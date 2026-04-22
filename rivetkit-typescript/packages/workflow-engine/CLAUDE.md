@@ -1,5 +1,7 @@
 # Workflow Engine Guidance
 
+- `storage.flush(...)` chunks driver batch writes to actor KV limits (128 entries / 976 KiB payload) and clears dirty markers only after all write/delete operations succeed.
+
 ## Persist Schema Sync
 
 - The workflow engine persistence schema is duplicated in RivetKit for inspector transport.

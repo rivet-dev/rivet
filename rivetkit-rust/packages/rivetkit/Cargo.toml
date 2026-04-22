@@ -30,4 +30,10 @@ tokio-util.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
+axum = { workspace = true }
+bytes.workspace = true
+rivet-envoy-client = { path = "../../../engine/sdks/rust/envoy-client" }
+rivetkit-client-protocol = { path = "../client-protocol" }
+serde_json.workspace = true
 tracing-subscriber.workspace = true
+vbare.workspace = true

@@ -7,7 +7,7 @@ use rivetkit_core::{
 
 use crate::{
 	actor::Actor,
-	start::{wrap_start, Start},
+	start::{Start, wrap_start},
 };
 
 pub struct Registry {
@@ -79,7 +79,7 @@ where
 
 #[cfg(test)]
 mod tests {
-	use tokio::sync::mpsc;
+	use tokio::sync::mpsc::unbounded_channel;
 
 	use super::*;
 	use crate::action;
@@ -110,7 +110,7 @@ mod tests {
 			);
 
 		let factory = build_factory::<EmptyActor, _, _>(ActorConfig::default(), drain_events);
-		let (event_tx, event_rx) = mpsc::channel(1);
+		let (event_tx, event_rx) = unbounded_channel();
 		drop(event_tx);
 
 		let result = factory

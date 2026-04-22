@@ -1,4 +1,3 @@
-
 #[allow(dead_code)]
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 pub const USER_AGENT_VALUE: &str = concat!("ActorClient-Rust/", env!("CARGO_PKG_VERSION"));
@@ -25,6 +24,9 @@ pub const HEADER_RIVET_NAMESPACE: &str = "x-rivet-namespace";
 pub const PATH_CONNECT_WEBSOCKET: &str = "/connect";
 pub const PATH_WEBSOCKET_PREFIX: &str = "/websocket/";
 
+pub type RawWebSocket =
+	tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
+
 // WebSocket protocol prefixes
 pub const WS_PROTOCOL_STANDARD: &str = "rivet";
 pub const WS_PROTOCOL_TARGET: &str = "rivet_target.";
@@ -37,34 +39,38 @@ pub const WS_PROTOCOL_TOKEN: &str = "rivet_token.";
 
 #[derive(Debug, Clone, Copy)]
 pub enum TransportKind {
-    WebSocket,
-    Sse,
+	WebSocket,
+	Sse,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EncodingKind {
-    Json,
-    Cbor,
-    Bare,
+	Json,
+	Cbor,
+	Bare,
 }
 
 impl EncodingKind {
-    pub fn as_str(&self) -> &str {
-        match self {
-            EncodingKind::Json => "json",
-            EncodingKind::Cbor => "cbor",
-            EncodingKind::Bare => "bare",
-        }
-    }
+	pub fn as_str(&self) -> &str {
+		match self {
+			EncodingKind::Json => "json",
+			EncodingKind::Cbor => "cbor",
+			EncodingKind::Bare => "bare",
+		}
+	}
+}
+
+impl Default for EncodingKind {
+	fn default() -> Self {
+		Self::Bare
+	}
 }
 
 impl ToString for EncodingKind {
-    fn to_string(&self) -> String {
-        self.as_str().to_string()
-    }
+	fn to_string(&self) -> String {
+		self.as_str().to_string()
+	}
 }
-
-
 
 // Max size of each entry is 128 bytes
 pub type ActorKey = Vec<String>;

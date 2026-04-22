@@ -1,28 +1,40 @@
 use std::fmt;
 use std::sync::Arc;
-use std::sync::RwLock;
 
-use anyhow::{Result, anyhow};
+use anyhow::Result;
+use futures::future::BoxFuture;
+use parking_lot::RwLock;
 use rivet_envoy_client::config::WebSocketSender;
 
+use crate::actor::context::WebSocketCallbackRegion;
+use crate::error::ActorRuntime;
 use crate::types::WsMessage;
 
+// Rivet supports a non-standard async close-listener extension for actor
+// WebSockets. Core tracks close-event delivery with the websocket callback
+// region instead of reusing disconnect callbacks because close listeners are
+// WebSocket event work, while `onDisconnect` is connection lifecycle work.
 pub(crate) type WebSocketSendCallback = Arc<dyn Fn(WsMessage) -> Result<()> + Send + Sync>;
 pub(crate) type WebSocketCloseCallback =
-	Arc<dyn Fn(Option<u16>, Option<String>) -> Result<()> + Send + Sync>;
+	Arc<dyn Fn(Option<u16>, Option<String>) -> BoxFuture<'static, Result<()>> + Send + Sync>;
 pub(crate) type WebSocketMessageEventCallback =
 	Arc<dyn Fn(WsMessage, Option<u16>) -> Result<()> + Send + Sync>;
 pub(crate) type WebSocketCloseEventCallback =
-	Arc<dyn Fn(u16, String, bool) -> Result<()> + Send + Sync>;
+	Arc<dyn Fn(u16, String, bool) -> BoxFuture<'static, Result<()>> + Send + Sync>;
+pub(crate) type WebSocketCallbackRegionFactory =
+	Arc<dyn Fn() -> WebSocketCallbackRegion + Send + Sync>;
 
 #[derive(Clone)]
 pub struct WebSocket(Arc<WebSocketInner>);
 
 struct WebSocketInner {
+	// Forced-sync: WebSocket configuration and event dispatch are synchronous
+	// public APIs, so callbacks are cloned out before any async close work.
 	send_callback: RwLock<Option<WebSocketSendCallback>>,
 	close_callback: RwLock<Option<WebSocketCloseCallback>>,
 	message_event_callback: RwLock<Option<WebSocketMessageEventCallback>>,
 	close_event_callback: RwLock<Option<WebSocketCloseEventCallback>>,
+	close_event_callback_region: RwLock<Option<WebSocketCallbackRegionFactory>>,
 }
 
 impl WebSocket {
@@ -32,6 +44,7 @@ impl WebSocket {
 			close_callback: RwLock::new(None),
 			message_event_callback: RwLock::new(None),
 			close_event_callback: RwLock::new(None),
+			close_event_callback_region: RwLock::new(None),
 		}))
 	}
 
@@ -47,8 +60,8 @@ impl WebSocket {
 		}
 	}
 
-	pub fn close(&self, code: Option<u16>, reason: Option<String>) {
-		if let Err(error) = self.try_close(code, reason) {
+	pub async fn close(&self, code: Option<u16>, reason: Option<String>) {
+		if let Err(error) = self.try_close(code, reason).await {
 			tracing::error!(?error, "failed to close websocket");
 		}
 	}
@@ -59,8 +72,8 @@ impl WebSocket {
 		}
 	}
 
-	pub fn dispatch_close_event(&self, code: u16, reason: String, was_clean: bool) {
-		if let Err(error) = self.try_dispatch_close_event(code, reason, was_clean) {
+	pub async fn dispatch_close_event(&self, code: u16, reason: String, was_clean: bool) {
+		if let Err(error) = self.try_dispatch_close_event(code, reason, was_clean).await {
 			tracing::error!(?error, "failed to dispatch websocket close event");
 		}
 	}
@@ -76,47 +89,41 @@ impl WebSocket {
 			Ok(())
 		})));
 		self.configure_close_callback(Some(Arc::new(move |code, reason| {
-			close_sender.close(code, reason);
-			Ok(())
+			let close_sender = close_sender.clone();
+			Box::pin(async move {
+				close_sender.close(code, reason);
+				Ok(())
+			})
 		})));
 	}
 
 	pub(crate) fn configure_send_callback(&self, send_callback: Option<WebSocketSendCallback>) {
-		*self
-			.0
-			.send_callback
-			.write()
-			.expect("websocket send callback lock poisoned") = send_callback;
+		*self.0.send_callback.write() = send_callback;
 	}
 
 	pub(crate) fn configure_close_callback(&self, close_callback: Option<WebSocketCloseCallback>) {
-		*self
-			.0
-			.close_callback
-			.write()
-			.expect("websocket close callback lock poisoned") = close_callback;
+		*self.0.close_callback.write() = close_callback;
 	}
 
 	pub fn configure_message_event_callback(
 		&self,
 		message_event_callback: Option<WebSocketMessageEventCallback>,
 	) {
-		*self
-			.0
-			.message_event_callback
-			.write()
-			.expect("websocket message event callback lock poisoned") = message_event_callback;
+		*self.0.message_event_callback.write() = message_event_callback;
 	}
 
 	pub fn configure_close_event_callback(
 		&self,
 		close_event_callback: Option<WebSocketCloseEventCallback>,
 	) {
-		*self
-			.0
-			.close_event_callback
-			.write()
-			.expect("websocket close event callback lock poisoned") = close_event_callback;
+		*self.0.close_event_callback.write() = close_event_callback;
+	}
+
+	pub(crate) fn configure_close_event_callback_region(
+		&self,
+		close_event_callback_region: Option<WebSocketCallbackRegionFactory>,
+	) {
+		*self.0.close_event_callback_region.write() = close_event_callback_region;
 	}
 
 	pub(crate) fn try_send(&self, msg: WsMessage) -> Result<()> {
@@ -124,9 +131,9 @@ impl WebSocket {
 		callback(msg)
 	}
 
-	pub(crate) fn try_close(&self, code: Option<u16>, reason: Option<String>) -> Result<()> {
+	pub(crate) async fn try_close(&self, code: Option<u16>, reason: Option<String>) -> Result<()> {
 		let callback = self.close_callback()?;
-		callback(code, reason)
+		callback(code, reason).await
 	}
 
 	pub(crate) fn try_dispatch_message_event(
@@ -138,51 +145,59 @@ impl WebSocket {
 		callback(msg, message_index)
 	}
 
-	pub(crate) fn try_dispatch_close_event(
+	pub(crate) async fn try_dispatch_close_event(
 		&self,
 		code: u16,
 		reason: String,
 		was_clean: bool,
 	) -> Result<()> {
 		let callback = self.close_event_callback()?;
-		callback(code, reason, was_clean)
+		let _region = self.close_event_callback_region().map(|create| create());
+		callback(code, reason, was_clean).await
 	}
 
 	fn send_callback(&self) -> Result<WebSocketSendCallback> {
 		self.0
 			.send_callback
 			.read()
-			.expect("websocket send callback lock poisoned")
 			.clone()
-			.ok_or_else(|| anyhow!("websocket send callback is not configured"))
+			.ok_or_else(|| websocket_not_configured("send callback"))
 	}
 
 	fn close_callback(&self) -> Result<WebSocketCloseCallback> {
 		self.0
 			.close_callback
 			.read()
-			.expect("websocket close callback lock poisoned")
 			.clone()
-			.ok_or_else(|| anyhow!("websocket close callback is not configured"))
+			.ok_or_else(|| websocket_not_configured("close callback"))
 	}
 
 	fn message_event_callback(&self) -> Result<WebSocketMessageEventCallback> {
 		self.0
 			.message_event_callback
 			.read()
-			.expect("websocket message event callback lock poisoned")
 			.clone()
-			.ok_or_else(|| anyhow!("websocket message event callback is not configured"))
+			.ok_or_else(|| websocket_not_configured("message event callback"))
 	}
 
 	fn close_event_callback(&self) -> Result<WebSocketCloseEventCallback> {
 		self.0
 			.close_event_callback
 			.read()
-			.expect("websocket close event callback lock poisoned")
 			.clone()
-			.ok_or_else(|| anyhow!("websocket close event callback is not configured"))
+			.ok_or_else(|| websocket_not_configured("close event callback"))
 	}
+
+	fn close_event_callback_region(&self) -> Option<WebSocketCallbackRegionFactory> {
+		self.0.close_event_callback_region.read().clone()
+	}
+}
+
+fn websocket_not_configured(component: &str) -> anyhow::Error {
+	ActorRuntime::NotConfigured {
+		component: format!("websocket {component}"),
+	}
+	.build()
 }
 
 impl Default for WebSocket {
@@ -194,41 +209,19 @@ impl Default for WebSocket {
 impl fmt::Debug for WebSocket {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		f.debug_struct("WebSocket")
-			.field(
-				"send_configured",
-				&self
-					.0
-					.send_callback
-					.read()
-					.expect("websocket send callback lock poisoned")
-					.is_some(),
-			)
-			.field(
-				"close_configured",
-				&self
-					.0
-					.close_callback
-					.read()
-					.expect("websocket close callback lock poisoned")
-					.is_some(),
-			)
+			.field("send_configured", &self.0.send_callback.read().is_some())
+			.field("close_configured", &self.0.close_callback.read().is_some())
 			.field(
 				"message_event_configured",
-				&self
-					.0
-					.message_event_callback
-					.read()
-					.expect("websocket message event callback lock poisoned")
-					.is_some(),
+				&self.0.message_event_callback.read().is_some(),
 			)
 			.field(
 				"close_event_configured",
-				&self
-					.0
-					.close_event_callback
-					.read()
-					.expect("websocket close event callback lock poisoned")
-					.is_some(),
+				&self.0.close_event_callback.read().is_some(),
+			)
+			.field(
+				"close_event_region_configured",
+				&self.0.close_event_callback_region.read().is_some(),
 			)
 			.finish()
 	}

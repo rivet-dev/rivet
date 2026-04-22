@@ -2,15 +2,17 @@ use std::time::Duration;
 
 use napi::bindgen_prelude::Buffer;
 use napi_derive::napi;
-use rivetkit_core::Schedule as CoreSchedule;
+use rivetkit_core::ActorContext as CoreActorContext;
+
+use crate::{NapiInvalidArgument, napi_anyhow_error};
 
 #[napi]
 pub struct Schedule {
-	inner: CoreSchedule,
+	inner: CoreActorContext,
 }
 
 impl Schedule {
-	pub(crate) fn new(inner: CoreSchedule) -> Self {
+	pub(crate) fn new(inner: CoreActorContext) -> Self {
 		Self { inner }
 	}
 }
@@ -19,8 +21,15 @@ impl Schedule {
 impl Schedule {
 	#[napi]
 	pub fn after(&self, duration_ms: i64, action_name: String, args: Buffer) -> napi::Result<()> {
-		let duration_ms = u64::try_from(duration_ms)
-			.map_err(|_| napi::Error::from_reason("schedule delay must be non-negative"))?;
+		let duration_ms = u64::try_from(duration_ms).map_err(|_| {
+			napi_anyhow_error(
+				NapiInvalidArgument {
+					argument: "durationMs".to_owned(),
+					reason: "must be non-negative".to_owned(),
+				}
+				.build(),
+			)
+		})?;
 		self.inner.after(
 			Duration::from_millis(duration_ms),
 			&action_name,

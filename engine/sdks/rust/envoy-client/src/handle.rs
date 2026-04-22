@@ -3,6 +3,7 @@ use std::sync::atomic::Ordering;
 
 use rivet_envoy_protocol as protocol;
 use rivet_util::async_counter::AsyncCounter;
+use tokio::sync::oneshot;
 
 use crate::context::SharedContext;
 use crate::envoy::{ActorInfo, ToEnvoyMessage};
@@ -161,24 +162,34 @@ impl EnvoyHandle {
 			return true;
 		}
 
-		self
-			.shared
+		self.shared
 			.pending_hibernation_restores
 			.lock()
 			.expect("shared pending hibernation restore registry poisoned")
 			.get(actor_id)
 			.is_some_and(|entries| {
-				entries.iter().any(|entry| {
-					entry.gateway_id == gateway_id && entry.request_id == request_id
-				})
+				entries
+					.iter()
+					.any(|entry| entry.gateway_id == gateway_id && entry.request_id == request_id)
 			})
 	}
 
 	pub fn set_alarm(&self, actor_id: String, alarm_ts: Option<i64>, generation: Option<u32>) {
+		self.set_alarm_with_ack(actor_id, alarm_ts, generation, None);
+	}
+
+	pub fn set_alarm_with_ack(
+		&self,
+		actor_id: String,
+		alarm_ts: Option<i64>,
+		generation: Option<u32>,
+		ack_tx: Option<oneshot::Sender<()>>,
+	) {
 		let _ = self.shared.envoy_tx.send(ToEnvoyMessage::SetAlarm {
 			actor_id,
 			generation,
 			alarm_ts,
+			ack_tx,
 		});
 	}
 
@@ -439,8 +450,7 @@ impl EnvoyHandle {
 		actor_id: String,
 		meta_entries: Vec<HibernatingWebSocketMetadata>,
 	) {
-		self
-			.shared
+		self.shared
 			.pending_hibernation_restores
 			.lock()
 			.expect("shared pending hibernation restore registry poisoned")
@@ -451,8 +461,7 @@ impl EnvoyHandle {
 		&self,
 		actor_id: &str,
 	) -> Option<Vec<HibernatingWebSocketMetadata>> {
-		self
-			.shared
+		self.shared
 			.pending_hibernation_restores
 			.lock()
 			.expect("shared pending hibernation restore registry poisoned")
@@ -560,13 +569,9 @@ impl EnvoyHandle {
 		rx.await
 			.map_err(|_| anyhow::anyhow!("sqlite response channel closed"))?
 	}
-
 }
 
-fn make_ws_key(
-	gateway_id: &protocol::GatewayId,
-	request_id: &protocol::RequestId,
-) -> [u8; 8] {
+fn make_ws_key(gateway_id: &protocol::GatewayId, request_id: &protocol::RequestId) -> [u8; 8] {
 	let mut key = [0u8; 8];
 	key[..4].copy_from_slice(gateway_id);
 	key[4..].copy_from_slice(request_id);

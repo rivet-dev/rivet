@@ -289,6 +289,19 @@ pub async fn init_conn(
 						.actor_id
 						.parse::<Id>()
 						.context("failed to parse actor_id from missed envoy command")?;
+					let ids = ctx
+						.op(pegboard::ops::actor::hibernating_request::list::Input { actor_id })
+						.await?;
+
+					// Dynamically populate hibernating request ids
+					start.hibernating_requests = ids
+						.into_iter()
+						.map(|x| protocol::HibernatingRequest {
+							gateway_id: x.gateway_id,
+							request_id: x.request_id,
+						})
+						.collect();
+
 					sqlite_runtime::populate_start_command(
 						ctx,
 						sqlite_engine.as_ref(),

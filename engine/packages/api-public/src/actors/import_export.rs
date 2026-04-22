@@ -15,8 +15,7 @@ use rivet_api_types::actors::{
 		ExportActorIdsSelector, ExportActorNamesSelector, ExportRequest, ExportResponse,
 		ExportSelector, ImportRequest, ImportResponse,
 	},
-	list as list_types,
-	list_names as list_names_types,
+	list as list_types, list_names as list_names_types,
 };
 use rivet_api_util::{Method, request_remote_datacenter};
 use rivet_envoy_protocol as ep;
@@ -99,7 +98,10 @@ enum ImportActorOutcome {
 	),
 	security(("bearer_auth" = [])),
 )]
-pub async fn export(Extension(ctx): Extension<ApiCtx>, Json(body): Json<ExportRequest>) -> Response {
+pub async fn export(
+	Extension(ctx): Extension<ApiCtx>,
+	Json(body): Json<ExportRequest>,
+) -> Response {
 	match export_inner(ctx, body).await {
 		Ok(response) => Json(response).into_response(),
 		Err(err) => ApiError::from(err).into_response(),
@@ -117,7 +119,10 @@ pub async fn export(Extension(ctx): Extension<ApiCtx>, Json(body): Json<ExportRe
 	),
 	security(("bearer_auth" = [])),
 )]
-pub async fn import(Extension(ctx): Extension<ApiCtx>, Json(body): Json<ImportRequest>) -> Response {
+pub async fn import(
+	Extension(ctx): Extension<ApiCtx>,
+	Json(body): Json<ImportRequest>,
+) -> Response {
 	match import_inner(ctx, body).await {
 		Ok(response) => Json(response).into_response(),
 		Err(err) => ApiError::from(err).into_response(),
@@ -240,7 +245,10 @@ async fn import_inner(ctx: ApiCtx, body: ImportRequest) -> Result<ImportResponse
 	let actors_dir = archive_path.join("actors");
 	if !fs::try_exists(&actors_dir).await? {
 		return Err(errors::Validation::InvalidInput {
-			message: format!("archive is missing actors directory at {}", actors_dir.display()),
+			message: format!(
+				"archive is missing actors directory at {}",
+				actors_dir.display()
+			),
 		}
 		.build());
 	}
@@ -312,25 +320,24 @@ async fn import_actor_dir(
 		}
 	};
 
-	if actor_exists_with_name_and_key(ctx, target_namespace, &metadata.name, metadata.key.as_deref()).await? {
+	if actor_exists_with_name_and_key(
+		ctx,
+		target_namespace,
+		&metadata.name,
+		metadata.key.as_deref(),
+	)
+	.await?
+	{
 		return Ok(ImportActorOutcome::Skipped(format!(
 			"skipped archive actor {} (name={}, key={:?}) because target namespace {} already has the same (name, key)",
-			metadata.source_actor_id,
-			metadata.name,
-			metadata.key,
-			target_namespace,
+			metadata.source_actor_id, metadata.name, metadata.key, target_namespace,
 		)));
 	}
 
 	// Source actor IDs are retained in archive paths for provenance only.
 	// Import must always generate new actor IDs because the target may be another namespace in the same cluster.
-	let created_actor = create_imported_actor(
-		ctx,
-		target_namespace,
-		target_namespace_id,
-		&metadata,
-	)
-	.await?;
+	let created_actor =
+		create_imported_actor(ctx, target_namespace, target_namespace_id, &metadata).await?;
 
 	let sqlite_path = actor_dir.join("sqlite.bin");
 	let replay_res = async {
@@ -345,19 +352,18 @@ async fn import_actor_dir(
 
 	match replay_res {
 		Ok(()) => Ok(ImportActorOutcome::Imported),
-		Err(err) => match rollback_imported_actor(ctx, target_namespace, created_actor.actor_id).await {
-			Ok(()) => Ok(ImportActorOutcome::Skipped(format!(
-				"rolled back partial import for archive actor {} (name={}, key={:?}) in namespace {} after error: {err:#}",
-				metadata.source_actor_id,
-				metadata.name,
-				metadata.key,
-				target_namespace,
-			))),
-			Err(rollback_err) => Err(rollback_err).context(format!(
-				"failed to roll back partial import for archive actor {} after import error: {err:#}",
-				metadata.source_actor_id,
-			)),
-		},
+		Err(err) => {
+			match rollback_imported_actor(ctx, target_namespace, created_actor.actor_id).await {
+				Ok(()) => Ok(ImportActorOutcome::Skipped(format!(
+					"rolled back partial import for archive actor {} (name={}, key={:?}) in namespace {} after error: {err:#}",
+					metadata.source_actor_id, metadata.name, metadata.key, target_namespace,
+				))),
+				Err(rollback_err) => Err(rollback_err).context(format!(
+					"failed to roll back partial import for archive actor {} after import error: {err:#}",
+					metadata.source_actor_id,
+				)),
+			}
+		}
 	}
 }
 
@@ -394,7 +400,8 @@ fn parse_selector(selector: &ExportSelector) -> Result<SelectorVariant> {
 		+ usize::from(selector.actor_ids.is_some());
 	if variant_count != 1 {
 		return Err(errors::Validation::InvalidInput {
-			message: "export selector must set exactly one of `all`, `actor_names`, or `actor_ids`".to_string(),
+			message: "export selector must set exactly one of `all`, `actor_names`, or `actor_ids`"
+				.to_string(),
 		}
 		.build());
 	}
@@ -598,7 +605,8 @@ async fn create_imported_actor(
 	};
 
 	let response = if target_dc_label == ctx.config().dc_label() {
-		rivet_api_peer::actors::import_create::create(ctx.clone().into(), (), query, request).await?
+		rivet_api_peer::actors::import_create::create(ctx.clone().into(), (), query, request)
+			.await?
 	} else {
 		request_remote_datacenter::<rivet_api_peer::actors::import_create::ImportCreateResponse>(
 			ctx.config(),
@@ -693,11 +701,7 @@ async fn replay_actor_kv(ctx: &ApiCtx, actor: &Actor, kv_path: &Path) -> Result<
 	Ok(())
 }
 
-async fn rollback_imported_actor(
-	ctx: &ApiCtx,
-	target_namespace: &str,
-	actor_id: Id,
-) -> Result<()> {
+async fn rollback_imported_actor(ctx: &ApiCtx, target_namespace: &str, actor_id: Id) -> Result<()> {
 	if actor_id.label() == ctx.config().dc_label() {
 		rivet_api_peer::actors::delete::delete(
 			ctx.clone().into(),

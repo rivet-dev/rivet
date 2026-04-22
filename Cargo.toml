@@ -59,6 +59,10 @@ members = [
   "engine/sdks/rust/epoxy-protocol",
   "engine/sdks/rust/test-envoy",
   "engine/sdks/rust/ups-protocol",
+  "rivetkit-rust/packages/client",
+  "rivetkit-rust/packages/client-protocol",
+  "rivetkit-rust/packages/inspector-protocol",
+  "rivetkit-rust/packages/rivetkit",
   "rivetkit-rust/packages/rivetkit-core",
   "rivetkit-rust/packages/rivetkit-sqlite",
   "rivetkit-typescript/packages/rivetkit-napi"
@@ -526,6 +530,12 @@ members = [
 
     [workspace.dependencies.rivet-envoy-protocol]
     path = "engine/sdks/rust/envoy-protocol"
+
+    [workspace.dependencies.rivetkit-client-protocol]
+    path = "rivetkit-rust/packages/client-protocol"
+
+    [workspace.dependencies.rivetkit-inspector-protocol]
+    path = "rivetkit-rust/packages/inspector-protocol"
 
     [workspace.dependencies.rivetkit-sqlite]
     path = "rivetkit-rust/packages/rivetkit-sqlite"

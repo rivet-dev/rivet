@@ -2,15 +2,18 @@ use std::{fmt, io::Cursor, marker::PhantomData};
 
 use anyhow::{Context, Result as AnyhowResult};
 use ciborium::Value;
+use rivetkit_core::actor::StopReason;
+use rivetkit_core::error::ActorRuntime;
 use rivetkit_core::{
-	ActorEvent, Reply, Request, Response, SerializeStateReason, StateDelta, WebSocket,
+	ActorEvent, QueueSendResult, QueueSendStatus, Reply, Request, Response, SerializeStateReason,
+	StateDelta, WebSocket,
 };
 use serde::{
-	de::{
-		self, value::BorrowedStrDeserializer, DeserializeOwned, DeserializeSeed, EnumAccess,
-		MapAccess, VariantAccess, Visitor,
-	},
 	Serialize,
+	de::{
+		self, DeserializeOwned, DeserializeSeed, EnumAccess, MapAccess, VariantAccess, Visitor,
+		value::BorrowedStrDeserializer,
+	},
 };
 
 use crate::{actor::Actor, context::ConnCtx, persist};
@@ -20,6 +23,7 @@ use crate::{actor::Actor, context::ConnCtx, persist};
 pub enum Event<A: Actor> {
 	Action(Action<A>),
 	Http(HttpCall),
+	QueueSend(QueueSend<A>),
 	WebSocketOpen(WsOpen<A>),
 	ConnOpen(ConnOpen<A>),
 	ConnClosed(ConnClosed<A>),
@@ -47,6 +51,23 @@ impl<A: Actor> Event<A> {
 			}),
 			ActorEvent::HttpRequest { request, reply } => Self::Http(HttpCall {
 				request: Some(request),
+				reply: Some(reply),
+			}),
+			ActorEvent::QueueSend {
+				name,
+				body,
+				conn,
+				request,
+				wait,
+				timeout_ms,
+				reply,
+			} => Self::QueueSend(QueueSend {
+				name,
+				body,
+				conn: ConnCtx::from(conn),
+				request,
+				wait,
+				timeout_ms,
 				reply: Some(reply),
 			}),
 			ActorEvent::WebSocketOpen { ws, request, reply } => Self::WebSocketOpen(WsOpen {
@@ -83,14 +104,19 @@ impl<A: Actor> Event<A> {
 				reply: Some(reply),
 				_p: PhantomData,
 			}),
-			ActorEvent::Sleep { reply } => Self::Sleep(Sleep {
-				reply: Some(reply),
-				_p: PhantomData,
-			}),
-			ActorEvent::Destroy { reply } => Self::Destroy(Destroy {
-				reply: Some(reply),
-				_p: PhantomData,
-			}),
+			ActorEvent::RunGracefulCleanup { reason, reply } => match reason {
+				StopReason::Sleep => Self::Sleep(Sleep {
+					reply: Some(reply),
+					_p: PhantomData,
+				}),
+				StopReason::Destroy => Self::Destroy(Destroy {
+					reply: Some(reply),
+					_p: PhantomData,
+				}),
+			},
+			ActorEvent::DisconnectConn { .. } => {
+				unreachable!("DisconnectConn is handled by foreign-runtime adapters")
+			}
 			ActorEvent::WorkflowHistoryRequested { reply } => {
 				Self::WorkflowHistory(WfHistory { reply: Some(reply) })
 			}
@@ -140,7 +166,13 @@ impl<A: Actor> Action<A> {
 			self.name.as_str(),
 			self.raw_args(),
 		))
-		.map_err(|error| anyhow::anyhow!("decode action '{}': {error}", self.name))
+		.map_err(|error| {
+			ActorRuntime::InvalidOperation {
+				operation: format!("decode action '{}'", self.name),
+				reason: error.to_string(),
+			}
+			.build()
+		})
 	}
 
 	pub fn decode_as<T: DeserializeOwned>(&self) -> AnyhowResult<T> {
@@ -611,7 +643,11 @@ impl<'de> de::Deserializer<'de> for ValueDeserializer {
 				value: None,
 			}),
 			Value::Map(mut entries) if entries.len() == 1 => {
-				let (key, value) = entries.pop().expect("checked len");
+				let Some((key, value)) = entries.pop() else {
+					return Err(de::Error::custom(
+						"expected externally tagged enum map to contain one entry",
+					));
+				};
 				match key {
 					Value::Text(variant) => visitor.visit_enum(ValueEnumAccess {
 						variant,
@@ -898,21 +934,28 @@ impl HttpReply {
 }
 
 impl HttpCall {
-	pub fn request(&self) -> &Request {
-		self.request.as_ref().expect("http request already moved")
+	pub fn request(&self) -> Option<&Request> {
+		self.request.as_ref()
 	}
 
-	pub fn request_mut(&mut self) -> &mut Request {
-		self.request.as_mut().expect("http request already moved")
+	pub fn request_mut(&mut self) -> Option<&mut Request> {
+		self.request.as_mut()
 	}
 
-	pub fn into_request(mut self) -> (Request, HttpReply) {
-		(
-			self.request.take().expect("http request already moved"),
+	pub fn into_request(mut self) -> AnyhowResult<(Request, HttpReply)> {
+		let request = self.request.take().ok_or_else(|| {
+			ActorRuntime::InvalidOperation {
+				operation: "http.into_request".to_owned(),
+				reason: "request was already moved".to_owned(),
+			}
+			.build()
+		})?;
+		Ok((
+			request,
 			HttpReply {
 				reply: self.reply.take(),
 			},
-		)
+		))
 	}
 
 	pub fn reply(mut self, response: Response) {
@@ -929,6 +972,77 @@ impl HttpCall {
 	}
 
 	pub fn reply_err(mut self, err: anyhow::Error) {
+		if let Some(reply) = self.reply.take() {
+			reply.send(Err(err));
+		}
+	}
+}
+
+#[derive(Debug)]
+#[must_use = "reply to the queue send or dropping it sends actor/dropped_reply"]
+#[allow(dead_code)]
+pub struct QueueSend<A: Actor> {
+	pub(crate) name: String,
+	pub(crate) body: Vec<u8>,
+	pub(crate) conn: ConnCtx<A>,
+	pub(crate) request: Request,
+	pub(crate) wait: bool,
+	pub(crate) timeout_ms: Option<u64>,
+	pub(crate) reply: Option<Reply<QueueSendResult>>,
+}
+
+impl<A: Actor> Drop for QueueSend<A> {
+	fn drop(&mut self) {
+		if self.reply.is_some() {
+			warn_dropped_event("QueueSend", self.name.as_str());
+		}
+	}
+}
+
+impl<A: Actor> QueueSend<A> {
+	pub fn name(&self) -> &str {
+		&self.name
+	}
+
+	pub fn body(&self) -> &[u8] {
+		&self.body
+	}
+
+	pub fn conn(&self) -> &ConnCtx<A> {
+		&self.conn
+	}
+
+	pub fn request(&self) -> &Request {
+		&self.request
+	}
+
+	pub fn should_wait(&self) -> bool {
+		self.wait
+	}
+
+	pub fn timeout_ms(&self) -> Option<u64> {
+		self.timeout_ms
+	}
+
+	pub fn complete(mut self, response: Option<Vec<u8>>) {
+		if let Some(reply) = self.reply.take() {
+			reply.send(Ok(QueueSendResult {
+				status: QueueSendStatus::Completed,
+				response,
+			}));
+		}
+	}
+
+	pub fn timed_out(mut self) {
+		if let Some(reply) = self.reply.take() {
+			reply.send(Ok(QueueSendResult {
+				status: QueueSendStatus::TimedOut,
+				response: None,
+			}));
+		}
+	}
+
+	pub fn err(mut self, err: anyhow::Error) {
 		if let Some(reply) = self.reply.take() {
 			reply.send(Err(err));
 		}
@@ -1306,7 +1420,8 @@ mod tests {
 
 	use rivetkit_core::ConnHandle;
 	use serde::{Deserialize, Serialize};
-	use tokio::sync::{mpsc, oneshot};
+	use tokio::sync::mpsc::unbounded_channel;
+	use tokio::sync::oneshot;
 	use tracing_subscriber::fmt::MakeWriter;
 
 	use super::*;
@@ -1363,9 +1478,9 @@ mod tests {
 		assert_dropped_reply_logs("Action", "ping", || {
 			let runtime = build_runtime();
 			let (reply_tx, reply_rx) = oneshot::channel();
-			let (event_tx, event_rx) = mpsc::channel(1);
+			let (event_tx, event_rx) = unbounded_channel();
 			event_tx
-				.try_send(ActorEvent::Action {
+				.send(ActorEvent::Action {
 					name: "ping".into(),
 					args: Vec::new(),
 					conn: None,
@@ -1790,7 +1905,7 @@ mod tests {
 			request: Some(Request::new(b"hello".to_vec())),
 			reply: Some(reply_tx.into()),
 		};
-		assert_eq!(http.request().body(), b"hello");
+		assert_eq!(http.request().expect("request").body(), b"hello");
 
 		http.reply_status(404);
 

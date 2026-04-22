@@ -7,6 +7,7 @@ import type {
 import {
 	KEYS,
 	queueMetadataKey,
+	queueMessagesPrefix,
 	workflowStoragePrefix,
 } from "@/actor/keys";
 import { ENGINE_ENDPOINT } from "@/common/engine";
@@ -289,6 +290,11 @@ export function buildActorNames(
 					{
 						prefix: Array.from(KEYS.CONN_PREFIX),
 						maxBytes: options.preloadMaxConnectionsBytes ?? 65_536,
+						partial: false,
+					},
+					{
+						prefix: Array.from(queueMessagesPrefix()),
+						maxBytes: 65_536,
 						partial: false,
 					},
 				],

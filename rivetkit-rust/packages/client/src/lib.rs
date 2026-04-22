@@ -1,15 +1,22 @@
+//! Rust client for RivetKit actors.
+//!
+//! See `docs-internal/engine/rivetkit-rust-client.md` for actor-to-actor
+//! client usage and idiomatic cancellation patterns with `tokio::select!`,
+//! dropped futures, websocket handle drop, and optional
+//! `tokio_util::sync::CancellationToken` threading.
+
 mod backoff;
-mod common;
-mod remote_manager;
 pub mod client;
-pub mod drivers;
+mod common;
 pub mod connection;
+pub mod drivers;
 pub mod handle;
 pub mod protocol;
+mod remote_manager;
 
 pub use client::{
-    Client, ClientConfig, CreateOptions, GetOptions, GetOrCreateOptions, GetWithIdOptions,
+	Client, ClientConfig, CreateOptions, GetOptions, GetOrCreateOptions, GetWithIdOptions,
 };
-pub use common::{TransportKind, EncodingKind};
-pub use connection::ConnectionStatus;
-pub use handle::{QueueSendOptions, QueueSendResult, QueueSendStatus};
+pub use common::{EncodingKind, RawWebSocket, TransportKind};
+pub use connection::{ConnectionStatus, Event, SubscriptionHandle};
+pub use handle::{QueueSendOptions, QueueSendResult, QueueSendStatus, SendAndWaitOpts, SendOpts};

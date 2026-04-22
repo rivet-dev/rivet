@@ -1,4 +1,4 @@
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{Serialize, de::DeserializeOwned};
 
 pub trait Actor: Send + 'static {
 	type Input: DeserializeOwned + Send + 'static;

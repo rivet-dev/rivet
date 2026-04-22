@@ -29,11 +29,17 @@
     "onDestroy": {
       "description": "Called when the actor is destroyed."
     },
+    "onMigrate": {
+      "description": "Called on every actor start after persisted state loads and before onWake. Use for repeatable schema migrations."
+    },
     "onWake": {
       "description": "Called when the actor wakes up and is ready to receive connections and actions."
     },
     "onSleep": {
       "description": "Called when the actor is stopping or sleeping. Use to clean up resources."
+    },
+    "run": {
+      "description": "Called after actor starts. Does not block startup. Use for background tasks like queue processing or tick loops. If it exits, the actor follows the normal idle sleep timeout once idle. If it throws, the actor logs the error and then follows the normal idle sleep timeout once idle."
     },
     "onStateChange": {
       "description": "Called when the actor's state changes. State changes within this hook won't trigger recursion."
@@ -57,7 +63,34 @@
       "description": "Called for raw WebSocket connections to /actors/{name}/websocket/* endpoints."
     },
     "actions": {
-      "description": "Map of action name to handler function.",
+      "description": "Map of action name to handler function. Defaults to an empty object.",
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {}
+    },
+    "actionInputSchemas": {
+      "description": "Optional schema map for validating action argument tuples in native runtimes.",
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {}
+    },
+    "connParamsSchema": {
+      "description": "Optional schema for validating connection params in native runtimes."
+    },
+    "events": {
+      "description": "Map of event names to schemas.",
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {}
+    },
+    "queues": {
+      "description": "Map of queue names to schemas.",
       "type": "object",
       "propertyNames": {
         "type": "string"
@@ -68,6 +101,14 @@
       "description": "Actor options for timeouts and behavior configuration.",
       "type": "object",
       "properties": {
+        "name": {
+          "description": "Display name for the actor in the Inspector UI.",
+          "type": "string"
+        },
+        "icon": {
+          "description": "Icon for the actor in the Inspector UI. Can be an emoji (e.g., '🚀') or FontAwesome icon name (e.g., 'rocket').",
+          "type": "string"
+        },
         "createVarsTimeout": {
           "description": "Timeout in ms for createVars handler. Default: 5000",
           "type": "number"
@@ -76,20 +117,28 @@
           "description": "Timeout in ms for createConnState handler. Default: 5000",
           "type": "number"
         },
+        "onMigrateTimeout": {
+          "description": "Timeout in ms for onMigrate handler. Default: 30000",
+          "type": "number"
+        },
+        "onBeforeConnectTimeout": {
+          "description": "Timeout in ms for onBeforeConnect handler. Default: 5000",
+          "type": "number"
+        },
         "onConnectTimeout": {
           "description": "Timeout in ms for onConnect handler. Default: 5000",
           "type": "number"
         },
-        "onSleepTimeout": {
-          "description": "Timeout in ms for onSleep handler. Must be less than ACTOR_STOP_THRESHOLD_MS. Default: 5000",
+        "sleepGracePeriod": {
+          "description": "Max time in ms for the graceful sleep window. Covers lifecycle hooks, waitUntil, async raw WebSocket handlers, disconnect callbacks, and waiting for preventSleep to clear after shutdown starts. Default: 15000.",
           "type": "number"
         },
         "onDestroyTimeout": {
-          "description": "Timeout in ms for onDestroy handler. Default: 5000",
+          "description": "Graceful destroy shutdown window in ms. Default: 15000",
           "type": "number"
         },
         "stateSaveInterval": {
-          "description": "Interval in ms between automatic state saves. Default: 10000",
+          "description": "Interval in ms between automatic state saves. Default: 1000",
           "type": "number"
         },
         "actionTimeout": {
@@ -97,7 +146,7 @@
           "type": "number"
         },
         "waitUntilTimeout": {
-          "description": "Max time in ms to wait for waitUntil background promises during shutdown. Default: 15000",
+          "description": "Deprecated. Legacy timeout in ms for waitUntil when sleepGracePeriod is not set. Default: 15000",
           "type": "number"
         },
         "connectionLivenessTimeout": {
@@ -109,16 +158,32 @@
           "type": "number"
         },
         "noSleep": {
-          "description": "If true, the actor will never sleep. Default: false",
+          "description": "Deprecated. If true, the actor will never sleep. Use c.setPreventSleep(true) for bounded idle sleep delays instead. Default: false",
           "type": "boolean"
         },
         "sleepTimeout": {
           "description": "Time in ms of inactivity before the actor sleeps. Default: 30000",
           "type": "number"
         },
+        "maxQueueSize": {
+          "description": "Maximum number of queue messages before rejecting new messages. Default: 1000",
+          "type": "number"
+        },
+        "maxQueueMessageSize": {
+          "description": "Maximum size of each queue message in bytes. Default: 65536",
+          "type": "number"
+        },
         "canHibernateWebSocket": {
           "description": "Whether WebSockets using onWebSocket can be hibernated. WebSockets using actions/events are hibernatable by default. Default: false",
           "type": "boolean"
+        },
+        "preloadMaxWorkflowBytes": {
+          "description": "Override RivetKit's workflow preload budget for this actor. Set to 0 to disable workflow preloading.",
+          "type": "number"
+        },
+        "preloadMaxConnectionsBytes": {
+          "description": "Override RivetKit's connections preload budget for this actor. Set to 0 to disable connections preloading.",
+          "type": "number"
         }
       },
       "additionalProperties": false

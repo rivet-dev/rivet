@@ -48,7 +48,6 @@ export const runWithTicks = actor({
 	},
 	options: {
 		sleepTimeout: RUN_SLEEP_TIMEOUT,
-		runStopTimeout: 1000,
 	},
 });
 
@@ -97,7 +96,6 @@ export const runWithQueueConsumer = actor({
 	},
 	options: {
 		sleepTimeout: RUN_SLEEP_TIMEOUT,
-		runStopTimeout: 1000,
 	},
 });
 
@@ -172,6 +170,99 @@ export const runWithError = actor({
 	},
 	options: {
 		sleepTimeout: RUN_SLEEP_TIMEOUT,
+	},
+});
+
+export const runSelfInitiatedSleep = actor({
+	state: {
+		runCount: 0,
+		wakeCount: 0,
+		sleepCount: 0,
+		marker: "new",
+	},
+	onWake: (c) => {
+		c.state.wakeCount += 1;
+	},
+	onSleep: (c) => {
+		c.state.sleepCount += 1;
+		c.state.marker = "slept";
+	},
+	run: (c) => {
+		c.state.runCount += 1;
+		if (c.state.runCount === 1) {
+			c.state.marker = "sleep-requested";
+			c.sleep();
+		}
+	},
+	actions: {
+		getState: (c) => ({
+			runCount: c.state.runCount,
+			wakeCount: c.state.wakeCount,
+			sleepCount: c.state.sleepCount,
+			marker: c.state.marker,
+		}),
+	},
+	options: {
+		sleepTimeout: RUN_SLEEP_TIMEOUT,
+	},
+});
+
+export const runSelfInitiatedDestroy = actor({
+	state: {
+		runCount: 0,
+		destroyRequested: false,
+	},
+	run: (c) => {
+		c.state.runCount += 1;
+		if (!c.state.destroyRequested) {
+			c.state.destroyRequested = true;
+			c.destroy();
+		}
+	},
+	onDestroy: async (c) => {
+		const client = c.client<typeof registry>();
+		await client.lifecycleObserver
+			.getOrCreate(["self-initiated-destroy"])
+			.recordEvent({
+				actorKey: c.actorId,
+				event: "destroy",
+			});
+	},
+	actions: {
+		getState: (c) => ({
+			runCount: c.state.runCount,
+			destroyRequested: c.state.destroyRequested,
+		}),
+	},
+});
+
+export const runIgnoresAbortStopTimeout = actor({
+	state: {
+		wakeCount: 0,
+		destroyCount: 0,
+	},
+	onWake: (c) => {
+		c.state.wakeCount += 1;
+	},
+	onDestroy: (c) => {
+		c.state.destroyCount += 1;
+	},
+	run: async () => {
+		await new Promise(() => {});
+	},
+	actions: {
+		getState: (c) => ({
+			wakeCount: c.state.wakeCount,
+			destroyCount: c.state.destroyCount,
+		}),
+		destroy: (c) => {
+			c.destroy();
+		},
+	},
+	options: {
+		sleepTimeout: 50,
+		sleepGracePeriod: 5000,
+		onDestroyTimeout: 100,
 	},
 });
 

@@ -78,11 +78,11 @@ impl SqliteEngine {
 					if let Some(existing_meta) =
 						udb::tx_get_value_serializable(&tx, &subspace, &meta_storage_key).await?
 					{
-					let existing_head = decode_db_head(&existing_meta)?;
-					ensure!(
-						matches!(existing_head.origin, SqliteOrigin::MigratingFromV1),
-						SqliteStorageError::ConcurrentTakeover
-					);
+						let existing_head = decode_db_head(&existing_meta)?;
+						ensure!(
+							matches!(existing_head.origin, SqliteOrigin::MigratingFromV1),
+							SqliteStorageError::ConcurrentTakeover
+						);
 					}
 
 					udb::tx_delete_value_precise(&tx, &subspace, &meta_storage_key).await?;
@@ -490,9 +490,7 @@ mod tests {
 		SQLITE_PAGE_SIZE, SQLITE_SHARD_SIZE, SQLITE_VFS_V2_SCHEMA_VERSION, SqliteOrigin,
 		decode_db_head,
 	};
-	use crate::udb::{
-		WriteOp, apply_write_ops, physical_chunk_key, raw_key_exists,
-	};
+	use crate::udb::{WriteOp, apply_write_ops, physical_chunk_key, raw_key_exists};
 
 	const TEST_ACTOR: &str = "test-actor";
 

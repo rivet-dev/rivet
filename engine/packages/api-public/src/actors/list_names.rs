@@ -38,7 +38,10 @@ pub async fn list_names(
 }
 
 #[tracing::instrument(skip_all)]
-pub(crate) async fn list_names_inner(ctx: ApiCtx, query: ListNamesQuery) -> Result<ListNamesResponse> {
+pub(crate) async fn list_names_inner(
+	ctx: ApiCtx,
+	query: ListNamesQuery,
+) -> Result<ListNamesResponse> {
 	ctx.auth().await?;
 
 	// Prepare peer query for local handler

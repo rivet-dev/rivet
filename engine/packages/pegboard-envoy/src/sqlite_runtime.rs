@@ -13,7 +13,7 @@ use sqlite_storage::{
 	engine::SqliteEngine,
 	ltx::{LtxHeader, encode_ltx_v3},
 	takeover::TakeoverConfig,
-	types::{DirtyPage, SqliteOrigin, SQLITE_PAGE_SIZE, SQLITE_VFS_V2_SCHEMA_VERSION},
+	types::{DirtyPage, SQLITE_PAGE_SIZE, SQLITE_VFS_V2_SCHEMA_VERSION, SqliteOrigin},
 };
 use tempfile::tempdir;
 use tokio::sync::{Mutex, OnceCell};
@@ -308,12 +308,10 @@ async fn read_v1_file(
 	file_tag: u8,
 ) -> Result<Option<V1File>> {
 	let meta_key = v1_meta_key(file_tag).to_vec();
-	let (meta_keys, meta_values, _) = pegboard::actor_kv::get(db, recipient, vec![meta_key.clone()])
-		.await?;
+	let (meta_keys, meta_values, _) =
+		pegboard::actor_kv::get(db, recipient, vec![meta_key.clone()]).await?;
 
-	if meta_keys.is_empty()
-		&& !v1_file_exists(db, recipient, file_tag).await?
-	{
+	if meta_keys.is_empty() && !v1_file_exists(db, recipient, file_tag).await? {
 		return Ok(None);
 	}
 	ensure!(
@@ -365,7 +363,7 @@ async fn read_v1_file(
 			.context("sqlite v1 expected chunk count exceeded usize")?,
 		&chunks,
 	)
-		.with_context(|| format!("rebuild sqlite v1 file tag {file_tag}"))?;
+	.with_context(|| format!("rebuild sqlite v1 file tag {file_tag}"))?;
 
 	Ok(Some(V1File { size_bytes, bytes }))
 }
@@ -466,7 +464,9 @@ fn rebuild_v1_file(
 	expected_chunks: usize,
 	chunks: &[(u32, Vec<u8>)],
 ) -> Result<Vec<u8>> {
-	let size_bytes: usize = size_bytes.try_into().context("sqlite v1 file exceeded usize")?;
+	let size_bytes: usize = size_bytes
+		.try_into()
+		.context("sqlite v1 file exceeded usize")?;
 	ensure!(
 		chunks.len() == expected_chunks,
 		"sqlite v1 file expected {expected_chunks} chunks for size {size_bytes}, found {}",
@@ -660,9 +660,9 @@ mod tests {
 	use pegboard::actor_sqlite_v2::sqlite_subspace;
 
 	use super::{
-		FILE_TAG_JOURNAL, FILE_TAG_MAIN, FILE_TAG_SHM, FILE_TAG_WAL,
-		SQLITE_V1_CHUNK_SIZE, SQLITE_V1_MAX_MIGRATION_BYTES, SQLITE_V1_MIGRATION_LEASE_MS,
-		maybe_migrate_v1_to_v2, read_v1_file, v1_chunk_key, v1_meta_key,
+		FILE_TAG_JOURNAL, FILE_TAG_MAIN, FILE_TAG_SHM, FILE_TAG_WAL, SQLITE_V1_CHUNK_SIZE,
+		SQLITE_V1_MAX_MIGRATION_BYTES, SQLITE_V1_MIGRATION_LEASE_MS, maybe_migrate_v1_to_v2,
+		read_v1_file, v1_chunk_key, v1_meta_key,
 	};
 
 	fn recipient(actor_id: Id) -> Recipient {
@@ -714,8 +714,13 @@ mod tests {
 		let mut values = vec![encode_v1_meta(bytes.len() as u64).to_vec()];
 		for (chunk_idx, chunk) in bytes.chunks(SQLITE_V1_CHUNK_SIZE).enumerate() {
 			if keys.len() == 128 {
-				pegboard::actor_kv::put(db, recipient, std::mem::take(&mut keys), std::mem::take(&mut values))
-					.await?;
+				pegboard::actor_kv::put(
+					db,
+					recipient,
+					std::mem::take(&mut keys),
+					std::mem::take(&mut values),
+				)
+				.await?;
 			}
 			keys.push(v1_chunk_key(file_tag, chunk_idx as u32).to_vec());
 			values.push(chunk.to_vec());
@@ -734,8 +739,13 @@ mod tests {
 		let mut values = vec![encode_v1_meta(size_bytes).to_vec()];
 		for chunk_idx in 0..chunk_count {
 			if keys.len() == 128 {
-				pegboard::actor_kv::put(db, recipient, std::mem::take(&mut keys), std::mem::take(&mut values))
-					.await?;
+				pegboard::actor_kv::put(
+					db,
+					recipient,
+					std::mem::take(&mut keys),
+					std::mem::take(&mut values),
+				)
+				.await?;
 			}
 			keys.push(v1_chunk_key(file_tag, chunk_idx).to_vec());
 			values.push(vec![(chunk_idx as u8).wrapping_add(1)]);
@@ -762,7 +772,11 @@ mod tests {
 	async fn load_v2_bytes(engine: &SqliteEngine, actor_id: &str) -> Result<Vec<u8>> {
 		let meta = engine.load_meta(actor_id).await?;
 		let pages = engine
-			.get_pages(actor_id, meta.generation, (1..=meta.db_size_pages).collect())
+			.get_pages(
+				actor_id,
+				meta.generation,
+				(1..=meta.db_size_pages).collect(),
+			)
 			.await?;
 		let mut bytes = Vec::with_capacity(meta.db_size_pages as usize * meta.page_size as usize);
 		for page in pages {
@@ -868,7 +882,9 @@ mod tests {
 		let (engine, _compaction_rx) = SqliteEngine::new(db.clone(), sqlite_subspace());
 		let actor_id_str = actor_id.to_string();
 
-		let prepared = engine.prepare_v1_migration(&actor_id_str, timestamp::now()).await?;
+		let prepared = engine
+			.prepare_v1_migration(&actor_id_str, timestamp::now())
+			.await?;
 		let stage = engine
 			.commit_stage_begin(
 				&actor_id_str,
@@ -924,7 +940,9 @@ mod tests {
 		let (engine, _compaction_rx) = SqliteEngine::new(db.clone(), sqlite_subspace());
 		let actor_id_str = actor_id.to_string();
 
-		let prepared = engine.prepare_v1_migration(&actor_id_str, timestamp::now()).await?;
+		let prepared = engine
+			.prepare_v1_migration(&actor_id_str, timestamp::now())
+			.await?;
 		engine
 			.commit_stage_begin(
 				&actor_id_str,
@@ -1004,7 +1022,10 @@ mod tests {
 			db.as_ref(),
 			&sqlite_subspace(),
 			engine.op_counter.as_ref(),
-			vec![WriteOp::put(meta_key(&actor_id_str), b"not-a-db-head".to_vec())],
+			vec![WriteOp::put(
+				meta_key(&actor_id_str),
+				b"not-a-db-head".to_vec(),
+			)],
 		)
 		.await?;
 
@@ -1051,7 +1072,11 @@ mod tests {
 		let meta = engine.load_meta(&actor_id.to_string()).await?;
 		assert_eq!(meta.origin, SqliteOrigin::MigratedFromV1);
 		assert_eq!(meta.db_size_pages, 0);
-		assert!(load_v2_bytes(&engine, &actor_id.to_string()).await?.is_empty());
+		assert!(
+			load_v2_bytes(&engine, &actor_id.to_string())
+				.await?
+				.is_empty()
+		);
 
 		Ok(())
 	}
@@ -1134,8 +1159,13 @@ mod tests {
 				continue;
 			}
 			if keys.len() == 128 {
-				pegboard::actor_kv::put(&db, &recipient, std::mem::take(&mut keys), std::mem::take(&mut values))
-					.await?;
+				pegboard::actor_kv::put(
+					&db,
+					&recipient,
+					std::mem::take(&mut keys),
+					std::mem::take(&mut values),
+				)
+				.await?;
 			}
 			keys.push(v1_chunk_key(FILE_TAG_MAIN, chunk_idx as u32).to_vec());
 			values.push(chunk.to_vec());

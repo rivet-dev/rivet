@@ -1,22 +1,25 @@
-use std::collections::BTreeSet;
+// State management contract:
+// docs-internal/engine/rivetkit-core-state-management.md
+use std::collections::{BTreeMap, BTreeSet};
 use std::convert::TryFrom;
 use std::future::Future;
+use std::future::pending;
 use std::pin::Pin;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, LazyLock, Mutex, Weak};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::{Arc, LazyLock, Weak};
 
 use anyhow::Error;
-use napi::bindgen_prelude::{Buffer, Either, Promise};
+use napi::bindgen_prelude::{Buffer, Promise};
 use napi::threadsafe_function::{
-	ErrorStrategy, ThreadSafeCallContext, ThreadsafeFunction,
-	ThreadsafeFunctionCallMode,
+	ErrorStrategy, ThreadSafeCallContext, ThreadsafeFunction, ThreadsafeFunctionCallMode,
 };
 use napi::{Env, JsFunction, JsObject};
 use napi_derive::napi;
+use parking_lot::Mutex;
 use rivetkit_core::types::ActorKeySegment;
 use rivetkit_core::{
-	ActorContext as CoreActorContext, ConnHandle as CoreConnHandle,
-	Request as CoreRequest, StateDelta, WebSocketCallbackRegion,
+	ActorContext as CoreActorContext, ConnHandle as CoreConnHandle, Request as CoreRequest,
+	RequestSaveOpts, StateDelta, WebSocketCallbackRegion,
 };
 use scc::HashMap as SccHashMap;
 use tokio::sync::mpsc::UnboundedSender;
@@ -24,20 +27,17 @@ use tokio_util::sync::CancellationToken as CoreCancellationToken;
 
 use crate::actor_factory::BridgeRivetErrorContext;
 use crate::connection::ConnHandle;
+use crate::database::JsNativeDatabase;
 use crate::kv::Kv;
-use crate::napi_anyhow_error;
 use crate::queue::Queue;
 use crate::schedule::Schedule;
-use crate::sqlite_db::SqliteDb;
+use crate::{NapiInvalidArgument, NapiInvalidState, napi_anyhow_error};
 
-type AbortSignalTsfn =
-	ThreadsafeFunction<(), ErrorStrategy::CalleeHandled>;
+type AbortSignalTsfn = ThreadsafeFunction<(), ErrorStrategy::CalleeHandled>;
 type DisconnectPredicateTsfn =
 	ThreadsafeFunction<DisconnectPredicatePayload, ErrorStrategy::CalleeHandled>;
-type RunRestartHook =
-	Arc<dyn Fn() -> anyhow::Result<()> + Send + Sync + 'static>;
-pub(crate) type RegisteredTask =
-	Pin<Box<dyn Future<Output = ()> + Send + 'static>>;
+type RunRestartHook = Arc<dyn Fn() -> anyhow::Result<()> + Send + Sync + 'static>;
+pub(crate) type RegisteredTask = Pin<Box<dyn Future<Output = ()> + Send + 'static>>;
 
 static ACTOR_CONTEXT_SHARED: LazyLock<SccHashMap<String, Weak<ActorContextShared>>> =
 	LazyLock::new(SccHashMap::new);
@@ -52,16 +52,20 @@ pub struct ActorContext {
 
 #[derive(Default)]
 struct ActorContextShared {
+	// Runtime slots are touched from synchronous N-API methods and TSF callback
+	// paths; locks stay short and are never held across awaits.
 	abort_token: Mutex<Option<CoreCancellationToken>>,
 	run_restart: Mutex<Option<RunRestartHook>>,
 	task_sender: Mutex<Option<UnboundedSender<RegisteredTask>>>,
 	end_reason: Mutex<Option<EndReason>>,
-	websocket_callback_region: Mutex<Option<WebSocketCallbackRegion>>,
+	websocket_callback_regions: Mutex<BTreeMap<u32, WebSocketCallbackRegion>>,
+	next_websocket_callback_region_id: AtomicU32,
 	ready: AtomicBool,
 	started: AtomicBool,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[allow(dead_code)]
 pub(crate) enum EndReason {
 	Sleep,
 	Destroy,
@@ -96,6 +100,12 @@ pub struct StateDeltaPayload {
 }
 
 #[napi(object)]
+pub struct JsRequestSaveOpts {
+	pub immediate: Option<bool>,
+	pub max_wait_ms: Option<u32>,
+}
+
+#[napi(object)]
 pub struct JsInspectorSnapshot {
 	pub state_revision: i64,
 	pub connections_revision: i64,
@@ -112,7 +122,14 @@ struct DisconnectPredicatePayload {
 
 impl ActorContext {
 	pub(crate) fn new(inner: CoreActorContext) -> Self {
-		let shared = actor_context_shared(inner.actor_id());
+		let actor_id = inner.actor_id().to_owned();
+		let shared = actor_context_shared(&actor_id);
+		tracing::debug!(
+			class = "ActorContext",
+			%actor_id,
+			shared_strong_count = Arc::strong_count(&shared),
+			"constructed napi class"
+		);
 		Self { inner, shared }
 	}
 
@@ -122,10 +139,18 @@ impl ActorContext {
 	}
 
 	pub(crate) fn attach_napi_abort_token(&self, token: CoreCancellationToken) {
+		tracing::debug!(
+			actor_id = %self.inner.actor_id(),
+			"attached napi abort cancellation token"
+		);
 		self.shared.set_abort_token(token);
 	}
 
 	pub(crate) fn reset_runtime_shared_state(&self) {
+		tracing::debug!(
+			actor_id = %self.inner.actor_id(),
+			"reset actor context shared runtime state"
+		);
 		self.shared.reset_runtime_state();
 	}
 
@@ -136,13 +161,11 @@ impl ActorContext {
 		self.shared.set_run_restart(Arc::new(restart));
 	}
 
-	pub(crate) fn attach_task_sender(
-		&self,
-		sender: UnboundedSender<RegisteredTask>,
-	) {
+	pub(crate) fn attach_task_sender(&self, sender: UnboundedSender<RegisteredTask>) {
 		self.shared.set_task_sender(sender);
 	}
 
+	#[allow(dead_code)]
 	pub(crate) fn set_end_reason(&self, reason: EndReason) {
 		self.shared.set_end_reason(reason);
 	}
@@ -157,13 +180,13 @@ impl ActorContext {
 	}
 
 	pub(crate) fn set_state_initial(&self, state: Vec<u8>) -> anyhow::Result<()> {
-		self.inner.set_state(state)
+		self.inner.set_state_initial(state);
+		Ok(())
 	}
 
 	pub(crate) async fn mark_has_initialized_and_flush(&self) -> anyhow::Result<()> {
 		self.inner.set_has_initialized(true);
-		self
-			.inner
+		self.inner
 			.save_state(vec![StateDelta::ActorState(self.inner.state())])
 			.await
 	}
@@ -173,7 +196,7 @@ impl ActorContext {
 		conn: CoreConnHandle,
 		bytes: Vec<u8>,
 	) -> anyhow::Result<()> {
-		conn.set_state(bytes);
+		conn.set_state_initial(bytes);
 		Ok(())
 	}
 
@@ -182,7 +205,7 @@ impl ActorContext {
 		conn: &CoreConnHandle,
 		bytes: Vec<u8>,
 	) -> anyhow::Result<()> {
-		conn.set_state(bytes);
+		conn.set_state_initial(bytes);
 		Ok(())
 	}
 
@@ -203,6 +226,7 @@ impl ActorContext {
 		self.inner.drain_overdue_scheduled_events().await
 	}
 
+	#[allow(dead_code)]
 	pub(crate) fn has_conn_changes(&self) -> bool {
 		self.inner.conns().any(|conn| conn.is_hibernatable())
 	}
@@ -221,25 +245,13 @@ impl ActorContext {
 	}
 
 	#[napi]
-	pub fn vars(&self) -> Buffer {
-		Buffer::from(self.inner.vars())
+	pub fn begin_on_state_change(&self) {
+		self.inner.on_state_change_started();
 	}
 
 	#[napi]
-	pub fn set_state(&self, state: Buffer) -> napi::Result<()> {
-		self.inner
-			.set_state(state.to_vec())
-			.map_err(napi_anyhow_error)
-	}
-
-	#[napi]
-	pub fn set_in_on_state_change_callback(&self, in_callback: bool) {
-		self.inner.set_in_on_state_change_callback(in_callback);
-	}
-
-	#[napi]
-	pub fn set_vars(&self, vars: Buffer) {
-		self.inner.set_vars(vars.to_vec());
+	pub fn end_on_state_change(&self) {
+		self.inner.on_state_change_finished();
 	}
 
 	#[napi]
@@ -248,36 +260,55 @@ impl ActorContext {
 	}
 
 	#[napi]
-	pub fn sql(&self) -> SqliteDb {
-		SqliteDb::new(self.inner.clone())
+	pub fn sql(&self) -> JsNativeDatabase {
+		JsNativeDatabase::new(
+			self.inner.sql().clone(),
+			Some(self.inner.actor_id().to_owned()),
+		)
 	}
 
 	#[napi]
 	pub fn schedule(&self) -> Schedule {
-		Schedule::new(self.inner.schedule().clone())
+		Schedule::new(self.inner.clone())
 	}
 
 	#[napi]
 	pub fn queue(&self) -> Queue {
-		Queue::new(self.inner.queue().clone())
+		Queue::new(self.inner.clone())
 	}
 
 	#[napi]
 	pub fn set_alarm(&self, timestamp_ms: Option<i64>) -> napi::Result<()> {
-		self
-			.inner
+		self.inner
 			.set_alarm(timestamp_ms)
 			.map_err(napi_anyhow_error)
 	}
 
 	#[napi]
-	pub fn request_save(&self, immediate: bool) {
-		self.inner.request_save(immediate);
+	pub fn request_save(&self, opts: Option<JsRequestSaveOpts>) {
+		let opts = opts.unwrap_or(JsRequestSaveOpts {
+			immediate: None,
+			max_wait_ms: None,
+		});
+		self.inner.request_save(RequestSaveOpts {
+			immediate: opts.immediate.unwrap_or(false),
+			max_wait_ms: opts.max_wait_ms,
+		});
 	}
 
 	#[napi]
-	pub fn request_save_within(&self, ms: u32) {
-		self.inner.request_save_within(ms);
+	pub async fn request_save_and_wait(&self, opts: Option<JsRequestSaveOpts>) -> napi::Result<()> {
+		let opts = opts.unwrap_or(JsRequestSaveOpts {
+			immediate: None,
+			max_wait_ms: None,
+		});
+		self.inner
+			.request_save_and_wait(RequestSaveOpts {
+				immediate: opts.immediate.unwrap_or(false),
+				max_wait_ms: opts.max_wait_ms,
+			})
+			.await
+			.map_err(napi_anyhow_error)
 	}
 
 	#[napi]
@@ -287,7 +318,7 @@ impl ActorContext {
 		advertised_version: u32,
 	) -> napi::Result<Buffer> {
 		let advertised_version = u16::try_from(advertised_version)
-			.map_err(|_| napi::Error::from_reason("inspector version exceeds u16"))?;
+			.map_err(|_| inspector_version_error("advertisedVersion"))?;
 		rivetkit_core::inspector::decode_request_payload(bytes.as_ref(), advertised_version)
 			.map(Buffer::from)
 			.map_err(napi_anyhow_error)
@@ -299,8 +330,8 @@ impl ActorContext {
 		bytes: Buffer,
 		target_version: u32,
 	) -> napi::Result<Buffer> {
-		let target_version = u16::try_from(target_version)
-			.map_err(|_| napi::Error::from_reason("inspector version exceeds u16"))?;
+		let target_version =
+			u16::try_from(target_version).map_err(|_| inspector_version_error("targetVersion"))?;
 		rivetkit_core::inspector::encode_response_payload(bytes.as_ref(), target_version)
 			.map(Buffer::from)
 			.map_err(napi_anyhow_error)
@@ -321,10 +352,7 @@ impl ActorContext {
 	}
 
 	#[napi(js_name = "verifyInspectorAuth")]
-	pub async fn verify_inspector_auth_js(
-		&self,
-		bearer_token: Option<String>,
-	) -> napi::Result<()> {
+	pub async fn verify_inspector_auth_js(&self, bearer_token: Option<String>) -> napi::Result<()> {
 		rivetkit_core::inspector::InspectorAuth::new()
 			.verify(&self.inner, bearer_token.as_deref())
 			.await
@@ -352,22 +380,20 @@ impl ActorContext {
 	}
 
 	#[napi]
-	pub async fn save_state(
-		&self,
-		payload: Either<bool, StateDeltaPayload>,
-	) -> napi::Result<()> {
-		match payload {
-			Either::A(immediate) => {
-				// Preserve the old surface for callers that have not migrated yet.
-				self.inner.request_save(immediate);
-				Ok(())
-			}
-			Either::B(payload) => self
-				.inner
-				.save_state(state_deltas_from_payload(payload))
-				.await
-				.map_err(napi_anyhow_error),
-		}
+	pub fn dirty_hibernatable_conns(&self) -> Vec<ConnHandle> {
+		self.inner
+			.dirty_hibernatable_conns()
+			.into_iter()
+			.map(ConnHandle::new)
+			.collect()
+	}
+
+	#[napi]
+	pub async fn save_state(&self, payload: StateDeltaPayload) -> napi::Result<()> {
+		self.inner
+			.save_state(state_deltas_from_payload(payload))
+			.await
+			.map_err(napi_anyhow_error)
 	}
 
 	#[napi]
@@ -382,8 +408,7 @@ impl ActorContext {
 
 	#[napi]
 	pub fn key(&self) -> Vec<JsActorKeySegment> {
-		self
-			.inner
+		self.inner
 			.key()
 			.iter()
 			.map(|segment| match segment {
@@ -438,7 +463,11 @@ impl ActorContext {
 
 	#[napi]
 	pub fn aborted(&self) -> bool {
-		self.shared.abort_token().is_cancelled()
+		self.inner.actor_aborted()
+			|| self
+				.shared
+				.configured_abort_token()
+				.is_some_and(|token| token.is_cancelled())
 	}
 
 	#[napi]
@@ -448,10 +477,7 @@ impl ActorContext {
 
 	#[napi]
 	pub fn restart_run_handler(&self) -> napi::Result<()> {
-		self
-			.shared
-			.run_restart()
-			.map_err(napi_anyhow_error)
+		self.shared.run_restart().map_err(napi_anyhow_error)
 	}
 
 	#[napi]
@@ -476,25 +502,42 @@ impl ActorContext {
 	}
 
 	#[napi]
-	pub fn begin_websocket_callback(&self) {
-		self
-			.shared
-			.begin_websocket_callback(self.inner.websocket_callback_region());
+	pub fn begin_websocket_callback(&self) -> u32 {
+		self.shared
+			.begin_websocket_callback(self.inner.websocket_callback_region())
 	}
 
 	#[napi]
-	pub fn end_websocket_callback(&self) {
-		self.shared.end_websocket_callback();
+	pub fn end_websocket_callback(&self, region_id: u32) {
+		self.shared.end_websocket_callback(region_id);
 	}
 
 	#[napi(ts_return_type = "AbortSignal")]
 	pub fn abort_signal(&self, env: Env) -> napi::Result<JsObject> {
 		let (signal, abort) = create_abort_signal(env)?;
-		let token = self.shared.abort_token();
+		let actor_token = self.inner.actor_abort_signal();
+		let runtime_token = self.shared.configured_abort_token();
+		let actor_id = self.inner.actor_id().to_owned();
 
 		napi::bindgen_prelude::spawn(async move {
-			token.cancelled().await;
+			let runtime_cancelled = async move {
+				if let Some(token) = runtime_token {
+					token.cancelled().await;
+				} else {
+					pending::<()>().await;
+				}
+			};
+			tokio::select! {
+				_ = actor_token.cancelled() => {}
+				_ = runtime_cancelled => {}
+			}
+			tracing::debug!(
+				kind = "abortSignal",
+				payload_summary = %format!("actor_id={actor_id}"),
+				"invoking napi TSF callback"
+			);
 			let status = abort.call(Ok(()), ThreadsafeFunctionCallMode::NonBlocking);
+			tracing::debug!(kind = "abortSignal", ?status, "napi TSF callback returned");
 			if status != napi::Status::Ok {
 				tracing::warn!(?status, "failed to deliver abort signal");
 			}
@@ -505,11 +548,7 @@ impl ActorContext {
 
 	#[napi]
 	pub fn conns(&self) -> Vec<ConnHandle> {
-		self
-			.inner
-			.conns()
-			.map(ConnHandle::new)
-			.collect()
+		self.inner.conns().map(ConnHandle::new).collect()
 	}
 
 	#[napi]
@@ -518,16 +557,12 @@ impl ActorContext {
 		params: Buffer,
 		request: Option<JsHttpRequest>,
 	) -> napi::Result<ConnHandle> {
-		let request = request
-			.map(js_http_request_to_core_request)
-			.transpose()?;
+		let request = request.map(js_http_request_to_core_request).transpose()?;
 		let conn = self
 			.inner
-			.connect_conn_with_request(
-				params.to_vec(),
-				request,
-				async { Ok::<Vec<u8>, Error>(Vec::new()) },
-			)
+			.connect_conn_with_request(params.to_vec(), request, async {
+				Ok::<Vec<u8>, Error>(Vec::new())
+			})
 			.await
 			.map_err(napi_anyhow_error)?;
 		Ok(ConnHandle::new(conn))
@@ -535,8 +570,7 @@ impl ActorContext {
 
 	#[napi]
 	pub async fn disconnect_conn(&self, id: String) -> napi::Result<()> {
-		self
-			.inner
+		self.inner
 			.disconnect_conn(id)
 			.await
 			.map_err(napi_anyhow_error)
@@ -562,8 +596,7 @@ impl ActorContext {
 					}
 				}
 
-				ctx
-					.disconnect_conns(move |conn| ids.contains(conn.id()))
+				ctx.disconnect_conns(move |conn| ids.contains(conn.id()))
 					.await
 					.map_err(napi_anyhow_error)?;
 				Ok(())
@@ -578,10 +611,7 @@ impl ActorContext {
 	}
 
 	#[napi]
-	pub async fn wait_until(
-		&self,
-		promise: Promise<serde_json::Value>,
-	) -> napi::Result<()> {
+	pub async fn wait_until(&self, promise: Promise<serde_json::Value>) -> napi::Result<()> {
 		self.inner.wait_until(async move {
 			if let Err(error) = promise.await {
 				tracing::warn!(?error, "actor wait_until promise rejected");
@@ -591,12 +621,8 @@ impl ActorContext {
 	}
 
 	#[napi]
-	pub fn register_task(
-		&self,
-		promise: Promise<serde_json::Value>,
-	) -> napi::Result<()> {
-		self
-			.shared
+	pub fn register_task(&self, promise: Promise<serde_json::Value>) -> napi::Result<()> {
+		self.shared
 			.register_task(Box::pin(async move {
 				if let Err(error) = promise.await {
 					tracing::warn!(?error, "actor keep_awake promise rejected");
@@ -606,105 +632,91 @@ impl ActorContext {
 	}
 }
 
+impl Drop for ActorContext {
+	fn drop(&mut self) {
+		tracing::debug!(
+			class = "ActorContext",
+			actor_id = %self.inner.actor_id(),
+			shared_strong_count = Arc::strong_count(&self.shared),
+			"dropped napi class"
+		);
+	}
+}
+
 impl ActorContextShared {
-	fn abort_token(&self) -> CoreCancellationToken {
-		let mut guard = self
-			.abort_token
-			.lock()
-			.expect("actor context abort token mutex poisoned");
-		guard
-			.get_or_insert_with(CoreCancellationToken::new)
-			.clone()
+	fn configured_abort_token(&self) -> Option<CoreCancellationToken> {
+		self.abort_token.lock().clone()
 	}
 
 	fn set_abort_token(&self, token: CoreCancellationToken) {
-		*self
-			.abort_token
-			.lock()
-			.expect("actor context abort token mutex poisoned") = Some(token);
+		*self.abort_token.lock() = Some(token);
 	}
 
 	fn set_run_restart(&self, restart: RunRestartHook) {
-		*self
-			.run_restart
-			.lock()
-			.expect("actor context run restart mutex poisoned") = Some(restart);
+		*self.run_restart.lock() = Some(restart);
 	}
 
 	fn set_task_sender(&self, sender: UnboundedSender<RegisteredTask>) {
-		*self
-			.task_sender
-			.lock()
-			.expect("actor context task sender mutex poisoned") = Some(sender);
+		*self.task_sender.lock() = Some(sender);
 	}
 
 	fn register_task(&self, task: RegisteredTask) -> anyhow::Result<()> {
-		let sender = self
-			.task_sender
-			.lock()
-			.expect("actor context task sender mutex poisoned")
-			.clone()
-			.ok_or_else(|| anyhow::anyhow!("actor task registration is not configured"))?;
-		sender
-			.send(task)
-			.map_err(|_| anyhow::anyhow!("actor task registration is closed"))
+		let sender = self.task_sender.lock().clone().ok_or_else(|| {
+			NapiInvalidState {
+				state: "actor task registration".to_owned(),
+				reason: "not configured".to_owned(),
+			}
+			.build()
+		})?;
+		sender.send(task).map_err(|_| {
+			NapiInvalidState {
+				state: "actor task registration".to_owned(),
+				reason: "closed".to_owned(),
+			}
+			.build()
+		})
 	}
 
 	fn run_restart(&self) -> anyhow::Result<()> {
-		let restart = self
-			.run_restart
-			.lock()
-			.expect("actor context run restart mutex poisoned")
-			.clone()
-			.ok_or_else(|| anyhow::anyhow!("run handler restart is not configured"))?;
+		let restart = self.run_restart.lock().clone().ok_or_else(|| {
+			NapiInvalidState {
+				state: "run handler restart".to_owned(),
+				reason: "not configured".to_owned(),
+			}
+			.build()
+		})?;
 		restart()
 	}
 
 	fn run_restart_configured(&self) -> bool {
-		self
-			.run_restart
-			.lock()
-			.expect("actor context run restart mutex poisoned")
-			.is_some()
+		self.run_restart.lock().is_some()
 	}
 
+	#[allow(dead_code)]
 	fn set_end_reason(&self, reason: EndReason) {
-		*self
-			.end_reason
-			.lock()
-			.expect("actor context end reason mutex poisoned") = Some(reason);
+		*self.end_reason.lock() = Some(reason);
 	}
 
-	fn begin_websocket_callback(&self, region: WebSocketCallbackRegion) {
-		*self
-			.websocket_callback_region
-			.lock()
-			.expect("actor context websocket callback mutex poisoned") = Some(region);
+	fn begin_websocket_callback(&self, region: WebSocketCallbackRegion) -> u32 {
+		let id = self
+			.next_websocket_callback_region_id
+			.fetch_add(1, Ordering::SeqCst)
+			.wrapping_add(1);
+		self.websocket_callback_regions.lock().insert(id, region);
+		id
 	}
 
-	fn end_websocket_callback(&self) {
-		self
-			.websocket_callback_region
-			.lock()
-			.expect("actor context websocket callback mutex poisoned")
-			.take();
+	fn end_websocket_callback(&self, region_id: u32) {
+		self.websocket_callback_regions.lock().remove(&region_id);
 	}
 
 	#[cfg_attr(not(test), allow(dead_code))]
 	fn take_end_reason(&self) -> Option<EndReason> {
-		self
-			.end_reason
-			.lock()
-			.expect("actor context end reason mutex poisoned")
-			.take()
+		self.end_reason.lock().take()
 	}
 
 	fn has_end_reason(&self) -> bool {
-		self
-			.end_reason
-			.lock()
-			.expect("actor context end reason mutex poisoned")
-			.is_some()
+		self.end_reason.lock().is_some()
 	}
 
 	fn mark_ready(&self) {
@@ -715,7 +727,11 @@ impl ActorContextShared {
 
 	fn mark_started(&self) -> anyhow::Result<()> {
 		if !self.is_ready() {
-			anyhow::bail!("actor context cannot be started before it is ready");
+			return Err(NapiInvalidState {
+				state: "actor context".to_owned(),
+				reason: "cannot start before ready".to_owned(),
+			}
+			.build());
 		}
 
 		let _ = self
@@ -733,26 +749,13 @@ impl ActorContextShared {
 	}
 
 	fn reset_runtime_state(&self) {
-		*self
-			.abort_token
-			.lock()
-			.expect("actor context abort token mutex poisoned") = None;
-		*self
-			.run_restart
-			.lock()
-			.expect("actor context run restart mutex poisoned") = None;
-		*self
-			.task_sender
-			.lock()
-			.expect("actor context task sender mutex poisoned") = None;
-		*self
-			.end_reason
-			.lock()
-			.expect("actor context end reason mutex poisoned") = None;
-		*self
-			.websocket_callback_region
-			.lock()
-			.expect("actor context websocket callback mutex poisoned") = None;
+		*self.abort_token.lock() = None;
+		*self.run_restart.lock() = None;
+		*self.task_sender.lock() = None;
+		*self.end_reason.lock() = None;
+		*self.websocket_callback_regions.lock() = BTreeMap::new();
+		self.next_websocket_callback_region_id
+			.store(0, Ordering::SeqCst);
 		self.ready.store(false, Ordering::SeqCst);
 		self.started.store(false, Ordering::SeqCst);
 	}
@@ -764,16 +767,32 @@ fn actor_context_shared(actor_id: &str) -> Arc<ActorContextShared> {
 	match ACTOR_CONTEXT_SHARED.entry_sync(actor_id.to_owned()) {
 		scc::hash_map::Entry::Occupied(mut entry) => {
 			if let Some(shared) = entry.get().upgrade() {
+				tracing::debug!(
+					%actor_id,
+					outcome = "hit",
+					strong_count = Arc::strong_count(&shared),
+					"actor context shared-state cache lookup"
+				);
 				return shared;
 			}
 
 			let shared = Arc::new(ActorContextShared::default());
 			*entry.get_mut() = Arc::downgrade(&shared);
+			tracing::debug!(
+				%actor_id,
+				outcome = "stale",
+				"actor context shared-state cache lookup"
+			);
 			shared
 		}
 		scc::hash_map::Entry::Vacant(entry) => {
 			let shared = Arc::new(ActorContextShared::default());
 			entry.insert_entry(Arc::downgrade(&shared));
+			tracing::debug!(
+				%actor_id,
+				outcome = "miss",
+				"actor context shared-state cache lookup"
+			);
 			shared
 		}
 	}
@@ -787,21 +806,22 @@ fn usize_to_u32(value: usize) -> u32 {
 	value.min(u32::MAX as usize) as u32
 }
 
-pub(crate) fn state_deltas_from_payload(
-	payload: StateDeltaPayload,
-) -> Vec<StateDelta> {
+pub(crate) fn state_deltas_from_payload(payload: StateDeltaPayload) -> Vec<StateDelta> {
 	let mut deltas = Vec::new();
 
 	if let Some(state) = payload.state {
 		deltas.push(StateDelta::ActorState(state.to_vec()));
 	}
 
-	deltas.extend(payload.conn_hibernation.into_iter().map(|entry| {
-		StateDelta::ConnHibernation {
-			conn: entry.conn_id,
-			bytes: entry.bytes.to_vec(),
-		}
-	}));
+	deltas.extend(
+		payload
+			.conn_hibernation
+			.into_iter()
+			.map(|entry| StateDelta::ConnHibernation {
+				conn: entry.conn_id,
+				bytes: entry.bytes.to_vec(),
+			}),
+	);
 
 	deltas.extend(
 		payload
@@ -833,20 +853,38 @@ async fn call_disconnect_predicate(
 	callback: &DisconnectPredicateTsfn,
 	conn: CoreConnHandle,
 ) -> napi::Result<bool> {
+	let payload_summary = format!("conn_id={}", conn.id());
+	tracing::debug!(
+		kind = "disconnectPredicate",
+		payload_summary = %payload_summary,
+		"invoking napi TSF callback"
+	);
 	let promise = callback
 		.call_async::<Promise<bool>>(Ok(DisconnectPredicatePayload { conn }))
 		.await
-		.map_err(|error| {
-			napi::Error::from_reason(format!(
-				"disconnect predicate failed: {error}"
-			))
-		})?;
+		.map_err(disconnect_predicate_error)?;
 
-	promise.await.map_err(|error| {
-		napi::Error::from_reason(format!(
-			"disconnect predicate failed: {error}"
-		))
-	})
+	promise.await.map_err(disconnect_predicate_error)
+}
+
+fn inspector_version_error(argument: &str) -> napi::Error {
+	napi_anyhow_error(
+		NapiInvalidArgument {
+			argument: argument.to_owned(),
+			reason: "exceeds u16".to_owned(),
+		}
+		.build(),
+	)
+}
+
+fn disconnect_predicate_error(error: napi::Error) -> napi::Error {
+	napi_anyhow_error(
+		NapiInvalidState {
+			state: "disconnect predicate".to_owned(),
+			reason: error.to_string(),
+		}
+		.build(),
+	)
 }
 
 fn build_disconnect_predicate_payload(
@@ -867,10 +905,9 @@ fn create_abort_signal(env: Env) -> napi::Result<(JsObject, AbortSignalTsfn)> {
 	)?;
 	let signal = bridge.get_named_property::<JsObject>("signal")?;
 	let abort = bridge.get_named_property::<JsFunction>("abort")?;
-	let mut abort = abort.create_threadsafe_function(
-		0,
-		|_ctx: ThreadSafeCallContext<()>| Ok(Vec::<napi::JsUnknown>::new()),
-	)?;
+	let mut abort = abort.create_threadsafe_function(0, |_ctx: ThreadSafeCallContext<()>| {
+		Ok(Vec::<napi::JsUnknown>::new())
+	})?;
 	abort.unref(&env)?;
 
 	Ok((signal, abort))
@@ -910,7 +947,9 @@ mod tests {
 		let shared = ActorContextShared::default();
 
 		shared.mark_ready();
-		shared.mark_started().expect("started should succeed once ready");
+		shared
+			.mark_started()
+			.expect("started should succeed once ready");
 		shared.set_end_reason(EndReason::Sleep);
 		assert!(shared.has_end_reason());
 		assert!(shared.is_ready());

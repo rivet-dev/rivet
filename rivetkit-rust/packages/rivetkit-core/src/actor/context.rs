@@ -1,82 +1,149 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::future::Future;
-use std::sync::Arc;
 use std::sync::Weak;
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicUsize, Ordering};
+use std::sync::{Arc, OnceLock};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use anyhow::{Result, anyhow};
+use anyhow::Result;
 use futures::future::BoxFuture;
-use rivet_envoy_client::tunnel::HibernatingWebSocketMetadata;
+use parking_lot::{Mutex, RwLock};
 use rivet_envoy_client::handle::EnvoyHandle;
+use rivet_envoy_client::tunnel::HibernatingWebSocketMetadata;
+use scc::HashMap as SccHashMap;
 use tokio::runtime::Handle;
-use tokio::sync::{Notify, broadcast, mpsc, oneshot};
+use tokio::sync::{Mutex as AsyncMutex, Notify, OnceCell, broadcast, mpsc, oneshot};
+use tokio::task::JoinHandle;
 use tokio::time::Instant;
 use tokio_util::sync::CancellationToken;
 
-use crate::actor::callbacks::{ActorEvent, Reply, Request, StateDelta};
+use crate::ActorConfig;
 use crate::actor::connection::{
-	ConnHandle, ConnHandles, ConnectionManager, HibernatableConnectionMetadata,
-	PendingHibernationChanges,
+	ConnHandle, ConnHandles, HibernatableConnectionMetadata, PendingHibernationChanges,
+	hibernatable_id_from_slice,
 };
 use crate::actor::diagnostics::ActorDiagnostics;
-use crate::actor::event::EventBroadcaster;
+use crate::actor::lifecycle_hooks::Reply;
+use crate::actor::messages::{ActorEvent, Request, StateDelta};
 use crate::actor::metrics::ActorMetrics;
-use crate::actor::queue::Queue;
-use crate::actor::schedule::Schedule;
-use crate::actor::sleep::{CanSleep, SleepController};
-use crate::actor::state::{ActorState, PersistedActor};
+use crate::actor::preload::PreloadedKv;
+use crate::actor::queue::{QueueInspectorUpdateCallback, QueueMetadata, QueueWaitActivityCallback};
+use crate::actor::schedule::{InternalKeepAwakeCallback, LocalAlarmCallback};
+use crate::actor::sleep::{CanSleep, SleepState};
+use crate::actor::state::{PendingSave, PersistedActor, RequestSaveOpts};
 use crate::actor::task::{
 	LIFECYCLE_EVENT_INBOX_CHANNEL, LifecycleEvent, actor_channel_overloaded_error,
 };
 use crate::actor::task_types::UserTaskKind;
-use crate::actor::vars::ActorVars;
 use crate::actor::work_registry::RegionGuard;
-use crate::ActorConfig;
+use crate::error::ActorRuntime;
 use crate::inspector::{Inspector, InspectorSnapshot};
 use crate::kv::Kv;
 use crate::sqlite::SqliteDb;
-use crate::types::{ActorKey, ConnId, ListOpts, SaveStateOpts};
+use crate::types::{ActorKey, ConnId, ListOpts};
 
 /// Shared actor runtime context.
 ///
 /// This public surface is the foreign-runtime contract for `rivetkit-core`.
 /// Native Rust, NAPI-backed TypeScript, and future V8 runtimes should be able
 /// to drive actor behavior through `ActorFactory` plus the methods exposed here
-/// and on the returned runtime objects like `Kv`, `SqliteDb`, `Schedule`,
-/// `Queue`, `ConnHandle`, and `WebSocket`.
-#[derive(Clone, Debug)]
-pub struct ActorContext(Arc<ActorContextInner>);
+/// and on the returned runtime objects like `Kv`, `SqliteDb`, schedule APIs,
+/// queue APIs, `ConnHandle`, and `WebSocket`.
+#[derive(Clone)]
+pub struct ActorContext(pub(crate) Arc<ActorContextInner>);
 
-#[derive(Debug)]
 pub(crate) struct ActorContextInner {
-	state: ActorState,
-	vars: ActorVars,
-	kv: Kv,
+	pub(super) kv: Kv,
 	sql: SqliteDb,
-	schedule: Schedule,
-	queue: Queue,
-	broadcaster: EventBroadcaster,
-	connections: ConnectionManager,
-	sleep: SleepController,
+	// Forced-sync: actor state snapshots are exposed through synchronous
+	// accessors and are never held across `.await`.
+	pub(super) current_state: RwLock<Vec<u8>>,
+	pub(super) persisted: RwLock<PersistedActor>,
+	pub(super) last_pushed_alarm: RwLock<Option<i64>>,
+	pub(super) state_save_interval: Duration,
+	pub(super) state_dirty: AtomicBool,
+	pub(super) state_revision: AtomicU64,
+	pub(super) save_request_revision: AtomicU64,
+	pub(super) save_completed_revision: AtomicU64,
+	pub(super) save_completion: Notify,
+	pub(super) save_requested: AtomicBool,
+	pub(super) save_requested_immediate: AtomicBool,
+	// Forced-sync: debounce bookkeeping is updated from sync save-request paths.
+	pub(super) save_requested_within_deadline: Mutex<Option<std::time::Instant>>,
+	pub(super) last_save_at: Mutex<Option<std::time::Instant>>,
+	pub(super) pending_save: Mutex<Option<PendingSave>>,
+	pub(super) tracked_persist: Mutex<Option<JoinHandle<()>>>,
+	pub(super) save_guard: AsyncMutex<()>,
+	pub(super) in_flight_state_writes: AtomicUsize,
+	pub(super) state_write_completion: Notify,
+	pub(super) on_state_change_in_flight: AtomicUsize,
+	pub(super) on_state_change_idle: Notify,
+	// Forced-sync: hooks are registered and cloned from synchronous runtime
+	// wiring slots before use.
+	pub(super) request_save_hooks: RwLock<Vec<Arc<dyn Fn(RequestSaveOpts) + Send + Sync>>>,
+	// Forced-sync: schedule runtime handles and callbacks are synchronous
+	// wiring slots cloned before actor/envoy I/O.
+	pub(super) schedule_generation: Mutex<Option<u32>>,
+	pub(super) schedule_envoy_handle: Mutex<Option<EnvoyHandle>>,
+	pub(super) client_endpoint: OnceLock<String>,
+	pub(super) client_token: OnceLock<String>,
+	pub(super) client_namespace: OnceLock<String>,
+	pub(super) client_pool_name: OnceLock<String>,
+	pub(super) schedule_internal_keep_awake: Mutex<Option<InternalKeepAwakeCallback>>,
+	pub(super) schedule_local_alarm_callback: Mutex<Option<LocalAlarmCallback>>,
+	// Forced-sync: the local alarm timer is aborted from sync paths.
+	pub(super) schedule_local_alarm_task: Mutex<Option<JoinHandle<()>>>,
+	// Forced-sync: receivers are pushed/taken from sync paths and awaited after
+	// being moved out of the lock.
+	pub(super) schedule_pending_alarm_writes: Mutex<Vec<oneshot::Receiver<()>>>,
+	pub(super) schedule_local_alarm_epoch: AtomicU64,
+	pub(super) schedule_alarm_dispatch_enabled: AtomicBool,
+	pub(super) schedule_dirty_since_push: AtomicBool,
+	#[cfg(test)]
+	pub(super) schedule_driver_alarm_cancel_count: AtomicUsize,
+	// Forced-sync: queue config is read from sync public methods before blocking
+	// on async queue work.
+	pub(super) queue_config: Mutex<ActorConfig>,
+	pub(super) queue_abort_signal: Option<CancellationToken>,
+	pub(super) queue_initialize: OnceCell<()>,
+	// Forced-sync: startup installs preload before any queue method awaits init.
+	pub(super) queue_preloaded_kv: Mutex<Option<PreloadedKv>>,
+	pub(super) queue_preloaded_message_entries: Mutex<Option<Vec<(Vec<u8>, Vec<u8>)>>>,
+	pub(super) queue_metadata: AsyncMutex<QueueMetadata>,
+	pub(super) queue_receive_lock: AsyncMutex<()>,
+	pub(super) queue_completion_waiters: SccHashMap<u64, oneshot::Sender<Option<Vec<u8>>>>,
+	pub(super) queue_notify: Notify,
+	pub(super) active_queue_wait_count: AtomicU32,
+	// Forced-sync: callbacks are registered and cloned from synchronous hooks.
+	pub(super) queue_wait_activity_callback: Mutex<Option<QueueWaitActivityCallback>>,
+	pub(super) queue_inspector_update_callback: Mutex<Option<QueueInspectorUpdateCallback>>,
+	// Forced-sync: connection operations expose sync accessors or clone handles
+	// before awaiting; connection_disconnect_state serializes disconnect
+	// bookkeeping with pending hibernation snapshots.
+	pub(super) connection_config: RwLock<ActorConfig>,
+	pub(super) connections: RwLock<BTreeMap<ConnId, ConnHandle>>,
+	pub(super) pending_hibernation_updates: RwLock<BTreeSet<ConnId>>,
+	pub(super) pending_hibernation_removals: RwLock<BTreeSet<ConnId>>,
+	pub(super) connection_disconnect_state: Mutex<()>,
+	pub(super) sleep: SleepState,
 	activity: ActivityState,
+	pending_disconnect_count: AtomicUsize,
 	prevent_sleep: AtomicBool,
-	in_on_state_change: Arc<AtomicBool>,
 	sleep_requested: AtomicBool,
 	destroy_requested: AtomicBool,
 	destroy_completed: AtomicBool,
 	destroy_completion_notify: Notify,
 	abort_signal: CancellationToken,
-	inspector: std::sync::RwLock<Option<Inspector>>,
-	inspector_attach_count: std::sync::RwLock<Option<Arc<AtomicU32>>>,
-	inspector_overlay_tx:
-		std::sync::RwLock<Option<broadcast::Sender<Arc<Vec<u8>>>>>,
-	actor_events: std::sync::RwLock<Option<mpsc::Sender<ActorEvent>>>,
-	lifecycle_events: std::sync::RwLock<Option<mpsc::Sender<LifecycleEvent>>>,
-	hibernated_connection_liveness_override:
-		std::sync::RwLock<Option<BTreeSet<(Vec<u8>, Vec<u8>)>>>,
-	lifecycle_event_inbox_capacity: usize,
-	metrics: ActorMetrics,
+	// Forced-sync: runtime wiring slots are configured through synchronous
+	// lifecycle setup and cloned before sending events.
+	inspector: RwLock<Option<Inspector>>,
+	inspector_attach_count: RwLock<Option<Arc<AtomicU32>>>,
+	inspector_overlay_tx: RwLock<Option<broadcast::Sender<Arc<Vec<u8>>>>>,
+	actor_events: RwLock<Option<mpsc::UnboundedSender<ActorEvent>>>,
+	pub(super) lifecycle_events: RwLock<Option<mpsc::Sender<LifecycleEvent>>>,
+	hibernated_connection_liveness_override: RwLock<Option<BTreeSet<(Vec<u8>, Vec<u8>)>>>,
+	pub(super) lifecycle_event_inbox_capacity: usize,
+	pub(super) metrics: ActorMetrics,
 	diagnostics: ActorDiagnostics,
 	actor_id: String,
 	name: String,
@@ -87,27 +154,15 @@ pub(crate) struct ActorContextInner {
 #[derive(Debug, Default)]
 pub(crate) struct ActivityState {
 	dirty: AtomicBool,
-	notification_pending: AtomicBool,
 }
 
 impl ActivityState {
-	fn mark_dirty(&self) {
-		self.dirty.store(true, Ordering::SeqCst);
+	fn mark_dirty(&self) -> bool {
+		!self.dirty.swap(true, Ordering::AcqRel)
 	}
 
 	fn take_dirty(&self) -> bool {
-		self.dirty.swap(false, Ordering::SeqCst)
-	}
-
-	fn try_begin_notification(&self) -> bool {
-		self
-			.notification_pending
-			.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
-			.is_ok()
-	}
-
-	fn clear_notification_pending(&self) {
-		self.notification_pending.store(false, Ordering::SeqCst);
+		self.dirty.swap(false, Ordering::AcqRel)
 	}
 }
 
@@ -147,27 +202,20 @@ impl ActorContext {
 		)
 	}
 
-	pub(crate) fn new_runtime(
-		actor_id: impl Into<String>,
-		name: impl Into<String>,
-		key: ActorKey,
-		region: impl Into<String>,
-		config: ActorConfig,
-		kv: Kv,
-		sql: SqliteDb,
-	) -> Self {
+	#[cfg(test)]
+	pub(crate) fn new_for_state_tests(kv: Kv, config: ActorConfig) -> Self {
 		Self::build(
-			actor_id.into(),
-			name.into(),
-			key,
-			region.into(),
+			"state-test".to_owned(),
+			"state-test".to_owned(),
+			Vec::new(),
+			"local".to_owned(),
 			config,
 			kv,
-			sql,
+			SqliteDb::default(),
 		)
 	}
 
-	fn build(
+	pub(crate) fn build(
 		actor_id: String,
 		name: String,
 		key: ActorKey,
@@ -179,47 +227,82 @@ impl ActorContext {
 		let metrics = ActorMetrics::new(actor_id.clone(), name.clone());
 		let diagnostics = ActorDiagnostics::new(actor_id.clone());
 		let lifecycle_event_inbox_capacity = config.lifecycle_event_inbox_capacity;
-		let state = ActorState::new_with_metrics(kv.clone(), config.clone(), metrics.clone());
-		let in_on_state_change = state.in_on_state_change_flag();
-		let schedule = Schedule::new(state.clone(), actor_id.clone(), config);
+		let state_save_interval = config.state_save_interval;
 		let abort_signal = CancellationToken::new();
-		let queue = Queue::new(
-			kv.clone(),
-			ActorConfig::default(),
-			Some(abort_signal.clone()),
-			metrics.clone(),
-		);
-		let connections = ConnectionManager::new(
-			actor_id.clone(),
-			kv.clone(),
-			ActorConfig::default(),
-			metrics.clone(),
-		);
-		let sleep = SleepController::default();
+		let sleep = SleepState::new(config.clone());
 		let ctx = Self(Arc::new(ActorContextInner {
-			state,
-			vars: ActorVars::default(),
 			kv,
 			sql,
-			schedule,
-			queue,
-			broadcaster: EventBroadcaster,
-			connections,
+			current_state: RwLock::new(Vec::new()),
+			persisted: RwLock::new(PersistedActor::default()),
+			last_pushed_alarm: RwLock::new(None),
+			state_save_interval,
+			state_dirty: AtomicBool::new(false),
+			state_revision: AtomicU64::new(0),
+			save_request_revision: AtomicU64::new(0),
+			save_completed_revision: AtomicU64::new(0),
+			save_completion: Notify::new(),
+			save_requested: AtomicBool::new(false),
+			save_requested_immediate: AtomicBool::new(false),
+			save_requested_within_deadline: Mutex::new(None),
+			last_save_at: Mutex::new(None),
+			pending_save: Mutex::new(None),
+			tracked_persist: Mutex::new(None),
+			save_guard: AsyncMutex::new(()),
+			in_flight_state_writes: AtomicUsize::new(0),
+			state_write_completion: Notify::new(),
+			on_state_change_in_flight: AtomicUsize::new(0),
+			on_state_change_idle: Notify::new(),
+			request_save_hooks: RwLock::new(Vec::new()),
+			schedule_generation: Mutex::new(None),
+			schedule_envoy_handle: Mutex::new(None),
+			client_endpoint: OnceLock::new(),
+			client_token: OnceLock::new(),
+			client_namespace: OnceLock::new(),
+			client_pool_name: OnceLock::new(),
+			schedule_internal_keep_awake: Mutex::new(None),
+			schedule_local_alarm_callback: Mutex::new(None),
+			schedule_local_alarm_task: Mutex::new(None),
+			schedule_pending_alarm_writes: Mutex::new(Vec::new()),
+			schedule_local_alarm_epoch: AtomicU64::new(0),
+			schedule_alarm_dispatch_enabled: AtomicBool::new(true),
+			// A fresh actor context has no in-process record of a successful
+			// envoy alarm push yet, so the first sync must always push.
+			schedule_dirty_since_push: AtomicBool::new(true),
+			#[cfg(test)]
+			schedule_driver_alarm_cancel_count: AtomicUsize::new(0),
+			queue_config: Mutex::new(config.clone()),
+			queue_abort_signal: Some(abort_signal.clone()),
+			queue_initialize: OnceCell::new(),
+			queue_preloaded_kv: Mutex::new(None),
+			queue_preloaded_message_entries: Mutex::new(None),
+			queue_metadata: AsyncMutex::new(QueueMetadata::default()),
+			queue_receive_lock: AsyncMutex::new(()),
+			queue_completion_waiters: SccHashMap::new(),
+			queue_notify: Notify::new(),
+			active_queue_wait_count: AtomicU32::new(0),
+			queue_wait_activity_callback: Mutex::new(None),
+			queue_inspector_update_callback: Mutex::new(None),
+			connection_config: RwLock::new(config),
+			connections: RwLock::new(BTreeMap::new()),
+			pending_hibernation_updates: RwLock::new(BTreeSet::new()),
+			pending_hibernation_removals: RwLock::new(BTreeSet::new()),
+			connection_disconnect_state: Mutex::new(()),
 			sleep,
 			activity: ActivityState::default(),
+			pending_disconnect_count: AtomicUsize::new(0),
 			prevent_sleep: AtomicBool::new(false),
-			in_on_state_change,
 			sleep_requested: AtomicBool::new(false),
 			destroy_requested: AtomicBool::new(false),
 			destroy_completed: AtomicBool::new(false),
 			destroy_completion_notify: Notify::new(),
 			abort_signal,
-			inspector: std::sync::RwLock::new(None),
-			inspector_attach_count: std::sync::RwLock::new(None),
-			inspector_overlay_tx: std::sync::RwLock::new(None),
-			actor_events: std::sync::RwLock::new(None),
-			lifecycle_events: std::sync::RwLock::new(None),
-			hibernated_connection_liveness_override: std::sync::RwLock::new(None),
+			inspector: RwLock::new(None),
+			inspector_attach_count: RwLock::new(None),
+			inspector_overlay_tx: RwLock::new(None),
+			actor_events: RwLock::new(None),
+			lifecycle_events: RwLock::new(None),
+			hibernated_connection_liveness_override: RwLock::new(None),
 			lifecycle_event_inbox_capacity,
 			metrics,
 			diagnostics,
@@ -230,54 +313,6 @@ impl ActorContext {
 		}));
 		ctx.configure_sleep_hooks();
 		ctx
-	}
-
-	pub fn state(&self) -> Vec<u8> {
-		self.0.state.state()
-	}
-
-	pub fn set_state(&self, state: Vec<u8>) -> Result<()> {
-		let routed_to_actor_task = self.0.state.lifecycle_events_configured();
-		self.0.state.set_state(state)?;
-		if !routed_to_actor_task {
-			self.record_state_updated();
-			self.reset_sleep_timer();
-		}
-		Ok(())
-	}
-
-	pub fn request_save(&self, immediate: bool) {
-		self.0.state.request_save(immediate);
-	}
-
-	pub fn request_save_within(&self, ms: u32) {
-		self.0.state.request_save_within(ms);
-	}
-
-	pub async fn save_state(&self, deltas: Vec<StateDelta>) -> Result<()> {
-		let save_request_revision = self.0.state.save_request_revision();
-		self
-			.save_state_with_revision(deltas, save_request_revision)
-			.await
-	}
-
-	pub(crate) async fn persist_state(&self, opts: SaveStateOpts) -> Result<()> {
-		self.0.state.persist_state(opts).await?;
-		self.record_state_updated();
-		Ok(())
-	}
-
-	pub(crate) async fn wait_for_pending_state_writes(&self) {
-		self.0.state.wait_for_pending_writes().await;
-	}
-
-	pub fn vars(&self) -> Vec<u8> {
-		self.0.vars.vars()
-	}
-
-	pub fn set_vars(&self, vars: Vec<u8>) {
-		self.0.vars.set_vars(vars);
-		self.reset_sleep_timer();
 	}
 
 	pub async fn kv_batch_get(&self, keys: &[&[u8]]) -> Result<Vec<Option<Vec<u8>>>> {
@@ -325,11 +360,7 @@ impl ActorContext {
 		self.0.sql.exec_rows_cbor(sql).await
 	}
 
-	pub async fn db_query(
-		&self,
-		sql: &str,
-		params: Option<&[u8]>,
-	) -> Result<Vec<u8>> {
+	pub async fn db_query(&self, sql: &str, params: Option<&[u8]>) -> Result<Vec<u8>> {
 		self.0.sql.query_rows_cbor(sql, params).await
 	}
 
@@ -338,12 +369,8 @@ impl ActorContext {
 		Ok(())
 	}
 
-	pub fn schedule(&self) -> &Schedule {
-		&self.0.schedule
-	}
-
 	pub fn set_alarm(&self, timestamp_ms: Option<i64>) -> Result<()> {
-		self.0.schedule.set_alarm(timestamp_ms)
+		self.set_schedule_alarm(timestamp_ms)
 	}
 
 	/// Resync persisted alarms with the runtime's alarm transport.
@@ -352,54 +379,72 @@ impl ActorContext {
 	/// any persisted schedule state and before accepting user callbacks that rely
 	/// on future alarms being armed.
 	pub fn init_alarms(&self) {
-		self.0.schedule.sync_future_alarm_logged();
+		self.sync_future_alarm_logged();
 	}
 
-	pub fn queue(&self) -> &Queue {
-		&self.0.queue
+	pub fn queue(&self) -> &Self {
+		self
 	}
 
 	pub fn sleep(&self) {
-		self.0.sleep.cancel_sleep_timer();
+		self.cancel_sleep_timer();
 		self.0.sleep_requested.store(true, Ordering::SeqCst);
-		if let Ok(runtime) = Handle::try_current() {
+		if Handle::try_current().is_ok() {
 			let ctx = self.clone();
-			// Intentionally detached: `sleep()` is a user-facing bridge that only
-			// asks envoy to stop this actor; ActorTask owns the actual shutdown
-			// drain and hibernation persistence.
-			runtime.spawn(async move {
-				ctx.0.sleep.request_sleep(ctx.actor_id());
+			let tracked = self.track_shutdown_task(async move {
+				ctx.record_user_task_started(UserTaskKind::SleepFinalize);
+				let started_at = Instant::now();
+				ctx.request_sleep_from_envoy();
+				ctx.record_user_task_finished(UserTaskKind::SleepFinalize, started_at.elapsed());
 			});
-			return;
+			if tracked {
+				return;
+			}
 		}
 
-		self.0.sleep.request_sleep(self.actor_id());
+		self.request_sleep_from_envoy();
 	}
 
 	pub fn destroy(&self) {
 		self.mark_destroy_requested();
 
-		let actor_id = self.actor_id().to_owned();
-		let sleep = self.0.sleep.clone();
-		if let Ok(runtime) = Handle::try_current() {
-			// Intentionally detached without an extra defer: the spawned task is
-			// already enough to decouple the user-facing destroy signal from the
-			// caller, and ActorTask owns the actual shutdown once stop arrives.
-			runtime.spawn(async move {
-				sleep.request_destroy(&actor_id);
+		let ctx = self.clone();
+		if Handle::try_current().is_ok() {
+			let tracked = self.track_shutdown_task(async move {
+				ctx.record_user_task_started(UserTaskKind::DestroyRequest);
+				let started_at = Instant::now();
+				ctx.request_destroy_from_envoy();
+				ctx.record_user_task_finished(UserTaskKind::DestroyRequest, started_at.elapsed());
 			});
-			return;
+			if tracked {
+				return;
+			}
 		}
 
-		sleep.request_destroy(&actor_id);
+		self.request_destroy_from_envoy();
 	}
 
 	pub fn mark_destroy_requested(&self) {
-		self.0.sleep.cancel_sleep_timer();
-		self.0.state.flush_on_shutdown();
+		self.cancel_sleep_timer();
+		self.flush_on_shutdown();
 		self.0.destroy_requested.store(true, Ordering::SeqCst);
 		self.0.destroy_completed.store(false, Ordering::SeqCst);
 		self.0.abort_signal.cancel();
+	}
+
+	#[doc(hidden)]
+	pub fn cancel_abort_signal_for_sleep(&self) {
+		self.0.abort_signal.cancel();
+	}
+
+	#[doc(hidden)]
+	pub fn actor_abort_signal(&self) -> CancellationToken {
+		self.0.abort_signal.clone()
+	}
+
+	#[doc(hidden)]
+	pub fn actor_aborted(&self) -> bool {
+		self.0.abort_signal.is_cancelled()
 	}
 
 	/// Prevents the actor from entering sleep while enabled.
@@ -409,9 +454,9 @@ impl ActorContext {
 	pub fn set_prevent_sleep(&self, enabled: bool) {
 		let previous = self.0.prevent_sleep.swap(enabled, Ordering::SeqCst);
 		if previous != enabled {
-			self.0.sleep.notify_prevent_sleep_changed();
+			self.notify_prevent_sleep_changed();
+			self.reset_sleep_timer();
 		}
-		self.reset_sleep_timer();
 	}
 
 	pub fn prevent_sleep(&self) -> bool {
@@ -425,10 +470,10 @@ impl ActorContext {
 		}
 
 		let ctx = self.clone();
-		// Intentionally detached but tracked by SleepController: waitUntil work
+		// Intentionally detached but tracked by the actor sleep state: waitUntil work
 		// is a public side task that shutdown drains/aborts through
 		// `shutdown_tasks`, not an ActorTask dispatch child.
-		self.0.sleep.track_shutdown_task(async move {
+		self.track_shutdown_task(async move {
 			ctx.record_user_task_started(UserTaskKind::WaitUntil);
 			let started_at = Instant::now();
 			future.await;
@@ -453,11 +498,11 @@ impl ActorContext {
 	}
 
 	pub fn keep_awake_count(&self) -> usize {
-		self.0.sleep.keep_awake_count()
+		self.sleep_keep_awake_count()
 	}
 
 	pub fn internal_keep_awake_count(&self) -> usize {
-		self.0.sleep.internal_keep_awake_count()
+		self.sleep_internal_keep_awake_count()
 	}
 
 	pub fn actor_id(&self) -> &str {
@@ -487,7 +532,11 @@ impl ActorContext {
 	}
 
 	pub fn broadcast(&self, name: &str, args: &[u8]) {
-		self.0.broadcaster.broadcast(self.conns(), name, args);
+		for connection in self.conns() {
+			if connection.is_subscribed(name) {
+				connection.send(name, args);
+			}
+		}
 	}
 
 	/// Returns a lock-backed iterator over live connections.
@@ -496,47 +545,23 @@ impl ActorContext {
 	/// on the connection map until dropped, which blocks connection writers.
 	#[must_use]
 	pub fn conns(&self) -> ConnHandles<'_> {
-		self.0.connections.iter()
+		self.iter_connections()
 	}
 
-	pub async fn client_call(&self, _request: &[u8]) -> Result<Vec<u8>> {
-		Err(anyhow!("actor client bridge is not configured"))
+	pub fn client_endpoint(&self) -> Option<&str> {
+		self.0.client_endpoint.get().map(String::as_str)
 	}
 
-	pub fn client_endpoint(&self) -> Result<String> {
-		self
-			.0
-			.sleep
-			.envoy_handle()
-			.map(|handle| handle.endpoint().to_owned())
-			.ok_or_else(|| anyhow!("actor client endpoint is not configured"))
+	pub fn client_token(&self) -> Option<&str> {
+		self.0.client_token.get().map(String::as_str)
 	}
 
-	pub fn client_token(&self) -> Result<Option<String>> {
-		self
-			.0
-			.sleep
-			.envoy_handle()
-			.map(|handle| handle.token().map(ToOwned::to_owned))
-			.ok_or_else(|| anyhow!("actor client token is not configured"))
+	pub fn client_namespace(&self) -> Option<&str> {
+		self.0.client_namespace.get().map(String::as_str)
 	}
 
-	pub fn client_namespace(&self) -> Result<String> {
-		self
-			.0
-			.sleep
-			.envoy_handle()
-			.map(|handle| handle.namespace().to_owned())
-			.ok_or_else(|| anyhow!("actor client namespace is not configured"))
-	}
-
-	pub fn client_pool_name(&self) -> Result<String> {
-		self
-			.0
-			.sleep
-			.envoy_handle()
-			.map(|handle| handle.pool_name().to_owned())
-			.ok_or_else(|| anyhow!("actor client pool name is not configured"))
+	pub fn client_pool_name(&self) -> Option<&str> {
+		self.0.client_pool_name.get().map(String::as_str)
 	}
 
 	pub fn ack_hibernatable_websocket_message(
@@ -545,53 +570,24 @@ impl ActorContext {
 		request_id: &[u8],
 		server_message_index: u16,
 	) -> Result<()> {
-		let envoy_handle = self
-			.0
-			.sleep
-			.envoy_handle()
-			.ok_or_else(|| anyhow!("hibernatable websocket ack is not configured"))?;
-		let gateway_id: [u8; 4] = gateway_id
-			.try_into()
-			.map_err(|_| anyhow!("invalid hibernatable websocket gateway id"))?;
-		let request_id: [u8; 4] = request_id
-			.try_into()
-			.map_err(|_| anyhow!("invalid hibernatable websocket request id"))?;
-		envoy_handle.send_hibernatable_ws_message_ack(
-			gateway_id,
-			request_id,
-			server_message_index,
-		);
+		let gateway_id = hibernatable_id_from_slice("gateway_id", gateway_id)?;
+		let request_id = hibernatable_id_from_slice("request_id", request_id)?;
+		let envoy_handle = self.sleep_envoy_handle().ok_or_else(|| {
+			ActorRuntime::NotConfigured {
+				component: "hibernatable websocket ack".to_owned(),
+			}
+			.build()
+		})?;
+		envoy_handle.send_hibernatable_ws_message_ack(gateway_id, request_id, server_message_index);
 		Ok(())
 	}
 
-	#[allow(dead_code)]
 	pub(crate) fn load_persisted_actor(&self, persisted: PersistedActor) {
-		self.0.state.load_persisted(persisted);
+		self.load_persisted(persisted);
 	}
 
-	#[allow(dead_code)]
 	pub(crate) fn persisted_actor(&self) -> PersistedActor {
-		self.0.state.persisted()
-	}
-
-	/// Marks whether this actor has completed its first-create initialization.
-	///
-	/// Foreign-runtime adapters should set this before the pre-ready persistence
-	/// flush that commits first-create state to KV.
-	pub fn set_has_initialized(&self, has_initialized: bool) {
-		self.0.state.set_has_initialized(has_initialized);
-	}
-
-	pub fn set_in_on_state_change_callback(&self, in_callback: bool) {
-		self.0.state.set_in_on_state_change_callback(in_callback);
-	}
-
-	pub fn in_on_state_change_callback(&self) -> bool {
-		self.0.in_on_state_change.load(Ordering::SeqCst)
-	}
-
-	pub fn on_request_save(&self, hook: Box<dyn Fn(bool) + Send + Sync>) {
-		self.0.state.on_request_save(hook);
+		self.persisted()
 	}
 
 	/// Dispatches any scheduled actions whose deadline has already passed.
@@ -599,13 +595,12 @@ impl ActorContext {
 	/// Foreign-runtime adapters should call this after startup callbacks complete
 	/// so overdue scheduled work enters the normal actor event loop.
 	pub async fn drain_overdue_scheduled_events(&self) -> Result<()> {
-		for event in self.0.schedule.due_events(now_timestamp_ms()) {
-			self
-				.dispatch_scheduled_action(&event.event_id, event.action, event.args)
+		for event in self.due_scheduled_events(now_timestamp_ms()) {
+			self.dispatch_scheduled_action(&event.event_id, event.action, event.args)
 				.await;
 		}
 
-		self.0.schedule.sync_alarm_logged();
+		self.sync_alarm_logged();
 		Ok(())
 	}
 
@@ -617,11 +612,7 @@ impl ActorContext {
 		self.0.metrics.begin_user_task(kind);
 	}
 
-	pub(crate) fn record_user_task_finished(
-		&self,
-		kind: UserTaskKind,
-		duration: Duration,
-	) {
+	pub(crate) fn record_user_task_finished(&self, kind: UserTaskKind, duration: Duration) {
 		self.0.metrics.end_user_task(kind, duration);
 	}
 
@@ -633,10 +624,7 @@ impl ActorContext {
 		self.0.metrics.observe_shutdown_wait(reason, duration);
 	}
 
-	pub(crate) fn record_shutdown_timeout(
-		&self,
-		reason: crate::actor::task_types::StopReason,
-	) {
+	pub(crate) fn record_shutdown_timeout(&self, reason: crate::actor::task_types::StopReason) {
 		self.0.metrics.inc_shutdown_timeout(reason);
 	}
 
@@ -645,18 +633,13 @@ impl ActorContext {
 		subsystem: &str,
 		operation: &str,
 	) {
-		self
-			.0
+		self.0
 			.metrics
 			.inc_direct_subsystem_shutdown_warning(subsystem, operation);
 	}
 
 	pub(crate) fn warn_work_sent_to_stopping_instance(&self, operation: &'static str) {
-		if let Some(suppression) = self
-			.0
-			.diagnostics
-			.record("work_sent_to_stopping_instance")
-		{
+		if let Some(suppression) = self.0.diagnostics.record("work_sent_to_stopping_instance") {
 			tracing::warn!(
 				actor_id = %suppression.actor_id,
 				operation,
@@ -679,25 +662,6 @@ impl ActorContext {
 		}
 	}
 
-	pub(crate) fn warn_long_shutdown_drain(
-		&self,
-		reason: &'static str,
-		phase: &'static str,
-		elapsed: Duration,
-	) {
-		if let Some(suppression) = self.0.diagnostics.record("long_shutdown_drain") {
-			tracing::warn!(
-				actor_id = %suppression.actor_id,
-				reason,
-				phase,
-				elapsed_ms = elapsed.as_millis() as u64,
-				per_actor_suppressed = suppression.per_actor_suppressed,
-				global_suppressed = suppression.global_suppressed,
-				"actor shutdown drain is taking longer than expected"
-			);
-		}
-	}
-
 	#[doc(hidden)]
 	pub fn render_metrics(&self) -> Result<String> {
 		self.0.metrics.render()
@@ -707,16 +671,15 @@ impl ActorContext {
 		self.0.metrics.metrics_content_type()
 	}
 
-	#[allow(dead_code)]
+	#[cfg(test)]
 	pub(crate) fn add_conn(&self, conn: ConnHandle) {
-		self.0.connections.insert_existing(conn);
+		self.insert_existing(conn);
 		self.record_connections_updated();
 		self.reset_sleep_timer();
 	}
 
-	#[allow(dead_code)]
 	pub(crate) fn remove_conn(&self, conn_id: &str) -> Option<ConnHandle> {
-		let removed = self.0.connections.remove_existing(conn_id);
+		let removed = self.remove_existing(conn_id);
 		if removed.is_some() {
 			self.record_connections_updated();
 			self.reset_sleep_timer();
@@ -724,24 +687,17 @@ impl ActorContext {
 		removed
 	}
 
-	#[allow(dead_code)]
-	pub(crate) fn configure_connection_runtime(
-		&self,
-		config: ActorConfig,
-	) {
-		self.0.sleep.configure(config.clone());
-		self.0.connections.configure_runtime(config);
+	pub(crate) fn configure_connection_runtime(&self, config: ActorConfig) {
+		self.configure_sleep_state(config.clone());
+		self.configure_connection_storage(config);
 	}
 
-	pub(crate) fn configure_actor_events(
-		&self,
-		sender: Option<mpsc::Sender<ActorEvent>>,
-	) {
-		*self
-			.0
-			.actor_events
-			.write()
-			.expect("actor events lock poisoned") = sender;
+	pub(crate) fn configure_queue_preload(&self, preloaded_kv: Option<PreloadedKv>) {
+		self.configure_preload(preloaded_kv);
+	}
+
+	pub(crate) fn configure_actor_events(&self, sender: Option<mpsc::UnboundedSender<ActorEvent>>) {
+		*self.0.actor_events.write() = sender;
 	}
 
 	pub(crate) fn try_send_actor_event(
@@ -749,44 +705,47 @@ impl ActorContext {
 		event: ActorEvent,
 		operation: &'static str,
 	) -> Result<()> {
-		let sender = self
-			.0
-			.actor_events
-			.read()
-			.expect("actor events lock poisoned")
-			.clone()
-			.ok_or_else(|| anyhow!("actor event inbox is not configured"))?;
-		let permit = sender.try_reserve().map_err(|_| {
-			actor_channel_overloaded_error(
-				"actor_event_inbox",
-				self.0.lifecycle_event_inbox_capacity,
-				operation,
-				Some(&self.0.metrics),
-			)
+		let sender = self.0.actor_events.read().clone().ok_or_else(|| {
+			ActorRuntime::NotConfigured {
+				component: "actor event inbox".to_owned(),
+			}
+			.build()
 		})?;
-		permit.send(event);
-		Ok(())
+		tracing::debug!(
+			actor_id = %self.actor_id(),
+			operation,
+			event = event.kind(),
+			"actor event enqueued"
+		);
+		sender.send(event).map_err(|_| {
+			ActorRuntime::NotConfigured {
+				component: "actor event inbox".to_owned(),
+			}
+			.build()
+		})
 	}
 
-	#[allow(dead_code)]
-	pub(crate) fn configure_envoy(
-		&self,
-		envoy_handle: EnvoyHandle,
-		generation: Option<u32>,
-	) {
-		self.0
-			.sleep
-			.configure_envoy(self.actor_id(), envoy_handle.clone(), generation);
-		self.0.schedule.configure_envoy(envoy_handle, generation);
+	#[doc(hidden)]
+	pub fn configure_envoy(&self, envoy_handle: EnvoyHandle, generation: Option<u32>) {
+		let _ = self
+			.0
+			.client_endpoint
+			.set(envoy_handle.endpoint().to_owned());
+		if let Some(token) = envoy_handle.token() {
+			let _ = self.0.client_token.set(token.to_owned());
+		}
+		let _ = self
+			.0
+			.client_namespace
+			.set(envoy_handle.namespace().to_owned());
+		let _ = self
+			.0
+			.client_pool_name
+			.set(envoy_handle.pool_name().to_owned());
+		self.configure_sleep_envoy(envoy_handle.clone(), generation);
+		self.configure_schedule_envoy(envoy_handle, generation);
 	}
 
-	#[allow(dead_code)]
-	pub(crate) fn clear_envoy(&self) {
-		self.0.sleep.clear_envoy();
-		self.0.schedule.clear_envoy();
-	}
-
-	#[allow(dead_code)]
 	pub(crate) async fn connect_conn<F>(
 		&self,
 		params: Vec<u8>,
@@ -799,23 +758,13 @@ impl ActorContext {
 		F: Future<Output = Result<Vec<u8>>> + Send,
 	{
 		let conn = self
-			.0
-			.connections
-			.connect_with_state(
-				self,
-				params,
-				is_hibernatable,
-				hibernation,
-				request,
-				create_state,
-			)
+			.connect_with_state(params, is_hibernatable, hibernation, request, create_state)
 			.await?;
 		self.record_connections_updated();
-		self.notify_activity_dirty_or_reset_sleep_timer();
+		self.reset_sleep_timer();
 		Ok(conn)
 	}
 
-	#[allow(dead_code)]
 	pub async fn connect_conn_with_request<F>(
 		&self,
 		params: Vec<u8>,
@@ -825,8 +774,7 @@ impl ActorContext {
 	where
 		F: Future<Output = Result<Vec<u8>>> + Send,
 	{
-		self
-			.connect_conn(params, false, None, request, create_state)
+		self.connect_conn(params, false, None, request, create_state)
 			.await
 	}
 
@@ -835,44 +783,28 @@ impl ActorContext {
 		gateway_id: &[u8],
 		request_id: &[u8],
 	) -> Result<ConnHandle> {
-		self
-			.0
-			.connections
-			.reconnect_hibernatable(self, gateway_id, request_id)
+		self.reconnect_hibernatable(gateway_id, request_id)
 	}
 
 	pub async fn disconnect_conn(&self, id: ConnId) -> Result<()> {
-		self
-			.0
-			.connections
-			.disconnect_transport_only(self, |conn| conn.id() == id)
-			.await
+		self.disconnect_transport_only(|conn| conn.id() == id).await
 	}
 
 	pub async fn disconnect_conns<F>(&self, predicate: F) -> Result<()>
 	where
 		F: FnMut(&ConnHandle) -> bool,
 	{
-		self
-			.0
-			.connections
-			.disconnect_transport_only(self, predicate)
-			.await
+		self.disconnect_transport_only(predicate).await
 	}
 
 	pub(crate) fn request_hibernation_transport_save(&self, conn_id: &str) {
-		self.0
-			.connections
-			.queue_hibernation_update(conn_id.to_owned());
-		self.request_save(false);
+		self.queue_hibernation_update(conn_id.to_owned());
+		self.request_save(RequestSaveOpts::default());
 	}
 
-	pub(crate) fn request_hibernation_transport_removal(
-		&self,
-		conn_id: impl Into<String>,
-	) {
-		self.0.connections.queue_hibernation_removal(conn_id.into());
-		self.request_save(false);
+	pub(crate) fn request_hibernation_transport_removal(&self, conn_id: impl Into<String>) {
+		self.queue_hibernation_removal_inner(conn_id.into());
+		self.request_save(RequestSaveOpts::default());
 	}
 
 	pub fn queue_hibernation_removal(&self, conn_id: impl Into<String>) {
@@ -880,11 +812,15 @@ impl ActorContext {
 	}
 
 	pub fn has_pending_hibernation_changes(&self) -> bool {
-		self.0.connections.has_pending_hibernation_changes()
+		self.has_pending_hibernation_changes_inner()
 	}
 
 	pub fn take_pending_hibernation_changes(&self) -> Vec<ConnId> {
-		self.0.connections.pending_hibernation_removals()
+		self.pending_hibernation_removals()
+	}
+
+	pub fn dirty_hibernatable_conns(&self) -> Vec<ConnHandle> {
+		self.dirty_hibernatable_conns_inner()
 	}
 
 	pub(crate) fn hibernated_connection_is_live(
@@ -892,30 +828,24 @@ impl ActorContext {
 		gateway_id: &[u8],
 		request_id: &[u8],
 	) -> Result<bool> {
+		let gateway_id = hibernatable_id_from_slice("gateway_id", gateway_id)?;
+		let request_id = hibernatable_id_from_slice("request_id", request_id)?;
+
 		if let Some(override_pairs) = self
 			.0
 			.hibernated_connection_liveness_override
 			.read()
-			.expect("hibernated connection liveness override lock poisoned")
 			.as_ref()
 		{
-			return Ok(
-				override_pairs.contains(&(gateway_id.to_vec(), request_id.to_vec()))
-			);
+			return Ok(override_pairs.contains(&(gateway_id.to_vec(), request_id.to_vec())));
 		}
 
-		let Some(envoy_handle) = self.0.sleep.envoy_handle() else {
+		let Some(envoy_handle) = self.sleep_envoy_handle() else {
 			return Ok(false);
 		};
-		let gateway_id: [u8; 4] = gateway_id
-			.try_into()
-			.map_err(|_| anyhow!("invalid hibernatable websocket gateway id"))?;
-		let request_id: [u8; 4] = request_id
-			.try_into()
-			.map_err(|_| anyhow!("invalid hibernatable websocket request id"))?;
 		let is_live = envoy_handle.hibernatable_connection_is_live(
 			self.actor_id(),
-			self.0.sleep.generation(),
+			self.sleep_generation(),
 			gateway_id,
 			request_id,
 		);
@@ -923,18 +853,11 @@ impl ActorContext {
 	}
 
 	#[cfg(test)]
-	pub(crate) fn set_hibernated_connection_liveness_override<I>(
-		&self,
-		pairs: I,
-	) where
+	pub(crate) fn set_hibernated_connection_liveness_override<I>(&self, pairs: I)
+	where
 		I: IntoIterator<Item = (Vec<u8>, Vec<u8>)>,
 	{
-		*self
-			.0
-			.hibernated_connection_liveness_override
-			.write()
-			.expect("hibernated connection liveness override lock poisoned") =
-			Some(pairs.into_iter().collect());
+		*self.0.hibernated_connection_liveness_override.write() = Some(pairs.into_iter().collect());
 	}
 
 	fn prepare_state_deltas(
@@ -942,11 +865,11 @@ impl ActorContext {
 		deltas: Vec<StateDelta>,
 	) -> Result<(Vec<StateDelta>, PendingHibernationChanges)> {
 		fn finish_with_error(
-			manager: &ConnectionManager,
+			ctx: &ActorContext,
 			pending: PendingHibernationChanges,
 			error: anyhow::Error,
 		) -> Result<(Vec<StateDelta>, PendingHibernationChanges)> {
-			manager.restore_pending_hibernation_changes(pending);
+			ctx.restore_pending_hibernation_changes(pending);
 			Err(error)
 		}
 
@@ -957,8 +880,8 @@ impl ActorContext {
 		for delta in deltas {
 			match delta {
 				StateDelta::ConnHibernation { conn, bytes } => {
-					if let Some(handle) = self.0.connections.connection(&conn) {
-						handle.set_state(bytes.clone());
+					if let Some(handle) = self.connection(&conn) {
+						handle.set_state_initial(bytes.clone());
 					}
 					explicit_updates.insert(conn, bytes);
 				}
@@ -969,22 +892,21 @@ impl ActorContext {
 			}
 		}
 
-		let pending = self.0.connections.take_pending_hibernation_changes();
+		let pending = self.take_pending_hibernation_changes_inner();
 		let mut removal_ids = pending.removed.clone();
 		removal_ids.extend(explicit_removals.iter().cloned());
+
+		let explicit_update_ids: std::collections::BTreeSet<_> =
+			explicit_updates.keys().cloned().collect();
 
 		for (conn, bytes) in explicit_updates {
 			if removal_ids.contains(&conn) {
 				continue;
 			}
-			let encoded = match self
-				.0
-				.connections
-				.encode_hibernation_delta(&conn, bytes)
-			{
+			let encoded = match self.encode_hibernation_delta(&conn, bytes) {
 				Ok(encoded) => encoded,
 				Err(error) => {
-					return finish_with_error(&self.0.connections, pending, error);
+					return finish_with_error(self, pending, error);
 				}
 			};
 			next_deltas.push(StateDelta::ConnHibernation {
@@ -994,23 +916,22 @@ impl ActorContext {
 		}
 
 		for conn in &pending.updated {
-			if removal_ids.contains(conn) || explicit_removals.contains(conn) {
+			if removal_ids.contains(conn)
+				|| explicit_removals.contains(conn)
+				|| explicit_update_ids.contains(conn)
+			{
 				continue;
 			}
-			let Some(handle) = self.0.connections.connection(conn) else {
+			let Some(handle) = self.connection(conn) else {
 				continue;
 			};
 			if !handle.is_hibernatable() || handle.hibernation().is_none() {
 				continue;
 			}
-			let encoded = match self
-				.0
-				.connections
-				.encode_hibernation_delta(conn, handle.state())
-			{
+			let encoded = match self.encode_hibernation_delta(conn, handle.state()) {
 				Ok(encoded) => encoded,
 				Err(error) => {
-					return finish_with_error(&self.0.connections, pending, error);
+					return finish_with_error(self, pending, error);
 				}
 			};
 			next_deltas.push(StateDelta::ConnHibernation {
@@ -1026,20 +947,26 @@ impl ActorContext {
 		Ok((next_deltas, pending))
 	}
 
-	#[allow(dead_code)]
-	pub(crate) async fn restore_hibernatable_connections(
+	#[cfg(test)]
+	pub(crate) async fn restore_hibernatable_connections(&self) -> Result<Vec<ConnHandle>> {
+		self.restore_hibernatable_connections_with_preload(None)
+			.await
+	}
+
+	pub(crate) async fn restore_hibernatable_connections_with_preload(
 		&self,
+		preloaded_kv: Option<&PreloadedKv>,
 	) -> Result<Vec<ConnHandle>> {
-		let restored = self.0.connections.restore_persisted(self).await?;
+		let restored = self.restore_persisted(preloaded_kv).await?;
 		if !restored.is_empty() {
-			if let Some(envoy_handle) = self.0.sleep.envoy_handle() {
+			if let Some(envoy_handle) = self.sleep_envoy_handle() {
 				let meta_entries: Vec<_> = restored
 					.iter()
 					.filter_map(|conn| {
 						let hibernation = conn.hibernation()?;
 						Some(HibernatingWebSocketMetadata {
-							gateway_id: hibernation.gateway_id.clone().try_into().ok()?,
-							request_id: hibernation.request_id.clone().try_into().ok()?,
+							gateway_id: hibernation.gateway_id,
+							request_id: hibernation.request_id,
 							envoy_message_index: hibernation.client_message_index,
 							rivet_message_index: hibernation.server_message_index,
 							path: hibernation.request_path,
@@ -1047,30 +974,20 @@ impl ActorContext {
 						})
 					})
 					.collect();
-				envoy_handle
-					.restore_hibernating_requests(self.actor_id().to_owned(), meta_entries);
+				envoy_handle.restore_hibernating_requests(self.actor_id().to_owned(), meta_entries);
 			}
 			self.record_connections_updated();
-			self.notify_activity_dirty_or_reset_sleep_timer();
+			self.reset_sleep_timer();
 		}
 		Ok(restored)
 	}
 
-	#[allow(dead_code)]
 	pub(crate) fn configure_inspector(&self, inspector: Option<Inspector>) {
-		*self
-			.0
-			.inspector
-			.write()
-			.expect("actor inspector lock poisoned") = inspector;
+		*self.0.inspector.write() = inspector;
 	}
 
 	pub(crate) fn inspector(&self) -> Option<Inspector> {
-		self.0
-			.inspector
-			.read()
-			.expect("actor inspector lock poisoned")
-			.clone()
+		self.0.inspector.read().clone()
 	}
 
 	pub fn inspector_snapshot(&self) -> InspectorSnapshot {
@@ -1084,62 +1001,27 @@ impl ActorContext {
 		attach_count: Arc<AtomicU32>,
 		overlay_tx: broadcast::Sender<Arc<Vec<u8>>>,
 	) {
-		*self
-			.0
-			.inspector_attach_count
-			.write()
-			.expect("actor inspector attach count lock poisoned") =
-			Some(attach_count);
-		*self
-			.0
-			.inspector_overlay_tx
-			.write()
-			.expect("actor inspector overlay sender lock poisoned") =
-			Some(overlay_tx);
+		*self.0.inspector_attach_count.write() = Some(attach_count);
+		*self.0.inspector_overlay_tx.write() = Some(overlay_tx);
 	}
 
-	pub(crate) fn inspector_attach(&self) {
-		let Some(attach_count) = self.inspector_attach_count_arc() else {
-			return;
-		};
-		if attach_count.fetch_add(1, Ordering::SeqCst) == 0 {
-			self.notify_inspector_attachments_changed();
-		}
-	}
-
-	pub(crate) fn inspector_detach(&self) {
-		let Some(attach_count) = self.inspector_attach_count_arc() else {
-			return;
-		};
-		let Ok(previous) = attach_count.fetch_update(
-			Ordering::SeqCst,
-			Ordering::SeqCst,
-			|current| current.checked_sub(1),
-		) else {
-			return;
-		};
-		if previous == 1 {
-			self.notify_inspector_attachments_changed();
-		}
+	pub(crate) fn inspector_attach(&self) -> Option<InspectorAttachGuard> {
+		InspectorAttachGuard::new(self.clone())
 	}
 
 	#[cfg(test)]
 	pub(crate) fn inspector_attach_count(&self) -> u32 {
-		self
-			.inspector_attach_count_arc()
+		self.inspector_attach_count_arc()
 			.map(|attach_count| attach_count.load(Ordering::SeqCst))
 			.unwrap_or(0)
 	}
 
-	pub(crate) fn subscribe_inspector(&self) -> broadcast::Receiver<Arc<Vec<u8>>> {
-		self
-			.0
+	pub(crate) fn subscribe_inspector(&self) -> Option<broadcast::Receiver<Arc<Vec<u8>>>> {
+		self.0
 			.inspector_overlay_tx
 			.read()
-			.expect("actor inspector overlay sender lock poisoned")
 			.clone()
-			.expect("actor inspector runtime must be configured before subscribing")
-			.subscribe()
+			.map(|overlay_tx| overlay_tx.subscribe())
 	}
 
 	pub(crate) fn downgrade(&self) -> Weak<ActorContextInner> {
@@ -1150,26 +1032,18 @@ impl ActorContext {
 		weak.upgrade().map(Self)
 	}
 
-	#[allow(dead_code)]
 	pub(crate) fn set_ready(&self, ready: bool) {
-		self.0.sleep.set_ready(ready);
+		self.set_sleep_ready(ready);
 		self.reset_sleep_timer();
 	}
 
-	#[allow(dead_code)]
-	pub(crate) fn ready(&self) -> bool {
-		self.0.sleep.ready()
-	}
-
-	#[allow(dead_code)]
 	pub(crate) fn set_started(&self, started: bool) {
-		self.0.sleep.set_started(started);
+		self.set_sleep_started(started);
 		self.reset_sleep_timer();
 	}
 
-	#[allow(dead_code)]
 	pub(crate) fn started(&self) -> bool {
-		self.0.sleep.started()
+		self.sleep_started()
 	}
 
 	pub(crate) fn destroy_requested(&self) -> bool {
@@ -1206,45 +1080,25 @@ impl ActorContext {
 		self.0.destroy_completion_notify.notify_waiters();
 	}
 
-	#[allow(dead_code)]
 	pub(crate) async fn can_sleep(&self) -> CanSleep {
-		self.0.sleep.can_sleep(self).await
+		self.can_arm_sleep_timer().await
 	}
 
-	pub(crate) async fn wait_for_sleep_idle_window(&self, deadline: Instant) -> bool {
-		self.0.sleep.wait_for_sleep_idle_window(self, deadline).await
+	pub(crate) fn pending_disconnect_count(&self) -> usize {
+		self.0.pending_disconnect_count.load(Ordering::SeqCst)
 	}
 
-	pub(crate) async fn wait_for_shutdown_tasks(&self, deadline: Instant) -> bool {
-		self.0.sleep.wait_for_shutdown_tasks(self, deadline).await
+	pub async fn with_disconnect_callback<F, Fut, T>(&self, run: F) -> T
+	where
+		F: FnOnce() -> Fut,
+		Fut: Future<Output = T>,
+	{
+		let _guard = DisconnectCallbackGuard::new(self.clone());
+		run().await
 	}
 
-	pub(crate) async fn teardown_sleep_controller(&self) {
-		self.0.sleep.teardown().await;
-	}
-
-	pub(crate) fn reset_sleep_timer(&self) {
-		self.notify_activity_dirty_or_reset_sleep_timer();
-	}
-
-	pub(crate) fn cancel_sleep_timer(&self) {
-		self.0.sleep.cancel_sleep_timer();
-	}
-
-	pub(crate) fn cancel_local_alarm_timeouts(&self) {
-		self.0.schedule.cancel_local_alarm_timeouts();
-	}
-
-	pub(crate) fn configure_lifecycle_events(
-		&self,
-		sender: Option<mpsc::Sender<LifecycleEvent>>,
-	) {
-		self.0.state.configure_lifecycle_events(sender.clone());
-		*self
-			.0
-			.lifecycle_events
-			.write()
-			.expect("lifecycle events lock poisoned") = sender;
+	pub(crate) fn configure_lifecycle_events(&self, sender: Option<mpsc::Sender<LifecycleEvent>>) {
+		*self.0.lifecycle_events.write() = sender;
 	}
 
 	pub(crate) fn notify_inspector_serialize_requested(&self) {
@@ -1254,67 +1108,29 @@ impl ActorContext {
 		);
 	}
 
-	pub(crate) fn save_requested(&self) -> bool {
-		self.0.state.save_requested()
-	}
-
-	pub(crate) fn save_requested_immediate(&self) -> bool {
-		self.0.state.save_requested_immediate()
-	}
-
-	pub(crate) fn save_deadline(&self, immediate: bool) -> Instant {
-		self.0.state.compute_save_deadline(immediate).into()
-	}
-
-	pub(crate) fn save_request_revision(&self) -> u64 {
-		self.0.state.save_request_revision()
-	}
-
 	pub(crate) fn notify_activity_dirty(&self) -> bool {
-		self.0.activity.mark_dirty();
-		let sender = self
-			.0
-			.lifecycle_events
-			.read()
-			.expect("lifecycle events lock poisoned")
-			.clone();
-		let Some(sender) = sender else {
+		if self.0.lifecycle_events.read().is_none() {
 			return false;
-		};
-
-		if !self.0.activity.try_begin_notification() {
-			return true;
 		}
-
-		match sender.try_reserve() {
-			Ok(permit) => {
-				permit.send(LifecycleEvent::ActivityDirty);
-			}
-			Err(_) => {
-				self.0.activity.clear_notification_pending();
-				let _ = actor_channel_overloaded_error(
-					LIFECYCLE_EVENT_INBOX_CHANNEL,
-					self.0.lifecycle_event_inbox_capacity,
-					"activity_dirty",
-					Some(&self.0.metrics),
-				);
-			}
+		if self.0.activity.mark_dirty() {
+			self.sleep_activity_notify().notify_one();
 		}
-
 		true
 	}
 
 	pub(crate) fn acknowledge_activity_dirty(&self) -> bool {
-		self.0.activity.clear_notification_pending();
 		self.0.activity.take_dirty()
 	}
 
-	pub(crate) fn notify_activity_dirty_or_reset_sleep_timer(&self) {
+	/// Notify the ActorTask that a `can_sleep` input has changed so the sleep
+	/// deadline gets re-evaluated. Falls back to the detached compat timer
+	/// when the actor has no wired `ActorTask` (test-only contexts).
+	pub(crate) fn reset_sleep_timer(&self) {
 		if self.notify_activity_dirty() {
 			return;
 		}
 
-		self.0.sleep.reset_sleep_timer(self.clone());
+		self.reset_sleep_timer_state();
 	}
 
 	fn notify_inspector_attachments_changed(&self) {
@@ -1324,32 +1140,35 @@ impl ActorContext {
 		);
 	}
 
-	#[allow(dead_code)]
 	pub(crate) fn configure_sleep(&self, config: ActorConfig) {
-		self.0.sleep.configure(config.clone());
-		self.0.queue.configure_sleep(config);
+		self.configure_sleep_state(config.clone());
+		self.configure_queue(config);
 		self.reset_sleep_timer();
 	}
 
-	#[allow(dead_code)]
 	pub(crate) fn sleep_config(&self) -> ActorConfig {
-		self.0.sleep.config()
+		self.sleep_state_config()
 	}
 
-	#[allow(dead_code)]
 	pub(crate) fn sleep_requested(&self) -> bool {
 		self.0.sleep_requested.load(Ordering::SeqCst)
 	}
 
 	fn keep_awake_guard(&self) -> KeepAwakeGuard {
-		let guard = KeepAwakeGuard::new(self.clone(), self.0.sleep.keep_awake());
-		self.notify_activity_dirty_or_reset_sleep_timer();
+		let region = self
+			.keep_awake_region()
+			.with_log_fields("keep_awake", Some(self.actor_id().to_owned()));
+		let guard = KeepAwakeGuard::new(self.clone(), region);
+		self.reset_sleep_timer();
 		guard
 	}
 
 	fn internal_keep_awake_guard(&self) -> KeepAwakeGuard {
-		let guard = KeepAwakeGuard::new(self.clone(), self.0.sleep.internal_keep_awake());
-		self.notify_activity_dirty_or_reset_sleep_timer();
+		let region = self
+			.internal_keep_awake_region()
+			.with_log_fields("internal_keep_awake", Some(self.actor_id().to_owned()));
+		let guard = KeepAwakeGuard::new(self.clone(), region);
+		self.reset_sleep_timer();
 		guard
 	}
 
@@ -1360,31 +1179,9 @@ impl ActorContext {
 		self.internal_keep_awake(future).await
 	}
 
-	pub(crate) async fn wait_for_internal_keep_awake_idle(
-		&self,
-		deadline: Instant,
-	) -> bool {
-		self.0
-			.sleep
-			.wait_for_internal_keep_awake_idle(deadline)
-			.await
-	}
-
-	pub(crate) async fn wait_for_http_requests_drained(
-		&self,
-		deadline: Instant,
-	) -> bool {
-		self.0
-			.sleep
-			.wait_for_http_requests_drained(self, deadline)
-			.await
-	}
-
 	pub fn websocket_callback_region(&self) -> WebSocketCallbackRegion {
 		WebSocketCallbackRegion {
-			guard: Some(
-				self.websocket_callback_guard(UserTaskKind::WebSocketCallback),
-			),
+			guard: Some(self.websocket_callback_guard(UserTaskKind::WebSocketCallback)),
 		}
 	}
 
@@ -1397,11 +1194,8 @@ impl ActorContext {
 		run().await
 	}
 
-	fn websocket_callback_guard(
-		&self,
-		kind: UserTaskKind,
-	) -> WebSocketCallbackGuard {
-		let region = self.0.sleep.websocket_callback();
+	fn websocket_callback_guard(&self, kind: UserTaskKind) -> WebSocketCallbackGuard {
+		let region = self.websocket_callback_region_state();
 		self.record_user_task_started(kind);
 		self.reset_sleep_timer();
 		WebSocketCallbackGuard::new(self.clone(), kind, region)
@@ -1409,22 +1203,20 @@ impl ActorContext {
 
 	fn configure_sleep_hooks(&self) {
 		let internal_keep_awake_ctx = self.clone();
-		self.0.schedule.set_internal_keep_awake(Some(Arc::new(move |future| {
+		self.set_internal_keep_awake(Some(Arc::new(move |future| {
 			let ctx = internal_keep_awake_ctx.clone();
 			Box::pin(async move { ctx.internal_keep_awake_task(future).await })
 		})));
 
 		let queue_ctx = self.clone();
-		self.0.queue.set_wait_activity_callback(Some(Arc::new(move || {
-			queue_ctx.notify_activity_dirty_or_reset_sleep_timer();
+		self.set_wait_activity_callback(Some(Arc::new(move || {
+			queue_ctx.reset_sleep_timer();
 		})));
 
 		let queue_ctx = self.clone();
-		self.0.queue.set_inspector_update_callback(Some(Arc::new(
-			move |queue_size| {
-				queue_ctx.record_queue_updated(queue_size);
-			},
-		)));
+		self.set_inspector_update_callback(Some(Arc::new(move |queue_size| {
+			queue_ctx.record_queue_updated(queue_size);
+		})));
 	}
 
 	pub(crate) fn record_state_updated(&self) {
@@ -1437,7 +1229,7 @@ impl ActorContext {
 		let Some(inspector) = self.inspector() else {
 			return;
 		};
-		let active_connections = self.0.connections.active_count();
+		let active_connections = self.active_connection_count();
 		inspector.record_connections_updated(active_connections);
 	}
 
@@ -1452,108 +1244,79 @@ impl ActorContext {
 		deltas: Vec<StateDelta>,
 		save_request_revision: u64,
 	) -> Result<()> {
-		let (deltas, pending_hibernation_changes) =
-			match self.prepare_state_deltas(deltas) {
-				Ok(prepared) => prepared,
-				Err(error) => return Err(error),
-			};
-		if let Err(error) = self
-			.0
-			.state
-			.apply_state_deltas(deltas, save_request_revision)
-			.await
-		{
-			self
-				.0
-				.connections
-				.restore_pending_hibernation_changes(pending_hibernation_changes);
+		let (deltas, pending_hibernation_changes) = match self.prepare_state_deltas(deltas) {
+			Ok(prepared) => prepared,
+			Err(error) => return Err(error),
+		};
+		if let Err(error) = self.apply_state_deltas(deltas, save_request_revision).await {
+			self.restore_pending_hibernation_changes(pending_hibernation_changes);
 			return Err(error);
 		}
 		self.record_state_updated();
 		Ok(())
 	}
 
-	async fn dispatch_scheduled_action(
-		&self,
-		event_id: &str,
-		action: String,
-		args: Vec<u8>,
-	) {
-		self.record_user_task_started(UserTaskKind::ScheduledAction);
-		let started_at = Instant::now();
+	async fn dispatch_scheduled_action(&self, event_id: &str, action: String, args: Vec<u8>) {
+		self.cancel_scheduled_event(event_id);
+		let ctx = self.clone();
+		let event_id = event_id.to_owned();
+		let keep_awake_guard = self.internal_keep_awake_guard();
 
-		self
-			.internal_keep_awake(async {
-				let (reply_tx, reply_rx) = oneshot::channel();
+		self.track_shutdown_task(async move {
+			let _keep_awake_guard = keep_awake_guard;
+			ctx.record_user_task_started(UserTaskKind::ScheduledAction);
+			let started_at = Instant::now();
+			let action_name = action.clone();
+			let (reply_tx, reply_rx) = oneshot::channel();
 
-				match self.try_send_actor_event(
-					ActorEvent::Action {
-						name: action.clone(),
-						args,
-						conn: None,
-						reply: Reply::from(reply_tx),
-					},
-					"scheduled_action",
-				) {
-					Ok(()) => match reply_rx.await {
-						Ok(Ok(_)) => {}
-						Ok(Err(error)) => {
-							tracing::error!(
-								?error,
-								event_id,
-								action_name = action,
-								"scheduled event execution failed"
-							);
-						}
-						Err(error) => {
-							tracing::error!(
-								?error,
-								event_id,
-								action_name = action,
-								"scheduled event reply dropped"
-							);
-						}
-					},
+			match ctx.try_send_actor_event(
+				ActorEvent::Action {
+					name: action.clone(),
+					args,
+					conn: None,
+					reply: Reply::from(reply_tx),
+				},
+				"scheduled_action",
+			) {
+				Ok(()) => match reply_rx.await {
+					Ok(Ok(_)) => {}
+					Ok(Err(error)) => {
+						tracing::error!(
+							?error,
+							event_id,
+							action_name,
+							"scheduled event execution failed"
+						);
+					}
 					Err(error) => {
 						tracing::error!(
 							?error,
 							event_id,
-							action_name = action,
-							"failed to enqueue scheduled event"
+							action_name,
+							"scheduled event reply dropped"
 						);
 					}
+				},
+				Err(error) => {
+					tracing::error!(
+						?error,
+						event_id,
+						action_name,
+						"failed to enqueue scheduled event"
+					);
 				}
-			})
-			.await;
+			}
 
-		self.record_user_task_finished(
-			UserTaskKind::ScheduledAction,
-			started_at.elapsed(),
-		);
-		self.0.schedule.cancel(event_id);
+			ctx.record_user_task_finished(UserTaskKind::ScheduledAction, started_at.elapsed());
+		});
 	}
 
 	fn inspector_attach_count_arc(&self) -> Option<Arc<AtomicU32>> {
-		self
-			.0
-			.inspector_attach_count
-			.read()
-			.expect("actor inspector attach count lock poisoned")
-			.clone()
+		self.0.inspector_attach_count.read().clone()
 	}
 
-	fn try_send_lifecycle_event(
-		&self,
-		event: LifecycleEvent,
-		operation: &'static str,
-	) {
-		let Some(sender) = self
-			.0
-			.lifecycle_events
-			.read()
-			.expect("lifecycle events lock poisoned")
-			.clone()
-		else {
+	fn try_send_lifecycle_event(&self, event: LifecycleEvent, operation: &'static str) {
+		let Some(sender) = self.0.lifecycle_events.read().clone() else {
 			return;
 		};
 
@@ -1585,6 +1348,93 @@ struct KeepAwakeGuard {
 	region: Option<RegionGuard>,
 }
 
+#[must_use]
+struct DisconnectCallbackGuard {
+	ctx: ActorContext,
+	started_at: Instant,
+}
+
+impl DisconnectCallbackGuard {
+	fn new(ctx: ActorContext) -> Self {
+		ctx.0
+			.pending_disconnect_count
+			.fetch_add(1, Ordering::SeqCst);
+		ctx.record_user_task_started(UserTaskKind::DisconnectCallback);
+		ctx.reset_sleep_timer();
+		Self {
+			ctx,
+			started_at: Instant::now(),
+		}
+	}
+}
+
+impl Drop for DisconnectCallbackGuard {
+	fn drop(&mut self) {
+		let Ok(previous) = self.ctx.0.pending_disconnect_count.fetch_update(
+			Ordering::SeqCst,
+			Ordering::SeqCst,
+			|current| current.checked_sub(1),
+		) else {
+			return;
+		};
+		if previous == 0 {
+			return;
+		}
+		self.ctx
+			.record_user_task_finished(UserTaskKind::DisconnectCallback, self.started_at.elapsed());
+		self.ctx.reset_sleep_timer();
+	}
+}
+
+#[must_use]
+#[derive(Debug)]
+pub(crate) struct InspectorAttachGuard {
+	ctx: ActorContext,
+}
+
+impl InspectorAttachGuard {
+	fn new(ctx: ActorContext) -> Option<Self> {
+		let attach_count = ctx.inspector_attach_count_arc()?;
+		let previous = attach_count.fetch_add(1, Ordering::SeqCst);
+		let current = previous.saturating_add(1);
+		tracing::debug!(
+			actor_id = %ctx.actor_id(),
+			previous_count = previous,
+			current_count = current,
+			"inspector attached"
+		);
+		if previous == 0 {
+			ctx.notify_inspector_attachments_changed();
+		}
+		Some(Self { ctx })
+	}
+}
+
+impl Drop for InspectorAttachGuard {
+	fn drop(&mut self) {
+		let Some(attach_count) = self.ctx.inspector_attach_count_arc() else {
+			return;
+		};
+		let Ok(previous) =
+			attach_count.fetch_update(Ordering::SeqCst, Ordering::SeqCst, |current| {
+				current.checked_sub(1)
+			})
+		else {
+			return;
+		};
+		let current = previous.saturating_sub(1);
+		tracing::debug!(
+			actor_id = %self.ctx.actor_id(),
+			previous_count = previous,
+			current_count = current,
+			"inspector detached"
+		);
+		if previous == 1 {
+			self.ctx.notify_inspector_attachments_changed();
+		}
+	}
+}
+
 impl KeepAwakeGuard {
 	fn new(ctx: ActorContext, region: RegionGuard) -> Self {
 		Self {
@@ -1597,7 +1447,7 @@ impl KeepAwakeGuard {
 impl Drop for KeepAwakeGuard {
 	fn drop(&mut self) {
 		self.region.take();
-		self.ctx.notify_activity_dirty_or_reset_sleep_timer();
+		self.ctx.reset_sleep_timer();
 	}
 }
 
@@ -1638,9 +1488,14 @@ impl Drop for WebSocketCallbackRegion {
 	}
 }
 
-impl Default for ActorContext {
-	fn default() -> Self {
-		Self::new("", "", Vec::new(), "")
+impl std::fmt::Debug for ActorContext {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.debug_struct("ActorContext")
+			.field("actor_id", &self.0.actor_id)
+			.field("name", &self.0.name)
+			.field("key", &self.0.key)
+			.field("region", &self.0.region)
+			.finish()
 	}
 }
 

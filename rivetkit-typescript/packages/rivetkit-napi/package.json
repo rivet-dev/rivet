@@ -9,11 +9,6 @@
 		".": {
 			"types": "./index.d.ts",
 			"default": "./index.js"
-		},
-		"./wrapper": {
-			"types": "./wrapper.d.ts",
-			"require": "./wrapper.js",
-			"default": "./wrapper.js"
 		}
 	},
 	"engines": {
@@ -37,8 +32,6 @@
 	"files": [
 		"index.js",
 		"index.d.ts",
-		"wrapper.js",
-		"wrapper.d.ts",
 		"package.json",
 		"scripts/build.mjs"
 	],

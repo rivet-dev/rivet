@@ -3,11 +3,10 @@ use std::fmt;
 use anyhow::Result;
 use futures::future::BoxFuture;
 
-use crate::actor::callbacks::ActorStart;
 use crate::ActorConfig;
+use crate::actor::lifecycle_hooks::ActorStart;
 
-pub type ActorEntryFn =
-	dyn Fn(ActorStart) -> BoxFuture<'static, Result<()>> + Send + Sync;
+pub type ActorEntryFn = dyn Fn(ActorStart) -> BoxFuture<'static, Result<()>> + Send + Sync;
 
 /// Runtime extension point for building actor receive loops.
 pub struct ActorFactory {

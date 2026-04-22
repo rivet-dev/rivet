@@ -10,7 +10,7 @@ pub mod start;
 pub use crate::{
 	action::Raw,
 	actor::Actor,
-	context::{ConnCtx, ConnIter, Ctx},
+	context::{ConnCtx, ConnIter, Ctx, Schedule},
 	event::{
 		Action, ConnClosed, ConnOpen, Destroy, Event, HttpCall, HttpReply, SerializeState, Sleep,
 		Subscribe, WfHistory, WfReplay, WsOpen,
@@ -20,13 +20,9 @@ pub use crate::{
 };
 pub use rivetkit_client as client;
 pub use rivetkit_core::{
-	sqlite::{BindParam, ColumnValue, ExecResult, QueryResult},
 	ActorConfig, ActorKey, ActorKeySegment, CanHibernateWebSocket, ConnHandle, ConnId,
-	EnqueueAndWaitOpts, Kv, ListOpts, Queue, QueueMessage, QueueWaitOpts, Request, Response,
-	SaveStateOpts, Schedule, SerializeStateReason, ServeConfig, SqliteDb, StateDelta, WebSocket,
+	EnqueueAndWaitOpts, Kv, ListOpts, QueueMessage, QueueWaitOpts, Request, RequestSaveOpts,
+	Response, SaveStateOpts, SerializeStateReason, ServeConfig, SqliteDb, StateDelta, WebSocket,
 	WsMessage,
+	sqlite::{BindParam, ColumnValue, ExecResult, QueryResult},
 };
-
-#[cfg(test)]
-#[path = "../tests/integration_canned_events.rs"]
-mod integration_canned_events;

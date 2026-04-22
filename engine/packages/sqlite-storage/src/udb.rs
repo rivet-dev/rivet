@@ -368,9 +368,7 @@ pub async fn raw_key_exists(
 ) -> Result<bool> {
 	run_db_op(db, op_counter, move |tx| {
 		let key = key.clone();
-		async move {
-			Ok(tx.get(&key, Snapshot).await?.is_some())
-		}
+		async move { Ok(tx.get(&key, Snapshot).await?.is_some()) }
 	})
 	.await
 }

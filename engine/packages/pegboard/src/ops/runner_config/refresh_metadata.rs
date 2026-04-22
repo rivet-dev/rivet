@@ -74,6 +74,15 @@ pub async fn pegboard_runner_config_refresh_metadata(
 		.await;
 	}
 
+	if metadata.envoy_protocol_version.is_some() {
+		crate::utils::purge_runner_config_caches(
+			ctx.cache(),
+			input.namespace_id,
+			&input.runner_name,
+		)
+		.await?;
+	}
+
 	// Update actor names in DB if present
 	if !metadata.actor_names.is_empty() {
 		ctx.udb()?

@@ -81,3 +81,6 @@ examples/*/public/
 
 # Native addon binaries
 *.node
+
+# Ralph/Codex generated command stream logs
+scripts/ralph/codex-streams/

@@ -1,0 +1,85 @@
+# MARK: Core
+
+type Cbor data
+
+# MARK: WebSocket Server -> Client
+
+type Init struct {
+	actorId: str
+	connectionId: str
+	connectionToken: str
+}
+
+type Error struct {
+	group: str
+	code: str
+	message: str
+	metadata: optional<Cbor>
+	actionId: optional<uint>
+}
+
+type ActionResponse struct {
+	id: uint
+	output: Cbor
+}
+
+type Event struct {
+	name: str
+	args: Cbor
+}
+
+type ToClientBody union {
+	Init |
+	Error |
+	ActionResponse |
+	Event
+}
+
+type ToClient struct {
+	body: ToClientBody
+}
+
+# MARK: WebSocket Client -> Server
+
+type ActionRequest struct {
+	id: uint
+	name: str
+	args: Cbor
+}
+
+type SubscriptionRequest struct {
+	eventName: str
+	subscribe: bool
+}
+
+type ToServerBody union {
+	ActionRequest |
+	SubscriptionRequest
+}
+
+type ToServer struct {
+	body: ToServerBody
+}
+
+# MARK: HTTP
+
+type HttpActionRequest struct {
+	args: Cbor
+}
+
+type HttpActionResponse struct {
+	output: Cbor
+}
+
+type HttpResponseError struct {
+	group: str
+	code: str
+	message: str
+	metadata: optional<Cbor>
+}
+
+type HttpResolveRequest void
+
+type HttpResolveResponse struct {
+	actorId: str
+}

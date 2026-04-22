@@ -94,6 +94,7 @@ export interface Traces<TExport> {
 	withSpan<T>(handle: SpanHandle, fn: () => T): T;
 	getCurrentSpan(): SpanHandle | null;
 	flush(): Promise<boolean>;
+	getLastWriteError(): unknown | null;
 	readRange(options: ReadRangeOptions): Promise<ReadRangeResult<TExport>>;
 	readRangeWire(options: ReadRangeOptions): Promise<ReadRangeWire>;
 }

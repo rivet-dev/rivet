@@ -1,38 +1,58 @@
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
-use anyhow::{Result, anyhow};
+use anyhow::Result;
+use parking_lot::Mutex;
 use rivet_error::{MacroMarker, RivetError as RivetTransportError, RivetErrorSchema};
 use rivetkit_core::{
-	ActorEvent, ActorEvents, ActorLifecycle, ActorStart, Reply,
-	SerializeStateReason, StateDelta,
+	ActorContext as CoreActorContext, ActorEvent, ActorEvents, ActorLifecycle, ActorStart,
+	QueueSendResult, QueueSendStatus, Reply, SerializeStateReason, StateDelta,
 };
 use tokio::sync::mpsc::{UnboundedReceiver, unbounded_channel};
 use tokio::task::JoinHandle;
 use tokio::task::JoinSet;
 use tokio_util::sync::CancellationToken;
 
-use crate::actor_context::{
-	ActorContext, EndReason, RegisteredTask, state_deltas_from_payload,
-};
+use crate::NapiInvalidState;
+#[cfg(test)]
+use crate::actor_context::EndReason;
+use crate::actor_context::{ActorContext, RegisteredTask, state_deltas_from_payload};
 use crate::actor_factory::{
-	ActionPayload, AdapterConfig, BeforeActionResponsePayload,
-	BeforeConnectPayload, BeforeSubscribePayload, CallbackBindings,
-	ConnectionPayload, CreateConnStatePayload, CreateStatePayload,
-	HttpRequestPayload, LifecyclePayload, MigratePayload,
-	SerializeStatePayload, WebSocketPayload, WorkflowHistoryPayload,
-	WorkflowReplayPayload, call_buffer, call_optional_buffer,
-	call_request, call_state_delta_payload, call_void,
+	ActionPayload, AdapterConfig, BeforeActionResponsePayload, BeforeConnectPayload,
+	BeforeSubscribePayload, CallbackBindings, ConnectionPayload, CreateConnStatePayload,
+	CreateStatePayload, HttpRequestPayload, LifecyclePayload, MigratePayload, QueueSendPayload,
+	SerializeStatePayload, WebSocketPayload, WorkflowHistoryPayload, WorkflowReplayPayload,
+	call_buffer, call_optional_buffer, call_queue_send, call_request, call_state_delta_payload,
+	call_void,
 };
 use crate::cancel_token::register_guarded_token as register_dispatch_token;
 #[cfg(test)]
 use crate::cancel_token::{
-	active_token_count as active_dispatch_token_count,
-	lock_registry_for_test, poll_cancelled as poll_dispatch_cancelled,
+	active_token_count as active_dispatch_token_count, lock_registry_for_test,
+	poll_cancelled as poll_dispatch_cancelled,
 };
 
+// Restart hooks are synchronous callback slots; the guard is only held while
+// swapping task handles, never while awaiting a task shutdown.
 type RunHandlerSlot = Arc<Mutex<Option<JoinHandle<()>>>>;
+
+struct RunHandlerActiveGuard {
+	ctx: CoreActorContext,
+}
+
+impl RunHandlerActiveGuard {
+	fn new(ctx: CoreActorContext) -> Self {
+		ctx.begin_run_handler();
+		Self { ctx }
+	}
+}
+
+impl Drop for RunHandlerActiveGuard {
+	fn drop(&mut self) {
+		self.ctx.end_run_handler();
+	}
+}
 
 static ACTION_TIMED_OUT_SCHEMA: RivetErrorSchema = RivetErrorSchema {
 	group: "actor",
@@ -73,7 +93,7 @@ pub(crate) async fn run_adapter_loop(
 	let dirty = Arc::new(AtomicBool::new(false));
 	core_ctx.on_request_save(Box::new({
 		let dirty = Arc::clone(&dirty);
-		move |_immediate| {
+		move |_opts| {
 			dirty.store(true, Ordering::Release);
 		}
 	}));
@@ -174,7 +194,13 @@ async fn run_preamble(
 		}
 		ctx.mark_has_initialized_and_flush().await?;
 	} else {
-		let snapshot = snapshot.expect("snapshot is present for wake path");
+		let snapshot = snapshot.ok_or_else(|| {
+			NapiInvalidState {
+				state: "actor wake snapshot".to_owned(),
+				reason: "wake path did not include a persisted snapshot".to_owned(),
+			}
+			.build()
+		})?;
 		ctx.set_state_initial(snapshot)?;
 		for (conn, bytes) in hibernated {
 			ctx.restore_hibernatable_conn(conn, bytes)?;
@@ -182,13 +208,12 @@ async fn run_preamble(
 	}
 
 	if let Some(callback) = &bindings.create_vars {
-		let bytes = with_timeout(
+		with_timeout(
 			"createVars",
 			config.create_vars_timeout,
 			call_create_vars(callback, ctx),
 		)
 		.await?;
-		ctx.inner().set_vars(bytes);
 	}
 
 	if let Some(callback) = &bindings.on_migrate {
@@ -200,15 +225,17 @@ async fn run_preamble(
 		.await?;
 	}
 
-	if !is_new {
-		if let Some(callback) = &bindings.on_wake {
-			with_timeout("onWake", config.on_wake_timeout, call_on_wake(callback, ctx))
-				.await?;
-		}
-	}
-
 	ctx.init_alarms().await?;
 	ctx.mark_ready_internal();
+
+	if let Some(callback) = &bindings.on_wake {
+		with_timeout(
+			"onWake",
+			config.on_wake_timeout,
+			call_on_wake(callback, ctx),
+		)
+		.await?;
+	}
 
 	if let Some(callback) = &bindings.on_before_actor_start {
 		with_timeout(
@@ -225,10 +252,7 @@ async fn run_preamble(
 	Ok(())
 }
 
-fn configure_run_handler(
-	bindings: &Arc<CallbackBindings>,
-	ctx: &ActorContext,
-) -> RunHandlerSlot {
+fn configure_run_handler(bindings: &Arc<CallbackBindings>, ctx: &ActorContext) -> RunHandlerSlot {
 	let run_handler = Arc::new(Mutex::new(None));
 	let Some(callback) = bindings.run.as_ref().cloned() else {
 		return run_handler;
@@ -239,9 +263,7 @@ fn configure_run_handler(
 	let restart_callback = callback.clone();
 
 	ctx.attach_run_restart(move || {
-		let mut guard = restart_slot
-			.lock()
-			.expect("run handler slot mutex poisoned");
+		let mut guard = restart_slot.lock();
 		if let Some(handle) = guard.take() {
 			handle.abort();
 		}
@@ -253,9 +275,7 @@ fn configure_run_handler(
 	});
 
 	{
-		let mut guard = run_handler
-			.lock()
-			.expect("run handler slot mutex poisoned");
+		let mut guard = run_handler.lock();
 		*guard = Some(spawn_run_handler(callback, ctx.clone()));
 	}
 
@@ -269,7 +289,7 @@ pub(crate) async fn dispatch_event(
 	ctx: &ActorContext,
 	abort: &CancellationToken,
 	tasks: &mut JoinSet<()>,
-	registered_task_rx: &mut UnboundedReceiver<RegisteredTask>,
+	_registered_task_rx: &mut UnboundedReceiver<RegisteredTask>,
 	dirty: &Arc<AtomicBool>,
 ) {
 	let _ = dirty;
@@ -285,8 +305,7 @@ pub(crate) async fn dispatch_event(
 				reply.send(Err(action_not_found(name)));
 				return;
 			};
-			let on_before_action_response =
-				bindings.on_before_action_response.clone();
+			let on_before_action_response = bindings.on_before_action_response.clone();
 			let timeout = config.action_timeout;
 			let ctx = ctx.clone();
 
@@ -317,13 +336,7 @@ pub(crate) async fn dispatch_event(
 						"Action timed out",
 						None,
 						timeout,
-						call_on_before_action_response(
-							&callback,
-							&ctx,
-							name,
-							args,
-							output,
-						),
+						call_on_before_action_response(&callback, &ctx, name, args, output),
 					)
 					.await
 				} else {
@@ -347,13 +360,67 @@ pub(crate) async fn dispatch_event(
 						None,
 						timeout,
 						async move {
-							call_http_request(
+							call_http_request(&callback, &ctx, request, Some(cancel_token_id)).await
+						},
+					)
+				})
+				.await
+			});
+		}
+		ActorEvent::QueueSend {
+			name,
+			body,
+			conn,
+			request,
+			wait,
+			timeout_ms,
+			reply,
+		} => {
+			let Some(callback) = bindings.on_queue_send.clone() else {
+				reply.send(Err(missing_callback("onQueueSend")));
+				return;
+			};
+			let ctx = ctx.clone();
+			let timeout = config.on_request_timeout;
+			spawn_reply(tasks, abort.clone(), reply, async move {
+				with_dispatch_cancel_token(|cancel_token_id| {
+					with_structured_timeout(
+						"actor",
+						"action_timed_out",
+						"Action timed out",
+						None,
+						timeout,
+						async move {
+							let result = call_queue_send(
+								"onQueueSend",
 								&callback,
-								&ctx,
-								request,
-								Some(cancel_token_id),
+								QueueSendPayload {
+									ctx: ctx.inner().clone(),
+									conn,
+									request,
+									name,
+									body,
+									wait,
+									timeout_ms,
+									cancel_token_id: Some(cancel_token_id),
+								},
 							)
-							.await
+							.await?;
+							let status = match result.status.as_str() {
+								"completed" => QueueSendStatus::Completed,
+								"timedOut" => QueueSendStatus::TimedOut,
+								other => {
+									return Err(NapiInvalidState {
+										state: "queue send status".to_owned(),
+										reason: format!("invalid status `{other}`"),
+									}
+									.build());
+								}
+							};
+							Ok(QueueSendResult {
+								status,
+								response: result.response.map(|buffer| buffer.to_vec()),
+							})
 						},
 					)
 				})
@@ -389,12 +456,7 @@ pub(crate) async fn dispatch_event(
 					with_timeout(
 						"onBeforeConnect",
 						timeout,
-						call_on_before_connect(
-							&callback,
-							&ctx,
-							params.clone(),
-							request.clone(),
-						),
+						call_on_before_connect(&callback, &ctx, params.clone(), request.clone()),
 					)
 					.await?;
 				}
@@ -465,6 +527,54 @@ pub(crate) async fn dispatch_event(
 		ActorEvent::SerializeState { reason, reply } => {
 			reply.send(maybe_serialize(bindings.as_ref(), dirty.as_ref(), reason).await);
 		}
+		ActorEvent::RunGracefulCleanup { reason, reply } => {
+			let callback = match reason {
+				rivetkit_core::actor::StopReason::Sleep => bindings.on_sleep.clone(),
+				rivetkit_core::actor::StopReason::Destroy => bindings.on_destroy.clone(),
+			};
+			let ctx = ctx.clone();
+			tasks.spawn(async move {
+				let result: Result<()> = async {
+					if let Some(callback) = callback {
+						match reason {
+							rivetkit_core::actor::StopReason::Sleep => {
+								call_on_sleep(&callback, &ctx).await
+							}
+							rivetkit_core::actor::StopReason::Destroy => {
+								call_on_destroy(&callback, &ctx).await
+							}
+						}?;
+					}
+					Ok(())
+				}
+				.await;
+				if let Err(error) = result {
+					tracing::error!(?error, "graceful cleanup callback failed");
+				}
+				reply.send(Ok(()));
+			});
+		}
+		ActorEvent::DisconnectConn { conn_id, reply } => {
+			let callback = bindings.on_disconnect_final.clone();
+			let ctx = ctx.clone();
+			tasks.spawn(async move {
+				let result: Result<()> = async {
+					let conn = { ctx.inner().conns().find(|conn| conn.id() == conn_id) };
+					if let Some(conn) = conn {
+						if let Some(callback) = callback {
+							call_on_disconnect_final(&callback, &ctx, conn.clone()).await?;
+						}
+						ctx.inner().disconnect_conn(conn_id).await?;
+					}
+					Ok(())
+				}
+				.await;
+				if let Err(error) = result {
+					tracing::error!(?error, "disconnect cleanup callback failed");
+				}
+				reply.send(Ok(()));
+			});
+		}
 		ActorEvent::WorkflowHistoryRequested { reply } => {
 			let Some(callback) = bindings.get_workflow_history.clone() else {
 				reply.send(Ok(None));
@@ -485,159 +595,7 @@ pub(crate) async fn dispatch_event(
 				call_workflow_replay(&callback, &ctx, entry_id).await
 			});
 		}
-		ActorEvent::BeginSleep => {
-			let Some(callback) = bindings.on_sleep.clone() else {
-				return;
-			};
-			let ctx = ctx.clone();
-			let timeout = config.on_sleep_timeout;
-			spawn_task(tasks, abort.clone(), async move {
-				with_timeout("onSleep", timeout, call_on_sleep(&callback, &ctx)).await
-			});
-		}
-		ActorEvent::FinalizeSleep { reply } => {
-			match handle_sleep_event(
-				bindings,
-				config,
-				ctx,
-				tasks,
-				registered_task_rx,
-				dirty,
-			)
-			.await
-			{
-				Ok(()) => {
-					reply.send(Ok(()));
-					abort.cancel();
-					ctx.set_end_reason(EndReason::Sleep);
-				}
-				Err(error) => {
-					reply.send(Err(error));
-					abort.cancel();
-					ctx.set_end_reason(EndReason::Sleep);
-				}
-			}
-		}
-		ActorEvent::Destroy { reply } => {
-			abort.cancel();
-			match handle_destroy_event(
-				bindings,
-				config,
-				ctx,
-				tasks,
-				registered_task_rx,
-				dirty,
-			)
-			.await
-			{
-				Ok(()) => {
-					reply.send(Ok(()));
-					ctx.set_end_reason(EndReason::Destroy);
-				}
-				Err(error) => {
-					reply.send(Err(error));
-					ctx.set_end_reason(EndReason::Destroy);
-				}
-			}
-		}
 	}
-}
-
-async fn handle_sleep_event(
-	bindings: &CallbackBindings,
-	config: &AdapterConfig,
-	ctx: &ActorContext,
-	tasks: &mut JoinSet<()>,
-	registered_task_rx: &mut UnboundedReceiver<RegisteredTask>,
-	dirty: &AtomicBool,
-) -> Result<()> {
-	drain_tasks(tasks, registered_task_rx).await;
-	notify_disconnects_inline(ctx, bindings, config, |conn| !conn.is_hibernatable())
-		.await?;
-	ctx.inner()
-		.disconnect_conns(|conn| !conn.is_hibernatable())
-		.await?;
-
-	let has_conn_changes = ctx.has_conn_changes();
-	maybe_shutdown_save(bindings, ctx, dirty, "sleep", has_conn_changes).await
-}
-
-async fn handle_destroy_event(
-	bindings: &CallbackBindings,
-	config: &AdapterConfig,
-	ctx: &ActorContext,
-	tasks: &mut JoinSet<()>,
-	registered_task_rx: &mut UnboundedReceiver<RegisteredTask>,
-	dirty: &AtomicBool,
-) -> Result<()> {
-	if let Some(callback) = bindings.on_destroy.as_ref() {
-		with_timeout(
-			"onDestroy",
-			config.on_destroy_timeout,
-			call_on_destroy(callback, ctx),
-		)
-		.await?;
-	}
-
-	drain_tasks(tasks, registered_task_rx).await;
-	notify_disconnects_inline(ctx, bindings, config, |_| true).await?;
-	ctx.inner().disconnect_conns(|_| true).await?;
-	maybe_shutdown_save(bindings, ctx, dirty, "destroy", false).await
-}
-
-async fn notify_disconnects_inline<F>(
-	ctx: &ActorContext,
-	bindings: &CallbackBindings,
-	config: &AdapterConfig,
-	mut predicate: F,
-) -> Result<()>
-where
-	F: FnMut(&rivetkit_core::ConnHandle) -> bool,
-{
-	let Some(callback) = bindings.on_disconnect_final.as_ref() else {
-		return Ok(());
-	};
-	let conns: Vec<_> = ctx
-		.inner()
-		.conns()
-		.filter(|conn| predicate(conn))
-		.collect();
-
-	for conn in conns {
-		with_timeout(
-			"onDisconnect",
-			config.on_connect_timeout,
-			call_on_disconnect_final(callback, ctx, conn),
-		)
-		.await?;
-	}
-
-	Ok(())
-}
-
-async fn maybe_shutdown_save(
-	bindings: &CallbackBindings,
-	ctx: &ActorContext,
-	dirty: &AtomicBool,
-	reason: &'static str,
-	force: bool,
-) -> Result<()> {
-	let was_dirty = dirty.swap(false, Ordering::AcqRel);
-	if !was_dirty && !force {
-		return Ok(());
-	}
-
-	let result = async {
-		let deltas = call_serialize_state(bindings, reason).await?;
-		ctx.inner().save_state(deltas).await
-	}
-	.await;
-
-	if result.is_err() && was_dirty {
-		dirty.store(true, Ordering::Release);
-	}
-
-	result
 }
 
 async fn maybe_serialize(
@@ -663,9 +621,7 @@ where
 	F: FnOnce(&'a CallbackBindings, &'static str) -> Fut,
 	Fut: std::future::Future<Output = Result<Vec<StateDelta>>> + 'a,
 {
-	if reason != SerializeStateReason::Inspector
-		&& !dirty.swap(false, Ordering::AcqRel)
-	{
+	if reason != SerializeStateReason::Inspector && !dirty.swap(false, Ordering::AcqRel) {
 		return Ok(Vec::new());
 	}
 
@@ -720,11 +676,8 @@ pub(crate) fn spawn_reply<T, F>(
 	});
 }
 
-fn spawn_task<F>(
-	tasks: &mut JoinSet<()>,
-	abort: CancellationToken,
-	work: F,
-) where
+fn spawn_task<F>(tasks: &mut JoinSet<()>, abort: CancellationToken, work: F)
+where
 	F: std::future::Future<Output = Result<()>> + Send + 'static,
 {
 	tasks.spawn(async move {
@@ -769,9 +722,7 @@ fn pump_registered_tasks(
 
 async fn stop_run_handler(run_handler: &RunHandlerSlot) {
 	let handle = {
-		let mut guard = run_handler
-			.lock()
-			.expect("run handler slot mutex poisoned");
+		let mut guard = run_handler.lock();
 		guard.take()
 	};
 
@@ -781,11 +732,7 @@ async fn stop_run_handler(run_handler: &RunHandlerSlot) {
 	}
 }
 
-async fn with_timeout<T, F>(
-	callback_name: &str,
-	duration: Duration,
-	future: F,
-) -> Result<T>
+async fn with_timeout<T, F>(callback_name: &str, duration: Duration, future: F) -> Result<T>
 where
 	F: std::future::Future<Output = Result<T>>,
 {
@@ -868,7 +815,9 @@ fn spawn_run_handler(
 	callback: crate::actor_factory::CallbackTsfn<LifecyclePayload>,
 	ctx: ActorContext,
 ) -> JoinHandle<()> {
+	let run_handler_active = RunHandlerActiveGuard::new(ctx.inner().clone());
 	tokio::spawn(async move {
+		let _run_handler_active = run_handler_active;
 		match call_run(&callback, &ctx).await {
 			Ok(()) => {
 				tracing::debug!(
@@ -922,8 +871,8 @@ async fn call_on_create(
 async fn call_create_vars(
 	callback: &crate::actor_factory::CallbackTsfn<LifecyclePayload>,
 	ctx: &ActorContext,
-) -> Result<Vec<u8>> {
-	call_buffer(
+) -> Result<()> {
+	call_void(
 		"createVars",
 		callback,
 		LifecyclePayload {
@@ -1217,16 +1166,20 @@ async fn call_on_disconnect_final(
 	ctx: &ActorContext,
 	conn: rivetkit_core::ConnHandle,
 ) -> Result<()> {
-	call_void(
-		"onDisconnect",
-		callback,
-		ConnectionPayload {
-			ctx: ctx.inner().clone(),
-			conn,
-			request: None,
-		},
-	)
-	.await
+	ctx.inner()
+		.with_disconnect_callback(|| async {
+			call_void(
+				"onDisconnect",
+				callback,
+				ConnectionPayload {
+					ctx: ctx.inner().clone(),
+					conn,
+					request: None,
+				},
+			)
+			.await
+		})
+		.await
 }
 
 fn action_not_found(name: String) -> anyhow::Error {
@@ -1250,7 +1203,11 @@ fn actor_shutting_down() -> anyhow::Error {
 }
 
 fn missing_callback(name: &str) -> anyhow::Error {
-	anyhow!("callback `{name}` is not configured")
+	NapiInvalidState {
+		state: format!("callback {name}"),
+		reason: "not configured".to_owned(),
+	}
+	.build()
 }
 
 #[cfg(test)]
@@ -1263,7 +1220,7 @@ mod tests {
 	use rivet_error::RivetError as RivetTransportError;
 	use rivetkit_core::Kv;
 	use rivetkit_core::actor::state::{PERSIST_DATA_KEY, PersistedActor};
-	use tokio::sync::{Notify, mpsc, oneshot};
+	use tokio::sync::oneshot;
 
 	use super::*;
 
@@ -1279,8 +1236,6 @@ mod tests {
 			create_conn_state_timeout: timeout,
 			on_before_connect_timeout: timeout,
 			on_connect_timeout: timeout,
-			on_sleep_timeout: timeout,
-			on_destroy_timeout: timeout,
 			action_timeout: timeout,
 			on_request_timeout: timeout,
 		}
@@ -1303,6 +1258,7 @@ mod tests {
 			on_before_subscribe: None,
 			actions: HashMap::new(),
 			on_before_action_response: None,
+			on_queue_send: None,
 			on_request: None,
 			on_websocket: None,
 			run: None,
@@ -1342,10 +1298,7 @@ mod tests {
 			let seen_cancel_token_id = StdArc::clone(&seen_cancel_token_id);
 			async move {
 				let _ = with_dispatch_cancel_token(|cancel_token_id| async move {
-					seen_cancel_token_id.store(
-						cancel_token_id,
-						AtomicOrdering::Relaxed,
-					);
+					seen_cancel_token_id.store(cancel_token_id, AtomicOrdering::Relaxed);
 					panic!("dispatch panic");
 					#[allow(unreachable_code)]
 					Ok::<(), anyhow::Error>(())
@@ -1357,8 +1310,7 @@ mod tests {
 		.expect_err("panic dispatch should panic");
 
 		assert!(join_error.is_panic());
-		let cancel_token_id =
-			seen_cancel_token_id.load(AtomicOrdering::Relaxed);
+		let cancel_token_id = seen_cancel_token_id.load(AtomicOrdering::Relaxed);
 		assert_ne!(cancel_token_id, 0);
 		assert!(poll_dispatch_cancelled(cancel_token_id));
 		assert_eq!(active_dispatch_token_count(), baseline);
@@ -1400,12 +1352,8 @@ mod tests {
 	async fn action_dispatch_missing_action_returns_not_found() {
 		let bindings = Arc::new(empty_bindings());
 		let config = test_adapter_config();
-		let core_ctx = rivetkit_core::ActorContext::new(
-			"actor-missing-action",
-			"actor",
-			Vec::new(),
-			"local",
-		);
+		let core_ctx =
+			rivetkit_core::ActorContext::new("actor-missing-action", "actor", Vec::new(), "local");
 		let ctx = ActorContext::new(core_ctx);
 		let abort = CancellationToken::new();
 		let dirty = Arc::new(AtomicBool::new(false));
@@ -1444,20 +1392,15 @@ mod tests {
 	async fn subscribe_request_without_guard_is_allowed() {
 		let bindings = Arc::new(empty_bindings());
 		let config = test_adapter_config();
-		let core_ctx = rivetkit_core::ActorContext::new(
-			"actor-subscribe",
-			"actor",
-			Vec::new(),
-			"local",
-		);
+		let core_ctx =
+			rivetkit_core::ActorContext::new("actor-subscribe", "actor", Vec::new(), "local");
 		let ctx = ActorContext::new(core_ctx);
 		let abort = CancellationToken::new();
 		let dirty = Arc::new(AtomicBool::new(false));
 		let mut tasks = JoinSet::new();
 		let (_registered_task_tx, mut registered_task_rx) = unbounded_channel();
 		let (tx, rx) = oneshot::channel();
-		let conn =
-			rivetkit_core::ConnHandle::new("conn-subscribe", Vec::new(), Vec::new(), false);
+		let conn = rivetkit_core::ConnHandle::new("conn-subscribe", Vec::new(), Vec::new(), false);
 
 		dispatch_event(
 			ActorEvent::SubscribeRequest {
@@ -1486,24 +1429,15 @@ mod tests {
 	async fn connection_open_without_callbacks_is_allowed() {
 		let bindings = Arc::new(empty_bindings());
 		let config = test_adapter_config();
-		let core_ctx = rivetkit_core::ActorContext::new(
-			"actor-connection-open",
-			"actor",
-			Vec::new(),
-			"local",
-		);
+		let core_ctx =
+			rivetkit_core::ActorContext::new("actor-connection-open", "actor", Vec::new(), "local");
 		let ctx = ActorContext::new(core_ctx);
 		let abort = CancellationToken::new();
 		let dirty = Arc::new(AtomicBool::new(false));
 		let mut tasks = JoinSet::new();
 		let (_registered_task_tx, mut registered_task_rx) = unbounded_channel();
 		let (tx, rx) = oneshot::channel();
-		let conn = rivetkit_core::ConnHandle::new(
-			"conn-open",
-			vec![1, 2, 3],
-			Vec::new(),
-			false,
-		);
+		let conn = rivetkit_core::ConnHandle::new("conn-open", vec![1, 2, 3], Vec::new(), false);
 
 		dispatch_event(
 			ActorEvent::ConnectionOpen {
@@ -1534,12 +1468,8 @@ mod tests {
 	async fn workflow_requests_without_callbacks_return_none() {
 		let bindings = Arc::new(empty_bindings());
 		let config = test_adapter_config();
-		let core_ctx = rivetkit_core::ActorContext::new(
-			"actor-workflow",
-			"actor",
-			Vec::new(),
-			"local",
-		);
+		let core_ctx =
+			rivetkit_core::ActorContext::new("actor-workflow", "actor", Vec::new(), "local");
 		let ctx = ActorContext::new(core_ctx);
 		let abort = CancellationToken::new();
 		let dirty = Arc::new(AtomicBool::new(false));
@@ -1620,19 +1550,18 @@ mod tests {
 	#[tokio::test]
 	async fn callback_timeout_returns_structured_error_with_metadata() {
 		let timeout = Duration::from_millis(10);
-		let error = with_timeout(
-			"onWake",
-			timeout,
-			std::future::pending::<Result<()>>(),
-		)
-		.await
-		.expect_err("callback timeout should fail");
+		let error = with_timeout("onWake", timeout, std::future::pending::<Result<()>>())
+			.await
+			.expect_err("callback timeout should fail");
 		let error = RivetTransportError::extract(&error);
 		assert_eq!(error.group(), "actor");
 		assert_eq!(error.code(), "callback_timed_out");
 		assert_eq!(
 			error.message(),
-			format!("callback `onWake` timed out after {} ms", timeout.as_millis())
+			format!(
+				"callback `onWake` timed out after {} ms",
+				timeout.as_millis()
+			)
 		);
 		assert_eq!(
 			error.metadata(),
@@ -1662,295 +1591,11 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn finalize_sleep_event_drains_tasks_before_replying() {
-		let bindings = Arc::new(empty_bindings());
-		let config = test_adapter_config();
-		let core_ctx = rivetkit_core::ActorContext::new(
-			"actor-sleep",
-			"actor",
-			Vec::new(),
-			"local",
-		);
-		let ctx = ActorContext::new(core_ctx);
-		let abort = CancellationToken::new();
-		ctx.attach_napi_abort_token(abort.clone());
-		let dirty = Arc::new(AtomicBool::new(false));
-		let mut tasks = JoinSet::new();
-		let (_registered_task_tx, mut registered_task_rx) = unbounded_channel();
-		let (tx, rx) = oneshot::channel();
-		let gate = Arc::new(Notify::new());
-		let started = Arc::new(Notify::new());
-
-		spawn_task(&mut tasks, abort.clone(), {
-			let gate = Arc::clone(&gate);
-			let started = Arc::clone(&started);
-			async move {
-				started.notify_one();
-				gate.notified().await;
-				Ok(())
-			}
-		});
-		started.notified().await;
-
-		let sleep = dispatch_event(
-			ActorEvent::FinalizeSleep { reply: tx.into() },
-			&bindings,
-			&config,
-			&ctx,
-			&abort,
-			&mut tasks,
-			&mut registered_task_rx,
-			&dirty,
-		);
-		tokio::pin!(sleep);
-
-		tokio::select! {
-			_ = &mut sleep => panic!("sleep should wait for in-flight tasks"),
-			_ = tokio::time::sleep(Duration::from_millis(25)) => {}
-		}
-
-		gate.notify_waiters();
-		sleep.await;
-
-		rx.await
-			.expect("sleep reply should resolve")
-			.expect("sleep should succeed");
-		assert_eq!(ctx.take_end_reason(), Some(EndReason::Sleep));
-		assert!(!ctx.aborted());
-	}
-
-	#[tokio::test]
-	async fn destroy_event_cancels_abort_before_draining_tasks() {
-		let bindings = Arc::new(empty_bindings());
-		let config = test_adapter_config();
-		let core_ctx = rivetkit_core::ActorContext::new(
-			"actor-destroy",
-			"actor",
-			Vec::new(),
-			"local",
-		);
-		let ctx = ActorContext::new(core_ctx);
-		let abort = CancellationToken::new();
-		ctx.attach_napi_abort_token(abort.clone());
-		let dirty = Arc::new(AtomicBool::new(false));
-		let mut tasks = JoinSet::new();
-		let (_registered_task_tx, mut registered_task_rx) = unbounded_channel();
-		let (tx, rx) = oneshot::channel();
-
-		spawn_task(&mut tasks, abort.clone(), async move {
-			std::future::pending::<()>().await;
-			#[allow(unreachable_code)]
-			Ok(())
-		});
-
-		dispatch_event(
-			ActorEvent::Destroy { reply: tx.into() },
-			&bindings,
-			&config,
-			&ctx,
-			&abort,
-			&mut tasks,
-			&mut registered_task_rx,
-			&dirty,
-		)
-		.await;
-
-		rx.await
-			.expect("destroy reply should resolve")
-			.expect("destroy should succeed");
-		assert_eq!(ctx.take_end_reason(), Some(EndReason::Destroy));
-		assert!(ctx.aborted());
-	}
-
-	#[tokio::test]
-	async fn sleep_error_sets_end_reason_so_loop_terminates() {
-		let bindings = Arc::new(empty_bindings());
-		let config = Arc::new(test_adapter_config());
-		let core_ctx = rivetkit_core::ActorContext::new(
-			"actor-sleep-error",
-			"actor",
-			Vec::new(),
-			"local",
-		);
-		let ctx = ActorContext::new(core_ctx.clone());
-		let abort = CancellationToken::new();
-		ctx.attach_napi_abort_token(abort.clone());
-		let dirty = Arc::new(AtomicBool::new(false));
-		core_ctx.on_request_save(Box::new({
-			let dirty = Arc::clone(&dirty);
-			move |_immediate| {
-				dirty.store(true, Ordering::Release);
-			}
-		}));
-
-		core_ctx.request_save(false);
-
-		let (events_tx, events_rx) = mpsc::channel(4);
-		let (sleep_tx, sleep_rx) = oneshot::channel();
-		let (action_tx, action_rx) = oneshot::channel();
-
-		let loop_task = tokio::spawn({
-			let bindings = Arc::clone(&bindings);
-			let config = Arc::clone(&config);
-			let ctx = ctx.clone();
-			let abort = abort.clone();
-			let dirty = Arc::clone(&dirty);
-			async move {
-				let mut tasks = JoinSet::new();
-				let (_registered_task_tx, mut registered_task_rx) = unbounded_channel();
-				let mut events = ActorEvents::from(events_rx);
-				run_event_loop(
-					&bindings,
-					config.as_ref(),
-					&ctx,
-					&abort,
-					&mut tasks,
-					&mut registered_task_rx,
-					&dirty,
-					&mut events,
-				)
-				.await;
-				drain_tasks(&mut tasks, &mut registered_task_rx).await;
-			}
-		});
-
-		events_tx
-			.send(ActorEvent::FinalizeSleep {
-				reply: sleep_tx.into(),
-			})
-			.await
-			.expect("sleep event should send");
-		events_tx
-			.send(ActorEvent::Action {
-				name: "after-sleep".to_owned(),
-				args: Vec::new(),
-				conn: None,
-				reply: action_tx.into(),
-			})
-			.await
-			.expect("action event should send");
-		drop(events_tx);
-
-		let sleep_error = sleep_rx
-			.await
-			.expect("sleep reply should resolve")
-			.expect_err("sleep should fail when serializeState is missing");
-		assert!(
-			sleep_error
-				.to_string()
-				.contains("callback `serializeState` is not configured")
-		);
-
-		loop_task.await.expect("sleep loop task should finish");
-		assert_eq!(ctx.take_end_reason(), Some(EndReason::Sleep));
-
-		let action_error = action_rx
-			.await
-			.expect("post-sleep action reply should resolve")
-			.expect_err("post-sleep action should be dropped after loop exit");
-		assert_error_code(action_error, "dropped_reply");
-	}
-
-	#[tokio::test]
-	async fn destroy_error_sets_end_reason_so_loop_terminates() {
-		let bindings = Arc::new(empty_bindings());
-		let config = Arc::new(test_adapter_config());
-		let core_ctx = rivetkit_core::ActorContext::new(
-			"actor-destroy-error",
-			"actor",
-			Vec::new(),
-			"local",
-		);
-		let ctx = ActorContext::new(core_ctx.clone());
-		let abort = CancellationToken::new();
-		ctx.attach_napi_abort_token(abort.clone());
-		let dirty = Arc::new(AtomicBool::new(false));
-		core_ctx.on_request_save(Box::new({
-			let dirty = Arc::clone(&dirty);
-			move |_immediate| {
-				dirty.store(true, Ordering::Release);
-			}
-		}));
-
-		core_ctx.request_save(false);
-
-		let (events_tx, events_rx) = mpsc::channel(4);
-		let (destroy_tx, destroy_rx) = oneshot::channel();
-		let (action_tx, action_rx) = oneshot::channel();
-
-		let loop_task = tokio::spawn({
-			let bindings = Arc::clone(&bindings);
-			let config = Arc::clone(&config);
-			let ctx = ctx.clone();
-			let abort = abort.clone();
-			let dirty = Arc::clone(&dirty);
-			async move {
-				let mut tasks = JoinSet::new();
-				let (_registered_task_tx, mut registered_task_rx) = unbounded_channel();
-				let mut events = ActorEvents::from(events_rx);
-				run_event_loop(
-					&bindings,
-					config.as_ref(),
-					&ctx,
-					&abort,
-					&mut tasks,
-					&mut registered_task_rx,
-					&dirty,
-					&mut events,
-				)
-				.await;
-				drain_tasks(&mut tasks, &mut registered_task_rx).await;
-			}
-		});
-
-		events_tx
-			.send(ActorEvent::Destroy {
-				reply: destroy_tx.into(),
-			})
-			.await
-			.expect("destroy event should send");
-		events_tx
-			.send(ActorEvent::Action {
-				name: "after-destroy".to_owned(),
-				args: Vec::new(),
-				conn: None,
-				reply: action_tx.into(),
-			})
-			.await
-			.expect("action event should send");
-		drop(events_tx);
-
-		let destroy_error = destroy_rx
-			.await
-			.expect("destroy reply should resolve")
-			.expect_err("destroy should fail when serializeState is missing");
-		assert!(
-			destroy_error
-				.to_string()
-				.contains("callback `serializeState` is not configured")
-		);
-
-		loop_task.await.expect("destroy loop task should finish");
-		assert_eq!(ctx.take_end_reason(), Some(EndReason::Destroy));
-		assert!(ctx.aborted());
-
-		let action_error = action_rx
-			.await
-			.expect("post-destroy action reply should resolve")
-			.expect_err("post-destroy action should be dropped after loop exit");
-		assert_error_code(action_error, "dropped_reply");
-	}
-
-	#[tokio::test]
 	async fn run_adapter_loop_resets_stale_shared_end_reason_before_wake() {
 		let bindings = Arc::new(empty_bindings());
 		let config = Arc::new(test_adapter_config());
-		let core_ctx = rivetkit_core::ActorContext::new(
-			"actor-wake-reset",
-			"actor",
-			Vec::new(),
-			"local",
-		);
+		let core_ctx =
+			rivetkit_core::ActorContext::new("actor-wake-reset", "actor", Vec::new(), "local");
 		let stale_ctx = ActorContext::new(core_ctx.clone());
 		stale_ctx.mark_ready_internal();
 		stale_ctx
@@ -1958,7 +1603,7 @@ mod tests {
 			.expect("stale context should mark started");
 		stale_ctx.set_end_reason(EndReason::Sleep);
 
-		let (events_tx, events_rx) = mpsc::channel(4);
+		let (events_tx, events_rx) = unbounded_channel();
 		let (first_tx, first_rx) = oneshot::channel();
 		let (second_tx, second_rx) = oneshot::channel();
 
@@ -1969,7 +1614,6 @@ mod tests {
 				conn: None,
 				reply: first_tx.into(),
 			})
-			.await
 			.expect("first action event should send");
 		events_tx
 			.send(ActorEvent::Action {
@@ -1978,7 +1622,6 @@ mod tests {
 				conn: None,
 				reply: second_tx.into(),
 			})
-			.await
 			.expect("second action event should send");
 		drop(events_tx);
 
@@ -2028,27 +1671,19 @@ mod tests {
 			.set_state_initial(vec![9, 9, 9])
 			.expect("initial state should set");
 
-		run_preamble(
-			&bindings,
-			&config,
-			&first_ctx,
-			None,
-			None,
-			Vec::new(),
-		)
-		.await
-		.expect("first-create preamble should succeed");
+		run_preamble(&bindings, &config, &first_ctx, None, None, Vec::new())
+			.await
+			.expect("first-create preamble should succeed");
 
 		let persisted_bytes = kv
 			.get(PERSIST_DATA_KEY)
 			.await
 			.expect("persisted actor read should succeed")
 			.expect("persisted actor bytes should exist");
-		let embedded_version =
-			u16::from_le_bytes([persisted_bytes[0], persisted_bytes[1]]);
+		let embedded_version = u16::from_le_bytes([persisted_bytes[0], persisted_bytes[1]]);
 		assert!(matches!(embedded_version, 3 | 4));
-		let persisted: PersistedActor = serde_bare::from_slice(&persisted_bytes[2..])
-			.expect("persisted actor should decode");
+		let persisted: PersistedActor =
+			serde_bare::from_slice(&persisted_bytes[2..]).expect("persisted actor should decode");
 		assert!(persisted.has_initialized);
 
 		let second_core_ctx = rivetkit_core::ActorContext::new_with_kv(
@@ -2062,16 +1697,9 @@ mod tests {
 		let snapshot = persisted.has_initialized.then_some(persisted.state.clone());
 		assert!(snapshot.is_some());
 
-		run_preamble(
-			&bindings,
-			&config,
-			&second_ctx,
-			None,
-			snapshot,
-			Vec::new(),
-		)
-		.await
-		.expect("wake preamble should succeed");
+		run_preamble(&bindings, &config, &second_ctx, None, snapshot, Vec::new())
+			.await
+			.expect("wake preamble should succeed");
 
 		assert_eq!(second_ctx.inner().state(), vec![9, 9, 9]);
 	}
@@ -2081,10 +1709,9 @@ mod tests {
 		let bindings = empty_bindings();
 		let dirty = AtomicBool::new(false);
 
-		let deltas =
-			maybe_serialize(&bindings, &dirty, SerializeStateReason::Save)
-				.await
-				.expect("clean save serialize should not fail");
+		let deltas = maybe_serialize(&bindings, &dirty, SerializeStateReason::Save)
+			.await
+			.expect("clean save serialize should not fail");
 
 		assert!(deltas.is_empty());
 		assert!(!dirty.load(Ordering::Acquire));
@@ -2094,7 +1721,7 @@ mod tests {
 	async fn maybe_serialize_inspector_does_not_consume_pending_save() {
 		let bindings = empty_bindings();
 		let dirty = AtomicBool::new(true);
-		let calls = Arc::new(std::sync::Mutex::new(Vec::new()));
+		let calls = Arc::new(Mutex::new(Vec::new()));
 
 		let inspector_deltas = maybe_serialize_with(
 			&bindings,
@@ -2103,7 +1730,7 @@ mod tests {
 			|_, reason| {
 				let calls = Arc::clone(&calls);
 				async move {
-					calls.lock().expect("call log lock poisoned").push(reason);
+					calls.lock().push(reason);
 					Ok(vec![StateDelta::ActorState(vec![1, 2, 3])])
 				}
 			},
@@ -2121,7 +1748,7 @@ mod tests {
 			|_, reason| {
 				let calls = Arc::clone(&calls);
 				async move {
-					calls.lock().expect("call log lock poisoned").push(reason);
+					calls.lock().push(reason);
 					Ok(vec![StateDelta::ActorState(vec![4, 5, 6])])
 				}
 			},
@@ -2131,9 +1758,6 @@ mod tests {
 
 		assert_eq!(save_deltas.len(), 1);
 		assert!(!dirty.load(Ordering::Acquire));
-		assert_eq!(
-			*calls.lock().expect("call log lock poisoned"),
-			vec!["inspector", "save"]
-		);
+		assert_eq!(*calls.lock(), vec!["inspector", "save"]);
 	}
 }

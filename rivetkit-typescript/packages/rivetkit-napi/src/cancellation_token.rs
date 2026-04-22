@@ -12,6 +12,7 @@ pub struct CancellationToken {
 
 impl CancellationToken {
 	pub(crate) fn new(inner: CoreCancellationToken) -> Self {
+		tracing::debug!(class = "CancellationToken", "constructed napi class");
 		Self { inner }
 	}
 
@@ -34,6 +35,10 @@ impl CancellationToken {
 
 	#[napi]
 	pub fn cancel(&self) {
+		tracing::debug!(
+			class = "CancellationToken",
+			"abort signal cancelled native cancellation token"
+		);
 		self.inner.cancel();
 	}
 
@@ -47,12 +52,28 @@ impl CancellationToken {
 
 		napi::bindgen_prelude::spawn(async move {
 			token.cancelled().await;
+			tracing::debug!(
+				kind = "cancellationToken.onCancelled",
+				payload_summary = "cancelled=true",
+				"invoking napi TSF callback"
+			);
 			let status = tsfn.call(Ok(()), ThreadsafeFunctionCallMode::NonBlocking);
+			tracing::debug!(
+				kind = "cancellationToken.onCancelled",
+				?status,
+				"napi TSF callback returned"
+			);
 			if status != napi::Status::Ok {
 				tracing::warn!(?status, "failed to deliver cancellation callback");
 			}
 		});
 
 		Ok(())
+	}
+}
+
+impl Drop for CancellationToken {
+	fn drop(&mut self) {
+		tracing::debug!(class = "CancellationToken", "dropped napi class");
 	}
 }

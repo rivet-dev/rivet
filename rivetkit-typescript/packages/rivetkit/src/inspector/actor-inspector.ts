@@ -2,7 +2,7 @@ import * as cbor from "cbor-x";
 import { CONN_DRIVER_SYMBOL, CONN_STATE_MANAGER_SYMBOL } from "@/actor/config";
 import { RivetError } from "@/actor/errors";
 import { Lock } from "@/actor/utils";
-import type * as schema from "@/common/bare/inspector/v4";
+import type * as schema from "@/common/bare/generated/inspector/v4";
 import { bufferToArrayBuffer, toUint8Array } from "@/utils";
 
 export interface ActorInspectorWorkflowAdapter {

@@ -29,8 +29,10 @@ fn actor_import_export_round_trip_e2e() {
 		let source = create_namespace(&ctx, "source").await?;
 		let target = create_namespace(&ctx, "target").await?;
 
-		upsert_normal_runner_config(ctx.leader_dc().guard_port(), &source.name, RUNNER_NAME).await?;
-		upsert_normal_runner_config(ctx.leader_dc().guard_port(), &target.name, RUNNER_NAME).await?;
+		upsert_normal_runner_config(ctx.leader_dc().guard_port(), &source.name, RUNNER_NAME)
+			.await?;
+		upsert_normal_runner_config(ctx.leader_dc().guard_port(), &target.name, RUNNER_NAME)
+			.await?;
 
 		let source_actor = create_sleeping_actor_with_kv(
 			ctx.leader_dc(),
@@ -128,8 +130,10 @@ fn actor_import_export_skips_name_key_collisions_e2e() {
 		let source = create_namespace(&ctx, "collision-source").await?;
 		let target = create_namespace(&ctx, "collision-target").await?;
 
-		upsert_normal_runner_config(ctx.leader_dc().guard_port(), &source.name, RUNNER_NAME).await?;
-		upsert_normal_runner_config(ctx.leader_dc().guard_port(), &target.name, RUNNER_NAME).await?;
+		upsert_normal_runner_config(ctx.leader_dc().guard_port(), &source.name, RUNNER_NAME)
+			.await?;
+		upsert_normal_runner_config(ctx.leader_dc().guard_port(), &target.name, RUNNER_NAME)
+			.await?;
 
 		let actor_key = Some("collision-key".to_string());
 		let source_actor =
@@ -328,8 +332,14 @@ async fn write_sqlite_v2_fixture(dc: &ctx::TestDatacenter, actor_id: rivet_util:
 		&*dc.workflow_ctx.udb().context("missing workflow db")?,
 		actor_id,
 		vec![
-			(strip_actor_prefix(&actor_str, meta_key(&actor_str)), SQLITE_META_VALUE.to_vec()),
-			(strip_actor_prefix(&actor_str, shard_key(&actor_str, 0)), SQLITE_PAGE_VALUE.to_vec()),
+			(
+				strip_actor_prefix(&actor_str, meta_key(&actor_str)),
+				SQLITE_META_VALUE.to_vec(),
+			),
+			(
+				strip_actor_prefix(&actor_str, shard_key(&actor_str, 0)),
+				SQLITE_PAGE_VALUE.to_vec(),
+			),
 		],
 	)
 	.await?;

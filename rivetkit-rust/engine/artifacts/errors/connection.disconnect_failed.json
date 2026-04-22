@@ -1,0 +1,5 @@
+{
+  "code": "disconnect_failed",
+  "group": "connection",
+  "message": "Connection disconnect failed"
+}

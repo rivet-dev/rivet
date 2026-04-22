@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
 use std::sync::Mutex as StdMutex;
+use std::sync::atomic::AtomicBool;
 
 use rivet_envoy_protocol as protocol;
 use rivet_util::async_counter::AsyncCounter;

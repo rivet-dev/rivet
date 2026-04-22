@@ -56,8 +56,6 @@ Re-verified 2026-04-21 against HEAD `7764a15fd`. Fixed items removed.
 
 ## Code Quality
 
-1. **Actor key ser/de should be in its own file** — Currently in `types.rs` alongside unrelated types. Move to `utils/key.rs`.
-
 2. **Request and Response structs need their own file** — Currently in `actor/callbacks.rs` (364 lines, 19 structs). Move to a dedicated file.
 
 3. **Rename `callbacks` to `lifecycle_hooks`** — `actor/callbacks.rs` should be `actor/lifecycle_hooks.rs`.
@@ -77,9 +75,3 @@ Re-verified 2026-04-21 against HEAD `7764a15fd`. Fixed items removed.
 20. **No panics unless absolutely necessary** — rivetkit-core, rivetkit, and rivetkit-napi should never panic. There are ~146 `.expect("lock poisoned")` calls that should be replaced with non-poisoning locks (e.g. `parking_lot::RwLock`/`Mutex`) or proper error propagation. Audit all `unwrap()`, `expect()`, and `panic!()` calls across these three crates and eliminate them.
 
 22. **Standardize error handling with rivetkit-core** — Investigate whether errors across rivetkit-core, rivetkit, and rivetkit-napi are consistently using `RivetError` with proper group/code/message. Look for places using raw `anyhow!()` or string errors that should be structured `RivetError` types instead.
-
----
-
-## Investigation
-
-21. **Investigate v1 vs v2 SQLite wiring** — Need to understand how v1 and v2 VFS are dispatched, whether both paths are correctly wired through rivetkit-core, and if there are any gaps in the v1-to-v2 migration path.

@@ -62,8 +62,7 @@ mod tests {
 	use super::{encode_db_head_with_usage, tracked_storage_entry_size};
 	use crate::keys::{delta_chunk_key, meta_key, pidx_delta_key, shard_key};
 	use crate::types::{
-		DBHead, SQLITE_DEFAULT_MAX_STORAGE_BYTES, SQLITE_PAGE_SIZE, SQLITE_SHARD_SIZE,
-		SqliteOrigin,
+		DBHead, SQLITE_DEFAULT_MAX_STORAGE_BYTES, SQLITE_PAGE_SIZE, SQLITE_SHARD_SIZE, SqliteOrigin,
 	};
 
 	const TEST_ACTOR: &str = "test-actor";

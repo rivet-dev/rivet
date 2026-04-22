@@ -135,6 +135,32 @@ describeDriverMatrix("Action Features", (driverTestConfig) => {
 				const results = await instance.getResults();
 				expect(results).toContain("delayed");
 			});
+
+			test("should dispatch actions concurrently on the same actor", async (c) => {
+				const { client } = await setupDriverTest(c, driverTestConfig);
+
+				const instance = client.concurrentActionActor.getOrCreate([
+					`concurrent-action-${crypto.randomUUID()}`,
+				]);
+				await instance.getEvents();
+
+				const slow = instance.runWithDelay("slow", 150);
+				await new Promise((resolve) => setTimeout(resolve, 25));
+				const fast = instance.runWithDelay("fast", 0);
+
+				await expect(Promise.all([slow, fast])).resolves.toEqual([
+					"slow",
+					"fast",
+				]);
+
+				const events = await instance.getEvents();
+				expect(events).toEqual([
+					"start:slow",
+					"start:fast",
+					"finish:fast",
+					"finish:slow",
+				]);
+			});
 		});
 
 		describe("Large Payloads", () => {

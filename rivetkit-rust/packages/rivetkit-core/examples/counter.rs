@@ -8,7 +8,7 @@ use std::io::Cursor;
 use anyhow::{Result, anyhow};
 use ciborium::{from_reader, into_writer};
 use rivetkit_core::{
-	ActorConfig, ActorEvent, ActorFactory, ActorStart, CoreRegistry,
+	ActorConfig, ActorEvent, ActorFactory, ActorStart, CoreRegistry, RequestSaveOpts,
 	SerializeStateReason, StateDelta,
 };
 
@@ -32,17 +32,23 @@ async fn run_counter(start: ActorStart) -> Result<()> {
 		mut events,
 		..
 	} = start;
-	let mut count = snapshot.as_deref().map(decode_count).transpose()?.unwrap_or(0);
+	let mut count = snapshot
+		.as_deref()
+		.map(decode_count)
+		.transpose()?
+		.unwrap_or(0);
 	let mut dirty = false;
 
 	while let Some(event) = events.recv().await {
 		match event {
-			ActorEvent::Action { name, args, reply, .. } => match name.as_str() {
+			ActorEvent::Action {
+				name, args, reply, ..
+			} => match name.as_str() {
 				"increment" => {
 					let delta = decode_count(&args).unwrap_or(1);
 					count += delta;
 					dirty = true;
-					ctx.request_save(false);
+					ctx.request_save(RequestSaveOpts::default());
 					reply.send(Ok(encode_count(count)?));
 				}
 				"get" => {
