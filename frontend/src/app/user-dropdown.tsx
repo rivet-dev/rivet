@@ -171,7 +171,7 @@ function OrganizationSwitcher({ value }: { value: string | undefined }) {
 			{organizations?.map((org) => (
 				<DropdownMenuCheckboxItem
 					key={org.id}
-					checked={org.id === value}
+					checked={org.slug === value}
 					onSelect={() => {
 						authClient.organization.setActive({
 							organizationId: org.id,
@@ -179,7 +179,7 @@ function OrganizationSwitcher({ value }: { value: string | undefined }) {
 						navigate({
 							to: `/orgs/$organization`,
 							params: {
-								organization: org.id,
+								organization: org.slug,
 							},
 						});
 					}}

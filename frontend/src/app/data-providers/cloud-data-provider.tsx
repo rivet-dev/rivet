@@ -53,7 +53,7 @@ export const createGlobalContext = () => {
 				queryFn: async () => {
 					const result =
 						await authClient.organization.getFullOrganization({
-							query: { organizationId: opts.org },
+							query: { organizationSlug: opts.org },
 						});
 					return result.data;
 				},

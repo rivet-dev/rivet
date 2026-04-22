@@ -2,15 +2,18 @@ import { createFileRoute } from "@tanstack/react-router";
 import { Logo } from "@/app/logo";
 import { SignUp } from "@/app/sign-up";
 import { authClient, redirectToOrganization } from "@/lib/auth";
+import { features } from "@/lib/features";
 
 export const Route = createFileRoute("/join")({
 	component: RouteComponent,
 	beforeLoad: async ({ search }) => {
-		const session = await authClient.getSession();
-		if (session.data) {
-			await redirectToOrganization({
-				from: "from" in search ? (search.from as string) : undefined,
-			});
+		if (features.auth) {
+			const session = await authClient.getSession();
+			if (session.data) {
+				await redirectToOrganization({
+					from: "from" in search ? (search.from as string) : undefined,
+				});
+			}
 		}
 	},
 });

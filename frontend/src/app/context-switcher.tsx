@@ -372,7 +372,7 @@ function ProjectList({
 										onSelect={() => {
 											onClose?.();
 											authClient.organization.setActive({
-												organizationId: organization,
+												organizationSlug: organization,
 											});
 											return navigate({
 												to: "/orgs/$organization/projects/$project",
@@ -563,7 +563,7 @@ function NamespaceList({
 										onSelect={() => {
 											onClose?.();
 											authClient.organization.setActive({
-												organizationId: organization,
+												organizationSlug: organization,
 											});
 											return navigate({
 												to: "/orgs/$organization/projects/$project/ns/$namespace",
