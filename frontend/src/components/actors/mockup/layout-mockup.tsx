@@ -1,16 +1,16 @@
+import * as DialogPrimitive from "@radix-ui/react-dialog";
 import {
 	faActorsBorderless,
 	faArrowUp,
-	faChevronDown,
-	faCircleUser,
+	faBolt,
 	faCodeBranch,
 	faComment,
+	faDatabase,
+	faDiagramProject,
 	faMagnifyingGlass,
-	faMoon,
+	faMicrochip,
 	faPlus,
-	faRivet,
 	faSliders,
-	faSun,
 	faXmark,
 	Icon,
 } from "@rivet-gg/icons";
@@ -54,16 +54,10 @@ import {
 	useMemo,
 	useRef,
 	useState,
-	useSyncExternalStore,
 } from "react";
 import {
 	Button,
 	cn,
-	DropdownMenu,
-	DropdownMenuContent,
-	DropdownMenuItem,
-	DropdownMenuSeparator,
-	DropdownMenuTrigger,
 	ResizableHandle,
 	ResizablePanel,
 	ResizablePanelGroup,
@@ -74,164 +68,13 @@ import {
 	TabsTrigger,
 } from "@/components";
 import { CodeMirror } from "@/components/code-mirror";
+import {
+	MockupTopBar,
+	useMockupTheme,
+} from "@/components/mockup/shared";
 import { ActorStatusIndicator } from "../actor-status-indicator";
 import { useDataProvider } from "../data-provider";
 import type { ActorId, ActorStatus } from "../queries";
-
-// -- Theme --
-
-type Theme = "light" | "dark";
-const THEME_STORAGE_KEY = "mockup-theme";
-
-function readStoredTheme(): Theme {
-	if (typeof window === "undefined") return "dark";
-	const stored = localStorage.getItem(THEME_STORAGE_KEY);
-	if (stored === "light" || stored === "dark") return stored;
-	return document.documentElement.classList.contains("dark")
-		? "dark"
-		: "light";
-}
-
-let currentTheme: Theme =
-	typeof window === "undefined" ? "dark" : readStoredTheme();
-const themeListeners = new Set<() => void>();
-
-function applyTheme(next: Theme) {
-	currentTheme = next;
-	document.documentElement.classList.toggle("dark", next === "dark");
-	localStorage.setItem(THEME_STORAGE_KEY, next);
-	for (const listener of themeListeners) listener();
-}
-
-function subscribeTheme(listener: () => void): () => void {
-	themeListeners.add(listener);
-	return () => {
-		themeListeners.delete(listener);
-	};
-}
-
-function getThemeSnapshot(): Theme {
-	return currentTheme;
-}
-
-function useTheme(): [Theme, () => void] {
-	const theme = useSyncExternalStore(
-		subscribeTheme,
-		getThemeSnapshot,
-		getThemeSnapshot,
-	);
-
-	// Ensure the DOM reflects the stored preference on first render.
-	useEffect(() => {
-		if (typeof window === "undefined") return;
-		const isDark = document.documentElement.classList.contains("dark");
-		if ((currentTheme === "dark") !== isDark) {
-			applyTheme(currentTheme);
-		}
-	}, []);
-
-	const toggle = useCallback(() => {
-		applyTheme(currentTheme === "dark" ? "light" : "dark");
-	}, []);
-
-	return [theme, toggle];
-}
-
-// -- Top Bar --
-
-function MockupTopBar() {
-	return (
-		<div className="h-12 mt-2 mx-2 border dark:border-white/10 rounded-lg bg-card flex items-center justify-between px-3 shrink-0 z-20">
-			<div className="flex items-center gap-3">
-				<Icon icon={faRivet} className="text-2xl text-foreground" />
-				<div className="h-5 w-px bg-border" />
-				<NamespaceDropdownPlaceholder />
-			</div>
-
-			<div className="flex items-center gap-1">
-				<Button
-					variant="ghost"
-					size="sm"
-					className="text-muted-foreground"
-				>
-					Actor Builds
-				</Button>
-				<div className="h-5 w-px bg-border mx-1" />
-				<AccountMenu />
-			</div>
-		</div>
-	);
-}
-
-function AccountMenu() {
-	const [theme, toggleTheme] = useTheme();
-
-	return (
-		<DropdownMenu>
-			<DropdownMenuTrigger asChild>
-				<Button
-					variant="ghost"
-					size="sm"
-					className="text-muted-foreground gap-2"
-				>
-					<Icon icon={faCircleUser} className="text-base" />
-					<span className="text-xs">Company</span>
-					<Icon
-						icon={faChevronDown}
-						className="text-[10px] opacity-60"
-					/>
-				</Button>
-			</DropdownMenuTrigger>
-			<DropdownMenuContent align="end" className="w-48">
-				<DropdownMenuItem>Billing</DropdownMenuItem>
-				<DropdownMenuItem>Support</DropdownMenuItem>
-				<DropdownMenuItem>What's New</DropdownMenuItem>
-				<DropdownMenuSeparator />
-				<DropdownMenuItem
-					onSelect={(e) => {
-						e.preventDefault();
-						toggleTheme();
-					}}
-				>
-					<Icon
-						icon={theme === "dark" ? faSun : faMoon}
-						className="mr-2 w-3.5 text-muted-foreground"
-					/>
-					{theme === "dark" ? "Light mode" : "Dark mode"}
-				</DropdownMenuItem>
-				<DropdownMenuItem>Settings</DropdownMenuItem>
-				<DropdownMenuItem>Sign out</DropdownMenuItem>
-			</DropdownMenuContent>
-		</DropdownMenu>
-	);
-}
-
-function NamespaceDropdownPlaceholder() {
-	return (
-		<DropdownMenu>
-			<DropdownMenuTrigger asChild>
-				<Button
-					variant="ghost"
-					size="sm"
-					className="text-foreground gap-2 font-medium"
-				>
-					<span className="text-xs">Namespace</span>
-					<Icon
-						icon={faChevronDown}
-						className="text-[10px] opacity-60"
-					/>
-				</Button>
-			</DropdownMenuTrigger>
-			<DropdownMenuContent align="start" className="w-48">
-				<DropdownMenuItem>default</DropdownMenuItem>
-				<DropdownMenuItem>staging</DropdownMenuItem>
-				<DropdownMenuItem>production</DropdownMenuItem>
-				<DropdownMenuSeparator />
-				<DropdownMenuItem>New namespace</DropdownMenuItem>
-			</DropdownMenuContent>
-		</DropdownMenu>
-	);
-}
 
 // -- Actor Node for Canvas --
 
@@ -244,9 +87,15 @@ interface ActorNodeData {
 	[key: string]: unknown;
 }
 
-function ActorCanvasNode({ data }: NodeProps<Node<ActorNodeData>>) {
+function ActorCanvasNode({ data, selected }: NodeProps<Node<ActorNodeData>>) {
 	return (
-		<div className="bg-card border dark:border-white/10 dark:bg-white/[0.02] rounded-lg px-4 py-3 w-[240px] cursor-pointer hover:border-primary/50 transition-colors shadow-sm relative group">
+		<div
+			className={cn(
+				"bg-card border dark:border-white/10 dark:bg-stone-900 rounded-lg px-4 py-3 w-[240px] cursor-pointer hover:border-primary/50 dark:hover:bg-stone-800 transition-colors shadow-sm relative group",
+				selected &&
+					"border-primary dark:border-primary ring-2 ring-primary/40",
+			)}
+		>
 			<Handle
 				type="source"
 				position={Position.Top}
@@ -271,10 +120,6 @@ function ActorCanvasNode({ data }: NodeProps<Node<ActorNodeData>>) {
 				id="left"
 			/>
 			<div className="flex items-center gap-2">
-				<Icon
-					icon={faActorsBorderless}
-					className="text-muted-foreground shrink-0"
-				/>
 				<div className="min-w-0 flex-1">
 					<div className="text-sm truncate">{data.label}</div>
 					<div className="text-[10px] text-muted-foreground flex items-center gap-1.5">
@@ -285,9 +130,6 @@ function ActorCanvasNode({ data }: NodeProps<Node<ActorNodeData>>) {
 							{data.instances !== 1 ? "s" : ""}
 						</span>
 					</div>
-				</div>
-				<div className="flex items-center shrink-0">
-					<ActorStatusIndicator status={data.status} />
 				</div>
 			</div>
 		</div>
@@ -330,9 +172,46 @@ function DeletableEdge({
 		[id, setEdges],
 	);
 
+	const selectedMarkerId = `arrow-selected-${id}`;
+
 	return (
 		<>
-			<BaseEdge path={edgePath} style={style} markerEnd={markerEnd} />
+			{selected ? (
+				<defs>
+					<marker
+						id={selectedMarkerId}
+						viewBox="-10 -10 20 20"
+						refX="0"
+						refY="0"
+						markerWidth="12.5"
+						markerHeight="12.5"
+						markerUnits="strokeWidth"
+						orient="auto-start-reverse"
+					>
+						<polyline
+							style={{
+								stroke: "hsl(var(--primary))",
+								fill: "hsl(var(--primary))",
+								strokeWidth: 1,
+							}}
+							points="-5,-4 0,0 -5,4 -5,-4"
+						/>
+					</marker>
+				</defs>
+			) : null}
+			<BaseEdge
+				path={edgePath}
+				style={{
+					...style,
+					stroke: selected
+						? "hsl(var(--primary))"
+						: style?.stroke,
+					strokeWidth: selected ? 2 : style?.strokeWidth,
+				}}
+				markerEnd={
+					selected ? `url(#${selectedMarkerId})` : markerEnd
+				}
+			/>
 			{selected ? (
 				<EdgeLabelRenderer>
 					<div
@@ -344,7 +223,7 @@ function DeletableEdge({
 						<button
 							type="button"
 							onClick={handleDelete}
-							className="flex items-center justify-center w-5 h-5 rounded-full bg-background border text-muted-foreground hover:text-destructive hover:border-destructive shadow-sm transition-colors"
+							className="flex items-center justify-center w-5 h-5 rounded-full bg-background border border-primary text-primary hover:bg-destructive hover:text-destructive-foreground hover:border-destructive shadow-sm transition-colors"
 							aria-label="Delete edge"
 						>
 							<Icon icon={faXmark} className="w-2.5" />
@@ -384,7 +263,7 @@ function FitViewOnChange({
 
 // -- Canvas State Persistence --
 
-const STORAGE_KEY = "mockup-canvas-state";
+const STORAGE_KEY = "mockup-canvas-state-v2";
 
 const PLACEHOLDERS: {
 	name: string;
@@ -400,6 +279,10 @@ const PLACEHOLDERS: {
 	{ name: "Inventory", instances: 7, status: "running", version: "v15" },
 	{ name: "Player Stats", instances: 1, status: "crashed", version: "v3" },
 	{ name: "World State", instances: 2, status: "running", version: "v9" },
+	{ name: "Chat Presence", instances: 6, status: "running", version: "v7" },
+	{ name: "Payments Worker", instances: 2, status: "running", version: "v18" },
+	{ name: "Email Queue", instances: 1, status: "sleeping", version: "v5" },
+	{ name: "Analytics Sink", instances: 4, status: "running", version: "v11" },
 ];
 
 function loadCanvasState(): {
@@ -454,16 +337,40 @@ function makeDefaultNodes(): Node<ActorNodeData>[] {
 	}));
 }
 
+function makeDefaultEdges(): Edge[] {
+	const connections: [number, number][] = [
+		[3, 1],
+		[3, 0],
+		[1, 8],
+		[4, 2],
+		[4, 7],
+		[5, 6],
+		[5, 11],
+		[9, 10],
+		[0, 7],
+	];
+	return connections.map(([from, to], i) => ({
+		id: `placeholder-edge-${i}`,
+		source: `placeholder-${from}`,
+		target: `placeholder-${to}`,
+		type: "deletable",
+	}));
+}
+
 // -- Actor Canvas --
 
 function ActorCanvas({
 	onActorClick,
 	leftOpen,
 	rightOpen,
+	selectedActorId,
+	onCreate,
 }: {
 	onActorClick: (actorId: string) => void;
 	leftOpen: boolean;
 	rightOpen: boolean;
+	selectedActorId: string | null;
+	onCreate: () => void;
 }) {
 	const n = useSearch({
 		from: "/_context",
@@ -475,16 +382,19 @@ function ActorCanvas({
 
 	const [nodes, setNodes] = useState<Node<ActorNodeData>[]>(() => {
 		const saved = loadCanvasState();
-		if (saved) return saved.nodes ?? [];
+		if (saved?.nodes?.length) return saved.nodes;
 		return makeDefaultNodes();
 	});
 
 	const [edges, setEdges] = useState<Edge[]>(() => {
 		const saved = loadCanvasState();
-		return (saved?.edges ?? []).map((edge) => ({
-			...edge,
-			type: "deletable",
-		}));
+		if (saved?.edges?.length) {
+			return saved.edges.map((edge) => ({
+				...edge,
+				type: "deletable",
+			}));
+		}
+		return makeDefaultEdges();
 	});
 
 	// Update nodes from real actors if available
@@ -555,11 +465,20 @@ function ActorCanvas({
 		onActorClick("");
 	}, [onActorClick]);
 
+	const displayedNodes = useMemo(
+		() =>
+			nodes.map((node) => ({
+				...node,
+				selected: selectedActorId !== null && node.id === selectedActorId,
+			})),
+		[nodes, selectedActorId],
+	);
+
 	return (
 		<ReactFlowProvider>
 			<FitViewOnChange leftOpen={leftOpen} rightOpen={rightOpen} />
 			<ReactFlow
-				nodes={nodes}
+				nodes={displayedNodes}
 				edges={edges}
 				nodeTypes={nodeTypes}
 				edgeTypes={edgeTypes}
@@ -593,12 +512,12 @@ function ActorCanvas({
 				/>
 				<Controls />
 			</ReactFlow>
-			{nodes.length === 0 ? <CanvasEmptyState /> : null}
+			{nodes.length === 0 ? <CanvasEmptyState onCreate={onCreate} /> : null}
 		</ReactFlowProvider>
 	);
 }
 
-function CanvasEmptyState() {
+function CanvasEmptyState({ onCreate }: { onCreate: () => void }) {
 	return (
 		<div className="absolute inset-0 flex items-center justify-center pointer-events-none z-[5]">
 			<div className="flex flex-col items-center gap-4 pointer-events-auto">
@@ -616,7 +535,11 @@ function CanvasEmptyState() {
 						Create your first actor to start building.
 					</p>
 				</div>
-				<Button size="sm" className="gap-1.5 text-xs">
+				<Button
+					size="sm"
+					className="gap-1.5 text-xs"
+					onClick={onCreate}
+				>
 					<Icon icon={faPlus} className="w-3" />
 					Create actor
 				</Button>
@@ -625,64 +548,223 @@ function CanvasEmptyState() {
 	);
 }
 
+// -- Create Actor Dialog --
+
+interface CreateOption {
+	id: string;
+	name: string;
+	description: string;
+	icon: typeof faBolt;
+}
+
+const CREATE_OPTION_GROUPS: {
+	group: string;
+	options: CreateOption[];
+}[] = [
+	{
+		group: "Actor",
+		options: [
+			{
+				id: "realtime",
+				name: "Realtime",
+				description:
+					"Stateful actors for multiplayer, chat, and live collaboration.",
+				icon: faBolt,
+			},
+			{
+				id: "workflow",
+				name: "Workflow",
+				description:
+					"Durable, long-running processes with retries and versioning.",
+				icon: faDiagramProject,
+			},
+			{
+				id: "sqlite",
+				name: "SQLite",
+				description:
+					"Per-actor embedded SQLite database with strong consistency.",
+				icon: faDatabase,
+			},
+		],
+	},
+	{
+		group: "agentOS",
+		options: [
+			{
+				id: "virtual-machine",
+				name: "Virtual Machine",
+				description:
+					"Isolated VM for running untrusted code and agentic workloads.",
+				icon: faMicrochip,
+			},
+		],
+	},
+];
+
+function CreateActorDialog({
+	open,
+	onOpenChange,
+}: {
+	open: boolean;
+	onOpenChange: (open: boolean) => void;
+}) {
+	return (
+		<DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
+			<DialogPrimitive.Portal>
+				<DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/50 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 duration-200 ease-out" />
+				<DialogPrimitive.Content
+					className={cn(
+						"fixed left-1/2 top-1/2 z-50 w-[92vw] max-w-xl -translate-x-1/2 -translate-y-1/2",
+						"rounded-lg border dark:border-white/10 bg-card shadow-2xl overflow-hidden",
+						"data-[state=open]:animate-in data-[state=open]:fade-in-0",
+						"data-[state=closed]:animate-out data-[state=closed]:fade-out-0",
+						"duration-150 ease-out",
+					)}
+				>
+					<div className="flex items-start justify-between gap-4 px-5 pt-4 pb-3 border-b dark:border-white/10">
+						<div>
+							<DialogPrimitive.Title className="text-sm font-semibold text-foreground">
+								Create actor
+							</DialogPrimitive.Title>
+							<DialogPrimitive.Description className="mt-0.5 text-xs text-muted-foreground">
+								Choose a template to get started.
+							</DialogPrimitive.Description>
+						</div>
+						<DialogPrimitive.Close
+							className="rounded-sm text-muted-foreground opacity-70 transition-opacity hover:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+							aria-label="Close"
+						>
+							<Icon icon={faXmark} className="h-4 w-4" />
+						</DialogPrimitive.Close>
+					</div>
+					<div className="p-2 max-h-[70vh] overflow-auto">
+						{CREATE_OPTION_GROUPS.map((group) => (
+							<div key={group.group} className="mb-1 last:mb-0">
+								<div className="px-2 pt-2 pb-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+									{group.group}
+								</div>
+								<div className="flex flex-col">
+									{group.options.map((option) => (
+										<button
+											key={option.id}
+											type="button"
+											onClick={() => onOpenChange(false)}
+											className="flex items-center gap-3 px-2 py-2 rounded-md text-left hover:bg-accent transition-colors group"
+										>
+											<div className="flex items-center justify-center w-8 h-8 rounded-md border dark:border-white/10 bg-muted/40 text-muted-foreground shrink-0 group-hover:text-foreground transition-colors">
+												<Icon
+													icon={option.icon}
+													className="text-sm"
+												/>
+											</div>
+											<div className="flex-1 min-w-0">
+												<div className="text-xs font-medium text-foreground">
+													{option.name}
+												</div>
+												<div className="text-[11px] text-muted-foreground truncate">
+													{option.description}
+												</div>
+											</div>
+										</button>
+									))}
+								</div>
+							</div>
+						))}
+					</div>
+				</DialogPrimitive.Content>
+			</DialogPrimitive.Portal>
+		</DialogPrimitive.Root>
+	);
+}
+
 // -- Left Popover (Agent / Versions) --
 
 function LeftPopover({
 	tab,
-	onTabChange,
 	onClose,
 	visible,
 }: {
 	tab: "agent" | "versions";
-	onTabChange: (tab: "agent" | "versions") => void;
 	onClose: () => void;
 	visible: boolean;
 }) {
 	return (
 		<div
 			className={cn(
-				"absolute left-4 top-4 bottom-4 w-80 bg-card border dark:border-white/10 rounded-lg shadow-xl z-10 flex flex-col overflow-hidden transition-transform duration-300 ease-out",
+				"absolute left-4 top-14 bottom-4 w-80 bg-card border dark:border-white/10 rounded-lg shadow-xl z-10 flex flex-col overflow-hidden transition-all duration-300 ease-out",
 				visible
-					? "translate-x-0"
-					: "-translate-x-[calc(100%+2rem)]",
+					? "translate-x-0 opacity-100"
+					: "-translate-x-[calc(100%+2rem)] opacity-0 pointer-events-none",
 			)}
 		>
-			<Tabs
-				value={tab}
-				onValueChange={(v) => onTabChange(v as "agent" | "versions")}
-				className="flex flex-col flex-1 min-h-0"
-			>
-				<div className="flex items-center justify-between border-b h-[45px] px-2">
-					<TabsList className="items-center bg-transparent gap-0.5 border-b-0 h-auto w-auto">
-						<TabsTrigger
-							value="agent"
-							className="text-xs px-2.5 py-1 h-7 min-h-0 rounded-md font-medium border-b-0 data-[state=active]:border-b-transparent data-[state=active]:bg-accent"
-						>
-							Agent
-						</TabsTrigger>
-						<TabsTrigger
-							value="versions"
-							className="text-xs px-2.5 py-1 h-7 min-h-0 rounded-md font-medium border-b-0 data-[state=active]:border-b-transparent data-[state=active]:bg-accent"
-						>
-							Versions
-						</TabsTrigger>
-					</TabsList>
-					<Button variant="ghost" size="icon-sm" onClick={onClose}>
-						<Icon icon={faXmark} />
-					</Button>
-				</div>
-				<TabsContent value="agent" className="flex-1 mt-0 min-h-0">
-					<AgentChat />
-				</TabsContent>
-				<TabsContent value="versions" className="flex-1 mt-0 min-h-0">
-					<ScrollArea className="h-full p-4">
-						<div className="text-muted-foreground text-sm text-center py-8">
-							Versions panel placeholder
-						</div>
-					</ScrollArea>
-				</TabsContent>
-			</Tabs>
+			<div className="flex items-center justify-between border-b h-[37px] px-3 shrink-0">
+				<span className="text-xs font-medium text-foreground">
+					{tab === "agent" ? "Agent" : "Versions"}
+				</span>
+				<Button variant="ghost" size="icon-sm" onClick={onClose}>
+					<Icon icon={faXmark} />
+				</Button>
+			</div>
+			<div className="flex-1 min-h-0">
+				{tab === "agent" ? <AgentChat /> : <VersionsList />}
+			</div>
 		</div>
+	);
+}
+
+// -- Versions List --
+
+interface MockVersion {
+	id: string;
+	name: string;
+	deployedAt: string;
+}
+
+const MOCK_VERSIONS: MockVersion[] = [
+	{ id: "v-12", name: "v12 · feat/leaderboard", deployedAt: "2h ago" },
+	{ id: "v-11", name: "v11 · fix/reconnect", deployedAt: "1d ago" },
+	{ id: "v-10", name: "v10 · refactor/state", deployedAt: "3d ago" },
+	{ id: "v-9", name: "v9 · chore/deps", deployedAt: "1w ago" },
+	{ id: "v-8", name: "v8 · feat/presence", deployedAt: "2w ago" },
+];
+
+function VersionsList() {
+	const [currentId, setCurrentId] = useState(MOCK_VERSIONS[0].id);
+	return (
+		<ScrollArea className="h-full">
+			{MOCK_VERSIONS.map((version) => {
+				const isCurrent = version.id === currentId;
+				return (
+					<div
+						key={version.id}
+						className="flex items-center gap-2 pl-3 pr-2 py-2 border-b dark:border-white/10 last:border-b-0 hover:bg-accent/40 transition-colors"
+					>
+						<div className="flex-1 min-w-0">
+							<div className="text-xs text-foreground truncate">
+								{version.name}
+							</div>
+							<div className="text-[10px] text-muted-foreground mt-0.5">
+								Deployed {version.deployedAt}
+							</div>
+						</div>
+						{isCurrent ? (
+							<span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground px-2">
+								Current
+							</span>
+						) : (
+							<Button
+								variant="outline"
+								size="sm"
+								className="h-6 px-2 text-[11px]"
+								onClick={() => setCurrentId(version.id)}
+							>
+								Deploy
+							</Button>
+						)}
+					</div>
+				);
+			})}
+		</ScrollArea>
 	);
 }
 
@@ -753,25 +835,25 @@ function AgentChat() {
 // -- Left Floating Buttons --
 
 function LeftFloatingButtons({
-	onOpen,
-	visible,
+	onSelect,
+	activeTab,
+	isOpen,
 }: {
-	onOpen: (tab: "agent" | "versions") => void;
-	visible: boolean;
+	onSelect: (tab: "agent" | "versions") => void;
+	activeTab: "agent" | "versions";
+	isOpen: boolean;
 }) {
 	return (
-		<div
-			className={cn(
-				"absolute left-4 top-4 z-10 bg-card border dark:border-white/10 rounded-md overflow-hidden flex flex-col transition-all duration-300 ease-out",
-				visible
-					? "translate-x-0 opacity-100"
-					: "-translate-x-4 opacity-0 pointer-events-none",
-			)}
-		>
+		<div className="absolute left-4 top-4 z-20 bg-card border dark:border-white/10 rounded-md overflow-hidden flex flex-row">
 			<button
 				type="button"
-				onClick={() => onOpen("agent")}
-				className="flex items-center gap-2 px-2.5 py-1.5 text-xs hover:bg-accent border-b border-border text-foreground transition-colors"
+				onClick={() => onSelect("agent")}
+				className={cn(
+					"flex items-center gap-2 px-2.5 py-1.5 text-xs border-r border-border text-foreground transition-colors",
+					isOpen && activeTab === "agent"
+						? "bg-accent"
+						: "hover:bg-accent",
+				)}
 			>
 				<Icon
 					icon={faComment}
@@ -781,8 +863,13 @@ function LeftFloatingButtons({
 			</button>
 			<button
 				type="button"
-				onClick={() => onOpen("versions")}
-				className="flex items-center gap-2 px-2.5 py-1.5 text-xs hover:bg-accent text-foreground transition-colors"
+				onClick={() => onSelect("versions")}
+				className={cn(
+					"flex items-center gap-2 px-2.5 py-1.5 text-xs text-foreground transition-colors",
+					isOpen && activeTab === "versions"
+						? "bg-accent"
+						: "hover:bg-accent",
+				)}
 			>
 				<Icon
 					icon={faCodeBranch}
@@ -796,7 +883,13 @@ function LeftFloatingButtons({
 
 // -- Right Floating Buttons --
 
-function RightFloatingButtons({ visible }: { visible: boolean }) {
+function RightFloatingButtons({
+	visible,
+	onCreate,
+}: {
+	visible: boolean;
+	onCreate: () => void;
+}) {
 	return (
 		<div
 			className={cn(
@@ -808,6 +901,7 @@ function RightFloatingButtons({ visible }: { visible: boolean }) {
 		>
 			<button
 				type="button"
+				onClick={onCreate}
 				className="flex items-center gap-2 px-2.5 py-1.5 text-xs hover:bg-accent text-foreground transition-colors"
 			>
 				<Icon icon={faPlus} className="text-muted-foreground w-3.5" />
@@ -823,11 +917,13 @@ function RightPopover({
 	actorId,
 	onClose,
 	onSelectActor,
+	onCreate,
 	visible,
 }: {
 	actorId: string;
 	onClose: () => void;
 	onSelectActor: (actorId: string) => void;
+	onCreate: () => void;
 	visible: boolean;
 }) {
 	return (
@@ -850,6 +946,7 @@ function RightPopover({
 					<ActorListPlaceholder
 						selectedActorId={actorId}
 						onSelect={onSelectActor}
+						onCreate={onCreate}
 					/>
 				</ResizablePanel>
 				<ResizableHandle />
@@ -890,9 +987,11 @@ function ActorListToolbar() {
 function ActorListPlaceholder({
 	selectedActorId,
 	onSelect,
+	onCreate,
 }: {
 	selectedActorId: string;
 	onSelect: (actorId: string) => void;
+	onCreate: () => void;
 }) {
 	return (
 		<ScrollArea className="flex-1">
@@ -921,6 +1020,7 @@ function ActorListPlaceholder({
 			})}
 			<button
 				type="button"
+				onClick={onCreate}
 				className="w-full flex items-center gap-2 pl-2 pr-2.5 py-1 border-b border-dashed border-l-2 border-l-transparent text-muted-foreground hover:text-foreground hover:bg-accent/30 transition-colors"
 			>
 				<span className="size-2 rounded-full border border-dashed border-muted-foreground/60" />
@@ -1007,7 +1107,7 @@ function ActorDetailPlaceholder({
 	onClose,
 }: { actorId: string; onClose: () => void }) {
 	const [inspectorTab, setInspectorTab] = useState("code");
-	const [theme] = useTheme();
+	const [theme] = useMockupTheme();
 	const codeTheme = useMemo(
 		() =>
 			theme === "dark"
@@ -1110,6 +1210,9 @@ export function LayoutMockup() {
 	const [selectedActorId, setSelectedActorId] = useState<string | null>(null);
 	const [leftOpen, setLeftOpen] = useState(false);
 	const [leftTab, setLeftTab] = useState<"agent" | "versions">("agent");
+	const [createOpen, setCreateOpen] = useState(false);
+
+	const handleCreate = useCallback(() => setCreateOpen(true), []);
 
 	// Track mount state for animations (start hidden, animate in)
 	const [leftMounted, setLeftMounted] = useState(false);
@@ -1124,11 +1227,18 @@ export function LayoutMockup() {
 		setRightMounted(true);
 	}, []);
 
-	const handleLeftOpen = useCallback((tab: "agent" | "versions") => {
-		setLeftTab(tab);
-		setLeftOpen(true);
-		setLeftMounted(true);
-	}, []);
+	const handleLeftSelect = useCallback(
+		(tab: "agent" | "versions") => {
+			if (leftOpen && leftTab === tab) {
+				setLeftOpen(false);
+				return;
+			}
+			setLeftTab(tab);
+			setLeftOpen(true);
+			setLeftMounted(true);
+		},
+		[leftOpen, leftTab],
+	);
 
 	const handleLeftClose = useCallback(() => {
 		setLeftOpen(false);
@@ -1149,23 +1259,28 @@ export function LayoutMockup() {
 						onActorClick={handleActorClick}
 						leftOpen={leftOpen}
 						rightOpen={!!selectedActorId}
+						selectedActorId={selectedActorId}
+						onCreate={handleCreate}
 					/>
 				</div>
 
-				{/* Left floating buttons (visible when left popover is closed) */}
+				{/* Left floating buttons always visible; active tab gets highlight when panel is open */}
 				<LeftFloatingButtons
-					onOpen={handleLeftOpen}
-					visible={!leftOpen}
+					onSelect={handleLeftSelect}
+					activeTab={leftTab}
+					isOpen={leftOpen}
 				/>
 
 				{/* Right floating buttons (visible when right popover is closed) */}
-				<RightFloatingButtons visible={!selectedActorId} />
+				<RightFloatingButtons
+					visible={!selectedActorId}
+					onCreate={handleCreate}
+				/>
 
 				{/* Left popover (always mounted after first open for animation) */}
 				{leftMounted ? (
 					<LeftPopover
 						tab={leftTab}
-						onTabChange={setLeftTab}
 						onClose={handleLeftClose}
 						visible={leftOpen}
 					/>
@@ -1177,10 +1292,16 @@ export function LayoutMockup() {
 						actorId={selectedActorId ?? "placeholder-0"}
 						onClose={handleRightClose}
 						onSelectActor={handleActorClick}
+						onCreate={handleCreate}
 						visible={!!selectedActorId}
 					/>
 				) : null}
 			</div>
+
+			<CreateActorDialog
+				open={createOpen}
+				onOpenChange={setCreateOpen}
+			/>
 		</div>
 	);
 }
