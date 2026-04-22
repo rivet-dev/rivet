@@ -13,7 +13,7 @@ use crate::keys::{
 };
 use crate::ltx::{LtxHeader, decode_ltx_v3, encode_ltx_v3};
 use crate::quota::{encode_db_head_with_usage, tracked_storage_entry_size};
-use crate::types::{DBHead, DirtyPage, SQLITE_PAGE_SIZE};
+use crate::types::{DBHead, DirtyPage, SQLITE_PAGE_SIZE, decode_db_head};
 use crate::udb::{self, WriteOp};
 
 const PIDX_PGNO_BYTES: usize = std::mem::size_of::<u32>();
@@ -467,10 +467,6 @@ fn compute_materialized_txid(
 	}
 }
 
-fn decode_db_head(bytes: &[u8]) -> Result<DBHead> {
-	serde_bare::from_slice(bytes).context("decode sqlite db head")
-}
-
 fn decode_pidx_pgno(actor_id: &str, key: &[u8]) -> Result<u32> {
 	let prefix = pidx_delta_prefix(actor_id);
 	ensure!(
@@ -522,7 +518,7 @@ mod tests {
 	use crate::test_utils::{read_value, scan_prefix_values, test_db};
 	use crate::types::{
 		DBHead, DirtyPage, FetchedPage, SQLITE_DEFAULT_MAX_STORAGE_BYTES, SQLITE_PAGE_SIZE,
-		SQLITE_SHARD_SIZE, SQLITE_VFS_V2_SCHEMA_VERSION,
+		SQLITE_SHARD_SIZE, SQLITE_VFS_V2_SCHEMA_VERSION, SqliteOrigin,
 	};
 	use crate::udb::{WriteOp, apply_write_ops, test_hooks};
 
@@ -541,6 +537,7 @@ mod tests {
 			creation_ts_ms: 123,
 			sqlite_storage_used: 0,
 			sqlite_max_storage: SQLITE_DEFAULT_MAX_STORAGE_BYTES,
+			origin: SqliteOrigin::Native,
 		}
 	}
 

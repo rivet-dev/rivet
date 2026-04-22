@@ -918,6 +918,7 @@ async fn handle_sqlite_commit_finalize(
 				txid: request.txid,
 				new_db_size_pages: request.new_db_size_pages,
 				now_ms: util::timestamp::now(),
+				origin_override: None,
 			},
 		)
 		.await;

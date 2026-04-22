@@ -6,8 +6,6 @@ use rivetkit_core::sqlite::{
 };
 
 use crate::envoy_handle::JsEnvoyHandle;
-use crate::types::JsKvEntry;
-
 #[napi]
 #[derive(Clone)]
 pub struct JsNativeDatabase {
@@ -163,16 +161,14 @@ fn u64_to_i64(value: u64) -> i64 {
 
 pub(crate) async fn open_database_with_runtime_config(
 	config: SqliteRuntimeConfig,
-	preloaded_entries: Vec<(Vec<u8>, Vec<u8>)>,
 ) -> napi::Result<JsNativeDatabase> {
 	let SqliteRuntimeConfig {
 		handle,
 		actor_id,
-		schema_version,
 		startup_data,
 	} = config;
-	let db = CoreSqliteDb::new(handle, actor_id, schema_version, startup_data);
-	db.open(preloaded_entries)
+	let db = CoreSqliteDb::new(handle, actor_id, startup_data);
+	db.open()
 		.await
 		.map_err(crate::napi_anyhow_error)?;
 	Ok(JsNativeDatabase::new(db))
@@ -183,31 +179,15 @@ pub(crate) async fn open_database_with_runtime_config(
 pub async fn open_database_from_envoy(
 	js_handle: &JsEnvoyHandle,
 	actor_id: String,
-	preloaded_entries: Option<Vec<JsKvEntry>>,
 ) -> napi::Result<JsNativeDatabase> {
-	let schema_version = js_handle
-		.clone_sqlite_schema_version(&actor_id)
-		.await
-		.ok_or_else(|| {
-			napi::Error::from_reason(format!(
-				"missing sqlite schema version for actor {actor_id}"
-			))
-		})?;
 	let startup_data = js_handle.clone_sqlite_startup_data(&actor_id).await;
-	let preloaded_entries = preloaded_entries
-		.unwrap_or_default()
-		.into_iter()
-		.map(|entry| (entry.key.to_vec(), entry.value.to_vec()))
-		.collect();
 
 	open_database_with_runtime_config(
 		SqliteRuntimeConfig {
 			handle: js_handle.handle.clone(),
 			actor_id,
-			schema_version,
 			startup_data,
 		},
-		preloaded_entries,
 	)
 	.await
 }

@@ -159,19 +159,9 @@ async function startEnvoy(config) {
 /**
  * Open a native database backed by envoy KV.
  */
-async function openDatabaseFromEnvoy(handle, actorId, preloadedEntries) {
+async function openDatabaseFromEnvoy(handle, actorId) {
 	const rawHandle = handle._raw || handle;
-	const nativePreloadedEntries = preloadedEntries
-		? preloadedEntries.map(([key, value]) => ({
-				key: Buffer.from(key),
-				value: Buffer.from(value),
-			}))
-		: null;
-	return native.openDatabaseFromEnvoy(
-		rawHandle,
-		actorId,
-		nativePreloadedEntries,
-	);
+	return native.openDatabaseFromEnvoy(rawHandle, actorId);
 }
 
 function decodePreloadedKv(preloadedKv) {

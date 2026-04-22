@@ -13,7 +13,7 @@ pub use rivetkit_sqlite::query::{BindParam, ColumnValue, ExecResult, QueryResult
 use rivetkit_sqlite::{
 	database::{NativeDatabaseHandle, open_database_from_envoy},
 	query::{exec_statements, execute_statement, query_statement},
-	v2::vfs::SqliteVfsMetricsSnapshot,
+	vfs::SqliteVfsMetricsSnapshot,
 };
 
 #[cfg(not(feature = "sqlite"))]
@@ -64,7 +64,6 @@ pub struct SqliteVfsMetricsSnapshot {
 pub struct SqliteRuntimeConfig {
 	pub handle: EnvoyHandle,
 	pub actor_id: String,
-	pub schema_version: u32,
 	pub startup_data: Option<protocol::SqliteStartupData>,
 }
 
@@ -72,7 +71,6 @@ pub struct SqliteRuntimeConfig {
 pub struct SqliteDb {
 	handle: Option<EnvoyHandle>,
 	actor_id: Option<String>,
-	schema_version: Option<u32>,
 	startup_data: Option<protocol::SqliteStartupData>,
 	#[cfg(feature = "sqlite")]
 	db: std::sync::Arc<std::sync::Mutex<Option<NativeDatabaseHandle>>>,
@@ -82,13 +80,11 @@ impl SqliteDb {
 	pub fn new(
 		handle: EnvoyHandle,
 		actor_id: impl Into<String>,
-		schema_version: u32,
 		startup_data: Option<protocol::SqliteStartupData>,
 	) -> Self {
 		Self {
 			handle: Some(handle),
 			actor_id: Some(actor_id.into()),
-			schema_version: Some(schema_version),
 			startup_data,
 			#[cfg(feature = "sqlite")]
 			db: Default::default(),
@@ -137,7 +133,7 @@ impl SqliteDb {
 		self.handle()?.sqlite_commit_finalize(request).await
 	}
 
-	pub async fn open(&self, preloaded_entries: Vec<(Vec<u8>, Vec<u8>)>) -> Result<()> {
+	pub async fn open(&self) -> Result<()> {
 		#[cfg(feature = "sqlite")]
 		{
 			let config = self.runtime_config()?;
@@ -156,9 +152,7 @@ impl SqliteDb {
 				let native_db = open_database_from_envoy(
 					config.handle,
 					config.actor_id,
-					config.schema_version,
 					config.startup_data,
-					preloaded_entries,
 					rt_handle,
 				)?;
 				*guard = Some(native_db);
@@ -170,17 +164,14 @@ impl SqliteDb {
 
 		#[cfg(not(feature = "sqlite"))]
 		{
-			let _ = preloaded_entries;
-			bail!(
-				"actor database is not available because rivetkit-core was built without the `sqlite` feature"
-			)
+			bail!("actor database is not available because rivetkit-core was built without the `sqlite` feature")
 		}
 	}
 
 	pub async fn exec(&self, sql: impl Into<String>) -> Result<QueryResult> {
 		#[cfg(feature = "sqlite")]
 		{
-			self.open(Vec::new()).await?;
+			self.open().await?;
 			let sql = sql.into();
 			let db = self.db.clone();
 			tokio::task::spawn_blocking(move || {
@@ -212,7 +203,7 @@ impl SqliteDb {
 	) -> Result<QueryResult> {
 		#[cfg(feature = "sqlite")]
 		{
-			self.open(Vec::new()).await?;
+			self.open().await?;
 			let sql = sql.into();
 			let db = self.db.clone();
 			tokio::task::spawn_blocking(move || {
@@ -244,7 +235,7 @@ impl SqliteDb {
 	) -> Result<ExecResult> {
 		#[cfg(feature = "sqlite")]
 		{
-			self.open(Vec::new()).await?;
+			self.open().await?;
 			let sql = sql.into();
 			let db = self.db.clone();
 			tokio::task::spawn_blocking(move || {
@@ -313,11 +304,10 @@ impl SqliteDb {
 	pub fn metrics(&self) -> Option<SqliteVfsMetricsSnapshot> {
 		#[cfg(feature = "sqlite")]
 		{
-			self.db.lock().ok().and_then(|guard| {
-				guard
-					.as_ref()
-					.and_then(NativeDatabaseHandle::sqlite_vfs_metrics)
-			})
+			self.db
+				.lock()
+				.ok()
+				.and_then(|guard| guard.as_ref().map(NativeDatabaseHandle::sqlite_vfs_metrics))
 		}
 
 		#[cfg(not(feature = "sqlite"))]
@@ -333,9 +323,6 @@ impl SqliteDb {
 				.actor_id
 				.clone()
 				.ok_or_else(|| anyhow!("sqlite actor id is not configured"))?,
-			schema_version: self
-				.schema_version
-				.ok_or_else(|| anyhow!("sqlite schema version is not configured"))?,
 			startup_data: self.startup_data.clone(),
 		})
 	}
@@ -372,7 +359,6 @@ impl std::fmt::Debug for SqliteDb {
 		f.debug_struct("SqliteDb")
 			.field("configured", &self.handle.is_some())
 			.field("actor_id", &self.actor_id)
-			.field("schema_version", &self.schema_version)
 			.finish()
 	}
 }

@@ -188,6 +188,49 @@ pub(crate) async fn tx_scan_prefix_values(
 	Ok(rows)
 }
 
+pub(crate) async fn tx_delete_value_precise(
+	tx: &universaldb::Transaction,
+	subspace: &Subspace,
+	key: &[u8],
+) -> Result<()> {
+	let metadata = tx.get(&physical_key(subspace, key), Snapshot).await?;
+	tx.clear(&physical_key(subspace, key));
+
+	if let Some(metadata) = metadata.as_ref() {
+		match metadata.first().copied() {
+			Some(INLINE_VALUE_MARKER) | None => {}
+			Some(CHUNKED_VALUE_MARKER) => {
+				ensure!(
+					metadata.len() == CHUNKED_METADATA_LEN,
+					"chunked metadata for key {:?} had invalid length {}",
+					key,
+					metadata.len()
+				);
+				let chunk_count = u32::from_be_bytes(
+					metadata[5..9]
+						.try_into()
+						.expect("chunked metadata count bytes should be present"),
+				);
+				for chunk_idx in 0..chunk_count {
+					tx.clear(&physical_key(subspace, &chunk_key(key, chunk_idx)));
+				}
+			}
+			Some(other) => {
+				return Err(anyhow::anyhow!(
+					"unknown sqlite-storage value marker {other} for key {:?}",
+					key
+				));
+			}
+		}
+	}
+
+	let prefix = chunk_key_prefix(key);
+	let physical_prefix = physical_key(subspace, &prefix);
+	tx.clear_range(&physical_prefix, &end_of_key_range(&physical_prefix));
+
+	Ok(())
+}
+
 pub(crate) fn tx_write_value(
 	tx: &universaldb::Transaction,
 	subspace: &Subspace,
@@ -310,6 +353,26 @@ fn chunk_key(key: &[u8], chunk_idx: u32) -> Vec<u8> {
 
 fn physical_key(subspace: &Subspace, key: &[u8]) -> Vec<u8> {
 	[subspace.bytes(), key].concat()
+}
+
+#[cfg(test)]
+pub fn physical_chunk_key(subspace: &Subspace, key: &[u8], chunk_idx: u32) -> Vec<u8> {
+	physical_key(subspace, &chunk_key(key, chunk_idx))
+}
+
+#[cfg(test)]
+pub async fn raw_key_exists(
+	db: &universaldb::Database,
+	op_counter: &AtomicUsize,
+	key: Vec<u8>,
+) -> Result<bool> {
+	run_db_op(db, op_counter, move |tx| {
+		let key = key.clone();
+		async move {
+			Ok(tx.get(&key, Snapshot).await?.is_some())
+		}
+	})
+	.await
 }
 
 #[cfg(test)]

@@ -9,11 +9,13 @@ use crate::engine::SqliteEngine;
 use crate::error::SqliteStorageError;
 use crate::keys::{
 	decode_delta_chunk_txid, delta_chunk_prefix, delta_prefix, meta_key, pidx_delta_prefix,
-	shard_key,
+	shard_key, shard_prefix,
 };
 use crate::ltx::decode_ltx_v3;
 use crate::quota::{encode_db_head_with_usage, tracked_storage_entry_size};
-use crate::types::{DBHead, FetchedPage, SQLITE_MAX_DELTA_BYTES, SqliteMeta};
+use crate::types::{
+	DBHead, FetchedPage, SQLITE_MAX_DELTA_BYTES, SqliteMeta, SqliteOrigin, decode_db_head,
+};
 use crate::udb::{self, WriteOp};
 
 pub const DEFAULT_PRELOAD_MAX_BYTES: usize = 1024 * 1024;
@@ -53,7 +55,66 @@ pub struct TakeoverResult {
 	pub preloaded_pages: Vec<FetchedPage>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PrepareV1MigrationResult {
+	pub meta: SqliteMeta,
+}
+
 impl SqliteEngine {
+	pub async fn prepare_v1_migration(
+		&self,
+		actor_id: &str,
+		now_ms: i64,
+	) -> Result<PrepareV1MigrationResult> {
+		let actor_id = actor_id.to_string();
+		let actor_id_for_tx = actor_id.clone();
+		let subspace = self.subspace.clone();
+		let (head, _encoded_head) =
+			udb::run_db_op(self.db.as_ref(), self.op_counter.as_ref(), move |tx| {
+				let actor_id = actor_id_for_tx.clone();
+				let subspace = subspace.clone();
+				async move {
+					let meta_storage_key = meta_key(&actor_id);
+					if let Some(existing_meta) =
+						udb::tx_get_value_serializable(&tx, &subspace, &meta_storage_key).await?
+					{
+					let existing_head = decode_db_head(&existing_meta)?;
+					ensure!(
+						matches!(existing_head.origin, SqliteOrigin::MigratingFromV1),
+						SqliteStorageError::ConcurrentTakeover
+					);
+					}
+
+					udb::tx_delete_value_precise(&tx, &subspace, &meta_storage_key).await?;
+					for prefix in [
+						delta_prefix(&actor_id),
+						pidx_delta_prefix(&actor_id),
+						shard_prefix(&actor_id),
+					] {
+						for (key, _) in udb::tx_scan_prefix_values(&tx, &subspace, &prefix).await? {
+							udb::tx_delete_value_precise(&tx, &subspace, &key).await?;
+						}
+					}
+
+					let mut head = DBHead::new(now_ms);
+					head.origin = SqliteOrigin::MigratingFromV1;
+					let (head, encoded_head) = encode_db_head_with_usage(&actor_id, &head, 0)?;
+					udb::tx_write_value(&tx, &subspace, &meta_storage_key, &encoded_head)?;
+
+					Ok((head, encoded_head))
+				}
+			})
+			.await?;
+
+		self.page_indices.remove_async(&actor_id).await;
+		self.pending_stages
+			.retain_sync(|(pending_actor_id, _), _| pending_actor_id != &actor_id);
+
+		Ok(PrepareV1MigrationResult {
+			meta: SqliteMeta::from((head, SQLITE_MAX_DELTA_BYTES)),
+		})
+	}
+
 	pub async fn takeover(&self, actor_id: &str, config: TakeoverConfig) -> Result<TakeoverResult> {
 		let start = Instant::now();
 		let meta_bytes = udb::get_value(
@@ -343,10 +404,6 @@ fn collect_preload_pgnos(config: &TakeoverConfig) -> Vec<u32> {
 	requested.into_iter().collect()
 }
 
-fn decode_db_head(bytes: &[u8]) -> Result<DBHead> {
-	serde_bare::from_slice(bytes).context("decode sqlite db head")
-}
-
 fn decode_pidx_pgno(actor_id: &str, key: &[u8]) -> Result<u32> {
 	let prefix = pidx_delta_prefix(actor_id);
 	ensure!(
@@ -430,9 +487,12 @@ mod tests {
 	}
 	use crate::types::{
 		DBHead, DirtyPage, FetchedPage, SQLITE_DEFAULT_MAX_STORAGE_BYTES, SQLITE_MAX_DELTA_BYTES,
-		SQLITE_PAGE_SIZE, SQLITE_SHARD_SIZE, SQLITE_VFS_V2_SCHEMA_VERSION,
+		SQLITE_PAGE_SIZE, SQLITE_SHARD_SIZE, SQLITE_VFS_V2_SCHEMA_VERSION, SqliteOrigin,
+		decode_db_head,
 	};
-	use crate::udb::{WriteOp, apply_write_ops};
+	use crate::udb::{
+		WriteOp, apply_write_ops, physical_chunk_key, raw_key_exists,
+	};
 
 	const TEST_ACTOR: &str = "test-actor";
 
@@ -449,6 +509,7 @@ mod tests {
 			creation_ts_ms: 123,
 			sqlite_storage_used: 0,
 			sqlite_max_storage: SQLITE_DEFAULT_MAX_STORAGE_BYTES,
+			origin: SqliteOrigin::Native,
 		}
 	}
 
@@ -498,6 +559,89 @@ mod tests {
 		let head: DBHead = serde_bare::from_slice(&stored_meta)?;
 		assert_eq!(head.generation, 1);
 		assert_eq!(head.creation_ts_ms, 777);
+
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn prepare_v1_migration_wipes_actor_rows_and_chunk_subkeys() -> Result<()> {
+		let (db, subspace) = test_db().await?;
+		let (engine, _compaction_rx) = SqliteEngine::new(db, subspace);
+		let large_orphan = vec![0x5a; 150_000];
+		let unrelated_key = meta_key("other-actor");
+		let orphan_key = delta_blob_key(TEST_ACTOR, 99);
+		let orphan_chunk_0 = physical_chunk_key(&engine.subspace, &orphan_key, 0);
+		let orphan_chunk_14 = physical_chunk_key(&engine.subspace, &orphan_key, 14);
+		apply_write_ops(
+			engine.db.as_ref(),
+			&engine.subspace,
+			engine.op_counter.as_ref(),
+			vec![
+				WriteOp::put(orphan_key.clone(), large_orphan),
+				WriteOp::put(pidx_delta_key(TEST_ACTOR, 1), 99_u64.to_be_bytes().to_vec()),
+				WriteOp::put(unrelated_key.clone(), vec![0x42]),
+			],
+		)
+		.await?;
+
+		assert!(
+			raw_key_exists(
+				engine.db.as_ref(),
+				engine.op_counter.as_ref(),
+				orphan_chunk_0.clone(),
+			)
+			.await?,
+			"chunked orphan should create physical chunk rows"
+		);
+		assert!(
+			raw_key_exists(
+				engine.db.as_ref(),
+				engine.op_counter.as_ref(),
+				orphan_chunk_14.clone(),
+			)
+			.await?,
+			"chunked orphan should create the tail chunk row too"
+		);
+
+		let prepared = engine.prepare_v1_migration(TEST_ACTOR, 4_242).await?;
+		assert_eq!(prepared.meta.origin, SqliteOrigin::MigratingFromV1);
+
+		assert!(read_value(&engine, orphan_key.clone()).await?.is_none());
+		assert!(
+			read_value(&engine, pidx_delta_key(TEST_ACTOR, 1))
+				.await?
+				.is_none()
+		);
+		let stored_meta = read_value(&engine, meta_key(TEST_ACTOR))
+			.await?
+			.expect("meta should be recreated");
+		let head = decode_db_head(&stored_meta)?;
+		assert_eq!(head.origin, SqliteOrigin::MigratingFromV1);
+		assert_eq!(head.creation_ts_ms, 4_242);
+		assert!(
+			!raw_key_exists(
+				engine.db.as_ref(),
+				engine.op_counter.as_ref(),
+				orphan_chunk_0,
+			)
+			.await?,
+			"orphaned chunk row 0 should be wiped"
+		);
+		assert!(
+			!raw_key_exists(
+				engine.db.as_ref(),
+				engine.op_counter.as_ref(),
+				orphan_chunk_14,
+			)
+			.await?,
+			"orphaned chunk subkeys should be wiped too"
+		);
+
+		assert_eq!(
+			read_value(&engine, unrelated_key.clone()).await?,
+			Some(vec![0x42]),
+			"cleanup should stay inside the actor prefix"
+		);
 
 		Ok(())
 	}

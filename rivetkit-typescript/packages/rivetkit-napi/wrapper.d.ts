@@ -143,6 +143,5 @@ export declare function startEnvoy(config: EnvoyConfig): Promise<EnvoyHandle>;
 export declare function openDatabaseFromEnvoy(
 	handle: EnvoyHandle,
 	actorId: string,
-	preloadedEntries?: readonly [Uint8Array, Uint8Array][] | null,
 ): Promise<JsNativeDatabase>;
 export declare const utils: {};

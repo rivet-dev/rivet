@@ -5,14 +5,13 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 workspace = "../../../"
-description = "Native SQLite VFS for RivetKit backed by a transport-agnostic KV trait"
+description = "Native SQLite VFS for RivetKit backed by sqlite-storage"
 
 [lib]
 crate-type = ["lib"]
 
 [dependencies]
 anyhow.workspace = true
-async-trait.workspace = true
 libsqlite3-sys = { version = "0.30", features = ["bundled"] }
 rivet-envoy-client.workspace = true
 tokio.workspace = true
