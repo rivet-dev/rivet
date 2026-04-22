@@ -1,7 +1,7 @@
 use std::ffi::{CStr, CString, c_char};
 use std::ptr;
 
-use anyhow::{Result, anyhow, bail};
+use anyhow::{Result, anyhow};
 use libsqlite3_sys::{
 	SQLITE_BLOB, SQLITE_DONE, SQLITE_FLOAT, SQLITE_INTEGER, SQLITE_NULL, SQLITE_OK, SQLITE_ROW,
 	SQLITE_TEXT, SQLITE_TRANSIENT, sqlite3, sqlite3_bind_blob, sqlite3_bind_double,

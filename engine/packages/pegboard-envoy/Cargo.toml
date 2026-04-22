@@ -32,6 +32,7 @@ serde_bare.workspace = true
 serde_json.workspace = true
 serde.workspace = true
 sqlite-storage.workspace = true
+tempfile.workspace = true
 tokio-tungstenite.workspace = true
 tokio.workspace = true
 tracing.workspace = true
@@ -39,6 +40,7 @@ universaldb.workspace = true
 universalpubsub.workspace = true
 url.workspace = true
 vbare.workspace = true
+rusqlite.workspace = true
 
 pegboard.workspace = true
 namespace.workspace = true

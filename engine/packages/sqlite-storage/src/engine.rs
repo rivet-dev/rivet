@@ -12,7 +12,7 @@ use universaldb::Subspace;
 use crate::keys::{meta_key, pidx_delta_prefix};
 use crate::metrics::SqliteStorageMetrics;
 use crate::page_index::DeltaPageIndex;
-use crate::types::{DBHead, SQLITE_MAX_DELTA_BYTES, SqliteMeta};
+use crate::types::{DBHead, SQLITE_MAX_DELTA_BYTES, SqliteMeta, decode_db_head};
 use crate::udb;
 
 pub struct SqliteEngine {
@@ -56,23 +56,34 @@ impl SqliteEngine {
 	}
 
 	pub async fn load_head(&self, actor_id: &str) -> Result<DBHead> {
+		self.try_load_head(actor_id)
+			.await?
+			.context("sqlite meta missing")
+	}
+
+	pub async fn try_load_head(&self, actor_id: &str) -> Result<Option<DBHead>> {
 		let meta_bytes = udb::get_value(
 			self.db.as_ref(),
 			&self.subspace,
 			self.op_counter.as_ref(),
 			meta_key(actor_id),
 		)
-		.await?
-		.context("sqlite meta missing")?;
+		.await?;
 
-		serde_bare::from_slice(&meta_bytes).context("decode sqlite db head")
+		meta_bytes.map(|meta_bytes| decode_db_head(&meta_bytes)).transpose()
 	}
 
 	pub async fn load_meta(&self, actor_id: &str) -> Result<SqliteMeta> {
-		Ok(SqliteMeta::from((
-			self.load_head(actor_id).await?,
-			SQLITE_MAX_DELTA_BYTES,
-		)))
+		self.try_load_meta(actor_id)
+			.await?
+			.context("sqlite meta missing")
+	}
+
+	pub async fn try_load_meta(&self, actor_id: &str) -> Result<Option<SqliteMeta>> {
+		Ok(self
+			.try_load_head(actor_id)
+			.await?
+			.map(|head| SqliteMeta::from((head, SQLITE_MAX_DELTA_BYTES))))
 	}
 
 	pub async fn get_or_load_pidx(

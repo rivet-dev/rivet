@@ -2216,7 +2216,6 @@ impl RegistryDispatcher {
 		generation: u32,
 		actor_name: &str,
 		key: ActorKey,
-		sqlite_schema_version: u32,
 		sqlite_startup_data: Option<protocol::SqliteStartupData>,
 		factory: &ActorFactory,
 	) -> ActorContext {
@@ -2230,7 +2229,6 @@ impl RegistryDispatcher {
 			SqliteDb::new(
 				handle.clone(),
 				actor_id.to_owned(),
-				sqlite_schema_version,
 				sqlite_startup_data,
 			),
 		);
@@ -2248,7 +2246,7 @@ impl EnvoyCallbacks for RegistryCallbacks {
 		generation: u32,
 		config: protocol::ActorConfig,
 		preloaded_kv: Option<protocol::PreloadedKv>,
-		sqlite_schema_version: u32,
+		_sqlite_schema_version: u32,
 		sqlite_startup_data: Option<protocol::SqliteStartupData>,
 	) -> EnvoyBoxFuture<anyhow::Result<()>> {
 		let dispatcher = self.dispatcher.clone();
@@ -2267,7 +2265,6 @@ impl EnvoyCallbacks for RegistryCallbacks {
 				generation,
 				&actor_name,
 				key,
-				sqlite_schema_version,
 				sqlite_startup_data,
 				factory.as_ref(),
 			);

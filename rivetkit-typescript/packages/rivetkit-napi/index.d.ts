@@ -93,7 +93,7 @@ export interface JsSqliteVfsMetrics {
   commitCount: number
 }
 /** Open a native SQLite database backed by the envoy's KV channel. */
-export declare function openDatabaseFromEnvoy(jsHandle: JsEnvoyHandle, actorId: string, preloadedEntries?: Array<JsKvEntry> | undefined | null): Promise<JsNativeDatabase>
+export declare function openDatabaseFromEnvoy(jsHandle: JsEnvoyHandle, actorId: string): Promise<JsNativeDatabase>
 export interface JsQueueNextOptions {
   names?: Array<string>
   timeoutMs?: number

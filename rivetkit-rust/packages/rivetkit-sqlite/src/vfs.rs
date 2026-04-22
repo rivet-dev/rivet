@@ -1,31 +1,57 @@
-//! Custom SQLite VFS backed by KV operations over the KV channel.
-//!
-//! This crate now owns the KV-backed SQLite behavior used by `rivetkit-napi`.
-
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::ffi::{c_char, c_int, c_void, CStr, CString};
 use std::ptr;
 use std::slice;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::Arc;
+use std::time::Instant;
 
+use anyhow::Result;
 use libsqlite3_sys::*;
+use moka::sync::Cache;
+use parking_lot::{Mutex, RwLock};
+use rivet_envoy_client::handle::EnvoyHandle;
+use rivet_envoy_protocol as protocol;
+use sqlite_storage::ltx::{encode_ltx_v3, LtxHeader};
+#[cfg(test)]
+use sqlite_storage::{engine::SqliteEngine, error::SqliteStorageError};
 use tokio::runtime::Handle;
+#[cfg(test)]
+use tokio::sync::Notify;
 
-use crate::kv;
-use crate::sqlite_kv::{KvGetResult, SqliteKv, SqliteKvError};
+const DEFAULT_CACHE_CAPACITY_PAGES: u64 = 50_000;
+const DEFAULT_PREFETCH_DEPTH: usize = 16;
+const DEFAULT_MAX_PREFETCH_BYTES: usize = 256 * 1024;
+const DEFAULT_MAX_PAGES_PER_STAGE: usize = 4_000;
+const DEFAULT_PAGE_SIZE: usize = 4096;
+const MAX_PATHNAME: c_int = 64;
+const TEMP_AUX_PATH_PREFIX: &str = "__sqlite_temp__";
+const EMPTY_DB_PAGE_HEADER_PREFIX: [u8; 108] = [
+	83, 81, 76, 105, 116, 101, 32, 102, 111, 114, 109, 97, 116, 32, 51, 0, 16, 0, 1, 1, 0, 64, 32,
+	32, 0, 0, 0, 3, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 0, 46, 138, 17, 13, 0, 0, 0, 0, 16, 0, 0,
+];
+
+#[cfg(test)]
+static NEXT_STAGE_ID: AtomicU64 = AtomicU64::new(1);
+static NEXT_TEMP_AUX_ID: AtomicU64 = AtomicU64::new(1);
 
 unsafe extern "C" {
 	fn sqlite3_close_v2(db: *mut sqlite3) -> c_int;
 }
 
-// MARK: Panic Guard
+fn empty_db_page() -> Vec<u8> {
+	let mut page = vec![0u8; DEFAULT_PAGE_SIZE];
+	page[..EMPTY_DB_PAGE_HEADER_PREFIX.len()].copy_from_slice(&EMPTY_DB_PAGE_HEADER_PREFIX);
+	page
+}
 
 fn panic_message(payload: &Box<dyn std::any::Any + Send>) -> String {
-	if let Some(s) = payload.downcast_ref::<&str>() {
-		s.to_string()
-	} else if let Some(s) = payload.downcast_ref::<String>() {
-		s.clone()
+	if let Some(message) = payload.downcast_ref::<&str>() {
+		message.to_string()
+	} else if let Some(message) = payload.downcast_ref::<String>() {
+		message.clone()
 	} else {
 		"unknown panic".to_string()
 	}
@@ -36,490 +62,1729 @@ macro_rules! vfs_catch_unwind {
 		match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| $body)) {
 			Ok(result) => result,
 			Err(panic) => {
-				tracing::error!(message = panic_message(&panic), "vfs callback panicked");
+				tracing::error!(
+					message = panic_message(&panic),
+					"sqlite callback panicked"
+				);
 				$err_val
 			}
 		}
 	};
 }
 
-// MARK: Constants
-
-/// File metadata version for KV-backed SQLite storage.
-const META_VERSION: u16 = 1;
-
-/// Encoded metadata size. This is 2 bytes of version plus 8 bytes of size.
-const META_ENCODED_SIZE: usize = 10;
-
-/// Maximum pathname length reported to SQLite.
-const MAX_PATHNAME: c_int = 64;
-
-/// Maximum number of keys accepted by a single KV put or delete request.
-const KV_MAX_BATCH_KEYS: usize = 128;
-
-/// Opt-in flag for the native read cache. Disabled by default to match the WASM VFS.
-const READ_CACHE_ENV_VAR: &str = "RIVETKIT_SQLITE_NATIVE_READ_CACHE";
-
-/// First 108 bytes of a valid empty page-1 SQLite database.
-///
-/// This is the canonical empty page-1 header for the KV-backed SQLite VFS.
-const EMPTY_DB_PAGE_HEADER_PREFIX: [u8; 108] = [
-	83, 81, 76, 105, 116, 101, 32, 102, 111, 114, 109, 97, 116, 32, 51, 0, 16, 0, 1, 1, 0, 64, 32,
-	32, 0, 0, 0, 3, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-	0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-	0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 0, 46, 138, 17, 13, 0, 0, 0, 0, 16, 0, 0,
-];
-
-fn empty_db_page() -> Vec<u8> {
-	let mut page = vec![0u8; kv::CHUNK_SIZE];
-	page[..EMPTY_DB_PAGE_HEADER_PREFIX.len()].copy_from_slice(&EMPTY_DB_PAGE_HEADER_PREFIX);
-	page
+#[derive(Clone)]
+struct SqliteTransport {
+	inner: Arc<SqliteTransportInner>,
 }
 
-// MARK: Metadata Encoding
-
-pub fn encode_file_meta(size: i64) -> Vec<u8> {
-	let mut buf = Vec::with_capacity(META_ENCODED_SIZE);
-	buf.extend_from_slice(&META_VERSION.to_le_bytes());
-	buf.extend_from_slice(&(size as u64).to_le_bytes());
-	buf
+enum SqliteTransportInner {
+	Envoy(EnvoyHandle),
+	#[cfg(test)]
+	Direct {
+		engine: Arc<SqliteEngine>,
+		hooks: Arc<DirectTransportHooks>,
+	},
+	#[cfg(test)]
+	Test(Arc<MockProtocol>),
 }
 
-pub fn decode_file_meta(data: &[u8]) -> Option<i64> {
-	if data.len() < META_ENCODED_SIZE {
-		return None;
-	}
-	let version_bytes: [u8; 2] = data[0..2].try_into().ok()?;
-	if u16::from_le_bytes(version_bytes) != META_VERSION {
-		return None;
-	}
-	let size_bytes: [u8; 8] = data[2..10].try_into().ok()?;
-	let size = u64::from_le_bytes(size_bytes);
-	if size > i64::MAX as u64 {
-		return None;
-	}
-	Some(size as i64)
-}
-
-fn is_valid_file_size(size: i64) -> bool {
-	size >= 0 && (size as u64) <= kv::MAX_FILE_SIZE
-}
-
-fn read_cache_enabled() -> bool {
-	static READ_CACHE_ENABLED: OnceLock<bool> = OnceLock::new();
-
-	*READ_CACHE_ENABLED.get_or_init(|| {
-		std::env::var(READ_CACHE_ENV_VAR)
-			.map(|value| {
-				matches!(
-					value.to_ascii_lowercase().as_str(),
-					"1" | "true" | "yes" | "on"
-				)
-			})
-			.unwrap_or(false)
-	})
-}
-
-type StartupPreloadEntries = Vec<(Vec<u8>, Vec<u8>)>;
-
-fn sort_startup_preload(entries: &mut StartupPreloadEntries) {
-	entries.sort_by(|a, b| a.0.cmp(&b.0));
-}
-
-fn startup_preload_search(entries: &StartupPreloadEntries, key: &[u8]) -> Result<usize, usize> {
-	entries.binary_search_by(|(candidate, _)| candidate.as_slice().cmp(key))
-}
-
-fn startup_preload_get<'a>(entries: &'a StartupPreloadEntries, key: &[u8]) -> Option<&'a [u8]> {
-	startup_preload_search(entries, key)
-		.ok()
-		.map(|idx| entries[idx].1.as_slice())
-}
-
-fn startup_preload_put(entries: &mut StartupPreloadEntries, key: &[u8], value: &[u8]) {
-	if let Ok(idx) = startup_preload_search(entries, key) {
-		entries[idx].1 = value.to_vec();
-	}
-}
-
-fn startup_preload_delete(entries: &mut StartupPreloadEntries, key: &[u8]) {
-	if let Ok(idx) = startup_preload_search(entries, key) {
-		entries.remove(idx);
-	}
-}
-
-fn startup_preload_delete_range(entries: &mut StartupPreloadEntries, start: &[u8], end: &[u8]) {
-	entries.retain(|(key, _)| key.as_slice() < start || key.as_slice() >= end);
-}
-
-// MARK: VFS Metrics
-
-/// Per-VFS-callback operation metrics for diagnosing native SQLite VFS performance.
-pub struct VfsMetrics {
-	pub xread_count: AtomicU64,
-	pub xread_us: AtomicU64,
-	pub xwrite_count: AtomicU64,
-	pub xwrite_us: AtomicU64,
-	pub xwrite_buffered_count: AtomicU64,
-	pub xsync_count: AtomicU64,
-	pub xsync_us: AtomicU64,
-	pub commit_atomic_count: AtomicU64,
-	pub commit_atomic_us: AtomicU64,
-	pub commit_atomic_pages: AtomicU64,
-}
-
-impl VfsMetrics {
-	pub fn new() -> Self {
+impl SqliteTransport {
+	fn from_envoy(handle: EnvoyHandle) -> Self {
 		Self {
-			xread_count: AtomicU64::new(0),
-			xread_us: AtomicU64::new(0),
-			xwrite_count: AtomicU64::new(0),
-			xwrite_us: AtomicU64::new(0),
-			xwrite_buffered_count: AtomicU64::new(0),
-			xsync_count: AtomicU64::new(0),
-			xsync_us: AtomicU64::new(0),
-			commit_atomic_count: AtomicU64::new(0),
-			commit_atomic_us: AtomicU64::new(0),
-			commit_atomic_pages: AtomicU64::new(0),
-		}
-	}
-}
-
-// MARK: VFS Context
-
-struct VfsContext {
-	kv: Arc<dyn SqliteKv>,
-	actor_id: String,
-	main_file_name: String,
-	// Bounded startup entries shipped with actor start. This is not the opt-in read cache.
-	startup_preload: Mutex<Option<StartupPreloadEntries>>,
-	read_cache_enabled: bool,
-	last_error: Mutex<Option<String>>,
-	rt_handle: Handle,
-	io_methods: Box<sqlite3_io_methods>,
-	vfs_metrics: Arc<VfsMetrics>,
-}
-
-impl VfsContext {
-	fn clear_last_error(&self) {
-		match self.last_error.lock() {
-			Ok(mut last_error) => {
-				*last_error = None;
-			}
-			Err(err) => {
-				tracing::warn!(%err, "native sqlite last_error mutex poisoned");
-			}
+			inner: Arc::new(SqliteTransportInner::Envoy(handle)),
 		}
 	}
 
-	fn set_last_error(&self, message: String) {
-		match self.last_error.lock() {
-			Ok(mut last_error) => {
-				*last_error = Some(message);
-			}
-			Err(err) => {
-				tracing::warn!(%err, "native sqlite last_error mutex poisoned");
-			}
+	#[cfg(test)]
+	fn from_direct(engine: Arc<SqliteEngine>) -> Self {
+		Self {
+			inner: Arc::new(SqliteTransportInner::Direct {
+				engine,
+				hooks: Arc::new(DirectTransportHooks::default()),
+			}),
 		}
 	}
 
-	fn clone_last_error(&self) -> Option<String> {
-		match self.last_error.lock() {
-			Ok(last_error) => last_error.clone(),
-			Err(err) => {
-				tracing::warn!(%err, "native sqlite last_error mutex poisoned");
-				None
-			}
+	#[cfg(test)]
+	fn from_mock(protocol: Arc<MockProtocol>) -> Self {
+		Self {
+			inner: Arc::new(SqliteTransportInner::Test(protocol)),
 		}
 	}
 
-	fn take_last_error(&self) -> Option<String> {
-		match self.last_error.lock() {
-			Ok(mut last_error) => last_error.take(),
-			Err(err) => {
-				tracing::warn!(%err, "native sqlite last_error mutex poisoned");
-				None
-			}
+	#[cfg(test)]
+	fn direct_hooks(&self) -> Option<Arc<DirectTransportHooks>> {
+		match &*self.inner {
+			SqliteTransportInner::Direct { hooks, .. } => Some(Arc::clone(hooks)),
+			_ => None,
 		}
 	}
 
-	fn report_kv_error(&self, err: SqliteKvError) -> String {
-		let message = err.to_string();
-		self.set_last_error(message.clone());
-		self.kv.on_error(&self.actor_id, &err);
-		message
-	}
+	async fn get_pages(
+		&self,
+		req: protocol::SqliteGetPagesRequest,
+	) -> Result<protocol::SqliteGetPagesResponse> {
+		match &*self.inner {
+			SqliteTransportInner::Envoy(handle) => handle.sqlite_get_pages(req).await,
+			#[cfg(test)]
+			SqliteTransportInner::Direct { engine, .. } => {
+				let pgnos = req.pgnos.clone();
+				match engine.get_pages(&req.actor_id, req.generation, pgnos).await {
+					Ok(pages) => Ok(protocol::SqliteGetPagesResponse::SqliteGetPagesOk(
+						protocol::SqliteGetPagesOk {
+							pages: pages.into_iter().map(protocol_fetched_page).collect(),
+							meta: protocol_sqlite_meta(engine.load_meta(&req.actor_id).await?),
+						},
+					)),
+					Err(err) => {
+						if let Some(SqliteStorageError::FenceMismatch { reason }) =
+							sqlite_storage_error(&err)
+						{
+							Ok(protocol::SqliteGetPagesResponse::SqliteFenceMismatch(
+								protocol::SqliteFenceMismatch {
+									actual_meta: protocol_sqlite_meta(
+										engine.load_meta(&req.actor_id).await?,
+									),
+									reason: reason.clone(),
+								},
+							))
+						} else if matches!(
+							sqlite_storage_error(&err),
+							Some(SqliteStorageError::MetaMissing { operation })
+								if *operation == "get_pages" && req.generation == 1
+						) {
+							match engine
+								.takeover(
+									&req.actor_id,
+									sqlite_storage::takeover::TakeoverConfig::new(1),
+								)
+								.await
+							{
+								Ok(_) => {}
+								Err(takeover_err)
+									if matches!(
+										sqlite_storage_error(&takeover_err),
+										Some(SqliteStorageError::ConcurrentTakeover)
+									) => {}
+								Err(takeover_err) => {
+									return Ok(
+										protocol::SqliteGetPagesResponse::SqliteErrorResponse(
+											sqlite_error_response(&takeover_err),
+										),
+									);
+								}
+							}
 
-	fn resolve_file_tag(&self, path: &str) -> Option<u8> {
-		if path == self.main_file_name {
-			return Some(kv::FILE_TAG_MAIN);
-		}
-
-		if let Some(suffix) = path.strip_prefix(&self.main_file_name) {
-			match suffix {
-				"-journal" => Some(kv::FILE_TAG_JOURNAL),
-				"-wal" => Some(kv::FILE_TAG_WAL),
-				"-shm" => Some(kv::FILE_TAG_SHM),
-				_ => None,
-			}
-		} else {
-			None
-		}
-	}
-
-	fn update_startup_preload(&self, f: impl FnOnce(&mut StartupPreloadEntries)) {
-		if let Ok(mut guard) = self.startup_preload.lock() {
-			if let Some(entries) = guard.as_mut() {
-				f(entries);
-			}
-		}
-	}
-
-	fn kv_get(&self, keys: Vec<Vec<u8>>) -> Result<KvGetResult, String> {
-		let key_count = keys.len();
-		let start = std::time::Instant::now();
-		let (preloaded_keys, preloaded_values, miss_keys) =
-			if let Ok(guard) = self.startup_preload.lock() {
-				if let Some(entries) = guard.as_ref() {
-					let mut hit_keys = Vec::new();
-					let mut hit_values = Vec::new();
-					let mut misses = Vec::new();
-					for key in keys {
-						if let Some(value) = startup_preload_get(entries, key.as_slice()) {
-							hit_keys.push(key);
-							hit_values.push(value.to_vec());
+							match engine
+								.get_pages(&req.actor_id, req.generation, req.pgnos)
+								.await
+							{
+								Ok(pages) => {
+									Ok(protocol::SqliteGetPagesResponse::SqliteGetPagesOk(
+										protocol::SqliteGetPagesOk {
+											pages: pages
+												.into_iter()
+												.map(protocol_fetched_page)
+												.collect(),
+											meta: protocol_sqlite_meta(
+												engine.load_meta(&req.actor_id).await?,
+											),
+										},
+									))
+								}
+								Err(retry_err) => {
+									Ok(protocol::SqliteGetPagesResponse::SqliteErrorResponse(
+										sqlite_error_response(&retry_err),
+									))
+								}
+							}
 						} else {
-							misses.push(key);
+							Ok(protocol::SqliteGetPagesResponse::SqliteErrorResponse(
+								sqlite_error_response(&err),
+							))
 						}
 					}
-					(hit_keys, hit_values, misses)
-				} else {
-					(Vec::new(), Vec::new(), keys)
 				}
-			} else {
-				(Vec::new(), Vec::new(), keys)
-			};
-		let result = if miss_keys.is_empty() {
-			Ok(KvGetResult {
-				keys: preloaded_keys,
-				values: preloaded_values,
-			})
-		} else {
-			self.rt_handle
-				.block_on(self.kv.batch_get(&self.actor_id, miss_keys))
-				.map(|mut result| {
-					result.keys.extend(preloaded_keys);
-					result.values.extend(preloaded_values);
-					result
-				})
-				.map_err(|err| self.report_kv_error(err))
-		};
-		if result.is_ok() {
-			self.clear_last_error();
+			}
+			#[cfg(test)]
+			SqliteTransportInner::Test(protocol) => protocol.get_pages(req).await,
 		}
-		let elapsed = start.elapsed();
-		tracing::debug!(
-			op = %format_args!("get({key_count}keys)"),
-			duration_us = elapsed.as_micros() as u64,
-			"kv round-trip"
-		);
-		result
 	}
 
-	fn kv_put(&self, keys: Vec<Vec<u8>>, values: Vec<Vec<u8>>) -> Result<(), String> {
-		let key_count = keys.len();
-		let start = std::time::Instant::now();
-		let result = self
-			.rt_handle
-			.block_on(
-				self.kv
-					.batch_put(&self.actor_id, keys.clone(), values.clone()),
-			)
-			.map_err(|err| self.report_kv_error(err));
-		if result.is_ok() {
-			self.clear_last_error();
-			self.update_startup_preload(|entries| {
-				for (key, value) in keys.iter().zip(values.iter()) {
-					startup_preload_put(entries, key.as_slice(), value.as_slice());
+	async fn commit(
+		&self,
+		req: protocol::SqliteCommitRequest,
+	) -> Result<protocol::SqliteCommitResponse> {
+		match &*self.inner {
+			SqliteTransportInner::Envoy(handle) => handle.sqlite_commit(req).await,
+			#[cfg(test)]
+			SqliteTransportInner::Direct { engine, hooks } => {
+				if let Some(message) = hooks.take_commit_error() {
+					return Err(anyhow::anyhow!(message));
 				}
-			});
-		}
-		let elapsed = start.elapsed();
-		tracing::debug!(
-			op = %format_args!("put({key_count}keys)"),
-			duration_us = elapsed.as_micros() as u64,
-			"kv round-trip"
-		);
-		result
-	}
 
-	fn kv_delete(&self, keys: Vec<Vec<u8>>) -> Result<(), String> {
-		let key_count = keys.len();
-		let start = std::time::Instant::now();
-		let result = self
-			.rt_handle
-			.block_on(self.kv.batch_delete(&self.actor_id, keys.clone()))
-			.map_err(|err| self.report_kv_error(err));
-		if result.is_ok() {
-			self.clear_last_error();
-			self.update_startup_preload(|entries| {
-				for key in &keys {
-					startup_preload_delete(entries, key.as_slice());
+				match engine
+					.commit(
+						&req.actor_id,
+						sqlite_storage::commit::CommitRequest {
+							generation: req.generation,
+							head_txid: req.expected_head_txid,
+							db_size_pages: req.new_db_size_pages,
+							dirty_pages: req
+								.dirty_pages
+								.into_iter()
+								.map(storage_dirty_page)
+								.collect(),
+							now_ms: sqlite_now_ms()?,
+						},
+					)
+					.await
+				{
+					Ok(result) => Ok(protocol::SqliteCommitResponse::SqliteCommitOk(
+						protocol::SqliteCommitOk {
+							new_head_txid: result.txid,
+							meta: protocol_sqlite_meta(result.meta),
+						},
+					)),
+					Err(err) => {
+						if let Some(SqliteStorageError::FenceMismatch { reason }) =
+							sqlite_storage_error(&err)
+						{
+							Ok(protocol::SqliteCommitResponse::SqliteFenceMismatch(
+								protocol::SqliteFenceMismatch {
+									actual_meta: protocol_sqlite_meta(
+										engine.load_meta(&req.actor_id).await?,
+									),
+									reason: reason.clone(),
+								},
+							))
+						} else if let Some(SqliteStorageError::CommitTooLarge {
+							actual_size_bytes,
+							max_size_bytes,
+						}) = sqlite_storage_error(&err)
+						{
+							Ok(protocol::SqliteCommitResponse::SqliteCommitTooLarge(
+								protocol::SqliteCommitTooLarge {
+									actual_size_bytes: *actual_size_bytes,
+									max_size_bytes: *max_size_bytes,
+								},
+							))
+						} else {
+							Ok(protocol::SqliteCommitResponse::SqliteErrorResponse(
+								sqlite_error_response(&err),
+							))
+						}
+					}
 				}
-			});
+			}
+			#[cfg(test)]
+			SqliteTransportInner::Test(protocol) => protocol.commit(req).await,
 		}
-		let elapsed = start.elapsed();
-		tracing::debug!(
-			op = %format_args!("del({key_count}keys)"),
-			duration_us = elapsed.as_micros() as u64,
-			"kv round-trip"
-		);
-		result
 	}
 
-	fn kv_delete_range(&self, start: Vec<u8>, end: Vec<u8>) -> Result<(), String> {
-		let start_time = std::time::Instant::now();
-		let preload_start = start.clone();
-		let preload_end = end.clone();
-		let result = self
-			.rt_handle
-			.block_on(self.kv.delete_range(&self.actor_id, start, end))
-			.map_err(|err| self.report_kv_error(err));
-		if result.is_ok() {
-			self.clear_last_error();
-			self.update_startup_preload(|entries| {
-				startup_preload_delete_range(
-					entries,
-					preload_start.as_slice(),
-					preload_end.as_slice(),
-				);
-			});
+	async fn commit_stage_begin(
+		&self,
+		req: protocol::SqliteCommitStageBeginRequest,
+	) -> Result<protocol::SqliteCommitStageBeginResponse> {
+		match &*self.inner {
+			SqliteTransportInner::Envoy(handle) => handle.sqlite_commit_stage_begin(req).await,
+			#[cfg(test)]
+			SqliteTransportInner::Direct { engine, .. } => {
+				match engine
+					.commit_stage_begin(
+						&req.actor_id,
+						sqlite_storage::commit::CommitStageBeginRequest {
+							generation: req.generation,
+						},
+					)
+					.await
+				{
+					Ok(result) => Ok(
+						protocol::SqliteCommitStageBeginResponse::SqliteCommitStageBeginOk(
+							protocol::SqliteCommitStageBeginOk { txid: result.txid },
+						),
+					),
+					Err(err) => {
+						if let Some(SqliteStorageError::FenceMismatch { reason }) =
+							sqlite_storage_error(&err)
+						{
+							Ok(
+								protocol::SqliteCommitStageBeginResponse::SqliteFenceMismatch(
+									protocol::SqliteFenceMismatch {
+										actual_meta: protocol_sqlite_meta(
+											engine.load_meta(&req.actor_id).await?,
+										),
+										reason: reason.clone(),
+									},
+								),
+							)
+						} else {
+							Ok(
+								protocol::SqliteCommitStageBeginResponse::SqliteErrorResponse(
+									sqlite_error_response(&err),
+								),
+							)
+						}
+					}
+				}
+			}
+			#[cfg(test)]
+			SqliteTransportInner::Test(protocol) => protocol.commit_stage_begin(req).await,
 		}
-		let elapsed = start_time.elapsed();
-		tracing::debug!(
-			op = "delRange",
-			duration_us = elapsed.as_micros() as u64,
-			"kv round-trip"
-		);
-		result
 	}
 
-	fn delete_file(&self, file_tag: u8) -> Result<(), String> {
-		let meta_key = kv::get_meta_key(file_tag);
-		self.kv_delete(vec![meta_key.to_vec()])?;
-		self.kv_delete_range(
-			kv::get_chunk_key(file_tag, 0).to_vec(),
-			kv::get_chunk_key_range_end(file_tag).to_vec(),
+	async fn commit_stage(
+		&self,
+		req: protocol::SqliteCommitStageRequest,
+	) -> Result<protocol::SqliteCommitStageResponse> {
+		match &*self.inner {
+			SqliteTransportInner::Envoy(handle) => handle.sqlite_commit_stage(req).await,
+			#[cfg(test)]
+			SqliteTransportInner::Direct { engine, .. } => {
+				match engine
+					.commit_stage(
+						&req.actor_id,
+						sqlite_storage::commit::CommitStageRequest {
+							generation: req.generation,
+							txid: req.txid,
+							chunk_idx: req.chunk_idx,
+							bytes: req.bytes,
+							is_last: req.is_last,
+						},
+					)
+					.await
+				{
+					Ok(result) => Ok(protocol::SqliteCommitStageResponse::SqliteCommitStageOk(
+						protocol::SqliteCommitStageOk {
+							chunk_idx_committed: result.chunk_idx_committed,
+						},
+					)),
+					Err(err) => {
+						if let Some(SqliteStorageError::FenceMismatch { reason }) =
+							sqlite_storage_error(&err)
+						{
+							Ok(protocol::SqliteCommitStageResponse::SqliteFenceMismatch(
+								protocol::SqliteFenceMismatch {
+									actual_meta: protocol_sqlite_meta(
+										engine.load_meta(&req.actor_id).await?,
+									),
+									reason: reason.clone(),
+								},
+							))
+						} else {
+							Ok(protocol::SqliteCommitStageResponse::SqliteErrorResponse(
+								sqlite_error_response(&err),
+							))
+						}
+					}
+				}
+			}
+			#[cfg(test)]
+			SqliteTransportInner::Test(protocol) => protocol.commit_stage(req).await,
+		}
+	}
+
+	fn queue_commit_stage(&self, req: protocol::SqliteCommitStageRequest) -> Result<bool> {
+		match &*self.inner {
+			SqliteTransportInner::Envoy(handle) => {
+				handle.sqlite_commit_stage_fire_and_forget(req)?;
+				Ok(true)
+			}
+			#[cfg(test)]
+			SqliteTransportInner::Direct { .. } => Ok(false),
+			#[cfg(test)]
+			SqliteTransportInner::Test(protocol) => {
+				protocol.queue_commit_stage(req);
+				Ok(true)
+			}
+		}
+	}
+
+	async fn commit_finalize(
+		&self,
+		req: protocol::SqliteCommitFinalizeRequest,
+	) -> Result<protocol::SqliteCommitFinalizeResponse> {
+		match &*self.inner {
+			SqliteTransportInner::Envoy(handle) => handle.sqlite_commit_finalize(req).await,
+			#[cfg(test)]
+			SqliteTransportInner::Direct { engine, .. } => {
+				match engine
+					.commit_finalize(
+						&req.actor_id,
+						sqlite_storage::commit::CommitFinalizeRequest {
+							generation: req.generation,
+							expected_head_txid: req.expected_head_txid,
+							txid: req.txid,
+							new_db_size_pages: req.new_db_size_pages,
+							now_ms: sqlite_now_ms()?,
+							origin_override: None,
+						},
+					)
+					.await
+				{
+					Ok(result) => Ok(
+						protocol::SqliteCommitFinalizeResponse::SqliteCommitFinalizeOk(
+							protocol::SqliteCommitFinalizeOk {
+								new_head_txid: result.new_head_txid,
+								meta: protocol_sqlite_meta(result.meta),
+							},
+						),
+					),
+					Err(err) => {
+						if let Some(SqliteStorageError::FenceMismatch { reason }) =
+							sqlite_storage_error(&err)
+						{
+							Ok(protocol::SqliteCommitFinalizeResponse::SqliteFenceMismatch(
+								protocol::SqliteFenceMismatch {
+									actual_meta: protocol_sqlite_meta(
+										engine.load_meta(&req.actor_id).await?,
+									),
+									reason: reason.clone(),
+								},
+							))
+						} else if let Some(SqliteStorageError::StageNotFound { stage_id }) =
+							sqlite_storage_error(&err)
+						{
+							Ok(protocol::SqliteCommitFinalizeResponse::SqliteStageNotFound(
+								protocol::SqliteStageNotFound {
+									stage_id: *stage_id,
+								},
+							))
+						} else {
+							Ok(protocol::SqliteCommitFinalizeResponse::SqliteErrorResponse(
+								sqlite_error_response(&err),
+							))
+						}
+					}
+				}
+			}
+			#[cfg(test)]
+			SqliteTransportInner::Test(protocol) => protocol.commit_finalize(req).await,
+		}
+	}
+}
+
+#[cfg(test)]
+#[derive(Default)]
+struct DirectTransportHooks {
+	fail_next_commit: Mutex<Option<String>>,
+}
+
+#[cfg(test)]
+impl DirectTransportHooks {
+	fn fail_next_commit(&self, message: impl Into<String>) {
+		*self.fail_next_commit.lock() = Some(message.into());
+	}
+
+	fn take_commit_error(&self) -> Option<String> {
+		self.fail_next_commit.lock().take()
+	}
+}
+
+#[cfg(test)]
+fn protocol_sqlite_meta(meta: sqlite_storage::types::SqliteMeta) -> protocol::SqliteMeta {
+	protocol::SqliteMeta {
+		schema_version: meta.schema_version,
+		generation: meta.generation,
+		head_txid: meta.head_txid,
+		materialized_txid: meta.materialized_txid,
+		db_size_pages: meta.db_size_pages,
+		page_size: meta.page_size,
+		creation_ts_ms: meta.creation_ts_ms,
+		max_delta_bytes: meta.max_delta_bytes,
+	}
+}
+
+#[cfg(test)]
+fn protocol_fetched_page(page: sqlite_storage::types::FetchedPage) -> protocol::SqliteFetchedPage {
+	protocol::SqliteFetchedPage {
+		pgno: page.pgno,
+		bytes: page.bytes,
+	}
+}
+
+#[cfg(test)]
+fn storage_dirty_page(page: protocol::SqliteDirtyPage) -> sqlite_storage::types::DirtyPage {
+	sqlite_storage::types::DirtyPage {
+		pgno: page.pgno,
+		bytes: page.bytes,
+	}
+}
+
+#[cfg(test)]
+fn sqlite_storage_error(err: &anyhow::Error) -> Option<&SqliteStorageError> {
+	err.downcast_ref::<SqliteStorageError>()
+}
+
+#[cfg(test)]
+fn sqlite_error_reason(err: &anyhow::Error) -> String {
+	err.chain()
+		.map(ToString::to_string)
+		.collect::<Vec<_>>()
+		.join(": ")
+}
+
+#[cfg(test)]
+fn sqlite_error_response(err: &anyhow::Error) -> protocol::SqliteErrorResponse {
+	protocol::SqliteErrorResponse {
+		message: sqlite_error_reason(err),
+	}
+}
+
+fn sqlite_now_ms() -> Result<i64> {
+	use std::time::{SystemTime, UNIX_EPOCH};
+
+	Ok(SystemTime::now()
+		.duration_since(UNIX_EPOCH)?
+		.as_millis()
+		.try_into()?)
+}
+
+#[cfg(test)]
+struct MockProtocol {
+	commit_response: protocol::SqliteCommitResponse,
+	stage_response: protocol::SqliteCommitStageResponse,
+	finalize_response: protocol::SqliteCommitFinalizeResponse,
+	get_pages_response: protocol::SqliteGetPagesResponse,
+	mirror_commit_meta: Mutex<bool>,
+	commit_requests: Mutex<Vec<protocol::SqliteCommitRequest>>,
+	stage_requests: Mutex<Vec<protocol::SqliteCommitStageRequest>>,
+	awaited_stage_responses: Mutex<usize>,
+	finalize_requests: Mutex<Vec<protocol::SqliteCommitFinalizeRequest>>,
+	get_pages_requests: Mutex<Vec<protocol::SqliteGetPagesRequest>>,
+	finalize_started: Notify,
+	release_finalize: Notify,
+}
+
+#[cfg(test)]
+impl MockProtocol {
+	fn new(
+		commit_response: protocol::SqliteCommitResponse,
+		stage_response: protocol::SqliteCommitStageResponse,
+		finalize_response: protocol::SqliteCommitFinalizeResponse,
+	) -> Self {
+		Self {
+			commit_response,
+			stage_response,
+			finalize_response,
+			get_pages_response: protocol::SqliteGetPagesResponse::SqliteGetPagesOk(
+				protocol::SqliteGetPagesOk {
+					pages: vec![],
+					meta: sqlite_meta(8 * 1024 * 1024),
+				},
+			),
+			mirror_commit_meta: Mutex::new(false),
+			commit_requests: Mutex::new(Vec::new()),
+			stage_requests: Mutex::new(Vec::new()),
+			awaited_stage_responses: Mutex::new(0),
+			finalize_requests: Mutex::new(Vec::new()),
+			get_pages_requests: Mutex::new(Vec::new()),
+			finalize_started: Notify::new(),
+			release_finalize: Notify::new(),
+		}
+	}
+
+	fn commit_requests(&self) -> parking_lot::MutexGuard<'_, Vec<protocol::SqliteCommitRequest>> {
+		self.commit_requests.lock()
+	}
+
+	fn stage_requests(
+		&self,
+	) -> parking_lot::MutexGuard<'_, Vec<protocol::SqliteCommitStageRequest>> {
+		self.stage_requests.lock()
+	}
+
+	fn awaited_stage_responses(&self) -> usize {
+		*self.awaited_stage_responses.lock()
+	}
+
+	fn finalize_requests(
+		&self,
+	) -> parking_lot::MutexGuard<'_, Vec<protocol::SqliteCommitFinalizeRequest>> {
+		self.finalize_requests.lock()
+	}
+
+	fn get_pages_requests(
+		&self,
+	) -> parking_lot::MutexGuard<'_, Vec<protocol::SqliteGetPagesRequest>> {
+		self.get_pages_requests.lock()
+	}
+
+	fn set_mirror_commit_meta(&self, enabled: bool) {
+		*self.mirror_commit_meta.lock() = enabled;
+	}
+
+	fn queue_commit_stage(&self, req: protocol::SqliteCommitStageRequest) {
+		self.stage_requests().push(req);
+	}
+
+	async fn get_pages(
+		&self,
+		req: protocol::SqliteGetPagesRequest,
+	) -> Result<protocol::SqliteGetPagesResponse> {
+		self.get_pages_requests().push(req);
+		Ok(self.get_pages_response.clone())
+	}
+
+	async fn commit(
+		&self,
+		req: protocol::SqliteCommitRequest,
+	) -> Result<protocol::SqliteCommitResponse> {
+		let req = req.clone();
+		self.commit_requests().push(req.clone());
+		if *self.mirror_commit_meta.lock() {
+			if let protocol::SqliteCommitResponse::SqliteCommitOk(ok) = &self.commit_response {
+				let mut meta = ok.meta.clone();
+				meta.head_txid = req.expected_head_txid + 1;
+				meta.db_size_pages = req.new_db_size_pages;
+				return Ok(protocol::SqliteCommitResponse::SqliteCommitOk(
+					protocol::SqliteCommitOk {
+						new_head_txid: req.expected_head_txid + 1,
+						meta,
+					},
+				));
+			}
+		}
+		Ok(self.commit_response.clone())
+	}
+
+	async fn commit_stage_begin(
+		&self,
+		_req: protocol::SqliteCommitStageBeginRequest,
+	) -> Result<protocol::SqliteCommitStageBeginResponse> {
+		Ok(
+			protocol::SqliteCommitStageBeginResponse::SqliteCommitStageBeginOk(
+				protocol::SqliteCommitStageBeginOk {
+					txid: next_stage_id(),
+				},
+			),
 		)
 	}
+
+	async fn commit_stage(
+		&self,
+		req: protocol::SqliteCommitStageRequest,
+	) -> Result<protocol::SqliteCommitStageResponse> {
+		*self.awaited_stage_responses.lock() += 1;
+		self.stage_requests().push(req);
+		Ok(self.stage_response.clone())
+	}
+
+	async fn commit_finalize(
+		&self,
+		req: protocol::SqliteCommitFinalizeRequest,
+	) -> Result<protocol::SqliteCommitFinalizeResponse> {
+		let req = req.clone();
+		self.finalize_requests().push(req.clone());
+		self.finalize_started.notify_one();
+		self.release_finalize.notified().await;
+		if *self.mirror_commit_meta.lock() {
+			if let protocol::SqliteCommitFinalizeResponse::SqliteCommitFinalizeOk(ok) =
+				&self.finalize_response
+			{
+				let mut meta = ok.meta.clone();
+				meta.head_txid = req.expected_head_txid + 1;
+				meta.db_size_pages = req.new_db_size_pages;
+				return Ok(
+					protocol::SqliteCommitFinalizeResponse::SqliteCommitFinalizeOk(
+						protocol::SqliteCommitFinalizeOk {
+							new_head_txid: req.expected_head_txid + 1,
+							meta,
+						},
+					),
+				);
+			}
+		}
+		Ok(self.finalize_response.clone())
+	}
 }
 
-// MARK: File State
-
-struct KvFileState {
-	batch_mode: bool,
-	dirty_buffer: BTreeMap<u32, Vec<u8>>,
-	saved_file_size: i64,
-	/// Read cache: maps chunk keys to their data. Populated on KV gets,
-	/// updated on writes, cleared on truncate/delete. This avoids
-	/// redundant KV round-trips for pages SQLite reads multiple times.
-	read_cache: Option<HashMap<Vec<u8>, Vec<u8>>>,
+#[cfg(test)]
+fn sqlite_meta(max_delta_bytes: u64) -> protocol::SqliteMeta {
+	protocol::SqliteMeta {
+		schema_version: 2,
+		generation: 7,
+		head_txid: 12,
+		materialized_txid: 12,
+		db_size_pages: 1,
+		page_size: 4096,
+		creation_ts_ms: 1_700_000_000_000,
+		max_delta_bytes,
+	}
 }
 
-impl KvFileState {
-	fn new(read_cache_enabled: bool) -> Self {
+#[derive(Debug, Clone)]
+pub struct VfsConfig {
+	pub cache_capacity_pages: u64,
+	pub prefetch_depth: usize,
+	pub max_prefetch_bytes: usize,
+	pub max_pages_per_stage: usize,
+}
+
+impl Default for VfsConfig {
+	fn default() -> Self {
 		Self {
-			batch_mode: false,
-			dirty_buffer: BTreeMap::new(),
-			saved_file_size: 0,
-			read_cache: read_cache_enabled.then(HashMap::new),
+			cache_capacity_pages: DEFAULT_CACHE_CAPACITY_PAGES,
+			prefetch_depth: DEFAULT_PREFETCH_DEPTH,
+			max_prefetch_bytes: DEFAULT_MAX_PREFETCH_BYTES,
+			max_pages_per_stage: DEFAULT_MAX_PAGES_PER_STAGE,
 		}
 	}
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CommitPath {
+	Fast,
+	Slow,
+}
+
+#[derive(Debug, Clone)]
+pub struct BufferedCommitRequest {
+	pub actor_id: String,
+	pub generation: u64,
+	pub expected_head_txid: u64,
+	pub new_db_size_pages: u32,
+	pub max_delta_bytes: u64,
+	pub max_pages_per_stage: usize,
+	pub dirty_pages: Vec<protocol::SqliteDirtyPage>,
+}
+
+#[derive(Debug, Clone)]
+pub struct BufferedCommitOutcome {
+	pub path: CommitPath,
+	pub new_head_txid: u64,
+	pub meta: protocol::SqliteMeta,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CommitBufferError {
+	FenceMismatch(String),
+	StageNotFound(u64),
+	Other(String),
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct SqliteVfsMetricsSnapshot {
+	pub request_build_ns: u64,
+	pub serialize_ns: u64,
+	pub transport_ns: u64,
+	pub state_update_ns: u64,
+	pub total_ns: u64,
+	pub commit_count: u64,
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+struct CommitTransportMetrics {
+	serialize_ns: u64,
+	transport_ns: u64,
+}
+
+pub struct VfsContext {
+	actor_id: String,
+	runtime: Handle,
+	transport: SqliteTransport,
+	config: VfsConfig,
+	state: RwLock<VfsState>,
+	aux_files: RwLock<BTreeMap<String, Arc<AuxFileState>>>,
+	last_error: Mutex<Option<String>>,
+	commit_atomic_count: AtomicU64,
+	io_methods: Box<sqlite3_io_methods>,
+	// Performance counters
+	pub resolve_pages_total: AtomicU64,
+	pub resolve_pages_cache_hits: AtomicU64,
+	pub resolve_pages_fetches: AtomicU64,
+	pub pages_fetched_total: AtomicU64,
+	pub prefetch_pages_total: AtomicU64,
+	pub commit_total: AtomicU64,
+	pub commit_request_build_ns: AtomicU64,
+	pub commit_serialize_ns: AtomicU64,
+	pub commit_transport_ns: AtomicU64,
+	pub commit_state_update_ns: AtomicU64,
+	pub commit_duration_ns_total: AtomicU64,
+}
+
+#[derive(Debug, Clone)]
+struct VfsState {
+	generation: u64,
+	head_txid: u64,
+	db_size_pages: u32,
+	page_size: usize,
+	max_delta_bytes: u64,
+	page_cache: Cache<u32, Vec<u8>>,
+	write_buffer: WriteBuffer,
+	predictor: PrefetchPredictor,
+	dead: bool,
+}
+
+#[derive(Debug, Clone, Default)]
+struct WriteBuffer {
+	in_atomic_write: bool,
+	saved_db_size: u32,
+	dirty: BTreeMap<u32, Vec<u8>>,
+}
+
+#[derive(Debug, Clone, Default)]
+struct PrefetchPredictor {
+	last_pgno: Option<u32>,
+	last_delta: Option<i64>,
+	stride_run_len: usize,
+	// Inspired by mvSQLite's Markov + stride predictor design (Apache-2.0).
+	transitions: HashMap<i64, HashMap<i64, u32>>,
+}
+
+#[derive(Debug)]
+enum GetPagesError {
+	FenceMismatch(String),
+	Other(String),
 }
 
 #[repr(C)]
-struct KvFile {
+struct VfsFile {
 	base: sqlite3_file,
 	ctx: *const VfsContext,
-	state: *mut KvFileState,
-	file_tag: u8,
-	meta_key: [u8; 4],
-	size: i64,
-	meta_dirty: bool,
-	flags: c_int,
+	aux: *mut AuxFileHandle,
 }
 
-// MARK: Helpers
-
-unsafe fn get_file(p: *mut sqlite3_file) -> &'static mut KvFile {
-	&mut *(p as *mut KvFile)
+#[derive(Default)]
+struct AuxFileState {
+	bytes: Mutex<Vec<u8>>,
 }
 
-unsafe fn get_file_state(state: *mut KvFileState) -> &'static mut KvFileState {
-	&mut *state
+struct AuxFileHandle {
+	path: String,
+	state: Arc<AuxFileState>,
+	delete_on_close: bool,
 }
 
-unsafe fn free_file_state(file: &mut KvFile) {
-	if !file.state.is_null() {
-		drop(Box::from_raw(file.state));
-		file.state = ptr::null_mut();
+unsafe impl Send for VfsContext {}
+unsafe impl Sync for VfsContext {}
+
+pub struct SqliteVfs {
+	vfs_ptr: *mut sqlite3_vfs,
+	_name: CString,
+	ctx_ptr: *mut VfsContext,
+}
+
+unsafe impl Send for SqliteVfs {}
+unsafe impl Sync for SqliteVfs {}
+
+pub struct NativeDatabase {
+	db: *mut sqlite3,
+	_vfs: SqliteVfs,
+}
+
+unsafe impl Send for NativeDatabase {}
+
+impl PrefetchPredictor {
+	fn record(&mut self, pgno: u32) {
+		if let Some(last_pgno) = self.last_pgno {
+			let delta = pgno as i64 - last_pgno as i64;
+			if let Some(last_delta) = self.last_delta {
+				self.transitions
+					.entry(last_delta)
+					.or_default()
+					.entry(delta)
+					.and_modify(|count| *count += 1)
+					.or_insert(1);
+				if delta == last_delta {
+					self.stride_run_len += 1;
+				} else {
+					self.stride_run_len = 1;
+				}
+			} else {
+				self.stride_run_len = 1;
+			}
+			self.last_delta = Some(delta);
+		}
+		self.last_pgno = Some(pgno);
 	}
+
+	fn multi_predict(&self, from_pgno: u32, depth: usize, db_size_pages: u32) -> Vec<u32> {
+		if depth == 0 || db_size_pages == 0 {
+			return Vec::new();
+		}
+
+		let mut seen = HashSet::new();
+		let mut predicted = Vec::with_capacity(depth);
+
+		if let Some(delta) = self.last_delta {
+			if self.stride_run_len >= 2 && delta > 0 {
+				let mut current = from_pgno as i64;
+				for _ in 0..depth {
+					current += delta;
+					if !(1..=db_size_pages as i64).contains(&current) {
+						break;
+					}
+					let pgno = current as u32;
+					if seen.insert(pgno) {
+						predicted.push(pgno);
+					}
+				}
+				if predicted.len() >= depth {
+					return predicted;
+				}
+			}
+
+			let mut current_delta = delta;
+			let mut current_pgno = from_pgno as i64;
+			for _ in predicted.len()..depth {
+				let Some(next_delta) = self
+					.transitions
+					.get(&current_delta)
+					.and_then(|counts| counts.iter().max_by_key(|(_, count)| *count))
+					.map(|(delta, _)| *delta)
+				else {
+					break;
+				};
+
+				current_pgno += next_delta;
+				if !(1..=db_size_pages as i64).contains(&current_pgno) {
+					break;
+				}
+				let pgno = current_pgno as u32;
+				if seen.insert(pgno) {
+					predicted.push(pgno);
+				}
+				current_delta = next_delta;
+			}
+		}
+
+		predicted
+	}
+}
+
+impl VfsState {
+	fn new(config: &VfsConfig, startup: &protocol::SqliteStartupData) -> Self {
+		let page_cache = Cache::builder()
+			.max_capacity(config.cache_capacity_pages)
+			.build();
+		for page in &startup.preloaded_pages {
+			if let Some(bytes) = &page.bytes {
+				page_cache.insert(page.pgno, bytes.clone());
+			}
+		}
+
+		let mut state = Self {
+			generation: startup.generation,
+			head_txid: startup.meta.head_txid,
+			db_size_pages: startup.meta.db_size_pages,
+			page_size: startup.meta.page_size as usize,
+			max_delta_bytes: startup.meta.max_delta_bytes,
+			page_cache,
+			write_buffer: WriteBuffer::default(),
+			predictor: PrefetchPredictor::default(),
+			dead: false,
+		};
+		if state.db_size_pages == 0 && !state.page_cache.contains_key(&1) {
+			state.page_cache.insert(1, empty_db_page());
+			state.db_size_pages = 1;
+		}
+		state
+	}
+
+	fn update_meta(&mut self, meta: &protocol::SqliteMeta) {
+		self.generation = meta.generation;
+		self.head_txid = meta.head_txid;
+		self.db_size_pages = meta.db_size_pages;
+		self.page_size = meta.page_size as usize;
+		self.max_delta_bytes = meta.max_delta_bytes;
+	}
+
+	fn update_read_meta(&mut self, meta: &protocol::SqliteMeta) {
+		self.max_delta_bytes = meta.max_delta_bytes;
+	}
+}
+
+impl VfsContext {
+	fn new(
+		actor_id: String,
+		runtime: Handle,
+		transport: SqliteTransport,
+		startup: protocol::SqliteStartupData,
+		config: VfsConfig,
+		io_methods: sqlite3_io_methods,
+	) -> Self {
+		Self {
+			actor_id,
+			runtime,
+			transport,
+			config: config.clone(),
+			state: RwLock::new(VfsState::new(&config, &startup)),
+			aux_files: RwLock::new(BTreeMap::new()),
+			last_error: Mutex::new(None),
+			commit_atomic_count: AtomicU64::new(0),
+			io_methods: Box::new(io_methods),
+			resolve_pages_total: AtomicU64::new(0),
+			resolve_pages_cache_hits: AtomicU64::new(0),
+			resolve_pages_fetches: AtomicU64::new(0),
+			pages_fetched_total: AtomicU64::new(0),
+			prefetch_pages_total: AtomicU64::new(0),
+			commit_total: AtomicU64::new(0),
+			commit_request_build_ns: AtomicU64::new(0),
+			commit_serialize_ns: AtomicU64::new(0),
+			commit_transport_ns: AtomicU64::new(0),
+			commit_state_update_ns: AtomicU64::new(0),
+			commit_duration_ns_total: AtomicU64::new(0),
+		}
+	}
+
+	fn clear_last_error(&self) {
+		*self.last_error.lock() = None;
+	}
+
+	fn set_last_error(&self, message: String) {
+		*self.last_error.lock() = Some(message);
+	}
+
+	fn clone_last_error(&self) -> Option<String> {
+		self.last_error.lock().clone()
+	}
+
+	fn take_last_error(&self) -> Option<String> {
+		self.last_error.lock().take()
+	}
+
+	fn add_commit_phase_metrics(
+		&self,
+		request_build_ns: u64,
+		transport_metrics: CommitTransportMetrics,
+		state_update_ns: u64,
+		total_ns: u64,
+	) {
+		self.commit_request_build_ns
+			.fetch_add(request_build_ns, Ordering::Relaxed);
+		self.commit_serialize_ns
+			.fetch_add(transport_metrics.serialize_ns, Ordering::Relaxed);
+		self.commit_transport_ns
+			.fetch_add(transport_metrics.transport_ns, Ordering::Relaxed);
+		self.commit_state_update_ns
+			.fetch_add(state_update_ns, Ordering::Relaxed);
+		self.commit_duration_ns_total
+			.fetch_add(total_ns, Ordering::Relaxed);
+	}
+
+	fn sqlite_vfs_metrics(&self) -> SqliteVfsMetricsSnapshot {
+		SqliteVfsMetricsSnapshot {
+			request_build_ns: self.commit_request_build_ns.load(Ordering::Relaxed),
+			serialize_ns: self.commit_serialize_ns.load(Ordering::Relaxed),
+			transport_ns: self.commit_transport_ns.load(Ordering::Relaxed),
+			state_update_ns: self.commit_state_update_ns.load(Ordering::Relaxed),
+			total_ns: self.commit_duration_ns_total.load(Ordering::Relaxed),
+			commit_count: self.commit_total.load(Ordering::Relaxed),
+		}
+	}
+
+	fn page_size(&self) -> usize {
+		self.state.read().page_size.max(DEFAULT_PAGE_SIZE)
+	}
+
+	fn open_aux_file(&self, path: &str) -> Arc<AuxFileState> {
+		if let Some(state) = self.aux_files.read().get(path) {
+			return state.clone();
+		}
+
+		let mut aux_files = self.aux_files.write();
+		aux_files
+			.entry(path.to_string())
+			.or_insert_with(|| Arc::new(AuxFileState::default()))
+			.clone()
+	}
+
+	fn aux_file_exists(&self, path: &str) -> bool {
+		self.aux_files.read().contains_key(path)
+	}
+
+	fn delete_aux_file(&self, path: &str) {
+		self.aux_files.write().remove(path);
+	}
+
+	fn is_dead(&self) -> bool {
+		self.state.read().dead
+	}
+
+	fn mark_dead(&self, message: String) {
+		self.set_last_error(message);
+		self.state.write().dead = true;
+	}
+
+	fn resolve_pages(
+		&self,
+		target_pgnos: &[u32],
+		prefetch: bool,
+	) -> std::result::Result<HashMap<u32, Option<Vec<u8>>>, GetPagesError> {
+		use std::sync::atomic::Ordering::Relaxed;
+		self.resolve_pages_total.fetch_add(1, Relaxed);
+
+		let mut resolved = HashMap::new();
+		let mut missing = Vec::new();
+		let mut seen = HashSet::new();
+
+		{
+			let state = self.state.read();
+			if state.dead {
+				return Err(GetPagesError::Other(
+					"sqlite actor lost its fence".to_string(),
+				));
+			}
+
+			for pgno in target_pgnos.iter().copied() {
+				if !seen.insert(pgno) {
+					continue;
+				}
+				if let Some(bytes) = state.write_buffer.dirty.get(&pgno) {
+					resolved.insert(pgno, Some(bytes.clone()));
+					continue;
+				}
+				if let Some(bytes) = state.page_cache.get(&pgno) {
+					resolved.insert(pgno, Some(bytes));
+					continue;
+				}
+				missing.push(pgno);
+			}
+		}
+
+		if missing.is_empty() {
+			self.resolve_pages_cache_hits
+				.fetch_add(target_pgnos.len() as u64, Relaxed);
+			return Ok(resolved);
+		}
+		self.resolve_pages_cache_hits
+			.fetch_add((seen.len() - missing.len()) as u64, Relaxed);
+
+		let (generation, to_fetch) = {
+			let mut state = self.state.write();
+			for pgno in target_pgnos.iter().copied() {
+				state.predictor.record(pgno);
+			}
+
+			let mut to_fetch = missing.clone();
+			if prefetch {
+				let page_budget = (self.config.max_prefetch_bytes / state.page_size.max(1)).max(1);
+				let prediction_budget = page_budget.saturating_sub(to_fetch.len());
+				let seed_pgno = target_pgnos.last().copied().unwrap_or_default();
+				for predicted in state.predictor.multi_predict(
+					seed_pgno,
+					prediction_budget.min(self.config.prefetch_depth),
+					state.db_size_pages.max(seed_pgno),
+				) {
+					if resolved.contains_key(&predicted) || to_fetch.contains(&predicted) {
+						continue;
+					}
+					to_fetch.push(predicted);
+				}
+			}
+			(state.generation, to_fetch)
+		};
+
+		{
+			let prefetch_count = to_fetch.len() - missing.len();
+			self.resolve_pages_fetches.fetch_add(1, Relaxed);
+			self.pages_fetched_total
+				.fetch_add(to_fetch.len() as u64, Relaxed);
+			self.prefetch_pages_total
+				.fetch_add(prefetch_count as u64, Relaxed);
+			tracing::debug!(
+				missing = missing.len(),
+				prefetch = prefetch_count,
+				total_fetch = to_fetch.len(),
+				"vfs get_pages fetch"
+			);
+		}
+
+		let response = self
+			.runtime
+			.block_on(self.transport.get_pages(protocol::SqliteGetPagesRequest {
+				actor_id: self.actor_id.clone(),
+				generation,
+				pgnos: to_fetch.clone(),
+			}))
+			.map_err(|err| GetPagesError::Other(err.to_string()))?;
+
+		match response {
+			protocol::SqliteGetPagesResponse::SqliteFenceMismatch(mismatch) => {
+				Err(GetPagesError::FenceMismatch(mismatch.reason))
+			}
+			protocol::SqliteGetPagesResponse::SqliteGetPagesOk(ok) => {
+				let mut state = self.state.write();
+				state.update_read_meta(&ok.meta);
+				for fetched in ok.pages {
+					if let Some(bytes) = &fetched.bytes {
+						state.page_cache.insert(fetched.pgno, bytes.clone());
+					}
+					resolved.insert(fetched.pgno, fetched.bytes);
+				}
+				for pgno in missing {
+					resolved.entry(pgno).or_insert(None);
+				}
+				Ok(resolved)
+			}
+			protocol::SqliteGetPagesResponse::SqliteErrorResponse(error) => {
+				Err(GetPagesError::Other(error.message))
+			}
+		}
+	}
+
+	fn flush_dirty_pages(
+		&self,
+	) -> std::result::Result<Option<BufferedCommitOutcome>, CommitBufferError> {
+		let total_start = Instant::now();
+		let request_build_start = Instant::now();
+		let request = {
+			let state = self.state.read();
+			if state.dead {
+				return Err(CommitBufferError::Other(
+					"sqlite actor lost its fence".to_string(),
+				));
+			}
+			if state.write_buffer.in_atomic_write || state.write_buffer.dirty.is_empty() {
+				return Ok(None);
+			}
+
+			BufferedCommitRequest {
+				actor_id: self.actor_id.clone(),
+				generation: state.generation,
+				expected_head_txid: state.head_txid,
+				new_db_size_pages: state.db_size_pages,
+				max_delta_bytes: state.max_delta_bytes,
+				max_pages_per_stage: self.config.max_pages_per_stage,
+				dirty_pages: state
+					.write_buffer
+					.dirty
+					.iter()
+					.map(|(pgno, bytes)| protocol::SqliteDirtyPage {
+						pgno: *pgno,
+						bytes: bytes.clone(),
+					})
+					.collect(),
+			}
+		};
+		let request_build_ns = request_build_start.elapsed().as_nanos() as u64;
+
+		let (outcome, transport_metrics) = match self
+			.runtime
+			.block_on(commit_buffered_pages(&self.transport, request.clone()))
+		{
+			Ok(outcome) => outcome,
+			Err(err) => {
+				mark_dead_for_non_fence_commit_error(self, &err);
+				return Err(err);
+			}
+		};
+		self.commit_total
+			.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+		tracing::debug!(
+			dirty_pages = request.dirty_pages.len(),
+			path = ?outcome.path,
+			new_head_txid = outcome.new_head_txid,
+			request_build_ns,
+			serialize_ns = transport_metrics.serialize_ns,
+			transport_ns = transport_metrics.transport_ns,
+			"vfs commit complete (flush)"
+		);
+		let state_update_start = Instant::now();
+		let mut state = self.state.write();
+		state.update_meta(&outcome.meta);
+		state.db_size_pages = request.new_db_size_pages;
+		for dirty_page in &request.dirty_pages {
+			state
+				.page_cache
+				.insert(dirty_page.pgno, dirty_page.bytes.clone());
+		}
+		state.write_buffer.dirty.clear();
+		let state_update_ns = state_update_start.elapsed().as_nanos() as u64;
+		self.add_commit_phase_metrics(
+			request_build_ns,
+			transport_metrics,
+			state_update_ns,
+			total_start.elapsed().as_nanos() as u64,
+		);
+		Ok(Some(outcome))
+	}
+
+	fn commit_atomic_write(&self) -> std::result::Result<(), CommitBufferError> {
+		let total_start = Instant::now();
+		let request_build_start = Instant::now();
+		let request = {
+			let mut state = self.state.write();
+			if state.dead {
+				return Err(CommitBufferError::Other(
+					"sqlite actor lost its fence".to_string(),
+				));
+			}
+			if !state.write_buffer.in_atomic_write {
+				return Ok(());
+			}
+			if state.write_buffer.dirty.is_empty() {
+				state.write_buffer.in_atomic_write = false;
+				return Ok(());
+			}
+
+			BufferedCommitRequest {
+				actor_id: self.actor_id.clone(),
+				generation: state.generation,
+				expected_head_txid: state.head_txid,
+				new_db_size_pages: state.db_size_pages,
+				max_delta_bytes: state.max_delta_bytes,
+				max_pages_per_stage: self.config.max_pages_per_stage,
+				dirty_pages: state
+					.write_buffer
+					.dirty
+					.iter()
+					.map(|(pgno, bytes)| protocol::SqliteDirtyPage {
+						pgno: *pgno,
+						bytes: bytes.clone(),
+					})
+					.collect(),
+			}
+		};
+		let request_build_ns = request_build_start.elapsed().as_nanos() as u64;
+
+		let (outcome, transport_metrics) = match self
+			.runtime
+			.block_on(commit_buffered_pages(&self.transport, request.clone()))
+		{
+			Ok(outcome) => outcome,
+			Err(err) => {
+				mark_dead_for_non_fence_commit_error(self, &err);
+				return Err(err);
+			}
+		};
+		self.commit_total
+			.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+		tracing::debug!(
+			dirty_pages = request.dirty_pages.len(),
+			path = ?outcome.path,
+			new_head_txid = outcome.new_head_txid,
+			request_build_ns,
+			serialize_ns = transport_metrics.serialize_ns,
+			transport_ns = transport_metrics.transport_ns,
+			"vfs commit complete (atomic)"
+		);
+		self.set_last_error(format!(
+			"post-commit atomic write succeeded: requested_db_size_pages={}, returned_db_size_pages={}, returned_head_txid={}",
+			request.new_db_size_pages,
+			outcome.meta.db_size_pages,
+			outcome.meta.head_txid,
+		));
+		let state_update_start = Instant::now();
+		let mut state = self.state.write();
+		state.update_meta(&outcome.meta);
+		state.db_size_pages = request.new_db_size_pages;
+		for dirty_page in &request.dirty_pages {
+			state
+				.page_cache
+				.insert(dirty_page.pgno, dirty_page.bytes.clone());
+		}
+		state.write_buffer.dirty.clear();
+		state.write_buffer.in_atomic_write = false;
+		let state_update_ns = state_update_start.elapsed().as_nanos() as u64;
+		self.add_commit_phase_metrics(
+			request_build_ns,
+			transport_metrics,
+			state_update_ns,
+			total_start.elapsed().as_nanos() as u64,
+		);
+		Ok(())
+	}
+
+	fn truncate_main_file(&self, size: sqlite3_int64) {
+		let page_size = self.page_size() as i64;
+		let truncated_pages = ((size + page_size - 1) / page_size) as u32;
+		let mut state = self.state.write();
+		state.db_size_pages = truncated_pages;
+		state
+			.write_buffer
+			.dirty
+			.retain(|pgno, _| *pgno <= truncated_pages);
+		state.page_cache.invalidate_all();
+	}
+}
+
+fn cleanup_batch_atomic_probe(db: *mut sqlite3) {
+	if let Err(err) = sqlite_exec(db, "DROP TABLE IF EXISTS __rivet_batch_probe;") {
+		tracing::warn!(%err, "failed to clean up sqlite batch atomic probe table");
+	}
+}
+
+fn assert_batch_atomic_probe(
+	db: *mut sqlite3,
+	vfs: &SqliteVfs,
+) -> std::result::Result<(), String> {
+	let commit_atomic_before = vfs.commit_atomic_count();
+	let probe_sql = "\
+		BEGIN IMMEDIATE;\
+		CREATE TABLE IF NOT EXISTS __rivet_batch_probe(x INTEGER);\
+		INSERT INTO __rivet_batch_probe VALUES(1);\
+		DELETE FROM __rivet_batch_probe;\
+		DROP TABLE IF EXISTS __rivet_batch_probe;\
+		COMMIT;\
+	";
+
+	if let Err(err) = sqlite_exec(db, probe_sql) {
+		cleanup_batch_atomic_probe(db);
+		return Err(format!("batch atomic probe failed: {err}"));
+	}
+
+	let commit_atomic_after = vfs.commit_atomic_count();
+	if commit_atomic_after == commit_atomic_before {
+		tracing::error!(
+			"batch atomic writes not active for sqlite, SQLITE_ENABLE_BATCH_ATOMIC_WRITE may be missing"
+		);
+		cleanup_batch_atomic_probe(db);
+		return Err(
+			"batch atomic writes not active for sqlite, SQLITE_ENABLE_BATCH_ATOMIC_WRITE may be missing"
+				.to_string(),
+		);
+	}
+
+	Ok(())
+}
+
+fn mark_dead_for_non_fence_commit_error(ctx: &VfsContext, err: &CommitBufferError) {
+	match err {
+		CommitBufferError::FenceMismatch(_) => {}
+		CommitBufferError::StageNotFound(stage_id) => {
+			ctx.mark_dead(format!(
+				"sqlite stage {stage_id} missing during commit finalize"
+			));
+		}
+		CommitBufferError::Other(message) => ctx.mark_dead(message.clone()),
+	}
+}
+
+fn mark_dead_from_fence_commit_error(ctx: &VfsContext, err: &CommitBufferError) {
+	if let CommitBufferError::FenceMismatch(reason) = err {
+		ctx.mark_dead(reason.clone());
+	}
+}
+
+fn dirty_pages_raw_bytes(dirty_pages: &[protocol::SqliteDirtyPage]) -> Result<u64> {
+	dirty_pages.iter().try_fold(0u64, |total, dirty_page| {
+		let page_len = u64::try_from(dirty_page.bytes.len())?;
+		Ok(total + page_len)
+	})
+}
+
+fn split_bytes(bytes: &[u8], max_chunk_bytes: usize) -> Vec<Vec<u8>> {
+	if bytes.is_empty() || max_chunk_bytes == 0 {
+		return vec![bytes.to_vec()];
+	}
+
+	bytes
+		.chunks(max_chunk_bytes)
+		.map(|chunk| chunk.to_vec())
+		.collect()
+}
+
+#[cfg(test)]
+fn next_stage_id() -> u64 {
+	NEXT_STAGE_ID.fetch_add(1, Ordering::Relaxed)
+}
+
+fn next_temp_aux_path() -> String {
+	format!(
+		"{TEMP_AUX_PATH_PREFIX}-{}",
+		NEXT_TEMP_AUX_ID.fetch_add(1, Ordering::Relaxed)
+	)
+}
+
+unsafe fn get_aux_state(file: &VfsFile) -> Option<&AuxFileHandle> {
+	(!file.aux.is_null()).then(|| &*file.aux)
+}
+
+async fn commit_buffered_pages(
+	transport: &SqliteTransport,
+	request: BufferedCommitRequest,
+) -> std::result::Result<(BufferedCommitOutcome, CommitTransportMetrics), CommitBufferError> {
+	let raw_dirty_bytes = dirty_pages_raw_bytes(&request.dirty_pages)
+		.map_err(|err| CommitBufferError::Other(err.to_string()))?;
+	let mut metrics = CommitTransportMetrics::default();
+
+	if raw_dirty_bytes <= request.max_delta_bytes {
+		let serialize_start = Instant::now();
+		let fast_request = protocol::SqliteCommitRequest {
+			actor_id: request.actor_id.clone(),
+			generation: request.generation,
+			expected_head_txid: request.expected_head_txid,
+			dirty_pages: request.dirty_pages.clone(),
+			new_db_size_pages: request.new_db_size_pages,
+		};
+		metrics.serialize_ns += serialize_start.elapsed().as_nanos() as u64;
+		let transport_start = Instant::now();
+		match transport
+			.commit(fast_request)
+			.await
+			.map_err(|err| CommitBufferError::Other(err.to_string()))?
+		{
+			protocol::SqliteCommitResponse::SqliteCommitOk(ok) => {
+				metrics.transport_ns += transport_start.elapsed().as_nanos() as u64;
+				return Ok((
+					BufferedCommitOutcome {
+						path: CommitPath::Fast,
+						new_head_txid: ok.new_head_txid,
+						meta: ok.meta,
+					},
+					metrics,
+				));
+			}
+			protocol::SqliteCommitResponse::SqliteFenceMismatch(mismatch) => {
+				return Err(CommitBufferError::FenceMismatch(mismatch.reason));
+			}
+			protocol::SqliteCommitResponse::SqliteCommitTooLarge(_) => {
+				metrics.transport_ns += transport_start.elapsed().as_nanos() as u64;
+			}
+			protocol::SqliteCommitResponse::SqliteErrorResponse(error) => {
+				return Err(CommitBufferError::Other(error.message));
+			}
+		}
+	}
+
+	let serialize_start = Instant::now();
+	let stage_begin_request = protocol::SqliteCommitStageBeginRequest {
+		actor_id: request.actor_id.clone(),
+		generation: request.generation,
+	};
+	metrics.serialize_ns += serialize_start.elapsed().as_nanos() as u64;
+	let transport_start = Instant::now();
+	let txid = match transport
+		.commit_stage_begin(stage_begin_request)
+		.await
+		.map_err(|err| CommitBufferError::Other(err.to_string()))?
+	{
+		protocol::SqliteCommitStageBeginResponse::SqliteCommitStageBeginOk(ok) => {
+			metrics.transport_ns += transport_start.elapsed().as_nanos() as u64;
+			ok.txid
+		}
+		protocol::SqliteCommitStageBeginResponse::SqliteFenceMismatch(mismatch) => {
+			return Err(CommitBufferError::FenceMismatch(mismatch.reason));
+		}
+		protocol::SqliteCommitStageBeginResponse::SqliteErrorResponse(error) => {
+			return Err(CommitBufferError::Other(error.message));
+		}
+	};
+
+	let serialize_start = Instant::now();
+	let encoded_delta = encode_ltx_v3(
+		LtxHeader::delta(
+			txid,
+			request.new_db_size_pages,
+			sqlite_now_ms().map_err(|err| CommitBufferError::Other(err.to_string()))?,
+		),
+		&request
+			.dirty_pages
+			.iter()
+			.map(|dirty_page| sqlite_storage::types::DirtyPage {
+				pgno: dirty_page.pgno,
+				bytes: dirty_page.bytes.clone(),
+			})
+			.collect::<Vec<_>>(),
+	)
+	.map_err(|err| CommitBufferError::Other(err.to_string()))?;
+	let staged_chunks = split_bytes(
+		&encoded_delta,
+		request.max_delta_bytes.try_into().map_err(|_| {
+			CommitBufferError::Other("sqlite max_delta_bytes exceeded usize".to_string())
+		})?,
+	);
+	metrics.serialize_ns += serialize_start.elapsed().as_nanos() as u64;
+
+	for (chunk_idx, chunk_bytes) in staged_chunks.iter().enumerate() {
+		let serialize_start = Instant::now();
+		let stage_request = protocol::SqliteCommitStageRequest {
+			actor_id: request.actor_id.clone(),
+			generation: request.generation,
+			txid,
+			chunk_idx: chunk_idx as u32,
+			bytes: chunk_bytes.clone(),
+			is_last: chunk_idx + 1 == staged_chunks.len(),
+		};
+		metrics.serialize_ns += serialize_start.elapsed().as_nanos() as u64;
+		if transport
+			.queue_commit_stage(stage_request.clone())
+			.map_err(|err| CommitBufferError::Other(err.to_string()))?
+		{
+			continue;
+		}
+
+		let transport_start = Instant::now();
+		match transport
+			.commit_stage(stage_request)
+			.await
+			.map_err(|err| CommitBufferError::Other(err.to_string()))?
+		{
+			protocol::SqliteCommitStageResponse::SqliteCommitStageOk(_) => {
+				metrics.transport_ns += transport_start.elapsed().as_nanos() as u64;
+			}
+			protocol::SqliteCommitStageResponse::SqliteFenceMismatch(mismatch) => {
+				return Err(CommitBufferError::FenceMismatch(mismatch.reason));
+			}
+			protocol::SqliteCommitStageResponse::SqliteErrorResponse(error) => {
+				return Err(CommitBufferError::Other(error.message));
+			}
+		}
+	}
+
+	let serialize_start = Instant::now();
+	let finalize_request = protocol::SqliteCommitFinalizeRequest {
+		actor_id: request.actor_id,
+		generation: request.generation,
+		expected_head_txid: request.expected_head_txid,
+		txid,
+		new_db_size_pages: request.new_db_size_pages,
+	};
+	metrics.serialize_ns += serialize_start.elapsed().as_nanos() as u64;
+	let transport_start = Instant::now();
+	match transport
+		.commit_finalize(finalize_request)
+		.await
+		.map_err(|err| CommitBufferError::Other(err.to_string()))?
+	{
+		protocol::SqliteCommitFinalizeResponse::SqliteCommitFinalizeOk(ok) => {
+			metrics.transport_ns += transport_start.elapsed().as_nanos() as u64;
+			Ok((
+				BufferedCommitOutcome {
+					path: CommitPath::Slow,
+					new_head_txid: ok.new_head_txid,
+					meta: ok.meta,
+				},
+				metrics,
+			))
+		}
+		protocol::SqliteCommitFinalizeResponse::SqliteFenceMismatch(mismatch) => {
+			Err(CommitBufferError::FenceMismatch(mismatch.reason))
+		}
+		protocol::SqliteCommitFinalizeResponse::SqliteStageNotFound(not_found) => {
+			Err(CommitBufferError::StageNotFound(not_found.stage_id))
+		}
+		protocol::SqliteCommitFinalizeResponse::SqliteErrorResponse(error) => {
+			Err(CommitBufferError::Other(error.message))
+		}
+	}
+}
+
+unsafe fn get_file(p: *mut sqlite3_file) -> &'static mut VfsFile {
+	&mut *(p as *mut VfsFile)
 }
 
 unsafe fn get_vfs_ctx(p: *mut sqlite3_vfs) -> &'static VfsContext {
 	&*((*p).pAppData as *const VfsContext)
 }
 
-fn build_value_map(resp: &KvGetResult) -> HashMap<&[u8], &[u8]> {
-	resp.keys
-		.iter()
-		.zip(resp.values.iter())
-		.filter(|(_, value)| !value.is_empty())
-		.map(|(key, value)| (key.as_slice(), value.as_slice()))
-		.collect()
-}
-
-fn split_entries(entries: Vec<(Vec<u8>, Vec<u8>)>) -> (Vec<Vec<u8>>, Vec<Vec<u8>>) {
-	let mut keys = Vec::with_capacity(entries.len());
-	let mut values = Vec::with_capacity(entries.len());
-	for (key, value) in entries {
-		keys.push(key);
-		values.push(value);
-	}
-	(keys, values)
-}
-
-// MARK: IO Callbacks
-
-unsafe extern "C" fn kv_io_close(p_file: *mut sqlite3_file) -> c_int {
-	vfs_catch_unwind!(SQLITE_IOERR, {
-		let file = get_file(p_file);
-		let ctx = &*file.ctx;
-
-		let result = if file.flags & SQLITE_OPEN_DELETEONCLOSE != 0 {
-			ctx.delete_file(file.file_tag)
-		} else if file.meta_dirty {
-			ctx.kv_put(
-				vec![file.meta_key.to_vec()],
-				vec![encode_file_meta(file.size)],
-			)
+fn sqlite_error_message(db: *mut sqlite3) -> String {
+	unsafe {
+		if db.is_null() {
+			"unknown sqlite error".to_string()
 		} else {
+			CStr::from_ptr(sqlite3_errmsg(db))
+				.to_string_lossy()
+				.into_owned()
+		}
+	}
+}
+
+fn sqlite_exec(db: *mut sqlite3, sql: &str) -> std::result::Result<(), String> {
+	let c_sql = CString::new(sql).map_err(|err| err.to_string())?;
+	let rc = unsafe { sqlite3_exec(db, c_sql.as_ptr(), None, ptr::null_mut(), ptr::null_mut()) };
+	if rc != SQLITE_OK {
+		return Err(format!(
+			"`{sql}` failed with code {rc}: {}",
+			sqlite_error_message(db)
+		));
+	}
+	Ok(())
+}
+
+#[cfg(test)]
+fn sqlite_step_statement(db: *mut sqlite3, sql: &str) -> std::result::Result<(), String> {
+	let c_sql = CString::new(sql).map_err(|err| err.to_string())?;
+	let mut stmt = ptr::null_mut();
+	let rc = unsafe { sqlite3_prepare_v2(db, c_sql.as_ptr(), -1, &mut stmt, ptr::null_mut()) };
+	if rc != SQLITE_OK {
+		return Err(format!(
+			"`{sql}` prepare failed with code {rc}: {}",
+			sqlite_error_message(db)
+		));
+	}
+	if stmt.is_null() {
+		return Ok(());
+	}
+
+	let result = loop {
+		let step_rc = unsafe { sqlite3_step(stmt) };
+		if step_rc == SQLITE_DONE {
+			break Ok(());
+		}
+		if step_rc != SQLITE_ROW {
+			break Err(format!(
+				"`{sql}` step failed with code {step_rc}: {}",
+				sqlite_error_message(db)
+			));
+		}
+	};
+
+	unsafe {
+		sqlite3_finalize(stmt);
+	}
+
+	result
+}
+
+fn page_span(offset: i64, length: usize, page_size: usize) -> std::result::Result<Vec<u32>, ()> {
+	if offset < 0 {
+		return Err(());
+	}
+	if length == 0 {
+		return Ok(Vec::new());
+	}
+
+	let start = offset as usize / page_size + 1;
+	let end = (offset as usize + length - 1) / page_size + 1;
+	Ok((start as u32..=end as u32).collect())
+}
+
+unsafe extern "C" fn io_close(p_file: *mut sqlite3_file) -> c_int {
+	vfs_catch_unwind!(SQLITE_IOERR, {
+		if p_file.is_null() {
+			return SQLITE_OK;
+		}
+		let file = get_file(p_file);
+		let result = if !file.aux.is_null() {
+			let aux = Box::from_raw(file.aux);
+			if aux.delete_on_close {
+				let ctx = &*file.ctx;
+				ctx.delete_aux_file(&aux.path);
+			}
+			file.aux = ptr::null_mut();
 			Ok(())
+		} else {
+			let ctx = &*file.ctx;
+			let should_flush = {
+				let state = ctx.state.read();
+				state.write_buffer.in_atomic_write || !state.write_buffer.dirty.is_empty()
+			};
+			if should_flush {
+				if ctx.state.read().write_buffer.in_atomic_write {
+					ctx.commit_atomic_write().map(|_| ())
+				} else {
+					ctx.flush_dirty_pages().map(|_| ())
+				}
+			} else {
+				Ok(())
+			}
 		};
-
-		free_file_state(file);
-
+		file.base.pMethods = ptr::null();
 		match result {
 			Ok(()) => SQLITE_OK,
 			Err(err) => {
-				tracing::error!(%err, file_tag = file.file_tag, "failed to close file");
+				let ctx = &*file.ctx;
+				mark_dead_from_fence_commit_error(ctx, &err);
 				SQLITE_IOERR
 			}
 		}
 	})
 }
 
-unsafe extern "C" fn kv_io_read(
+unsafe extern "C" fn io_read(
 	p_file: *mut sqlite3_file,
 	p_buf: *mut c_void,
 	i_amt: c_int,
@@ -531,122 +1796,86 @@ unsafe extern "C" fn kv_io_read(
 		}
 
 		let file = get_file(p_file);
-		let state = get_file_state(file.state);
-		let ctx = &*file.ctx;
-		let read_start = std::time::Instant::now();
-		ctx.vfs_metrics.xread_count.fetch_add(1, Ordering::Relaxed);
-		let requested_length = i_amt as usize;
-		let buf = slice::from_raw_parts_mut(p_buf as *mut u8, requested_length);
+		if let Some(aux) = get_aux_state(file) {
+			if i_offset < 0 {
+				return SQLITE_IOERR_READ;
+			}
 
-		if i_offset < 0 {
+			let offset = i_offset as usize;
+			let requested = i_amt as usize;
+			let buf = slice::from_raw_parts_mut(p_buf.cast::<u8>(), requested);
+			buf.fill(0);
+
+			let bytes = aux.state.bytes.lock();
+			if offset >= bytes.len() {
+				return SQLITE_IOERR_SHORT_READ;
+			}
+
+			let copy_len = requested.min(bytes.len() - offset);
+			buf[..copy_len].copy_from_slice(&bytes[offset..offset + copy_len]);
+			return if copy_len < requested {
+				SQLITE_IOERR_SHORT_READ
+			} else {
+				SQLITE_OK
+			};
+		}
+
+		let ctx = &*file.ctx;
+		if ctx.is_dead() {
 			return SQLITE_IOERR_READ;
 		}
 
-		let offset = i_offset as usize;
-		let file_size = file.size as usize;
-		if offset >= file_size {
-			buf.fill(0);
-			return SQLITE_IOERR_SHORT_READ;
-		}
+		let buf = slice::from_raw_parts_mut(p_buf.cast::<u8>(), i_amt as usize);
+		let requested_pages = match page_span(i_offset, i_amt as usize, ctx.page_size()) {
+			Ok(pages) => pages,
+			Err(_) => return SQLITE_IOERR_READ,
+		};
+		let page_size = ctx.page_size();
+		let file_size = {
+			let state = ctx.state.read();
+			state.db_size_pages as usize * state.page_size
+		};
 
-		let start_chunk = offset / kv::CHUNK_SIZE;
-		let end_chunk = (offset + requested_length - 1) / kv::CHUNK_SIZE;
-
-		let mut chunk_keys_to_fetch = Vec::new();
-		let mut buffered_chunks: HashMap<usize, &[u8]> = HashMap::new();
-		// Skip fetching chunks already present in the dirty buffer (batch mode) or read cache.
-		for chunk_idx in start_chunk..=end_chunk {
-			if state.batch_mode {
-				if state.dirty_buffer.contains_key(&(chunk_idx as u32)) {
-					continue;
-				}
+		let resolved = match ctx.resolve_pages(&requested_pages, true) {
+			Ok(pages) => pages,
+			Err(GetPagesError::FenceMismatch(reason)) => {
+				ctx.mark_dead(reason);
+				return SQLITE_IOERR_READ;
 			}
-			let key = kv::get_chunk_key(file.file_tag, chunk_idx as u32);
-			if let Some(read_cache) = state.read_cache.as_ref() {
-				if let Some(cached) = read_cache.get(key.as_slice()) {
-					buffered_chunks.insert(chunk_idx, cached.as_slice());
-					continue;
-				}
-			}
-			chunk_keys_to_fetch.push(key.to_vec());
-		}
-
-		let resp = if chunk_keys_to_fetch.is_empty() {
-			KvGetResult {
-				keys: Vec::new(),
-				values: Vec::new(),
-			}
-		} else {
-			match ctx.kv_get(chunk_keys_to_fetch) {
-				Ok(resp) => resp,
-				Err(_) => return SQLITE_IOERR_READ,
+			Err(GetPagesError::Other(message)) => {
+				ctx.mark_dead(message);
+				return SQLITE_IOERR_READ;
 			}
 		};
-		let value_map = build_value_map(&resp);
+		ctx.clear_last_error();
 
-		for chunk_idx in start_chunk..=end_chunk {
-			let chunk_data = if state.batch_mode {
-				state
-					.dirty_buffer
-					.get(&(chunk_idx as u32))
-					.map(|buffered| buffered.as_slice())
-			} else {
-				None
+		buf.fill(0);
+		for pgno in requested_pages {
+			let Some(Some(bytes)) = resolved.get(&pgno) else {
+				continue;
+			};
+			let page_start = (pgno as usize - 1) * page_size;
+			let copy_start = page_start.max(i_offset as usize);
+			let copy_end = (page_start + page_size).min(i_offset as usize + i_amt as usize);
+			if copy_start >= copy_end {
+				continue;
 			}
-			.or_else(|| buffered_chunks.get(&chunk_idx).copied())
-			.or_else(|| {
-				let chunk_key = kv::get_chunk_key(file.file_tag, chunk_idx as u32);
-				value_map.get(chunk_key.as_slice()).copied()
-			});
-			let chunk_offset = chunk_idx * kv::CHUNK_SIZE;
-			let read_start = offset.saturating_sub(chunk_offset);
-			let read_end = std::cmp::min(kv::CHUNK_SIZE, offset + requested_length - chunk_offset);
-			let dest_start = chunk_offset + read_start - offset;
-
-			if let Some(chunk_data) = chunk_data {
-				let source_end = std::cmp::min(read_end, chunk_data.len());
-				if source_end > read_start {
-					let dest_end = dest_start + (source_end - read_start);
-					buf[dest_start..dest_end].copy_from_slice(&chunk_data[read_start..source_end]);
-				}
-				if source_end < read_end {
-					let zero_start = dest_start + (source_end - read_start);
-					let zero_end = dest_start + (read_end - read_start);
-					buf[zero_start..zero_end].fill(0);
-				}
-			} else {
-				let dest_end = dest_start + (read_end - read_start);
-				buf[dest_start..dest_end].fill(0);
-			}
+			let page_offset = copy_start - page_start;
+			let dest_offset = copy_start - i_offset as usize;
+			let copy_len = copy_end - copy_start;
+			buf[dest_offset..dest_offset + copy_len]
+				.copy_from_slice(&bytes[page_offset..page_offset + copy_len]);
 		}
 
-		// `resp` is empty when every chunk was served from the dirty buffer or read cache.
-		// In that case this loop is a no-op.
-		if let Some(read_cache) = state.read_cache.as_mut() {
-			for (key, value) in resp.keys.iter().zip(resp.values.iter()) {
-				if !value.is_empty() {
-					read_cache.insert(key.clone(), value.clone());
-				}
-			}
-		}
-
-		let actual_bytes = std::cmp::min(requested_length, file_size - offset);
-		if actual_bytes < requested_length {
-			buf[actual_bytes..].fill(0);
-			ctx.vfs_metrics
-				.xread_us
-				.fetch_add(read_start.elapsed().as_micros() as u64, Ordering::Relaxed);
+		if i_offset as usize + i_amt as usize > file_size {
 			return SQLITE_IOERR_SHORT_READ;
 		}
 
-		ctx.vfs_metrics
-			.xread_us
-			.fetch_add(read_start.elapsed().as_micros() as u64, Ordering::Relaxed);
 		SQLITE_OK
 	})
 }
 
-unsafe extern "C" fn kv_io_write(
+unsafe extern "C" fn io_write(
 	p_file: *mut sqlite3_file,
 	p_buf: *const c_void,
 	i_amt: c_int,
@@ -658,338 +1887,182 @@ unsafe extern "C" fn kv_io_write(
 		}
 
 		let file = get_file(p_file);
-		let ctx = &*file.ctx;
-		let write_start = std::time::Instant::now();
-		ctx.vfs_metrics.xwrite_count.fetch_add(1, Ordering::Relaxed);
-		let data = slice::from_raw_parts(p_buf as *const u8, i_amt as usize);
-
-		if i_offset < 0 {
-			return SQLITE_IOERR_WRITE;
-		}
-
-		let offset = i_offset as usize;
-		let write_length = i_amt as usize;
-		let write_end_offset = match offset.checked_add(write_length) {
-			Some(end) => end,
-			None => return SQLITE_IOERR_WRITE,
-		};
-		if write_end_offset as u64 > kv::MAX_FILE_SIZE {
-			return SQLITE_IOERR_WRITE;
-		}
-
-		let start_chunk = offset / kv::CHUNK_SIZE;
-		let end_chunk = (offset + write_length - 1) / kv::CHUNK_SIZE;
-
-		{
-			let state = get_file_state(file.state);
-			if state.batch_mode {
-				for chunk_idx in start_chunk..=end_chunk {
-					let chunk_offset = chunk_idx * kv::CHUNK_SIZE;
-					let source_start =
-						std::cmp::max(0isize, chunk_offset as isize - offset as isize) as usize;
-					let source_end =
-						std::cmp::min(write_length, chunk_offset + kv::CHUNK_SIZE - offset);
-					state
-						.dirty_buffer
-						.insert(chunk_idx as u32, data[source_start..source_end].to_vec());
-				}
-
-				let new_size = std::cmp::max(file.size, write_end_offset as i64);
-				if new_size != file.size {
-					file.size = new_size;
-					file.meta_dirty = true;
-				}
-
-				ctx.vfs_metrics
-					.xwrite_buffered_count
-					.fetch_add(1, Ordering::Relaxed);
-				ctx.vfs_metrics
-					.xwrite_us
-					.fetch_add(write_start.elapsed().as_micros() as u64, Ordering::Relaxed);
-				return SQLITE_OK;
+		if let Some(aux) = get_aux_state(file) {
+			if i_offset < 0 {
+				return SQLITE_IOERR_WRITE;
 			}
-		}
 
-		struct WritePlan {
-			chunk_key: Vec<u8>,
-			chunk_offset: usize,
-			write_start: usize,
-			write_end: usize,
-			cached_chunk: Option<Vec<u8>>,
-			existing_chunk_index: Option<usize>,
-		}
-
-		let mut plans = Vec::new();
-		let mut chunk_keys_to_fetch = Vec::new();
-		for chunk_idx in start_chunk..=end_chunk {
-			let chunk_offset = chunk_idx * kv::CHUNK_SIZE;
-			let write_start = offset.saturating_sub(chunk_offset);
-			let write_end = std::cmp::min(kv::CHUNK_SIZE, offset + write_length - chunk_offset);
-			let existing_bytes_in_chunk = if file.size as usize > chunk_offset {
-				std::cmp::min(kv::CHUNK_SIZE, file.size as usize - chunk_offset)
-			} else {
-				0
-			};
-			let needs_existing = write_start > 0 || existing_bytes_in_chunk > write_end;
-			let chunk_key = kv::get_chunk_key(file.file_tag, chunk_idx as u32).to_vec();
-			let cached_chunk = if needs_existing && ctx.read_cache_enabled {
-				let state = get_file_state(file.state);
-				state
-					.read_cache
-					.as_ref()
-					.and_then(|read_cache| read_cache.get(chunk_key.as_slice()).cloned())
-			} else {
-				None
-			};
-			let existing_chunk_index = if needs_existing && cached_chunk.is_none() {
-				let idx = chunk_keys_to_fetch.len();
-				chunk_keys_to_fetch.push(chunk_key.clone());
-				Some(idx)
-			} else {
-				None
-			};
-
-			plans.push(WritePlan {
-				chunk_key,
-				chunk_offset,
-				write_start,
-				write_end,
-				cached_chunk,
-				existing_chunk_index,
-			});
-		}
-
-		let existing_chunks = if chunk_keys_to_fetch.is_empty() {
-			Vec::new()
-		} else {
-			match ctx.kv_get(chunk_keys_to_fetch.clone()) {
-				Ok(resp) => {
-					let value_map = build_value_map(&resp);
-					chunk_keys_to_fetch
-						.iter()
-						.map(|key| value_map.get(key.as_slice()).map(|value| value.to_vec()))
-						.collect::<Vec<_>>()
-				}
-				Err(_) => return SQLITE_IOERR_WRITE,
+			let offset = i_offset as usize;
+			let source = slice::from_raw_parts(p_buf.cast::<u8>(), i_amt as usize);
+			let mut bytes = aux.state.bytes.lock();
+			let end = offset + source.len();
+			if bytes.len() < end {
+				bytes.resize(end, 0);
 			}
-		};
-
-		let mut entries_to_write = Vec::with_capacity(plans.len() + 1);
-		for plan in &plans {
-			let existing_chunk = plan.cached_chunk.as_deref().or_else(|| {
-				plan.existing_chunk_index
-					.and_then(|idx| existing_chunks.get(idx))
-					.and_then(|value| value.as_deref())
-			});
-
-			let mut new_chunk = if let Some(existing_chunk) = existing_chunk {
-				let mut chunk = vec![0u8; std::cmp::max(existing_chunk.len(), plan.write_end)];
-				chunk[..existing_chunk.len()].copy_from_slice(existing_chunk);
-				chunk
-			} else {
-				vec![0u8; plan.write_end]
-			};
-
-			let source_start = plan.chunk_offset + plan.write_start - offset;
-			let source_end = source_start + (plan.write_end - plan.write_start);
-			new_chunk[plan.write_start..plan.write_end]
-				.copy_from_slice(&data[source_start..source_end]);
-
-			entries_to_write.push((plan.chunk_key.clone(), new_chunk));
-		}
-
-		let previous_size = file.size;
-		let previous_meta_dirty = file.meta_dirty;
-		let new_size = std::cmp::max(file.size, write_end_offset as i64);
-		if new_size != previous_size {
-			file.size = new_size;
-			file.meta_dirty = true;
-		}
-		if file.meta_dirty {
-			entries_to_write.push((file.meta_key.to_vec(), encode_file_meta(file.size)));
-		}
-
-		if let Some(read_cache) = get_file_state(file.state).read_cache.as_mut() {
-			for (key, value) in &entries_to_write {
-				// Only cache chunk keys here. Metadata keys are read on open/access
-				// and should not be mixed into the per-page cache.
-				if key.len() == 8 {
-					read_cache.insert(key.clone(), value.clone());
-				}
-			}
-		}
-
-		let (keys, values) = split_entries(entries_to_write);
-		if ctx.kv_put(keys, values).is_err() {
-			file.size = previous_size;
-			file.meta_dirty = previous_meta_dirty;
-			return SQLITE_IOERR_WRITE;
-		}
-		file.meta_dirty = false;
-
-		ctx.vfs_metrics
-			.xwrite_us
-			.fetch_add(write_start.elapsed().as_micros() as u64, Ordering::Relaxed);
-		SQLITE_OK
-	})
-}
-
-unsafe extern "C" fn kv_io_truncate(p_file: *mut sqlite3_file, size: sqlite3_int64) -> c_int {
-	vfs_catch_unwind!(SQLITE_IOERR_TRUNCATE, {
-		let file = get_file(p_file);
-		let ctx = &*file.ctx;
-
-		if size < 0 || size as u64 > kv::MAX_FILE_SIZE {
-			return SQLITE_IOERR_TRUNCATE;
-		}
-
-		if size >= file.size {
-			if size > file.size {
-				let previous_size = file.size;
-				let previous_meta_dirty = file.meta_dirty;
-				file.size = size;
-				file.meta_dirty = true;
-				if ctx
-					.kv_put(
-						vec![file.meta_key.to_vec()],
-						vec![encode_file_meta(file.size)],
-					)
-					.is_err()
-				{
-					file.size = previous_size;
-					file.meta_dirty = previous_meta_dirty;
-					return SQLITE_IOERR_TRUNCATE;
-				}
-				file.meta_dirty = false;
-			}
+			bytes[offset..end].copy_from_slice(source);
 			return SQLITE_OK;
 		}
 
-		let last_chunk_to_keep = if size == 0 {
-			-1
-		} else {
-			(size - 1) / kv::CHUNK_SIZE as i64
+		let ctx = &*file.ctx;
+		if ctx.is_dead() {
+			return SQLITE_IOERR_WRITE;
+		}
+
+		let page_size = ctx.page_size();
+		let source = slice::from_raw_parts(p_buf.cast::<u8>(), i_amt as usize);
+		let target_pages = match page_span(i_offset, i_amt as usize, page_size) {
+			Ok(pages) => pages,
+			Err(_) => return SQLITE_IOERR_WRITE,
 		};
-		let last_existing_chunk = if file.size == 0 {
-			-1
+
+		// Fast path: for full-page aligned writes we don't need the existing
+		// page data because we're overwriting every byte. Skip resolve_pages
+		// to eliminate a round trip to the engine per page. Also, for pages
+		// beyond db_size_pages (new allocations), there's nothing to fetch.
+		let offset = i_offset as usize;
+		let amt = i_amt as usize;
+		let is_aligned_full_page = offset % page_size == 0 && amt % page_size == 0;
+
+		let resolved = if is_aligned_full_page {
+			HashMap::new()
 		} else {
-			(file.size - 1) / kv::CHUNK_SIZE as i64
-		};
-
-		if let Some(read_cache) = get_file_state(file.state).read_cache.as_mut() {
-			// The read cache stores only chunk keys. Keep entries strictly before
-			// the truncation boundary so reads cannot serve bytes from removed chunks.
-			read_cache.retain(|key, _| {
-				// Chunk keys are 8 bytes: [prefix, version, CHUNK_PREFIX, file_tag, idx_be32]
-				if key.len() == 8 && key[3] == file.file_tag {
-					let chunk_idx = u32::from_be_bytes([key[4], key[5], key[6], key[7]]);
-					(chunk_idx as i64) <= last_chunk_to_keep
-				} else {
-					true
-				}
-			});
-		}
-
-		let previous_size = file.size;
-		let previous_meta_dirty = file.meta_dirty;
-		file.size = size;
-		file.meta_dirty = true;
-		if ctx
-			.kv_put(
-				vec![file.meta_key.to_vec()],
-				vec![encode_file_meta(file.size)],
-			)
-			.is_err()
-		{
-			file.size = previous_size;
-			file.meta_dirty = previous_meta_dirty;
-			return SQLITE_IOERR_TRUNCATE;
-		}
-		file.meta_dirty = false;
-
-		if size > 0 && size as usize % kv::CHUNK_SIZE != 0 {
-			let last_chunk_key = kv::get_chunk_key(file.file_tag, last_chunk_to_keep as u32);
-			let resp = match ctx.kv_get(vec![last_chunk_key.to_vec()]) {
-				Ok(resp) => resp,
-				Err(_) => return SQLITE_IOERR_TRUNCATE,
-			};
-			let value_map = build_value_map(&resp);
-			if let Some(last_chunk_data) = value_map.get(last_chunk_key.as_slice()) {
-				let truncated_len = size as usize % kv::CHUNK_SIZE;
-				if last_chunk_data.len() > truncated_len {
-					let truncated_chunk = last_chunk_data[..truncated_len].to_vec();
-					if ctx
-						.kv_put(vec![last_chunk_key.to_vec()], vec![truncated_chunk.clone()])
-						.is_err()
-					{
-						return SQLITE_IOERR_TRUNCATE;
-					}
-					if let Some(read_cache) = get_file_state(file.state).read_cache.as_mut() {
-						read_cache.insert(last_chunk_key.to_vec(), truncated_chunk);
-					}
-				}
-			}
-		}
-
-		if last_chunk_to_keep < last_existing_chunk {
-			if ctx
-				.kv_delete_range(
-					kv::get_chunk_key(file.file_tag, (last_chunk_to_keep + 1) as u32).to_vec(),
-					kv::get_chunk_key_range_end(file.file_tag).to_vec(),
+			let (db_size_pages, pages_to_resolve): (u32, Vec<u32>) = {
+				let state = ctx.state.read();
+				let known_max = state.db_size_pages;
+				(
+					known_max,
+					target_pages
+						.iter()
+						.copied()
+						.filter(|pgno| *pgno <= known_max)
+						.collect(),
 				)
-				.is_err()
-			{
-				return SQLITE_IOERR_TRUNCATE;
+			};
+
+			let mut resolved = if pages_to_resolve.is_empty() {
+				HashMap::new()
+			} else {
+				match ctx.resolve_pages(&pages_to_resolve, false) {
+					Ok(pages) => pages,
+					Err(GetPagesError::FenceMismatch(reason)) => {
+						ctx.mark_dead(reason);
+						return SQLITE_IOERR_WRITE;
+					}
+					Err(GetPagesError::Other(message)) => {
+						ctx.mark_dead(message);
+						return SQLITE_IOERR_WRITE;
+					}
+				}
+			};
+			for pgno in &target_pages {
+				if *pgno > db_size_pages {
+					resolved.entry(*pgno).or_insert(None);
+				}
 			}
+			resolved
+		};
+
+		let mut dirty_pages = BTreeMap::new();
+		for pgno in target_pages {
+			let page_start = (pgno as usize - 1) * page_size;
+			let patch_start = page_start.max(offset);
+			let patch_end = (page_start + page_size).min(offset + amt);
+			let Some(copy_len) = patch_end.checked_sub(patch_start) else {
+				continue;
+			};
+			if copy_len == 0 {
+				continue;
+			}
+
+			let mut page = if is_aligned_full_page {
+				vec![0; page_size]
+			} else {
+				resolved
+					.get(&pgno)
+					.and_then(|bytes| bytes.clone())
+					.unwrap_or_else(|| vec![0; page_size])
+			};
+			if page.len() < page_size {
+				page.resize(page_size, 0);
+			}
+
+			let page_offset = patch_start - page_start;
+			let source_offset = patch_start - offset;
+			page[page_offset..page_offset + copy_len]
+				.copy_from_slice(&source[source_offset..source_offset + copy_len]);
+			dirty_pages.insert(pgno, page);
 		}
 
+		let mut state = ctx.state.write();
+		for (pgno, bytes) in dirty_pages {
+			state.write_buffer.dirty.insert(pgno, bytes);
+		}
+		let end_page = ((offset + amt) + page_size - 1) / page_size;
+		state.db_size_pages = state.db_size_pages.max(end_page as u32);
+		ctx.clear_last_error();
 		SQLITE_OK
 	})
 }
 
-unsafe extern "C" fn kv_io_sync(p_file: *mut sqlite3_file, _flags: c_int) -> c_int {
+unsafe extern "C" fn io_truncate(p_file: *mut sqlite3_file, size: sqlite3_int64) -> c_int {
+	vfs_catch_unwind!(SQLITE_IOERR_TRUNCATE, {
+		if size < 0 {
+			return SQLITE_IOERR_TRUNCATE;
+		}
+		let file = get_file(p_file);
+		if let Some(aux) = get_aux_state(file) {
+			aux.state.bytes.lock().truncate(size as usize);
+			return SQLITE_OK;
+		}
+		let ctx = &*file.ctx;
+		ctx.truncate_main_file(size);
+		SQLITE_OK
+	})
+}
+
+unsafe extern "C" fn io_sync(p_file: *mut sqlite3_file, _flags: c_int) -> c_int {
 	vfs_catch_unwind!(SQLITE_IOERR_FSYNC, {
 		let file = get_file(p_file);
-		if !file.meta_dirty {
+		if get_aux_state(file).is_some() {
 			return SQLITE_OK;
 		}
-
 		let ctx = &*file.ctx;
-		if ctx
-			.kv_put(
-				vec![file.meta_key.to_vec()],
-				vec![encode_file_meta(file.size)],
-			)
-			.is_err()
-		{
-			return SQLITE_IOERR_FSYNC;
+		match ctx.flush_dirty_pages() {
+			Ok(_) => SQLITE_OK,
+			Err(err) => {
+				mark_dead_from_fence_commit_error(ctx, &err);
+				SQLITE_IOERR_FSYNC
+			}
 		}
-		file.meta_dirty = false;
-
-		SQLITE_OK
 	})
 }
 
-unsafe extern "C" fn kv_io_file_size(
+unsafe extern "C" fn io_file_size(
 	p_file: *mut sqlite3_file,
 	p_size: *mut sqlite3_int64,
 ) -> c_int {
 	vfs_catch_unwind!(SQLITE_IOERR_FSTAT, {
 		let file = get_file(p_file);
-		*p_size = file.size;
+		if let Some(aux) = get_aux_state(file) {
+			*p_size = aux.state.bytes.lock().len() as sqlite3_int64;
+			return SQLITE_OK;
+		}
+		let ctx = &*file.ctx;
+		let state = ctx.state.read();
+		*p_size = (state.db_size_pages as usize * state.page_size) as sqlite3_int64;
 		SQLITE_OK
 	})
 }
 
-unsafe extern "C" fn kv_io_lock(_p_file: *mut sqlite3_file, _level: c_int) -> c_int {
+unsafe extern "C" fn io_lock(_p_file: *mut sqlite3_file, _level: c_int) -> c_int {
 	vfs_catch_unwind!(SQLITE_IOERR_LOCK, SQLITE_OK)
 }
 
-unsafe extern "C" fn kv_io_unlock(_p_file: *mut sqlite3_file, _level: c_int) -> c_int {
+unsafe extern "C" fn io_unlock(_p_file: *mut sqlite3_file, _level: c_int) -> c_int {
 	vfs_catch_unwind!(SQLITE_IOERR_UNLOCK, SQLITE_OK)
 }
 
-unsafe extern "C" fn kv_io_check_reserved_lock(
+unsafe extern "C" fn io_check_reserved_lock(
 	_p_file: *mut sqlite3_file,
 	p_res_out: *mut c_int,
 ) -> c_int {
@@ -999,98 +2072,41 @@ unsafe extern "C" fn kv_io_check_reserved_lock(
 	})
 }
 
-unsafe extern "C" fn kv_io_file_control(
+unsafe extern "C" fn io_file_control(
 	p_file: *mut sqlite3_file,
 	op: c_int,
 	_p_arg: *mut c_void,
 ) -> c_int {
 	vfs_catch_unwind!(SQLITE_IOERR, {
 		let file = get_file(p_file);
-		if file.state.is_null() {
+		if get_aux_state(file).is_some() {
 			return SQLITE_NOTFOUND;
 		}
-		let state = get_file_state(file.state);
+		let ctx = &*file.ctx;
 
 		match op {
 			SQLITE_FCNTL_BEGIN_ATOMIC_WRITE => {
-				state.saved_file_size = file.size;
-				state.batch_mode = true;
-				file.meta_dirty = false;
-				state.dirty_buffer.clear();
+				let mut state = ctx.state.write();
+				state.write_buffer.in_atomic_write = true;
+				state.write_buffer.saved_db_size = state.db_size_pages;
+				state.write_buffer.dirty.clear();
 				SQLITE_OK
 			}
-			SQLITE_FCNTL_COMMIT_ATOMIC_WRITE => {
-				let ctx = &*file.ctx;
-				let commit_start = std::time::Instant::now();
-				let dirty_page_count = state.dirty_buffer.len() as u64;
-				let max_dirty_pages = if file.meta_dirty {
-					KV_MAX_BATCH_KEYS - 1
-				} else {
-					KV_MAX_BATCH_KEYS
-				};
-
-				if state.dirty_buffer.len() > max_dirty_pages {
-					state.dirty_buffer.clear();
-					file.size = state.saved_file_size;
-					file.meta_dirty = false;
-					state.batch_mode = false;
-					return SQLITE_IOERR;
+			SQLITE_FCNTL_COMMIT_ATOMIC_WRITE => match ctx.commit_atomic_write() {
+				Ok(()) => {
+					ctx.commit_atomic_count.fetch_add(1, Ordering::Relaxed);
+					SQLITE_OK
 				}
-
-				let mut entries = Vec::with_capacity(state.dirty_buffer.len() + 1);
-				for (chunk_index, data) in &state.dirty_buffer {
-					entries.push((
-						kv::get_chunk_key(file.file_tag, *chunk_index).to_vec(),
-						data.clone(),
-					));
+				Err(err) => {
+					mark_dead_from_fence_commit_error(ctx, &err);
+					SQLITE_IOERR
 				}
-				if file.meta_dirty {
-					entries.push((file.meta_key.to_vec(), encode_file_meta(file.size)));
-				}
-
-				let (keys, values) = split_entries(entries);
-				if ctx.kv_put(keys, values).is_err() {
-					state.dirty_buffer.clear();
-					file.size = state.saved_file_size;
-					file.meta_dirty = false;
-					state.batch_mode = false;
-					return SQLITE_IOERR;
-				}
-
-				// Move dirty buffer entries into the read cache so subsequent
-				// reads can serve them without a KV round-trip.
-				let flushed: Vec<_> = std::mem::take(&mut state.dirty_buffer)
-					.into_iter()
-					.collect();
-				if let Some(read_cache) = state.read_cache.as_mut() {
-					// Only chunk pages belong in the read cache. The metadata write above
-					// still goes through KV, but should not be cached as a page.
-					for (chunk_index, data) in flushed {
-						let key = kv::get_chunk_key(file.file_tag, chunk_index);
-						read_cache.insert(key.to_vec(), data);
-					}
-				}
-				file.meta_dirty = false;
-				state.batch_mode = false;
-				ctx.vfs_metrics
-					.commit_atomic_count
-					.fetch_add(1, Ordering::Relaxed);
-				ctx.vfs_metrics
-					.commit_atomic_pages
-					.fetch_add(dirty_page_count, Ordering::Relaxed);
-				ctx.vfs_metrics
-					.commit_atomic_us
-					.fetch_add(commit_start.elapsed().as_micros() as u64, Ordering::Relaxed);
-				SQLITE_OK
-			}
+			},
 			SQLITE_FCNTL_ROLLBACK_ATOMIC_WRITE => {
-				if !state.batch_mode {
-					return SQLITE_OK;
-				}
-				state.dirty_buffer.clear();
-				file.size = state.saved_file_size;
-				file.meta_dirty = false;
-				state.batch_mode = false;
+				let mut state = ctx.state.write();
+				state.write_buffer.dirty.clear();
+				state.write_buffer.in_atomic_write = false;
+				state.db_size_pages = state.write_buffer.saved_db_size;
 				SQLITE_OK
 			}
 			_ => SQLITE_NOTFOUND,
@@ -1098,17 +2114,22 @@ unsafe extern "C" fn kv_io_file_control(
 	})
 }
 
-unsafe extern "C" fn kv_io_sector_size(_p_file: *mut sqlite3_file) -> c_int {
-	vfs_catch_unwind!(kv::CHUNK_SIZE as c_int, kv::CHUNK_SIZE as c_int)
+unsafe extern "C" fn io_sector_size(_p_file: *mut sqlite3_file) -> c_int {
+	vfs_catch_unwind!(DEFAULT_PAGE_SIZE as c_int, DEFAULT_PAGE_SIZE as c_int)
 }
 
-unsafe extern "C" fn kv_io_device_characteristics(_p_file: *mut sqlite3_file) -> c_int {
-	vfs_catch_unwind!(0, SQLITE_IOCAP_BATCH_ATOMIC)
+unsafe extern "C" fn io_device_characteristics(p_file: *mut sqlite3_file) -> c_int {
+	vfs_catch_unwind!(0, {
+		let file = get_file(p_file);
+		if get_aux_state(file).is_some() {
+			0
+		} else {
+			SQLITE_IOCAP_BATCH_ATOMIC
+		}
+	})
 }
 
-// MARK: VFS Callbacks
-
-unsafe extern "C" fn kv_vfs_open(
+unsafe extern "C" fn vfs_open(
 	p_vfs: *mut sqlite3_vfs,
 	z_name: *const c_char,
 	p_file: *mut sqlite3_file,
@@ -1116,77 +2137,41 @@ unsafe extern "C" fn kv_vfs_open(
 	p_out_flags: *mut c_int,
 ) -> c_int {
 	vfs_catch_unwind!(SQLITE_CANTOPEN, {
-		if z_name.is_null() {
-			return SQLITE_CANTOPEN;
-		}
-
 		let ctx = get_vfs_ctx(p_vfs);
-		let path = match CStr::from_ptr(z_name).to_str() {
-			Ok(path) => path,
-			Err(_) => return SQLITE_CANTOPEN,
-		};
-		let file_tag = match ctx.resolve_file_tag(path) {
-			Some(file_tag) => file_tag,
-			None => return SQLITE_CANTOPEN,
-		};
-		let meta_key = kv::get_meta_key(file_tag);
-
-		let resp = match ctx.kv_get(vec![meta_key.to_vec()]) {
-			Ok(resp) => resp,
-			Err(_) => return SQLITE_CANTOPEN,
-		};
-		let value_map = build_value_map(&resp);
-
-		let size = if let Some(size_data) = value_map.get(meta_key.as_slice()) {
-			let size = match decode_file_meta(size_data) {
-				Some(size) => size,
-				None => return SQLITE_IOERR,
-			};
-			if !is_valid_file_size(size) {
-				return SQLITE_IOERR;
-			}
-			size
-		} else if flags & SQLITE_OPEN_CREATE != 0 {
-			if file_tag == kv::FILE_TAG_MAIN {
-				let size = kv::CHUNK_SIZE as i64;
-				let entries = vec![
-					(kv::get_chunk_key(file_tag, 0).to_vec(), empty_db_page()),
-					(meta_key.to_vec(), encode_file_meta(size)),
-				];
-				let (keys, values) = split_entries(entries);
-				if ctx.kv_put(keys, values).is_err() {
-					return SQLITE_CANTOPEN;
-				}
-				size
+		let delete_on_close = (flags & SQLITE_OPEN_DELETEONCLOSE) != 0;
+		let path = if z_name.is_null() {
+			if delete_on_close {
+				next_temp_aux_path()
 			} else {
-				let size = 0i64;
-				if ctx
-					.kv_put(vec![meta_key.to_vec()], vec![encode_file_meta(size)])
-					.is_err()
-				{
-					return SQLITE_CANTOPEN;
-				}
-				size
+				return SQLITE_CANTOPEN;
 			}
 		} else {
-			return SQLITE_CANTOPEN;
+			match CStr::from_ptr(z_name).to_str() {
+				Ok(path) => path.to_string(),
+				Err(_) => return SQLITE_CANTOPEN,
+			}
 		};
+		let is_main =
+			path == ctx.actor_id && !delete_on_close && (flags & SQLITE_OPEN_MAIN_DB) != 0;
 
-		let state = Box::into_raw(Box::new(KvFileState::new(ctx.read_cache_enabled)));
 		let base = sqlite3_file {
-			pMethods: ctx.io_methods.as_ref() as *const sqlite3_io_methods,
+			pMethods: ctx.io_methods.as_ref(),
+		};
+		let aux = if is_main {
+			ptr::null_mut()
+		} else {
+			Box::into_raw(Box::new(AuxFileHandle {
+				path: path.clone(),
+				state: ctx.open_aux_file(&path),
+				delete_on_close,
+			}))
 		};
 		ptr::write(
-			p_file as *mut KvFile,
-			KvFile {
+			p_file.cast::<VfsFile>(),
+			VfsFile {
 				base,
 				ctx: ctx as *const VfsContext,
-				state,
-				file_tag,
-				meta_key,
-				size,
-				meta_dirty: false,
-				flags,
+				aux,
 			},
 		);
 
@@ -1198,34 +2183,29 @@ unsafe extern "C" fn kv_vfs_open(
 	})
 }
 
-unsafe extern "C" fn kv_vfs_delete(
+unsafe extern "C" fn vfs_delete(
 	p_vfs: *mut sqlite3_vfs,
 	z_name: *const c_char,
 	_sync_dir: c_int,
 ) -> c_int {
 	vfs_catch_unwind!(SQLITE_IOERR_DELETE, {
 		if z_name.is_null() {
-			return SQLITE_IOERR_DELETE;
+			return SQLITE_OK;
 		}
 
 		let ctx = get_vfs_ctx(p_vfs);
 		let path = match CStr::from_ptr(z_name).to_str() {
 			Ok(path) => path,
-			Err(_) => return SQLITE_IOERR_DELETE,
+			Err(_) => return SQLITE_OK,
 		};
-		let file_tag = match ctx.resolve_file_tag(path) {
-			Some(file_tag) => file_tag,
-			None => return SQLITE_IOERR_DELETE,
-		};
-
-		match ctx.delete_file(file_tag) {
-			Ok(()) => SQLITE_OK,
-			Err(_) => SQLITE_IOERR_DELETE,
+		if path != ctx.actor_id {
+			ctx.delete_aux_file(path);
 		}
+		SQLITE_OK
 	})
 }
 
-unsafe extern "C" fn kv_vfs_access(
+unsafe extern "C" fn vfs_access(
 	p_vfs: *mut sqlite3_vfs,
 	z_name: *const c_char,
 	_flags: c_int,
@@ -1245,30 +2225,17 @@ unsafe extern "C" fn kv_vfs_access(
 				return SQLITE_OK;
 			}
 		};
-		let file_tag = match ctx.resolve_file_tag(path) {
-			Some(file_tag) => file_tag,
-			None => {
-				*p_res_out = 0;
-				return SQLITE_OK;
-			}
-		};
-		let meta_key = kv::get_meta_key(file_tag);
-		let resp = match ctx.kv_get(vec![meta_key.to_vec()]) {
-			Ok(resp) => resp,
-			Err(_) => return SQLITE_IOERR_ACCESS,
-		};
-		let value_map = build_value_map(&resp);
-		*p_res_out = if value_map.contains_key(meta_key.as_slice()) {
+
+		*p_res_out = if path == ctx.actor_id || ctx.aux_file_exists(path) {
 			1
 		} else {
 			0
 		};
-
 		SQLITE_OK
 	})
 }
 
-unsafe extern "C" fn kv_vfs_full_pathname(
+unsafe extern "C" fn vfs_full_pathname(
 	_p_vfs: *mut sqlite3_vfs,
 	z_name: *const c_char,
 	n_out: c_int,
@@ -1285,18 +2252,18 @@ unsafe extern "C" fn kv_vfs_full_pathname(
 			return SQLITE_IOERR;
 		}
 
-		ptr::copy_nonoverlapping(bytes.as_ptr() as *const c_char, z_out, bytes.len());
+		ptr::copy_nonoverlapping(bytes.as_ptr().cast::<c_char>(), z_out, bytes.len());
 		SQLITE_OK
 	})
 }
 
-unsafe extern "C" fn kv_vfs_randomness(
+unsafe extern "C" fn vfs_randomness(
 	_p_vfs: *mut sqlite3_vfs,
 	n_byte: c_int,
 	z_out: *mut c_char,
 ) -> c_int {
 	vfs_catch_unwind!(0, {
-		let buf = slice::from_raw_parts_mut(z_out as *mut u8, n_byte as usize);
+		let buf = slice::from_raw_parts_mut(z_out.cast::<u8>(), n_byte as usize);
 		match getrandom::getrandom(buf) {
 			Ok(()) => n_byte,
 			Err(_) => 0,
@@ -1304,14 +2271,14 @@ unsafe extern "C" fn kv_vfs_randomness(
 	})
 }
 
-unsafe extern "C" fn kv_vfs_sleep(_p_vfs: *mut sqlite3_vfs, microseconds: c_int) -> c_int {
+unsafe extern "C" fn vfs_sleep(_p_vfs: *mut sqlite3_vfs, microseconds: c_int) -> c_int {
 	vfs_catch_unwind!(0, {
 		std::thread::sleep(std::time::Duration::from_micros(microseconds as u64));
 		microseconds
 	})
 }
 
-unsafe extern "C" fn kv_vfs_current_time(_p_vfs: *mut sqlite3_vfs, p_time_out: *mut f64) -> c_int {
+unsafe extern "C" fn vfs_current_time(_p_vfs: *mut sqlite3_vfs, p_time_out: *mut f64) -> c_int {
 	vfs_catch_unwind!(SQLITE_IOERR, {
 		let now = std::time::SystemTime::now()
 			.duration_since(std::time::UNIX_EPOCH)
@@ -1321,7 +2288,7 @@ unsafe extern "C" fn kv_vfs_current_time(_p_vfs: *mut sqlite3_vfs, p_time_out: *
 	})
 }
 
-unsafe extern "C" fn kv_vfs_get_last_error(
+unsafe extern "C" fn vfs_get_last_error(
 	p_vfs: *mut sqlite3_vfs,
 	n_byte: c_int,
 	z_err_msg: *mut c_char,
@@ -1332,8 +2299,7 @@ unsafe extern "C" fn kv_vfs_get_last_error(
 		}
 
 		let ctx = get_vfs_ctx(p_vfs);
-		let last_error = ctx.clone_last_error();
-		let Some(message) = last_error else {
+		let Some(message) = ctx.clone_last_error() else {
 			*z_err_msg = 0;
 			return 0;
 		};
@@ -1343,91 +2309,79 @@ unsafe extern "C" fn kv_vfs_get_last_error(
 		let copy_len = bytes.len().min(max_len);
 		let dst = z_err_msg.cast::<u8>();
 		ptr::copy_nonoverlapping(bytes.as_ptr(), dst, copy_len);
-		*dst.add(copy_len) = 0u8;
+		*dst.add(copy_len) = 0;
 		0
 	})
 }
 
-// MARK: KvVfs
+impl SqliteVfs {
+	pub fn register(
+		name: &str,
+		handle: EnvoyHandle,
+		actor_id: String,
+		runtime: Handle,
+		startup: protocol::SqliteStartupData,
+		config: VfsConfig,
+	) -> std::result::Result<Self, String> {
+		Self::register_with_transport(
+			name,
+			SqliteTransport::from_envoy(handle),
+			actor_id,
+			runtime,
+			startup,
+			config,
+		)
+	}
 
-pub struct KvVfs {
-	vfs_ptr: *mut sqlite3_vfs,
-	_name: CString,
-	ctx_ptr: *mut VfsContext,
-}
-
-unsafe impl Send for KvVfs {}
-unsafe impl Sync for KvVfs {}
-
-impl KvVfs {
-	fn take_last_kv_error(&self) -> Option<String> {
+	fn take_last_error(&self) -> Option<String> {
 		unsafe { (*self.ctx_ptr).take_last_error() }
 	}
 
-	fn commit_atomic_count(&self) -> u64 {
-		unsafe {
-			(&(*self.ctx_ptr).vfs_metrics)
-				.commit_atomic_count
-				.load(Ordering::Relaxed)
-		}
-	}
-
-	pub fn register(
+	fn register_with_transport(
 		name: &str,
-		kv: Arc<dyn SqliteKv>,
+		transport: SqliteTransport,
 		actor_id: String,
-		rt_handle: Handle,
-		mut startup_preload: StartupPreloadEntries,
-	) -> Result<Self, String> {
+		runtime: Handle,
+		startup: protocol::SqliteStartupData,
+		config: VfsConfig,
+	) -> std::result::Result<Self, String> {
 		let mut io_methods: sqlite3_io_methods = unsafe { std::mem::zeroed() };
 		io_methods.iVersion = 1;
-		io_methods.xClose = Some(kv_io_close);
-		io_methods.xRead = Some(kv_io_read);
-		io_methods.xWrite = Some(kv_io_write);
-		io_methods.xTruncate = Some(kv_io_truncate);
-		io_methods.xSync = Some(kv_io_sync);
-		io_methods.xFileSize = Some(kv_io_file_size);
-		io_methods.xLock = Some(kv_io_lock);
-		io_methods.xUnlock = Some(kv_io_unlock);
-		io_methods.xCheckReservedLock = Some(kv_io_check_reserved_lock);
-		io_methods.xFileControl = Some(kv_io_file_control);
-		io_methods.xSectorSize = Some(kv_io_sector_size);
-		io_methods.xDeviceCharacteristics = Some(kv_io_device_characteristics);
+		io_methods.xClose = Some(io_close);
+		io_methods.xRead = Some(io_read);
+		io_methods.xWrite = Some(io_write);
+		io_methods.xTruncate = Some(io_truncate);
+		io_methods.xSync = Some(io_sync);
+		io_methods.xFileSize = Some(io_file_size);
+		io_methods.xLock = Some(io_lock);
+		io_methods.xUnlock = Some(io_unlock);
+		io_methods.xCheckReservedLock = Some(io_check_reserved_lock);
+		io_methods.xFileControl = Some(io_file_control);
+		io_methods.xSectorSize = Some(io_sector_size);
+		io_methods.xDeviceCharacteristics = Some(io_device_characteristics);
 
-		let vfs_metrics = Arc::new(VfsMetrics::new());
-		sort_startup_preload(&mut startup_preload);
-		let ctx = Box::new(VfsContext {
-			kv,
-			actor_id: actor_id.clone(),
-			main_file_name: actor_id,
-			startup_preload: Mutex::new((!startup_preload.is_empty()).then_some(startup_preload)),
-			read_cache_enabled: read_cache_enabled(),
-			last_error: Mutex::new(None),
-			rt_handle,
-			io_methods: Box::new(io_methods),
-			vfs_metrics,
-		});
+		let ctx = Box::new(VfsContext::new(
+			actor_id, runtime, transport, startup, config, io_methods,
+		));
 		let ctx_ptr = Box::into_raw(ctx);
-
 		let name_cstring = CString::new(name).map_err(|err| err.to_string())?;
 
 		let mut vfs: sqlite3_vfs = unsafe { std::mem::zeroed() };
 		vfs.iVersion = 1;
-		vfs.szOsFile = std::mem::size_of::<KvFile>() as c_int;
+		vfs.szOsFile = std::mem::size_of::<VfsFile>() as c_int;
 		vfs.mxPathname = MAX_PATHNAME;
 		vfs.zName = name_cstring.as_ptr();
-		vfs.pAppData = ctx_ptr as *mut c_void;
-		vfs.xOpen = Some(kv_vfs_open);
-		vfs.xDelete = Some(kv_vfs_delete);
-		vfs.xAccess = Some(kv_vfs_access);
-		vfs.xFullPathname = Some(kv_vfs_full_pathname);
-		vfs.xRandomness = Some(kv_vfs_randomness);
-		vfs.xSleep = Some(kv_vfs_sleep);
-		vfs.xCurrentTime = Some(kv_vfs_current_time);
-		vfs.xGetLastError = Some(kv_vfs_get_last_error);
+		vfs.pAppData = ctx_ptr.cast::<c_void>();
+		vfs.xOpen = Some(vfs_open);
+		vfs.xDelete = Some(vfs_delete);
+		vfs.xAccess = Some(vfs_access);
+		vfs.xFullPathname = Some(vfs_full_pathname);
+		vfs.xRandomness = Some(vfs_randomness);
+		vfs.xSleep = Some(vfs_sleep);
+		vfs.xCurrentTime = Some(vfs_current_time);
+		vfs.xGetLastError = Some(vfs_get_last_error);
 
 		let vfs_ptr = Box::into_raw(Box::new(vfs));
-
 		let rc = unsafe { sqlite3_vfs_register(vfs_ptr, 0) };
 		if rc != SQLITE_OK {
 			unsafe {
@@ -1447,9 +2401,13 @@ impl KvVfs {
 	pub fn name_ptr(&self) -> *const c_char {
 		self._name.as_ptr()
 	}
+
+	fn commit_atomic_count(&self) -> u64 {
+		unsafe { (*self.ctx_ptr).commit_atomic_count.load(Ordering::Relaxed) }
+	}
 }
 
-impl Drop for KvVfs {
+impl Drop for SqliteVfs {
 	fn drop(&mut self) {
 		unsafe {
 			sqlite3_vfs_unregister(self.vfs_ptr);
@@ -1459,22 +2417,17 @@ impl Drop for KvVfs {
 	}
 }
 
-// MARK: NativeDatabase
-
-pub struct NativeDatabase {
-	db: *mut sqlite3,
-	_vfs: KvVfs,
-}
-
-unsafe impl Send for NativeDatabase {}
-
 impl NativeDatabase {
 	pub fn as_ptr(&self) -> *mut sqlite3 {
 		self.db
 	}
 
 	pub fn take_last_kv_error(&self) -> Option<String> {
-		self._vfs.take_last_kv_error()
+		self._vfs.take_last_error()
+	}
+
+	pub fn sqlite_vfs_metrics(&self) -> SqliteVfsMetricsSnapshot {
+		unsafe { (*self._vfs.ctx_ptr).sqlite_vfs_metrics() }
 	}
 }
 
@@ -1494,69 +2447,10 @@ impl Drop for NativeDatabase {
 	}
 }
 
-fn sqlite_error_message(db: *mut sqlite3) -> String {
-	unsafe {
-		if db.is_null() {
-			"unknown sqlite error".to_string()
-		} else {
-			CStr::from_ptr(sqlite3_errmsg(db))
-				.to_string_lossy()
-				.into_owned()
-		}
-	}
-}
-
-fn sqlite_exec(db: *mut sqlite3, sql: &str) -> Result<(), String> {
-	let c_sql = CString::new(sql).map_err(|err| err.to_string())?;
-	let rc = unsafe { sqlite3_exec(db, c_sql.as_ptr(), None, ptr::null_mut(), ptr::null_mut()) };
-	if rc != SQLITE_OK {
-		return Err(format!(
-			"`{sql}` failed with code {rc}: {}",
-			sqlite_error_message(db)
-		));
-	}
-
-	Ok(())
-}
-
-fn cleanup_batch_atomic_probe(db: *mut sqlite3) {
-	if let Err(err) = sqlite_exec(db, "DROP TABLE IF EXISTS __rivet_batch_probe;") {
-		tracing::warn!(%err, "failed to clean up batch atomic probe table");
-	}
-}
-
-fn assert_batch_atomic_probe(db: *mut sqlite3, vfs: &KvVfs) -> Result<(), String> {
-	let commit_atomic_before = vfs.commit_atomic_count();
-	let probe_sql = "\
-		BEGIN IMMEDIATE;\
-		CREATE TABLE IF NOT EXISTS __rivet_batch_probe(x INTEGER);\
-		INSERT INTO __rivet_batch_probe VALUES(1);\
-		DELETE FROM __rivet_batch_probe;\
-		DROP TABLE IF EXISTS __rivet_batch_probe;\
-		COMMIT;\
-	";
-
-	if let Err(err) = sqlite_exec(db, probe_sql) {
-		cleanup_batch_atomic_probe(db);
-		return Err(format!("batch atomic probe failed: {err}"));
-	}
-
-	let commit_atomic_after = vfs.commit_atomic_count();
-	if commit_atomic_after == commit_atomic_before {
-		tracing::error!(
-			"batch atomic writes not active, SQLITE_ENABLE_BATCH_ATOMIC_WRITE may be missing"
-		);
-		cleanup_batch_atomic_probe(db);
-		return Err(
-			"batch atomic writes not active, SQLITE_ENABLE_BATCH_ATOMIC_WRITE may be missing"
-				.to_string(),
-		);
-	}
-
-	Ok(())
-}
-
-pub fn open_database(vfs: KvVfs, file_name: &str) -> Result<NativeDatabase, String> {
+pub fn open_database(
+	vfs: SqliteVfs,
+	file_name: &str,
+) -> std::result::Result<NativeDatabase, String> {
 	let c_name = CString::new(file_name).map_err(|err| err.to_string())?;
 	let mut db: *mut sqlite3 = ptr::null_mut();
 
@@ -1604,161 +2498,27 @@ pub fn open_database(vfs: KvVfs, file_name: &str) -> Result<NativeDatabase, Stri
 	Ok(NativeDatabase { db, _vfs: vfs })
 }
 
-// MARK: Tests
-
 #[cfg(test)]
 mod tests {
-	use super::*;
-	use std::collections::HashMap;
-	use std::ffi::{CStr, CString};
-	use std::ptr;
-	use std::sync::atomic::{AtomicU64, Ordering};
-	use std::sync::{Arc, Mutex};
+	use std::sync::atomic::{AtomicBool, AtomicU64, Ordering as AtomicOrdering};
+	use std::sync::{Arc, Mutex as StdMutex};
+	use std::thread;
 
-	use crate::sqlite_kv::{KvGetResult, SqliteKv, SqliteKvError};
+	use tempfile::TempDir;
+	use tokio::runtime::Builder;
+	use universaldb::Subspace;
+
+	use super::*;
 
 	static TEST_ID: AtomicU64 = AtomicU64::new(1);
 
-	#[derive(Clone, Debug)]
-	enum KvOp {
-		Get { keys: Vec<Vec<u8>> },
-		Put { keys: Vec<Vec<u8>> },
-		Delete { keys: Vec<Vec<u8>> },
-		DeleteRange { start: Vec<u8>, end: Vec<u8> },
-	}
-
-	#[derive(Default)]
-	struct MemoryKv {
-		stores: Mutex<HashMap<String, HashMap<Vec<u8>, Vec<u8>>>>,
-		op_log: Mutex<HashMap<String, Vec<KvOp>>>,
-	}
-
-	impl MemoryKv {
-		fn new() -> Self {
-			Self::default()
-		}
-
-		fn record_op(&self, actor_id: &str, op: KvOp) {
-			let mut op_log = self.op_log.lock().unwrap();
-			op_log.entry(actor_id.to_string()).or_default().push(op);
-		}
-
-		fn snapshot_actor(&self, actor_id: &str) -> HashMap<Vec<u8>, Vec<u8>> {
-			self.stores
-				.lock()
-				.unwrap()
-				.get(actor_id)
-				.cloned()
-				.unwrap_or_default()
-		}
-
-		fn op_log(&self, actor_id: &str) -> Vec<KvOp> {
-			self.op_log
-				.lock()
-				.unwrap()
-				.get(actor_id)
-				.cloned()
-				.unwrap_or_default()
-		}
-
-		fn journal_was_used(&self, actor_id: &str) -> bool {
-			self.op_log(actor_id).iter().any(|op| match op {
-				KvOp::Get { keys } | KvOp::Put { keys } | KvOp::Delete { keys } => keys
-					.iter()
-					.any(|key| key_file_tag(key.as_slice()) == Some(kv::FILE_TAG_JOURNAL)),
-				KvOp::DeleteRange { start, end } => {
-					key_file_tag(start.as_slice()) == Some(kv::FILE_TAG_JOURNAL)
-						|| key_file_tag(end.as_slice()) == Some(kv::FILE_TAG_JOURNAL)
-				}
+	fn dirty_pages(page_count: u32, fill: u8) -> Vec<protocol::SqliteDirtyPage> {
+		(0..page_count)
+			.map(|offset| protocol::SqliteDirtyPage {
+				pgno: offset + 1,
+				bytes: vec![fill; 4096],
 			})
-		}
-	}
-
-	#[async_trait::async_trait]
-	impl SqliteKv for MemoryKv {
-		async fn batch_get(
-			&self,
-			actor_id: &str,
-			keys: Vec<Vec<u8>>,
-		) -> Result<KvGetResult, SqliteKvError> {
-			self.record_op(actor_id, KvOp::Get { keys: keys.clone() });
-
-			let store_guard = self.stores.lock().unwrap();
-			let actor_store = store_guard.get(actor_id);
-			let mut found_keys = Vec::new();
-			let mut found_values = Vec::new();
-			for key in keys {
-				if let Some(value) = actor_store.and_then(|store| store.get(&key)) {
-					found_keys.push(key);
-					found_values.push(value.clone());
-				}
-			}
-
-			Ok(KvGetResult {
-				keys: found_keys,
-				values: found_values,
-			})
-		}
-
-		async fn batch_put(
-			&self,
-			actor_id: &str,
-			keys: Vec<Vec<u8>>,
-			values: Vec<Vec<u8>>,
-		) -> Result<(), SqliteKvError> {
-			if keys.len() != values.len() {
-				return Err(SqliteKvError::new("keys and values length mismatch"));
-			}
-
-			self.record_op(actor_id, KvOp::Put { keys: keys.clone() });
-
-			let mut stores = self.stores.lock().unwrap();
-			let actor_store = stores.entry(actor_id.to_string()).or_default();
-			for (key, value) in keys.into_iter().zip(values.into_iter()) {
-				actor_store.insert(key, value);
-			}
-
-			Ok(())
-		}
-
-		async fn batch_delete(
-			&self,
-			actor_id: &str,
-			keys: Vec<Vec<u8>>,
-		) -> Result<(), SqliteKvError> {
-			self.record_op(actor_id, KvOp::Delete { keys: keys.clone() });
-
-			let mut stores = self.stores.lock().unwrap();
-			let actor_store = stores.entry(actor_id.to_string()).or_default();
-			for key in keys {
-				actor_store.remove(&key);
-			}
-
-			Ok(())
-		}
-
-		async fn delete_range(
-			&self,
-			actor_id: &str,
-			start: Vec<u8>,
-			end: Vec<u8>,
-		) -> Result<(), SqliteKvError> {
-			self.record_op(
-				actor_id,
-				KvOp::DeleteRange {
-					start: start.clone(),
-					end: end.clone(),
-				},
-			);
-
-			let mut stores = self.stores.lock().unwrap();
-			let actor_store = stores.entry(actor_id.to_string()).or_default();
-			actor_store.retain(|key, _| {
-				!(key.as_slice() >= start.as_slice() && key.as_slice() < end.as_slice())
-			});
-
-			Ok(())
-		}
+			.collect()
 	}
 
 	fn next_test_name(prefix: &str) -> String {
@@ -1766,366 +2526,2560 @@ mod tests {
 		format!("{prefix}-{id}")
 	}
 
-	fn with_test_db(test_fn: impl FnOnce(*mut sqlite3, Arc<MemoryKv>, &str)) {
-		let runtime = tokio::runtime::Builder::new_current_thread()
-			.build()
-			.unwrap();
-		let kv = Arc::new(MemoryKv::new());
-		let actor_id = next_test_name("sqlite-native-test");
-		let vfs_name = next_test_name("sqlite-native-vfs");
-		let vfs = KvVfs::register(
-			&vfs_name,
-			kv.clone(),
-			actor_id.clone(),
-			runtime.handle().clone(),
-			Vec::new(),
-		)
-		.unwrap();
-		let db = open_database(vfs, &actor_id).unwrap();
-
-		test_fn(db.as_ptr(), kv, &actor_id);
-
-		drop(db);
-		drop(runtime);
+	fn random_hex() -> String {
+		let mut bytes = [0u8; 8];
+		getrandom::getrandom(&mut bytes).expect("random bytes should be available");
+		bytes.iter().map(|byte| format!("{byte:02x}")).collect()
 	}
 
-	fn exec_sql(db: *mut sqlite3, sql: &str) {
-		let c_sql = CString::new(sql).unwrap();
-		let mut err_msg = ptr::null_mut();
-		let rc = unsafe { sqlite3_exec(db, c_sql.as_ptr(), None, ptr::null_mut(), &mut err_msg) };
-		if rc != SQLITE_OK {
-			let message = if err_msg.is_null() {
-				format!("sqlite error {rc}")
-			} else {
-				let message = unsafe { CStr::from_ptr(err_msg) }
-					.to_string_lossy()
-					.into_owned();
-				unsafe { sqlite3_free(err_msg as *mut c_void) };
-				message
-			};
-			panic!("sqlite3_exec failed for `{sql}`: {message}");
-		}
+	struct DirectEngineHarness {
+		actor_id: String,
+		db_dir: TempDir,
+		subspace: Subspace,
 	}
 
-	fn query_i64(db: *mut sqlite3, sql: &str) -> i64 {
-		let c_sql = CString::new(sql).unwrap();
-		let mut stmt = ptr::null_mut();
-		let rc = unsafe { sqlite3_prepare_v2(db, c_sql.as_ptr(), -1, &mut stmt, ptr::null_mut()) };
-		assert_eq!(rc, SQLITE_OK, "failed to prepare `{sql}`");
-		assert!(
-			!stmt.is_null(),
-			"sqlite returned a null statement for `{sql}`"
-		);
-
-		let step_rc = unsafe { sqlite3_step(stmt) };
-		assert_eq!(step_rc, SQLITE_ROW, "expected a row from `{sql}`");
-		let value = unsafe { sqlite3_column_int64(stmt, 0) };
-		let done_rc = unsafe { sqlite3_step(stmt) };
-		assert_eq!(done_rc, SQLITE_DONE, "expected SQLITE_DONE after `{sql}`");
-
-		unsafe {
-			sqlite3_finalize(stmt);
-		}
-
-		value
-	}
-
-	fn query_texts(db: *mut sqlite3, sql: &str) -> Vec<String> {
-		let c_sql = CString::new(sql).unwrap();
-		let mut stmt = ptr::null_mut();
-		let rc = unsafe { sqlite3_prepare_v2(db, c_sql.as_ptr(), -1, &mut stmt, ptr::null_mut()) };
-		assert_eq!(rc, SQLITE_OK, "failed to prepare `{sql}`");
-		assert!(
-			!stmt.is_null(),
-			"sqlite returned a null statement for `{sql}`"
-		);
-
-		let mut values = Vec::new();
-		loop {
-			let step_rc = unsafe { sqlite3_step(stmt) };
-			if step_rc == SQLITE_DONE {
-				break;
+	impl DirectEngineHarness {
+		fn new() -> Self {
+			Self {
+				actor_id: next_test_name("sqlite-direct-actor"),
+				db_dir: tempfile::tempdir().expect("temp dir should build"),
+				subspace: Subspace::new(&("sqlite-direct", random_hex())),
 			}
-			assert_eq!(
-				step_rc, SQLITE_ROW,
-				"expected SQLITE_ROW or SQLITE_DONE for `{sql}`"
-			);
-			let text_ptr = unsafe { sqlite3_column_text(stmt, 0) };
-			assert!(!text_ptr.is_null(), "expected text result for `{sql}`");
-			values.push(
-				unsafe { CStr::from_ptr(text_ptr as *const c_char) }
-					.to_string_lossy()
-					.into_owned(),
-			);
 		}
+
+		async fn open_engine(&self) -> Arc<SqliteEngine> {
+			let mut attempts = 0;
+			let driver = loop {
+				match universaldb::driver::RocksDbDatabaseDriver::new(
+					self.db_dir.path().to_path_buf(),
+				)
+				.await
+				{
+					Ok(driver) => break driver,
+					Err(_err) if attempts < 50 => {
+						attempts += 1;
+						std::thread::sleep(std::time::Duration::from_millis(10));
+					}
+					Err(err) => panic!("rocksdb driver should build: {err:#}"),
+				}
+			};
+			let db = Arc::new(universaldb::Database::new(Arc::new(driver)));
+			let (engine, _compaction_rx) = SqliteEngine::new(db, self.subspace.clone());
+
+			Arc::new(engine)
+		}
+
+		async fn startup_data_for(
+			&self,
+			actor_id: &str,
+			engine: &SqliteEngine,
+		) -> protocol::SqliteStartupData {
+			let takeover = engine
+				.takeover(
+					actor_id,
+					sqlite_storage::takeover::TakeoverConfig::new(
+						sqlite_now_ms().expect("startup time should resolve"),
+					),
+				)
+				.await
+				.expect("takeover should succeed");
+
+			protocol::SqliteStartupData {
+				generation: takeover.generation,
+				meta: protocol_sqlite_meta(takeover.meta),
+				preloaded_pages: takeover
+					.preloaded_pages
+					.into_iter()
+					.map(protocol_fetched_page)
+					.collect(),
+			}
+		}
+
+		async fn startup_data(&self, engine: &SqliteEngine) -> protocol::SqliteStartupData {
+			self.startup_data_for(&self.actor_id, engine).await
+		}
+
+		fn open_db_on_engine(
+			&self,
+			runtime: &tokio::runtime::Runtime,
+			engine: Arc<SqliteEngine>,
+			actor_id: &str,
+			config: VfsConfig,
+		) -> NativeDatabase {
+			let startup = runtime.block_on(self.startup_data_for(actor_id, &engine));
+			let vfs = SqliteVfs::register_with_transport(
+				&next_test_name("sqlite-direct-vfs"),
+				SqliteTransport::from_direct(engine),
+				actor_id.to_string(),
+				runtime.handle().clone(),
+				startup,
+				config,
+			)
+			.expect("v2 vfs should register");
+
+			open_database(vfs, actor_id).expect("sqlite database should open")
+		}
+
+		fn open_db(&self, runtime: &tokio::runtime::Runtime) -> NativeDatabase {
+			let engine = runtime.block_on(self.open_engine());
+			self.open_db_on_engine(runtime, engine, &self.actor_id, VfsConfig::default())
+		}
+	}
+
+	fn direct_vfs_ctx(db: &NativeDatabase) -> &VfsContext {
+		unsafe { &*db._vfs.ctx_ptr }
+	}
+
+	fn sqlite_query_i64(db: *mut sqlite3, sql: &str) -> std::result::Result<i64, String> {
+		let c_sql = CString::new(sql).map_err(|err| err.to_string())?;
+		let mut stmt = ptr::null_mut();
+		let rc = unsafe { sqlite3_prepare_v2(db, c_sql.as_ptr(), -1, &mut stmt, ptr::null_mut()) };
+		if rc != SQLITE_OK {
+			return Err(format!(
+				"`{sql}` prepare failed with code {rc}: {}",
+				sqlite_error_message(db)
+			));
+		}
+		if stmt.is_null() {
+			return Err(format!("`{sql}` returned no statement"));
+		}
+
+		let result = match unsafe { sqlite3_step(stmt) } {
+			SQLITE_ROW => Ok(unsafe { sqlite3_column_int64(stmt, 0) }),
+			step_rc => Err(format!(
+				"`{sql}` step failed with code {step_rc}: {}",
+				sqlite_error_message(db)
+			)),
+		};
 
 		unsafe {
 			sqlite3_finalize(stmt);
 		}
 
-		values
+		result
 	}
 
-	fn key_file_tag(key: &[u8]) -> Option<u8> {
-		(key.len() >= 4 && key[0] == kv::SQLITE_PREFIX && key[1] == kv::SQLITE_SCHEMA_VERSION)
-			.then_some(key[3])
-	}
-
-	fn assert_journal_round_trip(kv: &MemoryKv, actor_id: &str) {
-		assert!(
-			kv.journal_was_used(actor_id),
-			"expected rollback journal KV operations for actor {actor_id}"
-		);
-		assert!(
-			kv.snapshot_actor(actor_id)
-				.keys()
-				.all(|key| key_file_tag(key.as_slice()) != Some(kv::FILE_TAG_JOURNAL)),
-			"expected rollback journal keys to be deleted after commit for actor {actor_id}"
-		);
-	}
-
-	#[test]
-	fn encode_decode_round_trip() {
-		for size in [0i64, 1, 4096, 1_000_000, i64::MAX / 2] {
-			let encoded = encode_file_meta(size);
-			assert_eq!(encoded.len(), META_ENCODED_SIZE);
-			assert_eq!(&encoded[0..2], &META_VERSION.to_le_bytes());
-			let decoded = decode_file_meta(&encoded).unwrap();
-			assert_eq!(decoded, size);
+	fn sqlite_query_text(db: *mut sqlite3, sql: &str) -> std::result::Result<String, String> {
+		let c_sql = CString::new(sql).map_err(|err| err.to_string())?;
+		let mut stmt = ptr::null_mut();
+		let rc = unsafe { sqlite3_prepare_v2(db, c_sql.as_ptr(), -1, &mut stmt, ptr::null_mut()) };
+		if rc != SQLITE_OK {
+			return Err(format!(
+				"`{sql}` prepare failed with code {rc}: {}",
+				sqlite_error_message(db)
+			));
 		}
+		if stmt.is_null() {
+			return Err(format!("`{sql}` returned no statement"));
+		}
+
+		let result = match unsafe { sqlite3_step(stmt) } {
+			SQLITE_ROW => {
+				let text_ptr = unsafe { sqlite3_column_text(stmt, 0) };
+				if text_ptr.is_null() {
+					Ok(String::new())
+				} else {
+					Ok(unsafe { CStr::from_ptr(text_ptr.cast()) }
+						.to_string_lossy()
+						.into_owned())
+				}
+			}
+			step_rc => Err(format!(
+				"`{sql}` step failed with code {step_rc}: {}",
+				sqlite_error_message(db)
+			)),
+		};
+
+		unsafe {
+			sqlite3_finalize(stmt);
+		}
+
+		result
+	}
+
+	fn sqlite_file_control(db: *mut sqlite3, op: c_int) -> std::result::Result<c_int, String> {
+		let main = CString::new("main").map_err(|err| err.to_string())?;
+		let rc = unsafe { sqlite3_file_control(db, main.as_ptr(), op, ptr::null_mut()) };
+		if rc != SQLITE_OK {
+			return Err(format!(
+				"sqlite3_file_control op {op} failed with code {rc}: {}",
+				sqlite_error_message(db)
+			));
+		}
+
+		Ok(rc)
+	}
+
+	fn direct_runtime() -> tokio::runtime::Runtime {
+		Builder::new_multi_thread()
+			.worker_threads(2)
+			.enable_all()
+			.build()
+			.expect("runtime should build")
 	}
 
 	#[test]
-	fn startup_probe_asserts_batch_atomic_writes_are_active() {
-		let runtime = tokio::runtime::Builder::new_current_thread()
+	fn predictor_prefers_stride_after_repeated_reads() {
+		let mut predictor = PrefetchPredictor::default();
+		for pgno in [5, 8, 11, 14] {
+			predictor.record(pgno);
+		}
+
+		assert_eq!(predictor.multi_predict(14, 3, 30), vec![17, 20, 23]);
+	}
+
+	#[test]
+	fn startup_data_populates_cache_without_protocol_calls() {
+		let runtime = Builder::new_current_thread()
+			.enable_all()
 			.build()
-			.unwrap();
-		let kv = Arc::new(MemoryKv::new());
-		let actor_id = next_test_name("sqlite-native-probe");
-		let vfs_name = next_test_name("sqlite-native-probe-vfs");
-		let vfs = KvVfs::register(
-			&vfs_name,
-			kv,
-			actor_id.clone(),
+			.expect("runtime should build");
+		let protocol = Arc::new(MockProtocol::new(
+			protocol::SqliteCommitResponse::SqliteCommitOk(protocol::SqliteCommitOk {
+				new_head_txid: 13,
+				meta: sqlite_meta(8 * 1024 * 1024),
+			}),
+			protocol::SqliteCommitStageResponse::SqliteCommitStageOk(
+				protocol::SqliteCommitStageOk {
+					chunk_idx_committed: 0,
+				},
+			),
+			protocol::SqliteCommitFinalizeResponse::SqliteCommitFinalizeOk(
+				protocol::SqliteCommitFinalizeOk {
+					new_head_txid: 13,
+					meta: sqlite_meta(8 * 1024 * 1024),
+				},
+			),
+		));
+		let startup = protocol::SqliteStartupData {
+			generation: 3,
+			meta: sqlite_meta(8 * 1024 * 1024),
+			preloaded_pages: vec![protocol::SqliteFetchedPage {
+				pgno: 1,
+				bytes: Some(vec![7; 4096]),
+			}],
+		};
+
+		let ctx = VfsContext::new(
+			"actor".to_string(),
 			runtime.handle().clone(),
-			Vec::new(),
+			SqliteTransport::from_mock(protocol.clone()),
+			startup,
+			VfsConfig::default(),
+			unsafe { std::mem::zeroed() },
+		);
+
+		assert_eq!(ctx.state.read().page_cache.get(&1), Some(vec![7; 4096]));
+		assert!(protocol.get_pages_requests().is_empty());
+	}
+
+	#[test]
+	fn direct_engine_supports_create_insert_select_and_user_version() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let db = harness.open_db(&runtime);
+
+		assert_eq!(
+			sqlite_file_control(db.as_ptr(), SQLITE_FCNTL_BEGIN_ATOMIC_WRITE)
+				.expect("batch atomic begin should succeed"),
+			SQLITE_OK
+		);
+		assert_eq!(
+			sqlite_file_control(db.as_ptr(), SQLITE_FCNTL_COMMIT_ATOMIC_WRITE)
+				.expect("batch atomic commit should succeed"),
+			SQLITE_OK
+		);
+
+		sqlite_exec(
+			db.as_ptr(),
+			"CREATE TABLE items (id INTEGER PRIMARY KEY, value TEXT NOT NULL);",
 		)
-		.unwrap();
-		let db = open_database(vfs, &actor_id).unwrap();
+		.expect("create table should succeed");
+		sqlite_step_statement(
+			db.as_ptr(),
+			"INSERT INTO items (id, value) VALUES (1, 'alpha');",
+		)
+		.expect("insert should succeed");
+		sqlite_exec(db.as_ptr(), "PRAGMA user_version = 42;")
+			.expect("user_version pragma should succeed");
+
+		assert_eq!(
+			sqlite_query_text(db.as_ptr(), "SELECT value FROM items WHERE id = 1;")
+				.expect("select should succeed"),
+			"alpha"
+		);
+		assert_eq!(
+			sqlite_query_i64(db.as_ptr(), "SELECT COUNT(*) FROM items;")
+				.expect("count should succeed"),
+			1
+		);
+		assert_eq!(
+			sqlite_query_i64(db.as_ptr(), "PRAGMA user_version;")
+				.expect("user_version read should succeed"),
+			42
+		);
+	}
+
+	#[test]
+	fn direct_engine_handles_large_rows_and_multi_page_growth() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let db = harness.open_db(&runtime);
+
+		sqlite_exec(
+			db.as_ptr(),
+			"CREATE TABLE blobs (id INTEGER PRIMARY KEY, payload BLOB NOT NULL);",
+		)
+		.expect("create table should succeed");
+
+		for _ in 0..48 {
+			sqlite_step_statement(
+				db.as_ptr(),
+				"INSERT INTO blobs (payload) VALUES (randomblob(3500));",
+			)
+			.expect("seed insert should succeed");
+		}
+		sqlite_step_statement(
+			db.as_ptr(),
+			"INSERT INTO blobs (payload) VALUES (randomblob(9000));",
+		)
+		.expect("large row insert should succeed");
+
+		assert_eq!(
+			sqlite_query_i64(db.as_ptr(), "SELECT COUNT(*) FROM blobs;")
+				.expect("count should succeed"),
+			49
+		);
+		assert!(
+			sqlite_query_i64(db.as_ptr(), "PRAGMA page_count;").expect("page_count should succeed")
+				> 20
+		);
+		assert!(
+			sqlite_query_i64(db.as_ptr(), "SELECT max(length(payload)) FROM blobs;")
+				.expect("max payload length should succeed")
+				>= 9000
+		);
+	}
+
+	#[test]
+	fn direct_engine_persists_data_across_close_and_reopen() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+
+		{
+			let db = harness.open_db(&runtime);
+			sqlite_exec(
+				db.as_ptr(),
+				"CREATE TABLE events (id INTEGER PRIMARY KEY, value TEXT NOT NULL);",
+			)
+			.expect("create table should succeed");
+			sqlite_step_statement(
+				db.as_ptr(),
+				"INSERT INTO events (id, value) VALUES (1, 'persisted');",
+			)
+			.expect("insert should succeed");
+			sqlite_exec(db.as_ptr(), "PRAGMA user_version = 7;")
+				.expect("user_version write should succeed");
+		}
+
+		let reopened = harness.open_db(&runtime);
+		assert_eq!(
+			sqlite_query_i64(reopened.as_ptr(), "SELECT COUNT(*) FROM events;")
+				.expect("count after reopen should succeed"),
+			1
+		);
+		assert_eq!(
+			sqlite_query_text(reopened.as_ptr(), "SELECT value FROM events WHERE id = 1;")
+				.expect("value after reopen should succeed"),
+			"persisted"
+		);
+		assert_eq!(
+			sqlite_query_i64(reopened.as_ptr(), "PRAGMA user_version;")
+				.expect("user_version after reopen should succeed"),
+			7
+		);
+	}
+
+	#[test]
+	fn direct_engine_handles_aux_files_and_truncate_then_regrow() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let db = harness.open_db(&runtime);
+
+		sqlite_exec(db.as_ptr(), "PRAGMA temp_store = FILE;")
+			.expect("temp_store pragma should succeed");
+		sqlite_exec(
+			db.as_ptr(),
+			"CREATE TABLE blobs (id INTEGER PRIMARY KEY, payload BLOB NOT NULL);",
+		)
+		.expect("create table should succeed");
+
+		for _ in 0..32 {
+			sqlite_step_statement(
+				db.as_ptr(),
+				"INSERT INTO blobs (payload) VALUES (randomblob(8192));",
+			)
+			.expect("growth insert should succeed");
+		}
+		let grown_pages = sqlite_query_i64(db.as_ptr(), "PRAGMA page_count;")
+			.expect("grown page_count should succeed");
+		assert!(grown_pages > 40);
+
+		sqlite_exec(
+			db.as_ptr(),
+			"CREATE TEMP TABLE scratch AS SELECT id FROM blobs ORDER BY id DESC;",
+		)
+		.expect("temp table should succeed");
+		assert_eq!(
+			sqlite_query_i64(db.as_ptr(), "SELECT COUNT(*) FROM scratch;")
+				.expect("temp table count should succeed"),
+			32
+		);
+
+		sqlite_exec(db.as_ptr(), "DELETE FROM blobs;").expect("delete should succeed");
+		sqlite_exec(db.as_ptr(), "VACUUM;").expect("vacuum should succeed");
+		let shrunk_pages = sqlite_query_i64(db.as_ptr(), "PRAGMA page_count;")
+			.expect("shrunk page_count should succeed");
+		assert!(shrunk_pages < grown_pages);
+
+		for _ in 0..8 {
+			sqlite_step_statement(
+				db.as_ptr(),
+				"INSERT INTO blobs (payload) VALUES (randomblob(8192));",
+			)
+			.expect("regrow insert should succeed");
+		}
+		let regrown_pages = sqlite_query_i64(db.as_ptr(), "PRAGMA page_count;")
+			.expect("regrown page_count should succeed");
+		assert!(regrown_pages > shrunk_pages);
+	}
+
+	#[test]
+	fn direct_engine_batch_atomic_probe_runs_on_open() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let db = harness.open_db(&runtime);
+
 		assert!(
 			db._vfs.commit_atomic_count() > 0,
-			"expected startup probe to trigger COMMIT_ATOMIC_WRITE"
-		);
-		drop(db);
-		drop(runtime);
-	}
-
-	#[test]
-	fn encode_zero_size() {
-		let encoded = encode_file_meta(0);
-		assert_eq!(encoded, [1, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
-	}
-
-	#[test]
-	fn encode_known_size() {
-		let encoded = encode_file_meta(4096);
-		assert_eq!(
-			encoded,
-			[1, 0, 0x00, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+			"open_database should run the sqlite batch-atomic probe",
 		);
 	}
 
 	#[test]
-	fn decode_invalid_version() {
-		let data = [2u8, 0, 0, 0, 0, 0, 0, 0, 0, 0];
-		assert!(decode_file_meta(&data).is_none());
-	}
-
-	#[test]
-	fn decode_too_short() {
-		assert!(decode_file_meta(&[]).is_none());
-		assert!(decode_file_meta(&[1]).is_none());
-		assert!(decode_file_meta(&[1, 0]).is_none());
-		assert!(decode_file_meta(&[1, 0, 0, 0, 0]).is_none());
-	}
-
-	#[test]
-	fn kv_file_struct_is_larger_than_sqlite3_file() {
-		assert!(std::mem::size_of::<KvFile>() > std::mem::size_of::<sqlite3_file>());
-	}
-
-	#[test]
-	fn meta_encoded_size_constant() {
-		assert_eq!(META_ENCODED_SIZE, 10);
-	}
-
-	#[test]
-	fn meta_version_matches_wasm_vfs() {
-		assert_eq!(META_VERSION, 1);
-	}
-
-	#[test]
-	fn encode_matches_vbare_format() {
-		let encoded = encode_file_meta(42);
-		assert_eq!(encoded[0], 0x01);
-		assert_eq!(encoded[1], 0x00);
-		assert_eq!(&encoded[2..], &42u64.to_le_bytes());
-	}
-
-	#[test]
-	fn empty_db_page_matches_generated_prefix() {
-		let page = empty_db_page();
-		assert_eq!(page.len(), kv::CHUNK_SIZE);
-		assert_eq!(
-			&page[..EMPTY_DB_PAGE_HEADER_PREFIX.len()],
-			&EMPTY_DB_PAGE_HEADER_PREFIX
+	fn direct_engine_keeps_head_txid_after_cache_miss_reads_between_commits() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let engine = runtime.block_on(harness.open_engine());
+		let db = harness.open_db_on_engine(
+			&runtime,
+			engine,
+			&harness.actor_id,
+			VfsConfig {
+				cache_capacity_pages: 2,
+				prefetch_depth: 0,
+				max_prefetch_bytes: 0,
+				..VfsConfig::default()
+			},
 		);
-		assert!(page[EMPTY_DB_PAGE_HEADER_PREFIX.len()..]
-			.iter()
-			.all(|byte| *byte == 0));
-	}
 
-	#[test]
-	fn startup_preload_helpers_use_exact_key_matches() {
-		let mut entries = vec![
-			(vec![3], vec![30]),
-			(vec![1], vec![10]),
-			(vec![2], vec![20]),
-		];
-		sort_startup_preload(&mut entries);
-
-		assert_eq!(startup_preload_get(&entries, &[1]), Some(&[10][..]));
-		assert_eq!(startup_preload_get(&entries, &[2]), Some(&[20][..]));
-		assert_eq!(startup_preload_get(&entries, &[4]), None);
-	}
-
-	#[test]
-	fn startup_preload_helpers_update_without_growing() {
-		let mut entries = vec![(vec![1], vec![10]), (vec![2], vec![20])];
-		sort_startup_preload(&mut entries);
-
-		startup_preload_put(&mut entries, &[2], &[99]);
-		startup_preload_put(&mut entries, &[3], &[30]);
-		startup_preload_delete(&mut entries, &[1]);
-		startup_preload_delete(&mut entries, &[7]);
-
-		assert_eq!(entries, vec![(vec![2], vec![99])]);
-	}
-
-	#[test]
-	fn startup_preload_helpers_delete_range_is_half_open() {
-		let mut entries = vec![
-			(vec![1], vec![10]),
-			(vec![2], vec![20]),
-			(vec![3], vec![30]),
-			(vec![4], vec![40]),
-		];
-		sort_startup_preload(&mut entries);
-
-		startup_preload_delete_range(&mut entries, &[2], &[4]);
-
-		assert_eq!(entries, vec![(vec![1], vec![10]), (vec![4], vec![40])]);
-	}
-
-	#[test]
-	fn v1_vfs_single_insert_and_select() {
-		with_test_db(|db, kv, actor_id| {
-			exec_sql(
-				db,
-				"CREATE TABLE users (id INTEGER PRIMARY KEY, value INTEGER NOT NULL);",
-			);
-			exec_sql(db, "INSERT INTO users (value) VALUES (42);");
-
-			assert_eq!(query_i64(db, "SELECT value FROM users WHERE id = 1;"), 42);
-			assert_journal_round_trip(kv.as_ref(), actor_id);
-		});
-	}
-
-	#[test]
-	fn v1_vfs_multi_row_insert() {
-		with_test_db(|db, kv, actor_id| {
-			exec_sql(
-				db,
-				"CREATE TABLE metrics (id INTEGER PRIMARY KEY, value INTEGER NOT NULL);",
-			);
-			exec_sql(
-				db,
-				"INSERT INTO metrics (value) VALUES (5), (7), (11), (13), (17);",
-			);
-
-			assert_eq!(query_i64(db, "SELECT COUNT(*) FROM metrics;"), 5);
-			assert_eq!(query_i64(db, "SELECT SUM(value) FROM metrics;"), 53);
-			assert_journal_round_trip(kv.as_ref(), actor_id);
-		});
-	}
-
-	#[test]
-	fn v1_vfs_update_existing_row() {
-		with_test_db(|db, kv, actor_id| {
-			exec_sql(
-				db,
-				"CREATE TABLE docs (id INTEGER PRIMARY KEY, title TEXT NOT NULL);",
-			);
-			exec_sql(db, "INSERT INTO docs (title) VALUES ('draft');");
-			exec_sql(db, "UPDATE docs SET title = 'published' WHERE id = 1;");
-
-			assert_eq!(
-				query_texts(db, "SELECT title FROM docs WHERE id = 1;"),
-				vec!["published".to_string()]
-			);
-			assert_journal_round_trip(kv.as_ref(), actor_id);
-		});
-	}
-
-	#[test]
-	fn v1_vfs_delete_row() {
-		with_test_db(|db, kv, actor_id| {
-			exec_sql(
-				db,
-				"CREATE TABLE events (id INTEGER PRIMARY KEY, name TEXT NOT NULL);",
-			);
-			exec_sql(
-				db,
-				"INSERT INTO events (name) VALUES ('open'), ('close'), ('archive');",
-			);
-			exec_sql(db, "DELETE FROM events WHERE name = 'close';");
-
-			assert_eq!(query_i64(db, "SELECT COUNT(*) FROM events;"), 2);
-			assert_eq!(
-				query_texts(db, "SELECT name FROM events ORDER BY id;"),
-				vec!["open".to_string(), "archive".to_string()]
-			);
-			assert_journal_round_trip(kv.as_ref(), actor_id);
-		});
-	}
-
-	#[test]
-	fn v1_vfs_multiple_tables_schema() {
-		with_test_db(|db, kv, actor_id| {
-			exec_sql(
-				db,
-				"
-				CREATE TABLE projects (id INTEGER PRIMARY KEY, name TEXT NOT NULL);
-				CREATE TABLE tasks (
-					id INTEGER PRIMARY KEY,
-					project_id INTEGER NOT NULL,
-					title TEXT NOT NULL
-				);
-				INSERT INTO projects (name) VALUES ('sqlite-vfs');
-				INSERT INTO tasks (project_id, title) VALUES (1, 'baseline'), (1, 'verify');
-				",
-			);
-
-			assert_eq!(query_i64(db, "SELECT COUNT(*) FROM projects;"), 1);
-			assert_eq!(query_i64(db, "SELECT COUNT(*) FROM tasks;"), 2);
-			assert_eq!(
-				query_texts(
-					db,
-					"SELECT title FROM tasks WHERE project_id = 1 ORDER BY id;",
+		sqlite_exec(
+			db.as_ptr(),
+			"CREATE TABLE items (id INTEGER PRIMARY KEY, value TEXT NOT NULL);",
+		)
+		.expect("create table should succeed");
+		sqlite_exec(db.as_ptr(), "CREATE INDEX items_value_idx ON items(value);")
+			.expect("create index should succeed");
+		for i in 0..120 {
+			sqlite_step_statement(
+				db.as_ptr(),
+				&format!(
+					"INSERT INTO items (id, value) VALUES ({}, 'item-{i:03}');",
+					i + 1
 				),
-				vec!["baseline".to_string(), "verify".to_string()]
-			);
-			assert_journal_round_trip(kv.as_ref(), actor_id);
+			)
+			.expect("seed insert should succeed");
+		}
+
+		let ctx = direct_vfs_ctx(&db);
+		let head_after_first_phase = ctx.state.read().head_txid;
+
+		ctx.state.write().page_cache.invalidate_all();
+		assert_eq!(
+			sqlite_query_text(
+				db.as_ptr(),
+				"SELECT value FROM items WHERE value = 'item-091';",
+			)
+			.expect("cache-miss read should succeed"),
+			"item-091"
+		);
+		let head_after_cache_miss = ctx.state.read().head_txid;
+		assert_eq!(
+			head_after_cache_miss, head_after_first_phase,
+			"cache-miss reads must not rewind head_txid",
+		);
+
+		sqlite_step_statement(
+			db.as_ptr(),
+			"INSERT INTO items (id, value) VALUES (1000, 'after-cache-miss');",
+		)
+		.expect("commit after cache-miss read should succeed");
+		assert!(
+			ctx.state.read().head_txid > head_after_cache_miss,
+			"head_txid should still advance after the follow-up commit",
+		);
+	}
+
+	#[test]
+	fn direct_engine_uses_slow_path_for_large_real_engine_commits() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let engine = runtime.block_on(harness.open_engine());
+		let startup = runtime.block_on(harness.startup_data(&engine));
+		let dirty_pages = (1..=2300u32)
+			.map(|pgno| protocol::SqliteDirtyPage {
+				pgno,
+				bytes: vec![(pgno % 251) as u8; 4096],
+			})
+			.collect::<Vec<_>>();
+
+		let outcome = runtime
+			.block_on(commit_buffered_pages(
+				&SqliteTransport::from_direct(Arc::clone(&engine)),
+				BufferedCommitRequest {
+					actor_id: harness.actor_id.clone(),
+					generation: startup.generation,
+					expected_head_txid: startup.meta.head_txid,
+					new_db_size_pages: 2300,
+					max_delta_bytes: startup.meta.max_delta_bytes,
+					max_pages_per_stage: 256,
+					dirty_pages,
+				},
+			))
+			.expect("slow-path direct commit should succeed");
+		let (outcome, metrics) = outcome;
+
+		assert_eq!(outcome.path, CommitPath::Slow);
+		assert_eq!(outcome.new_head_txid, startup.meta.head_txid + 1);
+		assert!(metrics.serialize_ns > 0);
+		assert!(metrics.transport_ns > 0);
+
+		let pages = runtime
+			.block_on(engine.get_pages(&harness.actor_id, startup.generation, vec![1, 1024, 2300]))
+			.expect("pages should read back after slow-path commit");
+		let expected_page_1 = vec![1u8; 4096];
+		let expected_page_1024 = vec![(1024 % 251) as u8; 4096];
+		let expected_page_2300 = vec![(2300 % 251) as u8; 4096];
+		assert_eq!(pages.len(), 3);
+		assert_eq!(pages[0].bytes.as_deref(), Some(expected_page_1.as_slice()));
+		assert_eq!(
+			pages[1].bytes.as_deref(),
+			Some(expected_page_1024.as_slice())
+		);
+		assert_eq!(
+			pages[2].bytes.as_deref(),
+			Some(expected_page_2300.as_slice())
+		);
+	}
+
+	#[test]
+	fn direct_engine_marks_vfs_dead_after_transport_errors() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let engine = runtime.block_on(harness.open_engine());
+		let startup = runtime.block_on(harness.startup_data(&engine));
+		let transport = SqliteTransport::from_direct(engine);
+		let hooks = transport
+			.direct_hooks()
+			.expect("direct transport should expose test hooks");
+		let vfs = SqliteVfs::register_with_transport(
+			&next_test_name("sqlite-direct-vfs"),
+			transport,
+			harness.actor_id.clone(),
+			runtime.handle().clone(),
+			startup,
+			VfsConfig::default(),
+		)
+		.expect("v2 vfs should register");
+		let db = open_database(vfs, &harness.actor_id).expect("sqlite database should open");
+
+		hooks.fail_next_commit("InjectedTransportError: commit transport dropped");
+		let err = sqlite_exec(
+			db.as_ptr(),
+			"CREATE TABLE broken (id INTEGER PRIMARY KEY, value TEXT NOT NULL);",
+		)
+		.expect_err("failing transport commit should surface as an IO error");
+		assert!(
+			err.contains("I/O") || err.contains("disk I/O"),
+			"sqlite should surface transport failure as an IO error: {err}",
+		);
+		assert!(
+			direct_vfs_ctx(&db).is_dead(),
+			"transport error should kill the v2 VFS"
+		);
+		assert_eq!(
+			db.take_last_kv_error().as_deref(),
+			Some("InjectedTransportError: commit transport dropped"),
+		);
+		assert!(
+			sqlite_query_i64(db.as_ptr(), "PRAGMA page_count;").is_err(),
+			"subsequent reads should fail once the VFS is dead",
+		);
+	}
+
+	#[test]
+	fn flush_dirty_pages_marks_vfs_dead_after_transport_error() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let engine = runtime.block_on(harness.open_engine());
+		let startup = runtime.block_on(harness.startup_data(&engine));
+		let transport = SqliteTransport::from_direct(engine);
+		let hooks = transport
+			.direct_hooks()
+			.expect("direct transport should expose test hooks");
+		let vfs = SqliteVfs::register_with_transport(
+			&next_test_name("sqlite-direct-vfs"),
+			transport,
+			harness.actor_id.clone(),
+			runtime.handle().clone(),
+			startup,
+			VfsConfig::default(),
+		)
+		.expect("v2 vfs should register");
+		let db = open_database(vfs, &harness.actor_id).expect("sqlite database should open");
+		let ctx = direct_vfs_ctx(&db);
+
+		{
+			let mut state = ctx.state.write();
+			state.write_buffer.dirty.insert(1, vec![0x7a; 4096]);
+			state.db_size_pages = 1;
+		}
+
+		hooks.fail_next_commit("InjectedTransportError: flush transport dropped");
+		let err = ctx
+			.flush_dirty_pages()
+			.expect_err("transport failure should bubble out of flush_dirty_pages");
+
+		assert!(
+			matches!(err, CommitBufferError::Other(ref message) if message.contains("InjectedTransportError")),
+			"flush failure should surface as a transport error: {err:?}",
+		);
+		assert!(
+			ctx.is_dead(),
+			"flush transport failure should poison the VFS"
+		);
+		assert_eq!(
+			db.take_last_kv_error().as_deref(),
+			Some("InjectedTransportError: flush transport dropped"),
+		);
+	}
+
+	#[test]
+	fn commit_atomic_write_marks_vfs_dead_after_transport_error() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let engine = runtime.block_on(harness.open_engine());
+		let startup = runtime.block_on(harness.startup_data(&engine));
+		let transport = SqliteTransport::from_direct(engine);
+		let hooks = transport
+			.direct_hooks()
+			.expect("direct transport should expose test hooks");
+		let vfs = SqliteVfs::register_with_transport(
+			&next_test_name("sqlite-direct-vfs"),
+			transport,
+			harness.actor_id.clone(),
+			runtime.handle().clone(),
+			startup,
+			VfsConfig::default(),
+		)
+		.expect("v2 vfs should register");
+		let db = open_database(vfs, &harness.actor_id).expect("sqlite database should open");
+		let ctx = direct_vfs_ctx(&db);
+
+		{
+			let mut state = ctx.state.write();
+			state.write_buffer.in_atomic_write = true;
+			state.write_buffer.saved_db_size = state.db_size_pages;
+			state.write_buffer.dirty.insert(1, vec![0x5c; 4096]);
+			state.db_size_pages = 1;
+		}
+
+		hooks.fail_next_commit("InjectedTransportError: atomic transport dropped");
+		let err = ctx
+			.commit_atomic_write()
+			.expect_err("transport failure should bubble out of commit_atomic_write");
+
+		assert!(
+			matches!(err, CommitBufferError::Other(ref message) if message.contains("InjectedTransportError")),
+			"atomic-write failure should surface as a transport error: {err:?}",
+		);
+		assert!(
+			ctx.is_dead(),
+			"commit_atomic_write transport failure should poison the VFS",
+		);
+		assert_eq!(
+			db.take_last_kv_error().as_deref(),
+			Some("InjectedTransportError: atomic transport dropped"),
+		);
+	}
+
+	#[test]
+	fn direct_engine_handles_multithreaded_statement_churn() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let db = Arc::new(StdMutex::new(harness.open_db(&runtime)));
+
+		{
+			let db = db.lock().expect("db mutex should lock");
+			sqlite_exec(
+				db.as_ptr(),
+				"CREATE TABLE items (id INTEGER PRIMARY KEY AUTOINCREMENT, value TEXT NOT NULL);",
+			)
+			.expect("create table should succeed");
+		}
+
+		let mut workers = Vec::new();
+		for worker_id in 0..4 {
+			let db = Arc::clone(&db);
+			workers.push(thread::spawn(move || {
+				for idx in 0..40 {
+					let db = db.lock().expect("db mutex should lock");
+					sqlite_step_statement(
+						db.as_ptr(),
+						&format!(
+							"INSERT INTO items (value) VALUES ('worker-{worker_id}-row-{idx}');"
+						),
+					)
+					.expect("threaded insert should succeed");
+				}
+			}));
+		}
+		for worker in workers {
+			worker.join().expect("worker thread should finish");
+		}
+
+		let db = db.lock().expect("db mutex should lock");
+		assert_eq!(
+			sqlite_query_i64(db.as_ptr(), "SELECT COUNT(*) FROM items;")
+				.expect("threaded row count should succeed"),
+			160
+		);
+	}
+
+	#[test]
+	fn direct_engine_isolates_two_actors_on_one_shared_engine() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let engine = runtime.block_on(harness.open_engine());
+		let actor_a = next_test_name("sqlite-actor-a");
+		let actor_b = next_test_name("sqlite-actor-b");
+		let db_a = harness.open_db_on_engine(
+			&runtime,
+			Arc::clone(&engine),
+			&actor_a,
+			VfsConfig::default(),
+		);
+		let db_b = harness.open_db_on_engine(&runtime, engine, &actor_b, VfsConfig::default());
+
+		sqlite_exec(
+			db_a.as_ptr(),
+			"CREATE TABLE items (id INTEGER PRIMARY KEY, value TEXT NOT NULL);",
+		)
+		.expect("actor A create table should succeed");
+		sqlite_exec(
+			db_b.as_ptr(),
+			"CREATE TABLE items (id INTEGER PRIMARY KEY, value TEXT NOT NULL);",
+		)
+		.expect("actor B create table should succeed");
+		sqlite_step_statement(
+			db_a.as_ptr(),
+			"INSERT INTO items (id, value) VALUES (1, 'alpha');",
+		)
+		.expect("actor A insert should succeed");
+		sqlite_step_statement(
+			db_b.as_ptr(),
+			"INSERT INTO items (id, value) VALUES (1, 'beta');",
+		)
+		.expect("actor B insert should succeed");
+
+		assert_eq!(
+			sqlite_query_text(db_a.as_ptr(), "SELECT value FROM items WHERE id = 1;")
+				.expect("actor A select should succeed"),
+			"alpha"
+		);
+		assert_eq!(
+			sqlite_query_text(db_b.as_ptr(), "SELECT value FROM items WHERE id = 1;")
+				.expect("actor B select should succeed"),
+			"beta"
+		);
+	}
+
+	#[test]
+	fn direct_engine_hot_row_updates_survive_reopen() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+
+		{
+			let db = harness.open_db(&runtime);
+			sqlite_exec(
+				db.as_ptr(),
+				"CREATE TABLE counters (id INTEGER PRIMARY KEY, value TEXT NOT NULL);",
+			)
+			.expect("create table should succeed");
+			sqlite_step_statement(
+				db.as_ptr(),
+				"INSERT INTO counters (id, value) VALUES (1, 'v-0');",
+			)
+			.expect("seed row should succeed");
+			for i in 1..=150 {
+				sqlite_step_statement(
+					db.as_ptr(),
+					&format!("UPDATE counters SET value = 'v-{i}' WHERE id = 1;"),
+				)
+				.expect("hot-row update should succeed");
+			}
+		}
+
+		let reopened = harness.open_db(&runtime);
+		assert_eq!(
+			sqlite_query_text(
+				reopened.as_ptr(),
+				"SELECT value FROM counters WHERE id = 1;"
+			)
+			.expect("final value should survive reopen"),
+			"v-150"
+		);
+	}
+
+	#[test]
+	fn direct_engine_preserves_mixed_workload_across_sleep_wake() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+
+		{
+			let db = harness.open_db(&runtime);
+			sqlite_exec(
+				db.as_ptr(),
+				"CREATE TABLE items (id INTEGER PRIMARY KEY, value TEXT NOT NULL, status TEXT NOT NULL);",
+			)
+			.expect("create table should succeed");
+			for id in 1..=50 {
+				sqlite_step_statement(
+					db.as_ptr(),
+					&format!(
+						"INSERT INTO items (id, value, status) VALUES ({id}, 'item-{id}', 'new');"
+					),
+				)
+				.expect("seed insert should succeed");
+			}
+			for id in 1..=20 {
+				sqlite_step_statement(
+					db.as_ptr(),
+					&format!(
+						"UPDATE items SET status = 'updated', value = 'item-{id}-updated' WHERE id = {id};"
+					),
+				)
+				.expect("update should succeed");
+			}
+			for id in 41..=50 {
+				sqlite_step_statement(db.as_ptr(), &format!("DELETE FROM items WHERE id = {id};"))
+					.expect("delete should succeed");
+			}
+			sqlite_step_statement(
+				db.as_ptr(),
+				"INSERT INTO items (id, value, status) VALUES (1000, 'disconnect-write', 'new');",
+			)
+			.expect("disconnect-style write before close should succeed");
+		}
+
+		let reopened = harness.open_db(&runtime);
+		assert_eq!(
+			sqlite_query_i64(reopened.as_ptr(), "SELECT COUNT(*) FROM items;")
+				.expect("row count after reopen should succeed"),
+			41
+		);
+		assert_eq!(
+			sqlite_query_i64(
+				reopened.as_ptr(),
+				"SELECT COUNT(*) FROM items WHERE status = 'updated';",
+			)
+			.expect("updated row count should succeed"),
+			20
+		);
+		assert_eq!(
+			sqlite_query_text(
+				reopened.as_ptr(),
+				"SELECT value FROM items WHERE id = 1000;",
+			)
+			.expect("disconnect write should survive reopen"),
+			"disconnect-write"
+		);
+	}
+
+	#[test]
+	fn direct_engine_reopens_cleanly_after_failed_migration() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+
+		{
+			let db = harness.open_db(&runtime);
+			sqlite_exec(
+				db.as_ptr(),
+				"CREATE TABLE items (id INTEGER PRIMARY KEY, value TEXT NOT NULL);",
+			)
+			.expect("create table should succeed");
+			sqlite_exec(db.as_ptr(), "ALTER TABLE items ADD COLUMN;")
+				.expect_err("broken migration should fail");
+		}
+
+		let reopened = harness.open_db(&runtime);
+		sqlite_step_statement(
+			reopened.as_ptr(),
+			"INSERT INTO items (id, value) VALUES (1, 'still-alive');",
+		)
+		.expect("reopened database should still accept writes after migration failure");
+		assert_eq!(
+			sqlite_query_text(reopened.as_ptr(), "SELECT value FROM items WHERE id = 1;")
+				.expect("select after reopen should succeed"),
+			"still-alive"
+		);
+	}
+
+	#[test]
+	fn direct_engine_reads_continue_while_compaction_runs() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let engine = runtime.block_on(harness.open_engine());
+		let db = Arc::new(StdMutex::new(harness.open_db_on_engine(
+			&runtime,
+			Arc::clone(&engine),
+			&harness.actor_id,
+			VfsConfig::default(),
+		)));
+
+		{
+			let db = db.lock().expect("db mutex should lock");
+			sqlite_exec(
+				db.as_ptr(),
+				"CREATE TABLE items (id INTEGER PRIMARY KEY, value TEXT NOT NULL);",
+			)
+			.expect("create table should succeed");
+			for id in 1..=48 {
+				sqlite_step_statement(
+					db.as_ptr(),
+					&format!("INSERT INTO items (id, value) VALUES ({id}, 'row-{id}');"),
+				)
+				.expect("seed insert should succeed");
+			}
+		}
+
+		let keep_reading = Arc::new(AtomicBool::new(true));
+		let read_error = Arc::new(StdMutex::new(None::<String>));
+		let db_for_reader = Arc::clone(&db);
+		let keep_reading_for_thread = Arc::clone(&keep_reading);
+		let read_error_for_thread = Arc::clone(&read_error);
+		let reader = thread::spawn(move || {
+			while keep_reading_for_thread.load(AtomicOrdering::Relaxed) {
+				let db = db_for_reader.lock().expect("db mutex should lock");
+				direct_vfs_ctx(&db)
+					.state
+					.write()
+					.page_cache
+					.invalidate_all();
+				if let Err(err) =
+					sqlite_query_i64(db.as_ptr(), "SELECT COUNT(*) FROM items WHERE id >= 1;")
+				{
+					*read_error_for_thread
+						.lock()
+						.expect("read error mutex should lock") = Some(err);
+					break;
+				}
+			}
 		});
+
+		runtime
+			.block_on(engine.compact_worker(&harness.actor_id, 8))
+			.expect("compaction should succeed");
+		keep_reading.store(false, AtomicOrdering::Relaxed);
+		reader.join().expect("reader thread should finish");
+
+		assert!(
+			read_error
+				.lock()
+				.expect("read error mutex should lock")
+				.is_none(),
+			"reads should keep working while compaction folds deltas",
+		);
+		let db = db.lock().expect("db mutex should lock");
+		assert_eq!(
+			sqlite_query_i64(db.as_ptr(), "SELECT COUNT(*) FROM items;")
+				.expect("final row count should succeed"),
+			48
+		);
+	}
+
+	#[test]
+	fn open_database_supports_empty_db_schema_setup() {
+		let runtime = Builder::new_current_thread()
+			.enable_all()
+			.build()
+			.expect("runtime should build");
+		let protocol = Arc::new(MockProtocol::new(
+			protocol::SqliteCommitResponse::SqliteCommitOk(protocol::SqliteCommitOk {
+				new_head_txid: 13,
+				meta: protocol::SqliteMeta {
+					db_size_pages: 2,
+					..sqlite_meta(8 * 1024 * 1024)
+				},
+			}),
+			protocol::SqliteCommitStageResponse::SqliteCommitStageOk(
+				protocol::SqliteCommitStageOk {
+					chunk_idx_committed: 0,
+				},
+			),
+			protocol::SqliteCommitFinalizeResponse::SqliteCommitFinalizeOk(
+				protocol::SqliteCommitFinalizeOk {
+					new_head_txid: 13,
+					meta: protocol::SqliteMeta {
+						db_size_pages: 2,
+						..sqlite_meta(8 * 1024 * 1024)
+					},
+				},
+			),
+		));
+		protocol.set_mirror_commit_meta(true);
+
+		let vfs = SqliteVfs::register_with_transport(
+			"test-v2-empty-db",
+			SqliteTransport::from_mock(protocol.clone()),
+			"actor".to_string(),
+			runtime.handle().clone(),
+			protocol::SqliteStartupData {
+				generation: 7,
+				meta: protocol::SqliteMeta {
+					db_size_pages: 0,
+					..sqlite_meta(8 * 1024 * 1024)
+				},
+				preloaded_pages: Vec::new(),
+			},
+			VfsConfig::default(),
+		)
+		.expect("vfs should register");
+		let db = open_database(vfs, "actor").expect("db should open");
+
+		sqlite_exec(
+			db.as_ptr(),
+			"CREATE TABLE test (id INTEGER PRIMARY KEY, value TEXT NOT NULL);",
+		)
+		.expect("schema setup should succeed");
+	}
+
+	#[test]
+	fn open_database_supports_insert_after_pragma_migration() {
+		let runtime = Builder::new_current_thread()
+			.enable_all()
+			.build()
+			.expect("runtime should build");
+		let protocol = Arc::new(MockProtocol::new(
+			protocol::SqliteCommitResponse::SqliteCommitOk(protocol::SqliteCommitOk {
+				new_head_txid: 13,
+				meta: protocol::SqliteMeta {
+					db_size_pages: 32,
+					..sqlite_meta(8 * 1024 * 1024)
+				},
+			}),
+			protocol::SqliteCommitStageResponse::SqliteCommitStageOk(
+				protocol::SqliteCommitStageOk {
+					chunk_idx_committed: 0,
+				},
+			),
+			protocol::SqliteCommitFinalizeResponse::SqliteCommitFinalizeOk(
+				protocol::SqliteCommitFinalizeOk {
+					new_head_txid: 13,
+					meta: protocol::SqliteMeta {
+						db_size_pages: 32,
+						..sqlite_meta(8 * 1024 * 1024)
+					},
+				},
+			),
+		));
+
+		let vfs = SqliteVfs::register_with_transport(
+			"test-v2-pragma-migration",
+			SqliteTransport::from_mock(protocol.clone()),
+			"actor".to_string(),
+			runtime.handle().clone(),
+			protocol::SqliteStartupData {
+				generation: 7,
+				meta: protocol::SqliteMeta {
+					db_size_pages: 0,
+					..sqlite_meta(8 * 1024 * 1024)
+				},
+				preloaded_pages: Vec::new(),
+			},
+			VfsConfig::default(),
+		)
+		.expect("vfs should register");
+		let db = open_database(vfs, "actor").expect("db should open");
+
+		sqlite_exec(
+			db.as_ptr(),
+			"CREATE TABLE items (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL);",
+		)
+		.expect("create table should succeed");
+		sqlite_exec(
+			db.as_ptr(),
+			"ALTER TABLE items ADD COLUMN status TEXT NOT NULL DEFAULT 'active';",
+		)
+		.expect("alter table should succeed");
+		sqlite_exec(db.as_ptr(), "PRAGMA user_version = 2;").expect("pragma should succeed");
+		sqlite_step_statement(
+			db.as_ptr(),
+			"INSERT INTO items (name) VALUES ('test-item');",
+		)
+		.expect("insert after pragma migration should succeed");
+	}
+
+	#[test]
+	fn open_database_supports_explicit_status_insert_after_pragma_migration() {
+		let runtime = Builder::new_current_thread()
+			.enable_all()
+			.build()
+			.expect("runtime should build");
+		let protocol = Arc::new(MockProtocol::new(
+			protocol::SqliteCommitResponse::SqliteCommitOk(protocol::SqliteCommitOk {
+				new_head_txid: 13,
+				meta: protocol::SqliteMeta {
+					db_size_pages: 32,
+					..sqlite_meta(8 * 1024 * 1024)
+				},
+			}),
+			protocol::SqliteCommitStageResponse::SqliteCommitStageOk(
+				protocol::SqliteCommitStageOk {
+					chunk_idx_committed: 0,
+				},
+			),
+			protocol::SqliteCommitFinalizeResponse::SqliteCommitFinalizeOk(
+				protocol::SqliteCommitFinalizeOk {
+					new_head_txid: 13,
+					meta: protocol::SqliteMeta {
+						db_size_pages: 32,
+						..sqlite_meta(8 * 1024 * 1024)
+					},
+				},
+			),
+		));
+		protocol.set_mirror_commit_meta(true);
+
+		let vfs = SqliteVfs::register_with_transport(
+			"test-v2-pragma-explicit",
+			SqliteTransport::from_mock(protocol),
+			"actor".to_string(),
+			runtime.handle().clone(),
+			protocol::SqliteStartupData {
+				generation: 7,
+				meta: protocol::SqliteMeta {
+					db_size_pages: 0,
+					..sqlite_meta(8 * 1024 * 1024)
+				},
+				preloaded_pages: Vec::new(),
+			},
+			VfsConfig::default(),
+		)
+		.expect("vfs should register");
+		let db = open_database(vfs, "actor").expect("db should open");
+
+		sqlite_exec(
+			db.as_ptr(),
+			"CREATE TABLE items (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL);",
+		)
+		.expect("create table should succeed");
+		sqlite_exec(
+			db.as_ptr(),
+			"ALTER TABLE items ADD COLUMN status TEXT NOT NULL DEFAULT 'active';",
+		)
+		.expect("alter table should succeed");
+		sqlite_exec(db.as_ptr(), "PRAGMA user_version = 2;").expect("pragma should succeed");
+		sqlite_step_statement(
+			db.as_ptr(),
+			"INSERT INTO items (name, status) VALUES ('done-item', 'completed');",
+		)
+		.expect("explicit status insert should succeed");
+	}
+
+	#[test]
+	fn open_database_supports_hot_row_update_churn() {
+		let runtime = Builder::new_current_thread()
+			.enable_all()
+			.build()
+			.expect("runtime should build");
+		let protocol = Arc::new(MockProtocol::new(
+			protocol::SqliteCommitResponse::SqliteCommitOk(protocol::SqliteCommitOk {
+				new_head_txid: 13,
+				meta: protocol::SqliteMeta {
+					db_size_pages: 128,
+					..sqlite_meta(8 * 1024 * 1024)
+				},
+			}),
+			protocol::SqliteCommitStageResponse::SqliteCommitStageOk(
+				protocol::SqliteCommitStageOk {
+					chunk_idx_committed: 0,
+				},
+			),
+			protocol::SqliteCommitFinalizeResponse::SqliteCommitFinalizeOk(
+				protocol::SqliteCommitFinalizeOk {
+					new_head_txid: 13,
+					meta: protocol::SqliteMeta {
+						db_size_pages: 128,
+						..sqlite_meta(8 * 1024 * 1024)
+					},
+				},
+			),
+		));
+		protocol.set_mirror_commit_meta(true);
+
+		let vfs = SqliteVfs::register_with_transport(
+			"test-v2-hot-row-updates",
+			SqliteTransport::from_mock(protocol),
+			"actor".to_string(),
+			runtime.handle().clone(),
+			protocol::SqliteStartupData {
+				generation: 7,
+				meta: protocol::SqliteMeta {
+					db_size_pages: 0,
+					..sqlite_meta(8 * 1024 * 1024)
+				},
+				preloaded_pages: Vec::new(),
+			},
+			VfsConfig::default(),
+		)
+		.expect("vfs should register");
+		let db = open_database(vfs, "actor").expect("db should open");
+
+		sqlite_exec(
+			db.as_ptr(),
+			"CREATE TABLE test_data (id INTEGER PRIMARY KEY AUTOINCREMENT, value TEXT NOT NULL, payload TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL);",
+		)
+		.expect("create table should succeed");
+		for i in 0..10 {
+			sqlite_step_statement(
+				db.as_ptr(),
+				&format!(
+					"INSERT INTO test_data (value, payload, created_at) VALUES ('init-{i}', '', 1);"
+				),
+			)
+			.expect("seed insert should succeed");
+		}
+		for i in 0..240 {
+			let row_id = i % 10 + 1;
+			sqlite_step_statement(
+				db.as_ptr(),
+				&format!("UPDATE test_data SET value = 'v-{i}' WHERE id = {row_id};"),
+			)
+			.expect("hot-row update should succeed");
+		}
+	}
+
+	#[test]
+	fn open_database_supports_cross_thread_exec_sequence() {
+		let runtime = Builder::new_current_thread()
+			.enable_all()
+			.build()
+			.expect("runtime should build");
+		let protocol = Arc::new(MockProtocol::new(
+			protocol::SqliteCommitResponse::SqliteCommitOk(protocol::SqliteCommitOk {
+				new_head_txid: 13,
+				meta: protocol::SqliteMeta {
+					db_size_pages: 32,
+					..sqlite_meta(8 * 1024 * 1024)
+				},
+			}),
+			protocol::SqliteCommitStageResponse::SqliteCommitStageOk(
+				protocol::SqliteCommitStageOk {
+					chunk_idx_committed: 0,
+				},
+			),
+			protocol::SqliteCommitFinalizeResponse::SqliteCommitFinalizeOk(
+				protocol::SqliteCommitFinalizeOk {
+					new_head_txid: 13,
+					meta: protocol::SqliteMeta {
+						db_size_pages: 32,
+						..sqlite_meta(8 * 1024 * 1024)
+					},
+				},
+			),
+		));
+		protocol.set_mirror_commit_meta(true);
+
+		let vfs = SqliteVfs::register_with_transport(
+			"test-v2-cross-thread",
+			SqliteTransport::from_mock(protocol),
+			"actor".to_string(),
+			runtime.handle().clone(),
+			protocol::SqliteStartupData {
+				generation: 7,
+				meta: protocol::SqliteMeta {
+					db_size_pages: 0,
+					..sqlite_meta(8 * 1024 * 1024)
+				},
+				preloaded_pages: Vec::new(),
+			},
+			VfsConfig::default(),
+		)
+		.expect("vfs should register");
+		let db = Arc::new(StdMutex::new(
+			open_database(vfs, "actor").expect("db should open"),
+		));
+
+		{
+			let db = db.clone();
+			thread::spawn(move || {
+				let db = db.lock().expect("db mutex should lock");
+				sqlite_exec(
+					db.as_ptr(),
+					"CREATE TABLE items (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL);",
+				)
+				.expect("create table should succeed");
+				sqlite_exec(
+					db.as_ptr(),
+					"ALTER TABLE items ADD COLUMN status TEXT NOT NULL DEFAULT 'active';",
+				)
+				.expect("alter table should succeed");
+				sqlite_exec(db.as_ptr(), "PRAGMA user_version = 2;")
+					.expect("pragma should succeed");
+			})
+			.join()
+			.expect("migration thread should finish");
+		}
+
+		thread::spawn(move || {
+			let db = db.lock().expect("db mutex should lock");
+			sqlite_step_statement(
+				db.as_ptr(),
+				"INSERT INTO items (name) VALUES ('test-item');",
+			)
+			.expect("cross-thread insert should succeed");
+		})
+		.join()
+		.expect("insert thread should finish");
+	}
+
+	#[test]
+	fn aux_files_are_shared_by_path_until_deleted() {
+		let runtime = Builder::new_current_thread()
+			.enable_all()
+			.build()
+			.expect("runtime should build");
+		let protocol = Arc::new(MockProtocol::new(
+			protocol::SqliteCommitResponse::SqliteCommitOk(protocol::SqliteCommitOk {
+				new_head_txid: 13,
+				meta: sqlite_meta(8 * 1024 * 1024),
+			}),
+			protocol::SqliteCommitStageResponse::SqliteCommitStageOk(
+				protocol::SqliteCommitStageOk {
+					chunk_idx_committed: 0,
+				},
+			),
+			protocol::SqliteCommitFinalizeResponse::SqliteCommitFinalizeOk(
+				protocol::SqliteCommitFinalizeOk {
+					new_head_txid: 13,
+					meta: sqlite_meta(8 * 1024 * 1024),
+				},
+			),
+		));
+		let ctx = VfsContext::new(
+			"actor".to_string(),
+			runtime.handle().clone(),
+			SqliteTransport::from_mock(protocol),
+			protocol::SqliteStartupData {
+				generation: 7,
+				meta: sqlite_meta(8 * 1024 * 1024),
+				preloaded_pages: Vec::new(),
+			},
+			VfsConfig::default(),
+			unsafe { std::mem::zeroed() },
+		);
+
+		let first = ctx.open_aux_file("actor-journal");
+		first.bytes.lock().extend_from_slice(&[1, 2, 3, 4]);
+		let second = ctx.open_aux_file("actor-journal");
+		assert_eq!(*second.bytes.lock(), vec![1, 2, 3, 4]);
+		assert!(ctx.aux_file_exists("actor-journal"));
+
+		ctx.delete_aux_file("actor-journal");
+		assert!(!ctx.aux_file_exists("actor-journal"));
+		assert!(ctx.open_aux_file("actor-journal").bytes.lock().is_empty());
+	}
+
+	#[test]
+	fn truncate_main_file_discards_pages_beyond_eof() {
+		let runtime = Builder::new_current_thread()
+			.enable_all()
+			.build()
+			.expect("runtime should build");
+		let protocol = Arc::new(MockProtocol::new(
+			protocol::SqliteCommitResponse::SqliteCommitOk(protocol::SqliteCommitOk {
+				new_head_txid: 13,
+				meta: sqlite_meta(8 * 1024 * 1024),
+			}),
+			protocol::SqliteCommitStageResponse::SqliteCommitStageOk(
+				protocol::SqliteCommitStageOk {
+					chunk_idx_committed: 0,
+				},
+			),
+			protocol::SqliteCommitFinalizeResponse::SqliteCommitFinalizeOk(
+				protocol::SqliteCommitFinalizeOk {
+					new_head_txid: 13,
+					meta: sqlite_meta(8 * 1024 * 1024),
+				},
+			),
+		));
+		let ctx = VfsContext::new(
+			"actor".to_string(),
+			runtime.handle().clone(),
+			SqliteTransport::from_mock(protocol),
+			protocol::SqliteStartupData {
+				generation: 7,
+				meta: protocol::SqliteMeta {
+					db_size_pages: 4,
+					..sqlite_meta(8 * 1024 * 1024)
+				},
+				preloaded_pages: vec![
+					protocol::SqliteFetchedPage {
+						pgno: 1,
+						bytes: Some(vec![1; 4096]),
+					},
+					protocol::SqliteFetchedPage {
+						pgno: 4,
+						bytes: Some(vec![4; 4096]),
+					},
+				],
+			},
+			VfsConfig::default(),
+			unsafe { std::mem::zeroed() },
+		);
+		{
+			let mut state = ctx.state.write();
+			state.write_buffer.dirty.insert(3, vec![3; 4096]);
+			state.write_buffer.dirty.insert(4, vec![4; 4096]);
+		}
+
+		ctx.truncate_main_file(2 * 4096);
+
+		let state = ctx.state.read();
+		assert_eq!(state.db_size_pages, 2);
+		assert!(!state.write_buffer.dirty.contains_key(&3));
+		assert!(!state.write_buffer.dirty.contains_key(&4));
+		assert!(state.page_cache.get(&4).is_none());
+	}
+
+	#[test]
+	fn resolve_pages_does_not_rewind_meta_on_stale_response() {
+		let runtime = Builder::new_current_thread()
+			.enable_all()
+			.build()
+			.expect("runtime should build");
+		let mut protocol = MockProtocol::new(
+			protocol::SqliteCommitResponse::SqliteCommitOk(protocol::SqliteCommitOk {
+				new_head_txid: 13,
+				meta: sqlite_meta(8 * 1024 * 1024),
+			}),
+			protocol::SqliteCommitStageResponse::SqliteCommitStageOk(
+				protocol::SqliteCommitStageOk {
+					chunk_idx_committed: 0,
+				},
+			),
+			protocol::SqliteCommitFinalizeResponse::SqliteCommitFinalizeOk(
+				protocol::SqliteCommitFinalizeOk {
+					new_head_txid: 13,
+					meta: sqlite_meta(8 * 1024 * 1024),
+				},
+			),
+		);
+		protocol.get_pages_response =
+			protocol::SqliteGetPagesResponse::SqliteGetPagesOk(protocol::SqliteGetPagesOk {
+				pages: vec![protocol::SqliteFetchedPage {
+					pgno: 2,
+					bytes: Some(vec![2; 4096]),
+				}],
+				meta: protocol::SqliteMeta {
+					head_txid: 1,
+					db_size_pages: 1,
+					max_delta_bytes: 32 * 1024 * 1024,
+					..sqlite_meta(8 * 1024 * 1024)
+				},
+			});
+		let ctx = VfsContext::new(
+			"actor".to_string(),
+			runtime.handle().clone(),
+			SqliteTransport::from_mock(Arc::new(protocol)),
+			protocol::SqliteStartupData {
+				generation: 7,
+				meta: protocol::SqliteMeta {
+					head_txid: 3,
+					db_size_pages: 3,
+					..sqlite_meta(8 * 1024 * 1024)
+				},
+				preloaded_pages: vec![protocol::SqliteFetchedPage {
+					pgno: 1,
+					bytes: Some(vec![1; 4096]),
+				}],
+			},
+			VfsConfig::default(),
+			unsafe { std::mem::zeroed() },
+		);
+
+		let resolved = ctx
+			.resolve_pages(&[2], false)
+			.expect("missing page should resolve");
+
+		assert_eq!(resolved.get(&2), Some(&Some(vec![2; 4096])));
+		let state = ctx.state.read();
+		assert_eq!(state.head_txid, 3);
+		assert_eq!(state.db_size_pages, 3);
+		assert_eq!(state.max_delta_bytes, 32 * 1024 * 1024);
+	}
+
+	#[test]
+	fn resolve_pages_does_not_shrink_db_size_pages_on_same_head_response() {
+		let runtime = Builder::new_current_thread()
+			.enable_all()
+			.build()
+			.expect("runtime should build");
+		let mut protocol = MockProtocol::new(
+			protocol::SqliteCommitResponse::SqliteCommitOk(protocol::SqliteCommitOk {
+				new_head_txid: 13,
+				meta: sqlite_meta(8 * 1024 * 1024),
+			}),
+			protocol::SqliteCommitStageResponse::SqliteCommitStageOk(
+				protocol::SqliteCommitStageOk {
+					chunk_idx_committed: 0,
+				},
+			),
+			protocol::SqliteCommitFinalizeResponse::SqliteCommitFinalizeOk(
+				protocol::SqliteCommitFinalizeOk {
+					new_head_txid: 13,
+					meta: sqlite_meta(8 * 1024 * 1024),
+				},
+			),
+		);
+		protocol.get_pages_response =
+			protocol::SqliteGetPagesResponse::SqliteGetPagesOk(protocol::SqliteGetPagesOk {
+				pages: vec![protocol::SqliteFetchedPage {
+					pgno: 4,
+					bytes: Some(vec![4; 4096]),
+				}],
+				meta: protocol::SqliteMeta {
+					head_txid: 3,
+					db_size_pages: 1,
+					max_delta_bytes: 16 * 1024 * 1024,
+					..sqlite_meta(8 * 1024 * 1024)
+				},
+			});
+		let ctx = VfsContext::new(
+			"actor".to_string(),
+			runtime.handle().clone(),
+			SqliteTransport::from_mock(Arc::new(protocol)),
+			protocol::SqliteStartupData {
+				generation: 7,
+				meta: protocol::SqliteMeta {
+					head_txid: 3,
+					db_size_pages: 4,
+					..sqlite_meta(8 * 1024 * 1024)
+				},
+				preloaded_pages: vec![protocol::SqliteFetchedPage {
+					pgno: 1,
+					bytes: Some(vec![1; 4096]),
+				}],
+			},
+			VfsConfig::default(),
+			unsafe { std::mem::zeroed() },
+		);
+
+		let resolved = ctx
+			.resolve_pages(&[4], false)
+			.expect("missing page should resolve");
+
+		assert_eq!(resolved.get(&4), Some(&Some(vec![4; 4096])));
+		let state = ctx.state.read();
+		assert_eq!(state.head_txid, 3);
+		assert_eq!(state.db_size_pages, 4);
+		assert_eq!(state.max_delta_bytes, 16 * 1024 * 1024);
+	}
+
+	#[test]
+	fn commit_buffered_pages_uses_fast_path() {
+		let runtime = Builder::new_current_thread()
+			.enable_all()
+			.build()
+			.expect("runtime should build");
+		let protocol = Arc::new(MockProtocol::new(
+			protocol::SqliteCommitResponse::SqliteCommitOk(protocol::SqliteCommitOk {
+				new_head_txid: 13,
+				meta: sqlite_meta(8 * 1024 * 1024),
+			}),
+			protocol::SqliteCommitStageResponse::SqliteCommitStageOk(
+				protocol::SqliteCommitStageOk {
+					chunk_idx_committed: 0,
+				},
+			),
+			protocol::SqliteCommitFinalizeResponse::SqliteCommitFinalizeOk(
+				protocol::SqliteCommitFinalizeOk {
+					new_head_txid: 14,
+					meta: sqlite_meta(8 * 1024 * 1024),
+				},
+			),
+		));
+
+		let outcome = runtime
+			.block_on(commit_buffered_pages(
+				&SqliteTransport::from_mock(protocol.clone()),
+				BufferedCommitRequest {
+					actor_id: "actor".to_string(),
+					generation: 7,
+					expected_head_txid: 12,
+					new_db_size_pages: 1,
+					max_delta_bytes: 8 * 1024 * 1024,
+					max_pages_per_stage: 4_000,
+					dirty_pages: dirty_pages(1, 9),
+				},
+			))
+			.expect("fast-path commit should succeed");
+		let (outcome, metrics) = outcome;
+
+		assert_eq!(outcome.path, CommitPath::Fast);
+		assert_eq!(outcome.new_head_txid, 13);
+		assert!(metrics.serialize_ns > 0);
+		assert!(metrics.transport_ns > 0);
+		assert_eq!(protocol.commit_requests().len(), 1);
+		assert!(protocol.stage_requests().is_empty());
+		assert!(protocol.finalize_requests().is_empty());
+	}
+
+	#[test]
+	fn commit_buffered_pages_falls_back_to_slow_path() {
+		let runtime = Builder::new_current_thread()
+			.enable_all()
+			.build()
+			.expect("runtime should build");
+		let protocol = Arc::new(MockProtocol::new(
+			protocol::SqliteCommitResponse::SqliteCommitTooLarge(protocol::SqliteCommitTooLarge {
+				actual_size_bytes: 3 * 4096,
+				max_size_bytes: 4096,
+			}),
+			protocol::SqliteCommitStageResponse::SqliteCommitStageOk(
+				protocol::SqliteCommitStageOk {
+					chunk_idx_committed: 0,
+				},
+			),
+			protocol::SqliteCommitFinalizeResponse::SqliteCommitFinalizeOk(
+				protocol::SqliteCommitFinalizeOk {
+					new_head_txid: 14,
+					meta: sqlite_meta(4096),
+				},
+			),
+		));
+
+		let protocol_for_release = protocol.clone();
+		let release = std::thread::spawn(move || {
+			runtime.block_on(async {
+				protocol_for_release.finalize_started.notified().await;
+				assert_eq!(protocol_for_release.awaited_stage_responses(), 0);
+				protocol_for_release.release_finalize.notify_one();
+			});
+		});
+
+		let outcome = Builder::new_current_thread()
+			.enable_all()
+			.build()
+			.expect("runtime should build")
+			.block_on(commit_buffered_pages(
+				&SqliteTransport::from_mock(protocol.clone()),
+				BufferedCommitRequest {
+					actor_id: "actor".to_string(),
+					generation: 7,
+					expected_head_txid: 12,
+					new_db_size_pages: 3,
+					max_delta_bytes: 4096,
+					max_pages_per_stage: 1,
+					dirty_pages: dirty_pages(3, 4),
+				},
+			))
+			.expect("slow-path commit should succeed");
+		let (outcome, metrics) = outcome;
+
+		release.join().expect("release thread should finish");
+
+		assert_eq!(outcome.path, CommitPath::Slow);
+		assert_eq!(outcome.new_head_txid, 14);
+		assert!(metrics.serialize_ns > 0);
+		assert!(metrics.transport_ns > 0);
+		assert!(protocol.commit_requests().is_empty());
+		assert!(!protocol.stage_requests().is_empty());
+		assert!(protocol
+			.stage_requests()
+			.iter()
+			.enumerate()
+			.all(|(chunk_idx, request)| request.chunk_idx as usize == chunk_idx));
+		assert!(protocol
+			.stage_requests()
+			.last()
+			.is_some_and(|request| request.is_last));
+		assert_eq!(protocol.awaited_stage_responses(), 0);
+		assert_eq!(protocol.finalize_requests().len(), 1);
+	}
+
+	#[test]
+	fn vfs_records_commit_phase_durations() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let db = harness.open_db(&runtime);
+		let ctx = direct_vfs_ctx(&db);
+
+		sqlite_exec(
+			db.as_ptr(),
+			"CREATE TABLE metrics_test (id INTEGER PRIMARY KEY, value TEXT NOT NULL);",
+		)
+		.expect("create table should succeed");
+
+		let relaxed = std::sync::atomic::Ordering::Relaxed;
+		ctx.commit_request_build_ns.store(0, relaxed);
+		ctx.commit_serialize_ns.store(0, relaxed);
+		ctx.commit_transport_ns.store(0, relaxed);
+		ctx.commit_state_update_ns.store(0, relaxed);
+		ctx.commit_duration_ns_total.store(0, relaxed);
+		ctx.commit_total.store(0, relaxed);
+
+		sqlite_exec(
+			db.as_ptr(),
+			"INSERT INTO metrics_test (id, value) VALUES (1, 'hello');",
+		)
+		.expect("insert should succeed");
+
+		let metrics = db.sqlite_vfs_metrics();
+		assert_eq!(metrics.commit_count, 1);
+		assert!(metrics.request_build_ns > 0);
+		assert!(metrics.serialize_ns > 0);
+		assert!(metrics.transport_ns > 0);
+		assert!(metrics.state_update_ns > 0);
+		assert!(metrics.total_ns >= metrics.request_build_ns);
+		assert!(metrics.request_build_ns + metrics.transport_ns + metrics.state_update_ns > 0);
+	}
+
+	#[test]
+	fn profile_large_tx_insert_5mb() {
+		// 5MB = 1280 rows x 4KB blobs in one transaction
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let db = harness.open_db(&runtime);
+		let ctx = direct_vfs_ctx(&db);
+
+		sqlite_exec(
+			db.as_ptr(),
+			"CREATE TABLE bench (id INTEGER PRIMARY KEY, payload BLOB NOT NULL);",
+		)
+		.expect("create table should succeed");
+
+		let relaxed = std::sync::atomic::Ordering::Relaxed;
+		ctx.resolve_pages_total.store(0, relaxed);
+		ctx.resolve_pages_cache_hits.store(0, relaxed);
+		ctx.resolve_pages_fetches.store(0, relaxed);
+		ctx.pages_fetched_total.store(0, relaxed);
+		ctx.prefetch_pages_total.store(0, relaxed);
+		ctx.commit_total.store(0, relaxed);
+
+		let start = std::time::Instant::now();
+		sqlite_exec(db.as_ptr(), "BEGIN;").expect("begin");
+		for i in 0..1280 {
+			sqlite_step_statement(
+				db.as_ptr(),
+				&format!(
+					"INSERT INTO bench (id, payload) VALUES ({}, randomblob(4096));",
+					i
+				),
+			)
+			.expect("insert should succeed");
+		}
+		sqlite_exec(db.as_ptr(), "COMMIT;").expect("commit");
+		let elapsed = start.elapsed();
+
+		let resolve_total = ctx.resolve_pages_total.load(relaxed);
+		let cache_hits = ctx.resolve_pages_cache_hits.load(relaxed);
+		let fetches = ctx.resolve_pages_fetches.load(relaxed);
+		let pages_fetched = ctx.pages_fetched_total.load(relaxed);
+		let prefetch = ctx.prefetch_pages_total.load(relaxed);
+		let commits = ctx.commit_total.load(relaxed);
+
+		eprintln!("=== 5MB INSERT PROFILE (1280 rows x 4KB) ===");
+		eprintln!("  wall clock:           {:?}", elapsed);
+		eprintln!("  resolve_pages calls:  {}", resolve_total);
+		eprintln!("  cache hits (pages):   {}", cache_hits);
+		eprintln!("  engine fetches:       {}", fetches);
+		eprintln!("  pages fetched total:  {}", pages_fetched);
+		eprintln!("  prefetch pages:       {}", prefetch);
+		eprintln!("  commits:              {}", commits);
+		eprintln!("============================================");
+
+		// In a single transaction, all 1280 row writes are to new pages.
+		// Only the single commit at the end should hit the engine.
+		assert_eq!(
+			fetches, 0,
+			"expected 0 engine fetches during 5MB insert transaction"
+		);
+		assert_eq!(
+			commits, 1,
+			"expected exactly 1 commit for transactional insert"
+		);
+
+		let count = sqlite_query_i64(db.as_ptr(), "SELECT COUNT(*) FROM bench;")
+			.expect("count should succeed");
+		assert_eq!(count, 1280);
+	}
+
+	#[test]
+	fn profile_hot_row_updates() {
+		// 100 updates to the same row - this is the autocommit case
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let db = harness.open_db(&runtime);
+		let ctx = direct_vfs_ctx(&db);
+
+		sqlite_exec(
+			db.as_ptr(),
+			"CREATE TABLE counter (id INTEGER PRIMARY KEY, value INTEGER NOT NULL);",
+		)
+		.expect("create");
+		sqlite_exec(db.as_ptr(), "INSERT INTO counter VALUES (1, 0);").expect("insert");
+
+		let relaxed = std::sync::atomic::Ordering::Relaxed;
+		ctx.resolve_pages_total.store(0, relaxed);
+		ctx.resolve_pages_cache_hits.store(0, relaxed);
+		ctx.resolve_pages_fetches.store(0, relaxed);
+		ctx.pages_fetched_total.store(0, relaxed);
+		ctx.prefetch_pages_total.store(0, relaxed);
+		ctx.commit_total.store(0, relaxed);
+
+		let start = std::time::Instant::now();
+		for _ in 0..100 {
+			sqlite_exec(
+				db.as_ptr(),
+				"UPDATE counter SET value = value + 1 WHERE id = 1;",
+			)
+			.expect("update");
+		}
+		let elapsed = start.elapsed();
+
+		let fetches = ctx.resolve_pages_fetches.load(relaxed);
+		let commits = ctx.commit_total.load(relaxed);
+
+		eprintln!("=== 100 HOT ROW UPDATES (autocommit) ===");
+		eprintln!("  wall clock:           {:?}", elapsed);
+		eprintln!(
+			"  resolve_pages calls:  {}",
+			ctx.resolve_pages_total.load(relaxed)
+		);
+		eprintln!(
+			"  cache hits (pages):   {}",
+			ctx.resolve_pages_cache_hits.load(relaxed)
+		);
+		eprintln!("  engine fetches:       {}", fetches);
+		eprintln!(
+			"  pages fetched total:  {}",
+			ctx.pages_fetched_total.load(relaxed)
+		);
+		eprintln!(
+			"  prefetch pages:       {}",
+			ctx.prefetch_pages_total.load(relaxed)
+		);
+		eprintln!("  commits:              {}", commits);
+		eprintln!("=========================================");
+
+		// Hot row updates: each update modifies the same page. Pages already
+		// in write_buffer or cache should not need re-fetching. With the
+		// counter's page(s) already warm, subsequent updates should be
+		// 100% cache hits (0 fetches). Autocommit means 100 separate commits.
+		assert_eq!(
+			fetches, 0,
+			"expected 0 engine fetches for 100 hot row updates"
+		);
+		assert_eq!(
+			commits, 100,
+			"expected 100 commits (autocommit per statement)"
+		);
+	}
+
+	#[test]
+	fn profile_large_tx_insert_1mb_preloaded() {
+		// Same as the 1MB test but preload all pages first to see commit-only cost
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let engine = runtime.block_on(harness.open_engine());
+		let actor_id = &harness.actor_id;
+
+		// First pass: create and populate the table to generate pages
+		let db1 =
+			harness.open_db_on_engine(&runtime, engine.clone(), actor_id, VfsConfig::default());
+		sqlite_exec(
+			db1.as_ptr(),
+			"CREATE TABLE bench (id INTEGER PRIMARY KEY, payload BLOB NOT NULL);",
+		)
+		.expect("create table should succeed");
+		sqlite_exec(db1.as_ptr(), "BEGIN;").expect("begin");
+		for i in 0..256 {
+			sqlite_step_statement(
+				db1.as_ptr(),
+				&format!(
+					"INSERT INTO bench (id, payload) VALUES ({}, randomblob(4096));",
+					i
+				),
+			)
+			.expect("insert should succeed");
+		}
+		sqlite_exec(db1.as_ptr(), "COMMIT;").expect("commit");
+		drop(db1);
+
+		// Second pass: reopen with warm cache (takeover preloads page 1, rest from reads)
+		let db2 =
+			harness.open_db_on_engine(&runtime, engine.clone(), actor_id, VfsConfig::default());
+		let ctx = direct_vfs_ctx(&db2);
+
+		// Warm the cache by reading everything
+		sqlite_exec(db2.as_ptr(), "SELECT COUNT(*) FROM bench;").expect("count");
+
+		// Reset counters
+		let relaxed = std::sync::atomic::Ordering::Relaxed;
+		ctx.resolve_pages_total.store(0, relaxed);
+		ctx.resolve_pages_cache_hits.store(0, relaxed);
+		ctx.resolve_pages_fetches.store(0, relaxed);
+		ctx.pages_fetched_total.store(0, relaxed);
+		ctx.prefetch_pages_total.store(0, relaxed);
+		ctx.commit_total.store(0, relaxed);
+
+		let start = std::time::Instant::now();
+		sqlite_exec(db2.as_ptr(), "BEGIN;").expect("begin");
+		for i in 256..512 {
+			sqlite_step_statement(
+				db2.as_ptr(),
+				&format!(
+					"INSERT INTO bench (id, payload) VALUES ({}, randomblob(4096));",
+					i
+				),
+			)
+			.expect("insert should succeed");
+		}
+		sqlite_exec(db2.as_ptr(), "COMMIT;").expect("commit");
+		let elapsed = start.elapsed();
+
+		let resolve_total = ctx.resolve_pages_total.load(relaxed);
+		let cache_hits = ctx.resolve_pages_cache_hits.load(relaxed);
+		let fetches = ctx.resolve_pages_fetches.load(relaxed);
+		let pages_fetched = ctx.pages_fetched_total.load(relaxed);
+		let prefetch = ctx.prefetch_pages_total.load(relaxed);
+		let commits = ctx.commit_total.load(relaxed);
+
+		eprintln!("=== 1MB INSERT PROFILE (WARM CACHE) ===");
+		eprintln!("  wall clock:           {:?}", elapsed);
+		eprintln!("  resolve_pages calls:  {}", resolve_total);
+		eprintln!("  cache hits (pages):   {}", cache_hits);
+		eprintln!("  engine fetches:       {}", fetches);
+		eprintln!("  pages fetched total:  {}", pages_fetched);
+		eprintln!("  prefetch pages:       {}", prefetch);
+		eprintln!("  commits:              {}", commits);
+		eprintln!("========================================");
+
+		// Second 256-row transaction into the already-populated table.
+		// All new pages are beyond db_size_pages, so no engine fetches.
+		assert_eq!(
+			fetches, 0,
+			"expected 0 engine fetches during warm 1MB insert"
+		);
+		assert_eq!(
+			commits, 1,
+			"expected exactly 1 commit for transactional insert"
+		);
+
+		let count = sqlite_query_i64(db2.as_ptr(), "SELECT COUNT(*) FROM bench;")
+			.expect("count should succeed");
+		assert_eq!(count, 512);
+	}
+
+	#[test]
+	fn profile_large_tx_insert_1mb() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let db = harness.open_db(&runtime);
+		let ctx = direct_vfs_ctx(&db);
+
+		sqlite_exec(
+			db.as_ptr(),
+			"CREATE TABLE bench (id INTEGER PRIMARY KEY, payload BLOB NOT NULL);",
+		)
+		.expect("create table should succeed");
+
+		// Reset counters after schema setup
+		ctx.resolve_pages_total
+			.store(0, std::sync::atomic::Ordering::Relaxed);
+		ctx.resolve_pages_cache_hits
+			.store(0, std::sync::atomic::Ordering::Relaxed);
+		ctx.resolve_pages_fetches
+			.store(0, std::sync::atomic::Ordering::Relaxed);
+		ctx.pages_fetched_total
+			.store(0, std::sync::atomic::Ordering::Relaxed);
+		ctx.prefetch_pages_total
+			.store(0, std::sync::atomic::Ordering::Relaxed);
+		ctx.commit_total
+			.store(0, std::sync::atomic::Ordering::Relaxed);
+
+		let start = std::time::Instant::now();
+
+		sqlite_exec(db.as_ptr(), "BEGIN;").expect("begin should succeed");
+		for i in 0..256 {
+			sqlite_step_statement(
+				db.as_ptr(),
+				&format!(
+					"INSERT INTO bench (id, payload) VALUES ({}, randomblob(4096));",
+					i
+				),
+			)
+			.expect("insert should succeed");
+		}
+		sqlite_exec(db.as_ptr(), "COMMIT;").expect("commit should succeed");
+
+		let elapsed = start.elapsed();
+		let relaxed = std::sync::atomic::Ordering::Relaxed;
+
+		let resolve_total = ctx.resolve_pages_total.load(relaxed);
+		let cache_hits = ctx.resolve_pages_cache_hits.load(relaxed);
+		let fetches = ctx.resolve_pages_fetches.load(relaxed);
+		let pages_fetched = ctx.pages_fetched_total.load(relaxed);
+		let prefetch = ctx.prefetch_pages_total.load(relaxed);
+		let commits = ctx.commit_total.load(relaxed);
+
+		eprintln!("=== 1MB INSERT PROFILE (256 rows x 4KB) ===");
+		eprintln!("  wall clock:           {:?}", elapsed);
+		eprintln!("  resolve_pages calls:  {}", resolve_total);
+		eprintln!("  cache hits (pages):   {}", cache_hits);
+		eprintln!("  engine fetches:       {}", fetches);
+		eprintln!("  pages fetched total:  {}", pages_fetched);
+		eprintln!("  prefetch pages:       {}", prefetch);
+		eprintln!("  commits:              {}", commits);
+		eprintln!("============================================");
+
+		// Assert expected zero-fetch behavior: in a single transaction,
+		// all writes are to new pages, so no engine fetches should happen.
+		// Only the single commit at the end should hit the engine.
+		assert_eq!(
+			fetches, 0,
+			"expected 0 engine fetches during 1MB insert transaction"
+		);
+		assert_eq!(
+			commits, 1,
+			"expected exactly 1 commit for transactional insert"
+		);
+
+		let count = sqlite_query_i64(db.as_ptr(), "SELECT COUNT(*) FROM bench;")
+			.expect("count should succeed");
+		assert_eq!(count, 256);
+	}
+
+	// Regression test for fence mismatch during rapid autocommit inserts.
+	// Each autocommit INSERT is its own transaction. This test drives many
+	// sequential commits through the VFS and verifies they all succeed.
+	#[test]
+	fn autocommit_inserts_maintain_head_txid_consistency() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let db = harness.open_db(&runtime);
+		let ctx = direct_vfs_ctx(&db);
+
+		sqlite_exec(
+			db.as_ptr(),
+			"CREATE TABLE t (id INTEGER PRIMARY KEY, v INTEGER NOT NULL);",
+		)
+		.expect("create table should succeed");
+
+		let relaxed = std::sync::atomic::Ordering::Relaxed;
+		ctx.commit_total.store(0, relaxed);
+
+		// 100 sequential autocommit inserts. If fence mismatch is the bug,
+		// this will fail partway through with "commit head_txid X did not
+		// match current head_txid X-1".
+		for i in 0..100 {
+			sqlite_exec(
+				db.as_ptr(),
+				&format!("INSERT INTO t (id, v) VALUES ({i}, {});", i * 2),
+			)
+			.expect("autocommit insert should not fence-mismatch");
+		}
+
+		let commits = ctx.commit_total.load(relaxed);
+		// Each autocommit INSERT = 1 commit. CREATE TABLE was 1 more.
+		// We reset commit_total after CREATE, so expect 100.
+		assert_eq!(commits, 100, "expected exactly 100 commits");
+
+		let count =
+			sqlite_query_i64(db.as_ptr(), "SELECT COUNT(*) FROM t;").expect("count should succeed");
+		assert_eq!(count, 100);
+
+		// Verify the sum to make sure data is correct and not corrupted
+		let sum =
+			sqlite_query_i64(db.as_ptr(), "SELECT SUM(v) FROM t;").expect("sum should succeed");
+		assert_eq!(sum, (0..100).map(|i| i * 2).sum::<i64>());
+	}
+
+	// Regression test: 5 actors run 200 autocommits each on the same engine.
+	// Compaction is triggered via the mpsc channel after each commit, so this
+	// also exercises the commit-vs-compaction race that caused fence rewinds
+	// before the tx_get_value_serializable fix.
+	#[test]
+	fn stress_concurrent_multi_actor_autocommits() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let engine = runtime.block_on(harness.open_engine());
+
+		let mut dbs = Vec::new();
+		for i in 0..5 {
+			let actor_id = format!("{}-stress-{}", harness.actor_id, i);
+			let db = harness.open_db_on_engine(
+				&runtime,
+				engine.clone(),
+				&actor_id,
+				VfsConfig::default(),
+			);
+			sqlite_exec(
+				db.as_ptr(),
+				"CREATE TABLE t (id INTEGER PRIMARY KEY, v INTEGER NOT NULL);",
+			)
+			.expect("create");
+			dbs.push(db);
+		}
+
+		// Interleave 200 autocommit inserts across all 5 actors
+		for i in 0..200 {
+			for db in &dbs {
+				sqlite_exec(
+					db.as_ptr(),
+					&format!("INSERT INTO t (id, v) VALUES ({i}, {i});"),
+				)
+				.expect("insert");
+			}
+		}
+
+		for db in &dbs {
+			let count = sqlite_query_i64(db.as_ptr(), "SELECT COUNT(*) FROM t;").expect("count");
+			assert_eq!(count, 200);
+		}
+	}
+
+	// Regression test: two actors run autocommits concurrently on the same
+	// SqliteEngine. If anything in the engine (e.g., compaction) cross-contaminates
+	// actors or races on shared state, we'd see fence mismatches.
+	#[test]
+	fn concurrent_multi_actor_autocommits() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let engine = runtime.block_on(harness.open_engine());
+
+		let actor_a = format!("{}-a", harness.actor_id);
+		let actor_b = format!("{}-b", harness.actor_id);
+
+		let db_a =
+			harness.open_db_on_engine(&runtime, engine.clone(), &actor_a, VfsConfig::default());
+		let db_b =
+			harness.open_db_on_engine(&runtime, engine.clone(), &actor_b, VfsConfig::default());
+
+		sqlite_exec(
+			db_a.as_ptr(),
+			"CREATE TABLE t (id INTEGER PRIMARY KEY, v INTEGER NOT NULL);",
+		)
+		.expect("create a");
+		sqlite_exec(
+			db_b.as_ptr(),
+			"CREATE TABLE t (id INTEGER PRIMARY KEY, v INTEGER NOT NULL);",
+		)
+		.expect("create b");
+
+		// Run 100 autocommits on each actor, interleaved.
+		for i in 0..100 {
+			sqlite_exec(
+				db_a.as_ptr(),
+				&format!("INSERT INTO t (id, v) VALUES ({i}, {i});"),
+			)
+			.expect("insert a");
+			sqlite_exec(
+				db_b.as_ptr(),
+				&format!("INSERT INTO t (id, v) VALUES ({i}, {i});"),
+			)
+			.expect("insert b");
+		}
+
+		let count_a = sqlite_query_i64(db_a.as_ptr(), "SELECT COUNT(*) FROM t;").expect("count a");
+		assert_eq!(count_a, 100);
+		let count_b = sqlite_query_i64(db_b.as_ptr(), "SELECT COUNT(*) FROM t;").expect("count b");
+		assert_eq!(count_b, 100);
+	}
+
+	// Same as above but across a close/reopen cycle to exercise takeover.
+	#[test]
+	fn autocommit_survives_close_reopen() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let engine = runtime.block_on(harness.open_engine());
+		let actor_id = &harness.actor_id;
+
+		{
+			let db = harness.open_db_on_engine(
+				&runtime,
+				engine.clone(),
+				actor_id,
+				VfsConfig::default(),
+			);
+			sqlite_exec(
+				db.as_ptr(),
+				"CREATE TABLE t (id INTEGER PRIMARY KEY, v INTEGER NOT NULL);",
+			)
+			.expect("create table");
+			for i in 0..50 {
+				sqlite_exec(
+					db.as_ptr(),
+					&format!("INSERT INTO t (id, v) VALUES ({i}, {});", i),
+				)
+				.expect("insert");
+			}
+		}
+
+		// Reopen (triggers takeover which bumps generation)
+		let db2 =
+			harness.open_db_on_engine(&runtime, engine.clone(), actor_id, VfsConfig::default());
+		for i in 50..100 {
+			sqlite_exec(
+				db2.as_ptr(),
+				&format!("INSERT INTO t (id, v) VALUES ({i}, {});", i),
+			)
+			.expect("insert after reopen");
+		}
+
+		let count = sqlite_query_i64(db2.as_ptr(), "SELECT COUNT(*) FROM t;")
+			.expect("count should succeed");
+		assert_eq!(count, 100);
+	}
+
+	// Bench-parity tests. Each mirrors a workload in
+	// examples/kitchen-sink/src/actors/testing/test-sqlite-bench.ts so
+	// storage-layer regressions surface here without needing the full stack.
+
+	fn open_bench_db(runtime: &tokio::runtime::Runtime) -> NativeDatabase {
+		let harness = DirectEngineHarness::new();
+		harness.open_db(runtime)
+	}
+
+	#[test]
+	fn bench_insert_tx_x10000() {
+		let runtime = direct_runtime();
+		let db = open_bench_db(&runtime);
+		sqlite_exec(
+			db.as_ptr(),
+			"CREATE TABLE t (id INTEGER PRIMARY KEY, v INTEGER);",
+		)
+		.unwrap();
+
+		sqlite_exec(db.as_ptr(), "BEGIN").unwrap();
+		for i in 0..10_000 {
+			sqlite_exec(
+				db.as_ptr(),
+				&format!("INSERT INTO t (id, v) VALUES ({i}, {i});"),
+			)
+			.unwrap();
+		}
+		sqlite_exec(db.as_ptr(), "COMMIT").unwrap();
+
+		assert_eq!(
+			sqlite_query_i64(db.as_ptr(), "SELECT COUNT(*) FROM t;").unwrap(),
+			10_000
+		);
+	}
+
+	#[test]
+	fn bench_large_tx_insert_500kb() {
+		large_tx_insert(500 * 1024);
+	}
+
+	#[test]
+	fn bench_large_tx_insert_10mb() {
+		large_tx_insert(10 * 1024 * 1024);
+	}
+
+	#[test]
+	fn bench_large_tx_insert_50mb() {
+		// 50MB exercises the slow-path stage/finalize chunking that has
+		// historically hit decode errors under certain transports.
+		large_tx_insert(50 * 1024 * 1024);
+	}
+
+	fn large_tx_insert(target_bytes: usize) {
+		let runtime = direct_runtime();
+		let db = open_bench_db(&runtime);
+		sqlite_exec(
+			db.as_ptr(),
+			"CREATE TABLE large_tx (id INTEGER PRIMARY KEY AUTOINCREMENT, payload BLOB NOT NULL);",
+		)
+		.unwrap();
+
+		let row_size = 4 * 1024;
+		let rows = (target_bytes + row_size - 1) / row_size;
+		sqlite_exec(db.as_ptr(), "BEGIN").unwrap();
+		for _ in 0..rows {
+			sqlite_exec(
+				db.as_ptr(),
+				&format!("INSERT INTO large_tx (payload) VALUES (randomblob({row_size}));"),
+			)
+			.unwrap();
+		}
+		if let Err(err) = sqlite_exec(db.as_ptr(), "COMMIT") {
+			let vfs_err = direct_vfs_ctx(&db).clone_last_error();
+			panic!(
+				"COMMIT failed for {} MiB: sqlite={}, vfs_last_error={:?}",
+				target_bytes / (1024 * 1024),
+				err,
+				vfs_err,
+			);
+		}
+
+		assert_eq!(
+			sqlite_query_i64(db.as_ptr(), "SELECT COUNT(*) FROM large_tx;").unwrap(),
+			rows as i64
+		);
+	}
+
+	#[test]
+	fn bench_churn_insert_delete_10x1000() {
+		// Tests freelist reuse / space reclamation under heavy churn.
+		let runtime = direct_runtime();
+		let db = open_bench_db(&runtime);
+		sqlite_exec(
+			db.as_ptr(),
+			"CREATE TABLE churn (id INTEGER PRIMARY KEY AUTOINCREMENT, payload BLOB NOT NULL);",
+		)
+		.unwrap();
+		for _ in 0..10 {
+			sqlite_exec(db.as_ptr(), "BEGIN").unwrap();
+			for _ in 0..1000 {
+				sqlite_exec(
+					db.as_ptr(),
+					"INSERT INTO churn (payload) VALUES (randomblob(1024));",
+				)
+				.unwrap();
+			}
+			sqlite_exec(db.as_ptr(), "DELETE FROM churn;").unwrap();
+			sqlite_exec(db.as_ptr(), "COMMIT").unwrap();
+		}
+		assert_eq!(
+			sqlite_query_i64(db.as_ptr(), "SELECT COUNT(*) FROM churn;").unwrap(),
+			0
+		);
+	}
+
+	#[test]
+	fn bench_mixed_oltp_large() {
+		let runtime = direct_runtime();
+		let db = open_bench_db(&runtime);
+		sqlite_exec(
+			db.as_ptr(),
+			"CREATE TABLE mixed (id INTEGER PRIMARY KEY, v INTEGER NOT NULL, data BLOB NOT NULL);",
+		)
+		.unwrap();
+
+		sqlite_exec(db.as_ptr(), "BEGIN").unwrap();
+		for i in 0..500 {
+			sqlite_exec(
+				db.as_ptr(),
+				&format!(
+					"INSERT INTO mixed (id, v, data) VALUES ({i}, {}, randomblob(1024));",
+					i * 2
+				),
+			)
+			.unwrap();
+		}
+		sqlite_exec(db.as_ptr(), "COMMIT").unwrap();
+
+		sqlite_exec(db.as_ptr(), "BEGIN").unwrap();
+		for i in 0..500 {
+			sqlite_exec(
+				db.as_ptr(),
+				&format!(
+					"INSERT INTO mixed (id, v, data) VALUES ({}, {}, randomblob(1024));",
+					500 + i,
+					i * 3
+				),
+			)
+			.unwrap();
+			sqlite_exec(
+				db.as_ptr(),
+				&format!("UPDATE mixed SET v = v + 1 WHERE id = {i};"),
+			)
+			.unwrap();
+			if i % 5 == 0 && i >= 50 {
+				sqlite_exec(
+					db.as_ptr(),
+					&format!("DELETE FROM mixed WHERE id = {};", i - 50),
+				)
+				.unwrap();
+			}
+		}
+		sqlite_exec(db.as_ptr(), "COMMIT").unwrap();
+
+		let count = sqlite_query_i64(db.as_ptr(), "SELECT COUNT(*) FROM mixed;").unwrap();
+		assert!(count > 900 && count < 1000);
+	}
+
+	#[test]
+	fn bench_bulk_update_1000_rows() {
+		let runtime = direct_runtime();
+		let db = open_bench_db(&runtime);
+		sqlite_exec(
+			db.as_ptr(),
+			"CREATE TABLE bulk (id INTEGER PRIMARY KEY, v INTEGER);",
+		)
+		.unwrap();
+		sqlite_exec(db.as_ptr(), "BEGIN").unwrap();
+		for i in 0..1000 {
+			sqlite_exec(
+				db.as_ptr(),
+				&format!("INSERT INTO bulk (id, v) VALUES ({i}, {i});"),
+			)
+			.unwrap();
+		}
+		sqlite_exec(db.as_ptr(), "COMMIT").unwrap();
+
+		sqlite_exec(db.as_ptr(), "BEGIN").unwrap();
+		for i in 0..1000 {
+			sqlite_exec(
+				db.as_ptr(),
+				&format!("UPDATE bulk SET v = v + 1 WHERE id = {i};"),
+			)
+			.unwrap();
+		}
+		sqlite_exec(db.as_ptr(), "COMMIT").unwrap();
+
+		assert_eq!(
+			sqlite_query_i64(db.as_ptr(), "SELECT SUM(v) FROM bulk;").unwrap(),
+			(0..1000).map(|i| i + 1).sum::<i64>()
+		);
+	}
+
+	#[test]
+	fn bench_truncate_and_regrow() {
+		let runtime = direct_runtime();
+		let db = open_bench_db(&runtime);
+		sqlite_exec(
+			db.as_ptr(),
+			"CREATE TABLE regrow (id INTEGER PRIMARY KEY AUTOINCREMENT, payload BLOB NOT NULL);",
+		)
+		.unwrap();
+		for _ in 0..2 {
+			sqlite_exec(db.as_ptr(), "BEGIN").unwrap();
+			for _ in 0..500 {
+				sqlite_exec(
+					db.as_ptr(),
+					"INSERT INTO regrow (payload) VALUES (randomblob(1024));",
+				)
+				.unwrap();
+			}
+			sqlite_exec(db.as_ptr(), "COMMIT").unwrap();
+			sqlite_exec(db.as_ptr(), "DELETE FROM regrow;").unwrap();
+		}
+		assert_eq!(
+			sqlite_query_i64(db.as_ptr(), "SELECT COUNT(*) FROM regrow;").unwrap(),
+			0
+		);
+	}
+
+	#[test]
+	fn bench_many_small_tables() {
+		let runtime = direct_runtime();
+		let db = open_bench_db(&runtime);
+		sqlite_exec(db.as_ptr(), "BEGIN").unwrap();
+		for i in 0..50 {
+			sqlite_exec(
+				db.as_ptr(),
+				&format!("CREATE TABLE t_{i} (id INTEGER PRIMARY KEY, v INTEGER);"),
+			)
+			.unwrap();
+			for j in 0..10 {
+				sqlite_exec(
+					db.as_ptr(),
+					&format!("INSERT INTO t_{i} (id, v) VALUES ({j}, {});", i * j),
+				)
+				.unwrap();
+			}
+		}
+		sqlite_exec(db.as_ptr(), "COMMIT").unwrap();
+
+		let total: i64 = (0..50)
+			.map(|i| {
+				sqlite_query_i64(db.as_ptr(), &format!("SELECT COUNT(*) FROM t_{i};")).unwrap()
+			})
+			.sum();
+		assert_eq!(total, 500);
+	}
+
+	#[test]
+	fn bench_index_creation_on_10k_rows() {
+		let runtime = direct_runtime();
+		let db = open_bench_db(&runtime);
+		sqlite_exec(
+			db.as_ptr(),
+			"CREATE TABLE idx_test (id INTEGER PRIMARY KEY AUTOINCREMENT, k TEXT NOT NULL, v INTEGER NOT NULL);",
+		)
+		.unwrap();
+		sqlite_exec(db.as_ptr(), "BEGIN").unwrap();
+		for i in 0..10_000 {
+			sqlite_exec(
+				db.as_ptr(),
+				&format!(
+					"INSERT INTO idx_test (k, v) VALUES ('key-{}-{i}', {i});",
+					i % 1000
+				),
+			)
+			.unwrap();
+		}
+		sqlite_exec(db.as_ptr(), "COMMIT").unwrap();
+
+		sqlite_exec(db.as_ptr(), "CREATE INDEX idx_test_k ON idx_test(k);").unwrap();
+
+		assert_eq!(
+			sqlite_query_i64(db.as_ptr(), "SELECT COUNT(*) FROM idx_test;").unwrap(),
+			10_000
+		);
+	}
+
+	#[test]
+	fn bench_growing_aggregation() {
+		let runtime = direct_runtime();
+		let db = open_bench_db(&runtime);
+		sqlite_exec(
+			db.as_ptr(),
+			"CREATE TABLE agg (id INTEGER PRIMARY KEY AUTOINCREMENT, v INTEGER NOT NULL);",
+		)
+		.unwrap();
+
+		let batches = 20;
+		let per_batch = 100;
+		for batch in 0..batches {
+			sqlite_exec(db.as_ptr(), "BEGIN").unwrap();
+			for i in 0..per_batch {
+				sqlite_exec(
+					db.as_ptr(),
+					&format!("INSERT INTO agg (v) VALUES ({});", batch * per_batch + i),
+				)
+				.unwrap();
+			}
+			sqlite_exec(db.as_ptr(), "COMMIT").unwrap();
+			let expected_sum: i64 = (0..(batch + 1) * per_batch).map(|i| i as i64).sum();
+			assert_eq!(
+				sqlite_query_i64(db.as_ptr(), "SELECT SUM(v) FROM agg;").unwrap(),
+				expected_sum
+			);
+		}
 	}
 }

@@ -13,7 +13,9 @@ use crate::error::SqliteStorageError;
 use crate::keys::{delta_chunk_key, delta_chunk_prefix, meta_key, pidx_delta_key};
 use crate::ltx::{LtxHeader, decode_ltx_v3, encode_ltx_v3};
 use crate::quota::{encode_db_head_with_usage, tracked_storage_entry_size};
-use crate::types::{DBHead, DirtyPage, SQLITE_MAX_DELTA_BYTES, SqliteMeta};
+use crate::types::{
+	DirtyPage, SQLITE_MAX_DELTA_BYTES, SqliteMeta, SqliteOrigin, decode_db_head,
+};
 use crate::udb;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -63,6 +65,7 @@ pub struct CommitFinalizeRequest {
 	pub txid: u64,
 	pub new_db_size_pages: u32,
 	pub now_ms: i64,
+	pub origin_override: Option<SqliteOrigin>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -691,6 +694,9 @@ impl SqliteEngine {
 
 				head.head_txid = request.txid;
 				head.db_size_pages = request.new_db_size_pages;
+				if let Some(origin_override) = request.origin_override {
+					head.origin = origin_override;
+				}
 
 				let txid_bytes = request.txid.to_be_bytes();
 				let mut usage_without_meta = head.sqlite_storage_used.saturating_sub(
@@ -799,10 +805,6 @@ impl SqliteEngine {
 	}
 }
 
-fn decode_db_head(bytes: &[u8]) -> Result<DBHead> {
-	serde_bare::from_slice(bytes).context("decode sqlite db head")
-}
-
 fn dirty_pages_raw_bytes(dirty_pages: &[DirtyPage]) -> Result<u64> {
 	dirty_pages.iter().try_fold(0u64, |total, page| {
 		let page_bytes =
@@ -835,7 +837,7 @@ mod tests {
 	};
 	use crate::types::{
 		DBHead, DirtyPage, FetchedPage, SQLITE_DEFAULT_MAX_STORAGE_BYTES, SQLITE_PAGE_SIZE,
-		SQLITE_SHARD_SIZE, SQLITE_VFS_V2_SCHEMA_VERSION,
+		SQLITE_SHARD_SIZE, SQLITE_VFS_V2_SCHEMA_VERSION, SqliteOrigin,
 	};
 	use crate::udb::{WriteOp, apply_write_ops};
 
@@ -854,6 +856,7 @@ mod tests {
 			creation_ts_ms: 123,
 			sqlite_storage_used: 0,
 			sqlite_max_storage: SQLITE_DEFAULT_MAX_STORAGE_BYTES,
+			origin: SqliteOrigin::Native,
 		}
 	}
 
@@ -922,6 +925,7 @@ mod tests {
 					txid: stage_begin.txid,
 					new_db_size_pages,
 					now_ms,
+					origin_override: None,
 				},
 			)
 			.await?;
@@ -1513,6 +1517,7 @@ mod tests {
 					txid: 999,
 					new_db_size_pages: 1,
 					now_ms: 777,
+					origin_override: None,
 				},
 			)
 			.await

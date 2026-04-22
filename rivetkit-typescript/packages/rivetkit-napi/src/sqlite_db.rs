@@ -34,7 +34,6 @@ impl SqliteDb {
 					.sql()
 					.runtime_config()
 					.map_err(crate::napi_anyhow_error)?,
-				Vec::new(),
 			)
 			.await?,
 		);

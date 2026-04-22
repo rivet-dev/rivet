@@ -68,7 +68,7 @@ mod tests {
 	use crate::test_utils::{clear_op_count, scan_prefix_values, test_db};
 	use crate::types::{
 		DBHead, DirtyPage, SQLITE_DEFAULT_MAX_STORAGE_BYTES, SQLITE_PAGE_SIZE, SQLITE_SHARD_SIZE,
-		SQLITE_VFS_V2_SCHEMA_VERSION,
+		SQLITE_VFS_V2_SCHEMA_VERSION, SqliteOrigin,
 	};
 	use crate::udb::{self, WriteOp, apply_write_ops};
 
@@ -87,6 +87,7 @@ mod tests {
 			creation_ts_ms: 123,
 			sqlite_storage_used: 0,
 			sqlite_max_storage: SQLITE_DEFAULT_MAX_STORAGE_BYTES,
+			origin: SqliteOrigin::Native,
 		}
 	}
 
