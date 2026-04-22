@@ -23,20 +23,6 @@ async function getRivetSse(): Promise<typeof RivetSse> {
 const MAX_RETRIES = 8;
 const BASE_DELAY_MS = 1_000;
 
-async function sleep(ms: number, signal: AbortSignal) {
-	return new Promise<void>((resolve) => {
-		const timeout = setTimeout(resolve, ms);
-		signal.addEventListener(
-			"abort",
-			() => {
-				clearTimeout(timeout);
-				resolve();
-			},
-			{ once: true },
-		);
-	});
-}
-
 function parseSseEvent(raw: string): RivetSse.LogStreamEvent | null {
 	let eventType = "message";
 	let data = "";
@@ -120,6 +106,21 @@ async function* streamLogsWithCredentials(
 	}
 }
 
+async function sleep(ms: number, signal: AbortSignal) {
+	return new Promise<void>((resolve) => {
+		const timeout = setTimeout(resolve, ms);
+		signal.addEventListener(
+			"abort",
+			() => {
+				clearTimeout(timeout);
+				resolve();
+			},
+			{ once: true },
+		);
+	});
+}
+
+
 async function streamWithRetry(
 	project: string,
 	namespace: string,
@@ -134,9 +135,8 @@ async function streamWithRetry(
 		if (signal.aborted) return "aborted";
 
 		try {
-			const sse = await getRivetSse();
-			const stream = sse.streamLogs(
-				options,
+			const stream = streamLogsWithCredentials(
+				cloudEnv().VITE_APP_CLOUD_API_URL,
 				project,
 				namespace,
 				pool,
@@ -261,5 +261,13 @@ export function useDeploymentLogsStream({
 		}
 	}, [paused]);
 
-	return { logs, isLoading, error };
+	return {
+		logs,
+		isLoading,
+		error,
+		streamError: null,
+		isLoadingMore: false,
+		hasMore: false,
+		loadMoreHistory: () => { },
+	};
 }

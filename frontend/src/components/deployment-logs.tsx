@@ -1,4 +1,4 @@
-import type { Rivet } from "@rivet-gg/cloud";
+import type { RivetSse } from "@rivet-gg/cloud";
 import { faTriangleExclamation, Icon } from "@rivet-gg/icons";
 import type { Virtualizer } from "@tanstack/react-virtual";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -54,16 +54,18 @@ const SKELETON_KEYS = [
 ];
 
 interface DeploymentLogsProps {
+	project?: string;
+	namespace?: string;
 	pool: string;
 	filter?: string;
 	region?: string;
 	paused?: boolean;
-	logsRef?: React.MutableRefObject<Rivet.LogHistoryResponseItem[]>;
+	logsRef?: React.MutableRefObject<RivetSse.LogStreamEvent.Log[]>;
 }
 
 interface LogRowData {
 	className?: string;
-	entry?: Rivet.LogHistoryResponseItem;
+	entry?: RivetSse.LogStreamEvent.Log;
 	isSentinel?: boolean;
 	isLoadingMore?: boolean;
 }
@@ -96,21 +98,21 @@ function LogRow({ entry, isSentinel, isLoadingMore, ...props }: LogRowData) {
 				className={cn(
 					"grid grid-cols-[max-content,16ch,3fr] gap-3 whitespace-pre-wrap break-words px-4 py-1 border-b",
 					{
-						"text-red-400": entry.stream === "stderr",
-						"text-muted-foreground": entry.stream !== "stderr",
+						"text-red-400": entry.data.severity === "error",
+						"text-muted-foreground": entry.data.severity !== "error",
 					},
 				)}
 			>
 				<span className="text-neutral-500 shrink-0">
-					{entry.timestamp}
+					{entry.data.timestamp}
 				</span>
-				{entry.region ? (
+				{entry.data.region ? (
 					<span className="text-neutral-600 shrink-0">
-						[{entry.region}]
+						[{entry.data.region}]
 					</span>
 				) : null}
 				<span className="flex-1">
-					<AnsiText text={entry.message} />
+					<AnsiText text={entry.data.message} />
 				</span>
 			</div>
 		</div>
@@ -118,6 +120,8 @@ function LogRow({ entry, isSentinel, isLoadingMore, ...props }: LogRowData) {
 }
 
 export function DeploymentLogs({
+	project,
+	namespace,
 	pool,
 	filter,
 	region,
@@ -132,7 +136,7 @@ export function DeploymentLogs({
 		isLoadingMore,
 		hasMore,
 		loadMoreHistory,
-	} = useDeploymentLogsStream({ pool, filter, region, paused });
+	} = useDeploymentLogsStream({ project: project ?? "", namespace: namespace ?? "", pool, filter, region, paused });
 
 	const viewportRef = useRef<HTMLDivElement>(null);
 	const virtualizerRef = useRef<Virtualizer<HTMLDivElement, Element>>(null);

@@ -26,7 +26,6 @@ import { toast } from "sonner";
 import { match } from "ts-pattern";
 import z from "zod";
 import * as ConnectServerlessForm from "@/app/forms/connect-manual-serverless-form";
-import { features } from "@/lib/features";
 import {
 	AccordionItem,
 	AccordionTrigger,
@@ -48,6 +47,7 @@ import { defineStepper } from "@/components/ui/stepper";
 import { deriveProviderFromMetadata } from "@/lib/data";
 import { successfulBackendSetupEffect } from "@/lib/effects";
 import { cloudEnv } from "@/lib/env";
+import { features } from "@/lib/features";
 import { usePublishableToken } from "@/queries/accessors";
 import { queryClient } from "@/queries/global";
 import { cn } from "../components/lib/utils";
@@ -366,10 +366,6 @@ function StepperFooter() {
 function ProviderSetup() {
 	const { setValue, control } = useFormContext();
 
-	const filteredOptions = deployOptions.filter(
-		(option) => !option.specializedPlatform,
-	);
-
 	return (
 		<div data-testid={TEST_IDS.Onboarding.IntegrationProviderSelection}>
 			<p className="text-sm text-muted-foreground mb-4">
@@ -380,33 +376,10 @@ function ProviderSetup() {
 				control={control}
 				name="provider"
 				render={({ field }) => {
-					// const rivetCompute = filteredOptions.find(
-					// 	(o) => o.name === "rivet",
-					// );
-					const rest = filteredOptions.filter(
-						(o) => o.name !== "rivet",
-					);
 					return (
 						<div className="flex flex-col gap-2">
-							{/* {rivetCompute ? (
-								<ProviderCard
-									option={rivetCompute}
-									isSelected={
-										field.value === rivetCompute.name
-									}
-									onSelect={() =>
-										setValue("provider", rivetCompute.name, {
-											shouldDirty: true,
-											shouldTouch: true,
-											shouldValidate: true,
-										})
-									}
-									className="py-5"
-									iconClassName="!w-7"
-								/>
-							) : null} */}
 							<div className="grid grid-cols-2 gap-2">
-								{rest.map((option) => (
+								{deployOptions.map((option) => (
 									<ProviderCard
 										key={option.name}
 										option={option}
@@ -467,14 +440,6 @@ function ProviderCard({
 			<div className="min-w-0">
 				<div className="flex items-center gap-2 flex-wrap">
 					<p className="text-sm font-medium">{option.displayName}</p>
-					{option.badge ? (
-						<Badge
-							variant="secondary"
-							className="shrink-0 text-[10px] px-1.5 py-0"
-						>
-							{option.badge}
-						</Badge>
-					) : null}
 				</div>
 				<p className="text-xs text-muted-foreground">
 					{option.description}
@@ -1027,7 +992,8 @@ function useOtherAgentInstructionsCode(provider?: Provider) {
 }
 
 function CopyAgentInstructionsButton({ provider }: { provider?: Provider }) {
-	if (provider === "rivet") {
+	// FIXME: after we bring back rivet compute
+	if (/*provider === "rivet"*/ false) {
 		return <RivetCopyAgentInstructionsButton />;
 	}
 	return <OtherCopyAgentInstructionsButton provider={provider} />;
@@ -1200,7 +1166,7 @@ function BackendSetupRivet() {
 
 	return (
 		<div className="flex flex-col gap-6">
-			<CopyAgentInstructionsButton provider="rivet" />
+			{/* <CopyAgentInstructionsButton provider="rivet" /> */}
 			<div className="rounded-lg border bg-muted/30 p-8 overflow-hidden">
 				<AnimatePresence mode="wait">
 					<motion.div
