@@ -1,16 +1,29 @@
 import {
 	faActorsBorderless,
+	faArrowUp,
+	faChevronDown,
+	faCircleUser,
+	faCodeBranch,
+	faComment,
 	faMagnifyingGlass,
+	faMoon,
 	faPlus,
+	faRivet,
 	faSliders,
+	faSun,
 	faXmark,
 	Icon,
 } from "@rivet-gg/icons";
 import {
 	Background,
 	BackgroundVariant,
+	BaseEdge,
 	Controls,
 	type Edge,
+	EdgeLabelRenderer,
+	type EdgeProps,
+	type EdgeTypes,
+	getSmoothStepPath,
 	Handle,
 	MarkerType,
 	type Node,
@@ -29,12 +42,31 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { javascript } from "@codemirror/lang-javascript";
+import {
+	githubDarkInit,
+	githubLightInit,
+} from "@uiw/codemirror-theme-github";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { useSearch } from "@tanstack/react-router";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+	useCallback,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+	useSyncExternalStore,
+} from "react";
 import {
 	Button,
 	cn,
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuSeparator,
+	DropdownMenuTrigger,
+	ResizableHandle,
+	ResizablePanel,
+	ResizablePanelGroup,
 	ScrollArea,
 	Tabs,
 	TabsContent,
@@ -42,22 +74,76 @@ import {
 	TabsTrigger,
 } from "@/components";
 import { CodeMirror } from "@/components/code-mirror";
-import { ensureTrailingSlash } from "@/lib/utils";
 import { ActorStatusIndicator } from "../actor-status-indicator";
 import { useDataProvider } from "../data-provider";
-import type { ActorId } from "../queries";
+import type { ActorId, ActorStatus } from "../queries";
+
+// -- Theme --
+
+type Theme = "light" | "dark";
+const THEME_STORAGE_KEY = "mockup-theme";
+
+function readStoredTheme(): Theme {
+	if (typeof window === "undefined") return "dark";
+	const stored = localStorage.getItem(THEME_STORAGE_KEY);
+	if (stored === "light" || stored === "dark") return stored;
+	return document.documentElement.classList.contains("dark")
+		? "dark"
+		: "light";
+}
+
+let currentTheme: Theme =
+	typeof window === "undefined" ? "dark" : readStoredTheme();
+const themeListeners = new Set<() => void>();
+
+function applyTheme(next: Theme) {
+	currentTheme = next;
+	document.documentElement.classList.toggle("dark", next === "dark");
+	localStorage.setItem(THEME_STORAGE_KEY, next);
+	for (const listener of themeListeners) listener();
+}
+
+function subscribeTheme(listener: () => void): () => void {
+	themeListeners.add(listener);
+	return () => {
+		themeListeners.delete(listener);
+	};
+}
+
+function getThemeSnapshot(): Theme {
+	return currentTheme;
+}
+
+function useTheme(): [Theme, () => void] {
+	const theme = useSyncExternalStore(
+		subscribeTheme,
+		getThemeSnapshot,
+		getThemeSnapshot,
+	);
+
+	// Ensure the DOM reflects the stored preference on first render.
+	useEffect(() => {
+		if (typeof window === "undefined") return;
+		const isDark = document.documentElement.classList.contains("dark");
+		if ((currentTheme === "dark") !== isDark) {
+			applyTheme(currentTheme);
+		}
+	}, []);
+
+	const toggle = useCallback(() => {
+		applyTheme(currentTheme === "dark" ? "light" : "dark");
+	}, []);
+
+	return [theme, toggle];
+}
 
 // -- Top Bar --
 
 function MockupTopBar() {
 	return (
-		<div className="h-12 border-b bg-background flex items-center justify-between px-3 shrink-0 z-20">
+		<div className="h-12 mt-2 mx-2 border dark:border-white/10 rounded-lg bg-card flex items-center justify-between px-3 shrink-0 z-20">
 			<div className="flex items-center gap-3">
-				<img
-					src={`${ensureTrailingSlash(import.meta.env.BASE_URL || "")}logo.svg`}
-					alt="Rivet"
-					className="h-5"
-				/>
+				<Icon icon={faRivet} className="text-2xl text-foreground" />
 				<div className="h-5 w-px bg-border" />
 				<NamespaceDropdownPlaceholder />
 			</div>
@@ -71,52 +157,79 @@ function MockupTopBar() {
 					Actor Builds
 				</Button>
 				<div className="h-5 w-px bg-border mx-1" />
-				<Button
-					variant="ghost"
-					size="sm"
-					className="text-muted-foreground"
-				>
-					Billing
-				</Button>
-				<Button
-					variant="ghost"
-					size="sm"
-					className="text-muted-foreground"
-				>
-					Support
-				</Button>
-				<Button
-					variant="ghost"
-					size="sm"
-					className="text-muted-foreground"
-				>
-					What's New
-				</Button>
-				<div className="h-5 w-px bg-border mx-1" />
-				<Button
-					variant="ghost"
-					size="sm"
-					className="text-muted-foreground font-mono text-xs"
-				>
-					Company &#9662;
-				</Button>
+				<AccountMenu />
 			</div>
 		</div>
 	);
 }
 
+function AccountMenu() {
+	const [theme, toggleTheme] = useTheme();
+
+	return (
+		<DropdownMenu>
+			<DropdownMenuTrigger asChild>
+				<Button
+					variant="ghost"
+					size="sm"
+					className="text-muted-foreground gap-2"
+				>
+					<Icon icon={faCircleUser} className="text-base" />
+					<span className="text-xs">Company</span>
+					<Icon
+						icon={faChevronDown}
+						className="text-[10px] opacity-60"
+					/>
+				</Button>
+			</DropdownMenuTrigger>
+			<DropdownMenuContent align="end" className="w-48">
+				<DropdownMenuItem>Billing</DropdownMenuItem>
+				<DropdownMenuItem>Support</DropdownMenuItem>
+				<DropdownMenuItem>What's New</DropdownMenuItem>
+				<DropdownMenuSeparator />
+				<DropdownMenuItem
+					onSelect={(e) => {
+						e.preventDefault();
+						toggleTheme();
+					}}
+				>
+					<Icon
+						icon={theme === "dark" ? faSun : faMoon}
+						className="mr-2 w-3.5 text-muted-foreground"
+					/>
+					{theme === "dark" ? "Light mode" : "Dark mode"}
+				</DropdownMenuItem>
+				<DropdownMenuItem>Settings</DropdownMenuItem>
+				<DropdownMenuItem>Sign out</DropdownMenuItem>
+			</DropdownMenuContent>
+		</DropdownMenu>
+	);
+}
+
 function NamespaceDropdownPlaceholder() {
 	return (
-		<Button
-			variant="ghost"
-			size="sm"
-			className="text-sm text-foreground font-medium"
-		>
-			Namespace
-			<span className="text-muted-foreground ml-1 text-xs">
-				&#9662;
-			</span>
-		</Button>
+		<DropdownMenu>
+			<DropdownMenuTrigger asChild>
+				<Button
+					variant="ghost"
+					size="sm"
+					className="text-foreground gap-2 font-medium"
+				>
+					<span className="text-xs">Namespace</span>
+					<Icon
+						icon={faChevronDown}
+						className="text-[10px] opacity-60"
+					/>
+				</Button>
+			</DropdownMenuTrigger>
+			<DropdownMenuContent align="start" className="w-48">
+				<DropdownMenuItem>default</DropdownMenuItem>
+				<DropdownMenuItem>staging</DropdownMenuItem>
+				<DropdownMenuItem>production</DropdownMenuItem>
+				<DropdownMenuSeparator />
+				<DropdownMenuItem>New namespace</DropdownMenuItem>
+			</DropdownMenuContent>
+		</DropdownMenu>
 	);
 }
 
@@ -126,12 +239,14 @@ interface ActorNodeData {
 	actorId: ActorId;
 	label: string;
 	instances: number;
+	status: ActorStatus;
+	version: string;
 	[key: string]: unknown;
 }
 
 function ActorCanvasNode({ data }: NodeProps<Node<ActorNodeData>>) {
 	return (
-		<div className="bg-card border rounded-lg px-4 py-3 w-[220px] cursor-pointer hover:border-primary/50 transition-colors shadow-sm relative group">
+		<div className="bg-card border dark:border-white/10 dark:bg-white/[0.02] rounded-lg px-4 py-3 w-[240px] cursor-pointer hover:border-primary/50 transition-colors shadow-sm relative group">
 			<Handle
 				type="source"
 				position={Position.Top}
@@ -158,13 +273,21 @@ function ActorCanvasNode({ data }: NodeProps<Node<ActorNodeData>>) {
 			<div className="flex items-center gap-2">
 				<Icon
 					icon={faActorsBorderless}
-					className="text-muted-foreground"
+					className="text-muted-foreground shrink-0"
 				/>
-				<div className="min-w-0">
+				<div className="min-w-0 flex-1">
 					<div className="text-sm truncate">{data.label}</div>
-					<div className="text-[10px] text-muted-foreground">
-						{data.instances} instance{data.instances !== 1 ? "s" : ""}
+					<div className="text-[10px] text-muted-foreground flex items-center gap-1.5">
+						<span className="font-mono">{data.version}</span>
+						<span className="opacity-40">·</span>
+						<span>
+							{data.instances} instance
+							{data.instances !== 1 ? "s" : ""}
+						</span>
 					</div>
+				</div>
+				<div className="flex items-center shrink-0">
+					<ActorStatusIndicator status={data.status} />
 				</div>
 			</div>
 		</div>
@@ -173,6 +296,68 @@ function ActorCanvasNode({ data }: NodeProps<Node<ActorNodeData>>) {
 
 const nodeTypes: NodeTypes = {
 	actor: ActorCanvasNode,
+};
+
+// -- Deletable Edge --
+
+function DeletableEdge({
+	id,
+	sourceX,
+	sourceY,
+	targetX,
+	targetY,
+	sourcePosition,
+	targetPosition,
+	style,
+	markerEnd,
+	selected,
+}: EdgeProps) {
+	const { setEdges } = useReactFlow();
+	const [edgePath, labelX, labelY] = getSmoothStepPath({
+		sourceX,
+		sourceY,
+		sourcePosition,
+		targetX,
+		targetY,
+		targetPosition,
+	});
+
+	const handleDelete = useCallback(
+		(event: React.MouseEvent) => {
+			event.stopPropagation();
+			setEdges((edges) => edges.filter((edge) => edge.id !== id));
+		},
+		[id, setEdges],
+	);
+
+	return (
+		<>
+			<BaseEdge path={edgePath} style={style} markerEnd={markerEnd} />
+			{selected ? (
+				<EdgeLabelRenderer>
+					<div
+						className="nodrag nopan absolute pointer-events-auto"
+						style={{
+							transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
+						}}
+					>
+						<button
+							type="button"
+							onClick={handleDelete}
+							className="flex items-center justify-center w-5 h-5 rounded-full bg-background border text-muted-foreground hover:text-destructive hover:border-destructive shadow-sm transition-colors"
+							aria-label="Delete edge"
+						>
+							<Icon icon={faXmark} className="w-2.5" />
+						</button>
+					</div>
+				</EdgeLabelRenderer>
+			) : null}
+		</>
+	);
+}
+
+const edgeTypes: EdgeTypes = {
+	deletable: DeletableEdge,
 };
 
 // -- Canvas Auto-Fit Hook --
@@ -201,18 +386,21 @@ function FitViewOnChange({
 
 const STORAGE_KEY = "mockup-canvas-state";
 
-const PLACEHOLDER_NAMES = [
-	"Leaderboard",
-	"Chat Room",
-	"Game Lobby",
-	"Auth Session",
-	"Match Maker",
-	"Inventory",
-	"Player Stats",
-	"World State",
+const PLACEHOLDERS: {
+	name: string;
+	instances: number;
+	status: ActorStatus;
+	version: string;
+}[] = [
+	{ name: "Leaderboard", instances: 3, status: "running", version: "v12" },
+	{ name: "Chat Room", instances: 12, status: "running", version: "v8" },
+	{ name: "Game Lobby", instances: 1, status: "sleeping", version: "v4" },
+	{ name: "Auth Session", instances: 48, status: "running", version: "v21" },
+	{ name: "Match Maker", instances: 5, status: "starting", version: "v2" },
+	{ name: "Inventory", instances: 7, status: "running", version: "v15" },
+	{ name: "Player Stats", instances: 1, status: "crashed", version: "v3" },
+	{ name: "World State", instances: 2, status: "running", version: "v9" },
 ];
-
-const PLACEHOLDER_INSTANCES = [3, 12, 1, 48, 5, 7, 1, 2];
 
 function loadCanvasState(): {
 	nodes: Node<ActorNodeData>[];
@@ -249,7 +437,7 @@ function makeDefaultNodes(): Node<ActorNodeData>[] {
 	const X_GAP = 280;
 	const Y_GAP = 100;
 
-	return PLACEHOLDER_NAMES.map((name, i) => ({
+	return PLACEHOLDERS.map((placeholder, i) => ({
 		id: `placeholder-${i}`,
 		type: "actor",
 		position: {
@@ -258,8 +446,10 @@ function makeDefaultNodes(): Node<ActorNodeData>[] {
 		},
 		data: {
 			actorId: `placeholder-${i}` as ActorId,
-			label: name,
-			instances: PLACEHOLDER_INSTANCES[i],
+			label: placeholder.name,
+			instances: placeholder.instances,
+			status: placeholder.status,
+			version: placeholder.version,
 		},
 	}));
 }
@@ -285,13 +475,16 @@ function ActorCanvas({
 
 	const [nodes, setNodes] = useState<Node<ActorNodeData>[]>(() => {
 		const saved = loadCanvasState();
-		if (saved?.nodes?.length) return saved.nodes;
+		if (saved) return saved.nodes ?? [];
 		return makeDefaultNodes();
 	});
 
 	const [edges, setEdges] = useState<Edge[]>(() => {
 		const saved = loadCanvasState();
-		return saved?.edges ?? [];
+		return (saved?.edges ?? []).map((edge) => ({
+			...edge,
+			type: "deletable",
+		}));
 	});
 
 	// Update nodes from real actors if available
@@ -313,13 +506,17 @@ function ActorCanvas({
 					actorId: actor.actorId,
 					label: actor.key || actor.actorId.substring(0, 8),
 					instances: 1,
+					status: "running",
+					version: "v1",
 				},
 			})),
 		);
 	}, [actors]);
 
 	// Persist state on changes
-	const saveTimeout = useRef<ReturnType<typeof setTimeout>>();
+	const saveTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(
+		undefined,
+	);
 	useEffect(() => {
 		clearTimeout(saveTimeout.current);
 		saveTimeout.current = setTimeout(() => saveCanvasState(nodes, edges), 500);
@@ -365,6 +562,7 @@ function ActorCanvas({
 				nodes={nodes}
 				edges={edges}
 				nodeTypes={nodeTypes}
+				edgeTypes={edgeTypes}
 				onNodesChange={onNodesChange}
 				onEdgesChange={onEdgesChange}
 				onConnect={onConnect}
@@ -377,10 +575,10 @@ function ActorCanvas({
 				onNodeClick={handleNodeClick}
 				onPaneClick={handlePaneClick}
 				proOptions={{ hideAttribution: true }}
-				deleteKeyCode="Backspace"
+				deleteKeyCode={["Backspace", "Delete"]}
 				defaultEdgeOptions={{
 					style: { stroke: "hsl(var(--muted-foreground))", strokeWidth: 1.5 },
-					type: "smoothstep",
+					type: "deletable",
 					markerEnd: {
 						type: MarkerType.ArrowClosed,
 						color: "hsl(var(--muted-foreground))",
@@ -390,12 +588,40 @@ function ActorCanvas({
 				<Background
 					variant={BackgroundVariant.Dots}
 					gap={20}
-					size={1.5}
-					color="hsl(var(--border))"
+					size={1.8}
+					color="hsl(var(--muted-foreground) / 0.35)"
 				/>
 				<Controls />
 			</ReactFlow>
+			{nodes.length === 0 ? <CanvasEmptyState /> : null}
 		</ReactFlowProvider>
+	);
+}
+
+function CanvasEmptyState() {
+	return (
+		<div className="absolute inset-0 flex items-center justify-center pointer-events-none z-[5]">
+			<div className="flex flex-col items-center gap-4 pointer-events-auto">
+				<div className="w-20 h-20 rounded-2xl border-2 border-dashed border-muted-foreground/30 flex items-center justify-center">
+					<Icon
+						icon={faActorsBorderless}
+						className="text-3xl text-muted-foreground/60"
+					/>
+				</div>
+				<div className="text-center max-w-xs">
+					<h3 className="text-sm font-medium text-foreground">
+						No actors yet
+					</h3>
+					<p className="text-xs text-muted-foreground mt-1">
+						Create your first actor to start building.
+					</p>
+				</div>
+				<Button size="sm" className="gap-1.5 text-xs">
+					<Icon icon={faPlus} className="w-3" />
+					Create actor
+				</Button>
+			</div>
+		</div>
 	);
 }
 
@@ -415,7 +641,7 @@ function LeftPopover({
 	return (
 		<div
 			className={cn(
-				"absolute left-4 top-4 bottom-4 w-80 bg-card border rounded-lg shadow-xl z-10 flex flex-col overflow-hidden transition-transform duration-300 ease-out",
+				"absolute left-4 top-4 bottom-4 w-80 bg-card border dark:border-white/10 rounded-lg shadow-xl z-10 flex flex-col overflow-hidden transition-transform duration-300 ease-out",
 				visible
 					? "translate-x-0"
 					: "-translate-x-[calc(100%+2rem)]",
@@ -426,34 +652,29 @@ function LeftPopover({
 				onValueChange={(v) => onTabChange(v as "agent" | "versions")}
 				className="flex flex-col flex-1 min-h-0"
 			>
-				<div className="flex items-center justify-between h-[45px]">
-					<TabsList className="flex-1 items-end h-full">
+				<div className="flex items-center justify-between border-b h-[45px] px-2">
+					<TabsList className="items-center bg-transparent gap-0.5 border-b-0 h-auto w-auto">
 						<TabsTrigger
 							value="agent"
-							className="text-xs px-3 py-1 pb-2"
+							className="text-xs px-2.5 py-1 h-7 min-h-0 rounded-md font-medium border-b-0 data-[state=active]:border-b-transparent data-[state=active]:bg-accent"
 						>
 							Agent
 						</TabsTrigger>
 						<TabsTrigger
 							value="versions"
-							className="text-xs px-3 py-1 pb-2"
+							className="text-xs px-2.5 py-1 h-7 min-h-0 rounded-md font-medium border-b-0 data-[state=active]:border-b-transparent data-[state=active]:bg-accent"
 						>
 							Versions
 						</TabsTrigger>
 					</TabsList>
-					<Button
-						variant="ghost"
-						size="icon-sm"
-						onClick={onClose}
-						className="mr-2"
-					>
+					<Button variant="ghost" size="icon-sm" onClick={onClose}>
 						<Icon icon={faXmark} />
 					</Button>
 				</div>
-				<TabsContent value="agent" className="flex-1 mt-0">
+				<TabsContent value="agent" className="flex-1 mt-0 min-h-0">
 					<AgentChat />
 				</TabsContent>
-				<TabsContent value="versions" className="flex-1 mt-0">
+				<TabsContent value="versions" className="flex-1 mt-0 min-h-0">
 					<ScrollArea className="h-full p-4">
 						<div className="text-muted-foreground text-sm text-center py-8">
 							Versions panel placeholder
@@ -488,34 +709,41 @@ const FAKE_MESSAGES = [
 
 function AgentChat() {
 	return (
-		<div className="flex flex-col h-full">
+		<div className="flex flex-col h-full min-h-0">
 			<ScrollArea className="flex-1">
-				<div className="p-3 space-y-3">
-					{FAKE_MESSAGES.map((msg, i) => (
-						<div
-							key={i}
-							className={cn(
-								"rounded-lg px-3 py-2 text-xs leading-relaxed max-w-[90%]",
-								msg.role === "user"
-									? "bg-primary text-primary-foreground ml-auto"
-									: "bg-accent text-accent-foreground",
-							)}
-						>
-							{msg.text}
-						</div>
-					))}
+				<div className="px-4 py-4 space-y-5">
+					{FAKE_MESSAGES.map((msg, i) =>
+						msg.role === "user" ? (
+							<div key={i} className="flex justify-end">
+								<div className="rounded-2xl rounded-br-md bg-accent text-foreground text-xs leading-relaxed px-3 py-2 max-w-[85%]">
+									{msg.text}
+								</div>
+							</div>
+						) : (
+							<div
+								key={i}
+								className="text-xs leading-relaxed text-foreground"
+							>
+								{msg.text}
+							</div>
+						),
+					)}
 				</div>
 			</ScrollArea>
-			<div className="border-t p-2">
-				<div className="flex gap-2">
+			<div className="p-3">
+				<div className="flex items-center gap-2 rounded-lg border bg-muted/20 focus-within:bg-muted/40 focus-within:border-foreground/30 transition-colors px-2.5 py-1">
 					<input
 						type="text"
 						placeholder="Ask the agent..."
-						className="flex-1 bg-transparent border rounded-md px-3 py-1.5 text-xs placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+						className="flex-1 min-w-0 bg-transparent text-xs placeholder:text-muted-foreground focus:outline-none py-1.5"
 					/>
-					<Button size="sm" className="text-xs">
-						Send
-					</Button>
+					<button
+						type="button"
+						aria-label="Send message"
+						className="w-6 h-6 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent flex items-center justify-center transition-colors shrink-0"
+					>
+						<Icon icon={faArrowUp} className="w-2.5" />
+					</button>
 				</div>
 			</div>
 		</div>
@@ -534,26 +762,57 @@ function LeftFloatingButtons({
 	return (
 		<div
 			className={cn(
-				"absolute left-4 top-4 flex gap-2 z-10 transition-all duration-300 ease-out",
+				"absolute left-4 top-4 z-10 bg-card border dark:border-white/10 rounded-md overflow-hidden flex flex-col transition-all duration-300 ease-out",
 				visible
 					? "translate-x-0 opacity-100"
-					: "-translate-x-8 opacity-0 pointer-events-none",
+					: "-translate-x-4 opacity-0 pointer-events-none",
 			)}
 		>
-			<Button
-				variant="secondary"
-				className="shadow-lg"
+			<button
+				type="button"
 				onClick={() => onOpen("agent")}
+				className="flex items-center gap-2 px-2.5 py-1.5 text-xs hover:bg-accent border-b border-border text-foreground transition-colors"
 			>
-				Agent
-			</Button>
-			<Button
-				variant="secondary"
-				className="shadow-lg"
+				<Icon
+					icon={faComment}
+					className="text-muted-foreground w-3.5"
+				/>
+				<span>Agent</span>
+			</button>
+			<button
+				type="button"
 				onClick={() => onOpen("versions")}
+				className="flex items-center gap-2 px-2.5 py-1.5 text-xs hover:bg-accent text-foreground transition-colors"
 			>
-				Versions
-			</Button>
+				<Icon
+					icon={faCodeBranch}
+					className="text-muted-foreground w-3.5"
+				/>
+				<span>Versions</span>
+			</button>
+		</div>
+	);
+}
+
+// -- Right Floating Buttons --
+
+function RightFloatingButtons({ visible }: { visible: boolean }) {
+	return (
+		<div
+			className={cn(
+				"absolute right-4 top-4 z-10 bg-card border dark:border-white/10 rounded-md overflow-hidden flex flex-col transition-all duration-300 ease-out",
+				visible
+					? "translate-x-0 opacity-100"
+					: "translate-x-4 opacity-0 pointer-events-none",
+			)}
+		>
+			<button
+				type="button"
+				className="flex items-center gap-2 px-2.5 py-1.5 text-xs hover:bg-accent text-foreground transition-colors"
+			>
+				<Icon icon={faPlus} className="text-muted-foreground w-3.5" />
+				<span>Create actor</span>
+			</button>
 		</div>
 	);
 }
@@ -563,95 +822,111 @@ function LeftFloatingButtons({
 function RightPopover({
 	actorId,
 	onClose,
+	onSelectActor,
 	visible,
 }: {
 	actorId: string;
 	onClose: () => void;
+	onSelectActor: (actorId: string) => void;
 	visible: boolean;
 }) {
 	return (
 		<div
 			className={cn(
-				"absolute right-4 top-4 bottom-4 w-[40%] min-w-[500px] bg-card border rounded-lg shadow-xl z-10 flex flex-col overflow-hidden transition-transform duration-300 ease-out",
+				"absolute right-4 top-4 bottom-4 w-[48%] min-w-[560px] max-w-[1100px] bg-card border dark:border-white/10 rounded-lg shadow-xl z-10 flex flex-col overflow-hidden transition-transform duration-300 ease-out",
 				visible
 					? "translate-x-0"
 					: "translate-x-[calc(100%+2rem)]",
 			)}
 		>
-			<div className="flex flex-1 min-h-0">
-				<div className="w-[220px] min-w-[220px] border-r flex flex-col">
+			<ResizablePanelGroup direction="horizontal" className="flex-1">
+				<ResizablePanel
+					defaultSize={32}
+					minSize={20}
+					maxSize={50}
+					className="flex flex-col"
+				>
 					<ActorListToolbar />
-					<ActorListPlaceholder selectedActorId={actorId} />
-				</div>
-				<div className="flex-1 flex flex-col min-w-0 relative">
-					<ActorDetailPlaceholder actorId={actorId} />
-					<Button
-						variant="ghost"
-						size="icon-sm"
-						onClick={onClose}
-						className="absolute top-1.5 right-2 z-10"
-					>
-						<Icon icon={faXmark} />
-					</Button>
-				</div>
-			</div>
+					<ActorListPlaceholder
+						selectedActorId={actorId}
+						onSelect={onSelectActor}
+					/>
+				</ResizablePanel>
+				<ResizableHandle />
+				<ResizablePanel defaultSize={68} minSize={50} className="flex flex-col min-w-0">
+					<ActorDetailPlaceholder actorId={actorId} onClose={onClose} />
+				</ResizablePanel>
+			</ResizablePanelGroup>
 		</div>
 	);
 }
 
 function ActorListToolbar() {
 	return (
-		<div className="flex items-center justify-end gap-1 border-b px-2 py-1.5">
-			<Button variant="ghost" size="icon-sm">
-				<Icon icon={faMagnifyingGlass} />
-			</Button>
-			<Button variant="ghost" size="icon-sm">
-				<Icon icon={faPlus} />
-			</Button>
-			<Button variant="ghost" size="icon-sm">
-				<Icon icon={faSliders} />
-			</Button>
-		</div>
+		<>
+			<div className="flex items-center border-b h-[37px] px-3">
+				<span className="text-xs font-medium text-foreground">
+					Actors
+				</span>
+				<span className="ml-auto text-[10px] text-muted-foreground tabular-nums">
+					{PLACEHOLDERS.length} total
+				</span>
+			</div>
+			<div className="flex items-center justify-end gap-0.5 border-b h-[34px] px-1 bg-muted/30">
+				<Button variant="ghost" size="icon-sm" className="h-7 w-7">
+					<Icon icon={faMagnifyingGlass} />
+				</Button>
+				<Button variant="ghost" size="icon-sm" className="h-7 w-7">
+					<Icon icon={faPlus} />
+				</Button>
+				<Button variant="ghost" size="icon-sm" className="h-7 w-7">
+					<Icon icon={faSliders} />
+				</Button>
+			</div>
+		</>
 	);
 }
 
 function ActorListPlaceholder({
 	selectedActorId,
-}: { selectedActorId: string }) {
+	onSelect,
+}: {
+	selectedActorId: string;
+	onSelect: (actorId: string) => void;
+}) {
 	return (
 		<ScrollArea className="flex-1">
-			{Array.from({ length: 12 }, (_, i) => {
+			{PLACEHOLDERS.map((placeholder, i) => {
 				const id = `placeholder-${i}`;
 				const isSelected = id === selectedActorId;
-				const statuses = [
-					"running",
-					"running",
-					"sleeping",
-					"running",
-					"stopped",
-					"running",
-					"running",
-					"sleeping",
-					"running",
-					"running",
-					"crashed",
-					"running",
-				] as const;
 				return (
-					<div
+					<button
+						type="button"
 						key={id}
+						onClick={() => onSelect(id)}
 						className={cn(
-							"flex items-center gap-2 px-2.5 py-1.5 border-b text-sm cursor-pointer hover:bg-accent/50",
-							isSelected && "bg-accent",
+							"w-full flex items-center gap-2 pl-2 pr-2.5 py-1 border-b border-l-2 border-l-transparent text-sm cursor-pointer hover:bg-accent/50 text-left",
+							isSelected && "bg-accent border-l-primary",
 						)}
 					>
-						<ActorStatusIndicator status={statuses[i]} />
-						<span className="font-mono text-xs truncate">
-							actor-{i + 1}
+						<ActorStatusIndicator status={placeholder.status} />
+						<span className="text-xs truncate flex-1 min-w-0">
+							{placeholder.name}
 						</span>
-					</div>
+						<span className="text-[10px] text-muted-foreground font-mono shrink-0">
+							{placeholder.version}
+						</span>
+					</button>
 				);
 			})}
+			<button
+				type="button"
+				className="w-full flex items-center gap-2 pl-2 pr-2.5 py-1 border-b border-dashed border-l-2 border-l-transparent text-muted-foreground hover:text-foreground hover:bg-accent/30 transition-colors"
+			>
+				<span className="size-2 rounded-full border border-dashed border-muted-foreground/60" />
+				<span className="text-xs flex-1 text-left">Create actor</span>
+				<Icon icon={faPlus} className="w-2.5 opacity-60" />
+			</button>
 		</ScrollArea>
 	);
 }
@@ -681,8 +956,72 @@ export default class Leaderboard extends Actor {
 }
 `;
 
-function ActorDetailPlaceholder({ actorId }: { actorId: string }) {
+const TAB_GROUPS = [
+	{
+		id: "source",
+		label: "Source",
+		tabs: [
+			{ value: "code", label: "Code" },
+			{ value: "workflow", label: "Workflow" },
+		],
+	},
+	{
+		id: "data",
+		label: "Data",
+		tabs: [
+			{ value: "database", label: "Database" },
+			{ value: "state", label: "State" },
+			{ value: "queue", label: "Queue" },
+		],
+	},
+	{
+		id: "runtime",
+		label: "Runtime",
+		tabs: [
+			{ value: "connections", label: "Connections" },
+			{ value: "logs", label: "Logs" },
+			{ value: "metadata", label: "Metadata" },
+		],
+	},
+] as const;
+
+type TabGroupId = (typeof TAB_GROUPS)[number]["id"];
+
+function groupForTab(value: string): TabGroupId {
+	for (const group of TAB_GROUPS) {
+		if (group.tabs.some((t) => t.value === value)) return group.id;
+	}
+	return "source";
+}
+
+const CODE_THEME_SETTINGS = {
+	background: "transparent",
+	lineHighlight: "transparent",
+	gutterBackground: "transparent",
+	gutterBorder: "hsl(var(--border))",
+	fontSize: "12px",
+} as const;
+
+function ActorDetailPlaceholder({
+	actorId,
+	onClose,
+}: { actorId: string; onClose: () => void }) {
 	const [inspectorTab, setInspectorTab] = useState("code");
+	const [theme] = useTheme();
+	const codeTheme = useMemo(
+		() =>
+			theme === "dark"
+				? githubDarkInit({ settings: CODE_THEME_SETTINGS })
+				: githubLightInit({ settings: CODE_THEME_SETTINGS }),
+		[theme],
+	);
+	const activeGroupId = groupForTab(inspectorTab);
+	const activeGroup = TAB_GROUPS.find((g) => g.id === activeGroupId)!;
+
+	const handleGroupChange = useCallback((groupId: string) => {
+		const group = TAB_GROUPS.find((g) => g.id === groupId);
+		if (group) setInspectorTab(group.tabs[0].value);
+	}, []);
 
 	return (
 		<Tabs
@@ -690,67 +1029,52 @@ function ActorDetailPlaceholder({ actorId }: { actorId: string }) {
 			onValueChange={setInspectorTab}
 			className="flex flex-col flex-1 min-h-0"
 		>
-			<div className="flex justify-between items-center border-b h-[45px]">
-				<TabsList className="overflow-auto border-none h-full items-end [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-					<TabsTrigger
-						value="code"
-						className="text-xs px-3 py-1 pb-2"
-					>
-						Code
-					</TabsTrigger>
-					<TabsTrigger
-						value="workflow"
-						className="text-xs px-3 py-1 pb-2"
-					>
-						Workflow
-					</TabsTrigger>
-					<TabsTrigger
-						value="database"
-						className="text-xs px-3 py-1 pb-2"
-					>
-						Database
-					</TabsTrigger>
-					<TabsTrigger
-						value="state"
-						className="text-xs px-3 py-1 pb-2"
-					>
-						State
-					</TabsTrigger>
-					<TabsTrigger
-						value="queue"
-						className="text-xs px-3 py-1 pb-2"
-					>
-						Queue
-					</TabsTrigger>
-					<TabsTrigger
-						value="connections"
-						className="text-xs px-3 py-1 pb-2"
-					>
-						Connections
-					</TabsTrigger>
-					<TabsTrigger
-						value="metadata"
-						className="text-xs px-3 py-1 pb-2"
-					>
-						Metadata
-					</TabsTrigger>
-					<TabsTrigger
-						value="logs"
-						className="text-xs px-3 py-1 pb-2"
-					>
-						Logs
-					</TabsTrigger>
+			<div className="flex items-center border-b h-[37px] px-1">
+				<div className="flex-1 flex items-center gap-0.5">
+					{TAB_GROUPS.map((group) => (
+						<Button
+							key={group.id}
+							variant="ghost"
+							size="sm"
+							onClick={() => handleGroupChange(group.id)}
+							className={cn(
+								"h-7 text-xs px-2.5 rounded-md",
+								group.id === activeGroupId
+									? "bg-accent text-foreground"
+									: "text-muted-foreground",
+							)}
+						>
+							{group.label}
+						</Button>
+					))}
+				</div>
+				<Button variant="ghost" size="icon-sm" onClick={onClose}>
+					<Icon icon={faXmark} />
+				</Button>
+			</div>
+			<div className="flex items-center border-b h-[34px] px-1 bg-muted/30">
+				<TabsList className="border-none h-full items-center bg-transparent gap-0.5">
+					{activeGroup.tabs.map((tab) => (
+						<TabsTrigger
+							key={tab.value}
+							value={tab.value}
+							className="text-xs px-2.5 py-1 h-7 min-h-0 rounded-md font-medium border-b-0 data-[state=active]:border-b-transparent data-[state=active]:bg-accent"
+						>
+							{tab.label}
+						</TabsTrigger>
+					))}
 				</TabsList>
 			</div>
 			<TabsContent value="code" className="flex-1 mt-0" forceMount>
 				<div
 					className={cn(
-						"h-full overflow-auto",
+						"h-full p-3",
 						inspectorTab !== "code" && "hidden",
 					)}
 				>
 					<CodeMirror
 						value={EXAMPLE_CODE}
+						theme={codeTheme}
 						extensions={[javascript({ typescript: true })]}
 						readOnly
 						basicSetup={{
@@ -815,12 +1139,12 @@ export function LayoutMockup() {
 	}, []);
 
 	return (
-		<div className="fixed inset-0 flex flex-col bg-background z-50">
+		<div className="fixed inset-0 flex flex-col bg-background dark:bg-black z-50">
 			<MockupTopBar />
 
 			<div className="flex-1 relative min-h-0 p-2">
 				{/* Canvas fills entire area with inset and rounded corners */}
-				<div className="absolute inset-2 rounded-lg overflow-hidden border bg-card">
+				<div className="absolute inset-2 rounded-lg overflow-hidden border dark:border-white/10 bg-card">
 					<ActorCanvas
 						onActorClick={handleActorClick}
 						leftOpen={leftOpen}
@@ -833,6 +1157,9 @@ export function LayoutMockup() {
 					onOpen={handleLeftOpen}
 					visible={!leftOpen}
 				/>
+
+				{/* Right floating buttons (visible when right popover is closed) */}
+				<RightFloatingButtons visible={!selectedActorId} />
 
 				{/* Left popover (always mounted after first open for animation) */}
 				{leftMounted ? (
@@ -849,6 +1176,7 @@ export function LayoutMockup() {
 					<RightPopover
 						actorId={selectedActorId ?? "placeholder-0"}
 						onClose={handleRightClose}
+						onSelectActor={handleActorClick}
 						visible={!!selectedActorId}
 					/>
 				) : null}
