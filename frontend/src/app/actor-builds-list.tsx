@@ -1,5 +1,5 @@
 import { faActorsBorderless, Icon, type IconProp } from "@rivet-gg/icons";
-import { useInfiniteQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, usePrefetchInfiniteQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import {
 	Fragment,
@@ -88,6 +88,7 @@ function ActorIcon({ iconValue }: { iconValue: string | null }) {
 }
 
 export function ActorBuildsList() {
+	usePrefetchInfiniteQuery({...useEngineCompatDataProvider().buildsQueryOptions(), pages: Infinity});
 	const { data, isLoading, hasNextPage, fetchNextPage, isFetchingNextPage } =
 		useInfiniteQuery(useEngineCompatDataProvider().buildsQueryOptions());
 
@@ -101,7 +102,7 @@ export function ActorBuildsList() {
 						Connect RivetKit to see instances.
 					</p>
 				) : null}
-				{data?.map((build) => {
+				{data?.toSorted((a, b) => a.id.localeCompare(b.id)).map((build) => {
 					const actorMeta = build.name.metadata as
 						| Record<string, unknown>
 						| undefined;
