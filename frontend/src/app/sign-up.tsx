@@ -44,7 +44,12 @@ export function SignUp() {
 		}
 
 		const result = await authClient.signUp.email(
-			{ email, password, name, callbackURL: `${window.location.origin}/?emailVerified=1` },
+			{
+				email,
+				password,
+				name,
+				callbackURL: `${window.location.origin}/?emailVerified=1`,
+			},
 			features.captcha && turnstileToken
 				? { headers: { "x-captcha-response": turnstileToken } }
 				: undefined,
@@ -64,7 +69,7 @@ export function SignUp() {
 	const handleGoogleSignUp = async () => {
 		await authClient.signIn.social({
 			provider: "google",
-			callbackURL: from ?? "/",
+			callbackURL: `${window.location.origin}${from ?? "/"}`,
 		});
 	};
 

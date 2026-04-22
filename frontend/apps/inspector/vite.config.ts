@@ -22,7 +22,6 @@ export default defineConfig({
 		tsconfigPaths(),
 	],
 	define: {
-		__APP_TYPE__: JSON.stringify("inspector"),
 		__APP_BUILD_ID__: JSON.stringify(
 			`${new Date().toISOString()}@${crypto.randomUUID()}`,
 		),
