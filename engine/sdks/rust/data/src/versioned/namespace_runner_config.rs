@@ -69,8 +69,9 @@ impl OwnedVersionedData for NamespaceRunnerConfig {
 
 impl NamespaceRunnerConfig {
 	fn v1_to_v2(self) -> Result<Self> {
-		if let NamespaceRunnerConfig::V1(pegboard_namespace_runner_config_v1::Data::Serverless(serverless)) =
-			self
+		if let NamespaceRunnerConfig::V1(pegboard_namespace_runner_config_v1::Data::Serverless(
+			serverless,
+		)) = self
 		{
 			let pegboard_namespace_runner_config_v1::Serverless {
 				url,

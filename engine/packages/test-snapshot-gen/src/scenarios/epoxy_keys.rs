@@ -1,6 +1,6 @@
-use anyhow::{Result, ensure};
+use anyhow::Result;
 use async_trait::async_trait;
-use epoxy::ops::propose::{self, Command, CommandKind, Proposal, ProposalResult, SetCommand};
+use epoxy::ops::propose::{self, Command, CommandKind, Proposal, SetCommand};
 
 use crate::test_cluster::TestCluster;
 
@@ -31,7 +31,7 @@ impl Scenario for EpoxyKeys {
 		];
 
 		for &(key, value) in test_keys {
-			let result = leader_ctx
+			leader_ctx
 				.op(propose::Input {
 					proposal: Proposal {
 						commands: vec![Command {
@@ -45,12 +45,8 @@ impl Scenario for EpoxyKeys {
 					purge_cache: false,
 					target_replicas: None,
 				})
-				.await?;
-
-			ensure!(
-				matches!(result, ProposalResult::Committed),
-				"proposal failed: {result:?}"
-			);
+				.await?
+				.resolve()?;
 		}
 
 		tracing::info!(count = test_keys.len(), "wrote keys via consensus");

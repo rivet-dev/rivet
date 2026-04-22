@@ -11,6 +11,28 @@ type ReloadHandle = reload::Handle<EnvFilter, tracing_subscriber::Registry>;
 
 static RELOAD_HANDLE: OnceLock<ReloadHandle> = OnceLock::new();
 
+/// Log output format.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LogFormat {
+	/// Logfmt (key=value) — default, human-friendly.
+	Logfmt,
+	/// Structured JSON compatible with GCP Cloud Logging ingestion.
+	Gcp,
+}
+
+impl LogFormat {
+	fn from_env() -> Self {
+		match std::env::var("RUST_LOG_FORMAT")
+			.unwrap_or_default()
+			.to_lowercase()
+			.as_str()
+		{
+			"gcp" => LogFormat::Gcp,
+			_ => LogFormat::Logfmt,
+		}
+	}
+}
+
 /// Initialize tracing-subscriber
 pub fn init_tracing_subscriber(otel_providers: &Option<OtelProviderGuard>) {
 	// Create reloadable env filter for RUST_LOG
@@ -43,6 +65,8 @@ pub fn init_tracing_subscriber(otel_providers: &Option<OtelProviderGuard>) {
 	// Check if tokio console is enabled
 	let enable_tokio_console = std::env::var("TOKIO_CONSOLE_ENABLE").map_or(false, |x| x == "1");
 
+	let log_format = LogFormat::from_env();
+
 	registry
 		.with(
 			// Add tokio console if its enabled
@@ -59,16 +83,29 @@ pub fn init_tracing_subscriber(otel_providers: &Option<OtelProviderGuard>) {
 				None
 			},
 		)
-		.with(
-			tracing_logfmt::builder()
-				.with_span_name(std::env::var("RUST_LOG_SPAN_NAME").map_or(false, |x| x == "1"))
-				.with_span_path(std::env::var("RUST_LOG_SPAN_PATH").map_or(false, |x| x == "1"))
-				.with_target(std::env::var("RUST_LOG_TARGET").map_or(false, |x| x == "1"))
-				.with_location(std::env::var("RUST_LOG_LOCATION").map_or(false, |x| x == "1"))
-				.with_module_path(std::env::var("RUST_LOG_MODULE_PATH").map_or(false, |x| x == "1"))
-				.with_ansi_color(std::env::var("RUST_LOG_ANSI_COLOR").map_or(false, |x| x == "1"))
-				.layer(),
-		)
+		.with(match log_format {
+			LogFormat::Logfmt => Some(
+				tracing_logfmt::builder()
+					.with_span_name(std::env::var("RUST_LOG_SPAN_NAME").map_or(false, |x| x == "1"))
+					.with_span_path(std::env::var("RUST_LOG_SPAN_PATH").map_or(false, |x| x == "1"))
+					.with_target(std::env::var("RUST_LOG_TARGET").map_or(false, |x| x == "1"))
+					.with_location(std::env::var("RUST_LOG_LOCATION").map_or(false, |x| x == "1"))
+					.with_module_path(
+						std::env::var("RUST_LOG_MODULE_PATH").map_or(false, |x| x == "1"),
+					)
+					.with_ansi_color(
+						std::env::var("RUST_LOG_ANSI_COLOR").map_or(false, |x| x == "1"),
+					)
+					.layer(),
+			),
+			LogFormat::Gcp => None,
+		})
+		.with(match log_format {
+			LogFormat::Logfmt => None,
+			LogFormat::Gcp => Some(tracing_stackdriver::layer().with_source_location(
+				std::env::var("RUST_LOG_LOCATION").map_or(false, |x| x == "1"),
+			)),
+		})
 		.init()
 }
 

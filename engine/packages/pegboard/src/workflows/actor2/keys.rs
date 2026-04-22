@@ -1,6 +1,6 @@
 use epoxy::{
 	ops::propose::{
-		CheckAndSetCommand, Command, CommandError, CommandKind, Proposal, ProposalResult,
+		CheckAndSetCommand, Command, CommandKind, ConsensusFailedReason, Proposal, ProposalResult,
 	},
 	protocol::ReplicaId,
 };
@@ -83,12 +83,9 @@ pub async fn reserve_key(
 						}
 					}
 				}
-				ProposalResult::ConsensusFailed => {
-					bail!("consensus failed")
-				}
-				ProposalResult::CommandError(CommandError::ExpectedValueDoesNotMatch {
-					current_value,
-				}) => {
+				ProposalResult::ConsensusFailed {
+					reason: ConsensusFailedReason::ExpectedValueDoesNotMatch { current_value },
+				} => {
 					if let Some(current_value) = current_value {
 						let existing_reservation_id = keys::epoxy::ns::ReservationByKeyKey::new(
 							namespace_id,
@@ -110,6 +107,7 @@ pub async fn reserve_key(
 						bail!("unreachable: current_value should exist")
 					}
 				}
+				res => bail!("consensus failed: {res:?}"),
 			}
 		}
 	}

@@ -48,12 +48,35 @@ pub struct CheckAndSetCommand {
 #[derive(Debug, Serialize, Deserialize)]
 pub enum ProposalResult {
 	Committed,
-	ConsensusFailed,
-	CommandError(CommandError),
+	ConsensusFailed { reason: ConsensusFailedReason },
+}
+
+impl ProposalResult {
+	/// Errors if the result is not `Committed`
+	pub fn resolve(&self) -> Result<()> {
+		match self {
+			ProposalResult::Committed => Ok(()),
+			ProposalResult::ConsensusFailed { reason } => match reason {
+				ConsensusFailedReason::PreparePhaseConsensusFailed => {
+					bail!("proposal failed due to prepare phase consensus failure")
+				}
+				ConsensusFailedReason::AcceptPhaseConsensusFailed => {
+					bail!("proposal failed due to accept phase consensus failure")
+				}
+				ConsensusFailedReason::StaleBallot => bail!("proposal failed due to stale ballot"),
+				ConsensusFailedReason::ExpectedValueDoesNotMatch { .. } => {
+					bail!("proposal failed due to value mismatch")
+				}
+			},
+		}
+	}
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub enum CommandError {
+pub enum ConsensusFailedReason {
+	PreparePhaseConsensusFailed,
+	AcceptPhaseConsensusFailed,
+	StaleBallot,
 	ExpectedValueDoesNotMatch { current_value: Option<Vec<u8>> },
 }
 
@@ -116,12 +139,16 @@ impl SetProposal {
 			if current_value == self.value {
 				ProposalResult::Committed
 			} else {
-				ProposalResult::ConsensusFailed
+				ProposalResult::ConsensusFailed {
+					reason: ConsensusFailedReason::ExpectedValueDoesNotMatch { current_value },
+				}
 			}
 		} else if current_value == self.value {
 			ProposalResult::Committed
 		} else {
-			ProposalResult::CommandError(CommandError::ExpectedValueDoesNotMatch { current_value })
+			ProposalResult::ConsensusFailed {
+				reason: ConsensusFailedReason::ExpectedValueDoesNotMatch { current_value },
+			}
 		}
 	}
 }
@@ -281,7 +308,9 @@ pub async fn epoxy_propose(ctx: &OperationCtx, input: &Input) -> Result<Proposal
 				PreparePhaseOutcome::AlreadyCommitted(value) => {
 					proposal.result_for_committed_value(value)
 				}
-				PreparePhaseOutcome::ConsensusFailed => ProposalResult::ConsensusFailed,
+				PreparePhaseOutcome::ConsensusFailed => ProposalResult::ConsensusFailed {
+					reason: ConsensusFailedReason::PreparePhaseConsensusFailed,
+				},
 			}
 		}
 		BallotSelection::FreshBallot(ballot) => {
@@ -337,7 +366,9 @@ pub async fn epoxy_propose(ctx: &OperationCtx, input: &Input) -> Result<Proposal
 				PreparePhaseOutcome::AlreadyCommitted(value) => {
 					proposal.result_for_committed_value(value)
 				}
-				PreparePhaseOutcome::ConsensusFailed => ProposalResult::ConsensusFailed,
+				PreparePhaseOutcome::ConsensusFailed => ProposalResult::ConsensusFailed {
+					reason: ConsensusFailedReason::PreparePhaseConsensusFailed,
+				},
 			}
 		}
 	};
@@ -427,7 +458,11 @@ async fn run_accept_path(
 		AcceptPhaseOutcome::AlreadyCommitted(value) => {
 			return Ok(proposal.result_for_committed_value(value));
 		}
-		AcceptPhaseOutcome::ConsensusFailed => return Ok(ProposalResult::ConsensusFailed),
+		AcceptPhaseOutcome::ConsensusFailed => {
+			return Ok(ProposalResult::ConsensusFailed {
+				reason: ConsensusFailedReason::AcceptPhaseConsensusFailed,
+			});
+		}
 	}
 
 	let commit_result = ctx
@@ -496,7 +531,9 @@ async fn run_accept_path(
 		CommitKvOutcome::AlreadyCommitted { value, .. } => {
 			Ok(proposal.result_for_committed_value(value))
 		}
-		CommitKvOutcome::StaleBallot { .. } => Ok(ProposalResult::ConsensusFailed),
+		CommitKvOutcome::StaleBallot { .. } => Ok(ProposalResult::ConsensusFailed {
+			reason: ConsensusFailedReason::StaleBallot,
+		}),
 	}
 }
 

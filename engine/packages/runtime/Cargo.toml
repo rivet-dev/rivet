@@ -24,6 +24,7 @@ thiserror.workspace = true
 tokio.workspace = true
 tracing-core.workspace = true
 tracing-logfmt.workspace = true
+tracing-stackdriver.workspace = true
 tracing-opentelemetry.workspace = true
 tracing-subscriber.workspace = true
 tracing.workspace = true

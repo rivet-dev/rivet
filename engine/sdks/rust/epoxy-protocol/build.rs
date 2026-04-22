@@ -27,10 +27,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 		.into());
 	}
 
-	println!(
-		"cargo:rerun-if-changed={}",
-		highest_version_path.display()
-	);
+	println!("cargo:rerun-if-changed={}", highest_version_path.display());
 
 	let cfg = vbare_compiler::Config::with_hashable_map();
 	vbare_compiler::process_schemas_with_config(&schema_dir, &cfg)?;

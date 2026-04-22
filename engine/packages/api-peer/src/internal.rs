@@ -696,9 +696,8 @@ pub async fn set_epoxy_kv(
 
 	let result_str = match result {
 		epoxy::ops::propose::ProposalResult::Committed => "committed".to_string(),
-		epoxy::ops::propose::ProposalResult::ConsensusFailed => "consensus_failed".to_string(),
-		epoxy::ops::propose::ProposalResult::CommandError(err) => {
-			format!("command_error: {:?}", err)
+		epoxy::ops::propose::ProposalResult::ConsensusFailed { reason } => {
+			format!("consensus_failed: {reason:?}")
 		}
 	};
 

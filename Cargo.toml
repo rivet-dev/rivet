@@ -349,6 +349,10 @@ members = [
     version = "0.3"
     features = [ "ansi_logs" ]
 
+    [workspace.dependencies.tracing-stackdriver]
+    version = "0.10.0"
+    default-features = false
+
     [workspace.dependencies.tracing-subscriber]
     version = "0.3"
     default-features = false

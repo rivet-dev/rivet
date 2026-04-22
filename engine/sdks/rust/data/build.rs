@@ -24,10 +24,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	let mut combined = fs::read_to_string(&combined_imports_path)?;
 	for (identifier, version) in &versions {
 		let const_name = schema_identifier_to_const(identifier);
-		combined.push_str(&format!(
-			"\npub const {}: u16 = {};\n",
-			const_name, version
-		));
+		combined.push_str(&format!("\npub const {}: u16 = {};\n", const_name, version));
 	}
 	fs::write(combined_imports_path, combined)?;
 
@@ -76,6 +73,9 @@ fn find_schema_versions(schema_dir: &Path) -> Vec<(String, u32)> {
 fn schema_identifier_to_const(identifier: &str) -> String {
 	format!(
 		"{}_VERSION",
-		identifier.to_uppercase().replace('.', "_").replace('-', "_")
+		identifier
+			.to_uppercase()
+			.replace('.', "_")
+			.replace('-', "_")
 	)
 }
