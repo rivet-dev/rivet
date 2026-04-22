@@ -43,19 +43,21 @@ fn default_drain_on_version_upgrade() -> bool {
 	false
 }
 
-impl From<RunnerConfig> for rivet_data::generated::namespace_runner_config_v5::RunnerConfig {
+impl From<RunnerConfig>
+	for rivet_data::generated::pegboard_namespace_runner_config_v5::RunnerConfig
+{
 	fn from(value: RunnerConfig) -> Self {
 		let RunnerConfig {
 			kind,
 			metadata,
 			drain_on_version_upgrade,
 		} = value;
-		rivet_data::generated::namespace_runner_config_v5::RunnerConfig {
+		rivet_data::generated::pegboard_namespace_runner_config_v5::RunnerConfig {
 			metadata: metadata.and_then(|value| serde_json::to_string(&value).ok()),
 			drain_on_version_upgrade,
 			kind: match kind {
 				RunnerConfigKind::Normal {} => {
-					rivet_data::generated::namespace_runner_config_v5::RunnerConfigKind::Normal
+					rivet_data::generated::pegboard_namespace_runner_config_v5::RunnerConfigKind::Normal
 				}
 				RunnerConfigKind::Serverless {
 					url,
@@ -69,8 +71,8 @@ impl From<RunnerConfig> for rivet_data::generated::namespace_runner_config_v5::R
 					runners_margin,
 					metadata_poll_interval,
 				} => {
-					rivet_data::generated::namespace_runner_config_v5::RunnerConfigKind::Serverless(
-						rivet_data::generated::namespace_runner_config_v5::Serverless {
+					rivet_data::generated::pegboard_namespace_runner_config_v5::RunnerConfigKind::Serverless(
+						rivet_data::generated::pegboard_namespace_runner_config_v5::Serverless {
 							url,
 							headers: headers.into(),
 							request_lifespan,
@@ -89,9 +91,13 @@ impl From<RunnerConfig> for rivet_data::generated::namespace_runner_config_v5::R
 	}
 }
 
-impl From<rivet_data::generated::namespace_runner_config_v5::RunnerConfig> for RunnerConfig {
-	fn from(value: rivet_data::generated::namespace_runner_config_v5::RunnerConfig) -> Self {
-		let rivet_data::generated::namespace_runner_config_v5::RunnerConfig {
+impl From<rivet_data::generated::pegboard_namespace_runner_config_v5::RunnerConfig>
+	for RunnerConfig
+{
+	fn from(
+		value: rivet_data::generated::pegboard_namespace_runner_config_v5::RunnerConfig,
+	) -> Self {
+		let rivet_data::generated::pegboard_namespace_runner_config_v5::RunnerConfig {
 			metadata,
 			kind,
 			drain_on_version_upgrade,
@@ -100,10 +106,10 @@ impl From<rivet_data::generated::namespace_runner_config_v5::RunnerConfig> for R
 			metadata: metadata.and_then(|raw| serde_json::from_str(&raw).ok()),
 			drain_on_version_upgrade,
 			kind: match kind {
-				rivet_data::generated::namespace_runner_config_v5::RunnerConfigKind::Normal => {
+				rivet_data::generated::pegboard_namespace_runner_config_v5::RunnerConfigKind::Normal => {
 					RunnerConfigKind::Normal {}
 				}
-				rivet_data::generated::namespace_runner_config_v5::RunnerConfigKind::Serverless(
+				rivet_data::generated::pegboard_namespace_runner_config_v5::RunnerConfigKind::Serverless(
 					o,
 				) => RunnerConfigKind::Serverless {
 					url: o.url,

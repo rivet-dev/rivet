@@ -23,6 +23,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	vbare_compiler::process_schemas_with_config(&schema_dir, &cfg)?;
 	post_process_generated_rust(&out_dir)?;
 
+	// Append protocol version constant to generated file
+	let (highest_version, _) = find_highest_version(&schema_dir);
+	let combined_imports_path = out_dir.join("combined_imports.rs");
+	let mut combined = fs::read_to_string(&combined_imports_path)?;
+	combined.push_str(&format!(
+		"\npub const PROTOCOL_VERSION: u16 = {};\n",
+		highest_version
+	));
+	fs::write(combined_imports_path, combined)?;
+
 	// TypeScript SDK generation
 	let cli_js_path = workspace_root
 		.parent()

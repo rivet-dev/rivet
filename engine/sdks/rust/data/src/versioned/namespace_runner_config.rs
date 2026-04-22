@@ -4,17 +4,17 @@ use vbare::OwnedVersionedData;
 use crate::generated::*;
 
 pub enum NamespaceRunnerConfig {
-	V1(namespace_runner_config_v1::Data),
-	V2(namespace_runner_config_v2::RunnerConfig),
-	V3(namespace_runner_config_v3::RunnerConfig),
-	V4(namespace_runner_config_v4::RunnerConfig),
-	V5(namespace_runner_config_v5::RunnerConfig),
+	V1(pegboard_namespace_runner_config_v1::Data),
+	V2(pegboard_namespace_runner_config_v2::RunnerConfig),
+	V3(pegboard_namespace_runner_config_v3::RunnerConfig),
+	V4(pegboard_namespace_runner_config_v4::RunnerConfig),
+	V5(pegboard_namespace_runner_config_v5::RunnerConfig),
 }
 
 impl OwnedVersionedData for NamespaceRunnerConfig {
-	type Latest = namespace_runner_config_v5::RunnerConfig;
+	type Latest = pegboard_namespace_runner_config_v5::RunnerConfig;
 
-	fn wrap_latest(latest: namespace_runner_config_v5::RunnerConfig) -> Self {
+	fn wrap_latest(latest: pegboard_namespace_runner_config_v5::RunnerConfig) -> Self {
 		NamespaceRunnerConfig::V5(latest)
 	}
 
@@ -69,10 +69,10 @@ impl OwnedVersionedData for NamespaceRunnerConfig {
 
 impl NamespaceRunnerConfig {
 	fn v1_to_v2(self) -> Result<Self> {
-		if let NamespaceRunnerConfig::V1(namespace_runner_config_v1::Data::Serverless(serverless)) =
+		if let NamespaceRunnerConfig::V1(pegboard_namespace_runner_config_v1::Data::Serverless(serverless)) =
 			self
 		{
-			let namespace_runner_config_v1::Serverless {
+			let pegboard_namespace_runner_config_v1::Serverless {
 				url,
 				headers,
 				request_lifespan,
@@ -83,10 +83,10 @@ impl NamespaceRunnerConfig {
 			} = serverless;
 
 			Ok(NamespaceRunnerConfig::V2(
-				namespace_runner_config_v2::RunnerConfig {
+				pegboard_namespace_runner_config_v2::RunnerConfig {
 					metadata: None,
-					kind: namespace_runner_config_v2::RunnerConfigKind::Serverless(
-						namespace_runner_config_v2::Serverless {
+					kind: pegboard_namespace_runner_config_v2::RunnerConfigKind::Serverless(
+						pegboard_namespace_runner_config_v2::Serverless {
 							url,
 							headers,
 							request_lifespan,
@@ -105,11 +105,11 @@ impl NamespaceRunnerConfig {
 
 	fn v2_to_v1(self) -> Result<Self> {
 		if let NamespaceRunnerConfig::V2(config) = self {
-			let namespace_runner_config_v2::RunnerConfig { kind, .. } = config;
+			let pegboard_namespace_runner_config_v2::RunnerConfig { kind, .. } = config;
 
 			match kind {
-				namespace_runner_config_v2::RunnerConfigKind::Serverless(serverless) => {
-					let namespace_runner_config_v2::Serverless {
+				pegboard_namespace_runner_config_v2::RunnerConfigKind::Serverless(serverless) => {
+					let pegboard_namespace_runner_config_v2::Serverless {
 						url,
 						headers,
 						request_lifespan,
@@ -120,8 +120,8 @@ impl NamespaceRunnerConfig {
 					} = serverless;
 
 					Ok(NamespaceRunnerConfig::V1(
-						namespace_runner_config_v1::Data::Serverless(
-							namespace_runner_config_v1::Serverless {
+						pegboard_namespace_runner_config_v1::Data::Serverless(
+							pegboard_namespace_runner_config_v1::Serverless {
 								url,
 								headers,
 								request_lifespan,
@@ -133,7 +133,7 @@ impl NamespaceRunnerConfig {
 						),
 					))
 				}
-				namespace_runner_config_v2::RunnerConfigKind::Normal => {
+				pegboard_namespace_runner_config_v2::RunnerConfigKind::Normal => {
 					bail!("namespace runner config v1 does not support normal runner config")
 				}
 			}
@@ -144,12 +144,12 @@ impl NamespaceRunnerConfig {
 
 	fn v2_to_v3(self) -> Result<Self> {
 		if let NamespaceRunnerConfig::V2(config) = self {
-			let namespace_runner_config_v2::RunnerConfig { kind, metadata } = config;
+			let pegboard_namespace_runner_config_v2::RunnerConfig { kind, metadata } = config;
 
 			let kind = match kind {
-				namespace_runner_config_v2::RunnerConfigKind::Serverless(serverless) => {
-					namespace_runner_config_v3::RunnerConfigKind::Serverless(
-						namespace_runner_config_v3::Serverless {
+				pegboard_namespace_runner_config_v2::RunnerConfigKind::Serverless(serverless) => {
+					pegboard_namespace_runner_config_v3::RunnerConfigKind::Serverless(
+						pegboard_namespace_runner_config_v3::Serverless {
 							url: serverless.url,
 							headers: serverless.headers,
 							request_lifespan: serverless.request_lifespan,
@@ -160,13 +160,13 @@ impl NamespaceRunnerConfig {
 						},
 					)
 				}
-				namespace_runner_config_v2::RunnerConfigKind::Normal => {
-					namespace_runner_config_v3::RunnerConfigKind::Normal
+				pegboard_namespace_runner_config_v2::RunnerConfigKind::Normal => {
+					pegboard_namespace_runner_config_v3::RunnerConfigKind::Normal
 				}
 			};
 
 			Ok(NamespaceRunnerConfig::V3(
-				namespace_runner_config_v3::RunnerConfig {
+				pegboard_namespace_runner_config_v3::RunnerConfig {
 					kind,
 					metadata,
 					// Default to false for v2 -> v3 migration
@@ -180,12 +180,12 @@ impl NamespaceRunnerConfig {
 
 	fn v3_to_v2(self) -> Result<Self> {
 		if let NamespaceRunnerConfig::V3(config) = self {
-			let namespace_runner_config_v3::RunnerConfig { kind, metadata, .. } = config;
+			let pegboard_namespace_runner_config_v3::RunnerConfig { kind, metadata, .. } = config;
 
 			let kind = match kind {
-				namespace_runner_config_v3::RunnerConfigKind::Serverless(serverless) => {
-					namespace_runner_config_v2::RunnerConfigKind::Serverless(
-						namespace_runner_config_v2::Serverless {
+				pegboard_namespace_runner_config_v3::RunnerConfigKind::Serverless(serverless) => {
+					pegboard_namespace_runner_config_v2::RunnerConfigKind::Serverless(
+						pegboard_namespace_runner_config_v2::Serverless {
 							url: serverless.url,
 							headers: serverless.headers,
 							request_lifespan: serverless.request_lifespan,
@@ -196,13 +196,13 @@ impl NamespaceRunnerConfig {
 						},
 					)
 				}
-				namespace_runner_config_v3::RunnerConfigKind::Normal => {
-					namespace_runner_config_v2::RunnerConfigKind::Normal
+				pegboard_namespace_runner_config_v3::RunnerConfigKind::Normal => {
+					pegboard_namespace_runner_config_v2::RunnerConfigKind::Normal
 				}
 			};
 
 			Ok(NamespaceRunnerConfig::V2(
-				namespace_runner_config_v2::RunnerConfig { kind, metadata },
+				pegboard_namespace_runner_config_v2::RunnerConfig { kind, metadata },
 			))
 		} else {
 			bail!("unexpected version");
@@ -211,16 +211,16 @@ impl NamespaceRunnerConfig {
 
 	fn v3_to_v4(self) -> Result<Self> {
 		if let NamespaceRunnerConfig::V3(config) = self {
-			let namespace_runner_config_v3::RunnerConfig {
+			let pegboard_namespace_runner_config_v3::RunnerConfig {
 				kind,
 				metadata,
 				drain_on_version_upgrade,
 			} = config;
 
 			let kind = match kind {
-				namespace_runner_config_v3::RunnerConfigKind::Serverless(serverless) => {
-					namespace_runner_config_v4::RunnerConfigKind::Serverless(
-						namespace_runner_config_v4::Serverless {
+				pegboard_namespace_runner_config_v3::RunnerConfigKind::Serverless(serverless) => {
+					pegboard_namespace_runner_config_v4::RunnerConfigKind::Serverless(
+						pegboard_namespace_runner_config_v4::Serverless {
 							url: serverless.url,
 							headers: serverless.headers,
 							request_lifespan: serverless.request_lifespan,
@@ -233,13 +233,13 @@ impl NamespaceRunnerConfig {
 						},
 					)
 				}
-				namespace_runner_config_v3::RunnerConfigKind::Normal => {
-					namespace_runner_config_v4::RunnerConfigKind::Normal
+				pegboard_namespace_runner_config_v3::RunnerConfigKind::Normal => {
+					pegboard_namespace_runner_config_v4::RunnerConfigKind::Normal
 				}
 			};
 
 			Ok(NamespaceRunnerConfig::V4(
-				namespace_runner_config_v4::RunnerConfig {
+				pegboard_namespace_runner_config_v4::RunnerConfig {
 					kind,
 					metadata,
 					drain_on_version_upgrade,
@@ -252,16 +252,16 @@ impl NamespaceRunnerConfig {
 
 	fn v4_to_v3(self) -> Result<Self> {
 		if let NamespaceRunnerConfig::V4(config) = self {
-			let namespace_runner_config_v4::RunnerConfig {
+			let pegboard_namespace_runner_config_v4::RunnerConfig {
 				kind,
 				metadata,
 				drain_on_version_upgrade,
 			} = config;
 
 			let kind = match kind {
-				namespace_runner_config_v4::RunnerConfigKind::Serverless(serverless) => {
-					namespace_runner_config_v3::RunnerConfigKind::Serverless(
-						namespace_runner_config_v3::Serverless {
+				pegboard_namespace_runner_config_v4::RunnerConfigKind::Serverless(serverless) => {
+					pegboard_namespace_runner_config_v3::RunnerConfigKind::Serverless(
+						pegboard_namespace_runner_config_v3::Serverless {
 							url: serverless.url,
 							headers: serverless.headers,
 							request_lifespan: serverless.request_lifespan,
@@ -273,13 +273,13 @@ impl NamespaceRunnerConfig {
 						},
 					)
 				}
-				namespace_runner_config_v4::RunnerConfigKind::Normal => {
-					namespace_runner_config_v3::RunnerConfigKind::Normal
+				pegboard_namespace_runner_config_v4::RunnerConfigKind::Normal => {
+					pegboard_namespace_runner_config_v3::RunnerConfigKind::Normal
 				}
 			};
 
 			Ok(NamespaceRunnerConfig::V3(
-				namespace_runner_config_v3::RunnerConfig {
+				pegboard_namespace_runner_config_v3::RunnerConfig {
 					kind,
 					metadata,
 					drain_on_version_upgrade,
@@ -292,16 +292,16 @@ impl NamespaceRunnerConfig {
 
 	fn v4_to_v5(self) -> Result<Self> {
 		if let NamespaceRunnerConfig::V4(config) = self {
-			let namespace_runner_config_v4::RunnerConfig {
+			let pegboard_namespace_runner_config_v4::RunnerConfig {
 				kind,
 				metadata,
 				drain_on_version_upgrade,
 			} = config;
 
 			let kind = match kind {
-				namespace_runner_config_v4::RunnerConfigKind::Serverless(serverless) => {
-					namespace_runner_config_v5::RunnerConfigKind::Serverless(
-						namespace_runner_config_v5::Serverless {
+				pegboard_namespace_runner_config_v4::RunnerConfigKind::Serverless(serverless) => {
+					pegboard_namespace_runner_config_v5::RunnerConfigKind::Serverless(
+						pegboard_namespace_runner_config_v5::Serverless {
 							url: serverless.url,
 							headers: serverless.headers,
 							request_lifespan: serverless.request_lifespan,
@@ -317,13 +317,13 @@ impl NamespaceRunnerConfig {
 						},
 					)
 				}
-				namespace_runner_config_v4::RunnerConfigKind::Normal => {
-					namespace_runner_config_v5::RunnerConfigKind::Normal
+				pegboard_namespace_runner_config_v4::RunnerConfigKind::Normal => {
+					pegboard_namespace_runner_config_v5::RunnerConfigKind::Normal
 				}
 			};
 
 			Ok(NamespaceRunnerConfig::V5(
-				namespace_runner_config_v5::RunnerConfig {
+				pegboard_namespace_runner_config_v5::RunnerConfig {
 					kind,
 					metadata,
 					drain_on_version_upgrade,
@@ -336,16 +336,16 @@ impl NamespaceRunnerConfig {
 
 	fn v5_to_v4(self) -> Result<Self> {
 		if let NamespaceRunnerConfig::V5(config) = self {
-			let namespace_runner_config_v5::RunnerConfig {
+			let pegboard_namespace_runner_config_v5::RunnerConfig {
 				kind,
 				metadata,
 				drain_on_version_upgrade,
 			} = config;
 
 			let kind = match kind {
-				namespace_runner_config_v5::RunnerConfigKind::Serverless(serverless) => {
-					namespace_runner_config_v4::RunnerConfigKind::Serverless(
-						namespace_runner_config_v4::Serverless {
+				pegboard_namespace_runner_config_v5::RunnerConfigKind::Serverless(serverless) => {
+					pegboard_namespace_runner_config_v4::RunnerConfigKind::Serverless(
+						pegboard_namespace_runner_config_v4::Serverless {
 							url: serverless.url,
 							headers: serverless.headers,
 							request_lifespan: serverless.request_lifespan,
@@ -358,13 +358,13 @@ impl NamespaceRunnerConfig {
 						},
 					)
 				}
-				namespace_runner_config_v5::RunnerConfigKind::Normal => {
-					namespace_runner_config_v4::RunnerConfigKind::Normal
+				pegboard_namespace_runner_config_v5::RunnerConfigKind::Normal => {
+					pegboard_namespace_runner_config_v4::RunnerConfigKind::Normal
 				}
 			};
 
 			Ok(NamespaceRunnerConfig::V4(
-				namespace_runner_config_v4::RunnerConfig {
+				pegboard_namespace_runner_config_v4::RunnerConfig {
 					kind,
 					metadata,
 					drain_on_version_upgrade,
