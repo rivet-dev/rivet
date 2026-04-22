@@ -2,7 +2,7 @@
 import { faGoogle, Icon } from "@rivet-gg/icons";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { motion } from "framer-motion";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
 	EmailField,
 	Form,
@@ -25,10 +25,10 @@ import { TurnstileWidget } from "@/components/ui/turnstile";
 import { authClient } from "@/lib/auth";
 import { cloudEnv } from "@/lib/env";
 import { features } from "@/lib/features";
+import { LoginWithGoogle } from "./login";
 
 export function SignUp() {
 	const navigate = useNavigate();
-	const from = useSearch({ strict: false, select: (s) => s?.from as string });
 	const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
 	const turnstileSiteKey = cloudEnv().VITE_APP_TURNSTILE_SITE_KEY;
 	const handleSubmit: SubmitHandler = async (
@@ -66,13 +66,6 @@ export function SignUp() {
 		navigate({ to: "/verify-email-pending", search: { email } });
 	};
 
-	const handleGoogleSignUp = async () => {
-		await authClient.signIn.social({
-			provider: "google",
-			callbackURL: `${window.location.origin}${from ?? "/"}`,
-		});
-	};
-
 	return (
 		<motion.div
 			className="grid w-full grow items-center px-4"
@@ -80,7 +73,7 @@ export function SignUp() {
 			animate={{ opacity: 1, y: 0 }}
 			exit={{ opacity: 0, y: 10 }}
 		>
-			<Card className="w-full max-w-md grow mx-auto">
+			<Card className="w-full max-w-[21.75rem] grow mx-auto">
 				<CardHeader>
 					<CardTitle>Welcome!</CardTitle>
 					<CardDescription>
@@ -91,24 +84,19 @@ export function SignUp() {
 					defaultValues={{ name: "", email: "", password: "" }}
 					onSubmit={handleSubmit}
 				>
-					<CardContent className="grid gap-y-4">
-						<div className="grid grid-cols-1 gap-x-4">
-							<Button
-								variant="outline"
-								type="button"
-								onClick={handleGoogleSignUp}
-							>
-								<Icon icon={faGoogle} className="mr-2 size-4" />
-								Google
-							</Button>
+					<CardContent className="gap-2 flex flex-col">
+						<div className="grid gap-y-4">
+							<div className="grid grid-cols-1 gap-x-4">
+								<LoginWithGoogle />
+							</div>
+							<p className="flex items-center gap-x-3 text-sm text-muted-foreground before:h-px before:flex-1 before:bg-border after:h-px after:flex-1 after:bg-border">
+								or
+							</p>
+							<NameField />
+							<EmailField />
+							<PasswordField />
+							<RootError />
 						</div>
-						<p className="flex items-center gap-x-3 text-sm text-muted-foreground before:h-px before:flex-1 before:bg-border after:h-px after:flex-1 after:bg-border">
-							or
-						</p>
-						<NameField />
-						<EmailField />
-						<PasswordField />
-						<RootError />
 						{features.captcha && turnstileSiteKey && (
 							<TurnstileWidget
 								siteKey={turnstileSiteKey}

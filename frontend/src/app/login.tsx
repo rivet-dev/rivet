@@ -1,14 +1,15 @@
 "use client";
 import { faGoogle, Icon } from "@rivet-gg/icons";
+import { useMutation } from "@tanstack/react-query";
 import {
 	isRedirect,
 	Link,
 	useNavigate,
-	useSearch,
 } from "@tanstack/react-router";
 import { attemptAsync } from "es-toolkit";
 import { motion } from "framer-motion";
 import { useState } from "react";
+import { useFormContext } from "react-hook-form";
 import {
 	EmailField,
 	Form,
@@ -30,10 +31,10 @@ import { TurnstileWidget } from "@/components/ui/turnstile";
 import { authClient, redirectToOrganization } from "@/lib/auth";
 import { cloudEnv } from "@/lib/env";
 import { features } from "@/lib/features";
+import { isAuthError } from "@/lib/utils";
 
 export function Login() {
 	const navigate = useNavigate();
-	const from = useSearch({ strict: false, select: (s) => s?.from as string });
 	const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
 	const turnstileSiteKey = cloudEnv().VITE_APP_TURNSTILE_SITE_KEY;
 
@@ -75,13 +76,6 @@ export function Login() {
 		}
 	};
 
-	const handleGoogleSignIn = async () => {
-		await authClient.signIn.social({
-			provider: "google",
-			callbackURL: `${window.location.origin}${from ?? "/"}`,
-		});
-	};
-
 	return (
 		<motion.div
 			className="grid w-full grow items-center px-4"
@@ -89,7 +83,7 @@ export function Login() {
 			animate={{ opacity: 1, y: 0 }}
 			exit={{ opacity: 0, y: 10 }}
 		>
-			<Card className="w-full max-w-md grow mx-auto">
+			<Card className="w-full max-w-[21.75rem] grow mx-auto">
 				<CardHeader>
 					<CardTitle>Welcome!</CardTitle>
 					<CardDescription>
@@ -100,20 +94,10 @@ export function Login() {
 					defaultValues={{ email: "", password: "" }}
 					onSubmit={handleSubmit}
 				>
-					<CardContent>
+					<CardContent className="gap-2 flex flex-col">
 						<div className="grid gap-y-4">
 							<div className="grid grid-cols-1 gap-x-4">
-								<Button
-									variant="outline"
-									type="button"
-									onClick={handleGoogleSignIn}
-								>
-									<Icon
-										icon={faGoogle}
-										className="mr-2 size-4"
-									/>
-									Google
-								</Button>
+								<LoginWithGoogle />
 							</div>
 							<p className="flex items-center gap-x-3 text-sm text-muted-foreground before:h-px before:flex-1 before:bg-border after:h-px after:flex-1 after:bg-border">
 								or
@@ -158,5 +142,37 @@ export function Login() {
 				</Form>
 			</Card>
 		</motion.div>
+	);
+}
+
+export function LoginWithGoogle() {
+	const form = useFormContext();
+
+	const { isPending, mutate } = useMutation({
+		mutationFn: async () => {
+			return authClient.signIn.social({
+				provider: "google",
+				callbackURL: `${window.location.origin}/`,
+			});
+		},
+		onSettled(response) {
+			if (isAuthError(response?.error)) {
+				form.setError("root", {
+					message: response.error.message,
+				});
+			}
+		},
+	});
+
+	return (
+		<Button
+			variant="outline"
+			onClick={() => mutate()}
+			type="button"
+			isLoading={isPending}
+		>
+			<Icon icon={faGoogle} className="mr-2 size-4" />
+			Sign in with Google
+		</Button>
 	);
 }
