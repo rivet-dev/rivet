@@ -34,6 +34,7 @@ const searchSchema = z
 		n: z.array(z.string()).optional(),
 		u: z.string().optional(),
 		t: z.string().optional(),
+		from: z.string().optional(),
 	})
 	.and(z.record(z.string(), z.any()));
 

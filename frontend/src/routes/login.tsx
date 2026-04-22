@@ -8,7 +8,8 @@ import { features } from "@/lib/features";
 
 export const Route = createFileRoute("/login")({
 	component: RouteComponent,
-	validateSearch: z.object({ emailVerified: z.coerce.number().optional() }),
+	validateSearch: z.object({ emailVerified: z.coerce.number().optional(), 
+			from: z.string().optional(), }),
 	beforeLoad: async ({ search }) => {
 		if (search.emailVerified) {
 			toast.success("Email verified successfully. You can now sign in.", {

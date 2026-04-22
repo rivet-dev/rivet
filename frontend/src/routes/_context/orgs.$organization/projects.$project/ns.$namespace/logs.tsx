@@ -48,7 +48,7 @@ export const Route = createFileRoute(
 });
 
 function RouteComponent() {
-	const { namespace } = Route.useParams();
+	const { namespace, project } = Route.useParams();
 	const dataProvider = useCloudNamespaceDataProvider();
 
 	const { data: pool } = useSuspenseQuery(
@@ -178,6 +178,7 @@ function RouteComponent() {
 					{pool ? (
 						<div className="flex-1 min-h-0 overflow-hidden">
 							<DeploymentLogs
+								project={project}
 								namespace={namespace}
 								pool="default"
 								filter={search || undefined}

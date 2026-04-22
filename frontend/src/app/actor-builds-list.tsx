@@ -1,7 +1,13 @@
 import { faActorsBorderless, Icon, type IconProp } from "@rivet-gg/icons";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { Fragment, type LazyExoticComponent, lazy, Suspense, use } from "react";
+import {
+	Fragment,
+	type LazyExoticComponent,
+	lazy,
+	type ReactNode,
+	Suspense,
+} from "react";
 import { Button, cn, Skeleton } from "@/components";
 import { useEngineCompatDataProvider } from "@/components/actors";
 import { VisibilitySensor } from "@/components/visibility-sensor";

@@ -111,7 +111,7 @@ export function ActorDatabase({ actorId }: ActorDatabaseProps) {
 		return schema;
 	}, [tables]);
 
-	const handleRunRef = useRef<() => Promise<void>>(async () => {});
+	const handleRunRef = useRef<() => Promise<void> | void>(async () => {});
 
 	const sqlExtensions = useMemo(
 		() => [
