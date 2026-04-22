@@ -288,8 +288,7 @@ impl PubSub {
 		let inner = self.0.clone();
 		let reply_subject_clone = reply_subject.clone();
 		tokio::spawn(async move {
-			if let std::result::Result::Ok(NextOutput::Message(msg)) =
-				reply_subscriber.next().await
+			if let std::result::Result::Ok(NextOutput::Message(msg)) = reply_subscriber.next().await
 			{
 				// Already decoded; forward payload
 				if let Some((_, tx)) = inner

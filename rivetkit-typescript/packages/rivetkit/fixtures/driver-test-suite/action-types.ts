@@ -1,5 +1,8 @@
 import { actor, UserError } from "rivetkit";
 
+const sleep = (ms: number) =>
+	new Promise<void>((resolve) => setTimeout(resolve, ms));
+
 // Actor with synchronous actions
 export const syncActionActor = actor({
 	state: { value: 0 },
@@ -52,6 +55,19 @@ export const asyncActionActor = actor({
 
 			return "Success";
 		},
+	},
+});
+
+export const concurrentActionActor = actor({
+	state: { events: [] as string[] },
+	actions: {
+		runWithDelay: async (c, label: string, delayMs: number) => {
+			c.state.events.push(`start:${label}`);
+			await sleep(delayMs);
+			c.state.events.push(`finish:${label}`);
+			return label;
+		},
+		getEvents: (c) => [...c.state.events],
 	},
 });
 

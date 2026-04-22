@@ -47,7 +47,6 @@ export const runWithTicks = actor({
 	},
 	options: {
 		sleepTimeout: RUN_SLEEP_TIMEOUT,
-		runStopTimeout: 1000,
 	},
 });
 
@@ -88,7 +87,6 @@ export const runWithQueueConsumer = actor({
 	},
 	options: {
 		sleepTimeout: RUN_SLEEP_TIMEOUT,
-		runStopTimeout: 1000,
 	},
 });
 

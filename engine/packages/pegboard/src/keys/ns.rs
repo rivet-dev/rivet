@@ -45,12 +45,11 @@ impl FormalKey for RunnerAllocIdxKey {
 	type Value = rivet_data::converted::RunnerAllocIdxKeyData;
 
 	fn deserialize(&self, raw: &[u8]) -> Result<Self::Value> {
-		rivet_data::versioned::RunnerAllocIdxKeyData::deserialize_with_embedded_version(raw)?
-			.try_into()
+		rivet_data::versioned::RunnerAllocIdxKeyData::deserialize_with_embedded_version(raw)
 	}
 
 	fn serialize(&self, value: Self::Value) -> Result<Vec<u8>> {
-		rivet_data::versioned::RunnerAllocIdxKeyData::wrap_latest(value.try_into()?)
+		rivet_data::versioned::RunnerAllocIdxKeyData::wrap_latest(value)
 			.serialize_with_embedded_version(
 				rivet_data::PEGBOARD_NAMESPACE_RUNNER_ALLOC_IDX_VERSION,
 			)
@@ -582,11 +581,11 @@ impl FormalKey for ActorByKeyKey {
 	type Value = rivet_data::converted::ActorByKeyKeyData;
 
 	fn deserialize(&self, raw: &[u8]) -> Result<Self::Value> {
-		rivet_data::versioned::ActorByKeyKeyData::deserialize_with_embedded_version(raw)?.try_into()
+		rivet_data::versioned::ActorByKeyKeyData::deserialize_with_embedded_version(raw)
 	}
 
 	fn serialize(&self, value: Self::Value) -> Result<Vec<u8>> {
-		rivet_data::versioned::ActorByKeyKeyData::wrap_latest(value.try_into()?)
+		rivet_data::versioned::ActorByKeyKeyData::wrap_latest(value)
 			.serialize_with_embedded_version(rivet_data::PEGBOARD_NAMESPACE_ACTOR_BY_KEY_VERSION)
 	}
 }
@@ -1197,12 +1196,11 @@ impl FormalKey for RunnerByKeyKey {
 	type Value = rivet_data::converted::RunnerByKeyKeyData;
 
 	fn deserialize(&self, raw: &[u8]) -> Result<Self::Value> {
-		rivet_data::versioned::RunnerByKeyKeyData::deserialize_with_embedded_version(raw)?
-			.try_into()
+		rivet_data::versioned::RunnerByKeyKeyData::deserialize_with_embedded_version(raw)
 	}
 
 	fn serialize(&self, value: Self::Value) -> Result<Vec<u8>> {
-		rivet_data::versioned::RunnerByKeyKeyData::wrap_latest(value.try_into()?)
+		rivet_data::versioned::RunnerByKeyKeyData::wrap_latest(value)
 			.serialize_with_embedded_version(rivet_data::PEGBOARD_NAMESPACE_RUNNER_BY_KEY_VERSION)
 	}
 }

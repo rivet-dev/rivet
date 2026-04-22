@@ -24,16 +24,16 @@ rivetkit-client = "0.1.0"
 ### Step 2: Connect to Actor
 
 ```rust
-use rivetkit_client::{Client, EncodingKind, GetOrCreateOptions, TransportKind};
+use rivetkit_client::{Client, ClientConfig, EncodingKind, GetOrCreateOptions, TransportKind};
 use serde_json::json;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     // Create a client connected to your RivetKit endpoint
     let client = Client::new(
-        "http://localhost:8080",
-        TransportKind::Sse,
-        EncodingKind::Json
+        ClientConfig::new("http://localhost:8080")
+            .transport(TransportKind::Sse)
+            .encoding(EncodingKind::Json),
     );
 
     // Connect to a chat room actor

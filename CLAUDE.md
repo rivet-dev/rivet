@@ -1,5 +1,7 @@
 # CLAUDE.md
 
+Design constraints, invariants, and reference commands for the Rivet monorepo. For implementation details, wiring, and procedural gotchas, follow the links under [Reference Docs](#reference-docs).
+
 ## Important Domain Information
 
 **ALWAYS use `rivet.dev` - NEVER use `rivet.gg`**
@@ -22,68 +24,55 @@ The `rivet.gg` domain is deprecated and should never be used in this codebase.
 - Add a new versioned schema instead, then migrate `versioned.rs` and related compatibility code to bridge old versions forward.
 - When bumping the protocol version, update `PROTOCOL_MK2_VERSION` in `engine/packages/runner-protocol/src/lib.rs` and `PROTOCOL_VERSION` in `rivetkit-typescript/packages/engine-runner/src/mod.ts` together. Both must match the latest schema version.
 
+When talking about "Rivet Actors" make sure to capitalize "Rivet Actor" as a proper noun and lowercase "actor" as a generic noun.
+
 ## Commands
 
-### Build Commands
+### Build + test
+
 ```bash
 # Check a specific package without producing artifacts (preferred for verification)
 cargo check -p package-name
 
-# Build all packages in the workspace
+# Build
 cargo build
-
-# Build a specific package
 cargo build -p package-name
-
-# Build with release optimizations
 cargo build --release
-```
 
-### Test Commands
-```bash
-# Run all tests in the workspace
+# Test
 cargo test
-
-# Run tests for a specific package
 cargo test -p package-name
-
-# Run a specific test
 cargo test test_name
-
-# Run tests with output displayed
 cargo test -- --nocapture
 ```
 
-### Development Commands
-```bash
-# Format code (enforced by pre-commit hooks)
-# cargo fmt
-# DO NOT RUN CARGO FMT AUTOMATICALLY (note for humans: we need to run cargo fmt when everything is merged together and make sure lefthook is working)
+### Development
 
-# Run linter and fix issues
+```bash
+# Run linter (but see "Development warnings" below)
 ./scripts/cargo/fix.sh
 
 # Check for linting issues
 cargo clippy -- -W warnings
 ```
 
+- Do not run `cargo fmt` automatically. The team runs it at merge time.
+- Do not run `./scripts/cargo/fix.sh`. Do not format the code yourself.
 - Ensure lefthook is installed and enabled for git hooks (`lefthook install`).
 
-### Docker Development Environment
+### Docker dev environment
+
 ```bash
-# Start the development environment with all services
 cd self-host/compose/dev
 docker-compose up -d
 ```
 
-- Rebuild publish base images with `scripts/docker-builder-base/build-push.sh <base-name|all> --push`; update `BASE_TAG` when rebuilding shared builder bases, while engine bases are published per commit in `publish.yaml`.
+- Do not edit `self-host/compose/dev*` configs directly. Edit the template in `self-host/compose/template/` and rerun (`cd self-host/compose/template && pnpm start`) to regenerate.
+- Rebuild publish base images with `scripts/docker-builder-base/build-push.sh <base-name|all> --push`. Update `BASE_TAG` when rebuilding shared builder bases; engine bases are published per commit in `publish.yaml`.
 
-### Git Commands
-```bash
-# Use conventional commits with a single-line commit message, no co-author
-git commit -m "chore(my-pkg): foo bar"
-```
+### Git + PRs
 
+- Use conventional commits with a single-line commit message, no co-author: `git commit -m "chore(my-pkg): foo bar"`.
 - We use Graphite for stacked PRs. Diff against the parent branch (`gt ls` to see the stack), not `main`.
 - To revert a file to the version before this branch's changes, checkout from the first child branch (below in the stack), not from `main` or the parent. Child branches contain the pre-this-branch state of files modified by branches further down the stack.
 
@@ -266,66 +255,57 @@ git commit -m "chore(my-pkg): foo bar"
 
 All agent working files live in `.agent/` at the repo root.
 
-- **Specs**: `.agent/specs/` -- design specs and interface definitions for planned work.
-- **Research**: `.agent/research/` -- research documents on external systems, prior art, and design analysis.
-- **Todo**: `.agent/todo/*.md` -- deferred work items with context on what needs to be done and why.
-- **Notes**: `.agent/notes/` -- general notes and tracking.
+- **Specs**: `.agent/specs/` — design specs and interface definitions for planned work.
+- **Research**: `.agent/research/` — research documents on external systems, prior art, and design analysis.
+- **Todo**: `.agent/todo/*.md` — deferred work items with context on what needs to be done and why.
+- **Notes**: `.agent/notes/` — general notes and tracking.
 
 When the user asks to track something in a note, store it in `.agent/notes/` by default. When something is identified as "do later", add it to `.agent/todo/`. Design documents and interface specs go in `.agent/specs/`.
-- When the user asks to update any `CLAUDE.md`, add one-line bullet points only, or add a new section containing one-line bullet points.
 
-## Architecture
+## RivetKit Layer Architecture
 
-### Deprecated Packages
-- `engine/packages/pegboard-runner/` and associated TypeScript "runner" packages (`engine/sdks/typescript/runner`, `rivetkit-typescript/packages/engine-runner/`) and runner workflows are deprecated. All new actor hosting work targets `engine/packages/pegboard-envoy/` exclusively. Do not add features to or fix bugs in the deprecated runner path.
-
-### RivetKit Layers
 - **Engine** (`packages/core/engine/`, includes Pegboard + Pegboard Envoy) — Orchestration. Manages actor lifecycle, routing, KV, SQLite, alarms. In local dev, the engine is spawned alongside RivetKit.
 - **envoy-client** (`engine/sdks/rust/envoy-client/`) — Wire protocol between actors and the engine. BARE serialization, WebSocket transport, KV request/response matching, SQLite protocol dispatch, tunnel routing.
-- **rivetkit-core** (`rivetkit-rust/packages/rivetkit-core/`) — Core RivetKit logic in Rust, built to be language-agnostic. Lifecycle state machine, sleep logic, shutdown sequencing, state persistence, action dispatch, event broadcast, queue management, schedule system, inspector, metrics. All callbacks are dynamic closures with opaque bytes. All load-bearing logic must live here. Config conversion helpers and HTTP request/response parsing for foreign runtimes belong here.
+- **rivetkit-core** (`rivetkit-rust/packages/rivetkit-core/`) — Core RivetKit logic in Rust, language-agnostic. Lifecycle state machine, sleep logic, shutdown sequencing, state persistence, action dispatch, event broadcast, queue management, schedule system, inspector, metrics. All callbacks are dynamic closures with opaque bytes. All load-bearing logic must live here. Config conversion helpers and HTTP request/response parsing for foreign runtimes belong here.
 - **rivetkit (Rust)** (`rivetkit-rust/packages/rivetkit/`) — Rust-friendly typed API. `Actor` trait, `Ctx<A>`, `Registry` builder, CBOR serde at boundaries. Thin wrapper over rivetkit-core. No load-bearing logic.
-- `rivetkit-rust/packages/rivetkit/src/persist.rs` is the shared home for typed actor-state `StateDelta` builders; keep `SerializeState`/`Sleep`/`Destroy` in `src/event.rs` as thin reply helpers that reuse those builders instead of open-coding persistence bytes per wrapper.
-- **rivetkit-napi** (`rivetkit-typescript/packages/rivetkit-napi/`) — NAPI bindings only. ThreadsafeFunction wrappers, JS object construction, Promise-to-Future conversion. No load-bearing logic. Must only translate between JS types and rivetkit-core types. Only consumed by `rivetkit-typescript/packages/rivetkit/`; do not design its API for external embedders.
+- **rivetkit-napi** (`rivetkit-typescript/packages/rivetkit-napi/`) — NAPI bindings only. ThreadsafeFunction wrappers, JS object construction, Promise-to-Future conversion. No load-bearing logic. Must only translate between JS types and rivetkit-core types. Only consumed by `rivetkit-typescript/packages/rivetkit/`.
 - **rivetkit (TypeScript)** (`rivetkit-typescript/packages/rivetkit/`) — TypeScript-friendly API. Calls into rivetkit-core via NAPI for lifecycle logic. Owns workflow engine, agent-os, and client library. Zod validation for user-provided schemas runs here.
 
-### RivetKit Layer Constraints
+### Layer constraints
+
 - All actor lifecycle logic, state persistence, sleep/shutdown, action dispatch, event broadcast, queue management, schedule, inspector, and metrics must live in rivetkit-core. No lifecycle logic in TS or NAPI.
-- rivetkit-napi must be pure bindings: ThreadsafeFunction wrappers, JS<->Rust type conversion, NAPI class declarations. If code would be duplicated by a future V8 runtime, it belongs in rivetkit-core instead.
+- rivetkit-napi must be pure bindings. If code would be duplicated by a future V8 runtime, it belongs in rivetkit-core instead.
+- rivetkit-napi serves through `CoreRegistry` + `NapiActorFactory`; do not reintroduce the deleted `BridgeCallbacks` JSON-envelope envoy path or `startEnvoy*Js` exports.
+- NAPI `ActorContext.sql()` returns `JsNativeDatabase` directly; do not reintroduce a standalone `SqliteDb` wrapper export.
 - rivetkit (Rust) is a thin typed wrapper. If it does more than deserialize, delegate to core, and serialize, the logic should move to rivetkit-core.
 - rivetkit (TypeScript) owns only: workflow engine, agent-os, client library, Zod schema validation for user-defined types, and actor definition types.
-- Errors use universal RivetError (group/code/message/metadata) at all boundaries. No custom error classes in TS.
+- Errors use universal `RivetError` (group/code/message/metadata) at all boundaries. No custom error classes in TS.
 - CBOR serialization at all cross-language boundaries. JSON only for HTTP inspector endpoints.
-- When removing legacy TypeScript actor runtime internals, keep the public actor context, queue, and connection types in `rivetkit-typescript/packages/rivetkit/src/actor/config.ts`, and move shared wire helpers into `rivetkit-typescript/packages/rivetkit/src/common/` instead of leaving callers tied to deleted runtime paths.
-- When removing deprecated TypeScript routing or serverless surfaces, leave surviving public entrypoints as explicit errors until downstream callers migrate to `Registry.startEnvoy()` and the native rivetkit-core path.
-- When deleting deprecated TypeScript infrastructure folders, move any still-live database or protocol helpers into `src/common/` or client-local modules first, then retarget driver fixtures so `tsc` does not keep pulling deleted package paths back in.
-- When deleting a deprecated `rivetkit` package surface, remove the matching `package.json` exports, `tsconfig.json` aliases, Turbo task hooks, driver-test entries, and docs imports in the same change so builds stop following dead paths.
-- During the ActorTask migration, `ActorContext::restart_run_handler()` should enqueue `LifecycleEvent::RestartRunHandler` once `ActorTask` is configured; only pre-task startup uses the legacy fallback.
-- `RegistryDispatcher` stores per-actor `ActorTaskHandle`s, but startup still runs through `ActorLifecycle::startup` before `LifecycleCommand::Start`; later migration stories own moving startup fully inside `ActorTask`.
-- Actor action dispatch through `ActorTask` should use `DispatchCommand::Action`, spawn a `UserTaskKind::Action` child in `ActorTask.children`, and reply from that child task.
-- Actor action children must remain concurrent; do not reintroduce a per-actor action lock because unblock/finish actions need to run while long-running actions await.
-- Actor HTTP dispatch through `ActorTask` should use `DispatchCommand::Http`, spawn a `UserTaskKind::Http` child in `ActorTask.children`, and reply from that child task.
-- Raw WebSocket opens should send `DispatchCommand::OpenWebSocket`, spawn a `UserTaskKind::WebSocketLifetime` child, and keep message/close callbacks inline under the WebSocket callback guard.
-- Actor-owned lifecycle/dispatch/lifecycle-event inbox producers must use `try_reserve` helpers and return `actor/overloaded`; do not await bounded `mpsc::Sender::send`.
-- Actor runtime Prometheus metrics should flow through the shared `ActorContext` `ActorMetrics`; use `UserTaskKind` / `StateMutationReason` metric labels instead of string literals at call sites.
 
-### Monorepo Structure
-- This is a Rust workspace-based monorepo for Rivet with the following key packages and components:
+### Monorepo orientation
 
-- **Core Engine** (`packages/core/engine/`) - Main orchestration service that coordinates all operations
-- **Workflow Engine** (`packages/common/gasoline/`) - Handles complex multi-step operations with reliability and observability
-- **Pegboard** (`packages/core/pegboard/`) - Actor/server lifecycle management system
-- **Pegboard Envoy** (`engine/packages/pegboard-envoy/`) - The active actor-to-engine bridge. All new actor hosting work goes here.
-- **Common Packages** (`/packages/common/`) - Foundation utilities, database connections, caching, metrics, logging, health checks, workflow engine core
-- **Core Packages** (`/packages/core/`) - Main engine executable, Pegboard actor orchestration, workflow workers
-- **Shared Libraries** (`shared/{language}/{package}/`) - Libraries shared between the engine and rivetkit (e.g., `shared/typescript/virtual-websocket/`)
-- **Service Infrastructure** - Distributed services communicate via NATS messaging with service discovery
+- **Core Engine** (`packages/core/engine/`) — main orchestration service.
+- **Workflow Engine** (`packages/common/gasoline/`) — multi-step operations with reliability + observability.
+- **Pegboard** (`packages/core/pegboard/`) — actor/server lifecycle management.
+- **Pegboard Envoy** (`engine/packages/pegboard-envoy/`) — active actor-to-engine bridge (successor to pegboard-runner).
+- **Common packages** (`packages/common/`) — foundation utilities, DB pools, caching, metrics, logging, health, gasoline core.
+- **Core packages** (`packages/core/`) — engine executable, pegboard orchestration, workflow workers.
+- **Shared libraries** (`shared/{language}/{package}/`) — shared between engine and rivetkit (e.g., `shared/typescript/virtual-websocket/`).
+- **Databases**: UniversalDB (distributed state), ClickHouse (analytics/time-series). Connection pooling via `packages/common/pools/`.
+- Services communicate via NATS with service discovery.
 
-### Engine Runner Parity
+### Deprecated paths
+
+- `engine/packages/pegboard-runner/`, `engine/sdks/typescript/runner`, `rivetkit-typescript/packages/engine-runner/`, and associated runner workflows are deprecated. All new actor hosting work targets `engine/packages/pegboard-envoy/` exclusively. Do not add features to or fix bugs in the deprecated runner path.
+
+### Engine runner parity
+
 - Keep `engine/sdks/typescript/runner` and `engine/sdks/rust/engine-runner` at feature parity.
 - Any behavior, protocol handling, or test coverage added to one runner should be mirrored in the other runner in the same change whenever possible.
 - When parity cannot be completed in the same change, explicitly document the gap and add a follow-up task.
 
-### Trust Boundaries
+## Trust Boundaries
+
 - Treat `client <-> engine` as untrusted.
 - Treat `envoy <-> pegboard-envoy` as untrusted.
 - Treat traffic inside the engine over `nats`, `fdb`, and other internal backends as trusted.
@@ -333,173 +313,83 @@ When the user asks to track something in a note, store it in `.agent/notes/` by 
 - Validate and authorize all client-originated data at the engine edge before it reaches trusted internal systems.
 - Validate and authorize all envoy-originated data at `pegboard-envoy` before it reaches trusted internal systems.
 
-### Important Patterns
+## Fail-By-Default Runtime
 
-**Error Handling**
-- Custom error system at `packages/common/error/`
-- Uses derive macros with struct-based error definitions
-- `rivetkit-core` should convert callback/action `anyhow::Error` values into transport-safe `group/code/message` payloads with `rivet_error::RivetError::extract` before returning them across runtime boundaries.
-- `envoy-client` actor-scoped HTTP fetch work should stay in a `JoinSet` plus an `Arc<AtomicUsize>` counter so sleep checks can read in-flight request count and shutdown can abort and join the tasks before sending `Stopped`.
+- Avoid silent no-ops for required runtime behavior. If a capability is required, validate it and throw an explicit error with actionable context instead of returning early.
+- Do not use optional chaining for required lifecycle and bridge operations (for example sleep, destroy, alarm dispatch, ack, and websocket dispatch paths).
+- Optional chaining is acceptable only for best-effort diagnostics and cleanup paths (for example logging hooks and dispose/release cleanup).
+- Keep scaffolded `rivetkit-core` wrappers `Default`-constructible, but return explicit configuration errors until a real `EnvoyHandle` is wired in.
+- Keep foreign-runtime-only `ActorContext` helpers present on the public surface even before NAPI or V8 wires them. Make them fail with explicit configuration errors instead of silently disappearing.
+- In `rivetkit-core` `ActorTask::run`, bind inbox `recv()` calls as raw `Option`s and log the closed channel before terminating. `Some(...) = recv()` plus `else => break` hides which inbox died.
+- In `rivetkit-typescript/packages/rivetkit/src/common/utils.ts::deconstructError`, only passthrough canonical structured errors (`instanceof RivetError` or tagged `__type: "RivetError"` with full fields). Plain-object lookalikes must still be classified and sanitized.
+- Actor-owned lifecycle / dispatch / lifecycle-event inbox producers use `try_reserve` helpers and return `actor.overloaded`. Do not await bounded `mpsc::Sender::send`.
 
-- Use this pattern for custom errors:
+## Performance
 
-```rust
-use rivet_error::*;
-use serde::{Serialize, Deserialize};
-
-// Simple error without metadata
-#[derive(RivetError)]
-#[error("auth", "invalid_token", "The provided authentication token is invalid")]
-struct AuthInvalidToken;
-
-// Error with metadata
-#[derive(RivetError, Serialize, Deserialize)]
-#[error(
-    "api",
-    "rate_limited",
-    "Rate limit exceeded",
-    "Rate limit exceeded. Limit: {limit}, resets at: {reset_at}"
-)]
-struct ApiRateLimited {
-    limit: u32,
-    reset_at: i64,
-}
-
-// Use errors in code
-let error = AuthInvalidToken.build();
-let error_with_meta = ApiRateLimited { limit: 100, reset_at: 1234567890 }.build();
-```
-
-- Key points:
-- Use `#[derive(RivetError)]` on struct definitions
-- RivetError derives in `rivetkit-core` generate JSON artifacts under `rivetkit-rust/engine/artifacts/errors/`; commit new generated files with new error codes.
-- Use `#[error(group, code, description)]` or `#[error(group, code, description, formatted_message)]` attribute
-- Group errors by module/domain (e.g., "auth", "actor", "namespace")
-- Add `Serialize, Deserialize` derives for errors with metadata fields
-- Always return anyhow errors from failable functions
-- For example: `fn foo() -> Result<i64> { /* ... */ }`
-- Do not glob import (`::*`) from anyhow. Instead, import individual types and traits
-- Prefer anyhow's `.context()` over `anyhow!` macro
-
-**Rust Dependency Management**
-- When adding a dependency, check for a workspace dependency in Cargo.toml
-- If available, use the workspace dependency (e.g., `anyhow.workspace = true`)
-- If you need to add a dependency and can't find it in the Cargo.toml of the workspace, add it to the workspace dependencies in Cargo.toml (`[workspace.dependencies]`) and then add it to the package you need with `{dependency}.workspace = true`
-
-**Native SQLite & KV Channel**
-- RivetKit TypeScript SQLite is exposed through `@rivetkit/rivetkit-napi`, but runtime behavior must stay in `rivetkit-rust/packages/rivetkit-sqlite/` and `rivetkit-core`.
-- The Rust KV-backed SQLite implementation lives in `rivetkit-rust/packages/rivetkit-sqlite/src/`; when changing its on-disk or KV layout, update the internal data-channel spec in the same change.
-- SQLite v2 slow-path staging writes encoded LTX bytes directly under DELTA chunk keys. Do not expect `/STAGE` keys or a fixed one-chunk-per-page mapping in tests or recovery code.
-- The native VFS uses the same 4 KiB chunk layout and KV key encoding as the WASM VFS. Data is compatible between backends.
-- **The native Rust VFS and the WASM TypeScript VFS must match 1:1.** This includes: KV key layout and encoding, chunk size, PRAGMA settings, VFS callback-to-KV-operation mapping, delete/truncate strategy (both must use `deleteRange`), and journal mode. When changing any VFS behavior in one implementation, update the other. The relevant files are:
-  - Native: `rivetkit-rust/packages/rivetkit-sqlite/src/vfs.rs`, `kv.rs`
-  - WASM: `rivetkit-typescript/packages/sqlite-wasm/src/vfs.ts`, `kv.ts`
-- SQLite VFS v2 storage keys use literal ASCII path segments under the `0x02` subspace prefix with big-endian numeric suffixes so `scan_prefix` and `BTreeMap` ordering stay numerically correct.
-- Full spec: `docs-internal/engine/NATIVE_SQLITE_DATA_CHANNEL.md`
-
-**Inspector HTTP API**
-- When updating the WebSocket inspector (`rivetkit-typescript/packages/rivetkit/src/inspector/`), also update the HTTP inspector endpoints in `rivetkit-typescript/packages/rivetkit/src/actor/router.ts`. The HTTP API mirrors the WebSocket inspector for agent-based debugging.
-- When adding or modifying inspector endpoints, also update the relevant RivetKit tests in `rivetkit-typescript/packages/rivetkit/tests/` to cover all inspector HTTP endpoints.
-- Native inspector queue-size reads should come from `ctx.inspectorSnapshot().queueSize` in `rivetkit-core`, not TS-side caches or hardcoded fallback values.
-- When adding or modifying inspector endpoints, also update the documentation in `website/src/metadata/skill-base-rivetkit.md` and `website/src/content/docs/actors/debugging.mdx` to keep them in sync.
-- Inspector wire-protocol version downgrades should turn unsupported features into explicit `Error` messages with `inspector.*_dropped` codes instead of silently stripping payloads.
-- Inspector wire-version negotiation belongs in `rivetkit-core` via `ActorContext.decodeInspectorRequest(...)` / `encodeInspectorResponse(...)`; do not reintroduce TS-side `inspector-versioned.ts` converters.
-- Inspector WebSocket transport should keep the wire format at v4 for outbound frames, accept v1-v4 inbound request frames, and fan out live updates through `InspectorSignal` subscriptions while reading live queue state for snapshots instead of trusting pre-attach counters.
-- Workflow inspector support should be inferred from mailbox replies (`actor/dropped_reply` means unsupported) rather than resurrecting `Inspector` callback flags or unconditional workflow-enabled booleans.
-
-**Database Usage**
-- UniversalDB for distributed state storage
-- ClickHouse for analytics and time-series data
-- Connection pooling through `packages/common/pools/`
-
-**Performance**
-- Never use `Mutex<HashMap<...>>` or `RwLock<HashMap<...>>`.
-- Use `scc::HashMap` (preferred), `moka::Cache` (for TTL/bounded), or `DashMap` for concurrent maps.
+- Never use `Mutex<HashMap<...>>` or `RwLock<HashMap<...>>`. Use `scc::HashMap` (preferred), `moka::Cache` (for TTL/bounded), or `DashMap` for concurrent maps.
 - Use `scc::HashSet` instead of `Mutex<HashSet<...>>` for concurrent sets.
 - `scc` async methods do not hold locks across `.await` points. Use `entry_async` for atomic read-then-write.
 - Never poll a shared-state counter with `loop { if ready; sleep(Nms).await; }`. Pair the counter with a `tokio::sync::Notify` (or `watch::channel`) that every decrement-to-zero site pings, and wait with `AsyncCounter::wait_zero(deadline)` or an equivalent `notify.notified()` + re-check guard that arms the permit before the check.
+- Every shared counter with an awaiter must have a paired `Notify`, `watch`, or permit. Waiters must arm the notification before re-checking the counter so decrement-to-zero cannot race past them.
 - Reserve `tokio::time::sleep` for: per-call timeouts via `tokio::select!`, retry/reconnect backoff, deliberate debounce windows, or `sleep_until(deadline)` arms in an event-select loop. If it is inside a `loop { check; sleep }` body, it is polling and should be event-driven instead.
 - Never add unexplained wall-clock defers like `sleep(1ms)` to decouple a spawn from its caller. Use `tokio::task::yield_now().await` or rely on the spawn itself.
 
-### Code Style
-- Hard tabs for Rust formatting (see `rustfmt.toml`)
-- Follow existing patterns in neighboring files
-- Always check existing imports and dependencies before adding new ones
-- **Always add imports at the top of the file inside of inline within the function.**
+## Async Rust Locks
 
-## Naming Conventions
+- Async Rust code defaults to `tokio::sync::Mutex` / `tokio::sync::RwLock`. Do not use `std::sync::Mutex` / `std::sync::RwLock`.
+- Use `parking_lot::Mutex` / `parking_lot::RwLock` only when sync is mandated by the call context: `Drop`, sync traits, FFI/SQLite VFS callbacks, or sync `&self` accessors.
+- `rivetkit-napi` sync N-API methods, TSF callback slots, and test `MakeWriter` captures are forced-sync contexts. Use `parking_lot` there and keep guards out of awaits.
+- `rivetkit-napi` test-only global serialization should use a real `parking_lot` guard instead of `AtomicBool` spin loops.
+- If an external dependency's struct requires `std::sync::Mutex`, keep it at the construction boundary with an explicit forced-std-sync comment.
+- Prefer async locks because sync guards can be silently held across `.await`, poisoning creates `.expect("lock poisoned")` boilerplate, and the tiny uncontended-lock win is dwarfed by actor I/O latency.
+
+## TypeScript Concurrency
+
+- Use `antiox` for TypeScript concurrency primitives instead of ad hoc Promise queues, custom channel wrappers, or event-emitter based coordination.
+- Prefer the Tokio-shaped APIs from `antiox`. For example, use `antiox/sync/mpsc` for `tx` and `rx` channels, `antiox/task` for spawning tasks, and the matching sync and time modules as needed.
+- Treat `antiox` as the default choice for any TypeScript concurrency work because it mirrors Rust and Tokio APIs used elsewhere in the codebase.
+
+## Error Handling
+
+- Custom error system at `packages/common/error/` using `#[derive(RivetError)]` on struct definitions. For the full derive example and conventions, see `.claude/reference/error-system.md`.
+- Always return anyhow errors from failable functions. Do not glob-import from anyhow. Prefer `.context()` over the `anyhow!` macro.
+- `rivetkit-core` should convert callback/action `anyhow::Error` values into transport-safe `group/code/message` payloads with `rivet_error::RivetError::extract` before returning them across runtime boundaries.
+- `rivetkit-core` is the single source of truth for cross-boundary error sanitization. The TS bridge must NOT pre-wrap non-structured JS errors into a canonical `RivetError` before bridge-encoding. Pass raw `Error` values through the bridge as unstructured strings so core's `RivetError::extract` hits `build_internal` and produces the sanitized `INTERNAL_ERROR` payload. Only TS errors that never cross into core (HTTP router parsing, Hono middleware) should be sanitized by `common/utils.ts::deconstructError`. The dev-mode toggle that exposes raw messages lives in core (reads env at `build_internal`), not in the TS bridge.
+- `envoy-client` actor-scoped HTTP fetch work should stay in a `JoinSet` plus an `Arc<AtomicUsize>` counter so sleep checks can read in-flight request count and shutdown can abort and join the tasks before sending `Stopped`.
+
+## Logging
+
+- Use tracing. Never use `eprintln!` or `println!` for logging in Rust code. Always use `tracing::info!`, `tracing::warn!`, `tracing::error!`, etc.
+- Do not format parameters into the main message. Use structured fields: `tracing::info!(?x, "foo")` instead of `tracing::info!("foo {x}")`.
+- Log messages should be lowercase unless mentioning specific code symbols. `tracing::info!("inserted UserRow")` instead of `tracing::info!("Inserted UserRow")`.
+- `rivetkit-core` runtime logs should include `actor_id` and stable structured fields such as `reason`, `kind`, `delta_count`, byte counts, and timestamp fields instead of payload debug dumps.
+
+## Testing
+
+- **Never use `vi.mock`, `jest.mock`, or module-level mocking.** Write tests against real infrastructure (Docker containers, real databases, real filesystems). For LLM calls, use `@copilotkit/llmock` to run a mock LLM server. For protocol-level test doubles (e.g., ACP adapters), write hand-written scripts that run as real processes. `vi.fn()` for simple callback tracking is acceptable.
+- Driver tests that wait for actor sleep must not poll actor actions while waiting; each action counts as activity and can reset the sleep deadline.
+- For running RivetKit tests, Vitest filter gotchas, the driver-test parity workflow, and Rust test layout rules, see `.claude/reference/testing.md`.
+
+## Traces Package
+
+- Keep `@rivetkit/traces` chunk writes under the 128 KiB actor KV value limit. Use 96 KiB chunks unless a multipart reader/writer replaces the single-value format.
+
+## Naming + Data Conventions
 
 - Data structures often include:
+  - `id` (uuid)
+  - `name` (machine-readable name, must be valid DNS subdomain, convention is using kebab case)
+  - `description` (human-readable, if applicable)
+- Use UUID (v4) for generating unique identifiers.
+- Store dates as i64 epoch timestamps in milliseconds for precise time tracking.
+- Timestamps use `*_at` naming with past-tense verbs. For example, `created_at`, `destroyed_at`.
 
-- `id` (uuid)
-- `name` (machine-readable name, must be valid DNS subdomain, convention is using kebab case)
-- `description` (human-readable, if applicable)
+## Code Style
 
-## Implementation Details
-
-### Data Storage Conventions
-- Use UUID (v4) for generating unique identifiers
-- Store dates as i64 epoch timestamps in milliseconds for precise time tracking
-
-### Timestamp Naming Conventions
-- When storing timestamps, name them *_at with past tense verb. For example, created_at, destroyed_at.
-
-## Logging Patterns
-
-### Structured Logging
-- Use tracing for logging. Never use `eprintln!` or `println!` for logging in Rust code. Always use tracing macros (`tracing::info!`, `tracing::warn!`, `tracing::error!`, etc.).
-- Do not format parameters into the main message, instead use tracing's structured logging.
-  - For example, instead of `tracing::info!("foo {x}")`, do `tracing::info!(?x, "foo")`
-- Log messages should be lowercase unless mentioning specific code symbols. For example, `tracing::info!("inserted UserRow")` instead of `tracing::info!("Inserted UserRow")`
-
-## Configuration Management
-
-### Docker Development Configuration
-- Do not make changes to self-host/compose/dev* configs. Instead, edit the template in self-host/compose/template/ and rerun (cd self-host/compose/template && pnpm start). This will regenerate the docker compose config for you.
-
-## Development Warnings
-
-- Do not run ./scripts/cargo/fix.sh. Do not format the code yourself.
-- When adding or changing any version value in the repo, verify `scripts/publish/src/lib/version.ts` (`bumpPackageJsons` for package.json files, `updateSourceFiles` for Cargo.toml + examples) updates that location so release bumps cannot leave stale versions behind.
-
-## Testing Guidelines
-- **Never use `vi.mock`, `jest.mock`, or module-level mocking.** Write tests against real infrastructure (Docker containers, real databases, real filesystems). For LLM calls, use `@copilotkit/llmock` to run a mock LLM server. For protocol-level test doubles (e.g., ACP adapters), write hand-written scripts that run as real processes. If you need callback tracking, `vi.fn()` for simple callbacks is acceptable.
-- When running tests, always pipe the test to a file in /tmp/ then grep it in a second step. You can grep test logs multiple times to search for different log lines.
-- For RivetKit TypeScript tests, run from `rivetkit-typescript/packages/rivetkit` and use `pnpm test <filter>` with `-t` to narrow to specific suites. For example: `pnpm test driver-file-system -t ".*Actor KV.*"`.
-- For RivetKit driver work, follow `.agent/notes/driver-test-progress.md` one file group at a time and keep the red/green loop anchored to `driver-test-suite.test.ts` in `rivetkit-typescript/packages/rivetkit` instead of switching to ad hoc native-only tests.
-- When RivetKit tests need a local engine instance, start the RocksDB engine in the background with `./scripts/run/engine-rocksdb.sh >/tmp/rivet-engine-startup.log 2>&1 &`.
-- For frontend testing, use the `agent-browser` skill to interact with and test web UIs in examples. This allows automated browser-based testing of frontend applications.
-- If you modify frontend UI, automatically use the Agent Browser CLI to take updated screenshots and post them to the PR with a short comment before wrapping up the task.
-
-## Optimizations
-
-- Never build a new reqwest client from scratch. Use `rivet_pools::reqwest::client().await?` to access an existing reqwest client instance.
-
-## TLS Trust Roots
-
-- For rustls-based outbound TLS clients (`tokio-tungstenite`, `reqwest`), always enable BOTH `rustls-tls-native-roots` and `rustls-tls-webpki-roots` together so the crates build a union root store — operator-installed corporate CAs work via native, and empty native stores (Distroless / Cloud Run / Alpine without `ca-certificates`) fall through to the bundled Mozilla list.
-- Pinned in workspace `Cargo.toml` (`tokio-tungstenite`) and in `rivetkit-rust/packages/client/Cargo.toml` (`reqwest` + `tokio-tungstenite`). Never enable only one: native-only breaks on Distroless, webpki-only silently breaks corporate CAs.
-- Engine-internal HTTPS clients on `hyper-tls` / `native-tls` (workspace `reqwest`, ClickHouse pool, guard HTTP proxy) intentionally stay on OpenSSL — they run in operator-controlled containers and already honor the system trust store.
-- Bump `webpki-roots` periodically so the bundled Mozilla CA list does not go stale.
-
-## Documentation
-
-- When talking about "Rivet Actors" make sure to capitalize "Rivet Actor" as a proper noun and lowercase "actor" as a generic noun
-
-### Documentation Sync
-- Ensure corresponding documentation is updated when making engine or RivetKit changes:
-- **Limits changes** (e.g., max message sizes, timeouts): Update `website/src/content/docs/actors/limits.mdx`
-- **Config changes** (e.g., new config options in `engine/packages/config/`): Update `website/src/content/docs/self-hosting/configuration.mdx`
-- **RivetKit config changes** (e.g., `rivetkit-typescript/packages/rivetkit/src/registry/config/index.ts` or `rivetkit-typescript/packages/rivetkit/src/actor/config.ts`): Update `website/src/content/docs/actors/limits.mdx` if they affect limits/timeouts
-- **Actor error changes**: When adding, removing, or modifying variants in `ActorError` (`engine/packages/types/src/actor/error.rs`) or `RunnerPoolError`, update `website/src/content/docs/actors/troubleshooting.mdx` to keep the Error Reference in sync. Each error should document the dashboard message (from `frontend/src/components/actors/actor-status-label.tsx`) and the API JSON shape.
-- **Actor status changes**: When modifying status derivation logic in `frontend/src/components/actors/queries/index.ts` or adding new statuses, update `website/src/content/docs/actors/statuses.mdx` and the corresponding tests in `frontend/src/components/actors/queries/index.test.ts`.
-- **Kubernetes manifest changes**: When modifying k8s manifests in `self-host/k8s/engine/`, update `website/src/content/docs/self-hosting/kubernetes.mdx`, `self-host/k8s/README.md`, and `scripts/run/k8s/engine.sh` if file names or deployment steps change.
-- **Landing page changes**: When updating the landing page (`website/src/pages/index.astro` and its section components in `website/src/components/marketing/sections/`), update `README.md` to reflect the same headlines, features, benchmarks, and talking points where applicable.
-- **Sandbox provider changes**: When adding, removing, or modifying sandbox providers in `rivetkit-typescript/packages/rivetkit/src/sandbox/providers/`, update `website/src/content/docs/actors/sandbox.mdx` to keep provider documentation, option tables, and custom provider guidance in sync.
-
-### CLAUDE.md conventions
-
-- When adding entries to any CLAUDE.md file, keep them concise. Ideally a single bullet point or minimal bullet points. Do not write paragraphs.
+- Hard tabs for Rust formatting (see `rustfmt.toml`).
+- Follow existing patterns in neighboring files.
+- Always check existing imports and dependencies before adding new ones.
+- **Always add imports at the top of the file instead of inline within a function.**
 
 ### Comments
 
@@ -507,15 +397,40 @@ let error_with_meta = ApiRateLimited { limit: 100, reset_at: 1234567890 }.build(
 - Do not use em dashes (—). Use periods to separate sentences instead.
 - Documenting deltas is not important or useful. A developer who has never worked on the project will not gain extra information if you add a comment stating that something was removed or changed because they don't know what was there before. The only time you would be adding a comment for something NOT being there is if its unintuitive for why its not there in the first place.
 
-### Examples
+## Documentation
 
-- When adding new examples, or updating existing ones, ensure that the user also modified the vercel equivalent, if applicable. This ensures parity between local and vercel examples. In order to generate vercel example, run `./scripts/vercel-examples/generate-vercel-examples.ts ` after making changes to examples.
-- To skip Vercel generation for a specific example, add `"skipVercel": true` to the `template` object in the example's `package.json`.
+- If you need to look at the documentation for a package, visit `https://docs.rs/{package-name}`. For example, serde docs live at `https://docs.rs/serde/`.
+- When adding new docs pages, update `website/src/sitemap/mod.ts` so the page appears in the sidebar.
+- For the full docs-sync table (limits, config, actor errors, statuses, k8s, landing, sandbox providers, inspector), see `.claude/reference/docs-sync.md`.
 
-#### Common Vercel Example Errors
+## CLAUDE.md conventions
 
-- You may see type-check errors like the following after regenerating Vercel examples:
-```
-error TS2688: Cannot find type definition file for 'vite/client'.
-```
-- You may also see `node_modules missing` warnings; fix this by running `pnpm install` before type checks because regenerated examples need dependencies reinstalled.
+- When adding entries to any CLAUDE.md file, keep them concise. Ideally a single bullet point or minimal bullet points. Do not write paragraphs.
+- Only add design constraints, invariants, and non-obvious rules that shape how new code should be written. Do not add general trivia, current implementation wiring, KV-key layouts, module organization, API signatures, ephemeral migration state, or anything a reader can learn by reading the code. That content belongs in module doc-comments, `docs-internal/`, or `.claude/reference/`.
+- When the user asks to update any `CLAUDE.md`, add one-line bullet points only, or add a new section containing one-line bullet points.
+- Architectural internals and runtime wiring belong in `docs-internal/engine/`. Agent-procedural guides (test-harness gotchas, build troubleshooting, docs-sync tables) belong in `.claude/reference/`. Link them from the [Reference Docs](#reference-docs) index below instead of inlining.
+
+## Reference Docs
+
+Load these only when the task touches the topic.
+
+### Architecture (`docs-internal/engine/`)
+
+- **[rivetkit-core internals](docs-internal/engine/rivetkit-core-internals.md)** — KV-key layout, storage organization on `ActorContextInner`, startup/shutdown sequences, inspector attach plumbing, schedule dirty-flag, registry dispatch. Read before changing state persistence, lifecycle, or registry wiring.
+- **[rivetkit-core state management](docs-internal/engine/rivetkit-core-state-management.md)** — `request_save` / `save_state` / `persist_state` / `set_state_initial` semantics. Keep in sync when changing state APIs.
+- **[ActorTask dispatch](docs-internal/engine/actor-task-dispatch.md)** — `DispatchCommand::Action`/`Http`/`OpenWebSocket`, `UserTaskKind` children, `ActorTask` migration status. Read before changing actor task routing.
+- **[Inspector protocol](docs-internal/engine/inspector-protocol.md)** — HTTP↔WebSocket mirroring rules, wire-version negotiation, `inspector.*_dropped` downgrades, workflow inspector inference. Read before touching inspector endpoints.
+- **[NAPI bridge](docs-internal/engine/napi-bridge.md)** — TSF callback slots, `ActorContextShared` cache reset, `#[napi(object)]` payload rules, cancellation token bridging, error prefix encoding. Read before touching `rivetkit-napi`.
+- **[BARE protocol crates](docs-internal/engine/bare-protocol-crates.md)** — vbare schema ordering, identity converters, `build.rs` TS codec generation pattern. Read before adding/changing protocol crates.
+- **[SQLite VFS parity](docs-internal/engine/sqlite-vfs.md)** — native Rust VFS ↔ WASM TypeScript VFS 1:1 parity rule, v2 storage keys, chunk layout, delete/truncate strategy. Read before touching either VFS.
+- **[TLS trust roots](docs-internal/engine/tls-trust-roots.md)** — rustls native+webpki union rationale, which clients use which backend.
+
+### Agent procedural (`.claude/reference/`)
+
+- **[Testing](.claude/reference/testing.md)** — running RivetKit tests, Vitest filter gotchas, driver-test parity workflow, Rust test layout.
+- **[Build troubleshooting](.claude/reference/build-troubleshooting.md)** — DTS failures, NAPI rebuild, `JsActorConfig` field churn, tsup stale exports.
+- **[Docs sync](.claude/reference/docs-sync.md)** — full table of "when you change X, update docs Y". Consult before finishing a change.
+- **[Content frontmatter](.claude/reference/content-frontmatter.md)** — required frontmatter schemas for docs + blog/changelog.
+- **[Examples + Vercel](.claude/reference/examples.md)** — example templates, Vercel mirror regen, common errors.
+- **[RivetError system](.claude/reference/error-system.md)** — full derive example, artifact commit rule, anyhow usage.
+- **[Dependencies](.claude/reference/dependencies.md)** — pnpm resolutions, Rust workspace deps, dynamic imports, version bumps, reqwest pool.

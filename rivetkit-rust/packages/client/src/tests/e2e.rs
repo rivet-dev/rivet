@@ -1,4 +1,4 @@
-use rivetkit_client::{Client, EncodingKind, GetOrCreateOptions, TransportKind};
+use rivetkit_client::{Client, ClientConfig, EncodingKind, GetOrCreateOptions, TransportKind};
 use fs_extra;
 use portpicker;
 use serde_json::json;
@@ -185,7 +185,11 @@ async fn e2e() {
     
     // Create the client
     info!("Creating client to endpoint: {}", endpoint);
-    let client = Client::new(&endpoint, TransportKind::WebSocket, EncodingKind::Cbor);
+    let client = Client::new(
+        ClientConfig::new(endpoint.as_str())
+            .transport(TransportKind::WebSocket)
+            .encoding(EncodingKind::Cbor),
+    );
     let counter = client.get_or_create("counter", [].into(), GetOrCreateOptions::default())
         .unwrap();
     let conn = counter.connect();

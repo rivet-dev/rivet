@@ -1,11 +1,11 @@
 use std::path::PathBuf;
-use std::sync::Mutex;
 
 use napi_derive::napi;
+use parking_lot::Mutex;
 use rivetkit_core::{CoreRegistry as NativeCoreRegistry, ServeConfig};
 
 use crate::actor_factory::NapiActorFactory;
-use crate::napi_anyhow_error;
+use crate::{NapiInvalidState, napi_anyhow_error};
 
 #[napi(object)]
 pub struct JsServeConfig {
@@ -20,6 +20,8 @@ pub struct JsServeConfig {
 
 #[napi]
 pub struct CoreRegistry {
+	// Registration is a synchronous N-API boundary; the lock is released before
+	// async serving begins.
 	inner: Mutex<Option<NativeCoreRegistry>>,
 }
 
@@ -27,6 +29,8 @@ pub struct CoreRegistry {
 impl CoreRegistry {
 	#[napi(constructor)]
 	pub fn new() -> Self {
+		crate::init_tracing(None);
+		tracing::debug!(class = "CoreRegistry", "constructed napi class");
 		Self {
 			inner: Mutex::new(Some(NativeCoreRegistry::new())),
 		}
@@ -34,27 +38,30 @@ impl CoreRegistry {
 
 	#[napi]
 	pub fn register(&self, name: String, factory: &NapiActorFactory) -> napi::Result<()> {
-		let mut guard = self
-			.inner
-			.lock()
-			.map_err(|_| napi::Error::from_reason("core registry mutex poisoned"))?;
+		let mut guard = self.inner.lock();
 		let registry = guard
 			.as_mut()
-			.ok_or_else(|| napi::Error::from_reason("core registry has already started serving"))?;
+			.ok_or_else(|| registry_already_serving_error())?;
 		registry.register_shared(&name, factory.actor_factory());
 		Ok(())
 	}
 
 	#[napi]
 	pub async fn serve(&self, config: JsServeConfig) -> napi::Result<()> {
+		tracing::debug!(
+			class = "CoreRegistry",
+			version = config.version,
+			endpoint = %config.endpoint,
+			namespace = %config.namespace,
+			pool_name = %config.pool_name,
+			starting_engine = config.engine_binary_path.is_some(),
+			"serving native registry"
+		);
 		let registry = {
-			let mut guard = self
-				.inner
-				.lock()
-				.map_err(|_| napi::Error::from_reason("core registry mutex poisoned"))?;
+			let mut guard = self.inner.lock();
 			guard
 				.take()
-				.ok_or_else(|| napi::Error::from_reason("core registry is already serving"))?
+				.ok_or_else(|| registry_already_serving_error())?
 		};
 
 		registry
@@ -72,4 +79,14 @@ impl CoreRegistry {
 			.await
 			.map_err(napi_anyhow_error)
 	}
+}
+
+fn registry_already_serving_error() -> napi::Error {
+	napi_anyhow_error(
+		NapiInvalidState {
+			state: "core registry".to_owned(),
+			reason: "already serving".to_owned(),
+		}
+		.build(),
+	)
 }

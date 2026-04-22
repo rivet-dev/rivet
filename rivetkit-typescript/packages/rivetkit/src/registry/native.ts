@@ -25,9 +25,9 @@ import type { AnyActorDefinition } from "@/actor/definition";
 import {
 	decodeBridgeRivetError,
 	encodeBridgeRivetError,
+	type RivetErrorLike,
 	forbiddenError,
 	INTERNAL_ERROR_CODE,
-	INTERNAL_ERROR_DESCRIPTION,
 	isRivetErrorLike,
 	RivetError,
 	toRivetError,
@@ -65,7 +65,6 @@ import {
 } from "@/common/client-protocol-zod";
 import type { AnyDatabaseProvider } from "@/common/database/config";
 import { wrapJsNativeDatabase } from "@/common/database/native-database";
-import { AsyncMutex } from "@/common/database/shared";
 import type { Encoding } from "@/common/encoding";
 import { decodeWorkflowHistoryTransport } from "@/common/inspector-transport";
 import { deconstructError } from "@/common/utils";
@@ -124,10 +123,9 @@ const nativeDatabaseClients = new Map<
 	}
 >();
 const nativeActorVars = new Map<string, unknown>();
-const nativeActionGates = new Map<
+const nativeDestroyGates = new Map<
 	string,
 	{
-		actionMutex: AsyncMutex;
 		destroyCompletion?: Promise<void>;
 		resolveDestroy?: () => void;
 	}
@@ -136,15 +134,12 @@ type SerializeStateReason = "save" | "inspector" | "sleep" | "destroy";
 type NativeOnStateChangeHandler = (
 	ctx: NativeActorContextAdapter,
 	state: unknown,
-) => void;
+) => void | Promise<void>;
 type NativePersistConnState = {
 	state: unknown;
-	persistChanged: boolean;
-	isHibernatable: boolean;
 };
 type NativePersistActorState = {
 	state: unknown;
-	persistChanged: boolean;
 	isInOnStateChange: boolean;
 	connStates: Map<string, NativePersistConnState>;
 };
@@ -155,6 +150,7 @@ const nativePersistStateByActorId = new Map<
 
 export function resetNativePersistStateForTest(actorId: string): void {
 	nativePersistStateByActorId.delete(actorId);
+	nativeActorVars.delete(actorId);
 }
 
 function getNativePersistState(actorId: string): NativePersistActorState {
@@ -162,13 +158,21 @@ function getNativePersistState(actorId: string): NativePersistActorState {
 	if (!persistState) {
 		persistState = {
 			state: undefined,
-			persistChanged: false,
 			isInOnStateChange: false,
 			connStates: new Map(),
 		};
 		nativePersistStateByActorId.set(actorId, persistState);
 	}
 	return persistState;
+}
+
+function isPromiseLike(value: unknown): value is PromiseLike<void> {
+	return (
+		typeof value === "object" &&
+		value !== null &&
+		"then" in value &&
+		typeof value.then === "function"
+	);
 }
 
 function getNativeConnPersistState(
@@ -181,58 +185,10 @@ function getNativeConnPersistState(
 	if (!connState) {
 		connState = {
 			state: undefined,
-			persistChanged: false,
-			isHibernatable: callNativeSync(() => conn.isHibernatable()),
 		};
 		persistState.connStates.set(connId, connState);
 	}
 	return connState;
-}
-
-function ensureNativeConnPersistState(
-	ctx: NativeActorContext,
-	actorId: string,
-): NativePersistActorState {
-	const persistState = getNativePersistState(actorId);
-	for (const conn of callNativeSync(() => ctx.conns())) {
-		if (!conn.isHibernatable()) {
-			continue;
-		}
-
-		const connId = conn.id();
-		if (persistState.connStates.has(connId)) {
-			continue;
-		}
-
-		persistState.connStates.set(connId, {
-			state: decodeValue(conn.state()),
-			persistChanged: false,
-			isHibernatable: true,
-		});
-	}
-
-	return persistState;
-}
-
-function hasNativePersistChanges(
-	ctx: NativeActorContext,
-	actorId: string,
-): boolean {
-	const persistState = getNativePersistState(actorId);
-	if (
-		persistState.persistChanged ||
-		callNativeSync(() => ctx.hasPendingHibernationChanges())
-	) {
-		return true;
-	}
-
-	for (const connState of persistState.connStates.values()) {
-		if (connState.isHibernatable && connState.persistChanged) {
-			return true;
-		}
-	}
-
-	return false;
 }
 
 function stateMutationReentrantError(): RivetError {
@@ -243,18 +199,18 @@ function stateMutationReentrantError(): RivetError {
 	);
 }
 
-function getNativeActionGate(ctx: NativeActorContext) {
+function getNativeDestroyGate(ctx: NativeActorContext) {
 	const actorId = callNativeSync(() => ctx.actorId());
-	let gate = nativeActionGates.get(actorId);
+	let gate = nativeDestroyGates.get(actorId);
 	if (!gate) {
-		gate = { actionMutex: new AsyncMutex() };
-		nativeActionGates.set(actorId, gate);
+		gate = {};
+		nativeDestroyGates.set(actorId, gate);
 	}
 	return gate;
 }
 
 function markNativeDestroyRequested(ctx: NativeActorContext) {
-	const gate = getNativeActionGate(ctx);
+	const gate = getNativeDestroyGate(ctx);
 	if (!gate.destroyCompletion) {
 		gate.destroyCompletion = new Promise<void>((resolve) => {
 			gate!.resolveDestroy = resolve;
@@ -264,7 +220,7 @@ function markNativeDestroyRequested(ctx: NativeActorContext) {
 
 function resolveNativeDestroy(ctx: NativeActorContext) {
 	const actorId = callNativeSync(() => ctx.actorId());
-	const gate = nativeActionGates.get(actorId);
+	const gate = nativeDestroyGates.get(actorId);
 	if (!gate?.resolveDestroy) {
 		return;
 	}
@@ -322,16 +278,6 @@ function getOrCreateNativeSqlDatabase(
 	const database = wrapJsNativeDatabase(callNativeSync(() => ctx.sql()));
 	nativeSqlDatabases.set(actorId, database);
 	return database;
-}
-
-function encodeActorVarsForCore(value: unknown): Buffer {
-	try {
-		return encodeValue(value);
-	} catch {
-		// Runtime-only JS values like Set, Promise, or class instances should stay
-		// in the JS-side vars cache instead of crossing the core bridge.
-		return encodeValue(undefined);
-	}
 }
 
 function toBuffer(value: string | Uint8Array | ArrayBuffer): Buffer {
@@ -572,19 +518,34 @@ function normalizeNativeBridgeError(error: unknown): unknown {
 	return promoteKnownBridgeError(error);
 }
 
+function isStructuredBridgeError(
+	error: unknown,
+): error is RivetError | RivetErrorLike {
+	if (error instanceof RivetError) {
+		return true;
+	}
+
+	return (
+		isRivetErrorLike(error) &&
+		"__type" in error &&
+		(error.__type === "RivetError" || error.__type === "ActorError")
+	);
+}
+
 function encodeNativeCallbackError(error: unknown): Error {
-	const normalized = toRivetError(error, {
-		group: "actor",
-		code: INTERNAL_ERROR_CODE,
-		message: INTERNAL_ERROR_DESCRIPTION,
-	});
-	const bridgeError = new Error(encodeBridgeRivetError(normalized), {
+	const structuredError = isStructuredBridgeError(error)
+		? error
+		: deconstructError(error, logger(), {
+				bridge: "native_callback",
+			});
+
+	const bridgeError = new Error(encodeBridgeRivetError(structuredError), {
 		cause: error instanceof Error ? error : undefined,
 	});
 	return Object.assign(bridgeError, {
-		group: normalized.group,
-		code: normalized.code,
-		metadata: normalized.metadata,
+		group: structuredError.group,
+		code: structuredError.code,
+		metadata: structuredError.metadata,
 	});
 }
 
@@ -1113,20 +1074,17 @@ class NativeConnAdapter {
 	#conn: NativeConnHandle;
 	#schemas: NativeValidationConfig;
 	#actorId?: string;
-	#requestSave?: () => void;
 	#queueHibernationRemoval?: (connId: string) => void;
 
 	constructor(
 		conn: NativeConnHandle,
 		schemas: NativeValidationConfig = {},
 		actorId?: string,
-		requestSave?: () => void,
 		queueHibernationRemoval?: (connId: string) => void,
 	) {
 		this.#conn = conn;
 		this.#schemas = schemas;
 		this.#actorId = actorId;
-		this.#requestSave = requestSave;
 		this.#queueHibernationRemoval = queueHibernationRemoval;
 		(
 			this as NativeConnAdapter & {
@@ -1157,17 +1115,17 @@ class NativeConnAdapter {
 		return createWriteThroughProxy(
 			nextState,
 			(nextValue) => {
-				this.#writeState(nextValue, { persistChanged: true });
+				this.#writeState(nextValue, { writeNative: true });
 			},
 		);
 	}
 
 	set state(value: unknown) {
-		this.#writeState(value, { persistChanged: true });
+		this.#writeState(value, { writeNative: true });
 	}
 
 	initializeState(value: unknown): void {
-		this.#writeState(value, { persistChanged: false });
+		this.#writeState(value, { writeNative: false });
 	}
 
 	get isHibernatable(): boolean {
@@ -1200,28 +1158,25 @@ class NativeConnAdapter {
 		if (connState.state === undefined) {
 			connState.state = decodeValue(this.#conn.state());
 		}
-		connState.isHibernatable = callNativeSync(() => this.#conn.isHibernatable());
 		return connState.state;
 	}
 
 	#writeState(
 		value: unknown,
 		options: {
-			persistChanged: boolean;
+			writeNative: boolean;
 		},
 	): void {
-		encodeValue(value);
+		const encoded = encodeValue(value);
 		if (!this.#actorId) {
-			this.#conn.setState(encodeValue(value));
+			this.#conn.setState(encoded);
 			return;
 		}
 
 		const connState = getNativeConnPersistState(this.#actorId, this.#conn);
 		connState.state = value;
-		connState.persistChanged = options.persistChanged;
-		connState.isHibernatable = callNativeSync(() => this.#conn.isHibernatable());
-		if (options.persistChanged && connState.isHibernatable) {
-			this.#requestSave?.();
+		if (options.writeNative) {
+			this.#conn.setState(encoded);
 		}
 	}
 }
@@ -1826,7 +1781,7 @@ class NativeWebSocketAdapter {
 			},
 			onClose: (code, reason) => {
 				this.#readyState = VirtualWebSocket.CLOSING;
-				callNativeSync(() => this.#ws.close(code, reason));
+				void callNative(() => this.#ws.close(code, reason));
 			},
 		});
 		this.#ws.setEventCallback((event) => {
@@ -2172,7 +2127,7 @@ class TrackedNativeWebSocketAdapter implements UniversalWebSocket {
 			if (!this.#isPromiseLike(result)) {
 				return;
 			}
-			this.#ctx.beginWebSocketCallback();
+			const callbackRegionId = this.#ctx.beginWebSocketCallback();
 			this.#ctx.waitUntil(
 				Promise.resolve(result)
 					.catch((error) => {
@@ -2183,7 +2138,7 @@ class TrackedNativeWebSocketAdapter implements UniversalWebSocket {
 						});
 					})
 					.finally(() => {
-						this.#ctx.endWebSocketCallback();
+						this.#ctx.endWebSocketCallback(callbackRegionId);
 					}),
 			);
 		} catch (error) {
@@ -2342,24 +2297,18 @@ export class NativeActorContextAdapter {
 		this.#writeState(value, { scheduleSave: false });
 	}
 
-	setInOnStateChangeCallback(inCallback: boolean) {
-		callNativeSync(() => this.#ctx.setInOnStateChangeCallback(inCallback));
-	}
-
 	get vars(): unknown {
 		const actorId = this.actorId;
 		if (nativeActorVars.has(actorId)) {
 			return nativeActorVars.get(actorId);
 		}
 
-		const vars = decodeValue(callNativeSync(() => this.#ctx.vars()));
-		nativeActorVars.set(actorId, vars);
-		return vars;
+		nativeActorVars.set(actorId, undefined);
+		return undefined;
 	}
 
 	set vars(value: unknown) {
 		nativeActorVars.set(this.actorId, value);
-		callNativeSync(() => this.#ctx.setVars(encodeActorVarsForCore(value)));
 	}
 
 	get queue(): NativeQueueAdapter {
@@ -2406,7 +2355,6 @@ export class NativeActorContextAdapter {
 					conn,
 					this.#schemas,
 					actorId,
-					() => callNativeSync(() => this.#ctx.requestSave(false)),
 					(connId) =>
 						callNativeSync(() =>
 							this.#ctx.queueHibernationRemoval(connId),
@@ -2585,56 +2533,43 @@ export class NativeActorContextAdapter {
 	}): Promise<void> {
 		if (opts?.immediate) {
 			await callNative(() =>
-				this.#ctx.saveState(this.serializeForTick("save")),
+				this.#ctx.requestSaveAndWait({ immediate: true }),
 			);
 			return;
 		}
 
-		if (!hasNativePersistChanges(this.#ctx, this.actorId)) {
-			return;
-		}
-
 		if (opts?.maxWait != null) {
-			callNativeSync(() => this.#ctx.requestSaveWithin(opts.maxWait));
+			callNativeSync(() =>
+				this.#ctx.requestSave({ maxWaitMs: opts.maxWait }),
+			);
 			return;
 		}
 
-		callNativeSync(() => this.#ctx.requestSave(false));
+		callNativeSync(() => this.#ctx.requestSave({ immediate: false }));
 	}
 
 	serializeForTick(reason: SerializeStateReason): NativeStateDeltaPayload {
-		const actorState = ensureNativeConnPersistState(
-			this.#ctx,
-			this.actorId,
-		);
+		void reason;
+		const actorState = getNativePersistState(this.actorId);
 		const connHibernationRemoved = callNativeSync(() =>
 			this.#ctx.takePendingHibernationChanges(),
 		);
 		for (const connId of connHibernationRemoved) {
 			actorState.connStates.delete(connId);
 		}
-		const persistAllHibernatableConns = reason !== "inspector";
 		const state =
 			this.#stateEnabled && this.#readState() !== undefined
 				? Buffer.from(encodeValue(this.#readState()))
 				: undefined;
-		const connHibernation = Array.from(actorState.connStates.entries())
-			.filter(
-				([, connState]) =>
-					connState.isHibernatable &&
-					(persistAllHibernatableConns || connState.persistChanged),
-			)
-			.map(([connId, connState]) => ({
+		const connHibernation = callNativeSync(() =>
+			this.#ctx.dirtyHibernatableConns(),
+		).map((conn) => {
+			const connId = callNativeSync(() => conn.id());
+			return {
 				connId,
-				bytes: Buffer.from(encodeValue(connState.state)),
-			}));
-
-		if (reason !== "inspector") {
-			actorState.persistChanged = false;
-			for (const connState of actorState.connStates.values()) {
-				connState.persistChanged = false;
-			}
-		}
+				bytes: Buffer.from(callNativeSync(() => conn.state())),
+			};
+		});
 
 		return {
 			state,
@@ -2686,12 +2621,14 @@ export class NativeActorContextAdapter {
 		void callNative(() => this.#ctx.waitUntil(Promise.resolve(promise)));
 	}
 
-	beginWebSocketCallback(): void {
-		callNativeSync(() => this.#ctx.beginWebsocketCallback());
+	beginWebSocketCallback(): number {
+		return callNativeSync(() => this.#ctx.beginWebsocketCallback());
 	}
 
-	endWebSocketCallback(): void {
-		callNativeSync(() => this.#ctx.endWebsocketCallback());
+	endWebSocketCallback(callbackRegionId: number): void {
+		callNativeSync(() =>
+			this.#ctx.endWebsocketCallback(callbackRegionId),
+		);
 	}
 
 	setPreventSleep(preventSleep: boolean): void {
@@ -2730,11 +2667,13 @@ export class NativeActorContextAdapter {
 	#createActorAbortSignal(): AbortSignal {
 		const nativeSignal = callNativeSync(() => this.#ctx.abortSignal());
 		const controller = new AbortController();
-		if (callNativeSync(() => nativeSignal.aborted())) {
+		if (nativeSignal.aborted) {
 			controller.abort();
 		} else {
-			callNativeSync(() =>
-				nativeSignal.onCancelled(() => controller.abort()),
+			nativeSignal.addEventListener(
+				"abort",
+				() => controller.abort(),
+				{ once: true },
 			);
 		}
 		return controller.signal;
@@ -2764,7 +2703,6 @@ export class NativeActorContextAdapter {
 		const actorState = getNativePersistState(this.actorId);
 		actorState.state = value;
 		if (!options.scheduleSave) {
-			actorState.persistChanged = false;
 			return;
 		}
 		this.#handleStateChange();
@@ -2780,20 +2718,36 @@ export class NativeActorContextAdapter {
 	#handleStateChange(): void {
 		const actorState = getNativePersistState(this.actorId);
 		encodeValue(actorState.state);
-		actorState.persistChanged = true;
-		callNativeSync(() => this.#ctx.requestSave(false));
+		callNativeSync(() => this.#ctx.requestSave({ immediate: false }));
 
 		if (!this.#onStateChange) {
 			return;
 		}
 
 		actorState.isInOnStateChange = true;
-		this.setInOnStateChangeCallback(true);
+		callNativeSync(() => this.#ctx.beginOnStateChange());
+		let shouldFinish = true;
 		try {
-			this.#onStateChange(this, actorState.state);
+			const result = this.#onStateChange(this, actorState.state) as unknown;
+			if (isPromiseLike(result)) {
+				shouldFinish = false;
+				void Promise.resolve(result)
+					.catch((error) => {
+						logger().error({
+							msg: "error in `onStateChange`",
+							error,
+						});
+					})
+					.finally(() => {
+						actorState.isInOnStateChange = false;
+						callNativeSync(() => this.#ctx.endOnStateChange());
+					});
+			}
 		} finally {
-			this.setInOnStateChangeCallback(false);
-			actorState.isInOnStateChange = false;
+			if (shouldFinish) {
+				actorState.isInOnStateChange = false;
+				callNativeSync(() => this.#ctx.endOnStateChange());
+			}
 		}
 	}
 }
@@ -3032,7 +2986,6 @@ function withConnContext(
 				conn,
 				schemas,
 				actorId,
-				() => callNativeSync(() => ctx.requestSave(false)),
 				(connId) =>
 					callNativeSync(() =>
 						ctx.queueHibernationRemoval(connId),
@@ -3086,382 +3039,6 @@ function buildNativeRequestErrorResponse(
 	});
 }
 
-async function maybeHandleNativeActionRequest(
-	bindings: NativeBindings,
-	ctx: NativeActorContext,
-	request: Request,
-	clientFactory: () => AnyClient,
-	actions: Record<string, (...args: Array<any>) => any>,
-	schemas: NativeValidationConfig,
-	options: {
-		maxIncomingMessageSize: number;
-		maxOutgoingMessageSize: number;
-		onBeforeActionResponse?: (...args: Array<any>) => any;
-		onStateChange?: NativeOnStateChangeHandler;
-		cancelTokenId?: bigint;
-		stateEnabled?: boolean;
-	},
-	databaseProvider?: AnyDatabaseProvider,
-): Promise<Response | undefined> {
-	if (request.method !== "POST") {
-		return undefined;
-	}
-
-	const actionMatch = /^\/action\/([^/]+)$/.exec(
-		new URL(request.url).pathname,
-	);
-	if (!actionMatch) {
-		return undefined;
-	}
-
-	const encodingHeader = request.headers.get(HEADER_ENCODING);
-	const encoding: Encoding =
-		encodingHeader === "cbor" || encodingHeader === "bare"
-			? encodingHeader
-			: "json";
-	const actionName = decodeURIComponent(actionMatch[1] ?? "");
-	const handler = actions[actionName];
-	if (typeof handler !== "function") {
-		return buildNativeRequestErrorResponse(
-			encoding,
-			`/action/${actionName}`,
-			{
-				__type: "ActorError",
-				public: true,
-				statusCode: 404,
-				group: "actor",
-				code: "action_not_found",
-				message: `action \`${actionName}\` was not found`,
-			},
-		);
-	}
-	const requestBody = new Uint8Array(await request.arrayBuffer());
-	if (requestBody.byteLength > options.maxIncomingMessageSize) {
-		return buildNativeRequestErrorResponse(
-			encoding,
-			`/action/${actionName}`,
-			new RivetError(
-				"message",
-				"incoming_too_long",
-				"Incoming message too long",
-				{ public: true, statusCode: 400 },
-			),
-		);
-	}
-	const args = deserializeWithEncoding(
-		encoding,
-		encoding === "json"
-			? new TextDecoder().decode(requestBody)
-			: requestBody,
-		HTTP_ACTION_REQUEST_VERSIONED,
-		HttpActionRequestSchema,
-		(json) => (Array.isArray(json.args) ? json.args : []),
-		(bare) =>
-			bare.args
-				? (cbor.decode(new Uint8Array(bare.args)) as unknown[])
-				: [],
-	);
-	const rawConnParams = request.headers.get(HEADER_CONN_PARAMS);
-	const gate = getNativeActionGate(ctx);
-	let output: unknown;
-	try {
-		if (actionName !== "destroy") {
-			await new Promise<void>((resolve) => setImmediate(resolve));
-		}
-
-		output = await gate.actionMutex.run(async () => {
-			let actorCtx: ReturnType<typeof withConnContext> | undefined;
-			let conn: NativeConnHandle | undefined;
-			try {
-				const validatedArgs = validateActionArgs(
-					schemas.actionInputSchemas,
-					actionName,
-					args,
-				);
-				const connParams = validateConnParams(
-					schemas.connParamsSchema,
-					rawConnParams ? JSON.parse(rawConnParams) : undefined,
-				);
-				conn = await callNative(() =>
-					ctx.connectConn(
-						encodeValue(connParams),
-						buildNativeHttpRequest(request, requestBody),
-					),
-				);
-				actorCtx = withConnContext(
-					bindings,
-					ctx,
-					conn,
-					clientFactory,
-					schemas,
-					databaseProvider,
-					request,
-					options.stateEnabled ?? true,
-					options.onStateChange,
-					options.cancelTokenId,
-				);
-				return await Promise.resolve(
-					handler(actorCtx, ...validatedArgs),
-				).then(async (result) => {
-					if (typeof options.onBeforeActionResponse !== "function") {
-						return result;
-					}
-
-					try {
-						return await options.onBeforeActionResponse(
-							actorCtx,
-							actionName,
-							validatedArgs,
-							result,
-						);
-					} catch (error) {
-						logger().error({
-							msg: "native onBeforeActionResponse failed",
-							actionName,
-							error,
-						});
-						return result;
-					}
-				});
-			} finally {
-				await actorCtx?.dispose();
-				if (conn) {
-					await conn.disconnect();
-				}
-			}
-		});
-	} catch (error) {
-		return buildNativeRequestErrorResponse(
-			encoding,
-			`/action/${actionName}`,
-			error,
-		);
-	}
-	const responseBody = serializeWithEncoding<
-		{ output: ArrayBuffer },
-		{ output: unknown },
-		unknown
-	>(
-		encoding,
-		output,
-		HTTP_ACTION_RESPONSE_VERSIONED,
-		CLIENT_PROTOCOL_CURRENT_VERSION,
-		HttpActionResponseSchema,
-		(value) => ({ output: value }),
-		(value) => ({
-			output: bufferToArrayBuffer(cbor.encode(value)),
-		}),
-	);
-	const responseSize =
-		responseBody instanceof Uint8Array
-			? responseBody.byteLength
-			: responseBody.length;
-	if (responseSize > options.maxOutgoingMessageSize) {
-		return buildNativeRequestErrorResponse(
-			encoding,
-			`/action/${actionName}`,
-			new RivetError(
-				"message",
-				"outgoing_too_long",
-				"Outgoing message too long",
-				{ public: true, statusCode: 400 },
-			),
-		);
-	}
-
-	return new Response(responseBody, {
-		status: 200,
-		headers: {
-			"Content-Type": contentTypeForEncoding(encoding),
-		},
-	});
-}
-
-async function maybeHandleNativeQueueRequest(
-	bindings: NativeBindings,
-	ctx: NativeActorContext,
-	request: Request,
-	clientFactory: () => AnyClient,
-	schemas: NativeValidationConfig,
-	options: {
-		maxIncomingMessageSize: number;
-		stateEnabled?: boolean;
-	},
-	databaseProvider?: AnyDatabaseProvider,
-): Promise<Response | undefined> {
-	if (request.method !== "POST") {
-		return undefined;
-	}
-
-	const queueMatch = /^\/queue\/([^/]+)$/.exec(new URL(request.url).pathname);
-	if (!queueMatch) {
-		return undefined;
-	}
-
-	const encodingHeader = request.headers.get(HEADER_ENCODING);
-	const encoding: Encoding =
-		encodingHeader === "cbor" || encodingHeader === "bare"
-			? encodingHeader
-			: "json";
-	const queueName = decodeURIComponent(queueMatch[1] ?? "");
-	const requestBody = new Uint8Array(await request.arrayBuffer());
-	if (requestBody.byteLength > options.maxIncomingMessageSize) {
-		return buildNativeRequestErrorResponse(
-			encoding,
-			`/queue/${queueName}`,
-			new RivetError(
-				"message",
-				"incoming_too_long",
-				"Incoming message too long",
-				{ public: true, statusCode: 400 },
-			),
-		);
-	}
-	const queueRequest = deserializeWithEncoding<
-		protocol.HttpQueueSendRequest,
-		HttpQueueSendRequestJson,
-		{ body: unknown; wait: boolean; timeout?: number }
-	>(
-		encoding,
-		encoding === "json"
-			? new TextDecoder().decode(requestBody)
-			: requestBody,
-		HTTP_QUEUE_SEND_REQUEST_VERSIONED,
-		HttpQueueSendRequestSchema,
-		(json) => ({
-			body: json.body,
-			wait: json.wait ?? false,
-			timeout: json.timeout,
-		}),
-		(bare) => ({
-			body: cbor.decode(new Uint8Array(bare.body)),
-			wait: bare.wait ?? false,
-			timeout: bare.timeout === null ? undefined : Number(bare.timeout),
-		}),
-	);
-	if (!schemas.queues || !hasSchemaConfigKey(schemas.queues, queueName)) {
-		const ignoredBody = serializeWithEncoding<
-			protocol.HttpQueueSendResponse,
-			HttpQueueSendResponseJson,
-			{ status: "completed"; response?: unknown }
-		>(
-			encoding,
-			{ status: "completed" },
-			HTTP_QUEUE_SEND_RESPONSE_VERSIONED,
-			CLIENT_PROTOCOL_CURRENT_VERSION,
-			HttpQueueSendResponseSchema,
-			(value) => value,
-			() => ({
-				status: "completed",
-				response: null,
-			}),
-		);
-
-		return new Response(ignoredBody, {
-			status: 200,
-			headers: {
-				"Content-Type": contentTypeForEncoding(encoding),
-			},
-		});
-	}
-	const rawConnParams = request.headers.get(HEADER_CONN_PARAMS);
-	let actorCtx: ReturnType<typeof withConnContext> | undefined;
-	let conn: NativeConnHandle | undefined;
-	let response: unknown;
-	let status: "completed" | "timedOut" = "completed";
-	try {
-		const connParams = validateConnParams(
-			schemas.connParamsSchema,
-			rawConnParams ? JSON.parse(rawConnParams) : undefined,
-		);
-		conn = await callNative(() =>
-			ctx.connectConn(
-				encodeValue(connParams),
-				buildNativeHttpRequest(request, requestBody),
-			),
-		);
-		actorCtx = withConnContext(
-			bindings,
-			ctx,
-			conn,
-			clientFactory,
-			schemas,
-			databaseProvider,
-			request,
-			options.stateEnabled ?? true,
-		);
-		const canPublish = getQueueCanPublish(schemas.queues, queueName);
-		if (canPublish && !(await canPublish(actorCtx))) {
-			throw forbiddenError();
-		}
-
-		if (queueRequest.wait) {
-			try {
-				response = await actorCtx.queue.enqueueAndWait(
-					queueName,
-					queueRequest.body,
-					{
-						timeout: queueRequest.timeout,
-					},
-				);
-			} catch (error) {
-				if (
-					(error as { group?: string; code?: string }).group ===
-						"queue" &&
-					(error as { group?: string; code?: string }).code ===
-						"timed_out"
-				) {
-					status = "timedOut";
-				} else {
-					throw error;
-				}
-			}
-		} else {
-			await actorCtx.queue.send(queueName, queueRequest.body);
-		}
-	} catch (error) {
-		return buildNativeRequestErrorResponse(
-			encoding,
-			`/queue/${queueName}`,
-			error,
-		);
-	} finally {
-		await actorCtx?.dispose();
-		if (conn) {
-			await conn.disconnect();
-		}
-	}
-	const responseBody = serializeWithEncoding<
-		protocol.HttpQueueSendResponse,
-		HttpQueueSendResponseJson,
-		{ status: "completed" | "timedOut"; response?: unknown }
-	>(
-		encoding,
-		{ status, response },
-		HTTP_QUEUE_SEND_RESPONSE_VERSIONED,
-		CLIENT_PROTOCOL_CURRENT_VERSION,
-		HttpQueueSendResponseSchema,
-		(value) =>
-			value.response === undefined
-				? { status: value.status }
-				: { status: value.status, response: value.response },
-		(value) => ({
-			status: value.status,
-			response:
-				value.response === undefined
-					? null
-					: bufferToArrayBuffer(cbor.encode(value.response)),
-		}),
-	);
-
-	return new Response(responseBody, {
-		status: 200,
-		headers: {
-			"Content-Type": contentTypeForEncoding(encoding),
-		},
-	});
-}
-
 function buildActorConfig(
 	definition: AnyActorDefinition,
 	registryConfig: RegistryConfig,
@@ -3485,7 +3062,6 @@ function buildActorConfig(
 			| undefined,
 		onConnectTimeoutMs: options.onConnectTimeout as number | undefined,
 		onMigrateTimeoutMs: options.onMigrateTimeout as number | undefined,
-		onSleepTimeoutMs: options.onSleepTimeout as number | undefined,
 		onDestroyTimeoutMs: options.onDestroyTimeout as number | undefined,
 		actionTimeoutMs: options.actionTimeout as number | undefined,
 		sleepTimeoutMs: options.sleepTimeout as number | undefined,
@@ -3643,10 +3219,14 @@ export function buildNativeFactory(
 				},
 			);
 		};
-		await ctx.verifyInspectorAuth(
-			jsRequest.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ??
-				null,
-		);
+		try {
+			await ctx.verifyInspectorAuth(
+				jsRequest.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ??
+					null,
+			);
+		} catch (error) {
+			return errorResponse(error, 401);
+		}
 
 		const workflowHistory = () =>
 			serializeWorkflowHistoryForJson(
@@ -3781,9 +3361,10 @@ export function buildNativeFactory(
 				return jsonResponse({
 					connections: Array.from(actorCtx.conns.values()).map(
 						(conn) => ({
+							type: null,
 							id: conn.id,
 							details: {
-								type: undefined,
+								type: null,
 								params: conn.params,
 								stateEnabled: true,
 								state: conn.state,
@@ -3992,9 +3573,10 @@ export function buildNativeFactory(
 					state: stateEnabled ? actorCtx.state : undefined,
 					connections: Array.from(actorCtx.conns.values()).map(
 						(conn) => ({
+							type: null,
 							id: conn.id,
 							details: {
-								type: undefined,
+								type: null,
 								params: conn.params,
 								stateEnabled: true,
 								state: conn.state,
@@ -4121,7 +3703,7 @@ export function buildNativeFactory(
 						async (
 							error: unknown,
 							payload: { ctx: NativeActorContext },
-						): Promise<Buffer> => {
+						): Promise<void> => {
 							const { ctx } = unwrapTsfnPayload(error, payload);
 							const actorCtx = makeActorCtx(ctx);
 							try {
@@ -4129,7 +3711,6 @@ export function buildNativeFactory(
 									? structuredClone(config.vars)
 									: await config.createVars(actorCtx, undefined);
 								actorCtx.vars = vars;
-								return encodeActorVarsForCore(vars);
 							} finally {
 								await actorCtx.dispose();
 							}
@@ -4170,23 +3751,6 @@ export function buildNativeFactory(
 					)
 				: undefined,
 		onWake:
-			typeof config.onBeforeActorStart === "function"
-				? wrapNativeCallback(
-						async (
-							error: unknown,
-							payload: { ctx: NativeActorContext },
-						) => {
-							const { ctx } = unwrapTsfnPayload(error, payload);
-							const actorCtx = makeActorCtx(ctx);
-							try {
-								await config.onBeforeActorStart(actorCtx);
-							} finally {
-								await actorCtx.dispose();
-							}
-						},
-					)
-				: undefined,
-		onBeforeActorStart:
 			typeof config.onWake === "function"
 				? wrapNativeCallback(
 						async (
@@ -4197,6 +3761,23 @@ export function buildNativeFactory(
 							const actorCtx = makeActorCtx(ctx);
 							try {
 								await config.onWake(actorCtx);
+							} finally {
+								await actorCtx.dispose();
+							}
+						},
+					)
+				: undefined,
+		onBeforeActorStart:
+			typeof config.onBeforeActorStart === "function"
+				? wrapNativeCallback(
+						async (
+							error: unknown,
+							payload: { ctx: NativeActorContext },
+						) => {
+							const { ctx } = unwrapTsfnPayload(error, payload);
+							const actorCtx = makeActorCtx(ctx);
+							try {
+								await config.onBeforeActorStart(actorCtx);
 							} finally {
 								await actorCtx.dispose();
 							}
@@ -4307,7 +3888,6 @@ export function buildNativeFactory(
 								conn,
 								schemaConfig,
 								callNativeSync(() => ctx.actorId()),
-								() => callNativeSync(() => ctx.requestSave(false)),
 								(connId) =>
 									callNativeSync(() =>
 										ctx.queueHibernationRemoval(connId),
@@ -4359,7 +3939,6 @@ export function buildNativeFactory(
 								conn,
 								schemaConfig,
 								callNativeSync(() => ctx.actorId()),
-								() => callNativeSync(() => ctx.requestSave(false)),
 								(connId) =>
 									callNativeSync(() =>
 										ctx.queueHibernationRemoval(connId),
@@ -4403,10 +3982,6 @@ export function buildNativeFactory(
 											conn,
 											schemaConfig,
 											callNativeSync(() => ctx.actorId()),
-											() =>
-												callNativeSync(
-													() => ctx.requestSave(false),
-												),
 											(connId) =>
 												callNativeSync(() =>
 													ctx.queueHibernationRemoval(
@@ -4524,46 +4099,6 @@ export function buildNativeFactory(
 						);
 					if (inspectorResponse) {
 						return await toJsHttpResponse(inspectorResponse);
-					}
-					const actionResponse = await maybeHandleNativeActionRequest(
-						bindings,
-						ctx,
-						jsRequest,
-						createClient,
-						actionHandlers,
-						schemaConfig,
-						{
-							maxIncomingMessageSize:
-								registryConfig.maxIncomingMessageSize,
-							maxOutgoingMessageSize:
-								registryConfig.maxOutgoingMessageSize,
-							cancelTokenId,
-							onBeforeActionResponse:
-								config.onBeforeActionResponse,
-							onStateChange,
-							stateEnabled,
-						},
-						databaseProvider,
-					);
-					if (actionResponse) {
-						return await toJsHttpResponse(actionResponse);
-					}
-
-					const queueResponse = await maybeHandleNativeQueueRequest(
-						bindings,
-						ctx,
-						jsRequest,
-						createClient,
-						schemaConfig,
-						{
-							maxIncomingMessageSize:
-								registryConfig.maxIncomingMessageSize,
-							stateEnabled,
-						},
-						databaseProvider,
-					);
-					if (queueResponse) {
-						return await toJsHttpResponse(queueResponse);
 					}
 
 					if (typeof config.onRequest !== "function") {
@@ -4780,6 +4315,105 @@ export function buildNativeFactory(
 					},
 				),
 			]),
+		),
+		onQueueSend: wrapNativeCallback(
+			async (
+				error: unknown,
+				payload: {
+					ctx: NativeActorContext;
+					conn: NativeConnHandle;
+					request: {
+						method: string;
+						uri: string;
+						headers?: Record<string, string>;
+						body?: Buffer;
+					};
+					name: string;
+					body: Buffer;
+					wait: boolean;
+					timeoutMs?: bigint | number;
+					cancelTokenId?: bigint;
+				},
+			) => {
+				const {
+					ctx,
+					conn,
+					request,
+					name,
+					body,
+					wait,
+					timeoutMs,
+					cancelTokenId,
+				} = unwrapTsfnPayload(error, payload);
+				const jsRequest = buildRequest(request);
+				const actorCtx = withConnContext(
+					bindings,
+					ctx,
+					conn,
+					createClient,
+					schemaConfig,
+					databaseProvider,
+					jsRequest,
+					stateEnabled,
+					onStateChange,
+					cancelTokenId,
+				);
+				try {
+					if (
+						!schemaConfig.queues ||
+						!hasSchemaConfigKey(schemaConfig.queues, name)
+					) {
+						return { status: "completed" };
+					}
+
+					const canPublish = getQueueCanPublish(
+						schemaConfig.queues,
+						name,
+					);
+					if (canPublish && !(await canPublish(actorCtx))) {
+						throw forbiddenError();
+					}
+
+					const decodedBody = decodeValue(body);
+					if (wait) {
+						try {
+							const response = await actorCtx.queue.enqueueAndWait(
+								name,
+								decodedBody,
+								{
+									timeout:
+										timeoutMs === undefined ||
+										timeoutMs === null
+											? undefined
+											: Number(timeoutMs),
+								},
+							);
+							return {
+								status: "completed",
+								response:
+									response === undefined
+										? undefined
+										: encodeValue(response),
+							};
+						} catch (error) {
+							if (
+								(error as { group?: string; code?: string })
+									.group === "queue" &&
+								(error as { group?: string; code?: string })
+									.code === "timed_out"
+							) {
+								return { status: "timedOut" };
+							}
+							throw error;
+						}
+					}
+
+					await actorCtx.queue.send(name, decodedBody);
+					return { status: "completed" };
+				} finally {
+					await actorCtx.dispose();
+				}
+			},
 		),
 		serializeState: wrapNativeCallback(
 			async (

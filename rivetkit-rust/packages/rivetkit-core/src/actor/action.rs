@@ -1,4 +1,4 @@
-use rivet_error::RivetError;
+use rivet_error::{MacroMarker, RivetError, RivetErrorSchema};
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 
@@ -19,5 +19,23 @@ impl ActionDispatchError {
 			message: error.message().to_owned(),
 			metadata: error.metadata(),
 		}
+	}
+
+	pub(crate) fn into_anyhow(self) -> anyhow::Error {
+		let meta = self
+			.metadata
+			.and_then(|value| serde_json::value::to_raw_value(&value).ok());
+		let schema = Box::leak(Box::new(RivetErrorSchema {
+			group: Box::leak(self.group.into_boxed_str()),
+			code: Box::leak(self.code.into_boxed_str()),
+			default_message: Box::leak(self.message.clone().into_boxed_str()),
+			meta_type: None,
+			_macro_marker: MacroMarker { _private: () },
+		}));
+		anyhow::Error::new(RivetError {
+			schema,
+			meta,
+			message: Some(self.message),
+		})
 	}
 }

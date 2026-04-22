@@ -382,9 +382,9 @@ describe.sequential("native NAPI runtime integration", () => {
 				},
 			});
 			await expect(handle.throwUntypedError()).rejects.toMatchObject({
-				group: "rivetkit",
+				group: "core",
 				code: "internal_error",
-				message: "native untyped error",
+				message: "An internal error occurred",
 			});
 			await client.dispose();
 		},

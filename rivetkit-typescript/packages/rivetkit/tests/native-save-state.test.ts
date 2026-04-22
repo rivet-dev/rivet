@@ -16,16 +16,20 @@ function createMockNativeContext(
 	options?: {
 		conns?: NativeConnHandle[];
 		saveState?: () => Promise<void>;
+		requestSaveAndWait?: () => Promise<void>;
 		queueHibernationRemoval?: (connId: string) => void;
 		hasPendingHibernationChanges?: () => boolean;
 		takePendingHibernationChanges?: () => string[];
+		dirtyHibernatableConns?: () => NativeConnHandle[];
 	},
 ) {
 	return {
 		actorId: vi.fn(() => actorId),
 		state: vi.fn(() => Buffer.from(cbor.encode(undefined))),
 		requestSave: vi.fn(),
-		requestSaveWithin: vi.fn(),
+		requestSaveAndWait: vi.fn(
+			() => options?.requestSaveAndWait?.() ?? Promise.resolve(),
+		),
 		conns: vi.fn(() => options?.conns ?? []),
 		queueHibernationRemoval: vi.fn((connId: string) =>
 			options?.queueHibernationRemoval?.(connId),
@@ -36,17 +40,20 @@ function createMockNativeContext(
 		takePendingHibernationChanges: vi.fn(
 			() => options?.takePendingHibernationChanges?.() ?? [],
 		),
+		dirtyHibernatableConns: vi.fn(
+			() => options?.dirtyHibernatableConns?.() ?? [],
+		),
 		saveState: vi.fn(() => options?.saveState?.() ?? Promise.resolve()),
-		setVars: vi.fn(),
 		setInOnStateChangeCallback: vi.fn(),
 	} as unknown as NativeActorContext & {
 		state: ReturnType<typeof vi.fn>;
 		requestSave: ReturnType<typeof vi.fn>;
-		requestSaveWithin: ReturnType<typeof vi.fn>;
+		requestSaveAndWait: ReturnType<typeof vi.fn>;
 		conns: ReturnType<typeof vi.fn>;
 		queueHibernationRemoval: ReturnType<typeof vi.fn>;
 		hasPendingHibernationChanges: ReturnType<typeof vi.fn>;
 		takePendingHibernationChanges: ReturnType<typeof vi.fn>;
+		dirtyHibernatableConns: ReturnType<typeof vi.fn>;
 		saveState: ReturnType<typeof vi.fn>;
 	};
 }
@@ -119,7 +126,7 @@ describe("native saveState adapter", () => {
 			resolveSave = resolve;
 		});
 		const nativeCtx = createMockNativeContext(actorId, {
-			saveState: () => saveCommitted,
+			requestSaveAndWait: () => saveCommitted,
 		});
 		const actorCtx = new NativeActorContextAdapter(
 			createMockBindings() as never,
@@ -136,18 +143,12 @@ describe("native saveState adapter", () => {
 
 		await Promise.resolve();
 
-		expect(nativeCtx.saveState).toHaveBeenCalledTimes(1);
+		expect(nativeCtx.requestSaveAndWait).toHaveBeenCalledTimes(1);
+		expect(nativeCtx.requestSaveAndWait).toHaveBeenCalledWith({
+			immediate: true,
+		});
+		expect(nativeCtx.saveState).not.toHaveBeenCalled();
 		expect(resolved).toBe(false);
-
-		const payload = nativeCtx.saveState.mock.calls[0]?.[0] as {
-			state?: Buffer;
-			connHibernation: Array<unknown>;
-			connHibernationRemoved: string[];
-		};
-		expect(Buffer.isBuffer(payload.state)).toBe(true);
-		expect(cbor.decode(payload.state!)).toEqual({ count: 1 });
-		expect(payload.connHibernation).toEqual([]);
-		expect(payload.connHibernationRemoved).toEqual([]);
 
 		resolveSave?.();
 		await savePromise;
@@ -170,8 +171,7 @@ describe("native saveState adapter", () => {
 
 		await actorCtx.saveState({ maxWait: 100 });
 
-		expect(nativeCtx.requestSaveWithin).toHaveBeenCalledWith(100);
-		expect(nativeCtx.requestSave).not.toHaveBeenCalled();
+		expect(nativeCtx.requestSave).toHaveBeenCalledWith({ maxWaitMs: 100 });
 		expect(nativeCtx.saveState).not.toHaveBeenCalled();
 	});
 
@@ -190,16 +190,16 @@ describe("native saveState adapter", () => {
 
 		await actorCtx.saveState();
 
-		expect(nativeCtx.hasPendingHibernationChanges).toHaveBeenCalledTimes(1);
+		expect(nativeCtx.hasPendingHibernationChanges).not.toHaveBeenCalled();
 		expect(nativeCtx.takePendingHibernationChanges).not.toHaveBeenCalled();
-		expect(nativeCtx.requestSave).toHaveBeenCalledWith(false);
+		expect(nativeCtx.requestSave).toHaveBeenCalledWith({ immediate: false });
 
 		const payload = actorCtx.serializeForTick("save");
 		expect(payload.connHibernationRemoved).toEqual(["conn-queued"]);
 		expect(nativeCtx.takePendingHibernationChanges).toHaveBeenCalledTimes(1);
 	});
 
-	test("saveState({ immediate: true }) flushes queued hibernation removals", async () => {
+	test("saveState({ immediate: true }) schedules callback-driven serialization", async () => {
 		const actorId = `native-save-${crypto.randomUUID()}`;
 		actorIds.add(actorId);
 
@@ -213,11 +213,11 @@ describe("native saveState adapter", () => {
 
 		await actorCtx.saveState({ immediate: true });
 
-		expect(nativeCtx.saveState).toHaveBeenCalledTimes(1);
-		expect(nativeCtx.takePendingHibernationChanges).toHaveBeenCalledTimes(1);
-		expect(nativeCtx.saveState.mock.calls[0]?.[0]).toMatchObject({
-			connHibernationRemoved: ["conn-1"],
+		expect(nativeCtx.requestSaveAndWait).toHaveBeenCalledWith({
+			immediate: true,
 		});
+		expect(nativeCtx.saveState).not.toHaveBeenCalled();
+		expect(nativeCtx.takePendingHibernationChanges).not.toHaveBeenCalled();
 	});
 
 	test("buildNativeFactory wires the serializeState callback", async () => {
@@ -322,6 +322,7 @@ describe("native saveState adapter", () => {
 			createStateInput?: unknown;
 			onCreateInput?: unknown;
 		} = {};
+		const lifecycleEvents: string[] = [];
 		const definition = actor({
 			createState: (_c, input) => {
 				inputs.createStateInput = input;
@@ -331,7 +332,9 @@ describe("native saveState adapter", () => {
 				inputs.onCreateInput = input;
 			},
 			createVars: () => ({ mode: "test" }),
-			onWake: () => {},
+			onWake: () => {
+				lifecycleEvents.push("onWake");
+			},
 			actions: {},
 		});
 
@@ -340,8 +343,8 @@ describe("native saveState adapter", () => {
 		expect(typeof capturedCallbacks.createState).toBe("function");
 		expect(typeof capturedCallbacks.onCreate).toBe("function");
 		expect(typeof capturedCallbacks.createVars).toBe("function");
-		expect(typeof capturedCallbacks.onBeforeActorStart).toBe("function");
-		expect(capturedCallbacks.onWake).toBeUndefined();
+		expect(typeof capturedCallbacks.onWake).toBe("function");
+		expect(capturedCallbacks.onBeforeActorStart).toBeUndefined();
 
 		const nativeCtx = createMockNativeContext(actorId);
 		const input = Buffer.from(cbor.encode({ count: 3 }));
@@ -357,19 +360,29 @@ describe("native saveState adapter", () => {
 		const createVars = capturedCallbacks.createVars as (
 			error: unknown,
 			payload: { ctx: NativeActorContext },
-		) => Promise<Buffer>;
+		) => Promise<void>;
+		const onWake = capturedCallbacks.onWake as (
+			error: unknown,
+			payload: { ctx: NativeActorContext },
+		) => Promise<void>;
 
 		expect(cbor.decode(await createState(undefined, { ctx: nativeCtx, input }))).toEqual({
 			count: 3,
 		});
 		await onCreate(undefined, { ctx: nativeCtx, input });
-		expect(cbor.decode(await createVars(undefined, { ctx: nativeCtx }))).toEqual({
-			mode: "test",
-		});
+		await createVars(undefined, { ctx: nativeCtx });
+		await onWake(undefined, { ctx: nativeCtx });
+		expect(
+			new NativeActorContextAdapter(
+				createMockBindings() as never,
+				nativeCtx,
+			).vars,
+		).toEqual({ mode: "test" });
 		expect(inputs).toEqual({
 			createStateInput: { count: 3 },
 			onCreateInput: { count: 3 },
 		});
+		expect(lifecycleEvents).toEqual(["onWake"]);
 	});
 
 	test("action callbacks accept null conn payloads", async () => {

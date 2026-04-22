@@ -24,10 +24,7 @@ impl Actor for Counter {
 	type Input = ();
 	type Vars = ();
 
-	async fn create_state(
-		_ctx: &Ctx<Self>,
-		_input: &Self::Input,
-	) -> Result<Self::State> {
+	async fn create_state(_ctx: &Ctx<Self>, _input: &Self::Input) -> Result<Self::State> {
 		Ok(CounterState { count: 0 })
 	}
 
@@ -47,11 +44,7 @@ impl Actor for Counter {
 		})
 	}
 
-	async fn on_request(
-		self: &Arc<Self>,
-		ctx: &Ctx<Self>,
-		_request: Request,
-	) -> Result<Response> {
+	async fn on_request(self: &Arc<Self>, ctx: &Ctx<Self>, _request: Request) -> Result<Response> {
 		self.request_count.fetch_add(1, Ordering::Relaxed);
 		let state = ctx.state();
 		let body = format!("{{\"count\":{}}}", state.count).into_bytes();
@@ -79,11 +72,7 @@ impl Actor for Counter {
 }
 
 impl Counter {
-	async fn increment(
-		self: Arc<Self>,
-		ctx: Ctx<Self>,
-		(amount,): (i64,),
-	) -> Result<CounterState> {
+	async fn increment(self: Arc<Self>, ctx: Ctx<Self>, (amount,): (i64,)) -> Result<CounterState> {
 		let _ = self;
 		let mut state = (*ctx.state()).clone();
 		state.count += amount;

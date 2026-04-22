@@ -6,8 +6,10 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::ffi::{CStr, CString, c_char, c_int, c_void};
 use std::ptr;
 use std::slice;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+#[cfg(test)]
+use std::sync::atomic::{AtomicBool, AtomicUsize};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
 
 use anyhow::Result;
@@ -16,7 +18,7 @@ use moka::sync::Cache;
 use parking_lot::{Mutex, RwLock};
 use rivet_envoy_client::handle::EnvoyHandle;
 use rivet_envoy_protocol as protocol;
-use sqlite_storage::ltx::{encode_ltx_v3, LtxHeader};
+use sqlite_storage::ltx::{LtxHeader, encode_ltx_v3};
 #[cfg(test)]
 use sqlite_storage::{engine::SqliteEngine, error::SqliteStorageError};
 use tokio::runtime::Handle;
@@ -66,10 +68,7 @@ macro_rules! vfs_catch_unwind {
 		match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| $body)) {
 			Ok(result) => result,
 			Err(panic) => {
-				tracing::error!(
-					message = panic_message(&panic),
-					"sqlite callback panicked"
-				);
+				tracing::error!(message = panic_message(&panic), "sqlite callback panicked");
 				$err_val
 			}
 		}
@@ -550,10 +549,11 @@ struct MockProtocol {
 	stage_response: protocol::SqliteCommitStageResponse,
 	finalize_response: protocol::SqliteCommitFinalizeResponse,
 	get_pages_response: protocol::SqliteGetPagesResponse,
-	mirror_commit_meta: Mutex<bool>,
+	mirror_commit_meta: AtomicBool,
 	commit_requests: Mutex<Vec<protocol::SqliteCommitRequest>>,
 	stage_requests: Mutex<Vec<protocol::SqliteCommitStageRequest>>,
-	awaited_stage_responses: Mutex<usize>,
+	awaited_stage_responses: AtomicUsize,
+	stage_response_awaited: Notify,
 	finalize_requests: Mutex<Vec<protocol::SqliteCommitFinalizeRequest>>,
 	get_pages_requests: Mutex<Vec<protocol::SqliteGetPagesRequest>>,
 	finalize_started: Notify,
@@ -577,10 +577,11 @@ impl MockProtocol {
 					meta: sqlite_meta(8 * 1024 * 1024),
 				},
 			),
-			mirror_commit_meta: Mutex::new(false),
+			mirror_commit_meta: AtomicBool::new(false),
 			commit_requests: Mutex::new(Vec::new()),
 			stage_requests: Mutex::new(Vec::new()),
-			awaited_stage_responses: Mutex::new(0),
+			awaited_stage_responses: AtomicUsize::new(0),
+			stage_response_awaited: Notify::new(),
 			finalize_requests: Mutex::new(Vec::new()),
 			get_pages_requests: Mutex::new(Vec::new()),
 			finalize_started: Notify::new(),
@@ -599,7 +600,19 @@ impl MockProtocol {
 	}
 
 	fn awaited_stage_responses(&self) -> usize {
-		*self.awaited_stage_responses.lock()
+		self.awaited_stage_responses.load(Ordering::SeqCst)
+	}
+
+	async fn wait_for_stage_responses(&self, expected: usize) {
+		use std::time::Duration;
+
+		tokio::time::timeout(Duration::from_secs(1), async {
+			while self.awaited_stage_responses() < expected {
+				self.stage_response_awaited.notified().await;
+			}
+		})
+		.await
+		.expect("stage response await count should reach expected value");
 	}
 
 	fn finalize_requests(
@@ -615,7 +628,7 @@ impl MockProtocol {
 	}
 
 	fn set_mirror_commit_meta(&self, enabled: bool) {
-		*self.mirror_commit_meta.lock() = enabled;
+		self.mirror_commit_meta.store(enabled, Ordering::SeqCst);
 	}
 
 	fn queue_commit_stage(&self, req: protocol::SqliteCommitStageRequest) {
@@ -636,7 +649,7 @@ impl MockProtocol {
 	) -> Result<protocol::SqliteCommitResponse> {
 		let req = req.clone();
 		self.commit_requests().push(req.clone());
-		if *self.mirror_commit_meta.lock() {
+		if self.mirror_commit_meta.load(Ordering::SeqCst) {
 			if let protocol::SqliteCommitResponse::SqliteCommitOk(ok) = &self.commit_response {
 				let mut meta = ok.meta.clone();
 				meta.head_txid = req.expected_head_txid + 1;
@@ -669,7 +682,8 @@ impl MockProtocol {
 		&self,
 		req: protocol::SqliteCommitStageRequest,
 	) -> Result<protocol::SqliteCommitStageResponse> {
-		*self.awaited_stage_responses.lock() += 1;
+		self.awaited_stage_responses.fetch_add(1, Ordering::SeqCst);
+		self.stage_response_awaited.notify_one();
 		self.stage_requests().push(req);
 		Ok(self.stage_response.clone())
 	}
@@ -682,7 +696,7 @@ impl MockProtocol {
 		self.finalize_requests().push(req.clone());
 		self.finalize_started.notify_one();
 		self.release_finalize.notified().await;
-		if *self.mirror_commit_meta.lock() {
+		if self.mirror_commit_meta.load(Ordering::SeqCst) {
 			if let protocol::SqliteCommitFinalizeResponse::SqliteCommitFinalizeOk(ok) =
 				&self.finalize_response
 			{
@@ -1083,10 +1097,6 @@ impl VfsContext {
 	}
 
 	fn open_aux_file(&self, path: &str) -> Arc<AuxFileState> {
-		if let Some(state) = self.aux_files.read().get(path) {
-			return state.clone();
-		}
-
 		let mut aux_files = self.aux_files.write();
 		aux_files
 			.entry(path.to_string())
@@ -1410,10 +1420,7 @@ fn cleanup_batch_atomic_probe(db: *mut sqlite3) {
 	}
 }
 
-fn assert_batch_atomic_probe(
-	db: *mut sqlite3,
-	vfs: &SqliteVfs,
-) -> std::result::Result<(), String> {
+fn assert_batch_atomic_probe(db: *mut sqlite3, vfs: &SqliteVfs) -> std::result::Result<(), String> {
 	let commit_atomic_before = vfs.commit_atomic_count();
 	let probe_sql = "\
 		BEGIN IMMEDIATE;\
@@ -2041,10 +2048,7 @@ unsafe extern "C" fn io_sync(p_file: *mut sqlite3_file, _flags: c_int) -> c_int 
 	})
 }
 
-unsafe extern "C" fn io_file_size(
-	p_file: *mut sqlite3_file,
-	p_size: *mut sqlite3_int64,
-) -> c_int {
+unsafe extern "C" fn io_file_size(p_file: *mut sqlite3_file, p_size: *mut sqlite3_int64) -> c_int {
 	vfs_catch_unwind!(SQLITE_IOERR_FSTAT, {
 		let file = get_file(p_file);
 		if let Some(aux) = get_aux_state(file) {
@@ -2505,9 +2509,10 @@ pub fn open_database(
 #[cfg(test)]
 mod tests {
 	use std::sync::atomic::{AtomicBool, AtomicU64, Ordering as AtomicOrdering};
-	use std::sync::{Arc, Mutex as StdMutex};
+	use std::sync::{Arc, Barrier};
 	use std::thread;
 
+	use parking_lot::Mutex as SyncMutex;
 	use tempfile::TempDir;
 	use tokio::runtime::Builder;
 	use universaldb::Subspace;
@@ -3230,10 +3235,11 @@ mod tests {
 	fn direct_engine_handles_multithreaded_statement_churn() {
 		let runtime = direct_runtime();
 		let harness = DirectEngineHarness::new();
-		let db = Arc::new(StdMutex::new(harness.open_db(&runtime)));
+		// Forced-sync: this test shares one SQLite handle across std::thread workers.
+		let db = Arc::new(SyncMutex::new(harness.open_db(&runtime)));
 
 		{
-			let db = db.lock().expect("db mutex should lock");
+			let db = db.lock();
 			sqlite_exec(
 				db.as_ptr(),
 				"CREATE TABLE items (id INTEGER PRIMARY KEY AUTOINCREMENT, value TEXT NOT NULL);",
@@ -3246,7 +3252,7 @@ mod tests {
 			let db = Arc::clone(&db);
 			workers.push(thread::spawn(move || {
 				for idx in 0..40 {
-					let db = db.lock().expect("db mutex should lock");
+					let db = db.lock();
 					sqlite_step_statement(
 						db.as_ptr(),
 						&format!(
@@ -3261,7 +3267,7 @@ mod tests {
 			worker.join().expect("worker thread should finish");
 		}
 
-		let db = db.lock().expect("db mutex should lock");
+		let db = db.lock();
 		assert_eq!(
 			sqlite_query_i64(db.as_ptr(), "SELECT COUNT(*) FROM items;")
 				.expect("threaded row count should succeed"),
@@ -3453,7 +3459,8 @@ mod tests {
 		let runtime = direct_runtime();
 		let harness = DirectEngineHarness::new();
 		let engine = runtime.block_on(harness.open_engine());
-		let db = Arc::new(StdMutex::new(harness.open_db_on_engine(
+		// Forced-sync: the reader is a std::thread exercising SQLite VFS callbacks.
+		let db = Arc::new(SyncMutex::new(harness.open_db_on_engine(
 			&runtime,
 			Arc::clone(&engine),
 			&harness.actor_id,
@@ -3461,7 +3468,7 @@ mod tests {
 		)));
 
 		{
-			let db = db.lock().expect("db mutex should lock");
+			let db = db.lock();
 			sqlite_exec(
 				db.as_ptr(),
 				"CREATE TABLE items (id INTEGER PRIMARY KEY, value TEXT NOT NULL);",
@@ -3477,13 +3484,14 @@ mod tests {
 		}
 
 		let keep_reading = Arc::new(AtomicBool::new(true));
-		let read_error = Arc::new(StdMutex::new(None::<String>));
+		// Forced-sync: error capture is written from a std::thread and read after join.
+		let read_error = Arc::new(SyncMutex::new(None::<String>));
 		let db_for_reader = Arc::clone(&db);
 		let keep_reading_for_thread = Arc::clone(&keep_reading);
 		let read_error_for_thread = Arc::clone(&read_error);
 		let reader = thread::spawn(move || {
 			while keep_reading_for_thread.load(AtomicOrdering::Relaxed) {
-				let db = db_for_reader.lock().expect("db mutex should lock");
+				let db = db_for_reader.lock();
 				direct_vfs_ctx(&db)
 					.state
 					.write()
@@ -3492,9 +3500,7 @@ mod tests {
 				if let Err(err) =
 					sqlite_query_i64(db.as_ptr(), "SELECT COUNT(*) FROM items WHERE id >= 1;")
 				{
-					*read_error_for_thread
-						.lock()
-						.expect("read error mutex should lock") = Some(err);
+					*read_error_for_thread.lock() = Some(err);
 					break;
 				}
 			}
@@ -3507,13 +3513,10 @@ mod tests {
 		reader.join().expect("reader thread should finish");
 
 		assert!(
-			read_error
-				.lock()
-				.expect("read error mutex should lock")
-				.is_none(),
+			read_error.lock().is_none(),
 			"reads should keep working while compaction folds deltas",
 		);
-		let db = db.lock().expect("db mutex should lock");
+		let db = db.lock();
 		assert_eq!(
 			sqlite_query_i64(db.as_ptr(), "SELECT COUNT(*) FROM items;")
 				.expect("final row count should succeed"),
@@ -3830,14 +3833,15 @@ mod tests {
 			VfsConfig::default(),
 		)
 		.expect("vfs should register");
-		let db = Arc::new(StdMutex::new(
+		// Forced-sync: this test moves one SQLite handle between std::thread workers.
+		let db = Arc::new(SyncMutex::new(
 			open_database(vfs, "actor").expect("db should open"),
 		));
 
 		{
 			let db = db.clone();
 			thread::spawn(move || {
-				let db = db.lock().expect("db mutex should lock");
+				let db = db.lock();
 				sqlite_exec(
 					db.as_ptr(),
 					"CREATE TABLE items (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL);",
@@ -3856,7 +3860,7 @@ mod tests {
 		}
 
 		thread::spawn(move || {
-			let db = db.lock().expect("db mutex should lock");
+			let db = db.lock();
 			sqlite_step_statement(
 				db.as_ptr(),
 				"INSERT INTO items (name) VALUES ('test-item');",
@@ -3912,6 +3916,66 @@ mod tests {
 		ctx.delete_aux_file("actor-journal");
 		assert!(!ctx.aux_file_exists("actor-journal"));
 		assert!(ctx.open_aux_file("actor-journal").bytes.lock().is_empty());
+	}
+
+	#[test]
+	fn concurrent_aux_file_opens_share_single_state() {
+		let runtime = Builder::new_current_thread()
+			.enable_all()
+			.build()
+			.expect("runtime should build");
+		let protocol = Arc::new(MockProtocol::new(
+			protocol::SqliteCommitResponse::SqliteCommitOk(protocol::SqliteCommitOk {
+				new_head_txid: 13,
+				meta: sqlite_meta(8 * 1024 * 1024),
+			}),
+			protocol::SqliteCommitStageResponse::SqliteCommitStageOk(
+				protocol::SqliteCommitStageOk {
+					chunk_idx_committed: 0,
+				},
+			),
+			protocol::SqliteCommitFinalizeResponse::SqliteCommitFinalizeOk(
+				protocol::SqliteCommitFinalizeOk {
+					new_head_txid: 13,
+					meta: sqlite_meta(8 * 1024 * 1024),
+				},
+			),
+		));
+		let ctx = Arc::new(VfsContext::new(
+			"actor".to_string(),
+			runtime.handle().clone(),
+			SqliteTransport::from_mock(protocol),
+			protocol::SqliteStartupData {
+				generation: 7,
+				meta: sqlite_meta(8 * 1024 * 1024),
+				preloaded_pages: Vec::new(),
+			},
+			VfsConfig::default(),
+			unsafe { std::mem::zeroed() },
+		));
+		let barrier = Arc::new(Barrier::new(2));
+
+		let first = {
+			let ctx = ctx.clone();
+			let barrier = barrier.clone();
+			thread::spawn(move || {
+				barrier.wait();
+				ctx.open_aux_file("actor-journal")
+			})
+		};
+		let second = {
+			let ctx = ctx.clone();
+			let barrier = barrier.clone();
+			thread::spawn(move || {
+				barrier.wait();
+				ctx.open_aux_file("actor-journal")
+			})
+		};
+
+		let first = first.join().expect("first open should complete");
+		let second = second.join().expect("second open should complete");
+		assert!(Arc::ptr_eq(&first, &second));
+		assert_eq!(ctx.aux_files.read().len(), 1);
 	}
 
 	#[test]
@@ -4160,6 +4224,48 @@ mod tests {
 	}
 
 	#[test]
+	fn mock_protocol_notifies_stage_response_awaits() {
+		let runtime = Builder::new_current_thread()
+			.enable_all()
+			.build()
+			.expect("runtime should build");
+		let protocol = Arc::new(MockProtocol::new(
+			protocol::SqliteCommitResponse::SqliteCommitTooLarge(protocol::SqliteCommitTooLarge {
+				actual_size_bytes: 3 * 4096,
+				max_size_bytes: 4096,
+			}),
+			protocol::SqliteCommitStageResponse::SqliteCommitStageOk(
+				protocol::SqliteCommitStageOk {
+					chunk_idx_committed: 0,
+				},
+			),
+			protocol::SqliteCommitFinalizeResponse::SqliteCommitFinalizeOk(
+				protocol::SqliteCommitFinalizeOk {
+					new_head_txid: 14,
+					meta: sqlite_meta(8 * 1024 * 1024),
+				},
+			),
+		));
+
+		runtime.block_on(async {
+			let wait = protocol.wait_for_stage_responses(1);
+			let stage = protocol.commit_stage(protocol::SqliteCommitStageRequest {
+				actor_id: "actor".to_string(),
+				generation: 7,
+				txid: 1,
+				chunk_idx: 0,
+				bytes: vec![1, 2, 3],
+				is_last: true,
+			});
+			let ((), response) = tokio::join!(wait, stage);
+			assert!(matches!(
+				response.expect("stage response should succeed"),
+				protocol::SqliteCommitStageResponse::SqliteCommitStageOk(_)
+			));
+		});
+	}
+
+	#[test]
 	fn commit_buffered_pages_falls_back_to_slow_path() {
 		let runtime = Builder::new_current_thread()
 			.enable_all()
@@ -4219,15 +4325,19 @@ mod tests {
 		assert!(metrics.transport_ns > 0);
 		assert!(protocol.commit_requests().is_empty());
 		assert!(!protocol.stage_requests().is_empty());
-		assert!(protocol
-			.stage_requests()
-			.iter()
-			.enumerate()
-			.all(|(chunk_idx, request)| request.chunk_idx as usize == chunk_idx));
-		assert!(protocol
-			.stage_requests()
-			.last()
-			.is_some_and(|request| request.is_last));
+		assert!(
+			protocol
+				.stage_requests()
+				.iter()
+				.enumerate()
+				.all(|(chunk_idx, request)| request.chunk_idx as usize == chunk_idx)
+		);
+		assert!(
+			protocol
+				.stage_requests()
+				.last()
+				.is_some_and(|request| request.is_last)
+		);
 		assert_eq!(protocol.awaited_stage_responses(), 0);
 		assert_eq!(protocol.finalize_requests().len(), 1);
 	}
@@ -4731,12 +4841,8 @@ mod tests {
 		let actor_id = &harness.actor_id;
 
 		{
-			let db = harness.open_db_on_engine(
-				&runtime,
-				engine.clone(),
-				actor_id,
-				VfsConfig::default(),
-			);
+			let db =
+				harness.open_db_on_engine(&runtime, engine.clone(), actor_id, VfsConfig::default());
 			sqlite_exec(
 				db.as_ptr(),
 				"CREATE TABLE t (id INTEGER PRIMARY KEY, v INTEGER NOT NULL);",

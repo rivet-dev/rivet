@@ -1,15 +1,15 @@
-use std::sync::Mutex;
 use std::time::Duration;
 
 use napi::bindgen_prelude::{BigInt, Buffer};
 use napi_derive::napi;
+use parking_lot::Mutex;
 use rivetkit_core::{
-	EnqueueAndWaitOpts, Queue as CoreQueue, QueueMessage as CoreQueueMessage, QueueNextBatchOpts,
-	QueueNextOpts, QueueTryNextBatchOpts, QueueTryNextOpts, QueueWaitOpts,
+	ActorContext as CoreActorContext, EnqueueAndWaitOpts, QueueMessage as CoreQueueMessage,
+	QueueNextBatchOpts, QueueNextOpts, QueueTryNextBatchOpts, QueueTryNextOpts, QueueWaitOpts,
 };
 
 use crate::cancellation_token::CancellationToken;
-use crate::napi_anyhow_error;
+use crate::{NapiInvalidArgument, NapiInvalidState, napi_anyhow_error};
 
 #[napi(object)]
 pub struct JsQueueNextOptions {
@@ -52,11 +52,13 @@ pub struct JsQueueTryNextBatchOptions {
 
 #[napi]
 pub struct Queue {
-	inner: CoreQueue,
+	inner: CoreActorContext,
 }
 
 #[napi]
 pub struct QueueMessage {
+	// Completes are exposed through sync N-API object state; hold only for
+	// take/restore, never across the queue completion await.
 	inner: Mutex<Option<CoreQueueMessage>>,
 	id: u64,
 	name: String,
@@ -66,13 +68,21 @@ pub struct QueueMessage {
 }
 
 impl Queue {
-	pub(crate) fn new(inner: CoreQueue) -> Self {
+	pub(crate) fn new(inner: CoreActorContext) -> Self {
 		Self { inner }
 	}
 }
 
 impl QueueMessage {
 	fn from_core(message: CoreQueueMessage) -> Self {
+		tracing::debug!(
+			class = "QueueMessage",
+			message_id = message.id,
+			name = %message.name,
+			body_bytes = message.body.len(),
+			completable = message.is_completable(),
+			"constructed napi class"
+		);
 		Self {
 			id: message.id,
 			name: message.name.clone(),
@@ -81,6 +91,18 @@ impl QueueMessage {
 			is_completable: message.is_completable(),
 			inner: Mutex::new(Some(message)),
 		}
+	}
+}
+
+impl Drop for QueueMessage {
+	fn drop(&mut self) {
+		tracing::debug!(
+			class = "QueueMessage",
+			message_id = self.id,
+			name = %self.name,
+			completable = self.is_completable,
+			"dropped napi class"
+		);
 	}
 }
 
@@ -220,14 +242,24 @@ impl QueueMessage {
 
 	#[napi]
 	pub async fn complete(&self, response: Option<Buffer>) -> napi::Result<()> {
+		tracing::debug!(
+			class = "QueueMessage",
+			message_id = self.id,
+			name = %self.name,
+			response_bytes = response.as_ref().map(|response| response.len()).unwrap_or(0),
+			"completing queue message"
+		);
 		let message = {
-			let mut guard = self
-				.inner
-				.lock()
-				.map_err(|_| napi::Error::from_reason("queue message mutex poisoned"))?;
-			guard
-				.take()
-				.ok_or_else(|| napi::Error::from_reason("queue message already completed"))?
+			let mut guard = self.inner.lock();
+			guard.take().ok_or_else(|| {
+				napi_anyhow_error(
+					NapiInvalidState {
+						state: "queue message".to_owned(),
+						reason: "already completed".to_owned(),
+					}
+					.build(),
+				)
+			})?
 		};
 
 		if let Err(error) = message
@@ -235,10 +267,7 @@ impl QueueMessage {
 			.complete(response.map(|response| response.to_vec()))
 			.await
 		{
-			let mut guard = self
-				.inner
-				.lock()
-				.map_err(|_| napi::Error::from_reason("queue message mutex poisoned"))?;
+			let mut guard = self.inner.lock();
 			*guard = Some(message);
 			return Err(napi_anyhow_error(error));
 		}
@@ -307,12 +336,26 @@ fn registered_cancel_token(
 
 	let (negative, token_id, lossless) = cancel_token_id.get_u64();
 	if negative || !lossless {
-		return Err(napi::Error::from_reason("invalid cancel token id"));
+		return Err(napi_anyhow_error(
+			NapiInvalidArgument {
+				argument: "cancelTokenId".to_owned(),
+				reason: "must be a non-negative u64".to_owned(),
+			}
+			.build(),
+		));
 	}
 
 	crate::cancel_token::lookup_token(token_id)
 		.map(Some)
-		.ok_or_else(|| napi::Error::from_reason("unknown cancel token id"))
+		.ok_or_else(|| {
+			napi_anyhow_error(
+				NapiInvalidArgument {
+					argument: "cancelTokenId".to_owned(),
+					reason: "unknown token id".to_owned(),
+				}
+				.build(),
+			)
+		})
 }
 
 fn enqueue_and_wait_opts(
@@ -355,12 +398,23 @@ fn queue_try_next_batch_opts(options: Option<JsQueueTryNextBatchOptions>) -> Que
 
 fn timeout_duration(timeout_ms: Option<i64>) -> napi::Result<Option<Duration>> {
 	match timeout_ms {
-		Some(timeout_ms) if timeout_ms < 0 => Err(napi::Error::from_reason(
-			"queue timeout must be non-negative",
+		Some(timeout_ms) if timeout_ms < 0 => Err(napi_anyhow_error(
+			NapiInvalidArgument {
+				argument: "timeoutMs".to_owned(),
+				reason: "must be non-negative".to_owned(),
+			}
+			.build(),
 		)),
 		Some(timeout_ms) => Ok(Some(Duration::from_millis(
-			u64::try_from(timeout_ms)
-				.map_err(|_| napi::Error::from_reason("queue timeout exceeds u64 range"))?,
+			u64::try_from(timeout_ms).map_err(|_| {
+				napi_anyhow_error(
+					NapiInvalidArgument {
+						argument: "timeoutMs".to_owned(),
+						reason: "exceeds u64 range".to_owned(),
+					}
+					.build(),
+				)
+			})?,
 		))),
 		None => Ok(None),
 	}

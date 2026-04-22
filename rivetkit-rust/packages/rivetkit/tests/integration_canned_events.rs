@@ -5,8 +5,9 @@ use rivetkit_core::{ActorContext, ActorEvent, ActorStart, SerializeStateReason, 
 use serde::Deserialize;
 use tokio::sync::{mpsc, oneshot};
 
-use crate::{action, start::wrap_start, Actor, Event, Start};
+use rivetkit::{Actor, Event, Start, start::wrap_start};
 
+#[derive(Debug)]
 struct CounterActor;
 
 impl Actor for CounterActor {
@@ -88,7 +89,7 @@ async fn canned_actor_start_drives_typed_counter_actor() {
 
 	let (sleep_tx, sleep_rx) = oneshot::channel();
 	event_tx
-		.send(ActorEvent::Sleep {
+		.send(ActorEvent::FinalizeSleep {
 			reply: sleep_tx.into(),
 		})
 		.await

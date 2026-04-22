@@ -5,6 +5,8 @@ use napi::threadsafe_function::{
 use napi_derive::napi;
 use rivetkit_core::{WebSocket as CoreWebSocket, WsMessage};
 
+use crate::{NapiInvalidArgument, napi_anyhow_error};
+
 #[derive(Clone)]
 enum WebSocketEvent {
 	Message {
@@ -28,7 +30,14 @@ pub struct WebSocket {
 impl WebSocket {
 	#[allow(dead_code)]
 	pub(crate) fn new(inner: CoreWebSocket) -> Self {
+		tracing::debug!(class = "WebSocket", "constructed napi class");
 		Self { inner }
+	}
+}
+
+impl Drop for WebSocket {
+	fn drop(&mut self) {
+		tracing::debug!(class = "WebSocket", "dropped napi class");
 	}
 }
 
@@ -40,9 +49,13 @@ impl WebSocket {
 			WsMessage::Binary(data.to_vec())
 		} else {
 			WsMessage::Text(String::from_utf8(data.to_vec()).map_err(|error| {
-				napi::Error::from_reason(format!(
-					"websocket text message must be valid utf-8: {error}"
-				))
+				napi_anyhow_error(
+					NapiInvalidArgument {
+						argument: "data".to_owned(),
+						reason: format!("websocket text message must be valid utf-8: {error}"),
+					}
+					.build(),
+				)
 			})?)
 		};
 		self.inner.send(message);
@@ -50,8 +63,9 @@ impl WebSocket {
 	}
 
 	#[napi]
-	pub fn close(&self, code: Option<u16>, reason: Option<String>) {
-		self.inner.close(code, reason);
+	pub async fn close(&self, code: Option<u16>, reason: Option<String>) -> napi::Result<()> {
+		self.inner.close(code, reason).await;
+		Ok(())
 	}
 
 	#[napi]
@@ -100,12 +114,16 @@ impl WebSocket {
 		self.inner
 			.configure_message_event_callback(Some(std::sync::Arc::new(
 				move |data, message_index| {
-					message_tsfn.call(
-						WebSocketEvent::Message {
-							data,
-							message_index,
-						},
-						ThreadsafeFunctionCallMode::NonBlocking,
+					let event = WebSocketEvent::Message {
+						data,
+						message_index,
+					};
+					log_websocket_event_invocation(&event);
+					let status = message_tsfn.call(event, ThreadsafeFunctionCallMode::NonBlocking);
+					tracing::debug!(
+						kind = "websocket.message",
+						?status,
+						"napi TSF callback returned"
 					);
 					Ok(())
 				},
@@ -113,18 +131,59 @@ impl WebSocket {
 		self.inner
 			.configure_close_event_callback(Some(std::sync::Arc::new(
 				move |code, reason, was_clean| {
-					tsfn.call(
-						WebSocketEvent::Close {
+					let tsfn = tsfn.clone();
+					Box::pin(async move {
+						let event = WebSocketEvent::Close {
 							code,
 							reason,
 							was_clean,
-						},
-						ThreadsafeFunctionCallMode::NonBlocking,
-					);
-					Ok(())
+						};
+						log_websocket_event_invocation(&event);
+						let status = tsfn.call(event, ThreadsafeFunctionCallMode::NonBlocking);
+						tracing::debug!(
+							kind = "websocket.close",
+							?status,
+							"napi TSF callback returned"
+						);
+						Ok(())
+					})
 				},
 			)));
 
 		Ok(())
 	}
+}
+
+fn log_websocket_event_invocation(event: &WebSocketEvent) {
+	let (kind, payload_summary) = match event {
+		WebSocketEvent::Message {
+			data,
+			message_index,
+		} => {
+			let (encoding, bytes) = match data {
+				WsMessage::Text(text) => ("text", text.len()),
+				WsMessage::Binary(bytes) => ("binary", bytes.len()),
+			};
+			(
+				"websocket.message",
+				format!("encoding={encoding} bytes={bytes} message_index={message_index:?}"),
+			)
+		}
+		WebSocketEvent::Close {
+			code,
+			reason,
+			was_clean,
+		} => (
+			"websocket.close",
+			format!(
+				"code={code} reason_bytes={} was_clean={was_clean}",
+				reason.len()
+			),
+		),
+	};
+	tracing::debug!(
+		kind,
+		payload_summary = %payload_summary,
+		"invoking napi TSF callback"
+	);
 }

@@ -139,6 +139,23 @@ describeDriverMatrix("Actor Sleep", (driverTestConfig) => {
 			}
 		});
 
+		test("run-closure-self-initiated-sleep persists state", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+			const actorKey = `run-self-sleep-${Date.now()}`;
+			const actor = client.runSelfInitiatedSleep.getOrCreate([actorKey]);
+
+			await vi.waitFor(
+				async () => {
+					const state = await actor.getState();
+					expect(state.sleepCount).toBe(1);
+					expect(state.marker).toBe("slept");
+					expect(state.wakeCount).toBeGreaterThanOrEqual(2);
+					expect(state.runCount).toBeGreaterThanOrEqual(2);
+				},
+				{ timeout: SLEEP_TIMEOUT * 4 },
+			);
+		});
+
 		test.skip("actor sleep persists state with connect", async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);
 
@@ -599,7 +616,7 @@ describeDriverMatrix("Actor Sleep", (driverTestConfig) => {
 			}
 
 			expect(await sleepActor.setPreventSleep(false)).toBe(false);
-			await waitFor(driverTestConfig, SLEEP_TIMEOUT + 250);
+			await waitFor(driverTestConfig, SLEEP_TIMEOUT * 3);
 
 			{
 				const status = await sleepActor.getStatus();

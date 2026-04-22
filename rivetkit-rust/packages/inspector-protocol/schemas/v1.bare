@@ -1,0 +1,159 @@
+# Actor Inspector BARE Schema v1
+
+type State data
+
+type PatchStateRequest struct {
+	state: data
+}
+
+type ActionRequest struct {
+	id: uint
+	name: str
+	args: data
+}
+
+type StateRequest struct {
+	id: uint
+}
+
+type ConnectionsRequest struct {
+	id: uint
+}
+
+type EventsRequest struct {
+	id: uint
+}
+
+type ClearEventsRequest struct {
+	id: uint
+}
+
+type RpcsListRequest struct {
+	id: uint
+}
+
+type ToServerBody union {
+	PatchStateRequest |
+	StateRequest |
+	ConnectionsRequest |
+	ActionRequest |
+	EventsRequest |
+	ClearEventsRequest |
+	RpcsListRequest
+}
+
+type ToServer struct {
+	body: ToServerBody
+}
+
+type Connection struct {
+	id: str
+	details: data
+}
+
+type ActionEvent struct {
+	name: str
+	args: data
+	connId: str
+}
+
+type BroadcastEvent struct {
+	eventName: str
+	args: data
+}
+
+type SubscribeEvent struct {
+	eventName: str
+	connId: str
+}
+
+type UnSubscribeEvent struct {
+	eventName: str
+	connId: str
+}
+
+type FiredEvent struct {
+	eventName: str
+	args: data
+	connId: str
+}
+
+type EventBody union {
+	ActionEvent |
+	BroadcastEvent |
+	SubscribeEvent |
+	UnSubscribeEvent |
+	FiredEvent
+}
+
+type Event struct {
+	body: EventBody
+}
+
+type Init struct {
+	connections: list<Connection>
+	events: list<Event>
+	state: optional<State>
+	isStateEnabled: bool
+	rpcs: list<str>
+	isDatabaseEnabled: bool
+}
+
+type ConnectionsResponse struct {
+	rid: uint
+	connections: list<Connection>
+}
+
+type StateResponse struct {
+	rid: uint
+	state: optional<State>
+	isStateEnabled: bool
+}
+
+type EventsResponse struct {
+	rid: uint
+	events: list<Event>
+}
+
+type ActionResponse struct {
+	rid: uint
+	output: data
+}
+
+type StateUpdated struct {
+	state: State
+}
+
+type EventsUpdated struct {
+	events: list<Event>
+}
+
+type RpcsListResponse struct {
+	rid: uint
+	rpcs: list<str>
+}
+
+type Error struct {
+	message: str
+}
+
+type ConnectionsUpdated struct {
+	connections: list<Connection>
+}
+
+type ToClientBody union {
+	StateResponse |
+	ConnectionsResponse |
+	EventsResponse |
+	ActionResponse |
+	RpcsListResponse |
+	ConnectionsUpdated |
+	EventsUpdated |
+	StateUpdated |
+	Error |
+	Init
+}
+
+type ToClient struct {
+	body: ToClientBody
+}

@@ -528,7 +528,7 @@ export const workflowStopTeardownActor = actor({
 	},
 	options: {
 		sleepTimeout: 75,
-		runStopTimeout: 2_000,
+		sleepGracePeriod: 250,
 	},
 });
 

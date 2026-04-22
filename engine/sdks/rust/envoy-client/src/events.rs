@@ -159,7 +159,9 @@ mod tests {
 			actors: Arc::new(std::sync::Mutex::new(HashMap::new())),
 			live_tunnel_requests: Arc::new(std::sync::Mutex::new(HashMap::new())),
 			pending_hibernation_restores: Arc::new(std::sync::Mutex::new(HashMap::new())),
-			ws_tx: Arc::new(tokio::sync::Mutex::new(None::<mpsc::UnboundedSender<WsTxMessage>>)),
+			ws_tx: Arc::new(tokio::sync::Mutex::new(
+				None::<mpsc::UnboundedSender<WsTxMessage>>,
+			)),
 			protocol_metadata: Arc::new(tokio::sync::Mutex::new(None)),
 			shutting_down: std::sync::atomic::AtomicBool::new(false),
 		});
@@ -200,8 +202,7 @@ mod tests {
 			format!("{actor_id}-{generation}"),
 			0,
 		);
-		ctx
-			.actors
+		ctx.actors
 			.get_mut(actor_id)
 			.and_then(|generations| generations.get_mut(&generation))
 			.expect("actor should be inserted")
@@ -256,7 +257,11 @@ mod tests {
 
 		handle_send_events(&mut ctx, vec![stopped_event("actor-shared", 1)]).await;
 
-		assert!(handle.http_request_counter("actor-shared", Some(1)).is_none());
+		assert!(
+			handle
+				.http_request_counter("actor-shared", Some(1))
+				.is_none()
+		);
 		let remaining = handle
 			.http_request_counter("actor-shared", Some(2))
 			.expect("other generation should remain visible");

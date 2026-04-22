@@ -12,7 +12,7 @@ import type {
 	WorkflowState,
 } from "@rivetkit/workflow-engine";
 import { encodeWorkflowHistoryTransport } from "@/common/inspector-transport";
-import type * as inspectorSchema from "@/common/bare/inspector/v4";
+import type * as inspectorSchema from "@/common/bare/generated/inspector/v4";
 import * as transport from "@/common/bare/transport/v1";
 import { assertUnreachable, bufferToArrayBuffer } from "@/utils";
 

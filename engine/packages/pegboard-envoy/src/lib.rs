@@ -16,7 +16,7 @@ mod conn;
 mod errors;
 mod metrics;
 mod ping_task;
-mod sqlite_runtime;
+pub mod sqlite_runtime;
 mod tunnel_to_ws_task;
 mod utils;
 mod ws_to_tunnel_task;

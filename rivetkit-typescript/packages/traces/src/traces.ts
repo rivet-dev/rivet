@@ -60,7 +60,7 @@ const AFTER_MAX_CHUNK_ID = 0x1_0000_0000;
 
 const DEFAULT_BUCKET_SIZE_SEC = 3600;
 const DEFAULT_TARGET_CHUNK_BYTES = 512 * 1024;
-const DEFAULT_MAX_CHUNK_BYTES = 1024 * 1024;
+const DEFAULT_MAX_CHUNK_BYTES = 96 * 1024;
 const DEFAULT_MAX_CHUNK_AGE_MS = 5000;
 const DEFAULT_SNAPSHOT_INTERVAL_MS = 300_000;
 const DEFAULT_SNAPSHOT_BYTES_THRESHOLD = 256 * 1024;
@@ -166,7 +166,8 @@ export function createTraces(
 	const activeSpans = new Map<string, SpanState>();
 	const activeSpanRefs = new Map<string, ActiveSpanRef>();
 	const pendingChunks: PendingChunk[] = [];
-	let writeChain = Promise.resolve();
+	let writeChain: Promise<void> = Promise.resolve();
+	let lastWriteError: unknown = null;
 	const bucketChunkCounters = new Map<number, number>();
 
 	function nowUnixMs(): number {
@@ -557,13 +558,21 @@ export function createTraces(
 	}
 
 	function enqueueWrite(pending: PendingChunk): void {
-		writeChain = writeChain.then(async () => {
-			await driver.set(pending.key, pending.bytes);
-			const index = pendingChunks.indexOf(pending);
-			if (index !== -1) {
-				pendingChunks.splice(index, 1);
-			}
-		});
+		writeChain = writeChain
+			.then(async () => {
+				await driver.set(pending.key, pending.bytes);
+				const index = pendingChunks.indexOf(pending);
+				if (index !== -1) {
+					pendingChunks.splice(index, 1);
+				}
+			})
+			.catch(recoverWriteChain);
+	}
+
+	function recoverWriteChain(error: unknown): undefined {
+		lastWriteError = error;
+		console.warn("[rivetkit/traces] trace chunk write failed", error);
+		return undefined;
 	}
 
 	function resetChunkState(bucketStartSec: number): void {
@@ -789,8 +798,12 @@ export function createTraces(
 		if (didFlush) {
 			resetChunkState(currentChunk.bucketStartSec);
 		}
-		await writeChain;
+		await writeChain.catch(recoverWriteChain);
 		return didFlush;
+	}
+
+	function getLastWriteError(): unknown | null {
+		return lastWriteError;
 	}
 
 	function withSpan<T>(handle: SpanHandle, fn: () => T): T {
@@ -1208,6 +1221,7 @@ export function createTraces(
 		withSpan,
 		getCurrentSpan,
 		flush,
+		getLastWriteError,
 		readRange,
 		readRangeWire,
 	};

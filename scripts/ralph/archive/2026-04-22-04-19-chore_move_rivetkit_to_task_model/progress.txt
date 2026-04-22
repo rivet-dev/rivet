@@ -1,0 +1,6 @@
+# Ralph Progress Log
+Started: 2026-04-22
+Project: rivetkit-core-napi-cleanup-and-rust-client-parity
+
+## Codebase Patterns
+(Populate as iterations discover reusable patterns)

@@ -3,6 +3,7 @@ use async_trait::async_trait;
 
 use crate::test_cluster::TestCluster;
 
+mod actor_v2_2_1_baseline;
 mod epoxy_keys;
 mod pb_actor_v1_pre_migration;
 
@@ -21,6 +22,7 @@ pub trait Scenario {
 
 pub fn all() -> Vec<Box<dyn Scenario>> {
 	vec![
+		Box::new(actor_v2_2_1_baseline::ActorV221Baseline),
 		Box::new(epoxy_keys::EpoxyKeys),
 		Box::new(pb_actor_v1_pre_migration::PbActorV1PreMigration),
 	]

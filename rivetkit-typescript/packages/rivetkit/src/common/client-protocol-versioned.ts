@@ -1,7 +1,7 @@
 import { createVersionedDataHandler } from "vbare";
-import * as v1 from "./bare/client-protocol/v1";
-import * as v2 from "./bare/client-protocol/v2";
-import * as v3 from "./bare/client-protocol/v3";
+import * as v1 from "./bare/generated/client-protocol/v1";
+import * as v2 from "./bare/generated/client-protocol/v2";
+import * as v3 from "./bare/generated/client-protocol/v3";
 
 export const CURRENT_VERSION = 3;
 

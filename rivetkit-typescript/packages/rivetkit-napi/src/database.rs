@@ -2,19 +2,34 @@ use napi::bindgen_prelude::Buffer;
 use napi_derive::napi;
 use rivetkit_core::sqlite::{
 	BindParam, ColumnValue, QueryResult as CoreQueryResult, SqliteDb as CoreSqliteDb,
-	SqliteRuntimeConfig,
 };
 
-use crate::envoy_handle::JsEnvoyHandle;
+use crate::{NapiInvalidArgument, napi_anyhow_error};
 #[napi]
 #[derive(Clone)]
 pub struct JsNativeDatabase {
 	db: CoreSqliteDb,
+	actor_id: Option<String>,
 }
 
 impl JsNativeDatabase {
-	fn new(db: CoreSqliteDb) -> Self {
-		Self { db }
+	pub(crate) fn new(db: CoreSqliteDb, actor_id: Option<String>) -> Self {
+		tracing::debug!(
+			class = "JsNativeDatabase",
+			actor_id = actor_id.as_deref().unwrap_or("<unknown>"),
+			"constructed napi class"
+		);
+		Self { db, actor_id }
+	}
+}
+
+impl Drop for JsNativeDatabase {
+	fn drop(&mut self) {
+		tracing::debug!(
+			class = "JsNativeDatabase",
+			actor_id = self.actor_id.as_deref().unwrap_or("<unknown>"),
+			"dropped napi class"
+		);
 	}
 }
 
@@ -125,9 +140,13 @@ fn js_bind_params_to_core(params: Vec<JsBindParam>) -> napi::Result<Vec<BindPara
 					.map(|value| value.as_ref().to_vec())
 					.unwrap_or_default(),
 			)),
-			other => Err(napi::Error::from_reason(format!(
-				"unsupported bind param kind: {other}"
-			))),
+			other => Err(napi_anyhow_error(
+				NapiInvalidArgument {
+					argument: "kind".to_owned(),
+					reason: format!("unsupported bind param kind `{other}`"),
+				}
+				.build(),
+			)),
 		})
 		.collect()
 }
@@ -157,37 +176,4 @@ fn column_value_to_json(value: ColumnValue) -> serde_json::Value {
 
 fn u64_to_i64(value: u64) -> i64 {
 	value.min(i64::MAX as u64) as i64
-}
-
-pub(crate) async fn open_database_with_runtime_config(
-	config: SqliteRuntimeConfig,
-) -> napi::Result<JsNativeDatabase> {
-	let SqliteRuntimeConfig {
-		handle,
-		actor_id,
-		startup_data,
-	} = config;
-	let db = CoreSqliteDb::new(handle, actor_id, startup_data);
-	db.open()
-		.await
-		.map_err(crate::napi_anyhow_error)?;
-	Ok(JsNativeDatabase::new(db))
-}
-
-/// Open a native SQLite database backed by the envoy's KV channel.
-#[napi]
-pub async fn open_database_from_envoy(
-	js_handle: &JsEnvoyHandle,
-	actor_id: String,
-) -> napi::Result<JsNativeDatabase> {
-	let startup_data = js_handle.clone_sqlite_startup_data(&actor_id).await;
-
-	open_database_with_runtime_config(
-		SqliteRuntimeConfig {
-			handle: js_handle.handle.clone(),
-			actor_id,
-			startup_data,
-		},
-	)
-	.await
 }

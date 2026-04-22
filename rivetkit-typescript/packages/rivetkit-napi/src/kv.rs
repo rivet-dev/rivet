@@ -2,8 +2,8 @@ use napi::bindgen_prelude::Buffer;
 use napi_derive::napi;
 use rivetkit_core::{Kv as CoreKv, ListOpts};
 
-use crate::napi_anyhow_error;
 use crate::types::{JsKvEntry, JsKvListOptions};
+use crate::{NapiInvalidArgument, napi_anyhow_error};
 
 #[napi]
 pub struct Kv {
@@ -138,14 +138,23 @@ fn list_opts(options: Option<JsKvListOptions>) -> napi::Result<ListOpts> {
 		.unwrap_or(false);
 	let limit = match options.and_then(|options| options.limit) {
 		Some(limit) if limit < 0 => {
-			return Err(napi::Error::from_reason(
-				"kv list limit must be non-negative",
+			return Err(napi_anyhow_error(
+				NapiInvalidArgument {
+					argument: "limit".to_owned(),
+					reason: "must be non-negative".to_owned(),
+				}
+				.build(),
 			));
 		}
-		Some(limit) => Some(
-			u32::try_from(limit)
-				.map_err(|_| napi::Error::from_reason("kv list limit exceeds u32 range"))?,
-		),
+		Some(limit) => Some(u32::try_from(limit).map_err(|_| {
+			napi_anyhow_error(
+				NapiInvalidArgument {
+					argument: "limit".to_owned(),
+					reason: "exceeds u32 range".to_owned(),
+				}
+				.build(),
+			)
+		})?),
 		None => None,
 	};
 

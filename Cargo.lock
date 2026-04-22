@@ -299,6 +299,7 @@ checksum = "021e862c184ae977658b36c4500f7feac3221ca5da43e3f25bd04ab6c79a29b5"
 dependencies = [
  "axum-core 0.5.2",
  "axum-macros",
+ "base64 0.22.1",
  "bytes",
  "form_urlencoded",
  "futures-util",
@@ -318,8 +319,10 @@ dependencies = [
  "serde_json",
  "serde_path_to_error",
  "serde_urlencoded",
+ "sha1",
  "sync_wrapper",
  "tokio",
+ "tokio-tungstenite",
  "tower 0.5.2",
  "tower-layer",
  "tower-service",
@@ -693,7 +696,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "57663b653d948a338bfb3eeba9bb2fd5fcfaecb9e199e87e1eda4d9e8b240fd9"
 dependencies = [
  "ciborium-io",
- "half",
+ "half 2.7.1",
 ]
 
 [[package]]
@@ -1976,6 +1979,12 @@ dependencies = [
 
 [[package]]
 name = "half"
+version = "1.8.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1b43ede17f21864e81be2fa654110bf1e793774238d86ef8555c37e6519c0403"
+
+[[package]]
+name = "half"
 version = "2.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6ea2d84b969582b4b1864a92dc5d27cd2b77b622a8d79306834f1be5ba20d84b"
@@ -2230,6 +2239,7 @@ dependencies = [
  "hyper 1.6.0",
  "hyper-util",
  "rustls",
+ "rustls-native-certs 0.8.3",
  "rustls-pki-types",
  "tokio",
  "tokio-rustls",
@@ -3272,6 +3282,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7c87def4c32ab89d880effc9e097653c8da5d6ef28e6b539d313baaacfbafcbe"
 
 [[package]]
+name = "openssl-src"
+version = "300.5.1+3.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "735230c832b28c000e3bc117119e6466a663ec73506bc0a9907ea4187508e42a"
+dependencies = [
+ "cc",
+]
+
+[[package]]
 name = "openssl-sys"
 version = "0.9.113"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3279,6 +3298,7 @@ checksum = "ad2f2c0eba47118757e4c6d2bff2838f3e0523380021356e7875e858372ce644"
 dependencies = [
  "cc",
  "libc",
+ "openssl-src",
  "pkg-config",
  "vcpkg",
 ]
@@ -4333,6 +4353,7 @@ dependencies = [
  "pin-project-lite",
  "quinn",
  "rustls",
+ "rustls-native-certs 0.8.3",
  "rustls-pki-types",
  "serde",
  "serde_json",
@@ -4682,6 +4703,7 @@ dependencies = [
  "namespace",
  "once_cell",
  "pegboard",
+ "pegboard-envoy",
  "pegboard-outbound",
  "pegboard-runner",
  "portpicker",
@@ -4710,6 +4732,7 @@ dependencies = [
  "rivet-util",
  "rivet-workflow-worker",
  "rstest",
+ "rusqlite",
  "rustyline",
  "semver",
  "serde",
@@ -4717,9 +4740,11 @@ dependencies = [
  "serde_html_form",
  "serde_json",
  "serde_yaml",
+ "sqlite-storage",
  "strum",
  "tabled",
  "tempfile",
+ "test-snapshot-gen",
  "thiserror 1.0.69",
  "tokio",
  "tokio-tungstenite",
@@ -5236,6 +5261,72 @@ dependencies = [
 ]
 
 [[package]]
+name = "rivetkit"
+version = "2.3.0-rc.4"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "axum 0.8.4",
+ "bytes",
+ "ciborium",
+ "futures",
+ "http 1.3.1",
+ "rivet-envoy-client",
+ "rivet-error",
+ "rivetkit-client",
+ "rivetkit-client-protocol",
+ "rivetkit-core",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "tracing-subscriber",
+ "vbare",
+]
+
+[[package]]
+name = "rivetkit-client"
+version = "0.9.0-rc.2"
+dependencies = [
+ "anyhow",
+ "axum 0.8.4",
+ "base64 0.22.1",
+ "bytes",
+ "fs_extra",
+ "futures-util",
+ "parking_lot",
+ "portpicker",
+ "reqwest",
+ "rivetkit-client-protocol",
+ "scc",
+ "serde",
+ "serde_bare",
+ "serde_cbor",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tokio-test",
+ "tokio-tungstenite",
+ "tracing",
+ "tracing-subscriber",
+ "tungstenite",
+ "urlencoding",
+ "vbare",
+]
+
+[[package]]
+name = "rivetkit-client-protocol"
+version = "2.3.0-rc.4"
+dependencies = [
+ "anyhow",
+ "serde",
+ "serde_bare",
+ "vbare",
+ "vbare-compiler",
+]
+
+[[package]]
 name = "rivetkit-core"
 version = "2.3.0-rc.4"
 dependencies = [
@@ -5244,12 +5335,15 @@ dependencies = [
  "futures",
  "http 1.3.1",
  "nix 0.30.1",
+ "parking_lot",
  "prometheus",
  "reqwest",
  "rivet-envoy-client",
  "rivet-error",
  "rivet-pools",
  "rivet-util",
+ "rivetkit-client-protocol",
+ "rivetkit-inspector-protocol",
  "rivetkit-sqlite",
  "scc",
  "serde",
@@ -5261,6 +5355,18 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "uuid",
+ "vbare",
+]
+
+[[package]]
+name = "rivetkit-inspector-protocol"
+version = "2.3.0-rc.4"
+dependencies = [
+ "anyhow",
+ "serde",
+ "serde_bare",
+ "vbare",
+ "vbare-compiler",
 ]
 
 [[package]]
@@ -5269,14 +5375,13 @@ version = "2.3.0-rc.4"
 dependencies = [
  "anyhow",
  "async-trait",
- "base64 0.22.1",
  "hex",
  "http 1.3.1",
  "napi",
  "napi-build",
  "napi-derive",
- "rivet-envoy-client",
- "rivet-envoy-protocol",
+ "openssl",
+ "parking_lot",
  "rivet-error",
  "rivetkit-core",
  "rivetkit-sqlite",
@@ -5288,7 +5393,6 @@ dependencies = [
  "tokio-util",
  "tracing",
  "tracing-subscriber",
- "uuid",
 ]
 
 [[package]]
@@ -5829,6 +5933,16 @@ checksum = "a5d440709e79d88e51ac01c4b72fc6cb7314017bb7da9eeff678aa94c10e3ea8"
 dependencies = [
  "serde",
  "serde_core",
+]
+
+[[package]]
+name = "serde_cbor"
+version = "0.11.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2bef2ebfde456fb76bbcf9f59315333decc4fda0b2b44b420243c11e0f5ec1f5"
+dependencies = [
+ "half 1.8.3",
+ "serde",
 ]
 
 [[package]]
@@ -6403,6 +6517,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "axum 0.8.4",
+ "ciborium",
  "clap",
  "epoxy",
  "epoxy-protocol",
@@ -6416,8 +6531,11 @@ dependencies = [
  "rivet-test-deps",
  "rivet-types",
  "rivet-util",
+ "rusqlite",
  "serde",
+ "serde_bare",
  "serde_json",
+ "tempfile",
  "tokio",
  "tracing",
  "universaldb",
@@ -6670,6 +6788,17 @@ dependencies = [
  "futures-core",
  "pin-project-lite",
  "tokio",
+]
+
+[[package]]
+name = "tokio-test"
+version = "0.4.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3f6d24790a10a7af737693a3e8f1d03faef7e6ca0cc99aae5066f533766de545"
+dependencies = [
+ "futures-core",
+ "tokio",
+ "tokio-stream",
 ]
 
 [[package]]

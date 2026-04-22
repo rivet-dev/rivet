@@ -503,7 +503,7 @@ describeDriverMatrix("Actor Workflow", (driverTestConfig) => {
 		);
 
 		test.skipIf(driverTestConfig.skip?.sleep)(
-			"workflow run teardown does not wait for runStopTimeout",
+			"workflow run teardown is bounded by sleepGracePeriod",
 			async (c) => {
 				const { client } = await setupDriverTest(c, driverTestConfig);
 				const actor = client.workflowStopTeardownActor.getOrCreate([

@@ -6,12 +6,10 @@ use anyhow::Result;
 pub enum LifecycleState {
 	#[default]
 	Loading,
-	Migrating,
-	Waking,
-	Ready,
 	Started,
 	SleepGrace,
 	SleepFinalize,
+	DestroyGrace,
 	Destroying,
 	Terminated,
 }
@@ -41,10 +39,12 @@ pub enum UserTaskKind {
 	ScheduledAction,
 	DisconnectCallback,
 	WaitUntil,
+	SleepFinalize,
+	DestroyRequest,
 }
 
 impl UserTaskKind {
-	pub(crate) const ALL: [Self; 8] = [
+	pub(crate) const ALL: [Self; 10] = [
 		Self::Action,
 		Self::Http,
 		Self::WebSocketLifetime,
@@ -53,6 +53,8 @@ impl UserTaskKind {
 		Self::ScheduledAction,
 		Self::DisconnectCallback,
 		Self::WaitUntil,
+		Self::SleepFinalize,
+		Self::DestroyRequest,
 	];
 
 	pub(crate) fn as_metric_label(self) -> &'static str {
@@ -65,14 +67,14 @@ impl UserTaskKind {
 			Self::ScheduledAction => "scheduled_action",
 			Self::DisconnectCallback => "disconnect_callback",
 			Self::WaitUntil => "wait_until",
+			Self::SleepFinalize => "sleep_finalize",
+			Self::DestroyRequest => "destroy_request",
 		}
 	}
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StateMutationReason {
-	UserSetState,
-	UserMutateState,
 	InternalReplace,
 	ScheduledEventsUpdate,
 	InputSet,
@@ -80,9 +82,7 @@ pub enum StateMutationReason {
 }
 
 impl StateMutationReason {
-	pub(crate) const ALL: [Self; 6] = [
-		Self::UserSetState,
-		Self::UserMutateState,
+	pub(crate) const ALL: [Self; 4] = [
 		Self::InternalReplace,
 		Self::ScheduledEventsUpdate,
 		Self::InputSet,
@@ -91,8 +91,6 @@ impl StateMutationReason {
 
 	pub(crate) fn as_metric_label(self) -> &'static str {
 		match self {
-			Self::UserSetState => "user_set_state",
-			Self::UserMutateState => "user_mutate_state",
 			Self::InternalReplace => "internal_replace",
 			Self::ScheduledEventsUpdate => "scheduled_events_update",
 			Self::InputSet => "input_set",

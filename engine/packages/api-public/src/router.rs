@@ -20,6 +20,8 @@ use crate::{
 		actors::delete::delete,
 		actors::list_names::list_names,
 		actors::get_or_create::get_or_create,
+		actors::import_export::export,
+		actors::import_export::import,
 		actors::kv_get::kv_get,
 		actors::sleep::sleep,
 		actors::reschedule::reschedule,
@@ -87,6 +89,14 @@ pub async fn router(
 			.route(
 				"/actors",
 				axum::routing::put(actors::get_or_create::get_or_create),
+			)
+			.route(
+				"/admin/actors/export",
+				axum::routing::post(actors::import_export::export),
+			)
+			.route(
+				"/admin/actors/import",
+				axum::routing::post(actors::import_export::import),
 			)
 			.route(
 				"/actors/{actor_id}",

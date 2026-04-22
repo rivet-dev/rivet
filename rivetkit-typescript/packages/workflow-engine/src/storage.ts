@@ -40,6 +40,9 @@ import type {
 	WorkflowHistorySnapshot,
 } from "./types.js";
 
+export const MAX_KV_BATCH_ENTRIES = 128;
+export const MAX_KV_BATCH_PAYLOAD_BYTES = 976 * 1024;
+
 /**
  * Create an empty storage instance.
  */
@@ -238,6 +241,8 @@ export async function flush(
 	pendingDeletions?: PendingDeletions,
 ): Promise<void> {
 	const writes: KVWrite[] = [];
+	const dirtyEntries: Entry[] = [];
+	const dirtyMetadata: EntryMetadata[] = [];
 	let historyUpdated = false;
 
 	// Flush only new names (those added since last flush)
@@ -263,7 +268,7 @@ export async function flush(
 				key: buildHistoryKey(entry.location),
 				value: serializeEntry(entry),
 			});
-			entry.dirty = false;
+			dirtyEntries.push(entry);
 			historyUpdated = true;
 		}
 	}
@@ -275,7 +280,7 @@ export async function flush(
 				key: buildEntryMetadataKey(id),
 				value: serializeEntryMetadata(metadata),
 			});
-			metadata.dirty = false;
+			dirtyMetadata.push(metadata);
 			historyUpdated = true;
 		}
 	}
@@ -313,7 +318,9 @@ export async function flush(
 	}
 
 	if (writes.length > 0) {
-		await driver.batch(writes);
+		for (const chunk of splitBatchWrites(writes)) {
+			await driver.batch(chunk);
+		}
 	}
 
 	// Apply pending deletions after the batch write. These are collected
@@ -336,6 +343,12 @@ export async function flush(
 	}
 
 	// Update flushed tracking after successful write
+	for (const entry of dirtyEntries) {
+		entry.dirty = false;
+	}
+	for (const metadata of dirtyMetadata) {
+		metadata.dirty = false;
+	}
 	storage.flushedNameCount = storage.nameRegistry.length;
 	storage.flushedState = storage.state;
 	storage.flushedOutput = storage.output;
@@ -344,6 +357,40 @@ export async function flush(
 	if (historyUpdated && onHistoryUpdated) {
 		onHistoryUpdated();
 	}
+}
+
+function splitBatchWrites(writes: KVWrite[]): KVWrite[][] {
+	const chunks: KVWrite[][] = [];
+	let chunk: KVWrite[] = [];
+	let chunkBytes = 0;
+
+	for (const write of writes) {
+		const writeBytes = write.key.byteLength + write.value.byteLength;
+		if (writeBytes > MAX_KV_BATCH_PAYLOAD_BYTES) {
+			throw new Error(
+				`KV batch write is ${writeBytes} bytes, exceeding the ${MAX_KV_BATCH_PAYLOAD_BYTES} byte limit`,
+			);
+		}
+
+		if (
+			chunk.length >= MAX_KV_BATCH_ENTRIES ||
+			(chunk.length > 0 &&
+				chunkBytes + writeBytes > MAX_KV_BATCH_PAYLOAD_BYTES)
+		) {
+			chunks.push(chunk);
+			chunk = [];
+			chunkBytes = 0;
+		}
+
+		chunk.push(write);
+		chunkBytes += writeBytes;
+	}
+
+	if (chunk.length > 0) {
+		chunks.push(chunk);
+	}
+
+	return chunks;
 }
 
 /**

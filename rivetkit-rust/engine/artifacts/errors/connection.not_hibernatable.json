@@ -1,0 +1,5 @@
+{
+  "code": "not_hibernatable",
+  "group": "connection",
+  "message": "Connection is not hibernatable"
+}

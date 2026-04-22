@@ -1,15 +1,15 @@
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant};
 
+use parking_lot::Mutex;
 use scc::HashMap as SccHashMap;
 
 const WARNING_WINDOW: Duration = Duration::from_secs(30);
 const WARNING_LIMIT: usize = 3;
 
-static GLOBAL_WARNINGS: OnceLock<SccHashMap<String, Arc<Mutex<WarningWindow>>>> =
-	OnceLock::new();
-static ACTOR_WARNINGS: OnceLock<SccHashMap<String, Arc<Mutex<WarningWindow>>>> =
-	OnceLock::new();
+// Forced-sync: warning windows are updated from synchronous diagnostics paths.
+static GLOBAL_WARNINGS: OnceLock<SccHashMap<String, Arc<Mutex<WarningWindow>>>> = OnceLock::new();
+static ACTOR_WARNINGS: OnceLock<SccHashMap<String, Arc<Mutex<WarningWindow>>>> = OnceLock::new();
 
 #[derive(Debug)]
 pub(crate) struct ActorDiagnostics {
@@ -26,16 +26,8 @@ impl ActorDiagnostics {
 	}
 
 	pub(crate) fn record(&self, kind: &'static str) -> Option<WarningSuppression> {
-		let per_actor = record_limited_warning(
-			&self.warnings,
-			kind.to_owned(),
-			Instant::now(),
-		);
-		let global = record_limited_warning(
-			global_warnings(),
-			kind.to_owned(),
-			Instant::now(),
-		);
+		let per_actor = record_limited_warning(&self.warnings, kind.to_owned(), Instant::now());
+		let global = record_limited_warning(global_warnings(), kind.to_owned(), Instant::now());
 
 		if per_actor.emit && global.emit {
 			Some(WarningSuppression {
@@ -55,11 +47,7 @@ pub(crate) fn record_actor_warning(
 ) -> Option<WarningSuppression> {
 	let actor_key = format!("{actor_id}:{kind}");
 	let per_actor = record_limited_warning(actor_warnings(), actor_key, Instant::now());
-	let global = record_limited_warning(
-		global_warnings(),
-		kind.to_owned(),
-		Instant::now(),
-	);
+	let global = record_limited_warning(global_warnings(), kind.to_owned(), Instant::now());
 
 	if per_actor.emit && global.emit {
 		Some(WarningSuppression {
@@ -142,10 +130,7 @@ fn record_limited_warning(
 			window
 		});
 
-	window
-		.lock()
-		.expect("warning rate-limit window lock poisoned")
-		.record(now)
+	window.lock().record(now)
 }
 
 fn global_warnings() -> &'static SccHashMap<String, Arc<Mutex<WarningWindow>>> {
