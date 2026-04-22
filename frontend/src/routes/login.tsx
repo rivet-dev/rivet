@@ -4,6 +4,7 @@ import { z } from "zod";
 import { Login } from "@/app/login";
 import { Logo } from "@/app/logo";
 import { authClient, redirectToOrganization } from "@/lib/auth";
+import { features } from "@/lib/features";
 
 export const Route = createFileRoute("/login")({
 	component: RouteComponent,
@@ -16,11 +17,13 @@ export const Route = createFileRoute("/login")({
 			throw redirect({ to: ".", search: { emailVerified: undefined } });
 		}
 
-		const session = await authClient.getSession();
-		if (session.data) {
-			await redirectToOrganization({
-				from: "from" in search ? (search.from as string) : undefined,
-			});
+		if (features.auth) {
+			const session = await authClient.getSession();
+			if (session.data) {
+				await redirectToOrganization({
+					from: "from" in search ? (search.from as string) : undefined,
+				});
+			}
 		}
 	},
 });
