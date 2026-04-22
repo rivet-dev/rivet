@@ -21,6 +21,7 @@ import {
 } from "react";
 import {
 	cn,
+	ShimmerLine,
 	Tabs,
 	TabsContent,
 	TabsList,
@@ -63,17 +64,25 @@ interface ActorsActorDetailsProps {
 export const ActorsActorDetails = memo(
 	({ tab, onTabChange, actorId }: ActorsActorDetailsProps) => {
 		return (
-			<GuardConnectableInspector actorId={actorId}>
-				<ActorDetailsSettingsProvider>
-					<div className="flex flex-col h-full flex-1">
-						<ActorTabs
-							actorId={actorId}
-							tab={tab}
-							onTabChange={onTabChange}
-						/>
-					</div>
-				</ActorDetailsSettingsProvider>
-			</GuardConnectableInspector>
+			<Suspense fallback={
+				<div className="flex flex-col h-full flex-1">
+					<ActorTabs disabled className="relative">
+				 		<ShimmerLine className="top-0" /> 
+					</ActorTabs>
+				</div>
+			}>
+				<GuardConnectableInspector actorId={actorId}>
+					<ActorDetailsSettingsProvider>
+						<div className="flex flex-col h-full flex-1">
+							<ActorTabs
+								actorId={actorId}
+								tab={tab}
+								onTabChange={onTabChange}
+							/>
+						</div>
+					</ActorDetailsSettingsProvider>
+				</GuardConnectableInspector>
+			</Suspense>
 		);
 	},
 );
