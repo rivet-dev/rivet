@@ -6,7 +6,6 @@ import {
 	faPencil,
 	faRunning,
 	faSignalStream,
-	faSparkles,
 	Icon,
 	type IconProp,
 } from "@rivet-gg/icons";
@@ -18,6 +17,32 @@ import {
 	DialogContent,
 	DialogTitle,
 } from "@/components";
+
+function AnimatedSparkles({ className }: { className?: string }) {
+	return (
+		<svg
+			viewBox="0 0 24 24"
+			className={className}
+			fill="currentColor"
+			aria-hidden="true"
+		>
+			<path
+				className="animate-billing-sparkle"
+				d="M8 6 L9.25 10.75 L14 12 L9.25 13.25 L8 18 L6.75 13.25 L2 12 L6.75 10.75 Z"
+			/>
+			<path
+				className="animate-billing-sparkle"
+				style={{ animationDelay: "0.7s" }}
+				d="M18 3 L18.65 5.35 L21 6 L18.65 6.65 L18 9 L17.35 6.65 L15 6 L17.35 5.35 Z"
+			/>
+			<path
+				className="animate-billing-sparkle"
+				style={{ animationDelay: "1.4s" }}
+				d="M18 16.5 L18.55 18.45 L20.5 19 L18.55 19.55 L18 21.5 L17.45 19.55 L15.5 19 L17.45 18.45 Z"
+			/>
+		</svg>
+	);
+}
 
 // -- Plan Summary Card --
 
@@ -43,12 +68,20 @@ function PlanSummaryCard({ onUpgrade }: { onUpgrade: () => void }) {
 						Perfect for exploring Rivet. Upgrade anytime to unlock
 						more capacity and support.
 					</p>
-					<div className="mt-5 flex items-center gap-2">
-						<Button size="sm" className="gap-1.5" onClick={onUpgrade}>
-							<Icon icon={faSparkles} className="w-3" />
+					<div className="mt-6 flex items-center gap-2">
+						<Button
+							size="sm"
+							className="h-8 gap-1.5 px-3.5 bg-foreground text-background hover:bg-foreground/90"
+							onClick={onUpgrade}
+						>
+							<AnimatedSparkles className="w-3 h-3" />
 							Upgrade plan
 						</Button>
-						<Button variant="ghost" size="sm" className="gap-1.5">
+						<Button
+							variant="ghost"
+							size="sm"
+							className="h-8 gap-1.5 px-3"
+						>
 							Manage billing
 							<Icon icon={faArrowUpRight} className="w-3" />
 						</Button>
@@ -267,7 +300,11 @@ function PlanCard({ plan }: { plan: Plan }) {
 			<Button
 				variant={plan.ctaVariant ?? "default"}
 				size="sm"
-				className="w-full mt-6"
+				className={cn(
+					"w-full mt-6",
+					(plan.ctaVariant ?? "default") === "default" &&
+						"bg-foreground text-background hover:bg-foreground/90",
+				)}
 				disabled={plan.current}
 			>
 				{plan.ctaLabel}

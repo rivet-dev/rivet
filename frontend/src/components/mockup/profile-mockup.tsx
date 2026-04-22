@@ -1,6 +1,5 @@
 import {
 	faCircleUser,
-	faEllipsisVertical,
 	faGoogle,
 	faPlus,
 	faShield,
@@ -122,18 +121,6 @@ function Field({
 	);
 }
 
-function OptionsButton() {
-	return (
-		<button
-			type="button"
-			className="text-muted-foreground hover:text-foreground rounded p-1 -m-1"
-			aria-label="Options"
-		>
-			<Icon icon={faEllipsisVertical} className="w-3.5" />
-		</button>
-	);
-}
-
 function ProfileSection() {
 	return (
 		<Card
@@ -157,16 +144,13 @@ function ProfileSection() {
 			</Field>
 			<Field label="Email">
 				<div className="space-y-2">
-					<div className="flex items-center justify-between gap-3">
-						<div className="flex items-center gap-2 min-w-0">
-							<span className="text-sm text-foreground truncate">
-								nicholas@rivet.dev
-							</span>
-							<span className="inline-flex shrink-0 items-center rounded-full border border-border bg-muted px-1.5 py-px text-[10px] font-medium text-muted-foreground">
-								Primary
-							</span>
-						</div>
-						<OptionsButton />
+					<div className="flex items-center gap-2 min-w-0">
+						<span className="text-sm text-foreground truncate">
+							nicholas@rivet.dev
+						</span>
+						<span className="inline-flex shrink-0 items-center rounded-full border border-border bg-muted px-1.5 py-px text-[10px] font-medium text-muted-foreground">
+							Primary
+						</span>
 					</div>
 					<button
 						type="button"
@@ -178,21 +162,16 @@ function ProfileSection() {
 				</div>
 			</Field>
 			<Field label="Connected accounts" last>
-				<div className="flex items-center justify-between gap-3">
-					<div className="flex items-center gap-2 min-w-0">
-						<Icon
-							icon={faGoogle}
-							className="w-3.5 text-muted-foreground shrink-0"
-						/>
-						<span className="text-sm text-foreground">Google</span>
-						<span className="text-muted-foreground/50 text-sm">
-							·
-						</span>
-						<span className="text-sm text-muted-foreground truncate">
-							nicholas@rivet.dev
-						</span>
-					</div>
-					<OptionsButton />
+				<div className="flex items-center gap-2 min-w-0">
+					<Icon
+						icon={faGoogle}
+						className="w-3.5 text-muted-foreground shrink-0"
+					/>
+					<span className="text-sm text-foreground">Google</span>
+					<span className="text-muted-foreground/50 text-sm">·</span>
+					<span className="text-sm text-muted-foreground truncate">
+						nicholas@rivet.dev
+					</span>
 				</div>
 			</Field>
 		</Card>

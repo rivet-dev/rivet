@@ -1,7 +1,7 @@
 import { faMoon, Icon } from "@rivet-gg/icons";
 import { useQuery } from "@tanstack/react-query";
 import type { ComponentPropsWithRef } from "react";
-import { cn, Ping } from "@/components";
+import { cn } from "@/components";
 import { useDataProvider } from "./data-provider";
 import type { ActorId, ActorStatus } from "./queries";
 
@@ -32,15 +32,13 @@ export const ActorStatusIndicator = ({
 	...props
 }: ActorStatusIndicatorProps) => {
 	if (status === "sleeping") {
-		return <Icon icon={faMoon} className="text-indigo-400" />;
-	}
-
-	if (status === "running") {
 		return (
-			<Ping
-				variant="success"
-				{...props}
-				className={cn("relative right-auto", props.className)}
+			<Icon
+				icon={faMoon}
+				className={cn(
+					"text-indigo-400 text-[10px]",
+					props.className,
+				)}
 			/>
 		);
 	}
@@ -51,6 +49,7 @@ export const ActorStatusIndicator = ({
 			className={cn(
 				"size-2 rounded-full",
 				{
+					"bg-green-500": status === "running",
 					"bg-blue-600 animate-pulse": status === "starting",
 					"bg-destructive":
 						status === "crashed" || status === "crash-loop",

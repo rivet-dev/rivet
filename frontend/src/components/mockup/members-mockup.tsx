@@ -1,19 +1,32 @@
 import {
+	faChevronDown,
+	faCheck,
 	faEllipsisVertical,
 	faUserPlus,
 	Icon,
 } from "@rivet-gg/icons";
-import { Button, cn } from "@/components";
+import { useState } from "react";
+import {
+	Button,
+	cn,
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from "@/components";
+
+type AssignableRole = "Admin" | "Member";
+type MemberRole = "Owner" | AssignableRole;
 
 interface Member {
 	name: string;
 	email: string;
-	role: "Owner" | "Admin" | "Member";
+	role: MemberRole;
 	joinedAt: string;
 	color: string;
 }
 
-const MEMBERS: Member[] = [
+const INITIAL_MEMBERS: Member[] = [
 	{
 		name: "Nicholas Kissel",
 		email: "nicholas@rivet.dev",
@@ -27,13 +40,6 @@ const MEMBERS: Member[] = [
 		role: "Admin",
 		joinedAt: "Jan 12, 2025",
 		color: "bg-emerald-500",
-	},
-	{
-		name: "Forest Anderson",
-		email: "forest@rivet.dev",
-		role: "Admin",
-		joinedAt: "Feb 3, 2025",
-		color: "bg-amber-500",
 	},
 	{
 		name: "Ava Chen",
@@ -63,25 +69,92 @@ function Avatar({ name, color }: { name: string; color: string }) {
 	);
 }
 
-function RoleBadge({ role }: { role: Member["role"] }) {
-	const variants: Record<Member["role"], string> = {
-		Owner: "bg-primary/10 text-primary border-primary/20",
-		Admin: "bg-muted-foreground/10 text-foreground border-border",
-		Member: "bg-muted-foreground/5 text-muted-foreground border-border",
-	};
+function OwnerBadge() {
 	return (
-		<span
-			className={cn(
-				"inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium",
-				variants[role],
-			)}
-		>
-			{role}
+		<span className="inline-flex items-center rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">
+			Owner
 		</span>
 	);
 }
 
+function RoleSelect({
+	value,
+	onChange,
+}: {
+	value: AssignableRole;
+	onChange: (role: AssignableRole) => void;
+}) {
+	const roles: AssignableRole[] = ["Admin", "Member"];
+	return (
+		<DropdownMenu>
+			<DropdownMenuTrigger asChild>
+				<Button
+					variant="outline"
+					size="sm"
+					className="h-7 px-2.5 gap-1.5 text-xs font-normal"
+				>
+					{value}
+					<Icon icon={faChevronDown} className="w-2.5" />
+				</Button>
+			</DropdownMenuTrigger>
+			<DropdownMenuContent align="start" className="w-36">
+				{roles.map((role) => (
+					<DropdownMenuItem
+						key={role}
+						onSelect={() => onChange(role)}
+						className="text-xs"
+					>
+						<span className="flex-1">{role}</span>
+						{role === value ? (
+							<Icon
+								icon={faCheck}
+								className="w-3 text-muted-foreground"
+							/>
+						) : null}
+					</DropdownMenuItem>
+				))}
+			</DropdownMenuContent>
+		</DropdownMenu>
+	);
+}
+
+function MemberRowMenu({ onRemove }: { onRemove: () => void }) {
+	return (
+		<DropdownMenu>
+			<DropdownMenuTrigger asChild>
+				<button
+					type="button"
+					className="text-muted-foreground hover:text-foreground rounded p-1 -m-1"
+					aria-label="Member options"
+				>
+					<Icon icon={faEllipsisVertical} className="w-3.5" />
+				</button>
+			</DropdownMenuTrigger>
+			<DropdownMenuContent align="end" className="w-40">
+				<DropdownMenuItem
+					onSelect={onRemove}
+					className="text-xs text-destructive focus:text-destructive focus:bg-destructive/10"
+				>
+					Remove member
+				</DropdownMenuItem>
+			</DropdownMenuContent>
+		</DropdownMenu>
+	);
+}
+
 export function MembersContent() {
+	const [members, setMembers] = useState<Member[]>(INITIAL_MEMBERS);
+
+	const updateRole = (email: string, role: AssignableRole) => {
+		setMembers((prev) =>
+			prev.map((m) => (m.email === email ? { ...m, role } : m)),
+		);
+	};
+
+	const removeMember = (email: string) => {
+		setMembers((prev) => prev.filter((m) => m.email !== email));
+	};
+
 	return (
 		<div className="space-y-6 pb-10">
 			<div className="flex items-center justify-end">
@@ -108,7 +181,7 @@ export function MembersContent() {
 						<span>Role</span>
 						<span className="w-6" />
 					</div>
-					{MEMBERS.map((member) => (
+					{members.map((member) => (
 						<div
 							key={member.email}
 							className="grid grid-cols-[2fr_1.5fr_1fr_auto] items-center gap-4 px-6 py-3.5 text-sm border-b dark:border-white/10 last:border-b-0 hover:bg-muted/20 transition-colors"
@@ -131,18 +204,24 @@ export function MembersContent() {
 								{member.email}
 							</span>
 							<span>
-								<RoleBadge role={member.role} />
+								{member.role === "Owner" ? (
+									<OwnerBadge />
+								) : (
+									<RoleSelect
+										value={member.role}
+										onChange={(role) =>
+											updateRole(member.email, role)
+										}
+									/>
+								)}
 							</span>
-							<button
-								type="button"
-								className="text-muted-foreground hover:text-foreground rounded p-1 -m-1"
-								aria-label="Options"
-							>
-								<Icon
-									icon={faEllipsisVertical}
-									className="w-3.5"
+							{member.role === "Owner" ? (
+								<span className="w-6" />
+							) : (
+								<MemberRowMenu
+									onRemove={() => removeMember(member.email)}
 								/>
-							</button>
+							)}
 						</div>
 					))}
 				</div>
