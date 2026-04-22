@@ -18,6 +18,186 @@ pub(crate) fn new_with_kv(
 	)
 }
 
+#[test]
+fn build_applies_actor_config_to_owned_subsystems() {
+	let mut config = ActorConfig::default();
+	config.max_queue_size = 7;
+	config.max_queue_message_size = 11;
+	config.create_conn_state_timeout = std::time::Duration::from_millis(123);
+	config.connection_liveness_timeout = std::time::Duration::from_millis(456);
+	config.sleep_timeout = std::time::Duration::from_millis(789);
+	config.no_sleep = true;
+
+	let ctx = ActorContext::build(
+		"configured-actor".to_owned(),
+		"configured".to_owned(),
+		Vec::new(),
+		"local".to_owned(),
+		config.clone(),
+		Kv::default(),
+		SqliteDb::default(),
+	);
+
+	let queue_config = ctx.queue_config_for_tests();
+	assert_eq!(queue_config.max_queue_size, config.max_queue_size);
+	assert_eq!(
+		queue_config.max_queue_message_size,
+		config.max_queue_message_size
+	);
+
+	let connection_config = ctx.connection_config_for_tests();
+	assert_eq!(
+		connection_config.create_conn_state_timeout,
+		config.create_conn_state_timeout
+	);
+	assert_eq!(
+		connection_config.connection_liveness_timeout,
+		config.connection_liveness_timeout
+	);
+
+	let sleep_config = ctx.sleep_config();
+	assert_eq!(sleep_config.sleep_timeout, config.sleep_timeout);
+	assert_eq!(sleep_config.no_sleep, config.no_sleep);
+}
+
+#[tokio::test]
+async fn inspector_attach_guard_notifies_on_threshold_edges() {
+	let ctx = ActorContext::new("inspector-actor", "actor", Vec::new(), "local");
+	let attach_count = std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0));
+	let (overlay_tx, _) = tokio::sync::broadcast::channel(4);
+	ctx.configure_inspector_runtime(std::sync::Arc::clone(&attach_count), overlay_tx);
+	let (lifecycle_tx, mut lifecycle_rx) = tokio::sync::mpsc::channel(4);
+	ctx.configure_lifecycle_events(Some(lifecycle_tx));
+
+	let first_guard = ctx
+		.inspector_attach()
+		.expect("inspector runtime should be configured");
+	assert_eq!(ctx.inspector_attach_count(), 1);
+	assert!(matches!(
+		lifecycle_rx.try_recv(),
+		Ok(LifecycleEvent::InspectorAttachmentsChanged)
+	));
+
+	let second_guard = ctx
+		.inspector_attach()
+		.expect("inspector runtime should be configured");
+	assert_eq!(ctx.inspector_attach_count(), 2);
+	assert!(matches!(
+		lifecycle_rx.try_recv(),
+		Err(tokio::sync::mpsc::error::TryRecvError::Empty)
+	));
+
+	drop(second_guard);
+	assert_eq!(ctx.inspector_attach_count(), 1);
+	assert!(matches!(
+		lifecycle_rx.try_recv(),
+		Err(tokio::sync::mpsc::error::TryRecvError::Empty)
+	));
+
+	drop(first_guard);
+	assert_eq!(ctx.inspector_attach_count(), 0);
+	assert!(matches!(
+		lifecycle_rx.try_recv(),
+		Ok(LifecycleEvent::InspectorAttachmentsChanged)
+	));
+}
+
+#[tokio::test]
+async fn disconnect_callback_guard_blocks_sleep_until_drop() {
+	let ctx = ActorContext::new("actor-disconnect", "actor", Vec::new(), "local");
+	ctx.set_ready(true);
+	ctx.set_started(true);
+
+	let (started_tx, started_rx) = tokio::sync::oneshot::channel();
+	let (release_tx, release_rx) = tokio::sync::oneshot::channel();
+	let task = tokio::spawn({
+		let ctx = ctx.clone();
+		async move {
+			ctx.with_disconnect_callback(|| async move {
+				let _ = started_tx.send(());
+				let _ = release_rx.await;
+			})
+			.await;
+		}
+	});
+
+	started_rx.await.expect("disconnect callback should start");
+	assert_eq!(ctx.pending_disconnect_count(), 1);
+	assert_eq!(ctx.can_sleep().await, CanSleep::ActiveDisconnectCallbacks);
+
+	release_tx
+		.send(())
+		.expect("disconnect callback should still be waiting");
+	task.await.expect("disconnect callback task should join");
+
+	assert_eq!(ctx.pending_disconnect_count(), 0);
+	assert_eq!(ctx.can_sleep().await, CanSleep::Yes);
+}
+
+#[tokio::test(start_paused = true)]
+async fn disconnect_callback_completion_resets_sleep_timer() {
+	let ctx = ActorContext::new("actor-disconnect-timer", "actor", Vec::new(), "local");
+	let mut config = ActorConfig::default();
+	config.sleep_timeout = std::time::Duration::from_secs(5);
+	ctx.configure_sleep(config);
+	ctx.set_ready(true);
+	ctx.set_started(true);
+
+	let (started_tx, started_rx) = tokio::sync::oneshot::channel();
+	let (release_tx, release_rx) = tokio::sync::oneshot::channel();
+	let task = tokio::spawn({
+		let ctx = ctx.clone();
+		async move {
+			ctx.with_disconnect_callback(|| async move {
+				let _ = started_tx.send(());
+				let _ = release_rx.await;
+			})
+			.await;
+		}
+	});
+	started_rx.await.expect("disconnect callback should start");
+
+	tokio::time::advance(std::time::Duration::from_secs(10)).await;
+	tokio::task::yield_now().await;
+	assert_eq!(ctx.sleep_request_count(), 0);
+
+	release_tx
+		.send(())
+		.expect("disconnect callback should still be waiting");
+	task.await.expect("disconnect callback task should join");
+
+	tokio::time::advance(std::time::Duration::from_secs(5)).await;
+	tokio::task::yield_now().await;
+	tokio::task::yield_now().await;
+	assert_eq!(ctx.sleep_request_count(), 1);
+}
+
+#[tokio::test(start_paused = true)]
+async fn active_run_handler_blocks_sleep_until_cleared() {
+	let ctx = ActorContext::new("actor-run-active", "actor", Vec::new(), "local");
+	let mut config = ActorConfig::default();
+	config.sleep_timeout = std::time::Duration::from_secs(5);
+	ctx.configure_sleep(config);
+	ctx.set_ready(true);
+	ctx.set_started(true);
+
+	ctx.begin_run_handler();
+	assert_eq!(ctx.can_sleep().await, CanSleep::ActiveRunHandler);
+
+	tokio::time::advance(std::time::Duration::from_secs(10)).await;
+	tokio::task::yield_now().await;
+	assert_eq!(ctx.sleep_request_count(), 0);
+
+	ctx.end_run_handler();
+	assert_eq!(ctx.can_sleep().await, CanSleep::Yes);
+	tokio::task::yield_now().await;
+
+	tokio::time::advance(std::time::Duration::from_secs(5)).await;
+	tokio::task::yield_now().await;
+	tokio::task::yield_now().await;
+	assert_eq!(ctx.sleep_request_count(), 1);
+}
+
 mod moved_tests {
 	use std::collections::{BTreeSet, HashMap, HashSet};
 	use std::sync::atomic::{AtomicUsize, Ordering};
@@ -26,8 +206,8 @@ mod moved_tests {
 
 	use anyhow::anyhow;
 	use rivet_envoy_client::config::{
-		BoxFuture, EnvoyCallbacks, EnvoyConfig, HttpRequest, HttpResponse,
-		WebSocketHandler, WebSocketSender,
+		BoxFuture, EnvoyCallbacks, EnvoyConfig, HttpRequest, HttpResponse, WebSocketHandler,
+		WebSocketSender,
 	};
 	use rivet_envoy_client::context::{SharedActorEntry, SharedContext, WsTxMessage};
 	use rivet_envoy_client::handle::EnvoyHandle;
@@ -37,8 +217,8 @@ mod moved_tests {
 	use tokio::time::{Instant, sleep};
 
 	use super::ActorContext;
-	use crate::actor::callbacks::ActorEvent;
 	use crate::actor::connection::ConnHandle;
+	use crate::actor::messages::ActorEvent;
 	use crate::actor::state::{PersistedActor, PersistedScheduleEvent};
 	use crate::types::ListOpts;
 
@@ -91,9 +271,7 @@ mod moved_tests {
 			_is_restoring_hibernatable: bool,
 			_sender: WebSocketSender,
 		) -> BoxFuture<anyhow::Result<WebSocketHandler>> {
-			Box::pin(async {
-				anyhow::bail!("websocket should not be called in context tests")
-			})
+			Box::pin(async { anyhow::bail!("websocket should not be called in context tests") })
 		}
 
 		fn can_hibernate(
@@ -140,10 +318,13 @@ mod moved_tests {
 			envoy_tx,
 			actors: Arc::new(std::sync::Mutex::new(HashMap::new())),
 			live_tunnel_requests,
-			pending_hibernation_restores: Arc::new(std::sync::Mutex::new(
-				HashMap::from([(actor_id.to_owned(), pending_restores)]),
+			pending_hibernation_restores: Arc::new(std::sync::Mutex::new(HashMap::from([(
+				actor_id.to_owned(),
+				pending_restores,
+			)]))),
+			ws_tx: Arc::new(tokio::sync::Mutex::new(
+				None::<mpsc::UnboundedSender<WsTxMessage>>,
 			)),
-			ws_tx: Arc::new(tokio::sync::Mutex::new(None::<mpsc::UnboundedSender<WsTxMessage>>)),
 			protocol_metadata: Arc::new(tokio::sync::Mutex::new(None)),
 			shutting_down: std::sync::atomic::AtomicBool::new(false),
 		});
@@ -162,6 +343,35 @@ mod moved_tests {
 					),
 				},
 			);
+		EnvoyHandle::from_shared(shared)
+	}
+
+	fn build_client_envoy_handle() -> EnvoyHandle {
+		let (envoy_tx, _envoy_rx) = mpsc::unbounded_channel();
+		let shared = Arc::new(SharedContext {
+			config: EnvoyConfig {
+				version: 1,
+				endpoint: "http://127.0.0.1:7777".to_string(),
+				token: Some("secret".to_string()),
+				namespace: "test-ns".to_string(),
+				pool_name: "test-pool".to_string(),
+				prepopulate_actor_names: HashMap::new(),
+				metadata: None,
+				not_global: true,
+				debug_latency_ms: None,
+				callbacks: Arc::new(IdleEnvoyCallbacks),
+			},
+			envoy_key: "test-envoy".to_string(),
+			envoy_tx,
+			actors: Arc::new(std::sync::Mutex::new(HashMap::new())),
+			live_tunnel_requests: Arc::new(std::sync::Mutex::new(HashMap::new())),
+			pending_hibernation_restores: Arc::new(std::sync::Mutex::new(HashMap::new())),
+			ws_tx: Arc::new(tokio::sync::Mutex::new(
+				None::<mpsc::UnboundedSender<WsTxMessage>>,
+			)),
+			protocol_metadata: Arc::new(tokio::sync::Mutex::new(None)),
+			shutting_down: std::sync::atomic::AtomicBool::new(false),
+		});
 		EnvoyHandle::from_shared(shared)
 	}
 
@@ -203,16 +413,29 @@ mod moved_tests {
 
 	#[tokio::test]
 	async fn foreign_runtime_only_helpers_fail_explicitly_when_unconfigured() {
-		let ctx = ActorContext::default();
+		let ctx = ActorContext::new("unconfigured-actor", "actor", Vec::new(), "local");
 
 		assert!(ctx.db_exec("select 1").await.is_err());
 		assert!(ctx.db_query("select 1", None).await.is_err());
 		assert!(ctx.db_run("select 1", None).await.is_err());
-		assert!(ctx.client_call(b"call").await.is_err());
+		assert_eq!(ctx.client_endpoint(), None);
+		assert_eq!(ctx.client_token(), None);
 		assert!(ctx.set_alarm(Some(1)).is_err());
-		assert!(ctx
-			.ack_hibernatable_websocket_message(b"gateway", b"request", 1)
-			.is_err());
+		assert!(
+			ctx.ack_hibernatable_websocket_message(b"gateway", b"request", 1)
+				.is_err()
+		);
+	}
+
+	#[test]
+	fn client_accessors_read_config_from_wired_envoy_handle() {
+		let ctx = ActorContext::new("client-actor", "actor", Vec::new(), "local");
+		ctx.configure_envoy(build_client_envoy_handle(), Some(1));
+
+		assert_eq!(ctx.client_endpoint(), Some("http://127.0.0.1:7777"));
+		assert_eq!(ctx.client_token(), Some("secret"));
+		assert_eq!(ctx.client_namespace(), Some("test-ns"));
+		assert_eq!(ctx.client_pool_name(), Some("test-pool"));
 	}
 
 	#[tokio::test]
@@ -310,7 +533,7 @@ mod moved_tests {
 			vec!["conn-removed".to_owned()]
 		);
 
-		let pending = ctx.0.connections.take_pending_hibernation_changes();
+		let pending = ctx.take_pending_hibernation_changes_inner();
 		assert_eq!(pending.updated, BTreeSet::from(["conn-updated".to_owned()]));
 		assert_eq!(pending.removed, BTreeSet::from(["conn-removed".to_owned()]));
 	}
@@ -328,22 +551,18 @@ mod moved_tests {
 			build_envoy_handle_with_live_connections(
 				"actor-live-conn",
 				7,
-				HashSet::from([[
-					1, 2, 3, 4, 5, 6, 7, 8,
-				]]),
+				HashSet::from([[1, 2, 3, 4, 5, 6, 7, 8]]),
 				Vec::new(),
 			),
 			Some(7),
 		);
 
 		assert!(
-			ctx
-				.hibernated_connection_is_live(&[1, 2, 3, 4], &[5, 6, 7, 8])
+			ctx.hibernated_connection_is_live(&[1, 2, 3, 4], &[5, 6, 7, 8])
 				.expect("matching live connection should be found")
 		);
 		assert!(
-			!ctx
-				.hibernated_connection_is_live(&[1, 2, 3, 4], &[9, 9, 9, 9])
+			!ctx.hibernated_connection_is_live(&[1, 2, 3, 4], &[9, 9, 9, 9])
 				.expect("missing live connection should return false")
 		);
 	}
@@ -375,13 +594,11 @@ mod moved_tests {
 		);
 
 		assert!(
-			ctx
-				.hibernated_connection_is_live(&[1, 2, 3, 4], &[5, 6, 7, 8])
+			ctx.hibernated_connection_is_live(&[1, 2, 3, 4], &[5, 6, 7, 8])
 				.expect("pending restore should count as a live hibernated connection")
 		);
 		assert!(
-			!ctx
-				.hibernated_connection_is_live(&[9, 9, 9, 9], &[5, 6, 7, 8])
+			!ctx.hibernated_connection_is_live(&[9, 9, 9, 9], &[5, 6, 7, 8])
 				.expect("non-matching pending restore should return false")
 		);
 	}
@@ -463,7 +680,7 @@ mod moved_tests {
 			crate::kv::Kv::new_in_memory(),
 		);
 		let fired = Arc::new(AtomicUsize::new(0));
-		ctx.schedule().set_local_alarm_callback(Some(Arc::new({
+		ctx.set_local_alarm_callback(Some(Arc::new({
 			let fired = fired.clone();
 			move || {
 				let fired = fired.clone();
@@ -503,7 +720,7 @@ mod moved_tests {
 			"local",
 			crate::kv::Kv::new_in_memory(),
 		);
-		let (events_tx, mut events_rx) = mpsc::channel(4);
+		let (events_tx, mut events_rx) = mpsc::unbounded_channel();
 		ctx.configure_actor_events(Some(events_tx));
 		ctx.load_persisted_actor(PersistedActor {
 			scheduled_events: vec![PersistedScheduleEvent {
@@ -516,7 +733,11 @@ mod moved_tests {
 		});
 
 		let recv = tokio::spawn(async move {
-			match events_rx.recv().await.expect("scheduled action event should arrive") {
+			match events_rx
+				.recv()
+				.await
+				.expect("scheduled action event should arrive")
+			{
 				ActorEvent::Action {
 					name,
 					args,
@@ -532,13 +753,12 @@ mod moved_tests {
 			}
 		});
 
-		ctx
-			.drain_overdue_scheduled_events()
+		ctx.drain_overdue_scheduled_events()
 			.await
 			.expect("draining overdue scheduled events should succeed");
 		recv.await.expect("scheduled action receiver should join");
 
-		assert!(ctx.schedule().next_event().is_none());
+		assert!(ctx.next_event().is_none());
 	}
 
 	#[tokio::test]
@@ -570,8 +790,7 @@ mod moved_tests {
 
 		assert_eq!(ctx.keep_awake_count(), 1);
 		assert!(
-			!ctx
-				.wait_for_sleep_idle_window(Instant::now() + Duration::from_millis(5))
+			!ctx.wait_for_sleep_idle_window(Instant::now() + Duration::from_millis(5))
 				.await
 		);
 		assert!(
@@ -579,9 +798,7 @@ mod moved_tests {
 				.await
 		);
 
-		keep_awake
-			.await
-			.expect("keep_awake task should complete");
+		keep_awake.await.expect("keep_awake task should complete");
 		assert_eq!(ctx.keep_awake_count(), 0);
 	}
 
@@ -595,11 +812,11 @@ mod moved_tests {
 			crate::kv::Kv::new_in_memory(),
 		);
 
-		assert_eq!(ctx.0.sleep.sleep_request_count(), 0);
+		assert_eq!(ctx.sleep_request_count(), 0);
 
 		ctx.sleep();
 		tokio::task::yield_now().await;
 
-		assert_eq!(ctx.0.sleep.sleep_request_count(), 1);
+		assert_eq!(ctx.sleep_request_count(), 1);
 	}
 }

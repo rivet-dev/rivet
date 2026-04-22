@@ -1,8 +1,7 @@
 import type { DeconstructedError } from "@/common/utils";
 
 export const INTERNAL_ERROR_CODE = "internal_error";
-export const INTERNAL_ERROR_DESCRIPTION =
-	"Internal error. Read the server logs for more details.";
+export const INTERNAL_ERROR_DESCRIPTION = "An internal error occurred";
 export type InternalErrorMetadata = Record<string, never>;
 
 export const USER_ERROR_CODE = "user_error";

@@ -2,8 +2,8 @@ use napi::bindgen_prelude::Buffer;
 use napi_derive::napi;
 use rivetkit_core::{Kv as CoreKv, ListOpts};
 
-use crate::napi_anyhow_error;
 use crate::types::{JsKvEntry, JsKvListOptions};
+use crate::{NapiInvalidArgument, napi_anyhow_error};
 
 #[napi]
 pub struct Kv {
@@ -37,7 +37,10 @@ impl Kv {
 
 	#[napi]
 	pub async fn delete(&self, key: Buffer) -> napi::Result<()> {
-		self.inner.delete(key.as_ref()).await.map_err(napi_anyhow_error)
+		self.inner
+			.delete(key.as_ref())
+			.await
+			.map_err(napi_anyhow_error)
 	}
 
 	#[napi]
@@ -97,7 +100,12 @@ impl Kv {
 		self.inner
 			.batch_get(&key_refs)
 			.await
-			.map(|values| values.into_iter().map(|value| value.map(Buffer::from)).collect())
+			.map(|values| {
+				values
+					.into_iter()
+					.map(|value| value.map(Buffer::from))
+					.collect()
+			})
 			.map_err(napi_anyhow_error)
 	}
 
@@ -107,13 +115,19 @@ impl Kv {
 			.iter()
 			.map(|entry| (entry.key.as_ref(), entry.value.as_ref()))
 			.collect();
-		self.inner.batch_put(&entry_refs).await.map_err(napi_anyhow_error)
+		self.inner
+			.batch_put(&entry_refs)
+			.await
+			.map_err(napi_anyhow_error)
 	}
 
 	#[napi]
 	pub async fn batch_delete(&self, keys: Vec<Buffer>) -> napi::Result<()> {
 		let key_refs: Vec<&[u8]> = keys.iter().map(Buffer::as_ref).collect();
-		self.inner.batch_delete(&key_refs).await.map_err(napi_anyhow_error)
+		self.inner
+			.batch_delete(&key_refs)
+			.await
+			.map_err(napi_anyhow_error)
 	}
 }
 
@@ -124,12 +138,22 @@ fn list_opts(options: Option<JsKvListOptions>) -> napi::Result<ListOpts> {
 		.unwrap_or(false);
 	let limit = match options.and_then(|options| options.limit) {
 		Some(limit) if limit < 0 => {
-			return Err(napi::Error::from_reason(
-				"kv list limit must be non-negative",
+			return Err(napi_anyhow_error(
+				NapiInvalidArgument {
+					argument: "limit".to_owned(),
+					reason: "must be non-negative".to_owned(),
+				}
+				.build(),
 			));
 		}
 		Some(limit) => Some(u32::try_from(limit).map_err(|_| {
-			napi::Error::from_reason("kv list limit exceeds u32 range")
+			napi_anyhow_error(
+				NapiInvalidArgument {
+					argument: "limit".to_owned(),
+					reason: "exceeds u32 range".to_owned(),
+				}
+				.build(),
+			)
 		})?),
 		None => None,
 	};

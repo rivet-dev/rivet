@@ -1,4 +1,4 @@
-use anyhow::{Context, Result, bail, ensure};
+use anyhow::{Context, Result, bail};
 use bytes::Bytes;
 use futures_util::{SinkExt, StreamExt};
 use http_body_util::{BodyExt, Full, Limited};
@@ -1541,7 +1541,6 @@ impl ProxyService {
 				self.state.tasks.spawn(
 					async move {
 						let req_ctx = &mut req_ctx;
-						let mut ws_hibernation_close = false;
 						let mut after_hibernation = false;
 						let mut attempts = 0u32;
 
@@ -1604,14 +1603,6 @@ impl ProxyService {
 									}
 
 									if ws_hibernate {
-										// This should be unreachable because as soon as the actor is
-										// reconnected to after hibernation the gateway will consume the close
-										// frame from the client ws stream
-										ensure!(
-											!ws_hibernation_close,
-											"should not be hibernating again after receiving a close frame during hibernation"
-										);
-
 										// After this function returns:
 										// - the route will be resolved again
 										// - the websocket will connect to the new downstream target
@@ -1626,13 +1617,40 @@ impl ProxyService {
 
 										after_hibernation = true;
 
-										// Despite receiving a close frame from the client during hibernation
-										// we are going to reconnect to the actor so that it knows the
-										// connection has closed
 										if let HibernationResult::Close = res {
 											tracing::debug!("starting hibernating websocket close");
 
-											ws_hibernation_close = true;
+											match ws_handle.send(utils::to_hyper_close(None)).await
+											{
+												Ok(_) => {
+													tracing::debug!(
+														"close frame sent successfully"
+													);
+												}
+												Err(err) => {
+													tracing::debug!(
+														?err,
+														"failed to send close frame (websocket may be already closing)"
+													);
+												}
+											}
+
+											match ws_handle.flush().await {
+												Ok(_) => {
+													tracing::debug!(
+														"websocket flushed successfully"
+													);
+												}
+												Err(err) => {
+													tracing::debug!(
+														?err,
+														"failed to flush websocket (websocket may be already closing)"
+													);
+												}
+											}
+
+											tokio::time::sleep(WEBSOCKET_CLOSE_LINGER).await;
+											break;
 										}
 									} else if attempts > req_ctx.retry.max_attempts
 										|| !utils::is_retryable_ws_error(&err)
@@ -1728,7 +1746,7 @@ impl ProxyService {
 							.release_in_flight(req_ctx.client_ip, req_ctx.in_flight_request_id)
 							.await;
 
-						Ok(())
+						Ok::<(), anyhow::Error>(())
 					}
 					.instrument(tracing::info_span!("handle_ws_task_custom_serve")),
 				);

@@ -336,6 +336,7 @@ impl PegboardGateway2 {
 						.pegboard()
 						.gateway_websocket_open_timeout_ms(),
 				),
+				false,
 			)
 			.await?;
 
@@ -371,6 +372,7 @@ impl PegboardGateway2 {
 						.pegboard()
 						.gateway_websocket_open_timeout_ms(),
 				),
+				true,
 			)
 			.await?;
 
@@ -447,11 +449,17 @@ impl PegboardGateway2 {
 		} else {
 			None
 		};
+		let tunnel_to_ws_abort_handle = tunnel_to_ws.abort_handle();
+		let ws_to_tunnel_abort_handle = ws_to_tunnel.abort_handle();
 
 		// Wait for all tasks to complete
 		let (tunnel_to_ws_res, ws_to_tunnel_res, ping_res, keepalive_res, metrics_res) = tokio::join!(
 			async {
-				let res = tunnel_to_ws.await?;
+				let res = match tunnel_to_ws.await {
+					Ok(res) => res,
+					Err(err) if err.is_cancelled() => Ok(LifecycleResult::Aborted),
+					Err(err) => Err(err.into()),
+				};
 
 				// Abort other if not aborted
 				if !matches!(res, Ok(LifecycleResult::Aborted)) {
@@ -459,6 +467,7 @@ impl PegboardGateway2 {
 
 					let _ = ping_abort_tx.send(());
 					let _ = ws_to_tunnel_abort_tx.send(());
+					ws_to_tunnel_abort_handle.abort();
 					let _ = keepalive_abort_tx.send(());
 					let _ = metrics_abort_tx.send(());
 				} else {
@@ -468,7 +477,11 @@ impl PegboardGateway2 {
 				res
 			},
 			async {
-				let res = ws_to_tunnel.await?;
+				let res = match ws_to_tunnel.await {
+					Ok(res) => res,
+					Err(err) if err.is_cancelled() => Ok(LifecycleResult::Aborted),
+					Err(err) => Err(err.into()),
+				};
 
 				// Abort other if not aborted
 				if !matches!(res, Ok(LifecycleResult::Aborted)) {
@@ -476,6 +489,7 @@ impl PegboardGateway2 {
 
 					let _ = ping_abort_tx.send(());
 					let _ = tunnel_to_ws_abort_tx.send(());
+					tunnel_to_ws_abort_handle.abort();
 					let _ = keepalive_abort_tx.send(());
 					let _ = metrics_abort_tx.send(());
 				} else {
@@ -588,6 +602,15 @@ impl PegboardGateway2 {
 				.await
 			{
 				tracing::error!(?err, "error sending close message");
+			}
+
+			if matches!(lifecycle_res, Ok(LifecycleResult::ClientClose(_))) {
+				ctx.op(pegboard::ops::actor::hibernating_request::delete::Input {
+					actor_id: self.actor_id,
+					gateway_id: self.shared_state.gateway_id(),
+					request_id,
+				})
+				.await?;
 			}
 		}
 
@@ -719,9 +742,26 @@ impl CustomServeTrait for PegboardGateway2 {
 			.await?
 		{
 			tracing::debug!("exiting hibernating due to pending messages");
+			tokio::try_join!(
+				ctx.op(pegboard::ops::actor::hibernating_request::upsert::Input {
+					actor_id: self.actor_id,
+					gateway_id: self.shared_state.gateway_id(),
+					request_id,
+				}),
+				self.shared_state.keepalive_hws(request_id),
+			)?;
 
 			return Ok(HibernationResult::Continue);
 		}
+
+		tokio::try_join!(
+			ctx.op(pegboard::ops::actor::hibernating_request::upsert::Input {
+				actor_id: self.actor_id,
+				gateway_id: self.shared_state.gateway_id(),
+				request_id,
+			}),
+			self.shared_state.keepalive_hws(request_id),
+		)?;
 
 		// Start keepalive task
 		let (keepalive_abort_tx, keepalive_abort_rx) = watch::channel(());
@@ -746,6 +786,17 @@ impl CustomServeTrait for PegboardGateway2 {
 
 		let _ = keepalive_abort_tx.send(());
 		let _ = keepalive_handle.await;
+
+		if matches!(res, Ok(HibernationResult::Continue)) {
+			tokio::try_join!(
+				ctx.op(pegboard::ops::actor::hibernating_request::upsert::Input {
+					actor_id: self.actor_id,
+					gateway_id: self.shared_state.gateway_id(),
+					request_id,
+				}),
+				self.shared_state.keepalive_hws(request_id),
+			)?;
+		}
 
 		let (delete_res, _) = tokio::join!(
 			async {
@@ -855,9 +906,12 @@ async fn hibernate_ws(ws_rx: Arc<Mutex<WebSocketReceiver>>) -> Result<Hibernatio
 				Ok(Message::Binary(_)) | Ok(Message::Text(_)) => {
 					return Ok(HibernationResult::Continue);
 				}
-				// We don't care about the close frame because we're currently hibernating; there is no
-				// downstream to send the close frame to.
-				Ok(Message::Close(_)) => return Ok(HibernationResult::Close),
+				// Consume the close frame so the websocket stack can complete the
+				// close handshake while the actor is hibernating.
+				Ok(Message::Close(_)) => {
+					pinned.try_next().await?;
+					return Ok(HibernationResult::Close);
+				}
 				// Ignore rest
 				_ => {
 					pinned.try_next().await?;
@@ -875,41 +929,75 @@ async fn wait_for_envoy_websocket_open(
 	stopped_sub: &mut message::SubscriptionHandle<pegboard::workflows::actor2::Stopped>,
 	request_id: protocol::RequestId,
 	websocket_open_timeout: Duration,
+	stop_on_actor_stopped: bool,
 ) -> Result<protocol::ToRivetWebSocketOpen> {
 	let fut = async {
 		loop {
-			tokio::select! {
-				res = msg_rx.recv() => {
-					if let Some(msg) = res {
-						match msg {
-							protocol::ToRivetTunnelMessageKind::ToRivetWebSocketOpen(msg) => {
-								return anyhow::Ok(msg);
+			if stop_on_actor_stopped {
+				tokio::select! {
+					res = msg_rx.recv() => {
+						if let Some(msg) = res {
+							match msg {
+								protocol::ToRivetTunnelMessageKind::ToRivetWebSocketOpen(msg) => {
+									return anyhow::Ok(msg);
+								}
+								protocol::ToRivetTunnelMessageKind::ToRivetWebSocketClose(close) => {
+									tracing::warn!(?close, "websocket closed before opening");
+									return Err(WebSocketServiceUnavailable.build());
+								}
+								_ => {
+									tracing::warn!(
+										"received unexpected message while waiting for websocket open"
+									);
+								}
 							}
-							protocol::ToRivetTunnelMessageKind::ToRivetWebSocketClose(close) => {
-								tracing::warn!(?close, "websocket closed before opening");
-								return Err(WebSocketServiceUnavailable.build());
-							}
-							_ => {
-								tracing::warn!(
-									"received unexpected message while waiting for websocket open"
-								);
-							}
+						} else {
+							tracing::warn!(
+								request_id=%protocol::util::id_to_string(&request_id),
+								"received no message response during ws init",
+							);
+							break;
 						}
-					} else {
-						tracing::warn!(
-							request_id=%protocol::util::id_to_string(&request_id),
-							"received no message response during ws init",
-						);
-						break;
+					}
+					_ = stopped_sub.next() => {
+						tracing::debug!("actor stopped while waiting for websocket open");
+						return Err(WebSocketServiceUnavailable.build());
+					}
+					_ = drop_rx.changed() => {
+						tracing::warn!(reason=?drop_rx.borrow(), "websocket open timeout");
+						return Err(WebSocketServiceUnavailable.build());
 					}
 				}
-				_ = stopped_sub.next() => {
-					tracing::debug!("actor stopped while waiting for websocket open");
-					return Err(WebSocketServiceUnavailable.build());
-				}
-				_ = drop_rx.changed() => {
-					tracing::warn!(reason=?drop_rx.borrow(), "websocket open timeout");
-					return Err(WebSocketServiceUnavailable.build());
+			} else {
+				tokio::select! {
+					res = msg_rx.recv() => {
+						if let Some(msg) = res {
+							match msg {
+								protocol::ToRivetTunnelMessageKind::ToRivetWebSocketOpen(msg) => {
+									return anyhow::Ok(msg);
+								}
+								protocol::ToRivetTunnelMessageKind::ToRivetWebSocketClose(close) => {
+									tracing::warn!(?close, "websocket closed before opening");
+									return Err(WebSocketServiceUnavailable.build());
+								}
+								_ => {
+									tracing::warn!(
+										"received unexpected message while waiting for websocket open"
+									);
+								}
+							}
+						} else {
+							tracing::warn!(
+								request_id=%protocol::util::id_to_string(&request_id),
+								"received no message response during ws init",
+							);
+							break;
+						}
+					}
+					_ = drop_rx.changed() => {
+						tracing::warn!(reason=?drop_rx.borrow(), "websocket open timeout");
+						return Err(WebSocketServiceUnavailable.build());
+					}
 				}
 			}
 		}

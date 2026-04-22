@@ -1,35 +1,46 @@
 pub mod actor_context;
 pub mod actor_factory;
 pub mod cancel_token;
-pub mod napi_actor_events;
-pub mod bridge_actor;
 pub mod cancellation_token;
 pub mod connection;
 pub mod database;
-pub mod envoy_handle;
 pub mod kv;
+pub mod napi_actor_events;
 pub mod queue;
 pub mod registry;
 pub mod schedule;
-pub mod sqlite_db;
 pub mod types;
 pub mod websocket;
 
-use std::collections::HashMap;
-use std::sync::Arc;
 use std::sync::Once;
 
-use napi_derive::napi;
 use rivet_error::RivetError as RivetTransportError;
-use rivet_envoy_client::config::EnvoyConfig;
-use rivet_envoy_client::envoy::start_envoy_sync;
-use tokio::runtime::Runtime;
 
 static INIT_TRACING: Once = Once::new();
 pub(crate) const BRIDGE_RIVET_ERROR_PREFIX: &str = "__RIVET_ERROR_JSON__:";
 
-pub(crate) fn napi_error(error: impl std::fmt::Display) -> napi::Error {
-	napi::Error::from_reason(error.to_string())
+#[derive(rivet_error::RivetError, serde::Serialize)]
+#[error(
+	"napi",
+	"invalid_argument",
+	"Invalid native argument",
+	"Invalid native argument '{argument}': {reason}"
+)]
+pub(crate) struct NapiInvalidArgument {
+	pub(crate) argument: String,
+	pub(crate) reason: String,
+}
+
+#[derive(rivet_error::RivetError, serde::Serialize)]
+#[error(
+	"napi",
+	"invalid_state",
+	"Invalid native state",
+	"Invalid native state '{state}': {reason}"
+)]
+pub(crate) struct NapiInvalidState {
+	pub(crate) state: String,
+	pub(crate) reason: String,
 }
 
 pub(crate) fn napi_anyhow_error(error: anyhow::Error) -> napi::Error {
@@ -37,21 +48,28 @@ pub(crate) fn napi_anyhow_error(error: anyhow::Error) -> napi::Error {
 		.chain()
 		.find_map(|cause| cause.downcast_ref::<crate::actor_factory::BridgeRivetErrorContext>());
 	let error = RivetTransportError::extract(&error);
+	let public_ = bridge_context.and_then(|context| context.public_);
+	let status_code = bridge_context.and_then(|context| context.status_code);
 	let payload = serde_json::json!({
 		"group": error.group(),
 		"code": error.code(),
 		"message": error.message(),
 		"metadata": error.metadata(),
-		"public": bridge_context.and_then(|context| context.public_),
-		"statusCode": bridge_context.and_then(|context| context.status_code),
+		"public": public_,
+		"statusCode": status_code,
 	});
-	napi::Error::from_reason(format!(
-		"{BRIDGE_RIVET_ERROR_PREFIX}{}",
-		payload
-	))
+	tracing::debug!(
+		group = error.group(),
+		code = error.code(),
+		has_metadata = error.metadata().is_some(),
+		?public_,
+		?status_code,
+		"encoded structured bridge error"
+	);
+	napi::Error::from_reason(format!("{BRIDGE_RIVET_ERROR_PREFIX}{}", payload))
 }
 
-fn init_tracing(log_level: Option<&str>) {
+pub(crate) fn init_tracing(log_level: Option<&str>) {
 	INIT_TRACING.call_once(|| {
 		// Priority: explicit config > RIVET_LOG_LEVEL > LOG_LEVEL > RUST_LOG > "warn"
 		let filter = log_level
@@ -67,86 +85,4 @@ fn init_tracing(log_level: Option<&str>) {
 			.with_writer(std::io::stdout)
 			.init();
 	});
-}
-
-use crate::bridge_actor::{BridgeCallbacks, ResponseMap, SqliteStartupMap, WsSenderMap};
-use crate::envoy_handle::JsEnvoyHandle;
-use crate::types::JsEnvoyConfig;
-
-/// Start the native envoy client synchronously.
-///
-/// Returns a handle immediately. The caller must call `await handle.started()`
-/// to wait for the connection to be ready.
-#[napi]
-pub fn start_envoy_sync_js(
-	config: JsEnvoyConfig,
-	#[napi(ts_arg_type = "(event: any) => void")] event_callback: napi::JsFunction,
-) -> napi::Result<JsEnvoyHandle> {
-	init_tracing(config.log_level.as_deref());
-
-	let runtime = Runtime::new()
-		.map_err(|e| napi::Error::from_reason(format!("failed to create tokio runtime: {}", e)))?;
-	let runtime = Arc::new(runtime);
-
-	let response_map: ResponseMap = Arc::new(scc::HashMap::new());
-	let ws_sender_map: WsSenderMap = Arc::new(scc::HashMap::new());
-	let sqlite_startup_map: SqliteStartupMap = Arc::new(scc::HashMap::new());
-
-	// Create threadsafe callback for bridging events to JS
-	let tsfn: bridge_actor::EventCallback = event_callback.create_threadsafe_function(
-		0,
-		|ctx: napi::threadsafe_function::ThreadSafeCallContext<serde_json::Value>| {
-			let env = ctx.env;
-			let value = env.to_js_value(&ctx.value)?;
-			Ok(vec![value])
-		},
-	)?;
-
-	let callbacks = Arc::new(BridgeCallbacks::new(
-		tsfn.clone(),
-		response_map.clone(),
-		ws_sender_map.clone(),
-		sqlite_startup_map.clone(),
-	));
-
-	let metadata: Option<HashMap<String, String>> = config.metadata.and_then(|v| {
-		if let serde_json::Value::Object(map) = v {
-			Some(map.into_iter().map(|(k, v)| (k, v.to_string())).collect())
-		} else {
-			None
-		}
-	});
-
-	let envoy_config = EnvoyConfig {
-		version: config.version,
-		endpoint: config.endpoint,
-		token: Some(config.token),
-		namespace: config.namespace,
-		pool_name: config.pool_name,
-		prepopulate_actor_names: HashMap::new(),
-		metadata,
-		not_global: config.not_global,
-		debug_latency_ms: None,
-		callbacks,
-	};
-
-	let _guard = runtime.enter();
-	let handle = start_envoy_sync(envoy_config);
-
-	Ok(JsEnvoyHandle::new(
-		runtime,
-		handle,
-		response_map,
-		ws_sender_map,
-		sqlite_startup_map,
-	))
-}
-
-/// Start the native envoy client asynchronously.
-#[napi]
-pub fn start_envoy_js(
-	config: JsEnvoyConfig,
-	#[napi(ts_arg_type = "(event: any) => void")] event_callback: napi::JsFunction,
-) -> napi::Result<JsEnvoyHandle> {
-	start_envoy_sync_js(config, event_callback)
 }

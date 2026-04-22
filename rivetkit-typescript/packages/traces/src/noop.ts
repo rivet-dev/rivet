@@ -59,6 +59,9 @@ export function createNoopTraces(): Traces<OtlpExportTraceServiceRequestJson> {
 		async flush(): Promise<boolean> {
 			return false;
 		},
+		getLastWriteError(): unknown | null {
+			return null;
+		},
 		async readRange(
 			_options: ReadRangeOptions,
 		): Promise<ReadRangeResult<OtlpExportTraceServiceRequestJson>> {

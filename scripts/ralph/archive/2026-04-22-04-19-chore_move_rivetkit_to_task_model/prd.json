@@ -1,0 +1,1027 @@
+{
+  "project": "rivetkit-core-napi-cleanup-and-rust-client-parity",
+  "branchName": "04-22-chore_fix_remaining_issues_with_rivetkit-core",
+  "description": "Execute the running complaint log at `.agent/notes/user-complaints.md` and the Rust client parity spec at `.agent/specs/rust-client-parity.md` against `rivetkit-rust/packages/rivetkit-core/`, `rivetkit-rust/packages/rivetkit-sqlite/`, `rivetkit-rust/packages/rivetkit/`, `rivetkit-rust/packages/client/`, and `rivetkit-typescript/packages/rivetkit-napi/`. Covers behavioral parity vs. `feat/sqlite-vfs-v2`, the alarm-during-sleep blocker, state-mutation API simplification, async callback alignment, subsystem merging, logging, docs, TOCTOU/drop-guard/atomic-vs-mutex fixes, AND bringing the Rust client to parity with the TypeScript client (BARE encoding, queue send, raw HTTP/WS, lifecycle callbacks, c.client() actor-to-actor). Always read the linked source-of-truth documents before starting a story.\n\n===== SCOPE =====\n\nPrimary edit targets:\n- `rivetkit-rust/packages/rivetkit-core/` (lifecycle, state, callbacks, sleep, scheduling, connections, queue, inspector, engine process mgr)\n- `rivetkit-rust/packages/rivetkit-sqlite/` (VFS TOCTOU fixes, async mutex conversions, counter audits)\n- `rivetkit-rust/packages/rivetkit/` (Rust wrapper adjustments for c.client + typed helpers)\n- `rivetkit-rust/packages/client/` (Rust client — parity with TS client)\n- `rivetkit-rust/packages/client-protocol/` (NEW crate for generated client-protocol BARE)\n- `rivetkit-rust/packages/inspector-protocol/` (NEW crate for generated inspector-protocol BARE)\n- `rivetkit-typescript/packages/rivetkit-napi/` (bridge types, TSF wiring, logging, vars removal)\n- `rivetkit-typescript/packages/rivetkit/` (call sites + generated TS codec output)\n- Root `CLAUDE.md` (rule additions/fixes)\n- `.agent/notes/` (audit + progress notes)\n- `docs-internal/engine/` (new documentation pages)\n\nDo NOT change:\n- Wire protocol BARE schemas of published versions — add new versioned schemas when bumping.\n- Engine-side workflow logic beyond what user-complaints entries explicitly call out.\n- frontend/, examples/, website/, self-host/, unrelated engine packages.\n\n===== GREEN GATE =====\n\n- Rust-only stories: `cargo build -p <crate>` plus targeted `cargo test -p <crate>` for changed modules.\n- NAPI stories: `cargo build -p rivetkit-napi`, then `pnpm --filter @rivetkit/rivetkit-napi build:force` before any TS-side verification.\n- TS stories: `pnpm build -F rivetkit` from repo root, then targeted `pnpm test <filter>` from `rivetkit-typescript/packages/rivetkit`.\n- Client parity stories: `cargo build -p rivetkit-client` plus targeted tests.\n- Do NOT run `cargo build --workspace` / `cargo test --workspace`. Unrelated crates may be red and that's expected.\n\n===== GUIDING INVARIANTS =====\n\n- Core owns zero user-level tasks; NAPI adapter owns them via a `JoinSet`.\n- All cross-language errors use `RivetError { group, code, message, metadata }` and cross the boundary via prefix-encoding into `napi::Error.reason`.\n- State mutations from user code flow through `request_save(opts) → serializeState → Vec<StateDelta> → apply_state_deltas → KV`. `set_state` / `mutate_state` are boot-only.\n- Never hold an async mutex across a KV/I/O `.await` unless the serialization is part of the invariant you're enforcing.\n- Every live-count atomic that has an awaiter pairs with a `Notify` / `watch` / permit — do not poll.\n- Rust client mirrors TS client semantics; naming can be idiomatic-Rust (e.g. `disconnect` vs `dispose`) but feature set must match.",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Behavioral parity audit: feat/sqlite-vfs-v2 vs current rivetkit-core+napi",
+      "description": "As a maintainer, I want a written audit of every behavioral difference between the rivetkit-typescript implementation at git ref `feat/sqlite-vfs-v2` and the current branch's rivetkit-core + rivetkit-napi stack, so that follow-up stories can target each gap individually.",
+      "acceptanceCriteria": [
+        "Checkout `feat/sqlite-vfs-v2` under a worktree and read its `rivetkit-typescript/packages/rivetkit/src/actor/` tree end-to-end",
+        "Compare lifecycle (start/stop/sleep/destroy), state save flow, connection lifecycle, queue, schedule/alarms, inspector, and hibernation behavior against current rivetkit-core + rivetkit-napi",
+        "Produce `.agent/notes/parity-audit.md` with one subsection per subsystem, each listing: (a) what the TS reference does, (b) what current code does, (c) whether this is an intentional divergence or a bug, (d) suggested remediation",
+        "Flag any finding that is already tracked in `.agent/notes/user-complaints.md` with a cross-reference to the complaint number",
+        "At the end of the audit, append a list of NEW user stories (titles + 1-line descriptions) to drop into `scripts/ralph/prd.json` as follow-ups",
+        "No code changes in this story — audit output only"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-002",
+      "title": "Fix alarm-during-sleep wake path (driver test suite blocker)",
+      "description": "As a maintainer, I want scheduled alarms to wake a sleeping actor without requiring an external HTTP request, so that `schedule.after` timers fire correctly during sleep and the driver test suite unblocks (`actor-sleep-db`, `actor-conn-hibernation`, `actor-sleep`).",
+      "acceptanceCriteria": [
+        "Read `.agent/todo/alarm-during-destroy.md` and complaint #22 in user-complaints.md for context",
+        "Design the fix in `.agent/specs/alarm-during-sleep-fix.md` before coding — spec must cover interaction with sleep finalize, destroy cleanup, and HTTP-wake races",
+        "Modify `rivetkit-rust/packages/rivetkit-core/src/actor/task.rs::finish_shutdown_cleanup_with_ctx` (or equivalent) so `Sleep` does NOT unconditionally `cancel_driver_alarm_logged` while `Destroy` still does",
+        "Ensure engine-side `alarm_ts` stays armed across sleep and drives a fresh wake via existing alarm dispatch",
+        "On wake via alarm, core re-syncs alarm state during `init_alarms` without double-pushing",
+        "Driver tests pass: `actor-sleep-db` (14/14), `actor-conn-hibernation` (5/5), `actor-sleep alarms wake actors`",
+        "Typecheck + targeted driver tests pass: `pnpm test` from `rivetkit-typescript/packages/rivetkit` filtered to those three files"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-003",
+      "title": "Fix typo `actor/overloaded` → `actor.overloaded` in root CLAUDE.md",
+      "description": "As a maintainer, I want the root CLAUDE.md inbox-backpressure rule to use the canonical dotted error code format, so that future model/human readers don't propagate the wrong format.",
+      "acceptanceCriteria": [
+        "Edit root `CLAUDE.md` at the line referencing `try_reserve` helpers and change `actor/overloaded` to `actor.overloaded`",
+        "Grep the rest of CLAUDE.md and confirm no other slash-formatted error codes remain",
+        "Typecheck passes (smoke): `cargo check -p rivetkit-core`"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-004",
+      "title": "Remove unused LifecycleState variants (Migrating/Waking/Ready)",
+      "description": "As a maintainer, I want the LifecycleState enum to reflect only states that are actually reached, so that readers of `task.rs` aren't misled by dead states.",
+      "acceptanceCriteria": [
+        "Delete `Migrating`, `Waking`, `Ready` from `rivetkit-rust/packages/rivetkit-core/src/actor/task_types.rs`",
+        "Remove match arms for those variants in `transition_to` (task.rs:1309) and `dispatch_lifecycle_error::NotReady` branch (518-524)",
+        "Remove any `#[allow(dead_code)]` attributes that existed just for these variants",
+        "Typecheck passes: `cargo build -p rivetkit-core`",
+        "Inline tests pass: `cargo test -p rivetkit-core --lib actor::task`"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-005",
+      "title": "Fix KV `delete_range` TOCTOU race on in-memory backend",
+      "description": "As a maintainer, I want `delete_range` on the in-memory KV backend to execute under a single write lock, so that concurrent mutations during a range delete don't cause missed or no-op deletes under load.",
+      "acceptanceCriteria": [
+        "Rewrite `KvBackend::InMemory::delete_range` in `rivetkit-rust/packages/rivetkit-core/src/kv.rs:82-111` to use a single write lock with `BTreeMap::retain`",
+        "Drop the read-then-write-upgrade pattern entirely",
+        "Add an inline test that fires a concurrent put during an in-flight delete_range and asserts the invariant",
+        "Typecheck passes: `cargo build -p rivetkit-core`",
+        "Tests pass: `cargo test -p rivetkit-core --lib kv`"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-006",
+      "title": "Fix SQLite `aux_files` double-lock TOCTOU race",
+      "description": "As a maintainer, I want `open_aux_file` to allocate at most one `AuxFileState` per key under concurrent opens, so that the VFS doesn't silently shadow aux file state.",
+      "acceptanceCriteria": [
+        "Rewrite `open_aux_file` in `rivetkit-rust/packages/rivetkit-sqlite/src/v2/vfs.rs:1080-1090` (or current equivalent post-merge) to use a single write lock + `BTreeMap::entry().or_insert_with(...)`",
+        "Drop the read-then-write-upgrade pattern",
+        "Add an inline test opening the same aux key from two tasks concurrently and asserting a single allocation",
+        "Typecheck passes: `cargo build -p rivetkit-sqlite`",
+        "Tests pass: `cargo test -p rivetkit-sqlite --lib vfs`"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-007",
+      "title": "Convert SQLite test-only polling counter/gate to atomic + Notify",
+      "description": "As a maintainer, I want the SQLite VFS test harness to use event-driven waits instead of polling `Mutex<usize>`/`Mutex<bool>`, so that flaky timing issues and unnecessary latency don't cloud test results.",
+      "acceptanceCriteria": [
+        "Replace `awaited_stage_responses: Mutex<usize>` (v2/vfs.rs:551, 596-598) with `AtomicUsize` + a paired `tokio::sync::Notify`; increment+notify on each stage response, test code awaits `notified()` with a deadline instead of polling",
+        "Replace `mirror_commit_meta: Mutex<bool>` (v2/vfs.rs:679-680) with `AtomicBool` checked via `load(SeqCst)`, paired with existing `finalize_started` / `release_finalize` Notify",
+        "Remove the lock-based polling getters that read these fields",
+        "Typecheck passes: `cargo build -p rivetkit-sqlite`",
+        "Tests pass: `cargo test -p rivetkit-sqlite --lib v2`"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-008",
+      "title": "Replace `inspector_attach_count` manual inc/dec with RAII `InspectorAttachGuard`",
+      "description": "As a maintainer, I want the inspector attach counter to be managed by a Drop-guard pattern like `ActiveQueueWaitGuard`, so that panics and error returns can't leak the count high and wedge the inspector-attached state.",
+      "acceptanceCriteria": [
+        "Introduce `InspectorAttachGuard` in `rivetkit-rust/packages/rivetkit-core/src/actor/context.rs` with `new(ctx)` incrementing + firing `notify_inspector_attachments_changed` on 0→1, and `Drop::drop` decrementing + firing on 1→0",
+        "Replace the `fetch_add(1, SeqCst)` at `actor/context.rs:1105` and `fetch_update` at `actor/context.rs:1114-1123` with guard construction/drop",
+        "Thread the guard through the inspector subscription setup so early-return paths can't skip decrement",
+        "Typecheck passes: `cargo build -p rivetkit-core`",
+        "Tests pass: `cargo test -p rivetkit-core --lib actor::context`"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-009",
+      "title": "Split `save_guard` across KV write to eliminate backpressure pile-up",
+      "description": "As a maintainer, I want `save_guard` released before the actual `kv.apply_batch(...).await`, so that concurrent save callers don't serialize on network latency.",
+      "acceptanceCriteria": [
+        "Refactor `rivetkit-rust/packages/rivetkit-core/src/actor/state.rs` (lines ~310-347 and ~734-755) so `save_guard` is acquired long enough to snapshot state + deltas + build puts/deletes, then released before the KV call",
+        "Add a separate in-flight-write `Notify` or atomic for downstream waiters that need to observe write completion",
+        "Assert with an inline test that two concurrent save_state calls overlap at the KV-write stage (don't queue)",
+        "Typecheck passes: `cargo build -p rivetkit-core`",
+        "Tests pass: `cargo test -p rivetkit-core --lib actor::state`"
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-010",
+      "title": "Remove `set_state` from the public NAPI surface",
+      "description": "As a maintainer, I want the NAPI `set_state` method to be deleted from the public surface, so that TS user code can't call state-replace semantics outside the structured-deltas flow. Boot-only `set_state_initial` stays as a private bootstrap entry.",
+      "acceptanceCriteria": [
+        "Delete the `set_state` napi method at `rivetkit-typescript/packages/rivetkit-napi/src/actor_context.rs:229`",
+        "Confirm `set_state_initial` (actor_context.rs:159-161) remains as a private bootstrap entrypoint",
+        "Update any TS-side callers in `rivetkit-typescript/packages/rivetkit/src/` to use `saveState(deltas)` instead (grep for `.set_state(` / `.setState(` on ctx objects)",
+        "Regenerate NAPI type surface: `pnpm --filter @rivetkit/rivetkit-napi build:force`",
+        "Typecheck passes: `pnpm build -F rivetkit`",
+        "Driver tests pass: `pnpm test` from `rivetkit-typescript/packages/rivetkit`"
+      ],
+      "priority": 10,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-011",
+      "title": "Drop `Either<bool, StateDeltaPayload>` shim on NAPI `save_state`",
+      "description": "As a maintainer, I want NAPI `save_state` to accept only `StateDeltaPayload`, so that the legacy `ctx.saveState(true)` footgun (returns before KV commit) is gone.",
+      "acceptanceCriteria": [
+        "Delete the `Either<bool, StateDeltaPayload>` branch at `rivetkit-typescript/packages/rivetkit-napi/src/actor_context.rs:355-371`",
+        "Surviving callers that want a dirty hint must call `requestSave(immediate)` instead",
+        "Update TS call sites in `rivetkit-typescript/packages/rivetkit/src/` that still pass a bool",
+        "Remove the matching CLAUDE.md warning about the legacy boolean path once the code is gone",
+        "Regenerate NAPI types: `pnpm --filter @rivetkit/rivetkit-napi build:force`",
+        "Typecheck passes: `pnpm build -F rivetkit`",
+        "Driver tests pass: `pnpm test` from `rivetkit-typescript/packages/rivetkit`"
+      ],
+      "priority": 11,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-012",
+      "title": "Remove `mutate_state` + `set_state` from core ActorState public API",
+      "description": "As a maintainer, I want `ActorState::set_state` / `ActorState::mutate_state` deleted, so that the only post-boot mutation path is `request_save → serializeState → deltas`.",
+      "acceptanceCriteria": [
+        "Delete `set_state` (state.rs:132-137) and `mutate_state` (state.rs:139-174) from `rivetkit-rust/packages/rivetkit-core/src/actor/state.rs`",
+        "Delete `StateMutated` variant of `LifecycleEvent`, `replace_state`, `in_on_state_change_callback` reentrancy check, `StateMutationReason::UserSetState` / `UserMutateState` labels",
+        "Delete `ActorContext::set_state` delegate at context.rs:239-247",
+        "`set_state_initial` remains as boot-only path",
+        "Update rivetkit-core test helpers that used the deleted API",
+        "Typecheck passes: `cargo build -p rivetkit-core`",
+        "Rebuild NAPI: `pnpm --filter @rivetkit/rivetkit-napi build:force`",
+        "Driver tests pass: `pnpm test` from `rivetkit-typescript/packages/rivetkit`"
+      ],
+      "priority": 12,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-013",
+      "title": "Collapse `request_save` variants into `request_save(opts)`",
+      "description": "As a maintainer, I want a single ergonomic `request_save(opts: { immediate?: bool, max_wait_ms?: u32 })` surface, so that callers don't juggle two similar methods.",
+      "acceptanceCriteria": [
+        "Add `RequestSaveOpts` struct in `rivetkit-rust/packages/rivetkit-core/src/actor/state.rs`",
+        "Replace `request_save(immediate: bool)` and `request_save_within(ms)` with single `request_save(opts)` on `ActorState` and `ActorContext`",
+        "Mirror on NAPI: single `requestSave({ immediate, maxWaitMs })` on JS ctx",
+        "Update TS call sites in `rivetkit-typescript/packages/rivetkit/src/registry/native.ts` and state-manager",
+        "Regenerate NAPI types: `pnpm --filter @rivetkit/rivetkit-napi build:force`",
+        "Typecheck passes: `cargo build -p rivetkit-core` and `pnpm build -F rivetkit`",
+        "Driver tests pass: `pnpm test` from `rivetkit-typescript/packages/rivetkit`"
+      ],
+      "priority": 13,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-014",
+      "title": "Unify immediate + deferred save paths through one `serializeState` callback",
+      "description": "As a maintainer, I want `saveState({ immediate: true })` to go through the same `serializeState` TSF callback as `requestSave(false)`, so that both paths share one code path and can't drift.",
+      "acceptanceCriteria": [
+        "Rewrite `saveState({ immediate: true })` on NAPI ctx to schedule a save with zero debounce and await completion — no direct `serializeForTick` call outside the callback",
+        "`requestSave(false)` stays debounced fire-and-forget",
+        "Update the three immediate-save callers: `native.ts:3774`, `actor-inspector.ts:224`, `hibernatable-websocket-ack-state.ts:109`",
+        "Delete the `hasNativePersistChanges` asymmetric skip on the immediate path",
+        "Typecheck passes: `cargo build -p rivetkit-core` and `pnpm build -F rivetkit`",
+        "Driver tests pass: `pnpm test` from `rivetkit-typescript/packages/rivetkit`"
+      ],
+      "priority": 14,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-015",
+      "title": "Align connection state dirty/notify/serialize with actor state",
+      "description": "As a maintainer, I want `conn.setState(...)` on hibernatable conns to mark core-side dirty + fire `SaveRequested` + include dirty conns in the serialize output, so that TS callers don't need to remember to call `ctx.requestSave(false)` after every conn mutation.",
+      "acceptanceCriteria": [
+        "Add `dirty: AtomicBool` to `ConnHandle` (`rivetkit-rust/packages/rivetkit-core/src/actor/connection.rs:92-104`) for hibernatable conns only",
+        "`ConnHandle::set_state` (connection.rs:142-148) marks conn dirty + marks actor dirty + fires `LifecycleEvent::SaveRequested { immediate: false }`",
+        "Non-hibernatable conns keep in-memory-only `set_state` semantics",
+        "`serializeForTick` contract: core iterates dirty hibernatable conns and invokes the TSF to serialize each into `StateDelta::ConnHibernation { conn_id, bytes }`",
+        "Delete TS-side `ensureNativeConnPersistState` / `persistChanged` and per-site `ctx.requestSave(false)` calls in `native.ts` (~2409, 2602, 2784, 3035, 4310, 4362, 4408)",
+        "Remove CLAUDE.md rule about `CONN_STATE_MANAGER_SYMBOL` + `ctx.requestSave(false)`",
+        "Rebuild NAPI: `pnpm --filter @rivetkit/rivetkit-napi build:force`",
+        "Typecheck passes + driver tests including `actor-conn-hibernation`"
+      ],
+      "priority": 15,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-016",
+      "title": "Document state-mutation API on a single page",
+      "description": "As a new contributor, I want one page explaining the state-mutation API surface, so that I don't have to read `state.rs` + `actor_context.rs` + `registry/native.ts`.",
+      "acceptanceCriteria": [
+        "Create `docs-internal/engine/rivetkit-core-state-management.md` covering: TS owns JS-side state, `save_state(deltas)` is structured save, `request_save(opts)` is debounced hint, `persist_state(opts)` is internal, `set_state_initial` is boot-only",
+        "Alternative: top-of-file `//!` doc in `rivetkit-core/src/actor/state.rs`",
+        "Cross-link from NAPI `actor_context.rs` top-of-file comment",
+        "No code changes — documentation only",
+        "Typecheck passes (smoke): `cargo build -p rivetkit-core`"
+      ],
+      "priority": 16,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-017",
+      "title": "Add `dirty_since_push` flag to Schedule; skip shutdown alarm re-sync when unchanged",
+      "description": "As a maintainer, I want `Schedule` to track whether any mutation happened during the awake period, so that `finish_shutdown_cleanup` doesn't re-push an identical `set_alarm` value.",
+      "acceptanceCriteria": [
+        "Add `dirty_since_push: AtomicBool` on `Schedule`",
+        "Any schedule mutation (`at(...)`, `cancel(...)`, `schedule_event(...)`) sets it true",
+        "`sync_alarm` / `sync_future_alarm` check the flag and skip the push when false; clear to false after successful push",
+        "Typecheck passes: `cargo build -p rivetkit-core`",
+        "Tests pass: `cargo test -p rivetkit-core --lib actor::schedule`"
+      ],
+      "priority": 17,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-018",
+      "title": "Persist last-pushed alarm in actor KV; skip startup push when identical",
+      "description": "As a maintainer, I want the actor to know what alarm value was last pushed, so that `init_alarms` on wake doesn't push an identical value.",
+      "acceptanceCriteria": [
+        "Add `LAST_PUSHED_ALARM_KEY = [6]` in rivetkit-core KV key constants",
+        "On startup, load the last-pushed alarm alongside `PersistedActor`",
+        "`init_alarms` at `task.rs:602` compares against current desired alarm and skips push when equal",
+        "After any successful `set_alarm` push, update the persisted last-pushed value",
+        "Typecheck passes: `cargo build -p rivetkit-core`",
+        "Tests pass: `cargo test -p rivetkit-core --lib actor::task`"
+      ],
+      "priority": 18,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-019",
+      "title": "Add `pending_disconnect_count` with RAII guard and sleep-gate for onDisconnect",
+      "description": "As a maintainer, I want `onDisconnect` user callbacks awaited and gating sleep while in flight, matching `feat/sqlite-vfs-v2`.",
+      "acceptanceCriteria": [
+        "Add `pending_disconnect_count: AtomicUsize` on `ActorContextInner`",
+        "Add `DisconnectCallbackGuard` RAII (inc + `reset_sleep_timer()` in new; dec + reset in Drop)",
+        "Extend `SleepController::can_sleep` with `CanSleep::ActiveDisconnectCallbacks` variant blocking while count > 0",
+        "Wrap every `DisconnectCallback` await with a `DisconnectCallbackGuard`",
+        "Wire-level WebSocket close callbacks (`websocket.rs:10-17`) stay sync — NOT changed here",
+        "Typecheck passes: `cargo build -p rivetkit-core`",
+        "Driver tests pass filtered to `actor-sleep`"
+      ],
+      "priority": 19,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-020",
+      "title": "Convert `WebSocketCloseCallback` + `WebSocketCloseEventCallback` to async BoxFuture",
+      "description": "As a maintainer, I want WebSocket close callback types in `rivetkit-core/src/websocket.rs` to be async `BoxFuture<'static, Result<()>>`, consistent with `DisconnectCallback`.",
+      "acceptanceCriteria": [
+        "Change `WebSocketCloseCallback` and `WebSocketCloseEventCallback` at `websocket.rs:10-17` to return `BoxFuture<'static, Result<()>>`",
+        "Update every invocation site to `.await` the returned future",
+        "`WebSocketSendCallback` and `WebSocketMessageEventCallback` stay sync for now",
+        "Typecheck passes: `cargo build -p rivetkit-core`",
+        "Rebuild NAPI: `pnpm --filter @rivetkit/rivetkit-napi build:force`",
+        "Driver tests pass filtered to websocket/hibernation suites"
+      ],
+      "priority": 20,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-021",
+      "title": "Wire `WebSocketCallbackGuard` + sleep-gating for async user-facing close handlers",
+      "description": "As a maintainer, I want user-facing async `addEventListener('close', async handler)` / `ws.onclose = async handler` callbacks to count toward sleep readiness — a non-standard WebSocket API extension we explicitly support.",
+      "acceptanceCriteria": [
+        "Use existing `WebSocketCallbackGuard` at `actor/context.rs` (or add one) wrapping every `WebSocketCloseEventCallback` invocation",
+        "Guard inc + `reset_sleep_timer()` in new / Drop",
+        "`SleepController::can_sleep` treats pending close handlers as blocking — reuse `pending_disconnect_count` plumbing from US-019 if semantics align, OR add `CanSleep::ActiveCloseHandlers`",
+        "Record the reuse-vs-separate decision in a brief note atop `websocket.rs`",
+        "Document the non-standard async-close behavior in `docs-internal/engine/rivetkit-core-websocket.md`",
+        "Typecheck passes: `cargo build -p rivetkit-core`",
+        "Rebuild NAPI; driver tests pass"
+      ],
+      "priority": 21,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-022",
+      "title": "Remove `ActorVars` from rivetkit-core entirely",
+      "description": "As a maintainer, I want `vars.rs` and its plumbing deleted so that TS-runtime in-memory vars live entirely on the JS side.",
+      "acceptanceCriteria": [
+        "Delete `rivetkit-rust/packages/rivetkit-core/src/actor/vars.rs`",
+        "Delete `vars: ActorVars` field on `ActorContextInner` (context.rs:54), default init (context.rs:201), and `ActorContext::vars` / `ActorContext::set_vars` (context.rs:274-281)",
+        "Delete NAPI `vars()` / `set_vars(buffer)` at `actor_context.rs:224-225, 241-242`",
+        "Delete the `set_vars` call in NAPI bootstrap at `napi_actor_events.rs:191`",
+        "Relocate vars storage in TS runtime to `rivetkit-typescript/packages/rivetkit/src/` — memory-only",
+        "Public TS `ctx.vars` / `ctx.setVars` unchanged from user perspective",
+        "Typecheck passes + NAPI rebuild + driver tests"
+      ],
+      "priority": 22,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-023",
+      "title": "Add async-mutex-default rule to root CLAUDE.md",
+      "description": "As a maintainer, I want a durable rule that async code defaults to `tokio::sync::Mutex` and uses `parking_lot::Mutex` only where sync is mandated.",
+      "acceptanceCriteria": [
+        "Add a bullet section to root CLAUDE.md stating the new default and the forced-sync exceptions (Drop, sync traits, FFI/SQLite VFS, sync `&self` accessors)",
+        "Include rationale: silent-await hold bug class, poisoning boilerplate, perf-vs-I/O trade-off",
+        "No code changes — rule-setting only",
+        "Typecheck passes (smoke): `cargo build -p rivetkit-core`"
+      ],
+      "priority": 23,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-024",
+      "title": "Audit + convert std::sync::Mutex usages in rivetkit-core",
+      "description": "As a maintainer, I want every `std::sync::Mutex`/`RwLock` in rivetkit-core classified and converted per US-023.",
+      "acceptanceCriteria": [
+        "Grep `rivetkit-rust/packages/rivetkit-core/src/` for `std::sync::(Mutex|RwLock)` and `StdMutex`/`StdRwLock` aliases",
+        "For each hit, decide async-convert or forced-sync; note classification in a one-liner comment at each converted site",
+        "Candidates to check: `actor/queue.rs:105`, `actor/queue.rs:113-114`, `actor/state.rs:75-77`, `actor/state.rs:80`, `actor/context.rs` runtime-wiring slots",
+        "Remove `.expect(\"... lock poisoned\")` boilerplate replaced by non-poisoning types",
+        "Remove unused `std::sync` imports",
+        "Typecheck passes + tests pass"
+      ],
+      "priority": 24,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-025",
+      "title": "Audit + convert std::sync::Mutex usages in rivetkit-sqlite",
+      "description": "As a maintainer, I want every `std::sync::Mutex`/`RwLock` in rivetkit-sqlite classified and converted, noting that SQLite VFS callbacks are forced-sync.",
+      "acceptanceCriteria": [
+        "Grep `rivetkit-rust/packages/rivetkit-sqlite/src/` for `std::sync::(Mutex|RwLock)` and `StdMutex`",
+        "Classify each: VFS callback / Drop → `parking_lot::Mutex`; else → `tokio::sync::Mutex`",
+        "Convert + inline comments at forced-sync sites",
+        "Remove `.expect(\"... lock poisoned\")` boilerplate",
+        "Typecheck passes: `cargo build -p rivetkit-sqlite`",
+        "Tests pass: `cargo test -p rivetkit-sqlite`"
+      ],
+      "priority": 25,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-026",
+      "title": "Audit + convert std::sync::Mutex usages in rivetkit-napi",
+      "description": "As a maintainer, I want the same audit applied to rivetkit-napi.",
+      "acceptanceCriteria": [
+        "Grep `rivetkit-typescript/packages/rivetkit-napi/src/` for `std::sync::(Mutex|RwLock)` and `StdMutex`",
+        "Classify each: TSF sync-callback / Drop → `parking_lot::Mutex`; else → `tokio::sync::Mutex`",
+        "Convert + inline comments",
+        "Remove `.expect` boilerplate",
+        "Typecheck passes: `cargo build -p rivetkit-napi`",
+        "Rebuild NAPI; driver tests pass"
+      ],
+      "priority": 26,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-027",
+      "title": "Sweep rivetkit-core for counter-polling patterns; convert to Notify/watch",
+      "description": "As a maintainer, I want every polling-loop-on-counter pattern in rivetkit-core converted to event-driven `Notify` or `watch::channel`.",
+      "acceptanceCriteria": [
+        "Grep `rivetkit-core/src/` for: `loop { ... sleep(Duration::from_millis(_)).await; ... }` checking counter/flag/map-size, and `AtomicUsize|U32|U64` fields with awaiters",
+        "Classify each: event-driven / polling / monotonic-sequence",
+        "Findings into `.agent/notes/counter-poll-audit-core.md`",
+        "Convert each polling site; add paired `Notify` on decrement-to-zero",
+        "Typecheck passes + tests pass"
+      ],
+      "priority": 27,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-028",
+      "title": "Sweep rivetkit-sqlite for counter-polling patterns",
+      "description": "As a maintainer, I want the same counter-polling audit + conversion applied to rivetkit-sqlite.",
+      "acceptanceCriteria": [
+        "Grep `rivetkit-sqlite/src/` for same patterns as US-027",
+        "Findings into `.agent/notes/counter-poll-audit-sqlite.md`",
+        "Confirm no regression of US-007 fixes",
+        "Convert remaining sites",
+        "Typecheck passes + tests pass: `cargo test -p rivetkit-sqlite`"
+      ],
+      "priority": 28,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-029",
+      "title": "Sweep rivetkit-napi for counter-polling patterns",
+      "description": "As a maintainer, I want the same counter-polling audit + conversion applied to rivetkit-napi.",
+      "acceptanceCriteria": [
+        "Grep `rivetkit-napi/src/` for same patterns as US-027",
+        "Findings into `.agent/notes/counter-poll-audit-napi.md`",
+        "Convert each site",
+        "Typecheck passes; rebuild NAPI; driver tests pass"
+      ],
+      "priority": 29,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-030",
+      "title": "Codify counter-polling supplementary rule in root CLAUDE.md",
+      "description": "As a maintainer, I want the supplementary rule 'every shared counter with an awaiter must ping a paired Notify/watch/permit on decrement-to-zero; waiters arm before re-checking' added to root CLAUDE.md.",
+      "acceptanceCriteria": [
+        "Append supplementary rule to existing counter-polling section of root CLAUDE.md",
+        "Add review-checklist item",
+        "No code changes",
+        "Typecheck passes (smoke)"
+      ],
+      "priority": 30,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-031",
+      "title": "Add rivetkit-core lifecycle + dispatch + event logging",
+      "description": "As a maintainer, I want tracing output at every lifecycle transition, LifecycleCommand / DispatchCommand receive, and ActorEvent enqueue/drain.",
+      "acceptanceCriteria": [
+        "Lifecycle transitions (`transition_to` at `task.rs:1309`) log at `info!` with `actor_id`, `old`, `new`",
+        "Every `LifecycleCommand` received + replied logs at `debug!`",
+        "Every `DispatchCommand` received logs at `debug!` with variant + outcome",
+        "`ActorEvent` enqueue/drain logs at `debug!`",
+        "All structured tracing per CLAUDE.md",
+        "Typecheck passes",
+        "Smoke-run lifecycle test with `RUST_LOG=debug` and confirm logs"
+      ],
+      "priority": 31,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-032",
+      "title": "Add rivetkit-core sleep + schedule + persistence logging",
+      "description": "As a maintainer, I want tracing at every sleep controller decision, schedule mutation, and persistence op.",
+      "acceptanceCriteria": [
+        "Sleep controller: log activity reset, idle-out, keep-awake engage/disengage, grace start, finalize start",
+        "Schedule: log event added/cancelled, local alarm armed/fired, envoy `set_alarm` push with old/new",
+        "Persistence: log every `apply_state_deltas` with delta count + revision, `SerializeState` reason + bytes, alarm-write waits",
+        "All structured tracing",
+        "Typecheck passes"
+      ],
+      "priority": 32,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-033",
+      "title": "Add rivetkit-core connection + KV + inspector + shutdown logging",
+      "description": "As a maintainer, I want tracing at every connection lifecycle event, KV call, inspector attach/detach, and shutdown step.",
+      "acceptanceCriteria": [
+        "Connection manager: log conn added/removed/hibernation-restored/transport-removed, dead-conn settle outcomes",
+        "KV backend: log `batch_get`/`batch_put`/`delete`/`list_prefix` key counts + latencies",
+        "Inspector: log attach/detach, overlay broadcasts",
+        "Shutdown: log sleep grace, sleep finalize, destroy entered, each shutdown step",
+        "Typecheck passes"
+      ],
+      "priority": 33,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-034",
+      "title": "Add rivetkit-napi TSF + cache + bridge + class-lifecycle logging",
+      "description": "As a maintainer, I want tracing across the N-API bridge layer.",
+      "acceptanceCriteria": [
+        "Every TSF callback invocation logs at `debug!` with `kind` + payload summary",
+        "Shared-state cache hit/miss for `ActorContextShared`",
+        "Bridge error paths log structured-error prefix decode/encode",
+        "`AbortSignal` → `CancellationToken` trigger logs",
+        "N-API class construct/drop for `ActorContext`, `JsNativeDatabase`, queue-message wrappers",
+        "Typecheck passes + rebuild NAPI",
+        "Smoke-test one driver test with `RIVET_LOG_LEVEL=debug`"
+      ],
+      "priority": 34,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-035",
+      "title": "Document `try_reserve` vs `try_send` rationale inline",
+      "description": "As a new reader, I want a doc explaining why rivetkit-core uses `try_reserve`.",
+      "acceptanceCriteria": [
+        "Add module-level `//!` doc or short comment on `reserve_actor_event` (task.rs:465-481), `try_send_lifecycle_command`, `try_send_dispatch_command` (registry.rs:47)",
+        "Cover: permit-before-message avoids allocating on full; decouples capacity from value; lifecycle oneshot orphaning avoidance",
+        "No code changes",
+        "Typecheck passes (smoke)"
+      ],
+      "priority": 35,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-036",
+      "title": "Document `ActorTask` multi-inbox design",
+      "description": "As a new contributor, I want one place explaining why `ActorTask` has four separate mpsc receivers.",
+      "acceptanceCriteria": [
+        "Add module-level `//!` doc on `rivetkit-core/src/actor/task.rs` covering back-pressure isolation, biased-select priority, per-inbox overload metrics, sender/trust topology",
+        "Optionally: `docs-internal/engine/rivetkit-core-lifecycle.md`",
+        "No code changes",
+        "Typecheck passes (smoke)"
+      ],
+      "priority": 36,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-037",
+      "title": "Extract engine process manager from registry.rs into engine_process.rs",
+      "description": "As a maintainer, I want `EngineProcessManager` moved out of the 4083-line `registry.rs`.",
+      "acceptanceCriteria": [
+        "Create `rivetkit-core/src/engine_process.rs`",
+        "Move: `EngineHealthResponse`, `EngineProcessManager` + impl, `engine_health_url`, `spawn_engine_log_task`, `join_log_task`, `wait_for_engine_health`, `terminate_engine_process`, `send_sigterm`",
+        "`CoreRegistry::serve` spawn/shutdown call sites now call into the new module",
+        "Add `pub mod engine_process;` to `lib.rs` with appropriate visibility",
+        "Typecheck passes + tests pass: `cargo test -p rivetkit-core`"
+      ],
+      "priority": 37,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-038",
+      "title": "Consume `[2]+conn_id` hibernatable connection entries from preload bundle",
+      "description": "As a maintainer, I want `ConnectionManager::restore_persisted` to consume preloaded connection entries when present.",
+      "acceptanceCriteria": [
+        "Modify `ConnectionManager::restore_persisted` at `connection.rs:746-778` to consume `[2]+*` entries from preload first",
+        "Fall back to `kv.list_prefix([2])` only when absent",
+        "Confirm engine side includes `[2]+*` entries; if not open a follow-up",
+        "Typecheck passes",
+        "Driver tests pass filtered to `actor-conn-hibernation`"
+      ],
+      "priority": 38,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-039",
+      "title": "Consume `[5,1,*]` queue entries from preload bundle",
+      "description": "As a maintainer, I want `Queue::ensure_initialized` to consume preloaded queue entries.",
+      "acceptanceCriteria": [
+        "Modify `Queue::ensure_initialized` at `queue.rs:586-595` to consume `[5,1,1]` + `[5,1,2]+*` entries from preload when present",
+        "Fall back to existing lazy-init when absent",
+        "Confirm engine-side preload includes queue prefixes; add if missing (minimal engine edit)",
+        "Typecheck passes",
+        "Driver tests pass filtered to queue-focused suites"
+      ],
+      "priority": 39,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-040",
+      "title": "Add tri-state `decode_preloaded_persisted_actor` return",
+      "description": "As a maintainer, I want the decode function to distinguish `NoBundle` / `BundleExistsButEmpty` / `Some`.",
+      "acceptanceCriteria": [
+        "Change `decode_preloaded_persisted_actor` at `registry.rs:2689-2703` to return `NoBundle` / `BundleExistsButEmpty` / `Some(persisted)`",
+        "`load_persisted_actor` treats `BundleExistsButEmpty` as fresh-actor (use defaults, no fallback get)",
+        "`NoBundle` keeps existing fallback behavior",
+        "Typecheck passes",
+        "Driver tests including fresh-actor creates"
+      ],
+      "priority": 40,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-041",
+      "title": "Merge `EventBroadcaster` fields into `ActorContextInner`",
+      "description": "As a maintainer, I want `EventBroadcaster` flattened or deleted as phase 2 of complaint #1.",
+      "acceptanceCriteria": [
+        "Assess trivial-or-not; if flatten, move fields onto `ActorContextInner` and methods to `impl ActorContext`",
+        "If delete, inline into consumers",
+        "Remove `pub use` from `lib.rs`",
+        "Typecheck passes + tests pass"
+      ],
+      "priority": 41,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-042",
+      "title": "Merge `SleepController` fields into `ActorContextInner`",
+      "description": "As a maintainer, I want `SleepController`'s state-machine fields flattened onto `ActorContextInner`, with methods staying in `sleep.rs` via `impl ActorContext` blocks.",
+      "acceptanceCriteria": [
+        "Move SleepController fields onto `ActorContextInner` (plain inner struct `SleepState` for grouping is fine)",
+        "`sleep.rs` switches to `impl ActorContext`",
+        "Delete `Arc<SleepControllerInner>` wrapper + `configure_*`/`set_*`",
+        "Remove `pub use SleepController`",
+        "Add `ActorContext::new_for_sleep_tests(...)` helper",
+        "Typecheck passes + tests pass"
+      ],
+      "priority": 42,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-043",
+      "title": "Merge `Schedule` fields into `ActorContextInner`",
+      "description": "As a maintainer, I want `Schedule`'s fields flattened, methods staying in `schedule.rs`.",
+      "acceptanceCriteria": [
+        "Move Schedule fields (including `dirty_since_push` from US-017) onto `ActorContextInner`",
+        "`schedule.rs` switches to `impl ActorContext`",
+        "Delete `Arc<ScheduleInner>` wrapper + plumbing + `Schedule::new(state.clone(), ...)` wiring",
+        "Remove `pub use Schedule`",
+        "Test helper for schedule-only tests",
+        "Typecheck passes + tests pass"
+      ],
+      "priority": 43,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-044",
+      "title": "Merge `Queue` fields into `ActorContextInner`",
+      "description": "As a maintainer, I want `Queue`'s fields flattened, methods staying in `queue.rs`.",
+      "acceptanceCriteria": [
+        "Move Queue fields (metadata, message store, init OnceCell, wait-activity/inspector callback slots) onto `ActorContextInner`",
+        "`queue.rs` switches to `impl ActorContext`",
+        "Delete `Arc<QueueInner>` wrapper + plumbing",
+        "Remove `pub use Queue`",
+        "Test helper for queue-only tests",
+        "Typecheck passes + tests pass"
+      ],
+      "priority": 44,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-045",
+      "title": "Merge `ActorState` fields into `ActorContextInner`",
+      "description": "As a maintainer, I want `ActorState`'s fields flattened, methods staying in `state.rs`.",
+      "acceptanceCriteria": [
+        "Move ActorState fields onto `ActorContextInner`",
+        "`state.rs` switches to `impl ActorContext`",
+        "Delete `Arc<ActorStateInner>` wrapper + plumbing + duplicated `lifecycle_events`/`lifecycle_event_inbox_capacity`/`metrics`",
+        "Remove `pub use ActorState`",
+        "Add `ActorContext::new_for_state_tests(kv, config)` helper",
+        "Typecheck passes + NAPI rebuild + driver tests"
+      ],
+      "priority": 45,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-046",
+      "title": "Merge `ConnectionManager` fields into `ActorContextInner`",
+      "description": "As a maintainer, I want `ConnectionManager`'s fields flattened as phase 7 (final) of complaint #1.",
+      "acceptanceCriteria": [
+        "Move ConnectionManager fields onto `ActorContextInner`",
+        "`connection.rs` switches to `impl ActorContext`",
+        "Delete `Arc<ConnectionManagerInner>` wrapper",
+        "Remove `pub use ConnectionManager`",
+        "Update US-015 conn-dirty tracking to reference merged layout",
+        "Test helper for conn-only tests",
+        "Typecheck passes + NAPI rebuild + hibernation driver tests"
+      ],
+      "priority": 46,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-047",
+      "title": "Apply parity fixes from US-001 audit findings",
+      "description": "As a maintainer, I want each behavioral difference from the audit addressed. Split if the audit produces more than 3 distinct fixes.",
+      "acceptanceCriteria": [
+        "Read `.agent/notes/parity-audit.md` from US-001 — if it doesn't exist, this story is blocked (bail with a clear note)",
+        "For each finding marked 'bug' (not 'intentional divergence'), implement the fix",
+        "If audit lists >3 distinct fixes, SPLIT by appending US-065+ entries to `prd.json` and bail on this story with a note",
+        "For each fix, add a targeted regression test",
+        "Typecheck passes across modified crates + NAPI rebuild + `pnpm build -F rivetkit`",
+        "Driver tests pass: full `pnpm test` from `rivetkit-typescript/packages/rivetkit`"
+      ],
+      "priority": 47,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-048",
+      "title": "Create `rivetkit-client-protocol` crate with vbare-generated schemas v1-v3",
+      "description": "As a maintainer, I want a new Rust crate that owns the client-actor BARE protocol schemas and generates Rust + TS codecs, so that hand-rolled BARE in both `registry.rs` and the Rust client can be replaced. Reference: `.agent/specs/rust-client-parity.md` § New Protocol Crates.",
+      "acceptanceCriteria": [
+        "Create `rivetkit-rust/packages/client-protocol/` with `Cargo.toml`, `build.rs` (using `vbare_compiler::process_schemas_with_config()`), and `schemas/v1.bare` / `v2.bare` / `v3.bare`",
+        "v1: Init with connectionToken; v2: Init without connectionToken; v3: + HttpQueueSend request/response",
+        "Covers WebSocket: `ActionRequest`, `SubscriptionRequest`, `Init`, `Error`, `ActionResponse`, `Event`; HTTP: `HttpActionRequest`, `HttpActionResponse`, `HttpQueueSendRequest`, `HttpQueueSendResponse`, `HttpResponseError`",
+        "Wire up `src/lib.rs` with `pub use generated::v3::*` + `pub const PROTOCOL_VERSION: u16 = 3`",
+        "Write `src/versioned.rs` with v1→v2→v3 migration converters",
+        "Add crate to root `Cargo.toml` workspace members and workspace deps table",
+        "Typecheck passes: `cargo build -p rivetkit-client-protocol`"
+      ],
+      "priority": 48,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-049",
+      "title": "Create `rivetkit-inspector-protocol` crate with vbare-generated schemas v1-v4",
+      "description": "As a maintainer, I want a new Rust crate that owns the inspector debug BARE protocol schemas and generates Rust + TS codecs. Reference: `.agent/specs/rust-client-parity.md` § New Protocol Crates.",
+      "acceptanceCriteria": [
+        "Create `rivetkit-rust/packages/inspector-protocol/` with `Cargo.toml`, `build.rs`, and `schemas/v1.bare` through `v4.bare` (moved from TS `schemas/actor-inspector/`)",
+        "Wire up `src/lib.rs` with `pub use generated::v4::*`",
+        "Write `src/versioned.rs` with v1→v4 migration converters",
+        "Add crate to root `Cargo.toml` workspace members and workspace deps table",
+        "Typecheck passes: `cargo build -p rivetkit-inspector-protocol`"
+      ],
+      "priority": 49,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-050",
+      "title": "Migrate `registry.rs` + `inspector/protocol.rs` to generated protocol types",
+      "description": "As a maintainer, I want the hand-rolled `BareCursor` / `bare_write_*` code (~230 lines) in rivetkit-core deleted and replaced with generated types from the new protocol crates.",
+      "acceptanceCriteria": [
+        "Delete hand-rolled BARE plumbing in `rivetkit-rust/packages/rivetkit-core/src/registry.rs`",
+        "Import from `rivetkit-client-protocol`; use `serde_bare` for encode/decode of the generated types",
+        "Replace manual JSON-based protocol types in `rivetkit-core/src/inspector/protocol.rs` with generated BARE types from `rivetkit-inspector-protocol`",
+        "Add `rivetkit-client-protocol` + `rivetkit-inspector-protocol` to `rivetkit-core`'s `Cargo.toml`",
+        "Typecheck passes: `cargo build -p rivetkit-core`",
+        "Tests pass: `cargo test -p rivetkit-core`"
+      ],
+      "priority": 50,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-051",
+      "title": "Migrate `rivetkit-client` codec to generated protocol types",
+      "description": "As a maintainer, I want the hand-rolled `BareCursor` (~123 lines) in `rivetkit-rust/packages/client/src/protocol/codec.rs` deleted and replaced with `rivetkit-client-protocol` imports.",
+      "acceptanceCriteria": [
+        "Delete hand-rolled BARE in `rivetkit-rust/packages/client/src/protocol/codec.rs`",
+        "Import from `rivetkit-client-protocol` for generated types + serde_bare",
+        "Add `rivetkit-client-protocol` to `rivetkit-client`'s `Cargo.toml`",
+        "Typecheck passes: `cargo build -p rivetkit-client`",
+        "Tests pass: `cargo test -p rivetkit-client`"
+      ],
+      "priority": 51,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-052",
+      "title": "Replace vendored TS BARE codecs with generated output from new protocol crates",
+      "description": "As a maintainer, I want the TS vendored codecs at `rivetkit-typescript/packages/rivetkit/src/common/bare/client-protocol/` and `common/bare/inspector/` replaced by build-generated output from the new Rust protocol crates.",
+      "acceptanceCriteria": [
+        "Configure `rivetkit-client-protocol/build.rs` to also emit TS codecs via `vbare_compiler` TS-gen feature (same pattern as `runner-protocol`)",
+        "Same for `rivetkit-inspector-protocol/build.rs`",
+        "Point TS imports in `rivetkit-typescript/packages/rivetkit/src/` at the generated output",
+        "Delete the vendored `client-protocol/v1-v3.ts` and `inspector/v1-v4.ts` files once imports migrate",
+        "Typecheck passes: `pnpm build -F rivetkit`",
+        "Driver tests pass: `pnpm test` from `rivetkit-typescript/packages/rivetkit`"
+      ],
+      "priority": 52,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-053",
+      "title": "Add `ClientConfig` builder struct for Rust client",
+      "description": "As a Rust client user, I want a `ClientConfig` builder struct replacing the positional `Client::new` constructor, so that config options (headers, max_input_size, namespace, disable_metadata_lookup, pool_name) can be provided ergonomically.",
+      "acceptanceCriteria": [
+        "Add `ClientConfig` struct in `rivetkit-rust/packages/client/src/` with fields: `endpoint`, `token`, `namespace`, `pool_name`, `encoding`, `transport`, `headers: Option<HashMap<String, String>>`, `max_input_size: Option<usize>`, `disable_metadata_lookup: bool`",
+        "`Client::new(config: ClientConfig)` replaces positional constructor; keep a short `Client::from_endpoint(&str)` convenience if trivial",
+        "Update any callers in `rivetkit-rust/packages/rivetkit/` + example code",
+        "Typecheck passes: `cargo build -p rivetkit-client`",
+        "Tests pass: `cargo test -p rivetkit-client`"
+      ],
+      "priority": 53,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-054",
+      "title": "Add BARE encoding to Rust client; make it the default",
+      "description": "As a Rust client user, I want `EncodingKind::Bare` as the default encoding, so that wire efficiency matches the TypeScript client.",
+      "acceptanceCriteria": [
+        "Add `EncodingKind::Bare` variant to `rivetkit-rust/packages/client/src/encoding.rs` (or equivalent)",
+        "Wire BARE encode/decode paths using `rivetkit-client-protocol` generated types",
+        "Change `EncodingKind::default()` to `Bare`",
+        "Existing `Cbor` and `Json` paths remain untouched",
+        "Add a smoke test exercising BARE-encoded action send/receive against a test actor",
+        "Typecheck passes: `cargo build -p rivetkit-client`",
+        "Tests pass: `cargo test -p rivetkit-client`"
+      ],
+      "priority": 54,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-055",
+      "title": "Add queue `send` and `send_and_wait` to Rust `ActorHandleStateless`",
+      "description": "As a Rust client user, I want `handle.send(name, body, opts)` and `handle.send_and_wait(name, body, opts)` methods for queue operations, matching the TypeScript client.",
+      "acceptanceCriteria": [
+        "Add `send(name: &str, body: impl Serialize, opts: SendOpts) -> Result<()>` on `ActorHandleStateless` in `rivetkit-rust/packages/client/src/`",
+        "Add `send_and_wait(name: &str, body: impl Serialize, opts: SendAndWaitOpts) -> Result<Response>`",
+        "`SendAndWaitOpts` has optional `timeout`",
+        "Both use HTTP POST to the actor's `/queue/{name}` endpoint with versioned request encoding via `rivetkit-client-protocol` `HttpQueueSendRequest` / `HttpQueueSendResponse`",
+        "Add integration test hitting a local actor with queue-send",
+        "Typecheck passes: `cargo build -p rivetkit-client`",
+        "Tests pass: `cargo test -p rivetkit-client`"
+      ],
+      "priority": 55,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-056",
+      "title": "Add raw HTTP `fetch` on Rust `ActorHandleStateless`",
+      "description": "As a Rust client user, I want `handle.fetch(path, method, headers, body)` for raw HTTP requests to an actor's `/request` endpoint.",
+      "acceptanceCriteria": [
+        "Add `fetch(path: &str, method: Method, headers: HeaderMap, body: Option<Bytes>) -> Result<Response>` on `ActorHandleStateless`",
+        "Proxies to the actor gateway's `/request` endpoint",
+        "Accepts request cancellation via `tokio::select!` / drop (idiomatic Rust)",
+        "Integration test posting to a local actor fetch handler",
+        "Typecheck passes: `cargo build -p rivetkit-client`",
+        "Tests pass: `cargo test -p rivetkit-client`"
+      ],
+      "priority": 56,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-057",
+      "title": "Add raw `web_socket` on Rust `ActorHandleStateless`",
+      "description": "As a Rust client user, I want `handle.web_socket(path, protocols)` for raw (non-protocol) WebSocket connections to an actor.",
+      "acceptanceCriteria": [
+        "Add `web_socket(path: &str, protocols: Option<Vec<String>>) -> Result<RawWebSocket>` on `ActorHandleStateless`",
+        "Returns a raw WebSocket handle without the client-protocol framing layer",
+        "Integration test opening a raw WS to a local actor's `/ws` handler",
+        "Typecheck passes: `cargo build -p rivetkit-client`",
+        "Tests pass: `cargo test -p rivetkit-client`"
+      ],
+      "priority": 57,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-058",
+      "title": "Add `ConnectionStatus` enum + lifecycle callbacks on `ActorConnection`",
+      "description": "As a Rust client user, I want `on_error`, `on_open`, `on_close`, `on_status_change`, and `conn_status()` on `ActorConnection`, matching the TypeScript client.",
+      "acceptanceCriteria": [
+        "Add `pub enum ConnectionStatus { Idle, Connecting, Connected, Disconnected }` in `rivetkit-rust/packages/client/src/`",
+        "`ActorConnection` exposes current status via `tokio::sync::watch::Receiver<ConnectionStatus>` for efficient async change observation",
+        "Add callback registration methods: `on_error`, `on_open`, `on_close`, `on_status_change`",
+        "Fire status changes through the `watch::Sender` at every transition",
+        "Fire `on_error` / `on_open` / `on_close` at appropriate points in the reconnection loop",
+        "Integration test subscribing to all four and asserting delivery",
+        "Typecheck passes + tests pass"
+      ],
+      "priority": 58,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-059",
+      "title": "Add `once_event` (auto-unsubscribe after first delivery) to `ActorConnection`",
+      "description": "As a Rust client user, I want `conn.once_event(name, cb)` that auto-unsubscribes after first delivery, matching TS `conn.once(event, cb)`.",
+      "acceptanceCriteria": [
+        "Add `once_event(name: &str, cb: impl FnOnce(Event) + Send + 'static) -> SubscriptionHandle` on `ActorConnection`",
+        "Implementation: register callback, auto-unsubscribe inside the callback wrapper after first invocation",
+        "Test: fire event twice, assert callback called once",
+        "Typecheck passes + tests pass"
+      ],
+      "priority": 59,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-060",
+      "title": "Add `gateway_url()` builder on Rust `ActorHandleStateless`",
+      "description": "As a Rust client user, I want `handle.gateway_url()` returning the gateway URL for direct access, matching TS.",
+      "acceptanceCriteria": [
+        "Add `gateway_url(&self) -> String` on `ActorHandleStateless`",
+        "Builds URL from client's endpoint + actor identity following the shared `GatewayTarget` parity with TS",
+        "Handles both direct actor-ID and query-backed (`rvt-*` params) forms per CLAUDE.md `buildGatewayUrl` rules",
+        "Unit test for each form",
+        "Typecheck passes + tests pass"
+      ],
+      "priority": 60,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-061",
+      "title": "Thread `headers`, `max_input_size`, `disable_metadata_lookup` config options through client",
+      "description": "As a Rust client user, I want the new `ClientConfig` fields honored by every request path, so that custom headers are added, max_input_size enforces pre-encoding, and metadata lookup can be skipped.",
+      "acceptanceCriteria": [
+        "Every HTTP / WS request path merges `ClientConfig.headers` into the request headers (following the CLAUDE.md guidance on query-backed gateway URLs)",
+        "`ClientConfig.max_input_size` enforced against raw CBOR/BARE byte length BEFORE base64url encoding, matching TS `ClientConfig.maxInputSize`",
+        "`ClientConfig.disable_metadata_lookup` skips the pre-call metadata fetch when true",
+        "Unit tests for each option",
+        "Typecheck passes + tests pass"
+      ],
+      "priority": 61,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-062",
+      "title": "Add `client_endpoint()` + `client_token()` accessors on rivetkit-core `ActorContext`",
+      "description": "As the rivetkit Rust wrapper, I want accessors on `ActorContext` exposing the actor's own endpoint + token, so that `c.client()` can construct a Client without reaching into envoy internals.",
+      "acceptanceCriteria": [
+        "Add `client_endpoint(&self) -> Option<&str>` and `client_token(&self) -> Option<&str>` on `rivetkit-core::ActorContext`",
+        "Values read from the actor's `EnvoyHandle` config (same source TS uses from `RegistryConfig`)",
+        "Document that these return `None` until `EnvoyHandle` is wired",
+        "Typecheck passes: `cargo build -p rivetkit-core`",
+        "Tests pass: `cargo test -p rivetkit-core`"
+      ],
+      "priority": 62,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-063",
+      "title": "Add `c.client()` to `Ctx<A>` on the rivetkit Rust wrapper",
+      "description": "As a rivetkit Rust actor author, I want `c.client()` returning a fully-configured Client for actor-to-actor RPC / queue sends / connections, matching TS.",
+      "acceptanceCriteria": [
+        "Add `fn client(&self) -> Client` on `Ctx<A>` in `rivetkit-rust/packages/rivetkit/src/`",
+        "Builds `Client` from `client_endpoint()` + `client_token()` via `ClientConfig`",
+        "Cache the Client after first call (`OnceCell` or `scc::HashMap` keyed by actor instance)",
+        "Replace the existing stub `client_call()` that errors with 'not configured' in rivetkit-core — the Client construction now happens at the wrapper layer",
+        "Add a test actor that calls `c.client().handle(...).action(...)` into a sibling actor",
+        "Typecheck passes: `cargo build -p rivetkit`",
+        "Tests pass: `cargo test -p rivetkit`"
+      ],
+      "priority": 63,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-064",
+      "title": "Document idiomatic Rust cancellation for client actions",
+      "description": "As a Rust client user, I want a doc page explaining how to cancel in-flight actions / connections using `tokio::select!` + drop (the idiomatic Rust pattern), since we're deliberately NOT adding an `AbortSignal` equivalent.",
+      "acceptanceCriteria": [
+        "Write `docs-internal/engine/rivetkit-rust-client.md` (or similar) covering: `tokio::select!` + drop to cancel a pending action; dropping an `ActorConnection` closes the WS; optional `CancellationToken` threading for explicit cancellation",
+        "Cross-link from `rivetkit-rust/packages/client/src/lib.rs` top-of-file `//!` doc",
+        "Include a minimal code example per pattern",
+        "No code changes — documentation only",
+        "Typecheck passes (smoke): `cargo build -p rivetkit-client`"
+      ],
+      "priority": 64,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-065",
+      "title": "Generate v2.2.1 test snapshot and add cross-version migration integration test",
+      "description": "As a maintainer, I want a reproducible test snapshot generated from the v2.2.1 release that exercises the full write path (actor create, SQLite v1 writes, queue enqueue, KV state, scheduled alarms), plus a companion integration test that loads the snapshot on the current branch and verifies v1→v2 SQLite migration + queue drain + state restore all work correctly. Reference: `docs-internal/engine/TEST_SNAPSHOTS.md` § Cross-version snapshots.",
+      "acceptanceCriteria": [
+        "Write a new scenario at `engine/packages/test-snapshot-gen/src/scenarios/actor_v2_2_1_baseline.rs` that: creates at least one actor, writes SQLite v1 pages, enqueues a queue message, stores KV state, schedules an alarm",
+        "Register scenario in `scenarios::all()` with name `actor-v2-2-1-baseline`",
+        "Create a worktree at tag/commit corresponding to v2.2.1 release, copy the scenario file into it, run `cargo run -p test-snapshot-gen -- build actor-v2-2-1-baseline` there, and copy the generated `snapshots/actor-v2-2-1-baseline/` tree (including `metadata.json` and all `replica-*/` RocksDB checkpoint dirs) back to the current branch, tracking via git LFS",
+        "Add an integration test at `engine/packages/engine/tests/actor_v2_2_1_migration.rs` that: loads the snapshot via `test_snapshot::SnapshotTestCtx::from_snapshot(\"actor-v2-2-1-baseline\")`, boots a cluster running the current branch's code, wakes the actor, confirms SQLite v1→v2 migration runs + preserves data, confirms queue messages are drained, confirms KV state is restored, confirms the scheduled alarm still fires",
+        "Run the new integration test and capture any failures: `cargo test -p rivet-engine --test actor_v2_2_1_migration`",
+        "Fix ALL issues surfaced by the test — each fix lands as a code change with a short comment explaining the compatibility reason, not as a test suppression",
+        "If the set of fixes is large (>3 distinct root causes), SPLIT this story: append US-066+ entries to `scripts/ralph/prd.json` describing each fix and bail on this story",
+        "Typecheck passes: `cargo build -p test-snapshot-gen` and `cargo build -p rivet-engine --tests`",
+        "Integration test passes: `cargo test -p rivet-engine --test actor_v2_2_1_migration`"
+      ],
+      "priority": 65,
+      "passes": false,
+      "notes": ""
+    }
+  ]
+}

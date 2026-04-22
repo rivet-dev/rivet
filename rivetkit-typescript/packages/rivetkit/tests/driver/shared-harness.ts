@@ -422,10 +422,18 @@ async function spawnSharedEngine(): Promise<SharedEngine> {
 	timing("engine.spawn", spawnStartedAt, { endpoint });
 
 	engine.stdout?.on("data", (chunk) => {
-		logs.stdout += chunk.toString();
+		const text = chunk.toString();
+		logs.stdout += text;
+		if (process.env.DRIVER_ENGINE_LOGS === "1") {
+			process.stderr.write(`[ENG.OUT] ${text}`);
+		}
 	});
 	engine.stderr?.on("data", (chunk) => {
-		logs.stderr += chunk.toString();
+		const text = chunk.toString();
+		logs.stderr += text;
+		if (process.env.DRIVER_ENGINE_LOGS === "1") {
+			process.stderr.write(`[ENG.ERR] ${text}`);
+		}
 	});
 
 	try {
@@ -566,10 +574,18 @@ export async function startNativeDriverRuntime(
 	timing("runtime.spawn", spawnStartedAt, { namespace, poolName });
 
 	runtime.stdout?.on("data", (chunk) => {
-		logs.stdout += chunk.toString();
+		const text = chunk.toString();
+		logs.stdout += text;
+		if (process.env.DRIVER_RUNTIME_LOGS === "1") {
+			process.stderr.write(`[RT.OUT] ${text}`);
+		}
 	});
 	runtime.stderr?.on("data", (chunk) => {
-		logs.stderr += chunk.toString();
+		const text = chunk.toString();
+		logs.stderr += text;
+		if (process.env.DRIVER_RUNTIME_LOGS === "1") {
+			process.stderr.write(`[RT.ERR] ${text}`);
+		}
 	});
 
 	try {

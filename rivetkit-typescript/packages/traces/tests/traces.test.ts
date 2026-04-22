@@ -125,6 +125,35 @@ class DelayedTracesDriver extends InMemoryTracesDriver {
 	}
 }
 
+class MaxValueTracesDriver extends InMemoryTracesDriver {
+	constructor(private readonly maxValueBytes: number) {
+		super();
+	}
+
+	async set(key: Uint8Array, value: Uint8Array): Promise<void> {
+		if (value.byteLength > this.maxValueBytes) {
+			throw new Error(`value exceeds ${this.maxValueBytes} bytes`);
+		}
+		return super.set(key, value);
+	}
+}
+
+class FailNthSetTracesDriver extends InMemoryTracesDriver {
+	public setAttempts = 0;
+
+	constructor(private readonly failAt: number) {
+		super();
+	}
+
+	async set(key: Uint8Array, value: Uint8Array): Promise<void> {
+		this.setAttempts++;
+		if (this.setAttempts === this.failAt) {
+			throw new Error(`injected set failure ${this.failAt}`);
+		}
+		return super.set(key, value);
+	}
+}
+
 function toKey(key: Uint8Array): string {
 	return Buffer.from(key).toString("hex");
 }
@@ -289,6 +318,81 @@ describe("traces", () => {
 				expect(inOrder).toBe(true);
 			}
 		} finally {
+			clock.restore();
+		}
+	});
+
+	it("keeps default trace chunks below the 128KiB KV value limit", async () => {
+		const clock = installFakeClock();
+		const driver = new MaxValueTracesDriver(128 * 1024);
+		try {
+			const traces = createTraces({ driver });
+
+			const span = traces.startSpan("large");
+			for (let i = 0; i < 80; i++) {
+				traces.emitEvent(span, "payload", {
+					attributes: {
+						idx: i,
+						payload: "x".repeat(2048),
+					},
+				});
+			}
+			traces.endSpan(span);
+			await traces.flush();
+
+			const entries = driver.entries();
+			expect(entries.length).toBeGreaterThan(1);
+			expect(
+				entries.every((entry) => entry.value.byteLength <= 128 * 1024),
+			).toBe(true);
+
+			const now = clock.nowUnixMs();
+			const result = await traces.readRange({
+				startMs: now - 1000,
+				endMs: now + 1000,
+				limit: 10,
+			});
+			const spans = result.otlp.resourceSpans[0].scopeSpans[0].spans;
+			expect(spans).toHaveLength(1);
+			expect(spans[0].events).toHaveLength(80);
+		} finally {
+			clock.restore();
+		}
+	});
+
+	it("recovers the write chain after one KV failure", async () => {
+		const clock = installFakeClock();
+		const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+		const driver = new FailNthSetTracesDriver(2);
+		try {
+			const traces = createTraces({
+				driver,
+				targetChunkBytes: 256,
+				maxChunkBytes: 2048,
+				maxChunkAgeMs: 60_000,
+			});
+
+			const span = traces.startSpan("recover");
+			for (let i = 0; i < 30; i++) {
+				traces.emitEvent(span, "event", { attributes: { idx: i } });
+			}
+			traces.endSpan(span);
+			await traces.flush();
+
+			expect(traces.getLastWriteError()).toBeInstanceOf(Error);
+			expect(warnSpy).toHaveBeenCalledOnce();
+
+			const storedAfterFailure = driver.entries().length;
+			expect(driver.setAttempts).toBeGreaterThan(storedAfterFailure);
+			expect(storedAfterFailure).toBeGreaterThan(0);
+
+			const later = traces.startSpan("after-failure");
+			traces.endSpan(later);
+			await traces.flush();
+
+			expect(driver.entries().length).toBeGreaterThan(storedAfterFailure);
+		} finally {
+			warnSpy.mockRestore();
 			clock.restore();
 		}
 	});

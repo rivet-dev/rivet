@@ -15,6 +15,7 @@ import {
 } from "./action-timeout";
 import {
 	asyncActionActor,
+	concurrentActionActor,
 	promiseActor,
 	syncActionActor,
 } from "./action-types";
@@ -65,6 +66,9 @@ import { rawWebSocketActor, rawWebSocketBinaryActor } from "./raw-websocket";
 import { rejectConnectionActor } from "./reject-connection";
 import { requestAccessActor } from "./request-access";
 import {
+	runSelfInitiatedDestroy,
+	runSelfInitiatedSleep,
+	runIgnoresAbortStopTimeout,
 	runWithEarlyExit,
 	runWithError,
 	runWithoutHandler,
@@ -225,6 +229,7 @@ export const registry = setup({
 		// From action-types.ts
 		syncActionActor,
 		asyncActionActor,
+		concurrentActionActor,
 		promiseActor,
 		// From conn-params.ts
 		counterWithParams,
@@ -270,6 +275,9 @@ export const registry = setup({
 		runWithQueueConsumer,
 		runWithEarlyExit,
 		runWithError,
+		runSelfInitiatedSleep,
+		runSelfInitiatedDestroy,
+		runIgnoresAbortStopTimeout,
 		runWithoutHandler,
 		// From workflow.ts
 		workflowCounterActor,

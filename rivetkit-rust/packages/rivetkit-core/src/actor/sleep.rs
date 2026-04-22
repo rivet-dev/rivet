@@ -1,35 +1,47 @@
-use std::future::Future;
-use std::sync::Arc;
-use std::sync::Mutex;
-use std::sync::atomic::{AtomicBool, Ordering};
-#[cfg(test)]
-use std::sync::atomic::AtomicUsize;
+use parking_lot::Mutex;
 use rivet_envoy_client::handle::EnvoyHandle;
 use rivet_util::async_counter::AsyncCounter;
+use std::future::Future;
+use std::sync::Arc;
+#[cfg(test)]
+use std::sync::atomic::AtomicUsize as TestAtomicUsize;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use tokio::runtime::Handle;
+use tokio::sync::Notify;
 use tokio::task::JoinHandle;
-use tokio::time::{Instant, sleep, sleep_until, timeout_at};
+use tokio::time::{Instant, sleep};
+#[cfg(test)]
+use tokio::time::{sleep_until, timeout_at};
 
 use crate::actor::config::ActorConfig;
 use crate::actor::context::ActorContext;
 use crate::actor::work_registry::{CountGuard, RegionGuard, WorkRegistry};
+#[cfg(test)]
+use crate::types::ActorKey;
 
-#[derive(Clone)]
-pub struct SleepController(Arc<SleepControllerInner>);
-
-struct SleepControllerInner {
-	config: Mutex<ActorConfig>,
-	envoy_handle: Mutex<Option<EnvoyHandle>>,
-	generation: Mutex<Option<u32>>,
-	http_request_counter: Mutex<Option<Arc<AsyncCounter>>>,
+/// Per-actor sleep state.
+///
+/// `ActorContext::reset_sleep_timer()` is invoked on every mutation that changes
+/// a sleep predicate input. Production actors wake the owning `ActorTask` via a
+/// single `Notify`; contexts not wired to an `ActorTask` use the detached
+/// compatibility timer below.
+pub(crate) struct SleepState {
+	// Forced-sync: sleep controller config/runtime handles are synchronous
+	// wiring slots cloned before actor I/O.
+	pub(super) config: Mutex<ActorConfig>,
+	pub(super) envoy_handle: Mutex<Option<EnvoyHandle>>,
+	pub(super) generation: Mutex<Option<u32>>,
+	pub(super) http_request_counter: Mutex<Option<Arc<AsyncCounter>>>,
 	#[cfg(test)]
-	sleep_request_count: AtomicUsize,
+	sleep_request_count: TestAtomicUsize,
 	#[cfg(test)]
-	destroy_request_count: AtomicUsize,
-	ready: AtomicBool,
-	started: AtomicBool,
-	sleep_timer: Mutex<Option<JoinHandle<()>>>,
-	work: WorkRegistry,
+	destroy_request_count: TestAtomicUsize,
+	pub(super) ready: AtomicBool,
+	pub(super) started: AtomicBool,
+	pub(super) run_handler_active_count: AtomicUsize,
+	// Forced-sync: the compatibility sleep timer is aborted from sync paths.
+	pub(super) sleep_timer: Mutex<Option<JoinHandle<()>>>,
+	pub(super) work: WorkRegistry,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -41,177 +53,199 @@ pub(crate) enum CanSleep {
 	ActiveHttpRequests,
 	ActiveKeepAwake,
 	ActiveInternalKeepAwake,
+	ActiveRunHandler,
+	ActiveDisconnectCallbacks,
 	ActiveConnections,
 	ActiveWebSocketCallbacks,
 }
 
-impl SleepController {
+impl SleepState {
 	pub fn new(config: ActorConfig) -> Self {
-		Self(Arc::new(SleepControllerInner {
+		Self {
 			config: Mutex::new(config),
 			envoy_handle: Mutex::new(None),
 			generation: Mutex::new(None),
 			http_request_counter: Mutex::new(None),
 			#[cfg(test)]
-			sleep_request_count: AtomicUsize::new(0),
+			sleep_request_count: TestAtomicUsize::new(0),
 			#[cfg(test)]
-			destroy_request_count: AtomicUsize::new(0),
+			destroy_request_count: TestAtomicUsize::new(0),
 			ready: AtomicBool::new(false),
 			started: AtomicBool::new(false),
+			run_handler_active_count: AtomicUsize::new(0),
 			sleep_timer: Mutex::new(None),
 			work: WorkRegistry::new(),
-		}))
+		}
+	}
+}
+
+impl Default for SleepState {
+	fn default() -> Self {
+		Self::new(ActorConfig::default())
+	}
+}
+
+impl std::fmt::Debug for SleepState {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.debug_struct("SleepState")
+			.field("ready", &self.ready.load(Ordering::SeqCst))
+			.field("started", &self.started.load(Ordering::SeqCst))
+			.field(
+				"run_handler_active_count",
+				&self.run_handler_active_count.load(Ordering::SeqCst),
+			)
+			.field("keep_awake_count", &self.work.keep_awake.load())
+			.field(
+				"internal_keep_awake_count",
+				&self.work.internal_keep_awake.load(),
+			)
+			.field(
+				"websocket_callback_count",
+				&self.work.websocket_callback.load(),
+			)
+			.finish()
+	}
+}
+
+impl ActorContext {
+	#[cfg(test)]
+	pub(crate) fn new_for_sleep_tests(actor_id: impl Into<String>) -> Self {
+		Self::new(actor_id, "sleep-test", ActorKey::default(), "local")
 	}
 
-	pub(crate) fn configure(&self, config: ActorConfig) {
-		*self.0.config.lock().expect("sleep config lock poisoned") = config;
+	pub(crate) fn configure_sleep_state(&self, config: ActorConfig) {
+		*self.0.sleep.config.lock() = config;
 	}
 
-	#[allow(dead_code)]
-	pub(crate) fn configure_envoy(
-		&self,
-		actor_id: &str,
-		envoy_handle: EnvoyHandle,
-		generation: Option<u32>,
-	) {
-		*self
-			.0
-			.envoy_handle
-			.lock()
-			.expect("sleep envoy handle lock poisoned") = Some(envoy_handle);
-		*self
-			.0
-			.generation
-			.lock()
-			.expect("sleep generation lock poisoned") = generation;
-		*self
-			.0
-			.http_request_counter
-			.lock()
-			.expect("sleep http request counter lock poisoned") =
-			self.lookup_http_request_counter(actor_id);
+	pub(crate) fn configure_sleep_envoy(&self, envoy_handle: EnvoyHandle, generation: Option<u32>) {
+		*self.0.sleep.envoy_handle.lock() = Some(envoy_handle);
+		*self.0.sleep.generation.lock() = generation;
+		*self.0.sleep.http_request_counter.lock() =
+			self.lookup_http_request_counter(self.actor_id());
 	}
 
-	#[allow(dead_code)]
-	pub(crate) fn clear_envoy(&self) {
-		*self
-			.0
-			.envoy_handle
-			.lock()
-			.expect("sleep envoy handle lock poisoned") = None;
-		*self
-			.0
-			.generation
-			.lock()
-			.expect("sleep generation lock poisoned") = None;
-		*self
-			.0
-			.http_request_counter
-			.lock()
-			.expect("sleep http request counter lock poisoned") = None;
+	pub(crate) fn sleep_envoy_handle(&self) -> Option<EnvoyHandle> {
+		self.0.sleep.envoy_handle.lock().clone()
 	}
 
-	pub(crate) fn envoy_handle(&self) -> Option<EnvoyHandle> {
-		self
-			.0
-			.envoy_handle
-			.lock()
-			.expect("sleep envoy handle lock poisoned")
-			.clone()
+	pub(crate) fn sleep_generation(&self) -> Option<u32> {
+		*self.0.sleep.generation.lock()
 	}
 
-	pub(crate) fn generation(&self) -> Option<u32> {
-		*self
-			.0
-			.generation
-			.lock()
-			.expect("sleep generation lock poisoned")
-	}
-
-	pub(crate) fn request_sleep(&self, actor_id: &str) {
+	pub(crate) fn request_sleep_from_envoy(&self) {
 		#[cfg(test)]
-		self.0.sleep_request_count.fetch_add(1, Ordering::SeqCst);
-		let envoy_handle = self
-			.0
-			.envoy_handle
-			.lock()
-			.expect("sleep envoy handle lock poisoned")
-			.clone();
-		let generation = *self
-			.0
-			.generation
-			.lock()
-			.expect("sleep generation lock poisoned");
+		self.0
+			.sleep
+			.sleep_request_count
+			.fetch_add(1, Ordering::SeqCst);
+		let envoy_handle = self.0.sleep.envoy_handle.lock().clone();
+		let generation = *self.0.sleep.generation.lock();
 		if let Some(envoy_handle) = envoy_handle {
-			envoy_handle.sleep_actor(actor_id.to_owned(), generation);
+			envoy_handle.sleep_actor(self.actor_id().to_owned(), generation);
 		}
 	}
 
-	pub(crate) fn request_destroy(&self, actor_id: &str) {
+	pub(crate) fn request_destroy_from_envoy(&self) {
 		#[cfg(test)]
-		self.0.destroy_request_count.fetch_add(1, Ordering::SeqCst);
-		let envoy_handle = self
-			.0
-			.envoy_handle
-			.lock()
-			.expect("sleep envoy handle lock poisoned")
-			.clone();
-		let generation = *self
-			.0
-			.generation
-			.lock()
-			.expect("sleep generation lock poisoned");
+		self.0
+			.sleep
+			.destroy_request_count
+			.fetch_add(1, Ordering::SeqCst);
+		let envoy_handle = self.0.sleep.envoy_handle.lock().clone();
+		let generation = *self.0.sleep.generation.lock();
 		if let Some(envoy_handle) = envoy_handle {
-			envoy_handle.destroy_actor(actor_id.to_owned(), generation);
+			envoy_handle.destroy_actor(self.actor_id().to_owned(), generation);
 		}
 	}
 
-	#[allow(dead_code)]
-	pub(crate) fn set_ready(&self, ready: bool) {
-		self.0.ready.store(ready, Ordering::SeqCst);
+	pub(crate) fn set_sleep_ready(&self, ready: bool) {
+		let previous = self.0.sleep.ready.swap(ready, Ordering::SeqCst);
+		if previous != ready {
+			self.reset_sleep_timer();
+		}
 	}
 
-	#[allow(dead_code)]
-	pub(crate) fn ready(&self) -> bool {
-		self.0.ready.load(Ordering::SeqCst)
+	pub(crate) fn set_sleep_started(&self, started: bool) {
+		let previous = self.0.sleep.started.swap(started, Ordering::SeqCst);
+		if previous != started {
+			self.reset_sleep_timer();
+		}
 	}
 
-	#[allow(dead_code)]
-	pub(crate) fn set_started(&self, started: bool) {
-		self.0.started.store(started, Ordering::SeqCst);
+	pub(crate) fn sleep_started(&self) -> bool {
+		self.0.sleep.started.load(Ordering::SeqCst)
 	}
 
-	#[allow(dead_code)]
-	pub(crate) fn started(&self) -> bool {
-		self.0.started.load(Ordering::SeqCst)
+	#[doc(hidden)]
+	pub fn begin_run_handler(&self) {
+		let previous = self
+			.0
+			.sleep
+			.run_handler_active_count
+			.fetch_add(1, Ordering::SeqCst);
+		if previous == 0 {
+			self.reset_sleep_timer();
+		}
+	}
+
+	#[doc(hidden)]
+	pub fn end_run_handler(&self) {
+		match self.0.sleep.run_handler_active_count.fetch_update(
+			Ordering::SeqCst,
+			Ordering::SeqCst,
+			|count| count.checked_sub(1),
+		) {
+			Ok(1) => self.reset_sleep_timer(),
+			Ok(_) => {}
+			Err(_) => {
+				tracing::warn!(
+					actor_id = %self.actor_id(),
+					"run handler active counter underflow"
+				);
+			}
+		}
+	}
+
+	pub(crate) fn run_handler_active(&self) -> bool {
+		self.0.sleep.run_handler_active_count.load(Ordering::SeqCst) > 0
 	}
 
 	#[cfg(test)]
 	pub(crate) fn sleep_request_count(&self) -> usize {
-		self.0.sleep_request_count.load(Ordering::SeqCst)
+		self.0.sleep.sleep_request_count.load(Ordering::SeqCst)
 	}
 
-	pub(crate) async fn can_sleep(&self, ctx: &ActorContext) -> CanSleep {
-		let config = self.config();
-		if !self.0.ready.load(Ordering::SeqCst) || !self.0.started.load(Ordering::SeqCst) {
+	pub(crate) async fn can_arm_sleep_timer(&self) -> CanSleep {
+		let config = self.sleep_state_config();
+		if !self.0.sleep.ready.load(Ordering::SeqCst)
+			|| !self.0.sleep.started.load(Ordering::SeqCst)
+		{
 			return CanSleep::NotReady;
 		}
-		if ctx.prevent_sleep() {
+		if self.prevent_sleep() {
 			return CanSleep::PreventSleep;
 		}
 		if config.no_sleep {
 			return CanSleep::NoSleep;
 		}
-		if self.active_http_request_count(ctx) > 0 {
+		if self.active_http_request_count() > 0 {
 			return CanSleep::ActiveHttpRequests;
 		}
-		if self.keep_awake_count() > 0 {
+		if self.sleep_keep_awake_count() > 0 {
 			return CanSleep::ActiveKeepAwake;
 		}
-		if self.internal_keep_awake_count() > 0 {
+		if self.sleep_internal_keep_awake_count() > 0 {
 			return CanSleep::ActiveInternalKeepAwake;
 		}
-		if !ctx.conns().is_empty() {
+		// Queue receives are sleep-compatible: sleep aborts the wait via the
+		// actor abort token, then the next generation restarts the run loop.
+		if self.run_handler_active() && self.active_queue_wait_count() == 0 {
+			return CanSleep::ActiveRunHandler;
+		}
+		if self.pending_disconnect_count() > 0 {
+			return CanSleep::ActiveDisconnectCallbacks;
+		}
+		if !self.conns().is_empty() {
 			return CanSleep::ActiveConnections;
 		}
 		if self.websocket_callback_count() > 0 {
@@ -221,305 +255,311 @@ impl SleepController {
 		CanSleep::Yes
 	}
 
-	pub(crate) fn reset_sleep_timer(&self, ctx: ActorContext) {
+	pub(crate) fn can_finalize_sleep(&self) -> bool {
+		self.0.sleep.work.core_dispatched_hooks.load() == 0
+			&& self.shutdown_task_count() == 0
+			&& self.sleep_keep_awake_count() == 0
+			&& self.sleep_internal_keep_awake_count() == 0
+			&& self.active_http_request_count() == 0
+			&& self.websocket_callback_count() == 0
+			&& self.pending_disconnect_count() == 0
+			&& !self.prevent_sleep()
+	}
+
+	/// Spawn the fallback sleep timer used by `ActorContext`s that are not
+	/// bound to an `ActorTask`.
+	///
+	/// This path only engages when `configure_lifecycle_events` has not been
+	/// wired, which in practice means test contexts. Production actors built
+	/// through the registry always have an `ActorTask` and never spawn this
+	/// detached timer.
+	pub(crate) fn reset_sleep_timer_state(&self) {
 		self.cancel_sleep_timer();
 
 		let Ok(runtime) = Handle::try_current() else {
+			tracing::debug!(
+				actor_id = %self.actor_id(),
+				"sleep activity reset skipped without tokio runtime"
+			);
 			return;
 		};
 
-		let controller = self.clone();
-		// Intentionally detached compatibility timer for contexts that are not
-		// wired to ActorTask. ActorTask-owned actors use lifecycle events and a
-		// task-local sleep deadline instead.
+		tracing::debug!(
+			actor_id = %self.actor_id(),
+			sleep_timeout_ms = self.0.sleep.config.lock().sleep_timeout.as_millis() as u64,
+			"sleep activity reset"
+		);
+
+		let ctx = self.clone();
 		let task = runtime.spawn(async move {
-			if controller.can_sleep(&ctx).await != CanSleep::Yes {
+			let can_sleep = ctx.can_sleep().await;
+			if can_sleep != CanSleep::Yes {
+				tracing::debug!(
+					actor_id = %ctx.actor_id(),
+					reason = ?can_sleep,
+					"sleep idle timer skipped"
+				);
 				return;
 			}
 
-			let timeout = controller.config().sleep_timeout;
+			let timeout = ctx.sleep_config().sleep_timeout;
 			sleep(timeout).await;
 
-			if controller.can_sleep(&ctx).await == CanSleep::Yes {
+			let can_sleep = ctx.can_sleep().await;
+			if can_sleep == CanSleep::Yes {
+				tracing::debug!(
+					actor_id = %ctx.actor_id(),
+					sleep_timeout_ms = timeout.as_millis() as u64,
+					"sleep idle timer elapsed"
+				);
 				ctx.sleep();
+			} else {
+				tracing::warn!(
+					actor_id = %ctx.actor_id(),
+					reason = ?can_sleep,
+					"sleep idle timer elapsed but actor stayed awake"
+				);
 			}
 		});
 
-		*self
-			.0
-			.sleep_timer
-			.lock()
-			.expect("sleep timer lock poisoned") = Some(task);
+		*self.0.sleep.sleep_timer.lock() = Some(task);
 	}
 
 	pub(crate) fn cancel_sleep_timer(&self) {
-		let timer = self
-			.0
-			.sleep_timer
-			.lock()
-			.expect("sleep timer lock poisoned")
-			.take();
+		let timer = self.0.sleep.sleep_timer.lock().take();
 		if let Some(timer) = timer {
 			timer.abort();
 		}
 	}
 
-	pub(crate) async fn wait_for_sleep_idle_window(
-		&self,
-		ctx: &ActorContext,
-		deadline: Instant,
-	) -> bool {
-		loop {
-			let idle = self.0.work.idle_notify.notified();
-			tokio::pin!(idle);
-			idle.as_mut().enable();
+	pub(crate) async fn wait_for_internal_keep_awake_idle(&self, deadline: Instant) -> bool {
+		self.0
+			.sleep
+			.work
+			.internal_keep_awake
+			.wait_zero(deadline)
+			.await
+	}
 
-			if self.sleep_shutdown_idle_ready(ctx) {
+	#[cfg(test)]
+	pub(crate) async fn wait_for_sleep_idle_window(&self, deadline: Instant) -> bool {
+		loop {
+			let activity = self.sleep_activity_notify();
+			let notified = activity.notified();
+			tokio::pin!(notified);
+			notified.as_mut().enable();
+
+			if self.can_finalize_sleep() {
 				return true;
 			}
 
-			if timeout_at(deadline, idle).await.is_err() {
+			if timeout_at(deadline, notified).await.is_err() {
 				return false;
 			}
 		}
 	}
 
-	pub(crate) async fn wait_for_shutdown_tasks(
-		&self,
-		ctx: &ActorContext,
-		deadline: Instant,
-	) -> bool {
+	#[cfg(test)]
+	pub(crate) async fn wait_for_shutdown_tasks(&self, deadline: Instant) -> bool {
 		loop {
-			let prevent_sleep = self.0.work.prevent_sleep_notify.notified();
-			tokio::pin!(prevent_sleep);
-			prevent_sleep.as_mut().enable();
+			let activity = self.sleep_activity_notify();
+			let notified = activity.notified();
+			tokio::pin!(notified);
+			notified.as_mut().enable();
 
 			let shutdown_count = self.shutdown_task_count();
 			let websocket_count = self.websocket_callback_count();
-			if shutdown_count == 0 && websocket_count == 0 && !ctx.prevent_sleep() {
+			if shutdown_count == 0 && websocket_count == 0 && !self.prevent_sleep() {
 				return true;
 			}
 
 			tokio::select! {
-				drained = self.0.work.shutdown_counter.wait_zero(deadline), if shutdown_count > 0 => {
+				drained = self.0.sleep.work.shutdown_counter.wait_zero(deadline), if shutdown_count > 0 => {
 					if !drained {
 						return false;
 					}
 				}
-				drained = self.0.work.websocket_callback.wait_zero(deadline), if websocket_count > 0 => {
+				drained = self.0.sleep.work.websocket_callback.wait_zero(deadline), if websocket_count > 0 => {
 					if !drained {
 						return false;
 					}
 				}
-				_ = &mut prevent_sleep => {}
+				_ = &mut notified => {}
 				_ = sleep_until(deadline) => return false,
 			}
 		}
 	}
 
-	pub(crate) async fn wait_for_internal_keep_awake_idle(
-		&self,
-		deadline: Instant,
-	) -> bool {
-		self.0.work.internal_keep_awake.wait_zero(deadline).await
-	}
-
-	pub(crate) async fn wait_for_http_requests_drained(
-		&self,
-		ctx: &ActorContext,
-		deadline: Instant,
-	) -> bool {
-		let Some(counter) = self.http_request_counter(ctx) else {
+	pub(crate) async fn wait_for_http_requests_drained(&self, deadline: Instant) -> bool {
+		let Some(counter) = self.http_request_counter() else {
 			return true;
 		};
 		counter.wait_zero(deadline).await
 	}
 
-	pub(crate) fn keep_awake(&self) -> RegionGuard {
-		self.0.work.keep_awake_guard()
+	pub(crate) async fn wait_for_http_requests_idle(&self) {
+		loop {
+			let idle = self.0.sleep.work.idle_notify.notified();
+			tokio::pin!(idle);
+			idle.as_mut().enable();
+
+			if self.active_http_request_count() == 0 {
+				return;
+			}
+
+			idle.await;
+		}
 	}
 
-	pub(crate) fn keep_awake_count(&self) -> usize {
-		self.0.work.keep_awake.load()
+	pub(crate) fn keep_awake_region(&self) -> RegionGuard {
+		self.0.sleep.work.keep_awake_guard()
 	}
 
-	pub(crate) fn internal_keep_awake(&self) -> RegionGuard {
-		self.0.work.internal_keep_awake_guard()
+	pub(crate) fn sleep_keep_awake_count(&self) -> usize {
+		self.0.sleep.work.keep_awake.load()
 	}
 
-	pub(crate) fn internal_keep_awake_count(&self) -> usize {
-		self.0.work.internal_keep_awake.load()
+	pub(crate) fn internal_keep_awake_region(&self) -> RegionGuard {
+		self.0.sleep.work.internal_keep_awake_guard()
 	}
 
-	pub(crate) fn websocket_callback(&self) -> RegionGuard {
-		self.0.work.websocket_callback_guard()
+	pub(crate) fn sleep_internal_keep_awake_count(&self) -> usize {
+		self.0.sleep.work.internal_keep_awake.load()
+	}
+
+	fn active_queue_wait_count(&self) -> usize {
+		self.0.active_queue_wait_count.load(Ordering::SeqCst) as usize
+	}
+
+	pub(crate) fn websocket_callback_region_state(&self) -> RegionGuard {
+		self.0.sleep.work.websocket_callback_guard()
 	}
 
 	fn websocket_callback_count(&self) -> usize {
-		self.0.work.websocket_callback.load()
+		self.0.sleep.work.websocket_callback.load()
 	}
 
-	pub(crate) fn track_shutdown_task<F>(&self, fut: F)
+	pub(crate) fn track_shutdown_task<F>(&self, fut: F) -> bool
 	where
 		F: Future<Output = ()> + Send + 'static,
 	{
-		let mut shutdown_tasks = self
-			.0
-			.work
-			.shutdown_tasks
-			.lock()
-			.expect("shutdown tasks lock poisoned");
-		if self.0.work.teardown_started.load(Ordering::Acquire) {
-			tracing::warn!("shutdown task spawned after teardown; aborting immediately");
-			return;
+		if Handle::try_current().is_err() {
+			tracing::warn!("shutdown task spawned without tokio runtime; running fallback");
+			return false;
 		}
-		let counter = self.0.work.shutdown_counter.clone();
+
+		let mut shutdown_tasks = self.0.sleep.work.shutdown_tasks.lock();
+		if self.0.sleep.work.teardown_started.load(Ordering::Acquire) {
+			tracing::warn!("shutdown task spawned after teardown; aborting immediately");
+			return false;
+		}
+		let counter = self.0.sleep.work.shutdown_counter.clone();
 		counter.increment();
 		let guard = CountGuard::from_incremented(counter);
 		shutdown_tasks.spawn(async move {
 			let _guard = guard;
 			fut.await;
 		});
+		true
 	}
 
-	#[allow(dead_code)]
 	pub(crate) fn shutdown_task_count(&self) -> usize {
-		self.0.work.shutdown_counter.load()
+		self.0.sleep.work.shutdown_counter.load()
 	}
 
-	pub(crate) async fn teardown(&self) {
-		self
-			.0
+	pub(crate) fn begin_core_dispatched_hook(&self) {
+		self.0.sleep.work.core_dispatched_hooks.increment();
+		self.reset_sleep_timer();
+	}
+
+	pub fn mark_core_dispatched_hook_completed(&self) {
+		self.0.sleep.work.core_dispatched_hooks.decrement();
+		self.reset_sleep_timer();
+	}
+
+	#[cfg(test)]
+	#[allow(dead_code)]
+	pub(crate) fn core_dispatched_hook_count(&self) -> usize {
+		self.0.sleep.work.core_dispatched_hooks.load()
+	}
+
+	pub(crate) async fn teardown_sleep_state(&self) {
+		self.0
+			.sleep
 			.work
 			.teardown_started
 			.store(true, Ordering::Release);
 		let mut shutdown_tasks = {
-			let mut guard = self
-				.0
-				.work
-				.shutdown_tasks
-				.lock()
-				.expect("shutdown tasks lock poisoned");
+			let mut guard = self.0.sleep.work.shutdown_tasks.lock();
 			std::mem::take(&mut *guard)
 		};
 		shutdown_tasks.shutdown().await;
-		*self
-			.0
-			.work
-			.shutdown_tasks
-			.lock()
-			.expect("shutdown tasks lock poisoned") = shutdown_tasks;
+		*self.0.sleep.work.shutdown_tasks.lock() = shutdown_tasks;
 	}
 
-	fn sleep_shutdown_idle_ready(&self, ctx: &ActorContext) -> bool {
-		self.active_http_request_count(ctx) == 0
-			&& self.keep_awake_count() == 0
-			&& self.internal_keep_awake_count() == 0
-	}
-	pub(crate) fn config(&self) -> ActorConfig {
-		self.0
-			.config
-			.lock()
-			.expect("sleep config lock poisoned")
-			.clone()
+	pub(crate) fn sleep_state_config(&self) -> ActorConfig {
+		self.0.sleep.config.lock().clone()
 	}
 
-	fn active_http_request_count(&self, ctx: &ActorContext) -> usize {
-		self
-			.http_request_counter(ctx)
+	fn active_http_request_count(&self) -> usize {
+		self.http_request_counter()
 			.map(|counter| counter.load())
 			.unwrap_or(0)
 	}
 
 	pub(crate) fn notify_prevent_sleep_changed(&self) {
-		self.0.work.prevent_sleep_notify.notify_waiters();
+		self.0.sleep.work.prevent_sleep_notify.notify_waiters();
+		self.reset_sleep_timer();
 	}
 
-	fn http_request_counter(&self, ctx: &ActorContext) -> Option<Arc<AsyncCounter>> {
-		if let Some(counter) = self
-			.0
-			.http_request_counter
-			.lock()
-			.expect("sleep http request counter lock poisoned")
-			.clone()
-		{
+	pub(crate) fn sleep_activity_notify(&self) -> Arc<Notify> {
+		self.0.sleep.work.activity_notify.clone()
+	}
+
+	fn http_request_counter(&self) -> Option<Arc<AsyncCounter>> {
+		if let Some(counter) = self.0.sleep.http_request_counter.lock().clone() {
 			return Some(counter);
 		}
 
-		let counter = self.lookup_http_request_counter(ctx.actor_id())?;
-		*self
-			.0
-			.http_request_counter
-			.lock()
-			.expect("sleep http request counter lock poisoned") = Some(counter.clone());
+		let counter = self.lookup_http_request_counter(self.actor_id())?;
+		*self.0.sleep.http_request_counter.lock() = Some(counter.clone());
 		Some(counter)
 	}
 
 	fn lookup_http_request_counter(&self, actor_id: &str) -> Option<Arc<AsyncCounter>> {
-		let envoy_handle = self
-			.0
-			.envoy_handle
-			.lock()
-			.expect("sleep envoy handle lock poisoned")
-			.clone();
-		let generation = *self
-			.0
-			.generation
-			.lock()
-			.expect("sleep generation lock poisoned");
+		let envoy_handle = self.0.sleep.envoy_handle.lock().clone();
+		let generation = *self.0.sleep.generation.lock();
 		let envoy_handle = envoy_handle?;
 		let counter = envoy_handle.http_request_counter(actor_id, generation)?;
-		counter.register_zero_notify(&self.0.work.idle_notify);
+		counter.register_zero_notify(&self.0.sleep.work.idle_notify);
+		// The HTTP counter is owned by envoy-client, so neither increment nor
+		// decrement goes through a rivetkit-core guard. Hook every transition
+		// into the sleep activity notify so the sleep deadline gets
+		// re-evaluated when a request starts or completes.
+		let ctx = self.clone();
+		counter.register_change_callback(Arc::new(move || {
+			ctx.reset_sleep_timer();
+		}));
 		Some(counter)
-	}
-}
-
-impl Default for SleepController {
-	fn default() -> Self {
-		Self::new(ActorConfig::default())
-	}
-}
-
-impl std::fmt::Debug for SleepController {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		f.debug_struct("SleepController")
-			.field("ready", &self.0.ready.load(Ordering::SeqCst))
-			.field("started", &self.0.started.load(Ordering::SeqCst))
-			.field(
-				"keep_awake_count",
-				&self.keep_awake_count(),
-			)
-			.field(
-				"internal_keep_awake_count",
-				&self.internal_keep_awake_count(),
-			)
-			.field(
-				"websocket_callback_count",
-				&self.websocket_callback_count(),
-			)
-			.finish()
 	}
 }
 
 #[cfg(test)]
 mod tests {
 	use std::sync::Arc;
-	use std::sync::Mutex as StdMutex;
 	use std::sync::atomic::{AtomicUsize, Ordering};
 
 	use crate::actor::context::ActorContext;
-	use crate::types::ActorKey;
+	use parking_lot::Mutex as DropMutex;
 	use rivet_util::async_counter::AsyncCounter;
 	use tokio::sync::oneshot;
 	use tokio::task::yield_now;
 	use tokio::time::{Duration, Instant, advance};
-	use tracing::{Event, Subscriber};
 	use tracing::field::{Field, Visit};
+	use tracing::{Event, Subscriber};
 	use tracing_subscriber::layer::{Context as LayerContext, Layer};
 	use tracing_subscriber::prelude::*;
 	use tracing_subscriber::registry::Registry;
-
-	use super::SleepController;
 
 	#[derive(Default)]
 	struct MessageVisitor {
@@ -564,17 +604,17 @@ mod tests {
 		}
 	}
 
-	struct NotifyOnDrop(StdMutex<Option<oneshot::Sender<()>>>);
+	struct NotifyOnDrop(DropMutex<Option<oneshot::Sender<()>>>);
 
 	impl NotifyOnDrop {
 		fn new(sender: oneshot::Sender<()>) -> Self {
-			Self(StdMutex::new(Some(sender)))
+			Self(DropMutex::new(Some(sender)))
 		}
 	}
 
 	impl Drop for NotifyOnDrop {
 		fn drop(&mut self) {
-			if let Some(sender) = self.0.lock().expect("drop notify lock poisoned").take() {
+			if let Some(sender) = self.0.lock().take() {
 				let _ = sender.send(());
 			}
 		}
@@ -582,20 +622,20 @@ mod tests {
 
 	#[tokio::test(start_paused = true)]
 	async fn shutdown_task_counter_reaches_zero_after_completion() {
-		let controller = SleepController::default();
+		let ctx = ActorContext::new_for_sleep_tests("actor-shutdown-complete");
 		let (done_tx, done_rx) = oneshot::channel();
 
-		controller.track_shutdown_task(async move {
+		ctx.track_shutdown_task(async move {
 			let _ = done_tx.send(());
 		});
 
 		done_rx.await.expect("shutdown task should complete");
 		yield_now().await;
 
-		assert_eq!(controller.shutdown_task_count(), 0);
+		assert_eq!(ctx.shutdown_task_count(), 0);
 		assert!(
-			controller
-				.0
+			ctx.0
+				.sleep
 				.work
 				.shutdown_counter
 				.wait_zero(Instant::now() + Duration::from_millis(1))
@@ -605,19 +645,19 @@ mod tests {
 
 	#[tokio::test(start_paused = true)]
 	async fn shutdown_task_counter_reaches_zero_after_panic() {
-		let controller = SleepController::default();
+		let ctx = ActorContext::new_for_sleep_tests("actor-shutdown-panic");
 
-		controller.track_shutdown_task(async move {
+		ctx.track_shutdown_task(async move {
 			panic!("boom");
 		});
 
 		yield_now().await;
 		yield_now().await;
 
-		assert_eq!(controller.shutdown_task_count(), 0);
+		assert_eq!(ctx.shutdown_task_count(), 0);
 		assert!(
-			controller
-				.0
+			ctx.0
+				.sleep
 				.work
 				.shutdown_counter
 				.wait_zero(Instant::now() + Duration::from_millis(1))
@@ -627,94 +667,98 @@ mod tests {
 
 	#[tokio::test(start_paused = true)]
 	async fn teardown_aborts_tracked_shutdown_tasks() {
-		let controller = SleepController::default();
+		let ctx = ActorContext::new_for_sleep_tests("actor-shutdown-teardown");
 		let (drop_tx, drop_rx) = oneshot::channel();
 		let (_never_tx, never_rx) = oneshot::channel::<()>();
 		let notify = NotifyOnDrop::new(drop_tx);
 
-		controller.track_shutdown_task(async move {
+		ctx.track_shutdown_task(async move {
 			let _notify = notify;
 			let _ = never_rx.await;
 		});
 
-		assert_eq!(controller.shutdown_task_count(), 1);
+		assert_eq!(ctx.shutdown_task_count(), 1);
 
-		controller.teardown().await;
+		ctx.teardown_sleep_state().await;
 		advance(Duration::from_millis(1)).await;
 
-		drop_rx.await.expect("teardown should abort the tracked task");
-		assert_eq!(controller.shutdown_task_count(), 0);
+		drop_rx
+			.await
+			.expect("teardown should abort the tracked task");
+		assert_eq!(ctx.shutdown_task_count(), 0);
 	}
 
 	#[tokio::test(start_paused = true)]
 	async fn track_shutdown_task_refuses_spawns_after_teardown() {
-		let controller = SleepController::default();
+		let ctx = ActorContext::new_for_sleep_tests("actor-shutdown-refuse");
 		let warning_count = Arc::new(AtomicUsize::new(0));
 		let subscriber = Registry::default().with(ShutdownTaskRefusedLayer {
 			count: warning_count.clone(),
 		});
 		let _guard = tracing::subscriber::set_default(subscriber);
 
-		controller.teardown().await;
-		controller.track_shutdown_task(async move {
+		ctx.teardown_sleep_state().await;
+		ctx.track_shutdown_task(async move {
 			panic!("post-teardown shutdown task should never spawn");
 		});
 		yield_now().await;
 
-		assert_eq!(controller.shutdown_task_count(), 0);
+		assert_eq!(ctx.shutdown_task_count(), 0);
 		assert_eq!(warning_count.load(Ordering::SeqCst), 1);
 	}
 
 	#[tokio::test(start_paused = true)]
-	async fn sleep_idle_window_without_work_returns_next_tick() {
-		let controller = SleepController::default();
-		let ctx = ActorContext::new(
-			"actor-sleep-idle",
-			"sleep-idle",
-			ActorKey::default(),
-			"local",
+	async fn sleep_then_destroy_signal_tasks_do_not_leak_after_teardown() {
+		let ctx = ActorContext::new_for_sleep_tests("actor-sleep-destroy");
+
+		ctx.sleep();
+		ctx.destroy();
+
+		assert_eq!(
+			ctx.shutdown_task_count(),
+			2,
+			"sleep and destroy bridge work should be tracked before it runs"
 		);
 
+		ctx.teardown_sleep_state().await;
+		advance(Duration::from_millis(1)).await;
+
+		assert_eq!(ctx.shutdown_task_count(), 0);
+	}
+
+	#[tokio::test(start_paused = true)]
+	async fn sleep_idle_window_without_work_returns_next_tick() {
+		let ctx = ActorContext::new_for_sleep_tests("actor-sleep-idle");
+
 		let waiter = tokio::spawn({
-			let controller = controller.clone();
 			let ctx = ctx.clone();
 			async move {
-				controller
-					.wait_for_sleep_idle_window(&ctx, Instant::now() + Duration::from_secs(1))
+				ctx.wait_for_sleep_idle_window(Instant::now() + Duration::from_secs(1))
 					.await
 			}
 		});
 
 		yield_now().await;
 
-		assert!(waiter.is_finished(), "idle wait should not poll in 10ms slices");
+		assert!(
+			waiter.is_finished(),
+			"idle wait should not poll in 10ms slices"
+		);
 		assert!(waiter.await.expect("idle waiter should join"));
 	}
 
 	#[tokio::test(start_paused = true)]
 	async fn sleep_idle_window_waits_for_http_counter_zero_transition() {
-		let controller = SleepController::default();
-		let ctx = ActorContext::new(
-			"actor-http-idle",
-			"http-idle",
-			ActorKey::default(),
-			"local",
-		);
+		let ctx = ActorContext::new_for_sleep_tests("actor-http-idle");
 		let counter = Arc::new(AsyncCounter::new());
-		counter.register_zero_notify(&controller.0.work.idle_notify);
-		*controller
-			.0
-			.http_request_counter
-			.lock()
-			.expect("sleep http request counter lock poisoned") = Some(counter.clone());
+		counter.register_zero_notify(&ctx.0.sleep.work.idle_notify);
+		*ctx.0.sleep.http_request_counter.lock() = Some(counter.clone());
 
 		counter.increment();
 		let waiter = tokio::spawn({
-			let controller = controller.clone();
 			let ctx = ctx.clone();
 			async move {
-				controller
-					.wait_for_sleep_idle_window(&ctx, Instant::now() + Duration::from_secs(1))
+				ctx.wait_for_sleep_idle_window(Instant::now() + Duration::from_secs(1))
 					.await
 			}
 		});
@@ -728,7 +772,70 @@ mod tests {
 		counter.decrement();
 		yield_now().await;
 
-		assert!(waiter.is_finished(), "idle wait should resume on the next scheduler tick");
+		assert!(
+			waiter.is_finished(),
+			"idle wait should resume on the next scheduler tick"
+		);
 		assert!(waiter.await.expect("http idle waiter should join"));
+	}
+
+	#[tokio::test(start_paused = true)]
+	async fn http_request_idle_wait_uses_zero_notify() {
+		let ctx = ActorContext::new_for_sleep_tests("actor-http-zero-notify");
+		let counter = Arc::new(AsyncCounter::new());
+		counter.register_zero_notify(&ctx.0.sleep.work.idle_notify);
+		*ctx.0.sleep.http_request_counter.lock() = Some(counter.clone());
+
+		counter.increment();
+		let waiter = tokio::spawn({
+			let ctx = ctx.clone();
+			async move {
+				ctx.wait_for_http_requests_idle().await;
+			}
+		});
+
+		yield_now().await;
+		assert!(
+			!waiter.is_finished(),
+			"http request idle wait should block while the counter is non-zero"
+		);
+
+		counter.decrement();
+		yield_now().await;
+
+		assert!(
+			waiter.is_finished(),
+			"http request idle wait should wake on the zero notification"
+		);
+		waiter.await.expect("http idle waiter should join");
+	}
+
+	#[tokio::test(start_paused = true)]
+	async fn sleep_idle_window_waits_for_websocket_callback_zero_transition() {
+		let ctx = ActorContext::new_for_sleep_tests("actor-websocket-idle");
+		let guard = ctx.websocket_callback_region_state();
+
+		let waiter = tokio::spawn({
+			let ctx = ctx.clone();
+			async move {
+				ctx.wait_for_sleep_idle_window(Instant::now() + Duration::from_secs(1))
+					.await
+			}
+		});
+
+		yield_now().await;
+		assert!(
+			!waiter.is_finished(),
+			"websocket callback drain should stay blocked while the counter is non-zero"
+		);
+
+		drop(guard);
+		yield_now().await;
+
+		assert!(
+			waiter.is_finished(),
+			"idle wait should resume on the next scheduler tick"
+		);
+		assert!(waiter.await.expect("websocket idle waiter should join"));
 	}
 }

@@ -2,14 +2,14 @@ use super::*;
 
 mod moved_tests {
 	use super::{Inspector, InspectorSignal, InspectorSnapshot};
+	use crate::QueueNextOpts;
 	use crate::actor::connection::{
-		ConnHandle, PersistedConnection, PersistedSubscription,
-		encode_persisted_connection, make_connection_key,
+		ConnHandle, PersistedConnection, PersistedSubscription, encode_persisted_connection,
+		make_connection_key,
 	};
 	use crate::actor::context::tests::new_with_kv;
-	use crate::actor::callbacks::StateDelta;
+	use crate::actor::messages::StateDelta;
 	use crate::inspector::InspectorAuth;
-	use crate::QueueNextOpts;
 	use rivet_error::RivetError;
 	use std::collections::BTreeMap;
 	use std::sync::Arc;
@@ -30,8 +30,6 @@ mod moved_tests {
 		let inspector = Inspector::new();
 
 		ctx.configure_inspector(Some(inspector.clone()));
-		ctx.set_state(vec![1, 2, 3])
-			.expect("test state should update");
 		ctx.save_state(vec![StateDelta::ActorState(vec![1, 2, 3])])
 			.await
 			.expect("state save should succeed");
@@ -39,7 +37,7 @@ mod moved_tests {
 		assert_eq!(
 			inspector.snapshot(),
 			InspectorSnapshot {
-				state_revision: 2,
+				state_revision: 1,
 				..InspectorSnapshot::default()
 			},
 		);
@@ -87,8 +85,8 @@ mod moved_tests {
 			subscriptions: vec![PersistedSubscription {
 				event_name: "counter.updated".into(),
 			}],
-			gateway_id: vec![1],
-			request_id: vec![2],
+			gateway_id: [1, 2, 3, 4],
+			request_id: [5, 6, 7, 8],
 			server_message_index: 3,
 			client_message_index: 4,
 			request_path: "/socket".into(),

@@ -68,6 +68,7 @@ export function createRivetKitWithClient<Registry extends AnyActorRegistry>(
 		 * @param eventName The name of the event to listen for.
 		 * @param handler The function to call when the event is emitted.
 		 */
+		// @ts-ignore Type instantiation can be excessively deep for complex registries.
 		const useEvent = ((
 			eventName: string,
 			handler: (...args: unknown[]) => void,

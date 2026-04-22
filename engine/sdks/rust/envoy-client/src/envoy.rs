@@ -97,6 +97,7 @@ pub enum ToEnvoyMessage {
 		actor_id: String,
 		generation: Option<u32>,
 		alarm_ts: Option<i64>,
+		ack_tx: Option<oneshot::Sender<()>>,
 	},
 	HwsAck {
 		gateway_id: protocol::GatewayId,
@@ -132,8 +133,7 @@ impl EnvoyContext {
 	) {
 		let buffered_actor_id = actor_id.clone();
 		let buffered_handle = handle.clone();
-		self
-			.actors
+		self.actors
 			.entry(actor_id.clone())
 			.or_insert_with(HashMap::new)
 			.insert(
@@ -147,8 +147,7 @@ impl EnvoyContext {
 					received_stop: false,
 				},
 			);
-		self
-			.shared
+		self.shared
 			.actors
 			.lock()
 			.expect("shared actor registry poisoned")
@@ -343,9 +342,15 @@ async fn envoy_loop(
 							let _ = entry.handle.send(ToActor::Intent { intent, error });
 						}
 					}
-					ToEnvoyMessage::SetAlarm { actor_id, generation, alarm_ts } => {
+					ToEnvoyMessage::SetAlarm { actor_id, generation, alarm_ts, ack_tx } => {
 						if let Some(entry) = ctx.get_actor(&actor_id, generation) {
-							let _ = entry.handle.send(ToActor::SetAlarm { alarm_ts });
+							if let Err(error) = entry.handle.send(ToActor::SetAlarm { alarm_ts, ack_tx }) {
+								if let ToActor::SetAlarm { ack_tx: Some(ack_tx), .. } = error.0 {
+									let _ = ack_tx.send(());
+								}
+							}
+						} else if let Some(ack_tx) = ack_tx {
+							let _ = ack_tx.send(());
 						}
 					}
 					ToEnvoyMessage::HwsAck { gateway_id, request_id, envoy_message_index } => {

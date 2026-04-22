@@ -1,5 +1,5 @@
 import { describeDriverMatrix } from "./shared-matrix";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import { setupDriverTest } from "./shared-utils";
 
 const LIFECYCLE_RACE_TIMEOUT_MS = 60_000;
@@ -138,6 +138,60 @@ describeDriverMatrix("Actor Lifecycle", (driverTestConfig) => {
 			// Clean up
 			await newActor.destroy();
 		});
+
+		test("run-closure-self-initiated-destroy terminates actor", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+			const observer = client.lifecycleObserver.getOrCreate([
+				"self-initiated-destroy",
+			]);
+			await observer.clearEvents();
+
+			const actorKey = `run-self-destroy-${Date.now()}`;
+			const actor = client.runSelfInitiatedDestroy.getOrCreate([actorKey]);
+			const actorId = await actor.resolve();
+
+			await vi.waitFor(
+				async () => {
+					const events = await observer.getEvents();
+					expect(
+						events.some(
+							(event) =>
+								event.actorKey === actorId &&
+								event.event === "destroy",
+						),
+					).toBe(true);
+				},
+				{ timeout: 5_000 },
+			);
+
+			await vi.waitFor(
+				async () => {
+					await expect(
+						client.runSelfInitiatedDestroy.getForId(actorId).getState(),
+					).rejects.toMatchObject({
+						group: "actor",
+						code: "not_found",
+					});
+				},
+				{ timeout: 5_000 },
+			);
+		});
+
+		test("onDestroyTimeout bounds run handler shutdown", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+			const actor = client.runIgnoresAbortStopTimeout.getOrCreate([
+				`run-destroy-timeout-${Date.now()}`,
+			]);
+
+			const state = await actor.getState();
+			expect(state.wakeCount).toBe(1);
+
+			const startedAt = performance.now();
+			await actor.destroy();
+			const elapsedMs = performance.now() - startedAt;
+
+			expect(elapsedMs).toBeLessThan(1_500);
+		}, 10_000);
 
 		test.skip("onDestroy is called even when actor is destroyed during start", async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);

@@ -1,38 +1,48 @@
 mod moved_tests {
-	use std::collections::BTreeMap;
+	use std::collections::{BTreeMap, HashMap};
 	use std::path::PathBuf;
 	use std::process::Command;
 	use std::sync::Arc;
+	use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 	use std::sync::{Mutex, OnceLock};
-	use std::sync::atomic::{AtomicUsize, Ordering};
 	use std::task::Poll;
 	use std::time::Duration;
 
 	use futures::{FutureExt, poll};
+	use rivet_envoy_client::config::{
+		BoxFuture as EnvoyBoxFuture, EnvoyCallbacks, EnvoyConfig, HttpRequest, HttpResponse,
+		WebSocketHandler, WebSocketSender,
+	};
+	use rivet_envoy_client::context::{SharedContext, WsTxMessage};
+	use rivet_envoy_client::envoy::ToEnvoyMessage;
+	use rivet_envoy_client::handle::EnvoyHandle;
+	use rivet_envoy_client::protocol;
 	use tokio::sync::{Mutex as AsyncMutex, mpsc, oneshot};
 	use tokio::task::yield_now;
-	use tokio::time::{Instant, advance, sleep};
-	use tracing::{Event, Subscriber};
+	use tokio::time::{Instant, advance, sleep, timeout};
 	use tracing::field::{Field, Visit};
+	use tracing::{Event, Subscriber};
 	use tracing_subscriber::layer::{Context as LayerContext, Layer};
 	use tracing_subscriber::prelude::*;
 	use tracing_subscriber::registry::Registry;
 
-	use crate::actor::callbacks::{ActorEvent, SerializeStateReason, StateDelta};
 	use crate::actor::connection::{
 		ConnHandle, HibernatableConnectionMetadata, decode_persisted_connection,
 		make_connection_key,
 	};
 	use crate::actor::context::tests::new_with_kv;
-	use crate::actor::task::{
-		ActorTask, DispatchCommand, LifecycleCommand, LifecycleEvent,
-		LONG_SHUTDOWN_DRAIN_WARNING_THRESHOLD, LifecycleState,
-	};
-	use crate::actor::task_types::{StateMutationReason, StopReason};
+	use crate::actor::messages::{ActorEvent, SerializeStateReason, StateDelta};
+	use crate::actor::preload::PreloadedPersistedActor;
 	use crate::actor::state::{
-		PERSIST_DATA_KEY, PersistedActor, PersistedScheduleEvent,
-		decode_persisted_actor,
+		LAST_PUSHED_ALARM_KEY, PERSIST_DATA_KEY, PersistedActor, PersistedScheduleEvent,
+		RequestSaveOpts, decode_last_pushed_alarm, decode_persisted_actor,
+		encode_last_pushed_alarm, encode_persisted_actor,
 	};
+	use crate::actor::task::{
+		ActorTask, DispatchCommand, LONG_SHUTDOWN_DRAIN_WARNING_THRESHOLD, LifecycleCommand,
+		LifecycleEvent, LifecycleState,
+	};
+	use crate::actor::task_types::StopReason;
 	use crate::kv::tests::new_in_memory;
 	use crate::{ActorConfig, ActorContext, ActorFactory};
 
@@ -89,8 +99,7 @@ mod moved_tests {
 								reply.send(Ok(vec![StateDelta::ActorState(vec![next as u8])]));
 							}
 							ActorEvent::BeginSleep => {}
-							ActorEvent::FinalizeSleep { reply }
-							| ActorEvent::Destroy { reply } => {
+							ActorEvent::FinalizeSleep { reply } | ActorEvent::Destroy { reply } => {
 								reply.send(Ok(()));
 								break;
 							}
@@ -159,6 +168,123 @@ mod moved_tests {
 		)
 	}
 
+	struct IdleEnvoyCallbacks;
+
+	impl EnvoyCallbacks for IdleEnvoyCallbacks {
+		fn on_actor_start(
+			&self,
+			_handle: EnvoyHandle,
+			_actor_id: String,
+			_generation: u32,
+			_config: protocol::ActorConfig,
+			_preloaded_kv: Option<protocol::PreloadedKv>,
+			_sqlite_schema_version: u32,
+			_sqlite_startup_data: Option<protocol::SqliteStartupData>,
+		) -> EnvoyBoxFuture<anyhow::Result<()>> {
+			Box::pin(async { Ok(()) })
+		}
+
+		fn on_shutdown(&self) {}
+
+		fn fetch(
+			&self,
+			_handle: EnvoyHandle,
+			_actor_id: String,
+			_gateway_id: protocol::GatewayId,
+			_request_id: protocol::RequestId,
+			_request: HttpRequest,
+		) -> EnvoyBoxFuture<anyhow::Result<HttpResponse>> {
+			Box::pin(async { anyhow::bail!("fetch should not run in task tests") })
+		}
+
+		fn websocket(
+			&self,
+			_handle: EnvoyHandle,
+			_actor_id: String,
+			_gateway_id: protocol::GatewayId,
+			_request_id: protocol::RequestId,
+			_request: HttpRequest,
+			_path: String,
+			_headers: HashMap<String, String>,
+			_is_hibernatable: bool,
+			_is_restoring_hibernatable: bool,
+			_sender: WebSocketSender,
+		) -> EnvoyBoxFuture<anyhow::Result<WebSocketHandler>> {
+			Box::pin(async { anyhow::bail!("websocket should not run in task tests") })
+		}
+
+		fn can_hibernate(
+			&self,
+			_actor_id: &str,
+			_gateway_id: &protocol::GatewayId,
+			_request_id: &protocol::RequestId,
+			_request: &HttpRequest,
+		) -> bool {
+			false
+		}
+	}
+
+	fn test_envoy_handle() -> (EnvoyHandle, mpsc::UnboundedReceiver<ToEnvoyMessage>) {
+		let (envoy_tx, envoy_rx) = mpsc::unbounded_channel();
+		let shared = Arc::new(SharedContext {
+			config: EnvoyConfig {
+				version: 1,
+				endpoint: "http://127.0.0.1:1".to_string(),
+				token: None,
+				namespace: "test".to_string(),
+				pool_name: "test".to_string(),
+				prepopulate_actor_names: HashMap::new(),
+				metadata: None,
+				not_global: true,
+				debug_latency_ms: None,
+				callbacks: Arc::new(IdleEnvoyCallbacks),
+			},
+			envoy_key: "test-envoy".to_string(),
+			envoy_tx,
+			actors: Arc::new(Mutex::new(HashMap::new())),
+			live_tunnel_requests: Arc::new(Mutex::new(HashMap::new())),
+			pending_hibernation_restores: Arc::new(Mutex::new(HashMap::new())),
+			ws_tx: Arc::new(tokio::sync::Mutex::new(
+				None::<mpsc::UnboundedSender<WsTxMessage>>,
+			)),
+			protocol_metadata: Arc::new(tokio::sync::Mutex::new(None)),
+			shutting_down: AtomicBool::new(false),
+		});
+
+		(EnvoyHandle::from_shared(shared), envoy_rx)
+	}
+
+	fn recv_alarm_now(
+		rx: &mut mpsc::UnboundedReceiver<ToEnvoyMessage>,
+		expected_actor_id: &str,
+		expected_generation: Option<u32>,
+	) -> Option<i64> {
+		match rx.try_recv() {
+			Ok(ToEnvoyMessage::SetAlarm {
+				actor_id,
+				generation,
+				alarm_ts,
+				ack_tx,
+			}) => {
+				assert_eq!(actor_id, expected_actor_id);
+				assert_eq!(generation, expected_generation);
+				if let Some(ack_tx) = ack_tx {
+					let _ = ack_tx.send(());
+				}
+				alarm_ts
+			}
+			Ok(_) => panic!("expected set_alarm envoy message"),
+			Err(error) => panic!("expected set_alarm envoy message, got {error:?}"),
+		}
+	}
+
+	fn assert_no_alarm(rx: &mut mpsc::UnboundedReceiver<ToEnvoyMessage>) {
+		assert!(matches!(
+			rx.try_recv(),
+			Err(mpsc::error::TryRecvError::Empty)
+		));
+	}
+
 	fn shutdown_ack_factory(config: ActorConfig) -> Arc<ActorFactory> {
 		Arc::new(ActorFactory::new(config, move |start| {
 			Box::pin(async move {
@@ -169,8 +295,7 @@ mod moved_tests {
 							reply.send(Ok(Vec::new()));
 						}
 						ActorEvent::BeginSleep => {}
-						ActorEvent::FinalizeSleep { reply }
-						| ActorEvent::Destroy { reply } => {
+						ActorEvent::FinalizeSleep { reply } | ActorEvent::Destroy { reply } => {
 							reply.send(Ok(()));
 							break;
 						}
@@ -229,6 +354,11 @@ mod moved_tests {
 		channel: Option<String>,
 		actor_id: Option<String>,
 		reason: Option<String>,
+		command: Option<String>,
+		event: Option<String>,
+		outcome: Option<String>,
+		old: Option<String>,
+		new: Option<String>,
 	}
 
 	impl Visit for MessageVisitor {
@@ -238,6 +368,11 @@ mod moved_tests {
 				"channel" => self.channel = Some(value.to_owned()),
 				"actor_id" => self.actor_id = Some(value.to_owned()),
 				"reason" => self.reason = Some(value.to_owned()),
+				"command" => self.command = Some(value.to_owned()),
+				"event" => self.event = Some(value.to_owned()),
+				"outcome" => self.outcome = Some(value.to_owned()),
+				"old" => self.old = Some(value.to_owned()),
+				"new" => self.new = Some(value.to_owned()),
 				_ => {}
 			}
 		}
@@ -256,9 +391,36 @@ mod moved_tests {
 				"reason" => {
 					self.reason = Some(format!("{value:?}").trim_matches('"').to_owned());
 				}
+				"command" => {
+					self.command = Some(format!("{value:?}").trim_matches('"').to_owned());
+				}
+				"event" => {
+					self.event = Some(format!("{value:?}").trim_matches('"').to_owned());
+				}
+				"outcome" => {
+					self.outcome = Some(format!("{value:?}").trim_matches('"').to_owned());
+				}
+				"old" => {
+					self.old = Some(format!("{value:?}").trim_matches('"').to_owned());
+				}
+				"new" => {
+					self.new = Some(format!("{value:?}").trim_matches('"').to_owned());
+				}
 				_ => {}
 			}
 		}
+	}
+
+	#[derive(Clone, Debug)]
+	struct ActorTaskLog {
+		level: tracing::Level,
+		actor_id: Option<String>,
+		message: Option<String>,
+		command: Option<String>,
+		event: Option<String>,
+		outcome: Option<String>,
+		old: Option<String>,
+		new: Option<String>,
 	}
 
 	#[derive(Clone, Debug, PartialEq, Eq)]
@@ -284,6 +446,11 @@ mod moved_tests {
 		records: Arc<Mutex<Vec<ClosedChannelWarning>>>,
 	}
 
+	#[derive(Clone)]
+	struct ActorTaskLogLayer {
+		records: Arc<Mutex<Vec<ActorTaskLog>>>,
+	}
+
 	struct NotifyOnDrop(Mutex<Option<oneshot::Sender<()>>>);
 
 	impl NotifyOnDrop {
@@ -294,12 +461,7 @@ mod moved_tests {
 
 	impl Drop for NotifyOnDrop {
 		fn drop(&mut self) {
-			if let Some(sender) = self
-				.0
-				.lock()
-				.expect("drop notify lock poisoned")
-				.take()
-			{
+			if let Some(sender) = self.0.lock().expect("drop notify lock poisoned").take() {
 				let _ = sender.send(());
 			}
 		}
@@ -383,6 +545,29 @@ mod moved_tests {
 		}
 	}
 
+	impl<S> Layer<S> for ActorTaskLogLayer
+	where
+		S: Subscriber,
+	{
+		fn on_event(&self, event: &Event<'_>, _ctx: LayerContext<'_, S>) {
+			let mut visitor = MessageVisitor::default();
+			event.record(&mut visitor);
+			self.records
+				.lock()
+				.expect("actor-task log lock poisoned")
+				.push(ActorTaskLog {
+					level: *event.metadata().level(),
+					actor_id: visitor.actor_id,
+					message: visitor.message,
+					command: visitor.command,
+					event: visitor.event,
+					outcome: visitor.outcome,
+					old: visitor.old,
+					new: visitor.new,
+				});
+		}
+	}
+
 	async fn poll_until_ready(
 		future: &mut std::pin::Pin<&mut impl std::future::Future<Output = bool>>,
 	) -> bool {
@@ -413,7 +598,13 @@ mod moved_tests {
 	}
 
 	async fn run_task_with_closed_channel(case: ClosedChannelCase) -> Vec<ClosedChannelWarning> {
-		let ctx = new_with_kv(case.actor_id(), "task-run", Vec::new(), "local", new_in_memory());
+		let ctx = new_with_kv(
+			case.actor_id(),
+			"task-run",
+			Vec::new(),
+			"local",
+			new_in_memory(),
+		);
 		let (mut task, lifecycle_tx, dispatch_tx, events_tx) = new_task_with_senders(ctx);
 		let warnings = Arc::new(Mutex::new(Vec::new()));
 		let subscriber = Registry::default().with(ClosedChannelWarningLayer {
@@ -504,22 +695,19 @@ mod moved_tests {
 		);
 
 		let (start_tx, start_rx) = oneshot::channel();
-		task
-			.handle_lifecycle(LifecycleCommand::Start { reply: start_tx })
+		task.handle_lifecycle(LifecycleCommand::Start { reply: start_tx })
 			.await;
 		start_rx
 			.await
 			.expect("start reply should send")
 			.expect("start should succeed");
 
-		ctx.request_save(false);
-		task
-			.handle_event(crate::actor::task::LifecycleEvent::SaveRequested {
-				immediate: false,
-			})
+		ctx.request_save(RequestSaveOpts::default());
+		task.handle_event(crate::actor::task::LifecycleEvent::SaveRequested { immediate: false })
 			.await;
-		let debounce_deadline =
-			task.state_save_deadline.expect("debounced save deadline should exist");
+		let debounce_deadline = task
+			.state_save_deadline
+			.expect("debounced save deadline should exist");
 		assert!(debounce_deadline > tokio::time::Instant::now());
 		sleep(Duration::from_millis(20)).await;
 		assert_eq!(save_ticks.load(Ordering::SeqCst), 0);
@@ -529,32 +717,37 @@ mod moved_tests {
 		wait_for_count(&save_ticks, 1).await;
 		wait_for_state(&ctx, &[1]).await;
 
-		ctx.request_save(true);
-		task
-			.handle_event(crate::actor::task::LifecycleEvent::SaveRequested {
-				immediate: true,
-			})
+		ctx.request_save(RequestSaveOpts {
+			immediate: true,
+			max_wait_ms: None,
+		});
+		task.handle_event(crate::actor::task::LifecycleEvent::SaveRequested { immediate: true })
 			.await;
-		let immediate_deadline =
-			task.state_save_deadline.expect("immediate save deadline should exist");
+		let immediate_deadline = task
+			.state_save_deadline
+			.expect("immediate save deadline should exist");
 		assert!(immediate_deadline <= tokio::time::Instant::now() + Duration::from_millis(5));
 		task.on_state_save_tick().await;
 		wait_for_count(&save_ticks, 2).await;
 		wait_for_state(&ctx, &[2]).await;
 
-		task
-			.handle_stop(crate::actor::task_types::StopReason::Destroy)
+		task.handle_stop(crate::actor::task_types::StopReason::Destroy)
 			.await
 			.expect("stop should succeed");
 	}
 
 	#[tokio::test]
 	async fn inspector_attach_threshold_arms_and_clears_serialize_debounce() {
-		let ctx =
-			new_with_kv("actor-inspector", "task-inspector", Vec::new(), "local", new_in_memory());
-		let (_lifecycle_tx, lifecycle_rx) = mpsc::channel(8);
-		let (_dispatch_tx, dispatch_rx) = mpsc::channel(8);
-		let (events_tx, events_rx) = mpsc::channel(8);
+		let ctx = new_with_kv(
+			"actor-inspector",
+			"task-inspector",
+			Vec::new(),
+			"local",
+			new_in_memory(),
+		);
+		let (_lifecycle_tx, lifecycle_rx) = mpsc::channel(4);
+		let (_dispatch_tx, dispatch_rx) = mpsc::channel(4);
+		let (events_tx, events_rx) = mpsc::channel(4);
 		ctx.configure_lifecycle_events(Some(events_tx));
 
 		let save_ticks = Arc::new(AtomicUsize::new(0));
@@ -571,25 +764,26 @@ mod moved_tests {
 		);
 
 		let (start_tx, start_rx) = oneshot::channel();
-		task
-			.handle_lifecycle(LifecycleCommand::Start { reply: start_tx })
+		task.handle_lifecycle(LifecycleCommand::Start { reply: start_tx })
 			.await;
 		start_rx
 			.await
 			.expect("start reply should send")
 			.expect("start should succeed");
 
-		ctx.request_save(false);
+		ctx.request_save(RequestSaveOpts::default());
 		drain_lifecycle_events(&mut task).await;
 		assert!(task.state_save_deadline.is_some());
 		assert!(task.inspector_serialize_state_deadline.is_none());
 
-		ctx.inspector_attach();
+		let inspector_guard = ctx
+			.inspector_attach()
+			.expect("inspector runtime should be configured");
 		drain_lifecycle_events(&mut task).await;
 		assert_eq!(ctx.inspector_attach_count(), 1);
 		assert!(task.inspector_serialize_state_deadline.is_some());
 
-		ctx.inspector_detach();
+		drop(inspector_guard);
 		drain_lifecycle_events(&mut task).await;
 		assert_eq!(ctx.inspector_attach_count(), 0);
 		assert!(task.inspector_serialize_state_deadline.is_none());
@@ -602,11 +796,16 @@ mod moved_tests {
 	#[tokio::test]
 	async fn inspector_serialize_tick_broadcasts_overlay_without_persisting_kv() {
 		let kv = new_in_memory();
-		let ctx =
-			new_with_kv("actor-overlay", "task-overlay", Vec::new(), "local", kv.clone());
-		let (_lifecycle_tx, lifecycle_rx) = mpsc::channel(8);
-		let (_dispatch_tx, dispatch_rx) = mpsc::channel(8);
-		let (events_tx, events_rx) = mpsc::channel(8);
+		let ctx = new_with_kv(
+			"actor-overlay",
+			"task-overlay",
+			Vec::new(),
+			"local",
+			kv.clone(),
+		);
+		let (_lifecycle_tx, lifecycle_rx) = mpsc::channel(4);
+		let (_dispatch_tx, dispatch_rx) = mpsc::channel(4);
+		let (events_tx, events_rx) = mpsc::channel(4);
 		ctx.configure_lifecycle_events(Some(events_tx));
 
 		let factory = Arc::new(ActorFactory::new(Default::default(), move |start| {
@@ -621,8 +820,7 @@ mod moved_tests {
 							reply.send(Ok(vec![StateDelta::ActorState(vec![9, 9, 9])]));
 						}
 						ActorEvent::BeginSleep => {}
-						ActorEvent::FinalizeSleep { reply }
-						| ActorEvent::Destroy { reply } => {
+						ActorEvent::FinalizeSleep { reply } | ActorEvent::Destroy { reply } => {
 							reply.send(Ok(()));
 							break;
 						}
@@ -645,18 +843,21 @@ mod moved_tests {
 			None,
 		);
 
-		let mut inspector_rx = ctx.subscribe_inspector();
+		let mut inspector_rx = ctx
+			.subscribe_inspector()
+			.expect("inspector runtime should be configured");
 		let (start_tx, start_rx) = oneshot::channel();
-		task
-			.handle_lifecycle(LifecycleCommand::Start { reply: start_tx })
+		task.handle_lifecycle(LifecycleCommand::Start { reply: start_tx })
 			.await;
 		start_rx
 			.await
 			.expect("start reply should send")
 			.expect("start should succeed");
 
-		ctx.inspector_attach();
-		ctx.request_save(false);
+		let _inspector_guard = ctx
+			.inspector_attach()
+			.expect("inspector runtime should be configured");
+		ctx.request_save(RequestSaveOpts::default());
 		drain_lifecycle_events(&mut task).await;
 		assert!(task.inspector_serialize_state_deadline.is_some());
 
@@ -666,8 +867,8 @@ mod moved_tests {
 			.recv()
 			.await
 			.expect("inspector overlay should broadcast");
-		let deltas: Vec<StateDelta> = ciborium::from_reader(overlay.as_slice())
-			.expect("overlay payload should decode");
+		let deltas: Vec<StateDelta> =
+			ciborium::from_reader(overlay.as_slice()).expect("overlay payload should decode");
 		assert_eq!(deltas, vec![StateDelta::ActorState(vec![9, 9, 9])]);
 		assert!(ctx.save_requested());
 
@@ -688,11 +889,16 @@ mod moved_tests {
 
 	#[tokio::test]
 	async fn save_tick_cancels_pending_inspector_deadline_and_broadcasts_overlay() {
-		let ctx =
-			new_with_kv("actor-save-overlay", "task-save-overlay", Vec::new(), "local", new_in_memory());
-		let (_lifecycle_tx, lifecycle_rx) = mpsc::channel(8);
-		let (_dispatch_tx, dispatch_rx) = mpsc::channel(8);
-		let (events_tx, events_rx) = mpsc::channel(8);
+		let ctx = new_with_kv(
+			"actor-save-overlay",
+			"task-save-overlay",
+			Vec::new(),
+			"local",
+			new_in_memory(),
+		);
+		let (_lifecycle_tx, lifecycle_rx) = mpsc::channel(4);
+		let (_dispatch_tx, dispatch_rx) = mpsc::channel(4);
+		let (events_tx, events_rx) = mpsc::channel(4);
 		ctx.configure_lifecycle_events(Some(events_tx));
 
 		let save_ticks = Arc::new(AtomicUsize::new(0));
@@ -708,18 +914,21 @@ mod moved_tests {
 			None,
 		);
 
-		let mut inspector_rx = ctx.subscribe_inspector();
+		let mut inspector_rx = ctx
+			.subscribe_inspector()
+			.expect("inspector runtime should be configured");
 		let (start_tx, start_rx) = oneshot::channel();
-		task
-			.handle_lifecycle(LifecycleCommand::Start { reply: start_tx })
+		task.handle_lifecycle(LifecycleCommand::Start { reply: start_tx })
 			.await;
 		start_rx
 			.await
 			.expect("start reply should send")
 			.expect("start should succeed");
 
-		ctx.inspector_attach();
-		ctx.request_save(false);
+		let _inspector_guard = ctx
+			.inspector_attach()
+			.expect("inspector runtime should be configured");
+		ctx.request_save(RequestSaveOpts::default());
 		drain_lifecycle_events(&mut task).await;
 		assert!(task.state_save_deadline.is_some());
 		assert!(task.inspector_serialize_state_deadline.is_some());
@@ -731,8 +940,8 @@ mod moved_tests {
 			.recv()
 			.await
 			.expect("save tick should broadcast inspector overlay");
-		let deltas: Vec<StateDelta> = ciborium::from_reader(overlay.as_slice())
-			.expect("overlay payload should decode");
+		let deltas: Vec<StateDelta> =
+			ciborium::from_reader(overlay.as_slice()).expect("overlay payload should decode");
 		assert_eq!(deltas, vec![StateDelta::ActorState(vec![1])]);
 		wait_for_state(&ctx, &[1]).await;
 
@@ -743,7 +952,13 @@ mod moved_tests {
 
 	#[tokio::test]
 	async fn save_tick_reschedules_when_request_save_arrives_during_in_flight_reply() {
-		let ctx = new_with_kv("actor-race", "task-race", Vec::new(), "local", new_in_memory());
+		let ctx = new_with_kv(
+			"actor-race",
+			"task-race",
+			Vec::new(),
+			"local",
+			new_in_memory(),
+		);
 		let (_lifecycle_tx, lifecycle_rx) = mpsc::channel(4);
 		let (_dispatch_tx, dispatch_rx) = mpsc::channel(4);
 		let (events_tx, events_rx) = mpsc::channel(4);
@@ -765,13 +980,12 @@ mod moved_tests {
 							} => {
 								let tick = save_ticks.fetch_add(1, Ordering::SeqCst) + 1;
 								if tick == 1 {
-									ctx.request_save(false);
+									ctx.request_save(RequestSaveOpts::default());
 								}
 								reply.send(Ok(vec![StateDelta::ActorState(vec![tick as u8])]));
 							}
 							ActorEvent::BeginSleep => {}
-							ActorEvent::FinalizeSleep { reply }
-							| ActorEvent::Destroy { reply } => {
+							ActorEvent::FinalizeSleep { reply } | ActorEvent::Destroy { reply } => {
 								reply.send(Ok(()));
 								break;
 							}
@@ -796,19 +1010,15 @@ mod moved_tests {
 		);
 
 		let (start_tx, start_rx) = oneshot::channel();
-		task
-			.handle_lifecycle(LifecycleCommand::Start { reply: start_tx })
+		task.handle_lifecycle(LifecycleCommand::Start { reply: start_tx })
 			.await;
 		start_rx
 			.await
 			.expect("start reply should send")
 			.expect("start should succeed");
 
-		ctx.request_save(false);
-		task
-			.handle_event(crate::actor::task::LifecycleEvent::SaveRequested {
-				immediate: false,
-			})
+		ctx.request_save(RequestSaveOpts::default());
+		task.handle_event(crate::actor::task::LifecycleEvent::SaveRequested { immediate: false })
 			.await;
 		task.on_state_save_tick().await;
 
@@ -845,15 +1055,15 @@ mod moved_tests {
 		let hibernating_conn =
 			managed_test_conn(&ctx, "conn-hibernating", true, disconnects.clone());
 		hibernating_conn.configure_hibernation(Some(HibernatableConnectionMetadata {
-			gateway_id: b"gateway".to_vec(),
-			request_id: b"request".to_vec(),
+			gateway_id: *b"gate",
+			request_id: *b"req1",
 			server_message_index: 1,
 			client_message_index: 2,
 			request_path: "/ws".to_owned(),
 			request_headers: BTreeMap::from([("x-test".to_owned(), "true".to_owned())]),
 		}));
 		ctx.add_conn(hibernating_conn.clone());
-		configure_live_hibernated_pairs(&ctx, [(b"gateway".as_slice(), b"request".as_slice())]);
+		configure_live_hibernated_pairs(&ctx, [(b"gate".as_slice(), b"req1".as_slice())]);
 
 		let hibernating_conn_id = hibernating_conn.id().to_owned();
 		let factory = Arc::new(ActorFactory::new(
@@ -907,8 +1117,7 @@ mod moved_tests {
 			None,
 		);
 		let (start_tx, start_rx) = oneshot::channel();
-		task
-			.handle_lifecycle(LifecycleCommand::Start { reply: start_tx })
+		task.handle_lifecycle(LifecycleCommand::Start { reply: start_tx })
 			.await;
 		start_rx
 			.await
@@ -937,7 +1146,10 @@ mod moved_tests {
 			.expect("persisted connection should decode");
 		assert_eq!(persisted_conn.state, vec![9, 8, 7]);
 		assert_eq!(
-			disconnects.lock().expect("disconnect log lock poisoned").as_slice(),
+			disconnects
+				.lock()
+				.expect("disconnect log lock poisoned")
+				.as_slice(),
 			["conn-normal"]
 		);
 		let remaining_conns: Vec<_> = ctx.conns().collect();
@@ -946,10 +1158,107 @@ mod moved_tests {
 	}
 
 	#[tokio::test]
+	async fn sleep_shutdown_waits_for_on_state_change_before_final_save() {
+		let kv = new_in_memory();
+		let ctx = new_with_kv(
+			"actor-sleep-state-change",
+			"task-sleep-state-change",
+			Vec::new(),
+			"local",
+			kv.clone(),
+		);
+		ctx.set_state_initial(vec![1]);
+
+		let (_lifecycle_tx, lifecycle_rx) = mpsc::channel(4);
+		let (_dispatch_tx, dispatch_rx) = mpsc::channel(4);
+		let (events_tx, events_rx) = mpsc::channel(4);
+		ctx.configure_lifecycle_events(Some(events_tx));
+
+		let factory = Arc::new(ActorFactory::new(
+			ActorConfig {
+				action_timeout: Duration::from_millis(500),
+				sleep_grace_period: Duration::from_millis(500),
+				sleep_grace_period_overridden: true,
+				..ActorConfig::default()
+			},
+			|start| {
+				Box::pin(async move {
+					let ctx = start.ctx.clone();
+					let mut events = start.events;
+					while let Some(event) = events.recv().await {
+						match event {
+							ActorEvent::BeginSleep => {}
+							ActorEvent::FinalizeSleep { reply } => {
+								let state = ctx.state();
+								ctx.save_state(vec![StateDelta::ActorState(state)])
+									.await
+									.expect("sleep shutdown should persist final state");
+								reply.send(Ok(()));
+								break;
+							}
+							ActorEvent::Destroy { reply } => {
+								reply.send(Ok(()));
+								break;
+							}
+							_ => {}
+						}
+					}
+					Ok(())
+				})
+			},
+		));
+
+		let mut task = ActorTask::new(
+			"actor-sleep-state-change".into(),
+			0,
+			lifecycle_rx,
+			dispatch_rx,
+			events_rx,
+			factory,
+			ctx.clone(),
+			None,
+			None,
+		);
+		let (start_tx, start_rx) = oneshot::channel();
+		task.handle_lifecycle(LifecycleCommand::Start { reply: start_tx })
+			.await;
+		start_rx
+			.await
+			.expect("start reply should send")
+			.expect("start should succeed");
+
+		let on_state_change = ctx.begin_on_state_change();
+		let callback_ctx = ctx.clone();
+		tokio::spawn(async move {
+			sleep(Duration::from_millis(25)).await;
+			callback_ctx.set_state_initial(vec![8]);
+			drop(on_state_change);
+		});
+
+		task.handle_stop(StopReason::Sleep)
+			.await
+			.expect("sleep stop should succeed");
+
+		let persisted_actor = kv
+			.get(PERSIST_DATA_KEY)
+			.await
+			.expect("persisted actor lookup should succeed")
+			.expect("persisted actor should exist");
+		let persisted_actor =
+			decode_persisted_actor(&persisted_actor).expect("persisted actor should decode");
+		assert_eq!(persisted_actor.state, vec![8]);
+	}
+
+	#[tokio::test]
 	async fn destroy_shutdown_disconnects_hibernating_connections_after_final_delta_flush() {
 		let kv = new_in_memory();
-		let ctx =
-			new_with_kv("actor-destroy", "task-destroy", Vec::new(), "local", kv.clone());
+		let ctx = new_with_kv(
+			"actor-destroy",
+			"task-destroy",
+			Vec::new(),
+			"local",
+			kv.clone(),
+		);
 		let (_lifecycle_tx, lifecycle_rx) = mpsc::channel(4);
 		let (_dispatch_tx, dispatch_rx) = mpsc::channel(4);
 		let (events_tx, events_rx) = mpsc::channel(4);
@@ -961,15 +1270,15 @@ mod moved_tests {
 		let hibernating_conn =
 			managed_test_conn(&ctx, "conn-hibernating", true, disconnects.clone());
 		hibernating_conn.configure_hibernation(Some(HibernatableConnectionMetadata {
-			gateway_id: b"gateway".to_vec(),
-			request_id: b"request".to_vec(),
+			gateway_id: *b"gate",
+			request_id: *b"req1",
 			server_message_index: 1,
 			client_message_index: 2,
 			request_path: "/ws".to_owned(),
 			request_headers: BTreeMap::new(),
 		}));
 		ctx.add_conn(hibernating_conn.clone());
-		configure_live_hibernated_pairs(&ctx, [(b"gateway".as_slice(), b"request".as_slice())]);
+		configure_live_hibernated_pairs(&ctx, [(b"gate".as_slice(), b"req1".as_slice())]);
 
 		let hibernating_conn_id = hibernating_conn.id().to_owned();
 		let factory = Arc::new(ActorFactory::new(
@@ -1024,8 +1333,7 @@ mod moved_tests {
 			None,
 		);
 		let (start_tx, start_rx) = oneshot::channel();
-		task
-			.handle_lifecycle(LifecycleCommand::Start { reply: start_tx })
+		task.handle_lifecycle(LifecycleCommand::Start { reply: start_tx })
 			.await;
 		start_rx
 			.await
@@ -1050,7 +1358,10 @@ mod moved_tests {
 			.expect("disconnect log lock poisoned")
 			.clone();
 		disconnects.sort();
-		assert_eq!(disconnects, vec!["conn-hibernating".to_owned(), "conn-normal".to_owned()]);
+		assert_eq!(
+			disconnects,
+			vec!["conn-hibernating".to_owned(), "conn-normal".to_owned()]
+		);
 		assert!(
 			kv.get(&make_connection_key(hibernating_conn.id()))
 				.await
@@ -1062,8 +1373,13 @@ mod moved_tests {
 
 	#[tokio::test]
 	async fn action_dispatch_uses_optional_conn_and_alarms_use_none() {
-		let ctx =
-			new_with_kv("actor-action", "task-action", Vec::new(), "local", new_in_memory());
+		let ctx = new_with_kv(
+			"actor-action",
+			"task-action",
+			Vec::new(),
+			"local",
+			new_in_memory(),
+		);
 		let (_lifecycle_tx, lifecycle_rx) = mpsc::channel(4);
 		let (_dispatch_tx, dispatch_rx) = mpsc::channel(4);
 		let (events_tx, events_rx) = mpsc::channel(4);
@@ -1087,8 +1403,7 @@ mod moved_tests {
 							reply.send(Ok(name.into_bytes()));
 						}
 						ActorEvent::BeginSleep => {}
-						ActorEvent::FinalizeSleep { reply }
-						| ActorEvent::Destroy { reply } => {
+						ActorEvent::FinalizeSleep { reply } | ActorEvent::Destroy { reply } => {
 							reply.send(Ok(()));
 							break;
 						}
@@ -1111,8 +1426,7 @@ mod moved_tests {
 			None,
 		);
 		let (start_tx, start_rx) = oneshot::channel();
-		task
-			.handle_lifecycle(LifecycleCommand::Start { reply: start_tx })
+		task.handle_lifecycle(LifecycleCommand::Start { reply: start_tx })
 			.await;
 		start_rx
 			.await
@@ -1121,14 +1435,13 @@ mod moved_tests {
 
 		let client_conn = ConnHandle::new("conn-client", Vec::new(), Vec::new(), false);
 		let (reply_tx, reply_rx) = oneshot::channel();
-		task
-			.handle_dispatch(DispatchCommand::Action {
-				name: "client-action".to_owned(),
-				args: Vec::new(),
-				conn: client_conn,
-				reply: reply_tx,
-			})
-			.await;
+		task.handle_dispatch(DispatchCommand::Action {
+			name: "client-action".to_owned(),
+			args: Vec::new(),
+			conn: client_conn,
+			reply: reply_tx,
+		})
+		.await;
 		assert_eq!(
 			reply_rx
 				.await
@@ -1148,17 +1461,19 @@ mod moved_tests {
 			scheduled_events: persisted.scheduled_events,
 			..persisted
 		});
-		task
-			.ctx
+		task.ctx
 			.drain_overdue_scheduled_events()
 			.await
 			.expect("scheduled actions should drain");
+		for _ in 0..50 {
+			if seen_conns.lock().expect("action log lock poisoned").len() >= 2 {
+				break;
+			}
+			sleep(Duration::from_millis(10)).await;
+		}
 
 		assert_eq!(
-			seen_conns
-				.lock()
-				.expect("action log lock poisoned")
-				.clone(),
+			seen_conns.lock().expect("action log lock poisoned").clone(),
 			vec![Some("conn-client".to_owned()), None],
 		);
 
@@ -1173,8 +1488,8 @@ mod moved_tests {
 		let seed_ctx = new_with_kv("actor-wake", "task-wake", Vec::new(), "local", kv.clone());
 		let seed_conn = ConnHandle::new("conn-hibernating", Vec::new(), Vec::new(), true);
 		seed_conn.configure_hibernation(Some(HibernatableConnectionMetadata {
-			gateway_id: b"gateway".to_vec(),
-			request_id: b"request".to_vec(),
+			gateway_id: *b"gate",
+			request_id: *b"req1",
 			server_message_index: 4,
 			client_message_index: 8,
 			request_path: "/ws".to_owned(),
@@ -1194,7 +1509,7 @@ mod moved_tests {
 		let (_dispatch_tx, dispatch_rx) = mpsc::channel(4);
 		let (events_tx, events_rx) = mpsc::channel(4);
 		ctx.configure_lifecycle_events(Some(events_tx));
-		configure_live_hibernated_pairs(&ctx, [(b"gateway".as_slice(), b"request".as_slice())]);
+		configure_live_hibernated_pairs(&ctx, [(b"gate".as_slice(), b"req1".as_slice())]);
 		let (started_tx, started_rx) = oneshot::channel();
 		let started_tx = Arc::new(Mutex::new(Some(started_tx)));
 		let factory = Arc::new(ActorFactory::new(Default::default(), move |start| {
@@ -1215,8 +1530,7 @@ mod moved_tests {
 				while let Some(event) = events.recv().await {
 					match event {
 						ActorEvent::BeginSleep => {}
-						ActorEvent::FinalizeSleep { reply }
-						| ActorEvent::Destroy { reply } => {
+						ActorEvent::FinalizeSleep { reply } | ActorEvent::Destroy { reply } => {
 							reply.send(Ok(()));
 							break;
 						}
@@ -1242,8 +1556,7 @@ mod moved_tests {
 			None,
 		);
 		let (start_tx, start_rx) = oneshot::channel();
-		task
-			.handle_lifecycle(LifecycleCommand::Start { reply: start_tx })
+		task.handle_lifecycle(LifecycleCommand::Start { reply: start_tx })
 			.await;
 		start_rx
 			.await
@@ -1263,8 +1576,13 @@ mod moved_tests {
 
 	#[tokio::test]
 	async fn workflow_requests_dispatch_through_actor_events() {
-		let ctx =
-			new_with_kv("actor-workflow", "task-workflow", Vec::new(), "local", new_in_memory());
+		let ctx = new_with_kv(
+			"actor-workflow",
+			"task-workflow",
+			Vec::new(),
+			"local",
+			new_in_memory(),
+		);
 		let (_lifecycle_tx, lifecycle_rx) = mpsc::channel(4);
 		let (_dispatch_tx, dispatch_rx) = mpsc::channel(4);
 		let (events_tx, events_rx) = mpsc::channel(4);
@@ -1307,8 +1625,7 @@ mod moved_tests {
 							reply.send(Ok(Some(replay_payload.clone())));
 						}
 						ActorEvent::BeginSleep => {}
-						ActorEvent::FinalizeSleep { reply }
-						| ActorEvent::Destroy { reply } => {
+						ActorEvent::FinalizeSleep { reply } | ActorEvent::Destroy { reply } => {
 							reply.send(Ok(()));
 							break;
 						}
@@ -1331,8 +1648,7 @@ mod moved_tests {
 			None,
 		);
 		let (start_tx, start_rx) = oneshot::channel();
-		task
-			.handle_lifecycle(LifecycleCommand::Start { reply: start_tx })
+		task.handle_lifecycle(LifecycleCommand::Start { reply: start_tx })
 			.await;
 		start_rx
 			.await
@@ -1344,8 +1660,7 @@ mod moved_tests {
 		);
 
 		let (history_tx, history_rx) = oneshot::channel();
-		task
-			.handle_dispatch(DispatchCommand::WorkflowHistory { reply: history_tx })
+		task.handle_dispatch(DispatchCommand::WorkflowHistory { reply: history_tx })
 			.await;
 		assert_eq!(
 			history_rx
@@ -1356,12 +1671,11 @@ mod moved_tests {
 		);
 
 		let (replay_tx, replay_rx) = oneshot::channel();
-		task
-			.handle_dispatch(DispatchCommand::WorkflowReplay {
-				entry_id: Some("entry-123".to_owned()),
-				reply: replay_tx,
-			})
-			.await;
+		task.handle_dispatch(DispatchCommand::WorkflowReplay {
+			entry_id: Some("entry-123".to_owned()),
+			reply: replay_tx,
+		})
+		.await;
 		assert_eq!(
 			replay_rx
 				.await
@@ -1385,8 +1699,7 @@ mod moved_tests {
 	#[tokio::test]
 	async fn hibernation_transport_updates_flush_only_on_save_tick() {
 		let kv = new_in_memory();
-		let ctx =
-			new_with_kv("actor-hws", "task-hws", Vec::new(), "local", kv.clone());
+		let ctx = new_with_kv("actor-hws", "task-hws", Vec::new(), "local", kv.clone());
 
 		let (_lifecycle_tx, lifecycle_rx) = mpsc::channel(4);
 		let (_dispatch_tx, dispatch_rx) = mpsc::channel(4);
@@ -1405,8 +1718,7 @@ mod moved_tests {
 							reply.send(Ok(Vec::new()));
 						}
 						ActorEvent::BeginSleep => {}
-						ActorEvent::FinalizeSleep { reply }
-						| ActorEvent::Destroy { reply } => {
+						ActorEvent::FinalizeSleep { reply } | ActorEvent::Destroy { reply } => {
 							reply.send(Ok(()));
 							break;
 						}
@@ -1429,8 +1741,7 @@ mod moved_tests {
 			None,
 		);
 		let (start_tx, start_rx) = oneshot::channel();
-		task
-			.handle_lifecycle(LifecycleCommand::Start { reply: start_tx })
+		task.handle_lifecycle(LifecycleCommand::Start { reply: start_tx })
 			.await;
 		start_rx
 			.await
@@ -1440,21 +1751,20 @@ mod moved_tests {
 		let disconnects = Arc::new(Mutex::new(Vec::<String>::new()));
 		let conn = managed_test_conn(&ctx, "conn-hibernating", true, disconnects);
 		conn.configure_hibernation(Some(HibernatableConnectionMetadata {
-			gateway_id: b"gateway".to_vec(),
-			request_id: b"request".to_vec(),
+			gateway_id: *b"gate",
+			request_id: *b"req1",
 			server_message_index: 1,
 			client_message_index: 2,
 			request_path: "/ws".to_owned(),
 			request_headers: BTreeMap::new(),
 		}));
 		ctx.add_conn(conn.clone());
-		ctx
-			.save_state(vec![StateDelta::ConnHibernation {
-				conn: conn.id().into(),
-				bytes: vec![9, 8, 7],
-			}])
-			.await
-			.expect("seed hibernation should persist");
+		ctx.save_state(vec![StateDelta::ConnHibernation {
+			conn: conn.id().into(),
+			bytes: vec![9, 8, 7],
+		}])
+		.await
+		.expect("seed hibernation should persist");
 		assert_eq!(kv.test_apply_batch_call_count(), 1);
 
 		conn.set_server_message_index(7);
@@ -1469,10 +1779,7 @@ mod moved_tests {
 			.expect("persisted connection should decode");
 		assert_eq!(persisted_before.server_message_index, 1);
 
-		task
-			.handle_event(crate::actor::task::LifecycleEvent::SaveRequested {
-				immediate: false,
-			})
+		task.handle_event(crate::actor::task::LifecycleEvent::SaveRequested { immediate: false })
 			.await;
 		task.on_state_save_tick().await;
 
@@ -1514,8 +1821,7 @@ mod moved_tests {
 				while let Some(event) = events.recv().await {
 					match event {
 						ActorEvent::Destroy { reply } => {
-							ctx.schedule()
-								.after(Duration::from_secs(60), "after-destroy", &[1, 2, 3]);
+							ctx.after(Duration::from_secs(60), "after-destroy", &[1, 2, 3]);
 							reply.send(Ok(()));
 							break;
 						}
@@ -1543,8 +1849,7 @@ mod moved_tests {
 			None,
 		);
 		let (start_tx, start_rx) = oneshot::channel();
-		task
-			.handle_lifecycle(LifecycleCommand::Start { reply: start_tx })
+		task.handle_lifecycle(LifecycleCommand::Start { reply: start_tx })
 			.await;
 		start_rx
 			.await
@@ -1560,15 +1865,152 @@ mod moved_tests {
 			.await
 			.expect("persisted actor lookup should succeed")
 			.expect("scheduled event should be persisted before shutdown returns");
-		let persisted = decode_persisted_actor(&actor_bytes)
-			.expect("persisted actor should decode");
+		let persisted =
+			decode_persisted_actor(&actor_bytes).expect("persisted actor should decode");
 		assert_eq!(persisted.scheduled_events.len(), 1);
 		assert_eq!(persisted.scheduled_events[0].action, "after-destroy");
 		assert_eq!(persisted.scheduled_events[0].args, vec![1, 2, 3]);
 	}
 
 	#[tokio::test]
-	async fn fire_due_alarms_defers_overdue_work_during_sleep_grace() {
+	async fn startup_uses_empty_preloaded_persisted_actor_without_fallback_get() {
+		let kv = new_in_memory();
+		let ctx = new_with_kv(
+			"actor-preload-empty",
+			"task-preload-empty",
+			Vec::new(),
+			"local",
+			kv.clone(),
+		);
+		let mut task = new_task(ctx.clone())
+			.with_preloaded_persisted_actor(PreloadedPersistedActor::BundleExistsButEmpty);
+		let (start_tx, start_rx) = oneshot::channel();
+
+		task.handle_lifecycle(LifecycleCommand::Start { reply: start_tx })
+			.await;
+		start_rx
+			.await
+			.expect("start reply should send")
+			.expect("start should succeed");
+
+		assert_eq!(kv.test_batch_get_call_count(), 0);
+		assert!(ctx.persisted_actor().has_initialized);
+	}
+
+	#[tokio::test]
+	async fn startup_skips_future_alarm_push_when_last_pushed_matches() {
+		let kv = new_in_memory();
+		let future_ts = 4_102_444_800_000;
+		let persisted = PersistedActor {
+			has_initialized: true,
+			scheduled_events: vec![PersistedScheduleEvent {
+				event_id: "evt-future".to_owned(),
+				timestamp_ms: future_ts,
+				action: "tick".to_owned(),
+				args: Vec::new(),
+			}],
+			..PersistedActor::default()
+		};
+		kv.put(
+			PERSIST_DATA_KEY,
+			&encode_persisted_actor(&persisted).expect("persisted actor should encode"),
+		)
+		.await
+		.expect("persisted actor should seed");
+		kv.put(
+			LAST_PUSHED_ALARM_KEY,
+			&encode_last_pushed_alarm(Some(future_ts)).expect("last pushed alarm should encode"),
+		)
+		.await
+		.expect("last pushed alarm should seed");
+
+		let ctx = new_with_kv(
+			"actor-startup-skip-alarm",
+			"task-startup-skip-alarm",
+			Vec::new(),
+			"local",
+			kv,
+		);
+		let (handle, mut rx) = test_envoy_handle();
+		ctx.configure_envoy(handle, Some(11));
+		let mut task = new_task(ctx);
+		let (start_tx, start_rx) = oneshot::channel();
+
+		task.handle_lifecycle(LifecycleCommand::Start { reply: start_tx })
+			.await;
+		start_rx
+			.await
+			.expect("start reply should send")
+			.expect("start should succeed");
+
+		assert_no_alarm(&mut rx);
+	}
+
+	#[tokio::test]
+	async fn startup_persists_last_pushed_alarm_after_future_alarm_push() {
+		let kv = new_in_memory();
+		let future_ts = 4_102_444_900_000;
+		let persisted = PersistedActor {
+			has_initialized: true,
+			scheduled_events: vec![PersistedScheduleEvent {
+				event_id: "evt-future".to_owned(),
+				timestamp_ms: future_ts,
+				action: "tick".to_owned(),
+				args: Vec::new(),
+			}],
+			..PersistedActor::default()
+		};
+		kv.put(
+			PERSIST_DATA_KEY,
+			&encode_persisted_actor(&persisted).expect("persisted actor should encode"),
+		)
+		.await
+		.expect("persisted actor should seed");
+		kv.put(
+			LAST_PUSHED_ALARM_KEY,
+			&encode_last_pushed_alarm(Some(future_ts + 1))
+				.expect("last pushed alarm should encode"),
+		)
+		.await
+		.expect("last pushed alarm should seed");
+
+		let ctx = new_with_kv(
+			"actor-startup-push-alarm",
+			"task-startup-push-alarm",
+			Vec::new(),
+			"local",
+			kv.clone(),
+		);
+		let (handle, mut rx) = test_envoy_handle();
+		ctx.configure_envoy(handle, Some(12));
+		let mut task = new_task(ctx.clone());
+		let (start_tx, start_rx) = oneshot::channel();
+
+		task.handle_lifecycle(LifecycleCommand::Start { reply: start_tx })
+			.await;
+		start_rx
+			.await
+			.expect("start reply should send")
+			.expect("start should succeed");
+
+		assert_eq!(
+			recv_alarm_now(&mut rx, "actor-startup-push-alarm", Some(12)),
+			Some(future_ts)
+		);
+		ctx.wait_for_pending_alarm_writes().await;
+		let encoded = kv
+			.get(LAST_PUSHED_ALARM_KEY)
+			.await
+			.expect("last pushed alarm lookup should succeed")
+			.expect("last pushed alarm should be persisted");
+		assert_eq!(
+			decode_last_pushed_alarm(&encoded).expect("last pushed alarm should decode"),
+			Some(future_ts)
+		);
+	}
+
+	#[tokio::test]
+	async fn fire_due_alarms_dispatches_overdue_work_during_sleep_grace() {
 		let ctx = new_with_kv(
 			"actor-sleep-grace-alarm",
 			"task-sleep-grace-alarm",
@@ -1576,7 +2018,7 @@ mod moved_tests {
 			"local",
 			new_in_memory(),
 		);
-		let (events_tx, mut events_rx) = mpsc::channel(4);
+		let (events_tx, mut events_rx) = mpsc::unbounded_channel();
 		ctx.configure_actor_events(Some(events_tx));
 		ctx.load_persisted_actor(PersistedActor {
 			scheduled_events: vec![PersistedScheduleEvent {
@@ -1591,23 +2033,22 @@ mod moved_tests {
 		let mut task = new_task(ctx.clone());
 		task.lifecycle = LifecycleState::SleepGrace;
 
-		task
-			.fire_due_alarms()
+		task.fire_due_alarms()
 			.await
 			.expect("sleep grace alarm fire should not fail");
 
+		let dispatched = tokio::time::timeout(Duration::from_secs(1), events_rx.recv())
+			.await
+			.expect("sleep grace scheduled action should dispatch before timeout")
+			.expect("actor event channel should stay open");
+		match dispatched {
+			ActorEvent::Action { reply, .. } => reply.send(Ok(Vec::new())),
+			other => panic!("expected scheduled action dispatch, got {}", other.kind()),
+		}
 		assert!(
-			matches!(
-				events_rx.try_recv(),
-				Err(tokio::sync::mpsc::error::TryRecvError::Empty)
-			),
-			"sleep grace should defer overdue alarms instead of dispatching them"
+			ctx.next_event().is_none(),
+			"overdue alarm should be consumed after dispatch"
 		);
-		let pending = ctx
-			.schedule()
-			.next_event()
-			.expect("overdue alarm should stay persisted for the next instance");
-		assert_eq!(pending.event_id, "evt-overdue");
 	}
 
 	#[tokio::test(start_paused = true)]
@@ -1619,8 +2060,7 @@ mod moved_tests {
 			"local",
 			new_in_memory(),
 		);
-		let (mut task, lifecycle_tx, _dispatch_tx, _events_tx) =
-			new_task_with_senders(ctx.clone());
+		let (mut task, lifecycle_tx, _dispatch_tx, _events_tx) = new_task_with_senders(ctx.clone());
 		task.factory = shutdown_ack_factory(ActorConfig {
 			sleep_grace_period: Duration::from_secs(5),
 			sleep_grace_period_overridden: true,
@@ -1638,7 +2078,7 @@ mod moved_tests {
 			.expect("start reply should send")
 			.expect("start should succeed");
 
-		ctx.schedule().after(Duration::from_secs(60), "wake", &[]);
+		ctx.after(Duration::from_secs(60), "wake", &[]);
 
 		let (stop_tx, stop_rx) = oneshot::channel();
 		lifecycle_tx
@@ -1652,9 +2092,11 @@ mod moved_tests {
 			.await
 			.expect("sleep stop reply should send")
 			.expect("sleep stop should succeed");
-		run.await.expect("task run should finish").expect("task run should succeed");
+		run.await
+			.expect("task run should finish")
+			.expect("task run should succeed");
 
-		assert_eq!(ctx.schedule().test_driver_alarm_cancel_count(), 0);
+		assert_eq!(ctx.test_driver_alarm_cancel_count(), 0);
 	}
 
 	#[tokio::test(start_paused = true)]
@@ -1666,8 +2108,7 @@ mod moved_tests {
 			"local",
 			new_in_memory(),
 		);
-		let (mut task, lifecycle_tx, _dispatch_tx, _events_tx) =
-			new_task_with_senders(ctx.clone());
+		let (mut task, lifecycle_tx, _dispatch_tx, _events_tx) = new_task_with_senders(ctx.clone());
 		task.factory = shutdown_ack_factory(ActorConfig {
 			on_destroy_timeout: Duration::from_secs(5),
 			..ActorConfig::default()
@@ -1684,7 +2125,7 @@ mod moved_tests {
 			.expect("start reply should send")
 			.expect("start should succeed");
 
-		ctx.schedule().after(Duration::from_secs(60), "wake", &[]);
+		ctx.after(Duration::from_secs(60), "wake", &[]);
 
 		let (stop_tx, stop_rx) = oneshot::channel();
 		lifecycle_tx
@@ -1698,9 +2139,11 @@ mod moved_tests {
 			.await
 			.expect("destroy stop reply should send")
 			.expect("destroy stop should succeed");
-		run.await.expect("task run should finish").expect("task run should succeed");
+		run.await
+			.expect("task run should finish")
+			.expect("task run should succeed");
 
-		assert_eq!(ctx.schedule().test_driver_alarm_cancel_count(), 1);
+		assert_eq!(ctx.test_driver_alarm_cancel_count(), 1);
 	}
 
 	#[tokio::test(start_paused = true)]
@@ -1753,7 +2196,9 @@ mod moved_tests {
 			.expect("sleep stop join should succeed")
 			.expect("sleep stop reply should send")
 			.expect("sleep stop should succeed");
-		run.await.expect("task run should finish").expect("task run should succeed");
+		run.await
+			.expect("task run should finish")
+			.expect("task run should succeed");
 	}
 
 	#[tokio::test(start_paused = true)]
@@ -1829,7 +2274,9 @@ mod moved_tests {
 		keep_awake
 			.await
 			.expect("keep-awake task should finish after release");
-		run.await.expect("task run should finish").expect("task run should succeed");
+		run.await
+			.expect("task run should finish")
+			.expect("task run should succeed");
 	}
 
 	#[tokio::test(start_paused = true)]
@@ -1851,8 +2298,7 @@ mod moved_tests {
 		);
 
 		let (start_tx, start_rx) = oneshot::channel();
-		task
-			.handle_lifecycle(LifecycleCommand::Start { reply: start_tx })
+		task.handle_lifecycle(LifecycleCommand::Start { reply: start_tx })
 			.await;
 		start_rx
 			.await
@@ -1936,8 +2382,7 @@ mod moved_tests {
 				}
 			}
 		}));
-		let (mut task, lifecycle_tx, _dispatch_tx, _events_tx) =
-			new_task_with_senders(ctx.clone());
+		let (mut task, lifecycle_tx, _dispatch_tx, _events_tx) = new_task_with_senders(ctx.clone());
 		task.factory = shutdown_ack_factory(ActorConfig::default());
 		let run = tokio::spawn(task.run());
 
@@ -1959,9 +2404,7 @@ mod moved_tests {
 			})
 			.await
 			.expect("sleep stop command should send");
-		hook_rx
-			.await
-			.expect("sleep cleanup hook should fire");
+		hook_rx.await.expect("sleep cleanup hook should fire");
 		assert_eq!(
 			drop_rx
 				.try_recv()
@@ -1977,7 +2420,9 @@ mod moved_tests {
 			ctx.wait_for_shutdown_tasks(Instant::now() + Duration::from_millis(1))
 				.await
 		);
-		run.await.expect("task run should finish").expect("task run should succeed");
+		run.await
+			.expect("task run should finish")
+			.expect("task run should succeed");
 	}
 
 	#[tokio::test(start_paused = true)]
@@ -2033,8 +2478,7 @@ mod moved_tests {
 				}
 			}
 		}));
-		let (mut task, lifecycle_tx, _dispatch_tx, _events_tx) =
-			new_task_with_senders(ctx.clone());
+		let (mut task, lifecycle_tx, _dispatch_tx, _events_tx) = new_task_with_senders(ctx.clone());
 		task.factory = shutdown_ack_factory(ActorConfig::default());
 		let run = tokio::spawn(task.run());
 
@@ -2070,9 +2514,7 @@ mod moved_tests {
 			})
 			.await
 			.expect("destroy stop command should send");
-		hook_rx
-			.await
-			.expect("destroy cleanup hook should fire");
+		hook_rx.await.expect("destroy cleanup hook should fire");
 		assert_eq!(
 			drop_rx
 				.try_recv()
@@ -2092,7 +2534,9 @@ mod moved_tests {
 			.await
 			.expect("destroy completion waiter should join");
 		assert_eq!(destroy_completed.load(Ordering::SeqCst), 1);
-		run.await.expect("task run should finish").expect("task run should succeed");
+		run.await
+			.expect("task run should finish")
+			.expect("task run should succeed");
 	}
 
 	#[tokio::test]
@@ -2153,6 +2597,7 @@ mod moved_tests {
 			.await
 			.expect("sleep stop should send");
 		wait_for_count(&begin_sleep_count, 1).await;
+		assert!(ctx.actor_aborted());
 		assert_eq!(finalize_sleep_count.load(Ordering::SeqCst), 0);
 
 		let (sleep_again_tx, sleep_again_rx) = oneshot::channel();
@@ -2201,11 +2646,14 @@ mod moved_tests {
 			.expect("keep-awake task should finish after release");
 		assert_eq!(finalize_sleep_count.load(Ordering::SeqCst), 1);
 		assert_eq!(destroy_count.load(Ordering::SeqCst), 0);
-		run.await.expect("task run should finish").expect("task run should succeed");
+		run.await
+			.expect("task run should finish")
+			.expect("task run should succeed");
 	}
 
+	#[cfg(not(debug_assertions))]
 	#[tokio::test]
-	async fn destroy_during_sleep_grace_escalates_without_finalize_sleep() {
+	async fn duplicate_destroy_during_sleep_grace_is_acked_and_ignored_in_release() {
 		let ctx = new_with_kv(
 			"actor-sleep-grace-destroy",
 			"task-sleep-grace-destroy",
@@ -2276,112 +2724,26 @@ mod moved_tests {
 		destroy_rx
 			.await
 			.expect("destroy reply should send")
-			.expect("destroy should succeed");
+			.expect("duplicate destroy should be ignored");
+
+		release_tx.send(()).expect("keep-awake release should send");
 		sleep_rx
 			.await
 			.expect("sleep reply should send")
-			.expect("sleep should resolve after destroy escalation");
-		ctx.wait_for_destroy_completion_public().await;
-
-		release_tx.send(()).expect("keep-awake release should send");
+			.expect("sleep should succeed after grace completes");
 		keep_awake
 			.await
 			.expect("keep-awake task should finish after release");
 		assert_eq!(begin_sleep_count.load(Ordering::SeqCst), 1);
-		assert_eq!(finalize_sleep_count.load(Ordering::SeqCst), 0);
-		assert_eq!(destroy_count.load(Ordering::SeqCst), 1);
-		run.await.expect("task run should finish").expect("task run should succeed");
+		assert_eq!(finalize_sleep_count.load(Ordering::SeqCst), 1);
+		assert_eq!(destroy_count.load(Ordering::SeqCst), 0);
+		run.await
+			.expect("task run should finish")
+			.expect("task run should succeed");
 	}
 
 	#[tokio::test(start_paused = true)]
-	async fn sleep_finalize_keeps_lifecycle_events_live_between_shutdown_steps() {
-		let _hook_lock = test_hook_lock().lock().await;
-		let ctx = new_with_kv(
-			"actor-sleep-finalize-events",
-			"task-sleep-finalize-events",
-			Vec::new(),
-			"local",
-			new_in_memory(),
-		);
-		let (mut task, lifecycle_tx, _dispatch_tx, events_tx) =
-			new_task_with_senders(ctx.clone());
-		task.factory = shutdown_ack_factory(ActorConfig {
-			sleep_grace_period: Duration::from_secs(5),
-			sleep_grace_period_overridden: true,
-			..ActorConfig::default()
-		});
-		let seen_state_mutation = Arc::new(AtomicUsize::new(0));
-		let _event_hook = crate::actor::task::install_lifecycle_event_hook(Arc::new({
-			let seen_state_mutation = seen_state_mutation.clone();
-			move |ctx, event| {
-				if ctx.actor_id() != "actor-sleep-finalize-events" {
-					return;
-				}
-				if matches!(
-					event,
-					LifecycleEvent::StateMutated {
-						reason: StateMutationReason::UserSetState,
-					}
-				) {
-					seen_state_mutation.fetch_add(1, Ordering::SeqCst);
-				}
-			}
-		}));
-		let run = tokio::spawn(task.run());
-
-		let (start_tx, start_rx) = oneshot::channel();
-		lifecycle_tx
-			.send(LifecycleCommand::Start { reply: start_tx })
-			.await
-			.expect("start command should send");
-		start_rx
-			.await
-			.expect("start reply should send")
-			.expect("start should succeed");
-
-		let (release_tx, release_rx) = oneshot::channel();
-		ctx.wait_until(async move {
-			let _ = release_rx.await;
-		});
-		yield_now().await;
-
-		let (stop_tx, stop_rx) = oneshot::channel();
-		lifecycle_tx
-			.send(LifecycleCommand::Stop {
-				reason: StopReason::Sleep,
-				reply: stop_tx,
-			})
-			.await
-			.expect("sleep stop should send");
-		let stop = tokio::spawn(async move { stop_rx.await });
-		yield_now().await;
-		assert!(
-			!stop.is_finished(),
-			"sleep shutdown should be waiting on tracked shutdown work"
-		);
-
-		events_tx
-			.send(LifecycleEvent::StateMutated {
-				reason: StateMutationReason::UserSetState,
-			})
-			.await
-			.expect("state mutation event should send during sleep finalize");
-		wait_for_count(&seen_state_mutation, 1).await;
-		assert!(
-			!stop.is_finished(),
-			"sleep shutdown should still be pending after servicing the lifecycle event"
-		);
-
-		release_tx.send(()).expect("release should send");
-		stop.await
-			.expect("sleep stop join should succeed")
-			.expect("sleep stop reply should send")
-			.expect("sleep stop should succeed");
-		run.await.expect("task run should finish").expect("task run should succeed");
-	}
-
-	#[tokio::test(start_paused = true)]
-	async fn shutdown_step_panic_returns_error_instead_of_crashing_task_loop() {
+	async fn inline_shutdown_panic_returns_error_instead_of_crashing_task_loop() {
 		let _hook_lock = test_hook_lock().lock().await;
 		let ctx = new_with_kv(
 			"actor-shutdown-step-panic",
@@ -2390,16 +2752,14 @@ mod moved_tests {
 			"local",
 			new_in_memory(),
 		);
-		let _cleanup_hook = crate::actor::task::install_shutdown_cleanup_hook(Arc::new(
-			move |ctx, _reason| {
+		let _cleanup_hook =
+			crate::actor::task::install_shutdown_cleanup_hook(Arc::new(move |ctx, _reason| {
 				if ctx.actor_id() != "actor-shutdown-step-panic" {
 					return;
 				}
 				panic!("boom");
-			},
-		));
-		let (mut task, lifecycle_tx, _dispatch_tx, _events_tx) =
-			new_task_with_senders(ctx.clone());
+			}));
+		let (mut task, lifecycle_tx, _dispatch_tx, _events_tx) = new_task_with_senders(ctx.clone());
 		task.factory = shutdown_ack_factory(ActorConfig::default());
 		let run = tokio::spawn(task.run());
 
@@ -2426,10 +2786,19 @@ mod moved_tests {
 			.expect("destroy stop reply should send")
 			.expect_err("shutdown panic should surface as an error reply");
 		assert!(
-			error.to_string().contains("shutdown phase Finalizing panicked"),
+			error.to_string().contains("internal_error"),
 			"unexpected shutdown panic error: {error:#}"
 		);
-		run.await.expect("task run should finish").expect("task run should succeed");
+		let task_error = run
+			.await
+			.expect("task run should finish")
+			.expect_err("task should return shutdown panic error");
+		assert!(
+			task_error
+				.to_string()
+				.contains("shutdown panicked during Destroy"),
+			"unexpected task shutdown panic error: {task_error:#}"
+		);
 	}
 
 	#[tokio::test(start_paused = true)]
@@ -2452,14 +2821,15 @@ mod moved_tests {
 				if reason == StopReason::Destroy {
 					hook_count.fetch_add(1, Ordering::SeqCst);
 					assert!(
-						ctx.wait_for_destroy_completion_public().now_or_never().is_some(),
+						ctx.wait_for_destroy_completion_public()
+							.now_or_never()
+							.is_some(),
 						"destroy completion should already be visible when the shutdown reply is sent"
 					);
 				}
 			}
 		}));
-		let (mut task, lifecycle_tx, _dispatch_tx, _events_tx) =
-			new_task_with_senders(ctx.clone());
+		let (mut task, lifecycle_tx, _dispatch_tx, _events_tx) = new_task_with_senders(ctx.clone());
 		task.factory = shutdown_ack_factory(ActorConfig::default());
 		let run = tokio::spawn(task.run());
 
@@ -2486,7 +2856,110 @@ mod moved_tests {
 			.expect("destroy stop reply should send")
 			.expect("destroy stop should succeed");
 		assert_eq!(hook_count.load(Ordering::SeqCst), 1);
-		run.await.expect("task run should finish").expect("task run should succeed");
+		run.await
+			.expect("task run should finish")
+			.expect("task run should succeed");
+	}
+
+	#[tokio::test]
+	async fn self_initiated_sleep_runs_shutdown_without_stop_reply() {
+		let _hook_lock = test_hook_lock().lock().await;
+		let ctx = new_with_kv(
+			"actor-self-sleep-run-return",
+			"task-self-sleep-run-return",
+			Vec::new(),
+			"local",
+			new_in_memory(),
+		);
+		let cleanup_count = Arc::new(AtomicUsize::new(0));
+		let _cleanup_hook = crate::actor::task::install_shutdown_cleanup_hook(Arc::new({
+			let cleanup_count = cleanup_count.clone();
+			move |ctx, reason| {
+				if ctx.actor_id() == "actor-self-sleep-run-return" && reason == "sleep" {
+					cleanup_count.fetch_add(1, Ordering::SeqCst);
+				}
+			}
+		}));
+		let factory = Arc::new(ActorFactory::new(ActorConfig::default(), move |start| {
+			Box::pin(async move {
+				start.ctx.sleep();
+				Ok(())
+			})
+		}));
+		let (mut task, lifecycle_tx, _dispatch_tx, _events_tx) = new_task_with_senders(ctx.clone());
+		task.factory = factory;
+		let run = tokio::spawn(task.run());
+
+		let (start_tx, start_rx) = oneshot::channel();
+		lifecycle_tx
+			.send(LifecycleCommand::Start { reply: start_tx })
+			.await
+			.expect("start command should send");
+		start_rx
+			.await
+			.expect("start reply should send")
+			.expect("start should succeed");
+
+		timeout(Duration::from_secs(2), run)
+			.await
+			.expect("self-initiated sleep shutdown should finish")
+			.expect("task join should succeed")
+			.expect("task run should succeed");
+		assert_eq!(ctx.sleep_request_count(), 1);
+		assert_eq!(cleanup_count.load(Ordering::SeqCst), 1);
+	}
+
+	#[tokio::test]
+	async fn self_initiated_destroy_runs_shutdown_and_marks_complete() {
+		let _hook_lock = test_hook_lock().lock().await;
+		let ctx = new_with_kv(
+			"actor-self-destroy-run-return",
+			"task-self-destroy-run-return",
+			Vec::new(),
+			"local",
+			new_in_memory(),
+		);
+		let cleanup_count = Arc::new(AtomicUsize::new(0));
+		let _cleanup_hook = crate::actor::task::install_shutdown_cleanup_hook(Arc::new({
+			let cleanup_count = cleanup_count.clone();
+			move |ctx, reason| {
+				if ctx.actor_id() == "actor-self-destroy-run-return" && reason == "destroy" {
+					cleanup_count.fetch_add(1, Ordering::SeqCst);
+				}
+			}
+		}));
+		let factory = Arc::new(ActorFactory::new(ActorConfig::default(), move |start| {
+			Box::pin(async move {
+				start.ctx.destroy();
+				Ok(())
+			})
+		}));
+		let (mut task, lifecycle_tx, _dispatch_tx, _events_tx) = new_task_with_senders(ctx.clone());
+		task.factory = factory;
+		let run = tokio::spawn(task.run());
+
+		let (start_tx, start_rx) = oneshot::channel();
+		lifecycle_tx
+			.send(LifecycleCommand::Start { reply: start_tx })
+			.await
+			.expect("start command should send");
+		start_rx
+			.await
+			.expect("start reply should send")
+			.expect("start should succeed");
+
+		timeout(Duration::from_secs(2), run)
+			.await
+			.expect("self-initiated destroy shutdown should finish")
+			.expect("task join should succeed")
+			.expect("task run should succeed");
+		assert_eq!(cleanup_count.load(Ordering::SeqCst), 1);
+		assert!(
+			ctx.wait_for_destroy_completion_public()
+				.now_or_never()
+				.is_some(),
+			"destroy completion should be marked after self-initiated shutdown"
+		);
 	}
 
 	#[test]
@@ -2598,8 +3071,7 @@ mod moved_tests {
 				actor_id: "actor-channel-lifecycle".to_owned(),
 				channel: "lifecycle_inbox".to_owned(),
 				reason: "all senders dropped".to_owned(),
-				message: "actor task terminating because lifecycle command inbox closed"
-					.to_owned(),
+				message: "actor task terminating because lifecycle command inbox closed".to_owned(),
 			}]
 		);
 	}
@@ -2633,28 +3105,176 @@ mod moved_tests {
 	}
 
 	#[tokio::test]
+	async fn actor_task_logs_lifecycle_dispatch_and_actor_event_flow() {
+		let ctx = new_with_kv(
+			"actor-log-flow",
+			"task-log-flow",
+			Vec::new(),
+			"local",
+			new_in_memory(),
+		);
+		let (lifecycle_tx, lifecycle_rx) = mpsc::channel(4);
+		let (dispatch_tx, dispatch_rx) = mpsc::channel(4);
+		let (events_tx, events_rx) = mpsc::channel(4);
+		ctx.configure_lifecycle_events(Some(events_tx));
+		let factory = Arc::new(ActorFactory::new(Default::default(), |start| {
+			Box::pin(async move {
+				let mut events = start.events;
+				while let Some(event) = events.recv().await {
+					match event {
+						ActorEvent::Action { reply, .. } => {
+							reply.send(Ok(vec![1]));
+						}
+						ActorEvent::Destroy { reply } => {
+							reply.send(Ok(()));
+							break;
+						}
+						_ => {}
+					}
+				}
+				Ok(())
+			})
+		}));
+		let task = ActorTask::new(
+			"actor-log-flow".into(),
+			0,
+			lifecycle_rx,
+			dispatch_rx,
+			events_rx,
+			factory,
+			ctx,
+			None,
+			None,
+		);
+		let records = Arc::new(Mutex::new(Vec::new()));
+		let subscriber = Registry::default().with(ActorTaskLogLayer {
+			records: records.clone(),
+		});
+		let _guard = tracing::subscriber::set_default(subscriber);
+		let run = tokio::spawn(task.run());
+
+		let (start_tx, start_rx) = oneshot::channel();
+		lifecycle_tx
+			.send(LifecycleCommand::Start { reply: start_tx })
+			.await
+			.expect("start command should send");
+		start_rx
+			.await
+			.expect("start reply should send")
+			.expect("start should succeed");
+
+		let (action_tx, action_rx) = oneshot::channel();
+		dispatch_tx
+			.send(DispatchCommand::Action {
+				name: "ping".to_owned(),
+				args: Vec::new(),
+				conn: ConnHandle::new("conn-log-flow", Vec::new(), Vec::new(), false),
+				reply: action_tx,
+			})
+			.await
+			.expect("dispatch command should send");
+		assert_eq!(
+			action_rx
+				.await
+				.expect("dispatch reply should send")
+				.expect("dispatch should succeed"),
+			vec![1]
+		);
+
+		let (stop_tx, stop_rx) = oneshot::channel();
+		lifecycle_tx
+			.send(LifecycleCommand::Stop {
+				reason: StopReason::Destroy,
+				reply: stop_tx,
+			})
+			.await
+			.expect("stop command should send");
+		stop_rx
+			.await
+			.expect("stop reply should send")
+			.expect("stop should succeed");
+		run.await
+			.expect("task join should succeed")
+			.expect("task should succeed");
+
+		let logs = records
+			.lock()
+			.expect("actor-task log lock poisoned")
+			.clone();
+		assert!(logs.iter().any(|log| {
+			log.level == tracing::Level::INFO
+				&& log.actor_id.as_deref() == Some("actor-log-flow")
+				&& log.message.as_deref() == Some("actor lifecycle transition")
+				&& log.old.as_deref() == Some("Loading")
+				&& log.new.as_deref() == Some("Started")
+		}));
+		assert!(logs.iter().any(|log| {
+			log.level == tracing::Level::DEBUG
+				&& log.actor_id.as_deref() == Some("actor-log-flow")
+				&& log.message.as_deref() == Some("actor lifecycle command received")
+				&& log.command.as_deref() == Some("start")
+		}));
+		assert!(logs.iter().any(|log| {
+			log.level == tracing::Level::DEBUG
+				&& log.actor_id.as_deref() == Some("actor-log-flow")
+				&& log.message.as_deref() == Some("actor lifecycle command replied")
+				&& log.command.as_deref() == Some("start")
+				&& log.outcome.as_deref() == Some("ok")
+		}));
+		assert!(logs.iter().any(|log| {
+			log.level == tracing::Level::DEBUG
+				&& log.actor_id.as_deref() == Some("actor-log-flow")
+				&& log.message.as_deref() == Some("actor dispatch command received")
+				&& log.command.as_deref() == Some("action")
+		}));
+		assert!(logs.iter().any(|log| {
+			log.level == tracing::Level::DEBUG
+				&& log.actor_id.as_deref() == Some("actor-log-flow")
+				&& log.message.as_deref() == Some("actor dispatch command handled")
+				&& log.command.as_deref() == Some("action")
+				&& log.outcome.as_deref() == Some("enqueued")
+		}));
+		assert!(logs.iter().any(|log| {
+			log.level == tracing::Level::DEBUG
+				&& log.actor_id.as_deref() == Some("actor-log-flow")
+				&& log.message.as_deref() == Some("actor event enqueued")
+				&& log.event.as_deref() == Some("action")
+		}));
+		assert!(logs.iter().any(|log| {
+			log.level == tracing::Level::DEBUG
+				&& log.actor_id.as_deref() == Some("actor-log-flow")
+				&& log.message.as_deref() == Some("actor event drained")
+				&& log.event.as_deref() == Some("action")
+		}));
+	}
+
+	#[tokio::test]
 	async fn disconnect_hibernatable_connection_reaps_on_next_atomic_flush() {
 		let kv = new_in_memory();
-		let ctx =
-			new_with_kv("actor-disconnect", "task-disconnect", Vec::new(), "local", kv.clone());
+		let ctx = new_with_kv(
+			"actor-disconnect",
+			"task-disconnect",
+			Vec::new(),
+			"local",
+			kv.clone(),
+		);
 		let disconnects = Arc::new(Mutex::new(Vec::<String>::new()));
 		let conn = managed_test_conn(&ctx, "conn-hibernating", true, disconnects);
 		conn.configure_hibernation(Some(HibernatableConnectionMetadata {
-			gateway_id: b"gateway".to_vec(),
-			request_id: b"request".to_vec(),
+			gateway_id: *b"gate",
+			request_id: *b"req1",
 			server_message_index: 1,
 			client_message_index: 2,
 			request_path: "/ws".to_owned(),
 			request_headers: BTreeMap::new(),
 		}));
 		ctx.add_conn(conn.clone());
-		ctx
-			.save_state(vec![StateDelta::ConnHibernation {
-				conn: conn.id().into(),
-				bytes: vec![1, 2, 3],
-			}])
-			.await
-			.expect("seed hibernation should persist");
+		ctx.save_state(vec![StateDelta::ConnHibernation {
+			conn: conn.id().into(),
+			bytes: vec![1, 2, 3],
+		}])
+		.await
+		.expect("seed hibernation should persist");
 		assert_eq!(kv.test_batch_delete_call_count(), 0);
 
 		conn.disconnect(Some("bye"))
@@ -2683,11 +3303,17 @@ mod moved_tests {
 	#[tokio::test]
 	async fn wake_start_filters_disconnected_hibernated_connections_and_reaps_them() {
 		let kv = new_in_memory();
-		let seed_ctx = new_with_kv("actor-wake-prune", "task-wake", Vec::new(), "local", kv.clone());
+		let seed_ctx = new_with_kv(
+			"actor-wake-prune",
+			"task-wake",
+			Vec::new(),
+			"local",
+			kv.clone(),
+		);
 		let live_conn = ConnHandle::new("conn-live", Vec::new(), Vec::new(), true);
 		live_conn.configure_hibernation(Some(HibernatableConnectionMetadata {
-			gateway_id: b"gateway-live".to_vec(),
-			request_id: b"request-live".to_vec(),
+			gateway_id: *b"gliv",
+			request_id: *b"rliv",
 			server_message_index: 4,
 			client_message_index: 8,
 			request_path: "/ws".to_owned(),
@@ -2695,8 +3321,8 @@ mod moved_tests {
 		}));
 		let stale_conn = ConnHandle::new("conn-stale", Vec::new(), Vec::new(), true);
 		stale_conn.configure_hibernation(Some(HibernatableConnectionMetadata {
-			gateway_id: b"gateway-stale".to_vec(),
-			request_id: b"request-stale".to_vec(),
+			gateway_id: *b"gstl",
+			request_id: *b"rstl",
 			server_message_index: 5,
 			client_message_index: 9,
 			request_path: "/ws".to_owned(),
@@ -2718,15 +3344,18 @@ mod moved_tests {
 			.await
 			.expect("seed hibernations should persist");
 
-		let ctx = new_with_kv("actor-wake-prune", "task-wake", Vec::new(), "local", kv.clone());
+		let ctx = new_with_kv(
+			"actor-wake-prune",
+			"task-wake",
+			Vec::new(),
+			"local",
+			kv.clone(),
+		);
 		let (_lifecycle_tx, lifecycle_rx) = mpsc::channel(4);
 		let (_dispatch_tx, dispatch_rx) = mpsc::channel(4);
 		let (events_tx, events_rx) = mpsc::channel(4);
 		ctx.configure_lifecycle_events(Some(events_tx));
-		configure_live_hibernated_pairs(
-			&ctx,
-			[(b"gateway-live".as_slice(), b"request-live".as_slice())],
-		);
+		configure_live_hibernated_pairs(&ctx, [(b"gliv".as_slice(), b"rliv".as_slice())]);
 
 		let (started_tx, started_rx) = oneshot::channel();
 		let started_tx = Arc::new(Mutex::new(Some(started_tx)));
@@ -2755,8 +3384,7 @@ mod moved_tests {
 							reply.send(Ok(Vec::new()));
 						}
 						ActorEvent::BeginSleep => {}
-						ActorEvent::FinalizeSleep { reply }
-						| ActorEvent::Destroy { reply } => {
+						ActorEvent::FinalizeSleep { reply } | ActorEvent::Destroy { reply } => {
 							reply.send(Ok(()));
 							break;
 						}
@@ -2782,8 +3410,7 @@ mod moved_tests {
 			None,
 		);
 		let (start_tx, start_rx) = oneshot::channel();
-		task
-			.handle_lifecycle(LifecycleCommand::Start { reply: start_tx })
+		task.handle_lifecycle(LifecycleCommand::Start { reply: start_tx })
 			.await;
 		start_rx
 			.await
@@ -2793,10 +3420,7 @@ mod moved_tests {
 		let hibernated = started_rx.await.expect("start info should send");
 		assert_eq!(hibernated, vec![("conn-live".to_owned(), vec![3, 2, 1])]);
 
-		task
-			.handle_event(crate::actor::task::LifecycleEvent::SaveRequested {
-				immediate: false,
-			})
+		task.handle_event(crate::actor::task::LifecycleEvent::SaveRequested { immediate: false })
 			.await;
 		task.on_state_save_tick().await;
 
@@ -2819,12 +3443,17 @@ mod moved_tests {
 	#[tokio::test]
 	async fn wake_start_reaps_dead_hibernated_connections_without_engine_registration() {
 		let kv = new_in_memory();
-		let seed_ctx =
-			new_with_kv("actor-wake-dead", "task-wake", Vec::new(), "local", kv.clone());
+		let seed_ctx = new_with_kv(
+			"actor-wake-dead",
+			"task-wake",
+			Vec::new(),
+			"local",
+			kv.clone(),
+		);
 		let dead_conn = ConnHandle::new("conn-dead", Vec::new(), Vec::new(), true);
 		dead_conn.configure_hibernation(Some(HibernatableConnectionMetadata {
-			gateway_id: b"gateway-dead".to_vec(),
-			request_id: b"request-dead".to_vec(),
+			gateway_id: *b"gded",
+			request_id: *b"rded",
 			server_message_index: 7,
 			client_message_index: 11,
 			request_path: "/ws".to_owned(),
@@ -2839,8 +3468,13 @@ mod moved_tests {
 			.await
 			.expect("seed hibernation should persist");
 
-		let ctx =
-			new_with_kv("actor-wake-dead", "task-wake", Vec::new(), "local", kv.clone());
+		let ctx = new_with_kv(
+			"actor-wake-dead",
+			"task-wake",
+			Vec::new(),
+			"local",
+			kv.clone(),
+		);
 		let (_lifecycle_tx, lifecycle_rx) = mpsc::channel(4);
 		let (_dispatch_tx, dispatch_rx) = mpsc::channel(4);
 		let (events_tx, events_rx) = mpsc::channel(4);
@@ -2858,7 +3492,13 @@ mod moved_tests {
 					.expect("started sender lock poisoned")
 					.take()
 					.expect("started sender should exist")
-					.send(start.hibernated.into_iter().map(|(conn, _)| conn.id().to_owned()).collect::<Vec<_>>())
+					.send(
+						start
+							.hibernated
+							.into_iter()
+							.map(|(conn, _)| conn.id().to_owned())
+							.collect::<Vec<_>>(),
+					)
 					.expect("started info should send");
 				while let Some(event) = events.recv().await {
 					match event {
@@ -2869,8 +3509,7 @@ mod moved_tests {
 							reply.send(Ok(Vec::new()));
 						}
 						ActorEvent::BeginSleep => {}
-						ActorEvent::FinalizeSleep { reply }
-						| ActorEvent::Destroy { reply } => {
+						ActorEvent::FinalizeSleep { reply } | ActorEvent::Destroy { reply } => {
 							reply.send(Ok(()));
 							break;
 						}
@@ -2896,21 +3535,20 @@ mod moved_tests {
 			None,
 		);
 		let (start_tx, start_rx) = oneshot::channel();
-		task
-			.handle_lifecycle(LifecycleCommand::Start { reply: start_tx })
+		task.handle_lifecycle(LifecycleCommand::Start { reply: start_tx })
 			.await;
 		start_rx
 			.await
 			.expect("start reply should send")
 			.expect("start should succeed");
 
-		assert_eq!(started_rx.await.expect("start info should send"), Vec::<String>::new());
+		assert_eq!(
+			started_rx.await.expect("start info should send"),
+			Vec::<String>::new()
+		);
 		assert!(ctx.conns().is_empty());
 
-		task
-			.handle_event(crate::actor::task::LifecycleEvent::SaveRequested {
-				immediate: false,
-			})
+		task.handle_event(crate::actor::task::LifecycleEvent::SaveRequested { immediate: false })
 			.await;
 		task.on_state_save_tick().await;
 

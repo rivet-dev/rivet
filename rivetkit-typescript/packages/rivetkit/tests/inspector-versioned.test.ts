@@ -1,10 +1,10 @@
 import { describe, expect, test } from "vitest";
 import { ActorContext } from "@rivetkit/rivetkit-napi";
 import type { WorkflowHistory } from "@/common/bare/transport/v1";
-import * as v1 from "@/common/bare/inspector/v1";
-import * as v2 from "@/common/bare/inspector/v2";
-import * as v3 from "@/common/bare/inspector/v3";
-import * as v4 from "@/common/bare/inspector/v4";
+import * as v1 from "@/common/bare/generated/inspector/v1";
+import * as v2 from "@/common/bare/generated/inspector/v2";
+import * as v3 from "@/common/bare/generated/inspector/v3";
+import * as v4 from "@/common/bare/generated/inspector/v4";
 import {
 	decodeWorkflowHistoryTransport,
 	encodeWorkflowHistoryTransport,

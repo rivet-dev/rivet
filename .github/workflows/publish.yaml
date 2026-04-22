@@ -89,47 +89,47 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # rivetkit-native addon: 7 platforms (gnu + musl Linux, darwin,
+          # rivetkit-napi addon: 7 platforms (gnu + musl Linux, darwin,
           # windows-msvc is produced via cargo-xwin in the base image).
-          - name: rivetkit-native (linux-x64-gnu)
-            build_target: rivetkit-native
+          - name: rivetkit-napi (linux-x64-gnu)
+            build_target: rivetkit-napi
             docker: docker/build/linux-x64-gnu.Dockerfile
-            artifact: rivetkit-native.linux-x64-gnu.node
+            artifact: rivetkit-napi.linux-x64-gnu.node
             upload_prefix: native
             platform: linux-x64-gnu
             release_only: false
-          - name: rivetkit-native (linux-x64-musl)
-            build_target: rivetkit-native
+          - name: rivetkit-napi (linux-x64-musl)
+            build_target: rivetkit-napi
             docker: docker/build/linux-x64-musl.Dockerfile
-            artifact: rivetkit-native.linux-x64-musl.node
+            artifact: rivetkit-napi.linux-x64-musl.node
             upload_prefix: native
             platform: linux-x64-musl
             release_only: false
-          - name: rivetkit-native (linux-arm64-gnu)
-            build_target: rivetkit-native
+          - name: rivetkit-napi (linux-arm64-gnu)
+            build_target: rivetkit-napi
             docker: docker/build/linux-arm64-gnu.Dockerfile
-            artifact: rivetkit-native.linux-arm64-gnu.node
+            artifact: rivetkit-napi.linux-arm64-gnu.node
             upload_prefix: native
             platform: linux-arm64-gnu
             release_only: false
-          - name: rivetkit-native (linux-arm64-musl)
-            build_target: rivetkit-native
+          - name: rivetkit-napi (linux-arm64-musl)
+            build_target: rivetkit-napi
             docker: docker/build/linux-arm64-musl.Dockerfile
-            artifact: rivetkit-native.linux-arm64-musl.node
+            artifact: rivetkit-napi.linux-arm64-musl.node
             upload_prefix: native
             platform: linux-arm64-musl
             release_only: false
-          - name: rivetkit-native (darwin-x64)
-            build_target: rivetkit-native
+          - name: rivetkit-napi (darwin-x64)
+            build_target: rivetkit-napi
             docker: docker/build/darwin-x64.Dockerfile
-            artifact: rivetkit-native.darwin-x64.node
+            artifact: rivetkit-napi.darwin-x64.node
             upload_prefix: native
             platform: darwin-x64
             release_only: false
-          - name: rivetkit-native (darwin-arm64)
-            build_target: rivetkit-native
+          - name: rivetkit-napi (darwin-arm64)
+            build_target: rivetkit-napi
             docker: docker/build/darwin-arm64.Dockerfile
-            artifact: rivetkit-native.darwin-arm64.node
+            artifact: rivetkit-napi.darwin-arm64.node
             upload_prefix: native
             platform: darwin-arm64
             release_only: false
@@ -346,10 +346,10 @@ jobs:
 
       - name: Place native binaries in platform packages
         run: |
-          NATIVE_DIR=rivetkit-typescript/packages/rivetkit-native
+          NATIVE_DIR=rivetkit-typescript/packages/rivetkit-napi
           for f in native-artifacts/*.node; do
             filename=$(basename "$f")
-            platform="${filename#rivetkit-native.}"
+            platform="${filename#rivetkit-napi.}"
             platform="${platform%.node}"
             mkdir -p "${NATIVE_DIR}/npm/${platform}"
             cp "$f" "${NATIVE_DIR}/npm/${platform}/"
@@ -397,19 +397,7 @@ jobs:
 
       # ---- build TypeScript packages (turbo dep graph picks up native) ----
       - name: Build TypeScript packages
-        run: pnpm build -F rivetkit -F '@rivetkit/*' -F '!@rivetkit/shared-data' -F '!@rivetkit/engine-frontend' -F '!@rivetkit/mcp-hub' -F '!@rivetkit/rivetkit-native'
-
-      - name: Pack inspector
-        run: npx turbo build:pack-inspector -F rivetkit
-
-      - name: Strip inspector sourcemaps
-        run: |
-          cd rivetkit-typescript/packages/rivetkit/dist
-          mkdir -p /tmp/inspector-repack
-          tar xzf inspector.tar.gz -C /tmp/inspector-repack
-          find /tmp/inspector-repack -name '*.map' -delete
-          tar czf inspector.tar.gz -C /tmp/inspector-repack .
-          rm -rf /tmp/inspector-repack
+        run: pnpm build -F rivetkit -F '@rivetkit/*' -F '!@rivetkit/shared-data' -F '!@rivetkit/engine-frontend' -F '!@rivetkit/mcp-hub' -F '!@rivetkit/rivetkit-napi'
 
       # ---- shared publish (runs for all triggers) ----
       - name: Finalize package versions for publish

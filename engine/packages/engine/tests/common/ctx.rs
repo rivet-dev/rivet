@@ -6,6 +6,7 @@ use std::time::Duration;
 pub struct TestOpts {
 	pub datacenters: usize,
 	pub timeout_secs: u64,
+	pub pegboard_outbound: bool,
 }
 
 impl TestOpts {
@@ -13,11 +14,17 @@ impl TestOpts {
 		Self {
 			datacenters,
 			timeout_secs: 10,
+			pegboard_outbound: false,
 		}
 	}
 
 	pub fn with_timeout(mut self, timeout_secs: u64) -> Self {
 		self.timeout_secs = timeout_secs;
+		self
+	}
+
+	pub fn with_pegboard_outbound(mut self) -> Self {
+		self.pegboard_outbound = true;
 		self
 	}
 }
@@ -27,6 +34,7 @@ impl Default for TestOpts {
 		Self {
 			datacenters: 1,
 			timeout_secs: 10,
+			pegboard_outbound: false,
 		}
 	}
 }
@@ -71,14 +79,17 @@ impl TestCtx {
 		// Setup all datacenters
 		let mut dcs = Vec::new();
 		for test_deps in test_deps_list {
-			let dc = Self::setup_instance(test_deps).await?;
+			let dc = Self::setup_instance(test_deps, opts.pegboard_outbound).await?;
 			dcs.push(dc);
 		}
 
 		Ok(Self { dcs, opts })
 	}
 
-	async fn setup_instance(test_deps: rivet_test_deps::TestDeps) -> Result<TestDatacenter> {
+	async fn setup_instance(
+		test_deps: rivet_test_deps::TestDeps,
+		include_pegboard_outbound: bool,
+	) -> Result<TestDatacenter> {
 		let config = test_deps.config().clone();
 		let pools = test_deps.pools().clone();
 
@@ -89,7 +100,7 @@ impl TestCtx {
 			let config = config.clone();
 			let pools = pools.clone();
 			async move {
-				let services = vec![
+				let mut services = vec![
 					Service::new(
 						"api-peer",
 						ServiceKind::ApiPeer,
@@ -115,6 +126,15 @@ impl TestCtx {
 						false,
 					),
 				];
+
+				if include_pegboard_outbound {
+					services.push(Service::new(
+						"pegboard_outbound",
+						ServiceKind::Standalone,
+						|config, pools| Box::pin(pegboard_outbound::start(config, pools)),
+						true,
+					));
+				}
 
 				rivet_service_manager::start(config, pools, services).await
 			}

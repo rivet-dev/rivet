@@ -29,6 +29,7 @@ struct InFlightRequest {
 	receiver_subject: String,
 	/// Sender for incoming messages to this request.
 	msg_tx: mpsc::Sender<protocol::ToRivetTunnelMessageKind>,
+	buffered_inbound: Vec<protocol::ToRivetTunnelMessageKind>,
 	/// Used to check if the request handler has been dropped.
 	drop_tx: watch::Sender<Option<MsgGcReason>>,
 	/// True once first message for this request has been sent (so envoy learned reply_to).
@@ -43,6 +44,9 @@ struct InFlightRequest {
 struct HibernationState {
 	total_pending_ws_msgs_size: u64,
 	pending_ws_msgs: Vec<PendingWebsocketMessage>,
+	/// True while the old request handler is parked in hibernation and the
+	/// replacement after-hibernation handler has not taken over yet.
+	hibernating: bool,
 	// Used to keep hibernating websockets from being GC'd
 	last_ping: Instant,
 }
@@ -133,12 +137,14 @@ impl SharedState {
 	) -> InFlightRequestHandle {
 		let (msg_tx, msg_rx) = mpsc::channel(128);
 		let (drop_tx, drop_rx) = watch::channel(None);
+		let mut buffered_inbound = Vec::new();
 
 		let new = match self.in_flight_requests.entry_async(request_id).await {
 			Entry::Vacant(entry) => {
 				entry.insert_entry(InFlightRequest {
 					receiver_subject,
 					msg_tx,
+					buffered_inbound: Vec::new(),
 					drop_tx,
 					opened: false,
 					message_index: 0,
@@ -156,6 +162,10 @@ impl SharedState {
 				entry.drop_tx = drop_tx;
 				entry.opened = false;
 				entry.last_pong = util::timestamp::now();
+				buffered_inbound = std::mem::take(&mut entry.buffered_inbound);
+				if let Some(hs) = &mut entry.hibernation_state {
+					hs.hibernating = false;
+				}
 
 				if entry.stopping {
 					entry.hibernation_state = None;
@@ -165,6 +175,16 @@ impl SharedState {
 				false
 			}
 		};
+
+		if let Some(req) = self.in_flight_requests.get_async(&request_id).await {
+			for msg in buffered_inbound {
+				tracing::debug!(
+					request_id=%protocol::util::id_to_string(&request_id),
+					"replaying buffered inbound tunnel message"
+				);
+				let _ = req.msg_tx.send(msg).await;
+			}
+		}
 
 		InFlightRequestHandle {
 			msg_rx,
@@ -295,6 +315,7 @@ impl SharedState {
 			.context("request not in flight")?;
 
 		if let Some(hs) = &mut req.hibernation_state {
+			hs.hibernating = true;
 			hs.last_ping = Instant::now();
 		} else {
 			tracing::warn!("should not call keepalive_hws for non-hibernating ws");
@@ -332,7 +353,7 @@ impl SharedState {
 				Ok(protocol::ToGateway::ToRivetTunnelMessage(msg)) => {
 					let message_id = msg.message_id;
 
-					let Some(in_flight) = self
+					let Some(mut in_flight) = self
 						.in_flight_requests
 						.get_async(&message_id.request_id)
 						.await
@@ -360,7 +381,45 @@ impl SharedState {
 						inner_size,
 						"forwarding message to request handler"
 					);
-					let _ = in_flight.msg_tx.send(msg.message_kind.clone()).await;
+					let should_buffer_restored_open = in_flight.hibernation_state.is_some()
+						&& in_flight.opened
+						&& matches!(
+							msg.message_kind,
+							protocol::ToRivetTunnelMessageKind::ToRivetWebSocketOpen(_)
+						);
+					let should_buffer = should_buffer_restored_open
+						|| in_flight
+							.hibernation_state
+							.as_ref()
+							.is_some_and(|hs| hs.hibernating)
+							&& matches!(
+								msg.message_kind,
+								protocol::ToRivetTunnelMessageKind::ToRivetWebSocketOpen(_)
+									| protocol::ToRivetTunnelMessageKind::ToRivetWebSocketClose(_)
+							);
+
+					if should_buffer {
+						tracing::debug!(
+							gateway_id=%protocol::util::id_to_string(&message_id.gateway_id),
+							request_id=%protocol::util::id_to_string(&message_id.request_id),
+							message_index=message_id.message_index,
+							"buffering hibernating control tunnel message"
+						);
+						in_flight.buffered_inbound.push(msg.message_kind.clone());
+					} else if in_flight
+						.msg_tx
+						.send(msg.message_kind.clone())
+						.await
+						.is_err()
+					{
+						tracing::debug!(
+							gateway_id=%protocol::util::id_to_string(&message_id.gateway_id),
+							request_id=%protocol::util::id_to_string(&message_id.request_id),
+							message_index=message_id.message_index,
+							"buffering tunnel message after request receiver dropped"
+						);
+						in_flight.buffered_inbound.push(msg.message_kind.clone());
+					}
 				}
 				Err(err) => {
 					tracing::error!(?err, "failed to parse message");
@@ -388,6 +447,7 @@ impl SharedState {
 				req.hibernation_state = Some(HibernationState {
 					total_pending_ws_msgs_size: 0,
 					pending_ws_msgs: Vec::new(),
+					hibernating: false,
 					last_ping: Instant::now(),
 				});
 			}

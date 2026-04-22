@@ -1,35 +1,76 @@
-use std::future::{self, Future};
+//! Actor lifecycle task orchestration.
+//!
+//! `ActorTask` deliberately uses four separate bounded `mpsc` receivers instead
+//! of one tagged command queue:
+//!
+//! - `lifecycle_inbox` carries trusted registry/envoy lifecycle commands:
+//!   start, stop, destroy, and driver-alarm wakeups.
+//! - `dispatch_inbox` carries client-facing actor work such as actions, raw
+//!   HTTP, raw WebSockets, and inspector workflow requests.
+//! - `lifecycle_events` carries internal subsystem signals from
+//!   `ActorContext`: save requests, activity changes, inspector attach changes,
+//!   and sleep ticks.
+//! - `actor_event_rx` feeds the user runtime adapter with actor events after
+//!   `ActorTask` accepts dispatch work.
+//!
+//! Keeping these queues split gives the task loop explicit back-pressure and
+//! priority boundaries. Client dispatch can fill its own bounded inbox without
+//! starving lifecycle stop/destroy commands, while internal save/sleep/inspector
+//! events do not compete with untrusted client traffic. The main `tokio::select!`
+//! is biased so lifecycle commands are observed first, then internal lifecycle
+//! events, then dispatch and timers. During sleep grace, the same priority keeps
+//! lifecycle handling live while still draining accepted dispatch replies before
+//! final teardown.
+//!
+//! Producers reserve capacity with `try_reserve` before constructing channel
+//! work. Overload paths therefore fail fast with `actor.overloaded`, record the
+//! specific inbox metric (`lifecycle_inbox`, `dispatch_inbox`,
+//! `lifecycle_event_inbox`, or `actor_event_inbox`), and avoid orphaning reply
+//! oneshots. The sender topology follows the trust boundary: registry/envoy owns
+//! lifecycle and dispatch senders, core subsystems enqueue lifecycle events
+//! through `ActorContext`, and only `ActorTask` forwards accepted work into the
+//! actor-event stream consumed by user code.
+
+use std::future;
 use std::panic::AssertUnwindSafe;
-use std::pin::Pin;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU32, Ordering};
 #[cfg(test)]
-use std::sync::{Mutex, OnceLock};
+use std::sync::OnceLock;
+use std::sync::atomic::{AtomicU32, Ordering};
 
 use anyhow::{Context, Result, anyhow};
 use futures::FutureExt;
+#[cfg(test)]
+use parking_lot::Mutex;
 use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio::task::{JoinError, JoinHandle};
-use tokio::time::{Duration, Instant, sleep, sleep_until, timeout};
+use tokio::time::{Duration, Instant, sleep_until, timeout};
 
 use crate::actor::action::ActionDispatchError;
-use crate::actor::callbacks::{
-	ActorEvent, ActorStart, Reply, Request, Response, SerializeStateReason,
-};
 use crate::actor::connection::ConnHandle;
 use crate::actor::context::ActorContext;
 use crate::actor::diagnostics::record_actor_warning;
 use crate::actor::factory::ActorFactory;
+use crate::actor::lifecycle_hooks::{ActorEvents, ActorStart, Reply};
+use crate::actor::messages::{
+	ActorEvent, QueueSendResult, Request, Response, SerializeStateReason, StateDelta,
+};
 use crate::actor::metrics::ActorMetrics;
-use crate::actor::state::{PERSIST_DATA_KEY, PersistedActor, decode_persisted_actor};
-use crate::actor::task_types::{StateMutationReason, StopReason};
-use crate::error::ActorLifecycle as ActorLifecycleError;
+use crate::actor::preload::{PreloadedKv, PreloadedPersistedActor};
+use crate::actor::state::{
+	LAST_PUSHED_ALARM_KEY, PERSIST_DATA_KEY, PersistedActor, decode_last_pushed_alarm,
+	decode_persisted_actor,
+};
+use crate::actor::task_types::StopReason;
+use crate::error::{ActorLifecycle as ActorLifecycleError, ActorRuntime};
 use crate::types::SaveStateOpts;
 use crate::websocket::WebSocket;
 
 pub type ActionDispatchResult = std::result::Result<Vec<u8>, ActionDispatchError>;
 pub type HttpDispatchResult = Result<Response>;
 
+const SERIALIZE_STATE_SHUTDOWN_SANITY_CAP: Duration = Duration::from_secs(30);
+#[cfg(test)]
 const LONG_SHUTDOWN_DRAIN_WARNING_THRESHOLD: Duration = Duration::from_secs(1);
 const INSPECTOR_SERIALIZE_STATE_INTERVAL: Duration = Duration::from_millis(50);
 const INSPECTOR_OVERLAY_CHANNEL_CAPACITY: usize = 32;
@@ -37,7 +78,6 @@ const INSPECTOR_OVERLAY_CHANNEL_CAPACITY: usize = 32;
 pub(crate) const LIFECYCLE_INBOX_CHANNEL: &str = "lifecycle_inbox";
 pub(crate) const DISPATCH_INBOX_CHANNEL: &str = "dispatch_inbox";
 pub(crate) const LIFECYCLE_EVENT_INBOX_CHANNEL: &str = "lifecycle_event_inbox";
-pub(crate) const ACTOR_EVENT_INBOX_CHANNEL: &str = "actor_event_inbox";
 pub use crate::actor::task_types::LifecycleState;
 
 #[cfg(test)]
@@ -48,40 +88,27 @@ mod tests;
 type ShutdownCleanupHook = Arc<dyn Fn(&ActorContext, &'static str) + Send + Sync>;
 
 #[cfg(test)]
-static SHUTDOWN_CLEANUP_HOOK: OnceLock<Mutex<Option<ShutdownCleanupHook>>> =
-	OnceLock::new();
+// Forced-sync: test hooks are installed and cleared from synchronous guard APIs.
+static SHUTDOWN_CLEANUP_HOOK: OnceLock<Mutex<Option<ShutdownCleanupHook>>> = OnceLock::new();
 
 #[cfg(test)]
 pub(crate) struct ShutdownCleanupHookGuard;
 
 #[cfg(test)]
-type LifecycleEventHook = Arc<dyn Fn(&ActorContext, &LifecycleEvent) + Send + Sync>;
-
-#[cfg(test)]
-static LIFECYCLE_EVENT_HOOK: OnceLock<Mutex<Option<LifecycleEventHook>>> =
-	OnceLock::new();
-
-#[cfg(test)]
-pub(crate) struct LifecycleEventHookGuard;
-
-#[cfg(test)]
 type ShutdownReplyHook = Arc<dyn Fn(&ActorContext, StopReason) + Send + Sync>;
 
 #[cfg(test)]
-static SHUTDOWN_REPLY_HOOK: OnceLock<Mutex<Option<ShutdownReplyHook>>> =
-	OnceLock::new();
+// Forced-sync: test hooks are installed and cleared from synchronous guard APIs.
+static SHUTDOWN_REPLY_HOOK: OnceLock<Mutex<Option<ShutdownReplyHook>>> = OnceLock::new();
 
 #[cfg(test)]
 pub(crate) struct ShutdownReplyHookGuard;
 
 #[cfg(test)]
-pub(crate) fn install_shutdown_cleanup_hook(
-	hook: ShutdownCleanupHook,
-) -> ShutdownCleanupHookGuard {
+pub(crate) fn install_shutdown_cleanup_hook(hook: ShutdownCleanupHook) -> ShutdownCleanupHookGuard {
 	*SHUTDOWN_CLEANUP_HOOK
 		.get_or_init(|| Mutex::new(None))
-		.lock()
-		.expect("shutdown cleanup hook lock poisoned") = Some(hook);
+		.lock() = Some(hook);
 	ShutdownCleanupHookGuard
 }
 
@@ -89,9 +116,7 @@ pub(crate) fn install_shutdown_cleanup_hook(
 impl Drop for ShutdownCleanupHookGuard {
 	fn drop(&mut self) {
 		if let Some(hooks) = SHUTDOWN_CLEANUP_HOOK.get() {
-			*hooks
-				.lock()
-				.expect("shutdown cleanup hook lock poisoned") = None;
+			*hooks.lock() = None;
 		}
 	}
 }
@@ -101,7 +126,6 @@ fn run_shutdown_cleanup_hook(ctx: &ActorContext, reason: &'static str) {
 	let hook = SHUTDOWN_CLEANUP_HOOK
 		.get_or_init(|| Mutex::new(None))
 		.lock()
-		.expect("shutdown cleanup hook lock poisoned")
 		.clone();
 	if let Some(hook) = hook {
 		hook(ctx, reason);
@@ -109,47 +133,8 @@ fn run_shutdown_cleanup_hook(ctx: &ActorContext, reason: &'static str) {
 }
 
 #[cfg(test)]
-pub(crate) fn install_lifecycle_event_hook(
-	hook: LifecycleEventHook,
-) -> LifecycleEventHookGuard {
-	*LIFECYCLE_EVENT_HOOK
-		.get_or_init(|| Mutex::new(None))
-		.lock()
-		.expect("lifecycle event hook lock poisoned") = Some(hook);
-	LifecycleEventHookGuard
-}
-
-#[cfg(test)]
-impl Drop for LifecycleEventHookGuard {
-	fn drop(&mut self) {
-		if let Some(hooks) = LIFECYCLE_EVENT_HOOK.get() {
-			*hooks
-				.lock()
-				.expect("lifecycle event hook lock poisoned") = None;
-		}
-	}
-}
-
-#[cfg(test)]
-fn run_lifecycle_event_hook(ctx: &ActorContext, event: &LifecycleEvent) {
-	let hook = LIFECYCLE_EVENT_HOOK
-		.get_or_init(|| Mutex::new(None))
-		.lock()
-		.expect("lifecycle event hook lock poisoned")
-		.clone();
-	if let Some(hook) = hook {
-		hook(ctx, event);
-	}
-}
-
-#[cfg(test)]
-pub(crate) fn install_shutdown_reply_hook(
-	hook: ShutdownReplyHook,
-) -> ShutdownReplyHookGuard {
-	*SHUTDOWN_REPLY_HOOK
-		.get_or_init(|| Mutex::new(None))
-		.lock()
-		.expect("shutdown reply hook lock poisoned") = Some(hook);
+pub(crate) fn install_shutdown_reply_hook(hook: ShutdownReplyHook) -> ShutdownReplyHookGuard {
+	*SHUTDOWN_REPLY_HOOK.get_or_init(|| Mutex::new(None)).lock() = Some(hook);
 	ShutdownReplyHookGuard
 }
 
@@ -157,9 +142,7 @@ pub(crate) fn install_shutdown_reply_hook(
 impl Drop for ShutdownReplyHookGuard {
 	fn drop(&mut self) {
 		if let Some(hooks) = SHUTDOWN_REPLY_HOOK.get() {
-			*hooks
-				.lock()
-				.expect("shutdown reply hook lock poisoned") = None;
+			*hooks.lock() = None;
 		}
 	}
 }
@@ -169,7 +152,6 @@ fn run_shutdown_reply_hook(ctx: &ActorContext, reason: StopReason) {
 	let hook = SHUTDOWN_REPLY_HOOK
 		.get_or_init(|| Mutex::new(None))
 		.lock()
-		.expect("shutdown reply hook lock poisoned")
 		.clone();
 	if let Some(hook) = hook {
 		hook(ctx, reason);
@@ -189,6 +171,23 @@ pub enum LifecycleCommand {
 	},
 }
 
+impl LifecycleCommand {
+	fn kind(&self) -> &'static str {
+		match self {
+			Self::Start { .. } => "start",
+			Self::Stop { .. } => "stop",
+			Self::FireAlarm { .. } => "fire_alarm",
+		}
+	}
+
+	fn stop_reason(&self) -> Option<&'static str> {
+		match self {
+			Self::Stop { reason, .. } => Some(shutdown_reason_label(*reason)),
+			_ => None,
+		}
+	}
+}
+
 pub(crate) fn actor_channel_overloaded_error(
 	channel: &'static str,
 	capacity: usize,
@@ -199,9 +198,7 @@ pub(crate) fn actor_channel_overloaded_error(
 		match channel {
 			LIFECYCLE_INBOX_CHANNEL => metrics.inc_lifecycle_inbox_overload(operation),
 			DISPATCH_INBOX_CHANNEL => metrics.inc_dispatch_inbox_overload(operation),
-			LIFECYCLE_EVENT_INBOX_CHANNEL => {
-				metrics.inc_lifecycle_event_overload(operation)
-			}
+			LIFECYCLE_EVENT_INBOX_CHANNEL => metrics.inc_lifecycle_event_overload(operation),
 			_ => {}
 		}
 	}
@@ -247,13 +244,12 @@ pub(crate) fn try_send_lifecycle_command(
 	command: LifecycleCommand,
 	metrics: Option<&ActorMetrics>,
 ) -> Result<()> {
+	// Reserve capacity before sending so overload paths can return
+	// `actor.overloaded` without waiting or constructing more channel-owned work.
+	// Lifecycle callers also avoid creating reply oneshots when a full inbox would
+	// immediately orphan them.
 	let permit = sender.try_reserve().map_err(|_| {
-		actor_channel_overloaded_error(
-			LIFECYCLE_INBOX_CHANNEL,
-			capacity,
-			operation,
-			metrics,
-		)
+		actor_channel_overloaded_error(LIFECYCLE_INBOX_CHANNEL, capacity, operation, metrics)
 	})?;
 	permit.send(command);
 	Ok(())
@@ -265,6 +261,15 @@ pub enum DispatchCommand {
 		args: Vec<u8>,
 		conn: ConnHandle,
 		reply: oneshot::Sender<Result<Vec<u8>>>,
+	},
+	QueueSend {
+		name: String,
+		body: Vec<u8>,
+		conn: ConnHandle,
+		request: Request,
+		wait: bool,
+		timeout_ms: Option<u64>,
+		reply: oneshot::Sender<Result<QueueSendResult>>,
 	},
 	Http {
 		request: Request,
@@ -284,6 +289,19 @@ pub enum DispatchCommand {
 	},
 }
 
+impl DispatchCommand {
+	fn kind(&self) -> &'static str {
+		match self {
+			Self::Action { .. } => "action",
+			Self::QueueSend { .. } => "queue_send",
+			Self::Http { .. } => "http",
+			Self::OpenWebSocket { .. } => "open_websocket",
+			Self::WorkflowHistory { .. } => "workflow_history",
+			Self::WorkflowReplay { .. } => "workflow_replay",
+		}
+	}
+}
+
 pub(crate) fn try_send_dispatch_command(
 	sender: &mpsc::Sender<DispatchCommand>,
 	capacity: usize,
@@ -291,13 +309,11 @@ pub(crate) fn try_send_dispatch_command(
 	command: DispatchCommand,
 	metrics: Option<&ActorMetrics>,
 ) -> Result<()> {
+	// Match lifecycle command backpressure semantics: capacity is checked before
+	// handing the value to the channel, which keeps reject paths cheap and avoids
+	// `try_send` returning a fully built command that must be discarded.
 	let permit = sender.try_reserve().map_err(|_| {
-		actor_channel_overloaded_error(
-			DISPATCH_INBOX_CHANNEL,
-			capacity,
-			operation,
-			metrics,
-		)
+		actor_channel_overloaded_error(DISPATCH_INBOX_CHANNEL, capacity, operation, metrics)
 	})?;
 	permit.send(command);
 	Ok(())
@@ -305,58 +321,117 @@ pub(crate) fn try_send_dispatch_command(
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LifecycleEvent {
-	StateMutated {
-		reason: StateMutationReason,
-	},
-	ActivityDirty,
-	SaveRequested {
-		immediate: bool,
-	},
+	SaveRequested { immediate: bool },
 	InspectorSerializeRequested,
 	InspectorAttachmentsChanged,
 	SleepTick,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum ShutdownPhase {
-	SendingFinalize,
-	AwaitingFinalizeReply,
-	DrainingBefore,
-	DisconnectingConns,
-	DrainingAfter,
-	AwaitingRunHandle,
-	Finalizing,
-	Done,
+impl LifecycleEvent {
+	fn kind(&self) -> &'static str {
+		match self {
+			Self::SaveRequested { .. } => "save_requested",
+			Self::InspectorSerializeRequested => "inspector_serialize_requested",
+			Self::InspectorAttachmentsChanged => "inspector_attachments_changed",
+			Self::SleepTick => "sleep_tick",
+		}
+	}
 }
 
-type ShutdownStep = Pin<Box<dyn Future<Output = Result<ShutdownPhase>> + Send>>;
+enum LiveExit {
+	Shutdown { reason: StopReason },
+	Terminated,
+}
+
+struct SleepGraceState {
+	deadline: Instant,
+	reason: StopReason,
+}
+
+struct PersistedStartup {
+	actor: PersistedActor,
+	last_pushed_alarm: Option<i64>,
+}
+
+struct PendingLifecycleReply {
+	command: &'static str,
+	reason: Option<&'static str>,
+	reply: oneshot::Sender<Result<()>>,
+}
 
 pub struct ActorTask {
+	// === IDENTITY ===
 	pub actor_id: String,
 	pub generation: u32,
+
+	// === INBOX CHANNELS ===
+	/// Lifecycle commands (Start / Stop / FireAlarm) sent by the registry
+	/// in response to engine-driven `EnvoyCallbacks` from the envoy client.
 	pub lifecycle_inbox: mpsc::Receiver<LifecycleCommand>,
+	/// Client-originated work sent by `RegistryDispatcher` in
+	/// `registry/dispatch.rs` (Action, OpenWebSocket, Workflow*) and
+	/// `registry/http.rs` (Http, QueueSend).
 	pub dispatch_inbox: mpsc::Receiver<DispatchCommand>,
+	/// Internal self-events the actor enqueues onto itself via `ActorContext`
+	/// hooks (save/inspector/activity notifications from
+	/// `actor/state.rs`, `actor/connection.rs`, `actor/context.rs`).
 	pub lifecycle_events: mpsc::Receiver<LifecycleEvent>,
+
+	// === RUNTIME STATE ===
 	pub lifecycle: LifecycleState,
 	pub factory: Arc<ActorFactory>,
 	pub ctx: ActorContext,
+
+	// === STARTUP ===
 	pub start_input: Option<Vec<u8>>,
-	pub preload_persisted_actor: Option<PersistedActor>,
-	actor_event_tx: Option<mpsc::Sender<ActorEvent>>,
-	actor_event_rx: Option<mpsc::Receiver<ActorEvent>>,
+	/// Optional persisted snapshot supplied by the registry to skip the
+	/// initial KV fetch. Tri-state: `NoBundle` falls back to KV,
+	/// `BundleExistsButEmpty` means fresh actor defaults, `Some` decodes
+	/// the persisted actor.
+	preload_persisted_actor: PreloadedPersistedActor,
+	/// Optional preloaded KV entries (e.g. `[1]`, `[2] + conn_id`,
+	/// `[5, 1, *]`) supplied alongside `preload_persisted_actor` so startup
+	/// avoids extra round trips.
+	preloaded_kv: Option<PreloadedKv>,
+
+	// === USER RUNTIME BRIDGE ===
+	/// Sends `ActorEvent`s from core subsystems and `ActorTask` to the
+	/// user runtime adapter.
+	actor_event_tx: Option<mpsc::UnboundedSender<ActorEvent>>,
+	/// Receiver half. Not consumed by `ActorTask`. `spawn_run_handle`
+	/// `take()`s it and hands it to the user `run` handler via `ActorStart`
+	/// so the runtime adapter (e.g. NAPI receive loop) drains events there.
+	actor_event_rx: Option<mpsc::UnboundedReceiver<ActorEvent>>,
+	/// Join handle for the user `run` task spawned by `spawn_run_handle`.
+	/// Awaited as a `select!` arm; cleared on shutdown abort/await.
 	run_handle: Option<JoinHandle<Result<()>>>,
+
+	// === INSPECTOR ===
+	/// Live count of attached inspector websockets. Read from request-save
+	/// hooks to decide whether to debounce a `SerializeState { Inspector }`.
 	inspector_attach_count: Arc<AtomicU32>,
+	/// Live `StateDelta` stream broadcast to attached inspector WebSockets
+	/// so their snapshot stays in sync without re-fetching.
 	inspector_overlay_tx: broadcast::Sender<Arc<Vec<u8>>>,
+
+	// === TIMERS ===
+	/// Next deadline at which `on_state_save_tick` should flush a deferred
+	/// state save. Cleared while no save is requested.
 	pub state_save_deadline: Option<Instant>,
+	/// Next deadline at which an inspector-driven `SerializeState` should
+	/// fire. Debounces inspector overlay refreshes.
 	pub inspector_serialize_state_deadline: Option<Instant>,
+	/// Next deadline at which the actor becomes eligible for sleep if it
+	/// stays idle. Cleared on activity and during sleep grace.
 	pub sleep_deadline: Option<Instant>,
-	shutdown_phase: Option<ShutdownPhase>,
-	shutdown_reason: Option<StopReason>,
-	shutdown_deadline: Option<Instant>,
-	shutdown_started_at: Option<Instant>,
-	shutdown_replies: Vec<oneshot::Sender<Result<()>>>,
-	shutdown_step: Option<ShutdownStep>,
-	shutdown_finalize_reply: Option<oneshot::Receiver<Result<()>>>,
+
+	// === SHUTDOWN ===
+	/// The single lifecycle reply for shutdown. Engine actor2 sends at most
+	/// one Stop command per actor instance; duplicates are a protocol bug.
+	shutdown_reply: Option<PendingLifecycleReply>,
+	/// Active sleep-grace idle wait. Polled by the main loop so grace keeps the
+	/// same inbox/timer handling as the started actor.
+	sleep_grace: Option<SleepGraceState>,
 }
 
 impl ActorTask {
@@ -371,10 +446,8 @@ impl ActorTask {
 		start_input: Option<Vec<u8>>,
 		preload_persisted_actor: Option<PersistedActor>,
 	) -> Self {
-		let (actor_event_tx, actor_event_rx) =
-			mpsc::channel(factory.config().lifecycle_event_inbox_capacity);
-		let (inspector_overlay_tx, _) =
-			broadcast::channel(INSPECTOR_OVERLAY_CHANNEL_CAPACITY);
+		let (actor_event_tx, actor_event_rx) = mpsc::unbounded_channel();
+		let (inspector_overlay_tx, _) = broadcast::channel(INSPECTOR_OVERLAY_CHANNEL_CAPACITY);
 		let inspector_attach_count = Arc::new(AtomicU32::new(0));
 		ctx.configure_inspector_runtime(
 			Arc::clone(&inspector_attach_count),
@@ -382,7 +455,7 @@ impl ActorTask {
 		);
 		let inspector_ctx = ctx.clone();
 		let inspector_attach_count_for_hook = Arc::clone(&inspector_attach_count);
-		ctx.on_request_save(Box::new(move |_immediate| {
+		ctx.on_request_save(Box::new(move |_opts| {
 			if inspector_attach_count_for_hook.load(Ordering::SeqCst) > 0 {
 				inspector_ctx.notify_inspector_serialize_requested();
 			}
@@ -397,7 +470,8 @@ impl ActorTask {
 			factory,
 			ctx,
 			start_input,
-			preload_persisted_actor,
+			preload_persisted_actor: preload_persisted_actor.into(),
+			preloaded_kv: None,
 			actor_event_tx: Some(actor_event_tx),
 			actor_event_rx: Some(actor_event_rx),
 			run_handle: None,
@@ -406,31 +480,64 @@ impl ActorTask {
 			state_save_deadline: None,
 			inspector_serialize_state_deadline: None,
 			sleep_deadline: None,
-			shutdown_phase: None,
-			shutdown_reason: None,
-			shutdown_deadline: None,
-			shutdown_started_at: None,
-			shutdown_replies: Vec::new(),
-			shutdown_step: None,
-			shutdown_finalize_reply: None,
+			shutdown_reply: None,
+			sleep_grace: None,
 		}
 	}
 
+	pub(crate) fn with_preloaded_kv(mut self, preloaded_kv: Option<PreloadedKv>) -> Self {
+		self.preloaded_kv = preloaded_kv;
+		self
+	}
+
+	pub(crate) fn with_preloaded_persisted_actor(
+		mut self,
+		preload_persisted_actor: PreloadedPersistedActor,
+	) -> Self {
+		self.preload_persisted_actor = preload_persisted_actor;
+		self
+	}
+
 	pub async fn run(mut self) -> Result<()> {
+		let exit = self.run_live().await;
+		let LiveExit::Shutdown { reason } = exit else {
+			self.record_inbox_depths();
+			return Ok(());
+		};
+
+		let result = match AssertUnwindSafe(self.run_shutdown(reason))
+			.catch_unwind()
+			.await
+		{
+			Ok(result) => result,
+			Err(_) => Err(anyhow!("shutdown panicked during {reason:?}")),
+		};
+		self.deliver_shutdown_reply(reason, &result);
+		self.transition_to(LifecycleState::Terminated);
+		self.record_inbox_depths();
+		result
+	}
+
+	async fn run_live(&mut self) -> LiveExit {
+		let activity_notify = self.ctx.sleep_activity_notify();
+
 		loop {
 			self.record_inbox_depths();
 			tokio::select! {
 				biased;
-				// Bind the raw Option so a closed channel is logged, not silently swallowed by tokio::select!'s else arm.
 				lifecycle_command = self.lifecycle_inbox.recv() => {
 					match lifecycle_command {
-						Some(command) => self.handle_lifecycle(command).await,
+						Some(command) => {
+							if let Some(exit) = self.handle_lifecycle(command).await {
+								return exit;
+							}
+						}
 						None => {
 							self.log_closed_channel(
 								"lifecycle_inbox",
 								"actor task terminating because lifecycle command inbox closed",
 							);
-							break;
+							return LiveExit::Terminated;
 						}
 					}
 				}
@@ -442,12 +549,20 @@ impl ActorTask {
 								"lifecycle_events",
 								"actor task terminating because lifecycle event inbox closed",
 							);
-							break;
+							return LiveExit::Terminated;
 						}
 					}
 				}
-				shutdown_outcome = Self::poll_shutdown_step(self.shutdown_step.as_mut()), if self.shutdown_step.is_some() => {
-					self.on_shutdown_step_complete(shutdown_outcome);
+				_ = activity_notify.notified() => {
+					self.ctx.acknowledge_activity_dirty();
+					if let Some(exit) = self.on_activity_signal().await {
+						return exit;
+					}
+				}
+				_ = Self::sleep_grace_tick(self.sleep_grace.as_ref().map(|grace| grace.deadline)), if self.sleep_grace.is_some() => {
+					if let Some(exit) = self.on_sleep_grace_deadline().await {
+						return exit;
+					}
 				}
 				dispatch_command = self.dispatch_inbox.recv(), if self.accepting_dispatch() => {
 					match dispatch_command {
@@ -457,12 +572,14 @@ impl ActorTask {
 								"dispatch_inbox",
 								"actor task terminating because dispatch inbox closed",
 							);
-							break;
+							return LiveExit::Terminated;
 						}
 					}
 				}
-				outcome = Self::wait_for_run_handle(self.run_handle.as_mut()), if self.run_handle.is_some() && self.shutdown_step.is_none() => {
-					self.handle_run_handle_outcome(outcome);
+				outcome = Self::wait_for_run_handle(self.run_handle.as_mut()), if self.run_handle.is_some() => {
+					if let Some(exit) = self.handle_run_handle_outcome(outcome) {
+						return exit;
+					}
 				}
 				_ = Self::state_save_tick(self.state_save_deadline), if self.state_save_timer_active() => {
 					self.on_state_save_tick().await;
@@ -476,79 +593,168 @@ impl ActorTask {
 			}
 
 			if self.should_terminate() {
-				break;
+				return LiveExit::Terminated;
 			}
 		}
-
-		self.record_inbox_depths();
-		Ok(())
 	}
 
-	async fn handle_lifecycle(&mut self, command: LifecycleCommand) {
+	async fn handle_lifecycle(&mut self, command: LifecycleCommand) -> Option<LiveExit> {
+		let command_kind = command.kind();
+		let reason = command.stop_reason();
+		self.log_lifecycle_command_received(command_kind, reason);
+		if matches!(
+			self.lifecycle,
+			LifecycleState::SleepGrace | LifecycleState::DestroyGrace
+		) {
+			return self
+				.handle_sleep_grace_lifecycle(command, command_kind, reason)
+				.await;
+		}
 		match command {
 			LifecycleCommand::Start { reply } => {
 				let result = self.start_actor().await;
-				let _ = reply.send(result);
+				self.reply_lifecycle_command(command_kind, reason, reply, result);
+				None
 			}
 			LifecycleCommand::Stop { reason, reply } => {
-				self.begin_stop(reason, reply).await;
+				self.begin_stop(
+					reason,
+					command_kind,
+					Some(shutdown_reason_label(reason)),
+					reply,
+				)
+				.await
 			}
 			LifecycleCommand::FireAlarm { reply } => {
 				let result = self.fire_due_alarms().await;
-				let _ = reply.send(result);
+				self.reply_lifecycle_command(command_kind, reason, reply, result);
+				None
 			}
 		}
 	}
 
-	#[cfg_attr(not(test), allow(dead_code))]
+	async fn handle_sleep_grace_lifecycle(
+		&mut self,
+		command: LifecycleCommand,
+		command_kind: &'static str,
+		command_reason: Option<&'static str>,
+	) -> Option<LiveExit> {
+		match command {
+			LifecycleCommand::Start { reply } => {
+				self.reply_lifecycle_command(
+					command_kind,
+					command_reason,
+					reply,
+					Err(ActorLifecycleError::Stopping.build()),
+				);
+				None
+			}
+			LifecycleCommand::Stop { reason, reply } => {
+				let current_reason = self.sleep_grace.as_ref().map(|grace| grace.reason);
+				if current_reason != Some(reason) {
+					debug_assert!(false, "engine actor2 sends one Stop per actor instance");
+					tracing::warn!(
+						actor_id = %self.ctx.actor_id(),
+						reason = shutdown_reason_label(reason),
+						current_reason = ?current_reason,
+						"conflicting Stop during grace, ignoring"
+					);
+				}
+				self.reply_lifecycle_command(command_kind, command_reason, reply, Ok(()));
+				None
+			}
+			LifecycleCommand::FireAlarm { reply } => {
+				let result = self.fire_due_alarms().await;
+				self.reply_lifecycle_command(command_kind, command_reason, reply, result);
+				None
+			}
+		}
+	}
+
+	#[cfg(test)]
 	async fn handle_stop(&mut self, reason: StopReason) -> Result<()> {
 		let (reply_tx, reply_rx) = oneshot::channel();
-		self.begin_stop(reason, reply_tx).await;
-		self.drive_shutdown_to_completion().await;
-		reply_rx
+		self.shutdown_reply = Some(PendingLifecycleReply {
+			command: "stop",
+			reason: Some(shutdown_reason_label(reason)),
+			reply: reply_tx,
+		});
+		self.begin_grace(reason).await;
+		self.sleep_grace = None;
+		let result = match AssertUnwindSafe(self.run_shutdown(reason))
+			.catch_unwind()
 			.await
-			.expect("direct stop reply channel should remain open")
+		{
+			Ok(result) => result,
+			Err(_) => Err(anyhow!("shutdown panicked during {reason:?}")),
+		};
+		self.deliver_shutdown_reply(reason, &result);
+		self.transition_to(LifecycleState::Terminated);
+		match reply_rx.await {
+			Ok(result) => result,
+			Err(_) => Err(ActorLifecycleError::DroppedReply.build()),
+		}
 	}
 
 	async fn begin_stop(
 		&mut self,
 		reason: StopReason,
+		command: &'static str,
+		command_reason: Option<&'static str>,
 		reply: oneshot::Sender<Result<()>>,
-	) {
+	) -> Option<LiveExit> {
 		match self.lifecycle {
 			LifecycleState::Started => {
-				self.register_shutdown_reply(reply);
+				self.register_shutdown_reply(command, command_reason, reply);
 				self.drain_accepted_dispatch().await;
-				match reason {
-					StopReason::Sleep => {
-						self.transition_to(LifecycleState::SleepGrace);
-						self.shutdown_for_sleep_grace().await;
-					}
-					StopReason::Destroy => {
-						self.enter_shutdown_state_machine(StopReason::Destroy);
-					}
+				self.begin_grace(reason).await;
+				None
+			}
+			LifecycleState::SleepGrace | LifecycleState::DestroyGrace => {
+				let current_reason = self.sleep_grace.as_ref().map(|grace| grace.reason);
+				if current_reason == Some(reason) {
+					self.reply_lifecycle_command(command, command_reason, reply, Ok(()));
+					None
+				} else {
+					debug_assert!(false, "engine actor2 sends one Stop per actor instance");
+					tracing::warn!(
+						actor_id = %self.ctx.actor_id(),
+						reason = shutdown_reason_label(reason),
+					current_reason = ?current_reason,
+						"conflicting Stop during grace, ignoring"
+					);
+					self.reply_lifecycle_command(command, command_reason, reply, Ok(()));
+					None
 				}
 			}
-			LifecycleState::SleepGrace => {
-				let _ = reply.send(Ok(()));
-			}
 			LifecycleState::SleepFinalize | LifecycleState::Destroying => {
-				self.register_shutdown_reply(reply);
+				debug_assert!(false, "engine actor2 sends one Stop per actor instance");
+				tracing::warn!(
+					actor_id = %self.ctx.actor_id(),
+					reason = shutdown_reason_label(reason),
+					"duplicate Stop after shutdown started, ignoring"
+				);
+				self.reply_lifecycle_command(command, command_reason, reply, Ok(()));
+				None
 			}
 			LifecycleState::Terminated => {
-				let _ = reply.send(Ok(()));
+				self.reply_lifecycle_command(command, command_reason, reply, Ok(()));
+				None
 			}
-			LifecycleState::Loading
-			| LifecycleState::Migrating
-			| LifecycleState::Waking
-			| LifecycleState::Ready => {
-				let _ = reply.send(Err(ActorLifecycleError::NotReady.build()));
+			LifecycleState::Loading => {
+				self.reply_lifecycle_command(
+					command,
+					command_reason,
+					reply,
+					Err(ActorLifecycleError::NotReady.build()),
+				);
+				None
 			}
 		}
 	}
 
 	async fn drain_accepted_dispatch(&mut self) {
-		while self.lifecycle == LifecycleState::Started {
+		while self.accepting_dispatch() {
 			let Ok(command) = self.dispatch_inbox.try_recv() else {
 				break;
 			};
@@ -556,17 +762,83 @@ impl ActorTask {
 		}
 	}
 
+	async fn begin_grace(&mut self, reason: StopReason) {
+		tracing::debug!(
+			actor_id = %self.ctx.actor_id(),
+			reason = shutdown_reason_label(reason),
+			"actor grace shutdown started"
+		);
+		self.ctx.suspend_alarm_dispatch();
+		self.ctx.cancel_local_alarm_timeouts();
+		self.ctx.set_local_alarm_callback(None);
+		if matches!(reason, StopReason::Destroy) {
+			self.ctx.cancel_driver_alarm_logged();
+		}
+		self.transition_to(match reason {
+			StopReason::Sleep => LifecycleState::SleepGrace,
+			StopReason::Destroy => LifecycleState::DestroyGrace,
+		});
+		self.start_grace(reason);
+		self.emit_grace_events(reason);
+	}
+
+	fn emit_grace_events(&mut self, reason: StopReason) {
+		let conns: Vec<_> = self.ctx.conns().collect();
+		for conn in conns {
+			let hibernatable_sleep = matches!(reason, StopReason::Sleep) && conn.is_hibernatable();
+			if hibernatable_sleep {
+				self.ctx.request_hibernation_transport_save(conn.id());
+				continue;
+			}
+			self.ctx.begin_core_dispatched_hook();
+			let reply = self.core_dispatched_hook_reply("disconnect_conn");
+			let conn_id = conn.id().to_owned();
+			if let Err(error) = self.send_actor_event(
+				"grace_disconnect_conn",
+				ActorEvent::DisconnectConn { conn_id, reply },
+			) {
+				tracing::error!(?error, "failed to enqueue disconnect cleanup event");
+				self.ctx.mark_core_dispatched_hook_completed();
+			}
+		}
+
+		self.ctx.begin_core_dispatched_hook();
+		let reply = self.core_dispatched_hook_reply("run_graceful_cleanup");
+		if let Err(error) = self.send_actor_event(
+			"grace_run_cleanup",
+			ActorEvent::RunGracefulCleanup { reason, reply },
+		) {
+			tracing::error!(?error, "failed to enqueue run cleanup event");
+			self.ctx.mark_core_dispatched_hook_completed();
+		}
+		self.ctx.reset_sleep_timer();
+	}
+
+	fn core_dispatched_hook_reply(&self, operation: &'static str) -> Reply<()> {
+		let (tx, rx) = oneshot::channel();
+		let ctx = self.ctx.clone();
+		tokio::spawn(async move {
+			match rx.await {
+				Ok(Ok(())) => {}
+				Ok(Err(error)) => {
+					tracing::error!(?error, operation, "core dispatched hook failed");
+				}
+				Err(error) => {
+					tracing::error!(?error, operation, "core dispatched hook reply dropped");
+				}
+			}
+			ctx.mark_core_dispatched_hook_completed();
+		});
+		tx.into()
+	}
+
 	async fn handle_event(&mut self, event: LifecycleEvent) {
-		#[cfg(test)]
-		run_lifecycle_event_hook(&self.ctx, &event);
+		tracing::debug!(
+			actor_id = %self.ctx.actor_id(),
+			event = event.kind(),
+			"actor lifecycle event drained"
+		);
 		match event {
-			LifecycleEvent::StateMutated { .. } => {
-				self.ctx.record_state_updated();
-			}
-			LifecycleEvent::ActivityDirty => {
-				self.ctx.acknowledge_activity_dirty();
-				self.reset_sleep_deadline().await;
-			}
 			LifecycleEvent::SaveRequested { immediate } => {
 				self.schedule_state_save(immediate);
 				self.sync_inspector_serialize_deadline();
@@ -582,8 +854,15 @@ impl ActorTask {
 	}
 
 	async fn handle_dispatch(&mut self, command: DispatchCommand) {
+		let command_kind = command.kind();
+		tracing::debug!(
+			actor_id = %self.ctx.actor_id(),
+			command = command_kind,
+			"actor dispatch command received"
+		);
 		if let Some(error) = self.dispatch_lifecycle_error() {
 			self.reply_dispatch_error(command, error);
+			self.log_dispatch_command_handled(command_kind, "rejected_lifecycle");
 			return;
 		}
 
@@ -593,99 +872,162 @@ impl ActorTask {
 				args,
 				conn,
 				reply,
-			} => match self.reserve_actor_event("dispatch_action") {
-				Ok(permit) => {
-					permit.send(ActorEvent::Action {
+			} => {
+				let (tracked_reply_tx, tracked_reply_rx) = oneshot::channel();
+				match self.send_actor_event(
+					"dispatch_action",
+					ActorEvent::Action {
 						name,
 						args,
 						conn: Some(conn),
-						reply: Reply::from(reply),
-					});
-				}
-				Err(error) => {
-					let _ = reply.send(Err(error));
-				}
-			},
-			DispatchCommand::Http { request, reply } => {
-				match self.reserve_actor_event("dispatch_http") {
-					Ok(permit) => {
-						permit.send(ActorEvent::HttpRequest {
-							request,
-							reply: Reply::from(reply),
+						reply: Reply::from(tracked_reply_tx),
+					},
+				) {
+					Ok(()) => {
+						self.log_dispatch_command_handled(command_kind, "enqueued");
+						self.ctx.wait_until(async move {
+							match tracked_reply_rx.await {
+								Ok(result) => {
+									let _ = reply.send(result);
+								}
+								Err(_) => {
+									let _ =
+										reply.send(Err(ActorLifecycleError::DroppedReply.build()));
+								}
+							}
 						});
 					}
 					Err(error) => {
 						let _ = reply.send(Err(error));
+						self.log_dispatch_command_handled(command_kind, "enqueue_failed");
+					}
+				}
+			}
+			DispatchCommand::QueueSend {
+				name,
+				body,
+				conn,
+				request,
+				wait,
+				timeout_ms,
+				reply,
+			} => match self.send_actor_event(
+				"dispatch_queue_send",
+				ActorEvent::QueueSend {
+					name,
+					body,
+					conn,
+					request,
+					wait,
+					timeout_ms,
+					reply: Reply::from(reply),
+				},
+			) {
+				Ok(()) => {
+					self.log_dispatch_command_handled(command_kind, "enqueued");
+				}
+				Err(_error) => {
+					self.log_dispatch_command_handled(command_kind, "enqueue_failed");
+				}
+			},
+			DispatchCommand::Http { request, reply } => {
+				match self.send_actor_event(
+					"dispatch_http",
+					ActorEvent::HttpRequest {
+						request,
+						reply: Reply::from(reply),
+					},
+				) {
+					Ok(()) => {
+						self.log_dispatch_command_handled(command_kind, "enqueued");
+					}
+					Err(_error) => {
+						self.log_dispatch_command_handled(command_kind, "enqueue_failed");
 					}
 				}
 			}
 			DispatchCommand::OpenWebSocket { ws, request, reply } => {
-				match self.reserve_actor_event("dispatch_websocket_open") {
-					Ok(permit) => {
-						permit.send(ActorEvent::WebSocketOpen {
-							ws,
-							request,
-							reply: Reply::from(reply),
-						});
+				match self.send_actor_event(
+					"dispatch_websocket_open",
+					ActorEvent::WebSocketOpen {
+						ws,
+						request,
+						reply: Reply::from(reply),
+					},
+				) {
+					Ok(()) => {
+						self.log_dispatch_command_handled(command_kind, "enqueued");
 					}
-					Err(error) => {
-						let _ = reply.send(Err(error));
+					Err(_error) => {
+						self.log_dispatch_command_handled(command_kind, "enqueue_failed");
 					}
 				}
 			}
 			DispatchCommand::WorkflowHistory { reply } => {
-				match self.reserve_actor_event("dispatch_workflow_history") {
-					Ok(permit) => {
-						permit.send(ActorEvent::WorkflowHistoryRequested {
-							reply: Reply::from(reply),
-						});
+				match self.send_actor_event(
+					"dispatch_workflow_history",
+					ActorEvent::WorkflowHistoryRequested {
+						reply: Reply::from(reply),
+					},
+				) {
+					Ok(()) => {
+						self.log_dispatch_command_handled(command_kind, "enqueued");
 					}
-					Err(error) => {
-						let _ = reply.send(Err(error));
+					Err(_error) => {
+						self.log_dispatch_command_handled(command_kind, "enqueue_failed");
 					}
 				}
 			}
 			DispatchCommand::WorkflowReplay { entry_id, reply } => {
-				match self.reserve_actor_event("dispatch_workflow_replay") {
-					Ok(permit) => {
-						permit.send(ActorEvent::WorkflowReplayRequested {
-							entry_id,
-							reply: Reply::from(reply),
-						});
+				match self.send_actor_event(
+					"dispatch_workflow_replay",
+					ActorEvent::WorkflowReplayRequested {
+						entry_id,
+						reply: Reply::from(reply),
+					},
+				) {
+					Ok(()) => {
+						self.log_dispatch_command_handled(command_kind, "enqueued");
 					}
-					Err(error) => {
-						let _ = reply.send(Err(error));
+					Err(_error) => {
+						self.log_dispatch_command_handled(command_kind, "enqueue_failed");
 					}
 				}
 			}
 		}
 	}
 
-	fn reserve_actor_event(
-		&self,
-		operation: &'static str,
-	) -> Result<mpsc::OwnedPermit<ActorEvent>> {
-		let sender = self
-			.actor_event_tx
-			.clone()
-			.ok_or_else(|| ActorLifecycleError::NotReady.build())?;
-		sender.try_reserve_owned().map_err(|_| {
-			actor_channel_overloaded_error(
-				ACTOR_EVENT_INBOX_CHANNEL,
-				self.factory.config().lifecycle_event_inbox_capacity,
-				operation,
-				Some(self.ctx.metrics()),
-			)
-		})
+	fn log_dispatch_command_handled(&self, command: &'static str, outcome: &'static str) {
+		tracing::debug!(
+			actor_id = %self.ctx.actor_id(),
+			command,
+			outcome,
+			"actor dispatch command handled"
+		);
 	}
 
-	fn reply_dispatch_error(
-		&self,
-		command: DispatchCommand,
-		error: anyhow::Error,
-	) {
+	fn send_actor_event(&self, operation: &'static str, event: ActorEvent) -> Result<()> {
+		let sender = self
+			.actor_event_tx
+			.as_ref()
+			.ok_or_else(|| ActorLifecycleError::NotReady.build())?;
+		tracing::debug!(
+			actor_id = %self.ctx.actor_id(),
+			operation,
+			event = event.kind(),
+			"actor event enqueued"
+		);
+		sender
+			.send(event)
+			.map_err(|_| ActorLifecycleError::NotReady.build())
+	}
+
+	fn reply_dispatch_error(&self, command: DispatchCommand, error: anyhow::Error) {
 		match command {
 			DispatchCommand::Action { reply, .. } => {
+				let _ = reply.send(Err(error));
+			}
+			DispatchCommand::QueueSend { reply, .. } => {
 				let _ = reply.send(Err(error));
 			}
 			DispatchCommand::Http { reply, .. } => {
@@ -705,8 +1047,10 @@ impl ActorTask {
 
 	fn dispatch_lifecycle_error(&self) -> Option<anyhow::Error> {
 		match self.lifecycle {
-			LifecycleState::Started | LifecycleState::SleepGrace => None,
-			LifecycleState::SleepFinalize => {
+			LifecycleState::Started => None,
+			LifecycleState::SleepGrace
+			| LifecycleState::SleepFinalize
+			| LifecycleState::DestroyGrace => {
 				self.ctx.warn_work_sent_to_stopping_instance("dispatch");
 				Some(ActorLifecycleError::Stopping.build())
 			}
@@ -714,10 +1058,7 @@ impl ActorTask {
 				self.ctx.warn_work_sent_to_stopping_instance("dispatch");
 				Some(ActorLifecycleError::Destroying.build())
 			}
-			LifecycleState::Loading
-			| LifecycleState::Migrating
-			| LifecycleState::Waking
-			| LifecycleState::Ready => {
+			LifecycleState::Loading => {
 				self.ctx.warn_self_call_risk("dispatch");
 				Some(ActorLifecycleError::NotReady.build())
 			}
@@ -727,27 +1068,24 @@ impl ActorTask {
 	async fn start_actor(&mut self) -> Result<()> {
 		if !self.ctx.started() {
 			self.ctx.configure_sleep(self.factory.config().clone());
-			self
-				.ctx
+			self.ctx
 				.configure_connection_runtime(self.factory.config().clone());
 		}
 		self.ensure_actor_event_channel();
-		self
-			.ctx
-			.configure_actor_events(self.actor_event_tx.clone());
+		self.ctx.configure_actor_events(self.actor_event_tx.clone());
+		self.ctx.configure_queue_preload(self.preloaded_kv.clone());
 
-		let persisted = self.load_persisted_actor().await?;
-		let is_new = !persisted.has_initialized;
-		self.ctx.load_persisted_actor(persisted);
+		let persisted = self.load_persisted_startup().await?;
+		let is_new = !persisted.actor.has_initialized;
+		self.ctx.load_persisted_actor(persisted.actor);
+		self.ctx.load_last_pushed_alarm(persisted.last_pushed_alarm);
 		self.ctx.set_has_initialized(true);
-		self
-			.ctx
+		self.ctx
 			.persist_state(SaveStateOpts { immediate: true })
 			.await
 			.context("persist actor initialization")?;
-		self
-			.ctx
-			.restore_hibernatable_connections()
+		self.ctx
+			.restore_hibernatable_connections_with_preload(self.preloaded_kv.as_ref())
 			.await
 			.context("restore hibernatable connections")?;
 		Self::settle_hibernated_connections(self.ctx.clone())
@@ -762,12 +1100,34 @@ impl ActorTask {
 		Ok(())
 	}
 
-	async fn load_persisted_actor(&mut self) -> Result<PersistedActor> {
-		if let Some(preloaded) = self.preload_persisted_actor.take() {
-			return Ok(preloaded);
+	async fn load_persisted_startup(&mut self) -> Result<PersistedStartup> {
+		match std::mem::take(&mut self.preload_persisted_actor) {
+			PreloadedPersistedActor::Some(preloaded) => {
+				return Ok(PersistedStartup {
+					actor: preloaded,
+					last_pushed_alarm: Self::load_last_pushed_alarm(self.ctx.kv().clone()).await?,
+				});
+			}
+			PreloadedPersistedActor::BundleExistsButEmpty => {
+				return Ok(PersistedStartup {
+					actor: PersistedActor {
+						input: self.start_input.clone(),
+						..PersistedActor::default()
+					},
+					last_pushed_alarm: None,
+				});
+			}
+			PreloadedPersistedActor::NoBundle => {}
 		}
 
-		match self.ctx.kv().get(PERSIST_DATA_KEY).await? {
+		let mut values = self
+			.ctx
+			.kv()
+			.batch_get(&[PERSIST_DATA_KEY, LAST_PUSHED_ALARM_KEY])
+			.await
+			.context("load persisted actor startup data")?
+			.into_iter();
+		let actor = match values.next().flatten() {
 			Some(bytes) => {
 				decode_persisted_actor(&bytes).context("decode persisted actor startup data")
 			}
@@ -775,7 +1135,29 @@ impl ActorTask {
 				input: self.start_input.clone(),
 				..PersistedActor::default()
 			}),
-		}
+		}?;
+		let last_pushed_alarm = values
+			.next()
+			.flatten()
+			.map(|bytes| decode_last_pushed_alarm(&bytes))
+			.transpose()
+			.context("decode persisted last pushed alarm")?
+			.flatten();
+
+		Ok(PersistedStartup {
+			actor,
+			last_pushed_alarm,
+		})
+	}
+
+	async fn load_last_pushed_alarm(kv: crate::kv::Kv) -> Result<Option<i64>> {
+		kv.get(LAST_PUSHED_ALARM_KEY)
+			.await
+			.context("load persisted last pushed alarm")?
+			.map(|bytes| decode_last_pushed_alarm(&bytes))
+			.transpose()
+			.context("decode persisted last pushed alarm")
+			.map(Option::flatten)
 	}
 
 	fn ensure_actor_event_channel(&mut self) {
@@ -783,8 +1165,7 @@ impl ActorTask {
 			return;
 		}
 
-		let (actor_event_tx, actor_event_rx) =
-			mpsc::channel(self.factory.config().lifecycle_event_inbox_capacity);
+		let (actor_event_tx, actor_event_rx) = mpsc::unbounded_channel();
 		self.actor_event_tx = Some(actor_event_tx);
 		self.actor_event_rx = Some(actor_event_rx);
 	}
@@ -810,38 +1191,63 @@ impl ActorTask {
 					(conn, bytes)
 				})
 				.collect(),
-			events: actor_events.into(),
+			events: ActorEvents::new(self.ctx.actor_id().to_owned(), actor_events),
 		};
 		let factory = self.factory.clone();
 		self.run_handle = Some(tokio::spawn(async move {
 			match AssertUnwindSafe(factory.start(start)).catch_unwind().await {
 				Ok(result) => result,
-				Err(_) => Err(anyhow!("actor run handler panicked")),
+				Err(_) => Err(ActorRuntime::Panicked {
+					operation: "run handler".to_owned(),
+				}
+				.build()),
 			}
 		}));
 	}
 
 	async fn settle_hibernated_connections(ctx: ActorContext) -> Result<()> {
+		let actor_id = ctx.actor_id().to_owned();
 		let mut dead_conn_ids = Vec::new();
 		for conn in ctx.conns().filter(|conn| conn.is_hibernatable()) {
 			let hibernation = conn.hibernation();
 			let Some(hibernation) = hibernation else {
+				tracing::debug!(
+					actor_id = %actor_id,
+					conn_id = conn.id(),
+					outcome = "dead_missing_hibernation_metadata",
+					"hibernated connection settled"
+				);
 				dead_conn_ids.push(conn.id().to_owned());
 				continue;
 			};
-			let is_live = ctx.hibernated_connection_is_live(
-				&hibernation.gateway_id,
-				&hibernation.request_id,
-			)?;
+			let is_live = ctx
+				.hibernated_connection_is_live(&hibernation.gateway_id, &hibernation.request_id)?;
 			if is_live {
+				tracing::debug!(
+					actor_id = %actor_id,
+					conn_id = conn.id(),
+					outcome = "live",
+					"hibernated connection settled"
+				);
 				continue;
 			}
+			tracing::debug!(
+				actor_id = %actor_id,
+				conn_id = conn.id(),
+				outcome = "dead_not_live",
+				"hibernated connection settled"
+			);
 			dead_conn_ids.push(conn.id().to_owned());
 		}
 
 		for conn_id in dead_conn_ids {
 			ctx.request_hibernation_transport_removal(conn_id.clone());
 			ctx.remove_conn(&conn_id);
+			tracing::debug!(
+				actor_id = %actor_id,
+				conn_id = %conn_id,
+				"dead hibernated connection removed"
+			);
 		}
 
 		Ok(())
@@ -858,8 +1264,9 @@ impl ActorTask {
 	fn handle_run_handle_outcome(
 		&mut self,
 		outcome: std::result::Result<Result<()>, JoinError>,
-	) {
+	) -> Option<LiveExit> {
 		self.run_handle = None;
+		self.ctx.reset_sleep_timer();
 		self.state_save_deadline = None;
 		self.inspector_serialize_state_deadline = None;
 		self.close_actor_event_channel();
@@ -874,19 +1281,11 @@ impl ActorTask {
 			}
 		}
 
-		if self.ctx.destroy_requested() {
-			self.transition_to(LifecycleState::Destroying);
-			return;
-		}
-
-		if self.ctx.sleep_requested() {
-			self.transition_to(LifecycleState::SleepFinalize);
-			return;
-		}
-
 		if self.lifecycle == LifecycleState::Started {
 			self.transition_to(LifecycleState::Terminated);
 		}
+
+		None
 	}
 
 	async fn wait_for_run_handle(
@@ -904,130 +1303,91 @@ impl ActorTask {
 		self.ctx.configure_actor_events(None);
 	}
 
-	async fn shutdown_for_sleep_grace(&mut self) {
-		let config = self.factory.config().clone();
-		let shutdown_deadline = Instant::now() + config.effective_sleep_grace_period();
+	fn start_grace(&mut self, reason: StopReason) {
+		let grace_period = match reason {
+			StopReason::Sleep => self.factory.config().effective_sleep_grace_period(),
+			StopReason::Destroy => self.factory.config().effective_on_destroy_timeout(),
+		};
 		self.sleep_deadline = None;
 		self.ctx.cancel_sleep_timer();
-		self.request_begin_sleep();
+		self.ctx.cancel_abort_signal_for_sleep();
+		self.sleep_grace = Some(SleepGraceState {
+			deadline: Instant::now() + grace_period,
+			reason,
+		});
+		self.ctx.reset_sleep_timer();
+	}
 
-		let idle_wait_ctx = self.ctx.clone();
-		let idle_wait = async move {
-			idle_wait_ctx
-				.wait_for_sleep_idle_window(shutdown_deadline)
-				.await
+	async fn sleep_grace_tick(deadline: Option<Instant>) {
+		let Some(deadline) = deadline else {
+			future::pending::<()>().await;
+			return;
 		};
-		tokio::pin!(idle_wait);
-		loop {
-			tokio::select! {
-				biased;
-				lifecycle_command = self.lifecycle_inbox.recv() => {
-					match lifecycle_command {
-						Some(LifecycleCommand::Start { reply }) => {
-							let _ = reply.send(Err(ActorLifecycleError::Stopping.build()));
-						}
-						Some(LifecycleCommand::Stop { reason: StopReason::Sleep, reply }) => {
-							let _ = reply.send(Ok(()));
-						}
-						Some(LifecycleCommand::Stop { reason: StopReason::Destroy, reply }) => {
-							self.register_shutdown_reply(reply);
-							self.enter_shutdown_state_machine(StopReason::Destroy);
-							return;
-						}
-						Some(LifecycleCommand::FireAlarm { reply }) => {
-							let result = self.fire_due_alarms().await;
-							let _ = reply.send(result);
-						}
-						None => {
-							self.log_closed_channel(
-								"lifecycle_inbox",
-								"actor task terminating because lifecycle command inbox closed",
-							);
-						}
-					}
-				}
-				lifecycle_event = self.lifecycle_events.recv() => {
-					match lifecycle_event {
-						Some(event) => self.handle_event(event).await,
-						None => {
-							self.log_closed_channel(
-								"lifecycle_events",
-								"actor task terminating because lifecycle event inbox closed",
-							);
-						}
-					}
-				}
-				dispatch_command = self.dispatch_inbox.recv() => {
-					match dispatch_command {
-						Some(command) => self.handle_dispatch(command).await,
-						None => {
-							self.log_closed_channel(
-								"dispatch_inbox",
-								"actor task terminating because dispatch inbox closed",
-							);
-						}
-					}
-				}
-				outcome = Self::wait_for_run_handle(self.run_handle.as_mut()), if self.run_handle.is_some() => {
-					self.handle_run_handle_outcome(outcome);
-				}
-				_ = Self::state_save_tick(self.state_save_deadline), if self.state_save_timer_active() => {
-					self.on_state_save_tick().await;
-				}
-				_ = Self::inspector_serialize_state_tick(self.inspector_serialize_state_deadline), if self.inspector_serialize_timer_active() => {
-					self.on_inspector_serialize_state_tick().await;
-				}
-				idle_ready = &mut idle_wait => {
-					if !idle_ready {
-						tracing::warn!(
-							timeout_ms = config.effective_sleep_grace_period().as_millis() as u64,
-							"sleep shutdown reached the idle wait deadline"
-						);
-					}
-					break;
+
+		sleep_until(deadline).await;
+	}
+
+	async fn on_activity_signal(&mut self) -> Option<LiveExit> {
+		match self.lifecycle {
+			LifecycleState::Started => {
+				self.reset_sleep_deadline().await;
+				None
+			}
+			LifecycleState::SleepGrace | LifecycleState::DestroyGrace => self.try_finish_grace(),
+			_ => None,
+		}
+	}
+
+	fn try_finish_grace(&mut self) -> Option<LiveExit> {
+		let Some(grace) = self.sleep_grace.as_ref() else {
+			return None;
+		};
+		if self.ctx.can_finalize_sleep() {
+			let reason = grace.reason;
+			self.sleep_grace = None;
+			return Some(LiveExit::Shutdown { reason });
+		}
+		None
+	}
+
+	async fn on_sleep_grace_deadline(&mut self) -> Option<LiveExit> {
+		let Some(grace) = self.sleep_grace.take() else {
+			return None;
+		};
+		if let Some(run_handle) = self.run_handle.as_mut() {
+			run_handle.abort();
+		}
+		self.ctx.record_shutdown_timeout(grace.reason);
+		tracing::warn!(
+			reason = shutdown_reason_label(grace.reason),
+			deadline_missed_by_ms = Instant::now()
+				.saturating_duration_since(grace.deadline)
+				.as_millis() as u64,
+			"actor shutdown reached the grace deadline"
+		);
+		Some(LiveExit::Shutdown {
+			reason: grace.reason,
+		})
+	}
+
+	async fn join_aborted_run_handle(&mut self) {
+		let Some(mut run_handle) = self.run_handle.take() else {
+			return;
+		};
+		match (&mut run_handle).await {
+			Ok(Ok(())) => {}
+			Ok(Err(error)) => {
+				tracing::error!(?error, "actor run handler failed during shutdown");
+			}
+			Err(error) => {
+				if !error.is_cancelled() {
+					tracing::error!(?error, "actor run handler join failed during shutdown");
 				}
 			}
-		}
-
-		self.enter_shutdown_state_machine(StopReason::Sleep);
+		};
 	}
 
-	fn enter_shutdown_state_machine(&mut self, reason: StopReason) {
-		let started_at = Instant::now();
-		let deadline = started_at
-			+ match reason {
-				StopReason::Sleep => {
-					self.transition_to(LifecycleState::SleepFinalize);
-					self.factory.config().effective_sleep_grace_period()
-				}
-				StopReason::Destroy => {
-					self.transition_to(LifecycleState::Destroying);
-					for conn in self.ctx.conns() {
-						if conn.is_hibernatable() {
-							self
-								.ctx
-								.request_hibernation_transport_removal(conn.id().to_owned());
-						}
-					}
-					self.factory.config().effective_on_destroy_timeout()
-				}
-			};
-		self.shutdown_reason = Some(reason);
-		self.shutdown_started_at = Some(started_at);
-		self.shutdown_deadline = Some(deadline);
-		self.shutdown_phase = None;
-		self.shutdown_finalize_reply = None;
-		self.state_save_deadline = None;
-		self.inspector_serialize_state_deadline = None;
-		self.sleep_deadline = None;
-		self.ctx.cancel_sleep_timer();
-		self.ctx.schedule().suspend_alarm_dispatch();
-		self.ctx.cancel_local_alarm_timeouts();
-		self.ctx.schedule().set_local_alarm_callback(None);
-		self.install_shutdown_step(ShutdownPhase::SendingFinalize);
-	}
-
-	#[cfg_attr(not(test), allow(dead_code))]
+	#[cfg(test)]
 	async fn drain_tracked_work(
 		&mut self,
 		reason: StopReason,
@@ -1037,214 +1397,7 @@ impl ActorTask {
 		Self::drain_tracked_work_with_ctx(self.ctx.clone(), reason, phase, deadline).await
 	}
 
-	fn register_shutdown_reply(&mut self, reply: oneshot::Sender<Result<()>>) {
-		self.shutdown_replies.push(reply);
-	}
-
-	#[cfg_attr(not(test), allow(dead_code))]
-	async fn drive_shutdown_to_completion(&mut self) {
-		while self.shutdown_step.is_some() {
-			let outcome = Self::poll_shutdown_step(self.shutdown_step.as_mut()).await;
-			self.on_shutdown_step_complete(outcome);
-		}
-	}
-
-	async fn poll_shutdown_step(
-		step: Option<&mut ShutdownStep>,
-	) -> Result<ShutdownPhase> {
-		match step {
-			Some(step) => step.await,
-			None => future::pending().await,
-		}
-	}
-
-	fn on_shutdown_step_complete(
-		&mut self,
-		outcome: Result<ShutdownPhase>,
-	) {
-		self.shutdown_step = None;
-		match outcome {
-			Ok(next) => self.install_shutdown_step(next),
-			Err(error) => self.complete_shutdown(Err(error)),
-		}
-	}
-
-	fn install_shutdown_step(&mut self, phase: ShutdownPhase) {
-		self.shutdown_phase = Some(phase);
-		let reason = self
-			.shutdown_reason
-			.expect("shutdown reason should be set before installing a step");
-		let deadline = self
-			.shutdown_deadline
-			.expect("shutdown deadline should be set before installing a step");
-		let reason_label = shutdown_reason_label(reason);
-
-		self.shutdown_step = match phase {
-			ShutdownPhase::SendingFinalize => {
-				let actor_event_tx = self.actor_event_tx.clone();
-				let (reply_tx, reply_rx) = oneshot::channel();
-				self.shutdown_finalize_reply = Some(reply_rx);
-				Some(Self::boxed_shutdown_step(phase, async move {
-					if let Some(sender) = actor_event_tx {
-						match sender.try_reserve_owned() {
-							Ok(permit) => {
-								let event = match reason {
-									StopReason::Sleep => ActorEvent::FinalizeSleep {
-										reply: Reply::from(reply_tx),
-									},
-									StopReason::Destroy => ActorEvent::Destroy {
-										reply: Reply::from(reply_tx),
-									},
-								};
-								permit.send(event);
-							}
-							Err(_) => {
-								tracing::warn!(
-									reason = reason_label,
-									"failed to enqueue shutdown event"
-								);
-							}
-						}
-					}
-					Ok(ShutdownPhase::AwaitingFinalizeReply)
-				}))
-			}
-			ShutdownPhase::AwaitingFinalizeReply => {
-				let reply_rx = self
-					.shutdown_finalize_reply
-					.take()
-					.expect("shutdown finalize reply should be set before awaiting it");
-				let timeout_duration = remaining_shutdown_budget(deadline);
-				Some(Self::boxed_shutdown_step(phase, async move {
-					match timeout(timeout_duration, reply_rx).await {
-						Ok(Ok(Ok(()))) => {}
-						Ok(Ok(Err(error))) => {
-							tracing::error!(?error, reason = reason_label, "actor shutdown event failed");
-						}
-						Ok(Err(error)) => {
-							tracing::error!(?error, reason = reason_label, "actor shutdown reply dropped");
-						}
-						Err(_) => {
-							tracing::warn!(
-								reason = reason_label,
-								timeout_ms = timeout_duration.as_millis() as u64,
-								"actor shutdown event timed out"
-							);
-						}
-					}
-					Ok(ShutdownPhase::DrainingBefore)
-				}))
-			}
-			ShutdownPhase::DrainingBefore => {
-				let ctx = self.ctx.clone();
-				Some(Self::boxed_shutdown_step(phase, async move {
-					if !Self::drain_tracked_work_with_ctx(
-						ctx.clone(),
-						reason,
-						"before_disconnect",
-						deadline,
-					)
-					.await
-					{
-						ctx.record_shutdown_timeout(reason);
-						tracing::warn!(
-							"{reason_label} shutdown timed out waiting for shutdown tasks"
-						);
-					}
-					Ok(ShutdownPhase::DisconnectingConns)
-				}))
-			}
-			ShutdownPhase::DisconnectingConns => {
-				let ctx = self.ctx.clone();
-				Some(Self::boxed_shutdown_step(phase, async move {
-					Self::disconnect_for_shutdown_with_ctx(
-						ctx,
-						match reason {
-							StopReason::Sleep => "actor sleeping",
-							StopReason::Destroy => "actor destroyed",
-						},
-						matches!(reason, StopReason::Sleep),
-					)
-					.await?;
-					Ok(ShutdownPhase::DrainingAfter)
-				}))
-			}
-			ShutdownPhase::DrainingAfter => {
-				let ctx = self.ctx.clone();
-				Some(Self::boxed_shutdown_step(phase, async move {
-					if !Self::drain_tracked_work_with_ctx(
-						ctx.clone(),
-						reason,
-						"after_disconnect",
-						deadline,
-					)
-					.await
-					{
-						ctx.record_shutdown_timeout(reason);
-						tracing::warn!(
-							"{reason_label} shutdown timed out after disconnect callbacks"
-						);
-					}
-					Ok(ShutdownPhase::AwaitingRunHandle)
-				}))
-			}
-			ShutdownPhase::AwaitingRunHandle => {
-				self.close_actor_event_channel();
-				let run_handle = self.run_handle.take();
-				let timeout_duration = remaining_shutdown_budget(deadline);
-				Some(Self::boxed_shutdown_step(phase, async move {
-					if let Some(mut run_handle) = run_handle {
-						tokio::select! {
-							outcome = &mut run_handle => {
-								match outcome {
-									Ok(Ok(())) => {}
-									Ok(Err(error)) => {
-										tracing::error!(?error, "actor run handler failed during shutdown");
-									}
-									Err(error) => {
-										tracing::error!(?error, "actor run handler join failed during shutdown");
-									}
-								}
-							}
-							_ = sleep(timeout_duration) => {
-								run_handle.abort();
-								tracing::warn!(
-									reason = reason_label,
-									timeout_ms = timeout_duration.as_millis() as u64,
-									"actor run handler timed out during shutdown"
-								);
-							}
-						}
-					}
-					Ok(ShutdownPhase::Finalizing)
-				}))
-			}
-			ShutdownPhase::Finalizing => {
-				let ctx = self.ctx.clone();
-				Some(Self::boxed_shutdown_step(phase, async move {
-					Self::finish_shutdown_cleanup_with_ctx(ctx, reason).await?;
-					Ok(ShutdownPhase::Done)
-				}))
-			}
-			ShutdownPhase::Done => {
-				self.complete_shutdown(Ok(()));
-				None
-			}
-		};
-	}
-
-	fn boxed_shutdown_step<F>(phase: ShutdownPhase, future: F) -> ShutdownStep
-	where
-		F: Future<Output = Result<ShutdownPhase>> + Send + 'static,
-	{
-		Box::pin(async move {
-			match AssertUnwindSafe(future).catch_unwind().await {
-				Ok(outcome) => outcome,
-				Err(_) => Err(anyhow!("shutdown phase {phase:?} panicked")),
-			}
-		})
-	}
-
+	#[cfg(test)]
 	async fn drain_tracked_work_with_ctx(
 		ctx: ActorContext,
 		reason: StopReason,
@@ -1254,14 +1407,16 @@ impl ActorTask {
 		let started_at = Instant::now();
 		tokio::select! {
 			result = ctx.wait_for_shutdown_tasks(deadline) => result,
-			_ = sleep(LONG_SHUTDOWN_DRAIN_WARNING_THRESHOLD) => {
+			_ = tokio::time::sleep(LONG_SHUTDOWN_DRAIN_WARNING_THRESHOLD) => {
 				if ctx.wait_for_shutdown_tasks(Instant::now()).await {
 					true
 				} else {
-					ctx.warn_long_shutdown_drain(
-						reason.as_metric_label(),
+					tracing::warn!(
+						actor_id = %ctx.actor_id(),
+						reason = reason.as_metric_label(),
 						phase,
-						Instant::now().duration_since(started_at),
+						elapsed_ms = Instant::now().duration_since(started_at).as_millis() as u64,
+						"actor shutdown drain is taking longer than expected"
 					);
 					ctx.wait_for_shutdown_tasks(deadline).await
 				}
@@ -1269,84 +1424,197 @@ impl ActorTask {
 		}
 	}
 
-	async fn disconnect_for_shutdown_with_ctx(
-		ctx: ActorContext,
-		reason: &'static str,
-		preserve_hibernatable: bool,
-	) -> Result<()> {
-		let connections: Vec<_> = ctx.conns().collect();
-		for conn in connections {
-			if preserve_hibernatable && conn.is_hibernatable() {
-				continue;
-			}
+	fn log_lifecycle_command_received(&self, command: &'static str, reason: Option<&'static str>) {
+		tracing::debug!(
+			actor_id = %self.ctx.actor_id(),
+			command,
+			reason,
+			"actor lifecycle command received"
+		);
+	}
 
-			if let Err(error) = conn.disconnect(Some(reason)).await {
-				tracing::error!(
-					?error,
-					conn_id = conn.id(),
-					"failed to disconnect connection during shutdown"
-				);
-			}
+	fn reply_lifecycle_command(
+		&self,
+		command: &'static str,
+		reason: Option<&'static str>,
+		reply: oneshot::Sender<Result<()>>,
+		result: Result<()>,
+	) {
+		let outcome = result_outcome(&result);
+		let delivered = reply.send(result).is_ok();
+		tracing::debug!(
+			actor_id = %self.ctx.actor_id(),
+			command,
+			reason,
+			outcome,
+			delivered,
+			"actor lifecycle command replied"
+		);
+	}
+
+	fn register_shutdown_reply(
+		&mut self,
+		command: &'static str,
+		reason: Option<&'static str>,
+		reply: oneshot::Sender<Result<()>>,
+	) {
+		if self.shutdown_reply.is_some() {
+			debug_assert!(false, "engine actor2 sends one Stop per actor instance");
+			tracing::warn!(
+				actor_id = %self.ctx.actor_id(),
+				command,
+				reason,
+				"duplicate Stop after shutdown reply was registered, dropping new reply"
+			);
+			return;
 		}
+		self.shutdown_reply = Some(PendingLifecycleReply {
+			command,
+			reason,
+			reply,
+		});
+	}
 
+	fn deliver_shutdown_reply(&mut self, reason: StopReason, result: &Result<()>) {
+		#[cfg(test)]
+		run_shutdown_reply_hook(&self.ctx, reason);
+
+		let Some(pending) = self.shutdown_reply.take() else {
+			return;
+		};
+		let outcome = result_outcome(result);
+		let delivered = pending.reply.send(clone_shutdown_result(result)).is_ok();
+		tracing::debug!(
+			actor_id = %self.ctx.actor_id(),
+			command = pending.command,
+			reason = pending.reason,
+			shutdown_reason = shutdown_reason_label(reason),
+			outcome,
+			delivered,
+			"actor lifecycle command replied"
+		);
+	}
+
+	async fn run_shutdown(&mut self, reason: StopReason) -> Result<()> {
+		self.sleep_grace = None;
+		let started_at = Instant::now();
+		self.state_save_deadline = None;
+		self.inspector_serialize_state_deadline = None;
+		self.sleep_deadline = None;
+		self.transition_to(match reason {
+			StopReason::Sleep => LifecycleState::SleepFinalize,
+			StopReason::Destroy => LifecycleState::Destroying,
+		});
+		self.save_final_state().await?;
+		self.close_actor_event_channel();
+		self.join_aborted_run_handle().await;
+		Self::finish_shutdown_cleanup_with_ctx(self.ctx.clone(), reason).await?;
+		if matches!(reason, StopReason::Destroy) {
+			self.ctx.mark_destroy_completed();
+		}
+		self.ctx.record_shutdown_wait(reason, started_at.elapsed());
 		Ok(())
 	}
 
-	async fn finish_shutdown_cleanup_with_ctx(
-		ctx: ActorContext,
-		reason: StopReason,
-	) -> Result<()> {
+	async fn save_final_state(&mut self) -> Result<()> {
+		let (reply_tx, reply_rx) = oneshot::channel();
+		if let Err(error) = self.send_actor_event(
+			"shutdown_serialize_state",
+			ActorEvent::SerializeState {
+				reason: SerializeStateReason::Save,
+				reply: Reply::from(reply_tx),
+			},
+		) {
+			tracing::error!(?error, "shutdown serialize-state enqueue failed");
+			return self.ctx.save_state(Vec::new()).await;
+		}
+
+		let deltas = match timeout(SERIALIZE_STATE_SHUTDOWN_SANITY_CAP, reply_rx).await {
+			Ok(Ok(Ok(deltas))) => deltas,
+			Ok(Ok(Err(error))) => {
+				tracing::error!(?error, "serializeState callback returned error");
+				Vec::new()
+			}
+			Ok(Err(error)) => {
+				tracing::error!(?error, "serializeState reply dropped");
+				Vec::new()
+			}
+			Err(_) => {
+				tracing::error!("serializeState timed out");
+				Vec::new()
+			}
+		};
+
+		self.ctx.save_state(deltas).await
+	}
+
+	async fn finish_shutdown_cleanup_with_ctx(ctx: ActorContext, reason: StopReason) -> Result<()> {
 		let reason_label = shutdown_reason_label(reason);
-		ctx.teardown_sleep_controller().await;
+		let actor_id = ctx.actor_id().to_owned();
+		ctx.teardown_sleep_state().await;
+		tracing::debug!(
+			actor_id = %actor_id,
+			reason = reason_label,
+			step = "teardown_sleep_state",
+			"actor shutdown cleanup step completed"
+		);
 		#[cfg(test)]
 		run_shutdown_cleanup_hook(&ctx, reason_label);
 		ctx.wait_for_pending_state_writes().await;
-		ctx.schedule().sync_alarm_logged();
-		ctx.schedule().wait_for_pending_alarm_writes().await;
-		ctx
-			.sql()
+		tracing::debug!(
+			actor_id = %actor_id,
+			reason = reason_label,
+			step = "wait_for_pending_state_writes",
+			"actor shutdown cleanup step completed"
+		);
+		ctx.sync_alarm_logged();
+		tracing::debug!(
+			actor_id = %actor_id,
+			reason = reason_label,
+			step = "sync_alarm",
+			"actor shutdown cleanup step completed"
+		);
+		ctx.wait_for_pending_alarm_writes().await;
+		tracing::debug!(
+			actor_id = %actor_id,
+			reason = reason_label,
+			step = "wait_for_pending_alarm_writes",
+			"actor shutdown cleanup step completed"
+		);
+		ctx.sql()
 			.cleanup()
 			.await
 			.with_context(|| format!("cleanup sqlite during {reason_label} shutdown"))?;
+		tracing::debug!(
+			actor_id = %actor_id,
+			reason = reason_label,
+			step = "cleanup_sqlite",
+			"actor shutdown cleanup step completed"
+		);
 		match reason {
 			// Match the reference TS runtime: keep the persisted engine alarm armed
 			// across sleep so the next instance still has a wake trigger, but abort
 			// the local Tokio timer owned by the shutting-down instance.
-			StopReason::Sleep => ctx.schedule().cancel_local_alarm_timeouts(),
-			StopReason::Destroy => ctx.schedule().cancel_driver_alarm_logged(),
+			StopReason::Sleep => {
+				ctx.cancel_local_alarm_timeouts();
+				tracing::debug!(
+					actor_id = %actor_id,
+					reason = reason_label,
+					step = "cancel_local_alarm_timeouts",
+					"actor shutdown cleanup step completed"
+				);
+			}
+			StopReason::Destroy => {
+				ctx.cancel_driver_alarm_logged();
+				tracing::debug!(
+					actor_id = %actor_id,
+					reason = reason_label,
+					step = "cancel_driver_alarm",
+					"actor shutdown cleanup step completed"
+				);
+			}
 		}
 		Ok(())
-	}
-
-	fn complete_shutdown(&mut self, result: Result<()>) {
-		let reason = self.shutdown_reason.take();
-		let started_at = self.shutdown_started_at.take();
-		self.shutdown_deadline = None;
-		self.shutdown_phase = None;
-		self.shutdown_step = None;
-		self.shutdown_finalize_reply = None;
-		self.transition_to(LifecycleState::Terminated);
-
-		if let Some(reason) = reason {
-			if result.is_ok() {
-				if let Some(started_at) = started_at {
-					self.ctx.record_shutdown_wait(reason, started_at.elapsed());
-				}
-			}
-			if matches!(reason, StopReason::Destroy) {
-				self.ctx.mark_destroy_completed();
-			}
-			self.send_shutdown_replies(reason, &result);
-		}
-	}
-
-	fn send_shutdown_replies(&mut self, _reason: StopReason, result: &Result<()>) {
-		#[cfg(test)]
-		run_shutdown_reply_hook(&self.ctx, _reason);
-
-		for reply in self.shutdown_replies.drain(..) {
-			let _ = reply.send(clone_shutdown_result(result));
-		}
 	}
 
 	fn record_inbox_depths(&self) {
@@ -1362,10 +1630,7 @@ impl ActorTask {
 	}
 
 	fn accepting_dispatch(&self) -> bool {
-		matches!(
-			self.lifecycle,
-			LifecycleState::Started | LifecycleState::SleepGrace
-		)
+		matches!(self.lifecycle, LifecycleState::Started)
 	}
 
 	fn sleep_timer_active(&self) -> bool {
@@ -1437,13 +1702,14 @@ impl ActorTask {
 
 		let save_request_revision = self.ctx.save_request_revision();
 		let (reply_tx, reply_rx) = oneshot::channel();
-		match self.reserve_actor_event("save_tick") {
-			Ok(permit) => {
-				permit.send(ActorEvent::SerializeState {
-					reason: SerializeStateReason::Save,
-					reply: Reply::from(reply_tx),
-				});
-			}
+		match self.send_actor_event(
+			"save_tick",
+			ActorEvent::SerializeState {
+				reason: SerializeStateReason::Save,
+				reply: Reply::from(reply_tx),
+			},
+		) {
+			Ok(()) => {}
 			Err(error) => {
 				tracing::warn!(?error, "failed to enqueue save tick");
 				self.schedule_state_save(true);
@@ -1453,6 +1719,15 @@ impl ActorTask {
 
 		match reply_rx.await {
 			Ok(Ok(deltas)) => {
+				let serialized_bytes = state_delta_payload_bytes(&deltas);
+				tracing::debug!(
+					actor_id = %self.ctx.actor_id(),
+					reason = SerializeStateReason::Save.label(),
+					delta_count = deltas.len(),
+					serialized_bytes,
+					save_request_revision,
+					"actor serializeState completed"
+				);
 				self.broadcast_inspector_overlay(&deltas);
 				if let Err(error) = self
 					.ctx
@@ -1485,21 +1760,21 @@ impl ActorTask {
 		if !matches!(
 			self.lifecycle,
 			LifecycleState::Started | LifecycleState::SleepGrace
-		)
-			|| self.inspector_attach_count.load(Ordering::SeqCst) == 0
+		) || self.inspector_attach_count.load(Ordering::SeqCst) == 0
 			|| !self.ctx.save_requested()
 		{
 			return;
 		}
 
 		let (reply_tx, reply_rx) = oneshot::channel();
-		match self.reserve_actor_event("inspector_serialize_state") {
-			Ok(permit) => {
-				permit.send(ActorEvent::SerializeState {
-					reason: SerializeStateReason::Inspector,
-					reply: Reply::from(reply_tx),
-				});
-			}
+		match self.send_actor_event(
+			"inspector_serialize_state",
+			ActorEvent::SerializeState {
+				reason: SerializeStateReason::Inspector,
+				reply: Reply::from(reply_tx),
+			},
+		) {
+			Ok(()) => {}
 			Err(error) => {
 				tracing::warn!(?error, "failed to enqueue inspector serialize tick");
 				self.sync_inspector_serialize_deadline();
@@ -1509,6 +1784,13 @@ impl ActorTask {
 
 		match reply_rx.await {
 			Ok(Ok(deltas)) => {
+				tracing::debug!(
+					actor_id = %self.ctx.actor_id(),
+					reason = SerializeStateReason::Inspector.label(),
+					delta_count = deltas.len(),
+					serialized_bytes = state_delta_payload_bytes(&deltas),
+					"actor serializeState completed"
+				);
 				self.broadcast_inspector_overlay(&deltas);
 			}
 			Ok(Err(error)) => {
@@ -1528,9 +1810,20 @@ impl ActorTask {
 			return;
 		}
 
-		if self.ctx.can_sleep().await == crate::actor::sleep::CanSleep::Yes {
+		let can_sleep = self.ctx.can_sleep().await;
+		if can_sleep == crate::actor::sleep::CanSleep::Yes {
+			tracing::debug!(
+				actor_id = %self.ctx.actor_id(),
+				sleep_timeout_ms = self.factory.config().sleep_timeout.as_millis() as u64,
+				"sleep idle deadline elapsed"
+			);
 			self.ctx.sleep();
 		} else {
+			tracing::warn!(
+				actor_id = %self.ctx.actor_id(),
+				reason = ?can_sleep,
+				"sleep idle deadline elapsed but actor stayed awake"
+			);
 			self.reset_sleep_deadline().await;
 		}
 	}
@@ -1538,14 +1831,30 @@ impl ActorTask {
 	async fn reset_sleep_deadline(&mut self) {
 		if self.lifecycle != LifecycleState::Started {
 			self.sleep_deadline = None;
+			tracing::debug!(
+				actor_id = %self.ctx.actor_id(),
+				lifecycle = ?self.lifecycle,
+				"sleep activity reset skipped outside started state"
+			);
 			return;
 		}
 
-		if self.ctx.can_sleep().await == crate::actor::sleep::CanSleep::Yes {
-			self.sleep_deadline =
-				Some(Instant::now() + self.factory.config().sleep_timeout);
+		let can_sleep = self.ctx.can_sleep().await;
+		if can_sleep == crate::actor::sleep::CanSleep::Yes {
+			let deadline = Instant::now() + self.factory.config().sleep_timeout;
+			self.sleep_deadline = Some(deadline);
+			tracing::debug!(
+				actor_id = %self.ctx.actor_id(),
+				sleep_timeout_ms = self.factory.config().sleep_timeout.as_millis() as u64,
+				"sleep activity reset"
+			);
 		} else {
 			self.sleep_deadline = None;
+			tracing::debug!(
+				actor_id = %self.ctx.actor_id(),
+				reason = ?can_sleep,
+				"sleep activity reset skipped"
+			);
 		}
 	}
 
@@ -1553,8 +1862,7 @@ impl ActorTask {
 		if !matches!(
 			self.lifecycle,
 			LifecycleState::Started | LifecycleState::SleepGrace
-		)
-			|| self.inspector_attach_count.load(Ordering::SeqCst) == 0
+		) || self.inspector_attach_count.load(Ordering::SeqCst) == 0
 			|| !self.ctx.save_requested()
 		{
 			self.inspector_serialize_state_deadline = None;
@@ -1565,7 +1873,7 @@ impl ActorTask {
 			.get_or_insert_with(|| Instant::now() + INSPECTOR_SERIALIZE_STATE_INTERVAL);
 	}
 
-	fn broadcast_inspector_overlay(&self, deltas: &[crate::actor::callbacks::StateDelta]) {
+	fn broadcast_inspector_overlay(&self, deltas: &[StateDelta]) {
 		if self.inspector_attach_count.load(Ordering::SeqCst) == 0 || deltas.is_empty() {
 			return;
 		}
@@ -1576,7 +1884,28 @@ impl ActorTask {
 			return;
 		}
 
-		let _ = self.inspector_overlay_tx.send(Arc::new(payload));
+		let payload = Arc::new(payload);
+		let payload_bytes = payload.len();
+		match self.inspector_overlay_tx.send(payload) {
+			Ok(receiver_count) => {
+				tracing::debug!(
+					actor_id = %self.ctx.actor_id(),
+					delta_count = deltas.len(),
+					payload_bytes,
+					receiver_count,
+					"inspector overlay broadcast"
+				);
+			}
+			Err(error) => {
+				tracing::debug!(
+					actor_id = %self.ctx.actor_id(),
+					delta_count = deltas.len(),
+					payload_bytes,
+					error = ?error,
+					"inspector overlay broadcast dropped"
+				);
+			}
+		}
 	}
 
 	fn should_terminate(&self) -> bool {
@@ -1593,42 +1922,27 @@ impl ActorTask {
 	}
 
 	fn transition_to(&mut self, lifecycle: LifecycleState) {
+		let old = self.lifecycle;
+		tracing::info!(
+			actor_id = %self.ctx.actor_id(),
+			old = ?old,
+			new = ?lifecycle,
+			"actor lifecycle transition"
+		);
 		self.lifecycle = lifecycle;
 		match lifecycle {
-			LifecycleState::Ready
-			| LifecycleState::Started
-			| LifecycleState::SleepGrace => self.ctx.set_ready(true),
+			LifecycleState::Started => self.ctx.set_ready(true),
 			LifecycleState::Loading
-			| LifecycleState::Migrating
-			| LifecycleState::Waking
+			| LifecycleState::SleepGrace
 			| LifecycleState::SleepFinalize
+			| LifecycleState::DestroyGrace
 			| LifecycleState::Destroying
 			| LifecycleState::Terminated => self.ctx.set_ready(false),
 		}
 
-		self
-			.ctx
-			.set_started(matches!(lifecycle, LifecycleState::Started | LifecycleState::SleepGrace));
+		self.ctx
+			.set_started(matches!(lifecycle, LifecycleState::Started));
 	}
-
-	fn request_begin_sleep(&mut self) {
-		if self.run_handle.is_none() {
-			return;
-		}
-
-		match self.reserve_actor_event("begin_sleep") {
-			Ok(permit) => {
-				permit.send(ActorEvent::BeginSleep);
-			}
-			Err(error) => {
-				tracing::warn!(?error, "failed to enqueue begin-sleep event");
-			}
-		}
-	}
-}
-
-fn remaining_shutdown_budget(deadline: Instant) -> Duration {
-	deadline.saturating_duration_since(Instant::now())
 }
 
 fn shutdown_reason_label(reason: StopReason) -> &'static str {
@@ -1641,6 +1955,20 @@ fn shutdown_reason_label(reason: StopReason) -> &'static str {
 fn clone_shutdown_result(result: &Result<()>) -> Result<()> {
 	match result {
 		Ok(()) => Ok(()),
-		Err(error) => Err(anyhow!(error.to_string())),
+		Err(error) => {
+			let error = rivet_error::RivetError::extract(error);
+			Err(anyhow::Error::new(error))
+		}
 	}
+}
+
+fn result_outcome<T>(result: &Result<T>) -> &'static str {
+	match result {
+		Ok(_) => "ok",
+		Err(_) => "error",
+	}
+}
+
+fn state_delta_payload_bytes(deltas: &[StateDelta]) -> usize {
+	deltas.iter().map(StateDelta::payload_len).sum()
 }

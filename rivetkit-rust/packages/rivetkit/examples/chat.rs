@@ -51,7 +51,7 @@ async fn run(mut start: Start<Chat>) -> Result<()> {
 					};
 					state.messages.push(message.clone());
 					ctx.broadcast("message", &message)?;
-					ctx.request_save(false);
+					ctx.request_save(RequestSaveOpts::default());
 					action.ok(&());
 				}
 				Ok(ChatAction::History) => action.ok(&state.messages),
@@ -69,6 +69,7 @@ async fn run(mut start: Start<Chat>) -> Result<()> {
 				}
 				Err(error) => action.err(error),
 			},
+			Event::QueueSend(queue) => queue.err(anyhow!("no queue support")),
 			Event::Http(http) => http.reply_status(404),
 			Event::WebSocketOpen(ws) => ws.reject(anyhow!("no websocket support")),
 			Event::ConnOpen(conn) => {

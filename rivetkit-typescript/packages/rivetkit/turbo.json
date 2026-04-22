@@ -46,6 +46,7 @@
 			"env": ["FAST_BUILD", "CUSTOM_RIVETKIT_DEVTOOLS_URL"]
 		},
 		"build:browser": {
+			"dependsOn": ["^build"],
 			"inputs": [
 				"src/client/mod.browser.ts",
 				"src/**",

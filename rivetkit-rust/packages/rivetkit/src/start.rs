@@ -1,7 +1,8 @@
 use std::io::Cursor;
 use std::marker::PhantomData;
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result};
+use rivetkit_core::error::ActorRuntime;
 use rivetkit_core::{ActorEvent, ActorEvents, ActorStart};
 use serde::de::DeserializeOwned;
 
@@ -35,7 +36,7 @@ impl<A: Actor> Input<A> {
 		let bytes = self
 			.bytes
 			.as_deref()
-			.ok_or_else(|| anyhow!("actor input is missing"))?;
+			.ok_or_else(|| ActorRuntime::MissingInput.build())?;
 		decode_cbor(bytes, "actor input")
 	}
 
@@ -100,22 +101,56 @@ pub struct Hibernated<A: Actor> {
 
 #[derive(Debug)]
 pub struct Events<A: Actor> {
+	ctx: Ctx<A>,
 	rx: ActorEvents,
 	_p: PhantomData<fn() -> A>,
 }
 
 impl<A: Actor> Events<A> {
 	pub async fn recv(&mut self) -> Option<Event<A>> {
-		self.rx.recv().await.map(wrap_event)
+		loop {
+			let event = self.rx.recv().await?;
+			if let Some(event) = self.handle_runtime_event(event).await {
+				return Some(wrap_event(event));
+			}
+		}
 	}
 
 	pub fn try_recv(&mut self) -> Option<Event<A>> {
-		self.rx.try_recv().map(wrap_event)
+		while let Some(event) = self.rx.try_recv() {
+			if let Some(event) = self.handle_runtime_event_sync(event) {
+				return Some(wrap_event(event));
+			}
+		}
+		None
+	}
+
+	async fn handle_runtime_event(&self, event: ActorEvent) -> Option<ActorEvent> {
+		match event {
+			ActorEvent::DisconnectConn { conn_id, reply } => {
+				reply.send(self.ctx.disconnect_conn(&conn_id).await);
+				None
+			}
+			event => Some(event),
+		}
+	}
+
+	fn handle_runtime_event_sync(&self, event: ActorEvent) -> Option<ActorEvent> {
+		match event {
+			ActorEvent::DisconnectConn { conn_id, reply } => {
+				let ctx = self.ctx.clone();
+				tokio::spawn(async move {
+					reply.send(ctx.disconnect_conn(&conn_id).await);
+				});
+				None
+			}
+			event => Some(event),
+		}
 	}
 }
 
-#[allow(dead_code)]
-pub(crate) fn wrap_start<A: Actor>(core_start: ActorStart) -> Result<Start<A>> {
+#[doc(hidden)]
+pub fn wrap_start<A: Actor>(core_start: ActorStart) -> Result<Start<A>> {
 	let ActorStart {
 		ctx,
 		input,
@@ -134,8 +169,10 @@ pub(crate) fn wrap_start<A: Actor>(core_start: ActorStart) -> Result<Start<A>> {
 		})
 		.collect();
 
+	let ctx = Ctx::new(ctx);
+
 	Ok(Start {
-		ctx: Ctx::new(ctx),
+		ctx: ctx.clone(),
 		input: Input {
 			bytes: input,
 			_p: PhantomData,
@@ -143,6 +180,7 @@ pub(crate) fn wrap_start<A: Actor>(core_start: ActorStart) -> Result<Start<A>> {
 		snapshot: Snapshot { bytes: snapshot },
 		hibernated,
 		events: Events {
+			ctx,
 			rx: events,
 			_p: PhantomData,
 		},
@@ -160,7 +198,7 @@ fn decode_cbor<T: DeserializeOwned>(bytes: &[u8], label: &str) -> Result<T> {
 #[cfg(test)]
 mod tests {
 	use serde::Serialize;
-	use tokio::sync::mpsc;
+	use tokio::sync::mpsc::unbounded_channel;
 
 	use super::*;
 	use crate::action;
@@ -262,7 +300,7 @@ mod tests {
 
 	#[test]
 	fn wrap_start_rehydrates_hibernated_connection_state() {
-		let (tx, rx) = mpsc::channel(1);
+		let (tx, rx) = unbounded_channel();
 		drop(tx);
 		let start = wrap_start::<ConnActor>(ActorStart {
 			ctx: rivetkit_core::ActorContext::new("actor-id", "test", Vec::new(), "local"),
@@ -292,13 +330,19 @@ mod tests {
 
 	#[test]
 	fn events_try_recv_wraps_core_events() {
-		let (tx, rx) = mpsc::channel(1);
-		tx.try_send(ActorEvent::ConnectionClosed {
+		let (tx, rx) = unbounded_channel();
+		tx.send(ActorEvent::ConnectionClosed {
 			conn: rivetkit_core::ConnHandle::new("conn-id", cbor(&()), cbor(&()), true),
 		})
 		.expect("queue event");
 
 		let mut events = Events::<EmptyActor> {
+			ctx: Ctx::new(rivetkit_core::ActorContext::new(
+				"actor-id",
+				"test",
+				Vec::new(),
+				"local",
+			)),
 			rx: rx.into(),
 			_p: PhantomData,
 		};

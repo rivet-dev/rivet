@@ -91,7 +91,7 @@ describe("RivetError bridge helpers", () => {
 			public: false,
 			group: "rivetkit",
 			code: "internal_error",
-			message: "Internal error. Read the server logs for more details.",
+			message: "An internal error occurred",
 		});
 		expect(logger.info).not.toHaveBeenCalledWith(
 			expect.objectContaining({

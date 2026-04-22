@@ -70,7 +70,9 @@ impl SqliteEngine {
 		)
 		.await?;
 
-		meta_bytes.map(|meta_bytes| decode_db_head(&meta_bytes)).transpose()
+		meta_bytes
+			.map(|meta_bytes| decode_db_head(&meta_bytes))
+			.transpose()
 	}
 
 	pub async fn load_meta(&self, actor_id: &str) -> Result<SqliteMeta> {

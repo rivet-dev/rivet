@@ -1,5 +1,5 @@
-use serde::de::{self, Deserializer};
 use serde::Deserialize;
+use serde::de::{self, Deserializer};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Raw;
@@ -18,8 +18,8 @@ impl<'de> Deserialize<'de> for Raw {
 
 #[cfg(test)]
 mod tests {
-	use serde::de::value::{Error as ValueError, UnitDeserializer};
 	use serde::Deserialize;
+	use serde::de::value::{Error as ValueError, UnitDeserializer};
 
 	use super::Raw;
 

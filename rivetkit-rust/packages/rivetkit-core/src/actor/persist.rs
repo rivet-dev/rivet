@@ -1,6 +1,8 @@
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
+
+use crate::error::ProtocolError;
 
 const EMBEDDED_VERSION_LEN: usize = 2;
 
@@ -12,8 +14,8 @@ pub(crate) fn encode_with_embedded_version<T>(
 where
 	T: Serialize,
 {
-	let payload = serde_bare::to_vec(value)
-		.with_context(|| format!("encode {label} bare payload"))?;
+	let payload =
+		serde_bare::to_vec(value).with_context(|| format!("encode {label} bare payload"))?;
 	let mut encoded = Vec::with_capacity(EMBEDDED_VERSION_LEN + payload.len());
 	encoded.extend_from_slice(&version.to_le_bytes());
 	encoded.extend_from_slice(&payload);
@@ -29,15 +31,23 @@ where
 	T: DeserializeOwned,
 {
 	if payload.len() < EMBEDDED_VERSION_LEN {
-		bail!("{label} payload too short for embedded version");
+		return Err(ProtocolError::InvalidPersistedData {
+			label: label.to_owned(),
+			reason: "payload too short for embedded version".to_owned(),
+		}
+		.build());
 	}
 
 	let version = u16::from_le_bytes([payload[0], payload[1]]);
 	if !supported_versions.contains(&version) {
-		bail!(
-			"unsupported {label} version {version}; expected one of {:?}",
-			supported_versions
-		);
+		return Err(ProtocolError::InvalidPersistedData {
+			label: label.to_owned(),
+			reason: format!(
+				"unsupported version {version}; expected one of {:?}",
+				supported_versions
+			),
+		}
+		.build());
 	}
 
 	serde_bare::from_slice(&payload[EMBEDDED_VERSION_LEN..])

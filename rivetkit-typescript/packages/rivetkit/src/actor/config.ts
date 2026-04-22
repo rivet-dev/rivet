@@ -19,7 +19,6 @@ import type {
 	InferSchemaMap,
 } from "./schema";
 
-export const DEFAULT_ON_SLEEP_TIMEOUT = 5_000;
 export const DEFAULT_WAIT_UNTIL_TIMEOUT = 15_000;
 export const DEFAULT_SLEEP_GRACE_PERIOD = 15_000;
 
@@ -839,8 +838,7 @@ const InstanceActorOptionsBaseSchema = z
 		onConnectTimeout: z.number().positive().default(5000),
 		onMigrateTimeout: z.number().positive().default(30_000),
 		sleepGracePeriod: z.number().positive().optional(),
-		onSleepTimeout: z.number().positive().default(DEFAULT_ON_SLEEP_TIMEOUT),
-		onDestroyTimeout: z.number().positive().default(5000),
+		onDestroyTimeout: z.number().positive().default(15_000),
 		stateSaveInterval: z.number().positive().default(1_000),
 		actionTimeout: z.number().positive().default(60_000),
 		// Deprecated timeout for legacy background shutdown tasks
@@ -848,8 +846,6 @@ const InstanceActorOptionsBaseSchema = z
 			.number()
 			.positive()
 			.default(DEFAULT_WAIT_UNTIL_TIMEOUT),
-		// Max time to wait for run handler to stop during shutdown
-		runStopTimeout: z.number().positive().default(15_000),
 		connectionLivenessTimeout: z.number().positive().default(2500),
 		connectionLivenessInterval: z.number().positive().default(5000),
 		/** @deprecated Use `c.setPreventSleep(true)` for bounded delays or keep `noSleep` for actors that must stay awake indefinitely. Will be removed in 2.2.0. */
@@ -1203,9 +1199,6 @@ interface BaseActorConfig<
 	 * If this handler throws, the actor logs the error and then sleeps once it
 	 * becomes idle.
 	 * Call `c.destroy()` explicitly if a run handler should destroy the actor.
-	 *
-	 * On shutdown, the actor waits for this handler to complete with a
-	 * configurable timeout (options.runStopTimeout, default 15s).
 	 *
 	 * Can be either a function or a RunConfig object with optional name/icon metadata.
 	 *
@@ -1742,18 +1735,12 @@ export const DocActorOptionsSchema = z
 			.number()
 			.optional()
 			.describe(
-				`Max time in ms for the graceful sleep window. Covers onSleep, waitUntil, async raw WebSocket handlers, and waiting for preventSleep to clear after shutdown starts. Default: ${DEFAULT_SLEEP_GRACE_PERIOD}. If sleepGracePeriod is unset, custom legacy onSleepTimeout and waitUntilTimeout values still factor into the effective shutdown budget.`,
-			),
-		onSleepTimeout: z
-			.number()
-			.optional()
-			.describe(
-				`Deprecated. Legacy timeout in ms for onSleep when sleepGracePeriod is not set. Must be less than ACTOR_STOP_THRESHOLD_MS. Default: ${DEFAULT_ON_SLEEP_TIMEOUT}`,
+				`Max time in ms for the graceful sleep window. Covers lifecycle hooks, waitUntil, async raw WebSocket handlers, disconnect callbacks, and waiting for preventSleep to clear after shutdown starts. Default: ${DEFAULT_SLEEP_GRACE_PERIOD}.`,
 			),
 		onDestroyTimeout: z
 			.number()
 			.optional()
-			.describe("Timeout in ms for onDestroy handler. Default: 5000"),
+			.describe("Graceful destroy shutdown window in ms. Default: 15000"),
 		stateSaveInterval: z
 			.number()
 			.optional()
@@ -1769,12 +1756,6 @@ export const DocActorOptionsSchema = z
 			.optional()
 			.describe(
 				`Deprecated. Legacy timeout in ms for waitUntil when sleepGracePeriod is not set. Default: ${DEFAULT_WAIT_UNTIL_TIMEOUT}`,
-			),
-		runStopTimeout: z
-			.number()
-			.optional()
-			.describe(
-				"Max time in ms to wait for run handler to stop during shutdown. Default: 15000",
 			),
 		connectionLivenessTimeout: z
 			.number()

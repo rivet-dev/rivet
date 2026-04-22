@@ -13,8 +13,8 @@ pub fn open_database_from_envoy(
 	startup_data: Option<protocol::SqliteStartupData>,
 	rt_handle: Handle,
 ) -> Result<NativeDatabaseHandle> {
-	let startup = startup_data
-		.ok_or_else(|| anyhow!("missing sqlite startup data for actor {actor_id}"))?;
+	let startup =
+		startup_data.ok_or_else(|| anyhow!("missing sqlite startup data for actor {actor_id}"))?;
 	let vfs_name = format!("envoy-sqlite-{actor_id}");
 	let vfs = SqliteVfs::register(
 		&vfs_name,

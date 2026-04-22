@@ -23,6 +23,10 @@ export interface StateDeltaPayload {
   connHibernation: Array<StateDeltaConnHibernationEntry>
   connHibernationRemoved: Array<string>
 }
+export interface JsRequestSaveOpts {
+  immediate?: boolean
+  maxWaitMs?: number
+}
 export interface JsInspectorSnapshot {
   stateRevision: number
   connectionsRevision: number
@@ -35,6 +39,10 @@ export interface JsHttpResponse {
   status?: number
   headers?: Record<string, string>
   body?: Buffer
+}
+export interface JsQueueSendResult {
+  status: string
+  response?: Buffer
 }
 export interface JsActorConfig {
   name?: string
@@ -50,7 +58,6 @@ export interface JsActorConfig {
   onMigrateTimeoutMs?: number
   onWakeTimeoutMs?: number
   onBeforeActorStartTimeoutMs?: number
-  onSleepTimeoutMs?: number
   onDestroyTimeoutMs?: number
   actionTimeoutMs?: number
   onRequestTimeoutMs?: number
@@ -92,8 +99,6 @@ export interface JsSqliteVfsMetrics {
   totalNs: number
   commitCount: number
 }
-/** Open a native SQLite database backed by the envoy's KV channel. */
-export declare function openDatabaseFromEnvoy(jsHandle: JsEnvoyHandle, actorId: string): Promise<JsNativeDatabase>
 export interface JsQueueNextOptions {
   names?: Array<string>
   timeoutMs?: number
@@ -130,21 +135,6 @@ export interface JsServeConfig {
   engineBinaryPath?: string
   handleInspectorHttpInRuntime?: boolean
 }
-/** Configuration for starting the native envoy client. */
-export interface JsEnvoyConfig {
-  endpoint: string
-  token: string
-  namespace: string
-  poolName: string
-  version: number
-  metadata?: any
-  notGlobal: boolean
-  /**
-   * Log level for the Rust tracing subscriber (e.g. "trace", "debug", "info", "warn", "error").
-   * Falls back to RIVET_LOG_LEVEL, then LOG_LEVEL, then RUST_LOG env vars. Defaults to "warn".
-   */
-  logLevel?: string
-}
 /** Options for KV list operations. */
 export interface JsKvListOptions {
   reverse?: boolean
@@ -155,35 +145,19 @@ export interface JsKvEntry {
   key: Buffer
   value: Buffer
 }
-/** A single hibernating request entry. */
-export interface HibernatingRequestEntry {
-  gatewayId: Buffer
-  requestId: Buffer
-}
-/**
- * Start the native envoy client synchronously.
- *
- * Returns a handle immediately. The caller must call `await handle.started()`
- * to wait for the connection to be ready.
- */
-export declare function startEnvoySyncJs(config: JsEnvoyConfig, eventCallback: (event: any) => void): JsEnvoyHandle
-/** Start the native envoy client asynchronously. */
-export declare function startEnvoyJs(config: JsEnvoyConfig, eventCallback: (event: any) => void): JsEnvoyHandle
 /** N-API wrapper around `rivetkit-core::ActorContext`. */
 export declare class ActorContext {
   constructor(actorId: string, name: string, region: string)
   state(): Buffer
-  vars(): Buffer
-  setState(state: Buffer): void
-  setInOnStateChangeCallback(inCallback: boolean): void
-  setVars(vars: Buffer): void
+  beginOnStateChange(): void
+  endOnStateChange(): void
   kv(): Kv
-  sql(): SqliteDb
+  sql(): JsNativeDatabase
   schedule(): Schedule
   queue(): Queue
   setAlarm(timestampMs?: number | undefined | null): void
-  requestSave(immediate: boolean): void
-  requestSaveWithin(ms: number): void
+  requestSave(opts?: JsRequestSaveOpts | undefined | null): void
+  requestSaveAndWait(opts?: JsRequestSaveOpts | undefined | null): Promise<void>
   decodeInspectorRequest(bytes: Buffer, advertisedVersion: number): Buffer
   encodeInspectorResponse(bytes: Buffer, targetVersion: number): Buffer
   inspectorSnapshot(): JsInspectorSnapshot
@@ -191,7 +165,8 @@ export declare class ActorContext {
   queueHibernationRemoval(connId: string): void
   hasPendingHibernationChanges(): boolean
   takePendingHibernationChanges(): Array<string>
-  saveState(payload: boolean | StateDeltaPayload): Promise<void>
+  dirtyHibernatableConns(): Array<ConnHandle>
+  saveState(payload: StateDeltaPayload): Promise<void>
   actorId(): string
   name(): string
   key(): Array<JsActorKeySegment>
@@ -209,8 +184,8 @@ export declare class ActorContext {
   markStarted(): void
   isReady(): boolean
   isStarted(): boolean
-  beginWebsocketCallback(): void
-  endWebsocketCallback(): void
+  beginWebsocketCallback(): number
+  endWebsocketCallback(regionId: number): void
   abortSignal(): AbortSignal
   conns(): Array<ConnHandle>
   connectConn(params: Buffer, request?: JsHttpRequest | undefined | null): Promise<ConnHandle>
@@ -245,32 +220,6 @@ export declare class JsNativeDatabase {
   query(sql: string, params?: Array<JsBindParam> | undefined | null): Promise<QueryResult>
   exec(sql: string): Promise<QueryResult>
   close(): Promise<void>
-}
-/** Native envoy handle exposed to JavaScript via N-API. */
-export declare class JsEnvoyHandle {
-  started(): Promise<void>
-  shutdown(immediate: boolean): void
-  get envoyKey(): string
-  sleepActor(actorId: string, generation?: number | undefined | null): void
-  stopActor(actorId: string, generation?: number | undefined | null, error?: string | undefined | null): void
-  destroyActor(actorId: string, generation?: number | undefined | null): void
-  setAlarm(actorId: string, alarmTs?: number | undefined | null, generation?: number | undefined | null): void
-  kvGet(actorId: string, keys: Array<Buffer>): Promise<Array<Buffer | undefined | null>>
-  kvPut(actorId: string, entries: Array<JsKvEntry>): Promise<void>
-  kvDelete(actorId: string, keys: Array<Buffer>): Promise<void>
-  kvDeleteRange(actorId: string, start: Buffer, end: Buffer): Promise<void>
-  kvListAll(actorId: string, options?: JsKvListOptions | undefined | null): Promise<Array<JsKvEntry>>
-  kvListRange(actorId: string, start: Buffer, end: Buffer, exclusive?: boolean | undefined | null, options?: JsKvListOptions | undefined | null): Promise<Array<JsKvEntry>>
-  kvListPrefix(actorId: string, prefix: Buffer, options?: JsKvListOptions | undefined | null): Promise<Array<JsKvEntry>>
-  kvDrop(actorId: string): Promise<void>
-  restoreHibernatingRequests(actorId: string, requests: Array<HibernatingRequestEntry>): void
-  sendHibernatableWebSocketMessageAck(gatewayId: Buffer, requestId: Buffer, clientMessageIndex: number): void
-  /** Send a message on an open WebSocket connection identified by messageIdHex. */
-  sendWsMessage(gatewayId: Buffer, requestId: Buffer, data: Buffer, binary: boolean): Promise<void>
-  /** Close an open WebSocket connection. */
-  closeWebsocket(gatewayId: Buffer, requestId: Buffer, code?: number | undefined | null, reason?: string | undefined | null): Promise<void>
-  startServerless(payload: Buffer): Promise<void>
-  respondCallback(responseId: string, data: any): Promise<void>
 }
 export declare class Kv {
   get(key: Buffer): Promise<Buffer | null>
@@ -310,14 +259,8 @@ export declare class Schedule {
   after(durationMs: number, actionName: string, args: Buffer): void
   at(timestampMs: number, actionName: string, args: Buffer): void
 }
-export declare class SqliteDb {
-  exec(sql: string): Promise<QueryResult>
-  run(sql: string, params?: Array<JsBindParam> | undefined | null): Promise<ExecuteResult>
-  query(sql: string, params?: Array<JsBindParam> | undefined | null): Promise<QueryResult>
-  close(): Promise<void>
-}
 export declare class WebSocket {
   send(data: Buffer, binary: boolean): void
-  close(code?: number | undefined | null, reason?: string | undefined | null): void
+  close(code?: number | undefined | null, reason?: string | undefined | null): Promise<void>
   setEventCallback(callback: (...args: any[]) => any): void
 }

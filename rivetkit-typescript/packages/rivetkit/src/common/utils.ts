@@ -215,7 +215,10 @@ function isCanonicalStructuredRivetError(
 	);
 }
 
-/** Deconstructs error in to components that are used to build responses. */
+/**
+ * Deconstructs errors into response fields. Bridge callback errors that cross
+ * into rivetkit-core are sanitized there; this only classifies JS-local errors.
+ */
 export function deconstructError(
 	error: unknown,
 	logger: Logger,

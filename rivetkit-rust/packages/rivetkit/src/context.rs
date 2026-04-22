@@ -1,12 +1,13 @@
 use std::future::Future;
 use std::io::Cursor;
 use std::marker::PhantomData;
+use std::sync::{Arc, OnceLock};
 
 use anyhow::{Context, Result};
 use rivetkit_client::{Client, ClientConfig, EncodingKind, TransportKind};
 use rivetkit_core::{
-	ActorContext, ActorKey, ConnHandle, ConnId, Kv, Queue, Schedule, SqliteDb, StateDelta,
-	actor::connection::ConnHandles,
+	ActorContext, ActorKey, ConnHandle, ConnId, Kv, RequestSaveOpts, SqliteDb, StateDelta,
+	actor::connection::ConnHandles, error::ActorRuntime,
 };
 use serde::{Serialize, de::DeserializeOwned};
 
@@ -15,13 +16,19 @@ use crate::actor::Actor;
 #[derive(Debug)]
 pub struct Ctx<A: Actor> {
 	inner: ActorContext,
+	client: Arc<OnceLock<Client>>,
 	_p: PhantomData<fn() -> A>,
+}
+
+pub struct Schedule<'a> {
+	inner: &'a ActorContext,
 }
 
 impl<A: Actor> Clone for Ctx<A> {
 	fn clone(&self) -> Self {
 		Self {
 			inner: self.inner.clone(),
+			client: self.client.clone(),
 			_p: PhantomData,
 		}
 	}
@@ -31,6 +38,7 @@ impl<A: Actor> Ctx<A> {
 	pub fn new(inner: ActorContext) -> Self {
 		Self {
 			inner,
+			client: Arc::new(OnceLock::new()),
 			_p: PhantomData,
 		}
 	}
@@ -59,20 +67,16 @@ impl<A: Actor> Ctx<A> {
 		self.inner.sql()
 	}
 
-	pub fn queue(&self) -> &Queue {
+	pub fn queue(&self) -> &ActorContext {
 		self.inner.queue()
 	}
 
-	pub fn schedule(&self) -> &Schedule {
-		self.inner.schedule()
+	pub fn schedule(&self) -> Schedule<'_> {
+		Schedule { inner: &self.inner }
 	}
 
-	pub fn request_save(&self, immediate: bool) {
-		self.inner.request_save(immediate);
-	}
-
-	pub fn request_save_within(&self, ms: u32) {
-		self.inner.request_save_within(ms);
+	pub fn request_save(&self, opts: RequestSaveOpts) {
+		self.inner.request_save(opts);
 	}
 
 	pub async fn save_state(&self, deltas: Vec<StateDelta>) -> Result<()> {
@@ -134,15 +138,47 @@ impl<A: Actor> Ctx<A> {
 	}
 
 	pub fn client(&self) -> Result<Client> {
-		Ok(Client::from_config(
-			ClientConfig::new(self.inner.client_endpoint()?)
-				.token_opt(self.inner.client_token()?)
-				.namespace(self.inner.client_namespace()?)
-				.pool_name(self.inner.client_pool_name()?)
+		if let Some(client) = self.client.get() {
+			return Ok(client.clone());
+		}
+
+		let endpoint = self.inner.client_endpoint().ok_or_else(|| {
+			ActorRuntime::NotConfigured {
+				component: "actor client endpoint".to_owned(),
+			}
+			.build()
+		})?;
+		let namespace = self.inner.client_namespace().ok_or_else(|| {
+			ActorRuntime::NotConfigured {
+				component: "actor client namespace".to_owned(),
+			}
+			.build()
+		})?;
+		let pool_name = self.inner.client_pool_name().ok_or_else(|| {
+			ActorRuntime::NotConfigured {
+				component: "actor client pool name".to_owned(),
+			}
+			.build()
+		})?;
+		let client = Client::new(
+			ClientConfig::new(endpoint)
+				.token_opt(self.inner.client_token().map(ToOwned::to_owned))
+				.namespace(namespace)
+				.pool_name(pool_name)
 				.encoding(EncodingKind::Bare)
 				.transport(TransportKind::WebSocket)
 				.disable_metadata_lookup(true),
-		))
+		);
+
+		match self.client.set(client) {
+			Ok(()) => self.client.get().cloned().ok_or_else(|| {
+				ActorRuntime::NotConfigured {
+					component: "actor client cache".to_owned(),
+				}
+				.build()
+			}),
+			Err(client) => Ok(self.client.get().cloned().unwrap_or(client)),
+		}
 	}
 
 	pub fn inner(&self) -> &ActorContext {
@@ -151,6 +187,16 @@ impl<A: Actor> Ctx<A> {
 
 	pub fn into_inner(self) -> ActorContext {
 		self.inner
+	}
+}
+
+impl Schedule<'_> {
+	pub fn after(&self, duration: std::time::Duration, action_name: &str, args: &[u8]) {
+		self.inner.after(duration, action_name, args);
+	}
+
+	pub fn at(&self, timestamp_ms: i64, action_name: &str, args: &[u8]) {
+		self.inner.at(timestamp_ms, action_name, args);
 	}
 }
 

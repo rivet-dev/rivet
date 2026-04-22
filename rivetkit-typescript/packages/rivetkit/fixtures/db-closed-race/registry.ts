@@ -67,7 +67,6 @@ export const dbClosedRaceActor = actor({
 	},
 	options: {
 		sleepTimeout: 60_000,
-		runStopTimeout: 500,
 	},
 });
 

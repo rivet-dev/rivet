@@ -30,6 +30,7 @@ pub enum ToActor {
 	Lost,
 	SetAlarm {
 		alarm_ts: Option<i64>,
+		ack_tx: Option<oneshot::Sender<()>>,
 	},
 	ReqStart {
 		message_id: protocol::MessageId,
@@ -311,11 +312,14 @@ async fn actor_inner(
 							StopProgress::Pending(stop) => pending_stop = Some(stop),
 						}
 					}
-					ToActor::SetAlarm { alarm_ts } => {
+					ToActor::SetAlarm { alarm_ts, ack_tx } => {
 						send_event(
 							&mut ctx,
 							protocol::Event::EventActorSetAlarm(protocol::EventActorSetAlarm { alarm_ts }),
 						);
+						if let Some(ack_tx) = ack_tx {
+							let _ = ack_tx.send(());
+						}
 					}
 					ToActor::ReqStart { message_id, req } => {
 						handle_req_start(&mut ctx, &handle, &mut http_request_tasks, message_id, req);
@@ -400,7 +404,7 @@ async fn begin_stop(
 			handle.clone(),
 			ctx.actor_id.clone(),
 			ctx.generation,
-			reason,
+			reason.clone(),
 			crate::config::ActorStopHandle::new(stop_tx),
 		)
 		.await;
@@ -439,7 +443,12 @@ fn finalize_stop(
 ) {
 	match stop_result {
 		Ok(stop_result) => {
-			send_stopped_event_for_result(ctx, pending.stop_code, pending.stop_message, stop_result);
+			send_stopped_event_for_result(
+				ctx,
+				pending.stop_code,
+				pending.stop_message,
+				stop_result,
+			);
 		}
 		Err(error) => {
 			tracing::warn!(
@@ -639,9 +648,10 @@ fn spawn_ws_outgoing_task(
 								request_id,
 								message_index: idx,
 							},
-							message_kind: protocol::ToRivetTunnelMessageKind::ToRivetWebSocketMessage(
-								protocol::ToRivetWebSocketMessage { data, binary },
-							),
+							message_kind:
+								protocol::ToRivetTunnelMessageKind::ToRivetWebSocketMessage(
+									protocol::ToRivetWebSocketMessage { data, binary },
+								),
 						}),
 					)
 					.await;
@@ -734,8 +744,7 @@ async fn handle_ws_open(
 			)),
 		}
 	} else {
-		ctx
-			.shared
+		ctx.shared
 			.config
 			.callbacks
 			.websocket(
@@ -1321,10 +1330,7 @@ mod tests {
 			}
 		}
 
-		fn completing(
-			fetch_started_tx: oneshot::Sender<()>,
-			release_fetch: Arc<Notify>,
-		) -> Self {
+		fn completing(fetch_started_tx: oneshot::Sender<()>, release_fetch: Arc<Notify>) -> Self {
 			Self {
 				fetch_started_tx: Mutex::new(Some(fetch_started_tx)),
 				fetch_dropped_tx: Mutex::new(None),
@@ -1517,7 +1523,9 @@ mod tests {
 			_is_restoring_hibernatable: bool,
 			_sender: WebSocketSender,
 		) -> BoxFuture<anyhow::Result<WebSocketHandler>> {
-			Box::pin(async { anyhow::bail!("websocket should not be called in deferred stop test") })
+			Box::pin(async {
+				anyhow::bail!("websocket should not be called in deferred stop test")
+			})
 		}
 
 		fn can_hibernate(
@@ -1553,7 +1561,9 @@ mod tests {
 			actors: Arc::new(std::sync::Mutex::new(HashMap::new())),
 			live_tunnel_requests: Arc::new(std::sync::Mutex::new(HashMap::new())),
 			pending_hibernation_restores: Arc::new(std::sync::Mutex::new(HashMap::new())),
-			ws_tx: Arc::new(tokio::sync::Mutex::new(None::<mpsc::UnboundedSender<WsTxMessage>>)),
+			ws_tx: Arc::new(tokio::sync::Mutex::new(
+				None::<mpsc::UnboundedSender<WsTxMessage>>,
+			)),
 			protocol_metadata: Arc::new(tokio::sync::Mutex::new(None)),
 			shutting_down: std::sync::atomic::AtomicBool::new(false),
 		});
@@ -1608,12 +1618,51 @@ mod tests {
 					if events.iter().any(|event| {
 						matches!(
 							event.inner,
-							protocol::Event::EventActorStateUpdate(protocol::EventActorStateUpdate {
-								state: protocol::ActorState::ActorStateStopped(_),
-							})
+							protocol::Event::EventActorStateUpdate(
+								protocol::EventActorStateUpdate {
+									state: protocol::ActorState::ActorStateStopped(_),
+								}
+							)
 						)
 					}) {
 						return;
+					}
+				}
+			}
+		})
+		.await
+		.expect("timed out waiting for stopped event");
+	}
+
+	async fn assert_alarm_before_stopped_event(
+		envoy_rx: &mut mpsc::UnboundedReceiver<ToEnvoyMessage>,
+		expected_alarm_ts: Option<i64>,
+	) {
+		tokio::time::timeout(Duration::from_secs(2), async {
+			let mut saw_alarm = false;
+			loop {
+				let Some(msg) = envoy_rx.recv().await else {
+					panic!("envoy channel closed before stopped event");
+				};
+
+				if let ToEnvoyMessage::SendEvents { events } = msg {
+					for event in events {
+						match event.inner {
+							protocol::Event::EventActorSetAlarm(alarm) => {
+								if alarm.alarm_ts == expected_alarm_ts {
+									saw_alarm = true;
+								}
+							}
+							protocol::Event::EventActorStateUpdate(
+								protocol::EventActorStateUpdate {
+									state: protocol::ActorState::ActorStateStopped(_),
+								},
+							) => {
+								assert!(saw_alarm, "stopped event arrived before alarm update");
+								return;
+							}
+							_ => {}
+						}
 					}
 				}
 			}
@@ -1633,9 +1682,11 @@ mod tests {
 					if events.iter().any(|event| {
 						matches!(
 							event.inner,
-							protocol::Event::EventActorStateUpdate(protocol::EventActorStateUpdate {
-								state: protocol::ActorState::ActorStateStopped(_),
-							})
+							protocol::Event::EventActorStateUpdate(
+								protocol::EventActorStateUpdate {
+									state: protocol::ActorState::ActorStateStopped(_),
+								}
+							)
 						)
 					}) {
 						panic!("received stopped event before teardown completion");
@@ -1645,7 +1696,10 @@ mod tests {
 		})
 		.await;
 
-		assert!(result.is_err(), "stopped event arrived before teardown completion");
+		assert!(
+			result.is_err(),
+			"stopped event arrived before teardown completion"
+		);
 	}
 
 	#[tokio::test]
@@ -1771,6 +1825,53 @@ mod tests {
 
 		assert!(stop_handle.complete(), "stop handle should complete once");
 		wait_for_stopped_event(&mut envoy_rx).await;
+	}
+
+	#[tokio::test]
+	async fn actor_stop_flushes_acknowledged_alarm_before_completion() {
+		let (stop_handle_tx, stop_handle_rx) = oneshot::channel();
+		let callbacks = Arc::new(DeferredStopCallbacks {
+			stop_handle_tx: Mutex::new(Some(stop_handle_tx)),
+		});
+		let (shared, mut envoy_rx) = build_shared_context(callbacks);
+		let (actor_tx, _active_http_request_count) = create_actor(
+			shared,
+			"actor-4".to_string(),
+			1,
+			actor_config(),
+			Vec::new(),
+			None,
+			0,
+			None,
+		);
+
+		actor_tx
+			.send(ToActor::Stop {
+				command_idx: 1,
+				reason: protocol::StopActorReason::StopIntent,
+			})
+			.expect("failed to send stop");
+
+		let stop_handle = tokio::time::timeout(Duration::from_secs(2), stop_handle_rx)
+			.await
+			.expect("timed out waiting for stop handle")
+			.expect("stop handle sender dropped");
+
+		let (alarm_ack_tx, alarm_ack_rx) = oneshot::channel();
+		actor_tx
+			.send(ToActor::SetAlarm {
+				alarm_ts: Some(123),
+				ack_tx: Some(alarm_ack_tx),
+			})
+			.expect("failed to send alarm");
+
+		tokio::time::timeout(Duration::from_secs(2), alarm_ack_rx)
+			.await
+			.expect("timed out waiting for alarm ack")
+			.expect("alarm ack sender dropped");
+
+		assert!(stop_handle.complete(), "stop handle should complete once");
+		assert_alarm_before_stopped_event(&mut envoy_rx, Some(123)).await;
 	}
 
 	#[tokio::test]

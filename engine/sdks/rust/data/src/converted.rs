@@ -3,6 +3,7 @@ use gas::prelude::*;
 
 use crate::generated::*;
 
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RunnerAllocIdxKeyData {
 	pub workflow_id: Id,
 	pub remaining_slots: u32,
@@ -60,6 +61,7 @@ impl TryFrom<MetadataKeyData> for pegboard_runner_metadata_v1::Data {
 	}
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ActorByKeyKeyData {
 	pub workflow_id: Id,
 	pub is_destroyed: bool,
@@ -87,6 +89,7 @@ impl TryFrom<ActorByKeyKeyData> for pegboard_namespace_actor_by_key_v1::Data {
 	}
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RunnerByKeyKeyData {
 	pub runner_id: Id,
 	pub workflow_id: Id,

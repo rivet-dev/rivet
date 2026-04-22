@@ -23,11 +23,7 @@ impl InspectorAuth {
 		Self
 	}
 
-	pub async fn verify(
-		&self,
-		ctx: &ActorContext,
-		bearer_token: Option<&str>,
-	) -> Result<()> {
+	pub async fn verify(&self, ctx: &ActorContext, bearer_token: Option<&str>) -> Result<()> {
 		let Some(bearer_token) = bearer_token.filter(|token| !token.is_empty()) else {
 			return Err(InspectorUnauthorized.build());
 		};

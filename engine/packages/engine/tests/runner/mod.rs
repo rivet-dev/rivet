@@ -14,6 +14,7 @@ pub mod api_actors_list_names;
 pub mod api_namespaces_create;
 pub mod api_namespaces_list;
 pub mod api_runner_configs_list;
+pub mod api_runner_configs_refresh_metadata;
 pub mod api_runner_configs_upsert;
 pub mod api_runners_list;
 pub mod api_runners_list_names;
