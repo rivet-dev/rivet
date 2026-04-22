@@ -1,8 +1,9 @@
-use anyhow::*;
+use anyhow::{Result, ensure};
 use axum::body::Bytes;
-use epoxy_protocol::{PROTOCOL_VERSION, protocol};
+use epoxy_protocol::{protocol, versioned};
 use rivet_api_builder::prelude::*;
 use std::time::Instant;
+use vbare::OwnedVersionedData;
 
 use crate::metrics;
 
@@ -23,8 +24,7 @@ pub fn mount_routes(
 }
 
 pub async fn message(ctx: ApiCtx, path: ProtocolPath, _query: (), body: Bytes) -> Result<Vec<u8>> {
-	assert_protocol_version(path.version)?;
-	let request = deserialize_request(&body)?;
+	let request = versioned::Request::deserialize_version(&body, path.version)?.unwrap_latest()?;
 	ensure!(
 		!matches!(request.kind, protocol::RequestKind::ChangelogReadRequest(_)),
 		"use /epoxy/changelog-read for changelog reads"
@@ -39,8 +39,7 @@ pub async fn changelog_read(
 	_query: (),
 	body: Bytes,
 ) -> Result<Vec<u8>> {
-	assert_protocol_version(path.version)?;
-	let request = deserialize_request(&body)?;
+	let request = versioned::Request::deserialize_version(&body, path.version)?.unwrap_latest()?;
 	ensure!(
 		matches!(request.kind, protocol::RequestKind::ChangelogReadRequest(_)),
 		"/epoxy/changelog-read only accepts changelog read requests"
@@ -49,22 +48,11 @@ pub async fn changelog_read(
 	handle_request(ctx, request).await
 }
 
-fn assert_protocol_version(version: u16) -> Result<()> {
-	ensure!(
-		version == PROTOCOL_VERSION,
-		"unsupported epoxy protocol version: {version}"
-	);
-	Ok(())
-}
-
-fn deserialize_request(body: &[u8]) -> Result<protocol::Request> {
-	serde_bare::from_slice(body).map_err(Into::into)
-}
-
 fn request_kind_label(kind: &protocol::RequestKind) -> &'static str {
 	match kind {
 		protocol::RequestKind::UpdateConfigRequest(_) => "update_config",
 		protocol::RequestKind::PrepareRequest(_) => "prepare",
+		protocol::RequestKind::PreAcceptRequest(_) => "pre_accept",
 		protocol::RequestKind::AcceptRequest(_) => "accept",
 		protocol::RequestKind::CommitRequest(_) => "commit",
 		protocol::RequestKind::ChangelogReadRequest(_) => "changelog_read",

@@ -183,6 +183,7 @@ impl<'de> TupleUnpack<'de> for KvBallotKey {
 	}
 }
 
+/// Deprecated. Use KvAccepted2Key.
 #[derive(Debug, Clone)]
 pub struct KvAcceptedKey {
 	key: Vec<u8>,
@@ -232,6 +233,61 @@ impl<'de> TupleUnpack<'de> for KvAcceptedKey {
 		}
 
 		let v = KvAcceptedKey { key };
+
+		Ok((input, v))
+	}
+}
+
+#[derive(Debug, Clone)]
+pub struct KvAccepted2Key {
+	key: Vec<u8>,
+}
+
+impl KvAccepted2Key {
+	pub fn new(key: Vec<u8>) -> Self {
+		Self { key }
+	}
+
+	pub fn key(&self) -> &[u8] {
+		&self.key
+	}
+}
+
+impl FormalKey for KvAccepted2Key {
+	type Value = protocol::AcceptedValue;
+
+	fn deserialize(&self, raw: &[u8]) -> Result<Self::Value> {
+		versioned::AcceptedValue::deserialize_with_embedded_version(raw)
+	}
+
+	fn serialize(&self, value: Self::Value) -> Result<Vec<u8>> {
+		versioned::AcceptedValue::wrap_latest(value)
+			.serialize_with_embedded_version(PROTOCOL_VERSION)
+	}
+}
+
+impl TuplePack for KvAccepted2Key {
+	fn pack<W: std::io::Write>(
+		&self,
+		w: &mut W,
+		tuple_depth: TupleDepth,
+	) -> std::io::Result<VersionstampOffset> {
+		let t = (KV, &self.key, ACCEPTED2);
+		t.pack(w, tuple_depth)
+	}
+}
+
+impl<'de> TupleUnpack<'de> for KvAccepted2Key {
+	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
+		let (input, (root, key, leaf)) = <(usize, Vec<u8>, usize)>::unpack(input, tuple_depth)?;
+		if root != KV {
+			return Err(PackError::Message("expected KV root".into()));
+		}
+		if leaf != ACCEPTED2 {
+			return Err(PackError::Message("expected ACCEPTED2 leaf".into()));
+		}
+
+		let v = KvAccepted2Key { key };
 
 		Ok((input, v))
 	}

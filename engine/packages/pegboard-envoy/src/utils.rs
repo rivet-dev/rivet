@@ -17,54 +17,55 @@ impl UrlData {
 		let protocol_version = url
 			.query_pairs()
 			.find_map(|(n, v)| (n == "protocol_version").then_some(v))
-			.context("missing `protocol_version` query parameter")?
+			.ok_or_else(|| {
+				WsError::InvalidRequest("missing `protocol_version` query parameter").build()
+			})?
 			.parse::<u16>()
-			.context("invalid `protocol_version` query parameter")?;
+			.context(
+				WsError::InvalidRequest("invalid `protocol_version` query parameter").build(),
+			)?;
 
 		// Read namespace from query parameters
 		let namespace = url
 			.query_pairs()
 			.find_map(|(n, v)| (n == "namespace").then_some(v))
-			.context("missing `namespace` query parameter")?
+			.ok_or_else(|| WsError::InvalidRequest("missing `namespace` query parameter").build())?
 			.to_string();
 
 		// Read envoy pool name from query parameters
 		let pool_name = url
 			.query_pairs()
 			.find_map(|(n, v)| (n == "pool_name").then_some(v))
-			.context("missing `pool_name` query parameter")?
+			.ok_or_else(|| WsError::InvalidRequest("missing `pool_name` query parameter").build())?
 			.to_string();
 
 		if pool_name.len() > 128 {
-			return Err(
-				WsError::InvalidInitialPacket("`pool_name` parameter too long (> 128)").build(),
-			);
+			return Err(WsError::InvalidRequest("`pool_name` parameter too long (> 128)").build());
 		}
 
 		// Read envoy key from query parameters
 		let envoy_key = url
 			.query_pairs()
 			.find_map(|(n, v)| (n == "envoy_key").then_some(v))
-			.context("missing `envoy_key` query parameter")?
+			.ok_or_else(|| WsError::InvalidRequest("missing `envoy_key` query parameter").build())?
 			.to_string();
 
 		if envoy_key.len() < 3 {
-			return Err(
-				WsError::InvalidInitialPacket("`envoy_key` parameter too short (< 3)").build(),
-			);
+			return Err(WsError::InvalidRequest("`envoy_key` parameter too short (< 3)").build());
 		}
 		if envoy_key.len() > 128 {
-			return Err(
-				WsError::InvalidInitialPacket("`envoy_key` parameter too long (> 128)").build(),
-			);
+			return Err(WsError::InvalidRequest("`envoy_key` parameter too long (> 128)").build());
+		}
+		if !util::check::ident_with_len(&envoy_key, true, 128) {
+			return Err(WsError::InvalidRequest("`envoy_key` parameter invalid").build());
 		}
 
 		let version = url
 			.query_pairs()
 			.find_map(|(n, v)| (n == "version").then_some(v))
-			.context("missing `version` query parameter")?
+			.ok_or_else(|| WsError::InvalidRequest("missing `version` query parameter").build())?
 			.parse::<u32>()
-			.context("invalid `version` query parameter")?;
+			.context(WsError::InvalidRequest("invalid `version` query parameter").build())?;
 
 		Ok(UrlData {
 			protocol_version,

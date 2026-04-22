@@ -6,7 +6,8 @@ pub async fn start(config: rivet_config::Config, pools: rivet_pools::Pools) -> R
 	let reg = pegboard::registry()?
 		.merge(namespace::registry()?)?
 		.merge(epoxy::registry()?)?
-		.merge(gasoline_runtime::registry()?)?;
+		.merge(gasoline_runtime::registry()?)?
+		.merge(datacenter::registry()?)?;
 
 	let db = db::DatabaseKv::new(config.clone(), pools.clone()).await?;
 	let worker = Worker::new(reg.handle(), db, config, pools);

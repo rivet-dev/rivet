@@ -8,7 +8,7 @@ use std::sync::Arc;
 use std::sync::Once;
 
 use napi_derive::napi;
-use rivet_envoy_client::config::EnvoyConfig;
+use rivet_envoy_client::config::{ActorName, EnvoyConfig};
 use rivet_envoy_client::envoy::start_envoy_sync;
 use tokio::runtime::Runtime;
 
@@ -32,7 +32,7 @@ fn init_tracing(log_level: Option<&str>) {
 	});
 }
 
-use crate::bridge_actor::{BridgeCallbacks, ResponseMap, WsSenderMap};
+use crate::bridge_actor::{BridgeCallbacks, CanHibernateResponseMap, ResponseMap, WsSenderMap};
 use crate::envoy_handle::JsEnvoyHandle;
 use crate::types::JsEnvoyConfig;
 
@@ -53,6 +53,8 @@ pub fn start_envoy_sync_js(
 
 	let response_map: ResponseMap = Arc::new(tokio::sync::Mutex::new(HashMap::new()));
 	let ws_sender_map: WsSenderMap = Arc::new(tokio::sync::Mutex::new(HashMap::new()));
+	let can_hibernate_response_map: CanHibernateResponseMap =
+		Arc::new(tokio::sync::Mutex::new(HashMap::new()));
 
 	// Create threadsafe callback for bridging events to JS
 	let tsfn: bridge_actor::EventCallback = event_callback.create_threadsafe_function(
@@ -68,15 +70,8 @@ pub fn start_envoy_sync_js(
 		tsfn.clone(),
 		response_map.clone(),
 		ws_sender_map.clone(),
+		can_hibernate_response_map.clone(),
 	));
-
-	let metadata: Option<HashMap<String, String>> = config.metadata.and_then(|v| {
-		if let serde_json::Value::Object(map) = v {
-			Some(map.into_iter().map(|(k, v)| (k, v.to_string())).collect())
-		} else {
-			None
-		}
-	});
 
 	let envoy_config = EnvoyConfig {
 		version: config.version,
@@ -84,8 +79,19 @@ pub fn start_envoy_sync_js(
 		token: Some(config.token),
 		namespace: config.namespace,
 		pool_name: config.pool_name,
-		prepopulate_actor_names: HashMap::new(),
-		metadata,
+		prepopulate_actor_names: config
+			.prepopulate_actor_names
+			.into_iter()
+			.map(|(name, data)| {
+				(
+					name,
+					ActorName {
+						metadata: data.metadata,
+					},
+				)
+			})
+			.collect(),
+		metadata: config.metadata,
 		not_global: config.not_global,
 		debug_latency_ms: None,
 		callbacks,
@@ -99,6 +105,7 @@ pub fn start_envoy_sync_js(
 		handle,
 		response_map,
 		ws_sender_map,
+		can_hibernate_response_map,
 	))
 }
 

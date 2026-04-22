@@ -203,7 +203,7 @@ async fn verify_changelog_catch_up(
 		assert!(
 			changelog_entries.contains(&ChangelogEntry {
 				key: key.clone(),
-				value: value.clone(),
+				value: Some(value.clone()),
 				version: 1,
 				mutable: false,
 			}),

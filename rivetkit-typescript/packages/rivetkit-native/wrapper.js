@@ -133,8 +133,9 @@ function startEnvoySync(config) {
 			namespace: config.namespace,
 			poolName: config.poolName,
 			version: config.version,
+			prepopulateActorNames: config.prepopulateActorNames,
 			metadata: config.metadata || null,
-			notGlobal: config.notGlobal,
+			notGlobal: config.notGlobal || false,
 		},
 		(event) => {
 			handleEvent(event, config, wrappedHandle);
@@ -483,14 +484,10 @@ function handleEvent(event, config, wrappedHandle) {
 				if (!handle._wsMap) handle._wsMap = new Map();
 				handle._wsMap.set(wsIdHex, ws);
 
-				const canHibernate = config.hibernatableWebSocket
-					? config.hibernatableWebSocket.canHibernate(
-						event.actorId,
-						gatewayId,
-						requestId,
-						request,
-					)
-					: false;
+				// isHibernatable and isRestoringHibernatable come from Rust (determined by
+				// can_hibernate callback and restore path respectively).
+				const canHibernate = !!event.isHibernatable;
+				const isRestoringHibernatable = !!event.isRestoringHibernatable;
 
 				Promise.resolve(
 					config.websocket(
@@ -503,7 +500,7 @@ function handleEvent(event, config, wrappedHandle) {
 						event.path,
 						event.headers || {},
 						canHibernate,
-						false,
+						isRestoringHibernatable,
 					),
 				).then(() => {
 					ws.dispatchEvent(new Event("open"));
@@ -511,6 +508,44 @@ function handleEvent(event, config, wrappedHandle) {
 					console.error("[wrapper] websocket callback error:", err);
 				});
 			}
+			break;
+		}
+		case "can_hibernate": {
+			console.log(event, "-------------------------------777");
+
+			const messageId = Buffer.from(event.messageId);
+			const gatewayId = messageId.subarray(0, 4);
+			const requestId = messageId.subarray(4, 8);
+
+			const headers = new Headers(event.headers || {});
+			headers.set("Upgrade", "websocket");
+			headers.set("Connection", "Upgrade");
+			const url = `http://actor${event.path}`;
+			const request = new Request(url, {
+				method: "GET",
+				headers,
+			});
+
+			console.log("asdASdoasdoasdosadaspd", config.hibernatableWebSocket);
+			const canHibernate = config.hibernatableWebSocket
+				? config.hibernatableWebSocket.canHibernate(
+					event.actorId,
+					gatewayId,
+					requestId,
+					request,
+				)
+				: false;
+			console.log("asdASdoasdoasdosadaspd", canHibernate, handle._raw);
+
+			if (handle._raw) {
+				Promise.resolve(
+					handle._raw.respondCanHibernate(event.responseId, canHibernate),
+				).catch((err) => {
+					console.error("[wrapper] respondCanHibernate error:", err);
+				});
+			}
+			console.log("---------123");
+
 			break;
 		}
 		case "websocket_message": {

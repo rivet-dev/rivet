@@ -34,7 +34,7 @@ async fn list_inner(ctx: ApiCtx, query: ListQuery) -> Result<ListResponse> {
 	// Fanout to all datacenters
 	let mut runners =
 		fanout_to_datacenters::<ListResponse, _, _, _, _, Vec<rivet_types::runners::Runner>>(
-			ctx.into(),
+			&ctx,
 			"/runners",
 			query.clone(),
 			|ctx, query| async move { rivet_api_peer::runners::list(ctx, (), query).await },
@@ -92,7 +92,7 @@ async fn list_names_inner(ctx: ApiCtx, query: ListNamesQuery) -> Result<ListName
 
 	// Fanout to all datacenters
 	let mut all_names = fanout_to_datacenters::<ListNamesResponse, _, _, _, _, IndexSet<String>>(
-		ctx.into(),
+		&ctx,
 		"/runners/names",
 		query,
 		|ctx, query| async move { rivet_api_peer::runners::list_names(ctx, (), query).await },

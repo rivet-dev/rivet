@@ -23,7 +23,7 @@ impl State {
 /// Runs alongside the connection workflow to process signals. This is required because the connection
 /// workflow cannot listen for signals while in an activity.
 #[workflow]
-pub async fn pegboard_serverless_receiver(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> {
+pub async fn pegboard_serverless_receiver2(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> {
 	ctx.activity(InitStateInput {}).await?;
 
 	let conn_wf_id = ctx

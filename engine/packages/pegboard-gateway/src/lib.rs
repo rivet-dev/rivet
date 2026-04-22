@@ -669,20 +669,24 @@ impl CustomServeTrait for PegboardGateway {
 		if let Err(err) = metrics_res {
 			tracing::error!(?err, "http req ingress metrics failed");
 		} else {
-			if let Err(err) = record_req_metrics(
-				&ctx,
-				self.runner_id,
-				self.actor_id,
-				Metric::HttpEgress(response_size as usize),
-			)
-			.await
-			{
-				tracing::error!(
-					?err,
-					runner_id=?self.runner_id,
-					"http req egress metrics failed, likely corrupt now",
-				);
-			}
+			let runner_id = self.runner_id;
+			let actor_id = self.actor_id;
+			tokio::spawn(async move {
+				if let Err(err) = record_req_metrics(
+					&ctx,
+					runner_id,
+					actor_id,
+					Metric::HttpEgress(response_size as usize),
+				)
+				.await
+				{
+					tracing::error!(
+						?err,
+						?runner_id,
+						"http req egress metrics failed, likely corrupt now",
+					);
+				}
+			});
 		}
 
 		res
@@ -704,16 +708,19 @@ impl CustomServeTrait for PegboardGateway {
 		if let Err(err) = metrics_res {
 			tracing::error!(?err, "ws open metrics failed");
 		} else {
-			if let Err(err) =
-				record_req_metrics(&ctx, self.runner_id, self.actor_id, Metric::WebsocketClose)
-					.await
-			{
-				tracing::error!(
-					?err,
-					runner_id=?self.runner_id,
-					"ws close metrics failed, likely corrupt now",
-				);
-			}
+			let runner_id = self.runner_id;
+			let actor_id = self.actor_id;
+			tokio::spawn(async move {
+				if let Err(err) =
+					record_req_metrics(&ctx, runner_id, actor_id, Metric::WebsocketClose).await
+				{
+					tracing::error!(
+						?err,
+						?runner_id,
+						"ws close metrics failed, likely corrupt now",
+					);
+				}
+			});
 		}
 
 		res

@@ -8,11 +8,18 @@ use hyper::header::HeaderName;
 use rivet_guard_core::{RouteConfig, RouteTarget, RoutingOutput, request_context::RequestContext};
 
 use super::{
-	SEC_WEBSOCKET_PROTOCOL, WS_PROTOCOL_ACTOR, WS_PROTOCOL_TOKEN, X_RIVET_TOKEN,
-	actor_path::ParsedActorPath,
+	SEC_WEBSOCKET_PROTOCOL, WS_PROTOCOL_ACTOR, WS_PROTOCOL_BYPASS_CONNECTABLE, WS_PROTOCOL_TOKEN,
+	X_RIVET_BYPASS_CONNECTABLE, X_RIVET_TOKEN, actor_path::ParsedActorPath,
 };
-use crate::{errors, routing::actor_path::parse_actor_path, shared_state::SharedState};
-use resolve_actor_query::resolve_query_actor_id;
+use crate::{
+	errors,
+	routing::{
+		actor_path::parse_actor_path,
+		pegboard_gateway::resolve_actor_query::ResolveQueryActorResult,
+	},
+	shared_state::SharedState,
+};
+use resolve_actor_query::resolve_query;
 
 const ACTOR_FORCE_WAKE_PENDING_TIMEOUT: i64 = util::duration::seconds(60);
 const ACTOR_READY_TIMEOUT: Duration = Duration::from_secs(10);
@@ -37,15 +44,53 @@ pub async fn route_request_path_based(
 
 	tracing::debug!(?actor_path, "routing using path-based actor routing");
 
-	let resolved_route = resolve_path_based_route(ctx, req_ctx, &actor_path).await?;
+	let (actor_id, token, stripped_path, bypass_connectable) = match actor_path {
+		ParsedActorPath::Direct(path) => (
+			Id::parse(&path.actor_id).context("invalid actor id in path")?,
+			read_gateway_token_for_path_based(req_ctx, path.token.as_deref())?
+				.map(ToOwned::to_owned),
+			path.stripped_path.clone(),
+			// TODO:
+			false,
+		),
+		ParsedActorPath::Query(path) => match resolve_query(ctx, &path.query).await? {
+			ResolveQueryActorResult::Found { actor_id } => (
+				actor_id,
+				read_gateway_token_for_path_based(req_ctx, path.token.as_deref())?
+					.map(ToOwned::to_owned),
+				path.stripped_path.clone(),
+				path.query.bypass_connectable(),
+			),
+			ResolveQueryActorResult::Forward { dc_label } => {
+				let peer_dc = ctx
+					.config()
+					.dc_for_label(dc_label)
+					.ok_or_else(|| rivet_api_util::errors::Datacenter::NotFound.build())?;
+
+				return Ok(Some(RoutingOutput::Route(RouteConfig {
+					targets: vec![RouteTarget {
+						host: peer_dc
+							.proxy_url_host()
+							.context("bad peer dc proxy url host")?
+							.to_string(),
+						port: peer_dc
+							.proxy_url_port()
+							.context("bad peer dc proxy url port")?,
+						path: req_ctx.path().to_owned(),
+					}],
+				})));
+			}
+		},
+	};
 
 	route_request_inner(
 		ctx,
 		shared_state,
 		req_ctx,
-		resolved_route.actor_id,
-		&resolved_route.stripped_path,
-		resolved_route.token.as_deref(),
+		actor_id,
+		&stripped_path,
+		token.as_deref(),
+		bypass_connectable,
 	)
 	.await
 	.map(Some)
@@ -65,7 +110,7 @@ pub async fn route_request(
 	}
 
 	// Extract actor ID and token from WebSocket protocol or HTTP headers
-	let (actor_id_str, token) = if req_ctx.is_websocket() {
+	let (actor_id_str, token, bypass_connectable) = if req_ctx.is_websocket() {
 		// For WebSocket, parse the sec-websocket-protocol header
 		let protocols_header = req_ctx
 			.headers()
@@ -98,7 +143,11 @@ pub async fn route_request(
 			.iter()
 			.find_map(|p| p.strip_prefix(WS_PROTOCOL_TOKEN));
 
-		(actor_id, token)
+		let bypass_connectable = protocols
+			.iter()
+			.any(|p| p == &WS_PROTOCOL_BYPASS_CONNECTABLE);
+
+		(actor_id, token, bypass_connectable)
 	} else {
 		// For HTTP, use headers
 		let actor_id = req_ctx
@@ -121,81 +170,25 @@ pub async fn route_request(
 			.transpose()
 			.context("invalid x-rivet-token header")?;
 
-		(actor_id.to_string(), token)
+		let bypass_connectable = req_ctx.headers().contains_key(X_RIVET_BYPASS_CONNECTABLE);
+
+		(actor_id.to_string(), token, bypass_connectable)
 	};
 
 	// Find actor to route to
 	let actor_id = Id::parse(&actor_id_str).context("invalid x-rivet-actor header")?;
 
-	route_request_inner(ctx, shared_state, req_ctx, actor_id, req_ctx.path(), token)
-		.await
-		.map(Some)
-}
-
-#[derive(Debug)]
-struct ResolvedPathBasedRoute {
-	actor_id: Id,
-	token: Option<String>,
-	stripped_path: String,
-}
-
-async fn resolve_path_based_route(
-	ctx: &StandaloneCtx,
-	req_ctx: &RequestContext,
-	actor_path: &ParsedActorPath,
-) -> Result<ResolvedPathBasedRoute> {
-	match actor_path {
-		ParsedActorPath::Direct(path) => Ok(ResolvedPathBasedRoute {
-			actor_id: Id::parse(&path.actor_id).context("invalid actor id in path")?,
-			token: read_gateway_token_from_request(req_ctx, path.token.as_deref())?
-				.map(ToOwned::to_owned),
-			stripped_path: path.stripped_path.clone(),
-		}),
-		ParsedActorPath::Query(path) => Ok(ResolvedPathBasedRoute {
-			actor_id: resolve_query_actor_id(ctx, &path.query).await?,
-			token: read_gateway_token_from_request(req_ctx, path.token.as_deref())?
-				.map(ToOwned::to_owned),
-			stripped_path: path.stripped_path.clone(),
-		}),
-	}
-}
-
-fn read_gateway_token_from_request<'a>(
-	req_ctx: &'a RequestContext,
-	token_from_path: Option<&'a str>,
-) -> Result<Option<&'a str>> {
-	if let Some(token) = token_from_path {
-		return Ok(Some(token));
-	}
-
-	if req_ctx.is_websocket() {
-		let protocols_header = req_ctx
-			.headers()
-			.get(SEC_WEBSOCKET_PROTOCOL)
-			.and_then(|protocols| protocols.to_str().ok())
-			.ok_or_else(|| {
-				crate::errors::MissingHeader {
-					header: "sec-websocket-protocol".to_string(),
-				}
-				.build()
-			})?;
-
-		let protocols = protocols_header
-			.split(',')
-			.map(|p| p.trim())
-			.collect::<Vec<&str>>();
-
-		Ok(protocols
-			.iter()
-			.find_map(|p| p.strip_prefix(WS_PROTOCOL_TOKEN)))
-	} else {
-		req_ctx
-			.headers()
-			.get(X_RIVET_TOKEN)
-			.map(|x| x.to_str())
-			.transpose()
-			.context("invalid x-rivet-token header")
-	}
+	route_request_inner(
+		ctx,
+		shared_state,
+		req_ctx,
+		actor_id,
+		req_ctx.path(),
+		token,
+		bypass_connectable,
+	)
+	.await
+	.map(Some)
 }
 
 async fn route_request_inner(
@@ -205,6 +198,7 @@ async fn route_request_inner(
 	actor_id: Id,
 	stripped_path: &str,
 	_token: Option<&str>,
+	bypass_connectable: bool,
 ) -> Result<RoutingOutput> {
 	// NOTE: Token validation implemented in EE
 
@@ -215,7 +209,7 @@ async fn route_request_inner(
 		let peer_dc = ctx
 			.config()
 			.dc_for_label(actor_id.label())
-			.context("dc with the given label not found")?;
+			.ok_or_else(|| rivet_api_util::errors::Datacenter::NotFound.build())?;
 
 		return Ok(RoutingOutput::Route(RouteConfig {
 			targets: vec![RouteTarget {
@@ -280,6 +274,7 @@ async fn route_request_inner(
 				actor_id,
 				actor,
 				stripped_path,
+				bypass_connectable,
 				ready_sub2,
 				stopped_sub2,
 				fail_sub2,
@@ -294,6 +289,7 @@ async fn route_request_inner(
 				actor_id,
 				actor,
 				stripped_path,
+				bypass_connectable,
 				ready_sub,
 				stopped_sub,
 				fail_sub,
@@ -316,6 +312,7 @@ async fn handle_actor_v2(
 	actor_id: Id,
 	actor: pegboard::ops::actor::get_for_gateway::Output,
 	stripped_path: &str,
+	bypass_connectable: bool,
 	mut ready_sub: SubscriptionHandle<pegboard::workflows::actor2::Ready>,
 	mut stopped_sub: SubscriptionHandle<pegboard::workflows::actor2::Stopped>,
 	mut fail_sub: SubscriptionHandle<pegboard::workflows::actor2::Failed>,
@@ -331,7 +328,9 @@ async fn handle_actor_v2(
 			.await?;
 	}
 
-	let envoy_key = if let (Some(envoy_key), true) = (actor.envoy_key, actor.connectable) {
+	let envoy_key = if let (Some(envoy_key), true) =
+		(actor.envoy_key, actor.connectable || bypass_connectable)
+	{
 		envoy_key
 	} else {
 		tracing::debug!(?actor_id, "waiting for actor to become ready");
@@ -416,6 +415,7 @@ async fn handle_actor_v1(
 	actor_id: Id,
 	actor: pegboard::ops::actor::get_for_gateway::Output,
 	stripped_path: &str,
+	bypass_connectable: bool,
 	mut ready_sub: SubscriptionHandle<pegboard::workflows::actor::Ready>,
 	mut stopped_sub: SubscriptionHandle<pegboard::workflows::actor::Stopped>,
 	mut fail_sub: SubscriptionHandle<pegboard::workflows::actor::Failed>,
@@ -440,7 +440,9 @@ async fn handle_actor_v1(
 		.await?;
 	}
 
-	let runner_id = if let (Some(runner_id), true) = (actor.runner_id, actor.connectable) {
+	let runner_id = if let (Some(runner_id), true) =
+		(actor.runner_id, actor.connectable || bypass_connectable)
+	{
 		runner_id
 	} else {
 		tracing::debug!(?actor_id, "waiting for actor to become ready");
@@ -502,6 +504,7 @@ async fn handle_actor_v1(
 						actor_id,
 						actor,
 						stripped_path,
+						bypass_connectable,
 						ready_sub2,
 						stopped_sub2,
 						fail_sub2,
@@ -534,6 +537,44 @@ async fn handle_actor_v1(
 	Ok(RoutingOutput::CustomServe(std::sync::Arc::new(gateway)))
 }
 
+fn read_gateway_token_for_path_based<'a>(
+	req_ctx: &'a RequestContext,
+	token_from_path: Option<&'a str>,
+) -> Result<Option<&'a str>> {
+	if let Some(token) = token_from_path {
+		return Ok(Some(token));
+	}
+
+	if req_ctx.is_websocket() {
+		let protocols_header = req_ctx
+			.headers()
+			.get(SEC_WEBSOCKET_PROTOCOL)
+			.and_then(|protocols| protocols.to_str().ok())
+			.ok_or_else(|| {
+				crate::errors::MissingHeader {
+					header: "sec-websocket-protocol".to_string(),
+				}
+				.build()
+			})?;
+
+		let protocols = protocols_header
+			.split(',')
+			.map(|p| p.trim())
+			.collect::<Vec<&str>>();
+
+		Ok(protocols
+			.iter()
+			.find_map(|p| p.strip_prefix(WS_PROTOCOL_TOKEN)))
+	} else {
+		req_ctx
+			.headers()
+			.get(X_RIVET_TOKEN)
+			.map(|x| x.to_str())
+			.transpose()
+			.context("invalid x-rivet-token header")
+	}
+}
+
 /// Waits for initial delay, then periodically checks for runner pool errors.
 ///
 /// Returns `true` if the pool has an active error, `false` otherwise.
@@ -562,7 +603,12 @@ async fn check_runner_pool_error_loop(
 			.await?;
 
 		if let Some(entry) = errors.into_iter().next() {
-			tracing::debug!(?entry.error, "runner pool has active error, failing fast");
+			tracing::warn!(
+				%namespace_id,
+				%runner_name,
+				error = ?entry.error,
+				"runner pool has active error, fast-failing request"
+			);
 			return Ok(true);
 		}
 

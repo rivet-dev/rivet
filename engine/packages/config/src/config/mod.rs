@@ -248,6 +248,7 @@ impl Root {
 		self.dc_label() as u64
 	}
 
+	/// Current datacenter's label.
 	pub fn dc_label(&self) -> u16 {
 		self.topology().datacenter_label
 	}

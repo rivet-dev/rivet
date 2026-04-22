@@ -130,6 +130,10 @@ impl ByVariantKey {
 	) -> ByVariantSubspaceKey {
 		ByVariantSubspaceKey::new_with_variant(namespace_id, variant)
 	}
+
+	pub fn entire_subspace() -> ByVariantSubspaceKey {
+		ByVariantSubspaceKey::entire()
+	}
 }
 
 impl FormalKey for ByVariantKey {
@@ -185,22 +189,29 @@ impl<'de> TupleUnpack<'de> for ByVariantKey {
 }
 
 pub struct ByVariantSubspaceKey {
-	pub namespace_id: Id,
+	pub namespace_id: Option<Id>,
 	pub variant: Option<RunnerConfigVariant>,
 }
 
 impl ByVariantSubspaceKey {
 	pub fn new(namespace_id: Id) -> Self {
 		ByVariantSubspaceKey {
-			namespace_id,
+			namespace_id: Some(namespace_id),
 			variant: None,
 		}
 	}
 
 	pub fn new_with_variant(namespace_id: Id, variant: RunnerConfigVariant) -> Self {
 		ByVariantSubspaceKey {
-			namespace_id,
+			namespace_id: Some(namespace_id),
 			variant: Some(variant),
+		}
+	}
+
+	pub fn entire() -> Self {
+		ByVariantSubspaceKey {
+			namespace_id: None,
+			variant: None,
 		}
 	}
 }
@@ -213,8 +224,12 @@ impl TuplePack for ByVariantSubspaceKey {
 	) -> std::io::Result<VersionstampOffset> {
 		let mut offset = VersionstampOffset::None { size: 0 };
 
-		let t = (RUNNER, CONFIG, BY_VARIANT, self.namespace_id);
+		let t = (RUNNER, CONFIG, BY_VARIANT);
 		offset += t.pack(w, tuple_depth)?;
+
+		if let Some(namespace_id) = self.namespace_id {
+			offset += namespace_id.pack(w, tuple_depth)?;
+		}
 
 		if let Some(variant) = self.variant {
 			offset += (variant as usize).pack(w, tuple_depth)?;

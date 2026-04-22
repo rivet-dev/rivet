@@ -30,16 +30,31 @@ pub enum QueryActorQuery {
 		namespace: String,
 		name: String,
 		key: Vec<String>,
+		bypass_connectable: bool,
 	},
 	GetOrCreate {
 		namespace: String,
 		name: String,
-		runner_name: String,
+		pool_name: String,
 		key: Vec<String>,
 		input: Option<Vec<u8>>,
 		region: Option<String>,
 		crash_policy: Option<CrashPolicy>,
+		bypass_connectable: bool,
 	},
+}
+
+impl QueryActorQuery {
+	pub fn bypass_connectable(&self) -> bool {
+		match self {
+			QueryActorQuery::Get {
+				bypass_connectable, ..
+			}
+			| QueryActorQuery::GetOrCreate {
+				bypass_connectable, ..
+			} => *bypass_connectable,
+		}
+	}
 }
 
 #[derive(Debug, Clone)]
@@ -57,6 +72,8 @@ struct RvtParams {
 	#[serde(default)]
 	runner: Option<String>,
 	#[serde(default)]
+	pool: Option<String>,
+	#[serde(default)]
 	key: Option<String>,
 	#[serde(default)]
 	input: Option<String>,
@@ -66,6 +83,8 @@ struct RvtParams {
 	crash_policy: Option<String>,
 	#[serde(default)]
 	token: Option<String>,
+	#[serde(default)]
+	bypass_connectable: bool,
 }
 
 /// Parse actor routing information from path.
@@ -250,12 +269,14 @@ fn build_actor_query(name: &str, rvt: RvtParams) -> Result<QueryActorQuery> {
 				namespace: rvt.namespace,
 				name: name.to_string(),
 				key,
+				bypass_connectable: rvt.bypass_connectable,
 			})
 		}
 		"getOrCreate" => {
-			let runner_name = rvt
-				.runner
-				.ok_or_else(|| errors::QueryMissingRunnerName.build())?;
+			let pool_name = rvt
+				.pool
+				.or(rvt.runner)
+				.ok_or_else(|| errors::QueryMissingPool.build())?;
 
 			let input = rvt.input.as_deref().map(decode_query_input).transpose()?;
 
@@ -268,11 +289,12 @@ fn build_actor_query(name: &str, rvt: RvtParams) -> Result<QueryActorQuery> {
 			Ok(QueryActorQuery::GetOrCreate {
 				namespace: rvt.namespace,
 				name: name.to_string(),
-				runner_name,
+				pool_name,
 				key,
 				input,
 				region: rvt.region,
 				crash_policy,
+				bypass_connectable: rvt.bypass_connectable,
 			})
 		}
 		other => Err(errors::QueryInvalidParams {

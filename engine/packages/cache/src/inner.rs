@@ -32,11 +32,12 @@ impl CacheInner {
 	) -> Result<Cache, Error> {
 		let ups = pools.ups().ok();
 
-		match &config.cache().driver {
-			Some(rivet_config::config::CacheDriver::InMemory) => {
-				Ok(Self::new_in_memory(10000, ups))
+		if config.cache().enabled {
+			match &config.cache().driver() {
+				rivet_config::config::CacheDriver::InMemory => Ok(Self::new_in_memory(10000, ups)),
 			}
-			None => Ok(Self::new_disabled()),
+		} else {
+			Ok(Self::new_disabled())
 		}
 	}
 

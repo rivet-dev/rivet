@@ -12,7 +12,7 @@ COPY shared/typescript/ ./shared/typescript/
 RUN pnpm install --frozen-lockfile
 RUN mkdir -p rivetkit-openapi rivetkit-asyncapi
 RUN pnpm build --filter=sandbox
-COPY examples/sandbox/public ./examples/sandbox/dist/public
+COPY examples/sandbox/dist/public ./examples/sandbox/dist/public
 
 WORKDIR /app/examples/sandbox
 

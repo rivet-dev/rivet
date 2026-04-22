@@ -1,5 +1,5 @@
 use anyhow::Result;
-use epoxy_protocol::generated::v2::CachingBehavior;
+use epoxy_protocol::protocol::CachingBehavior;
 use futures_util::StreamExt;
 use gas::prelude::*;
 
@@ -13,6 +13,7 @@ pub struct Input {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Output {
+	/// In order of ascending ping to current dc.
 	pub dc_labels: Vec<u16>,
 }
 
@@ -59,7 +60,8 @@ async fn list_runner_config_enabled_dcs_inner(
 	ctx: &OperationCtx,
 	input: &Input,
 ) -> Result<Vec<u16>> {
-	Ok(
+	let (dcs_by_ping_res, enabled_dcs) = tokio::join!(
+		ctx.op(datacenter::ops::list_by_ping::Input {}),
 		futures_util::stream::iter(ctx.config().topology().datacenters.clone())
 			.map(|dc| async move {
 				let runner_config_key = keys::runner_config::GlobalDataKey::new(
@@ -94,6 +96,12 @@ async fn list_runner_config_enabled_dcs_inner(
 			.buffer_unordered(512)
 			.filter_map(std::future::ready)
 			.collect::<Vec<_>>()
-			.await,
-	)
+	);
+
+	// Use the filtered dcs list to make the enabled dcs list filtered
+	Ok(dcs_by_ping_res?
+		.datacenters
+		.into_iter()
+		.filter_map(|dc| enabled_dcs.iter().find(|edc| &&dc.dc_label == edc).copied())
+		.collect())
 }

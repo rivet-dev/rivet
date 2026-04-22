@@ -139,7 +139,10 @@ pub async fn read_config(
 
 #[cfg(test)]
 mod tests {
-	use super::{QuorumType, calculate_fanout_quorum, calculate_quorum};
+	use super::{
+		QuorumType, calculate_fanout_quorum, calculate_quorum, resolve_active_quorum_members,
+	};
+	use epoxy_protocol::protocol::{ClusterConfig, ReplicaConfig, ReplicaId, ReplicaStatus};
 
 	#[test]
 	fn quorum_sizes_match_expected_values_for_small_clusters() {

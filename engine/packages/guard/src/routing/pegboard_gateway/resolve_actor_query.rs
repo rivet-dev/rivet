@@ -12,31 +12,41 @@ use rivet_types::actors::CrashPolicy;
 
 use crate::routing::actor_path::QueryActorQuery;
 
+pub enum ResolveQueryActorResult {
+	Found { actor_id: Id },
+	Forward { dc_label: u16 },
+}
+
 /// Resolve a parsed query gateway path to a concrete actor ID.
 ///
 /// Dispatches to the appropriate resolution strategy based on the query method
 /// (Get or GetOrCreate).
-pub async fn resolve_query_actor_id(ctx: &StandaloneCtx, query: &QueryActorQuery) -> Result<Id> {
+pub async fn resolve_query(
+	ctx: &StandaloneCtx,
+	query: &QueryActorQuery,
+) -> Result<ResolveQueryActorResult> {
 	match query {
 		QueryActorQuery::Get {
 			namespace,
 			name,
 			key,
-		} => resolve_query_get_actor_id(ctx, namespace, name, key).await,
+			..
+		} => resolve_query_get(ctx, namespace, name, key).await,
 		QueryActorQuery::GetOrCreate {
 			namespace,
 			name,
-			runner_name,
+			pool_name,
 			key,
 			input,
 			region,
 			crash_policy,
+			..
 		} => {
-			resolve_query_get_or_create_actor_id(
+			resolve_query_get_or_create(
 				ctx,
 				namespace,
 				name,
-				runner_name,
+				pool_name,
 				key,
 				input.as_deref(),
 				region.as_deref(),
@@ -59,35 +69,49 @@ async fn resolve_namespace_id(ctx: &StandaloneCtx, namespace_name: &str) -> Resu
 }
 
 /// Look up an existing actor by key. Returns `None` if no actor matches.
-async fn get_actor_id_for_key(
+async fn get_actor_for_key(
 	ctx: &StandaloneCtx,
 	namespace_id: Id,
 	name: &str,
 	serialized_key: &str,
-) -> Result<Option<Id>> {
-	let existing = ctx
+	pool_name: Option<&str>,
+) -> Result<Option<ResolveQueryActorResult>> {
+	// Get the reservation ID for this key
+	let res = ctx
 		.op(pegboard::ops::actor::get_for_key::Input {
-			namespace_id,
+			namespace_id: namespace_id,
 			name: name.to_string(),
 			key: serialized_key.to_string(),
+			pool_name: pool_name.map(|x| x.to_string()),
 			fetch_error: true,
 		})
 		.await?;
-	Ok(existing.actor.map(|a| a.actor_id))
+
+	match res {
+		pegboard::ops::actor::get_for_key::Output::Found { actor } => {
+			Ok(Some(ResolveQueryActorResult::Found {
+				actor_id: actor.actor_id,
+			}))
+		}
+		pegboard::ops::actor::get_for_key::Output::NotFound => Ok(None),
+		pegboard::ops::actor::get_for_key::Output::Forward { dc_label } => {
+			Ok(Some(ResolveQueryActorResult::Forward { dc_label }))
+		}
+	}
 }
 
 /// Resolve a "get" query to an existing actor ID. Returns an error if no actor
 /// matches the given key.
-async fn resolve_query_get_actor_id(
+async fn resolve_query_get(
 	ctx: &StandaloneCtx,
 	namespace_name: &str,
 	name: &str,
 	key: &[String],
-) -> Result<Id> {
+) -> Result<ResolveQueryActorResult> {
 	let namespace_id = resolve_namespace_id(ctx, namespace_name).await?;
 	let serialized_key = serialize_actor_key(key)?;
 
-	get_actor_id_for_key(ctx, namespace_id, name, &serialized_key)
+	get_actor_for_key(ctx, namespace_id, name, &serialized_key, None)
 		.await?
 		.ok_or_else(|| pegboard::errors::Actor::NotFound.build())
 }
@@ -95,26 +119,27 @@ async fn resolve_query_get_actor_id(
 /// Resolve a "getOrCreate" query. Tries to find an existing actor by key first,
 /// then creates one if none exists. Handles duplicate-key races by retrying the
 /// lookup after a failed create.
-async fn resolve_query_get_or_create_actor_id(
+async fn resolve_query_get_or_create(
 	ctx: &StandaloneCtx,
 	namespace_name: &str,
 	name: &str,
-	runner_name: &str,
+	pool_name: &str,
 	key: &[String],
 	input: Option<&[u8]>,
 	region: Option<&str>,
 	crash_policy: CrashPolicy,
-) -> Result<Id> {
+) -> Result<ResolveQueryActorResult> {
 	let namespace_id = resolve_namespace_id(ctx, namespace_name).await?;
 	let serialized_key = serialize_actor_key(key)?;
 
-	if let Some(actor_id) = get_actor_id_for_key(ctx, namespace_id, name, &serialized_key).await? {
-		return Ok(actor_id);
+	if let Some(res) =
+		get_actor_for_key(ctx, namespace_id, name, &serialized_key, Some(pool_name)).await?
+	{
+		return Ok(res);
 	}
 
 	let target_dc_label =
-		resolve_query_target_dc_label(ctx, namespace_id, namespace_name, runner_name, region)
-			.await?;
+		resolve_query_target_dc_label(ctx, namespace_id, namespace_name, pool_name, region).await?;
 	let encoded_input = input.map(|input| STANDARD.encode(input));
 
 	if target_dc_label == ctx.config().dc_label() {
@@ -125,7 +150,7 @@ async fn resolve_query_get_or_create_actor_id(
 				namespace_id,
 				name: name.to_string(),
 				key: Some(serialized_key.clone()),
-				runner_name_selector: runner_name.to_string(),
+				runner_name_selector: pool_name.to_string(),
 				crash_policy,
 				input: encoded_input,
 				forward_request: true,
@@ -133,38 +158,20 @@ async fn resolve_query_get_or_create_actor_id(
 			})
 			.await
 		{
-			Ok(res) => Ok(res.actor.actor_id),
+			Ok(res) => Ok(ResolveQueryActorResult::Found {
+				actor_id: res.actor.actor_id,
+			}),
 			Err(err) if is_duplicate_key_error(&err) => {
-				get_actor_id_for_key(ctx, namespace_id, name, &serialized_key)
+				get_actor_for_key(ctx, namespace_id, name, &serialized_key, Some(pool_name))
 					.await?
 					.ok_or_else(|| pegboard::errors::Actor::NotFound.build())
 			}
 			Err(err) => Err(err),
 		}
 	} else {
-		let response = rivet_api_util::request_remote_datacenter::<
-			rivet_api_types::actors::get_or_create::GetOrCreateResponse,
-		>(
-			ctx.config(),
-			target_dc_label,
-			"/actors",
-			rivet_api_util::Method::PUT,
-			Some(&rivet_api_types::actors::get_or_create::GetOrCreateQuery {
-				namespace: namespace_name.to_string(),
-			}),
-			Some(
-				&rivet_api_types::actors::get_or_create::GetOrCreateRequest {
-					datacenter: None,
-					name: name.to_string(),
-					key: serialized_key,
-					input: encoded_input,
-					runner_name_selector: runner_name.to_string(),
-					crash_policy,
-				},
-			),
-		)
-		.await?;
-		Ok(response.actor.actor_id)
+		Ok(ResolveQueryActorResult::Forward {
+			dc_label: target_dc_label,
+		})
 	}
 }
 
@@ -195,6 +202,7 @@ async fn resolve_query_target_dc_label(
 		)
 		.await?;
 
+	// Return nearest enabled dc
 	if let Some(dc_label) = res.dc_labels.into_iter().next() {
 		Ok(dc_label)
 	} else {

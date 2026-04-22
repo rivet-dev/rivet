@@ -6,7 +6,7 @@ use napi_derive::napi;
 use rivet_envoy_client::handle::EnvoyHandle;
 use tokio::runtime::Runtime;
 
-use crate::bridge_actor::{ResponseMap, WsSenderMap};
+use crate::bridge_actor::{CanHibernateResponseMap, ResponseMap, WsSenderMap};
 use crate::types::{self, JsKvEntry, JsKvListOptions};
 
 fn make_ws_key(gateway_id: &[u8], request_id: &[u8]) -> [u8; 8] {
@@ -27,6 +27,7 @@ pub struct JsEnvoyHandle {
 	pub(crate) handle: EnvoyHandle,
 	pub(crate) response_map: ResponseMap,
 	pub(crate) ws_sender_map: WsSenderMap,
+	pub(crate) can_hibernate_response_map: CanHibernateResponseMap,
 }
 
 impl JsEnvoyHandle {
@@ -35,12 +36,14 @@ impl JsEnvoyHandle {
 		handle: EnvoyHandle,
 		response_map: ResponseMap,
 		ws_sender_map: WsSenderMap,
+		can_hibernate_response_map: CanHibernateResponseMap,
 	) -> Self {
 		Self {
 			runtime,
 			handle,
 			response_map,
 			ws_sender_map,
+			can_hibernate_response_map,
 		}
 	}
 }
@@ -363,6 +366,21 @@ impl JsEnvoyHandle {
 	}
 
 	// -- Callback responses --
+
+	#[napi]
+	pub async fn respond_can_hibernate(
+		&self,
+		response_id: String,
+		can_hibernate: bool,
+	) -> napi::Result<()> {
+		let response_id = uuid::Uuid::parse_str(&response_id)
+			.map_err(|e| napi::Error::from_reason(e.to_string()))?;
+		let mut map = self.can_hibernate_response_map.lock().await;
+		if let Some(tx) = map.remove(&response_id) {
+			let _ = tx.send(can_hibernate);
+		}
+		Ok(())
+	}
 
 	#[napi]
 	pub async fn respond_callback(

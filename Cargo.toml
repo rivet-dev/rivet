@@ -13,6 +13,7 @@ members = [
   "engine/packages/cache-result",
   "engine/packages/config",
   "engine/packages/config-schema-gen",
+  "engine/packages/datacenter",
   "engine/packages/engine",
   "engine/packages/env",
   "engine/packages/epoxy",
@@ -383,6 +384,9 @@ members = [
 
     [workspace.dependencies.rivet-config-schema-gen]
     path = "engine/packages/config-schema-gen"
+
+    [workspace.dependencies.datacenter]
+    path = "engine/packages/datacenter"
 
     [workspace.dependencies.rivet-engine]
     path = "engine/packages/engine"

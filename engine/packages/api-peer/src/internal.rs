@@ -1,12 +1,19 @@
 use anyhow::*;
+use base64::Engine;
 use epoxy::{
 	ops::propose::{Command, CommandKind, Proposal, SetCommand},
 	protocol::ReplicaId,
 };
+use futures_util::TryStreamExt;
 use gas::prelude::*;
 use indexmap::IndexMap;
 use rivet_api_builder::ApiCtx;
 use serde::{Deserialize, Serialize};
+use universaldb::{
+	RangeOption,
+	options::StreamingMode,
+	utils::{FormalKey, IsolationLevel::Serializable, keys::CHANGELOG},
+};
 use universalpubsub::PublishOpts;
 
 #[derive(Serialize, Deserialize)]
@@ -177,7 +184,6 @@ pub async fn set_epoxy_state(
 pub struct GetEpoxyReplicaDebugResponse {
 	pub config: epoxy::types::ClusterConfig,
 	pub computed: EpoxyReplicaDebugComputed,
-	pub state: EpoxyReplicaDebugState,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -205,16 +211,9 @@ pub struct EpoxyReplicaCounts {
 	pub joining: usize,
 }
 
-#[derive(Serialize, Deserialize)]
-pub struct EpoxyReplicaDebugState {
-	pub ballot: EpoxyBallot,
-	pub instance_number: u64,
-}
-
 #[derive(Serialize, Deserialize, Clone)]
 pub struct EpoxyBallot {
-	pub epoch: u64,
-	pub ballot: u64,
+	pub counter: u64,
 	pub replica_id: ReplicaId,
 }
 
@@ -283,15 +282,6 @@ pub async fn get_epoxy_replica_debug(
 			quorum_sizes,
 			replica_counts,
 		},
-		state: EpoxyReplicaDebugState {
-			ballot: EpoxyBallot {
-				epoch: 0,
-				ballot: 0,
-				replica_id,
-			},
-			// Epoxy v2 no longer maintains replica-global ballot or instance counters.
-			instance_number: 0,
-		},
 	})
 }
 
@@ -305,34 +295,64 @@ pub struct EpoxyKeyDebugPath {
 pub struct GetEpoxyKeyDebugResponse {
 	pub replica_id: ReplicaId,
 	pub key: String,
-	pub instances: Vec<EpoxyKeyInstance>,
-	pub instances_by_status: IndexMap<String, usize>,
+	pub state: EpoxyKeyState,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
-pub struct EpoxyKeyInstance {
-	pub replica_id: ReplicaId,
-	pub slot_id: u64,
-	pub log_entry: Option<EpoxyKeyLogEntry>,
+pub struct EpoxyKeyState {
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub current_ballot: Option<EpoxyBallot>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub accepted: Option<EpoxyAcceptedValue>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub committed: Option<EpoxyCommittedValue>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub optimistic_cache: Option<EpoxyCachedValue>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub legacy_committed: Option<String>,
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
+	pub changelog: Vec<EpoxyChangelogEntry>,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
-pub struct EpoxyKeyLogEntry {
-	pub status: String,
+pub struct EpoxyCommittedValue {
+	/// Base64-encoded value bytes.
+	pub value: Option<String>,
+	pub version: u64,
+	pub mutable: bool,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct EpoxyAcceptedValue {
+	/// Base64-encoded value bytes.
+	pub value: Option<String>,
 	pub ballot: EpoxyBallot,
-	pub seq: u64,
-	pub deps: Vec<EpoxyInstance>,
+	pub version: u64,
+	pub mutable: bool,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
-pub struct EpoxyInstance {
-	pub replica_id: ReplicaId,
-	pub slot_id: u64,
+pub struct EpoxyCachedValue {
+	/// Base64-encoded value bytes.
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub value: Option<String>,
+	pub version: u64,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct EpoxyChangelogEntry {
+	/// Base64-encoded value bytes.
+	pub value: Option<String>,
+	/// Base64-encoded raw versionstamp bytes.
+	pub versionstamp: String,
+	pub version: u64,
+	pub mutable: bool,
 }
 
 /// Returns debug information for a specific key on this replica.
 ///
-/// Shows all instances that have touched this key and their log entry states.
+/// V2 stores per-key Fast Paxos state rather than an EPaxos-style instance log, so this route
+/// exposes the concrete key state that actually exists in UDB.
 pub async fn get_epoxy_key_debug(
 	ctx: ApiCtx,
 	path: EpoxyKeyDebugPath,
@@ -340,52 +360,15 @@ pub async fn get_epoxy_key_debug(
 ) -> Result<GetEpoxyKeyDebugResponse> {
 	let replica_id = ctx.config().epoxy_replica_id();
 
-	// Decode key from base64
-	let key_bytes = base64::Engine::decode(&base64::engine::general_purpose::STANDARD, &path.key)
+	let key_bytes = base64::engine::general_purpose::STANDARD
+		.decode(&path.key)
 		.context("invalid base64 key")?;
-
-	let local_value = ctx
-		.op(epoxy::ops::kv::get_local::Input {
-			replica_id,
-			key: key_bytes,
-		})
-		.await?;
-
-	let instances = local_value
-		.map(|_| {
-			vec![EpoxyKeyInstance {
-				replica_id,
-				slot_id: 0,
-				log_entry: Some(EpoxyKeyLogEntry {
-					status: "committed".to_string(),
-					ballot: EpoxyBallot {
-						epoch: 0,
-						ballot: 0,
-						replica_id,
-					},
-					seq: 0,
-					deps: Vec::new(),
-				}),
-			}]
-		})
-		.unwrap_or_default();
-
-	// Compute instances by status
-	let mut instances_by_status = IndexMap::new();
-	for instance in &instances {
-		let status = instance
-			.log_entry
-			.as_ref()
-			.map(|e| e.status.clone())
-			.unwrap_or_else(|| "Unknown".to_string());
-		*instances_by_status.entry(status).or_insert(0) += 1;
-	}
+	let state = read_epoxy_key_state(ctx.clone(), replica_id, key_bytes).await?;
 
 	Ok(GetEpoxyKeyDebugResponse {
 		replica_id,
 		key: path.key,
-		instances,
-		instances_by_status,
+		state,
 	})
 }
 
@@ -467,6 +450,125 @@ pub async fn get_epoxy_key_debug_fanout(
 	Ok(GetEpoxyKeyDebugFanoutResponse { replicas, errors })
 }
 
+fn debug_ballot(ballot: epoxy::protocol::Ballot) -> EpoxyBallot {
+	EpoxyBallot {
+		counter: ballot.counter,
+		replica_id: ballot.replica_id,
+	}
+}
+
+async fn read_epoxy_key_state(
+	ctx: ApiCtx,
+	replica_id: ReplicaId,
+	key: Vec<u8>,
+) -> Result<EpoxyKeyState> {
+	ctx.udb()?
+		.run(move |tx| {
+			let key = key.clone();
+			async move {
+				let replica_subspace = epoxy::keys::subspace(replica_id);
+				let legacy_subspace = epoxy::keys::legacy_subspace(replica_id);
+
+				let value_key = epoxy::keys::KvValueKey::new(key.clone());
+				let ballot_key = epoxy::keys::KvBallotKey::new(key.clone());
+				let accepted_key = epoxy::keys::KvAcceptedKey::new(key.clone());
+				let accepted2_key = epoxy::keys::KvAccepted2Key::new(key.clone());
+				let cache_key = epoxy::keys::KvOptimisticCacheKey::new(key.clone());
+				let legacy_value_key = epoxy::keys::LegacyCommittedValueKey::new(key.clone());
+
+				let v2_tx = tx.with_subspace(replica_subspace.clone());
+				let legacy_tx = tx.with_subspace(legacy_subspace);
+
+				let (
+					committed,
+					current_ballot,
+					accepted,
+					accepted2,
+					optimistic_cache,
+					legacy_committed,
+				) = tokio::try_join!(
+					v2_tx.read_opt(&value_key, Serializable),
+					v2_tx.read_opt(&ballot_key, Serializable),
+					v2_tx.read_opt(&accepted_key, Serializable),
+					v2_tx.read_opt(&accepted2_key, Serializable),
+					v2_tx.read_opt(&cache_key, Serializable),
+					legacy_tx.read_opt(&legacy_value_key, Serializable),
+				)?;
+
+				let changelog_subspace = replica_subspace.subspace(&(CHANGELOG,));
+				let mut range: RangeOption<'static> = (&changelog_subspace).into();
+				range.mode = StreamingMode::WantAll;
+
+				let mut changelog = Vec::new();
+				let mut stream = tx.get_ranges_keyvalues(range, Serializable);
+				while let Some(entry) = stream.try_next().await? {
+					let changelog_key =
+						replica_subspace.unpack::<epoxy::keys::ChangelogKey>(entry.key())?;
+					let changelog_entry = changelog_key.deserialize(entry.value())?;
+
+					if changelog_entry.key != key {
+						continue;
+					}
+
+					changelog.push(EpoxyChangelogEntry {
+						value: changelog_entry
+							.value
+							.as_ref()
+							.map(|x| base64::engine::general_purpose::STANDARD.encode(x)),
+						versionstamp: base64::engine::general_purpose::STANDARD
+							.encode(changelog_key.versionstamp().as_bytes()),
+						version: changelog_entry.version,
+						mutable: changelog_entry.mutable,
+					});
+				}
+
+				Ok(EpoxyKeyState {
+					current_ballot: current_ballot.map(debug_ballot),
+					accepted: accepted2
+						.map(|accepted| EpoxyAcceptedValue {
+							value: accepted
+								.value
+								.as_ref()
+								.map(|x| base64::engine::general_purpose::STANDARD.encode(x)),
+							ballot: debug_ballot(accepted.ballot),
+							version: accepted.version,
+							mutable: accepted.mutable,
+						})
+						.or_else(|| {
+							accepted.map(|accepted| EpoxyAcceptedValue {
+								value: Some(
+									base64::engine::general_purpose::STANDARD
+										.encode(accepted.value),
+								),
+								ballot: debug_ballot(accepted.ballot),
+								version: accepted.version,
+								mutable: accepted.mutable,
+							})
+						}),
+					committed: committed.map(|value| EpoxyCommittedValue {
+						value: value
+							.value
+							.as_ref()
+							.map(|x| base64::engine::general_purpose::STANDARD.encode(x)),
+						version: value.version,
+						mutable: value.mutable,
+					}),
+					optimistic_cache: optimistic_cache.map(|value| EpoxyCachedValue {
+						value: value
+							.value
+							.flatten()
+							.map(|value| base64::engine::general_purpose::STANDARD.encode(&value)),
+						version: value.version,
+					}),
+					legacy_committed: legacy_committed
+						.map(|value| base64::engine::general_purpose::STANDARD.encode(&value)),
+					changelog,
+				})
+			}
+		})
+		.await
+}
+
 // MARK: KV get/set
 #[derive(Serialize, Deserialize)]
 pub struct GetEpoxyKvResponse {
@@ -499,7 +601,9 @@ pub async fn get_epoxy_kv_local(
 
 	Ok(GetEpoxyKvResponse {
 		exists: output.is_some(),
-		value: output.map(|v| base64::engine::general_purpose::STANDARD.encode(&v.value)),
+		value: output
+			.and_then(|v| v.value)
+			.map(|v| base64::engine::general_purpose::STANDARD.encode(&v)),
 	})
 }
 

@@ -28,7 +28,6 @@ pub struct Command {
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Hash)]
 pub enum CommandKind {
-	NoopCommand,
 	SetCommand(SetCommand),
 	CheckAndSetCommand(CheckAndSetCommand),
 }
@@ -75,7 +74,7 @@ pub struct Input {
 #[derive(Debug, Clone)]
 struct SetProposal {
 	key: Vec<u8>,
-	value: Vec<u8>,
+	value: Option<Vec<u8>>,
 	mutable: bool,
 }
 
@@ -87,10 +86,7 @@ impl SetProposal {
 
 		let command = &proposal.commands[0];
 		match &command.kind {
-			CommandKind::SetCommand(SetCommand {
-				key,
-				value: Some(value),
-			}) => Ok(Self {
+			CommandKind::SetCommand(SetCommand { key, value }) => Ok(Self {
 				key: key.clone(),
 				value: value.clone(),
 				mutable,
@@ -98,19 +94,24 @@ impl SetProposal {
 			CommandKind::CheckAndSetCommand(CheckAndSetCommand {
 				key,
 				expect_one_of,
-				new_value: Some(value),
-			}) if expect_one_of.len() == 1 && matches!(expect_one_of.first(), Some(None)) => Ok(Self {
-				key: key.clone(),
-				value: value.clone(),
-				mutable,
-			}),
-			_ => bail!(
-				"epoxy v2 only supports single-key set-if-absent proposals with a concrete value"
-			),
+				new_value,
+			}) => {
+				if expect_one_of.len() != 1 || !matches!(expect_one_of.first(), Some(None)) {
+					bail!(
+						"epoxy v2 does not support multiple `expect_one_of` values for `CheckAndSet` or `expect_one_of` values that are not `None`"
+					)
+				}
+
+				Ok(Self {
+					key: key.clone(),
+					value: new_value.clone(),
+					mutable,
+				})
+			}
 		}
 	}
 
-	fn result_for_committed_value(&self, current_value: Vec<u8>) -> ProposalResult {
+	fn result_for_committed_value(&self, current_value: Option<Vec<u8>>) -> ProposalResult {
 		if self.mutable {
 			if current_value == self.value {
 				ProposalResult::Committed
@@ -120,9 +121,7 @@ impl SetProposal {
 		} else if current_value == self.value {
 			ProposalResult::Committed
 		} else {
-			ProposalResult::CommandError(CommandError::ExpectedValueDoesNotMatch {
-				current_value: Some(current_value),
-			})
+			ProposalResult::CommandError(CommandError::ExpectedValueDoesNotMatch { current_value })
 		}
 	}
 }
@@ -133,7 +132,7 @@ enum PreparePhaseOutcome {
 		ballot: protocol::Ballot,
 		value: CommittedValue,
 	},
-	AlreadyCommitted(Vec<u8>),
+	AlreadyCommitted(Option<Vec<u8>>),
 	ConsensusFailed,
 }
 
@@ -142,7 +141,7 @@ enum PrepareRoundOutcome {
 	Promised {
 		accepted_value: Option<(Ballot, CommittedValue)>,
 	},
-	AlreadyCommitted(Vec<u8>),
+	AlreadyCommitted(Option<Vec<u8>>),
 	Retry {
 		next_ballot: Ballot,
 	},
@@ -152,14 +151,14 @@ enum PrepareRoundOutcome {
 #[derive(Debug, PartialEq, Eq)]
 enum AcceptPhaseOutcome {
 	Accepted,
-	AlreadyCommitted(Vec<u8>),
+	AlreadyCommitted(Option<Vec<u8>>),
 	ConsensusFailed,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum AcceptObservation {
 	Ok,
-	AlreadyCommitted(Vec<u8>),
+	AlreadyCommitted(Option<Vec<u8>>),
 	HigherBallot,
 	Failed,
 }
@@ -1008,7 +1007,6 @@ fn prepare_retry_base_delay_ms(retry_count: usize) -> u64 {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use epoxy_protocol::protocol::{ClusterConfig, ReplicaConfig, ReplicaStatus};
 	use rand::{SeedableRng, rngs::StdRng};
 
 	#[test]
@@ -1024,7 +1022,7 @@ mod tests {
 
 		let parsed = SetProposal::from_proposal(&proposal, false).unwrap();
 		assert_eq!(parsed.key, b"key".to_vec());
-		assert_eq!(parsed.value, b"value".to_vec());
+		assert_eq!(parsed.value, Some(b"value".to_vec()));
 		assert!(!parsed.mutable);
 	}
 

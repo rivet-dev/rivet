@@ -1,7 +1,9 @@
 use anyhow::{Context, Result};
 use axum::{body::Body, response::Response};
 use futures_util::StreamExt;
+use gas::prelude::*;
 use rivet_api_builder::{ApiCtx, ErrorResponse, RawErrorResponse, X_RIVET_RAY_ID};
+use rivet_cache::{CacheKey, RawCacheKey};
 use serde::{Serialize, de::DeserializeOwned};
 use std::future::Future;
 
@@ -21,14 +23,14 @@ async fn send_request(
 }
 
 /// Generic function to make raw requests to remote datacenters by label (returns axum Response)
-#[tracing::instrument(skip(ctx, query, body))]
+#[tracing::instrument(skip_all, fields(dc_label, endpoint, method))]
 pub async fn request_remote_datacenter_raw(
-	ctx: &ApiCtx,
+	ctx: &StandaloneCtx,
 	dc_label: u16,
 	endpoint: &str,
 	method: Method,
-	query: Option<&impl Serialize>,
-	body: Option<&impl Serialize>,
+	query: Option<impl Serialize>,
+	body: Option<impl Serialize>,
 ) -> Result<Response> {
 	let dc = ctx
 		.config()
@@ -39,7 +41,7 @@ pub async fn request_remote_datacenter_raw(
 	let mut url = dc.peer_url.join(endpoint)?;
 
 	// NOTE: We don't use reqwest's `.query` because it doesn't support list query parameters
-	if let Some(q) = query {
+	if let Some(q) = &query {
 		url.set_query(Some(&serde_html_form::to_string(q)?));
 	}
 
@@ -48,7 +50,7 @@ pub async fn request_remote_datacenter_raw(
 	let url_string = url.to_string();
 	let mut request = client.request(method, url);
 
-	if let Some(b) = body {
+	if let Some(b) = &body {
 		request = request.json(b);
 	}
 
@@ -57,14 +59,14 @@ pub async fn request_remote_datacenter_raw(
 }
 
 /// Generic function to make requests to a specific datacenter
-#[tracing::instrument(skip(config, query, body))]
+#[tracing::instrument(skip_all, fields(dc_label, endpoint, method))]
 pub async fn request_remote_datacenter<T>(
 	config: &rivet_config::Config,
 	dc_label: u16,
 	endpoint: &str,
 	method: Method,
-	query: Option<&impl Serialize>,
-	body: Option<&impl Serialize>,
+	query: Option<impl Serialize>,
+	body: Option<impl Serialize>,
 ) -> Result<T>
 where
 	T: DeserializeOwned,
@@ -77,7 +79,7 @@ where
 	let mut url = dc.peer_url.join(endpoint)?;
 
 	// NOTE: We don't use reqwest's `.query` because it doesn't support list query parameters
-	if let Some(q) = query {
+	if let Some(q) = &query {
 		url.set_query(Some(&serde_html_form::to_string(q)?));
 	}
 
@@ -86,7 +88,7 @@ where
 	let url_string = url.to_string();
 	let mut request = client.request(method, url);
 
-	if let Some(b) = body {
+	if let Some(b) = &body {
 		request = request.json(b);
 	}
 
@@ -96,21 +98,21 @@ where
 
 /// Generic function to fanout requests to all datacenters and aggregate results
 /// Returns aggregated results and errors only if all requests fail
-#[tracing::instrument(skip(ctx, query, local_handler, aggregator))]
+#[tracing::instrument(skip_all, fields(endpoint))]
 pub async fn fanout_to_datacenters<I, Q, F, Fut, A, R>(
-	ctx: ApiCtx,
+	ctx: &ApiCtx,
 	endpoint: &str,
 	query: Q,
 	local_handler: F,
 	aggregator: A,
 ) -> Result<R>
 where
-	I: DeserializeOwned + Send + 'static,
-	Q: Serialize + Clone + Send + 'static,
-	F: Fn(ApiCtx, Q) -> Fut + Clone + Send + 'static,
+	I: DeserializeOwned + Send,
+	Q: Serialize + Send + Clone,
+	F: for<'a> Fn(ApiCtx, Q) -> Fut + Send,
 	Fut: Future<Output = Result<I>> + Send,
 	A: Fn(u16, I, &mut R),
-	R: Default + Send + 'static,
+	R: Default + Send,
 {
 	let dcs = ctx
 		.config()
@@ -125,7 +127,7 @@ where
 			let ctx = ctx.clone();
 			let query = query.clone();
 			let endpoint = endpoint.to_string();
-			let local_handler = local_handler.clone();
+			let local_handler = &local_handler;
 
 			async move {
 				if dc.datacenter_label == ctx.config().dc_label() {
@@ -141,7 +143,7 @@ where
 							&endpoint,
 							Method::GET,
 							Some(&query),
-							Option::<&()>::None,
+							None::<()>,
 						)
 						.await,
 					)
@@ -229,4 +231,89 @@ pub async fn parse_response<T: DeserializeOwned>(reqwest_response: reqwest::Resp
 			Err(error.into())
 		}
 	}
+}
+
+#[tracing::instrument(skip_all, fields(base_key))]
+pub async fn cache_purge_global(
+	ctx: &StandaloneCtx,
+	base_key: &str,
+	keys: Vec<impl CacheKey>,
+) -> Result<()> {
+	let dcs = ctx
+		.config()
+		.topology()
+		.datacenters
+		.iter()
+		.cloned()
+		.collect::<Vec<_>>();
+	let body = CachePurgeRequest {
+		base_key: base_key.to_string(),
+		keys: keys
+			.into_iter()
+			.map(|key| RawCacheKey::from(key.cache_key()))
+			.collect(),
+	};
+
+	let results = futures_util::stream::iter(dcs)
+		.map(|dc| {
+			let ctx = ctx.clone();
+			let body = &body;
+
+			async move {
+				if dc.datacenter_label == ctx.config().dc_label() {
+					// Local datacenter
+					(
+						dc.datacenter_label,
+						ctx.cache()
+							.clone()
+							.request()
+							.purge(body.base_key.as_str(), body.keys.clone())
+							.await,
+					)
+				} else {
+					// Remote datacenter - HTTP request
+					(
+						dc.datacenter_label,
+						request_remote_datacenter::<()>(
+							ctx.config(),
+							dc.datacenter_label,
+							"/cache/purge",
+							Method::POST,
+							Option::<()>::None,
+							Some(&body),
+						)
+						.await,
+					)
+				}
+			}
+		})
+		.buffer_unordered(16)
+		.collect::<Vec<_>>()
+		.await;
+
+	// Aggregate results
+	let result_count = results.len();
+	let mut errors = Vec::new();
+	for (dc_label, res) in results {
+		if let Err(err) = res {
+			tracing::error!(?dc_label, ?err, "failed to request edge dc");
+			errors.push(err);
+		}
+	}
+
+	// Error only if all requests failed
+	if result_count == errors.len() {
+		if let Some(res) = errors.into_iter().next() {
+			return Err(res).context("all datacenter requests failed");
+		}
+	}
+
+	Ok(())
+}
+
+// TODO: Copied from `api-peer/src/internal.rs`
+#[derive(Serialize, Clone)]
+struct CachePurgeRequest {
+	base_key: String,
+	keys: Vec<rivet_cache::RawCacheKey>,
 }

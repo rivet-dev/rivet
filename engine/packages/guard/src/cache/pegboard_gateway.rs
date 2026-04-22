@@ -113,6 +113,7 @@ pub fn build_cache_key_query_based(info: &QueryActorPathInfo, req_ctx: &RequestC
 			namespace,
 			name,
 			key,
+			..
 		} => {
 			"get".hash(&mut hasher);
 			namespace.hash(&mut hasher);
@@ -122,16 +123,17 @@ pub fn build_cache_key_query_based(info: &QueryActorPathInfo, req_ctx: &RequestC
 		QueryActorQuery::GetOrCreate {
 			namespace,
 			name,
-			runner_name,
+			pool_name,
 			key,
 			input,
 			region,
 			crash_policy,
+			..
 		} => {
 			"getOrCreate".hash(&mut hasher);
 			namespace.hash(&mut hasher);
 			name.hash(&mut hasher);
-			runner_name.hash(&mut hasher);
+			pool_name.hash(&mut hasher);
 			key.hash(&mut hasher);
 			input.hash(&mut hasher);
 			region.hash(&mut hasher);

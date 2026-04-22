@@ -25,7 +25,7 @@ struct RunnerState {
 }
 
 #[workflow]
-pub async fn pegboard_runner_pool(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> {
+pub async fn pegboard_runner_pool2(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> {
 	// Exit before starting sidecar workflows if there is no serverless runner config to manage.
 	if matches!(
 		ctx.v(4)
@@ -103,14 +103,15 @@ pub async fn pegboard_runner_pool(ctx: &mut WorkflowCtx, input: &Input) -> Resul
 						.await?;
 				}
 
+				// These will never both be non-zero
 				let drain_count = state.runners.len().saturating_sub(desired_count);
 				let start_count = desired_count.saturating_sub(state.runners.len());
 
 				// Drain unnecessary runners
 				if drain_count != 0 {
 					// TODO: Implement smart logic of draining runners with the lowest allocated actors
-					let draining_runners =
-						state.runners.iter().take(drain_count).collect::<Vec<_>>();
+					let remaining_runners = state.runners.split_off(drain_count);
+					let draining_runners = std::mem::replace(&mut state.runners, remaining_runners);
 
 					// TODO: Spawn sub wf to process these so this is not blocking the loop
 					for runner in draining_runners {
@@ -120,9 +121,8 @@ pub async fn pegboard_runner_pool(ctx: &mut WorkflowCtx, input: &Input) -> Resul
 							.await?;
 					}
 				}
-
 				// Dispatch new runner workflows
-				if start_count != 0 {
+				else if start_count != 0 {
 					// TODO: Spawn sub wf to process these so this is not blocking the loop
 					for _ in 0..start_count {
 						let receiver_wf_id = ctx
@@ -240,6 +240,14 @@ async fn read_desired(ctx: &ActivityCtx, input: &ReadDesiredInput) -> Result<Rea
 	else {
 		return Ok(ReadDesiredOutput::Stop);
 	};
+
+	// Envoys don't need this workflow
+	if runner_config.protocol_version.is_some() {
+		return Ok(ReadDesiredOutput::Desired {
+			desired_count: 0,
+			details_hash: 0,
+		});
+	}
 
 	let adjusted_desired_slots = if desired_slots < 0 {
 		tracing::error!(

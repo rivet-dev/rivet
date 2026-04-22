@@ -51,12 +51,10 @@ pub async fn reserve_key(
 			})
 			.await?;
 
-		if !target_replicas.contains(&ctx.config().epoxy_replica_id()) {
-			let replica_id = target_replicas
-				.first()
-				.copied()
-				.ok_or_else(|| anyhow::anyhow!("target_replicas is empty"))?;
-			let dc_label = u16::try_from(replica_id)?;
+		if !target_replicas.contains(&ctx.config().epoxy_replica_id())
+			&& let Some(replica_id) = target_replicas.first()
+		{
+			let dc_label = u16::try_from(*replica_id)?;
 
 			return Ok(ReserveKeyOutput::ForwardToDatacenter { dc_label });
 		}

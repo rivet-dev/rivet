@@ -21,7 +21,8 @@ pub struct Input {
 	/// time, or that any scope change is handled as an explicit reconfiguration at a higher
 	/// layer.
 	pub target_replicas: Option<Vec<ReplicaId>>,
-	// Whether or not to write an empty value into cache if it did not exist on read.
+	// Whether or not to write an empty value into cache if it did not exist on read. This short circuits
+	// future get_optimistic calls so they don't fanout.
 	pub save_empty: bool,
 }
 
@@ -64,12 +65,12 @@ pub async fn epoxy_kv_get_optimistic(ctx: &OperationCtx, input: &Input) -> Resul
 		input.caching_behavior == protocol::CachingBehavior::Optimistic,
 	)
 	.await?;
-	if let Some(value) = local_read
-		.value
-		.map(|v| v.value)
-		.or(local_read.cache_value.and_then(|v| v.value))
-	{
-		return Ok(Output { value: Some(value) });
+	if let Some(value) = local_read.value {
+		return Ok(Output { value: value.value });
+	} else if let Some(value) = local_read.cache_value {
+		return Ok(Output {
+			value: value.value.flatten(),
+		});
 	}
 
 	// Request fanout to other datacenters, return first datacenter with any non-none value
@@ -135,9 +136,7 @@ pub async fn epoxy_kv_get_optimistic(ctx: &OperationCtx, input: &Input) -> Resul
 			cache_fanout_value(ctx, input.replica_id, &input.key, &value).await?;
 		}
 
-		return Ok(Output {
-			value: Some(value.value),
-		});
+		return Ok(Output { value: value.value });
 	} else if input.save_empty {
 		cache_empty_value(ctx, input.replica_id, &input.key).await?;
 	}

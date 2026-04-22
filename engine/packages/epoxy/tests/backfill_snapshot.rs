@@ -166,7 +166,7 @@ async fn v1_snapshot_dual_read_mutate_and_backfill() {
 						String::from_utf8_lossy(key),
 					)
 				});
-			assert_eq!(committed.value, expected_value);
+			assert_eq!(committed.value, Some(expected_value.to_vec()));
 			assert_eq!(committed.version, 0);
 			assert!(!committed.mutable);
 		}
@@ -183,7 +183,7 @@ async fn v1_snapshot_dual_read_mutate_and_backfill() {
 			assert!(
 				changelog
 					.iter()
-					.any(|e| e.key == key && e.value == expected_value),
+					.any(|e| e.key == key && e.value.as_deref() == Some(expected_value)),
 				"replica {replica_id}: changelog should contain backfill entry for {:?}",
 				String::from_utf8_lossy(key),
 			);

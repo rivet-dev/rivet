@@ -3658,7 +3658,7 @@ importers:
         version: 12.10.0(@types/react@19.2.13)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       actor-core:
         specifier: ^0.6.3
-        version: 0.6.3(eventsource@3.0.7)(ws@8.19.0)
+        version: 0.6.3(eventsource@3.0.7)(ws@8.18.3)
       autoprefixer:
         specifier: ^10.4.21
         version: 10.4.22(postcss@8.5.6)
@@ -4082,6 +4082,448 @@ importers:
       '@rivet-gg/icons':
         specifier: workspace:*
         version: link:../icons
+
+  platform/api:
+    dependencies:
+      '@clickhouse/client':
+        specifier: ^1.16.0
+        version: 1.18.2
+      '@google-cloud/artifact-registry':
+        specifier: ^4.5.0
+        version: 4.7.0
+      '@google-cloud/billing':
+        specifier: ^5.1.1
+        version: 5.1.1
+      '@google-cloud/logging':
+        specifier: ^11.0.0
+        version: 11.2.1
+      '@google-cloud/pino-logging-gcp-config':
+        specifier: ^1.2.0
+        version: 1.3.3
+      '@google-cloud/resource-manager':
+        specifier: ^6.2.1
+        version: 6.2.1
+      '@google-cloud/run':
+        specifier: ^3.1.0
+        version: 3.2.0
+      '@google-cloud/service-usage':
+        specifier: ^4.2.1
+        version: 4.2.1
+      '@hono/node-server':
+        specifier: ^1.19.1
+        version: 1.19.9(hono@4.11.9)
+      '@hono/otel':
+        specifier: ^0.5.0
+        version: 0.5.0(hono@4.11.9)
+      '@hono/zod-openapi':
+        specifier: ^1.1.0
+        version: 1.1.5(hono@4.11.9)(zod@4.1.12)
+      '@opentelemetry/api':
+        specifier: ^1.9.0
+        version: 1.9.0
+      '@opentelemetry/auto-instrumentations-node':
+        specifier: ^0.64.1
+        version: 0.64.6(@opentelemetry/api@1.9.0)(@opentelemetry/core@2.6.0(@opentelemetry/api@1.9.0))
+      '@opentelemetry/exporter-trace-otlp-http':
+        specifier: ^0.205.0
+        version: 0.205.0(@opentelemetry/api@1.9.0)
+      '@opentelemetry/instrumentation':
+        specifier: ^0.205.0
+        version: 0.205.0(@opentelemetry/api@1.9.0)
+      '@opentelemetry/instrumentation-pg':
+        specifier: ^0.58.0
+        version: 0.58.3(@opentelemetry/api@1.9.0)
+      '@opentelemetry/instrumentation-pino':
+        specifier: ^0.52.0
+        version: 0.52.3(@opentelemetry/api@1.9.0)
+      '@opentelemetry/resources':
+        specifier: ^2.1.0
+        version: 2.6.0(@opentelemetry/api@1.9.0)
+      '@opentelemetry/sdk-metrics':
+        specifier: ^2.1.0
+        version: 2.2.0(@opentelemetry/api@1.9.0)
+      '@opentelemetry/sdk-node':
+        specifier: ^0.205.0
+        version: 0.205.0(@opentelemetry/api@1.9.0)
+      '@opentelemetry/sdk-trace-node':
+        specifier: ^2.1.0
+        version: 2.2.0(@opentelemetry/api@1.9.0)
+      '@opentelemetry/semantic-conventions':
+        specifier: ^1.37.0
+        version: 1.40.0
+      '@react-email/components':
+        specifier: ^0.0.36
+        version: 0.0.36(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      '@react-email/render':
+        specifier: ^1.0.5
+        version: 1.4.0(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      '@react-email/tailwind':
+        specifier: ^2.0.7
+        version: 2.0.7(@react-email/body@0.0.11(react@19.1.0))(@react-email/button@0.0.19(react@19.1.0))(@react-email/code-block@0.0.12(react@19.1.0))(@react-email/code-inline@0.0.5(react@19.1.0))(@react-email/container@0.0.15(react@19.1.0))(@react-email/heading@0.0.15(react@19.1.0))(@react-email/hr@0.0.11(react@19.1.0))(@react-email/img@0.0.11(react@19.1.0))(@react-email/link@0.0.12(react@19.1.0))(@react-email/preview@0.0.12(react@19.1.0))(@react-email/text@0.1.1(react@19.1.0))(react@19.1.0)
+      '@rivet-gg/auth':
+        specifier: workspace:*
+        version: link:../auth
+      '@rivet-gg/db':
+        specifier: workspace:*
+        version: link:../db
+      '@rivetkit/engine-api-full':
+        specifier: workspace:*
+        version: link:../../engine/sdks/typescript/api-full
+      '@rivetkit/sqlite-vfs':
+        specifier: 2.0.4-rc.1
+        version: 2.0.4-rc.1
+      '@sentry/node':
+        specifier: ^10.11.0
+        version: 10.42.0
+      '@sentry/opentelemetry':
+        specifier: ^10.11.0
+        version: 10.42.0(@opentelemetry/api@1.9.0)(@opentelemetry/context-async-hooks@2.6.0(@opentelemetry/api@1.9.0))(@opentelemetry/core@2.6.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.6.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.40.0)
+      '@types/pg':
+        specifier: ^8.15.5
+        version: 8.16.0
+      '@vitest/ui':
+        specifier: ^3.2.4
+        version: 3.2.4(vitest@3.2.4)
+      bcrypt:
+        specifier: ^6.0.0
+        version: 6.0.0
+      better-auth:
+        specifier: ^1.5.6
+        version: 1.6.0(@cloudflare/workers-types@4.20251106.1)(@opentelemetry/api@1.9.0)(drizzle-kit@0.31.6)(drizzle-orm@0.44.6(@cloudflare/workers-types@4.20251106.1)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0))(next@16.1.1(@opentelemetry/api@1.9.0)(@playwright/test@1.57.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)(sass@1.93.2))(pg@8.17.2)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)(vitest@3.2.4)
+      dotenv:
+        specifier: ^17.2.2
+        version: 17.2.3
+      drizzle-orm:
+        specifier: 'catalog:'
+        version: 0.44.6(@cloudflare/workers-types@4.20251106.1)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(better-sqlite3@12.8.0)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0)
+      drizzle-zod:
+        specifier: 'catalog:'
+        version: 0.8.3(drizzle-orm@0.44.6(@cloudflare/workers-types@4.20251106.1)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0))(zod@4.1.12)
+      fern-api:
+        specifier: ^0.71.0
+        version: 0.71.1
+      google-auth-library:
+        specifier: ^10.5.0
+        version: 10.6.2
+      google-gax:
+        specifier: 5.0.6
+        version: 5.0.6
+      hono:
+        specifier: ^4.9.6
+        version: 4.11.9
+      hono-pino:
+        specifier: ^0.10.2
+        version: 0.10.3(hono@4.11.9)(pino@9.9.5)
+      invariant:
+        specifier: ^2.2.4
+        version: 2.2.4
+      p-retry:
+        specifier: ^7.1.1
+        version: 7.1.1
+      pg:
+        specifier: ^8.16.3
+        version: 8.17.2
+      pino:
+        specifier: ^9.9.5
+        version: 9.9.5
+      pino-pretty:
+        specifier: ^13.1.1
+        version: 13.1.1
+      postgres:
+        specifier: ^3.4.7
+        version: 3.4.9
+      react:
+        specifier: 19.1.0
+        version: 19.1.0
+      resend:
+        specifier: ^4.5.2
+        version: 4.8.0(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      rivetkit:
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit
+      stripe:
+        specifier: ^18.5.0
+        version: 18.5.0(@types/node@25.5.2)
+      testcontainers:
+        specifier: ^11.5.1
+        version: 11.13.0
+      ts-pattern:
+        specifier: ^5.8.0
+        version: 5.8.0
+      tsx:
+        specifier: ^4.20.5
+        version: 4.21.0
+      typescript:
+        specifier: ^5.9.2
+        version: 5.9.3
+      vite:
+        specifier: ^7.1.4
+        version: 7.3.1(@types/node@25.5.2)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.4(@types/debug@4.1.12)(@types/node@25.5.2)(@vitest/ui@3.2.4)(less@4.4.1)(lightningcss@1.32.0)(msw@2.12.10(@types/node@25.5.2)(typescript@5.9.3))(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
+      waddler:
+        specifier: ^0.1.1
+        version: 0.1.1(@clickhouse/client@1.18.2)(@cloudflare/workers-types@4.20251106.1)(bun-types@1.3.11)(pg@8.17.2)(postgres@3.4.9)
+      zod:
+        specifier: ^4.1.5
+        version: 4.1.12
+    devDependencies:
+      '@sentry/esbuild-plugin':
+        specifier: ^4.9.0
+        version: 4.9.1
+      '@types/bcrypt':
+        specifier: ^6.0.0
+        version: 6.0.0
+      '@types/invariant':
+        specifier: ^2.2.37
+        version: 2.2.37
+      '@types/react':
+        specifier: ^19
+        version: 19.2.13
+      esbuild:
+        specifier: ^0.25.10
+        version: 0.25.12
+      esbuild-node-externals:
+        specifier: ^1.18.0
+        version: 1.21.0(esbuild@0.25.12)
+      portless:
+        specifier: ^0.10.1
+        version: 0.10.1
+      prompts:
+        specifier: ^2.4.2
+        version: 2.4.2
+
+  platform/auth:
+    dependencies:
+      '@rivet-gg/db':
+        specifier: workspace:*
+        version: link:../db
+      drizzle-orm:
+        specifier: 'catalog:'
+        version: 0.44.6(@cloudflare/workers-types@4.20251106.1)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(better-sqlite3@12.8.0)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0)
+    devDependencies:
+      '@types/node':
+        specifier: ^25.5.0
+        version: 25.5.2
+      esbuild:
+        specifier: ^0.25.10
+        version: 0.25.12
+      glob:
+        specifier: ^11.0.0
+        version: 11.1.0
+      typescript:
+        specifier: ^5.9.2
+        version: 5.9.3
+
+  platform/db:
+    dependencies:
+      drizzle-orm:
+        specifier: 'catalog:'
+        version: 0.44.6(@cloudflare/workers-types@4.20251106.1)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(better-sqlite3@12.8.0)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0)
+      pg:
+        specifier: ^8.16.3
+        version: 8.17.2
+      pino:
+        specifier: ^9.9.5
+        version: 9.9.5
+      zod:
+        specifier: ^4.1.5
+        version: 4.1.12
+    devDependencies:
+      '@types/pg':
+        specifier: ^8.15.5
+        version: 8.16.0
+      drizzle-kit:
+        specifier: ^0.31.4
+        version: 0.31.6
+      esbuild:
+        specifier: ^0.25.10
+        version: 0.25.12
+      glob:
+        specifier: ^11.0.0
+        version: 11.1.0
+      typescript:
+        specifier: ^5.9.2
+        version: 5.9.3
+
+  platform/health-monitor:
+    dependencies:
+      '@hono/node-server':
+        specifier: ^1.19.4
+        version: 1.19.9(hono@4.11.9)
+      '@hono/node-ws':
+        specifier: ^1.2.0
+        version: 1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9)
+      hono:
+        specifier: ^4.7.0
+        version: 4.11.9
+      rivetkit:
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit
+    devDependencies:
+      '@types/node':
+        specifier: ^22.13.9
+        version: 22.19.15
+      tsup:
+        specifier: ^8.5.0
+        version: 8.5.1(@microsoft/api-extractor@7.54.0(@types/node@22.19.15))(@swc/core@1.15.11(@swc/helpers@0.5.17))(jiti@2.6.1)(postcss@8.5.6)(tsx@3.14.0)(typescript@5.9.3)(yaml@2.8.2)
+      tsx:
+        specifier: ^3.12.7
+        version: 3.14.0
+      typescript:
+        specifier: ^5.5.2
+        version: 5.9.3
+
+  platform/registry-proxy:
+    dependencies:
+      '@google-cloud/pino-logging-gcp-config':
+        specifier: ^1.2.0
+        version: 1.3.3
+      '@hono/node-server':
+        specifier: ^1.19.1
+        version: 1.19.9(hono@4.11.9)
+      '@rivet-gg/auth':
+        specifier: workspace:*
+        version: link:../auth
+      '@rivet-gg/db':
+        specifier: workspace:*
+        version: link:../db
+      '@sentry/node':
+        specifier: ^10.11.0
+        version: 10.42.0
+      drizzle-orm:
+        specifier: 'catalog:'
+        version: 0.44.6(@cloudflare/workers-types@4.20251106.1)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(better-sqlite3@12.8.0)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(postgres@3.4.9)(sql.js@1.13.0)
+      google-auth-library:
+        specifier: ^10.5.0
+        version: 10.6.2
+      hono:
+        specifier: ^4.9.6
+        version: 4.11.9
+      hono-pino:
+        specifier: ^0.10.2
+        version: 0.10.3(hono@4.11.9)(pino@9.9.5)
+      lru-cache:
+        specifier: ^11.0.2
+        version: 11.2.6
+      pg:
+        specifier: ^8.16.3
+        version: 8.17.2
+      pino:
+        specifier: ^9.9.5
+        version: 9.9.5
+      pino-pretty:
+        specifier: ^13.1.1
+        version: 13.1.1
+      rivetkit:
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit
+      zod:
+        specifier: ^4.1.5
+        version: 4.1.12
+    devDependencies:
+      '@types/node':
+        specifier: ^22.13.9
+        version: 22.19.15
+      esbuild:
+        specifier: ^0.25.10
+        version: 0.25.12
+      esbuild-node-externals:
+        specifier: ^1.18.0
+        version: 1.21.0(esbuild@0.25.12)
+      tsx:
+        specifier: ^4.20.5
+        version: 4.21.0
+      typescript:
+        specifier: ^5.9.2
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.4(@types/debug@4.1.12)(@types/node@22.19.15)(@vitest/ui@3.2.4)(less@4.4.1)(lightningcss@1.32.0)(msw@2.12.10(@types/node@22.19.15)(typescript@5.9.3))(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
+
+  platform/sdks/typescript/api:
+    dependencies:
+      cross-fetch:
+        specifier: ^4.1.0
+        version: 4.1.0
+      form-data:
+        specifier: ^4.0.0
+        version: 4.0.5
+      js-base64:
+        specifier: ^3.7.5
+        version: 3.7.8
+      node-fetch:
+        specifier: '2'
+        version: 2.7.0
+      pino-pretty:
+        specifier: ^13.1.1
+        version: 13.1.1
+      qs:
+        specifier: ^6.11.2
+        version: 6.14.1
+      readable-stream:
+        specifier: ^4.5.2
+        version: 4.7.0
+      url-join:
+        specifier: ^5.0.0
+        version: 5.0.0
+    devDependencies:
+      '@types/node':
+        specifier: 17.0.33
+        version: 17.0.33
+      '@types/node-fetch':
+        specifier: 2.6.11
+        version: 2.6.11
+      '@types/qs':
+        specifier: 6.9.8
+        version: 6.9.8
+      '@types/readable-stream':
+        specifier: ^4.0.18
+        version: 4.0.21
+      '@types/url-join':
+        specifier: 4.0.1
+        version: 4.0.1
+      tsdown:
+        specifier: ^0.20.1
+        version: 0.20.3(@emnapi/core@1.9.2)(@emnapi/runtime@1.7.1)(typescript@5.8.2)
+      typescript:
+        specifier: 5.8.2
+        version: 5.8.2
+
+  platform/vercel-health-check:
+    dependencies:
+      '@rivetkit/next-js':
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/next-js
+      next:
+        specifier: ^16.1.1
+        version: 16.1.1(@opentelemetry/api@1.9.0)(@playwright/test@1.57.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)(sass@1.93.2)
+      react:
+        specifier: 19.1.0
+        version: 19.1.0
+      react-dom:
+        specifier: 19.1.0
+        version: 19.1.0(react@19.1.0)
+      rivetkit:
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit
+    devDependencies:
+      '@types/node':
+        specifier: ^20
+        version: 20.19.13
+      '@types/react':
+        specifier: ^19
+        version: 19.2.13
+      '@types/react-dom':
+        specifier: ^19
+        version: 19.2.3(@types/react@19.2.13)
+      tsx:
+        specifier: ^4.20.6
+        version: 4.21.0
+      typescript:
+        specifier: ^5
+        version: 5.9.3
 
   rivetkit-swift/examples/hello-world-cli/server:
     dependencies:
@@ -9473,8 +9915,178 @@ packages:
     resolution: {integrity: sha512-5RC9Ze/wTKqSlJvopdCgr+EfyV93+iiH8Thog0QXrl8PT1unuBNw/jadXNMtwgAxrIaCJL+JLaHQH9w7rqpMDw==}
     engines: {node: '>=20'}
 
+  '@rivetkit/sqlite-vfs@2.0.4-rc.1':
+    resolution: {integrity: sha512-qOOubTa3j1cDceWfb3HlwF0u+2Nc3n6EPQBt0oSCFGuz/6WsREytk7mUIeH7Tlav59bbeg5K4TKODngItYN8aA==}
+    engines: {node: '>=20.0.0'}
+
   '@rivetkit/sqlite@0.1.1':
     resolution: {integrity: sha512-NE7ZBy/hQhOrWzMZFjkHX9SoXxf+ILcDvVV+mNbUYPgiy/fsDzlXdK0+JDTGnko5f4Xl6/KVCoCozz9gkwkq8A==}
+
+  '@rolldown/binding-android-arm64@1.0.0-rc.12':
+    resolution: {integrity: sha512-pv1y2Fv0JybcykuiiD3qBOBdz6RteYojRFY1d+b95WVuzx211CRh+ytI/+9iVyWQ6koTh5dawe4S/yRfOFjgaA==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [arm64]
+    os: [android]
+
+  '@rolldown/binding-android-arm64@1.0.0-rc.3':
+    resolution: {integrity: sha512-0T1k9FinuBZ/t7rZ8jN6OpUKPnUjNdYHoj/cESWrQ3ZraAJ4OMm6z7QjSfCxqj8mOp9kTKc1zHK3kGz5vMu+nQ==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [arm64]
+    os: [android]
+
+  '@rolldown/binding-darwin-arm64@1.0.0-rc.12':
+    resolution: {integrity: sha512-cFYr6zTG/3PXXF3pUO+umXxt1wkRK/0AYT8lDwuqvRC+LuKYWSAQAQZjCWDQpAH172ZV6ieYrNnFzVVcnSflAg==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@rolldown/binding-darwin-arm64@1.0.0-rc.3':
+    resolution: {integrity: sha512-JWWLzvcmc/3pe7qdJqPpuPk91SoE/N+f3PcWx/6ZwuyDVyungAEJPvKm/eEldiDdwTmaEzWfIR+HORxYWrCi1A==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@rolldown/binding-darwin-x64@1.0.0-rc.12':
+    resolution: {integrity: sha512-ZCsYknnHzeXYps0lGBz8JrF37GpE9bFVefrlmDrAQhOEi4IOIlcoU1+FwHEtyXGx2VkYAvhu7dyBf75EJQffBw==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [x64]
+    os: [darwin]
+
+  '@rolldown/binding-darwin-x64@1.0.0-rc.3':
+    resolution: {integrity: sha512-MTakBxfx3tde5WSmbHxuqlDsIW0EzQym+PJYGF4P6lG2NmKzi128OGynoFUqoD5ryCySEY85dug4v+LWGBElIw==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [x64]
+    os: [darwin]
+
+  '@rolldown/binding-freebsd-x64@1.0.0-rc.12':
+    resolution: {integrity: sha512-dMLeprcVsyJsKolRXyoTH3NL6qtsT0Y2xeuEA8WQJquWFXkEC4bcu1rLZZSnZRMtAqwtrF/Ib9Ddtpa/Gkge9Q==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [x64]
+    os: [freebsd]
+
+  '@rolldown/binding-freebsd-x64@1.0.0-rc.3':
+    resolution: {integrity: sha512-jje3oopyOLs7IwfvXoS6Lxnmie5JJO7vW29fdGFu5YGY1EDbVDhD+P9vDihqS5X6fFiqL3ZQZCMBg6jyHkSVww==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [x64]
+    os: [freebsd]
+
+  '@rolldown/binding-linux-arm-gnueabihf@1.0.0-rc.12':
+    resolution: {integrity: sha512-YqWjAgGC/9M1lz3GR1r1rP79nMgo3mQiiA+Hfo+pvKFK1fAJ1bCi0ZQVh8noOqNacuY1qIcfyVfP6HoyBRZ85Q==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [arm]
+    os: [linux]
+
+  '@rolldown/binding-linux-arm-gnueabihf@1.0.0-rc.3':
+    resolution: {integrity: sha512-A0n8P3hdLAaqzSFrQoA42p23ZKBYQOw+8EH5r15Sa9X1kD9/JXe0YT2gph2QTWvdr0CVK2BOXiK6ENfy6DXOag==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [arm]
+    os: [linux]
+
+  '@rolldown/binding-linux-arm64-gnu@1.0.0-rc.12':
+    resolution: {integrity: sha512-/I5AS4cIroLpslsmzXfwbe5OmWvSsrFuEw3mwvbQ1kDxJ822hFHIx+vsN/TAzNVyepI/j/GSzrtCIwQPeKCLIg==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [arm64]
+    os: [linux]
+
+  '@rolldown/binding-linux-arm64-gnu@1.0.0-rc.3':
+    resolution: {integrity: sha512-kWXkoxxarYISBJ4bLNf5vFkEbb4JvccOwxWDxuK9yee8lg5XA7OpvlTptfRuwEvYcOZf+7VS69Uenpmpyo5Bjw==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [arm64]
+    os: [linux]
+
+  '@rolldown/binding-linux-arm64-musl@1.0.0-rc.12':
+    resolution: {integrity: sha512-V6/wZztnBqlx5hJQqNWwFdxIKN0m38p8Jas+VoSfgH54HSj9tKTt1dZvG6JRHcjh6D7TvrJPWFGaY9UBVOaWPw==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [arm64]
+    os: [linux]
+
+  '@rolldown/binding-linux-arm64-musl@1.0.0-rc.3':
+    resolution: {integrity: sha512-Z03/wrqau9Bicfgb3Dbs6SYTHliELk2PM2LpG2nFd+cGupTMF5kanLEcj2vuuJLLhptNyS61rtk7SOZ+lPsTUA==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [arm64]
+    os: [linux]
+
+  '@rolldown/binding-linux-ppc64-gnu@1.0.0-rc.12':
+    resolution: {integrity: sha512-AP3E9BpcUYliZCxa3w5Kwj9OtEVDYK6sVoUzy4vTOJsjPOgdaJZKFmN4oOlX0Wp0RPV2ETfmIra9x1xuayFB7g==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [ppc64]
+    os: [linux]
+
+  '@rolldown/binding-linux-s390x-gnu@1.0.0-rc.12':
+    resolution: {integrity: sha512-nWwpvUSPkoFmZo0kQazZYOrT7J5DGOJ/+QHHzjvNlooDZED8oH82Yg67HvehPPLAg5fUff7TfWFHQS8IV1n3og==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [s390x]
+    os: [linux]
+
+  '@rolldown/binding-linux-x64-gnu@1.0.0-rc.12':
+    resolution: {integrity: sha512-RNrafz5bcwRy+O9e6P8Z/OCAJW/A+qtBczIqVYwTs14pf4iV1/+eKEjdOUta93q2TsT/FI0XYDP3TCky38LMAg==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [x64]
+    os: [linux]
+
+  '@rolldown/binding-linux-x64-gnu@1.0.0-rc.3':
+    resolution: {integrity: sha512-iSXXZsQp08CSilff/DCTFZHSVEpEwdicV3W8idHyrByrcsRDVh9sGC3sev6d8BygSGj3vt8GvUKBPCoyMA4tgQ==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [x64]
+    os: [linux]
+
+  '@rolldown/binding-linux-x64-musl@1.0.0-rc.12':
+    resolution: {integrity: sha512-Jpw/0iwoKWx3LJ2rc1yjFrj+T7iHZn2JDg1Yny1ma0luviFS4mhAIcd1LFNxK3EYu3DHWCps0ydXQ5i/rrJ2ig==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [x64]
+    os: [linux]
+
+  '@rolldown/binding-linux-x64-musl@1.0.0-rc.3':
+    resolution: {integrity: sha512-qaj+MFudtdCv9xZo9znFvkgoajLdc+vwf0Kz5N44g+LU5XMe+IsACgn3UG7uTRlCCvhMAGXm1XlpEA5bZBrOcw==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [x64]
+    os: [linux]
+
+  '@rolldown/binding-openharmony-arm64@1.0.0-rc.12':
+    resolution: {integrity: sha512-vRugONE4yMfVn0+7lUKdKvN4D5YusEiPilaoO2sgUWpCvrncvWgPMzK00ZFFJuiPgLwgFNP5eSiUlv2tfc+lpA==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [arm64]
+    os: [openharmony]
+
+  '@rolldown/binding-openharmony-arm64@1.0.0-rc.3':
+    resolution: {integrity: sha512-U662UnMETyjT65gFmG9ma+XziENrs7BBnENi/27swZPYagubfHRirXHG2oMl+pEax2WvO7Kb9gHZmMakpYqBHQ==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [arm64]
+    os: [openharmony]
+
+  '@rolldown/binding-wasm32-wasi@1.0.0-rc.12':
+    resolution: {integrity: sha512-ykGiLr/6kkiHc0XnBfmFJuCjr5ZYKKofkx+chJWDjitX+KsJuAmrzWhwyOMSHzPhzOHOy7u9HlFoa5MoAOJ/Zg==}
+    engines: {node: '>=14.0.0'}
+    cpu: [wasm32]
+
+  '@rolldown/binding-wasm32-wasi@1.0.0-rc.3':
+    resolution: {integrity: sha512-gekrQ3Q2HiC1T5njGyuUJoGpK/l6B/TNXKed3fZXNf9YRTJn3L5MOZsFBn4bN2+UX+8+7hgdlTcEsexX988G4g==}
+    engines: {node: '>=14.0.0'}
+    cpu: [wasm32]
+
+  '@rolldown/binding-win32-arm64-msvc@1.0.0-rc.12':
+    resolution: {integrity: sha512-5eOND4duWkwx1AzCxadcOrNeighiLwMInEADT0YM7xeEOOFcovWZCq8dadXgcRHSf3Ulh1kFo/qvzoFiCLOL1Q==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [arm64]
+    os: [win32]
+
+  '@rolldown/binding-win32-arm64-msvc@1.0.0-rc.3':
+    resolution: {integrity: sha512-85y5JifyMgs8m5K2XzR/VDsapKbiFiohl7s5lEj7nmNGO0pkTXE7q6TQScei96BNAsoK7JC3pA7ukA8WRHVJpg==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [arm64]
+    os: [win32]
+
+  '@rolldown/binding-win32-x64-msvc@1.0.0-rc.12':
+    resolution: {integrity: sha512-PyqoipaswDLAZtot351MLhrlrh6lcZPo2LSYE+VDxbVk24LVKAGOuE4hb8xZQmrPAuEtTZW8E6D2zc5EUZX4Lw==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [x64]
+    os: [win32]
+
+  '@rolldown/binding-win32-x64-msvc@1.0.0-rc.3':
+    resolution: {integrity: sha512-a4VUQZH7LxGbUJ3qJ/TzQG8HxdHvf+jOnqf7B7oFx1TEBm+j2KNL2zr5SQ7wHkNAcaPevF6gf9tQnVBnC4mD+A==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [x64]
+    os: [win32]
 
   '@rolldown/pluginutils@1.0.0-beta.27':
     resolution: {integrity: sha512-+d0F4MKMCbeVUJwG96uQ4SgAznZNSq93I3V+9NHA4OpvqG8mRCpGdKmK8l/dl02h2CCDHwW2FqilnTyDcAnqjA==}
@@ -22655,6 +23267,11 @@ snapshots:
   '@isaacs/balanced-match@4.0.1':
     optional: true
 
+  '@isaacs/balanced-match@4.0.1':
+    optional: true
+
+  '@isaacs/balanced-match@4.0.1': {}
+
   '@isaacs/brace-expansion@5.0.1':
     dependencies:
       '@isaacs/balanced-match': 4.0.1
@@ -23421,8 +24038,31 @@ snapshots:
       json-schema-typed: 8.0.2
       pkce-challenge: 5.0.1
       raw-body: 3.0.2
-      zod: 4.1.13
-      zod-to-json-schema: 3.25.1(zod@4.1.13)
+      zod: 4.1.12
+      zod-to-json-schema: 3.25.1(zod@4.1.12)
+    transitivePeerDependencies:
+      - hono
+      - supports-color
+    optional: true
+
+  '@modelcontextprotocol/sdk@1.25.3(hono@4.11.9)(zod@4.3.6)':
+    dependencies:
+      '@hono/node-server': 1.19.13(hono@4.11.9)
+      ajv: 8.17.1
+      ajv-formats: 3.0.1(ajv@8.17.1)
+      content-type: 1.0.5
+      cors: 2.8.5
+      cross-spawn: 7.0.6
+      eventsource: 3.0.7
+      eventsource-parser: 3.0.6
+      express: 5.2.1
+      express-rate-limit: 7.5.1(express@5.2.1)
+      jose: 6.1.3
+      json-schema-typed: 8.0.2
+      pkce-challenge: 5.0.1
+      raw-body: 3.0.2
+      zod: 4.3.6
+      zod-to-json-schema: 3.25.1(zod@4.3.6)
     transitivePeerDependencies:
       - hono
       - supports-color
@@ -25082,26 +25722,113 @@ snapshots:
     transitivePeerDependencies:
       - encoding
 
-  '@rivet-gg/cloud@https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@413534c':
-    dependencies:
-      cross-fetch: 4.1.0
-      form-data: 4.0.5
-      js-base64: 3.7.8
-      node-fetch: 2.7.0
-      pino-pretty: 13.1.2
-      qs: 6.14.1
-      readable-stream: 4.7.0
-      url-join: 5.0.0
-    transitivePeerDependencies:
-      - encoding
-
   '@rivetkit/bare-ts@0.6.2': {}
 
   '@rivetkit/fast-json-patch@3.1.2': {}
 
   '@rivetkit/on-change@6.0.2-rc.1': {}
 
+  '@rivetkit/sqlite-vfs@2.0.4-rc.1':
+    dependencies:
+      '@rivetkit/bare-ts': 0.6.2
+      '@rivetkit/sqlite': 0.1.1
+      vbare: 0.0.4
+
   '@rivetkit/sqlite@0.1.1': {}
+
+  '@rolldown/binding-android-arm64@1.0.0-rc.12':
+    optional: true
+
+  '@rolldown/binding-android-arm64@1.0.0-rc.3':
+    optional: true
+
+  '@rolldown/binding-darwin-arm64@1.0.0-rc.12':
+    optional: true
+
+  '@rolldown/binding-darwin-arm64@1.0.0-rc.3':
+    optional: true
+
+  '@rolldown/binding-darwin-x64@1.0.0-rc.12':
+    optional: true
+
+  '@rolldown/binding-darwin-x64@1.0.0-rc.3':
+    optional: true
+
+  '@rolldown/binding-freebsd-x64@1.0.0-rc.12':
+    optional: true
+
+  '@rolldown/binding-freebsd-x64@1.0.0-rc.3':
+    optional: true
+
+  '@rolldown/binding-linux-arm-gnueabihf@1.0.0-rc.12':
+    optional: true
+
+  '@rolldown/binding-linux-arm-gnueabihf@1.0.0-rc.3':
+    optional: true
+
+  '@rolldown/binding-linux-arm64-gnu@1.0.0-rc.12':
+    optional: true
+
+  '@rolldown/binding-linux-arm64-gnu@1.0.0-rc.3':
+    optional: true
+
+  '@rolldown/binding-linux-arm64-musl@1.0.0-rc.12':
+    optional: true
+
+  '@rolldown/binding-linux-arm64-musl@1.0.0-rc.3':
+    optional: true
+
+  '@rolldown/binding-linux-ppc64-gnu@1.0.0-rc.12':
+    optional: true
+
+  '@rolldown/binding-linux-s390x-gnu@1.0.0-rc.12':
+    optional: true
+
+  '@rolldown/binding-linux-x64-gnu@1.0.0-rc.12':
+    optional: true
+
+  '@rolldown/binding-linux-x64-gnu@1.0.0-rc.3':
+    optional: true
+
+  '@rolldown/binding-linux-x64-musl@1.0.0-rc.12':
+    optional: true
+
+  '@rolldown/binding-linux-x64-musl@1.0.0-rc.3':
+    optional: true
+
+  '@rolldown/binding-openharmony-arm64@1.0.0-rc.12':
+    optional: true
+
+  '@rolldown/binding-openharmony-arm64@1.0.0-rc.3':
+    optional: true
+
+  '@rolldown/binding-wasm32-wasi@1.0.0-rc.12(@emnapi/core@1.9.2)(@emnapi/runtime@1.7.1)':
+    dependencies:
+      '@napi-rs/wasm-runtime': 1.1.2(@emnapi/core@1.9.2)(@emnapi/runtime@1.7.1)
+    transitivePeerDependencies:
+      - '@emnapi/core'
+      - '@emnapi/runtime'
+    optional: true
+
+  '@rolldown/binding-wasm32-wasi@1.0.0-rc.3(@emnapi/core@1.9.2)(@emnapi/runtime@1.7.1)':
+    dependencies:
+      '@napi-rs/wasm-runtime': 1.1.2(@emnapi/core@1.9.2)(@emnapi/runtime@1.7.1)
+    transitivePeerDependencies:
+      - '@emnapi/core'
+      - '@emnapi/runtime'
+    optional: true
+
+  '@rolldown/binding-win32-arm64-msvc@1.0.0-rc.12':
+    optional: true
+
+  '@rolldown/binding-win32-arm64-msvc@1.0.0-rc.3':
+    optional: true
+
+  '@rolldown/binding-win32-x64-msvc@1.0.0-rc.12':
+    optional: true
+
+  '@rolldown/binding-win32-x64-msvc@1.0.0-rc.3':
+    optional: true
 
   '@rolldown/pluginutils@1.0.0-beta.27': {}
 
@@ -27585,6 +28312,15 @@ snapshots:
       msw: 2.12.10(@types/node@22.19.15)(typescript@5.9.3)
       vite: 5.4.21(@types/node@22.19.15)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
 
+  '@vitest/mocker@3.2.4(msw@2.12.10(@types/node@25.5.2)(typescript@5.9.3))(vite@5.4.21(@types/node@25.5.2)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))':
+    dependencies:
+      '@vitest/spy': 3.2.4
+      estree-walker: 3.0.3
+      magic-string: 0.30.21
+    optionalDependencies:
+      msw: 2.12.10(@types/node@25.5.2)(typescript@5.9.3)
+      vite: 5.4.21(@types/node@25.5.2)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
+
   '@vitest/mocker@4.0.18(msw@2.12.10(@types/node@20.19.13)(typescript@5.9.3))(vite@6.4.1(@types/node@20.19.13)(jiti@1.21.7)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2))':
     dependencies:
       '@vitest/spy': 4.0.18
@@ -27926,7 +28662,7 @@ snapshots:
     transitivePeerDependencies:
       - zod
 
-  actor-core@0.6.3(eventsource@3.0.7)(ws@8.19.0):
+  actor-core@0.6.3(eventsource@3.0.7)(ws@8.18.3):
     dependencies:
       cbor-x: 1.6.0
       hono: 4.11.9
@@ -27935,7 +28671,7 @@ snapshots:
       zod: 3.25.76
     optionalDependencies:
       eventsource: 3.0.7
-      ws: 8.19.0
+      ws: 8.18.3
 
   agent-base@6.0.2:
     dependencies:

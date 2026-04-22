@@ -18,13 +18,13 @@ pub async fn start(config: rivet_config::Config, pools: rivet_pools::Pools) -> R
 		async {
 			// Replicas must exist before coordinator
 			setup_epoxy_replica(&ctx).await?;
-			setup_epoxy_backfill(&ctx).await?;
 			setup_epoxy_coordinator(&ctx).await
 		},
 		create_default_namespace(&ctx),
 		backfill::run(&ctx),
 		setup_pegboard_metrics_aggregator(&ctx),
 		setup_gas_pruner(&ctx),
+		setup_datacenter_ping(&ctx),
 	)?;
 
 	Ok(())
@@ -43,13 +43,13 @@ async fn setup_epoxy_coordinator(ctx: &StandaloneCtx) -> Result<()> {
 		.unique()
 		.dispatch()
 		.await?;
-	tracing::info!(%workflow_id, "created epoxy coordinator");
+	tracing::debug!(%workflow_id, "created epoxy coordinator");
 
 	ctx.signal(epoxy::workflows::coordinator::Reconfigure {})
 		.to_workflow_id(workflow_id)
 		.send()
 		.await?;
-	tracing::info!(%workflow_id, "sent reconfigure message to epoxy coordinator");
+	tracing::debug!(%workflow_id, "sent reconfigure message to epoxy coordinator");
 
 	Ok(())
 }
@@ -62,19 +62,7 @@ async fn setup_epoxy_replica(ctx: &StandaloneCtx) -> Result<()> {
 		.unique()
 		.dispatch()
 		.await?;
-	tracing::info!(%workflow_id, "created epoxy replica");
-
-	Ok(())
-}
-
-async fn setup_epoxy_backfill(ctx: &StandaloneCtx) -> Result<()> {
-	let workflow_id = ctx
-		.workflow(epoxy::workflows::backfill::Input { chunk_size: None })
-		.tag("replica", ctx.config().epoxy_replica_id())
-		.unique()
-		.dispatch()
-		.await?;
-	tracing::info!(%workflow_id, "created epoxy backfill");
+	tracing::debug!(%workflow_id, "created epoxy replica");
 
 	Ok(())
 }
@@ -107,7 +95,7 @@ async fn create_default_namespace(ctx: &StandaloneCtx) -> Result<()> {
 			.await?;
 		tracing::info!(%workflow_id, %namespace_id, "created default namespace");
 	} else {
-		tracing::info!("default namespace already exists");
+		tracing::debug!("default namespace already exists");
 	}
 
 	Ok(())
@@ -120,7 +108,7 @@ async fn setup_pegboard_metrics_aggregator(ctx: &StandaloneCtx) -> Result<()> {
 		.unique()
 		.dispatch()
 		.await?;
-	tracing::info!(%workflow_id, "created pegboard metrics aggregator");
+	tracing::debug!(%workflow_id, "created pegboard metrics aggregator");
 
 	Ok(())
 }
@@ -132,7 +120,19 @@ async fn setup_gas_pruner(ctx: &StandaloneCtx) -> Result<()> {
 		.unique()
 		.dispatch()
 		.await?;
-	tracing::info!(%workflow_id, "created gasoline pruner");
+	tracing::debug!(%workflow_id, "created gasoline pruner");
+
+	Ok(())
+}
+
+async fn setup_datacenter_ping(ctx: &StandaloneCtx) -> Result<()> {
+	// Create datacenter ping wf if does not exist
+	let workflow_id = ctx
+		.workflow(datacenter::workflows::ping::Input {})
+		.unique()
+		.dispatch()
+		.await?;
+	tracing::debug!(%workflow_id, "created datacenter ping");
 
 	Ok(())
 }

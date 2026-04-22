@@ -1176,6 +1176,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2a2330da5de22e8a3cb63252ce2abb30116bf5265e89c0e01bc17015ce30a476"
 
 [[package]]
+name = "datacenter"
+version = "2.3.0-rc.4"
+dependencies = [
+ "anyhow",
+ "futures-util",
+ "gasoline",
+ "reqwest",
+ "rivet-config",
+ "rivet-metrics",
+ "serde",
+ "tracing",
+ "universaldb",
+]
+
+[[package]]
 name = "deadpool"
 version = "0.12.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1488,6 +1503,7 @@ dependencies = [
  "rivet-pools",
  "rivet-runtime",
  "rivet-test-deps",
+ "rivet-types",
  "rivet-util",
  "serde",
  "serde_bare",
@@ -3436,6 +3452,7 @@ dependencies = [
  "anyhow",
  "base64 0.22.1",
  "bytes",
+ "datacenter",
  "epoxy",
  "epoxy-protocol",
  "foundationdb-tuple",
@@ -4401,6 +4418,7 @@ dependencies = [
  "base64 0.22.1",
  "epoxy",
  "epoxy-protocol",
+ "futures-util",
  "gasoline",
  "indexmap 2.10.0",
  "namespace",
@@ -4417,6 +4435,7 @@ dependencies = [
  "serde_json",
  "tokio",
  "tracing",
+ "universaldb",
  "universalpubsub",
  "utoipa",
  "uuid",
@@ -4488,8 +4507,10 @@ dependencies = [
  "anyhow",
  "axum 0.8.4",
  "futures-util",
+ "gasoline",
  "reqwest",
  "rivet-api-builder",
+ "rivet-cache",
  "rivet-config",
  "rivet-error",
  "rivet-pools",
@@ -4505,6 +4526,7 @@ dependencies = [
 name = "rivet-bootstrap"
 version = "2.3.0-rc.4"
 dependencies = [
+ "datacenter",
  "epoxy",
  "gasoline",
  "gasoline-runtime",
@@ -5177,6 +5199,7 @@ name = "rivet-workflow-worker"
 version = "2.3.0-rc.4"
 dependencies = [
  "anyhow",
+ "datacenter",
  "epoxy",
  "gasoline",
  "gasoline-runtime",

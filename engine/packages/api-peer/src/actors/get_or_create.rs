@@ -19,78 +19,91 @@ pub async fn get_or_create(
 		.ok_or_else(|| namespace::errors::Namespace::NotFound.build())?;
 
 	// Check if actor already exists for the key
-	let existing = ctx
+	let res = ctx
 		.op(pegboard::ops::actor::get_for_key::Input {
 			namespace_id: namespace.namespace_id,
 			name: body.name.clone(),
 			key: body.key.clone(),
+			pool_name: Some(body.runner_name_selector.clone()),
 			fetch_error: true,
 		})
 		.await?;
 
-	if let Some(actor) = existing.actor {
-		// Actor exists, return it
-		return Ok(GetOrCreateResponse {
+	match res {
+		pegboard::ops::actor::get_for_key::Output::Found { actor } => Ok(GetOrCreateResponse {
 			actor,
 			created: false,
-		});
-	}
-
-	// Actor doesn't exist, create it
-	let actor_id = Id::new_v1(ctx.config().dc_label());
-
-	match ctx
-		.op(pegboard::ops::actor::create::Input {
-			actor_id,
-			namespace_id: namespace.namespace_id,
-			name: body.name.clone(),
-			key: Some(body.key.clone()),
-			runner_name_selector: body.runner_name_selector,
-			input: body.input.clone(),
-			crash_policy: body.crash_policy,
-			// NOTE: This can forward if the user attempts to create an actor with a target dc and this dc
-			// ends up forwarding to another.
-			forward_request: true,
-			// api-peer is always creating in its own datacenter
-			datacenter_name: None,
-		})
-		.await
-	{
-		Ok(res) => Ok(GetOrCreateResponse {
-			actor: res.actor,
-			created: true,
 		}),
-		Err(err) => {
-			// Check if this is a DuplicateKey error and extract the existing actor ID
-			if let Some(existing_actor_id) = extract_duplicate_key_error(&err) {
-				tracing::info!(
-					?existing_actor_id,
-					"received duplicate key error, fetching existing actor"
-				);
+		// Actor doesn't exist, create it
+		pegboard::ops::actor::get_for_key::Output::NotFound => {
+			let actor_id = Id::new_v1(ctx.config().dc_label());
 
-				// Fetch the existing actor - it should be in this datacenter since
-				// the duplicate key error came from this datacenter
-				let res = ctx
-					.op(pegboard::ops::actor::get::Input {
-						actor_ids: vec![existing_actor_id],
-						fetch_error: true,
-					})
-					.await?;
+			match ctx
+				.op(pegboard::ops::actor::create::Input {
+					actor_id,
+					namespace_id: namespace.namespace_id,
+					name: body.name.clone(),
+					key: Some(body.key.clone()),
+					runner_name_selector: body.runner_name_selector,
+					input: body.input.clone(),
+					crash_policy: body.crash_policy,
+					// NOTE: This can forward if the user attempts to create an actor with a target dc and this dc
+					// ends up forwarding to another.
+					forward_request: true,
+					// api-peer is always creating in its own datacenter
+					datacenter_name: None,
+				})
+				.await
+			{
+				Ok(res) => Ok(GetOrCreateResponse {
+					actor: res.actor,
+					created: true,
+				}),
+				Err(err) => {
+					// Check if this is a DuplicateKey error and extract the existing actor ID
+					if let Some(existing_actor_id) = extract_duplicate_key_error(&err) {
+						tracing::info!(
+							?existing_actor_id,
+							"received duplicate key error, fetching existing actor"
+						);
 
-				let actor = res
-					.actors
-					.into_iter()
-					.next()
-					.ok_or_else(|| pegboard::errors::Actor::NotFound.build())?;
+						// Fetch the existing actor - it should be in this datacenter since
+						// the duplicate key error came from this datacenter
+						let res = ctx
+							.op(pegboard::ops::actor::get::Input {
+								actor_ids: vec![existing_actor_id],
+								fetch_error: true,
+							})
+							.await?;
 
-				return Ok(GetOrCreateResponse {
-					actor,
-					created: false,
-				});
+						let actor = res
+							.actors
+							.into_iter()
+							.next()
+							.ok_or_else(|| pegboard::errors::Actor::NotFound.build())?;
+
+						return Ok(GetOrCreateResponse {
+							actor,
+							created: false,
+						});
+					}
+
+					// Re-throw the original error if it's not a DuplicateKey
+					Err(err)
+				}
 			}
-
-			// Re-throw the original error if it's not a DuplicateKey
-			Err(err)
+		}
+		// Make request to remote datacenter
+		pegboard::ops::actor::get_for_key::Output::Forward { dc_label } => {
+			rivet_api_util::request_remote_datacenter(
+				ctx.config(),
+				dc_label,
+				"/actors",
+				rivet_api_util::Method::PUT,
+				Some(&query),
+				Some(&body),
+			)
+			.await
 		}
 	}
 }

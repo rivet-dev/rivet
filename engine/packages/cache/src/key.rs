@@ -36,7 +36,7 @@ impl<V0: CacheKey, V1: CacheKey, V2: CacheKey> CacheKey for (V0, V1, V2) {
 			"{}:{}:{}",
 			self.0.cache_key(),
 			self.1.cache_key(),
-			self.2.cache_key()
+			self.2.cache_key(),
 		)
 	}
 }
@@ -48,7 +48,38 @@ impl<V0: CacheKey, V1: CacheKey, V2: CacheKey, V3: CacheKey> CacheKey for (V0, V
 			self.0.cache_key(),
 			self.1.cache_key(),
 			self.2.cache_key(),
-			self.3.cache_key()
+			self.3.cache_key(),
+		)
+	}
+}
+
+impl<V0: CacheKey, V1: CacheKey, V2: CacheKey, V3: CacheKey, V4: CacheKey> CacheKey
+	for (V0, V1, V2, V3, V4)
+{
+	fn cache_key(&self) -> String {
+		format!(
+			"{}:{}:{}:{}:{}",
+			self.0.cache_key(),
+			self.1.cache_key(),
+			self.2.cache_key(),
+			self.3.cache_key(),
+			self.4.cache_key(),
+		)
+	}
+}
+
+impl<V0: CacheKey, V1: CacheKey, V2: CacheKey, V3: CacheKey, V4: CacheKey, V5: CacheKey> CacheKey
+	for (V0, V1, V2, V3, V4, V5)
+{
+	fn cache_key(&self) -> String {
+		format!(
+			"{}:{}:{}:{}:{}:{}",
+			self.0.cache_key(),
+			self.1.cache_key(),
+			self.2.cache_key(),
+			self.3.cache_key(),
+			self.4.cache_key(),
+			self.5.cache_key(),
 		)
 	}
 }

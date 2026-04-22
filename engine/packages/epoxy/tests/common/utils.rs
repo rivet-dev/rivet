@@ -1,8 +1,8 @@
 use anyhow::Result;
 use epoxy::{
 	keys::{
-		self, ChangelogKey, CommittedValue, KvAcceptedKey, KvAcceptedValue, KvBallotKey,
-		KvOptimisticCacheKey, KvValueKey, LegacyCommittedValueKey,
+		self, ChangelogKey, KvAccepted2Key, KvAcceptedKey, KvBallotKey, KvOptimisticCacheKey,
+		KvValueKey, LegacyCommittedValueKey,
 	},
 	ops::propose::{
 		self, CheckAndSetCommand, Command, CommandKind, Proposal, ProposalResult, SetCommand,
@@ -98,6 +98,27 @@ pub async fn set_mutable(
 }
 
 #[allow(dead_code)]
+pub async fn delete_mutable(ctx: &WorkflowTestCtx, key: &[u8]) -> Result<ProposalResult> {
+	let result = ctx
+		.op(propose::Input {
+			proposal: Proposal {
+				commands: vec![Command {
+					kind: CommandKind::SetCommand(SetCommand {
+						key: key.to_vec(),
+						value: None,
+					}),
+				}],
+			},
+			mutable: true,
+			purge_cache: false,
+			target_replicas: None,
+		})
+		.await?;
+
+	Ok(result)
+}
+
+#[allow(dead_code)]
 pub async fn get_local(
 	ctx: &WorkflowTestCtx,
 	replica_id: ReplicaId,
@@ -109,7 +130,7 @@ pub async fn get_local(
 			key: key.to_vec(),
 		})
 		.await?;
-	Ok(output.value)
+	Ok(output.and_then(|x| x.value))
 }
 
 #[allow(dead_code)]
@@ -117,7 +138,7 @@ pub async fn read_v2_committed_value(
 	ctx: &WorkflowTestCtx,
 	replica_id: ReplicaId,
 	key: &[u8],
-) -> Result<Option<CommittedValue>> {
+) -> Result<Option<protocol::CommittedValue>> {
 	let key = key.to_vec();
 	ctx.udb()?
 		.run(move |tx| {
@@ -138,7 +159,7 @@ pub async fn read_v2_value(
 ) -> Result<Option<Vec<u8>>> {
 	Ok(read_v2_committed_value(ctx, replica_id, key)
 		.await?
-		.map(|value| value.value))
+		.and_then(|value| value.value))
 }
 
 #[allow(dead_code)]
@@ -152,8 +173,8 @@ pub async fn write_v2_value(
 		ctx,
 		replica_id,
 		key,
-		CommittedValue {
-			value: value.to_vec(),
+		protocol::CommittedValue {
+			value: Some(value.to_vec()),
 			version: 1,
 			mutable: false,
 		},
@@ -166,7 +187,7 @@ pub async fn write_v2_committed_value(
 	ctx: &WorkflowTestCtx,
 	replica_id: ReplicaId,
 	key: &[u8],
-	value: CommittedValue,
+	value: protocol::CommittedValue,
 ) -> Result<()> {
 	let key = key.to_vec();
 	ctx.udb()?
@@ -247,11 +268,11 @@ pub async fn write_legacy_v2_value(
 }
 
 #[allow(dead_code)]
-pub async fn read_cache_committed_value(
+pub async fn read_cached_value(
 	ctx: &WorkflowTestCtx,
 	replica_id: ReplicaId,
 	key: &[u8],
-) -> Result<Option<CommittedValue>> {
+) -> Result<Option<protocol::CachedValue>> {
 	let key = key.to_vec();
 	ctx.udb()?
 		.run(move |tx| {
@@ -266,11 +287,11 @@ pub async fn read_cache_committed_value(
 }
 
 #[allow(dead_code)]
-pub async fn write_cache_committed_value(
+pub async fn write_cached_value(
 	ctx: &WorkflowTestCtx,
 	replica_id: ReplicaId,
 	key: &[u8],
-	value: CommittedValue,
+	value: protocol::CachedValue,
 ) -> Result<()> {
 	let key = key.to_vec();
 	ctx.udb()?
@@ -287,14 +308,15 @@ pub async fn write_cache_committed_value(
 }
 
 #[allow(dead_code)]
-pub async fn read_cache_value(
+pub async fn read_raw_cached_value(
 	ctx: &WorkflowTestCtx,
 	replica_id: ReplicaId,
 	key: &[u8],
 ) -> Result<Option<Vec<u8>>> {
-	Ok(read_cache_committed_value(ctx, replica_id, key)
+	Ok(read_cached_value(ctx, replica_id, key)
 		.await?
-		.map(|value| value.value))
+		.and_then(|value| value.value)
+		.flatten())
 }
 
 #[allow(dead_code)]
@@ -320,14 +342,28 @@ pub async fn read_accepted_value(
 	ctx: &WorkflowTestCtx,
 	replica_id: ReplicaId,
 	key: &[u8],
-) -> Result<Option<KvAcceptedValue>> {
+) -> Result<Option<protocol::AcceptedValue>> {
 	let key = key.to_vec();
 	ctx.udb()?
 		.run(move |tx| {
 			let key = key.clone();
 			async move {
 				let tx = tx.with_subspace(keys::subspace(replica_id));
-				tx.read_opt(&KvAcceptedKey::new(key), Serializable).await
+				let accepted_key = KvAcceptedKey::new(key.clone());
+				let accepted2_key = KvAccepted2Key::new(key);
+				let (accepted_value, accepted2_value) = tokio::try_join!(
+					tx.read_opt(&accepted_key, Serializable),
+					tx.read_opt(&accepted2_key, Serializable),
+				)?;
+
+				Ok(accepted2_value.or_else(|| {
+					accepted_value.map(|v| protocol::AcceptedValue {
+						value: Some(v.value),
+						ballot: v.ballot,
+						version: v.version,
+						mutable: v.mutable,
+					})
+				}))
 			}
 		})
 		.await

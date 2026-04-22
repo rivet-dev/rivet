@@ -22,11 +22,11 @@ pub enum WsError {
 	#[error("timed_out", "Ping timed out.")]
 	TimedOut,
 	#[error(
-		"invalid_initial_packet",
-		"The websocket could not process the initial packet.",
-		"Invalid initial packet: {0}."
+		"invalid_request",
+		"The websocket could not open due to an invalid request.",
+		"Invalid websocket request: {0}."
 	)]
-	InvalidInitialPacket(&'static str),
+	InvalidRequest(&'static str),
 	#[error(
 		"invalid_packet",
 		"The websocket could not process the given packet.",

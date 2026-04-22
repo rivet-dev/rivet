@@ -26,6 +26,9 @@ The `rivet.gg` domain is deprecated and should never be used in this codebase.
 
 ### Build Commands
 ```bash
+# Check a specific package without producing artifacts (preferred for verification)
+cargo check -p package-name
+
 # Build all packages in the workspace
 cargo build
 

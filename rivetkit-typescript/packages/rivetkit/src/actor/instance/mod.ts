@@ -2499,10 +2499,9 @@ export class ActorInstance<
 		}
 
 		for (const _conn of this.connectionManager.connections.values()) {
-			// TODO: Add back
-			// if (!_conn.isHibernatable) {
-			return CanSleep.ActiveConns;
-			// }
+			if (!_conn.isHibernatable) {
+				return CanSleep.ActiveConns;
+			}
 		}
 
 		if (this.connectionManager.pendingDisconnectCount > 0) {

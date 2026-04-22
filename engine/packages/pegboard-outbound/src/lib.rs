@@ -159,6 +159,12 @@ async fn handle(ctx: &StandaloneCtx, packet: protocol::ToOutbound) -> Result<()>
 			actor_config,
 		}) => (namespace_id, pool_name, checkpoint, actor_config),
 	};
+
+	let current_span = tracing::Span::current();
+	current_span.record("namespace_id", &namespace_id);
+	current_span.record("pool_name", &pool_name);
+	current_span.record("actor_id", &checkpoint.actor_id);
+
 	let namespace_id = Id::parse(&namespace_id)?;
 	let actor_id = Id::parse(&checkpoint.actor_id)?;
 	let generation = checkpoint.generation;
@@ -166,7 +172,7 @@ async fn handle(ctx: &StandaloneCtx, packet: protocol::ToOutbound) -> Result<()>
 	tracing::debug!(?namespace_id, %pool_name, ?actor_id, ?generation, "received outbound request");
 
 	let db = ctx.udb()?;
-	let (namespace_res, pool_res, preloaded_kv) = tokio::try_join!(
+	let (namespace_res, pool_res, hibernating_requests, preloaded_kv) = tokio::try_join!(
 		ctx.op(namespace::ops::get_global::Input {
 			namespace_ids: vec![namespace_id],
 		}),
@@ -174,6 +180,7 @@ async fn handle(ctx: &StandaloneCtx, packet: protocol::ToOutbound) -> Result<()>
 			runners: vec![(namespace_id, pool_name.clone())],
 			bypass_cache: false,
 		}),
+		ctx.op(pegboard::ops::actor::hibernating_request::list::Input { actor_id }),
 		pegboard::actor_kv::preload::fetch_preloaded_kv(
 			&db,
 			ctx.config().pegboard(),
@@ -217,9 +224,13 @@ async fn handle(ctx: &StandaloneCtx, packet: protocol::ToOutbound) -> Result<()>
 			checkpoint,
 			inner: protocol::Command::CommandStartActor(protocol::CommandStartActor {
 				config: actor_config,
-				// Empty because request ids are ephemeral. This is intercepted by guard and
-				// populated before it reaches the envoy
-				hibernating_requests: Vec::new(),
+				hibernating_requests: hibernating_requests
+					.into_iter()
+					.map(|x| protocol::HibernatingRequest {
+						gateway_id: x.gateway_id,
+						request_id: x.request_id,
+					})
+					.collect(),
 				preloaded_kv,
 			}),
 		},

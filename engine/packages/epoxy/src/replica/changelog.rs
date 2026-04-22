@@ -1,16 +1,16 @@
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result};
 use epoxy_protocol::protocol::{self, CommittedValue};
 use futures_util::TryStreamExt;
+use universaldb::prelude::*;
 use universaldb::{
-	KeySelector, RangeOption, Transaction,
-	options::StreamingMode,
+	Transaction,
 	tuple::Versionstamp,
-	utils::{FormalKey, IsolationLevel::Serializable, keys::CHANGELOG},
 	versionstamp::{generate_versionstamp, substitute_versionstamp},
 };
 
 use crate::keys::{
-	self, ChangelogKey, KvAcceptedKey, KvBallotKey, KvOptimisticCacheKey, KvValueKey,
+	self, ChangelogKey, KvAccepted2Key, KvAcceptedKey, KvBallotKey, KvOptimisticCacheKey,
+	KvValueKey,
 };
 use crate::metrics;
 
@@ -19,7 +19,7 @@ pub fn append(
 	replica_id: protocol::ReplicaId,
 	tx: &Transaction,
 	key: Vec<u8>,
-	value: Vec<u8>,
+	value: Option<Vec<u8>>,
 	version: u64,
 	mutable: bool,
 ) -> Result<()> {
@@ -93,6 +93,7 @@ pub async fn apply_entry(
 	let tx = tx.with_subspace(keys::subspace(replica_id));
 	let value_key = KvValueKey::new(entry.key.clone());
 	let accepted_key = KvAcceptedKey::new(entry.key.clone());
+	let accepted2_key = KvAccepted2Key::new(entry.key.clone());
 	let ballot_key = KvBallotKey::new(entry.key.clone());
 	let cache_key = KvOptimisticCacheKey::new(entry.key.clone());
 
@@ -102,7 +103,7 @@ pub async fn apply_entry(
 		}
 
 		if !existing_value.mutable && existing_value.value != entry.value {
-			bail!(
+			tracing::warn!(
 				"changelog catch-up saw conflicting committed value for immutable key {:?}",
 				value_key.key()
 			);
@@ -122,6 +123,7 @@ pub async fn apply_entry(
 		},
 	)?;
 	tx.delete(&accepted_key);
+	tx.delete(&accepted2_key);
 	if entry.mutable {
 		tx.delete(&ballot_key);
 		tx.delete(&cache_key);

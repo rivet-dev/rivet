@@ -13,8 +13,18 @@ type CommittedValue struct {
 }
 
 type CachedValue struct {
+	# Repr:
+	# None 	  - Value not found on any replica and saved into cache as such
+	# Some(X) - Value set
 	value: optional<data>
 	version: u64
+}
+
+type AcceptedValue struct {
+	value: data
+	ballot: Ballot
+	version: u64
+	mutable: bool
 }
 
 # MARK: Cluster config
@@ -100,6 +110,32 @@ type PreAcceptResponse union {
 	PreAcceptResponseOk |
 	PreAcceptResponseAlreadyCommitted |
 	PreAcceptResponseHigherBallot
+}
+
+type AcceptRequest struct {
+	key: data
+	value: data
+	ballot: Ballot
+	mutable: bool
+	version: u64
+}
+
+type AcceptResponseOk struct {
+	ballot: Ballot
+}
+
+type AcceptResponseAlreadyCommitted struct {
+	value: data
+}
+
+type AcceptResponseHigherBallot struct {
+	ballot: Ballot
+}
+
+type AcceptResponse union {
+	AcceptResponseOk |
+	AcceptResponseAlreadyCommitted |
+	AcceptResponseHigherBallot
 }
 
 type CommitRequest struct {

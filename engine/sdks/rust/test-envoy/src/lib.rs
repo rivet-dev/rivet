@@ -2,8 +2,8 @@ pub mod behaviors;
 mod server;
 
 pub use rivet_envoy_client::config::{
-	BoxFuture, EnvoyCallbacks, EnvoyConfig, HttpRequest, HttpResponse, PrepopulatedActor,
-	ResponseChunk, WebSocketHandler, WebSocketMessage,
+	BoxFuture, EnvoyCallbacks, EnvoyConfig, HttpRequest, HttpResponse, ResponseChunk,
+	WebSocketHandler, WebSocketMessage,
 };
 pub use rivet_envoy_client::envoy::{start_envoy, start_envoy_sync};
 pub use rivet_envoy_client::handle::EnvoyHandle;
