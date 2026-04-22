@@ -472,11 +472,7 @@ function ActorContextProvider(props: {
 		);
 	}
 
-	return __APP_TYPE__ === "inspector" ? (
-		<ActorInspectorProvider {...props} inspectorToken={token} />
-	) : (
-		<ActorEngineProvider {...props} inspectorToken={token} />
-	);
+	return <ActorEngineProvider {...props} inspectorToken={token} />;
 }
 
 function ActorInspectorProvider({
@@ -537,9 +533,6 @@ function useEngineToken() {
 		);
 		return data;
 	}
-	if (__APP_TYPE__ === "inspector") {
-		return "";
-	}
 	const [data] = useLocalStorage(
 		ls.engineCredentials.key(getConfig().apiUrl),
 		"",
@@ -549,15 +542,6 @@ function useEngineToken() {
 }
 
 function useEngineUrl() {
-	if (__APP_TYPE__ === "inspector") {
-		return (
-			useSearch({
-				from: "/_context",
-				select: (s) => s.u,
-			}) || "https://localhost:6420"
-		);
-	}
-
 	return useConfig().apiUrl;
 }
 

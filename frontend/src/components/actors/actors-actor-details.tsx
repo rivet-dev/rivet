@@ -105,14 +105,16 @@ const TAB_PRIORITY = [
 
 type TabId = (typeof TAB_PRIORITY)[number];
 
+// FIXME: once we have back rivet cloud
 function useManagedPool() {
-	if (__APP_TYPE__ !== "cloud") return false;
-	const provider = useCloudNamespaceDataProvider();
-	const { data: hasManagedPool } = useSuspenseQuery(
-		provider.currentNamespaceHasManagedPoolQueryOptions(),
-	);
+	// if (__APP_TYPE__ !== "cloud") return false;
+	// const provider = useCloudNamespaceDataProvider();
+	// const { data: hasManagedPool } = useSuspenseQuery(
+	// 	provider.currentNamespaceHasManagedPoolQueryOptions(),
+	// );
 
-	return hasManagedPool;
+	// return hasManagedPool;
+	return false;
 }
 
 function useActorTabVisibility(actorId: ActorId) {

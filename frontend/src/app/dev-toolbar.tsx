@@ -8,11 +8,11 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { usePostHog } from "posthog-js/react";
 import { useEffect, useState } from "react";
-import { Kbd, ls } from "@/components";
+import { Kbd, ls, WithTooltip } from "@/components";
 import { authClient } from "@/lib/auth";
+import { features } from "@/lib/features";
 
 export const DevToolbar = () => {
-	if (__APP_TYPE__ !== "cloud") return null;
 	if (
 		ls.get(
 			"__I_SOLELY_SWORE_TO_ONLY_ENABLE_DEV_TOOLBAR_FOR_DEBUGGING_PURPOSES_AND_WILL_NOT_USE_IT_FOR_ANY_MALICIOUS_ACTIVITIES__",
@@ -75,8 +75,18 @@ const Content = () => {
 		<div className="fixed bottom-0 inset-x-0 bg-background-main px-2 border-t border-border-main text-xs z-50 flex gap-0.5 text-muted-foreground overflow-auto">
 			<div className="flex min-w-0 flex-shrink-0 items-center h-8 [&>div]:h-10 [&>div]:flex [&>div]:items-center [&>div]:min-w-0 [&>div]:flex-shrink-0 [&>div]:gap-0.5 [&_button[disabled]]:cursor-not-allowed [&_button[disabled]]:opacity-80 [&_button[disabled]]:no-underline [&_button]:underline ">
 				<div>
-					{__APP_TYPE__}{" "}
-					<span className="font-mon">{__APP_BUILD_ID__}</span>
+					<WithTooltip
+						content={
+							<pre className="font-mono">
+								{JSON.stringify(features, null, 2)}
+							</pre>
+						}
+						trigger={
+							<span className="font-mono">
+								{__APP_BUILD_ID__}
+							</span>
+						}
+					/>
 				</div>
 				<Sep />
 				<div>
