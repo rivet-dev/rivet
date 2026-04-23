@@ -25,12 +25,7 @@ export const Counter = Actor.make("Counter", {
 	//    Schema.decodeUnknown before it reaches handler code. Handler
 	//    inference erases types at runtime and trusts whatever arrives.
 	//
-	// 2. Contract separation. The definition can be imported by client
-	//    code without pulling in server dependencies. It can also be
-	//    published as a standalone package or satisfied by multiple
-	//    implementations (real, test, mock).
-	//
-	// 3. Wire encoding control. Effect Schema distinguishes encoded
+	// 2. Wire encoding control. Effect Schema distinguishes encoded
 	//    (wire) and decoded (runtime) types, e.g. Schema.Date decodes
 	//    a string into a Date. Handler inference only gives the decoded
 	//    type.
