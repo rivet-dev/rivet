@@ -61,3 +61,11 @@ Started: Thu Apr 23 04:17:16 AM PDT 2026
 - **Learnings for future iterations:**
   - Treat stale DT failures as closeable only after the exact targeted case, whole file, and matrix-shaped repro all pass.
 ---
+## 2026-04-23T12:22:37Z - DT-046
+- Rechecked the CBOR inspector database named-properties failure from DT-008; it no longer reproduces on the current branch.
+- Confirmed the setup actions, CBOR action serialization, and inspector database execute endpoint all succeed in the targeted and whole-file verifier.
+- Files changed: `scripts/ralph/prd.json`, `.agent/notes/driver-test-progress.md`, `scripts/ralph/progress.txt`.
+- Verification: targeted CBOR named-properties test passed; full `actor-inspector.test.ts` passed with 63 passed; `pnpm -F rivetkit check-types` passed; `pnpm build -F rivetkit` passed.
+- **Learnings for future iterations:**
+  - For stale full-file driver failures, close the spawned story only after the exact encoding-specific target and the full file both pass on the current branch.
+---

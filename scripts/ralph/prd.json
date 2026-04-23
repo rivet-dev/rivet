@@ -833,8 +833,8 @@
         "Tests pass"
       ],
       "priority": 44,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Completed on 2026-04-23: no source change was needed. The DT-008 CBOR full-file failure no longer reproduces on this branch; the exact CBOR named-properties test and full actor-inspector file both pass. The setup actions, CBOR action serialization, and inspector database execute path all succeeded in the verification run."
     }
   ]
 }

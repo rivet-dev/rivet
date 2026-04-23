@@ -27,7 +27,7 @@ Config: registry (static), client type (http), encoding (bare)
 - [x] raw-http | raw http
 - [x] raw-http-request-properties | raw http request properties
 - [!] raw-websocket | raw websocket
-- [!] actor-inspector | Actor Inspector Tests
+- [x] actor-inspector | Actor Inspector Tests
 - [x] gateway-query-url | Gateway Query URL Tests
 - [x] actor-db-pragma-migration | Actor Database Pragma Migration
 - [x] actor-state-zod-coercion | Actor State Zod Coercion
@@ -90,3 +90,4 @@ Config: registry (static), client type (http), encoding (bare)
 - 2026-04-23T11:57:29.000Z serverless-handler: PASS full file (3 passed, 0 failed; static/http/bare). `/start` uses an actor ID created in the same engine namespace as the serverless envoy headers.
 - 2026-04-23T12:14:00.000Z DT-008 full-file recheck: FAIL (239 passed, 4 failed, 33 skipped) - actor-conn bare `onOpen should be called when connection opens`; actor-inspector cbor `POST /inspector/database/execute supports named properties`; conn-error-serialization bare/cbor `createConnState preserves group/code` timed out. Follow-up stories: DT-045, DT-046; DT-014 already covers conn-error-serialization.
 - 2026-04-23T12:19:11.000Z actor-conn: PASS DT-011 recheck. Targeted bare oversized response passed; full actor-conn file passed (69 passed, 0 failed); parallel bare actor-conn suite passed (23 passed, 0 failed, 46 skipped).
+- 2026-04-23T12:22:37.000Z actor-inspector: PASS DT-046 recheck. Targeted CBOR named-properties inspector database execute passed; full actor-inspector file passed (63 passed, 0 failed).
