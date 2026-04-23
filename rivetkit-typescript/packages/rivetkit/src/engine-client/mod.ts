@@ -1,4 +1,3 @@
-import * as cbor from "cbor-x";
 import type { Context as HonoContext } from "hono";
 import invariant from "invariant";
 import { deserializeActorKey, serializeActorKey } from "@/actor/keys";
@@ -17,7 +16,7 @@ import {
 } from "@/engine-client/driver";
 import type { Actor as ApiActor } from "@/engine-api/actors";
 import type { Encoding, UniversalWebSocket } from "@/mod";
-import { uint8ArrayToBase64 } from "@/serde";
+import { encodeCborCompat, uint8ArrayToBase64 } from "@/serde";
 import { combineUrlPath, type GetUpgradeWebSocket } from "@/utils";
 import { getNextPhase } from "@/utils/env-vars";
 import { sendHttpRequestToGateway } from "./actor-http-client";
@@ -175,7 +174,7 @@ export class RemoteEngineControlClient implements EngineControlClient {
 			key: serializeActorKey(key),
 			runner_name_selector: this.#config.poolName,
 			input: actorInput
-				? uint8ArrayToBase64(cbor.encode(actorInput))
+				? uint8ArrayToBase64(encodeCborCompat(actorInput))
 				: undefined,
 			crash_policy: crashPolicy ?? "sleep",
 		});
@@ -208,7 +207,9 @@ export class RemoteEngineControlClient implements EngineControlClient {
 			name,
 			runner_name_selector: this.#config.poolName,
 			key: serializeActorKey(key),
-			input: input ? uint8ArrayToBase64(cbor.encode(input)) : undefined,
+			input: input
+				? uint8ArrayToBase64(encodeCborCompat(input))
+				: undefined,
 			crash_policy: crashPolicy ?? "sleep",
 		});
 

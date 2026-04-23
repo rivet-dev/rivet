@@ -1,8 +1,8 @@
-import * as cbor from "cbor-x";
 import { CONN_DRIVER_SYMBOL, CONN_STATE_MANAGER_SYMBOL } from "@/actor/config";
 import { RivetError } from "@/actor/errors";
 import { Lock } from "@/actor/utils";
 import type * as schema from "@/common/bare/generated/inspector/v4";
+import { decodeCborCompat, encodeCborCompat } from "@/serde";
 import { bufferToArrayBuffer, toUint8Array } from "@/utils";
 
 export interface ActorInspectorWorkflowAdapter {
@@ -125,7 +125,7 @@ function databaseNotEnabledError(): RivetError {
 }
 
 function encodeCbor(value: unknown): ArrayBuffer {
-	return bufferToArrayBuffer(cbor.encode(value));
+	return bufferToArrayBuffer(encodeCborCompat(value));
 }
 
 function escapeDoubleQuotes(value: string): string {
@@ -220,7 +220,7 @@ export class ActorInspector {
 			throw stateNotEnabledError();
 		}
 
-		this.actor.stateManager.state = cbor.decode(toUint8Array(state));
+		this.actor.stateManager.state = decodeCborCompat(toUint8Array(state));
 		await this.actor.stateManager.saveState({ immediate: true });
 	}
 
@@ -237,7 +237,7 @@ export class ActorInspector {
 		);
 
 		try {
-			const decodedArgs = cbor.decode(toUint8Array(args));
+			const decodedArgs = decodeCborCompat(toUint8Array(args));
 			const normalizedArgs = Array.isArray(decodedArgs)
 				? decodedArgs
 				: [];

@@ -10,6 +10,7 @@ Started: Thu Apr 23 04:17:16 AM PDT 2026
 - Actor-connect protocol `actionId` values are nullable; `0` is a valid action ID, and only `null` means a connection-level error.
 - Gateway actor-connect must preserve tunnel messages queued between the envoy open ack and the websocket forwarding task; setup-error close frames can arrive immediately after open.
 - If an omitted optional value passes in bare but fails in CBOR or JSON, inspect whether the cross-encoding path is coercing `undefined` into `null`.
+- Opaque user payloads that must preserve JS `undefined` through Rust JSON/CBOR bridges should use `encodeCborCompat` / `decodeCborCompat`; do not run structural request envelopes through those helpers or optional API fields turn into bogus sentinel arrays.
 - When validating Linux NAPI preview packages, run the sanity check in Docker `node:22` if the host already has a `rivet-engine` on port `6420`.
 - Serverless `/start` driver tests need the start payload actor ID to exist in the same engine namespace as the serverless envoy headers, or startup fails at KV load with `actor does not exist`.
 - Serverless `/start` tests must upsert a normal runner config for the temporary pool before starting the native serverless envoy.
@@ -315,4 +316,12 @@ Started: Thu Apr 23 04:17:16 AM PDT 2026
 - **Learnings for future iterations:**
   - A reopened DT-008 verifier story can be stale even when the tracker is still red. Re-run the exact target and the full file before touching `actor-conn` code.
   - Use the latest successful DT-008 tracked verifier on the branch as the combined-run receipt when a fresh combined rerun is blocked by a different story.
+---
+## 2026-04-23T18:55:01Z - DT-057
+- Fixed the manager-driver omitted-input regression by preserving JS `undefined` in opaque payloads that cross the native CBOR/JSON bridge, while leaving structural JSON envelopes untouched.
+- Files changed: `rivetkit-typescript/CLAUDE.md`, `rivetkit-typescript/packages/rivetkit/src/{common/encoding.ts,common/router.ts,serde.ts,registry/native.ts,client/actor-handle.ts,client/actor-conn.ts,client/queue.ts,client/utils.ts,engine-client/mod.ts,engine-client/actor-websocket-client.ts,inspector/actor-inspector.ts,workflow/inspector.ts}`, `.agent/notes/driver-test-progress.md`, `scripts/ralph/{prd.json,progress.txt}`.
+- Verification: `pnpm -F rivetkit test tests/driver/manager-driver.test.ts -t "input is undefined when not provided"` passed; `pnpm -F rivetkit test tests/driver/manager-driver.test.ts` passed with 48 tests; `pnpm -F rivetkit check-types` passed; `pnpm build -F rivetkit` passed.
+- **Learnings for future iterations:**
+  - The native bridge can safely carry `undefined` only inside opaque payload bytes; structural JSON request/response envelopes still need normal omitted-field semantics.
+  - Reviving compat sentinels in shared decode helpers is cheaper than chasing `null`/`undefined` mismatches one transport at a time.
 ---

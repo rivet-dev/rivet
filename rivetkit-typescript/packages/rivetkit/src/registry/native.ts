@@ -14,7 +14,6 @@ import type {
 	WebSocket as NativeWebSocket,
 } from "@rivetkit/rivetkit-napi";
 import { VirtualWebSocket } from "@rivetkit/virtual-websocket";
-import * as cbor from "cbor-x";
 import {
 	ACTOR_CONTEXT_INTERNAL_SYMBOL,
 	CONN_STATE_MANAGER_SYMBOL,
@@ -84,7 +83,9 @@ import type { Registry } from "@/registry";
 import type { RegistryConfig } from "@/registry/config";
 import {
 	contentTypeForEncoding,
+	decodeCborCompat,
 	deserializeWithEncoding,
+	encodeCborCompat,
 	serializeWithEncoding,
 } from "@/serde";
 import { bufferToArrayBuffer, VERSION } from "@/utils";
@@ -385,11 +386,11 @@ function decodeValue<T>(value?: Buffer | Uint8Array | null): T {
 		return undefined as T;
 	}
 
-	return cbor.decode(Buffer.from(value)) as T;
+	return decodeCborCompat(Buffer.from(value));
 }
 
 function encodeValue(value: unknown): Buffer {
-	return Buffer.from(cbor.encode(value));
+	return Buffer.from(encodeCborCompat(value));
 }
 
 function unwrapTsfnPayload<T>(error: unknown, payload: T): T {
@@ -659,7 +660,7 @@ function decodeWorkflowCbor(data: ArrayBuffer | null): unknown | null {
 	}
 
 	try {
-		return cbor.decode(new Uint8Array(data));
+		return decodeCborCompat(new Uint8Array(data));
 	} catch {
 		return null;
 	}
@@ -3044,7 +3045,7 @@ function buildNativeRequestErrorResponse(
 			metadata:
 				value.metadata === undefined
 					? null
-					: bufferToArrayBuffer(cbor.encode(value.metadata)),
+					: bufferToArrayBuffer(encodeCborCompat(value.metadata)),
 		}),
 	);
 

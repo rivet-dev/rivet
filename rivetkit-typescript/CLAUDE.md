@@ -82,6 +82,7 @@ The log name matches the key in `ActorMetrics.startup`. Internal phases use `per
 - Static actor `state` values in `packages/rivetkit/src/registry/native.ts` must be `structuredClone(...)`d per actor instance; reusing the literal leaks mutations across different keyed actors.
 - Every `NativeConnAdapter` construction path in `packages/rivetkit/src/registry/native.ts` must keep the `CONN_STATE_MANAGER_SYMBOL` hookup; hibernatable conn mutations rely on core `ConnHandle::set_state` dirty tracking to request persistence.
 - Durable native actor saves in `packages/rivetkit/src/registry/native.ts` must use `ctx.requestSaveAndWait({ immediate: true })`; state bytes are collected only through the `serializeState` callback.
+- Opaque user payloads that must preserve JS `undefined` across Rust JSON/CBOR bridges should go through `encodeCborCompat` / `decodeCborCompat`; do not use those helpers on structural JSON envelopes where omitted fields must stay omitted.
 - Reply-bearing TSF dispatches in `packages/rivetkit-napi/src/napi_actor_events.rs` must wrap the callback future in `with_timeout(...)` via a shared timed-spawn helper; raw `spawn_reply(...)` on HTTP or workflow callbacks can leak stuck JS promises until shutdown.
 
 ## Sleep Shutdown
