@@ -6,7 +6,7 @@ Config: registry (static), client type (http), encoding (bare)
 ## Fast Tests
 
 - [x] manager-driver | Manager Driver Tests
-- [!] actor-conn | Actor Connection Tests
+- [x] actor-conn | Actor Connection Tests
 - [x] actor-conn-state | Actor Connection State Tests
 - [x] conn-error-serialization | Connection Error Serialization Tests
 - [x] actor-destroy | Actor Destroy Tests
@@ -21,7 +21,7 @@ Config: registry (static), client type (http), encoding (bare)
 - [x] actor-db-raw | Actor Database Raw Tests
 - [x] actor-workflow | Actor Workflow Tests
 - [x] actor-error-handling | Actor Error Handling Tests
-- [!] actor-queue | Actor Queue Tests
+- [x] actor-queue | Actor Queue Tests
 - [x] actor-kv | Actor KV Tests
 - [x] actor-stateless | Actor Stateless Tests
 - [x] raw-http | raw http
@@ -115,3 +115,16 @@ Config: registry (static), client type (http), encoding (bare)
 - 2026-04-23T16:23:57.000Z raw-websocket: PASS in fast static/http/bare verifier.
 - 2026-04-23T16:23:57.000Z slow parallel: PASS (68 passed, 0 failed, 166 skipped)
 - 2026-04-23T16:27:47.000Z raw-websocket: PASS DT-015. Targeted bare hibernatable ack-state tests passed; full raw-websocket file passed (39 passed, 0 failed across bare/CBOR/JSON); typecheck passed.
+- 2026-04-23T16:44:04.000Z fast parallel: FAIL (285 passed, 2 failed, 577 skipped)
+- 2026-04-23T16:44:04.000Z actor-conn: FAIL - `isConnected should be false before connection opens` failed at `tests/driver/actor-conn.test.ts:419` with `AssertionError: expected false to be true // Object.is equality`. Existing story DT-047 covers this failure.
+- 2026-04-23T16:44:04.000Z raw-websocket: FAIL - `acks buffered indexed raw websocket messages immediately at the threshold` failed at `tests/driver/raw-websocket.test.ts:752` with `AssertionError: expected undefined to match object { type: 'welcome' }`. Reopened DT-015.
+- 2026-04-23T16:44:04.000Z slow parallel: FAIL (67 passed, 1 failed, 166 skipped)
+- 2026-04-23T16:44:04.000Z actor-run: FAIL - `run handler starts after actor startup` failed at `tests/driver/actor-run.test.ts:19` with `AssertionError: expected false to be true // Object.is equality`. Follow-up story: DT-052.
+- 2026-04-23T16:58:02.000Z fast parallel: FAIL (286 passed, 1 failed, 577 skipped)
+- 2026-04-23T16:58:02.000Z actor-conn: PASS in fast static/http/bare verifier.
+- 2026-04-23T16:58:02.000Z actor-queue: PASS in fast static/http/bare verifier.
+- 2026-04-23T16:58:02.000Z raw-websocket: PASS in fast static/http/bare verifier.
+- 2026-04-23T16:58:02.000Z lifecycle-hooks: FAIL - `rejects connection with generic error` timed out at `tests/driver/lifecycle-hooks.test.ts:31`. Follow-up story: DT-053.
+- 2026-04-23T16:58:02.000Z slow parallel: PASS (68 passed, 0 failed, 166 skipped)
+- 2026-04-23T16:58:02.000Z actor-run: PASS in slow static/http/bare verifier.
+- 2026-04-23T17:13:02.000Z lifecycle-hooks: PASS DT-053. Targeted bare `rejects connection with generic error` passed; full lifecycle-hooks file passed (24 passed, 0 failed); `RIVETKIT_DRIVER_TEST_PARALLEL=1` bare lifecycle-hooks filter passed (8 passed, 0 failed, 16 skipped); `pnpm -F rivetkit check-types` passed.

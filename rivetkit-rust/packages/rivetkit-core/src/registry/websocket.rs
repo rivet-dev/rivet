@@ -3,6 +3,7 @@ use super::dispatch::*;
 use super::inspector::encode_json_as_cbor;
 use super::*;
 use crate::error::ProtocolError;
+use tokio::time::timeout;
 
 impl RegistryDispatcher {
 	pub(super) async fn handle_websocket(
@@ -105,6 +106,7 @@ impl RegistryDispatcher {
 			instance.factory.config().max_incoming_message_size as usize;
 		let max_outgoing_message_size =
 			instance.factory.config().max_outgoing_message_size as usize;
+		let connect_timeout = instance.factory.config().on_connect_timeout;
 
 		let conn_params = websocket_conn_params(headers)?;
 		let connect_request = Request::from_parts("GET", path, headers.clone(), Vec::new())
@@ -143,19 +145,20 @@ impl RegistryDispatcher {
 					.collect(),
 			});
 
-			match instance
-				.ctx
-				.connect_conn(
+			match timeout(
+				connect_timeout,
+				instance.ctx.connect_conn(
 					conn_params,
 					is_hibernatable,
 					hibernation,
 					Some(connect_request),
 					async { Ok(Vec::new()) },
-				)
-				.await
+				),
+			)
+			.await
 			{
-				Ok(conn) => conn,
-				Err(error) => {
+				Ok(Ok(conn)) => conn,
+				Ok(Err(error)) => {
 					let rivet_error = RivetError::extract(&error);
 					tracing::warn!(
 						actor_id,
@@ -174,6 +177,27 @@ impl RegistryDispatcher {
 							code: rivet_error.code().to_owned(),
 							message: rivet_error.message().to_owned(),
 							metadata,
+							action_id: None,
+						},
+						max_outgoing_message_size,
+					));
+				}
+				Err(_) => {
+					tracing::warn!(
+						actor_id,
+						timeout_ms = connect_timeout.as_millis(),
+						"actor websocket connection setup timed out"
+					);
+					return Ok(actor_connect_error_websocket_handler(
+						encoding,
+						ActorConnectError {
+							group: "actor".to_owned(),
+							code: "callback_timed_out".to_owned(),
+							message: format!(
+								"actor websocket connection setup timed out after {} ms",
+								connect_timeout.as_millis()
+							),
+							metadata: None,
 							action_id: None,
 						},
 						max_outgoing_message_size,

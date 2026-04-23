@@ -5,6 +5,7 @@ Started: Thu Apr 23 04:17:16 AM PDT 2026
 ## Codebase Patterns
 - Use rustls for Rust HTTP/TLS clients; `reqwest`, Hyper clients, and published NAPI paths must not pull `native-tls`, `openssl-sys`, `libssl`, or `libcrypto`.
 - Actor-connect WebSocket setup failures should send a protocol `Error` frame before closing; JSON/CBOR connection-level errors must include `actionId: null`.
+- Actor-connect WebSocket setup also needs a registry-level timeout; the HTTP upgrade can finish before `connection_open` replies, so wedged setup must emit a structured error and close instead of idling until the client times out.
 - Flush the envoy `WebSocketSender` after queueing required setup/error frames and before an immediate close, so the outgoing task handles the frame before termination.
 - Actor-connect protocol `actionId` values are nullable; `0` is a valid action ID, and only `null` means a connection-level error.
 - Gateway actor-connect must preserve tunnel messages queued between the envoy open ack and the websocket forwarding task; setup-error close frames can arrive immediately after open.
@@ -14,6 +15,7 @@ Started: Thu Apr 23 04:17:16 AM PDT 2026
 - Raw `db()` uses the native database provider only; custom raw database client overrides are removed.
 - Queue enqueue-and-wait must register the completion waiter before publishing the queue message to KV; otherwise a fast consumer can complete the message before the waiter exists.
 - If Rust under `rivetkit-core` changes, make sure the local NAPI `.node` artifact is newer than the changed Rust files before rerunning driver tests.
+- A driver story is not really dead until the matrix-shaped fast/slow verifier stays green; if the exact same file/test regresses there, reopen the existing story instead of spawning a duplicate.
 
 ## 2026-04-23T11:45:04Z - DT-000
 - Implemented the urgent Linux NAPI publish fix in `/tmp/rivet-publish-fix` on branch `04-22-chore_fix_remaining_issues_with_rivetkit-core`.
@@ -225,4 +227,33 @@ Started: Thu Apr 23 04:17:16 AM PDT 2026
 - Verification: targeted indexed ack test passed; targeted threshold-buffered ack test passed; full `raw-websocket.test.ts` passed with 39 tests across bare/CBOR/JSON; `pnpm -F rivetkit check-types` passed.
 - **Learnings for future iterations:**
   - Stale driver stories can be closed without source changes only after the exact target checks, whole-file verifier, and typecheck all pass on the current branch.
+---
+## 2026-04-23T16:44:04Z - DT-008
+- Re-ran the static/http/bare fast and slow driver verifiers for the DT-008 slice.
+- DT-008 remains blocked: fast failed with 285 passed, 2 failed, 577 skipped; slow failed with 67 passed, 1 failed, 166 skipped.
+- Reopened DT-015 for the raw-websocket threshold ack regression, kept DT-047 open for actor-conn, and added DT-052 for the new actor-run startup failure.
+- Files changed: `scripts/ralph/prd.json`, `.agent/notes/driver-test-progress.md`, `scripts/ralph/progress.txt`.
+- Verification: `RIVETKIT_DRIVER_TEST_PARALLEL=1 pnpm test <fast driver files> -t "static registry.*encoding \\(bare\\)"` failed on `actor-conn` and `raw-websocket`; `RIVETKIT_DRIVER_TEST_PARALLEL=1 pnpm test <slow driver files> -t "static registry.*encoding \\(bare\\)"` failed on `actor-run`. No source code was changed and no commit was made because DT-008 acceptance criteria are still not satisfied.
+- **Learnings for future iterations:**
+  - A previously closed driver story is not actually dead until the matrix-shaped verifier stays green; reopen the existing story when the exact same test regresses instead of spawning a duplicate.
+  - The static/http/bare fast and slow parallel sweeps can expose different failures in the same iteration, so finish both runs before deciding which follow-up stories to open.
+---
+## 2026-04-23T16:58:02Z - DT-008
+- Re-ran the static/http/bare fast and slow driver verifiers for the DT-008 slice.
+- DT-008 remains blocked: fast failed with 286 passed, 1 failed, 577 skipped; slow passed with 68 passed, 0 failed, 166 skipped.
+- The old fast/slow blockers did not reproduce in this sweep: actor-conn, actor-queue, raw-websocket, and actor-run all passed. Added DT-053 for the new lifecycle-hooks bare `rejects connection with generic error` timeout at `tests/driver/lifecycle-hooks.test.ts:31`.
+- Files changed: `scripts/ralph/prd.json`, `.agent/notes/driver-test-progress.md`, `scripts/ralph/progress.txt`.
+- Verification: `RIVETKIT_DRIVER_TEST_PARALLEL=1 pnpm test <fast driver files> -t "static registry.*encoding \\(bare\\)"` failed only on `lifecycle-hooks`; `RIVETKIT_DRIVER_TEST_PARALLEL=1 pnpm test <slow driver files> -t "static registry.*encoding \\(bare\\)"` passed. No source code was changed and no commit was made because DT-008 acceptance criteria are still not satisfied.
+- **Learnings for future iterations:**
+  - The matrix-shaped verifier can clear several stale blockers and still surface a completely different failing file in the same sweep, so update the suite status to match the latest run instead of leaving old `[!]` markers around.
+  - DT-008 is still a moving target even when the previous follow-up stories stop reproducing; the current blocker list has to come from the newest fast/slow verifier, not yesterday's failures.
+---
+## 2026-04-23T10:14:28Z - DT-053
+- Implemented a registry-level timeout around actor-connect websocket setup so `onBeforeConnect` failures cannot leave upgraded sockets hanging until the Vitest client timeout.
+- Files changed: `rivetkit-rust/packages/rivetkit-core/src/registry/websocket.rs`, `rivetkit-rust/packages/rivetkit-core/CLAUDE.md`, `.agent/notes/driver-test-progress.md`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
+- Verification: `cargo build -p rivetkit-core` passed; `pnpm --filter @rivetkit/rivetkit-napi build:force` passed; `pnpm test tests/driver/lifecycle-hooks.test.ts -t "static registry.*encoding \\(bare\\).*rejects connection with generic error"` passed; `pnpm test tests/driver/lifecycle-hooks.test.ts` passed with 24 tests; `RIVETKIT_DRIVER_TEST_PARALLEL=1 pnpm test tests/driver/lifecycle-hooks.test.ts -t "static registry.*encoding \\(bare\\).*Lifecycle Hooks"` passed; `pnpm check-types` passed.
+- **Learnings for future iterations:**
+  - The HTTP websocket upgrade can succeed before `connection_open` responds, so actor-connect setup needs its own timeout at the registry boundary rather than relying on the client-side websocket timeout.
+  - When a Rust core change touches driver behavior, rebuild `@rivetkit/rivetkit-napi` before trusting a TypeScript driver repro; stale `.node` artifacts will waste your time.
+  - `lifecycle-hooks` can pass in an isolated test case while still hanging in the full file, so re-run the whole file before calling the story fixed.
 ---

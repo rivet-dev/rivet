@@ -155,7 +155,7 @@
       ],
       "priority": 8,
       "passes": false,
-      "notes": "DT-008 verification failed on 2026-04-23T07:02Z. Fast bare sweep: 281 passed, 6 failed, 577 skipped. Slow bare sweep: 67 passed, 1 failed, 166 skipped. Follow-up stories added as DT-011..DT-016. Rechecked full-file set on 2026-04-23T12:14Z: 239 passed, 4 failed, 33 skipped. Existing DT-014 covers conn-error-serialization; new follow-up stories added as DT-045 and DT-046. Rechecked on 2026-04-23T14:32Z: 241 passed, 2 failed, 33 skipped. Rechecked on 2026-04-23T14:55Z: 240 passed, 3 failed, 33 skipped. Rechecked on 2026-04-23T15:18Z: 242 passed, 1 failed, 33 skipped. DT-048 conn-error-serialization passed across bare/CBOR/JSON; DT-047 actor-conn `isConnected should be false before connection opens` reproduced under static/bare. Rechecked on 2026-04-23T15:29Z: 242 passed, 1 failed, 33 skipped. DT-048 conn-error-serialization bare `createConnState preserves group/code` timed out again under the six-file verifier; DT-048 reopened. Rechecked static/http/bare fast+slow on 2026-04-23T16:23Z: fast failed with 285 passed, 2 failed, 577 skipped; slow passed with 68 passed, 166 skipped. Existing DT-047 covers actor-conn. New follow-up DT-051 covers actor-queue `dispatch_inbox` overload."
+      "notes": "DT-008 verification failed on 2026-04-23T07:02Z. Fast bare sweep: 281 passed, 6 failed, 577 skipped. Slow bare sweep: 67 passed, 1 failed, 166 skipped. Follow-up stories added as DT-011..DT-016. Rechecked full-file set on 2026-04-23T12:14Z: 239 passed, 4 failed, 33 skipped. Existing DT-014 covers conn-error-serialization; new follow-up stories added as DT-045 and DT-046. Rechecked on 2026-04-23T14:32Z: 241 passed, 2 failed, 33 skipped. Rechecked on 2026-04-23T14:55Z: 240 passed, 3 failed, 33 skipped. Rechecked on 2026-04-23T15:18Z: 242 passed, 1 failed, 33 skipped. DT-048 conn-error-serialization passed across bare/CBOR/JSON; DT-047 actor-conn `isConnected should be false before connection opens` reproduced under static/bare. Rechecked on 2026-04-23T15:29Z: 242 passed, 1 failed, 33 skipped. DT-048 conn-error-serialization bare `createConnState preserves group/code` timed out again under the six-file verifier; DT-048 reopened. Rechecked static/http/bare fast+slow on 2026-04-23T16:23Z: fast failed with 285 passed, 2 failed, 577 skipped; slow passed with 68 passed, 166 skipped. Existing DT-047 covers actor-conn. New follow-up DT-051 covers actor-queue `dispatch_inbox` overload. Rechecked static/http/bare fast+slow on 2026-04-23T16:44Z: fast failed with 285 passed, 2 failed, 577 skipped; slow failed with 67 passed, 1 failed, 166 skipped. DT-047 still covers actor-conn. DT-015 was reopened for the raw-websocket threshold ack regression, and new follow-up DT-052 covers the actor-run startup regression. Rechecked static/http/bare fast+slow on 2026-04-23T16:58Z: fast failed with 286 passed, 1 failed, 577 skipped; slow passed with 68 passed, 166 skipped. The earlier actor-conn, actor-queue, raw-websocket, and actor-run regressions did not reproduce in this sweep. New follow-up DT-053 covers the lifecycle-hooks `rejects connection with generic error` timeout at `tests/driver/lifecycle-hooks.test.ts:31`."
     },
     {
       "id": "DT-009",
@@ -283,8 +283,8 @@
         "Tests pass"
       ],
       "priority": 15,
-      "passes": true,
-      "notes": "Completed on 2026-04-23: the stale raw-websocket hibernatable ack-state failure no longer reproduces. Both targeted static/http/bare ack-state tests passed, the full raw-websocket file passed with 39 tests across bare/CBOR/JSON, and pnpm -F rivetkit check-types passed."
+      "passes": false,
+      "notes": "Completed on 2026-04-23, then reopened on 2026-04-23T16:44Z after the static/http/bare fast parallel verifier failed `tests/driver/raw-websocket.test.ts:752` (`acks buffered indexed raw websocket messages immediately at the threshold`) with `AssertionError: expected undefined to match object { type: 'welcome' }`. The stale recheck was not enough; the regression still reproduces in the matrix-shaped run."
     },
     {
       "id": "DT-016",
@@ -928,6 +928,42 @@
       ],
       "priority": 49,
       "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "DT-052",
+      "title": "Fix actor-run startup regression under static/http/bare slow verifier",
+      "description": "DT-008 slow static/http/bare verification on 2026-04-23 failed `tests/driver/actor-run.test.ts:19` (`run handler starts after actor startup`) with `AssertionError: expected false to be true // Object.is equality`. The slow parallel verifier saw the actor-run startup flag still false when the test expected the run handler to have started. Root-cause why the run handler startup ordering regresses under the slow bare matrix even though the rest of the slow slice passed.",
+      "acceptanceCriteria": [
+        "Single-test verification: `pnpm -F rivetkit test tests/driver/actor-run.test.ts -t \"static registry.*encoding \\\\(bare\\\\).*run handler starts after actor startup\"` passes",
+        "Whole-file verification: `pnpm -F rivetkit test tests/driver/actor-run.test.ts` passes with zero failures",
+        "Slow bare matrix verification includes `actor-run` passing under `RIVETKIT_DRIVER_TEST_PARALLEL=1` with the static/http/bare filter",
+        "Root cause identifies why the run-handler startup ordering fails only in the slow bare verifier shape",
+        "Fix does not add timeout bumps, retry masking, or test-only sleeps",
+        "`.agent/notes/driver-test-progress.md` updates the `actor-run` entry from `[!]` to `[x]` and appends a PASS line",
+        "`pnpm -F rivetkit check-types` passes",
+        "Tests pass"
+      ],
+      "priority": 50,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "DT-053",
+      "title": "Fix lifecycle-hooks generic onBeforeConnect rejection timeout under static/http/bare",
+      "description": "DT-008 fast static/http/bare verification on 2026-04-23 failed `tests/driver/lifecycle-hooks.test.ts:31` (`rejects connection with generic error`) with `Error: Test timed out in 30000ms.` The test calls `client.beforeConnectGenericErrorActor.getOrCreate().connect({ shouldFail: true })`, then expects `await expect(conn.ping()).rejects.toThrow()` to resolve promptly. In the fast matrix run the connection logs `socket closed` and `connection retry aborted`, but the awaited rejection never reaches the test before timeout.",
+      "acceptanceCriteria": [
+        "Single-test verification: `pnpm -F rivetkit test tests/driver/lifecycle-hooks.test.ts -t \"static registry.*encoding \\\\(bare\\\\).*rejects connection with generic error\"` passes",
+        "Whole-file verification: `pnpm -F rivetkit test tests/driver/lifecycle-hooks.test.ts` passes with zero failures",
+        "Fast bare matrix verification includes `lifecycle-hooks` passing under `RIVETKIT_DRIVER_TEST_PARALLEL=1` with the static/http/bare filter",
+        "Root cause identifies why a generic `onBeforeConnect` failure can leave the pending connection action unresolved or otherwise not reject the caller under the matrix-shaped fast run",
+        "Fix does not add timeout bumps, retry masking, or test-only sleeps",
+        "`.agent/notes/driver-test-progress.md` updates the `lifecycle-hooks` entry from `[!]` to `[x]` and appends a PASS line",
+        "`pnpm -F rivetkit check-types` passes",
+        "Tests pass"
+      ],
+      "priority": 51,
+      "passes": true,
       "notes": ""
     }
   ]

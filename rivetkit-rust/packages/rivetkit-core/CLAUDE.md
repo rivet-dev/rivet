@@ -19,3 +19,4 @@
 - Raw `onWebSocket` hibernatable connections must create `HibernatableConnectionMetadata` and persist plus ack every inbound message through core before gateway replay state is correct.
 - Actor-connect WebSocket setup errors must send a protocol `Error` frame before closing; JSON/CBOR connection-level errors include `actionId: null`.
 - Flush the actor-connect `WebSocketSender` after queuing a setup `Error` frame and before closing so the envoy writer handles the error before the close terminates the connection.
+- Bound actor-connect websocket setup at the registry boundary as well as inside the actor task. The HTTP upgrade can complete before `connection_open` replies, so a missing reply must still close the socket instead of idling until the client test timeout.
