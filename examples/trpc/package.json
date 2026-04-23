@@ -17,7 +17,7 @@
 		"@hono/trpc-server": "^0.3.0",
 		"@trpc/client": "^11.3.1",
 		"@trpc/server": "^11.4.2",
-		"hono": "^4.7.11",
+		"hono": "^4.12.14",
 		"rivetkit": "^2.3.0-rc.4",
 		"zod": "^3.25.76"
 	},
