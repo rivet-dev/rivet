@@ -30,6 +30,10 @@ declare module "@tanstack/react-query" {
 			mightRequireAuth?: boolean;
 			statusCheck?: boolean;
 			reportType?: string;
+			actorsList?: boolean;
+			actorsListQueryKey?: readonly unknown[];
+			actorsListPage1Poll?: boolean;
+			actorsListTargetQueryKey?: readonly unknown[];
 		};
 	}
 }

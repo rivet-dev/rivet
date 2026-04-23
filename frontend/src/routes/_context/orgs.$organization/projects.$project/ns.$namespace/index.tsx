@@ -19,12 +19,11 @@ export const Route = createFileRoute(
 	loaderDeps(opts) {
 		return {
 			n: opts.search.n,
-			actorId: opts.search.actorId,
-			actorKey: opts.search.actorKey,
 		};
 	},
-	async loader({ context, deps }) {
+	async loader({ context, deps, location }) {
 		const dataProvider = context.dataProvider;
+		const { actorId, actorKey } = location.search as Record<string, string> || {};
 
 		// Prefetch runner configs so EmptyState doesn't flash "No Providers Connected"
 		// while the queries are loading.
@@ -37,7 +36,7 @@ export const Route = createFileRoute(
 			),
 		]);
 
-		if (deps.n && (deps.actorId || deps.actorKey)) {
+		if (deps.n && (actorId || actorKey)) {
 			await runnerPrefetch;
 			return;
 		}

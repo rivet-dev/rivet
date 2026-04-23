@@ -38,12 +38,14 @@ import { CloudApiTokens, PublishableToken, SecretToken } from "./tokens";
 export const Route = createFileRoute(
 	"/_context/orgs/$organization/projects/$project/ns/$namespace/settings",
 )({
-	component: features.namespaceManagement
-		? RouteComponent
-		: () => {
-				throw notFound();
-			},
+	component:RouteComponent,
+		
 	pendingComponent: DataLoadingPlaceholder,
+	beforeLoad: async () => {
+		if(!features.multitenancy) {
+			throw notFound();
+		}
+	},
 	loader: async ({ context }) => {
 		const dataProvider = context.dataProvider;
 		await Promise.all([

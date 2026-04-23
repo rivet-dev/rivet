@@ -36,19 +36,19 @@ const stepper = defineStepper(
 		title: "Deploy",
 		assist: false,
 		schema: z.object({}),
-		next: "Next",
-	},
-	{
-		id: "step-3",
-		title: "Wait for the Runner to connect",
-		assist: true,
-		schema: z.object({
-			success: z.boolean().refine((v) => v === true, {
-				message: "Runner must be connected to proceed",
-			}),
-		}),
 		next: "Add",
 	},
+	// {
+	// 	id: "step-3",
+	// 	title: "Wait for the Runner to connect",
+	// 	assist: true,
+	// 	schema: z.object({
+	// 		success: z.boolean().refine((v) => v === true, {
+	// 			message: "Runner must be connected to proceed",
+	// 		}),
+	// 	}),
+	// 	next: "Add",
+	// },
 );
 
 interface ConnectManualServerlfullFrameContentProps extends DialogContentProps {
@@ -147,7 +147,7 @@ function FormStepper({
 			content={{
 				"step-1": () => <Step1 />,
 				"step-2": () => <Step2 provider={provider} />,
-				"step-3": () => <Step3 />,
+				// "step-3": () => <Step3 />,
 			}}
 		/>
 	);

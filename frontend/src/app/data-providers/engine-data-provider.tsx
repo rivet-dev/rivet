@@ -15,6 +15,7 @@ import type { ActorId } from "@/components/actors";
 import { engineEnv } from "@/lib/env";
 import { convertStringToId } from "@/lib/utils";
 import { features } from "@/lib/features";
+import { createActorBatchLoader } from "@/queries/actor-batch-loader";
 import { noThrow, shouldRetryAllExpect403 } from "@/queries/utils";
 import {
 	type ActorQueryOptions,
@@ -142,6 +143,15 @@ export const createNamespaceContext = ({
 	...parent
 }: { namespace: string } & ReturnType<typeof createGlobalContext>) => {
 	const def = createDefaultGlobalContext();
+
+	const actorBatchLoader = createActorBatchLoader(async (actorIds) => {
+		const data = await client.actorsList({
+			namespace,
+			actorIds: actorIds.join(","),
+		});
+		return data.actors;
+	});
+
 	const dataProvider = {
 		...def,
 		endpoint: engineEnv().VITE_APP_API_URL,
@@ -208,12 +218,14 @@ export const createNamespaceContext = ({
 				],
 				enabled: !!actorId,
 				queryFn: async () => {
+					if (typeof actorId === "string") {
+						return actorBatchLoader.load(actorId);
+					}
+
 					const data = await client.actorsList({
-						...(typeof actorId === "string"
-							? { actorIds: actorId }
-							: actorId && "key" in actorId
-								? { key: actorId.key, name: actorId.name }
-								: {}),
+						...(actorId && "key" in actorId
+							? { key: actorId.key, name: actorId.name }
+							: {}),
 						namespace,
 					});
 
@@ -288,6 +300,57 @@ export const createNamespaceContext = ({
 				throwOnError: noThrow,
 				meta: {
 					mightRequireAuth,
+				},
+			});
+		},
+		actorsListPage1PollQueryOptions(opts: ActorQueryOptions) {
+			return queryOptions({
+				...def.actorsListPage1PollQueryOptions(opts),
+				queryKey: [
+					{ namespace },
+					...def.actorsListPage1PollQueryOptions(opts).queryKey,
+				] as QueryKey,
+				enabled: (opts?.n || []).length > 0,
+				refetchInterval: 5000,
+				queryFn: async ({ queryKey: [, , , _opts] }) => {
+					const { success, data: parsedOpts } =
+						ActorQueryOptionsSchema.safeParse(_opts || {});
+
+					if (
+						(parsedOpts?.n?.length === 0 || !parsedOpts?.n) &&
+						(parsedOpts?.filters?.id?.value?.length === 0 ||
+							!parsedOpts?.filters?.id?.value ||
+							parsedOpts?.filters.key?.value?.length === 0 ||
+							!parsedOpts?.filters.key?.value)
+					) {
+						return { actors: [], pagination: { cursor: undefined } };
+					}
+
+					const data = await client.actorsList({
+						namespace,
+						cursor: undefined,
+						actorIds: parsedOpts?.filters?.id?.value?.join(","),
+						key: parsedOpts?.filters?.key?.value?.join(","),
+						includeDestroyed:
+							success &&
+							(parsedOpts?.filters?.showDestroyed?.value.includes(
+								"true",
+							) ||
+								parsedOpts?.filters?.showDestroyed?.value.includes(
+									"1",
+								)),
+						limit: RECORDS_PER_PAGE,
+						name: parsedOpts?.n?.join(","),
+					});
+
+					return data;
+				},
+				retry: shouldRetryAllExpect403,
+				throwOnError: noThrow,
+				meta: {
+					mightRequireAuth,
+					actorsListPage1Poll: true,
+					actorsListTargetQueryKey: this.actorsQueryOptions(opts).queryKey,
 				},
 			});
 		},

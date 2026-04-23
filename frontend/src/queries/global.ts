@@ -1,10 +1,13 @@
 import {
 	CancelledError,
+	type InfiniteData,
 	MutationCache,
 	QueryCache,
 	QueryClient,
+	type QueryKey,
 	queryOptions,
 } from "@tanstack/react-query";
+import type { Rivet } from "@rivetkit/engine-api-full";
 import { posthog } from "@/lib/posthog";
 import { toast } from "@/components";
 import { isRivetApiError } from "@/lib/errors";
@@ -50,6 +53,34 @@ const queryCache = new QueryCache({
 				});
 			}
 		}
+
+		if (query.meta?.actorsListPage1Poll) {
+			const response = data as Rivet.ActorsListResponse;
+			const targetKey = query.meta.actorsListTargetQueryKey as QueryKey;
+			queryClient.setQueryData<InfiniteData<Rivet.ActorsListResponse>>(
+				targetKey,
+				(old) => {
+					if (!old?.pages.length) return old;
+					const existingIds = new Set(
+						old.pages.flatMap((p) => p.actors.map((a) => a.actorId)),
+					);
+					const newActors = response.actors.filter(
+						(a) => !existingIds.has(a.actorId),
+					);
+					if (!newActors.length) return old;
+					return {
+						...old,
+						pages: [
+							{
+								...old.pages[0],
+								actors: [...newActors, ...old.pages[0].actors],
+							},
+							...old.pages.slice(1),
+						],
+					};
+				},
+			);
+		}
 	},
 });
 
@@ -63,7 +94,7 @@ const mutationCache = new MutationCache({
 			? error.body.message
 			: error.message;
 
-		toast.error("Error occurred while performing the operation.", {
+		toast.error("Operation failed", {
 			description,
 		});
 	},

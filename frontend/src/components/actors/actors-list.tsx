@@ -13,10 +13,12 @@ import {
 } from "@rivet-gg/icons";
 import {
 	useInfiniteQuery,
+	useQuery,
 	useSuspenseInfiniteQuery,
 } from "@tanstack/react-query";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
-import { Suspense, useCallback } from "react";
+import { Suspense, useCallback, useRef, type RefObject } from "react";
 import { useLocalStorage } from "usehooks-ts";
 import { RECORDS_PER_PAGE } from "@/app/data-providers/default-data-provider";
 import {
@@ -45,17 +47,28 @@ import { NoProvidersAlert } from "./no-providers-alert";
 import { useRootLayout } from "./root-layout-context";
 
 export function ActorsList() {
+	const viewportRef = useRef<HTMLDivElement>(null);
+
 	return (
-		<ScrollArea className="w-full @container/main">
+		<ScrollArea
+			className="h-full w-full @container/main"
+			viewportRef={viewportRef}
+		>
 			<TopBar />
-			<div className="grid grid-cols-[1.5rem_4fr] @xs/main:grid-cols-[1.5rem_4fr_1fr] items-center justify-center gap-x-1 w-full @container/table">
-				<Suspense fallback={<ListSkeleton />}>
-					<List />
-					<Pagination />
-				</Suspense>
-			</div>
+			<Page1Poller />
+			<Suspense fallback={<ListSkeleton />}>
+				<List viewportRef={viewportRef} />
+				<Pagination />
+			</Suspense>
 		</ScrollArea>
 	);
+}
+
+function Page1Poller() {
+	const { n } = useSearch({ from: "/_context" });
+	const filters = useFiltersValue({ onlyStatic: true });
+	useQuery(useDataProvider().actorsListPage1PollQueryOptions({ n, filters }));
+	return null;
 }
 
 function TopBar() {
@@ -124,7 +137,9 @@ function LoadingIndicator() {
 	return null;
 }
 
-function List() {
+function List({
+	viewportRef,
+}: { viewportRef: RefObject<HTMLDivElement | null> }) {
 	const filters = useFiltersValue({ onlyStatic: true });
 	const { actorId, actorKey, n } = useSearch({
 		from: "/_context",
@@ -133,19 +148,42 @@ function List() {
 		useDataProvider().actorsListQueryOptions({ n, filters }),
 	);
 
+	const rowVirtualizer = useVirtualizer({
+		count: actors.length,
+		getScrollElement: () => viewportRef.current,
+		estimateSize: () => 56,
+		overscan: 5,
+	});
+
 	return (
-		<>
-			{actors.map((actor) => (
-				<ActorsListRow
-					key={actor.key}
-					actorKey={actor.key}
-					actorId={actor.actorId}
-					isCurrent={
-						actorId === actor.actorId || actorKey === actor.key
-					}
-				/>
-			))}
-		</>
+		<div
+			className="relative w-full"
+			style={{ height: rowVirtualizer.getTotalSize() }}
+		>
+			{rowVirtualizer.getVirtualItems().map((virtualItem) => {
+				const actor = actors[virtualItem.index];
+				return (
+					<div
+						key={actor.actorId}
+						ref={rowVirtualizer.measureElement}
+						data-index={virtualItem.index}
+						className="absolute inset-x-0"
+						style={{
+							transform: `translateY(${virtualItem.start}px)`,
+						}}
+					>
+						<ActorsListRow
+							actorKey={actor.key}
+							actorId={actor.actorId}
+							isCurrent={
+								actorId === actor.actorId ||
+								actorKey === actor.key
+							}
+						/>
+					</div>
+				);
+			})}
+		</div>
 	);
 }
 
@@ -176,7 +214,7 @@ function Pagination() {
 
 export function ListSkeleton() {
 	return (
-		<div className="grid grid-cols-subgrid col-span-full">
+		<div className="w-full">
 			{Array(RECORDS_PER_PAGE)
 				.fill(null)
 				.map((_, i) => (
