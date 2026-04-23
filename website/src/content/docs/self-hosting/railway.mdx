@@ -67,6 +67,7 @@ railway init
 2. Set image: `rivetdev/engine:latest`
 3. Configure environment variables:
     - `RIVET__POSTGRES__URL=${{Postgres.DATABASE_URL}}`
+4. Configure graceful shutdown (see [Graceful Shutdown](#graceful-shutdown) below)
 
 ### Step 3: Deploy Your Application
 
@@ -77,6 +78,21 @@ Follow the [Railway Quick Start guide](https://docs.railway.com/quick-start) to 
 3. Railway will automatically detect and deploy your application
 4. Configure environment variables for your application:
     - `RIVET_ENDPOINT=${{Rivet.RAILWAY_PRIVATE_DOMAIN}}` - Points to the Rivet Engine service's private domain
+
+## Graceful Shutdown
+
+By default, Railway kills the old deploy 0 seconds after sending `SIGTERM` (see [Railway's docs](https://docs.railway.com/deployments/reference#singleton-deploys)), so in-flight requests are dropped and state flushes can be interrupted on every deploy. Rivet ships with a `SIGTERM` handler that drains cleanly, but it only gets to run if Railway is configured to give it time.
+
+Configure the following under **Settings → Deploy** on your service:
+
+- **Draining seconds** — the grace window between `SIGTERM` and `SIGKILL`. This is how long Rivet has to finish in-flight work and flush state. See [Railway's deployment teardown docs](https://docs.railway.com/deployments/deployment-teardown).
+
+Set draining seconds in the dashboard, via `drainingSeconds` in config-as-code, or via the `RAILWAY_DEPLOYMENT_DRAINING_SECONDS` service variable. A reasonable value is **60 seconds**.
+
+If your start command is a wrapper process (for example `npm start`, `yarn start`, `pnpm start`, or a shell script), the wrapper becomes PID 1 and swallows the signal — your app never drains and Railway force-kills it at the end of the window.
+
+- Invoke your binary directly as the start command (for example `node dist/index.js`, not `npm start`).
+- Or run `dumb-init` / `tini` as PID 1 in your Dockerfile so signals forward to your process.   
 
 ## Next Steps
 
