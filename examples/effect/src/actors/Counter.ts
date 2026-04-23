@@ -3,7 +3,7 @@ import { Actor } from "@rivetkit/effect"
 
 // --- Definition ---
 
-export class CounterOverflowError extends Schema.TaggedError<CounterOverflowError>()(
+export class CounterOverflowError extends Schema.TaggedErrorClass<CounterOverflowError>()(
 	"CounterOverflowError",
 	{ limit: Schema.Number },
 ) {}
@@ -22,7 +22,7 @@ export const Counter = Actor.make("Counter", {
 	//
 	// 1. Runtime validation. Client-to-server is an untrusted boundary.
 	//    Schemas let the server validate wire data with
-	//    Schema.decodeUnknown before it reaches handler code. Handler
+	//    Schema.decodeUnknownEffect before it reaches handler code. Handler
 	//    inference erases types at runtime and trusts whatever arrives.
 	//
 	// 2. Wire encoding control. Effect Schema distinguishes encoded
