@@ -17,7 +17,7 @@ const program = Effect.gen(function* () {
   const counter = counterClient.getOrCreate(["counter-123"])
 
   // Action calls return Effects with types inferred from the schema.
-  //   counter.increment: (input: { amount: number }) => Effect<number, CounterOverflowError>
+  //   counter.increment: (payload: { amount: number }) => Effect<number, CounterOverflowError>
   const count = yield* counter.increment({ amount: 5 })
   yield* Effect.log(`Count: ${count}`)
 

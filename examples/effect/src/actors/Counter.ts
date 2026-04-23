@@ -19,7 +19,7 @@ export const Counter = Actor.make("Counter", {
   events: { countChanged: Schema.Number },
   actions: {
     increment: {
-      input: Schema.Struct({ amount: Schema.Number }),
+      payload: Schema.Struct({ amount: Schema.Number }),
       success: Schema.Number,
       error: CounterOverflowError,
     },
@@ -53,10 +53,10 @@ export const CounterLive = Counter.toLayer(
     // Return the action implementations. Counter.of
     // type-checks each handler against its Action schema.
     return Counter.of({
-      increment: ({ input }) =>
+      increment: ({ payload }) =>
         Effect.gen(function* () {
           const next = yield* Ref.updateAndGet(state, (s) => ({
-            count: s.count + input.amount,
+            count: s.count + payload.amount,
           }))
           if (next.count > 20) {
             return yield* new CounterOverflowError({ limit: 20 })
