@@ -19,6 +19,7 @@ export const destroyObserver = actor({
 
 export const destroyActor = actor({
 	state: { value: 0, key: "" },
+	createVars: () => ({ ephemeral: "fresh" }),
 	queues: {
 		values: queue<number>(),
 	},
@@ -59,6 +60,13 @@ export const destroyActor = actor({
 		},
 		getValue: (c) => {
 			return c.state.value;
+		},
+		setEphemeral: (c, value: string) => {
+			c.vars.ephemeral = value;
+			return c.vars.ephemeral;
+		},
+		getEphemeral: (c) => {
+			return c.vars.ephemeral;
 		},
 		receiveValue: async (c) => {
 			const message = await c.queue.next({

@@ -2,7 +2,7 @@
 
 import { describe, expect, test, vi } from "vitest";
 import { describeDriverMatrix } from "./shared-matrix";
-import { FAKE_TIME, setupDriverTest, waitFor } from "./shared-utils";
+import { setupDriverTest } from "./shared-utils";
 
 const CONNECTION_BOOTSTRAP_TIMEOUT_MS = 20_000;
 
@@ -10,13 +10,36 @@ async function waitForConnectionBootstrap<T>(
 	action: () => Promise<T>,
 ): Promise<T> {
 	let result: T | undefined;
+	// Poll because actor-connect bootstrap can race registry setup and only becomes callable once the socket is ready.
 	await vi.waitFor(
 		async () => {
 			result = await action();
 		},
 		{ timeout: CONNECTION_BOOTSTRAP_TIMEOUT_MS, interval: 100 },
 	);
-	return result!;
+	if (result === undefined) {
+		throw new Error("connection bootstrap never produced a result");
+	}
+	return result;
+}
+
+function collectConnectionEvents<T>(
+	connection: {
+		on(eventName: string, callback: (value: T) => void): () => void;
+	},
+	eventName: string,
+	count: number,
+): Promise<T[]> {
+	return new Promise((resolve) => {
+		const values: T[] = [];
+		const unsubscribe = connection.on(eventName, (value: T) => {
+			values.push(value);
+			if (values.length === count) {
+				unsubscribe();
+				resolve(values);
+			}
+		});
+	});
 }
 
 describeDriverMatrix("Actor Conn", (driverTestConfig) => {
@@ -109,26 +132,25 @@ describeDriverMatrix("Actor Conn", (driverTestConfig) => {
 					receivedEvents.push(count);
 				});
 
-				// TODO: There is a race condition with opening subscription and sending events on SSE, so we need to wait for a successful round trip on the event
-				await vi.waitFor(
-					async () => {
-						// Send one RPC call over the connection to ensure it's open.
-						await connection.setCount(1);
-						expect(receivedEvents).includes(1);
-					},
-					{ timeout: 10_000, interval: 25 },
+				const bootstrapEventPromise = collectConnectionEvents<number>(
+					connection,
+					"newCount",
+					1,
 				);
+				await connection.setCount(1);
+				expect(await bootstrapEventPromise).toEqual([1]);
 
 				// Now use stateless RPC calls through the handle (no connection)
 				// These should still trigger events that the connection receives
+				const forwardedEventsPromise = collectConnectionEvents<number>(
+					connection,
+					"newCount",
+					2,
+				);
 				await handle.setCount(2);
 				await handle.setCount(3);
-
-				// Wait for all events to be received
-				await vi.waitFor(() => {
-					expect(receivedEvents).includes(2);
-					expect(receivedEvents).includes(3);
-				});
+				expect(await forwardedEventsPromise).toEqual([2, 3]);
+				expect(receivedEvents).toEqual([1, 2, 3]);
 
 				// Clean up
 				await connection.dispose();
@@ -147,17 +169,15 @@ describeDriverMatrix("Actor Conn", (driverTestConfig) => {
 					receivedEvents.push(count);
 				});
 
-				// HACK: Race condition between subscribing & sending events in SSE
-				// Verify events were received
-				await vi.waitFor(
-					async () => {
-						await connection.setCount(5);
-						await connection.setCount(8);
-						expect(receivedEvents).toContain(5);
-						expect(receivedEvents).toContain(8);
-					},
-					{ timeout: 10_000 },
+				const broadcastEventsPromise = collectConnectionEvents<number>(
+					connection,
+					"newCount",
+					2,
 				);
+				await connection.setCount(5);
+				await connection.setCount(8);
+				expect(await broadcastEventsPromise).toEqual([5, 8]);
+				expect(receivedEvents).toEqual([5, 8]);
 
 				// Clean up
 				await connection.dispose();
@@ -172,19 +192,20 @@ describeDriverMatrix("Actor Conn", (driverTestConfig) => {
 
 				// Set up one-time event listener
 				const receivedEvents: number[] = [];
-				connection.once("newCount", (count: number) => {
-					receivedEvents.push(count);
+				const firstEventPromise = new Promise<number>((resolve) => {
+					connection.once("newCount", (count: number) => {
+						receivedEvents.push(count);
+						resolve(count);
+					});
 				});
 
 				// Trigger multiple events, but should only receive the first one
 				await connection.increment(5);
 				await connection.increment(3);
 
-				// Verify only the first event was received
-				await vi.waitFor(() => {
-					expect(receivedEvents).toEqual([5]);
-					expect(receivedEvents).not.toContain(8);
-				});
+				expect(await firstEventPromise).toBe(5);
+				expect(receivedEvents).toEqual([5]);
+				expect(receivedEvents).not.toContain(8);
 
 				// Clean up
 				await connection.dispose();
@@ -199,19 +220,22 @@ describeDriverMatrix("Actor Conn", (driverTestConfig) => {
 
 				// Set up event listener with unsubscribe
 				const receivedEvents: number[] = [];
+				let resolveFirstEvent: ((value: number) => void) | undefined;
 				const unsubscribe = connection.on(
 					"newCount",
 					(count: number) => {
 						receivedEvents.push(count);
+						resolveFirstEvent?.(count);
+						resolveFirstEvent = undefined;
 					},
 				);
-
-				// TODO: SSE has race condition with subscriptions & publishing messages
-				// Trigger first event
-				await vi.waitFor(async () => {
-					await connection.setCount(5);
-					expect(receivedEvents).toEqual([5]);
+				const firstEventPromise = new Promise<number>((resolve) => {
+					resolveFirstEvent = resolve;
 				});
+
+				await connection.setCount(5);
+				expect(await firstEventPromise).toBe(5);
+				expect(receivedEvents).toEqual([5]);
 
 				// Unsubscribe
 				unsubscribe();
@@ -326,6 +350,7 @@ describeDriverMatrix("Actor Conn", (driverTestConfig) => {
 					code: "get_params_failed",
 				});
 
+				// Poll until the retrying connection setup succeeds and exposes the settled initializer state.
 				await vi.waitFor(
 					async () => {
 						expect(await conn.getInitializers()).toEqual(["user1"]);
@@ -366,6 +391,7 @@ describeDriverMatrix("Actor Conn", (driverTestConfig) => {
 				// Disconnect should trigger onDisconnect
 				await connection.dispose();
 
+				// Poll because onDisconnect runs asynchronously after the transport closes.
 				await vi.waitFor(
 					async () => {
 						// Reconnect to check if onDisconnect was called
@@ -413,7 +439,7 @@ describeDriverMatrix("Actor Conn", (driverTestConfig) => {
 				// isConnected should be false initially (connection not yet established)
 				expect(connection.isConnected).toBe(false);
 
-				// Wait for connection to be established
+				// Poll until the async connect handshake flips isConnected on the client handle.
 				await vi.waitFor(
 					() => {
 						expect(connection.isConnected).toBe(true);
@@ -570,7 +596,7 @@ describeDriverMatrix("Actor Conn", (driverTestConfig) => {
 					handler2Called = true;
 				});
 
-				// Wait for connection to open
+				// Poll until both async onOpen callbacks fire after the connect handshake completes.
 				await vi.waitFor(
 					() => {
 						expect(handler1Called).toBe(true);
@@ -603,7 +629,7 @@ describeDriverMatrix("Actor Conn", (driverTestConfig) => {
 					handler2Called = true;
 				});
 
-				// Wait for connection to open first
+				// Poll until the async connect handshake finishes before exercising onClose handlers.
 				await vi.waitFor(
 					() => {
 						expect(connection.isConnected).toBe(true);

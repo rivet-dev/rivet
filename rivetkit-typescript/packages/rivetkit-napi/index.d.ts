@@ -73,10 +73,6 @@ export interface JsActorConfig {
   preloadMaxWorkflowBytes?: number
   preloadMaxConnectionsBytes?: number
 }
-export declare function pollCancelToken(id: bigint): boolean
-export declare function registerNativeCancelToken(): bigint
-export declare function cancelNativeCancelToken(id: bigint): void
-export declare function dropNativeCancelToken(id: bigint): void
 export interface JsBindParam {
   kind: string
   intValue?: number
@@ -216,6 +212,7 @@ export declare class ActorContext {
   broadcast(name: string, args: Buffer): void
   waitUntil(promise: Promise<any>): Promise<void>
   registerTask(promise: Promise<any>): void
+  runtimeState(): object
 }
 export declare class NapiActorFactory {
   constructor(callbacks: object, config?: JsActorConfig | undefined | null)
@@ -258,7 +255,7 @@ export declare class Queue {
   send(name: string, body: Buffer): Promise<QueueMessage>
   next(options?: JsQueueNextOptions | undefined | null, signal?: CancellationToken | undefined | null): Promise<QueueMessage | null>
   nextBatch(options?: JsQueueNextBatchOptions | undefined | null, signal?: CancellationToken | undefined | null): Promise<Array<QueueMessage>>
-  waitForNames(names: Array<string>, options?: JsQueueWaitOptions | undefined | null, cancelTokenId?: bigint | undefined | null): Promise<QueueMessage>
+  waitForNames(names: Array<string>, options?: JsQueueWaitOptions | undefined | null, signal?: CancellationToken | undefined | null): Promise<QueueMessage>
   waitForNamesAvailable(names: Array<string>, options?: JsQueueWaitOptions | undefined | null): Promise<void>
   enqueueAndWait(name: string, body: Buffer, options?: JsQueueEnqueueAndWaitOptions | undefined | null, signal?: CancellationToken | undefined | null): Promise<Buffer | null>
   tryNext(options?: JsQueueTryNextOptions | undefined | null): QueueMessage | null

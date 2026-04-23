@@ -1,7 +1,8 @@
 // @ts-nocheck
-import { describeDriverMatrix } from "./shared-matrix";
+
 import { describe, expect, test, vi } from "vitest";
 import { HIBERNATION_SLEEP_TIMEOUT } from "../../fixtures/driver-test-suite/hibernation";
+import { describeDriverMatrix } from "./shared-matrix";
 import { setupDriverTest, waitFor } from "./shared-utils";
 
 const CONNECTION_READY_TIMEOUT_MS = 15_000;
@@ -108,6 +109,7 @@ describeDriverMatrix("Actor Conn Hibernation", (driverTestConfig) => {
 					openCount += 1;
 				});
 
+				// Poll until the connection handshake finishes and the async onOpen callback has fired.
 				await vi.waitFor(
 					() => {
 						expect(hibernatingActor.isConnected).toBe(true);
@@ -170,7 +172,7 @@ describeDriverMatrix("Actor Conn Hibernation", (driverTestConfig) => {
 				// Create second connection to verify first connection disconnected
 				const conn2 = client.hibernationActor.getOrCreate().connect();
 
-				// Wait for connection to be established
+				// Poll until the replacement connection becomes visible after hibernation wake and disconnect cleanup.
 				await vi.waitFor(
 					async () => {
 						const newConnectionIds = await conn2.getConnectionIds();
@@ -199,6 +201,7 @@ describeDriverMatrix("Actor Conn Hibernation", (driverTestConfig) => {
 						.getOrCreate([`sleep-window-${delayMs}`])
 						.connect();
 
+					// Poll until the connection handshake finishes because connect() has no ready promise.
 					await vi.waitFor(
 						async () => {
 							expect(connection.isConnected).toBe(true);

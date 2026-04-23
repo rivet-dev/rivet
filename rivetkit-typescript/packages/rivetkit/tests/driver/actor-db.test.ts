@@ -1,6 +1,7 @@
 // @ts-nocheck
-import { describeDriverMatrix } from "./shared-matrix";
+
 import { describe, expect, test, vi } from "vitest";
+import { describeDriverMatrix } from "./shared-matrix";
 import { setupDriverTest, waitFor } from "./shared-utils";
 
 type DbVariant = "raw";
@@ -46,7 +47,7 @@ function isActorStoppingDbError(error: unknown): boolean {
 
 function getDbActor(
 	client: Awaited<ReturnType<typeof setupDriverTest>>["client"],
-	variant: DbVariant,
+	_variant: DbVariant,
 ) {
 	return client.dbActorRaw;
 }
@@ -90,6 +91,7 @@ describeDriverMatrix("Actor Db", (driverTestConfig) => {
 						`db-${variant}-crud-${crypto.randomUUID()}`,
 					]);
 
+					// Poll until the actor finishes startup and can serve reset without racing DB initialization.
 					await vi.waitFor(
 						async () => {
 							await actor.reset();

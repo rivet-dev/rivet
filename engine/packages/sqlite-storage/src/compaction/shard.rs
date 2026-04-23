@@ -126,7 +126,11 @@ impl SqliteEngine {
 
 		let shard_rows = all_pidx_rows
 			.iter()
-			.filter(|row| row.pgno >= shard_start_pgno && row.pgno <= shard_end_pgno)
+			.filter(|row| {
+				row.pgno >= shard_start_pgno
+					&& row.pgno <= shard_end_pgno
+					&& row.pgno <= head.db_size_pages
+			})
 			.cloned()
 			.collect::<Vec<_>>();
 		if shard_rows.is_empty() {
@@ -410,7 +414,10 @@ fn merge_shard_pages(
 	if let Some(shard_blob) = blobs.get(shard_blob_key).cloned().flatten() {
 		let decoded = decode_ltx_v3(&shard_blob).context("decode existing shard blob")?;
 		for page in decoded.pages {
-			if page.pgno >= shard_start_pgno && page.pgno <= shard_end_pgno {
+			if page.pgno >= shard_start_pgno
+				&& page.pgno <= shard_end_pgno
+				&& page.pgno <= head.db_size_pages
+			{
 				merged_pages.insert(page.pgno, (head.materialized_txid, page.bytes));
 			}
 		}
@@ -439,7 +446,10 @@ fn merge_shard_pages(
 				page.bytes.len(),
 				SQLITE_PAGE_SIZE
 			);
-			if page.pgno >= shard_start_pgno && page.pgno <= shard_end_pgno {
+			if page.pgno >= shard_start_pgno
+				&& page.pgno <= shard_end_pgno
+				&& page.pgno <= head.db_size_pages
+			{
 				merged_pages.insert(page.pgno, (txid, page.bytes));
 			}
 		}
@@ -512,7 +522,7 @@ mod tests {
 	use crate::commit::CommitRequest;
 	use crate::engine::SqliteEngine;
 	use crate::keys::{delta_chunk_key, meta_key, pidx_delta_key, pidx_delta_prefix, shard_key};
-	use crate::ltx::{LtxHeader, encode_ltx_v3};
+	use crate::ltx::{LtxHeader, decode_ltx_v3, encode_ltx_v3};
 	use crate::quota::{encode_db_head_with_usage, tracked_storage_entry_size};
 	use crate::takeover::TakeoverConfig;
 	use crate::test_utils::{read_value, scan_prefix_values, test_db};
@@ -805,6 +815,52 @@ mod tests {
 
 		assert_eq!(stored_head.sqlite_storage_used, after_usage);
 		assert!(after_usage <= before_usage);
+
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn compact_shard_discards_pages_above_eof() -> Result<()> {
+		let (db, subspace) = test_db().await?;
+		let mut head = seeded_head();
+		head.head_txid = 2;
+		head.next_txid = 3;
+		head.db_size_pages = 1;
+		let (engine, _compaction_rx) = SqliteEngine::new(db, subspace);
+		apply_write_ops(
+			engine.db.as_ref(),
+			&engine.subspace,
+			engine.op_counter.as_ref(),
+			vec![
+				WriteOp::put(meta_key(TEST_ACTOR), serde_bare::to_vec(&head)?),
+				WriteOp::put(
+					shard_key(TEST_ACTOR, 0),
+					encoded_blob(1, 2, &[(1, 0x10), (2, 0x20)]),
+				),
+				WriteOp::put(
+					delta_blob_key(TEST_ACTOR, 2),
+					encoded_blob(2, 2, &[(1, 0x11), (2, 0x22)]),
+				),
+				WriteOp::put(pidx_delta_key(TEST_ACTOR, 1), 2_u64.to_be_bytes().to_vec()),
+			],
+		)
+		.await?;
+		rewrite_meta_with_actual_usage(&engine).await?;
+
+		assert!(engine.compact_shard(TEST_ACTOR, 0).await?);
+
+		let shard_blob = read_value(&engine, shard_key(TEST_ACTOR, 0))
+			.await?
+			.expect("shard should exist after compaction");
+		let decoded = decode_ltx_v3(&shard_blob)?;
+		assert_eq!(decoded.pages.len(), 1);
+		assert_eq!(decoded.pages[0].pgno, 1);
+		assert_eq!(decoded.pages[0].bytes, page(0x11));
+		assert!(
+			read_value(&engine, delta_blob_key(TEST_ACTOR, 2))
+				.await?
+				.is_none()
+		);
 
 		Ok(())
 	}

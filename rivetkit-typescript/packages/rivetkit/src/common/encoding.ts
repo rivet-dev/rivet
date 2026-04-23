@@ -9,6 +9,11 @@ export type InputData = string | Buffer | Blob | ArrayBufferLike | Uint8Array;
 /** Data that's been serialized. */
 export type OutputData = string | Uint8Array;
 
+const JSON_COMPAT_BIGINT = "$BigInt";
+const JSON_COMPAT_ARRAY_BUFFER = "$ArrayBuffer";
+const JSON_COMPAT_UINT8_ARRAY = "$Uint8Array";
+const JSON_COMPAT_UNDEFINED = "$Undefined";
+
 export const EncodingSchema = z.enum(["json", "cbor", "bare"]);
 
 /**
@@ -98,6 +103,87 @@ function base64EncodeArrayBuffer(arrayBuffer: ArrayBuffer): string {
 	return base64EncodeUint8Array(new Uint8Array(arrayBuffer));
 }
 
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+	if (value === null || typeof value !== "object") {
+		return false;
+	}
+
+	const proto = Object.getPrototypeOf(value);
+	return proto === Object.prototype || proto === null;
+}
+
+export function encodeJsonCompatValue(input: any): any {
+	if (input === undefined) {
+		return [JSON_COMPAT_UNDEFINED, 0];
+	}
+	if (typeof input === "bigint") {
+		return [JSON_COMPAT_BIGINT, input.toString()];
+	}
+	if (input instanceof ArrayBuffer) {
+		return [JSON_COMPAT_ARRAY_BUFFER, base64EncodeArrayBuffer(input)];
+	}
+	if (input instanceof Uint8Array) {
+		return [JSON_COMPAT_UINT8_ARRAY, base64EncodeUint8Array(input)];
+	}
+	if (Array.isArray(input)) {
+		const encoded = input.map((value) => encodeJsonCompatValue(value));
+		if (
+			encoded.length === 2 &&
+			typeof encoded[0] === "string" &&
+			encoded[0].startsWith("$")
+		) {
+			return ["$" + encoded[0], encoded[1]];
+		}
+		return encoded;
+	}
+	if (isPlainObject(input)) {
+		const encoded: Record<string, unknown> = {};
+		for (const [key, value] of Object.entries(input)) {
+			encoded[key] = encodeJsonCompatValue(value);
+		}
+		return encoded;
+	}
+	return input;
+}
+
+export function reviveJsonCompatValue(input: any): any {
+	if (Array.isArray(input)) {
+		if (
+			input.length === 2 &&
+			typeof input[0] === "string" &&
+			input[0].startsWith("$")
+		) {
+			if (input[0] === JSON_COMPAT_BIGINT) {
+				return BigInt(input[1]);
+			}
+			if (input[0] === JSON_COMPAT_ARRAY_BUFFER) {
+				return base64DecodeToArrayBuffer(input[1]);
+			}
+			if (input[0] === JSON_COMPAT_UINT8_ARRAY) {
+				return base64DecodeToUint8Array(input[1]);
+			}
+			if (input[0] === JSON_COMPAT_UNDEFINED) {
+				return undefined;
+			}
+			if (input[0].startsWith("$$")) {
+				return [input[0].substring(1), reviveJsonCompatValue(input[1])];
+			}
+			throw new Error(
+				`Unknown JSON encoding type: ${input[0]}. This may indicate corrupted data or a version mismatch.`,
+			);
+		}
+		return input.map((value) => reviveJsonCompatValue(value));
+	}
+	if (isPlainObject(input)) {
+		const decoded: Record<string, unknown> = {};
+		for (const [key, value] of Object.entries(input)) {
+			decoded[key] = reviveJsonCompatValue(value);
+		}
+		return decoded;
+	}
+	return input;
+}
+
 /** Converts data that was encoded to a string. Some formats do not support raw binary data. */
 export function encodeDataToString(message: OutputData): string {
 	if (typeof message === "string") {
@@ -130,13 +216,19 @@ function base64DecodeToArrayBuffer(base64: string): ArrayBuffer {
 export function jsonStringifyCompat(input: any): string {
 	return JSON.stringify(input, (_key, value) => {
 		if (typeof value === "bigint") {
-			return ["$BigInt", value.toString()];
+			return [JSON_COMPAT_BIGINT, value.toString()];
 		}
 		if (value instanceof ArrayBuffer) {
-			return ["$ArrayBuffer", base64EncodeArrayBuffer(value)];
+			return [
+				JSON_COMPAT_ARRAY_BUFFER,
+				base64EncodeArrayBuffer(value),
+			];
 		}
 		if (value instanceof Uint8Array) {
-			return ["$Uint8Array", base64EncodeUint8Array(value)];
+			return [
+				JSON_COMPAT_UINT8_ARRAY,
+				base64EncodeUint8Array(value),
+			];
 		}
 		if (
 			Array.isArray(value) &&
@@ -152,29 +244,5 @@ export function jsonStringifyCompat(input: any): string {
 
 /** Parses JSON with compat for values that BARE & CBOR supports. */
 export function jsonParseCompat(input: string): any {
-	return JSON.parse(input, (_key, value) => {
-		if (
-			Array.isArray(value) &&
-			value.length === 2 &&
-			typeof value[0] === "string" &&
-			value[0].startsWith("$")
-		) {
-			if (value[0] === "$BigInt") {
-				return BigInt(value[1]);
-			}
-			if (value[0] === "$ArrayBuffer") {
-				return base64DecodeToArrayBuffer(value[1]);
-			}
-			if (value[0] === "$Uint8Array") {
-				return base64DecodeToUint8Array(value[1]);
-			}
-			if (value[0].startsWith("$$")) {
-				return [value[0].substring(1), value[1]];
-			}
-			throw new Error(
-				`Unknown JSON encoding type: ${value[0]}. This may indicate corrupted data or a version mismatch.`,
-			);
-		}
-		return value;
-	});
+	return reviveJsonCompatValue(JSON.parse(input));
 }

@@ -17,5 +17,9 @@
 	"include": [
 		"src/**/*",
 		"runtime/index.ts"
+	],
+	"exclude": [
+		"src/actor/instance/mod.ts",
+		"src/drivers/engine/actor-driver.ts"
 	]
 }

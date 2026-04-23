@@ -32,7 +32,10 @@ const SQLITE_V1_META_VERSION: u16 = 1;
 const SQLITE_V1_META_LEN: usize = 10;
 const SQLITE_V1_CHUNK_SIZE: usize = 4096;
 const SQLITE_V1_MAX_MIGRATION_BYTES: u64 = 128 * 1024 * 1024;
-const SQLITE_V1_MIGRATION_LEASE_MS: i64 = 5 * 60 * 1000;
+// A staged v1 import can reserve one txid, write at most 16 delta chunks
+// (128 MiB max import / 8 MiB max delta chunk), and finalize. That window should
+// stay well under a minute, so keep stale-owner recovery short.
+const SQLITE_V1_MIGRATION_LEASE_MS: i64 = 60 * 1000;
 const FILE_TAG_MAIN: u8 = 0x00;
 const FILE_TAG_JOURNAL: u8 = 0x01;
 const FILE_TAG_WAL: u8 = 0x02;
@@ -103,6 +106,16 @@ pub async fn populate_start_command(
 		name: start.config.name.clone(),
 	};
 	if protocol_version >= PROTOCOL_VERSION {
+		let actor_id_str = actor_id.to_string();
+		if sqlite_engine
+			.invalidate_v1_migration(&actor_id_str, timestamp::now())
+			.await?
+		{
+			tracing::info!(
+				actor_id = %actor_id_str,
+				"reset stale v1 migration after authoritative actor allocation"
+			);
+		}
 		maybe_migrate_v1_to_v2(&db, sqlite_engine, &recipient).await?;
 	}
 
@@ -961,6 +974,42 @@ mod tests {
 		assert!(
 			err.to_string().contains("already in progress"),
 			"unexpected error: {err:?}"
+		);
+
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn restarts_v1_migration_immediately_after_allocate_invalidation() -> Result<()> {
+		let db = test_db().await?;
+		let actor_id = Id::new_v1(1);
+		let recipient = recipient(actor_id);
+		let fixture = build_fixture_db(&["allocate-retry-a", "allocate-retry-b"])?;
+		seed_v1_file(&db, &recipient, FILE_TAG_MAIN, &fixture).await?;
+		let (engine, _compaction_rx) = SqliteEngine::new(db.clone(), sqlite_subspace());
+		let actor_id_str = actor_id.to_string();
+
+		let prepared = engine
+			.prepare_v1_migration(&actor_id_str, timestamp::now())
+			.await?;
+		engine
+			.commit_stage_begin(
+				&actor_id_str,
+				sqlite_storage::commit::CommitStageBeginRequest {
+					generation: prepared.meta.generation,
+				},
+			)
+			.await?;
+
+		assert!(
+			engine
+				.invalidate_v1_migration(&actor_id_str, timestamp::now())
+				.await?
+		);
+		assert!(maybe_migrate_v1_to_v2(&db, &engine, &recipient).await?);
+		assert_eq!(
+			query_note_values(&load_v2_bytes(&engine, &actor_id_str).await?)?,
+			vec!["allocate-retry-a", "allocate-retry-b"]
 		);
 
 		Ok(())

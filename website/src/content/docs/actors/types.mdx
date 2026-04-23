@@ -84,12 +84,14 @@ Each lifecycle hook and handler has a corresponding `*ContextOf` type, exported 
 | Hook / Handler | Context Type |
 |---|---|
 | `createState` | `CreateContextOf` |
+| `onCreate` | `CreateContextOf` |
 | `createVars` | `CreateVarsContextOf` |
 | `createConnState` | `CreateConnStateContextOf` |
 | `onBeforeConnect` | `BeforeConnectContextOf` |
 | `onConnect` | `ConnectContextOf` |
 | `onDisconnect` | `DisconnectContextOf` |
 | `onDestroy` | `DestroyContextOf` |
+| `onMigrate` | `MigrateContextOf` |
 | `onWake` | `WakeContextOf` |
 | `onSleep` | `SleepContextOf` |
 | `onStateChange` | `StateChangeContextOf` |

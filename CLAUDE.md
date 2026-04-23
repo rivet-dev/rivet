@@ -343,18 +343,6 @@ When the user asks to track something in a note, store it in `.agent/notes/` by 
 - If an external dependency's struct requires `std::sync::Mutex`, keep it at the construction boundary with an explicit forced-std-sync comment.
 - Prefer async locks because sync guards can be silently held across `.await`, poisoning creates `.expect("lock poisoned")` boilerplate, and the tiny uncontended-lock win is dwarfed by actor I/O latency.
 
-## TypeScript Concurrency
-
-- Use `antiox` for TypeScript concurrency primitives instead of ad hoc Promise queues, custom channel wrappers, or event-emitter based coordination.
-- Prefer the Tokio-shaped APIs from `antiox`. For example, use `antiox/sync/mpsc` for `tx` and `rx` channels, `antiox/task` for spawning tasks, and the matching sync and time modules as needed.
-- Treat `antiox` as the default choice for any TypeScript concurrency work because it mirrors Rust and Tokio APIs used elsewhere in the codebase.
-
-## TLS / HTTP clients
-
-- Always use rustls. Never enable `native-tls` / `default-tls` on `reqwest` or anything else on Linux. Consumers, especially `.node` addons published via npm, must have no runtime `libssl.so` dependency.
-- `reqwest` workspace dep must set `default-features = false` and enable `rustls-tls-native-roots` + `rustls-tls-webpki-roots`. Per-crate overrides must keep the same.
-- Never vendor openssl as a workaround. If `openssl-sys` shows up in `cargo tree`, trace the transitive dep, usually `reqwest` default features, and switch it to rustls.
-
 ## Error Handling
 
 - Custom error system at `packages/common/error/` using `#[derive(RivetError)]` on struct definitions. For the full derive example and conventions, see `.claude/reference/error-system.md`.
@@ -374,6 +362,9 @@ When the user asks to track something in a note, store it in `.agent/notes/` by 
 
 - **Never use `vi.mock`, `jest.mock`, or module-level mocking.** Write tests against real infrastructure (Docker containers, real databases, real filesystems). For LLM calls, use `@copilotkit/llmock` to run a mock LLM server. For protocol-level test doubles (e.g., ACP adapters), write hand-written scripts that run as real processes. `vi.fn()` for simple callback tracking is acceptable.
 - Driver tests that wait for actor sleep must not poll actor actions while waiting; each action counts as activity and can reset the sleep deadline.
+- **Never paper over flakes with retry loops or bumped waits.** When a test flakes, (1) root-cause the race, (2) write a deterministic repro using `vi.useFakeTimers()` or event-ordered `Promise` resolution, (3) fix the underlying ordering in core/napi/typescript, (4) delete any flake-workaround note. `vi.waitFor` is acceptable for legitimate "wait for an async event" coordination but never as a retry-until-success masking layer. Every `vi.waitFor` call must have a one-line comment explaining why polling rather than direct awaiting is necessary.
+- In `rivetkit-typescript/packages/rivetkit/tests/`, put the `vi.waitFor(...)` justification on the immediately preceding `//` line. `pnpm run check:wait-for-comments` enforces the adjacent comment.
+- **Rust tests live under `tests/`, not inline `#[cfg(test)] mod tests` in `src/`.** Move every inline test module in Rust crates to the crate's `tests/` directory. Exceptions must be justified (e.g., testing a private internal that can't be reached from an integration test).
 - For running RivetKit tests, Vitest filter gotchas, the driver-test parity workflow, and Rust test layout rules, see `.claude/reference/testing.md`.
 
 ## Traces Package

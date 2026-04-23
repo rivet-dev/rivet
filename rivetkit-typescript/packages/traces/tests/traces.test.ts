@@ -1,5 +1,4 @@
 import { describe, expect, it, vi } from "vitest";
-import { performance } from "node:perf_hooks";
 import { pack, unpack } from "fdb-tuple";
 import { createTraces } from "../src/index.js";
 import type { TracesDriver } from "../src/types.js";
@@ -172,34 +171,51 @@ function hasPrefix(key: Uint8Array, prefix: Uint8Array): boolean {
 
 type FakeClock = {
 	nowUnixMs: () => number;
-	nowMonoMs: () => number;
-	set: (unixMs: number, monoMs?: number) => void;
 	advance: (ms: number) => void;
 	restore: () => void;
 };
 
 function installFakeClock(initialUnixMs = 1_700_000_000_000): FakeClock {
-	let unixMs = initialUnixMs;
 	let monoMs = 0;
-	const dateSpy = vi.spyOn(Date, "now").mockImplementation(() => unixMs);
-	const perfSpy = vi
-		.spyOn(performance, "now")
-		.mockImplementation(() => monoMs);
+	const performanceDescriptor = Object.getOwnPropertyDescriptor(
+		globalThis.performance,
+		"now",
+	);
+	vi.useFakeTimers({
+		toFake: [
+			"Date",
+			"setTimeout",
+			"clearTimeout",
+			"setInterval",
+			"clearInterval",
+		],
+	});
+	vi.setSystemTime(initialUnixMs);
+	Object.defineProperty(globalThis.performance, "now", {
+		configurable: true,
+		value: () => monoMs,
+	});
 
 	return {
-		nowUnixMs: () => unixMs,
-		nowMonoMs: () => monoMs,
-		set: (nextUnixMs: number, nextMonoMs = monoMs) => {
-			unixMs = nextUnixMs;
-			monoMs = nextMonoMs;
-		},
+		nowUnixMs: () => Date.now(),
 		advance: (ms: number) => {
-			unixMs += ms;
 			monoMs += ms;
+			if (ms >= 0) {
+				vi.advanceTimersByTime(ms);
+				return;
+			}
+
+			vi.setSystemTime(Date.now() + ms);
 		},
 		restore: () => {
-			dateSpy.mockRestore();
-			perfSpy.mockRestore();
+			if (performanceDescriptor) {
+				Object.defineProperty(
+					globalThis.performance,
+					"now",
+					performanceDescriptor,
+				);
+			}
+			vi.useRealTimers();
 		},
 	};
 }
@@ -820,7 +836,7 @@ describe("traces", () => {
 			const span = traces.startSpan("time");
 			traces.emitEvent(span, "forward", { timeUnixMs: t0 + 100 });
 			clock.advance(-5000);
-			traces.emitEvent(span, "back");
+			traces.emitEvent(span, "back", { timeUnixMs: clock.nowUnixMs() });
 			traces.endSpan(span);
 
 			const result = await traces.readRange({

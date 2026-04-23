@@ -103,6 +103,7 @@ export const runWithQueueConsumer = actor({
 export const runWithEarlyExit = actor({
 	state: {
 		runStarted: false,
+		runExited: false,
 		destroyCalled: false,
 		sleepCount: 0,
 		wakeCount: 0,
@@ -110,27 +111,46 @@ export const runWithEarlyExit = actor({
 	onWake: (c) => {
 		c.state.wakeCount += 1;
 	},
-	onSleep: (c) => {
+	onSleep: async (c) => {
 		c.state.sleepCount += 1;
+		const client = c.client<typeof registry>();
+		await client.lifecycleObserver
+			.getOrCreate(["run-with-early-exit"])
+			.recordEvent({
+				actorKey: c.actorId,
+				event: "sleep",
+			});
 	},
 	run: async (c) => {
 		c.state.runStarted = true;
 		c.log.info("run handler started, will exit after delay");
 		// Wait a bit so we can observe the runStarted state before exit
 		await new Promise((resolve) => setTimeout(resolve, 200));
+		c.state.runExited = true;
 		c.log.info("run handler exiting early");
 		// Exit without respecting abort signal
 	},
-	onDestroy: (c) => {
+	onDestroy: async (c) => {
 		c.state.destroyCalled = true;
+		const client = c.client<typeof registry>();
+		await client.lifecycleObserver
+			.getOrCreate(["run-with-early-exit"])
+			.recordEvent({
+				actorKey: c.actorId,
+				event: "destroy",
+			});
 	},
 	actions: {
 		getState: (c) => ({
 			runStarted: c.state.runStarted,
+			runExited: c.state.runExited,
 			destroyCalled: c.state.destroyCalled,
 			sleepCount: c.state.sleepCount,
 			wakeCount: c.state.wakeCount,
 		}),
+		destroy: (c) => {
+			c.destroy();
+		},
 	},
 	options: {
 		sleepTimeout: RUN_SLEEP_TIMEOUT,

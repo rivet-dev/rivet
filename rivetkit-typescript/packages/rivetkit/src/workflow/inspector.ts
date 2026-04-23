@@ -1,4 +1,3 @@
-import * as cbor from "cbor-x";
 import type {
 	BranchStatus,
 	BranchStatusType,
@@ -14,6 +13,7 @@ import type {
 import { encodeWorkflowHistoryTransport } from "@/common/inspector-transport";
 import type * as inspectorSchema from "@/common/bare/generated/inspector/v4";
 import * as transport from "@/common/bare/transport/v1";
+import { encodeCborCompat } from "@/serde";
 import { assertUnreachable, bufferToArrayBuffer } from "@/utils";
 
 type HistoryListener = (history: inspectorSchema.WorkflowHistory) => void;
@@ -91,7 +91,7 @@ export function createWorkflowInspectorAdapter(): {
 }
 
 function encodeCbor(value: unknown): ArrayBuffer {
-	return bufferToArrayBuffer(cbor.encode(value));
+	return bufferToArrayBuffer(encodeCborCompat(value));
 }
 
 function encodeOptionalCbor(value: unknown): ArrayBuffer | null {

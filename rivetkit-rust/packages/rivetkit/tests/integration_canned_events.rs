@@ -55,6 +55,7 @@ async fn canned_actor_start_drives_typed_counter_actor() {
 		snapshot: None,
 		hibernated: Vec::new(),
 		events: event_rx.into(),
+		startup_ready: None,
 	})
 	.expect("wrap canned actor start");
 

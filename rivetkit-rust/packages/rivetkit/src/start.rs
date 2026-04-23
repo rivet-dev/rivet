@@ -157,6 +157,7 @@ pub fn wrap_start<A: Actor>(core_start: ActorStart) -> Result<Start<A>> {
 		snapshot,
 		hibernated,
 		events,
+		startup_ready: _,
 	} = core_start;
 
 	let hibernated = hibernated
@@ -316,6 +317,7 @@ mod tests {
 				cbor(&ConnState { value: 5 }),
 			)],
 			events: rx.into(),
+			startup_ready: None,
 		})
 		.expect("wrap start");
 

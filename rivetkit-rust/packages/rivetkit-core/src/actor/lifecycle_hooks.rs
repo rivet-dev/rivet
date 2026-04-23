@@ -93,4 +93,5 @@ pub struct ActorStart {
 	pub snapshot: Option<Vec<u8>>,
 	pub hibernated: Vec<(ConnHandle, Vec<u8>)>,
 	pub events: ActorEvents,
+	pub startup_ready: Option<oneshot::Sender<Result<()>>>,
 }

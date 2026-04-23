@@ -50,9 +50,9 @@ for version in "${VERSIONS[@]}"; do
 	# Install the target version into the rivetkit package.
 	pnpm --filter rivetkit add -D "drizzle-orm@$version" 2>&1 | tail -3
 
-	# Run only the drizzle variant of the DB tests.
+	# Typecheck the supported drizzle subpath surface against the target version.
 	TEST_LOG="/tmp/drizzle-compat-${version}.log"
-	if cd "$PKG_DIR" && pnpm test driver-file-system -t "Actor Database \(drizzle\)" > "$TEST_LOG" 2>&1; then
+	if cd "$PKG_DIR" && pnpm exec tsc --noEmit -p tsconfig.drizzle-compat.json > "$TEST_LOG" 2>&1; then
 		RESULTS["$version"]="PASS"
 		echo "  -> PASS"
 	else

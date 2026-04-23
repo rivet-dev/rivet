@@ -66,53 +66,77 @@ impl SqliteEngine {
 		actor_id: &str,
 		now_ms: i64,
 	) -> Result<PrepareV1MigrationResult> {
+		self.reset_v1_migration(actor_id, now_ms, false)
+			.await?
+			.context("v1 migration reset unexpectedly returned no state")
+	}
+
+	pub async fn invalidate_v1_migration(&self, actor_id: &str, now_ms: i64) -> Result<bool> {
+		Ok(self
+			.reset_v1_migration(actor_id, now_ms, true)
+			.await?
+			.is_some())
+	}
+
+	async fn reset_v1_migration(
+		&self,
+		actor_id: &str,
+		now_ms: i64,
+		require_stage_in_progress: bool,
+	) -> Result<Option<PrepareV1MigrationResult>> {
 		let actor_id = actor_id.to_string();
 		let actor_id_for_tx = actor_id.clone();
 		let subspace = self.subspace.clone();
-		let (head, _encoded_head) =
-			udb::run_db_op(self.db.as_ref(), self.op_counter.as_ref(), move |tx| {
-				let actor_id = actor_id_for_tx.clone();
-				let subspace = subspace.clone();
-				async move {
-					let meta_storage_key = meta_key(&actor_id);
-					if let Some(existing_meta) =
-						udb::tx_get_value_serializable(&tx, &subspace, &meta_storage_key).await?
-					{
-						let existing_head = decode_db_head(&existing_meta)?;
-						ensure!(
-							matches!(existing_head.origin, SqliteOrigin::MigratingFromV1),
-							SqliteStorageError::ConcurrentTakeover
-						);
+		let head = udb::run_db_op(self.db.as_ref(), self.op_counter.as_ref(), move |tx| {
+			let actor_id = actor_id_for_tx.clone();
+			let subspace = subspace.clone();
+			async move {
+				let meta_storage_key = meta_key(&actor_id);
+				if let Some(existing_meta) =
+					udb::tx_get_value_serializable(&tx, &subspace, &meta_storage_key).await?
+				{
+					let existing_head = decode_db_head(&existing_meta)?;
+					ensure!(
+						matches!(existing_head.origin, SqliteOrigin::MigratingFromV1),
+						SqliteStorageError::ConcurrentTakeover
+					);
+					let stage_in_progress =
+						existing_head.next_txid > existing_head.head_txid.saturating_add(1);
+					if require_stage_in_progress && !stage_in_progress {
+						return Ok(None);
 					}
-
-					udb::tx_delete_value_precise(&tx, &subspace, &meta_storage_key).await?;
-					for prefix in [
-						delta_prefix(&actor_id),
-						pidx_delta_prefix(&actor_id),
-						shard_prefix(&actor_id),
-					] {
-						for (key, _) in udb::tx_scan_prefix_values(&tx, &subspace, &prefix).await? {
-							udb::tx_delete_value_precise(&tx, &subspace, &key).await?;
-						}
-					}
-
-					let mut head = DBHead::new(now_ms);
-					head.origin = SqliteOrigin::MigratingFromV1;
-					let (head, encoded_head) = encode_db_head_with_usage(&actor_id, &head, 0)?;
-					udb::tx_write_value(&tx, &subspace, &meta_storage_key, &encoded_head)?;
-
-					Ok((head, encoded_head))
+				} else if require_stage_in_progress {
+					return Ok(None);
 				}
-			})
-			.await?;
+
+				udb::tx_delete_value_precise(&tx, &subspace, &meta_storage_key).await?;
+				for prefix in [
+					delta_prefix(&actor_id),
+					pidx_delta_prefix(&actor_id),
+					shard_prefix(&actor_id),
+				] {
+					for (key, _) in udb::tx_scan_prefix_values(&tx, &subspace, &prefix).await? {
+						udb::tx_delete_value_precise(&tx, &subspace, &key).await?;
+					}
+				}
+
+				let mut head = DBHead::new(now_ms);
+				head.origin = SqliteOrigin::MigratingFromV1;
+				let (head, encoded_head) = encode_db_head_with_usage(&actor_id, &head, 0)?;
+				udb::tx_write_value(&tx, &subspace, &meta_storage_key, &encoded_head)?;
+
+				Ok(Some(head))
+			}
+		})
+		.await?;
 
 		self.page_indices.remove_async(&actor_id).await;
 		self.pending_stages
 			.retain_sync(|(pending_actor_id, _), _| pending_actor_id != &actor_id);
 
-		Ok(PrepareV1MigrationResult {
+		Ok(head.map(|head| PrepareV1MigrationResult {
 			meta: SqliteMeta::from((head, SQLITE_MAX_DELTA_BYTES)),
-		})
+		}))
 	}
 
 	pub async fn takeover(&self, actor_id: &str, config: TakeoverConfig) -> Result<TakeoverResult> {
@@ -239,32 +263,61 @@ impl SqliteEngine {
 			pidx_delta_prefix(actor_id),
 		)
 		.await?;
+		let shard_rows = udb::scan_prefix_values(
+			self.db.as_ref(),
+			&self.subspace,
+			self.op_counter.as_ref(),
+			shard_prefix(actor_id),
+		)
+		.await?;
 
-		let mut live_delta_txids = BTreeSet::new();
+		let mut delta_rows_by_txid = BTreeMap::<u64, Vec<(Vec<u8>, Vec<u8>)>>::new();
 		let mut mutations = Vec::new();
 		let mut tracked_deleted_bytes = 0u64;
 
 		for (key, value) in delta_rows {
 			let txid = decode_delta_chunk_txid(actor_id, &key)?;
-			if txid > head.head_txid {
-				tracked_deleted_bytes += tracked_storage_entry_size(&key, &value)
-					.expect("delta key should count toward sqlite quota");
-				mutations.push(WriteOp::delete(key));
-			} else {
-				live_delta_txids.insert(txid);
-			}
+			delta_rows_by_txid
+				.entry(txid)
+				.or_default()
+				.push((key, value));
 		}
 
+		let mut live_delta_txids = BTreeSet::new();
 		for (key, value) in pidx_rows {
 			let pgno = decode_pidx_pgno(actor_id, &key)?;
 			let txid = decode_pidx_txid(&value)?;
 
-			if txid > head.head_txid || !live_delta_txids.contains(&txid) {
+			if pgno == 0
+				|| pgno > head.db_size_pages
+				|| txid > head.head_txid
+				|| !delta_rows_by_txid.contains_key(&txid)
+			{
 				tracked_deleted_bytes += tracked_storage_entry_size(&key, &value)
 					.expect("pidx key should count toward sqlite quota");
 				mutations.push(WriteOp::delete(key));
 			} else {
 				live_pidx.insert(pgno, txid);
+				live_delta_txids.insert(txid);
+			}
+		}
+
+		for (txid, rows) in delta_rows_by_txid {
+			if txid > head.head_txid || !live_delta_txids.contains(&txid) {
+				for (key, value) in rows {
+					tracked_deleted_bytes += tracked_storage_entry_size(&key, &value)
+						.expect("delta key should count toward sqlite quota");
+					mutations.push(WriteOp::delete(key));
+				}
+			}
+		}
+
+		for (key, value) in shard_rows {
+			let shard_id = decode_shard_id(actor_id, &key)?;
+			if shard_id.saturating_mul(head.shard_size) > head.db_size_pages {
+				tracked_deleted_bytes += tracked_storage_entry_size(&key, &value)
+					.expect("shard key should count toward sqlite quota");
+				mutations.push(WriteOp::delete(key));
 			}
 		}
 		let orphan_count = mutations.len();
@@ -441,6 +494,28 @@ fn decode_pidx_txid(value: &[u8]) -> Result<u64> {
 	))
 }
 
+fn decode_shard_id(actor_id: &str, key: &[u8]) -> Result<u32> {
+	let prefix = shard_prefix(actor_id);
+	ensure!(
+		key.starts_with(&prefix),
+		"shard key did not start with expected prefix"
+	);
+
+	let suffix = &key[prefix.len()..];
+	ensure!(
+		suffix.len() == PIDX_PGNO_BYTES,
+		"shard key suffix had {} bytes, expected {}",
+		suffix.len(),
+		PIDX_PGNO_BYTES
+	);
+
+	Ok(u32::from_be_bytes(
+		suffix
+			.try_into()
+			.context("shard key suffix should decode as u32")?,
+	))
+}
+
 async fn load_delta_blob(
 	db: &universaldb::Database,
 	subspace: &universaldb::Subspace,
@@ -474,8 +549,10 @@ mod tests {
 	use crate::engine::SqliteEngine;
 	use crate::keys::{delta_chunk_key, meta_key, pidx_delta_key, shard_key};
 	use crate::ltx::{LtxHeader, encode_ltx_v3};
+	use crate::quota::{encode_db_head_with_usage, tracked_storage_entry_size};
 	use crate::test_utils::{
-		checkpoint_test_db, read_value, reopen_test_db, test_db, test_db_with_path,
+		checkpoint_test_db, read_value, reopen_test_db, scan_prefix_values, test_db,
+		test_db_with_path,
 	};
 
 	fn registry_text() -> String {
@@ -528,6 +605,35 @@ mod tests {
 			}],
 		)
 		.expect("encode test ltx blob")
+	}
+
+	async fn actual_tracked_usage(engine: &SqliteEngine) -> Result<u64> {
+		Ok(scan_prefix_values(engine, vec![0x02])
+			.await?
+			.into_iter()
+			.filter_map(|(key, value)| tracked_storage_entry_size(&key, &value))
+			.sum())
+	}
+
+	async fn rewrite_meta_with_actual_usage(engine: &SqliteEngine, actor_id: &str) -> Result<()> {
+		let meta_key = meta_key(actor_id);
+		let meta_bytes = read_value(engine, meta_key.clone())
+			.await?
+			.expect("meta should exist before rewrite");
+		let head = decode_db_head(&meta_bytes)?;
+		let usage_without_meta = actual_tracked_usage(engine).await?.saturating_sub(
+			tracked_storage_entry_size(&meta_key, &meta_bytes)
+				.expect("meta key should count toward sqlite quota"),
+		);
+		let (_, rewritten_meta) = encode_db_head_with_usage(actor_id, &head, usage_without_meta)?;
+		apply_write_ops(
+			engine.db.as_ref(),
+			&engine.subspace,
+			engine.op_counter.as_ref(),
+			vec![WriteOp::put(meta_key, rewritten_meta)],
+		)
+		.await?;
+		Ok(())
 	}
 
 	#[tokio::test]
@@ -836,6 +942,60 @@ mod tests {
 	}
 
 	#[tokio::test]
+	async fn takeover_cleans_above_eof_pidx_delta_and_shard_rows() -> Result<()> {
+		let (db, subspace) = test_db().await?;
+		let (engine, _compaction_rx) = SqliteEngine::new(db, subspace);
+		let mut head = seeded_head();
+		head.db_size_pages = 2;
+		apply_write_ops(
+			engine.db.as_ref(),
+			&engine.subspace,
+			engine.op_counter.as_ref(),
+			vec![
+				WriteOp::put(meta_key(TEST_ACTOR), serde_bare::to_vec(&head)?),
+				WriteOp::put(delta_blob_key(TEST_ACTOR, 1), encoded_blob(1, 1, 0x11)),
+				WriteOp::put(delta_blob_key(TEST_ACTOR, 2), encoded_blob(2, 70, 0x70)),
+				WriteOp::put(shard_key(TEST_ACTOR, 1), encoded_blob(3, 70, 0x71)),
+				WriteOp::put(pidx_delta_key(TEST_ACTOR, 1), 1_u64.to_be_bytes().to_vec()),
+				WriteOp::put(pidx_delta_key(TEST_ACTOR, 70), 2_u64.to_be_bytes().to_vec()),
+			],
+		)
+		.await?;
+		rewrite_meta_with_actual_usage(&engine, TEST_ACTOR).await?;
+		let before_usage = actual_tracked_usage(&engine).await?;
+
+		let result = engine
+			.takeover(TEST_ACTOR, TakeoverConfig::new(999))
+			.await?;
+
+		assert_eq!(result.generation, 2);
+		assert_eq!(
+			read_value(&engine, pidx_delta_key(TEST_ACTOR, 1)).await?,
+			Some(1_u64.to_be_bytes().to_vec())
+		);
+		assert!(
+			read_value(&engine, pidx_delta_key(TEST_ACTOR, 70))
+				.await?
+				.is_none()
+		);
+		assert!(
+			read_value(&engine, delta_blob_key(TEST_ACTOR, 2))
+				.await?
+				.is_none()
+		);
+		assert!(
+			read_value(&engine, shard_key(TEST_ACTOR, 1))
+				.await?
+				.is_none()
+		);
+		let after_usage = actual_tracked_usage(&engine).await?;
+		assert!(after_usage < before_usage);
+		assert_eq!(result.meta.sqlite_storage_used, after_usage);
+
+		Ok(())
+	}
+
+	#[tokio::test]
 	async fn takeover_cleans_orphan_deltas() -> Result<()> {
 		let (db, subspace) = test_db().await?;
 		let (engine, _compaction_rx) = SqliteEngine::new(db, subspace);
@@ -1053,6 +1213,7 @@ mod tests {
 		let mut head = seeded_head();
 		head.head_txid = 32;
 		head.next_txid = 33;
+		head.db_size_pages = 32;
 		let (engine, mut compaction_rx) = SqliteEngine::new(db, subspace);
 		let mut mutations = vec![WriteOp::put(
 			meta_key(TEST_ACTOR),
@@ -1061,7 +1222,11 @@ mod tests {
 		for txid in 1..=32_u64 {
 			mutations.push(WriteOp::put(
 				delta_blob_key(TEST_ACTOR, txid),
-				vec![txid as u8],
+				encoded_blob(txid, txid as u32, txid as u8),
+			));
+			mutations.push(WriteOp::put(
+				pidx_delta_key(TEST_ACTOR, txid as u32),
+				txid.to_be_bytes().to_vec(),
 			));
 		}
 		apply_write_ops(
@@ -1083,15 +1248,15 @@ mod tests {
 			vec![
 				FetchedPage {
 					pgno: 1,
-					bytes: None,
+					bytes: Some(page(1)),
 				},
 				FetchedPage {
 					pgno: 2,
-					bytes: None,
+					bytes: Some(page(2)),
 				},
 				FetchedPage {
 					pgno: 3,
-					bytes: None,
+					bytes: Some(page(3)),
 				},
 			]
 		);

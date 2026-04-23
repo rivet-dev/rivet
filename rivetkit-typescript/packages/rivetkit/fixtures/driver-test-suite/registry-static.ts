@@ -113,6 +113,7 @@ import {
 	sleepWithRawWs,
 	sleepWsActiveDbExceedsGrace,
 } from "./sleep-db";
+import { saveStateActor, saveStateObserver } from "./save-state";
 import { lifecycleObserver, startStopRaceActor } from "./start-stop-race";
 import { statelessActor } from "./stateless";
 import { stateZodCoercionActor } from "./state-zod-coercion";
@@ -205,6 +206,8 @@ export const registry = setup({
 		sleepWsMessageExceedsGrace,
 		sleepWsConcurrentDbExceedsGrace,
 		sleepWsActiveDbExceedsGrace,
+		saveStateActor,
+		saveStateObserver,
 		// From error-handling.ts
 		errorHandlingActor,
 		customTimeoutActor,

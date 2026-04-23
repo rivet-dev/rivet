@@ -37,6 +37,7 @@ export default defineConfig({
 	outDir: "dist/browser/",
 	entry: {
 		client: "src/client/mod.browser.ts",
+		"inspector/client": "src/inspector/client.browser.ts",
 	},
 	define: {
 		"globalThis.CUSTOM_RIVETKIT_DEVTOOLS_URL": process.env

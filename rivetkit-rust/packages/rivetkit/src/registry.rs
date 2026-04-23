@@ -1,6 +1,7 @@
 use std::{future::Future, sync::Arc};
 
 use anyhow::Result;
+use rivet_error::RivetError;
 use rivetkit_core::{
 	ActorConfig, ActorFactory as CoreActorFactory, ActorStart, CoreRegistry, ServeConfig,
 };
@@ -68,11 +69,26 @@ where
 	Fut: Future<Output = Result<()>> + Send + 'static,
 {
 	let entry = Arc::new(entry);
-	CoreActorFactory::new(config, move |core_start: ActorStart| {
+	CoreActorFactory::new_with_manual_startup_ready(config, move |core_start: ActorStart| {
 		let entry = Arc::clone(&entry);
 		Box::pin(async move {
-			let start = wrap_start::<A>(core_start)?;
-			entry(start).await
+			let mut core_start = core_start;
+			let startup_ready = core_start.startup_ready.take();
+			match wrap_start::<A>(core_start) {
+				Ok(start) => {
+					if let Some(reply) = startup_ready {
+						let _ = reply.send(Ok(()));
+					}
+					entry(start).await
+				}
+				Err(error) => {
+					if let Some(reply) = startup_ready {
+						let startup_error = anyhow::Error::new(RivetError::extract(&error));
+						let _ = reply.send(Err(startup_error));
+					}
+					Err(error)
+				}
+			}
 		})
 	})
 }
@@ -120,6 +136,7 @@ mod tests {
 				snapshot: None,
 				hibernated: Vec::new(),
 				events: event_rx.into(),
+				startup_ready: None,
 			})
 			.await;
 

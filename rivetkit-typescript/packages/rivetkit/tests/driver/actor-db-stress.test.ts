@@ -75,7 +75,7 @@ describeDriverMatrix("Actor Db Stress", (driverTestConfig) => {
 					];
 					const getActor = () => client.dbStressActor.getOrCreate(actorKey);
 
-					// Insert some data.
+					// Poll the first insert because the actor can still be starting when the initial DB action is sent.
 					await vi.waitFor(
 						async () => {
 							await getActor().insertBatch(10);
@@ -129,7 +129,7 @@ describeDriverMatrix("Actor Db Stress", (driverTestConfig) => {
 				expect(health.elapsedMs).toBeLessThan(30_000);
 				expect(health.insertCount).toBe(100);
 
-				// Verify the actor is still healthy after the test.
+				// Poll the integrity check because the actor may still be finishing the prior async insert loop.
 				const integrity = await vi.waitFor(
 					async () =>
 						client.dbStressActor

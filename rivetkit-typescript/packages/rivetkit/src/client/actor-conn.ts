@@ -1,4 +1,3 @@
-import * as cbor from "cbor-x";
 import invariant from "invariant";
 import pRetry from "p-retry";
 import type { AnyActorDefinition } from "@/actor/definition";
@@ -23,7 +22,12 @@ import {
 import { assertUnreachable, stringifyError } from "@/common/utils";
 import type { UniversalWebSocket } from "@/common/websocket-interface";
 import type { EngineControlClient } from "@/engine-client/driver";
-import { deserializeWithEncoding, serializeWithEncoding } from "@/serde";
+import {
+	decodeCborCompat,
+	deserializeWithEncoding,
+	encodeCborCompat,
+	serializeWithEncoding,
+} from "@/serde";
 import { bufferToArrayBuffer, promiseWithResolvers } from "@/utils";
 import { getLogMessage } from "@/utils/env-vars";
 import type {
@@ -661,7 +665,7 @@ export class ActorConnRaw {
 			const { group, code, message, metadata, actionId } =
 				response.body.val;
 
-			if (actionId) {
+			if (actionId !== null) {
 				const inFlight = this.#takeActionInFlight(Number(actionId));
 				this.#invalidateActorIfStale(group, code);
 
@@ -1175,7 +1179,9 @@ export class ActorConnRaw {
 											id: msg.body.val.id,
 											name: msg.body.val.name,
 											args: bufferToArrayBuffer(
-												cbor.encode(msg.body.val.args),
+												encodeCborCompat(
+													msg.body.val.args,
+												),
 											),
 										},
 									},
@@ -1290,7 +1296,7 @@ export class ActorConnRaw {
 								code: msg.body.val.code,
 								message: msg.body.val.message,
 								metadata: msg.body.val.metadata
-									? cbor.decode(
+									? decodeCborCompat(
 											new Uint8Array(
 												msg.body.val.metadata,
 											),
@@ -1306,7 +1312,7 @@ export class ActorConnRaw {
 							tag: "ActionResponse",
 							val: {
 								id: msg.body.val.id,
-								output: cbor.decode(
+								output: decodeCborCompat(
 									new Uint8Array(msg.body.val.output),
 								),
 							},
@@ -1318,7 +1324,7 @@ export class ActorConnRaw {
 							tag: "Event",
 							val: {
 								name: msg.body.val.name,
-								args: cbor.decode(
+								args: decodeCborCompat(
 									new Uint8Array(msg.body.val.args),
 								),
 							},

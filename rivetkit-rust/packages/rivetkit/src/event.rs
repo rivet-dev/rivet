@@ -1496,6 +1496,7 @@ mod tests {
 					snapshot: None,
 					hibernated: Vec::new(),
 					events: event_rx.into(),
+					startup_ready: None,
 				})
 				.expect("wrap start");
 

@@ -522,6 +522,11 @@ impl ActorTask {
 		let activity_notify = self.ctx.sleep_activity_notify();
 
 		loop {
+			if self.ctx.acknowledge_activity_dirty() {
+				if let Some(exit) = self.on_activity_signal().await {
+					return exit;
+				}
+			}
 			self.record_inbox_depths();
 			tokio::select! {
 				biased;
@@ -674,25 +679,60 @@ impl ActorTask {
 	#[cfg(test)]
 	async fn handle_stop(&mut self, reason: StopReason) -> Result<()> {
 		let (reply_tx, reply_rx) = oneshot::channel();
-		self.shutdown_reply = Some(PendingLifecycleReply {
-			command: "stop",
-			reason: Some(shutdown_reason_label(reason)),
-			reply: reply_tx,
-		});
+		self.register_shutdown_reply("stop", Some(shutdown_reason_label(reason)), reply_tx);
 		self.begin_grace(reason).await;
-		self.sleep_grace = None;
-		let result = match AssertUnwindSafe(self.run_shutdown(reason))
-			.catch_unwind()
-			.await
-		{
-			Ok(result) => result,
-			Err(_) => Err(anyhow!("shutdown panicked during {reason:?}")),
-		};
-		self.deliver_shutdown_reply(reason, &result);
-		self.transition_to(LifecycleState::Terminated);
-		match reply_rx.await {
-			Ok(result) => result,
-			Err(_) => Err(ActorLifecycleError::DroppedReply.build()),
+		loop {
+			if self.ctx.acknowledge_activity_dirty() {
+				if let Some(exit) = self.on_activity_signal().await {
+					let LiveExit::Shutdown { reason } = exit else {
+						return Ok(());
+					};
+					let result = match AssertUnwindSafe(self.run_shutdown(reason))
+						.catch_unwind()
+						.await
+					{
+						Ok(result) => result,
+						Err(_) => Err(anyhow!("shutdown panicked during {reason:?}")),
+					};
+					self.deliver_shutdown_reply(reason, &result);
+					self.transition_to(LifecycleState::Terminated);
+					return match reply_rx.await {
+						Ok(result) => result,
+						Err(_) => Err(ActorLifecycleError::DroppedReply.build()),
+					};
+				}
+			}
+
+			let Some(deadline) = self.sleep_grace.as_ref().map(|grace| grace.deadline) else {
+				return Err(anyhow!("stop grace ended without shutdown exit"));
+			};
+			let activity_notify = self.ctx.sleep_activity_notify();
+			let activity = activity_notify.notified();
+			tokio::pin!(activity);
+
+			tokio::select! {
+				_ = &mut activity => {}
+				_ = Self::sleep_grace_tick(Some(deadline)) => {
+					if let Some(exit) = self.on_sleep_grace_deadline().await {
+						let LiveExit::Shutdown { reason } = exit else {
+							return Ok(());
+						};
+						let result = match AssertUnwindSafe(self.run_shutdown(reason))
+							.catch_unwind()
+							.await
+						{
+							Ok(result) => result,
+							Err(_) => Err(anyhow!("shutdown panicked during {reason:?}")),
+						};
+						self.deliver_shutdown_reply(reason, &result);
+						self.transition_to(LifecycleState::Terminated);
+						return match reply_rx.await {
+							Ok(result) => result,
+							Err(_) => Err(ActorLifecycleError::DroppedReply.build()),
+						};
+					}
+				}
+			}
 		}
 	}
 
@@ -708,7 +748,7 @@ impl ActorTask {
 				self.register_shutdown_reply(command, command_reason, reply);
 				self.drain_accepted_dispatch().await;
 				self.begin_grace(reason).await;
-				None
+				self.try_finish_grace()
 			}
 			LifecycleState::SleepGrace | LifecycleState::DestroyGrace => {
 				let current_reason = self.sleep_grace.as_ref().map(|grace| grace.reason);
@@ -771,9 +811,6 @@ impl ActorTask {
 		self.ctx.suspend_alarm_dispatch();
 		self.ctx.cancel_local_alarm_timeouts();
 		self.ctx.set_local_alarm_callback(None);
-		if matches!(reason, StopReason::Destroy) {
-			self.ctx.cancel_driver_alarm_logged();
-		}
 		self.transition_to(match reason {
 			StopReason::Sleep => LifecycleState::SleepGrace,
 			StopReason::Destroy => LifecycleState::DestroyGrace,
@@ -798,7 +835,6 @@ impl ActorTask {
 				ActorEvent::DisconnectConn { conn_id, reply },
 			) {
 				tracing::error!(?error, "failed to enqueue disconnect cleanup event");
-				self.ctx.mark_core_dispatched_hook_completed();
 			}
 		}
 
@@ -809,7 +845,6 @@ impl ActorTask {
 			ActorEvent::RunGracefulCleanup { reason, reply },
 		) {
 			tracing::error!(?error, "failed to enqueue run cleanup event");
-			self.ctx.mark_core_dispatched_hook_completed();
 		}
 		self.ctx.reset_sleep_timer();
 	}
@@ -1094,7 +1129,7 @@ impl ActorTask {
 		self.ctx.init_alarms();
 
 		self.transition_to(LifecycleState::Started);
-		self.spawn_run_handle(is_new);
+		self.spawn_run_handle(is_new).await?;
 		self.reset_sleep_deadline().await;
 		self.ctx.drain_overdue_scheduled_events().await?;
 		Ok(())
@@ -1170,13 +1205,20 @@ impl ActorTask {
 		self.actor_event_rx = Some(actor_event_rx);
 	}
 
-	fn spawn_run_handle(&mut self, is_new: bool) {
+	async fn spawn_run_handle(&mut self, is_new: bool) -> Result<()> {
 		if self.run_handle.is_some() {
-			return;
+			return Ok(());
 		}
 
 		let Some(actor_events) = self.actor_event_rx.take() else {
-			return;
+			return Ok(());
+		};
+		let requires_manual_startup_ready = self.factory.requires_manual_startup_ready();
+		let (startup_ready_tx, startup_ready_rx) = if requires_manual_startup_ready {
+			let (tx, rx) = oneshot::channel();
+			(Some(tx), Some(rx))
+		} else {
+			(None, None)
 		};
 		let start = ActorStart {
 			ctx: self.ctx.clone(),
@@ -1192,6 +1234,7 @@ impl ActorTask {
 				})
 				.collect(),
 			events: ActorEvents::new(self.ctx.actor_id().to_owned(), actor_events),
+			startup_ready: startup_ready_tx,
 		};
 		let factory = self.factory.clone();
 		self.run_handle = Some(tokio::spawn(async move {
@@ -1203,6 +1246,13 @@ impl ActorTask {
 				.build()),
 			}
 		}));
+		if let Some(startup_ready_rx) = startup_ready_rx {
+			startup_ready_rx
+				.await
+				.context("receive runtime startup ready reply")?
+				.context("runtime startup preamble")?;
+		}
+		Ok(())
 	}
 
 	async fn settle_hibernated_connections(ctx: ActorContext) -> Result<()> {
@@ -1254,7 +1304,10 @@ impl ActorTask {
 	}
 
 	async fn fire_due_alarms(&mut self) -> Result<()> {
-		if !matches!(self.lifecycle, LifecycleState::Started) {
+		if !matches!(
+			self.lifecycle,
+			LifecycleState::Started | LifecycleState::SleepGrace | LifecycleState::DestroyGrace
+		) {
 			return Ok(());
 		}
 
@@ -1640,7 +1693,10 @@ impl ActorTask {
 	}
 
 	fn accepting_dispatch(&self) -> bool {
-		matches!(self.lifecycle, LifecycleState::Started)
+		matches!(
+			self.lifecycle,
+			LifecycleState::Started | LifecycleState::SleepGrace | LifecycleState::DestroyGrace
+		)
 	}
 
 	fn sleep_timer_active(&self) -> bool {
