@@ -17,7 +17,7 @@ const program = Effect.gen(function* () {
   const counter = counterClient.getOrCreate(["counter-123"])
 
   // Action calls return Effects with types inferred from the schema.
-  //   counter.increment: (input: { amount: number }) => Effect<number, CounterOverflow>
+  //   counter.increment: (input: { amount: number }) => Effect<number, CounterOverflowError>
   const count = yield* counter.increment({ amount: 5 })
   yield* Effect.log(`Count: ${count}`)
 
@@ -27,7 +27,7 @@ const program = Effect.gen(function* () {
     Stream.runForEach((n) => Effect.log(`Changed: ${n}`)),
   )
 })
-// program: Effect<void, CounterOverflow, Counter.Client>
+// program: Effect<void, CounterOverflowError, Counter.Client>
 //                                        ^^^^^^^^^^^^^^
 //  Missing Counter.Client -> compile error naming the exact actor dependency.
 

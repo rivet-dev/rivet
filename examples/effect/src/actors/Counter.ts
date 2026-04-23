@@ -3,8 +3,8 @@ import { Actor, Action } from "@rivetkit/effect"
 
 // --- Errors ---
 
-export class CounterOverflow extends Schema.TaggedError<CounterOverflow>()(
-  "CounterOverflow",
+export class CounterOverflowError extends Schema.TaggedError<CounterOverflowError>()(
+  "CounterOverflowError",
   { limit: Schema.Number },
 ) {}
 
@@ -17,7 +17,7 @@ export class CounterOverflow extends Schema.TaggedError<CounterOverflow>()(
 export const Increment = Action.make("Increment", {
   input: Schema.Struct({ amount: Schema.Number }),
   success: Schema.Number,
-  error: CounterOverflow,
+  error: CounterOverflowError,
 })
 
 export const GetCount = Action.make("GetCount", {
@@ -66,7 +66,7 @@ export const CounterLive = Counter.toLayer(
             count: s.count + input.amount,
           }))
           if (next.count > 20) {
-            return yield* new CounterOverflow({ limit: 20 })
+            return yield* new CounterOverflowError({ limit: 20 })
           }
           yield* PubSub.publish(events.countChanged, next.count)
           return next.count
