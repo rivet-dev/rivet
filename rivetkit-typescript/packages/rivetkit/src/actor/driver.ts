@@ -4,7 +4,6 @@ import type { EngineControlClient } from "@/engine-client/driver";
 import type { AnyActorInstance, AnyStaticActorInstance } from "./definition";
 import type { RegistryConfig } from "@/registry/config";
 import type {
-	RawDatabaseClient,
 	DrizzleDatabaseClient,
 	NativeDatabaseProvider,
 } from "@/common/database/config";
@@ -74,15 +73,6 @@ export interface ActorDriver {
 	cancelAlarm?(actorId: string): void;
 
 	// Database
-	/**
-	 * Override the default raw database client for the actor.
-	 * If not provided, rivetkit will construct a KV-backed SQLite client.
-	 * @experimental
-	 */
-	overrideRawDatabaseClient?(
-		actorId: string,
-	): Promise<RawDatabaseClient | undefined>;
-
 	/**
 	 * Override the default Drizzle database client for the actor.
 	 * If not provided, rivetkit will construct a KV-backed Drizzle client.

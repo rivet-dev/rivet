@@ -7,6 +7,7 @@ Started: Thu Apr 23 04:17:16 AM PDT 2026
 - When validating Linux NAPI preview packages, run the sanity check in Docker `node:22` if the host already has a `rivet-engine` on port `6420`.
 - Serverless `/start` driver tests need the start payload actor ID to exist in the same engine namespace as the serverless envoy headers, or startup fails at KV load with `actor does not exist`.
 - Serverless `/start` tests must upsert a normal runner config for the temporary pool before starting the native serverless envoy.
+- Raw `db()` uses the native database provider only; custom raw database client overrides are removed.
 
 ## 2026-04-23T11:45:04Z - DT-000
 - Implemented the urgent Linux NAPI publish fix in `/tmp/rivet-publish-fix` on branch `04-22-chore_fix_remaining_issues_with_rivetkit-core`.
@@ -34,4 +35,12 @@ Started: Thu Apr 23 04:17:16 AM PDT 2026
   - Serverless `/start` payloads can be generated with `@rivetkit/engine-envoy-protocol` by prepending the little-endian envoy protocol version to a `ToEnvoyCommands` payload.
   - The actor ID in a serverless `/start` driver test must come from the same engine namespace used in the `x-rivet-namespace-name` header.
   - `Registry.start()` is native-envoy-only now; built-in `staticDir` serving is intentionally documented as a follow-up gap.
+---
+## 2026-04-23T12:02:25Z - DT-042
+- Removed the experimental `overrideRawDatabaseClient` hook from the actor driver interface and database provider context.
+- Collapsed the raw `db()` factory so it always requires the native database provider path instead of accepting a custom raw client override.
+- Files changed: `rivetkit-typescript/packages/rivetkit/src/actor/driver.ts`, `rivetkit-typescript/packages/rivetkit/src/common/database/config.ts`, `rivetkit-typescript/packages/rivetkit/src/common/database/mod.ts`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
+- Verification: `rg -n "overrideRawDatabaseClient" rivetkit-typescript` returned zero matches; `rg -n "overrideDrizzleDatabaseClient" ...` confirmed the Drizzle override still exists; `pnpm build -F rivetkit` passed; `pnpm -F rivetkit check-types` passed; `pnpm -F rivetkit test tests/driver/actor-db.test.ts tests/driver/actor-db-raw.test.ts tests/driver/actor-db-pragma-migration.test.ts` passed with 72 tests.
+- **Learnings for future iterations:**
+  - Raw `db()` now depends exclusively on the native database provider; only Drizzle keeps an experimental override path.
 ---
