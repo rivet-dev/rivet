@@ -155,7 +155,7 @@
       ],
       "priority": 8,
       "passes": false,
-      "notes": "DT-008 verification failed on 2026-04-23T07:02Z. Fast bare sweep: 281 passed, 6 failed, 577 skipped. Slow bare sweep: 67 passed, 1 failed, 166 skipped. Follow-up stories added as DT-011..DT-016."
+      "notes": "DT-008 verification failed on 2026-04-23T07:02Z. Fast bare sweep: 281 passed, 6 failed, 577 skipped. Slow bare sweep: 67 passed, 1 failed, 166 skipped. Follow-up stories added as DT-011..DT-016. Rechecked full-file set on 2026-04-23T12:14Z: 239 passed, 4 failed, 33 skipped. Existing DT-014 covers conn-error-serialization; new follow-up stories added as DT-045 and DT-046."
     },
     {
       "id": "DT-009",
@@ -215,8 +215,8 @@
         "Tests pass"
       ],
       "priority": 11,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Completed on 2026-04-23: no source change was needed. The stale fast-matrix timeout no longer reproduces on this branch; targeted bare oversized-response rejection, full actor-conn file, and parallel bare actor-conn suite all pass."
     },
     {
       "id": "DT-012",
@@ -801,6 +801,40 @@
       "priority": 0,
       "passes": true,
       "notes": "Priority 0 = run this before ANY other pending story. This is an urgent ship-blocker for Linux consumers of the published NAPI package. Branch/worktree for this story is separate from the rest of the PRD — do NOT run on the PRD's default branchName. Completed on 2026-04-23: pushed cda279eda and 19a731adb to 04-22-chore_fix_remaining_issues_with_rivetkit-core. Publish run 24832562681 passed on preview 0.0.0-pr.4701.d2c139c. Docker node:22 sanity check passed; ldd on published linux-x64-gnu .node has no libssl/libcrypto lines."
+    },
+    {
+      "id": "DT-045",
+      "title": "Fix actor-conn onOpen handler missed under bare full-file verification",
+      "description": "DT-008 full-file verification on 2026-04-23 failed `tests/driver/actor-conn.test.ts:428` (`onOpen should be called when connection opens`) under `static registry > encoding (bare)` with `AssertionError: expected +0 to be 1 // Object.is equality` at `tests/driver/actor-conn.test.ts:444`. Root-cause why the WebSocket opens (`socket open` is logged) but the registered `onOpen` callback is not observed before the 10s wait expires. Likely locations are the TS actor WebSocket client connection-state callback path or a bare/static ordering issue exposed by full-file execution.",
+      "acceptanceCriteria": [
+        "Single-test verification: `pnpm -F rivetkit test tests/driver/actor-conn.test.ts -t \"static registry.*encoding \\\\(bare\\\\).*onOpen should be called when connection opens\"` passes",
+        "Whole-file verification: `pnpm -F rivetkit test tests/driver/actor-conn.test.ts` passes with zero failures",
+        "Root cause explains why the bare onOpen callback can be missed even though the socket reaches open state",
+        "Fix does not add timeout bumps, retry masking, or test-only sleeps",
+        "`.agent/notes/driver-test-progress.md` updates or confirms the `actor-conn` entry and appends a PASS line",
+        "`pnpm -F rivetkit check-types` passes",
+        "Tests pass"
+      ],
+      "priority": 43,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "DT-046",
+      "title": "Fix actor-inspector database execute named properties under CBOR",
+      "description": "DT-008 full-file verification on 2026-04-23 failed `tests/driver/actor-inspector.test.ts:556` (`POST /inspector/database/execute supports named properties`) under `static registry > encoding (cbor)` with `RivetError: An internal error occurred` thrown from `src/client/actor-handle.ts:355`, reached from `tests/driver/actor-inspector.test.ts:562`. Root-cause why the inspector database execute path or setup action fails only in the CBOR full-file run, and preserve structured error reporting instead of collapsing to an internal error.",
+      "acceptanceCriteria": [
+        "Single-test verification: `pnpm -F rivetkit test tests/driver/actor-inspector.test.ts -t \"static registry.*encoding \\\\(cbor\\\\).*POST /inspector/database/execute supports named properties\"` passes",
+        "Whole-file verification: `pnpm -F rivetkit test tests/driver/actor-inspector.test.ts` passes with zero failures",
+        "Root cause identifies whether the failure is in inspector database execution, CBOR argument serialization, or test setup action dispatch",
+        "Structured errors are preserved where applicable; do not mask the failure as generic internal unless it is genuinely internal",
+        "`.agent/notes/driver-test-progress.md` updates the `actor-inspector` entry from `[!]` to `[x]` after verification and appends a PASS line",
+        "`pnpm -F rivetkit check-types` passes",
+        "Tests pass"
+      ],
+      "priority": 44,
+      "passes": false,
+      "notes": ""
     }
   ]
 }

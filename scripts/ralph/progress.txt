@@ -44,3 +44,20 @@ Started: Thu Apr 23 04:17:16 AM PDT 2026
 - **Learnings for future iterations:**
   - Raw `db()` now depends exclusively on the native database provider; only Drizzle keeps an experimental override path.
 ---
+## 2026-04-23T12:15:22Z - DT-008
+- Re-ran the DT-008 full-file verifier for the six tracked driver files.
+- DT-008 remains blocked: `pnpm -F rivetkit test tests/driver/actor-conn.test.ts tests/driver/conn-error-serialization.test.ts tests/driver/actor-inspector.test.ts tests/driver/actor-workflow.test.ts tests/driver/actor-sleep-db.test.ts tests/driver/hibernatable-websocket-protocol.test.ts` failed with 239 passed, 4 failed, 33 skipped.
+- Added follow-up stories for new failures: DT-045 (`actor-conn` bare `onOpen should be called when connection opens`) and DT-046 (`actor-inspector` cbor database execute named properties). Existing DT-014 already covers the conn-error-serialization timeout.
+- Files changed: `scripts/ralph/prd.json`, `.agent/notes/driver-test-progress.md`, `scripts/ralph/progress.txt`.
+- Verification: failed by design for this verification story; no source code was changed and no commit was made because DT-008 acceptance criteria are not satisfied.
+- **Learnings for future iterations:**
+  - DT-008 can surface new full-file failures outside the original fast/slow bare sweep; add concrete DT follow-up stories instead of marking the verifier green.
+  - The six-file verifier runs all encodings for those files and can take about 9 minutes.
+---
+## 2026-04-23T12:19:11Z - DT-011
+- Rechecked the actor-conn oversized response timeout from the fast bare matrix; it no longer reproduces on the current branch, so no source edit was needed.
+- Files changed: `scripts/ralph/prd.json`, `.agent/notes/driver-test-progress.md`, `scripts/ralph/progress.txt`.
+- Verification: targeted bare oversized response passed; full `actor-conn.test.ts` passed with 69 passed; parallel bare actor-conn suite passed with 23 passed and 46 skipped.
+- **Learnings for future iterations:**
+  - Treat stale DT failures as closeable only after the exact targeted case, whole file, and matrix-shaped repro all pass.
+---
