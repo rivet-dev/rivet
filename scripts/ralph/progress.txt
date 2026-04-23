@@ -126,3 +126,11 @@ Started: Thu Apr 23 04:17:16 AM PDT 2026
   - Driver tests can lie like hell when the checked-out Rust source is newer than the compiled local NAPI artifact; compare timestamps or just rebuild NAPI after core WebSocket/protocol changes.
   - Do not run separate Vitest driver processes in parallel against the native harness while validating a full file; local runtime startup can race and produce bogus `ECONNREFUSED` failures.
 ---
+## 2026-04-23T13:51:44Z - DT-047
+- Rechecked the bare `actor-conn` `isConnected should be false before connection opens` failure from the DT-008 verifier; it no longer reproduces on the current branch.
+- Confirmed `actor-conn` passed in the six-file DT-008 verifier shape across bare/CBOR/JSON. The same combined run still failed on the recurring static/CBOR `conn-error-serialization` createConnState timeout, so DT-048 was reopened.
+- Files changed: `scripts/ralph/prd.json`, `.agent/notes/driver-test-progress.md`, `scripts/ralph/progress.txt`.
+- Verification: targeted bare `isConnected` test passed; full `actor-conn.test.ts` passed with 69 tests; six-file DT-008 verifier showed `actor-conn` green and failed only `conn-error-serialization` CBOR; `pnpm -F rivetkit check-types` passed.
+- **Learnings for future iterations:**
+  - A story-specific verifier can pass its target file inside a combined run even when the combined command exits nonzero for a different tracked file; record both facts instead of calling the whole DT-008 slice green.
+---

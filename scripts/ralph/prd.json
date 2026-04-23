@@ -851,8 +851,8 @@
         "Tests pass"
       ],
       "priority": 45,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Completed on 2026-04-23: no source change was needed. The prior bare `isConnected` DT-008 verifier failure no longer reproduces after the native artifact refresh from DT-048. The exact bare target passed, full `actor-conn.test.ts` passed with 69 tests, and the six-file DT-008 verifier showed `actor-conn` green across bare/CBOR/JSON. The combined verifier still fails on the recurring DT-048 conn-error-serialization CBOR timeout."
     },
     {
       "id": "DT-048",
@@ -871,8 +871,8 @@
         "Tests pass"
       ],
       "priority": 46,
-      "passes": true,
-      "notes": "Completed on 2026-04-23: no source change was needed. Root cause was a stale local NAPI artifact older than `rivetkit-core/src/registry/websocket.rs`; rebuilding `@rivetkit/rivetkit-napi` refreshed the native bridge. Targeted bare and CBOR createConnState setup-error tests passed, full conn-error-serialization passed with 9 tests, and the six-file DT-008 verifier showed conn-error-serialization green across bare/CBOR/JSON. The verifier still fails on DT-047 actor-conn only."
+      "passes": false,
+      "notes": "Reopened on 2026-04-23: the DT-047 six-file verifier showed actor-conn green but failed `conn-error-serialization` under static/CBOR with `Error: Test timed out in 30000ms.` Targeted and full-file checks had passed earlier, so this remains a combined-verifier-load failure."
     }
   ]
 }
