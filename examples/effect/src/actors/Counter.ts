@@ -1,14 +1,12 @@
 import { Schema, Effect, Ref, PubSub } from "effect"
 import { Actor } from "@rivetkit/effect"
 
-// --- Errors ---
+// --- Definition ---
 
 export class CounterOverflowError extends Schema.TaggedError<CounterOverflowError>()(
 	"CounterOverflowError",
 	{ limit: Schema.Number },
 ) {}
-
-// --- Definition ---
 
 // The definition is the actor's public contract: its name,
 // state shape, event schemas, and action set. It carries no
