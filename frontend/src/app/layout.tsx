@@ -320,7 +320,7 @@ const Sidebar = ({
 													target="_blank"
 													rel="noopener"
 												>
-													Whats new?
+													What's new?
 													<Ping
 														className="relative -right-1"
 														data-changelog-ping
@@ -614,7 +614,6 @@ function CloudSidebarContentInner() {
 							fuzzy: true,
 						}) ? (
 							<>
-								<DeploymentsLink />
 								<HeaderLink
 									to="/orgs/$organization/projects/$project/ns/$namespace/settings"
 									className="font-normal"

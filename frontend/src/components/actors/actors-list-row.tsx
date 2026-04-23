@@ -1,7 +1,7 @@
 import { faCopy, Icon } from "@rivet-gg/icons";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { memo, useState } from "react";
+import { memo } from "react";
 import {
 	Button,
 	CopyTrigger,
@@ -12,7 +12,6 @@ import {
 	SmallText,
 	WithTooltip,
 } from "@/components";
-import { VisibilitySensor } from "../visibility-sensor";
 import { useFiltersValue } from "./actor-filters-context";
 import { ActorRegion } from "./actor-region";
 import {
@@ -32,12 +31,10 @@ interface ActorsListRowProps {
 
 export const ActorsListRow = memo(
 	({ className, actorId, actorKey, isCurrent }: ActorsListRowProps) => {
-		const [isVisible, setIsVisible] = useState(false);
-
 		return (
 			<Button
 				className={cn(
-					"h-auto grid grid-cols-subgrid col-span-full py-4 group border-l-0 border-r-0 border-t first-of-type:border-t-transparent border-b-transparent last-of-type:border-b-border rounded-none pl-2 pr-4 min-h-[56px]",
+					"h-[56px] flex items-center w-full group border-l-0 border-r-0 border-t-0 border-b rounded-none pl-2 pr-4",
 					className,
 				)}
 				variant={isCurrent ? "secondary" : "outline"}
@@ -49,43 +46,32 @@ export const ActorsListRow = memo(
 						...search,
 						...(actorKey ? { actorKey } : { actorId }),
 					})}
-					className="min-w-0 flex-wrap gap-2 relative"
+					className="flex items-center gap-2 w-full min-w-0"
 				>
-					{isVisible ? (
-						<>
-							<WithTooltip
-								delayDuration={0}
-								trigger={
-									<div className="w-full flex justify-end">
-										<QueriedActorStatusIndicator
-											actorId={actorId}
-										/>
-									</div>
-								}
-								content={
-									<div className="flex flex-col">
-										<QueriedActorStatusLabel
-											actorId={actorId}
-											showAdditionalInfo
-										/>
-									</div>
-								}
-							/>
-							<div className="min-w-0 flex items-center gap-1">
-								<Id actorId={actorId} />
-								<Datacenter actorId={actorId} />
-								<Tags actorId={actorId} />
+					<WithTooltip
+						delayDuration={0}
+						trigger={
+							<div className="w-6 flex-none flex justify-center">
+								<QueriedActorStatusIndicator
+									actorId={actorId}
+								/>
 							</div>
-
-							<Timestamp actorId={actorId} />
-						</>
-					) : (
-						<SkeletonContent />
-					)}
-					<VisibilitySensor
-						onToggle={setIsVisible}
-						className="absolute"
+						}
+						content={
+							<div className="flex flex-col">
+								<QueriedActorStatusLabel
+									actorId={actorId}
+									showAdditionalInfo
+								/>
+							</div>
+						}
 					/>
+					<div className="flex-1 min-w-0 flex items-center gap-1">
+						<Id actorId={actorId} />
+						<Datacenter actorId={actorId} />
+						<Tags actorId={actorId} />
+					</div>
+					<Timestamp actorId={actorId} />
 				</Link>
 			</Button>
 		);
@@ -144,13 +130,13 @@ function Tags({ actorId }: { actorId: ActorId }) {
 	);
 
 	return (
-		<SmallText className="text-foreground truncate min-w-0 max-w-full inline-flex items-center gap-1 group">
+		<SmallText className="text-foreground truncate min-w-0 max-w-full inline-flex items-center gap-0.5 group">
 			{isLoading ? <Skeleton className="h-5 w-10" /> : data || "-"}
 			<CopyTrigger value={actorId}>
 				<Button
 					variant="ghost"
 					size="icon-xs"
-					className="group-hover:opacity-100 opacity-0 transition-opacity"
+					className="group-hover:opacity-100 opacity-0 transition-opacity text-sm"
 				>
 					<Icon icon={faCopy} />
 				</Button>
@@ -189,15 +175,15 @@ function SkeletonContent() {
 
 	return (
 		<>
-			<div className="size-full items-center justify-center flex">
+			<div className="w-6 flex-none flex items-center justify-center">
 				<ActorStatusIndicator status="unknown" />
 			</div>
-			<div className="min-w-0 flex items-center gap-1">
+			<div className="flex-1 min-w-0 flex items-center gap-1">
 				{showIds ? <Skeleton className="h-5 w-10" /> : <div />}
 				<Skeleton className="h-5 w-10" />
 				<Skeleton className="h-5 w-10" />
 			</div>
-			<div className="hidden @xs/main:flex size-full justify-end">
+			<div className="hidden @xs/main:flex justify-end">
 				<Skeleton className="h-5 w-10" />
 			</div>
 		</>
@@ -206,7 +192,7 @@ function SkeletonContent() {
 
 export function ActorsListRowSkeleton() {
 	return (
-		<div className="border-b gap-1.5 py-4 pr-4 h-[56px] grid grid-cols-subgrid col-span-full items-center relative">
+		<div className="border-b flex items-center gap-2 pl-2 pr-4 h-[56px] relative">
 			<SkeletonContent />
 		</div>
 	);

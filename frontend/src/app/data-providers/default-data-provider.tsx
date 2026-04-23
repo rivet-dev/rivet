@@ -86,7 +86,15 @@ const defaultContext = {
 			queryKey: ["actors", "builds"] as QueryKey,
 			enabled: false,
 			initialPageParam: undefined as string | undefined,
-			refetchInterval: 2000,
+			refetchInterval: (query) => {
+				const data = query.state.data as
+					| { pages: Rivet.ActorsListNamesResponse[] }
+					| undefined;
+				const hasNames = data?.pages.some(
+					(p) => Object.keys(p.names).length > 0,
+				);
+				return hasNames ? 10000 : 2000;
+			},
 			queryFn: async () => {
 				throw new Error("Not implemented");
 				// biome-ignore lint/correctness/noUnreachable: stub
@@ -122,7 +130,11 @@ const defaultContext = {
 		return infiniteQueryOptions({
 			...this.actorsQueryOptions(opts),
 			enabled: (opts?.n || []).length > 0,
-			refetchInterval: 5000,
+			refetchInterval: false,
+			meta: {
+				actorsList: true,
+				actorsListQueryKey: this.actorsQueryOptions(opts).queryKey,
+			},
 			select: (data) => {
 				return data.pages.flatMap((page) =>
 					page.actors.map((actor) => ({
@@ -134,9 +146,27 @@ const defaultContext = {
 		});
 	},
 
+	actorsListPage1PollQueryOptions(opts: ActorQueryOptions) {
+		return queryOptions({
+			queryKey: ["actors", "page1-poll", opts] as QueryKey,
+			enabled: false,
+			refetchInterval: false,
+			queryFn: async () => {
+				throw new Error("Not implemented");
+				// biome-ignore lint/correctness/noUnreachable: stub
+				return {} as Rivet.ActorsListResponse;
+			},
+			meta: {
+				actorsListPage1Poll: true,
+				actorsListTargetQueryKey: this.actorsQueryOptions(opts).queryKey,
+			},
+		});
+	},
+
 	actorsListPaginationQueryOptions(opts: ActorQueryOptions) {
 		return infiniteQueryOptions({
 			...this.actorsQueryOptions(opts),
+			refetchInterval: 5000,
 			select: (data) => {
 				return data.pages.flatMap((page) =>
 					page.actors.map((actor) => actor.actorId),

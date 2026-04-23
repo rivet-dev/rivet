@@ -29,15 +29,11 @@ export const ACTORS_FILTERS_DEFINITIONS = {
 		operators: [FilterOp.EQUAL],
 		excludes: ["id"],
 	},
-	...(features.datacenter
-		? {
-				showDestroyed: {
-					type: "boolean",
-					label: "Show destroyed",
-					category: "display",
-				},
-			}
-		: {}),
+	showDestroyed: {
+		type: "boolean",
+		label: "Show destroyed",
+		category: "display",
+	},
 	showIds: {
 		type: "boolean",
 		label: "Show IDs",

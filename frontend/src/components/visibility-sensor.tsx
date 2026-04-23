@@ -14,12 +14,13 @@ export function VisibilitySensor({
 	useEffect(() => {
 		const observer = new IntersectionObserver(
 			(entries) => {
-				if (entries[0].isIntersecting) {
+				const isIntersecting = entries[0].isIntersecting;
+				if (isIntersecting) {
 					onChange?.();
-					onToggle?.(true);
 				}
+				onToggle?.(isIntersecting);
 			},
-			{ threshold: 1.0 },
+			{ threshold: 0 },
 		);
 		if (ref.current) {
 			observer.observe(ref.current);

@@ -137,6 +137,11 @@ export function ActorError({ error }: { error: object | string }) {
 				</p>
 			),
 		)
+		.with(P.shape({envoy_connection_lost: P.shape({ envoy_key: P.string })}), (err) => (
+			<p>
+				Connection to Runner was lost.
+			</p>
+		))
 		.with(P.shape({ crashed: P.shape({ message: P.string }) }), (err) => (
 			<p>Actor crashed. {err.crashed.message} </p>
 		))

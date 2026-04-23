@@ -8,7 +8,6 @@ import { match } from "ts-pattern";
 import * as CreateNamespaceForm from "@/app/forms/create-namespace-form";
 import { Flex, Frame } from "@/components";
 import { features } from "@/lib/features";
-import { convertStringToId } from "@/lib/utils";
 
 const useDataProvider = () => {
 	if (features.multitenancy) {
@@ -32,17 +31,17 @@ const useCreateNamespace = () => {
 
 	const params = useParams({ strict: false });
 
-	const dataProivder = useDataProvider();
+	const dataProvider = useDataProvider();
 
 	return useMutation(
-		dataProivder.createNamespaceMutationOptions({
+		dataProvider.createNamespaceMutationOptions({
 			onSuccess: async (data) => {
 				// Invalidate all queries to ensure fresh data
 				await queryClient.refetchQueries(
-					dataProivder.namespacesQueryOptions(),
+					dataProvider.namespacesQueryOptions(),
 				);
 
-				if (features.namespaceManagement) {
+				if (features.multitenancy) {
 					if (!params.project || !params.organization) {
 						throw new Error("Missing required parameters");
 					}
