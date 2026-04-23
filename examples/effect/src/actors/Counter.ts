@@ -42,6 +42,10 @@ export const Counter = Actor.make("Counter", {
 			success: Schema.Number,
 		},
 	},
+	options: {
+		name: "Counter",	// Human-friendly display name
+		icon: "comments", 	// FontAwesome icon name
+	},
 })
 
 // --- Implementation ---
