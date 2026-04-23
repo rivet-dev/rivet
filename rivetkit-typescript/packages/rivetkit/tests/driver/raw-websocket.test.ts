@@ -721,6 +721,7 @@ describeDriverMatrix("Raw Websocket", (driverTestConfig) => {
 						payloadSize: 6,
 					});
 
+					// The ack hook is updated asynchronously after the indexed response is sent.
 					await vi.waitFor(
 						async () => {
 							expect(await readHibernatableAckState(ws)).toEqual({
@@ -769,6 +770,7 @@ describeDriverMatrix("Raw Websocket", (driverTestConfig) => {
 							8_000,
 					});
 
+					// The ack hook is updated asynchronously after the indexed response is sent.
 					await vi.waitFor(
 						async () => {
 							expect(await readHibernatableAckState(ws)).toEqual({

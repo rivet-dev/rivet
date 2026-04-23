@@ -1,0 +1,5 @@
+{
+  "code": "namespace_mismatch",
+  "group": "config",
+  "message": "Namespace mismatch."
+}

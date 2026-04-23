@@ -6,8 +6,8 @@ Use this client to connect to RivetKit services from Python applications.
 
 ## Resources
 
-- [Quickstart](https://rivetkit.org/introduction)
-- [Documentation](https://rivetkit.org/clients/python)
+- [Quickstart](https://rivet.dev/docs)
+- [Documentation](https://rivet.dev/docs/clients/python)
 - [Examples](https://github.com/rivet-dev/rivet/tree/main/examples)
 
 ## Getting Started

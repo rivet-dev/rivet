@@ -16,6 +16,7 @@ const workflowRunningStepDeferreds = new Map<
 	string,
 	{ promise: Promise<void>; resolve: () => void }
 >();
+const workflowRunningStepReleased = new Set<string>();
 
 function createWorkflowRunningStepDeferred(): {
 	promise: Promise<void>;
@@ -769,10 +770,14 @@ export const workflowRunningStepActor = actor({
 		await ctx.step("block", async () => {
 			const deferred = createWorkflowRunningStepDeferred();
 			workflowRunningStepDeferreds.set(ctx.actorId, deferred);
+			if (workflowRunningStepReleased.delete(ctx.actorId)) {
+				deferred.resolve();
+			}
 			try {
 				await deferred.promise;
 			} finally {
 				workflowRunningStepDeferreds.delete(ctx.actorId);
+				workflowRunningStepReleased.delete(ctx.actorId);
 			}
 		});
 		await ctx.step("finish", async () => {
@@ -782,7 +787,12 @@ export const workflowRunningStepActor = actor({
 	actions: {
 		getState: (c) => ({ ...c.state }),
 		release: (c) => {
-			workflowRunningStepDeferreds.get(c.actorId)?.resolve();
+			const deferred = workflowRunningStepDeferreds.get(c.actorId);
+			if (deferred) {
+				deferred.resolve();
+			} else {
+				workflowRunningStepReleased.add(c.actorId);
+			}
 		},
 	},
 	options: {

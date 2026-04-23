@@ -40,7 +40,7 @@ mod moved_tests {
 	};
 	use crate::actor::task::{
 		ActorTask, DispatchCommand, LONG_SHUTDOWN_DRAIN_WARNING_THRESHOLD, LifecycleCommand,
-		LifecycleEvent, LifecycleState,
+		LifecycleEvent, LifecycleState, LiveExit,
 	};
 	use crate::actor::task_types::StopReason;
 	use crate::kv::tests::new_in_memory;
@@ -301,6 +301,62 @@ mod moved_tests {
 						}
 						_ => {}
 					}
+				}
+				Ok(())
+			})
+		}))
+	}
+
+	fn detached_cleanup_after_clean_run_factory(
+		sleep_count: Arc<AtomicUsize>,
+		destroy_count: Arc<AtomicUsize>,
+		run_returned_tx: oneshot::Sender<()>,
+		cleanup_tx: oneshot::Sender<StopReason>,
+	) -> Arc<ActorFactory> {
+		let run_returned_tx = Arc::new(Mutex::new(Some(run_returned_tx)));
+		let cleanup_tx = Arc::new(Mutex::new(Some(cleanup_tx)));
+		Arc::new(ActorFactory::new(ActorConfig::default(), move |start| {
+			let sleep_count = sleep_count.clone();
+			let destroy_count = destroy_count.clone();
+			let run_returned_tx = run_returned_tx.clone();
+			let cleanup_tx = cleanup_tx.clone();
+			Box::pin(async move {
+				let mut events = start.events;
+				tokio::spawn(async move {
+					while let Some(event) = events.recv().await {
+						match event {
+							ActorEvent::SerializeState { reply, .. } => {
+								reply.send(Ok(Vec::new()));
+							}
+							ActorEvent::RunGracefulCleanup { reason, reply } => {
+								match reason {
+									StopReason::Sleep => {
+										sleep_count.fetch_add(1, Ordering::SeqCst);
+									}
+									StopReason::Destroy => {
+										destroy_count.fetch_add(1, Ordering::SeqCst);
+									}
+								}
+								reply.send(Ok(()));
+								if let Some(tx) = cleanup_tx
+									.lock()
+									.expect("cleanup sender lock poisoned")
+									.take()
+								{
+									let _ = tx.send(reason);
+								}
+								break;
+							}
+							_ => {}
+						}
+					}
+				});
+				if let Some(tx) = run_returned_tx
+					.lock()
+					.expect("run returned sender lock poisoned")
+					.take()
+				{
+					let _ = tx.send(());
 				}
 				Ok(())
 			})
@@ -2859,6 +2915,108 @@ mod moved_tests {
 		run.await
 			.expect("task run should finish")
 			.expect("task run should succeed");
+	}
+
+	#[tokio::test]
+	async fn clean_run_exit_still_dispatches_on_sleep_when_stop_arrives() {
+		assert_clean_run_exit_stop_dispatches_cleanup(StopReason::Sleep).await;
+	}
+
+	#[tokio::test]
+	async fn clean_run_exit_still_dispatches_on_destroy_when_stop_arrives() {
+		assert_clean_run_exit_stop_dispatches_cleanup(StopReason::Destroy).await;
+	}
+
+	async fn assert_clean_run_exit_stop_dispatches_cleanup(reason: StopReason) {
+		let actor_id = match reason {
+			StopReason::Sleep => "actor-clean-run-sleep-stop",
+			StopReason::Destroy => "actor-clean-run-destroy-stop",
+		};
+		let ctx = new_with_kv(
+			actor_id,
+			"task-clean-run",
+			Vec::new(),
+			"local",
+			new_in_memory(),
+		);
+		let sleep_count = Arc::new(AtomicUsize::new(0));
+		let destroy_count = Arc::new(AtomicUsize::new(0));
+		let (run_returned_tx, run_returned_rx) = oneshot::channel();
+		let (cleanup_tx, cleanup_rx) = oneshot::channel();
+		let mut task = new_task_with_factory(
+			ctx.clone(),
+			detached_cleanup_after_clean_run_factory(
+				sleep_count.clone(),
+				destroy_count.clone(),
+				run_returned_tx,
+				cleanup_tx,
+			),
+		);
+
+		let (start_tx, start_rx) = oneshot::channel();
+		task.handle_lifecycle(LifecycleCommand::Start { reply: start_tx })
+			.await;
+		start_rx
+			.await
+			.expect("start reply should send")
+			.expect("start should succeed");
+		timeout(Duration::from_secs(2), run_returned_rx)
+			.await
+			.expect("clean run should return")
+			.expect("run returned signal should send");
+
+		let outcome = ActorTask::wait_for_run_handle(task.run_handle.as_mut()).await;
+		assert!(task.handle_run_handle_outcome(outcome).is_none());
+		assert_eq!(task.lifecycle, LifecycleState::Started);
+
+		let (stop_tx, stop_rx) = oneshot::channel();
+		task.handle_lifecycle(LifecycleCommand::Stop {
+			reason,
+			reply: stop_tx,
+		})
+		.await;
+		assert_eq!(
+			timeout(Duration::from_secs(2), cleanup_rx)
+				.await
+				.expect("grace cleanup should run after Stop")
+				.expect("cleanup signal should send"),
+			reason
+		);
+		assert_eq!(
+			sleep_count.load(Ordering::SeqCst),
+			usize::from(matches!(reason, StopReason::Sleep))
+		);
+		assert_eq!(
+			destroy_count.load(Ordering::SeqCst),
+			usize::from(matches!(reason, StopReason::Destroy))
+		);
+
+		timeout(Duration::from_secs(2), async {
+			while ctx.core_dispatched_hook_count() != 0 {
+				yield_now().await;
+			}
+		})
+		.await
+		.expect("core-dispatched cleanup hook should complete");
+
+		let exit = task
+			.try_finish_grace()
+			.expect("grace should finish after cleanup hook completes");
+		let LiveExit::Shutdown {
+			reason: shutdown_reason,
+		} = exit
+		else {
+			panic!("grace should transition to shutdown");
+		};
+		assert_eq!(shutdown_reason, reason);
+		let result = task.run_shutdown(shutdown_reason).await;
+		task.deliver_shutdown_reply(shutdown_reason, &result);
+		task.transition_to(LifecycleState::Terminated);
+		result.expect("shutdown should succeed");
+		stop_rx
+			.await
+			.expect("stop reply should send")
+			.expect("stop should succeed");
 	}
 
 	#[tokio::test]

@@ -1,0 +1,440 @@
+{
+  "project": "rivetkit-review-followup",
+  "branchName": "04-22-chore_rivetkit_core_napi_typescript_follow_up_review",
+  "description": "Execute the findings from the adversarial review synthesis at `.agent/notes/rivetkit-core-review-synthesis.md`. Each story is one finding with a defined Desired behavior. Citations and verdicts were challenged against the current branch; each story references the underlying F-number in the synthesis doc.\n\n===== ARCHITECTURAL INVARIANTS (context for every story) =====\n\n1. One Stop command per actor generation. The engine's actor2 workflow sends exactly one `Stop` command per generation — either `Sleep` or `Destroy`, never both, never multiples. Any 'concurrent Stop' or 'Stop upgrade' scenario is unreachable by construction.\n2. One actor instance running, cluster-wide. At any moment, exactly one physical copy of an actor is running across the entire cluster. Failover transitions ownership atomically via engine assignment. Any hazard that depends on 'two envoys running the same actor concurrently' is infeasible under this invariant.\n\n===== LAYER GLOSSARY =====\n\n- core = `rivetkit-rust/packages/rivetkit-core/` — Rust lifecycle/state/dispatch state machine.\n- napi = `rivetkit-typescript/packages/rivetkit-napi/` — Rust NAPI bindings between core and JS.\n- typescript = `rivetkit-typescript/packages/rivetkit/` — TypeScript runtime consumed by user code.\n- engine = `engine/packages/*` — orchestrator (pegboard-envoy, sqlite-storage, actor2). Out of scope except where explicitly cited.\n\nUser-defined hooks (`run`, `onSleep`, `onDestroy`, `onDisconnect`, `onStateChange`, `serializeState`) are defined in typescript but dispatched from core via `ActorEvent` messages.\n\n===== GREEN GATE =====\n\n- Rust stories: `cargo build -p <crate>` plus targeted `cargo test -p <crate>`.\n- NAPI stories: `cargo build -p rivetkit-napi`, then `pnpm --filter @rivetkit/rivetkit-napi build:force` before any TS-side verification.\n- TS stories: `pnpm build -F rivetkit` from repo root, then targeted `pnpm test <filter>`.\n- Do NOT run `cargo build --workspace` / `cargo test --workspace`.\n\n===== READ BEFORE STARTING =====\n\n- `.agent/notes/rivetkit-core-review-synthesis.md` is the source of truth for each finding. Read the relevant F-entry before starting any story.",
+  "userStories": [
+    {
+      "id": "F3",
+      "title": "Clean run exit must not transition to Terminated before Stop arrives",
+      "description": "Layer: core. Under the one-Stop-per-generation invariant, if user's typescript `run` returns cleanly before the (sole) engine Stop arrives, core must not jump to `Terminated`. Currently `handle_run_handle_outcome` in `task.rs:1303-1328` transitions to `Terminated` on clean run exit, and `begin_stop` on `Terminated` idempotent-acks without firing `onSleep`/`onDestroy`. Hooks are then silently skipped.",
+      "acceptanceCriteria": [
+        "`handle_run_handle_outcome` no longer transitions to `Terminated` on clean `run` exit from `Started`",
+        "Instead, actor stays in `Started` (or a new substate) awaiting the engine Stop",
+        "When the Stop arrives, `begin_stop` enters `SleepGrace`/`DestroyGrace` and dispatches `onSleep`/`onDestroy` as normal",
+        "Invariant enforced: `onSleep` or `onDestroy` fires exactly once per generation regardless of how `run` returned",
+        "Targeted test added: actor with `run` that returns immediately still has `onSleep` invoked when engine sends Stop { Sleep }",
+        "Targeted test added: same for Stop { Destroy } → `onDestroy`",
+        "`cargo build -p rivetkit-core` passes",
+        "`cargo test -p rivetkit-core` passes for touched modules",
+        "Typecheck passes"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "F8",
+      "title": "Reclaim PIDX + DELTA entries above new EOF on SQLite truncate",
+      "description": "Layer: engine (rivetkit-sqlite + sqlite-storage). Every `VACUUM`/`DROP TABLE` shrink permanently leaks KV space. `rivetkit-rust/packages/rivetkit-sqlite/src/vfs.rs:1403-1413` updates `state.db_size_pages` but never deletes entries for `pgno > new_size`. `engine/packages/sqlite-storage/src/commit.rs:222` sets the new size. `takeover.rs:258-269` `build_recovery_plan` ignores `pgno`. Compaction folds stale pages into shards rather than freeing them. Billable leak against `sqlite_storage_used`.",
+      "acceptanceCriteria": [
+        "Commit path enumerates and deletes `pidx_delta_*` and `pidx_shard_*` entries for `pgno >= new_db_size_pages` when db size shrinks",
+        "`build_recovery_plan` filters orphan entries by `pgno >= head.db_size_pages`",
+        "`sqlite_storage_used` decrements to reflect the freed space",
+        "Compaction reclaims (deletes) truncated pages rather than folding them into shards",
+        "Targeted test added: VACUUM shrinks 100 pages, `sqlite_storage_used` decreases, KV scan confirms no entries for `pgno >= new_size`",
+        "`cargo build -p rivetkit-sqlite` and `cargo build -p sqlite-storage` pass",
+        "Targeted `cargo test` passes",
+        "Typecheck passes"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "F10",
+      "title": "Shorten v1 migration lease + allow Allocate-based invalidation",
+      "description": "Layer: engine (pegboard-envoy). `SQLITE_V1_MIGRATION_LEASE_MS = 5 min` at `engine/packages/pegboard-envoy/src/sqlite_runtime.rs:34`. If owning envoy crashes mid-stage, actor is non-startable for 5 min. Under the one-instance-cluster-wide invariant, a fresh engine `Allocate` is authoritative evidence the prior attempt is dead — no wall-clock timeout needed.",
+      "acceptanceCriteria": [
+        "Lease reduced to reflect real stage-window duration (30-60s, TBD during implementation)",
+        "New production (non-test) path invalidates the stale in-progress marker when engine `Allocate` re-assigns the actor",
+        "Test-only `age_v1_migration_head` helper is NOT used in production path",
+        "Targeted test: simulate crash between `commit_stage_begin` and `commit_finalize`, then fresh Allocate → migration restarts without waiting for lease expiry",
+        "`cargo build -p pegboard-envoy` passes",
+        "Targeted `cargo test` passes",
+        "Typecheck passes"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "F12",
+      "title": "Add @deprecated jsdoc to Registry.handler() and Registry.serve()",
+      "description": "Layer: typescript. `rivetkit-typescript/packages/rivetkit/src/registry/index.ts:75-95` throws `removedLegacyRoutingError` at runtime with no static signal. A custom routing layer is the long-term replacement; the jsdoc is a stopgap to give users a compile-time / editor warning until it lands.",
+      "acceptanceCriteria": [
+        "`Registry.handler()` and `Registry.serve()` have `@deprecated` jsdoc annotations pointing at `Registry.startEnvoy()`",
+        "Deprecation message includes a one-sentence migration example",
+        "CHANGELOG.md has an entry documenting the removal with migration instructions",
+        "`pnpm build -F rivetkit` passes",
+        "Typecheck passes"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "F13",
+      "title": "Document error-class removal migration in CHANGELOG",
+      "description": "Layer: typescript. Removal of ~48 typed error classes in favor of `RivetError` + `isRivetErrorCode(e, group, code)` is INTENTIONAL. Users need a migration path documented.",
+      "acceptanceCriteria": [
+        "CHANGELOG.md entry describing the removal",
+        "Migration section shows `catch (e) { if (e instanceof QueueFull) … }` → `isRivetErrorCode(e, \"queue\", \"full\")` with at least 5 common (group, code) pairs documented",
+        "Typecheck passes"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "F14",
+      "title": "Audit removed package-exports subpaths, restore or document each",
+      "description": "Layer: typescript. `rivetkit-typescript/packages/rivetkit/package.json` dropped many subpath exports. Accepted removals (keep gone, document): `./dynamic`, `./sandbox/*`. Evaluate per subpath and decide: `./driver-helpers`, `./driver-helpers/websocket`, `./test`, `./inspector`, `./db`, `./db/drizzle`, `./topologies/coordinate`, `./topologies/partition`.",
+      "acceptanceCriteria": [
+        "Each 'evaluate' subpath has a decision recorded (restore vs. permanently remove) in CHANGELOG or a follow-up note",
+        "Restored subpaths resolve correctly and export their original surface",
+        "Permanently-removed subpaths have a CHANGELOG entry with a migration note",
+        "`./dynamic` and `./sandbox/*` remain removed with CHANGELOG entries",
+        "`pnpm build -F rivetkit` passes",
+        "Typecheck passes"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "F18",
+      "title": "Deduplicate actor-ready/actor-started state between core and napi",
+      "description": "Layer: core + napi. Both layers track `ready`/`started` AtomicBools independently. Core at `sleep.rs:39-40` feeds `can_arm_sleep_timer`. Napi at `actor_context.rs:68-69` has parallel `mark_ready`/`mark_started` with a 'cannot start before ready' precondition at `:783-794`. The two are not wired together. IMPORTANT: do not seriously change core functionality — this is a pure refactor to remove the parallel copy, not an opportunity to change semantics.",
+      "acceptanceCriteria": [
+        "Napi's `ready`/`started` AtomicBools on `ActorContextShared` deleted",
+        "Napi's `mark_ready`/`mark_started` are thin forwarders that call core's setters",
+        "Napi's `is_ready`/`is_started` accessors read through to core's `SleepState`",
+        "'Cannot start before ready' precondition either stays on napi side as a precondition check (forwarding state reads to core) or moves to core — whichever keeps current behavior unchanged",
+        "No observable semantic change: all existing sleep-timer and lifecycle tests pass unchanged",
+        "`cargo build -p rivetkit-core` and `cargo build -p rivetkit-napi` pass",
+        "`pnpm --filter @rivetkit/rivetkit-napi build:force` passes",
+        "Targeted tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "F19",
+      "title": "Move all inspector logic from typescript into core",
+      "description": "Layer: typescript → core. `rivetkit-typescript/packages/rivetkit/src/inspector/actor-inspector.ts:141-475` implements `patchState`, `executeAction`, `getQueueStatus`, `getDatabaseSchema` in typescript, parallel to core at `registry/inspector.rs:385` and `inspector_ws.rs:222, 369`. There should be nothing left for the inspector in the typescript layer after this change.",
+      "acceptanceCriteria": [
+        "`actor-inspector.ts` and the typescript inspector directory are deleted or reduced to nothing (no `ActorInspector` class, no inspector-operation implementations in TS)",
+        "All inspector operations (`patchState`, `executeAction`, `getQueueStatus`, `getDatabaseSchema`) run through core's existing inspector surface",
+        "If a user-schema-aware operation needs TS, core calls back narrowly for that piece rather than keeping a parallel TS implementation",
+        "Existing inspector HTTP/WS endpoints continue to function end-to-end",
+        "`cargo build -p rivetkit-core` passes",
+        "`pnpm build -F rivetkit` passes",
+        "Existing inspector tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "F21",
+      "title": "Replace 50ms dispatch-cancel polling with TSF on_cancelled callback",
+      "description": "Layer: typescript + napi. `rivetkit-typescript/packages/rivetkit/src/registry/native.ts:2405-2415` uses `setInterval(..., 50)` to poll `#isDispatchCancelled`. Napi already has a TSF `on_cancelled` callback at `rivetkit-typescript/packages/rivetkit-napi/src/cancellation_token.rs:47-73` that should replace the poll. Tied to F31.",
+      "acceptanceCriteria": [
+        "`setInterval` poll in `native.ts` deleted",
+        "Typescript subscribes to the NAPI `CancellationToken` class's `on_cancelled` TSF callback",
+        "Dispatch cancellation is event-driven: callback fires exactly once when token cancels",
+        "Targeted test confirms dispatch-cancel path awakens on cancel without 50ms latency floor",
+        "`pnpm --filter @rivetkit/rivetkit-napi build:force` passes",
+        "`pnpm build -F rivetkit` passes",
+        "Typecheck passes"
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "F22",
+      "title": "Remove vi.spyOn(Runtime, create).mockResolvedValue in registry tests",
+      "description": "Layer: typescript tests. `rivetkit-typescript/packages/rivetkit/tests/registry-constructor.test.ts:30-32, :52` uses `vi.spyOn(Runtime, \"create\").mockResolvedValue(createMockRuntime())`. Violates CLAUDE.md's 'tests must use real infrastructure' rule.",
+      "acceptanceCriteria": [
+        "`registry-constructor.test.ts` no longer calls `vi.spyOn(Runtime, \"create\")`",
+        "Tests exercise a real `Runtime` via test-infrastructure helper (driver-test-suite pattern or equivalent)",
+        "`packages/traces/tests/traces.test.ts:184-187, :365` replaces `vi.spyOn(Date, \"now\")` with `vi.useFakeTimers()` + `vi.setSystemTime()`",
+        "`vi.spyOn(console, \"warn\").mockImplementation(() => {})` may remain (log-silencing is acceptable)",
+        "All affected tests still pass",
+        "Typecheck passes"
+      ],
+      "priority": 10,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "F23",
+      "title": "Delete createMockNativeContext and move coverage to driver-test-suite",
+      "description": "Layer: typescript tests. `rivetkit-typescript/packages/rivetkit/tests/native-save-state.test.ts:14-59, :73, :237, :250` builds a full fake `NativeActorContext` via `vi.fn()`. Tests never exercise real napi.",
+      "acceptanceCriteria": [
+        "`createMockNativeContext` factory deleted",
+        "Equivalent save-state coverage added to driver-test-suite (`rivetkit-typescript/packages/rivetkit/src/driver-test-suite/`)",
+        "OR: if the logic is a pure typescript adapter transformation, extract and unit-test the function directly without needing a `NativeActorContext`",
+        "`native-save-state.test.ts` no longer exists or is empty",
+        "All replaced tests pass",
+        "`pnpm build -F rivetkit` passes",
+        "Typecheck passes"
+      ],
+      "priority": 11,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "F24",
+      "title": "Replace expect(true).toBe(true) sentinel with concrete assertion",
+      "description": "Layer: typescript test. `tests/driver/actor-lifecycle.test.ts:118` asserts `expect(true).toBe(true)` after 10 create/destroy iterations — no real check.",
+      "acceptanceCriteria": [
+        "`expect(true).toBe(true)` at `actor-lifecycle.test.ts:118` replaced with an observable assertion (destroy-count, thrown-error-count, or actor state)",
+        "Test still passes on current code",
+        "If the race the test is guarding is broken, the test fails in a clearly-named way",
+        "Typecheck passes"
+      ],
+      "priority": 12,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "F25",
+      "title": "Fix or track 10 skipped tests in actor-sleep-db.test.ts",
+      "description": "Layer: typescript tests. `tests/driver/actor-sleep-db.test.ts:219, 260, 292, 375, 522, 572, 617, 739, 895, 976` have `test.skip` on shutdown-lifecycle invariants. 9 of 10 have no TODO/issue reference.",
+      "acceptanceCriteria": [
+        "For each of the 10 skipped tests: either un-skip after fixing the underlying race, or annotate with a tracking-ticket ID in the test description/comment",
+        "No bare `test.skip(...)` remains without a tracking reference",
+        "Un-skipped tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 13,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "F26",
+      "title": "Fix or track onDestroy-during-start skipped test",
+      "description": "Layer: typescript test. `tests/driver/actor-lifecycle.test.ts:196` has `test.skip(\"onDestroy is called even when actor is destroyed during start\")` with no tracking comment. Likely related to F3.",
+      "acceptanceCriteria": [
+        "Either un-skip after fixing core behavior (may share fix with F3 — verify)",
+        "Or annotate with tracking-ticket ID",
+        "If un-skipped: test passes",
+        "Typecheck passes"
+      ],
+      "priority": 14,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "F27",
+      "title": "Replace flake-workaround waitFor/retry patterns with deterministic coordination",
+      "description": "Layer: typescript tests + `.agent/notes/` flake notes. `actor-sleep-db.test.ts:198-208` wraps assertions in `vi.waitFor({ timeout: 5000, interval: 50 })` without comment; `.agent/notes/flake-conn-websocket.md:47` proposes 'longer wait'. CLAUDE.md (just added) forbids retry-loop flake masking.",
+      "acceptanceCriteria": [
+        "Every existing `vi.waitFor` call either has a one-line comment explaining why polling is necessary OR is replaced with event-driven await / `vi.useFakeTimers()` coordination",
+        "Root-cause any flake that was being masked; fix underlying ordering in core/napi/typescript",
+        "Flake-workaround notes in `.agent/notes/flake-*.md` removed once the races they describe are fixed",
+        "All affected tests pass deterministically (10x repeat run, no flakes)",
+        "Typecheck passes"
+      ],
+      "priority": 15,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "F28",
+      "title": "Enable driver test suites that were enabled at feat/sqlite-vfs-v2",
+      "description": "Layer: typescript tests. `tests/driver/hibernatable-websocket-protocol.test.ts:140` skips whole suite under default driver; likely other suites similarly gated. Regression: coverage was broader on `feat/sqlite-vfs-v2`.",
+      "acceptanceCriteria": [
+        "Enumerate every driver test suite currently gated on a feature flag",
+        "For each, compare to `feat/sqlite-vfs-v2` via `git show feat/sqlite-vfs-v2:<path>`",
+        "Every suite that was enabled on `feat/sqlite-vfs-v2` is enabled now",
+        "If a driver genuinely lacks a feature, split so feature-gated tests still run on at least one CI configuration",
+        "`pnpm build -F rivetkit` passes",
+        "Affected test suites pass",
+        "Typecheck passes"
+      ],
+      "priority": 16,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "F30",
+      "title": "Replace plain Error with RivetError at native.ts:2654",
+      "description": "Layer: typescript. `rivetkit-typescript/packages/rivetkit/src/registry/native.ts:2654` throws `new Error(\"native actor client is not configured\")`. CLAUDE.md requires RivetError at boundaries.",
+      "acceptanceCriteria": [
+        "Replace `throw new Error(...)` with `RivetError` using an appropriate group/code (e.g. 'native', 'not_configured')",
+        "Grep `native.ts` for other `new Error(...)` throws on required paths and fix any found",
+        "`pnpm build -F rivetkit` passes",
+        "Typecheck passes"
+      ],
+      "priority": 17,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "F31",
+      "title": "Consolidate napi cancel-token into single module with TSF callback",
+      "description": "Layer: napi. Both `cancellation_token.rs` (NAPI class + `on_cancelled` TSF callback) and `cancel_token.rs` (BigInt-keyed `SccHashMap` registry) exist. Canonical version: `cancellation_token.rs`. Tied to F21 — once typescript uses the NAPI class directly, the BigInt registry has no consumer.",
+      "acceptanceCriteria": [
+        "All cancel-token consumers in typescript migrate to the `cancellation_token.rs` NAPI class (likely part of F21)",
+        "`cancel_token.rs` deleted once no callers remain",
+        "One cancel-token concept per actor",
+        "`cargo build -p rivetkit-napi` passes",
+        "`pnpm --filter @rivetkit/rivetkit-napi build:force` passes",
+        "`pnpm build -F rivetkit` passes",
+        "Typecheck passes"
+      ],
+      "priority": 18,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "F32",
+      "title": "Move module-level actor-keyed maps from native.ts to cleanest layer",
+      "description": "Layer: typescript and/or napi. `rivetkit-typescript/packages/rivetkit/src/registry/native.ts:114-149` declares `nativeSqlDatabases`, `nativeDatabaseClients`, `nativeActorVars`, `nativeDestroyGates`, `nativePersistStateByActorId` as file-level `Map<string, ...>` keyed on `actorId`. Do the cleanest approach at whichever layer fits best — per-actor object in TS, or move accounting into core and expose via ctx.",
+      "acceptanceCriteria": [
+        "The five module-level `Map<string, ...>` declarations at `native.ts:114-149` are eliminated",
+        "State lives on a per-actor object (TS or core-owned) with automatic lifecycle cleanup on actor destroy",
+        "No `actorId`-keyed global lookup per operation",
+        "Existing tests pass",
+        "`pnpm build -F rivetkit` passes",
+        "Typecheck passes"
+      ],
+      "priority": 19,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "F33",
+      "title": "Decide intent for core's request_save silent warn",
+      "description": "Layer: core. `rivetkit-rust/packages/rivetkit-core/src/actor/state.rs:141-145` catches 'lifecycle channel overloaded' and only `tracing::warn!`s. `request_save` signature is `fn(&self, opts) -> ()`; `request_save_and_wait` returns `Result<()>`. Uncertain whether fire-and-forget-with-warn is intentional.",
+      "acceptanceCriteria": [
+        "Decision recorded in a doc-comment on `request_save`: either (a) fire-and-forget is the design, with doc explaining warn is the sole signal and pointing at `request_save_and_wait` as the error-aware alternative, OR (b) signature changes to `Result<()>` and callers handle",
+        "If (b): all callers at the ~20 call sites handle or explicitly `.ok()` the result",
+        "`cargo build -p rivetkit-core` passes",
+        "Targeted tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 20,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "F34",
+      "title": "Narrow ActorContext.key type back to string[]",
+      "description": "Layer: typescript. `rivetkit-typescript/packages/rivetkit/src/actor/config.ts:289` declares `readonly key: Array<string | number>`. Reference was `string[]`. `client/query.ts:15-17` still declares `ActorKeySchema = z.array(z.string())`. Latent inconsistency — numeric key can't round-trip through query path.",
+      "acceptanceCriteria": [
+        "`ActorContext.key` narrowed to `readonly key: string[]` at `actor/config.ts:289`",
+        "If any callers relied on numeric keys, coerce with `.map(String)` at call sites",
+        "Type matches `ActorKeySchema` in `client/query.ts`",
+        "`pnpm build -F rivetkit` passes",
+        "Typecheck passes"
+      ],
+      "priority": 21,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "F35",
+      "title": "Remove sql from ActorContext, restore ./db/drizzle subpath",
+      "description": "Layer: typescript. `rivetkit-typescript/packages/rivetkit/src/actor/config.ts:283-284` has both `readonly sql: ActorSql` (new) and `readonly db: InferDatabaseClient<TDatabase>` (old, but drizzle subpath dropped). Keep the old exports surface.",
+      "acceptanceCriteria": [
+        "`sql` property removed from `ActorContext`",
+        "`./db/drizzle` subpath restored in `package.json` exports",
+        "`db` property on ctx backed by a functioning drizzle provider wired via the restored subpath",
+        "`ctx.db.select(...)` type-checks and resolves at runtime with the drizzle provider",
+        "`pnpm build -F rivetkit` passes",
+        "Typecheck passes"
+      ],
+      "priority": 22,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "F36",
+      "title": "Restore *ContextOf type helpers; keep runtime exports removed",
+      "description": "Layer: typescript. Reference exported `PATH_CONNECT`, `PATH_WEBSOCKET_PREFIX`, `ActorKv`, `KV_KEYS`, `ActorInstance`, `ActorRouter`, `createActorRouter`, `routeWebSocket`, and all `*ContextOf` type helpers. Current `actor/mod.ts` exports none. Split: restore `*ContextOf` helpers only; keep runtime exports removed.",
+      "acceptanceCriteria": [
+        "`ActionContextOf`, `ConnContextOf`, `CreateContextOf`, `SleepContextOf`, `DestroyContextOf`, `WakeContextOf`, and other `*ContextOf` type helpers restored as type-only exports",
+        "Recreate `actor/contexts/index.ts` (or equivalent) as a type-only module if cleanest structurally",
+        "Runtime exports stay removed: `PATH_CONNECT`, `PATH_WEBSOCKET_PREFIX`, `KV_KEYS`, `ActorKv`, `ActorInstance`, `ActorRouter`, `createActorRouter`, `routeWebSocket` are NOT restored",
+        "CHANGELOG entry documents the runtime-export removals as permanent",
+        "`rivetkit-typescript/CLAUDE.md` sync rule updated or removed to match current state",
+        "User-facing type pattern `type MyCtx = ActionContextOf<typeof actor>` works again",
+        "`pnpm build -F rivetkit` passes",
+        "Typecheck passes"
+      ],
+      "priority": 23,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "F38",
+      "title": "Move inline use statement to top of file in http.rs test",
+      "description": "Layer: core. `rivetkit-rust/packages/rivetkit-core/src/registry/http.rs:1003` has `use vbare::OwnedVersionedData;` inside a `#[test] fn`. CLAUDE.md requires imports at top of file.",
+      "acceptanceCriteria": [
+        "`use vbare::OwnedVersionedData;` moved to the top of the file's test module (`#[cfg(test)] mod tests { use …; }`)",
+        "No inline imports inside test function bodies in `http.rs`",
+        "`cargo build -p rivetkit-core` passes",
+        "`cargo test -p rivetkit-core` passes for touched module",
+        "Typecheck passes"
+      ],
+      "priority": 24,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "F39",
+      "title": "Remove speculative antiox imports in typescript (rule retired)",
+      "description": "Layer: typescript. CLAUDE.md's 'TypeScript Concurrency' section has been retired. If any speculative `antiox` imports were added in anticipation of the rule, remove them. Hand-rolled primitives like `Lock<T>` stay as-is.",
+      "acceptanceCriteria": [
+        "`grep -r 'antiox' rivetkit-typescript/` returns zero matches (or only in deleted-file stubs)",
+        "If `antiox` was in any `package.json`, remove it",
+        "Existing `Lock<T>` (`utils.ts:65`) and other hand-rolled primitives unchanged",
+        "`pnpm build -F rivetkit` passes",
+        "Typecheck passes"
+      ],
+      "priority": 25,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "F41",
+      "title": "Audit dead BARE code in typescript",
+      "description": "Layer: typescript. Post-rewrite, typescript may have BARE-protocol code that's no longer exercised by any current caller. Task: audit only. Do not delete as part of this story.",
+      "acceptanceCriteria": [
+        "Enumerate every BARE type, codec, and helper in `rivetkit-typescript/packages/`",
+        "For each, record whether it has a live caller (trace via grep + import graph)",
+        "Produce `.agent/notes/bare-dead-code-audit.md` listing candidates for removal with their current callers (if any)",
+        "No deletions performed in this story — removal is a follow-up decision",
+        "Typecheck still passes (no code changes to verify)"
+      ],
+      "priority": 26,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "F42",
+      "title": "Audit and relocate inline mod tests in core and napi",
+      "description": "Layer: core and napi only (other engine crates out of scope). CLAUDE.md rule: Rust tests live under `tests/`, not inline `#[cfg(test)] mod tests` in `src/`. Scope: `rivetkit-rust/packages/rivetkit-core/` and `rivetkit-typescript/packages/rivetkit-napi/`.",
+      "acceptanceCriteria": [
+        "Enumerate every `#[cfg(test)] mod tests` block in `rivetkit-rust/packages/rivetkit-core/src/**/*.rs` and `rivetkit-typescript/packages/rivetkit-napi/src/**/*.rs`",
+        "Move each to `tests/<module>.rs` in the same crate",
+        "Exceptions (testing a private internal unreachable from an integration test) have a one-line comment justifying staying inline",
+        "`cargo build -p rivetkit-core` passes",
+        "`cargo build -p rivetkit-napi` passes",
+        "`cargo test -p rivetkit-core` passes",
+        "`cargo test -p rivetkit-napi` passes",
+        "Typecheck passes"
+      ],
+      "priority": 27,
+      "passes": false,
+      "notes": ""
+    }
+  ]
+}

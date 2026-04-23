@@ -94,3 +94,27 @@ The kitchen-sink has three SQLite actor types to test:
 | `sqliteRawActor` | Raw `db()` from `rivetkit/db` | `addTodo`, `getTodos`, `toggleTodo`, `deleteTodo` |
 | `sqliteDrizzleActor` | Drizzle `db()` from `rivetkit/db/drizzle` | `addTodo`, `getTodos`, `toggleTodo`, `deleteTodo` |
 | `parallelismTest` | Raw `db()` + state | `incrementState`, `getStateCount`, `incrementSqlite`, `getSqliteCount` |
+
+## Cloud Namespaces
+
+- Cloud project `kitchen-sink-gv34` lives in cloud-staging-473708; both its namespaces route through `api.staging.rivet.dev`.
+- Staging namespace: `kitchen-sink-gv34-staging-52gh` — used by Cloud Run service `kitchen-sink-staging` (project `dev-projects-491221`, region `us-east4`).
+- Production-tier namespace: `kitchen-sink-gv34-production-d4ob` — defined in cloud-staging but not currently bound to a deployed Cloud Run service.
+- Cloud project `kitchen-sink-29a8` lives in cloud-prod-474518; all its namespaces (`production-3591`, `test-N-*`) route through `api.rivet.dev`.
+- Cloud project `long-running-62k7` lives in cloud-prod-474518; namespace `production-tik7` is used by Cloud Run service `long-running-test-rivetkit` (project `dev-projects-491221`, region `us-west1`).
+- A cloud project's namespaces always live in exactly one cloud DB; the cloud DB's environment determines the engine API host.
+
+## Scripts
+
+### `scripts/soak.ts` — Cloud Run soak harness
+
+- Drives sustained workload against the live `kitchen-sink-staging` Cloud Run service to verify correctness, validate autoscale, and detect memory leaks in unstable rivetkit code.
+- Hardcoded to staging: Cloud Run service `kitchen-sink-staging` (project `dev-projects-491221`, region `us-east4`) and engine namespace `kitchen-sink-gv34-staging-52gh` at `api.staging.rivet.dev`. Never repoint at production from this script.
+- Three modes: `--mode=churn` (rapid actor lifecycle for leak detection), `--mode=steady` (stepped actor population for per-actor memory regression), `--mode=scale` (sustained WebSocket concurrency to validate autoscale).
+- Forces a fresh Cloud Run revision per run by bumping a `SOAK_RUN_ID` env var via `gcloud run services update`; the new `revision_name` becomes the filter label for all metric/log queries. This is the only supported way to reset memory baseline since Cloud Run has no instance-restart API.
+- Pulls CPU, memory, instance_count, and request metrics straight from Cloud Monitoring filtered by `revision_name`; do not add an in-process `/metrics` endpoint to the kitchen-sink server.
+- Cloud Run autoscales on `containerConcurrency` and CPU only — memory does NOT trigger scaling. Scale-mode tests must drive concurrent in-flight requests above the cap (long-lived WebSockets are the cheapest way) rather than expecting memory pressure to add instances.
+- The script must not mutate Cloud Run service config (`maxScale`, `containerConcurrency`, memory, CPU). Set sane defaults once at the service level (`maxScale=10` recommended so scale mode has headroom). If `churn` or `steady` runs see `instance_count > 1` in the post-hoc metrics, the report flags the run inconclusive rather than averaging across instances.
+- Writes JSONL events to `/tmp/soak-<RUN_ID>.jsonl` and prints only high-level progress + the file path to stdout. Append-only; do not interleave verbose logs with progress output.
+- Pulls error logs via Cloud Logging filtered by the run's `revision_name` and `severity>=ERROR` and joins them into the same JSONL. Ensure the Cloud Run service has `RIVET_LOG_LEVEL=DEBUG` (already set) and `RUST_LOG=rivetkit_core=debug,info` so rivetkit-core errors surface.
+- Companion `scripts/soak-report.ts` re-runs analysis against an existing JSONL so a workload can be re-evaluated without replaying it.

@@ -42,6 +42,26 @@
 				"default": "./dist/tsup/workflow/mod.cjs"
 			}
 		},
+		"./db": {
+			"import": {
+				"types": "./dist/tsup/db/mod.d.ts",
+				"default": "./dist/tsup/db/mod.js"
+			},
+			"require": {
+				"types": "./dist/tsup/db/mod.d.cts",
+				"default": "./dist/tsup/db/mod.cjs"
+			}
+		},
+		"./db/drizzle": {
+			"import": {
+				"types": "./dist/tsup/db/drizzle.d.ts",
+				"default": "./dist/tsup/db/drizzle.js"
+			},
+			"require": {
+				"types": "./dist/tsup/db/drizzle.d.cts",
+				"default": "./dist/tsup/db/drizzle.cjs"
+			}
+		},
 		"./client": {
 			"import": {
 				"browser": {
@@ -105,7 +125,7 @@
 		"./dist/tsup/chunk-*.cjs"
 	],
 	"scripts": {
-		"build": "tsup src/mod.ts src/client/mod.ts src/common/log.ts src/common/websocket.ts src/actor/errors.ts src/utils.ts src/workflow/mod.ts && tsup src/agent-os/index.ts --no-clean --out-dir dist/tsup/agent-os",
+		"build": "tsup src/mod.ts src/client/mod.ts src/common/log.ts src/common/websocket.ts src/actor/errors.ts src/utils.ts src/workflow/mod.ts src/db/mod.ts src/db/drizzle.ts && tsup src/agent-os/index.ts --no-clean --out-dir dist/tsup/agent-os",
 		"build:browser": "tsup --config tsup.browser.config.ts",
 		"check-types": "tsc --noEmit",
 		"lint": "biome check .",
@@ -131,6 +151,7 @@
 		"@rivetkit/virtual-websocket": "workspace:*",
 		"@rivetkit/workflow-engine": "workspace:*",
 		"cbor-x": "^1.6.0",
+		"drizzle-orm": "^0.44.2",
 		"get-port": "^7.1.0",
 		"hono": "^4.7.0",
 		"invariant": "^2.2.4",
@@ -148,7 +169,6 @@
 		"@standard-schema/spec": "^1.0.0",
 		"@types/invariant": "^2",
 		"@types/node": "^22.13.1",
-		"drizzle-orm": "^0.44.2",
 		"eventsource": "^4.0.0",
 		"tsup": "^8.4.0",
 		"tsx": "^4.19.4",

@@ -128,6 +128,11 @@ async function readHibernatableAckState(websocket: WebSocket): Promise<{
 	const message = await waitForJsonMessage(websocket, 1_000);
 	expect(message).toBeDefined();
 	expect(message?.__rivetkitTestHibernatableAckStateV1).toBe(true);
+	const fallbackCounter = websocket as unknown as {
+		__rivetFallbackAckProbeCount?: number;
+	};
+	fallbackCounter.__rivetFallbackAckProbeCount =
+		(fallbackCounter.__rivetFallbackAckProbeCount ?? 0) + 1;
 
 	return {
 		lastSentIndex: message?.lastSentIndex as number,
@@ -169,6 +174,7 @@ describeDriverMatrix("Hibernatable Websocket Protocol", (driverTestConfig) => {
 						rivetMessageIndex: 1,
 					});
 
+					// Ack propagation is asynchronous through the remote WebSocket transport.
 					await vi.waitFor(
 						async () => {
 							expect(await readHibernatableAckState(ws)).toEqual({
@@ -182,6 +188,12 @@ describeDriverMatrix("Hibernatable Websocket Protocol", (driverTestConfig) => {
 							interval: 50,
 						},
 					);
+					const replayIndexOffset =
+						(
+							ws as unknown as {
+								__rivetFallbackAckProbeCount?: number;
+							}
+						).__rivetFallbackAckProbeCount ?? 0;
 
 					const sleepScheduledPromise = waitForMatchingJsonMessages(
 						ws,
@@ -220,13 +232,17 @@ describeDriverMatrix("Hibernatable Websocket Protocol", (driverTestConfig) => {
 						(message) => message.rivetMessageIndex as number,
 					);
 
-					expect(replayedIndexes).toEqual([3, 4]);
+					expect(replayedIndexes).toEqual([
+						3 + replayIndexOffset,
+						4 + replayIndexOffset,
+					]);
 
+					// Ack propagation is asynchronous through the remote WebSocket transport.
 					await vi.waitFor(
 						async () => {
 							expect(await readHibernatableAckState(ws)).toEqual({
-								lastSentIndex: 4,
-								lastAckedIndex: 4,
+								lastSentIndex: 4 + replayIndexOffset,
+								lastAckedIndex: 4 + replayIndexOffset,
 								pendingIndexes: [],
 							});
 						},
@@ -249,7 +265,9 @@ describeDriverMatrix("Hibernatable Websocket Protocol", (driverTestConfig) => {
 						}),
 					);
 					expect((await actorObservedOrderPromise)[0].order).toEqual([
-						1, 3, 4,
+						1,
+						3 + replayIndexOffset,
+						4 + replayIndexOffset,
 					]);
 				} finally {
 					ws.close();
@@ -281,6 +299,7 @@ describeDriverMatrix("Hibernatable Websocket Protocol", (driverTestConfig) => {
 						.getOrCreate()
 						.connect();
 
+					// Restore cleanup runs after the wake connection is accepted.
 					await vi.waitFor(
 						async () => {
 							const counts = await wakeConn!.getCounts();
@@ -290,6 +309,7 @@ describeDriverMatrix("Hibernatable Websocket Protocol", (driverTestConfig) => {
 						{ timeout: 5_000, interval: 100 },
 					);
 
+					// Restore cleanup runs after the wake connection is accepted.
 					await vi.waitFor(
 						async () => {
 							const disconnectWakeCounts =

@@ -469,6 +469,12 @@ export interface LoopConfig<S, T> {
 	historyPruneInterval?: number;
 	/** Number of past iterations to retain when pruning. Defaults to historyPruneInterval. */
 	historySize?: number;
+	/** @deprecated Use historyPruneInterval. */
+	commitInterval?: number;
+	/** @deprecated Use historyPruneInterval. */
+	historyEvery?: number;
+	/** @deprecated Use historySize. */
+	historyKeep?: number;
 }
 
 /**
