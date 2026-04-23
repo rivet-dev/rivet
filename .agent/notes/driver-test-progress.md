@@ -8,7 +8,7 @@ Config: registry (static), client type (http), encoding (bare)
 - [x] manager-driver | Manager Driver Tests
 - [x] actor-conn | Actor Connection Tests
 - [x] actor-conn-state | Actor Connection State Tests
-- [!] conn-error-serialization | Connection Error Serialization Tests
+- [x] conn-error-serialization | Connection Error Serialization Tests
 - [x] actor-destroy | Actor Destroy Tests
 - [x] request-access | Request Access in Lifecycle Hooks
 - [x] actor-handle | Actor Handle Tests
@@ -93,3 +93,4 @@ Config: registry (static), client type (http), encoding (bare)
 - 2026-04-23T12:22:37.000Z actor-inspector: PASS DT-046 recheck. Targeted CBOR named-properties inspector database execute passed; full actor-inspector file passed (63 passed, 0 failed).
 - 2026-04-23T12:26:06.000Z actor-conn: PASS DT-045 recheck. Targeted bare onOpen passed; full actor-conn file passed (69 passed, 0 failed).
 - 2026-04-23T12:40:56.000Z actor-queue: PASS DT-012. Fixed core enqueue-and-wait waiter registration race; targeted bare wait-send passed; full actor-queue file passed (75 passed, 0 failed); parallel bare actor-queue suite passed (25 passed, 0 failed, 50 skipped).
+- 2026-04-23T13:06:56.000Z conn-error-serialization: PASS DT-014. Targeted bare createConnState error passed; full conn-error-serialization file passed (9 passed, 0 failed); parallel bare conn-error-serialization suite passed (3 passed, 0 failed, 6 skipped).

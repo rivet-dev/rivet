@@ -4,6 +4,7 @@ Started: Thu Apr 23 04:17:16 AM PDT 2026
 
 ## Codebase Patterns
 - Use rustls for Rust HTTP/TLS clients; `reqwest`, Hyper clients, and published NAPI paths must not pull `native-tls`, `openssl-sys`, `libssl`, or `libcrypto`.
+- Actor-connect WebSocket setup failures should send a protocol `Error` frame before closing; JSON/CBOR connection-level errors must include `actionId: null`.
 - When validating Linux NAPI preview packages, run the sanity check in Docker `node:22` if the host already has a `rivet-engine` on port `6420`.
 - Serverless `/start` driver tests need the start payload actor ID to exist in the same engine namespace as the serverless envoy headers, or startup fails at KV load with `actor does not exist`.
 - Serverless `/start` tests must upsert a normal runner config for the temporary pool before starting the native serverless envoy.
@@ -86,4 +87,14 @@ Started: Thu Apr 23 04:17:16 AM PDT 2026
 - **Learnings for future iterations:**
   - Queue completion waiters must exist before queue messages become visible in KV, because action/run consumers can drain and complete the message immediately.
   - A one-off `no_envoys` failure in the full actor-queue file did not reproduce in the isolated run or subsequent full-file verification; keep watching that path if it reappears.
+---
+## 2026-04-23T13:06:56Z - DT-014
+- Implemented structured actor-connect WebSocket setup errors in `rivetkit-core`.
+- Fixed connection-level `Error` frames for JSON/CBOR by emitting `actionId: null`, matching the client schema.
+- Files changed: `rivetkit-rust/packages/rivetkit-core/src/registry/actor_connect.rs`, `rivetkit-rust/packages/rivetkit-core/src/registry/websocket.rs`, `rivetkit-rust/packages/rivetkit-core/CLAUDE.md`, `.agent/notes/driver-test-progress.md`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
+- Verification: targeted bare createConnState error passed; full `conn-error-serialization.test.ts` passed with 9 tests; parallel bare conn-error-serialization suite passed with 3 tests; `cargo build -p rivetkit-core` passed; `pnpm --filter @rivetkit/rivetkit-napi build:force` passed; `pnpm build -F rivetkit` passed; `pnpm -F rivetkit check-types` passed.
+- DT-008 recheck remains blocked by existing DT-016 hibernatable WebSocket bare failures: welcome message was undefined and cleanup-on-restore timed out.
+- **Learnings for future iterations:**
+  - Actor-connect setup failures happen before `Init`, so a close-only path can leave queued connection actions unresolved for bare/CBOR clients.
+  - Connection-level protocol errors use `actionId: null`; omitting the field breaks JSON/CBOR client schema validation.
 ---

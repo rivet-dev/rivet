@@ -266,8 +266,8 @@
         "Tests pass"
       ],
       "priority": 14,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Completed on 2026-04-23: actor-connect WebSocket setup failures now send a structured protocol Error frame before closing, so createConnState errors reject queued actions instead of hanging. Targeted bare createConnState error, full conn-error-serialization file, parallel bare matrix, cargo build -p rivetkit-core, NAPI force build, pnpm build -F rivetkit, and pnpm -F rivetkit check-types all passed."
     },
     {
       "id": "DT-015",

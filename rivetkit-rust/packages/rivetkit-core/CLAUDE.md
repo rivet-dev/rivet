@@ -17,3 +17,4 @@
 ## Hibernatable WebSockets
 
 - Raw `onWebSocket` hibernatable connections must create `HibernatableConnectionMetadata` and persist plus ack every inbound message through core before gateway replay state is correct.
+- Actor-connect WebSocket setup errors must send a protocol `Error` frame before closing; JSON/CBOR connection-level errors include `actionId: null`.

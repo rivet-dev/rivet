@@ -101,6 +101,11 @@ impl RegistryDispatcher {
 			}
 		};
 
+		let max_incoming_message_size =
+			instance.factory.config().max_incoming_message_size as usize;
+		let max_outgoing_message_size =
+			instance.factory.config().max_outgoing_message_size as usize;
+
 		let conn_params = websocket_conn_params(headers)?;
 		let connect_request = Request::from_parts("GET", path, headers.clone(), Vec::new())
 			.context("build actor connect request")?;
@@ -159,9 +164,19 @@ impl RegistryDispatcher {
 						?error,
 						"failed to establish actor websocket connection"
 					);
-					return Ok(closing_websocket_handler(
-						1011,
-						&format!("{}.{}", rivet_error.group(), rivet_error.code()),
+					let metadata = rivet_error.metadata().and_then(|metadata| {
+						encode_json_as_cbor(&metadata).ok().map(ByteBuf::from)
+					});
+					return Ok(actor_connect_error_websocket_handler(
+						encoding,
+						ActorConnectError {
+							group: rivet_error.group().to_owned(),
+							code: rivet_error.code().to_owned(),
+							message: rivet_error.message().to_owned(),
+							metadata,
+							action_id: None,
+						},
+						max_outgoing_message_size,
 					));
 				}
 			}
@@ -183,11 +198,6 @@ impl RegistryDispatcher {
 			})
 		})));
 		conn.configure_disconnect_handler(Some(managed_disconnect));
-
-		let max_incoming_message_size =
-			instance.factory.config().max_incoming_message_size as usize;
-		let max_outgoing_message_size =
-			instance.factory.config().max_outgoing_message_size as usize;
 
 		let event_sender = sender.clone();
 		conn.configure_event_sender(Some(Arc::new(
@@ -792,6 +802,36 @@ pub(super) fn closing_websocket_handler(code: u16, reason: &str) -> WebSocketHan
 			let reason = reason.clone();
 			Box::pin(async move {
 				sender.close(Some(code), Some(reason));
+			})
+		})),
+	}
+}
+
+pub(super) fn actor_connect_error_websocket_handler(
+	encoding: ActorConnectEncoding,
+	error: ActorConnectError,
+	max_outgoing_message_size: usize,
+) -> WebSocketHandler {
+	let close_reason = format!("{}.{}", error.group, error.code);
+	WebSocketHandler {
+		on_message: Box::new(|_message: WebSocketMessage| Box::pin(async {})),
+		on_close: Box::new(|_code, _reason| Box::pin(async {})),
+		on_open: Some(Box::new(move |sender| {
+			let close_reason = close_reason.clone();
+			Box::pin(async move {
+				let message = ActorConnectToClient::Error(error);
+				if let Err(send_error) = send_actor_connect_message(
+					&sender,
+					encoding,
+					&message,
+					max_outgoing_message_size,
+				) {
+					tracing::error!(
+						?send_error,
+						"failed to send actor websocket connection error"
+					);
+				}
+				sender.close(Some(1011), Some(close_reason));
 			})
 		})),
 	}
