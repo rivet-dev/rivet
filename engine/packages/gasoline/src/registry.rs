@@ -103,6 +103,10 @@ impl Registry {
 	pub fn size(&self) -> usize {
 		self.workflows.len()
 	}
+
+	pub fn names(&self) -> Vec<&str> {
+		self.workflows.keys().map(|x| x.as_str()).collect()
+	}
 }
 
 pub struct RegistryWorkflow {

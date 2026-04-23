@@ -76,6 +76,8 @@ pub enum SubCommand {
 		#[clap(subcommand)]
 		command: signal::SubCommand,
 	},
+	/// Prints the current workflow registry
+	Registry {},
 }
 
 impl SubCommand {
@@ -169,6 +171,20 @@ impl SubCommand {
 				util::wf::print_history(history, exclude_json, print_location, print_ts).await
 			}
 			Self::Signal { command } => command.execute(db).await,
+			Self::Registry {} => {
+				let reg = rivet_workflow_worker::registry()?;
+				let mut names = reg.names();
+				names.sort();
+
+				rivet_term::status::success("Workflows", names.len());
+				println!();
+
+				for name in names {
+					println!("{name}");
+				}
+
+				Ok(())
+			}
 		}
 	}
 }

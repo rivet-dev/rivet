@@ -64,7 +64,7 @@ pub struct PegboardGateway2 {
 }
 
 impl PegboardGateway2 {
-	#[tracing::instrument(skip_all, fields(?actor_id, ?namespace_id, ?envoy_key, ?path))]
+	#[tracing::instrument(skip_all, fields(?actor_id, ?namespace_id, %envoy_key, ?path))]
 	pub fn new(
 		ctx: StandaloneCtx,
 		shared_state: SharedState,

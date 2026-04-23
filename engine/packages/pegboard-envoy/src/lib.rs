@@ -89,6 +89,10 @@ impl CustomServeTrait for PegboardEnvoyWs {
 			.await
 			.context("failed to initialize envoy connection")?;
 
+		let span = tracing::Span::current();
+		span.record("namespace_id", conn.namespace_id.to_string());
+		span.record("envoy_key", &conn.envoy_key);
+
 		// Subscribe before accepting the client websocket so that failures can be retried by the proxy.
 		let topic = pegboard::pubsub_subjects::EnvoyReceiverSubject::new(
 			conn.namespace_id,

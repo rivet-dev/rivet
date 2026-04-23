@@ -413,7 +413,7 @@ async fn handle_actor_v2(
 		}
 	};
 
-	tracing::debug!(?actor_id, ?envoy_key, "actor ready");
+	tracing::debug!(?actor_id, %envoy_key, "actor ready");
 
 	// Return pegboard-gateway2 instance with path
 	let gateway = pegboard_gateway2::PegboardGateway2::new(
