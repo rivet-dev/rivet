@@ -16,7 +16,7 @@ http-body.workspace = true
 http.workspace = true
 # TODO: Make this use workspace version
 hyper = { version = "1.6.0", features = ["full", "http1", "http2"] }
-hyper-tls.workspace = true
+hyper-rustls.workspace = true
 hyper-tungstenite.workspace = true
 hyper-util = { workspace = true, features = ["full"] }
 indoc.workspace = true

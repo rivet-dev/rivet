@@ -11,7 +11,7 @@ async-nats.workspace = true
 clickhouse.workspace = true
 futures-util.workspace = true
 governor.workspace = true
-hyper-tls.workspace = true
+hyper-rustls.workspace = true
 hyper-util.workspace = true
 lazy_static.workspace = true
 reqwest.workspace = true
@@ -33,4 +33,3 @@ uuid.workspace = true
 
 [dev-dependencies]
 divan.workspace = true
-

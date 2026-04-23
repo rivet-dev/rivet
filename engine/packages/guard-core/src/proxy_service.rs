@@ -52,7 +52,7 @@ pub struct ProxyState {
 	// NOTE: Using the hyper legacy client is the only option currently.
 	// This is what reqwest uses under the hood. Eventually we'll migrate to h3 once it's ready.
 	client: Client<
-		hyper_tls::HttpsConnector<hyper_util::client::legacy::connect::HttpConnector>,
+		hyper_rustls::HttpsConnector<hyper_util::client::legacy::connect::HttpConnector>,
 		Full<Bytes>,
 	>,
 	route_cache: RouteCache,
@@ -70,7 +70,22 @@ impl ProxyState {
 		routing_fn: RoutingFn,
 		cache_key_fn: CacheKeyFn,
 	) -> Self {
-		let https_connector = hyper_tls::HttpsConnector::new();
+		let https_connector_builder =
+			match hyper_rustls::HttpsConnectorBuilder::new().with_native_roots() {
+				Ok(builder) => builder,
+				Err(err) => {
+					tracing::warn!(
+						?err,
+						"failed to load native TLS roots; falling back to webpki roots"
+					);
+					hyper_rustls::HttpsConnectorBuilder::new().with_webpki_roots()
+				}
+			};
+		let https_connector = https_connector_builder
+			.https_or_http()
+			.enable_http1()
+			.enable_http2()
+			.build();
 		let client = Client::builder(TokioExecutor::new())
 			.pool_idle_timeout(Duration::from_secs(30))
 			.build(https_connector);
