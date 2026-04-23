@@ -1,5 +1,5 @@
 import { Schema, Effect, Ref, PubSub } from "effect"
-import { Actor, Action } from "@rivetkit/effect"
+import { Actor } from "@rivetkit/effect"
 
 // --- Errors ---
 
@@ -8,23 +8,7 @@ export class CounterOverflowError extends Schema.TaggedError<CounterOverflowErro
   { limit: Schema.Number },
 ) {}
 
-
-// --- Actions ---
-
-// Actions are first-class values, not inline methods.
-// This lets the same action schema drive server validation,
-// client type inference, and documentation generation.
-export const Increment = Action.make("Increment", {
-  input: Schema.Struct({ amount: Schema.Number }),
-  success: Schema.Number,
-  error: CounterOverflowError,
-})
-
-export const GetCount = Action.make("GetCount", {
-  success: Schema.Number,
-})
-
-// --- Actor Definition ---
+// --- Definition ---
 
 // The definition is the actor's public contract: its name,
 // state shape, event schemas, and action set. It carries no
@@ -33,7 +17,16 @@ export const GetCount = Action.make("GetCount", {
 export const Counter = Actor.make("Counter", {
   state: Schema.Struct({ count: Schema.Number }),
   events: { countChanged: Schema.Number },
-  actions: [Increment, GetCount],
+  actions: {
+    increment: {
+      input: Schema.Struct({ amount: Schema.Number }),
+      success: Schema.Number,
+      error: CounterOverflowError,
+    },
+    getCount: {
+      success: Schema.Number,
+    },
+  },
 })
 
 // --- Implementation ---
@@ -60,7 +53,7 @@ export const CounterLive = Counter.toLayer(
     // Return the action implementations. Counter.of
     // type-checks each handler against its Action schema.
     return Counter.of({
-      Increment: ({ input }) =>
+      increment: ({ input }) =>
         Effect.gen(function* () {
           const next = yield* Ref.updateAndGet(state, (s) => ({
             count: s.count + input.amount,
@@ -72,7 +65,7 @@ export const CounterLive = Counter.toLayer(
           return next.count
         }),
 
-      GetCount: () =>
+      getCount: () =>
         Ref.get(state).pipe(Effect.map((s) => s.count)),
     })
   }),

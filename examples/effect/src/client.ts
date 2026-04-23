@@ -28,7 +28,7 @@ const program = Effect.gen(function* () {
   )
 })
 // program: Effect<void, CounterOverflowError, Counter.Client>
-//                                        ^^^^^^^^^^^^^^
+//                                             ^^^^^^^^^^^^^^
 //  Missing Counter.Client -> compile error naming the exact actor dependency.
 
 // ------------------------------------------------------------------
