@@ -1,4 +1,3 @@
-import * as cbor from "cbor-x";
 import type { Context as HonoContext, Next } from "hono";
 import * as envoyProtocol from "@rivetkit/engine-envoy-protocol";
 import type { Encoding } from "@/common/encoding";
@@ -16,7 +15,11 @@ import {
 	type HttpResponseError as HttpResponseErrorJson,
 	HttpResponseErrorSchema,
 } from "@/common/client-protocol-zod";
-import { encodingIsBinary, serializeWithEncoding } from "@/serde";
+import {
+	encodeCborCompat,
+	encodingIsBinary,
+	serializeWithEncoding,
+} from "@/serde";
 import { bufferToArrayBuffer, VERSION } from "@/utils";
 import { getLogHeaders } from "@/utils/env-vars";
 import { getLogger, type Logger } from "./log";
@@ -95,7 +98,7 @@ export function handleRouteError(error: unknown, c: HonoContext) {
 			code: value.code,
 			message: value.message,
 			metadata: value.metadata
-				? bufferToArrayBuffer(cbor.encode(value.metadata))
+				? bufferToArrayBuffer(encodeCborCompat(value.metadata))
 				: null,
 		}),
 	);

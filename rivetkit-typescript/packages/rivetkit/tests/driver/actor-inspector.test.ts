@@ -1,13 +1,9 @@
-import { describeDriverMatrix } from "./shared-matrix";
 import { describe, expect, test, vi } from "vitest";
+import { describeDriverMatrix } from "./shared-matrix";
 import { setupDriverTest, waitFor } from "./shared-utils";
 
 const WORKFLOW_READY_TIMEOUT_MS = 30_000;
 const ACTIVE_WORKFLOW_INSPECTOR_TIMEOUT_MS = 45_000;
-
-type WorkflowRunningStepState = {
-	finishedAt: number | null;
-};
 
 type WorkflowHistoryResponse = {
 	history: {
@@ -52,6 +48,7 @@ async function waitForInspectorJson<T>(
 ): Promise<T> {
 	let ready!: T;
 
+	// Poll because inspector routes can race actor startup and workflow state transitions during native runs.
 	await vi.waitFor(
 		async () => {
 			const response = await fetch(buildInspectorUrl(gatewayUrl, path), {
@@ -174,7 +171,7 @@ describeDriverMatrix("Actor Inspector", (driverTestConfig) => {
 				},
 			);
 			expect(response.status).toBe(200);
-			const data = (await response!.json()) as {
+			const data = (await response.json()) as {
 				connections: unknown[];
 			};
 			expect(data).toHaveProperty("connections");
@@ -385,12 +382,13 @@ describeDriverMatrix("Actor Inspector", (driverTestConfig) => {
 						history.workflowState,
 					);
 					expect(history.history).not.toBeNull();
-					expect(history.history?.nameRegistry.length).toBeGreaterThan(
-						0,
-					);
+					expect(
+						history.history?.nameRegistry.length,
+					).toBeGreaterThan(0);
 					expect(history.history?.entries.length).toBeGreaterThan(0);
 					expect(
-						Object.keys(history.history?.entryMetadata ?? {}).length,
+						Object.keys(history.history?.entryMetadata ?? {})
+							.length,
 					).toBeGreaterThan(0);
 				},
 				ACTIVE_WORKFLOW_INSPECTOR_TIMEOUT_MS,
@@ -405,6 +403,7 @@ describeDriverMatrix("Actor Inspector", (driverTestConfig) => {
 			).toBeGreaterThan(0);
 
 			await handle.release();
+			// Poll until the released workflow finishes because release() only unblocks the run handler.
 			await vi.waitFor(
 				async () => {
 					expect((await handle.getState()).finishedAt).not.toBeNull();
@@ -420,6 +419,7 @@ describeDriverMatrix("Actor Inspector", (driverTestConfig) => {
 				crypto.randomUUID(),
 			]);
 
+			// Poll until the first run finishes and persists its baseline timeline before replay.
 			await vi.waitFor(
 				async () => {
 					expect(await handle.getTimeline()).toEqual(["one", "two"]);
@@ -429,10 +429,14 @@ describeDriverMatrix("Actor Inspector", (driverTestConfig) => {
 
 			const gatewayUrl = await handle.getGatewayUrl();
 			let response: Response | undefined;
+			// Poll the replay endpoint because completed workflow history can become visible slightly after the actor action returns.
 			await vi.waitFor(
 				async () => {
 					const replayResponse = await fetch(
-						buildInspectorUrl(gatewayUrl, "/inspector/workflow/replay"),
+						buildInspectorUrl(
+							gatewayUrl,
+							"/inspector/workflow/replay",
+						),
 						{
 							method: "POST",
 							headers: {
@@ -459,6 +463,7 @@ describeDriverMatrix("Actor Inspector", (driverTestConfig) => {
 			expect(data.isWorkflowEnabled).toBe(true);
 			expect(data.history).not.toBeNull();
 
+			// Poll until the replayed workflow repopulates the persisted timeline from the beginning.
 			await vi.waitFor(
 				async () => {
 					expect(await handle.getTimeline()).toEqual([
@@ -593,6 +598,7 @@ describeDriverMatrix("Actor Inspector", (driverTestConfig) => {
 			]);
 			const gatewayUrl = await handle.getGatewayUrl();
 
+			// Poll the exact workflow-history endpoint because replay eligibility is asserted against its pending or running state.
 			await vi.waitFor(
 				async () => {
 					const history = await fetchWorkflowHistory(gatewayUrl);
@@ -605,10 +611,14 @@ describeDriverMatrix("Actor Inspector", (driverTestConfig) => {
 			);
 
 			let response!: Response;
+			// Poll the replay endpoint until it observes the in-flight workflow state and returns the structured 409.
 			await vi.waitFor(
 				async () => {
 					const replayResponse = await fetch(
-						buildInspectorUrl(gatewayUrl, "/inspector/workflow/replay"),
+						buildInspectorUrl(
+							gatewayUrl,
+							"/inspector/workflow/replay",
+						),
 						{
 							method: "POST",
 							headers: {
@@ -639,6 +649,7 @@ describeDriverMatrix("Actor Inspector", (driverTestConfig) => {
 			});
 
 			await handle.release();
+			// Poll until the released workflow finishes because release() only unblocks the run handler.
 			await vi.waitFor(
 				async () => {
 					expect((await handle.getState()).finishedAt).not.toBeNull();
@@ -741,12 +752,13 @@ describeDriverMatrix("Actor Inspector", (driverTestConfig) => {
 					expect(
 						summary.workflowHistory?.nameRegistry.length,
 					).toBeGreaterThan(0);
-					expect(summary.workflowHistory?.entries.length).toBeGreaterThan(
-						0,
-					);
 					expect(
-						Object.keys(summary.workflowHistory?.entryMetadata ?? {})
-							.length,
+						summary.workflowHistory?.entries.length,
+					).toBeGreaterThan(0);
+					expect(
+						Object.keys(
+							summary.workflowHistory?.entryMetadata ?? {},
+						).length,
 					).toBeGreaterThan(0);
 				},
 				ACTIVE_WORKFLOW_INSPECTOR_TIMEOUT_MS,
@@ -763,6 +775,7 @@ describeDriverMatrix("Actor Inspector", (driverTestConfig) => {
 			).toBeGreaterThan(0);
 
 			await handle.release();
+			// Poll until the released workflow finishes because release() only unblocks the run handler.
 			await vi.waitFor(
 				async () => {
 					expect((await handle.getState()).finishedAt).not.toBeNull();
@@ -857,12 +870,18 @@ describeDriverMatrix("Actor Inspector", (driverTestConfig) => {
 
 			expect(data.sqlite_commit_phases).toBeDefined();
 			expect(data.sqlite_commit_phases.type).toBe("labeled_timing");
-			expect(data.sqlite_commit_phases.values.request_build.calls).toBeGreaterThan(0);
+			expect(
+				data.sqlite_commit_phases.values.request_build.calls,
+			).toBeGreaterThan(0);
 			expect(
 				data.sqlite_commit_phases.values.request_build.totalMs,
 			).toBeGreaterThan(0);
-			expect(data.sqlite_commit_phases.values.serialize.totalMs).toBeGreaterThan(0);
-			expect(data.sqlite_commit_phases.values.transport.totalMs).toBeGreaterThan(0);
+			expect(
+				data.sqlite_commit_phases.values.serialize.totalMs,
+			).toBeGreaterThan(0);
+			expect(
+				data.sqlite_commit_phases.values.transport.totalMs,
+			).toBeGreaterThan(0);
 			expect(
 				data.sqlite_commit_phases.values.state_update.totalMs,
 			).toBeGreaterThan(0);

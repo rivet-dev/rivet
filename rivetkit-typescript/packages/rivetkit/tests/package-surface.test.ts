@@ -1,7 +1,111 @@
 import { describe, expect, test } from "vitest";
 import packageJson from "../package.json" with { type: "json" };
+import * as rivetkit from "rivetkit";
+import type {
+	ActionContextOf,
+	ActorContextOf,
+	BeforeActionResponseContextOf,
+	BeforeConnectContextOf,
+	ConnectContextOf,
+	ConnContextOf,
+	ConnInitContextOf,
+	CreateConnStateContextOf,
+	CreateContextOf,
+	CreateVarsContextOf,
+	DestroyContextOf,
+	DisconnectContextOf,
+	MigrateContextOf,
+	RequestContextOf,
+	RunContextOf,
+	SleepContextOf,
+	StateChangeContextOf,
+	WakeContextOf,
+	WebSocketContextOf,
+} from "rivetkit";
+import { db as rawDb } from "rivetkit/db";
+import { db as drizzleDb, defineConfig } from "rivetkit/db/drizzle";
+import { decodeWorkflowHistoryTransport } from "rivetkit/inspector";
+import {
+	CURRENT_VERSION,
+	TO_CLIENT_VERSIONED,
+	TO_SERVER_VERSIONED,
+	type TransportWorkflowHistory,
+} from "rivetkit/inspector/client";
+import { setupTest } from "rivetkit/test";
+
+const contextTypeSmokeActor = rivetkit.actor({
+	createState: (_ctx, input: { initialCount: number }) => ({
+		count: input.initialCount,
+	}),
+	createVars: () => ({ lastSeenAt: Date.now() }),
+	createConnState: (_ctx, params: { userId: string }) => ({
+		userId: params.userId,
+	}),
+	actions: {
+		increment: (ctx, amount: number) => (ctx.state.count += amount),
+	},
+	run: async (ctx) => {
+		ctx.state.count += 1;
+	},
+	onRequest: () => new Response("ok"),
+	onWebSocket: () => {},
+});
+
+type RestoredContextTypeSmoke = [
+	ActorContextOf<typeof contextTypeSmokeActor>,
+	ActionContextOf<typeof contextTypeSmokeActor>,
+	BeforeActionResponseContextOf<typeof contextTypeSmokeActor>,
+	BeforeConnectContextOf<typeof contextTypeSmokeActor>,
+	ConnectContextOf<typeof contextTypeSmokeActor>,
+	ConnContextOf<typeof contextTypeSmokeActor>,
+	ConnInitContextOf<typeof contextTypeSmokeActor>,
+	CreateConnStateContextOf<typeof contextTypeSmokeActor>,
+	CreateContextOf<typeof contextTypeSmokeActor>,
+	CreateVarsContextOf<typeof contextTypeSmokeActor>,
+	DestroyContextOf<typeof contextTypeSmokeActor>,
+	DisconnectContextOf<typeof contextTypeSmokeActor>,
+	MigrateContextOf<typeof contextTypeSmokeActor>,
+	RequestContextOf<typeof contextTypeSmokeActor>,
+	RunContextOf<typeof contextTypeSmokeActor>,
+	SleepContextOf<typeof contextTypeSmokeActor>,
+	StateChangeContextOf<typeof contextTypeSmokeActor>,
+	WakeContextOf<typeof contextTypeSmokeActor>,
+	WebSocketContextOf<typeof contextTypeSmokeActor>,
+];
 
 describe("package surface", () => {
+	test("restores supported package entrypoints", () => {
+		expect(packageJson.exports).toHaveProperty("./test");
+		expect(packageJson.exports).toHaveProperty("./inspector");
+		expect(packageJson.exports).toHaveProperty("./inspector/client");
+		expect(packageJson.exports).toHaveProperty("./db");
+		expect(packageJson.exports).toHaveProperty("./db/drizzle");
+	});
+
+	test("restored package entrypoints resolve", () => {
+		expect(setupTest).toBeTypeOf("function");
+		expect(decodeWorkflowHistoryTransport).toBeTypeOf("function");
+		expect(rawDb).toBeTypeOf("function");
+		expect(drizzleDb).toBeTypeOf("function");
+		expect(defineConfig).toBeTypeOf("function");
+		expect(CURRENT_VERSION).toBe(4);
+		expect(TO_CLIENT_VERSIONED).toBeDefined();
+		expect(TO_SERVER_VERSIONED).toBeDefined();
+
+		const history: TransportWorkflowHistory | null = null;
+		expect(history).toBeNull();
+	});
+
+	test("restores root ContextOf helper exports", () => {
+		const contextTypes: RestoredContextTypeSmoke | null = null;
+		expect(contextTypes).toBeNull();
+	});
+
+	test("keeps database helpers on dedicated subpaths", () => {
+		expect(rivetkit).not.toHaveProperty("db");
+		expect(rivetkit).not.toHaveProperty("defineConfig");
+	});
+
 	test("does not advertise deleted topology entrypoints", () => {
 		expect(packageJson.exports).not.toHaveProperty(
 			"./topologies/coordinate",
@@ -36,5 +140,14 @@ describe("package surface", () => {
 		expect(packageJson.devDependencies).not.toHaveProperty(
 			"zod-to-json-schema",
 		);
+	});
+
+	test("keeps intentionally removed helper entrypoints deleted", () => {
+		expect(packageJson.exports).not.toHaveProperty("./driver-helpers");
+		expect(packageJson.exports).not.toHaveProperty(
+			"./driver-helpers/websocket",
+		);
+		expect(packageJson.exports).not.toHaveProperty("./dynamic");
+		expect(packageJson.exports).not.toHaveProperty("./sandbox");
 	});
 });

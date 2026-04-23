@@ -5,7 +5,7 @@ use std::convert::TryFrom;
 use std::future::Future;
 use std::future::pending;
 use std::pin::Pin;
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, LazyLock, Weak};
 
 use anyhow::Error;
@@ -13,7 +13,7 @@ use napi::bindgen_prelude::{Buffer, Promise};
 use napi::threadsafe_function::{
 	ErrorStrategy, ThreadSafeCallContext, ThreadsafeFunction, ThreadsafeFunctionCallMode,
 };
-use napi::{Env, JsFunction, JsObject};
+use napi::{Env, JsFunction, JsObject, Ref};
 use napi_derive::napi;
 use parking_lot::Mutex;
 use rivetkit_core::types::ActorKeySegment;
@@ -57,11 +57,10 @@ struct ActorContextShared {
 	abort_token: Mutex<Option<CoreCancellationToken>>,
 	run_restart: Mutex<Option<RunRestartHook>>,
 	task_sender: Mutex<Option<UnboundedSender<RegisteredTask>>>,
+	runtime_state: Mutex<Option<Ref<()>>>,
 	end_reason: Mutex<Option<EndReason>>,
 	websocket_callback_regions: Mutex<BTreeMap<u32, WebSocketCallbackRegion>>,
 	next_websocket_callback_region_id: AtomicU32,
-	ready: AtomicBool,
-	started: AtomicBool,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -215,11 +214,11 @@ impl ActorContext {
 	}
 
 	pub(crate) fn mark_ready_internal(&self) {
-		self.shared.mark_ready();
+		self.shared.mark_ready(&self.inner);
 	}
 
 	pub(crate) fn mark_started_internal(&self) -> anyhow::Result<()> {
-		self.shared.mark_started()
+		self.shared.mark_started(&self.inner)
 	}
 
 	pub(crate) async fn drain_overdue_scheduled_events(&self) -> anyhow::Result<()> {
@@ -482,23 +481,25 @@ impl ActorContext {
 
 	#[napi]
 	pub fn mark_ready(&self) -> napi::Result<()> {
-		self.shared.mark_ready();
+		self.shared.mark_ready(&self.inner);
 		Ok(())
 	}
 
 	#[napi]
 	pub fn mark_started(&self) -> napi::Result<()> {
-		self.shared.mark_started().map_err(napi_anyhow_error)
+		self.shared
+			.mark_started(&self.inner)
+			.map_err(napi_anyhow_error)
 	}
 
 	#[napi]
 	pub fn is_ready(&self) -> bool {
-		self.shared.is_ready()
+		self.shared.is_ready(&self.inner)
 	}
 
 	#[napi]
 	pub fn is_started(&self) -> bool {
-		self.shared.is_started()
+		self.shared.is_started(&self.inner)
 	}
 
 	#[napi]
@@ -630,6 +631,11 @@ impl ActorContext {
 			}))
 			.map_err(napi_anyhow_error)
 	}
+
+	#[napi]
+	pub fn runtime_state(&self, env: Env) -> napi::Result<JsObject> {
+		self.shared.runtime_state(env)
+	}
 }
 
 impl Drop for ActorContext {
@@ -692,6 +698,18 @@ impl ActorContextShared {
 		self.run_restart.lock().is_some()
 	}
 
+	fn runtime_state(&self, env: Env) -> napi::Result<JsObject> {
+		let mut runtime_state = self.runtime_state.lock();
+		if let Some(reference) = runtime_state.as_ref() {
+			return env.get_reference_value(reference);
+		}
+
+		let reference = env.create_reference(env.create_object()?)?;
+		let state = env.get_reference_value(&reference)?;
+		*runtime_state = Some(reference);
+		Ok(state)
+	}
+
 	#[allow(dead_code)]
 	fn set_end_reason(&self, reason: EndReason) {
 		*self.end_reason.lock() = Some(reason);
@@ -719,14 +737,12 @@ impl ActorContextShared {
 		self.end_reason.lock().is_some()
 	}
 
-	fn mark_ready(&self) {
-		let _ = self
-			.ready
-			.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst);
+	fn mark_ready(&self, ctx: &CoreActorContext) {
+		ctx.set_ready(true);
 	}
 
-	fn mark_started(&self) -> anyhow::Result<()> {
-		if !self.is_ready() {
+	fn mark_started(&self, ctx: &CoreActorContext) -> anyhow::Result<()> {
+		if !self.is_ready(ctx) {
 			return Err(NapiInvalidState {
 				state: "actor context".to_owned(),
 				reason: "cannot start before ready".to_owned(),
@@ -734,30 +750,27 @@ impl ActorContextShared {
 			.build());
 		}
 
-		let _ = self
-			.started
-			.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst);
+		ctx.set_started(true);
 		Ok(())
 	}
 
-	fn is_ready(&self) -> bool {
-		self.ready.load(Ordering::SeqCst)
+	fn is_ready(&self, ctx: &CoreActorContext) -> bool {
+		ctx.ready()
 	}
 
-	fn is_started(&self) -> bool {
-		self.started.load(Ordering::SeqCst)
+	fn is_started(&self, ctx: &CoreActorContext) -> bool {
+		ctx.started()
 	}
 
 	fn reset_runtime_state(&self) {
 		*self.abort_token.lock() = None;
 		*self.run_restart.lock() = None;
 		*self.task_sender.lock() = None;
+		*self.runtime_state.lock() = None;
 		*self.end_reason.lock() = None;
 		*self.websocket_callback_regions.lock() = BTreeMap::new();
 		self.next_websocket_callback_region_id
 			.store(0, Ordering::SeqCst);
-		self.ready.store(false, Ordering::SeqCst);
-		self.started.store(false, Ordering::SeqCst);
 	}
 }
 
@@ -930,35 +943,37 @@ mod tests {
 	#[test]
 	fn mark_started_requires_ready() {
 		let shared = ActorContextShared::default();
+		let ctx = CoreActorContext::new("actor-test", "actor", Vec::new(), "local");
 
-		assert!(shared.mark_started().is_err());
-		assert!(!shared.is_started());
+		assert!(shared.mark_started(&ctx).is_err());
+		assert!(!shared.is_started(&ctx));
 
-		shared.mark_ready();
-		assert!(shared.mark_started().is_ok());
-		assert!(shared.is_started());
+		shared.mark_ready(&ctx);
+		assert!(shared.mark_started(&ctx).is_ok());
+		assert!(shared.is_started(&ctx));
 
-		shared.mark_ready();
-		assert!(shared.mark_started().is_ok());
+		shared.mark_ready(&ctx);
+		assert!(shared.mark_started(&ctx).is_ok());
 	}
 
 	#[test]
-	fn reset_runtime_state_clears_end_reason_and_lifecycle_flags() {
+	fn reset_runtime_state_clears_end_reason_without_touching_core_lifecycle_flags() {
 		let shared = ActorContextShared::default();
+		let ctx = CoreActorContext::new("actor-test", "actor", Vec::new(), "local");
 
-		shared.mark_ready();
+		shared.mark_ready(&ctx);
 		shared
-			.mark_started()
+			.mark_started(&ctx)
 			.expect("started should succeed once ready");
 		shared.set_end_reason(EndReason::Sleep);
 		assert!(shared.has_end_reason());
-		assert!(shared.is_ready());
-		assert!(shared.is_started());
+		assert!(shared.is_ready(&ctx));
+		assert!(shared.is_started(&ctx));
 
 		shared.reset_runtime_state();
 
 		assert!(!shared.has_end_reason());
-		assert!(!shared.is_ready());
-		assert!(!shared.is_started());
+		assert!(shared.is_ready(&ctx));
+		assert!(shared.is_started(&ctx));
 	}
 }

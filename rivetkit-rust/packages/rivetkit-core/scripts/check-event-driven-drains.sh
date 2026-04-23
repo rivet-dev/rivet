@@ -19,4 +19,4 @@ check_no_matches 'sleep\(Duration::from_millis\(10\)\)' \
 check_no_matches 'Mutex<Vec<JoinHandle' \
 	"$ROOT/rivetkit-rust/packages/rivetkit-core/src/actor/sleep.rs"
 check_no_matches 'begin_keep_awake|end_keep_awake|begin_internal_keep_awake|end_internal_keep_awake|begin_websocket_callback|end_websocket_callback' \
-	"$ROOT/rivetkit-rust/packages/rivetkit-core"
+	"$ROOT/rivetkit-rust/packages/rivetkit-core/src"

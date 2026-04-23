@@ -1,10 +1,10 @@
-import { describeDriverMatrix } from "./shared-matrix";
 import { describe, expect, test, vi } from "vitest";
 import type { ActorError } from "@/client/mod";
 import {
 	WORKFLOW_NESTED_QUEUE_NAME,
 	WORKFLOW_QUEUE_NAME,
 } from "../../fixtures/driver-test-suite/workflow";
+import { describeDriverMatrix } from "./shared-matrix";
 import { setupDriverTest, waitFor } from "./shared-utils";
 
 function isActorStoppingConnectionError(error: unknown): boolean {
@@ -147,6 +147,7 @@ describeDriverMatrix("Actor Workflow", (driverTestConfig) => {
 					},
 				});
 
+				// Poll until the workflow finishes mutating actor state because workflow steps run asynchronously.
 				await vi.waitFor(async () => {
 					const state = await actor.getState();
 					expect(state.processed).toEqual(testCase.expected);
@@ -419,13 +420,15 @@ describeDriverMatrix("Actor Workflow", (driverTestConfig) => {
 			await observer.reset();
 
 			const actor = client.workflowDestroyActor.getOrCreate([actorKey]);
-			const actorId = await actor.resolve();
+			await actor.resolve();
 
+			// Poll until onDestroy propagates to the observer actor because teardown is asynchronous.
 			await vi.waitFor(async () => {
 				const wasDestroyed = await observer.wasDestroyed(actorKey);
 				expect(wasDestroyed, "actor onDestroy not called").toBeTruthy();
 			});
 
+			// Poll because actor lookup only turns into not_found once destroy teardown fully completes.
 			await vi.waitFor(async () => {
 				let actorRunning = false;
 				try {
@@ -440,24 +443,22 @@ describeDriverMatrix("Actor Workflow", (driverTestConfig) => {
 			});
 		});
 
-		test.skip(
-			"failed workflow steps sleep instead of surfacing as run errors",
-			async (c) => {
-				const { client } = await setupDriverTest(c, driverTestConfig);
-				const actor = client.workflowFailedStepActor.getOrCreate([
-					"workflow-failed-step",
-				]);
+		// TODO(#4708): Root-cause failed-step sleep-vs-run-error behavior and re-enable this coverage.
+		test.skip("failed workflow steps sleep instead of surfacing as run errors", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+			const actor = client.workflowFailedStepActor.getOrCreate([
+				"workflow-failed-step",
+			]);
 
-				let state = await actor.getState();
-				for (let i = 0; i < 10 && state.sleepCount === 0; i++) {
-					await waitFor(driverTestConfig, 100);
-					state = await actor.getState();
-				}
-				expect(state.runCount).toBeGreaterThan(0);
-				expect(state.sleepCount).toBeGreaterThan(0);
-				expect(state.startCount).toBeGreaterThan(1);
-			},
-		);
+			let state = await actor.getState();
+			for (let i = 0; i < 10 && state.sleepCount === 0; i++) {
+				await waitFor(driverTestConfig, 100);
+				state = await actor.getState();
+			}
+			expect(state.runCount).toBeGreaterThan(0);
+			expect(state.sleepCount).toBeGreaterThan(0);
+			expect(state.startCount).toBeGreaterThan(1);
+		});
 
 		test.skipIf(driverTestConfig.skip?.sleep)(
 			"workflow onError is not reported again after sleep and wake",

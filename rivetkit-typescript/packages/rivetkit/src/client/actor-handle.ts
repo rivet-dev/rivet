@@ -1,4 +1,3 @@
-import * as cbor from "cbor-x";
 import type { AnyActorDefinition } from "@/actor/definition";
 import type { Encoding } from "@/common/encoding";
 import {
@@ -22,7 +21,7 @@ import {
 } from "@/common/client-protocol-zod";
 import { deconstructError } from "@/common/utils";
 import type { EngineControlClient } from "@/engine-client/driver";
-import { deserializeWithEncoding } from "@/serde";
+import { decodeCborCompat, deserializeWithEncoding, encodeCborCompat } from "@/serde";
 import { bufferToArrayBuffer } from "@/utils";
 import type {
 	ActorDefinitionActions,
@@ -283,11 +282,11 @@ export class ActorHandleRaw {
 						args,
 					}),
 					requestToBare: (args): protocol.HttpActionRequest => ({
-						args: bufferToArrayBuffer(cbor.encode(args)),
+						args: bufferToArrayBuffer(encodeCborCompat(args)),
 					}),
 					responseFromJson: (json): Response => json.output as Response,
 					responseFromBare: (bare): Response =>
-						cbor.decode(new Uint8Array(bare.output)) as Response,
+						decodeCborCompat(new Uint8Array(bare.output)),
 				});
 				if (opts.name === "destroy" && actorId) {
 					await this.#waitForDestroyActionToSettle(actorId);
@@ -709,7 +708,7 @@ export class ActorHandleRaw {
 					code: bare.code,
 					message: bare.message,
 					metadata: bare.metadata
-						? cbor.decode(new Uint8Array(bare.metadata))
+						? decodeCborCompat(new Uint8Array(bare.metadata))
 						: undefined,
 				}),
 			);

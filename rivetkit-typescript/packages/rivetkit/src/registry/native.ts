@@ -14,7 +14,6 @@ import type {
 	WebSocket as NativeWebSocket,
 } from "@rivetkit/rivetkit-napi";
 import { VirtualWebSocket } from "@rivetkit/virtual-websocket";
-import * as cbor from "cbor-x";
 import {
 	ACTOR_CONTEXT_INTERNAL_SYMBOL,
 	CONN_STATE_MANAGER_SYMBOL,
@@ -84,7 +83,9 @@ import type { Registry } from "@/registry";
 import type { RegistryConfig } from "@/registry/config";
 import {
 	contentTypeForEncoding,
+	decodeCborCompat,
 	deserializeWithEncoding,
+	encodeCborCompat,
 	serializeWithEncoding,
 } from "@/serde";
 import { bufferToArrayBuffer, VERSION } from "@/utils";
@@ -117,25 +118,6 @@ type NativeWebSocketWithEvents = NativeWebSocket & {
 };
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
-const nativeSqlDatabases = new Map<
-	string,
-	ReturnType<typeof wrapJsNativeDatabase>
->();
-const nativeDatabaseClients = new Map<
-	string,
-	{
-		client: unknown;
-		provider: Exclude<AnyDatabaseProvider, undefined>;
-	}
->();
-const nativeActorVars = new Map<string, unknown>();
-const nativeDestroyGates = new Map<
-	string,
-	{
-		destroyCompletion?: Promise<void>;
-		resolveDestroy?: () => void;
-	}
->();
 type SerializeStateReason = "save" | "inspector" | "sleep" | "destroy";
 type NativeOnStateChangeHandler = (
 	ctx: NativeActorContextAdapter,
@@ -149,27 +131,47 @@ type NativePersistActorState = {
 	isInOnStateChange: boolean;
 	connStates: Map<string, NativePersistConnState>;
 };
-const nativePersistStateByActorId = new Map<
-	string,
-	NativePersistActorState
->();
+type NativeDestroyGate = {
+	destroyCompletion?: Promise<void>;
+	resolveDestroy?: () => void;
+};
+type NativeDatabaseClientState = {
+	client: unknown;
+	provider: Exclude<AnyDatabaseProvider, undefined>;
+};
+type NativeActorRuntimeState = {
+	sql?: ReturnType<typeof wrapJsNativeDatabase>;
+	databaseClient?: NativeDatabaseClientState;
+	varsInitialized?: boolean;
+	vars?: unknown;
+	destroyGate?: NativeDestroyGate;
+	persistState?: NativePersistActorState;
+};
 
-export function resetNativePersistStateForTest(actorId: string): void {
-	nativePersistStateByActorId.delete(actorId);
-	nativeActorVars.delete(actorId);
-}
-
-function getNativePersistState(actorId: string): NativePersistActorState {
-	let persistState = nativePersistStateByActorId.get(actorId);
-	if (!persistState) {
-		persistState = {
+// Keep JS-only actor caches on the NAPI ActorContext runtime-state bag instead
+// of actorId-keyed module globals so same-key recreates start from a fresh
+// generation.
+function getNativeRuntimeState(
+	ctx: NativeActorContext,
+): NativeActorRuntimeState {
+	const runtimeState = callNativeSync(() =>
+		ctx.runtimeState(),
+	) as NativeActorRuntimeState;
+	if (!runtimeState.destroyGate) {
+		runtimeState.destroyGate = {};
+	}
+	if (!runtimeState.persistState) {
+		runtimeState.persistState = {
 			state: undefined,
 			isInOnStateChange: false,
 			connStates: new Map(),
 		};
-		nativePersistStateByActorId.set(actorId, persistState);
 	}
-	return persistState;
+	return runtimeState;
+}
+
+function getNativePersistState(ctx: NativeActorContext): NativePersistActorState {
+	return getNativeRuntimeState(ctx).persistState!;
 }
 
 function isPromiseLike(value: unknown): value is PromiseLike<void> {
@@ -182,10 +184,10 @@ function isPromiseLike(value: unknown): value is PromiseLike<void> {
 }
 
 function getNativeConnPersistState(
-	actorId: string,
+	ctx: NativeActorContext,
 	conn: NativeConnHandle,
 ): NativePersistConnState {
-	const persistState = getNativePersistState(actorId);
+	const persistState = getNativePersistState(ctx);
 	const connId = callNativeSync(() => conn.id());
 	let connState = persistState.connStates.get(connId);
 	if (!connState) {
@@ -205,14 +207,44 @@ function stateMutationReentrantError(): RivetError {
 	);
 }
 
+function databaseNotConfiguredError(): RivetError {
+	return new RivetError(
+		"actor",
+		"database_not_configured",
+		"database is not configured for this actor",
+		{ public: true },
+	);
+}
+
+function stateNotEnabledError(): RivetError {
+	return new RivetError(
+		"actor",
+		"state_not_enabled",
+		"State not enabled. Must implement `createState` or `state` to use state. (https://www.rivet.dev/docs/actors/state/#initializing-state)",
+		{ public: true },
+	);
+}
+
+function nativeClientNotConfiguredError(): RivetError {
+	return new RivetError(
+		"native",
+		"client_not_configured",
+		"native actor client is not configured",
+		{ public: true },
+	);
+}
+
+function nativeEndpointNotConfiguredError(): RivetError {
+	return new RivetError(
+		"native",
+		"endpoint_not_configured",
+		"registry endpoint is required for native envoy startup",
+		{ public: true },
+	);
+}
+
 function getNativeDestroyGate(ctx: NativeActorContext) {
-	const actorId = callNativeSync(() => ctx.actorId());
-	let gate = nativeDestroyGates.get(actorId);
-	if (!gate) {
-		gate = {};
-		nativeDestroyGates.set(actorId, gate);
-	}
-	return gate;
+	return getNativeRuntimeState(ctx).destroyGate!;
 }
 
 function markNativeDestroyRequested(ctx: NativeActorContext) {
@@ -225,8 +257,7 @@ function markNativeDestroyRequested(ctx: NativeActorContext) {
 }
 
 function resolveNativeDestroy(ctx: NativeActorContext) {
-	const actorId = callNativeSync(() => ctx.actorId());
-	const gate = nativeDestroyGates.get(actorId);
+	const gate = getNativeRuntimeState(ctx).destroyGate;
 	if (!gate?.resolveDestroy) {
 		return;
 	}
@@ -236,26 +267,31 @@ function resolveNativeDestroy(ctx: NativeActorContext) {
 	gate.destroyCompletion = undefined;
 }
 
-function closeNativeSqlDatabase(actorId: string): Promise<void> | undefined {
-	const database = nativeSqlDatabases.get(actorId);
+function closeNativeSqlDatabase(
+	ctx: NativeActorContext,
+): Promise<void> | undefined {
+	const runtimeState = getNativeRuntimeState(ctx);
+	const database = runtimeState.sql;
 	if (!database) {
 		return;
 	}
 
-	nativeSqlDatabases.delete(actorId);
+	runtimeState.sql = undefined;
 	return database.close();
 }
 
 async function closeNativeDatabaseClient(
-	actorId: string,
+	ctx: NativeActorContext,
 	destroy: boolean,
 ): Promise<void> {
-	const entry = nativeDatabaseClients.get(actorId);
+	void destroy;
+	const runtimeState = getNativeRuntimeState(ctx);
+	const entry = runtimeState.databaseClient;
 	if (!entry) {
 		return;
 	}
 
-	nativeDatabaseClients.delete(actorId);
+	runtimeState.databaseClient = undefined;
 
 	if (typeof entry.provider.onDestroy === "function") {
 		await entry.provider.onDestroy(entry.client as never);
@@ -274,15 +310,15 @@ async function closeNativeDatabaseClient(
 
 function getOrCreateNativeSqlDatabase(
 	ctx: NativeActorContext,
-	actorId: string,
 ): ReturnType<typeof wrapJsNativeDatabase> {
-	const cachedDatabase = nativeSqlDatabases.get(actorId);
+	const runtimeState = getNativeRuntimeState(ctx);
+	const cachedDatabase = runtimeState.sql;
 	if (cachedDatabase) {
 		return cachedDatabase;
 	}
 
 	const database = wrapJsNativeDatabase(callNativeSync(() => ctx.sql()));
-	nativeSqlDatabases.set(actorId, database);
+	runtimeState.sql = database;
 	return database;
 }
 
@@ -385,11 +421,11 @@ function decodeValue<T>(value?: Buffer | Uint8Array | null): T {
 		return undefined as T;
 	}
 
-	return cbor.decode(Buffer.from(value)) as T;
+	return decodeCborCompat(Buffer.from(value));
 }
 
 function encodeValue(value: unknown): Buffer {
-	return Buffer.from(cbor.encode(value));
+	return Buffer.from(encodeCborCompat(value));
 }
 
 function unwrapTsfnPayload<T>(error: unknown, payload: T): T {
@@ -621,45 +657,13 @@ async function createNativeCancellationToken(signal?: AbortSignal): Promise<{
 	};
 }
 
-async function createNativeRegisteredCancelToken(
-	signal?: AbortSignal,
-): Promise<{
-	cancelTokenId?: bigint;
-	cleanup?: () => void;
-}> {
-	if (!signal) {
-		return {};
-	}
-
-	const bindings = await loadNativeBindings();
-	const cancelTokenId = callNativeSync(() =>
-		bindings.registerNativeCancelToken(),
-	);
-	const cancel = () =>
-		callNativeSync(() =>
-			bindings.cancelNativeCancelToken(cancelTokenId),
-		);
-	const cleanup = () => {
-		signal.removeEventListener("abort", cancel);
-		callNativeSync(() => bindings.dropNativeCancelToken(cancelTokenId));
-	};
-
-	if (signal.aborted) {
-		cancel();
-		return { cancelTokenId, cleanup };
-	}
-
-	signal.addEventListener("abort", cancel, { once: true });
-	return { cancelTokenId, cleanup };
-}
-
 function decodeWorkflowCbor(data: ArrayBuffer | null): unknown | null {
 	if (data === null) {
 		return null;
 	}
 
 	try {
-		return cbor.decode(new Uint8Array(data));
+		return decodeCborCompat(new Uint8Array(data));
 	} catch {
 		return null;
 	}
@@ -1075,10 +1079,10 @@ function toActorKey(
 		stringValue?: string;
 		numberValue?: number;
 	}>,
-): Array<string | number> {
+): string[] {
 	return segments.map((segment) =>
 		segment.kind === "number"
-			? (segment.numberValue ?? 0)
+			? String(segment.numberValue ?? 0)
 			: (segment.stringValue ?? ""),
 	);
 }
@@ -1086,18 +1090,18 @@ function toActorKey(
 class NativeConnAdapter {
 	#conn: NativeConnHandle;
 	#schemas: NativeValidationConfig;
-	#actorId?: string;
+	#ctx?: NativeActorContext;
 	#queueHibernationRemoval?: (connId: string) => void;
 
 	constructor(
 		conn: NativeConnHandle,
 		schemas: NativeValidationConfig = {},
-		actorId?: string,
+		ctx?: NativeActorContext,
 		queueHibernationRemoval?: (connId: string) => void,
 	) {
 		this.#conn = conn;
 		this.#schemas = schemas;
-		this.#actorId = actorId;
+		this.#ctx = ctx;
 		this.#queueHibernationRemoval = queueHibernationRemoval;
 		(
 			this as NativeConnAdapter & {
@@ -1163,11 +1167,11 @@ class NativeConnAdapter {
 	}
 
 	#readState(): unknown {
-		if (!this.#actorId) {
+		if (!this.#ctx) {
 			return decodeValue(this.#conn.state());
 		}
 
-		const connState = getNativeConnPersistState(this.#actorId, this.#conn);
+		const connState = getNativeConnPersistState(this.#ctx, this.#conn);
 		if (connState.state === undefined) {
 			connState.state = decodeValue(this.#conn.state());
 		}
@@ -1181,12 +1185,12 @@ class NativeConnAdapter {
 		},
 	): void {
 		const encoded = encodeValue(value);
-		if (!this.#actorId) {
+		if (!this.#ctx) {
 			this.#conn.setState(encoded);
 			return;
 		}
 
-		const connState = getNativeConnPersistState(this.#actorId, this.#conn);
+		const connState = getNativeConnPersistState(this.#ctx, this.#conn);
 		connState.state = value;
 		if (options.writeNative) {
 			this.#conn.setState(encoded);
@@ -1531,8 +1535,9 @@ class NativeQueueAdapter {
 			completable?: boolean;
 		},
 	) {
-		const { cancelTokenId, cleanup } =
-			await createNativeRegisteredCancelToken(options?.signal);
+		const { token, cleanup } = await createNativeCancellationToken(
+			options?.signal,
+		);
 
 		try {
 			return wrapQueueMessage(
@@ -1543,7 +1548,7 @@ class NativeQueueAdapter {
 							timeoutMs: options?.timeout,
 							completable: options?.completable,
 						},
-						cancelTokenId,
+						token,
 					),
 				),
 				this.#schemas,
@@ -2184,7 +2189,7 @@ export class NativeActorContextAdapter {
 	#databaseProvider?: Exclude<AnyDatabaseProvider, undefined>;
 	#db?: unknown;
 	#dbProxy?: unknown;
-	#dispatchCancelTokenId?: bigint;
+	#dispatchCancelToken?: NativeCancellationToken;
 	#kv?: NativeKvAdapter;
 	#queue?: NativeQueueAdapter;
 	#request?: Request;
@@ -2204,13 +2209,13 @@ export class NativeActorContextAdapter {
 		stateEnabled = true,
 		runHandlerActiveProvider?: () => boolean,
 		onStateChange?: NativeOnStateChangeHandler,
-		dispatchCancelTokenId?: bigint,
+		dispatchCancelToken?: NativeCancellationToken,
 	) {
 		this.#bindings = bindings;
 		this.#ctx = ctx;
 		this.#clientFactory = clientFactory;
 		this.#schemas = schemas;
-		this.#dispatchCancelTokenId = dispatchCancelTokenId;
+		this.#dispatchCancelToken = dispatchCancelToken;
 		this.#runHandlerActiveProvider = runHandlerActiveProvider;
 		this.#onStateChange = onStateChange;
 		this.#stateEnabled = stateEnabled;
@@ -2236,15 +2241,14 @@ export class NativeActorContextAdapter {
 
 	get sql() {
 		if (!this.#sql) {
-			const actorId = callNativeSync(() => this.#ctx.actorId());
-			this.#sql = getOrCreateNativeSqlDatabase(this.#ctx, actorId);
+			this.#sql = getOrCreateNativeSqlDatabase(this.#ctx);
 		}
 		return this.#sql;
 	}
 
 	get db() {
 		if (!this.#databaseProvider) {
-			throw new Error("database is not configured for this actor");
+			throw databaseNotConfiguredError();
 		}
 
 		if (!this.#dbProxy) {
@@ -2277,9 +2281,7 @@ export class NativeActorContextAdapter {
 
 	get state(): unknown {
 		if (!this.#stateEnabled) {
-			throw new Error(
-				"State not enabled. Must implement `createState` or `state` to use state. (https://www.rivet.dev/docs/actors/state/#initializing-state)",
-			);
+			throw stateNotEnabledError();
 		}
 		const nextState = this.#readState();
 		return createWriteThroughProxy(
@@ -2295,9 +2297,7 @@ export class NativeActorContextAdapter {
 
 	set state(value: unknown) {
 		if (!this.#stateEnabled) {
-			throw new Error(
-				"State not enabled. Must implement `createState` or `state` to use state. (https://www.rivet.dev/docs/actors/state/#initializing-state)",
-			);
+			throw stateNotEnabledError();
 		}
 		this.#assertCanMutateState();
 		this.#writeState(value, { scheduleSave: true });
@@ -2311,17 +2311,20 @@ export class NativeActorContextAdapter {
 	}
 
 	get vars(): unknown {
-		const actorId = this.actorId;
-		if (nativeActorVars.has(actorId)) {
-			return nativeActorVars.get(actorId);
+		const runtimeState = getNativeRuntimeState(this.#ctx);
+		if (runtimeState.varsInitialized) {
+			return runtimeState.vars;
 		}
 
-		nativeActorVars.set(actorId, undefined);
+		runtimeState.varsInitialized = true;
+		runtimeState.vars = undefined;
 		return undefined;
 	}
 
 	set vars(value: unknown) {
-		nativeActorVars.set(this.actorId, value);
+		const runtimeState = getNativeRuntimeState(this.#ctx);
+		runtimeState.varsInitialized = true;
+		runtimeState.vars = value;
 	}
 
 	get queue(): NativeQueueAdapter {
@@ -2351,7 +2354,7 @@ export class NativeActorContextAdapter {
 		return callNativeSync(() => this.#ctx.name());
 	}
 
-	get key(): Array<string | number> {
+	get key(): string[] {
 		return toActorKey(callNativeSync(() => this.#ctx.key()));
 	}
 
@@ -2360,14 +2363,13 @@ export class NativeActorContextAdapter {
 	}
 
 	get conns(): Map<string, NativeConnAdapter> {
-		const actorId = this.actorId;
 		return new Map(
 			callNativeSync(() => this.#ctx.conns()).map((conn) => [
 				conn.id(),
 				new NativeConnAdapter(
 					conn,
 					this.#schemas,
-					actorId,
+					this.#ctx,
 					(connId) =>
 						callNativeSync(() =>
 							this.#ctx.queueHibernationRemoval(connId),
@@ -2384,12 +2386,11 @@ export class NativeActorContextAdapter {
 	get abortSignal(): AbortSignal {
 		if (!this.#abortSignal) {
 			const actorSignal = this.#createActorAbortSignal();
-			if (this.#dispatchCancelTokenId === undefined) {
+			if (this.#dispatchCancelToken === undefined) {
 				this.#abortSignal = actorSignal;
 			} else {
 				const controller = new AbortController();
 				let cleanedUp = false;
-				let interval: ReturnType<typeof setInterval> | undefined;
 				const onActorAbort = () => {
 					cleanup();
 					controller.abort();
@@ -2399,41 +2400,27 @@ export class NativeActorContextAdapter {
 						return;
 					}
 					cleanedUp = true;
-					if (interval !== undefined) {
-						clearInterval(interval);
-					}
 					actorSignal.removeEventListener("abort", onActorAbort);
 					this.#abortSignalCleanup = undefined;
 				};
 
 				if (
 					actorSignal.aborted ||
-					this.#isDispatchCancelled(this.#dispatchCancelTokenId)
+					this.#dispatchCancelToken.aborted()
 				) {
 					controller.abort();
 				} else {
+					const dispatchCancelToken = this.#dispatchCancelToken;
+					this.#abortSignalCleanup = cleanup;
 					actorSignal.addEventListener("abort", onActorAbort, {
 						once: true,
 					});
-					interval = setInterval(() => {
-						if (
-							this.#dispatchCancelTokenId !== undefined &&
-							this.#isDispatchCancelled(
-								this.#dispatchCancelTokenId,
-							)
-						) {
+					callNativeSync(() =>
+						dispatchCancelToken.onCancelled(() => {
 							cleanup();
 							controller.abort();
-						}
-					}, 50);
-					if (
-						typeof interval === "object" &&
-						interval !== null &&
-						"unref" in interval
-					) {
-						interval.unref();
-					}
-					this.#abortSignalCleanup = cleanup;
+						}),
+					);
 				}
 
 				this.#abortSignal = controller.signal;
@@ -2452,20 +2439,21 @@ export class NativeActorContextAdapter {
 
 	private async ensureDatabaseClient(): Promise<unknown> {
 		if (!this.#databaseProvider) {
-			throw new Error("database is not configured for this actor");
+			throw databaseNotConfiguredError();
 		}
 
 		if (this.#db) {
 			return this.#db;
 		}
 
-		const actorId = this.actorId;
-		const cachedClient = nativeDatabaseClients.get(actorId);
+		const runtimeState = getNativeRuntimeState(this.#ctx);
+		const cachedClient = runtimeState.databaseClient;
 		if (cachedClient) {
 			this.#db = cachedClient.client;
 			return this.#db;
 		}
 
+		const actorId = this.actorId;
 		const client = await this.#databaseProvider.createClient({
 			actorId,
 			kv: {
@@ -2489,17 +2477,15 @@ export class NativeActorContextAdapter {
 			},
 			nativeDatabaseProvider: {
 				open: async (requestedActorId) => {
-					return getOrCreateNativeSqlDatabase(
-						this.#ctx,
-						requestedActorId,
-					);
+					void requestedActorId;
+					return getOrCreateNativeSqlDatabase(this.#ctx);
 				},
 			},
 		});
-		nativeDatabaseClients.set(actorId, {
+		runtimeState.databaseClient = {
 			client,
 			provider: this.#databaseProvider,
-		});
+		};
 		this.#db = client;
 		return client;
 	}
@@ -2525,8 +2511,8 @@ export class NativeActorContextAdapter {
 	async closeDatabase(destroy: boolean): Promise<void> {
 		this.#db = undefined;
 		this.#sql = undefined;
-		await closeNativeDatabaseClient(this.actorId, destroy);
-		await closeNativeSqlDatabase(this.actorId);
+		await closeNativeDatabaseClient(this.#ctx, destroy);
+		await closeNativeSqlDatabase(this.#ctx);
 	}
 
 	broadcast(name: string, ...args: unknown[]): void {
@@ -2563,7 +2549,7 @@ export class NativeActorContextAdapter {
 
 	serializeForTick(reason: SerializeStateReason): NativeStateDeltaPayload {
 		void reason;
-		const actorState = getNativePersistState(this.actorId);
+		const actorState = getNativePersistState(this.#ctx);
 		const connHibernationRemoved = callNativeSync(() =>
 			this.#ctx.takePendingHibernationChanges(),
 		);
@@ -2668,7 +2654,7 @@ export class NativeActorContextAdapter {
 	client<T = AnyClient>(): T extends Registry<any> ? Client<T> : T {
 		if (!this.#client) {
 			if (!this.#clientFactory) {
-				throw new Error("native actor client is not configured");
+				throw nativeClientNotConfiguredError();
 			}
 			this.#client = this.#clientFactory();
 		}
@@ -2696,14 +2682,8 @@ export class NativeActorContextAdapter {
 		return controller.signal;
 	}
 
-	#isDispatchCancelled(cancelTokenId: bigint): boolean {
-		return callNativeSync(() =>
-			this.#bindings.pollCancelToken(cancelTokenId),
-		);
-	}
-
 	#readState(): unknown {
-		const actorState = getNativePersistState(this.actorId);
+		const actorState = getNativePersistState(this.#ctx);
 		if (actorState.state === undefined) {
 			actorState.state = decodeValue(callNativeSync(() => this.#ctx.state()));
 		}
@@ -2717,7 +2697,7 @@ export class NativeActorContextAdapter {
 		},
 	): void {
 		encodeValue(value);
-		const actorState = getNativePersistState(this.actorId);
+		const actorState = getNativePersistState(this.#ctx);
 		actorState.state = value;
 		if (!options.scheduleSave) {
 			return;
@@ -2726,14 +2706,14 @@ export class NativeActorContextAdapter {
 	}
 
 	#assertCanMutateState(): void {
-		const actorState = getNativePersistState(this.actorId);
+		const actorState = getNativePersistState(this.#ctx);
 		if (actorState.isInOnStateChange) {
 			throw stateMutationReentrantError();
 		}
 	}
 
 	#handleStateChange(): void {
-		const actorState = getNativePersistState(this.actorId);
+		const actorState = getNativePersistState(this.#ctx);
 		encodeValue(actorState.state);
 		callNativeSync(() => this.#ctx.requestSave({ immediate: false }));
 
@@ -2982,9 +2962,8 @@ function withConnContext(
 	request?: Request,
 	stateEnabled = true,
 	onStateChange?: NativeOnStateChangeHandler,
-	dispatchCancelTokenId?: bigint,
+	dispatchCancelToken?: NativeCancellationToken,
 ) {
-	const actorId = callNativeSync(() => ctx.actorId());
 	return Object.assign(
 		new NativeActorContextAdapter(
 			bindings,
@@ -2996,13 +2975,13 @@ function withConnContext(
 			stateEnabled,
 			undefined,
 			onStateChange,
-			dispatchCancelTokenId,
+			dispatchCancelToken,
 		),
 		{
 			conn: new NativeConnAdapter(
 				conn,
 				schemas,
-				actorId,
+				ctx,
 				(connId) =>
 					callNativeSync(() =>
 						ctx.queueHibernationRemoval(connId),
@@ -3044,7 +3023,7 @@ function buildNativeRequestErrorResponse(
 			metadata:
 				value.metadata === undefined
 					? null
-					: bufferToArrayBuffer(cbor.encode(value.metadata)),
+					: bufferToArrayBuffer(encodeCborCompat(value.metadata)),
 		}),
 	);
 
@@ -3164,7 +3143,7 @@ export function buildNativeFactory(
 	const makeActorCtx = (
 		ctx: NativeActorContext,
 		request?: Request,
-		cancelTokenId?: bigint,
+		cancelToken?: NativeCancellationToken,
 	) =>
 		new NativeActorContextAdapter(
 			bindings,
@@ -3176,13 +3155,13 @@ export function buildNativeFactory(
 			stateEnabled,
 			() => isNativeRunHandlerActive(ctx),
 			onStateChange,
-			cancelTokenId,
+			cancelToken,
 		);
 	const makeConnCtx = (
 		ctx: NativeActorContext,
 		conn: NativeConnHandle,
 		request?: Request,
-		cancelTokenId?: bigint,
+		cancelToken?: NativeCancellationToken,
 	) =>
 		withConnContext(
 			bindings,
@@ -3194,7 +3173,7 @@ export function buildNativeFactory(
 			request,
 			stateEnabled,
 			onStateChange,
-			cancelTokenId,
+			cancelToken,
 		);
 	const maybeHandleNativeInspectorRequest = async (
 		ctx: NativeActorContext,
@@ -3904,7 +3883,7 @@ export function buildNativeFactory(
 							const connAdapter = new NativeConnAdapter(
 								conn,
 								schemaConfig,
-								callNativeSync(() => ctx.actorId()),
+								ctx,
 								(connId) =>
 									callNativeSync(() =>
 										ctx.queueHibernationRemoval(connId),
@@ -3955,7 +3934,7 @@ export function buildNativeFactory(
 							const connAdapter = new NativeConnAdapter(
 								conn,
 								schemaConfig,
-								callNativeSync(() => ctx.actorId()),
+								ctx,
 								(connId) =>
 									callNativeSync(() =>
 										ctx.queueHibernationRemoval(connId),
@@ -3998,7 +3977,7 @@ export function buildNativeFactory(
 										new NativeConnAdapter(
 											conn,
 											schemaConfig,
-											callNativeSync(() => ctx.actorId()),
+											ctx,
 											(connId) =>
 												callNativeSync(() =>
 													ctx.queueHibernationRemoval(
@@ -4099,11 +4078,11 @@ export function buildNativeFactory(
 						headers?: Record<string, string>;
 						body?: Buffer;
 					};
-					cancelTokenId?: bigint;
+					cancelToken?: NativeCancellationToken;
 				},
 			) => {
 				try {
-					const { ctx, request, cancelTokenId } = unwrapTsfnPayload(
+					const { ctx, request, cancelToken } = unwrapTsfnPayload(
 						error,
 						payload,
 					);
@@ -4144,7 +4123,7 @@ export function buildNativeFactory(
 							ctx,
 							conn,
 							jsRequest,
-							cancelTokenId,
+							cancelToken,
 						);
 						const response = await config.onRequest(
 							requestCtx,
@@ -4304,17 +4283,17 @@ export function buildNativeFactory(
 							conn: NativeConnHandle | null;
 							name: string;
 							args: Buffer;
-							cancelTokenId?: bigint;
+							cancelToken?: NativeCancellationToken;
 						},
 					) => {
-						const { ctx, conn, args, cancelTokenId } = unwrapTsfnPayload(
+						const { ctx, conn, args, cancelToken } = unwrapTsfnPayload(
 							error,
 							payload,
 						);
 						const actorCtx =
 							conn != null
-								? makeConnCtx(ctx, conn, undefined, cancelTokenId)
-								: makeActorCtx(ctx, undefined, cancelTokenId);
+								? makeConnCtx(ctx, conn, undefined, cancelToken)
+								: makeActorCtx(ctx, undefined, cancelToken);
 						try {
 							return encodeValue(
 								await handler(
@@ -4349,7 +4328,7 @@ export function buildNativeFactory(
 					body: Buffer;
 					wait: boolean;
 					timeoutMs?: bigint | number;
-					cancelTokenId?: bigint;
+					cancelToken?: NativeCancellationToken;
 				},
 			) => {
 				const {
@@ -4360,7 +4339,7 @@ export function buildNativeFactory(
 					body,
 					wait,
 					timeoutMs,
-					cancelTokenId,
+					cancelToken,
 				} = unwrapTsfnPayload(error, payload);
 				const jsRequest = buildRequest(request);
 				const actorCtx = withConnContext(
@@ -4373,7 +4352,7 @@ export function buildNativeFactory(
 					jsRequest,
 					stateEnabled,
 					onStateChange,
-					cancelTokenId,
+					cancelToken,
 				);
 				try {
 					if (
@@ -4461,9 +4440,7 @@ async function buildServeConfig(
 	config: RegistryConfig,
 ): Promise<JsServeConfig> {
 	if (!config.endpoint) {
-		throw new Error(
-			"registry endpoint is required for native envoy startup",
-		);
+		throw nativeEndpointNotConfiguredError();
 	}
 
 	const serveConfig: JsServeConfig = {

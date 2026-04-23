@@ -303,6 +303,23 @@ impl ActorContext {
 		metadata.size = metadata.size.saturating_add(1);
 		let encoded_metadata = encode_queue_metadata(&metadata).context("encode queue metadata")?;
 
+		let registered_completion_waiter = if let Some(waiter) = completion_waiter {
+			if self
+				.0
+				.queue_completion_waiters
+				.insert_async(id, waiter)
+				.await
+				.is_err()
+			{
+				metadata.next_id = id;
+				metadata.size = metadata.size.saturating_sub(1);
+				return Err(QueueCompletionWaiterConflict { message_id: id }.build());
+			}
+			true
+		} else {
+			false
+		};
+
 		if let Err(error) = self
 			.0
 			.kv
@@ -317,15 +334,10 @@ impl ActorContext {
 		{
 			metadata.next_id = id;
 			metadata.size = metadata.size.saturating_sub(1);
+			if registered_completion_waiter {
+				self.remove_completion_waiter(id).await;
+			}
 			return Err(error).context("persist queue message");
-		}
-
-		if let Some(waiter) = completion_waiter {
-			self.0
-				.queue_completion_waiters
-				.insert_async(id, waiter)
-				.await
-				.map_err(|_| QueueCompletionWaiterConflict { message_id: id }.build())?;
 		}
 
 		let queue_size = metadata.size;

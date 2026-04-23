@@ -1,19 +1,11 @@
 import { actor, setup } from "@/mod";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { Runtime } from "../runtime";
+import { buildNativeRegistry } from "../src/registry/native";
 
 const testActor = actor({
 	state: {},
 	actions: {},
 });
-
-function createMockRuntime() {
-	return {
-		startRunner: vi.fn(),
-		startServerless: vi.fn(),
-		handleServerlessRequest: vi.fn(),
-	} as any;
-}
 
 describe("Registry constructor", () => {
 	beforeEach(() => {
@@ -27,9 +19,6 @@ describe("Registry constructor", () => {
 
 	test("does not schedule prestart when it is not explicitly enabled", async () => {
 		const setTimeoutSpy = vi.spyOn(globalThis, "setTimeout");
-		const runtimeCreateSpy = vi
-			.spyOn(Runtime, "create")
-			.mockResolvedValue(createMockRuntime());
 		const initialTimeoutCalls = setTimeoutSpy.mock.calls.length;
 
 		setup({
@@ -41,32 +30,38 @@ describe("Registry constructor", () => {
 		expect(setTimeoutSpy.mock.calls).toHaveLength(initialTimeoutCalls);
 
 		await vi.runAllTimersAsync();
-		expect(runtimeCreateSpy).not.toHaveBeenCalled();
+		expect(setTimeoutSpy.mock.calls).toHaveLength(initialTimeoutCalls);
 	});
 
-	test("reads config mutations made before the prestart tick", async () => {
+	test("reads config mutations made before the native registry is built", async () => {
 		const setTimeoutSpy = vi.spyOn(globalThis, "setTimeout");
 		const initialTimeoutCalls = setTimeoutSpy.mock.calls.length;
-		let engineVersion: string | undefined;
-
-		vi.spyOn(Runtime, "create").mockImplementation(async (registry) => {
-			engineVersion = registry.parseConfig().engineVersion;
-
-			return createMockRuntime();
-		});
 
 		const registry = setup({
 			use: {
 				test: testActor,
 			},
-			startEngine: true,
+			startEngine: false,
+			endpoint: "http://127.0.0.1:6642",
+			token: "dev",
+			namespace: "before-build",
+			envoy: {
+				poolName: "before-build-pool",
+			},
 		});
 
-		registry.config.engineVersion = "9.9.9-test";
+		registry.config.namespace = "after-build";
+		registry.config.endpoint = "http://127.0.0.1:7755";
+		registry.config.envoy = {
+			...registry.config.envoy,
+			poolName: "after-build-pool",
+		};
 
-		expect(setTimeoutSpy.mock.calls).toHaveLength(initialTimeoutCalls + 1);
+		const { serveConfig } = await buildNativeRegistry(registry.parseConfig());
 
-		await vi.runAllTimersAsync();
-		expect(engineVersion).toBe("9.9.9-test");
+		expect(setTimeoutSpy.mock.calls).toHaveLength(initialTimeoutCalls);
+		expect(new URL(serveConfig.endpoint).origin).toBe("http://127.0.0.1:7755");
+		expect(serveConfig.namespace).toBe("after-build");
+		expect(serveConfig.poolName).toBe("after-build-pool");
 	});
 });

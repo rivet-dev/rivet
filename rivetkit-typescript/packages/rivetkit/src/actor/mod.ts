@@ -35,4 +35,24 @@ export {
 	UserError,
 	type UserErrorOptions,
 } from "./errors";
+export type {
+	ActionContextOf,
+	BeforeActionResponseContextOf,
+	BeforeConnectContextOf,
+	ConnectContextOf,
+	ConnContextOf,
+	ConnInitContextOf,
+	CreateConnStateContextOf,
+	CreateContextOf,
+	CreateVarsContextOf,
+	DestroyContextOf,
+	DisconnectContextOf,
+	MigrateContextOf,
+	RequestContextOf,
+	RunContextOf,
+	SleepContextOf,
+	StateChangeContextOf,
+	WakeContextOf,
+	WebSocketContextOf,
+} from "./contexts";
 export { event, queue, type Type } from "./schema";

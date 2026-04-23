@@ -33,31 +33,6 @@ export function db({
 }: DatabaseFactoryConfig = {}): DatabaseProvider<RawAccess> {
 	return {
 		createClient: async (ctx) => {
-			// Check if override is provided
-			const override = ctx.overrideRawDatabaseClient
-				? await ctx.overrideRawDatabaseClient()
-				: undefined;
-
-			if (override) {
-				// Use the override
-				return {
-					execute: async <
-						TRow extends Record<string, unknown> = Record<
-							string,
-							unknown
-						>,
-					>(
-						query: string,
-						...args: unknown[]
-					): Promise<TRow[]> => {
-						return await override.exec<TRow>(query, ...args);
-					},
-					close: async () => {
-						// Override clients don't need cleanup
-					},
-				} satisfies RawAccess;
-			}
-
 			const nativeDatabaseProvider = ctx.nativeDatabaseProvider;
 			if (!nativeDatabaseProvider) {
 				throw new Error(

@@ -20,7 +20,7 @@ use std::{
 	sync::{Arc, atomic::AtomicU64},
 	time::Duration,
 };
-use tokio::sync::{Mutex, watch};
+use tokio::sync::{Mutex, mpsc, watch};
 use tokio_tungstenite::tungstenite::{
 	Message,
 	protocol::frame::{CloseFrame, coding::CloseCode},
@@ -391,6 +391,7 @@ impl PegboardGateway2 {
 			.resend_pending_websocket_messages(request_id)
 			.await?;
 
+		let initial_tunnel_messages = drain_ready_tunnel_messages(request_id, &mut msg_rx);
 		let ws_rx = client_ws.recv();
 
 		let (tunnel_to_ws_abort_tx, tunnel_to_ws_abort_rx) = watch::channel(());
@@ -406,6 +407,7 @@ impl PegboardGateway2 {
 			stopped_sub,
 			msg_rx,
 			drop_rx,
+			initial_tunnel_messages,
 			can_hibernate,
 			egress_bytes.clone(),
 			tunnel_to_ws_abort_rx,
@@ -926,6 +928,31 @@ async fn hibernate_ws(ws_rx: Arc<Mutex<WebSocketReceiver>>) -> Result<Hibernatio
 			return Ok(HibernationResult::Close);
 		}
 	}
+}
+
+fn drain_ready_tunnel_messages(
+	request_id: protocol::RequestId,
+	msg_rx: &mut mpsc::Receiver<protocol::ToRivetTunnelMessageKind>,
+) -> Vec<protocol::ToRivetTunnelMessageKind> {
+	let mut messages = Vec::new();
+
+	loop {
+		match msg_rx.try_recv() {
+			Ok(message) => messages.push(message),
+			Err(mpsc::error::TryRecvError::Empty) => break,
+			Err(mpsc::error::TryRecvError::Disconnected) => break,
+		}
+	}
+
+	if !messages.is_empty() {
+		tracing::debug!(
+			request_id=%protocol::util::id_to_string(&request_id),
+			message_count=messages.len(),
+			"drained ready tunnel messages before websocket forwarding task"
+		);
+	}
+
+	messages
 }
 
 async fn wait_for_envoy_websocket_open(

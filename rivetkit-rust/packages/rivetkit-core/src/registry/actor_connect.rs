@@ -116,9 +116,13 @@ pub(super) fn actor_connect_message_json_value(
 			if let Some(metadata) = payload.metadata.as_ref() {
 				value.insert("metadata".to_owned(), decode_cbor_json(metadata.as_ref())?);
 			}
-			if let Some(action_id) = payload.action_id {
-				value.insert("actionId".to_owned(), json_compat_bigint(action_id));
-			}
+			value.insert(
+				"actionId".to_owned(),
+				payload
+					.action_id
+					.map(json_compat_bigint)
+					.unwrap_or(JsonValue::Null),
+			);
 			JsonValue::Object(serde_json::Map::from_iter([
 				("tag".to_owned(), JsonValue::String("Error".to_owned())),
 				("val".to_owned(), JsonValue::Object(value)),
@@ -306,9 +310,7 @@ pub(super) fn encode_actor_connect_message_cbor_manual(
 			if payload.metadata.is_some() {
 				field_count += 1;
 			}
-			if payload.action_id.is_some() {
-				field_count += 1;
-			}
+			field_count += 1;
 			cbor_write_map_len(&mut encoded, field_count);
 			cbor_write_string(&mut encoded, "group");
 			cbor_write_string(&mut encoded, &payload.group);
@@ -323,6 +325,9 @@ pub(super) fn encode_actor_connect_message_cbor_manual(
 			if let Some(action_id) = payload.action_id {
 				cbor_write_string(&mut encoded, "actionId");
 				cbor_write_u64_force_64(&mut encoded, action_id);
+			} else {
+				cbor_write_string(&mut encoded, "actionId");
+				cbor_write_null(&mut encoded);
 			}
 		}
 		ActorConnectToClient::ActionResponse(payload) => {
@@ -410,6 +415,10 @@ pub(super) fn cbor_write_string(buffer: &mut Vec<u8>, value: &str) {
 pub(super) fn cbor_write_u64_force_64(buffer: &mut Vec<u8>, value: u64) {
 	buffer.push(0x1b);
 	buffer.extend_from_slice(&value.to_be_bytes());
+}
+
+pub(super) fn cbor_write_null(buffer: &mut Vec<u8>) {
+	buffer.push(0xf6);
 }
 
 pub(super) fn action_dispatch_error_response(

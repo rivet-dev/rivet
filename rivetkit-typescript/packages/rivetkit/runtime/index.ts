@@ -16,12 +16,6 @@ import { logger } from "../src/registry/log";
 /** Tracks whether the runtime was started as serverless or serverful. */
 export type StartKind = "serverless" | "serverful";
 
-function removedLegacyRoutingError(method: string): Error {
-	return new Error(
-		`Runtime.${method}() relied on the removed TypeScript routing/serverless stack. Use Registry.startEnvoy() with the native rivetkit-core path instead.`,
-	);
-}
-
 function logLine(label: string, value: string): void {
 	const padding = " ".repeat(Math.max(0, 13 - label.length));
 	console.log(`  - ${label}:${padding}${value}`);
@@ -111,11 +105,15 @@ export class Runtime<A extends RegistryActors> {
 	}
 
 	async ensureHttpServer(): Promise<void> {
-		throw removedLegacyRoutingError("ensureHttpServer");
+		throw new Error(
+			"Runtime.ensureHttpServer() relied on the removed TypeScript routing stack. Use Registry.startEnvoy() with the native rivetkit-core path instead.",
+		);
 	}
 
 	startServerless(): void {
-		throw removedLegacyRoutingError("startServerless");
+		throw new Error(
+			"Runtime.startServerless() relied on the removed TypeScript serverless stack. Use Registry.handler() with the native rivetkit-core path instead.",
+		);
 	}
 
 	async startEnvoy(): Promise<void> {
@@ -172,6 +170,8 @@ export class Runtime<A extends RegistryActors> {
 
 	handleServerlessRequest(request: Request): Response | Promise<Response> {
 		void request;
-		throw removedLegacyRoutingError("handleServerlessRequest");
+		throw new Error(
+			"Runtime.handleServerlessRequest() relied on the removed TypeScript serverless stack. Use Registry.handler() with the native rivetkit-core path instead.",
+		);
 	}
 }

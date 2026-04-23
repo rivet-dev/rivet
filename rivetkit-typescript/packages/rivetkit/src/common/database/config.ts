@@ -49,12 +49,6 @@ export interface DatabaseProviderContext {
 	actorId: string;
 
 	/**
-	 * Override the default raw database client (optional).
-	 * If not provided, a KV-backed client will be constructed.
-	 */
-	overrideRawDatabaseClient?: () => Promise<RawDatabaseClient | undefined>;
-
-	/**
 	 * Override the default Drizzle database client (optional).
 	 * If not provided, a KV-backed client will be constructed.
 	 */

@@ -1,0 +1,8 @@
+{
+	"extends": "./tsconfig.json",
+	"include": [
+		"src/**/*",
+		"runtime/index.ts",
+		"scripts/drizzle-compat-smoke.ts"
+	]
+}

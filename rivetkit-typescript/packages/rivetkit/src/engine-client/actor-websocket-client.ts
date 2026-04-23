@@ -1,4 +1,3 @@
-import * as cbor from "cbor-x";
 import {
 	type ClientConfig,
 	DEFAULT_MAX_QUERY_INPUT_SIZE,
@@ -16,7 +15,7 @@ import { importWebSocket } from "@/common/websocket";
 import { setRemoteHibernatableWebSocketAckTestHooks } from "@/common/websocket-test-hooks";
 import type { ActorGatewayQuery, CrashPolicy } from "@/client/query";
 import type { Encoding, UniversalWebSocket } from "@/mod";
-import { uint8ArrayToBase64 } from "@/serde";
+import { encodeCborCompat, uint8ArrayToBase64 } from "@/serde";
 import { combineUrlPath } from "@/utils";
 import { logger } from "./log";
 
@@ -297,7 +296,7 @@ function pushInputQueryParam(
 		return;
 	}
 
-	const encodedInput = cbor.encode(input);
+	const encodedInput = encodeCborCompat(input);
 	if (encodedInput.byteLength > maxInputSize) {
 		throw new Error(
 			`Actor query input exceeds maxInputSize (${encodedInput.byteLength} > ${maxInputSize} bytes). Increase client maxInputSize to allow larger query payloads.`,

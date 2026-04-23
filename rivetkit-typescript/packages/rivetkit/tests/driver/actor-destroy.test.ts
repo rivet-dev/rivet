@@ -1,6 +1,6 @@
-import { describeDriverMatrix } from "./shared-matrix";
 import { describe, expect, test, vi } from "vitest";
 import type { ActorError } from "@/client/mod";
+import { describeDriverMatrix } from "./shared-matrix";
 import { setupDriverTest } from "./shared-utils";
 
 describeDriverMatrix("Actor Destroy", (driverTestConfig) => {
@@ -17,11 +17,13 @@ describeDriverMatrix("Actor Destroy", (driverTestConfig) => {
 		) {
 			const observer = client.destroyObserver.getOrCreate(["observer"]);
 
+			// Poll until onDestroy propagates to the observer actor because teardown is asynchronous.
 			await vi.waitFor(async () => {
 				const wasDestroyed = await observer.wasDestroyed(actorKey);
 				expect(wasDestroyed, "actor onDestroy not called").toBeTruthy();
 			});
 
+			// Poll because actor lookup only turns into not_found once destroy teardown fully completes.
 			await vi.waitFor(async () => {
 				let actorRunning = false;
 				try {
@@ -60,25 +62,7 @@ describeDriverMatrix("Actor Destroy", (driverTestConfig) => {
 			// Destroy the actor
 			await destroyActor.destroy();
 
-			// Wait until the observer confirms the actor was destroyed
-			await vi.waitFor(async () => {
-				const wasDestroyed = await observer.wasDestroyed(actorKey);
-				expect(wasDestroyed, "actor onDestroy not called").toBeTruthy();
-			});
-
-			// Wait until the actor is fully cleaned up (getForId returns error)
-			await vi.waitFor(async () => {
-				let actorRunning = false;
-				try {
-					await client.destroyActor.getForId(actorId).getValue();
-					actorRunning = true;
-				} catch (err) {
-					expect((err as ActorError).group).toBe("actor");
-					expect((err as ActorError).code).toBe("not_found");
-				}
-
-				expect(actorRunning, "actor still running").toBeFalsy();
-			});
+			await waitForActorDestroyed(client, actorKey, actorId);
 
 			// Verify actor no longer exists via getForId
 			let existsById = false;
@@ -120,6 +104,30 @@ describeDriverMatrix("Actor Destroy", (driverTestConfig) => {
 			expect(newValue).toBe(0);
 		});
 
+		test("actor destroy clears ephemeral vars on same-key recreation", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+
+			const actorKey = "test-destroy-clears-ephemeral-vars";
+
+			const observer = client.destroyObserver.getOrCreate(["observer"]);
+			await observer.reset();
+
+			const destroyActor = client.destroyActor.getOrCreate([actorKey]);
+			await destroyActor.setValue(42);
+			expect(await destroyActor.setEphemeral("dirty-vars")).toBe(
+				"dirty-vars",
+			);
+
+			const actorId = await destroyActor.resolve();
+			await destroyActor.destroy();
+
+			await waitForActorDestroyed(client, actorKey, actorId);
+
+			const recreated = client.destroyActor.getOrCreate([actorKey]);
+			expect(await recreated.getValue()).toBe(0);
+			expect(await recreated.getEphemeral()).toBe("fresh");
+		});
+
 		test("actor destroy clears state (with connect)", async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);
 
@@ -153,25 +161,7 @@ describeDriverMatrix("Actor Destroy", (driverTestConfig) => {
 			// Dispose the connection
 			await destroyActor.dispose();
 
-			// Wait until the observer confirms the actor was destroyed
-			await vi.waitFor(async () => {
-				const wasDestroyed = await observer.wasDestroyed(actorKey);
-				expect(wasDestroyed, "actor onDestroy not called").toBeTruthy();
-			});
-
-			// Wait until the actor is fully cleaned up (getForId returns error)
-			await vi.waitFor(async () => {
-				let actorRunning = false;
-				try {
-					await client.destroyActor.getForId(actorId).getValue();
-					actorRunning = true;
-				} catch (err) {
-					expect((err as ActorError).group).toBe("actor");
-					expect((err as ActorError).code).toBe("not_found");
-				}
-
-				expect(actorRunning, "actor still running").toBeFalsy();
-			});
+			await waitForActorDestroyed(client, actorKey, actorId);
 
 			// Verify actor no longer exists via getForId
 			let existsById = false;
@@ -238,25 +228,7 @@ describeDriverMatrix("Actor Destroy", (driverTestConfig) => {
 			// Destroy the actor
 			await destroyActor.destroy();
 
-			// Wait until the observer confirms the actor was destroyed
-			await vi.waitFor(async () => {
-				const wasDestroyed = await observer.wasDestroyed(actorKey);
-				expect(wasDestroyed, "actor onDestroy not called").toBeTruthy();
-			});
-
-			// Wait until the actor is fully cleaned up
-			await vi.waitFor(async () => {
-				let actorRunning = false;
-				try {
-					await client.destroyActor.getForId(actorId).getValue();
-					actorRunning = true;
-				} catch (err) {
-					expect((err as ActorError).group).toBe("actor");
-					expect((err as ActorError).code).toBe("not_found");
-				}
-
-				expect(actorRunning, "actor still running").toBeFalsy();
-			});
+			await waitForActorDestroyed(client, actorKey, actorId);
 
 			// Recreate using getOrCreate with resolve
 			const newHandle = client.destroyActor.getOrCreate([actorKey]);
@@ -292,25 +264,7 @@ describeDriverMatrix("Actor Destroy", (driverTestConfig) => {
 			// Destroy the actor
 			await initialHandle.destroy();
 
-			// Wait until the observer confirms the actor was destroyed
-			await vi.waitFor(async () => {
-				const wasDestroyed = await observer.wasDestroyed(actorKey);
-				expect(wasDestroyed, "actor onDestroy not called").toBeTruthy();
-			});
-
-			// Wait until the actor is fully cleaned up
-			await vi.waitFor(async () => {
-				let actorRunning = false;
-				try {
-					await client.destroyActor.getForId(actorId).getValue();
-					actorRunning = true;
-				} catch (err) {
-					expect((err as ActorError).group).toBe("actor");
-					expect((err as ActorError).code).toBe("not_found");
-				}
-
-				expect(actorRunning, "actor still running").toBeFalsy();
-			});
+			await waitForActorDestroyed(client, actorKey, actorId);
 
 			// Recreate using create()
 			const newHandle = await client.destroyActor.create([actorKey]);

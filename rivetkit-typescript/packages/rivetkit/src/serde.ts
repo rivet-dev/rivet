@@ -4,7 +4,12 @@ import type { VersionedDataHandler } from "vbare";
 import type { z } from "zod/v4";
 import { assertUnreachable } from "@/common/utils";
 import type { Encoding } from "@/common/encoding";
-import { jsonParseCompat, jsonStringifyCompat } from "./common/encoding";
+import {
+	encodeJsonCompatValue,
+	jsonParseCompat,
+	jsonStringifyCompat,
+	reviveJsonCompatValue,
+} from "./common/encoding";
 
 export function uint8ArrayToBase64(uint8Array: Uint8Array): string {
 	// Check if Buffer is available (Node.js)
@@ -39,6 +44,14 @@ export function contentTypeForEncoding(encoding: Encoding): string {
 	} else {
 		assertUnreachable(encoding);
 	}
+}
+
+export function encodeCborCompat(value: unknown): Uint8Array {
+	return cbor.encode(encodeJsonCompatValue(value));
+}
+
+export function decodeCborCompat<T>(buffer: Uint8Array): T {
+	return reviveJsonCompatValue(cbor.decode(buffer)) as T;
 }
 
 export function wsBinaryTypeForEncoding(
@@ -114,7 +127,7 @@ export function deserializeWithEncoding<TBare, TJson, T = TBare>(
 			"buffer cannot be string for cbor encoding",
 		);
 		// Decode CBOR to get JavaScript values (similar to JSON.parse)
-		const decoded: unknown = cbor.decode(buffer);
+		const decoded = decodeCborCompat(buffer);
 		// Validate with Zod schema (CBOR produces same structure as JSON)
 		const validated = zodSchema.parse(decoded);
 		// CBOR decoding produces JS objects, use fromJson

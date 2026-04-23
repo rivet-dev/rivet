@@ -26,12 +26,6 @@ use crate::actor_factory::{
 	call_buffer, call_optional_buffer, call_queue_send, call_request, call_state_delta_payload,
 	call_void,
 };
-use crate::cancel_token::register_guarded_token as register_dispatch_token;
-#[cfg(test)]
-use crate::cancel_token::{
-	active_token_count as active_dispatch_token_count, lock_registry_for_test,
-	poll_cancelled as poll_dispatch_cancelled,
-};
 
 // Restart hooks are synchronous callback slots; the guard is only held while
 // swapping task handles, never while awaiting a task shutdown.
@@ -41,6 +35,10 @@ struct RunHandlerActiveGuard {
 	ctx: CoreActorContext,
 }
 
+struct DispatchCancelGuard {
+	token: CancellationToken,
+}
+
 impl RunHandlerActiveGuard {
 	fn new(ctx: CoreActorContext) -> Self {
 		ctx.begin_run_handler();
@@ -48,9 +46,27 @@ impl RunHandlerActiveGuard {
 	}
 }
 
+impl DispatchCancelGuard {
+	fn new() -> Self {
+		Self {
+			token: CancellationToken::new(),
+		}
+	}
+
+	fn token(&self) -> CancellationToken {
+		self.token.clone()
+	}
+}
+
 impl Drop for RunHandlerActiveGuard {
 	fn drop(&mut self) {
 		self.ctx.end_run_handler();
+	}
+}
+
+impl Drop for DispatchCancelGuard {
+	fn drop(&mut self) {
+		self.token.cancel();
 	}
 }
 
@@ -81,6 +97,7 @@ pub(crate) async fn run_adapter_loop(
 		snapshot,
 		hibernated,
 		mut events,
+		startup_ready,
 	} = start;
 
 	let ctx = ActorContext::new(core_ctx.clone());
@@ -99,8 +116,7 @@ pub(crate) async fn run_adapter_loop(
 	}));
 
 	let mut tasks = JoinSet::new();
-
-	if let Err(error) = run_preamble(
+	let run_handler = match run_preamble(
 		&bindings,
 		config.as_ref(),
 		&ctx,
@@ -110,12 +126,20 @@ pub(crate) async fn run_adapter_loop(
 	)
 	.await
 	{
-		abort.cancel();
-		drain_tasks(&mut tasks, &mut registered_task_rx).await;
-		return Err(error);
-	}
-
-	let run_handler = configure_run_handler(&bindings, &ctx);
+		Ok(run_handler) => {
+			if let Some(reply) = startup_ready {
+				let _ = reply.send(Ok(()));
+			}
+			run_handler
+		}
+		Err(error) => {
+			if let Some(reply) = startup_ready {
+				let startup_error = anyhow::Error::new(RivetTransportError::extract(&error));
+				let _ = reply.send(Err(startup_error));
+			}
+			return Err(error);
+		}
+	};
 
 	run_event_loop(
 		&bindings,
@@ -171,7 +195,7 @@ async fn run_preamble(
 	input: Option<&[u8]>,
 	snapshot: Option<Vec<u8>>,
 	hibernated: Vec<(rivetkit_core::ConnHandle, Vec<u8>)>,
-) -> Result<()> {
+) -> Result<RunHandlerSlot> {
 	let is_new = snapshot.is_none();
 
 	if is_new {
@@ -247,12 +271,16 @@ async fn run_preamble(
 	}
 
 	ctx.mark_started_internal()?;
+	let run_handler = configure_run_handler(bindings, ctx);
+	if bindings.run.is_some() {
+		tokio::task::yield_now().await;
+	}
 	ctx.drain_overdue_scheduled_events().await?;
 
-	Ok(())
+	Ok(run_handler)
 }
 
-fn configure_run_handler(bindings: &Arc<CallbackBindings>, ctx: &ActorContext) -> RunHandlerSlot {
+fn configure_run_handler(bindings: &CallbackBindings, ctx: &ActorContext) -> RunHandlerSlot {
 	let run_handler = Arc::new(Mutex::new(None));
 	let Some(callback) = bindings.run.as_ref().cloned() else {
 		return run_handler;
@@ -310,7 +338,7 @@ pub(crate) async fn dispatch_event(
 			let ctx = ctx.clone();
 
 			spawn_reply(tasks, abort.clone(), reply, async move {
-				let output = with_dispatch_cancel_token(|cancel_token_id| {
+				let output = with_dispatch_cancel_token(|cancel_token| {
 					with_structured_timeout(
 						"actor",
 						"action_timed_out",
@@ -323,7 +351,7 @@ pub(crate) async fn dispatch_event(
 							conn,
 							name.clone(),
 							args.clone(),
-							Some(cancel_token_id),
+							Some(cancel_token),
 						),
 					)
 				})
@@ -352,7 +380,7 @@ pub(crate) async fn dispatch_event(
 			let ctx = ctx.clone();
 			let timeout = config.on_request_timeout;
 			spawn_reply(tasks, abort.clone(), reply, async move {
-				with_dispatch_cancel_token(|cancel_token_id| {
+				with_dispatch_cancel_token(|cancel_token| {
 					with_structured_timeout(
 						"actor",
 						"action_timed_out",
@@ -360,7 +388,7 @@ pub(crate) async fn dispatch_event(
 						None,
 						timeout,
 						async move {
-							call_http_request(&callback, &ctx, request, Some(cancel_token_id)).await
+							call_http_request(&callback, &ctx, request, Some(cancel_token)).await
 						},
 					)
 				})
@@ -383,7 +411,7 @@ pub(crate) async fn dispatch_event(
 			let ctx = ctx.clone();
 			let timeout = config.on_request_timeout;
 			spawn_reply(tasks, abort.clone(), reply, async move {
-				with_dispatch_cancel_token(|cancel_token_id| {
+				with_dispatch_cancel_token(|cancel_token| {
 					with_structured_timeout(
 						"actor",
 						"action_timed_out",
@@ -402,7 +430,7 @@ pub(crate) async fn dispatch_event(
 									body,
 									wait,
 									timeout_ms,
-									cancel_token_id: Some(cancel_token_id),
+									cancel_token: Some(cancel_token),
 								},
 							)
 							.await?;
@@ -525,7 +553,7 @@ pub(crate) async fn dispatch_event(
 			});
 		}
 		ActorEvent::SerializeState { reason, reply } => {
-			reply.send(maybe_serialize(bindings.as_ref(), dirty.as_ref(), reason).await);
+			reply.send(maybe_serialize(bindings.as_ref(), ctx, dirty.as_ref(), reason).await);
 		}
 		ActorEvent::RunGracefulCleanup { reason, reply } => {
 			let callback = match reason {
@@ -600,36 +628,43 @@ pub(crate) async fn dispatch_event(
 
 async fn maybe_serialize(
 	bindings: &CallbackBindings,
+	ctx: &ActorContext,
 	dirty: &AtomicBool,
 	reason: SerializeStateReason,
 ) -> Result<Vec<StateDelta>> {
 	// The adapter dirty bit is consumed only by persistence-bound serialization.
 	// Inspector snapshots feed the live overlay and must not steal a pending save.
-	maybe_serialize_with(bindings, dirty, reason, |bindings, reason| async move {
-		call_serialize_state(bindings, reason).await
-	})
+	maybe_serialize_with(
+		bindings,
+		ctx,
+		dirty,
+		reason,
+		|bindings, ctx, reason| async move { call_serialize_state(bindings, ctx, reason).await },
+	)
 	.await
 }
 
 async fn maybe_serialize_with<'a, F, Fut>(
 	bindings: &'a CallbackBindings,
+	ctx: &'a ActorContext,
 	dirty: &AtomicBool,
 	reason: SerializeStateReason,
 	serialize: F,
 ) -> Result<Vec<StateDelta>>
 where
-	F: FnOnce(&'a CallbackBindings, &'static str) -> Fut,
+	F: FnOnce(&'a CallbackBindings, &'a ActorContext, &'static str) -> Fut,
 	Fut: std::future::Future<Output = Result<Vec<StateDelta>>> + 'a,
 {
 	if reason != SerializeStateReason::Inspector && !dirty.swap(false, Ordering::AcqRel) {
 		return Ok(Vec::new());
 	}
 
-	serialize(bindings, serialize_state_reason_name(reason)).await
+	serialize(bindings, ctx, serialize_state_reason_name(reason)).await
 }
 
 async fn call_serialize_state(
 	bindings: &CallbackBindings,
+	ctx: &ActorContext,
 	reason: &'static str,
 ) -> Result<Vec<StateDelta>> {
 	let callback = bindings
@@ -640,6 +675,7 @@ async fn call_serialize_state(
 		"serializeState",
 		callback,
 		SerializeStatePayload {
+			ctx: ctx.inner().clone(),
 			reason: reason.to_owned(),
 		},
 	)
@@ -974,7 +1010,7 @@ async fn call_action(
 	conn: Option<rivetkit_core::ConnHandle>,
 	name: String,
 	args: Vec<u8>,
-	cancel_token_id: Option<u64>,
+	cancel_token: Option<CancellationToken>,
 ) -> Result<Vec<u8>> {
 	let callback_name = format!("actions.{name}");
 	call_buffer(
@@ -985,7 +1021,7 @@ async fn call_action(
 			conn,
 			name,
 			args,
-			cancel_token_id,
+			cancel_token,
 		},
 	)
 	.await
@@ -1015,7 +1051,7 @@ async fn call_http_request(
 	callback: &crate::actor_factory::CallbackTsfn<HttpRequestPayload>,
 	ctx: &ActorContext,
 	request: rivetkit_core::Request,
-	cancel_token_id: Option<u64>,
+	cancel_token: Option<CancellationToken>,
 ) -> Result<rivetkit_core::Response> {
 	call_request(
 		"onRequest",
@@ -1023,7 +1059,7 @@ async fn call_http_request(
 		HttpRequestPayload {
 			ctx: ctx.inner().clone(),
 			request,
-			cancel_token_id,
+			cancel_token,
 		},
 	)
 	.await
@@ -1031,12 +1067,11 @@ async fn call_http_request(
 
 async fn with_dispatch_cancel_token<T, F, Fut>(work: F) -> Result<T>
 where
-	F: FnOnce(u64) -> Fut,
+	F: FnOnce(CancellationToken) -> Fut,
 	Fut: std::future::Future<Output = Result<T>>,
 {
-	let (guard, _token) = register_dispatch_token();
-	let cancel_token_id = guard.id;
-	work(cancel_token_id).await
+	let guard = DispatchCancelGuard::new();
+	work(guard.token()).await
 }
 
 async fn call_on_websocket(
@@ -1214,7 +1249,6 @@ fn missing_callback(name: &str) -> anyhow::Error {
 mod tests {
 	use std::collections::HashMap;
 	use std::sync::Arc as StdArc;
-	use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
 	use std::time::Duration;
 
 	use rivet_error::RivetError as RivetTransportError;
@@ -1275,30 +1309,24 @@ mod tests {
 
 	#[tokio::test(flavor = "current_thread")]
 	async fn with_dispatch_cancel_token_cleans_up_after_success() {
-		let _lock = lock_registry_for_test();
-		let baseline = active_dispatch_token_count();
-
-		let cancel_token_id = with_dispatch_cancel_token(|cancel_token_id| async move {
-			Ok::<_, anyhow::Error>(cancel_token_id)
+		let cancel_token = with_dispatch_cancel_token(|cancel_token| async move {
+			Ok::<_, anyhow::Error>(cancel_token)
 		})
 		.await
 		.expect("successful dispatch should resolve");
 
-		assert!(poll_dispatch_cancelled(cancel_token_id));
-		assert_eq!(active_dispatch_token_count(), baseline);
+		assert!(cancel_token.is_cancelled());
 	}
 
 	#[tokio::test(flavor = "current_thread")]
 	async fn with_dispatch_cancel_token_cleans_up_after_panic() {
-		let _lock = lock_registry_for_test();
-		let baseline = active_dispatch_token_count();
-		let seen_cancel_token_id = StdArc::new(AtomicU64::new(0));
+		let seen_cancel_token = StdArc::new(parking_lot::Mutex::new(None));
 
 		let join_error = tokio::spawn({
-			let seen_cancel_token_id = StdArc::clone(&seen_cancel_token_id);
+			let seen_cancel_token = StdArc::clone(&seen_cancel_token);
 			async move {
-				let _ = with_dispatch_cancel_token(|cancel_token_id| async move {
-					seen_cancel_token_id.store(cancel_token_id, AtomicOrdering::Relaxed);
+				let _ = with_dispatch_cancel_token(|cancel_token| async move {
+					*seen_cancel_token.lock() = Some(cancel_token);
 					panic!("dispatch panic");
 					#[allow(unreachable_code)]
 					Ok::<(), anyhow::Error>(())
@@ -1310,24 +1338,23 @@ mod tests {
 		.expect_err("panic dispatch should panic");
 
 		assert!(join_error.is_panic());
-		let cancel_token_id = seen_cancel_token_id.load(AtomicOrdering::Relaxed);
-		assert_ne!(cancel_token_id, 0);
-		assert!(poll_dispatch_cancelled(cancel_token_id));
-		assert_eq!(active_dispatch_token_count(), baseline);
+		let cancel_token = seen_cancel_token
+			.lock()
+			.clone()
+			.expect("panic path should observe the dispatch token");
+		assert!(cancel_token.is_cancelled());
 	}
 
 	#[tokio::test(flavor = "current_thread")]
 	async fn with_dispatch_cancel_token_does_not_leak_under_mixed_load() {
-		let _lock = lock_registry_for_test();
-		let baseline = active_dispatch_token_count();
-
 		for i in 0..1000 {
 			if i % 2 == 0 {
-				with_dispatch_cancel_token(|cancel_token_id| async move {
-					Ok::<_, anyhow::Error>(cancel_token_id)
+				let cancel_token = with_dispatch_cancel_token(|cancel_token| async move {
+					Ok::<_, anyhow::Error>(cancel_token)
 				})
 				.await
 				.expect("successful dispatch should resolve");
+				assert!(cancel_token.is_cancelled());
 				continue;
 			}
 
@@ -1344,8 +1371,6 @@ mod tests {
 
 			assert!(join_error.is_panic());
 		}
-
-		assert_eq!(active_dispatch_token_count(), baseline);
 	}
 
 	#[tokio::test]
@@ -1634,6 +1659,7 @@ mod tests {
 				snapshot: Some(Vec::new()),
 				hibernated: Vec::new(),
 				events: ActorEvents::from(events_rx),
+				startup_ready: None,
 			},
 		)
 		.await
@@ -1707,9 +1733,12 @@ mod tests {
 	#[tokio::test]
 	async fn maybe_serialize_skips_save_when_adapter_is_clean() {
 		let bindings = empty_bindings();
+		let core_ctx =
+			rivetkit_core::ActorContext::new("actor-serialize-clean", "actor", Vec::new(), "local");
+		let ctx = ActorContext::new(core_ctx);
 		let dirty = AtomicBool::new(false);
 
-		let deltas = maybe_serialize(&bindings, &dirty, SerializeStateReason::Save)
+		let deltas = maybe_serialize(&bindings, &ctx, &dirty, SerializeStateReason::Save)
 			.await
 			.expect("clean save serialize should not fail");
 
@@ -1720,14 +1749,22 @@ mod tests {
 	#[tokio::test]
 	async fn maybe_serialize_inspector_does_not_consume_pending_save() {
 		let bindings = empty_bindings();
+		let core_ctx = rivetkit_core::ActorContext::new(
+			"actor-serialize-inspector",
+			"actor",
+			Vec::new(),
+			"local",
+		);
+		let ctx = ActorContext::new(core_ctx);
 		let dirty = AtomicBool::new(true);
 		let calls = Arc::new(Mutex::new(Vec::new()));
 
 		let inspector_deltas = maybe_serialize_with(
 			&bindings,
+			&ctx,
 			&dirty,
 			SerializeStateReason::Inspector,
-			|_, reason| {
+			|_, _, reason| {
 				let calls = Arc::clone(&calls);
 				async move {
 					calls.lock().push(reason);
@@ -1743,9 +1780,10 @@ mod tests {
 
 		let save_deltas = maybe_serialize_with(
 			&bindings,
+			&ctx,
 			&dirty,
 			SerializeStateReason::Save,
-			|_, reason| {
+			|_, _, reason| {
 				let calls = Arc::clone(&calls);
 				async move {
 					calls.lock().push(reason);

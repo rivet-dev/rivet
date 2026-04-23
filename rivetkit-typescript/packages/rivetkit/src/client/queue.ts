@@ -1,4 +1,3 @@
-import * as cbor from "cbor-x";
 import type { Encoding } from "@/common/encoding";
 import { HEADER_CONN_PARAMS, HEADER_ENCODING } from "@/common/actor-router-consts";
 import type * as protocol from "@/common/client-protocol";
@@ -13,6 +12,7 @@ import {
 	type HttpQueueSendResponse as HttpQueueSendResponseJson,
 	HttpQueueSendResponseSchema,
 } from "@/common/client-protocol-zod";
+import { decodeCborCompat, encodeCborCompat } from "@/serde";
 import { bufferToArrayBuffer } from "@/utils";
 import { sendHttpRequest } from "./utils";
 
@@ -111,7 +111,7 @@ export function createQueueSender(
 			}),
 			requestToBare: (value): protocol.HttpQueueSendRequest => ({
 				name: value.name ?? name,
-				body: bufferToArrayBuffer(cbor.encode(value.body)),
+				body: bufferToArrayBuffer(encodeCborCompat(value.body)),
 				wait: value.wait ?? false,
 				timeout:
 					value.timeout !== undefined ? BigInt(value.timeout) : null,
@@ -131,7 +131,7 @@ export function createQueueSender(
 				}
 				return {
 					status: bare.status as "completed" | "timedOut",
-					response: cbor.decode(new Uint8Array(bare.response)),
+					response: decodeCborCompat(new Uint8Array(bare.response)),
 				};
 			},
 		});

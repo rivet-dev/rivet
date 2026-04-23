@@ -129,6 +129,11 @@ impl ActorContext {
 		self.set_initial_state(state);
 	}
 
+	/// Requests a save without surfacing delivery failures to the caller.
+	///
+	/// If the lifecycle event inbox is overloaded or unavailable, this only logs
+	/// a warning and returns. Call [`Self::request_save_and_wait`] when the caller
+	/// needs a `Result` and must observe save-request delivery failures.
 	pub fn request_save(&self, opts: RequestSaveOpts) {
 		if let Err(error) = self.request_save_with_revision(opts) {
 			tracing::warn!(?error, "failed to request actor state save");

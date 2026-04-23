@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { describeDriverMatrix } from "./shared-matrix";
+
 import { describe, expect, test, vi } from "vitest";
 import {
 	PREVENT_SLEEP_TIMEOUT,
@@ -7,6 +7,7 @@ import {
 	RAW_WS_HANDLER_SLEEP_TIMEOUT,
 	SLEEP_TIMEOUT,
 } from "../../fixtures/driver-test-suite/sleep";
+import { describeDriverMatrix } from "./shared-matrix";
 import { setupDriverTest, waitFor } from "./shared-utils";
 
 async function waitForRawWebSocketMessage(ws: WebSocket) {
@@ -144,6 +145,7 @@ describeDriverMatrix("Actor Sleep", (driverTestConfig) => {
 			const actorKey = `run-self-sleep-${Date.now()}`;
 			const actor = client.runSelfInitiatedSleep.getOrCreate([actorKey]);
 
+			// Poll until the self-initiated sleep cycle persists the post-wake counters.
 			await vi.waitFor(
 				async () => {
 					const state = await actor.getState();
@@ -156,6 +158,7 @@ describeDriverMatrix("Actor Sleep", (driverTestConfig) => {
 			);
 		});
 
+		// TODO(#4707): Root-cause persistent connection sleep-state behavior and re-enable this coverage.
 		test.skip("actor sleep persists state with connect", async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);
 
@@ -177,6 +180,7 @@ describeDriverMatrix("Actor Sleep", (driverTestConfig) => {
 
 			// Reconnect and verify the persisted counters once the actor settles.
 			const sleepActor2 = client.sleep.getOrCreate();
+			// Poll until the reconnected actor observes the persisted sleep counters after wake.
 			await vi.waitFor(
 				async () => {
 					const { startCount, sleepCount } =
@@ -338,14 +342,17 @@ describeDriverMatrix("Actor Sleep", (driverTestConfig) => {
 			// Now wait for full timeout without any RPC calls
 			await waitFor(driverTestConfig, SLEEP_TIMEOUT + 250);
 
-			// Actor should have slept and restarted
-			await vi.waitFor(async () => {
-				const { startCount, sleepCount } = await client.sleep
-					.getOrCreate(actorKey)
-					.getCounts();
-				expect(sleepCount).toBe(1); // Slept once
-				expect(startCount).toBe(2); // New instance after sleep
-			}, { timeout: 20_000, interval: 100 });
+			// Poll until idle sleep teardown completes and a fresh actor instance exposes the persisted counters.
+			await vi.waitFor(
+				async () => {
+					const { startCount, sleepCount } = await client.sleep
+						.getOrCreate(actorKey)
+						.getCounts();
+					expect(sleepCount).toBe(1); // Slept once
+					expect(startCount).toBe(2); // New instance after sleep
+				},
+				{ timeout: 20_000, interval: 100 },
+			);
 		}, 60_000);
 
 		test("alarms keep actor awake", async (c) => {
@@ -447,10 +454,7 @@ describeDriverMatrix("Actor Sleep", (driverTestConfig) => {
 		});
 
 		test("active raw websockets keep actor awake", async (c) => {
-			const { client, endpoint: baseUrl } = await setupDriverTest(
-				c,
-				driverTestConfig,
-			);
+			const { client } = await setupDriverTest(c, driverTestConfig);
 
 			// Create actor
 			const sleepActor = client.sleepWithRawWebSocket.getOrCreate();
@@ -514,10 +518,7 @@ describeDriverMatrix("Actor Sleep", (driverTestConfig) => {
 		});
 
 		test("active raw fetch requests keep actor awake", async (c) => {
-			const { client, endpoint: baseUrl } = await setupDriverTest(
-				c,
-				driverTestConfig,
-			);
+			const { client } = await setupDriverTest(c, driverTestConfig);
 
 			// Create actor
 			const sleepActor = client.sleepWithRawHttp.getOrCreate();
@@ -740,6 +741,7 @@ describeDriverMatrix("Actor Sleep", (driverTestConfig) => {
 				RAW_WS_HANDLER_DELAY + RAW_WS_HANDLER_SLEEP_TIMEOUT + 150,
 			);
 
+			// Poll until the message handler finishes and the actor completes its post-sleep restart bookkeeping.
 			await vi.waitFor(
 				async () => {
 					const status = await actor.getStatus();
@@ -794,6 +796,7 @@ describeDriverMatrix("Actor Sleep", (driverTestConfig) => {
 				RAW_WS_HANDLER_DELAY + RAW_WS_HANDLER_SLEEP_TIMEOUT + 150,
 			);
 
+			// Poll until the close handler finishes and the actor completes its post-sleep restart bookkeeping.
 			await vi.waitFor(
 				async () => {
 					const status = await actor.getStatus();
