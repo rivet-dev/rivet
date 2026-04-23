@@ -39,3 +39,10 @@ export type {
 	SessionResumeOrCreateRequest,
 	SessionSendOptions,
 } from "sandbox-agent";
+export { e2b } from "sandbox-agent/e2b";
+export { docker } from "sandbox-agent/docker";
+export { local } from "sandbox-agent/local";
+export { daytona } from "sandbox-agent/daytona";
+export { vercel } from "sandbox-agent/vercel";
+export { modal } from "sandbox-agent/modal";
+export { computesdk } from "sandbox-agent/computesdk";
