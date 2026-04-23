@@ -7,56 +7,67 @@ import {
 import { match } from "ts-pattern";
 import * as CreateNamespaceForm from "@/app/forms/create-namespace-form";
 import { Flex, Frame } from "@/components";
+import { useCloudDataProvider } from "@/components/actors";
 import { features } from "@/lib/features";
 
-const useDataProvider = () => {
+const useCreateNamespace = ({ project: projectProp }: { project?: string }) => {
+	const queryClient = useQueryClient();
+	const navigate = useNavigate();
+	const params = useParams({ strict: false });
+
 	if (features.multitenancy) {
 		// biome-ignore lint/correctness/useHookAtTopLevel: guarded by build constant
-		return useRouteContext({
-			from: "/_context/orgs/$organization/projects/$project",
-			select: (ctx) => ctx.dataProvider,
+		const orgDataProvider = useCloudDataProvider();
+		const targetProject = projectProp ?? params.project!;
+		const organization = params.organization!;
+
+		// biome-ignore lint/correctness/useHookAtTopLevel: guarded by build constant
+		return useMutation({
+			mutationKey: ["namespaces"],
+			mutationFn: async (data: { displayName: string }) => {
+				const response = await orgDataProvider.client.namespaces.create(
+					targetProject,
+					{ displayName: data.displayName, org: organization },
+				);
+				return {
+					id: response.namespace.id,
+					name: response.namespace.name,
+					displayName: response.namespace.displayName,
+					createdAt: new Date(response.namespace.createdAt).toISOString(),
+				};
+			},
+			onSuccess: async (data) => {
+				await queryClient.refetchQueries(
+					orgDataProvider.currentOrgProjectNamespacesQueryOptions({
+						project: targetProject,
+					}),
+				);
+				await navigate({
+					to: "/orgs/$organization/projects/$project/ns/$namespace",
+					params: {
+						organization,
+						project: targetProject,
+						namespace: data.name,
+					},
+				});
+			},
 		});
 	}
+
 	// biome-ignore lint/correctness/useHookAtTopLevel: guarded by build constant
-	return match(useRouteContext({ from: "/_context" }))
+	const dataProvider = match(useRouteContext({ from: "/_context" }))
 		.with({ __type: "engine" }, (ctx) => ctx.dataProvider)
 		.otherwise(() => {
 			throw new Error("Invalid context");
 		});
-};
 
-const useCreateNamespace = () => {
-	const queryClient = useQueryClient();
-	const navigate = useNavigate();
-
-	const params = useParams({ strict: false });
-
-	const dataProvider = useDataProvider();
-
+	// biome-ignore lint/correctness/useHookAtTopLevel: guarded by build constant
 	return useMutation(
 		dataProvider.createNamespaceMutationOptions({
 			onSuccess: async (data) => {
-				// Invalidate all queries to ensure fresh data
 				await queryClient.refetchQueries(
 					dataProvider.namespacesQueryOptions(),
 				);
-
-				if (features.multitenancy) {
-					if (!params.project || !params.organization) {
-						throw new Error("Missing required parameters");
-					}
-					// Navigate to the newly created namespace
-					await navigate({
-						to: "/orgs/$organization/projects/$project/ns/$namespace",
-						params: {
-							organization: params.organization,
-							project: params.project,
-							namespace: data.name,
-						},
-					});
-					return;
-				}
-
 				await navigate({
 					to: "/ns/$namespace",
 					params: { namespace: data.name },
@@ -66,8 +77,12 @@ const useCreateNamespace = () => {
 	);
 };
 
-export default function CreateNamespacesFrameContent() {
-	const { mutateAsync } = useCreateNamespace();
+export default function CreateNamespacesFrameContent({
+	project,
+}: {
+	project?: string;
+}) {
+	const { mutateAsync } = useCreateNamespace({ project });
 
 	return (
 		<CreateNamespaceForm.Form

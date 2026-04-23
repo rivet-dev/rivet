@@ -536,6 +536,7 @@ function NamespaceList({
 											search: (old) => ({
 												...old,
 												modal: "create-ns",
+												project: project,
 											}),
 										});
 									}}
@@ -600,6 +601,7 @@ function NamespaceList({
 									search: (old) => ({
 										...old,
 										modal: "create-ns",
+										project: project,
 									}),
 								});
 							}}
