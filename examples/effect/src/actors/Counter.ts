@@ -38,8 +38,6 @@ export const Counter = Actor.make("Counter", {
 
 // --- Implementation ---
 
-const MAX_COUNT = 1_000_000
-
 // Counter.toLayer produces a Layer that registers this actor
 // with whatever registry is in context. The Effect inside runs
 // once per actor instance (not once per action call), so
@@ -67,8 +65,8 @@ export const CounterLive = Counter.toLayer(
           const next = yield* Ref.updateAndGet(state, (s) => ({
             count: s.count + input.amount,
           }))
-          if (next.count > MAX_COUNT) {
-            return yield* new CounterOverflow({ limit: MAX_COUNT })
+          if (next.count > 20) {
+            return yield* new CounterOverflow({ limit: 20 })
           }
           yield* PubSub.publish(events.countChanged, next.count)
           return next.count
