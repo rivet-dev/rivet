@@ -661,7 +661,7 @@ export class ActorConnRaw {
 			const { group, code, message, metadata, actionId } =
 				response.body.val;
 
-			if (actionId) {
+			if (actionId !== null) {
 				const inFlight = this.#takeActionInFlight(Number(actionId));
 				this.#invalidateActorIfStale(group, code);
 

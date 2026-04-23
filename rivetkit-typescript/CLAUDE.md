@@ -30,6 +30,8 @@
 
 For client-facing gateway operations, use the shared `GatewayTarget` type from `packages/rivetkit/src/engine-client/driver.ts` instead of ad hoc `string | ActorQuery` unions. The engine control client should preserve direct actor ID behavior and resolve `ActorQuery` targets inside the client implementation so higher-level client flows can widen their target type without duplicating query-resolution logic.
 
+Actor-connect protocol `actionId` values are nullable, and `0` is a valid action ID. Treat only `null` as a connection-level error.
+
 Query-backed remote gateway URLs use `rvt-*` query parameters: `/gateway/{name}/{path}?rvt-namespace=...&rvt-method=...&rvt-key=...`. The actor name is a clean path segment, and all routing params are standard query parameters with the `rvt-` prefix. The known `rvt-*` params are: `rvt-namespace`, `rvt-method`, `rvt-runner`, `rvt-key`, `rvt-input`, `rvt-region`, `rvt-crash-policy`, `rvt-token`. `rvt-runner` is required for `getOrCreate` and disallowed for `get`. For multi-component keys, use a single comma-separated `rvt-key` param (e.g. `rvt-key=tenant,room`). Use `URLSearchParams` to build and parse query strings.
 
 Keep `buildGatewayUrl()` query-backed for `get()` and `getOrCreate()` handles instead of pre-resolving to an actor ID. Local `getGatewayUrl()` flows should exercise the shared `actorGateway` query param parser on the served runtime router path, while direct actor ID targets still use `/gateway/{actorId}`.

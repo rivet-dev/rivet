@@ -831,6 +831,9 @@ pub(super) fn actor_connect_error_websocket_handler(
 						"failed to send actor websocket connection error"
 					);
 				}
+				// Ensure the structured error frame is queued before the close
+				// frame terminates the client connection.
+				sender.flush().await;
 				sender.close(Some(1011), Some(close_reason));
 			})
 		})),

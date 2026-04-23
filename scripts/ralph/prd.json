@@ -155,7 +155,7 @@
       ],
       "priority": 8,
       "passes": false,
-      "notes": "DT-008 verification failed on 2026-04-23T07:02Z. Fast bare sweep: 281 passed, 6 failed, 577 skipped. Slow bare sweep: 67 passed, 1 failed, 166 skipped. Follow-up stories added as DT-011..DT-016. Rechecked full-file set on 2026-04-23T12:14Z: 239 passed, 4 failed, 33 skipped. Existing DT-014 covers conn-error-serialization; new follow-up stories added as DT-045 and DT-046. Rechecked on 2026-04-23T14:32Z: 241 passed, 2 failed, 33 skipped. Rechecked on 2026-04-23T14:55Z: 240 passed, 3 failed, 33 skipped. Rechecked on 2026-04-23T15:18Z: 242 passed, 1 failed, 33 skipped. DT-048 conn-error-serialization passed across bare/CBOR/JSON; DT-047 actor-conn `isConnected should be false before connection opens` reproduced under static/bare."
+      "notes": "DT-008 verification failed on 2026-04-23T07:02Z. Fast bare sweep: 281 passed, 6 failed, 577 skipped. Slow bare sweep: 67 passed, 1 failed, 166 skipped. Follow-up stories added as DT-011..DT-016. Rechecked full-file set on 2026-04-23T12:14Z: 239 passed, 4 failed, 33 skipped. Existing DT-014 covers conn-error-serialization; new follow-up stories added as DT-045 and DT-046. Rechecked on 2026-04-23T14:32Z: 241 passed, 2 failed, 33 skipped. Rechecked on 2026-04-23T14:55Z: 240 passed, 3 failed, 33 skipped. Rechecked on 2026-04-23T15:18Z: 242 passed, 1 failed, 33 skipped. DT-048 conn-error-serialization passed across bare/CBOR/JSON; DT-047 actor-conn `isConnected should be false before connection opens` reproduced under static/bare. Rechecked on 2026-04-23T15:29Z: 242 passed, 1 failed, 33 skipped. DT-048 conn-error-serialization bare `createConnState preserves group/code` timed out again under the six-file verifier; DT-048 reopened."
     },
     {
       "id": "DT-009",
@@ -873,7 +873,7 @@
       ],
       "priority": 46,
       "passes": true,
-      "notes": "Completed on 2026-04-23T15:18Z: gateway actor-connect now drains tunnel messages already queued between the envoy open ack and the websocket forwarding task. That preserves immediate setup-error close frames, so createConnState errors reject queued actions instead of hanging. Targeted bare/CBOR/JSON createConnState checks passed, full `conn-error-serialization.test.ts` passed, and the six-file DT-008 verifier showed `conn-error-serialization` green across bare/CBOR/JSON. The combined verifier still exits red because DT-047 actor-conn `isConnected should be false before connection opens` reproduced under static/bare."
+      "notes": "Completed on 2026-04-23T16:10Z: added an envoy WebSocketSender flush barrier and used it before actor-connect setup-error close frames so the structured `Error` frame reaches pending connection actions before close. Also fixed client actor-connect error routing so `actionId: 0` is treated as a valid action error and only `null` means connection-level error. Targeted JSON createConnState, full conn-error-serialization, and the six-file DT-008 verifier all passed; combined verifier finished with 243 passed and 33 skipped."
     },
     {
       "id": "DT-049",

@@ -655,6 +655,9 @@ fn spawn_ws_outgoing_task(
 					)
 					.await;
 				}
+				crate::config::WsOutgoing::Flush { tx } => {
+					let _ = tx.send(());
+				}
 				crate::config::WsOutgoing::Close { code, reason } => {
 					ws_send(
 						&shared,
