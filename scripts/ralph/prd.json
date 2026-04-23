@@ -320,8 +320,8 @@
         "Tests pass"
       ],
       "priority": 17,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Completed on 2026-04-23: clean run exits now stay live until Stop drives SleepGrace/DestroyGrace, with new core and driver coverage proving onSleep/onDestroy still fire exactly once after run returns."
     },
     {
       "id": "DT-018",

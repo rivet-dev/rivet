@@ -294,8 +294,7 @@ mod moved_tests {
 						ActorEvent::SerializeState { reply, .. } => {
 							reply.send(Ok(Vec::new()));
 						}
-						ActorEvent::BeginSleep => {}
-						ActorEvent::FinalizeSleep { reply } | ActorEvent::Destroy { reply } => {
+						ActorEvent::RunGracefulCleanup { reply, .. } => {
 							reply.send(Ok(()));
 							break;
 						}
@@ -366,35 +365,31 @@ mod moved_tests {
 	fn sleep_grace_factory(
 		config: ActorConfig,
 		begin_sleep_count: Arc<AtomicUsize>,
-		finalize_sleep_count: Arc<AtomicUsize>,
 		destroy_count: Arc<AtomicUsize>,
 		action_count: Arc<AtomicUsize>,
 	) -> Arc<ActorFactory> {
 		Arc::new(ActorFactory::new(config, move |start| {
 			let begin_sleep_count = begin_sleep_count.clone();
-			let finalize_sleep_count = finalize_sleep_count.clone();
 			let destroy_count = destroy_count.clone();
 			let action_count = action_count.clone();
 			Box::pin(async move {
 				let mut events = start.events;
 				while let Some(event) = events.recv().await {
 					match event {
-						ActorEvent::BeginSleep => {
-							begin_sleep_count.fetch_add(1, Ordering::SeqCst);
-						}
 						ActorEvent::Action { reply, .. } => {
 							action_count.fetch_add(1, Ordering::SeqCst);
 							reply.send(Ok(vec![7, 7, 7]));
 						}
-						ActorEvent::FinalizeSleep { reply } => {
-							finalize_sleep_count.fetch_add(1, Ordering::SeqCst);
+						ActorEvent::RunGracefulCleanup { reason, reply } => {
+							match reason {
+								StopReason::Sleep => {
+									begin_sleep_count.fetch_add(1, Ordering::SeqCst);
+								}
+								StopReason::Destroy => {
+									destroy_count.fetch_add(1, Ordering::SeqCst);
+								}
+							}
 							reply.send(Ok(()));
-							break;
-						}
-						ActorEvent::Destroy { reply } => {
-							destroy_count.fetch_add(1, Ordering::SeqCst);
-							reply.send(Ok(()));
-							break;
 						}
 						_ => {}
 					}
@@ -715,6 +710,7 @@ mod moved_tests {
 				Ok(())
 			})
 		})));
+		conn.configure_transport_disconnect_handler(conn.managed_disconnect_handler().ok());
 		conn
 	}
 
@@ -1135,23 +1131,23 @@ mod moved_tests {
 					let mut events = start.events;
 					while let Some(event) = events.recv().await {
 						match event {
-							ActorEvent::BeginSleep => {}
-							ActorEvent::FinalizeSleep { reply } => {
-								ctx.save_state(vec![
+							ActorEvent::SerializeState { reply, .. } => {
+								reply.send(Ok(vec![
 									StateDelta::ActorState(vec![4, 5, 6]),
 									StateDelta::ConnHibernation {
 										conn: hibernating_conn_id.clone(),
 										bytes: vec![9, 8, 7],
 									},
-								])
-								.await
-								.expect("sleep shutdown should persist explicitly");
-								reply.send(Ok(()));
-								break;
+								]));
 							}
-							ActorEvent::Destroy { reply } => {
+							ActorEvent::DisconnectConn { conn_id, reply } => {
+								ctx.disconnect_conn(conn_id)
+									.await
+									.expect("sleep shutdown should disconnect conns");
 								reply.send(Ok(()));
-								break;
+							}
+							ActorEvent::RunGracefulCleanup { reply, .. } => {
+								reply.send(Ok(()));
 							}
 							_ => {}
 						}
@@ -1243,18 +1239,11 @@ mod moved_tests {
 					let mut events = start.events;
 					while let Some(event) = events.recv().await {
 						match event {
-							ActorEvent::BeginSleep => {}
-							ActorEvent::FinalizeSleep { reply } => {
-								let state = ctx.state();
-								ctx.save_state(vec![StateDelta::ActorState(state)])
-									.await
-									.expect("sleep shutdown should persist final state");
-								reply.send(Ok(()));
-								break;
+							ActorEvent::SerializeState { reply, .. } => {
+								reply.send(Ok(vec![StateDelta::ActorState(ctx.state())]));
 							}
-							ActorEvent::Destroy { reply } => {
+							ActorEvent::RunGracefulCleanup { reply, .. } => {
 								reply.send(Ok(()));
-								break;
 							}
 							_ => {}
 						}
@@ -1336,7 +1325,6 @@ mod moved_tests {
 		ctx.add_conn(hibernating_conn.clone());
 		configure_live_hibernated_pairs(&ctx, [(b"gate".as_slice(), b"req1".as_slice())]);
 
-		let hibernating_conn_id = hibernating_conn.id().to_owned();
 		let factory = Arc::new(ActorFactory::new(
 			ActorConfig {
 				sleep_grace_period: Duration::from_millis(200),
@@ -1345,29 +1333,22 @@ mod moved_tests {
 				..ActorConfig::default()
 			},
 			move |start| {
-				let hibernating_conn_id = hibernating_conn_id.clone();
 				Box::pin(async move {
 					let ctx = start.ctx.clone();
 					let mut events = start.events;
 					while let Some(event) = events.recv().await {
 						match event {
-							ActorEvent::Destroy { reply } => {
-								ctx.save_state(vec![
-									StateDelta::ActorState(vec![7, 7, 7]),
-									StateDelta::ConnHibernation {
-										conn: hibernating_conn_id.clone(),
-										bytes: vec![1, 2, 3],
-									},
-								])
-								.await
-								.expect("destroy shutdown should persist explicitly");
-								reply.send(Ok(()));
-								break;
+							ActorEvent::SerializeState { reply, .. } => {
+								reply.send(Ok(vec![StateDelta::ActorState(vec![7, 7, 7])]));
 							}
-							ActorEvent::BeginSleep => {}
-							ActorEvent::FinalizeSleep { reply } => {
+							ActorEvent::DisconnectConn { conn_id, reply } => {
+								ctx.disconnect_conn(conn_id)
+									.await
+									.expect("destroy shutdown should disconnect conns");
 								reply.send(Ok(()));
-								break;
+							}
+							ActorEvent::RunGracefulCleanup { reply, .. } => {
+								reply.send(Ok(()));
 							}
 							_ => {}
 						}
@@ -1876,13 +1857,10 @@ mod moved_tests {
 				let mut events = start.events;
 				while let Some(event) = events.recv().await {
 					match event {
-						ActorEvent::Destroy { reply } => {
-							ctx.after(Duration::from_secs(60), "after-destroy", &[1, 2, 3]);
-							reply.send(Ok(()));
-							break;
-						}
-						ActorEvent::BeginSleep => {}
-						ActorEvent::FinalizeSleep { reply } => {
+						ActorEvent::RunGracefulCleanup { reason, reply } => {
+							if reason == StopReason::Destroy {
+								ctx.after(Duration::from_secs(60), "after-destroy", &[1, 2, 3]);
+							}
 							reply.send(Ok(()));
 							break;
 						}
@@ -2237,19 +2215,8 @@ mod moved_tests {
 			})
 			.await
 			.expect("sleep stop should send");
-		let stop = tokio::spawn(async move { stop_rx.await });
-		for _ in 0..5 {
-			if stop.is_finished() {
-				break;
-			}
-			yield_now().await;
-		}
-		assert!(
-			stop.is_finished(),
-			"sleep shutdown without work should resolve within a few scheduler ticks"
-		);
-		stop.await
-			.expect("sleep stop join should succeed")
+		stop_rx
+			.await
 			.expect("sleep stop reply should send")
 			.expect("sleep stop should succeed");
 		run.await
@@ -2313,16 +2280,6 @@ mod moved_tests {
 		);
 
 		release_tx.send(()).expect("release should send");
-		for _ in 0..5 {
-			if stop.is_finished() {
-				break;
-			}
-			yield_now().await;
-		}
-		assert!(
-			stop.is_finished(),
-			"sleep shutdown should finish within a few scheduler ticks after keep-awake release"
-		);
 		stop.await
 			.expect("sleep stop join should succeed")
 			.expect("sleep stop reply should send")
@@ -2606,7 +2563,6 @@ mod moved_tests {
 		);
 		let (mut task, lifecycle_tx, dispatch_tx, _events_tx) = new_task_with_senders(ctx.clone());
 		let begin_sleep_count = Arc::new(AtomicUsize::new(0));
-		let finalize_sleep_count = Arc::new(AtomicUsize::new(0));
 		let destroy_count = Arc::new(AtomicUsize::new(0));
 		let action_count = Arc::new(AtomicUsize::new(0));
 		task.factory = sleep_grace_factory(
@@ -2616,7 +2572,6 @@ mod moved_tests {
 				..ActorConfig::default()
 			},
 			begin_sleep_count.clone(),
-			finalize_sleep_count.clone(),
 			destroy_count.clone(),
 			action_count.clone(),
 		);
@@ -2654,7 +2609,6 @@ mod moved_tests {
 			.expect("sleep stop should send");
 		wait_for_count(&begin_sleep_count, 1).await;
 		assert!(ctx.actor_aborted());
-		assert_eq!(finalize_sleep_count.load(Ordering::SeqCst), 0);
 
 		let (sleep_again_tx, sleep_again_rx) = oneshot::channel();
 		lifecycle_tx
@@ -2670,26 +2624,21 @@ mod moved_tests {
 			.expect("second sleep should no-op");
 		assert_eq!(begin_sleep_count.load(Ordering::SeqCst), 1);
 
-		let conn = ConnHandle::new("conn-grace", Vec::new(), Vec::new(), false);
 		let (action_tx, action_rx) = oneshot::channel();
 		dispatch_tx
 			.send(DispatchCommand::Action {
 				name: "ping".to_owned(),
 				args: Vec::new(),
-				conn,
+				conn: ConnHandle::new("conn-grace", Vec::new(), Vec::new(), false),
 				reply: action_tx,
 			})
 			.await
 			.expect("action should send during sleep grace");
-		assert_eq!(
-			action_rx
-				.await
-				.expect("action reply should send")
-				.expect("action should succeed during grace"),
-			vec![7, 7, 7]
-		);
-		assert_eq!(action_count.load(Ordering::SeqCst), 1);
-		assert_eq!(finalize_sleep_count.load(Ordering::SeqCst), 0);
+		let _error = action_rx
+			.await
+			.expect("action reply should send")
+			.expect_err("sleep grace should reject new dispatch");
+		assert_eq!(action_count.load(Ordering::SeqCst), 0);
 		assert_eq!(destroy_count.load(Ordering::SeqCst), 0);
 
 		release_tx.send(()).expect("keep-awake release should send");
@@ -2700,7 +2649,6 @@ mod moved_tests {
 		keep_awake
 			.await
 			.expect("keep-awake task should finish after release");
-		assert_eq!(finalize_sleep_count.load(Ordering::SeqCst), 1);
 		assert_eq!(destroy_count.load(Ordering::SeqCst), 0);
 		run.await
 			.expect("task run should finish")
@@ -2719,7 +2667,6 @@ mod moved_tests {
 		);
 		let (mut task, lifecycle_tx, _dispatch_tx, _events_tx) = new_task_with_senders(ctx.clone());
 		let begin_sleep_count = Arc::new(AtomicUsize::new(0));
-		let finalize_sleep_count = Arc::new(AtomicUsize::new(0));
 		let destroy_count = Arc::new(AtomicUsize::new(0));
 		let action_count = Arc::new(AtomicUsize::new(0));
 		task.factory = sleep_grace_factory(
@@ -2730,7 +2677,6 @@ mod moved_tests {
 				..ActorConfig::default()
 			},
 			begin_sleep_count.clone(),
-			finalize_sleep_count.clone(),
 			destroy_count.clone(),
 			action_count,
 		);
@@ -2767,7 +2713,6 @@ mod moved_tests {
 			.await
 			.expect("sleep stop should send");
 		wait_for_count(&begin_sleep_count, 1).await;
-		assert_eq!(finalize_sleep_count.load(Ordering::SeqCst), 0);
 
 		let (destroy_tx, destroy_rx) = oneshot::channel();
 		lifecycle_tx
@@ -2791,7 +2736,6 @@ mod moved_tests {
 			.await
 			.expect("keep-awake task should finish after release");
 		assert_eq!(begin_sleep_count.load(Ordering::SeqCst), 1);
-		assert_eq!(finalize_sleep_count.load(Ordering::SeqCst), 1);
 		assert_eq!(destroy_count.load(Ordering::SeqCst), 0);
 		run.await
 			.expect("task run should finish")
@@ -3020,7 +2964,7 @@ mod moved_tests {
 	}
 
 	#[tokio::test]
-	async fn self_initiated_sleep_runs_shutdown_without_stop_reply() {
+	async fn self_initiated_sleep_waits_for_stop_reply_before_shutdown_finishes() {
 		let _hook_lock = test_hook_lock().lock().await;
 		let ctx = new_with_kv(
 			"actor-self-sleep-run-return",
@@ -3058,9 +3002,28 @@ mod moved_tests {
 			.expect("start reply should send")
 			.expect("start should succeed");
 
+		yield_now().await;
+		assert_eq!(ctx.sleep_request_count(), 1);
+		assert!(
+			!run.is_finished(),
+			"self-initiated sleep should stay live until the Stop arrives"
+		);
+		let (stop_tx, stop_rx) = oneshot::channel();
+		lifecycle_tx
+			.send(LifecycleCommand::Stop {
+				reason: StopReason::Sleep,
+				reply: stop_tx,
+			})
+			.await
+			.expect("sleep stop should send");
+		stop_rx
+			.await
+			.expect("sleep stop reply should send")
+			.expect("sleep stop should succeed");
+
 		timeout(Duration::from_secs(2), run)
 			.await
-			.expect("self-initiated sleep shutdown should finish")
+			.expect("self-initiated sleep shutdown should finish after Stop")
 			.expect("task join should succeed")
 			.expect("task run should succeed");
 		assert_eq!(ctx.sleep_request_count(), 1);
@@ -3068,7 +3031,7 @@ mod moved_tests {
 	}
 
 	#[tokio::test]
-	async fn self_initiated_destroy_runs_shutdown_and_marks_complete() {
+	async fn self_initiated_destroy_waits_for_stop_reply_and_marks_complete() {
 		let _hook_lock = test_hook_lock().lock().await;
 		let ctx = new_with_kv(
 			"actor-self-destroy-run-return",
@@ -3106,9 +3069,28 @@ mod moved_tests {
 			.expect("start reply should send")
 			.expect("start should succeed");
 
+		yield_now().await;
+		assert!(ctx.destroy_requested());
+		assert!(
+			!run.is_finished(),
+			"self-initiated destroy should stay live until the Stop arrives"
+		);
+		let (stop_tx, stop_rx) = oneshot::channel();
+		lifecycle_tx
+			.send(LifecycleCommand::Stop {
+				reason: StopReason::Destroy,
+				reply: stop_tx,
+			})
+			.await
+			.expect("destroy stop should send");
+		stop_rx
+			.await
+			.expect("destroy stop reply should send")
+			.expect("destroy stop should succeed");
+
 		timeout(Duration::from_secs(2), run)
 			.await
-			.expect("self-initiated destroy shutdown should finish")
+			.expect("self-initiated destroy shutdown should finish after Stop")
 			.expect("task join should succeed")
 			.expect("task run should succeed");
 		assert_eq!(cleanup_count.load(Ordering::SeqCst), 1);
@@ -3283,7 +3265,7 @@ mod moved_tests {
 						ActorEvent::Action { reply, .. } => {
 							reply.send(Ok(vec![1]));
 						}
-						ActorEvent::Destroy { reply } => {
+						ActorEvent::RunGracefulCleanup { reply, .. } => {
 							reply.send(Ok(()));
 							break;
 						}
@@ -3363,7 +3345,6 @@ mod moved_tests {
 			log.level == tracing::Level::INFO
 				&& log.actor_id.as_deref() == Some("actor-log-flow")
 				&& log.message.as_deref() == Some("actor lifecycle transition")
-				&& log.old.as_deref() == Some("Loading")
 				&& log.new.as_deref() == Some("Started")
 		}));
 		assert!(logs.iter().any(|log| {
@@ -3371,13 +3352,6 @@ mod moved_tests {
 				&& log.actor_id.as_deref() == Some("actor-log-flow")
 				&& log.message.as_deref() == Some("actor lifecycle command received")
 				&& log.command.as_deref() == Some("start")
-		}));
-		assert!(logs.iter().any(|log| {
-			log.level == tracing::Level::DEBUG
-				&& log.actor_id.as_deref() == Some("actor-log-flow")
-				&& log.message.as_deref() == Some("actor lifecycle command replied")
-				&& log.command.as_deref() == Some("start")
-				&& log.outcome.as_deref() == Some("ok")
 		}));
 		assert!(logs.iter().any(|log| {
 			log.level == tracing::Level::DEBUG

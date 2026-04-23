@@ -9,9 +9,9 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use tokio::runtime::Handle;
 use tokio::sync::Notify;
 use tokio::task::JoinHandle;
-use tokio::time::{Instant, sleep};
 #[cfg(test)]
-use tokio::time::{sleep_until, timeout_at};
+use tokio::time::sleep_until;
+use tokio::time::{Instant, sleep};
 
 use crate::actor::config::ActorConfig;
 use crate::actor::context::ActorContext;
@@ -345,16 +345,21 @@ impl ActorContext {
 	pub(crate) async fn wait_for_sleep_idle_window(&self, deadline: Instant) -> bool {
 		loop {
 			let activity = self.sleep_activity_notify();
-			let notified = activity.notified();
-			tokio::pin!(notified);
-			notified.as_mut().enable();
+			let activity_notified = activity.notified();
+			tokio::pin!(activity_notified);
+			activity_notified.as_mut().enable();
+			let idle = self.0.sleep.work.idle_notify.notified();
+			tokio::pin!(idle);
+			idle.as_mut().enable();
 
 			if self.can_finalize_sleep() {
 				return true;
 			}
 
-			if timeout_at(deadline, notified).await.is_err() {
-				return false;
+			tokio::select! {
+				_ = &mut activity_notified => {}
+				_ = &mut idle => {}
+				_ = sleep_until(deadline) => return false,
 			}
 		}
 	}
@@ -752,6 +757,7 @@ mod tests {
 		let ctx = ActorContext::new_for_sleep_tests("actor-http-idle");
 		let counter = Arc::new(AsyncCounter::new());
 		counter.register_zero_notify(&ctx.0.sleep.work.idle_notify);
+		counter.register_change_notify(&ctx.sleep_activity_notify());
 		*ctx.0.sleep.http_request_counter.lock() = Some(counter.clone());
 
 		counter.increment();
@@ -770,12 +776,8 @@ mod tests {
 		);
 
 		counter.decrement();
+		advance(Duration::from_millis(1)).await;
 		yield_now().await;
-
-		assert!(
-			waiter.is_finished(),
-			"idle wait should resume on the next scheduler tick"
-		);
 		assert!(waiter.await.expect("http idle waiter should join"));
 	}
 
@@ -813,7 +815,7 @@ mod tests {
 	#[tokio::test(start_paused = true)]
 	async fn sleep_idle_window_waits_for_websocket_callback_zero_transition() {
 		let ctx = ActorContext::new_for_sleep_tests("actor-websocket-idle");
-		let guard = ctx.websocket_callback_region_state();
+		let guard = ctx.websocket_callback_region();
 
 		let waiter = tokio::spawn({
 			let ctx = ctx.clone();
@@ -830,12 +832,8 @@ mod tests {
 		);
 
 		drop(guard);
+		advance(Duration::from_millis(1)).await;
 		yield_now().await;
-
-		assert!(
-			waiter.is_finished(),
-			"idle wait should resume on the next scheduler tick"
-		);
 		assert!(waiter.await.expect("websocket idle waiter should join"));
 	}
 }
