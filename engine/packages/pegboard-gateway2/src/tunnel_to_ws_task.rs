@@ -23,54 +23,44 @@ pub async fn task(
 	mut stopped_sub: message::SubscriptionHandle<pegboard::workflows::actor2::Stopped>,
 	mut msg_rx: mpsc::Receiver<protocol::ToRivetTunnelMessageKind>,
 	mut drop_rx: watch::Receiver<Option<MsgGcReason>>,
+	initial_messages: Vec<protocol::ToRivetTunnelMessageKind>,
 	can_hibernate: bool,
 	egress_bytes: Arc<AtomicU64>,
 	mut tunnel_to_ws_abort_rx: watch::Receiver<()>,
 ) -> Result<LifecycleResult> {
+	let mut initial_messages = initial_messages.into_iter();
+
 	loop {
+		if let Some(msg) = initial_messages.next() {
+			if let Some(result) = handle_tunnel_message(
+				&shared_state,
+				&client_ws,
+				request_id,
+				can_hibernate,
+				&egress_bytes,
+				msg,
+			)
+			.await?
+			{
+				return Ok(result);
+			}
+			continue;
+		}
+
 		tokio::select! {
 			res = msg_rx.recv() => {
 				if let Some(msg) = res {
-					match msg {
-						protocol::ToRivetTunnelMessageKind::ToRivetWebSocketMessage(ws_msg) => {
-							tracing::trace!(
-								request_id=%protocol::util::id_to_string(&request_id),
-								data_len=ws_msg.data.len(),
-								binary=ws_msg.binary,
-								"forwarding websocket message to client"
-							);
-							let msg = if ws_msg.binary {
-								Message::Binary(ws_msg.data.into())
-							} else {
-								Message::Text(
-									String::from_utf8_lossy(&ws_msg.data).into_owned().into(),
-								)
-							};
-
-							egress_bytes.fetch_add(msg.len() as u64, Ordering::AcqRel);
-							client_ws.send(msg).await?;
-						}
-						protocol::ToRivetTunnelMessageKind::ToRivetWebSocketMessageAck(ack) => {
-							tracing::debug!(
-								request_id=%protocol::util::id_to_string(&request_id),
-								ack_index=?ack.index,
-								"received WebSocketMessageAck from envoy"
-							);
-							shared_state
-								.ack_pending_websocket_messages(request_id, ack.index)
-								.await?;
-						}
-						protocol::ToRivetTunnelMessageKind::ToRivetWebSocketClose(close) => {
-							tracing::debug!(?close, "server closed websocket");
-
-							if can_hibernate && close.hibernate {
-								return Err(WebSocketServiceHibernate.build());
-							} else {
-								// Successful closure
-								return Ok(LifecycleResult::ServerClose(close));
-							}
-						}
-						_ => {}
+					if let Some(result) = handle_tunnel_message(
+						&shared_state,
+						&client_ws,
+						request_id,
+						can_hibernate,
+						&egress_bytes,
+						msg,
+					)
+					.await?
+					{
+						return Ok(result);
 					}
 				} else {
 					tracing::debug!("tunnel sub closed");
@@ -96,4 +86,54 @@ pub async fn task(
 			}
 		}
 	}
+}
+
+async fn handle_tunnel_message(
+	shared_state: &SharedState,
+	client_ws: &WebSocketHandle,
+	request_id: protocol::RequestId,
+	can_hibernate: bool,
+	egress_bytes: &AtomicU64,
+	msg: protocol::ToRivetTunnelMessageKind,
+) -> Result<Option<LifecycleResult>> {
+	match msg {
+		protocol::ToRivetTunnelMessageKind::ToRivetWebSocketMessage(ws_msg) => {
+			tracing::trace!(
+				request_id=%protocol::util::id_to_string(&request_id),
+				data_len=ws_msg.data.len(),
+				binary=ws_msg.binary,
+				"forwarding websocket message to client"
+			);
+			let msg = if ws_msg.binary {
+				Message::Binary(ws_msg.data.into())
+			} else {
+				Message::Text(String::from_utf8_lossy(&ws_msg.data).into_owned().into())
+			};
+
+			egress_bytes.fetch_add(msg.len() as u64, Ordering::AcqRel);
+			client_ws.send(msg).await?;
+		}
+		protocol::ToRivetTunnelMessageKind::ToRivetWebSocketMessageAck(ack) => {
+			tracing::debug!(
+				request_id=%protocol::util::id_to_string(&request_id),
+				ack_index=?ack.index,
+				"received WebSocketMessageAck from envoy"
+			);
+			shared_state
+				.ack_pending_websocket_messages(request_id, ack.index)
+				.await?;
+		}
+		protocol::ToRivetTunnelMessageKind::ToRivetWebSocketClose(close) => {
+			tracing::debug!(?close, "server closed websocket");
+
+			if can_hibernate && close.hibernate {
+				return Err(WebSocketServiceHibernate.build());
+			}
+
+			return Ok(Some(LifecycleResult::ServerClose(close)));
+		}
+		_ => {}
+	}
+
+	Ok(None)
 }

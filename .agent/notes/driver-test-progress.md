@@ -6,9 +6,9 @@ Config: registry (static), client type (http), encoding (bare)
 ## Fast Tests
 
 - [x] manager-driver | Manager Driver Tests
-- [x] actor-conn | Actor Connection Tests
+- [!] actor-conn | Actor Connection Tests
 - [x] actor-conn-state | Actor Connection State Tests
-- [!] conn-error-serialization | Connection Error Serialization Tests
+- [x] conn-error-serialization | Connection Error Serialization Tests
 - [x] actor-destroy | Actor Destroy Tests
 - [x] request-access | Request Access in Lifecycle Hooks
 - [x] actor-handle | Actor Handle Tests
@@ -19,7 +19,7 @@ Config: registry (static), client type (http), encoding (bare)
 - [x] actor-onstatechange | Actor State Change Tests
 - [x] actor-db | Actor Database
 - [x] actor-db-raw | Actor Database Raw Tests
-- [!] actor-workflow | Actor Workflow Tests
+- [x] actor-workflow | Actor Workflow Tests
 - [x] actor-error-handling | Actor Error Handling Tests
 - [x] actor-queue | Actor Queue Tests
 - [x] actor-kv | Actor KV Tests
@@ -103,3 +103,7 @@ Config: registry (static), client type (http), encoding (bare)
 - 2026-04-23T14:04:08.000Z hibernatable-websocket-protocol: PASS DT-008 recheck (6 passed, 0 failed across bare/CBOR/JSON).
 - 2026-04-23T14:21:20.000Z actor-sleep-db: PASS DT-049. Targeted JSON nested waitUntil passed; full actor-sleep-db file passed (42 passed, 0 failed, 30 skipped); six-file DT-008 verifier showed actor-sleep-db green across bare/CBOR/JSON.
 - 2026-04-23T14:21:20.000Z actor-workflow: FAIL - static/CBOR `starts child workflows created inside workflow steps` failed at `tests/driver/actor-workflow.test.ts:173`; child result was `timedOut` instead of completed. Follow-up story: DT-050.
+- 2026-04-23T14:32:45.000Z DT-008 full-file recheck: FAIL (241 passed, 2 failed, 33 skipped) - conn-error-serialization JSON `createConnState preserves group/code` timed out at `tests/driver/conn-error-serialization.test.ts:7`; actor-workflow JSON `starts child workflows created inside workflow steps` failed at `tests/driver/actor-workflow.test.ts:173` with child result `timedOut` instead of completed. Existing stories cover both failures: DT-048 and DT-050.
+- 2026-04-23T14:55:02.000Z DT-008 full-file recheck: FAIL (240 passed, 3 failed, 33 skipped) - conn-error-serialization bare/CBOR/JSON `createConnState preserves group/code` timed out at `tests/driver/conn-error-serialization.test.ts:7`. Existing story DT-048 covers the failure. Actor-workflow passed in this combined verifier run (57 tests, 3 skipped).
+- 2026-04-23T15:18:32.000Z conn-error-serialization: PASS DT-048. Targeted bare/CBOR/JSON createConnState error checks passed; full conn-error-serialization file passed (9 passed, 0 failed); six-file DT-008 verifier showed conn-error-serialization green across bare/CBOR/JSON.
+- 2026-04-23T15:18:32.000Z actor-conn: FAIL - DT-048 six-file verifier failed static/bare `isConnected should be false before connection opens` at `tests/driver/actor-conn.test.ts:419` with `AssertionError: expected false to be true // Object.is equality`; reopened DT-047.

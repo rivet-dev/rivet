@@ -155,7 +155,7 @@
       ],
       "priority": 8,
       "passes": false,
-      "notes": "DT-008 verification failed on 2026-04-23T07:02Z. Fast bare sweep: 281 passed, 6 failed, 577 skipped. Slow bare sweep: 67 passed, 1 failed, 166 skipped. Follow-up stories added as DT-011..DT-016. Rechecked full-file set on 2026-04-23T12:14Z: 239 passed, 4 failed, 33 skipped. Existing DT-014 covers conn-error-serialization; new follow-up stories added as DT-045 and DT-046."
+      "notes": "DT-008 verification failed on 2026-04-23T07:02Z. Fast bare sweep: 281 passed, 6 failed, 577 skipped. Slow bare sweep: 67 passed, 1 failed, 166 skipped. Follow-up stories added as DT-011..DT-016. Rechecked full-file set on 2026-04-23T12:14Z: 239 passed, 4 failed, 33 skipped. Existing DT-014 covers conn-error-serialization; new follow-up stories added as DT-045 and DT-046. Rechecked on 2026-04-23T14:32Z: 241 passed, 2 failed, 33 skipped. Rechecked on 2026-04-23T14:55Z: 240 passed, 3 failed, 33 skipped. Rechecked on 2026-04-23T15:18Z: 242 passed, 1 failed, 33 skipped. DT-048 conn-error-serialization passed across bare/CBOR/JSON; DT-047 actor-conn `isConnected should be false before connection opens` reproduced under static/bare."
     },
     {
       "id": "DT-009",
@@ -851,8 +851,8 @@
         "Tests pass"
       ],
       "priority": 45,
-      "passes": true,
-      "notes": "Completed on 2026-04-23: no source change was needed. The prior bare `isConnected` DT-008 verifier failure no longer reproduces after the native artifact refresh from DT-048. The exact bare target passed, full `actor-conn.test.ts` passed with 69 tests, and the six-file DT-008 verifier showed `actor-conn` green across bare/CBOR/JSON. The combined verifier still fails on the recurring DT-048 conn-error-serialization CBOR timeout."
+      "passes": false,
+      "notes": "Reopened on 2026-04-23T15:18Z: the DT-048 six-file verifier failed `tests/driver/actor-conn.test.ts:419` (`isConnected should be false before connection opens`) under static/bare with `AssertionError: expected false to be true // Object.is equality`. The same combined run showed `conn-error-serialization` green across bare/CBOR/JSON, so this is again the current combined-verifier actor-conn blocker."
     },
     {
       "id": "DT-048",
@@ -872,8 +872,8 @@
         "Tests pass"
       ],
       "priority": 46,
-      "passes": false,
-      "notes": "Reopened on 2026-04-23: the DT-047 six-file verifier showed actor-conn green but failed `conn-error-serialization` under static/CBOR with `Error: Test timed out in 30000ms.` The 2026-04-23T14:03Z DT-008 verifier also failed the same test under static/JSON with `Error: Test timed out in 30000ms.` Targeted and full-file checks had passed earlier, so this remains a combined-verifier-load failure."
+      "passes": true,
+      "notes": "Completed on 2026-04-23T15:18Z: gateway actor-connect now drains tunnel messages already queued between the envoy open ack and the websocket forwarding task. That preserves immediate setup-error close frames, so createConnState errors reject queued actions instead of hanging. Targeted bare/CBOR/JSON createConnState checks passed, full `conn-error-serialization.test.ts` passed, and the six-file DT-008 verifier showed `conn-error-serialization` green across bare/CBOR/JSON. The combined verifier still exits red because DT-047 actor-conn `isConnected should be false before connection opens` reproduced under static/bare."
     },
     {
       "id": "DT-049",
@@ -895,13 +895,14 @@
     },
     {
       "id": "DT-050",
-      "title": "Fix actor-workflow CBOR child workflow timeout under DT-008 verifier load",
-      "description": "DT-049 six-file DT-008 verifier on 2026-04-23 failed `tests/driver/actor-workflow.test.ts:173` (`starts child workflows created inside workflow steps`) under `static registry > encoding (cbor)` with `AssertionError: expected [ { error: null, …(2) } ] to deeply equal [ { key: 'child-1', …(2) } ]`; the child workflow result had `{ status: 'timedOut' }` instead of `{ status: 'completed', response: { ok: true } }`. Root-cause why the parent workflow observes a timed-out child workflow only under the combined verifier load.",
+      "title": "Fix actor-workflow child workflow timeout under DT-008 verifier load",
+      "description": "DT-049 six-file DT-008 verifier on 2026-04-23 failed `tests/driver/actor-workflow.test.ts:173` (`starts child workflows created inside workflow steps`) under `static registry > encoding (cbor)` with `AssertionError: expected [ { error: null, …(2) } ] to deeply equal [ { key: 'child-1', …(2) } ]`; the child workflow result had `{ status: 'timedOut' }` instead of `{ status: 'completed', response: { ok: true } }`. A later DT-008 verifier on 2026-04-23 failed the same test under `static registry > encoding (json)` with the same assertion and timed-out child result. Root-cause why the parent workflow observes a timed-out child workflow only under the combined verifier load across encodings.",
       "acceptanceCriteria": [
         "Single-test verification: `pnpm -F rivetkit test tests/driver/actor-workflow.test.ts -t \"static registry.*encoding \\\\(cbor\\\\).*starts child workflows created inside workflow steps\"` passes",
+        "Single-test verification: `pnpm -F rivetkit test tests/driver/actor-workflow.test.ts -t \"static registry.*encoding \\\\(json\\\\).*starts child workflows created inside workflow steps\"` passes",
         "Whole-file verification: `pnpm -F rivetkit test tests/driver/actor-workflow.test.ts` passes with zero failures",
         "Combined DT-008 verifier includes `actor-workflow` passing in `pnpm -F rivetkit test tests/driver/actor-conn.test.ts tests/driver/conn-error-serialization.test.ts tests/driver/actor-inspector.test.ts tests/driver/actor-workflow.test.ts tests/driver/actor-sleep-db.test.ts tests/driver/hibernatable-websocket-protocol.test.ts`",
-        "Root cause identifies why the child workflow reports `timedOut` under CBOR combined verifier load",
+        "Root cause identifies why the child workflow reports `timedOut` under combined verifier load across encodings",
         "Fix does not add timeout bumps, retry masking, or test-only sleeps",
         "`.agent/notes/driver-test-progress.md` updates the `actor-workflow` entry from `[!]` to `[x]` and appends a PASS line",
         "`pnpm -F rivetkit check-types` passes",
@@ -909,7 +910,7 @@
       ],
       "priority": 48,
       "passes": false,
-      "notes": ""
+      "notes": "Updated on 2026-04-23: the DT-008 verifier also failed the same child-workflow test under static/JSON with `AssertionError: expected [ { error: null, …(2) } ] to deeply equal [ { key: 'child-1', …(2) } ]`; child result was `{ status: 'timedOut' }` instead of completed."
     }
   ]
 }

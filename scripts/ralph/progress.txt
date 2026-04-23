@@ -5,6 +5,7 @@ Started: Thu Apr 23 04:17:16 AM PDT 2026
 ## Codebase Patterns
 - Use rustls for Rust HTTP/TLS clients; `reqwest`, Hyper clients, and published NAPI paths must not pull `native-tls`, `openssl-sys`, `libssl`, or `libcrypto`.
 - Actor-connect WebSocket setup failures should send a protocol `Error` frame before closing; JSON/CBOR connection-level errors must include `actionId: null`.
+- Gateway actor-connect must preserve tunnel messages queued between the envoy open ack and the websocket forwarding task; setup-error close frames can arrive immediately after open.
 - When validating Linux NAPI preview packages, run the sanity check in Docker `node:22` if the host already has a `rivet-engine` on port `6420`.
 - Serverless `/start` driver tests need the start payload actor ID to exist in the same engine namespace as the serverless envoy headers, or startup fails at KV load with `actor does not exist`.
 - Serverless `/start` tests must upsert a normal runner config for the temporary pool before starting the native serverless envoy.
@@ -153,4 +154,34 @@ Started: Thu Apr 23 04:17:16 AM PDT 2026
 - **Learnings for future iterations:**
   - DT-008 combined-verifier failures can be stale by the next run; close them only after the exact target, full file, and combined shape show the target file green.
   - A green target file inside a red combined run is still useful closure for that story; add a new DT story for the different failing file instead of keeping the stale story open.
+---
+## 2026-04-23T14:32:45Z - DT-008
+- Re-ran the DT-008 six-file verifier for `actor-conn`, `conn-error-serialization`, `actor-inspector`, `actor-workflow`, `actor-sleep-db`, and `hibernatable-websocket-protocol`.
+- DT-008 remains blocked: `pnpm -F rivetkit test tests/driver/actor-conn.test.ts tests/driver/conn-error-serialization.test.ts tests/driver/actor-inspector.test.ts tests/driver/actor-workflow.test.ts tests/driver/actor-sleep-db.test.ts tests/driver/hibernatable-websocket-protocol.test.ts` failed with 241 passed, 2 failed, 33 skipped.
+- The current failures are covered by existing pending stories: DT-048 for `conn-error-serialization` static/JSON `createConnState` timeout, and DT-050 for `actor-workflow` child workflow result `timedOut` under combined verifier load.
+- Updated DT-050 to include static/JSON coverage in addition to the prior static/CBOR failure.
+- Files changed: `scripts/ralph/prd.json`, `.agent/notes/driver-test-progress.md`, `scripts/ralph/progress.txt`.
+- Verification: failed by design for this verifier story; no source code was changed and no commit was made because DT-008 acceptance criteria are not satisfied.
+- **Learnings for future iterations:**
+  - Existing follow-up stories should be broadened when DT-008 exposes the same underlying failure under another encoding; do not spawn duplicate stories for the same file/test/root symptom.
+---
+## 2026-04-23T14:55:02Z - DT-008
+- Re-ran the DT-008 six-file verifier for `actor-conn`, `conn-error-serialization`, `actor-inspector`, `actor-workflow`, `actor-sleep-db`, and `hibernatable-websocket-protocol`.
+- DT-008 remains blocked: `pnpm -F rivetkit test tests/driver/actor-conn.test.ts tests/driver/conn-error-serialization.test.ts tests/driver/actor-inspector.test.ts tests/driver/actor-workflow.test.ts tests/driver/actor-sleep-db.test.ts tests/driver/hibernatable-websocket-protocol.test.ts` failed with 240 passed, 3 failed, 33 skipped.
+- The current failures are covered by existing pending story DT-048: `conn-error-serialization` bare/CBOR/JSON `createConnState` timed out at `tests/driver/conn-error-serialization.test.ts:7`.
+- `actor-workflow` passed in this combined verifier run (57 tests, 3 skipped), so the DT-050 symptom did not reproduce this time.
+- Files changed: `scripts/ralph/prd.json`, `.agent/notes/driver-test-progress.md`, `scripts/ralph/progress.txt`.
+- Verification: failed by design for this verifier story; no source code was changed and no commit was made because DT-008 acceptance criteria are not satisfied.
+- **Learnings for future iterations:**
+  - The current DT-008 blocker is isolated to `conn-error-serialization` setup-error handling under combined verifier load; actor-workflow can pass in the same combined shape.
+---
+## 2026-04-23T15:18:32Z - DT-048
+- Implemented a gateway fix for immediate actor-connect setup-error closes under DT-008 combined verifier load.
+- `pegboard-gateway2` now drains tunnel messages queued between envoy open acknowledgement and websocket forwarding task startup, then processes those messages before waiting on the receiver.
+- Reopened DT-047 because the six-file verifier now fails the recurring static/bare actor-conn `isConnected should be false before connection opens` case.
+- Files changed: `engine/packages/pegboard-gateway2/src/lib.rs`, `engine/packages/pegboard-gateway2/src/tunnel_to_ws_task.rs`, `scripts/ralph/prd.json`, `.agent/notes/driver-test-progress.md`, `scripts/ralph/progress.txt`.
+- Verification: targeted bare/CBOR/JSON createConnState checks passed; full `conn-error-serialization.test.ts` passed with 9 tests; six-file DT-008 verifier showed `conn-error-serialization` green but failed DT-047 actor-conn after 242 passed and 33 skipped; `cargo build -p pegboard-gateway2` passed; `cargo build -p rivet-engine` passed; `pnpm -F rivetkit check-types` passed.
+- **Learnings for future iterations:**
+  - Actor-connect setup errors can close immediately after the envoy open ack, so the gateway cannot assume the spawned websocket forwarding task will be the first receiver to observe queued tunnel messages.
+  - A combined verifier failure can bounce back to a previously closed story; reopen that story when the exact acceptance target regresses instead of keeping the newly fixed story open.
 ---
