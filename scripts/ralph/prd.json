@@ -155,7 +155,7 @@
       ],
       "priority": 8,
       "passes": false,
-      "notes": "DT-008 verification failed on 2026-04-23T07:02Z. Fast bare sweep: 281 passed, 6 failed, 577 skipped. Slow bare sweep: 67 passed, 1 failed, 166 skipped. Follow-up stories added as DT-011..DT-016. Rechecked full-file set on 2026-04-23T12:14Z: 239 passed, 4 failed, 33 skipped. Existing DT-014 covers conn-error-serialization; new follow-up stories added as DT-045 and DT-046. Rechecked on 2026-04-23T14:32Z: 241 passed, 2 failed, 33 skipped. Rechecked on 2026-04-23T14:55Z: 240 passed, 3 failed, 33 skipped. Rechecked on 2026-04-23T15:18Z: 242 passed, 1 failed, 33 skipped. DT-048 conn-error-serialization passed across bare/CBOR/JSON; DT-047 actor-conn `isConnected should be false before connection opens` reproduced under static/bare. Rechecked on 2026-04-23T15:29Z: 242 passed, 1 failed, 33 skipped. DT-048 conn-error-serialization bare `createConnState preserves group/code` timed out again under the six-file verifier; DT-048 reopened."
+      "notes": "DT-008 verification failed on 2026-04-23T07:02Z. Fast bare sweep: 281 passed, 6 failed, 577 skipped. Slow bare sweep: 67 passed, 1 failed, 166 skipped. Follow-up stories added as DT-011..DT-016. Rechecked full-file set on 2026-04-23T12:14Z: 239 passed, 4 failed, 33 skipped. Existing DT-014 covers conn-error-serialization; new follow-up stories added as DT-045 and DT-046. Rechecked on 2026-04-23T14:32Z: 241 passed, 2 failed, 33 skipped. Rechecked on 2026-04-23T14:55Z: 240 passed, 3 failed, 33 skipped. Rechecked on 2026-04-23T15:18Z: 242 passed, 1 failed, 33 skipped. DT-048 conn-error-serialization passed across bare/CBOR/JSON; DT-047 actor-conn `isConnected should be false before connection opens` reproduced under static/bare. Rechecked on 2026-04-23T15:29Z: 242 passed, 1 failed, 33 skipped. DT-048 conn-error-serialization bare `createConnState preserves group/code` timed out again under the six-file verifier; DT-048 reopened. Rechecked static/http/bare fast+slow on 2026-04-23T16:23Z: fast failed with 285 passed, 2 failed, 577 skipped; slow passed with 68 passed, 166 skipped. Existing DT-047 covers actor-conn. New follow-up DT-051 covers actor-queue `dispatch_inbox` overload."
     },
     {
       "id": "DT-009",
@@ -283,8 +283,8 @@
         "Tests pass"
       ],
       "priority": 15,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Completed on 2026-04-23: the stale raw-websocket hibernatable ack-state failure no longer reproduces. Both targeted static/http/bare ack-state tests passed, the full raw-websocket file passed with 39 tests across bare/CBOR/JSON, and pnpm -F rivetkit check-types passed."
     },
     {
       "id": "DT-016",
@@ -911,6 +911,24 @@
       "priority": 48,
       "passes": false,
       "notes": "Updated on 2026-04-23: the DT-008 verifier also failed the same child-workflow test under static/JSON with `AssertionError: expected [ { error: null, …(2) } ] to deeply equal [ { key: 'child-1', …(2) } ]`; child result was `{ status: 'timedOut' }` instead of completed."
+    },
+    {
+      "id": "DT-051",
+      "title": "Fix actor-queue many-queue run-handler dispatch overload under static/http/bare",
+      "description": "DT-008 fast static/http/bare verification on 2026-04-23 failed `tests/driver/actor-queue.test.ts:303` (`drains many-queue child actors created from run handlers while connected`) with `RivetError: Actor channel 'dispatch_inbox' is overloaded while attempting to dispatch_queue_send (capacity 1024).` The failure occurred after the run-handler-created child actor connected and the test rapidly sent queue messages to the child. Root-cause why `dispatch_queue_send` overloads under the parallel fast bare matrix even though the sibling `drains many-queue child actors created from actions while connected` test passed.",
+      "acceptanceCriteria": [
+        "Single-test verification: `pnpm -F rivetkit test tests/driver/actor-queue.test.ts -t \"static registry.*encoding \\\\(bare\\\\).*drains many-queue child actors created from run handlers while connected\"` passes",
+        "Whole-file verification: `pnpm -F rivetkit test tests/driver/actor-queue.test.ts` passes with zero failures",
+        "Fast bare matrix verification includes `actor-queue` passing under `RIVETKIT_DRIVER_TEST_PARALLEL=1` with the static/http/bare filter",
+        "Root cause identifies why `dispatch_queue_send` overloads only for the run-handler-created child path under parallel verifier load",
+        "Fix does not add timeout bumps, retry masking, or test-only sleeps",
+        "`.agent/notes/driver-test-progress.md` updates the `actor-queue` entry from `[!]` to `[x]` and appends a PASS line",
+        "`pnpm -F rivetkit check-types` passes",
+        "Tests pass"
+      ],
+      "priority": 49,
+      "passes": false,
+      "notes": ""
     }
   ]
 }

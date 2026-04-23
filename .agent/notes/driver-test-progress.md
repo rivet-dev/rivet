@@ -21,12 +21,12 @@ Config: registry (static), client type (http), encoding (bare)
 - [x] actor-db-raw | Actor Database Raw Tests
 - [x] actor-workflow | Actor Workflow Tests
 - [x] actor-error-handling | Actor Error Handling Tests
-- [x] actor-queue | Actor Queue Tests
+- [!] actor-queue | Actor Queue Tests
 - [x] actor-kv | Actor KV Tests
 - [x] actor-stateless | Actor Stateless Tests
 - [x] raw-http | raw http
 - [x] raw-http-request-properties | raw http request properties
-- [!] raw-websocket | raw websocket
+- [x] raw-websocket | raw websocket
 - [x] actor-inspector | Actor Inspector Tests
 - [x] gateway-query-url | Gateway Query URL Tests
 - [x] actor-db-pragma-migration | Actor Database Pragma Migration
@@ -109,3 +109,9 @@ Config: registry (static), client type (http), encoding (bare)
 - 2026-04-23T15:18:32.000Z actor-conn: FAIL - DT-048 six-file verifier failed static/bare `isConnected should be false before connection opens` at `tests/driver/actor-conn.test.ts:419` with `AssertionError: expected false to be true // Object.is equality`; reopened DT-047.
 - 2026-04-23T15:29:56.000Z DT-008 full-file recheck: FAIL (242 passed, 1 failed, 33 skipped) - conn-error-serialization bare `createConnState preserves group/code` timed out at `tests/driver/conn-error-serialization.test.ts:7`. Existing story DT-048 was reopened.
 - 2026-04-23T16:10:02.000Z conn-error-serialization: PASS DT-048. Added an envoy WebSocketSender flush before actor-connect setup-error close frames and fixed client `actionId: 0` error routing; targeted JSON createConnState passed; full conn-error-serialization passed (9 passed, 0 failed); six-file DT-008 verifier passed (243 passed, 33 skipped).
+- 2026-04-23T16:23:57.000Z fast parallel: FAIL (285 passed, 2 failed, 577 skipped)
+- 2026-04-23T16:23:57.000Z actor-conn: FAIL - `isConnected should be false before connection opens` failed at `tests/driver/actor-conn.test.ts:419` with `AssertionError: expected false to be true // Object.is equality`. Existing story DT-047 covers this failure.
+- 2026-04-23T16:23:57.000Z actor-queue: FAIL - `drains many-queue child actors created from run handlers while connected` failed at `tests/driver/actor-queue.test.ts:303` with `RivetError: Actor channel 'dispatch_inbox' is overloaded while attempting to dispatch_queue_send (capacity 1024).` Follow-up story: DT-051.
+- 2026-04-23T16:23:57.000Z raw-websocket: PASS in fast static/http/bare verifier.
+- 2026-04-23T16:23:57.000Z slow parallel: PASS (68 passed, 0 failed, 166 skipped)
+- 2026-04-23T16:27:47.000Z raw-websocket: PASS DT-015. Targeted bare hibernatable ack-state tests passed; full raw-websocket file passed (39 passed, 0 failed across bare/CBOR/JSON); typecheck passed.

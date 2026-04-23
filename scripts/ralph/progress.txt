@@ -207,3 +207,22 @@ Started: Thu Apr 23 04:17:16 AM PDT 2026
   - JSON setup-error handling can pass via close reason alone, so inspect logs for the structured `connection error` message to confirm the protocol frame actually arrived.
   - Actor-connect `actionId` uses `null` for connection errors; `0` is the first valid action ID.
 ---
+## 2026-04-23T16:23:57Z - DT-008
+- Re-ran the static/http/bare fast and slow driver verifiers for the tracked DT-008 slice.
+- DT-008 remains blocked: fast static/http/bare failed with 285 passed, 2 failed, and 577 skipped; slow static/http/bare passed with 68 passed and 166 skipped.
+- Existing story DT-047 covers the recurring `actor-conn` bare `isConnected should be false before connection opens` failure at `tests/driver/actor-conn.test.ts:419`.
+- Added DT-051 for the new `actor-queue` bare `drains many-queue child actors created from run handlers while connected` failure at `tests/driver/actor-queue.test.ts:303`, where `dispatch_queue_send` returned `actor.overloaded`.
+- Files changed: `scripts/ralph/prd.json`, `.agent/notes/driver-test-progress.md`, `scripts/ralph/progress.txt`.
+- Verification: `RIVETKIT_DRIVER_TEST_PARALLEL=1 pnpm test <fast driver files> -t "static registry.*encoding \\(bare\\)"` failed by design; `RIVETKIT_DRIVER_TEST_PARALLEL=1 pnpm test <slow driver files> -t "static registry.*encoding \\(bare\\)"` passed. No source code was changed.
+- **Learnings for future iterations:**
+  - DT-008 should stay red when the fast parallel bare sweep finds new failures, even if the six-file verifier was green earlier.
+  - A new fast-suite failure needs a concrete PRD story immediately; progress log lines alone are not the work queue.
+---
+## 2026-04-23T16:27:47Z - DT-015
+- Rechecked the stale raw-websocket hibernatable ack-state failure; it no longer reproduces on the current branch.
+- Confirmed both targeted static/http/bare ack-state tests and the full raw-websocket file pass.
+- Files changed: `scripts/ralph/prd.json`, `.agent/notes/driver-test-progress.md`, `scripts/ralph/progress.txt`.
+- Verification: targeted indexed ack test passed; targeted threshold-buffered ack test passed; full `raw-websocket.test.ts` passed with 39 tests across bare/CBOR/JSON; `pnpm -F rivetkit check-types` passed.
+- **Learnings for future iterations:**
+  - Stale driver stories can be closed without source changes only after the exact target checks, whole-file verifier, and typecheck all pass on the current branch.
+---
