@@ -349,6 +349,12 @@ When the user asks to track something in a note, store it in `.agent/notes/` by 
 - Prefer the Tokio-shaped APIs from `antiox`. For example, use `antiox/sync/mpsc` for `tx` and `rx` channels, `antiox/task` for spawning tasks, and the matching sync and time modules as needed.
 - Treat `antiox` as the default choice for any TypeScript concurrency work because it mirrors Rust and Tokio APIs used elsewhere in the codebase.
 
+## TLS / HTTP clients
+
+- Always use rustls. Never enable `native-tls` / `default-tls` on `reqwest` or anything else on Linux. Consumers, especially `.node` addons published via npm, must have no runtime `libssl.so` dependency.
+- `reqwest` workspace dep must set `default-features = false` and enable `rustls-tls-native-roots` + `rustls-tls-webpki-roots`. Per-crate overrides must keep the same.
+- Never vendor openssl as a workaround. If `openssl-sys` shows up in `cargo tree`, trace the transitive dep, usually `reqwest` default features, and switch it to rustls.
+
 ## Error Handling
 
 - Custom error system at `packages/common/error/` using `#[derive(RivetError)]` on struct definitions. For the full derive example and conventions, see `.claude/reference/error-system.md`.
