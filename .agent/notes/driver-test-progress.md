@@ -19,7 +19,7 @@ Config: registry (static), client type (http), encoding (bare)
 - [x] actor-onstatechange | Actor State Change Tests
 - [x] actor-db | Actor Database
 - [x] actor-db-raw | Actor Database Raw Tests
-- [x] actor-workflow | Actor Workflow Tests
+- [!] actor-workflow | Actor Workflow Tests
 - [x] actor-error-handling | Actor Error Handling Tests
 - [x] actor-queue | Actor Queue Tests
 - [x] actor-kv | Actor KV Tests
@@ -44,7 +44,7 @@ Config: registry (static), client type (http), encoding (bare)
 - [x] actor-lifecycle | Actor Lifecycle Tests
 - [x] actor-conn-hibernation | Actor Connection Hibernation Tests
 - [x] actor-run | Actor Run Tests
-- [!] hibernatable-websocket-protocol | hibernatable websocket protocol
+- [x] hibernatable-websocket-protocol | hibernatable websocket protocol
 - [x] actor-db-stress | Actor Database Stress Tests
 
 ## Excluded
@@ -99,3 +99,7 @@ Config: registry (static), client type (http), encoding (bare)
 - 2026-04-23T13:38:30.000Z conn-error-serialization: PASS DT-048. Root cause was a stale NAPI artifact older than `rivetkit-core/src/registry/websocket.rs`; `pnpm --filter @rivetkit/rivetkit-napi build:force` refreshed the native bridge. Targeted bare and CBOR createConnState error tests passed; full conn-error-serialization file passed (9 passed, 0 failed); six-file DT-008 verifier showed conn-error-serialization passing across bare/CBOR/JSON and remains blocked only by DT-047 actor-conn (242 passed, 1 failed, 33 skipped).
 - 2026-04-23T13:51:44.000Z actor-conn: PASS DT-047. Targeted bare `isConnected should be false before connection opens` passed; full actor-conn file passed (69 passed, 0 failed); six-file DT-008 verifier showed actor-conn green across bare/CBOR/JSON.
 - 2026-04-23T13:51:44.000Z conn-error-serialization: FAIL - DT-047 six-file verifier failed static/CBOR `createConnState preserves group/code` with `Error: Test timed out in 30000ms`; reopened DT-048.
+- 2026-04-23T14:04:08.000Z DT-008 full-file recheck: FAIL (241 passed, 2 failed, 33 skipped) - conn-error-serialization JSON `createConnState preserves group/code` timed out at `tests/driver/conn-error-serialization.test.ts:7`; actor-sleep-db JSON `nested waitUntil inside waitUntil is drained before shutdown` failed at `tests/driver/actor-sleep-db.test.ts:463` with `RivetError: Request timed out after 15 seconds.` Updated DT-048 for JSON coverage and added DT-049.
+- 2026-04-23T14:04:08.000Z hibernatable-websocket-protocol: PASS DT-008 recheck (6 passed, 0 failed across bare/CBOR/JSON).
+- 2026-04-23T14:21:20.000Z actor-sleep-db: PASS DT-049. Targeted JSON nested waitUntil passed; full actor-sleep-db file passed (42 passed, 0 failed, 30 skipped); six-file DT-008 verifier showed actor-sleep-db green across bare/CBOR/JSON.
+- 2026-04-23T14:21:20.000Z actor-workflow: FAIL - static/CBOR `starts child workflows created inside workflow steps` failed at `tests/driver/actor-workflow.test.ts:173`; child result was `timedOut` instead of completed. Follow-up story: DT-050.

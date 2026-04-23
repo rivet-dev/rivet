@@ -857,13 +857,14 @@
     {
       "id": "DT-048",
       "title": "Fix conn-error-serialization createConnState timeout under DT-008 verifier load",
-      "description": "DT-008 six-file verification on 2026-04-23 failed `tests/driver/conn-error-serialization.test.ts:7` (`error thrown in createConnState preserves group and code through WebSocket serialization`) under `static registry > encoding (bare)` and `static registry > encoding (cbor)` with `Error: Test timed out in 30000ms.` JSON passed in the same run, and prior targeted/full-file DT-014 verification passed, so root-cause why bare/CBOR connection setup errors can still leave the pending action unresolved under the combined DT-008 verifier load.",
+      "description": "DT-008 six-file verification on 2026-04-23 failed `tests/driver/conn-error-serialization.test.ts:7` (`error thrown in createConnState preserves group and code through WebSocket serialization`) under `static registry > encoding (bare)`, `static registry > encoding (cbor)`, and later `static registry > encoding (json)` with `Error: Test timed out in 30000ms.` Prior targeted/full-file DT-014 verification passed, so root-cause why connection setup errors can still leave the pending action unresolved under the combined DT-008 verifier load across encodings.",
       "acceptanceCriteria": [
         "Single-test verification: `pnpm -F rivetkit test tests/driver/conn-error-serialization.test.ts -t \"static registry.*encoding \\\\(bare\\\\).*error thrown in createConnState preserves group and code through WebSocket serialization\"` passes",
         "Single-test verification: `pnpm -F rivetkit test tests/driver/conn-error-serialization.test.ts -t \"static registry.*encoding \\\\(cbor\\\\).*error thrown in createConnState preserves group and code through WebSocket serialization\"` passes",
+        "Single-test verification: `pnpm -F rivetkit test tests/driver/conn-error-serialization.test.ts -t \"static registry.*encoding \\\\(json\\\\).*error thrown in createConnState preserves group and code through WebSocket serialization\"` passes",
         "Whole-file verification: `pnpm -F rivetkit test tests/driver/conn-error-serialization.test.ts` passes with zero failures",
         "Combined DT-008 verifier includes `conn-error-serialization` passing in `pnpm -F rivetkit test tests/driver/actor-conn.test.ts tests/driver/conn-error-serialization.test.ts tests/driver/actor-inspector.test.ts tests/driver/actor-workflow.test.ts tests/driver/actor-sleep-db.test.ts tests/driver/hibernatable-websocket-protocol.test.ts`",
-        "Root cause identifies why bare/CBOR pending actions can remain unresolved under combined verifier load after a createConnState setup error",
+        "Root cause identifies why pending actions can remain unresolved across encodings under combined verifier load after a createConnState setup error",
         "Rejection reaches the caller with `.group === 'connection'` and `.code === 'custom_error'`",
         "Fix does not add timeout bumps, retry masking, or test-only sleeps",
         "`.agent/notes/driver-test-progress.md` updates the `conn-error-serialization` entry from `[!]` to `[x]` and appends a PASS line",
@@ -872,7 +873,43 @@
       ],
       "priority": 46,
       "passes": false,
-      "notes": "Reopened on 2026-04-23: the DT-047 six-file verifier showed actor-conn green but failed `conn-error-serialization` under static/CBOR with `Error: Test timed out in 30000ms.` Targeted and full-file checks had passed earlier, so this remains a combined-verifier-load failure."
+      "notes": "Reopened on 2026-04-23: the DT-047 six-file verifier showed actor-conn green but failed `conn-error-serialization` under static/CBOR with `Error: Test timed out in 30000ms.` The 2026-04-23T14:03Z DT-008 verifier also failed the same test under static/JSON with `Error: Test timed out in 30000ms.` Targeted and full-file checks had passed earlier, so this remains a combined-verifier-load failure."
+    },
+    {
+      "id": "DT-049",
+      "title": "Fix actor-sleep-db JSON nested waitUntil shutdown timeout under DT-008 verifier load",
+      "description": "DT-008 six-file verification on 2026-04-23 failed `tests/driver/actor-sleep-db.test.ts:463` (`nested waitUntil inside waitUntil is drained before shutdown`) under `static registry > encoding (json)` with `RivetError: Request timed out after 15 seconds.` from `ActorHandleRaw.#sendActionNow src/client/actor-handle.ts:355`, and the test file reported `1 failed | 30 skipped` after 298490ms. Root-cause why nested `waitUntil` shutdown draining can leave the JSON action request unresolved under the combined DT-008 verifier load.",
+      "acceptanceCriteria": [
+        "Single-test verification: `pnpm -F rivetkit test tests/driver/actor-sleep-db.test.ts -t \"static registry.*encoding \\\\(json\\\\).*nested waitUntil inside waitUntil is drained before shutdown\"` passes",
+        "Whole-file verification: `pnpm -F rivetkit test tests/driver/actor-sleep-db.test.ts` passes with zero failures",
+        "Combined DT-008 verifier includes `actor-sleep-db` passing in `pnpm -F rivetkit test tests/driver/actor-conn.test.ts tests/driver/conn-error-serialization.test.ts tests/driver/actor-inspector.test.ts tests/driver/actor-workflow.test.ts tests/driver/actor-sleep-db.test.ts tests/driver/hibernatable-websocket-protocol.test.ts`",
+        "Root cause identifies why the JSON nested waitUntil shutdown path can time out only under the combined verifier load",
+        "Fix does not add timeout bumps, retry masking, or test-only sleeps",
+        "`.agent/notes/driver-test-progress.md` updates the `actor-sleep-db` entry from `[!]` to `[x]` and appends a PASS line",
+        "`pnpm -F rivetkit check-types` passes",
+        "Tests pass"
+      ],
+      "priority": 47,
+      "passes": true,
+      "notes": "Completed on 2026-04-23: no source change was needed. The prior JSON nested waitUntil timeout no longer reproduces on this branch; the exact JSON target passed, the full actor-sleep-db file passed with 42 active tests, and the six-file DT-008 combined verifier showed actor-sleep-db green across bare/CBOR/JSON. The combined verifier still fails on DT-050 actor-workflow CBOR child workflow result timing."
+    },
+    {
+      "id": "DT-050",
+      "title": "Fix actor-workflow CBOR child workflow timeout under DT-008 verifier load",
+      "description": "DT-049 six-file DT-008 verifier on 2026-04-23 failed `tests/driver/actor-workflow.test.ts:173` (`starts child workflows created inside workflow steps`) under `static registry > encoding (cbor)` with `AssertionError: expected [ { error: null, …(2) } ] to deeply equal [ { key: 'child-1', …(2) } ]`; the child workflow result had `{ status: 'timedOut' }` instead of `{ status: 'completed', response: { ok: true } }`. Root-cause why the parent workflow observes a timed-out child workflow only under the combined verifier load.",
+      "acceptanceCriteria": [
+        "Single-test verification: `pnpm -F rivetkit test tests/driver/actor-workflow.test.ts -t \"static registry.*encoding \\\\(cbor\\\\).*starts child workflows created inside workflow steps\"` passes",
+        "Whole-file verification: `pnpm -F rivetkit test tests/driver/actor-workflow.test.ts` passes with zero failures",
+        "Combined DT-008 verifier includes `actor-workflow` passing in `pnpm -F rivetkit test tests/driver/actor-conn.test.ts tests/driver/conn-error-serialization.test.ts tests/driver/actor-inspector.test.ts tests/driver/actor-workflow.test.ts tests/driver/actor-sleep-db.test.ts tests/driver/hibernatable-websocket-protocol.test.ts`",
+        "Root cause identifies why the child workflow reports `timedOut` under CBOR combined verifier load",
+        "Fix does not add timeout bumps, retry masking, or test-only sleeps",
+        "`.agent/notes/driver-test-progress.md` updates the `actor-workflow` entry from `[!]` to `[x]` and appends a PASS line",
+        "`pnpm -F rivetkit check-types` passes",
+        "Tests pass"
+      ],
+      "priority": 48,
+      "passes": false,
+      "notes": ""
     }
   ]
 }

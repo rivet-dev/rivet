@@ -134,3 +134,23 @@ Started: Thu Apr 23 04:17:16 AM PDT 2026
 - **Learnings for future iterations:**
   - A story-specific verifier can pass its target file inside a combined run even when the combined command exits nonzero for a different tracked file; record both facts instead of calling the whole DT-008 slice green.
 ---
+## 2026-04-23T14:04:08Z - DT-008
+- Re-ran the DT-008 six-file verifier for `actor-conn`, `conn-error-serialization`, `actor-inspector`, `actor-workflow`, `actor-sleep-db`, and `hibernatable-websocket-protocol`.
+- DT-008 remains blocked: `pnpm -F rivetkit test tests/driver/actor-conn.test.ts tests/driver/conn-error-serialization.test.ts tests/driver/actor-inspector.test.ts tests/driver/actor-workflow.test.ts tests/driver/actor-sleep-db.test.ts tests/driver/hibernatable-websocket-protocol.test.ts` failed with 241 passed, 2 failed, 33 skipped.
+- Updated DT-048 to include the same `conn-error-serialization` `createConnState` timeout under static/JSON, and added DT-049 for the new static/JSON `actor-sleep-db` `nested waitUntil inside waitUntil is drained before shutdown` timeout.
+- Files changed: `scripts/ralph/prd.json`, `.agent/notes/driver-test-progress.md`, `scripts/ralph/progress.txt`.
+- Verification: failed by design for this verifier story; no source code was changed and no commit was made because DT-008 acceptance criteria are not satisfied. `hibernatable-websocket-protocol` passed in the combined verifier with 6 passed and 0 failed across bare/CBOR/JSON.
+- **Learnings for future iterations:**
+  - DT-008 combined-load failures can migrate between encodings even when targeted and whole-file checks passed earlier; keep the pending story acceptance criteria aligned with the latest observed encoding.
+  - `hibernatable-websocket-protocol` is currently green in the six-file verifier across bare/CBOR/JSON, but DT-008 remains red until `conn-error-serialization`, `actor-sleep-db`, and `raw-websocket` are all cleared.
+---
+## 2026-04-23T14:21:20Z - DT-049
+- Rechecked the actor-sleep-db JSON nested waitUntil timeout from DT-008; it no longer reproduces on the current branch.
+- Confirmed actor-sleep-db passed in the exact JSON target, the full file, and the six-file DT-008 verifier shape across bare/CBOR/JSON.
+- Added DT-050 for the new combined-verifier failure: actor-workflow static/CBOR `starts child workflows created inside workflow steps` reported a child workflow result of `timedOut` instead of completed.
+- Files changed: `scripts/ralph/prd.json`, `.agent/notes/driver-test-progress.md`, `scripts/ralph/progress.txt`.
+- Verification: targeted JSON nested waitUntil passed; full `actor-sleep-db.test.ts` passed with 42 active tests; six-file DT-008 verifier failed only on DT-050 actor-workflow after 242 passed and 33 skipped; `pnpm -F rivetkit check-types` passed.
+- **Learnings for future iterations:**
+  - DT-008 combined-verifier failures can be stale by the next run; close them only after the exact target, full file, and combined shape show the target file green.
+  - A green target file inside a red combined run is still useful closure for that story; add a new DT story for the different failing file instead of keeping the stale story open.
+---
