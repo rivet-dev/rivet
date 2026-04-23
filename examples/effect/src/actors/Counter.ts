@@ -54,7 +54,19 @@ export const Counter = Actor.make("Counter", {
 // yielded services like State and Events are instance-scoped.
 export const CounterLive = Counter.toLayer(
 	Effect.gen(function* () {
-		// Access actor-provided services
+		// Actor-provided services are yielded from the Effect context.
+		// They are scoped to this actor instance, not to individual
+		// action calls. This means all action handlers below close
+		// over the same state, events, kv, and db references.
+		//
+		// Because services come through the context (not a context
+		// parameter like the current SDK's `c`), they are:
+		//
+		// - Visible in the type signature. The Effect's R channel
+		//   declares exactly which services are required.
+		//
+		// - Swappable via layers. Tests can provide an in-memory KV
+		//   or a mock DB without changing the actor code.
 		const state = yield* Counter.State
 		//    ^ SubscriptionRef<{ count: number }>
 		const events = yield* Counter.Events
