@@ -150,3 +150,5 @@ Config: registry (static), client type (http), encoding (bare)
 - 2026-04-23T18:30:44Z fast parallel: PASS (287 passed, 0 failed, 577 skipped)
 - 2026-04-23T18:30:44Z slow parallel: PASS (68 passed, 0 failed, 166 skipped)
 - 2026-04-23T18:30:44Z typecheck: PASS (`pnpm -F rivetkit check-types`).
+- 2026-04-23T18:35:53Z DT-009 full-matrix sweep: FAIL - `tests/driver/manager-driver.test.ts` full file failed with 46 passed and 2 failed; static/CBOR and static/JSON `input is undefined when not provided` hit `AssertionError: expected null to be undefined` at `tests/driver/manager-driver.test.ts:159`. Follow-up story: DT-057.
+- 2026-04-23T18:42:27Z actor-conn: PASS DT-047 recheck. Targeted bare `isConnected should be false before connection opens` passed; full `actor-conn.test.ts` passed with 69 tests across bare/CBOR/JSON; `pnpm -F rivetkit check-types` passed. The latest successful DT-008 tracked verifier on this branch already had `actor-conn` green, so DT-047 is closed as a stale non-repro.

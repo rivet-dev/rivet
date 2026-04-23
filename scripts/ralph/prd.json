@@ -851,8 +851,8 @@
         "Tests pass"
       ],
       "priority": 45,
-      "passes": false,
-      "notes": "Reopened on 2026-04-23T15:18Z: the DT-048 six-file verifier failed `tests/driver/actor-conn.test.ts:419` (`isConnected should be false before connection opens`) under static/bare with `AssertionError: expected false to be true // Object.is equality`. The same combined run showed `conn-error-serialization` green across bare/CBOR/JSON, so this is again the current combined-verifier actor-conn blocker."
+      "passes": true,
+      "notes": "Completed on 2026-04-23: no source change was needed. The reopened verifier failure no longer reproduces on this branch; the exact bare `isConnected should be false before connection opens` test passed, the full `actor-conn.test.ts` file passed with 69 tests across bare/CBOR/JSON, `pnpm -F rivetkit check-types` passed, and the latest successful DT-008 tracked verifier on this branch already had `actor-conn` green."
     },
     {
       "id": "DT-048",
@@ -1017,6 +1017,24 @@
         "Tests pass"
       ],
       "priority": 54,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "DT-057",
+      "title": "Fix manager-driver omitted input preserved as undefined under CBOR and JSON",
+      "description": "DT-009 full-matrix verification on 2026-04-23 failed `tests/driver/manager-driver.test.ts:159` (`input is undefined when not provided`) under static registry `encoding (cbor)` and `encoding (json)` with `AssertionError: expected null to be undefined`. The full-file run passed the same test under bare, so root-cause why omitted actor input is preserved as `undefined` for bare but arrives as `null` through the CBOR and JSON paths.",
+      "acceptanceCriteria": [
+        "Single-test verification: `pnpm -F rivetkit test tests/driver/manager-driver.test.ts -t \"input is undefined when not provided\"` passes with zero failures across the default matrix",
+        "Whole-file verification: `pnpm -F rivetkit test tests/driver/manager-driver.test.ts` passes with zero failures across the default matrix",
+        "Root cause identifies where omitted actor input is coerced from `undefined` to `null` in the CBOR and JSON paths",
+        "Fix preserves the existing bare behavior and does not regress the sibling `passes input to actor during creation` and `getOrCreate passes input to actor during creation` tests",
+        "`.agent/notes/driver-test-progress.md` appends a PASS line for `manager-driver` after the fix",
+        "`pnpm build -F rivetkit` passes",
+        "`pnpm -F rivetkit check-types` passes",
+        "Tests pass"
+      ],
+      "priority": 55,
       "passes": false,
       "notes": ""
     }

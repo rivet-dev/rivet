@@ -9,6 +9,7 @@ Started: Thu Apr 23 04:17:16 AM PDT 2026
 - Flush the envoy `WebSocketSender` after queueing required setup/error frames and before an immediate close, so the outgoing task handles the frame before termination.
 - Actor-connect protocol `actionId` values are nullable; `0` is a valid action ID, and only `null` means a connection-level error.
 - Gateway actor-connect must preserve tunnel messages queued between the envoy open ack and the websocket forwarding task; setup-error close frames can arrive immediately after open.
+- If an omitted optional value passes in bare but fails in CBOR or JSON, inspect whether the cross-encoding path is coercing `undefined` into `null`.
 - When validating Linux NAPI preview packages, run the sanity check in Docker `node:22` if the host already has a `rivet-engine` on port `6420`.
 - Serverless `/start` driver tests need the start payload actor ID to exist in the same engine namespace as the serverless envoy headers, or startup fails at KV load with `actor does not exist`.
 - Serverless `/start` tests must upsert a normal runner config for the temporary pool before starting the native serverless envoy.
@@ -296,4 +297,22 @@ Started: Thu Apr 23 04:17:16 AM PDT 2026
 - **Learnings for future iterations:**
   - DT-008 is only actually done once the tracked full-file batch and the explicit fast/slow bare sweeps are both green in the same pass.
   - The progress-suite markers need to move back to `[x]` as soon as the newest verifier clears the file, even if an earlier sweep had reopened it.
+---
+## 2026-04-23T18:35:53Z - DT-009
+- Ran the DT-009 full-matrix sweep from the top of the driver list using whole-file runs across the default static `bare`/`cbor`/`json` matrix, stopping at the first red file as the driver-test-runner workflow requires.
+- `manager-driver.test.ts` failed first: static/CBOR and static/JSON `input is undefined when not provided` returned `null` instead of `undefined`, while the same case still passed under bare. Added follow-up story DT-057 with the exact repro and acceptance gates.
+- Files changed: `scripts/ralph/prd.json`, `.agent/notes/driver-test-progress.md`, `scripts/ralph/progress.txt`.
+- Verification: `pnpm -F rivetkit test tests/driver/manager-driver.test.ts` failed with 46 passed and 2 failed; `pnpm -F rivetkit test tests/driver/manager-driver.test.ts -t "input is undefined when not provided"` failed with the same two CBOR/JSON assertions at `tests/driver/manager-driver.test.ts:159`. No source code was changed and no commit was made because DT-009 is still blocked.
+- **Learnings for future iterations:**
+  - A file can be green for static/http/bare and still fail immediately in the broader DT-009 matrix because CBOR/JSON normalize omitted values differently.
+  - For DT-009, stop at the first failing file, spawn the concrete DT story immediately, and keep the whole-file plus targeted repro outputs together so the next iteration can jump straight into the real bug.
+---
+## 2026-04-23T18:42:27Z - DT-047
+- Rechecked the reopened `actor-conn` before-open state regression and confirmed it is stale on this branch.
+- No source code changed. The exact bare target passed, the full `actor-conn.test.ts` file passed across bare/CBOR/JSON, and `pnpm -F rivetkit check-types` passed.
+- Files changed: `scripts/ralph/prd.json`, `.agent/notes/driver-test-progress.md`, `scripts/ralph/progress.txt`.
+- Verification: `pnpm -F rivetkit test tests/driver/actor-conn.test.ts -t "static registry.*encoding \\(bare\\).*isConnected should be false before connection opens"` passed; `pnpm -F rivetkit test tests/driver/actor-conn.test.ts` passed with 69 tests; `pnpm -F rivetkit check-types` passed. The latest successful DT-008 tracked verifier on this branch already had `actor-conn` green, so DT-047 is closed as a stale non-repro.
+- **Learnings for future iterations:**
+  - A reopened DT-008 verifier story can be stale even when the tracker is still red. Re-run the exact target and the full file before touching `actor-conn` code.
+  - Use the latest successful DT-008 tracked verifier on the branch as the combined-run receipt when a fresh combined rerun is blocked by a different story.
 ---
