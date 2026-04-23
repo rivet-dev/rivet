@@ -300,8 +300,8 @@
         "Tests pass"
       ],
       "priority": 16,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Completed on 2026-04-23: stale non-repro on this branch. Targeted bare replay-ack test, full hibernatable-websocket-protocol file, static/http/bare parallel slice, and `pnpm -F rivetkit check-types` all passed without source changes."
     },
     {
       "id": "DT-017",

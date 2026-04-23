@@ -19,6 +19,7 @@ Started: Thu Apr 23 04:17:16 AM PDT 2026
 - If Rust under `rivetkit-core` changes, make sure the local NAPI `.node` artifact is newer than the changed Rust files before rerunning driver tests.
 - A driver story is not really dead until the matrix-shaped fast/slow verifier stays green; if the exact same file/test regresses there, reopen the existing story instead of spawning a duplicate.
 - DT-008 verifier sweeps should use the explicit fast/slow driver file lists from the progress buckets; `tests/driver -t "static registry.*encoding \(bare\)"` is broader and muddies the counts.
+- Close a stale driver story only after the exact targeted repro, the whole driver file, the relevant matrix slice, and typecheck all pass on the current branch.
 
 ## 2026-04-23T11:45:04Z - DT-000
 - Implemented the urgent Linux NAPI publish fix in `/tmp/rivet-publish-fix` on branch `04-22-chore_fix_remaining_issues_with_rivetkit-core`.
@@ -333,4 +334,13 @@ Started: Thu Apr 23 04:17:16 AM PDT 2026
 - **Learnings for future iterations:**
   - Reopened matrix regressions can still be stale ghosts. Re-run the exact target and the whole file before touching raw-websocket code.
   - A one-off `1006` on a large raw websocket case is not enough evidence for a fix if repeated targeted reruns and the full file stay green on the current branch.
+---
+## 2026-04-23T19:16:56Z - DT-016
+- Rechecked the hibernatable websocket replay-ack regression and confirmed it is stale on the current branch.
+- No source code changed. The exact bare replay target passed, the full `hibernatable-websocket-protocol.test.ts` file passed across bare/CBOR/JSON, the static/http/bare parallel slice passed, and `pnpm -F rivetkit check-types` passed.
+- Files changed: `.agent/notes/driver-test-progress.md`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
+- Verification: `pnpm -F rivetkit test tests/driver/hibernatable-websocket-protocol.test.ts -t "static registry.*encoding \\(bare\\).*replays only unacked indexed websocket messages after sleep and wake"` passed; `pnpm -F rivetkit test tests/driver/hibernatable-websocket-protocol.test.ts` passed with 6 tests; `RIVETKIT_DRIVER_TEST_PARALLEL=1 pnpm -F rivetkit test tests/driver/hibernatable-websocket-protocol.test.ts -t "static registry.*encoding \\(bare\\)"` passed with 2 bare tests; `pnpm -F rivetkit check-types` passed.
+- **Learnings for future iterations:**
+  - DT-016 overlaps the later hibernatable ack-state work. On this branch, close it as a stale non-repro instead of inventing a duplicate fix.
+  - The matrix slice matters for stale driver stories; a single passing targeted repro is not enough evidence.
 ---
