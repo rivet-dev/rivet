@@ -195,6 +195,9 @@ pub(crate) enum WsOutgoing {
 		data: Vec<u8>,
 		binary: bool,
 	},
+	Flush {
+		tx: tokio::sync::oneshot::Sender<()>,
+	},
 	Close {
 		code: Option<u16>,
 		reason: Option<String>,
@@ -208,6 +211,13 @@ impl WebSocketSender {
 
 	pub fn send_text(&self, text: &str) {
 		self.send(text.as_bytes().to_vec(), false);
+	}
+
+	pub async fn flush(&self) {
+		let (tx, rx) = tokio::sync::oneshot::channel();
+		if self.tx.send(WsOutgoing::Flush { tx }).is_ok() {
+			let _ = rx.await;
+		}
 	}
 
 	pub fn close(&self, code: Option<u16>, reason: Option<String>) {

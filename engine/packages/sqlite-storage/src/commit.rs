@@ -10,7 +10,10 @@ use tracing::Instrument;
 
 use crate::engine::{PendingStage, SqliteEngine};
 use crate::error::SqliteStorageError;
-use crate::keys::{delta_chunk_key, delta_chunk_prefix, meta_key, pidx_delta_key};
+use crate::keys::{
+	delta_chunk_key, delta_chunk_prefix, delta_prefix, meta_key, pidx_delta_key, pidx_delta_prefix,
+	shard_prefix,
+};
 use crate::ltx::{LtxHeader, decode_ltx_v3, encode_ltx_v3};
 use crate::quota::{encode_db_head_with_usage, tracked_storage_entry_size};
 use crate::types::{DirtyPage, SQLITE_MAX_DELTA_BYTES, SqliteMeta, SqliteOrigin, decode_db_head};
@@ -71,6 +74,37 @@ pub struct CommitFinalizeResult {
 	pub new_head_txid: u64,
 	pub meta: SqliteMeta,
 	pub delta_bytes: u64,
+}
+
+#[derive(Debug, Default)]
+struct TruncateCleanup {
+	deleted_pidx_rows: Vec<(u32, Vec<u8>, Vec<u8>)>,
+	deleted_delta_rows: Vec<(Vec<u8>, Vec<u8>)>,
+	deleted_shard_rows: Vec<(Vec<u8>, Vec<u8>)>,
+}
+
+impl TruncateCleanup {
+	fn tracked_deleted_bytes(&self) -> u64 {
+		self.deleted_pidx_rows
+			.iter()
+			.map(|(_, key, value)| {
+				tracked_storage_entry_size(key, value)
+					.expect("pidx key should count toward sqlite quota")
+			})
+			.chain(self.deleted_delta_rows.iter().map(|(key, value)| {
+				tracked_storage_entry_size(key, value)
+					.expect("delta key should count toward sqlite quota")
+			}))
+			.chain(self.deleted_shard_rows.iter().map(|(key, value)| {
+				tracked_storage_entry_size(key, value)
+					.expect("shard key should count toward sqlite quota")
+			}))
+			.sum()
+	}
+
+	fn truncated_pgnos(&self) -> impl Iterator<Item = u32> + '_ {
+		self.deleted_pidx_rows.iter().map(|(pgno, _, _)| *pgno)
+	}
 }
 
 #[cfg(test)]
@@ -155,157 +189,180 @@ impl SqliteEngine {
 		let request = request.clone();
 		let dirty_pgnos_for_tx = dirty_pgnos.clone();
 		let run_db_op_start = Instant::now();
-		let (txid, head, delta_bytes, meta_read_duration, ltx_encode_duration, pidx_read_duration) =
-			udb::run_db_op(self.db.as_ref(), self.op_counter.as_ref(), move |tx| {
-				let actor_id = actor_id_for_tx.clone();
-				let request = request.clone();
-				let dirty_pgnos = dirty_pgnos_for_tx.clone();
-				let subspace = subspace.clone();
-				let cached_existing_pidx = cached_existing_pidx.clone();
-				async move {
-					let meta_read_start = Instant::now();
-					let meta_storage_key = meta_key(&actor_id);
-					let meta_bytes = async {
-						udb::tx_get_value_serializable(&tx, &subspace, &meta_storage_key).await
-					}
-					.instrument(tracing::debug_span!("meta_read"))
-					.await?
-					.ok_or(SqliteStorageError::MetaMissing {
-						operation: "commit",
-					})?;
-					let mut head = decode_db_head(&meta_bytes)?;
-					let meta_read_duration = meta_read_start.elapsed();
+		let (
+			txid,
+			head,
+			delta_bytes,
+			truncated_pgnos,
+			meta_read_duration,
+			ltx_encode_duration,
+			pidx_read_duration,
+		) = udb::run_db_op(self.db.as_ref(), self.op_counter.as_ref(), move |tx| {
+			let actor_id = actor_id_for_tx.clone();
+			let request = request.clone();
+			let dirty_pgnos = dirty_pgnos_for_tx.clone();
+			let subspace = subspace.clone();
+			let cached_existing_pidx = cached_existing_pidx.clone();
+			async move {
+				let meta_read_start = Instant::now();
+				let meta_storage_key = meta_key(&actor_id);
+				let meta_bytes = async {
+					udb::tx_get_value_serializable(&tx, &subspace, &meta_storage_key).await
+				}
+				.instrument(tracing::debug_span!("meta_read"))
+				.await?
+				.ok_or(SqliteStorageError::MetaMissing {
+					operation: "commit",
+				})?;
+				let mut head = decode_db_head(&meta_bytes)?;
+				let meta_read_duration = meta_read_start.elapsed();
 
-					if head.generation != request.generation {
-						return Err(SqliteStorageError::FenceMismatch {
-							reason: format!(
-								"commit generation {} did not match current generation {}",
-								request.generation, head.generation
-							),
+				if head.generation != request.generation {
+					return Err(SqliteStorageError::FenceMismatch {
+						reason: format!(
+							"commit generation {} did not match current generation {}",
+							request.generation, head.generation
+						),
+					}
+					.into());
+				}
+				if head.head_txid != request.head_txid {
+					return Err(SqliteStorageError::FenceMismatch {
+						reason: format!(
+							"commit head_txid {} did not match current head_txid {}",
+							request.head_txid, head.head_txid
+						),
+					}
+					.into());
+				}
+
+				let txid = head.next_txid;
+				ensure!(
+					txid > head.head_txid,
+					"next txid {} must advance past head txid {}",
+					txid,
+					head.head_txid
+				);
+				let truncate_cleanup = collect_truncate_cleanup(
+					&tx,
+					&subspace,
+					&actor_id,
+					head.db_size_pages,
+					request.db_size_pages,
+					head.shard_size,
+				)
+				.await?;
+
+				let ltx_encode_start = Instant::now();
+				let delta = {
+					let _ltx_encode_span = tracing::debug_span!("ltx_encode").entered();
+					encode_ltx_v3(
+						LtxHeader::delta(txid, request.db_size_pages, request.now_ms),
+						&request.dirty_pages,
+					)
+					.context("encode commit delta")?
+				};
+				let ltx_encode_duration = ltx_encode_start.elapsed();
+				let delta_bytes = delta.len() as u64;
+
+				head.head_txid = txid;
+				head.next_txid += 1;
+				head.db_size_pages = request.db_size_pages;
+
+				let txid_bytes = txid.to_be_bytes();
+				let mut usage_without_meta = head.sqlite_storage_used.saturating_sub(
+					tracked_storage_entry_size(&meta_storage_key, &meta_bytes)
+						.expect("meta key should count toward sqlite quota"),
+				);
+				usage_without_meta =
+					usage_without_meta.saturating_sub(truncate_cleanup.tracked_deleted_bytes());
+				usage_without_meta +=
+					tracked_storage_entry_size(&delta_chunk_key(&actor_id, txid, 0), &delta)
+						.expect("delta chunk key should count toward sqlite quota");
+				let pidx_read_start = Instant::now();
+				let existing_pidx = match cached_existing_pidx {
+					Some(ref existing) => existing.clone(),
+					None => {
+						let mut existing = BTreeMap::new();
+						for pgno in &dirty_pgnos {
+							existing.insert(
+								*pgno,
+								udb::tx_get_value(
+									&tx,
+									&subspace,
+									&pidx_delta_key(&actor_id, *pgno),
+								)
+								.await?
+								.is_some(),
+							);
 						}
-						.into());
+						existing
 					}
-					if head.head_txid != request.head_txid {
-						return Err(SqliteStorageError::FenceMismatch {
-							reason: format!(
-								"commit head_txid {} did not match current head_txid {}",
-								request.head_txid, head.head_txid
-							),
-						}
-						.into());
-					}
-
-					let txid = head.next_txid;
-					ensure!(
-						txid > head.head_txid,
-						"next txid {} must advance past head txid {}",
-						txid,
-						head.head_txid
-					);
-
-					let ltx_encode_start = Instant::now();
-					let delta = {
-						let _ltx_encode_span = tracing::debug_span!("ltx_encode").entered();
-						encode_ltx_v3(
-							LtxHeader::delta(txid, request.db_size_pages, request.now_ms),
-							&request.dirty_pages,
+				};
+				let pidx_read_duration = pidx_read_start.elapsed();
+				for pgno in &dirty_pgnos {
+					if !existing_pidx.get(pgno).copied().unwrap_or(false) {
+						usage_without_meta += tracked_storage_entry_size(
+							&pidx_delta_key(&actor_id, *pgno),
+							&txid_bytes,
 						)
-						.context("encode commit delta")?
-					};
-					let ltx_encode_duration = ltx_encode_start.elapsed();
-					let delta_bytes = delta.len() as u64;
-
-					head.head_txid = txid;
-					head.next_txid += 1;
-					head.db_size_pages = request.db_size_pages;
-
-					let txid_bytes = txid.to_be_bytes();
-					let mut usage_without_meta = head.sqlite_storage_used.saturating_sub(
-						tracked_storage_entry_size(&meta_storage_key, &meta_bytes)
-							.expect("meta key should count toward sqlite quota"),
-					);
-					usage_without_meta +=
-						tracked_storage_entry_size(&delta_chunk_key(&actor_id, txid, 0), &delta)
-							.expect("delta chunk key should count toward sqlite quota");
-					let pidx_read_start = Instant::now();
-					let existing_pidx = match cached_existing_pidx {
-						Some(ref existing) => existing.clone(),
-						None => {
-							let mut existing = BTreeMap::new();
-							for pgno in &dirty_pgnos {
-								existing.insert(
-									*pgno,
-									udb::tx_get_value(
-										&tx,
-										&subspace,
-										&pidx_delta_key(&actor_id, *pgno),
-									)
-									.await?
-									.is_some(),
-								);
-							}
-							existing
-						}
-					};
-					let pidx_read_duration = pidx_read_start.elapsed();
-					for pgno in &dirty_pgnos {
-						if !existing_pidx.get(pgno).copied().unwrap_or(false) {
-							usage_without_meta += tracked_storage_entry_size(
-								&pidx_delta_key(&actor_id, *pgno),
-								&txid_bytes,
-							)
-							.expect("pidx key should count toward sqlite quota");
-						}
+						.expect("pidx key should count toward sqlite quota");
 					}
+				}
 
+				udb::tx_write_value(&tx, &subspace, &delta_chunk_key(&actor_id, txid, 0), &delta)?;
+				for pgno in &dirty_pgnos {
 					udb::tx_write_value(
 						&tx,
 						&subspace,
-						&delta_chunk_key(&actor_id, txid, 0),
-						&delta,
+						&pidx_delta_key(&actor_id, *pgno),
+						&txid_bytes,
 					)?;
-					for pgno in &dirty_pgnos {
-						udb::tx_write_value(
-							&tx,
-							&subspace,
-							&pidx_delta_key(&actor_id, *pgno),
-							&txid_bytes,
-						)?;
-					}
-
-					let (updated_head, encoded_head) =
-						encode_db_head_with_usage(&actor_id, &head, usage_without_meta)?;
-					if updated_head.sqlite_storage_used > updated_head.sqlite_max_storage {
-						bail!(
-							"SqliteStorageQuotaExceeded: sqlite storage used {} would exceed max {}",
-							updated_head.sqlite_storage_used,
-							updated_head.sqlite_max_storage
-						);
-					}
-					udb::tx_write_value(&tx, &subspace, &meta_storage_key, &encoded_head)?;
-					#[cfg(test)]
-					test_hooks::maybe_fail_fast_commit_write(&actor_id)?;
-
-					Ok((
-						txid,
-						updated_head,
-						delta_bytes,
-						meta_read_duration,
-						ltx_encode_duration,
-						pidx_read_duration,
-					))
 				}
-			})
-			.await
-			.map_err(|err| {
-				if matches!(
-					err.downcast_ref::<SqliteStorageError>(),
-					Some(SqliteStorageError::FenceMismatch { .. })
-				) {
-					self.metrics.inc_fence_mismatch_total();
+				for (_, key, _) in &truncate_cleanup.deleted_pidx_rows {
+					udb::tx_delete_value(&tx, &subspace, key);
 				}
-				err
-			})?;
+				for (key, _) in &truncate_cleanup.deleted_delta_rows {
+					udb::tx_delete_value(&tx, &subspace, key);
+				}
+				for (key, _) in &truncate_cleanup.deleted_shard_rows {
+					udb::tx_delete_value(&tx, &subspace, key);
+				}
+
+				let (updated_head, encoded_head) =
+					encode_db_head_with_usage(&actor_id, &head, usage_without_meta)?;
+				if updated_head.sqlite_storage_used > updated_head.sqlite_max_storage {
+					bail!(
+						"SqliteStorageQuotaExceeded: sqlite storage used {} would exceed max {}",
+						updated_head.sqlite_storage_used,
+						updated_head.sqlite_max_storage
+					);
+				}
+				udb::tx_write_value(&tx, &subspace, &meta_storage_key, &encoded_head)?;
+				#[cfg(test)]
+				test_hooks::maybe_fail_fast_commit_write(&actor_id)?;
+
+				Ok((
+					txid,
+					updated_head,
+					delta_bytes,
+					truncate_cleanup.truncated_pgnos().collect::<Vec<_>>(),
+					meta_read_duration,
+					ltx_encode_duration,
+					pidx_read_duration,
+				))
+			}
+		})
+		.await
+		.map_err(|err| {
+			if matches!(
+				err.downcast_ref::<SqliteStorageError>(),
+				Some(SqliteStorageError::FenceMismatch { .. })
+			) {
+				self.metrics.inc_fence_mismatch_total();
+			}
+			err
+		})?;
 		let run_db_op_duration = run_db_op_start.elapsed();
 		let udb_write_duration = run_db_op_duration
 			.saturating_sub(meta_read_duration)
@@ -314,6 +371,9 @@ impl SqliteEngine {
 
 		match self.page_indices.entry_async(actor_id.to_string()).await {
 			Entry::Occupied(entry) => {
+				for pgno in &truncated_pgnos {
+					entry.get().remove(*pgno);
+				}
 				for pgno in dirty_pgnos {
 					entry.get().insert(pgno, txid);
 				}
@@ -607,6 +667,7 @@ impl SqliteEngine {
 		let (
 			head,
 			staged_pgnos,
+			truncated_pgnos,
 			meta_read_duration,
 			stage_load_duration,
 			pidx_read_duration,
@@ -689,6 +750,15 @@ impl SqliteEngine {
 					);
 				}
 				let pidx_read_duration = pidx_read_start.elapsed();
+				let truncate_cleanup = collect_truncate_cleanup(
+					&tx,
+					&subspace,
+					&actor_id,
+					head.db_size_pages,
+					request.new_db_size_pages,
+					head.shard_size,
+				)
+				.await?;
 
 				head.head_txid = request.txid;
 				head.db_size_pages = request.new_db_size_pages;
@@ -701,6 +771,8 @@ impl SqliteEngine {
 					tracked_storage_entry_size(&meta_storage_key, &meta_bytes)
 						.expect("meta key should count toward sqlite quota"),
 				);
+				usage_without_meta =
+					usage_without_meta.saturating_sub(truncate_cleanup.tracked_deleted_bytes());
 				for pgno in &staged_pgnos {
 					if !existing_pidx.get(pgno).copied().unwrap_or(false) {
 						usage_without_meta += tracked_storage_entry_size(
@@ -720,6 +792,15 @@ impl SqliteEngine {
 						&txid_bytes,
 					)?;
 				}
+				for (_, key, _) in &truncate_cleanup.deleted_pidx_rows {
+					udb::tx_delete_value(&tx, &subspace, key);
+				}
+				for (key, _) in &truncate_cleanup.deleted_delta_rows {
+					udb::tx_delete_value(&tx, &subspace, key);
+				}
+				for (key, _) in &truncate_cleanup.deleted_shard_rows {
+					udb::tx_delete_value(&tx, &subspace, key);
+				}
 				let pidx_write_duration = pidx_write_start.elapsed();
 
 				let (updated_head, encoded_head) =
@@ -738,6 +819,7 @@ impl SqliteEngine {
 				Ok((
 					updated_head,
 					staged_pgnos,
+					truncate_cleanup.truncated_pgnos().collect::<Vec<_>>(),
 					meta_read_duration,
 					stage_load_duration,
 					pidx_read_duration,
@@ -760,6 +842,9 @@ impl SqliteEngine {
 		// Update the in-memory PIDX cache so subsequent reads skip the store scan.
 		match self.page_indices.entry_async(actor_id.to_string()).await {
 			Entry::Occupied(entry) => {
+				for pgno in &truncated_pgnos {
+					entry.get().remove(*pgno);
+				}
 				for pgno in &staged_pgnos {
 					entry.get().insert(*pgno, request.txid);
 				}
@@ -813,6 +898,114 @@ fn dirty_pages_raw_bytes(dirty_pages: &[DirtyPage]) -> Result<u64> {
 	})
 }
 
+async fn collect_truncate_cleanup(
+	tx: &universaldb::Transaction,
+	subspace: &universaldb::Subspace,
+	actor_id: &str,
+	previous_db_size_pages: u32,
+	new_db_size_pages: u32,
+	shard_size: u32,
+) -> Result<TruncateCleanup> {
+	if new_db_size_pages >= previous_db_size_pages {
+		return Ok(TruncateCleanup::default());
+	}
+
+	let pidx_rows = udb::tx_scan_prefix_values(tx, subspace, &pidx_delta_prefix(actor_id)).await?;
+	let mut retained_txids = BTreeMap::<u64, usize>::new();
+	let mut truncated_txids = BTreeMap::<u64, usize>::new();
+	let mut cleanup = TruncateCleanup::default();
+
+	for (key, value) in pidx_rows {
+		let pgno = decode_pidx_pgno(actor_id, &key)?;
+		let txid = decode_pidx_txid(&value)?;
+		if pgno > new_db_size_pages {
+			*truncated_txids.entry(txid).or_default() += 1;
+			cleanup.deleted_pidx_rows.push((pgno, key, value));
+		} else {
+			*retained_txids.entry(txid).or_default() += 1;
+		}
+	}
+
+	if !truncated_txids.is_empty() {
+		for (key, value) in
+			udb::tx_scan_prefix_values(tx, subspace, &delta_prefix(actor_id)).await?
+		{
+			let txid = crate::keys::decode_delta_chunk_txid(actor_id, &key)?;
+			if truncated_txids.contains_key(&txid) && !retained_txids.contains_key(&txid) {
+				cleanup.deleted_delta_rows.push((key, value));
+			}
+		}
+	}
+
+	for (key, value) in udb::tx_scan_prefix_values(tx, subspace, &shard_prefix(actor_id)).await? {
+		let shard_id = decode_shard_id(actor_id, &key)?;
+		if shard_id.saturating_mul(shard_size) > new_db_size_pages {
+			cleanup.deleted_shard_rows.push((key, value));
+		}
+	}
+
+	Ok(cleanup)
+}
+
+fn decode_pidx_pgno(actor_id: &str, key: &[u8]) -> Result<u32> {
+	let prefix = pidx_delta_prefix(actor_id);
+	ensure!(
+		key.starts_with(&prefix),
+		"pidx key did not start with expected prefix"
+	);
+
+	let suffix = &key[prefix.len()..];
+	ensure!(
+		suffix.len() == std::mem::size_of::<u32>(),
+		"pidx key suffix had {} bytes, expected {}",
+		suffix.len(),
+		std::mem::size_of::<u32>()
+	);
+
+	Ok(u32::from_be_bytes(
+		suffix
+			.try_into()
+			.context("pidx key suffix should decode as u32")?,
+	))
+}
+
+fn decode_pidx_txid(value: &[u8]) -> Result<u64> {
+	ensure!(
+		value.len() == std::mem::size_of::<u64>(),
+		"pidx value had {} bytes, expected {}",
+		value.len(),
+		std::mem::size_of::<u64>()
+	);
+
+	Ok(u64::from_be_bytes(
+		value
+			.try_into()
+			.context("pidx value should decode as u64")?,
+	))
+}
+
+fn decode_shard_id(actor_id: &str, key: &[u8]) -> Result<u32> {
+	let prefix = shard_prefix(actor_id);
+	ensure!(
+		key.starts_with(&prefix),
+		"shard key did not start with expected prefix"
+	);
+
+	let suffix = &key[prefix.len()..];
+	ensure!(
+		suffix.len() == std::mem::size_of::<u32>(),
+		"shard key suffix had {} bytes, expected {}",
+		suffix.len(),
+		std::mem::size_of::<u32>()
+	);
+
+	Ok(u32::from_be_bytes(
+		suffix
+			.try_into()
+			.context("shard key suffix should decode as u32")?,
+	))
+}
+
 #[cfg(test)]
 mod tests {
 	use anyhow::Result;
@@ -826,7 +1019,7 @@ mod tests {
 	use crate::engine::SqliteEngine;
 	use crate::error::SqliteStorageError;
 	use crate::keys::{
-		delta_chunk_key, delta_chunk_prefix, meta_key, pidx_delta_key, pidx_delta_prefix,
+		delta_chunk_key, delta_chunk_prefix, meta_key, pidx_delta_key, pidx_delta_prefix, shard_key,
 	};
 	use crate::ltx::{LtxHeader, encode_ltx_v3};
 	use crate::quota::{encode_db_head_with_usage, tracked_storage_entry_size};
@@ -952,6 +1145,27 @@ mod tests {
 			.into_iter()
 			.filter_map(|(key, value)| tracked_storage_entry_size(&key, &value))
 			.sum())
+	}
+
+	async fn rewrite_meta_with_actual_usage(engine: &SqliteEngine, actor_id: &str) -> Result<()> {
+		let meta_key = meta_key(actor_id);
+		let meta_bytes = read_value(engine, meta_key.clone())
+			.await?
+			.expect("meta should exist before rewrite");
+		let head = decode_db_head(&meta_bytes)?;
+		let usage_without_meta = actual_tracked_usage(engine).await?.saturating_sub(
+			tracked_storage_entry_size(&meta_key, &meta_bytes)
+				.expect("meta key should count toward sqlite quota"),
+		);
+		let (_, rewritten_meta) = encode_db_head_with_usage(actor_id, &head, usage_without_meta)?;
+		apply_write_ops(
+			engine.db.as_ref(),
+			&engine.subspace,
+			engine.op_counter.as_ref(),
+			vec![WriteOp::put(meta_key, rewritten_meta)],
+		)
+		.await?;
+		Ok(())
 	}
 
 	fn request(generation: u64, head_txid: u64) -> CommitRequest {
@@ -1232,6 +1446,157 @@ mod tests {
 				bytes: Some(page(0x64)),
 			}]
 		);
+
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn commit_shrink_reclaims_truncated_rows_and_usage() -> Result<()> {
+		let (db, subspace) = test_db().await?;
+		let (engine, _compaction_rx) = SqliteEngine::new(db, subspace);
+		let mut head = seeded_head();
+		head.head_txid = 3;
+		head.next_txid = 4;
+		head.db_size_pages = 130;
+		write_seeded_meta(&engine, TEST_ACTOR, head).await?;
+		apply_write_ops(
+			engine.db.as_ref(),
+			&engine.subspace,
+			engine.op_counter.as_ref(),
+			vec![
+				WriteOp::put(
+					delta_blob_key(TEST_ACTOR, 1),
+					encode_ltx_v3(
+						LtxHeader::delta(1, 130, 1_000),
+						&[DirtyPage {
+							pgno: 2,
+							bytes: page(0x12),
+						}],
+					)?,
+				),
+				WriteOp::put(
+					delta_blob_key(TEST_ACTOR, 2),
+					encode_ltx_v3(
+						LtxHeader::delta(2, 130, 1_001),
+						&[
+							DirtyPage {
+								pgno: 70,
+								bytes: page(0x70),
+							},
+							DirtyPage {
+								pgno: 71,
+								bytes: page(0x71),
+							},
+						],
+					)?,
+				),
+				WriteOp::put(
+					delta_blob_key(TEST_ACTOR, 3),
+					encode_ltx_v3(
+						LtxHeader::delta(3, 130, 1_002),
+						&[DirtyPage {
+							pgno: 130,
+							bytes: page(0x82),
+						}],
+					)?,
+				),
+				WriteOp::put(
+					shard_key(TEST_ACTOR, 2),
+					encode_ltx_v3(
+						LtxHeader::delta(3, 130, 1_002),
+						&[
+							DirtyPage {
+								pgno: 129,
+								bytes: page(0x91),
+							},
+							DirtyPage {
+								pgno: 130,
+								bytes: page(0x92),
+							},
+						],
+					)?,
+				),
+				WriteOp::put(pidx_delta_key(TEST_ACTOR, 2), 1_u64.to_be_bytes().to_vec()),
+				WriteOp::put(pidx_delta_key(TEST_ACTOR, 70), 2_u64.to_be_bytes().to_vec()),
+				WriteOp::put(pidx_delta_key(TEST_ACTOR, 71), 2_u64.to_be_bytes().to_vec()),
+				WriteOp::put(
+					pidx_delta_key(TEST_ACTOR, 130),
+					3_u64.to_be_bytes().to_vec(),
+				),
+			],
+		)
+		.await?;
+		rewrite_meta_with_actual_usage(&engine, TEST_ACTOR).await?;
+		let before_usage = actual_tracked_usage(&engine).await?;
+		let cached_index = engine.get_or_load_pidx(TEST_ACTOR).await?;
+		assert_eq!(cached_index.get().get(70), Some(2));
+		drop(cached_index);
+
+		let result = engine
+			.commit(
+				TEST_ACTOR,
+				CommitRequest {
+					generation: 4,
+					head_txid: 3,
+					db_size_pages: 2,
+					dirty_pages: vec![DirtyPage {
+						pgno: 1,
+						bytes: page(0x01),
+					}],
+					now_ms: 2_000,
+				},
+			)
+			.await?;
+
+		assert!(
+			read_value(&engine, pidx_delta_key(TEST_ACTOR, 70))
+				.await?
+				.is_none()
+		);
+		assert!(
+			read_value(&engine, pidx_delta_key(TEST_ACTOR, 71))
+				.await?
+				.is_none()
+		);
+		assert!(
+			read_value(&engine, pidx_delta_key(TEST_ACTOR, 130))
+				.await?
+				.is_none()
+		);
+		assert_eq!(
+			read_value(&engine, pidx_delta_key(TEST_ACTOR, 2)).await?,
+			Some(1_u64.to_be_bytes().to_vec())
+		);
+		assert!(
+			read_value(&engine, delta_blob_key(TEST_ACTOR, 2))
+				.await?
+				.is_none()
+		);
+		assert!(
+			read_value(&engine, delta_blob_key(TEST_ACTOR, 3))
+				.await?
+				.is_none()
+		);
+		assert!(
+			read_value(&engine, shard_key(TEST_ACTOR, 2))
+				.await?
+				.is_none()
+		);
+
+		let after_usage = actual_tracked_usage(&engine).await?;
+		let stored_head = decode_db_head(
+			&read_value(&engine, meta_key(TEST_ACTOR))
+				.await?
+				.expect("meta should exist after shrink commit"),
+		)?;
+		assert!(after_usage < before_usage);
+		assert_eq!(result.meta.sqlite_storage_used, after_usage);
+		assert_eq!(stored_head.sqlite_storage_used, after_usage);
+
+		let cached_index = engine.get_or_load_pidx(TEST_ACTOR).await?;
+		assert_eq!(cached_index.get().get(70), None);
+		assert_eq!(cached_index.get().get(130), None);
+		assert_eq!(cached_index.get().get(2), Some(1));
 
 		Ok(())
 	}

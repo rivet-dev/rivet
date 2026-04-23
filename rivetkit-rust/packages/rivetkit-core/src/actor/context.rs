@@ -1032,17 +1032,25 @@ impl ActorContext {
 		weak.upgrade().map(Self)
 	}
 
-	pub(crate) fn set_ready(&self, ready: bool) {
+	#[doc(hidden)]
+	pub fn set_ready(&self, ready: bool) {
 		self.set_sleep_ready(ready);
 		self.reset_sleep_timer();
 	}
 
-	pub(crate) fn set_started(&self, started: bool) {
+	#[doc(hidden)]
+	pub fn set_started(&self, started: bool) {
 		self.set_sleep_started(started);
 		self.reset_sleep_timer();
 	}
 
-	pub(crate) fn started(&self) -> bool {
+	#[doc(hidden)]
+	pub fn ready(&self) -> bool {
+		self.sleep_ready()
+	}
+
+	#[doc(hidden)]
+	pub fn started(&self) -> bool {
 		self.sleep_started()
 	}
 

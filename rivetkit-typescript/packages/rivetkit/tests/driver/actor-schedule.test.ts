@@ -1,5 +1,5 @@
-import { describeDriverMatrix } from "./shared-matrix";
 import { describe, expect, test, vi } from "vitest";
+import { describeDriverMatrix } from "./shared-matrix";
 import { setupDriverTest, waitFor } from "./shared-utils";
 
 describeDriverMatrix("Actor Schedule", (driverTestConfig) => {
@@ -70,6 +70,7 @@ describeDriverMatrix("Actor Schedule", (driverTestConfig) => {
 					// Wait for the scheduled task to execute
 					await waitFor(driverTestConfig, 500);
 
+					// Poll until the scheduled task mutates actor state because schedule execution is asynchronous.
 					await vi.waitFor(async () => {
 						const logCount = await actor.getLogCount();
 						const scheduledCount = await actor.getScheduledCount();
@@ -98,6 +99,7 @@ describeDriverMatrix("Actor Schedule", (driverTestConfig) => {
 
 					// Wait for first task only
 					await waitFor(driverTestConfig, 500);
+					// Poll until the first delayed task records its history entry.
 					await vi.waitFor(async () => {
 						const history1 = await scheduled.getTaskHistory();
 						expect(history1[0]).toBe("first");
@@ -105,6 +107,7 @@ describeDriverMatrix("Actor Schedule", (driverTestConfig) => {
 
 					// Wait for second task
 					await waitFor(driverTestConfig, 500);
+					// Poll until the second delayed task records its history entry.
 					await vi.waitFor(async () => {
 						const history2 = await scheduled.getTaskHistory();
 						expect(history2.slice(0, 2)).toEqual([
@@ -115,6 +118,7 @@ describeDriverMatrix("Actor Schedule", (driverTestConfig) => {
 
 					// Wait for third task
 					await waitFor(driverTestConfig, 500);
+					// Poll until the final delayed task records its history entry.
 					await vi.waitFor(async () => {
 						const history3 = await scheduled.getTaskHistory();
 						expect(history3).toEqual(["first", "second", "third"]);

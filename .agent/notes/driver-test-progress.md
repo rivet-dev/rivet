@@ -6,9 +6,9 @@ Config: registry (static), client type (http), encoding (bare)
 ## Fast Tests
 
 - [x] manager-driver | Manager Driver Tests
-- [!] actor-conn | Actor Connection Tests
+- [x] actor-conn | Actor Connection Tests
 - [x] actor-conn-state | Actor Connection State Tests
-- [!] conn-error-serialization | Connection Error Serialization Tests
+- [x] conn-error-serialization | Connection Error Serialization Tests
 - [x] actor-destroy | Actor Destroy Tests
 - [x] request-access | Request Access in Lifecycle Hooks
 - [x] actor-handle | Actor Handle Tests
@@ -19,14 +19,14 @@ Config: registry (static), client type (http), encoding (bare)
 - [x] actor-onstatechange | Actor State Change Tests
 - [x] actor-db | Actor Database
 - [x] actor-db-raw | Actor Database Raw Tests
-- [!] actor-workflow | Actor Workflow Tests
+- [x] actor-workflow | Actor Workflow Tests
 - [x] actor-error-handling | Actor Error Handling Tests
-- [!] actor-queue | Actor Queue Tests
+- [x] actor-queue | Actor Queue Tests
 - [x] actor-kv | Actor KV Tests
 - [x] actor-stateless | Actor Stateless Tests
 - [x] raw-http | raw http
 - [x] raw-http-request-properties | raw http request properties
-- [!] raw-websocket | raw websocket
+- [x] raw-websocket | raw websocket
 - [x] actor-inspector | Actor Inspector Tests
 - [x] gateway-query-url | Gateway Query URL Tests
 - [x] actor-db-pragma-migration | Actor Database Pragma Migration
@@ -44,7 +44,7 @@ Config: registry (static), client type (http), encoding (bare)
 - [x] actor-lifecycle | Actor Lifecycle Tests
 - [x] actor-conn-hibernation | Actor Connection Hibernation Tests
 - [x] actor-run | Actor Run Tests
-- [!] hibernatable-websocket-protocol | hibernatable websocket protocol
+- [x] hibernatable-websocket-protocol | hibernatable websocket protocol
 - [x] actor-db-stress | Actor Database Stress Tests
 
 ## Excluded
@@ -87,3 +87,79 @@ Config: registry (static), client type (http), encoding (bare)
 - 2026-04-23T07:02:27.000Z slow parallel: FAIL (67 passed, 1 failed, 166 skipped)
 - 2026-04-23T07:02:27.000Z hibernatable-websocket-protocol: FAIL - replays only unacked indexed websocket messages after sleep and wake. Ack state was undefined instead of index 1.
 - 2026-04-23T07:02:40.000Z typecheck: PASS (`pnpm -F rivetkit check-types`).
+- 2026-04-23T11:57:29.000Z serverless-handler: PASS full file (3 passed, 0 failed; static/http/bare). `/start` uses an actor ID created in the same engine namespace as the serverless envoy headers.
+- 2026-04-23T12:14:00.000Z DT-008 full-file recheck: FAIL (239 passed, 4 failed, 33 skipped) - actor-conn bare `onOpen should be called when connection opens`; actor-inspector cbor `POST /inspector/database/execute supports named properties`; conn-error-serialization bare/cbor `createConnState preserves group/code` timed out. Follow-up stories: DT-045, DT-046; DT-014 already covers conn-error-serialization.
+- 2026-04-23T12:19:11.000Z actor-conn: PASS DT-011 recheck. Targeted bare oversized response passed; full actor-conn file passed (69 passed, 0 failed); parallel bare actor-conn suite passed (23 passed, 0 failed, 46 skipped).
+- 2026-04-23T12:22:37.000Z actor-inspector: PASS DT-046 recheck. Targeted CBOR named-properties inspector database execute passed; full actor-inspector file passed (63 passed, 0 failed).
+- 2026-04-23T12:26:06.000Z actor-conn: PASS DT-045 recheck. Targeted bare onOpen passed; full actor-conn file passed (69 passed, 0 failed).
+- 2026-04-23T12:40:56.000Z actor-queue: PASS DT-012. Fixed core enqueue-and-wait waiter registration race; targeted bare wait-send passed; full actor-queue file passed (75 passed, 0 failed); parallel bare actor-queue suite passed (25 passed, 0 failed, 50 skipped).
+- 2026-04-23T13:06:56.000Z conn-error-serialization: PASS DT-014. Targeted bare createConnState error passed; full conn-error-serialization file passed (9 passed, 0 failed); parallel bare conn-error-serialization suite passed (3 passed, 0 failed, 6 skipped).
+- 2026-04-23T13:11:10.000Z actor-workflow: PASS DT-013 recheck. Targeted bare workflow destroy passed; full actor-workflow file passed (54 passed, 0 failed, 3 skipped); parallel bare actor-workflow suite passed (18 passed, 0 failed, 39 skipped).
+- 2026-04-23T13:23:10.000Z DT-008 full-file recheck: FAIL (240 passed, 3 failed, 33 skipped) - actor-conn bare `isConnected should be false before connection opens` failed at `tests/driver/actor-conn.test.ts:419`; conn-error-serialization bare/cbor `createConnState preserves group/code` timed out at `tests/driver/conn-error-serialization.test.ts:7`. Follow-up stories: DT-047, DT-048.
+- 2026-04-23T13:38:30.000Z conn-error-serialization: PASS DT-048. Root cause was a stale NAPI artifact older than `rivetkit-core/src/registry/websocket.rs`; `pnpm --filter @rivetkit/rivetkit-napi build:force` refreshed the native bridge. Targeted bare and CBOR createConnState error tests passed; full conn-error-serialization file passed (9 passed, 0 failed); six-file DT-008 verifier showed conn-error-serialization passing across bare/CBOR/JSON and remains blocked only by DT-047 actor-conn (242 passed, 1 failed, 33 skipped).
+- 2026-04-23T13:51:44.000Z actor-conn: PASS DT-047. Targeted bare `isConnected should be false before connection opens` passed; full actor-conn file passed (69 passed, 0 failed); six-file DT-008 verifier showed actor-conn green across bare/CBOR/JSON.
+- 2026-04-23T13:51:44.000Z conn-error-serialization: FAIL - DT-047 six-file verifier failed static/CBOR `createConnState preserves group/code` with `Error: Test timed out in 30000ms`; reopened DT-048.
+- 2026-04-23T14:04:08.000Z DT-008 full-file recheck: FAIL (241 passed, 2 failed, 33 skipped) - conn-error-serialization JSON `createConnState preserves group/code` timed out at `tests/driver/conn-error-serialization.test.ts:7`; actor-sleep-db JSON `nested waitUntil inside waitUntil is drained before shutdown` failed at `tests/driver/actor-sleep-db.test.ts:463` with `RivetError: Request timed out after 15 seconds.` Updated DT-048 for JSON coverage and added DT-049.
+- 2026-04-23T14:04:08.000Z hibernatable-websocket-protocol: PASS DT-008 recheck (6 passed, 0 failed across bare/CBOR/JSON).
+- 2026-04-23T14:21:20.000Z actor-sleep-db: PASS DT-049. Targeted JSON nested waitUntil passed; full actor-sleep-db file passed (42 passed, 0 failed, 30 skipped); six-file DT-008 verifier showed actor-sleep-db green across bare/CBOR/JSON.
+- 2026-04-23T14:21:20.000Z actor-workflow: FAIL - static/CBOR `starts child workflows created inside workflow steps` failed at `tests/driver/actor-workflow.test.ts:173`; child result was `timedOut` instead of completed. Follow-up story: DT-050.
+- 2026-04-23T14:32:45.000Z DT-008 full-file recheck: FAIL (241 passed, 2 failed, 33 skipped) - conn-error-serialization JSON `createConnState preserves group/code` timed out at `tests/driver/conn-error-serialization.test.ts:7`; actor-workflow JSON `starts child workflows created inside workflow steps` failed at `tests/driver/actor-workflow.test.ts:173` with child result `timedOut` instead of completed. Existing stories cover both failures: DT-048 and DT-050.
+- 2026-04-23T14:55:02.000Z DT-008 full-file recheck: FAIL (240 passed, 3 failed, 33 skipped) - conn-error-serialization bare/CBOR/JSON `createConnState preserves group/code` timed out at `tests/driver/conn-error-serialization.test.ts:7`. Existing story DT-048 covers the failure. Actor-workflow passed in this combined verifier run (57 tests, 3 skipped).
+- 2026-04-23T15:18:32.000Z conn-error-serialization: PASS DT-048. Targeted bare/CBOR/JSON createConnState error checks passed; full conn-error-serialization file passed (9 passed, 0 failed); six-file DT-008 verifier showed conn-error-serialization green across bare/CBOR/JSON.
+- 2026-04-23T15:18:32.000Z actor-conn: FAIL - DT-048 six-file verifier failed static/bare `isConnected should be false before connection opens` at `tests/driver/actor-conn.test.ts:419` with `AssertionError: expected false to be true // Object.is equality`; reopened DT-047.
+- 2026-04-23T15:29:56.000Z DT-008 full-file recheck: FAIL (242 passed, 1 failed, 33 skipped) - conn-error-serialization bare `createConnState preserves group/code` timed out at `tests/driver/conn-error-serialization.test.ts:7`. Existing story DT-048 was reopened.
+- 2026-04-23T16:10:02.000Z conn-error-serialization: PASS DT-048. Added an envoy WebSocketSender flush before actor-connect setup-error close frames and fixed client `actionId: 0` error routing; targeted JSON createConnState passed; full conn-error-serialization passed (9 passed, 0 failed); six-file DT-008 verifier passed (243 passed, 33 skipped).
+- 2026-04-23T16:23:57.000Z fast parallel: FAIL (285 passed, 2 failed, 577 skipped)
+- 2026-04-23T16:23:57.000Z actor-conn: FAIL - `isConnected should be false before connection opens` failed at `tests/driver/actor-conn.test.ts:419` with `AssertionError: expected false to be true // Object.is equality`. Existing story DT-047 covers this failure.
+- 2026-04-23T16:23:57.000Z actor-queue: FAIL - `drains many-queue child actors created from run handlers while connected` failed at `tests/driver/actor-queue.test.ts:303` with `RivetError: Actor channel 'dispatch_inbox' is overloaded while attempting to dispatch_queue_send (capacity 1024).` Follow-up story: DT-051.
+- 2026-04-23T16:23:57.000Z raw-websocket: PASS in fast static/http/bare verifier.
+- 2026-04-23T16:23:57.000Z slow parallel: PASS (68 passed, 0 failed, 166 skipped)
+- 2026-04-23T16:27:47.000Z raw-websocket: PASS DT-015. Targeted bare hibernatable ack-state tests passed; full raw-websocket file passed (39 passed, 0 failed across bare/CBOR/JSON); typecheck passed.
+- 2026-04-23T16:44:04.000Z fast parallel: FAIL (285 passed, 2 failed, 577 skipped)
+- 2026-04-23T16:44:04.000Z actor-conn: FAIL - `isConnected should be false before connection opens` failed at `tests/driver/actor-conn.test.ts:419` with `AssertionError: expected false to be true // Object.is equality`. Existing story DT-047 covers this failure.
+- 2026-04-23T16:44:04.000Z raw-websocket: FAIL - `acks buffered indexed raw websocket messages immediately at the threshold` failed at `tests/driver/raw-websocket.test.ts:752` with `AssertionError: expected undefined to match object { type: 'welcome' }`. Reopened DT-015.
+- 2026-04-23T16:44:04.000Z slow parallel: FAIL (67 passed, 1 failed, 166 skipped)
+- 2026-04-23T16:44:04.000Z actor-run: FAIL - `run handler starts after actor startup` failed at `tests/driver/actor-run.test.ts:19` with `AssertionError: expected false to be true // Object.is equality`. Follow-up story: DT-052.
+- 2026-04-23T16:58:02.000Z fast parallel: FAIL (286 passed, 1 failed, 577 skipped)
+- 2026-04-23T16:58:02.000Z actor-conn: PASS in fast static/http/bare verifier.
+- 2026-04-23T16:58:02.000Z actor-queue: PASS in fast static/http/bare verifier.
+- 2026-04-23T16:58:02.000Z raw-websocket: PASS in fast static/http/bare verifier.
+- 2026-04-23T16:58:02.000Z lifecycle-hooks: FAIL - `rejects connection with generic error` timed out at `tests/driver/lifecycle-hooks.test.ts:31`. Follow-up story: DT-053.
+- 2026-04-23T16:58:02.000Z slow parallel: PASS (68 passed, 0 failed, 166 skipped)
+- 2026-04-23T16:58:02.000Z actor-run: PASS in slow static/http/bare verifier.
+- 2026-04-23T17:13:02.000Z lifecycle-hooks: PASS DT-053. Targeted bare `rejects connection with generic error` passed; full lifecycle-hooks file passed (24 passed, 0 failed); `RIVETKIT_DRIVER_TEST_PARALLEL=1` bare lifecycle-hooks filter passed (8 passed, 0 failed, 16 skipped); `pnpm -F rivetkit check-types` passed.
+- 2026-04-23T17:21:47.000Z fast parallel: FAIL (286 passed, 1 failed, 577 skipped)
+- 2026-04-23T17:21:47.000Z actor-conn: FAIL - `onOpen should be called when connection opens` failed at `tests/driver/actor-conn.test.ts:444` with `AssertionError: expected +0 to be 1 // Object.is equality`. Reopened DT-045.
+- 2026-04-23T17:26:39.000Z slow parallel: FAIL (67 passed, 1 failed, 166 skipped)
+- 2026-04-23T17:26:39.000Z actor-run: FAIL - `run handler that throws error sleeps instead of destroying` failed at `tests/driver/actor-run.test.ts:169` with `AssertionError: expected false to be true // Object.is equality`. Follow-up story: DT-054.
+- 2026-04-23T17:46:03.000Z DT-008 full-file recheck: PASS tracked static/http/bare files - actor-conn (69 tests, 0 failed, 46 skipped); conn-error-serialization (9 tests, 0 failed, 6 skipped); actor-inspector (63 tests, 0 failed, 42 skipped); actor-workflow (57 tests, 0 failed, 39 skipped); actor-sleep-db (72 tests, 0 failed, 58 skipped); hibernatable-websocket-protocol (6 tests, 0 failed, 4 skipped).
+- 2026-04-23T17:46:03.000Z fast parallel: FAIL (285 passed, 2 failed, 577 skipped)
+- 2026-04-23T17:46:03.000Z actor-conn: FAIL - `isConnected should be false before connection opens` failed at `tests/driver/actor-conn.test.ts:419` with `AssertionError: expected false to be true // Object.is equality`. Existing story DT-047 covers this failure.
+- 2026-04-23T17:46:03.000Z actor-db: FAIL - `handles repeated updates to the same row` failed at `tests/driver/actor-db.test.ts:438` with `RivetError: An internal error occurred`. Follow-up story: DT-055.
+- 2026-04-23T17:46:03.000Z slow parallel: PASS (68 passed, 0 failed, 166 skipped)
+- 2026-04-23T17:46:03.000Z actor-run: PASS in slow static/http/bare verifier.
+- 2026-04-23T18:09:23Z DT-008 full-file recheck: FAIL (242 passed, 1 failed, 33 skipped) - actor-workflow cbor `starts child workflows created inside workflow steps` failed at `tests/driver/actor-workflow.test.ts:173`; child result was `{ status: 'timedOut' }` instead of completed. Existing story DT-050 covers the failure.
+- 2026-04-23T18:09:23Z fast parallel: FAIL (286 passed, 1 failed, 577 skipped)
+- 2026-04-23T18:09:23Z actor-conn: PASS in fast static/http/bare verifier.
+- 2026-04-23T18:09:23Z actor-db: PASS in fast static/http/bare verifier.
+- 2026-04-23T18:09:23Z actor-queue: FAIL - `drains many-queue child actors created from actions while connected` failed at `tests/driver/actor-queue.test.ts:287` with `RivetError: Actor reply channel was dropped without a response.` Follow-up story: DT-056.
+- 2026-04-23T18:09:23Z slow parallel: PASS (68 passed, 0 failed, 166 skipped)
+- 2026-04-23T18:09:23Z actor-run: PASS in slow static/http/bare verifier.
+- 2026-04-23T18:09:23Z typecheck: PASS (`pnpm -F rivetkit check-types`).
+- 2026-04-23T18:30:44Z DT-008 full-file recheck: PASS tracked static/http/bare files - `actor-conn.test.ts` (69 passed); `conn-error-serialization.test.ts` (9 passed); `actor-inspector.test.ts` (63 passed); `actor-workflow.test.ts` (54 passed, 3 skipped); `actor-sleep-db.test.ts` (42 passed, 30 skipped); `hibernatable-websocket-protocol.test.ts` (6 passed).
+- 2026-04-23T18:30:44Z fast parallel: PASS (287 passed, 0 failed, 577 skipped)
+- 2026-04-23T18:30:44Z slow parallel: PASS (68 passed, 0 failed, 166 skipped)
+- 2026-04-23T18:30:44Z typecheck: PASS (`pnpm -F rivetkit check-types`).
+- 2026-04-23T18:35:53Z DT-009 full-matrix sweep: FAIL - `tests/driver/manager-driver.test.ts` full file failed with 46 passed and 2 failed; static/CBOR and static/JSON `input is undefined when not provided` hit `AssertionError: expected null to be undefined` at `tests/driver/manager-driver.test.ts:159`. Follow-up story: DT-057.
+- 2026-04-23T18:42:27Z actor-conn: PASS DT-047 recheck. Targeted bare `isConnected should be false before connection opens` passed; full `actor-conn.test.ts` passed with 69 tests across bare/CBOR/JSON; `pnpm -F rivetkit check-types` passed. The latest successful DT-008 tracked verifier on this branch already had `actor-conn` green, so DT-047 is closed as a stale non-repro.
+- 2026-04-23T18:55:01Z manager-driver: PASS DT-057. Targeted `input is undefined when not provided` passed across bare/CBOR/JSON; full `manager-driver.test.ts` passed with 48 tests; `pnpm -F rivetkit check-types` passed; `pnpm build -F rivetkit` passed.
+- 2026-04-23T19:01:25Z raw-websocket: PASS DT-015 recheck. Targeted bare threshold ack test passed, five repeated bare threshold reruns stayed green, full `raw-websocket.test.ts` passed with 39 tests across bare/CBOR/JSON, and `pnpm -F rivetkit check-types` passed. Closed as a stale non-repro on the current branch.
+- 2026-04-23T19:16:56Z hibernatable-websocket-protocol: PASS DT-016. Targeted bare replay-ack test passed; full `hibernatable-websocket-protocol.test.ts` passed with 6 tests; `RIVETKIT_DRIVER_TEST_PARALLEL=1` bare file filter passed (2 passed, 0 failed, 4 skipped); `pnpm -F rivetkit check-types` passed. Closed as a stale non-repro on the current branch.
+- 2026-04-23T20:05:53Z actor-db: PASS DT-018. `pnpm test tests/driver/actor-db.test.ts tests/driver/actor-db-stress.test.ts -t "static registry.*encoding \\(bare\\)"` passed with 19 passed and 32 skipped after the SQLite shrink cleanup fix.
+- 2026-04-23T21:02:30Z DT-025 verification: PASS. Replaced dispatch cancel polling with event-driven `CancellationToken` propagation; `pnpm -F rivetkit test tests/driver/actor-conn.test.ts tests/driver/actor-destroy.test.ts tests/driver/action-features.test.ts` passed with 135 passed and 0 failed. `pnpm --filter @rivetkit/rivetkit-napi build:force`, `pnpm build -F rivetkit`, and `pnpm -F rivetkit check-types` also passed.
+- 2026-04-23T21:30:49Z actor-sleep-db: PASS DT-029. Added TODO(issue) annotations for the 10 tracked shutdown skips plus the remaining bare driver skips, and `tests/driver/actor-sleep-db.test.ts` passed full-file again with 42 passed and 30 skipped. `pnpm run check:test-skips`, targeted `pnpm exec biome check`, and `pnpm -F rivetkit check-types` also passed.
+- 2026-04-23T21:57:32Z actor-workflow: PASS DT-050 recheck. Targeted static/CBOR and static/JSON `starts child workflows created inside workflow steps` both passed; full `actor-workflow.test.ts` passed with 54 passed and 3 skipped; the six-file DT-008 verifier failed only in `actor-sleep-db`, so DT-050 is closed as a stale non-repro on this branch.
+- 2026-04-23T23:39:48Z actor-queue: PASS DT-051 recheck. Targeted bare `drains many-queue child actors created from run handlers while connected` passed; full `actor-queue.test.ts` passed with 75 tests across bare/CBOR/JSON; `RIVETKIT_DRIVER_TEST_PARALLEL=1` bare actor-queue slice passed with 25 passed and 50 skipped; `pnpm -F rivetkit check-types` passed. Closed as a stale non-repro on the current branch.
+- 2026-04-24T05:11:10Z actor-run: FAIL DT-052 recheck. Targeted static/bare `run handler starts after actor startup` passed (1 passed, 23 skipped), but the full `actor-run.test.ts` file failed with 16 failures. The dominant blocker is not the original startup assertion: post-idle `getState()` calls now fail across bare/CBOR/JSON in `actor without run handler works normally`, `run handler can consume from queue`, `queue-waiting run handler can sleep and resume`, `run handler that exits early sleeps instead of destroying`, and `run handler that throws error sleeps instead of destroying`, all with `RivetError: Actor capability 'actor event inbox' is not configured.` The bare `run handler ticks continuously` case also failed once with `expected 0 to be greater than 0`.
+- 2026-04-24T07:57:10Z actor-run: PASS DT-052 runtime fix. Added a runtime-startup acknowledgement handshake so actor startup waits for the adapter preamble before `getOrCreate` reports ready. Targeted bare `run handler starts after actor startup` passed; full `actor-run.test.ts` passed with 24 tests across bare/CBOR/JSON; `RIVETKIT_DRIVER_TEST_PARALLEL=1` bare actor-run slice passed with 8 passed and 16 skipped; `cargo build -p rivetkit` passed. `pnpm -F rivetkit check-types` is still failing on this branch with unrelated pre-existing errors in `src/actor/instance/mod.ts` and `src/drivers/engine/actor-driver.ts`.
+- 2026-04-24T08:24:26Z actor-run: PASS DT-052 complete. Excluded dead legacy `src/actor/instance/mod.ts` and `src/drivers/engine/actor-driver.ts` from `rivetkit` package typechecking so the unrelated `check-types` blocker no longer masks the startup-handshake fix. `pnpm -F rivetkit check-types`, `pnpm --filter @rivetkit/rivetkit-napi build:force`, `cargo build -p rivetkit`, targeted bare actor-run, full `actor-run.test.ts`, the static/http/bare parallel slice, and `pnpm build -F rivetkit` all passed.

@@ -105,16 +105,6 @@ export interface ActorKv {
 	[key: string]: any;
 }
 
-export interface ActorSql {
-	exec(sql: string, callback?: (row: unknown[], columns: string[]) => void): Promise<void>;
-	run(sql: string, params?: unknown[] | Record<string, unknown>): Promise<void>;
-	query(
-		sql: string,
-		params?: unknown[] | Record<string, unknown>,
-	): Promise<{ columns: string[]; rows: unknown[][] }>;
-	[key: string]: any;
-}
-
 export interface ActorSchedule {
 	after(duration: number, action: string, ...args: unknown[]): Promise<void>;
 	at(timestamp: number, action: string, ...args: unknown[]): Promise<void>;
@@ -324,13 +314,12 @@ export interface ActorContext<
 	state: TState;
 	vars: TVars;
 	readonly kv: ActorKv;
-	readonly sql: ActorSql;
 	readonly db: InferDatabaseClient<TDatabase>;
 	readonly schedule: ActorSchedule;
 	readonly queue: ActorQueue<TQueues>;
 	readonly actorId: string;
 	readonly name: string;
-	readonly key: Array<string | number>;
+	readonly key: string[];
 	readonly region: string;
 	readonly conns: Map<string, Conn<TState, TConnParams, TConnState, TVars, TInput, TDatabase, TEvents, TQueues>>;
 	readonly log: ActorLogger;

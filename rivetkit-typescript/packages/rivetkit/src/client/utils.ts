@@ -1,4 +1,3 @@
-import * as cbor from "cbor-x";
 import invariant from "invariant";
 import type { VersionedDataHandler } from "vbare";
 import type { z } from "zod/v4";
@@ -12,6 +11,7 @@ import {
 } from "@/common/client-protocol-zod";
 import {
 	contentTypeForEncoding,
+	decodeCborCompat,
 	deserializeWithEncoding,
 	encodingIsBinary,
 	serializeWithEncoding,
@@ -194,7 +194,7 @@ export async function sendHttpRequest<
 					code: bare.code,
 					message: bare.message,
 					metadata: bare.metadata
-						? cbor.decode(new Uint8Array(bare.metadata))
+						? decodeCborCompat(new Uint8Array(bare.metadata))
 						: undefined,
 				}),
 			);

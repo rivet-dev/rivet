@@ -6,6 +6,7 @@
 - Keep SQLite runtime code on the native `@rivetkit/rivetkit-napi` path. Do not reintroduce WebAssembly SQLite or KV-backed VFS fallbacks.
 - Importing `rivetkit/db` is the explicit opt-in for SQLite. Do not lazily load extra SQLite runtimes from that entrypoint.
 - Core drivers must remain SQLite-agnostic. Any SQLite-specific wiring belongs behind the native database provider boundary.
+- Before deleting a `rivetkit/*` package export, grep `examples/`, `website/`, and `frontend/` for self-imports. Those consumers are part of the supported package surface on this branch.
 
 ## Native SQLite v2
 
@@ -21,7 +22,7 @@
 
 ## Context Types Sync
 
-- Keep the `*ContextOf` types exported from `packages/rivetkit/src/actor/contexts/index.ts` in sync with the two docs locations below when adding, removing, or renaming context types.
+- Keep the `*ContextOf` types exported from `packages/rivetkit/src/actor/contexts/index.ts` and re-exported by `packages/rivetkit/src/actor/mod.ts` in sync with the two docs locations below when adding, removing, or renaming context types.
 
 - `website/src/content/docs/actors/types.mdx` — public docs page
 - `website/src/content/docs/actors/index.mdx` — crash course (Context Types section)
@@ -29,6 +30,10 @@
 ## Gateway Targets
 
 For client-facing gateway operations, use the shared `GatewayTarget` type from `packages/rivetkit/src/engine-client/driver.ts` instead of ad hoc `string | ActorQuery` unions. The engine control client should preserve direct actor ID behavior and resolve `ActorQuery` targets inside the client implementation so higher-level client flows can widen their target type without duplicating query-resolution logic.
+
+Keep the TypeScript `ActorKey` and `ActorContext.key` surfaces string-only unless `client/query.ts`, key serialization, and gateway query parsing are widened end to end in the same change.
+
+Actor-connect protocol `actionId` values are nullable, and `0` is a valid action ID. Treat only `null` as a connection-level error.
 
 Query-backed remote gateway URLs use `rvt-*` query parameters: `/gateway/{name}/{path}?rvt-namespace=...&rvt-method=...&rvt-key=...`. The actor name is a clean path segment, and all routing params are standard query parameters with the `rvt-` prefix. The known `rvt-*` params are: `rvt-namespace`, `rvt-method`, `rvt-runner`, `rvt-key`, `rvt-input`, `rvt-region`, `rvt-crash-policy`, `rvt-token`. `rvt-runner` is required for `getOrCreate` and disallowed for `get`. For multi-component keys, use a single comma-separated `rvt-key` param (e.g. `rvt-key=tenant,room`). Use `URLSearchParams` to build and parse query strings.
 
@@ -73,14 +78,19 @@ The log name matches the key in `ActorMetrics.startup`. Internal phases use `per
 ## NAPI Receive Loop
 
 - Keep adapter-owned long-lived task handles (for example the NAPI `run` handler) in `packages/rivetkit-napi/src/napi_actor_events.rs` and expose only sync restart hooks through shared `ActorContext` state; JS-facing restart methods must not depend on async locks.
+- Do not mirror actor `ready`/`started` flags in `packages/rivetkit-napi/src/actor_context.rs`; read and write those lifecycle gates through core `ActorContext` so sleep gating has a single source of truth.
 - Graceful adapter drains in `packages/rivetkit-napi/src/napi_actor_events.rs` should use `while let Some(...) = tasks.join_next().await`; `JoinSet::shutdown()` aborts in-flight work and breaks Sleep/Destroy ordering.
 - `Sleep` and `Destroy` must set the shared adapter `end_reason` on both success and error replies; otherwise the outer receive loop keeps consuming queued events after shutdown has already failed.
 - On this branch, the native TS actor/conn persistence glue still lives in `packages/rivetkit/src/registry/native.ts`; PRD references to split `state-manager.ts` or `connection-manager.ts` files may be stale, so land equivalent behavior in `registry/native.ts` unless those modules reappear first.
 - Public TS actor `onWake` maps to the native callback bag's `onWake`; `onBeforeActorStart` is an internal driver/NAPI startup hook, not public actor config.
 - Static actor `state` values in `packages/rivetkit/src/registry/native.ts` must be `structuredClone(...)`d per actor instance; reusing the literal leaks mutations across different keyed actors.
+- JS-only native actor caches in `packages/rivetkit/src/registry/native.ts` should live on `ActorContext.runtimeState()`, not on actorId-keyed module globals. Same-key recreates must get a fresh bag.
 - Every `NativeConnAdapter` construction path in `packages/rivetkit/src/registry/native.ts` must keep the `CONN_STATE_MANAGER_SYMBOL` hookup; hibernatable conn mutations rely on core `ConnHandle::set_state` dirty tracking to request persistence.
 - Durable native actor saves in `packages/rivetkit/src/registry/native.ts` must use `ctx.requestSaveAndWait({ immediate: true })`; state bytes are collected only through the `serializeState` callback.
+- Opaque user payloads that must preserve JS `undefined` across Rust JSON/CBOR bridges should go through `encodeCborCompat` / `decodeCborCompat`; do not use those helpers on structural JSON envelopes where omitted fields must stay omitted.
 - Reply-bearing TSF dispatches in `packages/rivetkit-napi/src/napi_actor_events.rs` must wrap the callback future in `with_timeout(...)` via a shared timed-spawn helper; raw `spawn_reply(...)` on HTTP or workflow callbacks can leak stuck JS promises until shutdown.
+- Dispatch cancellation between `packages/rivetkit-napi/src/napi_actor_events.rs` and `packages/rivetkit/src/registry/native.ts` must pass `CancellationToken` objects end to end. Do not reintroduce BigInt token registries or polling loops.
+- Native persistence and `saveState` coverage belongs in driver tests that use real NAPI plus `hardCrashActor` or sleep/wake. Do not mock `NativeActorContext` in Vitest for that path.
 
 ## Sleep Shutdown
 
@@ -96,7 +106,7 @@ cd rivetkit-typescript/packages/rivetkit
 ./scripts/test-drizzle-compat.sh 0.44.2 0.45.1     # test specific versions
 ```
 
-The script installs each drizzle-orm version, runs the drizzle driver tests, and reports pass/fail per version. It restores the original package.json and lockfile on exit. Update the `DEFAULT_VERSIONS` array in the script and `SUPPORTED_DRIZZLE_RANGE` in `packages/rivetkit/src/db/drizzle/mod.ts` when adding support for new drizzle releases.
+The script installs each drizzle-orm version, typechecks `scripts/drizzle-compat-smoke.ts` against the `rivetkit/db/drizzle` public surface, and reports pass/fail per version. It restores the original package.json and lockfile on exit. Update the `DEFAULT_VERSIONS` array in the script when adding support for new drizzle releases.
 
 ## Cloudflare Workers Compatibility
 

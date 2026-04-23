@@ -1,5 +1,5 @@
-import { describeDriverMatrix } from "./shared-matrix";
 import { describe, expect, test, vi } from "vitest";
+import { describeDriverMatrix } from "./shared-matrix";
 import { setupDriverTest } from "./shared-utils";
 
 const LIFECYCLE_RACE_TIMEOUT_MS = 60_000;
@@ -43,33 +43,35 @@ describeDriverMatrix("Actor Lifecycle", (driverTestConfig) => {
 		test(
 			"actor stop before actor instantiation completes cleans up handler",
 			async (c) => {
-			const { client } = await setupDriverTest(c, driverTestConfig);
+				const { client } = await setupDriverTest(c, driverTestConfig);
 
-			const actorKey = `test-stop-before-instantiation-${Date.now()}`;
+				const actorKey = `test-stop-before-instantiation-${Date.now()}`;
 
-			// Create multiple actors rapidly to increase chance of race
-			const actors = Array.from({ length: 5 }, (_, i) =>
-				client.startStopRaceActor.getOrCreate([`${actorKey}-${i}`]),
-			);
+				// Create multiple actors rapidly to increase chance of race
+				const actors = Array.from({ length: 5 }, (_, i) =>
+					client.startStopRaceActor.getOrCreate([`${actorKey}-${i}`]),
+				);
 
-			// Resolve all actor IDs (this triggers start)
-			const ids = await Promise.all(actors.map((a) => a.resolve()));
+				// Resolve all actor IDs (this triggers start)
+				const ids = await Promise.all(actors.map((a) => a.resolve()));
 
-			// Immediately destroy all actors
-			await Promise.all(actors.map((a) => a.destroy()));
+				// Immediately destroy all actors
+				await Promise.all(actors.map((a) => a.destroy()));
 
-			// Verify all actors were cleaned up
-			for (const id of ids) {
-				let destroyed = false;
-				try {
-					await client.startStopRaceActor.getForId(id).ping();
-				} catch (err: any) {
-					destroyed = true;
-					expect(err.group).toBe("actor");
-					expect(err.code).toBe("not_found");
+				// Verify all actors were cleaned up
+				for (const id of ids) {
+					let destroyed = false;
+					try {
+						await client.startStopRaceActor.getForId(id).ping();
+					} catch (err: any) {
+						destroyed = true;
+						expect(err.group).toBe("actor");
+						expect(err.code).toBe("not_found");
+					}
+					expect(destroyed, `actor ${id} should be destroyed`).toBe(
+						true,
+					);
 				}
-				expect(destroyed, `actor ${id} should be destroyed`).toBe(true);
-			}
 			},
 			LIFECYCLE_RACE_TIMEOUT_MS,
 		);
@@ -97,25 +99,38 @@ describeDriverMatrix("Actor Lifecycle", (driverTestConfig) => {
 		test(
 			"multiple rapid create/destroy cycles handle race correctly",
 			async (c) => {
-			const { client } = await setupDriverTest(c, driverTestConfig);
+				const { client } = await setupDriverTest(c, driverTestConfig);
+				let cleanedUpActors = 0;
 
-			// Perform multiple rapid create/destroy cycles
-			for (let i = 0; i < 10; i++) {
-				const actorKey = `test-rapid-cycle-${Date.now()}-${i}`;
-				const actor = client.startStopRaceActor.getOrCreate([actorKey]);
+				// Perform multiple rapid create/destroy cycles
+				for (let i = 0; i < 10; i++) {
+					const actorKey = `test-rapid-cycle-${Date.now()}-${i}`;
+					const actor = client.startStopRaceActor.getOrCreate([
+						actorKey,
+					]);
 
-				// Trigger start
-				const resolvePromise = actor.resolve();
+					// Trigger start
+					const resolvePromise = actor.resolve();
 
-				// Immediately destroy
-				const destroyPromise = actor.destroy();
+					// Immediately destroy
+					const destroyPromise = actor.destroy();
 
-				// Both should complete without errors
-				await Promise.all([resolvePromise, destroyPromise]);
-			}
+					// Both operations must complete, and the resolved actor ID must no longer exist afterward.
+					const [actorId] = await Promise.all([
+						resolvePromise,
+						destroyPromise,
+					]);
+					await expect(
+						client.startStopRaceActor.getForId(actorId).ping(),
+					).rejects.toMatchObject({
+						group: "actor",
+						code: "not_found",
+					});
+					cleanedUpActors += 1;
+				}
 
-			// If we get here without errors, the race condition is handled correctly
-			expect(true).toBe(true);
+				// The race is only handled correctly if every rapid cycle tears the actor down completely.
+				expect(cleanedUpActors).toBe(10);
 			},
 			LIFECYCLE_RACE_TIMEOUT_MS,
 		);
@@ -127,7 +142,7 @@ describeDriverMatrix("Actor Lifecycle", (driverTestConfig) => {
 
 			// Create and immediately destroy
 			const actor = client.startStopRaceActor.getOrCreate([actorKey]);
-			const id = await actor.resolve();
+			await actor.resolve();
 			await actor.destroy();
 
 			// Try to recreate with same key - should work without issues
@@ -139,6 +154,68 @@ describeDriverMatrix("Actor Lifecycle", (driverTestConfig) => {
 			await newActor.destroy();
 		});
 
+		test("run-closure-self-initiated-sleep runs onSleep before wake", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+			const actor = client.runSelfInitiatedSleep.getOrCreate([
+				`run-self-sleep-${Date.now()}`,
+			]);
+
+			// Poll until the actor has slept, restarted, and exposed the persisted hook state.
+			await vi.waitFor(
+				async () => {
+					const state = await actor.getState();
+					expect(state.sleepCount).toBe(1);
+					expect(state.marker).toBe("slept");
+					expect(state.wakeCount).toBeGreaterThanOrEqual(2);
+					expect(state.runCount).toBeGreaterThanOrEqual(2);
+				},
+				{ timeout: 10_000 },
+			);
+		});
+
+		test("clean run exit still runs onSleep when stop arrives later", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+			const observer = client.lifecycleObserver.getOrCreate([
+				"run-with-early-exit",
+			]);
+			await observer.clearEvents();
+
+			const actor = client.runWithEarlyExit.getOrCreate([
+				`run-clean-exit-sleep-${Date.now()}`,
+			]);
+			const actorId = await actor.resolve();
+
+			// Poll until the run handler exits cleanly before the actor reaches its idle sleep path.
+			await vi.waitFor(
+				async () => {
+					const state = await actor.getState();
+					expect(state.runStarted).toBe(true);
+					expect(state.runExited).toBe(true);
+				},
+				{ timeout: 5_000 },
+			);
+
+			// Poll until the delayed sleep stop runs the hook and a later wake exposes the persisted counts.
+			await vi.waitFor(
+				async () => {
+					const events = await observer.getEvents();
+					expect(
+						events.filter(
+							(event) =>
+								event.actorKey === actorId &&
+								event.event === "sleep",
+						),
+					).toHaveLength(1);
+
+					const state = await actor.getState();
+					expect(state.sleepCount).toBe(1);
+					expect(state.destroyCalled).toBe(false);
+					expect(state.wakeCount).toBeGreaterThanOrEqual(2);
+				},
+				{ timeout: 10_000 },
+			);
+		});
+
 		test("run-closure-self-initiated-destroy terminates actor", async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);
 			const observer = client.lifecycleObserver.getOrCreate([
@@ -147,9 +224,12 @@ describeDriverMatrix("Actor Lifecycle", (driverTestConfig) => {
 			await observer.clearEvents();
 
 			const actorKey = `run-self-destroy-${Date.now()}`;
-			const actor = client.runSelfInitiatedDestroy.getOrCreate([actorKey]);
+			const actor = client.runSelfInitiatedDestroy.getOrCreate([
+				actorKey,
+			]);
 			const actorId = await actor.resolve();
 
+			// Poll until the observer records the destroy hook for this actor instance.
 			await vi.waitFor(
 				async () => {
 					const events = await observer.getEvents();
@@ -164,10 +244,13 @@ describeDriverMatrix("Actor Lifecycle", (driverTestConfig) => {
 				{ timeout: 5_000 },
 			);
 
+			// Poll until registry teardown finishes and the actor ID is no longer resolvable.
 			await vi.waitFor(
 				async () => {
 					await expect(
-						client.runSelfInitiatedDestroy.getForId(actorId).getState(),
+						client.runSelfInitiatedDestroy
+							.getForId(actorId)
+							.getState(),
 					).rejects.toMatchObject({
 						group: "actor",
 						code: "not_found",
@@ -175,6 +258,53 @@ describeDriverMatrix("Actor Lifecycle", (driverTestConfig) => {
 				},
 				{ timeout: 5_000 },
 			);
+		});
+
+		test("clean run exit still runs onDestroy when stop arrives later", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+			const observer = client.lifecycleObserver.getOrCreate([
+				"run-with-early-exit",
+			]);
+			await observer.clearEvents();
+
+			const actor = client.runWithEarlyExit.getOrCreate([
+				`run-clean-exit-destroy-${Date.now()}`,
+			]);
+			const actorId = await actor.resolve();
+
+			// Poll until the run handler has returned so the destroy exercises the delayed Stop path.
+			await vi.waitFor(
+				async () => {
+					const state = await actor.getState();
+					expect(state.runStarted).toBe(true);
+					expect(state.runExited).toBe(true);
+				},
+				{ timeout: 5_000 },
+			);
+
+			await actor.destroy();
+
+			// Poll until the destroy hook is observed because registry teardown races the test process.
+			await vi.waitFor(
+				async () => {
+					const events = await observer.getEvents();
+					expect(
+						events.filter(
+							(event) =>
+								event.actorKey === actorId &&
+								event.event === "destroy",
+						),
+					).toHaveLength(1);
+				},
+				{ timeout: 5_000 },
+			);
+
+			await expect(
+				client.runWithEarlyExit.getForId(actorId).getState(),
+			).rejects.toMatchObject({
+				group: "actor",
+				code: "not_found",
+			});
 		});
 
 		test("onDestroyTimeout bounds run handler shutdown", async (c) => {
@@ -193,6 +323,7 @@ describeDriverMatrix("Actor Lifecycle", (driverTestConfig) => {
 			expect(elapsedMs).toBeLessThan(1_500);
 		}, 10_000);
 
+		// TODO(#4706): Root-cause destroy-during-start lifecycle ordering and re-enable this coverage.
 		test.skip("onDestroy is called even when actor is destroyed during start", async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);
 

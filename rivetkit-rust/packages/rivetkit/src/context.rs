@@ -75,6 +75,10 @@ impl<A: Actor> Ctx<A> {
 		Schedule { inner: &self.inner }
 	}
 
+	/// Requests a save without surfacing delivery failures to the caller.
+	///
+	/// If save-request delivery must be observed, use the error-aware
+	/// `request_save_and_wait` path on the underlying core context instead.
 	pub fn request_save(&self, opts: RequestSaveOpts) {
 		self.inner.request_save(opts);
 	}

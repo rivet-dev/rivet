@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { getEnginePath } from "@rivetkit/engine-cli";
 import { z } from "zod/v4";
 import { UserError, actor, event, queue, setup } from "../../src/mod";
+import { db } from "../../src/db/mod";
 import { buildNativeRegistry } from "../../src/registry/native";
 
 const textDecoder = new TextDecoder();
@@ -39,6 +40,7 @@ function resolveEngineBinaryPath(): string {
 
 const integrationActor = actor({
 	state: { count: 0 },
+	db: db(),
 	connParamsSchema,
 	actionInputSchemas: {
 		validatedAction: validatedActionArgsSchema,
@@ -74,34 +76,34 @@ const integrationActor = actor({
 			c.state.count += amount;
 
 			await c.kv.put("count", String(c.state.count));
-			await c.sql.run(
+			await c.db.execute(
 				"CREATE TABLE IF NOT EXISTS increments (value INTEGER NOT NULL)",
 			);
-			await c.sql.run("INSERT INTO increments (value) VALUES (?)", [
+			await c.db.execute("INSERT INTO increments (value) VALUES (?)", [
 				c.state.count,
 			]);
 
-			const rows = await c.sql.query(
+			const rows = await c.db.execute<{ value: number }>(
 				"SELECT value FROM increments ORDER BY rowid ASC",
 			);
 			return {
 				count: c.state.count,
-				sqliteValues: rows.rows.map(([value]) => Number(value)),
+				sqliteValues: rows.map(({ value }) => Number(value)),
 			};
 		},
 		snapshot: async (c) => {
 			const kvValue = await c.kv.get("count");
-			await c.sql.run(
+			await c.db.execute(
 				"CREATE TABLE IF NOT EXISTS increments (value INTEGER NOT NULL)",
 			);
-			const rows = await c.sql.query(
+			const rows = await c.db.execute<{ value: number }>(
 				"SELECT value FROM increments ORDER BY rowid ASC",
 			);
 
 			return {
 				count: c.state.count,
 				kvCount: kvValue ? Number(textDecoder.decode(kvValue)) : null,
-				sqliteValues: rows.rows.map(([value]) => Number(value)),
+				sqliteValues: rows.map(({ value }) => Number(value)),
 			};
 		},
 		incrementWithoutSql: async (c, amount: number) => {

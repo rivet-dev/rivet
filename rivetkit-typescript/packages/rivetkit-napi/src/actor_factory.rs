@@ -17,6 +17,7 @@ use rivetkit_core::{
 use scc::HashMap as SccHashMap;
 
 use crate::actor_context::{ActorContext, StateDeltaPayload};
+use crate::cancellation_token::CancellationToken;
 use crate::connection::ConnHandle;
 use crate::napi_actor_events::run_adapter_loop;
 use crate::websocket::WebSocket;
@@ -114,7 +115,7 @@ pub(crate) struct MigratePayload {
 pub(crate) struct HttpRequestPayload {
 	pub(crate) ctx: CoreActorContext,
 	pub(crate) request: Request,
-	pub(crate) cancel_token_id: Option<u64>,
+	pub(crate) cancel_token: Option<tokio_util::sync::CancellationToken>,
 }
 
 #[derive(Clone)]
@@ -126,7 +127,7 @@ pub(crate) struct QueueSendPayload {
 	pub(crate) body: Vec<u8>,
 	pub(crate) wait: bool,
 	pub(crate) timeout_ms: Option<u64>,
-	pub(crate) cancel_token_id: Option<u64>,
+	pub(crate) cancel_token: Option<tokio_util::sync::CancellationToken>,
 }
 
 #[derive(Clone)]
@@ -163,7 +164,7 @@ pub(crate) struct ActionPayload {
 	pub(crate) conn: Option<CoreConnHandle>,
 	pub(crate) name: String,
 	pub(crate) args: Vec<u8>,
-	pub(crate) cancel_token_id: Option<u64>,
+	pub(crate) cancel_token: Option<tokio_util::sync::CancellationToken>,
 }
 
 #[derive(Clone)]
@@ -187,6 +188,7 @@ pub(crate) struct WorkflowReplayPayload {
 
 #[derive(Clone)]
 pub(crate) struct SerializeStatePayload {
+	pub(crate) ctx: CoreActorContext,
 	pub(crate) reason: String,
 }
 
@@ -621,10 +623,10 @@ impl TsfnPayloadSummary for MigratePayload {
 impl TsfnPayloadSummary for HttpRequestPayload {
 	fn payload_summary(&self) -> String {
 		format!(
-			"actor_id={} {} cancel_token_id={:?}",
+			"actor_id={} {} has_cancel_token={}",
 			self.ctx.actor_id(),
 			request_summary(&self.request),
-			self.cancel_token_id
+			self.cancel_token.is_some()
 		)
 	}
 }
@@ -632,14 +634,14 @@ impl TsfnPayloadSummary for HttpRequestPayload {
 impl TsfnPayloadSummary for QueueSendPayload {
 	fn payload_summary(&self) -> String {
 		format!(
-			"actor_id={} conn_id={} queue={} body_bytes={} wait={} timeout_ms={:?} cancel_token_id={:?}",
+			"actor_id={} conn_id={} queue={} body_bytes={} wait={} timeout_ms={:?} has_cancel_token={}",
 			self.ctx.actor_id(),
 			self.conn.id(),
 			self.name,
 			self.body.len(),
 			self.wait,
 			self.timeout_ms,
-			self.cancel_token_id
+			self.cancel_token.is_some()
 		)
 	}
 }
@@ -690,12 +692,12 @@ impl TsfnPayloadSummary for ConnectionPayload {
 impl TsfnPayloadSummary for ActionPayload {
 	fn payload_summary(&self) -> String {
 		format!(
-			"actor_id={} action={} args_bytes={} conn_id={} cancel_token_id={:?}",
+			"actor_id={} action={} args_bytes={} conn_id={} has_cancel_token={}",
 			self.ctx.actor_id(),
 			self.name,
 			self.args.len(),
 			self.conn.as_ref().map(|conn| conn.id()).unwrap_or("<none>"),
-			self.cancel_token_id
+			self.cancel_token.is_some()
 		)
 	}
 }
@@ -730,7 +732,7 @@ impl TsfnPayloadSummary for WorkflowReplayPayload {
 
 impl TsfnPayloadSummary for SerializeStatePayload {
 	fn payload_summary(&self) -> String {
-		format!("reason={}", self.reason)
+		format!("actor_id={} reason={}", self.ctx.actor_id(), self.reason)
 	}
 }
 
@@ -791,7 +793,10 @@ fn build_http_request_payload(
 	let mut object = env.create_object()?;
 	object.set("ctx", ActorContext::new(payload.ctx))?;
 	object.set("request", build_request_object(env, payload.request)?)?;
-	object.set("cancelTokenId", payload.cancel_token_id)?;
+	match payload.cancel_token {
+		Some(cancel_token) => object.set("cancelToken", CancellationToken::new(cancel_token))?,
+		None => object.set("cancelToken", env.get_undefined()?)?,
+	}
 	Ok(vec![object.into_unknown()])
 }
 
@@ -807,7 +812,10 @@ fn build_queue_send_payload(
 	object.set("body", Buffer::from(payload.body))?;
 	object.set("wait", payload.wait)?;
 	object.set("timeoutMs", payload.timeout_ms)?;
-	object.set("cancelTokenId", payload.cancel_token_id)?;
+	match payload.cancel_token {
+		Some(cancel_token) => object.set("cancelToken", CancellationToken::new(cancel_token))?,
+		None => object.set("cancelToken", env.get_undefined()?)?,
+	}
 	Ok(vec![object.into_unknown()])
 }
 
@@ -870,7 +878,10 @@ fn build_action_payload(env: &Env, payload: ActionPayload) -> napi::Result<Vec<n
 	}
 	object.set("name", payload.name)?;
 	object.set("args", Buffer::from(payload.args))?;
-	object.set("cancelTokenId", payload.cancel_token_id)?;
+	match payload.cancel_token {
+		Some(cancel_token) => object.set("cancelToken", CancellationToken::new(cancel_token))?,
+		None => object.set("cancelToken", env.get_undefined()?)?,
+	}
 	Ok(vec![object.into_unknown()])
 }
 
@@ -909,9 +920,10 @@ fn build_serialize_state_payload(
 	env: &Env,
 	payload: SerializeStatePayload,
 ) -> napi::Result<Vec<napi::JsUnknown>> {
-	Ok(vec![
-		env.create_string_from_std(payload.reason)?.into_unknown(),
-	])
+	let mut object = env.create_object()?;
+	object.set("ctx", ActorContext::new(payload.ctx))?;
+	object.set("reason", payload.reason)?;
+	Ok(vec![object.into_unknown()])
 }
 
 fn build_request_object(env: &Env, request: Request) -> napi::Result<JsObject> {

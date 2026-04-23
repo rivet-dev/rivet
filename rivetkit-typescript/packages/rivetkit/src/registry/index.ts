@@ -1,20 +1,13 @@
-import { Runtime } from "../../runtime";
-import { ENGINE_ENDPOINT } from "@/common/engine";
 import {
 	type RegistryActors,
 	type RegistryConfig,
 	type RegistryConfigInput,
 	RegistryConfigSchema,
 } from "./config";
+import { ENGINE_ENDPOINT } from "@/common/engine";
 import { buildNativeRegistry } from "./native";
 import { configureServerlessPool } from "@/serverless/configure";
-import { detectRuntime, VERSION } from "@/utils";
-import { getNodeFsSync } from "@/utils/node";
-import {
-	crossPlatformServe,
-	findFreePort,
-	loadRuntimeServeStatic,
-} from "@/utils/serve";
+import { VERSION } from "@/utils";
 
 export type FetchHandler = (
 	request: Request,
@@ -36,38 +29,13 @@ export class Registry<A extends RegistryActors> {
 		return RegistryConfigSchema.parse(this.#config);
 	}
 
-	#runtimePromise?: Promise<Runtime<A>>;
 	#nativeServePromise?: Promise<void>;
 	#nativeServerlessPromise?: ReturnType<typeof buildNativeRegistry>;
 	#configureServerlessPoolPromise?: Promise<void>;
-	#httpServerPromise?: Promise<void>;
-	#httpPort?: number;
 	#welcomePrinted = false;
 
 	constructor(config: RegistryConfigInput<A>) {
 		this.#config = config;
-
-		// Start the local engine before /api/rivet is hit so clients can
-		// reach the endpoint preemptively. This waits one tick because some
-		// integrations mutate registry config immediately after setup() returns.
-		if (config.startEngine) {
-			setTimeout(() => {
-				const parsedConfig = this.parseConfig();
-
-				if (parsedConfig.startEngine) {
-					// biome-ignore lint/nursery/noFloatingPromises: fire-and-forget auto-prepare
-					this.#ensureRuntime();
-				}
-			}, 0);
-		}
-	}
-
-	/** Creates runtime if not already created. Idempotent. */
-	#ensureRuntime(): Promise<Runtime<A>> {
-		if (!this.#runtimePromise) {
-			this.#runtimePromise = Runtime.create(this);
-		}
-		return this.#runtimePromise;
 	}
 
 	/**
@@ -229,59 +197,6 @@ export class Registry<A extends RegistryActors> {
 		};
 	}
 
-	async #ensureHttpServer(config: RegistryConfig): Promise<void> {
-		if (this.#httpServerPromise) return this.#httpServerPromise;
-
-		this.#httpServerPromise = (async () => {
-			const httpPort = await findFreePort(config.httpPort);
-			this.#httpPort = httpPort;
-
-			const { Hono } = await import("hono");
-			const app = new Hono();
-			const apiBasePath =
-				config.serverless.basePath === "/"
-					? ""
-					: `/${config.serverless.basePath.replace(/^\/+|\/+$/g, "")}`;
-
-			app.all(`${apiBasePath}/*`, (c) => this.handler(c.req.raw));
-			app.all(apiBasePath || "/", (c) => this.handler(c.req.raw));
-
-			let serverApp = app;
-			if (config.staticDir) {
-				let dirExists = false;
-				try {
-					dirExists = getNodeFsSync().existsSync(config.staticDir);
-				} catch {
-					// Node fs is not available in every runtime.
-				}
-
-				if (dirExists) {
-					const runtime = detectRuntime();
-					const serveStaticFn =
-						await loadRuntimeServeStatic(runtime);
-					const wrapper = new Hono();
-					wrapper.use(
-						"*",
-						serveStaticFn({ root: `./${config.staticDir}` }),
-					);
-					wrapper.route("/", app);
-					serverApp = wrapper;
-				}
-			}
-
-			const out = await crossPlatformServe(config, httpPort, serverApp);
-			if (out.closeServer && process.env.NODE_ENV !== "production") {
-				const shutdown = () => {
-					out.closeServer?.();
-				};
-				process.on("SIGTERM", shutdown);
-				process.on("SIGINT", shutdown);
-			}
-		})();
-
-		return this.#httpServerPromise;
-	}
-
 	/**
 	 * Starts an actor envoy for standalone server deployments.
 	 */
@@ -303,14 +218,7 @@ export class Registry<A extends RegistryActors> {
 	}
 
 	/**
-	 * Starts the server, serving both the actor API and static files.
-	 *
-	 * This is the simplest way to run RivetKit. It starts a local runtime
-	 * server, serves static files from the configured `staticDir` (default
-	 * `"public"`), and starts the actor envoy.
-	 *
-	 * When an endpoint is configured (via config or RIVET_ENDPOINT env var),
-	 * operates in serverless mode connected to the remote engine instead.
+	 * Starts the native actor envoy for standalone server deployments.
 	 *
 	 * @example
 	 * ```ts
@@ -319,22 +227,8 @@ export class Registry<A extends RegistryActors> {
 	 * ```
 	 */
 	public start() {
-		if (this.#config.staticDir === undefined) {
-			this.#config.staticDir = "public";
-		}
-
-		if (this.#config.serverless === undefined) {
-			this.#config.serverless = {};
-		}
-		if (this.#config.serverless.publicEndpoint === undefined) {
-			this.#config.serverless.publicEndpoint = ENGINE_ENDPOINT;
-		}
-
 		const config = this.parseConfig();
-		this.#httpServerPromise = this.#ensureHttpServer(config).then(() => {
-			this.#startEnvoy(config, false);
-			this.#printWelcome(config, "serverful");
-		});
+		this.#startEnvoy(config, true);
 	}
 
 	#printWelcome(
@@ -366,20 +260,6 @@ export class Registry<A extends RegistryActors> {
 
 		if (kind === "serverless" && config.publicEndpoint) {
 			logLine("Client", config.publicEndpoint);
-		}
-
-		if (this.#httpPort) {
-			logLine("HTTP", `http://127.0.0.1:${this.#httpPort}`);
-		}
-
-		if (config.staticDir) {
-			try {
-				if (getNodeFsSync().existsSync(config.staticDir)) {
-					logLine("Static", `./${config.staticDir}`);
-				}
-			} catch {
-				// Node fs is not available in every runtime.
-			}
 		}
 
 		logLine("Actors", Object.keys(config.use).length.toString());

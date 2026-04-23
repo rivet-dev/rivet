@@ -8,8 +8,22 @@
 
 - Any mutation that changes a `can_sleep` input must call `ActorContext::reset_sleep_timer()` so the `ActorTask` sleep deadline is re-evaluated. Inputs are: `ready`/`started`, `prevent_sleep`, `no_sleep`, `active_http_request_count`, `sleep_keep_awake_count`, `sleep_internal_keep_awake_count`, `pending_disconnect_count`, `conns()`, and `websocket_callback_count`. Missing this call leaves the sleep timer armed against stale state and triggers the `"sleep idle deadline elapsed but actor stayed awake"` warning on the next tick.
 - Counter `register_zero_notify(&idle_notify)` hooks only drive shutdown drain waits. They are not a substitute for the activity-dirty notification, so any new sleep-affecting counter must also notify on transitions that change `can_sleep`.
+- A clean `run` exit while `Started` is not terminal. Keep the generation alive until the guaranteed `Stop` drives `SleepGrace` or `DestroyGrace`, and only treat `Terminated` as "grace hooks already completed."
+- Do not reply to actor startup until the runtime adapter has acknowledged its startup preamble. Otherwise `getOrCreate` can race the first action against `onWake` or `run` startup.
 - When forwarding an existing `anyhow::Error` across lifecycle/action replies, preserve structured `RivetError` data with `RivetError::extract` instead of stringifying it.
+- `ActorContext::request_save(...)` is intentionally fire-and-forget: lifecycle inbox overloads only emit a warning. Use `request_save_and_wait(...)` when callers need a `Result` and must observe delivery failures.
+
+## Queue invariants
+
+- Register queue completion waiters before publishing messages to KV so fast consumers cannot complete a message before the waiter exists.
 
 ## Hibernatable WebSockets
 
 - Raw `onWebSocket` hibernatable connections must create `HibernatableConnectionMetadata` and persist plus ack every inbound message through core before gateway replay state is correct.
+- Actor-connect WebSocket setup errors must send a protocol `Error` frame before closing; JSON/CBOR connection-level errors include `actionId: null`.
+- Flush the actor-connect `WebSocketSender` after queuing a setup `Error` frame and before closing so the envoy writer handles the error before the close terminates the connection.
+- Bound actor-connect websocket setup at the registry boundary as well as inside the actor task. The HTTP upgrade can complete before `connection_open` replies, so a missing reply must still close the socket instead of idling until the client test timeout.
+
+## Test harness
+
+- `tests/modules/task.rs` tests that install a tracing subscriber with `set_default(...)` must take `test_hook_lock()` first, or full `cargo test` parallelism makes the log-capture assertions flaky.

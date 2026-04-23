@@ -4,6 +4,11 @@ Date: 2026-04-22
 
 Scope: `rivetkit-typescript/packages/rivetkit`, static registry, bare encoding.
 
+## Current Status
+
+- The isolated `wait send returns completion response` path was fixed by DT-012 and is no longer the active bug for this area.
+- Remaining queue flake tracking is the high-fan-out child-actor path under fast static/http/bare verification. See DT-051 and DT-056 in `scripts/ralph/prd.json`.
+
 ## Repro Commands
 
 ```bash

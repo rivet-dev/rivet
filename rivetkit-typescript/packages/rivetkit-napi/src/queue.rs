@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use napi::bindgen_prelude::{BigInt, Buffer};
+use napi::bindgen_prelude::Buffer;
 use napi_derive::napi;
 use parking_lot::Mutex;
 use rivetkit_core::{
@@ -148,12 +148,10 @@ impl Queue {
 		&self,
 		names: Vec<String>,
 		options: Option<JsQueueWaitOptions>,
-		cancel_token_id: Option<BigInt>,
+		signal: Option<&CancellationToken>,
 	) -> napi::Result<QueueMessage> {
-		let mut wait_opts = queue_wait_opts(options)?;
-		wait_opts.signal = registered_cancel_token(cancel_token_id)?;
 		self.inner
-			.wait_for_names(names, wait_opts)
+			.wait_for_names(names, queue_wait_opts(options, signal)?)
 			.await
 			.map(QueueMessage::from_core)
 			.map_err(napi_anyhow_error)
@@ -166,7 +164,7 @@ impl Queue {
 		options: Option<JsQueueWaitOptions>,
 	) -> napi::Result<()> {
 		self.inner
-			.wait_for_names_available(names, queue_wait_opts(options)?)
+			.wait_for_names_available(names, queue_wait_opts(options, None)?)
 			.await
 			.map_err(napi_anyhow_error)
 	}
@@ -314,7 +312,10 @@ fn queue_next_batch_opts(
 	})
 }
 
-fn queue_wait_opts(options: Option<JsQueueWaitOptions>) -> napi::Result<QueueWaitOpts> {
+fn queue_wait_opts(
+	options: Option<JsQueueWaitOptions>,
+	signal: Option<&CancellationToken>,
+) -> napi::Result<QueueWaitOpts> {
 	let options = options.unwrap_or(JsQueueWaitOptions {
 		timeout_ms: None,
 		completable: None,
@@ -322,40 +323,9 @@ fn queue_wait_opts(options: Option<JsQueueWaitOptions>) -> napi::Result<QueueWai
 
 	Ok(QueueWaitOpts {
 		timeout: timeout_duration(options.timeout_ms)?,
-		signal: None,
+		signal: signal.map(|signal| signal.inner().clone()),
 		completable: options.completable.unwrap_or(false),
 	})
-}
-
-fn registered_cancel_token(
-	cancel_token_id: Option<BigInt>,
-) -> napi::Result<Option<tokio_util::sync::CancellationToken>> {
-	let Some(cancel_token_id) = cancel_token_id else {
-		return Ok(None);
-	};
-
-	let (negative, token_id, lossless) = cancel_token_id.get_u64();
-	if negative || !lossless {
-		return Err(napi_anyhow_error(
-			NapiInvalidArgument {
-				argument: "cancelTokenId".to_owned(),
-				reason: "must be a non-negative u64".to_owned(),
-			}
-			.build(),
-		));
-	}
-
-	crate::cancel_token::lookup_token(token_id)
-		.map(Some)
-		.ok_or_else(|| {
-			napi_anyhow_error(
-				NapiInvalidArgument {
-					argument: "cancelTokenId".to_owned(),
-					reason: "unknown token id".to_owned(),
-				}
-				.build(),
-			)
-		})
 }
 
 fn enqueue_and_wait_opts(

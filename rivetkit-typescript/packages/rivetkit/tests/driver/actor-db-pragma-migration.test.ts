@@ -1,5 +1,5 @@
-import { describeDriverMatrix } from "./shared-matrix";
 import { describe, expect, test, vi } from "vitest";
+import { describeDriverMatrix } from "./shared-matrix";
 import { setupDriverTest, waitFor } from "./shared-utils";
 
 const SLEEP_WAIT_MS = 150;
@@ -7,6 +7,7 @@ const REAL_TIMER_DB_TIMEOUT_MS = 180_000;
 const PRAGMA_READY_TIMEOUT_MS = 15_000;
 
 async function waitForPragmaAction<T>(action: () => Promise<T>): Promise<T> {
+	// Poll because the pragma actor can still be booting when the first DB action is issued.
 	return await vi.waitFor(action, {
 		timeout: PRAGMA_READY_TIMEOUT_MS,
 		interval: 100,

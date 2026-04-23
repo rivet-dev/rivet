@@ -42,6 +42,16 @@
 				"default": "./dist/tsup/workflow/mod.cjs"
 			}
 		},
+		"./test": {
+			"import": {
+				"types": "./dist/tsup/test/mod.d.ts",
+				"default": "./dist/tsup/test/mod.js"
+			},
+			"require": {
+				"types": "./dist/tsup/test/mod.d.cts",
+				"default": "./dist/tsup/test/mod.cjs"
+			}
+		},
 		"./db": {
 			"import": {
 				"types": "./dist/tsup/db/mod.d.ts",
@@ -96,6 +106,22 @@
 				"default": "./dist/tsup/actor/errors.cjs"
 			}
 		},
+		"./inspector": {
+			"import": {
+				"types": "./dist/tsup/inspector/mod.d.ts",
+				"default": "./dist/tsup/inspector/mod.js"
+			},
+			"require": {
+				"types": "./dist/tsup/inspector/mod.d.cts",
+				"default": "./dist/tsup/inspector/mod.cjs"
+			}
+		},
+		"./inspector/client": {
+			"import": {
+				"types": "./dist/browser/inspector/client.d.ts",
+				"default": "./dist/browser/inspector/client.js"
+			}
+		},
 		"./utils": {
 			"import": {
 				"types": "./dist/tsup/utils.d.ts",
@@ -125,11 +151,13 @@
 		"./dist/tsup/chunk-*.cjs"
 	],
 	"scripts": {
-		"build": "tsup src/mod.ts src/client/mod.ts src/common/log.ts src/common/websocket.ts src/actor/errors.ts src/utils.ts src/workflow/mod.ts src/db/mod.ts src/db/drizzle.ts && tsup src/agent-os/index.ts --no-clean --out-dir dist/tsup/agent-os",
+		"build": "tsup src/mod.ts src/client/mod.ts src/common/log.ts src/common/websocket.ts src/actor/errors.ts src/utils.ts src/workflow/mod.ts src/test/mod.ts src/inspector/mod.ts src/db/mod.ts src/db/drizzle.ts && tsup src/agent-os/index.ts --no-clean --out-dir dist/tsup/agent-os",
 		"build:browser": "tsup --config tsup.browser.config.ts",
 		"check-types": "tsc --noEmit",
-		"lint": "biome check .",
+		"lint": "biome check . && pnpm run check:test-skips && pnpm run check:wait-for-comments",
 		"lint:fix": "biome check --write .",
+		"check:test-skips": "tsx scripts/check-annotated-skips.ts",
+		"check:wait-for-comments": "tsx scripts/check-wait-for-comments.ts",
 		"format": "biome format .",
 		"format:write": "biome format --write .",
 		"test": "vitest run",

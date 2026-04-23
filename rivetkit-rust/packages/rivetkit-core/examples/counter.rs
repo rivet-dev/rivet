@@ -64,8 +64,7 @@ async fn run_counter(start: ActorStart) -> Result<()> {
 			} => {
 				reply.send(build_deltas(count, &mut dirty));
 			}
-			ActorEvent::BeginSleep => {}
-			ActorEvent::FinalizeSleep { reply } | ActorEvent::Destroy { reply } => {
+			ActorEvent::RunGracefulCleanup { reply, .. } => {
 				ctx.save_state(build_deltas(count, &mut dirty)?).await?;
 				reply.send(Ok(()));
 				break;

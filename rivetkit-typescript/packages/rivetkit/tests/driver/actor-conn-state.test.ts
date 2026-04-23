@@ -1,6 +1,7 @@
 // @ts-nocheck
-import { describeDriverMatrix } from "./shared-matrix";
+
 import { describe, expect, test, vi } from "vitest";
+import { describeDriverMatrix } from "./shared-matrix";
 import { setupDriverTest } from "./shared-utils";
 
 describeDriverMatrix("Actor Conn State", (driverTestConfig) => {
@@ -164,13 +165,13 @@ describeDriverMatrix("Actor Conn State", (driverTestConfig) => {
 				// Get the connection state
 				const connState = await conn.getConnectionState();
 
-				// Verify the connection is tracked
+				// Poll until the async connection registration exposes the new connection ID.
 				await vi.waitFor(async () => {
 					const connectionIds = await debugHandle.getConnectionIds();
 					expect(connectionIds).toContain(connState.id);
 				});
 
-				// Initial disconnection count
+				// Poll until the actor reports its initial disconnect count after connect bookkeeping settles.
 				await vi.waitFor(async () => {
 					const disconnects =
 						await debugHandle.getDisconnectionCount();
@@ -180,13 +181,11 @@ describeDriverMatrix("Actor Conn State", (driverTestConfig) => {
 				// Dispose the connection
 				await conn.dispose();
 
-				// Validate conn count
+				// Poll until async disconnect bookkeeping lands, which is especially slow over SSE on Workers.
 				await vi.waitFor(
 					async () => {
-						console.log("disconnects before");
 						const disconnects =
 							await debugHandle.getDisconnectionCount();
-						console.log("disconnects", disconnects);
 						expect(disconnects).toBe(1);
 					},
 					// SSE takes a long time to disconnect on CF Workers
@@ -199,23 +198,20 @@ describeDriverMatrix("Actor Conn State", (driverTestConfig) => {
 				// Create a new connection to check the disconnection count
 				const newConn = client.connStateActor.getOrCreate().connect();
 
-				// Verify the connection is tracked
+				// Poll until the replacement connection is registered after the reconnect handshake finishes.
 				await vi.waitFor(async () => {
 					const connectionIds = await debugHandle.getConnectionIds();
-					console.log("conn ids", connectionIds);
 					expect(connectionIds.length).toBe(1);
 				});
 
 				// Clean up
 				await newConn.dispose();
 
-				// Verify disconnection was tracked
+				// Poll until the second async disconnect bookkeeping pass updates the observer count.
 				await vi.waitFor(
 					async () => {
-						console.log("A");
 						const disconnects =
 							await debugHandle.getDisconnectionCount();
-						console.log(`B ${disconnects}`);
 						expect(disconnects).toBe(2);
 					},
 					// SSE takes a long time to disconnect on CF Workers
@@ -284,6 +280,7 @@ describeDriverMatrix("Actor Conn State", (driverTestConfig) => {
 				);
 				expect(success).toBe(true);
 
+				// Poll until the forwarded message arrives because conn-to-conn delivery is asynchronous.
 				await vi.waitFor(async () => {
 					// Verify message was received
 					expect(receivedMessages.length).toBe(1);

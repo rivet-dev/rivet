@@ -546,7 +546,7 @@ const chatRoom = actor({
 
 ### Context Types
 
-When writing helper functions outside the actor definition, use `*ContextOf<typeof myActor>` to extract the correct context type. Do not manually define your own context interface — always derive it from the actor definition.
+When writing helper functions outside the actor definition, use `*ContextOf<typeof myActor>` to extract the correct context type. Helpers like `ActionContextOf`, `CreateContextOf`, `ConnContextOf`, and `ConnInitContextOf` are exported from `"rivetkit"`. Do not manually define your own context interface. Always derive it from the actor definition.
 
 ```ts
 import { actor, ActionContextOf } from "rivetkit";
