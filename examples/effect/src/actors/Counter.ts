@@ -14,7 +14,9 @@ export class CounterOverflowError extends Schema.TaggedError<CounterOverflowErro
 // import this; the implementation stays server-only.
 export const Counter = Actor.make("Counter", {
 	state: Schema.Struct({ count: Schema.Number }),
-	events: { countChanged: Schema.Number },
+	events: {
+		countChanged: Schema.Number
+	},
 	// Actions use explicit schemas rather than inferring types from
 	// the handler signature (like the current Rivet SDK does) because:
 	//
