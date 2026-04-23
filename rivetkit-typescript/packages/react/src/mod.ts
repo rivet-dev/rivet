@@ -8,6 +8,8 @@ import { useStore } from "@tanstack/react-store";
 import { useEffect, useRef } from "react";
 import {
 	type ActorConn,
+	type ActorConnStatus,
+	type ActorHandle,
 	type Client,
 	type ClientConfigInput,
 	createClient,
@@ -16,6 +18,25 @@ import {
 
 export { ActorConnDisposed, createClient } from "rivetkit/client";
 export type { ActorConnStatus } from "@rivetkit/framework-base";
+
+type UseEvent<
+	Registry extends AnyActorRegistry,
+	ActorName extends keyof ExtractActorsFromRegistry<Registry> & string,
+> = ActorConn<ExtractActorsFromRegistry<Registry>[ActorName]>["on"];
+
+type UseActorState<
+	Registry extends AnyActorRegistry,
+	ActorName extends keyof ExtractActorsFromRegistry<Registry> & string,
+> = {
+	handle: ActorHandle<ExtractActorsFromRegistry<Registry>[ActorName]> | null;
+	connection: ActorConn<ExtractActorsFromRegistry<Registry>[ActorName]> | null;
+	connStatus: ActorConnStatus;
+	error: Error | null;
+	hash: string;
+	isConnected: boolean;
+	opts: ActorOptions<Registry, ActorName>;
+	useEvent: UseEvent<Registry, ActorName>;
+};
 
 export function createRivetKit<Registry extends AnyActorRegistry>(
 	clientInput: string | ClientConfigInput | undefined = undefined,
@@ -44,7 +65,9 @@ export function createRivetKitWithClient<Registry extends AnyActorRegistry>(
 	 */
 	function useActor<
 		ActorName extends keyof ExtractActorsFromRegistry<Registry> & string,
-	>(opts: ActorOptions<Registry, ActorName>) {
+	>(
+		opts: ActorOptions<Registry, ActorName>,
+	): UseActorState<Registry, ActorName> {
 		// getOrCreateActor syncs opts to store on every call
 		const { mount, state } = getOrCreateActor<ActorName>(opts);
 
@@ -53,11 +76,6 @@ export function createRivetKitWithClient<Registry extends AnyActorRegistry>(
 		}, [mount]);
 
 		const actorState = useStore(state);
-		type UseEvent = (typeof actorState)["connection"] extends ActorConn<
-			infer AD
-		> | null
-			? ActorConn<AD>["on"]
-			: never;
 
 		/**
 		 * Hook to listen for events emitted by the actor.
@@ -100,12 +118,12 @@ export function createRivetKitWithClient<Registry extends AnyActorRegistry>(
 				actorState.hash,
 				eventName,
 			]);
-		}) as UseEvent;
+		}) as UseEvent<Registry, ActorName>;
 
 		return {
 			...actorState,
 			useEvent,
-		};
+		} as UseActorState<Registry, ActorName>;
 	}
 
 	return {

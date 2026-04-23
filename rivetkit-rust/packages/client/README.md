@@ -6,8 +6,8 @@ Use this client to connect to RivetKit services from Rust applications.
 
 ## Resources
 
-- [Quickstart](https://rivetkit.org/introduction)
-- [Documentation](https://rivetkit.org/clients/rust)
+- [Quickstart](https://rivet.dev/docs)
+- [Documentation](https://rivet.dev/docs/clients/rust)
 - [Examples](https://github.com/rivet-dev/rivet/tree/main/examples)
 
 ## Getting Started

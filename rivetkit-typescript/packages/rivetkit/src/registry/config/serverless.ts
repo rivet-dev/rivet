@@ -16,6 +16,7 @@ export const ConfigurePoolSchema = z
 export const ServerlessConfigSchema = z.object({
 	// MARK: Routing
 	basePath: z.string().optional().default("/api/rivet"),
+	maxStartPayloadBytes: z.number().optional().default(1_048_576),
 
 	// MARK: Public Endpoint Configuration
 	/**

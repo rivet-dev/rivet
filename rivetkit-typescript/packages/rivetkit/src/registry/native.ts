@@ -20,6 +20,7 @@ import {
 	CONN_STATE_MANAGER_SYMBOL,
 	getRunFunction,
 	getRunInspectorConfig,
+	type WorkflowInspectorConfig,
 } from "@/actor/config";
 import type { AnyActorDefinition } from "@/actor/definition";
 import {
@@ -38,7 +39,11 @@ import {
 	getQueueCanPublish,
 	hasSchemaConfigKey,
 } from "@/actor/schema";
-import { type AnyClient, createClientWithDriver } from "@/client/client";
+import {
+	type AnyClient,
+	type Client,
+	createClientWithDriver,
+} from "@/client/client";
 import { convertRegistryConfigToClientConfig } from "@/client/config";
 import {
 	HEADER_CONN_PARAMS,
@@ -75,13 +80,14 @@ import type {
 	UniversalWebSocket,
 } from "@/common/websocket-interface";
 import { RemoteEngineControlClient } from "@/engine-client/mod";
+import type { Registry } from "@/registry";
 import type { RegistryConfig } from "@/registry/config";
 import {
 	contentTypeForEncoding,
 	deserializeWithEncoding,
 	serializeWithEncoding,
 } from "@/serde";
-import { bufferToArrayBuffer } from "@/utils";
+import { bufferToArrayBuffer, VERSION } from "@/utils";
 import { logger } from "./log";
 import {
 	type NativeValidationConfig,
@@ -572,15 +578,22 @@ function actorAbortedError(): Error & { group: string; code: string } {
 	});
 }
 
+type NativeWorkflowInspectorConfig = WorkflowInspectorConfig<ArrayBuffer> & {
+	getState?: () => Promise<unknown> | unknown;
+};
+
 function isClosedTaskRegistrationError(error: unknown): boolean {
+	const metadata = error instanceof RivetError ? error.metadata : undefined;
+	const metadataError =
+		metadata && typeof metadata === "object" && "error" in metadata
+			? metadata.error
+			: undefined;
 	return (
 		error instanceof RivetError &&
 		error.group === "core" &&
 		error.code === INTERNAL_ERROR_CODE &&
-		typeof error.metadata?.error === "string" &&
-		/actor task registration is (closed|not configured)/.test(
-			error.metadata.error,
-		)
+		typeof metadataError === "string" &&
+		/actor task registration is (closed|not configured)/.test(metadataError)
 	);
 }
 
@@ -1776,7 +1789,7 @@ class NativeWebSocketAdapter {
 
 				const buffer = ArrayBuffer.isView(data)
 					? Buffer.from(data.buffer, data.byteOffset, data.byteLength)
-					: Buffer.from(data);
+					: Buffer.from(data as ArrayBufferLike);
 				callNativeSync(() => this.#ws.send(buffer, true));
 			},
 			onClose: (code, reason) => {
@@ -2579,11 +2592,15 @@ export class NativeActorContextAdapter {
 	}
 
 	async restartRunHandler(): Promise<void> {
-		await callNative(() => this.#ctx.restartRunHandler());
+		await callNative(async () => {
+			this.#ctx.restartRunHandler();
+		});
 	}
 
 	async setAlarm(timestampMs?: number): Promise<void> {
-		await callNative(() => this.#ctx.setAlarm(timestampMs));
+		await callNative(async () => {
+			this.#ctx.setAlarm(timestampMs);
+		});
 	}
 
 	keepAwake<T>(promise: Promise<T>): Promise<T> {
@@ -2648,7 +2665,7 @@ export class NativeActorContextAdapter {
 		callNativeSync(() => this.#ctx.destroy());
 	}
 
-	client<T = AnyClient>(): T {
+	client<T = AnyClient>(): T extends Registry<any> ? Client<T> : T {
 		if (!this.#client) {
 			if (!this.#clientFactory) {
 				throw new Error("native actor client is not configured");
@@ -2656,7 +2673,7 @@ export class NativeActorContextAdapter {
 			this.#client = this.#clientFactory();
 		}
 
-		return this.#client as T;
+		return this.#client as T extends Registry<any> ? Client<T> : T;
 	}
 
 	async dispose(): Promise<void> {
@@ -3126,7 +3143,7 @@ export function buildNativeFactory(
 		getRunInspectorConfig(
 			config.run,
 			callNativeSync(() => ctx.actorId()),
-		)?.workflow;
+		)?.workflow as NativeWorkflowInspectorConfig | undefined;
 	const onStateChange =
 		typeof config.onStateChange === "function"
 			? (actorCtx: NativeActorContextAdapter, nextState: unknown) => {
@@ -4456,6 +4473,13 @@ async function buildServeConfig(
 		namespace: config.namespace,
 		poolName: config.envoy.poolName,
 		handleInspectorHttpInRuntime: true,
+		serverlessBasePath: config.serverless.basePath,
+		serverlessPackageVersion: VERSION,
+		serverlessClientEndpoint: config.publicEndpoint,
+		serverlessClientNamespace: config.publicNamespace,
+		serverlessClientToken: config.publicToken,
+		serverlessValidateEndpoint: config.validateServerlessEndpoint,
+		serverlessMaxStartPayloadBytes: config.serverless.maxStartPayloadBytes,
 	};
 
 	if (config.startEngine) {
@@ -4467,6 +4491,7 @@ async function buildServeConfig(
 }
 
 export async function buildNativeRegistry(config: RegistryConfig): Promise<{
+	bindings: NativeBindings;
 	registry: NativeCoreRegistry;
 	serveConfig: JsServeConfig;
 }> {
@@ -4488,6 +4513,7 @@ export async function buildNativeRegistry(config: RegistryConfig): Promise<{
 	}
 
 	return {
+		bindings,
 		registry,
 		serveConfig: await buildServeConfig(config),
 	};

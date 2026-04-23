@@ -134,6 +134,28 @@ export interface JsServeConfig {
   poolName: string
   engineBinaryPath?: string
   handleInspectorHttpInRuntime?: boolean
+  serverlessBasePath?: string
+  serverlessPackageVersion: string
+  serverlessClientEndpoint?: string
+  serverlessClientNamespace?: string
+  serverlessClientToken?: string
+  serverlessValidateEndpoint: boolean
+  serverlessMaxStartPayloadBytes: number
+}
+export interface JsServerlessRequest {
+  method: string
+  url: string
+  headers: Record<string, string>
+  body: Buffer
+}
+export interface JsServerlessResponseHead {
+  status: number
+  headers: Record<string, string>
+}
+export interface JsServerlessStreamError {
+  group: string
+  code: string
+  message: string
 }
 /** Options for KV list operations. */
 export interface JsKvListOptions {
@@ -254,6 +276,7 @@ export declare class CoreRegistry {
   constructor()
   register(name: string, factory: NapiActorFactory): void
   serve(config: JsServeConfig): Promise<void>
+  handleServerlessRequest(req: JsServerlessRequest, onStreamEvent: (...args: any[]) => any, cancelToken: CancellationToken, config: JsServeConfig): Promise<JsServerlessResponseHead>
 }
 export declare class Schedule {
   after(durationMs: number, actionName: string, args: Buffer): void

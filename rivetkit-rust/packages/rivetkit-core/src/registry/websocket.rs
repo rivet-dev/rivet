@@ -40,7 +40,18 @@ impl RegistryDispatcher {
 				.await;
 		}
 		match self
-			.handle_raw_websocket(actor_id, instance, request, path, headers, sender)
+			.handle_raw_websocket(
+				actor_id,
+				instance,
+				request,
+				path,
+				headers,
+				gateway_id,
+				request_id,
+				is_hibernatable,
+				is_restoring_hibernatable,
+				sender,
+			)
 			.await
 		{
 			Ok(handler) => Ok(handler),
@@ -374,10 +385,41 @@ impl RegistryDispatcher {
 								) {
 									Ok(()) => {}
 									Err(ActorConnectSendError::OutgoingTooLong) => {
-										sender.close(
-											Some(1011),
-											Some("message.outgoing_too_long".to_owned()),
-										);
+										let error_response =
+											ActorConnectToClient::Error(ActorConnectError {
+												group: "message".to_owned(),
+												code: "outgoing_too_long".to_owned(),
+												message: "Outgoing message too long".to_owned(),
+												metadata: None,
+												action_id: Some(request.id),
+											});
+										if let Err(error) = send_actor_connect_message(
+											&sender,
+											encoding,
+											&error_response,
+											usize::MAX,
+										) {
+											match error {
+												ActorConnectSendError::OutgoingTooLong => {
+													sender.close(
+														Some(1011),
+														Some(
+															"message.outgoing_too_long".to_owned(),
+														),
+													);
+												}
+												ActorConnectSendError::Encode(error) => {
+													tracing::error!(
+														?error,
+														"failed to send actor websocket outgoing-size error"
+													);
+													sender.close(
+														Some(1011),
+														Some("actor.send_failed".to_owned()),
+													);
+												}
+											}
+										}
 									}
 									Err(ActorConnectSendError::Encode(error)) => {
 										tracing::error!(
@@ -418,6 +460,10 @@ impl RegistryDispatcher {
 		request: &HttpRequest,
 		path: &str,
 		headers: &HashMap<String, String>,
+		gateway_id: &protocol::GatewayId,
+		request_id: &protocol::RequestId,
+		is_hibernatable: bool,
+		is_restoring_hibernatable: bool,
 		_sender: WebSocketSender,
 	) -> Result<WebSocketHandler> {
 		let conn_params = websocket_conn_params(headers)?;
@@ -428,16 +474,39 @@ impl RegistryDispatcher {
 			request.body.clone().unwrap_or_default(),
 		)
 		.context("build actor websocket request")?;
-		let conn = instance
-			.ctx
-			.connect_conn_with_request(conn_params, Some(websocket_request.clone()), async {
-				Ok(Vec::new())
-			})
-			.await?;
+		let conn = if is_restoring_hibernatable {
+			instance
+				.ctx
+				.reconnect_hibernatable_conn(gateway_id, request_id)?
+		} else {
+			let hibernation = is_hibernatable.then(|| HibernatableConnectionMetadata {
+				gateway_id: *gateway_id,
+				request_id: *request_id,
+				server_message_index: 0,
+				client_message_index: 0,
+				request_path: path.to_owned(),
+				request_headers: headers
+					.iter()
+					.map(|(name, value)| (name.to_ascii_lowercase(), value.clone()))
+					.collect(),
+			});
+
+			instance
+				.ctx
+				.connect_conn(
+					conn_params,
+					is_hibernatable,
+					hibernation,
+					Some(websocket_request.clone()),
+					async { Ok(Vec::new()) },
+				)
+				.await?
+		};
 		let ctx = instance.ctx.clone();
 		let dispatch = instance.dispatch.clone();
 		let dispatch_capacity = instance.factory.config().dispatch_command_inbox_capacity;
 		let conn_for_close = conn.clone();
+		let conn_for_message = conn.clone();
 		let ctx_for_message = ctx.clone();
 		let ctx_for_close = ctx.clone();
 		let ws = WebSocket::new();
@@ -452,6 +521,7 @@ impl RegistryDispatcher {
 		let actor_id = actor_id.to_owned();
 		let actor_id_for_close = actor_id.clone();
 		let actor_id_for_open = actor_id.clone();
+		let ack_test_state = Arc::new(Mutex::new(RawHibernatableAckTestState::default()));
 		let (closed_tx, _closed_rx) = oneshot::channel();
 		// Forced-sync: close notification is a small sync slot consumed once
 		// from the WebSocket close callback.
@@ -460,9 +530,21 @@ impl RegistryDispatcher {
 		Ok(WebSocketHandler {
 			on_message: Box::new(move |message: WebSocketMessage| {
 				let ctx = ctx_for_message.clone();
+				let conn = conn_for_message.clone();
 				let ws = ws_for_message.clone();
+				let ack_test_state = ack_test_state.clone();
 				Box::pin(async move {
+					let callback_ctx = ctx.clone();
 					ctx.with_websocket_callback(|| async move {
+						if is_hibernatable
+							&& maybe_respond_to_raw_hibernatable_ack_state_probe(
+								&ws,
+								&message,
+								&ack_test_state,
+							) {
+							return;
+						}
+
 						let payload = if message.binary {
 							WsMessage::Binary(message.data)
 						} else {
@@ -480,6 +562,29 @@ impl RegistryDispatcher {
 							}
 						};
 						ws.dispatch_message_event(payload, Some(message.message_index));
+						if is_hibernatable
+							&& let Err(error) = persist_and_ack_hibernatable_actor_message(
+								&callback_ctx,
+								&conn,
+								message.message_index,
+							)
+							.await
+						{
+							tracing::warn!(
+								?error,
+								conn_id = conn.id(),
+								"failed to persist and ack hibernatable raw websocket message"
+							);
+							ws.close(
+								Some(1011),
+								Some("actor.hibernation_persist_failed".to_owned()),
+							)
+							.await;
+							return;
+						}
+						if is_hibernatable {
+							ack_test_state.lock().record(message.message_index);
+						}
 					})
 					.await;
 				})
@@ -555,6 +660,52 @@ pub(super) async fn persist_and_ack_hibernatable_actor_message(
 		message_index,
 	)?;
 	Ok(())
+}
+
+#[derive(Default)]
+struct RawHibernatableAckTestState {
+	last_sent_index: u16,
+	last_acked_index: u16,
+}
+
+impl RawHibernatableAckTestState {
+	fn record(&mut self, message_index: u16) {
+		self.last_sent_index = self.last_sent_index.max(message_index);
+		self.last_acked_index = self.last_acked_index.max(message_index);
+	}
+}
+
+fn maybe_respond_to_raw_hibernatable_ack_state_probe(
+	ws: &WebSocket,
+	message: &WebSocketMessage,
+	state: &Arc<Mutex<RawHibernatableAckTestState>>,
+) -> bool {
+	if env::var_os("VITEST").is_none() || message.binary {
+		return false;
+	}
+
+	let Ok(value) = serde_json::from_slice::<JsonValue>(&message.data) else {
+		return false;
+	};
+	if value
+		.get("__rivetkitTestHibernatableAckStateV1")
+		.and_then(JsonValue::as_bool)
+		!= Some(true)
+	{
+		return false;
+	}
+
+	let state = state.lock();
+	ws.send(WsMessage::Text(
+		json!({
+			"__rivetkitTestHibernatableAckStateV1": true,
+			"lastSentIndex": state.last_sent_index,
+			"lastAckedIndex": state.last_acked_index,
+			"pendingIndexes": [],
+		})
+		.to_string(),
+	));
+	true
 }
 
 pub(super) fn websocket_inspector_token(headers: &HashMap<String, String>) -> Option<&str> {

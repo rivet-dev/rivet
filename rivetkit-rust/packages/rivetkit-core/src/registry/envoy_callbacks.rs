@@ -147,6 +147,13 @@ impl ServeSettings {
 			pool_name: env::var("RIVET_POOL_NAME").unwrap_or_else(|_| "rivetkit-rust".to_owned()),
 			engine_binary_path: env::var_os("RIVET_ENGINE_BINARY_PATH").map(PathBuf::from),
 			handle_inspector_http_in_runtime: false,
+			serverless_base_path: None,
+			serverless_package_version: env!("CARGO_PKG_VERSION").to_owned(),
+			serverless_client_endpoint: None,
+			serverless_client_namespace: None,
+			serverless_client_token: None,
+			serverless_validate_endpoint: true,
+			serverless_max_start_payload_bytes: 1_048_576,
 		}
 	}
 }
@@ -168,6 +175,13 @@ impl ServeConfig {
 			pool_name: settings.pool_name,
 			engine_binary_path: settings.engine_binary_path,
 			handle_inspector_http_in_runtime: settings.handle_inspector_http_in_runtime,
+			serverless_base_path: settings.serverless_base_path,
+			serverless_package_version: settings.serverless_package_version,
+			serverless_client_endpoint: settings.serverless_client_endpoint,
+			serverless_client_namespace: settings.serverless_client_namespace,
+			serverless_client_token: settings.serverless_client_token,
+			serverless_validate_endpoint: settings.serverless_validate_endpoint,
+			serverless_max_start_payload_bytes: settings.serverless_max_start_payload_bytes,
 		}
 	}
 }

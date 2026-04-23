@@ -614,7 +614,10 @@ export function createNativeDriverTestConfig(
 	return {
 		encoding: options.encoding,
 		skip: options.skip,
-		features: options.features,
+		features: {
+			hibernatableWebSocketProtocol: true,
+			...options.features,
+		},
 		useRealTimers: options.useRealTimers ?? true,
 		start: async () => {
 			const engine = await getOrStartSharedEngine();

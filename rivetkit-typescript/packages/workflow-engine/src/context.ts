@@ -1221,8 +1221,12 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 		}
 
 		const historyPruneInterval =
-			config.historyPruneInterval ?? DEFAULT_LOOP_HISTORY_PRUNE_INTERVAL;
-		const historySize = config.historySize ?? historyPruneInterval;
+			config.historyPruneInterval ??
+			config.commitInterval ??
+			config.historyEvery ??
+			DEFAULT_LOOP_HISTORY_PRUNE_INTERVAL;
+		const historySize =
+			config.historySize ?? config.historyKeep ?? historyPruneInterval;
 
 		// Track the last iteration we pruned up to so we only delete
 		// newly-expired iterations instead of re-scanning from 0.

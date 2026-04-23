@@ -4,6 +4,7 @@ import { db } from "@/common/database/mod";
 import { RAW_WS_HANDLER_DELAY, RAW_WS_HANDLER_SLEEP_TIMEOUT } from "./sleep";
 
 export const SLEEP_DB_TIMEOUT = 1000;
+export const SLEEP_SCHEDULE_AFTER_ON_SLEEP_DELAY_MS = 3000;
 
 export const sleepWithDb = actor({
 	state: {
@@ -477,6 +478,8 @@ export const sleepScheduleAfter = actor({
 	state: {
 		startCount: 0,
 		sleepCount: 0,
+		scheduledActionCount: 0,
+		holdAfterWake: false,
 	},
 	db: db({
 		onMigrate: async (db) => {
@@ -491,15 +494,23 @@ export const sleepScheduleAfter = actor({
 	}),
 	onWake: async (c) => {
 		c.state.startCount += 1;
+		if (c.state.holdAfterWake) {
+			// Keep the alarm wake observable before idle sleep can run again.
+			c.setPreventSleep(true);
+		}
 		await c.db.execute(
 			`INSERT INTO sleep_log (event, created_at) VALUES ('wake', ${Date.now()})`,
 		);
 	},
 	onSleep: async (c) => {
 		c.state.sleepCount += 1;
+		c.state.holdAfterWake = true;
 		// Schedule an alarm during onSleep. It should be persisted
-		// but not fire a local timeout during shutdown.
-		c.schedule.after(100, "onScheduledAction");
+		// but fire after the test has explicitly woken the actor.
+		c.schedule.after(
+			SLEEP_SCHEDULE_AFTER_ON_SLEEP_DELAY_MS,
+			"onScheduledAction",
+		);
 		await c.db.execute(
 			`INSERT INTO sleep_log (event, created_at) VALUES ('sleep', ${Date.now()})`,
 		);
@@ -508,10 +519,18 @@ export const sleepScheduleAfter = actor({
 		triggerSleep: (c) => {
 			c.sleep();
 		},
-		getCounts: (c) => ({
-			startCount: c.state.startCount,
-			sleepCount: c.state.sleepCount,
-		}),
+		getCounts: (c) => {
+			const counts = {
+				startCount: c.state.startCount,
+				sleepCount: c.state.sleepCount,
+				scheduledActionCount: c.state.scheduledActionCount,
+			};
+			if (c.state.scheduledActionCount > 0) {
+				c.state.holdAfterWake = false;
+				c.setPreventSleep(false);
+			}
+			return counts;
+		},
 		getLogEntries: async (c) => {
 			return await c.db.execute<{
 				id: number;
@@ -520,6 +539,7 @@ export const sleepScheduleAfter = actor({
 			}>(`SELECT * FROM sleep_log ORDER BY id`);
 		},
 		onScheduledAction: async (c) => {
+			c.state.scheduledActionCount += 1;
 			await c.db.execute(
 				`INSERT INTO sleep_log (event, created_at) VALUES ('scheduled-action', ${Date.now()})`,
 			);

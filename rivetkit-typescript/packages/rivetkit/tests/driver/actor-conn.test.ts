@@ -1,6 +1,7 @@
 // @ts-nocheck
-import { describeDriverMatrix } from "./shared-matrix";
+
 import { describe, expect, test, vi } from "vitest";
+import { describeDriverMatrix } from "./shared-matrix";
 import { FAKE_TIME, setupDriverTest, waitFor } from "./shared-utils";
 
 const CONNECTION_BOOTSTRAP_TIMEOUT_MS = 20_000;
@@ -245,14 +246,10 @@ describeDriverMatrix("Actor Conn", (driverTestConfig) => {
 				);
 
 				const conn1 = handle1.connect();
-				await waitForConnectionBootstrap(() =>
-					conn1.getInitializers(),
-				);
+				await waitForConnectionBootstrap(() => conn1.getInitializers());
 
 				const conn2 = handle2.connect();
-				await waitForConnectionBootstrap(() =>
-					conn2.getInitializers(),
-				);
+				await waitForConnectionBootstrap(() => conn2.getInitializers());
 
 				// Get initializers to verify connection params were used
 				const initializers = await waitForConnectionBootstrap(() =>
@@ -282,9 +279,7 @@ describeDriverMatrix("Actor Conn", (driverTestConfig) => {
 				);
 
 				const conn1 = handle.connect();
-				await waitForConnectionBootstrap(() =>
-					conn1.getInitializers(),
-				);
+				await waitForConnectionBootstrap(() => conn1.getInitializers());
 				await conn1.dispose();
 
 				const conn2 = handle.connect();
@@ -443,10 +438,13 @@ describeDriverMatrix("Actor Conn", (driverTestConfig) => {
 					openCount++;
 				});
 
-				// Wait for connection to open
-				await vi.waitFor(() => {
-					expect(openCount).toBe(1);
-				});
+				// The open callback depends on the async WebSocket init round trip.
+				await vi.waitFor(
+					() => {
+						expect(openCount).toBe(1);
+					},
+					{ timeout: 10_000, interval: 25 },
+				);
 
 				// Verify isConnected is true
 				expect(connection.isConnected).toBe(true);
@@ -468,10 +466,13 @@ describeDriverMatrix("Actor Conn", (driverTestConfig) => {
 					closeCount++;
 				});
 
-				// Wait for connection to open first
-				await vi.waitFor(() => {
-					expect(connection.isConnected).toBe(true);
-				});
+				// Connection opening depends on the async WebSocket init round trip.
+				await vi.waitFor(
+					() => {
+						expect(connection.isConnected).toBe(true);
+					},
+					{ timeout: 10_000, interval: 25 },
+				);
 
 				// Dispose connection
 				await connection.dispose();
@@ -501,10 +502,13 @@ describeDriverMatrix("Actor Conn", (driverTestConfig) => {
 				// Unsubscribe immediately
 				unsubscribe();
 
-				// Wait a bit for connection to potentially open
-				await vi.waitFor(() => {
-					expect(connection.isConnected).toBe(true);
-				});
+				// Connection opening depends on the async WebSocket init round trip.
+				await vi.waitFor(
+					() => {
+						expect(connection.isConnected).toBe(true);
+					},
+					{ timeout: 10_000, interval: 25 },
+				);
 
 				// Open callback should not have been called since we unsubscribed
 				expect(openCount).toBe(0);
@@ -528,10 +532,13 @@ describeDriverMatrix("Actor Conn", (driverTestConfig) => {
 					closeCount++;
 				});
 
-				// Wait for connection to open
-				await vi.waitFor(() => {
-					expect(connection.isConnected).toBe(true);
-				});
+				// Connection opening depends on the async WebSocket init round trip.
+				await vi.waitFor(
+					() => {
+						expect(connection.isConnected).toBe(true);
+					},
+					{ timeout: 10_000, interval: 25 },
+				);
 
 				// Unsubscribe before closing
 				unsubscribe();
@@ -668,7 +675,10 @@ describeDriverMatrix("Actor Conn", (driverTestConfig) => {
 
 				await expect(
 					connection.processLargeRequest({ items }),
-				).rejects.toThrow();
+				).rejects.toMatchObject({
+					group: "message",
+					code: "incoming_too_long",
+				});
 
 				// Clean up
 				await connection.dispose();
@@ -709,7 +719,10 @@ describeDriverMatrix("Actor Conn", (driverTestConfig) => {
 				// Each item is roughly 60 bytes, so 20000 items ≈ 1.2MB
 				await expect(
 					connection.getLargeResponse(20000),
-				).rejects.toThrow();
+				).rejects.toMatchObject({
+					group: "message",
+					code: "outgoing_too_long",
+				});
 
 				// Clean up
 				await connection.dispose();
