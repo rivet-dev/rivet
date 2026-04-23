@@ -1,0 +1,32 @@
+{
+	"name": "effect",
+	"version": "2.0.21",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"dev": "npx srvx --import tsx src/main.ts",
+		"start": "npx srvx --import tsx src/main.ts",
+		"check-types": "tsc --noEmit"
+	},
+	"dependencies": {
+		"rivetkit": "*",
+		"@rivetkit/effect": "*",
+		"effect": "^3.0.0",
+		"@effect/platform": "^0.80.0",
+		"@effect/platform-node": "^0.75.0",
+		"@effect/schema": "^0.80.0"
+	},
+	"devDependencies": {
+		"@types/node": "^22.13.9",
+		"tsx": "^3.12.7",
+		"typescript": "^5.5.2"
+	},
+	"stableVersion": "0.8.0",
+	"template": {
+		"technologies": ["typescript"],
+		"tags": [],
+		"noFrontend": true,
+		"skipVercel": true
+	},
+	"license": "MIT"
+}
