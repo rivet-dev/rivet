@@ -98,3 +98,11 @@ Started: Thu Apr 23 04:17:16 AM PDT 2026
   - Actor-connect setup failures happen before `Init`, so a close-only path can leave queued connection actions unresolved for bare/CBOR clients.
   - Connection-level protocol errors use `actionId: null`; omitting the field breaks JSON/CBOR client schema validation.
 ---
+## 2026-04-23T13:11:10Z - DT-013
+- Rechecked the actor-workflow destroy-step failure; it no longer reproduces on the current branch, so no source edit was needed.
+- Confirmed the workflow step calls `destroy`, `onDestroy` is observed, and `client.workflowDestroyActor.get([key]).resolve()` now rejects as `actor/not_found`.
+- Files changed: `scripts/ralph/prd.json`, `.agent/notes/driver-test-progress.md`, `scripts/ralph/progress.txt`.
+- Verification: targeted bare workflow destroy passed; full `actor-workflow.test.ts` passed with 54 tests and 3 skips; parallel bare actor-workflow suite passed with 18 tests and 39 skips; `pnpm -F rivetkit check-types` passed.
+- **Learnings for future iterations:**
+  - Stale workflow/lifecycle driver failures should be closed only after the exact encoding-specific target, the full file, and the matrix-shaped suite all pass on the current branch.
+---

@@ -249,8 +249,8 @@
         "Tests pass"
       ],
       "priority": 13,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Completed on 2026-04-23: no source change was needed. The stale workflow destroy discoverability failure no longer reproduces on this branch; targeted bare workflow destroy, full actor-workflow file, and parallel bare actor-workflow suite all pass."
     },
     {
       "id": "DT-014",

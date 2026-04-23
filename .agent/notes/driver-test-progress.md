@@ -19,7 +19,7 @@ Config: registry (static), client type (http), encoding (bare)
 - [x] actor-onstatechange | Actor State Change Tests
 - [x] actor-db | Actor Database
 - [x] actor-db-raw | Actor Database Raw Tests
-- [!] actor-workflow | Actor Workflow Tests
+- [x] actor-workflow | Actor Workflow Tests
 - [x] actor-error-handling | Actor Error Handling Tests
 - [x] actor-queue | Actor Queue Tests
 - [x] actor-kv | Actor KV Tests
@@ -94,3 +94,4 @@ Config: registry (static), client type (http), encoding (bare)
 - 2026-04-23T12:26:06.000Z actor-conn: PASS DT-045 recheck. Targeted bare onOpen passed; full actor-conn file passed (69 passed, 0 failed).
 - 2026-04-23T12:40:56.000Z actor-queue: PASS DT-012. Fixed core enqueue-and-wait waiter registration race; targeted bare wait-send passed; full actor-queue file passed (75 passed, 0 failed); parallel bare actor-queue suite passed (25 passed, 0 failed, 50 skipped).
 - 2026-04-23T13:06:56.000Z conn-error-serialization: PASS DT-014. Targeted bare createConnState error passed; full conn-error-serialization file passed (9 passed, 0 failed); parallel bare conn-error-serialization suite passed (3 passed, 0 failed, 6 skipped).
+- 2026-04-23T13:11:10.000Z actor-workflow: PASS DT-013 recheck. Targeted bare workflow destroy passed; full actor-workflow file passed (54 passed, 0 failed, 3 skipped); parallel bare actor-workflow suite passed (18 passed, 0 failed, 39 skipped).
