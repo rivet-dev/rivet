@@ -18,12 +18,12 @@
 				"default": "./dist/register.js"
 			},
 			"require": {
-				"default": "./dist/register.cjs"
+				"default": "./dist/register-require.cjs"
 			}
 		}
 	},
 	"scripts": {
-		"build": "tsup src/hook.ts src/register.ts",
+		"build": "tsup src/hook.ts src/register.ts src/register-require.cts",
 		"check-types": "tsc --noEmit"
 	},
 	"devDependencies": {

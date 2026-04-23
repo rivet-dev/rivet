@@ -6,31 +6,31 @@ Config: registry (static), client type (http), encoding (bare)
 ## Fast Tests
 
 - [x] manager-driver | Manager Driver Tests
-- [x] actor-conn | Actor Connection Tests
+- [!] actor-conn | Actor Connection Tests
 - [x] actor-conn-state | Actor Connection State Tests
-- [x] conn-error-serialization | Connection Error Serialization Tests
+- [!] conn-error-serialization | Connection Error Serialization Tests
 - [x] actor-destroy | Actor Destroy Tests
 - [x] request-access | Request Access in Lifecycle Hooks
 - [x] actor-handle | Actor Handle Tests
-- [x] action-features | Action Features (was listed as "Tests" in skill doc; actual describe is "Action Features")
+- [x] action-features | Action Features Tests
 - [x] access-control | access control
 - [x] actor-vars | Actor Variables
 - [x] actor-metadata | Actor Metadata Tests
-- [x] actor-onstatechange | Actor onStateChange Tests (was listed as "State Change Tests")
-- [x] actor-db | Actor Database (flaky: "handles parallel actor lifecycle churn" hit `no_envoys` 1/4 runs)
-- [x] actor-db-raw | Actor Database (Raw) Tests
-- [~] actor-workflow | Actor Workflow Tests (US-103 fixed sleep-grace/run-handler crash-path coverage; remaining known red test is workflow destroy semantics)
-- [~] actor-error-handling | Actor Error Handling Tests (6 pass / 1 fail)
-- [x] actor-queue | Actor Queue Tests (flaky on first run: 3 failures related to "reply channel dropped" / timeout; clean on retry)
+- [x] actor-onstatechange | Actor State Change Tests
+- [x] actor-db | Actor Database
+- [x] actor-db-raw | Actor Database Raw Tests
+- [!] actor-workflow | Actor Workflow Tests
+- [x] actor-error-handling | Actor Error Handling Tests
+- [!] actor-queue | Actor Queue Tests
 - [x] actor-kv | Actor KV Tests
 - [x] actor-stateless | Actor Stateless Tests
 - [x] raw-http | raw http
 - [x] raw-http-request-properties | raw http request properties
-- [x] raw-websocket | raw websocket
-- [~] actor-inspector | Actor Inspector HTTP API (1 fail is workflow-replay related; 20 pass)
-- [x] gateway-query-url | Gateway Query URLs (filter was missing the "s")
-- [x] actor-db-pragma-migration | Actor Database PRAGMA Migration Tests
-- [x] actor-state-zod-coercion | Actor State Zod Coercion Tests (filter needed suffix)
+- [!] raw-websocket | raw websocket
+- [x] actor-inspector | Actor Inspector Tests
+- [x] gateway-query-url | Gateway Query URL Tests
+- [x] actor-db-pragma-migration | Actor Database Pragma Migration
+- [x] actor-state-zod-coercion | Actor State Zod Coercion
 - [x] actor-conn-status | Connection Status Changes
 - [x] gateway-routing | Gateway Routing
 - [x] lifecycle-hooks | Lifecycle Hooks
@@ -42,9 +42,9 @@ Config: registry (static), client type (http), encoding (bare)
 - [x] actor-sleep | Actor Sleep Tests
 - [x] actor-sleep-db | Actor Sleep Database Tests
 - [x] actor-lifecycle | Actor Lifecycle Tests
-- [x] actor-conn-hibernation | Connection Hibernation (flaky first run; clean on retry)
+- [x] actor-conn-hibernation | Actor Connection Hibernation Tests
 - [x] actor-run | Actor Run Tests
-- [x] hibernatable-websocket-protocol | hibernatable websocket protocol (all 6 tests skipped; the feature flag `hibernatableWebSocketProtocol` is not enabled for the static driver config)
+- [!] hibernatable-websocket-protocol | hibernatable websocket protocol
 - [x] actor-db-stress | Actor Database Stress Tests
 
 ## Excluded
@@ -53,51 +53,37 @@ Config: registry (static), client type (http), encoding (bare)
 
 ## Log
 
-- 2026-04-22 manager-driver: PASS (16 tests, 12.20s)
-- 2026-04-22 actor-conn: PASS (23 tests, 28.12s) -- Note: first run showed 2 flaky failures (lifecycle hooks `onWake` missing; `maxIncomingMessageSize` timeout). Re-ran 5 times with trace after, all passed. Likely cold-start race on first run.
-- 2026-04-22 actor-conn-state: PASS (8 tests, 6.80s)
-- 2026-04-22 conn-error-serialization: PASS (3 tests, 2.53s)
-- 2026-04-22 actor-destroy: PASS (10 tests, 19.47s)
-- 2026-04-22 request-access: PASS (4 tests, 3.52s)
-- 2026-04-22 actor-handle: PASS (12 tests, 8.42s)
-- 2026-04-22 action-features: PASS (11 tests, 8.46s) -- corrected filter to "Action Features" (no "Tests" suffix)
-- 2026-04-22 access-control: PASS (8 tests, 6.29s)
-- 2026-04-22 actor-vars: PASS (5 tests, 3.81s)
-- 2026-04-22 actor-metadata: PASS (6 tests, 4.34s)
-- 2026-04-22 actor-onstatechange: PASS (5 tests, 3.97s) -- corrected filter to "Actor onStateChange Tests"
-- 2026-04-22 actor-db: PASS (16 tests, 26.21s) -- flaky 1/4: "handles parallel actor lifecycle churn" intermittently fails with no_envoys. Passes on retry.
-- 2026-04-22 actor-db-raw: PASS (4 tests, 4.04s) -- corrected filter to "Actor Database (Raw) Tests"
-- 2026-04-22 actor-queue: PASS (25 tests, 32.95s) -- first run had 3 flaky failures, all passed on retry
-- 2026-04-22 actor-kv: PASS (3 tests, 2.51s)
-- 2026-04-22 actor-stateless: PASS (6 tests, 4.38s)
-- 2026-04-22 raw-http: PASS (15 tests, 10.76s)
-- 2026-04-22 raw-http-request-properties: PASS (16 tests, 11.44s)
-- 2026-04-22 raw-websocket: PASS (11 tests, 8.77s)
-- 2026-04-22 actor-inspector: PARTIAL PASS (20 passed, 1 failed, 42 skipped) -- filter corrected to "Actor Inspector HTTP API". Only failure is `POST /inspector/workflow/replay rejects workflows that are currently in flight` (workflow-related; user asked to skip workflow issues).
-- 2026-04-22 gateway-query-url: PASS (2 tests, 2.35s) -- filter corrected to "Gateway Query URLs"
-- 2026-04-22 actor-db-pragma-migration: PASS (4 tests, 4.09s)
-- 2026-04-22 actor-state-zod-coercion: PASS (3 tests, 3.34s)
-- 2026-04-22 actor-conn-status: PASS (6 tests, 5.76s)
-- 2026-04-22 gateway-routing: PASS (8 tests, 5.96s)
-- 2026-04-22 lifecycle-hooks: PASS (8 tests, 6.62s)
-- 2026-04-22 actor-state: PASS (3 tests, 3.08s)
-- 2026-04-22 actor-schedule: PASS (4 tests, 6.79s)
-- 2026-04-22 actor-sleep: PASS (21 tests, 53.61s)
-- 2026-04-22 actor-sleep-db: PASS (14 tests, 42.29s)
-- 2026-04-22 actor-lifecycle: PASS (5 tests, 30.22s)
-- 2026-04-22 actor-conn-hibernation: PASS (5 tests) -- filter is "Connection Hibernation". Flaky first run ("conn state persists through hibernation"), passed on retry.
-- 2026-04-22 hibernatable-websocket-protocol: N/A (feature not enabled; all 6 tests correctly skipped)
-- 2026-04-22 actor-db-stress: PASS (3 tests, 24.22s)
-- 2026-04-22 actor-run: PASS after US-103 (8 passed / 16 skipped) -- native abortSignal binding plus sleep-grace abort firing and NAPI run-handler active gating now cover `active run handler keeps actor awake past sleep timeout`.
-- 2026-04-22 actor-error-handling: FAIL (1 failed, 6 passed, 14 skipped) -- `should convert internal errors to safe format` leaks the original `Error` message through instead of sanitizing to `INTERNAL_ERROR_DESCRIPTION`. Server-side sanitization of plain `Error` into canonical internal_error was likely dropped somewhere on this branch; `toRivetError` in actor/errors.ts preserves `error.message` and the classifier in common/utils.ts is not being invoked on this path. Needs fix outside driver-runner scope.
-- 2026-04-22 actor-workflow: FAIL (6 failed / 12 passed / 39 skipped) -- REVERTED the `isLifecycleEventsNotConfiguredError` swallow in `stateManager.saveState`. The fix only masked the symptom: workflow `batch()` does `Promise.all([kvBatchPut, stateManager.saveState])`, and when the task joins and `registry/mod.rs:807` clears `configure_lifecycle_events(None)`, a still-pending `saveState` hits `actor/state.rs:191` (`lifecycle_event_sender()` returns None) → unhandled rejection → Node runtime crash → downstream `no_envoys` / "reply channel dropped". Root cause is the race: shutdown tears down lifecycle events while the workflow engine still has an outstanding save. Real fix belongs in core or the workflow flush sequence, not in a bridge error swallow. Failures that were being masked:
-  * `starts child workflows created inside workflow steps` - 2 identical "child-1" results instead of 1. Workflow step body re-executes on replay, double-pushing to `state.results`.
-  * `workflow steps can destroy the actor` - ctx.destroy() fires onDestroy but actor still resolvable via `get`. envoy-client `destroy_actor` sends plain `ActorIntentStop` and there is no `ActorIntentDestroy` in the envoy v2 protocol. TS runner sets `graceful_exit` marker; equivalent marker is not wired through Rust envoy-client.
-- 2026-04-22 actor-workflow after US-103: PARTIAL PASS (17 passed / 1 failed / 39 skipped). Crash-path coverage passed, including `replays steps and guards state access`, `tryStep and try recover terminal workflow failures`, `sleeps and resumes between ticks`, and `completed workflows sleep instead of destroying the actor`. Remaining failure is still `workflow steps can destroy the actor`, matching the known missing envoy destroy marker above.
-- 2026-04-22 actor-db sanity after US-103: PASS for `handles parallel actor lifecycle churn`.
-- 2026-04-22 actor-queue sanity after US-103: combined route-sensitive run still hit the known many-queue dropped-reply/overload flake; both targeted cases passed when run in isolation.
-- 2026-04-22 ALL FILES PROCESSED (37 files). Summary: 30 full-pass, 4 partial-pass (actor-workflow, actor-error-handling, actor-inspector, actor-run), 1 n/a (hibernatable-websocket-protocol - feature disabled). 2 code fixes landed: (1) `stateManager.saveState` swallows post-shutdown state-save bridge error in workflow cleanup; (2) `#createActorAbortSignal` uses native `AbortSignal` property/event API instead of calling non-existent methods. Outstanding issues captured above; none caused by the test-runner pass itself.
-- 2026-04-22 flake investigation Step 1: `actor-error-handling` recheck is GREEN for static/bare `Actor Error Handling Tests` (`/tmp/driver-logs/error-handling-recheck.log`, exit 0). `actor-workflow` child-workflow recheck is GREEN for static/bare `starts child workflows` (`/tmp/driver-logs/workflow-child-recheck.log`, exit 0). Step 5 skipped because the child-workflow target is no longer red.
-- 2026-04-22 flake investigation Step 2: `actor-inspector` replay target still fails, but the failure is after the expected 409. `/tmp/driver-logs/inspector-replay.log` shows replay rejection works, then `handle.release()` does not lead to `finishedAt` before the 30s test timeout. Evidence and fix direction captured in `.agent/notes/flake-inspector-replay.md`.
-- 2026-04-22 flake investigation Step 3: `actor-conn` targeted runs: `isConnected should be false before connection opens` 5/5 PASS; `onOpen should be called when connection opens` 2/3 PASS and 1/3 FAIL; `should reject request exceeding maxIncomingMessageSize` 2/3 PASS and 1/3 FAIL; `should reject response exceeding maxOutgoingMessageSize` 3/3 PASS. Evidence and fix direction captured in `.agent/notes/flake-conn-websocket.md`.
-- 2026-04-22 flake investigation Step 4: isolated `actor-queue` `wait send returns completion response` is 5/5 PASS. `drains many-queue child actors created from actions while connected` is 1/3 PASS and 2/3 FAIL with `actor/dropped_reply` plus HTTP 500 responses. Evidence and fix direction captured in `.agent/notes/flake-queue-waitsend.md`.
+- 2026-04-23T03:45:07.364Z manager-driver: PASS (41.0s)
+- 2026-04-23T03:46:11.489Z actor-conn: FAIL - FAIL  tests/driver/actor-conn.test.ts > Actor Conn > static registry > encoding (bare) > Actor Connection Tests > Large Payloads > should reject response exceeding maxOutgoingMessageSize
+- 2026-04-23T04:07:04.000Z fast parallel: FAIL (280 passed, 5 failed, 579 skipped)
+- 2026-04-23T04:07:04.000Z actor-conn: FAIL - Large Payloads > should reject request exceeding maxIncomingMessageSize timed out in 30000ms
+- 2026-04-23T04:07:04.000Z actor-conn: FAIL - Large Payloads > should reject response exceeding maxOutgoingMessageSize timed out in 30000ms
+- 2026-04-23T04:07:04.000Z actor-inspector: FAIL - POST /inspector/workflow/replay rejects workflows that are currently in flight timed out in 30000ms
+- 2026-04-23T04:07:04.000Z actor-workflow: FAIL - workflow steps can destroy the actor. AssertionError: actor still running: expected true to be falsy
+- 2026-04-23T04:07:04.000Z conn-error-serialization: FAIL - error thrown in createConnState preserves group and code through WebSocket serialization timed out in 30000ms
+- 2026-04-23T04:36:09.000Z slow parallel: FAIL (65 passed, 1 failed, 168 skipped)
+- 2026-04-23T04:36:09.000Z actor-sleep-db: FAIL - schedule.after in onSleep persists and fires on wake. AssertionError: expected startCount 2, got 3
+- 2026-04-23T04:36:09.000Z hibernatable-websocket-protocol: SKIP - bare/static encoding filter matched no tests
+- 2026-04-23T05:03:34.000Z actor-conn: PASS static/http/bare full file (23 passed, 0 failed, 46 skipped)
+- 2026-04-23T05:22:55.000Z actor-conn: PASS static/http/bare full file (23 passed, 0 failed, 46 skipped)
+- 2026-04-23T05:26:51.000Z conn-error-serialization: PASS full file (9 passed, 0 failed; includes static/http/bare)
+- 2026-04-23T05:33:41.000Z actor-inspector: PASS full file (63 passed, 0 failed; includes static/http/bare)
+- 2026-04-23T05:44:46.000Z actor-workflow: PASS full file (54 passed, 0 failed, 3 skipped; includes static/http/bare)
+- 2026-04-23T06:18:25.000Z actor-sleep-db: PASS full file (42 passed, 0 failed, 30 skipped; includes static/http/bare)
+- 2026-04-23T06:33:39.000Z hibernatable-websocket-protocol: PASS full file (6 passed, 0 failed; static/http/bare enabled; raw-websocket full file also passed 39 passed, 0 failed)
+- 2026-04-23T06:38:26.000Z DT-008 full-file check: actor-conn FAIL (2 failed, 67 passed) - bare/cbor `should reject response exceeding maxOutgoingMessageSize` timed out in 30000ms; bare-only targeted recheck passed.
+- 2026-04-23T06:38:34.000Z DT-008 full-file check: conn-error-serialization PASS (9 passed, 0 failed).
+- 2026-04-23T06:39:32.000Z DT-008 full-file check: actor-inspector PASS (63 passed, 0 failed).
+- 2026-04-23T06:40:34.000Z DT-008 full-file check: actor-workflow FAIL (3 failed, 51 passed, 3 skipped) - `workflow steps can destroy the actor` still found actor running.
+- 2026-04-23T06:42:17.000Z DT-008 full-file check: actor-sleep-db PASS (42 passed, 0 failed, 30 skipped).
+- 2026-04-23T06:43:11.000Z DT-008 full-file check: hibernatable-websocket-protocol FAIL (3 failed, 3 passed) - replay ack state was undefined instead of index 1.
+- 2026-04-23T06:43:53.000Z DT-008 targeted recheck: actor-conn bare oversized response PASS; actor-workflow bare destroy FAIL; hibernatable bare replay FAIL.
+- 2026-04-23T06:58:43.000Z fast parallel: FAIL (281 passed, 6 failed, 577 skipped)
+- 2026-04-23T06:58:43.000Z actor-conn: FAIL - Large Payloads > should reject response exceeding maxOutgoingMessageSize timed out in 30000ms.
+- 2026-04-23T06:58:43.000Z actor-queue: FAIL - wait send returns completion response timed out in 30000ms.
+- 2026-04-23T06:58:43.000Z actor-workflow: FAIL - workflow steps can destroy the actor. AssertionError: actor still running: expected true to be falsy.
+- 2026-04-23T06:58:43.000Z conn-error-serialization: FAIL - error thrown in createConnState preserves group and code through WebSocket serialization timed out in 30000ms.
+- 2026-04-23T06:58:43.000Z raw-websocket: FAIL - hibernatable websocket ack state was undefined for indexed and threshold buffered ack tests.
+- 2026-04-23T07:02:27.000Z slow parallel: FAIL (67 passed, 1 failed, 166 skipped)
+- 2026-04-23T07:02:27.000Z hibernatable-websocket-protocol: FAIL - replays only unacked indexed websocket messages after sleep and wake. Ack state was undefined instead of index 1.
+- 2026-04-23T07:02:40.000Z typecheck: PASS (`pnpm -F rivetkit check-types`).

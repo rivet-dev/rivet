@@ -63,6 +63,7 @@ mod envoy_callbacks;
 mod http;
 mod inspector;
 mod inspector_ws;
+mod runner_config;
 mod websocket;
 
 use inspector::build_actor_inspector;
@@ -114,8 +115,8 @@ struct PendingStop {
 	stop_handle: ActorStopHandle,
 }
 
-struct RegistryDispatcher {
-	factories: HashMap<String, Arc<ActorFactory>>,
+pub(crate) struct RegistryDispatcher {
+	pub(crate) factories: HashMap<String, Arc<ActorFactory>>,
 	actor_instances: SccHashMap<String, ActorInstanceState>,
 	starting_instances: SccHashMap<String, Arc<Notify>>,
 	pending_stops: SccHashMap<String, PendingStop>,
@@ -124,8 +125,8 @@ struct RegistryDispatcher {
 	handle_inspector_http_in_runtime: bool,
 }
 
-struct RegistryCallbacks {
-	dispatcher: Arc<RegistryDispatcher>,
+pub(crate) struct RegistryCallbacks {
+	pub(crate) dispatcher: Arc<RegistryDispatcher>,
 }
 
 #[derive(Clone, Debug)]
@@ -148,6 +149,13 @@ struct ServeSettings {
 	pool_name: String,
 	engine_binary_path: Option<PathBuf>,
 	handle_inspector_http_in_runtime: bool,
+	serverless_base_path: Option<String>,
+	serverless_package_version: String,
+	serverless_client_endpoint: Option<String>,
+	serverless_client_namespace: Option<String>,
+	serverless_client_token: Option<String>,
+	serverless_validate_endpoint: bool,
+	serverless_max_start_payload_bytes: usize,
 }
 
 #[derive(Clone, Debug)]
@@ -159,6 +167,13 @@ pub struct ServeConfig {
 	pub pool_name: String,
 	pub engine_binary_path: Option<PathBuf>,
 	pub handle_inspector_http_in_runtime: bool,
+	pub serverless_base_path: Option<String>,
+	pub serverless_package_version: String,
+	pub serverless_client_endpoint: Option<String>,
+	pub serverless_client_namespace: Option<String>,
+	pub serverless_client_token: Option<String>,
+	pub serverless_validate_endpoint: bool,
+	pub serverless_max_start_payload_bytes: usize,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -405,6 +420,7 @@ impl CoreRegistry {
 			}
 			None => None,
 		};
+		runner_config::ensure_local_normal_runner_config(&config).await?;
 		let callbacks = Arc::new(RegistryCallbacks {
 			dispatcher: dispatcher.clone(),
 		});
@@ -438,8 +454,27 @@ impl CoreRegistry {
 	}
 
 	fn into_dispatcher(self, config: &ServeConfig) -> Arc<RegistryDispatcher> {
-		Arc::new(RegistryDispatcher {
-			factories: self.factories,
+		Arc::new(RegistryDispatcher::new(
+			self.factories,
+			config.handle_inspector_http_in_runtime,
+		))
+	}
+
+	pub async fn into_serverless_runtime(
+		self,
+		config: ServeConfig,
+	) -> Result<crate::serverless::CoreServerlessRuntime> {
+		crate::serverless::CoreServerlessRuntime::new(self.factories, config).await
+	}
+}
+
+impl RegistryDispatcher {
+	pub(crate) fn new(
+		factories: HashMap<String, Arc<ActorFactory>>,
+		handle_inspector_http_in_runtime: bool,
+	) -> Self {
+		Self {
+			factories,
 			actor_instances: SccHashMap::new(),
 			starting_instances: SccHashMap::new(),
 			pending_stops: SccHashMap::new(),
@@ -447,8 +482,8 @@ impl CoreRegistry {
 			inspector_token: env::var("RIVET_INSPECTOR_TOKEN")
 				.ok()
 				.filter(|token| !token.is_empty()),
-			handle_inspector_http_in_runtime: config.handle_inspector_http_in_runtime,
-		})
+			handle_inspector_http_in_runtime,
+		}
 	}
 }
 

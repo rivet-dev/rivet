@@ -1,279 +1,372 @@
 # rivetkit-core / napi / typescript Adversarial Review — Synthesis
 
-Findings consolidated from 5 original review agents (API parity, SQLite v2 soundness, test quality, lifecycle conformance, code quality) plus 3 spec-review agents that ran on the proposed shutdown redesign.
+Findings consolidated from 5 original review agents (API parity, SQLite v2 soundness, test quality, lifecycle conformance, code quality) plus 3 spec-review agents on the proposed shutdown redesign. Each finding has been challenged by a follow-up verification pass; verdicts annotated inline. Each finding now ends with a **Desired behavior** section describing what the fix should be.
 
-Each finding below includes the citation the original agent provided. **Subject to verification** — agents may have been wrong.
+## Layer glossary
+
+Used throughout to disambiguate claims:
+
+- **core** = `rivetkit-rust/packages/rivetkit-core/` — Rust lifecycle / state / dispatch state machine. Owns `ActorTask`, `ActorContext`, `run_handle: Option<JoinHandle>`, `SleepState`, lifecycle events, grace timers, counters.
+- **napi** = `rivetkit-typescript/packages/rivetkit-napi/` — Rust NAPI bindings between core and the JS runtime. Owns `ActorContextShared` (JS-callable ctx), event-loop task that processes `ActorEvent` and dispatches to JS callbacks, cancel-token registry.
+- **typescript** = `rivetkit-typescript/packages/rivetkit/` — TypeScript runtime consumed by user code. Owns user-defined callbacks (`run`, `onSleep`, `onDestroy`, `onDisconnect`, `onStateChange`, `serializeState`), Zod validation, `AbortSignal` surface (`c.abortSignal`, `c.aborted`), workflow engine, client library, `@rivetkit/actor` API shape.
+- **engine** = `engine/packages/*` — orchestrator (pegboard-envoy, sqlite-storage, actor2 workflow, etc). Outside the three layers above; referenced when findings touch SQLite v2 migration or engine-side state.
+
+User-defined lifecycle hooks (`run`, `onSleep`, `onDestroy`, `onDisconnect`, `onStateChange`, `serializeState`) are **defined in typescript** as user code. They are **dispatched from core** via `ActorEvent` messages (e.g. `ActorEvent::RunGracefulCleanup`) that traverse the napi event channel and trigger the napi adapter to call the typescript callback. Lifecycle accounting (when to fire, when to consider complete) lives in **core**.
+
+## Challenger verdict legend
+
+- **REAL** — verified on current branch.
+- **REAL (narrow)** — verified but bounded by mitigating mechanism.
+- **INTENTIONAL** — verified but the behavior is deliberate, not a bug.
+- **UNCERTAIN** — factually present but the "bug" framing is debatable.
+
+## Architectural invariants (important context)
+
+1. **One Stop command per actor generation.** The engine's actor2 workflow sends exactly one `Stop` command per generation — either `Sleep` or `Destroy`, never both, never multiples. Any "concurrent Stop" or "Stop upgrade" scenario is unreachable by construction.
+2. **One actor instance running, cluster-wide.** At any moment, exactly one physical copy of an actor is running across the entire cluster. Failover transitions ownership atomically via engine assignment. Any finding that depends on "two envoys running the same actor concurrently" is infeasible under this invariant.
+
+These invariants narrow several findings below.
 
 ---
 
 ## Blockers
 
-### F1. Engine-Destroy doesn't fire `c.aborted` in `onDestroy`
+### F3. User's `run` cleanly exits → the one engine Stop no-ops → `onSleep`/`onDestroy` never fire — REAL
 
-**Claim.** When the engine sends `Stop { Destroy }`, `run_shutdown` never calls `ctx.cancel_abort_signal_for_sleep()`. The abort signal only fires for Sleep (because `cancel_abort_signal_for_sleep` runs in `start_sleep_grace`) and for self-initiated destroy via `c.destroy()` (because `mark_destroy_requested` calls it at `context.rs:466`). Engine-initiated Destroy bypasses both paths.
+**Layer.** user `run` and `onSleep`/`onDestroy` are **typescript** callbacks; lifecycle-state transitions happen in **core**; dispatch of the callbacks is via **napi** receiving `ActorEvent`s from core.
 
-**Evidence.** `task.rs:1496-1676` (`run_shutdown` body) shows no abort-signal cancel. `task.rs:1497-1519` shows abort-signal cancel is only in `start_sleep_grace`. `context.rs:461-467` shows self-destroy path calls cancel.
+**Claim.** If user's typescript `run` handler returns cleanly before the (sole, guaranteed-to-arrive) Stop command arrives, core transitions to `Terminated` in `handle_run_handle_outcome` (`task.rs:1303-1328`), and `begin_stop` on `Terminated` replies `Ok` without emitting grace events (`task.rs:773-776`). The one Stop per generation lands on a dead lifecycle. Hooks never dispatch.
 
-**User-visible impact.** User code in `onDestroy` that checks `c.aborted` sees `false`. Contradicts `lifecycle.mdx:932` which says the abort signal fires before `onDestroy` runs.
+**Verdict.** Real.
 
-**Source.** Lifecycle agent (N-11, claimed as new confirmed bug not previously filed).
+**User impact.** A typescript actor whose `run` naturally completes (e.g. a task-tree that finishes) never gets its user `onSleep` / `onDestroy` hook invoked, even though the engine does send exactly one Stop.
 
-### F2. 2× `sleepGracePeriod` wall-clock budget
-
-**Claim.** `start_sleep_grace` at `task.rs:1376` computes `deadline = now + sleep_grace_period` for the idle wait. After grace exits, `run_shutdown` at `task.rs:1508-1518` computes a **fresh** `deadline = now + effective_sleep_grace_period()`. Total wall-clock from grace entry to save start can be up to 2× `sleepGracePeriod`.
-
-**User-visible impact.** Users set 15s and actor can take up to 30s to shut down.
-
-**Source.** Lifecycle agent, independently confirmed by me during spec drafting.
-
-### F3. `onSleep` silently doesn't run when `run` already returned
-
-**Claim.** `request_begin_sleep` at `task.rs:2170-2173` early-returns if `run_handle.is_none()`. So if user's `run` handler exited cleanly before Stop arrived, `ActorEvent::BeginSleep` never enqueues, and the adapter's `onSleep` spawn path at `napi_actor_events.rs:566-575` is never triggered.
-
-**Source.** Lifecycle agent.
-
-### F4. `run_handle` awaited at end of `run_shutdown`, after hooks
-
-**Claim.** Doc contract (`lifecycle.mdx:838-843`): step 2 waits for `run`, step 3 runs `onSleep`. Actual code: `onSleep` spawns from `BeginSleep` at grace entry, and `run_handle.take()` + select-with-sleep happens at `task.rs:1657-1680` (end of `run_shutdown`, after drain/disconnect).
-
-**User-visible impact.** `onSleep` runs concurrently with user's `run` handler instead of after it.
-
-**Source.** Lifecycle agent + spec drafting.
-
-### F5. Self-initiated `c.destroy()` bypasses grace under the new design
-
-**Claim.** `handle_run_handle_outcome` at `task.rs:1337-1349` sees `destroy_requested` flag when `run` returns, and jumps to `LiveExit::Shutdown` directly. Under the proposed grace-based design, this path skips the grace window entirely, so `onDestroy` never fires for self-initiated destroy.
-
-**Source.** Spec correctness agent (B3).
+**Desired behavior.** Because exactly one Stop arrives per generation, the correct fix is: clean `run` exit while `Started` must **not** transition to `Terminated`. Instead, stay in a waiting substate (or `Started`) until the Stop arrives. When the Stop arrives, `begin_stop` enters `SleepGrace`/`DestroyGrace` and hooks fire via the normal grace path. `Terminated` should mean "lifecycle fully complete, including hooks." Invariant to enforce: `onSleep` or `onDestroy` fires exactly once per generation, regardless of how `run` returned.
 
 ---
 
 ## High-priority
 
-### F6. SQLite v1→v2 has no cross-process migration fence
+### F7. `prepare_v1_migration` resets generation to 1 on every call — REAL (negligible)
 
-**Claim.** `SQLITE_MIGRATION_LOCKS` at `engine/packages/pegboard-envoy/src/sqlite_runtime.rs:24` is a `OnceLock<HashMap<...>>` local to one pegboard-envoy process. Two envoy processes hitting the same actor concurrently (failover, scale-out, split-brain) both pass the origin-None check at `:141-155` and both call `prepare_v1_migration` (`takeover.rs:64`) which wipes chunks/pidx each time.
+**Layer.** **engine** — `sqlite-storage`.
 
-**Source.** SQLite agent.
+**Background for reviewers.** `generation` is sqlite-storage's optimistic concurrency fence for commits. Under the "one actor instance cluster-wide" invariant, there are no concurrent writers, so the fence is protecting against stale retries within a single process, not against two processes.
 
-### F7. `prepare_v1_migration` resets generation on every call
+**Claim.** `engine/packages/sqlite-storage/src/takeover.rs:99` hardcodes `generation: 1` when preparing a v1 migration.
 
-**Claim.** `takeover.rs:99` builds `DBHead::new(now_ms)` which hardcodes `generation: 1` (`types.rs:51`). If a stale `MigratingFromV1` exists at generation 5, prepare overwrites to 1. Generation fence in `commit_stage_begin` (`commit.rs:200-206`) cannot distinguish concurrent prepare reset.
+**Verdict.** Real but negligible. Under the one-instance invariant, `prepare_v1_migration` is always the first v2 write for the actor, so `generation: 1` is correct. There's no concurrent writer that could hold a higher generation and get rewound.
 
-**Source.** SQLite agent.
+**Desired behavior.** Leave as-is. The "preserve existing generation" hardening is defense-in-depth against a scenario that can't happen under current architectural guarantees.
 
-### F8. Truncate leaks PIDX + DELTA entries above new EOF
+### F8. Truncate leaks PIDX + DELTA entries above new EOF — REAL
 
-**Claim.** `vfs.rs:1403-1413` `truncate_main_file` updates `state.db_size_pages` but does not mark pages `>= new_size` for deletion. `commit.rs:222` sets `head.db_size_pages` but doesn't clear `pidx_delta_key(pgno)` for `pgno > new_db_size_pages`. `build_recovery_plan` (`takeover.rs:222-278`) only filters by `txid > head.head_txid`.
+**Layer.** **engine** — shared by `rivetkit-sqlite` (VFS host) and `sqlite-storage` (KV backend).
 
-**User-visible impact.** Permanent KV-space leak on every shrink.
+**Claim.** `rivetkit-rust/packages/rivetkit-sqlite/src/vfs.rs:1403-1413` `truncate_main_file` updates `state.db_size_pages` but doesn't delete entries for `pgno > new_size`. `engine/packages/sqlite-storage/src/commit.rs:222` sets the new size; `takeover.rs:258-269` `build_recovery_plan` ignores `pgno`. Compaction (`compaction/shard.rs`) folds stale pages into shards rather than freeing them.
 
-**Source.** SQLite agent.
+**Verdict.** Real, unmitigated.
 
-### F9. V1 data never cleaned up after successful migration
+**User impact.** Every `VACUUM`/`DROP TABLE` shrink permanently leaks KV space in the actor's sqlite subspace. Billable against actor storage quota (`sqlite_storage_used` never decrements for the leaked pages).
 
-**Claim.** After `commit_finalize` sets origin to `MigratedFromV1` (`sqlite_runtime.rs:234`), the V1 KV entries under `0x08` prefix (`:26`) are left in place. `mod.rs` has `delete_all`, `delete_range` helpers but neither is called from the migration path.
+**Desired behavior.** The commit path should enumerate and delete all `pidx_delta_*` and `pidx_shard_*` entries for `pgno >= new_db_size_pages` whenever `db_size_pages` shrinks. `build_recovery_plan` should also filter orphan entries by `pgno >= head.db_size_pages`. `sqlite_storage_used` must decrement to reflect freed space. Compaction should reclaim (delete) truncated pages, not fold them into shards.
 
-**User-visible impact.** Storage doubles per migrated actor, forever.
+### F9. V1 KV data never cleaned up after successful migration — INTENTIONAL
 
-**Source.** SQLite agent.
+**Layer.** **engine** — `pegboard-envoy`.
 
-### F10. 5-minute migration lease blocks legitimate crash recovery
+**Claim.** `engine/packages/pegboard-envoy/src/sqlite_runtime.rs:124-250` (`maybe_migrate_v1_to_v2`) never calls `actor_kv::delete_all`, `delete_range`, or similar on the `0x08` prefix after finalize. `engine/packages/pegboard/src/actor_kv/mod.rs:497` has the `delete_all` helper but it's not wired in.
 
-**Claim.** `sqlite_runtime.rs:34, 149-152`. If pegboard-envoy crashes between `commit_stage_begin` and `commit_finalize`, the next start within 5 minutes returns `"sqlite v1 migration for actor ... is already in progress"`. Actor can't start for 5 minutes.
+**Verdict.** Factually accurate, but the behavior is **intentional**. V1 data is preserved after migration as a safety net in case migration corruption is detected after the fact — operators can fall back to the v1 bytes. A future version may add opt-in cleanup once the v2 path has soaked long enough to trust.
 
-**Source.** SQLite agent.
+**User impact.** Post-migration storage is roughly doubled for the affected actors. Trade-off is deliberate: storage cost vs. corruption-recovery safety net.
 
-### F11. Every actor start probes `sqlite_v1_data_exists`
+**Desired behavior.** No change now. Future work: once v2 has soaked long enough to trust, add an opt-in retention policy (config flag or per-actor age threshold) that triggers `delete_all` on the `0x08` prefix for actors whose v2 meta has been stable for N days / writes. Keep the current behavior as the default until then.
 
-**Claim.** `actor_kv/mod.rs:46-71` issues a range scan with `limit:1` under a fresh transaction even for actors that never had v1 data. Extra UDB RTT on hot actor-start path, forever.
+### F10. 5-minute migration lease blocks crash-recovery restart — REAL (narrow)
 
-**Source.** SQLite agent.
+**Layer.** **engine** — `pegboard-envoy`.
 
-### F12. `Registry.handler()` and `Registry.serve()` throw at runtime
+**Background for reviewers.** The migration lease is a wall-clock fence that says "the actor cannot restart a v1→v2 migration for N minutes after the last stage was begun." Under the "one actor instance cluster-wide" invariant, the lease is not protecting against concurrent migrations (impossible by construction); it's a conservative "the prior attempt probably didn't finish cleanly, wait before retrying" timeout after a crash.
 
-**Claim.** `rivetkit-typescript/packages/rivetkit/src/registry/index.ts:76, 89-94` throws `"removedLegacyRoutingError"`. Old branch (`feat/sqlite-vfs-v2:rivetkit-typescript/packages/rivetkit/src/registry/index.ts:75-77`) returned a real `Response`.
+**Claim.** `engine/packages/pegboard-envoy/src/sqlite_runtime.rs:34` `SQLITE_V1_MIGRATION_LEASE_MS = 5 * 60 * 1000`. If the owning envoy crashes between `commit_stage_begin` and `commit_finalize`, the new owner's restart within 5 min is rejected.
 
-**User-visible impact.** `export default registry.serve()` breaks instantly. No deprecation notice.
+**Verdict.** Real but narrow. Requires crash during the stage window (typically milliseconds to a few seconds for 128 MiB actors).
 
-**Source.** API parity agent.
+**User impact.** Affected actors are non-startable for up to 5 min after a rare envoy crash. No data loss — once the lease expires, migration restarts from scratch.
 
-### F13. ~45 typed error classes deleted from `@rivetkit/*` `./errors` subpath
+**Desired behavior.** Shorten the lease to reflect real stage-window duration (30-60s), *and* add a production path (not test-only) to invalidate the stale in-progress marker when a new engine `Allocate` assigns the actor. Since only one instance runs cluster-wide, a fresh `Allocate` is authoritative evidence the prior attempt is dead — no need to wait for a wall-clock timeout.
 
-**Claim.** Reference (`feat/sqlite-vfs-v2`) `actor/errors.ts` exported ~45 concrete subclasses: `InternalError`, `Unreachable`, `ActionTimedOut`, `ActionNotFound`, `InvalidEncoding`, `IncomingMessageTooLong`, `OutgoingMessageTooLong`, `MalformedMessage`, `InvalidStateType`, `QueueFull`, `QueueMessageTooLarge`, etc. Current exports only `RivetError`, `UserError`, `ActorError` alias plus factory functions.
+### F12. `Registry.handler()` / `Registry.serve()` throw at runtime — REAL
 
-**User-visible impact.** `catch (e) { if (e instanceof QueueFull) … }` breaks — `QueueFull` undefined.
+**Layer.** **typescript** — `@rivetkit/actor` package surface.
 
-**Source.** API parity agent.
+**Claim.** `rivetkit-typescript/packages/rivetkit/src/registry/index.ts:75-95` throws `removedLegacyRoutingError`. Reference branch (`feat/sqlite-vfs-v2`) returned a real `Response`.
 
-### F14. Package `exports` subpaths removed
+**Verdict.** Real. Intentional per commit `US-035`; error message names replacement (`Registry.startEnvoy()`).
 
-**Claim.** `rivetkit-typescript/packages/rivetkit/package.json:25-99` dropped: `./dynamic`, `./driver-helpers`, `./driver-helpers/websocket`, `./topologies/coordinate`, `./topologies/partition`, `./test`, `./inspector`, `./inspector/client`, `./db`, `./db/drizzle`, `./sandbox`, `./sandbox/client`, `./sandbox/computesdk`, `./sandbox/daytona`, `./sandbox/docker`, `./sandbox/e2b`, `./sandbox/local`, `./sandbox/modal`, `./sandbox/sprites`, `./sandbox/vercel`.
+**User impact.** `export default registry.serve()` / `registry.handler(c.req.raw)` in user typescript code throws on first request. No type-level signal.
 
-**User-visible impact.** `import "rivetkit/test"`, `import "rivetkit/db/drizzle"`, etc. all resolve to nothing.
+**Desired behavior.** A custom routing layer is needed to replace the old `handler`/`serve` surface. Until that lands, add `@deprecated` jsdoc annotations pointing at `Registry.startEnvoy()` so users see a compile-time / editor warning before hitting the runtime throw. Document the removal in CHANGELOG.md with a migration example. The custom routing layer is the real long-term fix; the deprecation shim is a stopgap during the gap.
 
-**Source.** API parity agent.
+### F13. ~48 typed error classes removed from typescript `./errors` subpath — INTENTIONAL
 
-### F15. `ActorError.__type` silently changed
+**Layer.** **typescript**.
 
-**Claim.** Reference `actor/errors.ts:17`: `class ActorError extends Error { __type = "ActorError"; … }`. Current `actor/errors.ts:209`: `ActorError = RivetError` whose `__type = "RivetError"`. Tag comparison `err.__type === "ActorError"` stops matching.
+**Claim.** `git show feat/sqlite-vfs-v2:rivetkit-typescript/packages/rivetkit/src/actor/errors.ts` exported 48 classes (`QueueFull`, `ActionTimedOut`, etc.). Current `actor/errors.ts` exports only `RivetError`, `UserError`, alias `ActorError = RivetError`, plus 7 factory helpers.
 
-**Source.** API parity agent.
+**Verdict.** Factually accurate, but the behavior is **intentional**. The new design has no concrete error classes; users discriminate via `group`/`code` on `RivetError` using helpers like `isRivetErrorCode(e, "queue", "full")`. The collapse was deliberate.
 
-### F16. Signal-primitive mismatch: `notify_one` vs `notify_waiters`
+**User impact.** User code doing `catch (e) { if (e instanceof QueueFull) … }` breaks. Migration is one-line per site: replace with `isRivetErrorCode(e, "queue", "full")`.
 
-**Claim.** `AsyncCounter::register_change_notify(&activity_notify)` at `sleep.rs:615` wires counter changes through `notify_waiters()` at `async_counter.rs:79` (no permit storage). The spec wants `notify_one` semantics (stores permit). Mixed shapes cause lost wakes when a counter fires while no waiter is registered (i.e., main loop is inside `.await`).
+**Desired behavior.** No restoration. Document the migration in CHANGELOG.md so users have a clear path. Include the most common `group`/`code` pairs in the migration guide.
 
-**Source.** Spec concurrency agent (§1).
+### F14. typescript package `exports` subpaths removed — REAL (split)
 
-### F17. `handle_run_handle_outcome` emits no notify when clearing `run_handle`
+**Layer.** **typescript** — `@rivetkit/actor` package.json exports map.
 
-**Claim.** `task.rs:1322` writes `self.run_handle = None` but doesn't call `reset_sleep_timer` or notify `activity_notify`. Under the grace-drain predicate `can_finalize_sleep() && run_handle.is_none()`, grace would silently degrade to deadline path whenever `run` exits after the last tracked task.
+**Claim.** `rivetkit-typescript/packages/rivetkit/package.json` dropped `./dynamic`, `./driver-helpers`, `./test`, `./inspector`, `./db`, `./db/drizzle`, `./sandbox/*` and more. Reference had all of these.
 
-**Source.** Spec concurrency agent (§2).
+**Verdict.** Real. Per commits `US-035`, `US-036`: deliberate feature-surface deletions.
 
-### F18. Actor-lifecycle state lives in napi, not core
+**Desired behavior.** Split decision:
 
-**Claim.** `rivetkit-typescript/packages/rivetkit-napi/src/actor_context.rs:58-70, 505-522, 770-787` stores `ready: AtomicBool`, `started: AtomicBool` on `ActorContextShared` and exposes `mark_ready`, `mark_started`, `is_ready`, `is_started` through NAPI. No equivalent in core. A future V8 runtime would have to re-implement.
+- **Accepted removals (keep gone):** `./dynamic`, `./sandbox/*`. These feature surfaces are not coming back. Document in CHANGELOG.
+- **Evaluate per subpath:** `./driver-helpers`, `./test`, `./inspector`, `./db`, `./db/drizzle`, `./topologies/*`, `./driver-helpers/websocket`. For each, decide whether it makes sense to restore given the post-rewrite architecture. If yes, bring back. If no, document in CHANGELOG why and provide a migration note.
 
-**Source.** Code quality agent.
+Don't do blanket restoration; evaluate each removed subpath against the current architecture and restore only the ones that still make sense.
 
-### F19. Inspector logic duplicated in TS
+### F18. Actor-ready / actor-started state lives in napi, not core — REAL
 
-**Claim.** `rivetkit-typescript/packages/rivetkit/src/inspector/actor-inspector.ts:141-475` implements `ActorInspector` with `patchState`, `executeAction`, `getDatabaseSchema`, `getQueueStatus`, `replayWorkflowFromStep` directly in TS. Core has `src/inspector/` and `registry/inspector.rs` (775 lines) + `inspector_ws.rs` (447 lines) that duplicate surface area.
+**Layer.** layer violation — **core** vs **napi**.
 
-**Source.** Code quality agent.
+**Claim.** Core's `SleepState::ready` and `SleepState::started` AtomicBools (`sleep.rs:39-40`) already feed `can_arm_sleep_timer`. napi *also* has its own `ready`/`started` AtomicBools on `ActorContextShared` (`actor_context.rs:68-69`) with parallel `mark_ready`/`mark_started` logic — including a "cannot start before ready" precondition (`:783-794`). The two are not wired to each other.
 
-### F20. Shutdown-save orchestration duplicated in napi
+**Verdict.** Real. Duplicate state machine. A future V8 runtime would need to reimplement napi's version and separately coordinate with core's.
 
-**Claim.** `rivetkit-typescript/packages/rivetkit-napi/src/napi_actor_events.rs:624-719` implements `handle_sleep_event`, `handle_destroy_event`, `notify_disconnects_inline`, `maybe_shutdown_save` — sequencing callbacks + conn-disconnect + state-save. The ordering is lifecycle logic that a V8 runtime would re-implement verbatim.
+**Desired behavior.** Deduplicate the state without changing core semantics. Make napi's `ready`/`started` accessors read through to core's existing `SleepState::ready`/`started`. napi's `mark_ready`/`mark_started` become thin forwarders to core's setters. **Do not alter core's current semantics or gating behavior** — this is a pure refactor to remove the parallel copy, not an opportunity to change when/how readiness flips. If the "cannot start before ready" precondition exists in napi for a JS-side ordering reason (TSF callback registration, etc.), keep it on the napi side as a precondition check, still forwarding the state read to core. Net: one source of truth (core), napi is transport; no behavior change.
 
-**Source.** Code quality agent.
+### F19. Inspector logic duplicated in typescript — REAL
+
+**Layer.** layer violation — **typescript** duplicates **core**.
+
+**Claim.** `rivetkit-typescript/packages/rivetkit/src/inspector/actor-inspector.ts:141-475` implements `patchState`, `executeAction`, `getQueueStatus`, `getDatabaseSchema` in typescript. Core's `registry/inspector.rs:385` + `inspector_ws.rs:222, 369` handle the same surface.
+
+**Verdict.** Real. Two parallel implementations of inspector state patching, action execution, queue introspection, schema introspection.
+
+**Desired behavior.** Move **all** inspector logic into core. After the move, there should be **nothing left** for the inspector in the typescript layer — no `ActorInspector` class, no `patchState`/`executeAction`/`getQueueStatus`/`getDatabaseSchema` implementations. Inspector is entirely core-owned. If any TS-specific concerns exist (e.g., user-schema-aware state patching), resolve them by having core call back into TS for the narrow piece that needs user schemas, not by leaving a parallel TS implementation.
 
 ---
 
 ## Medium-priority
 
-### F21. 50ms polling loop in TypeScript
+### F21. 50 ms polling loop in typescript `native.ts` — REAL
 
-**Claim.** `rivetkit-typescript/packages/rivetkit/src/registry/native.ts:2405-2415` uses `setInterval(..., 50)` to poll `this.#isDispatchCancelled(cancelTokenId)` even though a native `on_cancelled` TSF callback already exists at `rivetkit-napi/src/cancellation_token.rs:47-73`.
+**Layer.** **typescript** (`registry/native.ts`) with the intended fix in **napi**.
 
-**Source.** Code quality agent.
+**Claim.** typescript `native.ts:2405-2415` uses `setInterval(..., 50)` to poll `#isDispatchCancelled`. napi already has a TSF `on_cancelled` callback (`cancellation_token.rs:47-73`) that should replace the poll.
 
-### F22. Banned mock patterns
+**Verdict.** Real. typescript uses the BigInt-registry version of the cancel token (`cancel_token.rs`) instead of the NAPI class with TSF callbacks — related to F31.
 
-**Claim.** `vi.spyOn(Runtime, "create").mockResolvedValue(createMockRuntime())` at `rivetkit-typescript/packages/rivetkit/tests/registry-constructor.test.ts:30-32, :52`. Same for `vi.spyOn(Date, "now").mockImplementation(...)` in `packages/traces/tests/traces.test.ts:184-187, :365`.
+**Desired behavior.** Delete the `setInterval` poll. Subscribe to napi's `on_cancelled` TSF callback via the NAPI `CancellationToken` class. Dispatch cancellation becomes event-driven: napi invokes the JS callback exactly once when the token is cancelled, typescript awakens, no polling. Tied to F31's consolidation — once the TSF-callback version is canonical, the BigInt registry and its polling consumer both disappear.
 
-**Source.** Test quality agent.
+### F22. `vi.spyOn(...).mockImplementation/mockResolvedValue` in typescript tests — REAL (with caveat)
 
-### F23. `createMockNativeContext` factory fakes the whole NAPI
+**Layer.** **typescript** — test code.
 
-**Claim.** `rivetkit-typescript/packages/rivetkit/tests/native-save-state.test.ts:14-59, :73, :237, :250` produces full fake `NativeActorContext` objects via `vi.fn()`. Tests the TS adapter against fakes, never exercises real NAPI.
+**Claim.** `rivetkit-typescript/packages/rivetkit/tests/registry-constructor.test.ts:30-32, :52` uses `vi.spyOn(Runtime, "create").mockResolvedValue(createMockRuntime())`. `packages/traces/tests/traces.test.ts:184-187, :365` spies on `Date.now` and `console.warn` with `mockImplementation`.
 
-**Source.** Test quality agent.
+**Verdict.** Real. CLAUDE.md bans `vi.mock`/`vi.doMock`/`jest.mock` explicitly and allows `vi.fn()` for callback tracking. `vi.spyOn` with `mockImplementation` replaces implementation — violates the "real infrastructure" spirit. `Runtime.create` swap is the clearer violation; `Date.now` is more defensible for time tests.
 
-### F24. `expect(true).toBe(true)` sentinel after race iterations
+**Desired behavior.** Rewrite `registry-constructor.test.ts` to use a real `Runtime` built via a test-infrastructure helper (same pattern as driver-test-suite). Delete the `Runtime.create` spy. For time-dependent tests, replace `vi.spyOn(Date, "now")` with `vi.useFakeTimers()` + `vi.setSystemTime()` — vitest's built-in deterministic clock. `console.warn` silencing is acceptable as a test-hygiene measure; keep it.
 
-**Claim.** `rivetkit-typescript/packages/rivetkit/tests/driver/actor-lifecycle.test.ts:118` asserts `expect(true).toBe(true)` after 10 create/destroy iterations with comment "If we get here without errors, the race condition is handled correctly."
+### F23. `createMockNativeContext` fakes the whole napi surface in typescript tests — REAL
 
-**Source.** Test quality agent.
+**Layer.** **typescript** — tests fake the **napi** boundary.
 
-### F25. 10 skipped tests in `actor-sleep-db.test.ts` without tracking
+**Claim.** `rivetkit-typescript/packages/rivetkit/tests/native-save-state.test.ts:14-59` builds full fake `NativeActorContext` via `vi.fn()` for 10+ methods, cast as `unknown as NativeActorContext`. Never exercises real napi.
 
-**Claim.** `rivetkit-typescript/packages/rivetkit/tests/driver/actor-sleep-db.test.ts:219, 260, 292, 375, 522, 572, 617, 739, 895, 976` — 10 `test.skip` covering `onDisconnect` during sleep shutdown, async websocket close DB writes, action dispatch during sleep shutdown, new-conn rejection, double-sleep no-op, concurrent WebSocket DB handlers. No tracking ticket on any.
+**Verdict.** Real.
 
-**Source.** Test quality agent.
+**Desired behavior.** Delete `createMockNativeContext`. Move the save-state test coverage into the driver-test-suite (`rivetkit-typescript/packages/rivetkit/src/driver-test-suite/`) so it runs against real napi + real core. If the specific logic being tested is a pure typescript adapter transformation independent of napi, refactor to extract that logic into a pure function and unit-test the function directly without needing a `NativeActorContext` at all.
 
-### F26. `test.skip("onDestroy is called even when actor is destroyed during start")`
+### F24. `expect(true).toBe(true)` sentinel after race iterations in typescript tests — REAL
 
-**Claim.** `rivetkit-typescript/packages/rivetkit/tests/driver/actor-lifecycle.test.ts:142`. Real invariant silently disabled. No tracking link.
+**Layer.** **typescript** test.
 
-**Source.** Test quality agent.
+**Claim.** `tests/driver/actor-lifecycle.test.ts:118` asserts `expect(true).toBe(true)` after 10 create/destroy iterations with comment "If we get here without errors, the race condition is handled correctly."
 
-### F27. Flake fixes papering over races
+**Verdict.** Real. Test has no real assertion; race could be broken and test would pass.
 
-**Claim.** `.agent/notes/flake-conn-websocket.md:45-47` proposes bumping wait. `driver-test-progress.md:57, :68` notes "passes on retry" with no regression test added. `actor-sleep-db.test.ts:198-208` wraps assertions in `vi.waitFor({ timeout: 5000, interval: 50 })` with no explanation of why polling is needed.
+**Desired behavior.** Replace with a concrete observable assertion. Options: (a) count successful destroy callbacks (`expect(destroyCount).toBe(10)`), (b) capture all thrown exceptions across iterations and assert `expect(errors).toEqual([])`, (c) track the final actor state and assert cleanup completed. Whatever invariant the test is actually supposed to verify — encode it.
 
-**Source.** Test quality agent.
+### F25. 10 skipped tests in typescript `actor-sleep-db.test.ts` without tracking — REAL
 
-### F28. `hibernatable-websocket-protocol.test.ts` skips entire suite
+**Layer.** **typescript** tests.
 
-**Claim.** `rivetkit-typescript/packages/rivetkit/tests/driver/hibernatable-websocket-protocol.test.ts:140` skips the whole suite when `!features?.hibernatableWebSocketProtocol`. Per `driver-test-progress.md:47`, "all 6 tests skipped" in default driver config.
+**Claim.** `tests/driver/actor-sleep-db.test.ts:219, 260, 292, 375, 522, 572, 617, 739, 895, 976` have `test.skip` on shutdown-lifecycle invariants. 9 of 10 have no TODO/issue reference.
 
-**Source.** Test quality agent.
+**Verdict.** Real.
 
-### F29. Silent no-op: `can_hibernate` always returns false
+**Desired behavior.** For each of the 10 skipped tests: either root-cause the underlying ordering/race issue and un-skip, or file a tracking ticket and annotate the skip with the ticket ID in a comment (e.g. `test.skip("...", /* TODO(RVT-123): task-model shutdown ordering race */ ...)`). Unannotated `test.skip` should not pass code review. Once policy is established, add a lint rule or CI check that rejects bare `test.skip`.
 
-**Claim.** `rivetkit-typescript/packages/rivetkit-napi/src/bridge_actor.rs:371-379` hard-codes `fn can_hibernate(...) -> bool { false }`. Runtime capability check that always returns false.
+### F26. `test.skip("onDestroy is called even when actor is destroyed during start")` — REAL
 
-**Source.** Code quality agent.
+**Layer.** **typescript** test; verifies an invariant over user `onDestroy` (typescript callback) scheduling by core.
 
-### F30. Plain `Error` thrown on required path instead of `RivetError`
+**Claim.** `tests/driver/actor-lifecycle.test.ts:196` (not `:142` as originally cited).
 
-**Claim.** `rivetkit-typescript/packages/rivetkit/src/registry/native.ts:2654` throws `new Error("native actor client is not configured")`. CLAUDE.md says errors at boundaries must be `RivetError`.
+**Verdict.** Real.
 
-**Source.** Code quality agent.
+**Desired behavior.** Same as F25 — fix the underlying invariant (core should call `onDestroy` even when destroy arrives during actor start, i.e. the `Loading` lifecycle state should still dispatch `onDestroy`) or file a tracking ticket with the skip comment pointing at it.
 
-### F31. Two near-identical cancel-token modules in napi
+### F27. Flake "fixes" paper over races in typescript tests — REAL
 
-**Claim.** `cancellation_token.rs` (NAPI class wrapping `CoreCancellationToken`, 81 lines) and `cancel_token.rs` (BigInt registry with static `SccHashMap`, 176 lines). Registry exists because JS can't hold `Arc<CoreCancellationToken>` directly, but the JS side already has a `CancellationToken` class.
+**Layer.** **typescript** tests (and notes in `.agent/notes/`).
 
-**Source.** Code quality agent.
+**Claim.** `.agent/notes/flake-conn-websocket.md:47` proposes "longer wait"; `actor-sleep-db.test.ts:198-208` wraps assertions in `vi.waitFor({ timeout: 5000, interval: 50 })` with no explanation; `driver-test-progress.md:57, :68` notes "passes on retry" with no regression test.
 
-### F32. Module-level persist maps in TS keyed by `actorId`
+**Verdict.** Real.
 
-**Claim.** `rivetkit-typescript/packages/rivetkit/src/registry/native.ts:114-149` keeps `nativeSqlDatabases`, `nativeDatabaseClients`, `nativeActorVars`, `nativeDestroyGates`, `nativePersistStateByActorId` as process-global `Map`s keyed on `actorId`. Actor-scoped state kept in file-level globals.
+**Desired behavior.** Ban retry-loop workarounds for production-path flakes. When a flake is found: (1) root-cause the race, (2) write a deterministic repro using `vi.useFakeTimers()` or event-ordered `Promise` resolution, (3) fix the underlying ordering in core/napi/typescript, (4) delete the flake-workaround note. `vi.waitFor` is acceptable for legitimate "wait for an async event" coordination but never as a retry-until-success masking layer. Every existing `vi.waitFor` call should have a one-line comment explaining why polling rather than direct awaiting is necessary.
 
-**Source.** Code quality agent.
+### F28. Driver test suites feature-gated off by default — REAL
 
-### F33. `request_save` silently degrades error to warn
+**Layer.** **typescript** tests, gated on driver feature flags from test harness.
 
-**Claim.** `rivetkit-rust/packages/rivetkit-core/src/actor/state.rs:140-144` catches "lifecycle channel overloaded" error and only `tracing::warn!`s. Required lifecycle path returns `Ok(())` semantics for failed save request.
+**Claim.** `tests/driver/hibernatable-websocket-protocol.test.ts:140` `describe.skipIf(!driverTestConfig.features?.hibernatableWebSocketProtocol)` → all 6 tests skipped in default driver. Likely other suites are similarly gated.
 
-**Source.** Code quality agent.
+**Verdict.** Real.
 
-### F34. `ActorContext.key` type widened silently
+**Desired behavior.** Compare driver test-feature flags against `feat/sqlite-vfs-v2`: any test suite that was enabled there should be enabled now. Audit the driver test config on both branches and re-enable every suite that was running on the reference branch. Zero runtime coverage regressions from the rewrite.
 
-**Claim.** Ref `actor/contexts/base/actor.ts:208` returned `ActorKey = z.array(z.string())`. Current `rivetkit-typescript/packages/rivetkit/src/actor/config.ts:290` declares `readonly key: Array<string | number>`. Queries still expect `string[]` in `client/query.ts`.
+### F30. Plain `Error` thrown in typescript `native.ts` on required path — REAL
 
-**Source.** API parity agent.
+**Layer.** **typescript**.
 
-### F35. `ActorContext` gained `sql` without dropping `db`
+**Claim.** `registry/native.ts:2654` throws `new Error("native actor client is not configured")` instead of `RivetError`.
 
-**Claim.** `rivetkit-typescript/packages/rivetkit/src/actor/config.ts:284` adds `readonly sql: ActorSql`. Previously `sql` was not on ctx. `./db` subpath is dropped but `db` property remains without deprecation.
+**Verdict.** Real. CLAUDE.md says errors at boundaries must be `RivetError`.
 
-**Source.** API parity agent.
+**Desired behavior.** Replace with a `RivetError` using an appropriate group/code, e.g. `throw new RivetError("native", "not_configured", "native actor client is not configured")`. Audit `native.ts` for other `new Error(...)` throws on required paths and fix them all at once.
 
-### F36. Removed ~20 root exports with no migration path
+### F31. Two cancel-token modules in napi — REAL (subjective)
 
-**Claim.** Compared to ref, `actor/mod.ts` current lost: `PATH_CONNECT`, `PATH_WEBSOCKET_PREFIX`, `ActorKv` (class → interface), `ActorInstance` (class removed), `ActorRouter`, `createActorRouter`, `routeWebSocket`, `KV_KEYS`, and all `*ContextOf` type helpers except `ActorContextOf`.
+**Layer.** **napi**.
 
-**Source.** API parity agent.
+**Claim.** Both `cancellation_token.rs` (82-line NAPI class with TSF `on_cancelled` callback) and `cancel_token.rs` (BigInt-keyed `SccHashMap` registry) exist and serve different call patterns.
+
+**Verdict.** Real. Consolidation is a judgment call but the duplication is factual. Tied to F21 — typescript picks the wrong one for the dispatch-cancel path.
+
+**Desired behavior.** Canonical module is `cancellation_token.rs` (NAPI class + TSF `on_cancelled` callback). Migrate typescript's dispatch-cancel path (`native.ts:2405`) to use the NAPI class directly — this also fixes F21. Once no typescript code uses the BigInt-registry pattern, delete `cancel_token.rs` entirely. One cancel-token concept per actor, event-driven.
+
+### F32. Module-level actor-keyed maps in typescript `native.ts` — REAL
+
+**Layer.** **typescript** — file-level process-global state.
+
+**Claim.** `registry/native.ts:114-149` declares `nativeSqlDatabases`, `nativeDatabaseClients`, `nativeActorVars`, `nativeDestroyGates`, `nativePersistStateByActorId` as `new Map<string, ...>` keyed on `actorId`.
+
+**Verdict.** Real. Actor-scoped state lives on file-level globals instead of on the actor context.
+
+**Desired behavior.** Take the cleanest approach at whichever layer fits best. If there's a natural per-actor object in typescript to hang the state on, move it there. If the cleanest solution is to move the accounting into core (and have napi expose it via the ctx), do that instead. The goal is to eliminate the actorId-keyed module-global maps; the right destination is whatever produces the simplest lifecycle management with the least cross-layer plumbing.
+
+### F33. Core's `request_save` silently degrades error to `warn!` — UNCERTAIN
+
+**Layer.** **core**.
+
+**Claim.** `state.rs:141-145` catches "lifecycle channel overloaded" and only `tracing::warn!`s. Required lifecycle path returns `Ok(())` semantics for a failed save request.
+
+**Verdict.** Uncertain. Public signature is `fn request_save(&self, opts) -> ()` — no Result. All callers use fire-and-forget. The `request_save_and_wait` variant returns `Result<()>`. If fire-and-forget is the design choice, warn-and-continue is consistent. If not, the API itself needs a return type change.
+
+**Desired behavior.** Decide intent in a doc-comment on `request_save`. Two options: (a) Confirm fire-and-forget is intended: document explicitly that callers do not handle overload, that `warn!` is the sole signal, and that `request_save_and_wait` is the error-aware alternative. (b) Reject fire-and-forget: change signature to `fn request_save(&self, opts) -> Result<()>` and propagate the overload error. Callers update to handle or explicitly `.ok()`. Do not leave the current ambiguous state.
+
+### F34. typescript `ActorContext.key` type widened to `(string | number)[]` — REAL
+
+**Layer.** **typescript**.
+
+**Claim.** `actor/config.ts:289` declares `readonly key: Array<string | number>`. Reference was `string[]`. `client/query.ts:15-17` still declares `ActorKeySchema = z.array(z.string())`.
+
+**Verdict.** Real. Latent type inconsistency between typescript ctx surface and typescript query schema — a number-containing key cannot round-trip through the query path. Likely unintentional.
+
+**Desired behavior.** Narrow `key` back to `readonly key: string[]` to match `ActorKeySchema`. If numeric keys are intentionally supported end-to-end, widen `ActorKeySchema = z.array(z.union([z.string(), z.number()]))` and audit every consumer of `ActorKey` for numeric-safety. Fix the inconsistency one direction or the other; don't leave `key` wider than what can round-trip.
+
+### F35. typescript `ActorContext` gained `sql` but `./db` subpath dropped — REAL
+
+**Layer.** **typescript**.
+
+**Claim.** `actor/config.ts:283-284` has `readonly sql: ActorSql; readonly db: InferDatabaseClient<TDatabase>;`. Reference had only `db`. `./db/drizzle` package export is gone.
+
+**Verdict.** Real. `db` is dead surface (no drizzle provider path); `sql` is new surface.
+
+**Desired behavior.** Keep the old exports surface. Remove `sql` from `ActorContext`, restore `./db/drizzle` subpath as the way users configure the drizzle backing driver. `db` remains the typed drizzle client on ctx — no dual API.
+
+### F36. ~20 root exports removed from typescript `actor/mod.ts` — REAL (split)
+
+**Layer.** **typescript**.
+
+**Claim.** Reference exported `PATH_CONNECT`, `PATH_WEBSOCKET_PREFIX`, `ActorKv`, `KV_KEYS`, `ActorInstance`, `ActorRouter`, `createActorRouter`, `routeWebSocket`, all `*ContextOf` type helpers. Current exports none (39-line `actor/mod.ts`). `actor/contexts/index.ts` directory removed entirely.
+
+**Verdict.** Real per commits `US-038`, `US-040`.
+
+**Desired behavior.** Split decision:
+
+- **Keep removed** (no longer relevant in post-rewrite architecture): `PATH_CONNECT`, `PATH_WEBSOCKET_PREFIX`, `KV_KEYS`, `ActorKv`, `ActorInstance`, `ActorRouter`, `createActorRouter`, `routeWebSocket`. These were tied to the old routing/kv surfaces that don't exist anymore. Document in CHANGELOG that they're gone permanently.
+- **Restore**: all `*ContextOf` type helpers (`ActionContextOf`, `ConnContextOf`, `CreateContextOf`, `SleepContextOf`, `DestroyContextOf`, `WakeContextOf`, etc.). These are user-facing type utilities with zero runtime cost; dropping them breaks `type MyCtx = ActionContextOf<typeof actor>` patterns for no architectural reason. Recreate `actor/contexts/index.ts` (or equivalent) as a type-only module.
+
+Update `rivetkit-typescript/CLAUDE.md` to either restore the sync rule (if `actor/contexts/index.ts` comes back) or remove the stale reference.
 
 ---
 
 ## Low-priority
 
-### F37. `std::sync::Mutex` in test harness
+### F38. Inline `use` inside function body in core — REAL
 
-**Claim.** `rivetkit-rust/packages/rivetkit-core/tests/modules/context.rs:303, 327, 329, 371-373` uses `std::sync::Mutex` for HashMaps of live tunnel requests, actors, pending hibernation restores. Shared harness.
+**Layer.** **core**.
 
-**Source.** Code quality agent.
+**Claim.** `rivetkit-core/src/registry/http.rs:1003` has `use vbare::OwnedVersionedData;` inside a `#[test] fn`.
 
-### F38. Inline `use` inside function body
+**Verdict.** Real. CLAUDE.md: imports must be at top of file.
 
-**Claim.** `rivetkit-rust/packages/rivetkit-core/src/registry/http.rs:1003` has `use vbare::OwnedVersionedData;` inside a `#[test] fn`. CLAUDE.md says top-of-file imports only.
+**Desired behavior.** Move `use vbare::OwnedVersionedData;` to the top of `http.rs`'s test module (`#[cfg(test)] mod tests { use …; }`).
 
-**Source.** Code quality agent.
+### F39. No `antiox` usage in typescript — RESOLVED (rule retired)
 
-### F39. No `antiox` usage
+**Layer.** **typescript**.
 
-**Claim.** CLAUDE.md says use `antiox` for TS concurrency primitives. `rivetkit-typescript/packages/rivetkit/src/actor/utils.ts:65-85` implements `class Lock<T>` by hand with `_waiting: Array<() => void>` FIFO. No file in `rivetkit-typescript/packages/rivetkit/src/` imports `antiox`.
+**Claim.** Zero `antiox` imports; hand-rolled primitives like `Lock<T>` (`utils.ts:65`) in use.
 
-**Source.** Code quality agent.
+**Verdict.** Resolved by retiring the rule.
 
-### F40. `napi_actor_events.rs` is 2227 lines
+**Desired behavior.** CLAUDE.md's "TypeScript Concurrency" section has been removed. If any speculative `antiox` imports were added in anticipation of the rule, remove them. Existing hand-rolled primitives stay as-is.
 
-**Claim.** ~320-line `dispatch_event` match with 11 repetitive arms using `spawn_reply(tasks, abort.clone(), reply, async move { ... })` scaffold.
+### F41. Dead BARE code in typescript — AUDIT TASK
 
-**Source.** Code quality agent.
+**Layer.** **typescript**.
+
+**Claim.** Post-rewrite, typescript may have BARE-protocol code that's no longer exercised by any current caller.
+
+**Verdict.** User-reported; concrete dead surface not yet enumerated.
+
+**Desired behavior.** The task is the audit itself. Enumerate every BARE type / codec / helper in `rivetkit-typescript/packages/`, trace each to confirm it has a live caller, and record the list of dead symbols. Do not delete as part of the audit; produce the list of candidates for removal first. Removal is a follow-up decision.
+
+### F42. Rust inline `#[cfg(test)] mod tests` blocks in `src/` — NEW POLICY
+
+**Layer.** **core** and **napi** (scope limited; other engine crates not in scope).
+
+**Claim.** The project convention — now added to CLAUDE.md — is that Rust tests live under each crate's `tests/` directory, not inline inside `src/*.rs` files.
+
+**Desired behavior.** Audit `rivetkit-rust/packages/rivetkit-core/` and `rivetkit-typescript/packages/rivetkit-napi/` for inline `#[cfg(test)] mod tests` blocks. Move each to `tests/<module>.rs`. Exceptions (e.g., testing a private internal that can't be reached from an integration test) must have a one-line comment justifying staying inline. CLAUDE.md rule added at `CLAUDE.md:196`. Other engine crates are out of scope for this pass.
+
+---
+
+## Tally
+
+- **Real**: 23 (F3, F7, F8, F10, F12, F14, F18, F19, F21–F28, F30–F32, F34–F36, F38, F39, F41, F42)
+- **Real but narrow / negligible**: F7, F10 (2)
+- **Intentional (not a bug)**: F9, F13 (2)
+- **Uncertain**: F33 (1)
+- **Removed**: F1, F2, F4, F5, F6, F11, F15, F16, F17, F20, F29, F37, F40
+
+## Root-cause note
+
+The removed bullshit findings (F1, F2, F5, F16, F17, F20, F29, F40) clustered in lifecycle/core and napi, and mostly relied on stale code citations from before commits `US-067, US-103, US-104, US-105, US-109, US-110` reshaped core's `ActorTask`, `run_shutdown`, grace machinery, and the abort-signal wiring. Future reviews of core should verify citations against the current `task.rs` rather than trusting pre-refactor review output.

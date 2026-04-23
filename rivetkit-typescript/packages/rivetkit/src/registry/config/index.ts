@@ -204,7 +204,11 @@ export const RegistryConfigSchema = z
 		// If startEngine is enabled, set endpoint to the engine endpoint.
 		const endpoint = config.startEngine
 			? ENGINE_ENDPOINT
-			: parsedEndpoint?.endpoint;
+			: (parsedEndpoint?.endpoint ??
+				(isDevEnv ? ENGINE_ENDPOINT : undefined));
+		const validateServerlessEndpoint = Boolean(
+			config.startEngine || parsedEndpoint,
+		);
 		// Namespace priority: parsed from endpoint URL > config value (includes env var) > "default"
 		const namespace =
 			parsedEndpoint?.namespace ?? config.namespace ?? "default";
@@ -250,6 +254,7 @@ export const RegistryConfigSchema = z
 			publicEndpoint,
 			publicNamespace,
 			publicToken,
+			validateServerlessEndpoint,
 			serverless: {
 				...config.serverless,
 				publicEndpoint,
@@ -355,6 +360,12 @@ export const DocServerlessConfigSchema = z
 			.optional()
 			.describe(
 				"Base path for serverless API routes. Default: '/api/rivet'",
+			),
+		maxStartPayloadBytes: z
+			.number()
+			.optional()
+			.describe(
+				"Maximum POST /start body size in bytes. Default: 1048576",
 			),
 		publicEndpoint: z
 			.string()

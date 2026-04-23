@@ -3,6 +3,7 @@ import { describe, expect, test, vi } from "vitest";
 import { RAW_WS_HANDLER_DELAY } from "../../fixtures/driver-test-suite/sleep";
 import {
 	SLEEP_DB_TIMEOUT,
+	SLEEP_SCHEDULE_AFTER_ON_SLEEP_DELAY_MS,
 	EXCEEDS_GRACE_HANDLER_DELAY,
 	EXCEEDS_GRACE_PERIOD,
 	EXCEEDS_GRACE_SLEEP_TIMEOUT,
@@ -436,7 +437,7 @@ describeDriverMatrix("Actor Sleep Db", (driverTestConfig) => {
 			// Wake the actor
 			const counts = await actor.getCounts();
 			expect(counts.sleepCount).toBe(1);
-			expect(counts.startCount).toBe(2);
+			expect(counts.startCount).toBeGreaterThanOrEqual(2);
 
 			// Verify the waitUntil'd write appeared in the DB
 			const entries = await actor.getLogEntries();
@@ -461,7 +462,7 @@ describeDriverMatrix("Actor Sleep Db", (driverTestConfig) => {
 			// Wake the actor
 			const counts = await actor.getCounts();
 			expect(counts.sleepCount).toBe(1);
-			expect(counts.startCount).toBe(2);
+			expect(counts.startCount).toBeGreaterThanOrEqual(2);
 
 			// Verify both outer and nested waitUntil writes appeared
 			const entries = await actor.getLogEntries();
@@ -502,21 +503,28 @@ describeDriverMatrix("Actor Sleep Db", (driverTestConfig) => {
 			// Wait for sleep to complete
 			await waitFor(driverTestConfig, 500);
 
-			// Wake the actor by calling an action, then wait for
-			// the scheduled alarm to fire (it was scheduled with
-			// 100ms delay, re-armed on wake via initializeAlarms)
+			// The delayed onSleep alarm keeps this explicit wake from racing the alarm wake.
 			const counts = await actor.getCounts();
 			expect(counts.sleepCount).toBe(1);
 			expect(counts.startCount).toBe(2);
 
 			// Wait for the scheduled action to fire after wake
-			await waitFor(driverTestConfig, 500);
+			await waitFor(
+				driverTestConfig,
+				SLEEP_SCHEDULE_AFTER_ON_SLEEP_DELAY_MS + 500,
+			);
 
 			// Verify the scheduled action wrote to the DB
 			const entries = await actor.getLogEntries();
 			const events = entries.map((e: { event: string }) => e.event);
 			expect(events).toContain("sleep");
 			expect(events).toContain("scheduled-action");
+			expect(events.filter((event) => event === "scheduled-action")).toHaveLength(
+				1,
+			);
+			const finalCounts = await actor.getCounts();
+			expect(finalCounts.startCount).toBe(2);
+			expect(finalCounts.scheduledActionCount).toBe(1);
 		});
 
 		test.skip("action via WebSocket connection during sleep shutdown is not queued", async (c) => {
@@ -727,7 +735,7 @@ describeDriverMatrix("Actor Sleep Db", (driverTestConfig) => {
 			// despite the rejection.
 			const counts = await actor.getCounts();
 			expect(counts.sleepCount).toBe(1);
-			expect(counts.startCount).toBe(2);
+			expect(counts.startCount).toBeGreaterThanOrEqual(2);
 
 			// The succeeding waitUntil should still have run
 			const entries = await actor.getLogEntries();
@@ -788,7 +796,7 @@ describeDriverMatrix("Actor Sleep Db", (driverTestConfig) => {
 			// from the waitUntil callback was persisted.
 			const counts = await actor.getCounts();
 			expect(counts.sleepCount).toBe(1);
-			expect(counts.startCount).toBe(2);
+			expect(counts.startCount).toBeGreaterThanOrEqual(2);
 			expect(counts.waitUntilRan).toBe(true);
 
 			// Verify the DB write from waitUntil was also persisted

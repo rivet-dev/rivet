@@ -1266,24 +1266,34 @@ impl ActorTask {
 		outcome: std::result::Result<Result<()>, JoinError>,
 	) -> Option<LiveExit> {
 		self.run_handle = None;
-		self.ctx.reset_sleep_timer();
-		self.state_save_deadline = None;
-		self.inspector_serialize_state_deadline = None;
-		self.close_actor_event_channel();
-
-		match outcome {
-			Ok(Ok(())) => {}
+		let clean_exit = match outcome {
+			Ok(Ok(())) => true,
 			Ok(Err(error)) => {
 				tracing::error!(?error, "actor run handler failed");
+				false
 			}
 			Err(error) => {
 				tracing::error!(?error, "actor run handler join failed");
+				false
 			}
+		};
+
+		if clean_exit && self.lifecycle == LifecycleState::Started {
+			tracing::debug!(
+				actor_id = %self.ctx.actor_id(),
+				"actor run handler exited cleanly while awaiting engine stop"
+			);
+			return None;
 		}
 
 		if self.lifecycle == LifecycleState::Started {
 			self.transition_to(LifecycleState::Terminated);
 		}
+
+		self.ctx.reset_sleep_timer();
+		self.state_save_deadline = None;
+		self.inspector_serialize_state_deadline = None;
+		self.close_actor_event_channel();
 
 		None
 	}

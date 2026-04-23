@@ -2,15 +2,7 @@ import * as cbor from "cbor-x";
 import invariant from "invariant";
 import pRetry from "p-retry";
 import type { AnyActorDefinition } from "@/actor/definition";
-import {
-	type Encoding,
-	inputDataToBuffer,
-	jsonStringifyCompat,
-} from "@/common/encoding";
 import { PATH_CONNECT } from "@/common/actor-router-consts";
-import { assertUnreachable, stringifyError } from "@/common/utils";
-import type { UniversalWebSocket } from "@/common/websocket-interface";
-import type { EngineControlClient } from "@/engine-client/driver";
 import type * as protocol from "@/common/client-protocol";
 import {
 	CURRENT_VERSION as CLIENT_PROTOCOL_CURRENT_VERSION,
@@ -23,6 +15,14 @@ import {
 	type ToServer as ToServerJson,
 	ToServerSchema,
 } from "@/common/client-protocol-zod";
+import {
+	type Encoding,
+	inputDataToBuffer,
+	jsonStringifyCompat,
+} from "@/common/encoding";
+import { assertUnreachable, stringifyError } from "@/common/utils";
+import type { UniversalWebSocket } from "@/common/websocket-interface";
+import type { EngineControlClient } from "@/engine-client/driver";
 import { deserializeWithEncoding, serializeWithEncoding } from "@/serde";
 import { bufferToArrayBuffer, promiseWithResolvers } from "@/utils";
 import { getLogMessage } from "@/utils/env-vars";
@@ -84,6 +84,8 @@ interface EventSubscriptions<Args extends Array<unknown>> {
 	callback: (...args: Args) => void;
 	once: boolean;
 }
+
+const DEFAULT_MAX_INCOMING_MESSAGE_SIZE = 65_536;
 
 /**
  * A function that unsubscribes from an event.
@@ -1183,10 +1185,37 @@ export class ActorConnRaw {
 							}
 						},
 					);
+					const serializedLength = messageLength(messageSerialized);
+					if (
+						serializedLength > DEFAULT_MAX_INCOMING_MESSAGE_SIZE &&
+						message.body.tag === "ActionRequest"
+					) {
+						const actionId = Number(message.body.val.id);
+						const inFlight = this.#takeActionInFlight(actionId);
+						const error = new errors.ActorError(
+							"message",
+							"incoming_too_long",
+							"Incoming message too long",
+							{
+								maxSize: DEFAULT_MAX_INCOMING_MESSAGE_SIZE,
+								actualSize: serializedLength,
+							},
+						);
+						logger().warn({
+							msg: "rejecting oversized connection action request",
+							actionId,
+							actionName: inFlight.name,
+							actualSize: serializedLength,
+							maxSize: DEFAULT_MAX_INCOMING_MESSAGE_SIZE,
+						});
+						inFlight.reject(error);
+						this.#dispatchActorError(error);
+						return;
+					}
 					this.#websocket.send(messageSerialized);
 					logger().trace({
 						msg: "sent websocket message",
-						len: messageLength(messageSerialized),
+						len: serializedLength,
 					});
 				} catch (error) {
 					logger().warn({

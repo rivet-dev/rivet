@@ -7,6 +7,8 @@ import type {
 	DrizzleDatabaseClient,
 	NativeDatabaseProvider,
 } from "@/common/database/config";
+import type { Client } from "@/client/client";
+import type { Registry } from "@/registry";
 import type { BaseActorDefinition } from "./definition";
 import type {
 	EventSchemaConfig,
@@ -41,23 +43,65 @@ export interface ActorLogger {
 	[key: string]: any;
 }
 
+type ActorKvValueType = "text" | "arrayBuffer" | "binary";
+type ActorKvKeyType = "text" | "binary";
+type ActorKvValueTypeMap = {
+	text: string;
+	arrayBuffer: ArrayBuffer;
+	binary: Uint8Array;
+};
+type ActorKvKeyTypeMap = {
+	text: string;
+	binary: Uint8Array;
+};
+type ActorKvValueOptions<T extends ActorKvValueType = "text"> = {
+	type?: T;
+};
+type ActorKvListOptions<
+	T extends ActorKvValueType = "text",
+	K extends ActorKvKeyType = "text",
+> = ActorKvValueOptions<T> & {
+	keyType?: K;
+	reverse?: boolean;
+	limit?: number;
+};
+
+type ActorClientFor<T> = T extends Registry<any> ? Client<T> : T;
+
 export interface ActorKv {
-	get(key: Uint8Array | string): Promise<Uint8Array | null>;
-	put(key: Uint8Array | string, value: Uint8Array | string): Promise<void>;
+	get<T extends ActorKvValueType = "text">(
+		key: Uint8Array | string,
+		options?: ActorKvValueOptions<T>,
+	): Promise<ActorKvValueTypeMap[T] | null>;
+	put<T extends ActorKvValueType = "text">(
+		key: Uint8Array | string,
+		value: Uint8Array | string | ArrayBuffer,
+		options?: ActorKvValueOptions<T>,
+	): Promise<void>;
 	delete(key: Uint8Array | string): Promise<void>;
 	batchPut(entries: [Uint8Array, Uint8Array][]): Promise<void>;
 	batchGet(keys: Uint8Array[]): Promise<(Uint8Array | null)[]>;
 	batchDelete(keys: Uint8Array[]): Promise<void>;
 	deleteRange(start: Uint8Array, end: Uint8Array): Promise<void>;
-	listPrefix(
-		prefix: Uint8Array,
-		options?: { reverse?: boolean; limit?: number },
-	): Promise<[Uint8Array, Uint8Array][]>;
-	listRange(
-		start: Uint8Array,
-		end: Uint8Array,
-		options?: { reverse?: boolean; limit?: number },
-	): Promise<[Uint8Array, Uint8Array][]>;
+	listPrefix<
+		T extends ActorKvValueType = "text",
+		K extends ActorKvKeyType = "text",
+	>(
+		prefix: Uint8Array | string,
+		options?: ActorKvListOptions<T, K>,
+	): Promise<Array<[ActorKvKeyTypeMap[K], ActorKvValueTypeMap[T]]>>;
+	listRange<
+		T extends ActorKvValueType = "text",
+		K extends ActorKvKeyType = "text",
+	>(
+		start: Uint8Array | string,
+		end: Uint8Array | string,
+		options?: ActorKvListOptions<T, K>,
+	): Promise<Array<[ActorKvKeyTypeMap[K], ActorKvValueTypeMap[T]]>>;
+	list<T extends ActorKvValueType = "text", K extends ActorKvKeyType = "text">(
+		prefix: Uint8Array | string,
+		options?: ActorKvListOptions<T, K>,
+	): Promise<Array<[ActorKvKeyTypeMap[K], ActorKvValueTypeMap[T]]>>;
 	[key: string]: any;
 }
 
@@ -292,6 +336,7 @@ export interface ActorContext<
 	readonly log: ActorLogger;
 	readonly abortSignal: AbortSignal;
 	readonly aborted: boolean;
+	readonly request?: Request;
 	readonly preventSleep: boolean;
 	broadcast(name: string, ...args: any[]): void;
 	saveState(opts?: { immediate?: boolean; maxWait?: number }): Promise<void>;
@@ -300,7 +345,7 @@ export interface ActorContext<
 	setPreventSleep(preventSleep: boolean): void;
 	sleep(): void;
 	destroy(): void;
-	client<T = any>(): T;
+	client<T = any>(): ActorClientFor<T>;
 	[key: string]: any;
 }
 

@@ -1,0 +1,118 @@
+# Ralph Progress Log
+Started: Wed Apr 22 02:44:12 AM PDT 2026
+---
+## Codebase Patterns
+- Adding NAPI actor config fields needs all three surfaces updated: Rust `JsActorConfig`, `ActorConfigInput` conversion, and TS `buildActorConfig`, then regenerate `@rivetkit/rivetkit-napi/index.d.ts`.
+- Driver tests that need an actor to auto-sleep must not poll actor actions while waiting; every action is activity and can reset the sleep deadline.
+- `rivet-data` versioned key wrappers should expose engine `Id` fields as `rivet_util::Id`; convert through generated BARE structs only at serde boundaries to preserve stored bytes.
+- Core actor boundary config is `ActorConfigInput`; convert sparse runtime-boundary values with `ActorConfig::from_input(...)`.
+- Test-only `rivetkit-core` helpers should use `#[cfg(test)]`; delete genuinely unused internal helpers instead of keeping `#[allow(dead_code)]`.
+- `rivetkit-core` actor KV/SQLite subsystems live under `src/actor/`, while root `kv`/`sqlite` module aliases preserve existing `rivetkit_core::kv` and `rivetkit_core::sqlite` callers.
+- Preserve structured cross-boundary errors with `RivetError::extract` when forwarding an existing `anyhow::Error`; `anyhow!(error.to_string())` drops group/code/metadata.
+- NAPI public validation/state errors should pass through `napi_anyhow_error(...)` with a `RivetError`; the helper's `napi::Error::from_reason(...)` is the intentional structured-prefix bridge.
+- `cargo test -p rivetkit-napi --lib` links against Node NAPI symbols and can fail outside Node; use `cargo build -p rivetkit-napi` plus `pnpm --filter @rivetkit/rivetkit-napi build:force` as the native gate.
+- NAPI `BridgeCallbacks` response-map entries should be owned by RAII guards so errors, cancellation, and early returns remove pending `response_id` senders.
+- Canonical RivetError references in docs use dotted `group.code` form, not slash `group/code` form.
+- For Ralph reference-branch audits, use `git show <ref>:<path>` and `git grep <ref>` instead of checkout/worktree so the PRD branch never changes.
+- Alarm writes made during sleep teardown need an acknowledged envoy-to-actor path; enqueueing on `EnvoyHandle` alone is not enough.
+- After native `rivetkit-core` changes, rebuild `@rivetkit/rivetkit-napi` with `pnpm --filter @rivetkit/rivetkit-napi build:force` before trusting TS driver results.
+- `rivetkit-core::RegistryDispatcher::handle_fetch` owns framework HTTP routes `/metrics`, `/inspector/*`, `/action/*`, and `/queue/*`; TS NAPI callbacks keep action/queue schema validation and queue `canPublish`.
+- HTTP framework routes enforce action timeout and message-size caps in `rivetkit-core/src/registry.rs`; raw user `onRequest` still bypasses those framework guards.
+- RivetKit framework HTTP error payloads should omit absent `metadata` for JSON/CBOR responses; explicit `metadata: null` stays distinct from missing metadata.
+- Hibernating websocket restored-open messages can arrive before the after-hibernation handler rebinds its receiver; buffer restored `Open` messages on already-open hibernatable requests.
+- Hibernatable actor websocket action messages should only be acked after a response/error is produced; dropped sleep-transition actions need to stay unacked so the gateway can replay them after wake.
+- SleepGrace dispatch replies must be tracked as shutdown work so sleep finalization does not drop accepted action replies.
+- SleepGrace is driven by the main `ActorTask::run` select loop via `SleepGraceState`; do not add a second lifecycle/dispatch select loop for grace-only behavior.
+- In-memory KV range deletes should mutate under one write lock with `BTreeMap::retain`; avoid read-collect then write-delete TOCTOU patterns.
+- SQLite VFS aux-file create/open paths should mutate `BTreeMap` state under one write lock with `entry(...).or_insert_with(...)`; avoid read-then-write upgrade patterns.
+- SQLite VFS test wait counters should pair atomics with `tokio::sync::Notify` and bounded `tokio::time::timeout` waits instead of mutex-backed polling.
+- Inspector websocket attach state in `rivetkit-core` is guard-owned; hold `InspectorAttachGuard` for the subscription lifetime instead of manually decrementing counters.
+- Actor state persistence should hold `save_guard` only while preparing the snapshot/write batch; use the in-flight write counter + `Notify` when teardown must wait for KV durability.
+- Test-only KV hooks should clone the hook out of the stats mutex before invoking it, especially when the hook can block.
+- Removing public NAPI methods requires deleting the `#[napi]` Rust export and regenerating `@rivetkit/rivetkit-napi/index.d.ts` with `pnpm --filter @rivetkit/rivetkit-napi build:force`.
+- NAPI `ActorContext.saveState` accepts only `StateDeltaPayload`; deferred dirty hints should use `requestSave({ immediate, maxWaitMs })` instead of boolean `saveState` or `requestSaveWithin`.
+- `rivetkit-core` actor state is post-boot delta-only; bootstrap snapshots use `set_state_initial`, and runtime state writes must flow through `request_save` / `save_state(Vec<StateDelta>)`.
+- `rivetkit-core` save hints use `RequestSaveOpts { immediate, max_wait_ms }`; TypeScript/NAPI callers use `ctx.requestSave({ immediate, maxWaitMs })`.
+- Immediate native actor saves should call `ctx.requestSaveAndWait({ immediate: true })`; `serializeForTick("save")` should only run through the `serializeState` callback.
+- Hibernatable connection state mutations should flow through core `ConnHandle::set_state` dirty tracking; TS adapters should not keep per-conn `persistChanged` or manual request-save callbacks.
+- Hibernatable websocket `gateway_id` and `request_id` are fixed `[u8; 4]` values matching BARE `data[4]`; validate slices with `hibernatable_id_from_slice(...)` and do not use engine 19-byte `Id`.
+- RivetKit core state-management API rules are documented in `docs-internal/engine/rivetkit-core-state-management.md`; update that page when changing `request_save`, `save_state`, `persist_state`, or `set_state_initial` semantics.
+- `rivetkit-core` `Schedule` starts `dirty_since_push` as true, sets it true on schedule mutations, and skips envoy alarm pushes only after a successful in-process push has made the schedule clean.
+- `rivetkit-core` stores the last pushed driver alarm at actor KV key `[6]` (`LAST_PUSHED_ALARM_KEY`) and loads it during actor startup to skip identical future alarm pushes across generations.
+- User-facing `onDisconnect` work should run inside `ActorContext::with_disconnect_callback(...)` so `pending_disconnect_count` gates sleep until the async callback finishes.
+- `rivetkit-core` websocket close callbacks are async `BoxFuture`s; await `WebSocket::close(...)` and `dispatch_close_event(...)`, while send/message callbacks remain sync for now.
+- Native `WebSocket.close(...)` returns a Promise after the async core close conversion; TS `VirtualWebSocket` adapters should fire it through `void callNative(...)` to preserve the public sync close shape.
+- NAPI websocket async handlers need one `WebSocketCallbackRegion` token per promise-returning handler; a single shared region slot lets concurrent handlers release each other's sleep guard.
+- TypeScript actor vars are JS-runtime-only in `registry/native.ts`; do not reintroduce `ActorVars` in `rivetkit-core` or NAPI `ActorContext.vars/setVars`.
+- Async Rust code in RivetKit defaults to `tokio::sync::{Mutex,RwLock}`; reserve `parking_lot` for forced-sync contexts and avoid `std::sync` lock poisoning.
+- In `rivetkit-core`, forced-sync runtime wiring slots use `parking_lot`; keep `std::sync::Mutex` only at external API construction boundaries that require it and comment the boundary.
+- Schedule alarm dedup should skip only identical concrete timestamps; dirty `None` syncs still need to clear/push the driver alarm.
+- In `rivetkit-sqlite` tests, SQLite handles shared across `std::thread` workers are forced-sync and should use `parking_lot::Mutex` with a short comment, not `std::sync::Mutex`.
+- In `rivetkit-napi`, sync N-API methods, TSF callback slots, and test `MakeWriter` captures are forced-sync contexts; use `parking_lot::Mutex` and keep guards out of awaits.
+- `rivetkit-core` HTTP request drain/rearm waits should use `ActorContext::wait_for_http_requests_idle()` or `wait_for_http_requests_drained(...)`, never a sleep-loop around `can_sleep()`.
+- `rivetkit-napi` test-only global serialization should use `parking_lot::Mutex` guards instead of `AtomicBool` spin loops.
+- Shared counters with awaiters need both sides of the contract: decrement-to-zero wakes the paired `Notify` / `watch` / permit, and waiters arm before the final counter re-check.
+- Async `onStateChange` work must be tracked through core `ActorContext` begin/end methods, and sleep/destroy finalization must wait for idle before sending final save events.
+- RivetKit core actor-task logs should use stable string variant labels (`command`, `event`, `outcome`) rather than payload debug dumps; `ActorEvent::kind()` is the shared label source.
+- `rivetkit-core` runtime logs should carry stable structured fields (`actor_id`, `reason`, `delta_count`, byte counts, timestamps) instead of payload debug dumps or formatted message strings.
+- `rivetkit-core` KV debug logs use `operation`, `key_count`, `result_count`, `elapsed_us`, and `outcome` fields so storage latency can be inspected without logging raw key bytes.
+- NAPI bridge debug logs should use stable `kind` fields plus compact payload summaries; do not log raw buffers, full request bodies, or whole payload objects.
+- Actor inbox producers in `rivetkit-core` use `try_reserve` before constructing/sending messages so full bounded channels return cheap `actor.overloaded` errors and do not orphan lifecycle reply oneshots.
+- `ActorTask` uses separate bounded inboxes for lifecycle commands, client dispatch, internal lifecycle events, and accepted actor events so trusted shutdown/control paths do not compete with untrusted client traffic.
+- `ActorTask` shutdown finalize is terminal: the live select loop exits to inline `run_shutdown`, and SleepFinalize/Destroying should not keep servicing lifecycle events.
+- Engine actor2 sends at most one Stop per actor instance; duplicate shutdown Stops should assert in debug and warn/drop in release rather than reintroducing multi-reply fan-out.
+- Native TS callback errors must encode `deconstructError(...)` for unstructured exceptions before crossing NAPI so plain JS `Error`s become safe `internal_error` payloads.
+- `rivetkit-core` engine subprocess supervision lives in `src/engine_process.rs`; `registry.rs` should only call `EngineProcessManager` from serve startup/shutdown plumbing.
+- Preloaded KV prefix consumers should trust `requested_prefixes`: consume preloaded entries and skip KV only when the prefix is present; absence means preload skipped/truncated and should fall back.
+- Preloaded persisted actor startup is tri-state: `NoBundle` falls back to KV, requested-but-absent `[1]` starts from defaults, and present `[1]` decodes the actor snapshot.
+- Queue preload needs both signals: use `requested_get_keys` to distinguish an absent `[5,1,1]` metadata key from an unrequested key, and `requested_prefixes` to know `[5,1,2]+*` message entries are complete enough to consume.
+- `rivetkit-core` event fanout is now direct `ActorContext::broadcast(...)` logic; do not reintroduce an `EventBroadcaster` subsystem.
+- `rivetkit-core` queue storage lives on `ActorContextInner`, with behavior in `actor/queue.rs` `impl ActorContext` blocks; do not reintroduce `Arc<QueueInner>` or a public core `Queue` re-export.
+- `rivetkit-core` connection storage lives on `ActorContextInner`, with behavior in `actor/connection.rs` `impl ActorContext` blocks; do not reintroduce `Arc<ConnectionManagerInner>` or a public core `ConnectionManager` re-export.
+- `rivetkit-core` sleep state lives on `ActorContextInner` as `SleepState`, with behavior in `actor/sleep.rs` `impl ActorContext` blocks; do not reintroduce a `SleepController` wrapper.
+- `ActorContext::build(...)` must seed queue, connection, and sleep config storage from its `ActorConfig`; do not initialize owned subsystem config with `ActorConfig::default()`.
+- Sleep grace fires the actor abort signal at grace entry, but NAPI keeps callback teardown on a separate runtime token so onSleep and grace dispatch can still run.
+- Active TypeScript run-handler sleep gating belongs to the NAPI user-run JoinHandle, not the core ActorTask adapter loop; queue waits stay sleep-compatible via active_queue_wait_count.
+- `rivetkit-core` schedule storage lives on `ActorContextInner`, with behavior in `actor/schedule.rs` `impl ActorContext` blocks; do not reintroduce `Arc<ScheduleInner>` or a public core `Schedule` re-export.
+- `rivetkit-core` actor state storage lives on `ActorContextInner`, with behavior in `actor/state.rs` `impl ActorContext` blocks; do not reintroduce `Arc<ActorStateInner>` or a public core `ActorState` re-export.
+- Public TS actor config exposes `onWake`, not `onBeforeActorStart`; keep `onBeforeActorStart` as an internal driver/NAPI startup hook.
+- Native NAPI `onWake` runs after core marks the actor ready and must fire for both fresh starts and wake starts.
+- RivetKit protocol crates with BARE `uint` fields should use `vbare_compiler::Config::with_hash_map()` because `serde_bare::Uint` does not implement `Hash`.
+- vbare schemas must define structs before unions reference them; legacy TS schemas may need definition-order cleanup when moved into Rust protocol crates.
+- `rivetkit-core` actor/inspector BARE protocol paths should encode/decode through generated protocol crates and `vbare::OwnedVersionedData`, not local BARE cursors or writers.
+- Actor-connect local DTOs in `registry/mod.rs` should only derive serde traits for JSON/CBOR decode paths; BARE encode/decode belongs to `rivetkit-client-protocol`.
+- vbare types introduced in a later protocol version still need identity converters for skipped earlier versions so embedded latest-version serialization works.
+- Protocol crate `build.rs` TS codec generation should mirror `engine/packages/runner-protocol/build.rs`: use `@bare-ts/tools`, post-process imports to `@rivetkit/bare-ts`, and write generated codec imports under `rivetkit-typescript/packages/rivetkit/src/common/bare/generated/<protocol>/`.
+- Rust client callers should use `Client::new(ClientConfig::new(endpoint).foo(...))`; `Client::from_endpoint(...)` is the endpoint-only convenience path.
+- `rivetkit-client` Cargo integration tests live under `rivetkit-rust/packages/client/tests/`; `src/tests/e2e.rs` is not compiled by Cargo.
+- Rust client queue sends use `SendOpts` / `SendAndWaitOpts`; `SendAndWaitOpts.timeout` is a `Duration` encoded as milliseconds in `HttpQueueSendRequest.timeout`.
+- Cross-version test snapshots under Ralph branch safety should be generated from `git archive <tag>` temp copies, not checkout/worktrees.
+- `test-snapshot-gen` scenarios that need namespace-backed actors should create the default namespace explicitly instead of relying on coordinator side effects.
+- Rust client raw HTTP uses `handle.fetch(path, Method, HeaderMap, Option<Bytes>)` and routes to the actor gateway `/request` endpoint via `RemoteManager::send_request`.
+- Rust client raw WebSocket uses `handle.web_socket(path, Option<Vec<String>>) -> RawWebSocket` and routes to `/websocket/{path}` without client-protocol encoding.
+- Rust client connection lifecycle tests should keep the mock websocket open and call `conn.disconnect()` explicitly; otherwise the immediate reconnect loop can make `Disconnected` a transient watch value.
+- Rust client event subscriptions return `SubscriptionHandle`; `once_event` takes `FnOnce(Event)` and must send an unsubscribe after the first delivery.
+- Rust client mock tests should call `ClientConfig::disable_metadata_lookup(true)` unless the test server implements `/metadata`.
+- Rust client `gateway_url()` keeps `get()` and `get_or_create()` handles query-backed with `rvt-*` params; only `get_for_id()` builds a direct `/gateway/{actorId}` URL.
+- Rust actor-to-actor calls use `Ctx<A>::client()`, which builds and caches `rivetkit-client` from core Envoy client accessors; core should only expose endpoint/token/namespace/pool-name accessors.
+- TypeScript native action callbacks must stay per-actor lock-free; use slow+fast same-actor driver actions and assert interleaved events to catch serialized dispatch.
+- Runtime-backed `ActorContext`s should be created with internal `ActorContext::build(...)`; keep `new`/`new_with_kv` for explicit test/convenience contexts and do not reintroduce `Default` or `new_runtime`.
+- `rivetkit-core` registry actor task handles live in one `actor_instances: SccHashMap<String, ActorInstanceState>`; use `entry_async` for Active/Stopping state transitions.
+- Actor-scoped `ActorContext` side tasks should use `WorkRegistry.shutdown_tasks` so sleep/destroy teardown can drain or abort them; explicit `JoinHandle` slots are for cancelable timers or process-scoped tasks.
+- `rivetkit-core` registry code lives under `src/registry/`: keep HTTP framework routes in `http.rs`, inspector routes in `inspector.rs`/`inspector_ws.rs`, websocket transport in `websocket.rs`, actor-connect codecs in `actor_connect.rs`, and envoy callback glue in `envoy_callbacks.rs`.
+- `rivetkit-core` actor message payloads live in `src/actor/messages.rs`; lifecycle hook plumbing (`Reply`, `ActorEvents`, `ActorStart`) lives in `src/actor/lifecycle_hooks.rs`.
+- Removing dead `rivetkit-napi` exports can touch three surfaces: the Rust `#[napi]` export, generated `index.js`/`index.d.ts`, and manual `wrapper.js`/`wrapper.d.ts`.
+- `rivetkit-napi` serves through `CoreRegistry` + `NapiActorFactory`; the legacy `BridgeCallbacks` JSON-envelope envoy path and `JsEnvoyHandle` export are deleted and should stay deleted.
+- NAPI `ActorContext.sql()` should return `JsNativeDatabase` directly; do not reintroduce the deleted standalone `SqliteDb` wrapper/export.
+- Workflow-engine `flush(...)` must chunk KV writes to actor KV limits (128 entries / 976 KiB payload) and leave dirty markers set until all driver writes/deletions succeed.
+- `@rivetkit/traces` chunk writes must stay below the 128 KiB actor KV value limit; the default max chunk is 96 KiB unless multipart storage replaces the single-value format.
+- `@rivetkit/traces` write queues should recover each `writeChain` rejection and expose `getLastWriteError()` so one KV failure does not poison later writes.
+- Runner-config metadata refresh must purge `namespace.runner_config.get` when it writes `envoyProtocolVersion`; otherwise v2 dispatch can sit behind the 5s runner-config cache TTL.
+- Engine integration tests do not start `pegboard_outbound` by default; use `TestOpts::with_pegboard_outbound()` for v2 serverless dispatch coverage.
+- Rust client connection maps use `scc::HashMap`; clone event subscription callback `Arc`s out before invoking callbacks or sending subscription messages.
+- `ActorMetrics` treats Prometheus as optional runtime diagnostics: construction failures disable actor metrics, while registration collisions warn and leave only the failed collector unregistered.
+- Panic audits should separate production code from inline `#[cfg(test)]` modules; the raw required grep intentionally catches test assertions and panic-probe fixtures.
+- Inspector auth should flow through core `InspectorAuth`; HTTP and WebSocket bearer parsing should accept case-insensitive `Bearer` with flexible whitespace.
+- Inspector HTTP connection payloads should use the documented `{ type, id, details: { type, params, stateEnabled, state, subscriptions, isHibernatable } }` shape.
+- Actor-connect hibernatable restore is a websocket reconnect path in `registry/websocket.rs`; actor startup only restores persisted metadata before ready.
+- Deleting `@rivetkit/rivetkit-napi` subpaths needs package `exports`, `files`, and `turbo.json` inputs cleaned together; `rivetkit` loads the root NAPI package through the string-joined dynamic import in `registry/native.ts`.

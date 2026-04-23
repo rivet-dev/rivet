@@ -2,7 +2,6 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use anyhow::anyhow;
 use rivet_envoy_protocol as protocol;
 use rivet_util::async_counter::AsyncCounter;
 use rivet_util_serde::HashableMap;
@@ -765,13 +764,23 @@ async fn handle_ws_open(
 		tx: outgoing_tx.clone(),
 	};
 
-	let ws_result = if let Some(mut restored_ws) = restored_ws {
-		match restored_ws.ws_handler.take() {
-			Some(ws_handler) => Ok(ws_handler),
-			None => Err(anyhow!(
-				"missing websocket handler for restored hibernatable websocket"
-			)),
-		}
+	let ws_result = if is_restoring_hibernatable {
+		ctx.shared
+			.config
+			.callbacks
+			.websocket(
+				handle.clone(),
+				ctx.actor_id.clone(),
+				message_id.gateway_id,
+				message_id.request_id,
+				request,
+				path,
+				full_headers,
+				true,
+				true,
+				sender,
+			)
+			.await
 	} else {
 		ctx.shared
 			.config
@@ -1055,6 +1064,20 @@ async fn handle_hws_restore(
 						),
 					)
 					.await;
+					if let Some(ws) = ctx
+						.ws_entries
+						.get_mut(&[&hib_req.gateway_id, &hib_req.request_id])
+					{
+						if let Some(handler) = &mut ws.ws_handler {
+							if let Some(on_open) = handler.on_open.take() {
+								let sender = crate::config::WebSocketSender {
+									tx: ws.outgoing_tx.clone(),
+								};
+
+								on_open(sender).await;
+							}
+						}
+					}
 					tracing::info!(
 						request_id = id_to_str(&hib_req.request_id),
 						"connection successfully restored"
