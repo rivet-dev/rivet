@@ -10,6 +10,7 @@ Started: Thu Apr 23 04:17:16 AM PDT 2026
 - Serverless `/start` tests must upsert a normal runner config for the temporary pool before starting the native serverless envoy.
 - Raw `db()` uses the native database provider only; custom raw database client overrides are removed.
 - Queue enqueue-and-wait must register the completion waiter before publishing the queue message to KV; otherwise a fast consumer can complete the message before the waiter exists.
+- If Rust under `rivetkit-core` changes, make sure the local NAPI `.node` artifact is newer than the changed Rust files before rerunning driver tests.
 
 ## 2026-04-23T11:45:04Z - DT-000
 - Implemented the urgent Linux NAPI publish fix in `/tmp/rivet-publish-fix` on branch `04-22-chore_fix_remaining_issues_with_rivetkit-core`.
@@ -105,4 +106,23 @@ Started: Thu Apr 23 04:17:16 AM PDT 2026
 - Verification: targeted bare workflow destroy passed; full `actor-workflow.test.ts` passed with 54 tests and 3 skips; parallel bare actor-workflow suite passed with 18 tests and 39 skips; `pnpm -F rivetkit check-types` passed.
 - **Learnings for future iterations:**
   - Stale workflow/lifecycle driver failures should be closed only after the exact encoding-specific target, the full file, and the matrix-shaped suite all pass on the current branch.
+---
+## 2026-04-23T13:23:10Z - DT-008
+- Re-ran the DT-008 six-file verifier for `actor-conn`, `conn-error-serialization`, `actor-inspector`, `actor-workflow`, `actor-sleep-db`, and `hibernatable-websocket-protocol`.
+- DT-008 remains blocked: `pnpm -F rivetkit test tests/driver/actor-conn.test.ts tests/driver/conn-error-serialization.test.ts tests/driver/actor-inspector.test.ts tests/driver/actor-workflow.test.ts tests/driver/actor-sleep-db.test.ts tests/driver/hibernatable-websocket-protocol.test.ts` failed with 240 passed, 3 failed, 33 skipped.
+- Added follow-up stories: DT-047 for the bare `actor-conn` `isConnected should be false before connection opens` failure and DT-048 for the bare/CBOR `conn-error-serialization` `createConnState` timeout under the DT-008 verifier load.
+- Files changed: `scripts/ralph/prd.json`, `.agent/notes/driver-test-progress.md`, `scripts/ralph/progress.txt`.
+- Verification: failed by design for this verifier story; no source code was changed and no commit was made because DT-008 acceptance criteria are not satisfied.
+- **Learnings for future iterations:**
+  - The six-file verifier can expose ordering or load-sensitive regressions even after exact targeted and whole-file story checks have passed.
+  - A closed story can need a new follow-up when the failure only reproduces under the DT-008 combined verifier shape.
+---
+## 2026-04-23T13:38:30Z - DT-048
+- Rebuilt `@rivetkit/rivetkit-napi` because the local `.node` artifact was older than `rivetkit-core/src/registry/websocket.rs`.
+- Confirmed the bare/CBOR `createConnState` setup error now reaches pending connection actions as structured `connection/custom_error` again.
+- Files changed: `scripts/ralph/prd.json`, `.agent/notes/driver-test-progress.md`, `scripts/ralph/progress.txt`.
+- Verification: targeted bare createConnState passed; targeted CBOR createConnState passed; full `conn-error-serialization.test.ts` passed with 9 tests; six-file DT-008 verifier had `conn-error-serialization` green across bare/CBOR/JSON and remains blocked only by DT-047 actor-conn; `pnpm build -F rivetkit` passed; `pnpm -F rivetkit check-types` passed.
+- **Learnings for future iterations:**
+  - Driver tests can lie like hell when the checked-out Rust source is newer than the compiled local NAPI artifact; compare timestamps or just rebuild NAPI after core WebSocket/protocol changes.
+  - Do not run separate Vitest driver processes in parallel against the native harness while validating a full file; local runtime startup can race and produce bogus `ECONNREFUSED` failures.
 ---

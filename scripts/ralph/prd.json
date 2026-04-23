@@ -835,6 +835,44 @@
       "priority": 44,
       "passes": true,
       "notes": "Completed on 2026-04-23: no source change was needed. The DT-008 CBOR full-file failure no longer reproduces on this branch; the exact CBOR named-properties test and full actor-inspector file both pass. The setup actions, CBOR action serialization, and inspector database execute path all succeeded in the verification run."
+    },
+    {
+      "id": "DT-047",
+      "title": "Fix actor-conn isConnected before-open callback under DT-008 verifier load",
+      "description": "DT-008 six-file verification on 2026-04-23 failed `tests/driver/actor-conn.test.ts:419` (`isConnected should be false before connection opens`) under `static registry > encoding (bare)` with `AssertionError: expected false to be true // Object.is equality`. The failure happens inside the test's wait for `connection.isConnected` to become true before asserting the pre-open captured value. Root-cause why the bare connection never reaches the observed connected state under the combined DT-008 verifier load, even though prior targeted and full `actor-conn.test.ts` rechecks passed.",
+      "acceptanceCriteria": [
+        "Single-test verification: `pnpm -F rivetkit test tests/driver/actor-conn.test.ts -t \"static registry.*encoding \\\\(bare\\\\).*isConnected should be false before connection opens\"` passes",
+        "Whole-file verification: `pnpm -F rivetkit test tests/driver/actor-conn.test.ts` passes with zero failures",
+        "Combined DT-008 verifier includes `actor-conn` passing in `pnpm -F rivetkit test tests/driver/actor-conn.test.ts tests/driver/conn-error-serialization.test.ts tests/driver/actor-inspector.test.ts tests/driver/actor-workflow.test.ts tests/driver/actor-sleep-db.test.ts tests/driver/hibernatable-websocket-protocol.test.ts`",
+        "Root cause explains why the connection state callback or WebSocket open path is load/order sensitive under the combined verifier",
+        "Fix does not add timeout bumps, retry masking, or test-only sleeps",
+        "`.agent/notes/driver-test-progress.md` updates the `actor-conn` entry from `[!]` to `[x]` and appends a PASS line",
+        "`pnpm -F rivetkit check-types` passes",
+        "Tests pass"
+      ],
+      "priority": 45,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "DT-048",
+      "title": "Fix conn-error-serialization createConnState timeout under DT-008 verifier load",
+      "description": "DT-008 six-file verification on 2026-04-23 failed `tests/driver/conn-error-serialization.test.ts:7` (`error thrown in createConnState preserves group and code through WebSocket serialization`) under `static registry > encoding (bare)` and `static registry > encoding (cbor)` with `Error: Test timed out in 30000ms.` JSON passed in the same run, and prior targeted/full-file DT-014 verification passed, so root-cause why bare/CBOR connection setup errors can still leave the pending action unresolved under the combined DT-008 verifier load.",
+      "acceptanceCriteria": [
+        "Single-test verification: `pnpm -F rivetkit test tests/driver/conn-error-serialization.test.ts -t \"static registry.*encoding \\\\(bare\\\\).*error thrown in createConnState preserves group and code through WebSocket serialization\"` passes",
+        "Single-test verification: `pnpm -F rivetkit test tests/driver/conn-error-serialization.test.ts -t \"static registry.*encoding \\\\(cbor\\\\).*error thrown in createConnState preserves group and code through WebSocket serialization\"` passes",
+        "Whole-file verification: `pnpm -F rivetkit test tests/driver/conn-error-serialization.test.ts` passes with zero failures",
+        "Combined DT-008 verifier includes `conn-error-serialization` passing in `pnpm -F rivetkit test tests/driver/actor-conn.test.ts tests/driver/conn-error-serialization.test.ts tests/driver/actor-inspector.test.ts tests/driver/actor-workflow.test.ts tests/driver/actor-sleep-db.test.ts tests/driver/hibernatable-websocket-protocol.test.ts`",
+        "Root cause identifies why bare/CBOR pending actions can remain unresolved under combined verifier load after a createConnState setup error",
+        "Rejection reaches the caller with `.group === 'connection'` and `.code === 'custom_error'`",
+        "Fix does not add timeout bumps, retry masking, or test-only sleeps",
+        "`.agent/notes/driver-test-progress.md` updates the `conn-error-serialization` entry from `[!]` to `[x]` and appends a PASS line",
+        "`pnpm -F rivetkit check-types` passes",
+        "Tests pass"
+      ],
+      "priority": 46,
+      "passes": true,
+      "notes": "Completed on 2026-04-23: no source change was needed. Root cause was a stale local NAPI artifact older than `rivetkit-core/src/registry/websocket.rs`; rebuilding `@rivetkit/rivetkit-napi` refreshed the native bridge. Targeted bare and CBOR createConnState setup-error tests passed, full conn-error-serialization passed with 9 tests, and the six-file DT-008 verifier showed conn-error-serialization green across bare/CBOR/JSON. The verifier still fails on DT-047 actor-conn only."
     }
   ]
 }

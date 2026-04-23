@@ -6,7 +6,7 @@ Config: registry (static), client type (http), encoding (bare)
 ## Fast Tests
 
 - [x] manager-driver | Manager Driver Tests
-- [x] actor-conn | Actor Connection Tests
+- [!] actor-conn | Actor Connection Tests
 - [x] actor-conn-state | Actor Connection State Tests
 - [x] conn-error-serialization | Connection Error Serialization Tests
 - [x] actor-destroy | Actor Destroy Tests
@@ -95,3 +95,5 @@ Config: registry (static), client type (http), encoding (bare)
 - 2026-04-23T12:40:56.000Z actor-queue: PASS DT-012. Fixed core enqueue-and-wait waiter registration race; targeted bare wait-send passed; full actor-queue file passed (75 passed, 0 failed); parallel bare actor-queue suite passed (25 passed, 0 failed, 50 skipped).
 - 2026-04-23T13:06:56.000Z conn-error-serialization: PASS DT-014. Targeted bare createConnState error passed; full conn-error-serialization file passed (9 passed, 0 failed); parallel bare conn-error-serialization suite passed (3 passed, 0 failed, 6 skipped).
 - 2026-04-23T13:11:10.000Z actor-workflow: PASS DT-013 recheck. Targeted bare workflow destroy passed; full actor-workflow file passed (54 passed, 0 failed, 3 skipped); parallel bare actor-workflow suite passed (18 passed, 0 failed, 39 skipped).
+- 2026-04-23T13:23:10.000Z DT-008 full-file recheck: FAIL (240 passed, 3 failed, 33 skipped) - actor-conn bare `isConnected should be false before connection opens` failed at `tests/driver/actor-conn.test.ts:419`; conn-error-serialization bare/cbor `createConnState preserves group/code` timed out at `tests/driver/conn-error-serialization.test.ts:7`. Follow-up stories: DT-047, DT-048.
+- 2026-04-23T13:38:30.000Z conn-error-serialization: PASS DT-048. Root cause was a stale NAPI artifact older than `rivetkit-core/src/registry/websocket.rs`; `pnpm --filter @rivetkit/rivetkit-napi build:force` refreshed the native bridge. Targeted bare and CBOR createConnState error tests passed; full conn-error-serialization file passed (9 passed, 0 failed); six-file DT-008 verifier showed conn-error-serialization passing across bare/CBOR/JSON and remains blocked only by DT-047 actor-conn (242 passed, 1 failed, 33 skipped).
