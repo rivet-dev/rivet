@@ -775,8 +775,8 @@
         "Tests pass"
       ],
       "priority": 1,
-      "passes": true,
-      "notes": "Supersedes the deleted DT-043 (which was based on a now-deleted spec that got the architecture wrong). Follow-ups (separate stories, not this one): (a) Bun CI matrix coverage, (b) V8 binding for rivetkit-core to unlock Cloudflare Workers / Deno, (c) engine subprocess `staticDir` flag if not already present, (d) docs pages at `website/src/content/docs/actors/serverless.mdx` + Hono/Next.js examples, (e) non-SSE response streaming if any future route needs it. This story has priority 1 (= run first; DT-001..DT-007 at priority 1 are already `passes: true` and will be skipped). DT-000 at priority 0 remains the top priority but is on a different branch/worktree. Completed on 2026-04-23: restored native serverless handler coverage, removed the TS HTTP listener path from `registry.start()`, documented the staticDir gap, and added the static/http/bare driver test. Full `cargo test -p rivetkit-core` still fails on existing lifecycle/sleep tests outside the serverless module; targeted serverless/core/build/type/driver gates passed."
+      "passes": false,
+      "notes": "Supersedes the deleted DT-043 (which was based on a now-deleted spec that got the architecture wrong). Follow-ups (separate stories, not this one): (a) Bun CI matrix coverage, (b) V8 binding for rivetkit-core to unlock Cloudflare Workers / Deno, (c) engine subprocess `staticDir` flag if not already present, (d) docs pages at `website/src/content/docs/actors/serverless.mdx` + Hono/Next.js examples, (e) non-SSE response streaming if any future route needs it. This story has priority 1 (= run first; DT-001..DT-007 at priority 1 are already `passes: true` and will be skipped). DT-000 at priority 0 remains the top priority but is on a different branch/worktree."
     },
     {
       "id": "DT-000",
@@ -799,8 +799,8 @@
         "Pre-commit hook passed without `--no-verify`"
       ],
       "priority": 0,
-      "passes": true,
-      "notes": "Priority 0 = run this before ANY other pending story. This is an urgent ship-blocker for Linux consumers of the published NAPI package. Branch/worktree for this story is separate from the rest of the PRD — do NOT run on the PRD's default branchName. Completed on 2026-04-23: pushed cda279eda and 19a731adb to 04-22-chore_fix_remaining_issues_with_rivetkit-core. Publish run 24832562681 passed on preview 0.0.0-pr.4701.d2c139c. Docker node:22 sanity check passed; ldd on published linux-x64-gnu .node has no libssl/libcrypto lines."
+      "passes": false,
+      "notes": "Priority 0 = run this before ANY other pending story. This is an urgent ship-blocker for Linux consumers of the published NAPI package. Branch/worktree for this story is separate from the rest of the PRD — do NOT run on the PRD's default branchName."
     }
   ]
 }

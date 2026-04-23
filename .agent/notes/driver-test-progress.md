@@ -87,3 +87,4 @@ Config: registry (static), client type (http), encoding (bare)
 - 2026-04-23T07:02:27.000Z slow parallel: FAIL (67 passed, 1 failed, 166 skipped)
 - 2026-04-23T07:02:27.000Z hibernatable-websocket-protocol: FAIL - replays only unacked indexed websocket messages after sleep and wake. Ack state was undefined instead of index 1.
 - 2026-04-23T07:02:40.000Z typecheck: PASS (`pnpm -F rivetkit check-types`).
+- 2026-04-23T11:57:29.000Z serverless-handler: PASS full file (3 passed, 0 failed; static/http/bare). `/start` uses an actor ID created in the same engine namespace as the serverless envoy headers.
