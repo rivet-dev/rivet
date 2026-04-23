@@ -2201,7 +2201,7 @@ impl Database for DatabaseKv {
 		location: &Location,
 		version: usize,
 		_loop_location: Option<&Location>,
-		limit: usize,
+		mut limit: usize,
 		last_attempt: bool,
 	) -> WorkflowResult<Vec<SignalData>> {
 		let owned_filter = filter
@@ -2209,183 +2209,200 @@ impl Database for DatabaseKv {
 			.map(|x| x.to_string())
 			.collect::<Vec<_>>();
 
-		// Fetch signals from UDB
-		let signals = self
-			.pools
-			.udb()
-			.map_err(WorkflowError::PoolsGeneric)?
-			.run(|tx| {
-				let owned_filter = owned_filter.clone();
+		// Retry loop for limit
+		loop {
+			// Fetch signals from UDB
+			let res = self
+				.pools
+				.udb()
+				.map_err(WorkflowError::PoolsGeneric)?
+				.run(|tx| {
+					let owned_filter = owned_filter.clone();
 
-				async move {
-					// Fetch signals from all streams at the same time
-					let mut signals = futures_util::stream::iter(owned_filter.clone())
-						.map(|signal_name| {
-							let pending_signal_subspace = self.subspace.subspace(
-								&keys::workflow::PendingSignalKey::subspace(
-									workflow_id,
-									signal_name.to_string(),
-								),
-							);
+					async move {
+						// Fetch signals from all streams at the same time
+						let mut signals = futures_util::stream::iter(owned_filter.clone())
+							.map(|signal_name| {
+								let pending_signal_subspace = self.subspace.subspace(
+									&keys::workflow::PendingSignalKey::subspace(
+										workflow_id,
+										signal_name.to_string(),
+									),
+								);
 
-							tx.get_ranges_keyvalues(
-								universaldb::RangeOption {
-									mode: StreamingMode::Exact,
-									// Each individual stream is limited to our max limit, we apply this
-									// limit again after they are all aggregated further down
-									limit: Some(limit),
-									..(&pending_signal_subspace).into()
-								},
-								// NOTE: This is Serializable because any insert into this subspace
-								// should cause a conflict and retry of this txn
-								Serializable,
-							)
-						})
-						.flatten()
-						.map(|res| {
-							let entry = res?;
+								tx.get_ranges_keyvalues(
+									universaldb::RangeOption {
+										mode: StreamingMode::Exact,
+										// Each individual stream is limited to our max limit, we apply this
+										// limit again after they are all aggregated further down
+										limit: Some(limit),
+										..(&pending_signal_subspace).into()
+									},
+									// NOTE: This is Serializable because any insert into this subspace
+									// should cause a conflict and retry of this txn
+									Serializable,
+								)
+							})
+							.flatten()
+							.map(|res| {
+								let entry = res?;
 
-							anyhow::Ok(
-								self.subspace
-									.unpack::<keys::workflow::PendingSignalKey>(&entry.key())?,
-							)
-						})
-						.try_collect::<Vec<_>>()
-						.instrument(tracing::trace_span!("map_signals"))
-						.await?;
+								anyhow::Ok(
+									self.subspace
+										.unpack::<keys::workflow::PendingSignalKey>(&entry.key())?,
+								)
+							})
+							.try_collect::<Vec<_>>()
+							.instrument(tracing::trace_span!("map_signals"))
+							.await?;
 
-					if !signals.is_empty() {
-						let now = rivet_util::timestamp::now();
+						if !signals.is_empty() {
+							let now = rivet_util::timestamp::now();
 
-						// Insert history event
-						keys::history::insert::signals_event(
-							&self.subspace,
-							&tx,
-							workflow_id,
-							&location,
-							version,
-							now,
-						)?;
-
-						// Sort by ts after aggregating but before applying limit again. Signals are already
-						// in order by ts in their individual streams so this should be cheap
-						signals.sort_by_key(|key| key.ts);
-
-						// Read signal data in parallel
-						let signals =
-							futures_util::stream::iter(signals.into_iter().take(limit).enumerate())
-								.map(|(index, key)| {
-									let tx = tx.clone();
-									async move {
-										let ack_ts_key = keys::signal::AckTsKey::new(key.signal_id);
-
-										let packed_key = self.subspace.pack(&key);
-
-										// Ack signal
-										tx.add_conflict_range(
-											&packed_key,
-											&end_of_key_range(&packed_key),
-											ConflictRangeType::Read,
-										)?;
-										tx.set(
-											&self.subspace.pack(&ack_ts_key),
-											&ack_ts_key.serialize(now)?,
-										);
-
-										update_metric(
-											&tx.with_subspace(self.subspace.clone()),
-											Some(keys::metric::Metric::SignalPending2(
-												key.signal_name.clone(),
-											)),
-											None,
-										);
-										update_wf_metric(
-											&tx.with_subspace(self.subspace.clone()),
-											workflow_id,
-											Some(keys::workflow::Metric::SignalPending(
-												key.signal_name.clone(),
-											)),
-											None,
-										);
-
-										// Clear pending signal key
-										tx.clear(&packed_key);
-
-										// Read signal body
-										let body_key = keys::signal::BodyKey::new(key.signal_id);
-										let body_subspace = self.subspace.subspace(&body_key);
-
-										let chunks = tx
-											.get_ranges_keyvalues(
-												universaldb::RangeOption {
-													mode: StreamingMode::WantAll,
-													..(&body_subspace).into()
-												},
-												Serializable,
-											)
-											.try_collect::<Vec<_>>()
-											.await?;
-
-										let body = body_key.combine(chunks)?;
-
-										// Insert each signal body into the signals event
-										keys::history::insert::signals_event_signal(
-											&self.subspace,
-											&tx,
-											workflow_id,
-											&location,
-											index,
-											key.signal_id,
-											&key.signal_name,
-											&body,
-										)?;
-
-										anyhow::Ok(SignalData {
-											signal_id: key.signal_id,
-											signal_name: key.signal_name,
-											create_ts: key.ts,
-											body,
-										})
-									}
-								})
-								// IMPORTANT: The signals need to stay in order
-								.buffered(1024)
-								.try_collect::<Vec<_>>()
-								.await?;
-
-						Ok(signals)
-					}
-					// No signals found
-					else {
-						// Write signal wake index if no signal was received. Normally this is done in
-						// `commit_workflow` but without this code there would be a race condition if the
-						// signal is published between after this transaction and before `commit_workflow`.
-						// There is a possibility of `commit_workflow` NOT writing a signal secondary index
-						// after this in which case there might be an unnecessary wake condition inserted
-						// causing the workflow to wake up again, but this is not as big of an issue because
-						// workflow wakes should be idempotent if no events happen.
-						// It is important that this is only written on the last try to pull workflows
-						// (the workflow engine internally retries a few times) because it should only
-						// write signal wake indexes before going to sleep (with err `NoSignalFound`) and
-						// not during a retry.
-						if last_attempt {
-							self.write_signal_wake_idxs(
-								workflow_id,
-								&owned_filter.iter().map(|x| x.as_str()).collect::<Vec<_>>(),
+							// Insert history event
+							keys::history::insert::signals_event(
+								&self.subspace,
 								&tx,
+								workflow_id,
+								&location,
+								version,
+								now,
 							)?;
-						}
 
-						Ok(Vec::new())
+							// Sort by ts after aggregating but before applying limit again. Signals are already
+							// in order by ts in their individual streams so this should be cheap
+							signals.sort_by_key(|key| key.ts);
+
+							// Read signal data in parallel
+							let signals = futures_util::stream::iter(
+								signals.into_iter().take(limit).enumerate(),
+							)
+							.map(|(index, key)| {
+								let tx = tx.clone();
+								async move {
+									let ack_ts_key = keys::signal::AckTsKey::new(key.signal_id);
+
+									let packed_key = self.subspace.pack(&key);
+
+									// Ack signal
+									tx.add_conflict_range(
+										&packed_key,
+										&end_of_key_range(&packed_key),
+										ConflictRangeType::Read,
+									)?;
+									tx.set(
+										&self.subspace.pack(&ack_ts_key),
+										&ack_ts_key.serialize(now)?,
+									);
+
+									update_metric(
+										&tx.with_subspace(self.subspace.clone()),
+										Some(keys::metric::Metric::SignalPending2(
+											key.signal_name.clone(),
+										)),
+										None,
+									);
+									update_wf_metric(
+										&tx.with_subspace(self.subspace.clone()),
+										workflow_id,
+										Some(keys::workflow::Metric::SignalPending(
+											key.signal_name.clone(),
+										)),
+										None,
+									);
+
+									// Clear pending signal key
+									tx.clear(&packed_key);
+
+									// Read signal body
+									let body_key = keys::signal::BodyKey::new(key.signal_id);
+									let body_subspace = self.subspace.subspace(&body_key);
+
+									let chunks = tx
+										.get_ranges_keyvalues(
+											universaldb::RangeOption {
+												mode: StreamingMode::WantAll,
+												..(&body_subspace).into()
+											},
+											Serializable,
+										)
+										.try_collect::<Vec<_>>()
+										.await?;
+
+									let body = body_key.combine(chunks)?;
+
+									// Insert each signal body into the signals event
+									keys::history::insert::signals_event_signal(
+										&self.subspace,
+										&tx,
+										workflow_id,
+										&location,
+										index,
+										key.signal_id,
+										&key.signal_name,
+										&body,
+									)?;
+
+									anyhow::Ok(SignalData {
+										signal_id: key.signal_id,
+										signal_name: key.signal_name,
+										create_ts: key.ts,
+										body,
+									})
+								}
+							})
+							// IMPORTANT: The signals need to stay in order
+							.buffered(1024)
+							.try_collect::<Vec<_>>()
+							.await?;
+
+							Ok(signals)
+						}
+						// No signals found
+						else {
+							// Write signal wake index if no signal was received. Normally this is done in
+							// `commit_workflow` but without this code there would be a race condition if the
+							// signal is published between after this transaction and before `commit_workflow`.
+							// There is a possibility of `commit_workflow` NOT writing a signal secondary index
+							// after this in which case there might be an unnecessary wake condition inserted
+							// causing the workflow to wake up again, but this is not as big of an issue because
+							// workflow wakes should be idempotent if no events happen.
+							// It is important that this is only written on the last try to pull workflows
+							// (the workflow engine internally retries a few times) because it should only
+							// write signal wake indexes before going to sleep (with err `NoSignalFound`) and
+							// not during a retry.
+							if last_attempt {
+								self.write_signal_wake_idxs(
+									workflow_id,
+									&owned_filter.iter().map(|x| x.as_str()).collect::<Vec<_>>(),
+									&tx,
+								)?;
+							}
+
+							Ok(Vec::new())
+						}
+					}
+				})
+				.custom_instrument(tracing::info_span!("pull_next_signals_tx"))
+				.await;
+
+			// If the error indicates the payload is too large, shrink the limit procedurally until it succeeds.
+			match res {
+				Ok(signals) => return Ok(signals),
+				Err(err) => {
+					if universaldb::utils::error_is_transaction_too_large(&err) {
+						limit = (limit / 2).max(1);
+
+						tracing::warn!(
+							?limit,
+							"failed pulling workflows due to large txn, trying again with lower limit"
+						);
+					} else {
+						return Err(WorkflowError::Udb(err.context("failed to pull signals")));
 					}
 				}
-			})
-			.custom_instrument(tracing::info_span!("pull_next_signals_tx"))
-			.await
-			.context("failed to pull signals")
-			.map_err(WorkflowError::Udb)?;
-
-		Ok(signals)
+			}
+		}
 	}
 
 	#[tracing::instrument(skip_all)]

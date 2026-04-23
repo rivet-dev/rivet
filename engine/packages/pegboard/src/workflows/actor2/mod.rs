@@ -195,25 +195,28 @@ pub async fn pegboard_actor2(ctx: &mut WorkflowCtx, input: &Input) -> Result<()>
 	// Attempt initial allocation
 	runtime::reschedule_actor(ctx, input, &mut lifecycle_state, metrics_workflow_id).await?;
 
-	ctx.loope(lifecycle_state, |ctx, state| {
-		let input = input.clone();
+	ctx.lupe()
+		.commit_interval(5)
+		.with_state(lifecycle_state)
+		.run(|ctx, state| {
+			let input = input.clone();
 
-		async move {
-			let signals = listen_for_signals(ctx, &input, state, metrics_workflow_id).await?;
+			async move {
+				let signals = listen_for_signals(ctx, &input, state, metrics_workflow_id).await?;
 
-			for sig in signals {
-				if let Loop::Break(()) =
-					process_signal(ctx, &input, state, metrics_workflow_id, sig).await?
-				{
-					return Ok(Loop::Break(()));
+				for sig in signals {
+					if let Loop::Break(()) =
+						process_signal(ctx, &input, state, metrics_workflow_id, sig).await?
+					{
+						return Ok(Loop::Break(()));
+					}
 				}
-			}
 
-			Ok(Loop::Continue)
-		}
-		.boxed()
-	})
-	.await?;
+				Ok(Loop::Continue)
+			}
+			.boxed()
+		})
+		.await?;
 
 	// Destroy adjacent workflows
 	ctx.signal(metrics::Destroy {

@@ -32,6 +32,11 @@ impl std::ops::Deref for MaybeCommitted {
 	}
 }
 
+pub fn error_is_transaction_too_large(_err: &anyhow::Error) -> bool {
+	// Only implemented with fdb
+	false
+}
+
 /// Calculate exponential backoff based on attempt.
 ///
 /// Ours:

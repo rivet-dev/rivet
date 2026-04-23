@@ -247,8 +247,10 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 			}
 		};
 
-	let lifecycle_res = ctx
-		.loope(lifecycle_state, |ctx, state| {
+	let lifecycle_res = ctx.lupe()
+		.commit_interval(5)
+		.with_state(lifecycle_state)
+		.run(|ctx, state| {
 			let input = input.clone();
 
 			async move {
