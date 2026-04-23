@@ -32,14 +32,3 @@ napi-build = "2"
 
 [dev-dependencies]
 serde_bare.workspace = true
-
-# Statically link openssl on all Linux targets. transitive openssl-sys (via
-# reqwest/native-tls pulled in by opentelemetry-http) would otherwise pick up
-# whatever libssl the builder image happens to ship, and the resulting `.node`
-# inherits a NEEDED libssl.so.X runtime dependency that breaks on hosts with a
-# different openssl (e.g. linking to libssl.so.1.1 on Debian bullseye breaks on
-# Debian bookworm / Ubuntu 22.04+). Vendoring compiles openssl from source and
-# static-links it into the addon. darwin uses Security.framework and windows
-# uses schannel, so they don't need this.
-[target.'cfg(target_os = "linux")'.dependencies]
-openssl = { version = "0.10", features = ["vendored"] }

@@ -14,7 +14,22 @@ pub fn setup(config: &Config) -> Result<Option<ClickHousePool>> {
 		let mut http_connector = hyper_util::client::legacy::connect::HttpConnector::new();
 		http_connector.enforce_http(false);
 		http_connector.set_keepalive(Some(Duration::from_secs(15)));
-		let https_connector = hyper_tls::HttpsConnector::new_with_connector(http_connector);
+		let https_connector_builder =
+			match hyper_rustls::HttpsConnectorBuilder::new().with_native_roots() {
+				std::result::Result::Ok(builder) => builder,
+				std::result::Result::Err(err) => {
+					tracing::warn!(
+						?err,
+						"failed to load native TLS roots; falling back to webpki roots"
+					);
+					hyper_rustls::HttpsConnectorBuilder::new().with_webpki_roots()
+				}
+			};
+		let https_connector = https_connector_builder
+			.https_or_http()
+			.enable_http1()
+			.enable_http2()
+			.wrap_connector(http_connector);
 		let http_client =
 			hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new())
 				.pool_idle_timeout(Duration::from_secs(2))
