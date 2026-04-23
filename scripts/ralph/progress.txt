@@ -16,6 +16,7 @@ Started: Thu Apr 23 04:17:16 AM PDT 2026
 - Queue enqueue-and-wait must register the completion waiter before publishing the queue message to KV; otherwise a fast consumer can complete the message before the waiter exists.
 - If Rust under `rivetkit-core` changes, make sure the local NAPI `.node` artifact is newer than the changed Rust files before rerunning driver tests.
 - A driver story is not really dead until the matrix-shaped fast/slow verifier stays green; if the exact same file/test regresses there, reopen the existing story instead of spawning a duplicate.
+- DT-008 verifier sweeps should use the explicit fast/slow driver file lists from the progress buckets; `tests/driver -t "static registry.*encoding \(bare\)"` is broader and muddies the counts.
 
 ## 2026-04-23T11:45:04Z - DT-000
 - Implemented the urgent Linux NAPI publish fix in `/tmp/rivet-publish-fix` on branch `04-22-chore_fix_remaining_issues_with_rivetkit-core`.
@@ -256,4 +257,43 @@ Started: Thu Apr 23 04:17:16 AM PDT 2026
   - The HTTP websocket upgrade can succeed before `connection_open` responds, so actor-connect setup needs its own timeout at the registry boundary rather than relying on the client-side websocket timeout.
   - When a Rust core change touches driver behavior, rebuild `@rivetkit/rivetkit-napi` before trusting a TypeScript driver repro; stale `.node` artifacts will waste your time.
   - `lifecycle-hooks` can pass in an isolated test case while still hanging in the full file, so re-run the whole file before calling the story fixed.
+---
+## 2026-04-23T17:27:18Z - DT-008
+- Re-ran the static/http/bare fast and slow driver verifiers for the DT-008 slice.
+- DT-008 remains blocked: fast failed with 286 passed, 1 failed, 577 skipped; slow failed with 67 passed, 1 failed, 166 skipped.
+- Reopened DT-045 for the recurring bare `actor-conn` `onOpen should be called when connection opens` regression, and added DT-054 for the new bare `actor-run` `run handler that throws error sleeps instead of destroying` failure.
+- Files changed: `scripts/ralph/prd.json`, `.agent/notes/driver-test-progress.md`, `scripts/ralph/progress.txt`.
+- Verification: `RIVETKIT_DRIVER_TEST_PARALLEL=1 pnpm test <fast driver files> -t "static registry.*encoding \\(bare\\)"` failed on `actor-conn`; `RIVETKIT_DRIVER_TEST_PARALLEL=1 pnpm test <slow driver files> -t "static registry.*encoding \\(bare\\)"` failed on `actor-run`. No source code was changed and no commit was made because DT-008 acceptance criteria are still not satisfied.
+- **Learnings for future iterations:**
+  - Reopen the exact closed story when the same matrix verifier symptom returns, even if an isolated recheck had looked green earlier.
+  - Do not stuff a new failing test into an existing story just because it shares a file; `actor-run` now has both the startup regression in DT-052 and a separate error-path regression in DT-054.
+---
+## 2026-04-23T17:46:03Z - DT-008
+- Re-ran the six DT-008 tracked static/http/bare full-file verifiers plus the fast and slow parallel bare sweeps.
+- DT-008 remains blocked: all six tracked files passed individually, fast parallel failed with 285 passed, 2 failed, 577 skipped, and slow parallel passed with 68 passed, 0 failed, 166 skipped.
+- Existing story DT-047 still covers bare `actor-conn` `isConnected should be false before connection opens`; added DT-055 for bare `actor-db` `handles repeated updates to the same row` failing with `RivetError: An internal error occurred` at `tests/driver/actor-db.test.ts:438`.
+- Files changed: `scripts/ralph/prd.json`, `.agent/notes/driver-test-progress.md`, `scripts/ralph/progress.txt`.
+- Verification: `pnpm test tests/driver/actor-conn.test.ts -t "static registry.*encoding \\(bare\\)"`, `pnpm test tests/driver/conn-error-serialization.test.ts -t "static registry.*encoding \\(bare\\)"`, `pnpm test tests/driver/actor-inspector.test.ts -t "static registry.*encoding \\(bare\\)"`, `pnpm test tests/driver/actor-workflow.test.ts -t "static registry.*encoding \\(bare\\)"`, `pnpm test tests/driver/actor-sleep-db.test.ts -t "static registry.*encoding \\(bare\\)"`, and `pnpm test tests/driver/hibernatable-websocket-protocol.test.ts -t "static registry.*encoding \\(bare\\)"` all passed; `RIVETKIT_DRIVER_TEST_PARALLEL=1 pnpm test <fast driver files> -t "static registry.*encoding \\(bare\\)"` failed on `actor-conn` and `actor-db`; `RIVETKIT_DRIVER_TEST_PARALLEL=1 pnpm test <slow driver files> -t "static registry.*encoding \\(bare\\)"` passed. No source code was changed and no commit was made because DT-008 acceptance criteria are still not satisfied.
+- **Learnings for future iterations:**
+  - Latest verifier state should flip suite markers in both directions. `actor-run` goes back to green when the newest slow sweep passes, and `actor-db` has to be marked dirty the moment the newest fast sweep regresses it.
+  - New DT-008 blockers can appear outside the six tracked verifier files, so the follow-up queue has to come from the newest fast/slow sweep rather than the older tracked-file list.
+---
+## 2026-04-23T18:09:23Z - DT-008
+- Re-ran the DT-008 six-file verifier plus the static/http/bare fast and slow sweeps.
+- DT-008 remains blocked: the six-file verifier failed with 242 passed, 1 failed, 33 skipped; fast failed with 286 passed, 1 failed, 577 skipped; slow passed with 68 passed, 0 failed, 166 skipped.
+- Existing story DT-050 still covers the static/CBOR actor-workflow child-workflow timeout; added DT-056 for bare actor-queue `drains many-queue child actors created from actions while connected` failing with `RivetError: Actor reply channel was dropped without a response` at `tests/driver/actor-queue.test.ts:287`.
+- Files changed: `scripts/ralph/prd.json`, `.agent/notes/driver-test-progress.md`, `scripts/ralph/progress.txt`.
+- Verification: the six-file verifier failed only on `tests/driver/actor-workflow.test.ts`; the fast bare sweep failed only on `tests/driver/actor-queue.test.ts`; the slow bare sweep passed; `pnpm -F rivetkit check-types` passed. No source code was changed and no commit was made because DT-008 acceptance criteria are still not satisfied.
+- **Learnings for future iterations:**
+  - The `actor-queue` fast-suite regressions split across two different many-queue paths. Keep the action-created child failure in its own story instead of folding it into DT-051's run-handler path.
+  - The newest verifier run still owns the suite markers. `actor-conn` and `actor-db` go back to green as soon as the latest fast sweep clears them, even if an older run had them marked dirty.
+---
+## 2026-04-23T18:30:44Z - DT-008
+- Re-ran the six tracked DT-008 full-file verifiers, then reran the exact static/http/bare fast and slow sweeps using the explicit progress-bucket file lists.
+- DT-008 passed: all six tracked files were green, fast bare passed with 287 passed and 577 skipped, and slow bare passed with 68 passed and 166 skipped.
+- Files changed: `scripts/ralph/prd.json`, `.agent/notes/driver-test-progress.md`, `scripts/ralph/progress.txt`.
+- Verification: full `actor-conn.test.ts` passed with 69 tests; full `conn-error-serialization.test.ts` passed with 9 tests; full `actor-inspector.test.ts` passed with 63 tests; full `actor-workflow.test.ts` passed with 54 tests and 3 skips; full `actor-sleep-db.test.ts` passed with 42 tests and 30 skips; full `hibernatable-websocket-protocol.test.ts` passed with 6 tests; `RIVETKIT_DRIVER_TEST_PARALLEL=1 pnpm -F rivetkit test <fast driver files> -t "static registry.*encoding \\(bare\\)"` passed with 287 passed and 577 skipped; `RIVETKIT_DRIVER_TEST_PARALLEL=1 pnpm -F rivetkit test <slow driver files> -t "static registry.*encoding \\(bare\\)"` passed with 68 passed and 166 skipped; `pnpm -F rivetkit check-types` passed.
+- **Learnings for future iterations:**
+  - DT-008 is only actually done once the tracked full-file batch and the explicit fast/slow bare sweeps are both green in the same pass.
+  - The progress-suite markers need to move back to `[x]` as soon as the newest verifier clears the file, even if an earlier sweep had reopened it.
 ---
