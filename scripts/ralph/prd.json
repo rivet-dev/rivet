@@ -198,8 +198,8 @@
         "Tests pass"
       ],
       "priority": 10,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Completed on 2026-04-23: preserved JS `undefined` across the native CBOR/JSON bridge by encoding opaque user payloads through compat helpers and reviving them on decode, while leaving structural JSON envelopes untouched. Targeted manager-driver omitted-input repro, full manager-driver file, rivetkit typecheck, and package build all passed."
     },
     {
       "id": "DT-011",
