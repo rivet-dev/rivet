@@ -17,8 +17,9 @@ pub async fn task(
 	ctx: StandaloneCtx,
 	conn: Arc<Conn>,
 	mut ping_abort_rx: watch::Receiver<()>,
-	update_ping_interval: Duration,
 ) -> Result<LifecycleResult> {
+	let update_ping_interval =
+		Duration::from_millis(ctx.config().pegboard().runner_update_ping_interval_ms());
 	let ping_timeout_ms = ctx.config().pegboard().runner_ping_timeout_ms();
 
 	loop {

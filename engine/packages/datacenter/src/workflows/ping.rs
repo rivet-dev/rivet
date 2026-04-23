@@ -71,6 +71,7 @@ async fn record_ping(
 ) -> Result<()> {
 	let peer_url = dc.peer_url.join("/health")?;
 	let start = Instant::now();
+	let now = util::timestamp::now();
 
 	let peer_res = client
 		.get(peer_url)
@@ -88,10 +89,7 @@ async fn record_ping(
 		.run(|tx| async move {
 			let tx = tx.with_subspace(keys::subspace());
 
-			tx.write(
-				&keys::LastPingTsKey::new(dc.datacenter_label),
-				util::timestamp::now(),
-			)?;
+			tx.write(&keys::LastPingTsKey::new(dc.datacenter_label), now)?;
 			tx.write(&keys::LastRttKey::new(dc.datacenter_label), rtt)?;
 
 			Ok(())

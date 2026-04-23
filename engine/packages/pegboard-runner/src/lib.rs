@@ -161,14 +161,7 @@ impl CustomServeTrait for PegboardRunnerWsCustomServe {
 		));
 
 		// Update pings
-		let update_ping_interval =
-			Duration::from_millis(ctx.config().pegboard().runner_update_ping_interval_ms());
-		let ping = tokio::spawn(ping_task::task(
-			ctx.clone(),
-			conn.clone(),
-			ping_abort_rx,
-			update_ping_interval,
-		));
+		let ping = tokio::spawn(ping_task::task(ctx.clone(), conn.clone(), ping_abort_rx));
 		let tunnel_to_ws_abort_tx2 = tunnel_to_ws_abort_tx.clone();
 		let ws_to_tunnel_abort_tx2 = ws_to_tunnel_abort_tx.clone();
 		let ping_abort_tx2 = ping_abort_tx.clone();
