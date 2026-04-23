@@ -69,3 +69,11 @@ Started: Thu Apr 23 04:17:16 AM PDT 2026
 - **Learnings for future iterations:**
   - For stale full-file driver failures, close the spawned story only after the exact encoding-specific target and the full file both pass on the current branch.
 ---
+## 2026-04-23T12:26:06Z - DT-045
+- Rechecked the bare `actor-conn` onOpen failure from DT-008; it no longer reproduces on the current branch.
+- Confirmed the targeted bare onOpen case and the full `actor-conn.test.ts` verifier both pass.
+- Files changed: `scripts/ralph/prd.json`, `.agent/notes/driver-test-progress.md`, `scripts/ralph/progress.txt`.
+- Verification: targeted bare onOpen test passed; full `actor-conn.test.ts` passed with 69 passed; `pnpm -F rivetkit check-types` passed.
+- **Learnings for future iterations:**
+  - Stale callback-ordering failures should be closed only after the exact encoding-specific test and the full file both pass.
+---

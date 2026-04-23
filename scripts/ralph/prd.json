@@ -816,8 +816,8 @@
         "Tests pass"
       ],
       "priority": 43,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Completed on 2026-04-23: no source change was needed. The bare onOpen failure no longer reproduces on this branch; targeted bare onOpen and the full actor-conn file both pass."
     },
     {
       "id": "DT-046",
