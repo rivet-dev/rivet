@@ -54,6 +54,7 @@ Use `test-snapshot-gen` to generate and load RocksDB snapshots of the full UDB K
 - `sqlite-storage` LTX decoders should validate the varint page index against the actual page-frame layout instead of trusting footer offsets alone.
 - `sqlite-storage` `get_pages(...)` should keep META, cold PIDX loads, and DELTA/SHARD blob fetches inside one `db.run(...)` transaction, then decode each unique blob once and evict stale cached PIDX rows that now need SHARD fallback.
 - `sqlite-storage` fast-path commits should update an already-cached PIDX in memory after the store write, but must not load PIDX from store just to mutate it or the one-RTT path is gone.
+- `sqlite-storage` shrink writes must delete above-EOF PIDX rows and fully-above-EOF SHARD blobs inside the same commit/takeover transaction; compaction only cleans partial shards by filtering pages at or below `head.db_size_pages`.
 - `sqlite-storage` fast-path cutoffs should use raw dirty-page bytes, and slow-path finalize must accept larger encoded DELTA blobs because UniversalDB chunks logical values internally.
 - `sqlite-storage` compaction should choose shard passes from the live PIDX scan, then delete DELTA blobs by comparing all existing delta keys against the remaining global PIDX references so multi-shard and overwritten deltas only disappear when every page ref is gone.
 - `sqlite-storage` compaction must re-read META inside its write transaction and fence on `generation` plus `head_txid` before updating `materialized_txid` or quota fields, so takeover and commits cannot rewind the head.

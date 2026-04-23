@@ -22,6 +22,7 @@ Started: Thu Apr 23 04:17:16 AM PDT 2026
 - DT-008 verifier sweeps should use the explicit fast/slow driver file lists from the progress buckets; `tests/driver -t "static registry.*encoding \(bare\)"` is broader and muddies the counts.
 - Close a stale driver story only after the exact targeted repro, the whole driver file, the relevant matrix slice, and typecheck all pass on the current branch.
 - Clean `run` exit is not terminal in `rivetkit-core`; the actor generation must stay alive until the guaranteed `Stop` drives `SleepGrace` or `DestroyGrace`, and only then may it become `Terminated`.
+- SQLite v2 shrink paths must delete above-EOF PIDX rows and fully-above-EOF SHARD blobs in the same commit or takeover transaction; compaction only cleans partial shards by filtering pages at or below `head.db_size_pages`.
 
 ## 2026-04-23T11:45:04Z - DT-000
 - Implemented the urgent Linux NAPI publish fix in `/tmp/rivet-publish-fix` on branch `04-22-chore_fix_remaining_issues_with_rivetkit-core`.
@@ -363,4 +364,12 @@ Started: Thu Apr 23 04:17:16 AM PDT 2026
   - Grace paths must keep draining dispatch and alarm work; otherwise late `Stop` cleanup can hang or silently skip replies.
   - Shutdown tests that model state persistence need to assert through the final `SerializeState` save path, not ad hoc cleanup writes that later serialization will overwrite.
   - If Rust under `rivetkit-core` changes, rerun the full driver lifecycle file after rebuilding the local NAPI artifact, not just the targeted tests.
+---
+## 2026-04-23T20:05:53Z - DT-018
+- What was implemented: fixed SQLite v2 shrink cleanup so commit/finalize and takeover delete above-EOF PIDX rows plus fully-above-EOF SHARD blobs, and shard compaction now filters truncated pages out of partial shard rewrites instead of folding them back in.
+- Files changed: `engine/packages/sqlite-storage/src/commit.rs`, `engine/packages/sqlite-storage/src/takeover.rs`, `engine/packages/sqlite-storage/src/compaction/shard.rs`, `engine/CLAUDE.md`, `.agent/notes/driver-test-progress.md`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Shrink cleanup cannot live in compaction alone. The write path has to reclaim above-EOF references immediately or `sqlite_storage_used` keeps lying.
+  - Full SHARD blobs can be deleted only when the shard starts above EOF. Partial shards still need compaction to rewrite the blob with `pgno <= head.db_size_pages`.
+  - Takeover tests that expect compaction scheduling need live PIDX-backed deltas; orphan DELTAs should now be reclaimed during recovery instead of queued for later compaction.
 ---
