@@ -283,8 +283,8 @@
         "Tests pass"
       ],
       "priority": 15,
-      "passes": false,
-      "notes": "Completed on 2026-04-23, then reopened on 2026-04-23T16:44Z after the static/http/bare fast parallel verifier failed `tests/driver/raw-websocket.test.ts:752` (`acks buffered indexed raw websocket messages immediately at the threshold`) with `AssertionError: expected undefined to match object { type: 'welcome' }`. The stale recheck was not enough; the regression still reproduces in the matrix-shaped run."
+      "passes": true,
+      "notes": "Completed on 2026-04-23, then reopened on 2026-04-23T16:44Z after the static/http/bare fast parallel verifier failed `tests/driver/raw-websocket.test.ts:752` (`acks buffered indexed raw websocket messages immediately at the threshold`) with `AssertionError: expected undefined to match object { type: 'welcome' }`. Closed again on 2026-04-23T19:01Z as a stale non-repro after the exact bare threshold target, a five-run bare rerun loop, the full `raw-websocket.test.ts` file, and `pnpm -F rivetkit check-types` all passed on the current branch."
     },
     {
       "id": "DT-016",

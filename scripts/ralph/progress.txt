@@ -325,3 +325,12 @@ Started: Thu Apr 23 04:17:16 AM PDT 2026
   - The native bridge can safely carry `undefined` only inside opaque payload bytes; structural JSON request/response envelopes still need normal omitted-field semantics.
   - Reviving compat sentinels in shared decode helpers is cheaper than chasing `null`/`undefined` mismatches one transport at a time.
 ---
+## 2026-04-23T19:01:25Z - DT-015
+- Rechecked the reopened raw-websocket hibernatable threshold ack regression and confirmed it is stale on the current branch.
+- No source code changed. The exact bare threshold target passed, five repeated bare reruns stayed green, the full `raw-websocket.test.ts` file passed across bare/CBOR/JSON, and `pnpm -F rivetkit check-types` passed.
+- Files changed: `.agent/notes/driver-test-progress.md`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
+- Verification: `pnpm -F rivetkit test tests/driver/raw-websocket.test.ts -t "static registry.*encoding \\(bare\\).*acks buffered indexed raw websocket messages immediately at the threshold"` passed; a five-run loop of that same bare target passed every time; `pnpm -F rivetkit test tests/driver/raw-websocket.test.ts` passed with 39 tests; `pnpm -F rivetkit check-types` passed.
+- **Learnings for future iterations:**
+  - Reopened matrix regressions can still be stale ghosts. Re-run the exact target and the whole file before touching raw-websocket code.
+  - A one-off `1006` on a large raw websocket case is not enough evidence for a fix if repeated targeted reruns and the full file stay green on the current branch.
+---
