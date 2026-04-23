@@ -21,7 +21,7 @@ Config: registry (static), client type (http), encoding (bare)
 - [x] actor-db-raw | Actor Database Raw Tests
 - [!] actor-workflow | Actor Workflow Tests
 - [x] actor-error-handling | Actor Error Handling Tests
-- [!] actor-queue | Actor Queue Tests
+- [x] actor-queue | Actor Queue Tests
 - [x] actor-kv | Actor KV Tests
 - [x] actor-stateless | Actor Stateless Tests
 - [x] raw-http | raw http
@@ -92,3 +92,4 @@ Config: registry (static), client type (http), encoding (bare)
 - 2026-04-23T12:19:11.000Z actor-conn: PASS DT-011 recheck. Targeted bare oversized response passed; full actor-conn file passed (69 passed, 0 failed); parallel bare actor-conn suite passed (23 passed, 0 failed, 46 skipped).
 - 2026-04-23T12:22:37.000Z actor-inspector: PASS DT-046 recheck. Targeted CBOR named-properties inspector database execute passed; full actor-inspector file passed (63 passed, 0 failed).
 - 2026-04-23T12:26:06.000Z actor-conn: PASS DT-045 recheck. Targeted bare onOpen passed; full actor-conn file passed (69 passed, 0 failed).
+- 2026-04-23T12:40:56.000Z actor-queue: PASS DT-012. Fixed core enqueue-and-wait waiter registration race; targeted bare wait-send passed; full actor-queue file passed (75 passed, 0 failed); parallel bare actor-queue suite passed (25 passed, 0 failed, 50 skipped).

@@ -8,6 +8,7 @@ Started: Thu Apr 23 04:17:16 AM PDT 2026
 - Serverless `/start` driver tests need the start payload actor ID to exist in the same engine namespace as the serverless envoy headers, or startup fails at KV load with `actor does not exist`.
 - Serverless `/start` tests must upsert a normal runner config for the temporary pool before starting the native serverless envoy.
 - Raw `db()` uses the native database provider only; custom raw database client overrides are removed.
+- Queue enqueue-and-wait must register the completion waiter before publishing the queue message to KV; otherwise a fast consumer can complete the message before the waiter exists.
 
 ## 2026-04-23T11:45:04Z - DT-000
 - Implemented the urgent Linux NAPI publish fix in `/tmp/rivet-publish-fix` on branch `04-22-chore_fix_remaining_issues_with_rivetkit-core`.
@@ -76,4 +77,13 @@ Started: Thu Apr 23 04:17:16 AM PDT 2026
 - Verification: targeted bare onOpen test passed; full `actor-conn.test.ts` passed with 69 passed; `pnpm -F rivetkit check-types` passed.
 - **Learnings for future iterations:**
   - Stale callback-ordering failures should be closed only after the exact encoding-specific test and the full file both pass.
+---
+## 2026-04-23T12:40:56Z - DT-012
+- Fixed the actor queue enqueue-and-wait race in `rivetkit-core`: completion waiters are registered before the queue message is published to KV.
+- Added cleanup for the pre-registered waiter if the KV publish fails, preserving the existing fail-fast behavior instead of hiding errors.
+- Files changed: `rivetkit-rust/packages/rivetkit-core/src/actor/queue.rs`, `rivetkit-rust/packages/rivetkit-core/CLAUDE.md`, `.agent/notes/driver-test-progress.md`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
+- Verification: `cargo build -p rivetkit-core` passed; `pnpm --filter @rivetkit/rivetkit-napi build:force` passed; targeted bare and CBOR wait-send tests passed; full `actor-queue.test.ts` passed with 75 tests; parallel bare actor-queue suite passed with 25 tests; `pnpm -F rivetkit check-types` passed.
+- **Learnings for future iterations:**
+  - Queue completion waiters must exist before queue messages become visible in KV, because action/run consumers can drain and complete the message immediately.
+  - A one-off `no_envoys` failure in the full actor-queue file did not reproduce in the isolated run or subsequent full-file verification; keep watching that path if it reappears.
 ---

@@ -232,8 +232,8 @@
         "Tests pass"
       ],
       "priority": 12,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Completed on 2026-04-23: fixed the core queue enqueue-and-wait race by registering completion waiters before publishing queue messages to KV, so fast consumers cannot complete a message before the waiter exists. Targeted bare wait-send, full actor-queue file, parallel bare actor-queue matrix, core build, NAPI force build, and rivetkit typecheck all passed."
     },
     {
       "id": "DT-013",
