@@ -5,8 +5,8 @@ import {
 	useQuery,
 } from "@tanstack/react-query";
 import { createFileRoute, notFound, useNavigate } from "@tanstack/react-router";
+import { Suspense } from "react";
 import { HelpDropdown } from "@/app/help-dropdown";
-import { features } from "@/lib/features";
 import { Content } from "@/app/layout";
 import { ProviderDropdown } from "@/app/provider-dropdown";
 import { RunnerConfigsTable } from "@/app/runner-config-table";
@@ -33,16 +33,17 @@ import {
 	useEngineCompatDataProvider,
 } from "@/components/actors";
 import { NoProvidersAlert } from "@/components/actors/no-providers-alert";
+import { features } from "@/lib/features";
 import { CloudApiTokens, PublishableToken, SecretToken } from "./tokens";
 
 export const Route = createFileRoute(
 	"/_context/orgs/$organization/projects/$project/ns/$namespace/settings",
 )({
-	component:RouteComponent,
-		
+	component: RouteComponent,
+
 	pendingComponent: DataLoadingPlaceholder,
 	beforeLoad: async () => {
-		if(!features.multitenancy) {
+		if (!features.multitenancy) {
 			throw notFound();
 		}
 	},
@@ -258,11 +259,21 @@ function Advanced() {
 					Advanced
 				</AccordionTrigger>
 				<AccordionContent>
-					<SecretToken />
-					<PublishableToken />
-					{features.auth ? <CloudApiTokens /> : null}
-					<DatacenterStatus />
-					{features.namespaceManagement ? <DangerZone /> : null}
+					<Suspense
+						fallback={
+							<>
+								<Skeleton className="w-full h-20 rounded-md" />
+								<Skeleton className="w-full h-20 rounded-md" />
+								<Skeleton className="w-full h-20 rounded-md" />
+							</>
+						}
+					>
+						<SecretToken />
+						<PublishableToken />
+						{features.auth ? <CloudApiTokens /> : null}
+						<DatacenterStatus />
+						{features.dangerZone ? <DangerZone /> : null}
+					</Suspense>
 				</AccordionContent>
 			</AccordionItem>
 		</Accordion>

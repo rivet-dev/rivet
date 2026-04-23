@@ -441,14 +441,25 @@ export const createNamespaceContext = ({
 
 					const url = opts.runnerUrl.replace(/\/+$/, "");
 					if (!url.endsWith("/api/rivet")) {
-						const res = await healthCheck(`${url}/api/rivet`);
+						const apiRes = await healthCheck(`${url}/api/rivet`);
 
-						if ("success" in res) {
+						if ("success" in apiRes) {
 							return {
 								url: `${url}/api/rivet`,
-								success: res.success,
+								success: apiRes.success,
 							};
 						}
+
+						const rootRes = await healthCheck(url);
+						if ("success" in rootRes) {
+							return { url: url, success: rootRes.success };
+						}
+
+						// Prefer the /api/rivet failure over the root 404
+						return {
+							url: `${url}/api/rivet`,
+							failure: apiRes.failure,
+						};
 					}
 
 					const res = await healthCheck(url);

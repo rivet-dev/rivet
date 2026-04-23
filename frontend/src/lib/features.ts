@@ -24,6 +24,6 @@ export const features = {
 	support: isEnabled("support"),
 	branding: isEnabled("branding"),
 	datacenter: isEnabled("datacenter"),
-	namespaceManagement: isEnabled("namespace-management"),
+	dangerZone: isEnabled("danger-zone"),
 	multitenancy,
 } as const;
