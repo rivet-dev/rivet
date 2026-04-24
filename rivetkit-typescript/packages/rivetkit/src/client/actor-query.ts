@@ -46,11 +46,14 @@ export function getGatewayTarget(state: ActorResolutionState): GatewayTarget {
 export function isStaleResolvedActorError(
 	group: string,
 	code: string,
+	message?: string,
 ): boolean {
 	return (
 		group === "actor" &&
 		(code === "not_found" ||
 			code === "stopping" ||
+			(code === "not_configured" &&
+				message === "Actor capability 'actor event inbox' is not configured.") ||
 			code.startsWith("destroyed_"))
 	);
 }

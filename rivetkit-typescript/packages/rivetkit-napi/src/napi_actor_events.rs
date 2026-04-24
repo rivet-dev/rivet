@@ -1768,7 +1768,6 @@ mod tests {
 			rivetkit_core::ActorContext::new("actor-serialize-clean", "actor", Vec::new(), "local");
 		let ctx = ActorContext::new(core_ctx);
 		let dirty = AtomicBool::new(false);
-
 		let deltas = maybe_serialize(&bindings, &ctx, &dirty, SerializeStateReason::Save)
 			.await
 			.expect("clean save serialize should not fail");

@@ -50,6 +50,10 @@ import { rawHttpFetch, rawWebSocket } from "./raw-utils";
 import { resolveGatewayTarget } from "./resolve-gateway-target";
 import { sendHttpRequest } from "./utils";
 
+const DYNAMIC_LIFECYCLE_RETRY_WINDOW_MS = 100;
+const GET_FOR_KEY_DYNAMIC_QUERY_MAX_ATTEMPTS = 24;
+const GET_OR_CREATE_DYNAMIC_QUERY_MAX_ATTEMPTS = 180;
+
 /**
  * Provides underlying functions for stateless {@link ActorHandle} for action calls.
  * Similar to ActorConnRaw but doesn't maintain a connection.
@@ -153,7 +157,7 @@ export class ActorHandleRaw {
 						maxAttempts,
 					)
 				) {
-					useQueryTarget = true;
+					useQueryTarget = this.#shouldRetryViaQueryTarget();
 					await this.#waitForRetryWindow();
 					continue;
 				}
@@ -164,18 +168,24 @@ export class ActorHandleRaw {
 						code,
 						attempt,
 						maxAttempts,
+						message,
 					)
 				) {
 					this.#clearResolvedActorId();
-					useQueryTarget = true;
+					useQueryTarget = this.#shouldRetryViaQueryTarget();
 					await this.#waitForRetryWindow();
 					continue;
 				}
 
-				const invalidated = this.#invalidateResolvedActorId(group, code);
+				const invalidated = this.#invalidateResolvedActorId(
+					group,
+					code,
+					message,
+				);
 				if (invalidated && attempt < maxAttempts - 1) {
 					useQueryTarget =
-						code === "stopping" || code.startsWith("destroyed_");
+						this.#shouldRetryViaQueryTarget() &&
+						(code === "stopping" || code.startsWith("destroyed_"));
 					if (useQueryTarget) {
 						await this.#waitForRetryWindow();
 					}
@@ -309,7 +319,7 @@ export class ActorHandleRaw {
 						maxAttempts,
 					)
 				) {
-					useQueryTarget = true;
+					useQueryTarget = this.#shouldRetryViaQueryTarget();
 					await this.#waitForRetryWindow();
 					continue;
 				}
@@ -321,10 +331,11 @@ export class ActorHandleRaw {
 						code,
 						attempt,
 						maxAttempts,
+						message,
 					)
 				) {
 					this.#clearResolvedActorId();
-					useQueryTarget = true;
+					useQueryTarget = this.#shouldRetryViaQueryTarget();
 					await this.#waitForRetryWindow();
 					continue;
 				}
@@ -342,10 +353,14 @@ export class ActorHandleRaw {
 					);
 				}
 
-				const invalidated = this.#invalidateResolvedActorId(group, code);
+				const invalidated = this.#invalidateResolvedActorId(
+					group,
+					code,
+					message,
+				);
 				if (invalidated && attempt < maxAttempts - 1) {
 					if (group === "actor" && code === "stopping") {
-						useQueryTarget = true;
+						useQueryTarget = this.#shouldRetryViaQueryTarget();
 						await new Promise((resolve) => setTimeout(resolve, 100));
 					}
 					continue;
@@ -371,7 +386,9 @@ export class ActorHandleRaw {
 	}
 
 	async #waitForRetryWindow(): Promise<void> {
-		await new Promise((resolve) => setTimeout(resolve, 100));
+		await new Promise((resolve) =>
+			setTimeout(resolve, DYNAMIC_LIFECYCLE_RETRY_WINDOW_MS),
+		);
 	}
 
 	#getDynamicQueryMaxAttempts(): number {
@@ -379,7 +396,17 @@ export class ActorHandleRaw {
 			return 1;
 		}
 
-		return "getOrCreateForKey" in this.#actorResolutionState ? 60 : 24;
+		// `getOrCreateForKey` can race an actor that is still finishing the
+		// runtime's sleep grace period. Keep retrying long enough for the
+		// stop-to-wake handoff to settle instead of surfacing a stale
+		// `actor/stopping` error.
+		return "getOrCreateForKey" in this.#actorResolutionState
+			? GET_OR_CREATE_DYNAMIC_QUERY_MAX_ATTEMPTS
+			: GET_FOR_KEY_DYNAMIC_QUERY_MAX_ATTEMPTS;
+	}
+
+	#shouldRetryViaQueryTarget(): boolean {
+		return isDynamicActorQuery(this.#actorResolutionState);
 	}
 
 	#shouldRetryDynamicLifecycleError(
@@ -387,6 +414,7 @@ export class ActorHandleRaw {
 		code: string,
 		attempt: number,
 		maxAttempts: number,
+		message?: string,
 	): boolean {
 		if (
 			!isDynamicActorQuery(this.#actorResolutionState) ||
@@ -399,6 +427,9 @@ export class ActorHandleRaw {
 		return (
 			code === "not_found" ||
 			code === "stopping" ||
+			(code === "not_configured" &&
+				message ===
+					"Actor capability 'actor event inbox' is not configured.") ||
 			code === "destroying" ||
 			code.startsWith("destroyed_")
 		);
@@ -441,10 +472,14 @@ export class ActorHandleRaw {
 		return true;
 	}
 
-	#invalidateResolvedActorId(group: string, code: string): boolean {
+	#invalidateResolvedActorId(
+		group: string,
+		code: string,
+		message?: string,
+	): boolean {
 		if (
 			!isDynamicActorQuery(this.#actorResolutionState) ||
-			!isStaleResolvedActorError(group, code)
+			!isStaleResolvedActorError(group, code, message)
 		) {
 			return false;
 		}
@@ -570,7 +605,7 @@ export class ActorHandleRaw {
 						maxAttempts,
 					)
 				) {
-					useQueryTarget = true;
+					useQueryTarget = this.#shouldRetryViaQueryTarget();
 					await this.#waitForRetryWindow();
 					continue;
 				}
@@ -581,18 +616,24 @@ export class ActorHandleRaw {
 						code,
 						attempt,
 						maxAttempts,
+						message,
 					)
 				) {
 					this.#clearResolvedActorId();
-					useQueryTarget = true;
+					useQueryTarget = this.#shouldRetryViaQueryTarget();
 					await this.#waitForRetryWindow();
 					continue;
 				}
 
-				const invalidated = this.#invalidateResolvedActorId(group, code);
+				const invalidated = this.#invalidateResolvedActorId(
+					group,
+					code,
+					message,
+				);
 				if (invalidated && attempt < maxAttempts - 1) {
 					useQueryTarget =
-						code === "stopping" || code.startsWith("destroyed_");
+						this.#shouldRetryViaQueryTarget() &&
+						(code === "stopping" || code.startsWith("destroyed_"));
 					if (useQueryTarget) {
 						await this.#waitForRetryWindow();
 					}
@@ -627,7 +668,7 @@ export class ActorHandleRaw {
 			return null;
 		}
 
-		const { group, code } = error;
+		const { group, code, message } = error;
 
 		if (
 			await this.#shouldRetrySchedulingError(
@@ -639,7 +680,7 @@ export class ActorHandleRaw {
 			)
 		) {
 			return {
-				useQueryTarget: true,
+				useQueryTarget: this.#shouldRetryViaQueryTarget(),
 				waitForRetryWindow: true,
 			};
 		}
@@ -650,19 +691,25 @@ export class ActorHandleRaw {
 				code,
 				attempt,
 				maxAttempts,
+				message,
 			)
 		) {
 			this.#clearResolvedActorId();
 			return {
-				useQueryTarget: true,
+				useQueryTarget: this.#shouldRetryViaQueryTarget(),
 				waitForRetryWindow: true,
 			};
 		}
 
-		const invalidated = this.#invalidateResolvedActorId(group, code);
+		const invalidated = this.#invalidateResolvedActorId(
+			group,
+			code,
+			message,
+		);
 		if (invalidated && attempt < maxAttempts - 1) {
 			const useQueryTarget =
-				code === "stopping" || code.startsWith("destroyed_");
+				this.#shouldRetryViaQueryTarget() &&
+				(code === "stopping" || code.startsWith("destroyed_"));
 			return {
 				useQueryTarget,
 				waitForRetryWindow: useQueryTarget,

@@ -236,10 +236,14 @@ export class ActorConnRaw {
 	 * re-resolves to a fresh actor. Returns true if the identity was
 	 * invalidated.
 	 */
-	#invalidateActorIfStale(group: string, code: string): boolean {
+	#invalidateActorIfStale(
+		group: string,
+		code: string,
+		message?: string,
+	): boolean {
 		if (
 			!isDynamicActorQuery(this.#actorResolutionState) ||
-			!isStaleResolvedActorError(group, code)
+			!isStaleResolvedActorError(group, code, message)
 		) {
 			return false;
 		}
@@ -248,10 +252,14 @@ export class ActorConnRaw {
 		return true;
 	}
 
-	#shouldReconnectForStaleActor(group: string, code: string): boolean {
+	#shouldReconnectForStaleActor(
+		group: string,
+		code: string,
+		message?: string,
+	): boolean {
 		return (
 			isDynamicActorQuery(this.#actorResolutionState) &&
-			isStaleResolvedActorError(group, code) &&
+			isStaleResolvedActorError(group, code, message) &&
 			this.#onOpenPromise !== undefined &&
 			this.#connStatus !== "connected"
 		);
@@ -667,7 +675,7 @@ export class ActorConnRaw {
 
 			if (actionId !== null) {
 				const inFlight = this.#takeActionInFlight(Number(actionId));
-				this.#invalidateActorIfStale(group, code);
+				this.#invalidateActorIfStale(group, code, message);
 
 				logger().warn({
 					msg: "action error",
@@ -691,7 +699,7 @@ export class ActorConnRaw {
 					metadata,
 				});
 
-				if (this.#shouldReconnectForStaleActor(group, code)) {
+				if (this.#shouldReconnectForStaleActor(group, code, message)) {
 					this.#clearResolvedActorIdentity();
 					this.#onOpenPromise?.reject(
 						new errors.ActorError(group, code, message, metadata),
@@ -724,7 +732,7 @@ export class ActorConnRaw {
 					this.#onOpenPromise.reject(errorToThrow);
 				}
 
-				this.#invalidateActorIfStale(group, code);
+				this.#invalidateActorIfStale(group, code, message);
 
 				// Reject any in-flight requests
 				for (const [id, inFlight] of this.#actionsInFlight.entries()) {

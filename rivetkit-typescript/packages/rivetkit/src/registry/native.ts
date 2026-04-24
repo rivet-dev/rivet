@@ -148,15 +148,17 @@ type NativeActorRuntimeState = {
 	persistState?: NativePersistActorState;
 };
 
-// Keep JS-only actor caches on the NAPI ActorContext runtime-state bag instead
-// of actorId-keyed module globals so same-key recreates start from a fresh
-// generation.
+const nativeRuntimeStateByActorId = new Map<string, NativeActorRuntimeState>();
+
 function getNativeRuntimeState(
 	ctx: NativeActorContext,
 ): NativeActorRuntimeState {
-	const runtimeState = callNativeSync(() =>
-		ctx.runtimeState(),
-	) as NativeActorRuntimeState;
+	const actorId = callNativeSync(() => ctx.actorId());
+	let runtimeState = nativeRuntimeStateByActorId.get(actorId);
+	if (!runtimeState) {
+		runtimeState = {};
+		nativeRuntimeStateByActorId.set(actorId, runtimeState);
+	}
 	if (!runtimeState.destroyGate) {
 		runtimeState.destroyGate = {};
 	}
@@ -168,6 +170,10 @@ function getNativeRuntimeState(
 		};
 	}
 	return runtimeState;
+}
+
+function deleteNativeRuntimeState(ctx: NativeActorContext) {
+	nativeRuntimeStateByActorId.delete(callNativeSync(() => ctx.actorId()));
 }
 
 function getNativePersistState(ctx: NativeActorContext): NativePersistActorState {
@@ -3730,6 +3736,7 @@ export function buildNativeFactory(
 							} finally {
 								resolveNativeDestroy(ctx);
 								await actorCtx.closeDatabase(true);
+								deleteNativeRuntimeState(ctx);
 								await actorCtx.dispose();
 							}
 						},
