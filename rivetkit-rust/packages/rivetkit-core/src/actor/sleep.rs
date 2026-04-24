@@ -905,27 +905,65 @@ mod tests {
 		ctx.set_sleep_started(true);
 		ctx.set_ready(true);
 
+		// The stub must never flip the underlying flag.
 		ctx.set_prevent_sleep(true);
 		assert!(
 			!ctx.prevent_sleep(),
 			"prevent_sleep must stay false because the stub is a no-op"
 		);
-		// The sleep predicate ignores prevent_sleep entirely.
-		assert_eq!(ctx.can_sleep().await, CanSleep::Yes);
+
+		// Exhaustive match guards against reintroducing a `PreventSleep` enum
+		// variant. If a future change adds the variant back, this match stops
+		// compiling — surfacing the regression at build time rather than via a
+		// runtime assertion that could silently pass.
+		match ctx.can_sleep().await {
+			CanSleep::Yes
+			| CanSleep::NotReady
+			| CanSleep::NoSleep
+			| CanSleep::ActiveHttpRequests
+			| CanSleep::ActiveKeepAwake
+			| CanSleep::ActiveInternalKeepAwake
+			| CanSleep::ActiveRunHandler
+			| CanSleep::ActiveDisconnectCallbacks
+			| CanSleep::ActiveConnections
+			| CanSleep::ActiveWebSocketCallbacks => {}
+		}
 
 		ctx.set_prevent_sleep(false);
-		assert_eq!(ctx.can_sleep().await, CanSleep::Yes);
+		assert!(!ctx.prevent_sleep());
 	}
 
 	#[tokio::test(start_paused = true)]
-	async fn shutdown_deadline_token_cancels_on_request() {
+	async fn shutdown_deadline_token_aborts_select_awaiting_task() {
+		// Mirrors the NAPI `RunGracefulCleanup` pattern: a task awaits user
+		// work and the shutdown_deadline cancellation in a `tokio::select!`.
+		// If `cancel_shutdown_deadline()` does not propagate to clones of the
+		// token (a regression we cannot catch with `is_cancelled()` alone),
+		// the spawned task would hang and the test would time out.
 		let ctx = ActorContext::new_for_sleep_tests("actor-shutdown-deadline");
-
 		let token = ctx.shutdown_deadline_token();
 		assert!(!token.is_cancelled());
 
+		let aborted = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+		let aborted_clone = aborted.clone();
+		let task = tokio::spawn(async move {
+			tokio::select! {
+				_ = token.cancelled() => {
+					aborted_clone.store(true, Ordering::SeqCst);
+				}
+				_ = futures::future::pending::<()>() => {}
+			}
+		});
+
+		yield_now().await;
+		assert!(!aborted.load(Ordering::SeqCst));
+
 		ctx.cancel_shutdown_deadline();
-		assert!(token.is_cancelled());
+		task.await.expect("select task should join after cancel");
+		assert!(
+			aborted.load(Ordering::SeqCst),
+			"select-awaiting task must observe cancel via the cloned token"
+		);
 	}
 
 	#[tokio::test(start_paused = true)]

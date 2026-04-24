@@ -1671,7 +1671,13 @@ impl ActorTask {
 			return self.ctx.save_state(Vec::new()).await;
 		}
 
-		let deltas = match timeout(SERIALIZE_STATE_SHUTDOWN_SANITY_CAP, reply_rx).await {
+		// Cap at the larger of the default sanity bound or the user-configured
+		// sleep grace period. Without this, an actor with `sleepGracePeriod`
+		// raised above the default would silently truncate large state writes
+		// to empty deltas inside the user's own grace budget.
+		let cap = SERIALIZE_STATE_SHUTDOWN_SANITY_CAP
+			.max(self.factory.config().effective_sleep_grace_period());
+		let deltas = match timeout(cap, reply_rx).await {
 			Ok(Ok(Ok(deltas))) => deltas,
 			Ok(Ok(Err(error))) => {
 				tracing::error!(?error, "serializeState callback returned error");
@@ -1682,7 +1688,11 @@ impl ActorTask {
 				Vec::new()
 			}
 			Err(_) => {
-				tracing::error!("serializeState timed out");
+				tracing::error!(
+					actor_id = %self.ctx.actor_id(),
+					cap_ms = cap.as_millis() as u64,
+					"serializeState timed out; saving with empty deltas, prior persisted state retained"
+				);
 				Vec::new()
 			}
 		};

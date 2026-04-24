@@ -439,10 +439,11 @@ impl ActorContext {
 			return Err(ActorLifecycleError::Stopping.build())
 				.context("destroy already requested for this generation");
 		}
-		self.cancel_sleep_timer();
-		self.flush_on_shutdown();
-		self.0.destroy_completed.store(false, Ordering::SeqCst);
-		self.0.abort_signal.cancel();
+		// Reuse the shared teardown sequence used by the registry shutdown
+		// path so future changes to `mark_destroy_requested` cannot drift.
+		// `destroy_requested` is already true from the swap above; the redundant
+		// `store(true)` inside is harmless.
+		self.mark_destroy_requested();
 
 		let ctx = self.clone();
 		if Handle::try_current().is_ok() {
