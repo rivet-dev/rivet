@@ -33,22 +33,7 @@ export const CounterLive = Counter.toLayer(
 		// Equivalent to current SDK's temporary variables
 		const connectionsTotal = yield* Ref.make(0)
 
-		yield* Counter.onCreate(
-		)
-
-		yield* Effect.addFinalizer((exit) =>
-			Exit.match(exit, {
-				onSuccess: () =>
-					// Normal close = sleep
-					Effect.log("sleeping"),
-				onFailure: (cause) =>
-					Cause.match(cause, {
-						onInterrupt: () => Effect.log("destroyed"),
-						onDie: (defect) => Effect.log("unexpected crash", defect),
-					}),
-			})
-		)
-
+		yield* Effect.addFinalizer(() => Effect.log("sleeping"))
 
 		// Lifecycle hooks are just Effects that run at the right time.
 		// onConnect receives the connection — its scope finalizer IS onDisconnect.
