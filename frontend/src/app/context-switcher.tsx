@@ -16,7 +16,6 @@ import {
 	RECENT_NAMESPACES_KEY,
 	RECENT_PROJECTS_KEY,
 	getRecentTimestamp,
-	recordRecentVisit,
 } from "@/lib/recently-visited";
 import {
 	Button,
@@ -568,7 +567,6 @@ function NamespaceList({
 										]}
 										className="static w-full"
 										onSelect={() => {
-											recordRecentVisit(RECENT_NAMESPACES_KEY, namespace.name);
 											onClose?.();
 											authClient.organization.setActive({
 												organizationSlug: organization,
