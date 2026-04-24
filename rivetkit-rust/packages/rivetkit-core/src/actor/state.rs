@@ -9,6 +9,7 @@ use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 #[cfg(test)]
 use tokio::time::timeout;
+use tracing::Instrument;
 
 use crate::actor::connection::make_connection_key;
 use crate::actor::context::ActorContext;
@@ -573,17 +574,20 @@ impl ActorContext {
 		// Intentionally detached but abortable: pending delayed saves are
 		// retained in `pending_save`, replaced by newer saves, and awaited at
 		// shutdown through the state save guard.
-		let handle = tokio_handle.spawn(async move {
-			if !delay.is_zero() {
-				tokio::time::sleep(delay).await;
-			}
+		let handle = tokio_handle.spawn(
+			async move {
+				if !delay.is_zero() {
+					tokio::time::sleep(delay).await;
+				}
 
-			state.take_pending_save();
+				state.take_pending_save();
 
-			if let Err(error) = state.persist_if_dirty().await {
-				tracing::error!(?error, "failed to persist actor state");
+				if let Err(error) = state.persist_if_dirty().await {
+					tracing::error!(?error, "failed to persist actor state");
+				}
 			}
-		});
+			.in_current_span(),
+		);
 
 		*pending_save = Some(PendingSave {
 			scheduled_at,
@@ -611,15 +615,18 @@ impl ActorContext {
 		let state = self.clone();
 		let mut tracked_persist = self.0.tracked_persist.lock();
 		let previous = tracked_persist.take();
-		let handle = tokio_handle.spawn(async move {
-			if let Some(previous) = previous {
-				let _ = previous.await;
-			}
+		let handle = tokio_handle.spawn(
+			async move {
+				if let Some(previous) = previous {
+					let _ = previous.await;
+				}
 
-			if let Err(error) = state.persist_state(SaveStateOpts { immediate: true }).await {
-				tracing::error!(?error, description, "failed to persist actor state");
+				if let Err(error) = state.persist_state(SaveStateOpts { immediate: true }).await {
+					tracing::error!(?error, description, "failed to persist actor state");
+				}
 			}
-		});
+			.in_current_span(),
+		);
 		*tracked_persist = Some(handle);
 	}
 

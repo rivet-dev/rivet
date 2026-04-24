@@ -7,6 +7,7 @@ use rivet_envoy_protocol as protocol;
 use rivet_util::async_counter::AsyncCounter;
 use tokio::sync::Mutex;
 use tokio::sync::mpsc;
+use tokio::sync::watch;
 
 use crate::actor::ToActor;
 use crate::config::EnvoyConfig;
@@ -29,6 +30,11 @@ pub struct SharedContext {
 	pub ws_tx: Arc<Mutex<Option<mpsc::UnboundedSender<WsTxMessage>>>>,
 	pub protocol_metadata: Arc<Mutex<Option<protocol::ProtocolMetadata>>>,
 	pub shutting_down: AtomicBool,
+	// Latched signal fired by `envoy_loop` after its cleanup block completes.
+	// Waiters observing `true` are guaranteed that the loop has exited and
+	// every pending KV/SQLite request has been resolved (with `EnvoyShutdownError`
+	// if it didn't complete naturally).
+	pub stopped_tx: watch::Sender<bool>,
 }
 
 #[derive(Debug)]

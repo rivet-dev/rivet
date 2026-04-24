@@ -12,6 +12,7 @@ use tokio::task::JoinHandle;
 #[cfg(test)]
 use tokio::time::sleep_until;
 use tokio::time::{Instant, sleep};
+use tracing::Instrument;
 
 use crate::actor::config::ActorConfig;
 use crate::actor::context::ActorContext;
@@ -465,10 +466,13 @@ impl ActorContext {
 		let counter = self.0.sleep.work.shutdown_counter.clone();
 		counter.increment();
 		let guard = CountGuard::from_incremented(counter);
-		shutdown_tasks.spawn(async move {
-			let _guard = guard;
-			fut.await;
-		});
+		shutdown_tasks.spawn(
+			async move {
+				let _guard = guard;
+				fut.await;
+			}
+			.in_current_span(),
+		);
 		true
 	}
 

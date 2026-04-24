@@ -7,6 +7,7 @@ use futures::future::BoxFuture;
 use rivet_envoy_client::handle::EnvoyHandle;
 use tokio::runtime::Handle;
 use tokio::sync::oneshot;
+use tracing::Instrument;
 use uuid::Uuid;
 
 use crate::actor::context::ActorContext;
@@ -32,6 +33,7 @@ impl ActorContext {
 	pub fn at(&self, timestamp_ms: i64, action_name: &str, args: &[u8]) {
 		if let Err(error) = self.schedule_event(timestamp_ms, action_name, args) {
 			tracing::error!(
+				actor_id = %self.actor_id(),
 				?error,
 				action_name,
 				timestamp_ms,
@@ -307,17 +309,20 @@ impl ActorContext {
 		if let Ok(handle) = Handle::try_current() {
 			let state_ctx = self.clone();
 			let (persist_done_tx, persist_done_rx) = oneshot::channel();
-			handle.spawn(async move {
-				let _ = ack_rx.await;
-				if let Err(error) = state_ctx.persist_last_pushed_alarm(timestamp_ms).await {
-					tracing::error!(
-						?error,
-						?timestamp_ms,
-						"failed to persist last pushed actor alarm"
-					);
+			handle.spawn(
+				async move {
+					let _ = ack_rx.await;
+					if let Err(error) = state_ctx.persist_last_pushed_alarm(timestamp_ms).await {
+						tracing::error!(
+							?error,
+							?timestamp_ms,
+							"failed to persist last pushed actor alarm"
+						);
+					}
+					let _ = persist_done_tx.send(());
 				}
-				let _ = persist_done_tx.send(());
-			});
+				.in_current_span(),
+			);
 			self.0
 				.schedule_pending_alarm_writes
 				.lock()
@@ -356,35 +361,46 @@ impl ActorContext {
 		);
 		// Intentionally detached but abortable: the handle is stored in
 		// `local_alarm_task` and cancelled when alarms are resynced or stopped.
-		let handle = tokio_handle.spawn(async move {
-			tokio::time::sleep(Duration::from_millis(delay_ms)).await;
-			if schedule.0.schedule_local_alarm_epoch.load(Ordering::SeqCst) != local_alarm_epoch {
-				return;
+		let handle = tokio_handle.spawn(
+			async move {
+				tokio::time::sleep(Duration::from_millis(delay_ms)).await;
+				if schedule.0.schedule_local_alarm_epoch.load(Ordering::SeqCst) != local_alarm_epoch
+				{
+					return;
+				}
+				tracing::debug!(
+					timestamp_ms = next_alarm,
+					local_alarm_epoch,
+					"local actor alarm fired"
+				);
+				let Some(callback) = schedule.0.schedule_local_alarm_callback.lock().clone() else {
+					return;
+				};
+				callback().await;
 			}
-			tracing::debug!(
-				actor_id = %schedule.actor_id(),
-				timestamp_ms = next_alarm,
-				local_alarm_epoch,
-				"local actor alarm fired"
-			);
-			let Some(callback) = schedule.0.schedule_local_alarm_callback.lock().clone() else {
-				return;
-			};
-			callback().await;
-		});
+			.in_current_span(),
+		);
 
 		*self.0.schedule_local_alarm_task.lock() = Some(handle);
 	}
 
 	pub(crate) fn sync_alarm_logged(&self) {
 		if let Err(error) = self.sync_alarm() {
-			tracing::error!(?error, "failed to sync scheduled actor alarm");
+			tracing::error!(
+				actor_id = %self.actor_id(),
+				?error,
+				"failed to sync scheduled actor alarm"
+			);
 		}
 	}
 
 	pub(crate) fn sync_future_alarm_logged(&self) {
 		if let Err(error) = self.sync_future_alarm() {
-			tracing::error!(?error, "failed to sync future scheduled actor alarm");
+			tracing::error!(
+				actor_id = %self.actor_id(),
+				?error,
+				"failed to sync future scheduled actor alarm"
+			);
 		}
 	}
 
@@ -502,6 +518,7 @@ mod tests {
 			)),
 			protocol_metadata: Arc::new(tokio::sync::Mutex::new(None)),
 			shutting_down: AtomicBool::new(false),
+			stopped_tx: tokio::sync::watch::channel(true).0,
 		});
 
 		(EnvoyHandle::from_shared(shared), envoy_rx)

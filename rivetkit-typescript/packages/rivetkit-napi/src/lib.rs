@@ -79,8 +79,11 @@ pub(crate) fn init_tracing(log_level: Option<&str>) {
 			.unwrap_or_else(|| "warn".to_string());
 
 		tracing_subscriber::fmt()
+			.json()
 			.with_env_filter(tracing_subscriber::EnvFilter::new(&filter))
 			.with_target(true)
+			.with_current_span(true)
+			.with_span_list(false)
 			.with_writer(std::io::stdout)
 			.init();
 	});

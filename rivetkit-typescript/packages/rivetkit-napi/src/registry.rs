@@ -6,11 +6,12 @@ use napi::JsObject;
 use napi::bindgen_prelude::{Buffer, Env, Promise};
 use napi::threadsafe_function::{ErrorStrategy, ThreadSafeCallContext, ThreadsafeFunction};
 use napi_derive::napi;
-use parking_lot::Mutex;
 use rivetkit_core::{
 	CoreRegistry as NativeCoreRegistry, CoreServerlessRuntime, ServeConfig, ServerlessRequest,
 	serverless::ServerlessStreamError,
 };
+use tokio::sync::{Mutex as TokioMutex, Notify};
+use tokio_util::sync::CancellationToken as CoreCancellationToken;
 
 use crate::actor_factory::NapiActorFactory;
 use crate::cancellation_token::CancellationToken;
@@ -66,13 +67,35 @@ enum ServerlessStreamEvent {
 	},
 }
 
+/// Registry lifecycle state machine.
+///
+/// Mode A (`serve`) and Mode B (`handle_serverless_request` -> `Serverless(...)`)
+/// are mutually exclusive per instance: both transition out of `Registering`.
+/// `BuildingServerless` is a sentinel held across the `into_serverless_runtime`
+/// `.await` so a concurrent `shutdown()` can observe an in-flight build and
+/// either wait for it to settle into `Serverless(_)` (then tear it down) or
+/// transition directly to `ShutDown` while the build-side checks terminal
+/// state before installing.
+enum RegistryState {
+	Registering(NativeCoreRegistry),
+	BuildingServerless,
+	Serving,
+	Serverless(CoreServerlessRuntime),
+	ShuttingDown,
+	ShutDown,
+}
+
 #[napi]
 #[derive(Clone)]
 pub struct CoreRegistry {
-	// Registration is a synchronous N-API boundary; the lock is released before
-	// async serving begins.
-	inner: Arc<Mutex<Option<NativeCoreRegistry>>>,
-	serverless_runtime: Arc<Mutex<Option<CoreServerlessRuntime>>>,
+	state: Arc<TokioMutex<RegistryState>>,
+	shutdown_token: CoreCancellationToken,
+	/// Notified whenever the state transitions out of `BuildingServerless`
+	/// (to `Serverless(_)` on success, or `ShutDown` on failure/shutdown).
+	/// Lets concurrent `ensure_serverless_runtime` callers that arrive during
+	/// a build wait for the build to settle and then re-check the fast path
+	/// instead of erroring with a misleading mode-conflict.
+	build_complete: Arc<Notify>,
 }
 
 #[napi]
@@ -82,19 +105,31 @@ impl CoreRegistry {
 		crate::init_tracing(None);
 		tracing::debug!(class = "CoreRegistry", "constructed napi class");
 		Self {
-			inner: Arc::new(Mutex::new(Some(NativeCoreRegistry::new()))),
-			serverless_runtime: Arc::new(Mutex::new(None)),
+			state: Arc::new(TokioMutex::new(RegistryState::Registering(
+				NativeCoreRegistry::new(),
+			))),
+			shutdown_token: CoreCancellationToken::new(),
+			build_complete: Arc::new(Notify::new()),
 		}
 	}
 
 	#[napi]
 	pub fn register(&self, name: String, factory: &NapiActorFactory) -> napi::Result<()> {
-		let mut guard = self.inner.lock();
-		let registry = guard
-			.as_mut()
-			.ok_or_else(|| registry_already_serving_error())?;
-		registry.register_shared(&name, factory.actor_factory());
-		Ok(())
+		// Registration runs on the sync N-API thread before any async work.
+		// `try_lock` must always succeed here: no other path holds the lock at
+		// this point. If somehow contended, surface the structured error rather
+		// than blocking.
+		let mut guard = self
+			.state
+			.try_lock()
+			.map_err(|_| registry_register_busy_error())?;
+		match &mut *guard {
+			RegistryState::Registering(registry) => {
+				registry.register_shared(&name, factory.actor_factory());
+				Ok(())
+			}
+			_ => Err(registry_not_registering_error()),
+		}
 	}
 
 	#[napi]
@@ -109,34 +144,90 @@ impl CoreRegistry {
 			"serving native registry"
 		);
 		let registry = {
-			let mut guard = self.inner.lock();
-			guard
-				.take()
-				.ok_or_else(|| registry_already_serving_error())?
+			let mut guard = self.state.lock().await;
+			match std::mem::replace(&mut *guard, RegistryState::Serving) {
+				RegistryState::Registering(registry) => registry,
+				other => {
+					// Restore prior state so later shutdown sees the right variant.
+					*guard = other;
+					return Err(registry_not_registering_error());
+				}
+			}
 		};
 
 		registry
-			.serve_with_config(ServeConfig {
-				version: config.version,
-				endpoint: config.endpoint,
-				token: config.token,
-				namespace: config.namespace,
-				pool_name: config.pool_name,
-				engine_binary_path: config.engine_binary_path.map(PathBuf::from),
-				handle_inspector_http_in_runtime: config
-					.handle_inspector_http_in_runtime
-					.unwrap_or(false),
-				serverless_base_path: config.serverless_base_path,
-				serverless_package_version: config.serverless_package_version,
-				serverless_client_endpoint: config.serverless_client_endpoint,
-				serverless_client_namespace: config.serverless_client_namespace,
-				serverless_client_token: config.serverless_client_token,
-				serverless_validate_endpoint: config.serverless_validate_endpoint,
-				serverless_max_start_payload_bytes: config.serverless_max_start_payload_bytes
-					as usize,
-			})
+			.serve_with_config(
+				ServeConfig {
+					version: config.version,
+					endpoint: config.endpoint,
+					token: config.token,
+					namespace: config.namespace,
+					pool_name: config.pool_name,
+					engine_binary_path: config.engine_binary_path.map(PathBuf::from),
+					handle_inspector_http_in_runtime: config
+						.handle_inspector_http_in_runtime
+						.unwrap_or(false),
+					serverless_base_path: config.serverless_base_path,
+					serverless_package_version: config.serverless_package_version,
+					serverless_client_endpoint: config.serverless_client_endpoint,
+					serverless_client_namespace: config.serverless_client_namespace,
+					serverless_client_token: config.serverless_client_token,
+					serverless_validate_endpoint: config.serverless_validate_endpoint,
+					serverless_max_start_payload_bytes: config.serverless_max_start_payload_bytes
+						as usize,
+				},
+				self.shutdown_token.clone(),
+			)
 			.await
 			.map_err(napi_anyhow_error)
+	}
+
+	/// Trip the shutdown token and tear down any live serverless runtime.
+	///
+	/// Idempotent. Safe to call when neither mode has been activated.
+	/// Does not block on the `serve()` future; TS awaits that promise
+	/// separately to avoid re-entrancy.
+	#[napi]
+	pub async fn shutdown(&self) -> napi::Result<()> {
+		tracing::debug!(class = "CoreRegistry", "shutdown requested");
+		// Trip the cancel first, outside the lock, so a `serve_with_config`
+		// already past the state transition observes cancel promptly.
+		self.shutdown_token.cancel();
+
+		let (runtime, was_building) = {
+			let mut guard = self.state.lock().await;
+			match std::mem::replace(&mut *guard, RegistryState::ShuttingDown) {
+				RegistryState::Registering(_) | RegistryState::Serving => (None, false),
+				RegistryState::Serverless(runtime) => (Some(runtime), false),
+				RegistryState::BuildingServerless => {
+					// An `ensure_serverless_runtime` call is mid-build. Its
+					// post-build re-check will observe `shutdown_token` and
+					// tear down the runtime itself before settling state.
+					(None, true)
+				}
+				RegistryState::ShuttingDown | RegistryState::ShutDown => {
+					// Already in progress / done.
+					*guard = RegistryState::ShutDown;
+					return Ok(());
+				}
+			}
+		};
+
+		if let Some(runtime) = runtime {
+			runtime.shutdown().await;
+		}
+
+		if !was_building {
+			let mut guard = self.state.lock().await;
+			*guard = RegistryState::ShutDown;
+		}
+		// Wake any `ensure_serverless_runtime` waiters parked on
+		// `BuildingServerless`. They re-check state and observe the shutdown.
+		// Also covers the case where `was_building` is true: the builder
+		// itself is not a waiter, but future callers that arrive while the
+		// builder is draining need to see `ShuttingDown` and error promptly.
+		self.build_complete.notify_waiters();
+		Ok(())
 	}
 
 	#[napi(ts_return_type = "Promise<JsServerlessResponseHead>")]
@@ -208,17 +299,63 @@ impl CoreRegistry {
 		&self,
 		config: JsServeConfig,
 	) -> napi::Result<CoreServerlessRuntime> {
-		if let Some(runtime) = self.serverless_runtime.lock().as_ref().cloned() {
-			return Ok(runtime);
-		}
+		// Loop handles the "another caller is mid-build" case: arm the notify
+		// before re-checking so we can't miss a wakeup, then wait for the
+		// builder to transition out of `BuildingServerless`.
+		loop {
+			{
+				let guard = self.state.lock().await;
+				if let RegistryState::Serverless(runtime) = &*guard {
+					return Ok(runtime.clone());
+				}
+				if matches!(
+					*guard,
+					RegistryState::ShuttingDown | RegistryState::ShutDown
+				) {
+					return Err(registry_shut_down_error());
+				}
+				if matches!(*guard, RegistryState::Serving) {
+					return Err(registry_wrong_mode_error());
+				}
+				if matches!(*guard, RegistryState::BuildingServerless) {
+					// Another caller is building. Arm the notification before
+					// dropping the lock so a completion we race against still
+					// wakes us.
+					let notify = self.build_complete.clone();
+					let notified = notify.notified();
+					tokio::pin!(notified);
+					notified.as_mut().enable();
+					drop(guard);
+					notified.await;
+					continue;
+				}
+				// RegistryState::Registering(_): fall through to build.
+			}
 
-		let registry = {
-			let mut guard = self.inner.lock();
-			guard
-				.take()
-				.ok_or_else(|| registry_already_serving_error())?
-		};
-		let runtime = registry
+			// Transition Registering -> BuildingServerless, drop lock, build,
+			// re-acquire, install or tear down based on terminal state.
+			let registry = {
+				let mut guard = self.state.lock().await;
+				match std::mem::replace(&mut *guard, RegistryState::BuildingServerless) {
+					RegistryState::Registering(registry) => registry,
+					other => {
+						// State changed under us between fast-path and here;
+						// restore and re-evaluate.
+						*guard = other;
+						continue;
+					}
+				}
+			};
+			return self.build_serverless_runtime(registry, config).await;
+		}
+	}
+
+	async fn build_serverless_runtime(
+		&self,
+		registry: NativeCoreRegistry,
+		config: JsServeConfig,
+	) -> napi::Result<CoreServerlessRuntime> {
+		let build_result = registry
 			.into_serverless_runtime(ServeConfig {
 				version: config.version,
 				endpoint: config.endpoint,
@@ -238,10 +375,48 @@ impl CoreRegistry {
 				serverless_max_start_payload_bytes: config.serverless_max_start_payload_bytes
 					as usize,
 			})
-			.await
-			.map_err(napi_anyhow_error)?;
-		*self.serverless_runtime.lock() = Some(runtime.clone());
-		Ok(runtime)
+			.await;
+
+		// Re-acquire the lock and re-check state. Shutdown may have run during
+		// the build. If so, tear down the freshly-built runtime rather than
+		// installing it, preventing an orphaned runtime post-shutdown.
+		let mut guard = self.state.lock().await;
+		let result = match build_result {
+			Ok(runtime) => {
+				if self.shutdown_token.is_cancelled()
+					|| matches!(
+						*guard,
+						RegistryState::ShuttingDown | RegistryState::ShutDown
+					) {
+					// Drop the lock while we drain the envoy.
+					drop(guard);
+					runtime.shutdown().await;
+					let mut guard = self.state.lock().await;
+					*guard = RegistryState::ShutDown;
+					drop(guard);
+					Err(registry_shut_down_error())
+				} else {
+					*guard = RegistryState::Serverless(runtime.clone());
+					drop(guard);
+					Ok(runtime)
+				}
+			}
+			Err(error) => {
+				// Build failed. The inner `NativeCoreRegistry` was consumed by
+				// `into_serverless_runtime` and cannot be restored. Any future
+				// call on this `CoreRegistry` must observe a terminal state
+				// with a clear error, not the misleading `wrong_mode` that
+				// leaving `BuildingServerless` would produce.
+				*guard = RegistryState::ShutDown;
+				drop(guard);
+				Err(napi_anyhow_error(error))
+			}
+		};
+		// Wake any `ensure_serverless_runtime` callers parked on
+		// `BuildingServerless`. They re-check state and either get the cached
+		// runtime or the shutdown error.
+		self.build_complete.notify_waiters();
+		result
 	}
 }
 
@@ -291,11 +466,41 @@ impl From<ServerlessStreamError> for JsServerlessStreamError {
 	}
 }
 
-fn registry_already_serving_error() -> napi::Error {
+fn registry_not_registering_error() -> napi::Error {
 	napi_anyhow_error(
 		NapiInvalidState {
 			state: "core registry".to_owned(),
-			reason: "already serving".to_owned(),
+			reason: "already serving or shut down".to_owned(),
+		}
+		.build(),
+	)
+}
+
+fn registry_wrong_mode_error() -> napi::Error {
+	napi_anyhow_error(
+		NapiInvalidState {
+			state: "core registry".to_owned(),
+			reason: "mode conflict: another run mode is already active".to_owned(),
+		}
+		.build(),
+	)
+}
+
+fn registry_shut_down_error() -> napi::Error {
+	napi_anyhow_error(
+		NapiInvalidState {
+			state: "core registry".to_owned(),
+			reason: "shut down".to_owned(),
+		}
+		.build(),
+	)
+}
+
+fn registry_register_busy_error() -> napi::Error {
+	napi_anyhow_error(
+		NapiInvalidState {
+			state: "core registry".to_owned(),
+			reason: "register called concurrently with serve or shutdown".to_owned(),
 		}
 		.build(),
 	)

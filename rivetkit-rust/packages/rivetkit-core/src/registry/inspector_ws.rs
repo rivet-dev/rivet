@@ -3,6 +3,7 @@ use super::http::authorization_bearer_token_map;
 use super::inspector::*;
 use super::websocket::{closing_websocket_handler, websocket_inspector_token};
 use super::*;
+use tracing::Instrument;
 
 /// Aborts the wrapped task on drop. Ensures the overlay task cannot outlive
 /// the websocket handler even if `on_close` never fires (for example when the
@@ -23,6 +24,7 @@ impl RegistryDispatcher {
 		_request: &HttpRequest,
 		headers: &HashMap<String, String>,
 	) -> Result<WebSocketHandler> {
+		tracing::info!(actor_id, "inspector WS: handler invoked, verifying auth");
 		if InspectorAuth::new()
 			.verify(
 				&instance.ctx,
@@ -38,6 +40,7 @@ impl RegistryDispatcher {
 			);
 			return Ok(closing_websocket_handler(1008, "inspector.unauthorized"));
 		}
+		tracing::info!(actor_id, "inspector WS: auth passed, building handler");
 
 		let dispatcher = self.clone();
 		// Forced-sync: inspector websocket slots are filled/cleared inside
@@ -53,11 +56,20 @@ impl RegistryDispatcher {
 		let on_message_instance = instance.clone();
 		let on_message_dispatcher = dispatcher.clone();
 
+		let on_message_actor_id = actor_id.to_owned();
+		let on_close_actor_id = actor_id.to_owned();
+		let on_open_actor_id = actor_id.to_owned();
 		Ok(WebSocketHandler {
 			on_message: Box::new(move |message: WebSocketMessage| {
 				let dispatcher = on_message_dispatcher.clone();
 				let instance = on_message_instance.clone();
+				let actor_id = on_message_actor_id.clone();
 				Box::pin(async move {
+					tracing::info!(
+						actor_id = %actor_id,
+						bytes = message.data.len(),
+						"inspector WS: on_message fired"
+					);
 					dispatcher
 						.handle_inspector_websocket_message(
 							&instance,
@@ -67,11 +79,18 @@ impl RegistryDispatcher {
 						.await;
 				})
 			}),
-			on_close: Box::new(move |_code, _reason| {
+			on_close: Box::new(move |code, reason| {
 				let slot = subscription_slot.clone();
 				let overlay_slot = overlay_task_slot.clone();
 				let attach_slot = attach_guard_slot.clone();
+				let actor_id = on_close_actor_id.clone();
 				Box::pin(async move {
+					tracing::info!(
+						actor_id = %actor_id,
+						?code,
+						?reason,
+						"inspector WS: on_close fired"
+					);
 					let mut guard = slot.lock();
 					guard.take();
 					let mut overlay_guard = overlay_slot.lock();
@@ -81,7 +100,9 @@ impl RegistryDispatcher {
 				})
 			}),
 			on_open: Some(Box::new(move |open_sender| {
+				let actor_id = on_open_actor_id.clone();
 				Box::pin(async move {
+					tracing::info!(actor_id = %actor_id, "inspector WS: on_open fired, building init");
 					match on_open_dispatcher
 						.inspector_init_message(&on_open_instance)
 						.await
@@ -93,6 +114,7 @@ impl RegistryDispatcher {
 									.close(Some(1011), Some("inspector.init_error".to_owned()));
 								return;
 							}
+							tracing::info!(actor_id = %actor_id, "inspector WS: init message sent");
 						}
 						Err(error) => {
 							tracing::error!(?error, "failed to build inspector init message");
@@ -118,42 +140,49 @@ impl RegistryDispatcher {
 						*guard = Some(attach_guard);
 					}
 					let overlay_sender = open_sender.clone();
-					let overlay_task = tokio::spawn(async move {
-						loop {
-							match overlay_rx.recv().await {
-								Ok(payload) => match decode_inspector_overlay_state(&payload) {
-									Ok(Some(state)) => {
-										if let Err(error) = send_inspector_message(
-											&overlay_sender,
-											&InspectorServerMessage::StateUpdated(
-												inspector_protocol::StateUpdated { state },
-											),
-										) {
+					let overlay_actor_id = on_open_instance.ctx.actor_id().to_owned();
+					let overlay_task = tokio::spawn(
+						async move {
+							loop {
+								match overlay_rx.recv().await {
+									Ok(payload) => match decode_inspector_overlay_state(&payload) {
+										Ok(Some(state)) => {
+											if let Err(error) = send_inspector_message(
+												&overlay_sender,
+												&InspectorServerMessage::StateUpdated(
+													inspector_protocol::StateUpdated { state },
+												),
+											) {
+												tracing::error!(
+													?error,
+													"failed to push inspector overlay update"
+												);
+												break;
+											}
+										}
+										Ok(None) => {}
+										Err(error) => {
 											tracing::error!(
 												?error,
-												"failed to push inspector overlay update"
+												"failed to decode inspector overlay update"
 											);
-											break;
 										}
-									}
-									Ok(None) => {}
-									Err(error) => {
-										tracing::error!(
-											?error,
-											"failed to decode inspector overlay update"
+									},
+									Err(broadcast::error::RecvError::Lagged(skipped)) => {
+										tracing::warn!(
+											skipped,
+											"inspector overlay subscriber lagged; waiting for next sync"
 										);
 									}
-								},
-								Err(broadcast::error::RecvError::Lagged(skipped)) => {
-									tracing::warn!(
-										skipped,
-										"inspector overlay subscriber lagged; waiting for next sync"
-									);
+									Err(broadcast::error::RecvError::Closed) => break,
 								}
-								Err(broadcast::error::RecvError::Closed) => break,
 							}
 						}
-					});
+						.instrument(tracing::info_span!(
+							"inspector_ws",
+							actor_id = %overlay_actor_id,
+						)),
+					);
 					let mut overlay_guard = on_open_overlay_slot.lock();
 					*overlay_guard = Some(AbortOnDropTask(overlay_task));
 
@@ -170,32 +199,39 @@ impl RegistryDispatcher {
 								let dispatcher = listener_dispatcher.clone();
 								let instance = listener_instance.clone();
 								let sender = listener_sender.clone();
-								tokio::spawn(async move {
-									match dispatcher
-										.inspector_push_message_for_signal(&instance, signal)
-										.await
-									{
-										Ok(Some(message)) => {
-											if let Err(error) =
-												send_inspector_message(&sender, &message)
-											{
+								let actor_id = instance.ctx.actor_id().to_owned();
+								tokio::spawn(
+									async move {
+										match dispatcher
+											.inspector_push_message_for_signal(&instance, signal)
+											.await
+										{
+											Ok(Some(message)) => {
+												if let Err(error) =
+													send_inspector_message(&sender, &message)
+												{
+													tracing::error!(
+														?error,
+														?signal,
+														"failed to push inspector websocket update"
+													);
+												}
+											}
+											Ok(None) => {}
+											Err(error) => {
 												tracing::error!(
 													?error,
 													?signal,
-													"failed to push inspector websocket update"
+													"failed to build inspector websocket update"
 												);
 											}
 										}
-										Ok(None) => {}
-										Err(error) => {
-											tracing::error!(
-												?error,
-												?signal,
-												"failed to build inspector websocket update"
-											);
-										}
 									}
-								});
+									.instrument(tracing::info_span!(
+										"inspector_ws",
+										actor_id = %actor_id,
+									)),
+								);
 							}));
 					let mut guard = on_open_slot.lock();
 					*guard = Some(subscription);
@@ -211,28 +247,67 @@ impl RegistryDispatcher {
 		payload: &[u8],
 	) {
 		let response = match inspector_protocol::decode_client_message(payload) {
-			Ok(message) => match self
-				.process_inspector_websocket_message(instance, message)
-				.await
-			{
-				Ok(response) => response,
-				Err(error) => Some(InspectorServerMessage::Error(
+			Ok(message) => {
+				tracing::info!(
+					actor_id = %instance.ctx.actor_id(),
+					message_kind = client_message_kind(&message),
+					payload_len = payload.len(),
+					"inspector WS: decoded client message"
+				);
+				match self
+					.process_inspector_websocket_message(instance, message)
+					.await
+				{
+					Ok(response) => {
+						tracing::info!(
+							actor_id = %instance.ctx.actor_id(),
+							response_kind = response.as_ref().map(server_message_kind).unwrap_or("None"),
+							"inspector WS: processed client message"
+						);
+						response
+					}
+					Err(error) => {
+						tracing::warn!(
+							actor_id = %instance.ctx.actor_id(),
+							?error,
+							"inspector WS: process_inspector_websocket_message returned error"
+						);
+						Some(InspectorServerMessage::Error(
+							inspector_protocol::ErrorMessage {
+								message: error.to_string(),
+							},
+						))
+					}
+				}
+			}
+			Err(error) => {
+				tracing::warn!(
+					actor_id = %instance.ctx.actor_id(),
+					payload_len = payload.len(),
+					?error,
+					"inspector WS: failed to decode client message"
+				);
+				Some(InspectorServerMessage::Error(
 					inspector_protocol::ErrorMessage {
 						message: error.to_string(),
 					},
-				)),
-			},
-			Err(error) => Some(InspectorServerMessage::Error(
-				inspector_protocol::ErrorMessage {
-					message: error.to_string(),
-				},
-			)),
+				))
+			}
 		};
 
-		if let Some(response) = response
-			&& let Err(error) = send_inspector_message(sender, &response)
-		{
-			tracing::error!(?error, "failed to send inspector websocket response");
+		if let Some(response) = response {
+			match send_inspector_message(sender, &response) {
+				Ok(()) => tracing::debug!(
+					actor_id = %instance.ctx.actor_id(),
+					response_kind = server_message_kind(&response),
+					"inspector WS: sent response"
+				),
+				Err(error) => tracing::error!(
+					?error,
+					response_kind = server_message_kind(&response),
+					"failed to send inspector websocket response"
+				),
+			}
 		}
 	}
 
@@ -264,10 +339,22 @@ impl RegistryDispatcher {
 				)))
 			}
 			inspector_protocol::ClientMessage::ActionRequest(request) => {
+				tracing::info!(
+					rid = ?request.id,
+					action_name = %request.name,
+					args_len = request.args.len(),
+					"inspector WS: ActionRequest received"
+				);
 				let output = self
 					.execute_inspector_action_bytes(instance, &request.name, request.args)
 					.await
 					.map_err(ActionDispatchError::into_anyhow)?;
+				tracing::info!(
+					rid = ?request.id,
+					action_name = %request.name,
+					output_len = output.len(),
+					"inspector WS: ActionResponse ready to send"
+				);
 				Ok(Some(InspectorServerMessage::ActionResponse(
 					inspector_protocol::ActionResponse {
 						rid: request.id,
@@ -481,4 +568,42 @@ fn inspector_state_payload(ctx: &ActorContext, is_state_enabled: bool) -> Option
 	}
 	let state = ctx.state();
 	if state.is_empty() { None } else { Some(state) }
+}
+
+fn client_message_kind(message: &inspector_protocol::ClientMessage) -> &'static str {
+	use inspector_protocol::ClientMessage as C;
+	match message {
+		C::PatchStateRequest(_) => "PatchStateRequest",
+		C::StateRequest(_) => "StateRequest",
+		C::ConnectionsRequest(_) => "ConnectionsRequest",
+		C::ActionRequest(_) => "ActionRequest",
+		C::RpcsListRequest(_) => "RpcsListRequest",
+		C::TraceQueryRequest(_) => "TraceQueryRequest",
+		C::QueueRequest(_) => "QueueRequest",
+		C::WorkflowHistoryRequest(_) => "WorkflowHistoryRequest",
+		C::WorkflowReplayRequest(_) => "WorkflowReplayRequest",
+		C::DatabaseSchemaRequest(_) => "DatabaseSchemaRequest",
+		C::DatabaseTableRowsRequest(_) => "DatabaseTableRowsRequest",
+	}
+}
+
+fn server_message_kind(message: &InspectorServerMessage) -> &'static str {
+	match message {
+		InspectorServerMessage::Init(_) => "Init",
+		InspectorServerMessage::StateResponse(_) => "StateResponse",
+		InspectorServerMessage::StateUpdated(_) => "StateUpdated",
+		InspectorServerMessage::ConnectionsResponse(_) => "ConnectionsResponse",
+		InspectorServerMessage::ConnectionsUpdated(_) => "ConnectionsUpdated",
+		InspectorServerMessage::ActionResponse(_) => "ActionResponse",
+		InspectorServerMessage::RpcsListResponse(_) => "RpcsListResponse",
+		InspectorServerMessage::TraceQueryResponse(_) => "TraceQueryResponse",
+		InspectorServerMessage::QueueResponse(_) => "QueueResponse",
+		InspectorServerMessage::QueueUpdated(_) => "QueueUpdated",
+		InspectorServerMessage::WorkflowHistoryResponse(_) => "WorkflowHistoryResponse",
+		InspectorServerMessage::WorkflowHistoryUpdated(_) => "WorkflowHistoryUpdated",
+		InspectorServerMessage::WorkflowReplayResponse(_) => "WorkflowReplayResponse",
+		InspectorServerMessage::DatabaseSchemaResponse(_) => "DatabaseSchemaResponse",
+		InspectorServerMessage::DatabaseTableRowsResponse(_) => "DatabaseTableRowsResponse",
+		InspectorServerMessage::Error(_) => "Error",
+	}
 }

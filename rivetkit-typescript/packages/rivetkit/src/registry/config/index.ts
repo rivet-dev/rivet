@@ -169,6 +169,40 @@ export const RegistryConfigSchema = z
 		envoy: EnvoyConfigSchema.optional().default(() =>
 			EnvoyConfigSchema.parse({}),
 		),
+
+		// MARK: Shutdown
+		/**
+		 * Graceful shutdown configuration for SIGINT/SIGTERM.
+		 *
+		 * When a persistent envoy is running (Mode A, started via `registry.start()`),
+		 * rivetkit installs Node SIGINT/SIGTERM handlers that call into core's
+		 * `shutdown()` and wait up to `gracePeriodMs` for the envoy to drain
+		 * before re-raising the signal to let Node exit via its default path.
+		 *
+		 * Handlers are NOT installed when `handler(request)` is used alone
+		 * (Mode B / serverless): platform runtimes (Cloudflare Workers, Vercel,
+		 * Deno Deploy) own their own signal policy there, and `process.on` may
+		 * not exist.
+		 */
+		shutdown: z
+			.object({
+				/**
+				 * Wait this many milliseconds for the serve promise to resolve
+				 * after calling `CoreRegistry::shutdown()`. Defaults to 30s,
+				 * matching Kubernetes `terminationGracePeriodSeconds`.
+				 *
+				 * Must be >= rivetkit-core's drain timeout (20s) + margin.
+				 */
+				gracePeriodMs: z.number().int().min(1_000).optional().default(30_000),
+				/**
+				 * If true, rivetkit will not install SIGINT/SIGTERM handlers.
+				 * Use when the host application owns signal policy and will
+				 * call `nativeRegistry.shutdown()` itself.
+				 */
+				disableSignalHandlers: z.boolean().optional().default(false),
+			})
+			.optional()
+			.default(() => ({ gracePeriodMs: 30_000, disableSignalHandlers: false })),
 	})
 	.transform((config, ctx) => {
 		const isDevEnv = isDev();
