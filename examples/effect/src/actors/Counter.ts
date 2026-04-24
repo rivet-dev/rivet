@@ -85,6 +85,9 @@ export const CounterLive = Counter.toLayer(
 		const kv = yield* Counter.Kv
 		const db = yield* Counter.Db
 
+		// Equivalent to current SDK's temporary variables
+		const connectionsTotal = yield* Ref.make(0)
+
 		// Finalizers run when the actor's scope closes
 		yield* Effect.addFinalizer(() =>
 			Effect.log("Counter destroyed? or/and sleep? (TBD)")
