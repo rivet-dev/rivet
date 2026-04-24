@@ -26,6 +26,7 @@ export const Route = createFileRoute(
 				throw new Error("Invalid context type for this route");
 			});
 	},
+	loader: ({ context }) => ({ dataProvider: context.dataProvider }),
 	errorComponent: RouteError,
 	pendingMinMs: 0,
 	pendingMs: 0,

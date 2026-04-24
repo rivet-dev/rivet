@@ -1,9 +1,4 @@
-import {
-	type RegisteredRouter,
-	type RouteIds,
-	useMatchRoute,
-	useRouteContext,
-} from "@tanstack/react-router";
+import { useLoaderData, useMatchRoute } from "@tanstack/react-router";
 import type {
 	createGlobalContext as createGlobalCloudContext,
 	createNamespaceContext as createNamespaceCloudContext,
@@ -27,15 +22,16 @@ type CloudDataProvider = ReturnType<typeof createNamespaceCloudContext> &
 export const useDataProvider = (): EngineDataProvider | CloudDataProvider => {
 	if (features.multitenancy) {
 		// biome-ignore lint/correctness/useHookAtTopLevel: guarded by build constant
-		return useRouteContext({
+		return useLoaderData({
 			from: "/_context/orgs/$organization/projects/$project/ns/$namespace",
-			select: (ctx) => ctx.dataProvider,
+			select: (d) => d.dataProvider,
 		}) as CloudDataProvider;
 	}
 	// biome-ignore lint/correctness/useHookAtTopLevel: guarded by build constant
-	return useRouteContext({
+	return useLoaderData({
 		from: "/_context/ns/$namespace",
-	}).dataProvider as EngineDataProvider;
+		select: (d) => d.dataProvider,
+	}) as EngineDataProvider;
 };
 
 export const useDataProviderCheck = () => {
@@ -49,50 +45,51 @@ export const useDataProviderCheck = () => {
 };
 
 export const useEngineDataProvider = () => {
-	return useRouteContext({
+	return useLoaderData({
 		from: "/_context",
-	}).dataProvider;
+		select: (d) => d.dataProvider,
+	});
 };
 
 export const useEngineNamespaceDataProvider = () => {
-	return useRouteContext({
+	return useLoaderData({
 		from: "/_context/ns/$namespace",
-	}).dataProvider;
+		select: (d) => d.dataProvider,
+	});
 };
 
-type OnlyCloudRouteIds = Extract<
-	RouteIds<RegisteredRouter["routeTree"]>,
-	`/_context/orgs/${string}`
->;
-
-export const useCloudDataProvider = ({
-	from = "/_context/orgs/$organization",
-}: {
-	from?: OnlyCloudRouteIds;
-} = {}) => {
-	return useRouteContext({
-		from,
-	}).dataProvider;
+export const useCloudDataProvider = () => {
+	return useLoaderData({
+		from: "/_context/orgs/$organization",
+		select: (d) => d.dataProvider,
+	});
 };
 
 export const useCloudProjectDataProvider = () => {
-	return useRouteContext({
+	return useLoaderData({
 		from: "/_context/orgs/$organization/projects/$project",
-	}).dataProvider;
+		select: (d) => d.dataProvider,
+	});
 };
 
 export const useCloudNamespaceDataProvider = () => {
-	return useRouteContext({
+	return useLoaderData({
 		from: "/_context/orgs/$organization/projects/$project/ns/$namespace",
-	}).dataProvider;
+		select: (d) => d.dataProvider,
+	});
 };
 
 export const useEngineCompatDataProvider = () => {
-	const routePath = features.multitenancy
-		? ("/_context/orgs/$organization/projects/$project/ns/$namespace" as const)
-		: ("/_context/ns/$namespace" as const);
-
-	return useRouteContext({
-		from: routePath,
-	}).dataProvider as EngineDataProvider | CloudDataProvider;
+	if (features.multitenancy) {
+		// biome-ignore lint/correctness/useHookAtTopLevel: guarded by build constant
+		return useLoaderData({
+			from: "/_context/orgs/$organization/projects/$project/ns/$namespace",
+			select: (d) => d.dataProvider,
+		}) as EngineDataProvider | CloudDataProvider;
+	}
+	// biome-ignore lint/correctness/useHookAtTopLevel: guarded by build constant
+	return useLoaderData({
+		from: "/_context/ns/$namespace",
+		select: (d) => d.dataProvider,
+	}) as EngineDataProvider | CloudDataProvider;
 };
