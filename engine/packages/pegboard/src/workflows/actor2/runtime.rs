@@ -596,19 +596,49 @@ pub async fn handle_stopped(
 			StoppedResult::Continue
 		}
 		Decision::Sleep => {
-			// Clear alarm
-			if let Some(alarm_ts) = state.alarm_ts {
+			let overdue_alarm = if let Some(alarm_ts) = state.alarm_ts {
 				let now = ctx.activity(GetTsInput {}).await?;
-
 				if now >= alarm_ts {
 					state.alarm_ts = None;
+					true
+				} else {
+					false
 				}
+			} else {
+				false
+			};
+
+			if overdue_alarm {
+				let allocate_res = ctx.activity(AllocateInput {}).await?;
+
+				if let Some(allocation) = allocate_res.allocation {
+					state.generation += 1;
+
+					ctx.activity(SendOutboundInput {
+						generation: state.generation,
+						input: input.input.clone(),
+						allocation,
+					})
+					.await?;
+
+					state.transition = Transition::Allocating {
+						destroy_after_start: false,
+						lost_timeout_ts: allocate_res.now
+							+ ctx.config().pegboard().actor_allocation_threshold(),
+					};
+				} else {
+					state.transition = Transition::Reallocating {
+						since_ts: allocate_res.now,
+					};
+				}
+
+				StoppedResult::Continue
+			} else {
+				// Transition to sleeping
+				state.transition = Transition::Sleeping;
+
+				StoppedResult::Continue
 			}
-
-			// Transition to sleeping
-			state.transition = Transition::Sleeping;
-
-			StoppedResult::Continue
 		}
 		Decision::Destroy => StoppedResult::Destroy,
 	};
