@@ -9,6 +9,9 @@ use rivet_envoy_client::config::EnvoyConfig;
 use rivet_envoy_client::envoy::start_envoy;
 use rivet_envoy_client::handle::EnvoyHandle;
 use rivet_envoy_client::protocol;
+use rivetkit_shared_types::serverless_metadata::{
+	ActorName, ServerlessMetadataEnvoy, ServerlessMetadataPayload,
+};
 use serde::Serialize;
 use serde_json::json;
 use subtle::ConstantTimeEq;
@@ -308,22 +311,38 @@ impl CoreServerlessRuntime {
 						],
 					}),
 				);
-				(actor_name.clone(), json!({ "metadata": metadata }))
+				(
+					actor_name.clone(),
+					ActorName {
+						metadata: Some(serde_json::Value::Object(metadata)),
+					},
+				)
 			})
-			.collect::<serde_json::Map<_, _>>();
+			.collect::<HashMap<_, _>>();
 
-		let mut response = json!({
-			"runtime": "rivetkit",
-			"version": self.settings.package_version,
-			"envoy": {
-				"kind": { "serverless": {} },
-				"version": self.settings.version,
-			},
-			"envoyProtocolVersion": protocol::PROTOCOL_VERSION,
-			"actorNames": actor_names,
-		});
+		let payload = ServerlessMetadataPayload {
+			runtime: "rivetkit".to_owned(),
+			version: self.settings.package_version.clone(),
+			envoy_protocol_version: Some(protocol::PROTOCOL_VERSION),
+			actor_names,
+			envoy: Some(ServerlessMetadataEnvoy {
+				version: Some(self.settings.version),
+			}),
+			runner: None,
+		};
+
+		let mut response = serde_json::to_value(payload).unwrap_or_else(|_| json!({}));
 
 		if let serde_json::Value::Object(object) = &mut response {
+			if object.get("runner").is_some_and(serde_json::Value::is_null) {
+				object.remove("runner");
+			}
+			if let Some(envoy) = object
+				.get_mut("envoy")
+				.and_then(|value| value.as_object_mut())
+			{
+				envoy.insert("kind".to_owned(), json!({ "serverless": {} }));
+			}
 			if let Some(client_endpoint) = &self.settings.client_endpoint {
 				object.insert("clientEndpoint".to_owned(), json!(client_endpoint));
 			}

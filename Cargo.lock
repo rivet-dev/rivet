@@ -3423,6 +3423,7 @@ dependencies = [
  "rivet-test-deps",
  "rivet-types",
  "rivet-util",
+ "rivetkit-shared-types",
  "serde",
  "serde_bare",
  "serde_json",
@@ -5245,6 +5246,7 @@ dependencies = [
  "rivet-util",
  "rivetkit-client-protocol",
  "rivetkit-inspector-protocol",
+ "rivetkit-shared-types",
  "rivetkit-sqlite",
  "scc",
  "serde",
@@ -5294,6 +5296,14 @@ dependencies = [
  "tokio-util",
  "tracing",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "rivetkit-shared-types"
+version = "2.3.0-rc.4"
+dependencies = [
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
