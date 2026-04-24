@@ -272,19 +272,18 @@ function buildInspectorTokenErrorMessage(
 
 	const isLocal = metadata?.type === "local";
 
-	// 403: Token not set in run config (deployed only)
+	// 403: Inspector auth rejected (deployed only).
 	if (statusCode === 403 && !isLocal) {
 		return (
 			<Info>
 				<p>
-					Inspector token not configured. To enable the Inspector in
-					your deployed environment, set the token in your run config:
+					Inspector authentication failed. The dashboard fetches the
+					per-actor inspector token from the engine KV API; this
+					typically indicates a permissions or configuration issue
+					with the request.
 				</p>
-				<code className="block bg-gray-100 p-3 rounded mt-2 text-sm">
-					RIVET_INSPECTOR_TOKEN=&lt;your-token&gt;
-				</code>
 				<p className="mt-2 text-sm text-gray-600">
-					See{" "}
+					See the{" "}
 					<a
 						href="https://rivet.dev/docs/actors/inspector"
 						className="text-blue-600 hover:underline"

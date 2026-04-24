@@ -121,7 +121,9 @@ pub(crate) struct RegistryDispatcher {
 	starting_instances: SccHashMap<String, Arc<Notify>>,
 	pending_stops: SccHashMap<String, PendingStop>,
 	region: String,
-	inspector_token: Option<String>,
+	/// Shared secret gating the Prometheus `/metrics` actor endpoint. When
+	/// unset, the endpoint fails closed and is effectively disabled.
+	metrics_token: Option<String>,
 	handle_inspector_http_in_runtime: bool,
 }
 
@@ -479,7 +481,7 @@ impl RegistryDispatcher {
 			starting_instances: SccHashMap::new(),
 			pending_stops: SccHashMap::new(),
 			region: env::var("RIVET_REGION").unwrap_or_default(),
-			inspector_token: env::var("RIVET_INSPECTOR_TOKEN")
+			metrics_token: env::var("_RIVET_METRICS_TOKEN")
 				.ok()
 				.filter(|token| !token.is_empty()),
 			handle_inspector_http_in_runtime,

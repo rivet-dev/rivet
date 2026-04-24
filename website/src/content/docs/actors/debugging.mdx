@@ -269,11 +269,13 @@ Standard actor endpoints (health, actions, requests) and inspector endpoints hav
 
 #### Inspector Endpoints
 
+Each actor generates a unique inspector token on first start and persists it in its internal KV store at key `0x03` (base64 `Aw==`). Pass it as a bearer token in the `Authorization` header.
+
 | Environment | Authentication |
 |---|---|
-| **Local development** | No authentication required if `RIVET_INSPECTOR_TOKEN` is not set. A warning is logged. |
-| **Self-hosted engine** | Set the `RIVET_INSPECTOR_TOKEN` environment variable. Pass it as a bearer token in the `Authorization` header. The actor-specific inspector token used by the standalone Inspector UI is also accepted. |
-| **Rivet Cloud** | Token is required. Pass it as a bearer token in the `Authorization` header. The actor-specific inspector token used by the standalone Inspector UI is also accepted. |
+| **Local development** | No authentication required. |
+| **Self-hosted engine** | Bearer the actor's inspector token in the `Authorization` header. The Rivet dashboard fetches it automatically; for direct API access, fetch it through the management KV endpoint (see below). |
+| **Rivet Cloud** | Bearer the actor's inspector token in the `Authorization` header. The Rivet dashboard fetches it automatically; for direct API access, fetch it through the management KV endpoint (see below). |
 
 ```bash
 curl "$RIVET_API/gateway/{actor_id}/inspector/summary" \

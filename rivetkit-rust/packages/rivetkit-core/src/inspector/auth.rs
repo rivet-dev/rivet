@@ -7,7 +7,9 @@ use serde::{Deserialize, Serialize};
 use crate::ActorContext;
 
 const INSPECTOR_TOKEN_KEY: [u8; 1] = [3];
-const INSPECTOR_TOKEN_ENV: &str = "RIVET_INSPECTOR_TOKEN";
+/// Test-only override. Not a public/production auth mechanism; production
+/// inspector auth goes through the per-actor KV token at key [3].
+const INSPECTOR_TOKEN_ENV: &str = "_RIVET_TEST_INSPECTOR_TOKEN";
 const INSPECTOR_TOKEN_BYTES: usize = 32;
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -53,9 +55,9 @@ impl InspectorAuth {
 /// Ensures the actor has an inspector token persisted in KV at `[3]` so the
 /// engine-facing KV API can serve the token to the dashboard inspector.
 /// Skips the write when the token already exists. No-ops when the
-/// `RIVET_INSPECTOR_TOKEN` env override is set, since that takes precedence
-/// over any KV-stored token and we do not want to pin a per-actor token that
-/// will never be consulted.
+/// `_RIVET_TEST_INSPECTOR_TOKEN` env override is set, since that takes
+/// precedence over any KV-stored token and we do not want to pin a per-actor
+/// token that will never be consulted.
 pub async fn init_inspector_token(ctx: &ActorContext) -> Result<()> {
 	if std::env::var(INSPECTOR_TOKEN_ENV)
 		.ok()
