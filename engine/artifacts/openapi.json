@@ -2396,10 +2396,14 @@
               "invalid_response_json": {
                 "type": "object",
                 "required": [
-                  "body"
+                  "body",
+                  "parse_error"
                 ],
                 "properties": {
                   "body": {
+                    "type": "string"
+                  },
+                  "parse_error": {
                     "type": "string"
                   }
                 }
@@ -2424,6 +2428,27 @@
                   },
                   "version": {
                     "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "invalid_envoy_protocol_version"
+            ],
+            "properties": {
+              "invalid_envoy_protocol_version": {
+                "type": "object",
+                "required": [
+                  "version"
+                ],
+                "properties": {
+                  "version": {
+                    "type": "integer",
+                    "format": "int32",
+                    "minimum": 0
                   }
                 }
               }

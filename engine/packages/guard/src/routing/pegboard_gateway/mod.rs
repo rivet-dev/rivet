@@ -1,6 +1,7 @@
+mod cors;
 mod resolve_actor_query;
 
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
 use anyhow::Result;
 use gas::{ctx::message::SubscriptionHandle, prelude::*};
@@ -19,6 +20,7 @@ use crate::{
 	},
 	shared_state::SharedState,
 };
+use cors::{CorsPreflight, set_non_preflight_cors};
 use resolve_actor_query::resolve_query;
 
 const ACTOR_FORCE_WAKE_PENDING_TIMEOUT: i64 = util::duration::seconds(60);
@@ -36,11 +38,15 @@ pub const X_RIVET_ACTOR: HeaderName = HeaderName::from_static("x-rivet-actor");
 pub async fn route_request_path_based(
 	ctx: &StandaloneCtx,
 	shared_state: &SharedState,
-	req_ctx: &RequestContext,
+	req_ctx: &mut RequestContext,
 ) -> Result<Option<RoutingOutput>> {
 	let Some(actor_path) = parse_actor_path(req_ctx.path())? else {
 		return Ok(None);
 	};
+
+	if req_ctx.method() == hyper::Method::OPTIONS {
+		return Ok(Some(RoutingOutput::CustomServe(Arc::new(CorsPreflight))));
+	}
 
 	tracing::debug!(?actor_path, "routing using path-based actor routing");
 
@@ -101,12 +107,16 @@ pub async fn route_request_path_based(
 pub async fn route_request(
 	ctx: &StandaloneCtx,
 	shared_state: &SharedState,
-	req_ctx: &RequestContext,
+	req_ctx: &mut RequestContext,
 	target: &str,
 ) -> Result<Option<RoutingOutput>> {
 	// Check target
 	if target != "actor" {
 		return Ok(None);
+	}
+
+	if req_ctx.method() == hyper::Method::OPTIONS {
+		return Ok(Some(RoutingOutput::CustomServe(Arc::new(CorsPreflight))));
 	}
 
 	// Extract actor ID and token from WebSocket protocol or HTTP headers
@@ -141,7 +151,8 @@ pub async fn route_request(
 
 		let token = protocols
 			.iter()
-			.find_map(|p| p.strip_prefix(WS_PROTOCOL_TOKEN));
+			.find_map(|p| p.strip_prefix(WS_PROTOCOL_TOKEN))
+			.map(ToOwned::to_owned);
 
 		let bypass_connectable = protocols
 			.iter()
@@ -168,7 +179,8 @@ pub async fn route_request(
 			.get(X_RIVET_TOKEN)
 			.map(|x| x.to_str())
 			.transpose()
-			.context("invalid x-rivet-token header")?;
+			.context("invalid x-rivet-token header")?
+			.map(ToOwned::to_owned);
 
 		let bypass_connectable = req_ctx.headers().contains_key(X_RIVET_BYPASS_CONNECTABLE);
 
@@ -177,14 +189,15 @@ pub async fn route_request(
 
 	// Find actor to route to
 	let actor_id = Id::parse(&actor_id_str).context("invalid x-rivet-actor header")?;
+	let stripped_path = req_ctx.path().to_owned();
 
 	route_request_inner(
 		ctx,
 		shared_state,
 		req_ctx,
 		actor_id,
-		req_ctx.path(),
-		token,
+		&stripped_path,
+		token.as_deref(),
 		bypass_connectable,
 	)
 	.await
@@ -194,12 +207,17 @@ pub async fn route_request(
 async fn route_request_inner(
 	ctx: &StandaloneCtx,
 	shared_state: &SharedState,
-	req_ctx: &RequestContext,
+	req_ctx: &mut RequestContext,
 	actor_id: Id,
 	stripped_path: &str,
 	_token: Option<&str>,
 	bypass_connectable: bool,
 ) -> Result<RoutingOutput> {
+	// Attach CORS headers to the actual (non-OPTIONS) response so both the
+	// actor response and any early error (e.g. EE auth failure) are readable
+	// by the browser.
+	set_non_preflight_cors(req_ctx);
+
 	// NOTE: Token validation implemented in EE
 
 	// Route to peer dc where the actor lives
