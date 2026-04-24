@@ -23,6 +23,7 @@ rivet-pools.workspace = true
 rivet-util.workspace = true
 rivet-error.workspace = true
 rivet-envoy-client.workspace = true
+rivetkit-shared-types.workspace = true
 rivetkit-client-protocol.workspace = true
 rivetkit-inspector-protocol.workspace = true
 rivetkit-sqlite = { workspace = true, optional = true }

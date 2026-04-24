@@ -4,13 +4,18 @@
 	"tasks": {
 		"build": {
 			"inputs": [
-				"build.mjs",
+				"scripts/build.mjs",
+				"build.rs",
 				"src/**/*.rs",
 				"Cargo.toml",
-				"../../engine/sdks/rust/envoy-client/src/**/*.rs",
-				"../../engine/sdks/rust/envoy-client/Cargo.toml",
-				"../../engine/sdks/rust/envoy-protocol/src/**/*.rs",
-				"../../engine/sdks/rust/envoy-protocol/Cargo.toml"
+				"../../../Cargo.toml",
+				"../../../Cargo.lock",
+				"../../../rivetkit-rust/packages/**/src/**/*.rs",
+				"../../../rivetkit-rust/packages/**/Cargo.toml",
+				"../../../engine/packages/**/src/**/*.rs",
+				"../../../engine/packages/**/Cargo.toml",
+				"../../../engine/sdks/rust/**/src/**/*.rs",
+				"../../../engine/sdks/rust/**/Cargo.toml"
 			],
 			"outputs": ["*.node"]
 		}
