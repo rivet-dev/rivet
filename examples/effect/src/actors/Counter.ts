@@ -64,6 +64,7 @@ export const Counter = Actor.make("Counter", {
 // once per actor instance (not once per action call), so
 // yielded services like State and Events are instance-scoped.
 export const CounterLive = Counter.toLayer(
+	// Wake scope (runs each wake, finalizers run on sleep)
 	Effect.gen(function* () {
 		// Actor-provided services are yielded from the Effect context.
 		// They are scoped to this actor instance, not to individual
@@ -88,10 +89,8 @@ export const CounterLive = Counter.toLayer(
 		// Equivalent to current SDK's temporary variables
 		const connectionsTotal = yield* Ref.make(0)
 
-		// Finalizers run when the actor's scope closes
-		yield* Effect.addFinalizer(() =>
-			Effect.log("Counter destroyed? or/and sleep? (TBD)")
-		)
+		// Run when the actor sleeps
+		yield* Effect.addFinalizer(() => Effect.log("sleeping"))
 
 		// Return the action implementations. Counter.of
 		// type-checks each handler against its Action schema.
