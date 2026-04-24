@@ -9,7 +9,7 @@ use prometheus::{
 	Opts, Registry, TextEncoder,
 };
 
-use crate::actor::task_types::{StateMutationReason, StopReason, UserTaskKind};
+use crate::actor::task_types::{ShutdownKind, StateMutationReason, UserTaskKind};
 
 #[derive(Clone)]
 pub(crate) struct ActorMetrics {
@@ -216,7 +216,7 @@ impl ActorMetrics {
 		for reason in StateMutationReason::ALL {
 			state_mutation_total.with_label_values(&[reason.as_metric_label()]);
 		}
-		for reason in [StopReason::Sleep, StopReason::Destroy] {
+		for reason in [ShutdownKind::Sleep, ShutdownKind::Destroy] {
 			shutdown_wait_seconds.with_label_values(&[reason.as_metric_label()]);
 			shutdown_timeout_total.with_label_values(&[reason.as_metric_label()]);
 		}
@@ -397,7 +397,7 @@ impl ActorMetrics {
 			.observe(duration.as_secs_f64());
 	}
 
-	pub(crate) fn observe_shutdown_wait(&self, reason: StopReason, duration: Duration) {
+	pub(crate) fn observe_shutdown_wait(&self, reason: ShutdownKind, duration: Duration) {
 		let Some(inner) = self.inner.as_ref().as_ref() else {
 			return;
 		};
@@ -407,7 +407,7 @@ impl ActorMetrics {
 			.observe(duration.as_secs_f64());
 	}
 
-	pub(crate) fn inc_shutdown_timeout(&self, reason: StopReason) {
+	pub(crate) fn inc_shutdown_timeout(&self, reason: ShutdownKind) {
 		let Some(inner) = self.inner.as_ref().as_ref() else {
 			return;
 		};

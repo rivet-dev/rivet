@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::actor::connection::ConnHandle;
 use crate::actor::lifecycle_hooks::Reply;
-use crate::actor::task_types::StopReason;
+use crate::actor::task_types::ShutdownKind;
 use crate::error::ProtocolError;
 use crate::types::ConnId;
 use crate::websocket::WebSocket;
@@ -308,7 +308,7 @@ pub enum ActorEvent {
 		reply: Reply<Vec<StateDelta>>,
 	},
 	RunGracefulCleanup {
-		reason: StopReason,
+		reason: ShutdownKind,
 		reply: Reply<()>,
 	},
 	DisconnectConn {
@@ -349,8 +349,8 @@ impl ActorEvent {
 				SerializeStateReason::Inspector => "serialize_state_inspector",
 			},
 			Self::RunGracefulCleanup { reason, .. } => match reason {
-				StopReason::Sleep => "run_sleep_cleanup",
-				StopReason::Destroy => "run_destroy_cleanup",
+				ShutdownKind::Sleep => "run_sleep_cleanup",
+				ShutdownKind::Destroy => "run_destroy_cleanup",
 			},
 			Self::DisconnectConn { .. } => "disconnect_conn",
 			#[cfg(test)]

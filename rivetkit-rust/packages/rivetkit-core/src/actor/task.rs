@@ -62,7 +62,7 @@ use crate::actor::state::{
 	LAST_PUSHED_ALARM_KEY, PERSIST_DATA_KEY, PersistedActor, decode_last_pushed_alarm,
 	decode_persisted_actor,
 };
-use crate::actor::task_types::StopReason;
+use crate::actor::task_types::ShutdownKind;
 use crate::error::{ActorLifecycle as ActorLifecycleError, ActorRuntime};
 use crate::types::{SaveStateOpts, format_actor_key};
 use crate::websocket::WebSocket;
@@ -96,7 +96,7 @@ static SHUTDOWN_CLEANUP_HOOK: OnceLock<Mutex<Option<ShutdownCleanupHook>>> = Onc
 pub(crate) struct ShutdownCleanupHookGuard;
 
 #[cfg(test)]
-type ShutdownReplyHook = Arc<dyn Fn(&ActorContext, StopReason) + Send + Sync>;
+type ShutdownReplyHook = Arc<dyn Fn(&ActorContext, ShutdownKind) + Send + Sync>;
 
 #[cfg(test)]
 // Forced-sync: test hooks are installed and cleared from synchronous guard APIs.
@@ -149,7 +149,7 @@ impl Drop for ShutdownReplyHookGuard {
 }
 
 #[cfg(test)]
-fn run_shutdown_reply_hook(ctx: &ActorContext, reason: StopReason) {
+fn run_shutdown_reply_hook(ctx: &ActorContext, reason: ShutdownKind) {
 	let hook = SHUTDOWN_REPLY_HOOK
 		.get_or_init(|| Mutex::new(None))
 		.lock()
@@ -164,7 +164,7 @@ pub enum LifecycleCommand {
 		reply: oneshot::Sender<Result<()>>,
 	},
 	Stop {
-		reason: StopReason,
+		reason: ShutdownKind,
 		reply: oneshot::Sender<Result<()>>,
 	},
 	FireAlarm {
@@ -184,7 +184,8 @@ impl LifecycleCommand {
 	fn stop_reason(&self) -> Option<&'static str> {
 		match self {
 			Self::Stop { reason, .. } => Some(shutdown_reason_label(*reason)),
-			_ => None,
+			Self::Start { .. } => None,
+			Self::FireAlarm { .. } => None,
 		}
 	}
 }
@@ -340,13 +341,13 @@ impl LifecycleEvent {
 }
 
 enum LiveExit {
-	Shutdown { reason: StopReason },
+	Shutdown { reason: ShutdownKind },
 	Terminated,
 }
 
 struct SleepGraceState {
 	deadline: Instant,
-	reason: StopReason,
+	reason: ShutdownKind,
 }
 
 struct PersistedStartup {
@@ -686,7 +687,7 @@ impl ActorTask {
 	}
 
 	#[cfg(test)]
-	async fn handle_stop(&mut self, reason: StopReason) -> Result<()> {
+	async fn handle_stop(&mut self, reason: ShutdownKind) -> Result<()> {
 		let (reply_tx, reply_rx) = oneshot::channel();
 		self.register_shutdown_reply("stop", Some(shutdown_reason_label(reason)), reply_tx);
 		self.begin_grace(reason).await;
@@ -747,7 +748,7 @@ impl ActorTask {
 
 	async fn begin_stop(
 		&mut self,
-		reason: StopReason,
+		reason: ShutdownKind,
 		command: &'static str,
 		command_reason: Option<&'static str>,
 		reply: oneshot::Sender<Result<()>>,
@@ -811,7 +812,7 @@ impl ActorTask {
 		}
 	}
 
-	async fn begin_grace(&mut self, reason: StopReason) {
+	async fn begin_grace(&mut self, reason: ShutdownKind) {
 		tracing::debug!(
 			actor_id = %self.ctx.actor_id(),
 			reason = shutdown_reason_label(reason),
@@ -821,17 +822,18 @@ impl ActorTask {
 		self.ctx.cancel_local_alarm_timeouts();
 		self.ctx.set_local_alarm_callback(None);
 		self.transition_to(match reason {
-			StopReason::Sleep => LifecycleState::SleepGrace,
-			StopReason::Destroy => LifecycleState::DestroyGrace,
+			ShutdownKind::Sleep => LifecycleState::SleepGrace,
+			ShutdownKind::Destroy => LifecycleState::DestroyGrace,
 		});
 		self.start_grace(reason);
 		self.emit_grace_events(reason);
 	}
 
-	fn emit_grace_events(&mut self, reason: StopReason) {
+	fn emit_grace_events(&mut self, reason: ShutdownKind) {
 		let conns: Vec<_> = self.ctx.conns().collect();
 		for conn in conns {
-			let hibernatable_sleep = matches!(reason, StopReason::Sleep) && conn.is_hibernatable();
+			let hibernatable_sleep =
+				matches!(reason, ShutdownKind::Sleep) && conn.is_hibernatable();
 			if hibernatable_sleep {
 				self.ctx.request_hibernation_transport_save(conn.id());
 				continue;
@@ -1435,10 +1437,10 @@ impl ActorTask {
 		self.ctx.configure_actor_events(None);
 	}
 
-	fn start_grace(&mut self, reason: StopReason) {
+	fn start_grace(&mut self, reason: ShutdownKind) {
 		let grace_period = match reason {
-			StopReason::Sleep => self.factory.config().effective_sleep_grace_period(),
-			StopReason::Destroy => self.factory.config().effective_on_destroy_timeout(),
+			ShutdownKind::Sleep => self.factory.config().effective_sleep_grace_period(),
+			ShutdownKind::Destroy => self.factory.config().effective_on_destroy_timeout(),
 		};
 		self.sleep_deadline = None;
 		self.ctx.cancel_sleep_timer();
@@ -1466,7 +1468,13 @@ impl ActorTask {
 				None
 			}
 			LifecycleState::SleepGrace | LifecycleState::DestroyGrace => self.try_finish_grace(),
-			_ => None,
+			// Pre-startup, post-finalize, and tear-down states intentionally
+			// drop activity signals: there is no sleep deadline to reset and no
+			// grace window left to advance.
+			LifecycleState::Loading
+			| LifecycleState::SleepFinalize
+			| LifecycleState::Destroying
+			| LifecycleState::Terminated => None,
 		}
 	}
 
@@ -1532,7 +1540,7 @@ impl ActorTask {
 	#[cfg(test)]
 	async fn drain_tracked_work(
 		&mut self,
-		reason: StopReason,
+		reason: ShutdownKind,
 		phase: &'static str,
 		deadline: Instant,
 	) -> bool {
@@ -1542,7 +1550,7 @@ impl ActorTask {
 	#[cfg(test)]
 	async fn drain_tracked_work_with_ctx(
 		ctx: ActorContext,
-		reason: StopReason,
+		reason: ShutdownKind,
 		phase: &'static str,
 		deadline: Instant,
 	) -> bool {
@@ -1617,7 +1625,7 @@ impl ActorTask {
 		});
 	}
 
-	fn deliver_shutdown_reply(&mut self, reason: StopReason, result: &Result<()>) {
+	fn deliver_shutdown_reply(&mut self, reason: ShutdownKind, result: &Result<()>) {
 		#[cfg(test)]
 		run_shutdown_reply_hook(&self.ctx, reason);
 
@@ -1637,21 +1645,21 @@ impl ActorTask {
 		);
 	}
 
-	async fn run_shutdown(&mut self, reason: StopReason) -> Result<()> {
+	async fn run_shutdown(&mut self, reason: ShutdownKind) -> Result<()> {
 		self.sleep_grace = None;
 		let started_at = Instant::now();
 		self.state_save_deadline = None;
 		self.inspector_serialize_state_deadline = None;
 		self.sleep_deadline = None;
 		self.transition_to(match reason {
-			StopReason::Sleep => LifecycleState::SleepFinalize,
-			StopReason::Destroy => LifecycleState::Destroying,
+			ShutdownKind::Sleep => LifecycleState::SleepFinalize,
+			ShutdownKind::Destroy => LifecycleState::Destroying,
 		});
 		self.save_final_state().await?;
 		self.close_actor_event_channel();
 		self.join_aborted_run_handle().await;
 		Self::finish_shutdown_cleanup_with_ctx(self.ctx.clone(), reason).await?;
-		if matches!(reason, StopReason::Destroy) {
+		if matches!(reason, ShutdownKind::Destroy) {
 			self.ctx.mark_destroy_completed();
 		}
 		self.ctx.record_shutdown_wait(reason, started_at.elapsed());
@@ -1700,7 +1708,10 @@ impl ActorTask {
 		self.ctx.save_state(deltas).await
 	}
 
-	async fn finish_shutdown_cleanup_with_ctx(ctx: ActorContext, reason: StopReason) -> Result<()> {
+	async fn finish_shutdown_cleanup_with_ctx(
+		ctx: ActorContext,
+		reason: ShutdownKind,
+	) -> Result<()> {
 		let reason_label = shutdown_reason_label(reason);
 		let actor_id = ctx.actor_id().to_owned();
 		ctx.teardown_sleep_state().await;
@@ -1747,7 +1758,7 @@ impl ActorTask {
 			// Match the reference TS runtime: keep the persisted engine alarm armed
 			// across sleep so the next instance still has a wake trigger, but abort
 			// the local Tokio timer owned by the shutting-down instance.
-			StopReason::Sleep => {
+			ShutdownKind::Sleep => {
 				ctx.cancel_local_alarm_timeouts();
 				tracing::debug!(
 					actor_id = %actor_id,
@@ -1756,7 +1767,7 @@ impl ActorTask {
 					"actor shutdown cleanup step completed"
 				);
 			}
-			StopReason::Destroy => {
+			ShutdownKind::Destroy => {
 				ctx.cancel_driver_alarm_logged();
 				tracing::debug!(
 					actor_id = %actor_id,
@@ -2106,10 +2117,10 @@ impl ActorTask {
 	}
 }
 
-fn shutdown_reason_label(reason: StopReason) -> &'static str {
+fn shutdown_reason_label(reason: ShutdownKind) -> &'static str {
 	match reason {
-		StopReason::Sleep => "sleep",
-		StopReason::Destroy => "destroy",
+		ShutdownKind::Sleep => "sleep",
+		ShutdownKind::Destroy => "destroy",
 	}
 }
 

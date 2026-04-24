@@ -2,7 +2,7 @@ use std::{fmt, io::Cursor, marker::PhantomData};
 
 use anyhow::{Context, Result as AnyhowResult};
 use ciborium::Value;
-use rivetkit_core::actor::StopReason;
+use rivetkit_core::actor::ShutdownKind;
 use rivetkit_core::error::ActorRuntime;
 use rivetkit_core::{
 	ActorEvent, QueueSendResult, QueueSendStatus, Reply, Request, Response, SerializeStateReason,
@@ -105,11 +105,11 @@ impl<A: Actor> Event<A> {
 				_p: PhantomData,
 			}),
 			ActorEvent::RunGracefulCleanup { reason, reply } => match reason {
-				StopReason::Sleep => Self::Sleep(Sleep {
+				ShutdownKind::Sleep => Self::Sleep(Sleep {
 					reply: Some(reply),
 					_p: PhantomData,
 				}),
-				StopReason::Destroy => Self::Destroy(Destroy {
+				ShutdownKind::Destroy => Self::Destroy(Destroy {
 					reply: Some(reply),
 					_p: PhantomData,
 				}),
