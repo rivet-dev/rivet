@@ -3448,9 +3448,6 @@ export function buildNativeFactory(
 						{ status: 400 },
 					);
 				}
-				const readOnly = /^\s*(SELECT|PRAGMA|WITH|EXPLAIN)\b/i.test(
-					body.sql,
-				);
 				if (
 					body.properties &&
 					typeof body.properties === "object" &&
@@ -3459,24 +3456,14 @@ export function buildNativeFactory(
 					const bindings = normalizeSqlitePropertyBindings(
 						body.properties as Record<string, unknown>,
 					);
-					if (readOnly) {
-						const rows = queryRows(
-							await actorCtx.sql.query(body.sql, bindings),
-						);
-						return jsonResponse({ rows: jsonSafe(rows) });
-					}
-					await actorCtx.sql.run(body.sql, bindings);
-					return jsonResponse({ rows: [] });
-				}
-				const args = Array.isArray(body.args) ? body.args : [];
-				if (readOnly) {
 					const rows = queryRows(
-						await actorCtx.sql.query(body.sql, args),
+						await actorCtx.sql.query(body.sql, bindings),
 					);
 					return jsonResponse({ rows: jsonSafe(rows) });
 				}
-				await actorCtx.sql.run(body.sql, args);
-				return jsonResponse({ rows: [] });
+				const args = Array.isArray(body.args) ? body.args : [];
+				const rows = queryRows(await actorCtx.sql.query(body.sql, args));
+				return jsonResponse({ rows: jsonSafe(rows) });
 			}
 			if (
 				url.pathname === "/inspector/summary" &&
