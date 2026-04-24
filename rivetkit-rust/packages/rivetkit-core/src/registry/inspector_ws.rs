@@ -361,11 +361,12 @@ impl RegistryDispatcher {
 		let (workflow_supported, workflow_history) =
 			self.inspector_workflow_history_bytes(instance).await?;
 		let queue_size = self.inspector_current_queue_size(instance).await?;
+		let is_state_enabled = instance.ctx.has_state();
 		Ok(InspectorServerMessage::Init(
 			inspector_protocol::InitMessage {
 				connections: inspector_wire_connections(&instance.ctx),
-				state: Some(instance.ctx.state()),
-				is_state_enabled: instance.ctx.has_state(),
+				state: inspector_state_payload(&instance.ctx, is_state_enabled),
+				is_state_enabled,
 				rpcs: inspector_rpcs(instance),
 				is_database_enabled: instance.ctx.sql().is_enabled(),
 				queue_size: serde_bare::Uint(queue_size),
@@ -380,10 +381,11 @@ impl RegistryDispatcher {
 		instance: &ActorTaskHandle,
 		rid: serde_bare::Uint,
 	) -> inspector_protocol::StateResponse {
+		let is_state_enabled = instance.ctx.has_state();
 		inspector_protocol::StateResponse {
 			rid,
-			state: Some(instance.ctx.state()),
-			is_state_enabled: instance.ctx.has_state(),
+			state: inspector_state_payload(&instance.ctx, is_state_enabled),
+			is_state_enabled,
 		}
 	}
 
@@ -467,4 +469,16 @@ impl RegistryDispatcher {
 			}
 		}
 	}
+}
+
+/// Returns the actor state bytes for inspector wire payloads, or `None` when
+/// state is disabled or has not been initialized yet. Sending `Some(empty)`
+/// would cause the inspector frontend to attempt a CBOR decode of zero bytes
+/// and fail with "Unexpected end of CBOR data".
+fn inspector_state_payload(ctx: &ActorContext, is_state_enabled: bool) -> Option<Vec<u8>> {
+	if !is_state_enabled {
+		return None;
+	}
+	let state = ctx.state();
+	if state.is_empty() { None } else { Some(state) }
 }
