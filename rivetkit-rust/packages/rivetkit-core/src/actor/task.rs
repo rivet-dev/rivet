@@ -1119,6 +1119,9 @@ impl ActorTask {
 			.persist_state(SaveStateOpts { immediate: true })
 			.await
 			.context("persist actor initialization")?;
+		crate::inspector::init_inspector_token(&self.ctx)
+			.await
+			.context("initialize inspector token")?;
 		self.ctx
 			.restore_hibernatable_connections_with_preload(self.preloaded_kv.as_ref())
 			.await

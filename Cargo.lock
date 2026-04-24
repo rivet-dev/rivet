@@ -5236,12 +5236,14 @@ name = "rivetkit-core"
 version = "2.3.0-rc.4"
 dependencies = [
  "anyhow",
+ "base64 0.22.1",
  "ciborium",
  "futures",
  "http 1.3.1",
  "nix 0.30.1",
  "parking_lot",
  "prometheus",
+ "rand 0.8.5",
  "reqwest",
  "rivet-envoy-client",
  "rivet-error",
