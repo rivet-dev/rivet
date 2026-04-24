@@ -461,16 +461,6 @@ jobs:
             --version ${{ needs.context.outputs.version }} \
             --latest ${{ needs.context.outputs.latest }}
 
-      - name: Upload @rivetkit/devtools to R2
-        if: needs.context.outputs.trigger == 'release'
-        env:
-          R2_RELEASES_ACCESS_KEY_ID: ${{ secrets.R2_RELEASES_ACCESS_KEY_ID }}
-          R2_RELEASES_SECRET_ACCESS_KEY: ${{ secrets.R2_RELEASES_SECRET_ACCESS_KEY }}
-        run: |
-          pnpm --filter=publish exec tsx src/ci/bin.ts upload-devtools \
-            --sha ${{ needs.context.outputs.sha }} \
-            --version ${{ needs.context.outputs.version }} \
-            --latest ${{ needs.context.outputs.latest }}
 
       - name: Retag Docker manifests to version
         if: needs.context.outputs.trigger == 'release'

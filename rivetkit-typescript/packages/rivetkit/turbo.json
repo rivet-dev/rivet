@@ -37,6 +37,11 @@
 			"inputs": ["scripts/pack-inspector.ts", "package.json"],
 			"outputs": ["dist/inspector.tar.gz"]
 		},
+		"build:pack-devtools": {
+			"dependsOn": ["@rivetkit/devtools#build"],
+			"inputs": ["scripts/pack-devtools.ts", "package.json"],
+			"outputs": ["dist/devtools/mod.js"]
+		},
 		"build:dynamic-isolate-runtime": {
 			"dependsOn": ["^build", "build:schema"],
 			"inputs": [
@@ -98,7 +103,7 @@
 			]
 		},
 		"build:publish": {
-			"dependsOn": ["build", "build:pack-inspector"],
+			"dependsOn": ["build", "build:pack-inspector", "build:pack-devtools"],
 			"outputs": []
 		}
 	}

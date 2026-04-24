@@ -1,26 +1,18 @@
 import { createRoute } from "@hono/zod-openapi";
 import * as cbor from "cbor-x";
 import type { Hono } from "hono";
-import invariant from "invariant";
 import { z } from "zod/v4";
 import { Forbidden, RestrictedFeature } from "@/actor/errors";
 import { deserializeActorKey, serializeActorKey } from "@/actor/keys";
 import {
 	actorGateway,
-	createTestWebSocketProxy,
 } from "@/actor-gateway/gateway";
-import type { Encoding } from "@/client/mod";
 import {
 	HEADER_RIVET_TOKEN,
-	WS_PROTOCOL_ACTOR,
-	WS_PROTOCOL_CONN_PARAMS,
-	WS_PROTOCOL_ENCODING,
-	WS_TEST_PROTOCOL_PATH,
 } from "@/common/actor-router-consts";
 import { handleHealthRequest, handleMetadataRequest } from "@/common/router";
-import { deconstructError, noopNext, stringifyError } from "@/common/utils";
+import { stringifyError } from "@/common/utils";
 
-import { HEADER_ACTOR_ID } from "@/driver-helpers/mod";
 import {
 	ActorsCreateRequestSchema,
 	type ActorsCreateResponse,
@@ -468,6 +460,26 @@ export function buildRuntimeRouter(
 
 			router.get("/ui", (c) => c.redirect("/ui/"));
 		}
+
+		router.get("/devtools/mod.js", async (c) => {
+			let content: Buffer;
+			try {
+				content = await readDevtoolsBundle();
+			} catch (error) {
+				logger().error({
+					msg: "devtools bundle not found",
+					error: stringifyError(error),
+				});
+				return c.text("Devtools bundle not found.", 404);
+			}
+
+			return new Response(new Uint8Array(content), {
+				headers: {
+					"Content-Type": "application/javascript",
+					"Access-Control-Allow-Origin": "*",
+				},
+			});
+		});
 
 		router.get("/health", (c) => handleHealthRequest(c));
 
