@@ -1451,3 +1451,71 @@ fn many_actors_same_alarm_time() {
 		);
 	});
 }
+
+/// Regression test for the alarm-during-sleep-transition race.
+///
+/// Scenario: an actor schedules an alarm in the near future, then immediately
+/// sends a sleep intent. The stop flow may take long enough that the alarm
+/// becomes overdue while `handle_stopped` is processing `Decision::Sleep`.
+///
+/// Before the fix in `actor2/runtime.rs`, this window cleared `state.alarm_ts`
+/// without handling the overdue alarm, so the scheduled work was silently
+/// dropped and the actor went to sleep. The handler would never run.
+///
+/// After the fix, `Decision::Sleep` detects the overdue alarm, reallocates the
+/// actor, and bumps the generation so the alarm handler runs. This test
+/// verifies that path by setting a very short alarm offset and checking the
+/// actor wakes to generation 1 instead of sleeping forever.
+///
+/// Expected: the alarm triggers via reallocation. If the fix is reverted, the
+/// alarm will never trigger and this test will time out waiting for the wake.
+#[test]
+#[ignore = "captures alarm-during-sleep-transition race; times out if the overdue-alarm reallocation path regresses"]
+fn alarm_overdue_during_sleep_transition_fires_via_reallocation() {
+	common::run(
+		common::TestOpts::new(1).with_timeout(15),
+		|ctx| async move {
+			let (namespace, _) = common::setup_test_namespace(ctx.leader_dc()).await;
+
+			let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
+			let ready_tx = Arc::new(Mutex::new(Some(ready_tx)));
+
+			let runner = common::setup_runner(ctx.leader_dc(), &namespace, |builder| {
+				builder.with_actor_behavior("alarm-actor", move |_| {
+					let ready_tx = ready_tx.clone();
+					// 100ms offset leaves enough time to dispatch the sleep intent
+					// but is short enough that the alarm is near-overdue by the
+					// time the workflow reaches `Decision::Sleep`.
+					Box::new(AlarmAndSleepOnceActor::new(100, ready_tx))
+				})
+			})
+			.await;
+
+			let res = common::create_actor(
+				ctx.leader_dc().guard_port(),
+				&namespace,
+				"alarm-actor",
+				runner.name(),
+				rivet_types::actors::CrashPolicy::Destroy,
+			)
+			.await;
+
+			let actor_id = res.actor.actor_id.to_string();
+
+			ready_rx.await.expect("actor should send ready signal");
+
+			let lifecycle_rx = runner.subscribe_lifecycle_events();
+
+			// If the overdue alarm was dropped, the actor would enter sleep and
+			// never wake. A successful reallocation wakes the actor at generation 1.
+			wait_for_actor_wake_from_alarm(lifecycle_rx, &actor_id, 1, 10)
+				.await
+				.expect(
+					"actor should wake from the overdue alarm via reallocation; \
+				 if this times out, the `Decision::Sleep` overdue-alarm path was dropped",
+				);
+
+			tracing::info!(?actor_id, "overdue alarm fired via reallocation");
+		},
+	);
+}
