@@ -2,8 +2,14 @@ use rivet_envoy_protocol as protocol;
 
 use crate::connection::ws_send;
 use crate::envoy::EnvoyContext;
+use crate::stringify::stringify_event_wrapper;
 
 pub async fn handle_send_events(ctx: &mut EnvoyContext, events: Vec<protocol::EventWrapper>) {
+	tracing::info!(event_count = events.len(), "sending events");
+	for event in &events {
+		tracing::info!(event = %stringify_event_wrapper(event), "sending event");
+	}
+
 	// Record in history per actor
 	for event in &events {
 		let mut remove_after_stop = false;
@@ -60,6 +66,9 @@ pub async fn resend_unacknowledged_events(ctx: &EnvoyContext) {
 	}
 
 	tracing::info!(count = events.len(), "resending unacknowledged events");
+	for event in &events {
+		tracing::info!(event = %stringify_event_wrapper(event), "resending event");
+	}
 
 	ws_send(&ctx.shared, protocol::ToRivet::ToRivetEvents(events)).await;
 }
