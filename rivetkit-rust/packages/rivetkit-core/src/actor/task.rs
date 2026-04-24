@@ -70,7 +70,7 @@ use crate::websocket::WebSocket;
 pub type ActionDispatchResult = std::result::Result<Vec<u8>, ActionDispatchError>;
 pub type HttpDispatchResult = Result<Response>;
 
-const SERIALIZE_STATE_SHUTDOWN_SANITY_CAP: Duration = Duration::from_secs(30);
+const SERIALIZE_STATE_SHUTDOWN_SANITY_CAP: Duration = Duration::from_secs(15);
 #[cfg(test)]
 const LONG_SHUTDOWN_DRAIN_WARNING_THRESHOLD: Duration = Duration::from_secs(1);
 const INSPECTOR_SERIALIZE_STATE_INTERVAL: Duration = Duration::from_millis(50);
