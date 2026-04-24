@@ -545,9 +545,10 @@ export class ActorWorkflowContext<
 	}
 
 	/**
-	 * @deprecated Use `onSleep` for shutdown or flush work, or
-	 * `c.setPreventSleep(true)` while work is active if the actor must stay
-	 * awake until it finishes.
+	 * Registers a promise that the sleep grace period will wait on. Use this
+	 * for best-effort flush/cleanup work that may complete inside the grace
+	 * window. For work the actor must stay running through, prefer
+	 * `c.keepAwake(promise)` which also blocks idle sleep.
 	 */
 	waitUntil(promise: Promise<void>): void {
 		this.#ensureActorAccess("waitUntil");

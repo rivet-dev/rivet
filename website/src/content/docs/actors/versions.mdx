@@ -357,7 +357,7 @@ Several timeouts control how long each part of the shutdown process can take:
 | Timeout | Default | Description | Configuration |
 |---------|---------|-------------|---------------|
 | `actor_stop_threshold` | 30s | Engine-side limit on how long each actor has to stop before being marked lost | [Engine config](/docs/self-hosting/configuration) (`pegboard.actor_stop_threshold`) |
-| `sleepGracePeriod` | 15s | Total graceful sleep budget for `onSleep`, `waitUntil`, async raw WebSocket handlers, and waiting for `preventSleep` to clear after shutdown starts | [Actor options](/docs/actors/lifecycle#options) |
+| `sleepGracePeriod` | 15s | Total graceful sleep budget for `onSleep`, `waitUntil`, `keepAwake`, and async raw WebSocket handlers | [Actor options](/docs/actors/lifecycle#options) |
 | `runner_lost_threshold` | 15s | Fallback detection if the runner dies without graceful shutdown | [Engine config](/docs/self-hosting/configuration) (`pegboard.runner_lost_threshold`) |
 
 Rivet has a max shutdown grace period of 30 minutes that cannot be configured.

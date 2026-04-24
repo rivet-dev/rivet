@@ -884,7 +884,7 @@ const InstanceActorOptionsBaseSchema = z
 			.default(DEFAULT_WAIT_UNTIL_TIMEOUT),
 		connectionLivenessTimeout: z.number().positive().default(2500),
 		connectionLivenessInterval: z.number().positive().default(5000),
-		/** @deprecated Use `c.setPreventSleep(true)` for bounded delays or keep `noSleep` for actors that must stay awake indefinitely. Will be removed in 2.2.0. */
+		/** @deprecated Use `c.keepAwake(promise)` to scope keep-awake to a specific operation, or keep `noSleep` for actors that must stay awake indefinitely. Will be removed in 2.2.0. */
 		noSleep: z.boolean().default(false),
 		sleepTimeout: z.number().positive().default(30_000),
 		maxQueueSize: z.number().positive().default(1000),
@@ -1808,7 +1808,7 @@ export const DocActorOptionsSchema = z
 			.boolean()
 			.optional()
 			.describe(
-				"Deprecated. If true, the actor will never sleep. Use c.setPreventSleep(true) for bounded idle sleep delays instead. Default: false",
+				"Deprecated. If true, the actor will never sleep. Use c.keepAwake(promise) to scope keep-awake to a specific operation instead. Default: false",
 			),
 		sleepTimeout: z
 			.number()
