@@ -44,7 +44,7 @@ impl RegistryDispatcher {
 				StatusCode::OK,
 				&json!({
 					"state": decode_cbor_json_or_null(&instance.ctx.state()),
-					"isStateEnabled": true,
+					"isStateEnabled": instance.ctx.has_state(),
 				}),
 			),
 			(http::Method::PATCH, "/inspector/state") => {
@@ -277,11 +277,11 @@ impl RegistryDispatcher {
 			.context("load inspector workflow summary")?;
 		Ok(InspectorSummaryJson {
 			state: decode_cbor_json_or_null(&instance.ctx.state()),
-			is_state_enabled: true,
+			is_state_enabled: instance.ctx.has_state(),
 			connections: inspector_connections(&instance.ctx),
 			rpcs: inspector_rpcs(instance),
 			queue_size: queue_messages.len().try_into().unwrap_or(u32::MAX),
-			is_database_enabled: instance.ctx.sql().runtime_config().is_ok(),
+			is_database_enabled: instance.ctx.sql().is_enabled(),
 			workflow_supported,
 			workflow_history,
 		})

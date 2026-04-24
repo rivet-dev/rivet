@@ -530,12 +530,12 @@ impl ActorContext {
 		})
 	}
 
-	pub(crate) async fn inspect_messages(&self) -> Result<Vec<QueueMessage>> {
+	pub async fn inspect_messages(&self) -> Result<Vec<QueueMessage>> {
 		self.ensure_initialized().await?;
 		self.list_messages().await
 	}
 
-	pub(crate) fn max_size(&self) -> u32 {
+	pub fn max_size(&self) -> u32 {
 		self.config().max_queue_size
 	}
 

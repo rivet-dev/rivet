@@ -3047,6 +3047,9 @@ function buildActorConfig(
 		name: options.name as string | undefined,
 		icon: options.icon as string | undefined,
 		hasDatabase: config.db !== undefined,
+		hasState:
+			config.state !== undefined ||
+			typeof config.createState === "function",
 		canHibernateWebsocket:
 			typeof canHibernate === "boolean" ? canHibernate : undefined,
 		stateSaveIntervalMs: options.stateSaveInterval as number | undefined,
@@ -3289,16 +3292,27 @@ export function buildNativeFactory(
 				url.pathname === "/inspector/queue" &&
 				jsRequest.method === "GET"
 			) {
-				const inspectorSnapshot = callNativeSync(() =>
-					ctx.inspectorSnapshot(),
-				);
+				const limitParam = url.searchParams.get("limit");
+				const parsedLimit = limitParam ? Number(limitParam) : 100;
+				const limit =
+					Number.isFinite(parsedLimit) && parsedLimit > 0
+						? Math.floor(parsedLimit)
+						: 100;
+				const queue = ctx.queue();
+				const allMessages = await queue.inspectMessages();
+				const truncated = allMessages.length > limit;
+				const messages = allMessages
+					.slice(0, limit)
+					.map((m) => ({
+						id: m.id,
+						name: m.name,
+						createdAtMs: m.createdAtMs,
+					}));
 				return jsonResponse({
-					size: inspectorSnapshot.queueSize,
-					maxSize:
-						(config.options.maxQueueSize as number | undefined) ??
-						1000,
-					truncated: false,
-					messages: [],
+					size: allMessages.length,
+					maxSize: queue.maxSize(),
+					truncated,
+					messages,
 				});
 			}
 			if (
