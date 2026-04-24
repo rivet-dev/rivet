@@ -50,6 +50,7 @@ export interface JsActionDefinition {
 export interface JsActorConfig {
   name?: string
   icon?: string
+  hasDatabase?: boolean
   canHibernateWebsocket?: boolean
   stateSaveIntervalMs?: number
   createStateTimeoutMs?: number

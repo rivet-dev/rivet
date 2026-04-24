@@ -766,11 +766,27 @@ impl ActorContextShared {
 		*self.abort_token.lock() = None;
 		*self.run_restart.lock() = None;
 		*self.task_sender.lock() = None;
-		*self.runtime_state.lock() = None;
+		// napi Ref::unref requires an Env; this function runs on tokio workers
+		// with no Env available. Dropping without unref panics a debug_assert in
+		// napi-rs and silently leaks the napi reference slot in release. Forget
+		// instead so debug matches release behavior. Leak is bounded to one
+		// JsObject per actor wake cycle until the process exits.
+		if let Some(old) = self.runtime_state.lock().take() {
+			std::mem::forget(old);
+		}
 		*self.end_reason.lock() = None;
 		*self.websocket_callback_regions.lock() = BTreeMap::new();
 		self.next_websocket_callback_region_id
 			.store(0, Ordering::SeqCst);
+	}
+}
+
+impl Drop for ActorContextShared {
+	fn drop(&mut self) {
+		// Same Env-less drop problem as reset_runtime_state. See comment there.
+		if let Some(old) = self.runtime_state.lock().take() {
+			std::mem::forget(old);
+		}
 	}
 }
 

@@ -118,7 +118,7 @@ type NativeWebSocketWithEvents = NativeWebSocket & {
 };
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
-type SerializeStateReason = "save" | "inspector" | "sleep" | "destroy";
+type SerializeStateReason = "save" | "inspector";
 type NativeOnStateChangeHandler = (
 	ctx: NativeActorContextAdapter,
 	state: unknown,
@@ -3046,6 +3046,7 @@ function buildActorConfig(
 	return {
 		name: options.name as string | undefined,
 		icon: options.icon as string | undefined,
+		hasDatabase: config.db !== undefined,
 		canHibernateWebsocket:
 			typeof canHibernate === "boolean" ? canHibernate : undefined,
 		stateSaveIntervalMs: options.stateSaveInterval as number | undefined,
