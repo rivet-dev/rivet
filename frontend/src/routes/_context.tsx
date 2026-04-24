@@ -35,6 +35,7 @@ const searchSchema = z
 		u: z.string().optional(),
 		t: z.string().optional(),
 		from: z.string().optional(),
+		project: z.string().optional(),
 	})
 	.and(z.record(z.string(), z.any()));
 

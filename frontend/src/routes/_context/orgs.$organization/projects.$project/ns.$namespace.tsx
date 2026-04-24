@@ -223,6 +223,7 @@ function CloudNamespaceModals() {
 				}}
 			/>
 			<CreateNamespaceDialog
+				project={search?.project}
 				dialogProps={{
 					open: search?.modal === "create-ns",
 					onOpenChange: (value) => {
