@@ -65,6 +65,7 @@ pub struct JsActionDefinition {
 pub struct JsActorConfig {
 	pub name: Option<String>,
 	pub icon: Option<String>,
+	pub has_database: Option<bool>,
 	pub can_hibernate_websocket: Option<bool>,
 	pub state_save_interval_ms: Option<u32>,
 	pub create_state_timeout_ms: Option<u32>,
@@ -883,7 +884,6 @@ fn build_action_payload(env: &Env, payload: ActionPayload) -> napi::Result<Vec<n
 		Some(conn) => object.set("conn", ConnHandle::new(conn))?,
 		None => object.set("conn", env.get_null()?)?,
 	}
-	object.set("name", payload.name)?;
 	object.set("args", Buffer::from(payload.args))?;
 	match payload.cancel_token {
 		Some(cancel_token) => object.set("cancelToken", CancellationToken::new(cancel_token))?,
@@ -929,7 +929,7 @@ fn build_serialize_state_payload(
 ) -> napi::Result<Vec<napi::JsUnknown>> {
 	let mut object = env.create_object()?;
 	object.set("ctx", ActorContext::new(payload.ctx))?;
-	object.set("reason", payload.reason)?;
+	object.set("reason", env.create_string_from_std(payload.reason)?)?;
 	Ok(vec![object.into_unknown()])
 }
 
@@ -1035,6 +1035,7 @@ impl From<JsActorConfig> for ActorConfigInput {
 		Self {
 			name: value.name,
 			icon: value.icon,
+			has_database: value.has_database,
 			can_hibernate_websocket: value.can_hibernate_websocket,
 			state_save_interval_ms: value.state_save_interval_ms,
 			create_vars_timeout_ms: value.create_vars_timeout_ms,
