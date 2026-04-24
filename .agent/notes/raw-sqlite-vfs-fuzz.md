@@ -1,0 +1,287 @@
+# Raw SQLite VFS fuzz tracking
+
+## Package-level SQLite/VFS checklist
+
+These cases belong in direct `rivetkit-sqlite` / VFS / `SqliteEngine` coverage so they run fast and isolate storage bugs from actor-runtime bugs.
+
+- [x] Insert operations.
+- [x] Update operations.
+- [x] Delete operations.
+- [x] Upsert operations.
+- [x] Repeated hot-row updates.
+- [x] Transaction balance conservation.
+- [x] SQL operation log vs live table validation.
+- [x] Page-boundary payload size `1`.
+- [x] Page-boundary payload size `4095`.
+- [x] Page-boundary payload size `4096`.
+- [x] Page-boundary payload size `4097`.
+- [x] Page-boundary payload size `8191`.
+- [x] Page-boundary payload size `8192`.
+- [x] Page-boundary payload size `8193`.
+- [x] Page-boundary payload size `32768`.
+- [x] Page-boundary payload size `65535`.
+- [x] Page-boundary payload size `65536`.
+- [x] Page-boundary payload size `98304`.
+- [x] Page-boundary payload size `131072`.
+- [x] Unicode text payloads.
+- [x] Escaped-NUL text payloads.
+- [x] Actual NUL text payloads.
+- [x] Fragmentation churn with variable-size rows.
+- [x] Fragmentation churn with random deletes.
+- [x] Fragmentation churn with shrink updates.
+- [x] Fragmentation churn with grow updates.
+- [x] Fragmentation churn with periodic `VACUUM`.
+- [x] DDL churn with tables.
+- [x] DDL churn with indexes.
+- [x] DDL churn with views.
+- [x] DDL churn with temp tables.
+- [x] DDL churn with `WITHOUT ROWID`.
+- [x] DDL churn with triggers.
+- [x] DDL churn with `ALTER TABLE ADD COLUMN`.
+- [x] DDL churn with `DROP INDEX`.
+- [x] Indexed query results compared against `NOT INDEXED` full scans.
+- [x] Compound index query coverage.
+- [x] `UNIQUE` constraint failure isolation.
+- [x] `NOT NULL` constraint failure isolation.
+- [x] `CHECK` constraint failure isolation.
+- [x] Foreign-key constraint failure isolation.
+- [x] Cascading delete validation.
+- [x] Savepoint rollback validation.
+- [x] Savepoint release validation.
+- [x] Idempotent replay validation.
+- [x] Order total equals item sum invariant.
+- [x] Captured payment sum equals paid order total invariant.
+- [x] Inventory conservation invariant.
+- [x] Intentional transaction rollback probe.
+- [x] `PRAGMA quick_check`.
+- [x] `PRAGMA integrity_check`.
+- [x] `PRAGMA journal_mode` fuzzing.
+- [x] `PRAGMA synchronous` fuzzing.
+- [x] `PRAGMA cache_size` fuzzing.
+- [x] `PRAGMA foreign_keys` fuzzing.
+- [x] `PRAGMA auto_vacuum` fuzzing.
+- [x] Prepared statement churn with many unique SQL strings.
+- [x] Prepared statement churn with repeated parameterized SQL.
+- [x] Large DB growth to 1 MiB.
+- [x] Large DB growth to 10 MiB.
+- [x] Large DB growth to 50 MiB.
+- [x] Large DB growth to 100 MiB.
+- [x] Long read while write phases execute.
+- [x] Aggregation read while write phases execute.
+- [x] Delete/truncate stress with huge rows.
+- [x] Delete/truncate stress followed by `VACUUM`.
+- [x] Delete/truncate stress followed by recreate.
+- [x] Boundary key with empty-ish string.
+- [x] Boundary key with very long primary key.
+- [x] Boundary key with slash.
+- [x] Boundary key with comma.
+- [x] Boundary key with percent.
+- [x] Boundary key with case variants.
+- [x] Boundary key with high-cardinality keys.
+- [x] Boundary key with sequential keys.
+- [x] Cross-restart validation-only phase.
+- [x] Close/reopen after normal writes.
+- [x] Close/reopen after hot-row churn.
+- [x] Close/reopen after failed migration.
+- [x] Close/reopen after forced transport failure.
+- [x] Deterministic nasty script for grow row from 1 byte to 128 KiB over many updates.
+- [x] Deterministic nasty script for updating the same row 10k times.
+- [x] Deterministic nasty script for inserting 10k rows then deleting every other row.
+- [x] Deterministic nasty script for transaction inserting 1k rows then rolling back.
+- [x] Deterministic nasty script for create/drop index around heavy writes.
+- [x] Shadow checksum table updated in the same transaction.
+- [x] Recomputed shadow checksum validation from base rows.
+- [x] Fault injection for commit transport drop.
+- [x] Fault injection for flush transport drop.
+- [x] Fault injection for atomic-write transport drop.
+- [x] Fault injection for stage/finalize mismatch.
+- [x] Fault injection for page-fetch/read-path failure.
+- [x] Fault injection for aux/temp-file failure.
+
+## Kitchen-sink actor/runtime checklist
+
+These cases belong in the `examples/kitchen-sink` harness because they need real actors, real registry wiring, sleep/wake, reacquire, and runtime integration.
+
+- [x] Insert operations.
+- [x] Update operations.
+- [x] Delete operations.
+- [x] Upsert operations.
+- [x] Repeated hot-row updates.
+- [x] Transaction balance conservation.
+- [x] SQL operation log vs live table validation.
+- [x] Page-boundary payload size `1`.
+- [x] Page-boundary payload size `4095`.
+- [x] Page-boundary payload size `4096`.
+- [x] Page-boundary payload size `4097`.
+- [x] Page-boundary payload size `8191`.
+- [x] Page-boundary payload size `8192`.
+- [x] Page-boundary payload size `8193`.
+- [x] Page-boundary payload size `32768`.
+- [x] Page-boundary payload size `65535`.
+- [x] Page-boundary payload size `65536`.
+- [x] Page-boundary payload size `98304`.
+- [x] Page-boundary payload size `131072`.
+- [x] Unicode text payloads.
+- [x] Escaped-NUL text payloads.
+- [x] Actual NUL text payloads.
+- [x] Fragmentation churn with variable-size rows.
+- [x] Fragmentation churn with random deletes.
+- [x] Fragmentation churn with shrink updates.
+- [x] Fragmentation churn with grow updates.
+- [x] Fragmentation churn with periodic `VACUUM`.
+- [x] DDL churn with tables.
+- [x] DDL churn with indexes.
+- [x] DDL churn with views.
+- [x] DDL churn with temp tables.
+- [x] DDL churn with `WITHOUT ROWID`.
+- [x] DDL churn with triggers.
+- [x] DDL churn with `ALTER TABLE ADD COLUMN`.
+- [x] DDL churn with `DROP INDEX`.
+- [x] Indexed query results compared against `NOT INDEXED` full scans.
+- [x] Compound index query coverage.
+- [x] `UNIQUE` constraint failure isolation.
+- [x] `NOT NULL` constraint failure isolation.
+- [x] `CHECK` constraint failure isolation.
+- [x] Foreign-key constraint failure isolation.
+- [x] Cascading delete validation.
+- [x] Savepoint rollback validation.
+- [x] Savepoint release validation.
+- [x] Idempotent replay validation.
+- [x] Multi-table relational users.
+- [x] Multi-table relational products.
+- [x] Multi-table relational orders.
+- [x] Multi-table relational order items.
+- [x] Multi-table relational payments.
+- [x] Multi-table relational inventory.
+- [x] Order total equals item sum invariant.
+- [x] Captured payment sum equals paid order total invariant.
+- [x] Inventory conservation invariant.
+- [x] Intentional transaction rollback probe.
+- [x] `PRAGMA quick_check`.
+- [x] `PRAGMA integrity_check`.
+- [x] `PRAGMA journal_mode` fuzzing.
+- [x] `PRAGMA synchronous` fuzzing.
+- [x] `PRAGMA cache_size` fuzzing.
+- [x] `PRAGMA foreign_keys` fuzzing.
+- [x] `PRAGMA auto_vacuum` fuzzing.
+- [x] Prepared statement churn with many unique SQL strings.
+- [x] Prepared statement churn with repeated parameterized SQL.
+- [x] Large DB growth to 1 MiB.
+- [x] Large DB growth to 10 MiB.
+- [x] Large DB growth to 50 MiB.
+- [x] Large DB growth to 100 MiB.
+- [x] Long read while write phases execute.
+- [x] Aggregation read while write phases execute.
+- [x] Delete/truncate stress with huge rows.
+- [x] Delete/truncate stress followed by `VACUUM`.
+- [x] Delete/truncate stress followed by recreate.
+- [x] Delete/truncate stress followed by sleep/wake.
+- [x] Boundary key with empty-ish string.
+- [x] Boundary key with very long primary key.
+- [x] Boundary key with slash.
+- [x] Boundary key with comma.
+- [x] Boundary key with percent.
+- [x] Boundary key with case variants.
+- [x] Boundary key with high-cardinality keys.
+- [x] Boundary key with sequential keys.
+- [x] Cross-restart validation-only phase.
+- [x] Sleep/wake persistence validation for all deep scenarios.
+- [x] Actor reacquire validation for final validation phases.
+- [x] Deterministic nasty script for grow row from 1 byte to 128 KiB over many updates.
+- [x] Deterministic nasty script for updating the same row 10k times.
+- [x] Deterministic nasty script for inserting 10k rows then deleting every other row.
+- [x] Deterministic nasty script for transaction inserting 1k rows then rolling back.
+- [x] Deterministic nasty script for create/drop index around heavy writes.
+- [x] Shadow checksum table updated in the same transaction.
+- [x] Recomputed shadow checksum validation from base rows.
+
+## Package-level issue log
+
+- No new package-level failures in the current direct-engine pass. The actor-harness failures for actual NUL text, boundary keys, and shadow-checksum transactions have **not** reproduced in direct `rivetkit-sqlite` coverage so far.
+- Existing package-level fault injection already proves that commit, flush, and atomic-write transport drops poison the VFS instead of silently limping onward.
+- The actor-harness prepared/reset weirdness also did **not** reproduce in direct prepared-statement churn coverage.
+- Aux/temp-path fault injection worked once routed through `ATTACH` and direct `vfs_delete`; `CREATE TEMP TABLE` did not reliably hit the file-backed aux path in this harness.
+
+## Kitchen-sink issue log
+
+- Root cause for the old sleep/wake panic: raw-SQLite actors could populate the NAPI `runtimeState()` bag, but the native `onSleep` / `onDestroy` cleanup callback was only registered when a high-level database provider or user lifecycle hook existed. On the next wake, `ActorContextShared::reset_runtime_state()` dropped that stale NAPI `Ref<()>` and panicked before the actor finished booting.
+- Follow-up fix: `rivetkit` now always registers native `onSleep` / `onDestroy` cleanup and explicitly clears the NAPI runtime-state reference on the JS thread before teardown. `sleep-fix-edge-004` and `sleep-fix-truncate-001` both passed sleep/wake after this change.
+- Root cause for the old `shadowMismatches: 1` kitchen-sink failure: the kitchen-sink bundle updated `fuzz_shadow_checksums` before the later idempotent and nasty-script item mutations ran. Moving shadow recomputation to the end of deep-scenario execution fixed that ordering bug; `kitchen-shadow-fix-001` passed afterward.
+- Root cause for the flaky actor-path `readwrite` `disk I/O error`: the raw native SQLite wrapper did not serialize overlapping `exec` / `run` / `query` calls on the same database handle, while the Drizzle path already did. Adding an `AsyncMutex` to `wrapJsNativeDatabase` fixed the focused `readwrite` repros and a full kitchen-sink sleep/wake repro.
+- `savepoints`, `pragma`, `truncate`, `shadow`, and `boundary-keys` all passed fresh focused reruns after the latest runtime and harness fixes. The old failures are still worth keeping here as historical repros, but they are no longer the current top issue.
+- Methodology correction: some of the earlier "remaining top issue" repro hunts were contaminated by launching multiple `--start-local-envoy` fuzz commands in parallel against the same local stack. Those results are not trustworthy and should not be treated as confirmed SQL/VFS failures.
+- Root cause for the no-reset rerun invariant leak: the relational and constraint scenarios reused phase-only IDs (`order-${phase}-${localIndex}` and `valid-${phase}` / `uniq-${phase}`), so rerunning phase 0 against the same actor DB tripped harness invariants even when SQLite state was fine. The harness now allocates rerun-safe IDs derived from the existing row count in that DB.
+- Harness observability improved: `applyItemOperation`, `applyEdgePayloads`, `applyFragmentationChurn`, and the top-level `runPhase` action now annotate failures with stage, key, payload size, or exact sub-step so the next real SQL/VFS failure should land with much tighter context.
+- Fresh sequential verification after those fixes: `runphase-stage-001` passed twice in a row against the same `--no-reset` actor key, and `runphase-stage-sleep-001` passed `kitchen-sink` plus sleep/wake on a fresh actor key.
+- `actual-nul-001` failed in `--mode actual-nul` with `nul byte found in provided data at position: 11`. This is a concrete binding/path rejection, not silent corruption.
+- `vfs-prepared-002` failed during reset with `failed to step sqlite exec statement: disk I/O error` under `RIVET_EXPOSE_ERRORS=1`. The same prepared workload passed with seed `prep-nr-001` using `--no-reset` and then passed reset on the same actor key, so this looks like actor/runtime/VFS placement or cleanup weirdness rather than a prepared-statement invariant mismatch.
+- `case-readwrite-nr-001` failed in `--mode readwrite --no-reset` with `failed to execute sqlite statement: disk I/O error` while the actor ran a long aggregate read concurrently with writes on the same SQLite DB.
+- `ok-truncate-001` failed in `--mode truncate` with `failed to execute sqlite statement: disk I/O error` during the large-row shrink/delete/`VACUUM`/recreate path.
+- `ok-boundary-keys-nr-001` failed in `--mode boundary-keys --no-reset` with `failed to step sqlite exec statement: disk I/O error` while writing boundary primary keys. The exact key is not isolated yet.
+- `ok-shadow-003` failed in `--mode shadow` with `failed to execute sqlite statement: disk I/O error` while updating the shadow checksum table in a transaction after base writes.
+- `ok-constraints-sleep-001` failed after `goToSleep()` with the existing NAPI ref-count panic followed by `Actor capability 'actor event inbox' is not configured`; the SQL invariants passed before sleep.
+- `truncate-sleep-001` failed during the actor `reset()` action with `Actor reply channel was dropped without a response.` before the truncate phase even started.
+- The sleep matrix (`edge`, `fragmentation`, `schema`, `index`, `constraints`, `prepared`, `growth`, `readwrite`, `truncate`, `relational`, `shadow`) consistently completed phase 0 and then failed at `goToSleep()` with the same NAPI ref-count panic followed by `Actor capability 'actor event inbox' is not configured`.
+- `sleep-matrix-savepoints-001` failed during phase 0 with `Actor reply channel was dropped without a response.` before reaching sleep.
+- `sleep-matrix-pragma-001` failed during phase 0 with a sanitized internal actor error before reaching sleep.
+- `sleep-matrix-boundary-keys-001` failed during phase 0 with a sanitized internal actor error before reaching sleep.
+- `kitchen-sleep-nr-001` and `sleep-matrix-kitchen-sink-001` failed before sleep with `shadowMismatches: 1` in the full deep scenario bundle, even though the same actor validation reported `integrityCheck: "ok"` and all other tracked invariants matched.
+
+## Package-level verification log
+
+- [x] Existing direct-VFS coverage in [vfs.rs](/home/nathan/r5-db-fuzzer-kitchen-sink/rivetkit-rust/packages/rivetkit-sqlite/src/vfs.rs) already exercises large growth, truncate/`VACUUM`/regrow, direct reopen, and concurrent multi-actor autocommits.
+- [x] `cargo test -p rivetkit-sqlite direct_engine_accepts_actual_nul_text_when_bound_with_explicit_length -- --nocapture`.
+- [x] `cargo test -p rivetkit-sqlite direct_engine_handles_boundary_primary_keys -- --nocapture`.
+- [x] `cargo test -p rivetkit-sqlite direct_engine_keeps_shadow_checksum_transaction_consistent -- --nocapture`.
+- [x] `cargo test -p rivetkit-sqlite direct_engine_mixed_row_model_preserves_invariants -- --nocapture`.
+- [x] `cargo test -p rivetkit-sqlite direct_engine_runs_deterministic_nasty_script -- --nocapture`.
+- [x] `cargo test -p rivetkit-sqlite direct_engine_repeated_close_reopen_cycles_preserve_state -- --nocapture`.
+- [x] `cargo test -p rivetkit-sqlite direct_engine_fresh_reopen_recovers_after_poisoned_handle -- --nocapture`.
+- [x] `cargo test -p rivetkit-sqlite direct_engine_handles_page_boundary_payloads_and_text_roundtrip -- --nocapture`.
+- [x] `cargo test -p rivetkit-sqlite direct_engine_enforces_constraints_savepoints_and_relational_invariants -- --nocapture`.
+- [x] `cargo test -p rivetkit-sqlite direct_engine_handles_schema_churn_index_parity_and_pragmas -- --nocapture`.
+- [x] `cargo test -p rivetkit-sqlite direct_engine_handles_prepared_statement_churn -- --nocapture`.
+- [x] `cargo test -p rivetkit-sqlite direct_engine_preserves_transaction_balance_and_fragmentation_invariants -- --nocapture`.
+- [x] `cargo test -p rivetkit-sqlite commit_buffered_pages_surfaces_finalize_stage_not_found -- --nocapture`.
+- [x] `cargo test -p rivetkit-sqlite resolve_pages_surfaces_read_path_error_response -- --nocapture`.
+- [x] `cargo test -p rivetkit-sqlite direct_engine_aux_open_failure_surfaces_without_poisoning_main_db -- --nocapture`.
+- [x] `cargo test -p rivetkit-sqlite vfs_delete_surfaces_aux_delete_failure -- --nocapture`.
+- [x] `cargo test -p rivetkit-sqlite bench_large_tx_insert_100mb -- --nocapture`.
+
+## Kitchen-sink verification log
+
+- [x] `pnpm --filter kitchen-sink exec tsc --noEmit --target esnext --module esnext --moduleResolution bundler --types node --skipLibCheck --allowImportingTsExtensions scripts/db-fuzz.ts`.
+- [x] `pnpm --filter kitchen-sink build`.
+- [x] `pnpm --filter kitchen-sink exec tsx scripts/db-fuzz.ts --endpoint http://127.0.0.1:6420 --start-local-envoy --seed vfs-pragma-001 --mode pragma --iterations 1 --actor-count 1 --concurrency 1 --ops-per-phase 2 --max-payload-bytes 4096 --local-envoy-warmup-ms 5000`.
+- [x] `pnpm --filter kitchen-sink exec tsx scripts/db-fuzz.ts --endpoint http://127.0.0.1:6420 --start-local-envoy --seed vfs-growth-001 --mode growth --iterations 1 --actor-count 1 --concurrency 1 --ops-per-phase 2 --max-payload-bytes 98304 --growth-target-bytes 1048576 --local-envoy-warmup-ms 5000`.
+- [x] `pnpm --filter kitchen-sink exec tsx scripts/db-fuzz.ts --endpoint http://127.0.0.1:6420 --start-local-envoy --seed ok-growth-10m-001 --mode growth --iterations 1 --actor-count 1 --concurrency 1 --ops-per-phase 4 --max-payload-bytes 98304 --growth-target-bytes 10485760 --local-envoy-warmup-ms 5000`.
+- [x] `pnpm --filter kitchen-sink exec tsx scripts/db-fuzz.ts --endpoint http://127.0.0.1:6420 --start-local-envoy --seed ok-growth-50m-001 --mode growth --iterations 1 --actor-count 1 --concurrency 1 --ops-per-phase 2 --max-payload-bytes 98304 --growth-target-bytes 52428800 --local-envoy-warmup-ms 5000`.
+- [x] `pnpm --filter kitchen-sink exec tsx scripts/db-fuzz.ts --endpoint http://127.0.0.1:6420 --start-local-envoy --seed ok-growth-100m-001 --mode growth --iterations 1 --actor-count 1 --concurrency 1 --ops-per-phase 1 --max-payload-bytes 98304 --growth-target-bytes 104857600 --local-envoy-warmup-ms 5000`.
+- [x] `pnpm --filter kitchen-sink exec tsx scripts/db-fuzz.ts --endpoint http://127.0.0.1:6420 --start-local-envoy --seed prep-nr-001 --mode prepared --iterations 1 --actor-count 1 --concurrency 1 --ops-per-phase 1 --max-payload-bytes 1024 --local-envoy-warmup-ms 5000`.
+- [x] `pnpm --filter kitchen-sink exec tsx scripts/db-fuzz.ts --endpoint http://127.0.0.1:6420 --start-local-envoy --seed ok-constraints-004 --mode constraints --iterations 1 --actor-count 1 --concurrency 1 --ops-per-phase 8 --max-payload-bytes 98304 --local-envoy-warmup-ms 5000`.
+- [x] `pnpm --filter kitchen-sink exec tsx scripts/db-fuzz.ts --endpoint http://127.0.0.1:6420 --start-local-envoy --seed ok-schema-004 --mode schema --iterations 1 --actor-count 1 --concurrency 1 --ops-per-phase 8 --max-payload-bytes 98304 --local-envoy-warmup-ms 5000`.
+- [x] `RIVET_EXPOSE_ERRORS=1 pnpm --filter kitchen-sink exec tsx scripts/db-fuzz.ts --endpoint http://127.0.0.1:6420 --start-local-envoy --seed actual-nul-001 --mode actual-nul --iterations 1 --actor-count 1 --concurrency 1 --ops-per-phase 1 --max-payload-bytes 1024 --local-envoy-warmup-ms 5000`.
+- [x] `pnpm --filter kitchen-sink exec tsx scripts/db-fuzz.ts --endpoint http://127.0.0.1:6420 --start-local-envoy --seed truncate-sleep-001 --mode truncate --iterations 1 --actor-count 1 --concurrency 1 --ops-per-phase 4 --max-payload-bytes 98304 --sleep-every 1 --wake-delay-ms 1000 --local-envoy-warmup-ms 5000`.
+- [x] `pnpm --filter kitchen-sink exec tsx scripts/db-fuzz.ts --endpoint http://127.0.0.1:6420 --start-local-envoy --seed truncate-sleep-nr-001 --mode truncate --iterations 1 --actor-count 1 --concurrency 1 --ops-per-phase 4 --max-payload-bytes 98304 --sleep-every 1 --wake-delay-ms 1000 --local-envoy-warmup-ms 5000 --no-reset`.
+- [x] `pnpm --filter kitchen-sink exec tsx scripts/db-fuzz.ts --endpoint http://127.0.0.1:6420 --start-local-envoy --seed kitchen-sleep-nr-001 --mode kitchen-sink --iterations 1 --actor-count 1 --concurrency 1 --ops-per-phase 8 --max-payload-bytes 98304 --growth-target-bytes 1048576 --sleep-every 1 --wake-delay-ms 1000 --local-envoy-warmup-ms 5000 --no-reset`.
+- [x] Sleep matrix run over `edge`, `fragmentation`, `schema`, `index`, `constraints`, `savepoints`, `pragma`, `prepared`, `growth`, `readwrite`, `truncate`, `boundary-keys`, `relational`, `shadow`, and `kitchen-sink` with `--sleep-every 1 --no-reset`.
+- [x] `pnpm --filter @rivetkit/rivetkit-napi build:force`.
+- [x] `pnpm --filter rivetkit build`.
+- [x] `RUST_BACKTRACE=1 RIVET_EXPOSE_ERRORS=1 pnpm --filter kitchen-sink exec tsx scripts/db-fuzz.ts --endpoint http://127.0.0.1:6420 --start-local-envoy --seed sleep-fix-edge-004 --mode edge --iterations 1 --actor-count 1 --concurrency 1 --ops-per-phase 8 --max-payload-bytes 65536 --sleep-every 1 --wake-delay-ms 1000 --local-envoy-warmup-ms 5000 --no-reset`.
+- [x] `RUST_BACKTRACE=1 RIVET_EXPOSE_ERRORS=1 pnpm --filter kitchen-sink exec tsx scripts/db-fuzz.ts --endpoint http://127.0.0.1:6420 --start-local-envoy --seed sleep-fix-truncate-001 --mode truncate --iterations 1 --actor-count 1 --concurrency 1 --ops-per-phase 4 --max-payload-bytes 98304 --sleep-every 1 --wake-delay-ms 1000 --local-envoy-warmup-ms 5000 --no-reset`.
+- [x] `pnpm --filter kitchen-sink exec tsx scripts/db-fuzz.ts --endpoint http://127.0.0.1:6420 --start-local-envoy --seed kitchen-shadow-fix-001 --mode kitchen-sink --iterations 1 --actor-count 1 --concurrency 1 --ops-per-phase 8 --max-payload-bytes 98304 --growth-target-bytes 1048576 --local-envoy-warmup-ms 5000 --no-reset`.
+- [x] `RIVET_EXPOSE_ERRORS=1 pnpm --filter kitchen-sink exec tsx scripts/db-fuzz.ts --endpoint http://127.0.0.1:6420 --start-local-envoy --seed savepoints-fix-check-001 --mode savepoints --iterations 1 --actor-count 1 --concurrency 1 --ops-per-phase 8 --max-payload-bytes 65536 --local-envoy-warmup-ms 5000 --no-reset`.
+- [x] `RIVET_EXPOSE_ERRORS=1 pnpm --filter kitchen-sink exec tsx scripts/db-fuzz.ts --endpoint http://127.0.0.1:6420 --start-local-envoy --seed pragma-fix-check-001 --mode pragma --iterations 1 --actor-count 1 --concurrency 1 --ops-per-phase 8 --max-payload-bytes 65536 --local-envoy-warmup-ms 5000 --no-reset`.
+- [x] `RIVET_EXPOSE_ERRORS=1 pnpm --filter kitchen-sink exec tsx scripts/db-fuzz.ts --endpoint http://127.0.0.1:6420 --start-local-envoy --seed boundary-fix-check-002 --mode boundary-keys --iterations 1 --actor-count 1 --concurrency 1 --ops-per-phase 8 --max-payload-bytes 65536 --local-envoy-warmup-ms 5000 --no-reset`.
+- [x] `RIVET_EXPOSE_ERRORS=1 pnpm --filter kitchen-sink exec tsx scripts/db-fuzz.ts --endpoint http://127.0.0.1:6420 --start-local-envoy --seed regress-shadow-001 --mode shadow --iterations 1 --actor-count 1 --concurrency 1 --ops-per-phase 8 --max-payload-bytes 65536 --local-envoy-warmup-ms 5000 --no-reset`.
+- [x] `RIVET_EXPOSE_ERRORS=1 pnpm --filter kitchen-sink exec tsx scripts/db-fuzz.ts --endpoint http://127.0.0.1:6420 --start-local-envoy --seed regress-truncate-001 --mode truncate --iterations 1 --actor-count 1 --concurrency 1 --ops-per-phase 4 --max-payload-bytes 98304 --local-envoy-warmup-ms 5000 --no-reset`.
+- [x] `RIVET_EXPOSE_ERRORS=1 pnpm --filter kitchen-sink exec tsx scripts/db-fuzz.ts --endpoint http://127.0.0.1:6420 --start-local-envoy --seed regress-kitchen-sleep-003 --mode kitchen-sink --iterations 1 --actor-count 1 --concurrency 1 --ops-per-phase 8 --max-payload-bytes 98304 --growth-target-bytes 1048576 --sleep-every 1 --wake-delay-ms 1000 --local-envoy-warmup-ms 5000 --no-reset`.
+- [x] `pnpm --filter rivetkit build` after adding raw native SQLite serialization to `wrapJsNativeDatabase`.
+- [x] `RIVET_EXPOSE_ERRORS=1 pnpm --filter kitchen-sink exec tsx scripts/db-fuzz.ts --endpoint http://127.0.0.1:6420 --start-local-envoy --seed sweep-readwrite-01-postmutex --mode readwrite --iterations 1 --actor-count 1 --concurrency 1 --ops-per-phase 8 --max-payload-bytes 65536 --growth-target-bytes 1048576 --local-envoy-warmup-ms 5000 --no-reset`.
+- [x] `RIVET_EXPOSE_ERRORS=1 pnpm --filter kitchen-sink exec tsx scripts/db-fuzz.ts --endpoint http://127.0.0.1:6420 --start-local-envoy --seed sweep-readwrite-02-postmutex --mode readwrite --iterations 1 --actor-count 1 --concurrency 1 --ops-per-phase 8 --max-payload-bytes 65536 --growth-target-bytes 1048576 --local-envoy-warmup-ms 5000 --no-reset`.
+- [x] `RIVET_EXPOSE_ERRORS=1 pnpm --filter kitchen-sink exec tsx scripts/db-fuzz.ts --endpoint http://127.0.0.1:6420 --start-local-envoy --seed sweep-kitchen-sleep-postmutex-01 --mode kitchen-sink --iterations 1 --actor-count 1 --concurrency 1 --ops-per-phase 8 --max-payload-bytes 98304 --growth-target-bytes 1048576 --sleep-every 1 --wake-delay-ms 1000 --local-envoy-warmup-ms 5000 --no-reset`.
+- [x] `RIVET_EXPOSE_ERRORS=1 pnpm --filter kitchen-sink exec tsx scripts/db-fuzz.ts --endpoint http://127.0.0.1:6420 --start-local-envoy --seed sweep-kitchen-sleep-postmutex-03 --mode kitchen-sink --iterations 1 --actor-count 1 --concurrency 1 --ops-per-phase 8 --max-payload-bytes 98304 --growth-target-bytes 1048576 --sleep-every 1 --wake-delay-ms 1000 --local-envoy-warmup-ms 5000 --no-reset`.
+- [x] `RIVET_EXPOSE_ERRORS=1 pnpm --filter kitchen-sink exec tsx scripts/db-fuzz.ts --endpoint http://127.0.0.1:6420 --start-local-envoy --seed sweep-kitchen-sleep-postmutex-02 --mode edge --iterations 1 --actor-count 1 --concurrency 1 --ops-per-phase 8 --max-payload-bytes 98304 --local-envoy-warmup-ms 5000 --no-reset`.
+- [x] Two-seed focused boundary-key sweep with `sweep-boundary-keys-01` and `sweep-boundary-keys-02`, both passing.
+- [x] Sequential no-reset rerun verification with `runphase-stage-001` twice in a row using `--mode kitchen-sink --iterations 1 --actor-count 1 --concurrency 1 --ops-per-phase 8 --max-payload-bytes 65536 --local-envoy-warmup-ms 5000 --no-reset`.
+- [x] Fresh `kitchen-sink` sleep/wake verification with `runphase-stage-sleep-001` using `--sleep-every 1 --wake-delay-ms 1000 --no-reset`.

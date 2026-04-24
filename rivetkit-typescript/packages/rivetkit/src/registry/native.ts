@@ -3696,45 +3696,39 @@ export function buildNativeFactory(
 						},
 					)
 				: undefined,
-		onSleep:
-			typeof config.onSleep === "function" ||
-			databaseProvider !== undefined
-				? wrapNativeCallback(
-						async (
-							error: unknown,
-							payload: { ctx: NativeActorContext },
-						) => {
-							const { ctx } = unwrapTsfnPayload(error, payload);
-							const actorCtx = makeActorCtx(ctx);
-							try {
-								if (typeof config.onSleep === "function") {
-									await config.onSleep(actorCtx);
-								}
-							} finally {
-								await actorCtx.dispose();
-							}
-						},
-					)
-				: undefined,
-		onDestroy:
-			typeof config.onDestroy === "function" ||
-			databaseProvider !== undefined
-				? wrapNativeCallback(
-						async (error: unknown, payload: { ctx: NativeActorContext }) => {
-							const { ctx } = unwrapTsfnPayload(error, payload);
-							const actorCtx = makeActorCtx(ctx);
-							try {
-								if (typeof config.onDestroy === "function") {
-									await config.onDestroy(actorCtx);
-								}
-							} finally {
-								resolveNativeDestroy(ctx);
-								await actorCtx.closeDatabase(true);
-								await actorCtx.dispose();
-							}
-						},
-					)
-				: undefined,
+		onSleep: wrapNativeCallback(
+			async (
+				error: unknown,
+				payload: { ctx: NativeActorContext },
+			) => {
+				const { ctx } = unwrapTsfnPayload(error, payload);
+				const actorCtx = makeActorCtx(ctx);
+				try {
+					if (typeof config.onSleep === "function") {
+						await config.onSleep(actorCtx);
+					}
+				} finally {
+					callNativeSync(() => ctx.clearRuntimeState());
+					await actorCtx.dispose();
+				}
+			},
+		),
+		onDestroy: wrapNativeCallback(
+			async (error: unknown, payload: { ctx: NativeActorContext }) => {
+				const { ctx } = unwrapTsfnPayload(error, payload);
+				const actorCtx = makeActorCtx(ctx);
+				try {
+					if (typeof config.onDestroy === "function") {
+						await config.onDestroy(actorCtx);
+					}
+				} finally {
+					resolveNativeDestroy(ctx);
+					await actorCtx.closeDatabase(true);
+					callNativeSync(() => ctx.clearRuntimeState());
+					await actorCtx.dispose();
+				}
+			},
+		),
 		onBeforeConnect:
 			typeof config.onBeforeConnect === "function"
 				? wrapNativeCallback(

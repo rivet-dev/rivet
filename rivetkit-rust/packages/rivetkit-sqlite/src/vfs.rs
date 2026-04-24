@@ -805,6 +805,10 @@ pub struct VfsContext {
 	state: RwLock<VfsState>,
 	aux_files: RwLock<BTreeMap<String, Arc<AuxFileState>>>,
 	last_error: Mutex<Option<String>>,
+	#[cfg(test)]
+	fail_next_aux_open: Mutex<Option<String>>,
+	#[cfg(test)]
+	fail_next_aux_delete: Mutex<Option<String>>,
 	commit_atomic_count: AtomicU64,
 	io_methods: Box<sqlite3_io_methods>,
 	// Performance counters
@@ -1030,6 +1034,10 @@ impl VfsContext {
 			state: RwLock::new(VfsState::new(&config, &startup)),
 			aux_files: RwLock::new(BTreeMap::new()),
 			last_error: Mutex::new(None),
+			#[cfg(test)]
+			fail_next_aux_open: Mutex::new(None),
+			#[cfg(test)]
+			fail_next_aux_delete: Mutex::new(None),
 			commit_atomic_count: AtomicU64::new(0),
 			io_methods: Box::new(io_methods),
 			resolve_pages_total: AtomicU64::new(0),
@@ -1110,6 +1118,26 @@ impl VfsContext {
 
 	fn delete_aux_file(&self, path: &str) {
 		self.aux_files.write().remove(path);
+	}
+
+	#[cfg(test)]
+	fn fail_next_aux_open(&self, message: impl Into<String>) {
+		*self.fail_next_aux_open.lock() = Some(message.into());
+	}
+
+	#[cfg(test)]
+	fn take_aux_open_error(&self) -> Option<String> {
+		self.fail_next_aux_open.lock().take()
+	}
+
+	#[cfg(test)]
+	fn fail_next_aux_delete(&self, message: impl Into<String>) {
+		*self.fail_next_aux_delete.lock() = Some(message.into());
+	}
+
+	#[cfg(test)]
+	fn take_aux_delete_error(&self) -> Option<String> {
+		self.fail_next_aux_delete.lock().take()
 	}
 
 	fn is_dead(&self) -> bool {
@@ -1740,6 +1768,152 @@ fn sqlite_step_statement(db: *mut sqlite3, sql: &str) -> std::result::Result<(),
 	result
 }
 
+#[cfg(test)]
+fn sqlite_prepare_statement(
+	db: *mut sqlite3,
+	sql: &str,
+) -> std::result::Result<*mut sqlite3_stmt, String> {
+	let c_sql = CString::new(sql).map_err(|err| err.to_string())?;
+	let mut stmt = ptr::null_mut();
+	let rc = unsafe { sqlite3_prepare_v2(db, c_sql.as_ptr(), -1, &mut stmt, ptr::null_mut()) };
+	if rc != SQLITE_OK {
+		return Err(format!(
+			"`{sql}` prepare failed with code {rc}: {}",
+			sqlite_error_message(db)
+		));
+	}
+	if stmt.is_null() {
+		return Err(format!("`{sql}` returned no statement"));
+	}
+
+	Ok(stmt)
+}
+
+#[cfg(test)]
+fn sqlite_bind_text_bytes(
+	db: *mut sqlite3,
+	stmt: *mut sqlite3_stmt,
+	index: c_int,
+	bytes: &[u8],
+	sql: &str,
+) -> std::result::Result<(), String> {
+	let rc = unsafe {
+		sqlite3_bind_text(
+			stmt,
+			index,
+			bytes.as_ptr().cast(),
+			bytes.len() as c_int,
+			None,
+		)
+	};
+	if rc != SQLITE_OK {
+		return Err(format!(
+			"`{sql}` bind text index {index} failed with code {rc}: {}",
+			sqlite_error_message(db)
+		));
+	}
+
+	Ok(())
+}
+
+#[cfg(test)]
+fn sqlite_bind_i64(
+	db: *mut sqlite3,
+	stmt: *mut sqlite3_stmt,
+	index: c_int,
+	value: i64,
+	sql: &str,
+) -> std::result::Result<(), String> {
+	let rc = unsafe { sqlite3_bind_int64(stmt, index, value) };
+	if rc != SQLITE_OK {
+		return Err(format!(
+			"`{sql}` bind int index {index} failed with code {rc}: {}",
+			sqlite_error_message(db)
+		));
+	}
+
+	Ok(())
+}
+
+#[cfg(test)]
+fn sqlite_step_prepared(
+	db: *mut sqlite3,
+	stmt: *mut sqlite3_stmt,
+	sql: &str,
+) -> std::result::Result<(), String> {
+	let step_rc = unsafe { sqlite3_step(stmt) };
+	if step_rc != SQLITE_DONE {
+		return Err(format!(
+			"`{sql}` step failed with code {step_rc}: {}",
+			sqlite_error_message(db)
+		));
+	}
+
+	Ok(())
+}
+
+#[cfg(test)]
+fn sqlite_reset_prepared(stmt: *mut sqlite3_stmt, sql: &str) -> std::result::Result<(), String> {
+	let rc = unsafe { sqlite3_reset(stmt) };
+	if rc != SQLITE_OK {
+		return Err(format!("`{sql}` reset failed with code {rc}"));
+	}
+
+	Ok(())
+}
+
+#[cfg(test)]
+fn sqlite_clear_bindings(stmt: *mut sqlite3_stmt, sql: &str) -> std::result::Result<(), String> {
+	let rc = unsafe { sqlite3_clear_bindings(stmt) };
+	if rc != SQLITE_OK {
+		return Err(format!("`{sql}` clear bindings failed with code {rc}"));
+	}
+
+	Ok(())
+}
+
+#[cfg(test)]
+fn sqlite_insert_text_with_int_value(
+	db: *mut sqlite3,
+	sql: &str,
+	text_bytes: &[u8],
+	int_value: i64,
+) -> std::result::Result<(), String> {
+	let stmt = sqlite_prepare_statement(db, sql)?;
+	let result = (|| {
+		sqlite_bind_text_bytes(db, stmt, 1, text_bytes, sql)?;
+		sqlite_bind_i64(db, stmt, 2, int_value, sql)?;
+		sqlite_step_prepared(db, stmt, sql)
+	})();
+	unsafe {
+		sqlite3_finalize(stmt);
+	}
+	result
+}
+
+#[cfg(test)]
+fn sqlite_query_i64_bind_text(
+	db: *mut sqlite3,
+	sql: &str,
+	text_bytes: &[u8],
+) -> std::result::Result<i64, String> {
+	let stmt = sqlite_prepare_statement(db, sql)?;
+	let result = (|| {
+		sqlite_bind_text_bytes(db, stmt, 1, text_bytes, sql)?;
+		match unsafe { sqlite3_step(stmt) } {
+			SQLITE_ROW => Ok(unsafe { sqlite3_column_int64(stmt, 0) }),
+			step_rc => Err(format!(
+				"`{sql}` step failed with code {step_rc}: {}",
+				sqlite_error_message(db)
+			)),
+		}
+	})();
+	unsafe {
+		sqlite3_finalize(stmt);
+	}
+	result
+}
+
 fn page_span(offset: i64, length: usize, page_size: usize) -> std::result::Result<Vec<u32>, ()> {
 	if offset < 0 {
 		return Err(());
@@ -2162,6 +2336,14 @@ unsafe extern "C" fn vfs_open(
 		let is_main =
 			path == ctx.actor_id && !delete_on_close && (flags & SQLITE_OPEN_MAIN_DB) != 0;
 
+		#[cfg(test)]
+		if !is_main {
+			if let Some(message) = ctx.take_aux_open_error() {
+				ctx.set_last_error(message);
+				return SQLITE_CANTOPEN;
+			}
+		}
+
 		let base = sqlite3_file {
 			pMethods: ctx.io_methods.as_ref(),
 		};
@@ -2207,6 +2389,11 @@ unsafe extern "C" fn vfs_delete(
 			Err(_) => return SQLITE_OK,
 		};
 		if path != ctx.actor_id {
+			#[cfg(test)]
+			if let Some(message) = ctx.take_aux_delete_error() {
+				ctx.set_last_error(message);
+				return SQLITE_IOERR_DELETE;
+			}
 			ctx.delete_aux_file(path);
 		}
 		SQLITE_OK
@@ -2964,6 +3151,1044 @@ mod tests {
 	}
 
 	#[test]
+	fn direct_engine_accepts_actual_nul_text_when_bound_with_explicit_length() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let db = harness.open_db(&runtime);
+
+		sqlite_exec(
+			db.as_ptr(),
+			"CREATE TABLE nul_texts (payload TEXT PRIMARY KEY, marker INTEGER NOT NULL);",
+		)
+		.expect("create table should succeed");
+
+		let payload = b"actual\0nul-text";
+		sqlite_insert_text_with_int_value(
+			db.as_ptr(),
+			"INSERT INTO nul_texts (payload, marker) VALUES (?, ?);",
+			payload,
+			7,
+		)
+		.expect("explicit-length text bind should preserve embedded nul");
+
+		assert_eq!(
+			sqlite_query_i64_bind_text(
+				db.as_ptr(),
+				"SELECT marker FROM nul_texts WHERE payload = ?;",
+				payload,
+			)
+			.expect("lookup by embedded-nul text should succeed"),
+			7
+		);
+		assert_eq!(
+			sqlite_query_text(db.as_ptr(), "SELECT hex(payload) FROM nul_texts;")
+				.expect("hex query should succeed"),
+			"61637475616C006E756C2D74657874"
+		);
+	}
+
+	#[test]
+	fn direct_engine_handles_boundary_primary_keys() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let db = harness.open_db(&runtime);
+
+		sqlite_exec(
+			db.as_ptr(),
+			"CREATE TABLE boundary_keys (key_text TEXT PRIMARY KEY, value INTEGER NOT NULL);",
+		)
+		.expect("create table should succeed");
+
+		let mut keys = vec![
+			Vec::from("".as_bytes()),
+			Vec::from(" ".as_bytes()),
+			Vec::from("slash/key".as_bytes()),
+			Vec::from("comma,key".as_bytes()),
+			Vec::from("percent%key".as_bytes()),
+			Vec::from("CaseKey".as_bytes()),
+			Vec::from("casekey".as_bytes()),
+			vec![b'k'; 2048],
+		];
+		for i in 0..256 {
+			keys.push(format!("seq-{i:04}").into_bytes());
+		}
+
+		for (index, key) in keys.iter().enumerate() {
+			sqlite_insert_text_with_int_value(
+				db.as_ptr(),
+				"INSERT INTO boundary_keys (key_text, value) VALUES (?, ?);",
+				key,
+				index as i64,
+			)
+			.expect("boundary key insert should succeed");
+		}
+
+		for (index, key) in keys.iter().enumerate() {
+			assert_eq!(
+				sqlite_query_i64_bind_text(
+					db.as_ptr(),
+					"SELECT value FROM boundary_keys WHERE key_text = ?;",
+					key,
+				)
+				.expect("boundary key lookup should succeed"),
+				index as i64
+			);
+		}
+
+		assert_eq!(
+			sqlite_query_i64(db.as_ptr(), "SELECT COUNT(*) FROM boundary_keys;")
+				.expect("count should succeed"),
+			keys.len() as i64
+		);
+	}
+
+	#[test]
+	fn direct_engine_keeps_shadow_checksum_transaction_consistent() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let db = harness.open_db(&runtime);
+
+		sqlite_exec(
+			db.as_ptr(),
+			"CREATE TABLE items (id INTEGER PRIMARY KEY, value INTEGER NOT NULL);",
+		)
+		.expect("create items should succeed");
+		sqlite_exec(
+			db.as_ptr(),
+			"CREATE TABLE shadow_checksums (name TEXT PRIMARY KEY, total INTEGER NOT NULL);",
+		)
+		.expect("create shadow table should succeed");
+
+		let expected_total = (1..=128).sum::<i64>();
+		sqlite_exec(db.as_ptr(), "BEGIN").expect("begin should succeed");
+		for i in 1..=128 {
+			sqlite_step_statement(
+				db.as_ptr(),
+				&format!("INSERT INTO items (id, value) VALUES ({i}, {i});"),
+			)
+			.expect("item insert should succeed");
+		}
+		sqlite_step_statement(
+			db.as_ptr(),
+			&format!(
+				"INSERT INTO shadow_checksums (name, total) VALUES ('items', {expected_total});"
+			),
+		)
+		.expect("shadow insert should succeed");
+		sqlite_exec(db.as_ptr(), "COMMIT").expect("commit should succeed");
+
+		assert_eq!(
+			sqlite_query_i64(db.as_ptr(), "SELECT SUM(value) FROM items;")
+				.expect("item sum should succeed"),
+			expected_total
+		);
+		assert_eq!(
+			sqlite_query_i64(
+				db.as_ptr(),
+				"SELECT total FROM shadow_checksums WHERE name = 'items';",
+			)
+			.expect("shadow total should succeed"),
+			expected_total
+		);
+	}
+
+	#[test]
+	fn direct_engine_mixed_row_model_preserves_invariants() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let db = harness.open_db(&runtime);
+
+		sqlite_exec(
+			db.as_ptr(),
+			"CREATE TABLE items (item_key TEXT PRIMARY KEY, value TEXT NOT NULL, version INTEGER NOT NULL);",
+		)
+		.expect("create table should succeed");
+
+		for i in 0..64 {
+			sqlite_step_statement(
+				db.as_ptr(),
+				&format!(
+					"INSERT INTO items (item_key, value, version) VALUES ('item-{i:02}', 'insert-{i}', 1);"
+				),
+			)
+			.expect("seed insert should succeed");
+		}
+
+		for i in 0..32 {
+			sqlite_step_statement(
+				db.as_ptr(),
+				&format!(
+					"UPDATE items SET value = 'update-{i}', version = version + 1 WHERE item_key = 'item-{i:02}';"
+				),
+			)
+			.expect("update should succeed");
+		}
+
+		for i in 16..24 {
+			sqlite_step_statement(
+				db.as_ptr(),
+				&format!("DELETE FROM items WHERE item_key = 'item-{i:02}';"),
+			)
+			.expect("delete should succeed");
+		}
+
+		for i in 0..16 {
+			sqlite_step_statement(
+				db.as_ptr(),
+				&format!(
+					"INSERT INTO items (item_key, value, version) VALUES ('item-{i:02}', 'upsert-{i}', 99)
+					ON CONFLICT(item_key) DO UPDATE SET value = excluded.value, version = excluded.version;"
+				),
+			)
+			.expect("upsert should succeed");
+		}
+
+		for i in 0..1000 {
+			sqlite_step_statement(
+				db.as_ptr(),
+				&format!(
+					"UPDATE items SET version = version + 1, value = 'hot-{i}' WHERE item_key = 'item-00';"
+				),
+			)
+			.expect("hot-row update should succeed");
+		}
+
+		assert_eq!(
+			sqlite_query_i64(db.as_ptr(), "SELECT COUNT(*) FROM items;")
+				.expect("count should succeed"),
+			56
+		);
+		assert_eq!(
+			sqlite_query_i64(
+				db.as_ptr(),
+				"SELECT version FROM items WHERE item_key = 'item-00';"
+			)
+			.expect("hot-row version should succeed"),
+			1099
+		);
+		assert_eq!(
+			sqlite_query_text(db.as_ptr(), "PRAGMA quick_check;")
+				.expect("quick_check should succeed"),
+			"ok"
+		);
+		assert_eq!(
+			sqlite_query_text(db.as_ptr(), "PRAGMA integrity_check;")
+				.expect("integrity_check should succeed"),
+			"ok"
+		);
+	}
+
+	#[test]
+	fn direct_engine_runs_deterministic_nasty_script() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let db = harness.open_db(&runtime);
+
+		sqlite_exec(
+			db.as_ptr(),
+			"CREATE TABLE nasty_edge (id INTEGER PRIMARY KEY, payload BLOB NOT NULL);",
+		)
+		.expect("create nasty_edge should succeed");
+		sqlite_exec(
+			db.as_ptr(),
+			"CREATE TABLE nasty_counter (id INTEGER PRIMARY KEY, value INTEGER NOT NULL);",
+		)
+		.expect("create nasty_counter should succeed");
+		sqlite_exec(
+			db.as_ptr(),
+			"CREATE TABLE nasty_rows (n INTEGER PRIMARY KEY, payload BLOB NOT NULL);",
+		)
+		.expect("create nasty_rows should succeed");
+
+		for i in 0..256 {
+			let size = 1 + ((131072 - 1) * i / 255);
+			sqlite_step_statement(
+				db.as_ptr(),
+				&format!(
+					"INSERT OR REPLACE INTO nasty_edge (id, payload) VALUES (1, randomblob({size}));"
+				),
+			)
+			.expect("grow-row write should succeed");
+		}
+		assert_eq!(
+			sqlite_query_i64(
+				db.as_ptr(),
+				"SELECT length(payload) FROM nasty_edge WHERE id = 1;"
+			)
+			.expect("grown row length should succeed"),
+			131072
+		);
+
+		sqlite_step_statement(
+			db.as_ptr(),
+			"INSERT INTO nasty_counter (id, value) VALUES (1, 0);",
+		)
+		.expect("seed counter should succeed");
+		sqlite_exec(db.as_ptr(), "BEGIN").expect("counter begin should succeed");
+		for _ in 0..10_000 {
+			sqlite_step_statement(
+				db.as_ptr(),
+				"UPDATE nasty_counter SET value = value + 1 WHERE id = 1;",
+			)
+			.expect("counter update should succeed");
+		}
+		sqlite_exec(db.as_ptr(), "COMMIT").expect("counter commit should succeed");
+		assert_eq!(
+			sqlite_query_i64(db.as_ptr(), "SELECT value FROM nasty_counter WHERE id = 1;")
+				.expect("counter read should succeed"),
+			10_000
+		);
+
+		sqlite_exec(
+			db.as_ptr(),
+			"CREATE INDEX idx_nasty_rows_payload ON nasty_rows(payload);",
+		)
+		.expect("create index should succeed");
+		sqlite_exec(db.as_ptr(), "BEGIN").expect("bulk begin should succeed");
+		for i in 0..10_000 {
+			sqlite_step_statement(
+				db.as_ptr(),
+				&format!("INSERT INTO nasty_rows (n, payload) VALUES ({i}, randomblob(64));"),
+			)
+			.expect("bulk insert should succeed");
+		}
+		sqlite_exec(db.as_ptr(), "DELETE FROM nasty_rows WHERE n % 2 = 0;")
+			.expect("bulk delete should succeed");
+		sqlite_exec(db.as_ptr(), "COMMIT").expect("bulk commit should succeed");
+		sqlite_exec(db.as_ptr(), "DROP INDEX idx_nasty_rows_payload;")
+			.expect("drop index should succeed");
+		assert_eq!(
+			sqlite_query_i64(db.as_ptr(), "SELECT COUNT(*) FROM nasty_rows;")
+				.expect("remaining row count should succeed"),
+			5000
+		);
+		assert_eq!(
+			sqlite_query_i64(
+				db.as_ptr(),
+				"SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = 'idx_nasty_rows_payload';",
+			)
+			.expect("index absence should succeed"),
+			0
+		);
+
+		sqlite_exec(db.as_ptr(), "BEGIN").expect("rollback begin should succeed");
+		for i in 0..1000 {
+			sqlite_step_statement(
+				db.as_ptr(),
+				&format!(
+					"INSERT INTO nasty_rows (n, payload) VALUES ({}, randomblob(8));",
+					20_000 + i
+				),
+			)
+			.expect("rollback insert should succeed");
+		}
+		sqlite_exec(db.as_ptr(), "ROLLBACK").expect("rollback should succeed");
+		assert_eq!(
+			sqlite_query_i64(
+				db.as_ptr(),
+				"SELECT COUNT(*) FROM nasty_rows WHERE n >= 20000;"
+			)
+			.expect("rollback count should succeed"),
+			0
+		);
+	}
+
+	#[test]
+	fn direct_engine_handles_page_boundary_payloads_and_text_roundtrip() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let db = harness.open_db(&runtime);
+
+		sqlite_exec(
+			db.as_ptr(),
+			"CREATE TABLE payload_matrix (
+				id INTEGER PRIMARY KEY,
+				blob_payload BLOB NOT NULL,
+				unicode_text TEXT NOT NULL,
+				escaped_text TEXT NOT NULL
+			);",
+		)
+		.expect("create table should succeed");
+
+		let sizes = [
+			1, 4095, 4096, 4097, 8191, 8192, 8193, 32768, 65535, 65536, 98304, 131072,
+		];
+		for (index, size) in sizes.iter().enumerate() {
+			let id = index + 1;
+			let unicode_text = format!("snowman-{id}-こんにちは-ß-🧪");
+			let escaped_text = format!("escaped\\\\0-row-{id}");
+			sqlite_step_statement(
+				db.as_ptr(),
+				&format!(
+					"INSERT INTO payload_matrix (id, blob_payload, unicode_text, escaped_text)
+					VALUES ({id}, zeroblob({size}), '{}', '{}');",
+					unicode_text.replace('\'', "''"),
+					escaped_text.replace('\'', "''"),
+				),
+			)
+			.expect("boundary payload insert should succeed");
+		}
+
+		for (index, size) in sizes.iter().enumerate() {
+			let id = index + 1;
+			assert_eq!(
+				sqlite_query_i64(
+					db.as_ptr(),
+					&format!("SELECT length(blob_payload) FROM payload_matrix WHERE id = {id};"),
+				)
+				.expect("blob length query should succeed"),
+				*size as i64
+			);
+		}
+
+		assert_eq!(
+			sqlite_query_text(
+				db.as_ptr(),
+				"SELECT unicode_text FROM payload_matrix WHERE id = 4;",
+			)
+			.expect("unicode text should roundtrip"),
+			"snowman-4-こんにちは-ß-🧪"
+		);
+		assert_eq!(
+			sqlite_query_text(
+				db.as_ptr(),
+				"SELECT escaped_text FROM payload_matrix WHERE id = 4;",
+			)
+			.expect("escaped nul text should roundtrip"),
+			"escaped\\\\0-row-4"
+		);
+		assert_eq!(
+			sqlite_query_text(db.as_ptr(), "PRAGMA quick_check;")
+				.expect("quick_check should succeed"),
+			"ok"
+		);
+	}
+
+	#[test]
+	fn direct_engine_enforces_constraints_savepoints_and_relational_invariants() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let db = harness.open_db(&runtime);
+
+		sqlite_exec(db.as_ptr(), "PRAGMA foreign_keys = ON;")
+			.expect("foreign_keys pragma should succeed");
+		sqlite_exec(
+			db.as_ptr(),
+			"CREATE TABLE users (
+				id INTEGER PRIMARY KEY,
+				email TEXT NOT NULL UNIQUE,
+				name TEXT NOT NULL
+			);",
+		)
+		.expect("create users should succeed");
+		sqlite_exec(
+			db.as_ptr(),
+			"CREATE TABLE inventory (
+				sku TEXT PRIMARY KEY,
+				stock INTEGER NOT NULL CHECK(stock >= 0)
+			);",
+		)
+		.expect("create inventory should succeed");
+		sqlite_exec(
+			db.as_ptr(),
+			"CREATE TABLE orders (
+				id INTEGER PRIMARY KEY,
+				user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+				total_cents INTEGER NOT NULL CHECK(total_cents >= 0),
+				status TEXT NOT NULL
+			);",
+		)
+		.expect("create orders should succeed");
+		sqlite_exec(
+			db.as_ptr(),
+			"CREATE TABLE order_items (
+				order_id INTEGER NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+				sku TEXT NOT NULL REFERENCES inventory(sku),
+				qty INTEGER NOT NULL CHECK(qty > 0),
+				price_cents INTEGER NOT NULL CHECK(price_cents >= 0),
+				PRIMARY KEY(order_id, sku)
+			) WITHOUT ROWID;",
+		)
+		.expect("create order_items should succeed");
+		sqlite_exec(
+			db.as_ptr(),
+			"CREATE TABLE payments (
+				id INTEGER PRIMARY KEY,
+				order_id INTEGER NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+				amount_cents INTEGER NOT NULL CHECK(amount_cents >= 0),
+				status TEXT NOT NULL
+			);",
+		)
+		.expect("create payments should succeed");
+
+		sqlite_exec(
+			db.as_ptr(),
+			"INSERT INTO users (id, email, name) VALUES (1, 'alice@example.com', 'Alice');",
+		)
+		.expect("seed user should succeed");
+		sqlite_exec(
+			db.as_ptr(),
+			"INSERT INTO inventory (sku, stock) VALUES ('sku-red', 10), ('sku-blue', 8);",
+		)
+		.expect("seed inventory should succeed");
+
+		assert!(
+			sqlite_exec(
+				db.as_ptr(),
+				"INSERT INTO users (id, email, name) VALUES (2, 'alice@example.com', 'Again');",
+			)
+			.expect_err("unique violation should fail")
+			.contains("UNIQUE constraint failed")
+		);
+		assert!(
+			sqlite_exec(
+				db.as_ptr(),
+				"INSERT INTO users (id, email, name) VALUES (3, 'null@example.com', NULL);",
+			)
+			.expect_err("not-null violation should fail")
+			.contains("NOT NULL constraint failed")
+		);
+		assert!(
+			sqlite_exec(
+				db.as_ptr(),
+				"UPDATE inventory SET stock = -1 WHERE sku = 'sku-red';"
+			)
+			.expect_err("check violation should fail")
+			.contains("CHECK constraint failed")
+		);
+		assert!(
+			sqlite_exec(
+				db.as_ptr(),
+				"INSERT INTO orders (id, user_id, total_cents, status) VALUES (9, 999, 100, 'pending');",
+			)
+			.expect_err("foreign-key violation should fail")
+			.contains("FOREIGN KEY constraint failed")
+		);
+
+		sqlite_exec(db.as_ptr(), "BEGIN").expect("begin should succeed");
+		sqlite_exec(
+			db.as_ptr(),
+			"INSERT INTO orders (id, user_id, total_cents, status) VALUES (1, 1, 700, 'paid');",
+		)
+		.expect("order insert should succeed");
+		sqlite_exec(
+			db.as_ptr(),
+			"INSERT INTO order_items (order_id, sku, qty, price_cents)
+			VALUES (1, 'sku-red', 2, 150), (1, 'sku-blue', 1, 400);",
+		)
+		.expect("order items insert should succeed");
+		sqlite_exec(
+			db.as_ptr(),
+			"UPDATE inventory
+			SET stock = stock - CASE sku
+				WHEN 'sku-red' THEN 2
+				WHEN 'sku-blue' THEN 1
+				ELSE 0
+			END
+			WHERE sku IN ('sku-red', 'sku-blue');",
+		)
+		.expect("inventory update should succeed");
+		sqlite_exec(
+			db.as_ptr(),
+			"INSERT INTO payments (id, order_id, amount_cents, status) VALUES (1, 1, 700, 'captured');",
+		)
+		.expect("payment insert should succeed");
+		sqlite_exec(db.as_ptr(), "COMMIT").expect("commit should succeed");
+
+		assert_eq!(
+			sqlite_query_i64(db.as_ptr(), "SELECT total_cents FROM orders WHERE id = 1;",)
+				.expect("order total should succeed"),
+			sqlite_query_i64(
+				db.as_ptr(),
+				"SELECT SUM(qty * price_cents) FROM order_items WHERE order_id = 1;",
+			)
+			.expect("item sum should succeed")
+		);
+		assert_eq!(
+			sqlite_query_i64(
+				db.as_ptr(),
+				"SELECT SUM(amount_cents) FROM payments WHERE order_id = 1 AND status = 'captured';",
+			)
+			.expect("captured payment sum should succeed"),
+			700
+		);
+		assert_eq!(
+			sqlite_query_i64(
+				db.as_ptr(),
+				"SELECT SUM(stock) FROM inventory WHERE sku IN ('sku-red', 'sku-blue');",
+			)
+			.expect("inventory sum should succeed"),
+			15
+		);
+
+		sqlite_exec(db.as_ptr(), "SAVEPOINT sp_order_rollback;").expect("savepoint should succeed");
+		sqlite_exec(
+			db.as_ptr(),
+			"INSERT INTO orders (id, user_id, total_cents, status) VALUES (2, 1, 123, 'draft');",
+		)
+		.expect("draft order insert should succeed");
+		sqlite_exec(
+			db.as_ptr(),
+			"INSERT INTO order_items (order_id, sku, qty, price_cents) VALUES (2, 'sku-red', 1, 123);",
+		)
+		.expect("draft item insert should succeed");
+		sqlite_exec(db.as_ptr(), "ROLLBACK TO sp_order_rollback;")
+			.expect("rollback to savepoint should succeed");
+		sqlite_exec(db.as_ptr(), "RELEASE sp_order_rollback;")
+			.expect("release savepoint should succeed");
+		assert_eq!(
+			sqlite_query_i64(db.as_ptr(), "SELECT COUNT(*) FROM orders WHERE id = 2;")
+				.expect("rolled-back order should be absent"),
+			0
+		);
+
+		sqlite_exec(db.as_ptr(), "SAVEPOINT sp_order_release;")
+			.expect("release savepoint should succeed");
+		sqlite_exec(
+			db.as_ptr(),
+			"INSERT INTO orders (id, user_id, total_cents, status) VALUES (3, 1, 50, 'pending');",
+		)
+		.expect("released order insert should succeed");
+		sqlite_exec(db.as_ptr(), "RELEASE sp_order_release;")
+			.expect("release savepoint should succeed");
+		assert_eq!(
+			sqlite_query_i64(db.as_ptr(), "SELECT COUNT(*) FROM orders WHERE id = 3;")
+				.expect("released order should exist"),
+			1
+		);
+
+		sqlite_exec(db.as_ptr(), "BEGIN").expect("rollback begin should succeed");
+		sqlite_exec(
+			db.as_ptr(),
+			"INSERT INTO payments (id, order_id, amount_cents, status) VALUES (2, 3, 50, 'captured');",
+		)
+		.expect("rollback payment insert should succeed");
+		sqlite_exec(db.as_ptr(), "ROLLBACK").expect("rollback should succeed");
+		assert_eq!(
+			sqlite_query_i64(db.as_ptr(), "SELECT COUNT(*) FROM payments WHERE id = 2;")
+				.expect("rolled-back payment should be absent"),
+			0
+		);
+
+		sqlite_exec(
+			db.as_ptr(),
+			"INSERT INTO users (id, email, name) VALUES (7, 'idempotent@example.com', 'Replay')
+			ON CONFLICT(id) DO NOTHING;",
+		)
+		.expect("idempotent insert should succeed");
+		sqlite_exec(
+			db.as_ptr(),
+			"INSERT INTO users (id, email, name) VALUES (7, 'idempotent@example.com', 'Replay')
+			ON CONFLICT(id) DO NOTHING;",
+		)
+		.expect("idempotent replay should succeed");
+		assert_eq!(
+			sqlite_query_i64(db.as_ptr(), "SELECT COUNT(*) FROM users WHERE id = 7;")
+				.expect("idempotent user count should succeed"),
+			1
+		);
+
+		sqlite_exec(db.as_ptr(), "DELETE FROM orders WHERE id = 1;")
+			.expect("cascade delete should succeed");
+		assert_eq!(
+			sqlite_query_i64(
+				db.as_ptr(),
+				"SELECT COUNT(*) FROM order_items WHERE order_id = 1;"
+			)
+			.expect("cascaded order items should be removed"),
+			0
+		);
+		assert_eq!(
+			sqlite_query_i64(
+				db.as_ptr(),
+				"SELECT COUNT(*) FROM payments WHERE order_id = 1;"
+			)
+			.expect("cascaded payments should be removed"),
+			0
+		);
+	}
+
+	#[test]
+	fn direct_engine_handles_schema_churn_index_parity_and_pragmas() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let db = harness.open_db(&runtime);
+
+		assert_eq!(
+			sqlite_query_text(db.as_ptr(), "PRAGMA journal_mode = DELETE;")
+				.expect("journal_mode pragma should succeed"),
+			"delete"
+		);
+		sqlite_exec(db.as_ptr(), "PRAGMA synchronous = NORMAL;")
+			.expect("synchronous pragma should succeed");
+		sqlite_exec(db.as_ptr(), "PRAGMA cache_size = -2000;")
+			.expect("cache_size pragma should succeed");
+		sqlite_exec(db.as_ptr(), "PRAGMA foreign_keys = ON;")
+			.expect("foreign_keys pragma should succeed");
+		sqlite_exec(db.as_ptr(), "PRAGMA auto_vacuum = NONE;")
+			.expect("auto_vacuum pragma should succeed");
+		assert_eq!(
+			sqlite_query_i64(db.as_ptr(), "PRAGMA cache_size;")
+				.expect("cache_size read should succeed"),
+			-2000
+		);
+		assert_eq!(
+			sqlite_query_i64(db.as_ptr(), "PRAGMA foreign_keys;")
+				.expect("foreign_keys read should succeed"),
+			1
+		);
+
+		sqlite_exec(
+			db.as_ptr(),
+			"CREATE TABLE items (
+				id INTEGER PRIMARY KEY,
+				bucket INTEGER NOT NULL,
+				key_text TEXT NOT NULL,
+				value INTEGER NOT NULL
+			);",
+		)
+		.expect("create items should succeed");
+		sqlite_exec(
+			db.as_ptr(),
+			"CREATE TABLE item_ops (
+				seq INTEGER PRIMARY KEY AUTOINCREMENT,
+				kind TEXT NOT NULL,
+				item_id INTEGER NOT NULL
+			);",
+		)
+		.expect("create item_ops should succeed");
+		sqlite_exec(
+			db.as_ptr(),
+			"CREATE TABLE ledger (
+				account_id TEXT NOT NULL,
+				entry_id INTEGER NOT NULL,
+				amount INTEGER NOT NULL,
+				PRIMARY KEY(account_id, entry_id)
+			) WITHOUT ROWID;",
+		)
+		.expect("create ledger should succeed");
+		sqlite_exec(
+			db.as_ptr(),
+			"CREATE VIEW active_items AS
+			SELECT id, bucket, key_text, value FROM items WHERE value >= 0;",
+		)
+		.expect("create view should succeed");
+		sqlite_exec(
+			db.as_ptr(),
+			"CREATE TRIGGER items_ai AFTER INSERT ON items
+			BEGIN
+				INSERT INTO item_ops (kind, item_id) VALUES ('insert', NEW.id);
+			END;",
+		)
+		.expect("create insert trigger should succeed");
+		sqlite_exec(
+			db.as_ptr(),
+			"CREATE TRIGGER items_ad AFTER DELETE ON items
+			BEGIN
+				INSERT INTO item_ops (kind, item_id) VALUES ('delete', OLD.id);
+			END;",
+		)
+		.expect("create delete trigger should succeed");
+		sqlite_exec(
+			db.as_ptr(),
+			"ALTER TABLE items ADD COLUMN tag TEXT NOT NULL DEFAULT 'base';",
+		)
+		.expect("alter table should succeed");
+		sqlite_exec(
+			db.as_ptr(),
+			"CREATE INDEX idx_items_bucket_key ON items(bucket, key_text);",
+		)
+		.expect("create compound index should succeed");
+
+		sqlite_exec(db.as_ptr(), "BEGIN").expect("begin should succeed");
+		for i in 0..128 {
+			sqlite_step_statement(
+				db.as_ptr(),
+				&format!(
+					"INSERT INTO items (id, bucket, key_text, value, tag)
+					VALUES ({i}, {}, 'k-{i:03}', {}, 'tag-{}');",
+					i % 8,
+					i * 2,
+					i % 5,
+				),
+			)
+			.expect("items insert should succeed");
+			sqlite_step_statement(
+				db.as_ptr(),
+				&format!(
+					"INSERT INTO ledger (account_id, entry_id, amount) VALUES ('acct-{}', {i}, {});",
+					i % 4,
+					(i as i64) - 32,
+				),
+			)
+			.expect("ledger insert should succeed");
+		}
+		sqlite_exec(db.as_ptr(), "COMMIT").expect("commit should succeed");
+		sqlite_exec(db.as_ptr(), "DELETE FROM items WHERE id % 9 = 0;")
+			.expect("delete should succeed");
+
+		assert_eq!(
+			sqlite_query_i64(db.as_ptr(), "SELECT COUNT(*) FROM active_items;")
+				.expect("view query should succeed"),
+			sqlite_query_i64(db.as_ptr(), "SELECT COUNT(*) FROM items WHERE value >= 0;")
+				.expect("table query should succeed")
+		);
+		assert_eq!(
+			sqlite_query_i64(
+				db.as_ptr(),
+				"SELECT
+					SUM(CASE WHEN kind = 'insert' THEN 1 ELSE 0 END) -
+					SUM(CASE WHEN kind = 'delete' THEN 1 ELSE 0 END)
+				FROM item_ops;",
+			)
+			.expect("op log delta should succeed"),
+			sqlite_query_i64(db.as_ptr(), "SELECT COUNT(*) FROM items;")
+				.expect("live item count should succeed")
+		);
+		assert_eq!(
+			sqlite_query_i64(
+				db.as_ptr(),
+				"SELECT COUNT(*) FROM items WHERE bucket = 3 AND key_text >= 'k-040';",
+			)
+			.expect("indexed scan should succeed"),
+			sqlite_query_i64(
+				db.as_ptr(),
+				"SELECT COUNT(*) FROM items NOT INDEXED WHERE bucket = 3 AND key_text >= 'k-040';",
+			)
+			.expect("not-indexed scan should succeed")
+		);
+		assert_eq!(
+			sqlite_query_i64(
+				db.as_ptr(),
+				"SELECT COUNT(*) FROM ledger WHERE account_id = 'acct-2';"
+			)
+			.expect("without-rowid query should succeed"),
+			32
+		);
+
+		sqlite_exec(db.as_ptr(), "DROP INDEX idx_items_bucket_key;")
+			.expect("drop index should succeed");
+		assert_eq!(
+			sqlite_query_i64(
+				db.as_ptr(),
+				"SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = 'idx_items_bucket_key';",
+			)
+			.expect("dropped index should be absent"),
+			0
+		);
+	}
+
+	#[test]
+	fn direct_engine_handles_prepared_statement_churn() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let db = harness.open_db(&runtime);
+
+		sqlite_exec(
+			db.as_ptr(),
+			"CREATE TABLE prepared_items (
+				id INTEGER PRIMARY KEY,
+				value TEXT NOT NULL,
+				counter INTEGER NOT NULL
+			);",
+		)
+		.expect("create table should succeed");
+
+		for i in 1..=128 {
+			let sql = format!(
+				"INSERT INTO prepared_items (id, value, counter) VALUES ({i}, 'seed-{i}', 0); -- unique-sql-{i}"
+			);
+			let stmt = sqlite_prepare_statement(db.as_ptr(), &sql)
+				.expect("unique prepared statement should prepare");
+			sqlite_step_prepared(db.as_ptr(), stmt, &sql)
+				.expect("unique prepared statement should execute");
+			unsafe {
+				sqlite3_finalize(stmt);
+			}
+		}
+
+		let update_sql = "UPDATE prepared_items SET counter = counter + ?, value = ? WHERE id = ?;";
+		let stmt = sqlite_prepare_statement(db.as_ptr(), update_sql)
+			.expect("reused prepared statement should prepare");
+		for i in 0..4000 {
+			sqlite_reset_prepared(stmt, update_sql).expect("statement reset should succeed");
+			sqlite_clear_bindings(stmt, update_sql).expect("binding clear should succeed");
+			sqlite_bind_i64(db.as_ptr(), stmt, 1, 1, update_sql)
+				.expect("increment bind should succeed");
+			let value = format!("value-{i}");
+			sqlite_bind_text_bytes(db.as_ptr(), stmt, 2, value.as_bytes(), update_sql)
+				.expect("text bind should succeed");
+			sqlite_bind_i64(db.as_ptr(), stmt, 3, (i % 128 + 1) as i64, update_sql)
+				.expect("id bind should succeed");
+			sqlite_step_prepared(db.as_ptr(), stmt, update_sql)
+				.expect("reused prepared statement should execute");
+		}
+		unsafe {
+			sqlite3_finalize(stmt);
+		}
+
+		assert_eq!(
+			sqlite_query_i64(db.as_ptr(), "SELECT COUNT(*) FROM prepared_items;")
+				.expect("row count should succeed"),
+			128
+		);
+		assert_eq!(
+			sqlite_query_i64(db.as_ptr(), "SELECT SUM(counter) FROM prepared_items;")
+				.expect("counter sum should succeed"),
+			4000
+		);
+		assert_eq!(
+			sqlite_query_text(
+				db.as_ptr(),
+				"SELECT value FROM prepared_items WHERE id = 1;",
+			)
+			.expect("final prepared value should succeed"),
+			"value-3968"
+		);
+	}
+
+	#[test]
+	fn direct_engine_preserves_transaction_balance_and_fragmentation_invariants() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let db = harness.open_db(&runtime);
+
+		sqlite_exec(
+			db.as_ptr(),
+			"CREATE TABLE accounts (
+				id INTEGER PRIMARY KEY,
+				balance INTEGER NOT NULL
+			);",
+		)
+		.expect("create accounts should succeed");
+		sqlite_exec(
+			db.as_ptr(),
+			"CREATE TABLE transfer_log (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				from_id INTEGER NOT NULL,
+				to_id INTEGER NOT NULL,
+				amount INTEGER NOT NULL
+			);",
+		)
+		.expect("create transfer_log should succeed");
+		sqlite_exec(
+			db.as_ptr(),
+			"CREATE TABLE frag (
+				id INTEGER PRIMARY KEY,
+				payload BLOB NOT NULL
+			);",
+		)
+		.expect("create frag should succeed");
+
+		for id in 1..=8 {
+			sqlite_exec(
+				db.as_ptr(),
+				&format!("INSERT INTO accounts (id, balance) VALUES ({id}, 1000);"),
+			)
+			.expect("seed account should succeed");
+		}
+
+		sqlite_exec(db.as_ptr(), "BEGIN").expect("transfer begin should succeed");
+		for step in 0..500 {
+			let from_id = step % 8 + 1;
+			let to_id = (step * 5 + 3) % 8 + 1;
+			let amount = step % 17 + 1;
+			sqlite_exec(
+				db.as_ptr(),
+				&format!("UPDATE accounts SET balance = balance - {amount} WHERE id = {from_id};"),
+			)
+			.expect("debit should succeed");
+			sqlite_exec(
+				db.as_ptr(),
+				&format!("UPDATE accounts SET balance = balance + {amount} WHERE id = {to_id};"),
+			)
+			.expect("credit should succeed");
+			sqlite_exec(
+				db.as_ptr(),
+				&format!(
+					"INSERT INTO transfer_log (from_id, to_id, amount) VALUES ({from_id}, {to_id}, {amount});"
+				),
+			)
+			.expect("transfer log insert should succeed");
+		}
+		sqlite_exec(db.as_ptr(), "COMMIT").expect("transfer commit should succeed");
+
+		sqlite_exec(db.as_ptr(), "BEGIN").expect("rollback begin should succeed");
+		sqlite_exec(
+			db.as_ptr(),
+			"UPDATE accounts SET balance = balance - 777 WHERE id = 1;",
+		)
+		.expect("rollback debit should succeed");
+		sqlite_exec(
+			db.as_ptr(),
+			"UPDATE accounts SET balance = balance + 777 WHERE id = 2;",
+		)
+		.expect("rollback credit should succeed");
+		sqlite_exec(
+			db.as_ptr(),
+			"INSERT INTO transfer_log (from_id, to_id, amount) VALUES (1, 2, 777);",
+		)
+		.expect("rollback transfer log insert should succeed");
+		sqlite_exec(db.as_ptr(), "ROLLBACK").expect("rollback should succeed");
+
+		for id in 0..512 {
+			let size = ((id * 541) % 16384) + 1;
+			sqlite_exec(
+				db.as_ptr(),
+				&format!("INSERT INTO frag (id, payload) VALUES ({id}, randomblob({size}));"),
+			)
+			.expect("fragmentation insert should succeed");
+		}
+		for id in (0..512).filter(|id| (id * 17 + 11) % 5 == 0) {
+			sqlite_exec(db.as_ptr(), &format!("DELETE FROM frag WHERE id = {id};"))
+				.expect("fragmentation delete should succeed");
+		}
+		for id in (0..512).filter(|id| id % 3 == 0) {
+			let shrink_size = ((id * 13) % 256) + 1;
+			sqlite_exec(
+				db.as_ptr(),
+				&format!("UPDATE frag SET payload = randomblob({shrink_size}) WHERE id = {id};"),
+			)
+			.expect("fragmentation shrink should succeed");
+		}
+		for id in (0..512).filter(|id| id % 7 == 0) {
+			let grow_size = 16384 + ((id * 97) % 8192);
+			sqlite_exec(
+				db.as_ptr(),
+				&format!("UPDATE frag SET payload = randomblob({grow_size}) WHERE id = {id};"),
+			)
+			.expect("fragmentation grow should succeed");
+		}
+		sqlite_exec(db.as_ptr(), "VACUUM;").expect("vacuum should succeed");
+
+		assert_eq!(
+			sqlite_query_i64(db.as_ptr(), "SELECT SUM(balance) FROM accounts;")
+				.expect("balance sum should succeed"),
+			8000
+		);
+		assert_eq!(
+			sqlite_query_i64(db.as_ptr(), "SELECT COUNT(*) FROM transfer_log;")
+				.expect("transfer log count should succeed"),
+			500
+		);
+		assert_eq!(
+			sqlite_query_i64(db.as_ptr(), "SELECT COUNT(*) FROM frag;")
+				.expect("frag count should succeed"),
+			410
+		);
+		assert!(
+			sqlite_query_i64(db.as_ptr(), "SELECT SUM(length(payload)) FROM frag;")
+				.expect("frag payload sum should succeed")
+				> 0
+		);
+		assert_eq!(
+			sqlite_query_text(db.as_ptr(), "PRAGMA integrity_check;")
+				.expect("integrity_check should succeed"),
+			"ok"
+		);
+	}
+
+	#[test]
 	fn direct_engine_batch_atomic_probe_runs_on_open() {
 		let runtime = direct_runtime();
 		let harness = DirectEngineHarness::new();
@@ -3361,6 +4586,65 @@ mod tests {
 	}
 
 	#[test]
+	fn direct_engine_repeated_close_reopen_cycles_preserve_state() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let engine = runtime.block_on(harness.open_engine());
+		let actor_id = &harness.actor_id;
+
+		for cycle in 0..20 {
+			let db =
+				harness.open_db_on_engine(&runtime, engine.clone(), actor_id, VfsConfig::default());
+			sqlite_exec(
+				db.as_ptr(),
+				"CREATE TABLE IF NOT EXISTS reopen_cycles (
+					id INTEGER PRIMARY KEY,
+					cycle INTEGER NOT NULL,
+					value INTEGER NOT NULL
+				);",
+			)
+			.expect("create table should succeed");
+
+			let start = cycle * 25;
+			for id in start..start + 25 {
+				sqlite_exec(
+					db.as_ptr(),
+					&format!(
+						"INSERT INTO reopen_cycles (id, cycle, value) VALUES ({id}, {cycle}, {})
+						ON CONFLICT(id) DO UPDATE SET cycle = excluded.cycle, value = excluded.value;",
+						id * 3
+					),
+				)
+				.expect("insert across reopen cycle should succeed");
+			}
+
+			assert_eq!(
+				sqlite_query_i64(db.as_ptr(), "SELECT COUNT(*) FROM reopen_cycles;")
+					.expect("count during reopen cycle should succeed"),
+				((cycle + 1) * 25) as i64
+			);
+		}
+
+		let reopened =
+			harness.open_db_on_engine(&runtime, engine.clone(), actor_id, VfsConfig::default());
+		assert_eq!(
+			sqlite_query_i64(reopened.as_ptr(), "SELECT COUNT(*) FROM reopen_cycles;")
+				.expect("final reopen count should succeed"),
+			500
+		);
+		assert_eq!(
+			sqlite_query_i64(reopened.as_ptr(), "SELECT SUM(value) FROM reopen_cycles;")
+				.expect("final reopen sum should succeed"),
+			(0..500).map(|id| (id * 3) as i64).sum::<i64>()
+		);
+		assert_eq!(
+			sqlite_query_text(reopened.as_ptr(), "PRAGMA integrity_check;")
+				.expect("integrity_check after reopen loop should succeed"),
+			"ok"
+		);
+	}
+
+	#[test]
 	fn direct_engine_preserves_mixed_workload_across_sleep_wake() {
 		let runtime = direct_runtime();
 		let harness = DirectEngineHarness::new();
@@ -3451,6 +4735,158 @@ mod tests {
 			sqlite_query_text(reopened.as_ptr(), "SELECT value FROM items WHERE id = 1;")
 				.expect("select after reopen should succeed"),
 			"still-alive"
+		);
+	}
+
+	#[test]
+	fn direct_engine_fresh_reopen_recovers_after_poisoned_handle() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let engine = runtime.block_on(harness.open_engine());
+		let startup = runtime.block_on(harness.startup_data_for(&harness.actor_id, &engine));
+		let transport = SqliteTransport::from_direct(engine.clone());
+		let hooks = transport
+			.direct_hooks()
+			.expect("direct transport should expose test hooks");
+		let vfs = SqliteVfs::register_with_transport(
+			&next_test_name("sqlite-direct-vfs"),
+			transport,
+			harness.actor_id.clone(),
+			runtime.handle().clone(),
+			startup,
+			VfsConfig::default(),
+		)
+		.expect("v2 vfs should register");
+		let db = open_database(vfs, &harness.actor_id).expect("sqlite database should open");
+
+		sqlite_exec(
+			db.as_ptr(),
+			"CREATE TABLE stable_rows (id INTEGER PRIMARY KEY, value TEXT NOT NULL);",
+		)
+		.expect("create table should succeed");
+		sqlite_exec(
+			db.as_ptr(),
+			"INSERT INTO stable_rows (id, value) VALUES (1, 'committed-before-failure');",
+		)
+		.expect("seed write should succeed");
+
+		hooks.fail_next_commit("InjectedTransportError: reopen recovery transport dropped");
+		let err = sqlite_exec(
+			db.as_ptr(),
+			"INSERT INTO stable_rows (id, value) VALUES (2, 'should-not-commit');",
+		)
+		.expect_err("failing transport commit should surface as an IO error");
+		assert!(
+			err.contains("I/O") || err.contains("disk I/O"),
+			"sqlite should surface transport failure as an IO error: {err}",
+		);
+		assert!(
+			direct_vfs_ctx(&db).is_dead(),
+			"transport error should kill the live VFS",
+		);
+
+		drop(db);
+
+		let reopened = harness.open_db_on_engine(
+			&runtime,
+			engine.clone(),
+			&harness.actor_id,
+			VfsConfig::default(),
+		);
+		assert_eq!(
+			sqlite_query_i64(reopened.as_ptr(), "SELECT COUNT(*) FROM stable_rows;")
+				.expect("reopened count should succeed"),
+			1
+		);
+		assert_eq!(
+			sqlite_query_text(
+				reopened.as_ptr(),
+				"SELECT value FROM stable_rows WHERE id = 1;"
+			)
+			.expect("committed row should survive reopen"),
+			"committed-before-failure"
+		);
+		assert_eq!(
+			sqlite_query_i64(
+				reopened.as_ptr(),
+				"SELECT COUNT(*) FROM stable_rows WHERE id = 2;",
+			)
+			.expect("failed row should stay absent"),
+			0
+		);
+
+		sqlite_exec(
+			reopened.as_ptr(),
+			"INSERT INTO stable_rows (id, value) VALUES (3, 'after-reopen');",
+		)
+		.expect("fresh reopen should accept new writes");
+		assert_eq!(
+			sqlite_query_i64(reopened.as_ptr(), "SELECT COUNT(*) FROM stable_rows;")
+				.expect("final count should succeed"),
+			2
+		);
+	}
+
+	#[test]
+	fn direct_engine_aux_open_failure_surfaces_without_poisoning_main_db() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let db = harness.open_db(&runtime);
+		let ctx = direct_vfs_ctx(&db);
+
+		sqlite_exec(
+			db.as_ptr(),
+			"CREATE TABLE items (id INTEGER PRIMARY KEY, value TEXT NOT NULL);",
+		)
+		.expect("create table should succeed");
+		sqlite_exec(
+			db.as_ptr(),
+			"INSERT INTO items (id, value) VALUES (1, 'still-works');",
+		)
+		.expect("seed write should succeed");
+
+		ctx.fail_next_aux_open("InjectedAuxOpenError: attached db open failed");
+		let err = sqlite_exec(db.as_ptr(), "ATTACH 'scratch-aux.db' AS scratch;")
+			.expect_err("attach should surface aux open failure");
+		assert!(
+			err.contains("open") || err.contains("I/O") || err.contains("disk I/O"),
+			"sqlite should surface aux open failure: {err}",
+		);
+		assert_eq!(
+			db.take_last_kv_error().as_deref(),
+			Some("InjectedAuxOpenError: attached db open failed"),
+		);
+		assert!(
+			!ctx.is_dead(),
+			"aux open failure should not poison the main db handle",
+		);
+		assert_eq!(
+			sqlite_query_text(db.as_ptr(), "SELECT value FROM items WHERE id = 1;")
+				.expect("main db should remain queryable"),
+			"still-works"
+		);
+	}
+
+	#[test]
+	fn vfs_delete_surfaces_aux_delete_failure() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let db = harness.open_db(&runtime);
+		let ctx = direct_vfs_ctx(&db);
+
+		ctx.open_aux_file("actor-journal");
+		ctx.fail_next_aux_delete("InjectedAuxDeleteError: delete failed");
+		let path = CString::new("actor-journal").expect("cstring should build");
+
+		let rc = unsafe { vfs_delete(db._vfs.vfs_ptr, path.as_ptr(), 0) };
+		assert_eq!(rc, SQLITE_IOERR_DELETE);
+		assert_eq!(
+			db.take_last_kv_error().as_deref(),
+			Some("InjectedAuxDeleteError: delete failed"),
+		);
+		assert!(
+			ctx.aux_file_exists("actor-journal"),
+			"failed delete should leave aux state intact",
 		);
 	}
 
@@ -4175,6 +5611,62 @@ mod tests {
 	}
 
 	#[test]
+	fn resolve_pages_surfaces_read_path_error_response() {
+		let runtime = Builder::new_current_thread()
+			.enable_all()
+			.build()
+			.expect("runtime should build");
+		let mut protocol = MockProtocol::new(
+			protocol::SqliteCommitResponse::SqliteCommitOk(protocol::SqliteCommitOk {
+				new_head_txid: 13,
+				meta: sqlite_meta(8 * 1024 * 1024),
+			}),
+			protocol::SqliteCommitStageResponse::SqliteCommitStageOk(
+				protocol::SqliteCommitStageOk {
+					chunk_idx_committed: 0,
+				},
+			),
+			protocol::SqliteCommitFinalizeResponse::SqliteCommitFinalizeOk(
+				protocol::SqliteCommitFinalizeOk {
+					new_head_txid: 13,
+					meta: sqlite_meta(8 * 1024 * 1024),
+				},
+			),
+		);
+		protocol.get_pages_response =
+			protocol::SqliteGetPagesResponse::SqliteErrorResponse(protocol::SqliteErrorResponse {
+				message: "InjectedGetPagesError: read path dropped".to_string(),
+			});
+		let ctx = VfsContext::new(
+			"actor".to_string(),
+			runtime.handle().clone(),
+			SqliteTransport::from_mock(Arc::new(protocol)),
+			protocol::SqliteStartupData {
+				generation: 7,
+				meta: protocol::SqliteMeta {
+					db_size_pages: 4,
+					..sqlite_meta(8 * 1024 * 1024)
+				},
+				preloaded_pages: vec![protocol::SqliteFetchedPage {
+					pgno: 1,
+					bytes: Some(vec![1; 4096]),
+				}],
+			},
+			VfsConfig::default(),
+			unsafe { std::mem::zeroed() },
+		);
+
+		let err = ctx
+			.resolve_pages(&[2], false)
+			.expect_err("read-path error response should surface");
+		assert!(matches!(
+			err,
+			GetPagesError::Other(ref message)
+				if message.contains("InjectedGetPagesError")
+		));
+	}
+
+	#[test]
 	fn commit_buffered_pages_uses_fast_path() {
 		let runtime = Builder::new_current_thread()
 			.enable_all()
@@ -4340,6 +5832,58 @@ mod tests {
 		);
 		assert_eq!(protocol.awaited_stage_responses(), 0);
 		assert_eq!(protocol.finalize_requests().len(), 1);
+	}
+
+	#[test]
+	fn commit_buffered_pages_surfaces_finalize_stage_not_found() {
+		let runtime = Builder::new_current_thread()
+			.enable_all()
+			.build()
+			.expect("runtime should build");
+		let protocol = Arc::new(MockProtocol::new(
+			protocol::SqliteCommitResponse::SqliteCommitTooLarge(protocol::SqliteCommitTooLarge {
+				actual_size_bytes: 3 * 4096,
+				max_size_bytes: 4096,
+			}),
+			protocol::SqliteCommitStageResponse::SqliteCommitStageOk(
+				protocol::SqliteCommitStageOk {
+					chunk_idx_committed: 0,
+				},
+			),
+			protocol::SqliteCommitFinalizeResponse::SqliteStageNotFound(
+				protocol::SqliteStageNotFound { stage_id: 99 },
+			),
+		));
+
+		let protocol_for_release = Arc::clone(&protocol);
+		let release = std::thread::spawn(move || {
+			runtime.block_on(async {
+				protocol_for_release.finalize_started.notified().await;
+				protocol_for_release.release_finalize.notify_one();
+			});
+		});
+
+		let err = Builder::new_current_thread()
+			.enable_all()
+			.build()
+			.expect("runtime should build")
+			.block_on(commit_buffered_pages(
+				&SqliteTransport::from_mock(Arc::clone(&protocol)),
+				BufferedCommitRequest {
+					actor_id: "actor".to_string(),
+					generation: 7,
+					expected_head_txid: 12,
+					new_db_size_pages: 3,
+					max_delta_bytes: 4096,
+					max_pages_per_stage: 1,
+					dirty_pages: dirty_pages(3, 9),
+				},
+			))
+			.expect_err("stage-not-found finalize should fail");
+
+		release.join().expect("release thread should finish");
+
+		assert!(matches!(err, CommitBufferError::StageNotFound(99)));
 	}
 
 	#[test]
@@ -4923,6 +6467,11 @@ mod tests {
 		// 50MB exercises the slow-path stage/finalize chunking that has
 		// historically hit decode errors under certain transports.
 		large_tx_insert(50 * 1024 * 1024);
+	}
+
+	#[test]
+	fn bench_large_tx_insert_100mb() {
+		large_tx_insert(100 * 1024 * 1024);
 	}
 
 	fn large_tx_insert(target_bytes: usize) {
