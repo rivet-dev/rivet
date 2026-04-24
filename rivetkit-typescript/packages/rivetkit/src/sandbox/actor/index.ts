@@ -158,6 +158,12 @@ async function resolveProvider<TConnParams>(
  *    - Connecting to the sandbox-agent server
  * 3. Persist the sandbox ID from the started client
  * 4. Re-subscribe to all persisted session IDs
+ *
+ * **Reconnection fallback:** If the actor has a persisted sandbox ID and
+ * reconnection fails (e.g. Docker container removed after a daemon
+ * restart), the stale ID is cleared and a fresh sandbox is provisioned.
+ * If fresh provisioning also fails, the original state is restored so
+ * future attempts can retry once the provider recovers.
  */
 async function ensureAgent<TConnParams>(
 	c: SandboxActionContext<TConnParams>,
@@ -169,12 +175,54 @@ async function ensureAgent<TConnParams>(
 	}
 
 	const provider = await resolveProvider(c, config);
+	const existingSandboxId = c.state.sandboxId ?? undefined;
 
-	c.vars.sandboxAgentClient = await SandboxAgent.start({
-		sandbox: provider,
-		sandboxId: c.state.sandboxId ?? undefined,
-		persist: new SqliteSessionPersistDriver(c.db, persistRawEvents),
-	});
+	try {
+		c.vars.sandboxAgentClient = await SandboxAgent.start({
+			sandbox: provider,
+			sandboxId: existingSandboxId,
+			persist: new SqliteSessionPersistDriver(c.db, persistRawEvents),
+		});
+	} catch (error) {
+		// If we were reconnecting to an existing sandbox and it failed,
+		// the sandbox may have been destroyed externally (e.g. Docker
+		// container removed after a daemon restart with AutoRemove).
+		// Clear the stale ID and attempt to provision a fresh sandbox.
+		if (existingSandboxId) {
+			c.log.warn({
+				msg: "failed to reconnect to existing sandbox, creating a new one",
+				sandboxId: existingSandboxId,
+				error: String(error),
+			});
+
+			const previousSubscribedSessionIds = [
+				...c.state.subscribedSessionIds,
+			];
+			c.state.sandboxId = null;
+			c.state.subscribedSessionIds = [];
+
+			try {
+				c.vars.sandboxAgentClient = await SandboxAgent.start({
+					sandbox: provider,
+					sandboxId: undefined,
+					persist: new SqliteSessionPersistDriver(
+						c.db,
+						persistRawEvents,
+					),
+				});
+			} catch (retryError) {
+				// Fresh provisioning also failed — the provider is
+				// genuinely broken. Restore the previous state so a
+				// future attempt can retry reconnection once the
+				// provider recovers.
+				c.state.sandboxId = existingSandboxId;
+				c.state.subscribedSessionIds = previousSubscribedSessionIds;
+				throw retryError;
+			}
+		} else {
+			throw error;
+		}
+	}
 
 	// Persist the sandbox ID so future wake cycles reconnect to the same sandbox.
 	if (!c.state.sandboxId && c.vars.sandboxAgentClient.sandboxId) {
