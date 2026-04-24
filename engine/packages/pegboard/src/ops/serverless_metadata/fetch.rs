@@ -5,6 +5,7 @@ use anyhow::Result;
 use gas::prelude::*;
 use reqwest::header::{HeaderMap as ReqwestHeaderMap, HeaderName, HeaderValue};
 use rivet_envoy_protocol::PROTOCOL_VERSION;
+use rivetkit_shared_types::serverless_metadata::{ActorName, ServerlessMetadataPayload};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
@@ -25,8 +26,9 @@ pub enum ServerlessMetadataError {
 	RequestFailed {},
 	RequestTimedOut {},
 	NonSuccessStatus { status_code: u16, body: String },
-	InvalidResponseJson { body: String },
+	InvalidResponseJson { body: String, parse_error: String },
 	InvalidResponseSchema { runtime: String, version: String },
+	InvalidEnvoyProtocolVersion { version: u16 },
 }
 
 #[derive(Debug, Clone)]
@@ -43,33 +45,6 @@ pub struct Output {
 pub struct ActorNameMetadata {
 	pub name: String,
 	pub metadata: serde_json::Map<String, serde_json::Value>,
-}
-
-#[derive(Deserialize)]
-struct ServerlessMetadataEnvoy {
-	version: Option<u32>,
-}
-
-#[derive(Deserialize)]
-struct ServerlessMetadataRunner {
-	version: Option<u32>,
-}
-
-#[derive(Deserialize)]
-struct ServerlessMetadataPayload {
-	runtime: String,
-	version: String,
-	#[serde(rename = "envoyProtocolVersion")]
-	envoy_protocol_version: Option<u16>,
-	#[serde(rename = "actorNames", default)]
-	actor_names: HashMap<String, ActorName>,
-	envoy: Option<ServerlessMetadataEnvoy>,
-	runner: Option<ServerlessMetadataRunner>,
-}
-
-#[derive(Deserialize)]
-struct ActorName {
-	metadata: Option<serde_json::Value>,
 }
 
 fn truncate_response_body(body: &str) -> String {
@@ -160,9 +135,10 @@ pub async fn pegboard_serverless_metadata_fetch(
 
 	let payload = match serde_json::from_str::<ServerlessMetadataPayload>(&body_raw) {
 		Ok(p) => p,
-		Err(_) => {
+		Err(err) => {
 			return Ok(Err(ServerlessMetadataError::InvalidResponseJson {
 				body: body_for_user,
+				parse_error: err.to_string(),
 			}));
 		}
 	};
@@ -197,8 +173,8 @@ pub async fn pegboard_serverless_metadata_fetch(
 
 	if let Some(envoy_protocol_version) = envoy_protocol_version {
 		if envoy_protocol_version < 1 || envoy_protocol_version > PROTOCOL_VERSION {
-			return Ok(Err(ServerlessMetadataError::InvalidResponseJson {
-				body: body_for_user,
+			return Ok(Err(ServerlessMetadataError::InvalidEnvoyProtocolVersion {
+				version: envoy_protocol_version,
 			}));
 		}
 	}

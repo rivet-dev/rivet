@@ -3,7 +3,11 @@
 	"extends": ["//"],
 	"tasks": {
 		"build": {
-			"dependsOn": ["@rivetkit/react#build", "rivetkit#build"]
+			"dependsOn": [
+				"@rivetkit/react#build",
+				"@rivetkit/sql-loader#build",
+				"rivetkit#build"
+			]
 		}
 	}
 }

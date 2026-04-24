@@ -1660,6 +1660,9 @@ importers:
       '@rivetkit/rivetkit-napi':
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/rivetkit-napi
+      '@rivetkit/sql-loader':
+        specifier: '*'
+        version: 2.2.1
       ai:
         specifier: ^4.0.38
         version: 4.3.19(react@19.1.0)(zod@3.25.76)
@@ -9024,6 +9027,9 @@ packages:
   '@rivetkit/bare-ts@0.6.2':
     resolution: {integrity: sha512-3qndQUQXLdwafMEqfhz24hUtDPcsf1Bu3q52Kb8MqeH8JUh3h6R4HYW3ZJXiQsLcyYyFM68PuIwlLRlg1xDEpg==}
     engines: {node: ^14.18.0 || >=16.0.0}
+
+  '@rivetkit/sql-loader@2.2.1':
+    resolution: {integrity: sha512-qqykzDGak06VY58o8qh8TH7CL77vIp2FHUJB2ZT78LJ+muRrXiwj/QHeVn9ykWePqCYCD9XP0L6Qd2fmERdXqQ==}
 
   '@rolldown/pluginutils@1.0.0-beta.27':
     resolution: {integrity: sha512-+d0F4MKMCbeVUJwG96uQ4SgAznZNSq93I3V+9NHA4OpvqG8mRCpGdKmK8l/dl02h2CCDHwW2FqilnTyDcAnqjA==}
@@ -23766,6 +23772,8 @@ snapshots:
       - encoding
 
   '@rivetkit/bare-ts@0.6.2': {}
+
+  '@rivetkit/sql-loader@2.2.1': {}
 
   '@rolldown/pluginutils@1.0.0-beta.27': {}
 

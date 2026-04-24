@@ -63,6 +63,7 @@ members = [
   "rivetkit-rust/packages/inspector-protocol",
   "rivetkit-rust/packages/rivetkit",
   "rivetkit-rust/packages/rivetkit-core",
+  "rivetkit-rust/packages/shared-types",
   "rivetkit-rust/packages/rivetkit-sqlite",
   "rivetkit-typescript/packages/rivetkit-napi"
 ]
@@ -538,6 +539,9 @@ members = [
 
     [workspace.dependencies.rivetkit-core]
     path = "rivetkit-rust/packages/rivetkit-core"
+
+    [workspace.dependencies.rivetkit-shared-types]
+    path = "rivetkit-rust/packages/shared-types"
 
     [workspace.dependencies.epoxy-protocol]
     path = "engine/sdks/rust/epoxy-protocol"
