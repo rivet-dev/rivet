@@ -907,7 +907,12 @@ impl RegistryDispatcher {
 			self.region.clone(),
 			factory.config().clone(),
 			Kv::new(handle.clone(), actor_id.to_owned()),
-			SqliteDb::new(handle.clone(), actor_id.to_owned(), sqlite_startup_data),
+			SqliteDb::new(
+				handle.clone(),
+				actor_id.to_owned(),
+				sqlite_startup_data,
+				factory.config().has_database,
+			),
 		);
 		ctx.configure_envoy(handle, Some(generation));
 		ctx

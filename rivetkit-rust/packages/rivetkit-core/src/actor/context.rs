@@ -521,6 +521,10 @@ impl ActorContext {
 		&self.0.region
 	}
 
+	pub fn has_state(&self) -> bool {
+		self.0.connection_config.read().has_state
+	}
+
 	#[doc(hidden)]
 	pub fn record_startup_create_state(&self, duration: Duration) {
 		self.0.metrics.observe_create_state(duration);

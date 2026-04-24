@@ -78,6 +78,10 @@ pub struct SqliteDb {
 	handle: Option<EnvoyHandle>,
 	actor_id: Option<String>,
 	startup_data: Option<protocol::SqliteStartupData>,
+	/// Mirrors the user's actor-config `db({...})` declaration. The envoy
+	/// always sets up sqlite storage under the hood, so handle/actor_id are
+	/// not a reliable signal for whether the user opted in; this flag is.
+	enabled: bool,
 	#[cfg(feature = "sqlite")]
 	// Forced-sync: native SQLite handles are used inside spawn_blocking and
 	// synchronous diagnostic accessors.
@@ -89,14 +93,20 @@ impl SqliteDb {
 		handle: EnvoyHandle,
 		actor_id: impl Into<String>,
 		startup_data: Option<protocol::SqliteStartupData>,
+		enabled: bool,
 	) -> Self {
 		Self {
 			handle: Some(handle),
 			actor_id: Some(actor_id.into()),
 			startup_data,
+			enabled,
 			#[cfg(feature = "sqlite")]
 			db: Default::default(),
 		}
+	}
+
+	pub fn is_enabled(&self) -> bool {
+		self.enabled
 	}
 
 	pub async fn get_pages(

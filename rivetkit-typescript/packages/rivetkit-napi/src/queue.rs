@@ -209,6 +209,42 @@ impl Queue {
 			.map(|messages| messages.into_iter().map(QueueMessage::from_core).collect())
 			.map_err(napi_anyhow_error)
 	}
+
+	#[napi]
+	pub fn max_size(&self) -> u32 {
+		self.inner.max_size()
+	}
+
+	#[napi]
+	pub async fn inspect_messages(&self) -> napi::Result<Vec<JsQueueInspectMessage>> {
+		self.inner
+			.inspect_messages()
+			.await
+			.map(|messages| {
+				messages
+					.into_iter()
+					.map(|m| JsQueueInspectMessage {
+						id: u64_to_i64(m.id),
+						name: m.name,
+						created_at_ms: m.created_at,
+					})
+					.collect()
+			})
+			.map_err(napi_anyhow_error)
+	}
+}
+
+#[napi(object)]
+pub struct JsQueueInspectMessage {
+	/// Queue message id. Stored as the raw u64 reinterpreted as i64 so JS
+	/// sees a plain number; ids are monotonic and fit comfortably in i64.
+	pub id: i64,
+	pub name: String,
+	pub created_at_ms: i64,
+}
+
+fn u64_to_i64(value: u64) -> i64 {
+	i64::try_from(value).unwrap_or(i64::MAX)
 }
 
 #[napi]

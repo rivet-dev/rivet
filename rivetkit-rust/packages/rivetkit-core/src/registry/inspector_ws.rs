@@ -4,6 +4,17 @@ use super::inspector::*;
 use super::websocket::{closing_websocket_handler, websocket_inspector_token};
 use super::*;
 
+/// Aborts the wrapped task on drop. Ensures the overlay task cannot outlive
+/// the websocket handler even if `on_close` never fires (for example when the
+/// handler is dropped due to actor teardown rather than a clean close frame).
+struct AbortOnDropTask(JoinHandle<()>);
+
+impl Drop for AbortOnDropTask {
+	fn drop(&mut self) {
+		self.0.abort();
+	}
+}
+
 impl RegistryDispatcher {
 	pub(super) async fn handle_inspector_websocket(
 		self: &Arc<Self>,
@@ -32,7 +43,7 @@ impl RegistryDispatcher {
 		// Forced-sync: inspector websocket slots are filled/cleared inside
 		// synchronous callback setup/teardown and moved out before awaiting.
 		let subscription_slot = Arc::new(Mutex::new(None::<InspectorSubscription>));
-		let overlay_task_slot = Arc::new(Mutex::new(None::<JoinHandle<()>>));
+		let overlay_task_slot = Arc::new(Mutex::new(None::<AbortOnDropTask>));
 		let attach_guard_slot = Arc::new(Mutex::new(None::<InspectorAttachGuard>));
 		let on_open_instance = instance.clone();
 		let on_open_dispatcher = dispatcher.clone();
@@ -64,9 +75,7 @@ impl RegistryDispatcher {
 					let mut guard = slot.lock();
 					guard.take();
 					let mut overlay_guard = overlay_slot.lock();
-					if let Some(task) = overlay_guard.take() {
-						task.abort();
-					}
+					overlay_guard.take();
 					let mut attach_guard = attach_slot.lock();
 					attach_guard.take();
 				})
@@ -146,7 +155,7 @@ impl RegistryDispatcher {
 						}
 					});
 					let mut overlay_guard = on_open_overlay_slot.lock();
-					*overlay_guard = Some(overlay_task);
+					*overlay_guard = Some(AbortOnDropTask(overlay_task));
 
 					let listener_dispatcher = on_open_dispatcher.clone();
 					let listener_instance = on_open_instance.clone();
@@ -356,9 +365,9 @@ impl RegistryDispatcher {
 			inspector_protocol::InitMessage {
 				connections: inspector_wire_connections(&instance.ctx),
 				state: Some(instance.ctx.state()),
-				is_state_enabled: true,
+				is_state_enabled: instance.ctx.has_state(),
 				rpcs: inspector_rpcs(instance),
-				is_database_enabled: instance.ctx.sql().runtime_config().is_ok(),
+				is_database_enabled: instance.ctx.sql().is_enabled(),
 				queue_size: serde_bare::Uint(queue_size),
 				workflow_history,
 				is_workflow_enabled: workflow_supported,
@@ -374,7 +383,7 @@ impl RegistryDispatcher {
 		inspector_protocol::StateResponse {
 			rid,
 			state: Some(instance.ctx.state()),
-			is_state_enabled: true,
+			is_state_enabled: instance.ctx.has_state(),
 		}
 	}
 
