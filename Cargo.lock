@@ -5253,7 +5253,6 @@ dependencies = [
  "serde_bare",
  "serde_bytes",
  "serde_json",
- "subtle",
  "tokio",
  "tokio-util",
  "tracing",
