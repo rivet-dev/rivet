@@ -251,7 +251,7 @@ mod moved_tests {
 	async fn inspector_auth_uses_env_token_before_kv_fallback() {
 		let _env_guard = INSPECTOR_ENV_LOCK.lock().expect("env lock poisoned");
 		unsafe {
-			std::env::set_var("RIVET_INSPECTOR_TOKEN", "env-token");
+			std::env::set_var("_RIVET_TEST_INSPECTOR_TOKEN", "env-token");
 		}
 
 		let kv = crate::kv::tests::new_in_memory();
@@ -280,7 +280,7 @@ mod moved_tests {
 		assert_eq!(error.code(), "unauthorized");
 
 		unsafe {
-			std::env::remove_var("RIVET_INSPECTOR_TOKEN");
+			std::env::remove_var("_RIVET_TEST_INSPECTOR_TOKEN");
 		}
 	}
 
@@ -288,7 +288,7 @@ mod moved_tests {
 	async fn inspector_auth_falls_back_to_actor_kv_token() {
 		let _env_guard = INSPECTOR_ENV_LOCK.lock().expect("env lock poisoned");
 		unsafe {
-			std::env::remove_var("RIVET_INSPECTOR_TOKEN");
+			std::env::remove_var("_RIVET_TEST_INSPECTOR_TOKEN");
 		}
 
 		let kv = crate::kv::tests::new_in_memory();
@@ -321,7 +321,7 @@ mod moved_tests {
 	async fn inspector_auth_rejects_missing_token() {
 		let _env_guard = INSPECTOR_ENV_LOCK.lock().expect("env lock poisoned");
 		unsafe {
-			std::env::remove_var("RIVET_INSPECTOR_TOKEN");
+			std::env::remove_var("_RIVET_TEST_INSPECTOR_TOKEN");
 		}
 
 		let ctx = new_with_kv(

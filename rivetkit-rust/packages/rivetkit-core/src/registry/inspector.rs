@@ -156,6 +156,7 @@ impl RegistryDispatcher {
 						)
 					})
 			}
+			// TODO: Impelment when ready
 			(http::Method::GET, "/inspector/traces") => json_http_response(
 				StatusCode::OK,
 				&json!({
