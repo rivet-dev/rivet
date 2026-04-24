@@ -72,7 +72,7 @@ actors have create, destroy, wake, and sleep lifecycle hooks that you can implem
 - actors sleep when not in use
 - an actor is considered not in use when there are no active network connections to the actor (or the network connections are hibernatable websockets, see below) and there are no actions in flight
 - actors have a sleep timeout (configured in `options.sleepTimeout`) that decides how long to keep the actor in memory with no recent activity
-- sleep can be delayed while idle with `c.setPreventSleep(true)`
+- sleep can be held off for the lifetime of a promise with `c.keepAwake(promise)`
 - see the [sleeping docs](/docs/actors/lifecycle#sleeping) for full details
 
 ### wake events
