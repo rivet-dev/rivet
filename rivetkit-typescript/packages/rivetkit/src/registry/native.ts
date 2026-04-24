@@ -3712,6 +3712,7 @@ export function buildNativeFactory(
 								}
 							} finally {
 								await actorCtx.closeDatabase(false);
+								callNativeSync(() => ctx.clearRuntimeState());
 								await actorCtx.dispose();
 							}
 						},
@@ -3731,6 +3732,7 @@ export function buildNativeFactory(
 							} finally {
 								resolveNativeDestroy(ctx);
 								await actorCtx.closeDatabase(true);
+								callNativeSync(() => ctx.clearRuntimeState());
 								await actorCtx.dispose();
 							}
 						},

@@ -228,6 +228,7 @@ export declare class ActorContext {
   waitUntil(promise: Promise<any>): Promise<void>
   registerTask(promise: Promise<any>): void
   runtimeState(): object
+  clearRuntimeState(): void
 }
 export declare class NapiActorFactory {
   constructor(callbacks: object, config?: JsActorConfig | undefined | null)

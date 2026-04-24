@@ -1,4 +1,5 @@
 import { decodeBridgeRivetError } from "@/actor/errors";
+import { AsyncMutex } from "./shared";
 import type { SqliteBindings, SqliteDatabase } from "./config";
 
 interface NativeBindParam {
@@ -169,17 +170,30 @@ function toNativeBindings(
 export function wrapJsNativeDatabase(
 	database: JsNativeDatabaseLike,
 ): SqliteDatabase {
+	const mutex = new AsyncMutex();
+	let closed = false;
+
+	const ensureOpen = () => {
+		if (closed) {
+			throw new Error(
+				"Database is closed. This usually means a background timer (setInterval, setTimeout) or a stray promise is still running after the actor stopped. Use c.abortSignal to clean up timers before the actor shuts down.",
+			);
+		}
+	};
+
 	return {
 		async exec(
 			sql: string,
 			callback?: (row: unknown[], columns: string[]) => void,
 		): Promise<void> {
-			let result: NativeExecResult;
-			try {
-				result = await database.exec(sql);
-			} catch (error) {
-				enrichNativeDatabaseError(database, error);
-			}
+			const result = await mutex.run(async () => {
+				ensureOpen();
+				try {
+					return await database.exec(sql);
+				} catch (error) {
+					enrichNativeDatabaseError(database, error);
+				}
+			});
 			if (!callback) {
 				return;
 			}
@@ -188,24 +202,36 @@ export function wrapJsNativeDatabase(
 			}
 		},
 		async run(sql: string, params?: SqliteBindings): Promise<void> {
-			try {
-				await database.run(sql, toNativeBindings(sql, params));
-			} catch (error) {
-				enrichNativeDatabaseError(database, error);
-			}
+			await mutex.run(async () => {
+				ensureOpen();
+				try {
+					await database.run(sql, toNativeBindings(sql, params));
+				} catch (error) {
+					enrichNativeDatabaseError(database, error);
+				}
+			});
 		},
 		async query(sql: string, params?: SqliteBindings) {
-			try {
-				return await database.query(sql, toNativeBindings(sql, params));
-			} catch (error) {
-				enrichNativeDatabaseError(database, error);
-			}
+			return await mutex.run(async () => {
+				ensureOpen();
+				try {
+					return await database.query(sql, toNativeBindings(sql, params));
+				} catch (error) {
+					enrichNativeDatabaseError(database, error);
+				}
+			});
 		},
 		getSqliteVfsMetrics() {
 			return database.getSqliteVfsMetrics?.() ?? null;
 		},
 		async close(): Promise<void> {
-			await database.close();
+			await mutex.run(async () => {
+				if (closed) {
+					return;
+				}
+				closed = true;
+				await database.close();
+			});
 		},
 	};
 }

@@ -636,6 +636,11 @@ impl ActorContext {
 	pub fn runtime_state(&self, env: Env) -> napi::Result<JsObject> {
 		self.shared.runtime_state(env)
 	}
+
+	#[napi]
+	pub fn clear_runtime_state(&self, env: Env) -> napi::Result<()> {
+		self.shared.clear_runtime_state(env)
+	}
 }
 
 impl Drop for ActorContext {
@@ -708,6 +713,15 @@ impl ActorContextShared {
 		let state = env.get_reference_value(&reference)?;
 		*runtime_state = Some(reference);
 		Ok(state)
+	}
+
+	fn clear_runtime_state(&self, env: Env) -> napi::Result<()> {
+		let Some(mut reference) = self.runtime_state.lock().take() else {
+			return Ok(());
+		};
+
+		reference.unref(env)?;
+		Ok(())
 	}
 
 	#[allow(dead_code)]
