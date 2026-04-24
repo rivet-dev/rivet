@@ -1952,7 +1952,13 @@ impl ActorTask {
 				sleep_timeout_ms = self.factory.config().sleep_timeout.as_millis() as u64,
 				"sleep idle deadline elapsed"
 			);
-			self.ctx.sleep();
+			if let Err(err) = self.ctx.sleep() {
+				tracing::debug!(
+					actor_id = %self.ctx.actor_id(),
+					?err,
+					"sleep idle deadline request suppressed"
+				);
+			}
 		} else {
 			tracing::warn!(
 				actor_id = %self.ctx.actor_id(),

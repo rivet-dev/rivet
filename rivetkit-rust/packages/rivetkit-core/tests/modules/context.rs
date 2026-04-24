@@ -814,9 +814,11 @@ mod moved_tests {
 			crate::kv::Kv::new_in_memory(),
 		);
 
+		ctx.set_sleep_started(true);
+
 		assert_eq!(ctx.sleep_request_count(), 0);
 
-		ctx.sleep();
+		ctx.sleep().expect("sleep should be accepted after startup");
 		tokio::task::yield_now().await;
 
 		assert_eq!(ctx.sleep_request_count(), 1);

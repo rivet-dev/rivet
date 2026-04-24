@@ -2986,7 +2986,7 @@ mod moved_tests {
 		}));
 		let factory = Arc::new(ActorFactory::new(ActorConfig::default(), move |start| {
 			Box::pin(async move {
-				start.ctx.sleep();
+				start.ctx.sleep()?;
 				Ok(())
 			})
 		}));
@@ -3053,7 +3053,7 @@ mod moved_tests {
 		}));
 		let factory = Arc::new(ActorFactory::new(ActorConfig::default(), move |start| {
 			Box::pin(async move {
-				start.ctx.destroy();
+				start.ctx.destroy()?;
 				Ok(())
 			})
 		}));
