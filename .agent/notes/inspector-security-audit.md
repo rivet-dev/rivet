@@ -13,7 +13,7 @@ Audited the native Rust inspector HTTP/WebSocket surface in `rivetkit-rust/packa
 - Rust HTTP `/inspector/*` routes call `InspectorAuth::verify(...)` before route dispatch.
 - Rust inspector WebSocket `/inspector/connect` verifies the `rivet_inspector_token.*` websocket protocol token first, then falls back to `Authorization: Bearer ...`.
 - TypeScript native HTTP `/inspector/*` routes call `ctx.verifyInspectorAuth(...)`, which delegates to the same core `InspectorAuth`.
-- `InspectorAuth` prefers `RIVET_INSPECTOR_TOKEN` when configured. If absent, it falls back to the per-actor KV token at key `[3]`.
+- `InspectorAuth` prefers `_RIVET_TEST_INSPECTOR_TOKEN` (test-only override, not public) when configured. If absent, it falls back to the per-actor KV token at key `[3]`, which is the production auth path.
 - Fixed in US-094: Rust bearer parsing now matches TS more closely by accepting case-insensitive `Bearer` and arbitrary whitespace after the scheme.
 
 ## HTTP Endpoint Matrix

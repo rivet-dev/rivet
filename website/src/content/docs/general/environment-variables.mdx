@@ -41,8 +41,13 @@ These variables configure how clients connect to your actors.
 
 | Environment Variable | Description |
 |---------------------|-------------|
-| `RIVET_INSPECTOR_TOKEN` | Token for accessing the Rivet Inspector |
 | `RIVET_INSPECTOR_DISABLE` | Set to `1` to disable the inspector |
+
+## Metrics
+
+| Environment Variable | Description |
+|---------------------|-------------|
+| `_RIVET_METRICS_TOKEN` | Bearer token that gates the per-actor Prometheus `/metrics` endpoint. When unset, `/metrics` is disabled. |
 
 ## Experimental
 

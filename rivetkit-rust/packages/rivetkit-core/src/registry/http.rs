@@ -77,6 +77,9 @@ impl RegistryDispatcher {
 			FrameworkHttpRoute::Queue(name) => {
 				self.handle_queue_fetch(instance, request, name).await
 			}
+			FrameworkHttpRoute::Metadata => handle_metadata_fetch(&request),
+			FrameworkHttpRoute::Health => handle_health_fetch(&request),
+			FrameworkHttpRoute::Root => handle_root_fetch(&request),
 		}
 	}
 
@@ -330,7 +333,7 @@ impl RegistryDispatcher {
 		instance: &ActorTaskHandle,
 		request: &HttpRequest,
 	) -> Result<HttpResponse> {
-		if !request_has_bearer_token(request, self.inspector_token.as_deref()) {
+		if !request_has_bearer_token(request, self.metrics_token.as_deref()) {
 			return Ok(unauthorized_response());
 		}
 
@@ -358,6 +361,9 @@ impl RegistryDispatcher {
 pub(super) enum FrameworkHttpRoute {
 	Action(String),
 	Queue(String),
+	Metadata,
+	Health,
+	Root,
 }
 
 pub(super) struct DecodedHttpQueueRequest {
@@ -377,7 +383,75 @@ pub(super) fn framework_http_route(path: &str) -> Result<Option<FrameworkHttpRou
 			percent_decode_path_segment(segment)?,
 		)));
 	}
-	Ok(None)
+	match path {
+		"/metadata" => Ok(Some(FrameworkHttpRoute::Metadata)),
+		"/health" => Ok(Some(FrameworkHttpRoute::Health)),
+		"/" => Ok(Some(FrameworkHttpRoute::Root)),
+		_ => Ok(None),
+	}
+}
+
+fn handle_metadata_fetch(request: &Request) -> Result<HttpResponse> {
+	if request.method() != http::Method::GET {
+		return method_not_allowed_response(request);
+	}
+	let runtime_type = if std::env::var("NODE_ENV").as_deref() == Ok("production") {
+		"deployed"
+	} else {
+		"local"
+	};
+	json_http_response(
+		StatusCode::OK,
+		&serde_json::json!({
+			"runtime": "rivetkit",
+			"version": env!("CARGO_PKG_VERSION"),
+			"type": runtime_type,
+		}),
+	)
+}
+
+fn handle_health_fetch(request: &Request) -> Result<HttpResponse> {
+	if request.method() != http::Method::GET {
+		return method_not_allowed_response(request);
+	}
+	text_response(StatusCode::OK, "ok")
+}
+
+fn handle_root_fetch(request: &Request) -> Result<HttpResponse> {
+	if request.method() != http::Method::GET {
+		return method_not_allowed_response(request);
+	}
+	text_response(
+		StatusCode::OK,
+		"This is an RivetKit actor.\n\nLearn more at https://rivetkit.org",
+	)
+}
+
+fn text_response(status: StatusCode, body: &str) -> Result<HttpResponse> {
+	let mut headers = HashMap::new();
+	headers.insert(
+		http::header::CONTENT_TYPE.to_string(),
+		"text/plain; charset=utf-8".to_owned(),
+	);
+	Ok(HttpResponse {
+		status: status.as_u16(),
+		headers,
+		body: Some(body.as_bytes().to_vec()),
+		body_stream: None,
+	})
+}
+
+fn method_not_allowed_response(request: &Request) -> Result<HttpResponse> {
+	let encoding = request_encoding(request.headers());
+	message_boundary_error_response(
+		encoding,
+		framework_error_status("actor", "method_not_allowed"),
+		MethodNotAllowed {
+			method: request.method().to_string(),
+			path: request.uri().path().to_owned(),
+		}
+		.build(),
+	)
 }
 
 pub(super) fn single_path_segment<'a>(path: &'a str, prefix: &str) -> Option<&'a str> {
