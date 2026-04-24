@@ -495,18 +495,11 @@ impl RegistryDispatcher {
 			Some(encode_json_as_cbor(&body.args)?)
 		};
 
-		if is_read_only_sql(&body.sql) {
-			let rows = ctx
-				.db_query(&body.sql, params.as_deref())
-				.await
-				.context("run inspector read-only database query")?;
-			return Ok(decode_cbor_json_or_null(&rows));
-		}
-
-		ctx.db_run(&body.sql, params.as_deref())
+		let rows = ctx
+			.db_query(&body.sql, params.as_deref())
 			.await
-			.context("run inspector database mutation")?;
-		Ok(JsonValue::Array(Vec::new()))
+			.context("run inspector database statement")?;
+		Ok(decode_cbor_json_or_null(&rows))
 	}
 }
 
@@ -607,14 +600,6 @@ pub(super) fn encode_json_as_cbor(value: &impl Serialize) -> Result<Vec<u8>> {
 
 pub(super) fn quote_sql_identifier(identifier: &str) -> String {
 	format!("\"{}\"", identifier.replace('"', "\"\""))
-}
-
-pub(super) fn is_read_only_sql(sql: &str) -> bool {
-	let statement = sql.trim_start().to_ascii_uppercase();
-	matches!(
-		statement.split_whitespace().next(),
-		Some("SELECT" | "PRAGMA" | "WITH" | "EXPLAIN")
-	)
 }
 
 pub(super) fn json_http_response(
