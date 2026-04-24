@@ -8,17 +8,15 @@ export const Route = createFileRoute(
 	"/_context/orgs/$organization/projects/$project",
 )({
 	component: RouteComponent,
-	beforeLoad: ({ context, params }) => {
+	context: ({ context, params }) => {
 		return match(context)
-			.with({ __type: "cloud" }, (context) => {
-				return {
-					dataProvider: context.getOrCreateProjectContext(
-						context.dataProvider,
-						params.organization,
-						params.project,
-					),
-				};
-			})
+			.with({ __type: "cloud" }, (context) => ({
+				dataProvider: context.getOrCreateProjectContext(
+					context.dataProvider,
+					params.organization,
+					params.project,
+				),
+			}))
 			.otherwise(() => {
 				throw new Error("Invalid context type for this route");
 			});

@@ -213,6 +213,7 @@ const Sidebar = ({
 									{features.billing && matchRoute({
 										to: "/orgs/$organization/projects/$project/ns/$namespace",
 										fuzzy: true,
+										pending: false,
 									}) ? (
 										<HeaderButton asChild>
 											<Link
@@ -235,7 +236,8 @@ const Sidebar = ({
 										</HeaderButton>
 									) : features.billing && matchRoute({
 											to: "/orgs/$organization/projects/$project",
-											fuzzy: true,
+												fuzzy: true,
+												pending: false,
 										}) ? (
 										<HeaderButton asChild>
 											<Link
