@@ -2634,12 +2634,12 @@ export class NativeActorContextAdapter {
 		);
 	}
 
-	setPreventSleep(preventSleep: boolean): void {
-		callNativeSync(() => this.#ctx.setPreventSleep(preventSleep));
-	}
+	/** @deprecated No-op. Use `keepAwake(promise)` or `waitUntil(promise)` instead. */
+	setPreventSleep(_preventSleep: boolean): void {}
 
+	/** @deprecated No-op. Always returns `false`. */
 	get preventSleep(): boolean {
-		return callNativeSync(() => this.#ctx.preventSleep());
+		return false;
 	}
 
 	sleep(): void {

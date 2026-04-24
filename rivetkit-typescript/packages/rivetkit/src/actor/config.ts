@@ -326,11 +326,13 @@ export interface ActorContext<
 	readonly abortSignal: AbortSignal;
 	readonly aborted: boolean;
 	readonly request?: Request;
+	/** @deprecated No-op. Always returns `false`. Use `keepAwake(promise)` or `waitUntil(promise)` instead. Will be removed in 2.2.0. */
 	readonly preventSleep: boolean;
 	broadcast(name: string, ...args: any[]): void;
 	saveState(opts?: { immediate?: boolean; maxWait?: number }): Promise<void>;
 	keepAwake<T>(promise: Promise<T>): Promise<T>;
 	waitUntil(promise: Promise<unknown>): void;
+	/** @deprecated No-op. Use `keepAwake(promise)` to hold the actor awake for a specific promise. Will be removed in 2.2.0. */
 	setPreventSleep(preventSleep: boolean): void;
 	sleep(): void;
 	destroy(): void;
@@ -1219,11 +1221,10 @@ interface BaseActorConfig<
 	 * - Custom workflow logic
 	 *
 	 * **Important:** The actor may go to sleep at any time during the `run`
-	 * handler. Use `c.setPreventSleep(true)` while work is active, then clear
-	 * it with `c.setPreventSleep(false)` once the actor can sleep again.
-	 * `setPreventSleep` blocks idle sleep until it is cleared. If shutdown has
-	 * already started, RivetKit waits for `preventSleep` to clear within the
-	 * same graceful shutdown window controlled by `sleepGracePeriod`.
+	 * handler. Wrap work that must keep the actor awake with
+	 * `c.keepAwake(promise)` to block idle sleep and shutdown finalize until
+	 * the promise settles, or use `c.waitUntil(promise)` to let the graceful
+	 * shutdown window (`sleepGracePeriod`) cover deferred work.
 	 *
 	 * The handler receives an abort signal via `c.abortSignal` and a
 	 * `c.aborted` alias for loop checks. Use these to gracefully exit.

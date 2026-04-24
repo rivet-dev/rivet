@@ -1,3 +1,6 @@
+// TODO(sleep-cleanup): investigate whether ActorInstance / drivers/engine
+// path is still needed after native path maturation. preventSleep tracking
+// below is retained for legacy driver compatibility but no longer drives core.
 import type { OtlpExportTraceServiceRequestJson } from "@rivetkit/traces";
 import {
 	createNoopTraces,
