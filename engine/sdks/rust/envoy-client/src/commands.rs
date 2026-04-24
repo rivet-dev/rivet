@@ -3,11 +3,18 @@ use rivet_envoy_protocol as protocol;
 use crate::actor::create_actor;
 use crate::connection::ws_send;
 use crate::envoy::EnvoyContext;
+use crate::stringify::stringify_command_wrapper;
 
 pub const ACK_COMMANDS_INTERVAL_MS: u64 = 5 * 60 * 1000;
 
 pub async fn handle_commands(ctx: &mut EnvoyContext, commands: Vec<protocol::CommandWrapper>) {
 	tracing::info!(command_count = commands.len(), "received commands");
+	for command_wrapper in &commands {
+		tracing::info!(
+			command = %stringify_command_wrapper(command_wrapper),
+			"received command"
+		);
+	}
 
 	for command_wrapper in commands {
 		let checkpoint = command_wrapper.checkpoint;
