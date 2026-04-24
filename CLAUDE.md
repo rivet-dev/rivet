@@ -313,6 +313,10 @@ When the user asks to track something in a note, store it in `.agent/notes/` by 
 - Validate and authorize all client-originated data at the engine edge before it reaches trusted internal systems.
 - Validate and authorize all envoy-originated data at `pegboard-envoy` before it reaches trusted internal systems.
 
+## WebSocket Rejection
+
+- Reject WebSocket connections (auth failures, routing errors, any rejection reason) by accepting the upgrade and sending a close frame with a meaningful close code and `<group>.<code>` reason. Do not reject with an HTTP status before the upgrade. Browser clients cannot surface HTTP status on a failed upgrade; they only see `CloseEvent.code` / `.reason`, so pre-upgrade rejection leaves them with no diagnostic. Use close code `1008` (policy violation) for auth failures, matching the `inspector.unauthorized` convention.
+
 ## Fail-By-Default Runtime
 
 - Avoid silent no-ops for required runtime behavior. If a capability is required, validate it and throw an explicit error with actionable context instead of returning early.
