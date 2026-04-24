@@ -69,7 +69,8 @@ impl EngineProcessManager {
 			.env("RIVET__METRICS__PORT", metrics_port.to_string())
 			.env("RIVET__FILE_SYSTEM__PATH", &db_path)
 			.stdout(Stdio::piped())
-			.stderr(Stdio::piped());
+			.stderr(Stdio::piped())
+			.kill_on_drop(true);
 
 		let mut child = command
 			.spawn()

@@ -105,5 +105,8 @@ async fn main() -> Result<()> {
 		.action("increment", Counter::increment)
 		.action("get_count", Counter::get_count)
 		.done();
-	registry.serve().await
+	tokio::select! {
+		res = registry.serve() => res,
+		_ = tokio::signal::ctrl_c() => Ok(()),
+	}
 }
