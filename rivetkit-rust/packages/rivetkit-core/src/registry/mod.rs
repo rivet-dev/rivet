@@ -48,7 +48,7 @@ use crate::actor::task::{
 };
 use crate::actor::task_types::StopReason;
 use crate::engine_process::EngineProcessManager;
-use crate::error::ActorRuntime;
+use crate::error::{ActorLifecycle as ActorLifecycleError, ActorRuntime};
 use crate::inspector::protocol::{
 	self as inspector_protocol, ServerMessage as InspectorServerMessage,
 };
@@ -725,13 +725,31 @@ impl RegistryDispatcher {
 	async fn active_actor(&self, actor_id: &str) -> Result<Arc<ActorTaskHandle>> {
 		if let Some(instance) = self.actor_instances.get_async(&actor_id.to_owned()).await {
 			match instance.get() {
-				ActorInstanceState::Active(instance) => return Ok(instance.clone()),
+				ActorInstanceState::Active(instance) => {
+					let instance = instance.clone();
+					if instance.ctx.ready() {
+						return Ok(instance);
+					}
+
+					instance
+						.ctx
+						.warn_work_sent_to_stopping_instance("active_actor");
+					return Err(if instance.ctx.destroy_requested() {
+						ActorLifecycleError::Destroying.build()
+					} else {
+						ActorLifecycleError::Stopping.build()
+					});
+				}
 				ActorInstanceState::Stopping(instance) => {
 					let instance = instance.clone();
 					instance
 						.ctx
 						.warn_work_sent_to_stopping_instance("active_actor");
-					return Ok(instance);
+					return Err(if instance.ctx.destroy_requested() {
+						ActorLifecycleError::Destroying.build()
+					} else {
+						ActorLifecycleError::Stopping.build()
+					});
 				}
 			}
 		}
