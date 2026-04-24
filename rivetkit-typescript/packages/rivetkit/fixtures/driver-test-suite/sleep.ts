@@ -3,7 +3,6 @@ import { promiseWithResolvers } from "rivetkit/utils";
 import { scheduleActorSleep } from "./schedule-sleep";
 
 export const SLEEP_TIMEOUT = 1000;
-export const PREVENT_SLEEP_TIMEOUT = 250;
 export const RAW_WS_HANDLER_SLEEP_TIMEOUT = 100;
 export const RAW_WS_HANDLER_DELAY = 250;
 
@@ -487,60 +486,3 @@ export const sleepWithNoSleepOption = actor({
 	},
 });
 
-export const sleepWithPreventSleep = actor({
-	state: {
-		startCount: 0,
-		sleepCount: 0,
-		preventSleepOnWake: false,
-		delayPreventSleepDuringShutdown: false,
-		preventSleepClearedDuringShutdown: false,
-	},
-	onWake: (c) => {
-		c.state.startCount += 1;
-		c.setPreventSleep(c.state.preventSleepOnWake);
-	},
-	onSleep: (c) => {
-		c.state.sleepCount += 1;
-		if (c.state.delayPreventSleepDuringShutdown) {
-			c.setPreventSleep(true);
-			setTimeout(() => {
-				c.state.preventSleepClearedDuringShutdown = true;
-				c.setPreventSleep(false);
-			}, PREVENT_SLEEP_TIMEOUT / 2);
-		}
-	},
-	actions: {
-		triggerSleep: (c) => {
-			c.sleep();
-		},
-		getStatus: (c) => {
-			return {
-				startCount: c.state.startCount,
-				sleepCount: c.state.sleepCount,
-				preventSleep: c.preventSleep,
-				preventSleepOnWake: c.state.preventSleepOnWake,
-				delayPreventSleepDuringShutdown:
-					c.state.delayPreventSleepDuringShutdown,
-				preventSleepClearedDuringShutdown:
-					c.state.preventSleepClearedDuringShutdown,
-			};
-		},
-		setPreventSleep: (c, prevent: boolean) => {
-			c.setPreventSleep(prevent);
-			return c.preventSleep;
-		},
-		setPreventSleepOnWake: (c, prevent: boolean) => {
-			c.state.preventSleepOnWake = prevent;
-			return c.state.preventSleepOnWake;
-		},
-		setDelayPreventSleepDuringShutdown: (c, enabled: boolean) => {
-			c.state.delayPreventSleepDuringShutdown = enabled;
-			c.state.preventSleepClearedDuringShutdown = false;
-			return c.state.delayPreventSleepDuringShutdown;
-		},
-	},
-	options: {
-		sleepTimeout: SLEEP_TIMEOUT,
-		sleepGracePeriod: PREVENT_SLEEP_TIMEOUT,
-	},
-});

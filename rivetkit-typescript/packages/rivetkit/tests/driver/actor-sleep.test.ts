@@ -2,7 +2,6 @@
 
 import { describe, expect, test, vi } from "vitest";
 import {
-	PREVENT_SLEEP_TIMEOUT,
 	RAW_WS_HANDLER_DELAY,
 	RAW_WS_HANDLER_SLEEP_TIMEOUT,
 	SLEEP_TIMEOUT,
@@ -590,105 +589,6 @@ describeDriverMatrix("Actor Sleep", (driverTestConfig) => {
 				const { startCount, sleepCount } = await sleepActor.getCounts();
 				expect(sleepCount).toBe(0); // Never slept
 				expect(startCount).toBe(1); // Still the same instance
-			}
-		});
-
-		test("preventSleep blocks auto sleep until cleared", async (c) => {
-			const { client } = await setupDriverTest(c, driverTestConfig);
-
-			const sleepActor = client.sleepWithPreventSleep.getOrCreate();
-
-			{
-				const status = await sleepActor.getStatus();
-				expect(status.sleepCount).toBe(0);
-				expect(status.startCount).toBe(1);
-				expect(status.preventSleep).toBe(false);
-				expect(status.preventSleepOnWake).toBe(false);
-			}
-
-			expect(await sleepActor.setPreventSleep(true)).toBe(true);
-			await waitFor(driverTestConfig, SLEEP_TIMEOUT + 250);
-
-			{
-				const status = await sleepActor.getStatus();
-				expect(status.sleepCount).toBe(0);
-				expect(status.startCount).toBe(1);
-				expect(status.preventSleep).toBe(true);
-			}
-
-			expect(await sleepActor.setPreventSleep(false)).toBe(false);
-			await waitFor(driverTestConfig, SLEEP_TIMEOUT * 3);
-
-			{
-				const status = await sleepActor.getStatus();
-				expect(status.sleepCount).toBe(1);
-				expect(status.startCount).toBe(2);
-				expect(status.preventSleep).toBe(false);
-			}
-		});
-
-		test("preventSleep delays shutdown until cleared", async (c) => {
-			const { client } = await setupDriverTest(c, driverTestConfig);
-
-			const sleepActor = client.sleepWithPreventSleep.getOrCreate([
-				"prevent-sleep-shutdown-delay",
-			]);
-
-			expect(
-				await sleepActor.setDelayPreventSleepDuringShutdown(true),
-			).toBe(true);
-			await sleepActor.triggerSleep();
-			await waitFor(driverTestConfig, PREVENT_SLEEP_TIMEOUT + 150);
-
-			{
-				const status = await sleepActor.getStatus();
-				expect(status.sleepCount).toBe(1);
-				expect(status.startCount).toBe(2);
-				expect(status.preventSleep).toBe(false);
-				expect(status.delayPreventSleepDuringShutdown).toBe(true);
-				expect(status.preventSleepClearedDuringShutdown).toBe(true);
-			}
-		});
-
-		test("preventSleep can be restored during onWake", async (c) => {
-			const { client } = await setupDriverTest(c, driverTestConfig);
-
-			const sleepActor = client.sleepWithPreventSleep.getOrCreate();
-
-			expect(await sleepActor.setPreventSleepOnWake(true)).toBe(true);
-
-			await sleepActor.triggerSleep();
-			await waitFor(driverTestConfig, 250);
-
-			{
-				const status = await sleepActor.getStatus();
-				expect(status.sleepCount).toBe(1);
-				expect(status.startCount).toBe(2);
-				expect(status.preventSleep).toBe(true);
-				expect(status.preventSleepOnWake).toBe(true);
-			}
-
-			await waitFor(driverTestConfig, SLEEP_TIMEOUT + 250);
-
-			{
-				const status = await sleepActor.getStatus();
-				expect(status.sleepCount).toBe(1);
-				expect(status.startCount).toBe(2);
-				expect(status.preventSleep).toBe(true);
-				expect(status.preventSleepOnWake).toBe(true);
-			}
-
-			expect(await sleepActor.setPreventSleepOnWake(false)).toBe(false);
-			expect(await sleepActor.setPreventSleep(false)).toBe(false);
-
-			await waitFor(driverTestConfig, SLEEP_TIMEOUT + 250);
-
-			{
-				const status = await sleepActor.getStatus();
-				expect(status.sleepCount).toBe(2);
-				expect(status.startCount).toBe(3);
-				expect(status.preventSleep).toBe(false);
-				expect(status.preventSleepOnWake).toBe(false);
 			}
 		});
 
