@@ -624,6 +624,14 @@ impl ActorContext {
 	}
 
 	#[napi]
+	pub async fn keep_awake(
+		&self,
+		promise: Promise<serde_json::Value>,
+	) -> napi::Result<serde_json::Value> {
+		self.inner.keep_awake(promise).await
+	}
+
+	#[napi]
 	pub fn register_task(&self, promise: Promise<serde_json::Value>) -> napi::Result<()> {
 		self.shared
 			.register_task(Box::pin(async move {
