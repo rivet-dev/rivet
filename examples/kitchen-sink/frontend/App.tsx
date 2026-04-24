@@ -48,7 +48,8 @@ mermaid.initialize({
 		lineColor: "#3a3a3c",
 		secondaryColor: "#2c2c2e",
 		tertiaryColor: "#0f0f0f",
-		fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', Roboto, sans-serif",
+		fontFamily:
+			"-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', Roboto, sans-serif",
 		fontSize: "13px",
 	},
 });
@@ -63,15 +64,22 @@ function MermaidDiagram({ chart }: { chart: string }) {
 		mermaid.render(id, chart).then(({ svg: renderedSvg }) => {
 			if (!cancelled) setSvg(renderedSvg);
 		});
-		return () => { cancelled = true; };
+		return () => {
+			cancelled = true;
+		};
 	}, [chart]);
 
-	return <div ref={ref} className="mermaid-diagram" dangerouslySetInnerHTML={{ __html: svg }} />;
+	return (
+		<div
+			ref={ref}
+			className="mermaid-diagram"
+			dangerouslySetInnerHTML={{ __html: svg }}
+		/>
+	);
 }
 
-const rivetEndpoint = import.meta.env.DEV
-	? "http://localhost:6420"
-	: `${window.location.origin}/api/rivet`;
+const rivetEndpoint =
+	import.meta.env.VITE_RIVET_ENDPOINT ?? "http://localhost:6420";
 
 const { useActor } = createRivetKit<typeof registry>(rivetEndpoint);
 
@@ -150,7 +158,7 @@ function formatActorName(name: string) {
 
 function getStateAction(actorName: string): string | undefined {
 	const templates = ACTION_TEMPLATES[actorName] ?? [];
-	return templates.find(t => t.args.length === 0)?.action;
+	return templates.find((t) => t.args.length === 0)?.action;
 }
 
 // ── Main App ──────────────────────────────────────
@@ -167,9 +175,7 @@ export function App() {
 			<aside className="sidebar">
 				<div>
 					<h1>Kitchen Sink</h1>
-					<p className="subtitle">
-						Explore every Rivet Actor feature
-					</p>
+					<p className="subtitle">Explore every Rivet Actor feature</p>
 				</div>
 
 				<div className="mobile-select">
@@ -177,9 +183,7 @@ export function App() {
 					<select
 						id="page-select"
 						value={activePage.id}
-						onChange={(event) =>
-							setActivePageId(event.target.value)
-						}
+						onChange={(event) => setActivePageId(event.target.value)}
 					>
 						{PAGE_GROUPS.map((group) => (
 							<optgroup key={group.id} label={group.title}>
@@ -196,22 +200,22 @@ export function App() {
 				{PAGE_GROUPS.map((group) => {
 					const Icon = GROUP_ICONS[group.icon];
 					return (
-					<div className="nav-group" key={group.id}>
-						<div className="nav-group-title">
-							{Icon && <Icon size={14} />}
-							{group.title}
+						<div className="nav-group" key={group.id}>
+							<div className="nav-group-title">
+								{Icon && <Icon size={14} />}
+								{group.title}
+							</div>
+							{group.pages.map((page) => (
+								<button
+									key={page.id}
+									className={`nav-button ${page.id === activePage.id ? "active" : ""}`}
+									onClick={() => setActivePageId(page.id)}
+									type="button"
+								>
+									{page.title}
+								</button>
+							))}
 						</div>
-						{group.pages.map((page) => (
-							<button
-								key={page.id}
-								className={`nav-button ${page.id === activePage.id ? "active" : ""}`}
-								onClick={() => setActivePageId(page.id)}
-								type="button"
-							>
-								{page.title}
-							</button>
-						))}
-					</div>
 					);
 				})}
 			</aside>
@@ -255,7 +259,9 @@ function DemoPanel({ page }: { page: PageConfig }) {
 function ActorDemoPanel({ page }: { page: PageConfig }) {
 	const [selectedIdx, setSelectedIdx] = useState(0);
 
-	useEffect(() => { setSelectedIdx(0); }, [page.id]);
+	useEffect(() => {
+		setSelectedIdx(0);
+	}, [page.id]);
 
 	const actorName = page.actors[selectedIdx] ?? page.actors[0];
 
@@ -294,7 +300,13 @@ function ActorDemoPanel({ page }: { page: PageConfig }) {
 
 // ── Actor View (two-column: controls | inspector) ─
 
-function ActorView({ actorName, page }: { actorName: string; page: PageConfig }) {
+function ActorView({
+	actorName,
+	page,
+}: {
+	actorName: string;
+	page: PageConfig;
+}) {
 	const [keyInput, setKeyInput] = usePersistedState(
 		`kitchen-sink:${page.id}:${actorName}:key`,
 		`demo-${page.id}`,
@@ -339,7 +351,7 @@ function ActorView({ actorName, page }: { actorName: string; page: PageConfig })
 
 	const [stateRefreshCounter, setStateRefreshCounter] = useState(0);
 	const triggerStateRefresh = useCallback(
-		() => setStateRefreshCounter(c => c + 1),
+		() => setStateRefreshCounter((c) => c + 1),
 		[],
 	);
 
@@ -352,13 +364,12 @@ function ActorView({ actorName, page }: { actorName: string; page: PageConfig })
 					)}
 					<div className="status-pill">
 						<span
-							className={`status-dot ${
-								actor.connStatus === "connected"
+							className={`status-dot ${actor.connStatus === "connected"
 									? "connected"
 									: actor.error
 										? "error"
 										: ""
-							}`}
+								}`}
 						/>
 						<span>{actor.connStatus ?? "idle"}</span>
 					</div>
@@ -486,43 +497,55 @@ function StatePanel({
 
 // ── Events Panel ──────────────────────────────────
 
-function EventsPanel({ actor, defaultEvents }: { actor: ActorPanelActor; defaultEvents?: string[] }) {
+function EventsPanel({
+	actor,
+	defaultEvents,
+}: {
+	actor: ActorPanelActor;
+	defaultEvents?: string[];
+}) {
 	const [eventInput, setEventInput] = useState("");
-	const [subscribedEvents, setSubscribedEvents] = useState<string[]>(defaultEvents ?? []);
-	const [events, setEvents] = useState<Array<{ time: string; name: string; data: string }>>([]);
+	const [subscribedEvents, setSubscribedEvents] = useState<string[]>(
+		defaultEvents ?? [],
+	);
+	const [events, setEvents] = useState<
+		Array<{ time: string; name: string; data: string }>
+	>([]);
 
 	const subscribedKey = subscribedEvents.join(",");
 
 	const addEvent = () => {
 		const name = eventInput.trim();
 		if (name && !subscribedEvents.includes(name)) {
-			setSubscribedEvents(prev => [...prev, name]);
+			setSubscribedEvents((prev) => [...prev, name]);
 		}
 		setEventInput("");
 	};
 
 	const removeEvent = (name: string) => {
-		setSubscribedEvents(prev => prev.filter(e => e !== name));
+		setSubscribedEvents((prev) => prev.filter((e) => e !== name));
 	};
 
 	useEffect(() => {
 		if (!actor.connection || !subscribedKey) return;
 
 		const names = subscribedKey.split(",");
-		const stops = names.map(name =>
+		const stops = names.map((name) =>
 			actor.connection!.on(name, (...args: unknown[]) => {
 				const now = new Date();
 				const time = [now.getHours(), now.getMinutes(), now.getSeconds()]
-					.map(n => n.toString().padStart(2, "0"))
+					.map((n) => n.toString().padStart(2, "0"))
 					.join(":");
 				setEvents((prev) => [
 					{ time, name, data: formatJson(args.length === 1 ? args[0] : args) },
 					...prev.slice(0, 49),
 				]);
-			})
+			}),
 		);
 
-		return () => { for (const stop of stops) stop(); };
+		return () => {
+			for (const stop of stops) stop();
+		};
 	}, [actor.connection, subscribedKey]);
 
 	return (
@@ -533,7 +556,9 @@ function EventsPanel({ actor, defaultEvents }: { actor: ActorPanelActor; default
 					<input
 						value={eventInput}
 						onChange={(e) => setEventInput(e.target.value)}
-						onKeyDown={(e) => { if (e.key === "Enter") addEvent(); }}
+						onKeyDown={(e) => {
+							if (e.key === "Enter") addEvent();
+						}}
 						placeholder="add event name"
 						className="inspector-input"
 					/>
@@ -558,7 +583,7 @@ function EventsPanel({ actor, defaultEvents }: { actor: ActorPanelActor; default
 			</div>
 			{subscribedEvents.length > 0 && (
 				<div className="event-tags">
-					{subscribedEvents.map(name => (
+					{subscribedEvents.map((name) => (
 						<span key={name} className="event-tag">
 							{name}
 							<button
@@ -674,22 +699,28 @@ function ActionRunner({
 
 		setInflight((n) => n + 1);
 		const start = performance.now();
-		actor.handle.action({
-			name: actionName,
-			args: parsedArgs.value,
-		}).then((response) => {
-			setLastLatency(performance.now() - start);
-			setResult(formatJson(response));
-			onActionComplete?.();
-		}).catch((err) => {
-			setError(err instanceof Error ? err.message : String(err));
-		}).finally(() => {
-			setInflight((n) => n - 1);
-		});
+		actor.handle
+			.action({
+				name: actionName,
+				args: parsedArgs.value,
+			})
+			.then((response) => {
+				setLastLatency(performance.now() - start);
+				setResult(formatJson(response));
+				onActionComplete?.();
+			})
+			.catch((err) => {
+				setError(err instanceof Error ? err.message : String(err));
+			})
+			.finally(() => {
+				setInflight((n) => n - 1);
+			});
 	};
 
 	if (templates.length === 0) {
-		return <div className="no-actions">No actions available for this actor.</div>;
+		return (
+			<div className="no-actions">No actions available for this actor.</div>
+		);
 	}
 
 	return (
@@ -741,9 +772,9 @@ function WelcomePanel() {
 	return (
 		<section className="card">
 			<p className="card-subtitle">
-				This kitchen sink lets you interact with every Rivet Actor feature
-				in one place. Pick a topic from the sidebar to connect to
-				live actors, invoke actions, and observe events in real time.
+				This kitchen sink lets you interact with every Rivet Actor feature in
+				one place. Pick a topic from the sidebar to connect to live actors,
+				invoke actions, and observe events in real time.
 			</p>
 		</section>
 	);
@@ -770,8 +801,7 @@ function ConfigPlayground() {
 			<div>
 				<h3 className="card-title">Configuration Playground</h3>
 				<p className="card-subtitle">
-					Edit JSON to explore how actor configuration payloads are
-					shaped.
+					Edit JSON to explore how actor configuration payloads are shaped.
 				</p>
 			</div>
 			<div className="demo-grid">
@@ -798,9 +828,7 @@ function ConfigPlayground() {
 
 function RawHttpPanel({ page }: { page: PageConfig }) {
 	const [selectedActor, setSelectedActor] = useState(page.actors[0] ?? "");
-	const [path, setPath] = useState(
-		page.rawHttpDefaults?.path ?? "/api/hello",
-	);
+	const [path, setPath] = useState(page.rawHttpDefaults?.path ?? "/api/hello");
 	const [method, setMethod] = useState(page.rawHttpDefaults?.method ?? "GET");
 	const [body, setBody] = useState(page.rawHttpDefaults?.body ?? "");
 	const [response, setResponse] = useState("");
@@ -832,9 +860,7 @@ function RawHttpPanel({ page }: { page: PageConfig }) {
 				method,
 				body: method === "GET" ? undefined : body || undefined,
 				headers:
-					method === "GET"
-						? undefined
-						: { "Content-Type": "application/json" },
+					method === "GET" ? undefined : { "Content-Type": "application/json" },
 			});
 			const text = await response.text();
 			setResponse(`Status ${response.status}\n${text}`);
@@ -859,9 +885,7 @@ function RawHttpPanel({ page }: { page: PageConfig }) {
 					<select
 						id="raw-http-actor"
 						value={selectedActor}
-						onChange={(event) =>
-							setSelectedActor(event.target.value)
-						}
+						onChange={(event) => setSelectedActor(event.target.value)}
 					>
 						{page.actors.map((actorName) => (
 							<option key={actorName} value={actorName}>
@@ -981,9 +1005,7 @@ function RawWebSocketPanel({ page }: { page: PageConfig }) {
 					<select
 						id="raw-ws-actor"
 						value={selectedActor}
-						onChange={(event) =>
-							setSelectedActor(event.target.value)
-						}
+						onChange={(event) => setSelectedActor(event.target.value)}
 					>
 						{page.actors.map((actorName) => (
 							<option key={actorName} value={actorName}>
@@ -1039,13 +1061,10 @@ function RawWebSocketPanel({ page }: { page: PageConfig }) {
 				{log.length === 0
 					? "No WebSocket activity yet."
 					: log.map((entry, index) => (
-							<div
-								className="event-entry"
-								key={`${entry}-${index}`}
-							>
-								{entry}
-							</div>
-						))}
+						<div className="event-entry" key={`${entry}-${index}`}>
+							{entry}
+						</div>
+					))}
 			</div>
 		</section>
 	);
