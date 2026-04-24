@@ -24,6 +24,13 @@
 - Flush the actor-connect `WebSocketSender` after queuing a setup `Error` frame and before closing so the envoy writer handles the error before the close terminates the connection.
 - Bound actor-connect websocket setup at the registry boundary as well as inside the actor task. The HTTP upgrade can complete before `connection_open` replies, so a missing reply must still close the socket instead of idling until the client test timeout.
 
+## Run modes
+
+- Two run modes exist for `CoreRegistry`. **Persistent envoy**: `serve_with_config(...)` starts one outbound envoy via `start_envoy` and holds it for the process lifetime; used by standalone Rust binaries and TS `registry.start()`. **Serverless request**: `into_serverless_runtime(...)` returns a `CoreServerlessRuntime` whose `handle_request(...)` lazily starts an envoy on first request via `ensure_envoy(...)` and caches it; used by Node/Bun/Deno HTTP hosts and platform fetch handlers. Both modes end up holding a long-lived `EnvoyHandle`.
+- Shutdown is a property of the host's `CoreRegistry` handle, not of whichever entrypoint ran first. Route process-level shutdown (SIGINT/SIGTERM) through a single `CoreRegistry::shutdown()` that trips one shared cancel token observed by `serve_with_config` and calls `CoreServerlessRuntime::shutdown()` on the cached runtime. Never attach the shutdown signal to `serve_with_config`'s config parameter — that misses Mode B entirely.
+- `rivetkit-core` and `rivet-envoy-client` must not install process signal handlers (no `tokio::signal::ctrl_c()` in library code). `tokio::signal::ctrl_c()` calls `sigaction(SIGINT, ...)` at the POSIX level and prevents Node from exiting when rivetkit is embedded via NAPI. Signal policy belongs to the host binary or the TS registry layer.
+- Per-request `CancellationToken` on `handle_serverless_request` cancels a single in-flight request and does not tear down the cached envoy. Do not overload it with registry shutdown.
+
 ## Test harness
 
 - `tests/modules/task.rs` tests that install a tracing subscriber with `set_default(...)` must take `test_hook_lock()` first, or full `cargo test` parallelism makes the log-capture assertions flaky.

@@ -540,7 +540,7 @@ impl ActorContext {
 			let status = abort.call(Ok(()), ThreadsafeFunctionCallMode::NonBlocking);
 			tracing::debug!(kind = "abortSignal", ?status, "napi TSF callback returned");
 			if status != napi::Status::Ok {
-				tracing::warn!(?status, "failed to deliver abort signal");
+				tracing::warn!(actor_id, ?status, "failed to deliver abort signal");
 			}
 		});
 

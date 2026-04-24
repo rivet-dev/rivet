@@ -238,14 +238,27 @@ impl RegistryDispatcher {
 		action_name: &str,
 		args: Vec<u8>,
 	) -> std::result::Result<Vec<u8>, ActionDispatchError> {
+		tracing::info!(
+			action_name,
+			args_len = args.len(),
+			"inspector RPC: connecting transient conn"
+		);
 		let conn = match instance
 			.ctx
 			.connect_conn(Vec::new(), false, None, None, async { Ok(Vec::new()) })
 			.await
 		{
 			Ok(conn) => conn,
-			Err(error) => return Err(ActionDispatchError::from_anyhow(error)),
+			Err(error) => {
+				tracing::warn!(action_name, ?error, "inspector RPC: connect_conn failed");
+				return Err(ActionDispatchError::from_anyhow(error));
+			}
 		};
+		tracing::info!(
+			action_name,
+			conn_id = ?conn.id(),
+			"inspector RPC: dispatching to actor task"
+		);
 		let output = dispatch_action_through_task(
 			&instance.dispatch,
 			instance.factory.config().dispatch_command_inbox_capacity,
@@ -254,6 +267,14 @@ impl RegistryDispatcher {
 			args,
 		)
 		.await;
+		match &output {
+			Ok(bytes) => tracing::info!(
+				action_name,
+				output_len = bytes.len(),
+				"inspector RPC: action returned"
+			),
+			Err(error) => tracing::warn!(action_name, ?error, "inspector RPC: action errored"),
+		}
 		if let Err(error) = conn.disconnect(None).await {
 			tracing::warn!(
 				?error,

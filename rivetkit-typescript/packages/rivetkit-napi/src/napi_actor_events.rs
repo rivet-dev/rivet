@@ -310,6 +310,10 @@ fn configure_run_handler(bindings: &CallbackBindings, ctx: &ActorContext) -> Run
 	run_handler
 }
 
+#[tracing::instrument(
+	skip_all,
+	fields(actor_id = %ctx.inner().actor_id()),
+)]
 pub(crate) async fn dispatch_event(
 	event: ActorEvent,
 	bindings: &Arc<CallbackBindings>,
@@ -329,7 +333,19 @@ pub(crate) async fn dispatch_event(
 			conn,
 			reply,
 		} => {
+			tracing::info!(
+				actor_id = %ctx.inner().actor_id(),
+				action_name = %name,
+				args_len = args.len(),
+				has_conn = conn.is_some(),
+				"napi: dispatching ActorEvent::Action to JS"
+			);
 			let Some(callback) = bindings.actions.get(&name).cloned() else {
+				tracing::warn!(
+					actor_id = %ctx.inner().actor_id(),
+					action_name = %name,
+					"napi: no action callback registered",
+				);
 				reply.send(Err(action_not_found(name)));
 				return;
 			};
@@ -338,6 +354,7 @@ pub(crate) async fn dispatch_event(
 			let ctx = ctx.clone();
 
 			spawn_reply(tasks, abort.clone(), reply, async move {
+				tracing::info!(action_name = %name, "napi: invoking action JS callback");
 				let output = with_dispatch_cancel_token(|cancel_token| {
 					with_structured_timeout(
 						"actor",
@@ -356,6 +373,11 @@ pub(crate) async fn dispatch_event(
 					)
 				})
 				.await?;
+				tracing::info!(
+					action_name = %name,
+					output_len = output.len(),
+					"napi: action JS callback returned"
+				);
 
 				if let Some(callback) = on_before_action_response {
 					with_structured_timeout(
@@ -522,8 +544,9 @@ pub(crate) async fn dispatch_event(
 				return;
 			};
 			let ctx = ctx.clone();
+			let actor_id = ctx.inner().actor_id().to_owned();
 			let timeout = config.on_connect_timeout;
-			spawn_task(tasks, abort.clone(), async move {
+			spawn_task(tasks, abort.clone(), actor_id, async move {
 				with_timeout(
 					"onDisconnect",
 					timeout,
@@ -577,7 +600,11 @@ pub(crate) async fn dispatch_event(
 				}
 				.await;
 				if let Err(error) = result {
-					tracing::error!(?error, "graceful cleanup callback failed");
+					tracing::error!(
+						actor_id = %ctx.inner().actor_id(),
+						?error,
+						"graceful cleanup callback failed",
+					);
 				}
 				reply.send(Ok(()));
 			});
@@ -598,7 +625,11 @@ pub(crate) async fn dispatch_event(
 				}
 				.await;
 				if let Err(error) = result {
-					tracing::error!(?error, "disconnect cleanup callback failed");
+					tracing::error!(
+						actor_id = %ctx.inner().actor_id(),
+						?error,
+						"disconnect cleanup callback failed",
+					);
 				}
 				reply.send(Ok(()));
 			});
@@ -712,7 +743,7 @@ pub(crate) fn spawn_reply<T, F>(
 	});
 }
 
-fn spawn_task<F>(tasks: &mut JoinSet<()>, abort: CancellationToken, work: F)
+fn spawn_task<F>(tasks: &mut JoinSet<()>, abort: CancellationToken, actor_id: String, work: F)
 where
 	F: std::future::Future<Output = Result<()>> + Send + 'static,
 {
@@ -721,7 +752,7 @@ where
 			_ = abort.cancelled() => {}
 			result = work => {
 				if let Err(error) = result {
-					tracing::error!(?error, "napi background callback failed");
+					tracing::error!(actor_id, ?error, "napi background callback failed");
 				}
 			}
 		}

@@ -252,6 +252,7 @@ pub fn start_envoy_sync(config: EnvoyConfig) -> EnvoyHandle {
 fn start_envoy_sync_inner(config: EnvoyConfig) -> EnvoyHandle {
 	let (envoy_tx, envoy_rx) = mpsc::unbounded_channel::<ToEnvoyMessage>();
 	let (start_tx, start_rx) = tokio::sync::watch::channel(());
+	let (stopped_tx, _stopped_rx) = tokio::sync::watch::channel(false);
 
 	let envoy_key = uuid::Uuid::new_v4().to_string();
 	let shared = Arc::new(SharedContext {
@@ -264,19 +265,13 @@ fn start_envoy_sync_inner(config: EnvoyConfig) -> EnvoyHandle {
 		ws_tx: Arc::new(tokio::sync::Mutex::new(None)),
 		protocol_metadata: Arc::new(tokio::sync::Mutex::new(None)),
 		shutting_down: std::sync::atomic::AtomicBool::new(false),
+		stopped_tx,
 	});
 
 	let handle = EnvoyHandle {
 		shared: shared.clone(),
 		started_rx: start_rx,
 	};
-
-	// Start signal handler
-	let handle2 = handle.clone();
-	tokio::spawn(async move {
-		let _ = tokio::signal::ctrl_c().await;
-		handle2.shutdown(false);
-	});
 
 	start_connection(shared.clone());
 
@@ -459,6 +454,11 @@ async fn envoy_loop(
 	tracing::info!("envoy stopped");
 
 	ctx.shared.config.callbacks.on_shutdown();
+
+	// Latched signal: waiters on `EnvoyHandle::wait_stopped` observe this and
+	// any future callers of `wait_stopped` resolve immediately because watch
+	// retains the last value.
+	let _ = ctx.shared.stopped_tx.send(true);
 }
 
 async fn handle_conn_message(

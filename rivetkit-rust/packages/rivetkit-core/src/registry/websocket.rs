@@ -4,6 +4,7 @@ use super::inspector::encode_json_as_cbor;
 use super::*;
 use crate::error::ProtocolError;
 use tokio::time::timeout;
+use tracing::Instrument;
 
 impl RegistryDispatcher {
 	pub(super) async fn handle_websocket(
@@ -18,13 +19,22 @@ impl RegistryDispatcher {
 		is_restoring_hibernatable: bool,
 		sender: WebSocketSender,
 	) -> Result<WebSocketHandler> {
+		tracing::info!(actor_id, path, "handle_websocket: routing");
 		let instance = self.active_actor(actor_id).await?;
 		if is_inspector_connect_path(path)? {
+			tracing::info!(
+				actor_id,
+				"handle_websocket: dispatching to inspector handler"
+			);
 			return self
 				.handle_inspector_websocket(actor_id, instance, request, headers)
 				.await;
 		}
 		if is_actor_connect_path(path)? {
+			tracing::info!(
+				actor_id,
+				"handle_websocket: dispatching to actor-connect handler"
+			);
 			return self
 				.handle_actor_connect_websocket(
 					actor_id,
@@ -40,6 +50,11 @@ impl RegistryDispatcher {
 				)
 				.await;
 		}
+		tracing::info!(
+			actor_id,
+			path,
+			"handle_websocket: dispatching to raw handler"
+		);
 		match self
 			.handle_raw_websocket(
 				actor_id,
@@ -359,114 +374,123 @@ impl RegistryDispatcher {
 							let ctx = ctx.clone();
 							let conn = conn.clone();
 							let message_index = message.message_index;
-							tokio::spawn(async move {
-								let response = match dispatch_action_through_task(
-									&dispatch,
-									on_message_dispatch_capacity,
-									conn.clone(),
-									request.name.clone(),
-									request.args.into_vec(),
-								)
-								.await
-								{
-									Ok(output) => ActorConnectToClient::ActionResponse(
-										ActorConnectActionResponse {
-											id: request.id,
-											output: ByteBuf::from(output),
-										},
-									),
-									Err(error) => {
-										if conn.is_hibernatable() && ctx.sleep_requested() {
-											tracing::debug!(
-												conn_id = conn.id(),
-												message_index,
-												action_name = request.name,
-												"deferring hibernatable actor websocket action while actor is entering sleep"
-											);
-											return;
-										}
-										ActorConnectToClient::Error(action_dispatch_error_response(
-											error, request.id,
-										))
-									}
-								};
-
-								if conn.is_hibernatable()
-									&& let Err(error) = persist_and_ack_hibernatable_actor_message(
-										&ctx,
-										&conn,
-										message_index,
+							let actor_id = ctx.actor_id().to_owned();
+							tokio::spawn(
+								async move {
+									let response = match dispatch_action_through_task(
+										&dispatch,
+										on_message_dispatch_capacity,
+										conn.clone(),
+										request.name.clone(),
+										request.args.into_vec(),
 									)
 									.await
-								{
-									tracing::warn!(
-										?error,
-										conn_id = conn.id(),
-										"failed to persist and ack hibernatable actor websocket message"
-									);
-									sender.close(
-										Some(1011),
-										Some("actor.hibernation_persist_failed".to_owned()),
-									);
-									return;
-								}
-
-								match send_actor_connect_message(
-									&sender,
-									encoding,
-									&response,
-									max_outgoing_message_size,
-								) {
-									Ok(()) => {}
-									Err(ActorConnectSendError::OutgoingTooLong) => {
-										let error_response =
-											ActorConnectToClient::Error(ActorConnectError {
-												group: "message".to_owned(),
-												code: "outgoing_too_long".to_owned(),
-												message: "Outgoing message too long".to_owned(),
-												metadata: None,
-												action_id: Some(request.id),
-											});
-										if let Err(error) = send_actor_connect_message(
-											&sender,
-											encoding,
-											&error_response,
-											usize::MAX,
-										) {
-											match error {
-												ActorConnectSendError::OutgoingTooLong => {
-													sender.close(
-														Some(1011),
-														Some(
-															"message.outgoing_too_long".to_owned(),
-														),
-													);
-												}
-												ActorConnectSendError::Encode(error) => {
-													tracing::error!(
-														?error,
-														"failed to send actor websocket outgoing-size error"
-													);
-													sender.close(
-														Some(1011),
-														Some("actor.send_failed".to_owned()),
-													);
-												}
+									{
+										Ok(output) => ActorConnectToClient::ActionResponse(
+											ActorConnectActionResponse {
+												id: request.id,
+												output: ByteBuf::from(output),
+											},
+										),
+										Err(error) => {
+											if conn.is_hibernatable() && ctx.sleep_requested() {
+												tracing::debug!(
+													conn_id = conn.id(),
+													message_index,
+													action_name = request.name,
+													"deferring hibernatable actor websocket action while actor is entering sleep"
+												);
+												return;
 											}
+											ActorConnectToClient::Error(
+												action_dispatch_error_response(error, request.id),
+											)
 										}
-									}
-									Err(ActorConnectSendError::Encode(error)) => {
-										tracing::error!(
+									};
+
+									if conn.is_hibernatable()
+										&& let Err(error) =
+											persist_and_ack_hibernatable_actor_message(
+												&ctx,
+												&conn,
+												message_index,
+											)
+											.await
+									{
+										tracing::warn!(
 											?error,
-											"failed to send actor websocket response"
+											conn_id = conn.id(),
+											"failed to persist and ack hibernatable actor websocket message"
 										);
 										sender.close(
 											Some(1011),
-											Some("actor.send_failed".to_owned()),
+											Some("actor.hibernation_persist_failed".to_owned()),
 										);
+										return;
+									}
+
+									match send_actor_connect_message(
+										&sender,
+										encoding,
+										&response,
+										max_outgoing_message_size,
+									) {
+										Ok(()) => {}
+										Err(ActorConnectSendError::OutgoingTooLong) => {
+											let error_response =
+												ActorConnectToClient::Error(ActorConnectError {
+													group: "message".to_owned(),
+													code: "outgoing_too_long".to_owned(),
+													message: "Outgoing message too long".to_owned(),
+													metadata: None,
+													action_id: Some(request.id),
+												});
+											if let Err(error) = send_actor_connect_message(
+												&sender,
+												encoding,
+												&error_response,
+												usize::MAX,
+											) {
+												match error {
+													ActorConnectSendError::OutgoingTooLong => {
+														sender.close(
+															Some(1011),
+															Some(
+																"message.outgoing_too_long"
+																	.to_owned(),
+															),
+														);
+													}
+													ActorConnectSendError::Encode(error) => {
+														tracing::error!(
+															?error,
+															"failed to send actor websocket outgoing-size error"
+														);
+														sender.close(
+															Some(1011),
+															Some("actor.send_failed".to_owned()),
+														);
+													}
+												}
+											}
+										}
+										Err(ActorConnectSendError::Encode(error)) => {
+											tracing::error!(
+												?error,
+												"failed to send actor websocket response"
+											);
+											sender.close(
+												Some(1011),
+												Some("actor.send_failed".to_owned()),
+											);
+										}
 									}
 								}
-							});
+								.instrument(tracing::info_span!(
+									"actor_connect_ws",
+									actor_id = %actor_id,
+								)),
+							);
 						}
 					}
 				})

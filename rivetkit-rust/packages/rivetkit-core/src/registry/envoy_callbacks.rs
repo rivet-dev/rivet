@@ -1,3 +1,5 @@
+use tracing::Instrument;
+
 use super::*;
 use crate::error::ActorRuntime;
 
@@ -63,16 +65,18 @@ impl EnvoyCallbacks for RegistryCallbacks {
 	) -> EnvoyBoxFuture<anyhow::Result<()>> {
 		let dispatcher = self.dispatcher.clone();
 		Box::pin(async move {
-			tokio::spawn(async move {
-				if let Err(error) = dispatcher.stop_actor(&actor_id, reason, stop_handle).await {
-					tracing::error!(
-						actor_id,
-						generation,
-						?error,
-						"actor stop failed after asynchronous completion handoff"
-					);
+			tokio::spawn(
+				async move {
+					if let Err(error) = dispatcher.stop_actor(&actor_id, reason, stop_handle).await
+					{
+						tracing::error!(
+							?error,
+							"actor stop failed after asynchronous completion handoff",
+						);
+					}
 				}
-			});
+				.in_current_span(),
+			);
 			Ok(())
 		})
 	}
@@ -87,6 +91,11 @@ impl EnvoyCallbacks for RegistryCallbacks {
 		_request_id: protocol::RequestId,
 		request: HttpRequest,
 	) -> EnvoyBoxFuture<anyhow::Result<HttpResponse>> {
+		tracing::info!(
+			method = %request.method,
+			path = %request.path,
+			"envoy callback: fetch request"
+		);
 		let dispatcher = self.dispatcher.clone();
 		Box::pin(async move { dispatcher.handle_fetch(&actor_id, request).await })
 	}
@@ -104,6 +113,12 @@ impl EnvoyCallbacks for RegistryCallbacks {
 		is_restoring_hibernatable: bool,
 		sender: WebSocketSender,
 	) -> EnvoyBoxFuture<anyhow::Result<WebSocketHandler>> {
+		tracing::info!(
+			path = %_path,
+			is_hibernatable = _is_hibernatable,
+			is_restoring_hibernatable,
+			"envoy callback: websocket request"
+		);
 		let dispatcher = self.dispatcher.clone();
 		Box::pin(async move {
 			dispatcher

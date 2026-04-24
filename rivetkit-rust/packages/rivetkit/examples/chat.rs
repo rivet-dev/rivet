@@ -106,8 +106,19 @@ async fn save_chat_state(ctx: &Ctx<Chat>, state: &ChatState) -> Result<()> {
 async fn main() -> Result<()> {
 	let mut registry = Registry::new();
 	registry.register::<Chat, _, _>("chat", run);
-	tokio::select! {
-		res = registry.serve() => res,
-		_ = tokio::signal::ctrl_c() => Ok(()),
+	let token = tokio_util::sync::CancellationToken::new();
+	let serve = tokio::spawn({
+		let token = token.clone();
+		async move { registry.serve(token).await }
+	});
+	match tokio::signal::ctrl_c().await {
+		Ok(()) => {}
+		Err(err) => tracing::warn!(?err, "ctrl_c install failed; cancelling anyway"),
+	}
+	token.cancel();
+	match serve.await {
+		Ok(Ok(())) => Ok(()),
+		Ok(Err(err)) => Err(err),
+		Err(join_err) => Err(join_err.into()),
 	}
 }

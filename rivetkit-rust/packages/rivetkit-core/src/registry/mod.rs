@@ -4,7 +4,7 @@ use std::io::Cursor;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use ::http::StatusCode;
 use anyhow::{Context, Result};
@@ -25,6 +25,7 @@ use serde_bytes::ByteBuf;
 use serde_json::{Value as JsonValue, json};
 use tokio::sync::{Mutex as TokioMutex, Notify, broadcast, mpsc, oneshot};
 use tokio::task::JoinHandle;
+use tokio_util::sync::CancellationToken;
 use vbare::OwnedVersionedData;
 
 use crate::actor::action::ActionDispatchError;
@@ -68,6 +69,11 @@ mod websocket;
 
 use inspector::build_actor_inspector;
 use websocket::is_actor_connect_path;
+
+/// Bound on `handle.shutdown_and_wait` inside `serve_with_config` teardown.
+/// Protects against indefinite hangs if the envoy reconnect loop is stuck;
+/// the TS/outer-host grace period is the ultimate backstop.
+const SHUTDOWN_DRAIN_TIMEOUT: Duration = Duration::from_secs(20);
 
 #[derive(Debug, Default)]
 pub struct CoreRegistry {
@@ -410,11 +416,16 @@ impl CoreRegistry {
 		self.factories.insert(name.to_owned(), factory);
 	}
 
-	pub async fn serve(self) -> Result<()> {
-		self.serve_with_config(ServeConfig::from_env()).await
+	pub async fn serve(self, shutdown: CancellationToken) -> Result<()> {
+		self.serve_with_config(ServeConfig::from_env(), shutdown)
+			.await
 	}
 
-	pub async fn serve_with_config(self, config: ServeConfig) -> Result<()> {
+	pub async fn serve_with_config(
+		self,
+		config: ServeConfig,
+		shutdown: CancellationToken,
+	) -> Result<()> {
 		let dispatcher = self.into_dispatcher(&config);
 		let _engine_process = match config.engine_binary_path.as_ref() {
 			Some(binary_path) => {
@@ -427,7 +438,7 @@ impl CoreRegistry {
 			dispatcher: dispatcher.clone(),
 		});
 
-		let _handle = start_envoy(rivet_envoy_client::config::EnvoyConfig {
+		let handle = start_envoy(rivet_envoy_client::config::EnvoyConfig {
 			version: config.version,
 			endpoint: config.endpoint,
 			token: config.token,
@@ -445,8 +456,22 @@ impl CoreRegistry {
 		// `sigaction(SIGINT, ...)` at the POSIX level, which overrides the
 		// host's default SIGINT handling when rivetkit-core is embedded in
 		// Node via NAPI and leaves the host process unable to exit. Callers
-		// drive shutdown themselves by dropping the task.
-		std::future::pending::<Result<()>>().await
+		// trip the `shutdown` token instead.
+		shutdown.cancelled().await;
+
+		// Bounded drain. If envoy cannot reach the engine (reconnect loop stuck),
+		// we fall back to immediate `Stop` rather than hanging indefinitely.
+		// The outer host (TS signal handler / Rust binary) is the backstop.
+		match tokio::time::timeout(SHUTDOWN_DRAIN_TIMEOUT, handle.shutdown_and_wait(false)).await {
+			Ok(()) => {}
+			Err(_) => {
+				tracing::warn!("envoy shutdown drain exceeded timeout; forcing immediate stop");
+				handle.shutdown(true);
+				handle.wait_stopped().await;
+			}
+		}
+
+		Ok(())
 	}
 
 	fn into_dispatcher(self, config: &ServeConfig) -> Arc<RegistryDispatcher> {

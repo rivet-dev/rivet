@@ -290,6 +290,14 @@ export declare class CoreRegistry {
   constructor()
   register(name: string, factory: NapiActorFactory): void
   serve(config: JsServeConfig): Promise<void>
+  /**
+   * Trip the shutdown token and tear down any live serverless runtime.
+   *
+   * Idempotent. Safe to call when neither mode has been activated.
+   * Does not block on the `serve()` future; TS awaits that promise
+   * separately to avoid re-entrancy.
+   */
+  shutdown(): Promise<void>
   handleServerlessRequest(req: JsServerlessRequest, onStreamEvent: (...args: any[]) => any, cancelToken: CancellationToken, config: JsServeConfig): Promise<JsServerlessResponseHead>
 }
 export declare class Schedule {

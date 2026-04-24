@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use anyhow::{Context, Result};
@@ -23,6 +24,10 @@ use crate::registry::{RegistryCallbacks, RegistryDispatcher, ServeConfig};
 
 const DEFAULT_BASE_PATH: &str = "/api/rivet";
 const SSE_PING_INTERVAL: Duration = Duration::from_secs(1);
+/// Bound on `handle.shutdown_and_wait` inside teardown paths. If envoy cannot
+/// reach the engine (reconnect loop stuck), we fall back to immediate `Stop`
+/// rather than hanging indefinitely. Must stay below the outer TS grace ceiling.
+const SHUTDOWN_DRAIN_TIMEOUT: Duration = Duration::from_secs(20);
 
 #[derive(Clone)]
 pub struct CoreServerlessRuntime {
@@ -30,6 +35,7 @@ pub struct CoreServerlessRuntime {
 	dispatcher: Arc<RegistryDispatcher>,
 	envoy: Arc<TokioMutex<Option<EnvoyHandle>>>,
 	_engine_process: Arc<TokioMutex<Option<EngineProcessManager>>>,
+	shutting_down: Arc<AtomicBool>,
 }
 
 #[derive(Clone, Debug)]
@@ -128,6 +134,15 @@ struct IncomingMessageTooLong {
 	limit: usize,
 }
 
+#[derive(rivet_error::RivetError, Serialize)]
+#[error(
+	"registry",
+	"shut_down",
+	"Registry is shut down.",
+	"Registry is shut down; no new requests can be accepted."
+)]
+struct RuntimeShutDown;
+
 impl CoreServerlessRuntime {
 	pub(crate) async fn new(
 		factories: HashMap<String, Arc<ActorFactory>>,
@@ -163,7 +178,30 @@ impl CoreServerlessRuntime {
 			dispatcher,
 			envoy: Arc::new(TokioMutex::new(None)),
 			_engine_process: Arc::new(TokioMutex::new(engine_process)),
+			shutting_down: Arc::new(AtomicBool::new(false)),
 		})
+	}
+
+	/// Tear down the cached envoy handle. Idempotent.
+	///
+	/// Sets `shutting_down` so concurrent `ensure_envoy` callers short-circuit
+	/// instead of starting a fresh envoy after teardown, and waits (with a
+	/// bounded timeout) for `envoy_loop` to exit. If the drain exceeds the
+	/// timeout (e.g. engine unreachable), falls back to an immediate `Stop`.
+	pub async fn shutdown(&self) {
+		self.shutting_down.store(true, Ordering::Release);
+		let handle = { self.envoy.lock().await.take() };
+		let Some(handle) = handle else { return };
+		match tokio::time::timeout(SHUTDOWN_DRAIN_TIMEOUT, handle.shutdown_and_wait(false)).await {
+			Ok(()) => {}
+			Err(_) => {
+				tracing::warn!(
+					"serverless runtime envoy drain exceeded timeout; forcing immediate stop"
+				);
+				handle.shutdown(true);
+				handle.wait_stopped().await;
+			}
+		}
 	}
 
 	pub async fn handle_request(&self, req: ServerlessRequest) -> ServerlessResponse {
@@ -399,6 +437,9 @@ impl CoreServerlessRuntime {
 	}
 
 	async fn ensure_envoy(&self, headers: &StartHeaders) -> Result<EnvoyHandle> {
+		if self.shutting_down.load(Ordering::Acquire) {
+			return Err(RuntimeShutDown.build());
+		}
 		let mut guard = self.envoy.lock().await;
 		if let Some(handle) = guard.as_ref() {
 			if !endpoints_match(handle.endpoint(), &headers.endpoint)
@@ -413,6 +454,10 @@ impl CoreServerlessRuntime {
 		let callbacks = Arc::new(RegistryCallbacks {
 			dispatcher: self.dispatcher.clone(),
 		});
+		// not_global: true to avoid caching the handle in the process-wide
+		// `GLOBAL_ENVOY` OnceLock. Without this, a shutdown-during-build race
+		// (spec §3 step 7) leaves a dead handle cached for the life of the
+		// process and any subsequent consumer gets it back.
 		let handle = start_envoy(EnvoyConfig {
 			version: self.settings.version,
 			endpoint: headers.endpoint.clone(),
@@ -425,11 +470,27 @@ impl CoreServerlessRuntime {
 			pool_name: headers.pool_name.clone(),
 			prepopulate_actor_names: HashMap::new(),
 			metadata: None,
-			not_global: false,
+			not_global: true,
 			debug_latency_ms: None,
 			callbacks,
 		})
 		.await;
+		// Re-check under the lock: shutdown may have run while we were awaiting
+		// `start_envoy`. If so, tear down the freshly-built envoy rather than
+		// installing it into the cache.
+		if self.shutting_down.load(Ordering::Acquire) {
+			drop(guard);
+			match tokio::time::timeout(SHUTDOWN_DRAIN_TIMEOUT, handle.shutdown_and_wait(false))
+				.await
+			{
+				Ok(()) => {}
+				Err(_) => {
+					handle.shutdown(true);
+					handle.wait_stopped().await;
+				}
+			}
+			return Err(RuntimeShutDown.build());
+		}
 		*guard = Some(handle.clone());
 		Ok(handle)
 	}

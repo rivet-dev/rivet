@@ -9,6 +9,7 @@ use tokio::sync::mpsc;
 use tokio::sync::oneshot;
 use tokio::sync::oneshot::error::TryRecvError;
 use tokio::task::{JoinError, JoinSet};
+use tracing::Instrument;
 
 use crate::config::{HttpRequest, HttpResponse, WebSocketMessage};
 use crate::connection::ws_send;
@@ -144,6 +145,14 @@ pub fn create_actor(
 	(tx, active_http_request_count)
 }
 
+#[tracing::instrument(
+	skip_all,
+	fields(
+		actor_id = %actor_id,
+		generation = generation,
+		actor_key = %config.key.as_deref().unwrap_or(""),
+	),
+)]
 async fn actor_inner(
 	shared: Arc<SharedContext>,
 	actor_id: String,
@@ -194,7 +203,7 @@ async fn actor_inner(
 		.await;
 
 	if let Err(error) = start_result {
-		tracing::error!(actor_id = %ctx.actor_id, ?error, "actor start failed");
+		tracing::error!(?error, "actor start failed");
 		send_event(
 			&mut ctx,
 			protocol::Event::EventActorStateUpdate(protocol::EventActorStateUpdate {
@@ -209,7 +218,7 @@ async fn actor_inner(
 
 	if let Some(meta_entries) = handle.take_pending_hibernation_restore(&actor_id) {
 		if let Err(error) = handle_hws_restore(&mut ctx, &handle, meta_entries).await {
-			tracing::error!(actor_id = %ctx.actor_id, ?error, "actor hibernation restore failed");
+			tracing::error!(?error, "actor hibernation restore failed");
 			send_event(
 				&mut ctx,
 				protocol::Event::EventActorStateUpdate(protocol::EventActorStateUpdate {
@@ -241,7 +250,7 @@ async fn actor_inner(
 				}
 			} => {
 				if let Some(result) = maybe_task {
-					handle_http_request_task_result(&ctx, result);
+					handle_http_request_task_result(result);
 				}
 			}
 			msg = async {
@@ -275,7 +284,6 @@ async fn actor_inner(
 					} => {
 						if pending_stop.is_some() {
 							tracing::warn!(
-								actor_id = %ctx.actor_id,
 								command_idx,
 								"ignoring duplicate stop while actor teardown is in progress"
 							);
@@ -294,7 +302,6 @@ async fn actor_inner(
 					ToActor::Lost => {
 						if pending_stop.is_some() {
 							tracing::warn!(
-								actor_id = %ctx.actor_id,
 								"ignoring lost signal while actor teardown is in progress"
 							);
 							continue;
@@ -368,7 +375,7 @@ async fn actor_inner(
 	}
 
 	abort_and_join_http_request_tasks(&mut ctx, &mut http_request_tasks).await;
-	tracing::debug!(actor_id = %ctx.actor_id, "envoy actor stopped");
+	tracing::debug!("envoy actor stopped");
 }
 
 fn send_event(ctx: &mut ActorContext, inner: protocol::Event) {
@@ -409,7 +416,7 @@ async fn begin_stop(
 		.await;
 
 	if let Err(error) = stop_result {
-		tracing::error!(actor_id = %ctx.actor_id, ?error, "actor stop failed");
+		tracing::error!(?error, "actor stop failed");
 		stop_code = protocol::StopCode::Error;
 		if stop_message.is_none() {
 			stop_message = Some(format!("{error:#}"));
@@ -451,7 +458,6 @@ fn finalize_stop(
 		}
 		Err(error) => {
 			tracing::warn!(
-				actor_id = %ctx.actor_id,
 				?error,
 				"actor stop completion handle dropped before signaling teardown result"
 			);
@@ -467,7 +473,7 @@ fn send_stopped_event_for_result(
 	stop_result: anyhow::Result<()>,
 ) {
 	if let Err(error) = stop_result {
-		tracing::error!(actor_id = %ctx.actor_id, ?error, "actor stop completion failed");
+		tracing::error!(?error, "actor stop completion failed");
 		stop_code = protocol::StopCode::Error;
 		if stop_message.is_none() {
 			stop_message = Some(format!("{error:#}"));
@@ -541,23 +547,26 @@ fn handle_req_start(
 	let request_id = message_id.request_id;
 	let request_guard = ActiveHttpRequestGuard::new(ctx.active_http_request_count.clone());
 
-	http_request_tasks.spawn(async move {
-		let _request_guard = request_guard;
-		let response = shared
-			.config
-			.callbacks
-			.fetch(handle_clone, actor_id, gateway_id, request_id, request)
-			.await;
+	http_request_tasks.spawn(
+		async move {
+			let _request_guard = request_guard;
+			let response = shared
+				.config
+				.callbacks
+				.fetch(handle_clone, actor_id, gateway_id, request_id, request)
+				.await;
 
-		match response {
-			Ok(response) => {
-				send_response(&shared, gateway_id, request_id, response).await;
-			}
-			Err(error) => {
-				tracing::error!(?error, "fetch failed");
+			match response {
+				Ok(response) => {
+					send_response(&shared, gateway_id, request_id, response).await;
+				}
+				Err(error) => {
+					tracing::error!(?error, "fetch failed");
+				}
 			}
 		}
-	});
+		.in_current_span(),
+	);
 
 	if !req.stream {
 		ctx.pending_requests
@@ -565,13 +574,13 @@ fn handle_req_start(
 	}
 }
 
-fn handle_http_request_task_result(ctx: &ActorContext, result: Result<(), JoinError>) {
+fn handle_http_request_task_result(result: Result<(), JoinError>) {
 	if let Err(error) = result {
 		if error.is_cancelled() {
 			return;
 		}
 
-		tracing::error!(actor_id = %ctx.actor_id, ?error, "http request task failed");
+		tracing::error!(?error, "http request task failed");
 	}
 }
 
@@ -585,7 +594,6 @@ async fn abort_and_join_http_request_tasks(
 
 	let active_http_request_count = ctx.active_http_request_count.load();
 	tracing::debug!(
-		actor_id = %ctx.actor_id,
 		active_http_request_count,
 		"aborting in-flight http request tasks"
 	);
@@ -593,7 +601,7 @@ async fn abort_and_join_http_request_tasks(
 	http_request_tasks.abort_all();
 
 	while let Some(result) = http_request_tasks.join_next().await {
-		handle_http_request_task_result(ctx, result);
+		handle_http_request_task_result(result);
 	}
 }
 
@@ -633,7 +641,7 @@ fn spawn_ws_outgoing_task(
 	request_id: protocol::RequestId,
 	mut outgoing_rx: mpsc::UnboundedReceiver<crate::config::WsOutgoing>,
 ) {
-	tokio::spawn(async move {
+	let ws_task = async move {
 		let mut idx: u16 = 0;
 		while let Some(msg) = outgoing_rx.recv().await {
 			idx += 1;
@@ -681,7 +689,8 @@ fn spawn_ws_outgoing_task(
 				}
 			}
 		}
-	});
+	};
+	tokio::spawn(ws_task.in_current_span());
 }
 
 async fn handle_ws_open(
@@ -896,7 +905,6 @@ async fn handle_ws_message(
 			if wrapping_lte_u16(received_index, previous_index) {
 				tracing::info!(
 					request_id = id_to_str(&message_id.request_id),
-					actor_id = %ctx.actor_id,
 					previous_index,
 					received_index,
 					"received duplicate hibernating websocket message"
@@ -908,7 +916,6 @@ async fn handle_ws_message(
 			if received_index != expected_index {
 				tracing::warn!(
 					request_id = id_to_str(&message_id.request_id),
-					actor_id = %ctx.actor_id,
 					previous_index,
 					expected_index,
 					received_index,
@@ -1621,6 +1628,7 @@ mod tests {
 			)),
 			protocol_metadata: Arc::new(tokio::sync::Mutex::new(None)),
 			shutting_down: std::sync::atomic::AtomicBool::new(false),
+			stopped_tx: tokio::sync::watch::channel(true).0,
 		});
 		(shared, envoy_rx)
 	}
