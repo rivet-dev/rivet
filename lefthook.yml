@@ -2,7 +2,7 @@ pre-commit:
   parallel: true
   commands:
     cargo-lock:
-      run: cargo metadata --locked --no-deps >/dev/null
+      run: cargo metadata --format-version 1 --locked --no-deps >/dev/null
       tags: lockfile
     pnpm-lock:
       run: pnpm install --frozen-lockfile --ignore-scripts

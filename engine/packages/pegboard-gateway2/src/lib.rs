@@ -1,7 +1,6 @@
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 use async_trait::async_trait;
 use bytes::Bytes;
-use futures_util::TryStreamExt;
 use gas::prelude::*;
 use http_body_util::{BodyExt, Full};
 use hyper::{Request, Response, StatusCode, body::Body};
@@ -13,22 +12,19 @@ use rivet_guard_core::{
 	errors::{ServiceUnavailable, WebSocketServiceUnavailable},
 	request_context::RequestContext,
 	utils::is_ws_hibernate,
-	websocket_handle::WebSocketReceiver,
 };
 use rivet_util::serde::HashableMap;
 use std::{
 	sync::{Arc, atomic::AtomicU64},
 	time::Duration,
 };
-use tokio::sync::{Mutex, watch};
-use tokio_tungstenite::tungstenite::{
-	Message,
-	protocol::frame::{CloseFrame, coding::CloseCode},
-};
+use tokio::sync::watch;
+use tokio_tungstenite::tungstenite::protocol::frame::{CloseFrame, coding::CloseCode};
 use universaldb::utils::IsolationLevel::*;
 
-use crate::shared_state::{InFlightRequestHandle, SharedState};
+use crate::shared_state::{InFlightRequestCtx, SharedState};
 
+mod hibernation_task;
 mod keepalive_task;
 mod metrics;
 mod metrics_task;
@@ -51,6 +47,13 @@ const UPDATE_METRICS_INTERVAL: Duration = Duration::from_secs(15);
 enum LifecycleResult {
 	ServerClose(protocol::ToRivetWebSocketClose),
 	ClientClose(Option<CloseFrame>),
+	Aborted,
+}
+
+#[derive(Debug)]
+enum HibernationLifecycleResult {
+	Continue,
+	Close,
 	Aborted,
 }
 
@@ -127,14 +130,14 @@ impl PegboardGateway2 {
 		.to_string();
 
 		// Start listening for request responses
-		let InFlightRequestHandle {
+		let InFlightRequestCtx {
 			mut msg_rx,
 			mut drop_rx,
-			..
+			handle: in_flight_req,
 		} = self
 			.shared_state
-			.start_in_flight_request(tunnel_subject, request_id)
-			.await;
+			.create_or_wake_in_flight_request(tunnel_subject, request_id, false)
+			.await?;
 
 		// Start request
 		let message = protocol::ToEnvoyTunnelMessageKind::ToEnvoyRequestStart(
@@ -151,7 +154,7 @@ impl PegboardGateway2 {
 				stream: false,
 			},
 		);
-		self.shared_state.send_message(request_id, message).await?;
+		in_flight_req.send_message(message).await?;
 
 		// Wait for response
 		tracing::debug!("gateway waiting for response from tunnel");
@@ -224,6 +227,8 @@ impl PegboardGateway2 {
 		let body = response_start.body.unwrap_or_default();
 		let response = response_builder.body(ResponseBody::Full(Full::new(Bytes::from(body))))?;
 
+		in_flight_req.stop().await;
+
 		Ok(response)
 	}
 
@@ -256,19 +261,14 @@ impl PegboardGateway2 {
 		.to_string();
 
 		// Start listening for WebSocket messages
-		let InFlightRequestHandle {
+		let InFlightRequestCtx {
 			mut msg_rx,
 			mut drop_rx,
-			new,
+			handle: in_flight_req,
 		} = self
 			.shared_state
-			.start_in_flight_request(tunnel_subject.clone(), request_id)
-			.await;
-
-		ensure!(
-			!after_hibernation || !new,
-			"should not be creating a new in flight entry after hibernation"
-		);
+			.create_or_wake_in_flight_request(tunnel_subject.clone(), request_id, after_hibernation)
+			.await?;
 
 		// If we are reconnecting after hibernation, don't send an open message
 		let can_hibernate = if after_hibernation {
@@ -283,9 +283,7 @@ impl PegboardGateway2 {
 				},
 			);
 
-			self.shared_state
-				.send_message(request_id, open_message)
-				.await?;
+			in_flight_req.send_message(open_message).await?;
 
 			tracing::debug!("gateway waiting for websocket open from tunnel");
 
@@ -345,8 +343,8 @@ impl PegboardGateway2 {
 					WebSocketServiceUnavailable.build()
 				})??;
 
-			self.shared_state
-				.toggle_hibernation(request_id, open_msg.can_hibernate)
+			in_flight_req
+				.toggle_hibernatable(open_msg.can_hibernate)
 				.await?;
 
 			open_msg.can_hibernate
@@ -356,9 +354,7 @@ impl PegboardGateway2 {
 		let egress_bytes = Arc::new(AtomicU64::new(0));
 
 		// Send pending messages
-		self.shared_state
-			.resend_pending_websocket_messages(request_id)
-			.await?;
+		in_flight_req.resend_pending_websocket_messages().await?;
 
 		let ws_rx = client_ws.recv();
 
@@ -369,9 +365,8 @@ impl PegboardGateway2 {
 		let (metrics_abort_tx, metrics_abort_rx) = watch::channel(());
 
 		let tunnel_to_ws = tokio::spawn(tunnel_to_ws_task::task(
-			self.shared_state.clone(),
+			in_flight_req.clone(),
 			client_ws,
-			request_id,
 			stopped_sub,
 			msg_rx,
 			drop_rx,
@@ -380,8 +375,7 @@ impl PegboardGateway2 {
 			tunnel_to_ws_abort_rx,
 		));
 		let ws_to_tunnel = tokio::spawn(ws_to_tunnel_task::task(
-			self.shared_state.clone(),
-			request_id,
+			in_flight_req.clone(),
 			ws_rx,
 			ingress_bytes.clone(),
 			ws_to_tunnel_abort_rx,
@@ -393,8 +387,7 @@ impl PegboardGateway2 {
 				.gateway_update_ping_interval_ms(),
 		);
 		let ping = tokio::spawn(ping_task::task(
-			self.shared_state.clone(),
-			request_id,
+			in_flight_req.clone(),
 			ping_abort_rx,
 			update_ping_interval,
 		));
@@ -408,7 +401,7 @@ impl PegboardGateway2 {
 		));
 		let keepalive = if can_hibernate {
 			Some(tokio::spawn(keepalive_task::task(
-				self.shared_state.clone(),
+				in_flight_req.clone(),
 				ctx.clone(),
 				self.actor_id,
 				self.shared_state.gateway_id(),
@@ -420,13 +413,13 @@ impl PegboardGateway2 {
 		};
 
 		// Wait for all tasks to complete
-		let (tunnel_to_ws_res, ws_to_tunnel_res, ping_res, keepalive_res, metrics_res) = tokio::join!(
+		let (tunnel_to_ws_res, ws_to_tunnel_res, ping_res, metrics_res, keepalive_res) = tokio::join!(
 			async {
 				let res = tunnel_to_ws.await?;
 
 				// Abort other if not aborted
 				if !matches!(res, Ok(LifecycleResult::Aborted)) {
-					tracing::debug!(?res, "tunnel to ws task completed, aborting counterpart");
+					tracing::debug!(?res, "tunnel to ws task completed, aborting others");
 
 					let _ = ping_abort_tx.send(());
 					let _ = ws_to_tunnel_abort_tx.send(());
@@ -443,7 +436,7 @@ impl PegboardGateway2 {
 
 				// Abort other if not aborted
 				if !matches!(res, Ok(LifecycleResult::Aborted)) {
-					tracing::debug!(?res, "ws to tunnel task completed, aborting counterpart");
+					tracing::debug!(?res, "ws to tunnel task completed, aborting others");
 
 					let _ = ping_abort_tx.send(());
 					let _ = tunnel_to_ws_abort_tx.send(());
@@ -473,6 +466,23 @@ impl PegboardGateway2 {
 				res
 			},
 			async {
+				let res = metrics.await?;
+
+				// Abort others if not aborted
+				if !matches!(res, Ok(LifecycleResult::Aborted)) {
+					tracing::debug!(?res, "metrics task completed, aborting others");
+
+					let _ = ws_to_tunnel_abort_tx.send(());
+					let _ = tunnel_to_ws_abort_tx.send(());
+					let _ = ping_abort_tx.send(());
+					let _ = keepalive_abort_tx.send(());
+				} else {
+					tracing::debug!(?res, "metrics task completed");
+				}
+
+				res
+			},
+			async {
 				let Some(keepalive) = keepalive else {
 					return Ok(LifecycleResult::Aborted);
 				};
@@ -493,23 +503,6 @@ impl PegboardGateway2 {
 
 				res
 			},
-			async {
-				let res = metrics.await?;
-
-				// Abort others if not aborted
-				if !matches!(res, Ok(LifecycleResult::Aborted)) {
-					tracing::debug!(?res, "metrics task completed, aborting others");
-
-					let _ = ws_to_tunnel_abort_tx.send(());
-					let _ = tunnel_to_ws_abort_tx.send(());
-					let _ = ping_abort_tx.send(());
-					let _ = keepalive_abort_tx.send(());
-				} else {
-					tracing::debug!(?res, "metrics task completed");
-				}
-
-				res
-			},
 		);
 
 		// Determine single result from all tasks
@@ -517,8 +510,8 @@ impl PegboardGateway2 {
 			tunnel_to_ws_res,
 			ws_to_tunnel_res,
 			ping_res,
-			keepalive_res,
 			metrics_res,
+			keepalive_res,
 		) {
 			// Prefer error
 			(Err(err), _, _, _, _) => Err(err),
@@ -553,13 +546,13 @@ impl PegboardGateway2 {
 				},
 			);
 
-			if let Err(err) = self
-				.shared_state
-				.send_message(request_id, close_message)
-				.await
-			{
+			if let Err(err) = in_flight_req.send_message(close_message).await {
 				tracing::error!(?err, "error sending close message");
 			}
+
+			in_flight_req.stop().await;
+		} else {
+			in_flight_req.start_hibernation().await?;
 		}
 
 		// Send WebSocket close message to client
@@ -687,22 +680,50 @@ impl CustomServeTrait for PegboardGateway2 {
 	) -> Result<HibernationResult> {
 		let ctx = self.ctx.with_ray(req_ctx.ray_id(), req_ctx.req_id())?;
 		let request_id = req_ctx.in_flight_request_id()?;
-
-		// Immediately rewake if we have pending messages
-		if self
+		let InFlightRequestCtx {
+			msg_rx,
+			drop_rx,
+			handle: in_flight_req,
+		} = self
 			.shared_state
-			.has_pending_websocket_messages(request_id)
-			.await?
-		{
-			tracing::debug!("exiting hibernating due to pending messages");
+			.get_hibernating_in_flight_request(request_id)
+			.await?;
+
+		// Immediately rewake if we have pending ws messages from the client
+		if in_flight_req.has_pending_websocket_messages().await? {
+			tracing::debug!("exiting hibernation due to pending ws messages");
 
 			return Ok(HibernationResult::Continue);
 		}
 
-		// Start keepalive task
+		// Unused during hibernation
+		let ingress_bytes = Arc::new(AtomicU64::new(0));
+		let egress_bytes = Arc::new(AtomicU64::new(0));
+
+		let (hibernation_abort_tx, hibernation_abort_rx) = watch::channel(());
 		let (keepalive_abort_tx, keepalive_abort_rx) = watch::channel(());
-		let keepalive_handle = tokio::spawn(keepalive_task::task(
-			self.shared_state.clone(),
+		let (metrics_abort_tx, metrics_abort_rx) = watch::channel(());
+
+		let hibernation = tokio::spawn(hibernation_task::task(
+			client_ws,
+			in_flight_req.clone(),
+			ctx.clone(),
+			self.actor_id,
+			msg_rx,
+			drop_rx,
+			egress_bytes.clone(),
+			hibernation_abort_rx,
+		));
+		let metrics = tokio::spawn(metrics_task::task(
+			ctx.clone(),
+			self.actor_id,
+			self.namespace_id,
+			ingress_bytes,
+			egress_bytes,
+			metrics_abort_rx,
+		));
+		let keepalive = tokio::spawn(keepalive_task::task(
+			in_flight_req.clone(),
 			ctx.clone(),
 			self.actor_id,
 			self.shared_state.gateway_id(),
@@ -710,24 +731,83 @@ impl CustomServeTrait for PegboardGateway2 {
 			keepalive_abort_rx,
 		));
 
-		let (res, metrics_res) = tokio::join!(
-			self.handle_websocket_hibernation_inner(client_ws),
+		// Wait for all tasks to complete or ws msg from client
+		let (record_start_res, hibernation_res, metrics_res, keepalive_res) = tokio::join!(
 			record_req_metrics(
 				&ctx,
 				self.actor_id,
 				self.namespace_id,
 				Metric::WebsocketHibernate
-			)
+			),
+			async {
+				let res = hibernation.await?;
+
+				// Abort other if not aborted
+				if !matches!(res, Ok(HibernationLifecycleResult::Aborted)) {
+					tracing::debug!(?res, "hibernation completed, aborting others");
+
+					let _ = keepalive_abort_tx.send(());
+					let _ = metrics_abort_tx.send(());
+				} else {
+					tracing::debug!(?res, "hibernation completed");
+				}
+
+				res
+			},
+			async {
+				let res = metrics.await?;
+
+				// Abort others if not aborted
+				if !matches!(res, Ok(LifecycleResult::Aborted)) {
+					tracing::debug!(?res, "metrics task completed, aborting others");
+
+					let _ = hibernation_abort_tx.send(());
+					let _ = keepalive_abort_tx.send(());
+				} else {
+					tracing::debug!(?res, "metrics task completed");
+				}
+
+				res
+			},
+			async {
+				let res = keepalive.await?;
+
+				// Abort others if not aborted
+				if !matches!(res, Ok(LifecycleResult::Aborted)) {
+					tracing::debug!(?res, "keepalive task completed, aborting others");
+
+					let _ = hibernation_abort_tx.send(());
+					let _ = metrics_abort_tx.send(());
+				} else {
+					tracing::debug!(?res, "keepalive task completed");
+				}
+
+				res
+			},
 		);
 
-		let _ = keepalive_abort_tx.send(());
-		let _ = keepalive_handle.await;
+		// Determine single result from all tasks
+		let res = match (hibernation_res, metrics_res, keepalive_res) {
+			// Prefer error
+			(Err(err), _, _) => Err(err),
+			(_, Err(err), _) => Err(err),
+			(_, _, Err(err)) => Err(err),
+			// Prefer hibernation result
+			(Ok(res), _, _) => match res {
+				HibernationLifecycleResult::Continue => Ok(HibernationResult::Continue),
+				HibernationLifecycleResult::Close => Ok(HibernationResult::Close),
+				// Should be unreachable
+				HibernationLifecycleResult::Aborted => Err(anyhow!("hibernation aborted")),
+			},
+		};
 
 		let (delete_res, _) = tokio::join!(
 			async {
 				match &res {
 					Ok(HibernationResult::Continue) => {}
 					Ok(HibernationResult::Close) | Err(_) => {
+						in_flight_req.stop().await;
+
 						// No longer an active hibernating request, delete entry
 						ctx.op(pegboard::ops::actor::hibernating_request::delete::Input {
 							actor_id: self.actor_id,
@@ -741,8 +821,8 @@ impl CustomServeTrait for PegboardGateway2 {
 				anyhow::Ok(())
 			},
 			async {
-				if let Err(err) = metrics_res {
-					tracing::error!(?err, "ws hibernate metrics failed");
+				if let Err(err) = record_start_res {
+					tracing::error!(?err, "ws start hibernate metrics failed");
 				} else {
 					if let Err(err) = record_req_metrics(
 						&ctx,
@@ -766,82 +846,6 @@ impl CustomServeTrait for PegboardGateway2 {
 		delete_res?;
 
 		res
-	}
-}
-
-impl PegboardGateway2 {
-	async fn handle_websocket_hibernation_inner(
-		&self,
-		client_ws: WebSocketHandle,
-	) -> Result<HibernationResult> {
-		let mut ready_sub = self
-			.ctx
-			.subscribe::<pegboard::workflows::actor2::Ready>(("actor_id", self.actor_id))
-			.await?;
-
-		// Fetch actor info after sub to prevent race condition
-		if let Some(actor) = self
-			.ctx
-			.op(pegboard::ops::actor::get_for_gateway::Input {
-				actor_id: self.actor_id,
-			})
-			.await?
-		{
-			if actor.envoy_key.is_some() {
-				tracing::debug!("actor became ready during hibernation");
-
-				return Ok(HibernationResult::Continue);
-			}
-		}
-
-		let res = tokio::select! {
-			_ = ready_sub.next() => {
-				tracing::debug!("actor became ready during hibernation");
-
-				HibernationResult::Continue
-			}
-			hibernation_res = hibernate_ws(client_ws.recv()) => {
-				let hibernation_res = hibernation_res?;
-
-				match &hibernation_res {
-					HibernationResult::Continue => {
-						tracing::debug!("received websocket message during hibernation");
-					}
-					HibernationResult::Close => {
-						tracing::debug!("websocket stream closed during hibernation");
-					}
-				}
-
-				hibernation_res
-			}
-		};
-
-		Ok(res)
-	}
-}
-
-#[tracing::instrument(skip_all)]
-async fn hibernate_ws(ws_rx: Arc<Mutex<WebSocketReceiver>>) -> Result<HibernationResult> {
-	let mut guard = ws_rx.lock().await;
-	let mut pinned = std::pin::Pin::new(&mut *guard);
-
-	loop {
-		if let Some(msg) = pinned.as_mut().peek().await {
-			match msg {
-				Ok(Message::Binary(_)) | Ok(Message::Text(_)) => {
-					return Ok(HibernationResult::Continue);
-				}
-				// We don't care about the close frame because we're currently hibernating; there is no
-				// downstream to send the close frame to.
-				Ok(Message::Close(_)) => return Ok(HibernationResult::Close),
-				// Ignore rest
-				_ => {
-					pinned.try_next().await?;
-				}
-			}
-		} else {
-			return Ok(HibernationResult::Close);
-		}
 	}
 }
 

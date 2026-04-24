@@ -6,14 +6,15 @@ use std::time::Duration;
 use tokio::sync::watch;
 
 use super::LifecycleResult;
-use crate::shared_state::SharedState;
+use crate::shared_state::InFlightRequestHandle;
 
 /// Periodically pings writes keepalive in UDB. This is used to restore hibernating request IDs on
 /// next actor start.
 ///
 /// Only ran for hibernating requests.
+#[tracing::instrument(skip_all)]
 pub async fn task(
-	shared_state: SharedState,
+	in_flight_req: InFlightRequestHandle,
 	ctx: StandaloneCtx,
 	actor_id: Id,
 	gateway_id: protocol::GatewayId,
@@ -55,7 +56,7 @@ pub async fn task(
 				request_id
 			}),
 			// Keep alive in flight req during hibernation
-			shared_state.keepalive_hws(request_id),
+			in_flight_req.keepalive_hws(),
 		)?;
 	}
 }

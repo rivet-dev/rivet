@@ -6,6 +6,7 @@ use tokio::sync::watch;
 
 use super::{LifecycleResult, Metric, UPDATE_METRICS_INTERVAL, record_req_metrics};
 
+#[tracing::instrument(skip_all)]
 pub async fn task(
 	ctx: StandaloneCtx,
 	actor_id: Id,

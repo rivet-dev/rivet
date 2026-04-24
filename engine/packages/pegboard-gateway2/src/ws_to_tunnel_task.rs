@@ -10,11 +10,11 @@ use tokio::sync::{Mutex, watch};
 use tokio_tungstenite::tungstenite::Message;
 
 use super::LifecycleResult;
-use crate::shared_state::SharedState;
+use crate::shared_state::InFlightRequestHandle;
 
+#[tracing::instrument(skip_all)]
 pub async fn task(
-	shared_state: SharedState,
-	request_id: protocol::RequestId,
+	in_flight_req: InFlightRequestHandle,
 	ws_rx: Arc<Mutex<WebSocketReceiver>>,
 	ingress_bytes: Arc<AtomicU64>,
 	mut ws_to_tunnel_abort_rx: watch::Receiver<()>,
@@ -36,9 +36,7 @@ pub async fn task(
 										binary: true,
 									},
 								);
-							shared_state
-								.send_message(request_id, ws_message)
-								.await?;
+							in_flight_req.send_message(ws_message).await?;
 						}
 						Message::Text(text) => {
 							let ws_message =
@@ -48,9 +46,7 @@ pub async fn task(
 										binary: false,
 									},
 								);
-							shared_state
-								.send_message(request_id, ws_message)
-								.await?;
+							in_flight_req.send_message(ws_message).await?;
 						}
 						Message::Close(close) => {
 							return Ok(LifecycleResult::ClientClose(close));

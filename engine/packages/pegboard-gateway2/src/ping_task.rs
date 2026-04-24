@@ -1,15 +1,14 @@
 use anyhow::Result;
 use rand::Rng;
-use rivet_envoy_protocol as protocol;
 use std::time::Duration;
 use tokio::sync::watch;
 
 use super::LifecycleResult;
-use crate::shared_state::SharedState;
+use crate::shared_state::InFlightRequestHandle;
 
+#[tracing::instrument(skip_all)]
 pub async fn task(
-	shared_state: SharedState,
-	request_id: protocol::RequestId,
+	in_flight_req: InFlightRequestHandle,
 	mut ping_abort_rx: watch::Receiver<()>,
 	update_ping_interval: Duration,
 ) -> Result<LifecycleResult> {
@@ -25,6 +24,6 @@ pub async fn task(
 		let jitter = { rand::thread_rng().gen_range(0..128) };
 		tokio::time::sleep(Duration::from_millis(jitter)).await;
 
-		shared_state.send_and_check_ping(request_id).await?;
+		in_flight_req.send_and_check_ping().await?;
 	}
 }

@@ -14,12 +14,12 @@ use tokio::sync::{mpsc, watch};
 use tokio_tungstenite::tungstenite::Message;
 
 use super::LifecycleResult;
-use crate::shared_state::{MsgGcReason, SharedState};
+use crate::shared_state::{InFlightRequestHandle, MsgGcReason};
 
+#[tracing::instrument(skip_all)]
 pub async fn task(
-	shared_state: SharedState,
+	in_flight_req: InFlightRequestHandle,
 	client_ws: WebSocketHandle,
-	request_id: protocol::RequestId,
 	mut stopped_sub: message::SubscriptionHandle<pegboard::workflows::actor2::Stopped>,
 	mut msg_rx: mpsc::Receiver<protocol::ToRivetTunnelMessageKind>,
 	mut drop_rx: watch::Receiver<Option<MsgGcReason>>,
@@ -34,7 +34,7 @@ pub async fn task(
 					match msg {
 						protocol::ToRivetTunnelMessageKind::ToRivetWebSocketMessage(ws_msg) => {
 							tracing::trace!(
-								request_id=%protocol::util::id_to_string(&request_id),
+								request_id=%protocol::util::id_to_string(&in_flight_req.request_id),
 								data_len=ws_msg.data.len(),
 								binary=ws_msg.binary,
 								"forwarding websocket message to client"
@@ -52,12 +52,12 @@ pub async fn task(
 						}
 						protocol::ToRivetTunnelMessageKind::ToRivetWebSocketMessageAck(ack) => {
 							tracing::debug!(
-								request_id=%protocol::util::id_to_string(&request_id),
+								request_id=%protocol::util::id_to_string(&in_flight_req.request_id),
 								ack_index=?ack.index,
 								"received WebSocketMessageAck from envoy"
 							);
-							shared_state
-								.ack_pending_websocket_messages(request_id, ack.index)
+							in_flight_req
+								.ack_pending_websocket_messages(ack.index)
 								.await?;
 						}
 						protocol::ToRivetTunnelMessageKind::ToRivetWebSocketClose(close) => {
@@ -73,8 +73,8 @@ pub async fn task(
 						_ => {}
 					}
 				} else {
-					tracing::debug!("tunnel sub closed");
-					return Err(WebSocketServiceHibernate.build());
+					tracing::warn!("tunnel sub closed");
+					return Err(WebSocketServiceUnavailable.build());
 				}
 			}
 			_ = stopped_sub.next() => {

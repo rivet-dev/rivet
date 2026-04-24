@@ -3542,6 +3542,7 @@ dependencies = [
  "namespace",
  "pegboard",
  "rand 0.8.5",
+ "replace_with",
  "rivet-config",
  "rivet-envoy-protocol",
  "rivet-error",
@@ -4238,6 +4239,12 @@ name = "relative-path"
 version = "1.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ba39f3699c378cd8970968dcbff9c43159ea4cfbd88d43c00b22f2ef10a435d2"
+
+[[package]]
+name = "replace_with"
+version = "0.1.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "51743d3e274e2b18df81c4dc6caf8a5b8e15dbe799e0dca05c7617380094e884"
 
 [[package]]
 name = "reqwest"

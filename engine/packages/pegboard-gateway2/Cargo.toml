@@ -19,6 +19,7 @@ lazy_static.workspace = true
 namespace.workspace = true
 pegboard.workspace = true
 rand.workspace = true
+replace_with.workspace = true
 rivet-config.workspace = true
 rivet-error.workspace = true
 rivet-guard-core.workspace = true

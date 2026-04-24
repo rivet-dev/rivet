@@ -124,6 +124,7 @@ members = [
   quote = "1.0"
   rand = "0.8"
   regex = "1.4"
+  replace_with = "0.1.8"
   rstest = "0.26.1"
   rusqlite = { version = "0.32.1", features = [ "bundled" ] }
   rustls-pemfile = "2.2.0"

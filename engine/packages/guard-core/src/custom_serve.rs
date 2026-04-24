@@ -35,6 +35,7 @@ pub trait CustomServeTrait: Send + Sync {
 		bail!("service does not support websockets");
 	}
 
+	// TODO: Combine into handle_websocket, remove hibernation from guard
 	/// Returns true if the websocket should close.
 	async fn handle_websocket_hibernation(
 		&self,
