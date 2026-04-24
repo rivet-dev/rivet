@@ -17,8 +17,8 @@ const program = Effect.gen(function* () {
   const counter = counterClient.getOrCreate(["counter-123"])
 
   // Action calls return Effects with types inferred from the schema.
-  //   counter.increment: (payload: { amount: number }) => Effect<number, CounterOverflowError>
-  const count = yield* counter.increment({ amount: 5 })
+  //   counter.Increment: (payload: { amount: number }) => Effect<number, CounterOverflowError>
+  const count = yield* counter.Increment({ amount: 5 })
   yield* Effect.log(`Count: ${count}`)
 
   // subscribe returns a Stream typed from the event schema.
@@ -47,7 +47,7 @@ const ActorClientLayer = Layer.mergeAll(
 //	ChatRoom.clientLayer,
 ).pipe(
   // Both client layers share the same transport here, but you
-  // could provide different transports to each (see below).
+  // could provide different transports to each.
   Layer.provide(
     ActorTransport.layer({
       endpoint: "https://api.rivet.dev",

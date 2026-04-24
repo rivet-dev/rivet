@@ -1,12 +1,47 @@
 import { Schema, Effect, Ref, PubSub } from "effect"
-import { Actor } from "@rivetkit/effect"
+import { Actor, Action } from "@rivetkit/effect"
 
-// --- Definition ---
+// --- Errors ---
 
 export class CounterOverflowError extends Schema.TaggedErrorClass<CounterOverflowError>()(
 	"CounterOverflowError",
 	{ limit: Schema.Number },
 ) {}
+
+// --- Actions ---
+
+// Actions use explicit schemas rather than inferring types from
+// the handler signature (like the current Rivet SDK does) because:
+//
+// - Runtime validation. Client-to-server is an untrusted boundary.
+//    Schemas validate wire data before it reaches handler code.
+//    Handler inference erases types at runtime and trusts whatever
+//    arrives.
+//
+// - Wire encoding control. Effect Schema distinguishes encoded
+//    (wire) and decoded (runtime) types, e.g. Schema.Date decodes
+//    a string into a Date. Handler inference only gives the decoded
+//    type.
+//
+// Actions are standalone values (vs. embedded in the actor
+// definition) because:
+//
+// - Per-action middleware and annotations. Allows for Auth on some
+//   actions but not others, timeout overrides...
+//
+// - Shared action protocols. A Ping health-check or GetMetrics
+//   action defined once and composed into multiple actors.
+export const Increment = Action.make("Increment", {
+	payload: Schema.Struct({ amount: Schema.Number }),
+	success: Schema.Number,
+	error: CounterOverflowError,
+})
+
+export const GetCount = Action.make("GetCount", {
+	success: Schema.Number,
+})
+
+// --- Actor Definition ---
 
 // The definition is the actor's public contract: its name,
 // state shape, event schemas, and action set. It carries no
@@ -14,31 +49,8 @@ export class CounterOverflowError extends Schema.TaggedErrorClass<CounterOverflo
 // import this; the implementation stays server-only.
 export const Counter = Actor.make("Counter", {
 	state: Schema.Struct({ count: Schema.Number }),
-	events: {
-		countChanged: Schema.Number
-	},
-	// Actions use explicit schemas rather than inferring types from
-	// the handler signature (like the current Rivet SDK does) because:
-	//
-	// 1. Runtime validation. Client-to-server is an untrusted boundary.
-	//    Schemas let the server validate wire data with
-	//    Schema.decodeUnknownEffect before it reaches handler code. Handler
-	//    inference erases types at runtime and trusts whatever arrives.
-	//
-	// 2. Wire encoding control. Effect Schema distinguishes encoded
-	//    (wire) and decoded (runtime) types, e.g. Schema.Date decodes
-	//    a string into a Date. Handler inference only gives the decoded
-	//    type.
-	actions: {
-		increment: {
-			payload: Schema.Struct({ amount: Schema.Number }),
-			success: Schema.Number,
-			error: CounterOverflowError,
-		},
-		getCount: {
-			success: Schema.Number,
-		},
-	},
+	events: { countChanged: Schema.Number },
+	actions: [Increment, GetCount],
 	options: {
 		name: "Counter",	// Human-friendly display name
 		icon: "comments", 	// FontAwesome icon name
@@ -81,7 +93,7 @@ export const CounterLive = Counter.toLayer(
 		// Return the action implementations. Counter.of
 		// type-checks each handler against its Action schema.
 		return Counter.of({
-			increment: ({ payload }) =>
+			Increment: ({ payload }) =>
 				Effect.gen(function* () {
 					const next = yield* Ref.updateAndGet(state, (s) => ({
 						count: s.count + payload.amount,
@@ -93,7 +105,7 @@ export const CounterLive = Counter.toLayer(
 					return next.count
 				}),
 
-			getCount: () =>
+			GetCount: () =>
 				Ref.get(state).pipe(Effect.map((s) => s.count)),
 		})
 	}),
