@@ -1,6 +1,8 @@
 import { actor } from "rivetkit";
 import { db } from "@/common/database/mod";
 
+const SLEEP_GRACE_PERIOD_MS = 50;
+
 export const dbPragmaMigrationActor = actor({
 	state: {},
 	db: db({
@@ -69,6 +71,7 @@ export const dbPragmaMigrationActor = actor({
 	},
 	options: {
 		actionTimeout: 120_000,
-		sleepTimeout: 100,
+		sleepGracePeriod: SLEEP_GRACE_PERIOD_MS,
+		sleepTimeout: 1_000,
 	},
 });

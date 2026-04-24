@@ -2,6 +2,8 @@ import { actor } from "rivetkit";
 import { db } from "@/common/database/mod";
 import { scheduleActorSleep } from "./schedule-sleep";
 
+const SLEEP_GRACE_PERIOD_MS = 50;
+
 function firstRowValue(row: Record<string, unknown> | undefined): unknown {
 	if (!row) {
 		return undefined;
@@ -341,6 +343,7 @@ export const dbActorRaw = actor({
 	},
 	options: {
 		actionTimeout: 120_000,
-		sleepTimeout: 100,
+		sleepGracePeriod: SLEEP_GRACE_PERIOD_MS,
+		sleepTimeout: 1_000,
 	},
 });
