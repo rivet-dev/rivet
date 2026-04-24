@@ -23,6 +23,20 @@ describeDriverMatrix("Actor Db Raw", (driverTestConfig) => {
 				expect(values[1].value).toBe("Bob");
 			});
 
+			test("round-trips text containing an embedded nul byte", async (c) => {
+				const { client } = await setupDriverTest(c, driverTestConfig);
+
+				const instance = client.dbActorRaw.getOrCreate(["nul-text"]);
+				const input = "a\0b";
+
+				const row = await instance.insertValueAndReadBack(input);
+
+				expect(row).not.toBeNull();
+				expect(row!.value).toBe(input);
+				expect(row!.hex_value).toBe("610062");
+				expect(row!.sqlite_length).toBe(1);
+			});
+
 			test("persists data across actor instances", async (c) => {
 				const { client } = await setupDriverTest(c, driverTestConfig);
 

@@ -209,12 +209,15 @@ fn bind_params(
 			BindParam::Null => unsafe { sqlite3_bind_null(stmt, bind_index) },
 			BindParam::Integer(value) => unsafe { sqlite3_bind_int64(stmt, bind_index, *value) },
 			BindParam::Float(value) => unsafe { sqlite3_bind_double(stmt, bind_index, *value) },
-			BindParam::Text(value) => {
-				let text = CString::new(value.as_str()).map_err(|err| anyhow!(err.to_string()))?;
-				unsafe {
-					sqlite3_bind_text(stmt, bind_index, text.as_ptr(), -1, SQLITE_TRANSIENT())
-				}
-			}
+			BindParam::Text(value) => unsafe {
+				sqlite3_bind_text(
+					stmt,
+					bind_index,
+					value.as_ptr() as *const c_char,
+					value.len() as i32,
+					SQLITE_TRANSIENT(),
+				)
+			},
 			BindParam::Blob(value) => unsafe {
 				sqlite3_bind_blob(
 					stmt,
@@ -258,9 +261,11 @@ fn column_value(stmt: *mut libsqlite3_sys::sqlite3_stmt, index: i32) -> ColumnVa
 			if text_ptr.is_null() {
 				ColumnValue::Null
 			} else {
-				let text = unsafe { CStr::from_ptr(text_ptr as *const c_char) }
-					.to_string_lossy()
-					.into_owned();
+				let text_len = unsafe { sqlite3_column_bytes(stmt, index) } as usize;
+				let text = String::from_utf8_lossy(unsafe {
+					std::slice::from_raw_parts(text_ptr as *const u8, text_len)
+				})
+				.into_owned();
 				ColumnValue::Text(text)
 			}
 		}

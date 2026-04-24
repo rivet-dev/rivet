@@ -98,6 +98,23 @@ export const dbActorRaw = actor({
 			);
 			return { id: results[0].id };
 		},
+		insertValueAndReadBack: async (c, value: string) => {
+			await c.db.execute(
+				"INSERT INTO test_data (value, payload, created_at) VALUES (?, ?, ?)",
+				value,
+				"",
+				Date.now(),
+			);
+			const inserted = await c.db.execute<{
+				id: number;
+				value: string;
+				hex_value: string;
+				sqlite_length: number;
+			}>(
+				`SELECT id, value, hex(value) as hex_value, length(value) as sqlite_length FROM test_data ORDER BY id DESC LIMIT 1`,
+			);
+			return inserted[0] ?? null;
+		},
 		getValues: async (c) => {
 			const results = await c.db.execute<{
 				id: number;
