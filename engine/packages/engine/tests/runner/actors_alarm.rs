@@ -1454,23 +1454,19 @@ fn many_actors_same_alarm_time() {
 
 /// Regression test for the alarm-during-sleep-transition race.
 ///
-/// Scenario: an actor schedules an alarm in the near future, then immediately
-/// sends a sleep intent. The stop flow may take long enough that the alarm
-/// becomes overdue while `handle_stopped` is processing `Decision::Sleep`.
+/// Scenario: an actor schedules an alarm that is already overdue, then
+/// immediately sends a sleep intent. When `handle_stopped` runs `Decision::Sleep`,
+/// `now >= alarm_ts` is true, so the workflow must reallocate and run the
+/// alarm handler instead of clearing `alarm_ts` and sleeping.
 ///
-/// Before the fix in `actor2/runtime.rs`, this window cleared `state.alarm_ts`
+/// Before the fix in `actor2/runtime.rs`, this branch cleared `state.alarm_ts`
 /// without handling the overdue alarm, so the scheduled work was silently
 /// dropped and the actor went to sleep. The handler would never run.
 ///
 /// After the fix, `Decision::Sleep` detects the overdue alarm, reallocates the
-/// actor, and bumps the generation so the alarm handler runs. This test
-/// verifies that path by setting a very short alarm offset and checking the
-/// actor wakes to generation 1 instead of sleeping forever.
-///
-/// Expected: the alarm triggers via reallocation. If the fix is reverted, the
-/// alarm will never trigger and this test will time out waiting for the wake.
+/// actor, and bumps the generation so the alarm handler runs. The negative
+/// alarm offset (`-1000`ms) deterministically forces the overdue branch.
 #[test]
-#[ignore = "captures alarm-during-sleep-transition race; times out if the overdue-alarm reallocation path regresses"]
 fn alarm_overdue_during_sleep_transition_fires_via_reallocation() {
 	common::run(
 		common::TestOpts::new(1).with_timeout(15),
@@ -1483,10 +1479,10 @@ fn alarm_overdue_during_sleep_transition_fires_via_reallocation() {
 			let runner = common::setup_runner(ctx.leader_dc(), &namespace, |builder| {
 				builder.with_actor_behavior("alarm-actor", move |_| {
 					let ready_tx = ready_tx.clone();
-					// 100ms offset leaves enough time to dispatch the sleep intent
-					// but is short enough that the alarm is near-overdue by the
-					// time the workflow reaches `Decision::Sleep`.
-					Box::new(AlarmAndSleepOnceActor::new(100, ready_tx))
+					// Negative offset guarantees `now >= alarm_ts` when
+					// `Decision::Sleep` runs, so the overdue branch is exercised
+					// every time instead of racing the workflow scheduler.
+					Box::new(AlarmAndSleepOnceActor::new(-1000, ready_tx))
 				})
 			})
 			.await;
@@ -1504,6 +1500,9 @@ fn alarm_overdue_during_sleep_transition_fires_via_reallocation() {
 
 			ready_rx.await.expect("actor should send ready signal");
 
+			// Subscribe before the actor enters sleep so we can't miss the
+			// reallocation `Started` event. With the negative offset the wake
+			// happens immediately after `handle_stopped` runs.
 			let lifecycle_rx = runner.subscribe_lifecycle_events();
 
 			// If the overdue alarm was dropped, the actor would enter sleep and
