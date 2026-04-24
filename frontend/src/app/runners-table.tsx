@@ -6,7 +6,6 @@ import {
 	faSignalAlt2,
 	faSignalAlt3,
 	faSignalAlt4,
-	faTriangleExclamation,
 	Icon,
 } from "@rivet-gg/icons";
 
@@ -35,7 +34,7 @@ interface RunnersTableProps {
 	isError?: boolean;
 	hasNextPage?: boolean;
 	fetchNextPage?: () => void;
-	runners: Rivet.Runner[];
+	runners: (Rivet.Runner | Rivet.Envoy)[];
 }
 
 export function RunnersTable({
@@ -90,7 +89,11 @@ export function RunnersTable({
 				{runners?.map((runner) => (
 					<Row
 						{...runner}
-						key={runner.runnerId}
+						key={
+							"runnerId" in runner
+								? runner.runnerId
+								: runner.envoyKey
+						}
 						latestVersion={latestVersion}
 					/>
 				))}
@@ -142,25 +145,74 @@ function RowSkeleton() {
 	);
 }
 
-export function Row(runner: Rivet.Runner & { latestVersion?: number }) {
+export function Row(
+	runner: (Rivet.Runner | Rivet.Envoy) & { latestVersion?: number },
+) {
+	if ("runnerId" in runner) {
+		// is a runner
+		return (
+			<TableRow>
+				<TableCell className="size-8">
+					<RunnerStatusBadge {...runner} />
+				</TableCell>
+				<TableCell>
+					<WithTooltip
+						content={runner.runnerId}
+						trigger={
+							<DiscreteCopyButton value={runner.runnerId}>
+								{runner.runnerId.slice(0, 8)}
+							</DiscreteCopyButton>
+						}
+					/>
+				</TableCell>
+				<TableCell>
+					<DiscreteCopyButton value={runner.name}>
+						{runner.name}
+					</DiscreteCopyButton>
+				</TableCell>
+				<TableCell>
+					<ActorRegion
+						regionId={runner.datacenter}
+						showLabel
+						className="justify-start"
+					/>
+				</TableCell>
+
+				<TableCell>
+					{runner.remainingSlots}/{runner.totalSlots}
+				</TableCell>
+
+				<TableCell>
+					{deriveRivetkitVersionFromMetadata(runner.metadata) ?? (
+						<span className="text-muted-foreground">-</span>
+					)}
+				</TableCell>
+
+				<TableCell>
+					<CreateTs createTs={runner.createTs} />
+				</TableCell>
+			</TableRow>
+		);
+	}
+
 	return (
-		<TableRow key={runner.runnerId}>
+		<TableRow>
 			<TableCell className="size-8">
 				<RunnerStatusBadge {...runner} />
 			</TableCell>
 			<TableCell>
 				<WithTooltip
-					content={runner.runnerId}
+					content={runner.envoyKey}
 					trigger={
-						<DiscreteCopyButton value={runner.runnerId}>
-							{runner.runnerId.slice(0, 8)}
+						<DiscreteCopyButton value={runner.envoyKey}>
+							{runner.envoyKey.slice(0, 8)}
 						</DiscreteCopyButton>
 					}
 				/>
 			</TableCell>
 			<TableCell>
-				<DiscreteCopyButton value={runner.name}>
-					{runner.name}
+				<DiscreteCopyButton value={runner.poolName}>
+					{runner.poolName}
 				</DiscreteCopyButton>
 			</TableCell>
 			<TableCell>
@@ -171,9 +223,7 @@ export function Row(runner: Rivet.Runner & { latestVersion?: number }) {
 				/>
 			</TableCell>
 
-			<TableCell>
-				{runner.remainingSlots}/{runner.totalSlots}
-			</TableCell>
+			<TableCell>{runner.slots}</TableCell>
 
 			<TableCell>
 				{deriveRivetkitVersionFromMetadata(runner.metadata) ?? (
@@ -203,7 +253,11 @@ function CreateTs({ createTs }: { createTs: number }) {
 	);
 }
 
-function RunnerStatusBadge(runner: Rivet.Runner & { latestVersion?: number }) {
+function RunnerStatusBadge(
+	runner: Pick<Rivet.Runner, "version" | "lastPingTs" | "lastRtt"> & {
+		latestVersion?: number;
+	},
+) {
 	const now = Date.now();
 	const isOutdated =
 		runner.latestVersion !== undefined &&
