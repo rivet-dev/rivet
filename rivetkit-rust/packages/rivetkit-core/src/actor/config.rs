@@ -54,6 +54,11 @@ pub struct ActorConfigOverrides {
 }
 
 #[derive(Clone, Debug)]
+pub struct ActionDefinition {
+	pub name: String,
+}
+
+#[derive(Clone, Debug)]
 pub struct ActorConfig {
 	pub name: Option<String>,
 	pub icon: Option<String>,
@@ -83,6 +88,7 @@ pub struct ActorConfig {
 	pub preload_max_workflow_bytes: Option<u64>,
 	pub preload_max_connections_bytes: Option<u64>,
 	pub overrides: Option<ActorConfigOverrides>,
+	pub actions: Vec<ActionDefinition>,
 }
 
 /// Sparse, serialization-friendly actor configuration. All fields are optional with millisecond integers instead of Duration. Used at runtime boundaries (NAPI, config files). Convert to ActorConfig via ActorConfig::from_input().
@@ -110,6 +116,7 @@ pub struct ActorConfigInput {
 	pub max_outgoing_message_size: Option<u32>,
 	pub preload_max_workflow_bytes: Option<f64>,
 	pub preload_max_connections_bytes: Option<f64>,
+	pub actions: Option<Vec<ActionDefinition>>,
 }
 
 impl ActorConfig {
@@ -180,6 +187,9 @@ impl ActorConfig {
 		actor_config.preload_max_connections_bytes = config
 			.preload_max_connections_bytes
 			.map(|value| value as u64);
+		if let Some(actions) = config.actions {
+			actor_config.actions = actions;
+		}
 
 		actor_config
 	}
@@ -243,6 +253,7 @@ impl Default for ActorConfig {
 			preload_max_workflow_bytes: None,
 			preload_max_connections_bytes: None,
 			overrides: None,
+			actions: Vec::new(),
 		}
 	}
 }

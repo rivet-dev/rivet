@@ -10,7 +10,7 @@ use napi::{Env, JsFunction, JsObject};
 use napi_derive::napi;
 use rivet_error::{MacroMarker, RivetError, RivetErrorSchema};
 use rivetkit_core::{
-	ActorConfig, ActorConfigInput, ActorContext as CoreActorContext,
+	ActionDefinition, ActorConfig, ActorConfigInput, ActorContext as CoreActorContext,
 	ActorFactory as CoreActorFactory, ConnHandle as CoreConnHandle, Request, Response,
 	WebSocket as CoreWebSocket,
 };
@@ -56,6 +56,12 @@ pub struct JsQueueSendResult {
 
 #[napi(object)]
 #[derive(Clone, Default)]
+pub struct JsActionDefinition {
+	pub name: String,
+}
+
+#[napi(object)]
+#[derive(Clone, Default)]
 pub struct JsActorConfig {
 	pub name: Option<String>,
 	pub icon: Option<String>,
@@ -84,6 +90,7 @@ pub struct JsActorConfig {
 	pub max_outgoing_message_size: Option<u32>,
 	pub preload_max_workflow_bytes: Option<f64>,
 	pub preload_max_connections_bytes: Option<f64>,
+	pub actions: Option<Vec<JsActionDefinition>>,
 }
 
 #[derive(Clone)]
@@ -1048,6 +1055,12 @@ impl From<JsActorConfig> for ActorConfigInput {
 			max_outgoing_message_size: value.max_outgoing_message_size,
 			preload_max_workflow_bytes: value.preload_max_workflow_bytes,
 			preload_max_connections_bytes: value.preload_max_connections_bytes,
+			actions: value.actions.map(|actions| {
+				actions
+					.into_iter()
+					.map(|action| ActionDefinition { name: action.name })
+					.collect()
+			}),
 		}
 	}
 }

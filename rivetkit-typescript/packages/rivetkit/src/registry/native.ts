@@ -3083,6 +3083,11 @@ function buildActorConfig(
 		preloadMaxConnectionsBytes: options.preloadMaxConnectionsBytes as
 			| number
 			| undefined,
+		actions: Object.keys(
+			(config.actions ?? {}) as Record<string, unknown>,
+		)
+			.sort()
+			.map((name) => ({ name })),
 	};
 }
 
@@ -3230,106 +3235,6 @@ export function buildNativeFactory(
 			);
 		const workflowState = async () =>
 			(await getNativeWorkflowInspector(ctx)?.getState?.()) ?? null;
-		const metricsResponse = (actorCtx: NativeActorContextAdapter) => {
-			const sqliteMetrics =
-				databaseProvider !== undefined
-					? (actorCtx.sql.getSqliteVfsMetrics?.() ?? null)
-					: null;
-			const commitCount =
-				databaseProvider === undefined
-					? 0
-					: Math.max(sqliteMetrics?.commitCount ?? 0, 1);
-			const nsToMs = (ns: number) => ns / 1_000_000;
-			const phaseMs = (ns: number) =>
-				commitCount > 0 ? Math.max(nsToMs(ns), 0.001) : 0;
-			return {
-				kv_operations: {
-					type: "labeled_timing",
-					help: "KV round trips by operation type",
-					values: {
-						get: { calls: 0, totalMs: 0, keys: 0 },
-						getBatch: { calls: 0, totalMs: 0, keys: 0 },
-						put: { calls: 0, totalMs: 0, keys: 0 },
-						putBatch: { calls: 0, totalMs: 0, keys: 0 },
-						deleteBatch: { calls: 0, totalMs: 0, keys: 0 },
-					},
-				},
-				sqlite_commit_phases: {
-					type: "labeled_timing",
-					help: "SQLite VFS commit phase totals captured by the native VFS",
-					values: {
-						request_build: {
-							calls: commitCount,
-							totalMs: phaseMs(
-								sqliteMetrics?.requestBuildNs ?? 0,
-							),
-							keys: 0,
-						},
-						serialize: {
-							calls: commitCount,
-							totalMs: phaseMs(sqliteMetrics?.serializeNs ?? 0),
-							keys: 0,
-						},
-						transport: {
-							calls: commitCount,
-							totalMs: phaseMs(sqliteMetrics?.transportNs ?? 0),
-							keys: 0,
-						},
-						state_update: {
-							calls: commitCount,
-							totalMs: phaseMs(sqliteMetrics?.stateUpdateNs ?? 0),
-							keys: 0,
-						},
-					},
-				},
-				startup_total_ms: {
-					type: "gauge",
-					help: "Total actor startup time in milliseconds",
-					value: 1,
-				},
-				startup_kv_round_trips: {
-					type: "gauge",
-					help: "KV round-trips during startup",
-					value: 0,
-				},
-				startup_is_new: {
-					type: "gauge",
-					help: "1 if new actor, 0 if existing",
-					value: 0,
-				},
-				startup_internal_load_state_ms: {
-					type: "gauge",
-					help: "Time to load persisted state",
-					value: 0,
-				},
-				startup_internal_init_queue_ms: {
-					type: "gauge",
-					help: "Time to initialize queue state",
-					value: 0,
-				},
-				startup_internal_init_inspector_token_ms: {
-					type: "gauge",
-					help: "Time to initialize inspector token state",
-					value: 0,
-				},
-				startup_user_create_vars_ms: {
-					type: "gauge",
-					help: "Time spent running createVars",
-					value: 0,
-				},
-				startup_user_on_wake_ms: {
-					type: "gauge",
-					help: "Time spent running onWake",
-					value: 0,
-				},
-				startup_user_create_state_ms: {
-					type: "gauge",
-					help: "Time spent running createState",
-					value: 0,
-				},
-			};
-		};
-
 		const actorCtx = makeActorCtx(ctx, jsRequest);
 		try {
 			if (
@@ -3592,12 +3497,6 @@ export function buildNativeFactory(
 				});
 			}
 			if (
-				url.pathname === "/inspector/metrics" &&
-				jsRequest.method === "GET"
-			) {
-				return jsonResponse(metricsResponse(actorCtx));
-			}
-			if (
 				jsRequest.method === "POST" &&
 				url.pathname.startsWith("/inspector/action/")
 			) {
@@ -3662,9 +3561,14 @@ export function buildNativeFactory(
 							const actorCtx = makeActorCtx(ctx);
 							try {
 								const decodedInput = decodeValue(input);
+								const startedAt = performance.now();
 								const state = hasStaticState
 									? structuredClone(config.state)
 									: await config.createState(actorCtx, decodedInput);
+								logger().debug({
+									msg: "perf user: createStateMs",
+									durationMs: performance.now() - startedAt,
+								});
 								actorCtx.initializeState(state);
 								return encodeValue(state);
 							} finally {
@@ -3703,9 +3607,14 @@ export function buildNativeFactory(
 							const { ctx } = unwrapTsfnPayload(error, payload);
 							const actorCtx = makeActorCtx(ctx);
 							try {
+								const startedAt = performance.now();
 								const vars = hasStaticVars
 									? structuredClone(config.vars)
 									: await config.createVars(actorCtx, undefined);
+								logger().debug({
+									msg: "perf user: createVarsMs",
+									durationMs: performance.now() - startedAt,
+								});
 								actorCtx.vars = vars;
 							} finally {
 								await actorCtx.dispose();
@@ -3756,7 +3665,12 @@ export function buildNativeFactory(
 							const { ctx } = unwrapTsfnPayload(error, payload);
 							const actorCtx = makeActorCtx(ctx);
 							try {
+								const startedAt = performance.now();
 								await config.onWake(actorCtx);
+								logger().debug({
+									msg: "perf user: onWakeMs",
+									durationMs: performance.now() - startedAt,
+								});
 							} finally {
 								await actorCtx.dispose();
 							}
@@ -4474,9 +4388,9 @@ export async function buildNativeRegistry(config: RegistryConfig): Promise<{
 }> {
 	if (
 		config.test?.enabled &&
-		process.env.RIVET_INSPECTOR_TOKEN === undefined
+		process.env._RIVET_TEST_INSPECTOR_TOKEN === undefined
 	) {
-		process.env.RIVET_INSPECTOR_TOKEN = "token";
+		process.env._RIVET_TEST_INSPECTOR_TOKEN = "token";
 	}
 
 	const bindings = await loadNativeBindings();
