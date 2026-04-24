@@ -2678,8 +2678,11 @@ export class NativeActorContextAdapter {
 	}
 
 	destroy(): void {
-		markNativeDestroyRequested(this.#ctx);
+		// Call the native destroy first so it can throw `actor/starting` or
+		// `actor/stopping` without leaving an unresolved destroyCompletion
+		// promise behind in the native runtime state.
 		callNativeSync(() => this.#ctx.destroy());
+		markNativeDestroyRequested(this.#ctx);
 	}
 
 	client<T = AnyClient>(): T extends Registry<any> ? Client<T> : T {
