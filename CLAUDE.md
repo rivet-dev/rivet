@@ -75,6 +75,7 @@ docker-compose up -d
 - Use conventional commits with a single-line commit message, no co-author: `git commit -m "chore(my-pkg): foo bar"`.
 - We use Graphite for stacked PRs. Diff against the parent branch (`gt ls` to see the stack), not `main`.
 - To revert a file to the version before this branch's changes, checkout from the first child branch (below in the stack), not from `main` or the parent. Child branches contain the pre-this-branch state of files modified by branches further down the stack.
+- To find the preview deploy for a PR: read the pkg-pr-new bot comment (`gh api repos/rivet-dev/rivet/issues/<PR>/comments --jq '.[] | select(.user.login | test("github-actions"; "i")) | .body'`) for the published version and dist-tag. Its GitHub Action is the `Publish` check (`gh pr checks <PR>` → open the `Publish` URL). Do not derive the version from `gh pr view` head SHA because pkg-pr-new tags its synthesized merge commit, not the branch tip, and it only publishes workspaces that changed in the PR so transitive `@rivetkit/*` deps may be missing.
 
 **Never push to `main` unless explicitly specified by the user.**
 
