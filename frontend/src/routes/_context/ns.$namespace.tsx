@@ -3,9 +3,14 @@ import { match } from "ts-pattern";
 import { NotFoundCard } from "@/app/not-found-card";
 import { RouteLayout } from "@/app/route-layout";
 import { useDialog } from "@/app/use-dialog";
+import {
+	RECENT_NAMESPACES_KEY,
+	recordRecentVisit,
+} from "@/lib/recently-visited";
 
 export const Route = createFileRoute("/_context/ns/$namespace")({
-	context: ({ context, params }) => {
+	beforeLoad: ({ params, context }) => {
+		recordRecentVisit(RECENT_NAMESPACES_KEY, params.namespace);
 		return match(context)
 			.with({ __type: "engine" }, (ctx) => {
 				return {

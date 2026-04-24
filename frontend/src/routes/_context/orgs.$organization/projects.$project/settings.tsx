@@ -12,9 +12,13 @@ import { features } from "@/lib/features";
 export const Route = createFileRoute(
 	"/_context/orgs/$organization/projects/$project/settings",
 )({
-	component: features.multitenancy ? RouteComponent : () => {
-		throw notFound();
+	beforeLoad: () => {
+		if(!features.multitenancy) {
+			throw notFound();
+		}
+	
 	},
+	component: RouteComponent,
 });
 
 function RouteComponent() {
