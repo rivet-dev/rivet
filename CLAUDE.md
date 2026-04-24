@@ -87,6 +87,14 @@ git commit -m "chore(my-pkg): foo bar"
 
 **Never push to `main` unless explicitly specified by the user.**
 
+## Frontend Routing (TanStack Router)
+
+### Route context vs loader data
+- `context()` runs at match creation time — its return value is part of `match.context` and readable via `useRouteContext`. Use it for synchronous context setup (e.g. creating a data provider from params).
+- `beforeLoad()` return value goes into `match.__beforeLoadContext` and is **never merged back into `match.context`**. `useRouteContext` will not see it — components reading via `useRouteContext` get a stale snapshot from before `beforeLoad` ran.
+- For async-computed values (e.g. a data provider that depends on a fetched namespace), return the value from `loader()` instead and read it in components via `useLoaderData`. The loader receives the full merged context including `beforeLoad` results as a function argument, so it can re-export the computed value into `match.loaderData`.
+- Rule of thumb: sync setup → `context()` + `useRouteContext`. Async setup → `beforeLoad` (for child route access) + `loader` return + `useLoaderData` (for component access).
+
 ## Dependency Management
 
 ### pnpm Workspace
