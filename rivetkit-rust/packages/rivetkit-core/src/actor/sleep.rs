@@ -927,4 +927,27 @@ mod tests {
 		ctx.cancel_shutdown_deadline();
 		assert!(token.is_cancelled());
 	}
+
+	#[tokio::test(start_paused = true)]
+	async fn sleep_after_grace_clears_started_returns_stopping_not_starting() {
+		// Simulate the lifecycle state machine clearing `started` when it
+		// transitions into SleepGrace. Calls into `sleep()` after that point
+		// must surface `Stopping`, not `Starting`.
+		let ctx = ActorContext::new_for_sleep_tests("actor-sleep-after-grace");
+		ctx.set_sleep_started(true);
+
+		ctx.sleep().expect("first sleep call should be accepted");
+
+		// Lifecycle machine clears `started` on transition into SleepGrace.
+		ctx.set_sleep_started(false);
+
+		let err = ctx.sleep().expect_err("second sleep should fail");
+		let rivet_err = rivet_error::RivetError::extract(&err);
+		assert_eq!(rivet_err.group(), "actor");
+		assert_eq!(
+			rivet_err.code(),
+			"stopping",
+			"started=false during shutdown must surface stopping, not starting"
+		);
+	}
 }
