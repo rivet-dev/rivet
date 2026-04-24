@@ -573,8 +573,13 @@ pub(super) fn build_actor_inspector() -> Inspector {
 }
 
 pub(super) fn inspector_rpcs(instance: &ActorTaskHandle) -> Vec<String> {
-	let _ = instance;
-	Vec::new()
+	instance
+		.factory
+		.config()
+		.actions
+		.iter()
+		.map(|action| action.name.clone())
+		.collect()
 }
 
 pub(super) fn inspector_request_url(request: &Request) -> Result<Url> {

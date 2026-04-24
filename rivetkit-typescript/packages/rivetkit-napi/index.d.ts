@@ -44,6 +44,9 @@ export interface JsQueueSendResult {
   status: string
   response?: Buffer
 }
+export interface JsActionDefinition {
+  name: string
+}
 export interface JsActorConfig {
   name?: string
   icon?: string
@@ -72,6 +75,7 @@ export interface JsActorConfig {
   maxOutgoingMessageSize?: number
   preloadMaxWorkflowBytes?: number
   preloadMaxConnectionsBytes?: number
+  actions?: Array<JsActionDefinition>
 }
 export interface JsBindParam {
   kind: string

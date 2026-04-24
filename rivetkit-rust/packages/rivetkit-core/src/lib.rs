@@ -10,7 +10,7 @@ pub use actor::{kv, sqlite};
 
 pub use actor::action::ActionDispatchError;
 pub use actor::config::{
-	ActorConfig, ActorConfigInput, ActorConfigOverrides, CanHibernateWebSocket,
+	ActionDefinition, ActorConfig, ActorConfigInput, ActorConfigOverrides, CanHibernateWebSocket,
 };
 pub use actor::connection::ConnHandle;
 pub use actor::context::{ActorContext, WebSocketCallbackRegion};

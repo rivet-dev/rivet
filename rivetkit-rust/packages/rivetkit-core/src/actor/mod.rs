@@ -20,7 +20,7 @@ pub mod task_types;
 pub(crate) mod work_registry;
 
 pub use action::ActionDispatchError;
-pub use config::{ActorConfig, ActorConfigOverrides, CanHibernateWebSocket};
+pub use config::{ActionDefinition, ActorConfig, ActorConfigOverrides, CanHibernateWebSocket};
 pub use connection::ConnHandle;
 pub use context::{ActorContext, WebSocketCallbackRegion};
 pub use factory::{ActorEntryFn, ActorFactory};
