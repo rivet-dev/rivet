@@ -50,6 +50,7 @@ export function isStaleResolvedActorError(
 	return (
 		group === "actor" &&
 		(code === "not_found" ||
+			code === "starting" ||
 			code === "stopping" ||
 			code.startsWith("destroyed_"))
 	);

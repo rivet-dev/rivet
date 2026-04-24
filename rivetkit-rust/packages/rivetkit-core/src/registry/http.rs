@@ -10,11 +10,26 @@ impl RegistryDispatcher {
 		actor_id: &str,
 		request: HttpRequest,
 	) -> Result<HttpResponse> {
-		let instance = self.active_actor(actor_id).await?;
 		if request.path == "/metrics" {
+			let instance = self.active_actor(actor_id).await?;
 			return self.handle_metrics_fetch(&instance, &request);
 		}
+
 		let request = build_http_request(request).await?;
+		let framework_route = framework_http_route(request.uri().path())?;
+		let instance = match self.active_actor(actor_id).await {
+			Ok(instance) => instance,
+			Err(error) => {
+				if framework_route.is_some() {
+					return message_boundary_error_response(
+						request_encoding(request.headers()),
+						framework_anyhow_status(&error),
+						error,
+					);
+				}
+				return Ok(inspector_anyhow_response(error));
+			}
+		};
 		if let Some(response) = self.handle_inspector_fetch(&instance, &request).await? {
 			return Ok(response);
 		}
@@ -29,7 +44,7 @@ impl RegistryDispatcher {
 			});
 		};
 
-		if let Some(route) = framework_http_route(request.uri().path())? {
+		if let Some(route) = framework_route {
 			let response = self.handle_framework_fetch(&instance, request, route).await;
 			rearm_sleep_after_request(instance.ctx.clone());
 			return response;
@@ -899,6 +914,7 @@ mod tests {
 	use http::StatusCode;
 	use rivet_error::RivetError;
 	use serde_json::json;
+	use vbare::OwnedVersionedData;
 
 	#[derive(RivetError)]
 	#[error("message", "incoming_too_long", "Incoming message too long")]
@@ -1074,8 +1090,6 @@ mod tests {
 
 	#[test]
 	fn message_boundary_error_response_serializes_bare_v3() {
-		use vbare::OwnedVersionedData;
-
 		let response = message_boundary_error_response(
 			HttpResponseEncoding::Bare,
 			StatusCode::BAD_REQUEST,
