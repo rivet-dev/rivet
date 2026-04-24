@@ -10,7 +10,7 @@
     "hono": "^4.7.0",
     "zod": "^4.1.0",
     "elysia": "^1.2.25",
-    "@hono/node-server": "^1.14.1",
+    "@hono/node-server": "^1.19.13",
     "pg": "^8.14.1",
     "vitest": "^3.0.9",
     "pino": "^9.7.0"

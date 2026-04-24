@@ -168,7 +168,7 @@
 	},
 	"dependencies": {
 		"@rivet-dev/agent-os-core": "^0.1.1",
-		"@hono/node-server": "^1.18.2",
+		"@hono/node-server": "^1.19.13",
 		"@hono/node-ws": "^1.1.1",
 		"@hono/zod-openapi": "^1.1.5",
 		"@rivetkit/bare-ts": "^0.6.2",
