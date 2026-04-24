@@ -9,21 +9,21 @@ import {
 } from "@/lib/recently-visited";
 
 export const Route = createFileRoute("/_context/ns/$namespace")({
-	beforeLoad: ({ params, context }) => {
-		recordRecentVisit(RECENT_NAMESPACES_KEY, params.namespace);
-		return match(context)
-			.with({ __type: "engine" }, (ctx) => {
-				return {
-					dataProvider: context.getOrCreateEngineNamespaceContext(
-						ctx.dataProvider,
-						params.namespace,
-					),
-				};
-			})
+	context: ({ context, params }) =>
+		match(context)
+			.with({ __type: "engine" }, (ctx) => ({
+				dataProvider: context.getOrCreateEngineNamespaceContext(
+					ctx.dataProvider,
+					params.namespace,
+				),
+			}))
 			.otherwise(() => {
 				throw new Error("Invalid context type for this route");
-			});
+			}),
+	beforeLoad: ({ params }) => {
+		recordRecentVisit(RECENT_NAMESPACES_KEY, params.namespace);
 	},
+	loader: ({ context }) => ({ dataProvider: context.dataProvider }),
 	component: RouteComponent,
 	notFoundComponent: () => <NotFoundCard />,
 });

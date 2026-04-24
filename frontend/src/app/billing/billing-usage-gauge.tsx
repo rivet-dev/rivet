@@ -1,9 +1,7 @@
 import { faExclamationTriangle, Icon } from "@rivet-gg/icons";
 import { useQuery } from "@tanstack/react-query";
-import { useMatchRoute } from "@tanstack/react-router";
 import { cn, WithTooltip } from "@/components";
 import { useCloudProjectDataProvider } from "@/components/actors";
-import { features } from "@/lib/features";
 import { useHighestUsagePercent } from "./hooks";
 
 const progressColors = {
@@ -28,14 +26,6 @@ const radius = 9;
 const circumference = 2 * Math.PI * radius;
 
 export function BillingUsageGauge() {
-	const matchRoute = useMatchRoute();
-	if (!features.billing) return null;
-	if (!matchRoute({ to: "/orgs/$organization/projects/$project", fuzzy: true, pending: false }))
-		return null;
-	return <BillingUsageGaugeInner />;
-}
-
-function BillingUsageGaugeInner() {
 	const progress = useHighestUsagePercent();
 
 	const dataProvider = useCloudProjectDataProvider();

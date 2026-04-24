@@ -86,6 +86,9 @@ docker-compose up -d
 - For async-computed values (e.g. a data provider that depends on a fetched namespace), return the value from `loader()` instead and read it in components via `useLoaderData`. The loader receives the full merged context including `beforeLoad` results as a function argument, so it can re-export the computed value into `match.loaderData`.
 - Rule of thumb: sync setup → `context()` + `useRouteContext`. Async setup → `beforeLoad` (for child route access) + `loader` return + `useLoaderData` (for component access).
 
+### Data providers (convention)
+- Every route that owns a data provider sets it up in `context()` (sync) or `beforeLoad` (async) AND re-exports it from `loader` as `{ dataProvider: context.dataProvider }`. All consumer hooks in `src/components/actors/data-provider.tsx` read via `useLoaderData`. Do not read data providers via `useRouteContext` — `match.context` is a snapshot taken at match creation time and does not include `beforeLoad` results.
+
 ## Dependency Management
 
 ### pnpm Workspace

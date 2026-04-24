@@ -76,6 +76,7 @@ export const Route = createFileRoute("/_context")({
 
 		}
 	},
+	loader: ({ context }) => ({ dataProvider: context.dataProvider }),
 });
 
 function IdentifyUser() {

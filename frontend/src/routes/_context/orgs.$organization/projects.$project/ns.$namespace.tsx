@@ -88,6 +88,7 @@ export const Route = createFileRoute(
 
 		if (namespace.displayName !== "Production" || isSkipped === true) {
 			return {
+				dataProvider: context.dataProvider,
 				displayOnboarding: false,
 				displayFrontendOnboarding: false,
 			};
@@ -124,6 +125,7 @@ export const Route = createFileRoute(
 		const hasBackendConfigured = hasRunnerNames || hasRunnerConfigs;
 
 		return {
+			dataProvider: context.dataProvider,
 			displayOnboarding: !hasBackendConfigured && !hasActors,
 			displayFrontendOnboarding: hasBackendConfigured && !hasActors,
 			provider: runnerProvider,
