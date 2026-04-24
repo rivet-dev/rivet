@@ -46,7 +46,7 @@ use crate::actor::task::{
 	try_send_dispatch_command,
 	try_send_lifecycle_command,
 };
-use crate::actor::task_types::StopReason;
+use crate::actor::task_types::ShutdownKind;
 use crate::engine_process::EngineProcessManager;
 use crate::error::{ActorLifecycle as ActorLifecycleError, ActorRuntime};
 use crate::inspector::protocol::{
@@ -612,7 +612,10 @@ impl RegistryDispatcher {
 					.map(|(_, pending_stop)| pending_stop);
 				if let Some(pending_stop) = pending_stop {
 					let actor_id = request.actor_id.clone();
-					if !matches!(pending_stop.reason, protocol::StopActorReason::SleepIntent) {
+					if matches!(
+						map_envoy_stop_reason(&pending_stop.reason),
+						ShutdownKind::Destroy
+					) {
 						instance.ctx.mark_destroy_requested();
 					}
 					self.set_actor_instance_state(
@@ -818,7 +821,9 @@ impl RegistryDispatcher {
 		reason: protocol::StopActorReason,
 		stop_handle: ActorStopHandle,
 	) -> Result<()> {
-		if !matches!(reason, protocol::StopActorReason::SleepIntent) {
+		let task_stop_reason = map_envoy_stop_reason(&reason);
+
+		if matches!(task_stop_reason, ShutdownKind::Destroy) {
 			instance.ctx.mark_destroy_requested();
 		}
 
@@ -828,13 +833,10 @@ impl RegistryDispatcher {
 			actor_name = %instance.actor_name,
 			generation = instance.generation,
 			?reason,
+			?task_stop_reason,
 			"stopping actor instance"
 		);
 
-		let task_stop_reason = match reason {
-			protocol::StopActorReason::SleepIntent => StopReason::Sleep,
-			_ => StopReason::Destroy,
-		};
 		let (reply_tx, reply_rx) = oneshot::channel();
 		let shutdown_result = match try_send_lifecycle_command(
 			&instance.lifecycle,
@@ -853,7 +855,7 @@ impl RegistryDispatcher {
 			Err(error) => Err(error),
 		};
 
-		if !matches!(reason, protocol::StopActorReason::SleepIntent) {
+		if matches!(task_stop_reason, ShutdownKind::Destroy) {
 			let shutdown_deadline =
 				Instant::now() + instance.factory.config().effective_sleep_grace_period();
 			if !instance
@@ -953,5 +955,26 @@ impl RegistryDispatcher {
 		);
 		ctx.configure_envoy(handle, Some(generation));
 		ctx
+	}
+}
+
+/// Maps an envoy-protocol stop reason to the lifecycle `ShutdownKind` used by
+/// `ActorTask`. Reallocation paths (the actor will resurrect on a new envoy)
+/// are routed through `Sleep` so user `onSleep` runs and durable state is
+/// preserved without firing a permanent destroy.
+fn map_envoy_stop_reason(reason: &protocol::StopActorReason) -> ShutdownKind {
+	match reason {
+		// Idle sleep requested by the actor itself.
+		protocol::StopActorReason::SleepIntent => ShutdownKind::Sleep,
+		// Runner is being drained; engine will reallocate the actor on a new
+		// envoy. Treat as sleep so persistent state and onSleep semantics hold.
+		protocol::StopActorReason::GoingAway => ShutdownKind::Sleep,
+		// Runner connection lost; once reconnected (or another runner is
+		// allocated) the actor resurrects with the same id.
+		protocol::StopActorReason::Lost => ShutdownKind::Sleep,
+		// User-initiated stop intent (`ctx.destroy()` and equivalents).
+		protocol::StopActorReason::StopIntent => ShutdownKind::Destroy,
+		// Engine-initiated permanent destroy.
+		protocol::StopActorReason::Destroy => ShutdownKind::Destroy,
 	}
 }

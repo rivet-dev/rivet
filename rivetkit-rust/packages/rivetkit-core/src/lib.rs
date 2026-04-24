@@ -31,7 +31,7 @@ pub use actor::task::{
 	ActionDispatchResult, ActorTask, DispatchCommand, HttpDispatchResult, LifecycleCommand,
 	LifecycleEvent, LifecycleState,
 };
-pub use actor::task_types::StopReason;
+pub use actor::task_types::ShutdownKind;
 pub use error::ActorLifecycle;
 pub use inspector::{Inspector, InspectorSnapshot};
 pub use registry::{CoreRegistry, ServeConfig};

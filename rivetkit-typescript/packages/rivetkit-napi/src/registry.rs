@@ -128,7 +128,11 @@ impl CoreRegistry {
 				registry.register_shared(&name, factory.actor_factory());
 				Ok(())
 			}
-			_ => Err(registry_not_registering_error()),
+			RegistryState::BuildingServerless
+			| RegistryState::Serving
+			| RegistryState::Serverless(_)
+			| RegistryState::ShuttingDown
+			| RegistryState::ShutDown => Err(registry_not_registering_error()),
 		}
 	}
 

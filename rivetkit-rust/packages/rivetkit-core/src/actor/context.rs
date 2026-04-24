@@ -669,13 +669,13 @@ impl ActorContext {
 
 	pub(crate) fn record_shutdown_wait(
 		&self,
-		reason: crate::actor::task_types::StopReason,
+		reason: crate::actor::task_types::ShutdownKind,
 		duration: Duration,
 	) {
 		self.0.metrics.observe_shutdown_wait(reason, duration);
 	}
 
-	pub(crate) fn record_shutdown_timeout(&self, reason: crate::actor::task_types::StopReason) {
+	pub(crate) fn record_shutdown_timeout(&self, reason: crate::actor::task_types::ShutdownKind) {
 		self.0.metrics.inc_shutdown_timeout(reason);
 	}
 

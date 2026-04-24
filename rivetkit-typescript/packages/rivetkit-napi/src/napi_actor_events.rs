@@ -580,8 +580,8 @@ pub(crate) async fn dispatch_event(
 		}
 		ActorEvent::RunGracefulCleanup { reason, reply } => {
 			let callback = match reason {
-				rivetkit_core::actor::StopReason::Sleep => bindings.on_sleep.clone(),
-				rivetkit_core::actor::StopReason::Destroy => bindings.on_destroy.clone(),
+				rivetkit_core::actor::ShutdownKind::Sleep => bindings.on_sleep.clone(),
+				rivetkit_core::actor::ShutdownKind::Destroy => bindings.on_destroy.clone(),
 			};
 			let ctx = ctx.clone();
 			let shutdown_deadline = ctx.inner().shutdown_deadline_token();
@@ -590,10 +590,10 @@ pub(crate) async fn dispatch_event(
 					let result: Result<()> = async {
 						if let Some(callback) = callback {
 							match reason {
-								rivetkit_core::actor::StopReason::Sleep => {
+								rivetkit_core::actor::ShutdownKind::Sleep => {
 									call_on_sleep(&callback, &ctx).await
 								}
-								rivetkit_core::actor::StopReason::Destroy => {
+								rivetkit_core::actor::ShutdownKind::Destroy => {
 									call_on_destroy(&callback, &ctx).await
 								}
 							}?;

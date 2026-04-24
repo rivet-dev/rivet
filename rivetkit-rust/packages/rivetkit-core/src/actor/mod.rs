@@ -37,4 +37,4 @@ pub use task::{
 	ActionDispatchResult, ActorTask, DispatchCommand, HttpDispatchResult, LifecycleCommand,
 	LifecycleEvent, LifecycleState,
 };
-pub use task_types::{ActorChildOutcome, StateMutationReason, StopReason, UserTaskKind};
+pub use task_types::{ActorChildOutcome, ShutdownKind, StateMutationReason, UserTaskKind};

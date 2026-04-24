@@ -42,7 +42,7 @@ mod moved_tests {
 		ActorTask, DispatchCommand, LONG_SHUTDOWN_DRAIN_WARNING_THRESHOLD, LifecycleCommand,
 		LifecycleEvent, LifecycleState, LiveExit,
 	};
-	use crate::actor::task_types::StopReason;
+	use crate::actor::task_types::ShutdownKind;
 	use crate::kv::tests::new_in_memory;
 	use crate::{ActorConfig, ActorContext, ActorFactory};
 
@@ -311,7 +311,7 @@ mod moved_tests {
 		sleep_count: Arc<AtomicUsize>,
 		destroy_count: Arc<AtomicUsize>,
 		run_returned_tx: oneshot::Sender<()>,
-		cleanup_tx: oneshot::Sender<StopReason>,
+		cleanup_tx: oneshot::Sender<ShutdownKind>,
 	) -> Arc<ActorFactory> {
 		let run_returned_tx = Arc::new(Mutex::new(Some(run_returned_tx)));
 		let cleanup_tx = Arc::new(Mutex::new(Some(cleanup_tx)));
@@ -330,10 +330,10 @@ mod moved_tests {
 							}
 							ActorEvent::RunGracefulCleanup { reason, reply } => {
 								match reason {
-									StopReason::Sleep => {
+									ShutdownKind::Sleep => {
 										sleep_count.fetch_add(1, Ordering::SeqCst);
 									}
-									StopReason::Destroy => {
+									ShutdownKind::Destroy => {
 										destroy_count.fetch_add(1, Ordering::SeqCst);
 									}
 								}
@@ -383,10 +383,10 @@ mod moved_tests {
 						}
 						ActorEvent::RunGracefulCleanup { reason, reply } => {
 							match reason {
-								StopReason::Sleep => {
+								ShutdownKind::Sleep => {
 									begin_sleep_count.fetch_add(1, Ordering::SeqCst);
 								}
-								StopReason::Destroy => {
+								ShutdownKind::Destroy => {
 									destroy_count.fetch_add(1, Ordering::SeqCst);
 								}
 							}
@@ -785,7 +785,7 @@ mod moved_tests {
 		wait_for_count(&save_ticks, 2).await;
 		wait_for_state(&ctx, &[2]).await;
 
-		task.handle_stop(crate::actor::task_types::StopReason::Destroy)
+		task.handle_stop(crate::actor::task_types::ShutdownKind::Destroy)
 			.await
 			.expect("stop should succeed");
 	}
@@ -842,7 +842,7 @@ mod moved_tests {
 		assert_eq!(ctx.inspector_attach_count(), 0);
 		assert!(task.inspector_serialize_state_deadline.is_none());
 
-		task.handle_stop(StopReason::Destroy)
+		task.handle_stop(ShutdownKind::Destroy)
 			.await
 			.expect("destroy stop should succeed");
 	}
@@ -936,7 +936,7 @@ mod moved_tests {
 		assert_eq!(persisted_actor.state, Vec::<u8>::new());
 		assert_eq!(ctx.state(), Vec::<u8>::new());
 
-		task.handle_stop(StopReason::Destroy)
+		task.handle_stop(ShutdownKind::Destroy)
 			.await
 			.expect("destroy stop should succeed");
 	}
@@ -999,7 +999,7 @@ mod moved_tests {
 		assert_eq!(deltas, vec![StateDelta::ActorState(vec![1])]);
 		wait_for_state(&ctx, &[1]).await;
 
-		task.handle_stop(StopReason::Destroy)
+		task.handle_stop(ShutdownKind::Destroy)
 			.await
 			.expect("destroy stop should succeed");
 	}
@@ -1089,7 +1089,7 @@ mod moved_tests {
 		wait_for_state(&ctx, &[2]).await;
 		assert!(!ctx.save_requested());
 
-		task.handle_stop(StopReason::Destroy)
+		task.handle_stop(ShutdownKind::Destroy)
 			.await
 			.expect("destroy stop should succeed");
 	}
@@ -1178,7 +1178,7 @@ mod moved_tests {
 			.expect("start reply should send")
 			.expect("start should succeed");
 
-		task.handle_stop(StopReason::Sleep)
+		task.handle_stop(ShutdownKind::Sleep)
 			.await
 			.expect("sleep stop should succeed");
 
@@ -1282,7 +1282,7 @@ mod moved_tests {
 			drop(on_state_change);
 		});
 
-		task.handle_stop(StopReason::Sleep)
+		task.handle_stop(ShutdownKind::Sleep)
 			.await
 			.expect("sleep stop should succeed");
 
@@ -1379,7 +1379,7 @@ mod moved_tests {
 			.expect("start reply should send")
 			.expect("start should succeed");
 
-		task.handle_stop(StopReason::Destroy)
+		task.handle_stop(ShutdownKind::Destroy)
 			.await
 			.expect("destroy stop should succeed");
 
@@ -1516,7 +1516,7 @@ mod moved_tests {
 			vec![Some("conn-client".to_owned()), None],
 		);
 
-		task.handle_stop(StopReason::Destroy)
+		task.handle_stop(ShutdownKind::Destroy)
 			.await
 			.expect("destroy stop should succeed");
 	}
@@ -1608,7 +1608,7 @@ mod moved_tests {
 		assert_eq!(bytes, vec![3, 2, 1]);
 		assert!(no_initial_event);
 
-		task.handle_stop(StopReason::Sleep)
+		task.handle_stop(ShutdownKind::Sleep)
 			.await
 			.expect("sleep stop should succeed");
 	}
@@ -1730,7 +1730,7 @@ mod moved_tests {
 			vec![None, Some("entry-123".to_owned())],
 		);
 
-		task.handle_stop(StopReason::Destroy)
+		task.handle_stop(ShutdownKind::Destroy)
 			.await
 			.expect("destroy stop should succeed");
 	}
@@ -1832,7 +1832,7 @@ mod moved_tests {
 			.expect("persisted connection should decode");
 		assert_eq!(persisted_after.server_message_index, 7);
 
-		task.handle_stop(StopReason::Destroy)
+		task.handle_stop(ShutdownKind::Destroy)
 			.await
 			.expect("destroy stop should succeed");
 	}
@@ -1860,7 +1860,7 @@ mod moved_tests {
 				while let Some(event) = events.recv().await {
 					match event {
 						ActorEvent::RunGracefulCleanup { reason, reply } => {
-							if reason == StopReason::Destroy {
+							if reason == ShutdownKind::Destroy {
 								ctx.after(Duration::from_secs(60), "after-destroy", &[1, 2, 3]);
 							}
 							reply.send(Ok(()));
@@ -1892,7 +1892,7 @@ mod moved_tests {
 			.expect("start reply should send")
 			.expect("start should succeed");
 
-		task.handle_stop(StopReason::Destroy)
+		task.handle_stop(ShutdownKind::Destroy)
 			.await
 			.expect("destroy stop should succeed");
 
@@ -2119,7 +2119,7 @@ mod moved_tests {
 		let (stop_tx, stop_rx) = oneshot::channel();
 		lifecycle_tx
 			.send(LifecycleCommand::Stop {
-				reason: StopReason::Sleep,
+				reason: ShutdownKind::Sleep,
 				reply: stop_tx,
 			})
 			.await
@@ -2166,7 +2166,7 @@ mod moved_tests {
 		let (stop_tx, stop_rx) = oneshot::channel();
 		lifecycle_tx
 			.send(LifecycleCommand::Stop {
-				reason: StopReason::Destroy,
+				reason: ShutdownKind::Destroy,
 				reply: stop_tx,
 			})
 			.await
@@ -2212,7 +2212,7 @@ mod moved_tests {
 		let (stop_tx, stop_rx) = oneshot::channel();
 		lifecycle_tx
 			.send(LifecycleCommand::Stop {
-				reason: StopReason::Sleep,
+				reason: ShutdownKind::Sleep,
 				reply: stop_tx,
 			})
 			.await
@@ -2269,7 +2269,7 @@ mod moved_tests {
 		let (stop_tx, stop_rx) = oneshot::channel();
 		lifecycle_tx
 			.send(LifecycleCommand::Stop {
-				reason: StopReason::Sleep,
+				reason: ShutdownKind::Sleep,
 				reply: stop_tx,
 			})
 			.await
@@ -2328,7 +2328,7 @@ mod moved_tests {
 		});
 		yield_now().await;
 
-		let stop = tokio::spawn(async move { task.handle_stop(StopReason::Destroy).await });
+		let stop = tokio::spawn(async move { task.handle_stop(ShutdownKind::Destroy).await });
 		yield_now().await;
 		assert!(
 			!stop.is_finished(),
@@ -2414,7 +2414,7 @@ mod moved_tests {
 		let (stop_tx, stop_rx) = oneshot::channel();
 		lifecycle_tx
 			.send(LifecycleCommand::Stop {
-				reason: StopReason::Sleep,
+				reason: ShutdownKind::Sleep,
 				reply: stop_tx,
 			})
 			.await
@@ -2524,7 +2524,7 @@ mod moved_tests {
 		let (stop_tx, stop_rx) = oneshot::channel();
 		lifecycle_tx
 			.send(LifecycleCommand::Stop {
-				reason: StopReason::Destroy,
+				reason: ShutdownKind::Destroy,
 				reply: stop_tx,
 			})
 			.await
@@ -2604,7 +2604,7 @@ mod moved_tests {
 		let (sleep_tx, sleep_rx) = oneshot::channel();
 		lifecycle_tx
 			.send(LifecycleCommand::Stop {
-				reason: StopReason::Sleep,
+				reason: ShutdownKind::Sleep,
 				reply: sleep_tx,
 			})
 			.await
@@ -2615,7 +2615,7 @@ mod moved_tests {
 		let (sleep_again_tx, sleep_again_rx) = oneshot::channel();
 		lifecycle_tx
 			.send(LifecycleCommand::Stop {
-				reason: StopReason::Sleep,
+				reason: ShutdownKind::Sleep,
 				reply: sleep_again_tx,
 			})
 			.await
@@ -2709,7 +2709,7 @@ mod moved_tests {
 		let (sleep_tx, sleep_rx) = oneshot::channel();
 		lifecycle_tx
 			.send(LifecycleCommand::Stop {
-				reason: StopReason::Sleep,
+				reason: ShutdownKind::Sleep,
 				reply: sleep_tx,
 			})
 			.await
@@ -2719,7 +2719,7 @@ mod moved_tests {
 		let (destroy_tx, destroy_rx) = oneshot::channel();
 		lifecycle_tx
 			.send(LifecycleCommand::Stop {
-				reason: StopReason::Destroy,
+				reason: ShutdownKind::Destroy,
 				reply: destroy_tx,
 			})
 			.await
@@ -2778,7 +2778,7 @@ mod moved_tests {
 		let (stop_tx, stop_rx) = oneshot::channel();
 		lifecycle_tx
 			.send(LifecycleCommand::Stop {
-				reason: StopReason::Destroy,
+				reason: ShutdownKind::Destroy,
 				reply: stop_tx,
 			})
 			.await
@@ -2820,7 +2820,7 @@ mod moved_tests {
 				if ctx.actor_id() != "actor-destroy-reply-order" {
 					return;
 				}
-				if reason == StopReason::Destroy {
+				if reason == ShutdownKind::Destroy {
 					hook_count.fetch_add(1, Ordering::SeqCst);
 					assert!(
 						ctx.wait_for_destroy_completion_public()
@@ -2848,7 +2848,7 @@ mod moved_tests {
 		let (stop_tx, stop_rx) = oneshot::channel();
 		lifecycle_tx
 			.send(LifecycleCommand::Stop {
-				reason: StopReason::Destroy,
+				reason: ShutdownKind::Destroy,
 				reply: stop_tx,
 			})
 			.await
@@ -2865,18 +2865,18 @@ mod moved_tests {
 
 	#[tokio::test]
 	async fn clean_run_exit_still_dispatches_on_sleep_when_stop_arrives() {
-		assert_clean_run_exit_stop_dispatches_cleanup(StopReason::Sleep).await;
+		assert_clean_run_exit_stop_dispatches_cleanup(ShutdownKind::Sleep).await;
 	}
 
 	#[tokio::test]
 	async fn clean_run_exit_still_dispatches_on_destroy_when_stop_arrives() {
-		assert_clean_run_exit_stop_dispatches_cleanup(StopReason::Destroy).await;
+		assert_clean_run_exit_stop_dispatches_cleanup(ShutdownKind::Destroy).await;
 	}
 
-	async fn assert_clean_run_exit_stop_dispatches_cleanup(reason: StopReason) {
+	async fn assert_clean_run_exit_stop_dispatches_cleanup(reason: ShutdownKind) {
 		let actor_id = match reason {
-			StopReason::Sleep => "actor-clean-run-sleep-stop",
-			StopReason::Destroy => "actor-clean-run-destroy-stop",
+			ShutdownKind::Sleep => "actor-clean-run-sleep-stop",
+			ShutdownKind::Destroy => "actor-clean-run-destroy-stop",
 		};
 		let ctx = new_with_kv(
 			actor_id,
@@ -2930,11 +2930,11 @@ mod moved_tests {
 		);
 		assert_eq!(
 			sleep_count.load(Ordering::SeqCst),
-			usize::from(matches!(reason, StopReason::Sleep))
+			usize::from(matches!(reason, ShutdownKind::Sleep))
 		);
 		assert_eq!(
 			destroy_count.load(Ordering::SeqCst),
-			usize::from(matches!(reason, StopReason::Destroy))
+			usize::from(matches!(reason, ShutdownKind::Destroy))
 		);
 
 		timeout(Duration::from_secs(2), async {
@@ -3013,7 +3013,7 @@ mod moved_tests {
 		let (stop_tx, stop_rx) = oneshot::channel();
 		lifecycle_tx
 			.send(LifecycleCommand::Stop {
-				reason: StopReason::Sleep,
+				reason: ShutdownKind::Sleep,
 				reply: stop_tx,
 			})
 			.await
@@ -3080,7 +3080,7 @@ mod moved_tests {
 		let (stop_tx, stop_rx) = oneshot::channel();
 		lifecycle_tx
 			.send(LifecycleCommand::Stop {
-				reason: StopReason::Destroy,
+				reason: ShutdownKind::Destroy,
 				reply: stop_tx,
 			})
 			.await
@@ -3144,7 +3144,7 @@ mod moved_tests {
 		});
 
 		let drain = task.drain_tracked_work(
-			StopReason::Destroy,
+			ShutdownKind::Destroy,
 			"before_disconnect",
 			Instant::now() + Duration::from_secs(5),
 		);
@@ -3184,7 +3184,7 @@ mod moved_tests {
 		});
 
 		let drain = task.drain_tracked_work(
-			StopReason::Sleep,
+			ShutdownKind::Sleep,
 			"after_disconnect",
 			Instant::now() + Duration::from_secs(5),
 		);
@@ -3329,7 +3329,7 @@ mod moved_tests {
 		let (stop_tx, stop_rx) = oneshot::channel();
 		lifecycle_tx
 			.send(LifecycleCommand::Stop {
-				reason: StopReason::Destroy,
+				reason: ShutdownKind::Destroy,
 				reply: stop_tx,
 			})
 			.await
@@ -3559,7 +3559,7 @@ mod moved_tests {
 				.is_none()
 		);
 
-		task.handle_stop(StopReason::Sleep)
+		task.handle_stop(ShutdownKind::Sleep)
 			.await
 			.expect("sleep stop should succeed");
 	}
@@ -3687,7 +3687,7 @@ mod moved_tests {
 				.is_none()
 		);
 
-		task.handle_stop(StopReason::Sleep)
+		task.handle_stop(ShutdownKind::Sleep)
 			.await
 			.expect("sleep stop should succeed");
 	}

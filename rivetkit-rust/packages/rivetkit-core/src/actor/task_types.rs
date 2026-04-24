@@ -15,16 +15,16 @@ pub enum LifecycleState {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum StopReason {
+pub enum ShutdownKind {
 	Sleep,
 	Destroy,
 }
 
-impl StopReason {
+impl ShutdownKind {
 	pub(crate) fn as_metric_label(self) -> &'static str {
 		match self {
-			StopReason::Sleep => "sleep",
-			StopReason::Destroy => "destroy",
+			ShutdownKind::Sleep => "sleep",
+			ShutdownKind::Destroy => "destroy",
 		}
 	}
 }

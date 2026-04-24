@@ -398,6 +398,10 @@ When the user asks to track something in a note, store it in `.agent/notes/` by 
 - Do not use em dashes (—). Use periods to separate sentences instead.
 - Documenting deltas is not important or useful. A developer who has never worked on the project will not gain extra information if you add a comment stating that something was removed or changed because they don't know what was there before. The only time you would be adding a comment for something NOT being there is if its unintuitive for why its not there in the first place.
 
+### Match statements
+
+- Never use a `_ =>` fall-through arm when matching on a Rust enum (or a TypeScript discriminated union). Enumerate every variant explicitly so adding a new variant later is a compile error instead of a silent behavior change. `_` is fine for `Result`, `Option`, integers, strings, and other open value spaces. `_ => unreachable!()` / `_ => panic!()` are explicit asserts and acceptable.
+
 ## Documentation
 
 - If you need to look at the documentation for a package, visit `https://docs.rs/{package-name}`. For example, serde docs live at `https://docs.rs/serde/`.
