@@ -412,17 +412,17 @@ impl SharedState {
 						);
 
 						let should_buffer_restored_open = in_flight.hibernation_state.is_some()
-							&& in_flight.opened
-							&& matches!(
-								msg.message_kind,
-								protocol::ToRivetTunnelMessageKind::ToRivetWebSocketOpen(_)
-							);
-						let should_buffer = should_buffer_restored_open
-							|| in_flight
-								.hibernation_state
-								.as_ref()
-								.is_some_and(|hs| hs.hibernating)
-								&& matches!(
+							&& in_flight.opened && matches!(
+							msg.message_kind,
+							protocol::ToRivetTunnelMessageKind::ToRivetWebSocketOpen(_)
+						);
+						let should_buffer =
+							should_buffer_restored_open
+								|| in_flight
+									.hibernation_state
+									.as_ref()
+									.is_some_and(|hs| hs.hibernating)
+									&& matches!(
 									msg.message_kind,
 									protocol::ToRivetTunnelMessageKind::ToRivetWebSocketOpen(_)
 										| protocol::ToRivetTunnelMessageKind::ToRivetWebSocketClose(_)
@@ -436,7 +436,12 @@ impl SharedState {
 								"buffering hibernating control tunnel message"
 							);
 							in_flight.buffered_inbound.push(msg.message_kind.clone());
-						} else if in_flight.msg_tx.send(msg.message_kind.clone()).await.is_err() {
+						} else if in_flight
+							.msg_tx
+							.send(msg.message_kind.clone())
+							.await
+							.is_err()
+						{
 							tracing::debug!(
 								gateway_id=%protocol::util::id_to_string(&message_id.gateway_id),
 								request_id=%protocol::util::id_to_string(&message_id.request_id),
