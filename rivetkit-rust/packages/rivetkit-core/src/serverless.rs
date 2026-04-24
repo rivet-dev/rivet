@@ -14,7 +14,6 @@ use rivetkit_shared_types::serverless_metadata::{
 };
 use serde::Serialize;
 use serde_json::json;
-use subtle::ConstantTimeEq;
 use tokio::sync::{Mutex as TokioMutex, mpsc};
 use tokio_util::sync::CancellationToken;
 
@@ -92,10 +91,6 @@ struct ServerlessErrorBody<'a> {
 struct InvalidRequest {
 	reason: String,
 }
-
-#[derive(rivet_error::RivetError, Serialize)]
-#[error("auth", "forbidden", "Forbidden.")]
-struct Forbidden;
 
 #[derive(rivet_error::RivetError, Serialize)]
 #[error(
@@ -358,17 +353,27 @@ impl CoreServerlessRuntime {
 	}
 
 	fn validate_start_headers(&self, headers: &StartHeaders) -> Result<()> {
-		if let Some(expected_token) = &self.settings.configured_token {
-			let Some(received_token) = &headers.token else {
-				return Err(Forbidden.build());
-			};
-			if !constant_time_eq(expected_token, received_token) {
-				return Err(Forbidden.build());
-			}
-		}
+		// TODO: pegboard-outbound does not currently auth the /start endpoint,
+		// so the incoming `x-rivet-token` does not match `config.token`
+		// (which is the user's API token, not a shared pool secret). Re-enable
+		// once the envoy-era serverless pool carries a dedicated shared secret
+		// in its configured headers.
+		// if let Some(expected_token) = &self.settings.configured_token {
+		// 	let Some(received_token) = &headers.token else {
+		// 		return Err(Forbidden.build());
+		// 	};
+		// 	if !constant_time_eq(expected_token, received_token) {
+		// 		return Err(Forbidden.build());
+		// 	}
+		// }
 
 		if self.settings.validate_endpoint {
 			if !endpoints_match(&headers.endpoint, &self.settings.configured_endpoint) {
+				tracing::warn!(
+					configured_endpoint = %self.settings.configured_endpoint,
+					received_endpoint = %headers.endpoint,
+					"serverless start rejected: endpoint mismatch",
+				);
 				return Err(EndpointMismatch {
 					expected: self.settings.configured_endpoint.clone(),
 					received: headers.endpoint.clone(),
@@ -377,6 +382,11 @@ impl CoreServerlessRuntime {
 			}
 
 			if headers.namespace != self.settings.configured_namespace {
+				tracing::warn!(
+					configured_namespace = %self.settings.configured_namespace,
+					received_namespace = %headers.namespace,
+					"serverless start rejected: namespace mismatch",
+				);
 				return Err(NamespaceMismatch {
 					expected: self.settings.configured_namespace.clone(),
 					received: headers.namespace.clone(),
@@ -462,10 +472,6 @@ fn required_header(headers: &HashMap<String, String>, name: &str) -> Result<Stri
 
 fn optional_header(headers: &HashMap<String, String>, name: &str) -> Option<String> {
 	headers.get(name).filter(|value| !value.is_empty()).cloned()
-}
-
-fn constant_time_eq(expected: &str, received: &str) -> bool {
-	bool::from(expected.as_bytes().ct_eq(received.as_bytes()))
 }
 
 fn cors_headers(req: &ServerlessRequest) -> HashMap<String, String> {
