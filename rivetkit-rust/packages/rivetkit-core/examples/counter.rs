@@ -99,5 +99,8 @@ fn counter_factory() -> ActorFactory {
 async fn main() -> Result<()> {
 	let mut registry = CoreRegistry::new();
 	registry.register("counter", counter_factory());
-	registry.serve().await
+	tokio::select! {
+		res = registry.serve() => res,
+		_ = tokio::signal::ctrl_c() => Ok(()),
+	}
 }

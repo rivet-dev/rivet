@@ -106,5 +106,8 @@ async fn save_chat_state(ctx: &Ctx<Chat>, state: &ChatState) -> Result<()> {
 async fn main() -> Result<()> {
 	let mut registry = Registry::new();
 	registry.register::<Chat, _, _>("chat", run);
-	registry.serve().await
+	tokio::select! {
+		res = registry.serve() => res,
+		_ = tokio::signal::ctrl_c() => Ok(()),
+	}
 }

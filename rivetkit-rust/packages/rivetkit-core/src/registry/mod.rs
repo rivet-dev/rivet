@@ -416,7 +416,7 @@ impl CoreRegistry {
 
 	pub async fn serve_with_config(self, config: ServeConfig) -> Result<()> {
 		let dispatcher = self.into_dispatcher(&config);
-		let mut engine_process = match config.engine_binary_path.as_ref() {
+		let _engine_process = match config.engine_binary_path.as_ref() {
 			Some(binary_path) => {
 				Some(EngineProcessManager::start(binary_path, &config.endpoint).await?)
 			}
@@ -427,7 +427,7 @@ impl CoreRegistry {
 			dispatcher: dispatcher.clone(),
 		});
 
-		let handle = start_envoy(rivet_envoy_client::config::EnvoyConfig {
+		let _handle = start_envoy(rivet_envoy_client::config::EnvoyConfig {
 			version: config.version,
 			endpoint: config.endpoint,
 			token: config.token,
@@ -441,18 +441,12 @@ impl CoreRegistry {
 		})
 		.await;
 
-		let shutdown_signal = tokio::signal::ctrl_c()
-			.await
-			.context("wait for registry shutdown signal");
-		handle.shutdown(false);
-
-		if let Some(engine_process) = engine_process.take() {
-			engine_process.shutdown().await?;
-		}
-
-		shutdown_signal?;
-
-		Ok(())
+		// Do not install `tokio::signal::ctrl_c()` here. It calls
+		// `sigaction(SIGINT, ...)` at the POSIX level, which overrides the
+		// host's default SIGINT handling when rivetkit-core is embedded in
+		// Node via NAPI and leaves the host process unable to exit. Callers
+		// drive shutdown themselves by dropping the task.
+		std::future::pending::<Result<()>>().await
 	}
 
 	fn into_dispatcher(self, config: &ServeConfig) -> Arc<RegistryDispatcher> {
