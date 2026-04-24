@@ -1,4 +1,3 @@
-import { Rivet } from "@rivetkit/engine-api-full";
 import { useMutation } from "@tanstack/react-query";
 import { useSearch } from "@tanstack/react-router";
 import type { DialogContentProps } from "@/components/hooks";
@@ -42,15 +41,14 @@ export default function CreateActorDialog({ onClose }: ContentProps) {
 					input: values.input ? JSON.parse(values.input) : undefined,
 					key: values.key,
 					datacenter: values.datacenter,
-					crashPolicy: values.crashPolicy || Rivet.CrashPolicy.Sleep,
 					runnerNameSelector: values.runnerNameSelector || "default",
+					crashPolicy: "destroy",
 				});
 				onClose?.();
 			}}
 			defaultValues={{
 				name,
 				key: getRandomKey(),
-				crashPolicy: Rivet.CrashPolicy.Sleep,
 			}}
 		>
 			<DialogHeader>
@@ -79,7 +77,6 @@ export default function CreateActorDialog({ onClose }: ContentProps) {
 								<>
 									<ActorCreateForm.Datacenter />
 									<ActorCreateForm.RunnerNameSelector />
-									<ActorCreateForm.CrashPolicy />
 								</>
 							) : null}
 							<ActorCreateForm.JsonInput />

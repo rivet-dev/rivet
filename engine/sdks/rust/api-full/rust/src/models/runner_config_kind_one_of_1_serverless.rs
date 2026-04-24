@@ -13,22 +13,29 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct RunnerConfigKindOneOf1Serverless {
+    /// Seconds.
+    #[serde(rename = "drain_grace_period", default, with = "::serde_with::rust::double_option", skip_serializing_if = "Option::is_none")]
+    pub drain_grace_period: Option<Option<i32>>,
     #[serde(rename = "headers", skip_serializing_if = "Option::is_none")]
     pub headers: Option<std::collections::HashMap<String, String>>,
     #[serde(rename = "max_concurrent_actors", default, with = "::serde_with::rust::double_option", skip_serializing_if = "Option::is_none")]
     pub max_concurrent_actors: Option<Option<i64>>,
+    /// Deprecated.
     #[serde(rename = "max_runners")]
     pub max_runners: i32,
     /// Milliseconds between metadata polling. If not set, uses the global default.
     #[serde(rename = "metadata_poll_interval", default, with = "::serde_with::rust::double_option", skip_serializing_if = "Option::is_none")]
     pub metadata_poll_interval: Option<Option<i64>>,
+    /// Deprecated.
     #[serde(rename = "min_runners", default, with = "::serde_with::rust::double_option", skip_serializing_if = "Option::is_none")]
     pub min_runners: Option<Option<i32>>,
     /// Seconds.
     #[serde(rename = "request_lifespan")]
     pub request_lifespan: i32,
+    /// Deprecated.
     #[serde(rename = "runners_margin", default, with = "::serde_with::rust::double_option", skip_serializing_if = "Option::is_none")]
     pub runners_margin: Option<Option<i32>>,
+    /// Deprecated.
     #[serde(rename = "slots_per_runner")]
     pub slots_per_runner: i32,
     #[serde(rename = "url")]
@@ -38,6 +45,7 @@ pub struct RunnerConfigKindOneOf1Serverless {
 impl RunnerConfigKindOneOf1Serverless {
     pub fn new(max_runners: i32, request_lifespan: i32, slots_per_runner: i32, url: String) -> RunnerConfigKindOneOf1Serverless {
         RunnerConfigKindOneOf1Serverless {
+            drain_grace_period: None,
             headers: None,
             max_concurrent_actors: None,
             max_runners,

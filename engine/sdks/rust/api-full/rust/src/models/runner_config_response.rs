@@ -21,6 +21,8 @@ pub struct RunnerConfigResponse {
     pub drain_on_version_upgrade: Option<bool>,
     #[serde(rename = "metadata", default, with = "::serde_with::rust::double_option", skip_serializing_if = "Option::is_none")]
     pub metadata: Option<Option<serde_json::Value>>,
+    #[serde(rename = "protocol_version", default, with = "::serde_with::rust::double_option", skip_serializing_if = "Option::is_none")]
+    pub protocol_version: Option<Option<i32>>,
     #[serde(rename = "runner_pool_error", default, with = "::serde_with::rust::double_option", skip_serializing_if = "Option::is_none")]
     pub runner_pool_error: Option<Option<serde_json::Value>>,
 }
@@ -32,6 +34,7 @@ impl RunnerConfigResponse {
             serverless: Box::new(serverless),
             drain_on_version_upgrade: None,
             metadata: None,
+            protocol_version: None,
             runner_pool_error: None,
         }
     }

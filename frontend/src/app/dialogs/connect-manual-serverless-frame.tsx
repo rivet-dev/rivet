@@ -115,12 +115,9 @@ function FormStepper({
 			}}
 			defaultValues={{
 				runnerName: "default",
-				slotsPerRunner: 1,
-				maxRunners: 100_000,
-				minRunners: 1,
-				runnerMargin: 0,
 				headers: [],
 				requestLifespan: 900,
+				drainGracePeriod: 0,
 				datacenters: Object.fromEntries(
 					datacenters.map((dc) => [dc.name, true]),
 				),
@@ -169,25 +166,43 @@ export const buildServerlessConfig = async (
 		.filter(([, selected]) => selected)
 		.map(([id]) => id);
 
-	const config = {
-		serverless: {
-			url: endpoint,
-			maxRunners: values.maxRunners,
-			slotsPerRunner: values.slotsPerRunner,
-			runnersMargin: values.runnerMargin,
-			requestLifespan: values.requestLifespan,
-			headers: Object.fromEntries(
-				values.headers.map(([key, value]) => [key, value]),
-			),
-		},
-		metadata: {
-			provider: provider || "custom",
-		},
-	};
+	const headers = Object.fromEntries(
+		values.headers.map(([key, value]) => [key, value]),
+	);
 
+	// maxConcurrentActors is not set during onboarding; the backend default applies.
 	const payload = {
 		...existing,
-		...Object.fromEntries(selectedDatacenters.map((dc) => [dc, config])),
+		...Object.fromEntries(
+			selectedDatacenters.map((dc) => {
+				const isNew = (existing[dc] as any)?.protocolVersion != null;
+				const serverless: Rivet.RunnerConfigServerless = isNew
+					? {
+							url: endpoint,
+							requestLifespan: values.requestLifespan,
+							headers,
+							maxRunners: 0,
+							slotsPerRunner: 0,
+							drainGracePeriod: values.drainGracePeriod,
+						}
+					: {
+							url: endpoint,
+							requestLifespan: values.requestLifespan,
+							headers,
+							maxRunners: values.maxRunners ?? 100_000,
+							slotsPerRunner: values.slotsPerRunner ?? 1,
+							runnersMargin: values.runnerMargin ?? 0,
+							minRunners: values.minRunners ?? 0,
+						};
+				const config = {
+					serverless,
+					metadata: {
+						provider: provider || "custom",
+					},
+				};
+				return [dc, config];
+			}),
+		),
 	};
 
 	return payload;
@@ -226,31 +241,22 @@ export function Configuration({
 	runnerName = true,
 	datacenters = true,
 	headers = true,
-	slotsPerRunner = true,
-	minRunners = true,
-	maxRunners = true,
-	runnerMargin = true,
 	requestLifespan = true,
+	drainGracePeriod = true,
 }: {
 	runnerName?: boolean;
 	datacenters?: boolean;
 	headers?: boolean;
-	slotsPerRunner?: boolean;
-	minRunners?: boolean;
-	maxRunners?: boolean;
-	runnerMargin?: boolean;
 	requestLifespan?: boolean;
+	drainGracePeriod?: boolean;
 }) {
 	return (
 		<>
 			{runnerName && <ConnectServerlessForm.RunnerName />}
 			{datacenters && <ConnectServerlessForm.Datacenters />}
 			{headers && <ConnectServerlessForm.Headers />}
-			{slotsPerRunner && <ConnectServerlessForm.SlotsPerRunner />}
-			{minRunners && <ConnectServerlessForm.MinRunners />}
-			{maxRunners && <ConnectServerlessForm.MaxRunners />}
-			{runnerMargin && <ConnectServerlessForm.RunnerMargin />}
 			{requestLifespan && <ConnectServerlessForm.RequestLifespan />}
+			{drainGracePeriod && <ConnectServerlessForm.DrainGracePeriod />}
 		</>
 	);
 }

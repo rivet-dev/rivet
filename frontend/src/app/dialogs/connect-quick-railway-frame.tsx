@@ -1,4 +1,5 @@
 import { faRailway, Icon } from "@rivet-gg/icons";
+import z from "zod";
 import {
 	useMutation,
 	usePrefetchInfiniteQuery,
@@ -108,11 +109,8 @@ function FormStepper({ onClose }: { onClose?: () => void }) {
 			}}
 			defaultValues={{
 				runnerName: "default",
-				slotsPerRunner: 1,
-				minRunners: 1,
-				maxRunners: 100_000,
-				runnerMargin: 0,
 				requestLifespan: 55,
+				drainGracePeriod: 0,
 				headers: [],
 				datacenters: Object.fromEntries(
 					datacenters.map((dc) => [dc.name, true]),

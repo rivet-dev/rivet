@@ -10,6 +10,7 @@ export const RunnerConfigServerless: core.serialization.ObjectSchema<
     serializers.RunnerConfigServerless.Raw,
     Rivet.RunnerConfigServerless
 > = core.serialization.object({
+    drainGracePeriod: core.serialization.property("drain_grace_period", core.serialization.number().optional()),
     headers: core.serialization.record(core.serialization.string(), core.serialization.string()).optional(),
     maxConcurrentActors: core.serialization.property("max_concurrent_actors", core.serialization.number().optional()),
     maxRunners: core.serialization.property("max_runners", core.serialization.number()),
@@ -23,6 +24,7 @@ export const RunnerConfigServerless: core.serialization.ObjectSchema<
 
 export declare namespace RunnerConfigServerless {
     export interface Raw {
+        drain_grace_period?: number | null;
         headers?: Record<string, string> | null;
         max_concurrent_actors?: number | null;
         max_runners: number;

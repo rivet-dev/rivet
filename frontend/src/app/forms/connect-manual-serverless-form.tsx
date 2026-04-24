@@ -35,11 +35,13 @@ export const configurationSchema = z.object({
 			"At least one datacenter must be selected",
 		),
 	headers: z.array(z.tuple([z.string(), z.string()])).default([]),
-	slotsPerRunner: z.coerce.number().min(1, "Must be at least 1"),
-	maxRunners: z.coerce.number().min(1, "Must be at least 1"),
-	minRunners: z.coerce.number().min(0, "Must be 0 or greater"),
-	runnerMargin: z.coerce.number().min(0, "Must be 0 or greater"),
 	requestLifespan: z.coerce.number().min(0, "Must be 0 or greater"),
+	drainGracePeriod: z.coerce.number().min(0).optional().default(0),
+	// Deprecated fields — only used when submitting to an old runner config (no protocolVersion).
+	slotsPerRunner: z.coerce.number().min(1).optional(),
+	maxRunners: z.coerce.number().min(1).optional(),
+	minRunners: z.coerce.number().min(0).optional(),
+	runnerMargin: z.coerce.number().min(0).optional(),
 });
 
 export const deploymentSchema = z.object({
@@ -153,118 +155,6 @@ export const Datacenters = function Datacenter() {
 	);
 };
 
-export const MinRunners = ({ className }: { className?: string }) => {
-	const { control } = useFormContext();
-	return (
-		<FormField
-			control={control}
-			name="minRunners"
-			render={({ field }) => (
-				<FormItem className={className}>
-					<FormLabel className="col-span-1">Min Runners</FormLabel>
-					<FormControl className="row-start-2">
-						<Input
-							type="number"
-							{...field}
-							value={field.value ?? ""}
-							min={0}
-						/>
-					</FormControl>
-					<FormDescription className="col-span-1">
-						The minimum number of runners to keep running.
-					</FormDescription>
-					<FormMessage className="col-span-1" />
-				</FormItem>
-			)}
-		/>
-	);
-};
-
-export const MaxRunners = ({ className }: { className?: string }) => {
-	const { control } = useFormContext();
-	return (
-		<FormField
-			control={control}
-			name="maxRunners"
-			render={({ field }) => (
-				<FormItem className={className}>
-					<FormLabel className="col-span-1">Max Runners</FormLabel>
-					<FormControl className="row-start-2">
-						<Input
-							type="number"
-							{...field}
-							value={field.value || ""}
-							min={0}
-						/>
-					</FormControl>
-					<FormDescription className="col-span-1">
-						The maximum number of runners that can be created to
-						handle load.
-					</FormDescription>
-					<FormMessage className="col-span-1" />
-				</FormItem>
-			)}
-		/>
-	);
-};
-
-export const SlotsPerRunner = ({ className }: { className?: string }) => {
-	const { control } = useFormContext();
-	return (
-		<FormField
-			control={control}
-			name="slotsPerRunner"
-			render={({ field }) => (
-				<FormItem className={className}>
-					<FormLabel className="col-span-1">
-						Slots Per Runner
-					</FormLabel>
-					<FormControl className="row-start-2">
-						<Input
-							type="number"
-							{...field}
-							value={field.value || ""}
-							min={0}
-						/>
-					</FormControl>
-					<FormDescription className="col-span-1">
-						The number of concurrent slots each runner can handle.
-					</FormDescription>
-					<FormMessage className="col-span-1" />
-				</FormItem>
-			)}
-		/>
-	);
-};
-
-export const RunnerMargin = ({ className }: { className?: string }) => {
-	const { control } = useFormContext();
-	return (
-		<FormField
-			control={control}
-			name="runnerMargin"
-			render={({ field }) => (
-				<FormItem className={className}>
-					<FormLabel className="col-span-1">Runner Margin</FormLabel>
-					<FormControl className="row-start-2">
-						<Input
-							type="number"
-							{...field}
-							value={field.value}
-							min={0}
-						/>
-					</FormControl>
-					<FormDescription className="col-span-1">
-						The number of extra runners to keep running to handle
-						sudden spikes in load.
-					</FormDescription>
-					<FormMessage className="col-span-1" />
-				</FormItem>
-			)}
-		/>
-	);
-};
-
 export const RequestLifespan = ({ className }: { className?: string }) => {
 	const { control } = useFormContext();
 	return (
@@ -287,6 +177,124 @@ export const RequestLifespan = ({ className }: { className?: string }) => {
 					<FormDescription className="col-span-1">
 						The maximum duration (in seconds) that a request can run
 						before being terminated.
+					</FormDescription>
+					<FormMessage className="col-span-1" />
+				</FormItem>
+			)}
+		/>
+	);
+};
+
+export const MinRunners = ({ className }: { className?: string }) => {
+	const { control } = useFormContext();
+	return (
+		<FormField
+			control={control}
+			name="minRunners"
+			render={({ field }) => (
+				<FormItem className={className}>
+					<FormLabel className="col-span-1">Min Runners</FormLabel>
+					<FormControl className="row-start-2">
+						<Input type="number" {...field} value={field.value ?? ""} min={0} />
+					</FormControl>
+					<FormDescription className="col-span-1">
+						The minimum number of runners to keep running.
+					</FormDescription>
+					<FormMessage className="col-span-1" />
+				</FormItem>
+			)}
+		/>
+	);
+};
+
+export const MaxRunners = ({ className }: { className?: string }) => {
+	const { control } = useFormContext();
+	return (
+		<FormField
+			control={control}
+			name="maxRunners"
+			render={({ field }) => (
+				<FormItem className={className}>
+					<FormLabel className="col-span-1">Max Runners</FormLabel>
+					<FormControl className="row-start-2">
+						<Input type="number" {...field} value={field.value ?? ""} min={0} />
+					</FormControl>
+					<FormDescription className="col-span-1">
+						The maximum number of runners that can be created to handle load.
+					</FormDescription>
+					<FormMessage className="col-span-1" />
+				</FormItem>
+			)}
+		/>
+	);
+};
+
+export const SlotsPerRunner = ({ className }: { className?: string }) => {
+	const { control } = useFormContext();
+	return (
+		<FormField
+			control={control}
+			name="slotsPerRunner"
+			render={({ field }) => (
+				<FormItem className={className}>
+					<FormLabel className="col-span-1">Slots Per Runner</FormLabel>
+					<FormControl className="row-start-2">
+						<Input type="number" {...field} value={field.value ?? ""} min={0} />
+					</FormControl>
+					<FormDescription className="col-span-1">
+						The number of concurrent slots each runner can handle.
+					</FormDescription>
+					<FormMessage className="col-span-1" />
+				</FormItem>
+			)}
+		/>
+	);
+};
+
+export const RunnerMargin = ({ className }: { className?: string }) => {
+	const { control } = useFormContext();
+	return (
+		<FormField
+			control={control}
+			name="runnerMargin"
+			render={({ field }) => (
+				<FormItem className={className}>
+					<FormLabel className="col-span-1">Runner Margin</FormLabel>
+					<FormControl className="row-start-2">
+						<Input type="number" {...field} value={field.value ?? ""} min={0} />
+					</FormControl>
+					<FormDescription className="col-span-1">
+						The number of extra runners to keep running to handle sudden spikes in load.
+					</FormDescription>
+					<FormMessage className="col-span-1" />
+				</FormItem>
+			)}
+		/>
+	);
+};
+
+export const DrainGracePeriod = ({ className }: { className?: string }) => {
+	const { control } = useFormContext();
+	return (
+		<FormField
+			control={control}
+			name="drainGracePeriod"
+			render={({ field }) => (
+				<FormItem className={className}>
+					<FormLabel className="col-span-1">
+						Drain Grace Period (s)
+					</FormLabel>
+					<FormControl className="row-start-2">
+						<Input
+							type="number"
+							{...field}
+							value={field.value ?? ""}
+							min={0}
+						/>
+					</FormControl>
+					<FormDescription className="col-span-1">
+						Time to wait for actors to finish before forcefully
+						stopping.
 					</FormDescription>
 					<FormMessage className="col-span-1" />
 				</FormItem>

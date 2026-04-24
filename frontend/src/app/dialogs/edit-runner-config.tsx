@@ -25,12 +25,22 @@ import { queryClient } from "@/queries/global";
 const defaultServerlessConfig: Rivet.RunnerConfigServerless = {
 	url: "",
 	maxRunners: 100_000,
-	minRunners: 0,
 	requestLifespan: 300,
-	runnersMargin: 2,
 	slotsPerRunner: 1,
 	headers: {},
 };
+
+function hasProtocolVersion(
+	datacenters: Record<string, Rivet.RunnerConfigResponse>,
+): boolean {
+	return Object.values(datacenters).some(
+		(dc) => dc.protocolVersion != null,
+	);
+}
+
+function dcHasProtocolVersion(dc: Rivet.RunnerConfigResponse): boolean {
+	return dc.protocolVersion != null;
+}
 
 interface EditRunnerConfigFrameContentProps extends DialogContentProps {
 	name: string;
@@ -145,22 +155,38 @@ function SharedSettingsForm({
 		...provider.runnerConfigQueryOptions({ name }),
 	});
 
-	const currentConfig = Object.values(data.datacenters).find(
-		(dc): dc is { serverless: Rivet.RunnerConfigServerless } =>
-			!!dc.serverless,
-	) || {
-		serverless: defaultServerlessConfig,
-	};
+	const isNewConfig = hasProtocolVersion(data.datacenters);
+
+	const currentDcConfig = Object.values(data.datacenters).find((dc) => !!dc.serverless);
+	const currentServerless = currentDcConfig?.serverless ?? defaultServerlessConfig;
 
 	return (
 		<EditRunnerConfigForm.Form
-			onSubmit={async ({ regions, ...values }) => {
+			onSubmit={async ({ regions, autoUpgrade, ...values }) => {
+				const serverless: Rivet.RunnerConfigServerless = isNewConfig
+					? {
+							url: values.url,
+							requestLifespan: values.requestLifespan,
+							headers: Object.fromEntries(values.headers || []),
+							maxRunners: 0,
+							slotsPerRunner: 0,
+							maxConcurrentActors: values.maxConcurrentActors,
+							drainGracePeriod: values.drainGracePeriod,
+						}
+					: {
+							url: values.url,
+							requestLifespan: values.requestLifespan,
+							headers: Object.fromEntries(values.headers || []),
+							maxRunners: values.maxRunners ?? 100_000,
+							minRunners: values.minRunners ?? 0,
+							runnersMargin: values.runnersMargin ?? 0,
+							slotsPerRunner: values.slotsPerRunner ?? 1,
+						};
+
 				const config = {
-					...(currentConfig || {}),
-					serverless: {
-						...values,
-						headers: Object.fromEntries(values.headers || []),
-					},
+					...(currentDcConfig || {}),
+					serverless,
+					...(isNewConfig ? { drainOnVersionUpgrade: autoUpgrade } : {}),
 				};
 
 				const providerConfig: Record<string, typeof config> = {};
@@ -188,14 +214,10 @@ function SharedSettingsForm({
 				onClose?.();
 			}}
 			defaultValues={{
-				url: currentConfig.serverless.url,
-				maxRunners: currentConfig.serverless.maxRunners,
-				minRunners: currentConfig.serverless.minRunners,
-				requestLifespan: currentConfig.serverless.requestLifespan,
-				runnersMargin: currentConfig.serverless.runnersMargin,
-				slotsPerRunner: currentConfig.serverless.slotsPerRunner,
+				url: currentServerless.url,
+				requestLifespan: currentServerless.requestLifespan,
 				headers: Object.entries(
-					currentConfig.serverless.headers || {},
+					currentServerless.headers || {},
 				).map(([key, value]) => [key, value]),
 				regions: Object.fromEntries(
 					Object.keys(data.datacenters).map((dcId) => [
@@ -203,19 +225,45 @@ function SharedSettingsForm({
 						!!data.datacenters[dcId],
 					]),
 				),
+				...(isNewConfig
+					? {
+							// eslint-disable-next-line @typescript-eslint/no-explicit-any
+							maxConcurrentActors: (currentServerless as any).maxConcurrentActors,
+							// eslint-disable-next-line @typescript-eslint/no-explicit-any
+							drainGracePeriod: (currentServerless as any).drainGracePeriod,
+							autoUpgrade: currentDcConfig?.drainOnVersionUpgrade ?? false,
+						}
+					: {
+							maxRunners: currentServerless.maxRunners,
+							minRunners: currentServerless.minRunners,
+							runnersMargin: currentServerless.runnersMargin,
+							slotsPerRunner: currentServerless.slotsPerRunner,
+						}),
 			}}
 		>
 			<EditRunnerConfigForm.Url />
-			<div className="grid grid-cols-2 gap-2">
-				<EditRunnerConfigForm.MinRunners />
-				<EditRunnerConfigForm.MaxRunners />
-			</div>
-			<div className="grid grid-cols-2 gap-2">
-				<EditRunnerConfigForm.RequestLifespan />
-				<EditRunnerConfigForm.SlotsPerRunner />
-			</div>
-
-			<EditRunnerConfigForm.RunnersMargin />
+			{isNewConfig ? (
+				<>
+					<div className="grid grid-cols-2 gap-2">
+						<EditRunnerConfigForm.RequestLifespan />
+						<EditRunnerConfigForm.MaxConcurrentActors />
+					</div>
+					<EditRunnerConfigForm.DrainGracePeriod />
+					<EditRunnerConfigForm.AutoUpgrade />
+				</>
+			) : (
+				<>
+					<div className="grid grid-cols-2 gap-2">
+						<EditRunnerConfigForm.MinRunners />
+						<EditRunnerConfigForm.MaxRunners />
+					</div>
+					<div className="grid grid-cols-2 gap-2">
+						<EditRunnerConfigForm.RequestLifespan />
+						<EditRunnerConfigForm.SlotsPerRunner />
+					</div>
+					<EditRunnerConfigForm.RunnersMargin />
+				</>
+			)}
 			<EditRunnerConfigForm.Headers />
 			<EditRunnerConfigForm.Regions />
 			<div className="flex justify-end mt-4">
@@ -266,6 +314,7 @@ function DatacenterSettingsForm({
 								data.datacenters[dc.name]?.serverless
 									?.headers || {},
 							).map(([key, value]) => [key, value]),
+							autoUpgrade: data.datacenters[dc.name]?.drainOnVersionUpgrade ?? false,
 						},
 					]),
 				),
@@ -280,13 +329,38 @@ function DatacenterSettingsForm({
 					values.datacenters || {},
 				)) {
 					if (dcConfig?.enable) {
-						const { enable, headers, ...rest } = dcConfig;
+						const {
+							enable,
+							headers,
+							autoUpgrade,
+							...rest
+						} = dcConfig;
+						const isNew = dcHasProtocolVersion(
+							data.datacenters[dcId] || {},
+						);
+						const serverless: Rivet.RunnerConfigServerless = isNew
+							? {
+									url: rest.url,
+									requestLifespan: rest.requestLifespan,
+									headers: Object.fromEntries(headers || []),
+									maxRunners: 0,
+									slotsPerRunner: 0,
+									maxConcurrentActors: rest.maxConcurrentActors,
+									drainGracePeriod: rest.drainGracePeriod,
+								}
+							: {
+									url: rest.url,
+									requestLifespan: rest.requestLifespan,
+									headers: Object.fromEntries(headers || []),
+									maxRunners: rest.maxRunners ?? 100_000,
+									minRunners: rest.minRunners ?? 0,
+									runnersMargin: rest.runnersMargin ?? 0,
+									slotsPerRunner: rest.slotsPerRunner ?? 1,
+								};
 						providerConfig[dcId] = {
 							...(data.datacenters[dcId] || {}),
-							serverless: {
-								...rest,
-								headers: Object.fromEntries(headers || []),
-							},
+							serverless,
+							...(isNew ? { drainOnVersionUpgrade: autoUpgrade } : {}),
 						};
 					}
 				}
@@ -311,6 +385,7 @@ function DatacenterSettingsForm({
 						key={dc.name}
 						regionId={dc.name}
 						name={name}
+						data={data!}
 					/>
 				))}
 			</Accordion>
@@ -329,10 +404,14 @@ function DatacenterSettingsForm({
 function DatacenterAccordion({
 	regionId,
 	name,
+	data,
 }: {
 	regionId: string;
 	name: string;
+	data: Rivet.RunnerConfigsListResponseRunnerConfigsValue;
 }) {
+	const isNew = dcHasProtocolVersion(data.datacenters[regionId] || {});
+
 	return (
 		<AccordionItem value={regionId} className="-mx-2">
 			<AccordionTrigger className="mx-2">
@@ -352,26 +431,46 @@ function DatacenterAccordion({
 				<EditSingleRunnerConfigForm.Url
 					name={`datacenters.${regionId}.url`}
 				/>
-				<div className="grid grid-cols-2 gap-2">
-					<EditSingleRunnerConfigForm.MinRunners
-						name={`datacenters.${regionId}.minRunners`}
-					/>
-					<EditSingleRunnerConfigForm.MaxRunners
-						name={`datacenters.${regionId}.maxRunners`}
-					/>
-				</div>
-				<div className="grid grid-cols-2 gap-2">
-					<EditSingleRunnerConfigForm.RequestLifespan
-						name={`datacenters.${regionId}.requestLifespan`}
-					/>
-					<EditSingleRunnerConfigForm.SlotsPerRunner
-						name={`datacenters.${regionId}.slotsPerRunner`}
-					/>
-				</div>
-
-				<EditSingleRunnerConfigForm.RunnersMargin
-					name={`datacenters.${regionId}.runnersMargin`}
-				/>
+				{isNew ? (
+					<>
+						<div className="grid grid-cols-2 gap-2">
+							<EditSingleRunnerConfigForm.RequestLifespan
+								name={`datacenters.${regionId}.requestLifespan`}
+							/>
+							<EditSingleRunnerConfigForm.MaxConcurrentActors
+								name={`datacenters.${regionId}.maxConcurrentActors`}
+							/>
+						</div>
+						<EditSingleRunnerConfigForm.DrainGracePeriod
+							name={`datacenters.${regionId}.drainGracePeriod`}
+						/>
+						<EditSingleRunnerConfigForm.AutoUpgrade
+							name={`datacenters.${regionId}.autoUpgrade`}
+						/>
+					</>
+				) : (
+					<>
+						<div className="grid grid-cols-2 gap-2">
+							<EditSingleRunnerConfigForm.MinRunners
+								name={`datacenters.${regionId}.minRunners`}
+							/>
+							<EditSingleRunnerConfigForm.MaxRunners
+								name={`datacenters.${regionId}.maxRunners`}
+							/>
+						</div>
+						<div className="grid grid-cols-2 gap-2">
+							<EditSingleRunnerConfigForm.RequestLifespan
+								name={`datacenters.${regionId}.requestLifespan`}
+							/>
+							<EditSingleRunnerConfigForm.SlotsPerRunner
+								name={`datacenters.${regionId}.slotsPerRunner`}
+							/>
+						</div>
+						<EditSingleRunnerConfigForm.RunnersMargin
+							name={`datacenters.${regionId}.runnersMargin`}
+						/>
+					</>
+				)}
 				<EditSingleRunnerConfigForm.Headers
 					name={`datacenters.${regionId}.headers`}
 				/>
