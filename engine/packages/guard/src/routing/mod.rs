@@ -95,6 +95,7 @@ pub fn create_routing_function(ctx: &StandaloneCtx, shared_state: SharedState) -
 								.split(',')
 								.map(|p| p.trim())
 								.find_map(|p| p.strip_prefix(WS_PROTOCOL_TARGET))
+								.map(ToOwned::to_owned)
 						})
 				} else {
 					// For HTTP, use the x-rivet-target header
@@ -102,12 +103,13 @@ pub fn create_routing_function(ctx: &StandaloneCtx, shared_state: SharedState) -
 						.headers()
 						.get(X_RIVET_TARGET)
 						.and_then(|x| x.to_str().ok())
+						.map(ToOwned::to_owned)
 				};
 
 				// Read target
 				if let Some(target) = target {
 					if let Some(routing_output) =
-						pegboard_gateway::route_request(&ctx, &shared_state, req_ctx, target)
+						pegboard_gateway::route_request(&ctx, &shared_state, req_ctx, &target)
 							.await?
 					{
 						metrics::ROUTE_TOTAL.with_label_values(&["gateway"]).inc();
@@ -116,7 +118,7 @@ pub fn create_routing_function(ctx: &StandaloneCtx, shared_state: SharedState) -
 					}
 
 					if let Some(routing_output) =
-						runner::route_request(&ctx, req_ctx, target).await?
+						runner::route_request(&ctx, req_ctx, &target).await?
 					{
 						metrics::ROUTE_TOTAL.with_label_values(&["runner"]).inc();
 
@@ -124,14 +126,14 @@ pub fn create_routing_function(ctx: &StandaloneCtx, shared_state: SharedState) -
 					}
 
 					if let Some(routing_output) =
-						envoy::route_request(&ctx, req_ctx, target).await?
+						envoy::route_request(&ctx, req_ctx, &target).await?
 					{
 						metrics::ROUTE_TOTAL.with_label_values(&["envoy"]).inc();
 
 						return Ok(routing_output);
 					}
 
-					if let Some(routing_output) = api_public::route_request(&ctx, target).await? {
+					if let Some(routing_output) = api_public::route_request(&ctx, &target).await? {
 						metrics::ROUTE_TOTAL.with_label_values(&["api"]).inc();
 
 						return Ok(routing_output);

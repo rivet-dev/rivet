@@ -11,7 +11,7 @@ use rivet_guard_core::{
 	ResponseBody, WebSocketHandle,
 	custom_serve::{CustomServeTrait, HibernationResult},
 	errors::{ServiceUnavailable, WebSocketServiceUnavailable},
-	request_context::{CorsConfig, RequestContext},
+	request_context::RequestContext,
 	utils::is_ws_hibernate,
 	websocket_handle::WebSocketReceiver,
 };
@@ -95,15 +95,6 @@ impl PegboardGateway2 {
 		let actor_id = self.actor_id.to_string();
 		let request_id = req_ctx.in_flight_request_id()?;
 
-		// Extract origin for CORS (before consuming request)
-		// When credentials: true, we must echo back the actual origin, not "*"
-		let origin = req
-			.headers()
-			.get("origin")
-			.and_then(|v| v.to_str().ok())
-			.unwrap_or("*")
-			.to_string();
-
 		// Extract request parts
 		let headers = req
 			.headers()
@@ -115,47 +106,6 @@ impl PegboardGateway2 {
 					.map(|value_str| (name.to_string(), value_str.to_string()))
 			})
 			.collect::<HashableMap<_, _>>();
-
-		// Handle CORS preflight OPTIONS requests at gateway level
-		//
-		// We need to do this in the gateway because there is no way of sending an OPTIONS request to the
-		// actor since we don't have the `x-rivet-token` header. This implementation allows
-		// requests from anywhere and lets the actor handle CORS manually in `onBeforeConnect`.
-		// This had the added benefit of also applying to WebSockets.
-		if req.method() == hyper::Method::OPTIONS {
-			tracing::debug!("handling OPTIONS preflight request at gateway");
-
-			// Extract requested headers
-			let requested_headers = req
-				.headers()
-				.get("access-control-request-headers")
-				.and_then(|v| v.to_str().ok())
-				.unwrap_or("*");
-
-			req_ctx.set_cors(CorsConfig {
-				allow_origin: origin.clone(),
-				allow_credentials: true,
-				expose_headers: "*".to_string(),
-				allow_methods: Some("GET, POST, PUT, DELETE, OPTIONS, PATCH".to_string()),
-				allow_headers: Some(requested_headers.to_string()),
-				max_age: Some(86400),
-			});
-
-			return Ok(Response::builder()
-				.status(StatusCode::NO_CONTENT)
-				.body(ResponseBody::Full(Full::new(Bytes::new())))?);
-		}
-
-		// Set CORS headers through guard
-		req_ctx.set_cors(CorsConfig {
-			allow_origin: origin.clone(),
-			allow_credentials: true,
-			expose_headers: "*".to_string(),
-			// Not an options req, not required
-			allow_methods: None,
-			allow_headers: None,
-			max_age: None,
-		});
 
 		// NOTE: Size constraints have already been applied by guard
 		let body_bytes = req
