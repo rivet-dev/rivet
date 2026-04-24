@@ -446,7 +446,7 @@ impl ActorContext {
 		self.0.sleep.work.websocket_callback_guard()
 	}
 
-	fn websocket_callback_count(&self) -> usize {
+	pub(crate) fn websocket_callback_count(&self) -> usize {
 		self.0.sleep.work.websocket_callback.load()
 	}
 
@@ -491,8 +491,6 @@ impl ActorContext {
 		self.reset_sleep_timer();
 	}
 
-	#[cfg(test)]
-	#[allow(dead_code)]
 	pub(crate) fn core_dispatched_hook_count(&self) -> usize {
 		self.0.sleep.work.core_dispatched_hooks.load()
 	}
@@ -515,7 +513,7 @@ impl ActorContext {
 		self.0.sleep.config.lock().clone()
 	}
 
-	fn active_http_request_count(&self) -> usize {
+	pub(crate) fn active_http_request_count(&self) -> usize {
 		self.http_request_counter()
 			.map(|counter| counter.load())
 			.unwrap_or(0)

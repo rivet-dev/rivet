@@ -1492,10 +1492,19 @@ impl ActorTask {
 		self.ctx.cancel_shutdown_deadline();
 		self.ctx.record_shutdown_timeout(grace.reason);
 		tracing::warn!(
+			actor_id = %self.ctx.actor_id(),
 			reason = shutdown_reason_label(grace.reason),
 			deadline_missed_by_ms = Instant::now()
 				.saturating_duration_since(grace.deadline)
 				.as_millis() as u64,
+			core_dispatched_hook_count = self.ctx.core_dispatched_hook_count(),
+			shutdown_task_count = self.ctx.shutdown_task_count(),
+			sleep_keep_awake_count = self.ctx.sleep_keep_awake_count(),
+			sleep_internal_keep_awake_count = self.ctx.sleep_internal_keep_awake_count(),
+			active_http_request_count = self.ctx.active_http_request_count(),
+			websocket_callback_count = self.ctx.websocket_callback_count(),
+			pending_disconnect_count = self.ctx.pending_disconnect_count(),
+			connection_count = self.ctx.conns().len(),
 			"actor shutdown reached the grace deadline"
 		);
 		Some(LiveExit::Shutdown {
