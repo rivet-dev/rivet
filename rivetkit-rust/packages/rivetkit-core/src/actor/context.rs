@@ -388,9 +388,19 @@ impl ActorContext {
 	}
 
 	pub fn sleep(&self) -> Result<()> {
+		// `started` is cleared when the lifecycle state machine transitions
+		// into SleepGrace / DestroyGrace, so `started=false` covers both
+		// "never started" and "already shutting down". Distinguish with the
+		// request flags for an accurate diagnostic.
 		if !self.0.sleep.started.load(Ordering::SeqCst) {
-			return Err(ActorLifecycleError::Starting.build())
-				.context("cannot request sleep before actor startup completes");
+			let already_stopping = self.0.sleep_requested.load(Ordering::SeqCst)
+				|| self.0.destroy_requested.load(Ordering::SeqCst);
+			return if already_stopping {
+				Err(ActorLifecycleError::Stopping.build()).context("actor is already shutting down")
+			} else {
+				Err(ActorLifecycleError::Starting.build())
+					.context("cannot request sleep before actor startup completes")
+			};
 		}
 		if self.0.sleep_requested.swap(true, Ordering::SeqCst) {
 			return Err(ActorLifecycleError::Stopping.build())
@@ -415,7 +425,13 @@ impl ActorContext {
 	}
 
 	pub fn destroy(&self) -> Result<()> {
-		if !self.0.sleep.started.load(Ordering::SeqCst) {
+		// See `sleep` for why the request flags disambiguate `started=false`.
+		// destroy() is allowed after sleep() has been requested because
+		// destroy is a stronger signal that escalates an in-flight sleep.
+		if !self.0.sleep.started.load(Ordering::SeqCst)
+			&& !self.0.sleep_requested.load(Ordering::SeqCst)
+			&& !self.0.destroy_requested.load(Ordering::SeqCst)
+		{
 			return Err(ActorLifecycleError::Starting.build())
 				.context("cannot request destroy before actor startup completes");
 		}
