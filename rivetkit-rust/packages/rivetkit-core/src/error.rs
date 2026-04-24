@@ -4,6 +4,9 @@ use serde::{Deserialize, Serialize};
 #[derive(RivetError, Debug, Clone, Deserialize, Serialize)]
 #[error("actor")]
 pub enum ActorLifecycle {
+	#[error("starting", "Actor is starting.")]
+	Starting,
+
 	#[error("not_ready", "Actor is not ready.")]
 	NotReady,
 

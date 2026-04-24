@@ -231,7 +231,8 @@ export class ActorConnRaw {
 
 	/**
 	 * If the query is dynamic (getForKey or getOrCreateForKey) and the error
-	 * indicates the previously resolved actor is gone (not_found or destroyed),
+	 * indicates the previously resolved actor is stale (not_found, starting,
+	 * stopping, or destroyed),
 	 * clear the cached actor ID and connection ID so the next operation
 	 * re-resolves to a fresh actor. Returns true if the identity was
 	 * invalidated.

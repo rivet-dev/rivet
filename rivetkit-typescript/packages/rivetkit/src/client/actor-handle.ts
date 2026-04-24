@@ -175,7 +175,9 @@ export class ActorHandleRaw {
 				const invalidated = this.#invalidateResolvedActorId(group, code);
 				if (invalidated && attempt < maxAttempts - 1) {
 					useQueryTarget =
-						code === "stopping" || code.startsWith("destroyed_");
+						(code === "starting" ||
+							code === "stopping" ||
+							code.startsWith("destroyed_"));
 					if (useQueryTarget) {
 						await this.#waitForRetryWindow();
 					}
@@ -344,7 +346,10 @@ export class ActorHandleRaw {
 
 				const invalidated = this.#invalidateResolvedActorId(group, code);
 				if (invalidated && attempt < maxAttempts - 1) {
-					if (group === "actor" && code === "stopping") {
+					if (
+						group === "actor" &&
+						(code === "starting" || code === "stopping")
+					) {
 						useQueryTarget = true;
 						await new Promise((resolve) => setTimeout(resolve, 100));
 					}
@@ -398,6 +403,7 @@ export class ActorHandleRaw {
 
 		return (
 			code === "not_found" ||
+			code === "starting" ||
 			code === "stopping" ||
 			code === "destroying" ||
 			code.startsWith("destroyed_")
@@ -592,7 +598,9 @@ export class ActorHandleRaw {
 				const invalidated = this.#invalidateResolvedActorId(group, code);
 				if (invalidated && attempt < maxAttempts - 1) {
 					useQueryTarget =
-						code === "stopping" || code.startsWith("destroyed_");
+						(code === "starting" ||
+							code === "stopping" ||
+							code.startsWith("destroyed_"));
 					if (useQueryTarget) {
 						await this.#waitForRetryWindow();
 					}
@@ -662,7 +670,9 @@ export class ActorHandleRaw {
 		const invalidated = this.#invalidateResolvedActorId(group, code);
 		if (invalidated && attempt < maxAttempts - 1) {
 			const useQueryTarget =
-				code === "stopping" || code.startsWith("destroyed_");
+				code === "starting" ||
+				code === "stopping" ||
+				code.startsWith("destroyed_");
 			return {
 				useQueryTarget,
 				waitForRetryWindow: useQueryTarget,
