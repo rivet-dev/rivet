@@ -78,7 +78,6 @@ export const useCloudDataProvider = ({
 export const useCloudProjectDataProvider = () => {
 	return useRouteContext({
 		from: "/_context/orgs/$organization/projects/$project",
-		
 	}).dataProvider;
 };
 

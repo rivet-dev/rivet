@@ -14,6 +14,10 @@ import { FullscreenLoading, ls } from "@/components";
 import { deriveProviderFromMetadata } from "@/lib/data";
 import { isRivetApiError } from "@/lib/errors";
 import { posthog } from "@/lib/posthog";
+import {
+	RECENT_NAMESPACES_KEY,
+	recordRecentVisit,
+} from "@/lib/recently-visited";
 
 export const Route = createFileRoute(
 	"/_context/orgs/$organization/projects/$project/ns/$namespace",
@@ -23,6 +27,8 @@ export const Route = createFileRoute(
 		if (context.__type !== "cloud") {
 			throw new Error("Invalid context type for this route");
 		}
+
+		recordRecentVisit(RECENT_NAMESPACES_KEY, params.namespace);
 
 		let ns: Rivet.NamespacesGetResponse.Namespace;
 		try {

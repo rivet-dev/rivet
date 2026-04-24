@@ -3,13 +3,18 @@ import { match } from "ts-pattern";
 import { RouteError } from "@/app/route-error";
 import { useDialog } from "@/app/use-dialog";
 import { FullscreenLoading } from "@/components";
+import {
+	RECENT_PROJECTS_KEY,
+	recordRecentVisit,
+} from "@/lib/recently-visited";
 
 export const Route = createFileRoute(
 	"/_context/orgs/$organization/projects/$project",
 )({
 	component: RouteComponent,
-	context: ({ context, params }) => {
-		return match(context)
+	beforeLoad: ({ params, context }) => {
+		recordRecentVisit(RECENT_PROJECTS_KEY, params.project);
+		return  match(context)
 			.with({ __type: "cloud" }, (context) => ({
 				dataProvider: context.getOrCreateProjectContext(
 					context.dataProvider,

@@ -13,6 +13,12 @@ import {
 import { useMatchRoute, useNavigate, useParams } from "@tanstack/react-router";
 import { useState } from "react";
 import {
+	RECENT_NAMESPACES_KEY,
+	RECENT_PROJECTS_KEY,
+	getRecentTimestamp,
+	recordRecentVisit,
+} from "@/lib/recently-visited";
+import {
 	Button,
 	Command,
 	CommandEmpty,
@@ -354,9 +360,9 @@ function ProjectList({
 
 						{data
 							?.sort((a, b) => {
-								if (a.name === project) return -1;
-								if (b.name === project) return 1;
-								return 0;
+								const aTime = getRecentTimestamp(RECENT_PROJECTS_KEY, a.name);
+								const bTime = getRecentTimestamp(RECENT_PROJECTS_KEY, b.name);
+								return bTime - aTime;
 							})
 							.map((project, index) => {
 								const Component =
@@ -548,9 +554,9 @@ function NamespaceList({
 
 						{data
 							?.sort((a, b) => {
-								if (a.name === namespace) return -1;
-								if (b.name === namespace) return 1;
-								return 0;
+								const aTime = getRecentTimestamp(RECENT_NAMESPACES_KEY, a.name);
+								const bTime = getRecentTimestamp(RECENT_NAMESPACES_KEY, b.name);
+								return bTime - aTime;
 							})
 							.map((namespace) => (
 								<SafeHover key={namespace.id} offset={40}>
@@ -562,6 +568,7 @@ function NamespaceList({
 										]}
 										className="static w-full"
 										onSelect={() => {
+											recordRecentVisit(RECENT_NAMESPACES_KEY, namespace.name);
 											onClose?.();
 											authClient.organization.setActive({
 												organizationSlug: organization,
