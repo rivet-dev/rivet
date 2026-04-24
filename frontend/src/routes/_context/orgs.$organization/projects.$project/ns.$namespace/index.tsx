@@ -5,7 +5,6 @@ import {
 	redirect,
 } from "@tanstack/react-router";
 import { Actors } from "@/app/actors";
-import { FullscreenLoading } from "@/components";
 
 export const Route = createFileRoute(
 	"/_context/orgs/$organization/projects/$project/ns/$namespace/",
@@ -77,10 +76,16 @@ export const Route = createFileRoute(
 			replace: true,
 		});
 	},
-	pendingComponent: FullscreenLoading,
+	pendingComponent: PendingComponent,
 });
 
 export function RouteComponent() {
+	const { actorId, actorKey } = Route.useSearch();
+
+	return <Actors actorId={actorKey ?? actorId} />;
+}
+
+function PendingComponent() {
 	const { actorId, actorKey } = Route.useSearch();
 
 	return <Actors actorId={actorKey ?? actorId} />;
