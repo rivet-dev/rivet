@@ -5,6 +5,7 @@ import {
 	type RegistryConfigInput,
 	RegistryConfigSchema,
 } from "./config";
+import { logger } from "./log";
 
 export type FetchHandler = (
 	request: Request,
@@ -44,8 +45,9 @@ export class Registry<A extends RegistryActors> {
 					parsedConfig.serverless.spawnEngine ||
 					parsedConfig.serveManager
 				) {
-					// biome-ignore lint/nursery/noFloatingPromises: fire-and-forget auto-prepare
-					this.#ensureRuntime();
+					this.#ensureRuntime().catch((err) => {
+						logger().error({ msg: "failed to pre-warm runtime", err });
+					});
 				}
 			}, 0);
 		}
@@ -138,8 +140,13 @@ export class Registry<A extends RegistryActors> {
 			}
 		}
 
-		// biome-ignore lint/nursery/noFloatingPromises: fire-and-forget
-		this.#ensureRuntime().then((runtime) => runtime.startEnvoy());
+		this.#ensureRuntime()
+			.then((runtime) => runtime.startEnvoy())
+			.catch((err) => {
+				logger().error({ msg: "failed to start runtime", err });
+				// Use exitCode instead of exit() so the logger has time to flush.
+				process.exitCode = 1;
+			});
 	}
 }
 
