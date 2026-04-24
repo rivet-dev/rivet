@@ -166,4 +166,11 @@ pub(crate) enum EngineProcessError {
 		"Engine health check failed after {attempts} attempts: {reason}"
 	)]
 	HealthCheckFailed { attempts: u32, reason: String },
+
+	#[error(
+		"port_occupied",
+		"Engine port is occupied by a different runtime.",
+		"Cannot start engine: endpoint '{endpoint}' is already serving runtime '{runtime}'. Stop that process and retry."
+	)]
+	PortOccupied { endpoint: String, runtime: String },
 }
