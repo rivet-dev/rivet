@@ -199,9 +199,6 @@ pub async fn allocate(ctx: &ActivityCtx, input: &AllocateInput) -> Result<Alloca
 			let ping_threshold_ts = util::timestamp::now() - envoy_eligible_threshold;
 			let tx = tx.with_subspace(keys::subspace());
 
-			// Set not sleeping
-			tx.delete(&keys::actor::SleepTsKey::new(actor_id));
-
 			let actor_slots_key = keys::ns::ActorSlotsKey::new(namespace_id, pool_name.clone());
 
 			let acquired_slot = if let Some(max_concurrent_actors) = max_concurrent_actors {
@@ -291,6 +288,11 @@ pub async fn allocate(ctx: &ActivityCtx, input: &AllocateInput) -> Result<Alloca
 				(None, Some(super::ActorError::ConcurrentActorLimitReached))
 			};
 
+			if allocation.is_some() {
+				// Set not sleeping
+				tx.delete(&keys::actor::SleepTsKey::new(actor_id));
+			}
+
 			Ok((acquired_slot, allocation, error))
 		})
 		.custom_instrument(tracing::info_span!("actor_check_limit_and_lb_tx"))
@@ -299,6 +301,10 @@ pub async fn allocate(ctx: &ActivityCtx, input: &AllocateInput) -> Result<Alloca
 	state.acquired_slot = acquired_slot;
 	state.error = error;
 	state.envoy_last_command_idx = 0;
+
+	if allocation.is_some() {
+		state.sleep_ts = None;
+	}
 
 	Ok(AllocateOutput {
 		allocation,
