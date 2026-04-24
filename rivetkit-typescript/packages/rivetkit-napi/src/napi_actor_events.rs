@@ -584,27 +584,40 @@ pub(crate) async fn dispatch_event(
 				rivetkit_core::actor::StopReason::Destroy => bindings.on_destroy.clone(),
 			};
 			let ctx = ctx.clone();
+			let shutdown_deadline = ctx.inner().shutdown_deadline_token();
 			tasks.spawn(async move {
-				let result: Result<()> = async {
-					if let Some(callback) = callback {
-						match reason {
-							rivetkit_core::actor::StopReason::Sleep => {
-								call_on_sleep(&callback, &ctx).await
-							}
-							rivetkit_core::actor::StopReason::Destroy => {
-								call_on_destroy(&callback, &ctx).await
-							}
-						}?;
+				let work = async {
+					let result: Result<()> = async {
+						if let Some(callback) = callback {
+							match reason {
+								rivetkit_core::actor::StopReason::Sleep => {
+									call_on_sleep(&callback, &ctx).await
+								}
+								rivetkit_core::actor::StopReason::Destroy => {
+									call_on_destroy(&callback, &ctx).await
+								}
+							}?;
+						}
+						Ok(())
 					}
-					Ok(())
-				}
-				.await;
-				if let Err(error) = result {
-					tracing::error!(
-						actor_id = %ctx.inner().actor_id(),
-						?error,
-						"graceful cleanup callback failed",
-					);
+					.await;
+					if let Err(error) = result {
+						tracing::error!(
+							actor_id = %ctx.inner().actor_id(),
+							?error,
+							"graceful cleanup callback failed",
+						);
+					}
+				};
+				tokio::select! {
+					_ = work => {}
+					_ = shutdown_deadline.cancelled() => {
+						tracing::warn!(
+							actor_id = %ctx.inner().actor_id(),
+							reason = ?reason,
+							"graceful cleanup aborted by shutdown grace deadline",
+						);
+					}
 				}
 				reply.send(Ok(()));
 			});

@@ -133,6 +133,7 @@ pub(crate) struct ActorContextInner {
 	destroy_completed: AtomicBool,
 	destroy_completion_notify: Notify,
 	abort_signal: CancellationToken,
+	shutdown_deadline: CancellationToken,
 	// Forced-sync: runtime wiring slots are configured through synchronous
 	// lifecycle setup and cloned before sending events.
 	inspector: RwLock<Option<Inspector>>,
@@ -228,6 +229,7 @@ impl ActorContext {
 		let lifecycle_event_inbox_capacity = config.lifecycle_event_inbox_capacity;
 		let state_save_interval = config.state_save_interval;
 		let abort_signal = CancellationToken::new();
+		let shutdown_deadline = CancellationToken::new();
 		let sleep = SleepState::new(config.clone());
 		let ctx = Self(Arc::new(ActorContextInner {
 			kv,
@@ -295,6 +297,7 @@ impl ActorContext {
 			destroy_completed: AtomicBool::new(false),
 			destroy_completion_notify: Notify::new(),
 			abort_signal,
+			shutdown_deadline,
 			inspector: RwLock::new(None),
 			inspector_attach_count: RwLock::new(None),
 			inspector_overlay_tx: RwLock::new(None),
@@ -463,6 +466,20 @@ impl ActorContext {
 	#[doc(hidden)]
 	pub fn actor_aborted(&self) -> bool {
 		self.0.abort_signal.is_cancelled()
+	}
+
+	/// Fires when the shutdown grace deadline has elapsed and core is forcing
+	/// cleanup. Foreign-runtime adapters should abort any in-flight shutdown
+	/// work (for example `onSleep` / `onDestroy`) when this token is cancelled
+	/// so resources like SQLite are not torn down mid-operation.
+	#[doc(hidden)]
+	pub fn shutdown_deadline_token(&self) -> CancellationToken {
+		self.0.shutdown_deadline.clone()
+	}
+
+	#[doc(hidden)]
+	pub fn cancel_shutdown_deadline(&self) {
+		self.0.shutdown_deadline.cancel();
 	}
 
 	/// Deprecated no-op. Use `keep_awake` to hold the actor awake for the
