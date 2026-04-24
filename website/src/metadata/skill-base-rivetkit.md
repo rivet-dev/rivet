@@ -36,7 +36,7 @@ Use the inspector HTTP API to examine running actors. These endpoints are access
 - `GET /inspector/database/schema` - SQLite tables and views exposed by `c.db`
 - `GET /inspector/database/rows?table=...&limit=100&offset=0` - paged SQLite rows for a table or view
 
-In local dev, no auth token is needed. In production, pass `Authorization: Bearer <RIVET_INSPECTOR_TOKEN>`. The actor-specific inspector token used by the standalone Inspector UI is also accepted for inspector endpoints. See the [debugging docs](https://rivet.dev/docs/actors/debugging) for details.
+In local dev, no auth token is needed. In production, pass `Authorization: Bearer <inspector-token>`, where the inspector token is the actor-specific token auto-generated on first start and persisted in the actor's internal KV at key `0x03`. The Rivet dashboard retrieves this token automatically; for direct API access, fetch it through the management KV endpoint. See the [debugging docs](https://rivet.dev/docs/actors/debugging) for details.
 
 ## Citing Sources
 

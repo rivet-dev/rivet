@@ -38,8 +38,6 @@ export const getRivetPublicToken = (): string | undefined =>
 // use different namespaces
 
 // RivetKit configuration
-export const getRivetkitInspectorToken = (): string | undefined =>
-	getEnvUniversal("RIVET_INSPECTOR_TOKEN");
 export const getRivetkitInspectorDisable = (): boolean =>
 	getEnvUniversal("RIVET_INSPECTOR_DISABLE") === "1";
 export const getRivetkitStoragePath = (): string | undefined =>

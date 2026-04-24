@@ -1101,6 +1101,8 @@ impl ActorTask {
 	}
 
 	async fn start_actor(&mut self) -> Result<()> {
+		let startup_started_at = Instant::now();
+		let actor_id = self.ctx.actor_id().to_owned();
 		if !self.ctx.started() {
 			self.ctx.configure_sleep(self.factory.config().clone());
 			self.ctx
@@ -1110,7 +1112,13 @@ impl ActorTask {
 		self.ctx.configure_actor_events(self.actor_event_tx.clone());
 		self.ctx.configure_queue_preload(self.preloaded_kv.clone());
 
+		let load_state_started_at = Instant::now();
 		let persisted = self.load_persisted_startup().await?;
+		tracing::debug!(
+			actor_id = %actor_id,
+			duration_ms = duration_ms_f64(load_state_started_at.elapsed()),
+			"perf internal: loadStateMs"
+		);
 		let is_new = !persisted.actor.has_initialized;
 		self.ctx.load_persisted_actor(persisted.actor);
 		self.ctx.load_last_pushed_alarm(persisted.last_pushed_alarm);
@@ -1119,9 +1127,15 @@ impl ActorTask {
 			.persist_state(SaveStateOpts { immediate: true })
 			.await
 			.context("persist actor initialization")?;
+		let init_inspector_token_started_at = Instant::now();
 		crate::inspector::init_inspector_token(&self.ctx)
 			.await
 			.context("initialize inspector token")?;
+		tracing::debug!(
+			actor_id = %actor_id,
+			duration_ms = duration_ms_f64(init_inspector_token_started_at.elapsed()),
+			"perf internal: initInspectorTokenMs"
+		);
 		self.ctx
 			.restore_hibernatable_connections_with_preload(self.preloaded_kv.as_ref())
 			.await
@@ -1135,6 +1149,12 @@ impl ActorTask {
 		self.spawn_run_handle(is_new).await?;
 		self.reset_sleep_deadline().await;
 		self.ctx.drain_overdue_scheduled_events().await?;
+		tracing::debug!(
+			actor_id = %actor_id,
+			duration_ms = duration_ms_f64(startup_started_at.elapsed()),
+			is_new,
+			"perf internal: startupTotalMs"
+		);
 		Ok(())
 	}
 
@@ -2040,4 +2060,8 @@ fn result_outcome<T>(result: &Result<T>) -> &'static str {
 
 fn state_delta_payload_bytes(deltas: &[StateDelta]) -> usize {
 	deltas.iter().map(StateDelta::payload_len).sum()
+}
+
+fn duration_ms_f64(duration: Duration) -> f64 {
+	duration.as_secs_f64() * 1000.0
 }
