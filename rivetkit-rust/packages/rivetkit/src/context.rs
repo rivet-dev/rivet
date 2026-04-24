@@ -87,12 +87,12 @@ impl<A: Actor> Ctx<A> {
 		self.inner.save_state(deltas).await
 	}
 
-	pub fn sleep(&self) {
-		self.inner.sleep();
+	pub fn sleep(&self) -> Result<()> {
+		self.inner.sleep()
 	}
 
-	pub fn destroy(&self) {
-		self.inner.destroy();
+	pub fn destroy(&self) -> Result<()> {
+		self.inner.destroy()
 	}
 
 	#[deprecated(note = "no-op: use `keep_awake` or `wait_until` instead")]

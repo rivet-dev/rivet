@@ -431,13 +431,13 @@ impl ActorContext {
 	}
 
 	#[napi]
-	pub fn sleep(&self) {
-		self.inner.sleep();
+	pub fn sleep(&self) -> napi::Result<()> {
+		self.inner.sleep().map_err(napi_anyhow_error)
 	}
 
 	#[napi]
-	pub fn destroy(&self) {
-		self.inner.destroy();
+	pub fn destroy(&self) -> napi::Result<()> {
+		self.inner.destroy().map_err(napi_anyhow_error)
 	}
 
 	#[napi]

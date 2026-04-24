@@ -5,7 +5,7 @@ use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicUsize, Ordering}
 use std::sync::{Arc, OnceLock};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use anyhow::Result;
+use anyhow::{Context as AnyhowContext, Result};
 use futures::future::BoxFuture;
 use parking_lot::{Mutex, RwLock};
 use rivet_envoy_client::handle::EnvoyHandle;
@@ -36,7 +36,7 @@ use crate::actor::task::{
 };
 use crate::actor::task_types::UserTaskKind;
 use crate::actor::work_registry::RegionGuard;
-use crate::error::ActorRuntime;
+use crate::error::{ActorLifecycle as ActorLifecycleError, ActorRuntime};
 use crate::inspector::{Inspector, InspectorSnapshot};
 use crate::kv::Kv;
 use crate::sqlite::SqliteDb;
@@ -384,9 +384,16 @@ impl ActorContext {
 		self
 	}
 
-	pub fn sleep(&self) {
+	pub fn sleep(&self) -> Result<()> {
+		if !self.0.sleep.started.load(Ordering::SeqCst) {
+			return Err(ActorLifecycleError::Starting.build())
+				.context("cannot request sleep before actor startup completes");
+		}
+		if self.0.sleep_requested.swap(true, Ordering::SeqCst) {
+			return Err(ActorLifecycleError::Stopping.build())
+				.context("sleep already requested for this generation");
+		}
 		self.cancel_sleep_timer();
-		self.0.sleep_requested.store(true, Ordering::SeqCst);
 		if Handle::try_current().is_ok() {
 			let ctx = self.clone();
 			let tracked = self.track_shutdown_task(async move {
@@ -396,15 +403,27 @@ impl ActorContext {
 				ctx.record_user_task_finished(UserTaskKind::SleepFinalize, started_at.elapsed());
 			});
 			if tracked {
-				return;
+				return Ok(());
 			}
 		}
 
 		self.request_sleep_from_envoy();
+		Ok(())
 	}
 
-	pub fn destroy(&self) {
-		self.mark_destroy_requested();
+	pub fn destroy(&self) -> Result<()> {
+		if !self.0.sleep.started.load(Ordering::SeqCst) {
+			return Err(ActorLifecycleError::Starting.build())
+				.context("cannot request destroy before actor startup completes");
+		}
+		if self.0.destroy_requested.swap(true, Ordering::SeqCst) {
+			return Err(ActorLifecycleError::Stopping.build())
+				.context("destroy already requested for this generation");
+		}
+		self.cancel_sleep_timer();
+		self.flush_on_shutdown();
+		self.0.destroy_completed.store(false, Ordering::SeqCst);
+		self.0.abort_signal.cancel();
 
 		let ctx = self.clone();
 		if Handle::try_current().is_ok() {
@@ -415,11 +434,12 @@ impl ActorContext {
 				ctx.record_user_task_finished(UserTaskKind::DestroyRequest, started_at.elapsed());
 			});
 			if tracked {
-				return;
+				return Ok(());
 			}
 		}
 
 		self.request_destroy_from_envoy();
+		Ok(())
 	}
 
 	pub fn mark_destroy_requested(&self) {

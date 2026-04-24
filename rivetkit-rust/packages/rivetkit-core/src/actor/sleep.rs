@@ -312,7 +312,13 @@ impl ActorContext {
 					sleep_timeout_ms = timeout.as_millis() as u64,
 					"sleep idle timer elapsed"
 				);
-				ctx.sleep();
+				if let Err(err) = ctx.sleep() {
+					tracing::debug!(
+						actor_id = %ctx.actor_id(),
+						?err,
+						"sleep idle timer request suppressed"
+					);
+				}
 			} else {
 				tracing::warn!(
 					actor_id = %ctx.actor_id(),
@@ -713,9 +719,11 @@ mod tests {
 	#[tokio::test(start_paused = true)]
 	async fn sleep_then_destroy_signal_tasks_do_not_leak_after_teardown() {
 		let ctx = ActorContext::new_for_sleep_tests("actor-sleep-destroy");
+		ctx.set_sleep_started(true);
 
-		ctx.sleep();
-		ctx.destroy();
+		ctx.sleep().expect("sleep should be accepted after startup");
+		ctx.destroy()
+			.expect("destroy should be accepted after startup");
 
 		assert_eq!(
 			ctx.shutdown_task_count(),
