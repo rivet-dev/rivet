@@ -95,11 +95,15 @@ impl<A: Actor> Ctx<A> {
 		self.inner.destroy();
 	}
 
+	#[deprecated(note = "no-op: use `keep_awake` or `wait_until` instead")]
 	pub fn set_prevent_sleep(&self, enabled: bool) {
+		#[allow(deprecated)]
 		self.inner.set_prevent_sleep(enabled);
 	}
 
+	#[deprecated(note = "no-op: always returns false")]
 	pub fn prevent_sleep(&self) -> bool {
+		#[allow(deprecated)]
 		self.inner.prevent_sleep()
 	}
 
