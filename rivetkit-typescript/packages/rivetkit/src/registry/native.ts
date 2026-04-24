@@ -71,7 +71,7 @@ import type { AnyDatabaseProvider } from "@/common/database/config";
 import { wrapJsNativeDatabase } from "@/common/database/native-database";
 import type { Encoding } from "@/common/encoding";
 import { decodeWorkflowHistoryTransport } from "@/common/inspector-transport";
-import { deconstructError } from "@/common/utils";
+import { deconstructError, stringifyError } from "@/common/utils";
 import type {
 	RivetCloseEvent,
 	RivetEvent,
@@ -2590,13 +2590,32 @@ export class NativeActorContextAdapter {
 	}
 
 	keepAwake<T>(promise: Promise<T>): Promise<T> {
-		// Forward to core `keep_awake`, which increments the keep_awake counter
-		// for the duration of the promise. This blocks both idle sleep and
-		// grace finalize until the promise settles. The promise value is
-		// returned unchanged; core only observes the settle signal.
-		void callNative(() =>
+		// Forward to core `keep_awake`, which holds the keep_awake counter
+		// for the duration of the promise (blocks both idle sleep and grace
+		// finalize). The promise value is returned unchanged; core only
+		// observes the settle signal.
+		//
+		// Counter-arm race (acceptable): the NAPI `keep_awake` call is async,
+		// so the Rust `keep_awake_guard()` increment happens on first poll of
+		// the Rust future, not synchronously when JS calls this method. There
+		// is a sub-millisecond window where idle-sleep evaluation could
+		// observe `keep_awake_count == 0`. In practice the idle timer runs on
+		// `sleep_timeout` (default 30s), so the next poll always observes the
+		// counter before the timer fires. Same race exists for `waitUntil`.
+		// We accept this trade-off in exchange for keeping the JS API
+		// fire-and-forget; core stays the single source of truth for sleep
+		// gating logic. Logging the rejection avoids unhandled-promise warnings
+		// without blocking the caller.
+		callNative(() =>
 			this.#ctx.keepAwake(Promise.resolve(promise).then(() => null)),
-		);
+		).catch((error) => {
+			if (!isClosedTaskRegistrationError(error)) {
+				logger().warn({
+					msg: "keepAwake bridge to native runtime failed",
+					error: stringifyError(error),
+				});
+			}
+		});
 		return promise;
 	}
 
@@ -2620,7 +2639,20 @@ export class NativeActorContextAdapter {
 	}
 
 	waitUntil(promise: Promise<unknown>): void {
-		void callNative(() => this.#ctx.waitUntil(Promise.resolve(promise)));
+		// Same counter-arm race as `keepAwake`: increment of the
+		// shutdown_counter happens on first poll of the Rust future. Acceptable
+		// because the only consumer is the grace-finalize predicate, which
+		// debounces through `activity_notify` and re-checks the counter.
+		callNative(() => this.#ctx.waitUntil(Promise.resolve(promise))).catch(
+			(error) => {
+				if (!isClosedTaskRegistrationError(error)) {
+					logger().warn({
+						msg: "waitUntil bridge to native runtime failed",
+						error: stringifyError(error),
+					});
+				}
+			},
+		);
 	}
 
 	beginWebSocketCallback(): number {
