@@ -128,7 +128,6 @@ pub(crate) struct ActorContextInner {
 	pub(super) sleep: SleepState,
 	activity: ActivityState,
 	pending_disconnect_count: AtomicUsize,
-	prevent_sleep: AtomicBool,
 	sleep_requested: AtomicBool,
 	destroy_requested: AtomicBool,
 	destroy_completed: AtomicBool,
@@ -291,7 +290,6 @@ impl ActorContext {
 			sleep,
 			activity: ActivityState::default(),
 			pending_disconnect_count: AtomicUsize::new(0),
-			prevent_sleep: AtomicBool::new(false),
 			sleep_requested: AtomicBool::new(false),
 			destroy_requested: AtomicBool::new(false),
 			destroy_completed: AtomicBool::new(false),
@@ -447,20 +445,15 @@ impl ActorContext {
 		self.0.abort_signal.is_cancelled()
 	}
 
-	/// Prevents the actor from entering sleep while enabled.
-	///
-	/// Shutdown drain loops continue polling until this is cleared or the
-	/// configured grace deadline is reached.
-	pub fn set_prevent_sleep(&self, enabled: bool) {
-		let previous = self.0.prevent_sleep.swap(enabled, Ordering::SeqCst);
-		if previous != enabled {
-			self.notify_prevent_sleep_changed();
-			self.reset_sleep_timer();
-		}
-	}
+	/// Deprecated no-op. Use `keep_awake` to hold the actor awake for the
+	/// duration of a future, or `wait_until` to keep work alive across the
+	/// sleep grace period. Retained only for NAPI bridge compatibility.
+	#[deprecated(note = "no-op: use `keep_awake` or `wait_until` instead")]
+	pub fn set_prevent_sleep(&self, _enabled: bool) {}
 
+	#[deprecated(note = "no-op: always returns false")]
 	pub fn prevent_sleep(&self) -> bool {
-		self.0.prevent_sleep.load(Ordering::SeqCst)
+		false
 	}
 
 	pub fn wait_until(&self, future: impl Future<Output = ()> + Send + 'static) {

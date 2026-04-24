@@ -49,7 +49,6 @@ pub(crate) struct SleepState {
 pub(crate) enum CanSleep {
 	Yes,
 	NotReady,
-	PreventSleep,
 	NoSleep,
 	ActiveHttpRequests,
 	ActiveKeepAwake,
@@ -227,9 +226,6 @@ impl ActorContext {
 		{
 			return CanSleep::NotReady;
 		}
-		if self.prevent_sleep() {
-			return CanSleep::PreventSleep;
-		}
 		if config.no_sleep {
 			return CanSleep::NoSleep;
 		}
@@ -268,7 +264,6 @@ impl ActorContext {
 			&& self.active_http_request_count() == 0
 			&& self.websocket_callback_count() == 0
 			&& self.pending_disconnect_count() == 0
-			&& !self.prevent_sleep()
 	}
 
 	/// Spawn the fallback sleep timer used by `ActorContext`s that are not
@@ -379,7 +374,7 @@ impl ActorContext {
 
 			let shutdown_count = self.shutdown_task_count();
 			let websocket_count = self.websocket_callback_count();
-			if shutdown_count == 0 && websocket_count == 0 && !self.prevent_sleep() {
+			if shutdown_count == 0 && websocket_count == 0 {
 				return true;
 			}
 
@@ -518,11 +513,6 @@ impl ActorContext {
 		self.http_request_counter()
 			.map(|counter| counter.load())
 			.unwrap_or(0)
-	}
-
-	pub(crate) fn notify_prevent_sleep_changed(&self) {
-		self.0.sleep.work.prevent_sleep_notify.notify_waiters();
-		self.reset_sleep_timer();
 	}
 
 	pub(crate) fn sleep_activity_notify(&self) -> Arc<Notify> {

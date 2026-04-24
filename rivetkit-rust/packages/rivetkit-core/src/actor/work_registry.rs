@@ -22,7 +22,6 @@ pub(crate) struct WorkRegistry {
 	/// counters like the envoy HTTP request counter whose increments happen
 	/// outside rivetkit-core.
 	pub(crate) activity_notify: Arc<Notify>,
-	pub(crate) prevent_sleep_notify: Arc<Notify>,
 	pub(crate) teardown_started: AtomicBool,
 }
 
@@ -45,7 +44,6 @@ impl WorkRegistry {
 			shutdown_tasks: Mutex::new(JoinSet::new()),
 			idle_notify,
 			activity_notify: Arc::new(Notify::new()),
-			prevent_sleep_notify: Arc::new(Notify::new()),
 			teardown_started: AtomicBool::new(false),
 		}
 	}
