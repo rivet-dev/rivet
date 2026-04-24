@@ -556,6 +556,7 @@ mod tests {
 	use std::sync::Arc;
 	use std::sync::atomic::{AtomicUsize, Ordering};
 
+	use super::CanSleep;
 	use crate::actor::context::ActorContext;
 	use parking_lot::Mutex as DropMutex;
 	use rivet_util::async_counter::AsyncCounter;
@@ -839,5 +840,91 @@ mod tests {
 		advance(Duration::from_millis(1)).await;
 		yield_now().await;
 		assert!(waiter.await.expect("websocket idle waiter should join"));
+	}
+
+	#[tokio::test(start_paused = true)]
+	async fn sleep_before_started_errors_with_actor_starting() {
+		let ctx = ActorContext::new_for_sleep_tests("actor-sleep-before-started");
+
+		let err = ctx
+			.sleep()
+			.expect_err("sleep should fail before started is set");
+		let rivet_err = rivet_error::RivetError::extract(&err);
+		assert_eq!(rivet_err.group(), "actor");
+		assert_eq!(rivet_err.code(), "starting");
+	}
+
+	#[tokio::test(start_paused = true)]
+	async fn destroy_before_started_errors_with_actor_starting() {
+		let ctx = ActorContext::new_for_sleep_tests("actor-destroy-before-started");
+
+		let err = ctx
+			.destroy()
+			.expect_err("destroy should fail before started is set");
+		let rivet_err = rivet_error::RivetError::extract(&err);
+		assert_eq!(rivet_err.group(), "actor");
+		assert_eq!(rivet_err.code(), "starting");
+	}
+
+	#[tokio::test(start_paused = true)]
+	async fn double_sleep_errors_with_actor_stopping() {
+		let ctx = ActorContext::new_for_sleep_tests("actor-double-sleep");
+		ctx.set_sleep_started(true);
+
+		ctx.sleep()
+			.expect("first sleep call should be accepted after startup");
+
+		let err = ctx
+			.sleep()
+			.expect_err("second sleep call should fail as already requested");
+		let rivet_err = rivet_error::RivetError::extract(&err);
+		assert_eq!(rivet_err.group(), "actor");
+		assert_eq!(rivet_err.code(), "stopping");
+	}
+
+	#[tokio::test(start_paused = true)]
+	async fn double_destroy_errors_with_actor_stopping() {
+		let ctx = ActorContext::new_for_sleep_tests("actor-double-destroy");
+		ctx.set_sleep_started(true);
+
+		ctx.destroy()
+			.expect("first destroy call should be accepted after startup");
+
+		let err = ctx
+			.destroy()
+			.expect_err("second destroy call should fail as already requested");
+		let rivet_err = rivet_error::RivetError::extract(&err);
+		assert_eq!(rivet_err.group(), "actor");
+		assert_eq!(rivet_err.code(), "stopping");
+	}
+
+	#[tokio::test(start_paused = true)]
+	#[allow(deprecated)]
+	async fn set_prevent_sleep_is_a_deprecated_noop() {
+		let ctx = ActorContext::new_for_sleep_tests("actor-prevent-sleep-noop");
+		ctx.set_sleep_started(true);
+		ctx.set_ready(true);
+
+		ctx.set_prevent_sleep(true);
+		assert!(
+			!ctx.prevent_sleep(),
+			"prevent_sleep must stay false because the stub is a no-op"
+		);
+		// The sleep predicate ignores prevent_sleep entirely.
+		assert_eq!(ctx.can_sleep().await, CanSleep::Yes);
+
+		ctx.set_prevent_sleep(false);
+		assert_eq!(ctx.can_sleep().await, CanSleep::Yes);
+	}
+
+	#[tokio::test(start_paused = true)]
+	async fn shutdown_deadline_token_cancels_on_request() {
+		let ctx = ActorContext::new_for_sleep_tests("actor-shutdown-deadline");
+
+		let token = ctx.shutdown_deadline_token();
+		assert!(!token.is_cancelled());
+
+		ctx.cancel_shutdown_deadline();
+		assert!(token.is_cancelled());
 	}
 }
