@@ -9,12 +9,17 @@ pub(super) async fn dispatch_action_through_task(
 	args: Vec<u8>,
 ) -> std::result::Result<Vec<u8>, ActionDispatchError> {
 	let (reply_tx, reply_rx) = oneshot::channel();
+	tracing::info!(
+		action_name = %name,
+		conn_id = ?conn.id(),
+		"dispatch_action: sending DispatchCommand::Action"
+	);
 	try_send_dispatch_command(
 		dispatch,
 		capacity,
 		"dispatch_action",
 		DispatchCommand::Action {
-			name,
+			name: name.clone(),
 			args,
 			conn,
 			reply: reply_tx,
@@ -22,9 +27,29 @@ pub(super) async fn dispatch_action_through_task(
 		None,
 	)
 	.map_err(ActionDispatchError::from_anyhow)?;
+	tracing::info!(
+		action_name = %name,
+		"dispatch_action: command queued, awaiting reply"
+	);
 
-	reply_rx
-		.await
+	let result = reply_rx.await;
+	match &result {
+		Ok(Ok(bytes)) => tracing::info!(
+			action_name = %name,
+			output_len = bytes.len(),
+			"dispatch_action: reply received"
+		),
+		Ok(Err(error)) => tracing::warn!(
+			action_name = %name,
+			?error,
+			"dispatch_action: reply was an error"
+		),
+		Err(_) => tracing::warn!(
+			action_name = %name,
+			"dispatch_action: reply channel dropped"
+		),
+	}
+	result
 		.map_err(|_| ActionDispatchError::from_anyhow(ActorLifecycleError::DroppedReply.build()))?
 		.map_err(ActionDispatchError::from_anyhow)
 }

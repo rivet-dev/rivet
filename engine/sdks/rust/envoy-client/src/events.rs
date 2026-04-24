@@ -164,6 +164,7 @@ mod tests {
 			)),
 			protocol_metadata: Arc::new(tokio::sync::Mutex::new(None)),
 			shutting_down: std::sync::atomic::AtomicBool::new(false),
+			stopped_tx: tokio::sync::watch::channel(true).0,
 		});
 		let handle = EnvoyHandle {
 			shared: shared.clone(),

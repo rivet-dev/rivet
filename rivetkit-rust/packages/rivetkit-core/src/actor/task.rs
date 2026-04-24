@@ -45,6 +45,7 @@ use parking_lot::Mutex;
 use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio::task::{JoinError, JoinHandle};
 use tokio::time::{Duration, Instant, sleep_until, timeout};
+use tracing::Instrument;
 
 use crate::actor::action::ActionDispatchError;
 use crate::actor::connection::ConnHandle;
@@ -63,7 +64,7 @@ use crate::actor::state::{
 };
 use crate::actor::task_types::StopReason;
 use crate::error::{ActorLifecycle as ActorLifecycleError, ActorRuntime};
-use crate::types::SaveStateOpts;
+use crate::types::{SaveStateOpts, format_actor_key};
 use crate::websocket::WebSocket;
 
 pub type ActionDispatchResult = std::result::Result<Vec<u8>, ActionDispatchError>;
@@ -498,6 +499,14 @@ impl ActorTask {
 		self
 	}
 
+	#[tracing::instrument(
+		skip_all,
+		fields(
+			actor_id = %self.actor_id,
+			generation = self.generation,
+			actor_key = %format_actor_key(self.ctx.key()),
+		),
+	)]
 	pub async fn run(mut self) -> Result<()> {
 		let exit = self.run_live().await;
 		let LiveExit::Shutdown { reason } = exit else {
@@ -852,18 +861,21 @@ impl ActorTask {
 	fn core_dispatched_hook_reply(&self, operation: &'static str) -> Reply<()> {
 		let (tx, rx) = oneshot::channel();
 		let ctx = self.ctx.clone();
-		tokio::spawn(async move {
-			match rx.await {
-				Ok(Ok(())) => {}
-				Ok(Err(error)) => {
-					tracing::error!(?error, operation, "core dispatched hook failed");
+		tokio::spawn(
+			async move {
+				match rx.await {
+					Ok(Ok(())) => {}
+					Ok(Err(error)) => {
+						tracing::error!(?error, operation, "core dispatched hook failed");
+					}
+					Err(error) => {
+						tracing::error!(?error, operation, "core dispatched hook reply dropped");
+					}
 				}
-				Err(error) => {
-					tracing::error!(?error, operation, "core dispatched hook reply dropped");
-				}
+				ctx.mark_core_dispatched_hook_completed();
 			}
-			ctx.mark_core_dispatched_hook_completed();
-		});
+			.in_current_span(),
+		);
 		tx.into()
 	}
 
@@ -908,7 +920,15 @@ impl ActorTask {
 				conn,
 				reply,
 			} => {
+				tracing::info!(
+					actor_id = %self.ctx.actor_id(),
+					action_name = %name,
+					conn_id = ?conn.id(),
+					args_len = args.len(),
+					"actor task: handling DispatchCommand::Action"
+				);
 				let (tracked_reply_tx, tracked_reply_rx) = oneshot::channel();
+				let action_name_for_log = name.clone();
 				match self.send_actor_event(
 					"dispatch_action",
 					ActorEvent::Action {
@@ -919,13 +939,30 @@ impl ActorTask {
 					},
 				) {
 					Ok(()) => {
+						tracing::info!(
+							actor_id = %self.ctx.actor_id(),
+							action_name = %action_name_for_log,
+							"actor task: ActorEvent::Action enqueued"
+						);
 						self.log_dispatch_command_handled(command_kind, "enqueued");
+						let actor_id = self.ctx.actor_id().to_owned();
 						self.ctx.wait_until(async move {
 							match tracked_reply_rx.await {
 								Ok(result) => {
+									tracing::info!(
+										actor_id = %actor_id,
+										action_name = %action_name_for_log,
+										ok = result.is_ok(),
+										"actor task: tracked reply received, forwarding"
+									);
 									let _ = reply.send(result);
 								}
 								Err(_) => {
+									tracing::warn!(
+										actor_id = %actor_id,
+										action_name = %action_name_for_log,
+										"actor task: tracked reply dropped before completion"
+									);
 									let _ =
 										reply.send(Err(ActorLifecycleError::DroppedReply.build()));
 								}
@@ -933,6 +970,12 @@ impl ActorTask {
 						});
 					}
 					Err(error) => {
+						tracing::warn!(
+							actor_id = %self.ctx.actor_id(),
+							action_name = %action_name_for_log,
+							?error,
+							"actor task: failed to enqueue ActorEvent::Action"
+						);
 						let _ = reply.send(Err(error));
 						self.log_dispatch_command_handled(command_kind, "enqueue_failed");
 					}
@@ -1254,15 +1297,18 @@ impl ActorTask {
 			startup_ready: Some(startup_ready_tx),
 		};
 		let factory = self.factory.clone();
-		self.run_handle = Some(tokio::spawn(async move {
-			match AssertUnwindSafe(factory.start(start)).catch_unwind().await {
-				Ok(result) => result,
-				Err(_) => Err(ActorRuntime::Panicked {
-					operation: "run handler".to_owned(),
+		self.run_handle = Some(tokio::spawn(
+			async move {
+				match AssertUnwindSafe(factory.start(start)).catch_unwind().await {
+					Ok(result) => result,
+					Err(_) => Err(ActorRuntime::Panicked {
+						operation: "run handler".to_owned(),
+					}
+					.build()),
 				}
-				.build()),
 			}
-		}));
+			.in_current_span(),
+		));
 		startup_ready_rx
 			.await
 			.context("receive runtime startup ready reply")?

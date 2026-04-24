@@ -5,6 +5,7 @@ use rivet_error::RivetError;
 use rivetkit_core::{
 	ActorConfig, ActorFactory as CoreActorFactory, ActorStart, CoreRegistry, ServeConfig,
 };
+use tokio_util::sync::CancellationToken;
 
 use crate::{
 	actor::Actor,
@@ -47,12 +48,16 @@ impl Registry {
 		self
 	}
 
-	pub async fn serve(self) -> Result<()> {
-		self.inner.serve().await
+	pub async fn serve(self, shutdown: CancellationToken) -> Result<()> {
+		self.inner.serve(shutdown).await
 	}
 
-	pub async fn serve_with_config(self, config: ServeConfig) -> Result<()> {
-		self.inner.serve_with_config(config).await
+	pub async fn serve_with_config(
+		self,
+		config: ServeConfig,
+		shutdown: CancellationToken,
+	) -> Result<()> {
+		self.inner.serve_with_config(config, shutdown).await
 	}
 }
 

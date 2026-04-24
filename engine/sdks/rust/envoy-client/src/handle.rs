@@ -36,6 +36,29 @@ impl EnvoyHandle {
 		}
 	}
 
+	/// Resolves when the envoy loop has finished its cleanup block.
+	///
+	/// Returning does NOT imply successful delivery of pending KV/SQLite/tunnel
+	/// requests. The cleanup block errors out every outstanding request with
+	/// `"envoy shutting down"`. Callers needing durability must wait on individual
+	/// request acks before invoking shutdown.
+	///
+	/// Latched: safe to call before, during, or after the envoy loop exits.
+	/// A waiter arriving after the loop already exited resolves immediately.
+	pub async fn wait_stopped(&self) {
+		let mut rx = self.shared.stopped_tx.subscribe();
+		if *rx.borrow_and_update() {
+			return;
+		}
+		let _ = rx.changed().await;
+	}
+
+	/// Convenience: signal shutdown then await `wait_stopped`.
+	pub async fn shutdown_and_wait(&self, immediate: bool) {
+		self.shutdown(immediate);
+		self.wait_stopped().await;
+	}
+
 	pub async fn get_protocol_metadata(&self) -> Option<protocol::ProtocolMetadata> {
 		self.shared.protocol_metadata.lock().await.clone()
 	}

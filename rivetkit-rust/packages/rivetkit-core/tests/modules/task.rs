@@ -249,6 +249,7 @@ mod moved_tests {
 			)),
 			protocol_metadata: Arc::new(tokio::sync::Mutex::new(None)),
 			shutting_down: AtomicBool::new(false),
+			stopped_tx: tokio::sync::watch::channel(true).0,
 		});
 
 		(EnvoyHandle::from_shared(shared), envoy_rx)
