@@ -535,7 +535,7 @@ pub async fn handle_stopped(
 		Destroy,
 	}
 
-	let decision = match &state.transition {
+	let mut decision = match &state.transition {
 		Transition::SleepIntent {
 			rewake_after_stop: true,
 			..
@@ -560,6 +560,16 @@ pub async fn handle_stopped(
 			| StoppedVariant::Lost { .. } => Decision::Sleep,
 		},
 	};
+
+	// Check alarm
+	if let (Decision::Sleep, Some(alarm_ts)) = (&decision, state.alarm_ts) {
+		let now = ctx.activity(GetTsInput {}).await?;
+
+		if now >= alarm_ts {
+			state.alarm_ts = None;
+			decision = Decision::Reallocate;
+		}
+	}
 
 	let stopped_res = match decision {
 		Decision::Reallocate => {
@@ -598,49 +608,10 @@ pub async fn handle_stopped(
 			StoppedResult::Continue
 		}
 		Decision::Sleep => {
-			let overdue_alarm = if let Some(alarm_ts) = state.alarm_ts {
-				let now = ctx.activity(GetTsInput {}).await?;
-				if now >= alarm_ts {
-					state.alarm_ts = None;
-					true
-				} else {
-					false
-				}
-			} else {
-				false
-			};
+			// Transition to sleeping
+			state.transition = Transition::Sleeping;
 
-			if overdue_alarm {
-				let allocate_res = ctx.activity(AllocateInput {}).await?;
-
-				if let Some(allocation) = allocate_res.allocation {
-					state.generation += 1;
-
-					ctx.activity(SendOutboundInput {
-						generation: state.generation,
-						input: input.input.clone(),
-						allocation,
-					})
-					.await?;
-
-					state.transition = Transition::Allocating {
-						destroy_after_start: false,
-						lost_timeout_ts: allocate_res.now
-							+ ctx.config().pegboard().actor_allocation_threshold(),
-					};
-				} else {
-					state.transition = Transition::Reallocating {
-						since_ts: allocate_res.now,
-					};
-				}
-
-				StoppedResult::Continue
-			} else {
-				// Transition to sleeping
-				state.transition = Transition::Sleeping;
-
-				StoppedResult::Continue
-			}
+			StoppedResult::Continue
 		}
 		Decision::Destroy => StoppedResult::Destroy,
 	};
