@@ -1489,6 +1489,7 @@ impl ActorTask {
 		if let Some(run_handle) = self.run_handle.as_mut() {
 			run_handle.abort();
 		}
+		self.ctx.cancel_shutdown_deadline();
 		self.ctx.record_shutdown_timeout(grace.reason);
 		tracing::warn!(
 			reason = shutdown_reason_label(grace.reason),
