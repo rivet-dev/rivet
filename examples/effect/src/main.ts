@@ -1,8 +1,8 @@
 import { Layer } from "effect"
 import { NodeRuntime } from "@effect/platform-node"
 import { Registry, TestRegistry } from "@rivetkit/effect"
-import { CounterLive } from "./actors/Counter.ts"
-// import { ChatRoomLive } from "./actors/ChatRoom.ts"
+import { CounterLive } from "./actors/counter/live.ts"
+// import { ChatRoomLive } from "./actors/chat-room/live.ts"
 
 const ActorsLayer = Layer.mergeAll(
 	CounterLive,
