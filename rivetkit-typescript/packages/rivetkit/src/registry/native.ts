@@ -2590,14 +2590,13 @@ export class NativeActorContextAdapter {
 	}
 
 	keepAwake<T>(promise: Promise<T>): Promise<T> {
-		const trackedPromise = promise.then(() => null);
-		try {
-			callNativeSync(() => this.#ctx.registerTask(trackedPromise));
-		} catch (error) {
-			if (!isClosedTaskRegistrationError(error)) {
-				throw error;
-			}
-		}
+		// Forward to core `keep_awake`, which increments the keep_awake counter
+		// for the duration of the promise. This blocks both idle sleep and
+		// grace finalize until the promise settles. The promise value is
+		// returned unchanged; core only observes the settle signal.
+		void callNative(() =>
+			this.#ctx.keepAwake(Promise.resolve(promise).then(() => null)),
+		);
 		return promise;
 	}
 
