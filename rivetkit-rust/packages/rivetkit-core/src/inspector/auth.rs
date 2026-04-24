@@ -3,6 +3,7 @@ use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use rand::RngCore;
 use rivet_error::RivetError as RivetErrorDerive;
 use serde::{Deserialize, Serialize};
+use subtle::ConstantTimeEq;
 
 use crate::ActorContext;
 
@@ -91,22 +92,9 @@ fn generate_inspector_token() -> String {
 }
 
 fn verify_token_bytes(candidate: &[u8], expected: &[u8]) -> Result<()> {
-	if timing_safe_equal(candidate, expected) {
+	if candidate.ct_eq(expected).into() {
 		Ok(())
 	} else {
 		Err(InspectorUnauthorized.build())
 	}
-}
-
-fn timing_safe_equal(left: &[u8], right: &[u8]) -> bool {
-	let max_len = left.len().max(right.len());
-	let mut diff = left.len() ^ right.len();
-
-	for idx in 0..max_len {
-		let left_byte = left.get(idx).copied().unwrap_or_default();
-		let right_byte = right.get(idx).copied().unwrap_or_default();
-		diff |= usize::from(left_byte ^ right_byte);
-	}
-
-	diff == 0
 }
