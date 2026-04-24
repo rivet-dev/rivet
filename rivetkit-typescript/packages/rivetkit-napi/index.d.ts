@@ -51,6 +51,7 @@ export interface JsActorConfig {
   name?: string
   icon?: string
   hasDatabase?: boolean
+  hasState?: boolean
   canHibernateWebsocket?: boolean
   stateSaveIntervalMs?: number
   createStateTimeoutMs?: number
@@ -126,6 +127,15 @@ export interface JsQueueTryNextBatchOptions {
   names?: Array<string>
   count?: number
   completable?: boolean
+}
+export interface JsQueueInspectMessage {
+  /**
+   * Queue message id. Stored as the raw u64 reinterpreted as i64 so JS
+   * sees a plain number; ids are monotonic and fit comfortably in i64.
+   */
+  id: number
+  name: string
+  createdAtMs: number
 }
 export interface JsServeConfig {
   version: number
@@ -265,6 +275,8 @@ export declare class Queue {
   enqueueAndWait(name: string, body: Buffer, options?: JsQueueEnqueueAndWaitOptions | undefined | null, signal?: CancellationToken | undefined | null): Promise<Buffer | null>
   tryNext(options?: JsQueueTryNextOptions | undefined | null): QueueMessage | null
   tryNextBatch(options?: JsQueueTryNextBatchOptions | undefined | null): Array<QueueMessage>
+  maxSize(): number
+  inspectMessages(): Promise<Array<JsQueueInspectMessage>>
 }
 export declare class QueueMessage {
   id(): bigint
