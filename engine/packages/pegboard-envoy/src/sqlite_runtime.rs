@@ -17,7 +17,6 @@ use sqlite_storage::{
 };
 use tempfile::tempdir;
 use tokio::sync::{Mutex, OnceCell};
-use universaldb::Subspace;
 
 use crate::metrics;
 
@@ -41,7 +40,7 @@ const SQLITE_MAGIC: &[u8; 16] = b"SQLite format 3\0";
 
 pub async fn shared_engine(ctx: &StandaloneCtx) -> Result<Arc<SqliteEngine>> {
 	let db = Arc::new((*ctx.udb()?).clone());
-	let subspace = sqlite_subspace();
+	let subspace = pegboard::actor_sqlite_v2::sqlite_subspace();
 
 	SQLITE_ENGINE
 		.get_or_try_init(|| async move {
@@ -58,10 +57,6 @@ pub async fn shared_engine(ctx: &StandaloneCtx) -> Result<Arc<SqliteEngine>> {
 		})
 		.await
 		.cloned()
-}
-
-fn sqlite_subspace() -> Subspace {
-	pegboard::keys::subspace().subspace(&("sqlite-storage",))
 }
 
 fn migration_locks() -> &'static HashMap<String, Arc<Mutex<()>>> {
@@ -662,10 +657,12 @@ mod tests {
 	use tempfile::tempdir;
 	use universaldb::driver::RocksDbDatabaseDriver;
 
+	use pegboard::actor_sqlite_v2::sqlite_subspace;
+
 	use super::{
 		FILE_TAG_JOURNAL, FILE_TAG_MAIN, FILE_TAG_SHM, FILE_TAG_WAL,
 		SQLITE_V1_CHUNK_SIZE, SQLITE_V1_MAX_MIGRATION_BYTES, SQLITE_V1_MIGRATION_LEASE_MS,
-		maybe_migrate_v1_to_v2, read_v1_file, sqlite_subspace, v1_chunk_key, v1_meta_key,
+		maybe_migrate_v1_to_v2, read_v1_file, v1_chunk_key, v1_meta_key,
 	};
 
 	fn recipient(actor_id: Id) -> Recipient {

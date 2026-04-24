@@ -30,6 +30,14 @@ pub struct Input {
 
 	/// Arbitrary user-provided binary encoded in base64. We assume this is valid base64.
 	pub input: Option<String>,
+	#[serde(default = "default_true")]
+	pub start_immediately: bool,
+	#[serde(default)]
+	pub create_ts: Option<i64>,
+}
+
+fn default_true() -> bool {
+	true
 }
 
 #[workflow]
@@ -73,7 +81,7 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 		namespace_id: input.namespace_id,
 		runner_name_selector: input.runner_name_selector.clone(),
 		crash_policy: input.crash_policy,
-		create_ts: ctx.create_ts(),
+		create_ts: input.create_ts.unwrap_or_else(|| ctx.create_ts()),
 	})
 	.await?;
 
@@ -170,12 +178,24 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 	})
 	.await?;
 
-	ctx.msg(CreateComplete {})
-		.topic(("actor_id", input.actor_id))
-		.send()
+	let lifecycle_state = if !input.start_immediately {
+		ctx.activity(runtime::SetSleepingInput {
+			actor_id: input.actor_id,
+		})
 		.await?;
 
-	let lifecycle_state =
+		ctx.msg(CreateComplete {})
+			.topic(("actor_id", input.actor_id))
+			.send()
+			.await?;
+
+		runtime::LifecycleState::new_sleeping()
+	} else {
+		ctx.msg(CreateComplete {})
+			.topic(("actor_id", input.actor_id))
+			.send()
+			.await?;
+
 		match runtime::spawn_actor(ctx, input, 0, AllocationOverride::None).await? {
 			runtime::SpawnActorOutput::Allocated {
 				runner_id,
@@ -233,6 +253,8 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 					namespace_id: input.namespace_id,
 					input: input.input.clone(),
 					from_v1: true,
+					start_immediately: input.start_immediately,
+					create_ts: input.create_ts,
 				})
 				.tag("actor_id", input.actor_id)
 				.dispatch()
@@ -245,7 +267,8 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 
 				return Ok(());
 			}
-		};
+		}
+	};
 
 	let lifecycle_res = ctx
 		.loope(lifecycle_state, |ctx, state| {
@@ -868,6 +891,8 @@ pub async fn pegboard_actor(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> 
 			namespace_id: input.namespace_id,
 			input: input.input.clone(),
 			from_v1: true,
+			start_immediately: input.start_immediately,
+			create_ts: input.create_ts,
 		})
 		.tag("actor_id", input.actor_id)
 		.dispatch()

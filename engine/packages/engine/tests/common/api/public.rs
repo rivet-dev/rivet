@@ -1,7 +1,7 @@
 #![allow(dead_code, unused_variables)]
 
 use anyhow::*;
-use rivet_api_types::{actors, datacenters, namespaces, pagination, runner_configs, runners};
+use rivet_api_types::{actors, datacenters, namespaces, runner_configs, runners};
 use serde::{Deserialize, Serialize};
 
 use super::get_endpoint;
@@ -299,6 +299,44 @@ pub async fn actors_create(
 	parse_response(response).await
 }
 
+pub async fn build_admin_actors_export_request(
+	port: u16,
+	request: actors::import_export::ExportRequest,
+) -> Result<reqwest::RequestBuilder> {
+	let client = rivet_pools::reqwest::client().await?;
+	Ok(client
+		.post(format!("{}/admin/actors/export", get_endpoint(port)))
+		.json(&request))
+}
+
+pub async fn admin_actors_export(
+	port: u16,
+	request: actors::import_export::ExportRequest,
+) -> Result<actors::import_export::ExportResponse> {
+	let req = build_admin_actors_export_request(port, request).await?;
+	let response = req.send().await?;
+	parse_response(response).await
+}
+
+pub async fn build_admin_actors_import_request(
+	port: u16,
+	request: actors::import_export::ImportRequest,
+) -> Result<reqwest::RequestBuilder> {
+	let client = rivet_pools::reqwest::client().await?;
+	Ok(client
+		.post(format!("{}/admin/actors/import", get_endpoint(port)))
+		.json(&request))
+}
+
+pub async fn admin_actors_import(
+	port: u16,
+	request: actors::import_export::ImportRequest,
+) -> Result<actors::import_export::ImportResponse> {
+	let req = build_admin_actors_import_request(port, request).await?;
+	let response = req.send().await?;
+	parse_response(response).await
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct GetOrCreateQuery {
 	pub namespace: String,
@@ -365,6 +403,31 @@ pub async fn actors_delete(
 	query: actors::delete::DeleteQuery,
 ) -> Result<actors::delete::DeleteResponse> {
 	let request = build_actors_delete_request(port, path, query).await?;
+	let response = request.send().await?;
+	parse_response(response).await
+}
+
+pub async fn build_actors_kv_get_request(
+	port: u16,
+	path: actors::kv_get::KvGetPath,
+	query: actors::kv_get::KvGetQuery,
+) -> Result<reqwest::RequestBuilder> {
+	let client = rivet_pools::reqwest::client().await?;
+	Ok(client.get(format!(
+		"{}/actors/{}/kv/keys/{}?{}",
+		get_endpoint(port),
+		path.actor_id,
+		urlencoding::encode(&path.key),
+		serde_html_form::to_string(&query)?,
+	)))
+}
+
+pub async fn actors_kv_get(
+	port: u16,
+	path: actors::kv_get::KvGetPath,
+	query: actors::kv_get::KvGetQuery,
+) -> Result<actors::kv_get::KvGetResponse> {
+	let request = build_actors_kv_get_request(port, path, query).await?;
 	let response = request.send().await?;
 	parse_response(response).await
 }

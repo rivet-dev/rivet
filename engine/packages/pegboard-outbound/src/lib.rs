@@ -32,7 +32,7 @@ static SQLITE_ENGINE: OnceCell<Arc<SqliteEngine>> = OnceCell::const_new();
 
 async fn shared_sqlite_engine(ctx: &StandaloneCtx) -> Result<Arc<SqliteEngine>> {
 	let db = Arc::new((*ctx.udb()?).clone());
-	let subspace = pegboard::keys::subspace().subspace(&("sqlite-storage",));
+	let subspace = pegboard::actor_sqlite_v2::sqlite_subspace();
 
 	SQLITE_ENGINE
 		.get_or_try_init(|| async move {

@@ -47,7 +47,7 @@ pub async fn list(Extension(ctx): Extension<ApiCtx>, Query(query): Query<ListQue
 	}
 }
 
-async fn list_inner(ctx: ApiCtx, query: ListQuery) -> Result<ListResponse> {
+pub(crate) async fn list_inner(ctx: ApiCtx, query: ListQuery) -> Result<ListResponse> {
 	// Reading is allowed, list requires auth
 	if query.actor_ids.is_none() && query.actor_id.is_empty() && query.key.is_none() {
 		ctx.auth().await?;

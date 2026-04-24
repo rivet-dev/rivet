@@ -47,6 +47,8 @@ pub async fn get_or_create(
 					runner_name_selector: body.runner_name_selector,
 					input: body.input.clone(),
 					crash_policy: body.crash_policy,
+					start_immediately: true,
+					create_ts: None,
 					// NOTE: This can forward if the user attempts to create an actor with a target dc and this dc
 					// ends up forwarding to another.
 					forward_request: true,

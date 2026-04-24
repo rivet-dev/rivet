@@ -1,0 +1,8 @@
+{
+  "source_actor_id": "d1h30qzt2m6xdtsefpuvllbjubbl00",
+  "name": "sqliteCounter",
+  "key": "sqlite-import-snapshot-v2-1-x",
+  "runner_name_selector": "test-driver",
+  "crash_policy": "sleep",
+  "create_ts": 1776064053262
+}

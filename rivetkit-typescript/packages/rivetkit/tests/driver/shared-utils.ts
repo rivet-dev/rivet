@@ -3,6 +3,7 @@ import { type TestContext, vi } from "vitest";
 import { type Client, createClient } from "../../src/client/mod";
 import { getLogger } from "../../src/common/log";
 import type { registry } from "../../fixtures/driver-test-suite/registry-static";
+import { TOKEN } from "./shared-harness";
 import type { DriverTestConfig } from "./shared-types";
 
 export const FAKE_TIME = new Date("2024-01-01T00:00:00.000Z");
@@ -29,6 +30,9 @@ export async function setupDriverTest(
 ): Promise<{
 	client: Client<typeof registry>;
 	endpoint: string;
+	namespace: string;
+	runnerName: string;
+	token: string;
 	hardCrashActor?: (actorId: string) => Promise<void>;
 	hardCrashPreservesData: boolean;
 }> {
@@ -81,9 +85,46 @@ export async function setupDriverTest(
 	return {
 		client,
 		endpoint,
+		namespace,
+		runnerName,
+		token: TOKEN,
 		hardCrashActor,
 		hardCrashPreservesData: hardCrashPreservesData ?? false,
 	};
+}
+
+export interface ImportActorSnapshotResponse {
+	imported_actors: number;
+	skipped_actors: number;
+	warnings: string[];
+}
+
+export async function importActorSnapshot(input: {
+	endpoint: string;
+	namespace: string;
+	token: string;
+	archivePath: string;
+}): Promise<ImportActorSnapshotResponse> {
+	const response = await fetch(
+		`${input.endpoint.replace(/\/$/, "")}/admin/actors/import`,
+		{
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+				Authorization: `Bearer ${input.token}`,
+			},
+			body: JSON.stringify({
+				target_namespace: input.namespace,
+				archive_path: input.archivePath,
+			}),
+		},
+	);
+	if (!response.ok) {
+		throw new Error(
+			`import actor snapshot failed: ${response.status} ${response.statusText} ${await response.text()}`,
+		);
+	}
+	return (await response.json()) as ImportActorSnapshotResponse;
 }
 
 export async function waitFor(
