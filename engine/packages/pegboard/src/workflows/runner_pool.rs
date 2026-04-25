@@ -263,7 +263,7 @@ async fn read_desired(ctx: &ActivityCtx, input: &ReadDesiredInput) -> Result<Rea
 
 	// Won't overflow as these values are all in u32 range
 	let desired_count = (runners_margin
-		+ (adjusted_desired_slots as u32).div_ceil(slots_per_runner))
+		+ (adjusted_desired_slots as u32).div_ceil(slots_per_runner.max(1)))
 	.max(min_runners)
 	.min(max_runners)
 	.min(
