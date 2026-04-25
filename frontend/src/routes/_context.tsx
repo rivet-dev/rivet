@@ -58,7 +58,14 @@ export const Route = createFileRoute("/_context")({
 	},
 	beforeLoad: async (route) => {
 		if (features.multitenancy) {
-			const session = await authClient.getSession();
+			const justVerifiedEmail =
+				(route.location.search as { emailVerified?: string })
+					?.emailVerified === "1";
+			const session = await authClient.getSession(
+				justVerifiedEmail
+					? { query: { disableCookieCache: true } }
+					: undefined,
+			);
 
 			if (!session.data) {
 				throw redirect({
