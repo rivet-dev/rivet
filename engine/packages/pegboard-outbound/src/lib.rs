@@ -284,6 +284,7 @@ async fn handle(ctx: &StandaloneCtx, packet: protocol::ToOutbound) -> Result<()>
 		url,
 		headers,
 		request_lifespan,
+		drain_grace_period,
 		..
 	} = pool.config.kind
 	else {
@@ -353,6 +354,7 @@ async fn handle(ctx: &StandaloneCtx, packet: protocol::ToOutbound) -> Result<()>
 		&url,
 		headers,
 		request_lifespan,
+		drain_grace_period,
 	)
 	.await;
 
@@ -375,6 +377,7 @@ async fn serverless_outbound_req(
 	url: &str,
 	headers: HashMap<String, String>,
 	request_lifespan: u32,
+	drain_grace_period: u32,
 ) -> Result<()> {
 	let current_dc = ctx.config().topology().current_dc()?;
 	let mut term_signal = TermSignal::get();
@@ -513,9 +516,8 @@ async fn serverless_outbound_req(
 		.with_label_values(&[namespace_id.to_string().as_str(), pool_name])
 		.inc();
 
-	let sleep_until_drain = Duration::from_secs(request_lifespan as u64).saturating_sub(
-		Duration::from_millis(ctx.config().pegboard().serverless_drain_grace_period()),
-	);
+	let sleep_until_drain =
+		Duration::from_secs(request_lifespan.saturating_sub(drain_grace_period) as u64);
 	tokio::select! {
 		res = stream_handler => {
 			// Mark actor as lost for immediate reallocation if SSE errors
@@ -560,10 +562,7 @@ async fn serverless_outbound_req(
 	}
 
 	// Wait for the grace period
-	tokio::time::sleep(Duration::from_millis(
-		ctx.config().pegboard().serverless_drain_grace_period(),
-	))
-	.await;
+	tokio::time::sleep(Duration::from_secs(drain_grace_period as u64)).await;
 
 	tracing::debug!("outbound req stopped");
 
