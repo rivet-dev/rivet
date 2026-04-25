@@ -6,6 +6,7 @@ use gas::prelude::*;
 use rivet_envoy_protocol as protocol;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
+use tokio_util::sync::{CancellationToken, DropGuard};
 
 use crate::metrics;
 
@@ -22,6 +23,8 @@ pub struct ActorEventDemuxer {
 	last_gc: Instant,
 	gc_interval: Duration,
 	max_last_seen: Duration,
+	cancellation_token: CancellationToken,
+	_guard: DropGuard,
 }
 
 impl ActorEventDemuxer {
@@ -30,6 +33,9 @@ impl ActorEventDemuxer {
 		let gc_interval = Duration::from_millis(pegboard_config.envoy_event_demuxer_gc_interval());
 		let max_last_seen =
 			Duration::from_millis(pegboard_config.envoy_event_demuxer_max_last_seen_threshold());
+		let token = CancellationToken::new();
+		let drop_guard = token.clone().drop_guard();
+
 		Self {
 			ctx,
 			envoy_key,
@@ -37,6 +43,8 @@ impl ActorEventDemuxer {
 			last_gc: Instant::now(),
 			gc_interval,
 			max_last_seen,
+			cancellation_token: token,
+			_guard: drop_guard,
 		}
 	}
 
@@ -53,6 +61,7 @@ impl ActorEventDemuxer {
 			let handle = tokio::spawn(channel_handler(
 				self.ctx.clone(),
 				self.envoy_key.clone(),
+				self.cancellation_token.clone(),
 				actor_id,
 				rx,
 			));
@@ -76,16 +85,10 @@ impl ActorEventDemuxer {
 		if self.last_gc.elapsed() > self.gc_interval {
 			self.last_gc = Instant::now();
 
-			self.channels.retain(|_, channel| {
-				let keep = channel.last_seen.elapsed() < self.max_last_seen;
-
-				if !keep {
-					// TODO: Verify aborting is safe here
-					channel.handle.abort();
-				}
-
-				keep
-			});
+			// This will drop the tx side of the channel and it's task will exit automatically. No abort
+			// required.
+			self.channels
+				.retain(|_, channel| channel.last_seen.elapsed() < self.max_last_seen);
 
 			metrics::EVENT_MULTIPLEXER_COUNT.set(self.channels.len() as i64);
 		}
@@ -116,6 +119,7 @@ impl ActorEventDemuxer {
 async fn channel_handler(
 	ctx: StandaloneCtx,
 	envoy_key: String,
+	cancellation_token: CancellationToken,
 	actor_id: Id,
 	mut rx: mpsc::UnboundedReceiver<protocol::EventWrapper>,
 ) {
@@ -123,13 +127,18 @@ async fn channel_handler(
 		let mut buffer = Vec::new();
 
 		// Batch process events
-		if rx.recv_many(&mut buffer, 1024).await == 0 {
-			break;
-		}
+		tokio::select! {
+			count = rx.recv_many(&mut buffer, 1024) => {
+				if count == 0 {
+					break;
+				}
 
-		if let Err(err) = dispatch_events(&ctx, &envoy_key, actor_id, buffer).await {
-			tracing::error!(?err, "actor event processor failed");
-			break;
+				if let Err(err) = dispatch_events(&ctx, &envoy_key, actor_id, buffer).await {
+					tracing::error!(?err, "actor event processor failed");
+					break;
+				}
+			}
+			_ = cancellation_token.cancelled() => break,
 		}
 	}
 }

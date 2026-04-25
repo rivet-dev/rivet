@@ -3485,6 +3485,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "tokio-tungstenite",
+ "tokio-util",
  "tracing",
  "universaldb",
  "universalpubsub",

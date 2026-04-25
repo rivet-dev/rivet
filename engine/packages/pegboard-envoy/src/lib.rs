@@ -143,19 +143,14 @@ impl CustomServeTrait for PegboardEnvoyWs {
 			eviction_sub,
 			tunnel_to_ws_abort_rx,
 		));
-
 		let ws_to_tunnel = tokio::spawn(ws_to_tunnel_task::task(
 			ctx.clone(),
 			conn.clone(),
 			ws_handle.recv(),
 			ws_to_tunnel_abort_rx,
 		));
-
-		// Update pings
+		let hard_abort_ws_to_tunnel = ws_to_tunnel.abort_handle();
 		let ping = tokio::spawn(ping_task::task(ctx.clone(), conn.clone(), ping_abort_rx));
-		let tunnel_to_ws_abort_tx2 = tunnel_to_ws_abort_tx.clone();
-		let ws_to_tunnel_abort_tx2 = ws_to_tunnel_abort_tx.clone();
-		let ping_abort_tx2 = ping_abort_tx.clone();
 
 		// Wait for all tasks to complete
 		let (tunnel_to_ws_res, ws_to_tunnel_res, ping_res) = tokio::join!(
@@ -181,7 +176,7 @@ impl CustomServeTrait for PegboardEnvoyWs {
 				if !matches!(res, Ok(LifecycleResult::Aborted)) {
 					tracing::debug!(?res, "ws to tunnel task completed, aborting others");
 
-					let _ = ping_abort_tx2.send(());
+					let _ = ping_abort_tx.send(());
 					let _ = tunnel_to_ws_abort_tx.send(());
 				} else {
 					tracing::debug!(?res, "ws to tunnel task completed");
@@ -196,10 +191,18 @@ impl CustomServeTrait for PegboardEnvoyWs {
 				if !matches!(res, Ok(LifecycleResult::Aborted)) {
 					tracing::debug!(?res, "ping task completed, aborting others");
 
-					let _ = ws_to_tunnel_abort_tx2.send(());
-					let _ = tunnel_to_ws_abort_tx2.send(());
+					let _ = ws_to_tunnel_abort_tx.send(());
+					let _ = tunnel_to_ws_abort_tx.send(());
 				} else {
 					tracing::debug!(?res, "ping task completed");
+				}
+
+				// Any error of the ping task must result in a hard abort of ws_to_tunnel. This stops all in
+				// flight kv requests from being completed immediately. This guarantees the invariant that an
+				// actor's KV is only being from one place at a time.
+				if res.is_err() {
+					tracing::warn!(?res, "ping task failed, aborting ws_to_tunnel");
+					hard_abort_ws_to_tunnel.abort();
 				}
 
 				res
