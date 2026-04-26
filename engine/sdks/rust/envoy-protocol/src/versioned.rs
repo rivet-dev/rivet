@@ -3,17 +3,12 @@ use vbare::OwnedVersionedData;
 
 use crate::generated::{v1, v2};
 
-const SQLITE_SCHEMA_VERSION_V1: u32 = 1;
-#[cfg(test)]
-const SQLITE_SCHEMA_VERSION_V2: u32 = 2;
-
 fn ensure_to_envoy_v1_compatible(message: &v2::ToEnvoy) -> Result<()> {
 	match message {
 		v2::ToEnvoy::ToEnvoyCommands(commands) => {
 			for command in commands {
 				if let v2::Command::CommandStartActor(start) = &command.inner
-					&& (start.sqlite_schema_version != SQLITE_SCHEMA_VERSION_V1
-						|| start.sqlite_startup_data.is_some())
+					&& start.sqlite_startup_data.is_some()
 				{
 					bail!("sqlite v2 startup data requires envoy-protocol v2");
 				}
@@ -336,7 +331,6 @@ fn convert_command_start_actor_v1_to_v2(start: v1::CommandStartActor) -> v2::Com
 			})
 			.collect(),
 		preloaded_kv: start.preloaded_kv.map(convert_preloaded_kv_v1_to_v2),
-		sqlite_schema_version: SQLITE_SCHEMA_VERSION_V1,
 		sqlite_startup_data: None,
 	}
 }
@@ -344,9 +338,6 @@ fn convert_command_start_actor_v1_to_v2(start: v1::CommandStartActor) -> v2::Com
 fn convert_command_start_actor_v2_to_v1(
 	start: v2::CommandStartActor,
 ) -> Result<v1::CommandStartActor> {
-	if start.sqlite_schema_version != SQLITE_SCHEMA_VERSION_V1 {
-		bail!("sqlite schema version requires envoy-protocol v2");
-	}
 	if start.sqlite_startup_data.is_some() {
 		bail!("sqlite startup data requires envoy-protocol v2");
 	}
@@ -463,7 +454,7 @@ mod tests {
 	use anyhow::Result;
 	use vbare::OwnedVersionedData;
 
-	use super::{ActorCommandKeyData, SQLITE_SCHEMA_VERSION_V1, SQLITE_SCHEMA_VERSION_V2, ToEnvoy};
+	use super::{ActorCommandKeyData, ToEnvoy};
 	use crate::generated::{v1, v2};
 
 	#[test]
@@ -496,7 +487,6 @@ mod tests {
 		};
 
 		assert!(start.sqlite_startup_data.is_none());
-		assert_eq!(start.sqlite_schema_version, SQLITE_SCHEMA_VERSION_V1);
 		assert!(start.preloaded_kv.is_none());
 		assert_eq!(commands[0].checkpoint.generation, 7);
 
@@ -520,7 +510,6 @@ mod tests {
 				},
 				hibernating_requests: Vec::new(),
 				preloaded_kv: None,
-				sqlite_schema_version: SQLITE_SCHEMA_VERSION_V2,
 				sqlite_startup_data: Some(v2::SqliteStartupData {
 					generation: 11,
 					meta: v2::SqliteMeta {
@@ -554,7 +543,6 @@ mod tests {
 				},
 				hibernating_requests: Vec::new(),
 				preloaded_kv: None,
-				sqlite_schema_version: SQLITE_SCHEMA_VERSION_V1,
 				sqlite_startup_data: None,
 			},
 		))
@@ -564,7 +552,6 @@ mod tests {
 		let v2::ActorCommandKeyData::CommandStartActor(start) = decoded else {
 			panic!("expected start actor");
 		};
-		assert_eq!(start.sqlite_schema_version, SQLITE_SCHEMA_VERSION_V1);
 		assert!(start.sqlite_startup_data.is_none());
 
 		Ok(())

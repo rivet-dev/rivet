@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::sync::Arc;
 
 use anyhow::{Context, Result, ensure};
 use gas::prelude::*;
@@ -7,10 +6,7 @@ use pegboard::actor_kv::Recipient;
 use rivet_envoy_protocol as protocol;
 use rusqlite::Connection;
 use serde::Deserialize;
-use sqlite_storage::{
-	engine::SqliteEngine,
-	types::{SQLITE_VFS_V2_SCHEMA_VERSION, SqliteOrigin},
-};
+use sqlite_storage::{engine::SqliteEngine, types::SqliteOrigin};
 use test_snapshot::SnapshotTestCtx;
 
 const SNAPSHOT_NAME: &str = "actor-v2-2-1-baseline";
@@ -45,12 +41,10 @@ async fn actor_v2_2_1_baseline_migrates_to_current_layout() -> Result<()> {
 		.next()
 		.context("snapshot actor should exist")?;
 
-	let db = Arc::new((*ctx.udb()?).clone());
+	let db = (*ctx.udb()?).clone();
 	let standalone_ctx = ctx.standalone()?;
-	let (sqlite_engine, _compaction_rx) = SqliteEngine::new(
-		Arc::clone(&db),
-		pegboard::actor_sqlite_v2::sqlite_subspace(),
-	);
+	let (sqlite_engine, _compaction_rx) =
+		SqliteEngine::new(db.clone(), pegboard::actor_sqlite::sqlite_subspace());
 	let mut start = protocol::CommandStartActor {
 		config: protocol::ActorConfig {
 			name: actor.name.clone(),
@@ -60,9 +54,20 @@ async fn actor_v2_2_1_baseline_migrates_to_current_layout() -> Result<()> {
 		},
 		hibernating_requests: Vec::new(),
 		preloaded_kv: None,
-		sqlite_schema_version: SQLITE_VFS_V2_SCHEMA_VERSION,
 		sqlite_startup_data: None,
 	};
+
+	let migration = pegboard::actor_sqlite::migrate_v1_to_v2(
+		db.clone(),
+		pegboard::actor_sqlite::MigrateV1ToV2Input {
+			actor_id: actor.actor_id,
+			namespace_id: namespace.namespace_id,
+			name: actor.name.clone(),
+			protocol_version: protocol::PROTOCOL_VERSION,
+		},
+	)
+	.await?;
+	assert!(migration.migrated);
 
 	pegboard_envoy::sqlite_runtime::populate_start_command(
 		&standalone_ctx,
@@ -74,7 +79,6 @@ async fn actor_v2_2_1_baseline_migrates_to_current_layout() -> Result<()> {
 	)
 	.await?;
 
-	assert_eq!(start.sqlite_schema_version, SQLITE_VFS_V2_SCHEMA_VERSION);
 	assert!(start.sqlite_startup_data.is_some());
 	assert_eq!(
 		sqlite_engine

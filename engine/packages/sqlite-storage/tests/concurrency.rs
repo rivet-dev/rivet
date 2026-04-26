@@ -18,7 +18,7 @@ async fn setup_engine() -> Result<(SqliteEngine, tokio::sync::mpsc::UnboundedRec
 		.tempdir()?
 		.keep();
 	let driver = universaldb::driver::RocksDbDatabaseDriver::new(path).await?;
-	let db = Arc::new(universaldb::Database::new(Arc::new(driver)));
+	let db = universaldb::Database::new(Arc::new(driver));
 	let subspace = Subspace::new(&("sqlite-storage-concurrency", Uuid::new_v4().to_string()));
 
 	Ok(SqliteEngine::new(db, subspace))

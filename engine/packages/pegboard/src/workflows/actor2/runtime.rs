@@ -1,4 +1,3 @@
-// runner wf see how signal fail handling
 use base64::Engine;
 use base64::prelude::BASE64_STANDARD;
 use futures_util::TryStreamExt;
@@ -11,6 +10,7 @@ use universalpubsub::PublishOpts;
 use vbare::OwnedVersionedData;
 
 use super::{ActorError, Input, LostReason, State, Stopped, metrics};
+use crate::actor_sqlite;
 use crate::keys;
 
 #[derive(Deserialize, Serialize)]
@@ -313,6 +313,34 @@ pub struct SendOutboundInput {
 	pub allocation: Allocation,
 }
 
+#[derive(Debug, Serialize, Deserialize, Hash)]
+pub struct MigrateSqliteV1ToV2Input {
+	pub actor_id: Id,
+	pub namespace_id: Id,
+	pub name: String,
+	pub protocol_version: u16,
+}
+
+#[activity(MigrateSqliteV1ToV2)]
+pub async fn migrate_sqlite_v1_to_v2(
+	ctx: &ActivityCtx,
+	input: &MigrateSqliteV1ToV2Input,
+) -> Result<actor_sqlite::MigrateV1ToV2Output> {
+	let udb = ctx.udb()?;
+	let db = (*udb).clone();
+
+	actor_sqlite::migrate_v1_to_v2(
+		db,
+		actor_sqlite::MigrateV1ToV2Input {
+			actor_id: input.actor_id,
+			namespace_id: input.namespace_id,
+			name: input.name.clone(),
+			protocol_version: input.protocol_version,
+		},
+	)
+	.await
+}
+
 #[activity(SendOutbound)]
 pub async fn send_outbound(ctx: &ActivityCtx, input: &SendOutboundInput) -> Result<()> {
 	let state = ctx.state::<State>()?;
@@ -366,7 +394,6 @@ pub async fn send_outbound(ctx: &ActivityCtx, input: &SendOutboundInput) -> Resu
 				// populated before it reaches the runner
 				hibernating_requests: Vec::new(),
 				preloaded_kv: None,
-				sqlite_schema_version: super::SQLITE_SCHEMA_VERSION_V2,
 				sqlite_startup_data: None,
 			});
 
@@ -387,6 +414,19 @@ pub async fn send_outbound(ctx: &ActivityCtx, input: &SendOutboundInput) -> Resu
 	Ok(())
 }
 
+async fn migrate_sqlite_v1_to_v2_step(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> {
+	ctx.v(2)
+		.activity(MigrateSqliteV1ToV2Input {
+			actor_id: input.actor_id,
+			namespace_id: input.namespace_id,
+			name: input.name.clone(),
+			protocol_version: PROTOCOL_VERSION,
+		})
+		.await?;
+
+	Ok(())
+}
+
 pub async fn reschedule_actor(
 	ctx: &mut WorkflowCtx,
 	input: &Input,
@@ -397,6 +437,7 @@ pub async fn reschedule_actor(
 
 	if let Some(allocation) = allocate_res.allocation {
 		state.generation += 1;
+		migrate_sqlite_v1_to_v2_step(ctx, input).await?;
 
 		match &allocation {
 			Allocation::Serverless => {
@@ -567,6 +608,7 @@ pub async fn handle_stopped(
 
 			if let Some(allocation) = allocate_res.allocation {
 				state.generation += 1;
+				migrate_sqlite_v1_to_v2_step(ctx, input).await?;
 
 				ctx.activity(SendOutboundInput {
 					generation: state.generation,
@@ -615,6 +657,7 @@ pub async fn handle_stopped(
 
 				if let Some(allocation) = allocate_res.allocation {
 					state.generation += 1;
+					migrate_sqlite_v1_to_v2_step(ctx, input).await?;
 
 					ctx.activity(SendOutboundInput {
 						generation: state.generation,

@@ -2,18 +2,14 @@
 
 Design constraints, invariants, and reference commands for the Rivet monorepo. For implementation details, wiring, and procedural gotchas, follow the links under [Reference Docs](#reference-docs).
 
-## Important Domain Information
+## Terminology
 
 **ALWAYS use `rivet.dev` - NEVER use `rivet.gg`**
-
-**Never claim "zero cold start" or "no cold start" for agentOS or Rivet Actors.** Always say "near-zero cold start" or specify the actual latency (e.g. "~6 ms cold start"). Cold starts are real, just very small.
 
 - API endpoint: `https://api.rivet.dev`
 - Cloud API endpoint: `https://cloud-api.rivet.dev`
 - Dashboard: `https://hub.rivet.dev`
 - Documentation: `https://rivet.dev/docs`
-
-The `rivet.gg` domain is deprecated and should never be used in this codebase.
 
 **Use "sandbox mounting" when referring to the agentOS sandbox integration.** Do not use "sandbox extension" or "sandbox escalation." The feature mounts a sandbox as a filesystem inside the VM.
 
@@ -91,168 +87,14 @@ docker-compose up -d
 
 ## Dependency Management
 
-### pnpm Workspace
-- Use pnpm for all npm-related commands. We're using a pnpm workspace.
-
-### TypeScript Concurrency
-- Use `antiox` for TypeScript concurrency primitives instead of ad hoc Promise queues, custom channel wrappers, or event-emitter based coordination.
-- Prefer the Tokio-shaped APIs from `antiox` for concurrency needs. For example, use `antiox/sync/mpsc` for `tx` and `rx` channels, `antiox/task` for spawning tasks, and the matching sync and time modules as needed.
-- Treat `antiox` as the default choice for any TypeScript concurrency work because it mirrors Rust and Tokio APIs used elsewhere in the codebase.
-
-### RivetKit Type Build Troubleshooting
-- If `rivetkit` type or DTS builds fail with missing `@rivetkit/*` declarations, run `pnpm build -F rivetkit` from repo root (Turbo build path) before changing TypeScript `paths`.
-- After native `rivetkit-core` changes, use `pnpm --filter @rivetkit/rivetkit-napi build:force` before TS driver tests because the normal N-API build skips when a prebuilt `.node` exists.
-- When removing `rivetkit-napi` `JsActorConfig` fields, keep `impl From<JsActorConfig> for FlatActorConfig` explicit and set any wider core-only fields to `None` instead of dropping them from the struct literal.
-- Do not add temporary `@rivetkit/*` path aliases in `rivetkit-typescript/packages/rivetkit/tsconfig.json` to work around stale or missing built declarations.
-- When trimming `rivetkit` entrypoints, update `package.json` exports, `files`, and `scripts.build` together. `tsup` can still pass while stale exports point at missing dist files.
-
-### RivetKit Test Fixtures
-- Keep RivetKit test fixtures scoped to the engine-only runtime.
-- Prefer targeted integration tests under `rivetkit-typescript/packages/rivetkit/tests/` over shared multi-driver matrices.
-- `rivetkit-typescript/packages/rivetkit/tests/driver/shared-harness.ts` mirrors runtime stderr lines containing `[DBG]`; strip temporary debug instrumentation before timing-sensitive driver reruns or hibernation tests will timeout on log spam.
-- `POST /inspector/workflow/replay` can legitimately return an empty workflow-history snapshot when replaying from the beginning because the endpoint clears persisted history before restarting the workflow.
-- For inspector replay tests, prove "workflow in flight" via inspector `workflowState` (`pending`/`running`), not `entryMetadata.status` or `runHandlerActive`, because those can lag or disagree across encodings.
-- Query-backed inspector endpoints can each hit their own transient `guard/actor_ready_timeout` during actor startup, so active-workflow driver tests should poll the exact endpoint they assert on instead of waiting on one inspector route and doing a single fetch against another.
-- When filtering a single driver file with Vitest, include the outer `describeDriverMatrix(...)` suite name before `static registry > encoding (...)` in the `-t` regex or Vitest will happily skip the whole file.
-- When moving Rust inline tests out of `src/`, keep a tiny source-owned `#[cfg(test)] #[path = "..."] mod tests;` shim so the moved file still has private module access without widening runtime visibility.
-- For RivetKit runtime or parity bugs, use `rivetkit-typescript/packages/rivetkit` driver tests as the primary oracle: reproduce with the TypeScript driver suite first, compare behavior against the original TypeScript implementation at ref `feat/sqlite-vfs-v2`, patch native/Rust to match, then rerun the same TypeScript driver test before adding lower-level native tests.
-
-### SQLite Package
-- RivetKit SQLite is native-only: VFS and query execution live in `rivetkit-rust/packages/rivetkit-sqlite/`, core owns lifecycle, and NAPI only marshals JS types.
-- The N-API addon lives at `@rivetkit/rivetkit-napi` in `rivetkit-typescript/packages/rivetkit-napi`; keep Docker build targets, publish metadata, examples, and workspace package references in sync when renaming or moving it.
-- N-API actor-runtime wrappers should expose `ActorContext` sub-objects as first-class classes, keep raw payloads as `Buffer`, and wrap queue messages as classes so completable receives can call `complete()` back into Rust.
-- N-API callback bridges should pass a single request object through `ThreadsafeFunction`, and Promise results that cross back into Rust should deserialize into `#[napi(object)]` structs instead of `JsObject` so the callback future stays `Send`.
-- Keep the receive-loop adapter callback registry centralized in `rivetkit-typescript/packages/rivetkit-napi/src/actor_factory.rs`; extend its TSF slots, payload builders, and bridge error helpers there instead of scattering ad hoc JS conversion logic across new dispatch code.
-- Keep `rivetkit-typescript/packages/rivetkit-napi/src/napi_actor_events.rs` as the receive-loop execution boundary; `actor_factory.rs` should stay focused on TSF binding setup and bridge helpers, not event-loop control flow.
-- `rivetkit-napi` `ActorContextShared` instances are cached by `actor_id`; every fresh `run_adapter_loop` must call `reset_runtime_shared_state()` before reattaching abort/run/task hooks or sleep→wake cycles inherit stale `end_reason` / lifecycle flags and drop post-wake events.
-- Receive-loop `SerializeState` handling should stay inline in `napi_actor_events.rs`, reuse the shared `state_deltas_from_payload(...)` converter from `actor_context.rs`, and only cancel the adapter abort token on `Destroy` or final adapter teardown, not on `Sleep`.
-- In `rivetkit-typescript/packages/rivetkit/src/registry/native.ts`, late `registerTask(...)` calls during sleep/finalize teardown can legitimately hit `actor task registration is closed` / `not configured`; swallow only that specific bridge error so workflow cleanup does not crash the runtime.
-- Bare-workflow `no_envoys` failures should be investigated as possible runtime crashes before being chased as engine scheduling misses; check actor stderr for late `registerTask(...)` / adapter panics first.
-- Receive-loop NAPI optional callbacks should preserve the TypeScript runtime defaults: missing `onBeforeSubscribe` allows the subscription, missing workflow callbacks reply `None`, and missing connection lifecycle hooks still accept the connection while leaving the existing empty conn state untouched.
-- N-API `ThreadsafeFunction` callbacks using `ErrorStrategy::CalleeHandled` follow Node's error-first JS signature, so internal wrappers must accept `(err, payload)` and rethrow non-null errors explicitly.
-- N-API structured errors should cross the JS<->Rust boundary by prefix-encoding `{ group, code, message, metadata }` into `napi::Error.reason`, then normalizing that prefix back into a `RivetError` on the other side.
-- `#[napi(object)]` bridge payloads should stay plain-data only; if TypeScript needs to cancel native work, use primitives or JS-side polling instead of trying to pass a `#[napi]` class instance through an object field.
-- For non-idempotent native waits like `queue.enqueueAndWait()`, bridge JS `AbortSignal` through a standalone native `CancellationToken`; timeout-slicing is only safe for receive-style polling calls like `waitForNames()`.
-- Native queue receive waits should observe the actor abort token, but `enqueue_and_wait` completion waits must ignore actor abort and rely on the tracked user task for shutdown cancellation.
-- Core queue receive waits need the `ActorContext`-owned abort `CancellationToken` wired into `Queue::new(...)` and cancelled from `mark_destroy_requested()`; external JS cancel tokens alone will not make `c.queue.next()` abort during destroy.
-
-### RivetKit Package Resolutions
-- The root `/package.json` contains `resolutions` that map RivetKit packages to local workspace versions:
-
-```json
-{
-  "resolutions": {
-    "rivetkit": "workspace:*",
-    "@rivetkit/react": "workspace:*",
-    "@rivetkit/workflow-engine": "workspace:*",
-    // ... other @rivetkit/* packages
-  }
-}
-```
-
-- Use `*` as the dependency version when adding RivetKit packages to `/examples/`, because root resolutions map them to local workspace packages:
-
-```json
-{
-  "dependencies": {
-    "rivetkit": "*",
-    "@rivetkit/react": "*"
-  }
-}
-```
-
-- Add new internal `@rivetkit/*` packages to root `resolutions` with `"workspace:*"` if missing, and prefer re-exporting internal packages (for example `@rivetkit/workflow-engine`) from `rivetkit` subpaths like `rivetkit/workflow` instead of direct dependencies.
-
-### Dynamic Import Pattern
-- For runtime-only dependencies, use dynamic loading so bundlers do not eagerly include them.
-- Build the module specifier from string parts (for example with `["pkg", "name"].join("-")` or `["@scope", "pkg"].join("/")`) instead of a single string literal.
-- Prefer this pattern for modules like `@rivetkit/rivetkit-napi/wrapper`, `sandboxed-node`, and `isolated-vm`.
-- The TypeScript registry's native envoy path should dynamically load `@rivetkit/rivetkit-napi` and `@rivetkit/engine-cli` so browser and serverless bundles do not eagerly pull native-only modules.
-- Native actor runner settings in `rivetkit-typescript/packages/rivetkit/src/registry/native.ts` should come from `definition.config.options`, not top-level actor config fields.
-- If loading by resolved file path, resolve first and then import via `pathToFileURL(...).href`.
-
-### Fail-By-Default Runtime Behavior
-- Avoid silent no-ops for required runtime behavior.
-- In `rivetkit-core` `ActorTask::run`, bind inbox `recv()` calls as raw `Option`s and log the closed channel before terminating; `Some(...) = recv()` plus `else => break` hides which inbox died.
-- In `rivetkit-typescript/packages/rivetkit/src/common/utils.ts::deconstructError`, only passthrough canonical structured errors (`instanceof RivetError` or tagged `__type: "RivetError"` with full fields); plain-object lookalikes must still be classified and sanitized.
-- Do not use optional chaining for required lifecycle and bridge operations (for example sleep, destroy, alarm dispatch, ack, and websocket dispatch paths).
-- If a capability is required, validate it and throw an explicit error with actionable context instead of returning early.
-- Optional chaining is acceptable only for best-effort diagnostics and cleanup paths (for example logging hooks and dispose/release cleanup).
-- Keep scaffolded `rivetkit-core` wrappers `Default`-constructible, but return explicit configuration errors until a real `EnvoyHandle` is wired in.
-- Keep foreign-runtime-only `ActorContext` helpers present on the public surface even before NAPI or V8 wires them, and make them fail with explicit configuration errors instead of silently disappearing.
-- `rivetkit-core` boxed callback APIs should use `futures::future::BoxFuture<'static, ...>` plus the shared `actor::callbacks::Request` and `Response` wrappers so config and HTTP parsing helpers stay in core for future runtimes.
-- `rivetkit-core` actor persistence should keep the BARE snapshot at the single-byte KV key `[1]` so the Rust runtime matches the TypeScript `KEYS.PERSIST_DATA` layout.
-- `rivetkit-core` receive-loop persistence should route deferred saves through `ActorContext::request_save(...)` + `ActorEvent::SerializeState { reason: Save, .. }`, while shutdown adapters persist explicitly with `ActorContext::save_state(Vec<StateDelta>)` because `Sleep`/`Destroy` replies are unit-only and direct durability must still clear pending save-request flags after a successful write.
-- `rivetkit-core` live inspector state for receive-loop actors now rides `ActorContext::inspector_attach()` / `inspector_detach()` / `subscribe_inspector()`, while `ActorTask` debounces `SerializeState { reason: Inspector, .. }` off request-save hooks; runtime inspector websocket handlers should stream the overlay broadcast instead of trusting `InspectorSignal::StateUpdated` for fresh bytes.
-- `rivetkit-core` receive-loop `ActorEvent::Action` dispatch should use `conn: None` for alarm-originated work and `Some(ConnHandle)` for real client connections; do not synthesize placeholder connections for scheduled actions.
-- `rivetkit-core` hibernatable websocket connections should persist each connection under KV key prefix `[2] + conn_id` using the TypeScript v4 BARE field order so Rust and TypeScript actors can restore the same connection payloads.
-- `rivetkit-core` queue persistence should keep metadata at KV key `[5, 1, 1]` and messages under `[5, 1, 2] + u64be(id)` so FIFO prefix scans match the TypeScript runtime layout.
-- `rivetkit-core` actor, connection, and queue persisted payloads should use the vbare-compatible 2-byte little-endian embedded version prefix before the BARE body, matching the TypeScript `serializeWithEmbeddedVersion(...)` format.
-- `rivetkit-core` cross-cutting inspector hooks should stay anchored on `ActorContext`, with queue-specific callbacks carrying the current size and connection updates reading the manager count so unconfigured inspectors stay cheap no-ops.
-- `rivetkit-core` schedule mutations should update `ActorState` through a single helper, then immediately kick `save_state(immediate = true)` and resync the envoy alarm to the earliest event.
-- `rivetkit-core` state mutations from inside `on_state_change` callbacks should fail with `actor/state_mutation_reentrant`; use vars or another non-state side channel for callback-run counters.
-- `rivetkit-core` HTTP and WebSocket staging helpers should keep transport failures at the boundary by turning `on_request` errors into HTTP 500 responses and `on_websocket` errors into logged 1011 closes, while `ConnHandle` and `WebSocket` wrappers surface explicit configuration errors through internal `try_*` helpers.
-- `rivetkit-core` bulk transport disconnect helpers should sweep every matching connection, remove the successful disconnects, update connection/sleep bookkeeping, and only then aggregate any per-connection failures into the returned error.
-- `rivetkit-core` registry startup should build runtime-backed `ActorContext`s with `ActorContext::new_runtime(...)` so state, queue, and connection managers inherit the actor config before lifecycle startup runs.
-- Raw `onRequest` HTTP fetches should bypass `maxIncomingMessageSize` / `maxOutgoingMessageSize`; keep those message-size guards on `/action/*` and `/queue/*` HTTP message routes in `rivetkit-typescript/packages/rivetkit/src/registry/native.ts`, not generic `RegistryDispatcher::handle_fetch`.
-- `rivetkit-core` sleep readiness should stay centralized in `SleepController`, with queue waits, scheduled internal work, disconnect callbacks, and websocket callbacks reporting activity through `ActorContext` hooks so the idle timer stays accurate.
-- `rivetkit-core` startup should load `PersistedActor` into `ActorContext` before factory creation, persist `has_initialized` immediately, set `ready` before the driver hook, and only set `started` after that hook completes.
-- `rivetkit-core` startup should resync persisted alarms and restore hibernatable connections before `ready`, then reset the sleep timer, spawn `run` in a detached panic-catching task, and drain overdue scheduled events after `started`.
-- `rivetkit-core` sleep shutdown should wait for the tracked `run` task, poll `SleepController` for the idle window and shutdown-task drains, persist hibernatable connections before disconnecting non-hibernatable ones, and finish with an immediate state save.
-- `rivetkit-core` sleep shutdown is two-phase now: `SleepGrace` fires `onSleep` immediately and keeps dispatch/save timers live, while only `SleepFinalize` gates dispatch, suspends alarms, and runs teardown.
-- Process-global `rivetkit-core` `ActorTask` test hooks (`install_shutdown_cleanup_hook`, lifecycle-event/reply hooks) must be actor-scoped and serialized in tests or parallel `cargo test` runs will cross-wire unrelated actors.
-- `rivetkit-core` destroy shutdown should skip the idle-window wait, use `on_destroy_timeout` independently from the shutdown grace period, disconnect every connection, and finish with the same immediate state save and SQLite cleanup path.
-- `rivetkit-core` stop shutdown should finish persistence in this order: immediate state save, pending state write wait, alarm write wait, SQLite cleanup, then driver alarm cancellation.
-- `rivetkit-core` `ActorConfig` uses `sleep_grace_period_overridden` to distinguish an explicit `sleep_grace_period` from legacy `on_sleep_timeout + wait_until_timeout` fallback behavior.
-- `envoy-client` graceful actor teardown should flow through `EnvoyCallbacks::on_actor_stop_with_completion`; the default implementation preserves the old immediate `on_actor_stop` behavior by auto-completing the stop handle after the callback returns.
-- `engine/sdks/rust/envoy-client` sync `EnvoyHandle` lookups for live actor state should read the shared `SharedContext.actors` mirror keyed by actor id/generation; blocking back through the envoy task can panic on current-thread Tokio runtimes.
-- `rivetkit` typed `Ctx<A>` should stay a stateless wrapper over `rivetkit-core::ActorContext`: actor state lives in the user receive loop, there is no typed vars field, and CBOR encode/decode stays at wrapper method boundaries like `broadcast` and `ConnCtx`.
-- `rivetkit` typed `Start<A>` wrappers must rehydrate each `ActorStart.hibernated` state blob back onto the `ConnHandle` before exposing `ConnCtx`, or `conn.state()` stops matching the wake snapshot.
-
-### Rust Dependencies
-- New crates under `rivetkit-rust/packages/` that should inherit repo-wide workspace deps must set `[package] workspace = "../../../"` and be added to the root `/Cargo.toml` workspace members.
-- The high-level `rivetkit` crate should stay a thin typed wrapper over `rivetkit-core` and re-export shared transport/config types instead of redefining them.
+- Prefer the Tokio-shaped APIs from `antiox` (`antiox/sync/mpsc`, `antiox/task`, etc.) over ad hoc Promise queues, custom channel wrappers, or event-emitter coordination.
+- The high-level `rivetkit` crate stays a thin typed wrapper over `rivetkit-core` and re-exports shared transport/config types instead of redefining them.
 - When `rivetkit` needs ergonomic helpers on a `rivetkit-core` type it re-exports, prefer an extension trait plus `prelude` re-export instead of wrapping and replacing the core type.
 
-## Documentation
+### SQLite Package
 
-- If you need to look at the documentation for a package, visit `https://docs.rs/{package-name}`. For example, serde docs live at https://docs.rs/serde/
-- When adding new docs pages, update `website/src/sitemap/mod.ts` so the page appears in the sidebar.
-- When changing actor/runtime limits or behavior that affects documented limits (for example KV, queue, SQLite, WebSocket, HTTP, or timeouts), update `website/src/content/docs/actors/limits.mdx` in the same change.
-
-## Code Blocks in Docs
-
-- All TypeScript code blocks in docs are typechecked during the website build. They must be valid, compilable TypeScript.
-- Use `<CodeGroup workspace>` only when showing multiple related files together (e.g., `actors.ts` + `client.ts`). For a single file, use a standalone fenced code block.
-- Code blocks are extracted and typechecked via `website/src/integrations/typecheck-code-blocks.ts`. Add `@nocheck` to the code fence to skip typechecking for a block.
-
-## Content Frontmatter
-
-### Docs (`website/src/content/docs/**/*.mdx`)
-
-- Required frontmatter fields:
-
-- `title` (string)
-- `description` (string)
-- `skill` (boolean)
-
-### Blog + Changelog (`website/src/content/posts/**/page.mdx`)
-
-- Required frontmatter fields:
-
-- `title` (string)
-- `description` (string)
-- `author` (enum: `nathan-flurry`, `nicholas-kissel`, `forest-anderson`)
-- `published` (date string)
-- `category` (enum: `changelog`, `monthly-update`, `launch-week`, `technical`, `guide`, `frogs`)
-
-- Optional frontmatter fields:
-
-- `keywords` (string array)
-
-## Examples
-
-- All example READMEs in `/examples/` should follow the format defined in `.claude/resources/EXAMPLE_TEMPLATE.md`.
+- RivetKit SQLite is native-only: VFS and query execution live in `rivetkit-rust/packages/rivetkit-sqlite/`, core owns lifecycle, and NAPI only marshals JS types.
+- For NAPI bridge wiring (TSF callback layout, cancellation tokens, `#[napi(object)]` rules), see `docs-internal/engine/napi-bridge.md`.
 
 ## Agent Working Directory
 

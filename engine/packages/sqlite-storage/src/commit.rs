@@ -197,7 +197,7 @@ impl SqliteEngine {
 			meta_read_duration,
 			ltx_encode_duration,
 			pidx_read_duration,
-		) = udb::run_db_op(self.db.as_ref(), self.op_counter.as_ref(), move |tx| {
+		) = udb::run_db_op(&self.db, self.op_counter.as_ref(), move |tx| {
 			let actor_id = actor_id_for_tx.clone();
 			let request = request.clone();
 			let dirty_pgnos = dirty_pgnos_for_tx.clone();
@@ -419,7 +419,7 @@ impl SqliteEngine {
 		let actor_id_for_tx = actor_id.clone();
 		let subspace = self.subspace.clone();
 		let request = request.clone();
-		let txid = udb::run_db_op(self.db.as_ref(), self.op_counter.as_ref(), move |tx| {
+		let txid = udb::run_db_op(&self.db, self.op_counter.as_ref(), move |tx| {
 			let actor_id = actor_id_for_tx.clone();
 			let subspace = subspace.clone();
 			let request = request.clone();
@@ -527,74 +527,72 @@ impl SqliteEngine {
 		let actor_id_for_tx = actor_id.clone();
 		let subspace = self.subspace.clone();
 		let request_for_tx = request.clone();
-		let chunk_write_result =
-			udb::run_db_op(self.db.as_ref(), self.op_counter.as_ref(), move |tx| {
-				let actor_id = actor_id_for_tx.clone();
-				let subspace = subspace.clone();
-				let request = request_for_tx.clone();
-				async move {
-					let meta_storage_key = meta_key(&actor_id);
-					let meta_bytes =
-						udb::tx_get_value_serializable(&tx, &subspace, &meta_storage_key)
-							.await?
-							.ok_or(SqliteStorageError::MetaMissing {
-								operation: "commit_stage",
-							})?;
-					let head = decode_db_head(&meta_bytes)?;
-					if head.generation != request.generation {
-						return Err(SqliteStorageError::FenceMismatch {
-							reason: format!(
-								"commit_stage generation {} did not match current generation {}",
-								request.generation, head.generation
-							),
-						}
-						.into());
+		let chunk_write_result = udb::run_db_op(&self.db, self.op_counter.as_ref(), move |tx| {
+			let actor_id = actor_id_for_tx.clone();
+			let subspace = subspace.clone();
+			let request = request_for_tx.clone();
+			async move {
+				let meta_storage_key = meta_key(&actor_id);
+				let meta_bytes = udb::tx_get_value_serializable(&tx, &subspace, &meta_storage_key)
+					.await?
+					.ok_or(SqliteStorageError::MetaMissing {
+						operation: "commit_stage",
+					})?;
+				let head = decode_db_head(&meta_bytes)?;
+				if head.generation != request.generation {
+					return Err(SqliteStorageError::FenceMismatch {
+						reason: format!(
+							"commit_stage generation {} did not match current generation {}",
+							request.generation, head.generation
+						),
 					}
-					if request.txid != head.next_txid.saturating_sub(1) {
-						return Err(SqliteStorageError::StageNotFound {
-							stage_id: request.txid,
-						}
-						.into());
+					.into());
+				}
+				if request.txid != head.next_txid.saturating_sub(1) {
+					return Err(SqliteStorageError::StageNotFound {
+						stage_id: request.txid,
 					}
-					ensure!(
-						request.txid > head.head_txid,
-						"commit_stage txid {} must be greater than current head txid {}",
-						request.txid,
-						head.head_txid
-					);
+					.into());
+				}
+				ensure!(
+					request.txid > head.head_txid,
+					"commit_stage txid {} must be greater than current head txid {}",
+					request.txid,
+					head.head_txid
+				);
 
-					let chunk_key = delta_chunk_key(&actor_id, request.txid, request.chunk_idx);
-					let existing_chunk = udb::tx_get_value(&tx, &subspace, &chunk_key).await?;
-					let mut usage_without_meta = head.sqlite_storage_used.saturating_sub(
-						tracked_storage_entry_size(&meta_storage_key, &meta_bytes)
-							.expect("meta key should count toward sqlite quota"),
-					);
-					if let Some(existing_chunk) = existing_chunk.as_ref() {
-						usage_without_meta = usage_without_meta.saturating_sub(
-							tracked_storage_entry_size(&chunk_key, existing_chunk)
-								.expect("delta chunk key should count toward sqlite quota"),
-						);
-					}
-					usage_without_meta = usage_without_meta.saturating_add(
-						tracked_storage_entry_size(&chunk_key, &request.bytes)
+				let chunk_key = delta_chunk_key(&actor_id, request.txid, request.chunk_idx);
+				let existing_chunk = udb::tx_get_value(&tx, &subspace, &chunk_key).await?;
+				let mut usage_without_meta = head.sqlite_storage_used.saturating_sub(
+					tracked_storage_entry_size(&meta_storage_key, &meta_bytes)
+						.expect("meta key should count toward sqlite quota"),
+				);
+				if let Some(existing_chunk) = existing_chunk.as_ref() {
+					usage_without_meta = usage_without_meta.saturating_sub(
+						tracked_storage_entry_size(&chunk_key, existing_chunk)
 							.expect("delta chunk key should count toward sqlite quota"),
 					);
-					let (updated_head, encoded_head) =
-						encode_db_head_with_usage(&actor_id, &head, usage_without_meta)?;
-					if updated_head.sqlite_storage_used > updated_head.sqlite_max_storage {
-						bail!(
-							"SqliteStorageQuotaExceeded: sqlite storage used {} would exceed max {}",
-							updated_head.sqlite_storage_used,
-							updated_head.sqlite_max_storage
-						);
-					}
-					udb::tx_write_value(&tx, &subspace, &chunk_key, &request.bytes)?;
-					udb::tx_write_value(&tx, &subspace, &meta_storage_key, &encoded_head)?;
-
-					Ok(())
 				}
-			})
-			.await;
+				usage_without_meta = usage_without_meta.saturating_add(
+					tracked_storage_entry_size(&chunk_key, &request.bytes)
+						.expect("delta chunk key should count toward sqlite quota"),
+				);
+				let (updated_head, encoded_head) =
+					encode_db_head_with_usage(&actor_id, &head, usage_without_meta)?;
+				if updated_head.sqlite_storage_used > updated_head.sqlite_max_storage {
+					bail!(
+						"SqliteStorageQuotaExceeded: sqlite storage used {} would exceed max {}",
+						updated_head.sqlite_storage_used,
+						updated_head.sqlite_max_storage
+					);
+				}
+				udb::tx_write_value(&tx, &subspace, &chunk_key, &request.bytes)?;
+				udb::tx_write_value(&tx, &subspace, &meta_storage_key, &encoded_head)?;
+
+				Ok(())
+			}
+		})
+		.await;
 		let udb_write_duration = decode_start.elapsed().saturating_sub(decode_duration);
 
 		match chunk_write_result {
@@ -673,7 +671,7 @@ impl SqliteEngine {
 			pidx_read_duration,
 			pidx_write_duration,
 			meta_write_duration,
-		) = udb::run_db_op(self.db.as_ref(), self.op_counter.as_ref(), move |tx| {
+		) = udb::run_db_op(&self.db, self.op_counter.as_ref(), move |tx| {
 			let actor_id = actor_id_for_tx.clone();
 			let subspace = subspace.clone();
 			let request = request_for_tx.clone();
@@ -1130,7 +1128,7 @@ mod tests {
 	) -> Result<DBHead> {
 		let (head, meta_bytes) = encode_db_head_with_usage(actor_id, &head, 0)?;
 		apply_write_ops(
-			engine.db.as_ref(),
+			&engine.db,
 			&engine.subspace,
 			engine.op_counter.as_ref(),
 			vec![WriteOp::put(meta_key(actor_id), meta_bytes)],
@@ -1159,7 +1157,7 @@ mod tests {
 		);
 		let (_, rewritten_meta) = encode_db_head_with_usage(actor_id, &head, usage_without_meta)?;
 		apply_write_ops(
-			engine.db.as_ref(),
+			&engine.db,
 			&engine.subspace,
 			engine.op_counter.as_ref(),
 			vec![WriteOp::put(meta_key, rewritten_meta)],
@@ -1460,7 +1458,7 @@ mod tests {
 		head.db_size_pages = 130;
 		write_seeded_meta(&engine, TEST_ACTOR, head).await?;
 		apply_write_ops(
-			engine.db.as_ref(),
+			&engine.db,
 			&engine.subspace,
 			engine.op_counter.as_ref(),
 			vec![
@@ -1607,7 +1605,7 @@ mod tests {
 		let (engine, _compaction_rx) = SqliteEngine::new(db, subspace);
 		write_seeded_meta(&engine, TEST_ACTOR, seeded_head()).await?;
 		apply_write_ops(
-			engine.db.as_ref(),
+			&engine.db,
 			&engine.subspace,
 			engine.op_counter.as_ref(),
 			vec![WriteOp::put(b"/kv/untracked".to_vec(), b"ignored".to_vec())],
@@ -1644,7 +1642,7 @@ mod tests {
 		head.sqlite_max_storage = 5_000;
 		write_seeded_meta(&engine, TEST_ACTOR, head).await?;
 		apply_write_ops(
-			engine.db.as_ref(),
+			&engine.db,
 			&engine.subspace,
 			engine.op_counter.as_ref(),
 			vec![WriteOp::put(

@@ -11,7 +11,6 @@ impl EnvoyCallbacks for RegistryCallbacks {
 		generation: u32,
 		config: protocol::ActorConfig,
 		preloaded_kv: Option<protocol::PreloadedKv>,
-		_sqlite_schema_version: u32,
 		sqlite_startup_data: Option<protocol::SqliteStartupData>,
 	) -> EnvoyBoxFuture<anyhow::Result<()>> {
 		let dispatcher = self.dispatcher.clone();

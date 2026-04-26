@@ -57,4 +57,37 @@ lazy_static::lazy_static! {
 		&["namespace_id", "runner_name"],
 		*REGISTRY
 	).unwrap();
+
+	pub static ref SQLITE_MIGRATION_ATTEMPTS_TOTAL: IntCounter = register_int_counter_with_registry!(
+		"pegboard_sqlite_migration_attempts_total",
+		"Total number of sqlite v1 to v2 migration attempts.",
+		*REGISTRY
+	).unwrap();
+
+	pub static ref SQLITE_MIGRATION_SUCCESSES_TOTAL: IntCounter = register_int_counter_with_registry!(
+		"pegboard_sqlite_migration_successes_total",
+		"Total number of sqlite v1 to v2 migrations that completed successfully.",
+		*REGISTRY
+	).unwrap();
+
+	pub static ref SQLITE_MIGRATION_FAILURES_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
+		"pegboard_sqlite_migration_failures_total",
+		"Total number of sqlite v1 to v2 migration failures by phase.",
+		&["phase"],
+		*REGISTRY
+	).unwrap();
+
+	pub static ref SQLITE_MIGRATION_DURATION: Histogram = register_histogram_with_registry!(
+		"pegboard_sqlite_migration_duration_seconds",
+		"Duration of sqlite v1 to v2 migrations.",
+		MICRO_BUCKETS.to_vec(),
+		*REGISTRY
+	).unwrap();
+
+	pub static ref SQLITE_MIGRATION_PAGES: Histogram = register_histogram_with_registry!(
+		"pegboard_sqlite_migration_pages",
+		"Number of pages imported during sqlite v1 to v2 migration.",
+		MICRO_BUCKETS.to_vec(),
+		*REGISTRY
+	).unwrap();
 }

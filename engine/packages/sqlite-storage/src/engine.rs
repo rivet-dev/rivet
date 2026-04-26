@@ -16,7 +16,7 @@ use crate::types::{DBHead, SQLITE_MAX_DELTA_BYTES, SqliteMeta, decode_db_head};
 use crate::udb;
 
 pub struct SqliteEngine {
-	pub db: Arc<universaldb::Database>,
+	pub db: universaldb::Database,
 	pub subspace: Subspace,
 	pub op_counter: Arc<AtomicUsize>,
 	pub page_indices: HashMap<String, DeltaPageIndex>,
@@ -34,7 +34,7 @@ pub struct PendingStage {
 
 impl SqliteEngine {
 	pub fn new(
-		db: Arc<universaldb::Database>,
+		db: universaldb::Database,
 		subspace: Subspace,
 	) -> (Self, mpsc::UnboundedReceiver<String>) {
 		let (compaction_tx, compaction_rx) = mpsc::unbounded_channel();
@@ -63,7 +63,7 @@ impl SqliteEngine {
 
 	pub async fn try_load_head(&self, actor_id: &str) -> Result<Option<DBHead>> {
 		let meta_bytes = udb::get_value(
-			self.db.as_ref(),
+			&self.db,
 			&self.subspace,
 			self.op_counter.as_ref(),
 			meta_key(actor_id),
@@ -100,7 +100,7 @@ impl SqliteEngine {
 				drop(entry);
 
 				let index = DeltaPageIndex::load_from_store(
-					self.db.as_ref(),
+					&self.db,
 					&self.subspace,
 					self.op_counter.as_ref(),
 					pidx_delta_prefix(&actor_id),
@@ -150,7 +150,7 @@ mod tests {
 		let (db, subspace) = test_db().await?;
 		let (engine, _compaction_rx) = SqliteEngine::new(db, subspace);
 		crate::udb::apply_write_ops(
-			engine.db.as_ref(),
+			&engine.db,
 			&engine.subspace,
 			engine.op_counter.as_ref(),
 			vec![
