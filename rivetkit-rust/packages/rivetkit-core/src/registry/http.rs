@@ -15,8 +15,13 @@ impl RegistryDispatcher {
 			return self.handle_metrics_fetch(&instance, &request);
 		}
 
+		let actor_request = is_actor_request_path(&request.path);
 		let request = build_http_request(request).await?;
-		let framework_route = framework_http_route(request.uri().path())?;
+		let framework_route = if actor_request {
+			None
+		} else {
+			framework_http_route(request.uri().path())?
+		};
 		let instance = match self.active_actor(actor_id).await {
 			Ok(instance) => instance,
 			Err(error) => {
@@ -567,6 +572,14 @@ pub(super) fn normalize_actor_request_path(path: &str) -> String {
 	}
 }
 
+fn is_actor_request_path(path: &str) -> bool {
+	let Some(stripped) = path.strip_prefix("/request") else {
+		return false;
+	};
+
+	stripped.is_empty() || matches!(stripped.as_bytes().first(), Some(b'/') | Some(b'?'))
+}
+
 pub(super) fn build_envoy_response(response: Response) -> Result<HttpResponse> {
 	let (status, headers, body) = response.to_parts();
 
@@ -905,9 +918,9 @@ mod tests {
 
 	use super::{
 		HttpRequest, HttpResponseEncoding, authorization_bearer_token,
-		authorization_bearer_token_map, framework_action_error_response,
-		message_boundary_error_response, request_encoding, request_has_bearer_token,
-		workflow_dispatch_result,
+		authorization_bearer_token_map, framework_action_error_response, is_actor_request_path,
+		message_boundary_error_response, normalize_actor_request_path, request_encoding,
+		request_has_bearer_token, workflow_dispatch_result,
 	};
 	use crate::actor::action::ActionDispatchError;
 	use crate::error::ActorLifecycle as ActorLifecycleError;
@@ -923,6 +936,21 @@ mod tests {
 	#[derive(RivetError)]
 	#[error("message", "outgoing_too_long", "Outgoing message too long")]
 	struct OutgoingMessageTooLong;
+
+	#[test]
+	fn request_prefix_detection_matches_normalization() {
+		assert!(is_actor_request_path("/request"));
+		assert!(is_actor_request_path("/request/"));
+		assert!(is_actor_request_path("/request/users"));
+		assert!(is_actor_request_path("/request?foo=bar"));
+		assert!(!is_actor_request_path("/requestfoo"));
+
+		assert_eq!(normalize_actor_request_path("/request"), "/");
+		assert_eq!(normalize_actor_request_path("/request/"), "/");
+		assert_eq!(normalize_actor_request_path("/request/users"), "/users");
+		assert_eq!(normalize_actor_request_path("/request?foo=bar"), "?foo=bar");
+		assert_eq!(normalize_actor_request_path("/requestfoo"), "/requestfoo");
+	}
 
 	#[test]
 	fn workflow_dispatch_result_marks_handled_workflow_as_enabled() {
