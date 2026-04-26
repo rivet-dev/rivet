@@ -36,6 +36,8 @@ Preload handling is tri-state for each prefix:
 - Receive-loop persistence routes deferred saves through `ActorContext::request_save(...)` + `ActorEvent::SerializeState { reason: Save, .. }`.
 - Shutdown adapters persist explicitly with `ActorContext::save_state(Vec<StateDelta>)` because `Sleep`/`Destroy` replies are unit-only. Direct durability must still clear pending save-request flags after a successful write.
 - Actor state is post-boot delta-only. Use `request_save` / `save_state(Vec<StateDelta>)`. Do not reintroduce `set_state` / `mutate_state`.
+- Schedule mutations update `ActorState` through a single helper, then immediately kick `save_state(immediate = true)` and resync the envoy alarm to the earliest event.
+- State mutations from inside `on_state_change` callbacks fail with `actor/state_mutation_reentrant`. Use vars or another non-state side channel for callback-run counters.
 
 ## Inspector wiring
 
@@ -124,6 +126,10 @@ Persistence order:
 ## Callbacks
 
 - Boxed callback APIs use `futures::future::BoxFuture<'static, ...>` plus the shared `actor::callbacks::Request` and `Response` wrappers so config and HTTP parsing helpers stay in core for future runtimes.
+
+## Test isolation
+
+- Process-global `ActorTask` test hooks (`install_shutdown_cleanup_hook`, lifecycle-event/reply hooks) must be actor-scoped and serialized in tests. Parallel `cargo test` runs will otherwise cross-wire unrelated actors.
 
 ## High-level wrapper (`rivetkit`) interop
 

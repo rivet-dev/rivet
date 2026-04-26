@@ -13,20 +13,20 @@ use crate::engine::SqliteEngine;
 use crate::types::DirtyPage;
 use crate::udb;
 
-async fn open_test_db(path: &Path) -> Result<Arc<universaldb::Database>> {
+async fn open_test_db(path: &Path) -> Result<universaldb::Database> {
 	let driver = universaldb::driver::RocksDbDatabaseDriver::new(path.to_path_buf()).await?;
-	let db = Arc::new(universaldb::Database::new(Arc::new(driver)));
+	let db = universaldb::Database::new(Arc::new(driver));
 
 	Ok(db)
 }
 
-pub async fn test_db() -> Result<(Arc<universaldb::Database>, Subspace)> {
+pub async fn test_db() -> Result<(universaldb::Database, Subspace)> {
 	let (db, subspace, _path) = test_db_with_path().await?;
 
 	Ok((db, subspace))
 }
 
-pub async fn test_db_with_path() -> Result<(Arc<universaldb::Database>, Subspace, PathBuf)> {
+pub async fn test_db_with_path() -> Result<(universaldb::Database, Subspace, PathBuf)> {
 	let path = Builder::new().prefix("sqlite-storage-").tempdir()?.keep();
 	let db = open_test_db(&path).await?;
 	let subspace = Subspace::new(&("sqlite-storage", Uuid::new_v4().to_string()));
@@ -34,7 +34,7 @@ pub async fn test_db_with_path() -> Result<(Arc<universaldb::Database>, Subspace
 	Ok((db, subspace, path))
 }
 
-pub async fn reopen_test_db(path: impl AsRef<Path>) -> Result<Arc<universaldb::Database>> {
+pub async fn reopen_test_db(path: impl AsRef<Path>) -> Result<universaldb::Database> {
 	open_test_db(path.as_ref()).await
 }
 
@@ -56,7 +56,7 @@ pub async fn setup_engine() -> Result<(SqliteEngine, mpsc::UnboundedReceiver<Str
 
 pub async fn read_value(engine: &SqliteEngine, key: Vec<u8>) -> Result<Option<Vec<u8>>> {
 	udb::get_value(
-		engine.db.as_ref(),
+		&engine.db,
 		&engine.subspace,
 		engine.op_counter.as_ref(),
 		key,
@@ -69,7 +69,7 @@ pub async fn scan_prefix_values(
 	prefix: Vec<u8>,
 ) -> Result<Vec<(Vec<u8>, Vec<u8>)>> {
 	udb::scan_prefix_values(
-		engine.db.as_ref(),
+		&engine.db,
 		&engine.subspace,
 		engine.op_counter.as_ref(),
 		prefix,

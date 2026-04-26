@@ -28,7 +28,6 @@ pub async fn handle_commands(ctx: &mut EnvoyContext, commands: Vec<protocol::Com
 					val.config,
 					val.hibernating_requests,
 					val.preloaded_kv,
-					val.sqlite_schema_version,
 					val.sqlite_startup_data,
 				);
 

@@ -344,7 +344,6 @@ type CommandStartActor struct {
 	config: ActorConfig
 	hibernatingRequests: list<HibernatingRequest>
 	preloadedKv: optional<PreloadedKv>
-	sqliteSchemaVersion: u32
 	sqliteStartupData: optional<SqliteStartupData>
 }
 
