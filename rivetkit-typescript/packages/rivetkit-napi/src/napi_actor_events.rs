@@ -198,6 +198,17 @@ async fn run_preamble(
 ) -> Result<RunHandlerSlot> {
 	let is_new = snapshot.is_none();
 
+	// Run database migrations before any user lifecycle hook so `c.db` is
+	// usable from createState, onCreate, and createVars.
+	if let Some(callback) = &bindings.on_migrate {
+		with_timeout(
+			"onMigrate",
+			config.on_migrate_timeout,
+			call_on_migrate(callback, ctx, is_new),
+		)
+		.await?;
+	}
+
 	if is_new {
 		if let Some(callback) = &bindings.create_state {
 			let bytes = with_timeout(
@@ -236,15 +247,6 @@ async fn run_preamble(
 			"createVars",
 			config.create_vars_timeout,
 			call_create_vars(callback, ctx),
-		)
-		.await?;
-	}
-
-	if let Some(callback) = &bindings.on_migrate {
-		with_timeout(
-			"onMigrate",
-			config.on_migrate_timeout,
-			call_on_migrate(callback, ctx, is_new),
 		)
 		.await?;
 	}
