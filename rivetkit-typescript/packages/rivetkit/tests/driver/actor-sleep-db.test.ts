@@ -206,8 +206,10 @@ describeDriverMatrix("Actor Sleep Db", (driverTestConfig) => {
 					expect(counts.startCount).toBe(2);
 				},
 				{
-					timeout: 5_000,
-					interval: 50,
+					timeout: 10_000,
+					// Each poll is an actor action, so a tight interval can keep the
+					// actor awake and prevent the idle sleep this assertion observes.
+					interval: SLEEP_DB_TIMEOUT + 250,
 				},
 			);
 
