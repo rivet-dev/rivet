@@ -1,4 +1,5 @@
 import { Cause, Effect, Exit, Ref, PubSub } from "effect"
+import { Actor } from "@rivetkit/effect"
 import { Counter, CounterOverflowError } from "./api.ts"
 
 // --- Actor Implementation ---
@@ -27,8 +28,8 @@ export const CounterLive = Counter.toLayer(
 		//    ^ SubscriptionRef<{ count: number }>
 		const events = yield* Counter.Events
 		//    ^ { countChanged: PubSub<number> }
-		const kv = yield* Counter.Kv
-		const db = yield* Counter.Db
+		const kv = yield* Actor.Kv
+		const db = yield* Actor.Db
 
 		// Equivalent to current SDK's temporary variables
 		const connectionsTotal = yield* Ref.make(0)
