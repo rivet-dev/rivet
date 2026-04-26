@@ -279,6 +279,12 @@ pub async fn init_conn(
 		.custom_instrument(tracing::info_span!("envoy_init_tx")),
 	)?;
 
+	// Serverful pools update protocol version directly from the envoy
+	// connection path. Purge the runner-config caches so the first actor
+	// request after connect does not keep seeing a stale pre-mk2 config.
+	pegboard::utils::purge_runner_config_caches(ctx.cache(), namespace.namespace_id, &pool_name)
+		.await?;
+
 	// Send missed commands (must be after init packet)
 	if !missed_commands.is_empty() {
 		let msg = {

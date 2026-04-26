@@ -47,7 +47,11 @@ pub async fn pegboard_actor_create(ctx: &OperationCtx, input: &Input) -> Result<
 		ctx.subscribe::<crate::workflows::actor2::DestroyStarted>(("actor_id", input.actor_id)),
 		ctx.op(crate::ops::runner_config::get::Input {
 			runners: vec![(input.namespace_id, input.runner_name_selector.clone())],
-			bypass_cache: false,
+			// Protocol version decides whether we dispatch the mk1 or mk2 actor
+			// workflow. A freshly connected envoy can update this immediately
+			// before the first actor request, so this read must not use a stale
+			// cached runner config.
+			bypass_cache: true,
 		}),
 	)?;
 
