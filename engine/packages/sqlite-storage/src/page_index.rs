@@ -159,7 +159,7 @@ mod tests {
 		let (db, subspace) = test_db().await?;
 		let counter = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
 		apply_write_ops(
-			db.as_ref(),
+			&db,
 			&subspace,
 			counter.as_ref(),
 			vec![
@@ -176,7 +176,7 @@ mod tests {
 		let prefix = pidx_delta_prefix(TEST_ACTOR);
 		counter.store(0, std::sync::atomic::Ordering::SeqCst);
 		let index = DeltaPageIndex::load_from_store(
-			db.as_ref(),
+			&db,
 			&subspace,
 			counter.as_ref(),
 			prefix.clone(),

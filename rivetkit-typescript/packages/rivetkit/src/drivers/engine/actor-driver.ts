@@ -881,7 +881,6 @@ export class EngineActorDriver implements ActorDriver {
 		generation: number,
 		actorConfig: protocol.ActorConfig,
 		preloadedKv: protocol.PreloadedKv | null,
-		_sqliteSchemaVersion: number,
 		_sqliteStartupData: protocol.SqliteStartupData | null,
 	): Promise<void> {
 		if (this.#isShuttingDown) {

@@ -13,7 +13,7 @@ use sqlite_storage::{
 	compaction::CompactionCoordinator,
 	engine::SqliteEngine,
 	takeover::TakeoverConfig,
-	types::{FetchedPage, SQLITE_VFS_V2_SCHEMA_VERSION, SqliteMeta},
+	types::{FetchedPage, SqliteMeta},
 };
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -31,12 +31,12 @@ const SHUTDOWN_PROGRESS_INTERVAL: Duration = Duration::from_secs(7);
 static SQLITE_ENGINE: OnceCell<Arc<SqliteEngine>> = OnceCell::const_new();
 
 async fn shared_sqlite_engine(ctx: &StandaloneCtx) -> Result<Arc<SqliteEngine>> {
-	let db = Arc::new((*ctx.udb()?).clone());
+	let db = (*ctx.udb()?).clone();
 	let subspace = pegboard::keys::subspace().subspace(&("sqlite-storage",));
 
 	SQLITE_ENGINE
 		.get_or_try_init(|| async move {
-			let (engine, compaction_rx) = SqliteEngine::new(Arc::clone(&db), subspace.clone());
+			let (engine, compaction_rx) = SqliteEngine::new(db, subspace.clone());
 			let engine = Arc::new(engine);
 			tokio::spawn(CompactionCoordinator::run(
 				compaction_rx,
@@ -53,10 +53,8 @@ async fn maybe_load_sqlite_startup_data(
 	sqlite_engine: &SqliteEngine,
 	protocol_version: u16,
 	actor_id: Id,
-	sqlite_schema_version: u32,
 ) -> Result<Option<protocol::SqliteStartupData>> {
-	if sqlite_schema_version != SQLITE_VFS_V2_SCHEMA_VERSION || protocol_version < PROTOCOL_VERSION
-	{
+	if protocol_version < PROTOCOL_VERSION {
 		return Ok(None);
 	}
 
@@ -294,23 +292,12 @@ async fn handle(ctx: &StandaloneCtx, packet: protocol::ToOutbound) -> Result<()>
 		return Ok(());
 	};
 	let protocol_version = pool.protocol_version.unwrap_or(PROTOCOL_VERSION);
-	let sqlite_schema_version =
-		if pegboard::actor_kv::sqlite_v1_data_exists(&*ctx.udb()?, actor_id).await? {
-			pegboard::workflows::actor2::SQLITE_SCHEMA_VERSION_V1
-		} else {
-			SQLITE_VFS_V2_SCHEMA_VERSION
-		};
-	let sqlite_startup_data = if sqlite_schema_version == SQLITE_VFS_V2_SCHEMA_VERSION {
-		maybe_load_sqlite_startup_data(
-			shared_sqlite_engine(ctx).await?.as_ref(),
-			protocol_version,
-			actor_id,
-			sqlite_schema_version,
-		)
-		.await?
-	} else {
-		None
-	};
+	let sqlite_startup_data = maybe_load_sqlite_startup_data(
+		shared_sqlite_engine(ctx).await?.as_ref(),
+		protocol_version,
+		actor_id,
+	)
+	.await?;
 	let payload = versioned::ToEnvoy::wrap_latest(protocol::ToEnvoy::ToEnvoyCommands(vec![
 		protocol::CommandWrapper {
 			checkpoint,
@@ -324,7 +311,6 @@ async fn handle(ctx: &StandaloneCtx, packet: protocol::ToOutbound) -> Result<()>
 					})
 					.collect(),
 				preloaded_kv,
-				sqlite_schema_version,
 				sqlite_startup_data,
 			}),
 		},

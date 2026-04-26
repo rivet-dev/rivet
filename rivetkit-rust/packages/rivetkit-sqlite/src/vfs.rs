@@ -2759,7 +2759,7 @@ mod tests {
 					Err(err) => panic!("rocksdb driver should build: {err:#}"),
 				}
 			};
-			let db = Arc::new(universaldb::Database::new(Arc::new(driver)));
+			let db = universaldb::Database::new(Arc::new(driver));
 			let (engine, _compaction_rx) = SqliteEngine::new(db, self.subspace.clone());
 
 			Arc::new(engine)

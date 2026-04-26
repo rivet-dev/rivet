@@ -34,9 +34,11 @@ rivet-runtime.workspace = true
 rivet-types.workspace = true
 rivet-util.workspace = true
 rivetkit-shared-types.workspace = true
+scc.workspace = true
 serde_bare.workspace = true
 serde_json.workspace = true
 serde.workspace = true
+sqlite-storage.workspace = true
 strum.workspace = true
 tokio.workspace = true
 tracing.workspace = true
@@ -49,6 +51,8 @@ vbare.workspace = true
 
 [dev-dependencies]
 portpicker.workspace = true
+rusqlite.workspace = true
+tempfile.workspace = true
 test-snapshot-gen.workspace = true
 rivet-config.workspace = true
 rivet-test-deps.workspace = true

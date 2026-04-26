@@ -1,4 +1,3 @@
-// runner wf see how signal fail handling
 use base64::Engine;
 use base64::prelude::BASE64_STANDARD;
 use futures_util::TryStreamExt;
@@ -366,7 +365,6 @@ pub async fn send_outbound(ctx: &ActivityCtx, input: &SendOutboundInput) -> Resu
 				// populated before it reaches the runner
 				hibernating_requests: Vec::new(),
 				preloaded_kv: None,
-				sqlite_schema_version: super::SQLITE_SCHEMA_VERSION_V2,
 				sqlite_startup_data: None,
 			});
 
@@ -387,6 +385,25 @@ pub async fn send_outbound(ctx: &ActivityCtx, input: &SendOutboundInput) -> Resu
 	Ok(())
 }
 
+// Every successful allocation must bump the generation, then send the start command. Centralized
+// so a future allocation path cannot forget the generation bump.
+async fn start_new_generation(
+	ctx: &mut WorkflowCtx,
+	input: &Input,
+	state: &mut LifecycleState,
+	allocation: Allocation,
+) -> Result<()> {
+	state.generation += 1;
+	ctx.activity(SendOutboundInput {
+		generation: state.generation,
+		input: input.input.clone(),
+		allocation,
+	})
+	.await?;
+
+	Ok(())
+}
+
 pub async fn reschedule_actor(
 	ctx: &mut WorkflowCtx,
 	input: &Input,
@@ -396,8 +413,6 @@ pub async fn reschedule_actor(
 	let allocate_res = ctx.activity(AllocateInput {}).await?;
 
 	if let Some(allocation) = allocate_res.allocation {
-		state.generation += 1;
-
 		match &allocation {
 			Allocation::Serverless => {
 				// Transition to allocating
@@ -417,12 +432,7 @@ pub async fn reschedule_actor(
 			}
 		}
 
-		ctx.activity(SendOutboundInput {
-			generation: state.generation,
-			input: input.input.clone(),
-			allocation,
-		})
-		.await?;
+		start_new_generation(ctx, input, state, allocation).await?;
 	} else {
 		// NOTE: Cannot return `StoppedResult::Destroy` if provided `StoppedVariant::FailedAllocation` so we
 		// can ignore it
@@ -566,14 +576,7 @@ pub async fn handle_stopped(
 			let allocate_res = ctx.activity(AllocateInput {}).await?;
 
 			if let Some(allocation) = allocate_res.allocation {
-				state.generation += 1;
-
-				ctx.activity(SendOutboundInput {
-					generation: state.generation,
-					input: input.input.clone(),
-					allocation,
-				})
-				.await?;
+				start_new_generation(ctx, input, state, allocation).await?;
 
 				// Transition to allocating
 				state.transition = Transition::Allocating {
@@ -614,14 +617,7 @@ pub async fn handle_stopped(
 				let allocate_res = ctx.activity(AllocateInput {}).await?;
 
 				if let Some(allocation) = allocate_res.allocation {
-					state.generation += 1;
-
-					ctx.activity(SendOutboundInput {
-						generation: state.generation,
-						input: input.input.clone(),
-						allocation,
-					})
-					.await?;
+					start_new_generation(ctx, input, state, allocation).await?;
 
 					state.transition = Transition::Allocating {
 						destroy_after_start: false,

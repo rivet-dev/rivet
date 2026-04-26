@@ -44,7 +44,6 @@ function makeStartPayload(actorId: string): Buffer {
 						},
 						hibernatingRequests: [],
 						preloadedKv: null,
-						sqliteSchemaVersion: 0,
 						sqliteStartupData: null,
 					},
 				},

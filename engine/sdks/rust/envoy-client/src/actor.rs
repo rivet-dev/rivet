@@ -125,7 +125,6 @@ pub fn create_actor(
 	config: protocol::ActorConfig,
 	hibernating_requests: Vec<protocol::HibernatingRequest>,
 	preloaded_kv: Option<protocol::PreloadedKv>,
-	sqlite_schema_version: u32,
 	sqlite_startup_data: Option<protocol::SqliteStartupData>,
 ) -> (mpsc::UnboundedSender<ToActor>, Arc<AsyncCounter>) {
 	let (tx, rx) = mpsc::unbounded_channel();
@@ -137,7 +136,6 @@ pub fn create_actor(
 		config,
 		hibernating_requests,
 		preloaded_kv,
-		sqlite_schema_version,
 		sqlite_startup_data,
 		rx,
 		active_http_request_count.clone(),
@@ -160,7 +158,6 @@ async fn actor_inner(
 	config: protocol::ActorConfig,
 	hibernating_requests: Vec<protocol::HibernatingRequest>,
 	preloaded_kv: Option<protocol::PreloadedKv>,
-	sqlite_schema_version: u32,
 	sqlite_startup_data: Option<protocol::SqliteStartupData>,
 	mut rx: mpsc::UnboundedReceiver<ToActor>,
 	active_http_request_count: Arc<AsyncCounter>,
@@ -197,7 +194,6 @@ async fn actor_inner(
 			generation,
 			config,
 			preloaded_kv,
-			sqlite_schema_version,
 			sqlite_startup_data,
 		)
 		.await;
@@ -1426,7 +1422,6 @@ mod tests {
 			_generation: u32,
 			_config: protocol::ActorConfig,
 			_preloaded_kv: Option<protocol::PreloadedKv>,
-			_sqlite_schema_version: u32,
 			_sqlite_startup_data: Option<protocol::SqliteStartupData>,
 		) -> BoxFuture<anyhow::Result<()>> {
 			Box::pin(async { Ok(()) })
@@ -1528,7 +1523,6 @@ mod tests {
 			_generation: u32,
 			_config: protocol::ActorConfig,
 			_preloaded_kv: Option<protocol::PreloadedKv>,
-			_sqlite_schema_version: u32,
 			_sqlite_startup_data: Option<protocol::SqliteStartupData>,
 		) -> BoxFuture<anyhow::Result<()>> {
 			Box::pin(async { Ok(()) })
