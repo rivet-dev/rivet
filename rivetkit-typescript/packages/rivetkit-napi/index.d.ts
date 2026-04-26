@@ -213,10 +213,6 @@ export declare class ActorContext {
   aborted(): boolean
   runHandlerActive(): boolean
   restartRunHandler(): void
-  markReady(): void
-  markStarted(): void
-  isReady(): boolean
-  isStarted(): boolean
   beginWebsocketCallback(): number
   endWebsocketCallback(regionId: number): void
   abortSignal(): AbortSignal

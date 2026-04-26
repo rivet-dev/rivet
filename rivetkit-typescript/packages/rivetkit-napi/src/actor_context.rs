@@ -208,23 +208,6 @@ impl ActorContext {
 		Ok(())
 	}
 
-	pub(crate) async fn init_alarms(&self) -> anyhow::Result<()> {
-		self.inner.init_alarms();
-		Ok(())
-	}
-
-	pub(crate) fn mark_ready_internal(&self) {
-		self.shared.mark_ready(&self.inner);
-	}
-
-	pub(crate) fn mark_started_internal(&self) -> anyhow::Result<()> {
-		self.shared.mark_started(&self.inner)
-	}
-
-	pub(crate) async fn drain_overdue_scheduled_events(&self) -> anyhow::Result<()> {
-		self.inner.drain_overdue_scheduled_events().await
-	}
-
 	#[allow(dead_code)]
 	pub(crate) fn has_conn_changes(&self) -> bool {
 		self.inner.conns().any(|conn| conn.is_hibernatable())
@@ -479,29 +462,6 @@ impl ActorContext {
 	#[napi]
 	pub fn restart_run_handler(&self) -> napi::Result<()> {
 		self.shared.run_restart().map_err(napi_anyhow_error)
-	}
-
-	#[napi]
-	pub fn mark_ready(&self) -> napi::Result<()> {
-		self.shared.mark_ready(&self.inner);
-		Ok(())
-	}
-
-	#[napi]
-	pub fn mark_started(&self) -> napi::Result<()> {
-		self.shared
-			.mark_started(&self.inner)
-			.map_err(napi_anyhow_error)
-	}
-
-	#[napi]
-	pub fn is_ready(&self) -> bool {
-		self.shared.is_ready(&self.inner)
-	}
-
-	#[napi]
-	pub fn is_started(&self) -> bool {
-		self.shared.is_started(&self.inner)
 	}
 
 	#[napi]
@@ -761,31 +721,6 @@ impl ActorContextShared {
 		self.end_reason.lock().is_some()
 	}
 
-	fn mark_ready(&self, ctx: &CoreActorContext) {
-		ctx.set_ready(true);
-	}
-
-	fn mark_started(&self, ctx: &CoreActorContext) -> anyhow::Result<()> {
-		if !self.is_ready(ctx) {
-			return Err(NapiInvalidState {
-				state: "actor context".to_owned(),
-				reason: "cannot start before ready".to_owned(),
-			}
-			.build());
-		}
-
-		ctx.set_started(true);
-		Ok(())
-	}
-
-	fn is_ready(&self, ctx: &CoreActorContext) -> bool {
-		ctx.ready()
-	}
-
-	fn is_started(&self, ctx: &CoreActorContext) -> bool {
-		ctx.started()
-	}
-
 	fn reset_runtime_state(&self) {
 		*self.abort_token.lock() = None;
 		*self.run_restart.lock() = None;
@@ -981,39 +916,18 @@ mod tests {
 	use super::*;
 
 	#[test]
-	fn mark_started_requires_ready() {
-		let shared = ActorContextShared::default();
-		let ctx = CoreActorContext::new("actor-test", "actor", Vec::new(), "local");
-
-		assert!(shared.mark_started(&ctx).is_err());
-		assert!(!shared.is_started(&ctx));
-
-		shared.mark_ready(&ctx);
-		assert!(shared.mark_started(&ctx).is_ok());
-		assert!(shared.is_started(&ctx));
-
-		shared.mark_ready(&ctx);
-		assert!(shared.mark_started(&ctx).is_ok());
-	}
-
-	#[test]
 	fn reset_runtime_state_clears_end_reason_without_touching_core_lifecycle_flags() {
 		let shared = ActorContextShared::default();
 		let ctx = CoreActorContext::new("actor-test", "actor", Vec::new(), "local");
 
-		shared.mark_ready(&ctx);
-		shared
-			.mark_started(&ctx)
-			.expect("started should succeed once ready");
+		ctx.set_started(true);
 		shared.set_end_reason(EndReason::Sleep);
 		assert!(shared.has_end_reason());
-		assert!(shared.is_ready(&ctx));
-		assert!(shared.is_started(&ctx));
+		assert!(ctx.started());
 
 		shared.reset_runtime_state();
 
 		assert!(!shared.has_end_reason());
-		assert!(shared.is_ready(&ctx));
-		assert!(shared.is_started(&ctx));
+		assert!(ctx.started());
 	}
 }

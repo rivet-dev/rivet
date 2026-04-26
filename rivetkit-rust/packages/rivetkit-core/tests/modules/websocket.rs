@@ -62,7 +62,7 @@ mod moved_tests {
 			Vec::new(),
 			"local",
 		);
-		ctx.set_ready(true);
+		ctx.set_started(true);
 		ctx.set_started(true);
 
 		let ws = WebSocket::new();

@@ -37,8 +37,7 @@ pub(crate) struct SleepState {
 	sleep_request_count: TestAtomicUsize,
 	#[cfg(test)]
 	destroy_request_count: TestAtomicUsize,
-	pub(super) ready: AtomicBool,
-	pub(super) started: AtomicBool,
+	pub(super) lifecycle_started: AtomicBool,
 	pub(super) run_handler_active_count: AtomicUsize,
 	// Forced-sync: the compatibility sleep timer is aborted from sync paths.
 	pub(super) sleep_timer: Mutex<Option<JoinHandle<()>>>,
@@ -70,8 +69,7 @@ impl SleepState {
 			sleep_request_count: TestAtomicUsize::new(0),
 			#[cfg(test)]
 			destroy_request_count: TestAtomicUsize::new(0),
-			ready: AtomicBool::new(false),
-			started: AtomicBool::new(false),
+			lifecycle_started: AtomicBool::new(false),
 			run_handler_active_count: AtomicUsize::new(0),
 			sleep_timer: Mutex::new(None),
 			work: WorkRegistry::new(),
@@ -88,8 +86,10 @@ impl Default for SleepState {
 impl std::fmt::Debug for SleepState {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.debug_struct("SleepState")
-			.field("ready", &self.ready.load(Ordering::SeqCst))
-			.field("started", &self.started.load(Ordering::SeqCst))
+			.field(
+				"lifecycle_started",
+				&self.lifecycle_started.load(Ordering::SeqCst),
+			)
 			.field(
 				"run_handler_active_count",
 				&self.run_handler_active_count.load(Ordering::SeqCst),
@@ -158,26 +158,19 @@ impl ActorContext {
 		}
 	}
 
-	pub(crate) fn set_sleep_ready(&self, ready: bool) {
-		let previous = self.0.sleep.ready.swap(ready, Ordering::SeqCst);
-		if previous != ready {
-			self.reset_sleep_timer();
-		}
-	}
-
-	pub(crate) fn sleep_ready(&self) -> bool {
-		self.0.sleep.ready.load(Ordering::SeqCst)
-	}
-
-	pub(crate) fn set_sleep_started(&self, started: bool) {
-		let previous = self.0.sleep.started.swap(started, Ordering::SeqCst);
+	pub(crate) fn set_lifecycle_started(&self, started: bool) {
+		let previous = self
+			.0
+			.sleep
+			.lifecycle_started
+			.swap(started, Ordering::SeqCst);
 		if previous != started {
 			self.reset_sleep_timer();
 		}
 	}
 
-	pub(crate) fn sleep_started(&self) -> bool {
-		self.0.sleep.started.load(Ordering::SeqCst)
+	pub(crate) fn lifecycle_started(&self) -> bool {
+		self.0.sleep.lifecycle_started.load(Ordering::SeqCst)
 	}
 
 	#[doc(hidden)]
@@ -221,9 +214,7 @@ impl ActorContext {
 
 	pub(crate) async fn can_arm_sleep_timer(&self) -> CanSleep {
 		let config = self.sleep_state_config();
-		if !self.0.sleep.ready.load(Ordering::SeqCst)
-			|| !self.0.sleep.started.load(Ordering::SeqCst)
-		{
+		if !self.0.sleep.lifecycle_started.load(Ordering::SeqCst) {
 			return CanSleep::NotReady;
 		}
 		if config.no_sleep {
@@ -718,7 +709,7 @@ mod tests {
 	#[tokio::test(start_paused = true)]
 	async fn sleep_then_destroy_signal_tasks_do_not_leak_after_teardown() {
 		let ctx = ActorContext::new_for_sleep_tests("actor-sleep-destroy");
-		ctx.set_sleep_started(true);
+		ctx.set_started(true);
 
 		ctx.sleep().expect("sleep should be accepted after startup");
 		ctx.destroy()
@@ -869,7 +860,7 @@ mod tests {
 	#[tokio::test(start_paused = true)]
 	async fn double_sleep_errors_with_actor_stopping() {
 		let ctx = ActorContext::new_for_sleep_tests("actor-double-sleep");
-		ctx.set_sleep_started(true);
+		ctx.set_started(true);
 
 		ctx.sleep()
 			.expect("first sleep call should be accepted after startup");
@@ -885,7 +876,7 @@ mod tests {
 	#[tokio::test(start_paused = true)]
 	async fn double_destroy_errors_with_actor_stopping() {
 		let ctx = ActorContext::new_for_sleep_tests("actor-double-destroy");
-		ctx.set_sleep_started(true);
+		ctx.set_started(true);
 
 		ctx.destroy()
 			.expect("first destroy call should be accepted after startup");
@@ -902,8 +893,7 @@ mod tests {
 	#[allow(deprecated)]
 	async fn set_prevent_sleep_is_a_deprecated_noop() {
 		let ctx = ActorContext::new_for_sleep_tests("actor-prevent-sleep-noop");
-		ctx.set_sleep_started(true);
-		ctx.set_ready(true);
+		ctx.set_started(true);
 
 		// The stub must never flip the underlying flag.
 		ctx.set_prevent_sleep(true);
@@ -972,12 +962,12 @@ mod tests {
 		// transitions into SleepGrace. Calls into `sleep()` after that point
 		// must surface `Stopping`, not `Starting`.
 		let ctx = ActorContext::new_for_sleep_tests("actor-sleep-after-grace");
-		ctx.set_sleep_started(true);
+		ctx.set_started(true);
 
 		ctx.sleep().expect("first sleep call should be accepted");
 
 		// Lifecycle machine clears `started` on transition into SleepGrace.
-		ctx.set_sleep_started(false);
+		ctx.set_started(false);
 
 		let err = ctx.sleep().expect_err("second sleep should fail");
 		let rivet_err = rivet_error::RivetError::extract(&err);

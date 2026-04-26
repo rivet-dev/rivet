@@ -730,7 +730,7 @@ impl RegistryDispatcher {
 			match instance.get() {
 				ActorInstanceState::Active(instance) => {
 					let instance = instance.clone();
-					if instance.ctx.ready() {
+					if instance.ctx.started() {
 						return Ok(instance);
 					}
 

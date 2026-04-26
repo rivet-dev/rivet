@@ -249,9 +249,6 @@ async fn run_preamble(
 		.await?;
 	}
 
-	ctx.init_alarms().await?;
-	ctx.mark_ready_internal();
-
 	if let Some(callback) = &bindings.on_wake {
 		with_timeout(
 			"onWake",
@@ -270,12 +267,10 @@ async fn run_preamble(
 		.await?;
 	}
 
-	ctx.mark_started_internal()?;
 	let run_handler = configure_run_handler(bindings, ctx);
 	if bindings.run.is_some() {
 		tokio::task::yield_now().await;
 	}
-	ctx.drain_overdue_scheduled_events().await?;
 
 	Ok(run_handler)
 }
@@ -1666,10 +1661,7 @@ mod tests {
 		let core_ctx =
 			rivetkit_core::ActorContext::new("actor-wake-reset", "actor", Vec::new(), "local");
 		let stale_ctx = ActorContext::new(core_ctx.clone());
-		stale_ctx.mark_ready_internal();
-		stale_ctx
-			.mark_started_internal()
-			.expect("stale context should mark started");
+		core_ctx.set_started(true);
 		stale_ctx.set_end_reason(EndReason::Sleep);
 
 		let (events_tx, events_rx) = unbounded_channel();

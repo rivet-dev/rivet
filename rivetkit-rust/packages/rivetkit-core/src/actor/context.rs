@@ -392,7 +392,7 @@ impl ActorContext {
 		// into SleepGrace / DestroyGrace, so `started=false` covers both
 		// "never started" and "already shutting down". Distinguish with the
 		// request flags for an accurate diagnostic.
-		if !self.0.sleep.started.load(Ordering::SeqCst) {
+		if !self.0.sleep.lifecycle_started.load(Ordering::SeqCst) {
 			let already_stopping = self.0.sleep_requested.load(Ordering::SeqCst)
 				|| self.0.destroy_requested.load(Ordering::SeqCst);
 			return if already_stopping {
@@ -428,7 +428,7 @@ impl ActorContext {
 		// See `sleep` for why the request flags disambiguate `started=false`.
 		// destroy() is allowed after sleep() has been requested because
 		// destroy is a stronger signal that escalates an in-flight sleep.
-		if !self.0.sleep.started.load(Ordering::SeqCst)
+		if !self.0.sleep.lifecycle_started.load(Ordering::SeqCst)
 			&& !self.0.sleep_requested.load(Ordering::SeqCst)
 			&& !self.0.destroy_requested.load(Ordering::SeqCst)
 		{
@@ -1084,25 +1084,14 @@ impl ActorContext {
 	}
 
 	#[doc(hidden)]
-	pub fn set_ready(&self, ready: bool) {
-		self.set_sleep_ready(ready);
-		self.reset_sleep_timer();
-	}
-
-	#[doc(hidden)]
 	pub fn set_started(&self, started: bool) {
-		self.set_sleep_started(started);
+		self.set_lifecycle_started(started);
 		self.reset_sleep_timer();
-	}
-
-	#[doc(hidden)]
-	pub fn ready(&self) -> bool {
-		self.sleep_ready()
 	}
 
 	#[doc(hidden)]
 	pub fn started(&self) -> bool {
-		self.sleep_started()
+		self.lifecycle_started()
 	}
 
 	pub(crate) fn destroy_requested(&self) -> bool {
