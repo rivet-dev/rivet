@@ -225,7 +225,7 @@ export declare class ActorContext {
   disconnectConn(id: string): Promise<void>
   disconnectConns(predicate: (...args: any[]) => any): Promise<void>
   broadcast(name: string, args: Buffer): void
-  waitUntil(promise: Promise<any>): Promise<void>
+  waitUntil(promise: Promise<any>): void
   keepAwake(promise: Promise<any>): Promise<any>
   registerTask(promise: Promise<any>): void
   runtimeState(): object

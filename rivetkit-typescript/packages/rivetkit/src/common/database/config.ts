@@ -28,7 +28,9 @@ export interface SqliteDatabase {
 	): Promise<void>;
 	run(sql: string, params?: SqliteBindings): Promise<void>;
 	query(sql: string, params?: SqliteBindings): Promise<SqliteQueryResult>;
-	getSqliteVfsMetrics?: () => import("./native-database").SqliteVfsMetrics | null;
+	getSqliteVfsMetrics?: () =>
+		| import("./native-database").SqliteVfsMetrics
+		| null;
 	close(): Promise<void>;
 }
 
@@ -94,12 +96,6 @@ export type DatabaseProvider<DB extends RawAccess> = {
 	 * @experimental
 	 */
 	onMigrate: (client: DB) => void | Promise<void>;
-	/**
-	 * Runs when the actor is being destroyed.
-	 * Use this to clean up database connections and release resources.
-	 * @experimental
-	 */
-	onDestroy?: (client: DB) => void | Promise<void>;
 };
 
 /**

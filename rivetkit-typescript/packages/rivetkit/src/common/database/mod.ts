@@ -105,12 +105,16 @@ export function db({
 							const returnsRows = sqlReturnsRows(query);
 							if (!hasMultipleStatements(query)) {
 								if (returnsRows) {
-									const { rows, columns } = await db.query(
-										query,
-									);
+									const { rows, columns } =
+										await db.query(query);
 									result = rows.map((row: unknown[]) => {
-										const rowObj: Record<string, unknown> = {};
-										for (let i = 0; i < columns.length; i++) {
+										const rowObj: Record<string, unknown> =
+											{};
+										for (
+											let i = 0;
+											i < columns.length;
+											i++
+										) {
 											rowObj[columns[i]] = row[i];
 										}
 										return rowObj;
@@ -119,7 +123,8 @@ export function db({
 									await db.run(query);
 									result = [] as TRow[];
 								} else {
-									const results: Record<string, unknown>[] = [];
+									const results: Record<string, unknown>[] =
+										[];
 									let columnNames: string[] | null = null;
 									await db.exec(
 										query,
@@ -127,8 +132,15 @@ export function db({
 											if (!columnNames) {
 												columnNames = columns;
 											}
-											const rowObj: Record<string, unknown> = {};
-											for (let i = 0; i < row.length; i++) {
+											const rowObj: Record<
+												string,
+												unknown
+											> = {};
+											for (
+												let i = 0;
+												i < row.length;
+												i++
+											) {
 												rowObj[columnNames[i]] = row[i];
 											}
 											results.push(rowObj);
@@ -145,7 +157,8 @@ export function db({
 										if (!columnNames) {
 											columnNames = columns;
 										}
-										const rowObj: Record<string, unknown> = {};
+										const rowObj: Record<string, unknown> =
+											{};
 										for (let i = 0; i < row.length; i++) {
 											rowObj[columnNames[i]] = row[i];
 										}
@@ -191,9 +204,6 @@ export function db({
 			if (onMigrate) {
 				await onMigrate(client);
 			}
-		},
-		onDestroy: async (client) => {
-			await client.close();
 		},
 	};
 }

@@ -2193,7 +2193,7 @@ export class ActorInstance<
 		} catch (error) {
 			if (client) {
 				try {
-					await this.#config.db.onDestroy?.(client);
+					await client.close();
 				} catch (cleanupError) {
 					this.#rLog.error({
 						msg: "database setup cleanup failed",
@@ -2227,7 +2227,7 @@ export class ActorInstance<
 
 		if (client && dbConfig) {
 			try {
-				await dbConfig.onDestroy?.(client);
+				await client.close();
 			} catch (error) {
 				this.#rLog.error({
 					msg: "database cleanup failed",

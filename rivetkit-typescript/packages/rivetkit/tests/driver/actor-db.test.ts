@@ -493,129 +493,16 @@ describeDriverMatrix("Actor Db", (driverTestConfig) => {
 		});
 	}
 
-	describe("Actor Database Lifecycle Cleanup Tests", () => {
-		test(
-			"runs db provider cleanup on sleep",
-			async (c) => {
-				const { client } = await setupDriverTest(c, driverTestConfig);
-				const observer = client.dbLifecycleObserver.getOrCreate([
-					"observer",
-				]);
-
-				const lifecycle = client.dbLifecycle.getOrCreate([
-					`db-lifecycle-sleep-${crypto.randomUUID()}`,
-				]);
-				const actorId = await lifecycle.getActorId();
-
-				const before = await observer.getCounts(actorId);
-
-				await lifecycle.insertValue("before-sleep");
-				await lifecycle.triggerSleep();
-				await waitFor(driverTestConfig, SLEEP_WAIT_MS + 100);
-				await lifecycle.ping();
-
-				let after = before;
-				for (let i = 0; i < LIFECYCLE_POLL_ATTEMPTS; i++) {
-					after = await observer.getCounts(actorId);
-					if (after.cleanup >= before.cleanup + 1) {
-						break;
-					}
-					await waitFor(driverTestConfig, LIFECYCLE_POLL_INTERVAL_MS);
-				}
-
-				expect(after.create).toBeGreaterThanOrEqual(before.create);
-				expect(after.migrate).toBeGreaterThanOrEqual(before.migrate);
-				expect(after.cleanup).toBeGreaterThanOrEqual(
-					before.cleanup + 1,
-				);
-			},
-			lifecycleTestTimeout,
-		);
-
-		test(
-			"runs db provider cleanup on destroy",
-			async (c) => {
-				const { client } = await setupDriverTest(c, driverTestConfig);
-				const observer = client.dbLifecycleObserver.getOrCreate([
-					"observer",
-				]);
-
-				const lifecycle = client.dbLifecycle.getOrCreate([
-					`db-lifecycle-destroy-${crypto.randomUUID()}`,
-				]);
-				const actorId = await lifecycle.getActorId();
-				const before = await observer.getCounts(actorId);
-
-				await lifecycle.insertValue("before-destroy");
-				await lifecycle.triggerDestroy();
-				await waitFor(driverTestConfig, SLEEP_WAIT_MS + 100);
-
-				let cleanupCount = before.cleanup;
-				for (let i = 0; i < LIFECYCLE_POLL_ATTEMPTS; i++) {
-					const counts = await observer.getCounts(actorId);
-					cleanupCount = counts.cleanup;
-					if (cleanupCount >= before.cleanup + 1) {
-						break;
-					}
-					await waitFor(driverTestConfig, LIFECYCLE_POLL_INTERVAL_MS);
-				}
-
-				expect(cleanupCount).toBeGreaterThanOrEqual(before.cleanup + 1);
-			},
-			lifecycleTestTimeout,
-		);
-
-		test(
-			"runs db provider cleanup when migration fails",
-			async (c) => {
-				const { client } = await setupDriverTest(c, driverTestConfig);
-				const observer = client.dbLifecycleObserver.getOrCreate([
-					"observer",
-				]);
-				const beforeTotalCleanup =
-					await observer.getTotalCleanupCount();
-				const key = `db-lifecycle-migrate-failure-${crypto.randomUUID()}`;
-				const lifecycle = client.dbLifecycleFailing.getOrCreate([key]);
-
-				let threw = false;
-				try {
-					await lifecycle.ping();
-				} catch {
-					threw = true;
-				}
-				expect(threw).toBeTruthy();
-
-				let cleanupCount = beforeTotalCleanup;
-				for (let i = 0; i < LIFECYCLE_POLL_ATTEMPTS; i++) {
-					cleanupCount = await observer.getTotalCleanupCount();
-					if (cleanupCount >= beforeTotalCleanup + 1) {
-						break;
-					}
-					await waitFor(driverTestConfig, LIFECYCLE_POLL_INTERVAL_MS);
-				}
-
-				expect(cleanupCount).toBeGreaterThanOrEqual(
-					beforeTotalCleanup + 1,
-				);
-			},
-			lifecycleTestTimeout,
-		);
-
+	describe("Actor Database Lifecycle Tests", () => {
 		test(
 			"handles parallel actor lifecycle churn",
 			async (c) => {
 				const { client } = await setupDriverTest(c, driverTestConfig);
-				const observer = client.dbLifecycleObserver.getOrCreate([
-					"observer",
-				]);
 
 				const actorHandles = Array.from({ length: 12 }, (_, i) =>
 					client.dbLifecycle.getOrCreate([
 						`db-lifecycle-stress-${i}-${crypto.randomUUID()}`,
 					]),
-				);
-				const actorIds = await Promise.all(
-					actorHandles.map((handle) => handle.getActorId()),
 				);
 
 				await Promise.all(
@@ -654,29 +541,6 @@ describeDriverMatrix("Actor Db", (driverTestConfig) => {
 					} else {
 						expect(count).toBe(2);
 					}
-				}
-
-				const lifecycleCleanup = new Map<string, number>();
-				for (let i = 0; i < LIFECYCLE_POLL_ATTEMPTS; i++) {
-					let allCleaned = true;
-					for (const actorId of actorIds) {
-						const counts = await observer.getCounts(actorId);
-						lifecycleCleanup.set(actorId, counts.cleanup);
-						if (counts.cleanup < 1) {
-							allCleaned = false;
-						}
-					}
-
-					if (allCleaned) {
-						break;
-					}
-					await waitFor(driverTestConfig, LIFECYCLE_POLL_INTERVAL_MS);
-				}
-
-				for (const actorId of actorIds) {
-					expect(
-						lifecycleCleanup.get(actorId) ?? 0,
-					).toBeGreaterThanOrEqual(1);
 				}
 			},
 			lifecycleTestTimeout,

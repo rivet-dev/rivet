@@ -5,14 +5,12 @@ import { scheduleActorSleep } from "./schedule-sleep";
 type LifecycleCounts = {
 	create: number;
 	migrate: number;
-	cleanup: number;
 };
 
 const clientActorIds = new WeakMap<object, string>();
 
 const createCounts = new Map<string, number>();
 const migrateCounts = new Map<string, number>();
-const cleanupCounts = new Map<string, number>();
 
 function increment(map: Map<string, number>, actorId: string) {
 	map.set(actorId, (map.get(actorId) ?? 0) + 1);
@@ -22,16 +20,7 @@ function getCounts(actorId: string): LifecycleCounts {
 	return {
 		create: createCounts.get(actorId) ?? 0,
 		migrate: migrateCounts.get(actorId) ?? 0,
-		cleanup: cleanupCounts.get(actorId) ?? 0,
 	};
-}
-
-function getTotalCleanupCount(): number {
-	let total = 0;
-	for (const count of cleanupCounts.values()) {
-		total += count;
-	}
-	return total;
 }
 
 const baseProvider = db({
@@ -62,15 +51,6 @@ const lifecycleProvider = {
 		}
 		await baseProvider.onMigrate(client);
 	},
-	onDestroy: async (
-		client: Parameters<NonNullable<typeof baseProvider.onDestroy>>[0],
-	) => {
-		const actorId = clientActorIds.get(client as object);
-		if (actorId) {
-			increment(cleanupCounts, actorId);
-		}
-		await baseProvider.onDestroy?.(client);
-	},
 };
 
 const failingLifecycleProvider = {
@@ -88,15 +68,6 @@ const failingLifecycleProvider = {
 			increment(migrateCounts, actorId);
 		}
 		throw new Error("forced migrate failure");
-	},
-	onDestroy: async (
-		client: Parameters<NonNullable<typeof baseProvider.onDestroy>>[0],
-	) => {
-		const actorId = clientActorIds.get(client as object);
-		if (actorId) {
-			increment(cleanupCounts, actorId);
-		}
-		await baseProvider.onDestroy?.(client);
 	},
 };
 
@@ -141,9 +112,6 @@ export const dbLifecycleObserver = actor({
 	actions: {
 		getCounts: (_c, actorId: string) => {
 			return getCounts(actorId);
-		},
-		getTotalCleanupCount: () => {
-			return getTotalCleanupCount();
 		},
 	},
 });

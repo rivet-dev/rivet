@@ -136,7 +136,8 @@ export function db<TSchema extends DrizzleSchema = Record<string, never>>({
 								msg: "sql query",
 								query: query.slice(0, 120),
 								durationMs,
-								kvReads: ctx.metrics.totalKvReads - kvReadsBefore,
+								kvReads:
+									ctx.metrics.totalKvReads - kvReadsBefore,
 								kvWrites:
 									ctx.metrics.totalKvWrites - kvWritesBefore,
 							});
@@ -187,9 +188,6 @@ export function db<TSchema extends DrizzleSchema = Record<string, never>>({
 			if (onMigrate) {
 				await onMigrate(client);
 			}
-		},
-		onDestroy: async (client) => {
-			await client.close();
 		},
 	};
 }
