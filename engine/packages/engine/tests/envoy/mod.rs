@@ -1,1 +1,13 @@
+pub mod auth;
+pub mod actors_alarm;
+pub mod actors_kv_crud;
+pub mod actors_kv_delete_range;
+pub mod actors_kv_drop;
+pub mod actors_kv_list;
+pub mod actors_kv_misc;
 pub mod actors_lifecycle;
+pub mod api_actors_create;
+pub mod api_actors_delete;
+pub mod api_actors_get_or_create;
+pub mod api_actors_list;
+pub mod api_actors_list_names;

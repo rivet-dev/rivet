@@ -3,9 +3,9 @@ use super::super::common;
 // MARK: Basic
 #[test]
 fn delete_existing_actor_with_namespace() {
-	common::run(common::TestOpts::new(1), |ctx| async move {
+	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
 		let (namespace, _, _runner) =
-			common::setup_test_namespace_with_runner(ctx.leader_dc()).await;
+			common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
 
 		// Create an actor
 		let res = common::api::public::actors_create(
@@ -50,9 +50,9 @@ fn delete_existing_actor_with_namespace() {
 
 #[test]
 fn delete_existing_actor_without_namespace() {
-	common::run(common::TestOpts::new(1), |ctx| async move {
+	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
 		let (namespace, _, _runner) =
-			common::setup_test_namespace_with_runner(ctx.leader_dc()).await;
+			common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
 
 		// Create an actor
 		let res = common::api::public::actors_create(
@@ -97,9 +97,9 @@ fn delete_existing_actor_without_namespace() {
 
 #[test]
 fn delete_actor_current_datacenter() {
-	common::run(common::TestOpts::new(1), |ctx| async move {
+	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
 		let (namespace, _, _runner) =
-			common::setup_test_namespace_with_runner(ctx.leader_dc()).await;
+			common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
 
 		// Create an actor in current datacenter
 		let res = common::api::public::actors_create(
@@ -143,9 +143,9 @@ fn delete_actor_current_datacenter() {
 
 #[test]
 fn delete_actor_remote_datacenter() {
-	common::run(common::TestOpts::new(2), |ctx| async move {
+	common::run(common::TestOpts::new(2).with_timeout(45), |ctx| async move {
 		let (namespace, _, _runner) =
-			common::setup_test_namespace_with_runner(ctx.leader_dc()).await;
+			common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
 
 		// Create an actor in DC2
 		let res = common::api::public::actors_create(
@@ -188,9 +188,9 @@ fn delete_actor_remote_datacenter() {
 
 #[test]
 fn delete_non_existent_actor() {
-	common::run(common::TestOpts::new(1), |ctx| async move {
+	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
 		let (namespace, _, _runner) =
-			common::setup_test_namespace_with_runner(ctx.leader_dc()).await;
+			common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
 
 		// Generate a fake actor ID with valid format but non-existent
 		let fake_actor_id = rivet_util::Id::new_v1(ctx.leader_dc().config.dc_label());
@@ -211,15 +211,12 @@ fn delete_non_existent_actor() {
 }
 
 #[test]
-// Broken legacy Pegboard Runner test: full engine sweep timed out in
-// `delete_actor_wrong_namespace`.
-#[ignore = "broken legacy Pegboard Runner test: times out in full engine sweep"]
 fn delete_actor_wrong_namespace() {
-	common::run(common::TestOpts::new(1), |ctx| async move {
+	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
 		let (namespace1, _, _runner1) =
-			common::setup_test_namespace_with_runner(ctx.leader_dc()).await;
+			common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
 		let (namespace2, _, _runner2) =
-			common::setup_test_namespace_with_runner(ctx.leader_dc()).await;
+			common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
 
 		// Create actor in namespace1
 		let res = common::api::public::actors_create(
@@ -267,9 +264,9 @@ fn delete_actor_wrong_namespace() {
 // `delete_with_non_existent_namespace`.
 #[ignore = "broken legacy Pegboard Runner test: times out in full engine sweep"]
 fn delete_with_non_existent_namespace() {
-	common::run(common::TestOpts::new(1), |ctx| async move {
+	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
 		let (namespace, _, _runner) =
-			common::setup_test_namespace_with_runner(ctx.leader_dc()).await;
+			common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
 
 		// Create an actor
 		let res = common::api::public::actors_create(
@@ -312,13 +309,10 @@ fn delete_with_non_existent_namespace() {
 // MARK: Cross-datacenter tests
 
 #[test]
-// Broken legacy Pegboard Runner test: full engine sweep timed out in
-// `delete_remote_actor_verify_propagation`.
-#[ignore = "broken legacy Pegboard Runner test: times out in full engine sweep"]
 fn delete_remote_actor_verify_propagation() {
-	common::run(common::TestOpts::new(2), |ctx| async move {
+	common::run(common::TestOpts::new(2).with_timeout(45), |ctx| async move {
 		let (namespace, _, _runner) =
-			common::setup_test_namespace_with_runner(ctx.leader_dc()).await;
+			common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
 
 		// Create an actor in DC2
 		let res = common::api::public::actors_create(
@@ -370,9 +364,9 @@ fn delete_remote_actor_verify_propagation() {
 #[test]
 #[ignore = "broken legacy Pegboard Runner test: second delete returns actor.not_found"]
 fn delete_already_destroyed_actor() {
-	common::run(common::TestOpts::new(1), |ctx| async move {
+	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
 		let (namespace, _, _runner) =
-			common::setup_test_namespace_with_runner(ctx.leader_dc()).await;
+			common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
 
 		// Create an actor
 		let res = common::api::public::actors_create(
@@ -433,9 +427,9 @@ fn delete_already_destroyed_actor() {
 #[ignore = "broken: runner config upsert can fail with replica not configured"]
 #[test]
 fn delete_actor_twice_rapidly() {
-	common::run(common::TestOpts::new(1), |ctx| async move {
+	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
 		let (namespace, _, _runner) =
-			common::setup_test_namespace_with_runner(ctx.leader_dc()).await;
+			common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
 
 		// Create an actor
 		let res = common::api::public::actors_create(

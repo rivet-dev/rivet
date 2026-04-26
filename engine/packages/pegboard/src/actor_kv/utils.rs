@@ -91,6 +91,7 @@ pub fn validate_entries(
 	}
 
 	for value in values {
+		ensure!(!value.is_empty(), "value cannot be empty");
 		ensure!(
 			value.len() <= MAX_VALUE_SIZE,
 			"value is too large (max {} KiB)",

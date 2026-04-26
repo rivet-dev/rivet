@@ -330,7 +330,13 @@ pub async fn init_conn(
 						actor_id,
 						start,
 					)
-					.await?;
+					.await
+					.with_context(|| {
+						format!(
+							"failed to populate missed envoy start command for actor {} generation {}",
+							cmd_wrapper.checkpoint.actor_id, cmd_wrapper.checkpoint.generation
+						)
+					})?;
 				}
 			}
 

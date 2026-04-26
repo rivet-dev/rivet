@@ -63,6 +63,7 @@ pub async fn pegboard_actor_create(ctx: &OperationCtx, input: &Input) -> Result<
 			name: input.name.clone(),
 			pool_name: input.runner_name_selector.clone(),
 			key: input.key.clone(),
+			crash_policy: input.crash_policy,
 			namespace_id: input.namespace_id,
 			input: input.input.clone(),
 			from_v1: false,

@@ -96,10 +96,13 @@ impl SqliteEngine {
 					udb::tx_get_value_serializable(&tx, &subspace, &meta_storage_key).await?
 				{
 					let existing_head = decode_db_head(&existing_meta)?;
-					ensure!(
-						matches!(existing_head.origin, SqliteOrigin::MigratingFromV1),
-						SqliteStorageError::ConcurrentTakeover
-					);
+					if !matches!(existing_head.origin, SqliteOrigin::MigratingFromV1) {
+						if require_stage_in_progress {
+							return Ok(None);
+						}
+
+						return Err(SqliteStorageError::ConcurrentTakeover.into());
+					}
 					let stage_in_progress =
 						existing_head.next_txid > existing_head.head_txid.saturating_add(1);
 					if require_stage_in_progress && !stage_in_progress {
@@ -779,6 +782,26 @@ mod tests {
 				bytes: Some(page(0x2a)),
 			}]
 		);
+
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn invalidate_v1_migration_ignores_native_v2_meta() -> Result<()> {
+		let (db, subspace) = test_db().await?;
+		let head = seeded_head();
+		let encoded = serde_bare::to_vec(&head)?;
+		let (engine, _compaction_rx) = SqliteEngine::new(db, subspace);
+		apply_write_ops(
+			engine.db.as_ref(),
+			&engine.subspace,
+			engine.op_counter.as_ref(),
+			vec![WriteOp::put(meta_key(TEST_ACTOR), encoded.clone())],
+		)
+		.await?;
+
+		assert!(!engine.invalidate_v1_migration(TEST_ACTOR, 999).await?);
+		assert_eq!(read_value(&engine, meta_key(TEST_ACTOR)).await?, Some(encoded));
 
 		Ok(())
 	}

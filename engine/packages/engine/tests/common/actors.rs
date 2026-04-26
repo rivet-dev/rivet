@@ -116,7 +116,7 @@ pub async fn bulk_create_actors(
 			},
 			api_types::actors::create::CreateRequest {
 				datacenter: None,
-				name: format!("{}-{}", prefix, i),
+				name: prefix.to_string(),
 				key: Some(generate_unique_key()),
 				input: None,
 				runner_name_selector: TEST_RUNNER_NAME.to_string(),

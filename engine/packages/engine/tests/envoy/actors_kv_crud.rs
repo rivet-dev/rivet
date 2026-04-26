@@ -1,6 +1,6 @@
 use anyhow::*;
 use async_trait::async_trait;
-use common::test_runner::*;
+use common::test_envoy::*;
 use std::sync::{Arc, Mutex};
 
 use super::super::common;
@@ -426,9 +426,6 @@ impl Actor for DeleteNonexistentKeyActor {
 // MARK: Basic CRUD Tests
 
 #[test]
-// Broken legacy Pegboard Runner test: full engine sweep timed out in
-// `basic_kv_put_and_get`.
-#[ignore = "broken legacy Pegboard Runner test: times out in full engine sweep"]
 fn basic_kv_put_and_get() {
 	common::run(common::TestOpts::new(1), |ctx| async move {
 		let (namespace, _) = common::setup_test_namespace(ctx.leader_dc()).await;
@@ -436,7 +433,7 @@ fn basic_kv_put_and_get() {
 		let (notify_tx, notify_rx) = tokio::sync::oneshot::channel();
 		let notify_tx = Arc::new(Mutex::new(Some(notify_tx)));
 
-		let runner = common::setup_runner(ctx.leader_dc(), &namespace, |builder| {
+		let runner = common::setup_envoy(ctx.leader_dc(), &namespace, |builder| {
 			builder.with_actor_behavior("kv-put-get", move |_| {
 				Box::new(PutAndGetActor::new(notify_tx.clone()))
 			})
@@ -447,7 +444,7 @@ fn basic_kv_put_and_get() {
 			ctx.leader_dc().guard_port(),
 			&namespace,
 			"kv-put-get",
-			runner.name(),
+			runner.pool_name(),
 			rivet_types::actors::CrashPolicy::Destroy,
 		)
 		.await;
@@ -469,9 +466,6 @@ fn basic_kv_put_and_get() {
 }
 
 #[test]
-// Broken legacy Pegboard Runner test: full engine sweep timed out in
-// `kv_get_nonexistent_key`.
-#[ignore = "broken legacy Pegboard Runner test: times out in full engine sweep"]
 fn kv_get_nonexistent_key() {
 	common::run(common::TestOpts::new(1), |ctx| async move {
 		let (namespace, _) = common::setup_test_namespace(ctx.leader_dc()).await;
@@ -479,7 +473,7 @@ fn kv_get_nonexistent_key() {
 		let (notify_tx, notify_rx) = tokio::sync::oneshot::channel();
 		let notify_tx = Arc::new(Mutex::new(Some(notify_tx)));
 
-		let runner = common::setup_runner(ctx.leader_dc(), &namespace, |builder| {
+		let runner = common::setup_envoy(ctx.leader_dc(), &namespace, |builder| {
 			builder.with_actor_behavior("kv-get-nonexistent", move |_| {
 				Box::new(GetNonexistentKeyActor::new(notify_tx.clone()))
 			})
@@ -490,7 +484,7 @@ fn kv_get_nonexistent_key() {
 			ctx.leader_dc().guard_port(),
 			&namespace,
 			"kv-get-nonexistent",
-			runner.name(),
+			runner.pool_name(),
 			rivet_types::actors::CrashPolicy::Destroy,
 		)
 		.await;
@@ -512,9 +506,6 @@ fn kv_get_nonexistent_key() {
 }
 
 #[test]
-// Broken legacy Pegboard Runner test: full engine sweep timed out in
-// `kv_put_overwrite_existing`.
-#[ignore = "broken legacy Pegboard Runner test: times out in full engine sweep"]
 fn kv_put_overwrite_existing() {
 	common::run(common::TestOpts::new(1), |ctx| async move {
 		let (namespace, _) = common::setup_test_namespace(ctx.leader_dc()).await;
@@ -522,7 +513,7 @@ fn kv_put_overwrite_existing() {
 		let (notify_tx, notify_rx) = tokio::sync::oneshot::channel();
 		let notify_tx = Arc::new(Mutex::new(Some(notify_tx)));
 
-		let runner = common::setup_runner(ctx.leader_dc(), &namespace, |builder| {
+		let runner = common::setup_envoy(ctx.leader_dc(), &namespace, |builder| {
 			builder.with_actor_behavior("kv-overwrite", move |_| {
 				Box::new(PutOverwriteActor::new(notify_tx.clone()))
 			})
@@ -533,7 +524,7 @@ fn kv_put_overwrite_existing() {
 			ctx.leader_dc().guard_port(),
 			&namespace,
 			"kv-overwrite",
-			runner.name(),
+			runner.pool_name(),
 			rivet_types::actors::CrashPolicy::Destroy,
 		)
 		.await;
@@ -562,7 +553,7 @@ fn kv_delete_existing_key() {
 		let (notify_tx, notify_rx) = tokio::sync::oneshot::channel();
 		let notify_tx = Arc::new(Mutex::new(Some(notify_tx)));
 
-		let runner = common::setup_runner(ctx.leader_dc(), &namespace, |builder| {
+		let runner = common::setup_envoy(ctx.leader_dc(), &namespace, |builder| {
 			builder.with_actor_behavior("kv-delete", move |_| {
 				Box::new(DeleteKeyActor::new(notify_tx.clone()))
 			})
@@ -573,7 +564,7 @@ fn kv_delete_existing_key() {
 			ctx.leader_dc().guard_port(),
 			&namespace,
 			"kv-delete",
-			runner.name(),
+			runner.pool_name(),
 			rivet_types::actors::CrashPolicy::Destroy,
 		)
 		.await;
@@ -596,13 +587,13 @@ fn kv_delete_existing_key() {
 
 #[test]
 fn kv_delete_nonexistent_key() {
-	common::run(common::TestOpts::new(1), |ctx| async move {
+	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
 		let (namespace, _) = common::setup_test_namespace(ctx.leader_dc()).await;
 
 		let (notify_tx, notify_rx) = tokio::sync::oneshot::channel();
 		let notify_tx = Arc::new(Mutex::new(Some(notify_tx)));
 
-		let runner = common::setup_runner(ctx.leader_dc(), &namespace, |builder| {
+		let runner = common::setup_envoy(ctx.leader_dc(), &namespace, |builder| {
 			builder.with_actor_behavior("kv-delete-nonexistent", move |_| {
 				Box::new(DeleteNonexistentKeyActor::new(notify_tx.clone()))
 			})
@@ -613,7 +604,7 @@ fn kv_delete_nonexistent_key() {
 			ctx.leader_dc().guard_port(),
 			&namespace,
 			"kv-delete-nonexistent",
-			runner.name(),
+			runner.pool_name(),
 			rivet_types::actors::CrashPolicy::Destroy,
 		)
 		.await;
@@ -889,13 +880,13 @@ impl Actor for BatchDeleteActor {
 
 #[test]
 fn kv_put_multiple_keys() {
-	common::run(common::TestOpts::new(1), |ctx| async move {
+	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
 		let (namespace, _) = common::setup_test_namespace(ctx.leader_dc()).await;
 
 		let (notify_tx, notify_rx) = tokio::sync::oneshot::channel();
 		let notify_tx = Arc::new(Mutex::new(Some(notify_tx)));
 
-		let runner = common::setup_runner(ctx.leader_dc(), &namespace, |builder| {
+		let runner = common::setup_envoy(ctx.leader_dc(), &namespace, |builder| {
 			builder.with_actor_behavior("kv-batch-put", move |_| {
 				Box::new(BatchPutActor::new(notify_tx.clone()))
 			})
@@ -906,7 +897,7 @@ fn kv_put_multiple_keys() {
 			ctx.leader_dc().guard_port(),
 			&namespace,
 			"kv-batch-put",
-			runner.name(),
+			runner.pool_name(),
 			rivet_types::actors::CrashPolicy::Destroy,
 		)
 		.await;
@@ -927,9 +918,6 @@ fn kv_put_multiple_keys() {
 }
 
 #[test]
-// Broken legacy Pegboard Runner test: full engine sweep timed out in
-// `kv_get_multiple_keys`.
-#[ignore = "broken legacy Pegboard Runner test: times out in full engine sweep"]
 fn kv_get_multiple_keys() {
 	common::run(common::TestOpts::new(1), |ctx| async move {
 		let (namespace, _) = common::setup_test_namespace(ctx.leader_dc()).await;
@@ -937,7 +925,7 @@ fn kv_get_multiple_keys() {
 		let (notify_tx, notify_rx) = tokio::sync::oneshot::channel();
 		let notify_tx = Arc::new(Mutex::new(Some(notify_tx)));
 
-		let runner = common::setup_runner(ctx.leader_dc(), &namespace, |builder| {
+		let runner = common::setup_envoy(ctx.leader_dc(), &namespace, |builder| {
 			builder.with_actor_behavior("kv-batch-get", move |_| {
 				Box::new(BatchGetActor::new(notify_tx.clone()))
 			})
@@ -948,7 +936,7 @@ fn kv_get_multiple_keys() {
 			ctx.leader_dc().guard_port(),
 			&namespace,
 			"kv-batch-get",
-			runner.name(),
+			runner.pool_name(),
 			rivet_types::actors::CrashPolicy::Destroy,
 		)
 		.await;
@@ -969,9 +957,6 @@ fn kv_get_multiple_keys() {
 }
 
 #[test]
-// Broken legacy Pegboard Runner test: full engine sweep timed out in
-// `kv_delete_multiple_keys`.
-#[ignore = "broken legacy Pegboard Runner test: times out in full engine sweep"]
 fn kv_delete_multiple_keys() {
 	common::run(common::TestOpts::new(1), |ctx| async move {
 		let (namespace, _) = common::setup_test_namespace(ctx.leader_dc()).await;
@@ -979,7 +964,7 @@ fn kv_delete_multiple_keys() {
 		let (notify_tx, notify_rx) = tokio::sync::oneshot::channel();
 		let notify_tx = Arc::new(Mutex::new(Some(notify_tx)));
 
-		let runner = common::setup_runner(ctx.leader_dc(), &namespace, |builder| {
+		let runner = common::setup_envoy(ctx.leader_dc(), &namespace, |builder| {
 			builder.with_actor_behavior("kv-batch-delete", move |_| {
 				Box::new(BatchDeleteActor::new(notify_tx.clone()))
 			})
@@ -990,7 +975,7 @@ fn kv_delete_multiple_keys() {
 			ctx.leader_dc().guard_port(),
 			&namespace,
 			"kv-batch-delete",
-			runner.name(),
+			runner.pool_name(),
 			rivet_types::actors::CrashPolicy::Destroy,
 		)
 		.await;

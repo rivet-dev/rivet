@@ -149,7 +149,13 @@ async fn handle_message(
 						actor_id,
 						start,
 					)
-					.await?;
+					.await
+					.with_context(|| {
+						format!(
+							"failed to populate live envoy start command for actor {} generation {}",
+							command_wrapper.checkpoint.actor_id, command_wrapper.checkpoint.generation
+						)
+					})?;
 				}
 			}
 

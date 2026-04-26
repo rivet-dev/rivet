@@ -116,7 +116,9 @@ pub async fn populate_start_command(
 				"reset stale v1 migration after authoritative actor allocation"
 			);
 		}
-		maybe_migrate_v1_to_v2(&db, sqlite_engine, &recipient).await?;
+		maybe_migrate_v1_to_v2(&db, sqlite_engine, &recipient)
+			.await
+			.with_context(|| format!("failed to migrate sqlite v1 data for actor {actor_id_str}"))?;
 	}
 
 	let actor_id_str = actor_id.to_string();
@@ -594,6 +596,9 @@ pub async fn maybe_load_sqlite_startup_data(
 	}
 
 	let actor_id = actor_id.to_string();
+	let startup_lock = actor_migration_lock(&actor_id).await;
+	let _guard = startup_lock.lock().await;
+
 	if let Some(meta) = sqlite_engine.try_load_meta(&actor_id).await? {
 		ensure!(
 			!matches!(meta.origin, SqliteOrigin::MigratingFromV1),
@@ -602,7 +607,8 @@ pub async fn maybe_load_sqlite_startup_data(
 	}
 	let startup = sqlite_engine
 		.takeover(&actor_id, TakeoverConfig::new(timestamp::now()))
-		.await?;
+		.await
+		.with_context(|| format!("failed to takeover sqlite startup data for actor {actor_id}"))?;
 
 	Ok(Some(protocol::SqliteStartupData {
 		generation: startup.generation,
@@ -624,9 +630,9 @@ pub fn protocol_sqlite_meta(meta: sqlite_storage::types::SqliteMeta) -> protocol
 		db_size_pages: meta.db_size_pages,
 		page_size: meta.page_size,
 		creation_ts_ms: meta.creation_ts_ms,
-		max_delta_bytes: meta.max_delta_bytes,
+			max_delta_bytes: meta.max_delta_bytes,
+		}
 	}
-}
 
 pub fn protocol_sqlite_fetched_page(
 	page: sqlite_storage::types::FetchedPage,

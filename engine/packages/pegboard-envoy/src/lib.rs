@@ -84,20 +84,26 @@ impl CustomServeTrait for PegboardEnvoyWs {
 			.await
 			.context("failed to initialize sqlite dispatch runtime")?;
 
-		// Create connection
-		let conn = conn::init_conn(&ctx, ws_handle.clone(), sqlite_engine, url_data)
+		let namespace_name = url_data.namespace.clone();
+		let namespace = ctx
+			.op(namespace::ops::resolve_for_name_global::Input {
+				name: namespace_name.clone(),
+			})
 			.await
-			.context("failed to initialize envoy connection")?;
+			.with_context(|| format!("failed to resolve namespace: {}", namespace_name))?
+			.ok_or_else(|| namespace::errors::Namespace::NotFound.build())
+			.with_context(|| format!("namespace not found: {}", namespace_name))?;
 
-		// Subscribe before accepting the client websocket so that failures can be retried by the proxy.
+		// Subscribe before inserting the envoy in the load balancer. Pending actors can retry
+		// as soon as the envoy is eligible, so subscribing after init_conn can miss a live start command.
 		let topic = pegboard::pubsub_subjects::EnvoyReceiverSubject::new(
-			conn.namespace_id,
-			conn.envoy_key.clone(),
+			namespace.namespace_id,
+			url_data.envoy_key.clone(),
 		)
 		.to_string();
 		let eviction_topic = pegboard::pubsub_subjects::EnvoyEvictionSubject::new(
-			conn.namespace_id,
-			conn.envoy_key.clone(),
+			namespace.namespace_id,
+			url_data.envoy_key.clone(),
 		)
 		.to_string();
 
@@ -112,6 +118,11 @@ impl CustomServeTrait for PegboardEnvoyWs {
 				eviction_topic
 			)
 		})?;
+
+		// Create connection
+		let conn = conn::init_conn(&ctx, ws_handle.clone(), sqlite_engine, url_data)
+			.await
+			.context("failed to initialize envoy connection")?;
 
 		// Publish eviction message to evict any currently connected envoys with the same key. This happens
 		// after subscribing to prevent race conditions.

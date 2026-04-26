@@ -1,6 +1,6 @@
 use anyhow::*;
 use async_trait::async_trait;
-use common::test_runner::*;
+use common::test_envoy::*;
 use rivet_runner_protocol::mk2 as rp;
 use std::sync::{Arc, Mutex};
 
@@ -756,7 +756,7 @@ fn kv_list_all_empty_store() {
 		let (notify_tx, notify_rx) = tokio::sync::oneshot::channel();
 		let notify_tx = Arc::new(Mutex::new(Some(notify_tx)));
 
-		let runner = common::setup_runner(ctx.leader_dc(), &namespace, |builder| {
+		let runner = common::setup_envoy(ctx.leader_dc(), &namespace, |builder| {
 			builder.with_actor_behavior("kv-list-empty", move |_| {
 				Box::new(ListAllEmptyActor::new(notify_tx.clone()))
 			})
@@ -767,7 +767,7 @@ fn kv_list_all_empty_store() {
 			ctx.leader_dc().guard_port(),
 			&namespace,
 			"kv-list-empty",
-			runner.name(),
+			runner.pool_name(),
 			rivet_types::actors::CrashPolicy::Destroy,
 		)
 		.await;
@@ -795,7 +795,7 @@ fn kv_list_all_with_keys() {
 		let (notify_tx, notify_rx) = tokio::sync::oneshot::channel();
 		let notify_tx = Arc::new(Mutex::new(Some(notify_tx)));
 
-		let runner = common::setup_runner(ctx.leader_dc(), &namespace, |builder| {
+		let runner = common::setup_envoy(ctx.leader_dc(), &namespace, |builder| {
 			builder.with_actor_behavior("kv-list-keys", move |_| {
 				Box::new(ListAllKeysActor::new(notify_tx.clone()))
 			})
@@ -806,7 +806,7 @@ fn kv_list_all_with_keys() {
 			ctx.leader_dc().guard_port(),
 			&namespace,
 			"kv-list-keys",
-			runner.name(),
+			runner.pool_name(),
 			rivet_types::actors::CrashPolicy::Destroy,
 		)
 		.await;
@@ -834,7 +834,7 @@ fn kv_list_all_with_limit() {
 		let (notify_tx, notify_rx) = tokio::sync::oneshot::channel();
 		let notify_tx = Arc::new(Mutex::new(Some(notify_tx)));
 
-		let runner = common::setup_runner(ctx.leader_dc(), &namespace, |builder| {
+		let runner = common::setup_envoy(ctx.leader_dc(), &namespace, |builder| {
 			builder.with_actor_behavior("kv-list-limit", move |_| {
 				Box::new(ListAllLimitActor::new(notify_tx.clone()))
 			})
@@ -845,7 +845,7 @@ fn kv_list_all_with_limit() {
 			ctx.leader_dc().guard_port(),
 			&namespace,
 			"kv-list-limit",
-			runner.name(),
+			runner.pool_name(),
 			rivet_types::actors::CrashPolicy::Destroy,
 		)
 		.await;
@@ -866,17 +866,14 @@ fn kv_list_all_with_limit() {
 }
 
 #[test]
-// Broken legacy Pegboard Runner test: full engine sweep timed out in
-// `kv_list_all_reverse`.
-#[ignore = "broken legacy Pegboard Runner test: times out in full engine sweep"]
 fn kv_list_all_reverse() {
-	common::run(common::TestOpts::new(1), |ctx| async move {
+	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
 		let (namespace, _) = common::setup_test_namespace(ctx.leader_dc()).await;
 
 		let (notify_tx, notify_rx) = tokio::sync::oneshot::channel();
 		let notify_tx = Arc::new(Mutex::new(Some(notify_tx)));
 
-		let runner = common::setup_runner(ctx.leader_dc(), &namespace, |builder| {
+		let runner = common::setup_envoy(ctx.leader_dc(), &namespace, |builder| {
 			builder.with_actor_behavior("kv-list-reverse", move |_| {
 				Box::new(ListAllReverseActor::new(notify_tx.clone()))
 			})
@@ -887,7 +884,7 @@ fn kv_list_all_reverse() {
 			ctx.leader_dc().guard_port(),
 			&namespace,
 			"kv-list-reverse",
-			runner.name(),
+			runner.pool_name(),
 			rivet_types::actors::CrashPolicy::Destroy,
 		)
 		.await;
@@ -909,13 +906,13 @@ fn kv_list_all_reverse() {
 
 #[test]
 fn kv_list_range_inclusive() {
-	common::run(common::TestOpts::new(1), |ctx| async move {
+	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
 		let (namespace, _) = common::setup_test_namespace(ctx.leader_dc()).await;
 
 		let (notify_tx, notify_rx) = tokio::sync::oneshot::channel();
 		let notify_tx = Arc::new(Mutex::new(Some(notify_tx)));
 
-		let runner = common::setup_runner(ctx.leader_dc(), &namespace, |builder| {
+		let runner = common::setup_envoy(ctx.leader_dc(), &namespace, |builder| {
 			builder.with_actor_behavior("kv-range-inclusive", move |_| {
 				Box::new(ListRangeInclusiveActor::new(notify_tx.clone()))
 			})
@@ -926,7 +923,7 @@ fn kv_list_range_inclusive() {
 			ctx.leader_dc().guard_port(),
 			&namespace,
 			"kv-range-inclusive",
-			runner.name(),
+			runner.pool_name(),
 			rivet_types::actors::CrashPolicy::Destroy,
 		)
 		.await;
@@ -948,13 +945,13 @@ fn kv_list_range_inclusive() {
 
 #[test]
 fn kv_list_range_exclusive() {
-	common::run(common::TestOpts::new(1), |ctx| async move {
+	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
 		let (namespace, _) = common::setup_test_namespace(ctx.leader_dc()).await;
 
 		let (notify_tx, notify_rx) = tokio::sync::oneshot::channel();
 		let notify_tx = Arc::new(Mutex::new(Some(notify_tx)));
 
-		let runner = common::setup_runner(ctx.leader_dc(), &namespace, |builder| {
+		let runner = common::setup_envoy(ctx.leader_dc(), &namespace, |builder| {
 			builder.with_actor_behavior("kv-range-exclusive", move |_| {
 				Box::new(ListRangeExclusiveActor::new(notify_tx.clone()))
 			})
@@ -965,7 +962,7 @@ fn kv_list_range_exclusive() {
 			ctx.leader_dc().guard_port(),
 			&namespace,
 			"kv-range-exclusive",
-			runner.name(),
+			runner.pool_name(),
 			rivet_types::actors::CrashPolicy::Destroy,
 		)
 		.await;
@@ -986,9 +983,6 @@ fn kv_list_range_exclusive() {
 }
 
 #[test]
-// Broken legacy Pegboard Runner test: full engine sweep timed out in
-// `kv_list_prefix_match`.
-#[ignore = "broken legacy Pegboard Runner test: times out in full engine sweep"]
 fn kv_list_prefix_match() {
 	common::run(common::TestOpts::new(1), |ctx| async move {
 		let (namespace, _) = common::setup_test_namespace(ctx.leader_dc()).await;
@@ -996,7 +990,7 @@ fn kv_list_prefix_match() {
 		let (notify_tx, notify_rx) = tokio::sync::oneshot::channel();
 		let notify_tx = Arc::new(Mutex::new(Some(notify_tx)));
 
-		let runner = common::setup_runner(ctx.leader_dc(), &namespace, |builder| {
+		let runner = common::setup_envoy(ctx.leader_dc(), &namespace, |builder| {
 			builder.with_actor_behavior("kv-prefix-match", move |_| {
 				Box::new(ListPrefixActor::new(notify_tx.clone()))
 			})
@@ -1007,7 +1001,7 @@ fn kv_list_prefix_match() {
 			ctx.leader_dc().guard_port(),
 			&namespace,
 			"kv-prefix-match",
-			runner.name(),
+			runner.pool_name(),
 			rivet_types::actors::CrashPolicy::Destroy,
 		)
 		.await;
@@ -1029,13 +1023,13 @@ fn kv_list_prefix_match() {
 
 #[test]
 fn kv_list_prefix_no_matches() {
-	common::run(common::TestOpts::new(1), |ctx| async move {
+	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
 		let (namespace, _) = common::setup_test_namespace(ctx.leader_dc()).await;
 
 		let (notify_tx, notify_rx) = tokio::sync::oneshot::channel();
 		let notify_tx = Arc::new(Mutex::new(Some(notify_tx)));
 
-		let runner = common::setup_runner(ctx.leader_dc(), &namespace, |builder| {
+		let runner = common::setup_envoy(ctx.leader_dc(), &namespace, |builder| {
 			builder.with_actor_behavior("kv-prefix-no-match", move |_| {
 				Box::new(ListPrefixNoMatchActor::new(notify_tx.clone()))
 			})
@@ -1046,7 +1040,7 @@ fn kv_list_prefix_no_matches() {
 			ctx.leader_dc().guard_port(),
 			&namespace,
 			"kv-prefix-no-match",
-			runner.name(),
+			runner.pool_name(),
 			rivet_types::actors::CrashPolicy::Destroy,
 		)
 		.await;

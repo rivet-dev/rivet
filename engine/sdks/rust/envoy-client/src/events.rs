@@ -15,21 +15,18 @@ pub async fn handle_send_events(ctx: &mut EnvoyContext, events: Vec<protocol::Ev
 		let mut remove_after_stop = false;
 		let entry =
 			ctx.get_actor_entry_mut(&event.checkpoint.actor_id, event.checkpoint.generation);
-		if let Some(entry) = entry {
-			entry.event_history.push(event.clone());
+			if let Some(entry) = entry {
+				entry.event_history.push(event.clone());
 
-			if let protocol::Event::EventActorStateUpdate(ref state_update) = event.inner {
-				if matches!(
-					state_update.state,
-					protocol::ActorState::ActorStateStopped(_)
-				) {
-					// If the actor is being stopped by rivet, we don't need the entry anymore
-					if entry.received_stop {
+				if let protocol::Event::EventActorStateUpdate(ref state_update) = event.inner {
+					if matches!(
+						state_update.state,
+						protocol::ActorState::ActorStateStopped(_)
+					) {
 						remove_after_stop = true;
 					}
 				}
 			}
-		}
 		if remove_after_stop {
 			ctx.remove_actor(&event.checkpoint.actor_id, event.checkpoint.generation);
 		}
@@ -50,8 +47,6 @@ pub fn handle_ack_events(ctx: &mut EnvoyContext, ack: protocol::ToEnvoyAckEvents
 	}
 }
 
-// TODO: If the envoy disconnects, actor stops, then envoy reconnects, we will send the stop event but there
-// is no mechanism to remove the actor entry afterwards. We only remove the actor entry if rivet stops the actor.
 pub async fn resend_unacknowledged_events(ctx: &EnvoyContext) {
 	let mut events: Vec<protocol::EventWrapper> = Vec::new();
 
@@ -255,6 +250,28 @@ mod tests {
 				.is_none()
 		);
 		assert!(handle.http_request_counter("actor-stop", Some(1)).is_none());
+	}
+
+	#[tokio::test]
+	async fn actor_initiated_stop_event_removes_actor_from_registries() {
+		let (mut ctx, handle) = new_envoy_context();
+		let counter = Arc::new(AsyncCounter::new());
+		insert_actor(&mut ctx, "actor-crash", 1, counter, false);
+
+		assert!(handle.http_request_counter("actor-crash", Some(1)).is_some());
+
+		handle_send_events(&mut ctx, vec![stopped_event("actor-crash", 1)]).await;
+
+		assert!(ctx.actors.get("actor-crash").is_none());
+		assert!(
+			ctx.shared
+				.actors
+				.lock()
+				.expect("shared actor registry poisoned")
+				.get("actor-crash")
+				.is_none()
+		);
+		assert!(handle.http_request_counter("actor-crash", Some(1)).is_none());
 	}
 
 	#[tokio::test]

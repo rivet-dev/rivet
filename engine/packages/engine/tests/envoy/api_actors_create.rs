@@ -3,9 +3,9 @@ use super::super::common;
 // MARK: Basic
 #[test]
 fn create_actor_valid_namespace() {
-	common::run(common::TestOpts::new(1), |ctx| async move {
+	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
 		let (namespace, _, runner) =
-			common::setup_test_namespace_with_runner(ctx.leader_dc()).await;
+			common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
 
 		let res = common::api::public::actors_create(
 			ctx.leader_dc().guard_port(),
@@ -17,7 +17,7 @@ fn create_actor_valid_namespace() {
 				name: "test-actor".to_string(),
 				key: None,
 				input: None,
-				runner_name_selector: runner.name().to_string(),
+				runner_name_selector: runner.pool_name().to_string(),
 				crash_policy: rivet_types::actors::CrashPolicy::Destroy,
 			},
 		)
@@ -39,9 +39,9 @@ fn create_actor_valid_namespace() {
 
 #[test]
 fn create_actor_with_key() {
-	common::run(common::TestOpts::new(1), |ctx| async move {
+	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
 		let (namespace, _, _runner) =
-			common::setup_test_namespace_with_runner(ctx.leader_dc()).await;
+			common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
 
 		let key = common::generate_unique_key();
 		let res = common::api::public::actors_create(
@@ -73,9 +73,9 @@ fn create_actor_with_key() {
 
 #[test]
 fn create_actor_with_input() {
-	common::run(common::TestOpts::new(1), |ctx| async move {
+	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
 		let (namespace, _, _runner) =
-			common::setup_test_namespace_with_runner(ctx.leader_dc()).await;
+			common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
 
 		let input_data = common::generate_test_input_data();
 		let res = common::api::public::actors_create(
@@ -105,9 +105,9 @@ fn create_actor_with_input() {
 // `create_durable_actor`.
 #[ignore = "broken legacy Pegboard Runner test: times out in full engine sweep"]
 fn create_durable_actor() {
-	common::run(common::TestOpts::new(1), |ctx| async move {
+	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
 		let (namespace, _, _runner) =
-			common::setup_test_namespace_with_runner(ctx.leader_dc()).await;
+			common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
 
 		let res = common::api::public::actors_create(
 			ctx.leader_dc().guard_port(),
@@ -144,9 +144,9 @@ fn create_durable_actor() {
 // `create_actor_specific_datacenter`.
 #[ignore = "broken legacy Pegboard Runner test: times out in full engine sweep"]
 fn create_actor_specific_datacenter() {
-	common::run(common::TestOpts::new(2), |ctx| async move {
+	common::run(common::TestOpts::new(2).with_timeout(45), |ctx| async move {
 		let (namespace, _, _runner) =
-			common::setup_test_namespace_with_runner(ctx.leader_dc()).await;
+			common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
 
 		let res = common::api::public::actors_create(
 			ctx.leader_dc().guard_port(),
@@ -177,7 +177,7 @@ fn create_actor_specific_datacenter() {
 // MARK: Error cases
 #[test]
 fn create_actor_non_existent_namespace() {
-	common::run(common::TestOpts::new(1), |ctx| async move {
+	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
 		let res = common::api::public::actors_create(
 			ctx.leader_dc().guard_port(),
 			common::api_types::actors::create::CreateQuery {
@@ -203,9 +203,9 @@ fn create_actor_non_existent_namespace() {
 
 #[test]
 fn create_actor_invalid_datacenter() {
-	common::run(common::TestOpts::new(1), |ctx| async move {
+	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
 		let (namespace, _, _runner) =
-			common::setup_test_namespace_with_runner(ctx.leader_dc()).await;
+			common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
 
 		let res = common::api::public::actors_create(
 			ctx.leader_dc().guard_port(),
@@ -232,13 +232,10 @@ fn create_actor_invalid_datacenter() {
 
 // MARK: Cross-datacenter tests
 #[test]
-// Broken legacy Pegboard Runner test: full engine sweep timed out in
-// `create_actor_remote_datacenter_verify`.
-#[ignore = "broken legacy Pegboard Runner test: times out in full engine sweep"]
 fn create_actor_remote_datacenter_verify() {
-	common::run(common::TestOpts::new(2), |ctx| async move {
+	common::run(common::TestOpts::new(2).with_timeout(45), |ctx| async move {
 		let (namespace, _, _runner) =
-			common::setup_test_namespace_with_runner(ctx.leader_dc()).await;
+			common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
 
 		let res = common::api::public::actors_create(
 			ctx.leader_dc().guard_port(),
@@ -272,9 +269,9 @@ fn create_actor_remote_datacenter_verify() {
 
 #[test]
 fn create_actor_input_large() {
-	common::run(common::TestOpts::new(1), |ctx| async move {
+	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
 		let (namespace, _, _runner) =
-			common::setup_test_namespace_with_runner(ctx.leader_dc()).await;
+			common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
 
 		// Create a large input (1 MiB) that should succeed
 		let input_size = 1024 * 1024;
@@ -304,9 +301,9 @@ fn create_actor_input_large() {
 
 #[test]
 fn create_actor_input_exceeds_max_size() {
-	common::run(common::TestOpts::new(1), |ctx| async move {
+	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
 		let (namespace, _, _runner) =
-			common::setup_test_namespace_with_runner(ctx.leader_dc()).await;
+			common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
 
 		// Create input exceeding 4 MiB
 		let max_input_size = 4 * 1024 * 1024;
@@ -338,9 +335,9 @@ fn create_actor_input_exceeds_max_size() {
 // MARK: Key validation tests
 #[test]
 fn create_actor_empty_key() {
-	common::run(common::TestOpts::new(1), |ctx| async move {
+	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
 		let (namespace, _, _runner) =
-			common::setup_test_namespace_with_runner(ctx.leader_dc()).await;
+			common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
 
 		let res = common::api::public::actors_create(
 			ctx.leader_dc().guard_port(),
@@ -364,9 +361,9 @@ fn create_actor_empty_key() {
 
 #[test]
 fn create_actor_key_at_max_size() {
-	common::run(common::TestOpts::new(1), |ctx| async move {
+	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
 		let (namespace, _, _runner) =
-			common::setup_test_namespace_with_runner(ctx.leader_dc()).await;
+			common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
 
 		// Create key of exactly 1024 bytes
 		let key = "a".repeat(1024);
@@ -400,9 +397,9 @@ fn create_actor_key_at_max_size() {
 
 #[test]
 fn create_actor_key_exceeds_max_size() {
-	common::run(common::TestOpts::new(1), |ctx| async move {
+	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
 		let (namespace, _, _runner) =
-			common::setup_test_namespace_with_runner(ctx.leader_dc()).await;
+			common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
 
 		// Create key exceeding 1024 bytes
 		let key = "a".repeat(1025);

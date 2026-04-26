@@ -4,9 +4,9 @@ use super::super::common;
 
 #[test]
 fn get_or_create_creates_new_actor() {
-	common::run(common::TestOpts::new(1), |ctx| async move {
+	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
 		let (namespace, _, _runner) =
-			common::setup_test_namespace_with_runner(ctx.leader_dc()).await;
+			common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
 
 		let actor_name = "test-actor";
 		let actor_key = "unique-key-1";
@@ -40,9 +40,9 @@ fn get_or_create_creates_new_actor() {
 // `get_or_create_returns_existing_actor`.
 #[ignore = "broken legacy Pegboard Runner test: times out in full engine sweep"]
 fn get_or_create_returns_existing_actor() {
-	common::run(common::TestOpts::new(1), |ctx| async move {
+	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
 		let (namespace, _, _runner) =
-			common::setup_test_namespace_with_runner(ctx.leader_dc()).await;
+			common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
 
 		let actor_name = "test-actor";
 		let actor_key = "unique-key-2";
@@ -102,9 +102,9 @@ fn get_or_create_returns_existing_actor() {
 // `get_or_create_same_name_different_keys`.
 #[ignore = "broken legacy Pegboard Runner test: times out in full engine sweep"]
 fn get_or_create_same_name_different_keys() {
-	common::run(common::TestOpts::new(1), |ctx| async move {
+	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
 		let (namespace, _, _runner) =
-			common::setup_test_namespace_with_runner(ctx.leader_dc()).await;
+			common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
 
 		let actor_name = "shared-name";
 
@@ -160,9 +160,9 @@ fn get_or_create_same_name_different_keys() {
 #[ignore = "broken: times out in full engine sweep"]
 #[test]
 fn get_or_create_idempotent() {
-	common::run(common::TestOpts::new(1), |ctx| async move {
+	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
 		let (namespace, _, _runner) =
-			common::setup_test_namespace_with_runner(ctx.leader_dc()).await;
+			common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
 
 		let actor_name = "idempotent-actor";
 		let actor_key = "idempotent-key";
@@ -209,9 +209,9 @@ fn get_or_create_idempotent() {
 #[ignore = "broken: concurrent get-or-create fails in full runner sweep"]
 #[test]
 fn get_or_create_race_condition_handling() {
-	common::run(common::TestOpts::new(1), |ctx| async move {
+	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
 		let (namespace, _, _runner) =
-			common::setup_test_namespace_with_runner(ctx.leader_dc()).await;
+			common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
 
 		let actor_name = "race-actor";
 		let actor_key = "race-key";
@@ -283,9 +283,9 @@ fn get_or_create_race_condition_handling() {
 // `get_or_create_returns_winner_on_race`.
 #[ignore = "broken legacy Pegboard Runner test: times out in full engine sweep"]
 fn get_or_create_returns_winner_on_race() {
-	common::run(common::TestOpts::new(1), |ctx| async move {
+	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
 		let (namespace, _, _runner) =
-			common::setup_test_namespace_with_runner(ctx.leader_dc()).await;
+			common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
 
 		let actor_name = "race-winner-actor";
 		let actor_key = "race-winner-key";
@@ -372,26 +372,25 @@ fn get_or_create_returns_winner_on_race() {
 #[test]
 #[ignore = "broken legacy Pegboard Runner test: times out in full runner sweep"]
 fn get_or_create_race_condition_across_datacenters() {
-	common::run(common::TestOpts::new(2), |ctx| async move {
+	common::run(common::TestOpts::new(2).with_timeout(45), |ctx| async move {
 		const DC2_RUNNER_NAME: &'static str = "dc-2-runner";
 
 		let (namespace, _, _runner) =
-			common::setup_test_namespace_with_runner(ctx.leader_dc()).await;
+			common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
 
-		let mut _runner2 = common::test_runner::TestRunnerBuilder::new(&namespace)
-			.with_runner_key(&format!("key-{:012x}", rand::random::<u64>()))
+		let _envoy2 = common::test_envoy::TestEnvoyBuilder::new(&namespace)
 			.with_version(1)
-			.with_total_slots(20)
-			.with_runner_name(DC2_RUNNER_NAME)
+			.with_pool_name(DC2_RUNNER_NAME)
 			.with_actor_behavior("test-actor", |_config| {
-				Box::new(common::test_runner::EchoActor::new())
+				Box::new(common::test_envoy::EchoActor::new())
 			})
 			.build(ctx.get_dc(2))
 			.await
-			.expect("failed to build test runner");
+			.expect("failed to build test envoy");
 
-		_runner2.start().await.expect("failed to start runner");
-		_runner2.wait_ready().await;
+		common::upsert_normal_runner_config(ctx.get_dc(2), &namespace, DC2_RUNNER_NAME).await;
+		_envoy2.start().await.expect("failed to start envoy");
+		_envoy2.wait_ready().await;
 
 		let actor_name = "cross-dc-race-actor";
 		let actor_key = "cross-dc-race-key";
@@ -462,13 +461,10 @@ fn get_or_create_race_condition_across_datacenters() {
 // MARK: Datacenter tests
 
 #[test]
-// Broken legacy Pegboard Runner test: full engine sweep timed out in
-// `get_or_create_in_current_datacenter`.
-#[ignore = "broken legacy Pegboard Runner test: times out in full engine sweep"]
 fn get_or_create_in_current_datacenter() {
-	common::run(common::TestOpts::new(1), |ctx| async move {
+	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
 		let (namespace, _, _runner) =
-			common::setup_test_namespace_with_runner(ctx.leader_dc()).await;
+			common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
 
 		let response = common::api::public::actors_get_or_create(
 			ctx.leader_dc().guard_port(),
@@ -500,9 +496,9 @@ fn get_or_create_in_current_datacenter() {
 #[test]
 #[ignore = "broken legacy Pegboard Runner test: target_replicas must include the local replica"]
 fn get_or_create_in_remote_datacenter() {
-	common::run(common::TestOpts::new(2), |ctx| async move {
+	common::run(common::TestOpts::new(2).with_timeout(45), |ctx| async move {
 		let (namespace, _, _runner) =
-			common::setup_test_namespace_with_runner(ctx.leader_dc()).await;
+			common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
 
 		// Request from DC1 but specify DC2
 		let response = common::api::public::actors_get_or_create(
@@ -536,7 +532,7 @@ fn get_or_create_in_remote_datacenter() {
 
 #[test]
 fn get_or_create_with_non_existent_namespace() {
-	common::run(common::TestOpts::new(1), |ctx| async move {
+	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
 		let res = common::api::public::actors_get_or_create(
 			ctx.leader_dc().guard_port(),
 			common::api::public::GetOrCreateQuery {
@@ -558,13 +554,10 @@ fn get_or_create_with_non_existent_namespace() {
 }
 
 #[test]
-// Broken legacy Pegboard Runner test: full engine sweep timed out in
-// `get_or_create_with_invalid_datacenter`.
-#[ignore = "broken legacy Pegboard Runner test: times out in full engine sweep"]
 fn get_or_create_with_invalid_datacenter() {
-	common::run(common::TestOpts::new(1), |ctx| async move {
+	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
 		let (namespace, _, _runner) =
-			common::setup_test_namespace_with_runner(ctx.leader_dc()).await;
+			common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
 
 		let res = common::api::public::actors_get_or_create(
 			ctx.leader_dc().guard_port(),
@@ -589,13 +582,10 @@ fn get_or_create_with_invalid_datacenter() {
 // MARK: Edge cases
 
 #[test]
-// Broken legacy Pegboard Runner test: full engine sweep timed out in
-// `get_or_create_with_destroyed_actor`.
-#[ignore = "broken legacy Pegboard Runner test: times out in full engine sweep"]
 fn get_or_create_with_destroyed_actor() {
-	common::run(common::TestOpts::new(1), |ctx| async move {
+	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
 		let (namespace, _, _runner) =
-			common::setup_test_namespace_with_runner(ctx.leader_dc()).await;
+			common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
 
 		let actor_name = "destroyed-actor";
 		let actor_key = "destroyed-key";
