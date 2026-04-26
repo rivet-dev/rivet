@@ -25,7 +25,11 @@ import { connErrorSerializationActor } from "./conn-error-serialization";
 import {
 	dbInitOrderCreateStateActor,
 	dbInitOrderCreateVarsActor,
+	dbInitOrderObserver,
 	dbInitOrderOnCreateActor,
+	dbInitOrderOnDestroyActor,
+	dbInitOrderOnSleepActor,
+	dbInitOrderOnWakeActor,
 } from "./db-init-order";
 import { dbPragmaMigrationActor } from "./db-pragma-migration";
 import { counterWithParams } from "./conn-params";
@@ -324,6 +328,10 @@ export const registry = setup({
 		dbInitOrderCreateStateActor,
 		dbInitOrderOnCreateActor,
 		dbInitOrderCreateVarsActor,
+		dbInitOrderOnWakeActor,
+		dbInitOrderOnSleepActor,
+		dbInitOrderOnDestroyActor,
+		dbInitOrderObserver,
 		// From state-zod-coercion.ts
 		stateZodCoercionActor,
 		// From lifecycle-hooks.ts
