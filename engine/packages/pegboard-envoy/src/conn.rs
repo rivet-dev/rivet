@@ -86,7 +86,7 @@ pub async fn init_conn(
 		.observe(start.elapsed().as_secs_f64());
 
 	let udb = ctx.udb()?;
-	let (_, mut missed_commands) = tokio::try_join!(
+	let (_, (mut missed_commands, runner_config_protocol_changed)) = tokio::try_join!(
 		// Send init packet as soon as possible
 		async {
 			let pb = ctx.config().pegboard();
@@ -223,13 +223,11 @@ pub async fn init_conn(
 				// the pool's protocol version is updated via the metadata_poller wf but that only runs for
 				// serverless pools.
 				let ns_tx = tx.with_subspace(namespace::keys::subspace());
-				ns_tx.write(
-					&pegboard::keys::runner_config::ProtocolVersionKey::new(
+				let runner_config_protocol_version_key =
+					pegboard::keys::runner_config::ProtocolVersionKey::new(
 						namespace_id,
 						pool_name.clone(),
-					),
-					protocol_version,
-				)?;
+					);
 
 				let envoy_actor_commands_subspace = pegboard::keys::subspace().subspace(
 					&pegboard::keys::envoy::ActorCommandKey::subspace(
@@ -238,46 +236,68 @@ pub async fn init_conn(
 					),
 				);
 
-				// Read missed commands
-				tx.get_ranges_keyvalues(
-					RangeOption {
-						mode: StreamingMode::WantAll,
-						..(&envoy_actor_commands_subspace).into()
-					},
-					Serializable,
-				)
-				.map(|res| {
-					let (key, command) =
-						tx.read_entry::<pegboard::keys::envoy::ActorCommandKey>(&res?)?;
-					match command {
-						protocol::ActorCommandKeyData::CommandStartActor(x) => {
-							Ok(protocol::CommandWrapper {
-								checkpoint: protocol::ActorCheckpoint {
-									actor_id: key.actor_id.to_string(),
-									generation: key.generation,
-									index: key.index,
-								},
-								inner: protocol::Command::CommandStartActor(x),
-							})
+				let (existing_runner_config_protocol_version, missed_commands) = tokio::try_join!(
+					ns_tx.read_opt(&runner_config_protocol_version_key, Serializable),
+					// Read missed commands
+					tx.get_ranges_keyvalues(
+						RangeOption {
+							mode: StreamingMode::WantAll,
+							..(&envoy_actor_commands_subspace).into()
+						},
+						Serializable,
+					)
+					.map(|res| -> anyhow::Result<protocol::CommandWrapper> {
+						let (key, command) =
+							tx.read_entry::<pegboard::keys::envoy::ActorCommandKey>(&res?)?;
+						match command {
+							protocol::ActorCommandKeyData::CommandStartActor(x) => {
+								Ok(protocol::CommandWrapper {
+									checkpoint: protocol::ActorCheckpoint {
+										actor_id: key.actor_id.to_string(),
+										generation: key.generation,
+										index: key.index,
+									},
+									inner: protocol::Command::CommandStartActor(x),
+								})
+							}
+							protocol::ActorCommandKeyData::CommandStopActor(x) => {
+								Ok(protocol::CommandWrapper {
+									checkpoint: protocol::ActorCheckpoint {
+										actor_id: key.actor_id.to_string(),
+										generation: key.generation,
+										index: key.index,
+									},
+									inner: protocol::Command::CommandStopActor(x),
+								})
+							}
 						}
-						protocol::ActorCommandKeyData::CommandStopActor(x) => {
-							Ok(protocol::CommandWrapper {
-								checkpoint: protocol::ActorCheckpoint {
-									actor_id: key.actor_id.to_string(),
-									generation: key.generation,
-									index: key.index,
-								},
-								inner: protocol::Command::CommandStopActor(x),
-							})
-						}
-					}
-				})
-				.try_collect::<Vec<_>>()
-				.await
+					})
+					.try_collect::<Vec<_>>(),
+				)?;
+
+				let runner_config_protocol_changed =
+					existing_runner_config_protocol_version != Some(protocol_version);
+				if runner_config_protocol_changed {
+					ns_tx.write(&runner_config_protocol_version_key, protocol_version)?;
+				}
+
+				Ok((missed_commands, runner_config_protocol_changed))
 			}
 		})
 		.custom_instrument(tracing::info_span!("envoy_init_tx")),
 	)?;
+
+	if runner_config_protocol_changed {
+		// This connection path updates the pool protocol version directly.
+		// Purge runner-config caches so readers do not keep seeing stale
+		// pre-mk2 data after the transaction commits.
+		pegboard::utils::purge_runner_config_caches(
+			ctx.cache(),
+			namespace.namespace_id,
+			&pool_name,
+		)
+		.await?;
+	}
 
 	// Send missed commands (must be after init packet)
 	if !missed_commands.is_empty() {
