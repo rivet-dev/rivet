@@ -10,11 +10,11 @@ const ActorsLayer = Layer.mergeAll(
 )
 
 const MainLayer = ActorsLayer.pipe(
-  Layer.provide(Registry.layer({ storagePath: "./data" })),
+	Layer.provide(Registry.layer({ storagePath: "./data" })),
 )
 
 const TestLayer = ActorsLayer.pipe(
-  Layer.provide(TestRegistry.layer),
+	Layer.provide(TestRegistry.layer),
 )
 
 // Keeps the layer alive. Tears down on SIGINT/SIGTERM.

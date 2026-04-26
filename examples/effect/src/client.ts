@@ -13,24 +13,24 @@ import {
 // each piece of code depends on.
 // ------------------------------------------------------------------
 const program = Effect.gen(function* () {
-  const counterClient = yield* Counter.Client
-  // R now includes Counter.Client
+	const counterClient = yield* Counter.Client
+	// R now includes Counter.Client
 
-  const counter = counterClient.getOrCreate(["counter-123"])
+	const counter = counterClient.getOrCreate(["counter-123"])
 
-  // Action calls return Effects with types inferred from the schema.
-  //   counter.Increment: (payload: { amount: number }) => Effect<number, CounterOverflowError>
-  const count = yield* counter.Increment({ amount: 5 })
-  yield* Effect.log(`Count: ${count}`)
+	// Action calls return Effects with types inferred from the schema.
+	//   counter.Increment: (payload: { amount: number }) => Effect<number, CounterOverflowError>
+	const count = yield* counter.Increment({ amount: 5 })
+	yield* Effect.log(`Count: ${count}`)
 
-  const newCount = yield* counter.send(IncrementBy({ amount: 3 }))
-  yield* Effect.log(`Count: ${newCount}`)
+	const newCount = yield* counter.send(IncrementBy({ amount: 3 }))
+	yield* Effect.log(`Count: ${newCount}`)
 
-  // subscribe returns a Stream typed from the event schema.
-  yield* counter.subscribe("countChanged").pipe(
-    Stream.take(3),
-    Stream.runForEach((n) => Effect.log(`Changed: ${n}`)),
-  )
+	// subscribe returns a Stream typed from the event schema.
+	yield* counter.subscribe("countChanged").pipe(
+		Stream.take(3),
+		Stream.runForEach((n) => Effect.log(`Changed: ${n}`)),
+	)
 })
 // program: Effect<void, CounterOverflowError, Counter.Client>
 //                                             ^^^^^^^^^^^^^^
@@ -51,14 +51,14 @@ const ActorClientLayer = Layer.mergeAll(
 	Counter.clientLayer,
 //	ChatRoom.clientLayer,
 ).pipe(
-  // Both client layers share the same transport here, but you
-  // could provide different transports to each.
-  Layer.provide(
-    ActorTransport.layer({
-      endpoint: "https://api.rivet.dev",
-      token: "...",
-    }),
-  ),
+	// Both client layers share the same transport here, but you
+	// could provide different transports to each.
+	Layer.provide(
+		ActorTransport.layer({
+			endpoint: "https://api.rivet.dev",
+			token: "...",
+		}),
+	),
 )
 
 program.pipe(Effect.provide(ActorClientLayer), Effect.runPromise)
