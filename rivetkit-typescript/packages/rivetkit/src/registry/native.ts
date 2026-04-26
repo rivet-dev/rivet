@@ -146,6 +146,7 @@ type NativeActorRuntimeState = {
 	vars?: unknown;
 	destroyGate?: NativeDestroyGate;
 	persistState?: NativePersistActorState;
+	preventSleepRelease?: () => void;
 };
 
 // Keep JS-only actor caches on the NAPI ActorContext runtime-state bag instead
@@ -2639,20 +2640,13 @@ export class NativeActorContextAdapter {
 	}
 
 	waitUntil(promise: Promise<unknown>): void {
-		// Same counter-arm race as `keepAwake`: increment of the
-		// shutdown_counter happens on first poll of the Rust future. Acceptable
-		// because the only consumer is the grace-finalize predicate, which
-		// debounces through `activity_notify` and re-checks the counter.
-		callNative(() => this.#ctx.waitUntil(Promise.resolve(promise))).catch(
-			(error) => {
-				if (!isClosedTaskRegistrationError(error)) {
-					logger().warn({
-						msg: "waitUntil bridge to native runtime failed",
-						error: stringifyError(error),
-					});
-				}
-			},
-		);
+		try {
+			callNativeSync(() => this.#ctx.waitUntil(Promise.resolve(promise)));
+		} catch (error) {
+			if (!isClosedTaskRegistrationError(error)) {
+				throw error;
+			}
+		}
 	}
 
 	beginWebSocketCallback(): number {
@@ -2665,12 +2659,30 @@ export class NativeActorContextAdapter {
 		);
 	}
 
-	/** @deprecated No-op. Use `keepAwake(promise)` or `waitUntil(promise)` instead. */
-	setPreventSleep(_preventSleep: boolean): void {}
+	/** @deprecated Use `keepAwake(promise)` or `waitUntil(promise)` instead. */
+	setPreventSleep(preventSleep: boolean): void {
+		const runtimeState = getNativeRuntimeState(this.#ctx);
+		if (preventSleep) {
+			if (runtimeState.preventSleepRelease) {
+				return;
+			}
 
-	/** @deprecated No-op. Always returns `false`. */
+			let release: () => void = () => {};
+			const promise = new Promise<void>((resolve) => {
+				release = resolve;
+			});
+			runtimeState.preventSleepRelease = release;
+			this.keepAwake(promise);
+			return;
+		}
+
+		runtimeState.preventSleepRelease?.();
+		runtimeState.preventSleepRelease = undefined;
+	}
+
+	/** @deprecated Use `keepAwake(promise)` or `waitUntil(promise)` instead. */
 	get preventSleep(): boolean {
-		return false;
+		return getNativeRuntimeState(this.#ctx).preventSleepRelease !== undefined;
 	}
 
 	sleep(): void {
@@ -3743,10 +3755,9 @@ export function buildNativeFactory(
 							try {
 								if (typeof config.onSleep === "function") {
 									await config.onSleep(actorCtx);
+									await actorCtx.saveState({ immediate: true });
 								}
 							} finally {
-								await actorCtx.closeDatabase(false);
-								callNativeSync(() => ctx.clearRuntimeState());
 								await actorCtx.dispose();
 							}
 						},
@@ -3766,7 +3777,6 @@ export function buildNativeFactory(
 							} finally {
 								resolveNativeDestroy(ctx);
 								await actorCtx.closeDatabase(true);
-								callNativeSync(() => ctx.clearRuntimeState());
 								await actorCtx.dispose();
 							}
 						},

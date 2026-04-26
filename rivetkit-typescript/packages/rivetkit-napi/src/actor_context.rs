@@ -614,7 +614,7 @@ impl ActorContext {
 	}
 
 	#[napi]
-	pub async fn wait_until(&self, promise: Promise<serde_json::Value>) -> napi::Result<()> {
+	pub fn wait_until(&self, promise: Promise<serde_json::Value>) -> napi::Result<()> {
 		self.inner.wait_until(async move {
 			if let Err(error) = promise.await {
 				tracing::warn!(?error, "actor wait_until promise rejected");
