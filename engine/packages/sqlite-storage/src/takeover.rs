@@ -96,10 +96,13 @@ impl SqliteEngine {
 					udb::tx_get_value_serializable(&tx, &subspace, &meta_storage_key).await?
 				{
 					let existing_head = decode_db_head(&existing_meta)?;
-					ensure!(
-						matches!(existing_head.origin, SqliteOrigin::MigratingFromV1),
-						SqliteStorageError::ConcurrentTakeover
-					);
+					if !matches!(existing_head.origin, SqliteOrigin::MigratingFromV1) {
+						if require_stage_in_progress {
+							return Ok(None);
+						}
+
+						return Err(SqliteStorageError::ConcurrentTakeover.into());
+					}
 					let stage_in_progress =
 						existing_head.next_txid > existing_head.head_txid.saturating_add(1);
 					if require_stage_in_progress && !stage_in_progress {
@@ -746,6 +749,30 @@ mod tests {
 			Some(vec![0x42]),
 			"cleanup should stay inside the actor prefix"
 		);
+
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn invalidate_v1_migration_ignores_native_v2_heads() -> Result<()> {
+		let (db, subspace) = test_db().await?;
+		let (engine, _compaction_rx) = SqliteEngine::new(db, subspace);
+		let (head, encoded_head) = encode_db_head_with_usage(TEST_ACTOR, &seeded_head(), 0)?;
+		apply_write_ops(
+			engine.db.as_ref(),
+			&engine.subspace,
+			engine.op_counter.as_ref(),
+			vec![WriteOp::put(meta_key(TEST_ACTOR), encoded_head)],
+		)
+		.await?;
+
+		assert!(!engine.invalidate_v1_migration(TEST_ACTOR, 9_999).await?);
+
+		let stored_meta = read_value(&engine, meta_key(TEST_ACTOR))
+			.await?
+			.expect("native meta should remain");
+		let stored_head = decode_db_head(&stored_meta)?;
+		assert_eq!(stored_head, head);
 
 		Ok(())
 	}

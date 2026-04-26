@@ -11,6 +11,7 @@ use sqlite_storage::{
 	commit::{CommitFinalizeRequest, CommitStageBeginRequest, CommitStageRequest},
 	compaction::CompactionCoordinator,
 	engine::SqliteEngine,
+	error::SqliteStorageError,
 	ltx::{LtxHeader, encode_ltx_v3},
 	takeover::TakeoverConfig,
 	types::{DirtyPage, SQLITE_PAGE_SIZE, SQLITE_VFS_V2_SCHEMA_VERSION, SqliteOrigin},
@@ -32,6 +33,7 @@ const SQLITE_V1_META_VERSION: u16 = 1;
 const SQLITE_V1_META_LEN: usize = 10;
 const SQLITE_V1_CHUNK_SIZE: usize = 4096;
 const SQLITE_V1_MAX_MIGRATION_BYTES: u64 = 128 * 1024 * 1024;
+const SQLITE_STARTUP_TAKEOVER_RETRIES: usize = 3;
 // A staged v1 import can reserve one txid, write at most 16 delta chunks
 // (128 MiB max import / 8 MiB max delta chunk), and finalize. That window should
 // stay well under a minute, so keep stale-owner recovery short.
@@ -594,25 +596,77 @@ pub async fn maybe_load_sqlite_startup_data(
 	}
 
 	let actor_id = actor_id.to_string();
+	let mut observed_generation = 0;
 	if let Some(meta) = sqlite_engine.try_load_meta(&actor_id).await? {
 		ensure!(
 			!matches!(meta.origin, SqliteOrigin::MigratingFromV1),
 			"sqlite v1 migration for actor {actor_id} is incomplete"
 		);
+		observed_generation = meta.generation;
 	}
-	let startup = sqlite_engine
-		.takeover(&actor_id, TakeoverConfig::new(timestamp::now()))
-		.await?;
 
-	Ok(Some(protocol::SqliteStartupData {
-		generation: startup.generation,
-		meta: protocol_sqlite_meta(startup.meta),
-		preloaded_pages: startup
-			.preloaded_pages
-			.into_iter()
-			.map(protocol_sqlite_fetched_page)
-			.collect(),
-	}))
+	for attempt in 0..=SQLITE_STARTUP_TAKEOVER_RETRIES {
+		match sqlite_engine
+			.takeover(&actor_id, TakeoverConfig::new(timestamp::now()))
+			.await
+		{
+			Ok(startup) => {
+				return Ok(Some(protocol::SqliteStartupData {
+					generation: startup.generation,
+					meta: protocol_sqlite_meta(startup.meta),
+					preloaded_pages: startup
+						.preloaded_pages
+						.into_iter()
+						.map(protocol_sqlite_fetched_page)
+						.collect(),
+				}));
+			}
+			Err(err)
+				if matches!(
+					err.downcast_ref::<SqliteStorageError>(),
+					Some(SqliteStorageError::ConcurrentTakeover)
+				) =>
+			{
+				let current_meta = sqlite_engine.load_meta(&actor_id).await?;
+				ensure!(
+					!matches!(current_meta.origin, SqliteOrigin::MigratingFromV1),
+					"sqlite v1 migration for actor {actor_id} is incomplete"
+				);
+
+				if current_meta.generation > observed_generation {
+					tracing::warn!(
+						actor_id = %actor_id,
+						previous_generation = observed_generation,
+						current_generation = current_meta.generation,
+						attempt,
+						"sqlite startup takeover raced with another startup owner; reusing current generation"
+					);
+					return Ok(Some(protocol::SqliteStartupData {
+						generation: current_meta.generation,
+						meta: protocol_sqlite_meta(current_meta),
+						preloaded_pages: Vec::new(),
+					}));
+				}
+
+				if attempt == SQLITE_STARTUP_TAKEOVER_RETRIES {
+					return Err(err);
+				}
+
+				tracing::debug!(
+					actor_id = %actor_id,
+					generation = current_meta.generation,
+					attempt,
+					"sqlite startup takeover raced with an in-flight meta update; retrying"
+				);
+				observed_generation = current_meta.generation;
+				tokio::time::sleep(std::time::Duration::from_millis(10 * (attempt as u64 + 1)))
+					.await;
+			}
+			Err(err) => return Err(err),
+		}
+	}
+
+	unreachable!("sqlite startup takeover loop should always return")
 }
 
 pub fn protocol_sqlite_meta(meta: sqlite_storage::types::SqliteMeta) -> protocol::SqliteMeta {
@@ -676,9 +730,9 @@ mod tests {
 	use universaldb::driver::RocksDbDatabaseDriver;
 
 	use super::{
-		FILE_TAG_JOURNAL, FILE_TAG_MAIN, FILE_TAG_SHM, FILE_TAG_WAL,
-		SQLITE_V1_CHUNK_SIZE, SQLITE_V1_MAX_MIGRATION_BYTES, SQLITE_V1_MIGRATION_LEASE_MS,
-		maybe_migrate_v1_to_v2, read_v1_file, sqlite_subspace, v1_chunk_key, v1_meta_key,
+		FILE_TAG_JOURNAL, FILE_TAG_MAIN, FILE_TAG_SHM, FILE_TAG_WAL, SQLITE_V1_CHUNK_SIZE,
+		SQLITE_V1_MAX_MIGRATION_BYTES, SQLITE_V1_MIGRATION_LEASE_MS, maybe_migrate_v1_to_v2,
+		read_v1_file, sqlite_subspace, v1_chunk_key, v1_meta_key,
 	};
 
 	fn recipient(actor_id: Id) -> Recipient {
