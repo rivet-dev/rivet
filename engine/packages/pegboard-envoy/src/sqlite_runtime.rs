@@ -676,9 +676,9 @@ mod tests {
 	use universaldb::driver::RocksDbDatabaseDriver;
 
 	use super::{
-		FILE_TAG_JOURNAL, FILE_TAG_MAIN, FILE_TAG_SHM, FILE_TAG_WAL,
-		SQLITE_V1_CHUNK_SIZE, SQLITE_V1_MAX_MIGRATION_BYTES, SQLITE_V1_MIGRATION_LEASE_MS,
-		maybe_migrate_v1_to_v2, read_v1_file, sqlite_subspace, v1_chunk_key, v1_meta_key,
+		FILE_TAG_JOURNAL, FILE_TAG_MAIN, FILE_TAG_SHM, FILE_TAG_WAL, SQLITE_V1_CHUNK_SIZE,
+		SQLITE_V1_MAX_MIGRATION_BYTES, SQLITE_V1_MIGRATION_LEASE_MS, maybe_migrate_v1_to_v2,
+		read_v1_file, sqlite_subspace, v1_chunk_key, v1_meta_key,
 	};
 
 	fn recipient(actor_id: Id) -> Recipient {
