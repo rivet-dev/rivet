@@ -93,7 +93,7 @@ mod test_hooks {
 impl SqliteEngine {
 	pub async fn compact_shard(&self, actor_id: &str, shard_id: u32) -> Result<bool> {
 		let meta_bytes = udb::get_value(
-			self.db.as_ref(),
+			&self.db,
 			&self.subspace,
 			self.op_counter.as_ref(),
 			meta_key(actor_id),
@@ -143,7 +143,7 @@ impl SqliteEngine {
 			.collect::<BTreeSet<_>>();
 		let shard_blob_key = shard_key(actor_id, shard_id);
 		let shard_blob = udb::get_value(
-			self.db.as_ref(),
+			&self.db,
 			&self.subspace,
 			self.op_counter.as_ref(),
 			shard_blob_key.clone(),
@@ -257,7 +257,7 @@ impl SqliteEngine {
 		let actor_id_for_tx = actor_id.to_string();
 		let meta_key_for_tx = meta_key(actor_id);
 		let deleted_delta_txids_for_tx = deleted_delta_txids.clone();
-		let updated_head = udb::run_db_op(self.db.as_ref(), self.op_counter.as_ref(), move |tx| {
+		let updated_head = udb::run_db_op(&self.db, self.op_counter.as_ref(), move |tx| {
 			let actor_id = actor_id_for_tx.clone();
 			let subspace = self.subspace.clone();
 			let meta_key = meta_key_for_tx.clone();
@@ -353,7 +353,7 @@ impl SqliteEngine {
 
 pub(super) async fn load_pidx_rows(engine: &SqliteEngine, actor_id: &str) -> Result<Vec<PidxRow>> {
 	udb::scan_prefix_values(
-		engine.db.as_ref(),
+		&engine.db,
 		&engine.subspace,
 		engine.op_counter.as_ref(),
 		pidx_delta_prefix(actor_id),
@@ -373,7 +373,7 @@ pub(super) async fn load_delta_entries(
 	actor_id: &str,
 ) -> Result<BTreeMap<u64, DeltaEntry>> {
 	udb::scan_prefix_values(
-		engine.db.as_ref(),
+		&engine.db,
 		&engine.subspace,
 		engine.op_counter.as_ref(),
 		delta_prefix(actor_id),
@@ -600,7 +600,7 @@ mod tests {
 		);
 		let (head, meta_bytes) = encode_db_head_with_usage(TEST_ACTOR, &head, usage_without_meta)?;
 		apply_write_ops(
-			engine.db.as_ref(),
+			&engine.db,
 			&engine.subspace,
 			engine.op_counter.as_ref(),
 			vec![WriteOp::put(meta_key(TEST_ACTOR), meta_bytes)],
@@ -627,7 +627,7 @@ mod tests {
 		head.db_size_pages = 5;
 		let (engine, _compaction_rx) = SqliteEngine::new(db, subspace);
 		apply_write_ops(
-			engine.db.as_ref(),
+			&engine.db,
 			&engine.subspace,
 			engine.op_counter.as_ref(),
 			vec![
@@ -724,7 +724,7 @@ mod tests {
 		head.db_size_pages = 2;
 		let (engine, _compaction_rx) = SqliteEngine::new(db, subspace);
 		apply_write_ops(
-			engine.db.as_ref(),
+			&engine.db,
 			&engine.subspace,
 			engine.op_counter.as_ref(),
 			vec![
@@ -783,7 +783,7 @@ mod tests {
 		head.db_size_pages = 2;
 		let (engine, _compaction_rx) = SqliteEngine::new(db, subspace);
 		apply_write_ops(
-			engine.db.as_ref(),
+			&engine.db,
 			&engine.subspace,
 			engine.op_counter.as_ref(),
 			vec![
@@ -828,7 +828,7 @@ mod tests {
 		head.db_size_pages = 1;
 		let (engine, _compaction_rx) = SqliteEngine::new(db, subspace);
 		apply_write_ops(
-			engine.db.as_ref(),
+			&engine.db,
 			&engine.subspace,
 			engine.op_counter.as_ref(),
 			vec![
@@ -874,7 +874,7 @@ mod tests {
 		head.db_size_pages = 2;
 		let (engine, _compaction_rx) = SqliteEngine::new(db, subspace);
 		apply_write_ops(
-			engine.db.as_ref(),
+			&engine.db,
 			&engine.subspace,
 			engine.op_counter.as_ref(),
 			vec![
@@ -908,7 +908,7 @@ mod tests {
 		);
 		let (_, meta_bytes) = encode_db_head_with_usage(FAIL_ACTOR, &head, usage_without_meta)?;
 		apply_write_ops(
-			engine.db.as_ref(),
+			&engine.db,
 			&engine.subspace,
 			engine.op_counter.as_ref(),
 			vec![WriteOp::put(meta_key(FAIL_ACTOR), meta_bytes)],
@@ -970,7 +970,7 @@ mod tests {
 		let (engine, _compaction_rx) = SqliteEngine::new(db, subspace);
 		let engine = std::sync::Arc::new(engine);
 		apply_write_ops(
-			engine.db.as_ref(),
+			&engine.db,
 			&engine.subspace,
 			engine.op_counter.as_ref(),
 			vec![
@@ -998,7 +998,7 @@ mod tests {
 		updated_head.head_txid = 2;
 		updated_head.next_txid = 3;
 		apply_write_ops(
-			engine.db.as_ref(),
+			&engine.db,
 			&engine.subspace,
 			engine.op_counter.as_ref(),
 			vec![WriteOp::put(
@@ -1047,7 +1047,7 @@ mod tests {
 		let (engine, _compaction_rx) = SqliteEngine::new(db, subspace);
 		let engine = std::sync::Arc::new(engine);
 		apply_write_ops(
-			engine.db.as_ref(),
+			&engine.db,
 			&engine.subspace,
 			engine.op_counter.as_ref(),
 			vec![
@@ -1121,7 +1121,7 @@ mod tests {
 		let (engine, _compaction_rx) = SqliteEngine::new(db, subspace);
 		let engine = std::sync::Arc::new(engine);
 		apply_write_ops(
-			engine.db.as_ref(),
+			&engine.db,
 			&engine.subspace,
 			engine.op_counter.as_ref(),
 			vec![
@@ -1179,7 +1179,7 @@ mod tests {
 		head.db_size_pages = 129;
 		let (engine, _compaction_rx) = SqliteEngine::new(db, subspace);
 		apply_write_ops(
-			engine.db.as_ref(),
+			&engine.db,
 			&engine.subspace,
 			engine.op_counter.as_ref(),
 			vec![
@@ -1251,7 +1251,7 @@ mod tests {
 		head.db_size_pages = 2;
 		let (engine, _compaction_rx) = SqliteEngine::new(db, subspace);
 		apply_write_ops(
-			engine.db.as_ref(),
+			&engine.db,
 			&engine.subspace,
 			engine.op_counter.as_ref(),
 			vec![

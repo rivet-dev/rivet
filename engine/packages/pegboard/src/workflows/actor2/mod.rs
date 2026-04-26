@@ -1,7 +1,7 @@
 use futures_util::FutureExt;
 use gas::prelude::*;
 use rivet_data::converted::ActorByKeyKeyData;
-use rivet_envoy_protocol as protocol;
+use rivet_envoy_protocol::{self as protocol, PROTOCOL_VERSION};
 use universaldb::prelude::*;
 
 use crate::errors;
@@ -9,13 +9,12 @@ use crate::errors;
 mod keys;
 pub mod metrics;
 mod runtime;
+mod sqlite;
 
 use runtime::{StoppedResult, Transition};
 
 /// Batch size of how many events to ack.
 const EVENT_ACK_BATCH_SIZE: i64 = 250;
-pub const SQLITE_SCHEMA_VERSION_V1: u32 = 1;
-pub const SQLITE_SCHEMA_VERSION_V2: u32 = 2;
 
 // NOTE: Assumes input is validated.
 #[derive(Clone, Debug, Serialize, Deserialize, Hash)]
@@ -123,6 +122,19 @@ pub async fn pegboard_actor2(ctx: &mut WorkflowCtx, input: &Input) -> Result<()>
 		from_v1: input.from_v1,
 	})
 	.await?;
+
+	// When this workflow is dispatched from the v1 actor workflow's migrate-to-v2 path, run the
+	// sqlite v1->v2 migration exactly once before any allocation. Skipped for fresh v2 actors.
+	if input.from_v1 {
+		ctx.v(2)
+			.activity(sqlite::MigrateSqliteV1ToV2Input {
+				actor_id: input.actor_id,
+				namespace_id: input.namespace_id,
+				name: input.name.clone(),
+				protocol_version: PROTOCOL_VERSION,
+			})
+			.await?;
+	}
 
 	if !input.from_v1 {
 		if let Some(key) = &input.key {

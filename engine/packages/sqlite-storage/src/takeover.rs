@@ -87,7 +87,7 @@ impl SqliteEngine {
 		let actor_id = actor_id.to_string();
 		let actor_id_for_tx = actor_id.clone();
 		let subspace = self.subspace.clone();
-		let head = udb::run_db_op(self.db.as_ref(), self.op_counter.as_ref(), move |tx| {
+		let head = udb::run_db_op(&self.db, self.op_counter.as_ref(), move |tx| {
 			let actor_id = actor_id_for_tx.clone();
 			let subspace = subspace.clone();
 			async move {
@@ -142,7 +142,7 @@ impl SqliteEngine {
 	pub async fn takeover(&self, actor_id: &str, config: TakeoverConfig) -> Result<TakeoverResult> {
 		let start = Instant::now();
 		let meta_bytes = udb::get_value(
-			self.db.as_ref(),
+			&self.db,
 			&self.subspace,
 			self.op_counter.as_ref(),
 			meta_key(actor_id),
@@ -191,7 +191,7 @@ impl SqliteEngine {
 		let expected_meta_bytes = meta_bytes.clone();
 		let takeover_mutations = mutations.clone();
 		let subspace = self.subspace.clone();
-		udb::run_db_op(self.db.as_ref(), self.op_counter.as_ref(), move |tx| {
+		udb::run_db_op(&self.db, self.op_counter.as_ref(), move |tx| {
 			let actor_id = actor_id_for_tx.clone();
 			let expected_meta_bytes = expected_meta_bytes.clone();
 			let takeover_mutations = takeover_mutations.clone();
@@ -250,21 +250,21 @@ impl SqliteEngine {
 		live_pidx: &mut BTreeMap<u32, u64>,
 	) -> Result<RecoveryPlan> {
 		let delta_rows = udb::scan_prefix_values(
-			self.db.as_ref(),
+			&self.db,
 			&self.subspace,
 			self.op_counter.as_ref(),
 			delta_prefix(actor_id),
 		)
 		.await?;
 		let pidx_rows = udb::scan_prefix_values(
-			self.db.as_ref(),
+			&self.db,
 			&self.subspace,
 			self.op_counter.as_ref(),
 			pidx_delta_prefix(actor_id),
 		)
 		.await?;
 		let shard_rows = udb::scan_prefix_values(
-			self.db.as_ref(),
+			&self.db,
 			&self.subspace,
 			self.op_counter.as_ref(),
 			shard_prefix(actor_id),
@@ -358,7 +358,7 @@ impl SqliteEngine {
 			for key in keys {
 				let value = if key.starts_with(&delta_prefix(actor_id)) {
 					load_delta_blob(
-						self.db.as_ref(),
+						&self.db,
 						&self.subspace,
 						self.op_counter.as_ref(),
 						key.as_slice(),
@@ -366,7 +366,7 @@ impl SqliteEngine {
 					.await?
 				} else {
 					udb::get_value(
-						self.db.as_ref(),
+						&self.db,
 						&self.subspace,
 						self.op_counter.as_ref(),
 						key.clone(),
@@ -627,7 +627,7 @@ mod tests {
 		);
 		let (_, rewritten_meta) = encode_db_head_with_usage(actor_id, &head, usage_without_meta)?;
 		apply_write_ops(
-			engine.db.as_ref(),
+			&engine.db,
 			&engine.subspace,
 			engine.op_counter.as_ref(),
 			vec![WriteOp::put(meta_key, rewritten_meta)],
@@ -677,7 +677,7 @@ mod tests {
 		let orphan_chunk_0 = physical_chunk_key(&engine.subspace, &orphan_key, 0);
 		let orphan_chunk_14 = physical_chunk_key(&engine.subspace, &orphan_key, 14);
 		apply_write_ops(
-			engine.db.as_ref(),
+			&engine.db,
 			&engine.subspace,
 			engine.op_counter.as_ref(),
 			vec![
@@ -690,7 +690,7 @@ mod tests {
 
 		assert!(
 			raw_key_exists(
-				engine.db.as_ref(),
+				&engine.db,
 				engine.op_counter.as_ref(),
 				orphan_chunk_0.clone(),
 			)
@@ -699,7 +699,7 @@ mod tests {
 		);
 		assert!(
 			raw_key_exists(
-				engine.db.as_ref(),
+				&engine.db,
 				engine.op_counter.as_ref(),
 				orphan_chunk_14.clone(),
 			)
@@ -723,21 +723,11 @@ mod tests {
 		assert_eq!(head.origin, SqliteOrigin::MigratingFromV1);
 		assert_eq!(head.creation_ts_ms, 4_242);
 		assert!(
-			!raw_key_exists(
-				engine.db.as_ref(),
-				engine.op_counter.as_ref(),
-				orphan_chunk_0,
-			)
-			.await?,
+			!raw_key_exists(&engine.db, engine.op_counter.as_ref(), orphan_chunk_0,).await?,
 			"orphaned chunk row 0 should be wiped"
 		);
 		assert!(
-			!raw_key_exists(
-				engine.db.as_ref(),
-				engine.op_counter.as_ref(),
-				orphan_chunk_14,
-			)
-			.await?,
+			!raw_key_exists(&engine.db, engine.op_counter.as_ref(), orphan_chunk_14,).await?,
 			"orphaned chunk subkeys should be wiped too"
 		);
 
@@ -757,7 +747,7 @@ mod tests {
 		head.db_size_pages = 1;
 		let (engine, _compaction_rx) = SqliteEngine::new(db, subspace);
 		apply_write_ops(
-			engine.db.as_ref(),
+			&engine.db,
 			&engine.subspace,
 			engine.op_counter.as_ref(),
 			vec![
@@ -792,7 +782,7 @@ mod tests {
 		head.next_txid = 8;
 		let (engine, _compaction_rx) = SqliteEngine::new(db, subspace);
 		apply_write_ops(
-			engine.db.as_ref(),
+			&engine.db,
 			&engine.subspace,
 			engine.op_counter.as_ref(),
 			vec![
@@ -862,7 +852,7 @@ mod tests {
 		head.db_size_pages = 1;
 		let (engine, _compaction_rx) = SqliteEngine::new(db, subspace);
 		apply_write_ops(
-			engine.db.as_ref(),
+			&engine.db,
 			&engine.subspace,
 			engine.op_counter.as_ref(),
 			vec![
@@ -887,7 +877,7 @@ mod tests {
 		let (db, subspace) = test_db().await?;
 		let (engine, _compaction_rx) = SqliteEngine::new(db, subspace);
 		apply_write_ops(
-			engine.db.as_ref(),
+			&engine.db,
 			&engine.subspace,
 			engine.op_counter.as_ref(),
 			vec![
@@ -948,7 +938,7 @@ mod tests {
 		let mut head = seeded_head();
 		head.db_size_pages = 2;
 		apply_write_ops(
-			engine.db.as_ref(),
+			&engine.db,
 			&engine.subspace,
 			engine.op_counter.as_ref(),
 			vec![
@@ -1000,7 +990,7 @@ mod tests {
 		let (db, subspace) = test_db().await?;
 		let (engine, _compaction_rx) = SqliteEngine::new(db, subspace);
 		apply_write_ops(
-			engine.db.as_ref(),
+			&engine.db,
 			&engine.subspace,
 			engine.op_counter.as_ref(),
 			vec![
@@ -1035,7 +1025,7 @@ mod tests {
 		let (db, subspace) = test_db().await?;
 		let (engine, _compaction_rx) = SqliteEngine::new(db, subspace);
 		apply_write_ops(
-			engine.db.as_ref(),
+			&engine.db,
 			&engine.subspace,
 			engine.op_counter.as_ref(),
 			vec![
@@ -1077,7 +1067,7 @@ mod tests {
 			..seeded_head()
 		};
 		apply_write_ops(
-			engine.db.as_ref(),
+			&engine.db,
 			&engine.subspace,
 			engine.op_counter.as_ref(),
 			vec![
@@ -1137,7 +1127,7 @@ mod tests {
 			..seeded_head()
 		};
 		apply_write_ops(
-			engine.db.as_ref(),
+			&engine.db,
 			&engine.subspace,
 			engine.op_counter.as_ref(),
 			vec![WriteOp::put(
@@ -1172,7 +1162,7 @@ mod tests {
 				},
 			)
 			.await?;
-		let checkpoint_path = checkpoint_test_db(engine.db.as_ref())?;
+		let checkpoint_path = checkpoint_test_db(&engine.db)?;
 		drop(engine);
 		drop(db);
 
@@ -1230,7 +1220,7 @@ mod tests {
 			));
 		}
 		apply_write_ops(
-			engine.db.as_ref(),
+			&engine.db,
 			&engine.subspace,
 			engine.op_counter.as_ref(),
 			mutations,

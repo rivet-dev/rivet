@@ -28,7 +28,7 @@ use universaldb::Subspace;
 async fn setup() -> Result<(SqliteEngine, tokio::sync::mpsc::UnboundedReceiver<String>)> {
 	let path = Builder::new().prefix("bench-rtt-").tempdir()?.keep();
 	let driver = universaldb::driver::RocksDbDatabaseDriver::new(path).await?;
-	let db = Arc::new(universaldb::Database::new(Arc::new(driver)));
+	let db = universaldb::Database::new(Arc::new(driver));
 	let subspace = Subspace::new(&("bench-rtt", Uuid::new_v4().to_string()));
 
 	Ok(SqliteEngine::new(db, subspace))

@@ -1678,7 +1678,6 @@ export type CommandStartActor = {
     readonly config: ActorConfig
     readonly hibernatingRequests: readonly HibernatingRequest[]
     readonly preloadedKv: PreloadedKv | null
-    readonly sqliteSchemaVersion: u32
     readonly sqliteStartupData: SqliteStartupData | null
 }
 
@@ -1687,7 +1686,6 @@ export function readCommandStartActor(bc: bare.ByteCursor): CommandStartActor {
         config: readActorConfig(bc),
         hibernatingRequests: read13(bc),
         preloadedKv: read14(bc),
-        sqliteSchemaVersion: bare.readU32(bc),
         sqliteStartupData: read15(bc),
     }
 }
@@ -1696,7 +1694,6 @@ export function writeCommandStartActor(bc: bare.ByteCursor, x: CommandStartActor
     writeActorConfig(bc, x.config)
     write13(bc, x.hibernatingRequests)
     write14(bc, x.preloadedKv)
-    bare.writeU32(bc, x.sqliteSchemaVersion)
     write15(bc, x.sqliteStartupData)
 }
 

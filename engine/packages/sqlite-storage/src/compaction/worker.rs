@@ -133,7 +133,7 @@ mod tests {
 			));
 		}
 		apply_write_ops(
-			engine.db.as_ref(),
+			&engine.db,
 			&engine.subspace,
 			engine.op_counter.as_ref(),
 			mutations,
@@ -172,7 +172,7 @@ mod tests {
 			));
 		}
 		apply_write_ops(
-			engine.db.as_ref(),
+			&engine.db,
 			&engine.subspace,
 			engine.op_counter.as_ref(),
 			mutations,
