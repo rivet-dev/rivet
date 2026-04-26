@@ -1,7 +1,7 @@
 import { Effect, Layer, Stream } from "effect"
 import { ActorTransport } from "@rivetkit/effect"
 import {
-	Counter,
+	Counter, IncrementBy,
 	// ChatRoom,
 } from "./actors/mod.ts"
 
@@ -22,6 +22,9 @@ const program = Effect.gen(function* () {
   //   counter.Increment: (payload: { amount: number }) => Effect<number, CounterOverflowError>
   const count = yield* counter.Increment({ amount: 5 })
   yield* Effect.log(`Count: ${count}`)
+
+  const newCount = yield* counter.send(IncrementBy({ amount: 3 }))
+  yield* Effect.log(`Count: ${newCount}`)
 
   // subscribe returns a Stream typed from the event schema.
   yield* counter.subscribe("countChanged").pipe(

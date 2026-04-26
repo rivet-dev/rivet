@@ -1,5 +1,5 @@
 import { Schema } from "effect"
-import { Actor, Action } from "@rivetkit/effect"
+import { Actor, Action, Message } from "@rivetkit/effect"
 
 // --- Errors ---
 
@@ -41,16 +41,29 @@ export const GetCount = Action.make("GetCount", {
 	success: Schema.Number,
 })
 
+// --- Messages ---
+
+// Non-completable (fire-and-forget)
+export const Reset = Message.make("Reset", {
+	payload: { reason: Schema.String },
+})
+
+// Completable (sender can await a typed response)
+export const IncrementBy = Message.make("IncrementBy", {
+	payload: Schema.Struct({ amount: Schema.Number }),
+	success: Schema.Number,
+})
+
 // --- Actor Definition ---
 
-// The definition is the actor's public contract: its name,
-// state shape, event schemas, and action set. It carries no
-// implementation, just types. Both server and client code
-// import this; the implementation stays server-only.
+// The definition is the actor's public contract. It carries no
+// implementation. Both server and client code import this;
+// the implementation stays server-only.
 export const Counter = Actor.make("Counter", {
 	state: Schema.Struct({ count: Schema.Number }),
+	actions: [Increment, GetCount],	// synchronous request-response
+	messages: [Reset, IncrementBy],	// durable, queued, background
 	events: { countChanged: Schema.Number },
-	actions: [Increment, GetCount],
 	options: {
 		name: "Counter",	// Human-friendly display name
 		icon: "comments", 	// FontAwesome icon name
