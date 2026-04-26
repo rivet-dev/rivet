@@ -22,6 +22,11 @@ import {
 import { dbActorRaw } from "./actor-db-raw";
 import { onStateChangeActor } from "./actor-onstatechange";
 import { connErrorSerializationActor } from "./conn-error-serialization";
+import {
+	dbInitOrderCreateStateActor,
+	dbInitOrderCreateVarsActor,
+	dbInitOrderOnCreateActor,
+} from "./db-init-order";
 import { dbPragmaMigrationActor } from "./db-pragma-migration";
 import { counterWithParams } from "./conn-params";
 import { connStateActor } from "./conn-state";
@@ -315,6 +320,10 @@ export const registry = setup({
 		connErrorSerializationActor,
 		// From db-pragma-migration.ts
 		dbPragmaMigrationActor,
+		// From db-init-order.ts
+		dbInitOrderCreateStateActor,
+		dbInitOrderOnCreateActor,
+		dbInitOrderCreateVarsActor,
 		// From state-zod-coercion.ts
 		stateZodCoercionActor,
 		// From lifecycle-hooks.ts
