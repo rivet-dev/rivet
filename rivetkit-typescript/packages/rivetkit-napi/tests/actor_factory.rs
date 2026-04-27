@@ -1,0 +1,90 @@
+use super::*;
+
+mod moved_tests {
+	use std::io;
+	use std::io::Write;
+	use std::sync::Arc;
+
+	use parking_lot::Mutex;
+	use rivet_error::{RivetError, RivetErrorSchema};
+	use tracing::Level;
+	use tracing_subscriber::fmt::MakeWriter;
+
+	use super::{BRIDGE_RIVET_ERROR_PREFIX, parse_bridge_rivet_error};
+
+	#[derive(Clone, Default)]
+	struct LogCapture(Arc<Mutex<Vec<u8>>>);
+
+	struct LogCaptureWriter(Arc<Mutex<Vec<u8>>>);
+
+	impl LogCapture {
+		fn output(&self) -> String {
+			String::from_utf8(self.0.lock().clone()).expect("log capture should stay utf-8")
+		}
+	}
+
+	impl<'a> MakeWriter<'a> for LogCapture {
+		type Writer = LogCaptureWriter;
+
+		fn make_writer(&'a self) -> Self::Writer {
+			LogCaptureWriter(Arc::clone(&self.0))
+		}
+	}
+
+	impl Write for LogCaptureWriter {
+		fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+			self.0.lock().extend_from_slice(buf);
+			Ok(buf.len())
+		}
+
+		fn flush(&mut self) -> io::Result<()> {
+			Ok(())
+		}
+	}
+
+	fn schema_ptr(error: &anyhow::Error) -> *const RivetErrorSchema {
+		error
+			.chain()
+			.find_map(|cause| cause.downcast_ref::<RivetError>())
+			.map(|error| error.schema as *const RivetErrorSchema)
+			.expect("expected bridged rivet error")
+	}
+
+	#[test]
+	fn parse_bridge_rivet_error_reuses_interned_schema() {
+		let reason = format!(
+			"{BRIDGE_RIVET_ERROR_PREFIX}{}",
+			serde_json::json!({
+				"group": "actor",
+				"code": "same_code",
+				"message": "same message",
+				"metadata": { "count": 1 },
+			})
+		);
+
+		let first = parse_bridge_rivet_error(&reason).expect("first parse should succeed");
+		let second = parse_bridge_rivet_error(&reason).expect("second parse should succeed");
+
+		assert_eq!(schema_ptr(&first), schema_ptr(&second));
+	}
+
+	#[test]
+	fn parse_bridge_rivet_error_warns_for_malformed_payload() {
+		let capture = LogCapture::default();
+		let subscriber = tracing_subscriber::fmt()
+			.with_writer(capture.clone())
+			.with_max_level(Level::WARN)
+			.with_ansi(false)
+			.with_target(false)
+			.without_time()
+			.finish();
+		let _guard = tracing::subscriber::set_default(subscriber);
+
+		let malformed = format!("{BRIDGE_RIVET_ERROR_PREFIX}{{not-json");
+		assert!(parse_bridge_rivet_error(&malformed).is_none());
+
+		let logs = capture.output();
+		assert!(logs.contains("malformed BridgeRivetErrorPayload"));
+		assert!(logs.contains("parse_err"));
+	}
+}
