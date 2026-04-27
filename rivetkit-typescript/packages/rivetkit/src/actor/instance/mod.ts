@@ -30,9 +30,6 @@ import {
 	type ActorConfig,
 	type ActorConfigInput,
 	ActorConfigSchema,
-	DEFAULT_ON_SLEEP_TIMEOUT,
-	DEFAULT_SLEEP_GRACE_PERIOD,
-	DEFAULT_WAIT_UNTIL_TIMEOUT,
 	getRunFunction,
 } from "../config";
 import type { ConnDriver } from "../conn/driver";
@@ -407,10 +404,6 @@ export class ActorInstance<
 	 */
 	overrides: {
 		sleepGracePeriod?: number;
-		onSleepTimeout?: number;
-		onDestroyTimeout?: number;
-		runStopTimeout?: number;
-		waitUntilTimeout?: number;
 	} = {};
 
 	// MARK: - Constructor
@@ -973,10 +966,11 @@ export class ActorInstance<
 				this.#abortController.abort();
 			} catch {}
 
+			// The run-handler join, lifecycle hooks, and remaining shutdown
+			// tasks all share the single sleepGracePeriod budget.
 			const shutdownTaskDeadlineTs =
 				Date.now() + this.#getEffectiveSleepGracePeriod();
 
-			// Wait for run handler to complete within the shared shutdown budget.
 			await this.#waitForRunHandler(shutdownTaskDeadlineTs - Date.now());
 
 			// Call onStop lifecycle
@@ -1505,48 +1499,13 @@ export class ActorInstance<
 	}
 
 	#getEffectiveSleepGracePeriod(): number {
-		// Resolve the graceful shutdown budget for sleep.
-		//
-		// If sleepGracePeriod is unset, use the new default unless one of the
-		// deprecated legacy timeout knobs was explicitly customized. In that case,
-		// keep honoring the legacy sum so existing tuned actors do not silently
-		// lose shutdown budget.
 		if (this.overrides.sleepGracePeriod !== undefined) {
-			return this.#config.options.sleepGracePeriod !== undefined
-				? Math.min(
-						this.#config.options.sleepGracePeriod,
-						this.overrides.sleepGracePeriod,
-					)
-				: this.overrides.sleepGracePeriod;
+			return Math.min(
+				this.#config.options.sleepGracePeriod,
+				this.overrides.sleepGracePeriod,
+			);
 		}
-
-		if (this.#config.options.sleepGracePeriod !== undefined) {
-			return this.#config.options.sleepGracePeriod;
-		}
-
-		const effectiveOnSleepTimeout =
-			this.overrides.onSleepTimeout !== undefined
-				? Math.min(
-						this.#config.options.onSleepTimeout,
-						this.overrides.onSleepTimeout,
-					)
-				: this.#config.options.onSleepTimeout;
-		const effectiveWaitUntilTimeout =
-			this.overrides.waitUntilTimeout !== undefined
-				? Math.min(
-						this.#config.options.waitUntilTimeout,
-						this.overrides.waitUntilTimeout,
-					)
-				: this.#config.options.waitUntilTimeout;
-
-		const usesDefaultLegacyTimeouts =
-			effectiveOnSleepTimeout === DEFAULT_ON_SLEEP_TIMEOUT &&
-			effectiveWaitUntilTimeout === DEFAULT_WAIT_UNTIL_TIMEOUT;
-		if (usesDefaultLegacyTimeouts) {
-			return DEFAULT_SLEEP_GRACE_PERIOD;
-		}
-
-		return effectiveOnSleepTimeout + effectiveWaitUntilTimeout;
+		return this.#config.options.sleepGracePeriod;
 	}
 
 	#beginActiveAsyncRegion(region: keyof ActiveAsyncRegionCounts) {

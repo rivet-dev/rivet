@@ -99,7 +99,7 @@ Finalize:
 ### Destroy
 
 - Skip the idle-window wait.
-- Use `on_destroy_timeout` independently from the shutdown grace period.
+- Use the unified `sleep_grace_period` budget for the destroy phase.
 - Wait for `wait_for_on_state_change_idle(...)` before final saves.
 - Disconnect every connection.
 - Immediate state save + SQLite cleanup.

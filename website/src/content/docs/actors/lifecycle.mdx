@@ -850,7 +850,7 @@ When an actor sleeps or is destroyed, it enters the graceful shutdown window:
 2. `onSleep` or `onDestroy` and `onDisconnect` for each closing connection run during the same window. User `waitUntil` promises and async raw WebSocket handlers are drained. Hibernatable WebSocket connections are preserved on sleep and closed on destroy.
 3. Once graceful work has completed, state is saved and the database is cleaned up.
 
-The entire window is bounded by `sleepGracePeriod` on sleep or `onDestroyTimeout` on destroy. Both default to 15 seconds. If the window is exceeded, the actor proceeds to state save anyway.
+The entire window is bounded by `sleepGracePeriod` on both sleep and destroy. Defaults to 15 seconds. If the window is exceeded, the actor proceeds to state save anyway.
 
 #### Graceful shutdown window
 
@@ -882,11 +882,8 @@ const myActor = actor({
     // Timeout for onConnect hook (default: 5000ms)
     onConnectTimeout: 5000,
 
-    // Total graceful shutdown sleep budget. Default: 15000ms.
+    // Total graceful shutdown budget for both sleep and destroy. Default: 15000ms.
     sleepGracePeriod: 15_000,
-
-    // Total graceful destroy shutdown budget. Default: 15000ms.
-    onDestroyTimeout: 15_000,
 
     // Interval for saving state (default: 10000ms)
     stateSaveInterval: 10_000,
@@ -917,8 +914,7 @@ const myActor = actor({
 | `createVarsTimeout` | 5000ms | Timeout for `createVars` function |
 | `createConnStateTimeout` | 5000ms | Timeout for `createConnState` function |
 | `onConnectTimeout` | 5000ms | Timeout for `onConnect` hook |
-| `sleepGracePeriod` | 15000ms | Total graceful sleep shutdown window |
-| `onDestroyTimeout` | 15000ms | Total graceful destroy shutdown window |
+| `sleepGracePeriod` | 15000ms | Total graceful shutdown window for both sleep and destroy |
 | `stateSaveInterval` | 10000ms | Interval for persisting state |
 | `actionTimeout` | 60000ms | Timeout for action execution |
 | `connectionLivenessTimeout` | 2500ms | Timeout for connection liveness check |

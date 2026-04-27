@@ -1,7 +1,23 @@
 import type { RegistryConfig } from "@/registry/config";
 import { ActorConfigSchema, type Actions, type ActorConfig, type ActorConfigInput } from "./config";
+import { loggerWithoutContext } from "./log";
 import type { AnyDatabaseProvider } from "@/common/database/config";
 import type { EventSchemaConfig, QueueSchemaConfig } from "./schema";
+
+const warnedDeprecatedTimeoutKeys = new Set<string>();
+
+function warnDeprecatedShutdownTimeoutKeys(options: unknown) {
+	if (!options || typeof options !== "object") return;
+	const opts = options as Record<string, unknown>;
+	for (const key of ["onDestroyTimeout", "waitUntilTimeout"]) {
+		if (opts[key] !== undefined && !warnedDeprecatedTimeoutKeys.has(key)) {
+			warnedDeprecatedTimeoutKeys.add(key);
+			loggerWithoutContext().warn({
+				msg: `actor option \`${key}\` is deprecated and is now ignored. Configure \`sleepGracePeriod\` instead, which bounds the entire graceful shutdown window for both sleep and destroy. Will be removed in 2.2.0.`,
+			});
+		}
+	}
+}
 
 export interface BaseActorDefinition<
 	S,
@@ -168,6 +184,9 @@ export function actor<
 	TQueues,
 	TActions
 > {
+	warnDeprecatedShutdownTimeoutKeys(
+		(input as { options?: unknown } | undefined)?.options,
+	);
 	const config = ActorConfigSchema.parse(input) as ActorConfig<
 		TState,
 		TConnParams,

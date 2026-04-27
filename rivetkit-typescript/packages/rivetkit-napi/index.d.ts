@@ -63,7 +63,6 @@ export interface JsActorConfig {
   onMigrateTimeoutMs?: number
   onWakeTimeoutMs?: number
   onBeforeActorStartTimeoutMs?: number
-  onDestroyTimeoutMs?: number
   actionTimeoutMs?: number
   onRequestTimeoutMs?: number
   sleepTimeoutMs?: number

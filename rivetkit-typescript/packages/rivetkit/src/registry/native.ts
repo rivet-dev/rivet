@@ -3084,7 +3084,6 @@ function buildActorConfig(
 			| undefined,
 		onConnectTimeoutMs: options.onConnectTimeout as number | undefined,
 		onMigrateTimeoutMs: options.onMigrateTimeout as number | undefined,
-		onDestroyTimeoutMs: options.onDestroyTimeout as number | undefined,
 		actionTimeoutMs: options.actionTimeout as number | undefined,
 		sleepTimeoutMs: options.sleepTimeout as number | undefined,
 		noSleep: options.noSleep as boolean | undefined,
