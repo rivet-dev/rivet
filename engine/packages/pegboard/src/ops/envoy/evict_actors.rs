@@ -30,7 +30,7 @@ pub async fn pegboard_envoy_evict_actors(ctx: &OperationCtx, input: &Input) -> R
 				Serializable,
 			)
 			.map(|res| {
-				let (key, generation) = tx.read_entry::<keys::runner::ActorKey>(&res?)?;
+				let (key, generation) = tx.read_entry::<keys::envoy::ActorKey>(&res?)?;
 
 				Ok((key.actor_id, generation))
 			})
