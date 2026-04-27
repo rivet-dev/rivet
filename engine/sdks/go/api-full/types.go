@@ -1379,13 +1379,14 @@ func (r *RunnerConfigsServerlessHealthCheckResponseSuccessSuccess) String() stri
 }
 
 type RunnerConfigsServerlessMetadataError struct {
-	typeName                                                  string
-	RunnerConfigsServerlessMetadataErrorInvalidRequest        *RunnerConfigsServerlessMetadataErrorInvalidRequest
-	RunnerConfigsServerlessMetadataErrorRequestFailed         *RunnerConfigsServerlessMetadataErrorRequestFailed
-	RunnerConfigsServerlessMetadataErrorRequestTimedOut       *RunnerConfigsServerlessMetadataErrorRequestTimedOut
-	RunnerConfigsServerlessMetadataErrorNonSuccessStatus      *RunnerConfigsServerlessMetadataErrorNonSuccessStatus
-	RunnerConfigsServerlessMetadataErrorInvalidResponseJson   *RunnerConfigsServerlessMetadataErrorInvalidResponseJson
-	RunnerConfigsServerlessMetadataErrorInvalidResponseSchema *RunnerConfigsServerlessMetadataErrorInvalidResponseSchema
+	typeName                                                        string
+	RunnerConfigsServerlessMetadataErrorInvalidRequest              *RunnerConfigsServerlessMetadataErrorInvalidRequest
+	RunnerConfigsServerlessMetadataErrorRequestFailed               *RunnerConfigsServerlessMetadataErrorRequestFailed
+	RunnerConfigsServerlessMetadataErrorRequestTimedOut             *RunnerConfigsServerlessMetadataErrorRequestTimedOut
+	RunnerConfigsServerlessMetadataErrorNonSuccessStatus            *RunnerConfigsServerlessMetadataErrorNonSuccessStatus
+	RunnerConfigsServerlessMetadataErrorInvalidResponseJson         *RunnerConfigsServerlessMetadataErrorInvalidResponseJson
+	RunnerConfigsServerlessMetadataErrorInvalidResponseSchema       *RunnerConfigsServerlessMetadataErrorInvalidResponseSchema
+	RunnerConfigsServerlessMetadataErrorInvalidEnvoyProtocolVersion *RunnerConfigsServerlessMetadataErrorInvalidEnvoyProtocolVersion
 }
 
 func NewRunnerConfigsServerlessMetadataErrorFromRunnerConfigsServerlessMetadataErrorInvalidRequest(value *RunnerConfigsServerlessMetadataErrorInvalidRequest) *RunnerConfigsServerlessMetadataError {
@@ -1410,6 +1411,10 @@ func NewRunnerConfigsServerlessMetadataErrorFromRunnerConfigsServerlessMetadataE
 
 func NewRunnerConfigsServerlessMetadataErrorFromRunnerConfigsServerlessMetadataErrorInvalidResponseSchema(value *RunnerConfigsServerlessMetadataErrorInvalidResponseSchema) *RunnerConfigsServerlessMetadataError {
 	return &RunnerConfigsServerlessMetadataError{typeName: "runnerConfigsServerlessMetadataErrorInvalidResponseSchema", RunnerConfigsServerlessMetadataErrorInvalidResponseSchema: value}
+}
+
+func NewRunnerConfigsServerlessMetadataErrorFromRunnerConfigsServerlessMetadataErrorInvalidEnvoyProtocolVersion(value *RunnerConfigsServerlessMetadataErrorInvalidEnvoyProtocolVersion) *RunnerConfigsServerlessMetadataError {
+	return &RunnerConfigsServerlessMetadataError{typeName: "runnerConfigsServerlessMetadataErrorInvalidEnvoyProtocolVersion", RunnerConfigsServerlessMetadataErrorInvalidEnvoyProtocolVersion: value}
 }
 
 func (r *RunnerConfigsServerlessMetadataError) UnmarshalJSON(data []byte) error {
@@ -1449,6 +1454,12 @@ func (r *RunnerConfigsServerlessMetadataError) UnmarshalJSON(data []byte) error 
 		r.RunnerConfigsServerlessMetadataErrorInvalidResponseSchema = valueRunnerConfigsServerlessMetadataErrorInvalidResponseSchema
 		return nil
 	}
+	valueRunnerConfigsServerlessMetadataErrorInvalidEnvoyProtocolVersion := new(RunnerConfigsServerlessMetadataErrorInvalidEnvoyProtocolVersion)
+	if err := json.Unmarshal(data, &valueRunnerConfigsServerlessMetadataErrorInvalidEnvoyProtocolVersion); err == nil {
+		r.typeName = "runnerConfigsServerlessMetadataErrorInvalidEnvoyProtocolVersion"
+		r.RunnerConfigsServerlessMetadataErrorInvalidEnvoyProtocolVersion = valueRunnerConfigsServerlessMetadataErrorInvalidEnvoyProtocolVersion
+		return nil
+	}
 	return fmt.Errorf("%s cannot be deserialized as a %T", data, r)
 }
 
@@ -1468,6 +1479,8 @@ func (r RunnerConfigsServerlessMetadataError) MarshalJSON() ([]byte, error) {
 		return json.Marshal(r.RunnerConfigsServerlessMetadataErrorInvalidResponseJson)
 	case "runnerConfigsServerlessMetadataErrorInvalidResponseSchema":
 		return json.Marshal(r.RunnerConfigsServerlessMetadataErrorInvalidResponseSchema)
+	case "runnerConfigsServerlessMetadataErrorInvalidEnvoyProtocolVersion":
+		return json.Marshal(r.RunnerConfigsServerlessMetadataErrorInvalidEnvoyProtocolVersion)
 	}
 }
 
@@ -1478,6 +1491,7 @@ type RunnerConfigsServerlessMetadataErrorVisitor interface {
 	VisitRunnerConfigsServerlessMetadataErrorNonSuccessStatus(*RunnerConfigsServerlessMetadataErrorNonSuccessStatus) error
 	VisitRunnerConfigsServerlessMetadataErrorInvalidResponseJson(*RunnerConfigsServerlessMetadataErrorInvalidResponseJson) error
 	VisitRunnerConfigsServerlessMetadataErrorInvalidResponseSchema(*RunnerConfigsServerlessMetadataErrorInvalidResponseSchema) error
+	VisitRunnerConfigsServerlessMetadataErrorInvalidEnvoyProtocolVersion(*RunnerConfigsServerlessMetadataErrorInvalidEnvoyProtocolVersion) error
 }
 
 func (r *RunnerConfigsServerlessMetadataError) Accept(visitor RunnerConfigsServerlessMetadataErrorVisitor) error {
@@ -1496,7 +1510,68 @@ func (r *RunnerConfigsServerlessMetadataError) Accept(visitor RunnerConfigsServe
 		return visitor.VisitRunnerConfigsServerlessMetadataErrorInvalidResponseJson(r.RunnerConfigsServerlessMetadataErrorInvalidResponseJson)
 	case "runnerConfigsServerlessMetadataErrorInvalidResponseSchema":
 		return visitor.VisitRunnerConfigsServerlessMetadataErrorInvalidResponseSchema(r.RunnerConfigsServerlessMetadataErrorInvalidResponseSchema)
+	case "runnerConfigsServerlessMetadataErrorInvalidEnvoyProtocolVersion":
+		return visitor.VisitRunnerConfigsServerlessMetadataErrorInvalidEnvoyProtocolVersion(r.RunnerConfigsServerlessMetadataErrorInvalidEnvoyProtocolVersion)
 	}
+}
+
+type RunnerConfigsServerlessMetadataErrorInvalidEnvoyProtocolVersion struct {
+	InvalidEnvoyProtocolVersion *RunnerConfigsServerlessMetadataErrorInvalidEnvoyProtocolVersionInvalidEnvoyProtocolVersion `json:"invalid_envoy_protocol_version,omitempty"`
+
+	_rawJSON json.RawMessage
+}
+
+func (r *RunnerConfigsServerlessMetadataErrorInvalidEnvoyProtocolVersion) UnmarshalJSON(data []byte) error {
+	type unmarshaler RunnerConfigsServerlessMetadataErrorInvalidEnvoyProtocolVersion
+	var value unmarshaler
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*r = RunnerConfigsServerlessMetadataErrorInvalidEnvoyProtocolVersion(value)
+	r._rawJSON = json.RawMessage(data)
+	return nil
+}
+
+func (r *RunnerConfigsServerlessMetadataErrorInvalidEnvoyProtocolVersion) String() string {
+	if len(r._rawJSON) > 0 {
+		if value, err := core.StringifyJSON(r._rawJSON); err == nil {
+			return value
+		}
+	}
+	if value, err := core.StringifyJSON(r); err == nil {
+		return value
+	}
+	return fmt.Sprintf("%#v", r)
+}
+
+type RunnerConfigsServerlessMetadataErrorInvalidEnvoyProtocolVersionInvalidEnvoyProtocolVersion struct {
+	MaxSupported int `json:"max_supported"`
+	Version      int `json:"version"`
+
+	_rawJSON json.RawMessage
+}
+
+func (r *RunnerConfigsServerlessMetadataErrorInvalidEnvoyProtocolVersionInvalidEnvoyProtocolVersion) UnmarshalJSON(data []byte) error {
+	type unmarshaler RunnerConfigsServerlessMetadataErrorInvalidEnvoyProtocolVersionInvalidEnvoyProtocolVersion
+	var value unmarshaler
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*r = RunnerConfigsServerlessMetadataErrorInvalidEnvoyProtocolVersionInvalidEnvoyProtocolVersion(value)
+	r._rawJSON = json.RawMessage(data)
+	return nil
+}
+
+func (r *RunnerConfigsServerlessMetadataErrorInvalidEnvoyProtocolVersionInvalidEnvoyProtocolVersion) String() string {
+	if len(r._rawJSON) > 0 {
+		if value, err := core.StringifyJSON(r._rawJSON); err == nil {
+			return value
+		}
+	}
+	if value, err := core.StringifyJSON(r); err == nil {
+		return value
+	}
+	return fmt.Sprintf("%#v", r)
 }
 
 type RunnerConfigsServerlessMetadataErrorInvalidRequest struct {
@@ -1558,7 +1633,8 @@ func (r *RunnerConfigsServerlessMetadataErrorInvalidResponseJson) String() strin
 }
 
 type RunnerConfigsServerlessMetadataErrorInvalidResponseJsonInvalidResponseJson struct {
-	Body string `json:"body"`
+	Body       string `json:"body"`
+	ParseError string `json:"parse_error"`
 
 	_rawJSON json.RawMessage
 }

@@ -53,6 +53,8 @@ export * from "./RunnerConfigsServerlessMetadataErrorInvalidResponseJsonInvalidR
 export * from "./RunnerConfigsServerlessMetadataErrorInvalidResponseJson";
 export * from "./RunnerConfigsServerlessMetadataErrorInvalidResponseSchemaInvalidResponseSchema";
 export * from "./RunnerConfigsServerlessMetadataErrorInvalidResponseSchema";
+export * from "./RunnerConfigsServerlessMetadataErrorInvalidEnvoyProtocolVersionInvalidEnvoyProtocolVersion";
+export * from "./RunnerConfigsServerlessMetadataErrorInvalidEnvoyProtocolVersion";
 export * from "./RunnerConfigsServerlessMetadataError";
 export * from "./RunnerConfigsUpsertResponse";
 export * from "./RunnersListNamesResponse";
