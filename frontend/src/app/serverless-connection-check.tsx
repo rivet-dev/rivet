@@ -10,7 +10,7 @@ import { useQuery } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect } from "react";
 import { useController, useWatch } from "react-hook-form";
-import { match, P } from "ts-pattern";
+import { match } from "ts-pattern";
 import { useDebounceValue } from "usehooks-ts";
 import z from "zod";
 import * as z4 from "zod/v4";
@@ -219,40 +219,11 @@ function HealthCheckFailure({
 		return null;
 	}
 
-	return match(error.error)
-		.with({ nonSuccessStatus: P.any }, (e) => {
-			return (
-				<p>
-					Health check failed with status{" "}
-					{e.nonSuccessStatus.statusCode}
-				</p>
-			);
-		})
-		.with({ invalidRequest: P.any }, () => {
-			return <p>Health check failed because the request was invalid.</p>;
-		})
-		.with({ invalidResponseJson: P.any }, () => {
-			return (
-				<p>
-					Health check failed because the response was not valid JSON.
-				</p>
-			);
-		})
-		.with({ requestFailed: P.any }, () => {
-			return (
-				<p>
-					Health check failed because the request could not be
-					completed.
-				</p>
-			);
-		})
-		.with({ requestTimedOut: P.any }, () => {
-			return <p>Health check failed because the request timed out.</p>;
-		})
-		.with({ invalidResponseSchema: P.any }, () => {
-			return (
-				<p>Health check failed because the response was not valid.</p>
-			);
-		})
-		.exhaustive();
+	const { message, details } = error.error;
+	return (
+		<p>
+			Health check failed: {message}
+			{details ? ` (${details})` : null}
+		</p>
+	);
 }
