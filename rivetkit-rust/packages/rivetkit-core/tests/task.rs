@@ -1332,7 +1332,6 @@ mod moved_tests {
 			ActorConfig {
 				sleep_grace_period: Duration::from_millis(200),
 				sleep_grace_period_overridden: true,
-				on_destroy_timeout: Duration::from_millis(100),
 				..ActorConfig::default()
 			},
 			move |start| {
@@ -2154,7 +2153,8 @@ mod moved_tests {
 		);
 		let (mut task, lifecycle_tx, _dispatch_tx, _events_tx) = new_task_with_senders(ctx.clone());
 		task.factory = shutdown_ack_factory(ActorConfig {
-			on_destroy_timeout: Duration::from_secs(5),
+			sleep_grace_period: Duration::from_secs(5),
+			sleep_grace_period_overridden: true,
 			..ActorConfig::default()
 		});
 		let run = tokio::spawn(task.run());
@@ -2315,7 +2315,8 @@ mod moved_tests {
 		let mut task = new_task_with_factory(
 			ctx.clone(),
 			shutdown_ack_factory(ActorConfig {
-				on_destroy_timeout: destroy_timeout,
+				sleep_grace_period: destroy_timeout,
+				sleep_grace_period_overridden: true,
 				..ActorConfig::default()
 			}),
 		);
@@ -2683,7 +2684,6 @@ mod moved_tests {
 			ActorConfig {
 				sleep_grace_period: Duration::from_secs(5),
 				sleep_grace_period_overridden: true,
-				on_destroy_timeout: Duration::from_secs(5),
 				..ActorConfig::default()
 			},
 			begin_sleep_count.clone(),

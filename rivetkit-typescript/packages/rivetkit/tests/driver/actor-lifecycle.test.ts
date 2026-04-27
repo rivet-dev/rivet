@@ -307,7 +307,7 @@ describeDriverMatrix("Actor Lifecycle", (driverTestConfig) => {
 			});
 		});
 
-		test("sleepGracePeriod bounds run handler shutdown", async (c) => {
+		test("sleepGracePeriod bounds run handler shutdown on destroy", async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);
 			const actor = client.runIgnoresAbortStopTimeout.getOrCreate([
 				`run-destroy-timeout-${Date.now()}`,

@@ -21,7 +21,6 @@ import type {
 	InferSchemaMap,
 } from "./schema";
 
-export const DEFAULT_WAIT_UNTIL_TIMEOUT = 15_000;
 export const DEFAULT_SLEEP_GRACE_PERIOD = 15_000;
 
 export const ACTOR_CONTEXT_INTERNAL_SYMBOL = Symbol(
@@ -873,15 +872,16 @@ const InstanceActorOptionsBaseSchema = z
 		onBeforeConnectTimeout: z.number().positive().default(5000),
 		onConnectTimeout: z.number().positive().default(5000),
 		onMigrateTimeout: z.number().positive().default(30_000),
-		sleepGracePeriod: z.number().positive().optional(),
-		onDestroyTimeout: z.number().positive().default(15_000),
-		stateSaveInterval: z.number().positive().default(1_000),
-		actionTimeout: z.number().positive().default(60_000),
-		// Deprecated timeout for legacy background shutdown tasks
-		waitUntilTimeout: z
+		sleepGracePeriod: z
 			.number()
 			.positive()
-			.default(DEFAULT_WAIT_UNTIL_TIMEOUT),
+			.default(DEFAULT_SLEEP_GRACE_PERIOD),
+		/** @deprecated `onDestroyTimeout` is folded into `sleepGracePeriod`, which now bounds the entire graceful shutdown window for both sleep and destroy. Will be removed in 2.2.0. */
+		onDestroyTimeout: z.number().positive().optional(),
+		/** @deprecated `waitUntilTimeout` is folded into `sleepGracePeriod`, which now bounds the entire graceful shutdown window for both sleep and destroy. Will be removed in 2.2.0. */
+		waitUntilTimeout: z.number().positive().optional(),
+		stateSaveInterval: z.number().positive().default(1_000),
+		actionTimeout: z.number().positive().default(60_000),
 		connectionLivenessTimeout: z.number().positive().default(2500),
 		connectionLivenessInterval: z.number().positive().default(5000),
 		/** @deprecated Use `c.keepAwake(promise)` to scope keep-awake to a specific operation, or keep `noSleep` for actors that must stay awake indefinitely. Will be removed in 2.2.0. */
@@ -1770,12 +1770,20 @@ export const DocActorOptionsSchema = z
 			.number()
 			.optional()
 			.describe(
-				`Max time in ms for the graceful sleep window. Covers lifecycle hooks, waitUntil, async raw WebSocket handlers, disconnect callbacks, and waiting for preventSleep to clear after shutdown starts. Default: ${DEFAULT_SLEEP_GRACE_PERIOD}.`,
+				`Max time in ms for the graceful shutdown window. Covers lifecycle hooks (onSleep, onDestroy), the run handler abort wait, async raw WebSocket handlers, disconnect callbacks, and final state serialization. Default: ${DEFAULT_SLEEP_GRACE_PERIOD}.`,
 			),
 		onDestroyTimeout: z
 			.number()
 			.optional()
-			.describe("Graceful destroy shutdown window in ms. Default: 15000"),
+			.describe(
+				"Deprecated. Folded into sleepGracePeriod, which now bounds the entire graceful shutdown window for both sleep and destroy. Will be removed in 2.2.0.",
+			),
+		waitUntilTimeout: z
+			.number()
+			.optional()
+			.describe(
+				"Deprecated. Folded into sleepGracePeriod, which now bounds the entire graceful shutdown window for both sleep and destroy. Will be removed in 2.2.0.",
+			),
 		stateSaveInterval: z
 			.number()
 			.optional()
@@ -1786,12 +1794,6 @@ export const DocActorOptionsSchema = z
 			.number()
 			.optional()
 			.describe("Timeout in ms for action handlers. Default: 60000"),
-		waitUntilTimeout: z
-			.number()
-			.optional()
-			.describe(
-				`Deprecated. Legacy timeout in ms for waitUntil when sleepGracePeriod is not set. Default: ${DEFAULT_WAIT_UNTIL_TIMEOUT}`,
-			),
 		connectionLivenessTimeout: z
 			.number()
 			.optional()

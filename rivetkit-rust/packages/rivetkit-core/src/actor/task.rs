@@ -1443,10 +1443,7 @@ impl ActorTask {
 	}
 
 	fn start_grace(&mut self, reason: ShutdownKind) {
-		let grace_period = match reason {
-			ShutdownKind::Sleep => self.factory.config().effective_sleep_grace_period(),
-			ShutdownKind::Destroy => self.factory.config().effective_on_destroy_timeout(),
-		};
+		let grace_period = self.factory.config().effective_sleep_grace_period();
 		self.sleep_deadline = None;
 		self.ctx.cancel_sleep_timer();
 		self.ctx.cancel_abort_signal_for_sleep();
