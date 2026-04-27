@@ -1547,6 +1547,7 @@ impl std::fmt::Debug for ActorContext {
 	}
 }
 
+// Test shim keeps moved tests in crate-root tests/ with private-module access.
 #[cfg(test)]
-#[path = "../../tests/modules/context.rs"]
+#[path = "../../tests/context.rs"]
 pub(crate) mod tests;

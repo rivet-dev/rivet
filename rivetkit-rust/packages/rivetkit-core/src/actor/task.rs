@@ -81,8 +81,9 @@ pub(crate) const DISPATCH_INBOX_CHANNEL: &str = "dispatch_inbox";
 pub(crate) const LIFECYCLE_EVENT_INBOX_CHANNEL: &str = "lifecycle_event_inbox";
 pub use crate::actor::task_types::LifecycleState;
 
+// Test shim keeps moved tests in crate-root tests/ with private-module access.
 #[cfg(test)]
-#[path = "../../tests/modules/task.rs"]
+#[path = "../../tests/task.rs"]
 mod tests;
 
 #[cfg(test)]
