@@ -3,6 +3,8 @@ use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use rand::RngCore;
 use rivet_error::RivetError as RivetErrorDerive;
 use serde::{Deserialize, Serialize};
+#[cfg(test)]
+use std::sync::{Mutex, OnceLock};
 use subtle::ConstantTimeEq;
 
 use crate::ActorContext;
@@ -12,6 +14,12 @@ const INSPECTOR_TOKEN_KEY: [u8; 1] = [3];
 /// inspector auth goes through the per-actor KV token at key [3].
 const INSPECTOR_TOKEN_ENV: &str = "_RIVET_TEST_INSPECTOR_TOKEN";
 const INSPECTOR_TOKEN_BYTES: usize = 32;
+
+#[cfg(test)]
+pub(crate) fn test_inspector_env_lock() -> &'static Mutex<()> {
+	static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+	LOCK.get_or_init(|| Mutex::new(()))
+}
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct InspectorAuth;

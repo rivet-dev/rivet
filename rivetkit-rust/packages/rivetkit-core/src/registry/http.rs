@@ -584,6 +584,16 @@ pub(super) async fn build_http_request(request: HttpRequest) -> Result<Request> 
 		.with_context(|| format!("build actor request for `{}`", request.path))
 }
 
+pub(super) fn is_actor_request_path(path: &str) -> bool {
+	let Some(stripped) = path.strip_prefix("/request") else {
+		return false;
+	};
+	if stripped.is_empty() {
+		return true;
+	}
+	matches!(stripped.as_bytes().first(), Some(b'/') | Some(b'?'))
+}
+
 pub(super) fn normalize_actor_request_path(path: &str) -> String {
 	let Some(stripped) = path.strip_prefix("/request") else {
 		return path.to_owned();
@@ -931,5 +941,5 @@ fn bearer_token_from_authorization(value: &str) -> Option<&str> {
 }
 
 #[cfg(test)]
-#[path = "../../tests/modules/registry_http.rs"]
+#[path = "../../tests/registry_http.rs"]
 mod tests;

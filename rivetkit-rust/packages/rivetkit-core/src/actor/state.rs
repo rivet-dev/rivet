@@ -130,11 +130,13 @@ impl ActorContext {
 		self.set_initial_state(state);
 	}
 
-	/// Requests a save without surfacing delivery failures to the caller.
+	/// Fire-and-forget save request helper.
 	///
 	/// If the lifecycle event inbox is overloaded or unavailable, this only logs
-	/// a warning and returns. Call [`Self::request_save_and_wait`] when the caller
-	/// needs a `Result` and must observe save-request delivery failures.
+	/// a warning and returns. That `warn!` is the sole failure signal for this
+	/// path; callers do not receive a `Result`. Call
+	/// [`Self::request_save_and_wait`] when the caller must observe
+	/// save-request delivery failures.
 	pub fn request_save(&self, opts: RequestSaveOpts) {
 		if let Err(error) = self.request_save_with_revision(opts) {
 			tracing::warn!(?error, "failed to request actor state save");
@@ -752,6 +754,7 @@ fn throttled_save_delay(
 	}
 }
 
+// Test shim keeps moved tests in crate-root tests/ with private-module access.
 #[cfg(test)]
-#[path = "../../tests/modules/state.rs"]
+#[path = "../../tests/state.rs"]
 mod tests;

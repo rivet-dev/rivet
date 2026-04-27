@@ -450,6 +450,7 @@ fn apply_list_opts(entries: &mut Vec<(Vec<u8>, Vec<u8>)>, opts: ListOpts) {
 	}
 }
 
+// Test shim keeps moved tests in crate-root tests/ with private-module access.
 #[cfg(test)]
-#[path = "../../tests/modules/kv.rs"]
+#[path = "../../tests/kv.rs"]
 pub(crate) mod tests;

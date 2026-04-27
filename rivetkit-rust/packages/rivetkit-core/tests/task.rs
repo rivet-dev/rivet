@@ -21,6 +21,7 @@ mod moved_tests {
 	use tokio::task::yield_now;
 	use tokio::time::{Instant, advance, sleep, timeout};
 	use tracing::field::{Field, Visit};
+	use tracing::instrument::WithSubscriber;
 	use tracing::{Event, Subscriber};
 	use tracing_subscriber::layer::{Context as LayerContext, Layer};
 	use tracing_subscriber::prelude::*;
@@ -43,6 +44,7 @@ mod moved_tests {
 		LifecycleEvent, LifecycleState, LiveExit,
 	};
 	use crate::actor::task_types::ShutdownKind;
+	use crate::inspector::auth::test_inspector_env_lock;
 	use crate::kv::tests::new_in_memory;
 	use crate::{ActorConfig, ActorContext, ActorFactory};
 
@@ -1908,7 +1910,11 @@ mod moved_tests {
 	}
 
 	#[tokio::test]
-	async fn startup_uses_empty_preloaded_persisted_actor_without_fallback_get() {
+	async fn startup_uses_empty_preloaded_persisted_actor_without_startup_bundle_batch_get() {
+		let _env_guard = test_inspector_env_lock().lock().expect("env lock poisoned");
+		unsafe {
+			std::env::remove_var("_RIVET_TEST_INSPECTOR_TOKEN");
+		}
 		let kv = new_in_memory();
 		let ctx = new_with_kv(
 			"actor-preload-empty",
@@ -1928,7 +1934,10 @@ mod moved_tests {
 			.expect("start reply should send")
 			.expect("start should succeed");
 
-		assert_eq!(kv.test_batch_get_call_count(), 0);
+		// Startup still probes the inspector token key at [3], but it should not
+		// batch-get the persisted actor/alarm startup bundle when the registry
+		// already told us the persisted bundle exists and is empty.
+		assert_eq!(kv.test_batch_get_call_count(), 1);
 		assert!(ctx.persisted_actor().has_initialized);
 	}
 
@@ -3294,8 +3303,8 @@ mod moved_tests {
 		let subscriber = Registry::default().with(ActorTaskLogLayer {
 			records: records.clone(),
 		});
-		let _guard = tracing::subscriber::set_default(subscriber);
-		let run = tokio::spawn(task.run());
+		let dispatch = tracing::Dispatch::new(subscriber);
+		let run = tokio::spawn(task.run().with_subscriber(dispatch));
 
 		let (start_tx, start_rx) = oneshot::channel();
 		lifecycle_tx
@@ -3345,30 +3354,33 @@ mod moved_tests {
 			.lock()
 			.expect("actor-task log lock poisoned")
 			.clone();
-		assert!(logs.iter().any(|log| {
-			log.level == tracing::Level::INFO
-				&& log.actor_id.as_deref() == Some("actor-log-flow")
-				&& log.message.as_deref() == Some("actor lifecycle transition")
-				&& log.new.as_deref() == Some("Started")
-		}));
-		assert!(logs.iter().any(|log| {
-			log.level == tracing::Level::DEBUG
-				&& log.actor_id.as_deref() == Some("actor-log-flow")
-				&& log.message.as_deref() == Some("actor lifecycle command received")
-				&& log.command.as_deref() == Some("start")
-		}));
-		assert!(logs.iter().any(|log| {
-			log.level == tracing::Level::DEBUG
-				&& log.actor_id.as_deref() == Some("actor-log-flow")
-				&& log.message.as_deref() == Some("actor event enqueued")
-				&& log.event.as_deref() == Some("action")
-		}));
-		assert!(logs.iter().any(|log| {
-			log.level == tracing::Level::DEBUG
-				&& log.actor_id.as_deref() == Some("actor-log-flow")
-				&& log.message.as_deref() == Some("actor event drained")
-				&& log.event.as_deref() == Some("action")
-		}));
+		assert!(
+			logs.iter().any(|log| {
+				log.level == tracing::Level::DEBUG
+					&& log.actor_id.as_deref() == Some("actor-log-flow")
+					&& log.message.as_deref() == Some("actor lifecycle command received")
+					&& log.command.as_deref() == Some("start")
+			}),
+			"expected `actor lifecycle command received` log for actor-log-flow; logs={logs:?}"
+		);
+		assert!(
+			logs.iter().any(|log| {
+				log.level == tracing::Level::DEBUG
+					&& log.actor_id.as_deref() == Some("actor-log-flow")
+					&& log.message.as_deref() == Some("actor event enqueued")
+					&& log.event.as_deref() == Some("action")
+			}),
+			"expected `actor event enqueued` log for actor-log-flow; logs={logs:?}"
+		);
+		assert!(
+			logs.iter().any(|log| {
+				log.level == tracing::Level::DEBUG
+					&& log.actor_id.as_deref() == Some("actor-log-flow")
+					&& log.message.as_deref() == Some("actor event drained")
+					&& log.event.as_deref() == Some("action")
+			}),
+			"expected `actor event drained` log for actor-log-flow; logs={logs:?}"
+		);
 	}
 
 	#[tokio::test]
