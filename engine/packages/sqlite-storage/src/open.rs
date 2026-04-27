@@ -113,8 +113,8 @@ impl SqliteEngine {
 					udb::tx_get_value_serializable(&tx, &subspace, &meta_storage_key).await?
 				{
 					let existing_head = decode_db_head(&existing_meta)?;
-					if !matches!(existing_head.origin, SqliteOrigin::MigratingFromV1) {
-						// Actor has already moved past v1 migration (Native or
+					if !matches!(existing_head.origin, SqliteOrigin::MigrationFromV1InProgress) {
+						// Actor has already moved past v1 migration (CreatedOnV2 or
 						// MigratedFromV1). For invalidate_v1_migration this is a
 						// no-op — there is nothing stale to clean up. For
 						// prepare_v1_migration this is a bug because the caller
@@ -146,7 +146,7 @@ impl SqliteEngine {
 				}
 
 				let mut head = DBHead::new(now_ms);
-				head.origin = SqliteOrigin::MigratingFromV1;
+				head.origin = SqliteOrigin::MigrationFromV1InProgress;
 				let (head, encoded_head) = encode_db_head_with_usage(&actor_id, &head, 0)?;
 				udb::tx_write_value(&tx, &subspace, &meta_storage_key, &encoded_head)?;
 
@@ -690,7 +690,7 @@ mod tests {
 			creation_ts_ms: 123,
 			sqlite_storage_used: 0,
 			sqlite_max_storage: SQLITE_DEFAULT_MAX_STORAGE_BYTES,
-			origin: SqliteOrigin::Native,
+			origin: SqliteOrigin::CreatedOnV2,
 		}
 	}
 
@@ -812,7 +812,7 @@ mod tests {
 		);
 
 		let prepared = engine.prepare_v1_migration(TEST_ACTOR, 4_242).await?;
-		assert_eq!(prepared.meta.origin, SqliteOrigin::MigratingFromV1);
+		assert_eq!(prepared.meta.origin, SqliteOrigin::MigrationFromV1InProgress);
 
 		assert!(read_value(&engine, orphan_key.clone()).await?.is_none());
 		assert!(
@@ -824,7 +824,7 @@ mod tests {
 			.await?
 			.expect("meta should be recreated");
 		let head = decode_db_head(&stored_meta)?;
-		assert_eq!(head.origin, SqliteOrigin::MigratingFromV1);
+		assert_eq!(head.origin, SqliteOrigin::MigrationFromV1InProgress);
 		assert_eq!(head.creation_ts_ms, 4_242);
 		assert!(
 			!raw_key_exists(&engine.db, engine.op_counter.as_ref(), orphan_chunk_0,).await?,

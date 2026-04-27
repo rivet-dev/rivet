@@ -24,9 +24,9 @@ pub const SQLITE_DEFAULT_MAX_STORAGE_BYTES: u64 = 10 * 1024 * 1024 * 1024;
 ///   lifecycle guarantee instead of file locking or generation ownership fencing.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SqliteOrigin {
-	Native,
+	CreatedOnV2,
 	MigratedFromV1,
-	MigratingFromV1,
+	MigrationFromV1InProgress,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -59,7 +59,7 @@ impl DBHead {
 			creation_ts_ms,
 			sqlite_storage_used: 0,
 			sqlite_max_storage: SQLITE_DEFAULT_MAX_STORAGE_BYTES,
-			origin: SqliteOrigin::Native,
+			origin: SqliteOrigin::CreatedOnV2,
 		}
 	}
 }
@@ -145,7 +145,7 @@ pub fn decode_db_head(bytes: &[u8]) -> Result<DBHead> {
 				creation_ts_ms: legacy.creation_ts_ms,
 				sqlite_storage_used: legacy.sqlite_storage_used,
 				sqlite_max_storage: legacy.sqlite_max_storage,
-				origin: SqliteOrigin::Native,
+				origin: SqliteOrigin::CreatedOnV2,
 			})
 		}
 	}
@@ -174,7 +174,7 @@ mod tests {
 		assert_eq!(head.creation_ts_ms, 1_713_456_789_000);
 		assert_eq!(head.sqlite_storage_used, 0);
 		assert_eq!(head.sqlite_max_storage, SQLITE_DEFAULT_MAX_STORAGE_BYTES);
-		assert_eq!(head.origin, SqliteOrigin::Native);
+		assert_eq!(head.origin, SqliteOrigin::CreatedOnV2);
 	}
 
 	#[test]
@@ -240,7 +240,7 @@ mod tests {
 	}
 
 	#[test]
-	fn decode_db_head_defaults_legacy_rows_to_native_origin() {
+	fn decode_db_head_defaults_legacy_rows_to_created_on_v2_origin() {
 		let legacy = (
 			SQLITE_VFS_V2_SCHEMA_VERSION,
 			7_u64,
@@ -257,7 +257,7 @@ mod tests {
 		let encoded = serde_bare::to_vec(&legacy).expect("legacy head should serialize");
 		let decoded = decode_db_head(&encoded).expect("legacy head should decode");
 
-		assert_eq!(decoded.origin, SqliteOrigin::Native);
+		assert_eq!(decoded.origin, SqliteOrigin::CreatedOnV2);
 		assert_eq!(decoded.generation, 7);
 		assert_eq!(decoded.db_size_pages, 321);
 	}

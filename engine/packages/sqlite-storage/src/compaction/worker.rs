@@ -87,7 +87,7 @@ mod tests {
 			creation_ts_ms: 123,
 			sqlite_storage_used: 0,
 			sqlite_max_storage: SQLITE_DEFAULT_MAX_STORAGE_BYTES,
-			origin: SqliteOrigin::Native,
+			origin: SqliteOrigin::CreatedOnV2,
 		}
 	}
 

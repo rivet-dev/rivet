@@ -381,7 +381,7 @@ async fn skips_native_v2_state_even_if_v1_tombstone_exists() -> Result<()> {
 	assert!(!migrate(&db, actor_id).await?.migrated);
 
 	let meta = engine.load_meta(&actor_id_str).await?;
-	assert_eq!(meta.origin, SqliteOrigin::Native);
+	assert_eq!(meta.origin, SqliteOrigin::CreatedOnV2);
 	assert_eq!(
 		query_note_values(&load_v2_bytes(&engine, &actor_id_str).await?)?,
 		vec!["native"]

@@ -95,8 +95,8 @@ async fn maybe_migrate_v1_to_v2(
 
 	if let Some(head) = sqlite_engine.try_load_head(&actor_id).await? {
 		match head.origin {
-			SqliteOrigin::Native | SqliteOrigin::MigratedFromV1 => return Ok(false),
-			SqliteOrigin::MigratingFromV1 => {
+			SqliteOrigin::CreatedOnV2 | SqliteOrigin::MigratedFromV1 => return Ok(false),
+			SqliteOrigin::MigrationFromV1InProgress => {
 				let migration_started_at = head.creation_ts_ms;
 				let lease_expires_at =
 					migration_started_at.saturating_add(SQLITE_V1_MIGRATION_LEASE_MS);
