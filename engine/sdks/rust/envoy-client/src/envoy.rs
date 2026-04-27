@@ -43,6 +43,11 @@ pub struct EnvoyContext {
 	pub next_sqlite_request_id: u32,
 	pub request_to_actor: BufferMap<String>,
 	pub buffered_messages: Vec<protocol::ToRivetTunnelMessage>,
+	/// Highest command index processed per `(actor_id, generation)`, used to
+	/// drop replayed commands from `pegboard-envoy` after a reconnect. Persists
+	/// across `remove_actor` so a replayed `CommandStartActor` for an
+	/// already-stopped actor cannot resurrect it.
+	pub processed_command_idx: HashMap<(String, u32), i64>,
 }
 
 pub struct ActorEntry {
@@ -286,6 +291,7 @@ fn start_envoy_sync_inner(config: EnvoyConfig) -> EnvoyHandle {
 		next_sqlite_request_id: 0,
 		request_to_actor: BufferMap::new(),
 		buffered_messages: Vec::new(),
+		processed_command_idx: HashMap::new(),
 	};
 
 	tracing::info!("starting envoy");
