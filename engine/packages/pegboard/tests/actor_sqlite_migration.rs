@@ -354,7 +354,7 @@ async fn skips_native_v2_state_even_if_v1_tombstone_exists() -> Result<()> {
 	seed_v1_file(&db, &recipient, FILE_TAG_MAIN, &v1_fixture).await?;
 	let native_fixture = build_fixture_db(&["native"])?;
 	let (engine, _compaction_rx) = pegboard::actor_sqlite::new_engine(db.clone());
-	let takeover = engine
+	let opened = engine
 		.open(&actor_id_str, OpenConfig::new(timestamp::now()))
 		.await?;
 	let dirty_pages = native_fixture
@@ -369,8 +369,8 @@ async fn skips_native_v2_state_even_if_v1_tombstone_exists() -> Result<()> {
 		.commit(
 			&actor_id_str,
 			CommitRequest {
-				generation: takeover.generation,
-				head_txid: takeover.meta.head_txid,
+				generation: opened.generation,
+				head_txid: opened.meta.head_txid,
 				db_size_pages: dirty_pages.len() as u32,
 				dirty_pages,
 				now_ms: timestamp::now(),

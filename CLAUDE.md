@@ -92,6 +92,13 @@ docker-compose up -d
 - When `rivetkit` needs ergonomic helpers on a `rivetkit-core` type it re-exports, prefer an extension trait plus `prelude` re-export instead of wrapping and replacing the core type.
 - `engine/sdks/*/api-*` are auto-generated SDK outputs; update the source API schema and regenerate them instead of editing them by hand.
 
+### RivetKit Test Fixtures
+
+- Core tests that touch the `_RIVET_TEST_INSPECTOR_TOKEN` env override must share a process-wide lock with startup tests that assert inspector-token initialization side effects; otherwise parallel `cargo test` runs can flip `init_inspector_token(...)` between the env-override no-op path and the KV-backed path.
+- For the fast static/http/bare driver verifier, pass only the files listed under `## Fast Tests` in `.agent/notes/driver-test-progress.md`; `tests/driver/*.test.ts` also pulls in slow-suite files and gives bogus gate failures.
+- When moving Rust inline tests out of `src/`, keep a tiny source-owned `#[cfg(test)] #[path = "..."] mod tests;` shim so the moved file still has private module access without widening runtime visibility. Prefer a dedicated moved-test file per source module; reusing stale shared `tests/modules/*.rs` files can silently rot against private APIs and explode once you wire them back in.
+- Tracing assertions on spawned Rust futures should bind an explicit `tracing::Dispatch` with `.with_subscriber(...)` on the spawned future; thread-local `set_default(...)` can miss the real logs in full async suite runs.
+
 ### SQLite Package
 
 - RivetKit SQLite is native-only: VFS and query execution live in `rivetkit-rust/packages/rivetkit-sqlite/`, core owns lifecycle, and NAPI only marshals JS types.
@@ -288,3 +295,4 @@ Load these only when the task touches the topic.
 - **[Examples + Vercel](.claude/reference/examples.md)** — example templates, Vercel mirror regen, common errors.
 - **[RivetError system](.claude/reference/error-system.md)** — full derive example, artifact commit rule, anyhow usage.
 - **[Dependencies](.claude/reference/dependencies.md)** — pnpm resolutions, Rust workspace deps, dynamic imports, version bumps, reqwest pool.
+- When a `utoipa` / OpenAPI enum grows a new API variant, update the checked-in SDK unions under `engine/sdks/{typescript,rust,go}/api-full` in the same change. `engine/artifacts/openapi.json` can be ahead of the generated clients.
