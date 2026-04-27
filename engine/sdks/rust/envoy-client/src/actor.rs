@@ -558,6 +558,7 @@ fn handle_req_start(
 				}
 				Err(error) => {
 					tracing::error!(?error, "fetch failed");
+					send_fetch_error_response(&shared, gateway_id, request_id).await;
 				}
 			}
 		}
@@ -1341,6 +1342,41 @@ async fn send_response(
 			}
 		}
 	}
+}
+
+async fn send_fetch_error_response(
+	shared: &SharedContext,
+	gateway_id: protocol::GatewayId,
+	request_id: protocol::RequestId,
+) {
+	let body = br#"{"group":"envoy","code":"fetch_failed","message":"actor fetch failed","metadata":{}}"#.to_vec();
+	let mut headers = HashableMap::new();
+	headers.insert("content-type".to_string(), "application/json".to_string());
+	headers.insert("content-length".to_string(), body.len().to_string());
+	headers.insert(
+		"x-rivet-error".to_string(),
+		"envoy.fetch_failed".to_string(),
+	);
+
+	ws_send(
+		shared,
+		protocol::ToRivet::ToRivetTunnelMessage(protocol::ToRivetTunnelMessage {
+			message_id: protocol::MessageId {
+				gateway_id,
+				request_id,
+				message_index: 0,
+			},
+			message_kind: protocol::ToRivetTunnelMessageKind::ToRivetResponseStart(
+				protocol::ToRivetResponseStart {
+					status: 500,
+					headers,
+					body: Some(body),
+					stream: false,
+				},
+			),
+		}),
+	)
+	.await;
 }
 
 #[cfg(test)]
