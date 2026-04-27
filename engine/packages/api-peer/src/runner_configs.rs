@@ -35,7 +35,7 @@ pub async fn list(ctx: ApiCtx, _path: ListPath, query: ListQuery) -> Result<List
 					.into_iter()
 					.map(|name| (namespace.namespace_id, name))
 					.collect(),
-				bypass_cache: false,
+				bypass_cache: true,
 			})
 			.await?;
 
