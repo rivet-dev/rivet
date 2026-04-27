@@ -38,20 +38,6 @@ export const CounterLive = Counter.toLayer(
 
 		yield* Effect.addFinalizer(() => Effect.log("sleeping"))
 
-		// Lifecycle hooks are just Effects that run at the right time.
-		// onConnect receives the connection — its scope finalizer IS onDisconnect.
-		yield* Counter.onConnect((conn) =>
-			Effect.gen(function* () {
-				yield* PubSub.publish(events.userJoined, conn.params.userId)
-
-				// Finalizer runs on disconnect (or sleep for non-hibernatable).
-				// This replaces onDisconnect — cleanup is co-located with setup.
-				yield* Effect.addFinalizer(() =>
-					Effect.log(`${conn.params.userId} disconnected`)
-				)
-			})
-		)
-
 		// --- Message processing (durable queue) ---
 		// Pull-based: the actor controls when to take the next message.
 		// Forked into a scoped fiber, so it runs in the background and
