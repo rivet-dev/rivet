@@ -49,7 +49,12 @@ pub trait DatabaseDebug: Database {
 	) -> Result<usize>;
 
 	/// Used by pruner workflow for automatic pruning.
-	async fn prune_workflows(&self, before_ts: i64) -> Result<usize>;
+	async fn prune_workflows(
+		&self,
+		before_ts: i64,
+		limit: usize,
+		last_key: Option<&[u8]>,
+	) -> Result<(usize, Option<Vec<u8>>)>;
 
 	/// Used for manual pruning.
 	async fn prune_complete_workflow_history(

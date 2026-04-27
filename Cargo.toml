@@ -60,14 +60,7 @@ members = [
   "engine/sdks/rust/sqlite-storage-protocol",
   "engine/sdks/rust/test-envoy",
   "engine/sdks/rust/ups-protocol",
-  "rivetkit-rust/packages/client",
-  "rivetkit-rust/packages/client-protocol",
-  "rivetkit-rust/packages/inspector-protocol",
-  "rivetkit-rust/packages/rivetkit",
-  "rivetkit-rust/packages/rivetkit-core",
-  "rivetkit-rust/packages/shared-types",
-  "rivetkit-rust/packages/rivetkit-sqlite",
-  "rivetkit-typescript/packages/rivetkit-napi"
+  "rivetkit-rust/packages/shared-types"
 ]
 
   [workspace.package]
@@ -103,7 +96,6 @@ members = [
   http = "1.3.1"
   http-body = "1.0.0"
   http-body-util = "0.1.1"
-  hyper-rustls = { version = "0.27.7", default-features = false, features = [ "http1", "http2", "native-tokio", "webpki-tokio", "ring" ] }
   hyper-tungstenite = "0.17.0"
   include_dir = "0.7.4"
   indoc = "2.0.5"
@@ -127,7 +119,6 @@ members = [
   regex = "1.4"
   replace_with = "0.1.8"
   rstest = "0.26.1"
-  rusqlite = { version = "0.32.1", features = [ "bundled" ] }
   rustls-pemfile = "2.2.0"
   rustyline = "15.0.0"
   scc = "3.6.12"
@@ -157,6 +148,15 @@ members = [
   tracing-slog = "0.2"
   vergen-gitcl = "1.0.0"
   reqwest-eventsource = "0.6.0"
+
+    [workspace.dependencies.hyper-rustls]
+    version = "0.27.7"
+    default-features = false
+    features = [ "http1", "http2", "native-tokio", "webpki-tokio", "ring" ]
+
+    [workspace.dependencies.rusqlite]
+    version = "0.32.1"
+    features = [ "bundled" ]
 
     [workspace.dependencies.tokio-tungstenite]
     version = "0.26.0"
@@ -478,11 +478,11 @@ members = [
     [workspace.dependencies.rivet-runtime]
     path = "engine/packages/runtime"
 
-    [workspace.dependencies.sqlite-storage]
-    path = "engine/packages/sqlite-storage"
-
     [workspace.dependencies.rivet-service-manager]
     path = "engine/packages/service-manager"
+
+    [workspace.dependencies.sqlite-storage]
+    path = "engine/packages/sqlite-storage"
 
     [workspace.dependencies.rivet-telemetry]
     path = "engine/packages/telemetry"
@@ -568,9 +568,6 @@ members = [
 
 [profile.dev]
 overflow-checks = false
-# "line-tables-only" produces just the line-number DWARF needed for stack
-# traces, skipping variable/type info. Meaningfully faster debug builds
-# (~2 min per engine cross-compile) with no runtime cost.
 debug = "line-tables-only"
 lto = "off"
 
