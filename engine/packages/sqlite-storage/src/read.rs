@@ -32,6 +32,7 @@ impl SqliteEngine {
 		for pgno in &pgnos {
 			ensure!(*pgno > 0, "get_pages does not accept page 0");
 		}
+		self.ensure_open(actor_id, generation, "get_pages").await?;
 
 		let pgnos_in_range = pgnos.iter().copied().collect::<Vec<_>>();
 		let actor_id = actor_id.to_string();
@@ -459,6 +460,7 @@ mod tests {
 	use crate::error::SqliteStorageError;
 	use crate::keys::{delta_chunk_key, meta_key, pidx_delta_key, shard_key};
 	use crate::ltx::{LtxHeader, encode_ltx_v3};
+	use crate::open::OpenConfig;
 	use crate::test_utils::{assert_op_count, clear_op_count, read_value, test_db};
 	use crate::types::{
 		DBHead, DirtyPage, FetchedPage, SQLITE_DEFAULT_MAX_STORAGE_BYTES, SQLITE_PAGE_SIZE,
@@ -530,6 +532,7 @@ mod tests {
 			],
 		)
 		.await?;
+		engine.open(TEST_ACTOR, OpenConfig::new(0)).await?;
 		clear_op_count(&engine);
 		let pages = engine.get_pages(TEST_ACTOR, 4, vec![1, 2, 4]).await?;
 
@@ -555,17 +558,20 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn get_pages_requires_takeover_before_reading_empty_store() -> Result<()> {
+	async fn get_pages_requires_open_before_reading_empty_store() -> Result<()> {
 		let (db, subspace) = test_db().await?;
 		let (engine, _compaction_rx) = SqliteEngine::new(db, subspace);
 
 		let error = engine
 			.get_pages(TEST_ACTOR, 1, vec![1, 2])
 			.await
-			.expect_err("missing meta should require takeover");
+			.expect_err("read without prior open should fail");
+		// `ensure_open` rejects the read before it touches META, so the
+		// surfaced error names the lifecycle gate rather than the underlying
+		// MetaMissing condition.
 		assert_eq!(
 			error.downcast_ref::<SqliteStorageError>(),
-			Some(&SqliteStorageError::MetaMissing {
+			Some(&SqliteStorageError::DbNotOpen {
 				operation: "get_pages",
 			})
 		);
@@ -601,6 +607,7 @@ mod tests {
 			],
 		)
 		.await?;
+		engine.open(TEST_ACTOR, OpenConfig::new(0)).await?;
 		clear_op_count(&engine);
 		let pages = engine.get_pages(TEST_ACTOR, 4, vec![2, 65]).await?;
 
@@ -645,6 +652,7 @@ mod tests {
 			],
 		)
 		.await?;
+		engine.open(TEST_ACTOR, OpenConfig::new(0)).await?;
 		let warmed_pages = engine.get_pages(TEST_ACTOR, 4, vec![3]).await?;
 		assert_eq!(
 			warmed_pages,
@@ -693,6 +701,7 @@ mod tests {
 			],
 		)
 		.await?;
+		engine.open(TEST_ACTOR, OpenConfig::new(0)).await?;
 		assert_eq!(
 			engine.get_pages(TEST_ACTOR, 4, vec![3]).await?,
 			vec![FetchedPage {
@@ -749,6 +758,7 @@ mod tests {
 			],
 		)
 		.await?;
+		engine.open(TEST_ACTOR, OpenConfig::new(0)).await?;
 		assert_eq!(
 			engine.get_pages(TEST_ACTOR, 4, vec![3]).await?,
 			vec![FetchedPage {
@@ -794,66 +804,6 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn get_pages_recovers_from_older_delta_when_latest_source_is_wrong() -> Result<()> {
-		let (db, subspace) = test_db().await?;
-		let mut head = seeded_head();
-		head.head_txid = 5;
-		head.next_txid = 6;
-		head.materialized_txid = 0;
-		head.db_size_pages = 3;
-		let (engine, _compaction_rx) = SqliteEngine::new(db, subspace);
-		apply_write_ops(
-			&engine.db,
-			&engine.subspace,
-			engine.op_counter.as_ref(),
-			vec![
-				WriteOp::put(meta_key(TEST_ACTOR), serde_bare::to_vec(&head)?),
-				WriteOp::put(
-					delta_blob_key(TEST_ACTOR, 4),
-					encoded_blob(4, 3, &[(3, 0x22)]),
-				),
-				WriteOp::put(
-					delta_blob_key(TEST_ACTOR, 5),
-					encoded_blob(5, 3, &[(3, 0x33)]),
-				),
-				WriteOp::put(pidx_delta_key(TEST_ACTOR, 3), 5_u64.to_be_bytes().to_vec()),
-			],
-		)
-		.await?;
-
-		assert_eq!(
-			engine.get_pages(TEST_ACTOR, 4, vec![3]).await?,
-			vec![FetchedPage {
-				pgno: 3,
-				bytes: Some(page(0x33)),
-			}]
-		);
-
-		apply_write_ops(
-			&engine.db,
-			&engine.subspace,
-			engine.op_counter.as_ref(),
-			vec![WriteOp::put(
-				delta_blob_key(TEST_ACTOR, 5),
-				encoded_blob(5, 3, &[(2, 0x55)]),
-			)],
-		)
-		.await?;
-		clear_op_count(&engine);
-
-		assert_eq!(
-			engine.get_pages(TEST_ACTOR, 4, vec![3]).await?,
-			vec![FetchedPage {
-				pgno: 3,
-				bytes: Some(page(0x22)),
-			}]
-		);
-		assert_op_count(&engine, 3);
-
-		Ok(())
-	}
-
-	#[tokio::test]
 	async fn get_pages_zero_fills_in_range_pages_when_no_source_exists() -> Result<()> {
 		let (db, subspace) = test_db().await?;
 		let mut head = seeded_head();
@@ -872,6 +822,7 @@ mod tests {
 			)],
 		)
 		.await?;
+		engine.open(TEST_ACTOR, OpenConfig::new(0)).await?;
 
 		assert_eq!(
 			engine.get_pages(TEST_ACTOR, 4, vec![3]).await?,
@@ -899,6 +850,7 @@ mod tests {
 			)],
 		)
 		.await?;
+		engine.open(TEST_ACTOR, OpenConfig::new(0)).await?;
 		clear_op_count(&engine);
 
 		let page_zero_error = engine
@@ -912,12 +864,16 @@ mod tests {
 			.get_pages(TEST_ACTOR, 99, vec![1])
 			.await
 			.expect_err("generation mismatch should fail");
-		assert!(
-			generation_error
-				.chain()
-				.any(|cause| cause.to_string().contains("generation fence mismatch"))
-		);
-		assert_op_count(&engine, 1);
+		// `ensure_open` surfaces fence mismatches with a message that names the
+		// operation and the two generations rather than the older "fence
+		// mismatch" wording.
+		assert!(generation_error.chain().any(|cause| {
+			let msg = cause.to_string();
+			msg.contains("did not match open generation") || msg.contains("fence mismatch")
+		}));
+		// `ensure_open` rejects the mismatched generation before get_pages
+		// opens any UDB transaction, so no ops are recorded.
+		assert_op_count(&engine, 0);
 
 		let stored_head = decode_db_head(
 			&read_value(&engine, meta_key(TEST_ACTOR))

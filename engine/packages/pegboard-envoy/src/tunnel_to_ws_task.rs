@@ -9,7 +9,7 @@ use universalpubsub as ups;
 use universalpubsub::{NextOutput, PublishOpts, Subscriber};
 use vbare::OwnedVersionedData;
 
-use crate::{LifecycleResult, conn::Conn, metrics, sqlite_runtime};
+use crate::{LifecycleResult, actor_lifecycle, conn::Conn, metrics};
 
 #[tracing::instrument(name="tunnel_to_ws_task", skip_all, fields(ray_id=?ctx.ray_id(), req_id=?ctx.req_id(), envoy_key=%conn.envoy_key, protocol_version=%conn.protocol_version))]
 pub async fn task(
@@ -127,29 +127,10 @@ async fn handle_message(
 			// TODO: Parallelize
 			for command_wrapper in &mut command_wrappers {
 				if let protocol::Command::CommandStartActor(start) = &mut command_wrapper.inner {
-					let actor_id = Id::parse(&command_wrapper.checkpoint.actor_id)?;
-					let hibernating_requests = ctx
-						.op(pegboard::ops::actor::hibernating_request::list::Input { actor_id })
+					actor_lifecycle::start_actor(ctx, conn, &command_wrapper.checkpoint, start)
 						.await?;
-
-					// Dynamically populate hibernating request ids
-					start.hibernating_requests = hibernating_requests
-						.into_iter()
-						.map(|x| protocol::HibernatingRequest {
-							gateway_id: x.gateway_id,
-							request_id: x.request_id,
-						})
-						.collect();
-
-					sqlite_runtime::populate_start_command(
-						ctx,
-						conn.sqlite_engine.as_ref(),
-						conn.protocol_version,
-						conn.namespace_id,
-						actor_id,
-						start,
-					)
-					.await?;
+				} else if let protocol::Command::CommandStopActor(_) = &command_wrapper.inner {
+					actor_lifecycle::stop_actor(conn, &command_wrapper.checkpoint).await?;
 				}
 			}
 

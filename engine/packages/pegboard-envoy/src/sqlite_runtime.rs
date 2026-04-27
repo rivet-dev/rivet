@@ -1,12 +1,9 @@
 use std::sync::Arc;
 
-use anyhow::{Result, ensure};
-use gas::prelude::{Id, StandaloneCtx, util::timestamp};
-use rivet_envoy_protocol::{self as protocol, PROTOCOL_VERSION};
-use sqlite_storage::{
-	compaction::CompactionCoordinator, engine::SqliteEngine, takeover::TakeoverConfig,
-	types::SqliteOrigin,
-};
+use anyhow::Result;
+use gas::prelude::StandaloneCtx;
+use rivet_envoy_protocol as protocol;
+use sqlite_storage::{compaction::CompactionCoordinator, engine::SqliteEngine, open::OpenResult};
 use tokio::sync::OnceCell;
 use universaldb::Subspace;
 
@@ -37,56 +34,8 @@ fn sqlite_subspace() -> Subspace {
 	pegboard::keys::subspace().subspace(&("sqlite-storage",))
 }
 
-pub async fn populate_start_command(
-	ctx: &StandaloneCtx,
-	sqlite_engine: &SqliteEngine,
-	protocol_version: u16,
-	namespace_id: Id,
-	actor_id: Id,
-	start: &mut protocol::CommandStartActor,
-) -> Result<()> {
-	ensure!(start.sqlite_startup_data.is_none());
-	ensure!(start.preloaded_kv.is_none());
-
-	// Preload KV
-	let db = ctx.udb()?;
-	start.preloaded_kv = pegboard::actor_kv::preload::fetch_preloaded_kv(
-		&db,
-		ctx.config().pegboard(),
-		actor_id,
-		namespace_id,
-		&start.config.name,
-	)
-	.await?;
-
-	// Preload SQLite
-	start.sqlite_startup_data =
-		maybe_load_sqlite_startup_data(sqlite_engine, protocol_version, actor_id).await?;
-
-	Ok(())
-}
-
-pub async fn maybe_load_sqlite_startup_data(
-	sqlite_engine: &SqliteEngine,
-	protocol_version: u16,
-	actor_id: Id,
-) -> Result<Option<protocol::SqliteStartupData>> {
-	if protocol_version < PROTOCOL_VERSION {
-		return Ok(None);
-	}
-
-	let actor_id = actor_id.to_string();
-	if let Some(meta) = sqlite_engine.try_load_meta(&actor_id).await? {
-		ensure!(
-			!matches!(meta.origin, SqliteOrigin::MigratingFromV1),
-			"sqlite v1 migration for actor {actor_id} is incomplete"
-		);
-	}
-	let startup = sqlite_engine
-		.takeover(&actor_id, TakeoverConfig::new(timestamp::now()))
-		.await?;
-
-	Ok(Some(protocol::SqliteStartupData {
+pub fn protocol_sqlite_startup_data(startup: OpenResult) -> protocol::SqliteStartupData {
+	protocol::SqliteStartupData {
 		generation: startup.generation,
 		meta: protocol_sqlite_meta(startup.meta),
 		preloaded_pages: startup
@@ -94,12 +43,11 @@ pub async fn maybe_load_sqlite_startup_data(
 			.into_iter()
 			.map(protocol_sqlite_fetched_page)
 			.collect(),
-	}))
+	}
 }
 
 pub fn protocol_sqlite_meta(meta: sqlite_storage::types::SqliteMeta) -> protocol::SqliteMeta {
 	protocol::SqliteMeta {
-		schema_version: meta.schema_version,
 		generation: meta.generation,
 		head_txid: meta.head_txid,
 		materialized_txid: meta.materialized_txid,

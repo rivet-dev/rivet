@@ -155,6 +155,8 @@ impl SqliteEngine {
 	)]
 	pub async fn commit(&self, actor_id: &str, request: CommitRequest) -> Result<CommitResult> {
 		let start = Instant::now();
+		self.ensure_open(actor_id, request.generation, "commit")
+			.await?;
 		let dirty_page_count = request.dirty_pages.len();
 		tracing::Span::current().record("dirty_pages", dirty_page_count);
 		let mut dirty_pgnos = request
@@ -415,6 +417,8 @@ impl SqliteEngine {
 		actor_id: &str,
 		request: CommitStageBeginRequest,
 	) -> Result<CommitStageBeginResult> {
+		self.ensure_open(actor_id, request.generation, "commit_stage_begin")
+			.await?;
 		let actor_id = actor_id.to_string();
 		let actor_id_for_tx = actor_id.clone();
 		let subspace = self.subspace.clone();
@@ -493,6 +497,8 @@ impl SqliteEngine {
 		request: CommitStageRequest,
 	) -> Result<CommitStageResult> {
 		let decode_start = Instant::now();
+		self.ensure_open(actor_id, request.generation, "commit_stage")
+			.await?;
 		let stage_key = (actor_id.to_string(), request.txid);
 		{
 			let entry = self.pending_stages.get_async(&stage_key).await.ok_or(
@@ -640,6 +646,8 @@ impl SqliteEngine {
 		request: CommitFinalizeRequest,
 	) -> Result<CommitFinalizeResult> {
 		let start = Instant::now();
+		self.ensure_open(actor_id, request.generation, "commit_finalize")
+			.await?;
 		let stage_key = (actor_id.to_string(), request.txid);
 		{
 			let entry = self.pending_stages.get_async(&stage_key).await.ok_or(
@@ -1017,6 +1025,7 @@ mod tests {
 	};
 	use crate::engine::SqliteEngine;
 	use crate::error::SqliteStorageError;
+	use crate::open::OpenConfig;
 	use crate::keys::{
 		delta_chunk_key, delta_chunk_prefix, meta_key, pidx_delta_key, pidx_delta_prefix, shard_key,
 	};
@@ -1135,6 +1144,9 @@ mod tests {
 			vec![WriteOp::put(meta_key(actor_id), meta_bytes)],
 		)
 		.await?;
+		// Register the actor in the engine's open_dbs map so commit/get_pages
+		// pass the `ensure_open` lifecycle gate.
+		engine.open(actor_id, OpenConfig::new(0)).await?;
 		Ok(head)
 	}
 
@@ -1741,7 +1753,9 @@ mod tests {
 			error.downcast_ref::<SqliteStorageError>(),
 			Some(SqliteStorageError::FenceMismatch { .. })
 		));
-		assert_op_count(&engine, 1);
+		// `ensure_open` rejects the mismatched generation before commit opens
+		// any UDB transaction, so no ops are recorded.
+		assert_op_count(&engine, 0);
 		assert!(
 			read_value(&engine, delta_blob_key(TEST_ACTOR, 1))
 				.await?

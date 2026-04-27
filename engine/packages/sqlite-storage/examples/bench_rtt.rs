@@ -21,7 +21,7 @@ use sqlite_storage::commit::{
 };
 use sqlite_storage::engine::SqliteEngine;
 use sqlite_storage::ltx::{LtxHeader, encode_ltx_v3};
-use sqlite_storage::takeover::TakeoverConfig;
+use sqlite_storage::open::OpenConfig;
 use sqlite_storage::types::{DirtyPage, SQLITE_PAGE_SIZE};
 use universaldb::Subspace;
 
@@ -94,10 +94,10 @@ async fn main() -> Result<()> {
 
 	{
 		let (engine, _rx) = setup().await?;
-		let takeover = engine
-			.takeover("bench-small", TakeoverConfig::new(1))
+		let open = engine
+			.open("bench-small", OpenConfig::new(1))
 			.await
-			.context("takeover for small commit")?;
+			.context("open for small commit")?;
 		clear_ops(&engine);
 
 		let start = Instant::now();
@@ -105,8 +105,8 @@ async fn main() -> Result<()> {
 			.commit(
 				"bench-small",
 				CommitRequest {
-					generation: takeover.generation,
-					head_txid: takeover.meta.head_txid,
+					generation: open.generation,
+					head_txid: open.meta.head_txid,
 					db_size_pages: 10,
 					dirty_pages: make_pages(10, 0xAA),
 					now_ms: 100,
@@ -126,10 +126,10 @@ async fn main() -> Result<()> {
 
 	{
 		let (engine, _rx) = setup().await?;
-		let takeover = engine
-			.takeover("bench-medium", TakeoverConfig::new(2))
+		let open = engine
+			.open("bench-medium", OpenConfig::new(2))
 			.await
-			.context("takeover for medium commit")?;
+			.context("open for medium commit")?;
 		clear_ops(&engine);
 
 		let start = Instant::now();
@@ -137,8 +137,8 @@ async fn main() -> Result<()> {
 			.commit(
 				"bench-medium",
 				CommitRequest {
-					generation: takeover.generation,
-					head_txid: takeover.meta.head_txid,
+					generation: open.generation,
+					head_txid: open.meta.head_txid,
 					db_size_pages: 256,
 					dirty_pages: make_pages(256, 0xBB),
 					now_ms: 200,
@@ -158,10 +158,10 @@ async fn main() -> Result<()> {
 
 	{
 		let (engine, _rx) = setup().await?;
-		let takeover = engine
-			.takeover("bench-large", TakeoverConfig::new(3))
+		let open = engine
+			.open("bench-large", OpenConfig::new(3))
 			.await
-			.context("takeover for large commit")?;
+			.context("open for large commit")?;
 		clear_ops(&engine);
 
 		let total_pages = 2560_u32;
@@ -169,7 +169,7 @@ async fn main() -> Result<()> {
 			.commit_stage_begin(
 				"bench-large",
 				CommitStageBeginRequest {
-					generation: takeover.generation,
+					generation: open.generation,
 				},
 			)
 			.await
@@ -187,7 +187,7 @@ async fn main() -> Result<()> {
 				.commit_stage(
 					"bench-large",
 					CommitStageRequest {
-						generation: takeover.generation,
+						generation: open.generation,
 						txid: stage.txid,
 						chunk_idx: chunk_idx as u32,
 						bytes: chunk.to_vec(),
@@ -201,8 +201,8 @@ async fn main() -> Result<()> {
 			.commit_finalize(
 				"bench-large",
 				CommitFinalizeRequest {
-					generation: takeover.generation,
-					expected_head_txid: takeover.meta.head_txid,
+					generation: open.generation,
+					expected_head_txid: open.meta.head_txid,
 					txid: stage.txid,
 					new_db_size_pages: total_pages,
 					now_ms: 300,
@@ -223,17 +223,17 @@ async fn main() -> Result<()> {
 
 	{
 		let (engine, _rx) = setup().await?;
-		let takeover = engine
-			.takeover("bench-read", TakeoverConfig::new(4))
+		let open = engine
+			.open("bench-read", OpenConfig::new(4))
 			.await
-			.context("takeover for read bench")?;
+			.context("open for read bench")?;
 
 		engine
 			.commit(
 				"bench-read",
 				CommitRequest {
-					generation: takeover.generation,
-					head_txid: takeover.meta.head_txid,
+					generation: open.generation,
+					head_txid: open.meta.head_txid,
 					db_size_pages: 50,
 					dirty_pages: make_pages(50, 0xDD),
 					now_ms: 400,
@@ -246,7 +246,7 @@ async fn main() -> Result<()> {
 		let read_pgnos = vec![3, 7, 11, 15, 19, 23, 27, 31, 35, 42];
 		let start = Instant::now();
 		let _pages = engine
-			.get_pages("bench-read", takeover.generation, read_pgnos)
+			.get_pages("bench-read", open.generation, read_pgnos)
 			.await
 			.context("get_pages bench")?;
 		let elapsed = start.elapsed();

@@ -2,11 +2,12 @@ use std::time::Instant;
 
 use anyhow::{Context, Result, ensure};
 use gas::prelude::{Id, util::timestamp};
-use rivet_envoy_protocol::{self as protocol, PROTOCOL_VERSION};
+use rivet_envoy_protocol as protocol;
 use sqlite_storage::{
 	commit::{CommitFinalizeRequest, CommitStageBeginRequest, CommitStageRequest},
 	engine::SqliteEngine,
 	ltx::{LtxHeader, encode_ltx_v3},
+	open::OpenConfig,
 	types::{DirtyPage, SQLITE_PAGE_SIZE, SqliteOrigin},
 };
 use universaldb::Subspace;
@@ -43,7 +44,6 @@ pub struct MigrateV1ToV2Input {
 	pub actor_id: Id,
 	pub namespace_id: Id,
 	pub name: String,
-	pub protocol_version: u16,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Hash)]
@@ -67,21 +67,17 @@ pub async fn migrate_v1_to_v2(
 		name: input.name,
 	};
 
-	let migrated = if input.protocol_version >= PROTOCOL_VERSION {
-		let actor_id = input.actor_id.to_string();
-		if sqlite_engine
-			.invalidate_v1_migration(&actor_id, timestamp::now())
-			.await?
-		{
-			tracing::info!(
-				actor_id = %actor_id,
-				"reset stale v1 migration after authoritative actor allocation"
-			);
-		}
-		maybe_migrate_v1_to_v2(&db, &sqlite_engine, &recipient).await?
-	} else {
-		false
-	};
+	let actor_id = input.actor_id.to_string();
+	if sqlite_engine
+		.invalidate_v1_migration(&actor_id, timestamp::now())
+		.await?
+	{
+		tracing::info!(
+			actor_id = %actor_id,
+			"reset stale v1 migration after authoritative actor allocation"
+		);
+	}
+	let migrated = maybe_migrate_v1_to_v2(&db, &sqlite_engine, &recipient).await?;
 
 	Ok(MigrateV1ToV2Output { migrated })
 }
@@ -133,6 +129,13 @@ async fn maybe_migrate_v1_to_v2(
 		.prepare_v1_migration(&actor_id, timestamp::now())
 		.await
 		.map_err(|err| migration_error(&actor_id, "takeover", err))?;
+	// Register the actor in the engine's open_dbs map so the
+	// commit_stage_begin / commit_stage / commit_finalize calls below pass
+	// the `ensure_open` lifecycle gate added in the open/close work.
+	sqlite_engine
+		.open(&actor_id, OpenConfig::new(timestamp::now()))
+		.await
+		.map_err(|err| migration_error(&actor_id, "open", err))?;
 	let stage_begin = sqlite_engine
 		.commit_stage_begin(
 			&actor_id,

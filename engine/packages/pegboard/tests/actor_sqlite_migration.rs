@@ -10,7 +10,7 @@ use sqlite_storage::{
 	engine::SqliteEngine,
 	keys::meta_key,
 	ltx::{LtxHeader, encode_ltx_v3},
-	takeover::TakeoverConfig,
+	open::OpenConfig,
 	types::{DirtyPage, SqliteOrigin},
 	udb::{self, WriteOp},
 };
@@ -122,7 +122,6 @@ async fn migrate(
 			actor_id,
 			namespace_id: Id::new_v1(1),
 			name: "test".to_string(),
-			protocol_version: rivet_envoy_protocol::PROTOCOL_VERSION,
 		},
 	)
 	.await
@@ -237,6 +236,9 @@ async fn migrates_v1_sqlite_into_v2_storage() -> Result<()> {
 
 	let (engine, _compaction_rx) = pegboard::actor_sqlite::new_engine(db.clone());
 	let actor_id_str = actor_id.to_string();
+	engine
+		.open(&actor_id_str, OpenConfig::new(timestamp::now()))
+		.await?;
 	let meta = engine.load_meta(&actor_id_str).await?;
 	assert_eq!(meta.origin, SqliteOrigin::MigratedFromV1);
 	assert_eq!(
@@ -259,6 +261,9 @@ async fn retries_cleanly_after_stale_partial_v1_import() -> Result<()> {
 
 	let prepared = engine
 		.prepare_v1_migration(&actor_id_str, timestamp::now())
+		.await?;
+	engine
+		.open(&actor_id_str, OpenConfig::new(timestamp::now()))
 		.await?;
 	let stage = engine
 		.commit_stage_begin(
@@ -319,6 +324,9 @@ async fn restarts_v1_migration_after_allocate_invalidation() -> Result<()> {
 		.prepare_v1_migration(&actor_id_str, timestamp::now())
 		.await?;
 	engine
+		.open(&actor_id_str, OpenConfig::new(timestamp::now()))
+		.await?;
+	engine
 		.commit_stage_begin(
 			&actor_id_str,
 			CommitStageBeginRequest {
@@ -347,7 +355,7 @@ async fn skips_native_v2_state_even_if_v1_tombstone_exists() -> Result<()> {
 	let native_fixture = build_fixture_db(&["native"])?;
 	let (engine, _compaction_rx) = pegboard::actor_sqlite::new_engine(db.clone());
 	let takeover = engine
-		.takeover(&actor_id_str, TakeoverConfig::new(timestamp::now()))
+		.open(&actor_id_str, OpenConfig::new(timestamp::now()))
 		.await?;
 	let dirty_pages = native_fixture
 		.chunks(SQLITE_V1_CHUNK_SIZE)
@@ -405,9 +413,12 @@ async fn bails_when_v2_meta_is_unreadable() -> Result<()> {
 	let err = migrate(&db, actor_id)
 		.await
 		.expect_err("corrupt meta should fail migration");
+	// vbare wraps decode failures behind the UDB transaction error, so walk
+	// the chain instead of relying on the top-level `to_string()`.
+	let err_chain = format!("{err:?}");
 	assert!(
-		err.to_string().contains("decode sqlite db head"),
-		"unexpected error: {err:?}"
+		err_chain.contains("decode sqlite db head"),
+		"unexpected error: {err_chain}"
 	);
 
 	Ok(())
@@ -448,14 +459,14 @@ async fn migrates_zero_size_v1_state_without_pages() -> Result<()> {
 	assert!(migrate(&db, actor_id).await?.migrated);
 
 	let (engine, _compaction_rx) = pegboard::actor_sqlite::new_engine(db.clone());
-	let meta = engine.load_meta(&actor_id.to_string()).await?;
+	let actor_id_str = actor_id.to_string();
+	engine
+		.open(&actor_id_str, OpenConfig::new(timestamp::now()))
+		.await?;
+	let meta = engine.load_meta(&actor_id_str).await?;
 	assert_eq!(meta.origin, SqliteOrigin::MigratedFromV1);
 	assert_eq!(meta.db_size_pages, 0);
-	assert!(
-		load_v2_bytes(&engine, &actor_id.to_string())
-			.await?
-			.is_empty()
-	);
+	assert!(load_v2_bytes(&engine, &actor_id_str).await?.is_empty());
 
 	Ok(())
 }

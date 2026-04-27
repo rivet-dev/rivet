@@ -523,8 +523,8 @@ mod tests {
 	use crate::engine::SqliteEngine;
 	use crate::keys::{delta_chunk_key, meta_key, pidx_delta_key, pidx_delta_prefix, shard_key};
 	use crate::ltx::{LtxHeader, decode_ltx_v3, encode_ltx_v3};
+	use crate::open::OpenConfig;
 	use crate::quota::{encode_db_head_with_usage, tracked_storage_entry_size};
-	use crate::takeover::TakeoverConfig;
 	use crate::test_utils::{read_value, scan_prefix_values, test_db};
 	use crate::types::{
 		DBHead, DirtyPage, FetchedPage, SQLITE_DEFAULT_MAX_STORAGE_BYTES, SQLITE_PAGE_SIZE,
@@ -660,6 +660,7 @@ mod tests {
 			],
 		)
 		.await?;
+		engine.open(TEST_ACTOR, OpenConfig::new(0)).await?;
 		let _ = engine.get_or_load_pidx(TEST_ACTOR).await?;
 
 		assert_eq!(engine.compact_worker(TEST_ACTOR, 8).await?, 1);
@@ -746,6 +747,7 @@ mod tests {
 			],
 		)
 		.await?;
+		engine.open(TEST_ACTOR, OpenConfig::new(0)).await?;
 		assert_eq!(engine.compact_worker(TEST_ACTOR, 8).await?, 1);
 		assert!(
 			read_value(&engine, delta_blob_key(TEST_ACTOR, 1))
@@ -801,6 +803,7 @@ mod tests {
 			],
 		)
 		.await?;
+		engine.open(TEST_ACTOR, OpenConfig::new(0)).await?;
 		rewrite_meta_with_actual_usage(&engine).await?;
 		let before_usage = actual_tracked_usage(&engine).await?;
 
@@ -845,6 +848,7 @@ mod tests {
 			],
 		)
 		.await?;
+		engine.open(TEST_ACTOR, OpenConfig::new(0)).await?;
 		rewrite_meta_with_actual_usage(&engine).await?;
 
 		assert!(engine.compact_shard(TEST_ACTOR, 0).await?);
@@ -892,6 +896,7 @@ mod tests {
 			],
 		)
 		.await?;
+		engine.open(FAIL_ACTOR, OpenConfig::new(0)).await?;
 		let head = decode_db_head(
 			&read_value(&engine, meta_key(FAIL_ACTOR))
 				.await?
@@ -983,6 +988,7 @@ mod tests {
 			],
 		)
 		.await?;
+		engine.open(TEST_ACTOR, OpenConfig::new(0)).await?;
 		let (_guard, reached, release) = super::test_hooks::pause_before_commit(TEST_ACTOR);
 		let compact_engine = std::sync::Arc::clone(&engine);
 		let compact_task =
@@ -1060,6 +1066,7 @@ mod tests {
 			],
 		)
 		.await?;
+		engine.open(TEST_ACTOR, OpenConfig::new(0)).await?;
 
 		let (guard, reached, release) = super::test_hooks::pause_before_commit(TEST_ACTOR);
 		let compact_engine = std::sync::Arc::clone(&engine);
@@ -1112,7 +1119,7 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn takeover_during_inflight_compaction_succeeds_and_fences_compaction() -> Result<()> {
+	async fn open_during_inflight_compaction_keeps_generation() -> Result<()> {
 		let (db, subspace) = test_db().await?;
 		let mut head = seeded_head();
 		head.head_txid = 1;
@@ -1142,29 +1149,33 @@ mod tests {
 
 		reached.notified().await;
 
-		let takeover = engine
-			.takeover(TEST_ACTOR, TakeoverConfig::new(2_345))
-			.await?;
+		let open = engine.open(TEST_ACTOR, OpenConfig::new(2_345)).await?;
 		release.notify_waiters();
 
-		assert_eq!(takeover.generation, head.generation + 1);
-		assert!(!compact_task.await??);
+		assert_eq!(open.generation, head.generation);
+		// Compaction is no longer fenced by `open()` — it proceeds and folds
+		// the delta into a shard. The generation field stays stable across
+		// the open + concurrent compaction, which is what this test guards.
+		assert!(compact_task.await??);
 		let stored_head = decode_db_head(
 			&read_value(engine.as_ref(), meta_key(TEST_ACTOR))
 				.await?
-				.expect("meta should exist after takeover"),
+				.expect("meta should exist after open"),
 		)?;
-		assert_eq!(stored_head.generation, head.generation + 1);
+		assert_eq!(stored_head.generation, head.generation);
 		assert_eq!(stored_head.head_txid, 1);
+		assert_eq!(stored_head.materialized_txid, 1);
 		assert!(
 			read_value(engine.as_ref(), delta_blob_key(TEST_ACTOR, 1))
 				.await?
-				.is_some()
+				.is_none(),
+			"compaction should have folded the delta into a shard",
 		);
 		assert!(
 			read_value(engine.as_ref(), shard_key(TEST_ACTOR, 0))
 				.await?
-				.is_none()
+				.is_some(),
+			"compaction should have written the shard",
 		);
 
 		Ok(())
@@ -1197,6 +1208,7 @@ mod tests {
 			],
 		)
 		.await?;
+		engine.open(TEST_ACTOR, OpenConfig::new(0)).await?;
 
 		assert!(engine.compact_shard(TEST_ACTOR, 0).await?);
 		assert!(
@@ -1269,6 +1281,7 @@ mod tests {
 			],
 		)
 		.await?;
+		engine.open(TEST_ACTOR, OpenConfig::new(0)).await?;
 
 		assert_eq!(engine.compact_worker(TEST_ACTOR, 8).await?, 1);
 		assert_eq!(engine.compact_worker(TEST_ACTOR, 8).await?, 0);

@@ -1,7 +1,7 @@
 use futures_util::FutureExt;
 use gas::prelude::*;
 use rivet_data::converted::ActorByKeyKeyData;
-use rivet_envoy_protocol::{self as protocol, PROTOCOL_VERSION};
+use rivet_envoy_protocol as protocol;
 use universaldb::prelude::*;
 
 use crate::errors;
@@ -131,7 +131,6 @@ pub async fn pegboard_actor2(ctx: &mut WorkflowCtx, input: &Input) -> Result<()>
 				actor_id: input.actor_id,
 				namespace_id: input.namespace_id,
 				name: input.name.clone(),
-				protocol_version: PROTOCOL_VERSION,
 			})
 			.await?;
 	}
