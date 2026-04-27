@@ -1,5 +1,5 @@
 import { Effect, Queue, Ref, PubSub, Match } from "effect"
-import { Actor } from "@rivetkit/effect"
+import { Actor, PersistedSubscriptionRef } from "@rivetkit/effect"
 import { Counter, CounterOverflowError } from "./api.ts"
 
 // --- Actor Implementation ---
@@ -24,8 +24,17 @@ export const CounterLive = Counter.toLayer(
 		//
 		// - Swappable via layers. Tests can provide an in-memory KV
 		//   or a mock DB without changing the actor code.
+
+		// PersistedSubscriptionRef extends SubscriptionRef with
+		// throttled durable persistence. Standard SubscriptionRef
+		// combinators (get, set, update, modify, changes) work as-is.
+		// Every published change schedules a save via the configured
+		// stateSaveInterval; the wake-scope finalizer flushes pending
+		// writes before sleep so state is durable on teardown. Use
+		// PersistedSubscriptionRef.sync / updateAndSync when an action
+		// must wait for durability before responding.
 		const state = yield* Counter.State
-		//    ^ SubscriptionRef<{ count: number }>
+		//    ^ PersistedSubscriptionRef<{ count: number }>
 		const events = yield* Counter.Events
 		//    ^ { countChanged: PubSub<number> }
 		const messages = yield* Counter.Messages
@@ -47,13 +56,13 @@ export const CounterLive = Counter.toLayer(
 			yield* Match.value(msg).pipe(
 				Match.tag("Reset", () =>
 					Effect.gen(function* () {
-						yield* Ref.set(state, { count: 0 })
+						yield* PersistedSubscriptionRef.set(state, { count: 0 })
 						yield* PubSub.publish(events.countChanged, 0)
 					})
 				),
 				Match.tag("IncrementBy", ({ payload, complete }) =>
 					Effect.gen(function* () {
-						const next = yield* Ref.updateAndGet(state, (s) => ({
+						const next = yield* PersistedSubscriptionRef.updateAndGet(state, (s) => ({
 							count: s.count + payload.amount,
 						}))
 						yield* PubSub.publish(events.countChanged, next.count)
@@ -68,7 +77,10 @@ export const CounterLive = Counter.toLayer(
 		return Counter.of({
 			Increment: ({ payload }) =>
 				Effect.gen(function* () {
-					const next = yield* Ref.updateAndGet(state, (s) => ({
+					// Throttled save: the change is published on
+					// state.changes, the framework debounces by
+					// stateSaveInterval and writes to durable KV.
+					const next = yield* PersistedSubscriptionRef.updateAndGet(state, (s) => ({
 						count: s.count + payload.amount,
 					}))
 					if (next.count > 20) {
@@ -79,7 +91,7 @@ export const CounterLive = Counter.toLayer(
 				}),
 
 			GetCount: () =>
-				Ref.get(state).pipe(Effect.map((s) => s.count)),
+				PersistedSubscriptionRef.get(state).pipe(Effect.map((s) => s.count)),
 		})
 	}),
 )
