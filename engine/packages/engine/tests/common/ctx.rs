@@ -7,6 +7,7 @@ pub struct TestOpts {
 	pub datacenters: usize,
 	pub timeout_secs: u64,
 	pub pegboard_outbound: bool,
+	pub auth_admin_token: Option<String>,
 }
 
 impl TestOpts {
@@ -15,6 +16,7 @@ impl TestOpts {
 			datacenters,
 			timeout_secs: 10,
 			pegboard_outbound: false,
+			auth_admin_token: None,
 		}
 	}
 
@@ -27,6 +29,11 @@ impl TestOpts {
 		self.pegboard_outbound = true;
 		self
 	}
+
+	pub fn with_auth_admin_token(mut self, token: impl Into<String>) -> Self {
+		self.auth_admin_token = Some(token.into());
+		self
+	}
 }
 
 impl Default for TestOpts {
@@ -35,6 +42,7 @@ impl Default for TestOpts {
 			datacenters: 1,
 			timeout_secs: 10,
 			pegboard_outbound: false,
+			auth_admin_token: None,
 		}
 	}
 }
@@ -79,9 +87,15 @@ impl TestCtx {
 		// Setup all datacenters
 		let mut dcs = Vec::new();
 		for test_deps in test_deps_list {
-			let dc = Self::setup_instance(test_deps, opts.pegboard_outbound).await?;
+			let dc = Self::setup_instance(
+				test_deps,
+				opts.pegboard_outbound,
+				opts.auth_admin_token.clone(),
+			)
+			.await?;
 			dcs.push(dc);
 		}
+		dcs.sort_by_key(|dc| dc.config.dc_label());
 
 		Ok(Self { dcs, opts })
 	}
@@ -89,8 +103,17 @@ impl TestCtx {
 	async fn setup_instance(
 		test_deps: rivet_test_deps::TestDeps,
 		include_pegboard_outbound: bool,
+		auth_admin_token: Option<String>,
 	) -> Result<TestDatacenter> {
-		let config = test_deps.config().clone();
+		let config = if let Some(admin_token) = auth_admin_token {
+			let mut root = (**test_deps.config()).clone();
+			root.auth = Some(rivet_config::config::auth::Auth {
+				admin_token: rivet_config::secret::Secret::new(admin_token),
+			});
+			rivet_config::Config::from_root(root)
+		} else {
+			test_deps.config().clone()
+		};
 		let pools = test_deps.pools().clone();
 
 		// Start the service manager with all required services

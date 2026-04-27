@@ -1,7 +1,10 @@
 use anyhow::*;
 use async_trait::async_trait;
-use common::test_runner::*;
-use std::sync::{Arc, Mutex};
+use common::test_envoy::*;
+use std::{
+	collections::HashSet,
+	sync::{Arc, Mutex},
+};
 use tokio::sync::broadcast;
 
 use super::super::common;
@@ -119,7 +122,7 @@ fn get_current_timestamp_ms() -> i64 {
 
 // MARK: Behavior Implementations
 
-/// Actor that sets an alarm and immediately sends sleep intent on first start (generation 0).
+/// Actor that sets an alarm and immediately sends sleep intent on first start (generation 2).
 /// On subsequent starts (after wake from alarm), it stays awake.
 /// Notifies via ready_tx when setup is complete.
 struct AlarmAndSleepActor {
@@ -145,7 +148,7 @@ impl Actor for AlarmAndSleepActor {
 		let generation = config.generation;
 		tracing::info!(?config.actor_id, generation, "alarm actor starting");
 
-		if generation == 0 {
+		if generation == 1 {
 			// First start: set alarm and sleep
 			let alarm_time = get_current_timestamp_ms() + self.alarm_offset_ms;
 			config.send_set_alarm(alarm_time);
@@ -158,7 +161,7 @@ impl Actor for AlarmAndSleepActor {
 
 			tracing::info!(generation, "set alarm and sleeping");
 		} else {
-			// Subsequent wakes (generation >= 1): stay awake
+			// Subsequent wakes (generation >= 2): stay awake
 			tracing::info!(generation, "woke from alarm, staying awake");
 		}
 
@@ -174,7 +177,7 @@ impl Actor for AlarmAndSleepActor {
 	}
 }
 
-/// Actor that sets an alarm and sleeps only on first run (generation 0).
+/// Actor that sets an alarm and sleeps only on first run (generation 2).
 /// On subsequent wakes (from alarm), stays awake without sleeping again.
 /// Notifies via ready_tx when setup is complete.
 struct AlarmAndSleepOnceActor {
@@ -200,8 +203,8 @@ impl Actor for AlarmAndSleepOnceActor {
 		let generation = config.generation;
 		tracing::info!(?config.actor_id, generation, "alarm once actor starting");
 
-		if generation == 0 {
-			// First start (gen 0): set alarm and sleep
+		if generation == 1 {
+			// First start (gen 2): set alarm and sleep
 			let alarm_time = get_current_timestamp_ms() + self.alarm_offset_ms;
 			config.send_set_alarm(alarm_time);
 			config.send_sleep_intent();
@@ -229,7 +232,7 @@ impl Actor for AlarmAndSleepOnceActor {
 	}
 }
 
-/// Actor that sets an alarm, sends sleep intent, then clears the alarm after a delay (generation 0 only).
+/// Actor that sets an alarm, sends sleep intent, then clears the alarm after a delay (generation 2 only).
 /// Notifies via ready_tx when initial setup is complete.
 /// Notifies via clear_tx when alarm is cleared.
 struct AlarmSleepThenClearActor {
@@ -255,7 +258,7 @@ impl Actor for AlarmSleepThenClearActor {
 		let generation = config.generation;
 		tracing::info!(?config.actor_id, generation, "alarm actor starting");
 
-		if generation == 0 {
+		if generation == 1 {
 			// Set alarm for current_time + offset
 			let alarm_time = get_current_timestamp_ms() + self.alarm_offset_ms;
 			config.send_set_alarm(alarm_time);
@@ -281,7 +284,7 @@ impl Actor for AlarmSleepThenClearActor {
 	}
 }
 
-/// Actor that sets an alarm, sends sleep intent, then replaces the alarm after a delay (generation 0 only).
+/// Actor that sets an alarm, sends sleep intent, then replaces the alarm after a delay (generation 2 only).
 /// Notifies via ready_tx when initial setup is complete.
 /// Notifies via replace_tx when alarm is replaced.
 struct AlarmSleepThenReplaceActor {
@@ -316,7 +319,7 @@ impl Actor for AlarmSleepThenReplaceActor {
 		let generation = config.generation;
 		tracing::info!(?config.actor_id, generation, "alarm actor starting");
 
-		if generation == 0 {
+		if generation == 1 {
 			// Set alarm A for current_time + offset
 			let alarm_a_time = get_current_timestamp_ms() + self.initial_alarm_offset_ms;
 			config.send_set_alarm(alarm_a_time);
@@ -354,7 +357,7 @@ impl Actor for AlarmSleepThenReplaceActor {
 	}
 }
 
-/// Actor that sets multiple alarms before sleeping (generation 0 only).
+/// Actor that sets multiple alarms before sleeping (generation 2 only).
 /// Used to test that only the last alarm fires.
 struct MultipleAlarmSetActor {
 	alarm_offsets_ms: Vec<i64>,
@@ -379,7 +382,7 @@ impl Actor for MultipleAlarmSetActor {
 		let generation = config.generation;
 		tracing::info!(?config.actor_id, generation, "multi alarm actor starting");
 
-		if generation == 0 {
+		if generation == 1 {
 			// Set multiple alarms
 			for offset in &self.alarm_offsets_ms {
 				let alarm_time = get_current_timestamp_ms() + offset;
@@ -464,7 +467,7 @@ impl Actor for MultiCycleAlarmActor {
 	}
 }
 
-/// Actor that sets an alarm on first wake (generation 0), then sleeps again without setting a new alarm.
+/// Actor that sets an alarm on first wake (generation 2), then sleeps again without setting a new alarm.
 /// Used to test that actor stays asleep when no new alarm is set.
 struct AlarmOnceActor {
 	alarm_offset_ms: i64,
@@ -489,8 +492,8 @@ impl Actor for AlarmOnceActor {
 		// Notify test of wake
 		let _ = self.wake_tx.send(generation);
 
-		if generation == 0 {
-			// First start (gen 0): set alarm and sleep
+		if generation == 1 {
+			// First start (gen 2): set alarm and sleep
 			let alarm_time = get_current_timestamp_ms() + self.alarm_offset_ms;
 			config.send_set_alarm(alarm_time);
 			config.send_sleep_intent();
@@ -513,7 +516,7 @@ impl Actor for AlarmOnceActor {
 	}
 }
 
-/// Actor that sets an alarm, sleeps on gen 0, then crashes immediately on wake.
+/// Actor that sets an alarm, sleeps on gen 2, then crashes immediately on wake.
 /// Gen 1+ stays running. Used to test that alarms don't persist across generations.
 struct AlarmSleepThenCrashActor {
 	alarm_offset_ms: i64,
@@ -541,8 +544,8 @@ impl Actor for AlarmSleepThenCrashActor {
 		let generation = config.generation;
 		tracing::info!(?config.actor_id, generation, "alarm crash actor starting");
 
-		if generation == 0 {
-			// First start (gen 0): set alarm, and crash
+		if generation == 1 {
+			// First start (gen 2): set alarm, and crash
 			let alarm_time = get_current_timestamp_ms() + self.alarm_offset_ms;
 			config.send_set_alarm(alarm_time);
 
@@ -552,9 +555,9 @@ impl Actor for AlarmSleepThenCrashActor {
 			tracing::info!(generation, "set alarm and sleeping");
 			Ok(ActorStartResult::Crash {
 				code: 1,
-				message: "crashing with gen 0".to_string(),
+				message: "crashing with gen 2".to_string(),
 			})
-		} else if generation == 1 {
+		} else if generation == 2 {
 			tracing::info!(generation, "restarted after crash, sending sleep intent");
 			config.send_sleep_intent();
 			let _ = self.sleeping_tx.send(generation);
@@ -576,7 +579,7 @@ impl Actor for AlarmSleepThenCrashActor {
 	}
 }
 
-/// Actor that rapidly sets and clears alarms multiple times before sleeping (generation 0 only).
+/// Actor that rapidly sets and clears alarms multiple times before sleeping (generation 2 only).
 /// Used to test that rapid operations don't cause errors.
 struct RapidAlarmCycleActor {
 	cycles: usize,
@@ -604,7 +607,7 @@ impl Actor for RapidAlarmCycleActor {
 		let generation = config.generation;
 		tracing::info!(?config.actor_id, generation, "rapid alarm cycle actor starting");
 
-		if generation == 0 {
+		if generation == 1 {
 			// Rapidly set and clear alarms
 			for _i in 0..self.cycles {
 				config.send_set_alarm(get_current_timestamp_ms() + 5000);
@@ -634,7 +637,7 @@ impl Actor for RapidAlarmCycleActor {
 	}
 }
 
-/// Actor that sets an alarm, immediately clears it, then sends sleep intent (generation 0 only).
+/// Actor that sets an alarm, immediately clears it, then sends sleep intent (generation 2 only).
 /// Used to test that null alarm_ts properly clears alarms.
 struct SetClearAlarmAndSleepActor {
 	ready_tx: Arc<Mutex<Option<tokio::sync::oneshot::Sender<()>>>>,
@@ -652,7 +655,7 @@ impl Actor for SetClearAlarmAndSleepActor {
 		let generation = config.generation;
 		tracing::info!(?config.actor_id, generation, "alarm actor starting");
 
-		if generation == 0 {
+		if generation == 1 {
 			// Set alarm
 			let alarm_time = get_current_timestamp_ms() + 2000;
 			config.send_set_alarm(alarm_time);
@@ -684,9 +687,6 @@ impl Actor for SetClearAlarmAndSleepActor {
 // MARK: Core Functionality
 
 #[test]
-// Broken legacy Pegboard Runner test: full engine sweep timed out in
-// `basic_alarm`.
-#[ignore = "broken legacy Pegboard Runner test: times out in full engine sweep"]
 fn basic_alarm() {
 	common::run(common::TestOpts::new(1), |ctx| async move {
 		let (namespace, _) = common::setup_test_namespace(ctx.leader_dc()).await;
@@ -694,7 +694,7 @@ fn basic_alarm() {
 		let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
 		let ready_tx = Arc::new(Mutex::new(Some(ready_tx)));
 
-		let runner = common::setup_runner(ctx.leader_dc(), &namespace, |builder| {
+		let runner = common::setup_envoy(ctx.leader_dc(), &namespace, |builder| {
 			builder.with_actor_behavior("alarm-actor", move |_| {
 				let ready_tx = ready_tx.clone();
 				Box::new(AlarmAndSleepActor::new(3000, ready_tx))
@@ -706,7 +706,7 @@ fn basic_alarm() {
 			ctx.leader_dc().guard_port(),
 			&namespace,
 			"alarm-actor",
-			runner.name(),
+			runner.pool_name(),
 			rivet_types::actors::CrashPolicy::Destroy,
 		)
 		.await;
@@ -723,7 +723,7 @@ fn basic_alarm() {
 
 		tracing::info!(
 			?actor_id,
-			"actor sleeping, alarm was set with gen 0, alarm should fire"
+			"actor sleeping, alarm was set with gen 2, alarm should fire"
 		);
 
 		// Verify actor wakes from valid alarm
@@ -731,14 +731,11 @@ fn basic_alarm() {
 			.await
 			.expect("actor should wake from alarm");
 
-		tracing::info!(?actor_id, "gen 0 alarm fired successfully");
+		tracing::info!(?actor_id, "gen 2 alarm fired successfully");
 	});
 }
 
 #[test]
-// Broken legacy Pegboard Runner test: full engine sweep timed out in
-// `clear_alarm_prevents_wake`.
-#[ignore = "broken legacy Pegboard Runner test: times out in full engine sweep"]
 fn clear_alarm_prevents_wake() {
 	common::run(common::TestOpts::new(1), |ctx| async move {
 		let (namespace, _) = common::setup_test_namespace(ctx.leader_dc()).await;
@@ -746,7 +743,7 @@ fn clear_alarm_prevents_wake() {
 		let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
 		let ready_tx = Arc::new(Mutex::new(Some(ready_tx)));
 
-		let runner = common::setup_runner(ctx.leader_dc(), &namespace, |builder| {
+		let runner = common::setup_envoy(ctx.leader_dc(), &namespace, |builder| {
 			builder.with_actor_behavior("alarm-actor", move |_| {
 				let ready_tx = ready_tx.clone();
 				Box::new(AlarmSleepThenClearActor::new(2000, ready_tx))
@@ -758,7 +755,7 @@ fn clear_alarm_prevents_wake() {
 			ctx.leader_dc().guard_port(),
 			&namespace,
 			"alarm-actor",
-			runner.name(),
+			runner.pool_name(),
 			rivet_types::actors::CrashPolicy::Destroy,
 		)
 		.await;
@@ -800,7 +797,7 @@ fn replace_alarm_overwrites_previous() {
 		let ready_tx = Arc::new(Mutex::new(Some(ready_tx)));
 		let (replace_tx, mut replace_rx) = tokio::sync::mpsc::unbounded_channel();
 
-		let runner = common::setup_runner(ctx.leader_dc(), &namespace, |builder| {
+		let runner = common::setup_envoy(ctx.leader_dc(), &namespace, |builder| {
 			builder.with_actor_behavior("alarm-actor", move |_| {
 				let ready_tx = ready_tx.clone();
 				let replace_tx = replace_tx.clone();
@@ -815,7 +812,7 @@ fn replace_alarm_overwrites_previous() {
 			ctx.leader_dc().guard_port(),
 			&namespace,
 			"alarm-actor",
-			runner.name(),
+			runner.pool_name(),
 			rivet_types::actors::CrashPolicy::Destroy,
 		)
 		.await;
@@ -862,7 +859,7 @@ fn alarm_in_the_past() {
 		let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
 		let ready_tx = Arc::new(Mutex::new(Some(ready_tx)));
 
-		let runner = common::setup_runner(ctx.leader_dc(), &namespace, |builder| {
+		let runner = common::setup_envoy(ctx.leader_dc(), &namespace, |builder| {
 			builder.with_actor_behavior("alarm-actor", move |_| {
 				let ready_tx = ready_tx.clone();
 				Box::new(AlarmAndSleepActor::new(-1000, ready_tx))
@@ -874,14 +871,14 @@ fn alarm_in_the_past() {
 			ctx.leader_dc().guard_port(),
 			&namespace,
 			"alarm-actor",
-			runner.name(),
+			runner.pool_name(),
 			rivet_types::actors::CrashPolicy::Destroy,
 		)
 		.await;
 
 		let actor_id = res.actor.actor_id.to_string();
 
-		// Wait for actor to be ready (gen 0)
+		// Wait for actor to be ready (gen 2)
 		ready_rx.await.expect("actor should send ready signal");
 
 		// Actor sets alarm in the past and sleeps
@@ -894,7 +891,7 @@ fn alarm_in_the_past() {
 			.await
 			.expect("actor should wake immediately from past alarm");
 
-		// Verify actor is awake at gen 1
+		// Verify actor is awake at gen 2
 		let actor = common::try_get_actor(ctx.leader_dc().guard_port(), &actor_id, &namespace)
 			.await
 			.expect("failed to get actor")
@@ -912,13 +909,13 @@ fn alarm_in_the_past() {
 
 #[test]
 fn alarm_with_null_timestamp() {
-	common::run(common::TestOpts::new(1), |ctx| async move {
+	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
 		let (namespace, _) = common::setup_test_namespace(ctx.leader_dc()).await;
 
 		let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
 		let ready_tx = Arc::new(Mutex::new(Some(ready_tx)));
 
-		let runner = common::setup_runner(ctx.leader_dc(), &namespace, |builder| {
+		let runner = common::setup_envoy(ctx.leader_dc(), &namespace, |builder| {
 			builder.with_actor_behavior("alarm-actor", move |_| {
 				let ready_tx = ready_tx.clone();
 				Box::new(SetClearAlarmAndSleepActor::new(ready_tx))
@@ -930,7 +927,7 @@ fn alarm_with_null_timestamp() {
 			ctx.leader_dc().guard_port(),
 			&namespace,
 			"alarm-actor",
-			runner.name(),
+			runner.pool_name(),
 			rivet_types::actors::CrashPolicy::Destroy,
 		)
 		.await;
@@ -978,7 +975,7 @@ fn alarm_fires_at_correct_time() {
 			let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
 			let ready_tx = Arc::new(Mutex::new(Some(ready_tx)));
 
-			let runner = common::setup_runner(ctx.leader_dc(), &namespace, |builder| {
+			let runner = common::setup_envoy(ctx.leader_dc(), &namespace, |builder| {
 				builder.with_actor_behavior("alarm-actor", move |_| {
 					let ready_tx = ready_tx.clone();
 					Box::new(AlarmAndSleepOnceActor::new(5000, ready_tx))
@@ -990,7 +987,7 @@ fn alarm_fires_at_correct_time() {
 				ctx.leader_dc().guard_port(),
 				&namespace,
 				"alarm-actor",
-				runner.name(),
+				runner.pool_name(),
 				rivet_types::actors::CrashPolicy::Destroy,
 			)
 			.await;
@@ -1011,8 +1008,8 @@ fn alarm_fires_at_correct_time() {
 			// Subscribe to lifecycle events AFTER actor is sleeping, so we only get the wake event
 			let lifecycle_rx = runner.subscribe_lifecycle_events();
 
-			// Wait for actor to wake using lifecycle events (expect generation 1, incremented from sleep)
-			wait_for_actor_wake_from_alarm(lifecycle_rx, &actor_id, 1, 7)
+			// Wait for actor to wake using lifecycle events (expect generation 2, incremented from sleep)
+			wait_for_actor_wake_from_alarm(lifecycle_rx, &actor_id, 2, 7)
 				.await
 				.expect("expected actor to be awake");
 
@@ -1039,7 +1036,7 @@ fn multiple_alarm_sets_before_sleep() {
 		let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
 		let ready_tx = Arc::new(Mutex::new(Some(ready_tx)));
 
-		let runner = common::setup_runner(ctx.leader_dc(), &namespace, |builder| {
+		let runner = common::setup_envoy(ctx.leader_dc(), &namespace, |builder| {
 			builder.with_actor_behavior("alarm-actor", move |_| {
 				let ready_tx = ready_tx.clone();
 				// Set alarms for +5s, +10s, +2s (last one should win)
@@ -1055,7 +1052,7 @@ fn multiple_alarm_sets_before_sleep() {
 			ctx.leader_dc().guard_port(),
 			&namespace,
 			"alarm-actor",
-			runner.name(),
+			runner.pool_name(),
 			rivet_types::actors::CrashPolicy::Destroy,
 		)
 		.await;
@@ -1102,7 +1099,7 @@ fn multiple_sleep_wake_alarm_cycles() {
 
 		let (wake_tx, mut wake_rx) = tokio::sync::mpsc::unbounded_channel();
 
-		let runner = common::setup_runner(ctx.leader_dc(), &namespace, |builder| {
+		let runner = common::setup_envoy(ctx.leader_dc(), &namespace, |builder| {
 			builder.with_actor_behavior("alarm-actor", move |_| {
 				let wake_tx = wake_tx.clone();
 				// 3 cycles with 1s alarms
@@ -1115,7 +1112,7 @@ fn multiple_sleep_wake_alarm_cycles() {
 			ctx.leader_dc().guard_port(),
 			&namespace,
 			"alarm-actor",
-			runner.name(),
+			runner.pool_name(),
 			rivet_types::actors::CrashPolicy::Destroy,
 		)
 		.await;
@@ -1148,7 +1145,7 @@ fn alarm_wake_then_sleep_without_new_alarm() {
 
 		let (wake_tx, mut wake_rx) = tokio::sync::mpsc::unbounded_channel();
 
-		let runner = common::setup_runner(ctx.leader_dc(), &namespace, |builder| {
+		let runner = common::setup_envoy(ctx.leader_dc(), &namespace, |builder| {
 			builder.with_actor_behavior("alarm-actor", move |_| {
 				let wake_tx = wake_tx.clone();
 				// Set alarm for 1s on first start
@@ -1161,7 +1158,7 @@ fn alarm_wake_then_sleep_without_new_alarm() {
 			ctx.leader_dc().guard_port(),
 			&namespace,
 			"alarm-actor",
-			runner.name(),
+			runner.pool_name(),
 			rivet_types::actors::CrashPolicy::Destroy,
 		)
 		.await;
@@ -1173,7 +1170,7 @@ fn alarm_wake_then_sleep_without_new_alarm() {
 		tracing::info!(?actor_id, "actor initial start");
 
 		// Wait for second wake (from alarm)
-		tokio::time::timeout(tokio::time::Duration::from_secs(3), wake_rx.recv())
+		tokio::time::timeout(tokio::time::Duration::from_secs(10), wake_rx.recv())
 			.await
 			.expect("timeout waiting for alarm wake")
 			.expect("wake channel closed");
@@ -1218,7 +1215,7 @@ fn alarm_behavior_with_crash_policy_restart() {
 			let (sleeping_tx, mut sleeping_rx) = tokio::sync::mpsc::unbounded_channel();
 			let (crash_tx, mut crash_rx) = tokio::sync::mpsc::unbounded_channel();
 
-			let runner = common::setup_runner(ctx.leader_dc(), &namespace, |builder| {
+			let runner = common::setup_envoy(ctx.leader_dc(), &namespace, |builder| {
 				builder.with_actor_behavior("alarm-actor", move |_| {
 					let sleeping_tx = sleeping_tx.clone();
 					let crash_tx = crash_tx.clone();
@@ -1232,14 +1229,14 @@ fn alarm_behavior_with_crash_policy_restart() {
 				ctx.leader_dc().guard_port(),
 				&namespace,
 				"alarm-actor",
-				runner.name(),
+				runner.pool_name(),
 				rivet_types::actors::CrashPolicy::Restart,
 			)
 			.await;
 
 			let actor_id = res.actor.actor_id.to_string();
 
-			// Wait for crash notification gen 0 sets alarm and crashes
+			// Wait for crash notification gen 2 sets alarm and crashes
 			crash_rx
 				.recv()
 				.await
@@ -1247,10 +1244,10 @@ fn alarm_behavior_with_crash_policy_restart() {
 
 			tracing::info!(
 				?actor_id,
-				"gen 0 crashed after alarm wake, waiting for gen 1 restart"
+				"gen 2 crashed after alarm wake, waiting for gen 2 restart"
 			);
 
-			// Wait for actor to start sleeping again (gen 1 started and sleep)
+			// Wait for actor to start sleeping again (gen 2 started and sleep)
 			sleeping_rx
 				.recv()
 				.await
@@ -1265,10 +1262,10 @@ fn alarm_behavior_with_crash_policy_restart() {
 
 			tracing::info!(
 				?actor_id,
-				"gen 1 is now asleep, waiting past original alarm time"
+				"gen 2 is now asleep, waiting past original alarm time"
 			);
 
-			// Verify the next gen is awake (woke from gen 0's alarm). Use a small
+			// Verify the next gen is awake (woke from gen 2's alarm). Use a small
 			// cushion over the 15s alarm offset for scheduling jitter.
 			let actor = wait_for_actor_wake_polling(
 				ctx.leader_dc().guard_port(),
@@ -1281,7 +1278,7 @@ fn alarm_behavior_with_crash_policy_restart() {
 
 			assert!(
 				actor.sleep_ts.is_none() && actor.connectable_ts.is_some(),
-				"next generation should be awake from gen 0 alarm"
+				"next generation should be awake from gen 2 alarm"
 			);
 		},
 	);
@@ -1295,7 +1292,7 @@ fn rapid_alarm_set_clear_cycles() {
 		let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
 		let ready_tx = Arc::new(Mutex::new(Some(ready_tx)));
 
-		let runner = common::setup_runner(ctx.leader_dc(), &namespace, |builder| {
+		let runner = common::setup_envoy(ctx.leader_dc(), &namespace, |builder| {
 			builder.with_actor_behavior("alarm-actor", move |_| {
 				let ready_tx = ready_tx.clone();
 				// 10 rapid cycles, then final alarm for 1s
@@ -1308,7 +1305,7 @@ fn rapid_alarm_set_clear_cycles() {
 			ctx.leader_dc().guard_port(),
 			&namespace,
 			"alarm-actor",
-			runner.name(),
+			runner.pool_name(),
 			rivet_types::actors::CrashPolicy::Destroy,
 		)
 		.await;
@@ -1349,7 +1346,7 @@ fn multiple_actors_with_different_alarm_times() {
 		let alarm_offsets = vec![1000, 2000, 3000];
 		let mut actor_ids = Vec::new();
 
-		let runner = common::setup_runner(ctx.leader_dc(), &namespace, |builder| {
+		let runner = common::setup_envoy(ctx.leader_dc(), &namespace, |builder| {
 			let mut b = builder;
 			for (idx, offset) in alarm_offsets.iter().enumerate() {
 				let offset = *offset;
@@ -1370,7 +1367,7 @@ fn multiple_actors_with_different_alarm_times() {
 				ctx.leader_dc().guard_port(),
 				&namespace,
 				&format!("alarm-actor-{}", idx),
-				runner.name(),
+				runner.pool_name(),
 				rivet_types::actors::CrashPolicy::Destroy,
 			)
 			.await;
@@ -1407,14 +1404,14 @@ fn multiple_actors_with_different_alarm_times() {
 // actors to wake in the combined Envoy+Runner full engine sweep.
 #[ignore = "broken legacy Pegboard Runner test: times out in full engine sweep"]
 fn many_actors_same_alarm_time() {
-	common::run(common::TestOpts::new(1), |ctx| async move {
+	common::run(common::TestOpts::new(1).with_timeout(45), |ctx| async move {
 		let (namespace, _) = common::setup_test_namespace(ctx.leader_dc()).await;
 
 		let num_actors = 10;
 		let alarm_offset = 2000; // All wake at same time
 		let mut actor_ids = Vec::new();
 
-		let runner = common::setup_runner(ctx.leader_dc(), &namespace, |builder| {
+		let runner = common::setup_envoy(ctx.leader_dc(), &namespace, |builder| {
 			builder.with_actor_behavior("alarm-actor", move |_| {
 				let (ready_tx, _) = tokio::sync::oneshot::channel();
 				let ready_tx = Arc::new(Mutex::new(Some(ready_tx)));
@@ -1423,13 +1420,15 @@ fn many_actors_same_alarm_time() {
 		})
 		.await;
 
+		let mut lifecycle_rx = runner.subscribe_lifecycle_events();
+
 		// Create actors
 		for _idx in 0..num_actors {
 			let res = common::create_actor(
 				ctx.leader_dc().guard_port(),
 				&namespace,
 				"alarm-actor",
-				runner.name(),
+				runner.pool_name(),
 				rivet_types::actors::CrashPolicy::Destroy,
 			)
 			.await;
@@ -1438,24 +1437,55 @@ fn many_actors_same_alarm_time() {
 
 		tracing::info!(num_actors, "created actors with same alarm time (+2s)");
 
-		// Wait for all actors to enter sleep state
-		for actor_id in &actor_ids {
-			wait_for_actor_sleep(ctx.leader_dc().guard_port(), actor_id, &namespace, 5)
+		let actor_id_set: HashSet<String> = actor_ids.iter().cloned().collect();
+
+		// Same-time alarms can wake early actors before a sequential API poll reaches
+		// later ones, so use the Envoy lifecycle stream to prove every actor stopped
+		// for sleep at generation 1.
+		let sleep_deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+		let mut slept_actor_ids = HashSet::new();
+		while slept_actor_ids.len() < num_actors {
+			let remaining = sleep_deadline.saturating_duration_since(std::time::Instant::now());
+			let event = tokio::time::timeout(remaining, lifecycle_rx.recv())
 				.await
-				.unwrap();
+				.expect("timed out waiting for actors to sleep")
+				.expect("lifecycle stream closed");
+
+			if let ActorLifecycleEvent::Stopped {
+				actor_id,
+				generation,
+			} = event
+			{
+				if generation == 1 && actor_id_set.contains(&actor_id) {
+					slept_actor_ids.insert(actor_id);
+				}
+			}
 		}
 
 		tracing::info!("all actors sleeping");
 
 		let alarm_start = std::time::Instant::now();
 
-		// Verify all actors wake within reasonable time window
-		for (idx, actor_id) in actor_ids.iter().enumerate() {
-			wait_for_actor_wake_polling(ctx.leader_dc().guard_port(), actor_id, &namespace, 4)
+		// Verify all actors wake within a reasonable time window.
+		let wake_deadline = std::time::Instant::now() + std::time::Duration::from_secs(4);
+		let mut woke_actor_ids = HashSet::new();
+		while woke_actor_ids.len() < num_actors {
+			let remaining = wake_deadline.saturating_duration_since(std::time::Instant::now());
+			let event = tokio::time::timeout(remaining, lifecycle_rx.recv())
 				.await
-				.expect("actor should wake");
+				.expect("timed out waiting for actors to wake")
+				.expect("lifecycle stream closed");
 
-			tracing::info!(idx, actor_id, "actor woke");
+			if let ActorLifecycleEvent::Started {
+				actor_id,
+				generation,
+			} = event
+			{
+				if generation == 2 && actor_id_set.contains(&actor_id) {
+					tracing::info!(actor_id, "actor woke");
+					woke_actor_ids.insert(actor_id);
+				}
+			}
 		}
 
 		let total_duration = alarm_start.elapsed();
@@ -1490,19 +1520,16 @@ fn many_actors_same_alarm_time() {
 /// actor, and bumps the generation so the alarm handler runs. The negative
 /// alarm offset (`-1000`ms) deterministically forces the overdue branch.
 #[test]
-// Broken legacy Pegboard Runner test: full engine sweep timed out in
-// `alarm_overdue_during_sleep_transition_fires_via_reallocation`.
-#[ignore = "broken legacy Pegboard Runner test: times out in full engine sweep"]
 fn alarm_overdue_during_sleep_transition_fires_via_reallocation() {
 	common::run(
-		common::TestOpts::new(1).with_timeout(15),
+			common::TestOpts::new(1).with_timeout(30),
 		|ctx| async move {
 			let (namespace, _) = common::setup_test_namespace(ctx.leader_dc()).await;
 
 			let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
 			let ready_tx = Arc::new(Mutex::new(Some(ready_tx)));
 
-			let runner = common::setup_runner(ctx.leader_dc(), &namespace, |builder| {
+			let runner = common::setup_envoy(ctx.leader_dc(), &namespace, |builder| {
 				builder.with_actor_behavior("alarm-actor", move |_| {
 					let ready_tx = ready_tx.clone();
 					// Negative offset guarantees `now >= alarm_ts` when
@@ -1517,7 +1544,7 @@ fn alarm_overdue_during_sleep_transition_fires_via_reallocation() {
 				ctx.leader_dc().guard_port(),
 				&namespace,
 				"alarm-actor",
-				runner.name(),
+				runner.pool_name(),
 				rivet_types::actors::CrashPolicy::Destroy,
 			)
 			.await;
@@ -1532,8 +1559,8 @@ fn alarm_overdue_during_sleep_transition_fires_via_reallocation() {
 			let lifecycle_rx = runner.subscribe_lifecycle_events();
 
 			// If the overdue alarm was dropped, the actor would enter sleep and
-			// never wake. A successful reallocation wakes the actor at generation 1.
-			wait_for_actor_wake_from_alarm(lifecycle_rx, &actor_id, 1, 10)
+			// never wake. A successful reallocation wakes the actor at generation 2.
+			wait_for_actor_wake_from_alarm(lifecycle_rx, &actor_id, 2, 10)
 				.await
 				.expect(
 					"actor should wake from the overdue alarm via reallocation; \

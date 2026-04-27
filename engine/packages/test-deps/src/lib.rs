@@ -58,7 +58,7 @@ impl TestDeps {
 		tracing::info!(?dc_ids, "setting up test dependencies");
 
 		let mut datacenters = HashMap::with_capacity(dc_ids.len());
-		let mut ports = Vec::with_capacity(dc_ids.len());
+		let mut dc_ports = Vec::with_capacity(dc_ids.len());
 
 		for &dc_id in dc_ids {
 			let api_peer_port = portpicker::pick_unused_port().context("api_peer_port")?;
@@ -77,21 +77,21 @@ impl TestDeps {
 					valid_hosts: None,
 				},
 			);
-			ports.push((api_peer_port, guard_port));
+			dc_ports.push((dc_id, api_peer_port, guard_port));
 		}
 
 		// Create futures for each datacenter
-		let futures = datacenters.iter().zip(ports.into_iter()).map(
-			|((_, dc), (api_peer_port, guard_port))| {
+		let futures = dc_ports
+			.into_iter()
+			.map(|(dc_label, api_peer_port, guard_port)| {
 				setup_single_datacenter(
 					test_id,
-					dc.datacenter_label,
+					dc_label,
 					datacenters.clone(),
 					api_peer_port,
 					guard_port,
 				)
-			},
-		);
+			});
 
 		// Execute all futures concurrently
 		let deps = future::try_join_all(futures).await?;

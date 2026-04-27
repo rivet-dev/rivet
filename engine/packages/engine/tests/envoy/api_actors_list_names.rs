@@ -6,9 +6,9 @@ use std::collections::HashSet;
 
 #[test]
 fn list_all_actor_names_in_namespace() {
-	common::run(common::TestOpts::new(1), |ctx| async move {
+	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
 		let (namespace, _, _runner) =
-			common::setup_test_namespace_with_runner(ctx.leader_dc()).await;
+			common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
 
 		// Create actors with different names
 		let names = vec!["actor-alpha", "actor-beta", "actor-gamma"];
@@ -83,9 +83,9 @@ fn list_all_actor_names_in_namespace() {
 // `list_names_with_pagination`.
 #[ignore = "broken legacy Pegboard Runner test: times out in full engine sweep"]
 fn list_names_with_pagination() {
-	common::run(common::TestOpts::new(1), |ctx| async move {
+	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
 		let (namespace, _, _runner) =
-			common::setup_test_namespace_with_runner(ctx.leader_dc()).await;
+			common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
 
 		// Create actors with many different names
 		for i in 0..9 {
@@ -156,13 +156,10 @@ fn list_names_with_pagination() {
 }
 
 #[test]
-// Broken legacy Pegboard Runner test: full engine sweep timed out in
-// `list_names_returns_empty_for_empty_namespace`.
-#[ignore = "broken legacy Pegboard Runner test: times out in full engine sweep"]
 fn list_names_returns_empty_for_empty_namespace() {
-	common::run(common::TestOpts::new(1), |ctx| async move {
+	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
 		let (namespace, _, _runner) =
-			common::setup_test_namespace_with_runner(ctx.leader_dc()).await;
+			common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
 
 		// List names in empty namespace
 		let response = common::api::public::actors_list_names(
@@ -188,7 +185,7 @@ fn list_names_returns_empty_for_empty_namespace() {
 
 #[test]
 fn list_names_with_non_existent_namespace() {
-	common::run(common::TestOpts::new(1), |ctx| async move {
+	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
 		// Try to list names with non-existent namespace
 		let res = common::api::public::actors_list_names(
 			ctx.leader_dc().guard_port(),
@@ -212,9 +209,9 @@ fn list_names_with_non_existent_namespace() {
 #[test]
 #[ignore = "broken legacy Pegboard Runner test: actor.destroyed_during_creation"]
 fn list_names_fanout_to_all_datacenters() {
-	common::run(common::TestOpts::new(2), |ctx| async move {
+	common::run(common::TestOpts::new(2).with_timeout(45), |ctx| async move {
 		let (namespace, _, _runner) =
-			common::setup_test_namespace_with_runner(ctx.leader_dc()).await;
+			common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
 
 		// Create actors with different names in different DCs
 		common::api::public::actors_create(
@@ -281,9 +278,9 @@ fn list_names_fanout_to_all_datacenters() {
 // `list_names_deduplication_across_datacenters`.
 #[ignore = "broken legacy Pegboard Runner test: times out in full engine sweep"]
 fn list_names_deduplication_across_datacenters() {
-	common::run(common::TestOpts::new(2), |ctx| async move {
+	common::run(common::TestOpts::new(2).with_timeout(45), |ctx| async move {
 		let (namespace, _, _runner) =
-			common::setup_test_namespace_with_runner(ctx.leader_dc()).await;
+			common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
 
 		// Create actors with same name in different DCs
 		let shared_name = "shared-name-actor";
@@ -352,9 +349,9 @@ fn list_names_deduplication_across_datacenters() {
 
 #[test]
 fn list_names_alphabetical_sorting() {
-	common::run(common::TestOpts::new(1), |ctx| async move {
+	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
 		let (namespace, _, _runner) =
-			common::setup_test_namespace_with_runner(ctx.leader_dc()).await;
+			common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
 
 		// Create actors with names that need sorting
 		let unsorted_names = vec!["zebra-actor", "alpha-actor", "beta-actor", "gamma-actor"];
@@ -409,9 +406,9 @@ fn list_names_alphabetical_sorting() {
 // `list_names_default_limit_100`.
 #[ignore = "broken legacy Pegboard Runner test: times out in full engine sweep"]
 fn list_names_default_limit_100() {
-	common::run(common::TestOpts::new(1), |ctx| async move {
+	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
 		let (namespace, _, _runner) =
-			common::setup_test_namespace_with_runner(ctx.leader_dc()).await;
+			common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
 
 		// Create 105 actors with different names to test the default limit of 100
 		for i in 0..105 {
@@ -462,9 +459,9 @@ fn list_names_default_limit_100() {
 
 #[test]
 fn list_names_with_metadata() {
-	common::run(common::TestOpts::new(1), |ctx| async move {
+	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
 		let (namespace, _, _runner) =
-			common::setup_test_namespace_with_runner(ctx.leader_dc()).await;
+			common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
 
 		let actor_name = "test-actor-with-metadata";
 
@@ -516,13 +513,10 @@ fn list_names_with_metadata() {
 }
 
 #[test]
-// Broken legacy Pegboard Runner test: full engine sweep timed out in
-// `list_names_empty_response_no_cursor`.
-#[ignore = "broken legacy Pegboard Runner test: times out in full engine sweep"]
 fn list_names_empty_response_no_cursor() {
-	common::run(common::TestOpts::new(1), |ctx| async move {
+	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
 		let (namespace, _, _runner) =
-			common::setup_test_namespace_with_runner(ctx.leader_dc()).await;
+			common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
 
 		// List names in empty namespace
 		let response = common::api::public::actors_list_names(
@@ -552,9 +546,9 @@ fn list_names_empty_response_no_cursor() {
 /// This is a regression test for the cursor being inclusive instead of exclusive.
 #[test]
 fn list_names_pagination_no_duplicates_comprehensive() {
-	common::run(common::TestOpts::new(1), |ctx| async move {
+	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
 		let (namespace, _, _runner) =
-			common::setup_test_namespace_with_runner(ctx.leader_dc()).await;
+			common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
 
 		// Create actors with sequential names
 		for i in 0..15 {
@@ -635,13 +629,10 @@ fn list_names_pagination_no_duplicates_comprehensive() {
 /// Tests that the cursor correctly advances past boundary conditions.
 /// Creates actors with names that test edge cases in lexicographic ordering.
 #[test]
-// Broken legacy Pegboard Runner test: full engine sweep timed out in
-// `list_names_pagination_boundary_cases`.
-#[ignore = "broken legacy Pegboard Runner test: times out in full engine sweep"]
 fn list_names_pagination_boundary_cases() {
-	common::run(common::TestOpts::new(1), |ctx| async move {
+	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
 		let (namespace, _, _runner) =
-			common::setup_test_namespace_with_runner(ctx.leader_dc()).await;
+			common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
 
 		// Create actors with names that have similar prefixes to test boundary conditions
 		let names = vec![

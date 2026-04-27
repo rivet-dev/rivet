@@ -3,7 +3,7 @@ mod server;
 
 pub use rivet_envoy_client::config::{
 	BoxFuture, EnvoyCallbacks, EnvoyConfig, HttpRequest, HttpResponse, ResponseChunk,
-	WebSocketHandler, WebSocketMessage,
+	WebSocketHandler, WebSocketMessage, WebSocketSender,
 };
 pub use rivet_envoy_client::envoy::{start_envoy, start_envoy_sync};
 pub use rivet_envoy_client::handle::EnvoyHandle;

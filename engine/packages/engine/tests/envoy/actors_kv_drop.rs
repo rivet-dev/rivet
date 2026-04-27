@@ -1,6 +1,6 @@
 use anyhow::*;
 use async_trait::async_trait;
-use common::test_runner::*;
+use common::test_envoy::*;
 use rivet_runner_protocol::mk2 as rp;
 use std::sync::{Arc, Mutex};
 
@@ -177,9 +177,6 @@ impl Actor for DropEmptyActor {
 // MARK: Tests
 
 #[test]
-// Broken legacy Pegboard Runner test: full engine sweep timed out in
-// `kv_drop_clears_all_data`.
-#[ignore = "broken legacy Pegboard Runner test: times out in full engine sweep"]
 fn kv_drop_clears_all_data() {
 	common::run(common::TestOpts::new(1), |ctx| async move {
 		let (namespace, _) = common::setup_test_namespace(ctx.leader_dc()).await;
@@ -187,7 +184,7 @@ fn kv_drop_clears_all_data() {
 		let (notify_tx, notify_rx) = tokio::sync::oneshot::channel();
 		let notify_tx = Arc::new(Mutex::new(Some(notify_tx)));
 
-		let runner = common::setup_runner(ctx.leader_dc(), &namespace, |builder| {
+		let runner = common::setup_envoy(ctx.leader_dc(), &namespace, |builder| {
 			builder.with_actor_behavior("kv-drop-clears", move |_| {
 				Box::new(DropClearsAllActor::new(notify_tx.clone()))
 			})
@@ -198,7 +195,7 @@ fn kv_drop_clears_all_data() {
 			ctx.leader_dc().guard_port(),
 			&namespace,
 			"kv-drop-clears",
-			runner.name(),
+			runner.pool_name(),
 			rivet_types::actors::CrashPolicy::Destroy,
 		)
 		.await;
@@ -226,7 +223,7 @@ fn kv_drop_empty_store() {
 		let (notify_tx, notify_rx) = tokio::sync::oneshot::channel();
 		let notify_tx = Arc::new(Mutex::new(Some(notify_tx)));
 
-		let runner = common::setup_runner(ctx.leader_dc(), &namespace, |builder| {
+		let runner = common::setup_envoy(ctx.leader_dc(), &namespace, |builder| {
 			builder.with_actor_behavior("kv-drop-empty", move |_| {
 				Box::new(DropEmptyActor::new(notify_tx.clone()))
 			})
@@ -237,7 +234,7 @@ fn kv_drop_empty_store() {
 			ctx.leader_dc().guard_port(),
 			&namespace,
 			"kv-drop-empty",
-			runner.name(),
+			runner.pool_name(),
 			rivet_types::actors::CrashPolicy::Destroy,
 		)
 		.await;

@@ -8,15 +8,26 @@ use super::TestDatacenter;
 pub async fn setup_test_namespace(leader_dc: &TestDatacenter) -> (String, rivet_util::Id) {
 	let random_suffix = rand::random::<u16>();
 	let namespace_name = format!("test-{random_suffix}");
-	let res = super::api::public::namespaces_create(
-		leader_dc.guard_port(),
-		rivet_api_peer::namespaces::CreateRequest {
-			name: namespace_name,
-			display_name: "Test Namespace".to_string(),
-		},
-	)
-	.await
-	.expect("failed to setup test namespace");
+	let start = std::time::Instant::now();
+	let timeout = std::time::Duration::from_secs(60);
+	let res = loop {
+		match super::api::public::namespaces_create(
+			leader_dc.guard_port(),
+			rivet_api_peer::namespaces::CreateRequest {
+				name: namespace_name.clone(),
+				display_name: "Test Namespace".to_string(),
+			},
+		)
+		.await
+		{
+			Ok(res) => break res,
+			Err(err) if start.elapsed() < timeout => {
+				tracing::warn!(?err, "retrying test namespace setup");
+				tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+			}
+			Err(err) => panic!("failed to setup test namespace: {err:?}"),
+		}
+	};
 	(res.namespace.name, res.namespace.namespace_id)
 }
 
@@ -43,9 +54,11 @@ pub async fn setup_test_namespace_with_envoy(
 	let (namespace_name, namespace_id) = setup_test_namespace(dc).await;
 
 	let envoy = setup_envoy(dc, &namespace_name, |builder| {
-		builder.with_actor_behavior("test-actor", |_config| {
-			Box::new(super::test_envoy::EchoActor::new())
-		})
+		builder
+			.with_pool_name(super::TEST_RUNNER_NAME)
+			.with_actor_behavior("test-actor", |_config| {
+				Box::new(super::test_envoy::EchoActor::new())
+			})
 	})
 	.await;
 
@@ -207,10 +220,55 @@ where
 		.await
 		.expect("failed to build test runner");
 
+	upsert_normal_runner_config(dc, namespace, runner.name()).await;
+
 	runner.start().await.expect("failed to start runner");
 	runner.wait_ready().await;
 
 	runner
+}
+
+pub async fn upsert_normal_runner_config(
+	dc: &super::TestDatacenter,
+	namespace: &str,
+	runner_name: &str,
+) {
+	let mut datacenters = HashMap::new();
+	datacenters.insert(
+		dc.config.dc_name().unwrap().to_string(),
+		rivet_api_types::namespaces::runner_configs::RunnerConfig {
+			kind: rivet_api_types::namespaces::runner_configs::RunnerConfigKind::Normal {},
+			metadata: None,
+			drain_on_version_upgrade: true,
+		},
+	);
+
+	let start = std::time::Instant::now();
+	let timeout = std::time::Duration::from_secs(60);
+	loop {
+		let res = crate::common::api::public::runner_configs_upsert(
+			dc.guard_port(),
+			rivet_api_peer::runner_configs::UpsertPath {
+				runner_name: runner_name.to_string(),
+			},
+			rivet_api_peer::runner_configs::UpsertQuery {
+				namespace: namespace.to_string(),
+			},
+			rivet_api_public::runner_configs::upsert::UpsertRequest {
+				datacenters: datacenters.clone(),
+			},
+		)
+		.await;
+
+		match res {
+			Ok(_) => break,
+			Err(err) if start.elapsed() < timeout => {
+				tracing::warn!(?err, "retrying normal runner config upsert");
+				tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+			}
+			Err(err) => panic!("failed to upsert runner config: {err:?}"),
+		}
+	}
 }
 
 /// Build a test envoy with specified configuration
@@ -247,29 +305,7 @@ where
 
 	let envoy = builder.build(dc).await.expect("failed to build test envoy");
 
-	// Upsert serverful runner config
-	let mut datacenters = HashMap::new();
-	datacenters.insert(
-		dc.config.dc_name().unwrap().to_string(),
-		rivet_api_types::namespaces::runner_configs::RunnerConfig {
-			kind: rivet_api_types::namespaces::runner_configs::RunnerConfigKind::Normal {},
-			metadata: None,
-			drain_on_version_upgrade: true,
-		},
-	);
-
-	crate::common::api::public::runner_configs_upsert(
-		dc.guard_port(),
-		rivet_api_peer::runner_configs::UpsertPath {
-			runner_name: envoy.pool_name().to_string(),
-		},
-		rivet_api_peer::runner_configs::UpsertQuery {
-			namespace: namespace.to_string(),
-		},
-		rivet_api_public::runner_configs::upsert::UpsertRequest { datacenters },
-	)
-	.await
-	.expect("failed to upsert runner config");
+	upsert_normal_runner_config(dc, namespace, envoy.pool_name()).await;
 
 	envoy.start().await.expect("failed to start envoy");
 	envoy.wait_ready().await;

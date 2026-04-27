@@ -92,6 +92,7 @@ fn refresh_metadata_invalidates_protocol_cache_before_v2_dispatch() {
 							headers: None,
 							request_lifespan: 30,
 							max_concurrent_actors: Some(10),
+							drain_grace_period: None,
 							slots_per_runner: 1,
 							min_runners: Some(0),
 							max_runners: 0,
@@ -134,10 +135,10 @@ fn refresh_metadata_invalidates_protocol_cache_before_v2_dispatch() {
 			common::api::public::runner_configs_refresh_metadata(
 				ctx.leader_dc().guard_port(),
 				runner_name.to_string(),
-				rivet_api_public::runner_configs::refresh_metadata::RefreshMetadataQuery {
+				common::api::public::RefreshMetadataQuery {
 					namespace: namespace.clone(),
 				},
-				rivet_api_public::runner_configs::refresh_metadata::RefreshMetadataRequest {},
+				common::api::public::RefreshMetadataRequest {},
 			)
 			.await
 			.expect("failed to refresh metadata");

@@ -5,13 +5,10 @@ use std::collections::HashSet;
 // MARK: List by Name
 
 #[test]
-// Broken legacy Pegboard Runner test: full engine sweep timed out in
-// `list_actors_by_namespace_and_name`.
-#[ignore = "broken legacy Pegboard Runner test: times out in full engine sweep"]
 fn list_actors_by_namespace_and_name() {
-	common::run(common::TestOpts::new(1), |ctx| async move {
+	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
 		let (namespace, _, _runner) =
-			common::setup_test_namespace_with_runner(ctx.leader_dc()).await;
+			common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
 
 		let name = "list-test-actor";
 
@@ -74,9 +71,9 @@ fn list_actors_by_namespace_and_name() {
 
 #[test]
 fn list_with_pagination() {
-	common::run(common::TestOpts::new(1), |ctx| async move {
+	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
 		let (namespace, _, _runner) =
-			common::setup_test_namespace_with_runner(ctx.leader_dc()).await;
+			common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
 
 		let name = "paginated-actor";
 
@@ -219,9 +216,9 @@ fn list_with_pagination() {
 
 #[test]
 fn list_returns_empty_array_when_no_actors() {
-	common::run(common::TestOpts::new(1), |ctx| async move {
+	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
 		let (namespace, _, _runner) =
-			common::setup_test_namespace_with_runner(ctx.leader_dc()).await;
+			common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
 
 		// List actors that don't exist
 		let response = common::api::public::actors_list(
@@ -247,13 +244,10 @@ fn list_returns_empty_array_when_no_actors() {
 // MARK: List by Name + Key
 
 #[test]
-// Broken legacy Pegboard Runner test: full engine sweep timed out in
-// `list_actors_by_namespace_name_and_key`.
-#[ignore = "broken legacy Pegboard Runner test: times out in full engine sweep"]
 fn list_actors_by_namespace_name_and_key() {
-	common::run(common::TestOpts::new(1), |ctx| async move {
+	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
 		let (namespace, _, _runner) =
-			common::setup_test_namespace_with_runner(ctx.leader_dc()).await;
+			common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
 
 		let name = "keyed-actor";
 		let key1 = "key1".to_string();
@@ -319,9 +313,9 @@ fn list_actors_by_namespace_name_and_key() {
 
 #[test]
 fn list_with_include_destroyed_false() {
-	common::run(common::TestOpts::new(1), |ctx| async move {
+	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
 		let (namespace, _, _runner) =
-			common::setup_test_namespace_with_runner(ctx.leader_dc()).await;
+			common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
 
 		let name = "destroyed-test";
 
@@ -399,9 +393,9 @@ fn list_with_include_destroyed_false() {
 
 #[test]
 fn list_with_include_destroyed_true() {
-	common::run(common::TestOpts::new(1), |ctx| async move {
+	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
 		let (namespace, _, _runner) =
-			common::setup_test_namespace_with_runner(ctx.leader_dc()).await;
+			common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
 
 		let name = "destroyed-included";
 
@@ -496,9 +490,9 @@ fn list_with_include_destroyed_true() {
 #[test]
 #[ignore = "broken legacy Pegboard Runner test: times out in full runner sweep"]
 fn list_specific_actors_by_ids() {
-	common::run(common::TestOpts::new(1), |ctx| async move {
+	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
 		let (namespace, _, _runner) =
-			common::setup_test_namespace_with_runner(ctx.leader_dc()).await;
+			common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
 
 		// Create multiple actors
 		let actor_ids =
@@ -556,9 +550,9 @@ fn list_specific_actors_by_ids() {
 // DC2 actor with `actor.destroyed_during_creation`.
 #[ignore = "broken legacy Pegboard Runner test: actor.destroyed_during_creation in full engine sweep"]
 fn list_actors_from_multiple_datacenters() {
-	common::run(common::TestOpts::new(2), |ctx| async move {
+	common::run(common::TestOpts::new(2).with_timeout(45), |ctx| async move {
 		let (namespace, _, _runner) =
-			common::setup_test_namespace_with_runner(ctx.leader_dc()).await;
+			common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
 
 		// Create actors in different DCs
 		let res1 = common::api::public::actors_create(
@@ -626,7 +620,7 @@ fn list_actors_from_multiple_datacenters() {
 
 #[test]
 fn list_with_non_existent_namespace() {
-	common::run(common::TestOpts::new(1), |ctx| async move {
+	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
 		// Try to list with non-existent namespace
 		let res = common::api::public::actors_list(
 			ctx.leader_dc().guard_port(),
@@ -650,9 +644,9 @@ fn list_with_non_existent_namespace() {
 
 #[test]
 fn list_with_key_but_no_name() {
-	common::run(common::TestOpts::new(1), |ctx| async move {
+	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
 		let (namespace, _, _runner) =
-			common::setup_test_namespace_with_runner(ctx.leader_dc()).await;
+			common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
 
 		// Try to list with key but no name (validation error)
 		let res = common::api::public::actors_list(
@@ -677,9 +671,9 @@ fn list_with_key_but_no_name() {
 
 #[test]
 fn list_with_more_than_32_actor_ids() {
-	common::run(common::TestOpts::new(1), |ctx| async move {
+	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
 		let (namespace, _, _runner) =
-			common::setup_test_namespace_with_runner(ctx.leader_dc()).await;
+			common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
 
 		// Try to list with more than 32 actor IDs
 		let actor_ids: Vec<rivet_util::Id> = (0..33)
@@ -708,9 +702,9 @@ fn list_with_more_than_32_actor_ids() {
 
 #[test]
 fn list_without_name_when_not_using_actor_ids() {
-	common::run(common::TestOpts::new(1), |ctx| async move {
+	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
 		let (namespace, _, _runner) =
-			common::setup_test_namespace_with_runner(ctx.leader_dc()).await;
+			common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
 
 		// Try to list without name or actor_ids
 		let res = common::api::public::actors_list(
@@ -740,9 +734,9 @@ fn list_without_name_when_not_using_actor_ids() {
 
 #[test]
 fn verify_sorting_by_create_ts_descending() {
-	common::run(common::TestOpts::new(1), |ctx| async move {
+	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
 		let (namespace, _, _runner) =
-			common::setup_test_namespace_with_runner(ctx.leader_dc()).await;
+			common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
 
 		let name = "sorted-actor";
 
@@ -803,9 +797,9 @@ fn verify_sorting_by_create_ts_descending() {
 #[test]
 #[ignore = "broken legacy Pegboard Runner test: times out in full runner sweep"]
 fn list_aggregates_results_from_all_datacenters() {
-	common::run(common::TestOpts::new(2), |ctx| async move {
+	common::run(common::TestOpts::new(2).with_timeout(45), |ctx| async move {
 		let (namespace, _, _runner) =
-			common::setup_test_namespace_with_runner(ctx.leader_dc()).await;
+			common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
 
 		let name = "fanout-test-actor";
 
@@ -884,9 +878,9 @@ fn list_aggregates_results_from_all_datacenters() {
 
 #[test]
 fn list_with_exactly_32_actor_ids() {
-	common::run(common::TestOpts::new(1), |ctx| async move {
+	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
 		let (namespace, _, _runner) =
-			common::setup_test_namespace_with_runner(ctx.leader_dc()).await;
+			common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
 
 		// Create exactly 32 actor IDs (boundary condition)
 		let actor_ids: Vec<rivet_util::Id> = (0..32)
@@ -921,9 +915,9 @@ fn list_with_exactly_32_actor_ids() {
 
 #[test]
 fn list_by_key_with_include_destroyed_true() {
-	common::run(common::TestOpts::new(1), |ctx| async move {
+	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
 		let (namespace, _, _runner) =
-			common::setup_test_namespace_with_runner(ctx.leader_dc()).await;
+			common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
 
 		let name = "key-destroyed-test";
 		let key = "test-key";
@@ -1014,13 +1008,10 @@ fn list_by_key_with_include_destroyed_true() {
 }
 
 #[test]
-// Broken legacy Pegboard Runner test: full engine sweep timed out in
-// `list_default_limit_100`.
-#[ignore = "broken legacy Pegboard Runner test: times out in full engine sweep"]
 fn list_default_limit_100() {
-	common::run(common::TestOpts::new(1), |ctx| async move {
+	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
 		let (namespace, _, _runner) =
-			common::setup_test_namespace_with_runner(ctx.leader_dc()).await;
+			common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
 
 		let name = "limit-test";
 
@@ -1067,9 +1058,9 @@ fn list_default_limit_100() {
 #[test]
 #[ignore = "broken legacy Pegboard Runner test: times out in full runner sweep"]
 fn list_with_invalid_actor_id_format_in_comma_list() {
-	common::run(common::TestOpts::new(1), |ctx| async move {
+	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
 		let (namespace, _, _runner) =
-			common::setup_test_namespace_with_runner(ctx.leader_dc()).await;
+			common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
 
 		// Create a valid actor
 		let res = common::api::public::actors_create(
@@ -1128,9 +1119,9 @@ fn list_with_invalid_actor_id_format_in_comma_list() {
 
 #[test]
 fn list_with_cursor_pagination() {
-	common::run(common::TestOpts::new(1), |ctx| async move {
+	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
 		let (namespace, _, _runner) =
-			common::setup_test_namespace_with_runner(ctx.leader_dc()).await;
+			common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
 
 		let name = "cursor-test-actor";
 
@@ -1272,13 +1263,10 @@ fn list_with_cursor_pagination() {
 }
 
 #[test]
-// Broken legacy Pegboard Runner test: full engine sweep timed out in
-// `list_cursor_filters_by_timestamp`.
-#[ignore = "broken legacy Pegboard Runner test: times out in full engine sweep"]
 fn list_cursor_filters_by_timestamp() {
-	common::run(common::TestOpts::new(1), |ctx| async move {
+	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
 		let (namespace, _, _runner) =
-			common::setup_test_namespace_with_runner(ctx.leader_dc()).await;
+			common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
 
 		let name = "timestamp-filter-test";
 
@@ -1362,9 +1350,9 @@ fn list_cursor_filters_by_timestamp() {
 
 #[test]
 fn list_cursor_with_exact_timestamp_boundary() {
-	common::run(common::TestOpts::new(1), |ctx| async move {
+	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
 		let (namespace, _, _runner) =
-			common::setup_test_namespace_with_runner(ctx.leader_dc()).await;
+			common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
 
 		let name = "boundary-test";
 
@@ -1440,9 +1428,9 @@ fn list_cursor_with_exact_timestamp_boundary() {
 
 #[test]
 fn list_cursor_empty_results_when_no_more_actors() {
-	common::run(common::TestOpts::new(1), |ctx| async move {
+	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
 		let (namespace, _, _runner) =
-			common::setup_test_namespace_with_runner(ctx.leader_dc()).await;
+			common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
 
 		let name = "empty-cursor-test";
 
@@ -1518,9 +1506,9 @@ fn list_cursor_empty_results_when_no_more_actors() {
 
 #[test]
 fn list_invalid_cursor_format() {
-	common::run(common::TestOpts::new(1), |ctx| async move {
+	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
 		let (namespace, _, _runner) =
-			common::setup_test_namespace_with_runner(ctx.leader_dc()).await;
+			common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
 
 		let name = "invalid-cursor-test";
 
@@ -1553,9 +1541,9 @@ fn list_invalid_cursor_format() {
 #[test]
 #[ignore = "broken legacy Pegboard Runner test: times out in full runner sweep"]
 fn list_cursor_across_datacenters() {
-	common::run(common::TestOpts::new(2), |ctx| async move {
+	common::run(common::TestOpts::new(2).with_timeout(45), |ctx| async move {
 		let (namespace, _, _runner) =
-			common::setup_test_namespace_with_runner(ctx.leader_dc()).await;
+			common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
 
 		let name = "multi-dc-cursor-test";
 
@@ -1663,9 +1651,9 @@ fn list_cursor_across_datacenters() {
 #[test]
 #[ignore = "broken legacy Pegboard Runner test: times out in full runner sweep"]
 fn list_actor_ids_with_cursor_pagination() {
-	common::run(common::TestOpts::new(1), |ctx| async move {
+	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
 		let (namespace, _, _runner) =
-			common::setup_test_namespace_with_runner(ctx.leader_dc()).await;
+			common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
 
 		let name = "actor-ids-cursor-test";
 
