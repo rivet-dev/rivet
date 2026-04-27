@@ -1116,9 +1116,16 @@ impl Database for DatabaseKv {
 							Snapshot,
 						)
 						.map(|res| {
-							let key = tx.unpack::<keys::worker::ActiveWorkerIdxKey>(res?.key())?;
-							Ok(key.worker_id)
+							let entry = res?;
+							match tx.unpack::<keys::worker::ActiveWorkerIdxKey>(entry.key()) {
+								Ok(key) => Ok(Some(key.worker_id)),
+								Err(err) => {
+									tracing::warn!(?err, "skipping malformed active worker index key");
+									Ok(None)
+								}
+							}
 						})
+						.try_filter_map(|worker_id| std::future::ready(Ok(worker_id)))
 						.try_collect::<Vec<_>>(),
 						async {
 							let start = Instant::now();
