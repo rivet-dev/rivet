@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::IntoParams;
 use utoipa::ToSchema;
 
-use super::utils::{ServerlessMetadataError, fetch_serverless_metadata};
+use super::utils::{ServerlessMetadataErrorEnvelope, fetch_serverless_metadata};
 use crate::ctx::ApiCtx;
 
 #[derive(Debug, Serialize, Deserialize, Clone, IntoParams)]
@@ -35,7 +35,7 @@ pub struct ServerlessHealthCheckRequest {
 #[schema(as = RunnerConfigsServerlessHealthCheckResponse)]
 pub enum ServerlessHealthCheckResponse {
 	Success { version: String },
-	Failure { error: ServerlessMetadataError },
+	Failure { error: ServerlessMetadataErrorEnvelope },
 }
 
 #[utoipa::path(
@@ -76,6 +76,8 @@ async fn serverless_health_check_inner(
 		Ok(metadata) => Ok(ServerlessHealthCheckResponse::Success {
 			version: metadata.version,
 		}),
-		Err(error) => Ok(ServerlessHealthCheckResponse::Failure { error }),
+		Err(error) => Ok(ServerlessHealthCheckResponse::Failure {
+			error: error.into(),
+		}),
 	}
 }

@@ -1,5 +1,5 @@
 {
   "code": "failed_to_fetch_metadata",
   "group": "serverless_runner_pool",
-  "message": "Failed to fetch serverless metadata: {reason:?}"
+  "message": "Failed to fetch serverless metadata: {reason}."
 }

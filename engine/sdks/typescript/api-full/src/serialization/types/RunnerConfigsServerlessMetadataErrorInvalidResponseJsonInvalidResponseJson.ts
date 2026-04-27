@@ -11,10 +11,12 @@ export const RunnerConfigsServerlessMetadataErrorInvalidResponseJsonInvalidRespo
     Rivet.RunnerConfigsServerlessMetadataErrorInvalidResponseJsonInvalidResponseJson
 > = core.serialization.object({
     body: core.serialization.string(),
+    parseError: core.serialization.property("parse_error", core.serialization.string()),
 });
 
 export declare namespace RunnerConfigsServerlessMetadataErrorInvalidResponseJsonInvalidResponseJson {
     export interface Raw {
         body: string;
+        parse_error: string;
     }
 }

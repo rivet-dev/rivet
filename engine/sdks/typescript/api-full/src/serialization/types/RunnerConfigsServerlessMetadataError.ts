@@ -11,6 +11,7 @@ import { RunnerConfigsServerlessMetadataErrorRequestTimedOut } from "./RunnerCon
 import { RunnerConfigsServerlessMetadataErrorNonSuccessStatus } from "./RunnerConfigsServerlessMetadataErrorNonSuccessStatus";
 import { RunnerConfigsServerlessMetadataErrorInvalidResponseJson } from "./RunnerConfigsServerlessMetadataErrorInvalidResponseJson";
 import { RunnerConfigsServerlessMetadataErrorInvalidResponseSchema } from "./RunnerConfigsServerlessMetadataErrorInvalidResponseSchema";
+import { RunnerConfigsServerlessMetadataErrorInvalidEnvoyProtocolVersion } from "./RunnerConfigsServerlessMetadataErrorInvalidEnvoyProtocolVersion";
 
 export const RunnerConfigsServerlessMetadataError: core.serialization.Schema<
     serializers.RunnerConfigsServerlessMetadataError.Raw,
@@ -22,6 +23,7 @@ export const RunnerConfigsServerlessMetadataError: core.serialization.Schema<
     RunnerConfigsServerlessMetadataErrorNonSuccessStatus,
     RunnerConfigsServerlessMetadataErrorInvalidResponseJson,
     RunnerConfigsServerlessMetadataErrorInvalidResponseSchema,
+    RunnerConfigsServerlessMetadataErrorInvalidEnvoyProtocolVersion,
 ]);
 
 export declare namespace RunnerConfigsServerlessMetadataError {
@@ -31,5 +33,6 @@ export declare namespace RunnerConfigsServerlessMetadataError {
         | RunnerConfigsServerlessMetadataErrorRequestTimedOut.Raw
         | RunnerConfigsServerlessMetadataErrorNonSuccessStatus.Raw
         | RunnerConfigsServerlessMetadataErrorInvalidResponseJson.Raw
-        | RunnerConfigsServerlessMetadataErrorInvalidResponseSchema.Raw;
+        | RunnerConfigsServerlessMetadataErrorInvalidResponseSchema.Raw
+        | RunnerConfigsServerlessMetadataErrorInvalidEnvoyProtocolVersion.Raw;
 }

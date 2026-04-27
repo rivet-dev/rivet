@@ -2234,9 +2234,15 @@
               "invalid_envoy_protocol_version": {
                 "type": "object",
                 "required": [
-                  "version"
+                  "version",
+                  "max_supported"
                 ],
                 "properties": {
+                  "max_supported": {
+                    "type": "integer",
+                    "format": "int32",
+                    "minimum": 0
+                  },
                   "version": {
                     "type": "integer",
                     "format": "int32",
