@@ -5,7 +5,6 @@ use gas::prelude::*;
 
 use crate::ctx::ApiCtx;
 
-// Re-export types from pegboard for API schema
 pub use pegboard::ops::serverless_metadata::fetch::ServerlessMetadataError;
 
 /// Serverless metadata returned from a runner.

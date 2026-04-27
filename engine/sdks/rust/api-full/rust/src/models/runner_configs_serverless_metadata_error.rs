@@ -20,6 +20,7 @@ pub enum RunnerConfigsServerlessMetadataError {
     RunnerConfigsServerlessMetadataErrorOneOf3(Box<models::RunnerConfigsServerlessMetadataErrorOneOf3>),
     RunnerConfigsServerlessMetadataErrorOneOf4(Box<models::RunnerConfigsServerlessMetadataErrorOneOf4>),
     RunnerConfigsServerlessMetadataErrorOneOf5(Box<models::RunnerConfigsServerlessMetadataErrorOneOf5>),
+    RunnerConfigsServerlessMetadataErrorOneOf6(Box<models::RunnerConfigsServerlessMetadataErrorOneOf6>),
 }
 
 impl Default for RunnerConfigsServerlessMetadataError {
