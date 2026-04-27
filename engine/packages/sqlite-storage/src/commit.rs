@@ -598,18 +598,13 @@ impl SqliteEngine {
 		.await;
 		let udb_write_duration = decode_start.elapsed().saturating_sub(decode_duration);
 
-		// The stage entry is inserted by commit_stage_begin and only removed
-		// by commit_finalize, so it must still be present here.
-		let mut entry = self
-			.pending_stages
-			.get_async(&stage_key)
-			.await
-			.expect("pending stage entry should exist for the duration of commit_stage");
 		match chunk_write_result {
 			Ok(()) => {
-				let stage = entry.get_mut();
-				stage.next_chunk_idx += 1;
-				stage.saw_last_chunk = request.is_last;
+				if let Some(mut entry) = self.pending_stages.get_async(&stage_key).await {
+					let stage = entry.get_mut();
+					stage.next_chunk_idx += 1;
+					stage.saw_last_chunk = request.is_last;
+				}
 			}
 			Err(err) => {
 				if matches!(
@@ -618,7 +613,9 @@ impl SqliteEngine {
 				) {
 					self.metrics.inc_fence_mismatch_total();
 				}
-				entry.get_mut().error_message = Some(err.to_string());
+				if let Some(mut entry) = self.pending_stages.get_async(&stage_key).await {
+					entry.get_mut().error_message = Some(err.to_string());
+				}
 				return Err(err);
 			}
 		}
