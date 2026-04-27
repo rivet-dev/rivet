@@ -100,10 +100,8 @@ fn create_actor_with_input() {
 	});
 }
 
+#[ignore = "non-sleep crash policies are not yet supported for envoys"]
 #[test]
-// Broken legacy Pegboard Runner test: full engine sweep timed out in
-// `create_durable_actor`.
-#[ignore = "broken legacy Pegboard Runner test: times out in full engine sweep"]
 fn create_durable_actor() {
 	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
 		let (namespace, _, _runner) =

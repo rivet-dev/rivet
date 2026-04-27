@@ -155,9 +155,6 @@ fn get_or_create_same_name_different_keys() {
 	});
 }
 
-// Broken in the full engine sweep: times out with `test timed out:
-// Elapsed(())`.
-#[ignore = "broken: times out in full engine sweep"]
 #[test]
 fn get_or_create_idempotent() {
 	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
@@ -204,9 +201,6 @@ fn get_or_create_idempotent() {
 
 // MARK: Race condition tests
 
-// Broken in the full engine sweep: concurrent get-or-create still fails under
-// legacy Pegboard Runner load.
-#[ignore = "broken: concurrent get-or-create fails in full runner sweep"]
 #[test]
 fn get_or_create_race_condition_handling() {
 	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
@@ -576,6 +570,66 @@ fn get_or_create_with_invalid_datacenter() {
 		.await;
 
 		assert!(res.is_err(), "Should fail with invalid datacenter");
+	});
+}
+
+#[test]
+fn get_or_create_empty_key() {
+	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
+		let (namespace, _, _runner) =
+			common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
+
+		let res = common::api::public::actors_get_or_create(
+			ctx.leader_dc().guard_port(),
+			common::api::public::GetOrCreateQuery {
+				namespace: namespace.clone(),
+			},
+			common::api::public::GetOrCreateRequest {
+				datacenter: None,
+				name: "test-actor".to_string(),
+				key: "".to_string(),
+				input: None,
+				runner_name_selector: common::TEST_RUNNER_NAME.to_string(),
+				crash_policy: rivet_types::actors::CrashPolicy::Destroy,
+			},
+		)
+		.await;
+
+		assert!(
+			res.is_err(),
+			"should fail to get or create actor with empty key"
+		);
+	});
+}
+
+#[test]
+fn get_or_create_key_exceeds_max_size() {
+	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
+		let (namespace, _, _runner) =
+			common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
+
+		let key = "a".repeat(1025);
+
+		let res = common::api::public::actors_get_or_create(
+			ctx.leader_dc().guard_port(),
+			common::api::public::GetOrCreateQuery {
+				namespace: namespace.clone(),
+			},
+			common::api::public::GetOrCreateRequest {
+				datacenter: None,
+				name: "test-actor".to_string(),
+				key,
+				input: None,
+				runner_name_selector: common::TEST_RUNNER_NAME.to_string(),
+				crash_policy: rivet_types::actors::CrashPolicy::Destroy,
+			},
+		)
+		.await;
+
+		assert!(
+			res.is_err(),
+			"should fail to get or create actor with key exceeding max size"
+		);
 	});
 }
 

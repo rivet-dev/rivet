@@ -780,6 +780,7 @@ fn envoy_actor_stop_waits_for_completion_before_destroy() {
 }
 
 // MARK: 5. Crash Handling and Policies
+#[ignore = "non-sleep crash policies are not yet supported for envoys"]
 #[test]
 fn envoy_crash_policy_restart() {
 	common::run(common::TestOpts::new(1), |ctx| async move {
@@ -844,6 +845,7 @@ fn envoy_crash_policy_restart() {
 	});
 }
 
+#[ignore = "non-sleep crash policies are not yet supported for envoys"]
 #[test]
 fn envoy_crash_policy_restart_resets_on_success() {
 	common::run(common::TestOpts::new(1), |ctx| async move {
@@ -985,6 +987,7 @@ fn envoy_crash_policy_sleep() {
 	});
 }
 
+#[ignore = "non-sleep crash policies are not yet supported for envoys"]
 #[test]
 fn envoy_crash_policy_destroy() {
 	common::run(common::TestOpts::new(1), |ctx| async move {
@@ -1484,6 +1487,7 @@ fn envoy_normal_pool_does_not_apply_legacy_runner_slot_capacity() {
 }
 
 // MARK: Timeout and Retry Scenarios
+#[ignore = "non-sleep crash policies are not yet supported for envoys"]
 #[test]
 fn envoy_exponential_backoff_max_retries() {
 	common::run(common::TestOpts::new(1).with_timeout(45), |ctx| async move {

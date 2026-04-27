@@ -3,6 +3,8 @@ use gas::prelude::*;
 use rivet_api_builder::ApiCtx;
 use rivet_api_types::actors::create::{CreateQuery, CreateRequest, CreateResponse};
 
+const MAX_ACTOR_KEY_SIZE: usize = 1024;
+
 #[tracing::instrument(skip_all)]
 pub async fn create(
 	ctx: ApiCtx,
@@ -10,6 +12,19 @@ pub async fn create(
 	query: CreateQuery,
 	body: CreateRequest,
 ) -> Result<CreateResponse> {
+	if let Some(key) = &body.key {
+		if key.is_empty() {
+			return Err(pegboard::errors::Actor::EmptyKey.build());
+		}
+		if key.len() > MAX_ACTOR_KEY_SIZE {
+			return Err(pegboard::errors::Actor::KeyTooLarge {
+				max_size: MAX_ACTOR_KEY_SIZE,
+				key_preview: util::safe_slice(key, 0, MAX_ACTOR_KEY_SIZE).to_string(),
+			}
+			.build());
+		}
+	}
+
 	let namespace = ctx
 		.op(namespace::ops::resolve_for_name_global::Input {
 			name: query.namespace.clone(),

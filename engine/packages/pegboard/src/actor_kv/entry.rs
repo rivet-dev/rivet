@@ -1,4 +1,4 @@
-use anyhow::{Context, Result, ensure};
+use anyhow::{Context, Result};
 use rivet_envoy_protocol as ep;
 
 use crate::keys::actor_kv::KeyWrapper;
@@ -36,8 +36,6 @@ impl EntryBuilder {
 	}
 
 	pub fn build(self) -> Result<(ep::KvKey, ep::KvValue, ep::KvMetadata)> {
-		ensure!(!self.value.is_empty(), "empty value at key");
-
 		Ok((
 			self.key.0,
 			self.value,

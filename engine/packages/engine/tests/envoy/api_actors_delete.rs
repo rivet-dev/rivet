@@ -421,10 +421,6 @@ fn delete_already_destroyed_actor() {
 	});
 }
 
-// Broken in the full engine sweep: setup can fail while upserting the runner
-// config with HTTP 500 `core.internal_error` (`replica 1 has not been
-// configured yet`).
-#[ignore = "broken: runner config upsert can fail with replica not configured"]
 #[test]
 fn delete_actor_twice_rapidly() {
 	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {

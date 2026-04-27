@@ -44,6 +44,10 @@ When changing a versioned VBARE schema, follow the existing migration pattern.
 
 Use `test-snapshot-gen` to generate and load RocksDB snapshots of the full UDB KV store for migration and integration tests. Scenarios produce per-replica RocksDB checkpoints stored under `engine/packages/test-snapshot-gen/snapshots/` (git LFS tracked). In tests, use `test_snapshot::SnapshotTestCtx::from_snapshot("scenario-name")` to boot a cluster from snapshot data. See `docs-internal/engine/TEST_SNAPSHOTS.md` for the full guide.
 
+## Engine test flakes
+
+- If a full engine test sweep fails during workflow-worker startup with `ActiveWorkerIdxKey` and `bad code, found 2`, treat it as a sporadic harness issue and retry the affected test once.
+
 ## SQLite storage tests
 
 - In `sqlite-storage` failure-injection tests, inspect state with `MemoryStore::snapshot()` because store calls still consume the `fail_after_ops` budget after the first injected error.

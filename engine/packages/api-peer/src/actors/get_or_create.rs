@@ -4,6 +4,8 @@ use rivet_api_builder::ApiCtx;
 use rivet_api_types::actors::get_or_create::*;
 use rivet_error::RivetError;
 
+const MAX_ACTOR_KEY_SIZE: usize = 1024;
+
 #[tracing::instrument(skip_all)]
 pub async fn get_or_create(
 	ctx: ApiCtx,
@@ -11,6 +13,17 @@ pub async fn get_or_create(
 	query: GetOrCreateQuery,
 	body: GetOrCreateRequest,
 ) -> Result<GetOrCreateResponse> {
+	if body.key.is_empty() {
+		return Err(pegboard::errors::Actor::EmptyKey.build());
+	}
+	if body.key.len() > MAX_ACTOR_KEY_SIZE {
+		return Err(pegboard::errors::Actor::KeyTooLarge {
+			max_size: MAX_ACTOR_KEY_SIZE,
+			key_preview: util::safe_slice(&body.key, 0, MAX_ACTOR_KEY_SIZE).to_string(),
+		}
+		.build());
+	}
+
 	let namespace = ctx
 		.op(namespace::ops::resolve_for_name_global::Input {
 			name: query.namespace.clone(),

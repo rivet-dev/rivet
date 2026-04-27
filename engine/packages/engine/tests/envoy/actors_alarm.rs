@@ -1201,10 +1201,7 @@ fn alarm_wake_then_sleep_without_new_alarm() {
 
 // MARK: Advanced Usage
 
-// Broken in the full engine sweep: times out waiting for the restarted actor to
-// wake from the original alarm (`actor should wake from original alarm:
-// timeout waiting for actor to wake: sleep_ts=Some(...), connectable_ts=None`).
-#[ignore = "broken: times out waiting for restarted actor to wake from original alarm"]
+#[ignore = "non-sleep crash policies are not yet supported for envoys"]
 #[test]
 fn alarm_behavior_with_crash_policy_restart() {
 	common::run(

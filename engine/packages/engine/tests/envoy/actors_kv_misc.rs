@@ -102,7 +102,7 @@ impl Actor for BinaryDataActor {
 	}
 }
 
-/// Actor that tests empty value is rejected.
+/// Actor that tests empty values round trip.
 struct EmptyValueActor {
 	notify_tx: Arc<Mutex<Option<tokio::sync::oneshot::Sender<KvTestResult>>>>,
 }
@@ -130,35 +130,31 @@ impl Actor for EmptyValueActor {
 
 			tracing::info!("put initial key with value");
 
-				// Try to put key with empty value (0 bytes)
-				let empty_value = Vec::new();
-				let put_result = config
-					.send_kv_put(vec![key.clone()], vec![empty_value])
-					.await;
+			let empty_value = Vec::new();
+			config
+				.send_kv_put(vec![key.clone()], vec![empty_value])
+				.await
+				.context("failed to put empty value")?;
 
-				if put_result.is_ok() {
-					bail!("expected put with empty value to fail, but it succeeded");
-				}
+			let response = config
+				.send_kv_get(vec![key.clone()])
+				.await
+				.context("failed to get key after empty value put")?;
 
-				let response = config
-					.send_kv_get(vec![key.clone()])
-					.await
-					.context("failed to get key after empty value rejection")?;
+			if response.values.is_empty() {
+				bail!("key should still exist with empty value");
+			}
 
-				if response.values.is_empty() {
-					bail!("key should still exist with original value");
-				}
+			let retrieved_value = response.values.first().context("expected value to exist")?;
 
-				let retrieved_value = response.values.first().context("expected value to exist")?;
+			if !retrieved_value.is_empty() {
+				bail!(
+					"expected empty value, got {:?}",
+					String::from_utf8_lossy(retrieved_value)
+				);
+			}
 
-				if retrieved_value != &make_value("initial") {
-					bail!(
-						"expected original value 'initial', got {:?}",
-						String::from_utf8_lossy(retrieved_value)
-					);
-				}
-
-				tracing::info!("verified original value preserved after rejected empty value put");
+			tracing::info!("verified empty value round trip");
 			Result::Ok(KvTestResult::Success)
 		}
 		.await;
