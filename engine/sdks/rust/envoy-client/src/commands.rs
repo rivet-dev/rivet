@@ -18,6 +18,26 @@ pub async fn handle_commands(ctx: &mut EnvoyContext, commands: Vec<protocol::Com
 
 	for command_wrapper in commands {
 		let checkpoint = command_wrapper.checkpoint;
+		let dedup_key = (checkpoint.actor_id.clone(), checkpoint.generation);
+
+		// Drop replayed commands. `pegboard-envoy` re-streams every unacked
+		// command on reconnect, and the command index is monotonic per
+		// `(actor_id, generation)`, so any index at or below the highest one
+		// we have already processed is a duplicate.
+		if let Some(&last_idx) = ctx.processed_command_idx.get(&dedup_key) {
+			if checkpoint.index <= last_idx {
+				tracing::debug!(
+					actor_id = %checkpoint.actor_id,
+					generation = checkpoint.generation,
+					index = checkpoint.index,
+					last_idx,
+					"skipping replayed command"
+				);
+				continue;
+			}
+		}
+		ctx.processed_command_idx.insert(dedup_key, checkpoint.index);
+
 		match command_wrapper.inner {
 			protocol::Command::CommandStartActor(val) => {
 				let actor_name = val.config.name.clone();
