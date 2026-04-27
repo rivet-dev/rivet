@@ -592,7 +592,6 @@ export function writeSqlitePageBytes(bc: bare.ByteCursor, x: SqlitePageBytes): v
 }
 
 export type SqliteMeta = {
-    readonly schemaVersion: u32
     readonly generation: SqliteGeneration
     readonly headTxid: SqliteTxid
     readonly materializedTxid: SqliteTxid
@@ -604,7 +603,6 @@ export type SqliteMeta = {
 
 export function readSqliteMeta(bc: bare.ByteCursor): SqliteMeta {
     return {
-        schemaVersion: bare.readU32(bc),
         generation: readSqliteGeneration(bc),
         headTxid: readSqliteTxid(bc),
         materializedTxid: readSqliteTxid(bc),
@@ -616,7 +614,6 @@ export function readSqliteMeta(bc: bare.ByteCursor): SqliteMeta {
 }
 
 export function writeSqliteMeta(bc: bare.ByteCursor, x: SqliteMeta): void {
-    bare.writeU32(bc, x.schemaVersion)
     writeSqliteGeneration(bc, x.generation)
     writeSqliteTxid(bc, x.headTxid)
     writeSqliteTxid(bc, x.materializedTxid)
