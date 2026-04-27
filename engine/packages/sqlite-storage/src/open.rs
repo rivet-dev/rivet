@@ -14,7 +14,7 @@ use crate::keys::{
 use crate::ltx::decode_ltx_v3;
 use crate::quota::{encode_db_head_with_usage, tracked_storage_entry_size};
 use crate::types::{
-	DBHead, FetchedPage, SQLITE_MAX_DELTA_BYTES, SqliteMeta, SqliteOrigin, decode_db_head,
+	DBHead, FetchedPage, SQLITE_MAX_DELTA_BYTES, SqliteMeta, SqliteOrigin, decode_db_head, encode_db_head, new_db_head,
 };
 use crate::udb::{self, WriteOp};
 
@@ -145,7 +145,7 @@ impl SqliteEngine {
 					}
 				}
 
-				let mut head = DBHead::new(now_ms);
+				let mut head = new_db_head(now_ms);
 				head.origin = SqliteOrigin::MigrationFromV1InProgress;
 				let (head, encoded_head) = encode_db_head_with_usage(&actor_id, &head, 0)?;
 				udb::tx_write_value(&tx, &subspace, &meta_storage_key, &encoded_head)?;
@@ -246,7 +246,7 @@ impl SqliteEngine {
 			head.sqlite_storage_used = usage_without_meta.saturating_sub(tracked_deleted_bytes);
 			head
 		} else {
-			DBHead::new(config.now_ms)
+			new_db_head(config.now_ms)
 		};
 
 		let (head, encoded_head) =
@@ -671,7 +671,7 @@ mod tests {
 	use crate::types::{
 		DBHead, DirtyPage, FetchedPage, SQLITE_DEFAULT_MAX_STORAGE_BYTES, SQLITE_MAX_DELTA_BYTES,
 		SQLITE_PAGE_SIZE, SQLITE_SHARD_SIZE, SQLITE_VFS_V2_SCHEMA_VERSION, SqliteOrigin,
-		decode_db_head,
+		decode_db_head, encode_db_head, new_db_head,
 	};
 	use crate::udb::{WriteOp, apply_write_ops, physical_chunk_key, raw_key_exists};
 
@@ -764,7 +764,7 @@ mod tests {
 		let stored_meta = read_value(&engine, meta_key(TEST_ACTOR))
 			.await?
 			.expect("meta should exist");
-		let head: DBHead = serde_bare::from_slice(&stored_meta)?;
+		let head = decode_db_head(&stored_meta)?;
 		assert_eq!(head.generation, 1);
 		assert_eq!(head.creation_ts_ms, 777);
 
@@ -855,7 +855,7 @@ mod tests {
 			&engine.subspace,
 			engine.op_counter.as_ref(),
 			vec![
-				WriteOp::put(meta_key(TEST_ACTOR), serde_bare::to_vec(&head)?),
+				WriteOp::put(meta_key(TEST_ACTOR), encode_db_head(&head)?),
 				WriteOp::put(shard_key(TEST_ACTOR, 0), encoded_blob(1, 1, 0x2a)),
 			],
 		)
@@ -888,7 +888,7 @@ mod tests {
 			&engine.subspace,
 			engine.op_counter.as_ref(),
 			vec![
-				WriteOp::put(meta_key(TEST_ACTOR), serde_bare::to_vec(&head)?),
+				WriteOp::put(meta_key(TEST_ACTOR), encode_db_head(&head)?),
 				WriteOp::put(
 					delta_blob_key(TEST_ACTOR, 7),
 					encode_ltx_v3(
@@ -958,7 +958,7 @@ mod tests {
 			&engine.subspace,
 			engine.op_counter.as_ref(),
 			vec![
-				WriteOp::put(meta_key(TEST_ACTOR), serde_bare::to_vec(&head)?),
+				WriteOp::put(meta_key(TEST_ACTOR), encode_db_head(&head)?),
 				WriteOp::put(shard_key(TEST_ACTOR, 0), encoded_blob(1, 1, 0x2a)),
 			],
 		)
@@ -981,7 +981,7 @@ mod tests {
 			&engine.subspace,
 			engine.op_counter.as_ref(),
 			vec![
-				WriteOp::put(meta_key(TEST_ACTOR), serde_bare::to_vec(&seeded_head())?),
+				WriteOp::put(meta_key(TEST_ACTOR), encode_db_head(&seeded_head())?),
 				WriteOp::put(delta_blob_key(TEST_ACTOR, 2), encoded_blob(2, 1, 0x11)),
 				WriteOp::put(delta_blob_key(TEST_ACTOR, 5), encoded_blob(5, 2, 0x55)),
 				WriteOp::put(pidx_delta_key(TEST_ACTOR, 1), 2_u64.to_be_bytes().to_vec()),
@@ -1039,7 +1039,7 @@ mod tests {
 			&engine.subspace,
 			engine.op_counter.as_ref(),
 			vec![
-				WriteOp::put(meta_key(TEST_ACTOR), serde_bare::to_vec(&head)?),
+				WriteOp::put(meta_key(TEST_ACTOR), encode_db_head(&head)?),
 				WriteOp::put(delta_blob_key(TEST_ACTOR, 1), encoded_blob(1, 1, 0x11)),
 				WriteOp::put(delta_blob_key(TEST_ACTOR, 2), encoded_blob(2, 70, 0x70)),
 				WriteOp::put(shard_key(TEST_ACTOR, 1), encoded_blob(3, 70, 0x71)),
@@ -1088,7 +1088,7 @@ mod tests {
 			&engine.subspace,
 			engine.op_counter.as_ref(),
 			vec![
-				WriteOp::put(meta_key(TEST_ACTOR), serde_bare::to_vec(&seeded_head())?),
+				WriteOp::put(meta_key(TEST_ACTOR), encode_db_head(&seeded_head())?),
 				WriteOp::put(delta_blob_key(TEST_ACTOR, 2), encoded_blob(2, 1, 0x11)),
 				WriteOp::put(delta_blob_key(TEST_ACTOR, 5), encoded_blob(5, 2, 0x55)),
 				WriteOp::put(pidx_delta_key(TEST_ACTOR, 1), 2_u64.to_be_bytes().to_vec()),
@@ -1121,7 +1121,7 @@ mod tests {
 			&engine.subspace,
 			engine.op_counter.as_ref(),
 			vec![
-				WriteOp::put(meta_key(TEST_ACTOR), serde_bare::to_vec(&seeded_head())?),
+				WriteOp::put(meta_key(TEST_ACTOR), encode_db_head(&seeded_head())?),
 				WriteOp::put(delta_chunk_key(TEST_ACTOR, 42, 0), vec![1, 2, 3]),
 				WriteOp::put(delta_chunk_key(TEST_ACTOR, 42, 1), vec![4, 5, 6]),
 			],
@@ -1161,7 +1161,7 @@ mod tests {
 			&engine.subspace,
 			engine.op_counter.as_ref(),
 			vec![
-				WriteOp::put(meta_key(TEST_ACTOR), serde_bare::to_vec(&head)?),
+				WriteOp::put(meta_key(TEST_ACTOR), encode_db_head(&head)?),
 				// Three orphan staged txids (> head_txid).
 				WriteOp::put(delta_chunk_key(TEST_ACTOR, 6, 0), vec![0; 256]),
 				WriteOp::put(delta_chunk_key(TEST_ACTOR, 6, 1), vec![0; 256]),
@@ -1220,7 +1220,7 @@ mod tests {
 			engine.op_counter.as_ref(),
 			vec![WriteOp::put(
 				meta_key(TEST_ACTOR),
-				serde_bare::to_vec(&head)?,
+				encode_db_head(&head)?,
 			)],
 		)
 		.await?;
@@ -1260,7 +1260,7 @@ mod tests {
 		let result = recovered_engine
 			.open(TEST_ACTOR, OpenConfig::new(2_222))
 			.await?;
-		let stored_head: DBHead = serde_bare::from_slice(
+		let stored_head = decode_db_head(
 			&read_value(&recovered_engine, meta_key(TEST_ACTOR))
 				.await?
 				.expect("meta should still exist after recovery"),
@@ -1296,7 +1296,7 @@ mod tests {
 		let (engine, mut compaction_rx) = SqliteEngine::new(db, subspace);
 		let mut mutations = vec![WriteOp::put(
 			meta_key(TEST_ACTOR),
-			serde_bare::to_vec(&head)?,
+			encode_db_head(&head)?,
 		)];
 		for txid in 1..=32_u64 {
 			mutations.push(WriteOp::put(

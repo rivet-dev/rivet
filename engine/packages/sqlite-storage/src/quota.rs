@@ -44,7 +44,7 @@ pub fn encode_db_head_with_usage(
 		let mut encoded_head = head.clone();
 		encoded_head.sqlite_storage_used = total_usage;
 
-		let bytes = serde_bare::to_vec(&encoded_head)
+		let bytes = crate::types::encode_db_head(&encoded_head)
 			.context("serialize sqlite db head with quota usage")?;
 		let next_total_usage = usage_without_meta + meta_key_len + bytes.len() as u64;
 		if next_total_usage == total_usage {

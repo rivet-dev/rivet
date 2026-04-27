@@ -11,7 +11,7 @@ use sqlite_storage::{
 	keys::meta_key,
 	ltx::{LtxHeader, encode_ltx_v3},
 	open::OpenConfig,
-	types::{DirtyPage, SqliteOrigin},
+	types::{DirtyPage, SqliteOrigin, encode_db_head},
 	udb::{self, WriteOp},
 };
 use tempfile::tempdir;
@@ -138,7 +138,7 @@ async fn age_v1_migration_head(
 		db,
 		&pegboard::actor_sqlite::sqlite_subspace(),
 		engine.op_counter.as_ref(),
-		vec![WriteOp::put(meta_key(actor_id), serde_bare::to_vec(&head)?)],
+		vec![WriteOp::put(meta_key(actor_id), encode_db_head(&head)?)],
 	)
 	.await
 }

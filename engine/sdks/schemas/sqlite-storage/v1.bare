@@ -1,0 +1,31 @@
+# SQLite VFS v2 on-disk META schema.
+#
+# `DBHead` is the per-actor meta record persisted under `meta_key(actor_id)`.
+# Encoded with the standard 2-byte LE version prefix via `vbare`. New schema
+# changes should add v2.bare and a converter rather than mutating this file.
+
+type SqliteOrigin enum {
+	# Actor was created on v2 storage from the start. No v1 data ever existed.
+	CREATED_ON_V2
+	# Migration from v1 ran and finalized. Actor lives on v2 with this bit
+	# kept as a historical signal.
+	MIGRATED_FROM_V1
+	# Migration from v1 has started but is not yet finalized. The stage may
+	# or may not have begun writing pages (`next_txid > head_txid + 1`).
+	MIGRATION_FROM_V1_IN_PROGRESS
+}
+
+type DBHead struct {
+	schemaVersion: u32
+	generation: u64
+	headTxid: u64
+	nextTxid: u64
+	materializedTxid: u64
+	dbSizePages: u32
+	pageSize: u32
+	shardSize: u32
+	creationTsMs: i64
+	sqliteStorageUsed: u64
+	sqliteMaxStorage: u64
+	origin: SqliteOrigin
+}

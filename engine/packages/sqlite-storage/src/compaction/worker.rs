@@ -68,7 +68,7 @@ mod tests {
 	use crate::test_utils::{clear_op_count, scan_prefix_values, test_db};
 	use crate::types::{
 		DBHead, DirtyPage, SQLITE_DEFAULT_MAX_STORAGE_BYTES, SQLITE_PAGE_SIZE, SQLITE_SHARD_SIZE,
-		SQLITE_VFS_V2_SCHEMA_VERSION, SqliteOrigin,
+		SQLITE_VFS_V2_SCHEMA_VERSION, SqliteOrigin, encode_db_head, new_db_head,
 	};
 	use crate::udb::{self, WriteOp, apply_write_ops};
 
@@ -117,7 +117,7 @@ mod tests {
 		let (engine, _compaction_rx) = SqliteEngine::new(db, subspace);
 		let mut mutations = vec![WriteOp::put(
 			meta_key(TEST_ACTOR),
-			serde_bare::to_vec(&head)?,
+			encode_db_head(&head)?,
 		)];
 
 		for shard_id in 0..9u32 {
@@ -155,7 +155,7 @@ mod tests {
 		let (engine, _compaction_rx) = SqliteEngine::new(db, subspace);
 		let mut mutations = vec![WriteOp::put(
 			meta_key(TEST_ACTOR),
-			serde_bare::to_vec(&head)?,
+			encode_db_head(&head)?,
 		)];
 
 		// Seed 8 single-page shards so one compact_worker call triggers all 8 shard passes.

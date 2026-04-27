@@ -14,7 +14,7 @@ use crate::keys::{
 };
 use crate::ltx::{DecodedLtx, decode_ltx_v3};
 use crate::page_index::DeltaPageIndex;
-use crate::types::{DBHead, FetchedPage, decode_db_head};
+use crate::types::{DBHead, FetchedPage, decode_db_head, encode_db_head, new_db_head};
 use crate::udb;
 
 const PIDX_PGNO_BYTES: usize = std::mem::size_of::<u32>();
@@ -464,7 +464,8 @@ mod tests {
 	use crate::test_utils::{assert_op_count, clear_op_count, read_value, test_db};
 	use crate::types::{
 		DBHead, DirtyPage, FetchedPage, SQLITE_DEFAULT_MAX_STORAGE_BYTES, SQLITE_PAGE_SIZE,
-		SQLITE_SHARD_SIZE, SQLITE_VFS_V2_SCHEMA_VERSION, SqliteOrigin,
+		SQLITE_SHARD_SIZE, SQLITE_VFS_V2_SCHEMA_VERSION, SqliteOrigin, encode_db_head,
+		new_db_head,
 	};
 	use crate::udb::{WriteOp, apply_write_ops};
 
@@ -521,7 +522,7 @@ mod tests {
 			&engine.subspace,
 			engine.op_counter.as_ref(),
 			vec![
-				WriteOp::put(meta_key(TEST_ACTOR), serde_bare::to_vec(&head)?),
+				WriteOp::put(meta_key(TEST_ACTOR), encode_db_head(&head)?),
 				WriteOp::put(
 					delta_blob_key(TEST_ACTOR, 5),
 					encoded_blob(5, 3, &[(1, 0x11), (2, 0x22), (3, 0x33)]),
@@ -594,7 +595,7 @@ mod tests {
 			&engine.subspace,
 			engine.op_counter.as_ref(),
 			vec![
-				WriteOp::put(meta_key(TEST_ACTOR), serde_bare::to_vec(&head)?),
+				WriteOp::put(meta_key(TEST_ACTOR), encode_db_head(&head)?),
 				WriteOp::put(
 					delta_blob_key(TEST_ACTOR, 9),
 					encoded_blob(9, 80, &[(2, 0x24)]),
@@ -643,7 +644,7 @@ mod tests {
 			&engine.subspace,
 			engine.op_counter.as_ref(),
 			vec![
-				WriteOp::put(meta_key(TEST_ACTOR), serde_bare::to_vec(&head)?),
+				WriteOp::put(meta_key(TEST_ACTOR), encode_db_head(&head)?),
 				WriteOp::put(
 					delta_blob_key(TEST_ACTOR, 4),
 					encoded_blob(4, 3, &[(3, 0x33)]),
@@ -692,7 +693,7 @@ mod tests {
 			&engine.subspace,
 			engine.op_counter.as_ref(),
 			vec![
-				WriteOp::put(meta_key(TEST_ACTOR), serde_bare::to_vec(&head)?),
+				WriteOp::put(meta_key(TEST_ACTOR), encode_db_head(&head)?),
 				WriteOp::put(
 					delta_blob_key(TEST_ACTOR, 4),
 					encoded_blob(4, 3, &[(3, 0x33)]),
@@ -749,7 +750,7 @@ mod tests {
 			&engine.subspace,
 			engine.op_counter.as_ref(),
 			vec![
-				WriteOp::put(meta_key(TEST_ACTOR), serde_bare::to_vec(&head)?),
+				WriteOp::put(meta_key(TEST_ACTOR), encode_db_head(&head)?),
 				WriteOp::put(
 					delta_blob_key(TEST_ACTOR, 4),
 					encoded_blob(4, 3, &[(3, 0x33)]),
@@ -818,7 +819,7 @@ mod tests {
 			engine.op_counter.as_ref(),
 			vec![WriteOp::put(
 				meta_key(TEST_ACTOR),
-				serde_bare::to_vec(&head)?,
+				encode_db_head(&head)?,
 			)],
 		)
 		.await?;
@@ -846,7 +847,7 @@ mod tests {
 			engine.op_counter.as_ref(),
 			vec![WriteOp::put(
 				meta_key(TEST_ACTOR),
-				serde_bare::to_vec(&head)?,
+				encode_db_head(&head)?,
 			)],
 		)
 		.await?;

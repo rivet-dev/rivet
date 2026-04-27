@@ -22,6 +22,7 @@ serde_bare.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 tracing.workspace = true
+rivet-sqlite-storage-protocol.workspace = true
 universaldb.workspace = true
 
 [dev-dependencies]

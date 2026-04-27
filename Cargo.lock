@@ -4991,6 +4991,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "rivet-sqlite-storage-protocol"
+version = "2.3.0-rc.4"
+dependencies = [
+ "anyhow",
+ "serde",
+ "serde_bare",
+ "vbare",
+ "vbare-compiler",
+]
+
+[[package]]
 name = "rivet-telemetry"
 version = "2.3.0-rc.4"
 dependencies = [
@@ -6207,6 +6218,7 @@ dependencies = [
  "parking_lot",
  "rand 0.8.5",
  "rivet-metrics",
+ "rivet-sqlite-storage-protocol",
  "scc",
  "serde",
  "serde_bare",
