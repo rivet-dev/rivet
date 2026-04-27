@@ -10,7 +10,7 @@ use sqlite_storage::{
 	engine::SqliteEngine,
 	keys::meta_key,
 	ltx::{LtxHeader, encode_ltx_v3},
-	takeover::TakeoverConfig,
+	open::OpenConfig,
 	types::{DirtyPage, SqliteOrigin},
 	udb::{self, WriteOp},
 };
@@ -122,7 +122,6 @@ async fn migrate(
 			actor_id,
 			namespace_id: Id::new_v1(1),
 			name: "test".to_string(),
-			protocol_version: rivet_envoy_protocol::PROTOCOL_VERSION,
 		},
 	)
 	.await
@@ -346,8 +345,8 @@ async fn skips_native_v2_state_even_if_v1_tombstone_exists() -> Result<()> {
 	seed_v1_file(&db, &recipient, FILE_TAG_MAIN, &v1_fixture).await?;
 	let native_fixture = build_fixture_db(&["native"])?;
 	let (engine, _compaction_rx) = pegboard::actor_sqlite::new_engine(db.clone());
-	let takeover = engine
-		.takeover(&actor_id_str, TakeoverConfig::new(timestamp::now()))
+	let opened = engine
+		.open(&actor_id_str, OpenConfig::new(timestamp::now()))
 		.await?;
 	let dirty_pages = native_fixture
 		.chunks(SQLITE_V1_CHUNK_SIZE)
@@ -361,8 +360,8 @@ async fn skips_native_v2_state_even_if_v1_tombstone_exists() -> Result<()> {
 		.commit(
 			&actor_id_str,
 			CommitRequest {
-				generation: takeover.generation,
-				head_txid: takeover.meta.head_txid,
+				generation: opened.generation,
+				head_txid: opened.meta.head_txid,
 				db_size_pages: dirty_pages.len() as u32,
 				dirty_pages,
 				now_ms: timestamp::now(),
