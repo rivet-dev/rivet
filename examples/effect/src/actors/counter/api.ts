@@ -1,4 +1,4 @@
-import { Schema } from "effect"
+import { Effect, Schema } from "effect"
 import { Actor, Action, Message } from "@rivetkit/effect"
 
 // --- Errors ---
@@ -60,7 +60,11 @@ export const IncrementBy = Message.make("IncrementBy", {
 // implementation. Both server and client code import this;
 // the implementation stays server-only.
 export const Counter = Actor.make("Counter", {
-	state: Schema.Struct({ count: Schema.Number }),
+	state: Schema.Struct({
+		count: Schema.Number.pipe(
+			Schema.withConstructorDefault(Effect.succeed(0)),
+		),
+	}),
 	actions: [Increment, GetCount],	// synchronous request-response
 	messages: [Reset, IncrementBy],	// durable, queued, background
 	events: { countChanged: Schema.Number },
