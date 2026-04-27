@@ -931,5 +931,5 @@ fn bearer_token_from_authorization(value: &str) -> Option<&str> {
 }
 
 #[cfg(test)]
-#[path = "../../tests/modules/registry_http.rs"]
+#[path = "../../tests/registry_http.rs"]
 mod tests;

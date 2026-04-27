@@ -10,13 +10,11 @@ mod moved_tests {
 	use crate::actor::context::tests::new_with_kv;
 	use crate::actor::messages::StateDelta;
 	use crate::inspector::InspectorAuth;
+	use crate::inspector::auth::test_inspector_env_lock;
 	use rivet_error::RivetError;
 	use std::collections::BTreeMap;
 	use std::sync::Arc;
-	use std::sync::Mutex;
 	use std::sync::atomic::{AtomicUsize, Ordering};
-
-	static INSPECTOR_ENV_LOCK: Mutex<()> = Mutex::new(());
 
 	#[tokio::test]
 	async fn state_updates_increment_inspector_revisions() {
@@ -249,7 +247,7 @@ mod moved_tests {
 
 	#[tokio::test]
 	async fn inspector_auth_uses_env_token_before_kv_fallback() {
-		let _env_guard = INSPECTOR_ENV_LOCK.lock().expect("env lock poisoned");
+		let _env_guard = test_inspector_env_lock().lock().expect("env lock poisoned");
 		unsafe {
 			std::env::set_var("_RIVET_TEST_INSPECTOR_TOKEN", "env-token");
 		}
@@ -286,7 +284,7 @@ mod moved_tests {
 
 	#[tokio::test]
 	async fn inspector_auth_falls_back_to_actor_kv_token() {
-		let _env_guard = INSPECTOR_ENV_LOCK.lock().expect("env lock poisoned");
+		let _env_guard = test_inspector_env_lock().lock().expect("env lock poisoned");
 		unsafe {
 			std::env::remove_var("_RIVET_TEST_INSPECTOR_TOKEN");
 		}
@@ -319,7 +317,7 @@ mod moved_tests {
 
 	#[tokio::test]
 	async fn inspector_auth_rejects_missing_token() {
-		let _env_guard = INSPECTOR_ENV_LOCK.lock().expect("env lock poisoned");
+		let _env_guard = test_inspector_env_lock().lock().expect("env lock poisoned");
 		unsafe {
 			std::env::remove_var("_RIVET_TEST_INSPECTOR_TOKEN");
 		}

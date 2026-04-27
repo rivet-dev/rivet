@@ -365,6 +365,7 @@ impl ActorEvent {
 	}
 }
 
+// Test shim keeps moved tests in crate-root tests/ with private-module access.
 #[cfg(test)]
-#[path = "../../tests/modules/messages.rs"]
+#[path = "../../tests/messages.rs"]
 mod tests;
