@@ -3,7 +3,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::time::Instant;
 
-use anyhow::{Context, Result, ensure};
+use anyhow::{Context, Result, bail, ensure};
 
 use crate::engine::{OpenDb, SqliteEngine};
 use crate::error::SqliteStorageError;
@@ -113,10 +113,18 @@ impl SqliteEngine {
 					udb::tx_get_value_serializable(&tx, &subspace, &meta_storage_key).await?
 				{
 					let existing_head = decode_db_head(&existing_meta)?;
-					ensure!(
-						matches!(existing_head.origin, SqliteOrigin::MigratingFromV1),
-						SqliteStorageError::InvalidV1MigrationState
-					);
+					if !matches!(existing_head.origin, SqliteOrigin::MigratingFromV1) {
+						// Actor has already moved past v1 migration (Native or
+						// MigratedFromV1). For invalidate_v1_migration this is a
+						// no-op — there is nothing stale to clean up. For
+						// prepare_v1_migration this is a bug because the caller
+						// is trying to start a fresh v1 migration over an actor
+						// already on v2.
+						if require_stage_in_progress {
+							return Ok(None);
+						}
+						bail!(SqliteStorageError::InvalidV1MigrationState);
+					}
 					let stage_in_progress =
 						existing_head.next_txid > existing_head.head_txid.saturating_add(1);
 					if require_stage_in_progress && !stage_in_progress {
