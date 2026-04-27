@@ -94,6 +94,7 @@ docker-compose up -d
 ### SQLite Package
 
 - RivetKit SQLite is native-only: VFS and query execution live in `rivetkit-rust/packages/rivetkit-sqlite/`, core owns lifecycle, and NAPI only marshals JS types.
+- Actor2 workflows and envoy actors always use the SQLite v2 storage format; only old actor v1 workflows and pegboard runners use the v1 storage format. ("v2" here refers to the on-disk storage format, not envoy-protocol v2.)
 - For NAPI bridge wiring (TSF callback layout, cancellation tokens, `#[napi(object)]` rules), see `docs-internal/engine/napi-bridge.md`.
 
 ## Agent Working Directory
@@ -126,6 +127,7 @@ When the user asks to track something in a note, store it in `.agent/notes/` by 
 - rivetkit (TypeScript) owns only: workflow engine, agent-os, client library, Zod schema validation for user-defined types, and actor definition types.
 - Errors use universal `RivetError` (group/code/message/metadata) at all boundaries. No custom error classes in TS.
 - CBOR serialization at all cross-language boundaries. JSON only for HTTP inspector endpoints.
+- Pegboard orchestrates actor exclusivity: at most one actor instance for a given actor id may be running or accessing that actor's KV at a time. `pegboard-envoy` and `envoy-client` may rely on this invariant and should not add separate KV concurrency fences for same-actor access; the lost-timeout + ping protocol is responsible for making overlapping actors impossible.
 
 ### Monorepo orientation
 

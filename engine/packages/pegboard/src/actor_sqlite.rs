@@ -2,7 +2,7 @@ use std::time::Instant;
 
 use anyhow::{Context, Result, ensure};
 use gas::prelude::{Id, util::timestamp};
-use rivet_envoy_protocol::{self as protocol, PROTOCOL_VERSION};
+use rivet_envoy_protocol as protocol;
 use sqlite_storage::{
 	commit::{CommitFinalizeRequest, CommitStageBeginRequest, CommitStageRequest},
 	engine::SqliteEngine,
@@ -45,7 +45,6 @@ pub struct MigrateV1ToV2Input {
 	pub actor_id: Id,
 	pub namespace_id: Id,
 	pub name: String,
-	pub protocol_version: u16,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Hash)]
@@ -64,21 +63,17 @@ pub async fn migrate_v1_to_v2(
 		name: input.name,
 	};
 
-	let migrated = if input.protocol_version >= PROTOCOL_VERSION {
-		let actor_id = input.actor_id.to_string();
-		if sqlite_engine
-			.invalidate_v1_migration(&actor_id, timestamp::now())
-			.await?
-		{
-			tracing::info!(
-				actor_id = %actor_id,
-				"reset stale v1 migration after authoritative actor allocation"
-			);
-		}
-		maybe_migrate_v1_to_v2(&db, &sqlite_engine, &recipient).await?
-	} else {
-		false
-	};
+	let actor_id = input.actor_id.to_string();
+	if sqlite_engine
+		.invalidate_v1_migration(&actor_id, timestamp::now())
+		.await?
+	{
+		tracing::info!(
+			actor_id = %actor_id,
+			"reset stale v1 migration after authoritative actor allocation"
+		);
+	}
+	let migrated = maybe_migrate_v1_to_v2(&db, &sqlite_engine, &recipient).await?;
 
 	Ok(MigrateV1ToV2Output { migrated })
 }

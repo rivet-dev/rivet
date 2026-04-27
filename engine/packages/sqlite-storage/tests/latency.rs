@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 use anyhow::Result;
 use sqlite_storage::commit::CommitRequest;
 use sqlite_storage::engine::SqliteEngine;
-use sqlite_storage::takeover::TakeoverConfig;
+use sqlite_storage::open::OpenConfig;
 use sqlite_storage::types::{DirtyPage, SQLITE_PAGE_SIZE};
 use tempfile::Builder;
 use tokio::time::sleep;
@@ -52,8 +52,8 @@ async fn latency_paths_use_single_rtt_under_simulated_udb_latency() -> Result<()
 
 	{
 		let (engine, _compaction_rx) = setup_engine().await?;
-		let takeover = engine
-			.takeover("latency-small-commit", TakeoverConfig::new(1))
+		let open = engine
+			.open("latency-small-commit", OpenConfig::new(1))
 			.await?;
 		engine.op_counter.store(0, Ordering::SeqCst);
 
@@ -62,8 +62,8 @@ async fn latency_paths_use_single_rtt_under_simulated_udb_latency() -> Result<()
 			.commit(
 				"latency-small-commit",
 				CommitRequest {
-					generation: takeover.generation,
-					head_txid: takeover.meta.head_txid,
+					generation: open.generation,
+					head_txid: open.meta.head_txid,
 					db_size_pages: 4,
 					dirty_pages: dirty_pages(1, 4, 0x11),
 					now_ms: 2,
@@ -78,15 +78,13 @@ async fn latency_paths_use_single_rtt_under_simulated_udb_latency() -> Result<()
 
 	{
 		let (engine, _compaction_rx) = setup_engine().await?;
-		let takeover = engine
-			.takeover("latency-get-pages", TakeoverConfig::new(3))
-			.await?;
+		let open = engine.open("latency-get-pages", OpenConfig::new(3)).await?;
 		let commit = engine
 			.commit(
 				"latency-get-pages",
 				CommitRequest {
-					generation: takeover.generation,
-					head_txid: takeover.meta.head_txid,
+					generation: open.generation,
+					head_txid: open.meta.head_txid,
 					db_size_pages: 10,
 					dirty_pages: dirty_pages(1, 10, 0x22),
 					now_ms: 4,
@@ -98,7 +96,7 @@ async fn latency_paths_use_single_rtt_under_simulated_udb_latency() -> Result<()
 
 		let started_at = Instant::now();
 		let pages = engine
-			.get_pages("latency-get-pages", takeover.generation, (1..=10).collect())
+			.get_pages("latency-get-pages", open.generation, (1..=10).collect())
 			.await?;
 		let elapsed = started_at.elapsed();
 
@@ -109,8 +107,8 @@ async fn latency_paths_use_single_rtt_under_simulated_udb_latency() -> Result<()
 
 	{
 		let (engine, mut compaction_rx) = setup_engine().await?;
-		let takeover = engine
-			.takeover("latency-compaction", TakeoverConfig::new(5))
+		let open = engine
+			.open("latency-compaction", OpenConfig::new(5))
 			.await?;
 		let compaction_task = tokio::spawn(async move {
 			let actor_id = compaction_rx
@@ -127,8 +125,8 @@ async fn latency_paths_use_single_rtt_under_simulated_udb_latency() -> Result<()
 			.commit(
 				"latency-compaction",
 				CommitRequest {
-					generation: takeover.generation,
-					head_txid: takeover.meta.head_txid,
+					generation: open.generation,
+					head_txid: open.meta.head_txid,
 					db_size_pages: 4,
 					dirty_pages: dirty_pages(1, 4, 0x33),
 					now_ms: 6,

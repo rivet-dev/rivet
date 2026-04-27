@@ -2,7 +2,7 @@ pub mod generated;
 pub mod util;
 pub mod versioned;
 
-// Re-export latest
-pub use generated::v2::*;
+// Re-export latest.
+pub use generated::v3::*;
 
-pub const PROTOCOL_VERSION: u16 = 2;
+pub const PROTOCOL_VERSION: u16 = 3;

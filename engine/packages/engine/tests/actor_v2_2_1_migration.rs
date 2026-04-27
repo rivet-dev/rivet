@@ -6,7 +6,7 @@ use pegboard::actor_kv::Recipient;
 use rivet_envoy_protocol as protocol;
 use rusqlite::Connection;
 use serde::Deserialize;
-use sqlite_storage::{engine::SqliteEngine, types::SqliteOrigin};
+use sqlite_storage::{engine::SqliteEngine, open::OpenConfig, types::SqliteOrigin};
 use test_snapshot::SnapshotTestCtx;
 
 const SNAPSHOT_NAME: &str = "actor-v2-2-1-baseline";
@@ -63,21 +63,30 @@ async fn actor_v2_2_1_baseline_migrates_to_current_layout() -> Result<()> {
 			actor_id: actor.actor_id,
 			namespace_id: namespace.namespace_id,
 			name: actor.name.clone(),
-			protocol_version: protocol::PROTOCOL_VERSION,
 		},
 	)
 	.await?;
 	assert!(migration.migrated);
 
-	pegboard_envoy::sqlite_runtime::populate_start_command(
-		&standalone_ctx,
-		&sqlite_engine,
-		protocol::PROTOCOL_VERSION,
-		namespace.namespace_id,
+	let sqlite_open = sqlite_engine
+		.open(
+			&actor.actor_id.to_string(),
+			OpenConfig::new(util::timestamp::now()),
+		)
+		.await?;
+	let sqlite_startup_data =
+		pegboard_envoy::sqlite_runtime::protocol_sqlite_startup_data(sqlite_open);
+	ensure!(start.sqlite_startup_data.is_none());
+	ensure!(start.preloaded_kv.is_none());
+	start.preloaded_kv = pegboard::actor_kv::preload::fetch_preloaded_kv(
+		&db,
+		standalone_ctx.config().pegboard(),
 		actor.actor_id,
-		&mut start,
+		namespace.namespace_id,
+		&start.config.name,
 	)
 	.await?;
+	start.sqlite_startup_data = Some(sqlite_startup_data);
 
 	assert!(start.sqlite_startup_data.is_some());
 	assert_eq!(

@@ -12,6 +12,7 @@ use tokio_tungstenite::tungstenite::protocol::frame::CloseFrame;
 use universalpubsub::PublishOpts;
 
 mod actor_event_demuxer;
+mod actor_lifecycle;
 mod conn;
 mod errors;
 mod metrics;
@@ -238,6 +239,8 @@ impl CustomServeTrait for PegboardEnvoyWs {
 				);
 			}
 		}
+
+		actor_lifecycle::shutdown_conn_actors(&conn).await;
 
 		tracing::debug!(%topic, "envoy websocket closed");
 
