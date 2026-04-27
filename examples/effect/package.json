@@ -3,8 +3,8 @@
 	"private": true,
 	"type": "module",
 	"scripts": {
-		"dev": "npx srvx --import tsx src/main.ts",
-		"start": "npx srvx --import tsx src/main.ts",
+		"dev": "tsx watch src/main.ts",
+		"start": "tsx src/main.ts",
 		"check-types": "tsc --noEmit"
 	},
 	"dependencies": {
@@ -15,7 +15,7 @@
 	},
 	"devDependencies": {
 		"@types/node": "^22.13.9",
-		"tsx": "^3.12.7",
+		"tsx": "^4.20.5",
 		"typescript": "^5.5.2"
 	},
 	"template": {
