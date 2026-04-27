@@ -12,7 +12,7 @@ use rivet_types::runner_configs::RunnerConfigKind;
 use sqlite_storage::{
 	compaction::CompactionCoordinator,
 	engine::SqliteEngine,
-	takeover::TakeoverConfig,
+	open::{OpenConfig, OpenResult},
 	types::{FetchedPage, SqliteMeta},
 };
 use std::collections::HashMap;
@@ -49,21 +49,8 @@ async fn shared_sqlite_engine(ctx: &StandaloneCtx) -> Result<Arc<SqliteEngine>> 
 		.cloned()
 }
 
-async fn maybe_load_sqlite_startup_data(
-	sqlite_engine: &SqliteEngine,
-	protocol_version: u16,
-	actor_id: Id,
-) -> Result<Option<protocol::SqliteStartupData>> {
-	if protocol_version < PROTOCOL_VERSION {
-		return Ok(None);
-	}
-
-	let actor_id = actor_id.to_string();
-	let startup = sqlite_engine
-		.takeover(&actor_id, TakeoverConfig::new(timestamp::now()))
-		.await?;
-
-	Ok(Some(protocol::SqliteStartupData {
+fn protocol_sqlite_startup_data(startup: OpenResult) -> protocol::SqliteStartupData {
+	protocol::SqliteStartupData {
 		generation: startup.generation,
 		meta: protocol_sqlite_meta(startup.meta),
 		preloaded_pages: startup
@@ -71,12 +58,11 @@ async fn maybe_load_sqlite_startup_data(
 			.into_iter()
 			.map(protocol_sqlite_fetched_page)
 			.collect(),
-	}))
+	}
 }
 
 fn protocol_sqlite_meta(meta: SqliteMeta) -> protocol::SqliteMeta {
 	protocol::SqliteMeta {
-		schema_version: meta.schema_version,
 		generation: meta.generation,
 		head_txid: meta.head_txid,
 		materialized_txid: meta.materialized_txid,
@@ -292,12 +278,12 @@ async fn handle(ctx: &StandaloneCtx, packet: protocol::ToOutbound) -> Result<()>
 		return Ok(());
 	};
 	let protocol_version = pool.protocol_version.unwrap_or(PROTOCOL_VERSION);
-	let sqlite_startup_data = maybe_load_sqlite_startup_data(
-		shared_sqlite_engine(ctx).await?.as_ref(),
-		protocol_version,
-		actor_id,
-	)
-	.await?;
+	let sqlite_engine = shared_sqlite_engine(ctx).await?;
+	let sqlite_open = sqlite_engine
+		.open(&actor_id.to_string(), OpenConfig::new(timestamp::now()))
+		.await?;
+	let sqlite_generation = sqlite_open.generation;
+	let sqlite_startup_data = protocol_sqlite_startup_data(sqlite_open);
 	let payload = versioned::ToEnvoy::wrap_latest(protocol::ToEnvoy::ToEnvoyCommands(vec![
 		protocol::CommandWrapper {
 			checkpoint,
@@ -311,7 +297,7 @@ async fn handle(ctx: &StandaloneCtx, packet: protocol::ToOutbound) -> Result<()>
 					})
 					.collect(),
 				preloaded_kv,
-				sqlite_startup_data,
+				sqlite_startup_data: Some(sqlite_startup_data),
 			}),
 		},
 	]))
@@ -345,6 +331,18 @@ async fn handle(ctx: &StandaloneCtx, packet: protocol::ToOutbound) -> Result<()>
 	metrics::REQ_ACTIVE
 		.with_label_values(&[&namespace_id.to_string(), &pool_name])
 		.dec();
+
+	let actor_id_str = actor_id.to_string();
+	if let Err(err) = sqlite_engine.close(&actor_id_str, sqlite_generation).await {
+		tracing::warn!(
+			?err,
+			?actor_id,
+			"close failed for outbound sqlite db, force-evicting open_dbs entry"
+		);
+		// Process-wide engine: a stale entry would block re-opening the same actor until
+		// process restart, so unconditionally evict on close failure.
+		sqlite_engine.force_close(&actor_id_str).await;
+	}
 
 	res
 }

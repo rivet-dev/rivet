@@ -19,7 +19,7 @@ use sqlite_storage::engine::SqliteEngine;
 use universaldb::prelude::*;
 use vbare::OwnedVersionedData;
 
-use crate::{errors, metrics, sqlite_runtime, utils::UrlData};
+use crate::{actor_lifecycle, errors, metrics, utils::UrlData};
 
 pub struct Conn {
 	pub namespace_id: Id,
@@ -29,6 +29,7 @@ pub struct Conn {
 	pub ws_handle: WebSocketHandle,
 	pub authorized_tunnel_routes: HashMap<(protocol::GatewayId, protocol::RequestId), ()>,
 	pub sqlite_engine: Arc<SqliteEngine>,
+	pub active_actors: HashMap<String, actor_lifecycle::ActiveActor>,
 	pub is_serverless: bool,
 	pub last_rtt: AtomicU32,
 	/// Timestamp (epoch ms) of the last pong received from the envoy.
@@ -288,9 +289,6 @@ pub async fn init_conn(
 	)?;
 
 	if runner_config_protocol_changed {
-		// This connection path updates the pool protocol version directly.
-		// Purge runner-config caches so readers do not keep seeing stale
-		// pre-mk2 data after the transaction commits.
 		pegboard::utils::purge_runner_config_caches(
 			ctx.cache(),
 			namespace.namespace_id,
@@ -299,54 +297,7 @@ pub async fn init_conn(
 		.await?;
 	}
 
-	// Send missed commands (must be after init packet)
-	if !missed_commands.is_empty() {
-		let msg = {
-			for cmd_wrapper in &mut missed_commands {
-				if let protocol::Command::CommandStartActor(ref mut start) = cmd_wrapper.inner {
-					let actor_id = cmd_wrapper
-						.checkpoint
-						.actor_id
-						.parse::<Id>()
-						.context("failed to parse actor_id from missed envoy command")?;
-					let ids = ctx
-						.op(pegboard::ops::actor::hibernating_request::list::Input { actor_id })
-						.await?;
-
-					// Dynamically populate hibernating request ids
-					start.hibernating_requests = ids
-						.into_iter()
-						.map(|x| protocol::HibernatingRequest {
-							gateway_id: x.gateway_id,
-							request_id: x.request_id,
-						})
-						.collect();
-
-					sqlite_runtime::populate_start_command(
-						ctx,
-						sqlite_engine.as_ref(),
-						protocol_version,
-						namespace.namespace_id,
-						actor_id,
-						start,
-					)
-					.await?;
-				}
-			}
-
-			versioned::ToEnvoy::wrap_latest(protocol::ToEnvoy::ToEnvoyCommands(missed_commands))
-		};
-		let msg_serialized = msg.serialize(protocol_version)?;
-		ws_handle
-			.send(Message::Binary(msg_serialized.into()))
-			.await?;
-	}
-
-	if is_serverless {
-		report_success(ctx, namespace.namespace_id, &pool_name).await;
-	}
-
-	Ok(Arc::new(Conn {
+	let conn = Arc::new(Conn {
 		namespace_id: namespace.namespace_id,
 		pool_name,
 		envoy_key,
@@ -354,10 +305,37 @@ pub async fn init_conn(
 		ws_handle,
 		authorized_tunnel_routes: HashMap::new(),
 		sqlite_engine,
+		active_actors: HashMap::new(),
 		is_serverless,
 		last_rtt: AtomicU32::new(0),
 		last_ping_ts: AtomicI64::new(util::timestamp::now()),
-	}))
+	});
+
+	// Send missed commands (must be after init packet)
+	if !missed_commands.is_empty() {
+		let msg = {
+			for cmd_wrapper in &mut missed_commands {
+				if let protocol::Command::CommandStartActor(ref mut start) = cmd_wrapper.inner {
+					actor_lifecycle::start_actor(ctx, &conn, &cmd_wrapper.checkpoint, start)
+						.await?;
+				} else if let protocol::Command::CommandStopActor(_) = cmd_wrapper.inner {
+					actor_lifecycle::stop_actor(&conn, &cmd_wrapper.checkpoint).await?;
+				}
+			}
+
+			versioned::ToEnvoy::wrap_latest(protocol::ToEnvoy::ToEnvoyCommands(missed_commands))
+		};
+		let msg_serialized = msg.serialize(protocol_version)?;
+		conn.ws_handle
+			.send(Message::Binary(msg_serialized.into()))
+			.await?;
+	}
+
+	if is_serverless {
+		report_success(ctx, namespace.namespace_id, &conn.pool_name).await;
+	}
+
+	Ok(conn)
 }
 
 /// Report success to the error tracker workflow.

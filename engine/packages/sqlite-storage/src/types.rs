@@ -19,8 +19,9 @@ pub const SQLITE_DEFAULT_MAX_STORAGE_BYTES: u64 = 10 * 1024 * 1024 * 1024;
 ///   (`commit_stage_begin` bumps `next_txid`; `commit_finalize` advances `head_txid` to match).
 /// - `materialized_txid <= head_txid`. Compaction folds DELTA records into SHARD blobs and
 ///   advances `materialized_txid` to the highest txid whose pages have all been merged.
-/// - `generation` is bumped by takeover. Every commit and compaction writes a fence check on
-///   `generation` so a takeover cleanly invalidates an in-flight commit from the previous owner.
+/// - `generation` is stable across open and close. Pegboard coordinates actor placement so only
+///   one envoy owns a given actor generation at a time. SQLite open and close rely on that
+///   lifecycle guarantee instead of file locking or generation ownership fencing.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SqliteOrigin {
 	Native,
