@@ -82,7 +82,7 @@ pub async fn handle_commands(ctx: &mut EnvoyContext, commands: Vec<protocol::Com
 	}
 }
 
-pub async fn send_command_ack(ctx: &EnvoyContext) {
+pub async fn send_command_ack(ctx: &mut EnvoyContext) {
 	let mut last_command_checkpoints: Vec<protocol::ActorCheckpoint> = Vec::new();
 
 	for (actor_id, generations) in &ctx.actors {
@@ -102,11 +102,33 @@ pub async fn send_command_ack(ctx: &EnvoyContext) {
 		return;
 	}
 
-	ws_send(
+	let send_failed = ws_send(
 		&ctx.shared,
 		protocol::ToRivet::ToRivetAckCommands(protocol::ToRivetAckCommands {
-			last_command_checkpoints,
+			last_command_checkpoints: last_command_checkpoints.clone(),
 		}),
 	)
 	.await;
+
+	// Skip the dedup clear if the ack never left this process. Otherwise
+	// `pegboard-envoy` would replay the commands on reconnect with no dedup
+	// state to suppress them.
+	if send_failed {
+		return;
+	}
+
+	// TODO: Race condition. We clear `processed_command_idx` as soon as the
+	// ack bytes leave this process, not when `pegboard-envoy` actually
+	// commits the matching `clear_range` over `ActorCommandKey` entries. If
+	// the WS drops between `ws_send` returning and the server applying the
+	// ack, on reconnect `pegboard-envoy` will replay these commands and the
+	// dedup map will no longer be populated to drop them, allowing a
+	// stopped actor to be resurrected or a live actor to be replaced. The
+	// window is narrow (the gap between OS-accepted bytes and the FDB
+	// commit), but a strictly correct fix needs an ack-of-ack from
+	// `pegboard-envoy` so we only clear after positive confirmation.
+	for cp in &last_command_checkpoints {
+		ctx.processed_command_idx
+			.remove(&(cp.actor_id.clone(), cp.generation));
+	}
 }
