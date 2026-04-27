@@ -408,8 +408,6 @@ export class ActorInstance<
 	overrides: {
 		sleepGracePeriod?: number;
 		onSleepTimeout?: number;
-		onDestroyTimeout?: number;
-		runStopTimeout?: number;
 		waitUntilTimeout?: number;
 	} = {};
 
@@ -973,25 +971,18 @@ export class ActorInstance<
 				this.#abortController.abort();
 			} catch {}
 
-			// Wait for run handler to complete
-			await this.#waitForRunHandler(
-				this.overrides.runStopTimeout !== undefined
-					? Math.min(
-							this.#config.options.runStopTimeout,
-							this.overrides.runStopTimeout,
-						)
-					: this.#config.options.runStopTimeout,
-			);
-
 			const shutdownTaskDeadlineTs =
 				Date.now() + this.#getEffectiveSleepGracePeriod();
+
+			// Wait for run handler to complete within the shared shutdown budget.
+			await this.#waitForRunHandler(shutdownTaskDeadlineTs - Date.now());
 
 			// Call onStop lifecycle
 			if (mode === "sleep") {
 				await this.#waitForIdleSleepWindow(shutdownTaskDeadlineTs);
 				await this.#callOnSleep(shutdownTaskDeadlineTs);
 			} else if (mode === "destroy") {
-				await this.#callOnDestroy();
+				await this.#callOnDestroy(shutdownTaskDeadlineTs);
 			} else {
 				assertUnreachable(mode);
 			}
@@ -2005,7 +1996,7 @@ export class ActorInstance<
 		}
 	}
 
-	async #callOnDestroy() {
+	async #callOnDestroy(deadlineTs: number) {
 		if (this.#config.onDestroy) {
 			const onDestroy = this.#config.onDestroy;
 			try {
@@ -2016,16 +2007,11 @@ export class ActorInstance<
 					async () => {
 						const result = onDestroy(this.actorContext);
 						if (result instanceof Promise) {
-							await deadline(
-								result,
-								this.overrides.onDestroyTimeout !== undefined
-									? Math.min(
-											this.#config.options
-												.onDestroyTimeout,
-											this.overrides.onDestroyTimeout,
-										)
-									: this.#config.options.onDestroyTimeout,
-							);
+							const remaining = deadlineTs - Date.now();
+							if (remaining <= 0) {
+								throw new DeadlineError();
+							}
+							await deadline(result, remaining);
 						}
 					},
 				);
@@ -2120,6 +2106,14 @@ export class ActorInstance<
 		}
 
 		this.#rLog.debug({ msg: "waiting for run handler to complete" });
+
+		if (timeoutMs <= 0) {
+			this.#rLog.warn({
+				msg: "run handler did not complete in time, it may have leaked - ensure you use c.aborted (or the abort signal c.abortSignal) to exit gracefully",
+				timeoutMs,
+			});
+			return;
+		}
 
 		const timedOut = await Promise.race([
 			this.#runPromise.then(() => false).catch(() => false),

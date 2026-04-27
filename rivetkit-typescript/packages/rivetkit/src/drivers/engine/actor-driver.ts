@@ -1054,7 +1054,7 @@ export class EngineActorDriver implements ActorDriver {
 						0,
 					);
 					staticActor.overrides.onSleepTimeout = stopThresholdMax;
-					staticActor.overrides.onDestroyTimeout = stopThresholdMax;
+					staticActor.overrides.sleepGracePeriod = stopThresholdMax;
 
 					if (protocolMetadata.serverlessDrainGracePeriod) {
 						const drainMax = Math.max(
@@ -1063,7 +1063,6 @@ export class EngineActorDriver implements ActorDriver {
 							) - 1000,
 							0,
 						);
-						staticActor.overrides.runStopTimeout = drainMax;
 						staticActor.overrides.waitUntilTimeout = drainMax;
 						staticActor.overrides.sleepGracePeriod =
 							stopThresholdMax + drainMax;
