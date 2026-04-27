@@ -987,6 +987,229 @@ fn envoy_crash_policy_sleep() {
 	});
 }
 
+// Fires the request in the background so a wake-then-crash race cannot panic
+// the test via `ping_actor_via_guard`'s non-200 assertion. The wake itself is
+// what we're verifying, and we observe it through `connectable_ts` polling.
+// Errors and non-2xx responses are logged so a wake that never reaches the
+// guard surfaces as a diagnostic instead of a silent 30s timeout.
+fn spawn_wake_ping(ctx: &common::TestCtx, actor_id: String) {
+	let guard_port = ctx.leader_dc().guard_port();
+	tokio::spawn(async move {
+		let client = reqwest::Client::new();
+		match client
+			.get(format!("http://127.0.0.1:{}/ping", guard_port))
+			.header("X-Rivet-Target", "actor")
+			.header("X-Rivet-Actor", &actor_id)
+			.send()
+			.await
+		{
+			Ok(res) if !res.status().is_success() => {
+				tracing::warn!(
+					%actor_id,
+					status = %res.status(),
+					"wake ping returned non-success"
+				);
+			}
+			Err(err) => {
+				tracing::warn!(%actor_id, ?err, "wake ping failed");
+			}
+			_ => {}
+		}
+	});
+}
+
+#[test]
+fn envoy_crash_policy_sleep_wakes_on_request() {
+	common::run(common::TestOpts::new(1).with_timeout(75), |ctx| async move {
+		let (namespace, _) = common::setup_test_namespace(ctx.leader_dc()).await;
+
+		let crash_count = Arc::new(Mutex::new(0));
+
+		// Actor crashes on first start, then succeeds. Sleep policy puts it to
+		// sleep after the crash; an incoming request should reallocate and run
+		// the now-successful start path.
+		let envoy = common::setup_envoy(ctx.leader_dc(), &namespace, |builder| {
+			builder.with_actor_behavior("crash-then-succeed-actor", move |_| {
+				Box::new(common::test_envoy::CrashNTimesThenSucceedActor::new(
+					1,
+					crash_count.clone(),
+				))
+			})
+		})
+		.await;
+
+		let res = common::create_actor(
+			ctx.leader_dc().guard_port(),
+			&namespace,
+			"crash-then-succeed-actor",
+			envoy.pool_name(),
+			rivet_types::actors::CrashPolicy::Sleep,
+		)
+		.await;
+
+		let actor_id_str = res.actor.actor_id.to_string();
+
+		// Wait for crash-induced sleep.
+		loop {
+			let actor =
+				common::try_get_actor(ctx.leader_dc().guard_port(), &actor_id_str, &namespace)
+					.await
+					.expect("failed to get actor")
+					.expect("actor should exist");
+			if actor.sleep_ts.is_some() && actor.connectable_ts.is_none() {
+				break;
+			}
+			tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+		}
+
+		tracing::info!(?actor_id_str, "actor sleeping after crash, sending request");
+
+		spawn_wake_ping(&ctx, actor_id_str.clone());
+
+		// Verify the actor wakes and becomes connectable on the second start.
+		let start = std::time::Instant::now();
+		let actor = loop {
+			let actor =
+				common::try_get_actor(ctx.leader_dc().guard_port(), &actor_id_str, &namespace)
+					.await
+					.expect("failed to get actor")
+					.expect("actor should exist");
+			if actor.connectable_ts.is_some() {
+				break actor;
+			}
+			if start.elapsed() > std::time::Duration::from_secs(30) {
+				panic!(
+					"actor should wake from sleep on incoming request; last actor: {:?}",
+					actor
+				);
+			}
+			tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+		};
+
+		assert!(
+			actor.connectable_ts.is_some(),
+			"actor should be connectable after waking from sleep"
+		);
+
+		tracing::info!(?actor_id_str, "actor woke from crash-induced sleep");
+	});
+}
+
+#[test]
+fn envoy_crash_policy_sleep_recovers_after_wake_crash() {
+	common::run(common::TestOpts::new(1).with_timeout(90), |ctx| async move {
+		let (namespace, _) = common::setup_test_namespace(ctx.leader_dc()).await;
+
+		let crash_count = Arc::new(Mutex::new(0));
+		let actor_crash_count = crash_count.clone();
+
+		// Actor crashes on the first two starts then succeeds. With Sleep
+		// policy, the first crash sleeps the actor; the wake (via incoming
+		// request) lets it crash again and re-attempt. This verifies the
+		// recovery path tolerates additional crashes after wake without
+		// abandoning the actor — eventual success is what the test asserts on,
+		// not strict per-cycle sleep observability (the workflow may quickly
+		// retry inside the wake path before falling back to another sleep).
+		let envoy = common::setup_envoy(ctx.leader_dc(), &namespace, |builder| {
+			builder.with_actor_behavior("crash-twice-actor", move |_| {
+				Box::new(common::test_envoy::CrashNTimesThenSucceedActor::new(
+					2,
+					actor_crash_count.clone(),
+				))
+			})
+		})
+		.await;
+
+		let res = common::create_actor(
+			ctx.leader_dc().guard_port(),
+			&namespace,
+			"crash-twice-actor",
+			envoy.pool_name(),
+			rivet_types::actors::CrashPolicy::Sleep,
+		)
+		.await;
+
+		let actor_id_str = res.actor.actor_id.to_string();
+
+		// Wait for crash-induced sleep after the first crash.
+		loop {
+			let actor =
+				common::try_get_actor(ctx.leader_dc().guard_port(), &actor_id_str, &namespace)
+					.await
+					.expect("failed to get actor")
+					.expect("actor should exist");
+			if actor.sleep_ts.is_some() && actor.connectable_ts.is_none() {
+				break;
+			}
+			tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+		}
+
+		tracing::info!(?actor_id_str, "first sleep observed, waking");
+		spawn_wake_ping(&ctx, actor_id_str.clone());
+
+		// Verify the actor eventually reaches a connectable, running state
+		// after at least two crashes (gen 1 then gen 2 on wake).
+		let start = std::time::Instant::now();
+		let actor = loop {
+			let actor =
+				common::try_get_actor(ctx.leader_dc().guard_port(), &actor_id_str, &namespace)
+					.await
+					.expect("failed to get actor")
+					.expect("actor should exist");
+			if actor.connectable_ts.is_some() {
+				break actor;
+			}
+			if start.elapsed() > std::time::Duration::from_secs(30) {
+				panic!(
+					"actor should eventually run after wake recovery; last actor: {:?}",
+					actor
+				);
+			}
+			tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+		};
+
+		assert!(actor.connectable_ts.is_some());
+		assert_eq!(
+			*crash_count.lock().expect("crash count lock"),
+			2,
+			"actor should have crashed exactly twice before the successful start"
+		);
+
+		tracing::info!(?actor_id_str, "sleep + wake-with-crash recovery completed");
+	});
+}
+
+#[test]
+fn envoy_crash_policy_sleep_persists_on_creation() {
+	common::run(common::TestOpts::new(1), |ctx| async move {
+		let (namespace, _, _runner) =
+			common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
+
+		let res = common::api::public::actors_create(
+			ctx.leader_dc().guard_port(),
+			common::api_types::actors::create::CreateQuery {
+				namespace: namespace.clone(),
+			},
+			common::api_types::actors::create::CreateRequest {
+				datacenter: None,
+				name: "test-actor".to_string(),
+				key: None,
+				input: None,
+				runner_name_selector: common::TEST_RUNNER_NAME.to_string(),
+				crash_policy: rivet_types::actors::CrashPolicy::Sleep,
+			},
+		)
+		.await
+		.expect("failed to create actor");
+
+		let actor_id = res.actor.actor_id.to_string();
+
+		let actor =
+			common::assert_actor_exists(ctx.leader_dc().guard_port(), &actor_id, &namespace).await;
+		assert_eq!(actor.crash_policy, rivet_types::actors::CrashPolicy::Sleep);
+	});
+}
+
 #[ignore = "non-sleep crash policies are not yet supported for envoys"]
 #[test]
 fn envoy_crash_policy_destroy() {
