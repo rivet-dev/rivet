@@ -141,9 +141,9 @@ lazy_static::lazy_static! {
 		*REGISTRY
 	).unwrap();
 
-	pub static ref SQLITE_TAKEOVER_DURATION: Histogram = register_histogram_with_registry!(
-		"sqlite_v2_takeover_duration_seconds",
-		"Duration of sqlite v2 takeover operations.",
+	pub static ref SQLITE_OPEN_DURATION: Histogram = register_histogram_with_registry!(
+		"sqlite_v2_open_duration_seconds",
+		"Duration of sqlite v2 open operations.",
 		BUCKETS.to_vec(),
 		*REGISTRY
 	).unwrap();
@@ -156,7 +156,7 @@ lazy_static::lazy_static! {
 
 	pub static ref SQLITE_ORPHAN_CHUNK_BYTES_RECLAIMED: IntCounter = register_int_counter_with_registry!(
 		"sqlite_orphan_chunk_bytes_reclaimed_total",
-		"Total bytes of orphan DELTA and PIDX entries reclaimed by takeover recovery.",
+		"Total bytes of orphan DELTA and PIDX entries reclaimed by open recovery.",
 		*REGISTRY
 	).unwrap();
 
@@ -273,8 +273,8 @@ impl SqliteStorageMetrics {
 		}
 	}
 
-	pub fn observe_takeover(&self, duration: Duration) {
-		SQLITE_TAKEOVER_DURATION.observe(duration.as_secs_f64());
+	pub fn observe_open(&self, duration: Duration) {
+		SQLITE_OPEN_DURATION.observe(duration.as_secs_f64());
 	}
 
 	pub fn add_recovery_orphans_cleaned(&self, count: usize) {

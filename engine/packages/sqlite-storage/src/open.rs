@@ -1,11 +1,11 @@
-//! Takeover handling for writer fencing and preload.
+//! Open handling for SQLite lifecycle setup and preload.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::time::Instant;
 
 use anyhow::{Context, Result, ensure};
 
-use crate::engine::SqliteEngine;
+use crate::engine::{OpenDb, SqliteEngine};
 use crate::error::SqliteStorageError;
 use crate::keys::{
 	decode_delta_chunk_txid, delta_chunk_prefix, delta_prefix, meta_key, pidx_delta_prefix,
@@ -30,14 +30,14 @@ pub struct PgnoRange {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TakeoverConfig {
+pub struct OpenConfig {
 	pub now_ms: i64,
 	pub preload_pgnos: Vec<u32>,
 	pub preload_ranges: Vec<PgnoRange>,
 	pub max_total_bytes: usize,
 }
 
-impl TakeoverConfig {
+impl OpenConfig {
 	pub fn new(now_ms: i64) -> Self {
 		Self {
 			now_ms,
@@ -48,8 +48,25 @@ impl TakeoverConfig {
 	}
 }
 
+struct OpenPlaceholderGuard<'a> {
+	open_dbs: &'a scc::HashMap<String, OpenDb>,
+	actor_id: String,
+	disarmed: bool,
+}
+
+impl<'a> Drop for OpenPlaceholderGuard<'a> {
+	fn drop(&mut self) {
+		if self.disarmed {
+			return;
+		}
+		// Synchronous remove from `scc::HashMap` is safe because we only
+		// inserted a placeholder; no dependent state holds a lock here.
+		self.open_dbs.remove_sync(&self.actor_id);
+	}
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TakeoverResult {
+pub struct OpenResult {
 	pub generation: u64,
 	pub meta: SqliteMeta,
 	pub preloaded_pages: Vec<FetchedPage>,
@@ -98,7 +115,7 @@ impl SqliteEngine {
 					let existing_head = decode_db_head(&existing_meta)?;
 					ensure!(
 						matches!(existing_head.origin, SqliteOrigin::MigratingFromV1),
-						SqliteStorageError::ConcurrentTakeover
+						SqliteStorageError::InvalidV1MigrationState
 					);
 					let stage_in_progress =
 						existing_head.next_txid > existing_head.head_txid.saturating_add(1);
@@ -139,7 +156,51 @@ impl SqliteEngine {
 		}))
 	}
 
-	pub async fn takeover(&self, actor_id: &str, config: TakeoverConfig) -> Result<TakeoverResult> {
+	pub async fn open(&self, actor_id: &str, config: OpenConfig) -> Result<OpenResult> {
+		match self.open_dbs.entry_async(actor_id.to_string()).await {
+			scc::hash_map::Entry::Occupied(_) => {
+				ensure!(false, "sqlite db already open for actor");
+			}
+			scc::hash_map::Entry::Vacant(entry) => {
+				entry.insert_entry(OpenDb { generation: 0 });
+			}
+		}
+
+		// Drop guard removes the placeholder if the future is cancelled or
+		// `open_inner` errors. Without this a dropped future would leave a
+		// `generation: 0` placeholder in `open_dbs` that permanently blocks
+		// re-opening the actor on this process.
+		let guard = OpenPlaceholderGuard {
+			open_dbs: &self.open_dbs,
+			actor_id: actor_id.to_string(),
+			disarmed: false,
+		};
+
+		let result = self.open_inner(actor_id, config).await;
+		// Disarm the guard so the placeholder is not removed before we either
+		// promote it (Ok path) or remove it explicitly (Err path).
+		let mut guard = guard;
+		guard.disarmed = true;
+		drop(guard);
+
+		match result {
+			Ok(result) => {
+				self.open_dbs
+					.update_async(actor_id, |_, open_db| {
+						open_db.generation = result.generation;
+					})
+					.await
+					.context("sqlite open state missing after open")?;
+				Ok(result)
+			}
+			Err(err) => {
+				self.open_dbs.remove_async(&actor_id.to_string()).await;
+				Err(err)
+			}
+		}
+	}
+
+	async fn open_inner(&self, actor_id: &str, config: OpenConfig) -> Result<OpenResult> {
 		let start = Instant::now();
 		let meta_bytes = udb::get_value(
 			&self.db,
@@ -173,10 +234,7 @@ impl SqliteEngine {
 			recovered_orphans = recovery_plan.orphan_count;
 			recovered_orphan_bytes = tracked_deleted_bytes;
 			mutations.extend(recovery_plan.mutations);
-			let mut head = DBHead {
-				generation: head.generation + 1,
-				..head
-			};
+			let mut head = head;
 			head.sqlite_storage_used = usage_without_meta.saturating_sub(tracked_deleted_bytes);
 			head
 		} else {
@@ -188,26 +246,14 @@ impl SqliteEngine {
 		mutations.push(WriteOp::put(meta_key(actor_id), encoded_head));
 
 		let actor_id_for_tx = actor_id.to_string();
-		let expected_meta_bytes = meta_bytes.clone();
-		let takeover_mutations = mutations.clone();
+		let open_mutations = mutations.clone();
 		let subspace = self.subspace.clone();
 		udb::run_db_op(&self.db, self.op_counter.as_ref(), move |tx| {
-			let actor_id = actor_id_for_tx.clone();
-			let expected_meta_bytes = expected_meta_bytes.clone();
-			let takeover_mutations = takeover_mutations.clone();
+			let open_mutations = open_mutations.clone();
 			let subspace = subspace.clone();
+			let actor_id = actor_id_for_tx.clone();
 			async move {
-				let current_meta =
-					udb::tx_get_value_serializable(&tx, &subspace, &meta_key(&actor_id)).await?;
-				if current_meta != expected_meta_bytes {
-					tracing::error!(
-						actor_id = %actor_id,
-						"meta changed during takeover, concurrent writer detected"
-					);
-					return Err(SqliteStorageError::ConcurrentTakeover.into());
-				}
-
-				for op in &takeover_mutations {
+				for op in &open_mutations {
 					match op {
 						WriteOp::Put(key, value) => {
 							udb::tx_write_value(&tx, &subspace, key, value)?
@@ -216,6 +262,7 @@ impl SqliteEngine {
 					}
 				}
 
+				tracing::debug!(actor_id = %actor_id, "opened sqlite db");
 				Ok(())
 			}
 		})
@@ -234,13 +281,64 @@ impl SqliteEngine {
 			.preload_pages(actor_id, &head, &live_pidx, &config)
 			.await?;
 		let meta = SqliteMeta::from((head.clone(), SQLITE_MAX_DELTA_BYTES));
-		self.metrics.observe_takeover(start.elapsed());
+		self.metrics.observe_open(start.elapsed());
 
-		Ok(TakeoverResult {
+		Ok(OpenResult {
 			generation: head.generation,
 			meta,
 			preloaded_pages,
 		})
+	}
+
+	pub async fn close(&self, actor_id: &str, generation: u64) -> Result<()> {
+		let actor_id = actor_id.to_string();
+		self.ensure_open(&actor_id, generation, "close").await?;
+		let removed = self
+			.open_dbs
+			.remove_if_async(&actor_id, |open_db| open_db.generation == generation)
+			.await;
+		ensure!(removed.is_some(), "sqlite db is not open for actor");
+
+		self.page_indices.remove_async(&actor_id).await;
+		self.pending_stages
+			.retain_sync(|(pending_actor_id, _), _| pending_actor_id != &actor_id);
+
+		Ok(())
+	}
+
+	// Unconditionally evict the actor's open-db / page-index / pending-stage caches without
+	// generation fencing. Use only on shutdown paths where keeping a stale entry would block
+	// future opens of the same actor on this process-wide engine.
+	pub async fn force_close(&self, actor_id: &str) {
+		let actor_id = actor_id.to_string();
+		self.open_dbs.remove_async(&actor_id).await;
+		self.page_indices.remove_async(&actor_id).await;
+		self.pending_stages
+			.retain_sync(|(pending_actor_id, _), _| pending_actor_id != &actor_id);
+	}
+
+	pub(crate) async fn ensure_open(
+		&self,
+		actor_id: &str,
+		generation: u64,
+		operation: &'static str,
+	) -> Result<()> {
+		let open_db_generation = self
+			.open_dbs
+			.read_async(actor_id, |_, open_db| open_db.generation)
+			.await
+			.ok_or(SqliteStorageError::DbNotOpen { operation })?;
+		ensure!(
+			open_db_generation == generation,
+			SqliteStorageError::FenceMismatch {
+				reason: format!(
+					"{operation} generation {} did not match open generation {}",
+					generation, open_db_generation
+				),
+			}
+		);
+
+		Ok(())
 	}
 
 	async fn build_recovery_plan(
@@ -335,7 +433,7 @@ impl SqliteEngine {
 		actor_id: &str,
 		head: &DBHead,
 		live_pidx: &BTreeMap<u32, u64>,
-		config: &TakeoverConfig,
+		config: &OpenConfig,
 	) -> Result<Vec<FetchedPage>> {
 		let requested = collect_preload_pgnos(config);
 		let mut sources = BTreeMap::new();
@@ -438,7 +536,7 @@ struct RecoveryPlan {
 	tracked_deleted_bytes: u64,
 }
 
-fn collect_preload_pgnos(config: &TakeoverConfig) -> Vec<u32> {
+fn collect_preload_pgnos(config: &OpenConfig) -> Vec<u32> {
 	let mut requested = BTreeSet::from([1]);
 	for pgno in &config.preload_pgnos {
 		if *pgno > 0 {
@@ -544,7 +642,7 @@ mod tests {
 	use rivet_metrics::REGISTRY;
 	use rivet_metrics::prometheus::{Encoder, TextEncoder};
 
-	use super::{PgnoRange, TakeoverConfig};
+	use super::{OpenConfig, PgnoRange};
 	use crate::commit::CommitStageRequest;
 	use crate::engine::SqliteEngine;
 	use crate::keys::{delta_chunk_key, meta_key, pidx_delta_key, shard_key};
@@ -637,12 +735,10 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn takeover_on_empty_store_creates_meta_and_page_one_placeholder() -> Result<()> {
+	async fn open_on_empty_store_creates_meta_and_page_one_placeholder() -> Result<()> {
 		let (db, subspace) = test_db().await?;
 		let (engine, mut compaction_rx) = SqliteEngine::new(db, subspace);
-		let result = engine
-			.takeover(TEST_ACTOR, TakeoverConfig::new(777))
-			.await?;
+		let result = engine.open(TEST_ACTOR, OpenConfig::new(777)).await?;
 
 		assert_eq!(result.generation, 1);
 		assert_eq!(result.meta.generation, 1);
@@ -741,7 +837,7 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn takeover_on_existing_meta_bumps_generation_and_preloads_page_one() -> Result<()> {
+	async fn open_on_existing_meta_keeps_generation_and_preloads_page_one() -> Result<()> {
 		let (db, subspace) = test_db().await?;
 		let mut head = seeded_head();
 		head.db_size_pages = 1;
@@ -756,12 +852,10 @@ mod tests {
 			],
 		)
 		.await?;
-		let result = engine
-			.takeover(TEST_ACTOR, TakeoverConfig::new(888))
-			.await?;
+		let result = engine.open(TEST_ACTOR, OpenConfig::new(888)).await?;
 
-		assert_eq!(result.generation, 2);
-		assert_eq!(result.meta.generation, 2);
+		assert_eq!(result.generation, 1);
+		assert_eq!(result.meta.generation, 1);
 		assert_eq!(
 			result.preloaded_pages,
 			vec![FetchedPage {
@@ -819,11 +913,11 @@ mod tests {
 		)
 		.await?;
 
-		let mut config = TakeoverConfig::new(1_234);
+		let mut config = OpenConfig::new(1_234);
 		config.preload_pgnos = vec![65];
 		config.preload_ranges.push(PgnoRange { start: 2, end: 3 });
 
-		let result = engine.takeover(TEST_ACTOR, config).await?;
+		let result = engine.open(TEST_ACTOR, config).await?;
 		assert_eq!(
 			result.preloaded_pages,
 			vec![
@@ -846,7 +940,7 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn takeover_bumps_generation() -> Result<()> {
+	async fn open_keeps_generation() -> Result<()> {
 		let (db, subspace) = test_db().await?;
 		let mut head = seeded_head();
 		head.db_size_pages = 1;
@@ -862,18 +956,16 @@ mod tests {
 		)
 		.await?;
 
-		let result = engine
-			.takeover(TEST_ACTOR, TakeoverConfig::new(888))
-			.await?;
+		let result = engine.open(TEST_ACTOR, OpenConfig::new(888)).await?;
 
-		assert_eq!(result.generation, 2);
-		assert_eq!(result.meta.generation, 2);
+		assert_eq!(result.generation, 1);
+		assert_eq!(result.meta.generation, 1);
 
 		Ok(())
 	}
 
 	#[tokio::test]
-	async fn takeover_cleans_orphans_and_stale_pidx_entries() -> Result<()> {
+	async fn open_cleans_orphans_and_stale_pidx_entries() -> Result<()> {
 		let (db, subspace) = test_db().await?;
 		let (engine, _compaction_rx) = SqliteEngine::new(db, subspace);
 		apply_write_ops(
@@ -890,11 +982,8 @@ mod tests {
 			],
 		)
 		.await?;
-		let result = engine
-			.takeover(TEST_ACTOR, TakeoverConfig::new(999))
-			.await?;
+		let result = engine.open(TEST_ACTOR, OpenConfig::new(999)).await?;
 
-		assert_eq!(result.generation, 2);
 		assert_eq!(
 			result.preloaded_pages,
 			vec![FetchedPage {
@@ -932,7 +1021,7 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn takeover_cleans_above_eof_pidx_delta_and_shard_rows() -> Result<()> {
+	async fn open_cleans_above_eof_pidx_delta_and_shard_rows() -> Result<()> {
 		let (db, subspace) = test_db().await?;
 		let (engine, _compaction_rx) = SqliteEngine::new(db, subspace);
 		let mut head = seeded_head();
@@ -954,11 +1043,8 @@ mod tests {
 		rewrite_meta_with_actual_usage(&engine, TEST_ACTOR).await?;
 		let before_usage = actual_tracked_usage(&engine).await?;
 
-		let result = engine
-			.takeover(TEST_ACTOR, TakeoverConfig::new(999))
-			.await?;
+		let result = engine.open(TEST_ACTOR, OpenConfig::new(999)).await?;
 
-		assert_eq!(result.generation, 2);
 		assert_eq!(
 			read_value(&engine, pidx_delta_key(TEST_ACTOR, 1)).await?,
 			Some(1_u64.to_be_bytes().to_vec())
@@ -986,7 +1072,7 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn takeover_cleans_orphan_deltas() -> Result<()> {
+	async fn open_cleans_orphan_deltas() -> Result<()> {
 		let (db, subspace) = test_db().await?;
 		let (engine, _compaction_rx) = SqliteEngine::new(db, subspace);
 		apply_write_ops(
@@ -1002,9 +1088,7 @@ mod tests {
 		)
 		.await?;
 
-		engine
-			.takeover(TEST_ACTOR, TakeoverConfig::new(999))
-			.await?;
+		engine.open(TEST_ACTOR, OpenConfig::new(999)).await?;
 
 		assert!(
 			read_value(&engine, delta_blob_key(TEST_ACTOR, 2))
@@ -1021,7 +1105,7 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn takeover_cleans_orphan_staged_delta_chunks() -> Result<()> {
+	async fn open_cleans_orphan_staged_delta_chunks() -> Result<()> {
 		let (db, subspace) = test_db().await?;
 		let (engine, _compaction_rx) = SqliteEngine::new(db, subspace);
 		apply_write_ops(
@@ -1036,9 +1120,7 @@ mod tests {
 		)
 		.await?;
 
-		engine
-			.takeover(TEST_ACTOR, TakeoverConfig::new(999))
-			.await?;
+		engine.open(TEST_ACTOR, OpenConfig::new(999)).await?;
 
 		assert!(
 			read_value(&engine, delta_chunk_key(TEST_ACTOR, 42, 0))
@@ -1055,9 +1137,9 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn takeover_cleans_multiple_aborted_stages() -> Result<()> {
+	async fn open_cleans_multiple_aborted_stages() -> Result<()> {
 		// Multiple partial commit_stage blobs (N>1 distinct orphan txids beyond head_txid)
-		// should all be deleted in a single takeover pass along with any dangling PIDX entries.
+		// should all be deleted in a single open pass along with any dangling PIDX entries.
 		let (db, subspace) = test_db().await?;
 		let (engine, _compaction_rx) = SqliteEngine::new(db, subspace);
 		let head = DBHead {
@@ -1085,9 +1167,7 @@ mod tests {
 		)
 		.await?;
 
-		engine
-			.takeover(TEST_ACTOR, TakeoverConfig::new(1_111))
-			.await?;
+		engine.open(TEST_ACTOR, OpenConfig::new(1_111)).await?;
 
 		for (txid, chunk_idx) in [(6, 0), (6, 1), (7, 0), (8, 0), (8, 1), (8, 2)] {
 			assert!(
@@ -1117,7 +1197,7 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn takeover_recovers_from_checkpointed_mid_commit_stage_state() -> Result<()> {
+	async fn open_recovers_from_checkpointed_mid_commit_stage_state() -> Result<()> {
 		let (db, subspace, _db_path) = test_db_with_path().await?;
 		let (engine, _compaction_rx) = SqliteEngine::new(db.clone(), subspace.clone());
 		let head = DBHead {
@@ -1136,6 +1216,7 @@ mod tests {
 			)],
 		)
 		.await?;
+		engine.open(TEST_ACTOR, OpenConfig::new(0)).await?;
 		let stage = engine
 			.commit_stage_begin(
 				TEST_ACTOR,
@@ -1169,7 +1250,7 @@ mod tests {
 		let reopened_db = reopen_test_db(&checkpoint_path).await?;
 		let (recovered_engine, _compaction_rx) = SqliteEngine::new(reopened_db, subspace);
 		let result = recovered_engine
-			.takeover(TEST_ACTOR, TakeoverConfig::new(2_222))
+			.open(TEST_ACTOR, OpenConfig::new(2_222))
 			.await?;
 		let stored_head: DBHead = serde_bare::from_slice(
 			&read_value(&recovered_engine, meta_key(TEST_ACTOR))
@@ -1177,7 +1258,7 @@ mod tests {
 				.expect("meta should still exist after recovery"),
 		)?;
 
-		assert_eq!(result.generation, head.generation + 1);
+		assert_eq!(result.generation, head.generation);
 		assert_eq!(result.meta.head_txid, 0);
 		assert_eq!(stored_head.head_txid, 0);
 		assert_eq!(stored_head.next_txid, 2);
@@ -1198,7 +1279,7 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn takeover_schedules_compaction_when_delta_threshold_is_met() -> Result<()> {
+	async fn open_schedules_compaction_when_delta_threshold_is_met() -> Result<()> {
 		let (db, subspace) = test_db().await?;
 		let mut head = seeded_head();
 		head.head_txid = 32;
@@ -1226,12 +1307,11 @@ mod tests {
 			mutations,
 		)
 		.await?;
-		let mut config = TakeoverConfig::new(1111);
+		let mut config = OpenConfig::new(1111);
 		config.preload_ranges.push(PgnoRange { start: 2, end: 4 });
 
-		let result = engine.takeover(TEST_ACTOR, config).await?;
+		let result = engine.open(TEST_ACTOR, config).await?;
 
-		assert_eq!(result.generation, 2);
 		assert_eq!(compaction_rx.recv().await, Some(TEST_ACTOR.to_string()));
 		assert_eq!(
 			result.preloaded_pages,

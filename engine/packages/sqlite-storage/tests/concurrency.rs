@@ -3,7 +3,7 @@ use std::sync::Arc;
 use anyhow::{Context, Result};
 use sqlite_storage::commit::CommitRequest;
 use sqlite_storage::engine::SqliteEngine;
-use sqlite_storage::takeover::TakeoverConfig;
+use sqlite_storage::open::OpenConfig;
 use sqlite_storage::types::{DirtyPage, SQLITE_PAGE_SIZE};
 use tempfile::Builder;
 use tokio::sync::Barrier;
@@ -45,10 +45,10 @@ async fn concurrent_commits_to_different_actors_preserve_isolation() -> Result<(
 
 	for idx in 0..10u8 {
 		let actor_id = format!("actor-{idx}");
-		let takeover = engine
-			.takeover(&actor_id, TakeoverConfig::new(i64::from(idx) + 1))
+		let open = engine
+			.open(&actor_id, OpenConfig::new(i64::from(idx) + 1))
 			.await?;
-		actors.push((actor_id, takeover.generation, takeover.meta.head_txid, idx));
+		actors.push((actor_id, open.generation, open.meta.head_txid, idx));
 	}
 
 	let mut commits = JoinSet::new();
@@ -85,13 +85,13 @@ async fn concurrent_commits_to_different_actors_preserve_isolation() -> Result<(
 async fn interleaved_commit_compaction_read_keeps_latest_page_visible() -> Result<()> {
 	let (engine, _compaction_rx) = setup_engine().await?;
 	let actor_id = "interleaved-actor";
-	let takeover = engine.takeover(actor_id, TakeoverConfig::new(1)).await?;
+	let open = engine.open(actor_id, OpenConfig::new(1)).await?;
 	let first_commit = engine
 		.commit(
 			actor_id,
 			CommitRequest {
-				generation: takeover.generation,
-				head_txid: takeover.meta.head_txid,
+				generation: open.generation,
+				head_txid: open.meta.head_txid,
 				db_size_pages: 70,
 				dirty_pages: dirty_pages(1, 70, 0x11),
 				now_ms: 2,
@@ -101,7 +101,7 @@ async fn interleaved_commit_compaction_read_keeps_latest_page_visible() -> Resul
 	assert!(engine.compact_shard(actor_id, 0).await?);
 
 	let after_compaction = engine
-		.get_pages(actor_id, takeover.generation, vec![1, 2])
+		.get_pages(actor_id, open.generation, vec![1, 2])
 		.await?;
 	assert_eq!(after_compaction[0].bytes, Some(page(0x11)));
 	assert_eq!(after_compaction[1].bytes, Some(page(0x11)));
@@ -110,7 +110,7 @@ async fn interleaved_commit_compaction_read_keeps_latest_page_visible() -> Resul
 		.commit(
 			actor_id,
 			CommitRequest {
-				generation: takeover.generation,
+				generation: open.generation,
 				head_txid: first_commit.txid,
 				db_size_pages: 70,
 				dirty_pages: dirty_pages(1, 2, 0x44),
@@ -120,7 +120,7 @@ async fn interleaved_commit_compaction_read_keeps_latest_page_visible() -> Resul
 		.await?;
 
 	let latest = engine
-		.get_pages(actor_id, takeover.generation, vec![1, 2, 3])
+		.get_pages(actor_id, open.generation, vec![1, 2, 3])
 		.await?;
 	assert_eq!(latest[0].bytes, Some(page(0x44)));
 	assert_eq!(latest[1].bytes, Some(page(0x44)));
@@ -134,9 +134,9 @@ async fn concurrent_reads_during_compaction_keep_returning_expected_pages() -> R
 	let (engine, _compaction_rx) = setup_engine().await?;
 	let engine = Arc::new(engine);
 	let actor_id = "read-compaction-actor".to_string();
-	let takeover = engine.takeover(&actor_id, TakeoverConfig::new(10)).await?;
-	let generation = takeover.generation;
-	let mut head_txid = takeover.meta.head_txid;
+	let open = engine.open(&actor_id, OpenConfig::new(10)).await?;
+	let generation = open.generation;
+	let mut head_txid = open.meta.head_txid;
 
 	for (shard_idx, fill) in [(0_u32, 0x10_u8), (1, 0x20), (2, 0x30), (3, 0x40)] {
 		let commit = engine
@@ -220,6 +220,27 @@ async fn concurrent_reads_during_compaction_keep_returning_expected_pages() -> R
 	assert_eq!(final_pages[1].bytes, Some(page(0x20)));
 	assert_eq!(final_pages[2].bytes, Some(page(0x30)));
 	assert_eq!(final_pages[3].bytes, Some(page(0x40)));
+
+	Ok(())
+}
+
+#[tokio::test]
+async fn second_open_for_same_actor_is_rejected_until_close() -> Result<()> {
+	let (engine, _compaction_rx) = setup_engine().await?;
+	let actor_id = "double-open-actor";
+
+	let first = engine.open(actor_id, OpenConfig::new(1)).await?;
+	let err = engine
+		.open(actor_id, OpenConfig::new(2))
+		.await
+		.expect_err("second open for the same actor must fail");
+	assert!(
+		err.to_string().contains("already open"),
+		"unexpected error: {err}"
+	);
+
+	engine.close(actor_id, first.generation).await?;
+	engine.open(actor_id, OpenConfig::new(3)).await?;
 
 	Ok(())
 }

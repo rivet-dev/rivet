@@ -12,7 +12,7 @@ use rivet_types::runner_configs::RunnerConfigKind;
 use sqlite_storage::{
 	compaction::CompactionCoordinator,
 	engine::SqliteEngine,
-	takeover::TakeoverConfig,
+	open::{OpenConfig, OpenResult},
 	types::{FetchedPage, SqliteMeta},
 };
 use std::collections::HashMap;
@@ -50,21 +50,8 @@ async fn shared_sqlite_engine(ctx: &StandaloneCtx) -> Result<Arc<SqliteEngine>> 
 		.cloned()
 }
 
-async fn maybe_load_sqlite_startup_data(
-	sqlite_engine: &SqliteEngine,
-	protocol_version: u16,
-	actor_id: Id,
-) -> Result<Option<protocol::SqliteStartupData>> {
-	if protocol_version < PROTOCOL_VERSION {
-		return Ok(None);
-	}
-
-	let actor_id = actor_id.to_string();
-	let startup = sqlite_engine
-		.takeover(&actor_id, TakeoverConfig::new(timestamp::now()))
-		.await?;
-
-	Ok(Some(protocol::SqliteStartupData {
+fn protocol_sqlite_startup_data(startup: OpenResult) -> protocol::SqliteStartupData {
+	protocol::SqliteStartupData {
 		generation: startup.generation,
 		meta: protocol_sqlite_meta(startup.meta),
 		preloaded_pages: startup
@@ -72,12 +59,11 @@ async fn maybe_load_sqlite_startup_data(
 			.into_iter()
 			.map(protocol_sqlite_fetched_page)
 			.collect(),
-	}))
+	}
 }
 
 fn protocol_sqlite_meta(meta: SqliteMeta) -> protocol::SqliteMeta {
 	protocol::SqliteMeta {
-		schema_version: meta.schema_version,
 		generation: meta.generation,
 		head_txid: meta.head_txid,
 		materialized_txid: meta.materialized_txid,
@@ -294,67 +280,90 @@ async fn handle(ctx: &StandaloneCtx, packet: protocol::ToOutbound) -> Result<()>
 		return Ok(());
 	};
 	let protocol_version = pool.protocol_version.unwrap_or(PROTOCOL_VERSION);
-	let sqlite_startup_data = maybe_load_sqlite_startup_data(
-		shared_sqlite_engine(ctx).await?.as_ref(),
-		protocol_version,
-		actor_id,
-	)
-	.await?;
-	let payload = versioned::ToEnvoy::wrap_latest(protocol::ToEnvoy::ToEnvoyCommands(vec![
-		protocol::CommandWrapper {
-			checkpoint,
-			inner: protocol::Command::CommandStartActor(protocol::CommandStartActor {
-				config: actor_config,
-				hibernating_requests: hibernating_requests
-					.into_iter()
-					.map(|x| protocol::HibernatingRequest {
-						gateway_id: x.gateway_id,
-						request_id: x.request_id,
-					})
-					.collect(),
-				preloaded_kv,
-				sqlite_startup_data,
-			}),
-		},
-	]))
-	.serialize_with_embedded_version(protocol_version)?;
-
-	// Send ack to actor wf before starting an outbound req
-	ctx.signal(pegboard::workflows::actor2::Allocated { generation })
-		.to_workflow::<pegboard::workflows::actor2::Workflow>()
-		.tag("actor_id", &actor_id)
-		.send()
+	let sqlite_engine = shared_sqlite_engine(ctx).await?;
+	let sqlite_open = sqlite_engine
+		.open(&actor_id.to_string(), OpenConfig::new(timestamp::now()))
 		.await?;
+	let sqlite_generation = sqlite_open.generation;
 
-	metrics::REQ_ACTIVE
-		.with_label_values(&[&namespace_id.to_string(), &pool_name])
-		.inc();
+	// Run the request body inside a closure so every error path closes the
+	// SQLite db. Without this the `?` operators on `serialize`, `signal`, and
+	// the `serverless_outbound_req` call would leak the open db on the
+	// process-wide `SqliteEngine`, blocking re-open until the process
+	// restarts.
+	let actor_id_str = actor_id.to_string();
+	let res = async {
+		let sqlite_startup_data = protocol_sqlite_startup_data(sqlite_open);
+		let payload = versioned::ToEnvoy::wrap_latest(protocol::ToEnvoy::ToEnvoyCommands(vec![
+			protocol::CommandWrapper {
+				checkpoint,
+				inner: protocol::Command::CommandStartActor(protocol::CommandStartActor {
+					config: actor_config,
+					hibernating_requests: hibernating_requests
+						.into_iter()
+						.map(|x| protocol::HibernatingRequest {
+							gateway_id: x.gateway_id,
+							request_id: x.request_id,
+						})
+						.collect(),
+					preloaded_kv,
+					sqlite_startup_data: Some(sqlite_startup_data),
+				}),
+			},
+		]))
+		.serialize_with_embedded_version(protocol_version)?;
 
-	let token = if let Some(auth) = &ctx.config().auth {
-		Some(auth.admin_token.read().as_str())
-	} else {
-		None
-	};
+		// Send ack to actor wf before starting an outbound req
+		ctx.signal(pegboard::workflows::actor2::Allocated { generation })
+			.to_workflow::<pegboard::workflows::actor2::Workflow>()
+			.tag("actor_id", &actor_id)
+			.send()
+			.await?;
 
-	let res = serverless_outbound_req(
-		ctx,
-		namespace_id,
-		&pool_name,
-		&namespace.name,
-		actor_id,
-		generation,
-		payload,
-		&url,
-		headers,
-		request_lifespan,
-		drain_grace_period,
-		token,
-	)
+		metrics::REQ_ACTIVE
+			.with_label_values(&[&namespace_id.to_string(), &pool_name])
+			.inc();
+
+		let token = if let Some(auth) = &ctx.config().auth {
+			Some(auth.admin_token.read().as_str())
+		} else {
+			None
+		};
+
+		let res = serverless_outbound_req(
+			ctx,
+			namespace_id,
+			&pool_name,
+			&namespace.name,
+			actor_id,
+			generation,
+			payload,
+			&url,
+			headers,
+			request_lifespan,
+			drain_grace_period,
+			token,
+		)
+		.await;
+
+		metrics::REQ_ACTIVE
+			.with_label_values(&[&namespace_id.to_string(), &pool_name])
+			.dec();
+
+		res
+	}
 	.await;
 
-	metrics::REQ_ACTIVE
-		.with_label_values(&[&namespace_id.to_string(), &pool_name])
-		.dec();
+	if let Err(err) = sqlite_engine.close(&actor_id_str, sqlite_generation).await {
+		tracing::warn!(
+			?err,
+			?actor_id,
+			"close failed for outbound sqlite db, force-evicting open_dbs entry"
+		);
+		// Process-wide engine: a stale entry would block re-opening the same actor until
+		// process restart, so unconditionally evict on close failure.
+		sqlite_engine.force_close(&actor_id_str).await;
+	}
 
 	res
 }

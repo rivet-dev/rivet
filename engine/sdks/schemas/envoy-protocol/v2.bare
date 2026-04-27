@@ -112,7 +112,6 @@ type SqliteStageId u64
 type SqlitePageBytes data
 
 type SqliteMeta struct {
-	schemaVersion: u32
 	generation: SqliteGeneration
 	headTxid: SqliteTxid
 	materializedTxid: SqliteTxid
