@@ -8,6 +8,8 @@ pub struct ConfigKey;
 impl FormalKey for ConfigKey {
 	type Value = protocol::ClusterConfig;
 
+	// TODO: this is mistakenly not versioned. Transition to vbare so future
+	// changes to ClusterConfig don't require hand-rolled LegacyXxx fallbacks.
 	fn deserialize(&self, raw: &[u8]) -> Result<Self::Value> {
 		serde_bare::from_slice(raw).map_err(Into::into)
 	}

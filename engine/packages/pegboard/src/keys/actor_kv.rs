@@ -147,6 +147,8 @@ impl EntryMetadataKey {
 impl FormalKey for EntryMetadataKey {
 	type Value = ep::KvMetadata;
 
+	// TODO: this is mistakenly not versioned. Transition to vbare so future
+	// changes to KvMetadata don't require hand-rolled LegacyXxx fallbacks.
 	fn deserialize(&self, raw: &[u8]) -> Result<Self::Value> {
 		serde_bare::from_slice(raw).map_err(Into::into)
 	}

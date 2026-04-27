@@ -157,9 +157,9 @@ impl SqliteTransport {
 								if *operation == "get_pages" && req.generation == 1
 						) {
 							match engine
-								.takeover(
+								.open(
 									&req.actor_id,
-									sqlite_storage::takeover::TakeoverConfig::new(1),
+									sqlite_storage::open::OpenConfig::new(1),
 								)
 								.await
 							{
@@ -2771,14 +2771,14 @@ mod tests {
 			engine: &SqliteEngine,
 		) -> protocol::SqliteStartupData {
 			let takeover = engine
-				.takeover(
+				.open(
 					actor_id,
-					sqlite_storage::takeover::TakeoverConfig::new(
+					sqlite_storage::open::OpenConfig::new(
 						sqlite_now_ms().expect("startup time should resolve"),
 					),
 				)
 				.await
-				.expect("takeover should succeed");
+				.expect("open should succeed");
 
 			protocol::SqliteStartupData {
 				generation: takeover.generation,
