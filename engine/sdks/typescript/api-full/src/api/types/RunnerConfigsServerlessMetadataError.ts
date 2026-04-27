@@ -10,4 +10,5 @@ export type RunnerConfigsServerlessMetadataError =
     | Rivet.RunnerConfigsServerlessMetadataErrorRequestTimedOut
     | Rivet.RunnerConfigsServerlessMetadataErrorNonSuccessStatus
     | Rivet.RunnerConfigsServerlessMetadataErrorInvalidResponseJson
-    | Rivet.RunnerConfigsServerlessMetadataErrorInvalidResponseSchema;
+    | Rivet.RunnerConfigsServerlessMetadataErrorInvalidResponseSchema
+    | Rivet.RunnerConfigsServerlessMetadataErrorInvalidEnvoyProtocolVersion;

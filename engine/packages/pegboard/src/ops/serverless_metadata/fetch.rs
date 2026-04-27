@@ -5,7 +5,7 @@ use anyhow::Result;
 use gas::prelude::*;
 use reqwest::header::{HeaderMap as ReqwestHeaderMap, HeaderName, HeaderValue};
 use rivet_envoy_protocol::PROTOCOL_VERSION;
-use rivetkit_shared_types::serverless_metadata::{ActorName, ServerlessMetadataPayload};
+use rivetkit_shared_types::serverless_metadata::ServerlessMetadataPayload;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
@@ -18,9 +18,7 @@ pub struct Input {
 	pub headers: HashMap<String, String>,
 }
 
-#[derive(Deserialize, Serialize, ToSchema, Clone, Debug, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-#[schema(as = RunnerConfigsServerlessMetadataError)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ServerlessMetadataError {
 	InvalidRequest {},
 	RequestFailed {},
@@ -28,7 +26,94 @@ pub enum ServerlessMetadataError {
 	NonSuccessStatus { status_code: u16, body: String },
 	InvalidResponseJson { body: String, parse_error: String },
 	InvalidResponseSchema { runtime: String, version: String },
-	InvalidEnvoyProtocolVersion { version: u16 },
+	InvalidEnvoyProtocolVersion { version: u16, max_supported: u16 },
+}
+
+/// Wire-format envelope for serverless metadata errors.
+///
+/// Surfaced to API clients with a stable `{message, details, metadata}` shape
+/// regardless of which internal `ServerlessMetadataError` variant produced it.
+/// `metadata.kind` discriminates the variant; per-variant fields live alongside
+/// `kind`.
+#[derive(Deserialize, Serialize, ToSchema, Clone, Debug, PartialEq, Eq)]
+#[schema(as = RunnerConfigsServerlessMetadataError)]
+pub struct ServerlessMetadataErrorEnvelope {
+	pub message: String,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub details: Option<String>,
+	#[serde(default)]
+	pub metadata: serde_json::Value,
+}
+
+impl std::fmt::Display for ServerlessMetadataErrorEnvelope {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.write_str(&self.message)
+	}
+}
+
+impl From<ServerlessMetadataError> for ServerlessMetadataErrorEnvelope {
+	fn from(err: ServerlessMetadataError) -> Self {
+		match err {
+			ServerlessMetadataError::InvalidRequest {} => Self {
+				message: "invalid serverless metadata request".to_string(),
+				details: None,
+				metadata: serde_json::json!({ "kind": "invalid_request" }),
+			},
+			ServerlessMetadataError::RequestFailed {} => Self {
+				message: "failed to reach serverless endpoint".to_string(),
+				details: None,
+				metadata: serde_json::json!({ "kind": "request_failed" }),
+			},
+			ServerlessMetadataError::RequestTimedOut {} => Self {
+				message: "serverless metadata request timed out".to_string(),
+				details: None,
+				metadata: serde_json::json!({ "kind": "request_timed_out" }),
+			},
+			ServerlessMetadataError::NonSuccessStatus { status_code, body } => Self {
+				message: format!(
+					"serverless metadata request returned status {status_code}"
+				),
+				details: Some(body),
+				metadata: serde_json::json!({
+					"kind": "non_success_status",
+					"status_code": status_code,
+				}),
+			},
+			ServerlessMetadataError::InvalidResponseJson { body, parse_error } => Self {
+				message: "serverless metadata response is not valid JSON".to_string(),
+				details: Some(body),
+				metadata: serde_json::json!({
+					"kind": "invalid_response_json",
+					"parse_error": parse_error,
+				}),
+			},
+			ServerlessMetadataError::InvalidResponseSchema { runtime, version } => Self {
+				message: format!(
+					"serverless runtime {runtime} version {version} is unsupported"
+				),
+				details: None,
+				metadata: serde_json::json!({
+					"kind": "invalid_response_schema",
+					"runtime": runtime,
+					"version": version,
+				}),
+			},
+			ServerlessMetadataError::InvalidEnvoyProtocolVersion {
+				version,
+				max_supported,
+			} => Self {
+				message: format!(
+					"envoy protocol version {version} is not supported (max supported: {max_supported})"
+				),
+				details: None,
+				metadata: serde_json::json!({
+					"kind": "invalid_envoy_protocol_version",
+					"envoy_protocol_version": version,
+					"max_supported_envoy_protocol_version": max_supported,
+				}),
+			},
+		}
+	}
 }
 
 #[derive(Debug, Clone)]
@@ -175,6 +260,7 @@ pub async fn pegboard_serverless_metadata_fetch(
 		if envoy_protocol_version < 1 || envoy_protocol_version > PROTOCOL_VERSION {
 			return Ok(Err(ServerlessMetadataError::InvalidEnvoyProtocolVersion {
 				version: envoy_protocol_version,
+				max_supported: PROTOCOL_VERSION,
 			}));
 		}
 	}

@@ -15,12 +15,15 @@ use serde::{Deserialize, Serialize};
 pub struct RunnerConfigsServerlessMetadataErrorOneOf4InvalidResponseJson {
     #[serde(rename = "body")]
     pub body: String,
+    #[serde(rename = "parse_error")]
+    pub parse_error: String,
 }
 
 impl RunnerConfigsServerlessMetadataErrorOneOf4InvalidResponseJson {
-    pub fn new(body: String) -> RunnerConfigsServerlessMetadataErrorOneOf4InvalidResponseJson {
+    pub fn new(body: String, parse_error: String) -> RunnerConfigsServerlessMetadataErrorOneOf4InvalidResponseJson {
         RunnerConfigsServerlessMetadataErrorOneOf4InvalidResponseJson {
             body,
+            parse_error,
         }
     }
 }

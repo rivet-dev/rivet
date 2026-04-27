@@ -5,8 +5,9 @@ use gas::prelude::*;
 
 use crate::ctx::ApiCtx;
 
-// Re-export types from pegboard for API schema
-pub use pegboard::ops::serverless_metadata::fetch::ServerlessMetadataError;
+pub use pegboard::ops::serverless_metadata::fetch::{
+	ServerlessMetadataError, ServerlessMetadataErrorEnvelope,
+};
 
 /// Serverless metadata returned from a runner.
 #[derive(Debug, Clone)]
@@ -70,7 +71,10 @@ pub async fn refresh_runner_config_metadata(
 	})
 	.await?
 	.map_err(|e| {
-		pegboard::errors::ServerlessRunnerPool::FailedToFetchMetadata { reason: e }.build()
+		pegboard::errors::ServerlessRunnerPool::FailedToFetchMetadata {
+			reason: ServerlessMetadataErrorEnvelope::from(e),
+		}
+		.build()
 	})?;
 
 	Ok(())
