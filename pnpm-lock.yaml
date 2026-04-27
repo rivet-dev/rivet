@@ -4111,7 +4111,7 @@ importers:
         specifier: ^22.13.1
         version: 22.19.15
       effect:
-        specifier: 4.0.0-beta.57
+        specifier: ^4.0.0-beta.57
         version: 4.0.0-beta.57
       tsup:
         specifier: ^8.4.0
@@ -14983,9 +14983,6 @@ packages:
 
   msgpackr@1.11.10:
     resolution: {integrity: sha512-iCZNq+HszvF+fC3anCm4nBmWEnbeIAfpDs6IStAEKhQ2YSgkjzVG2FF9XJqwwQh5bH3N9OUTUt4QwVN6MLMLtA==}
-
-  msgpackr@1.11.5:
-    resolution: {integrity: sha512-UjkUHN0yqp9RWKy0Lplhh+wlpdt9oQBYgULZOiFhV3VclSF1JnSQWZ5r9gORQlNYaUKQoR8itv7g7z1xDDuACA==}
 
   msw@2.12.10:
     resolution: {integrity: sha512-G3VUymSE0/iegFnuipujpwyTM2GuZAKXNeerUSrG2+Eg391wW63xFs5ixWsK9MWzr1AGoSkYGmyAzNgbR3+urw==}
@@ -29951,7 +29948,7 @@ snapshots:
 
   lmdb@3.4.4:
     dependencies:
-      msgpackr: 1.11.5
+      msgpackr: 1.11.10
       node-addon-api: 6.1.0
       node-gyp-build-optional-packages: 5.2.2
       ordered-binary: 1.6.0
@@ -31096,10 +31093,6 @@ snapshots:
     optionalDependencies:
       msgpackr-extract: 3.0.3
 
-  msgpackr@1.11.5:
-    optionalDependencies:
-      msgpackr-extract: 3.0.3
-
   msw@2.12.10(@types/node@20.19.13)(typescript@5.9.3):
     dependencies:
       '@inquirer/confirm': 5.1.21(@types/node@20.19.13)
@@ -31498,7 +31491,7 @@ snapshots:
 
   openapi3-ts@4.5.0:
     dependencies:
-      yaml: 2.8.2
+      yaml: 2.8.3
 
   openapi@1.0.1:
     dependencies:
@@ -31895,7 +31888,7 @@ snapshots:
   postcss-load-config@4.0.2(postcss@8.5.6)(ts-node@10.9.2(@swc/core@1.15.11(@swc/helpers@0.5.17))(@types/node@25.0.7)(typescript@5.9.3)):
     dependencies:
       lilconfig: 3.1.3
-      yaml: 2.8.2
+      yaml: 2.8.3
     optionalDependencies:
       postcss: 8.5.6
       ts-node: 10.9.2(@swc/core@1.15.11(@swc/helpers@0.5.17))(@types/node@25.0.7)(typescript@5.9.3)
