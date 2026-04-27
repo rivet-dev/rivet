@@ -4,6 +4,7 @@ use futures_util::TryStreamExt;
 use gas::prelude::*;
 use rand::prelude::SliceRandom;
 use rivet_envoy_protocol::{self as protocol, PROTOCOL_VERSION, versioned};
+use rivet_types::actors::CrashPolicy;
 use rivet_types::runner_configs::RunnerConfigKind;
 use universaldb::prelude::*;
 use universalpubsub::PublishOpts;
@@ -299,6 +300,8 @@ pub async fn allocate(ctx: &ActivityCtx, input: &AllocateInput) -> Result<Alloca
 	state.acquired_slot = acquired_slot;
 	state.error = error;
 	state.envoy_last_command_idx = 0;
+	state.sleep_ts = None;
+	state.reschedule_ts = None;
 
 	Ok(AllocateOutput {
 		allocation,
@@ -608,7 +611,11 @@ pub async fn handle_stopped(
 				code: protocol::StopCode::Error,
 				..
 			}
-			| StoppedVariant::Lost { .. } => Decision::Sleep,
+			| StoppedVariant::Lost { .. } => match input.crash_policy {
+				CrashPolicy::Restart => Decision::Backoff,
+				CrashPolicy::Sleep => Decision::Sleep,
+				CrashPolicy::Destroy => Decision::Destroy,
+			},
 		},
 	};
 
@@ -617,14 +624,20 @@ pub async fn handle_stopped(
 			let allocate_res = ctx.activity(AllocateInput {}).await?;
 
 			if let Some(allocation) = allocate_res.allocation {
-				start_new_generation(ctx, input, state, allocation).await?;
-
-				// Transition to allocating
-				state.transition = Transition::Allocating {
-					destroy_after_start: false,
-					lost_timeout_ts: allocate_res.now
-						+ ctx.config().pegboard().actor_allocation_threshold(),
+				state.transition = match &allocation {
+					Allocation::Serverless => Transition::Allocating {
+						destroy_after_start: false,
+						lost_timeout_ts: allocate_res.now
+							+ ctx.config().pegboard().actor_allocation_threshold(),
+					},
+					Allocation::Serverful { .. } => Transition::Starting {
+						destroy_after_start: false,
+						lost_timeout_ts: allocate_res.now
+							+ ctx.config().pegboard().actor_start_threshold(),
+					},
 				};
+
+				start_new_generation(ctx, input, state, allocation).await?;
 			} else {
 				// Transition to retry backoff
 				state.transition = Transition::Reallocating {
@@ -658,13 +671,20 @@ pub async fn handle_stopped(
 				let allocate_res = ctx.activity(AllocateInput {}).await?;
 
 				if let Some(allocation) = allocate_res.allocation {
-					start_new_generation(ctx, input, state, allocation).await?;
-
-					state.transition = Transition::Allocating {
-						destroy_after_start: false,
-						lost_timeout_ts: allocate_res.now
-							+ ctx.config().pegboard().actor_allocation_threshold(),
+					state.transition = match &allocation {
+						Allocation::Serverless => Transition::Allocating {
+							destroy_after_start: false,
+							lost_timeout_ts: allocate_res.now
+								+ ctx.config().pegboard().actor_allocation_threshold(),
+						},
+						Allocation::Serverful { .. } => Transition::Starting {
+							destroy_after_start: false,
+							lost_timeout_ts: allocate_res.now
+								+ ctx.config().pegboard().actor_start_threshold(),
+						},
 					};
+
+					start_new_generation(ctx, input, state, allocation).await?;
 				} else {
 					state.transition = Transition::Reallocating {
 						since_ts: allocate_res.now,
