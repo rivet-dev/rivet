@@ -485,6 +485,7 @@ async fn handle_conn_message(
 		}
 		protocol::ToEnvoy::ToEnvoyCommands(commands) => {
 			handle_commands(ctx, commands).await;
+			send_command_ack(ctx).await;
 		}
 		protocol::ToEnvoy::ToEnvoyAckEvents(ack) => {
 			handle_ack_events(ctx, ack);
