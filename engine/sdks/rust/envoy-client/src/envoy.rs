@@ -389,7 +389,7 @@ async fn envoy_loop(
 				}
 			}
 			_ = ack_interval.tick() => {
-				send_command_ack(&ctx).await;
+				send_command_ack(&mut ctx).await;
 			}
 			_ = kv_cleanup_interval.tick() => {
 				cleanup_old_kv_requests(&mut ctx);
