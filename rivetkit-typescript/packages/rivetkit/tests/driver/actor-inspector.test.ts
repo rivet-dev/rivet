@@ -1,4 +1,10 @@
+import * as cbor from "cbor-x";
 import { describe, expect, test, vi } from "vitest";
+import {
+	CURRENT_VERSION as INSPECTOR_PROTOCOL_VERSION,
+	TO_CLIENT_VERSIONED,
+	TO_SERVER_VERSIONED,
+} from "../../src/inspector/client.browser";
 import { describeDriverMatrix } from "./shared-matrix";
 import { setupDriverTest, waitFor } from "./shared-utils";
 
@@ -92,6 +98,117 @@ function buildInspectorUrl(
 	return url.toString();
 }
 
+function buildInspectorWebSocketUrl(gatewayUrl: string): string {
+	const url = new URL(buildInspectorUrl(gatewayUrl, "/inspector/connect"));
+	url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+	return url.toString();
+}
+
+async function toBinaryPayload(data: Blob | ArrayBuffer | Buffer | string) {
+	if (typeof data === "string") {
+		return new TextEncoder().encode(data);
+	}
+	if (data instanceof ArrayBuffer) {
+		return new Uint8Array(data);
+	}
+	if (data instanceof Blob) {
+		return new Uint8Array(await data.arrayBuffer());
+	}
+	return new Uint8Array(data);
+}
+
+type InspectorMessage = ReturnType<
+	typeof TO_CLIENT_VERSIONED.deserializeWithEmbeddedVersion
+>;
+
+async function waitForInspectorMessage(
+	ws: WebSocket,
+	timeoutMs = 10_000,
+	predicate?: (message: InspectorMessage) => boolean,
+) {
+	return await new Promise<InspectorMessage>((resolve, reject) => {
+		const timeout = setTimeout(() => {
+			cleanup();
+			reject(new Error("Inspector websocket message timed out"));
+		}, timeoutMs);
+
+		const cleanup = () => {
+			clearTimeout(timeout);
+			ws.removeEventListener("message", onMessage);
+			ws.removeEventListener("error", onError);
+		};
+
+		const onError = () => {
+			cleanup();
+			reject(new Error("Inspector websocket errored"));
+		};
+
+		const onMessage = async (event: MessageEvent) => {
+			try {
+				const payload = await toBinaryPayload(
+					event.data as Blob | ArrayBuffer | Buffer | string,
+				);
+				const decoded =
+					TO_CLIENT_VERSIONED.deserializeWithEmbeddedVersion(payload);
+				if (predicate && !predicate(decoded)) {
+					return;
+				}
+				cleanup();
+				resolve(decoded);
+			} catch (error) {
+				cleanup();
+				reject(error);
+			}
+		};
+
+		ws.addEventListener("message", onMessage);
+		ws.addEventListener("error", onError);
+	});
+}
+
+async function waitForInspectorMessageWithTag<
+	T extends InspectorMessage["body"]["tag"],
+>(
+	ws: WebSocket,
+	tag: T,
+	timeoutMs = 10_000,
+): Promise<Extract<InspectorMessage, { body: { tag: T } }>> {
+	const message = await waitForInspectorMessage(
+		ws,
+		timeoutMs,
+		(candidate) => candidate.body.tag === tag,
+	);
+	return message as Extract<InspectorMessage, { body: { tag: T } }>;
+}
+
+async function waitForInspectorOpen(ws: WebSocket, timeoutMs = 10_000) {
+	await new Promise<void>((resolve, reject) => {
+		const timeout = setTimeout(() => {
+			cleanup();
+			reject(new Error("Inspector websocket open timed out"));
+		}, timeoutMs);
+
+		const cleanup = () => {
+			clearTimeout(timeout);
+			ws.removeEventListener("open", onOpen);
+			ws.removeEventListener("error", onError);
+		};
+
+		const onOpen = () => {
+			cleanup();
+			resolve();
+		};
+
+		const onError = () => {
+			cleanup();
+			reject(new Error("Inspector websocket failed to open"));
+		};
+
+		ws.addEventListener("open", onOpen);
+		ws.addEventListener("error", onError);
+	});
+}
+
 function isActorStoppingDbError(error: unknown): boolean {
 	return (
 		error instanceof Error &&
@@ -152,6 +269,74 @@ describeDriverMatrix("Actor Inspector", (driverTestConfig) => {
 			// Verify via action
 			const count = await handle.getCount();
 			expect(count).toBe(42);
+		});
+
+		test("PATCH /inspector/state pushes StateUpdated over inspector websocket", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+			const handle = client.counter.getOrCreate([
+				"inspector-state-websocket-patch",
+			]);
+
+			await handle.increment(5);
+
+			const gatewayUrl = await handle.getGatewayUrl();
+			const ws = new WebSocket(buildInspectorWebSocketUrl(gatewayUrl), [
+				"rivet",
+				"rivet_inspector_token.token",
+			]);
+			ws.binaryType = "arraybuffer";
+
+			try {
+				await waitForInspectorOpen(ws);
+
+				await waitForInspectorMessageWithTag(ws, "Init");
+
+				ws.send(
+					TO_SERVER_VERSIONED.serializeWithEmbeddedVersion(
+						{
+							body: {
+								tag: "PatchStateRequest",
+								val: {
+									state: new Uint8Array(
+										cbor.encode({ count: 42 }),
+									).buffer,
+								},
+							},
+						},
+						INSPECTOR_PROTOCOL_VERSION,
+					),
+				);
+
+				const stateUpdated = await waitForInspectorMessageWithTag(
+					ws,
+					"StateUpdated",
+				);
+				expect(
+					cbor.decode(new Uint8Array(stateUpdated.body.val.state)),
+				).toEqual({ count: 42 });
+
+				ws.send(
+					TO_SERVER_VERSIONED.serializeWithEmbeddedVersion(
+						{
+							body: {
+								tag: "StateRequest",
+								val: { id: 1n },
+							},
+						},
+						INSPECTOR_PROTOCOL_VERSION,
+					),
+				);
+
+				const stateResponse = await waitForInspectorMessageWithTag(
+					ws,
+					"StateResponse",
+				);
+				expect(
+					cbor.decode(new Uint8Array(stateResponse.body.val.state!)),
+				).toEqual({ count: 42 });
+			} finally {
+				ws.close();
+			}
 		});
 
 		test("GET /inspector/connections returns connections list", async (c) => {
