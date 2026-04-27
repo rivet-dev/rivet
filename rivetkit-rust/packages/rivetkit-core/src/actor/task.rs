@@ -86,6 +86,10 @@ pub use crate::actor::task_types::LifecycleState;
 mod tests;
 
 #[cfg(test)]
+#[path = "../../tests/modules/task_lifecycle.rs"]
+mod lifecycle_tests;
+
+#[cfg(test)]
 type ShutdownCleanupHook = Arc<dyn Fn(&ActorContext, &'static str) + Send + Sync>;
 
 #[cfg(test)]
