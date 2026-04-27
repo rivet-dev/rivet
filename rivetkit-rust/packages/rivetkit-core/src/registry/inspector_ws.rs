@@ -193,9 +193,10 @@ impl RegistryDispatcher {
 						on_open_instance
 							.inspector
 							.subscribe(Arc::new(move |signal| {
-								if signal == InspectorSignal::StateUpdated {
-									return;
-								}
+								// Keep forwarding persisted StateUpdated signals here.
+								// Overlay broadcasts still carry unsaved in-memory state,
+								// but explicit inspector PATCH saves only emit the
+								// InspectorSignal path after the write completes.
 								let dispatcher = listener_dispatcher.clone();
 								let instance = listener_instance.clone();
 								let sender = listener_sender.clone();
