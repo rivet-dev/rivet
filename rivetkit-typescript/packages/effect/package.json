@@ -35,6 +35,7 @@
 		"effect": ">=4.0.0-beta.0"
 	},
 	"devDependencies": {
+		"@types/node": "^22.13.1",
 		"effect": "4.0.0-beta.57",
 		"tsup": "^8.4.0",
 		"typescript": "^5.5.2"

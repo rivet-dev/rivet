@@ -1,20 +1,7 @@
 {
+	"extends": "../../../tsconfig.base.json",
 	"compilerOptions": {
-		"target": "ES2022",
-		"module": "ESNext",
-		"lib": ["ES2022"],
-		"skipLibCheck": true,
-		"moduleResolution": "bundler",
-		"allowImportingTsExtensions": true,
-		"verbatimModuleSyntax": true,
-		"moduleDetection": "force",
-		"noEmit": true,
-		"strict": true,
-		"noUnusedLocals": true,
-		"noUnusedParameters": true,
-		"erasableSyntaxOnly": true,
-		"noFallthroughCasesInSwitch": true,
-		"noUncheckedSideEffectImports": true
+		"types": ["node"]
 	},
-	"include": ["src"]
+	"include": ["src/**/*"]
 }
