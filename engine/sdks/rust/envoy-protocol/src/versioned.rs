@@ -57,11 +57,11 @@ impl OwnedVersionedData for ToEnvoy {
 	}
 
 	fn deserialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
-		vec![Ok]
+		vec![Ok, Ok]
 	}
 
 	fn serialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
-		vec![Ok]
+		vec![Ok, Ok]
 	}
 }
 
@@ -116,11 +116,11 @@ impl OwnedVersionedData for ToRivet {
 	}
 
 	fn deserialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
-		vec![Ok]
+		vec![Ok, Ok]
 	}
 
 	fn serialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
-		vec![Ok]
+		vec![Ok, Ok]
 	}
 }
 
@@ -175,11 +175,11 @@ impl OwnedVersionedData for ToGateway {
 	}
 
 	fn deserialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
-		vec![Ok]
+		vec![Ok, Ok]
 	}
 
 	fn serialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
-		vec![Ok]
+		vec![Ok, Ok]
 	}
 }
 
@@ -234,11 +234,11 @@ impl OwnedVersionedData for ToOutbound {
 	}
 
 	fn deserialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
-		vec![Ok]
+		vec![Ok, Ok]
 	}
 
 	fn serialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
-		vec![Ok]
+		vec![Ok, Ok]
 	}
 }
 
@@ -296,11 +296,11 @@ impl OwnedVersionedData for ToEnvoyConn {
 	}
 
 	fn deserialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
-		vec![Ok]
+		vec![Ok, Ok]
 	}
 
 	fn serialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
-		vec![Ok]
+		vec![Ok, Ok]
 	}
 }
 
@@ -356,11 +356,11 @@ impl OwnedVersionedData for ActorCommandKeyData {
 	}
 
 	fn deserialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
-		vec![Ok]
+		vec![Ok, Ok]
 	}
 
 	fn serialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
-		vec![Ok]
+		vec![Ok, Ok]
 	}
 }
 
