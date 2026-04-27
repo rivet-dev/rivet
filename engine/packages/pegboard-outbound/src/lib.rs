@@ -26,6 +26,7 @@ mod metrics;
 
 const X_RIVET_ENDPOINT: HeaderName = HeaderName::from_static("x-rivet-endpoint");
 const X_RIVET_POOL_NAME: HeaderName = HeaderName::from_static("x-rivet-pool-name");
+const X_RIVET_TOKEN: HeaderName = HeaderName::from_static("x-rivet-token");
 const X_RIVET_NAMESPACE_NAME: HeaderName = HeaderName::from_static("x-rivet-namespace-name");
 const SHUTDOWN_PROGRESS_INTERVAL: Duration = Duration::from_secs(7);
 static SQLITE_ENGINE: OnceCell<Arc<SqliteEngine>> = OnceCell::const_new();
@@ -343,6 +344,12 @@ async fn handle(ctx: &StandaloneCtx, packet: protocol::ToOutbound) -> Result<()>
 		.with_label_values(&[&namespace_id.to_string(), &pool_name])
 		.inc();
 
+	let token = if let Some(auth) = &ctx.config().auth {
+		Some(auth.admin_token.read().as_str())
+	} else {
+		None
+	};
+
 	let res = serverless_outbound_req(
 		ctx,
 		namespace_id,
@@ -355,6 +362,7 @@ async fn handle(ctx: &StandaloneCtx, packet: protocol::ToOutbound) -> Result<()>
 		headers,
 		request_lifespan,
 		drain_grace_period,
+		token,
 	)
 	.await;
 
@@ -378,9 +386,16 @@ async fn serverless_outbound_req(
 	headers: HashMap<String, String>,
 	request_lifespan: u32,
 	drain_grace_period: u32,
+	token: Option<&str>,
 ) -> Result<()> {
 	let current_dc = ctx.config().topology().current_dc()?;
 	let mut term_signal = TermSignal::get();
+
+	let token_header = if let Some(token) = token {
+		Some((X_RIVET_TOKEN, HeaderValue::try_from(token)?))
+	} else {
+		None
+	};
 
 	let headers = headers
 		.into_iter()
@@ -402,6 +417,7 @@ async fn serverless_outbound_req(
 				HeaderValue::try_from(namespace_name)?,
 			),
 		])
+		.chain(token_header)
 		.collect();
 
 	let endpoint_url = format!("{}/start", url.trim_end_matches('/'));

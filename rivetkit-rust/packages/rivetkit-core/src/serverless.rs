@@ -79,7 +79,7 @@ pub struct ServerlessStreamError {
 #[derive(Debug)]
 struct StartHeaders {
 	endpoint: String,
-	token: Option<String>,
+	token: String,
 	pool_name: String,
 	namespace: String,
 }
@@ -391,20 +391,6 @@ impl CoreServerlessRuntime {
 	}
 
 	fn validate_start_headers(&self, headers: &StartHeaders) -> Result<()> {
-		// TODO: pegboard-outbound does not currently auth the /start endpoint,
-		// so the incoming `x-rivet-token` does not match `config.token`
-		// (which is the user's API token, not a shared pool secret). Re-enable
-		// once the envoy-era serverless pool carries a dedicated shared secret
-		// in its configured headers.
-		// if let Some(expected_token) = &self.settings.configured_token {
-		// 	let Some(received_token) = &headers.token else {
-		// 		return Err(Forbidden.build());
-		// 	};
-		// 	if !constant_time_eq(expected_token, received_token) {
-		// 		return Err(Forbidden.build());
-		// 	}
-		// }
-
 		if self.settings.validate_endpoint {
 			if !endpoints_match(&headers.endpoint, &self.settings.configured_endpoint) {
 				tracing::warn!(
@@ -461,11 +447,7 @@ impl CoreServerlessRuntime {
 		let handle = start_envoy(EnvoyConfig {
 			version: self.settings.version,
 			endpoint: headers.endpoint.clone(),
-			token: self
-				.settings
-				.configured_token
-				.clone()
-				.or_else(|| headers.token.clone()),
+			token: Some(headers.token.clone()),
 			namespace: headers.namespace.clone(),
 			pool_name: headers.pool_name.clone(),
 			prepopulate_actor_names: HashMap::new(),
@@ -512,7 +494,7 @@ fn route_path(base_path: &str, url: &str) -> Result<String> {
 fn parse_start_headers(headers: &HashMap<String, String>) -> Result<StartHeaders> {
 	Ok(StartHeaders {
 		endpoint: required_header(headers, "x-rivet-endpoint")?,
-		token: optional_header(headers, "x-rivet-token"),
+		token: required_header(headers, "x-rivet-token"),
 		pool_name: required_header(headers, "x-rivet-pool-name")?,
 		namespace: required_header(headers, "x-rivet-namespace-name")?,
 	})
