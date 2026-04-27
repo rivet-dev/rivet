@@ -45,7 +45,7 @@ export const GetCount = Action.make("GetCount", {
 
 // Non-completable (fire-and-forget)
 export const Reset = Message.make("Reset", {
-	payload: { reason: Schema.String },
+	payload: Schema.Struct({ reason: Schema.String }),
 })
 
 // Completable (sender can await a typed response)
