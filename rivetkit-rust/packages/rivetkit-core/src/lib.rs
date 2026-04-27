@@ -34,7 +34,11 @@ pub use actor::task::{
 pub use actor::task_types::ShutdownKind;
 pub use error::ActorLifecycle;
 pub use inspector::{Inspector, InspectorSnapshot};
-pub use registry::{CoreRegistry, ServeConfig};
+pub use registry::{
+	CoreRegistry, Datacenter, DatacentersResponse, EngineAdminConfig,
+	RunnerConfigDatacenterRequest, RunnerConfigRequest, ServeConfig, ServerlessRunnerConfig,
+	get_datacenters, update_runner_config, upsert_runner_config_for_all_datacenters,
+};
 pub use serverless::{CoreServerlessRuntime, ServerlessRequest, ServerlessResponse};
 pub use types::{
 	ActorKey, ActorKeySegment, ConnId, ListOpts, SaveStateOpts, WsMessage, format_actor_key,

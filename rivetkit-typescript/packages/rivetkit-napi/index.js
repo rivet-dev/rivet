@@ -310,7 +310,7 @@ if (!nativeBinding) {
   throw new Error(`Failed to load native binding`)
 }
 
-const { ActorContext, NapiActorFactory, CancellationToken, ConnHandle, JsNativeDatabase, Kv, Queue, QueueMessage, CoreRegistry, Schedule, WebSocket } = nativeBinding
+const { ActorContext, NapiActorFactory, CancellationToken, ConnHandle, JsNativeDatabase, Kv, Queue, QueueMessage, getDatacenters, updateRunnerConfig, upsertRunnerConfigForAllDatacenters, CoreRegistry, Schedule, WebSocket } = nativeBinding
 
 module.exports.ActorContext = ActorContext
 module.exports.NapiActorFactory = NapiActorFactory
@@ -320,6 +320,9 @@ module.exports.JsNativeDatabase = JsNativeDatabase
 module.exports.Kv = Kv
 module.exports.Queue = Queue
 module.exports.QueueMessage = QueueMessage
+module.exports.getDatacenters = getDatacenters
+module.exports.updateRunnerConfig = updateRunnerConfig
+module.exports.upsertRunnerConfigForAllDatacenters = upsertRunnerConfigForAllDatacenters
 module.exports.CoreRegistry = CoreRegistry
 module.exports.Schedule = Schedule
 module.exports.WebSocket = WebSocket

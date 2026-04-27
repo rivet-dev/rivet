@@ -7,15 +7,68 @@ use napi::bindgen_prelude::{Buffer, Env, Promise};
 use napi::threadsafe_function::{ErrorStrategy, ThreadSafeCallContext, ThreadsafeFunction};
 use napi_derive::napi;
 use rivetkit_core::{
-	CoreRegistry as NativeCoreRegistry, CoreServerlessRuntime, ServeConfig, ServerlessRequest,
-	serverless::ServerlessStreamError,
+	CoreRegistry as NativeCoreRegistry, CoreServerlessRuntime, Datacenter as CoreDatacenter,
+	DatacentersResponse as CoreDatacentersResponse, EngineAdminConfig as CoreEngineAdminConfig,
+	RunnerConfigDatacenterRequest as CoreRunnerConfigDatacenterRequest,
+	RunnerConfigRequest as CoreRunnerConfigRequest, ServeConfig, ServerlessRequest,
+	ServerlessRunnerConfig as CoreServerlessRunnerConfig, get_datacenters as core_get_datacenters,
+	serverless::ServerlessStreamError, update_runner_config as core_update_runner_config,
+	upsert_runner_config_for_all_datacenters as core_upsert_runner_config_for_all_datacenters,
 };
 use tokio::sync::{Mutex as TokioMutex, Notify};
 use tokio_util::sync::CancellationToken as CoreCancellationToken;
 
 use crate::actor_factory::NapiActorFactory;
 use crate::cancellation_token::CancellationToken;
-use crate::{NapiInvalidState, napi_anyhow_error};
+use crate::{NapiInvalidArgument, NapiInvalidState, napi_anyhow_error};
+
+#[napi(object)]
+pub struct JsEngineAdminConfig {
+	pub endpoint: String,
+	pub token: Option<String>,
+	pub namespace: String,
+	pub headers: Option<HashMap<String, String>>,
+}
+
+#[napi(object)]
+#[derive(Clone)]
+pub struct JsDatacenter {
+	pub name: String,
+}
+
+#[napi(object)]
+#[derive(Clone, Default)]
+pub struct JsDatacentersResponse {
+	pub datacenters: Vec<JsDatacenter>,
+}
+
+#[napi(object)]
+#[derive(Clone)]
+pub struct JsRunnerConfigServerless {
+	pub url: String,
+	pub headers: HashMap<String, String>,
+	pub max_runners: u32,
+	pub min_runners: u32,
+	pub request_lifespan: u32,
+	pub runners_margin: u32,
+	pub slots_per_runner: u32,
+	pub metadata_poll_interval: Option<u32>,
+}
+
+#[napi(object)]
+#[derive(Clone, Default)]
+pub struct JsRunnerConfigDatacenterRequest {
+	pub normal: Option<serde_json::Value>,
+	pub serverless: Option<JsRunnerConfigServerless>,
+	pub metadata: Option<serde_json::Value>,
+	pub drain_on_version_upgrade: Option<bool>,
+}
+
+#[napi(object)]
+#[derive(Clone, Default)]
+pub struct JsRunnerConfigRequest {
+	pub datacenters: HashMap<String, JsRunnerConfigDatacenterRequest>,
+}
 
 #[napi(object)]
 pub struct JsServeConfig {
@@ -55,6 +108,113 @@ pub struct JsServerlessStreamError {
 	pub group: String,
 	pub code: String,
 	pub message: String,
+}
+
+impl From<JsEngineAdminConfig> for CoreEngineAdminConfig {
+	fn from(value: JsEngineAdminConfig) -> Self {
+		Self {
+			endpoint: value.endpoint,
+			token: value.token,
+			namespace: value.namespace,
+			headers: value.headers.unwrap_or_default(),
+		}
+	}
+}
+
+impl From<CoreDatacentersResponse> for JsDatacentersResponse {
+	fn from(value: CoreDatacentersResponse) -> Self {
+		Self {
+			datacenters: value.datacenters.into_iter().map(Into::into).collect(),
+		}
+	}
+}
+
+impl From<CoreDatacenter> for JsDatacenter {
+	fn from(value: CoreDatacenter) -> Self {
+		Self { name: value.name }
+	}
+}
+
+impl From<JsRunnerConfigServerless> for CoreServerlessRunnerConfig {
+	fn from(value: JsRunnerConfigServerless) -> Self {
+		Self {
+			url: value.url,
+			headers: value.headers,
+			max_runners: value.max_runners,
+			min_runners: value.min_runners,
+			request_lifespan: value.request_lifespan,
+			runners_margin: value.runners_margin,
+			slots_per_runner: value.slots_per_runner,
+			metadata_poll_interval: value.metadata_poll_interval,
+		}
+	}
+}
+
+impl TryFrom<JsRunnerConfigDatacenterRequest> for CoreRunnerConfigDatacenterRequest {
+	type Error = napi::Error;
+
+	fn try_from(value: JsRunnerConfigDatacenterRequest) -> Result<Self, Self::Error> {
+		Ok(Self {
+			normal: value
+				.normal
+				.map(|value| json_object_field(value, "normal"))
+				.transpose()?,
+			serverless: value.serverless.map(Into::into),
+			metadata: value
+				.metadata
+				.map(|value| json_object_field(value, "metadata"))
+				.transpose()?,
+			drain_on_version_upgrade: value.drain_on_version_upgrade,
+		})
+	}
+}
+
+impl TryFrom<JsRunnerConfigRequest> for CoreRunnerConfigRequest {
+	type Error = napi::Error;
+
+	fn try_from(value: JsRunnerConfigRequest) -> Result<Self, Self::Error> {
+		let datacenters = value
+			.datacenters
+			.into_iter()
+			.map(|(name, config)| Ok((name, config.try_into()?)))
+			.collect::<Result<HashMap<_, _>, napi::Error>>()?;
+		Ok(Self { datacenters })
+	}
+}
+
+#[napi]
+pub async fn get_datacenters(config: JsEngineAdminConfig) -> napi::Result<JsDatacentersResponse> {
+	let config: CoreEngineAdminConfig = config.into();
+	let response = core_get_datacenters(&config)
+		.await
+		.map_err(napi_anyhow_error)?;
+	Ok(response.into())
+}
+
+#[napi]
+pub async fn update_runner_config(
+	config: JsEngineAdminConfig,
+	runner_name: String,
+	request: JsRunnerConfigRequest,
+) -> napi::Result<()> {
+	let config: CoreEngineAdminConfig = config.into();
+	let request: CoreRunnerConfigRequest = request.try_into()?;
+	core_update_runner_config(&config, &runner_name, &request)
+		.await
+		.map_err(napi_anyhow_error)
+}
+
+#[napi]
+pub async fn upsert_runner_config_for_all_datacenters(
+	config: JsEngineAdminConfig,
+	runner_name: String,
+	datacenter_request: JsRunnerConfigDatacenterRequest,
+) -> napi::Result<()> {
+	let config: CoreEngineAdminConfig = config.into();
+	let datacenter_request: CoreRunnerConfigDatacenterRequest = datacenter_request.try_into()?;
+	core_upsert_runner_config_for_all_datacenters(&config, &runner_name, datacenter_request)
+		.await
+		.map_err(napi_anyhow_error)
 }
 
 #[derive(Clone)]
@@ -450,6 +610,33 @@ fn create_stream_event_tsfn(
 		}
 		Ok(vec![object.into_unknown()])
 	})
+}
+
+fn json_object_field(
+	value: serde_json::Value,
+	argument: &str,
+) -> napi::Result<HashMap<String, serde_json::Value>> {
+	match value {
+		serde_json::Value::Object(map) => Ok(map.into_iter().collect()),
+		other => Err(napi_anyhow_error(
+			NapiInvalidArgument {
+				argument: argument.to_owned(),
+				reason: format!("expected JSON object, got {}", json_value_kind(&other)),
+			}
+			.build(),
+		)),
+	}
+}
+
+fn json_value_kind(value: &serde_json::Value) -> &'static str {
+	match value {
+		serde_json::Value::Null => "null",
+		serde_json::Value::Bool(_) => "boolean",
+		serde_json::Value::Number(_) => "number",
+		serde_json::Value::String(_) => "string",
+		serde_json::Value::Array(_) => "array",
+		serde_json::Value::Object(_) => "object",
+	}
 }
 
 async fn deliver_stream_event(

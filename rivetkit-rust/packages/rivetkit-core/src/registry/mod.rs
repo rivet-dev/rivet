@@ -68,6 +68,11 @@ mod runner_config;
 mod websocket;
 
 use inspector::build_actor_inspector;
+pub use runner_config::{
+	Datacenter, DatacentersResponse, EngineAdminConfig, RunnerConfigDatacenterRequest,
+	RunnerConfigRequest, ServerlessRunnerConfig, get_datacenters, update_runner_config,
+	upsert_runner_config_for_all_datacenters,
+};
 use websocket::is_actor_connect_path;
 
 /// Bound on `handle.shutdown_and_wait` inside `serve_with_config` teardown.

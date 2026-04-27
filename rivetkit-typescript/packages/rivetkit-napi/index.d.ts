@@ -137,6 +137,37 @@ export interface JsQueueInspectMessage {
   name: string
   createdAtMs: number
 }
+export interface JsEngineAdminConfig {
+  endpoint: string
+  token?: string
+  namespace: string
+  headers?: Record<string, string>
+}
+export interface JsDatacenter {
+  name: string
+}
+export interface JsDatacentersResponse {
+  datacenters: Array<JsDatacenter>
+}
+export interface JsRunnerConfigServerless {
+  url: string
+  headers: Record<string, string>
+  maxRunners: number
+  minRunners: number
+  requestLifespan: number
+  runnersMargin: number
+  slotsPerRunner: number
+  metadataPollInterval?: number
+}
+export interface JsRunnerConfigDatacenterRequest {
+  normal?: any
+  serverless?: JsRunnerConfigServerless
+  metadata?: any
+  drainOnVersionUpgrade?: boolean
+}
+export interface JsRunnerConfigRequest {
+  datacenters: Record<string, JsRunnerConfigDatacenterRequest>
+}
 export interface JsServeConfig {
   version: number
   endpoint: string
@@ -168,6 +199,9 @@ export interface JsServerlessStreamError {
   code: string
   message: string
 }
+export declare function getDatacenters(config: JsEngineAdminConfig): Promise<JsDatacentersResponse>
+export declare function updateRunnerConfig(config: JsEngineAdminConfig, runnerName: string, request: JsRunnerConfigRequest): Promise<void>
+export declare function upsertRunnerConfigForAllDatacenters(config: JsEngineAdminConfig, runnerName: string, datacenterRequest: JsRunnerConfigDatacenterRequest): Promise<void>
 /** Options for KV list operations. */
 export interface JsKvListOptions {
   reverse?: boolean

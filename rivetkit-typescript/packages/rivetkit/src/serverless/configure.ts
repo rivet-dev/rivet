@@ -1,8 +1,4 @@
-import { convertRegistryConfigToClientConfig } from "@/client/config";
-import {
-	getDatacenters,
-	updateRunnerConfig,
-} from "@/engine-client/api-endpoints";
+import { upsertRunnerConfigForAllDatacenters } from "@/engine-client/runner-config";
 import type { RegistryConfig } from "@/registry/config";
 import { logger } from "@/registry/log";
 
@@ -23,34 +19,27 @@ export async function configureServerlessPool(
 		}
 
 		const customConfig = config.configurePool;
-		const clientConfig = convertRegistryConfigToClientConfig(config);
-		const dcsRes = await getDatacenters(clientConfig);
 		const poolName = customConfig.name ?? "default";
 		const headers = {
 			...(config.token ? { "x-rivet-token": config.token } : {}),
 			...(customConfig.headers ?? {}),
 		};
-		const serverlessConfig = {
+
+		await upsertRunnerConfigForAllDatacenters(config, poolName, {
 			serverless: {
 				url: customConfig.url,
 				headers,
-				request_lifespan: customConfig.requestLifespan ?? 15 * 60,
-				metadata_poll_interval:
+				requestLifespan: customConfig.requestLifespan ?? 15 * 60,
+				metadataPollInterval:
 					customConfig.metadataPollInterval ?? 1000,
-				max_runners: 100_000,
-				min_runners: 0,
-				runners_margin: 0,
-				slots_per_runner: 1,
+				maxRunners: 100_000,
+				minRunners: 0,
+				runnersMargin: 0,
+				slotsPerRunner: 1,
 			},
 			metadata: customConfig.metadata ?? {},
-			drain_on_version_upgrade:
+			drainOnVersionUpgrade:
 				customConfig.drainOnVersionUpgrade ?? true,
-		};
-
-		await updateRunnerConfig(clientConfig, poolName, {
-			datacenters: Object.fromEntries(
-				dcsRes.datacenters.map((dc) => [dc.name, serverlessConfig]),
-			),
 		});
 
 		logger().info({

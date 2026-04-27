@@ -96,52 +96,6 @@ export async function getMetadata(
 	return apiCall<never, MetadataResponse>(config, "GET", `/metadata`);
 }
 
-// MARK: Get datacenters
-export interface DatacentersResponse {
-	datacenters: { name: string }[];
-}
-
-export async function getDatacenters(
-	config: ClientConfig,
-): Promise<DatacentersResponse> {
-	return apiCall<never, DatacentersResponse>(config, "GET", `/datacenters`);
-}
-
-// MARK: Update runner config
-export interface RegistryConfigRequest {
-	datacenters: Record<
-		string,
-		{
-			normal?: Record<string, unknown>;
-			serverless?: {
-				url: string;
-				headers: Record<string, string>;
-				max_runners: number;
-				min_runners: number;
-				request_lifespan: number;
-				runners_margin: number;
-				slots_per_runner: number;
-				metadata_poll_interval?: number;
-			};
-			metadata?: Record<string, unknown>;
-			drain_on_version_upgrade?: boolean;
-		}
-	>;
-}
-
-export async function updateRunnerConfig(
-	config: ClientConfig,
-	runnerName: string,
-	request: RegistryConfigRequest,
-): Promise<void> {
-	return apiCall<RegistryConfigRequest, void>(
-		config,
-		"PUT",
-		`/runner-configs/${runnerName}`,
-		request,
-	);
-}
-
 // MARK: KV Get
 interface KvGetResponse {
 	update_ts: string;
