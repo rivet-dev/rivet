@@ -10,6 +10,7 @@
 | RunnerConfigsServerlessMetadataErrorOneOf3 |  |
 | RunnerConfigsServerlessMetadataErrorOneOf4 |  |
 | RunnerConfigsServerlessMetadataErrorOneOf5 |  |
+| RunnerConfigsServerlessMetadataErrorOneOf6 |  |
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)
 

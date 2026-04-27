@@ -101,6 +101,8 @@ Class | Method | HTTP request | Description
  - [RunnerConfigsServerlessMetadataErrorOneOf4InvalidResponseJson](docs/RunnerConfigsServerlessMetadataErrorOneOf4InvalidResponseJson.md)
  - [RunnerConfigsServerlessMetadataErrorOneOf5](docs/RunnerConfigsServerlessMetadataErrorOneOf5.md)
  - [RunnerConfigsServerlessMetadataErrorOneOf5InvalidResponseSchema](docs/RunnerConfigsServerlessMetadataErrorOneOf5InvalidResponseSchema.md)
+ - [RunnerConfigsServerlessMetadataErrorOneOf6](docs/RunnerConfigsServerlessMetadataErrorOneOf6.md)
+ - [RunnerConfigsServerlessMetadataErrorOneOf6InvalidEnvoyProtocolVersion](docs/RunnerConfigsServerlessMetadataErrorOneOf6InvalidEnvoyProtocolVersion.md)
  - [RunnerConfigsUpsertRequestBody](docs/RunnerConfigsUpsertRequestBody.md)
  - [RunnerConfigsUpsertResponse](docs/RunnerConfigsUpsertResponse.md)
  - [RunnersListNamesResponse](docs/RunnersListNamesResponse.md)

@@ -5,7 +5,7 @@ use anyhow::Result;
 use gas::prelude::*;
 use reqwest::header::{HeaderMap as ReqwestHeaderMap, HeaderName, HeaderValue};
 use rivet_envoy_protocol::PROTOCOL_VERSION;
-use rivetkit_shared_types::serverless_metadata::{ActorName, ServerlessMetadataPayload};
+use rivetkit_shared_types::serverless_metadata::ServerlessMetadataPayload;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
@@ -28,7 +28,7 @@ pub enum ServerlessMetadataError {
 	NonSuccessStatus { status_code: u16, body: String },
 	InvalidResponseJson { body: String, parse_error: String },
 	InvalidResponseSchema { runtime: String, version: String },
-	InvalidEnvoyProtocolVersion { version: u16 },
+	InvalidEnvoyProtocolVersion { version: u16, max_supported: u16 },
 }
 
 #[derive(Debug, Clone)]
@@ -175,6 +175,7 @@ pub async fn pegboard_serverless_metadata_fetch(
 		if envoy_protocol_version < 1 || envoy_protocol_version > PROTOCOL_VERSION {
 			return Ok(Err(ServerlessMetadataError::InvalidEnvoyProtocolVersion {
 				version: envoy_protocol_version,
+				max_supported: PROTOCOL_VERSION,
 			}));
 		}
 	}

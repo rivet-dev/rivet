@@ -132,6 +132,8 @@ pub struct ServerlessMetadataError {
 	pub message: String,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub details: Option<String>,
+	#[serde(default)]
+	pub metadata: serde_json::Value,
 }
 
 pub async fn build_runner_configs_serverless_health_check_request(
