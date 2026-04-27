@@ -69,7 +69,9 @@ export const Counter = Actor.make("Counter", {
 	messages: [Reset, IncrementBy],	// durable, queued, background
 	events: { countChanged: Schema.Number },
 	options: {
-		name: "Counter",	// Human-friendly display name
-		icon: "comments", 	// FontAwesome icon name
+		name: "Counter",				// Human-friendly display name
+		icon: "comments", 				// FontAwesome icon name
+		maxQueueSize: 1000,				// Max number of pending messages
+		maxQueueMessageSize: 64 * 1024,	// Max bytes per message
 	},
 })
