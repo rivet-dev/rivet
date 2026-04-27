@@ -1045,29 +1045,26 @@ export class EngineActorDriver implements ActorDriver {
 				staticActor.metrics.startup.instantiateMs = instantiateMs;
 				staticActor.metrics.startup.kvRoundTrips = driverKvRoundTrips;
 
-				// Apply protocol limits as per-instance overrides without mutating the shared definition
+				// Cap the actor's graceful shutdown window to fit inside the
+				// engine's stop deadline, leaving a 1s safety margin. On
+				// serverless this also adds the drain grace period so sleep
+				// can run during the drain window.
 				const protocolMetadata = this.#envoy.getProtocolMetadata();
 				if (protocolMetadata) {
 					const stopThresholdMax = Math.max(
 						Number(protocolMetadata.actorStopThreshold) - 1000,
 						0,
 					);
-					staticActor.overrides.onSleepTimeout = stopThresholdMax;
-					staticActor.overrides.onDestroyTimeout = stopThresholdMax;
-					staticActor.overrides.sleepGracePeriod = stopThresholdMax;
-
-					if (protocolMetadata.serverlessDrainGracePeriod) {
-						const drainMax = Math.max(
-							Number(
-								protocolMetadata.serverlessDrainGracePeriod,
-							) - 1000,
-							0,
-						);
-						staticActor.overrides.runStopTimeout = drainMax;
-						staticActor.overrides.waitUntilTimeout = drainMax;
-						staticActor.overrides.sleepGracePeriod =
-							stopThresholdMax + drainMax;
-					}
+					const drainMax = protocolMetadata.serverlessDrainGracePeriod
+						? Math.max(
+								Number(
+									protocolMetadata.serverlessDrainGracePeriod,
+								) - 1000,
+								0,
+							)
+						: 0;
+					staticActor.overrides.sleepGracePeriod =
+						stopThresholdMax + drainMax;
 				}
 
 				// Start actor

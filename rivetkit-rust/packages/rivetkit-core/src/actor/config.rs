@@ -10,9 +10,7 @@ const DEFAULT_CREATE_CONN_STATE_TIMEOUT: Duration = Duration::from_secs(5);
 const DEFAULT_ON_BEFORE_CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
 const DEFAULT_ON_CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
 const DEFAULT_ON_MIGRATE_TIMEOUT: Duration = Duration::from_secs(30);
-const DEFAULT_ON_DESTROY_TIMEOUT: Duration = Duration::from_secs(15);
 const DEFAULT_ACTION_TIMEOUT: Duration = Duration::from_secs(60);
-const DEFAULT_WAIT_UNTIL_TIMEOUT: Duration = Duration::from_secs(15);
 const DEFAULT_SLEEP_TIMEOUT: Duration = Duration::from_secs(30);
 const DEFAULT_SLEEP_GRACE_PERIOD: Duration = Duration::from_secs(15);
 const DEFAULT_CONNECTION_LIVENESS_TIMEOUT: Duration = Duration::from_millis(2500);
@@ -49,8 +47,6 @@ impl Default for CanHibernateWebSocket {
 #[derive(Clone, Debug, Default)]
 pub struct ActorConfigOverrides {
 	pub sleep_grace_period: Option<Duration>,
-	pub on_destroy_timeout: Option<Duration>,
-	pub wait_until_timeout: Option<Duration>,
 }
 
 #[derive(Clone, Debug)]
@@ -75,9 +71,7 @@ pub struct ActorConfig {
 	pub on_before_connect_timeout: Duration,
 	pub on_connect_timeout: Duration,
 	pub on_migrate_timeout: Duration,
-	pub on_destroy_timeout: Duration,
 	pub action_timeout: Duration,
-	pub wait_until_timeout: Duration,
 	pub sleep_timeout: Duration,
 	pub no_sleep: bool,
 	pub sleep_grace_period: Duration,
@@ -111,7 +105,6 @@ pub struct ActorConfigInput {
 	pub on_before_connect_timeout_ms: Option<u32>,
 	pub on_connect_timeout_ms: Option<u32>,
 	pub on_migrate_timeout_ms: Option<u32>,
-	pub on_destroy_timeout_ms: Option<u32>,
 	pub action_timeout_ms: Option<u32>,
 	pub sleep_timeout_ms: Option<u32>,
 	pub no_sleep: Option<bool>,
@@ -158,9 +151,6 @@ impl ActorConfig {
 		if let Some(value) = config.on_migrate_timeout_ms {
 			actor_config.on_migrate_timeout = duration_ms(value);
 		}
-		if let Some(value) = config.on_destroy_timeout_ms {
-			actor_config.on_destroy_timeout = duration_ms(value);
-		}
 		if let Some(value) = config.action_timeout_ms {
 			actor_config.action_timeout = duration_ms(value);
 		}
@@ -204,24 +194,6 @@ impl ActorConfig {
 		actor_config
 	}
 
-	pub fn effective_on_destroy_timeout(&self) -> Duration {
-		cap_duration(
-			self.on_destroy_timeout,
-			self.overrides
-				.as_ref()
-				.and_then(|overrides| overrides.on_destroy_timeout),
-		)
-	}
-
-	pub fn effective_wait_until_timeout(&self) -> Duration {
-		cap_duration(
-			self.wait_until_timeout,
-			self.overrides
-				.as_ref()
-				.and_then(|overrides| overrides.wait_until_timeout),
-		)
-	}
-
 	pub fn effective_sleep_grace_period(&self) -> Duration {
 		cap_duration(
 			self.sleep_grace_period,
@@ -246,9 +218,7 @@ impl Default for ActorConfig {
 			on_before_connect_timeout: DEFAULT_ON_BEFORE_CONNECT_TIMEOUT,
 			on_connect_timeout: DEFAULT_ON_CONNECT_TIMEOUT,
 			on_migrate_timeout: DEFAULT_ON_MIGRATE_TIMEOUT,
-			on_destroy_timeout: DEFAULT_ON_DESTROY_TIMEOUT,
 			action_timeout: DEFAULT_ACTION_TIMEOUT,
-			wait_until_timeout: DEFAULT_WAIT_UNTIL_TIMEOUT,
 			sleep_timeout: DEFAULT_SLEEP_TIMEOUT,
 			no_sleep: false,
 			sleep_grace_period: DEFAULT_SLEEP_GRACE_PERIOD,
