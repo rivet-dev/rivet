@@ -24,4 +24,7 @@ pub enum SqliteStorageError {
 
 	#[error("invalid sqlite v1 migration state")]
 	InvalidV1MigrationState,
+
+	#[error("concurrent takeover detected, disconnecting actor")]
+	ConcurrentTakeover,
 }

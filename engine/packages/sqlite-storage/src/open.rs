@@ -66,16 +66,44 @@ impl SqliteEngine {
 		actor_id: &str,
 		now_ms: i64,
 	) -> Result<PrepareV1MigrationResult> {
-		self.reset_v1_migration(actor_id, now_ms, false)
-			.await?
-			.context("v1 migration reset unexpectedly returned no state")
+		match self.open_dbs.entry_async(actor_id.to_string()).await {
+			scc::hash_map::Entry::Occupied(_) => {
+				ensure!(false, "sqlite db already open for actor");
+			}
+			scc::hash_map::Entry::Vacant(entry) => {
+				entry.insert_entry(OpenDb { generation: 0 });
+			}
+		}
+
+		let result = self.reset_v1_migration(actor_id, now_ms, false).await;
+		match result {
+			Ok(Some(result)) => {
+				self.open_dbs
+					.update_async(actor_id, |_, open_db| {
+						open_db.generation = result.meta.generation;
+					})
+					.await
+					.context("sqlite open state missing after v1 migration prepare")?;
+				Ok(result)
+			}
+			Ok(None) => {
+				self.open_dbs.remove_async(&actor_id.to_string()).await;
+				None.context("v1 migration reset unexpectedly returned no state")
+			}
+			Err(err) => {
+				self.open_dbs.remove_async(&actor_id.to_string()).await;
+				Err(err)
+			}
+		}
 	}
 
 	pub async fn invalidate_v1_migration(&self, actor_id: &str, now_ms: i64) -> Result<bool> {
-		Ok(self
-			.reset_v1_migration(actor_id, now_ms, true)
-			.await?
-			.is_some())
+		let reset = self.reset_v1_migration(actor_id, now_ms, true).await?;
+		if reset.is_some() {
+			self.open_dbs.remove_async(&actor_id.to_string()).await;
+		}
+
+		Ok(reset.is_some())
 	}
 
 	async fn reset_v1_migration(
@@ -96,10 +124,13 @@ impl SqliteEngine {
 					udb::tx_get_value_serializable(&tx, &subspace, &meta_storage_key).await?
 				{
 					let existing_head = decode_db_head(&existing_meta)?;
-					ensure!(
-						matches!(existing_head.origin, SqliteOrigin::MigratingFromV1),
-						SqliteStorageError::InvalidV1MigrationState
-					);
+					if !matches!(existing_head.origin, SqliteOrigin::MigratingFromV1) {
+						if require_stage_in_progress {
+							return Ok(None);
+						}
+
+						return Err(SqliteStorageError::ConcurrentTakeover.into());
+					}
 					let stage_in_progress =
 						existing_head.next_txid > existing_head.head_txid.saturating_add(1);
 					if require_stage_in_progress && !stage_in_progress {
