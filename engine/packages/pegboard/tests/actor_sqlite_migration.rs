@@ -414,7 +414,7 @@ async fn bails_when_v2_meta_is_unreadable() -> Result<()> {
 }
 
 #[tokio::test]
-async fn recovers_a_pending_v1_journal_before_import() -> Result<()> {
+async fn rejects_v1_journal_sidecars() -> Result<()> {
 	let db = test_db().await?;
 	let actor_id = Id::new_v1(1);
 	let recipient = recipient(actor_id);
@@ -422,12 +422,17 @@ async fn recovers_a_pending_v1_journal_before_import() -> Result<()> {
 	seed_v1_file(&db, &recipient, FILE_TAG_MAIN, &main).await?;
 	seed_v1_file(&db, &recipient, FILE_TAG_JOURNAL, &journal).await?;
 
-	assert!(migrate(&db, actor_id).await?.migrated);
-
-	let (engine, _compaction_rx) = pegboard::actor_sqlite::new_engine(db.clone());
-	assert_eq!(
-		query_note_values(&load_v2_bytes(&engine, &actor_id.to_string()).await?)?,
-		vec!["before"]
+	let err = migrate(&db, actor_id)
+		.await
+		.expect_err("journal sidecar should fail migration");
+	let msg = err.to_string();
+	assert!(
+		msg.contains("crashed during a write transaction"),
+		"unexpected error: {err:?}"
+	);
+	assert!(
+		msg.contains(&actor_id.to_string()),
+		"error should include actor id: {err:?}"
 	);
 
 	Ok(())
@@ -456,6 +461,29 @@ async fn migrates_zero_size_v1_state_without_pages() -> Result<()> {
 }
 
 #[tokio::test]
+async fn rejects_v1_main_with_corrupt_magic_byte() -> Result<()> {
+	let db = test_db().await?;
+	let actor_id = Id::new_v1(1);
+	let recipient = recipient(actor_id);
+	let mut fixture = build_fixture_db(&["needs-magic"])?;
+	// Flip a byte in the SQLite magic header. rusqlite would have refused
+	// to open this file at all; in the simplified path the in-memory header
+	// validation is the only line of defense, so this test pins it down.
+	fixture[0] = b'X';
+	seed_v1_file(&db, &recipient, FILE_TAG_MAIN, &fixture).await?;
+
+	let err = migrate(&db, actor_id)
+		.await
+		.expect_err("corrupt magic should fail migration");
+	assert!(
+		err.to_string().contains("magic bytes mismatch"),
+		"unexpected error: {err:?}"
+	);
+
+	Ok(())
+}
+
+#[tokio::test]
 async fn rejects_v1_databases_with_unsupported_page_size() -> Result<()> {
 	let db = test_db().await?;
 	let actor_id = Id::new_v1(1);
@@ -468,7 +496,7 @@ async fn rejects_v1_databases_with_unsupported_page_size() -> Result<()> {
 		.expect_err("unsupported page size should fail migration");
 	assert!(
 		err.to_string()
-			.contains("sqlite page size 8192 is not supported by sqlite v2"),
+			.contains("sqlite v1 page size 8192 is not supported"),
 		"unexpected error: {err:?}"
 	);
 
@@ -488,8 +516,7 @@ async fn rejects_v1_wal_sidecars() -> Result<()> {
 		.await
 		.expect_err("wal sidecar should fail migration");
 	assert!(
-		err.to_string()
-			.contains("unexpected sqlite v1 WAL sidecar present"),
+		err.to_string().contains("unexpected WAL sidecar"),
 		"unexpected error: {err:?}"
 	);
 
@@ -509,8 +536,7 @@ async fn rejects_v1_shm_sidecars() -> Result<()> {
 		.await
 		.expect_err("shm sidecar should fail migration");
 	assert!(
-		err.to_string()
-			.contains("unexpected sqlite v1 SHM sidecar present"),
+		err.to_string().contains("unexpected SHM sidecar"),
 		"unexpected error: {err:?}"
 	);
 
