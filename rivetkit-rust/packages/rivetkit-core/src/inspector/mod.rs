@@ -199,6 +199,7 @@ pub fn encode_response_payload(payload: &[u8], target_version: u16) -> anyhow::R
 	protocol::encode_server_payload(&message, target_version)
 }
 
+// Test shim keeps moved tests in crate-root tests/ with private-module access.
 #[cfg(test)]
-#[path = "../../tests/modules/inspector.rs"]
+#[path = "../../tests/inspector.rs"]
 mod tests;

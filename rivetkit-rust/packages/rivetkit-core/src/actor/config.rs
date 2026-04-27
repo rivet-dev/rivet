@@ -282,6 +282,7 @@ fn duration_ms(value: u32) -> Duration {
 	Duration::from_millis(u64::from(value))
 }
 
+// Test shim keeps moved tests in crate-root tests/ with private-module access.
 #[cfg(test)]
-#[path = "../../tests/modules/config.rs"]
+#[path = "../../tests/config.rs"]
 mod tests;
