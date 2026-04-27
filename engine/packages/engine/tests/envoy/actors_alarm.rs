@@ -867,8 +867,6 @@ fn alarm_in_the_past() {
 		})
 		.await;
 
-		let lifecycle_rx = runner.subscribe_lifecycle_events();
-
 		let res = common::create_actor(
 			ctx.leader_dc().guard_port(),
 			&namespace,
@@ -883,15 +881,21 @@ fn alarm_in_the_past() {
 		// Wait for actor to be ready (gen 2)
 		ready_rx.await.expect("actor should send ready signal");
 
-		// A past alarm can wake the actor before the API observes sleep_ts.
-		wait_for_actor_wake_from_alarm(lifecycle_rx, &actor_id, 2, 5)
+		// Actor sets alarm in the past and sleeps
+		wait_for_actor_sleep(ctx.leader_dc().guard_port(), &actor_id, &namespace, 5)
+			.await
+			.expect("actor should be asleep");
+
+		// The past alarm should fire immediately, waking the actor
+		wait_for_actor_wake_polling(ctx.leader_dc().guard_port(), &actor_id, &namespace, 2)
 			.await
 			.expect("actor should wake immediately from past alarm");
 
-		// Verify the API view has caught up and the actor is awake at gen 2.
-		let actor = wait_for_actor_wake_polling(ctx.leader_dc().guard_port(), &actor_id, &namespace, 2)
+		// Verify actor is awake at gen 2
+		let actor = common::try_get_actor(ctx.leader_dc().guard_port(), &actor_id, &namespace)
 			.await
-			.expect("actor should be awake");
+			.expect("failed to get actor")
+			.expect("actor should exist");
 
 		assert!(actor.sleep_ts.is_none(), "actor should be awake");
 		assert!(

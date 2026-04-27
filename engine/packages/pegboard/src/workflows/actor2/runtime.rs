@@ -5,7 +5,6 @@ use futures_util::TryStreamExt;
 use gas::prelude::*;
 use rand::prelude::SliceRandom;
 use rivet_envoy_protocol::{self as protocol, PROTOCOL_VERSION, versioned};
-use rivet_types::actors::CrashPolicy;
 use rivet_types::runner_configs::RunnerConfigKind;
 use universaldb::prelude::*;
 use universalpubsub::PublishOpts;
@@ -147,7 +146,7 @@ impl RetryBackoffState {
 #[derive(Debug, Serialize, Deserialize, Hash)]
 pub struct AllocateInput {}
 
-#[derive(Clone, Debug, Serialize, Deserialize, Hash)]
+#[derive(Debug, Serialize, Deserialize, Hash)]
 #[serde(rename_all = "snake_case")]
 pub enum Allocation {
 	Serverless,
@@ -406,6 +405,7 @@ pub async fn reschedule_actor(
 
 		match &allocation {
 			Allocation::Serverless => {
+				// Transition to allocating
 				state.transition = Transition::Allocating {
 					destroy_after_start: false,
 					lost_timeout_ts: allocate_res.now
@@ -413,6 +413,7 @@ pub async fn reschedule_actor(
 				};
 			}
 			Allocation::Serverful { .. } => {
+				// Transition to starting
 				state.transition = Transition::Starting {
 					destroy_after_start: false,
 					lost_timeout_ts: allocate_res.now
@@ -561,11 +562,7 @@ pub async fn handle_stopped(
 				code: protocol::StopCode::Error,
 				..
 			}
-			| StoppedVariant::Lost { .. } => match input.crash_policy {
-				CrashPolicy::Restart => Decision::Reallocate,
-				CrashPolicy::Sleep => Decision::Sleep,
-				CrashPolicy::Destroy => Decision::Destroy,
-			},
+			| StoppedVariant::Lost { .. } => Decision::Sleep,
 		},
 	};
 
@@ -589,26 +586,16 @@ pub async fn handle_stopped(
 				ctx.activity(SendOutboundInput {
 					generation: state.generation,
 					input: input.input.clone(),
-					allocation: allocation.clone(),
+					allocation,
 				})
 				.await?;
 
-				match &allocation {
-					Allocation::Serverless => {
-						state.transition = Transition::Allocating {
-							destroy_after_start: false,
-							lost_timeout_ts: allocate_res.now
-								+ ctx.config().pegboard().actor_allocation_threshold(),
-						};
-					}
-					Allocation::Serverful { .. } => {
-						state.transition = Transition::Starting {
-							destroy_after_start: false,
-							lost_timeout_ts: allocate_res.now
-								+ ctx.config().pegboard().actor_start_threshold(),
-						};
-					}
-				}
+				// Transition to allocating
+				state.transition = Transition::Allocating {
+					destroy_after_start: false,
+					lost_timeout_ts: allocate_res.now
+						+ ctx.config().pegboard().actor_allocation_threshold(),
+				};
 			} else {
 				// Transition to retry backoff
 				state.transition = Transition::Reallocating {
@@ -763,7 +750,6 @@ pub async fn set_connectable(ctx: &ActivityCtx, input: &SetConnectableInput) -> 
 		state.start_ts = Some(now);
 	}
 	state.connectable_ts = Some(now);
-	state.sleep_ts = None;
 	state.envoy_key = Some(input.envoy_key.clone());
 
 	let namespace_id = state.namespace_id;
@@ -773,7 +759,6 @@ pub async fn set_connectable(ctx: &ActivityCtx, input: &SetConnectableInput) -> 
 			let tx = tx.with_subspace(keys::subspace());
 
 			tx.write(&keys::actor::ConnectableKey::new(actor_id), ())?;
-			tx.delete(&keys::actor::SleepTsKey::new(actor_id));
 			tx.write(
 				&keys::actor::EnvoyKeyKey::new(actor_id),
 				input.envoy_key.clone(),

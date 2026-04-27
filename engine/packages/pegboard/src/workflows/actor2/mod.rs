@@ -1,8 +1,7 @@
 use futures_util::FutureExt;
 use gas::prelude::*;
-use rivet_data::converted::{ActorByKeyKeyData, ActorNameKeyData};
+use rivet_data::converted::ActorByKeyKeyData;
 use rivet_envoy_protocol as protocol;
-use rivet_types::actors::CrashPolicy;
 use universaldb::prelude::*;
 
 use crate::errors;
@@ -17,10 +16,6 @@ use runtime::{StoppedResult, Transition};
 /// Batch size of how many events to ack.
 const EVENT_ACK_BATCH_SIZE: i64 = 250;
 
-fn default_crash_policy() -> CrashPolicy {
-	CrashPolicy::Sleep
-}
-
 // NOTE: Assumes input is validated.
 #[derive(Clone, Debug, Serialize, Deserialize, Hash)]
 pub struct Input {
@@ -28,8 +23,6 @@ pub struct Input {
 	pub name: String,
 	pub pool_name: String,
 	pub key: Option<String>,
-	#[serde(default = "default_crash_policy")]
-	pub crash_policy: CrashPolicy,
 
 	pub namespace_id: Id,
 
@@ -44,8 +37,6 @@ pub struct State {
 	pub name: String,
 	pub pool_name: String,
 	pub key: Option<String>,
-	#[serde(default = "default_crash_policy")]
-	pub crash_policy: CrashPolicy,
 	pub namespace_id: Id,
 
 	pub acquired_slot: bool,
@@ -78,7 +69,6 @@ impl State {
 		name: String,
 		pool_name: String,
 		key: Option<String>,
-		crash_policy: CrashPolicy,
 		namespace_id: Id,
 		create_ts: i64,
 	) -> Self {
@@ -87,7 +77,6 @@ impl State {
 			name,
 			pool_name,
 			key,
-			crash_policy,
 			namespace_id,
 
 			acquired_slot: false,
@@ -128,7 +117,6 @@ pub async fn pegboard_actor2(ctx: &mut WorkflowCtx, input: &Input) -> Result<()>
 		name: input.name.clone(),
 		pool_name: input.pool_name.clone(),
 		key: input.key.clone(),
-		crash_policy: input.crash_policy,
 		namespace_id: input.namespace_id,
 		create_ts: ctx.create_ts(),
 		from_v1: input.from_v1,
@@ -259,7 +247,6 @@ pub struct InitStateAndUdbInput {
 	pub key: Option<String>,
 	pub namespace_id: Id,
 	pub pool_name: String,
-	pub crash_policy: CrashPolicy,
 	pub create_ts: i64,
 	pub from_v1: bool,
 }
@@ -273,7 +260,6 @@ pub async fn insert_state_and_db(ctx: &ActivityCtx, input: &InitStateAndUdbInput
 		input.name.clone(),
 		input.pool_name.clone(),
 		input.key.clone(),
-		input.crash_policy,
 		input.namespace_id,
 		input.create_ts,
 	));
@@ -372,16 +358,6 @@ pub async fn populate_indexes(ctx: &ActivityCtx, input: &PopulateIndexesInput) -
 					),
 					ctx.workflow_id(),
 				)?;
-
-				let name_key = crate::keys::ns::ActorNameKey::new(namespace_id, name.clone());
-				if !tx.exists(&name_key, Serializable).await? {
-					tx.write(
-						&name_key,
-						ActorNameKeyData {
-							metadata: serde_json::Map::new(),
-						},
-					)?;
-				}
 
 				// NOTE: keys::ns::ActorByKeyKey is written in actor_keys.rs when reserved by epoxy
 
