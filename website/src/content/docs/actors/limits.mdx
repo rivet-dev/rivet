@@ -128,8 +128,7 @@ See [Actor Input](/docs/actors/input) for details.
 | Create vars timeout | 5 seconds | — | Timeout for `createVars` hook. Configurable via `createVarsTimeout`. |
 | Create conn state timeout | 5 seconds | — | Timeout for `createConnState` hook. Configurable via `createConnStateTimeout`. |
 | On connect timeout | 5 seconds | — | Timeout for `onConnect` hook. Configurable via `onConnectTimeout`. |
-| Sleep grace period | 15 seconds | — | Total graceful sleep budget for `onSleep`, `waitUntil`, `keepAwake`, and async raw WebSocket handlers. |
-| On destroy timeout | 15 seconds | — | Total graceful destroy budget for `onDestroy`, run handler shutdown, and connection cleanup. Configurable via `onDestroyTimeout`. |
+| Sleep grace period | 15 seconds | — | Total graceful shutdown budget for both sleep and destroy. Covers `onSleep`/`onDestroy`, run handler shutdown, `waitUntil`, `keepAwake`, async raw WebSocket handlers, and connection cleanup. Configurable via `sleepGracePeriod`. |
 | Sleep timeout | 30 seconds | — | Time of inactivity before actor hibernates. Configurable via `sleepTimeout`. |
 | State save interval | 10 seconds | — | Interval between automatic state saves. Configurable via `stateSaveInterval`. |
 

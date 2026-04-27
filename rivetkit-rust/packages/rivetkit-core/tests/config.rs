@@ -43,9 +43,7 @@ mod moved_tests {
 		);
 		assert_eq!(config.on_connect_timeout, default.on_connect_timeout);
 		assert_eq!(config.on_migrate_timeout, default.on_migrate_timeout);
-		assert_eq!(config.on_destroy_timeout, default.on_destroy_timeout);
 		assert_eq!(config.action_timeout, default.action_timeout);
-		assert_eq!(config.wait_until_timeout, default.wait_until_timeout);
 		assert_eq!(config.sleep_timeout, default.sleep_timeout);
 		assert_eq!(config.no_sleep, default.no_sleep);
 		assert_eq!(config.sleep_grace_period, default.sleep_grace_period);
@@ -114,7 +112,6 @@ mod moved_tests {
 	#[test]
 	fn actor_config_effective_sleep_grace_period_uses_explicit_value() {
 		let config = ActorConfig {
-			wait_until_timeout: Duration::from_secs(8),
 			sleep_grace_period: Duration::from_secs(20),
 			sleep_grace_period_overridden: true,
 			..ActorConfig::default()

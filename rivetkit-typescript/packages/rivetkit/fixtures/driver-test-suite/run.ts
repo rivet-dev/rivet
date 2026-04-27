@@ -282,7 +282,6 @@ export const runIgnoresAbortStopTimeout = actor({
 	options: {
 		sleepTimeout: 50,
 		sleepGracePeriod: 100,
-		onDestroyTimeout: 5000,
 	},
 });
 
