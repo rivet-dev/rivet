@@ -1,7 +1,9 @@
 use futures_util::FutureExt;
 use gas::prelude::*;
+use rivet_data::converted::ActorNameKeyData;
 use rivet_data::converted::ActorByKeyKeyData;
 use rivet_envoy_protocol as protocol;
+use rivet_types::actors::CrashPolicy;
 use universaldb::prelude::*;
 
 use crate::errors;
@@ -14,6 +16,9 @@ use runtime::{StoppedResult, Transition};
 
 /// Batch size of how many events to ack.
 const EVENT_ACK_BATCH_SIZE: i64 = 250;
+pub const SQLITE_SCHEMA_VERSION_V1: u32 = 1;
+pub const SQLITE_SCHEMA_VERSION_V2: u32 = 2;
+const MAX_INPUT_SIZE: usize = util::size::mebibytes(4) as usize;
 
 // NOTE: Assumes input is validated.
 #[derive(Clone, Debug, Serialize, Deserialize, Hash)]
@@ -22,6 +27,7 @@ pub struct Input {
 	pub name: String,
 	pub pool_name: String,
 	pub key: Option<String>,
+	pub crash_policy: CrashPolicy,
 
 	pub namespace_id: Id,
 
@@ -36,6 +42,8 @@ pub struct State {
 	pub name: String,
 	pub pool_name: String,
 	pub key: Option<String>,
+	#[serde(default)]
+	pub crash_policy: CrashPolicy,
 	pub namespace_id: Id,
 
 	pub acquired_slot: bool,
@@ -68,6 +76,7 @@ impl State {
 		name: String,
 		pool_name: String,
 		key: Option<String>,
+		crash_policy: CrashPolicy,
 		namespace_id: Id,
 		create_ts: i64,
 	) -> Self {
@@ -76,6 +85,7 @@ impl State {
 			name,
 			pool_name,
 			key,
+			crash_policy,
 			namespace_id,
 
 			acquired_slot: false,
@@ -111,11 +121,30 @@ pub async fn pegboard_actor2(ctx: &mut WorkflowCtx, input: &Input) -> Result<()>
 	//    we added to indexes before Epoxy validation, actors could appear in lists with duplicate
 	//    key (since reservation wasn't confirmed yet).
 
+	let validation_res = ctx
+		.activity(ValidateInput {
+			name: input.name.clone(),
+			key: input.key.clone(),
+			namespace_id: input.namespace_id,
+			input: input.input.clone(),
+		})
+		.await?;
+
+	if let Err(error) = validation_res {
+		ctx.msg(Failed { error })
+			.topic(("actor_id", input.actor_id))
+			.send()
+			.await?;
+
+		return Ok(());
+	}
+
 	ctx.activity(InitStateAndUdbInput {
 		actor_id: input.actor_id,
 		name: input.name.clone(),
 		pool_name: input.pool_name.clone(),
 		key: input.key.clone(),
+		crash_policy: input.crash_policy,
 		namespace_id: input.namespace_id,
 		create_ts: ctx.create_ts(),
 		from_v1: input.from_v1,
@@ -225,12 +254,62 @@ pub async fn pegboard_actor2(ctx: &mut WorkflowCtx, input: &Input) -> Result<()>
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Hash)]
+pub struct ValidateInput {
+	pub namespace_id: Id,
+	pub name: String,
+	pub key: Option<String>,
+	pub input: Option<String>,
+}
+
+#[activity(Validate)]
+pub async fn validate(
+	ctx: &ActivityCtx,
+	input: &ValidateInput,
+) -> Result<std::result::Result<(), errors::Actor>> {
+	let ns_res = ctx
+		.op(namespace::ops::get_global::Input {
+			namespace_ids: vec![input.namespace_id],
+		})
+		.await?;
+
+	if ns_res.is_empty() {
+		return Ok(Err(errors::Actor::NamespaceNotFound));
+	};
+
+	if input
+		.input
+		.as_ref()
+		.map(|x| x.len() > MAX_INPUT_SIZE)
+		.unwrap_or_default()
+	{
+		return Ok(Err(errors::Actor::InputTooLarge {
+			max_size: MAX_INPUT_SIZE,
+		}));
+	}
+
+	if let Some(k) = &input.key {
+		if k.is_empty() {
+			return Ok(Err(errors::Actor::EmptyKey));
+		}
+		if k.len() > 1024 {
+			return Ok(Err(errors::Actor::KeyTooLarge {
+				max_size: 1024,
+				key_preview: util::safe_slice(k, 0, 1024).to_string(),
+			}));
+		}
+	}
+
+	Ok(Ok(()))
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Hash)]
 pub struct InitStateAndUdbInput {
 	pub actor_id: Id,
 	pub name: String,
 	pub key: Option<String>,
 	pub namespace_id: Id,
 	pub pool_name: String,
+	pub crash_policy: CrashPolicy,
 	pub create_ts: i64,
 	pub from_v1: bool,
 }
@@ -244,6 +323,7 @@ pub async fn insert_state_and_db(ctx: &ActivityCtx, input: &InitStateAndUdbInput
 		input.name.clone(),
 		input.pool_name.clone(),
 		input.key.clone(),
+		input.crash_policy,
 		input.namespace_id,
 		input.create_ts,
 	));
@@ -342,6 +422,17 @@ pub async fn populate_indexes(ctx: &ActivityCtx, input: &PopulateIndexesInput) -
 					),
 					ctx.workflow_id(),
 				)?;
+
+				// Write the name into the namespace actor names list with empty metadata if it does not already exist.
+				let name_key = crate::keys::ns::ActorNameKey::new(namespace_id, name.clone());
+				if !tx.exists(&name_key, Serializable).await? {
+					tx.write(
+						&name_key,
+						ActorNameKeyData {
+							metadata: serde_json::Map::new(),
+						},
+					)?;
+				}
 
 				// NOTE: keys::ns::ActorByKeyKey is written in actor_keys.rs when reserved by epoxy
 
