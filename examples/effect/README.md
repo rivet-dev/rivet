@@ -13,8 +13,8 @@ This example demonstrates the proposed API design for `@rivetkit/effect`, an [Ef
 
 ## Files
 
-- [`src/actors/counter/api.ts`](https://github.com/rivet-dev/rivet/tree/main/examples/effect/src/actors/counter/api.ts) - Actor definition (public contract)
-- [`src/actors/counter/live.ts`](https://github.com/rivet-dev/rivet/tree/main/examples/effect/src/actors/counter/live.ts) - Actor implementation (server-only Layer)
-- [`src/main.ts`](https://github.com/rivet-dev/rivet/tree/main/examples/effect/src/main.ts) - Server entry point using `Registry.layer`
-- [`src/client.ts`](https://github.com/rivet-dev/rivet/tree/main/examples/effect/src/client.ts) - Client usage with typed actor dependencies
+- [`src/actors/counter/api.ts`](./src/actors/counter/api.ts) - Actor definition (public contract)
+- [`src/actors/counter/live.ts`](./src/actors/counter/live.ts) - Actor implementation (server-only Layer)
+- [`src/main.ts`](./src/main.ts) - Server entry point using `Registry.layer`
+- [`src/client.ts`](./src/client.ts) - Client usage with typed actor dependencies
 
