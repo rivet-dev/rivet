@@ -8,12 +8,9 @@ mod moved_tests {
 	use crate::actor::context::ActorContext;
 
 	#[tokio::test]
-	async fn can_sleep_requires_ready_and_started() {
+	async fn can_sleep_requires_started() {
 		let ctx = ActorContext::default();
 
-		assert_eq!(ctx.can_sleep().await, CanSleep::NotReady);
-
-		ctx.set_started(true);
 		assert_eq!(ctx.can_sleep().await, CanSleep::NotReady);
 
 		ctx.set_started(true);
@@ -23,7 +20,6 @@ mod moved_tests {
 	#[tokio::test]
 	async fn can_sleep_blocks_for_active_regions_and_run_handler() {
 		let ctx = ActorContext::default();
-		ctx.set_started(true);
 		ctx.set_started(true);
 
 		ctx.begin_keep_awake();
@@ -45,7 +41,6 @@ mod moved_tests {
 	async fn can_sleep_allows_run_handler_when_only_blocked_on_queue_wait() {
 		let ctx = ActorContext::default();
 		ctx.set_started(true);
-		ctx.set_started(true);
 		ctx.set_run_handler_active(true);
 		ctx.queue().set_wait_activity_callback(None);
 		crate::actor::queue::tests::begin_sleep_test_wait(ctx.queue());
@@ -58,7 +53,6 @@ mod moved_tests {
 	#[tokio::test]
 	async fn can_sleep_blocks_for_connections_disconnects_and_websocket_callbacks() {
 		let ctx = ActorContext::default();
-		ctx.set_started(true);
 		ctx.set_started(true);
 
 		let conn = crate::ConnHandle::new("conn-1", Vec::new(), Vec::new(), false);
@@ -84,7 +78,6 @@ mod moved_tests {
 			sleep_timeout: Duration::from_millis(10),
 			..ActorConfig::default()
 		});
-		ctx.set_started(true);
 		ctx.set_started(true);
 
 		ctx.reset_sleep_timer();

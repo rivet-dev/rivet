@@ -63,7 +63,6 @@ mod moved_tests {
 			"local",
 		);
 		ctx.set_started(true);
-		ctx.set_started(true);
 
 		let ws = WebSocket::new();
 		let region_ctx = ctx.clone();

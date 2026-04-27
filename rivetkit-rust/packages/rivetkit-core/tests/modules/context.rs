@@ -106,7 +106,6 @@ async fn inspector_attach_guard_notifies_on_threshold_edges() {
 async fn disconnect_callback_guard_blocks_sleep_until_drop() {
 	let ctx = ActorContext::new("actor-disconnect", "actor", Vec::new(), "local");
 	ctx.set_started(true);
-	ctx.set_started(true);
 
 	let (started_tx, started_rx) = tokio::sync::oneshot::channel();
 	let (release_tx, release_rx) = tokio::sync::oneshot::channel();
@@ -140,7 +139,6 @@ async fn disconnect_callback_completion_resets_sleep_timer() {
 	let mut config = ActorConfig::default();
 	config.sleep_timeout = std::time::Duration::from_secs(5);
 	ctx.configure_sleep(config);
-	ctx.set_started(true);
 	ctx.set_started(true);
 
 	let (started_tx, started_rx) = tokio::sync::oneshot::channel();
@@ -178,7 +176,6 @@ async fn active_run_handler_blocks_sleep_until_cleared() {
 	let mut config = ActorConfig::default();
 	config.sleep_timeout = std::time::Duration::from_secs(5);
 	ctx.configure_sleep(config);
-	ctx.set_started(true);
 	ctx.set_started(true);
 
 	ctx.begin_run_handler();
