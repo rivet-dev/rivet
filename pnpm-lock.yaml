@@ -4107,6 +4107,9 @@ importers:
         specifier: workspace:*
         version: link:../rivetkit
     devDependencies:
+      '@effect/language-service':
+        specifier: ^0.85.1
+        version: 0.85.1
       '@effect/vitest':
         specifier: ^4.0.0-beta.57
         version: 4.0.0-beta.57(effect@4.0.0-beta.57)(vitest@4.1.5(@opentelemetry/api@1.9.0)(@types/node@22.19.15)(msw@2.12.10(@types/node@22.19.15)(typescript@5.9.3))(vite@7.3.1(@types/node@22.19.15)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.3)))
@@ -5995,6 +5998,10 @@ packages:
   '@durable-streams/writer@https://pkg.pr.new/rivet-dev/durable-streams/@durable-streams/writer@0323b8bcf1c9b38f1014629e1a8b6c74cc662100':
     resolution: {tarball: https://pkg.pr.new/rivet-dev/durable-streams/@durable-streams/writer@0323b8bcf1c9b38f1014629e1a8b6c74cc662100}
     version: 0.0.0
+
+  '@effect/language-service@0.85.1':
+    resolution: {integrity: sha512-EXnJjIy6zQ3nUO/MZ+ynWUb8B895KZPotd1++oTs9JjDkplwM7cb6zo8Zq2zU6piwq+KflO7amXbEfj1UMpHkw==}
+    hasBin: true
 
   '@effect/platform-node-shared@4.0.0-beta.57':
     resolution: {integrity: sha512-C976X6f+qHUtLSqcqImuCrjhAHnJV17NC2RvvybsAuDfkyIWU4MyiO2XwgiBeijeNupyr1M/KPKnyjtkNxV9Hw==}
@@ -20124,6 +20131,8 @@ snapshots:
     dependencies:
       '@durable-streams/client': https://pkg.pr.new/rivet-dev/durable-streams/@durable-streams/client@0323b8bcf1c9b38f1014629e1a8b6c74cc662100
       fastq: 1.20.1
+
+  '@effect/language-service@0.85.1': {}
 
   '@effect/platform-node-shared@4.0.0-beta.57(effect@4.0.0-beta.57)':
     dependencies:
