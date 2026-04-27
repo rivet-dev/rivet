@@ -199,6 +199,49 @@ fn list_runner_configs_multiple_dcs() {
 	});
 }
 
+#[test]
+fn list_runner_configs_includes_envoy_protocol_version() {
+	common::run(common::TestOpts::new(1), |ctx| async move {
+		let (namespace, _, envoy) = common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
+		let datacenter_name = ctx
+			.leader_dc()
+			.config
+			.dc_name()
+			.expect("dc name should exist")
+			.to_string();
+
+		let response = common::api::public::runner_configs_list(
+			ctx.leader_dc().guard_port(),
+			rivet_api_types::runner_configs::list::ListQuery {
+				namespace,
+				runner_names: None,
+				runner_name: vec![envoy.pool_name().to_string()],
+				variant: None,
+				limit: None,
+				cursor: None,
+			},
+		)
+		.await
+		.expect("failed to list runner configs");
+
+		let runner = response
+			.runner_configs
+			.get(envoy.pool_name())
+			.expect("runner config should exist");
+		let datacenter_runner = runner
+			.datacenters
+			.get(&datacenter_name)
+			.expect("runner config should exist in the envoy datacenter");
+
+		assert_eq!(
+			datacenter_runner.protocol_version,
+			Some(common::test_envoy::PROTOCOL_VERSION),
+		);
+
+		envoy.shutdown().await;
+	});
+}
+
 // MARK: Filtering tests
 
 #[test]
