@@ -190,7 +190,7 @@ jobs:
       - uses: actions/checkout@v4
         if: steps.gate.outputs.skip != 'true'
         with:
-          lfs: true
+          lfs: ${{ needs.context.outputs.trigger == 'release' }}
       - uses: depot/setup-action@v1
         if: steps.gate.outputs.skip != 'true'
       - name: Log in to ghcr.io
@@ -253,7 +253,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          lfs: true
+          lfs: ${{ needs.context.outputs.trigger == 'release' }}
       - name: Compute build mode
         id: mode
         run: |
@@ -316,7 +316,7 @@ jobs:
         with:
           # Need history for tag operations in the release tail.
           fetch-depth: 0
-          lfs: true
+          lfs: ${{ needs.context.outputs.trigger == 'release' }}
       - run: corepack enable
       - uses: actions/setup-node@v4
         with:
