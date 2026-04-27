@@ -427,6 +427,27 @@ async fn migrate_sqlite_v1_to_v2_step(ctx: &mut WorkflowCtx, input: &Input) -> R
 	Ok(())
 }
 
+// Every successful allocation must bump the generation, run the v1→v2
+// sqlite migration check, then send the start command. Centralized so a
+// future allocation path cannot forget the migration step.
+async fn start_new_generation(
+	ctx: &mut WorkflowCtx,
+	input: &Input,
+	state: &mut LifecycleState,
+	allocation: Allocation,
+) -> Result<()> {
+	state.generation += 1;
+	migrate_sqlite_v1_to_v2_step(ctx, input).await?;
+	ctx.activity(SendOutboundInput {
+		generation: state.generation,
+		input: input.input.clone(),
+		allocation,
+	})
+	.await?;
+
+	Ok(())
+}
+
 pub async fn reschedule_actor(
 	ctx: &mut WorkflowCtx,
 	input: &Input,
@@ -436,9 +457,6 @@ pub async fn reschedule_actor(
 	let allocate_res = ctx.activity(AllocateInput {}).await?;
 
 	if let Some(allocation) = allocate_res.allocation {
-		state.generation += 1;
-		migrate_sqlite_v1_to_v2_step(ctx, input).await?;
-
 		match &allocation {
 			Allocation::Serverless => {
 				// Transition to allocating
@@ -458,12 +476,7 @@ pub async fn reschedule_actor(
 			}
 		}
 
-		ctx.activity(SendOutboundInput {
-			generation: state.generation,
-			input: input.input.clone(),
-			allocation,
-		})
-		.await?;
+		start_new_generation(ctx, input, state, allocation).await?;
 	} else {
 		// NOTE: Cannot return `StoppedResult::Destroy` if provided `StoppedVariant::FailedAllocation` so we
 		// can ignore it
@@ -607,15 +620,7 @@ pub async fn handle_stopped(
 			let allocate_res = ctx.activity(AllocateInput {}).await?;
 
 			if let Some(allocation) = allocate_res.allocation {
-				state.generation += 1;
-				migrate_sqlite_v1_to_v2_step(ctx, input).await?;
-
-				ctx.activity(SendOutboundInput {
-					generation: state.generation,
-					input: input.input.clone(),
-					allocation,
-				})
-				.await?;
+				start_new_generation(ctx, input, state, allocation).await?;
 
 				// Transition to allocating
 				state.transition = Transition::Allocating {
@@ -656,15 +661,7 @@ pub async fn handle_stopped(
 				let allocate_res = ctx.activity(AllocateInput {}).await?;
 
 				if let Some(allocation) = allocate_res.allocation {
-					state.generation += 1;
-					migrate_sqlite_v1_to_v2_step(ctx, input).await?;
-
-					ctx.activity(SendOutboundInput {
-						generation: state.generation,
-						input: input.input.clone(),
-						allocation,
-					})
-					.await?;
+					start_new_generation(ctx, input, state, allocation).await?;
 
 					state.transition = Transition::Allocating {
 						destroy_after_start: false,

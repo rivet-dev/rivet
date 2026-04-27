@@ -1,11 +1,8 @@
-use std::sync::{Arc, OnceLock};
 use std::time::Instant;
 
 use anyhow::{Context, Result, ensure};
 use gas::prelude::{Id, util::timestamp};
 use rivet_envoy_protocol::{self as protocol, PROTOCOL_VERSION};
-use rusqlite::Connection;
-use scc::{HashMap, hash_map::Entry};
 use sqlite_storage::{
 	commit::{CommitFinalizeRequest, CommitStageBeginRequest, CommitStageRequest},
 	engine::SqliteEngine,
@@ -14,13 +11,9 @@ use sqlite_storage::{
 	types::{DirtyPage, SQLITE_PAGE_SIZE, SqliteOrigin},
 	udb::{self, WriteOp},
 };
-use tempfile::tempdir;
-use tokio::sync::Mutex;
 use universaldb::Subspace;
 
 use crate::{actor_kv::Recipient, metrics};
-
-static SQLITE_MIGRATION_LOCKS: OnceLock<HashMap<String, Arc<Mutex<()>>>> = OnceLock::new();
 
 const SQLITE_V1_PREFIX: u8 = 0x08;
 const SQLITE_V1_SCHEMA_VERSION: u8 = 0x01;
@@ -147,12 +140,6 @@ async fn maybe_migrate_v1_to_v2(
 	}
 
 	let actor_id = recipient.actor_id.to_string();
-	let migration_lock = actor_migration_lock(&actor_id).await;
-	let _guard = migration_lock.lock().await;
-
-	if !crate::actor_kv::sqlite_v1_data_exists(db, recipient.actor_id).await? {
-		return Ok(false);
-	}
 
 	if let Some(head) = sqlite_engine.try_load_head(&actor_id).await? {
 		match head.origin {
@@ -173,17 +160,16 @@ async fn maybe_migrate_v1_to_v2(
 	metrics::SQLITE_MIGRATION_ATTEMPTS_TOTAL.inc();
 	let start = Instant::now();
 
-	let snapshot = read_v1_snapshot(db, recipient)
+	let main = read_v1_main(db, recipient)
 		.await
 		.map_err(|err| migration_error(&actor_id, "read_v1", err))?;
-	let recovered = recover_v1_snapshot(&actor_id, snapshot)
+	let recovered = validate_v1_main(&actor_id, main)
 		.map_err(|err| migration_error(&actor_id, "validate", err))?;
 	metrics::SQLITE_MIGRATION_PAGES.observe(recovered.total_pages as f64);
 	tracing::info!(
 		actor_id = %actor_id,
 		pages = recovered.total_pages,
 		size_bytes = recovered.bytes.len(),
-		has_journal = recovered.had_journal,
 		"starting v1→v2 migration"
 	);
 
@@ -265,18 +251,6 @@ async fn maybe_migrate_v1_to_v2(
 	Ok(true)
 }
 
-fn migration_locks() -> &'static HashMap<String, Arc<Mutex<()>>> {
-	SQLITE_MIGRATION_LOCKS.get_or_init(HashMap::default)
-}
-
-async fn actor_migration_lock(actor_id: &str) -> Arc<Mutex<()>> {
-	let actor_id = actor_id.to_string();
-	match migration_locks().entry_async(actor_id).await {
-		Entry::Occupied(entry) => Arc::clone(entry.get()),
-		Entry::Vacant(entry) => Arc::clone(entry.insert_entry(Arc::new(Mutex::new(()))).get()),
-	}
-}
-
 fn migration_error(actor_id: &str, phase: &'static str, err: anyhow::Error) -> anyhow::Error {
 	metrics::SQLITE_MIGRATION_FAILURES_TOTAL
 		.with_label_values(&[phase])
@@ -285,30 +259,30 @@ fn migration_error(actor_id: &str, phase: &'static str, err: anyhow::Error) -> a
 	err
 }
 
-async fn read_v1_snapshot(
-	db: &universaldb::Database,
-	recipient: &Recipient,
-) -> Result<RecoveredV1Snapshot> {
+async fn read_v1_main(db: &universaldb::Database, recipient: &Recipient) -> Result<V1File> {
+	let actor_id = recipient.actor_id;
+	if v1_file_exists(db, recipient, FILE_TAG_JOURNAL).await? {
+		// A v1 actor in DELETE journal mode only has a journal sidecar in KV
+		// when a write transaction was in flight at crash time. The current
+		// migration path does not auto-recover; the actor is stuck on v1
+		// until manually triaged.
+		metrics::SQLITE_MIGRATION_REJECTED_JOURNAL_TOTAL.inc();
+		anyhow::bail!(
+			"sqlite v1 actor {actor_id} crashed during a write transaction (journal sidecar present); manual triage required"
+		);
+	}
 	ensure!(
 		!v1_file_exists(db, recipient, FILE_TAG_WAL).await?,
-		"unexpected sqlite v1 WAL sidecar present"
+		"sqlite v1 actor {actor_id} has unexpected WAL sidecar; migration unsupported"
 	);
 	ensure!(
 		!v1_file_exists(db, recipient, FILE_TAG_SHM).await?,
-		"unexpected sqlite v1 SHM sidecar present"
+		"sqlite v1 actor {actor_id} has unexpected SHM sidecar; migration unsupported"
 	);
 
-	let main = read_v1_file(db, recipient, FILE_TAG_MAIN)
+	read_v1_file(db, recipient, FILE_TAG_MAIN)
 		.await?
-		.context("sqlite v1 main file missing metadata")?;
-	let journal = read_v1_file(db, recipient, FILE_TAG_JOURNAL).await?;
-	let had_journal = journal.is_some();
-
-	Ok(RecoveredV1Snapshot {
-		main,
-		journal,
-		had_journal,
-	})
+		.context("sqlite v1 main file missing metadata")
 }
 
 async fn v1_file_exists(
@@ -393,51 +367,27 @@ async fn read_v1_file(
 	)
 	.with_context(|| format!("rebuild sqlite v1 file tag {file_tag}"))?;
 
-	Ok(Some(V1File { size_bytes, bytes }))
+	Ok(Some(V1File { bytes }))
 }
 
-fn recover_v1_snapshot(actor_id: &str, snapshot: RecoveredV1Snapshot) -> Result<RecoveredDb> {
-	if snapshot.main.size_bytes == 0 {
+fn validate_v1_main(actor_id: &str, main: V1File) -> Result<RecoveredDb> {
+	let bytes = main.bytes;
+	if bytes.is_empty() {
 		return Ok(RecoveredDb {
-			bytes: Vec::new(),
+			bytes,
 			total_pages: 0,
-			had_journal: snapshot.had_journal,
 		});
 	}
 
-	let tmp = tempdir().context("create sqlite v1 migration tempdir")?;
-	let db_path = tmp.path().join("migration.db");
-	std::fs::write(&db_path, &snapshot.main.bytes)
-		.with_context(|| format!("write sqlite v1 main temp file for actor {actor_id}"))?;
-	if let Some(journal) = snapshot.journal {
-		std::fs::write(tmp.path().join("migration.db-journal"), &journal.bytes)
-			.with_context(|| format!("write sqlite v1 journal temp file for actor {actor_id}"))?;
-	}
-
-	let conn = Connection::open(&db_path)
-		.with_context(|| format!("open sqlite v1 temp db for actor {actor_id}"))?;
-	conn.pragma_update(None, "journal_mode", "DELETE")
-		.context("set sqlite journal_mode during v1 recovery")?;
-	let integrity: String = conn
-		.query_row("PRAGMA quick_check(1)", [], |row| row.get(0))
-		.context("run sqlite quick_check during v1 recovery")?;
 	ensure!(
-		integrity == "ok",
-		"sqlite integrity check failed after v1 recovery: {integrity}"
-	);
-	drop(conn);
-
-	let recovered = std::fs::read(&db_path)
-		.with_context(|| format!("read recovered sqlite db for actor {actor_id}"))?;
-	ensure!(
-		recovered.len() >= SQLITE_MAGIC.len() + 2,
-		"sqlite v1 database too small after recovery"
+		bytes.len() >= SQLITE_MAGIC.len() + 2,
+		"sqlite v1 main file too small for actor {actor_id}"
 	);
 	ensure!(
-		&recovered[..SQLITE_MAGIC.len()] == SQLITE_MAGIC,
-		"sqlite magic bytes mismatch after v1 recovery"
+		&bytes[..SQLITE_MAGIC.len()] == SQLITE_MAGIC,
+		"sqlite v1 magic bytes mismatch for actor {actor_id}"
 	);
-	let raw_page_size = u16::from_be_bytes([recovered[16], recovered[17]]);
+	let raw_page_size = u16::from_be_bytes([bytes[16], bytes[17]]);
 	let page_size = if raw_page_size == 1 {
 		65_536_u32
 	} else {
@@ -445,23 +395,22 @@ fn recover_v1_snapshot(actor_id: &str, snapshot: RecoveredV1Snapshot) -> Result<
 	};
 	ensure!(
 		(512..=65_536).contains(&page_size),
-		"sqlite page size {page_size} is outside the supported range"
+		"sqlite v1 page size {page_size} is outside the supported range for actor {actor_id}"
 	);
 	ensure!(
 		page_size == SQLITE_PAGE_SIZE,
-		"sqlite page size {page_size} is not supported by sqlite v2"
+		"sqlite v1 page size {page_size} is not supported by sqlite v2 for actor {actor_id}"
 	);
 	ensure!(
-		recovered.len() % page_size as usize == 0,
-		"sqlite v1 database size {} is not page aligned to {}",
-		recovered.len(),
+		bytes.len() % page_size as usize == 0,
+		"sqlite v1 database size {} is not page aligned to {} for actor {actor_id}",
+		bytes.len(),
 		page_size
 	);
 
 	Ok(RecoveredDb {
-		total_pages: (recovered.len() / page_size as usize) as u32,
-		bytes: recovered,
-		had_journal: snapshot.had_journal,
+		total_pages: (bytes.len() / page_size as usize) as u32,
+		bytes,
 	})
 }
 
@@ -578,18 +527,10 @@ fn v1_chunk_prefix(file_tag: u8) -> [u8; 4] {
 }
 
 struct V1File {
-	size_bytes: u64,
 	bytes: Vec<u8>,
-}
-
-struct RecoveredV1Snapshot {
-	main: V1File,
-	journal: Option<V1File>,
-	had_journal: bool,
 }
 
 struct RecoveredDb {
 	bytes: Vec<u8>,
 	total_pages: u32,
-	had_journal: bool,
 }

@@ -472,11 +472,11 @@ impl SqliteEngine {
 		})?;
 		let _ = self.pending_stages.insert_sync(
 			(actor_id, txid),
-			std::sync::Arc::new(parking_lot::Mutex::new(PendingStage {
+			PendingStage {
 				next_chunk_idx: 0,
 				saw_last_chunk: false,
 				error_message: None,
-			})),
+			},
 		);
 
 		Ok(CommitStageBeginResult { txid })
@@ -494,16 +494,13 @@ impl SqliteEngine {
 	) -> Result<CommitStageResult> {
 		let decode_start = Instant::now();
 		let stage_key = (actor_id.to_string(), request.txid);
-		let pending_stage = self
-			.pending_stages
-			.get_async(&stage_key)
-			.await
-			.map(|entry| std::sync::Arc::clone(entry.get()))
-			.ok_or(SqliteStorageError::StageNotFound {
-				stage_id: request.txid,
-			})?;
 		{
-			let stage = pending_stage.lock();
+			let entry = self.pending_stages.get_async(&stage_key).await.ok_or(
+				SqliteStorageError::StageNotFound {
+					stage_id: request.txid,
+				},
+			)?;
+			let stage = entry.get();
 			if let Some(error_message) = stage.error_message.as_ref() {
 				return Err(anyhow::anyhow!(error_message.clone()));
 			}
@@ -597,9 +594,11 @@ impl SqliteEngine {
 
 		match chunk_write_result {
 			Ok(()) => {
-				let mut stage = pending_stage.lock();
-				stage.next_chunk_idx += 1;
-				stage.saw_last_chunk = request.is_last;
+				if let Some(mut entry) = self.pending_stages.get_async(&stage_key).await {
+					let stage = entry.get_mut();
+					stage.next_chunk_idx += 1;
+					stage.saw_last_chunk = request.is_last;
+				}
 			}
 			Err(err) => {
 				if matches!(
@@ -608,7 +607,9 @@ impl SqliteEngine {
 				) {
 					self.metrics.inc_fence_mismatch_total();
 				}
-				pending_stage.lock().error_message = Some(err.to_string());
+				if let Some(mut entry) = self.pending_stages.get_async(&stage_key).await {
+					entry.get_mut().error_message = Some(err.to_string());
+				}
 				return Err(err);
 			}
 		}
@@ -637,16 +638,13 @@ impl SqliteEngine {
 	) -> Result<CommitFinalizeResult> {
 		let start = Instant::now();
 		let stage_key = (actor_id.to_string(), request.txid);
-		let pending_stage = self
-			.pending_stages
-			.get_async(&stage_key)
-			.await
-			.map(|entry| std::sync::Arc::clone(entry.get()))
-			.ok_or(SqliteStorageError::StageNotFound {
-				stage_id: request.txid,
-			})?;
 		{
-			let stage = pending_stage.lock();
+			let entry = self.pending_stages.get_async(&stage_key).await.ok_or(
+				SqliteStorageError::StageNotFound {
+					stage_id: request.txid,
+				},
+			)?;
+			let stage = entry.get();
 			if let Some(error_message) = stage.error_message.as_ref() {
 				return Err(anyhow::anyhow!(error_message.clone()));
 			}
