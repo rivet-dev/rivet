@@ -22,6 +22,7 @@ When changing a versioned VBARE schema, follow the existing migration pattern.
    ```
 5. If a new VBARE union version keeps old variants byte-identical, append new variants at the end and gate v2-only variants when serializing back to v1.
 6. If a nested payload like `CommandStartActor` changes shape, write explicit v1<->v2 conversions for both `ToEnvoy` and `ActorCommandKeyData` instead of assuming same-bytes compatibility.
+6a. Never rely on byte-identical wire layout across versions. Every cross-version converter must reconstruct the target type field-by-field, even when versions appear identical today. No `serde_bare::to_vec` + `from_slice` shortcuts and no `impl_versioned_same_bytes!`-style macros that reuse bytes across versions.
 7. For manual `vbare::OwnedVersionedData` impls whose latest schema version is greater than `1`, return `vec![Ok]` from both converter hooks or `serialize(version)` still treats the type as version `1`.
 3. Verify the affected Rust crate still builds.
 4. For the runner protocol specifically:

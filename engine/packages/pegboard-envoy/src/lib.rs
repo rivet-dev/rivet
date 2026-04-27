@@ -12,6 +12,7 @@ use tokio_tungstenite::tungstenite::protocol::frame::CloseFrame;
 use universalpubsub::PublishOpts;
 
 mod actor_event_demuxer;
+mod actor_lifecycle;
 mod conn;
 mod errors;
 mod metrics;
@@ -237,6 +238,13 @@ impl CustomServeTrait for PegboardEnvoyWs {
 					"failed to expire envoy during disconnect"
 				);
 			}
+		}
+
+		if let Err(err) = actor_lifecycle::shutdown_conn_actors(&conn).await {
+			tracing::error!(
+				?err,
+				"failed to close sqlite actors during envoy disconnect"
+			);
 		}
 
 		tracing::debug!(%topic, "envoy websocket closed");

@@ -523,8 +523,8 @@ mod tests {
 	use crate::engine::SqliteEngine;
 	use crate::keys::{delta_chunk_key, meta_key, pidx_delta_key, pidx_delta_prefix, shard_key};
 	use crate::ltx::{LtxHeader, decode_ltx_v3, encode_ltx_v3};
+	use crate::open::OpenConfig;
 	use crate::quota::{encode_db_head_with_usage, tracked_storage_entry_size};
-	use crate::takeover::TakeoverConfig;
 	use crate::test_utils::{read_value, scan_prefix_values, test_db};
 	use crate::types::{
 		DBHead, DirtyPage, FetchedPage, SQLITE_DEFAULT_MAX_STORAGE_BYTES, SQLITE_PAGE_SIZE,
@@ -1112,7 +1112,7 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn takeover_during_inflight_compaction_succeeds_and_fences_compaction() -> Result<()> {
+	async fn open_during_inflight_compaction_keeps_generation() -> Result<()> {
 		let (db, subspace) = test_db().await?;
 		let mut head = seeded_head();
 		head.head_txid = 1;
@@ -1142,19 +1142,17 @@ mod tests {
 
 		reached.notified().await;
 
-		let takeover = engine
-			.takeover(TEST_ACTOR, TakeoverConfig::new(2_345))
-			.await?;
+		let open = engine.open(TEST_ACTOR, OpenConfig::new(2_345)).await?;
 		release.notify_waiters();
 
-		assert_eq!(takeover.generation, head.generation + 1);
-		assert!(!compact_task.await??);
+		assert_eq!(open.generation, head.generation);
+		assert!(compact_task.await??);
 		let stored_head = decode_db_head(
 			&read_value(engine.as_ref(), meta_key(TEST_ACTOR))
 				.await?
-				.expect("meta should exist after takeover"),
+				.expect("meta should exist after open"),
 		)?;
-		assert_eq!(stored_head.generation, head.generation + 1);
+		assert_eq!(stored_head.generation, head.generation);
 		assert_eq!(stored_head.head_txid, 1);
 		assert!(
 			read_value(engine.as_ref(), delta_blob_key(TEST_ACTOR, 1))

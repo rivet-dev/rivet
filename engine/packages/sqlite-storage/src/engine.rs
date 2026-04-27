@@ -18,10 +18,16 @@ pub struct SqliteEngine {
 	pub db: universaldb::Database,
 	pub subspace: Subspace,
 	pub op_counter: Arc<AtomicUsize>,
+	pub open_dbs: HashMap<String, OpenDb>,
 	pub page_indices: HashMap<String, DeltaPageIndex>,
 	pub pending_stages: HashMap<(String, u64), PendingStage>,
 	pub compaction_tx: mpsc::UnboundedSender<String>,
 	pub metrics: SqliteStorageMetrics,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OpenDb {
+	pub generation: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -41,6 +47,7 @@ impl SqliteEngine {
 			db,
 			subspace,
 			op_counter: Arc::new(AtomicUsize::new(0)),
+			open_dbs: HashMap::default(),
 			page_indices: HashMap::default(),
 			pending_stages: HashMap::default(),
 			compaction_tx,

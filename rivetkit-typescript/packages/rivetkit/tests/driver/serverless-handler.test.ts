@@ -4,9 +4,8 @@ import { describeDriverMatrix } from "./shared-matrix";
 import { getOrStartSharedEngine, TOKEN } from "./shared-harness";
 import { setupDriverTest } from "./shared-utils";
 import { describe, expect, test } from "vitest";
-import { encodeToEnvoy } from "@rivetkit/engine-envoy-protocol";
+import { encodeToEnvoy, VERSION as ENVOY_PROTOCOL_VERSION } from "@rivetkit/engine-envoy-protocol";
 
-const ENVOY_PROTOCOL_VERSION = 2;
 const ACTOR_NAME = "counter";
 
 function serverlessHeaders(input: {

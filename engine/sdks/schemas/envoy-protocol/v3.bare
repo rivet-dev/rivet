@@ -112,7 +112,6 @@ type SqliteStageId u64
 type SqlitePageBytes data
 
 type SqliteMeta struct {
-	schemaVersion: u32
 	generation: SqliteGeneration
 	headTxid: SqliteTxid
 	materializedTxid: SqliteTxid
@@ -344,7 +343,6 @@ type CommandStartActor struct {
 	config: ActorConfig
 	hibernatingRequests: list<HibernatingRequest>
 	preloadedKv: optional<PreloadedKv>
-	sqliteSchemaVersion: u32
 	sqliteStartupData: optional<SqliteStartupData>
 }
 

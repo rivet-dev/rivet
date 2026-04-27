@@ -32,6 +32,7 @@ impl SqliteEngine {
 		for pgno in &pgnos {
 			ensure!(*pgno > 0, "get_pages does not accept page 0");
 		}
+		self.ensure_open(actor_id, generation, "get_pages").await?;
 
 		let pgnos_in_range = pgnos.iter().copied().collect::<Vec<_>>();
 		let actor_id = actor_id.to_string();
@@ -555,14 +556,14 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn get_pages_requires_takeover_before_reading_empty_store() -> Result<()> {
+	async fn get_pages_requires_open_before_reading_empty_store() -> Result<()> {
 		let (db, subspace) = test_db().await?;
 		let (engine, _compaction_rx) = SqliteEngine::new(db, subspace);
 
 		let error = engine
 			.get_pages(TEST_ACTOR, 1, vec![1, 2])
 			.await
-			.expect_err("missing meta should require takeover");
+			.expect_err("missing meta should require open");
 		assert_eq!(
 			error.downcast_ref::<SqliteStorageError>(),
 			Some(&SqliteStorageError::MetaMissing {
