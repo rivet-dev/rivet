@@ -23,10 +23,7 @@ pub async fn handle_send_events(ctx: &mut EnvoyContext, events: Vec<protocol::Ev
 					state_update.state,
 					protocol::ActorState::ActorStateStopped(_)
 				) {
-					// If the actor is being stopped by rivet, we don't need the entry anymore
-					if entry.received_stop {
-						remove_after_stop = true;
-					}
+					remove_after_stop = true;
 				}
 			}
 		}
@@ -50,8 +47,6 @@ pub fn handle_ack_events(ctx: &mut EnvoyContext, ack: protocol::ToEnvoyAckEvents
 	}
 }
 
-// TODO: If the envoy disconnects, actor stops, then envoy reconnects, we will send the stop event but there
-// is no mechanism to remove the actor entry afterwards. We only remove the actor entry if rivet stops the actor.
 pub async fn resend_unacknowledged_events(ctx: &EnvoyContext) {
 	let mut events: Vec<protocol::EventWrapper> = Vec::new();
 
