@@ -1895,7 +1895,10 @@ impl ActorTask {
 					save_request_revision,
 					"actor serializeState completed"
 				);
-				self.broadcast_inspector_overlay(&deltas);
+				// Skip the overlay broadcast on the save path. save_state_with_revision
+				// triggers record_state_updated after persist, which the inspector
+				// websocket signal subscriber forwards as StateUpdated. Broadcasting
+				// the overlay here too would deliver a duplicate message.
 				if let Err(error) = self
 					.ctx
 					.save_state_with_revision(deltas, save_request_revision)
