@@ -52,6 +52,8 @@ export function isStaleResolvedActorError(
 		(code === "not_found" ||
 			code === "starting" ||
 			code === "stopping" ||
+			code === "not_configured" ||
+			code === "dropped_reply" ||
 			code.startsWith("destroyed_"))
 	);
 }

@@ -11,6 +11,7 @@ import {
 	HTTP_ACTION_RESPONSE_VERSIONED,
 	HTTP_RESPONSE_ERROR_VERSIONED,
 } from "@/common/client-protocol-versioned";
+import { AsyncMutex } from "@/common/database/shared";
 import {
 	type HttpActionRequest as HttpActionRequestJson,
 	HttpActionRequestSchema,
@@ -65,6 +66,7 @@ export class ActorHandleRaw {
 	#getParams?: () => Promise<unknown>;
 	#resolvedActorId?: string;
 	#resolvingActorId?: Promise<string>;
+	#queueSendMutex = new AsyncMutex();
 
 	/**
 	 * Do not call this directly.
@@ -120,75 +122,90 @@ export class ActorHandleRaw {
 		body: unknown,
 		options?: QueueSendOptions,
 	): Promise<QueueSendResult | void> {
-		const maxAttempts = this.#getDynamicQueryMaxAttempts();
-		let useQueryTarget = false;
+		return await this.#queueSendMutex.run(async () => {
+			const maxAttempts = this.#getDynamicQueryMaxAttempts();
+			let useQueryTarget = false;
 
-		for (let attempt = 0; attempt < maxAttempts; attempt++) {
-			let actorId: string | undefined;
-			try {
-				const target = await this.#resolveActionTarget(useQueryTarget);
-				actorId = "directId" in target ? target.directId : undefined;
+			for (let attempt = 0; attempt < maxAttempts; attempt++) {
+				let actorId: string | undefined;
+				try {
+					const target = await this.#resolveActionTarget(useQueryTarget);
+					actorId = "directId" in target ? target.directId : undefined;
 
-				return await createQueueSender({
-					encoding: this.#encoding,
-					params: this.#params,
-					customFetch: async (request: Request) => {
-						return await this.#driver.sendRequest(target, request);
-					},
-				}).send(name, body, options as any);
-			} catch (err) {
-				const { group, code, message, metadata } = deconstructError(
-					err,
-					logger(),
-					{},
-					true,
-				);
+					return await createQueueSender({
+						encoding: this.#encoding,
+						params: this.#params,
+						customFetch: async (request: Request) => {
+							return await this.#driver.sendRequest(target, request);
+						},
+					}).send(name, body, options as any);
+				} catch (err) {
+					const { group, code, message, metadata } = deconstructError(
+						err,
+						logger(),
+						{},
+						true,
+					);
 
-				if (
-					await this.#shouldRetrySchedulingError(
-						group,
-						code,
-						actorId,
-						attempt,
-						maxAttempts,
-					)
-				) {
-					useQueryTarget = true;
-					await this.#waitForRetryWindow();
-					continue;
-				}
-
-				if (
-					this.#shouldRetryDynamicLifecycleError(
-						group,
-						code,
-						attempt,
-						maxAttempts,
-					)
-				) {
-					this.#clearResolvedActorId();
-					useQueryTarget = true;
-					await this.#waitForRetryWindow();
-					continue;
-				}
-
-				const invalidated = this.#invalidateResolvedActorId(group, code);
-				if (invalidated && attempt < maxAttempts - 1) {
-					useQueryTarget =
-						(code === "starting" ||
-							code === "stopping" ||
-							code.startsWith("destroyed_"));
-					if (useQueryTarget) {
+					if (
+						this.#shouldRetryQueueDispatchOverload(
+							group,
+							code,
+							metadata,
+							attempt,
+							maxAttempts,
+						)
+					) {
 						await this.#waitForRetryWindow();
+						continue;
 					}
-					continue;
+
+					if (
+						await this.#shouldRetrySchedulingError(
+							group,
+							code,
+							actorId,
+							attempt,
+							maxAttempts,
+						)
+					) {
+						useQueryTarget = true;
+						await this.#waitForRetryWindow();
+						continue;
+					}
+
+					if (
+						this.#shouldRetryDynamicLifecycleError(
+							group,
+							code,
+							attempt,
+							maxAttempts,
+						)
+					) {
+						this.#clearResolvedActorId();
+						useQueryTarget = true;
+						await this.#waitForRetryWindow();
+						continue;
+					}
+
+					const invalidated = this.#invalidateResolvedActorId(group, code);
+					if (invalidated && attempt < maxAttempts - 1) {
+						useQueryTarget =
+							(code === "starting" ||
+								code === "stopping" ||
+								code.startsWith("destroyed_"));
+						if (useQueryTarget) {
+							await this.#waitForRetryWindow();
+						}
+						continue;
+					}
+
+					throw new ActorError(group, code, message, metadata);
 				}
-
-				throw new ActorError(group, code, message, metadata);
 			}
-		}
 
-		throw new Error("unreachable queue retry state");
+			throw new Error("unreachable queue retry state");
+		});
 	}
 
 	/**
@@ -405,8 +422,38 @@ export class ActorHandleRaw {
 			code === "not_found" ||
 			code === "starting" ||
 			code === "stopping" ||
+			code === "not_configured" ||
+			code === "dropped_reply" ||
 			code === "destroying" ||
 			code.startsWith("destroyed_")
+		);
+	}
+
+	#shouldRetryQueueDispatchOverload(
+		group: string,
+		code: string,
+		metadata: unknown,
+		attempt: number,
+		maxAttempts: number,
+	): boolean {
+		if (
+			!isDynamicActorQuery(this.#actorResolutionState) ||
+			attempt >= maxAttempts - 1 ||
+			group !== "actor" ||
+			code !== "overloaded" ||
+			metadata === null ||
+			typeof metadata !== "object"
+		) {
+			return false;
+		}
+
+		const overload = metadata as {
+			channel?: unknown;
+			operation?: unknown;
+		};
+		return (
+			overload.channel === "dispatch_inbox" &&
+			overload.operation === "dispatch_queue_send"
 		);
 	}
 
