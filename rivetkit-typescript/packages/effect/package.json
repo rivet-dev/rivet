@@ -26,7 +26,8 @@
 	},
 	"scripts": {
 		"build": "tsup src/mod.ts",
-		"check-types": "tsc --noEmit"
+		"check-types": "tsc --noEmit",
+		"test": "vitest"
 	},
 	"dependencies": {
 		"rivetkit": "workspace:*"
@@ -35,9 +36,11 @@
 		"effect": "^4.0.0-beta.57"
 	},
 	"devDependencies": {
+		"@effect/vitest": "^4.0.0-beta.57",
 		"@types/node": "^22.13.1",
 		"effect": "^4.0.0-beta.57",
 		"tsup": "^8.4.0",
-		"typescript": "^5.9.2"
+		"typescript": "^5.9.2",
+		"vitest": "^4.1.5"
 	}
 }
