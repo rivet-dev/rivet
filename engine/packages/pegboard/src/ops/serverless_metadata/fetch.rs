@@ -5,7 +5,7 @@ use anyhow::Result;
 use gas::prelude::*;
 use reqwest::header::{HeaderMap as ReqwestHeaderMap, HeaderName, HeaderValue};
 use rivet_envoy_protocol::PROTOCOL_VERSION;
-use rivetkit_shared_types::serverless_metadata::{ActorName, ServerlessMetadataPayload};
+use rivetkit_shared_types::serverless_metadata::ServerlessMetadataPayload;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 

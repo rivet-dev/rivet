@@ -128,10 +128,52 @@ pub enum ServerlessHealthCheckResponse {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct ServerlessMetadataError {
-	pub message: String,
-	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub details: Option<String>,
+#[serde(untagged)]
+pub enum ServerlessMetadataError {
+	InvalidRequest {
+		invalid_request: serde_json::Value,
+	},
+	RequestFailed {
+		request_failed: serde_json::Value,
+	},
+	RequestTimedOut {
+		request_timed_out: serde_json::Value,
+	},
+	NonSuccessStatus {
+		non_success_status: ServerlessMetadataErrorNonSuccessStatus,
+	},
+	InvalidResponseJson {
+		invalid_response_json: ServerlessMetadataErrorInvalidResponseJson,
+	},
+	InvalidResponseSchema {
+		invalid_response_schema: ServerlessMetadataErrorInvalidResponseSchema,
+	},
+	InvalidEnvoyProtocolVersion {
+		invalid_envoy_protocol_version: ServerlessMetadataErrorInvalidEnvoyProtocolVersion,
+	},
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ServerlessMetadataErrorNonSuccessStatus {
+	pub status_code: u16,
+	pub body: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ServerlessMetadataErrorInvalidResponseJson {
+	pub body: String,
+	pub parse_error: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ServerlessMetadataErrorInvalidResponseSchema {
+	pub runtime: String,
+	pub version: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ServerlessMetadataErrorInvalidEnvoyProtocolVersion {
+	pub version: u16,
 }
 
 pub async fn build_runner_configs_serverless_health_check_request(
