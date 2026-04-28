@@ -1,6 +1,6 @@
 use futures_util::FutureExt;
 use gas::prelude::*;
-use rivet_data::converted::ActorByKeyKeyData;
+use rivet_data::converted::{ActorByKeyKeyData, ActorNameKeyData};
 use rivet_envoy_protocol as protocol;
 use universaldb::prelude::*;
 
@@ -358,6 +358,16 @@ pub async fn populate_indexes(ctx: &ActivityCtx, input: &PopulateIndexesInput) -
 					),
 					ctx.workflow_id(),
 				)?;
+
+				let name_key = crate::keys::ns::ActorNameKey::new(namespace_id, name.clone());
+				if !tx.exists(&name_key, Serializable).await? {
+					tx.write(
+						&name_key,
+						ActorNameKeyData {
+							metadata: serde_json::Map::new(),
+						},
+					)?;
+				}
 
 				// NOTE: keys::ns::ActorByKeyKey is written in actor_keys.rs when reserved by epoxy
 
