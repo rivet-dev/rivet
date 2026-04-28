@@ -1,9 +1,13 @@
 import { type Pipeable, pipeArguments } from "effect/Pipeable";
+import * as Predicate from "effect/Predicate";
 import * as Schema from "effect/Schema";
 
 const TypeId = "~@rivetkit/effect/Message";
 
 const EnvelopeTypeId = "~@rivetkit/effect/Message/Envelope";
+
+export const isMessage = (u: unknown): u is Message<any, any, any> =>
+	Predicate.hasProperty(u, TypeId);
 
 /**
  * A Rivet Actor message: a durable, queued operation that the actor

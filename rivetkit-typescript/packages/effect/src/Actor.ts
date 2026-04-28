@@ -2,6 +2,7 @@ import * as Context from "effect/Context";
 import type * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import { type Pipeable, pipeArguments } from "effect/Pipeable";
+import * as Predicate from "effect/Predicate";
 import type * as PubSub from "effect/PubSub";
 import type * as Queue from "effect/Queue";
 import * as Schema from "effect/Schema";
@@ -12,6 +13,9 @@ import type * as Action from "./Action";
 import type * as Message from "./Message";
 
 const TypeId = "~@rivetkit/effect/Actor";
+
+export const isActor = (u: unknown): u is Actor<any, any, any, any, any> =>
+	Predicate.hasProperty(u, TypeId);
 
 /**
  * Schemas keyed by the event names an actor can publish.
@@ -440,9 +444,6 @@ export type ServerServices<A> = A extends Actor<
 			| Message.ServicesServer<_Messages>
 			| EventEncodeServices<_Events>
 	: never;
-
-export const isActor = (u: unknown): u is Any =>
-	typeof u === "object" && u !== null && TypeId in u;
 
 const identity = <A>(value: A): A => value;
 

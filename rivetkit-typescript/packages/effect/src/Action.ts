@@ -1,7 +1,11 @@
 import { type Pipeable, pipeArguments } from "effect/Pipeable";
+import * as Predicate from "effect/Predicate";
 import * as Schema from "effect/Schema";
 
 const TypeId = "~@rivetkit/effect/Action";
+
+export const isAction = (u: unknown): u is Action<any, any, any, any> =>
+	Predicate.hasProperty(u, TypeId);
 
 /**
  * A Rivet Actor action: a synchronous request-response call dispatched
