@@ -13,7 +13,12 @@ import {
 	Icon,
 } from "@rivet-gg/icons";
 import { useSuspenseQuery } from "@tanstack/react-query";
-import { Link, useMatchRoute, useNavigate } from "@tanstack/react-router";
+import {
+	Link,
+	useMatch,
+	useMatchRoute,
+	useNavigate,
+} from "@tanstack/react-router";
 import {
 	type ComponentProps,
 	createContext,
@@ -586,14 +591,9 @@ function CloudSidebar(): ReactNode {
 }
 
 function CloudSidebarContent() {
-	const match = useMatchRoute();
+	const dataProvider = useCloudNamespaceDataProvider();
 
-	const matchNamespace = match({
-		to: "/orgs/$organization/projects/$project/ns/$namespace",
-		fuzzy: true,
-	});
-
-	if (matchNamespace) {
+	if (dataProvider) {
 		return <CloudSidebarContentInner />;
 	}
 
