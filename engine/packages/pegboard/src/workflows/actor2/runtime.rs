@@ -5,6 +5,7 @@ use futures_util::TryStreamExt;
 use gas::prelude::*;
 use rand::prelude::SliceRandom;
 use rivet_envoy_protocol::{self as protocol, PROTOCOL_VERSION, versioned};
+use rivet_types::actors::CrashPolicy;
 use rivet_types::runner_configs::RunnerConfigKind;
 use universaldb::prelude::*;
 use universalpubsub::PublishOpts;
@@ -562,7 +563,11 @@ pub async fn handle_stopped(
 				code: protocol::StopCode::Error,
 				..
 			}
-			| StoppedVariant::Lost { .. } => Decision::Sleep,
+			| StoppedVariant::Lost { .. } => match input.crash_policy {
+				CrashPolicy::Restart => Decision::Reallocate,
+				CrashPolicy::Sleep => Decision::Sleep,
+				CrashPolicy::Destroy => Decision::Destroy,
+			},
 		},
 	};
 
