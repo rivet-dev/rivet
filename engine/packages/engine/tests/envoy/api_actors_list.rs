@@ -26,7 +26,7 @@ fn list_actors_by_namespace_and_name() {
 					key: Some(format!("key-{}", i)),
 					input: None,
 					runner_name_selector: common::TEST_RUNNER_NAME.to_string(),
-					crash_policy: rivet_types::actors::CrashPolicy::Destroy,
+					crash_policy: rivet_types::actors::CrashPolicy::Sleep,
 				},
 			)
 			.await
@@ -91,7 +91,7 @@ fn list_with_pagination() {
 					key: Some(format!("key-{}", i)),
 					input: None,
 					runner_name_selector: common::TEST_RUNNER_NAME.to_string(),
-					crash_policy: rivet_types::actors::CrashPolicy::Destroy,
+					crash_policy: rivet_types::actors::CrashPolicy::Sleep,
 				},
 			)
 			.await
@@ -265,7 +265,7 @@ fn list_actors_by_namespace_name_and_key() {
 				key: Some(key1.clone()),
 				input: None,
 				runner_name_selector: common::TEST_RUNNER_NAME.to_string(),
-				crash_policy: rivet_types::actors::CrashPolicy::Destroy,
+				crash_policy: rivet_types::actors::CrashPolicy::Sleep,
 			},
 		)
 		.await
@@ -283,7 +283,7 @@ fn list_actors_by_namespace_name_and_key() {
 				key: Some(key2.clone()),
 				input: None,
 				runner_name_selector: common::TEST_RUNNER_NAME.to_string(),
-				crash_policy: rivet_types::actors::CrashPolicy::Destroy,
+				crash_policy: rivet_types::actors::CrashPolicy::Sleep,
 			},
 		)
 		.await
@@ -331,7 +331,7 @@ fn list_with_include_destroyed_false() {
 				key: Some("destroyed-key".to_string()),
 				input: None,
 				runner_name_selector: common::TEST_RUNNER_NAME.to_string(),
-				crash_policy: rivet_types::actors::CrashPolicy::Destroy,
+				crash_policy: rivet_types::actors::CrashPolicy::Sleep,
 			},
 		)
 		.await
@@ -362,7 +362,7 @@ fn list_with_include_destroyed_false() {
 				key: Some("active-key".to_string()),
 				input: None,
 				runner_name_selector: common::TEST_RUNNER_NAME.to_string(),
-				crash_policy: rivet_types::actors::CrashPolicy::Destroy,
+				crash_policy: rivet_types::actors::CrashPolicy::Sleep,
 			},
 		)
 		.await
@@ -411,7 +411,7 @@ fn list_with_include_destroyed_true() {
 				key: Some("destroyed-key".to_string()),
 				input: None,
 				runner_name_selector: common::TEST_RUNNER_NAME.to_string(),
-				crash_policy: rivet_types::actors::CrashPolicy::Destroy,
+				crash_policy: rivet_types::actors::CrashPolicy::Sleep,
 			},
 		)
 		.await
@@ -442,7 +442,7 @@ fn list_with_include_destroyed_true() {
 				key: Some("active-key".to_string()),
 				input: None,
 				runner_name_selector: common::TEST_RUNNER_NAME.to_string(),
-				crash_policy: rivet_types::actors::CrashPolicy::Destroy,
+				crash_policy: rivet_types::actors::CrashPolicy::Sleep,
 			},
 		)
 		.await
@@ -488,7 +488,6 @@ fn list_with_include_destroyed_true() {
 // Broken legacy Pegboard Runner coverage: full `runner::` sweep times out with
 // `test timed out: Elapsed(())`.
 #[test]
-#[ignore = "broken legacy Pegboard Runner test: times out in full runner sweep"]
 fn list_specific_actors_by_ids() {
 	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
 		let (namespace, _, _runner) =
@@ -548,7 +547,7 @@ fn list_specific_actors_by_ids() {
 #[test]
 // Broken legacy Pegboard Runner test: full engine sweep can fail creating the
 // DC2 actor with `actor.destroyed_during_creation`.
-#[ignore = "broken legacy Pegboard Runner test: actor.destroyed_during_creation in full engine sweep"]
+#[ignore = "DC2 actor create hangs / workflow-worker lease failure"]
 fn list_actors_from_multiple_datacenters() {
 	common::run(common::TestOpts::new(2).with_timeout(45), |ctx| async move {
 		let (namespace, _, _runner) =
@@ -566,7 +565,7 @@ fn list_actors_from_multiple_datacenters() {
 				key: Some("dc1-key".to_string()),
 				input: None,
 				runner_name_selector: common::TEST_RUNNER_NAME.to_string(),
-				crash_policy: rivet_types::actors::CrashPolicy::Destroy,
+				crash_policy: rivet_types::actors::CrashPolicy::Sleep,
 			},
 		)
 		.await
@@ -584,7 +583,7 @@ fn list_actors_from_multiple_datacenters() {
 				key: Some("dc2-key".to_string()),
 				input: None,
 				runner_name_selector: common::TEST_RUNNER_NAME.to_string(),
-				crash_policy: rivet_types::actors::CrashPolicy::Destroy,
+				crash_policy: rivet_types::actors::CrashPolicy::Sleep,
 			},
 		)
 		.await
@@ -754,7 +753,7 @@ fn verify_sorting_by_create_ts_descending() {
 					key: Some(format!("key-{}", i)),
 					input: None,
 					runner_name_selector: common::TEST_RUNNER_NAME.to_string(),
-					crash_policy: rivet_types::actors::CrashPolicy::Destroy,
+					crash_policy: rivet_types::actors::CrashPolicy::Sleep,
 				},
 			)
 			.await
@@ -795,7 +794,7 @@ fn verify_sorting_by_create_ts_descending() {
 // Broken legacy Pegboard Runner multi-DC coverage: full `runner::` sweep times
 // out with `test timed out: Elapsed(())`.
 #[test]
-#[ignore = "broken legacy Pegboard Runner test: times out in full runner sweep"]
+#[ignore = "DC2 actor create hangs / workflow-worker lease failure"]
 fn list_aggregates_results_from_all_datacenters() {
 	common::run(common::TestOpts::new(2).with_timeout(45), |ctx| async move {
 		let (namespace, _, _runner) =
@@ -815,7 +814,7 @@ fn list_aggregates_results_from_all_datacenters() {
 				key: Some("dc1-key".to_string()),
 				input: None,
 				runner_name_selector: common::TEST_RUNNER_NAME.to_string(),
-				crash_policy: rivet_types::actors::CrashPolicy::Destroy,
+				crash_policy: rivet_types::actors::CrashPolicy::Sleep,
 			},
 		)
 		.await
@@ -833,7 +832,7 @@ fn list_aggregates_results_from_all_datacenters() {
 				key: Some("dc2-key".to_string()),
 				input: None,
 				runner_name_selector: common::TEST_RUNNER_NAME.to_string(),
-				crash_policy: rivet_types::actors::CrashPolicy::Destroy,
+				crash_policy: rivet_types::actors::CrashPolicy::Sleep,
 			},
 		)
 		.await
@@ -934,7 +933,7 @@ fn list_by_key_with_include_destroyed_true() {
 				key: Some(key.to_string()),
 				input: None,
 				runner_name_selector: common::TEST_RUNNER_NAME.to_string(),
-				crash_policy: rivet_types::actors::CrashPolicy::Destroy,
+				crash_policy: rivet_types::actors::CrashPolicy::Sleep,
 			},
 		)
 		.await
@@ -965,7 +964,7 @@ fn list_by_key_with_include_destroyed_true() {
 				key: Some(key.to_string()),
 				input: None,
 				runner_name_selector: common::TEST_RUNNER_NAME.to_string(),
-				crash_policy: rivet_types::actors::CrashPolicy::Destroy,
+				crash_policy: rivet_types::actors::CrashPolicy::Sleep,
 			},
 		)
 		.await
@@ -1056,7 +1055,7 @@ fn list_default_limit_100() {
 // Broken legacy Pegboard Runner coverage: full `runner::` sweep times out with
 // `test timed out: Elapsed(())`.
 #[test]
-#[ignore = "broken legacy Pegboard Runner test: times out in full runner sweep"]
+#[ignore = "API rejects mixed-validity actor_ids instead of filtering"]
 fn list_with_invalid_actor_id_format_in_comma_list() {
 	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
 		let (namespace, _, _runner) =
@@ -1074,7 +1073,7 @@ fn list_with_invalid_actor_id_format_in_comma_list() {
 				key: Some("test-key".to_string()),
 				input: None,
 				runner_name_selector: common::TEST_RUNNER_NAME.to_string(),
-				crash_policy: rivet_types::actors::CrashPolicy::Destroy,
+				crash_policy: rivet_types::actors::CrashPolicy::Sleep,
 			},
 		)
 		.await
@@ -1139,7 +1138,7 @@ fn list_with_cursor_pagination() {
 					key: Some(format!("cursor-key-{}", i)),
 					input: None,
 					runner_name_selector: common::TEST_RUNNER_NAME.to_string(),
-					crash_policy: rivet_types::actors::CrashPolicy::Destroy,
+					crash_policy: rivet_types::actors::CrashPolicy::Sleep,
 				},
 			)
 			.await
@@ -1283,7 +1282,7 @@ fn list_cursor_filters_by_timestamp() {
 					key: Some(format!("ts-key-{}", i)),
 					input: None,
 					runner_name_selector: common::TEST_RUNNER_NAME.to_string(),
-					crash_policy: rivet_types::actors::CrashPolicy::Destroy,
+					crash_policy: rivet_types::actors::CrashPolicy::Sleep,
 				},
 			)
 			.await
@@ -1369,7 +1368,7 @@ fn list_cursor_with_exact_timestamp_boundary() {
 					key: Some(format!("boundary-key-{}", i)),
 					input: None,
 					runner_name_selector: common::TEST_RUNNER_NAME.to_string(),
-					crash_policy: rivet_types::actors::CrashPolicy::Destroy,
+					crash_policy: rivet_types::actors::CrashPolicy::Sleep,
 				},
 			)
 			.await
@@ -1447,7 +1446,7 @@ fn list_cursor_empty_results_when_no_more_actors() {
 					key: Some(format!("empty-key-{}", i)),
 					input: None,
 					runner_name_selector: common::TEST_RUNNER_NAME.to_string(),
-					crash_policy: rivet_types::actors::CrashPolicy::Destroy,
+					crash_policy: rivet_types::actors::CrashPolicy::Sleep,
 				},
 			)
 			.await
@@ -1539,7 +1538,7 @@ fn list_invalid_cursor_format() {
 // Broken legacy Pegboard Runner multi-DC coverage: full `runner::` sweep times
 // out with `test timed out: Elapsed(())`.
 #[test]
-#[ignore = "broken legacy Pegboard Runner test: times out in full runner sweep"]
+#[ignore = "DC2 actor create hangs / workflow-worker lease failure"]
 fn list_cursor_across_datacenters() {
 	common::run(common::TestOpts::new(2).with_timeout(45), |ctx| async move {
 		let (namespace, _, _runner) =
@@ -1560,7 +1559,7 @@ fn list_cursor_across_datacenters() {
 					key: Some(format!("dc1-cursor-key-{}", i)),
 					input: None,
 					runner_name_selector: common::TEST_RUNNER_NAME.to_string(),
-					crash_policy: rivet_types::actors::CrashPolicy::Destroy,
+					crash_policy: rivet_types::actors::CrashPolicy::Sleep,
 				},
 			)
 			.await
@@ -1579,7 +1578,7 @@ fn list_cursor_across_datacenters() {
 					key: Some(format!("dc2-cursor-key-{}", i)),
 					input: None,
 					runner_name_selector: common::TEST_RUNNER_NAME.to_string(),
-					crash_policy: rivet_types::actors::CrashPolicy::Destroy,
+					crash_policy: rivet_types::actors::CrashPolicy::Sleep,
 				},
 			)
 			.await
@@ -1649,7 +1648,7 @@ fn list_cursor_across_datacenters() {
 // Broken legacy Pegboard Runner coverage: full `runner::` sweep times out with
 // `test timed out: Elapsed(())`.
 #[test]
-#[ignore = "broken legacy Pegboard Runner test: times out in full runner sweep"]
+#[ignore = "cursor pagination off-by-one on final page"]
 fn list_actor_ids_with_cursor_pagination() {
 	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
 		let (namespace, _, _runner) =

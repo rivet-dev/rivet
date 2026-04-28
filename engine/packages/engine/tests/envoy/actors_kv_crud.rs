@@ -445,7 +445,7 @@ fn basic_kv_put_and_get() {
 			&namespace,
 			"kv-put-get",
 			runner.pool_name(),
-			rivet_types::actors::CrashPolicy::Destroy,
+			rivet_types::actors::CrashPolicy::Sleep,
 		)
 		.await;
 
@@ -485,7 +485,7 @@ fn kv_get_nonexistent_key() {
 			&namespace,
 			"kv-get-nonexistent",
 			runner.pool_name(),
-			rivet_types::actors::CrashPolicy::Destroy,
+			rivet_types::actors::CrashPolicy::Sleep,
 		)
 		.await;
 
@@ -525,7 +525,7 @@ fn kv_put_overwrite_existing() {
 			&namespace,
 			"kv-overwrite",
 			runner.pool_name(),
-			rivet_types::actors::CrashPolicy::Destroy,
+			rivet_types::actors::CrashPolicy::Sleep,
 		)
 		.await;
 
@@ -565,7 +565,7 @@ fn kv_delete_existing_key() {
 			&namespace,
 			"kv-delete",
 			runner.pool_name(),
-			rivet_types::actors::CrashPolicy::Destroy,
+			rivet_types::actors::CrashPolicy::Sleep,
 		)
 		.await;
 
@@ -605,7 +605,7 @@ fn kv_delete_nonexistent_key() {
 			&namespace,
 			"kv-delete-nonexistent",
 			runner.pool_name(),
-			rivet_types::actors::CrashPolicy::Destroy,
+			rivet_types::actors::CrashPolicy::Sleep,
 		)
 		.await;
 
@@ -898,7 +898,7 @@ fn kv_put_multiple_keys() {
 			&namespace,
 			"kv-batch-put",
 			runner.pool_name(),
-			rivet_types::actors::CrashPolicy::Destroy,
+			rivet_types::actors::CrashPolicy::Sleep,
 		)
 		.await;
 
@@ -937,7 +937,7 @@ fn kv_get_multiple_keys() {
 			&namespace,
 			"kv-batch-get",
 			runner.pool_name(),
-			rivet_types::actors::CrashPolicy::Destroy,
+			rivet_types::actors::CrashPolicy::Sleep,
 		)
 		.await;
 
@@ -976,7 +976,7 @@ fn kv_delete_multiple_keys() {
 			&namespace,
 			"kv-batch-delete",
 			runner.pool_name(),
-			rivet_types::actors::CrashPolicy::Destroy,
+			rivet_types::actors::CrashPolicy::Sleep,
 		)
 		.await;
 

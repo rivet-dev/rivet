@@ -768,7 +768,7 @@ fn kv_list_all_empty_store() {
 			&namespace,
 			"kv-list-empty",
 			runner.pool_name(),
-			rivet_types::actors::CrashPolicy::Destroy,
+			rivet_types::actors::CrashPolicy::Sleep,
 		)
 		.await;
 
@@ -807,7 +807,7 @@ fn kv_list_all_with_keys() {
 			&namespace,
 			"kv-list-keys",
 			runner.pool_name(),
-			rivet_types::actors::CrashPolicy::Destroy,
+			rivet_types::actors::CrashPolicy::Sleep,
 		)
 		.await;
 
@@ -846,7 +846,7 @@ fn kv_list_all_with_limit() {
 			&namespace,
 			"kv-list-limit",
 			runner.pool_name(),
-			rivet_types::actors::CrashPolicy::Destroy,
+			rivet_types::actors::CrashPolicy::Sleep,
 		)
 		.await;
 
@@ -885,7 +885,7 @@ fn kv_list_all_reverse() {
 			&namespace,
 			"kv-list-reverse",
 			runner.pool_name(),
-			rivet_types::actors::CrashPolicy::Destroy,
+			rivet_types::actors::CrashPolicy::Sleep,
 		)
 		.await;
 
@@ -924,7 +924,7 @@ fn kv_list_range_inclusive() {
 			&namespace,
 			"kv-range-inclusive",
 			runner.pool_name(),
-			rivet_types::actors::CrashPolicy::Destroy,
+			rivet_types::actors::CrashPolicy::Sleep,
 		)
 		.await;
 
@@ -963,7 +963,7 @@ fn kv_list_range_exclusive() {
 			&namespace,
 			"kv-range-exclusive",
 			runner.pool_name(),
-			rivet_types::actors::CrashPolicy::Destroy,
+			rivet_types::actors::CrashPolicy::Sleep,
 		)
 		.await;
 
@@ -1002,7 +1002,7 @@ fn kv_list_prefix_match() {
 			&namespace,
 			"kv-prefix-match",
 			runner.pool_name(),
-			rivet_types::actors::CrashPolicy::Destroy,
+			rivet_types::actors::CrashPolicy::Sleep,
 		)
 		.await;
 
@@ -1041,7 +1041,7 @@ fn kv_list_prefix_no_matches() {
 			&namespace,
 			"kv-prefix-no-match",
 			runner.pool_name(),
-			rivet_types::actors::CrashPolicy::Destroy,
+			rivet_types::actors::CrashPolicy::Sleep,
 		)
 		.await;
 

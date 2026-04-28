@@ -196,7 +196,7 @@ fn kv_drop_clears_all_data() {
 			&namespace,
 			"kv-drop-clears",
 			runner.pool_name(),
-			rivet_types::actors::CrashPolicy::Destroy,
+			rivet_types::actors::CrashPolicy::Sleep,
 		)
 		.await;
 
@@ -235,7 +235,7 @@ fn kv_drop_empty_store() {
 			&namespace,
 			"kv-drop-empty",
 			runner.pool_name(),
-			rivet_types::actors::CrashPolicy::Destroy,
+			rivet_types::actors::CrashPolicy::Sleep,
 		)
 		.await;
 
