@@ -10,11 +10,11 @@
 	},
 	"dependencies": {
 		"@ai-sdk/openai": "^0.0.66",
-		"@hono/node-server": "^1.19.7",
+		"@hono/node-server": "^1.19.13",
 		"@hono/node-ws": "^1.3.0",
 		"@rivetkit/react": "^2.3.0-rc.4",
-		"ai": "^4.0.38",
-		"hono": "^4.11.3",
+		"ai": "^5.0.52",
+		"hono": "^4.12.14",
 		"react": "^18.2.0",
 		"react-dom": "^18.2.0",
 		"rivetkit": "^2.3.0-rc.4"

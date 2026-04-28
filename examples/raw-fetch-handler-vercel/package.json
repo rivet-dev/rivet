@@ -9,10 +9,10 @@
 		"check-types": "tsc --noEmit"
 	},
 	"dependencies": {
-		"@hono/node-server": "^1.19.1",
+		"@hono/node-server": "^1.19.13",
 		"@hono/node-ws": "^1.3.0",
 		"@rivetkit/react": "^2.3.0-rc.4",
-		"hono": "^4.6.18",
+		"hono": "^4.12.14",
 		"react": "^18.3.1",
 		"react-dom": "^18.3.1",
 		"rivetkit": "^2.3.0-rc.4"

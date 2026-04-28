@@ -53,7 +53,7 @@
 	},
 	"dependencies": {
 		"@rivetkit/react": "workspace:*",
-		"hono": "^4.8.3",
+		"hono": "^4.12.14",
 		"rivetkit": "workspace:^"
 	},
 	"peerDependencies": {
