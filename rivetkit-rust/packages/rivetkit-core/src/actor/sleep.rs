@@ -458,18 +458,32 @@ impl ActorContext {
 		let counter = self.0.sleep.work.shutdown_counter.clone();
 		counter.increment();
 		let guard = CountGuard::from_incremented(counter);
+		let ctx = self.clone();
 		shutdown_tasks.spawn(
 			async move {
-				let _guard = guard;
-				fut.await;
+				{
+					let _guard = guard;
+					fut.await;
+				}
+				ctx.reset_sleep_timer();
 			}
 			.in_current_span(),
 		);
+		drop(shutdown_tasks);
+		self.reset_sleep_timer();
 		true
 	}
 
 	pub(crate) fn shutdown_task_count(&self) -> usize {
 		self.0.sleep.work.shutdown_counter.load()
+	}
+
+	pub(crate) fn mark_shutdown_deadline_reached(&self) {
+		self.0
+			.sleep
+			.work
+			.shutdown_deadline_reached
+			.store(true, Ordering::Release);
 	}
 
 	pub(crate) fn begin_core_dispatched_hook(&self) {
@@ -487,17 +501,47 @@ impl ActorContext {
 	}
 
 	pub(crate) async fn teardown_sleep_state(&self) {
-		self.0
+		let abort_remaining = self
+			.0
 			.sleep
 			.work
-			.teardown_started
-			.store(true, Ordering::Release);
-		let mut shutdown_tasks = {
-			let mut guard = self.0.sleep.work.shutdown_tasks.lock();
-			std::mem::take(&mut *guard)
-		};
-		shutdown_tasks.shutdown().await;
-		*self.0.sleep.work.shutdown_tasks.lock() = shutdown_tasks;
+			.shutdown_deadline_reached
+			.swap(false, Ordering::AcqRel);
+		if abort_remaining {
+			self.0
+				.sleep
+				.work
+				.teardown_started
+				.store(true, Ordering::Release);
+		}
+
+		loop {
+			let mut shutdown_tasks = {
+				let mut guard = self.0.sleep.work.shutdown_tasks.lock();
+				let taken = std::mem::take(&mut *guard);
+				if taken.is_empty() {
+					self.0
+						.sleep
+						.work
+						.teardown_started
+						.store(true, Ordering::Release);
+					return;
+				}
+				taken
+			};
+
+			if abort_remaining {
+				shutdown_tasks.shutdown().await;
+			} else {
+				while let Some(result) = shutdown_tasks.join_next().await {
+					if let Err(error) = result
+						&& !error.is_cancelled()
+					{
+						tracing::error!(?error, "shutdown task join failed during teardown");
+					}
+				}
+			}
+		}
 	}
 
 	pub(crate) fn sleep_state_config(&self) -> ActorConfig {

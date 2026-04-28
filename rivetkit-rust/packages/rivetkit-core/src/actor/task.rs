@@ -1500,6 +1500,7 @@ impl ActorTask {
 			run_handle.abort();
 		}
 		self.ctx.cancel_shutdown_deadline();
+		self.ctx.mark_shutdown_deadline_reached();
 		self.ctx.record_shutdown_timeout(grace.reason);
 		tracing::warn!(
 			actor_id = %self.ctx.actor_id(),

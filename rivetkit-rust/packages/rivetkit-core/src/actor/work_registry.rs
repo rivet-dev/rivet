@@ -23,6 +23,7 @@ pub(crate) struct WorkRegistry {
 	/// outside rivetkit-core.
 	pub(crate) activity_notify: Arc<Notify>,
 	pub(crate) teardown_started: AtomicBool,
+	pub(crate) shutdown_deadline_reached: AtomicBool,
 }
 
 impl WorkRegistry {
@@ -45,6 +46,7 @@ impl WorkRegistry {
 			idle_notify,
 			activity_notify: Arc::new(Notify::new()),
 			teardown_started: AtomicBool::new(false),
+			shutdown_deadline_reached: AtomicBool::new(false),
 		}
 	}
 
