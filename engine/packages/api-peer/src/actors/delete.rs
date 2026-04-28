@@ -43,9 +43,9 @@ pub async fn delete(ctx: ApiCtx, path: DeletePath, query: DeleteQuery) -> Result
 		.next()
 		.ok_or_else(|| pegboard::errors::Actor::NotFound.build())?;
 
-	// Already destroyed
+	// Already destroyed: succeed idempotently
 	if actor.destroy_ts.is_some() {
-		return Err(pegboard::errors::Actor::NotFound.build());
+		return Ok(DeleteResponse {});
 	}
 
 	// Verify the actor belongs to the specified namespace
