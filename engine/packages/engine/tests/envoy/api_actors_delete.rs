@@ -361,7 +361,6 @@ fn delete_remote_actor_verify_propagation() {
 // Broken legacy Pegboard Runner coverage: second delete returns
 // `actor.not_found` instead of the idempotent success this test expects.
 #[test]
-#[ignore = "broken legacy Pegboard Runner test: second delete returns actor.not_found"]
 fn delete_already_destroyed_actor() {
 	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
 		let (namespace, _, _runner) =
