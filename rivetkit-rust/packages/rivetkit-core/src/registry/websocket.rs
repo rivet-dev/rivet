@@ -565,6 +565,7 @@ impl RegistryDispatcher {
 		let dispatch_capacity = instance.factory.config().dispatch_command_inbox_capacity;
 		let conn_for_close = conn.clone();
 		let conn_for_message = conn.clone();
+		let conn_for_open = conn.clone();
 		let ctx_for_message = ctx.clone();
 		let ctx_for_close = ctx.clone();
 		let ws = WebSocket::new();
@@ -676,6 +677,7 @@ impl RegistryDispatcher {
 			}),
 			on_open: Some(Box::new(move |sender| {
 				let request = request_for_open.clone();
+				let conn = conn_for_open.clone();
 				let ws = ws_for_open.clone();
 				let actor_id = actor_id_for_open.clone();
 				let dispatch = dispatch.clone();
@@ -685,6 +687,7 @@ impl RegistryDispatcher {
 					let result = dispatch_websocket_open_through_task(
 						&dispatch,
 						dispatch_capacity,
+						conn,
 						ws.clone(),
 						Some(request),
 					)

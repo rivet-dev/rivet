@@ -285,6 +285,7 @@ pub enum ActorEvent {
 		reply: Reply<QueueSendResult>,
 	},
 	WebSocketOpen {
+		conn: ConnHandle,
 		ws: WebSocket,
 		request: Option<Request>,
 		reply: Reply<()>,

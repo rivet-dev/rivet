@@ -452,6 +452,25 @@ describeDriverMatrix("Raw Websocket", (driverTestConfig) => {
 			ws.close();
 		});
 
+		test("should expose connection context in onWebSocket", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+			const actor = client.rawWebSocketConnContextActor.getOrCreate([
+				"conn-context",
+			]);
+
+			const ws = await actor.webSocket();
+			const message = await waitForJsonMessage(ws, 5_000);
+
+			expect(message?.type).toBe("conn-context");
+			expect(typeof message?.connId).toBe("string");
+			expect(message?.state).toEqual({
+				opened: true,
+				connId: message?.connId,
+			});
+
+			ws.close();
+		});
+
 		test("should properly handle onWebSocket open and close events", async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);
 			const actor = client.rawWebSocketActor.getOrCreate([

@@ -474,14 +474,19 @@ pub(crate) async fn dispatch_event(
 				.await
 			});
 		}
-		ActorEvent::WebSocketOpen { ws, request, reply } => {
+		ActorEvent::WebSocketOpen {
+			conn,
+			ws,
+			request,
+			reply,
+		} => {
 			let Some(callback) = bindings.on_websocket.clone() else {
 				reply.send(Ok(()));
 				return;
 			};
 			let ctx = ctx.clone();
 			spawn_reply(tasks, abort.clone(), reply, async move {
-				call_on_websocket(&callback, &ctx, ws, request).await
+				call_on_websocket(&callback, &ctx, conn, ws, request).await
 			});
 		}
 		ActorEvent::ConnectionOpen {
@@ -1118,6 +1123,7 @@ where
 async fn call_on_websocket(
 	callback: &crate::actor_factory::CallbackTsfn<WebSocketPayload>,
 	ctx: &ActorContext,
+	conn: rivetkit_core::ConnHandle,
 	ws: rivetkit_core::WebSocket,
 	request: Option<rivetkit_core::Request>,
 ) -> Result<()> {
@@ -1126,6 +1132,7 @@ async fn call_on_websocket(
 		callback,
 		WebSocketPayload {
 			ctx: ctx.inner().clone(),
+			conn,
 			ws,
 			request,
 		},

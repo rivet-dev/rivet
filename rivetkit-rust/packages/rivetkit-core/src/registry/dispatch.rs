@@ -81,6 +81,7 @@ where
 pub(super) async fn dispatch_websocket_open_through_task(
 	dispatch: &mpsc::Sender<DispatchCommand>,
 	capacity: usize,
+	conn: ConnHandle,
 	ws: WebSocket,
 	request: Option<Request>,
 ) -> Result<()> {
@@ -90,6 +91,7 @@ pub(super) async fn dispatch_websocket_open_through_task(
 		capacity,
 		"dispatch_websocket_open",
 		DispatchCommand::OpenWebSocket {
+			conn,
 			ws,
 			request,
 			reply: reply_tx,

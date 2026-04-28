@@ -4134,6 +4134,7 @@ export function buildNativeFactory(
 							error: unknown,
 							payload: {
 								ctx: NativeActorContext;
+								conn: NativeConnHandle;
 								ws: NativeWebSocket;
 								request?: {
 									method: string;
@@ -4143,14 +4144,19 @@ export function buildNativeFactory(
 								};
 							},
 						) => {
-							const { ctx, ws, request } = unwrapTsfnPayload(
-								error,
-								payload,
-							);
+							const { ctx, conn, ws, request } =
+								unwrapTsfnPayload(
+									error,
+									payload,
+								);
 							const jsRequest = request
 								? buildRequest(request)
 								: undefined;
-							const actorCtx = makeActorCtx(ctx, jsRequest);
+							const actorCtx = makeConnCtx(
+								ctx,
+								conn,
+								jsRequest,
+							);
 							try {
 								await config.onWebSocket(
 									actorCtx,

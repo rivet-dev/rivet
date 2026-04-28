@@ -283,6 +283,7 @@ pub enum DispatchCommand {
 		reply: oneshot::Sender<HttpDispatchResult>,
 	},
 	OpenWebSocket {
+		conn: ConnHandle,
 		ws: WebSocket,
 		request: Option<Request>,
 		reply: oneshot::Sender<Result<()>>,
@@ -1031,10 +1032,16 @@ impl ActorTask {
 					}
 				}
 			}
-			DispatchCommand::OpenWebSocket { ws, request, reply } => {
+			DispatchCommand::OpenWebSocket {
+				conn,
+				ws,
+				request,
+				reply,
+			} => {
 				match self.send_actor_event(
 					"dispatch_websocket_open",
 					ActorEvent::WebSocketOpen {
+						conn,
 						ws,
 						request,
 						reply: Reply::from(reply),

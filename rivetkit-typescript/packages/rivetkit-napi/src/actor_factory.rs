@@ -141,6 +141,7 @@ pub(crate) struct QueueSendPayload {
 #[derive(Clone)]
 pub(crate) struct WebSocketPayload {
 	pub(crate) ctx: CoreActorContext,
+	pub(crate) conn: CoreConnHandle,
 	pub(crate) ws: CoreWebSocket,
 	pub(crate) request: Option<Request>,
 }
@@ -833,6 +834,7 @@ fn build_websocket_payload(
 ) -> napi::Result<Vec<napi::JsUnknown>> {
 	let mut object = env.create_object()?;
 	object.set("ctx", ActorContext::new(payload.ctx))?;
+	object.set("conn", ConnHandle::new(payload.conn))?;
 	object.set("ws", WebSocket::new(payload.ws))?;
 	if let Some(request) = payload.request {
 		object.set("request", build_request_object(env, request)?)?;
