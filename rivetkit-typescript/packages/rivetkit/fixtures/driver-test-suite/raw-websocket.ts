@@ -167,3 +167,22 @@ export const rawWebSocketBinaryActor = actor({
 	},
 	actions: {},
 });
+
+export const rawWebSocketAsyncOpenActor = actor({
+	state: {
+		openCount: 0,
+	},
+	async onWebSocket(ctx, websocket) {
+		ctx.state.openCount += 1;
+		await new Promise((resolve) => setTimeout(resolve, 10));
+		websocket.send(
+			JSON.stringify({
+				type: "async-open",
+				openCount: ctx.state.openCount,
+			}),
+		);
+	},
+	actions: {
+		getOpenCount: (ctx) => ctx.state.openCount,
+	},
+});

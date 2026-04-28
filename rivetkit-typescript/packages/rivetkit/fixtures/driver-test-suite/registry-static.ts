@@ -71,7 +71,11 @@ import {
 	rawHttpVoidReturnActor,
 } from "./raw-http";
 import { rawHttpRequestPropertiesActor } from "./raw-http-request-properties";
-import { rawWebSocketActor, rawWebSocketBinaryActor } from "./raw-websocket";
+import {
+	rawWebSocketActor,
+	rawWebSocketAsyncOpenActor,
+	rawWebSocketBinaryActor,
+} from "./raw-websocket";
 import { rejectConnectionActor } from "./reject-connection";
 import { requestAccessActor } from "./request-access";
 import {
@@ -96,6 +100,7 @@ import {
 	sleepWithRawHttp,
 	sleepWithRawWebSocket,
 	sleepWithWaitUntilMessage,
+	counterWaitUntilProbe,
 	sleepRawWsOnClose,
 	sleepRawWsOnMessage,
 	sleepRawWsSendOnSleep,
@@ -196,6 +201,7 @@ export const registry = setup({
 		sleepRawWsSendOnSleep,
 		sleepRawWsDelayedSendOnSleep,
 		sleepWithWaitUntilInOnWake,
+		counterWaitUntilProbe,
 		// From sleep-db.ts
 		sleepWithDb,
 		sleepWithSlowScheduledDb,
@@ -260,6 +266,7 @@ export const registry = setup({
 		rawHttpRequestPropertiesActor,
 		// From raw-websocket.ts
 		rawWebSocketActor,
+		rawWebSocketAsyncOpenActor,
 		rawWebSocketBinaryActor,
 		// From reject-connection.ts
 		rejectConnectionActor,

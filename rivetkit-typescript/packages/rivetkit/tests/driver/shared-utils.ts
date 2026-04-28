@@ -31,6 +31,7 @@ export async function setupDriverTest(
 	endpoint: string;
 	hardCrashActor?: (actorId: string) => Promise<void>;
 	hardCrashPreservesData: boolean;
+	getRuntimeOutput: () => string;
 }> {
 	if (!driverTestConfig.useRealTimers) {
 		vi.useFakeTimers();
@@ -46,6 +47,7 @@ export async function setupDriverTest(
 		runnerName,
 		hardCrashActor,
 		hardCrashPreservesData,
+		getRuntimeOutput,
 		cleanup,
 	} = await driverTestConfig.start();
 	timing("setup.driver_start", driverStartStartedAt, testName);
@@ -83,6 +85,7 @@ export async function setupDriverTest(
 		endpoint,
 		hardCrashActor,
 		hardCrashPreservesData: hardCrashPreservesData ?? false,
+		getRuntimeOutput: getRuntimeOutput ?? (() => ""),
 	};
 }
 

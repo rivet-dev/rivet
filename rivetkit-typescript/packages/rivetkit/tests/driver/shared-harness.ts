@@ -602,6 +602,7 @@ export async function startNativeDriverRuntime(
 		endpoint,
 		namespace,
 		runnerName: poolName,
+		getRuntimeOutput: () => childOutput(logs),
 		cleanup: async () => {
 			await stopRuntime(runtime);
 		},
