@@ -32,7 +32,7 @@ export class CounterOverflowError extends Schema.TaggedErrorClass<CounterOverflo
 // - Shared action protocols. A Ping health-check or GetMetrics
 //   action defined once and composed into multiple actors.
 export const Increment = Action.make("Increment", {
-	payload: Schema.Struct({ amount: Schema.Number }),
+	payload: { amount: Schema.Number },
 	success: Schema.Number,
 	error: CounterOverflowError,
 })
@@ -45,12 +45,12 @@ export const GetCount = Action.make("GetCount", {
 
 // Non-completable (fire-and-forget)
 export const Reset = Message.make("Reset", {
-	payload: Schema.Struct({ reason: Schema.String }),
+	payload: { reason: Schema.String },
 })
 
 // Completable (sender can await a typed response)
 export const IncrementBy = Message.make("IncrementBy", {
-	payload: Schema.Struct({ amount: Schema.Number }),
+	payload: { amount: Schema.Number },
 	success: Schema.Number,
 })
 
