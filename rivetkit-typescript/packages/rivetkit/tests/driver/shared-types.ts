@@ -17,6 +17,7 @@ export interface DriverDeployOutput {
 	runnerName: string;
 	hardCrashActor?: (actorId: string) => Promise<void>;
 	hardCrashPreservesData?: boolean;
+	getRuntimeOutput?: () => string;
 	cleanup(): Promise<void>;
 }
 

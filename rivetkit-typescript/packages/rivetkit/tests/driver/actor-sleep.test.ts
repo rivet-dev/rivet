@@ -304,6 +304,62 @@ describeDriverMatrix("Actor Sleep", (driverTestConfig) => {
 			}
 		});
 
+		test("waitUntil accepts promises that resolve to undefined", async (c) => {
+			const { client, getRuntimeOutput } = await setupDriverTest(
+				c,
+				driverTestConfig,
+			);
+
+			const probe = client.counterWaitUntilProbe.getOrCreate();
+
+			expect(await probe.triggerWaitUntilVoid()).toBe(1);
+			await waitFor(driverTestConfig, 50);
+
+			expect(await probe.getCount()).toBe(1);
+			expect(getRuntimeOutput()).not.toContain(
+				"undefined cannot be represented as a serde_json::Value",
+			);
+
+			expect(await probe.triggerWaitUntilWithValue()).toBe(2);
+			await waitFor(driverTestConfig, 50);
+
+			expect(await probe.getCount()).toBe(2);
+			expect(getRuntimeOutput()).not.toContain(
+				"undefined cannot be represented as a serde_json::Value",
+			);
+
+			expect(await probe.triggerWaitUntilRejectVoid()).toBe(3);
+			await waitFor(driverTestConfig, 50);
+
+			const runtimeOutput = getRuntimeOutput();
+			expect(runtimeOutput).toContain("actor wait_until promise rejected");
+			expect(runtimeOutput).toContain("reject-with-error-ok");
+			expect(runtimeOutput).not.toContain(
+				"undefined cannot be represented as a serde_json::Value",
+			);
+		});
+
+		test("keepAwake accepts promises that resolve to undefined", async (c) => {
+			const { client, getRuntimeOutput } = await setupDriverTest(
+				c,
+				driverTestConfig,
+			);
+
+			const probe = client.counterWaitUntilProbe.getOrCreate();
+
+			expect(await probe.triggerKeepAwakeVoid()).toBe(1);
+			expect(await probe.triggerKeepAwakeWithValue()).toBe(2);
+			expect(await probe.getCount()).toBe(2);
+
+			const runtimeOutput = getRuntimeOutput();
+			expect(runtimeOutput).not.toContain(
+				"keepAwake bridge to native runtime failed",
+			);
+			expect(runtimeOutput).not.toContain(
+				"undefined cannot be represented as a serde_json::Value",
+			);
+		});
+
 		test("rpc calls keep actor awake", async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);
 			const actorKey = [`rpc-awake-${crypto.randomUUID()}`];

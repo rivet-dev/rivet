@@ -428,6 +428,30 @@ describeDriverMatrix("Raw Websocket", (driverTestConfig) => {
 			expect(finalStats?.connectionCount).toBe(0);
 		});
 
+		test("should handle async onWebSocket open handler", async (c) => {
+			const { client, getRuntimeOutput } = await setupDriverTest(
+				c,
+				driverTestConfig,
+			);
+			const actor = client.rawWebSocketAsyncOpenActor.getOrCreate([
+				"async-open",
+			]);
+
+			const ws = await actor.webSocket();
+			const message = await waitForJsonMessage(ws, 5_000);
+
+			expect(message).toEqual({
+				type: "async-open",
+				openCount: 1,
+			});
+			expect(await actor.getOpenCount()).toBe(1);
+			expect(getRuntimeOutput()).not.toContain(
+				"undefined cannot be represented as a serde_json::Value",
+			);
+
+			ws.close();
+		});
+
 		test("should properly handle onWebSocket open and close events", async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);
 			const actor = client.rawWebSocketActor.getOrCreate([

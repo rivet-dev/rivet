@@ -2159,7 +2159,8 @@ class TrackedNativeWebSocketAdapter implements UniversalWebSocket {
 					})
 					.finally(() => {
 						this.#ctx.endWebSocketCallback(callbackRegionId);
-					}),
+					})
+					.then(() => null),
 			);
 		} catch (error) {
 			logger().error({
@@ -2638,8 +2639,9 @@ export class NativeActorContextAdapter {
 	}
 
 	waitUntil(promise: Promise<unknown>): void {
+		const trackedPromise = Promise.resolve(promise).then(() => null);
 		try {
-			callNativeSync(() => this.#ctx.waitUntil(Promise.resolve(promise)));
+			callNativeSync(() => this.#ctx.waitUntil(trackedPromise));
 		} catch (error) {
 			if (!isClosedTaskRegistrationError(error)) {
 				throw error;

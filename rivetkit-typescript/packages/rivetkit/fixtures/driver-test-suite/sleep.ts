@@ -464,6 +464,41 @@ export const sleepWithWaitUntilInOnWake = actor({
 	},
 });
 
+export const counterWaitUntilProbe = actor({
+	state: { count: 0 },
+	actions: {
+		triggerWaitUntilVoid: (c) => {
+			c.state.count += 1;
+			c.waitUntil(Promise.resolve());
+			return c.state.count;
+		},
+		triggerWaitUntilWithValue: (c) => {
+			c.state.count += 1;
+			c.waitUntil(Promise.resolve({ ok: true }));
+			return c.state.count;
+		},
+		triggerWaitUntilRejectVoid: (c) => {
+			c.state.count += 1;
+			c.waitUntil(Promise.reject(new Error("reject-with-error-ok")));
+			return c.state.count;
+		},
+		triggerKeepAwakeVoid: async (c) => {
+			c.state.count += 1;
+			await c.keepAwake(Promise.resolve());
+			return c.state.count;
+		},
+		triggerKeepAwakeWithValue: async (c) => {
+			c.state.count += 1;
+			await c.keepAwake(Promise.resolve({ ok: true }));
+			return c.state.count;
+		},
+		getCount: (c) => c.state.count,
+	},
+	options: {
+		sleepTimeout: SLEEP_TIMEOUT,
+	},
+});
+
 export const sleepWithNoSleepOption = actor({
 	state: { startCount: 0, sleepCount: 0 },
 	onWake: (c) => {
@@ -485,4 +520,3 @@ export const sleepWithNoSleepOption = actor({
 		noSleep: true,
 	},
 });
-
