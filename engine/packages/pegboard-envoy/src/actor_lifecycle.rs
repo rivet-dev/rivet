@@ -235,12 +235,23 @@ pub async fn stop_actor(conn: &Conn, checkpoint: &protocol::ActorCheckpoint) -> 
 
 pub async fn actor_stopped(conn: &Conn, checkpoint: &protocol::ActorCheckpoint) -> Result<()> {
 	let actor_id = checkpoint.actor_id.clone();
-	let active = conn
+	let active = match conn
 		.active_actors
 		.get_async(&actor_id)
 		.await
 		.map(|entry| entry.get().clone())
-		.context("actor stopped without active sqlite state")?;
+	{
+		Some(active) => active,
+		None if conn.is_serverless => {
+			conn.sqlite_engine.force_close(&actor_id).await;
+			conn.serverless_sqlite_actors.remove_async(&actor_id).await;
+			return Ok(());
+		}
+		None => {
+			ensure!(false, "actor stopped without active sqlite state");
+			unreachable!();
+		}
+	};
 	ensure!(
 		active.actor_generation == checkpoint.generation,
 		"stopped actor generation {} did not match active generation {}",
@@ -284,6 +295,22 @@ pub async fn shutdown_conn_actors(conn: &Conn) {
 	stream::iter(active_actors.into_iter().map(|(actor_id, active)| {
 		let sqlite_engine = conn.sqlite_engine.clone();
 		close_actor_on_shutdown(sqlite_engine, actor_id, active.sqlite_generation)
+	}))
+	.buffer_unordered(SHUTDOWN_CLOSE_PARALLELISM)
+	.for_each(|_| async {})
+	.await;
+
+	let mut serverless_sqlite_actors = Vec::new();
+	conn.serverless_sqlite_actors
+		.retain_sync(|actor_id, _generation| {
+			serverless_sqlite_actors.push(actor_id.clone());
+			false
+		});
+	stream::iter(serverless_sqlite_actors.into_iter().map(|actor_id| {
+		let sqlite_engine = conn.sqlite_engine.clone();
+		async move {
+			sqlite_engine.force_close(&actor_id).await;
+		}
 	}))
 	.buffer_unordered(SHUTDOWN_CLOSE_PARALLELISM)
 	.for_each(|_| async {})

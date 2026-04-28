@@ -703,6 +703,7 @@ async fn handle_sqlite_get_pages(
 ) -> Result<protocol::SqliteGetPagesResponse> {
 	validate_sqlite_get_pages_request(&request)?;
 	validate_sqlite_actor(ctx, conn, &request.actor_id).await?;
+	ensure_serverless_sqlite_open(conn, &request.actor_id, request.generation).await?;
 
 	match conn
 		.sqlite_engine
@@ -747,6 +748,7 @@ async fn handle_sqlite_commit(
 	let decode_request_start = Instant::now();
 	validate_sqlite_dirty_pages("sqlite commit", &request.dirty_pages)?;
 	validate_sqlite_actor(ctx, conn, &request.actor_id).await?;
+	ensure_serverless_sqlite_open(conn, &request.actor_id, request.generation).await?;
 	let decode_request_duration = decode_request_start.elapsed();
 	conn.sqlite_engine.metrics().observe_commit_phase(
 		"fast",
@@ -813,6 +815,7 @@ async fn handle_sqlite_commit_stage(
 	request: protocol::SqliteCommitStageRequest,
 ) -> Result<protocol::SqliteCommitStageResponse> {
 	validate_sqlite_actor(ctx, conn, &request.actor_id).await?;
+	ensure_serverless_sqlite_open(conn, &request.actor_id, request.generation).await?;
 
 	match conn
 		.sqlite_engine
@@ -850,6 +853,7 @@ async fn handle_sqlite_commit_stage_begin(
 	request: protocol::SqliteCommitStageBeginRequest,
 ) -> Result<protocol::SqliteCommitStageBeginResponse> {
 	validate_sqlite_actor(ctx, conn, &request.actor_id).await?;
+	ensure_serverless_sqlite_open(conn, &request.actor_id, request.generation).await?;
 
 	match conn
 		.sqlite_engine
@@ -884,6 +888,7 @@ async fn handle_sqlite_commit_finalize(
 ) -> Result<protocol::SqliteCommitFinalizeResponse> {
 	let decode_request_start = Instant::now();
 	validate_sqlite_actor(ctx, conn, &request.actor_id).await?;
+	ensure_serverless_sqlite_open(conn, &request.actor_id, request.generation).await?;
 	conn.sqlite_engine.metrics().observe_commit_phase(
 		"slow",
 		"decode_request",
@@ -948,6 +953,22 @@ async fn validate_sqlite_actor(ctx: &StandaloneCtx, conn: &Conn, actor_id: &str)
 	if actor.namespace_id != conn.namespace_id {
 		bail!("actor does not exist");
 	}
+
+	Ok(())
+}
+
+async fn ensure_serverless_sqlite_open(conn: &Conn, actor_id: &str, generation: u64) -> Result<()> {
+	if !conn.is_serverless {
+		return Ok(());
+	}
+
+	conn.sqlite_engine
+		.ensure_local_open(actor_id, generation)
+		.await?;
+
+	conn.serverless_sqlite_actors
+		.upsert_async(actor_id.to_string(), generation)
+		.await;
 
 	Ok(())
 }
