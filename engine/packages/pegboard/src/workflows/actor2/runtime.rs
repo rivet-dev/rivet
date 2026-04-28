@@ -146,7 +146,7 @@ impl RetryBackoffState {
 #[derive(Debug, Serialize, Deserialize, Hash)]
 pub struct AllocateInput {}
 
-#[derive(Debug, Serialize, Deserialize, Hash)]
+#[derive(Clone, Debug, Serialize, Deserialize, Hash)]
 #[serde(rename_all = "snake_case")]
 pub enum Allocation {
 	Serverless,
@@ -586,16 +586,26 @@ pub async fn handle_stopped(
 				ctx.activity(SendOutboundInput {
 					generation: state.generation,
 					input: input.input.clone(),
-					allocation,
+					allocation: allocation.clone(),
 				})
 				.await?;
 
-				// Transition to allocating
-				state.transition = Transition::Allocating {
-					destroy_after_start: false,
-					lost_timeout_ts: allocate_res.now
-						+ ctx.config().pegboard().actor_allocation_threshold(),
-				};
+				match &allocation {
+					Allocation::Serverless => {
+						state.transition = Transition::Allocating {
+							destroy_after_start: false,
+							lost_timeout_ts: allocate_res.now
+								+ ctx.config().pegboard().actor_allocation_threshold(),
+						};
+					}
+					Allocation::Serverful { .. } => {
+						state.transition = Transition::Starting {
+							destroy_after_start: false,
+							lost_timeout_ts: allocate_res.now
+								+ ctx.config().pegboard().actor_start_threshold(),
+						};
+					}
+				}
 			} else {
 				// Transition to retry backoff
 				state.transition = Transition::Reallocating {
