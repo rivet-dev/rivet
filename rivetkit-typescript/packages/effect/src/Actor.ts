@@ -83,12 +83,12 @@ export interface RegistryShape {
 	readonly _: unique symbol;
 }
 
-export interface ActorTransportOptions {
+export interface ClientOptions {
 	readonly endpoint: string;
 	readonly token?: string;
 }
 
-export interface ActorTransportShape extends ActorTransportOptions {
+export interface ClientShape extends ClientOptions {
 	readonly _: unique symbol;
 }
 
@@ -119,12 +119,11 @@ export class Registry extends Context.Service<Registry, RegistryShape>()(
 	"@rivetkit/effect/Actor/Registry",
 ) {}
 
-export class ActorTransport extends Context.Service<
-	ActorTransport,
-	ActorTransportShape
->()("@rivetkit/effect/Actor/ActorTransport") {
-	static layer(options: ActorTransportOptions): Layer.Layer<ActorTransport> {
-		return Layer.succeed(ActorTransport, {
+export class Client extends Context.Service<Client, ClientShape>()(
+	"@rivetkit/effect/Client",
+) {
+	static layer(options: ClientOptions): Layer.Layer<Client> {
+		return Layer.succeed(Client, {
 			...options,
 			_: undefined as never,
 		});
@@ -306,7 +305,7 @@ export interface Actor<
 	readonly client: Effect.Effect<
 		ActorClient<Actions, Messages, Events>,
 		never,
-		ActorTransport | ClientServices<Actor<Name, State, Actions, Messages, Events>>
+		Client | ClientServices<Actor<Name, State, Actions, Messages, Events>>
 	>;
 
 	of<Handlers extends ActionHandlers<Actions>>(handlers: Handlers): Handlers;
@@ -472,7 +471,7 @@ const Proto = {
 	get client(): never {
 		const self = this as unknown as AnyWithProps;
 		throw new Error(
-			`Actor.client for ${self._tag} is not yet implemented. ActorTransport runtime wiring is pending.`,
+			`Actor.client for ${self._tag} is not yet implemented. Client runtime wiring is pending.`,
 		);
 	},
 	annotate(this: AnyWithProps, tag: Context.Key<any, any>, value: any) {

@@ -1,5 +1,5 @@
 import { Effect, Stream } from "effect"
-import { ActorTransport } from "@rivetkit/effect"
+import { Client } from "@rivetkit/effect"
 import {
 	Counter, IncrementBy,
 	// ChatRoom,
@@ -24,17 +24,17 @@ const program = Effect.gen(function* () {
 		Stream.runForEach((n) => Effect.log(`Changed: ${n}`)),
 	)
 })
-// program: Effect<void, CounterOverflowError, ActorTransport>
-//                                             ^^^^^^^^^^^^^^
-//  Missing ActorTransport -> compile error naming the central runtime dependency.
+// program: Effect<void, CounterOverflowError, Client>
+//                                             ^^^^^^
+//  Missing Client -> compile error naming the central runtime dependency.
 
 // ------------------------------------------------------------------
-// Wiring: provide ActorTransport once. Each actor's .client effect
+// Wiring: provide Client once. Each actor's .client effect
 // uses that transport to create a contract-specific typed accessor.
 // ------------------------------------------------------------------
-const TransportLayer = ActorTransport.layer({
+const ClientLayer = Client.layer({
 	endpoint: "https://api.rivet.dev",
 	token: "...",
 })
 
-program.pipe(Effect.provide(TransportLayer), Effect.runPromise)
+program.pipe(Effect.provide(ClientLayer), Effect.runPromise)
