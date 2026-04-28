@@ -295,7 +295,6 @@ export interface Actor<
 	readonly messages: ReadonlyArray<Messages>;
 	readonly events: Events;
 	readonly options: Options;
-	readonly annotations: Context.Context<never>;
 	readonly State: Context.Service<StateService<Name>, StateRef<State["Type"]>>;
 	readonly Events: Context.Service<EventsService<Name>, EventPubSubMap<Events>>;
 	readonly Messages: Context.Service<
@@ -331,15 +330,6 @@ export interface Actor<
 		| Message.ServicesClient<Messages>
 		| Registry
 	>;
-
-	annotate<I, S>(
-		tag: Context.Key<I, S>,
-		value: S,
-	): Actor<Name, State, Actions, Messages, Events>;
-
-	annotateMerge<I>(
-		annotations: Context.Context<I>,
-	): Actor<Name, State, Actions, Messages, Events>;
 }
 
 /**
@@ -474,28 +464,6 @@ const Proto = {
 			`Actor.client for ${self._tag} is not yet implemented. Client runtime wiring is pending.`,
 		);
 	},
-	annotate(this: AnyWithProps, tag: Context.Key<any, any>, value: any) {
-		return makeProto({
-			_tag: this._tag,
-			stateSchema: this.stateSchema,
-			actions: this.actions,
-			messages: this.messages,
-			events: this.events,
-			options: this.options,
-			annotations: Context.add(this.annotations, tag, value),
-		});
-	},
-	annotateMerge(this: AnyWithProps, annotations: Context.Context<any>) {
-		return makeProto({
-			_tag: this._tag,
-			stateSchema: this.stateSchema,
-			actions: this.actions,
-			messages: this.messages,
-			events: this.events,
-			options: this.options,
-			annotations: Context.merge(this.annotations, annotations),
-		});
-	},
 };
 
 const makeProto = <
@@ -511,7 +479,6 @@ const makeProto = <
 	readonly messages: ReadonlyArray<Messages>;
 	readonly events: Events;
 	readonly options: Options;
-	readonly annotations: Context.Context<never>;
 }): Actor<Name, State, Actions, Messages, Events> => {
 	const key = `@rivetkit/effect/Actor/${options._tag}`;
 	const StateTag = Context.Service<StateService<Name>, StateRef<State["Type"]>>(
@@ -571,6 +538,5 @@ export const make = <
 		messages: (options?.messages ?? []) as ReadonlyArray<Message.AnyWithProps>,
 		events: (options?.events ?? {}) as EventSchemas,
 		options: options?.options ?? {},
-		annotations: Context.empty(),
 	}) as any;
 };
