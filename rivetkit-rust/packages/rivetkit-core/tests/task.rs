@@ -2303,6 +2303,142 @@ mod moved_tests {
 	}
 
 	#[tokio::test(start_paused = true)]
+	async fn nested_wait_until_during_grace_is_drained() {
+		let _hook_lock = test_hook_lock().lock().await;
+		let ctx = new_with_kv(
+			"actor-nested-wait-until-grace",
+			"task-nested-wait-until-grace",
+			Vec::new(),
+			"local",
+			new_in_memory(),
+		);
+		let warning_count = Arc::new(AtomicUsize::new(0));
+		let subscriber = Registry::default().with(ShutdownTaskRefusedWarningLayer {
+			count: warning_count.clone(),
+		});
+		let _guard = tracing::subscriber::set_default(subscriber);
+		let (release_tx, release_rx) = oneshot::channel();
+		let nested_ran = Arc::new(AtomicBool::new(false));
+		ctx.wait_until({
+			let ctx = ctx.clone();
+			let nested_ran = nested_ran.clone();
+			async move {
+				let _ = release_rx.await;
+				ctx.wait_until(async move {
+					nested_ran.store(true, Ordering::SeqCst);
+				});
+			}
+		});
+		yield_now().await;
+		assert_eq!(ctx.shutdown_task_count(), 1);
+
+		let teardown = tokio::spawn({
+			let ctx = ctx.clone();
+			async move {
+				ctx.teardown_sleep_state().await;
+			}
+		});
+		yield_now().await;
+		release_tx.send(()).expect("release should send");
+		teardown.await.expect("teardown task should join");
+
+		assert!(nested_ran.load(Ordering::SeqCst));
+		assert_eq!(warning_count.load(Ordering::SeqCst), 0);
+	}
+
+	#[tokio::test(start_paused = true)]
+	async fn keep_awake_in_on_sleep_blocks_finalize_until_released() {
+		let _hook_lock = test_hook_lock().lock().await;
+		let ctx = new_with_kv(
+			"actor-on-sleep-keep-awake",
+			"task-on-sleep-keep-awake",
+			Vec::new(),
+			"local",
+			new_in_memory(),
+		);
+		let warning_count = Arc::new(AtomicUsize::new(0));
+		let subscriber = Registry::default().with(ShutdownTaskRefusedWarningLayer {
+			count: warning_count.clone(),
+		});
+		let _guard = tracing::subscriber::set_default(subscriber);
+		let (release_tx, release_rx) = oneshot::channel();
+		let release_rx = Arc::new(Mutex::new(Some(release_rx)));
+		let (mut task, lifecycle_tx, _dispatch_tx, _events_tx) = new_task_with_senders(ctx.clone());
+		task.factory = Arc::new(ActorFactory::new(
+			ActorConfig {
+				sleep_grace_period: Duration::from_secs(5),
+				sleep_grace_period_overridden: true,
+				..ActorConfig::default()
+			},
+			move |start| {
+				let release_rx = release_rx.clone();
+				Box::pin(async move {
+					let ctx = start.ctx.clone();
+					let mut events = start.events;
+					while let Some(event) = events.recv().await {
+						match event {
+							ActorEvent::SerializeState { reply, .. } => {
+								reply.send(Ok(Vec::new()));
+							}
+							ActorEvent::RunGracefulCleanup { reply, .. } => {
+								let release_rx = release_rx
+									.lock()
+									.expect("release receiver lock poisoned")
+									.take()
+									.expect("release receiver should only be taken once");
+								ctx.keep_awake(async move {
+									let _ = release_rx.await;
+								})
+								.await;
+								reply.send(Ok(()));
+								break;
+							}
+							_ => {}
+						}
+					}
+					Ok(())
+				})
+			},
+		));
+		let run = tokio::spawn(task.run());
+
+		let (start_tx, start_rx) = oneshot::channel();
+		lifecycle_tx
+			.send(LifecycleCommand::Start { reply: start_tx })
+			.await
+			.expect("start command should send");
+		start_rx
+			.await
+			.expect("start reply should send")
+			.expect("start should succeed");
+
+		let (stop_tx, stop_rx) = oneshot::channel();
+		lifecycle_tx
+			.send(LifecycleCommand::Stop {
+				reason: ShutdownKind::Sleep,
+				reply: stop_tx,
+			})
+			.await
+			.expect("sleep stop should send");
+		let stop = tokio::spawn(async move { stop_rx.await });
+		yield_now().await;
+		assert!(
+			!stop.is_finished(),
+			"sleep shutdown should stay blocked while onSleep keep-awake work is active"
+		);
+
+		release_tx.send(()).expect("release should send");
+		stop.await
+			.expect("sleep stop join should succeed")
+			.expect("sleep stop reply should send")
+			.expect("sleep stop should succeed");
+		run.await
+			.expect("task run should finish")
+			.expect("task run should succeed");
+		assert_eq!(warning_count.load(Ordering::SeqCst), 0);
+	}
+
+	#[tokio::test(start_paused = true)]
 	async fn destroy_shutdown_times_out_at_deadline_and_aborts_stuck_shutdown_task() {
 		let ctx = new_with_kv(
 			"actor-destroy-timeout",
