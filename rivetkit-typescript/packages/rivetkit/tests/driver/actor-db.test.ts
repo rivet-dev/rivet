@@ -537,6 +537,7 @@ describeDriverMatrix("Actor Db", (driverTestConfig) => {
 					);
 
 					await actor.triggerSleep();
+					await waitFor(driverTestConfig, SLEEP_WAIT_MS);
 					await expectIntegrityCheckOk(
 						driverTestConfig,
 						async () => await actor.integrityCheck(),
