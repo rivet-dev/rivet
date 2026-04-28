@@ -84,17 +84,18 @@ impl TestCtx {
 			.await?
 			.into_iter();
 
-		// Setup all datacenters
-		let mut dcs = Vec::new();
-		for test_deps in test_deps_list {
-			let dc = Self::setup_instance(
+		// Setup all datacenters in parallel so each DC's epoxy/peer endpoints can reach the
+		// others without hitting a startup race (sequential setup would let DC1's epoxy try to
+		// contact DC2 before DC2's API server is listening, which puts DC1 into a long backoff
+		// loop).
+		let setup_futures = test_deps_list.map(|test_deps| {
+			Self::setup_instance(
 				test_deps,
 				opts.pegboard_outbound,
 				opts.auth_admin_token.clone(),
 			)
-			.await?;
-			dcs.push(dc);
-		}
+		});
+		let mut dcs: Vec<TestDatacenter> = futures_util::future::try_join_all(setup_futures).await?;
 		dcs.sort_by_key(|dc| dc.config.dc_label());
 
 		Ok(Self { dcs, opts })

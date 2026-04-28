@@ -545,13 +545,16 @@ fn list_specific_actors_by_ids() {
 }
 
 #[test]
-// Broken legacy Pegboard Runner test: full engine sweep can fail creating the
-// DC2 actor with `actor.destroyed_during_creation`.
-#[ignore = "DC2 actor create hangs / workflow-worker lease failure"]
 fn list_actors_from_multiple_datacenters() {
 	common::run(common::TestOpts::new(2).with_timeout(45), |ctx| async move {
 		let (namespace, _, _runner) =
 			common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
+		let _runner_dc2 = common::setup_envoy_on_dc(
+			ctx.get_dc(2),
+			&namespace,
+			vec!["multi-dc-actor".to_string()],
+		)
+		.await;
 
 		// Create actors in different DCs
 		let res1 = common::api::public::actors_create(
@@ -794,11 +797,16 @@ fn verify_sorting_by_create_ts_descending() {
 // Broken legacy Pegboard Runner multi-DC coverage: full `runner::` sweep times
 // out with `test timed out: Elapsed(())`.
 #[test]
-#[ignore = "DC2 actor create hangs / workflow-worker lease failure"]
 fn list_aggregates_results_from_all_datacenters() {
 	common::run(common::TestOpts::new(2).with_timeout(45), |ctx| async move {
 		let (namespace, _, _runner) =
 			common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
+		let _runner_dc2 = common::setup_envoy_on_dc(
+			ctx.get_dc(2),
+			&namespace,
+			vec!["fanout-test-actor".to_string()],
+		)
+		.await;
 
 		let name = "fanout-test-actor";
 
@@ -1537,11 +1545,16 @@ fn list_invalid_cursor_format() {
 // Broken legacy Pegboard Runner multi-DC coverage: full `runner::` sweep times
 // out with `test timed out: Elapsed(())`.
 #[test]
-#[ignore = "DC2 actor create hangs / workflow-worker lease failure"]
 fn list_cursor_across_datacenters() {
 	common::run(common::TestOpts::new(2).with_timeout(45), |ctx| async move {
 		let (namespace, _, _runner) =
 			common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
+		let _runner_dc2 = common::setup_envoy_on_dc(
+			ctx.get_dc(2),
+			&namespace,
+			vec!["multi-dc-cursor-test".to_string()],
+		)
+		.await;
 
 		let name = "multi-dc-cursor-test";
 

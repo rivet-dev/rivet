@@ -208,11 +208,19 @@ fn list_names_with_non_existent_namespace() {
 // Broken legacy Pegboard Runner multi-DC coverage: full engine sweep returns
 // `actor.destroyed_during_creation` while creating the DC2 actor.
 #[test]
-#[ignore = "DC2 actor create hangs / workflow-worker lease failure"]
 fn list_names_fanout_to_all_datacenters() {
 	common::run(common::TestOpts::new(2).with_timeout(45), |ctx| async move {
-		let (namespace, _, _runner) =
-			common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
+		let (namespace, _, _runner) = common::setup_test_namespace_with_envoy_for_names(
+			ctx.leader_dc(),
+			vec!["dc1-actor".to_string()],
+		)
+		.await;
+		let _runner_dc2 = common::setup_envoy_on_dc(
+			ctx.get_dc(2),
+			&namespace,
+			vec!["dc2-actor".to_string()],
+		)
+		.await;
 
 		// Create actors with different names in different DCs
 		common::api::public::actors_create(
@@ -277,11 +285,19 @@ fn list_names_fanout_to_all_datacenters() {
 #[test]
 // Broken legacy Pegboard Runner test: full engine sweep timed out in
 // `list_names_deduplication_across_datacenters`.
-#[ignore = "DC2 actor create hangs / workflow-worker lease failure"]
 fn list_names_deduplication_across_datacenters() {
 	common::run(common::TestOpts::new(2).with_timeout(45), |ctx| async move {
-		let (namespace, _, _runner) =
-			common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
+		let (namespace, _, _runner) = common::setup_test_namespace_with_envoy_for_names(
+			ctx.leader_dc(),
+			vec!["shared-name-actor".to_string()],
+		)
+		.await;
+		let _runner_dc2 = common::setup_envoy_on_dc(
+			ctx.get_dc(2),
+			&namespace,
+			vec!["shared-name-actor".to_string()],
+		)
+		.await;
 
 		// Create actors with same name in different DCs
 		let shared_name = "shared-name-actor";

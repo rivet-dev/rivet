@@ -358,10 +358,8 @@ fn get_or_create_returns_winner_on_race() {
 	});
 }
 
-// Broken legacy Pegboard Runner multi-DC coverage: full `runner::` sweep times
-// out with `test timed out: Elapsed(())`.
 #[test]
-#[ignore = "cross-DC get_or_create not idempotent"]
+#[ignore = "cross-DC reserve_key race: concurrent same-key requests from different DCs produce two distinct actors instead of converging"]
 fn get_or_create_race_condition_across_datacenters() {
 	common::run(common::TestOpts::new(2).with_timeout(45), |ctx| async move {
 		const DC2_RUNNER_NAME: &'static str = "dc-2-runner";
@@ -485,11 +483,16 @@ fn get_or_create_in_current_datacenter() {
 // Broken legacy Pegboard Runner multi-DC coverage: remote get-or-create returns
 // `core.internal_error` with `target_replicas must include the local replica`.
 #[test]
-#[ignore = "broken legacy Pegboard Runner test: target_replicas must include the local replica"]
 fn get_or_create_in_remote_datacenter() {
 	common::run(common::TestOpts::new(2).with_timeout(45), |ctx| async move {
 		let (namespace, _, _runner) =
 			common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
+		let _runner_dc2 = common::setup_envoy_on_dc(
+			ctx.get_dc(2),
+			&namespace,
+			vec!["remote-dc-actor".to_string()],
+		)
+		.await;
 
 		// Request from DC1 but specify DC2
 		let response = common::api::public::actors_get_or_create(
