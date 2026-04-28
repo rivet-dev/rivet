@@ -1647,7 +1647,6 @@ fn list_cursor_across_datacenters() {
 // Broken legacy Pegboard Runner coverage: full `runner::` sweep times out with
 // `test timed out: Elapsed(())`.
 #[test]
-#[ignore = "cursor pagination off-by-one on final page"]
 fn list_actor_ids_with_cursor_pagination() {
 	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
 		let (namespace, _, _runner) =

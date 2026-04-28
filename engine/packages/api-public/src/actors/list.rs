@@ -113,6 +113,7 @@ async fn list_inner(ctx: ApiCtx, query: ListQuery) -> Result<ListResponse> {
 			query.namespace.clone(),
 			query.include_destroyed,
 			Some(limit),
+			query.cursor.clone(),
 		)
 		.await?;
 
