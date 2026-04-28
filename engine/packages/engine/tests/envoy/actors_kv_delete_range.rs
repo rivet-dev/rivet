@@ -114,7 +114,7 @@ fn kv_delete_range_removes_half_open_range() {
 			&namespace,
 			"kv-delete-range",
 			runner.pool_name(),
-			rivet_types::actors::CrashPolicy::Destroy,
+			rivet_types::actors::CrashPolicy::Sleep,
 		)
 		.await;
 

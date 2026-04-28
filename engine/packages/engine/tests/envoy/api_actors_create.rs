@@ -18,7 +18,7 @@ fn create_actor_valid_namespace() {
 				key: None,
 				input: None,
 				runner_name_selector: runner.pool_name().to_string(),
-				crash_policy: rivet_types::actors::CrashPolicy::Destroy,
+				crash_policy: rivet_types::actors::CrashPolicy::Sleep,
 			},
 		)
 		.await
@@ -55,7 +55,7 @@ fn create_actor_with_key() {
 				key: Some(key.clone()),
 				input: None,
 				runner_name_selector: common::TEST_RUNNER_NAME.to_string(),
-				crash_policy: rivet_types::actors::CrashPolicy::Destroy,
+				crash_policy: rivet_types::actors::CrashPolicy::Sleep,
 			},
 		)
 		.await
@@ -89,7 +89,7 @@ fn create_actor_with_input() {
 				key: None,
 				input: Some(input_data.clone()),
 				runner_name_selector: common::TEST_RUNNER_NAME.to_string(),
-				crash_policy: rivet_types::actors::CrashPolicy::Destroy,
+				crash_policy: rivet_types::actors::CrashPolicy::Sleep,
 			},
 		)
 		.await
@@ -100,9 +100,8 @@ fn create_actor_with_input() {
 	});
 }
 
-#[ignore = "non-sleep crash policies are not yet supported for envoys"]
 #[test]
-fn create_durable_actor() {
+fn create_actor_sleep_crash_policy() {
 	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
 		let (namespace, _, _runner) =
 			common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
@@ -118,7 +117,7 @@ fn create_durable_actor() {
 				key: None,
 				input: None,
 				runner_name_selector: common::TEST_RUNNER_NAME.to_string(),
-				crash_policy: rivet_types::actors::CrashPolicy::Restart,
+				crash_policy: rivet_types::actors::CrashPolicy::Sleep,
 			},
 		)
 		.await
@@ -127,12 +126,11 @@ fn create_durable_actor() {
 
 		assert!(!actor_id.is_empty(), "actor ID should not be empty");
 
-		// Verify actor is durable
 		let actor =
 			common::assert_actor_exists(ctx.leader_dc().guard_port(), &actor_id, &namespace).await;
 		assert_eq!(
 			actor.crash_policy,
-			rivet_types::actors::CrashPolicy::Restart
+			rivet_types::actors::CrashPolicy::Sleep
 		);
 	});
 }
@@ -140,7 +138,6 @@ fn create_durable_actor() {
 #[test]
 // Broken legacy Pegboard Runner test: full engine sweep timed out in
 // `create_actor_specific_datacenter`.
-#[ignore = "broken legacy Pegboard Runner test: times out in full engine sweep"]
 fn create_actor_specific_datacenter() {
 	common::run(common::TestOpts::new(2).with_timeout(45), |ctx| async move {
 		let (namespace, _, _runner) =
@@ -157,7 +154,7 @@ fn create_actor_specific_datacenter() {
 				key: None,
 				input: None,
 				runner_name_selector: common::TEST_RUNNER_NAME.to_string(),
-				crash_policy: rivet_types::actors::CrashPolicy::Destroy,
+				crash_policy: rivet_types::actors::CrashPolicy::Sleep,
 			},
 		)
 		.await
@@ -187,7 +184,7 @@ fn create_actor_non_existent_namespace() {
 				key: None,
 				input: None,
 				runner_name_selector: common::TEST_RUNNER_NAME.to_string(),
-				crash_policy: rivet_types::actors::CrashPolicy::Destroy,
+				crash_policy: rivet_types::actors::CrashPolicy::Sleep,
 			},
 		)
 		.await;
@@ -216,7 +213,7 @@ fn create_actor_invalid_datacenter() {
 				key: None,
 				input: None,
 				runner_name_selector: common::TEST_RUNNER_NAME.to_string(),
-				crash_policy: rivet_types::actors::CrashPolicy::Destroy,
+				crash_policy: rivet_types::actors::CrashPolicy::Sleep,
 			},
 		)
 		.await;
@@ -246,7 +243,7 @@ fn create_actor_remote_datacenter_verify() {
 				key: None,
 				input: None,
 				runner_name_selector: common::TEST_RUNNER_NAME.to_string(),
-				crash_policy: rivet_types::actors::CrashPolicy::Destroy,
+				crash_policy: rivet_types::actors::CrashPolicy::Sleep,
 			},
 		)
 		.await
@@ -286,7 +283,7 @@ fn create_actor_input_large() {
 				key: None,
 				input: Some(input_data),
 				runner_name_selector: common::TEST_RUNNER_NAME.to_string(),
-				crash_policy: rivet_types::actors::CrashPolicy::Destroy,
+				crash_policy: rivet_types::actors::CrashPolicy::Sleep,
 			},
 		)
 		.await
@@ -318,7 +315,7 @@ fn create_actor_input_exceeds_max_size() {
 				key: None,
 				input: Some(input_data),
 				runner_name_selector: common::TEST_RUNNER_NAME.to_string(),
-				crash_policy: rivet_types::actors::CrashPolicy::Destroy,
+				crash_policy: rivet_types::actors::CrashPolicy::Sleep,
 			},
 		)
 		.await;
@@ -348,7 +345,7 @@ fn create_actor_empty_key() {
 				key: Some("".to_string()),
 				input: None,
 				runner_name_selector: common::TEST_RUNNER_NAME.to_string(),
-				crash_policy: rivet_types::actors::CrashPolicy::Destroy,
+				crash_policy: rivet_types::actors::CrashPolicy::Sleep,
 			},
 		)
 		.await;
@@ -377,7 +374,7 @@ fn create_actor_key_at_max_size() {
 				key: Some(key.clone()),
 				input: None,
 				runner_name_selector: common::TEST_RUNNER_NAME.to_string(),
-				crash_policy: rivet_types::actors::CrashPolicy::Destroy,
+				crash_policy: rivet_types::actors::CrashPolicy::Sleep,
 			},
 		)
 		.await
@@ -413,7 +410,7 @@ fn create_actor_key_exceeds_max_size() {
 				key: Some(key),
 				input: None,
 				runner_name_selector: common::TEST_RUNNER_NAME.to_string(),
-				crash_policy: rivet_types::actors::CrashPolicy::Destroy,
+				crash_policy: rivet_types::actors::CrashPolicy::Sleep,
 			},
 		)
 		.await;

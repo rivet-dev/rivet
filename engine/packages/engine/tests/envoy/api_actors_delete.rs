@@ -19,7 +19,7 @@ fn delete_existing_actor_with_namespace() {
 				key: None,
 				input: None,
 				runner_name_selector: common::TEST_RUNNER_NAME.to_string(),
-				crash_policy: rivet_types::actors::CrashPolicy::Destroy,
+				crash_policy: rivet_types::actors::CrashPolicy::Sleep,
 			},
 		)
 		.await
@@ -66,7 +66,7 @@ fn delete_existing_actor_without_namespace() {
 				key: None,
 				input: None,
 				runner_name_selector: common::TEST_RUNNER_NAME.to_string(),
-				crash_policy: rivet_types::actors::CrashPolicy::Destroy,
+				crash_policy: rivet_types::actors::CrashPolicy::Sleep,
 			},
 		)
 		.await
@@ -113,7 +113,7 @@ fn delete_actor_current_datacenter() {
 				key: None,
 				input: None,
 				runner_name_selector: common::TEST_RUNNER_NAME.to_string(),
-				crash_policy: rivet_types::actors::CrashPolicy::Destroy,
+				crash_policy: rivet_types::actors::CrashPolicy::Sleep,
 			},
 		)
 		.await
@@ -159,7 +159,7 @@ fn delete_actor_remote_datacenter() {
 				key: None,
 				input: None,
 				runner_name_selector: common::TEST_RUNNER_NAME.to_string(),
-				crash_policy: rivet_types::actors::CrashPolicy::Destroy,
+				crash_policy: rivet_types::actors::CrashPolicy::Sleep,
 			},
 		)
 		.await
@@ -230,7 +230,7 @@ fn delete_actor_wrong_namespace() {
 				key: None,
 				input: None,
 				runner_name_selector: common::TEST_RUNNER_NAME.to_string(),
-				crash_policy: rivet_types::actors::CrashPolicy::Destroy,
+				crash_policy: rivet_types::actors::CrashPolicy::Sleep,
 			},
 		)
 		.await
@@ -262,7 +262,6 @@ fn delete_actor_wrong_namespace() {
 #[test]
 // Broken legacy Pegboard Runner test: full engine sweep timed out in
 // `delete_with_non_existent_namespace`.
-#[ignore = "broken legacy Pegboard Runner test: times out in full engine sweep"]
 fn delete_with_non_existent_namespace() {
 	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
 		let (namespace, _, _runner) =
@@ -280,7 +279,7 @@ fn delete_with_non_existent_namespace() {
 				key: None,
 				input: None,
 				runner_name_selector: common::TEST_RUNNER_NAME.to_string(),
-				crash_policy: rivet_types::actors::CrashPolicy::Destroy,
+				crash_policy: rivet_types::actors::CrashPolicy::Sleep,
 			},
 		)
 		.await
@@ -326,7 +325,7 @@ fn delete_remote_actor_verify_propagation() {
 				key: None,
 				input: None,
 				runner_name_selector: common::TEST_RUNNER_NAME.to_string(),
-				crash_policy: rivet_types::actors::CrashPolicy::Destroy,
+				crash_policy: rivet_types::actors::CrashPolicy::Sleep,
 			},
 		)
 		.await
@@ -380,7 +379,7 @@ fn delete_already_destroyed_actor() {
 				key: None,
 				input: None,
 				runner_name_selector: common::TEST_RUNNER_NAME.to_string(),
-				crash_policy: rivet_types::actors::CrashPolicy::Destroy,
+				crash_policy: rivet_types::actors::CrashPolicy::Sleep,
 			},
 		)
 		.await
@@ -439,7 +438,7 @@ fn delete_actor_twice_rapidly() {
 				key: None,
 				input: None,
 				runner_name_selector: common::TEST_RUNNER_NAME.to_string(),
-				crash_policy: rivet_types::actors::CrashPolicy::Destroy,
+				crash_policy: rivet_types::actors::CrashPolicy::Sleep,
 			},
 		)
 		.await

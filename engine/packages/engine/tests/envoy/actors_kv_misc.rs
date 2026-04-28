@@ -613,7 +613,7 @@ fn kv_binary_keys_and_values() {
 			&namespace,
 			"kv-binary",
 			runner.pool_name(),
-			rivet_types::actors::CrashPolicy::Destroy,
+			rivet_types::actors::CrashPolicy::Sleep,
 		)
 		.await;
 
@@ -652,7 +652,7 @@ fn kv_empty_value() {
 			&namespace,
 			"kv-empty-value",
 			runner.pool_name(),
-			rivet_types::actors::CrashPolicy::Destroy,
+			rivet_types::actors::CrashPolicy::Sleep,
 		)
 		.await;
 
@@ -691,7 +691,7 @@ fn kv_large_value() {
 			&namespace,
 			"kv-large-value",
 			runner.pool_name(),
-			rivet_types::actors::CrashPolicy::Destroy,
+			rivet_types::actors::CrashPolicy::Sleep,
 		)
 		.await;
 
@@ -730,7 +730,7 @@ fn kv_get_with_empty_keys_array() {
 			&namespace,
 			"kv-get-empty",
 			runner.pool_name(),
-			rivet_types::actors::CrashPolicy::Destroy,
+			rivet_types::actors::CrashPolicy::Sleep,
 		)
 		.await;
 
@@ -769,7 +769,7 @@ fn kv_list_with_limit_zero() {
 			&namespace,
 			"kv-list-limit-zero",
 			runner.pool_name(),
-			rivet_types::actors::CrashPolicy::Destroy,
+			rivet_types::actors::CrashPolicy::Sleep,
 		)
 		.await;
 
@@ -810,7 +810,7 @@ fn kv_key_ordering_lexicographic() {
 			&namespace,
 			"kv-key-ordering",
 			runner.pool_name(),
-			rivet_types::actors::CrashPolicy::Destroy,
+			rivet_types::actors::CrashPolicy::Sleep,
 		)
 		.await;
 
@@ -849,7 +849,7 @@ fn kv_many_keys_storage() {
 			&namespace,
 			"kv-many-keys",
 			runner.pool_name(),
-			rivet_types::actors::CrashPolicy::Destroy,
+			rivet_types::actors::CrashPolicy::Sleep,
 		)
 		.await;
 

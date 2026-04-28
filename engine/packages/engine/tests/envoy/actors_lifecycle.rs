@@ -41,7 +41,7 @@ fn envoy_actor_basic_create() {
 			&namespace,
 			"test-actor",
 			envoy.pool_name(),
-			rivet_types::actors::CrashPolicy::Destroy,
+			rivet_types::actors::CrashPolicy::Sleep,
 		)
 		.await;
 
@@ -104,7 +104,7 @@ fn envoy_create_actor_with_input() {
 				key: None,
 				input: Some(input_data.clone()),
 				runner_name_selector: envoy.pool_name().to_string(),
-				crash_policy: rivet_types::actors::CrashPolicy::Destroy,
+				crash_policy: rivet_types::actors::CrashPolicy::Sleep,
 			},
 		)
 		.await
@@ -148,58 +148,6 @@ fn envoy_create_actor_with_input() {
 	});
 }
 
-#[test]
-fn envoy_actor_start_timeout() {
-	// This test takes 35+ seconds
-	common::run(
-		common::TestOpts::new(1).with_timeout(60),
-		|ctx| async move {
-			let (namespace, _) = common::setup_test_namespace(ctx.leader_dc()).await;
-
-			// Create envoy client with timeout actor behavior
-			let envoy = common::setup_envoy(ctx.leader_dc(), &namespace, |builder| {
-				builder.with_actor_behavior("timeout-actor", move |_| {
-					Box::new(common::test_envoy::TimeoutActor::new())
-				})
-			})
-			.await;
-
-			tracing::info!("envoy client ready, creating actor that will timeout");
-
-			// Create actor with destroy crash policy
-			let res = common::create_actor(
-				ctx.leader_dc().guard_port(),
-				&namespace,
-				"timeout-actor",
-				envoy.pool_name(),
-				rivet_types::actors::CrashPolicy::Destroy,
-			)
-			.await;
-
-			let actor_id_str = res.actor.actor_id.to_string();
-
-			tracing::info!(?actor_id_str, "actor created, waiting for timeout");
-
-			// Wait for the actor start timeout threshold (30s + buffer)
-			tokio::time::sleep(tokio::time::Duration::from_secs(35)).await;
-
-			// Verify actor was marked as destroyed due to timeout
-			let actor =
-				common::try_get_actor(ctx.leader_dc().guard_port(), &actor_id_str, &namespace)
-					.await
-					.expect("failed to get actor")
-					.expect("actor should exist");
-
-			assert!(
-				actor.destroy_ts.is_some(),
-				"actor should be destroyed after start timeout"
-			);
-
-			tracing::info!(?actor_id_str, "actor correctly destroyed after timeout");
-		},
-	);
-}
-
 // MARK: Running State Management
 #[test]
 fn envoy_actor_starts_and_connectable_via_guard_http() {
@@ -223,7 +171,7 @@ fn envoy_actor_starts_and_connectable_via_guard_http() {
 			&namespace,
 			"test-actor",
 			envoy.pool_name(),
-			rivet_types::actors::CrashPolicy::Destroy,
+			rivet_types::actors::CrashPolicy::Sleep,
 		)
 		.await;
 
@@ -278,7 +226,7 @@ fn envoy_http_tunnel_round_trips_request_and_errors() {
 			&namespace,
 			"test-actor",
 			envoy.pool_name(),
-			rivet_types::actors::CrashPolicy::Destroy,
+			rivet_types::actors::CrashPolicy::Sleep,
 		)
 		.await;
 		let actor_id = res.actor.actor_id.to_string();
@@ -374,7 +322,7 @@ fn envoy_actor_connectable_via_guard_websocket() {
 			&namespace,
 			"test-actor",
 			envoy.pool_name(),
-			rivet_types::actors::CrashPolicy::Destroy,
+			rivet_types::actors::CrashPolicy::Sleep,
 		)
 		.await;
 
@@ -434,7 +382,7 @@ fn envoy_websocket_actor_close_round_trip() {
 			&namespace,
 			"test-actor",
 			envoy.pool_name(),
-			rivet_types::actors::CrashPolicy::Destroy,
+			rivet_types::actors::CrashPolicy::Sleep,
 		)
 		.await;
 		let actor_id = res.actor.actor_id.to_string();
@@ -502,7 +450,7 @@ fn envoy_actor_graceful_stop_with_destroy_policy() {
 			&namespace,
 			"stop-actor",
 			envoy.pool_name(),
-			rivet_types::actors::CrashPolicy::Destroy,
+			rivet_types::actors::CrashPolicy::Sleep,
 		)
 		.await;
 
@@ -564,7 +512,7 @@ fn envoy_actor_explicit_destroy() {
 			&namespace,
 			"test-actor",
 			envoy.pool_name(),
-			rivet_types::actors::CrashPolicy::Destroy,
+			rivet_types::actors::CrashPolicy::Sleep,
 		)
 		.await;
 
@@ -648,7 +596,7 @@ fn envoy_reconnect_replays_pending_start_once() {
 			&namespace,
 			"replay-actor",
 			envoy.pool_name(),
-			rivet_types::actors::CrashPolicy::Destroy,
+			rivet_types::actors::CrashPolicy::Sleep,
 		)
 		.await;
 		let actor_id = res.actor.actor_id.to_string();
@@ -722,7 +670,7 @@ fn envoy_actor_stop_waits_for_completion_before_destroy() {
 			&namespace,
 			"delayed-stop-actor",
 			envoy.pool_name(),
-			rivet_types::actors::CrashPolicy::Destroy,
+			rivet_types::actors::CrashPolicy::Sleep,
 		)
 		.await;
 		let actor_id = res.actor.actor_id.to_string();
@@ -780,141 +728,6 @@ fn envoy_actor_stop_waits_for_completion_before_destroy() {
 }
 
 // MARK: 5. Crash Handling and Policies
-#[ignore = "non-sleep crash policies are not yet supported for envoys"]
-#[test]
-fn envoy_crash_policy_restart() {
-	common::run(common::TestOpts::new(1), |ctx| async move {
-		let (namespace, _) = common::setup_test_namespace(ctx.leader_dc()).await;
-
-		let crash_count = Arc::new(Mutex::new(0));
-
-		// Create envoy client with actor that crashes once, then succeeds.
-		let actor_crash_count = crash_count.clone();
-		let envoy = common::setup_envoy(ctx.leader_dc(), &namespace, |builder| {
-			builder.with_actor_behavior("crash-restart-actor", move |_| {
-				Box::new(common::test_envoy::CrashNTimesThenSucceedActor::new(
-					1,
-					actor_crash_count.clone(),
-				))
-			})
-		})
-		.await;
-
-		tracing::info!("envoy client ready, creating actor with restart policy");
-
-		// Create actor with restart crash policy
-		let res = common::create_actor(
-			ctx.leader_dc().guard_port(),
-			&namespace,
-			"crash-restart-actor",
-			envoy.pool_name(),
-			rivet_types::actors::CrashPolicy::Restart,
-		)
-		.await;
-
-		let actor_id_str = res.actor.actor_id.to_string();
-
-		tracing::info!(?actor_id_str, "actor created, will crash on start");
-
-		// Poll for the restarted actor to become connectable.
-		let actor = loop {
-			let actor =
-				common::try_get_actor(ctx.leader_dc().guard_port(), &actor_id_str, &namespace)
-					.await
-					.expect("failed to get actor")
-					.expect("actor should exist");
-
-			if actor.connectable_ts.is_some() {
-				break actor;
-			}
-
-			tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
-		};
-
-		assert!(
-			actor.connectable_ts.is_some(),
-			"actor should become connectable after restart"
-		);
-		assert_eq!(
-			*crash_count.lock().expect("crash count lock"),
-			1,
-			"actor should have crashed exactly once before restarting"
-		);
-
-		tracing::info!(?actor_id_str, "actor restarted successfully");
-	});
-}
-
-#[ignore = "non-sleep crash policies are not yet supported for envoys"]
-#[test]
-fn envoy_crash_policy_restart_resets_on_success() {
-	common::run(common::TestOpts::new(1), |ctx| async move {
-		let (namespace, _) = common::setup_test_namespace(ctx.leader_dc()).await;
-
-		let crash_count = Arc::new(Mutex::new(0));
-
-		// Create envoy client with actor that crashes 2 times then succeeds
-		let envoy = common::setup_envoy(ctx.leader_dc(), &namespace, |builder| {
-			builder.with_actor_behavior("crash-recover-actor", move |_| {
-				Box::new(common::test_envoy::CrashNTimesThenSucceedActor::new(
-					2,
-					crash_count.clone(),
-				))
-			})
-		})
-		.await;
-
-		tracing::info!("envoy client ready, creating actor with restart policy");
-
-		// Create actor with restart crash policy
-		let res = common::create_actor(
-			ctx.leader_dc().guard_port(),
-			&namespace,
-			"crash-recover-actor",
-			envoy.pool_name(),
-			rivet_types::actors::CrashPolicy::Restart,
-		)
-		.await;
-
-		let actor_id_str = res.actor.actor_id.to_string();
-
-		tracing::info!(
-			?actor_id_str,
-			"actor created, will crash twice then succeed"
-		);
-
-		// Poll for actor to eventually become connectable after crashes and restarts
-		// The actor should crash twice, reschedule, and eventually run successfully
-		let actor = loop {
-			let actor =
-				common::try_get_actor(ctx.leader_dc().guard_port(), &actor_id_str, &namespace)
-					.await
-					.expect("failed to get actor")
-					.expect("actor should exist");
-
-			// Actor successfully running after retries
-			if actor.connectable_ts.is_some() {
-				break actor;
-			}
-
-			tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-		};
-
-		assert!(
-			actor.connectable_ts.is_some(),
-			"actor should eventually become connectable after crashes"
-		);
-		// actor.reschedule_ts is always Some(), not sure if this is intended
-		assert!(
-			actor.reschedule_ts.is_none()
-				|| (actor.connectable_ts.unwrap() > actor.reschedule_ts.unwrap()),
-			"actor should not be scheduled for retry when running successfully"
-		);
-
-		tracing::info!(?actor_id_str, "actor successfully recovered after crashes");
-	});
-}
-
 #[test]
 fn envoy_crash_policy_sleep() {
 	common::run(common::TestOpts::new(1).with_timeout(75), |ctx| async move {
@@ -987,72 +800,6 @@ fn envoy_crash_policy_sleep() {
 	});
 }
 
-#[ignore = "non-sleep crash policies are not yet supported for envoys"]
-#[test]
-fn envoy_crash_policy_destroy() {
-	common::run(common::TestOpts::new(1), |ctx| async move {
-		let (namespace, _) = common::setup_test_namespace(ctx.leader_dc()).await;
-
-		// Create channel to be notified when actor crashes
-		let (crash_tx, crash_rx) = tokio::sync::oneshot::channel();
-		let crash_tx = Arc::new(Mutex::new(Some(crash_tx)));
-
-		// Create envoy client with crashing actor
-		let envoy = common::setup_envoy(ctx.leader_dc(), &namespace, |builder| {
-			builder.with_actor_behavior("crash-actor", move |_| {
-				Box::new(common::test_envoy::CrashOnStartActor::new_with_notify(
-					1,
-					crash_tx.clone(),
-				))
-			})
-		})
-		.await;
-
-		tracing::info!("envoy client ready, creating actor with destroy policy");
-
-		// Create actor with destroy crash policy
-		let res = common::create_actor(
-			ctx.leader_dc().guard_port(),
-			&namespace,
-			"crash-actor",
-			envoy.pool_name(),
-			rivet_types::actors::CrashPolicy::Destroy,
-		)
-		.await;
-
-		let actor_id_str = res.actor.actor_id.to_string();
-
-		tracing::info!(?actor_id_str, "actor created with destroy policy");
-
-		// Wait for crash notification
-		crash_rx
-			.await
-			.expect("actor should have sent crash notification");
-
-		// Poll for destroy_ts to be set (system needs to process the crash)
-		let actor = loop {
-			let actor =
-				common::try_get_actor(ctx.leader_dc().guard_port(), &actor_id_str, &namespace)
-					.await
-					.expect("failed to get actor")
-					.expect("actor should exist");
-
-			if actor.destroy_ts.is_some() {
-				break actor;
-			}
-
-			tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
-		};
-
-		assert!(
-			actor.destroy_ts.is_some(),
-			"actor should be destroyed after crash with destroy policy"
-		);
-
-		tracing::info!(?actor_id_str, "actor correctly destroyed after crash");
-	});
-}
-
 // MARK: 6. Sleep and Wake
 #[test]
 fn envoy_actor_sleep_intent() {
@@ -1081,7 +828,7 @@ fn envoy_actor_sleep_intent() {
 			&namespace,
 			"sleep-actor",
 			envoy.pool_name(),
-			rivet_types::actors::CrashPolicy::Destroy,
+			rivet_types::actors::CrashPolicy::Sleep,
 		)
 		.await;
 
@@ -1147,7 +894,7 @@ fn envoy_actor_pending_allocation_no_envoys() {
 			&namespace,
 			"test-actor",
 			pool_name,
-			rivet_types::actors::CrashPolicy::Destroy,
+			rivet_types::actors::CrashPolicy::Sleep,
 		)
 		.await;
 
@@ -1258,7 +1005,7 @@ fn envoy_multiple_pending_allocations_start_after_envoy_reconnect() {
 				&namespace,
 				&name,
 				envoy.pool_name(),
-				rivet_types::actors::CrashPolicy::Destroy,
+				rivet_types::actors::CrashPolicy::Sleep,
 			)
 			.await;
 
@@ -1310,109 +1057,6 @@ fn envoy_multiple_pending_allocations_start_after_envoy_reconnect() {
 	});
 }
 
-// MARK: envoy Failures
-#[test]
-fn envoy_actor_survives_envoy_disconnect() {
-	common::run(
-		common::TestOpts::new(1).with_timeout(90),
-		|ctx| async move {
-			let (namespace, _) = common::setup_test_namespace(ctx.leader_dc()).await;
-
-			// Create envoy and start actor
-			let (start_tx, start_rx) = tokio::sync::oneshot::channel();
-			let start_tx = Arc::new(Mutex::new(Some(start_tx)));
-
-			let envoy = common::setup_envoy(ctx.leader_dc(), &namespace, |builder| {
-				builder.with_actor_behavior("test-actor", move |_| {
-					Box::new(common::test_envoy::NotifyOnStartActor::new(
-						start_tx.clone(),
-					))
-				})
-			})
-			.await;
-
-			let res = common::create_actor(
-				ctx.leader_dc().guard_port(),
-				&namespace,
-				"test-actor",
-				envoy.pool_name(),
-				rivet_types::actors::CrashPolicy::Restart,
-			)
-			.await;
-
-			let actor_id_str = res.actor.actor_id.to_string();
-
-			// Wait for actor to start
-			start_rx
-				.await
-				.expect("actor should have sent start notification");
-
-			tracing::info!(?actor_id_str, "actor started, simulating envoy disconnect");
-
-			// Simulate an ungraceful envoy disconnect. Graceful shutdown waits for actor
-			// drain and exercises GoingAway instead of EnvoyConnectionLost.
-			envoy.crash().await;
-
-			tracing::info!(
-				"envoy disconnected, waiting for system to detect and apply crash policy"
-			);
-
-			let start = std::time::Instant::now();
-			loop {
-				let actor =
-					common::try_get_actor(ctx.leader_dc().guard_port(), &actor_id_str, &namespace)
-						.await
-						.expect("failed to get actor")
-						.expect("actor should exist");
-				tracing::warn!(?actor);
-				if actor.connectable_ts.is_none()
-					&& matches!(
-						&actor.error,
-						Some(rivet_types::actor::ActorError::EnvoyNoResponse { .. })
-							| Some(rivet_types::actor::ActorError::EnvoyConnectionLost { .. })
-							| Some(rivet_types::actor::ActorError::NoEnvoys)
-					) {
-					break;
-				}
-
-				if start.elapsed() > std::time::Duration::from_secs(30) {
-					panic!(
-						"actor should become non-connectable after envoy disconnect; last actor: {:?}",
-						actor
-					);
-				}
-
-				tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-			}
-
-			envoy.start().await.expect("failed to restart envoy");
-			envoy.wait_ready().await;
-
-			let start = std::time::Instant::now();
-			loop {
-				let actor =
-					common::try_get_actor(ctx.leader_dc().guard_port(), &actor_id_str, &namespace)
-						.await
-						.expect("failed to get actor")
-						.expect("actor should exist");
-
-				if actor.connectable_ts.is_some() && envoy.has_actor(&actor_id_str).await {
-					break;
-				}
-
-				if start.elapsed() > std::time::Duration::from_secs(20) {
-					panic!(
-						"actor should reconnect after envoy restarts; last actor: {:?}",
-						actor
-					);
-				}
-
-				tokio::time::sleep(tokio::time::Duration::from_millis(250)).await;
-			}
-		},
-	);
-}
-
 // MARK: Resource Limits
 #[test]
 fn envoy_normal_pool_does_not_apply_legacy_runner_slot_capacity() {
@@ -1433,7 +1077,7 @@ fn envoy_normal_pool_does_not_apply_legacy_runner_slot_capacity() {
 				&namespace,
 				"test-actor",
 				envoy.pool_name(),
-				rivet_types::actors::CrashPolicy::Destroy,
+				rivet_types::actors::CrashPolicy::Sleep,
 			)
 			.await;
 
@@ -1486,122 +1130,3 @@ fn envoy_normal_pool_does_not_apply_legacy_runner_slot_capacity() {
 	});
 }
 
-// MARK: Timeout and Retry Scenarios
-#[ignore = "non-sleep crash policies are not yet supported for envoys"]
-#[test]
-fn envoy_exponential_backoff_max_retries() {
-	common::run(common::TestOpts::new(1).with_timeout(45), |ctx| async move {
-		let (namespace, _) = common::setup_test_namespace(ctx.leader_dc()).await;
-
-		// Create envoy client with always-crashing actor
-
-		let envoy = common::setup_envoy(ctx.leader_dc(), &namespace, |builder| {
-			builder.with_actor_behavior("crash-always-actor", move |_| {
-				Box::new(common::test_envoy::CrashOnStartActor::new(1))
-			})
-		})
-		.await;
-
-		tracing::info!("envoy client ready, creating actor that will always crash");
-
-		// Create actor with restart crash policy
-		let res = common::create_actor(
-			ctx.leader_dc().guard_port(),
-			&namespace,
-			"crash-always-actor",
-			envoy.pool_name(),
-			rivet_types::actors::CrashPolicy::Restart,
-		)
-		.await;
-
-		let actor_id_str = res.actor.actor_id.to_string();
-
-		tracing::info!(?actor_id_str, "actor created, will crash repeatedly");
-
-		// Track reschedule timestamps to verify backoff increases
-		let mut previous_reschedule_ts: Option<i64> = None;
-		let mut backoff_deltas = Vec::new();
-
-		// Poll for multiple crashes and verify backoff increases
-		for iteration in 0..5 {
-			let actor = tokio::time::timeout(tokio::time::Duration::from_secs(20), async {
-				loop {
-					let actor =
-						common::try_get_actor(ctx.leader_dc().guard_port(), &actor_id_str, &namespace)
-							.await
-							.expect("failed to get actor")
-							.expect("actor should exist");
-
-					if let Some(reschedule_ts) = actor.reschedule_ts {
-						if previous_reschedule_ts.map_or(true, |prev| reschedule_ts > prev) {
-							break actor;
-						}
-					}
-
-					tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
-				}
-			})
-			.await
-			.expect("timed out waiting for fresh reschedule_ts");
-
-			let current_reschedule_ts = actor.reschedule_ts.expect("reschedule_ts should be set");
-
-			tracing::info!(
-				iteration,
-				reschedule_ts = current_reschedule_ts,
-				"actor has reschedule_ts after crash"
-			);
-
-			// Calculate backoff delta if we have a previous timestamp
-			if let Some(prev_ts) = previous_reschedule_ts {
-				let delta = current_reschedule_ts - prev_ts;
-				backoff_deltas.push(delta);
-				tracing::info!(
-					iteration,
-					delta_ms = delta,
-					"backoff delta from previous reschedule"
-				);
-			}
-
-			previous_reschedule_ts = Some(current_reschedule_ts);
-
-			// Wait for the reschedule time to pass so next crash can happen.
-			let now = rivet_util::timestamp::now();
-			if iteration < 4 && current_reschedule_ts > now {
-				let wait_duration = (current_reschedule_ts - now) as u64;
-				tracing::info!(
-					wait_duration_ms = wait_duration,
-					"waiting for reschedule time"
-				);
-				tokio::time::sleep(tokio::time::Duration::from_millis(wait_duration + 100)).await;
-			}
-		}
-
-		// Verify that backoff intervals generally increase (exponential backoff)
-		// We expect each delta to be larger than or equal to the previous
-		// (allowing some tolerance for system timing)
-		for i in 1..backoff_deltas.len() {
-			tracing::info!(
-				iteration = i,
-				current_delta = backoff_deltas[i],
-				previous_delta = backoff_deltas[i - 1],
-				"comparing backoff deltas"
-			);
-
-			// Allow some tolerance: current should be >= 80% of expected growth
-			// (exponential backoff typically doubles, but we allow for some variance)
-			assert!(
-				backoff_deltas[i] >= backoff_deltas[i - 1] / 2,
-				"backoff should not decrease significantly: iteration {}, prev={}, curr={}",
-				i,
-				backoff_deltas[i - 1],
-				backoff_deltas[i]
-			);
-		}
-
-		tracing::info!(
-			?backoff_deltas,
-			"exponential backoff verified across multiple crashes"
-		);
-	});
-}
