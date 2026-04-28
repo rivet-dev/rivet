@@ -7,6 +7,7 @@ FROM ghcr.io/rivet-dev/rivet/engine-base-builder:a36b881 AS builder
 # Docker automatically provides TARGETARCH
 ARG TARGETARCH
 
+ARG BUILD_FRONTEND=false
 ARG VITE_FEATURE_FLAGS=
 ARG CARGO_BUILD_MODE=debug
 ARG VITE_APP_API_URL=__SAME__
@@ -21,9 +22,9 @@ COPY . .
 # `lefthook install`, which needs a .git directory (excluded by
 # .dockerignore). lefthook is a dev-only git hook manager and has no
 # place inside the Docker build. SKIP_NAPI_BUILD=1 tells
-# @rivetkit/rivetkit-napi to skip its napi build — the frontend only
+# @rivetkit/rivetkit-napi to skip its napi build. The frontend only
 # consumes the TypeScript surface, not the runtime .node binary.
-RUN if [ -n "$VITE_FEATURE_FLAGS" ]; then \
+RUN if [ "$BUILD_FRONTEND" = "true" ]; then \
         export NODE_OPTIONS="--max-old-space-size=8192" && \
         export SKIP_NAPI_BUILD=1 && \
         pnpm install --ignore-scripts && \

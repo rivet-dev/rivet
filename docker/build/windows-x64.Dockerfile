@@ -15,6 +15,7 @@ ARG BUILD_TARGET=engine
 ARG BUILD_MODE=release
 ARG BUILD_FRONTEND=false
 ARG VITE_APP_API_URL=__SAME__
+ARG VITE_FEATURE_FLAGS=
 
 # Windows-specific build flags:
 # - lld linker is ~5x faster than MinGW's default ld for big Rust binaries.
@@ -35,11 +36,7 @@ RUN if [ "$BUILD_TARGET" = "engine" ] && [ "$BUILD_FRONTEND" = "true" ]; then \
         export NODE_OPTIONS="--max-old-space-size=8192" && \
         export SKIP_NAPI_BUILD=1 && \
         pnpm install --ignore-scripts && \
-        if [ -n "$VITE_APP_API_URL" ]; then \
-            VITE_APP_API_URL="${VITE_APP_API_URL}" npx turbo build:engine -F @rivetkit/engine-frontend; \
-        else \
-            npx turbo build:engine -F @rivetkit/engine-frontend; \
-        fi; \
+        VITE_APP_API_URL="${VITE_APP_API_URL}" VITE_FEATURE_FLAGS="${VITE_FEATURE_FLAGS}" npx turbo build -F @rivetkit/engine-frontend; \
     fi
 
 RUN --mount=type=cache,id=cargo-registry-windows-x64,target=/usr/local/cargo/registry,sharing=locked \

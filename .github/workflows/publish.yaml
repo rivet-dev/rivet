@@ -215,7 +215,7 @@ jobs:
             --secret id=DEPOT_TOKEN,env=DEPOT_TOKEN \
             --build-arg BUILD_TARGET=${{ matrix.build_target }} \
             --build-arg BUILD_MODE=${{ steps.mode.outputs.build_mode }} \
-            --build-arg BUILD_FRONTEND=false \
+            --build-arg BUILD_FRONTEND=${{ matrix.build_target == 'engine' && 'true' || 'false' }} \
             -f ${{ matrix.docker }} \
             -t builder-${{ matrix.build_target }}-${{ matrix.platform }} \
             --load \
@@ -262,7 +262,7 @@ jobs:
             echo "build_frontend=true" >> $GITHUB_OUTPUT
           else
             echo "cargo_build_mode=debug" >> $GITHUB_OUTPUT
-            echo "build_frontend=false" >> $GITHUB_OUTPUT
+            echo "build_frontend=true" >> $GITHUB_OUTPUT
           fi
       - uses: ./.github/actions/docker-setup
         with:
