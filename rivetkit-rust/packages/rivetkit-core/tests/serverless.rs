@@ -7,6 +7,7 @@ mod moved_tests {
 
 	use super::{
 		CoreServerlessRuntime, ServerlessRequest, endpoints_match, normalize_endpoint_url,
+		parse_start_headers,
 	};
 	use crate::registry::ServeConfig;
 
@@ -93,6 +94,43 @@ mod moved_tests {
 		let body = read_body(response).await;
 		assert_eq!(body["group"], "request");
 		assert_eq!(body["code"], "invalid");
+	}
+
+	#[test]
+	fn start_headers_do_not_require_token() {
+		let headers = HashMap::from([
+			(
+				"x-rivet-endpoint".to_owned(),
+				"http://127.0.0.1:6420".to_owned(),
+			),
+			("x-rivet-pool-name".to_owned(), "default".to_owned()),
+			("x-rivet-namespace-name".to_owned(), "default".to_owned()),
+		]);
+
+		let parsed = parse_start_headers(&headers).expect("headers should parse");
+
+		assert_eq!(parsed.token, None);
+	}
+
+	#[test]
+	fn start_headers_only_use_x_rivet_token() {
+		let headers = HashMap::from([
+			(
+				"x-rivet-endpoint".to_owned(),
+				"http://127.0.0.1:6420".to_owned(),
+			),
+			("authorization".to_owned(), "Bearer fallback".to_owned()),
+			("x-rivet-pool-name".to_owned(), "default".to_owned()),
+			("x-rivet-namespace-name".to_owned(), "default".to_owned()),
+		]);
+
+		let parsed = parse_start_headers(&headers).expect("headers should parse");
+		assert_eq!(parsed.token, None);
+
+		let mut headers = headers;
+		headers.insert("x-rivet-token".to_owned(), "dev".to_owned());
+		let parsed = parse_start_headers(&headers).expect("headers should parse");
+		assert_eq!(parsed.token.as_deref(), Some("dev"));
 	}
 
 	async fn test_runtime() -> CoreServerlessRuntime {

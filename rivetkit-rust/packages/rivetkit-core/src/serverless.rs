@@ -79,7 +79,7 @@ pub struct ServerlessStreamError {
 #[derive(Debug)]
 struct StartHeaders {
 	endpoint: String,
-	token: String,
+	token: Option<String>,
 	pool_name: String,
 	namespace: String,
 }
@@ -428,6 +428,8 @@ impl CoreServerlessRuntime {
 		}
 		let mut guard = self.envoy.lock().await;
 		if let Some(handle) = guard.as_ref() {
+			// The start request token authenticates the serverless callback. It is not part
+			// of envoy identity, and may differ from the token used for the engine connection.
 			if !endpoints_match(handle.endpoint(), &headers.endpoint)
 				|| handle.namespace() != headers.namespace
 				|| handle.pool_name() != headers.pool_name
@@ -447,7 +449,7 @@ impl CoreServerlessRuntime {
 		let handle = start_envoy(EnvoyConfig {
 			version: self.settings.version,
 			endpoint: headers.endpoint.clone(),
-			token: Some(headers.token.clone()),
+			token: headers.token.clone(),
 			namespace: headers.namespace.clone(),
 			pool_name: headers.pool_name.clone(),
 			prepopulate_actor_names: HashMap::new(),
@@ -494,7 +496,7 @@ fn route_path(base_path: &str, url: &str) -> Result<String> {
 fn parse_start_headers(headers: &HashMap<String, String>) -> Result<StartHeaders> {
 	Ok(StartHeaders {
 		endpoint: required_header(headers, "x-rivet-endpoint")?,
-		token: required_header(headers, "x-rivet-token")?,
+		token: optional_header(headers, "x-rivet-token"),
 		pool_name: required_header(headers, "x-rivet-pool-name")?,
 		namespace: required_header(headers, "x-rivet-namespace-name")?,
 	})
