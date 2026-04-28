@@ -65,6 +65,31 @@ pub async fn setup_test_namespace_with_envoy(
 	(namespace_name, namespace_id, envoy)
 }
 
+/// Like `setup_test_namespace_with_envoy`, but pre-declares the given actor names on the envoy.
+///
+/// Each name is registered with an `EchoActor` behavior. The envoy advertises these via
+/// `prepopulate_actor_names` on connect, which is what populates the `ActorNameKey` index used
+/// by the `actors/names` listing API.
+pub async fn setup_test_namespace_with_envoy_for_names(
+	dc: &super::TestDatacenter,
+	actor_names: Vec<String>,
+) -> (String, rivet_util::Id, super::test_envoy::TestEnvoy) {
+	let (namespace_name, namespace_id) = setup_test_namespace(dc).await;
+
+	let envoy = setup_envoy(dc, &namespace_name, move |mut builder| {
+		builder = builder.with_pool_name(super::TEST_RUNNER_NAME);
+		for name in actor_names {
+			builder = builder.with_actor_behavior(&name, |_config| {
+				Box::new(super::test_envoy::EchoActor::new())
+			});
+		}
+		builder
+	})
+	.await;
+
+	(namespace_name, namespace_id, envoy)
+}
+
 pub async fn cleanup_test_namespace(namespace_id: rivet_util::Id, _guard_port: u16) {
 	// TODO: implement namespace deletion when available
 	tracing::info!(?namespace_id, "namespace cleanup (not implemented)");

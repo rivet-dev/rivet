@@ -150,7 +150,19 @@ impl Envoy {
 			token: Some(self.config.token.clone()),
 			namespace: self.config.namespace.clone(),
 			pool_name: self.config.pool_name.clone(),
-			prepopulate_actor_names: HashMap::new(),
+			prepopulate_actor_names: self
+				.inner
+				.actor_factories
+				.keys()
+				.map(|name| {
+					(
+						name.clone(),
+						rivet_test_envoy::ActorName {
+							metadata: serde_json::Value::Object(serde_json::Map::new()),
+						},
+					)
+				})
+				.collect(),
 			metadata: self.config.metadata.clone(),
 			not_global: true,
 			debug_latency_ms: None,
