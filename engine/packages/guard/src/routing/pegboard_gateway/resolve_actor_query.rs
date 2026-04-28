@@ -132,14 +132,20 @@ async fn resolve_query_get_or_create(
 	let namespace_id = resolve_namespace_id(ctx, namespace_name).await?;
 	let serialized_key = serialize_actor_key(key)?;
 
+	let target_dc_label =
+		resolve_query_target_dc_label(ctx, namespace_id, namespace_name, pool_name, region).await?;
+	if target_dc_label != ctx.config().dc_label() {
+		return Ok(ResolveQueryActorResult::Forward {
+			dc_label: target_dc_label,
+		});
+	}
+
 	if let Some(res) =
 		get_actor_for_key(ctx, namespace_id, name, &serialized_key, Some(pool_name)).await?
 	{
 		return Ok(res);
 	}
 
-	let target_dc_label =
-		resolve_query_target_dc_label(ctx, namespace_id, namespace_name, pool_name, region).await?;
 	let encoded_input = input.map(|input| STANDARD.encode(input));
 
 	if target_dc_label == ctx.config().dc_label() {
@@ -185,13 +191,15 @@ async fn resolve_query_target_dc_label(
 	runner_name_selector: &str,
 	region: Option<&str>,
 ) -> Result<u16> {
-	if let Some(region) = region {
-		return Ok(ctx
+	let requested_dc_label = if let Some(region) = region {
+		Some(ctx
 			.config()
 			.dc_for_name(region)
 			.ok_or_else(|| rivet_api_util::errors::Datacenter::NotFound.build())?
-			.datacenter_label);
-	}
+			.datacenter_label)
+	} else {
+		None
+	};
 
 	let res = ctx
 		.op(
@@ -202,8 +210,15 @@ async fn resolve_query_target_dc_label(
 		)
 		.await?;
 
-	// Return nearest enabled dc
-	if let Some(dc_label) = res.dc_labels.into_iter().next() {
+	let target_dc_label = if let Some(requested_dc_label) = requested_dc_label {
+		res.dc_labels
+			.into_iter()
+			.find(|dc_label| *dc_label == requested_dc_label)
+	} else {
+		res.dc_labels.into_iter().next()
+	};
+
+	if let Some(dc_label) = target_dc_label {
 		Ok(dc_label)
 	} else {
 		Err(pegboard::errors::Actor::NoRunnerConfigConfigured {

@@ -139,32 +139,38 @@ pub async fn find_dc_for_actor_creation(
 	runner_name: &str,
 	dc_name: Option<&str>,
 ) -> Result<u16> {
-	let target_dc_label = if let Some(dc_name) = &dc_name {
+	let requested_dc_label = if let Some(dc_name) = &dc_name {
 		// Use user-configured DC
-		ctx.config()
+		Some(ctx.config()
 			.dc_for_name(dc_name)
 			.ok_or_else(|| rivet_api_util::errors::Datacenter::NotFound.build())?
-			.datacenter_label
+			.datacenter_label)
 	} else {
-		// Find the nearest DC with runners
-		let res = ctx
-			.op(
-				pegboard::ops::runner::list_runner_config_enabled_dcs::Input {
-					namespace_id,
-					runner_name: runner_name.into(),
-				},
-			)
-			.await?;
-		if let Some(dc_label) = res.dc_labels.into_iter().next() {
-			dc_label
-		} else {
-			return Err(pegboard::errors::Actor::NoRunnerConfigConfigured {
-				namespace: namespace_name.into(),
-				pool_name: runner_name.into(),
-			}
-			.build());
-		}
+		None
 	};
 
-	Ok(target_dc_label)
+	let res = ctx
+		.op(
+			pegboard::ops::runner::list_runner_config_enabled_dcs::Input {
+				namespace_id,
+				runner_name: runner_name.into(),
+			},
+		)
+		.await?;
+
+	let target_dc_label = if let Some(requested_dc_label) = requested_dc_label {
+		res.dc_labels
+			.into_iter()
+			.find(|dc_label| *dc_label == requested_dc_label)
+	} else {
+		res.dc_labels.into_iter().next()
+	};
+
+	target_dc_label.ok_or_else(|| {
+		pegboard::errors::Actor::NoRunnerConfigConfigured {
+			namespace: namespace_name.into(),
+			pool_name: runner_name.into(),
+		}
+		.build()
+	})
 }

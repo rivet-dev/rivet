@@ -106,17 +106,11 @@ pub async fn get_or_create(
 				}
 			}
 		}
-		// Make request to remote datacenter
 		pegboard::ops::actor::get_for_key::Output::Forward { dc_label } => {
-			rivet_api_util::request_remote_datacenter(
-				ctx.config(),
-				dc_label,
-				"/actors",
-				rivet_api_util::Method::PUT,
-				Some(&query),
-				Some(&body),
-			)
-			.await
+			Err(pegboard::errors::Actor::KeyReservedInDifferentDatacenter {
+				datacenter_label: dc_label,
+			}
+			.build())
 		}
 	}
 }

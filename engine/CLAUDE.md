@@ -39,6 +39,7 @@ When changing a versioned VBARE schema, follow the existing migration pattern.
 - UniversalDB simulated latency for benchmarks comes from `UDB_SIMULATED_LATENCY_MS`, which `Database::txn(...)` reads once via `OnceLock`, so set it before process startup.
 - When adding fields to epoxy workflow state structs, mark them `#[serde(default)]` so Gasoline can replay older serialized state.
 - Epoxy integration tests that spin up `tests/common::TestCtx` must call `shutdown()` before returning.
+- Before issuing an Epoxy operation with scoped `target_replicas`, validate the local replica is in scope or forward to an in-scope datacenter first.
 
 ## Test snapshots
 
@@ -71,7 +72,12 @@ Use `test-snapshot-gen` to generate and load RocksDB snapshots of the full UDB K
 
 ## Pegboard Envoy
 
+- Write new actor-hosting engine tests under `engine/packages/engine/tests/envoy/`; do not add new legacy runner tests under `engine/packages/engine/tests/runner/`.
 - `PegboardEnvoyWs::new(...)` is constructed per websocket request, so shared sqlite dispatch state such as the `SqliteEngine` and `CompactionCoordinator` must live behind a process-wide `OnceCell` instead of per-connection fields.
 - Restored hibernatable WebSockets must rebuild runtime WebSocket handlers from callbacks and call `on_open`; pre-sleep NAPI callbacks are not reusable after actor wake.
 - `pegboard-envoy` SQLite websocket handlers must validate page numbers, page sizes, and duplicate dirty pages at the websocket trust boundary and return `SqliteErrorResponse` for unexpected failures instead of bubbling them through the shared connection task.
 - SQLite start-command schema dispatch should probe actor KV prefix `0x08` at startup instead of persisting a schema version in pegboard config or actor workflow state.
+
+## API routing
+
+- `api-public` owns cross-datacenter forwarding for external requests; `api-peer` handlers should be local datacenter operations and must not add forwarding requirements.
