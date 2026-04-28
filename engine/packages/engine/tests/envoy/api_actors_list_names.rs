@@ -80,13 +80,13 @@ fn list_all_actor_names_in_namespace() {
 }
 
 #[test]
-// Broken legacy Pegboard Runner test: full engine sweep timed out in
-// `list_names_with_pagination`.
-#[ignore = "list_names ignores limit param"]
 fn list_names_with_pagination() {
 	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
-		let (namespace, _, _runner) =
-			common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
+		let (namespace, _, _runner) = common::setup_test_namespace_with_envoy_for_names(
+			ctx.leader_dc(),
+			(0..9).map(|i| format!("actor-{:02}", i)).collect(),
+		)
+		.await;
 
 		// Create actors with many different names
 		for i in 0..9 {
@@ -404,13 +404,13 @@ fn list_names_alphabetical_sorting() {
 // MARK: Edge cases
 
 #[test]
-// Broken legacy Pegboard Runner test: full engine sweep timed out in
-// `list_names_default_limit_100`.
-#[ignore = "list_names default limit not applied (returns 1)"]
 fn list_names_default_limit_100() {
 	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
-		let (namespace, _, _runner) =
-			common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
+		let (namespace, _, _runner) = common::setup_test_namespace_with_envoy_for_names(
+			ctx.leader_dc(),
+			(0..105).map(|i| format!("actor-{:03}", i)).collect(),
+		)
+		.await;
 
 		// Create 105 actors with different names to test the default limit of 100
 		for i in 0..105 {
