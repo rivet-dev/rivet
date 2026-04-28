@@ -11,7 +11,7 @@ const program = Effect.gen(function* () {
 	const counter = counterClient.getOrCreate(["counter-123"])
 
 	// Action calls return Effects with types inferred from the schema.
-	//   counter.Increment: (payload: { amount: number }) => Effect<number, CounterOverflowError>
+	//   counter.Increment: (payload: { amount: number }) => Effect<number, CounterOverflowError | ClientError>
 	const count = yield* counter.Increment({ amount: 5 })
 	yield* Effect.log(`Count: ${count}`)
 
@@ -24,7 +24,7 @@ const program = Effect.gen(function* () {
 		Stream.runForEach((n) => Effect.log(`Changed: ${n}`)),
 	)
 })
-// program: Effect<void, CounterOverflowError, Client>
+// program: Effect<void, CounterOverflowError | ClientError, Client>
 //                                             ^^^^^^
 //  Missing Client -> compile error naming the central runtime dependency.
 
