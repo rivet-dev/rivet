@@ -199,7 +199,8 @@ async fn actor_inner(
 		.await;
 
 	if let Err(error) = start_result {
-		tracing::error!(?error, "actor start failed");
+		let error_chain = error.chain().map(ToString::to_string).collect::<Vec<_>>();
+		tracing::error!(?error, error_chain = ?error_chain, "actor start failed");
 		send_event(
 			&mut ctx,
 			protocol::Event::EventActorStateUpdate(protocol::EventActorStateUpdate {

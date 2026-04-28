@@ -3,35 +3,10 @@ use std::sync::Arc;
 use anyhow::Result;
 use gas::prelude::StandaloneCtx;
 use rivet_envoy_protocol as protocol;
-use sqlite_storage::{compaction::CompactionCoordinator, engine::SqliteEngine, open::OpenResult};
-use tokio::sync::OnceCell;
-use universaldb::Subspace;
-
-static SQLITE_ENGINE: OnceCell<Arc<SqliteEngine>> = OnceCell::const_new();
+use sqlite_storage::{engine::SqliteEngine, open::OpenResult};
 
 pub async fn shared_engine(ctx: &StandaloneCtx) -> Result<Arc<SqliteEngine>> {
-	let db = (*ctx.udb()?).clone();
-	let subspace = sqlite_subspace();
-
-	SQLITE_ENGINE
-		.get_or_try_init(|| async move {
-			tracing::info!("initializing shared sqlite dispatch runtime");
-
-			let (engine, compaction_rx) = SqliteEngine::new(db, subspace.clone());
-			let engine = Arc::new(engine);
-			tokio::spawn(CompactionCoordinator::run(
-				compaction_rx,
-				Arc::clone(&engine),
-			));
-
-			Ok(engine)
-		})
-		.await
-		.cloned()
-}
-
-fn sqlite_subspace() -> Subspace {
-	pegboard::keys::subspace().subspace(&("sqlite-storage",))
+	pegboard::actor_sqlite::shared_engine(ctx).await
 }
 
 pub fn protocol_sqlite_startup_data(startup: OpenResult) -> protocol::SqliteStartupData {

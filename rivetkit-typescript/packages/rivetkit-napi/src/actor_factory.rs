@@ -976,9 +976,11 @@ fn parse_bridge_rivet_error(reason: &str) -> Option<anyhow::Error> {
 			return None;
 		}
 	};
-	tracing::debug!(
+	tracing::warn!(
 		group = %payload.group.as_str(),
 		code = %payload.code.as_str(),
+		message = %payload.message.as_str(),
+		metadata = ?payload.metadata,
 		has_metadata = payload.metadata.is_some(),
 		public_ = ?payload.public_,
 		status_code = ?payload.status_code,
@@ -1001,8 +1003,16 @@ fn parse_bridge_rivet_error(reason: &str) -> Option<anyhow::Error> {
 }
 
 pub(crate) fn callback_error(callback_name: &str, error: napi::Error) -> anyhow::Error {
+	let status = error.status;
 	let reason = error.reason;
 	if let Some(error) = parse_bridge_rivet_error(&reason) {
+		let error_chain = error.chain().map(ToString::to_string).collect::<Vec<_>>();
+		tracing::warn!(
+			callback = callback_name,
+			status = ?status,
+			error_chain = ?error_chain,
+			"napi callback failed with structured bridge error"
+		);
 		return error;
 	}
 	if error.status == napi::Status::Closing {

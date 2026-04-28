@@ -10,7 +10,6 @@ use rivet_runtime::TermSignal;
 use rivet_types::actor::RunnerPoolError;
 use rivet_types::runner_configs::RunnerConfigKind;
 use sqlite_storage::{
-	compaction::CompactionCoordinator,
 	engine::SqliteEngine,
 	open::{OpenConfig, OpenResult},
 	types::{FetchedPage, SqliteMeta},
@@ -18,7 +17,7 @@ use sqlite_storage::{
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use tokio::{sync::OnceCell, task::JoinHandle};
+use tokio::task::JoinHandle;
 use universalpubsub::NextOutput;
 use vbare::OwnedVersionedData;
 
@@ -29,25 +28,9 @@ const X_RIVET_POOL_NAME: HeaderName = HeaderName::from_static("x-rivet-pool-name
 const X_RIVET_TOKEN: HeaderName = HeaderName::from_static("x-rivet-token");
 const X_RIVET_NAMESPACE_NAME: HeaderName = HeaderName::from_static("x-rivet-namespace-name");
 const SHUTDOWN_PROGRESS_INTERVAL: Duration = Duration::from_secs(7);
-static SQLITE_ENGINE: OnceCell<Arc<SqliteEngine>> = OnceCell::const_new();
 
 async fn shared_sqlite_engine(ctx: &StandaloneCtx) -> Result<Arc<SqliteEngine>> {
-	let db = (*ctx.udb()?).clone();
-	let subspace = pegboard::keys::subspace().subspace(&("sqlite-storage",));
-
-	SQLITE_ENGINE
-		.get_or_try_init(|| async move {
-			let (engine, compaction_rx) = SqliteEngine::new(db, subspace.clone());
-			let engine = Arc::new(engine);
-			tokio::spawn(CompactionCoordinator::run(
-				compaction_rx,
-				Arc::clone(&engine),
-			));
-
-			Ok(engine)
-		})
-		.await
-		.cloned()
+	pegboard::actor_sqlite::shared_engine(ctx).await
 }
 
 fn protocol_sqlite_startup_data(startup: OpenResult) -> protocol::SqliteStartupData {
