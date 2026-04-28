@@ -30,6 +30,7 @@ pub struct Conn {
 	pub authorized_tunnel_routes: HashMap<(protocol::GatewayId, protocol::RequestId), ()>,
 	pub sqlite_engine: Arc<SqliteEngine>,
 	pub active_actors: HashMap<String, actor_lifecycle::ActiveActor>,
+	pub serverless_sqlite_actors: HashMap<String, u64>,
 	pub is_serverless: bool,
 	pub last_rtt: AtomicU32,
 	/// Timestamp (epoch ms) of the last pong received from the envoy.
@@ -306,6 +307,7 @@ pub async fn init_conn(
 		authorized_tunnel_routes: HashMap::new(),
 		sqlite_engine,
 		active_actors: HashMap::new(),
+		serverless_sqlite_actors: HashMap::new(),
 		is_serverless,
 		last_rtt: AtomicU32::new(0),
 		last_ping_ts: AtomicI64::new(util::timestamp::now()),

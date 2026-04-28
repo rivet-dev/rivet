@@ -393,6 +393,39 @@ impl SqliteEngine {
 		Ok(())
 	}
 
+	pub async fn ensure_local_open(&self, actor_id: &str, generation: u64) -> Result<()> {
+		let head = self.load_head(actor_id).await?;
+		ensure!(
+			head.generation == generation,
+			SqliteStorageError::FenceMismatch {
+				reason: format!(
+					"ensure_local_open generation {} did not match current generation {}",
+					generation, head.generation
+				),
+			},
+		);
+
+		match self.open_dbs.entry_async(actor_id.to_string()).await {
+			scc::hash_map::Entry::Occupied(entry) => {
+				ensure!(
+					entry.get().generation == generation,
+					SqliteStorageError::FenceMismatch {
+						reason: format!(
+							"ensure_local_open generation {} did not match open generation {}",
+							generation,
+							entry.get().generation
+						),
+					},
+				);
+			}
+			scc::hash_map::Entry::Vacant(entry) => {
+				entry.insert_entry(OpenDb { generation });
+			}
+		}
+
+		Ok(())
+	}
+
 	// Unconditionally evict the actor's open-db / page-index / pending-stage caches without
 	// generation fencing. Use only on shutdown paths where keeping a stale entry would block
 	// future opens of the same actor on this process-wide engine.
