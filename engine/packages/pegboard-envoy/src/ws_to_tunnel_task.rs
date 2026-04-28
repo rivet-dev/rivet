@@ -703,8 +703,6 @@ async fn handle_sqlite_get_pages(
 ) -> Result<protocol::SqliteGetPagesResponse> {
 	validate_sqlite_get_pages_request(&request)?;
 	validate_sqlite_actor(ctx, conn, &request.actor_id).await?;
-	actor_lifecycle::assert_sqlite_actor_active(conn, &request.actor_id, request.generation)
-		.await?;
 
 	match conn
 		.sqlite_engine
@@ -749,8 +747,6 @@ async fn handle_sqlite_commit(
 	let decode_request_start = Instant::now();
 	validate_sqlite_dirty_pages("sqlite commit", &request.dirty_pages)?;
 	validate_sqlite_actor(ctx, conn, &request.actor_id).await?;
-	actor_lifecycle::assert_sqlite_actor_active(conn, &request.actor_id, request.generation)
-		.await?;
 	let decode_request_duration = decode_request_start.elapsed();
 	conn.sqlite_engine.metrics().observe_commit_phase(
 		"fast",
@@ -817,8 +813,6 @@ async fn handle_sqlite_commit_stage(
 	request: protocol::SqliteCommitStageRequest,
 ) -> Result<protocol::SqliteCommitStageResponse> {
 	validate_sqlite_actor(ctx, conn, &request.actor_id).await?;
-	actor_lifecycle::assert_sqlite_actor_active(conn, &request.actor_id, request.generation)
-		.await?;
 
 	match conn
 		.sqlite_engine
@@ -856,8 +850,6 @@ async fn handle_sqlite_commit_stage_begin(
 	request: protocol::SqliteCommitStageBeginRequest,
 ) -> Result<protocol::SqliteCommitStageBeginResponse> {
 	validate_sqlite_actor(ctx, conn, &request.actor_id).await?;
-	actor_lifecycle::assert_sqlite_actor_active(conn, &request.actor_id, request.generation)
-		.await?;
 
 	match conn
 		.sqlite_engine
@@ -892,8 +884,6 @@ async fn handle_sqlite_commit_finalize(
 ) -> Result<protocol::SqliteCommitFinalizeResponse> {
 	let decode_request_start = Instant::now();
 	validate_sqlite_actor(ctx, conn, &request.actor_id).await?;
-	actor_lifecycle::assert_sqlite_actor_active(conn, &request.actor_id, request.generation)
-		.await?;
 	conn.sqlite_engine.metrics().observe_commit_phase(
 		"slow",
 		"decode_request",

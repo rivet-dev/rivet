@@ -43,6 +43,7 @@ pub(crate) struct NapiInvalidState {
 }
 
 pub(crate) fn napi_anyhow_error(error: anyhow::Error) -> napi::Error {
+	let error_chain = error.chain().map(ToString::to_string).collect::<Vec<_>>();
 	let bridge_context = error
 		.chain()
 		.find_map(|cause| cause.downcast_ref::<crate::actor_factory::BridgeRivetErrorContext>());
@@ -57,9 +58,12 @@ pub(crate) fn napi_anyhow_error(error: anyhow::Error) -> napi::Error {
 		"public": public_,
 		"statusCode": status_code,
 	});
-	tracing::debug!(
+	tracing::error!(
 		group = error.group(),
 		code = error.code(),
+		message = %error.message(),
+		metadata = ?error.metadata(),
+		error_chain = ?error_chain,
 		has_metadata = error.metadata().is_some(),
 		?public_,
 		?status_code,

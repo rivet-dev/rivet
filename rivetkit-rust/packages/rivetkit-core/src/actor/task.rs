@@ -1398,7 +1398,7 @@ impl ActorTask {
 		let clean_exit = match outcome {
 			Ok(Ok(())) => true,
 			Ok(Err(error)) => {
-				tracing::error!(?error, "actor run handler failed");
+				log_actor_error(&error, "actor run handler failed");
 				false
 			}
 			Err(error) => {
@@ -1529,7 +1529,7 @@ impl ActorTask {
 		match (&mut run_handle).await {
 			Ok(Ok(())) => {}
 			Ok(Err(error)) => {
-				tracing::error!(?error, "actor run handler failed during shutdown");
+				log_actor_error(&error, "actor run handler failed during shutdown");
 			}
 			Err(error) => {
 				if !error.is_cancelled() {
@@ -2127,6 +2127,18 @@ fn clone_shutdown_result(result: &Result<()>) -> Result<()> {
 			Err(anyhow::Error::new(error))
 		}
 	}
+}
+
+fn log_actor_error(error: &anyhow::Error, log_message: &'static str) {
+	let structured = rivet_error::RivetError::extract(error);
+	tracing::error!(
+		?error,
+		group = structured.group(),
+		code = structured.code(),
+		message = %structured.message(),
+		metadata = ?structured.metadata(),
+		"{log_message}"
+	);
 }
 
 fn result_outcome<T>(result: &Result<T>) -> &'static str {

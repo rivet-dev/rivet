@@ -575,6 +575,17 @@ function encodeNativeCallbackError(error: unknown): Error {
 				bridge: "native_callback",
 			});
 
+	logger().warn({
+		msg: "native callback error encoded for bridge",
+		group: structuredError.group,
+		code: structuredError.code,
+		message: structuredError.message,
+		metadata: structuredError.metadata,
+		originalError: stringifyError(error),
+		stack: error instanceof Error ? error.stack : undefined,
+		bridge: "native_callback",
+	});
+
 	const bridgeError = new Error(encodeBridgeRivetError(structuredError), {
 		cause: error instanceof Error ? error : undefined,
 	});

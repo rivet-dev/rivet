@@ -305,30 +305,3 @@ async fn close_actor_on_shutdown(
 		}
 	}
 }
-
-pub async fn assert_sqlite_actor_active(
-	conn: &Conn,
-	actor_id: &str,
-	sqlite_generation: u64,
-) -> Result<ActiveActor> {
-	// Stopping is accepted in addition to Running: the actor still owns its sqlite
-	// generation until actor_stopped runs, and may flush a final commit while draining.
-	let active = conn
-		.active_actors
-		.get_async(actor_id)
-		.await
-		.map(|entry| entry.get().clone())
-		.context("sqlite actor is not active on envoy connection")?;
-
-	let active_sqlite_generation = active
-		.sqlite_generation
-		.context("sqlite actor is still starting")?;
-	ensure!(
-		active_sqlite_generation == sqlite_generation,
-		"sqlite request generation {} did not match active generation {}",
-		sqlite_generation,
-		active_sqlite_generation
-	);
-
-	Ok(active)
-}

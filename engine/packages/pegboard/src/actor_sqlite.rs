@@ -1,15 +1,17 @@
-use std::time::Instant;
+use std::{sync::Arc, time::Instant};
 
 use anyhow::{Context, Result, ensure};
-use gas::prelude::{Id, util::timestamp};
+use gas::prelude::{Id, StandaloneCtx, util::timestamp};
 use rivet_envoy_protocol as protocol;
 use sqlite_storage::{
+	compaction::CompactionCoordinator,
 	commit::{CommitFinalizeRequest, CommitStageBeginRequest, CommitStageRequest},
 	engine::SqliteEngine,
 	ltx::{LtxHeader, encode_ltx_v3},
 	open::OpenConfig,
 	types::{DirtyPage, SQLITE_PAGE_SIZE, SqliteOrigin},
 };
+use tokio::sync::OnceCell;
 use universaldb::Subspace;
 
 use crate::{actor_kv::Recipient, metrics};
@@ -28,6 +30,7 @@ const FILE_TAG_JOURNAL: u8 = 0x01;
 const FILE_TAG_WAL: u8 = 0x02;
 const FILE_TAG_SHM: u8 = 0x03;
 const SQLITE_MAGIC: &[u8; 16] = b"SQLite format 3\0";
+static SQLITE_ENGINE: OnceCell<Arc<SqliteEngine>> = OnceCell::const_new();
 
 pub fn sqlite_subspace() -> Subspace {
 	crate::keys::subspace().subspace(&("sqlite-storage",))
@@ -37,6 +40,26 @@ pub fn new_engine(
 	db: universaldb::Database,
 ) -> (SqliteEngine, tokio::sync::mpsc::UnboundedReceiver<String>) {
 	SqliteEngine::new(db, sqlite_subspace())
+}
+
+pub async fn shared_engine(ctx: &StandaloneCtx) -> Result<Arc<SqliteEngine>> {
+	let db = (*ctx.udb()?).clone();
+
+	SQLITE_ENGINE
+		.get_or_try_init(|| async move {
+			tracing::info!("initializing shared sqlite dispatch runtime");
+
+			let (engine, compaction_rx) = new_engine(db);
+			let engine = Arc::new(engine);
+			tokio::spawn(CompactionCoordinator::run(
+				compaction_rx,
+				Arc::clone(&engine),
+			));
+
+			Ok(engine)
+		})
+		.await
+		.cloned()
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Hash)]
