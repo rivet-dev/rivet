@@ -8,15 +8,7 @@ export const isAction = (u: unknown): u is Action<any, any, any, any> =>
 	Predicate.hasProperty(u, TypeId);
 
 /**
- * A Rivet Actor action: a synchronous request-response call dispatched
- * on the actor's main loop.
- *
- * @remarks
- *
- * `Action` is a value-level definition that carries the wire schemas
- * for the request payload, the success response, and the typed error
- * channel. The action's implementation lives in the actor's handler
- * map; this type only describes the contract.
+ * A value-level definition for a non-durable, request-response call.
  */
 export interface Action<
 	in out Tag extends string,
