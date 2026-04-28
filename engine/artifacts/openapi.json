@@ -2120,139 +2120,23 @@
         ]
       },
       "RunnerConfigsServerlessMetadataError": {
-        "oneOf": [
-          {
-            "type": "object",
-            "required": [
-              "invalid_request"
-            ],
-            "properties": {
-              "invalid_request": {
-                "type": "object"
-              }
-            }
+        "type": "object",
+        "description": "Wire-format envelope for serverless metadata errors.\n\nSurfaced to API clients with a stable `{message, details, metadata}` shape\nregardless of which internal `ServerlessMetadataError` variant produced it.\n`metadata.kind` discriminates the variant; per-variant fields live alongside\n`kind`.",
+        "required": [
+          "message"
+        ],
+        "properties": {
+          "details": {
+            "type": [
+              "string",
+              "null"
+            ]
           },
-          {
-            "type": "object",
-            "required": [
-              "request_failed"
-            ],
-            "properties": {
-              "request_failed": {
-                "type": "object"
-              }
-            }
+          "message": {
+            "type": "string"
           },
-          {
-            "type": "object",
-            "required": [
-              "request_timed_out"
-            ],
-            "properties": {
-              "request_timed_out": {
-                "type": "object"
-              }
-            }
-          },
-          {
-            "type": "object",
-            "required": [
-              "non_success_status"
-            ],
-            "properties": {
-              "non_success_status": {
-                "type": "object",
-                "required": [
-                  "status_code",
-                  "body"
-                ],
-                "properties": {
-                  "body": {
-                    "type": "string"
-                  },
-                  "status_code": {
-                    "type": "integer",
-                    "format": "int32",
-                    "minimum": 0
-                  }
-                }
-              }
-            }
-          },
-          {
-            "type": "object",
-            "required": [
-              "invalid_response_json"
-            ],
-            "properties": {
-              "invalid_response_json": {
-                "type": "object",
-                "required": [
-                  "body",
-                  "parse_error"
-                ],
-                "properties": {
-                  "body": {
-                    "type": "string"
-                  },
-                  "parse_error": {
-                    "type": "string"
-                  }
-                }
-              }
-            }
-          },
-          {
-            "type": "object",
-            "required": [
-              "invalid_response_schema"
-            ],
-            "properties": {
-              "invalid_response_schema": {
-                "type": "object",
-                "required": [
-                  "runtime",
-                  "version"
-                ],
-                "properties": {
-                  "runtime": {
-                    "type": "string"
-                  },
-                  "version": {
-                    "type": "string"
-                  }
-                }
-              }
-            }
-          },
-          {
-            "type": "object",
-            "required": [
-              "invalid_envoy_protocol_version"
-            ],
-            "properties": {
-              "invalid_envoy_protocol_version": {
-                "type": "object",
-                "required": [
-                  "version",
-                  "max_supported"
-                ],
-                "properties": {
-                  "max_supported": {
-                    "type": "integer",
-                    "format": "int32",
-                    "minimum": 0
-                  },
-                  "version": {
-                    "type": "integer",
-                    "format": "int32",
-                    "minimum": 0
-                  }
-                }
-              }
-            }
-          }
-        ]
+          "metadata": {}
+        }
       },
       "RunnerConfigsUpsertRequestBody": {
         "type": "object",

@@ -9,6 +9,7 @@ use crate::{
 	options::ConflictRangeType,
 	tx_ops::Operation,
 	value::{KeyValue, Slice, Values},
+	versionstamp::substitute_versionstamp_if_incomplete,
 };
 
 pub enum TransactionCommand {
@@ -381,12 +382,9 @@ impl TransactionTask {
 		for op in operations {
 			match op {
 				Operation::Set { key, value } => {
-					// Regular `Set` operations must not rewrite the value.
-					// Versionstamp substitution only belongs on
-					// SetVersionstampedKey and SetVersionstampedValue mutation
-					// types, which go through AtomicOp. Applying versionstamp
-					// substitution here corrupts random data whose trailing 4
-					// bytes happen to form a plausible versionstamp offset.
+					// TODO: versionstamps need to be calculated on the sql side, not in rust
+					let value = substitute_versionstamp_if_incomplete(value.clone(), 0);
+
 					let query = "INSERT INTO kv (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2";
 					let stmt = tx.prepare_cached(query).await.map_err(map_postgres_error)?;
 
