@@ -56,6 +56,7 @@ pub async fn fetch_actors_by_ids(
 	namespace: String,
 	include_destroyed: Option<bool>,
 	limit: Option<usize>,
+	cursor: Option<String>,
 ) -> Result<Vec<Actor>> {
 	if actor_ids.is_empty() {
 		return Ok(Vec::new());
@@ -76,6 +77,7 @@ pub async fn fetch_actors_by_ids(
 		let namespace = namespace.clone();
 		let include_destroyed = include_destroyed;
 		let limit = limit;
+		let cursor = cursor.clone();
 
 		async move {
 			// Prepare peer query with actor_ids
@@ -87,7 +89,7 @@ pub async fn fetch_actors_by_ids(
 				actor_id: dc_actor_ids,
 				include_destroyed,
 				limit,
-				cursor: None,
+				cursor,
 			};
 
 			if dc_label == ctx.config().dc_label() {
