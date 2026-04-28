@@ -186,3 +186,21 @@ export const rawWebSocketAsyncOpenActor = actor({
 		getOpenCount: (ctx) => ctx.state.openCount,
 	},
 });
+
+export const rawWebSocketConnContextActor = actor({
+	onWebSocket(ctx: any, websocket: UniversalWebSocket) {
+		const connId = ctx.conn.id;
+		ctx.conn.state = {
+			opened: true,
+			connId,
+		};
+		websocket.send(
+			JSON.stringify({
+				type: "conn-context",
+				connId,
+				state: ctx.conn.state,
+			}),
+		);
+	},
+	actions: {},
+});

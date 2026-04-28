@@ -75,6 +75,7 @@ import {
 	rawWebSocketActor,
 	rawWebSocketAsyncOpenActor,
 	rawWebSocketBinaryActor,
+	rawWebSocketConnContextActor,
 } from "./raw-websocket";
 import { rejectConnectionActor } from "./reject-connection";
 import { requestAccessActor } from "./request-access";
@@ -268,6 +269,7 @@ export const registry = setup({
 		rawWebSocketActor,
 		rawWebSocketAsyncOpenActor,
 		rawWebSocketBinaryActor,
+		rawWebSocketConnContextActor,
 		// From reject-connection.ts
 		rejectConnectionActor,
 		// From request-access.ts
