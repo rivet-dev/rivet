@@ -4,22 +4,6 @@ import * as Schema from "effect/Schema";
 const TypeId = "~@rivetkit/effect/Action";
 
 /**
- * Schema describing the shape of unexpected runtime errors (defects)
- * that the action transport may surface.
- *
- * Defects are sanitized at the runtime boundary, so untrusted clients
- * never observe raw stack traces or non-serializable payloads.
- */
-export interface DefectSchema extends Schema.Top {
-	readonly Type: unknown;
-	make(input: null, options?: Schema.MakeOptions): unknown;
-	make(input: undefined, options?: Schema.MakeOptions): unknown;
-	make(input: object, options?: Schema.MakeOptions): unknown;
-	readonly DecodingServices: never;
-	readonly EncodingServices: never;
-}
-
-/**
  * A Rivet Actor action: a synchronous request-response call dispatched
  * on the actor's main loop.
  *
@@ -44,7 +28,6 @@ export interface Action<
 	readonly payloadSchema: Payload;
 	readonly successSchema: Success;
 	readonly errorSchema: Error;
-	readonly defectSchema: Schema.Top;
 }
 
 /**
@@ -68,7 +51,6 @@ export interface AnyWithProps extends Pipeable {
 	readonly payloadSchema: Schema.Top;
 	readonly successSchema: Schema.Top;
 	readonly errorSchema: Schema.Top;
-	readonly defectSchema: Schema.Top;
 }
 
 // --- Type helpers ---------------------------------------------------
@@ -180,7 +162,6 @@ const makeProto = <
 	readonly payloadSchema: Payload;
 	readonly successSchema: Success;
 	readonly errorSchema: Error;
-	readonly defectSchema: Schema.Top;
 }): Action<Tag, Payload, Success, Error> => {
 	function Action() {}
 	Object.setPrototypeOf(Action, Proto);
@@ -220,7 +201,6 @@ export const make = <
 		readonly payload?: Payload;
 		readonly success?: Success;
 		readonly error?: Error;
-		readonly defect?: DefectSchema;
 	},
 ): Action<
 	Tag,
@@ -230,7 +210,6 @@ export const make = <
 > => {
 	const successSchema = options?.success ?? Schema.Void;
 	const errorSchema = options?.error ?? Schema.Never;
-	const defectSchema = options?.defect ?? Schema.Defect;
 	const payloadSchema: Schema.Top = Schema.isSchema(options?.payload)
 		? (options?.payload as any)
 		: options?.payload
@@ -241,6 +220,5 @@ export const make = <
 		payloadSchema,
 		successSchema,
 		errorSchema,
-		defectSchema,
 	}) as any;
 };
