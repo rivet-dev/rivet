@@ -513,7 +513,7 @@ const makeProto = <
 	readonly options: Options;
 	readonly annotations: Context.Context<never>;
 }): Actor<Name, State, Actions, Messages, Events> => {
-	const key = `rivetkit/effect/Actor/${options._tag}`;
+	const key = `@rivetkit/effect/Actor/${options._tag}`;
 	const StateTag = Context.Service<StateService<Name>, StateRef<State["Type"]>>(
 		`${key}/State`,
 	);

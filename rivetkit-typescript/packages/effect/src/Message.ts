@@ -255,7 +255,7 @@ const makeProto = <
 	}
 	Object.setPrototypeOf(Message, Proto);
 	Object.assign(Message, options);
-	(Message as any).key = `rivetkit/effect/Message/${options._tag}`;
+	(Message as any).key = `@rivetkit/effect/Message/${options._tag}`;
 	return Message as any;
 };
 

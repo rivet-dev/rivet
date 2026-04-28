@@ -166,7 +166,7 @@ const makeProto = <
 	function Action() {}
 	Object.setPrototypeOf(Action, Proto);
 	Object.assign(Action, options);
-	Action.key = `rivetkit/effect/Action/${options._tag}`;
+	Action.key = `@rivetkit/effect/Action/${options._tag}`;
 	return Action as any;
 };
 
