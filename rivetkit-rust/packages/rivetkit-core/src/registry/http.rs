@@ -17,7 +17,16 @@ impl RegistryDispatcher {
 
 		let original_path = request.path.clone();
 		let request = build_http_request(request).await?;
-		let route = RegistryHttpRoute::from_paths(&original_path, request.uri().path())?;
+		let route = match RegistryHttpRoute::from_paths(&original_path, request.uri().path()) {
+			Ok(route) => route,
+			Err(error) => {
+				return message_boundary_error_response(
+					request_encoding(request.headers()),
+					StatusCode::NOT_FOUND,
+					error,
+				);
+			}
+		};
 		let instance = match self.active_actor(actor_id).await {
 			Ok(instance) => instance,
 			Err(error) => {
@@ -411,7 +420,13 @@ impl RegistryHttpRoute {
 			"/metadata" => Ok(Self::Framework(FrameworkHttpRoute::Metadata)),
 			"/health" => Ok(Self::Framework(FrameworkHttpRoute::Health)),
 			"/" => Ok(Self::Framework(FrameworkHttpRoute::Root)),
-			_ => Ok(Self::UserRawRequest),
+			_ => Err(ProtocolError::InvalidHttpRequest {
+				field: "path".to_owned(),
+				reason: format!(
+					"unknown actor http path '{original_path}': user request paths must be prefixed with '/request/'"
+				),
+			}
+			.build()),
 		}
 	}
 }
