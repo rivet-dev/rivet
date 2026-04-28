@@ -1055,7 +1055,6 @@ fn list_default_limit_100() {
 // Broken legacy Pegboard Runner coverage: full `runner::` sweep times out with
 // `test timed out: Elapsed(())`.
 #[test]
-#[ignore = "API rejects mixed-validity actor_ids instead of filtering"]
 fn list_with_invalid_actor_id_format_in_comma_list() {
 	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
 		let (namespace, _, _runner) =
