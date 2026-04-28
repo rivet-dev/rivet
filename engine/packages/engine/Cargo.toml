@@ -65,6 +65,7 @@ chrono.workspace = true
 epoxy.workspace = true
 futures-util.workspace = true
 namespace.workspace = true
+parking_lot.workspace = true
 portpicker.workspace = true
 rand.workspace = true
 pegboard-envoy.workspace = true

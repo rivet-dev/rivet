@@ -358,11 +358,8 @@ async fn handle(ctx: &StandaloneCtx, packet: protocol::ToOutbound) -> Result<()>
 		tracing::warn!(
 			?err,
 			?actor_id,
-			"close failed for outbound sqlite db, force-evicting open_dbs entry"
+			"close failed for outbound sqlite db"
 		);
-		// Process-wide engine: a stale entry would block re-opening the same actor until
-		// process restart, so unconditionally evict on close failure.
-		sqlite_engine.force_close(&actor_id_str).await;
 	}
 
 	res

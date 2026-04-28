@@ -51,6 +51,7 @@ impl OpenConfig {
 struct OpenPlaceholderGuard<'a> {
 	open_dbs: &'a scc::HashMap<String, OpenDb>,
 	actor_id: String,
+	reservation_generation: u64,
 	disarmed: bool,
 }
 
@@ -59,9 +60,12 @@ impl<'a> Drop for OpenPlaceholderGuard<'a> {
 		if self.disarmed {
 			return;
 		}
-		// Synchronous remove from `scc::HashMap` is safe because we only
-		// inserted a placeholder; no dependent state holds a lock here.
-		self.open_dbs.remove_sync(&self.actor_id);
+		// Synchronous remove from `scc::HashMap` is safe because no dependent
+		// state holds a lock here.
+		self.open_dbs
+			.remove_if_sync(&self.actor_id, |open_db| {
+				open_db.generation == self.reservation_generation
+			});
 	}
 }
 
@@ -165,26 +169,40 @@ impl SqliteEngine {
 	}
 
 	pub async fn open(&self, actor_id: &str, config: OpenConfig) -> Result<OpenResult> {
-		match self.open_dbs.entry_async(actor_id.to_string()).await {
-			scc::hash_map::Entry::Occupied(_) => {
-				ensure!(false, "sqlite db already open for actor");
+		let actor_id_string = actor_id.to_string();
+		let takeover_min_generation = match self.open_dbs.entry_async(actor_id_string.clone()).await
+		{
+			scc::hash_map::Entry::Occupied(mut entry) => {
+				let next_generation = entry.get().generation.max(1).saturating_add(1);
+				entry.get_mut().generation = next_generation;
+				Some(next_generation)
 			}
 			scc::hash_map::Entry::Vacant(entry) => {
 				entry.insert_entry(OpenDb { generation: 0 });
+				None
 			}
-		}
+		};
+		let reservation_generation = takeover_min_generation.unwrap_or(0);
 
 		// Drop guard removes the placeholder if the future is cancelled or
 		// `open_inner` errors. Without this a dropped future would leave a
-		// `generation: 0` placeholder in `open_dbs` that permanently blocks
-		// re-opening the actor on this process.
+		// placeholder in `open_dbs` that permanently blocks re-opening the
+		// actor on this process.
 		let guard = OpenPlaceholderGuard {
 			open_dbs: &self.open_dbs,
-			actor_id: actor_id.to_string(),
+			actor_id: actor_id_string.clone(),
+			reservation_generation,
 			disarmed: false,
 		};
 
-		let result = self.open_inner(actor_id, config).await;
+		let result = async {
+			if let Some(min_generation) = takeover_min_generation {
+				self.bump_generation_for_takeover(&actor_id_string, config.now_ms, min_generation)
+					.await?;
+			}
+			self.open_inner(actor_id, config).await
+		}
+		.await;
 		// Disarm the guard so the placeholder is not removed before we either
 		// promote it (Ok path) or remove it explicitly (Err path).
 		let mut guard = guard;
@@ -195,17 +213,68 @@ impl SqliteEngine {
 			Ok(result) => {
 				self.open_dbs
 					.update_async(actor_id, |_, open_db| {
-						open_db.generation = result.generation;
+						if open_db.generation <= result.generation {
+							open_db.generation = result.generation;
+						}
 					})
 					.await
 					.context("sqlite open state missing after open")?;
 				Ok(result)
 			}
 			Err(err) => {
-				self.open_dbs.remove_async(&actor_id.to_string()).await;
+				self.open_dbs
+					.remove_if_async(actor_id, |open_db| {
+						open_db.generation == reservation_generation
+					})
+					.await;
 				Err(err)
 			}
 		}
+	}
+
+	async fn bump_generation_for_takeover(
+		&self,
+		actor_id: &str,
+		now_ms: i64,
+		min_generation: u64,
+	) -> Result<()> {
+		let actor_id = actor_id.to_string();
+		let actor_id_for_tx = actor_id.clone();
+		let subspace = self.subspace.clone();
+
+		udb::run_db_op(&self.db, self.op_counter.as_ref(), move |tx| {
+			let actor_id = actor_id_for_tx.clone();
+			let subspace = subspace.clone();
+			async move {
+				let meta_storage_key = meta_key(&actor_id);
+				let meta_bytes =
+					udb::tx_get_value_serializable(&tx, &subspace, &meta_storage_key).await?;
+				let (mut head, usage_without_meta) = if let Some(meta_bytes) = meta_bytes.as_ref() {
+					let head = decode_db_head(meta_bytes)?;
+					let usage_without_meta = head.sqlite_storage_used.saturating_sub(
+						tracked_storage_entry_size(&meta_storage_key, meta_bytes)
+							.expect("meta key should count toward sqlite quota"),
+					);
+					(head, usage_without_meta)
+				} else {
+					(new_db_head(now_ms), 0)
+				};
+
+				head.generation = head.generation.saturating_add(1).max(min_generation);
+				let (_, encoded_head) =
+					encode_db_head_with_usage(&actor_id, &head, usage_without_meta)?;
+				udb::tx_write_value(&tx, &subspace, &meta_storage_key, &encoded_head)?;
+
+				Ok(())
+			}
+		})
+		.await?;
+
+		self.page_indices.remove_async(&actor_id).await;
+		self.pending_stages
+			.retain_sync(|(pending_actor_id, _), _| pending_actor_id != &actor_id);
+
+		Ok(())
 	}
 
 	async fn open_inner(&self, actor_id: &str, config: OpenConfig) -> Result<OpenResult> {
@@ -249,18 +318,25 @@ impl SqliteEngine {
 			new_db_head(config.now_ms)
 		};
 
-		let (head, encoded_head) =
-			encode_db_head_with_usage(actor_id, &head, head.sqlite_storage_used)?;
-		mutations.push(WriteOp::put(meta_key(actor_id), encoded_head));
-
+		let head_for_tx = head.clone();
 		let actor_id_for_tx = actor_id.to_string();
 		let open_mutations = mutations.clone();
 		let subspace = self.subspace.clone();
-		udb::run_db_op(&self.db, self.op_counter.as_ref(), move |tx| {
+		let head = udb::run_db_op(&self.db, self.op_counter.as_ref(), move |tx| {
 			let open_mutations = open_mutations.clone();
 			let subspace = subspace.clone();
 			let actor_id = actor_id_for_tx.clone();
+			let head = head_for_tx.clone();
 			async move {
+				let meta_storage_key = meta_key(&actor_id);
+				let mut head = head;
+				if let Some(current_meta_bytes) =
+					udb::tx_get_value_serializable(&tx, &subspace, &meta_storage_key).await?
+				{
+					let current_head = decode_db_head(&current_meta_bytes)?;
+					head.generation = head.generation.max(current_head.generation);
+				}
+
 				for op in &open_mutations {
 					match op {
 						WriteOp::Put(key, value) => {
@@ -269,9 +345,12 @@ impl SqliteEngine {
 						WriteOp::Delete(key) => udb::tx_delete_value(&tx, &subspace, key),
 					}
 				}
+				let (_, encoded_head) =
+					encode_db_head_with_usage(&actor_id, &head, head.sqlite_storage_used)?;
+				udb::tx_write_value(&tx, &subspace, &meta_storage_key, &encoded_head)?;
 
 				tracing::debug!(actor_id = %actor_id, "opened sqlite db");
-				Ok(())
+				Ok(head)
 			}
 		})
 		.await?;

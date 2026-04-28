@@ -24,6 +24,62 @@ pub enum ActiveActorState {
 	Stopping,
 }
 
+struct StartActorGuard<'a> {
+	sqlite_engine: Arc<SqliteEngine>,
+	active_actors: &'a scc::HashMap<String, ActiveActor>,
+	actor_id: String,
+	sqlite_generation: Option<u64>,
+	armed: bool,
+}
+
+impl<'a> StartActorGuard<'a> {
+	fn new(
+		sqlite_engine: Arc<SqliteEngine>,
+		active_actors: &'a scc::HashMap<String, ActiveActor>,
+		actor_id: String,
+	) -> Self {
+		Self {
+			sqlite_engine,
+			active_actors,
+			actor_id,
+			sqlite_generation: None,
+			armed: true,
+		}
+	}
+
+	fn set_sqlite_generation(&mut self, generation: u64) {
+		self.sqlite_generation = Some(generation);
+	}
+
+	fn disarm(&mut self) {
+		self.armed = false;
+	}
+}
+
+impl<'a> Drop for StartActorGuard<'a> {
+	fn drop(&mut self) {
+		if !self.armed {
+			return;
+		}
+
+		self.active_actors.remove_sync(&self.actor_id);
+
+		if let Some(generation) = self.sqlite_generation {
+			let sqlite_engine = self.sqlite_engine.clone();
+			let actor_id = std::mem::take(&mut self.actor_id);
+			tokio::spawn(async move {
+				if let Err(err) = sqlite_engine.close(&actor_id, generation).await {
+					tracing::debug!(
+						actor_id = %actor_id,
+						?err,
+						"sqlite db was already taken over during start cancellation"
+					);
+				}
+			});
+		}
+	}
+}
+
 pub async fn start_actor(
 	ctx: &StandaloneCtx,
 	conn: &Conn,
@@ -50,12 +106,19 @@ pub async fn start_actor(
 		}
 	}
 
+	let mut start_guard = StartActorGuard::new(
+		conn.sqlite_engine.clone(),
+		&conn.active_actors,
+		actor_id_string.clone(),
+	);
+
 	let result = async {
 		let sqlite_open = conn
 			.sqlite_engine
 			.open(&actor_id_string, OpenConfig::new(timestamp::now()))
 			.await?;
 		let sqlite_generation = sqlite_open.generation;
+		start_guard.set_sqlite_generation(sqlite_generation);
 
 		let populate_res = async {
 			ensure!(start.sqlite_startup_data.is_none());
@@ -133,10 +196,12 @@ pub async fn start_actor(
 				}
 				ensure!(false, "actor active state missing after start");
 			}
+			start_guard.disarm();
 			Ok(())
 		}
 		Err(err) => {
 			conn.active_actors.remove_async(&actor_id_string).await;
+			start_guard.disarm();
 			Err(err)
 		}
 	}
@@ -194,11 +259,8 @@ pub async fn actor_stopped(conn: &Conn, checkpoint: &protocol::ActorCheckpoint) 
 		tracing::warn!(
 			%actor_id,
 			?err,
-			"close failed in actor_stopped, force-evicting open_dbs entry"
+			"close failed in actor_stopped"
 		);
-		// Process-wide engine: leaving a stale entry would block re-opening
-		// the same actor on this process.
-		conn.sqlite_engine.force_close(&actor_id).await;
 	}
 	// Generation-checked remove so a concurrent `start_actor` for a fresh
 	// generation between the `get_async` above and this point does not have
@@ -238,16 +300,10 @@ async fn close_actor_on_shutdown(
 			tracing::warn!(
 				actor_id = %actor_id,
 				?err,
-				"close failed during envoy shutdown, force-evicting open_dbs entry"
+				"close failed during envoy shutdown"
 			);
-		} else {
-			return;
 		}
 	}
-	// Reach this point either when the actor never finished opening (no generation) or when
-	// close errored above. Always evict so the process-wide engine doesn't keep a stale
-	// entry that would block re-opening the same actor on this process.
-	sqlite_engine.force_close(&actor_id).await;
 }
 
 pub async fn assert_sqlite_actor_active(
