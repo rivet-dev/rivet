@@ -11,3 +11,4 @@ pub mod api_actors_delete;
 pub mod api_actors_get_or_create;
 pub mod api_actors_list;
 pub mod api_actors_list_names;
+pub mod serverless_outbound_sqlite_lifecycle;

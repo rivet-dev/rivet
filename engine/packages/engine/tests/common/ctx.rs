@@ -1,7 +1,63 @@
 use anyhow::*;
 use gas::prelude::*;
 use rivet_service_manager::{Service, ServiceKind};
+use std::io;
+use std::sync::{Arc, OnceLock};
 use std::time::Duration;
+
+/// Process-wide capture of formatted tracing output. Tests that need to make assertions about
+/// engine log lines (for example to detect a leaked sqlite open_dbs entry) read from this buffer.
+/// The buffer is appended to by every tracing event regardless of whether any test reads it.
+static LOG_CAPTURE: OnceLock<Arc<parking_lot::Mutex<Vec<u8>>>> = OnceLock::new();
+
+fn log_capture() -> Arc<parking_lot::Mutex<Vec<u8>>> {
+	LOG_CAPTURE
+		.get_or_init(|| Arc::new(parking_lot::Mutex::new(Vec::new())))
+		.clone()
+}
+
+/// Returns a snapshot of all tracing output captured so far across the process. Used by tests
+/// that need to assert on specific engine log lines.
+pub fn captured_logs_snapshot() -> String {
+	let guard = log_capture();
+	let buf = guard.lock();
+	String::from_utf8_lossy(&buf).into_owned()
+}
+
+/// `MakeWriter` that tees each tracing line into the test stdout writer (so libtest captures
+/// it for failed-test output) and into the process-wide capture buffer used by assertions.
+struct TeeMakeWriter {
+	capture: Arc<parking_lot::Mutex<Vec<u8>>>,
+}
+
+struct TeeWriter<'a> {
+	test_writer: tracing_subscriber::fmt::TestWriter,
+	capture: parking_lot::MutexGuard<'a, Vec<u8>>,
+}
+
+impl<'a> io::Write for TeeWriter<'a> {
+	fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+		// Forced-sync context: tracing-subscriber MakeWriter is invoked synchronously inside the
+		// emit path, so we must use a parking_lot guard rather than an async lock.
+		self.capture.extend_from_slice(buf);
+		self.test_writer.write(buf)
+	}
+
+	fn flush(&mut self) -> io::Result<()> {
+		self.test_writer.flush()
+	}
+}
+
+impl<'a> tracing_subscriber::fmt::MakeWriter<'a> for TeeMakeWriter {
+	type Writer = TeeWriter<'a>;
+
+	fn make_writer(&'a self) -> Self::Writer {
+		TeeWriter {
+			test_writer: tracing_subscriber::fmt::TestWriter::new(),
+			capture: self.capture.lock(),
+		}
+	}
+}
 
 pub struct TestOpts {
 	pub datacenters: usize,
@@ -68,11 +124,14 @@ impl TestCtx {
 
 	/// Creates a test context with custom options
 	pub async fn new_with_opts(opts: TestOpts) -> Result<Self> {
-		// Set up logging
+		// Set up logging. The custom `MakeWriter` tees each line into both the libtest
+		// stdout writer and a process-wide capture buffer (`captured_logs_snapshot`).
 		let _ = tracing_subscriber::fmt()
 			.with_env_filter("info")
 			.with_ansi(false)
-			.with_test_writer()
+			.with_writer(TeeMakeWriter {
+				capture: log_capture(),
+			})
 			.try_init();
 
 		// Initialize test dependencies for all DCs

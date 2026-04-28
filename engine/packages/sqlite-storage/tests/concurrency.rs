@@ -225,22 +225,51 @@ async fn concurrent_reads_during_compaction_keep_returning_expected_pages() -> R
 }
 
 #[tokio::test]
-async fn second_open_for_same_actor_is_rejected_until_close() -> Result<()> {
+async fn second_open_for_same_actor_takes_over_and_fences_old_generation() -> Result<()> {
 	let (engine, _compaction_rx) = setup_engine().await?;
 	let actor_id = "double-open-actor";
 
 	let first = engine.open(actor_id, OpenConfig::new(1)).await?;
-	let err = engine
-		.open(actor_id, OpenConfig::new(2))
-		.await
-		.expect_err("second open for the same actor must fail");
+	let second = engine.open(actor_id, OpenConfig::new(2)).await?;
+
 	assert!(
-		err.to_string().contains("already open"),
-		"unexpected error: {err}"
+		second.generation > first.generation,
+		"takeover generation {} must fence old generation {}",
+		second.generation,
+		first.generation
 	);
 
-	engine.close(actor_id, first.generation).await?;
-	engine.open(actor_id, OpenConfig::new(3)).await?;
+	let err = engine
+		.commit(
+			actor_id,
+			CommitRequest {
+				generation: first.generation,
+				head_txid: first.meta.head_txid,
+				db_size_pages: 1,
+				dirty_pages: dirty_pages(1, 1, 0x55),
+				now_ms: 3,
+			},
+		)
+		.await
+		.expect_err("old generation must be fenced after takeover");
+	assert!(
+		err.to_string().contains("did not match open generation"),
+		"unexpected stale-generation error: {err}"
+	);
+
+	engine
+		.commit(
+			actor_id,
+			CommitRequest {
+				generation: second.generation,
+				head_txid: second.meta.head_txid,
+				db_size_pages: 1,
+				dirty_pages: dirty_pages(1, 1, 0x66),
+				now_ms: 4,
+			},
+		)
+		.await?;
+	engine.close(actor_id, second.generation).await?;
 
 	Ok(())
 }

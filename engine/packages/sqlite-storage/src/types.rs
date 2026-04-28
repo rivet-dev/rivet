@@ -24,8 +24,8 @@ pub const SQLITE_DEFAULT_MAX_STORAGE_BYTES: u64 = 10 * 1024 * 1024 * 1024;
 ///   commit, so `next_txid - head_txid` is the number of txids that have been
 ///   allocated but not yet promoted to head.
 /// - `materialized_txid <= head_txid`.
-/// - `generation` is stable across open/close. Pegboard coordinates actor
-///   placement so only one envoy owns a given actor generation at a time.
+/// - `generation` fences stale owners. It starts at 1 and advances when a new
+///   open takes over an actor that this process still considers open.
 pub fn new_db_head(creation_ts_ms: i64) -> DBHead {
 	DBHead {
 		schema_version: SQLITE_VFS_V2_SCHEMA_VERSION,

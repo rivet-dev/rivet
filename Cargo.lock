@@ -4626,6 +4626,7 @@ dependencies = [
  "lz4_flex",
  "namespace",
  "once_cell",
+ "parking_lot",
  "pegboard",
  "pegboard-envoy",
  "pegboard-outbound",
