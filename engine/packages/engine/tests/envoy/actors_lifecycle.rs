@@ -360,6 +360,106 @@ fn envoy_actor_connectable_via_guard_websocket() {
 }
 
 #[test]
+fn query_get_or_create_from_dc_without_runner_forwards_to_runner_dc() {
+	common::run(common::TestOpts::new(2).with_timeout(45), |ctx| async move {
+		let (namespace, _, _envoy) =
+			common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
+		let wrong_dc = ctx.get_dc(2);
+
+		let client = reqwest::Client::new();
+		let response = client
+			.get(format!(
+				"http://127.0.0.1:{}/gateway/test-actor/ping",
+				wrong_dc.guard_port()
+			))
+			.query(&[
+				("rvt-namespace", namespace.as_str()),
+				("rvt-method", "getOrCreate"),
+				("rvt-runner", common::TEST_RUNNER_NAME),
+				("rvt-key", "geo-routed-key"),
+			])
+			.send()
+			.await
+			.expect("failed to send query gateway request");
+
+		assert_eq!(
+			response.status(),
+			reqwest::StatusCode::OK,
+			"query gateway should forward to the runner dc"
+		);
+
+		let body: serde_json::Value = response.json().await.expect("invalid ping response");
+		let actor_id = body["actorId"].as_str().expect("missing actor id");
+		assert_eq!(body["status"], "ok");
+		common::assert_actor_in_dc(actor_id, ctx.leader_dc().config.dc_label()).await;
+	});
+}
+
+#[test]
+fn public_get_or_create_with_unavailable_datacenter_returns_typed_error() {
+	common::run(common::TestOpts::new(2).with_timeout(45), |ctx| async move {
+		let (namespace, _, _envoy) =
+			common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
+		let wrong_dc = ctx.get_dc(2);
+
+		let request = common::api::public::build_actors_get_or_create_request(
+			ctx.leader_dc().guard_port(),
+			common::api::public::GetOrCreateQuery {
+				namespace: namespace.clone(),
+			},
+			common::api::public::GetOrCreateRequest {
+				datacenter: Some(wrong_dc.config.dc_name().unwrap().to_string()),
+				name: "test-actor".to_string(),
+				key: "public-explicit-wrong-dc-key".to_string(),
+				input: None,
+				runner_name_selector: common::TEST_RUNNER_NAME.to_string(),
+				crash_policy: rivet_types::actors::CrashPolicy::Sleep,
+			},
+		)
+		.await
+		.expect("failed to build request");
+		let response = request.send().await.expect("failed to send request");
+
+		assert_eq!(response.status(), reqwest::StatusCode::BAD_REQUEST);
+		let body: serde_json::Value = response.json().await.expect("invalid error response");
+		assert_eq!(body["group"], "actor");
+		assert_eq!(body["code"], "no_runner_config_configured");
+	});
+}
+
+#[test]
+fn public_create_with_unavailable_datacenter_returns_typed_error() {
+	common::run(common::TestOpts::new(2).with_timeout(45), |ctx| async move {
+		let (namespace, _, _envoy) =
+			common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
+		let wrong_dc = ctx.get_dc(2);
+
+		let request = common::api::public::build_actors_create_request(
+			ctx.leader_dc().guard_port(),
+			common::api_types::actors::create::CreateQuery {
+				namespace: namespace.clone(),
+			},
+			common::api_types::actors::create::CreateRequest {
+				datacenter: Some(wrong_dc.config.dc_name().unwrap().to_string()),
+				name: "test-actor".to_string(),
+				key: Some("public-create-explicit-wrong-dc-key".to_string()),
+				input: None,
+				runner_name_selector: common::TEST_RUNNER_NAME.to_string(),
+				crash_policy: rivet_types::actors::CrashPolicy::Sleep,
+			},
+		)
+		.await
+		.expect("failed to build request");
+		let response = request.send().await.expect("failed to send request");
+
+		assert_eq!(response.status(), reqwest::StatusCode::BAD_REQUEST);
+		let body: serde_json::Value = response.json().await.expect("invalid error response");
+		assert_eq!(body["group"], "actor");
+		assert_eq!(body["code"], "no_runner_config_configured");
+	});
+}
+
+#[test]
 fn envoy_websocket_actor_close_round_trip() {
 	common::run(common::TestOpts::new(1).with_timeout(20), |ctx| async move {
 		use futures_util::{SinkExt, StreamExt};
@@ -1129,4 +1229,3 @@ fn envoy_normal_pool_does_not_apply_legacy_runner_slot_capacity() {
 		}
 	});
 }
-

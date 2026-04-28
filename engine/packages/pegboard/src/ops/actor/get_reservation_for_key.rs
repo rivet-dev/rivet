@@ -1,3 +1,4 @@
+use anyhow::ensure;
 use gas::prelude::*;
 use universaldb::utils::FormalKey;
 
@@ -32,6 +33,11 @@ pub async fn pegboard_actor_get_reservation_for_key(
 				},
 			)
 			.await?;
+
+		ensure!(
+			res.replicas.contains(&ctx.config().epoxy_replica_id()),
+			"get_reservation_for_key called outside the scoped runner replica set"
+		);
 
 		Some(res.replicas)
 	} else {
