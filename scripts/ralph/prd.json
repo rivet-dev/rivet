@@ -32,8 +32,8 @@
         "Tests pass"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Increased VFS default prefetch depth from 16 pages to a shard-sized 64 pages and added focused VFS coverage for sequential prefetch plus bounded point reads. Benchmark artifact written to `.agent/notes/sqlite-cold-read-after-SQLITE-COLD-002.txt`. Numbers: insert e2e 15001.2ms; hot read e2e 97.6ms; wake read e2e 8078.7ms; wake read server 7932.6ms; wake overhead estimate 146.1ms; wake read VFS get_pages calls 368; pages fetched 18851; bytes fetched 77213696; prefetch pages 18483; prefetch bytes 75706368; VFS transport 7648.0ms. Compared with baseline/SQLITE-COLD-001: get_pages calls dropped 1249 -> 368, wake read e2e dropped 20141.0ms -> 8078.7ms, wake VFS transport dropped 19332.8ms -> 7648.0ms, and hot read e2e improved 118.6ms -> 97.6ms. Checks passed: cargo check -p rivetkit-sqlite; cargo test -p rivetkit-sqlite; pnpm --filter kitchen-sink check-types; pnpm -F rivetkit check-types; pnpm --filter @rivetkit/rivetkit-napi build:force."
     },
     {
       "id": "SQLITE-COLD-003",

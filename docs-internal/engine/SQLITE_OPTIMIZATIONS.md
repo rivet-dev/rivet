@@ -10,14 +10,13 @@ Implementation tracking lives in `scripts/ralph/prd.json`.
 
 - Actor startup can preload SQLite VFS pages through `OpenConfig.preload_pgnos`, `OpenConfig.preload_ranges`, and `OpenConfig.max_total_bytes`; pegboard-envoy currently uses the default config, so this mostly preloads page 1.
 - The VFS keeps an in-memory page cache seeded from `sqlite_startup_data.preloaded_pages`.
-- The VFS has speculative read-ahead via `prefetch_depth` and `max_prefetch_bytes`.
+- The VFS has speculative read-ahead via `prefetch_depth` and `max_prefetch_bytes`; the default forward-scan budget is 64 pages, which reduced the cold-read benchmark from 1,249 to 368 VFS `get_pages` calls.
 - Actor Prometheus metrics expose VFS read counters, fetched bytes, cache hits/misses, and `get_pages` duration at `/gateway/<actor_id>/metrics`.
 - `sqlite-storage` keeps an in-memory PIDX cache and decodes each unique DELTA/SHARD blob once per `get_pages(...)` call.
 - `sqlite-storage` compaction folds DELTA pages into SHARD blobs for steadier read behavior.
 
 ## Recommended Optimizations
 
-- Increase VFS read-ahead for forward scans to at least shard-sized batches, then consider larger adaptive batches.
 - Record VFS predictor access on cache hits so prefetch learns real sequential scans.
 - Cache repeated pegboard-envoy SQLite actor validation and local-open checks for active actors.
 - Return SQLite meta from `sqlite-storage::get_pages(...)` instead of doing a second META read in pegboard-envoy.

@@ -26,7 +26,7 @@ use tokio::runtime::Handle;
 use tokio::sync::Notify;
 
 const DEFAULT_CACHE_CAPACITY_PAGES: u64 = 50_000;
-const DEFAULT_PREFETCH_DEPTH: usize = 16;
+const DEFAULT_PREFETCH_DEPTH: usize = 64;
 const DEFAULT_MAX_PREFETCH_BYTES: usize = 256 * 1024;
 const DEFAULT_MAX_PAGES_PER_STAGE: usize = 4_000;
 const DEFAULT_PAGE_SIZE: usize = 4096;
@@ -3160,6 +3160,105 @@ mod tests {
 		}
 
 		assert_eq!(predictor.multi_predict(14, 3, 30), vec![17, 20, 23]);
+	}
+
+	#[test]
+	fn default_vfs_config_prefetches_one_shard_for_forward_scan() {
+		let runtime = Builder::new_current_thread()
+			.enable_all()
+			.build()
+			.expect("runtime should build");
+		let protocol = Arc::new(MockProtocol::new(
+			protocol::SqliteCommitResponse::SqliteCommitOk(protocol::SqliteCommitOk {
+				new_head_txid: 13,
+				meta: sqlite_meta(8 * 1024 * 1024),
+			}),
+			protocol::SqliteCommitStageResponse::SqliteCommitStageOk(
+				protocol::SqliteCommitStageOk {
+					chunk_idx_committed: 0,
+				},
+			),
+			protocol::SqliteCommitFinalizeResponse::SqliteCommitFinalizeOk(
+				protocol::SqliteCommitFinalizeOk {
+					new_head_txid: 13,
+					meta: sqlite_meta(8 * 1024 * 1024),
+				},
+			),
+		));
+		let ctx = VfsContext::new(
+			"actor".to_string(),
+			runtime.handle().clone(),
+			SqliteTransport::from_mock(protocol.clone()),
+			protocol::SqliteStartupData {
+				generation: 7,
+				meta: protocol::SqliteMeta {
+					db_size_pages: 200,
+					..sqlite_meta(8 * 1024 * 1024)
+				},
+				preloaded_pages: Vec::new(),
+			},
+			VfsConfig::default(),
+			unsafe { std::mem::zeroed() },
+			None,
+		);
+
+		for pgno in [10, 11, 12] {
+			ctx.resolve_pages(&[pgno], true)
+				.expect("page should resolve");
+		}
+
+		let requests = protocol.get_pages_requests();
+		let shard_fetch = requests.last().expect("scan should fetch missing pages");
+		let expected = (12..76).collect::<Vec<_>>();
+		assert_eq!(shard_fetch.pgnos, expected);
+	}
+
+	#[test]
+	fn default_vfs_config_keeps_point_reads_bounded() {
+		let runtime = Builder::new_current_thread()
+			.enable_all()
+			.build()
+			.expect("runtime should build");
+		let protocol = Arc::new(MockProtocol::new(
+			protocol::SqliteCommitResponse::SqliteCommitOk(protocol::SqliteCommitOk {
+				new_head_txid: 13,
+				meta: sqlite_meta(8 * 1024 * 1024),
+			}),
+			protocol::SqliteCommitStageResponse::SqliteCommitStageOk(
+				protocol::SqliteCommitStageOk {
+					chunk_idx_committed: 0,
+				},
+			),
+			protocol::SqliteCommitFinalizeResponse::SqliteCommitFinalizeOk(
+				protocol::SqliteCommitFinalizeOk {
+					new_head_txid: 13,
+					meta: sqlite_meta(8 * 1024 * 1024),
+				},
+			),
+		));
+		let ctx = VfsContext::new(
+			"actor".to_string(),
+			runtime.handle().clone(),
+			SqliteTransport::from_mock(protocol.clone()),
+			protocol::SqliteStartupData {
+				generation: 7,
+				meta: protocol::SqliteMeta {
+					db_size_pages: 200,
+					..sqlite_meta(8 * 1024 * 1024)
+				},
+				preloaded_pages: Vec::new(),
+			},
+			VfsConfig::default(),
+			unsafe { std::mem::zeroed() },
+			None,
+		);
+
+		ctx.resolve_pages(&[90], true)
+			.expect("point read should resolve");
+
+		let requests = protocol.get_pages_requests();
+		assert_eq!(requests.len(), 1);
+		assert_eq!(requests[0].pgnos, vec![90]);
 	}
 
 	#[test]
