@@ -2,7 +2,7 @@
 //!
 //! This crate now owns the KV-backed SQLite behavior used by `rivetkit-napi`.
 
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use std::ffi::{CStr, CString, c_char, c_int, c_void};
 use std::ptr;
 use std::slice;
@@ -29,7 +29,10 @@ const DEFAULT_CACHE_CAPACITY_PAGES: u64 = 50_000;
 const DEFAULT_PREFETCH_DEPTH: usize = 64;
 const DEFAULT_MAX_PREFETCH_BYTES: usize = 256 * 1024;
 const DEFAULT_MAX_PAGES_PER_STAGE: usize = 4_000;
+const DEFAULT_RECENT_HINT_PAGE_BUDGET: usize = 128;
+const DEFAULT_RECENT_HINT_RANGE_BUDGET: usize = 16;
 const DEFAULT_PAGE_SIZE: usize = 4096;
+const MIN_RECENT_SCAN_RANGE_PAGES: u32 = 8;
 const MAX_PATHNAME: c_int = 64;
 const TEMP_AUX_PATH_PREFIX: &str = "__sqlite_temp__";
 const EMPTY_DB_PAGE_HEADER_PREFIX: [u8; 108] = [
@@ -730,6 +733,8 @@ pub struct VfsConfig {
 	pub prefetch_depth: usize,
 	pub max_prefetch_bytes: usize,
 	pub max_pages_per_stage: usize,
+	pub recent_hint_page_budget: usize,
+	pub recent_hint_range_budget: usize,
 }
 
 impl Default for VfsConfig {
@@ -739,8 +744,22 @@ impl Default for VfsConfig {
 			prefetch_depth: DEFAULT_PREFETCH_DEPTH,
 			max_prefetch_bytes: DEFAULT_MAX_PREFETCH_BYTES,
 			max_pages_per_stage: DEFAULT_MAX_PAGES_PER_STAGE,
+			recent_hint_page_budget: DEFAULT_RECENT_HINT_PAGE_BUDGET,
+			recent_hint_range_budget: DEFAULT_RECENT_HINT_RANGE_BUDGET,
 		}
 	}
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VfsPreloadHintRange {
+	pub start_pgno: u32,
+	pub page_count: u32,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct VfsPreloadHintSnapshot {
+	pub pgnos: Vec<u32>,
+	pub ranges: Vec<VfsPreloadHintRange>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -831,6 +850,7 @@ struct VfsState {
 	page_cache: Cache<u32, Vec<u8>>,
 	write_buffer: WriteBuffer,
 	predictor: PrefetchPredictor,
+	recent_pages: RecentPageTracker,
 	dead: bool,
 }
 
@@ -848,6 +868,24 @@ struct PrefetchPredictor {
 	stride_run_len: usize,
 	// Inspired by mvSQLite's Markov + stride predictor design (Apache-2.0).
 	transitions: HashMap<i64, HashMap<i64, u32>>,
+}
+
+#[derive(Debug, Clone)]
+struct RecentPageTracker {
+	page_budget: usize,
+	range_budget: usize,
+	hot_pages: HashMap<u32, RecentPageAccess>,
+	ranges: VecDeque<VfsPreloadHintRange>,
+	active_scan_start: Option<u32>,
+	active_scan_end: u32,
+	last_pgno: Option<u32>,
+	access_seq: u64,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct RecentPageAccess {
+	count: u32,
+	last_access_seq: u64,
 }
 
 #[derive(Debug)]
@@ -971,6 +1009,188 @@ impl PrefetchPredictor {
 	}
 }
 
+impl VfsPreloadHintRange {
+	fn new(start_pgno: u32, end_pgno: u32) -> Self {
+		Self {
+			start_pgno,
+			page_count: end_pgno.saturating_sub(start_pgno).saturating_add(1),
+		}
+	}
+
+	fn end_pgno(&self) -> u32 {
+		self.start_pgno
+			.saturating_add(self.page_count)
+			.saturating_sub(1)
+	}
+
+	fn contains(&self, pgno: u32) -> bool {
+		(self.start_pgno..=self.end_pgno()).contains(&pgno)
+	}
+}
+
+impl RecentPageTracker {
+	fn new(page_budget: usize, range_budget: usize) -> Self {
+		Self {
+			page_budget,
+			range_budget,
+			hot_pages: HashMap::new(),
+			ranges: VecDeque::new(),
+			active_scan_start: None,
+			active_scan_end: 0,
+			last_pgno: None,
+			access_seq: 0,
+		}
+	}
+
+	fn record_pages(&mut self, pgnos: impl IntoIterator<Item = u32>) {
+		for pgno in pgnos {
+			self.record_page(pgno);
+		}
+	}
+
+	fn record_page(&mut self, pgno: u32) {
+		self.access_seq = self.access_seq.saturating_add(1);
+		self.record_hot_page(pgno);
+		self.record_scan_page(pgno);
+	}
+
+	fn record_hot_page(&mut self, pgno: u32) {
+		if self.page_budget == 0 {
+			return;
+		}
+
+		if let Some(access) = self.hot_pages.get_mut(&pgno) {
+			access.count = access.count.saturating_add(1);
+			access.last_access_seq = self.access_seq;
+			return;
+		}
+
+		if self.hot_pages.len() >= self.page_budget {
+			if let Some(evict_pgno) = self
+				.hot_pages
+				.iter()
+				.min_by_key(|(_, access)| (access.count, access.last_access_seq))
+				.map(|(pgno, _)| *pgno)
+			{
+				self.hot_pages.remove(&evict_pgno);
+			}
+		}
+
+		self.hot_pages.insert(
+			pgno,
+			RecentPageAccess {
+				count: 1,
+				last_access_seq: self.access_seq,
+			},
+		);
+	}
+
+	fn record_scan_page(&mut self, pgno: u32) {
+		match self.last_pgno {
+			Some(last_pgno) if pgno == last_pgno.saturating_add(1) => {
+				if self.active_scan_start.is_none() {
+					self.active_scan_start = Some(last_pgno);
+				}
+				self.active_scan_end = pgno;
+			}
+			Some(last_pgno) if pgno == last_pgno => {}
+			Some(_) | None => {
+				self.finish_active_scan();
+				self.active_scan_start = None;
+				self.active_scan_end = 0;
+			}
+		}
+		self.last_pgno = Some(pgno);
+	}
+
+	fn finish_active_scan(&mut self) {
+		let Some(start_pgno) = self.active_scan_start else {
+			return;
+		};
+		if self.active_scan_end < start_pgno {
+			return;
+		}
+		let page_count = self.active_scan_end - start_pgno + 1;
+		if page_count < MIN_RECENT_SCAN_RANGE_PAGES {
+			return;
+		}
+		self.push_range(VfsPreloadHintRange::new(start_pgno, self.active_scan_end));
+	}
+
+	fn push_range(&mut self, range: VfsPreloadHintRange) {
+		if self.range_budget == 0 || range.page_count == 0 {
+			return;
+		}
+		push_coalesced_range(&mut self.ranges, range);
+		while self.ranges.len() > self.range_budget {
+			self.ranges.pop_front();
+		}
+	}
+
+	fn snapshot(&self) -> VfsPreloadHintSnapshot {
+		let mut ranges = self.ranges.clone();
+		if let Some(start_pgno) = self.active_scan_start {
+			if self.active_scan_end >= start_pgno {
+				let page_count = self.active_scan_end - start_pgno + 1;
+				if page_count >= MIN_RECENT_SCAN_RANGE_PAGES {
+					push_coalesced_range(
+						&mut ranges,
+						VfsPreloadHintRange::new(start_pgno, self.active_scan_end),
+					);
+				}
+			}
+		}
+		while ranges.len() > self.range_budget {
+			ranges.pop_front();
+		}
+
+		let mut scored_pages = self
+			.hot_pages
+			.iter()
+			.filter(|(pgno, _)| !ranges.iter().any(|range| range.contains(**pgno)))
+			.map(|(pgno, access)| (*pgno, *access))
+			.collect::<Vec<_>>();
+		scored_pages.sort_by(|(left_pgno, left), (right_pgno, right)| {
+			right
+				.count
+				.cmp(&left.count)
+				.then_with(|| right.last_access_seq.cmp(&left.last_access_seq))
+				.then_with(|| left_pgno.cmp(right_pgno))
+		});
+
+		let mut pgnos = scored_pages
+			.into_iter()
+			.take(self.page_budget)
+			.map(|(pgno, _)| pgno)
+			.collect::<Vec<_>>();
+		pgnos.sort_unstable();
+
+		VfsPreloadHintSnapshot {
+			pgnos,
+			ranges: ranges.into_iter().collect(),
+		}
+	}
+}
+
+fn push_coalesced_range(ranges: &mut VecDeque<VfsPreloadHintRange>, range: VfsPreloadHintRange) {
+	let mut start_pgno = range.start_pgno;
+	let mut end_pgno = range.end_pgno();
+	let mut retained = VecDeque::new();
+	while let Some(existing) = ranges.pop_front() {
+		let existing_end = existing.end_pgno();
+		if existing.start_pgno <= end_pgno.saturating_add(1)
+			&& start_pgno <= existing_end.saturating_add(1)
+		{
+			start_pgno = start_pgno.min(existing.start_pgno);
+			end_pgno = end_pgno.max(existing_end);
+		} else {
+			retained.push_back(existing);
+		}
+	}
+	retained.push_back(VfsPreloadHintRange::new(start_pgno, end_pgno));
+	*ranges = retained;
+}
+
 impl VfsState {
 	fn new(config: &VfsConfig, startup: &protocol::SqliteStartupData) -> Self {
 		let page_cache = Cache::builder()
@@ -991,6 +1211,10 @@ impl VfsState {
 			page_cache,
 			write_buffer: WriteBuffer::default(),
 			predictor: PrefetchPredictor::default(),
+			recent_pages: RecentPageTracker::new(
+				config.recent_hint_page_budget,
+				config.recent_hint_range_budget,
+			),
 			dead: false,
 		};
 		if state.db_size_pages == 0 && !state.page_cache.contains_key(&1) {
@@ -1124,6 +1348,10 @@ impl VfsContext {
 		self.state.write().dead = true;
 	}
 
+	fn snapshot_preload_hints(&self) -> VfsPreloadHintSnapshot {
+		self.state.read().recent_pages.snapshot()
+	}
+
 	fn resolve_pages(
 		&self,
 		target_pgnos: &[u32],
@@ -1166,6 +1394,7 @@ impl VfsContext {
 			for pgno in target_pgnos.iter().copied() {
 				state.predictor.record(pgno);
 			}
+			state.recent_pages.record_pages(target_pgnos.iter().copied());
 			if let Some(metrics) = &self.metrics {
 				metrics.record_resolve_cache_hits(target_pgnos.len() as u64);
 			}
@@ -1181,6 +1410,7 @@ impl VfsContext {
 			for pgno in target_pgnos.iter().copied() {
 				state.predictor.record(pgno);
 			}
+			state.recent_pages.record_pages(target_pgnos.iter().copied());
 
 			let mut to_fetch = missing.clone();
 			let mut seed_pgno = None;
@@ -2591,6 +2821,10 @@ impl SqliteVfs {
 		unsafe { (*self.ctx_ptr).clone_last_error() }
 	}
 
+	fn snapshot_preload_hints(&self) -> VfsPreloadHintSnapshot {
+		unsafe { (*self.ctx_ptr).snapshot_preload_hints() }
+	}
+
 	fn register_with_transport(
 		name: &str,
 		transport: SqliteTransport,
@@ -2679,6 +2913,10 @@ impl NativeDatabase {
 
 	pub fn take_last_kv_error(&self) -> Option<String> {
 		self._vfs.take_last_error()
+	}
+
+	pub fn snapshot_preload_hints(&self) -> VfsPreloadHintSnapshot {
+		self._vfs.snapshot_preload_hints()
 	}
 }
 
@@ -3181,6 +3419,94 @@ mod tests {
 		}
 
 		assert_eq!(predictor.multi_predict(14, 3, 30), vec![17, 20, 23]);
+	}
+
+	#[test]
+	fn recent_page_tracker_keeps_full_scan_as_range_from_start() {
+		let mut tracker = RecentPageTracker::new(4, 2);
+		tracker.record_pages(1..=100);
+
+		let snapshot = tracker.snapshot();
+		assert!(snapshot.pgnos.len() <= 4);
+		assert_eq!(
+			snapshot.ranges,
+			vec![VfsPreloadHintRange {
+				start_pgno: 1,
+				page_count: 100,
+			}]
+		);
+	}
+
+	#[test]
+	fn recent_page_tracker_keeps_hot_pages_bounded() {
+		let mut tracker = RecentPageTracker::new(3, 2);
+		for pgno in [10, 20, 30, 40, 20, 30, 20] {
+			tracker.record_page(pgno);
+		}
+
+		let snapshot = tracker.snapshot();
+		assert!(snapshot.ranges.is_empty());
+		assert_eq!(snapshot.pgnos.len(), 3);
+		assert!(snapshot.pgnos.contains(&20));
+		assert!(snapshot.pgnos.contains(&30));
+	}
+
+	#[test]
+	fn resolve_pages_records_recent_page_hint_snapshot() {
+		let runtime = Builder::new_current_thread()
+			.enable_all()
+			.build()
+			.expect("runtime should build");
+		let protocol = Arc::new(MockProtocol::new(
+			protocol::SqliteCommitResponse::SqliteCommitOk(protocol::SqliteCommitOk {
+				new_head_txid: 13,
+				meta: sqlite_meta(8 * 1024 * 1024),
+			}),
+			protocol::SqliteCommitStageResponse::SqliteCommitStageOk(
+				protocol::SqliteCommitStageOk {
+					chunk_idx_committed: 0,
+				},
+			),
+			protocol::SqliteCommitFinalizeResponse::SqliteCommitFinalizeOk(
+				protocol::SqliteCommitFinalizeOk {
+					new_head_txid: 13,
+					meta: sqlite_meta(8 * 1024 * 1024),
+				},
+			),
+		));
+		let ctx = VfsContext::new(
+			"actor".to_string(),
+			runtime.handle().clone(),
+			SqliteTransport::from_mock(protocol),
+			protocol::SqliteStartupData {
+				generation: 7,
+				meta: protocol::SqliteMeta {
+					db_size_pages: 200,
+					..sqlite_meta(8 * 1024 * 1024)
+				},
+				preloaded_pages: Vec::new(),
+			},
+			VfsConfig {
+				recent_hint_page_budget: 4,
+				recent_hint_range_budget: 2,
+				..VfsConfig::default()
+			},
+			unsafe { std::mem::zeroed() },
+			None,
+		);
+
+		for pgno in 50..=65 {
+			ctx.resolve_pages(&[pgno], true)
+				.expect("page should resolve");
+		}
+
+		assert_eq!(
+			ctx.snapshot_preload_hints().ranges,
+			vec![VfsPreloadHintRange {
+				start_pgno: 50,
+				page_count: 16,
+			}]
+		);
 	}
 
 	#[test]

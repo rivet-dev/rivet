@@ -70,8 +70,8 @@
         "Tests pass"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added a bounded in-memory VFS recent-page hint tracker that records hot pages and coalesced scan ranges, avoids tail-only full-scan hints by preserving the active range start, and exposes `NativeDatabase::snapshot_preload_hints()` for future runtime-side flush wiring without adding a JS API. Benchmark artifact written to `.agent/notes/sqlite-cold-read-after-SQLITE-COLD-004.txt`. Numbers: insert e2e 15080.7ms; hot read e2e 161.7ms; wake read e2e 5884.3ms; wake read server 5743.7ms; wake overhead estimate 140.6ms; wake read VFS get_pages calls 220; pages fetched 13717; bytes fetched 56184832; prefetch pages 13497; prefetch bytes 55283712; VFS transport 5410.5ms. Compared with baseline/SQLITE-COLD-001: get_pages calls dropped 1249 -> 220, wake read e2e dropped 20141.0ms -> 5884.3ms, wake VFS transport dropped 19332.8ms -> 5410.5ms, and hot read e2e was 118.6ms -> 161.7ms. Compared with SQLITE-COLD-003: get_pages calls were 219 -> 220, wake read e2e was 5873.2ms -> 5884.3ms, wake VFS transport improved 5519.9ms -> 5410.5ms, and hot read e2e was 129.3ms -> 161.7ms. No cold-read speedup is expected until later stories persist and preload these hints. Checks passed: cargo check -p rivetkit-sqlite; cargo test -p rivetkit-sqlite recent_page_tracker -- --nocapture; cargo test -p rivetkit-sqlite resolve_pages_records_recent_page_hint_snapshot -- --nocapture; cargo test -p rivetkit-sqlite -- --test-threads=1; pnpm --filter kitchen-sink check-types; pnpm -F rivetkit check-types; pnpm --filter @rivetkit/rivetkit-napi build:force. Default parallel `cargo test -p rivetkit-sqlite` reproduced an existing large staged-delta test flake in `bench_large_tx_insert_100mb`; the same test passed alone and the serialized full suite passed."
     },
     {
       "id": "SQLITE-COLD-005",
