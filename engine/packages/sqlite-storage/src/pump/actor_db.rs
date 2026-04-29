@@ -1,14 +1,16 @@
-use std::{sync::Arc, time::Instant};
+use std::sync::Arc;
 
 use parking_lot::Mutex;
 use rivet_pools::NodeId;
+use tokio::time::Instant;
 use universaldb::Database;
 
-use crate::page_index::DeltaPageIndex;
+use crate::{compactor::Ups, page_index::DeltaPageIndex};
 
 #[allow(dead_code)]
 pub struct ActorDb {
 	pub(super) udb: Arc<Database>,
+	pub(super) ups: Ups,
 	pub(super) actor_id: String,
 	pub(super) node_id: NodeId,
 	pub(super) cache: Mutex<DeltaPageIndex>,
@@ -23,12 +25,13 @@ pub struct ActorDb {
 }
 
 impl ActorDb {
-	pub fn new(udb: Arc<Database>, actor_id: String, node_id: NodeId) -> Self {
+	pub fn new(udb: Arc<Database>, ups: Ups, actor_id: String, node_id: NodeId) -> Self {
 		#[cfg(debug_assertions)]
 		crate::takeover::reconcile_blocking(udb.clone(), actor_id.clone(), node_id);
 
 		Self {
 			udb,
+			ups,
 			actor_id,
 			node_id,
 			cache: Mutex::new(DeltaPageIndex::new()),

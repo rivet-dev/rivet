@@ -1,15 +1,25 @@
 use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::Result;
 use rivet_pools::NodeId;
+use sqlite_storage::compactor::{
+	SqliteCompactSubject, decode_compact_payload,
+};
 use sqlite_storage::{
-	keys::{delta_chunk_key, meta_head_key, pidx_delta_key, shard_key, PAGE_SIZE},
+	keys::{
+		PAGE_SIZE, delta_chunk_key, meta_compact_key, meta_head_key, pidx_delta_key, shard_key,
+	},
 	ltx::{LtxHeader, encode_ltx_v3},
 	pump::ActorDb,
 	quota::{self, SQLITE_MAX_STORAGE_BYTES},
-	types::{DBHead, DirtyPage, FetchedPage, decode_db_head, encode_db_head},
+	types::{
+		DBHead, DirtyPage, FetchedPage, MetaCompact, decode_db_head, encode_db_head,
+		encode_meta_compact,
+	},
 };
 use tempfile::Builder;
+use universalpubsub::{NextOutput, PubSub, driver::memory::MemoryDriver};
 use universaldb::utils::IsolationLevel::Snapshot;
 
 const TEST_ACTOR: &str = "test-actor";
@@ -19,6 +29,12 @@ async fn test_db() -> Result<universaldb::Database> {
 	let driver = universaldb::driver::RocksDbDatabaseDriver::new(path).await?;
 
 	Ok(universaldb::Database::new(Arc::new(driver)))
+}
+
+fn test_ups() -> PubSub {
+	PubSub::new(Arc::new(MemoryDriver::new(
+		"sqlite-storage-pump-commit-test".to_string(),
+	)))
 }
 
 fn head(head_txid: u64, db_size_pages: u32) -> DBHead {
@@ -95,7 +111,7 @@ async fn read_quota(db: &universaldb::Database) -> Result<i64> {
 #[tokio::test]
 async fn commit_lazily_initializes_meta_on_first_write() -> Result<()> {
 	let db = Arc::new(test_db().await?);
-	let actor_db = ActorDb::new(db.clone(), TEST_ACTOR.to_string(), NodeId::new());
+	let actor_db = ActorDb::new(db.clone(), test_ups(), TEST_ACTOR.to_string(), NodeId::new());
 
 	actor_db.commit(vec![page(1, 0x11)], 2, 1_000).await?;
 
@@ -121,7 +137,7 @@ async fn commit_lazily_initializes_meta_on_first_write() -> Result<()> {
 #[tokio::test]
 async fn commit_advances_head_and_updates_warm_cache() -> Result<()> {
 	let db = Arc::new(test_db().await?);
-	let actor_db = ActorDb::new(db.clone(), TEST_ACTOR.to_string(), NodeId::new());
+	let actor_db = ActorDb::new(db.clone(), test_ups(), TEST_ACTOR.to_string(), NodeId::new());
 
 	actor_db.commit(vec![page(1, 0x11)], 2, 1_000).await?;
 	assert_eq!(
@@ -171,7 +187,7 @@ async fn commit_rejects_quota_cap_before_writes() -> Result<()> {
 	})
 	.await?;
 
-	let actor_db = ActorDb::new(db.clone(), TEST_ACTOR.to_string(), NodeId::new());
+	let actor_db = ActorDb::new(db.clone(), test_ups(), TEST_ACTOR.to_string(), NodeId::new());
 	let err = actor_db
 		.commit(vec![page(1, 0x44)], 1, 3_000)
 		.await
@@ -218,7 +234,7 @@ async fn shrink_commit_deletes_above_eof_pidx_and_shards() -> Result<()> {
 	})
 	.await?;
 
-	let actor_db = ActorDb::new(db.clone(), TEST_ACTOR.to_string(), NodeId::new());
+	let actor_db = ActorDb::new(db.clone(), test_ups(), TEST_ACTOR.to_string(), NodeId::new());
 	actor_db.commit(vec![page(1, 0x11)], 63, 4_000).await?;
 
 	assert_eq!(read_head(&db).await?, head(8, 63));
@@ -234,6 +250,67 @@ async fn shrink_commit_deletes_above_eof_pidx_and_shards() -> Result<()> {
 		read_value(&db, pidx_delta_key(TEST_ACTOR, 1)).await?,
 		Some(8_u64.to_be_bytes().to_vec())
 	);
+
+	Ok(())
+}
+
+#[tokio::test(start_paused = true)]
+async fn commit_publishes_compaction_trigger_with_throttle() -> Result<()> {
+	let db = Arc::new(test_db().await?);
+	let ups = test_ups();
+	let mut sub = ups.queue_subscribe(SqliteCompactSubject, "compactor").await?;
+	seed(
+		&db,
+		vec![
+			(meta_head_key(TEST_ACTOR), encode_db_head(head(31, 1))?),
+			(
+				meta_compact_key(TEST_ACTOR),
+				encode_meta_compact(MetaCompact {
+					materialized_txid: 0,
+				})?,
+			),
+		],
+	)
+	.await?;
+	db.run(|tx| async move {
+		quota::atomic_add(&tx, TEST_ACTOR, 1_000);
+		Ok(())
+	})
+	.await?;
+
+	let actor_db = ActorDb::new(db, ups, TEST_ACTOR.to_string(), NodeId::new());
+	actor_db.commit(vec![page(1, 0x11)], 1, 5_000).await?;
+	let first = next_trigger(&mut sub).await?;
+	assert_eq!(first.actor_id, TEST_ACTOR);
+	assert!(first.commit_bytes_since_rollup > 0);
+
+	actor_db.commit(vec![page(1, 0x22)], 1, 5_100).await?;
+	assert_no_trigger(&mut sub).await?;
+
+	tokio::time::advance(Duration::from_millis(quota::TRIGGER_MAX_SILENCE_MS + 1)).await;
+	actor_db.commit(vec![page(1, 0x33)], 1, 5_200).await?;
+	let after_silence = next_trigger(&mut sub).await?;
+	assert_eq!(after_silence.actor_id, TEST_ACTOR);
+
+	Ok(())
+}
+
+async fn next_trigger(
+	sub: &mut universalpubsub::Subscriber,
+) -> Result<sqlite_storage::compactor::SqliteCompactPayload> {
+	let msg = tokio::time::timeout(Duration::from_secs(1), sub.next())
+		.await?
+		.expect("subscriber should receive");
+	let NextOutput::Message(msg) = msg else {
+		panic!("subscriber unexpectedly unsubscribed");
+	};
+
+	decode_compact_payload(&msg.payload)
+}
+
+async fn assert_no_trigger(sub: &mut universalpubsub::Subscriber) -> Result<()> {
+	let trigger = tokio::time::timeout(Duration::from_millis(1), sub.next()).await;
+	assert!(trigger.is_err(), "trigger should be throttled");
 
 	Ok(())
 }

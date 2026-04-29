@@ -1,6 +1,6 @@
 //! Single-shot commit path for the stateless sqlite-storage pump.
 
-use std::collections::BTreeSet;
+use std::{collections::BTreeSet, time::Duration};
 
 use anyhow::{Context, Result};
 use futures_util::TryStreamExt;
@@ -16,7 +16,7 @@ use crate::pump::{
 	ltx::{LtxHeader, encode_ltx_v3},
 	metrics,
 	quota,
-	types::{DBHead, DirtyPage, decode_db_head, encode_db_head},
+	types::{DBHead, DirtyPage, decode_db_head, decode_meta_compact, encode_db_head},
 };
 
 const DELTA_CHUNK_BYTES: usize = 10_000;
@@ -64,6 +64,13 @@ impl ActorDb {
 						.map(decode_db_head)
 						.transpose()
 						.context("decode current sqlite db head")?;
+					let materialized_txid = tx_get_value(&tx, &keys::meta_compact_key(&actor_id), Snapshot)
+						.await?
+						.as_deref()
+						.map(decode_meta_compact)
+						.transpose()
+						.context("decode sqlite compact meta for trigger")?
+						.map_or(0, |compact| compact.materialized_txid);
 					let previous_db_size_pages =
 						previous_head.as_ref().map_or(db_size_pages, |head| head.db_size_pages);
 					let txid = match previous_head.as_ref() {
@@ -150,6 +157,7 @@ impl ActorDb {
 
 					Ok(CommitTxResult {
 						txid,
+						materialized_txid,
 						dirty_pgnos,
 						truncated_pgnos: truncate_cleanup.truncated_pgnos,
 						added_bytes,
@@ -173,12 +181,54 @@ impl ActorDb {
 			}
 		}
 
+		self.publish_compact_trigger_if_needed(result.txid, result.materialized_txid);
+
 		Ok(())
+	}
+
+	fn publish_compact_trigger_if_needed(&self, head_txid: u64, materialized_txid: u64) {
+		let Some(delta_count) = head_txid.checked_sub(materialized_txid) else {
+			return;
+		};
+		if delta_count < quota::COMPACTION_DELTA_THRESHOLD {
+			return;
+		}
+
+		let now = tokio::time::Instant::now();
+		let should_publish = {
+			let mut last_trigger_at = self.last_trigger_at.lock();
+			let should_publish = last_trigger_at.is_none_or(|last| {
+				now.duration_since(last) >= Duration::from_millis(quota::TRIGGER_THROTTLE_MS)
+					|| now.duration_since(last)
+						> Duration::from_millis(quota::TRIGGER_MAX_SILENCE_MS)
+			});
+			if should_publish {
+				*last_trigger_at = Some(now);
+			}
+			should_publish
+		};
+
+		if should_publish {
+			let (commit_bytes_since_rollup, read_bytes_since_rollup) =
+				self.take_metering_snapshot();
+			crate::compactor::publish_compact_payload_with_node_id(
+				&self.ups,
+				crate::compactor::SqliteCompactPayload {
+					actor_id: self.actor_id.clone(),
+					namespace_id: None,
+					actor_name: None,
+					commit_bytes_since_rollup,
+					read_bytes_since_rollup,
+				},
+				self.node_id,
+			);
+		}
 	}
 }
 
 struct CommitTxResult {
 	txid: u64,
+	materialized_txid: u64,
 	dirty_pgnos: BTreeSet<u32>,
 	truncated_pgnos: Vec<u32>,
 	added_bytes: i64,

@@ -4,6 +4,7 @@ use universaldb::{options::MutationType, utils::IsolationLevel::Snapshot};
 use crate::pump::{error::SqliteStorageError, keys};
 
 pub const SQLITE_MAX_STORAGE_BYTES: i64 = 10 * 1024 * 1024 * 1024;
+pub const COMPACTION_DELTA_THRESHOLD: u64 = 32;
 pub const TRIGGER_THROTTLE_MS: u64 = 500;
 pub const TRIGGER_MAX_SILENCE_MS: u64 = 30_000;
 
