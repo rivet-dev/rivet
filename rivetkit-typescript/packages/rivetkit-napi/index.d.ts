@@ -92,14 +92,6 @@ export interface QueryResult {
   columns: Array<string>
   rows: Array<Array<any>>
 }
-export interface JsSqliteVfsMetrics {
-  requestBuildNs: number
-  serializeNs: number
-  transportNs: number
-  stateUpdateNs: number
-  totalNs: number
-  commitCount: number
-}
 export interface JsQueueNextOptions {
   names?: Array<string>
   timeoutMs?: number
@@ -246,7 +238,6 @@ export declare class ConnHandle {
 }
 export declare class JsNativeDatabase {
   takeLastKvError(): string | null
-  getSqliteVfsMetrics(): JsSqliteVfsMetrics | null
   run(sql: string, params?: Array<JsBindParam> | undefined | null): Promise<ExecuteResult>
   query(sql: string, params?: Array<JsBindParam> | undefined | null): Promise<QueryResult>
   exec(sql: string): Promise<QueryResult>

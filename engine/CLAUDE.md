@@ -49,6 +49,10 @@ Use `test-snapshot-gen` to generate and load RocksDB snapshots of the full UDB K
 
 - If a full engine test sweep fails during workflow-worker startup with `ActiveWorkerIdxKey` and `bad code, found 2`, treat it as a sporadic harness issue and retry the affected test once.
 
+## Metrics
+
+- RivetKit core exposes per-actor Prometheus metrics at `/gateway/<actor_id>/metrics`, gated by `_RIVET_METRICS_TOKEN`; prefer this endpoint for actor and VFS performance tuning metrics.
+
 ## SQLite storage tests
 
 - In `sqlite-storage` failure-injection tests, inspect state with `MemoryStore::snapshot()` because store calls still consume the `fail_after_ops` budget after the first injected error.

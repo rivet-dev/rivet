@@ -106,6 +106,10 @@ impl CompactionCoordinator {
 }
 
 async fn default_compaction_worker(actor_id: String, engine: Arc<SqliteEngine>) {
+	if std::env::var("RIVET_SQLITE_DISABLE_COMPACTION").is_ok() {
+		tracing::debug!(%actor_id, "sqlite compaction disabled by environment");
+		return;
+	}
 	if let Err(err) = engine.compact_default_batch(&actor_id).await {
 		tracing::warn!(?err, %actor_id, "sqlite compaction worker failed");
 	}

@@ -5,7 +5,7 @@ use std::sync::atomic::AtomicUsize;
 
 use anyhow::{Context, Result};
 use scc::{HashMap, hash_map::Entry};
-use tokio::sync::mpsc;
+use tokio::sync::{Mutex, mpsc};
 use universaldb::Subspace;
 
 use crate::keys::{meta_key, pidx_delta_prefix};
@@ -21,6 +21,7 @@ pub struct SqliteEngine {
 	pub open_dbs: HashMap<String, OpenDb>,
 	pub page_indices: HashMap<String, DeltaPageIndex>,
 	pub pending_stages: HashMap<(String, u64), PendingStage>,
+	pub actor_op_locks: HashMap<String, Arc<Mutex<()>>>,
 	pub compaction_tx: mpsc::UnboundedSender<String>,
 	pub metrics: SqliteStorageMetrics,
 }
@@ -50,6 +51,7 @@ impl SqliteEngine {
 			open_dbs: HashMap::default(),
 			page_indices: HashMap::default(),
 			pending_stages: HashMap::default(),
+			actor_op_locks: HashMap::default(),
 			compaction_tx,
 			metrics: SqliteStorageMetrics,
 		};
@@ -59,6 +61,13 @@ impl SqliteEngine {
 
 	pub fn metrics(&self) -> &SqliteStorageMetrics {
 		&self.metrics
+	}
+
+	pub async fn actor_op_lock(&self, actor_id: &str) -> Arc<Mutex<()>> {
+		match self.actor_op_locks.entry_async(actor_id.to_string()).await {
+			Entry::Occupied(entry) => Arc::clone(entry.get()),
+			Entry::Vacant(entry) => Arc::clone(entry.insert_entry(Arc::new(Mutex::new(()))).get()),
+		}
 	}
 
 	pub async fn load_head(&self, actor_id: &str) -> Result<DBHead> {

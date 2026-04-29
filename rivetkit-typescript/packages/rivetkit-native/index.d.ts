@@ -17,14 +17,6 @@ export interface QueryResult {
   columns: Array<string>
   rows: Array<Array<any>>
 }
-export interface JsSqliteVfsMetrics {
-  requestBuildNs: number
-  serializeNs: number
-  transportNs: number
-  stateUpdateNs: number
-  totalNs: number
-  commitCount: number
-}
 /** Open a native SQLite database backed by the envoy's KV channel. */
 export declare function openDatabaseFromEnvoy(jsHandle: JsEnvoyHandle, actorId: string, preloadedEntries?: Array<JsKvEntry> | undefined | null): Promise<JsNativeDatabase>
 /** Configuration for starting the native envoy client. */
@@ -77,7 +69,6 @@ export declare function startEnvoyJs(config: JsEnvoyConfig, eventCallback: (even
 /** Native SQLite database handle exposed to JavaScript. */
 export declare class JsNativeDatabase {
   takeLastKvError(): string | null
-  getSqliteVfsMetrics(): JsSqliteVfsMetrics | null
   run(sql: string, params?: Array<JsBindParam> | undefined | null): Promise<ExecuteResult>
   query(sql: string, params?: Array<JsBindParam> | undefined | null): Promise<QueryResult>
   exec(sql: string): Promise<QueryResult>

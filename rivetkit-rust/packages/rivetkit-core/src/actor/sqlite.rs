@@ -19,7 +19,7 @@ pub use rivetkit_sqlite::query::{BindParam, ColumnValue, ExecResult, QueryResult
 use rivetkit_sqlite::{
 	database::{NativeDatabaseHandle, open_database_from_envoy},
 	query::{exec_statements, execute_statement, query_statement},
-	vfs::SqliteVfsMetricsSnapshot,
+	vfs::SqliteVfsMetrics,
 };
 
 #[cfg(not(feature = "sqlite"))]
@@ -55,17 +55,6 @@ pub enum ColumnValue {
 	Blob(Vec<u8>),
 }
 
-#[cfg(not(feature = "sqlite"))]
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct SqliteVfsMetricsSnapshot {
-	pub request_build_ns: u64,
-	pub serialize_ns: u64,
-	pub transport_ns: u64,
-	pub state_update_ns: u64,
-	pub total_ns: u64,
-	pub commit_count: u64,
-}
-
 #[derive(Clone)]
 pub struct SqliteRuntimeConfig {
 	pub handle: EnvoyHandle,
@@ -86,6 +75,8 @@ pub struct SqliteDb {
 	// Forced-sync: native SQLite handles are used inside spawn_blocking and
 	// synchronous diagnostic accessors.
 	db: Arc<Mutex<Option<NativeDatabaseHandle>>>,
+	#[cfg(feature = "sqlite")]
+	vfs_metrics: Option<Arc<dyn SqliteVfsMetrics>>,
 }
 
 impl SqliteDb {
@@ -102,7 +93,14 @@ impl SqliteDb {
 			enabled,
 			#[cfg(feature = "sqlite")]
 			db: Default::default(),
+			#[cfg(feature = "sqlite")]
+			vfs_metrics: None,
 		}
+	}
+
+	#[cfg(feature = "sqlite")]
+	pub(crate) fn set_vfs_metrics(&mut self, metrics: Arc<dyn SqliteVfsMetrics>) {
+		self.vfs_metrics = Some(metrics);
 	}
 
 	pub fn is_enabled(&self) -> bool {
@@ -154,10 +152,11 @@ impl SqliteDb {
 	pub async fn open(&self) -> Result<()> {
 		#[cfg(feature = "sqlite")]
 		{
-			let config = self.runtime_config()?;
-			let db = self.db.clone();
-			let rt_handle = tokio::runtime::Handle::try_current()
-				.context("open sqlite database requires a tokio runtime")?;
+				let config = self.runtime_config()?;
+				let db = self.db.clone();
+				let vfs_metrics = self.vfs_metrics.clone();
+				let rt_handle = tokio::runtime::Handle::try_current()
+					.context("open sqlite database requires a tokio runtime")?;
 
 			tokio::task::spawn_blocking(move || {
 				let mut guard = db.lock();
@@ -167,10 +166,11 @@ impl SqliteDb {
 
 				let native_db = open_database_from_envoy(
 					config.handle,
-					config.actor_id,
-					config.startup_data,
-					rt_handle,
-				)?;
+						config.actor_id,
+						config.startup_data,
+						rt_handle,
+						vfs_metrics,
+					)?;
 				*guard = Some(native_db);
 				Ok(())
 			})
@@ -294,21 +294,6 @@ impl SqliteDb {
 				.lock()
 				.as_ref()
 				.and_then(NativeDatabaseHandle::take_last_kv_error)
-		}
-
-		#[cfg(not(feature = "sqlite"))]
-		{
-			None
-		}
-	}
-
-	pub fn metrics(&self) -> Option<SqliteVfsMetricsSnapshot> {
-		#[cfg(feature = "sqlite")]
-		{
-			self.db
-				.lock()
-				.as_ref()
-				.map(NativeDatabaseHandle::sqlite_vfs_metrics)
 		}
 
 		#[cfg(not(feature = "sqlite"))]

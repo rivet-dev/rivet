@@ -92,6 +92,8 @@ mod test_hooks {
 
 impl SqliteEngine {
 	pub async fn compact_shard(&self, actor_id: &str, shard_id: u32) -> Result<bool> {
+		let actor_lock = self.actor_op_lock(actor_id).await;
+		let _actor_guard = actor_lock.lock().await;
 		let meta_bytes = udb::get_value(
 			&self.db,
 			&self.subspace,
@@ -1045,7 +1047,7 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn compact_shard_aborts_and_retries_after_concurrent_commit() -> Result<()> {
+	async fn compact_shard_serializes_with_concurrent_commit() -> Result<()> {
 		let (db, subspace) = test_db().await?;
 		let mut head = seeded_head();
 		head.head_txid = 1;
@@ -1076,20 +1078,26 @@ mod tests {
 
 		reached.notified().await;
 
-		let commit = engine
-			.commit(TEST_ACTOR, commit_request(head.generation, 1, &[(2, 0x22)]))
-			.await?;
-		assert_eq!(commit.txid, 2);
+		let generation = head.generation;
+		let commit_engine = std::sync::Arc::clone(&engine);
+		let commit_task = tokio::spawn(async move {
+			commit_engine
+				.commit(TEST_ACTOR, commit_request(generation, 1, &[(2, 0x22)]))
+				.await
+		});
 		release.notify_waiters();
 
-		assert!(!compact_task.await??);
+		assert!(compact_task.await??);
+		let commit = commit_task.await??;
+		assert_eq!(commit.txid, 2);
 		let stored_head = decode_db_head(
 			&read_value(engine.as_ref(), meta_key(TEST_ACTOR))
 				.await?
-				.expect("meta should exist after concurrent commit"),
+				.expect("meta should exist after serialized commit"),
 		)?;
 		assert_eq!(stored_head.head_txid, 2);
 		assert_eq!(stored_head.next_txid, 3);
+		assert_eq!(stored_head.materialized_txid, 1);
 		assert_eq!(
 			engine
 				.get_pages(TEST_ACTOR, head.generation, vec![1, 2])

@@ -27,6 +27,8 @@ impl SqliteEngine {
 		if shards_per_batch == 0 {
 			return Ok(0);
 		}
+		let actor_lock = self.actor_op_lock(actor_id).await;
+		let _actor_guard = actor_lock.lock().await;
 
 		let head = self.load_head(actor_id).await?;
 		let mut pidx_rows = load_pidx_rows(self, actor_id).await?;
