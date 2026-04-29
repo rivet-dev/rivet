@@ -21,9 +21,8 @@ use crate::kv::{
 };
 use crate::sqlite::{
 	SqliteRequest, SqliteRequestEntry, SqliteResponse, cleanup_old_sqlite_requests,
-	handle_sqlite_commit_finalize_response, handle_sqlite_commit_response,
-	handle_sqlite_commit_stage_begin_response, handle_sqlite_commit_stage_response,
-	handle_sqlite_get_pages_response, handle_sqlite_request, process_unsent_sqlite_requests,
+	handle_sqlite_commit_response, handle_sqlite_get_pages_response, handle_sqlite_request,
+	process_unsent_sqlite_requests,
 };
 use crate::tunnel::{
 	handle_tunnel_message, resend_buffered_tunnel_messages, send_hibernatable_ws_message_ack,
@@ -501,21 +500,12 @@ async fn handle_conn_message(
 		protocol::ToEnvoy::ToEnvoySqliteGetPagesResponse(response) => {
 			handle_sqlite_get_pages_response(ctx, response).await;
 		}
-		protocol::ToEnvoy::ToEnvoySqliteCommitResponse(response) => {
-			handle_sqlite_commit_response(ctx, response).await;
-		}
-		protocol::ToEnvoy::ToEnvoySqliteCommitStageBeginResponse(response) => {
-			handle_sqlite_commit_stage_begin_response(ctx, response).await;
-		}
-		protocol::ToEnvoy::ToEnvoySqliteCommitStageResponse(response) => {
-			handle_sqlite_commit_stage_response(ctx, response).await;
-		}
-		protocol::ToEnvoy::ToEnvoySqliteCommitFinalizeResponse(response) => {
-			handle_sqlite_commit_finalize_response(ctx, response).await;
-		}
-		protocol::ToEnvoy::ToEnvoyTunnelMessage(tunnel_msg) => {
-			handle_tunnel_message(ctx, tunnel_msg).await;
-		}
+			protocol::ToEnvoy::ToEnvoySqliteCommitResponse(response) => {
+				handle_sqlite_commit_response(ctx, response).await;
+			}
+			protocol::ToEnvoy::ToEnvoyTunnelMessage(tunnel_msg) => {
+				handle_tunnel_message(ctx, tunnel_msg).await;
+			}
 		protocol::ToEnvoy::ToEnvoyPing(_) => {
 			// Should be handled by connection task
 		}

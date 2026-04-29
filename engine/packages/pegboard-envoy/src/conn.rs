@@ -17,7 +17,6 @@ use rivet_pools::NodeId;
 use rivet_types::runner_configs::RunnerConfigKind;
 use scc::HashMap;
 use sqlite_storage::pump::ActorDb;
-use sqlite_storage_legacy::engine::SqliteEngine;
 use universaldb::prelude::*;
 use universalpubsub::PubSub;
 use vbare::OwnedVersionedData;
@@ -31,7 +30,6 @@ pub struct Conn {
 	pub protocol_version: u16,
 	pub ws_handle: WebSocketHandle,
 	pub authorized_tunnel_routes: HashMap<(protocol::GatewayId, protocol::RequestId), ()>,
-	pub sqlite_engine: Arc<SqliteEngine>,
 	pub udb: Arc<universaldb::Database>,
 	pub ups: Arc<PubSub>,
 	pub node_id: NodeId,
@@ -49,7 +47,6 @@ pub struct Conn {
 pub async fn init_conn(
 	ctx: &StandaloneCtx,
 	ws_handle: WebSocketHandle,
-	sqlite_engine: Arc<SqliteEngine>,
 	UrlData {
 		protocol_version,
 		namespace,
@@ -313,11 +310,10 @@ pub async fn init_conn(
 		namespace_id: namespace.namespace_id,
 		pool_name,
 		envoy_key,
-		protocol_version,
-		ws_handle,
-		authorized_tunnel_routes: HashMap::new(),
-		sqlite_engine,
-		udb: conn_udb,
+			protocol_version,
+			ws_handle,
+			authorized_tunnel_routes: HashMap::new(),
+			udb: conn_udb,
 		ups: conn_ups,
 		node_id,
 		actor_dbs: HashMap::new(),

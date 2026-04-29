@@ -125,7 +125,6 @@ pub fn create_actor(
 	config: protocol::ActorConfig,
 	hibernating_requests: Vec<protocol::HibernatingRequest>,
 	preloaded_kv: Option<protocol::PreloadedKv>,
-	sqlite_startup_data: Option<protocol::SqliteStartupData>,
 ) -> (mpsc::UnboundedSender<ToActor>, Arc<AsyncCounter>) {
 	let (tx, rx) = mpsc::unbounded_channel();
 	let active_http_request_count = Arc::new(AsyncCounter::new());
@@ -136,7 +135,6 @@ pub fn create_actor(
 		config,
 		hibernating_requests,
 		preloaded_kv,
-		sqlite_startup_data,
 		rx,
 		active_http_request_count.clone(),
 	));
@@ -158,7 +156,6 @@ async fn actor_inner(
 	config: protocol::ActorConfig,
 	hibernating_requests: Vec<protocol::HibernatingRequest>,
 	preloaded_kv: Option<protocol::PreloadedKv>,
-	sqlite_startup_data: Option<protocol::SqliteStartupData>,
 	mut rx: mpsc::UnboundedReceiver<ToActor>,
 	active_http_request_count: Arc<AsyncCounter>,
 ) {
@@ -191,11 +188,10 @@ async fn actor_inner(
 		.on_actor_start(
 			handle.clone(),
 			actor_id.clone(),
-			generation,
-			config,
-			preloaded_kv,
-			sqlite_startup_data,
-		)
+				generation,
+				config,
+				preloaded_kv,
+			)
 		.await;
 
 	if let Err(error) = start_result {
@@ -1455,11 +1451,10 @@ mod tests {
 			&self,
 			_handle: EnvoyHandle,
 			_actor_id: String,
-			_generation: u32,
-			_config: protocol::ActorConfig,
-			_preloaded_kv: Option<protocol::PreloadedKv>,
-			_sqlite_startup_data: Option<protocol::SqliteStartupData>,
-		) -> BoxFuture<anyhow::Result<()>> {
+				_generation: u32,
+				_config: protocol::ActorConfig,
+				_preloaded_kv: Option<protocol::PreloadedKv>,
+			) -> BoxFuture<anyhow::Result<()>> {
 			Box::pin(async { Ok(()) })
 		}
 
@@ -1556,11 +1551,10 @@ mod tests {
 			&self,
 			_handle: EnvoyHandle,
 			_actor_id: String,
-			_generation: u32,
-			_config: protocol::ActorConfig,
-			_preloaded_kv: Option<protocol::PreloadedKv>,
-			_sqlite_startup_data: Option<protocol::SqliteStartupData>,
-		) -> BoxFuture<anyhow::Result<()>> {
+				_generation: u32,
+				_config: protocol::ActorConfig,
+				_preloaded_kv: Option<protocol::PreloadedKv>,
+			) -> BoxFuture<anyhow::Result<()>> {
 			Box::pin(async { Ok(()) })
 		}
 

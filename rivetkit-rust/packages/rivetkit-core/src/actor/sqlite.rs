@@ -70,14 +70,12 @@ pub struct SqliteVfsMetricsSnapshot {
 pub struct SqliteRuntimeConfig {
 	pub handle: EnvoyHandle,
 	pub actor_id: String,
-	pub startup_data: Option<protocol::SqliteStartupData>,
 }
 
 #[derive(Clone, Default)]
 pub struct SqliteDb {
 	handle: Option<EnvoyHandle>,
 	actor_id: Option<String>,
-	startup_data: Option<protocol::SqliteStartupData>,
 	/// Mirrors the user's actor-config `db({...})` declaration. The envoy
 	/// always sets up sqlite storage under the hood, so handle/actor_id are
 	/// not a reliable signal for whether the user opted in; this flag is.
@@ -92,13 +90,11 @@ impl SqliteDb {
 	pub fn new(
 		handle: EnvoyHandle,
 		actor_id: impl Into<String>,
-		startup_data: Option<protocol::SqliteStartupData>,
 		enabled: bool,
 	) -> Self {
 		Self {
 			handle: Some(handle),
 			actor_id: Some(actor_id.into()),
-			startup_data,
 			enabled,
 			#[cfg(feature = "sqlite")]
 			db: Default::default(),
@@ -123,34 +119,6 @@ impl SqliteDb {
 		self.handle()?.sqlite_commit(request).await
 	}
 
-	pub async fn commit_stage_begin(
-		&self,
-		request: protocol::SqliteCommitStageBeginRequest,
-	) -> Result<protocol::SqliteCommitStageBeginResponse> {
-		self.handle()?.sqlite_commit_stage_begin(request).await
-	}
-
-	pub async fn commit_stage(
-		&self,
-		request: protocol::SqliteCommitStageRequest,
-	) -> Result<protocol::SqliteCommitStageResponse> {
-		self.handle()?.sqlite_commit_stage(request).await
-	}
-
-	pub fn commit_stage_fire_and_forget(
-		&self,
-		request: protocol::SqliteCommitStageRequest,
-	) -> Result<()> {
-		self.handle()?.sqlite_commit_stage_fire_and_forget(request)
-	}
-
-	pub async fn commit_finalize(
-		&self,
-		request: protocol::SqliteCommitFinalizeRequest,
-	) -> Result<protocol::SqliteCommitFinalizeResponse> {
-		self.handle()?.sqlite_commit_finalize(request).await
-	}
-
 	pub async fn open(&self) -> Result<()> {
 		#[cfg(feature = "sqlite")]
 		{
@@ -168,7 +136,6 @@ impl SqliteDb {
 				let native_db = open_database_from_envoy(
 					config.handle,
 					config.actor_id,
-					config.startup_data,
 					rt_handle,
 				)?;
 				*guard = Some(native_db);
@@ -324,7 +291,6 @@ impl SqliteDb {
 				.actor_id
 				.clone()
 				.ok_or_else(|| sqlite_not_configured("actor id"))?,
-			startup_data: self.startup_data.clone(),
 		})
 	}
 

@@ -27,6 +27,10 @@ Started: Wed Apr 29 04:36:56 AM PDT 2026
 - `pegboard-envoy` SQLite `get_pages` and `commit` handlers lazily populate a per-conn `actor_dbs` cache and must not use it as authoritative actor presence tracking.
 - `pegboard-envoy` should pass `CommandStartActor` through without local SQLite side effects; only `CommandStopActor` touches the per-conn `actor_dbs` cache.
 - Pegboard actor destroy should call `actor_sqlite::clear_v2_storage_for_destroy` inside the same `ClearKv` UDB transaction as actor KV deletion so stateless SQLite META/PIDX/DELTA/SHARD and compactor lease keys are removed atomically.
+- The envoy protocol crate is `rivet-envoy-protocol` at `engine/sdks/rust/envoy-protocol`; its build script derives `PROTOCOL_VERSION` from the highest `engine/sdks/schemas/envoy-protocol/v*.bare` file.
+- Checked-in TS envoy-protocol output lives at `engine/sdks/typescript/envoy-protocol/src/index.ts`; if Rust build.rs skips TS generation because `@bare-ts/tools` is missing, regenerate it with the same BARE schema and post-process import/assert/VERSION like build.rs.
+- Stateless SQLite v3 envoy protocol has only `get_pages` and single-shot `commit`; remove startup-data and commit-stage plumbing from envoy-client, pegboard-envoy, pegboard-outbound, rivetkit-core, and rivetkit-sqlite together.
+- Protocol changes that touch `rivetkit-sqlite/src/vfs.rs` should include `cargo test -p rivetkit-sqlite --lib --no-run` because cfg(test) transport doubles can reference removed wire types even when `cargo check --workspace` passes.
 
 ## 2026-04-29 04:44:52 PDT - US-001
 - Implemented a UUID-backed `NodeId` type and stored a generated value on each `Pools` instance.
@@ -117,6 +121,18 @@ Started: Wed Apr 29 04:36:56 AM PDT 2026
   - Keep commit's steady-state UDB reads to `/META/head`; a cold quota cache is the only path that should add the `/META/quota` read.
   - Commit can split encoded LTX bytes across `DELTA/{txid}/{chunk_idx}` rows and the existing read path will concatenate them by prefix scan.
   - Do not warm a cold PIDX cache from commit alone; otherwise future reads can skip the full PIDX scan and miss older rows.
+---
+## 2026-04-29 07:14:10 PDT - US-024
+- Added envoy-protocol `v3.bare` with stateless SQLite `get_pages` and single-shot `commit`, optional debug fence fields, and no startup/open/close/staged-commit operation types.
+- Bumped Rust and TypeScript latest protocol exports to v3, updated vbare version handling, and added protocol round-trip coverage for requests, responses, optional fields, version constants, and removed op names.
+- Removed old SQLite startup-data and staged-commit plumbing from envoy-client, pegboard-envoy, pegboard-outbound, rivetkit-core, and rivetkit-sqlite so the workspace compiles against the v3 protocol.
+- Verified `cargo check -p rivet-envoy-protocol`, `cargo test -p rivet-envoy-protocol`, `cargo check --workspace`, `cargo test -p rivetkit-sqlite --lib --no-run`, `pnpm --filter @rivetkit/engine-envoy-protocol check-types`, and `git diff --check`.
+- Files changed: `engine/sdks/schemas/envoy-protocol/v3.bare`, `engine/sdks/rust/envoy-protocol/**`, `engine/sdks/typescript/envoy-protocol/src/index.ts`, `engine/sdks/rust/envoy-client/**`, `engine/packages/{pegboard-envoy,pegboard-outbound,pegboard,engine}/**`, `rivetkit-rust/packages/{rivetkit-core,rivetkit-sqlite}/**`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
+- **Learnings for future iterations:**
+  - The PRD path names for envoy-protocol were stale; use `engine/sdks/rust/envoy-protocol` and package name `rivet-envoy-protocol`.
+  - The Rust build can pass while checked-in TS protocol output is stale if `node_modules/@bare-ts/tools` is absent; regenerate or typecheck the TS package explicitly.
+  - Removing SQLite startup data requires updating callback signatures in tests and runtime callbacks, not just the protocol schema.
+  - `rivetkit-sqlite` has test-only transport doubles in `src/vfs.rs`; compile them with `cargo test -p rivetkit-sqlite --lib --no-run` after changing envoy SQLite protocol shapes.
 ---
 ## 2026-04-29 05:18:24 PDT - US-010
 - Added stateless pump Prometheus metrics for commit/get_pages duration, dirty page count, requested page count, and PIDX cold scans, all labeled by `node_id`.

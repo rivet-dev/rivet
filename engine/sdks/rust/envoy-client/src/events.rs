@@ -99,11 +99,10 @@ mod tests {
 			&self,
 			_handle: EnvoyHandle,
 			_actor_id: String,
-			_generation: u32,
-			_config: protocol::ActorConfig,
-			_preloaded_kv: Option<protocol::PreloadedKv>,
-			_sqlite_startup_data: Option<protocol::SqliteStartupData>,
-		) -> BoxFuture<anyhow::Result<()>> {
+				_generation: u32,
+				_config: protocol::ActorConfig,
+				_preloaded_kv: Option<protocol::PreloadedKv>,
+			) -> BoxFuture<anyhow::Result<()>> {
 			Box::pin(async { Ok(()) })
 		}
 

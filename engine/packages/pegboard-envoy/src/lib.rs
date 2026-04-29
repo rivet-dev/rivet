@@ -81,10 +81,6 @@ impl CustomServeTrait for PegboardEnvoyWs {
 
 		tracing::debug!(path=%req_ctx.path(), "tunnel ws connection established");
 
-		let sqlite_engine = sqlite_runtime::shared_engine(&ctx)
-			.await
-			.context("failed to initialize sqlite dispatch runtime")?;
-
 		let namespace_name = url_data.namespace.clone();
 		let namespace = ctx
 			.op(namespace::ops::resolve_for_name_global::Input {
@@ -125,7 +121,7 @@ impl CustomServeTrait for PegboardEnvoyWs {
 		})?;
 
 		// Create the connection.
-		let conn = conn::init_conn(&ctx, ws_handle.clone(), sqlite_engine, url_data)
+		let conn = conn::init_conn(&ctx, ws_handle.clone(), url_data)
 			.await
 			.context("failed to initialize envoy connection")?;
 

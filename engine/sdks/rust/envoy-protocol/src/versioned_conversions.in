@@ -1,0 +1,532 @@
+macro_rules! impl_pair_conversions {
+	(
+		$from:ident, $to:ident,
+		$stop_actor_reason:ident,
+		$stop_code:ident,
+		$actor_intent:ident,
+		$actor_state:ident,
+		$event:ident,
+		$event_wrapper:ident,
+		$to_envoy_ack_events:ident,
+		$to_rivet_ack_commands:ident,
+		$kv_list_query:ident,
+		$kv_request_data:ident,
+		$kv_response_data:ident,
+		$to_envoy_kv_response:ident,
+		$to_rivet_kv_request:ident,
+		$to_rivet_metadata:ident,
+		$message_id:ident,
+		$to_rivet_tunnel_message_kind:ident,
+		$to_rivet_tunnel_message:ident,
+		$to_envoy_tunnel_message_kind:ident,
+		$to_envoy_tunnel_message:ident
+	) => {
+		#[allow(dead_code)]
+		fn $stop_actor_reason(reason: $from::StopActorReason) -> $to::StopActorReason {
+			match reason {
+				$from::StopActorReason::SleepIntent => $to::StopActorReason::SleepIntent,
+				$from::StopActorReason::StopIntent => $to::StopActorReason::StopIntent,
+				$from::StopActorReason::Destroy => $to::StopActorReason::Destroy,
+				$from::StopActorReason::GoingAway => $to::StopActorReason::GoingAway,
+				$from::StopActorReason::Lost => $to::StopActorReason::Lost,
+			}
+		}
+
+		#[allow(dead_code)]
+		fn $stop_code(code: $from::StopCode) -> $to::StopCode {
+			match code {
+				$from::StopCode::Ok => $to::StopCode::Ok,
+				$from::StopCode::Error => $to::StopCode::Error,
+			}
+		}
+
+		#[allow(dead_code)]
+		fn $actor_intent(intent: $from::ActorIntent) -> $to::ActorIntent {
+			match intent {
+				$from::ActorIntent::ActorIntentSleep => $to::ActorIntent::ActorIntentSleep,
+				$from::ActorIntent::ActorIntentStop => $to::ActorIntent::ActorIntentStop,
+			}
+		}
+
+		#[allow(dead_code)]
+		fn $actor_state(state: $from::ActorState) -> $to::ActorState {
+			match state {
+				$from::ActorState::ActorStateRunning => $to::ActorState::ActorStateRunning,
+				$from::ActorState::ActorStateStopped(stopped) => {
+					$to::ActorState::ActorStateStopped($to::ActorStateStopped {
+						code: $stop_code(stopped.code),
+						message: stopped.message,
+					})
+				}
+			}
+		}
+
+		#[allow(dead_code)]
+		fn $event(event: $from::Event) -> $to::Event {
+			match event {
+				$from::Event::EventActorIntent(intent) => {
+					$to::Event::EventActorIntent($to::EventActorIntent {
+						intent: $actor_intent(intent.intent),
+					})
+				}
+				$from::Event::EventActorStateUpdate(state) => {
+					$to::Event::EventActorStateUpdate($to::EventActorStateUpdate {
+						state: $actor_state(state.state),
+					})
+				}
+				$from::Event::EventActorSetAlarm(alarm) => {
+					$to::Event::EventActorSetAlarm($to::EventActorSetAlarm {
+						alarm_ts: alarm.alarm_ts,
+					})
+				}
+			}
+		}
+
+		#[allow(dead_code)]
+		fn $event_wrapper(wrapper: $from::EventWrapper) -> $to::EventWrapper {
+			$to::EventWrapper {
+				checkpoint: $to::ActorCheckpoint {
+					actor_id: wrapper.checkpoint.actor_id,
+					generation: wrapper.checkpoint.generation,
+					index: wrapper.checkpoint.index,
+				},
+				inner: $event(wrapper.inner),
+			}
+		}
+
+		#[allow(dead_code)]
+		fn $to_envoy_ack_events(ack: $from::ToEnvoyAckEvents) -> $to::ToEnvoyAckEvents {
+			$to::ToEnvoyAckEvents {
+				last_event_checkpoints: ack
+					.last_event_checkpoints
+					.into_iter()
+					.map(|checkpoint| $to::ActorCheckpoint {
+						actor_id: checkpoint.actor_id,
+						generation: checkpoint.generation,
+						index: checkpoint.index,
+					})
+					.collect(),
+			}
+		}
+
+		#[allow(dead_code)]
+		fn $to_rivet_ack_commands(ack: $from::ToRivetAckCommands) -> $to::ToRivetAckCommands {
+			$to::ToRivetAckCommands {
+				last_command_checkpoints: ack
+					.last_command_checkpoints
+					.into_iter()
+					.map(|checkpoint| $to::ActorCheckpoint {
+						actor_id: checkpoint.actor_id,
+						generation: checkpoint.generation,
+						index: checkpoint.index,
+					})
+					.collect(),
+			}
+		}
+
+		#[allow(dead_code)]
+		fn $kv_list_query(query: $from::KvListQuery) -> $to::KvListQuery {
+			match query {
+				$from::KvListQuery::KvListAllQuery => $to::KvListQuery::KvListAllQuery,
+				$from::KvListQuery::KvListRangeQuery(range) => {
+					$to::KvListQuery::KvListRangeQuery($to::KvListRangeQuery {
+						start: range.start,
+						end: range.end,
+						exclusive: range.exclusive,
+					})
+				}
+				$from::KvListQuery::KvListPrefixQuery(prefix) => {
+					$to::KvListQuery::KvListPrefixQuery($to::KvListPrefixQuery { key: prefix.key })
+				}
+			}
+		}
+
+		#[allow(dead_code)]
+		fn $kv_request_data(data: $from::KvRequestData) -> $to::KvRequestData {
+			match data {
+				$from::KvRequestData::KvGetRequest(request) => {
+					$to::KvRequestData::KvGetRequest($to::KvGetRequest { keys: request.keys })
+				}
+				$from::KvRequestData::KvListRequest(request) => {
+					$to::KvRequestData::KvListRequest($to::KvListRequest {
+						query: $kv_list_query(request.query),
+						reverse: request.reverse,
+						limit: request.limit,
+					})
+				}
+				$from::KvRequestData::KvPutRequest(request) => {
+					$to::KvRequestData::KvPutRequest($to::KvPutRequest {
+						keys: request.keys,
+						values: request.values,
+					})
+				}
+				$from::KvRequestData::KvDeleteRequest(request) => {
+					$to::KvRequestData::KvDeleteRequest($to::KvDeleteRequest {
+						keys: request.keys,
+					})
+				}
+				$from::KvRequestData::KvDeleteRangeRequest(request) => {
+					$to::KvRequestData::KvDeleteRangeRequest($to::KvDeleteRangeRequest {
+						start: request.start,
+						end: request.end,
+					})
+				}
+				$from::KvRequestData::KvDropRequest => $to::KvRequestData::KvDropRequest,
+			}
+		}
+
+		#[allow(dead_code)]
+		fn $kv_response_data(data: $from::KvResponseData) -> $to::KvResponseData {
+			match data {
+				$from::KvResponseData::KvErrorResponse(response) => {
+					$to::KvResponseData::KvErrorResponse($to::KvErrorResponse {
+						message: response.message,
+					})
+				}
+				$from::KvResponseData::KvGetResponse(response) => {
+					$to::KvResponseData::KvGetResponse($to::KvGetResponse {
+						keys: response.keys,
+						values: response.values,
+						metadata: response
+							.metadata
+							.into_iter()
+							.map(|metadata| $to::KvMetadata {
+								version: metadata.version,
+								update_ts: metadata.update_ts,
+							})
+							.collect(),
+					})
+				}
+				$from::KvResponseData::KvListResponse(response) => {
+					$to::KvResponseData::KvListResponse($to::KvListResponse {
+						keys: response.keys,
+						values: response.values,
+						metadata: response
+							.metadata
+							.into_iter()
+							.map(|metadata| $to::KvMetadata {
+								version: metadata.version,
+								update_ts: metadata.update_ts,
+							})
+							.collect(),
+					})
+				}
+				$from::KvResponseData::KvPutResponse => $to::KvResponseData::KvPutResponse,
+				$from::KvResponseData::KvDeleteResponse => $to::KvResponseData::KvDeleteResponse,
+				$from::KvResponseData::KvDropResponse => $to::KvResponseData::KvDropResponse,
+			}
+		}
+
+		#[allow(dead_code)]
+		fn $to_envoy_kv_response(response: $from::ToEnvoyKvResponse) -> $to::ToEnvoyKvResponse {
+			$to::ToEnvoyKvResponse {
+				request_id: response.request_id,
+				data: $kv_response_data(response.data),
+			}
+		}
+
+		#[allow(dead_code)]
+		fn $to_rivet_kv_request(request: $from::ToRivetKvRequest) -> $to::ToRivetKvRequest {
+			$to::ToRivetKvRequest {
+				actor_id: request.actor_id,
+				request_id: request.request_id,
+				data: $kv_request_data(request.data),
+			}
+		}
+
+		#[allow(dead_code)]
+		fn $to_rivet_metadata(metadata: $from::ToRivetMetadata) -> $to::ToRivetMetadata {
+			$to::ToRivetMetadata {
+				prepopulate_actor_names: metadata.prepopulate_actor_names.map(|actor_names| {
+					actor_names
+						.into_iter()
+						.map(|(name, actor_name)| {
+							(
+								name,
+								$to::ActorName {
+									metadata: actor_name.metadata,
+								},
+							)
+						})
+						.collect()
+				}),
+				metadata: metadata.metadata,
+			}
+		}
+
+		#[allow(dead_code)]
+		fn $message_id(message_id: $from::MessageId) -> $to::MessageId {
+			$to::MessageId {
+				gateway_id: message_id.gateway_id,
+				request_id: message_id.request_id,
+				message_index: message_id.message_index,
+			}
+		}
+
+		#[allow(dead_code)]
+		fn $to_rivet_tunnel_message_kind(
+			kind: $from::ToRivetTunnelMessageKind,
+		) -> $to::ToRivetTunnelMessageKind {
+			match kind {
+				$from::ToRivetTunnelMessageKind::ToRivetResponseStart(start) => {
+					$to::ToRivetTunnelMessageKind::ToRivetResponseStart($to::ToRivetResponseStart {
+						status: start.status,
+						headers: start.headers,
+						body: start.body,
+						stream: start.stream,
+					})
+				}
+				$from::ToRivetTunnelMessageKind::ToRivetResponseChunk(chunk) => {
+					$to::ToRivetTunnelMessageKind::ToRivetResponseChunk($to::ToRivetResponseChunk {
+						body: chunk.body,
+						finish: chunk.finish,
+					})
+				}
+				$from::ToRivetTunnelMessageKind::ToRivetResponseAbort => {
+					$to::ToRivetTunnelMessageKind::ToRivetResponseAbort
+				}
+				$from::ToRivetTunnelMessageKind::ToRivetWebSocketOpen(open) => {
+					$to::ToRivetTunnelMessageKind::ToRivetWebSocketOpen($to::ToRivetWebSocketOpen {
+						can_hibernate: open.can_hibernate,
+					})
+				}
+				$from::ToRivetTunnelMessageKind::ToRivetWebSocketMessage(message) => {
+					$to::ToRivetTunnelMessageKind::ToRivetWebSocketMessage(
+						$to::ToRivetWebSocketMessage {
+							data: message.data,
+							binary: message.binary,
+						},
+					)
+				}
+				$from::ToRivetTunnelMessageKind::ToRivetWebSocketMessageAck(ack) => {
+					$to::ToRivetTunnelMessageKind::ToRivetWebSocketMessageAck(
+						$to::ToRivetWebSocketMessageAck { index: ack.index },
+					)
+				}
+				$from::ToRivetTunnelMessageKind::ToRivetWebSocketClose(close) => {
+					$to::ToRivetTunnelMessageKind::ToRivetWebSocketClose(
+						$to::ToRivetWebSocketClose {
+							code: close.code,
+							reason: close.reason,
+							hibernate: close.hibernate,
+						},
+					)
+				}
+			}
+		}
+
+		#[allow(dead_code)]
+		fn $to_rivet_tunnel_message(
+			message: $from::ToRivetTunnelMessage,
+		) -> $to::ToRivetTunnelMessage {
+			$to::ToRivetTunnelMessage {
+				message_id: $message_id(message.message_id),
+				message_kind: $to_rivet_tunnel_message_kind(message.message_kind),
+			}
+		}
+
+		#[allow(dead_code)]
+		fn $to_envoy_tunnel_message_kind(
+			kind: $from::ToEnvoyTunnelMessageKind,
+		) -> $to::ToEnvoyTunnelMessageKind {
+			match kind {
+				$from::ToEnvoyTunnelMessageKind::ToEnvoyRequestStart(start) => {
+					$to::ToEnvoyTunnelMessageKind::ToEnvoyRequestStart($to::ToEnvoyRequestStart {
+						actor_id: start.actor_id,
+						method: start.method,
+						path: start.path,
+						headers: start.headers,
+						body: start.body,
+						stream: start.stream,
+					})
+				}
+				$from::ToEnvoyTunnelMessageKind::ToEnvoyRequestChunk(chunk) => {
+					$to::ToEnvoyTunnelMessageKind::ToEnvoyRequestChunk($to::ToEnvoyRequestChunk {
+						body: chunk.body,
+						finish: chunk.finish,
+					})
+				}
+				$from::ToEnvoyTunnelMessageKind::ToEnvoyRequestAbort => {
+					$to::ToEnvoyTunnelMessageKind::ToEnvoyRequestAbort
+				}
+				$from::ToEnvoyTunnelMessageKind::ToEnvoyWebSocketOpen(open) => {
+					$to::ToEnvoyTunnelMessageKind::ToEnvoyWebSocketOpen($to::ToEnvoyWebSocketOpen {
+						actor_id: open.actor_id,
+						path: open.path,
+						headers: open.headers,
+					})
+				}
+				$from::ToEnvoyTunnelMessageKind::ToEnvoyWebSocketMessage(message) => {
+					$to::ToEnvoyTunnelMessageKind::ToEnvoyWebSocketMessage(
+						$to::ToEnvoyWebSocketMessage {
+							data: message.data,
+							binary: message.binary,
+						},
+					)
+				}
+				$from::ToEnvoyTunnelMessageKind::ToEnvoyWebSocketClose(close) => {
+					$to::ToEnvoyTunnelMessageKind::ToEnvoyWebSocketClose(
+						$to::ToEnvoyWebSocketClose {
+							code: close.code,
+							reason: close.reason,
+						},
+					)
+				}
+			}
+		}
+
+		#[allow(dead_code)]
+		fn $to_envoy_tunnel_message(
+			message: $from::ToEnvoyTunnelMessage,
+		) -> $to::ToEnvoyTunnelMessage {
+			$to::ToEnvoyTunnelMessage {
+				message_id: $message_id(message.message_id),
+				message_kind: $to_envoy_tunnel_message_kind(message.message_kind),
+			}
+		}
+	};
+}
+
+impl_pair_conversions!(
+	v1,
+	v2,
+	convert_stop_actor_reason_v1_to_v2,
+	convert_stop_code_v1_to_v2,
+	convert_actor_intent_v1_to_v2,
+	convert_actor_state_v1_to_v2,
+	convert_event_v1_to_v2,
+	convert_event_wrapper_v1_to_v2,
+	convert_to_envoy_ack_events_v1_to_v2,
+	convert_to_rivet_ack_commands_v1_to_v2,
+	convert_kv_list_query_v1_to_v2,
+	convert_kv_request_data_v1_to_v2,
+	convert_kv_response_data_v1_to_v2,
+	convert_to_envoy_kv_response_v1_to_v2,
+	convert_to_rivet_kv_request_v1_to_v2,
+	convert_to_rivet_metadata_v1_to_v2,
+	convert_message_id_v1_to_v2,
+	convert_to_rivet_tunnel_message_kind_v1_to_v2,
+	convert_to_rivet_tunnel_message_v1_to_v2,
+	convert_to_envoy_tunnel_message_kind_v1_to_v2,
+	convert_to_envoy_tunnel_message_v1_to_v2
+);
+
+impl_pair_conversions!(
+	v2,
+	v1,
+	convert_stop_actor_reason_v2_to_v1,
+	convert_stop_code_v2_to_v1,
+	convert_actor_intent_v2_to_v1,
+	convert_actor_state_v2_to_v1,
+	convert_event_v2_to_v1,
+	convert_event_wrapper_v2_to_v1,
+	convert_to_envoy_ack_events_v2_to_v1,
+	convert_to_rivet_ack_commands_v2_to_v1,
+	convert_kv_list_query_v2_to_v1,
+	convert_kv_request_data_v2_to_v1,
+	convert_kv_response_data_v2_to_v1,
+	convert_to_envoy_kv_response_v2_to_v1,
+	convert_to_rivet_kv_request_v2_to_v1,
+	convert_to_rivet_metadata_v2_to_v1,
+	convert_message_id_v2_to_v1,
+	convert_to_rivet_tunnel_message_kind_v2_to_v1,
+	convert_to_rivet_tunnel_message_v2_to_v1,
+	convert_to_envoy_tunnel_message_kind_v2_to_v1,
+	convert_to_envoy_tunnel_message_v2_to_v1
+);
+
+impl_pair_conversions!(
+	v1,
+	v3,
+	convert_stop_actor_reason_v1_to_v3,
+	convert_stop_code_v1_to_v3,
+	convert_actor_intent_v1_to_v3,
+	convert_actor_state_v1_to_v3,
+	convert_event_v1_to_v3,
+	convert_event_wrapper_v1_to_v3,
+	convert_to_envoy_ack_events_v1_to_v3,
+	convert_to_rivet_ack_commands_v1_to_v3,
+	convert_kv_list_query_v1_to_v3,
+	convert_kv_request_data_v1_to_v3,
+	convert_kv_response_data_v1_to_v3,
+	convert_to_envoy_kv_response_v1_to_v3,
+	convert_to_rivet_kv_request_v1_to_v3,
+	convert_to_rivet_metadata_v1_to_v3,
+	convert_message_id_v1_to_v3,
+	convert_to_rivet_tunnel_message_kind_v1_to_v3,
+	convert_to_rivet_tunnel_message_v1_to_v3,
+	convert_to_envoy_tunnel_message_kind_v1_to_v3,
+	convert_to_envoy_tunnel_message_v1_to_v3
+);
+
+impl_pair_conversions!(
+	v2,
+	v3,
+	convert_stop_actor_reason_v2_to_v3,
+	convert_stop_code_v2_to_v3,
+	convert_actor_intent_v2_to_v3,
+	convert_actor_state_v2_to_v3,
+	convert_event_v2_to_v3,
+	convert_event_wrapper_v2_to_v3,
+	convert_to_envoy_ack_events_v2_to_v3,
+	convert_to_rivet_ack_commands_v2_to_v3,
+	convert_kv_list_query_v2_to_v3,
+	convert_kv_request_data_v2_to_v3,
+	convert_kv_response_data_v2_to_v3,
+	convert_to_envoy_kv_response_v2_to_v3,
+	convert_to_rivet_kv_request_v2_to_v3,
+	convert_to_rivet_metadata_v2_to_v3,
+	convert_message_id_v2_to_v3,
+	convert_to_rivet_tunnel_message_kind_v2_to_v3,
+	convert_to_rivet_tunnel_message_v2_to_v3,
+	convert_to_envoy_tunnel_message_kind_v2_to_v3,
+	convert_to_envoy_tunnel_message_v2_to_v3
+);
+
+impl_pair_conversions!(
+	v3,
+	v1,
+	convert_stop_actor_reason_v3_to_v1,
+	convert_stop_code_v3_to_v1,
+	convert_actor_intent_v3_to_v1,
+	convert_actor_state_v3_to_v1,
+	convert_event_v3_to_v1,
+	convert_event_wrapper_v3_to_v1,
+	convert_to_envoy_ack_events_v3_to_v1,
+	convert_to_rivet_ack_commands_v3_to_v1,
+	convert_kv_list_query_v3_to_v1,
+	convert_kv_request_data_v3_to_v1,
+	convert_kv_response_data_v3_to_v1,
+	convert_to_envoy_kv_response_v3_to_v1,
+	convert_to_rivet_kv_request_v3_to_v1,
+	convert_to_rivet_metadata_v3_to_v1,
+	convert_message_id_v3_to_v1,
+	convert_to_rivet_tunnel_message_kind_v3_to_v1,
+	convert_to_rivet_tunnel_message_v3_to_v1,
+	convert_to_envoy_tunnel_message_kind_v3_to_v1,
+	convert_to_envoy_tunnel_message_v3_to_v1
+);
+
+impl_pair_conversions!(
+	v3,
+	v2,
+	convert_stop_actor_reason_v3_to_v2,
+	convert_stop_code_v3_to_v2,
+	convert_actor_intent_v3_to_v2,
+	convert_actor_state_v3_to_v2,
+	convert_event_v3_to_v2,
+	convert_event_wrapper_v3_to_v2,
+	convert_to_envoy_ack_events_v3_to_v2,
+	convert_to_rivet_ack_commands_v3_to_v2,
+	convert_kv_list_query_v3_to_v2,
+	convert_kv_request_data_v3_to_v2,
+	convert_kv_response_data_v3_to_v2,
+	convert_to_envoy_kv_response_v3_to_v2,
+	convert_to_rivet_kv_request_v3_to_v2,
+	convert_to_rivet_metadata_v3_to_v2,
+	convert_message_id_v3_to_v2,
+	convert_to_rivet_tunnel_message_kind_v3_to_v2,
+	convert_to_rivet_tunnel_message_v3_to_v2,
+	convert_to_envoy_tunnel_message_kind_v3_to_v2,
+	convert_to_envoy_tunnel_message_v3_to_v2
+);
