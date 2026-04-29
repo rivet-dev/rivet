@@ -1,4 +1,4 @@
-// BARE decoder for namespace runner config v3
+// BARE decoder for namespace runner config v5
 // Minimal implementation - no external dependencies
 
 const hexString = process.argv[2];
@@ -42,6 +42,13 @@ class BareDecoder {
 		// Read fixed 32-bit unsigned integer (little-endian)
 		const value = this.buffer.readUInt32LE(this.offset);
 		this.offset += 4;
+		return value;
+	}
+
+	readU64() {
+		// Read fixed 64-bit unsigned integer (little-endian) as BigInt
+		const value = this.buffer.readBigUInt64LE(this.offset);
+		this.offset += 8;
 		return value;
 	}
 
@@ -117,10 +124,15 @@ const kind = decoder.readUnion(
 				() => decoder.readString(),
 			);
 			serverless.request_lifespan = decoder.readU32();
+			serverless.max_concurrent_actors = decoder.readU64().toString();
+			serverless.drain_grace_period = decoder.readU32();
 			serverless.slots_per_runner = decoder.readU32();
 			serverless.min_runners = decoder.readU32();
 			serverless.max_runners = decoder.readU32();
 			serverless.runners_margin = decoder.readU32();
+			serverless.metadata_poll_interval = decoder.readOptional(
+				() => decoder.readU64().toString(),
+			);
 			return serverless;
 		},
 		// 1: Normal (void)
