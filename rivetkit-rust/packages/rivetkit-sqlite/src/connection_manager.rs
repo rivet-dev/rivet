@@ -1,6 +1,7 @@
 use anyhow::{Result, anyhow};
 use libsqlite3_sys::{
 	SQLITE_OPEN_CREATE, SQLITE_OPEN_READONLY, SQLITE_OPEN_READWRITE, sqlite3,
+	sqlite3_get_autocommit,
 };
 use tokio::sync::{Mutex, Notify};
 
@@ -55,6 +56,7 @@ struct NativeConnectionManagerState {
 	vfs: Option<NativeVfsHandle>,
 	mode: NativeConnectionManagerMode,
 	idle_readers: Vec<NativeConnection>,
+	idle_writer: Option<NativeConnection>,
 	active_readers: usize,
 	open_readers: usize,
 	pending_writers: usize,
@@ -71,6 +73,7 @@ pub struct NativeReadConnectionLease {
 pub struct NativeWriteConnectionLease {
 	manager: NativeConnectionManager,
 	connection: Option<NativeConnection>,
+	newly_opened: bool,
 }
 
 impl NativeConnectionManager {
@@ -87,6 +90,7 @@ impl NativeConnectionManager {
 					vfs: Some(vfs),
 					mode: NativeConnectionManagerMode::Closed,
 					idle_readers: Vec::new(),
+					idle_writer: None,
 					active_readers: 0,
 					open_readers: 0,
 					pending_writers: 0,
@@ -190,6 +194,13 @@ impl NativeConnectionManager {
 					state.pending_writers = state.pending_writers.saturating_sub(1);
 					state.active_writer = true;
 					state.mode = NativeConnectionManagerMode::WriteMode;
+					if let Some(connection) = state.idle_writer.take() {
+						return Ok(NativeWriteConnectionLease {
+							manager: self.clone(),
+							connection: Some(connection),
+							newly_opened: false,
+						});
+					}
 					Some((
 						state
 							.vfs
@@ -214,6 +225,7 @@ impl NativeConnectionManager {
 						return Ok(NativeWriteConnectionLease {
 							manager: self.clone(),
 							connection: Some(connection),
+							newly_opened: true,
 						});
 					}
 					Err(err) => {
@@ -262,14 +274,27 @@ impl NativeConnectionManager {
 		T: Send + 'static,
 		F: FnOnce(*mut sqlite3) -> Result<T> + Send + 'static,
 	{
+		self.with_write_connection_state(move |db, _newly_opened| f(db))
+			.await
+	}
+
+	pub async fn with_write_connection_state<T, F>(
+		&self,
+		f: F,
+	) -> Result<T>
+	where
+		T: Send + 'static,
+		F: FnOnce(*mut sqlite3, bool) -> Result<T> + Send + 'static,
+	{
 		let mut lease = self.acquire_write().await?;
+		let newly_opened = lease.newly_opened;
 		let connection = lease
 			.connection
 			.take()
 			.expect("write connection lease should hold a connection");
 		let (connection, result) =
 			tokio::task::spawn_blocking(move || {
-				let result = f(connection.as_ptr());
+				let result = f(connection.as_ptr(), newly_opened);
 				(connection, result)
 			})
 			.await?;
@@ -287,6 +312,7 @@ impl NativeConnectionManager {
 			state.mode = NativeConnectionManagerMode::Closing;
 			state.open_readers = state.open_readers.saturating_sub(state.idle_readers.len());
 			self.inner.changed.notify_waiters();
+			state.idle_writer.take();
 			std::mem::take(&mut state.idle_readers)
 		};
 		drop(idle_readers);
@@ -383,14 +409,31 @@ impl NativeWriteConnectionLease {
 			.as_ptr()
 	}
 
+	pub fn newly_opened(&self) -> bool {
+		self.newly_opened
+	}
+
 	pub async fn release(mut self) {
 		let connection = self.connection.take();
-		drop(connection);
-		{
+		let keep_writer_open = connection
+			.as_ref()
+			.is_some_and(|connection| unsafe { sqlite3_get_autocommit(connection.as_ptr()) == 0 });
+		let close_connection = {
 			let mut state = self.manager.inner.state.lock().await;
 			state.active_writer = false;
-			state.refresh_mode();
-		}
+			if keep_writer_open
+				&& state.vfs.is_some()
+				&& !matches!(state.mode, NativeConnectionManagerMode::Closing)
+			{
+				state.idle_writer = connection;
+				state.mode = NativeConnectionManagerMode::WriteMode;
+				None
+			} else {
+				state.refresh_mode();
+				connection
+			}
+		};
+		drop(close_connection);
 		self.manager.inner.changed.notify_waiters();
 	}
 }
@@ -409,6 +452,8 @@ impl NativeConnectionManagerState {
 			return;
 		}
 		self.mode = if self.active_writer {
+			NativeConnectionManagerMode::WriteMode
+		} else if self.idle_writer.is_some() {
 			NativeConnectionManagerMode::WriteMode
 		} else if self.active_readers > 0 || self.open_readers > 0 {
 			NativeConnectionManagerMode::ReadMode

@@ -3505,7 +3505,7 @@ impl NativeVfsHandle {
 		)
 	}
 
-	fn take_last_error(&self) -> Option<String> {
+	pub(crate) fn take_last_error(&self) -> Option<String> {
 		unsafe { (*self.inner.ctx_ptr).take_last_error() }
 	}
 
@@ -3513,7 +3513,7 @@ impl NativeVfsHandle {
 		unsafe { (*self.inner.ctx_ptr).clone_last_error() }
 	}
 
-	fn snapshot_preload_hints(&self) -> VfsPreloadHintSnapshot {
+	pub(crate) fn snapshot_preload_hints(&self) -> VfsPreloadHintSnapshot {
 		unsafe { (*self.inner.ctx_ptr).snapshot_preload_hints() }
 	}
 
@@ -3690,6 +3690,17 @@ pub fn open_database(
 		SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE,
 	)?;
 
+	configure_connection_for_database(connection.as_ptr(), &vfs, file_name)?;
+	verify_batch_atomic_writes(connection.as_ptr(), &vfs, file_name)?;
+
+	Ok(NativeDatabase { connection, vfs })
+}
+
+pub(crate) fn configure_connection_for_database(
+	db: *mut sqlite3,
+	vfs: &NativeVfsHandle,
+	file_name: &str,
+) -> std::result::Result<(), String> {
 	for pragma in &[
 		"PRAGMA page_size = 4096;",
 		"PRAGMA journal_mode = DELETE;",
@@ -3698,7 +3709,7 @@ pub fn open_database(
 		"PRAGMA auto_vacuum = NONE;",
 		"PRAGMA locking_mode = EXCLUSIVE;",
 	] {
-		if let Err(err) = sqlite_exec(connection.as_ptr(), pragma) {
+		if let Err(err) = sqlite_exec(db, pragma) {
 			tracing::error!(
 				file_name,
 				pragma,
@@ -3710,7 +3721,15 @@ pub fn open_database(
 		}
 	}
 
-	if let Err(err) = assert_batch_atomic_probe(connection.as_ptr(), &vfs) {
+	Ok(())
+}
+
+pub(crate) fn verify_batch_atomic_writes(
+	db: *mut sqlite3,
+	vfs: &NativeVfsHandle,
+	file_name: &str,
+) -> std::result::Result<(), String> {
+	if let Err(err) = assert_batch_atomic_probe(db, vfs) {
 		tracing::error!(
 			file_name,
 			%err,
@@ -3720,7 +3739,7 @@ pub fn open_database(
 		return Err(err);
 	}
 
-	Ok(NativeDatabase { connection, vfs })
+	Ok(())
 }
 
 #[cfg(test)]
@@ -6810,6 +6829,159 @@ mod tests {
 				.await
 				.expect("pending reader should acquire after writer releases")
 				.expect("pending reader task should not panic");
+			pending_reader.release().await;
+			manager.close().await.expect("manager close should succeed");
+		});
+	}
+
+	#[test]
+	fn connection_manager_keeps_begin_in_write_mode_until_commit() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let vfs_name = next_test_name("sqlite-manager-begin-gate");
+		let engine = runtime.block_on(harness.open_engine());
+		let vfs = harness.open_vfs_on_engine_with_metrics(
+			&runtime,
+			engine,
+			&harness.actor_id,
+			&vfs_name,
+			VfsConfig::default(),
+			None,
+		);
+		let manager = NativeConnectionManager::new(
+			vfs,
+			harness.actor_id.clone(),
+			NativeConnectionManagerConfig { max_readers: 2 },
+		);
+
+		runtime.block_on(async {
+			manager
+				.with_write_connection(|db| {
+					sqlite_exec(
+						db,
+						"CREATE TABLE manager_begin_gate (id INTEGER PRIMARY KEY, value TEXT);",
+					)
+					.map_err(anyhow::Error::msg)
+				})
+				.await
+				.expect("setup write should succeed");
+
+			manager
+				.with_write_connection(|db| sqlite_exec(db, "BEGIN").map_err(anyhow::Error::msg))
+				.await
+				.expect("begin should succeed");
+			let snapshot = manager.snapshot().await;
+			assert_eq!(snapshot.mode, NativeConnectionManagerMode::WriteMode);
+			assert!(!snapshot.active_writer);
+			assert_eq!(snapshot.open_readers, 0);
+
+			let reader_manager = manager.clone();
+			let pending_reader = tokio::spawn(async move {
+				reader_manager
+					.acquire_read()
+					.await
+					.expect("reader should acquire after commit")
+			});
+			tokio::task::yield_now().await;
+			assert!(!pending_reader.is_finished());
+
+			manager
+				.with_write_connection(|db| {
+					sqlite_exec(
+						db,
+						"INSERT INTO manager_begin_gate (id, value) VALUES (1, 'committed');",
+					)
+					.map_err(anyhow::Error::msg)
+				})
+				.await
+				.expect("transactional insert should succeed");
+			tokio::task::yield_now().await;
+			assert!(!pending_reader.is_finished());
+
+			manager
+				.with_write_connection(|db| sqlite_exec(db, "COMMIT").map_err(anyhow::Error::msg))
+				.await
+				.expect("commit should succeed");
+			let pending_reader = timeout(Duration::from_secs(1), pending_reader)
+				.await
+				.expect("reader should acquire after commit")
+				.expect("reader task should not panic");
+			assert_eq!(
+				sqlite_query_text(
+					pending_reader.as_ptr(),
+					"SELECT value FROM manager_begin_gate WHERE id = 1;",
+				)
+				.expect("reader should see committed write"),
+				"committed"
+			);
+			pending_reader.release().await;
+			manager.close().await.expect("manager close should succeed");
+		});
+	}
+
+	#[test]
+	fn connection_manager_keeps_savepoint_in_write_mode_until_rollback() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let vfs_name = next_test_name("sqlite-manager-savepoint-gate");
+		let engine = runtime.block_on(harness.open_engine());
+		let vfs = harness.open_vfs_on_engine_with_metrics(
+			&runtime,
+			engine,
+			&harness.actor_id,
+			&vfs_name,
+			VfsConfig::default(),
+			None,
+		);
+		let manager = NativeConnectionManager::new(
+			vfs,
+			harness.actor_id.clone(),
+			NativeConnectionManagerConfig { max_readers: 2 },
+		);
+
+		runtime.block_on(async {
+			manager
+				.with_write_connection(|db| {
+					sqlite_exec(
+						db,
+						"CREATE TABLE manager_savepoint_gate (id INTEGER PRIMARY KEY);",
+					)
+					.map_err(anyhow::Error::msg)
+				})
+				.await
+				.expect("setup write should succeed");
+
+			manager
+				.with_write_connection(|db| {
+					sqlite_exec(db, "SAVEPOINT manager_gate")
+						.map_err(anyhow::Error::msg)
+				})
+				.await
+				.expect("savepoint should succeed");
+			let snapshot = manager.snapshot().await;
+			assert_eq!(snapshot.mode, NativeConnectionManagerMode::WriteMode);
+			assert!(!snapshot.active_writer);
+
+			let reader_manager = manager.clone();
+			let pending_reader = tokio::spawn(async move {
+				reader_manager
+					.acquire_read()
+					.await
+					.expect("reader should acquire after rollback")
+			});
+			tokio::task::yield_now().await;
+			assert!(!pending_reader.is_finished());
+
+			manager
+				.with_write_connection(|db| {
+					sqlite_exec(db, "ROLLBACK").map_err(anyhow::Error::msg)
+				})
+				.await
+				.expect("rollback should succeed");
+			let pending_reader = timeout(Duration::from_secs(1), pending_reader)
+				.await
+				.expect("reader should acquire after rollback")
+				.expect("reader task should not panic");
 			pending_reader.release().await;
 			manager.close().await.expect("manager close should succeed");
 		});
