@@ -1,3 +1,19 @@
+## Codebase Patterns
+- `sqlite-storage` pump payload structs use `serde::{Serialize, Deserialize}` as the local serde_bare/vbare-compatible derive pattern; add `OwnedVersionedData` wrappers when adding concrete encode/decode helpers.
+
 # Ralph Progress Log
-Started: Wed Apr 29 04:36:56 AM PDT 2026
+Started: Wed Apr 29 03:29:23 PM PDT 2026
+---
+## 2026-04-29 16:36 PDT - US-001
+- Implemented the foundational PITR/fork identifier, branch record, pointer, tier, and branch state types in `pump/types.rs`.
+- Moved `uuid` into normal `sqlite-storage` dependencies so the new persisted ID newtypes compile outside tests.
+- Files changed:
+  - `engine/packages/sqlite-storage/src/pump/types.rs`
+  - `engine/packages/sqlite-storage/Cargo.toml`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - `sqlite-storage` currently uses `serde` derives plus `serde_bare` and `OwnedVersionedData` wrappers for vbare-compatible payloads.
+  - New UUID-backed persisted types need `uuid.workspace = true` under normal dependencies, not only dev-dependencies.
+  - `BookmarkRef` is needed by branch records before the bookmark story fully shapes `BookmarkStr`.
 ---

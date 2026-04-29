@@ -31,9 +31,9 @@ tracing.workspace = true
 universaldb.workspace = true
 universalpubsub.workspace = true
 util.workspace = true
+uuid.workspace = true
 vbare.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
 tokio = { workspace = true, features = ["test-util"] }
-uuid.workspace = true

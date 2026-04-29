@@ -1,9 +1,105 @@
 use anyhow::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 use vbare::OwnedVersionedData;
 
 pub const SQLITE_STORAGE_META_VERSION: u16 = 1;
 pub const SQLITE_PAGE_SIZE: u32 = crate::keys::PAGE_SIZE;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub struct NamespaceId(Uuid);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub struct NamespacePointerId(Uuid);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub struct ActorPointerId(Uuid);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub struct NamespaceBranchId(Uuid);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub struct ActorBranchId(Uuid);
+
+macro_rules! impl_uuid_id {
+	($type:ident) => {
+		impl $type {
+			pub fn new_v4() -> Self {
+				Self(Uuid::new_v4())
+			}
+
+			pub fn from_uuid(uuid: Uuid) -> Self {
+				Self(uuid)
+			}
+
+			pub fn as_uuid(&self) -> Uuid {
+				self.0
+			}
+		}
+	};
+}
+
+impl_uuid_id!(NamespaceId);
+impl_uuid_id!(NamespacePointerId);
+impl_uuid_id!(ActorPointerId);
+impl_uuid_id!(NamespaceBranchId);
+impl_uuid_id!(ActorBranchId);
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BookmarkRef {
+	pub bookmark: String,
+	pub resolved_versionstamp: Option<[u8; 16]>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Tier {
+	T0,
+	T1,
+	T2,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum BranchState {
+	Live,
+	Frozen,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NamespaceBranchRecord {
+	pub branch_id: NamespaceBranchId,
+	pub parent: Option<NamespaceBranchId>,
+	pub parent_versionstamp: Option<[u8; 16]>,
+	pub root_versionstamp: [u8; 16],
+	pub fork_depth: u8,
+	pub created_at_ms: i64,
+	pub created_from_bookmark: Option<BookmarkRef>,
+	pub state: BranchState,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ActorBranchRecord {
+	pub branch_id: ActorBranchId,
+	pub namespace_branch: NamespaceBranchId,
+	pub parent: Option<ActorBranchId>,
+	pub parent_versionstamp: Option<[u8; 16]>,
+	pub root_versionstamp: [u8; 16],
+	pub fork_depth: u8,
+	pub created_at_ms: i64,
+	pub created_from_bookmark: Option<BookmarkRef>,
+	pub state: BranchState,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NamespacePointer {
+	pub current_branch: NamespaceBranchId,
+	pub last_swapped_at_ms: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ActorPointer {
+	pub current_branch: ActorBranchId,
+	pub last_swapped_at_ms: i64,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DBHead {
