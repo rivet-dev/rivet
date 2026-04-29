@@ -116,6 +116,7 @@ export interface RegistryConfigRequest {
 			serverless?: {
 				url: string;
 				headers: Record<string, string>;
+				drain_grace_period?: number;
 				max_runners: number;
 				min_runners: number;
 				request_lifespan: number;
