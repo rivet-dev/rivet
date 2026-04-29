@@ -514,7 +514,8 @@ describeDriverMatrix("Raw Websocket", (driverTestConfig) => {
 				);
 			}
 			const closeEvent = await closePromise;
-			expect(closeEvent.code).not.toBe(1006);
+			expect(closeEvent.code).toBe(1000);
+			expect(closeEvent.reason).toBe("actor.stopped");
 			expect(ws.readyState).toBe(WebSocket.CLOSED);
 		});
 
