@@ -136,7 +136,15 @@ pub async fn router(
 			)
 			.route(
 				"/actors/{actor_id}/sqlite/retention",
-				axum::routing::get(actors::sqlite_admin::get_retention),
+				axum::routing::get(actors::sqlite_inspector::get_retention),
+			)
+			.route(
+				"/actors/{actor_id}/sqlite/checkpoints",
+				axum::routing::get(actors::sqlite_inspector::get_checkpoints),
+			)
+			.route(
+				"/actors/{actor_id}/sqlite/admin-ops",
+				axum::routing::get(actors::sqlite_inspector::get_admin_ops),
 			)
 			.route(
 				"/actors/{actor_id}/sqlite/retention",
@@ -145,6 +153,14 @@ pub async fn router(
 			.route(
 				"/actors/{actor_id}/sqlite/refcount/clear",
 				axum::routing::post(actors::sqlite_admin::post_refcount_clear),
+			)
+			.route(
+				"/namespaces/{ns_id}/sqlite/overview",
+				axum::routing::get(actors::sqlite_inspector::get_namespace_overview),
+			)
+			.route(
+				"/sqlite/inspector/ws",
+				axum::routing::get(actors::sqlite_inspector::websocket),
 			)
 			// MARK: Runners
 			.route("/runners", axum::routing::get(runners::list))

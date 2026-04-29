@@ -68,6 +68,23 @@ pub async fn handle_describe_retention(
 	Ok(view)
 }
 
+pub async fn inspect_retention_view(
+	udb: Arc<universaldb::Database>,
+	actor_id: String,
+	namespace_id: Uuid,
+) -> Result<RetentionView> {
+	load_retention_view(
+		udb,
+		actor_id,
+		admin_record::AuditFields {
+			caller_id: "sqlite-inspector".to_string(),
+			request_origin_ts_ms: 0,
+			namespace_id,
+		},
+	)
+	.await
+}
+
 pub async fn handle_get_retention(
 	udb: Arc<universaldb::Database>,
 	op_id: Uuid,

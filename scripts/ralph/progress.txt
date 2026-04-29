@@ -4,6 +4,8 @@ Started: Wed Apr 29 04:36:56 AM PDT 2026
 ## Codebase Patterns
 - `rivet-pools` keeps process-wide metadata on `PoolsInner`; initialize it in both `Pools::new` and `Pools::test`, with the test constructor only omitting optional service pools like ClickHouse.
 - api-public SQLite admin endpoints resolve namespace config from a parsed Rivet actor id when possible, with explicit `namespace_id` request hints only used for synthetic/non-Rivet-id admin test paths.
+- api-public SQLite inspector GET routes should be read-only UDB views; keep mutating admin operations in `actors::sqlite_admin`.
+- SQLite namespace overview reads existing per-actor `namespace::keys::metric::MetricKey` gauges and scans actor-scoped `/META/admin_op/` records for recent operation counts.
 - SQLite admin rate/concurrency gates belong at api-public before UPS publish; create the `AdminOpRecord` in the same UDB transaction that scans in-flight records so concurrent Restore/Fork requests reject instead of queueing.
 - SQLite admin audit events use structured tracing plus the debug test sink in `actors::sqlite_admin::test_hooks`; the compactor trusts injected `AuditFields` and does not re-check authz.
 - After renaming a hyphenated crate, update both the workspace dependency key (`sqlite-storage-legacy.workspace`) and Rust import path (`sqlite_storage_legacy`) for every consumer.
@@ -485,4 +487,15 @@ Started: Wed Apr 29 04:36:56 AM PDT 2026
   - Gauge-like namespace metrics should be set by applying an atomic-add delta from the previous stored value, not by adding the current snapshot every pass.
   - The compactor can refresh namespace-sum Prometheus gauges by scanning `namespace::keys::metric::MetricKey::subspace(namespace_id)` after it updates actor-level metric keys.
   - Keep commit/read rollups as counters, but live/PITR/checkpoint metric keys represent current per-actor values.
+---
+## 2026-04-29 10:30:54 PDT - US-041
+- Added read-only SQLite inspector HTTP routes for checkpoints, retention, admin-op history, and namespace overview, plus a JSON WebSocket mirror endpoint.
+- Exposed `sqlite_storage::compactor::inspect_retention_view` so inspector reads can reuse the retention view assembly without creating admin op records.
+- Added focused api-public inspector tests for checkpoint fields, namespace aggregation, paginated history, authz, and WS/HTTP parity.
+- Verified `cargo check -p sqlite-storage`, `cargo check -p rivet-api-public`, `cargo test -p rivet-api-public --test inspector_sqlite -- --nocapture`, `cargo test -p rivet-api-public --test sqlite_admin_endpoints -- --nocapture`, `cargo test -p rivet-api-public --test sqlite_admin_authz -- --nocapture`, `cargo test -p rivet-api-public`, `cargo check --workspace`, and `git diff --check`.
+- Files changed: `Cargo.toml`, `Cargo.lock`, `engine/packages/api-public/{Cargo.toml,src/actors/{mod.rs,sqlite_inspector.rs},src/router.rs,tests/inspector_sqlite.rs}`, `engine/packages/sqlite-storage/src/compactor/{admin.rs,mod.rs}`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
+- **Learnings for future iterations:**
+  - Inspector GETs should avoid creating `AdminOpRecord`s; use read-only UDB scans and helper views for operator debugging.
+  - `axum-test` websocket tests need both the crate `ws` feature and `TestServer::builder().http_transport()`.
+  - Namespace overview can aggregate PITR gauges from `namespace::keys::metric::MetricKey` and count recent ops by scanning actor-scoped `/META/admin_op/` records.
 ---

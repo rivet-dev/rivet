@@ -25,6 +25,7 @@ pub use crate::admin::{
 pub use admin::{
 	ClearRefcountRequest, DescribeRetentionRequest, GetRetentionRequest, SetRetentionRequest,
 	handle_clear_refcount, handle_describe_retention, handle_get_retention, handle_set_retention,
+	inspect_retention_view,
 };
 pub use fork::handle_fork;
 pub use lease::{

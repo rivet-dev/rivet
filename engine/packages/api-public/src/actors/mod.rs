@@ -7,5 +7,6 @@ pub mod list_names;
 pub mod reschedule;
 pub mod sleep;
 pub mod sqlite_admin;
+pub mod sqlite_inspector;
 mod sqlite_admin_metrics;
 pub mod utils;

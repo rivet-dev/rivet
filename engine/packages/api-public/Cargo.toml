@@ -48,5 +48,5 @@ anyhow.workspace = true
 fs_extra.workspace = true
 
 [dev-dependencies]
-axum-test.workspace = true
+axum-test = { workspace = true, features = ["ws"] }
 rivet-test-deps.workspace = true
