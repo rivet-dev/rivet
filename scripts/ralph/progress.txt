@@ -10,6 +10,7 @@ Started: Wed Apr 29 04:36:56 AM PDT 2026
 - For sqlite-storage byte-key atomic mutations, use `tx.informal().atomic_op(...)`; `Transaction::atomic_op` is for typed `FormalKey` tuple keys.
 - `/META/quota` is a raw signed `i64` little-endian atomic counter; missing means zero, and helper code should mutate it with `MutationType::Add` on `tx.informal()`.
 - `sqlite-storage::pump::ActorDb::new` runs debug-only takeover reconciliation synchronously; keep `takeover::reconcile` sync until the constructor shape changes.
+- For sqlite-storage raw byte prefix scans, build a `universaldb::Subspace` with `tuple::Subspace::from_bytes(prefix)` and use its range; direct `(prefix, end_of_key_range(prefix))` ranges can miss rows on the RocksDB driver.
 
 ## 2026-04-29 04:44:52 PDT - US-001
 - Implemented a UUID-backed `NodeId` type and stored a generated value on each `Pools` instance.
@@ -81,4 +82,13 @@ Started: Wed Apr 29 04:36:56 AM PDT 2026
   - `ActorDb` owns only per-actor hot-path cache state; the WS connection will own any map of actor ids to `Arc<ActorDb>`.
   - `takeover::reconcile` is sync for now because `ActorDb::new` is intentionally sync and release builds do no takeover work.
   - The staged `get_pages` and `commit` methods can import `DirtyPage` and `FetchedPage` from `pump::types` without reintroducing legacy protocol types.
+---
+## 2026-04-29 05:10:32 PDT - US-008
+- Implemented `ActorDb::get_pages` in `pump/read.rs` with `/META/head` loading, warm PIDX cache lookup, cold in-tx PIDX prefix scan, DELTA/SHARD blob fetching, stale-PIDX shard fallback, cache eviction, and read-byte rollup increments.
+- Added focused `pump_read` integration coverage for cold PIDX scan, warm cache reuse, stale PIDX fallback to shard, and above-EOF reads against a real RocksDB-backed UDB.
+- Files changed: `engine/packages/sqlite-storage/Cargo.toml`, `engine/packages/sqlite-storage/src/pump/actor_db.rs`, `engine/packages/sqlite-storage/src/pump/mod.rs`, `engine/packages/sqlite-storage/src/pump/read.rs`, `engine/packages/sqlite-storage/tests/pump_read.rs`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
+- **Learnings for future iterations:**
+  - Raw SQLite storage prefix scans should use `Subspace::from(tuple::Subspace::from_bytes(prefix))` for the range rather than hand-rolled `end_of_key_range` bounds.
+  - `ActorDb` methods implemented in sibling pump modules need `pub(super)` access to the per-actor fields owned by `actor_db.rs`.
+  - The read path can validate cache behavior by deleting PIDX rows after the first read; a warm cache should still route to the cached DELTA until stale fallback evicts it.
 ---

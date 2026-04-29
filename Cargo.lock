@@ -6209,6 +6209,7 @@ name = "sqlite-storage"
 version = "2.3.0-rc.4"
 dependencies = [
  "anyhow",
+ "futures-util",
  "lz4_flex",
  "parking_lot",
  "scc",

@@ -10,6 +10,7 @@ legacy-inline-tests = []
 
 [dependencies]
 anyhow.workspace = true
+futures-util.workspace = true
 lz4_flex.workspace = true
 parking_lot.workspace = true
 scc.workspace = true
