@@ -109,6 +109,7 @@ The kitchen-sink has three SQLite actor types to test:
 ### `scripts/sqlite-cold-start-bench.ts` — SQLite cold-read harness
 
 - Keep cold wake/open measured with a tiny SQLite action separately from cold full-read throughput, and keep the main read path free of CPU-heavy diagnostic probes like payload `LIKE` scans.
+- The default SQLite cold-start benchmark runs un-compacted and compacted scenarios separately; keep both on inline transaction sizes unless chunked DELTA reads are being explicitly tested.
 
 ### `scripts/soak.ts` — Cloud Run soak harness
 

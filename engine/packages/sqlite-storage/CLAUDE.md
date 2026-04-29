@@ -8,3 +8,4 @@
 - Native VFS page cache policy is configured in `optimization_flags.rs`; keep capacity, cache-class toggles, and scan-resistant protected-cache budgets there.
 - Large chunked logical values are reassembled with a bounded chunk-prefix range read by default; `RIVETKIT_SQLITE_OPT_BATCH_CHUNK_READS=false` preserves the serial 10 KB chunk-get fallback.
 - Repeated DELTA/SHARD LTX decodes are cached inside `SqliteEngine`; `RIVETKIT_SQLITE_OPT_DECODED_LTX_CACHE=false` preserves per-read decode behavior.
+- LTX decoding validates header, page frames, and page index structure, and accepts both trailer and legacy no-trailer blobs.

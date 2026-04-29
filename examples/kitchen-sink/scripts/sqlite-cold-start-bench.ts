@@ -11,11 +11,13 @@ import type { registry } from "../src/index.ts";
 interface Args {
 	endpoint: string;
 	key: string;
+	scenario: "both" | "un-compacted" | "compacted";
 	targetBytes: number;
 	rowBytes: number;
 	batchRows: number;
 	transactionBytes: number;
 	wakeDelayMs: number;
+	compactionWaitMs: number;
 	metricsToken: string;
 	disableMetadataLookup: boolean;
 	startLocalEnvoy: boolean;
@@ -49,6 +51,25 @@ interface WakeOpenResult {
 	rows: number;
 }
 
+interface ColdReadVariant {
+	label: string;
+	wakeOpen: { ms: number };
+	wakeOpenResult: WakeOpenResult;
+	coldRead: { ms: number };
+	coldReadResult: ReadResult;
+	metrics: VfsMetricSnapshot;
+}
+
+interface ScenarioResult {
+	label: string;
+	write: { ms: number };
+	writeResult: WriteResult;
+	hotRead?: { ms: number };
+	hotReadResult?: ReadResult;
+	hotReadMetrics?: VfsMetricSnapshot;
+	coldRead: ColdReadVariant;
+}
+
 interface LocalEngine {
 	child: ChildProcess;
 	dbRoot: string;
@@ -80,7 +101,9 @@ const DEFAULT_TARGET_BYTES = 50 * 1024 * 1024;
 const DEFAULT_ROW_BYTES = 16 * 1024;
 const DEFAULT_BATCH_ROWS = 8;
 const DEFAULT_TRANSACTION_BYTES = 64 * 1024;
+const COMPACTED_TRANSACTION_BYTES = DEFAULT_TRANSACTION_BYTES;
 const DEFAULT_WAKE_DELAY_MS = 2000;
+const DEFAULT_COMPACTION_WAIT_MS = 10000;
 const REPO_ENGINE_BINARY = fileURLToPath(
 	new URL("../../../target/debug/rivet-engine", import.meta.url),
 );
@@ -92,11 +115,13 @@ function usage(): never {
 Options:
   --endpoint <url>              Rivet endpoint. Default: ${DEFAULT_ENDPOINT}
   --key <key>                   Actor key suffix. Defaults to a generated key.
+  --scenario <name>             both, un-compacted, or compacted. Default: both.
   --bytes <n>                   Total bytes to write and read. Default: ${DEFAULT_TARGET_BYTES}
   --row-bytes <n>               Bytes per random string row. Default: ${DEFAULT_ROW_BYTES}
   --batch-rows <n>              Rows per INSERT statement. Default: ${DEFAULT_BATCH_ROWS}
 	  --transaction-bytes <n>       Bytes per SQLite transaction. Default: ${DEFAULT_TRANSACTION_BYTES}
 	  --wake-delay-ms <n>           Delay after c.sleep() before the cold read. Default: ${DEFAULT_WAKE_DELAY_MS}
+	  --compaction-wait-ms <n>      Extra wait after compacted writes. Default: ${DEFAULT_COMPACTION_WAIT_MS}
 	  --metrics-token <token>       Bearer token for actor /metrics. Default: env or dev-metrics.
 	  --disable-metadata-lookup     Treat --endpoint as the direct engine endpoint.
 	  --start-local-envoy           Start this registry's local envoy before driving it.
@@ -137,6 +162,14 @@ function readNumber(
 function parseArgs(argv: string[]): Args {
 	if (argv.includes("--help") || argv.includes("-h")) usage();
 	const endpoint = readFlag(argv, "--endpoint") ?? process.env.RIVET_ENDPOINT ?? DEFAULT_ENDPOINT;
+	const scenario = readFlag(argv, "--scenario") ?? "both";
+	if (
+		scenario !== "both" &&
+		scenario !== "un-compacted" &&
+		scenario !== "compacted"
+	) {
+		throw new Error("--scenario must be both, un-compacted, or compacted");
+	}
 	const shouldStartLocalEnvoy =
 		argv.includes("--start-local-envoy") ||
 		(!argv.includes("--no-start-local-envoy") &&
@@ -148,6 +181,7 @@ function parseArgs(argv: string[]): Args {
 		key:
 			readFlag(argv, "--key") ??
 			`sqlite-cold-start-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`,
+		scenario,
 		targetBytes: readNumber(
 			argv,
 			"--bytes",
@@ -178,6 +212,12 @@ function parseArgs(argv: string[]): Args {
 				"SQLITE_COLD_START_WAKE_DELAY_MS",
 				DEFAULT_WAKE_DELAY_MS,
 			),
+			compactionWaitMs: readNumber(
+				argv,
+				"--compaction-wait-ms",
+				"SQLITE_COLD_START_COMPACTION_WAIT_MS",
+				DEFAULT_COMPACTION_WAIT_MS,
+			),
 			metricsToken:
 				readFlag(argv, "--metrics-token") ??
 				process.env.SQLITE_COLD_START_METRICS_TOKEN ??
@@ -185,8 +225,8 @@ function parseArgs(argv: string[]): Args {
 				"dev-metrics",
 			disableMetadataLookup: argv.includes("--disable-metadata-lookup"),
 			startLocalEnvoy: shouldStartLocalEnvoy,
-		};
-	}
+	};
+}
 
 function sleep(ms: number): Promise<void> {
 	return new Promise((resolve) => setTimeout(resolve, ms));
@@ -498,22 +538,30 @@ async function waitForEngineReady(
 		: new Error("timed out waiting for rivet-engine");
 }
 
-async function startLocalEngine(endpoint: string): Promise<LocalEngine> {
+async function startLocalEngine(
+	endpoint: string,
+	disableCompaction: boolean,
+): Promise<LocalEngine> {
 	const logs: string[] = [];
 	const dbRoot = mkdtempSync(join(tmpdir(), "sqlite-cold-start-engine-"));
-		const child = spawn(resolveEngineBinary(), ["start"], {
-			env: {
-				...process.env,
-				RIVET__FILE_SYSTEM__PATH: join(dbRoot, "db"),
-				RIVET_SQLITE_DISABLE_COMPACTION:
-					process.env.RIVET_SQLITE_DISABLE_COMPACTION ?? "1",
-				_RIVET_METRICS_TOKEN:
-					process.env._RIVET_METRICS_TOKEN ??
-					process.env.SQLITE_COLD_START_METRICS_TOKEN ??
-					"dev-metrics",
-			},
-			stdio: ["ignore", "pipe", "pipe"],
-		});
+	const env = {
+		...process.env,
+		RIVET__FILE_SYSTEM__PATH: join(dbRoot, "db"),
+		_RIVET_METRICS_TOKEN:
+			process.env._RIVET_METRICS_TOKEN ??
+			process.env.SQLITE_COLD_START_METRICS_TOKEN ??
+			"dev-metrics",
+	};
+	if (disableCompaction) {
+		env.RIVET_SQLITE_DISABLE_COMPACTION =
+			process.env.RIVET_SQLITE_DISABLE_COMPACTION ?? "1";
+	} else {
+		delete env.RIVET_SQLITE_DISABLE_COMPACTION;
+	}
+	const child = spawn(resolveEngineBinary(), ["start"], {
+		env,
+		stdio: ["ignore", "pipe", "pipe"],
+	});
 	child.stdout?.on("data", (chunk) => logs.push(chunk.toString()));
 	child.stderr?.on("data", (chunk) => logs.push(chunk.toString()));
 	try {
@@ -539,13 +587,97 @@ async function stopLocalEngine(engine: LocalEngine | undefined): Promise<void> {
 	rmSync(dbRoot, { recursive: true, force: true });
 }
 
+function childArgs(args: Args, scenario: "un-compacted" | "compacted"): string[] {
+	const transactionBytes =
+		scenario === "compacted"
+			? Math.min(args.targetBytes, COMPACTED_TRANSACTION_BYTES)
+			: args.transactionBytes;
+	const values = [
+		"--scenario",
+		scenario,
+		"--endpoint",
+		args.endpoint,
+		"--key",
+		`${args.key}-${scenario}`,
+		"--bytes",
+		args.targetBytes.toString(),
+		"--row-bytes",
+		args.rowBytes.toString(),
+		"--batch-rows",
+		args.batchRows.toString(),
+		"--transaction-bytes",
+		transactionBytes.toString(),
+		"--wake-delay-ms",
+		args.wakeDelayMs.toString(),
+		"--compaction-wait-ms",
+		args.compactionWaitMs.toString(),
+		"--metrics-token",
+		args.metricsToken,
+		args.disableMetadataLookup ? "--disable-metadata-lookup" : undefined,
+		args.startLocalEnvoy ? "--start-local-envoy" : "--no-start-local-envoy",
+	];
+	return values.filter((value): value is string => value !== undefined);
+}
+
+async function runChildScenario(
+	args: Args,
+	scenario: "un-compacted" | "compacted",
+): Promise<void> {
+	const env = { ...process.env };
+	if (scenario === "un-compacted" || scenario === "compacted") {
+		env.RIVET_SQLITE_DISABLE_COMPACTION =
+			process.env.RIVET_SQLITE_DISABLE_COMPACTION ?? "1";
+	} else {
+		delete env.RIVET_SQLITE_DISABLE_COMPACTION;
+	}
+
+	await new Promise<void>((resolve, reject) => {
+		const child = spawn(
+			"pnpm",
+			[
+				"--filter",
+				"kitchen-sink",
+				"exec",
+				"tsx",
+				"scripts/sqlite-cold-start-bench.ts",
+				...childArgs(args, scenario),
+			],
+			{
+				cwd: fileURLToPath(new URL("../../..", import.meta.url)),
+				env,
+				stdio: "inherit",
+			},
+		);
+		child.on("error", reject);
+		child.on("exit", (code, signal) => {
+			if (code === 0) {
+				resolve();
+			} else {
+				reject(
+					new Error(
+						`${scenario} benchmark failed with ${signal ?? `exit code ${code}`}`,
+					),
+				);
+			}
+		});
+	});
+}
+
 async function main(): Promise<void> {
 	const args = parseArgs(process.argv.slice(2));
 	let engine: LocalEngine | undefined;
 	process.env._RIVET_METRICS_TOKEN = args.metricsToken;
 
+	if (args.scenario === "both") {
+		console.log("SQLite cold-start benchmark");
+		console.log("running un-compacted and compacted scenarios separately");
+		await runChildScenario(args, "un-compacted");
+		await runChildScenario(args, "compacted");
+		return;
+	}
+
 	if (args.startLocalEnvoy) {
-		engine = await startLocalEngine(args.endpoint);
+		engine = await startLocalEngine(args.endpoint, true);
 		await configureLocalRunner(args.endpoint);
 		await import("@rivetkit/sql-loader");
 		const { registry } = await import("../src/index.ts");
@@ -558,108 +690,221 @@ async function main(): Promise<void> {
 		endpoint: args.endpoint,
 		disableMetadataLookup: args.disableMetadataLookup,
 	});
-	const actorKey = ["sqlite-cold-start-bench", args.key];
-	const handle = client.sqliteColdStartBench.getOrCreate(actorKey);
-	const actorId = await handle.resolve();
+	type BenchHandle = ReturnType<typeof client.sqliteColdStartBench.getOrCreate>;
 
 	console.log("SQLite cold-start benchmark");
+	console.log(`scenario=${args.scenario}`);
 	console.log(`endpoint=${args.endpoint}`);
-	console.log(`actor_key=${actorKey.join("/")}`);
-	console.log(`actor_id=${actorId}`);
+	console.log(`actor_key_prefix=sqlite-cold-start-bench/${args.key}`);
 	console.log(`start_local_envoy=${args.startLocalEnvoy}`);
 	console.log(
 		`target=${fmtBytes(args.targetBytes)} row_bytes=${args.rowBytes} batch_rows=${args.batchRows} transaction_bytes=${args.transactionBytes}`,
 	);
+	console.log(`compaction_wait_ms=${args.compactionWaitMs}`);
+		console.log(
+			`storage_compaction_disabled=true`,
+	);
+	console.log(
+		`RIVETKIT_SQLITE_OPT_BATCH_CHUNK_READS=${process.env.RIVETKIT_SQLITE_OPT_BATCH_CHUNK_READS ?? "default"}`,
+	);
 
 	try {
-		console.log("\nreset...");
-		await handle.reset();
+		const runColdReadVariant = async (
+			label: string,
+			scenarioActorKey: string[],
+			scenarioActorId: string,
+			activeHandle: BenchHandle,
+			expectedBytes: number,
+			expectedRows: number,
+		): Promise<ColdReadVariant> => {
+			console.log(`sleep before ${label} wake/open...`);
+			await activeHandle.goToSleep();
+			await sleep(args.wakeDelayMs);
 
-		console.log("write random strings...");
+			console.log(`${label} cold wake/open...`);
+			const wakeHandle = client.sqliteColdStartBench.getOrCreate(scenarioActorKey);
+			const wakeOpen = await timed(() => wakeHandle.wakeSqlite());
+			const wakeOpenResult = wakeOpen.result as WakeOpenResult;
+			await scrapeMetrics(args.endpoint, scenarioActorId, args.metricsToken);
+
+			console.log(`sleep before ${label} cold full read...`);
+			await wakeHandle.goToSleep();
+			await sleep(args.wakeDelayMs);
+
+			console.log(`${label} wake read...`);
+			const coldHandle = client.sqliteColdStartBench.getOrCreate(scenarioActorKey);
+			const coldRead = await timed(() => coldHandle.readAll());
+			const coldReadResult = coldRead.result as ReadResult;
+			assertRead(label, coldReadResult, expectedBytes, expectedRows);
+			const metrics = await scrapeMetrics(
+				args.endpoint,
+				scenarioActorId,
+				args.metricsToken,
+			);
+
+			return {
+				label,
+				wakeOpen,
+				wakeOpenResult,
+				coldRead,
+				coldReadResult,
+				metrics,
+			};
+		};
+
+		const runScenario = async (
+			label: string,
+			transactionBytes: number,
+			measureHotRead: boolean,
+		): Promise<ScenarioResult> => {
+			const scenarioSuffix = label.replace(/[^a-z0-9]+/gi, "-").toLowerCase();
+			const scenarioActorKey = [
+				"sqlite-cold-start-bench",
+				`${args.key}-${scenarioSuffix}`,
+			];
+			const scenarioHandle = client.sqliteColdStartBench.getOrCreate(
+				scenarioActorKey,
+			);
+			const scenarioActorId = await scenarioHandle.resolve();
+			console.log(`\n${label} actor_key=${scenarioActorKey.join("/")}`);
+			console.log(`${label} actor_id=${scenarioActorId}`);
+			console.log(`\n${label} reset...`);
+			await scenarioHandle.reset();
+
+			console.log(`${label} write random strings...`);
 			const write = await timed(() =>
-				handle.writeRandomStrings({
+				scenarioHandle.writeRandomStrings({
 					targetBytes: args.targetBytes,
 					rowBytes: args.rowBytes,
 					batchRows: args.batchRows,
-					transactionBytes: args.transactionBytes,
+					transactionBytes,
 				}),
 			);
 			const writeResult = write.result as WriteResult;
 			const afterWriteMetrics = await scrapeMetrics(
 				args.endpoint,
-				actorId,
+				scenarioActorId,
 				args.metricsToken,
 			);
 
-			console.log("hot read...");
-			const hotRead = await timed(() => handle.readAll());
-			const hotReadResult = hotRead.result as ReadResult;
-			assertRead("hot", hotReadResult, writeResult.bytes, writeResult.rows);
-			const afterHotReadMetrics = await scrapeMetrics(
-				args.endpoint,
-				actorId,
-				args.metricsToken,
-			);
-			const hotReadMetrics = diffMetrics(afterHotReadMetrics, afterWriteMetrics);
+			if (label === "compacted") {
+				console.log(`${label} wait for storage compaction...`);
+				await sleep(args.compactionWaitMs);
+			}
 
-			console.log("sleep...");
-			await handle.goToSleep();
-			await sleep(args.wakeDelayMs);
-
-			console.log("cold wake/open...");
-			const wakeHandle = client.sqliteColdStartBench.getOrCreate(actorKey);
-			const wakeOpen = await timed(() => wakeHandle.wakeSqlite());
-			const wakeOpenResult = wakeOpen.result as WakeOpenResult;
-			const afterWakeOpenMetrics = await scrapeMetrics(
-				args.endpoint,
-				actorId,
-				args.metricsToken,
-			);
-
-			console.log("sleep before cold full read...");
-			await wakeHandle.goToSleep();
-			await sleep(args.wakeDelayMs);
-
-			console.log("wake read...");
-			const coldHandle = client.sqliteColdStartBench.getOrCreate(actorKey);
-			const coldRead = await timed(() => coldHandle.readAll());
-			const coldReadResult = coldRead.result as ReadResult;
-			assertRead("wake", coldReadResult, writeResult.bytes, writeResult.rows);
-			const afterWakeReadMetrics = await scrapeMetrics(
-				args.endpoint,
-				actorId,
-				args.metricsToken,
+			let hotRead: { ms: number } | undefined;
+			let hotReadResult: ReadResult | undefined;
+			let hotReadMetrics: VfsMetricSnapshot | undefined;
+			if (measureHotRead) {
+				console.log(`${label} hot read...`);
+				hotRead = await timed(() => scenarioHandle.readAll());
+				hotReadResult = hotRead.result as ReadResult;
+				assertRead(
+					`${label} hot`,
+					hotReadResult,
+					writeResult.bytes,
+					writeResult.rows,
+				);
+				const afterHotReadMetrics = await scrapeMetrics(
+					args.endpoint,
+					scenarioActorId,
+					args.metricsToken,
+				);
+				hotReadMetrics = diffMetrics(afterHotReadMetrics, afterWriteMetrics);
+			} else {
+				console.log(`${label} hot read skipped before cold-read measurement...`);
+			}
+			const coldRead = await runColdReadVariant(
+				label,
+				scenarioActorKey,
+				scenarioActorId,
+				scenarioHandle,
+				writeResult.bytes,
+				writeResult.rows,
 			);
 
-			console.log("\nResults");
-			console.log(`  rows: ${writeResult.rows}`);
-			console.log(`  transactions: ${writeResult.transactions}`);
-			console.log(`  bytes: ${fmtBytes(writeResult.bytes)}`);
+			return {
+				label,
+				write,
+				writeResult,
+				hotRead,
+				hotReadResult,
+				hotReadMetrics,
+				coldRead,
+			};
+		};
+
+		const scenarioResult = await runScenario(
+			args.scenario,
+			args.scenario === "compacted"
+				? Math.min(args.targetBytes, COMPACTED_TRANSACTION_BYTES)
+				: args.transactionBytes,
+			true,
+		);
+
+		console.log("\nResults");
+		for (const scenario of [scenarioResult]) {
+			const variant = scenario.coldRead;
+			console.log(`  ${scenario.label} rows: ${scenario.writeResult.rows}`);
 			console.log(
-				`  insert server: ${fmtMs(writeResult.ms)} (insert=${fmtMs(writeResult.sqliteInsertMs)}, commit=${fmtMs(writeResult.commitMs)}, random_strings=${fmtMs(writeResult.randomStringMs)})`,
+				`  ${scenario.label} transactions: ${scenario.writeResult.transactions}`,
 			);
-			console.log(`  insert e2e: ${fmtMs(write.ms)}`);
-			console.log(`  hot read server: ${fmtMs(hotReadResult.ms)}`);
-			console.log(`  hot read e2e: ${fmtMs(hotRead.ms)}`);
-			console.log(`  cold wake/open server: ${fmtMs(wakeOpenResult.ms)}`);
-			console.log(`  cold wake/open e2e: ${fmtMs(wakeOpen.ms)}`);
+			console.log(`  ${scenario.label} bytes: ${fmtBytes(scenario.writeResult.bytes)}`);
 			console.log(
-				`  cold wake/open overhead estimate: ${fmtMs(Math.max(0, wakeOpen.ms - wakeOpenResult.ms))}`,
-			);
-			console.log(`  wake read server: ${fmtMs(coldReadResult.ms)}`);
-			console.log(`  wake read e2e: ${fmtMs(coldRead.ms)}`);
-			console.log(
-				`  wake overhead estimate: ${fmtMs(Math.max(0, coldRead.ms - coldReadResult.ms))}`,
-			);
-			printVfsMetricDelta("hot read", hotReadMetrics);
-			printVfsMetricDelta("cold wake/open actor-lifetime", afterWakeOpenMetrics);
-			printVfsMetricDelta("wake read actor-lifetime", afterWakeReadMetrics);
-			console.log(
-				"  cold wake/open uses a tiny SQLite action without scanning the payload.",
+				`  ${scenario.label} transaction bytes: ${scenario.writeResult.transactionBytes}`,
 			);
 			console.log(
-				"  wake read actor-lifetime VFS metrics include startup DB work before the read action.",
+				`  ${scenario.label} insert server: ${fmtMs(scenario.writeResult.ms)} (insert=${fmtMs(scenario.writeResult.sqliteInsertMs)}, commit=${fmtMs(scenario.writeResult.commitMs)}, random_strings=${fmtMs(scenario.writeResult.randomStringMs)})`,
 			);
+			console.log(`  ${scenario.label} insert e2e: ${fmtMs(scenario.write.ms)}`);
+			if (scenario.hotRead && scenario.hotReadResult && scenario.hotReadMetrics) {
+				console.log(
+					`  ${scenario.label} hot read server: ${fmtMs(scenario.hotReadResult.ms)}`,
+				);
+				console.log(
+					`  ${scenario.label} hot read e2e: ${fmtMs(scenario.hotRead.ms)}`,
+				);
+			} else {
+				console.log(`  ${scenario.label} hot read: skipped`);
+			}
+			console.log(
+				`  ${variant.label} cold wake/open server: ${fmtMs(variant.wakeOpenResult.ms)}`,
+			);
+			console.log(
+				`  ${variant.label} cold wake/open e2e: ${fmtMs(variant.wakeOpen.ms)}`,
+			);
+			console.log(
+				`  ${variant.label} cold wake/open overhead estimate: ${fmtMs(Math.max(0, variant.wakeOpen.ms - variant.wakeOpenResult.ms))}`,
+			);
+			console.log(
+				`  ${variant.label} wake read server: ${fmtMs(variant.coldReadResult.ms)}`,
+			);
+			console.log(
+				`  ${variant.label} wake read e2e: ${fmtMs(variant.coldRead.ms)}`,
+			);
+			console.log(
+				`  ${variant.label} wake overhead estimate: ${fmtMs(Math.max(0, variant.coldRead.ms - variant.coldReadResult.ms))}`,
+			);
+			if (scenario.hotReadMetrics) {
+				printVfsMetricDelta(`${scenario.label} hot read`, scenario.hotReadMetrics);
+			}
+			printVfsMetricDelta(
+				`${variant.label} wake read actor-lifetime`,
+				variant.metrics,
+			);
+		}
+		console.log(
+			"  cold wake/open uses a tiny SQLite action without scanning the payload.",
+		);
+		console.log(
+			"  un-compacted keeps storage compaction disabled in the local benchmark engine.",
+		);
+		console.log(
+			"  compacted runs as a separate cold-read control with the same inline transaction size.",
+		);
+		console.log(
+			"  wake read actor-lifetime VFS metrics include startup DB work before the read action.",
+		);
 	} catch (err) {
 		const engineLogs = tailEngineLogs(engine);
 		if (engineLogs) {

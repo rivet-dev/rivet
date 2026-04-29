@@ -557,6 +557,16 @@ mod tests {
 		vec![fill; SQLITE_PAGE_SIZE as usize]
 	}
 
+	fn noisy_page(seed: u32) -> Vec<u8> {
+		let mut state = seed.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+		(0..SQLITE_PAGE_SIZE)
+			.map(|_| {
+				state = state.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+				(state >> 24) as u8
+			})
+			.collect()
+	}
+
 	fn delta_blob_key(actor_id: &str, txid: u64) -> Vec<u8> {
 		delta_chunk_key(actor_id, txid, 0)
 	}
@@ -617,6 +627,17 @@ mod tests {
 			.map(|(pgno, fill)| DirtyPage {
 				pgno: *pgno,
 				bytes: page(*fill),
+			})
+			.collect::<Vec<_>>();
+		encode_ltx_v3(LtxHeader::delta(txid, commit, 999), &pages).expect("encode test blob")
+	}
+
+	fn encoded_noisy_blob(txid: u64, commit: u32, pgnos: impl IntoIterator<Item = u32>) -> Vec<u8> {
+		let pages = pgnos
+			.into_iter()
+			.map(|pgno| DirtyPage {
+				pgno,
+				bytes: noisy_page(pgno),
 			})
 			.collect::<Vec<_>>();
 		encode_ltx_v3(LtxHeader::delta(txid, commit, 999), &pages).expect("encode test blob")
@@ -775,6 +796,50 @@ mod tests {
 					bytes: Some(page(0x33)),
 				},
 			]
+		);
+
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn compact_shard_reads_existing_chunked_shard_blob() -> Result<()> {
+		let (db, subspace) = test_db().await?;
+		let mut head = seeded_head();
+		head.head_txid = 2;
+		head.next_txid = 3;
+		head.db_size_pages = SQLITE_SHARD_SIZE;
+		let (engine, _compaction_rx) = SqliteEngine::new(db, subspace);
+		let pgnos = (1..=SQLITE_SHARD_SIZE).collect::<Vec<_>>();
+		let existing_shard = encoded_noisy_blob(1, SQLITE_SHARD_SIZE, pgnos.iter().copied());
+		assert!(existing_shard.len() > crate::udb::VALUE_CHUNK_SIZE * 10);
+		apply_write_ops(
+			&engine.db,
+			&engine.subspace,
+			engine.op_counter.as_ref(),
+			vec![
+				WriteOp::put(meta_key(TEST_ACTOR), encode_db_head(&head)?),
+				WriteOp::put(shard_key(TEST_ACTOR, 0), existing_shard),
+				WriteOp::put(
+					delta_blob_key(TEST_ACTOR, 2),
+					encoded_blob(2, SQLITE_SHARD_SIZE, &[(1, 0x22)]),
+				),
+				WriteOp::put(pidx_delta_key(TEST_ACTOR, 1), 2_u64.to_be_bytes().to_vec()),
+			],
+		)
+		.await?;
+		engine.open(TEST_ACTOR, OpenConfig::new(0)).await?;
+
+		assert!(engine.compact_shard(TEST_ACTOR, 0).await?);
+
+		let shard_blob = read_value(&engine, shard_key(TEST_ACTOR, 0))
+			.await?
+			.expect("shard should exist after compaction");
+		let decoded = decode_ltx_v3(&shard_blob)?;
+		assert_eq!(decoded.get_page(1), Some(page(0x22).as_slice()));
+		assert_eq!(decoded.get_page(2), Some(noisy_page(2).as_slice()));
+		assert_eq!(
+			decoded.get_page(SQLITE_SHARD_SIZE - 1),
+			Some(noisy_page(SQLITE_SHARD_SIZE - 1).as_slice())
 		);
 
 		Ok(())
