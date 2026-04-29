@@ -20,6 +20,7 @@ Implementation tracking lives in `scripts/ralph/prd.json`.
 
 - Gate SQLite cold-read optimizations behind central env-backed feature flags that default on, so each optimization can be benchmarked on and off.
 - Add adaptive forward-scan read-ahead that can grow beyond shard-sized batches for mostly sequential reads while shrinking back for scattered access.
+- Configure preload hint mechanisms independently with env vars, including hot pages, early-after-wake pages, scan ranges, and first-page/first-range policies.
 - Record VFS predictor access on cache hits so prefetch learns real sequential scans.
 - Cache repeated pegboard-envoy SQLite actor validation and local-open checks for active actors.
 - Return SQLite meta from `sqlite-storage::get_pages(...)` instead of doing a second META read in pegboard-envoy.
@@ -27,6 +28,14 @@ Implementation tracking lives in `scripts/ralph/prd.json`.
 - Add a bulk or range page-read protocol so cold scans do not require page-list request loops.
 - Reduce storage read amplification from chunked values and whole-blob LTX decode with larger chunks, range reads, decoded blob caching, or page-frame-addressable storage.
 - Benchmark compacted and un-compacted cold reads separately.
+
+## Preload Hint Policy
+
+- VFS preload hints are page-number based. SQLite index, table, schema, and overflow pages all hit VFS on pager-cache misses, but SQLite's pager cache can hide repeat access after the first read.
+- Preload selection should consider early-after-wake pages in addition to frequency and scan ranges, because index/root/schema pages may be important even when VFS only observes them once per actor lifetime.
+- Preload hint mechanisms must be independently configurable through the central SQLite optimization feature flag/config file, not scattered `std::env` reads.
+- Supported preload mechanisms should include first pages, persisted hot pages, early-after-wake pages, and persisted scan ranges.
+- All preload mechanisms should default on only when bounded by `OpenConfig.max_total_bytes` or an equivalent preload byte budget.
 
 ## Update Rules
 

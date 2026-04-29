@@ -150,16 +150,19 @@
         "`notes` records insert e2e ms, hot read e2e ms, wake read e2e ms, wake read server ms, wake overhead estimate ms, wake read VFS get_pages calls, pages fetched, bytes fetched, prefetch pages, prefetch bytes, and VFS transport ms and compares them to baseline plus SQLITE-COLD-007"
       ],
       "priority": 8,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added core-owned SQLite preload hint flushing in `rivetkit-core`: opening SQLite starts a default-enabled periodic flush task, actor cleanup stops the task, snapshots VFS hints, and queues a final best-effort persist request before closing the native handle. Added `rivet-envoy-client` fire-and-forget preload-hint persistence so stop/sleep teardown does not wait indefinitely for a response while shutdown is already in motion. Benchmark artifact written to `.agent/notes/sqlite-cold-read-after-SQLITE-COLD-008.txt` with no preload-hint flush timeout warnings. Numbers: insert e2e 15945.6ms; hot read e2e 156.3ms; wake read e2e 4116.3ms; wake read server 3967.7ms; wake overhead estimate 148.6ms; wake read VFS get_pages calls 69; pages fetched 13726; bytes fetched 56221696; prefetch pages 13657; prefetch bytes 55939072; VFS transport 3738.6ms. Compared with baseline/SQLITE-COLD-001: get_pages calls dropped 1249 -> 69, wake read e2e dropped 20141.0ms -> 4116.3ms, wake VFS transport dropped 19332.8ms -> 3738.6ms, and hot read e2e was 118.6ms -> 156.3ms. Compared with SQLITE-COLD-007: get_pages calls stayed 69 -> 69, wake read e2e was 4040.1ms -> 4116.3ms, wake read server was 3883.5ms -> 3967.7ms, wake VFS transport was 3650.0ms -> 3738.6ms, and hot read e2e improved 193.5ms -> 156.3ms. Checks passed: cargo check -p rivet-envoy-client; cargo check -p rivetkit-core --features sqlite; cargo test -p rivetkit-sqlite -- --test-threads=1; pnpm --filter kitchen-sink check-types; pnpm -F rivetkit check-types; pnpm --filter @rivetkit/rivetkit-napi build:force."
     },
     {
       "id": "SQLITE-COLD-009",
       "title": "Use persisted preload hints on actor start",
-      "description": "Load persisted recent-page preload hints during SQLite open and feed them into `OpenConfig.preload_pgnos`, `OpenConfig.preload_ranges`, and `OpenConfig.max_total_bytes` on the next actor start. Keep preload bounded and measurable.",
+      "description": "Load persisted recent-page preload hints during SQLite open and feed them into `OpenConfig.preload_pgnos`, `OpenConfig.preload_ranges`, and `OpenConfig.max_total_bytes` on the next actor start. Keep preload bounded and measurable. The preload selection must account for SQLite pager caching: index/root/schema pages are ordinary database pages, but repeat access can be hidden from VFS after first read, so pages read early after wake/open should be eligible preload candidates in addition to frequency and scan ranges. Different preload hint mechanisms must be configurable with env vars through the central SQLite optimization feature flag/config file.",
       "acceptanceCriteria": [
         "Any new optimization in this story is controlled by the central SQLite optimization feature flag file and defaults enabled unless this story is only documentation or benchmarking",
         "sqlite-storage open loads persisted preload hints if present",
+        "Preload hint selection treats pages read early after actor wake/open as preload candidates, because SQLite pager caching can hide repeated index/root/schema page usage from the VFS after the first read",
+        "Preload hint mechanisms are individually configurable through env vars in the central SQLite optimization feature flag/config file, including at least hot pages, early pages, and scan ranges",
+        "The selected preload mechanisms are enabled by default and can be disabled independently for benchmark comparison",
         "pegboard-envoy passes hint-derived pages and ranges into OpenConfig during actor start",
         "Preload budget is bounded and configurable or locally constant with a clear cap",
         "A repeated wake touching the same working set preloads useful pages before the action runs",
@@ -328,11 +331,14 @@
     {
       "id": "SQLITE-COLD-018",
       "title": "Make startup preload policy configurable",
-      "description": "Add bounded configuration for SQLite startup preload policy, including preload byte budget and whether to use first pages, persisted recent-page hints, or scan ranges. Defaults should stay conservative.",
+      "description": "Add bounded configuration for SQLite startup preload policy, including preload byte budget and independent env-var toggles for preload hint mechanisms such as first pages, persisted hot pages, early-after-wake pages, and scan ranges. Defaults should stay conservative and enabled where safe.",
       "acceptanceCriteria": [
         "Any new optimization in this story is controlled by the central SQLite optimization feature flag file and defaults enabled unless this story is only documentation or benchmarking",
         "SQLite startup preload budget is configurable or clearly centralized",
         "Startup preload can use first pages, persisted recent-page hints, and scan ranges within the budget",
+        "Preload mechanism defaults are documented in the story notes after implementation",
+        "All preload mechanism env vars are read through the central SQLite optimization feature flag/config file rather than direct scattered env reads",
+        "Startup preload policy supports env-var configuration for each preload hint mechanism: first pages, persisted hot pages, early-after-wake pages, and scan ranges",
         "Defaults remain conservative and do not preload the full database accidentally",
         "Relevant Rust checks pass for touched packages",
         "Typecheck passes",

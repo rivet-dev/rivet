@@ -481,6 +481,22 @@ impl EnvoyHandle {
 		}
 	}
 
+	pub fn sqlite_persist_preload_hints_fire_and_forget(
+		&self,
+		request: protocol::SqlitePersistPreloadHintsRequest,
+	) -> anyhow::Result<()> {
+		let (tx, rx) = tokio::sync::oneshot::channel();
+		drop(rx);
+		self.shared
+			.envoy_tx
+			.send(ToEnvoyMessage::SqliteRequest {
+				request: SqliteRequest::PersistPreloadHints(request),
+				response_tx: tx,
+			})
+			.map_err(|_| anyhow::anyhow!("envoy channel closed"))?;
+		Ok(())
+	}
+
 	pub fn restore_hibernating_requests(
 		&self,
 		actor_id: String,

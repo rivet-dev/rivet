@@ -2,6 +2,8 @@ use std::collections::HashSet;
 use std::io::Cursor;
 #[cfg(feature = "sqlite")]
 use std::sync::Arc;
+#[cfg(feature = "sqlite")]
+use std::time::Duration;
 
 use anyhow::{Context, Result};
 #[cfg(feature = "sqlite")]
@@ -10,6 +12,12 @@ use rivet_envoy_client::handle::EnvoyHandle;
 use rivet_envoy_client::protocol;
 use serde::Serialize;
 use serde_json::{Map as JsonMap, Value as JsonValue};
+#[cfg(feature = "sqlite")]
+use tokio::task::JoinHandle;
+#[cfg(feature = "sqlite")]
+use tokio::time::{interval, timeout};
+#[cfg(feature = "sqlite")]
+use tracing::Instrument;
 
 use crate::error::SqliteRuntimeError;
 
@@ -18,9 +26,15 @@ pub use rivetkit_sqlite::query::{BindParam, ColumnValue, ExecResult, QueryResult
 #[cfg(feature = "sqlite")]
 use rivetkit_sqlite::{
 	database::{NativeDatabaseHandle, open_database_from_envoy},
+	optimization_flags::sqlite_optimization_flags,
 	query::{exec_statements, execute_statement, query_statement},
-	vfs::SqliteVfsMetrics,
+	vfs::{SqliteVfsMetrics, VfsPreloadHintSnapshot},
 };
+
+#[cfg(feature = "sqlite")]
+const PRELOAD_HINT_FLUSH_INTERVAL: Duration = Duration::from_secs(30);
+#[cfg(feature = "sqlite")]
+const PRELOAD_HINT_FLUSH_TIMEOUT: Duration = Duration::from_secs(5);
 
 #[cfg(not(feature = "sqlite"))]
 #[derive(Clone, Debug, PartialEq)]
@@ -76,6 +90,10 @@ pub struct SqliteDb {
 	// synchronous diagnostic accessors.
 	db: Arc<Mutex<Option<NativeDatabaseHandle>>>,
 	#[cfg(feature = "sqlite")]
+	// Forced-sync: the background task is spawned and aborted from sync cleanup
+	// paths around the native database handle.
+	preload_hint_flush_task: Arc<Mutex<Option<JoinHandle<()>>>>,
+	#[cfg(feature = "sqlite")]
 	vfs_metrics: Option<Arc<dyn SqliteVfsMetrics>>,
 }
 
@@ -93,6 +111,8 @@ impl SqliteDb {
 			enabled,
 			#[cfg(feature = "sqlite")]
 			db: Default::default(),
+			#[cfg(feature = "sqlite")]
+			preload_hint_flush_task: Default::default(),
 			#[cfg(feature = "sqlite")]
 			vfs_metrics: None,
 		}
@@ -152,30 +172,32 @@ impl SqliteDb {
 	pub async fn open(&self) -> Result<()> {
 		#[cfg(feature = "sqlite")]
 		{
-				let config = self.runtime_config()?;
-				let db = self.db.clone();
-				let vfs_metrics = self.vfs_metrics.clone();
-				let rt_handle = tokio::runtime::Handle::try_current()
-					.context("open sqlite database requires a tokio runtime")?;
+			let config = self.runtime_config()?;
+			let db = self.db.clone();
+			let vfs_metrics = self.vfs_metrics.clone();
+			let rt_handle = tokio::runtime::Handle::try_current()
+				.context("open sqlite database requires a tokio runtime")?;
 
 			tokio::task::spawn_blocking(move || {
 				let mut guard = db.lock();
 				if guard.is_some() {
-					return Ok(());
+					return Ok::<(), anyhow::Error>(());
 				}
 
 				let native_db = open_database_from_envoy(
 					config.handle,
-						config.actor_id,
-						config.startup_data,
-						rt_handle,
-						vfs_metrics,
-					)?;
+					config.actor_id,
+					config.startup_data,
+					rt_handle,
+					vfs_metrics,
+				)?;
 				*guard = Some(native_db);
 				Ok(())
 			})
 			.await
-			.context("join sqlite open task")?
+			.context("join sqlite open task")??;
+			self.ensure_preload_hint_flush_task()?;
+			Ok(())
 		}
 
 		#[cfg(not(feature = "sqlite"))]
@@ -267,6 +289,7 @@ impl SqliteDb {
 	pub async fn close(&self) -> Result<()> {
 		#[cfg(feature = "sqlite")]
 		{
+			self.stop_preload_hint_flush_task();
 			let db = self.db.clone();
 			tokio::task::spawn_blocking(move || {
 				let mut guard = db.lock();
@@ -284,7 +307,84 @@ impl SqliteDb {
 	}
 
 	pub(crate) async fn cleanup(&self) -> Result<()> {
+		#[cfg(feature = "sqlite")]
+		{
+			self.stop_preload_hint_flush_task();
+			self.flush_preload_hints_before_close().await;
+		}
 		self.close().await
+	}
+
+	#[cfg(feature = "sqlite")]
+	fn ensure_preload_hint_flush_task(&self) -> Result<()> {
+		if !sqlite_optimization_flags().preload_hint_flush {
+			return Ok(());
+		}
+
+		let config = self.runtime_config()?;
+		let Some(generation) = config.startup_data.as_ref().map(|data| data.generation) else {
+			return Ok(());
+		};
+		if self.db.lock().is_none() {
+			return Ok(());
+		}
+
+		let mut task_guard = self.preload_hint_flush_task.lock();
+		if task_guard.is_some() {
+			return Ok(());
+		}
+
+		let db = self.db.clone();
+		let handle = config.handle;
+		let actor_id = config.actor_id;
+		*task_guard = Some(tokio::spawn(
+			async move {
+				let mut tick = interval(PRELOAD_HINT_FLUSH_INTERVAL);
+				tick.tick().await;
+				loop {
+					tick.tick().await;
+					flush_preload_hints_best_effort(
+						db.clone(),
+						handle.clone(),
+						actor_id.clone(),
+						generation,
+						"periodic",
+					)
+					.await;
+				}
+			}
+			.in_current_span(),
+		));
+		Ok(())
+	}
+
+	#[cfg(feature = "sqlite")]
+	fn stop_preload_hint_flush_task(&self) {
+		if let Some(task) = self.preload_hint_flush_task.lock().take() {
+			task.abort();
+		}
+	}
+
+	#[cfg(feature = "sqlite")]
+	async fn flush_preload_hints_before_close(&self) {
+		if !sqlite_optimization_flags().preload_hint_flush {
+			return;
+		}
+
+		let Ok(config) = self.runtime_config() else {
+			return;
+		};
+		let Some(generation) = config.startup_data.as_ref().map(|data| data.generation) else {
+			return;
+		};
+
+		enqueue_preload_hint_flush_best_effort(
+			self.db.clone(),
+			config.handle,
+			config.actor_id,
+			generation,
+		)
+		.await;
 	}
 
 	pub fn take_last_kv_error(&self) -> Option<String> {
@@ -337,6 +437,175 @@ impl SqliteDb {
 		self.handle
 			.clone()
 			.ok_or_else(|| sqlite_not_configured("handle"))
+	}
+}
+
+#[cfg(feature = "sqlite")]
+async fn enqueue_preload_hint_flush_best_effort(
+	db: Arc<Mutex<Option<NativeDatabaseHandle>>>,
+	handle: EnvoyHandle,
+	actor_id: String,
+	generation: u64,
+) {
+	let snapshot = match snapshot_preload_hints(db).await {
+		Ok(Some(snapshot)) => snapshot,
+		Ok(None) => return,
+		Err(error) => {
+			tracing::warn!(
+				actor_id = %actor_id,
+				?error,
+				reason = "shutdown",
+				"sqlite preload hint snapshot failed"
+			);
+			return;
+		}
+	};
+	if snapshot.pgnos.is_empty() && snapshot.ranges.is_empty() {
+		return;
+	}
+
+	let hint_count = snapshot.pgnos.len() + snapshot.ranges.len();
+	let request = protocol::SqlitePersistPreloadHintsRequest {
+		actor_id: actor_id.clone(),
+		generation,
+		hints: protocol_preload_hints(snapshot),
+	};
+	match handle.sqlite_persist_preload_hints_fire_and_forget(request) {
+		Ok(()) => {
+			tracing::debug!(
+				actor_id = %actor_id,
+				generation,
+				reason = "shutdown",
+				hint_count,
+				"sqlite preload hint flush queued"
+			);
+		}
+		Err(error) => {
+			tracing::warn!(
+				actor_id = %actor_id,
+				generation,
+				reason = "shutdown",
+				hint_count,
+				?error,
+				"sqlite preload hint flush queue failed"
+			);
+		}
+	}
+}
+
+#[cfg(feature = "sqlite")]
+async fn flush_preload_hints_best_effort(
+	db: Arc<Mutex<Option<NativeDatabaseHandle>>>,
+	handle: EnvoyHandle,
+	actor_id: String,
+	generation: u64,
+	reason: &'static str,
+) {
+	let snapshot = match snapshot_preload_hints(db).await {
+		Ok(Some(snapshot)) => snapshot,
+		Ok(None) => return,
+		Err(error) => {
+			tracing::warn!(
+				actor_id = %actor_id,
+				?error,
+				reason,
+				"sqlite preload hint snapshot failed"
+			);
+			return;
+		}
+	};
+	if snapshot.pgnos.is_empty() && snapshot.ranges.is_empty() {
+		return;
+	}
+
+	let hint_count = snapshot.pgnos.len() + snapshot.ranges.len();
+	let request = protocol::SqlitePersistPreloadHintsRequest {
+		actor_id: actor_id.clone(),
+		generation,
+		hints: protocol_preload_hints(snapshot),
+	};
+	let response = timeout(
+		PRELOAD_HINT_FLUSH_TIMEOUT,
+		handle.sqlite_persist_preload_hints(request),
+	)
+	.await;
+	match response {
+		Ok(Ok(protocol::SqlitePersistPreloadHintsResponse::SqlitePersistPreloadHintsOk)) => {
+			tracing::debug!(
+				actor_id = %actor_id,
+				generation,
+				reason,
+				hint_count,
+				"sqlite preload hints flushed"
+			);
+		}
+		Ok(Ok(protocol::SqlitePersistPreloadHintsResponse::SqliteFenceMismatch(mismatch))) => {
+			tracing::debug!(
+				actor_id = %actor_id,
+				generation,
+				reason,
+				hint_count,
+				fence_reason = %mismatch.reason,
+				"sqlite preload hint flush skipped after fence mismatch"
+			);
+		}
+		Ok(Ok(protocol::SqlitePersistPreloadHintsResponse::SqliteErrorResponse(error))) => {
+			tracing::warn!(
+				actor_id = %actor_id,
+				generation,
+				reason,
+				hint_count,
+				error = %error.message,
+				"sqlite preload hint flush failed"
+			);
+		}
+		Ok(Err(error)) => {
+			tracing::warn!(
+				actor_id = %actor_id,
+				generation,
+				reason,
+				hint_count,
+				?error,
+				"sqlite preload hint flush failed"
+			);
+		}
+		Err(_) => {
+			tracing::warn!(
+				actor_id = %actor_id,
+				generation,
+				reason,
+				hint_count,
+				timeout_ms = PRELOAD_HINT_FLUSH_TIMEOUT.as_millis() as u64,
+				"sqlite preload hint flush timed out"
+			);
+		}
+	}
+}
+
+#[cfg(feature = "sqlite")]
+async fn snapshot_preload_hints(
+	db: Arc<Mutex<Option<NativeDatabaseHandle>>>,
+) -> Result<Option<VfsPreloadHintSnapshot>> {
+	tokio::task::spawn_blocking(move || {
+		let guard = db.lock();
+		Ok(guard.as_ref().map(NativeDatabaseHandle::snapshot_preload_hints))
+	})
+	.await
+	.context("join sqlite preload hint snapshot task")?
+}
+
+#[cfg(feature = "sqlite")]
+fn protocol_preload_hints(snapshot: VfsPreloadHintSnapshot) -> protocol::SqlitePreloadHints {
+	protocol::SqlitePreloadHints {
+		pgnos: snapshot.pgnos,
+		ranges: snapshot
+			.ranges
+			.into_iter()
+			.map(|range| protocol::SqlitePreloadHintRange {
+				start_pgno: range.start_pgno,
+				page_count: range.page_count,
+			})
+			.collect(),
 	}
 }
 
