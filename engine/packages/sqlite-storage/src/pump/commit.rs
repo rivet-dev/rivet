@@ -14,6 +14,7 @@ use crate::pump::{
 	ActorDb,
 	keys::{self, SHARD_SIZE},
 	ltx::{LtxHeader, encode_ltx_v3},
+	metrics,
 	quota,
 	types::{DBHead, DirtyPage, decode_db_head, encode_db_head},
 };
@@ -27,6 +28,15 @@ impl ActorDb {
 		db_size_pages: u32,
 		now_ms: i64,
 	) -> Result<()> {
+		let node_id = self.node_id.to_string();
+		let labels = &[node_id.as_str()];
+		let _timer = metrics::SQLITE_PUMP_COMMIT_DURATION
+			.with_label_values(labels)
+			.start_timer();
+		metrics::SQLITE_PUMP_COMMIT_DIRTY_PAGE_COUNT
+			.with_label_values(labels)
+			.observe(dirty_pages.len() as f64);
+
 		let cached_storage_used = *self.storage_used.lock();
 		let cache_was_warm = !self.cache.lock().range(0, u32::MAX).is_empty();
 		let actor_id = self.actor_id.clone();

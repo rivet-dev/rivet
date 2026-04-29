@@ -1,6 +1,7 @@
 use std::{sync::Arc, time::Instant};
 
 use parking_lot::Mutex;
+use rivet_pools::NodeId;
 use universaldb::Database;
 
 use crate::page_index::DeltaPageIndex;
@@ -9,6 +10,7 @@ use crate::page_index::DeltaPageIndex;
 pub struct ActorDb {
 	pub(super) udb: Arc<Database>,
 	pub(super) actor_id: String,
+	pub(super) node_id: NodeId,
 	pub(super) cache: Mutex<DeltaPageIndex>,
 	/// Cached `/META/quota`. Loaded once on the first UDB tx.
 	pub(super) storage_used: Mutex<Option<i64>>,
@@ -21,13 +23,14 @@ pub struct ActorDb {
 }
 
 impl ActorDb {
-	pub fn new(udb: Arc<Database>, actor_id: String) -> Self {
+	pub fn new(udb: Arc<Database>, actor_id: String, node_id: NodeId) -> Self {
 		#[cfg(debug_assertions)]
 		crate::takeover::reconcile(&udb, &actor_id);
 
 		Self {
 			udb,
 			actor_id,
+			node_id,
 			cache: Mutex::new(DeltaPageIndex::new()),
 			storage_used: Mutex::new(None),
 			commit_bytes_since_rollup: Mutex::new(0),

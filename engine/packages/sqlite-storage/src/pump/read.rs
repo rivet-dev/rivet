@@ -15,6 +15,7 @@ use crate::pump::{
 	error::SqliteStorageError,
 	keys::{self, PAGE_SIZE, SHARD_SIZE},
 	ltx::{DecodedLtx, decode_ltx_v3},
+	metrics,
 	page_index::DeltaPageIndex,
 	types::{FetchedPage, decode_db_head},
 };
@@ -24,6 +25,15 @@ const PIDX_TXID_BYTES: usize = std::mem::size_of::<u64>();
 
 impl ActorDb {
 	pub async fn get_pages(&self, pgnos: Vec<u32>) -> Result<Vec<FetchedPage>> {
+		let node_id = self.node_id.to_string();
+		let labels = &[node_id.as_str()];
+		let _timer = metrics::SQLITE_PUMP_GET_PAGES_DURATION
+			.with_label_values(labels)
+			.start_timer();
+		metrics::SQLITE_PUMP_GET_PAGES_PGNO_COUNT
+			.with_label_values(labels)
+			.observe(pgnos.len() as f64);
+
 		for pgno in &pgnos {
 			ensure!(*pgno > 0, "get_pages does not accept page 0");
 		}
@@ -162,6 +172,10 @@ impl ActorDb {
 
 		let mut stale_pidx_pgnos = tx_result.stale_pidx_pgnos;
 		if let Some(loaded_pidx_rows) = tx_result.loaded_pidx_rows {
+			metrics::SQLITE_PUMP_PIDX_COLD_SCAN_TOTAL
+				.with_label_values(labels)
+				.inc();
+
 			let loaded_index = DeltaPageIndex::new();
 			for (pgno, txid) in loaded_pidx_rows {
 				if !stale_pidx_pgnos.contains(&pgno) {

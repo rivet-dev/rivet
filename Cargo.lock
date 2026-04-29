@@ -6210,8 +6210,11 @@ version = "2.3.0-rc.4"
 dependencies = [
  "anyhow",
  "futures-util",
+ "lazy_static",
  "lz4_flex",
  "parking_lot",
+ "rivet-metrics",
+ "rivet-pools",
  "scc",
  "serde",
  "serde_bare",

@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use anyhow::Result;
+use rivet_pools::NodeId;
 use sqlite_storage::{
 	keys::{delta_chunk_key, meta_head_key, pidx_delta_key, shard_key, PAGE_SIZE},
 	ltx::{LtxHeader, encode_ltx_v3},
@@ -94,7 +95,7 @@ async fn read_quota(db: &universaldb::Database) -> Result<i64> {
 #[tokio::test]
 async fn commit_lazily_initializes_meta_on_first_write() -> Result<()> {
 	let db = Arc::new(test_db().await?);
-	let actor_db = ActorDb::new(db.clone(), TEST_ACTOR.to_string());
+	let actor_db = ActorDb::new(db.clone(), TEST_ACTOR.to_string(), NodeId::new());
 
 	actor_db.commit(vec![page(1, 0x11)], 2, 1_000).await?;
 
@@ -120,7 +121,7 @@ async fn commit_lazily_initializes_meta_on_first_write() -> Result<()> {
 #[tokio::test]
 async fn commit_advances_head_and_updates_warm_cache() -> Result<()> {
 	let db = Arc::new(test_db().await?);
-	let actor_db = ActorDb::new(db.clone(), TEST_ACTOR.to_string());
+	let actor_db = ActorDb::new(db.clone(), TEST_ACTOR.to_string(), NodeId::new());
 
 	actor_db.commit(vec![page(1, 0x11)], 2, 1_000).await?;
 	assert_eq!(
@@ -170,7 +171,7 @@ async fn commit_rejects_quota_cap_before_writes() -> Result<()> {
 	})
 	.await?;
 
-	let actor_db = ActorDb::new(db.clone(), TEST_ACTOR.to_string());
+	let actor_db = ActorDb::new(db.clone(), TEST_ACTOR.to_string(), NodeId::new());
 	let err = actor_db
 		.commit(vec![page(1, 0x44)], 1, 3_000)
 		.await
@@ -213,7 +214,7 @@ async fn shrink_commit_deletes_above_eof_pidx_and_shards() -> Result<()> {
 	})
 	.await?;
 
-	let actor_db = ActorDb::new(db.clone(), TEST_ACTOR.to_string());
+	let actor_db = ActorDb::new(db.clone(), TEST_ACTOR.to_string(), NodeId::new());
 	actor_db.commit(vec![page(1, 0x11)], 63, 4_000).await?;
 
 	assert_eq!(read_head(&db).await?, head(8, 63));

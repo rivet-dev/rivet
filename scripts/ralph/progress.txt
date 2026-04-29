@@ -12,6 +12,7 @@ Started: Wed Apr 29 04:36:56 AM PDT 2026
 - `sqlite-storage::pump::ActorDb::new` runs debug-only takeover reconciliation synchronously; keep `takeover::reconcile` sync until the constructor shape changes.
 - For sqlite-storage raw byte prefix scans, build a `universaldb::Subspace` with `tuple::Subspace::from_bytes(prefix)` and use its range; direct `(prefix, end_of_key_range(prefix))` ranges can miss rows on the RocksDB driver.
 - `ActorDb::commit` should update the in-memory PIDX cache only when it was already warm; leave a cold cache empty so the next read performs the full PIDX scan instead of treating a partial commit-updated cache as authoritative.
+- `sqlite-storage::pump::ActorDb::new` carries a `rivet_pools::NodeId`; production callers should pass `pools.node_id()` so pump metrics are labeled by process node.
 
 ## 2026-04-29 04:44:52 PDT - US-001
 - Implemented a UUID-backed `NodeId` type and stored a generated value on each `Pools` instance.
@@ -102,4 +103,15 @@ Started: Wed Apr 29 04:36:56 AM PDT 2026
   - Keep commit's steady-state UDB reads to `/META/head`; a cold quota cache is the only path that should add the `/META/quota` read.
   - Commit can split encoded LTX bytes across `DELTA/{txid}/{chunk_idx}` rows and the existing read path will concatenate them by prefix scan.
   - Do not warm a cold PIDX cache from commit alone; otherwise future reads can skip the full PIDX scan and miss older rows.
+---
+## 2026-04-29 05:18:24 PDT - US-010
+- Added stateless pump Prometheus metrics for commit/get_pages duration, dirty page count, requested page count, and PIDX cold scans, all labeled by `node_id`.
+- Stored `rivet_pools::NodeId` on `ActorDb` so production callers can pass `pools.node_id()` when constructing per-actor handles.
+- Wired commit/read metrics into the existing hot paths and updated current integration tests for the new constructor shape.
+- Verified `cargo check -p sqlite-storage`, `cargo test -p sqlite-storage`, and `git diff --check`.
+- Files changed: `engine/packages/sqlite-storage/Cargo.toml`, `engine/packages/sqlite-storage/src/pump/actor_db.rs`, `engine/packages/sqlite-storage/src/pump/commit.rs`, `engine/packages/sqlite-storage/src/pump/metrics.rs`, `engine/packages/sqlite-storage/src/pump/mod.rs`, `engine/packages/sqlite-storage/src/pump/read.rs`, `engine/packages/sqlite-storage/tests/pump_commit.rs`, `engine/packages/sqlite-storage/tests/pump_read.rs`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
+- **Learnings for future iterations:**
+  - Pump metrics should use the exact `sqlite_pump_*` names from the PRD and a single `node_id` label.
+  - Passing `NodeId` into `ActorDb` keeps metric labeling local to the pump without threading `Pools` through hot-path methods.
+  - Histogram timers from `prometheus` observe on drop, so placing them at method entry records both success and early-error exits.
 ---
