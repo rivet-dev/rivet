@@ -107,6 +107,7 @@ docker-compose up -d
 - Actor2 workflows and envoy actors always use the SQLite v2 storage format; only old actor v1 workflows and pegboard runners use the v1 storage format. ("v2" here refers to the on-disk storage format, not envoy-protocol v2.)
 - Native SQLite VFS recent-page preload hints are actor-side Rust state surfaced by `NativeDatabase::snapshot_preload_hints()`; persist and consume them through runtime/envoy wiring, not JS APIs.
 - SQLite VFS file handles must enforce their reader or writer role; reader-owned handles fail closed on mutating callbacks.
+- Native SQLite single-statement work should route through the native execute path; keep `exec` as the multi-statement compatibility path.
 - For NAPI bridge wiring (TSF callback layout, cancellation tokens, `#[napi(object)]` rules), see `docs-internal/engine/napi-bridge.md`.
 
 ## Agent Working Directory

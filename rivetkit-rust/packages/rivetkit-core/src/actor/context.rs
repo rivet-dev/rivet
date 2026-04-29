@@ -367,6 +367,10 @@ impl ActorContext {
 		self.0.sql.query_rows_cbor(sql, params).await
 	}
 
+	pub async fn db_execute(&self, sql: &str, params: Option<&[u8]>) -> Result<Vec<u8>> {
+		self.0.sql.execute_rows_cbor(sql, params).await
+	}
+
 	pub async fn db_run(&self, sql: &str, params: Option<&[u8]>) -> Result<()> {
 		self.0.sql.run_cbor(sql, params).await?;
 		Ok(())

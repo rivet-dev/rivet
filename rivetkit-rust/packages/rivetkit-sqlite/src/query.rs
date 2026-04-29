@@ -17,8 +17,8 @@ use libsqlite3_sys::{
 	sqlite3_bind_double, sqlite3_bind_int64, sqlite3_bind_null, sqlite3_bind_text,
 	sqlite3_changes, sqlite3_column_blob, sqlite3_column_bytes, sqlite3_column_count,
 	sqlite3_column_double, sqlite3_column_int64, sqlite3_column_name, sqlite3_column_text,
-	sqlite3_column_type, sqlite3_errmsg, sqlite3_finalize, sqlite3_prepare_v2,
-	sqlite3_set_authorizer, sqlite3_step, sqlite3_stmt_readonly,
+	sqlite3_column_type, sqlite3_errmsg, sqlite3_finalize, sqlite3_last_insert_rowid,
+	sqlite3_prepare_v2, sqlite3_set_authorizer, sqlite3_step, sqlite3_stmt_readonly,
 };
 
 #[derive(Clone, Debug, PartialEq)]
@@ -39,6 +39,22 @@ pub struct ExecResult {
 pub struct QueryResult {
 	pub columns: Vec<String>,
 	pub rows: Vec<Vec<ColumnValue>>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ExecuteRoute {
+	Read,
+	Write,
+	WriteFallback,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct ExecuteResult {
+	pub columns: Vec<String>,
+	pub rows: Vec<Vec<ColumnValue>>,
+	pub changes: i64,
+	pub last_insert_row_id: Option<i64>,
+	pub route: ExecuteRoute,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -374,6 +390,77 @@ pub fn query_statement(
 		}
 
 		Ok(QueryResult { columns, rows })
+	})();
+
+	unsafe {
+		sqlite3_finalize(stmt);
+	}
+
+	result
+}
+
+pub fn execute_single_statement(
+	db: *mut sqlite3,
+	sql: &str,
+	params: Option<&[BindParam]>,
+	route: ExecuteRoute,
+) -> Result<ExecuteResult> {
+	let c_sql = CString::new(sql).map_err(|err| anyhow!(err.to_string()))?;
+	let mut stmt = ptr::null_mut();
+	let mut tail = ptr::null();
+	let rc = unsafe { sqlite3_prepare_v2(db, c_sql.as_ptr(), -1, &mut stmt, &mut tail) };
+	if rc != SQLITE_OK {
+		return Err(sqlite_error(db, "failed to prepare sqlite execute statement"));
+	}
+	if has_non_whitespace_tail(tail) {
+		if !stmt.is_null() {
+			unsafe {
+				sqlite3_finalize(stmt);
+			}
+		}
+		return Err(anyhow!("sqlite execute only supports a single statement"));
+	}
+	if stmt.is_null() {
+		return Ok(ExecuteResult {
+			columns: Vec::new(),
+			rows: Vec::new(),
+			changes: 0,
+			last_insert_row_id: None,
+			route,
+		});
+	}
+
+	let result = (|| {
+		if let Some(params) = params {
+			bind_params(db, stmt, params)?;
+		}
+
+		let columns = collect_columns(stmt);
+		let mut rows = Vec::new();
+		loop {
+			let step_rc = unsafe { sqlite3_step(stmt) };
+			if step_rc == SQLITE_DONE {
+				break;
+			}
+			if step_rc != SQLITE_ROW {
+				return Err(sqlite_error(db, "failed to step sqlite execute statement"));
+			}
+
+			let mut row = Vec::with_capacity(columns.len());
+			for index in 0..columns.len() {
+				row.push(column_value(stmt, index as i32));
+			}
+			rows.push(row);
+		}
+
+		let changes = unsafe { sqlite3_changes(db) as i64 };
+		Ok(ExecuteResult {
+			columns,
+			rows,
+			changes,
+			last_insert_row_id: (changes > 0).then(|| unsafe { sqlite3_last_insert_rowid(db) }),
+			route,
+		})
 	})();
 
 	unsafe {
@@ -811,5 +898,145 @@ mod tests {
 
 		assert_eq!(result.columns, vec!["count"]);
 		assert_eq!(result.rows, vec![vec![ColumnValue::Integer(2)]]);
+	}
+
+	#[test]
+	fn execute_single_statement_returns_rows_and_read_route() {
+		let db = MemoryDb::open();
+		let result = execute_single_statement(
+			db.as_ptr(),
+			"SELECT 7 AS value;",
+			None,
+			ExecuteRoute::Read,
+		)
+		.unwrap();
+
+		assert_eq!(result.columns, vec!["value"]);
+		assert_eq!(result.rows, vec![vec![ColumnValue::Integer(7)]]);
+		assert_eq!(result.changes, 0);
+		assert_eq!(result.last_insert_row_id, None);
+		assert_eq!(result.route, ExecuteRoute::Read);
+	}
+
+	#[test]
+	fn execute_single_statement_returns_write_metadata() {
+		let db = MemoryDb::open();
+		exec_statements(
+			db.as_ptr(),
+			"CREATE TABLE execute_items(id INTEGER PRIMARY KEY, label TEXT);",
+		)
+		.unwrap();
+
+		let result = execute_single_statement(
+			db.as_ptr(),
+			"INSERT INTO execute_items(label) VALUES (?);",
+			Some(&[BindParam::Text("alpha".to_owned())]),
+			ExecuteRoute::Write,
+		)
+		.unwrap();
+
+		assert_eq!(result.columns, Vec::<String>::new());
+		assert_eq!(result.rows, Vec::<Vec<ColumnValue>>::new());
+		assert_eq!(result.changes, 1);
+		assert_eq!(result.last_insert_row_id, Some(1));
+		assert_eq!(result.route, ExecuteRoute::Write);
+	}
+
+	#[test]
+	fn execute_single_statement_collects_insert_returning_rows() {
+		let db = MemoryDb::open();
+		exec_statements(
+			db.as_ptr(),
+			"CREATE TABLE execute_returning(id INTEGER PRIMARY KEY, label TEXT);",
+		)
+		.unwrap();
+
+		let result = execute_single_statement(
+			db.as_ptr(),
+			"INSERT INTO execute_returning(label) VALUES ('bravo') RETURNING id, label;",
+			None,
+			ExecuteRoute::Write,
+		)
+		.unwrap();
+
+		assert_eq!(result.columns, vec!["id", "label"]);
+		assert_eq!(
+			result.rows,
+			vec![vec![
+				ColumnValue::Integer(1),
+				ColumnValue::Text("bravo".to_owned())
+			]]
+		);
+		assert_eq!(result.changes, 1);
+		assert_eq!(result.last_insert_row_id, Some(1));
+		assert_eq!(result.route, ExecuteRoute::Write);
+	}
+
+	#[test]
+	fn execute_single_statement_collects_readonly_pragma_rows() {
+		let db = MemoryDb::open();
+		let result =
+			execute_single_statement(db.as_ptr(), "PRAGMA user_version;", None, ExecuteRoute::Read)
+				.unwrap();
+
+		assert_eq!(result.columns, vec!["user_version"]);
+		assert_eq!(result.rows, vec![vec![ColumnValue::Integer(0)]]);
+		assert_eq!(result.changes, 0);
+		assert_eq!(result.route, ExecuteRoute::Read);
+	}
+
+	#[test]
+	fn execute_single_statement_runs_mutating_pragma_in_write_route() {
+		let db = MemoryDb::open();
+		let result = execute_single_statement(
+			db.as_ptr(),
+			"PRAGMA user_version = 9;",
+			None,
+			ExecuteRoute::Write,
+		)
+		.unwrap();
+
+		assert_eq!(result.columns, Vec::<String>::new());
+		assert_eq!(result.rows, Vec::<Vec<ColumnValue>>::new());
+		assert_eq!(result.route, ExecuteRoute::Write);
+
+		let version =
+			execute_single_statement(db.as_ptr(), "PRAGMA user_version;", None, ExecuteRoute::Read)
+				.unwrap();
+		assert_eq!(version.rows, vec![vec![ColumnValue::Integer(9)]]);
+	}
+
+	#[test]
+	fn execute_single_statement_rejects_multi_statement_sql() {
+		let db = MemoryDb::open();
+		let err = execute_single_statement(
+			db.as_ptr(),
+			"SELECT 1; SELECT 2;",
+			None,
+			ExecuteRoute::WriteFallback,
+		)
+		.expect_err("multi statement execute should fail");
+
+		assert!(
+			err.to_string().contains("single statement"),
+			"unexpected error: {err:#}"
+		);
+	}
+
+	#[test]
+	fn execute_single_statement_reports_malformed_sql() {
+		let db = MemoryDb::open();
+		let err = execute_single_statement(
+			db.as_ptr(),
+			"SELECT FROM",
+			None,
+			ExecuteRoute::WriteFallback,
+		)
+		.expect_err("malformed execute should fail");
+
+		assert!(
+			err.to_string().contains("failed to prepare"),
+			"unexpected error: {err:#}"
+		);
 	}
 }

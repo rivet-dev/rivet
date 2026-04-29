@@ -8,8 +8,8 @@ use tokio::runtime::Handle;
 use crate::{
 	connection_manager::{NativeConnectionManager, NativeConnectionManagerConfig},
 	query::{
-		BindParam, ExecResult, QueryResult, classify_statement, exec_statements,
-		execute_statement, install_reader_authorizer, query_statement,
+		BindParam, ExecResult, ExecuteResult, ExecuteRoute, QueryResult, classify_statement,
+		exec_statements, execute_single_statement, install_reader_authorizer,
 	},
 	vfs::{
 		NativeVfsHandle, SqliteVfs, SqliteVfsMetrics, VfsConfig, VfsPreloadHintSnapshot,
@@ -18,8 +18,8 @@ use crate::{
 };
 
 enum ReadQueryRoute {
-	Read(QueryResult),
-	WriteRequired,
+	Read(ExecuteResult),
+	WriteRequired(ExecuteRoute),
 }
 
 #[derive(Clone)]
@@ -82,22 +82,32 @@ impl NativeDatabaseHandle {
 	}
 
 	pub async fn query(&self, sql: String, params: Option<Vec<BindParam>>) -> Result<QueryResult> {
-		let read_sql = sql.clone();
-		let read_params = params.clone();
-		match self.try_read_query(read_sql, read_params).await? {
-			ReadQueryRoute::Read(result) => return Ok(result),
-			ReadQueryRoute::WriteRequired => {}
-		}
-
-		self.with_configured_write_connection(move |db| {
-			query_statement(db, &sql, params.as_deref())
+		self.execute(sql, params).await.map(|result| QueryResult {
+			columns: result.columns,
+			rows: result.rows,
 		})
-		.await
 	}
 
 	pub async fn run(&self, sql: String, params: Option<Vec<BindParam>>) -> Result<ExecResult> {
+		self.execute(sql, params).await.map(|result| ExecResult {
+			changes: result.changes,
+		})
+	}
+
+	pub async fn execute(
+		&self,
+		sql: String,
+		params: Option<Vec<BindParam>>,
+	) -> Result<ExecuteResult> {
+		let read_sql = sql.clone();
+		let read_params = params.clone();
+		let route = match self.try_read_execute(read_sql, read_params).await? {
+			ReadQueryRoute::Read(result) => return Ok(result),
+			ReadQueryRoute::WriteRequired(route) => route,
+		};
+
 		self.with_configured_write_connection(move |db| {
-			execute_statement(db, &sql, params.as_deref())
+			execute_single_statement(db, &sql, params.as_deref(), route)
 		})
 		.await
 	}
@@ -151,7 +161,7 @@ impl NativeDatabaseHandle {
 			.await
 	}
 
-	async fn try_read_query(
+	async fn try_read_execute(
 		&self,
 		sql: String,
 		params: Option<Vec<BindParam>>,
@@ -164,16 +174,31 @@ impl NativeDatabaseHandle {
 
 				let classification = match classify_statement(db, &sql) {
 					Ok(classification) => classification,
-					Err(_) => return Ok(ReadQueryRoute::WriteRequired),
+					Err(_) => {
+						return Ok(ReadQueryRoute::WriteRequired(ExecuteRoute::WriteFallback));
+					}
 				};
 				if !classification.reader_eligible() {
-					return Ok(ReadQueryRoute::WriteRequired);
+					return Ok(ReadQueryRoute::WriteRequired(write_route_for_classification(
+						&classification,
+					)));
 				}
 
 				install_reader_authorizer(db)?;
-				query_statement(db, &sql, params.as_deref()).map(ReadQueryRoute::Read)
+				execute_single_statement(db, &sql, params.as_deref(), ExecuteRoute::Read)
+					.map(ReadQueryRoute::Read)
 			})
 			.await
+	}
+}
+
+fn write_route_for_classification(
+	classification: &crate::query::StatementClassification,
+) -> ExecuteRoute {
+	if !classification.sqlite_readonly || classification.authorizer.requires_write_route() {
+		ExecuteRoute::Write
+	} else {
+		ExecuteRoute::WriteFallback
 	}
 }
 

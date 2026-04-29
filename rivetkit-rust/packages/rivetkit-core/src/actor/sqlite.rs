@@ -24,7 +24,9 @@ use tracing::Instrument;
 use crate::error::SqliteRuntimeError;
 
 #[cfg(feature = "sqlite")]
-pub use rivetkit_sqlite::query::{BindParam, ColumnValue, ExecResult, QueryResult};
+pub use rivetkit_sqlite::query::{
+	BindParam, ColumnValue, ExecResult, ExecuteResult, ExecuteRoute, QueryResult,
+};
 #[cfg(feature = "sqlite")]
 use rivetkit_sqlite::{
 	database::{NativeDatabaseHandle, open_database_from_envoy},
@@ -58,6 +60,24 @@ pub struct ExecResult {
 pub struct QueryResult {
 	pub columns: Vec<String>,
 	pub rows: Vec<Vec<ColumnValue>>,
+}
+
+#[cfg(not(feature = "sqlite"))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ExecuteRoute {
+	Read,
+	Write,
+	WriteFallback,
+}
+
+#[cfg(not(feature = "sqlite"))]
+#[derive(Clone, Debug, PartialEq)]
+pub struct ExecuteResult {
+	pub columns: Vec<String>,
+	pub rows: Vec<Vec<ColumnValue>>,
+	pub changes: i64,
+	pub last_insert_row_id: Option<i64>,
+	pub route: ExecuteRoute,
 }
 
 #[cfg(not(feature = "sqlite"))]
@@ -259,6 +279,25 @@ impl SqliteDb {
 		}
 	}
 
+	pub async fn execute(
+		&self,
+		sql: impl Into<String>,
+		params: Option<Vec<BindParam>>,
+	) -> Result<ExecuteResult> {
+		#[cfg(feature = "sqlite")]
+		{
+			self.open().await?;
+			let sql = sql.into();
+			self.native_db_handle()?.execute(sql, params).await
+		}
+
+		#[cfg(not(feature = "sqlite"))]
+		{
+			let _ = (sql, params);
+			Err(SqliteRuntimeError::Unavailable.build())
+		}
+	}
+
 	pub async fn close(&self) -> Result<()> {
 		#[cfg(feature = "sqlite")]
 		{
@@ -410,6 +449,19 @@ impl SqliteDb {
 	pub(crate) async fn run_cbor(&self, sql: &str, params: Option<&[u8]>) -> Result<ExecResult> {
 		let bind_params = bind_params_from_cbor(sql, params)?;
 		self.run(sql.to_owned(), bind_params).await
+	}
+
+	pub(crate) async fn execute_rows_cbor(
+		&self,
+		sql: &str,
+		params: Option<&[u8]>,
+	) -> Result<Vec<u8>> {
+		let bind_params = bind_params_from_cbor(sql, params)?;
+		let result = self.execute(sql.to_owned(), bind_params).await?;
+		encode_json_as_cbor(&query_result_to_json_rows(&QueryResult {
+			columns: result.columns,
+			rows: result.rows,
+		}))
 	}
 
 	fn handle(&self) -> Result<EnvoyHandle> {

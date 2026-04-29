@@ -10,6 +10,7 @@ Started: Wed Apr 29 04:23:03 AM PDT 2026
 - Native SQLite work that can invoke VFS callbacks should run on `spawn_blocking`; VFS callbacks synchronously block on the transport runtime and can fail if SQL runs on an async runtime worker.
 - The native SQLite connection manager keeps an idle writer open while `sqlite3_get_autocommit` is false; `COMMIT` or `ROLLBACK` must reuse that writer and close it once autocommit is restored.
 - Native SQLite read-query routing must classify before installing the mandatory reader authorizer; statement classification uses a temporary authorizer and clears the connection-global authorizer when it finishes.
+- Native SQLite single-statement work should route through `NativeDatabaseHandle::execute`; keep `exec` as the multi-statement compatibility path.
 
 ## 2026-04-29 04:27:40 PDT - US-001
 - Implemented native SQLite statement classification with readonly detection, trailing-statement detection, authorizer action capture, and conservative reader eligibility.
@@ -125,4 +126,28 @@ Started: Wed Apr 29 04:23:03 AM PDT 2026
   - Reader routing should treat classification errors as write-required, but errors after a statement is classified reader-eligible should fail closed instead of silently retrying on the writer.
   - `sqlite3_open_v2` can invoke VFS callbacks, so read and write connection opens need the same blocking-thread treatment as SQL execution.
   - A held reader plus a timed read-only query is a deterministic way to prove queries are using read-mode instead of waiting behind write-mode.
+---
+## 2026-04-29 05:28:16 PDT - US-007
+- Implemented a native single-statement execute API that returns rows, columns, changes, last insert row id, and route metadata.
+- Routed `NativeDatabaseHandle::query` and `run` through the native execute path while leaving `exec` as the multi-statement compatibility path.
+- Updated core inspector database execution to use the native execute path through `ActorContext::db_execute`.
+- Files changed:
+  - `AGENTS.md`
+  - `rivetkit-rust/packages/rivetkit-core/src/actor/context.rs`
+  - `rivetkit-rust/packages/rivetkit-core/src/actor/mod.rs`
+  - `rivetkit-rust/packages/rivetkit-core/src/actor/sqlite.rs`
+  - `rivetkit-rust/packages/rivetkit-core/src/registry/inspector.rs`
+  - `rivetkit-rust/packages/rivetkit-sqlite/src/database.rs`
+  - `rivetkit-rust/packages/rivetkit-sqlite/src/query.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- Checks:
+  - `cargo check -p rivetkit-sqlite`
+  - `cargo test -p rivetkit-sqlite execute_single_statement --lib`
+  - `cargo check -p rivetkit-core`
+  - `timeout 240s cargo test -p rivetkit-sqlite`
+- **Learnings for future iterations:**
+  - `ExecuteRoute` metadata is assigned by the database routing layer; the low-level query helper only prepares, steps, and packages the supplied route.
+  - The native execute helper rejects multi-statement SQL by checking SQLite's prepare tail. Use `exec` when multi-statement compatibility is required.
+  - Inspector database execution should use `db_execute` so INSERT RETURNING and write statements go through the same native routing policy as user database calls.
 ---
