@@ -47,6 +47,7 @@ semver.workspace = true
 serde_json.workspace = true
 serde_yaml.workspace = true
 serde.workspace = true
+sqlite-storage.workspace = true
 strum.workspace = true
 tabled.workspace = true
 tempfile.workspace = true

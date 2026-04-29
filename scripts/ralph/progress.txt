@@ -20,6 +20,7 @@ Started: Wed Apr 29 04:36:56 AM PDT 2026
 - `sqlite-storage` compaction pause hooks are global per test binary; serialize tests that install those hooks and any same-actor `compact_default_batch` tests with a small async mutex.
 - `sqlite-storage` compact trigger payloads need namespace id and actor name alongside actor id before the compactor can emit namespace `MetricKey` rollups.
 - Debug-only compactor quota validation is wired from the worker through a per-actor `scc::HashMap<String, u32>` pass counter; the validator itself only scans PIDX, DELTA, and SHARD prefixes before comparing to `/META/quota`.
+- Compactor Prometheus metric vectors use `node_id` as the first label, with secondary labels like `outcome` or `actor_id` after it.
 
 ## 2026-04-29 04:44:52 PDT - US-001
 - Implemented a UUID-backed `NodeId` type and stored a generated value on each `Pools` instance.
@@ -195,4 +196,16 @@ Started: Wed Apr 29 04:36:56 AM PDT 2026
   - Keep the debug quota validator and worker pass counter fully behind `#[cfg(debug_assertions)]`; release builds should have no validation scan, map, or call site.
   - Put cfg-gated `lazy_static!` metrics in their own cfg-gated macro block. Gating a single static inside a shared block can break release compilation.
   - `quota_validate_every = 0` is treated as a local debug escape hatch to skip validation cadence and avoid modulo-by-zero.
+---
+## 2026-04-29 06:12:47 PDT - US-018
+- Added the full compactor Prometheus metric set, including node-labeled lease, pass, UPS publish, sampled storage, and debug-only invariant counters.
+- Wired metric observations through compaction, lease take/renew/held paths, UPS publishing, quota validation, and metering rollup.
+- Registered `sqlite_compactor` as a restartable Standalone service in engine run config and added the `sqlite-storage` engine dependency.
+- Added `tests/compactor_metrics.rs` coverage for metric registration, node labels, lease outcome labels, and a trigger-level compactor startup sample.
+- Verified `cargo check -p sqlite-storage`, `cargo test -p sqlite-storage --test compactor_metrics`, `cargo check -p rivet-engine`, `cargo check --workspace`, `cargo build --workspace`, and `git diff --check`.
+- Files changed: `Cargo.lock`, `engine/packages/engine/Cargo.toml`, `engine/packages/engine/src/run_config.rs`, `engine/packages/sqlite-storage/src/compactor/{compact.rs,metrics.rs,mod.rs,publish.rs,worker.rs}`, `engine/packages/sqlite-storage/tests/compactor_metrics.rs`, `.agent/specs/sqlite-storage-pitr-forking.md`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
+- **Learnings for future iterations:**
+  - `sqlite_compactor` registration needs both a `run_config.rs` service entry and a normal `sqlite-storage.workspace = true` dependency on `rivet-engine`.
+  - Keep compatibility wrappers for compactor helpers, then add `*_with_node_id` variants where production callers can thread `pools.node_id()`.
+  - Integration tests can assert Prometheus vector label shapes through the `Collector::desc()` descriptors without emitting every label combination first.
 ---

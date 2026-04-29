@@ -1,10 +1,11 @@
 use anyhow::{Context, Result, bail};
 use gas::prelude::Id;
+use rivet_pools::NodeId;
 use serde::{Deserialize, Serialize};
 use universalpubsub::PublishOpts;
 use vbare::OwnedVersionedData;
 
-use super::subjects::SqliteCompactSubject;
+use super::{metrics, subjects::SqliteCompactSubject};
 
 pub type Ups = universalpubsub::PubSub;
 
@@ -62,7 +63,11 @@ pub fn decode_compact_payload(payload: &[u8]) -> Result<SqliteCompactPayload> {
 }
 
 pub fn publish_compact_trigger(ups: &Ups, actor_id: &str) {
-	publish_compact_payload(
+	publish_compact_trigger_with_node_id(ups, actor_id, NodeId::new());
+}
+
+pub fn publish_compact_trigger_with_node_id(ups: &Ups, actor_id: &str, node_id: NodeId) {
+	publish_compact_payload_with_node_id(
 		ups,
 		SqliteCompactPayload {
 			actor_id: actor_id.to_string(),
@@ -71,17 +76,30 @@ pub fn publish_compact_trigger(ups: &Ups, actor_id: &str) {
 			commit_bytes_since_rollup: 0,
 			read_bytes_since_rollup: 0,
 		},
+		node_id,
 	);
 }
 
 pub fn publish_compact_payload(ups: &Ups, payload: SqliteCompactPayload) {
+	publish_compact_payload_with_node_id(ups, payload, NodeId::new());
+}
+
+pub fn publish_compact_payload_with_node_id(
+	ups: &Ups,
+	payload: SqliteCompactPayload,
+	node_id: NodeId,
+) {
 	let ups = ups.clone();
 	let actor_id = payload.actor_id.clone();
+	let node_id = node_id.to_string();
 
 	tokio::spawn(async move {
 		let payload = match encode_compact_payload(payload) {
 			Ok(payload) => payload,
 			Err(err) => {
+				metrics::SQLITE_COMPACTOR_UPS_PUBLISH_TOTAL
+					.with_label_values(&[node_id.as_str(), "err"])
+					.inc();
 				tracing::error!(?err, actor_id = %actor_id, "failed to encode sqlite compact trigger");
 				return;
 			}
@@ -91,7 +109,14 @@ pub fn publish_compact_payload(ups: &Ups, payload: SqliteCompactPayload) {
 			.publish(SqliteCompactSubject, &payload, PublishOpts::one())
 			.await
 		{
+			metrics::SQLITE_COMPACTOR_UPS_PUBLISH_TOTAL
+				.with_label_values(&[node_id.as_str(), "err"])
+				.inc();
 			tracing::warn!(?err, actor_id = %actor_id, "failed to publish sqlite compact trigger");
+		} else {
+			metrics::SQLITE_COMPACTOR_UPS_PUBLISH_TOTAL
+				.with_label_values(&[node_id.as_str(), "ok"])
+				.inc();
 		}
 	});
 }

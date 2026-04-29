@@ -1,4 +1,4 @@
-use std::{ops::Deref, sync::Arc, time::Duration};
+use std::{ops::Deref, sync::Arc, time::{Duration, Instant}};
 
 use anyhow::{Context, Result};
 use gas::prelude::{Database, Id, StandaloneCtx, db};
@@ -13,8 +13,8 @@ use universalpubsub::NextOutput;
 use crate::pump::quota;
 
 use super::{
-	SqliteCompactPayload, SqliteCompactSubject, TakeOutcome, compact_default_batch,
-	decode_compact_payload, lease, publish::Ups,
+	SqliteCompactPayload, SqliteCompactSubject, TakeOutcome, compact_default_batch_with_node_id,
+	decode_compact_payload, lease, metrics, publish::Ups,
 };
 
 const COMPACTOR_QUEUE_GROUP: &str = "compactor";
@@ -185,7 +185,8 @@ async fn handle_trigger(
 
 	let actor_id = payload.actor_id.clone();
 	let now_ms = now_ms()?;
-	let take_outcome = udb
+	let node_id = holder_id.to_string();
+	let take_result = udb
 		.run({
 			let actor_id = actor_id.clone();
 			move |tx| {
@@ -202,12 +203,26 @@ async fn handle_trigger(
 				}
 			}
 		})
-		.await?;
+		.await;
+
+	match &take_result {
+		Ok(TakeOutcome::Acquired) => metrics::SQLITE_COMPACTOR_LEASE_TAKE_TOTAL
+			.with_label_values(&[node_id.as_str(), "acquired"])
+			.inc(),
+		Ok(TakeOutcome::Skip) => metrics::SQLITE_COMPACTOR_LEASE_TAKE_TOTAL
+			.with_label_values(&[node_id.as_str(), "skipped"])
+			.inc(),
+		Err(_) => metrics::SQLITE_COMPACTOR_LEASE_TAKE_TOTAL
+			.with_label_values(&[node_id.as_str(), "conflict"])
+			.inc(),
+	}
+	let take_outcome = take_result?;
 
 	if matches!(take_outcome, TakeOutcome::Skip) {
 		return Ok(());
 	}
 
+	let lease_started_at = Instant::now();
 	let cancel_token = shutdown.child_token();
 	let initial_deadline = tokio::time::Instant::now() + lease_deadline_after(&compactor_config)?;
 	let (deadline_tx, deadline_rx) = watch::channel(initial_deadline);
@@ -222,11 +237,12 @@ async fn handle_trigger(
 	let deadline_handle = spawn_deadline_task(deadline_rx, cancel_token.clone());
 
 	let result = async {
-		compact_default_batch(
+		compact_default_batch_with_node_id(
 			Arc::clone(&udb),
 			actor_id.clone(),
 			compactor_config.batch_size_deltas,
 			cancel_token.clone(),
+			holder_id,
 		)
 		.await?;
 		#[cfg(debug_assertions)]
@@ -235,9 +251,10 @@ async fn handle_trigger(
 			actor_id.clone(),
 			&compactor_config,
 			&quota_validate_counts,
+			holder_id,
 		)
 		.await?;
-		emit_metering_rollup(Arc::clone(&udb), payload).await
+		emit_metering_rollup(Arc::clone(&udb), payload, holder_id).await
 	}
 	.await;
 
@@ -258,6 +275,9 @@ async fn handle_trigger(
 	if let Err(err) = release_result {
 		tracing::warn!(?err, actor_id = %actor_id, "failed to release sqlite compactor lease");
 	}
+	metrics::SQLITE_COMPACTOR_LEASE_HELD_SECONDS
+		.with_label_values(&[node_id.as_str()])
+		.observe(lease_started_at.elapsed().as_secs_f64());
 
 	result.map(|_| ())
 }
@@ -268,6 +288,7 @@ async fn maybe_validate_quota(
 	actor_id: String,
 	compactor_config: &CompactorConfig,
 	quota_validate_counts: &scc::HashMap<String, u32>,
+	node_id: rivet_pools::NodeId,
 ) -> Result<()> {
 	if compactor_config.quota_validate_every == 0 {
 		return Ok(());
@@ -286,7 +307,7 @@ async fn maybe_validate_quota(
 	};
 
 	if pass_count % compactor_config.quota_validate_every == 0 {
-		super::compact::validate_quota(udb, actor_id).await?;
+		super::compact::validate_quota_with_node_id(udb, actor_id, node_id).await?;
 	}
 
 	Ok(())
@@ -295,31 +316,39 @@ async fn maybe_validate_quota(
 async fn emit_metering_rollup(
 	udb: Arc<universaldb::Database>,
 	payload: SqliteCompactPayload,
+	node_id: rivet_pools::NodeId,
 ) -> Result<()> {
-	let Some(namespace_id) = payload.namespace_id else {
-		tracing::debug!(
-			actor_id = %payload.actor_id,
-			"skipping sqlite metering rollup without namespace id"
-		);
-		return Ok(());
-	};
-	let Some(actor_name) = payload.actor_name else {
-		tracing::debug!(
-			actor_id = %payload.actor_id,
-			"skipping sqlite metering rollup without actor name"
-		);
-		return Ok(());
-	};
 	let actor_id = payload.actor_id;
+	let node_id = node_id.to_string();
+	let namespace_id = payload.namespace_id;
+	let actor_name = payload.actor_name;
 	let commit_bytes_since_rollup = payload.commit_bytes_since_rollup;
 	let read_bytes_since_rollup = payload.read_bytes_since_rollup;
 
 	udb.run(move |tx| {
 		let actor_id = actor_id.clone();
+		let node_id = node_id.clone();
 		let actor_name = actor_name.clone();
 
 		async move {
 			let storage_used = quota::read(&tx, &actor_id).await?;
+			metrics::SQLITE_STORAGE_USED_BYTES
+				.with_label_values(&[node_id.as_str(), actor_id.as_str()])
+				.set(storage_used as f64);
+			let Some(namespace_id) = namespace_id else {
+				tracing::debug!(
+					actor_id = %actor_id,
+					"skipping sqlite metering rollup without namespace id"
+				);
+				return Ok(());
+			};
+			let Some(actor_name) = actor_name else {
+				tracing::debug!(
+					actor_id = %actor_id,
+					"skipping sqlite metering rollup without actor name"
+				);
+				return Ok(());
+			};
 			let namespace_tx = tx.with_subspace(namespace::keys::subspace());
 			namespace::keys::metric::inc(
 				&namespace_tx,
@@ -360,6 +389,7 @@ fn spawn_renewal_task(
 	deadline_tx: watch::Sender<tokio::time::Instant>,
 ) -> tokio::task::JoinHandle<()> {
 	tokio::spawn(async move {
+		let node_id = holder_id.to_string();
 		let mut interval =
 			tokio::time::interval(Duration::from_millis(compactor_config.lease_renew_interval_ms));
 		interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
@@ -401,6 +431,9 @@ fn spawn_renewal_task(
 
 					match renew_result {
 						Ok(lease::RenewOutcome::Renewed) => {
+							metrics::SQLITE_COMPACTOR_LEASE_RENEWAL_TOTAL
+								.with_label_values(&[node_id.as_str(), "ok"])
+								.inc();
 							match lease_deadline_after(&compactor_config) {
 								Ok(deadline_after) => {
 									let _ = deadline_tx.send(tokio::time::Instant::now() + deadline_after);
@@ -413,11 +446,17 @@ fn spawn_renewal_task(
 							}
 						}
 						Ok(outcome) => {
+							metrics::SQLITE_COMPACTOR_LEASE_RENEWAL_TOTAL
+								.with_label_values(&[node_id.as_str(), "stolen"])
+								.inc();
 							tracing::warn!(?outcome, actor_id = %actor_id, "sqlite compactor lease renewal stopped compaction");
 							cancel_token.cancel();
 							return;
 						}
 						Err(err) => {
+							metrics::SQLITE_COMPACTOR_LEASE_RENEWAL_TOTAL
+								.with_label_values(&[node_id.as_str(), "err"])
+								.inc();
 							tracing::warn!(?err, actor_id = %actor_id, "sqlite compactor lease renewal failed");
 							cancel_token.cancel();
 							return;

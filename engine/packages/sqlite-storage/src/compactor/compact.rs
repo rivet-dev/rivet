@@ -4,6 +4,7 @@ use std::{collections::BTreeMap, sync::Arc};
 
 use anyhow::{Context, Result, bail};
 use futures_util::TryStreamExt;
+use rivet_pools::NodeId;
 use tokio_util::sync::CancellationToken;
 use universaldb::{
 	RangeOption,
@@ -23,7 +24,6 @@ use crate::pump::{
 
 use super::{fold_shard, metrics};
 
-const UNKNOWN_NODE_ID: &str = "unknown";
 const PIDX_TXID_BYTES: usize = std::mem::size_of::<u64>();
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -41,8 +41,34 @@ pub async fn compact_default_batch(
 	batch_size_deltas: u32,
 	cancel_token: CancellationToken,
 ) -> Result<CompactionOutcome> {
+	compact_default_batch_with_node_id(
+		udb,
+		actor_id,
+		batch_size_deltas,
+		cancel_token,
+		NodeId::new(),
+	)
+	.await
+}
+
+pub(crate) async fn compact_default_batch_with_node_id(
+	udb: Arc<universaldb::Database>,
+	actor_id: String,
+	batch_size_deltas: u32,
+	cancel_token: CancellationToken,
+	node_id: NodeId,
+) -> Result<CompactionOutcome> {
+	let node_id = node_id.to_string();
+	let labels = &[node_id.as_str()];
+	let _timer = metrics::SQLITE_COMPACTOR_PASS_DURATION
+		.with_label_values(labels)
+		.start_timer();
+
 	ensure_not_cancelled(&cancel_token)?;
 	let plan = plan_batch(udb.as_ref(), actor_id.clone(), batch_size_deltas).await?;
+	metrics::SQLITE_COMPACTOR_LAG
+		.with_label_values(labels)
+		.observe(plan.selected_delta_txids.len() as f64);
 	if plan.selected_delta_txids.is_empty() {
 		return Ok(CompactionOutcome::default());
 	}
@@ -56,7 +82,6 @@ pub async fn compact_default_batch(
 		count_compare_and_clear_noops(udb.as_ref(), actor_id.clone(), write_result.attempted_pidx_deletes)
 			.await?;
 
-	let labels = &[UNKNOWN_NODE_ID];
 	metrics::SQLITE_COMPACTOR_PAGES_FOLDED_TOTAL
 		.with_label_values(labels)
 		.inc_by(write_result.pages_folded);
@@ -252,6 +277,15 @@ pub async fn validate_quota(
 	udb: Arc<universaldb::Database>,
 	actor_id: String,
 ) -> Result<()> {
+	validate_quota_with_node_id(udb, actor_id, NodeId::new()).await
+}
+
+#[cfg(debug_assertions)]
+pub(crate) async fn validate_quota_with_node_id(
+	udb: Arc<universaldb::Database>,
+	actor_id: String,
+	node_id: NodeId,
+) -> Result<()> {
 	let (manual_total, counter_value) = udb
 		.run({
 			let actor_id = actor_id.clone();
@@ -272,7 +306,10 @@ pub async fn validate_quota(
 		.await?;
 
 	if manual_total != counter_value {
-		metrics::SQLITE_QUOTA_VALIDATE_MISMATCH_TOTAL.inc();
+		let node_id = node_id.to_string();
+		metrics::SQLITE_QUOTA_VALIDATE_MISMATCH_TOTAL
+			.with_label_values(&[node_id.as_str()])
+			.inc();
 		tracing::error!(
 			actor_id = %actor_id,
 			manual_total,
