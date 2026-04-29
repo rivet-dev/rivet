@@ -1,7 +1,9 @@
 use std::io::Cursor;
 
 use anyhow::Result;
-use rivetkit_core::{ActorContext, ActorEvent, ActorStart, SerializeStateReason, StateDelta};
+use rivetkit_core::{
+	ActorContext, ActorEvent, ActorStart, SerializeStateReason, ShutdownKind, StateDelta,
+};
 use serde::Deserialize;
 use tokio::sync::{mpsc, oneshot};
 
@@ -48,7 +50,7 @@ async fn run(start: Start<CounterActor>) -> Result<()> {
 
 #[tokio::test]
 async fn canned_actor_start_drives_typed_counter_actor() {
-	let (event_tx, event_rx) = mpsc::channel(8);
+	let (event_tx, event_rx) = mpsc::unbounded_channel();
 	let start = wrap_start::<CounterActor>(ActorStart {
 		ctx: ActorContext::new("actor-id", "counter", Vec::new(), "local"),
 		input: None,
@@ -75,7 +77,6 @@ async fn canned_actor_start_drives_typed_counter_actor() {
 			reason: SerializeStateReason::Save,
 			reply: serialize_tx.into(),
 		})
-		.await
 		.expect("send serialize-state event");
 	let deltas = serialize_rx
 		.await
@@ -90,10 +91,10 @@ async fn canned_actor_start_drives_typed_counter_actor() {
 
 	let (sleep_tx, sleep_rx) = oneshot::channel();
 	event_tx
-		.send(ActorEvent::FinalizeSleep {
+		.send(ActorEvent::RunGracefulCleanup {
+			reason: ShutdownKind::Sleep,
 			reply: sleep_tx.into(),
 		})
-		.await
 		.expect("send sleep event");
 	sleep_rx
 		.await
@@ -107,7 +108,7 @@ async fn canned_actor_start_drives_typed_counter_actor() {
 		.expect("run exits cleanly");
 }
 
-async fn send_action(event_tx: &mpsc::Sender<ActorEvent>, name: &str) -> Vec<u8> {
+async fn send_action(event_tx: &mpsc::UnboundedSender<ActorEvent>, name: &str) -> Vec<u8> {
 	let (reply_tx, reply_rx) = oneshot::channel();
 	event_tx
 		.send(ActorEvent::Action {
@@ -116,7 +117,6 @@ async fn send_action(event_tx: &mpsc::Sender<ActorEvent>, name: &str) -> Vec<u8>
 			conn: None,
 			reply: reply_tx.into(),
 		})
-		.await
 		.expect("send action event");
 
 	reply_rx

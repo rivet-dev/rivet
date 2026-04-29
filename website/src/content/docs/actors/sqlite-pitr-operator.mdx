@@ -1,0 +1,117 @@
+---
+title: "SQLite PITR Operator Guide"
+description: "Tune SQLite PITR retention, storage budgets, and recovery procedures for Rivet Actors."
+skill: true
+---
+
+## Scope
+
+SQLite PITR keeps logical recovery points inside Rivet storage so operators can restore or fork an actor after application-level mistakes.
+
+**PITR is logical recovery only. It is NOT a backup against FoundationDB cluster loss. Object-store tiering is the eventual DR story.**
+
+## Retention And Cost
+
+PITR storage has two parts:
+
+- **Checkpoints**: full actor SQLite snapshots created by the compactor.
+- **Retained DELTAs**: per-commit page changes kept until they age out of the retention window and are covered by a checkpoint.
+
+The live SQLite cap remains separate from PITR overhead. Live bytes are tracked in `/META/storage_used_live`; checkpoints and retained DELTAs are tracked in `/META/storage_used_pitr`.
+
+Use shorter retention for high-write actors, and use longer checkpoint intervals when checkpoint size dominates cost. A healthy setup keeps `pitr_namespace_used_bytes` comfortably below `pitr_namespace_budget_bytes`.
+
+## Recommended Defaults
+
+Start conservative:
+
+```json
+{
+  "default_retention_ms": 86400000,
+  "default_checkpoint_interval_ms": 3600000,
+  "default_max_checkpoints": 25,
+  "pitr_max_bytes_per_actor": 1073741824,
+  "pitr_namespace_budget_bytes": 1099511627776
+}
+```
+
+That gives roughly one day of hourly checkpoints, plus retained DELTAs between checkpoints.
+
+## Capability Gates
+
+Namespace config separates capabilities:
+
+| Field | Grants |
+|---|---|
+| `allow_pitr_read` | DryRun restore, retention reads, and point inspection. |
+| `allow_pitr_destructive` | Apply restore. |
+| `allow_pitr_admin` | Retention updates and refcount repair. |
+| `allow_fork` | Actor fork operations. |
+
+Keep destructive and admin capabilities off for namespaces that only need read-only diagnostics.
+
+## Restore Runbook
+
+1. Confirm PITR is enabled and the target is reachable with DryRun.
+2. Start Apply restore.
+3. Expect existing WebSockets to close with `1012 actor.restore_in_progress`.
+4. Watch the operation SSE stream or poll the operation record.
+5. Confirm the actor resumes after the operation reaches `Completed`.
+
+If restore reaches `Failed`, the actor intentionally remains suspended. Inspect the operation record, verify whether storage is consistent, then resume manually only after deciding it is safe.
+
+## Fork Runbook
+
+1. Confirm both source and destination namespaces allow fork.
+2. Run DryRun to estimate bytes and selected recovery point.
+3. Use `Allocate` for normal fork creation. Use `Existing` only when the destination actor is known empty.
+4. Poll the operation until `Completed`.
+5. Verify the destination actor starts from the reported target txid.
+
+Fork temporarily pins the checkpoint and retained DELTAs it needs. These pins prevent compaction cleanup until the fork completes or fails and cleanup runs.
+
+## Refcount Leaks
+
+Checkpoint and DELTA refcounts protect objects used by in-flight forks. A leaked refcount means cleanup cannot delete old PITR data.
+
+Normal recovery is automatic: the compactor resets refcounts that have no live admin operation after `lease_ttl_ms * 10`.
+
+Manual recovery:
+
+```http
+POST /actors/{actor_id}/sqlite/refcount/clear
+```
+
+```json
+{
+  "kind": "Checkpoint",
+  "txid": 96
+}
+```
+
+Only clear a refcount after confirming no restore or fork operation still references that txid.
+
+## Monitoring
+
+Track namespace-level gauges:
+
+| Metric | Meaning |
+|---|---|
+| `sqlite_storage_live_used_bytes_namespace_sum` | Live SQLite bytes in the namespace. |
+| `sqlite_storage_pitr_used_bytes_namespace_sum` | PITR overhead bytes in the namespace. |
+| `sqlite_checkpoint_count_namespace_sum` | Checkpoints across the namespace. |
+| `sqlite_checkpoint_pinned_namespace_sum` | Pinned checkpoints across the namespace. |
+
+Operational warning signs:
+
+- PITR used bytes approach namespace budget.
+- Checkpoint creation is skipped because of quota.
+- Pinned checkpoint count stays nonzero after operations complete.
+- Admin operations become `Orphaned`.
+
+## Limits
+
+- Live SQLite data still has a 10 GiB per-actor cap.
+- PITR is per actor; there is no multi-actor consistent snapshot.
+- PITR does not protect against infrastructure data loss.
+- Read-only time travel is not supported. Use fork for non-destructive inspection.

@@ -7,8 +7,6 @@ use std::ffi::{CStr, CString, c_char, c_int, c_void};
 use std::ptr;
 use std::slice;
 use std::sync::Arc;
-#[cfg(test)]
-use std::sync::atomic::{AtomicBool, AtomicUsize};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
 
@@ -18,12 +16,13 @@ use moka::sync::Cache;
 use parking_lot::{Mutex, RwLock};
 use rivet_envoy_client::handle::EnvoyHandle;
 use rivet_envoy_protocol as protocol;
-use sqlite_storage::ltx::{LtxHeader, encode_ltx_v3};
 #[cfg(test)]
-use sqlite_storage::{engine::SqliteEngine, error::SqliteStorageError};
+use rivet_pools::NodeId;
+#[cfg(test)]
+use sqlite_storage::{error::SqliteStorageError, pump::ActorDb};
 use tokio::runtime::Handle;
 #[cfg(test)]
-use tokio::sync::Notify;
+use universalpubsub::{PubSub, driver::memory::MemoryDriver};
 
 const DEFAULT_CACHE_CAPACITY_PAGES: u64 = 50_000;
 const DEFAULT_PREFETCH_DEPTH: usize = 16;
@@ -39,8 +38,6 @@ const EMPTY_DB_PAGE_HEADER_PREFIX: [u8; 108] = [
 	0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 0, 46, 138, 17, 13, 0, 0, 0, 0, 16, 0, 0,
 ];
 
-#[cfg(test)]
-static NEXT_STAGE_ID: AtomicU64 = AtomicU64::new(1);
 static NEXT_TEMP_AUX_ID: AtomicU64 = AtomicU64::new(1);
 
 unsafe extern "C" {
@@ -83,10 +80,7 @@ struct SqliteTransport {
 enum SqliteTransportInner {
 	Envoy(EnvoyHandle),
 	#[cfg(test)]
-	Direct {
-		engine: Arc<SqliteEngine>,
-		hooks: Arc<DirectTransportHooks>,
-	},
+	Direct(Arc<DirectStorage>),
 	#[cfg(test)]
 	Test(Arc<MockProtocol>),
 }
@@ -99,12 +93,9 @@ impl SqliteTransport {
 	}
 
 	#[cfg(test)]
-	fn from_direct(engine: Arc<SqliteEngine>) -> Self {
+	fn from_direct(storage: Arc<DirectStorage>) -> Self {
 		Self {
-			inner: Arc::new(SqliteTransportInner::Direct {
-				engine,
-				hooks: Arc::new(DirectTransportHooks::default()),
-			}),
+			inner: Arc::new(SqliteTransportInner::Direct(storage)),
 		}
 	}
 
@@ -118,7 +109,7 @@ impl SqliteTransport {
 	#[cfg(test)]
 	fn direct_hooks(&self) -> Option<Arc<DirectTransportHooks>> {
 		match &*self.inner {
-			SqliteTransportInner::Direct { hooks, .. } => Some(Arc::clone(hooks)),
+			SqliteTransportInner::Direct(storage) => Some(Arc::clone(&storage.hooks)),
 			_ => None,
 		}
 	}
@@ -130,83 +121,17 @@ impl SqliteTransport {
 		match &*self.inner {
 			SqliteTransportInner::Envoy(handle) => handle.sqlite_get_pages(req).await,
 			#[cfg(test)]
-			SqliteTransportInner::Direct { engine, .. } => {
+			SqliteTransportInner::Direct(storage) => {
 				let pgnos = req.pgnos.clone();
-				match engine.get_pages(&req.actor_id, req.generation, pgnos).await {
+				match storage.get_pages(&req.actor_id, &pgnos).await {
 					Ok(pages) => Ok(protocol::SqliteGetPagesResponse::SqliteGetPagesOk(
 						protocol::SqliteGetPagesOk {
 							pages: pages.into_iter().map(protocol_fetched_page).collect(),
-							meta: protocol_sqlite_meta(engine.load_meta(&req.actor_id).await?),
 						},
 					)),
-					Err(err) => {
-						if let Some(SqliteStorageError::FenceMismatch { reason }) =
-							sqlite_storage_error(&err)
-						{
-							Ok(protocol::SqliteGetPagesResponse::SqliteFenceMismatch(
-								protocol::SqliteFenceMismatch {
-									actual_meta: protocol_sqlite_meta(
-										engine.load_meta(&req.actor_id).await?,
-									),
-									reason: reason.clone(),
-								},
-							))
-						} else if matches!(
-							sqlite_storage_error(&err),
-							Some(SqliteStorageError::MetaMissing { operation })
-								if *operation == "get_pages" && req.generation == 1
-						) {
-							match engine
-								.open(
-									&req.actor_id,
-									sqlite_storage::open::OpenConfig::new(1),
-								)
-								.await
-							{
-								Ok(_) => {}
-								Err(takeover_err)
-									if matches!(
-										sqlite_storage_error(&takeover_err),
-										Some(SqliteStorageError::ConcurrentTakeover)
-									) => {}
-								Err(takeover_err) => {
-									return Ok(
-										protocol::SqliteGetPagesResponse::SqliteErrorResponse(
-											sqlite_error_response(&takeover_err),
-										),
-									);
-								}
-							}
-
-							match engine
-								.get_pages(&req.actor_id, req.generation, req.pgnos)
-								.await
-							{
-								Ok(pages) => {
-									Ok(protocol::SqliteGetPagesResponse::SqliteGetPagesOk(
-										protocol::SqliteGetPagesOk {
-											pages: pages
-												.into_iter()
-												.map(protocol_fetched_page)
-												.collect(),
-											meta: protocol_sqlite_meta(
-												engine.load_meta(&req.actor_id).await?,
-											),
-										},
-									))
-								}
-								Err(retry_err) => {
-									Ok(protocol::SqliteGetPagesResponse::SqliteErrorResponse(
-										sqlite_error_response(&retry_err),
-									))
-								}
-							}
-						} else {
-							Ok(protocol::SqliteGetPagesResponse::SqliteErrorResponse(
-								sqlite_error_response(&err),
-							))
-						}
-					}
+					Err(err) => Ok(protocol::SqliteGetPagesResponse::SqliteErrorResponse(
+						sqlite_error_response(&err),
+					)),
 				}
 			}
 			#[cfg(test)]
@@ -221,62 +146,36 @@ impl SqliteTransport {
 		match &*self.inner {
 			SqliteTransportInner::Envoy(handle) => handle.sqlite_commit(req).await,
 			#[cfg(test)]
-			SqliteTransportInner::Direct { engine, hooks } => {
-				if let Some(message) = hooks.take_commit_error() {
+			SqliteTransportInner::Direct(storage) => {
+				if let Some(message) = storage.hooks.take_commit_error() {
 					return Err(anyhow::anyhow!(message));
 				}
 
-				match engine
+				let actor_id = req.actor_id.clone();
+				let dirty_pages = req
+					.dirty_pages
+					.into_iter()
+					.map(storage_dirty_page)
+					.collect::<Vec<_>>();
+				let actor_db = storage.actor_db(actor_id.clone()).await;
+				match actor_db
 					.commit(
-						&req.actor_id,
-						sqlite_storage::commit::CommitRequest {
-							generation: req.generation,
-							head_txid: req.expected_head_txid,
-							db_size_pages: req.new_db_size_pages,
-							dirty_pages: req
-								.dirty_pages
-								.into_iter()
-								.map(storage_dirty_page)
-								.collect(),
-							now_ms: sqlite_now_ms()?,
-						},
+						dirty_pages.clone(),
+						req.db_size_pages,
+						req.now_ms,
 					)
 					.await
 				{
-					Ok(result) => Ok(protocol::SqliteCommitResponse::SqliteCommitOk(
-						protocol::SqliteCommitOk {
-							new_head_txid: result.txid,
-							meta: protocol_sqlite_meta(result.meta),
-						},
-					)),
+					Ok(_) => {
+						storage
+							.apply_commit(&actor_id, dirty_pages, req.db_size_pages)
+							.await;
+						Ok(protocol::SqliteCommitResponse::SqliteCommitOk)
+					}
 					Err(err) => {
-						if let Some(SqliteStorageError::FenceMismatch { reason }) =
-							sqlite_storage_error(&err)
-						{
-							Ok(protocol::SqliteCommitResponse::SqliteFenceMismatch(
-								protocol::SqliteFenceMismatch {
-									actual_meta: protocol_sqlite_meta(
-										engine.load_meta(&req.actor_id).await?,
-									),
-									reason: reason.clone(),
-								},
-							))
-						} else if let Some(SqliteStorageError::CommitTooLarge {
-							actual_size_bytes,
-							max_size_bytes,
-						}) = sqlite_storage_error(&err)
-						{
-							Ok(protocol::SqliteCommitResponse::SqliteCommitTooLarge(
-								protocol::SqliteCommitTooLarge {
-									actual_size_bytes: *actual_size_bytes,
-									max_size_bytes: *max_size_bytes,
-								},
-							))
-						} else {
-							Ok(protocol::SqliteCommitResponse::SqliteErrorResponse(
-								sqlite_error_response(&err),
-							))
-						}
+						Ok(protocol::SqliteCommitResponse::SqliteErrorResponse(
+							sqlite_error_response(&err),
+						))
 					}
 				}
 			}
@@ -284,186 +183,167 @@ impl SqliteTransport {
 			SqliteTransportInner::Test(protocol) => protocol.commit(req).await,
 		}
 	}
+}
 
-	async fn commit_stage_begin(
-		&self,
-		req: protocol::SqliteCommitStageBeginRequest,
-	) -> Result<protocol::SqliteCommitStageBeginResponse> {
-		match &*self.inner {
-			SqliteTransportInner::Envoy(handle) => handle.sqlite_commit_stage_begin(req).await,
-			#[cfg(test)]
-			SqliteTransportInner::Direct { engine, .. } => {
-				match engine
-					.commit_stage_begin(
-						&req.actor_id,
-						sqlite_storage::commit::CommitStageBeginRequest {
-							generation: req.generation,
-						},
-					)
-					.await
-				{
-					Ok(result) => Ok(
-						protocol::SqliteCommitStageBeginResponse::SqliteCommitStageBeginOk(
-							protocol::SqliteCommitStageBeginOk { txid: result.txid },
-						),
-					),
-					Err(err) => {
-						if let Some(SqliteStorageError::FenceMismatch { reason }) =
-							sqlite_storage_error(&err)
-						{
-							Ok(
-								protocol::SqliteCommitStageBeginResponse::SqliteFenceMismatch(
-									protocol::SqliteFenceMismatch {
-										actual_meta: protocol_sqlite_meta(
-											engine.load_meta(&req.actor_id).await?,
-										),
-										reason: reason.clone(),
-									},
-								),
-							)
-						} else {
-							Ok(
-								protocol::SqliteCommitStageBeginResponse::SqliteErrorResponse(
-									sqlite_error_response(&err),
-								),
-							)
-						}
-					}
-				}
-			}
-			#[cfg(test)]
-			SqliteTransportInner::Test(protocol) => protocol.commit_stage_begin(req).await,
+#[cfg(test)]
+struct DirectStorage {
+	db: Arc<universaldb::Database>,
+	ups: PubSub,
+	node_id: NodeId,
+	actor_dbs: scc::HashMap<String, Arc<ActorDb>>,
+	page_mirrors: scc::HashMap<String, Arc<Mutex<DirectActorPages>>>,
+	hooks: Arc<DirectTransportHooks>,
+}
+
+#[cfg(test)]
+#[derive(Clone, Default)]
+struct DirectActorPages {
+	db_size_pages: u32,
+	pages: BTreeMap<u32, Vec<u8>>,
+}
+
+#[cfg(test)]
+impl DirectStorage {
+	fn new(db: universaldb::Database) -> Self {
+		Self {
+			db: Arc::new(db),
+			ups: PubSub::new(Arc::new(MemoryDriver::new(
+				"rivetkit-sqlite-direct-test".to_string(),
+			))),
+			node_id: NodeId::new(),
+			actor_dbs: scc::HashMap::new(),
+			page_mirrors: scc::HashMap::new(),
+			hooks: Arc::new(DirectTransportHooks::default()),
 		}
 	}
 
-	async fn commit_stage(
-		&self,
-		req: protocol::SqliteCommitStageRequest,
-	) -> Result<protocol::SqliteCommitStageResponse> {
-		match &*self.inner {
-			SqliteTransportInner::Envoy(handle) => handle.sqlite_commit_stage(req).await,
-			#[cfg(test)]
-			SqliteTransportInner::Direct { engine, .. } => {
-				match engine
-					.commit_stage(
-						&req.actor_id,
-						sqlite_storage::commit::CommitStageRequest {
-							generation: req.generation,
-							txid: req.txid,
-							chunk_idx: req.chunk_idx,
-							bytes: req.bytes,
-							is_last: req.is_last,
-						},
-					)
-					.await
-				{
-					Ok(result) => Ok(protocol::SqliteCommitStageResponse::SqliteCommitStageOk(
-						protocol::SqliteCommitStageOk {
-							chunk_idx_committed: result.chunk_idx_committed,
-						},
-					)),
-					Err(err) => {
-						if let Some(SqliteStorageError::FenceMismatch { reason }) =
-							sqlite_storage_error(&err)
-						{
-							Ok(protocol::SqliteCommitStageResponse::SqliteFenceMismatch(
-								protocol::SqliteFenceMismatch {
-									actual_meta: protocol_sqlite_meta(
-										engine.load_meta(&req.actor_id).await?,
-									),
-									reason: reason.clone(),
-								},
-							))
-						} else {
-							Ok(protocol::SqliteCommitStageResponse::SqliteErrorResponse(
-								sqlite_error_response(&err),
-							))
-						}
-					}
-				}
-			}
-			#[cfg(test)]
-			SqliteTransportInner::Test(protocol) => protocol.commit_stage(req).await,
-		}
+	async fn actor_db(&self, actor_id: String) -> Arc<ActorDb> {
+		self.actor_dbs
+			.entry_async(actor_id.clone())
+			.await
+			.or_insert_with(|| {
+				Arc::new(ActorDb::new(
+					Arc::clone(&self.db),
+					self.ups.clone(),
+					actor_id,
+					self.node_id,
+				))
+			})
+			.get()
+			.clone()
 	}
 
-	fn queue_commit_stage(&self, req: protocol::SqliteCommitStageRequest) -> Result<bool> {
-		match &*self.inner {
-			SqliteTransportInner::Envoy(handle) => {
-				handle.sqlite_commit_stage_fire_and_forget(req)?;
-				Ok(true)
-			}
-			#[cfg(test)]
-			SqliteTransportInner::Direct { .. } => Ok(false),
-			#[cfg(test)]
-			SqliteTransportInner::Test(protocol) => {
-				protocol.queue_commit_stage(req);
-				Ok(true)
+	async fn page_mirror(&self, actor_id: String) -> Arc<Mutex<DirectActorPages>> {
+		self.page_mirrors
+			.entry_async(actor_id)
+			.await
+			.or_insert_with(|| Arc::new(Mutex::new(DirectActorPages::default())))
+			.get()
+			.clone()
+	}
+
+	async fn get_pages(
+		&self,
+		actor_id: &str,
+		pgnos: &[u32],
+	) -> anyhow::Result<Vec<sqlite_storage::types::FetchedPage>> {
+		let actor_db = self.actor_db(actor_id.to_string()).await;
+		match actor_db.get_pages(pgnos.to_vec()).await {
+			Ok(pages) => Ok(self.fill_from_mirror(actor_id, pgnos, pages).await),
+			Err(err) => {
+				if matches!(
+					sqlite_storage_error(&err),
+					Some(SqliteStorageError::MetaMissing { operation })
+						if *operation == "get_pages"
+				) {
+					Ok(self.read_mirror(actor_id, pgnos).await)
+				} else {
+					Err(err)
+				}
 			}
 		}
 	}
 
-	async fn commit_finalize(
+	async fn fill_from_mirror(
 		&self,
-		req: protocol::SqliteCommitFinalizeRequest,
-	) -> Result<protocol::SqliteCommitFinalizeResponse> {
-		match &*self.inner {
-			SqliteTransportInner::Envoy(handle) => handle.sqlite_commit_finalize(req).await,
-			#[cfg(test)]
-			SqliteTransportInner::Direct { engine, .. } => {
-				match engine
-					.commit_finalize(
-						&req.actor_id,
-						sqlite_storage::commit::CommitFinalizeRequest {
-							generation: req.generation,
-							expected_head_txid: req.expected_head_txid,
-							txid: req.txid,
-							new_db_size_pages: req.new_db_size_pages,
-							now_ms: sqlite_now_ms()?,
-							origin_override: None,
-						},
-					)
-					.await
-				{
-					Ok(result) => Ok(
-						protocol::SqliteCommitFinalizeResponse::SqliteCommitFinalizeOk(
-							protocol::SqliteCommitFinalizeOk {
-								new_head_txid: result.new_head_txid,
-								meta: protocol_sqlite_meta(result.meta),
-							},
-						),
-					),
-					Err(err) => {
-						if let Some(SqliteStorageError::FenceMismatch { reason }) =
-							sqlite_storage_error(&err)
-						{
-							Ok(protocol::SqliteCommitFinalizeResponse::SqliteFenceMismatch(
-								protocol::SqliteFenceMismatch {
-									actual_meta: protocol_sqlite_meta(
-										engine.load_meta(&req.actor_id).await?,
-									),
-									reason: reason.clone(),
-								},
-							))
-						} else if let Some(SqliteStorageError::StageNotFound { stage_id }) =
-							sqlite_storage_error(&err)
-						{
-							Ok(protocol::SqliteCommitFinalizeResponse::SqliteStageNotFound(
-								protocol::SqliteStageNotFound {
-									stage_id: *stage_id,
-								},
-							))
-						} else {
-							Ok(protocol::SqliteCommitFinalizeResponse::SqliteErrorResponse(
-								sqlite_error_response(&err),
-							))
-						}
-					}
-				}
+		actor_id: &str,
+		pgnos: &[u32],
+		pages: Vec<sqlite_storage::types::FetchedPage>,
+	) -> Vec<sqlite_storage::types::FetchedPage> {
+		let mut by_pgno = pages
+			.into_iter()
+			.map(|page| (page.pgno, page))
+			.collect::<BTreeMap<_, _>>();
+		let mirror_pages = self.read_mirror(actor_id, pgnos).await;
+		for page in mirror_pages {
+			if page.bytes.is_some()
+				|| by_pgno.get(&page.pgno).is_none_or(|existing| existing.bytes.is_none())
+			{
+				by_pgno.insert(page.pgno, page);
 			}
-			#[cfg(test)]
-			SqliteTransportInner::Test(protocol) => protocol.commit_finalize(req).await,
 		}
+		pgnos
+			.iter()
+			.map(|pgno| {
+				by_pgno.remove(pgno).unwrap_or(sqlite_storage::types::FetchedPage {
+					pgno: *pgno,
+					bytes: None,
+				})
+			})
+			.collect()
+	}
+
+	async fn read_mirror(
+		&self,
+		actor_id: &str,
+		pgnos: &[u32],
+	) -> Vec<sqlite_storage::types::FetchedPage> {
+		let mirror = self.page_mirror(actor_id.to_string()).await;
+		let mirror = mirror.lock();
+		pgnos
+			.iter()
+			.map(|pgno| sqlite_storage::types::FetchedPage {
+				pgno: *pgno,
+				bytes: if *pgno <= mirror.db_size_pages {
+					mirror.pages.get(pgno).cloned()
+				} else {
+					None
+				},
+			})
+			.collect()
+	}
+
+	async fn apply_commit(
+		&self,
+		actor_id: &str,
+		dirty_pages: Vec<sqlite_storage::types::DirtyPage>,
+		db_size_pages: u32,
+	) {
+		let mirror = self.page_mirror(actor_id.to_string()).await;
+		let mut mirror = mirror.lock();
+		mirror.db_size_pages = db_size_pages;
+		mirror.pages.retain(|pgno, _| *pgno <= db_size_pages);
+		for page in dirty_pages {
+			mirror.pages.insert(page.pgno, page.bytes);
+		}
+	}
+
+	async fn snapshot_pages(&self, actor_id: &str) -> DirectActorPages {
+		self.page_mirror(actor_id.to_string()).await.lock().clone()
+	}
+
+	async fn compact_worker(
+		&self,
+		actor_id: &str,
+		batch_size_deltas: u32,
+	) -> anyhow::Result<sqlite_storage::compactor::CompactionOutcome> {
+		sqlite_storage::compactor::compact_default_batch(
+			Arc::clone(&self.db),
+			actor_id.to_string(),
+			batch_size_deltas,
+			tokio_util::sync::CancellationToken::new(),
+		)
+		.await
 	}
 }
 
@@ -481,20 +361,6 @@ impl DirectTransportHooks {
 
 	fn take_commit_error(&self) -> Option<String> {
 		self.fail_next_commit.lock().take()
-	}
-}
-
-#[cfg(test)]
-fn protocol_sqlite_meta(meta: sqlite_storage::types::SqliteMeta) -> protocol::SqliteMeta {
-	protocol::SqliteMeta {
-		schema_version: meta.schema_version,
-		generation: meta.generation,
-		head_txid: meta.head_txid,
-		materialized_txid: meta.materialized_txid,
-		db_size_pages: meta.db_size_pages,
-		page_size: meta.page_size,
-		creation_ts_ms: meta.creation_ts_ms,
-		max_delta_bytes: meta.max_delta_bytes,
 	}
 }
 
@@ -546,46 +412,23 @@ fn sqlite_now_ms() -> Result<i64> {
 #[cfg(test)]
 struct MockProtocol {
 	commit_response: protocol::SqliteCommitResponse,
-	stage_response: protocol::SqliteCommitStageResponse,
-	finalize_response: protocol::SqliteCommitFinalizeResponse,
 	get_pages_response: protocol::SqliteGetPagesResponse,
-	mirror_commit_meta: AtomicBool,
 	commit_requests: Mutex<Vec<protocol::SqliteCommitRequest>>,
-	stage_requests: Mutex<Vec<protocol::SqliteCommitStageRequest>>,
-	awaited_stage_responses: AtomicUsize,
-	stage_response_awaited: Notify,
-	finalize_requests: Mutex<Vec<protocol::SqliteCommitFinalizeRequest>>,
 	get_pages_requests: Mutex<Vec<protocol::SqliteGetPagesRequest>>,
-	finalize_started: Notify,
-	release_finalize: Notify,
 }
 
 #[cfg(test)]
 impl MockProtocol {
-	fn new(
-		commit_response: protocol::SqliteCommitResponse,
-		stage_response: protocol::SqliteCommitStageResponse,
-		finalize_response: protocol::SqliteCommitFinalizeResponse,
-	) -> Self {
+	fn new(commit_response: protocol::SqliteCommitResponse) -> Self {
 		Self {
 			commit_response,
-			stage_response,
-			finalize_response,
 			get_pages_response: protocol::SqliteGetPagesResponse::SqliteGetPagesOk(
 				protocol::SqliteGetPagesOk {
 					pages: vec![],
-					meta: sqlite_meta(8 * 1024 * 1024),
 				},
 			),
-			mirror_commit_meta: AtomicBool::new(false),
 			commit_requests: Mutex::new(Vec::new()),
-			stage_requests: Mutex::new(Vec::new()),
-			awaited_stage_responses: AtomicUsize::new(0),
-			stage_response_awaited: Notify::new(),
-			finalize_requests: Mutex::new(Vec::new()),
 			get_pages_requests: Mutex::new(Vec::new()),
-			finalize_started: Notify::new(),
-			release_finalize: Notify::new(),
 		}
 	}
 
@@ -593,46 +436,10 @@ impl MockProtocol {
 		self.commit_requests.lock()
 	}
 
-	fn stage_requests(
-		&self,
-	) -> parking_lot::MutexGuard<'_, Vec<protocol::SqliteCommitStageRequest>> {
-		self.stage_requests.lock()
-	}
-
-	fn awaited_stage_responses(&self) -> usize {
-		self.awaited_stage_responses.load(Ordering::SeqCst)
-	}
-
-	async fn wait_for_stage_responses(&self, expected: usize) {
-		use std::time::Duration;
-
-		tokio::time::timeout(Duration::from_secs(1), async {
-			while self.awaited_stage_responses() < expected {
-				self.stage_response_awaited.notified().await;
-			}
-		})
-		.await
-		.expect("stage response await count should reach expected value");
-	}
-
-	fn finalize_requests(
-		&self,
-	) -> parking_lot::MutexGuard<'_, Vec<protocol::SqliteCommitFinalizeRequest>> {
-		self.finalize_requests.lock()
-	}
-
 	fn get_pages_requests(
 		&self,
 	) -> parking_lot::MutexGuard<'_, Vec<protocol::SqliteGetPagesRequest>> {
 		self.get_pages_requests.lock()
-	}
-
-	fn set_mirror_commit_meta(&self, enabled: bool) {
-		self.mirror_commit_meta.store(enabled, Ordering::SeqCst);
-	}
-
-	fn queue_commit_stage(&self, req: protocol::SqliteCommitStageRequest) {
-		self.stage_requests().push(req);
 	}
 
 	async fn get_pages(
@@ -649,85 +456,7 @@ impl MockProtocol {
 	) -> Result<protocol::SqliteCommitResponse> {
 		let req = req.clone();
 		self.commit_requests().push(req.clone());
-		if self.mirror_commit_meta.load(Ordering::SeqCst) {
-			if let protocol::SqliteCommitResponse::SqliteCommitOk(ok) = &self.commit_response {
-				let mut meta = ok.meta.clone();
-				meta.head_txid = req.expected_head_txid + 1;
-				meta.db_size_pages = req.new_db_size_pages;
-				return Ok(protocol::SqliteCommitResponse::SqliteCommitOk(
-					protocol::SqliteCommitOk {
-						new_head_txid: req.expected_head_txid + 1,
-						meta,
-					},
-				));
-			}
-		}
 		Ok(self.commit_response.clone())
-	}
-
-	async fn commit_stage_begin(
-		&self,
-		_req: protocol::SqliteCommitStageBeginRequest,
-	) -> Result<protocol::SqliteCommitStageBeginResponse> {
-		Ok(
-			protocol::SqliteCommitStageBeginResponse::SqliteCommitStageBeginOk(
-				protocol::SqliteCommitStageBeginOk {
-					txid: next_stage_id(),
-				},
-			),
-		)
-	}
-
-	async fn commit_stage(
-		&self,
-		req: protocol::SqliteCommitStageRequest,
-	) -> Result<protocol::SqliteCommitStageResponse> {
-		self.awaited_stage_responses.fetch_add(1, Ordering::SeqCst);
-		self.stage_response_awaited.notify_one();
-		self.stage_requests().push(req);
-		Ok(self.stage_response.clone())
-	}
-
-	async fn commit_finalize(
-		&self,
-		req: protocol::SqliteCommitFinalizeRequest,
-	) -> Result<protocol::SqliteCommitFinalizeResponse> {
-		let req = req.clone();
-		self.finalize_requests().push(req.clone());
-		self.finalize_started.notify_one();
-		self.release_finalize.notified().await;
-		if self.mirror_commit_meta.load(Ordering::SeqCst) {
-			if let protocol::SqliteCommitFinalizeResponse::SqliteCommitFinalizeOk(ok) =
-				&self.finalize_response
-			{
-				let mut meta = ok.meta.clone();
-				meta.head_txid = req.expected_head_txid + 1;
-				meta.db_size_pages = req.new_db_size_pages;
-				return Ok(
-					protocol::SqliteCommitFinalizeResponse::SqliteCommitFinalizeOk(
-						protocol::SqliteCommitFinalizeOk {
-							new_head_txid: req.expected_head_txid + 1,
-							meta,
-						},
-					),
-				);
-			}
-		}
-		Ok(self.finalize_response.clone())
-	}
-}
-
-#[cfg(test)]
-fn sqlite_meta(max_delta_bytes: u64) -> protocol::SqliteMeta {
-	protocol::SqliteMeta {
-		schema_version: 2,
-		generation: 7,
-		head_txid: 12,
-		materialized_txid: 12,
-		db_size_pages: 1,
-		page_size: 4096,
-		creation_ts_ms: 1_700_000_000_000,
-		max_delta_bytes,
 	}
 }
 
@@ -759,19 +488,14 @@ pub enum CommitPath {
 #[derive(Debug, Clone)]
 pub struct BufferedCommitRequest {
 	pub actor_id: String,
-	pub generation: u64,
-	pub expected_head_txid: u64,
 	pub new_db_size_pages: u32,
-	pub max_delta_bytes: u64,
-	pub max_pages_per_stage: usize,
 	pub dirty_pages: Vec<protocol::SqliteDirtyPage>,
 }
 
 #[derive(Debug, Clone)]
 pub struct BufferedCommitOutcome {
 	pub path: CommitPath,
-	pub new_head_txid: u64,
-	pub meta: protocol::SqliteMeta,
+	pub db_size_pages: u32,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -827,11 +551,8 @@ pub struct VfsContext {
 
 #[derive(Debug, Clone)]
 struct VfsState {
-	generation: u64,
-	head_txid: u64,
 	db_size_pages: u32,
 	page_size: usize,
-	max_delta_bytes: u64,
 	page_cache: Cache<u32, Vec<u8>>,
 	write_buffer: WriteBuffer,
 	predictor: PrefetchPredictor,
@@ -856,7 +577,6 @@ struct PrefetchPredictor {
 
 #[derive(Debug)]
 enum GetPagesError {
-	FenceMismatch(String),
 	Other(String),
 }
 
@@ -976,44 +696,20 @@ impl PrefetchPredictor {
 }
 
 impl VfsState {
-	fn new(config: &VfsConfig, startup: &protocol::SqliteStartupData) -> Self {
+	fn new(config: &VfsConfig) -> Self {
 		let page_cache = Cache::builder()
 			.max_capacity(config.cache_capacity_pages)
 			.build();
-		for page in &startup.preloaded_pages {
-			if let Some(bytes) = &page.bytes {
-				page_cache.insert(page.pgno, bytes.clone());
-			}
-		}
+		page_cache.insert(1, empty_db_page());
 
-		let mut state = Self {
-			generation: startup.generation,
-			head_txid: startup.meta.head_txid,
-			db_size_pages: startup.meta.db_size_pages,
-			page_size: startup.meta.page_size as usize,
-			max_delta_bytes: startup.meta.max_delta_bytes,
+		Self {
+			db_size_pages: 1,
+			page_size: DEFAULT_PAGE_SIZE,
 			page_cache,
 			write_buffer: WriteBuffer::default(),
 			predictor: PrefetchPredictor::default(),
 			dead: false,
-		};
-		if state.db_size_pages == 0 && !state.page_cache.contains_key(&1) {
-			state.page_cache.insert(1, empty_db_page());
-			state.db_size_pages = 1;
 		}
-		state
-	}
-
-	fn update_meta(&mut self, meta: &protocol::SqliteMeta) {
-		self.generation = meta.generation;
-		self.head_txid = meta.head_txid;
-		self.db_size_pages = meta.db_size_pages;
-		self.page_size = meta.page_size as usize;
-		self.max_delta_bytes = meta.max_delta_bytes;
-	}
-
-	fn update_read_meta(&mut self, meta: &protocol::SqliteMeta) {
-		self.max_delta_bytes = meta.max_delta_bytes;
 	}
 }
 
@@ -1022,16 +718,31 @@ impl VfsContext {
 		actor_id: String,
 		runtime: Handle,
 		transport: SqliteTransport,
-		startup: protocol::SqliteStartupData,
 		config: VfsConfig,
 		io_methods: sqlite3_io_methods,
 	) -> Self {
+		#[cfg(test)]
+		let mut state = VfsState::new(&config);
+		#[cfg(test)]
+		if let SqliteTransportInner::Direct(storage) = &*transport.inner {
+			let snapshot = runtime.block_on(storage.snapshot_pages(&actor_id));
+			if snapshot.db_size_pages > 0 {
+				state.db_size_pages = snapshot.db_size_pages;
+				state.page_cache.invalidate_all();
+				for (pgno, bytes) in snapshot.pages {
+					state.page_cache.insert(pgno, bytes);
+				}
+			}
+		}
+		#[cfg(not(test))]
+		let state = VfsState::new(&config);
+
 		Self {
 			actor_id,
 			runtime,
 			transport,
 			config: config.clone(),
-			state: RwLock::new(VfsState::new(&config, &startup)),
+			state: RwLock::new(state),
 			aux_files: RwLock::new(BTreeMap::new()),
 			last_error: Mutex::new(None),
 			#[cfg(test)]
@@ -1193,7 +904,7 @@ impl VfsContext {
 		self.resolve_pages_cache_hits
 			.fetch_add((seen.len() - missing.len()) as u64, Relaxed);
 
-		let (generation, to_fetch) = {
+		let to_fetch = {
 			let mut state = self.state.write();
 			for pgno in target_pgnos.iter().copied() {
 				state.predictor.record(pgno);
@@ -1215,7 +926,7 @@ impl VfsContext {
 					to_fetch.push(predicted);
 				}
 			}
-			(state.generation, to_fetch)
+			to_fetch
 		};
 
 		{
@@ -1237,21 +948,18 @@ impl VfsContext {
 			.runtime
 			.block_on(self.transport.get_pages(protocol::SqliteGetPagesRequest {
 				actor_id: self.actor_id.clone(),
-				generation,
 				pgnos: to_fetch.clone(),
+				expected_generation: None,
+				expected_head_txid: None,
 			}))
 			.map_err(|err| GetPagesError::Other(err.to_string()))?;
 
-		match response {
-			protocol::SqliteGetPagesResponse::SqliteFenceMismatch(mismatch) => {
-				Err(GetPagesError::FenceMismatch(mismatch.reason))
-			}
-			protocol::SqliteGetPagesResponse::SqliteGetPagesOk(ok) => {
-				let mut state = self.state.write();
-				state.update_read_meta(&ok.meta);
-				for fetched in ok.pages {
-					if let Some(bytes) = &fetched.bytes {
-						state.page_cache.insert(fetched.pgno, bytes.clone());
+			match response {
+				protocol::SqliteGetPagesResponse::SqliteGetPagesOk(ok) => {
+					let state = self.state.write();
+					for fetched in ok.pages {
+						if let Some(bytes) = &fetched.bytes {
+							state.page_cache.insert(fetched.pgno, bytes.clone());
 					}
 					resolved.insert(fetched.pgno, fetched.bytes);
 				}
@@ -1284,11 +992,7 @@ impl VfsContext {
 
 			BufferedCommitRequest {
 				actor_id: self.actor_id.clone(),
-				generation: state.generation,
-				expected_head_txid: state.head_txid,
 				new_db_size_pages: state.db_size_pages,
-				max_delta_bytes: state.max_delta_bytes,
-				max_pages_per_stage: self.config.max_pages_per_stage,
 				dirty_pages: state
 					.write_buffer
 					.dirty
@@ -1317,7 +1021,7 @@ impl VfsContext {
 		tracing::debug!(
 			dirty_pages = request.dirty_pages.len(),
 			path = ?outcome.path,
-			new_head_txid = outcome.new_head_txid,
+			db_size_pages = outcome.db_size_pages,
 			request_build_ns,
 			serialize_ns = transport_metrics.serialize_ns,
 			transport_ns = transport_metrics.transport_ns,
@@ -1325,7 +1029,6 @@ impl VfsContext {
 		);
 		let state_update_start = Instant::now();
 		let mut state = self.state.write();
-		state.update_meta(&outcome.meta);
 		state.db_size_pages = request.new_db_size_pages;
 		for dirty_page in &request.dirty_pages {
 			state
@@ -1363,11 +1066,7 @@ impl VfsContext {
 
 			BufferedCommitRequest {
 				actor_id: self.actor_id.clone(),
-				generation: state.generation,
-				expected_head_txid: state.head_txid,
 				new_db_size_pages: state.db_size_pages,
-				max_delta_bytes: state.max_delta_bytes,
-				max_pages_per_stage: self.config.max_pages_per_stage,
 				dirty_pages: state
 					.write_buffer
 					.dirty
@@ -1396,21 +1095,19 @@ impl VfsContext {
 		tracing::debug!(
 			dirty_pages = request.dirty_pages.len(),
 			path = ?outcome.path,
-			new_head_txid = outcome.new_head_txid,
+			db_size_pages = outcome.db_size_pages,
 			request_build_ns,
 			serialize_ns = transport_metrics.serialize_ns,
 			transport_ns = transport_metrics.transport_ns,
 			"vfs commit complete (atomic)"
 		);
 		self.set_last_error(format!(
-			"post-commit atomic write succeeded: requested_db_size_pages={}, returned_db_size_pages={}, returned_head_txid={}",
+			"post-commit atomic write succeeded: requested_db_size_pages={}, returned_db_size_pages={}",
 			request.new_db_size_pages,
-			outcome.meta.db_size_pages,
-			outcome.meta.head_txid,
+			outcome.db_size_pages,
 		));
 		let state_update_start = Instant::now();
 		let mut state = self.state.write();
-		state.update_meta(&outcome.meta);
 		state.db_size_pages = request.new_db_size_pages;
 		for dirty_page in &request.dirty_pages {
 			state
@@ -1497,29 +1194,6 @@ fn mark_dead_from_fence_commit_error(ctx: &VfsContext, err: &CommitBufferError) 
 	}
 }
 
-fn dirty_pages_raw_bytes(dirty_pages: &[protocol::SqliteDirtyPage]) -> Result<u64> {
-	dirty_pages.iter().try_fold(0u64, |total, dirty_page| {
-		let page_len = u64::try_from(dirty_page.bytes.len())?;
-		Ok(total + page_len)
-	})
-}
-
-fn split_bytes(bytes: &[u8], max_chunk_bytes: usize) -> Vec<Vec<u8>> {
-	if bytes.is_empty() || max_chunk_bytes == 0 {
-		return vec![bytes.to_vec()];
-	}
-
-	bytes
-		.chunks(max_chunk_bytes)
-		.map(|chunk| chunk.to_vec())
-		.collect()
-}
-
-#[cfg(test)]
-fn next_stage_id() -> u64 {
-	NEXT_STAGE_ID.fetch_add(1, Ordering::Relaxed)
-}
-
 fn next_temp_aux_path() -> String {
 	format!(
 		"{TEMP_AUX_PATH_PREFIX}-{}",
@@ -1535,167 +1209,34 @@ async fn commit_buffered_pages(
 	transport: &SqliteTransport,
 	request: BufferedCommitRequest,
 ) -> std::result::Result<(BufferedCommitOutcome, CommitTransportMetrics), CommitBufferError> {
-	let raw_dirty_bytes = dirty_pages_raw_bytes(&request.dirty_pages)
-		.map_err(|err| CommitBufferError::Other(err.to_string()))?;
 	let mut metrics = CommitTransportMetrics::default();
-
-	if raw_dirty_bytes <= request.max_delta_bytes {
-		let serialize_start = Instant::now();
-		let fast_request = protocol::SqliteCommitRequest {
-			actor_id: request.actor_id.clone(),
-			generation: request.generation,
-			expected_head_txid: request.expected_head_txid,
-			dirty_pages: request.dirty_pages.clone(),
-			new_db_size_pages: request.new_db_size_pages,
-		};
-		metrics.serialize_ns += serialize_start.elapsed().as_nanos() as u64;
-		let transport_start = Instant::now();
-		match transport
-			.commit(fast_request)
-			.await
-			.map_err(|err| CommitBufferError::Other(err.to_string()))?
-		{
-			protocol::SqliteCommitResponse::SqliteCommitOk(ok) => {
-				metrics.transport_ns += transport_start.elapsed().as_nanos() as u64;
-				return Ok((
-					BufferedCommitOutcome {
-						path: CommitPath::Fast,
-						new_head_txid: ok.new_head_txid,
-						meta: ok.meta,
-					},
-					metrics,
-				));
-			}
-			protocol::SqliteCommitResponse::SqliteFenceMismatch(mismatch) => {
-				return Err(CommitBufferError::FenceMismatch(mismatch.reason));
-			}
-			protocol::SqliteCommitResponse::SqliteCommitTooLarge(_) => {
-				metrics.transport_ns += transport_start.elapsed().as_nanos() as u64;
-			}
-			protocol::SqliteCommitResponse::SqliteErrorResponse(error) => {
-				return Err(CommitBufferError::Other(error.message));
-			}
-		}
-	}
-
 	let serialize_start = Instant::now();
-	let stage_begin_request = protocol::SqliteCommitStageBeginRequest {
+	let commit_request = protocol::SqliteCommitRequest {
 		actor_id: request.actor_id.clone(),
-		generation: request.generation,
-	};
-	metrics.serialize_ns += serialize_start.elapsed().as_nanos() as u64;
-	let transport_start = Instant::now();
-	let txid = match transport
-		.commit_stage_begin(stage_begin_request)
-		.await
-		.map_err(|err| CommitBufferError::Other(err.to_string()))?
-	{
-		protocol::SqliteCommitStageBeginResponse::SqliteCommitStageBeginOk(ok) => {
-			metrics.transport_ns += transport_start.elapsed().as_nanos() as u64;
-			ok.txid
-		}
-		protocol::SqliteCommitStageBeginResponse::SqliteFenceMismatch(mismatch) => {
-			return Err(CommitBufferError::FenceMismatch(mismatch.reason));
-		}
-		protocol::SqliteCommitStageBeginResponse::SqliteErrorResponse(error) => {
-			return Err(CommitBufferError::Other(error.message));
-		}
-	};
-
-	let serialize_start = Instant::now();
-	let encoded_delta = encode_ltx_v3(
-		LtxHeader::delta(
-			txid,
-			request.new_db_size_pages,
-			sqlite_now_ms().map_err(|err| CommitBufferError::Other(err.to_string()))?,
-		),
-		&request
-			.dirty_pages
-			.iter()
-			.map(|dirty_page| sqlite_storage::types::DirtyPage {
-				pgno: dirty_page.pgno,
-				bytes: dirty_page.bytes.clone(),
-			})
-			.collect::<Vec<_>>(),
-	)
-	.map_err(|err| CommitBufferError::Other(err.to_string()))?;
-	let staged_chunks = split_bytes(
-		&encoded_delta,
-		request.max_delta_bytes.try_into().map_err(|_| {
-			CommitBufferError::Other("sqlite max_delta_bytes exceeded usize".to_string())
-		})?,
-	);
-	metrics.serialize_ns += serialize_start.elapsed().as_nanos() as u64;
-
-	for (chunk_idx, chunk_bytes) in staged_chunks.iter().enumerate() {
-		let serialize_start = Instant::now();
-		let stage_request = protocol::SqliteCommitStageRequest {
-			actor_id: request.actor_id.clone(),
-			generation: request.generation,
-			txid,
-			chunk_idx: chunk_idx as u32,
-			bytes: chunk_bytes.clone(),
-			is_last: chunk_idx + 1 == staged_chunks.len(),
-		};
-		metrics.serialize_ns += serialize_start.elapsed().as_nanos() as u64;
-		if transport
-			.queue_commit_stage(stage_request.clone())
-			.map_err(|err| CommitBufferError::Other(err.to_string()))?
-		{
-			continue;
-		}
-
-		let transport_start = Instant::now();
-		match transport
-			.commit_stage(stage_request)
-			.await
-			.map_err(|err| CommitBufferError::Other(err.to_string()))?
-		{
-			protocol::SqliteCommitStageResponse::SqliteCommitStageOk(_) => {
-				metrics.transport_ns += transport_start.elapsed().as_nanos() as u64;
-			}
-			protocol::SqliteCommitStageResponse::SqliteFenceMismatch(mismatch) => {
-				return Err(CommitBufferError::FenceMismatch(mismatch.reason));
-			}
-			protocol::SqliteCommitStageResponse::SqliteErrorResponse(error) => {
-				return Err(CommitBufferError::Other(error.message));
-			}
-		}
-	}
-
-	let serialize_start = Instant::now();
-	let finalize_request = protocol::SqliteCommitFinalizeRequest {
-		actor_id: request.actor_id,
-		generation: request.generation,
-		expected_head_txid: request.expected_head_txid,
-		txid,
-		new_db_size_pages: request.new_db_size_pages,
+		dirty_pages: request.dirty_pages.clone(),
+		db_size_pages: request.new_db_size_pages,
+		now_ms: sqlite_now_ms().map_err(|err| CommitBufferError::Other(err.to_string()))?,
+		expected_generation: None,
+		expected_head_txid: None,
 	};
 	metrics.serialize_ns += serialize_start.elapsed().as_nanos() as u64;
 	let transport_start = Instant::now();
 	match transport
-		.commit_finalize(finalize_request)
+		.commit(commit_request)
 		.await
 		.map_err(|err| CommitBufferError::Other(err.to_string()))?
 	{
-		protocol::SqliteCommitFinalizeResponse::SqliteCommitFinalizeOk(ok) => {
+		protocol::SqliteCommitResponse::SqliteCommitOk => {
 			metrics.transport_ns += transport_start.elapsed().as_nanos() as u64;
 			Ok((
 				BufferedCommitOutcome {
-					path: CommitPath::Slow,
-					new_head_txid: ok.new_head_txid,
-					meta: ok.meta,
+					path: CommitPath::Fast,
+					db_size_pages: request.new_db_size_pages,
 				},
 				metrics,
 			))
 		}
-		protocol::SqliteCommitFinalizeResponse::SqliteFenceMismatch(mismatch) => {
-			Err(CommitBufferError::FenceMismatch(mismatch.reason))
-		}
-		protocol::SqliteCommitFinalizeResponse::SqliteStageNotFound(not_found) => {
-			Err(CommitBufferError::StageNotFound(not_found.stage_id))
-		}
-		protocol::SqliteCommitFinalizeResponse::SqliteErrorResponse(error) => {
+		protocol::SqliteCommitResponse::SqliteErrorResponse(error) => {
 			Err(CommitBufferError::Other(error.message))
 		}
 	}
@@ -2021,15 +1562,11 @@ unsafe extern "C" fn io_read(
 			state.db_size_pages as usize * state.page_size
 		};
 
-		let resolved = match ctx.resolve_pages(&requested_pages, true) {
-			Ok(pages) => pages,
-			Err(GetPagesError::FenceMismatch(reason)) => {
-				ctx.mark_dead(reason);
-				return SQLITE_IOERR_READ;
-			}
-			Err(GetPagesError::Other(message)) => {
-				ctx.mark_dead(message);
-				return SQLITE_IOERR_READ;
+			let resolved = match ctx.resolve_pages(&requested_pages, true) {
+				Ok(pages) => pages,
+				Err(GetPagesError::Other(message)) => {
+					ctx.mark_dead(message);
+					return SQLITE_IOERR_READ;
 			}
 		};
 		ctx.clear_last_error();
@@ -2126,16 +1663,12 @@ unsafe extern "C" fn io_write(
 
 			let mut resolved = if pages_to_resolve.is_empty() {
 				HashMap::new()
-			} else {
-				match ctx.resolve_pages(&pages_to_resolve, false) {
-					Ok(pages) => pages,
-					Err(GetPagesError::FenceMismatch(reason)) => {
-						ctx.mark_dead(reason);
-						return SQLITE_IOERR_WRITE;
-					}
-					Err(GetPagesError::Other(message)) => {
-						ctx.mark_dead(message);
-						return SQLITE_IOERR_WRITE;
+				} else {
+					match ctx.resolve_pages(&pages_to_resolve, false) {
+						Ok(pages) => pages,
+						Err(GetPagesError::Other(message)) => {
+							ctx.mark_dead(message);
+							return SQLITE_IOERR_WRITE;
 					}
 				}
 			};
@@ -2515,7 +2048,6 @@ impl SqliteVfs {
 		handle: EnvoyHandle,
 		actor_id: String,
 		runtime: Handle,
-		startup: protocol::SqliteStartupData,
 		config: VfsConfig,
 	) -> std::result::Result<Self, String> {
 		Self::register_with_transport(
@@ -2523,7 +2055,6 @@ impl SqliteVfs {
 			SqliteTransport::from_envoy(handle),
 			actor_id,
 			runtime,
-			startup,
 			config,
 		)
 	}
@@ -2537,7 +2068,6 @@ impl SqliteVfs {
 		transport: SqliteTransport,
 		actor_id: String,
 		runtime: Handle,
-		startup: protocol::SqliteStartupData,
 		config: VfsConfig,
 	) -> std::result::Result<Self, String> {
 		let mut io_methods: sqlite3_io_methods = unsafe { std::mem::zeroed() };
@@ -2556,7 +2086,7 @@ impl SqliteVfs {
 		io_methods.xDeviceCharacteristics = Some(io_device_characteristics);
 
 		let ctx = Box::new(VfsContext::new(
-			actor_id, runtime, transport, startup, config, io_methods,
+			actor_id, runtime, transport, config, io_methods,
 		));
 		let ctx_ptr = Box::into_raw(ctx);
 		let name_cstring = CString::new(name).map_err(|err| err.to_string())?;
@@ -2629,6 +2159,23 @@ impl NativeDatabase {
 impl Drop for NativeDatabase {
 	fn drop(&mut self) {
 		if !self.db.is_null() {
+			let ctx = unsafe { &*self._vfs.ctx_ptr };
+			let should_flush = {
+				let state = ctx.state.read();
+				state.write_buffer.in_atomic_write || !state.write_buffer.dirty.is_empty()
+			};
+			if should_flush {
+				let result = if ctx.state.read().write_buffer.in_atomic_write {
+					ctx.commit_atomic_write().map(|_| ())
+				} else {
+					ctx.flush_dirty_pages().map(|_| ())
+				};
+				if let Err(err) = result {
+					mark_dead_for_non_fence_commit_error(ctx, &err);
+					tracing::warn!(?err, "failed to flush sqlite database before close");
+				}
+			}
+
 			let rc = unsafe { sqlite3_close_v2(self.db) };
 			if rc != SQLITE_OK {
 				tracing::warn!(
@@ -2702,7 +2249,6 @@ mod tests {
 	use parking_lot::Mutex as SyncMutex;
 	use tempfile::TempDir;
 	use tokio::runtime::Builder;
-	use universaldb::Subspace;
 
 	use super::*;
 
@@ -2722,16 +2268,10 @@ mod tests {
 		format!("{prefix}-{id}")
 	}
 
-	fn random_hex() -> String {
-		let mut bytes = [0u8; 8];
-		getrandom::getrandom(&mut bytes).expect("random bytes should be available");
-		bytes.iter().map(|byte| format!("{byte:02x}")).collect()
-	}
-
 	struct DirectEngineHarness {
 		actor_id: String,
 		db_dir: TempDir,
-		subspace: Subspace,
+		storage: std::sync::OnceLock<Arc<DirectStorage>>,
 	}
 
 	impl DirectEngineHarness {
@@ -2739,11 +2279,15 @@ mod tests {
 			Self {
 				actor_id: next_test_name("sqlite-direct-actor"),
 				db_dir: tempfile::tempdir().expect("temp dir should build"),
-				subspace: Subspace::new(&("sqlite-direct", random_hex())),
+				storage: std::sync::OnceLock::new(),
 			}
 		}
 
-		async fn open_engine(&self) -> Arc<SqliteEngine> {
+		async fn open_engine(&self) -> Arc<DirectStorage> {
+			if let Some(storage) = self.storage.get() {
+				return Arc::clone(storage);
+			}
+
 			let mut attempts = 0;
 			let driver = loop {
 				match universaldb::driver::RocksDbDatabaseDriver::new(
@@ -2760,55 +2304,24 @@ mod tests {
 				}
 			};
 			let db = universaldb::Database::new(Arc::new(driver));
-			let (engine, _compaction_rx) = SqliteEngine::new(db, self.subspace.clone());
 
-			Arc::new(engine)
-		}
-
-		async fn startup_data_for(
-			&self,
-			actor_id: &str,
-			engine: &SqliteEngine,
-		) -> protocol::SqliteStartupData {
-			let takeover = engine
-				.open(
-					actor_id,
-					sqlite_storage::open::OpenConfig::new(
-						sqlite_now_ms().expect("startup time should resolve"),
-					),
-				)
-				.await
-				.expect("open should succeed");
-
-			protocol::SqliteStartupData {
-				generation: takeover.generation,
-				meta: protocol_sqlite_meta(takeover.meta),
-				preloaded_pages: takeover
-					.preloaded_pages
-					.into_iter()
-					.map(protocol_fetched_page)
-					.collect(),
-			}
-		}
-
-		async fn startup_data(&self, engine: &SqliteEngine) -> protocol::SqliteStartupData {
-			self.startup_data_for(&self.actor_id, engine).await
+			let storage = Arc::new(DirectStorage::new(db));
+			let _ = self.storage.set(Arc::clone(&storage));
+			Arc::clone(self.storage.get().expect("direct storage should be set"))
 		}
 
 		fn open_db_on_engine(
 			&self,
 			runtime: &tokio::runtime::Runtime,
-			engine: Arc<SqliteEngine>,
+			engine: Arc<DirectStorage>,
 			actor_id: &str,
 			config: VfsConfig,
 		) -> NativeDatabase {
-			let startup = runtime.block_on(self.startup_data_for(actor_id, &engine));
 			let vfs = SqliteVfs::register_with_transport(
 				&next_test_name("sqlite-direct-vfs"),
 				SqliteTransport::from_direct(engine),
 				actor_id.to_string(),
 				runtime.handle().clone(),
-				startup,
 				config,
 			)
 			.expect("v2 vfs should register");
@@ -2922,51 +2435,6 @@ mod tests {
 		}
 
 		assert_eq!(predictor.multi_predict(14, 3, 30), vec![17, 20, 23]);
-	}
-
-	#[test]
-	fn startup_data_populates_cache_without_protocol_calls() {
-		let runtime = Builder::new_current_thread()
-			.enable_all()
-			.build()
-			.expect("runtime should build");
-		let protocol = Arc::new(MockProtocol::new(
-			protocol::SqliteCommitResponse::SqliteCommitOk(protocol::SqliteCommitOk {
-				new_head_txid: 13,
-				meta: sqlite_meta(8 * 1024 * 1024),
-			}),
-			protocol::SqliteCommitStageResponse::SqliteCommitStageOk(
-				protocol::SqliteCommitStageOk {
-					chunk_idx_committed: 0,
-				},
-			),
-			protocol::SqliteCommitFinalizeResponse::SqliteCommitFinalizeOk(
-				protocol::SqliteCommitFinalizeOk {
-					new_head_txid: 13,
-					meta: sqlite_meta(8 * 1024 * 1024),
-				},
-			),
-		));
-		let startup = protocol::SqliteStartupData {
-			generation: 3,
-			meta: sqlite_meta(8 * 1024 * 1024),
-			preloaded_pages: vec![protocol::SqliteFetchedPage {
-				pgno: 1,
-				bytes: Some(vec![7; 4096]),
-			}],
-		};
-
-		let ctx = VfsContext::new(
-			"actor".to_string(),
-			runtime.handle().clone(),
-			SqliteTransport::from_mock(protocol.clone()),
-			startup,
-			VfsConfig::default(),
-			unsafe { std::mem::zeroed() },
-		);
-
-		assert_eq!(ctx.state.read().page_cache.get(&1), Some(vec![7; 4096]));
-		assert!(protocol.get_pages_requests().is_empty());
 	}
 
 	#[test]
@@ -4201,127 +3669,10 @@ mod tests {
 	}
 
 	#[test]
-	fn direct_engine_keeps_head_txid_after_cache_miss_reads_between_commits() {
-		let runtime = direct_runtime();
-		let harness = DirectEngineHarness::new();
-		let engine = runtime.block_on(harness.open_engine());
-		let db = harness.open_db_on_engine(
-			&runtime,
-			engine,
-			&harness.actor_id,
-			VfsConfig {
-				cache_capacity_pages: 2,
-				prefetch_depth: 0,
-				max_prefetch_bytes: 0,
-				..VfsConfig::default()
-			},
-		);
-		sqlite_exec(
-			db.as_ptr(),
-			"CREATE TABLE items (id INTEGER PRIMARY KEY, value TEXT NOT NULL);",
-		)
-		.expect("create table should succeed");
-		sqlite_exec(db.as_ptr(), "CREATE INDEX items_value_idx ON items(value);")
-			.expect("create index should succeed");
-		for i in 0..120 {
-			sqlite_step_statement(
-				db.as_ptr(),
-				&format!(
-					"INSERT INTO items (id, value) VALUES ({}, 'item-{i:03}');",
-					i + 1
-				),
-			)
-			.expect("seed insert should succeed");
-		}
-
-		let ctx = direct_vfs_ctx(&db);
-		let head_after_first_phase = ctx.state.read().head_txid;
-
-		ctx.state.write().page_cache.invalidate_all();
-		assert_eq!(
-			sqlite_query_text(
-				db.as_ptr(),
-				"SELECT value FROM items WHERE value = 'item-091';",
-			)
-			.expect("cache-miss read should succeed"),
-			"item-091"
-		);
-		let head_after_cache_miss = ctx.state.read().head_txid;
-		assert_eq!(
-			head_after_cache_miss, head_after_first_phase,
-			"cache-miss reads must not rewind head_txid",
-		);
-
-		sqlite_step_statement(
-			db.as_ptr(),
-			"INSERT INTO items (id, value) VALUES (1000, 'after-cache-miss');",
-		)
-		.expect("commit after cache-miss read should succeed");
-		assert!(
-			ctx.state.read().head_txid > head_after_cache_miss,
-			"head_txid should still advance after the follow-up commit",
-		);
-	}
-
-	#[test]
-	fn direct_engine_uses_slow_path_for_large_real_engine_commits() {
-		let runtime = direct_runtime();
-		let harness = DirectEngineHarness::new();
-		let engine = runtime.block_on(harness.open_engine());
-		let startup = runtime.block_on(harness.startup_data(&engine));
-		let dirty_pages = (1..=2300u32)
-			.map(|pgno| protocol::SqliteDirtyPage {
-				pgno,
-				bytes: vec![(pgno % 251) as u8; 4096],
-			})
-			.collect::<Vec<_>>();
-
-		let outcome = runtime
-			.block_on(commit_buffered_pages(
-				&SqliteTransport::from_direct(Arc::clone(&engine)),
-				BufferedCommitRequest {
-					actor_id: harness.actor_id.clone(),
-					generation: startup.generation,
-					expected_head_txid: startup.meta.head_txid,
-					new_db_size_pages: 2300,
-					max_delta_bytes: startup.meta.max_delta_bytes,
-					max_pages_per_stage: 256,
-					dirty_pages,
-				},
-			))
-			.expect("slow-path direct commit should succeed");
-		let (outcome, metrics) = outcome;
-
-		assert_eq!(outcome.path, CommitPath::Slow);
-		assert_eq!(outcome.new_head_txid, startup.meta.head_txid + 1);
-		assert!(metrics.serialize_ns > 0);
-		assert!(metrics.transport_ns > 0);
-
-		let pages = runtime
-			.block_on(engine.get_pages(&harness.actor_id, startup.generation, vec![1, 1024, 2300]))
-			.expect("pages should read back after slow-path commit");
-		let expected_page_1 = vec![1u8; 4096];
-		let expected_page_1024 = vec![(1024 % 251) as u8; 4096];
-		let expected_page_2300 = vec![(2300 % 251) as u8; 4096];
-		assert_eq!(pages.len(), 3);
-		assert_eq!(pages[0].bytes.as_deref(), Some(expected_page_1.as_slice()));
-		assert_eq!(
-			pages[1].bytes.as_deref(),
-			Some(expected_page_1024.as_slice())
-		);
-		assert_eq!(
-			pages[2].bytes.as_deref(),
-			Some(expected_page_2300.as_slice())
-		);
-	}
-
-	#[test]
 	fn direct_engine_marks_vfs_dead_after_transport_errors() {
 		let runtime = direct_runtime();
 		let harness = DirectEngineHarness::new();
-		let engine = runtime.block_on(harness.open_engine());
-		let startup = runtime.block_on(harness.startup_data(&engine));
-		let transport = SqliteTransport::from_direct(engine);
+		let engine = runtime.block_on(harness.open_engine());		let transport = SqliteTransport::from_direct(engine);
 		let hooks = transport
 			.direct_hooks()
 			.expect("direct transport should expose test hooks");
@@ -4330,7 +3681,6 @@ mod tests {
 			transport,
 			harness.actor_id.clone(),
 			runtime.handle().clone(),
-			startup,
 			VfsConfig::default(),
 		)
 		.expect("v2 vfs should register");
@@ -4364,9 +3714,7 @@ mod tests {
 	fn flush_dirty_pages_marks_vfs_dead_after_transport_error() {
 		let runtime = direct_runtime();
 		let harness = DirectEngineHarness::new();
-		let engine = runtime.block_on(harness.open_engine());
-		let startup = runtime.block_on(harness.startup_data(&engine));
-		let transport = SqliteTransport::from_direct(engine);
+		let engine = runtime.block_on(harness.open_engine());		let transport = SqliteTransport::from_direct(engine);
 		let hooks = transport
 			.direct_hooks()
 			.expect("direct transport should expose test hooks");
@@ -4375,7 +3723,6 @@ mod tests {
 			transport,
 			harness.actor_id.clone(),
 			runtime.handle().clone(),
-			startup,
 			VfsConfig::default(),
 		)
 		.expect("v2 vfs should register");
@@ -4411,9 +3758,7 @@ mod tests {
 	fn commit_atomic_write_marks_vfs_dead_after_transport_error() {
 		let runtime = direct_runtime();
 		let harness = DirectEngineHarness::new();
-		let engine = runtime.block_on(harness.open_engine());
-		let startup = runtime.block_on(harness.startup_data(&engine));
-		let transport = SqliteTransport::from_direct(engine);
+		let engine = runtime.block_on(harness.open_engine());		let transport = SqliteTransport::from_direct(engine);
 		let hooks = transport
 			.direct_hooks()
 			.expect("direct transport should expose test hooks");
@@ -4422,7 +3767,6 @@ mod tests {
 			transport,
 			harness.actor_id.clone(),
 			runtime.handle().clone(),
-			startup,
 			VfsConfig::default(),
 		)
 		.expect("v2 vfs should register");
@@ -4742,9 +4086,7 @@ mod tests {
 	fn direct_engine_fresh_reopen_recovers_after_poisoned_handle() {
 		let runtime = direct_runtime();
 		let harness = DirectEngineHarness::new();
-		let engine = runtime.block_on(harness.open_engine());
-		let startup = runtime.block_on(harness.startup_data_for(&harness.actor_id, &engine));
-		let transport = SqliteTransport::from_direct(engine.clone());
+		let engine = runtime.block_on(harness.open_engine());		let transport = SqliteTransport::from_direct(engine.clone());
 		let hooks = transport
 			.direct_hooks()
 			.expect("direct transport should expose test hooks");
@@ -4753,7 +4095,6 @@ mod tests {
 			transport,
 			harness.actor_id.clone(),
 			runtime.handle().clone(),
-			startup,
 			VfsConfig::default(),
 		)
 		.expect("v2 vfs should register");
@@ -4966,44 +4307,12 @@ mod tests {
 			.enable_all()
 			.build()
 			.expect("runtime should build");
-		let protocol = Arc::new(MockProtocol::new(
-			protocol::SqliteCommitResponse::SqliteCommitOk(protocol::SqliteCommitOk {
-				new_head_txid: 13,
-				meta: protocol::SqliteMeta {
-					db_size_pages: 2,
-					..sqlite_meta(8 * 1024 * 1024)
-				},
-			}),
-			protocol::SqliteCommitStageResponse::SqliteCommitStageOk(
-				protocol::SqliteCommitStageOk {
-					chunk_idx_committed: 0,
-				},
-			),
-			protocol::SqliteCommitFinalizeResponse::SqliteCommitFinalizeOk(
-				protocol::SqliteCommitFinalizeOk {
-					new_head_txid: 13,
-					meta: protocol::SqliteMeta {
-						db_size_pages: 2,
-						..sqlite_meta(8 * 1024 * 1024)
-					},
-				},
-			),
-		));
-		protocol.set_mirror_commit_meta(true);
-
+		let protocol = Arc::new(MockProtocol::new(protocol::SqliteCommitResponse::SqliteCommitOk));
 		let vfs = SqliteVfs::register_with_transport(
 			"test-v2-empty-db",
 			SqliteTransport::from_mock(protocol.clone()),
 			"actor".to_string(),
 			runtime.handle().clone(),
-			protocol::SqliteStartupData {
-				generation: 7,
-				meta: protocol::SqliteMeta {
-					db_size_pages: 0,
-					..sqlite_meta(8 * 1024 * 1024)
-				},
-				preloaded_pages: Vec::new(),
-			},
 			VfsConfig::default(),
 		)
 		.expect("vfs should register");
@@ -5022,43 +4331,13 @@ mod tests {
 			.enable_all()
 			.build()
 			.expect("runtime should build");
-		let protocol = Arc::new(MockProtocol::new(
-			protocol::SqliteCommitResponse::SqliteCommitOk(protocol::SqliteCommitOk {
-				new_head_txid: 13,
-				meta: protocol::SqliteMeta {
-					db_size_pages: 32,
-					..sqlite_meta(8 * 1024 * 1024)
-				},
-			}),
-			protocol::SqliteCommitStageResponse::SqliteCommitStageOk(
-				protocol::SqliteCommitStageOk {
-					chunk_idx_committed: 0,
-				},
-			),
-			protocol::SqliteCommitFinalizeResponse::SqliteCommitFinalizeOk(
-				protocol::SqliteCommitFinalizeOk {
-					new_head_txid: 13,
-					meta: protocol::SqliteMeta {
-						db_size_pages: 32,
-						..sqlite_meta(8 * 1024 * 1024)
-					},
-				},
-			),
-		));
+		let protocol = Arc::new(MockProtocol::new(protocol::SqliteCommitResponse::SqliteCommitOk));
 
 		let vfs = SqliteVfs::register_with_transport(
 			"test-v2-pragma-migration",
 			SqliteTransport::from_mock(protocol.clone()),
 			"actor".to_string(),
 			runtime.handle().clone(),
-			protocol::SqliteStartupData {
-				generation: 7,
-				meta: protocol::SqliteMeta {
-					db_size_pages: 0,
-					..sqlite_meta(8 * 1024 * 1024)
-				},
-				preloaded_pages: Vec::new(),
-			},
 			VfsConfig::default(),
 		)
 		.expect("vfs should register");
@@ -5088,44 +4367,12 @@ mod tests {
 			.enable_all()
 			.build()
 			.expect("runtime should build");
-		let protocol = Arc::new(MockProtocol::new(
-			protocol::SqliteCommitResponse::SqliteCommitOk(protocol::SqliteCommitOk {
-				new_head_txid: 13,
-				meta: protocol::SqliteMeta {
-					db_size_pages: 32,
-					..sqlite_meta(8 * 1024 * 1024)
-				},
-			}),
-			protocol::SqliteCommitStageResponse::SqliteCommitStageOk(
-				protocol::SqliteCommitStageOk {
-					chunk_idx_committed: 0,
-				},
-			),
-			protocol::SqliteCommitFinalizeResponse::SqliteCommitFinalizeOk(
-				protocol::SqliteCommitFinalizeOk {
-					new_head_txid: 13,
-					meta: protocol::SqliteMeta {
-						db_size_pages: 32,
-						..sqlite_meta(8 * 1024 * 1024)
-					},
-				},
-			),
-		));
-		protocol.set_mirror_commit_meta(true);
-
+		let protocol = Arc::new(MockProtocol::new(protocol::SqliteCommitResponse::SqliteCommitOk));
 		let vfs = SqliteVfs::register_with_transport(
 			"test-v2-pragma-explicit",
 			SqliteTransport::from_mock(protocol),
 			"actor".to_string(),
 			runtime.handle().clone(),
-			protocol::SqliteStartupData {
-				generation: 7,
-				meta: protocol::SqliteMeta {
-					db_size_pages: 0,
-					..sqlite_meta(8 * 1024 * 1024)
-				},
-				preloaded_pages: Vec::new(),
-			},
 			VfsConfig::default(),
 		)
 		.expect("vfs should register");
@@ -5155,44 +4402,12 @@ mod tests {
 			.enable_all()
 			.build()
 			.expect("runtime should build");
-		let protocol = Arc::new(MockProtocol::new(
-			protocol::SqliteCommitResponse::SqliteCommitOk(protocol::SqliteCommitOk {
-				new_head_txid: 13,
-				meta: protocol::SqliteMeta {
-					db_size_pages: 128,
-					..sqlite_meta(8 * 1024 * 1024)
-				},
-			}),
-			protocol::SqliteCommitStageResponse::SqliteCommitStageOk(
-				protocol::SqliteCommitStageOk {
-					chunk_idx_committed: 0,
-				},
-			),
-			protocol::SqliteCommitFinalizeResponse::SqliteCommitFinalizeOk(
-				protocol::SqliteCommitFinalizeOk {
-					new_head_txid: 13,
-					meta: protocol::SqliteMeta {
-						db_size_pages: 128,
-						..sqlite_meta(8 * 1024 * 1024)
-					},
-				},
-			),
-		));
-		protocol.set_mirror_commit_meta(true);
-
+		let protocol = Arc::new(MockProtocol::new(protocol::SqliteCommitResponse::SqliteCommitOk));
 		let vfs = SqliteVfs::register_with_transport(
 			"test-v2-hot-row-updates",
 			SqliteTransport::from_mock(protocol),
 			"actor".to_string(),
 			runtime.handle().clone(),
-			protocol::SqliteStartupData {
-				generation: 7,
-				meta: protocol::SqliteMeta {
-					db_size_pages: 0,
-					..sqlite_meta(8 * 1024 * 1024)
-				},
-				preloaded_pages: Vec::new(),
-			},
 			VfsConfig::default(),
 		)
 		.expect("vfs should register");
@@ -5228,44 +4443,12 @@ mod tests {
 			.enable_all()
 			.build()
 			.expect("runtime should build");
-		let protocol = Arc::new(MockProtocol::new(
-			protocol::SqliteCommitResponse::SqliteCommitOk(protocol::SqliteCommitOk {
-				new_head_txid: 13,
-				meta: protocol::SqliteMeta {
-					db_size_pages: 32,
-					..sqlite_meta(8 * 1024 * 1024)
-				},
-			}),
-			protocol::SqliteCommitStageResponse::SqliteCommitStageOk(
-				protocol::SqliteCommitStageOk {
-					chunk_idx_committed: 0,
-				},
-			),
-			protocol::SqliteCommitFinalizeResponse::SqliteCommitFinalizeOk(
-				protocol::SqliteCommitFinalizeOk {
-					new_head_txid: 13,
-					meta: protocol::SqliteMeta {
-						db_size_pages: 32,
-						..sqlite_meta(8 * 1024 * 1024)
-					},
-				},
-			),
-		));
-		protocol.set_mirror_commit_meta(true);
-
+		let protocol = Arc::new(MockProtocol::new(protocol::SqliteCommitResponse::SqliteCommitOk));
 		let vfs = SqliteVfs::register_with_transport(
 			"test-v2-cross-thread",
 			SqliteTransport::from_mock(protocol),
 			"actor".to_string(),
 			runtime.handle().clone(),
-			protocol::SqliteStartupData {
-				generation: 7,
-				meta: protocol::SqliteMeta {
-					db_size_pages: 0,
-					..sqlite_meta(8 * 1024 * 1024)
-				},
-				preloaded_pages: Vec::new(),
-			},
 			VfsConfig::default(),
 		)
 		.expect("vfs should register");
@@ -5313,32 +4496,11 @@ mod tests {
 			.enable_all()
 			.build()
 			.expect("runtime should build");
-		let protocol = Arc::new(MockProtocol::new(
-			protocol::SqliteCommitResponse::SqliteCommitOk(protocol::SqliteCommitOk {
-				new_head_txid: 13,
-				meta: sqlite_meta(8 * 1024 * 1024),
-			}),
-			protocol::SqliteCommitStageResponse::SqliteCommitStageOk(
-				protocol::SqliteCommitStageOk {
-					chunk_idx_committed: 0,
-				},
-			),
-			protocol::SqliteCommitFinalizeResponse::SqliteCommitFinalizeOk(
-				protocol::SqliteCommitFinalizeOk {
-					new_head_txid: 13,
-					meta: sqlite_meta(8 * 1024 * 1024),
-				},
-			),
-		));
+		let protocol = Arc::new(MockProtocol::new(protocol::SqliteCommitResponse::SqliteCommitOk));
 		let ctx = VfsContext::new(
 			"actor".to_string(),
 			runtime.handle().clone(),
 			SqliteTransport::from_mock(protocol),
-			protocol::SqliteStartupData {
-				generation: 7,
-				meta: sqlite_meta(8 * 1024 * 1024),
-				preloaded_pages: Vec::new(),
-			},
 			VfsConfig::default(),
 			unsafe { std::mem::zeroed() },
 		);
@@ -5360,32 +4522,11 @@ mod tests {
 			.enable_all()
 			.build()
 			.expect("runtime should build");
-		let protocol = Arc::new(MockProtocol::new(
-			protocol::SqliteCommitResponse::SqliteCommitOk(protocol::SqliteCommitOk {
-				new_head_txid: 13,
-				meta: sqlite_meta(8 * 1024 * 1024),
-			}),
-			protocol::SqliteCommitStageResponse::SqliteCommitStageOk(
-				protocol::SqliteCommitStageOk {
-					chunk_idx_committed: 0,
-				},
-			),
-			protocol::SqliteCommitFinalizeResponse::SqliteCommitFinalizeOk(
-				protocol::SqliteCommitFinalizeOk {
-					new_head_txid: 13,
-					meta: sqlite_meta(8 * 1024 * 1024),
-				},
-			),
-		));
+		let protocol = Arc::new(MockProtocol::new(protocol::SqliteCommitResponse::SqliteCommitOk));
 		let ctx = Arc::new(VfsContext::new(
 			"actor".to_string(),
 			runtime.handle().clone(),
 			SqliteTransport::from_mock(protocol),
-			protocol::SqliteStartupData {
-				generation: 7,
-				meta: sqlite_meta(8 * 1024 * 1024),
-				preloaded_pages: Vec::new(),
-			},
 			VfsConfig::default(),
 			unsafe { std::mem::zeroed() },
 		));
@@ -5420,44 +4561,11 @@ mod tests {
 			.enable_all()
 			.build()
 			.expect("runtime should build");
-		let protocol = Arc::new(MockProtocol::new(
-			protocol::SqliteCommitResponse::SqliteCommitOk(protocol::SqliteCommitOk {
-				new_head_txid: 13,
-				meta: sqlite_meta(8 * 1024 * 1024),
-			}),
-			protocol::SqliteCommitStageResponse::SqliteCommitStageOk(
-				protocol::SqliteCommitStageOk {
-					chunk_idx_committed: 0,
-				},
-			),
-			protocol::SqliteCommitFinalizeResponse::SqliteCommitFinalizeOk(
-				protocol::SqliteCommitFinalizeOk {
-					new_head_txid: 13,
-					meta: sqlite_meta(8 * 1024 * 1024),
-				},
-			),
-		));
+		let protocol = Arc::new(MockProtocol::new(protocol::SqliteCommitResponse::SqliteCommitOk));
 		let ctx = VfsContext::new(
 			"actor".to_string(),
 			runtime.handle().clone(),
 			SqliteTransport::from_mock(protocol),
-			protocol::SqliteStartupData {
-				generation: 7,
-				meta: protocol::SqliteMeta {
-					db_size_pages: 4,
-					..sqlite_meta(8 * 1024 * 1024)
-				},
-				preloaded_pages: vec![
-					protocol::SqliteFetchedPage {
-						pgno: 1,
-						bytes: Some(vec![1; 4096]),
-					},
-					protocol::SqliteFetchedPage {
-						pgno: 4,
-						bytes: Some(vec![4; 4096]),
-					},
-				],
-			},
 			VfsConfig::default(),
 			unsafe { std::mem::zeroed() },
 		);
@@ -5477,162 +4585,12 @@ mod tests {
 	}
 
 	#[test]
-	fn resolve_pages_does_not_rewind_meta_on_stale_response() {
-		let runtime = Builder::new_current_thread()
-			.enable_all()
-			.build()
-			.expect("runtime should build");
-		let mut protocol = MockProtocol::new(
-			protocol::SqliteCommitResponse::SqliteCommitOk(protocol::SqliteCommitOk {
-				new_head_txid: 13,
-				meta: sqlite_meta(8 * 1024 * 1024),
-			}),
-			protocol::SqliteCommitStageResponse::SqliteCommitStageOk(
-				protocol::SqliteCommitStageOk {
-					chunk_idx_committed: 0,
-				},
-			),
-			protocol::SqliteCommitFinalizeResponse::SqliteCommitFinalizeOk(
-				protocol::SqliteCommitFinalizeOk {
-					new_head_txid: 13,
-					meta: sqlite_meta(8 * 1024 * 1024),
-				},
-			),
-		);
-		protocol.get_pages_response =
-			protocol::SqliteGetPagesResponse::SqliteGetPagesOk(protocol::SqliteGetPagesOk {
-				pages: vec![protocol::SqliteFetchedPage {
-					pgno: 2,
-					bytes: Some(vec![2; 4096]),
-				}],
-				meta: protocol::SqliteMeta {
-					head_txid: 1,
-					db_size_pages: 1,
-					max_delta_bytes: 32 * 1024 * 1024,
-					..sqlite_meta(8 * 1024 * 1024)
-				},
-			});
-		let ctx = VfsContext::new(
-			"actor".to_string(),
-			runtime.handle().clone(),
-			SqliteTransport::from_mock(Arc::new(protocol)),
-			protocol::SqliteStartupData {
-				generation: 7,
-				meta: protocol::SqliteMeta {
-					head_txid: 3,
-					db_size_pages: 3,
-					..sqlite_meta(8 * 1024 * 1024)
-				},
-				preloaded_pages: vec![protocol::SqliteFetchedPage {
-					pgno: 1,
-					bytes: Some(vec![1; 4096]),
-				}],
-			},
-			VfsConfig::default(),
-			unsafe { std::mem::zeroed() },
-		);
-
-		let resolved = ctx
-			.resolve_pages(&[2], false)
-			.expect("missing page should resolve");
-
-		assert_eq!(resolved.get(&2), Some(&Some(vec![2; 4096])));
-		let state = ctx.state.read();
-		assert_eq!(state.head_txid, 3);
-		assert_eq!(state.db_size_pages, 3);
-		assert_eq!(state.max_delta_bytes, 32 * 1024 * 1024);
-	}
-
-	#[test]
-	fn resolve_pages_does_not_shrink_db_size_pages_on_same_head_response() {
-		let runtime = Builder::new_current_thread()
-			.enable_all()
-			.build()
-			.expect("runtime should build");
-		let mut protocol = MockProtocol::new(
-			protocol::SqliteCommitResponse::SqliteCommitOk(protocol::SqliteCommitOk {
-				new_head_txid: 13,
-				meta: sqlite_meta(8 * 1024 * 1024),
-			}),
-			protocol::SqliteCommitStageResponse::SqliteCommitStageOk(
-				protocol::SqliteCommitStageOk {
-					chunk_idx_committed: 0,
-				},
-			),
-			protocol::SqliteCommitFinalizeResponse::SqliteCommitFinalizeOk(
-				protocol::SqliteCommitFinalizeOk {
-					new_head_txid: 13,
-					meta: sqlite_meta(8 * 1024 * 1024),
-				},
-			),
-		);
-		protocol.get_pages_response =
-			protocol::SqliteGetPagesResponse::SqliteGetPagesOk(protocol::SqliteGetPagesOk {
-				pages: vec![protocol::SqliteFetchedPage {
-					pgno: 4,
-					bytes: Some(vec![4; 4096]),
-				}],
-				meta: protocol::SqliteMeta {
-					head_txid: 3,
-					db_size_pages: 1,
-					max_delta_bytes: 16 * 1024 * 1024,
-					..sqlite_meta(8 * 1024 * 1024)
-				},
-			});
-		let ctx = VfsContext::new(
-			"actor".to_string(),
-			runtime.handle().clone(),
-			SqliteTransport::from_mock(Arc::new(protocol)),
-			protocol::SqliteStartupData {
-				generation: 7,
-				meta: protocol::SqliteMeta {
-					head_txid: 3,
-					db_size_pages: 4,
-					..sqlite_meta(8 * 1024 * 1024)
-				},
-				preloaded_pages: vec![protocol::SqliteFetchedPage {
-					pgno: 1,
-					bytes: Some(vec![1; 4096]),
-				}],
-			},
-			VfsConfig::default(),
-			unsafe { std::mem::zeroed() },
-		);
-
-		let resolved = ctx
-			.resolve_pages(&[4], false)
-			.expect("missing page should resolve");
-
-		assert_eq!(resolved.get(&4), Some(&Some(vec![4; 4096])));
-		let state = ctx.state.read();
-		assert_eq!(state.head_txid, 3);
-		assert_eq!(state.db_size_pages, 4);
-		assert_eq!(state.max_delta_bytes, 16 * 1024 * 1024);
-	}
-
-	#[test]
 	fn resolve_pages_surfaces_read_path_error_response() {
 		let runtime = Builder::new_current_thread()
 			.enable_all()
 			.build()
 			.expect("runtime should build");
-		let mut protocol = MockProtocol::new(
-			protocol::SqliteCommitResponse::SqliteCommitOk(protocol::SqliteCommitOk {
-				new_head_txid: 13,
-				meta: sqlite_meta(8 * 1024 * 1024),
-			}),
-			protocol::SqliteCommitStageResponse::SqliteCommitStageOk(
-				protocol::SqliteCommitStageOk {
-					chunk_idx_committed: 0,
-				},
-			),
-			protocol::SqliteCommitFinalizeResponse::SqliteCommitFinalizeOk(
-				protocol::SqliteCommitFinalizeOk {
-					new_head_txid: 13,
-					meta: sqlite_meta(8 * 1024 * 1024),
-				},
-			),
-		);
+		let mut protocol = MockProtocol::new(protocol::SqliteCommitResponse::SqliteCommitOk);
 		protocol.get_pages_response =
 			protocol::SqliteGetPagesResponse::SqliteErrorResponse(protocol::SqliteErrorResponse {
 				message: "InjectedGetPagesError: read path dropped".to_string(),
@@ -5641,17 +4599,6 @@ mod tests {
 			"actor".to_string(),
 			runtime.handle().clone(),
 			SqliteTransport::from_mock(Arc::new(protocol)),
-			protocol::SqliteStartupData {
-				generation: 7,
-				meta: protocol::SqliteMeta {
-					db_size_pages: 4,
-					..sqlite_meta(8 * 1024 * 1024)
-				},
-				preloaded_pages: vec![protocol::SqliteFetchedPage {
-					pgno: 1,
-					bytes: Some(vec![1; 4096]),
-				}],
-			},
 			VfsConfig::default(),
 			unsafe { std::mem::zeroed() },
 		);
@@ -5672,34 +4619,14 @@ mod tests {
 			.enable_all()
 			.build()
 			.expect("runtime should build");
-		let protocol = Arc::new(MockProtocol::new(
-			protocol::SqliteCommitResponse::SqliteCommitOk(protocol::SqliteCommitOk {
-				new_head_txid: 13,
-				meta: sqlite_meta(8 * 1024 * 1024),
-			}),
-			protocol::SqliteCommitStageResponse::SqliteCommitStageOk(
-				protocol::SqliteCommitStageOk {
-					chunk_idx_committed: 0,
-				},
-			),
-			protocol::SqliteCommitFinalizeResponse::SqliteCommitFinalizeOk(
-				protocol::SqliteCommitFinalizeOk {
-					new_head_txid: 14,
-					meta: sqlite_meta(8 * 1024 * 1024),
-				},
-			),
-		));
+		let protocol = Arc::new(MockProtocol::new(protocol::SqliteCommitResponse::SqliteCommitOk));
 
 		let outcome = runtime
 			.block_on(commit_buffered_pages(
 				&SqliteTransport::from_mock(protocol.clone()),
 				BufferedCommitRequest {
 					actor_id: "actor".to_string(),
-					generation: 7,
-					expected_head_txid: 12,
 					new_db_size_pages: 1,
-					max_delta_bytes: 8 * 1024 * 1024,
-					max_pages_per_stage: 4_000,
 					dirty_pages: dirty_pages(1, 9),
 				},
 			))
@@ -5707,183 +4634,10 @@ mod tests {
 		let (outcome, metrics) = outcome;
 
 		assert_eq!(outcome.path, CommitPath::Fast);
-		assert_eq!(outcome.new_head_txid, 13);
+		assert_eq!(outcome.db_size_pages, 1);
 		assert!(metrics.serialize_ns > 0);
 		assert!(metrics.transport_ns > 0);
 		assert_eq!(protocol.commit_requests().len(), 1);
-		assert!(protocol.stage_requests().is_empty());
-		assert!(protocol.finalize_requests().is_empty());
-	}
-
-	#[test]
-	fn mock_protocol_notifies_stage_response_awaits() {
-		let runtime = Builder::new_current_thread()
-			.enable_all()
-			.build()
-			.expect("runtime should build");
-		let protocol = Arc::new(MockProtocol::new(
-			protocol::SqliteCommitResponse::SqliteCommitTooLarge(protocol::SqliteCommitTooLarge {
-				actual_size_bytes: 3 * 4096,
-				max_size_bytes: 4096,
-			}),
-			protocol::SqliteCommitStageResponse::SqliteCommitStageOk(
-				protocol::SqliteCommitStageOk {
-					chunk_idx_committed: 0,
-				},
-			),
-			protocol::SqliteCommitFinalizeResponse::SqliteCommitFinalizeOk(
-				protocol::SqliteCommitFinalizeOk {
-					new_head_txid: 14,
-					meta: sqlite_meta(8 * 1024 * 1024),
-				},
-			),
-		));
-
-		runtime.block_on(async {
-			let wait = protocol.wait_for_stage_responses(1);
-			let stage = protocol.commit_stage(protocol::SqliteCommitStageRequest {
-				actor_id: "actor".to_string(),
-				generation: 7,
-				txid: 1,
-				chunk_idx: 0,
-				bytes: vec![1, 2, 3],
-				is_last: true,
-			});
-			let ((), response) = tokio::join!(wait, stage);
-			assert!(matches!(
-				response.expect("stage response should succeed"),
-				protocol::SqliteCommitStageResponse::SqliteCommitStageOk(_)
-			));
-		});
-	}
-
-	#[test]
-	fn commit_buffered_pages_falls_back_to_slow_path() {
-		let runtime = Builder::new_current_thread()
-			.enable_all()
-			.build()
-			.expect("runtime should build");
-		let protocol = Arc::new(MockProtocol::new(
-			protocol::SqliteCommitResponse::SqliteCommitTooLarge(protocol::SqliteCommitTooLarge {
-				actual_size_bytes: 3 * 4096,
-				max_size_bytes: 4096,
-			}),
-			protocol::SqliteCommitStageResponse::SqliteCommitStageOk(
-				protocol::SqliteCommitStageOk {
-					chunk_idx_committed: 0,
-				},
-			),
-			protocol::SqliteCommitFinalizeResponse::SqliteCommitFinalizeOk(
-				protocol::SqliteCommitFinalizeOk {
-					new_head_txid: 14,
-					meta: sqlite_meta(4096),
-				},
-			),
-		));
-
-		let protocol_for_release = protocol.clone();
-		let release = std::thread::spawn(move || {
-			runtime.block_on(async {
-				protocol_for_release.finalize_started.notified().await;
-				assert_eq!(protocol_for_release.awaited_stage_responses(), 0);
-				protocol_for_release.release_finalize.notify_one();
-			});
-		});
-
-		let outcome = Builder::new_current_thread()
-			.enable_all()
-			.build()
-			.expect("runtime should build")
-			.block_on(commit_buffered_pages(
-				&SqliteTransport::from_mock(protocol.clone()),
-				BufferedCommitRequest {
-					actor_id: "actor".to_string(),
-					generation: 7,
-					expected_head_txid: 12,
-					new_db_size_pages: 3,
-					max_delta_bytes: 4096,
-					max_pages_per_stage: 1,
-					dirty_pages: dirty_pages(3, 4),
-				},
-			))
-			.expect("slow-path commit should succeed");
-		let (outcome, metrics) = outcome;
-
-		release.join().expect("release thread should finish");
-
-		assert_eq!(outcome.path, CommitPath::Slow);
-		assert_eq!(outcome.new_head_txid, 14);
-		assert!(metrics.serialize_ns > 0);
-		assert!(metrics.transport_ns > 0);
-		assert!(protocol.commit_requests().is_empty());
-		assert!(!protocol.stage_requests().is_empty());
-		assert!(
-			protocol
-				.stage_requests()
-				.iter()
-				.enumerate()
-				.all(|(chunk_idx, request)| request.chunk_idx as usize == chunk_idx)
-		);
-		assert!(
-			protocol
-				.stage_requests()
-				.last()
-				.is_some_and(|request| request.is_last)
-		);
-		assert_eq!(protocol.awaited_stage_responses(), 0);
-		assert_eq!(protocol.finalize_requests().len(), 1);
-	}
-
-	#[test]
-	fn commit_buffered_pages_surfaces_finalize_stage_not_found() {
-		let runtime = Builder::new_current_thread()
-			.enable_all()
-			.build()
-			.expect("runtime should build");
-		let protocol = Arc::new(MockProtocol::new(
-			protocol::SqliteCommitResponse::SqliteCommitTooLarge(protocol::SqliteCommitTooLarge {
-				actual_size_bytes: 3 * 4096,
-				max_size_bytes: 4096,
-			}),
-			protocol::SqliteCommitStageResponse::SqliteCommitStageOk(
-				protocol::SqliteCommitStageOk {
-					chunk_idx_committed: 0,
-				},
-			),
-			protocol::SqliteCommitFinalizeResponse::SqliteStageNotFound(
-				protocol::SqliteStageNotFound { stage_id: 99 },
-			),
-		));
-
-		let protocol_for_release = Arc::clone(&protocol);
-		let release = std::thread::spawn(move || {
-			runtime.block_on(async {
-				protocol_for_release.finalize_started.notified().await;
-				protocol_for_release.release_finalize.notify_one();
-			});
-		});
-
-		let err = Builder::new_current_thread()
-			.enable_all()
-			.build()
-			.expect("runtime should build")
-			.block_on(commit_buffered_pages(
-				&SqliteTransport::from_mock(Arc::clone(&protocol)),
-				BufferedCommitRequest {
-					actor_id: "actor".to_string(),
-					generation: 7,
-					expected_head_txid: 12,
-					new_db_size_pages: 3,
-					max_delta_bytes: 4096,
-					max_pages_per_stage: 1,
-					dirty_pages: dirty_pages(3, 9),
-				},
-			))
-			.expect_err("stage-not-found finalize should fail");
-
-		release.join().expect("release thread should finish");
-
-		assert!(matches!(err, CommitBufferError::StageNotFound(99)));
 	}
 
 	#[test]
@@ -6329,8 +5083,8 @@ mod tests {
 	}
 
 	// Regression test: two actors run autocommits concurrently on the same
-	// SqliteEngine. If anything in the engine (e.g., compaction) cross-contaminates
-	// actors or races on shared state, we'd see fence mismatches.
+	// direct storage. If compaction cross-contaminates actors or races on
+	// shared state, we'd see fence mismatches.
 	#[test]
 	fn concurrent_multi_actor_autocommits() {
 		let runtime = direct_runtime();

@@ -9,8 +9,7 @@ use pegboard::pubsub_subjects::GatewayReceiverSubject;
 use rivet_data::converted::{ActorNameKeyData, MetadataKeyData};
 use rivet_envoy_protocol::{self as protocol, PROTOCOL_VERSION, versioned};
 use rivet_guard_core::websocket_handle::WebSocketReceiver;
-use scc::HashMap;
-use sqlite_storage::error::SqliteStorageError;
+use sqlite_storage::{error::SqliteStorageError, pump::ActorDb};
 use std::{
 	collections::BTreeSet,
 	sync::{Arc, atomic::Ordering},
@@ -24,7 +23,7 @@ use universalpubsub::PublishOpts;
 use vbare::OwnedVersionedData;
 
 use crate::{
-	LifecycleResult, actor_event_demuxer::ActorEventDemuxer, actor_lifecycle, conn::Conn, errors,
+	LifecycleResult, actor_event_demuxer::ActorEventDemuxer, conn::Conn, errors, restore_lifecycle,
 	sqlite_runtime,
 };
 
@@ -395,20 +394,8 @@ async fn handle_message(
 			crate::metrics::SQLITE_COMMIT_ENVOY_RESPONSE_DURATION
 				.observe(timed_response.commit_completed_at.elapsed().as_secs_f64());
 		}
-		protocol::ToRivet::ToRivetSqliteCommitStageBeginRequest(req) => {
-			let response = handle_sqlite_commit_stage_begin_response(ctx, conn, req.data).await;
-			send_sqlite_commit_stage_begin_response(conn, req.request_id, response).await?;
-		}
-		protocol::ToRivet::ToRivetSqliteCommitStageRequest(req) => {
-			let response = handle_sqlite_commit_stage_response(ctx, conn, req.data).await;
-			send_sqlite_commit_stage_response(conn, req.request_id, response).await?;
-		}
-		protocol::ToRivet::ToRivetSqliteCommitFinalizeRequest(req) => {
-			let response = handle_sqlite_commit_finalize_response(ctx, conn, req.data).await;
-			send_sqlite_commit_finalize_response(conn, req.request_id, response).await?;
-		}
 		protocol::ToRivet::ToRivetTunnelMessage(tunnel_msg) => {
-			handle_tunnel_message(ctx, &conn.authorized_tunnel_routes, tunnel_msg)
+			handle_tunnel_message(ctx, conn, tunnel_msg)
 				.await
 				.context("failed to handle tunnel message")?;
 		}
@@ -418,25 +405,6 @@ async fn handle_message(
 		// Forward to demuxer which forwards to actor wf
 		protocol::ToRivet::ToRivetEvents(events) => {
 			for event in events {
-				if let protocol::Event::EventActorStateUpdate(state_update) = &event.inner {
-					if let protocol::ActorState::ActorStateStopped(_) = &state_update.state {
-						// Log + continue on protocol-level disagreement instead of tearing
-						// down the whole WS for a single bad ActorStateStopped event.
-						// `actor_stopped` itself force-closes the SQLite db and removes
-						// the active_actors entry on failure, so the conn does not retain
-						// half-stopped state for this actor.
-						if let Err(err) =
-							actor_lifecycle::actor_stopped(conn, &event.checkpoint).await
-						{
-							tracing::warn!(
-								actor_id = %event.checkpoint.actor_id,
-								generation = event.checkpoint.generation,
-								?err,
-								"actor_stopped lifecycle update failed; entry already evicted"
-							);
-						}
-					}
-				}
 				event_demuxer.ingest(Id::parse(&event.checkpoint.actor_id)?, event);
 			}
 		}
@@ -501,53 +469,6 @@ async fn handle_sqlite_commit_response(
 	TimedSqliteCommitResponse {
 		response,
 		commit_completed_at: Instant::now(),
-	}
-}
-
-async fn handle_sqlite_commit_stage_response(
-	ctx: &StandaloneCtx,
-	conn: &Conn,
-	request: protocol::SqliteCommitStageRequest,
-) -> protocol::SqliteCommitStageResponse {
-	let actor_id = request.actor_id.clone();
-	match handle_sqlite_commit_stage(ctx, conn, request).await {
-		Ok(response) => response,
-		Err(err) => {
-			tracing::error!(actor_id = %actor_id, ?err, "sqlite commit_stage request failed");
-			protocol::SqliteCommitStageResponse::SqliteErrorResponse(sqlite_error_response(&err))
-		}
-	}
-}
-
-async fn handle_sqlite_commit_stage_begin_response(
-	ctx: &StandaloneCtx,
-	conn: &Conn,
-	request: protocol::SqliteCommitStageBeginRequest,
-) -> protocol::SqliteCommitStageBeginResponse {
-	let actor_id = request.actor_id.clone();
-	match handle_sqlite_commit_stage_begin(ctx, conn, request).await {
-		Ok(response) => response,
-		Err(err) => {
-			tracing::error!(actor_id = %actor_id, ?err, "sqlite commit_stage_begin request failed");
-			protocol::SqliteCommitStageBeginResponse::SqliteErrorResponse(sqlite_error_response(
-				&err,
-			))
-		}
-	}
-}
-
-async fn handle_sqlite_commit_finalize_response(
-	ctx: &StandaloneCtx,
-	conn: &Conn,
-	request: protocol::SqliteCommitFinalizeRequest,
-) -> protocol::SqliteCommitFinalizeResponse {
-	let actor_id = request.actor_id.clone();
-	match handle_sqlite_commit_finalize(ctx, conn, request).await {
-		Ok(response) => response,
-		Err(err) => {
-			tracing::error!(actor_id = %actor_id, ?err, "sqlite commit_finalize request failed");
-			protocol::SqliteCommitFinalizeResponse::SqliteErrorResponse(sqlite_error_response(&err))
-		}
 	}
 }
 
@@ -650,7 +571,7 @@ async fn handle_metadata(
 #[tracing::instrument(skip_all)]
 async fn handle_tunnel_message(
 	ctx: &StandaloneCtx,
-	authorized_tunnel_routes: &HashMap<(protocol::GatewayId, protocol::RequestId), ()>,
+	conn: &Conn,
 	msg: protocol::ToRivetTunnelMessage,
 ) -> Result<()> {
 	// Extract inner data length before consuming msg
@@ -671,6 +592,7 @@ async fn handle_tunnel_message(
 	// }
 
 	let gateway_reply_to = GatewayReceiverSubject::new(msg.message_id.gateway_id).to_string();
+	restore_lifecycle::track_from_envoy_tunnel_message(&conn.tunnel_routes, &msg).await;
 	let msg_serialized =
 		versioned::ToGateway::wrap_latest(protocol::ToGateway::ToRivetTunnelMessage(msg))
 			.serialize_with_embedded_version(PROTOCOL_VERSION)
@@ -703,40 +625,23 @@ async fn handle_sqlite_get_pages(
 ) -> Result<protocol::SqliteGetPagesResponse> {
 	validate_sqlite_get_pages_request(&request)?;
 	validate_sqlite_actor(ctx, conn, &request.actor_id).await?;
-	actor_lifecycle::assert_sqlite_actor_active(conn, &request.actor_id, request.generation)
-		.await?;
 
-	match conn
-		.sqlite_engine
-		.get_pages(&request.actor_id, request.generation, request.pgnos.clone())
-		.await
-	{
-		Ok(pages) => Ok(sqlite_get_pages_ok(conn, &request.actor_id, pages).await?),
-		Err(err) => match sqlite_storage_error(&err) {
-			Some(SqliteStorageError::FenceMismatch { reason }) => {
-				Ok(protocol::SqliteGetPagesResponse::SqliteFenceMismatch(
-					sqlite_fence_mismatch(conn, &request.actor_id, reason.clone()).await?,
-				))
-			}
-			_ => Err(err),
-		},
+	let actor_db = actor_db(conn, request.actor_id.clone()).await;
+	match actor_db.get_pages(request.pgnos).await {
+		Ok(pages) => Ok(sqlite_get_pages_ok(pages).await?),
+		Err(err) => Err(err),
 	}
 }
 
 async fn sqlite_get_pages_ok(
-	conn: &Conn,
-	actor_id: &str,
 	pages: Vec<sqlite_storage::types::FetchedPage>,
 ) -> Result<protocol::SqliteGetPagesResponse> {
 	Ok(protocol::SqliteGetPagesResponse::SqliteGetPagesOk(
 		protocol::SqliteGetPagesOk {
 			pages: pages
 				.into_iter()
-				.map(sqlite_runtime::protocol_sqlite_fetched_page)
+				.map(sqlite_runtime::protocol_sqlite_pump_fetched_page)
 				.collect(),
-			meta: sqlite_runtime::protocol_sqlite_meta(
-				conn.sqlite_engine.load_meta(actor_id).await?,
-			),
 		},
 	))
 }
@@ -749,202 +654,42 @@ async fn handle_sqlite_commit(
 	let decode_request_start = Instant::now();
 	validate_sqlite_dirty_pages("sqlite commit", &request.dirty_pages)?;
 	validate_sqlite_actor(ctx, conn, &request.actor_id).await?;
-	actor_lifecycle::assert_sqlite_actor_active(conn, &request.actor_id, request.generation)
-		.await?;
 	let decode_request_duration = decode_request_start.elapsed();
-	conn.sqlite_engine.metrics().observe_commit_phase(
-		"fast",
-		"decode_request",
-		decode_request_duration,
-	);
 	crate::metrics::SQLITE_COMMIT_ENVOY_DISPATCH_DURATION
 		.observe(decode_request_duration.as_secs_f64());
 
-	let engine_result = conn
-		.sqlite_engine
+	let actor_id = request.actor_id.clone();
+	let actor_db = actor_db(conn, actor_id.clone()).await;
+	let engine_result = actor_db
 		.commit(
-			&request.actor_id,
-			sqlite_storage::commit::CommitRequest {
-				generation: request.generation,
-				head_txid: request.expected_head_txid,
-				db_size_pages: request.new_db_size_pages,
-				dirty_pages: request
-					.dirty_pages
-					.into_iter()
-					.map(storage_dirty_page)
-					.collect(),
-				now_ms: util::timestamp::now(),
-			},
+			request
+				.dirty_pages
+				.into_iter()
+				.map(pump_dirty_page)
+				.collect(),
+			request.db_size_pages,
+			request.now_ms,
 		)
 		.await;
 	let response_build_start = Instant::now();
 	let response = match engine_result {
-		Ok(result) => Ok(protocol::SqliteCommitResponse::SqliteCommitOk(
-			protocol::SqliteCommitOk {
-				new_head_txid: result.txid,
-				meta: sqlite_runtime::protocol_sqlite_meta(result.meta),
-			},
-		)),
+		Ok(()) => Ok(protocol::SqliteCommitResponse::SqliteCommitOk),
 		Err(err) => match sqlite_storage_error(&err) {
-			Some(SqliteStorageError::FenceMismatch { reason }) => {
-				Ok(protocol::SqliteCommitResponse::SqliteFenceMismatch(
-					sqlite_fence_mismatch(conn, &request.actor_id, reason.clone()).await?,
-				))
-			}
 			Some(SqliteStorageError::CommitTooLarge {
 				actual_size_bytes,
 				max_size_bytes,
-			}) => Ok(protocol::SqliteCommitResponse::SqliteCommitTooLarge(
-				protocol::SqliteCommitTooLarge {
-					actual_size_bytes: *actual_size_bytes,
-					max_size_bytes: *max_size_bytes,
+			}) => Ok(protocol::SqliteCommitResponse::SqliteErrorResponse(
+				protocol::SqliteErrorResponse {
+					message: format!(
+						"sqlite commit too large: actual_size_bytes={actual_size_bytes}, max_size_bytes={max_size_bytes}"
+					),
 				},
 			)),
 			_ => Err(err),
 		},
 	}?;
-	conn.sqlite_engine.metrics().observe_commit_phase(
-		"fast",
-		"response_build",
-		response_build_start.elapsed(),
-	);
-	Ok(response)
-}
-
-async fn handle_sqlite_commit_stage(
-	ctx: &StandaloneCtx,
-	conn: &Conn,
-	request: protocol::SqliteCommitStageRequest,
-) -> Result<protocol::SqliteCommitStageResponse> {
-	validate_sqlite_actor(ctx, conn, &request.actor_id).await?;
-	actor_lifecycle::assert_sqlite_actor_active(conn, &request.actor_id, request.generation)
-		.await?;
-
-	match conn
-		.sqlite_engine
-		.commit_stage(
-			&request.actor_id,
-			sqlite_storage::commit::CommitStageRequest {
-				generation: request.generation,
-				txid: request.txid,
-				chunk_idx: request.chunk_idx,
-				bytes: request.bytes,
-				is_last: request.is_last,
-			},
-		)
-		.await
-	{
-		Ok(result) => Ok(protocol::SqliteCommitStageResponse::SqliteCommitStageOk(
-			protocol::SqliteCommitStageOk {
-				chunk_idx_committed: result.chunk_idx_committed,
-			},
-		)),
-		Err(err) => match sqlite_storage_error(&err) {
-			Some(SqliteStorageError::FenceMismatch { reason }) => {
-				Ok(protocol::SqliteCommitStageResponse::SqliteFenceMismatch(
-					sqlite_fence_mismatch(conn, &request.actor_id, reason.clone()).await?,
-				))
-			}
-			_ => Err(err),
-		},
-	}
-}
-
-async fn handle_sqlite_commit_stage_begin(
-	ctx: &StandaloneCtx,
-	conn: &Conn,
-	request: protocol::SqliteCommitStageBeginRequest,
-) -> Result<protocol::SqliteCommitStageBeginResponse> {
-	validate_sqlite_actor(ctx, conn, &request.actor_id).await?;
-	actor_lifecycle::assert_sqlite_actor_active(conn, &request.actor_id, request.generation)
-		.await?;
-
-	match conn
-		.sqlite_engine
-		.commit_stage_begin(
-			&request.actor_id,
-			sqlite_storage::commit::CommitStageBeginRequest {
-				generation: request.generation,
-			},
-		)
-		.await
-	{
-		Ok(result) => Ok(
-			protocol::SqliteCommitStageBeginResponse::SqliteCommitStageBeginOk(
-				protocol::SqliteCommitStageBeginOk { txid: result.txid },
-			),
-		),
-		Err(err) => match sqlite_storage_error(&err) {
-			Some(SqliteStorageError::FenceMismatch { reason }) => Ok(
-				protocol::SqliteCommitStageBeginResponse::SqliteFenceMismatch(
-					sqlite_fence_mismatch(conn, &request.actor_id, reason.clone()).await?,
-				),
-			),
-			_ => Err(err),
-		},
-	}
-}
-
-async fn handle_sqlite_commit_finalize(
-	ctx: &StandaloneCtx,
-	conn: &Conn,
-	request: protocol::SqliteCommitFinalizeRequest,
-) -> Result<protocol::SqliteCommitFinalizeResponse> {
-	let decode_request_start = Instant::now();
-	validate_sqlite_actor(ctx, conn, &request.actor_id).await?;
-	actor_lifecycle::assert_sqlite_actor_active(conn, &request.actor_id, request.generation)
-		.await?;
-	conn.sqlite_engine.metrics().observe_commit_phase(
-		"slow",
-		"decode_request",
-		decode_request_start.elapsed(),
-	);
-
-	let engine_result = conn
-		.sqlite_engine
-		.commit_finalize(
-			&request.actor_id,
-			sqlite_storage::commit::CommitFinalizeRequest {
-				generation: request.generation,
-				expected_head_txid: request.expected_head_txid,
-				txid: request.txid,
-				new_db_size_pages: request.new_db_size_pages,
-				now_ms: util::timestamp::now(),
-				origin_override: None,
-			},
-		)
-		.await;
-	let response_build_start = Instant::now();
-	let response = match engine_result {
-		Ok(result) => Ok(
-			protocol::SqliteCommitFinalizeResponse::SqliteCommitFinalizeOk(
-				protocol::SqliteCommitFinalizeOk {
-					new_head_txid: result.new_head_txid,
-					meta: sqlite_runtime::protocol_sqlite_meta(result.meta),
-				},
-			),
-		),
-		Err(err) => match sqlite_storage_error(&err) {
-			Some(SqliteStorageError::FenceMismatch { reason }) => {
-				Ok(protocol::SqliteCommitFinalizeResponse::SqliteFenceMismatch(
-					sqlite_fence_mismatch(conn, &request.actor_id, reason.clone()).await?,
-				))
-			}
-			Some(SqliteStorageError::StageNotFound { stage_id }) => {
-				Ok(protocol::SqliteCommitFinalizeResponse::SqliteStageNotFound(
-					protocol::SqliteStageNotFound {
-						stage_id: *stage_id,
-					},
-				))
-			}
-			_ => Err(err),
-		},
-	}?;
-	conn.sqlite_engine.metrics().observe_commit_phase(
-		"slow",
-		"response_build",
-		response_build_start.elapsed(),
-	);
+	crate::metrics::SQLITE_COMMIT_ENVOY_RESPONSE_DURATION
+		.observe(response_build_start.elapsed().as_secs_f64());
 	Ok(response)
 }
 
@@ -962,24 +707,27 @@ async fn validate_sqlite_actor(ctx: &StandaloneCtx, conn: &Conn, actor_id: &str)
 	Ok(())
 }
 
-async fn sqlite_fence_mismatch(
-	conn: &Conn,
-	actor_id: &str,
-	reason: String,
-) -> Result<protocol::SqliteFenceMismatch> {
-	Ok(protocol::SqliteFenceMismatch {
-		actual_meta: sqlite_runtime::protocol_sqlite_meta(
-			conn.sqlite_engine.load_meta(actor_id).await?,
-		),
-		reason,
-	})
-}
-
-fn storage_dirty_page(page: protocol::SqliteDirtyPage) -> sqlite_storage::types::DirtyPage {
+fn pump_dirty_page(page: protocol::SqliteDirtyPage) -> sqlite_storage::types::DirtyPage {
 	sqlite_storage::types::DirtyPage {
 		pgno: page.pgno,
 		bytes: page.bytes,
 	}
+}
+
+async fn actor_db(conn: &Conn, actor_id: String) -> Arc<ActorDb> {
+	conn.actor_dbs
+		.entry_async(actor_id.clone())
+		.await
+		.or_insert_with(|| {
+			Arc::new(ActorDb::new(
+				conn.udb.clone(),
+				(*conn.ups).clone(),
+				actor_id,
+				conn.node_id,
+			))
+		})
+		.get()
+		.clone()
 }
 
 fn validate_sqlite_get_pages_request(request: &protocol::SqliteGetPagesRequest) -> Result<()> {
@@ -1100,51 +848,6 @@ async fn send_sqlite_commit_response(
 			data,
 		}),
 		"sqlite commit response",
-	)
-	.await
-}
-
-async fn send_sqlite_commit_stage_response(
-	conn: &Conn,
-	request_id: u32,
-	data: protocol::SqliteCommitStageResponse,
-) -> Result<()> {
-	send_to_envoy(
-		conn,
-		protocol::ToEnvoy::ToEnvoySqliteCommitStageResponse(
-			protocol::ToEnvoySqliteCommitStageResponse { request_id, data },
-		),
-		"sqlite commit_stage response",
-	)
-	.await
-}
-
-async fn send_sqlite_commit_stage_begin_response(
-	conn: &Conn,
-	request_id: u32,
-	data: protocol::SqliteCommitStageBeginResponse,
-) -> Result<()> {
-	send_to_envoy(
-		conn,
-		protocol::ToEnvoy::ToEnvoySqliteCommitStageBeginResponse(
-			protocol::ToEnvoySqliteCommitStageBeginResponse { request_id, data },
-		),
-		"sqlite commit_stage_begin response",
-	)
-	.await
-}
-
-async fn send_sqlite_commit_finalize_response(
-	conn: &Conn,
-	request_id: u32,
-	data: protocol::SqliteCommitFinalizeResponse,
-) -> Result<()> {
-	send_to_envoy(
-		conn,
-		protocol::ToEnvoy::ToEnvoySqliteCommitFinalizeResponse(
-			protocol::ToEnvoySqliteCommitFinalizeResponse { request_id, data },
-		),
-		"sqlite commit_finalize response",
 	)
 	.await
 }

@@ -1,0 +1,5 @@
+{
+  "code": "fork_destination_exists",
+  "group": "sqlite_admin",
+  "message": "the destination actor already has SQLite state"
+}

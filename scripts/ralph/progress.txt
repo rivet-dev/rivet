@@ -1,880 +1,513 @@
 # Ralph Progress Log
-Started: Thu Apr 23 04:17:16 AM PDT 2026
+Started: Wed Apr 29 04:36:56 AM PDT 2026
 ---
-
 ## Codebase Patterns
-- `ActorContext::request_save(...)` is intentionally fire-and-forget and only warns on lifecycle inbox overload. Use `request_save_and_wait(...)` when the caller must observe save-request delivery failures.
-- `pnpm -F rivetkit check-types` compiles every file under `rivetkit-typescript/packages/rivetkit/src/**/*`, not just tsup entrypoints. Exclude dead legacy sources in `tsconfig.json` or they will block unrelated stories.
-- `getOrCreate` is only truly "ready" once the runtime adapter has acked its startup preamble. If core replies before that, the first action can beat `onWake` or `run` startup and read stale state.
-- Keep the root `*ContextOf` helper surface synced across `rivetkit-typescript/packages/rivetkit/src/actor/contexts/index.ts`, the `src/actor/mod.ts` re-export list, and the docs pages `website/src/content/docs/actors/types.mdx` and `website/src/content/docs/actors/index.mdx`.
-- Keep the TypeScript `ActorKey` and `ActorContext.key` surfaces string-only unless `client/query.ts`, key serialization, and gateway query parsing are widened end to end in the same change.
-- Native adapter required-path config failures in `rivetkit-typescript/packages/rivetkit/src/registry/native.ts` should throw structured `RivetError`s, not plain `Error`, so `group` and `code` survive the bridge back to callers.
-- Driver `actor_ready_timeout` failures can hide underlying `no_envoys` scheduling errors. Check actor lookup logs before assuming the bug is only in the transport or reply path.
-- In `rivetkit-typescript/packages/rivetkit/tests/`, keep each `vi.waitFor(...)` reason on the immediately preceding `//` line. `pnpm run check:wait-for-comments` only enforces adjacency, so the comment still needs to explain the async reason for polling.
-- When a driver test has a real event boundary, wait on a captured Promise or event collector instead of wrapping the action itself in `vi.waitFor(...)`. Reserve polling for state changes that have no direct hook.
-- Bare `test.skip(...)` in `rivetkit-typescript/packages/rivetkit/tests/` needs an adjacent `// TODO(<ticket>): ...` comment. `pnpm run check:test-skips` enforces that policy.
-- Native `saveState` persistence coverage should live in driver tests with a real actor plus `hardCrashActor` and an observer actor; do not mock `NativeActorContext` for that path.
-- When a TypeScript test needs deterministic monotonic time, patch `globalThis.performance.now` on the existing object. Replacing `globalThis.performance` can miss code that already captured the original object reference.
-- In `rivetkit-core/tests/modules/task.rs`, any test that installs a tracing subscriber with `set_default(...)` needs `test_hook_lock()` first or full `cargo test` parallelism makes the log capture flaky.
-- Intentional `rivetkit` package-surface removals should be documented in the root `CHANGELOG.md` with a direct before/after migration snippet, not left implicit in the code diff.
-- Before deleting a `rivetkit/*` package export, grep `examples/`, `website/`, and `frontend/` for self-imports; docs and app code often still depend on those subpaths even after internal refactors.
-- Use rustls for Rust HTTP/TLS clients; `reqwest`, Hyper clients, and published NAPI paths must not pull `native-tls`, `openssl-sys`, `libssl`, or `libcrypto`.
-- Do not run the long `actor-lifecycle.test.ts` driver verifier in parallel with heavy Rust builds or `cargo test`; the extra load can trigger bogus `guard.actor_ready_timeout` failures in lifecycle race tests.
-- NAPI lifecycle `ready`/`started` flags must forward to core `ActorContext`; do not keep a second copy in `ActorContextShared` or sleep gating drifts between layers.
-- JS-only native actor caches in `rivetkit-typescript/packages/rivetkit/src/registry/native.ts` should live on `ActorContext.runtimeState()`, not on actorId-keyed module globals. Same-key recreates must get a fresh bag.
-- Actor-connect WebSocket setup failures should send a protocol `Error` frame before closing; JSON/CBOR connection-level errors must include `actionId: null`.
-- Actor-connect WebSocket setup also needs a registry-level timeout; the HTTP upgrade can finish before `connection_open` replies, so wedged setup must emit a structured error and close instead of idling until the client times out.
-- Flush the envoy `WebSocketSender` after queueing required setup/error frames and before an immediate close, so the outgoing task handles the frame before termination.
-- Actor-connect protocol `actionId` values are nullable; `0` is a valid action ID, and only `null` means a connection-level error.
-- Gateway actor-connect must preserve tunnel messages queued between the envoy open ack and the websocket forwarding task; setup-error close frames can arrive immediately after open.
-- If an omitted optional value passes in bare but fails in CBOR or JSON, inspect whether the cross-encoding path is coercing `undefined` into `null`.
-- Opaque user payloads that must preserve JS `undefined` through Rust JSON/CBOR bridges should use `encodeCborCompat` / `decodeCborCompat`; do not run structural request envelopes through those helpers or optional API fields turn into bogus sentinel arrays.
-- When validating Linux NAPI preview packages, run the sanity check in Docker `node:22` if the host already has a `rivet-engine` on port `6420`.
-- Serverless `/start` driver tests need the start payload actor ID to exist in the same engine namespace as the serverless envoy headers, or startup fails at KV load with `actor does not exist`.
-- Serverless `/start` tests must upsert a normal runner config for the temporary pool before starting the native serverless envoy.
-- Raw `db()` uses the native database provider only; custom raw database client overrides are removed.
-- Queue enqueue-and-wait must register the completion waiter before publishing the queue message to KV; otherwise a fast consumer can complete the message before the waiter exists.
-- If Rust under `rivetkit-core` changes, make sure the local NAPI `.node` artifact is newer than the changed Rust files before rerunning driver tests.
-- A driver story is not really dead until the matrix-shaped fast/slow verifier stays green; if the exact same file/test regresses there, reopen the existing story instead of spawning a duplicate.
-- DT-008 verifier sweeps should use the explicit fast/slow driver file lists from the progress buckets; `tests/driver -t "static registry.*encoding \(bare\)"` is broader and muddies the counts.
-- Close a stale driver story only after the exact targeted repro, the whole driver file, the relevant matrix slice, and typecheck all pass on the current branch.
-- Native dispatch cancellation should flow as `CancellationToken` objects from NAPI TSF payloads into `registry/native.ts`. Do not reintroduce BigInt token registries or polling loops for cancel propagation.
-- Clean `run` exit is not terminal in `rivetkit-core`; the actor generation must stay alive until the guaranteed `Stop` drives `SleepGrace` or `DestroyGrace`, and only then may it become `Terminated`.
-- SQLite v2 shrink paths must delete above-EOF PIDX rows and fully-above-EOF SHARD blobs in the same commit or takeover transaction; compaction only cleans partial shards by filtering pages at or below `head.db_size_pages`.
-- A fresh `CommandStartActor`/Allocate is authoritative for a crashed v1 SQLite migration; reset staged v1 rows immediately on restart instead of waiting for the stale-owner lease to expire.
-- `getForId(actorId)` teardown assertions in driver tests are real but slow because actor lookup polls until the registry drops the actor; use them when you specifically need post-destroy unreachability, not as casual filler.
-- Native database providers in `rivetkit-typescript/packages/rivetkit/src/registry/native.ts` must close on sleep via `closeDatabase(false)` after user `onSleep`, or provider `onDestroy` cleanup runs on destroy only and lifecycle cleanup tests stick at `0`.
+- `rivet-pools` keeps process-wide metadata on `PoolsInner`; initialize it in both `Pools::new` and `Pools::test`, with the test constructor only omitting optional service pools like ClickHouse.
+- api-public SQLite admin endpoints resolve namespace config from a parsed Rivet actor id when possible, with explicit `namespace_id` request hints only used for synthetic/non-Rivet-id admin test paths.
+- api-public SQLite inspector GET routes should be read-only UDB views; keep mutating admin operations in `actors::sqlite_admin`.
+- SQLite namespace overview reads existing per-actor `namespace::keys::metric::MetricKey` gauges and scans actor-scoped `/META/admin_op/` records for recent operation counts.
+- SQLite admin rate/concurrency gates belong at api-public before UPS publish; create the `AdminOpRecord` in the same UDB transaction that scans in-flight records so concurrent Restore/Fork requests reject instead of queueing.
+- SQLite admin audit events use structured tracing plus the debug test sink in `actors::sqlite_admin::test_hooks`; the compactor trusts injected `AuditFields` and does not re-check authz.
+- After renaming a hyphenated crate, update both the workspace dependency key (`sqlite-storage-legacy.workspace`) and Rust import path (`sqlite_storage_legacy`) for every consumer.
+- When scaffolding `sqlite-storage` from copied legacy modules, root-level `pub use pump::{...}` preserves legacy `crate::types` and `crate::udb` paths while the real modules live under `pump/`.
+- `sqlite-storage` `actor_range` mirrors UniversalDB's single-key conflict range helper (`actor_prefix + 0`) and should not be treated as a full prefix scan range for suffixed actor keys.
+- Use `vbare::OwnedVersionedData` wrappers with embedded versions for sqlite-storage persisted META structs, even when the latest schema lives directly in `pump::types`.
+- For sqlite-storage byte-key atomic mutations, use `tx.informal().atomic_op(...)`; `Transaction::atomic_op` is for typed `FormalKey` tuple keys.
+- `/META/quota` is a raw signed `i64` little-endian atomic counter; missing means zero, and helper code should mutate it with `MutationType::Add` on `tx.informal()`.
+- `sqlite-storage::pump::ActorDb::new` runs debug-only takeover reconciliation synchronously; keep `takeover::reconcile` sync until the constructor shape changes.
+- For sqlite-storage raw byte prefix scans, build a `universaldb::Subspace` with `tuple::Subspace::from_bytes(prefix)` and use its range; direct `(prefix, end_of_key_range(prefix))` ranges can miss rows on the RocksDB driver.
+- `ActorDb::commit` should update the in-memory PIDX cache only when it was already warm; leave a cold cache empty so the next read performs the full PIDX scan instead of treating a partial commit-updated cache as authoritative.
+- `sqlite-storage::pump::ActorDb::new` carries a `rivet_pools::NodeId`; production callers should pass `pools.node_id()` so pump metrics are labeled by process node.
+- `sqlite-storage` compactor UPS messages use a typed `Subject`, `PublishOpts::one()`, and local vbare encode/decode helpers so dispatch tests can verify the wire payload through the memory driver.
+- `sqlite-storage` compactor lease take/renew helpers must use `Serializable` reads on `/META/compactor_lease`; use `TransactionRetryLimit(1)` in race tests when you need to observe the OCC abort instead of UDB's automatic retry.
+- `sqlite-storage` compactor shard folding uses absolute SQLite page numbers; page 0 is invalid for LTX, so full-shard tests use shard 1 pages `64..128`.
+- `sqlite-storage` raw byte prefix clears need the same `universaldb::Subspace::from(tuple::Subspace::from_bytes(prefix)).range()` shape as prefix scans; `end_of_key_range(prefix)` only clears the single prefix key on the RocksDB driver.
+- `sqlite-storage` compaction pause hooks are global per test binary; serialize tests that install those hooks and any same-actor `compact_default_batch` tests with a small async mutex.
+- `sqlite-storage` compact trigger payloads need namespace id and actor name alongside actor id before the compactor can emit namespace `MetricKey` rollups.
+- Debug-only compactor quota validation is wired from the worker through a per-actor `scc::HashMap<String, u32>` pass counter; the validator itself only scans PIDX, DELTA, and SHARD prefixes before comparing to `/META/quota`.
+- Compactor Prometheus metric vectors use `node_id` as the first label, with secondary labels like `outcome` or `actor_id` after it.
+- Debug takeover reconciliation treats seeded SQLite rows as real invariants; test fixtures with PIDX rows must also seed the referenced DELTA row before constructing `ActorDb`.
+- `sqlite-storage::pump::ActorDb::new` requires a UPS handle so commits can publish detached compaction triggers; tests can use `universalpubsub::driver::memory::MemoryDriver`.
+- Use `tokio::time::Instant` for actor-local trigger throttles so `#[tokio::test(start_paused = true)]` plus `tokio::time::advance` can cover timing deterministically.
+- `pegboard-envoy` SQLite `get_pages` and `commit` handlers lazily populate a per-conn `actor_dbs` cache and must not use it as authoritative actor presence tracking.
+- `pegboard-envoy` should pass `CommandStartActor` through without local SQLite side effects; only `CommandStopActor` touches the per-conn `actor_dbs` cache.
+- Pegboard actor destroy should call `actor_sqlite::clear_v2_storage_for_destroy` inside the same `ClearKv` UDB transaction as actor KV deletion so stateless SQLite META/PIDX/DELTA/SHARD and compactor lease keys are removed atomically.
+- The envoy protocol crate is `rivet-envoy-protocol` at `engine/sdks/rust/envoy-protocol`; its build script derives `PROTOCOL_VERSION` from the highest `engine/sdks/schemas/envoy-protocol/v*.bare` file.
+- Checked-in TS envoy-protocol output lives at `engine/sdks/typescript/envoy-protocol/src/index.ts`; if Rust build.rs skips TS generation because `@bare-ts/tools` is missing, regenerate it with the same BARE schema and post-process import/assert/VERSION like build.rs.
+- Stateless SQLite v3 envoy protocol has only `get_pages` and single-shot `commit`; remove startup-data and commit-stage plumbing from envoy-client, pegboard-envoy, pegboard-outbound, rivetkit-core, and rivetkit-sqlite together.
+- Protocol changes that touch `rivetkit-sqlite/src/vfs.rs` should include `cargo test -p rivetkit-sqlite --lib --no-run` because cfg(test) transport doubles can reference removed wire types even when `cargo check --workspace` passes.
+- After deleting `sqlite-storage-legacy`, pegboard v1 SQLite migration writes directly through `sqlite_storage::pump::ActorDb`; tests should verify bytes by reading v2 pages from `ActorDb` rather than using a legacy `SqliteEngine`.
+- `rivetkit-sqlite` direct VFS tests now use a test-only `DirectStorage` wrapper around `ActorDb`; share it across close/reopen cycles or reopen persistence tests will silently start from empty storage.
+- `rivetkit-napi` needs napi-rs `dyn-symbols` so Rust test binaries can link without Node providing N-API symbols at test-link time.
+- `engine/CLAUDE.md` SQLite guidance now assumes stateless per-conn `ActorDb` caches, tests under `engine/packages/sqlite-storage/tests/`, and a standalone compactor service.
+- PITR splits SQLite storage usage into `/META/storage_used_live` and `/META/storage_used_pitr`; new quota mutations should call `quota::atomic_add_live` or `quota::atomic_add_pitr`, while `/META/quota` is only a private migration key.
+- `/DELTA/{txid}/META` lives under the same `/DELTA/{txid}/` prefix as chunks, so DELTA prefix scanners must explicitly skip the `META` suffix before decoding or concatenating chunk rows.
+- Pump commits write `/DELTA/{txid}/META` and charge it to live storage; compaction byte accounting must include that meta row when clearing a delta prefix.
+- Restore guards use an `ActorDb`-local `restore_observed_clear` cache plus `sqlite_pump_restore_guard_read_total` to verify the first-read/skip behavior in tests.
+- Gas `#[operation]` emits a module-local `Operation` type, so put only one operation macro per module and split paired get/put ops into sibling modules.
+- SQLite checkpoint creation copies data rows first, then makes the checkpoint visible only by writing `/CHECKPOINT/{T}/META` and `/META/checkpoints` in the final tx.
+- PITR checkpoint work is gated by `CompactorConfig::pitr_enabled` and uses a separate checkpoint semaphore; worker-side checkpoint config comes from the compact payload's namespace id.
+- DELTA metadata must live at `/DELTA/{txid}/META` under `delta_chunk_prefix`; DELTA prefix readers concatenate chunks and explicitly skip the `META` row.
+- Retention-aware compaction needs namespace checkpoint config from the compact payload so it can load namespace defaults and emit namespace-level PITR metrics.
+- Checkpoint cleanup must preserve the latest checkpoint even past retention, update `/META/checkpoints`, clear `/CHECKPOINT/{T}/*`, and adjust `/META/storage_used_pitr` in one transaction.
+- SQLite admin operation state lives in actor-scoped `/META/admin_op/{operation_id}` records; helpers that only receive `op_id` locate the persisted record instead of using pod-local state.
+- SQLite admin op workers should call `admin::start_work` before dispatch so `/META/admin_op/{operation_id}` is the source of truth for Pending → InProgress transitions and holder assignment.
+- Restore/fork admin tests that install compactor pause hooks must serialize with a test-local async mutex because the hook slots are process-global.
+- SQLite fork destination PIDX rows must be self-contained by copying source DELTA rows referenced by checkpoint PIDX entries into the destination actor.
+- Short sqlite admin ops persist rich responses as typed `OpResult` variants; direct handlers in `compactor::admin` transition records to InProgress before completing so tests can call them without the worker.
+- SQLite admin audit fields carry a raw UUID namespace id; tests that need namespace config seed `namespace::keys::sqlite_config_key(Id::v1(audit.namespace_id, 0))`.
+- api-public SQLite admin endpoints create `AdminOpRecord`s locally through `ctx.udb()` and publish typed `SqliteOpSubject` requests through `ctx.ups()`; endpoint tests that need short-op completion must start `sqlite_storage::compactor::worker::test_hooks::run_for_test`.
+- Pegboard restore suspension is a persisted actor-lifecycle gate plus a broadcast lifecycle message; pegboard-envoy still checks UDB on each new tunnel open/request so missed broadcasts cannot reaccept traffic.
+- api-public restore orchestration resumes an actor only after the persisted `AdminOpRecord` reaches `Completed`; `Failed` and `Orphaned` records intentionally leave the actor suspended for operator action.
+- SQLite namespace gauge metrics store per-actor values in `MetricKey`; update them by reading the current value and applying an `atomic_add` delta, then refresh namespace-sum Prometheus gauges from the namespace metric keyspace.
+- Website docs typecheck `c.kv.listRange` and `deleteRange` examples against the current API; range bounds should be `Uint8Array` values, even when returned keys are decoded with `keyType: "text"`.
 
-## 2026-04-23T11:45:04Z - DT-000
-- Implemented the urgent Linux NAPI publish fix in `/tmp/rivet-publish-fix` on branch `04-22-chore_fix_remaining_issues_with_rivetkit-core`.
-- Switched workspace `reqwest` to rustls with default features disabled, replaced direct `hyper-tls` users with `hyper-rustls`, and removed the vendored OpenSSL block from `rivetkit-napi`.
-- Added `CLAUDE.md` TLS rules requiring rustls and forbidding vendored OpenSSL workarounds.
-- Files changed: `Cargo.toml`, `Cargo.lock`, `engine/packages/pools/{Cargo.toml,src/db/clickhouse.rs}`, `engine/packages/guard-core/{Cargo.toml,src/proxy_service.rs}`, `rivetkit-typescript/packages/rivetkit-napi/Cargo.toml`, `CLAUDE.md`.
-- Verification: `cargo tree -p {rivetkit-napi,rivetkit-core,rivet-envoy-client,rivet-engine} -i {openssl-sys,native-tls}` returned Cargo's package-not-found success signal; `cargo build -p rivetkit-core -p rivet-engine` passed; `pnpm --filter @rivetkit/rivetkit-napi build:force` passed; `pnpm build -F rivetkit` passed; local and Docker `ldd` showed no `libssl` or `libcrypto`.
-- Published commits: `cda279eda feat(deps): switch reqwest to rustls workspace-wide, drop openssl` and `19a731adb docs(claude): require rustls for all HTTP/TLS clients`.
-
-## 2026-04-23T21:15:24Z - DT-027
-- What was implemented
-  - Deleted `tests/native-save-state.test.ts`, which mocked `NativeActorContext` and never exercised the real NAPI boundary.
-  - Added `saveStateActor` and `saveStateObserver` driver fixtures plus a new `actor-save-state.test.ts` driver file that verifies `saveState({ immediate: true })` and `saveState({ maxWait })` survive a real hard crash across bare, CBOR, and JSON.
-  - Removed the now-unused `resetNativePersistStateForTest` hook and documented the driver-first persistence testing rule in `rivetkit-typescript/CLAUDE.md`.
-- Files changed
-  - `rivetkit-typescript/packages/rivetkit/fixtures/driver-test-suite/save-state.ts`
-  - `rivetkit-typescript/packages/rivetkit/fixtures/driver-test-suite/registry-static.ts`
-  - `rivetkit-typescript/packages/rivetkit/tests/driver/actor-save-state.test.ts`
-  - `rivetkit-typescript/packages/rivetkit/tests/native-save-state.test.ts`
-  - `rivetkit-typescript/packages/rivetkit/src/registry/native.ts`
-  - `rivetkit-typescript/CLAUDE.md`
-- **Learnings for future iterations:**
-  - For native persistence behavior, use a real driver actor that blocks after `saveState(...)`, then crash it with `hardCrashActor` to prove durability without a mocked NAPI context.
-  - An observer actor is the simplest way to signal that a save checkpoint has been reached before forcing the crash.
----
-- Publish workflow: `24832562681` passed all 15 jobs; preview version `0.0.0-pr.4701.d2c139c`.
-- Sanity check: Docker `node:22` install and E2E passed HTTP actions and WebSocket action/event checks; host run was polluted by an existing engine on `:6420`, so Docker was the clean Bookworm-style validation.
-- **Learnings for future iterations:**
-  - `hyper-tls` can pull `native-tls`/`openssl-sys` independently of `reqwest`; check direct Hyper clients as well as workspace `reqwest`.
-  - Cargo's inverse tree success for absent deps is phrased as `error: package ID specification 'X' did not match any packages`.
-  - For package sanity checks, Docker `node:22` avoids false results from a developer machine that already has a `rivet-engine` bound to port `6420`.
----
-## 2026-04-23T11:57:29Z - DT-044
-- Restored the serverless `Registry.handler()` / `Registry.serve()` surface through the native rivetkit-core path and kept TypeScript to `Request`/`Response` stream plumbing.
-- Simplified `Registry.start()` to the native envoy path only; documented the current `staticDir` gap in `CHANGELOG.md`.
-- Added static/http/bare driver coverage for `/`, `/health`, `/metadata`, invalid `/start` headers, and a real `CommandStartActor` `/start` payload that reaches the native envoy and streams SSE pings.
-- Fixed the `rivetkit-core` counter example to use `ActorEvent::RunGracefulCleanup`, which unblocked `cargo build -p rivetkit-core`.
-- Files changed: `CHANGELOG.md`, `rivetkit-rust/packages/rivetkit-core/examples/counter.rs`, `rivetkit-typescript/packages/rivetkit/runtime/index.ts`, `rivetkit-typescript/packages/rivetkit/src/registry/index.ts`, `rivetkit-typescript/packages/rivetkit/tests/driver/serverless-handler.test.ts`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
-- Verification: `pnpm -F rivetkit test tests/driver/serverless-handler.test.ts` passed; `cargo build -p rivetkit-core` passed; `cargo test -p rivetkit-core serverless` passed; `pnpm --filter @rivetkit/rivetkit-napi build:force` passed; `pnpm build -F rivetkit` passed; `pnpm -F rivetkit check-types` passed; `rg -n "removedLegacyRoutingError" rivetkit-typescript` returned zero matches; `git diff --check` passed.
-- Caveat: full `cargo test -p rivetkit-core` still fails on existing lifecycle/sleep tests outside the serverless module, so this story is green on targeted gates but the branch still has unrelated core-suite debt.
-- **Learnings for future iterations:**
-  - Serverless `/start` payloads can be generated with `@rivetkit/engine-envoy-protocol` by prepending the little-endian envoy protocol version to a `ToEnvoyCommands` payload.
-  - The actor ID in a serverless `/start` driver test must come from the same engine namespace used in the `x-rivet-namespace-name` header.
-  - `Registry.start()` is native-envoy-only now; built-in `staticDir` serving is intentionally documented as a follow-up gap.
----
-## 2026-04-23T12:02:25Z - DT-042
-- Removed the experimental `overrideRawDatabaseClient` hook from the actor driver interface and database provider context.
-- Collapsed the raw `db()` factory so it always requires the native database provider path instead of accepting a custom raw client override.
-- Files changed: `rivetkit-typescript/packages/rivetkit/src/actor/driver.ts`, `rivetkit-typescript/packages/rivetkit/src/common/database/config.ts`, `rivetkit-typescript/packages/rivetkit/src/common/database/mod.ts`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
-- Verification: `rg -n "overrideRawDatabaseClient" rivetkit-typescript` returned zero matches; `rg -n "overrideDrizzleDatabaseClient" ...` confirmed the Drizzle override still exists; `pnpm build -F rivetkit` passed; `pnpm -F rivetkit check-types` passed; `pnpm -F rivetkit test tests/driver/actor-db.test.ts tests/driver/actor-db-raw.test.ts tests/driver/actor-db-pragma-migration.test.ts` passed with 72 tests.
-- **Learnings for future iterations:**
-  - Raw `db()` now depends exclusively on the native database provider; only Drizzle keeps an experimental override path.
----
-## 2026-04-23T12:15:22Z - DT-008
-- Re-ran the DT-008 full-file verifier for the six tracked driver files.
-- DT-008 remains blocked: `pnpm -F rivetkit test tests/driver/actor-conn.test.ts tests/driver/conn-error-serialization.test.ts tests/driver/actor-inspector.test.ts tests/driver/actor-workflow.test.ts tests/driver/actor-sleep-db.test.ts tests/driver/hibernatable-websocket-protocol.test.ts` failed with 239 passed, 4 failed, 33 skipped.
-- Added follow-up stories for new failures: DT-045 (`actor-conn` bare `onOpen should be called when connection opens`) and DT-046 (`actor-inspector` cbor database execute named properties). Existing DT-014 already covers the conn-error-serialization timeout.
-- Files changed: `scripts/ralph/prd.json`, `.agent/notes/driver-test-progress.md`, `scripts/ralph/progress.txt`.
-- Verification: failed by design for this verification story; no source code was changed and no commit was made because DT-008 acceptance criteria are not satisfied.
-- **Learnings for future iterations:**
-  - DT-008 can surface new full-file failures outside the original fast/slow bare sweep; add concrete DT follow-up stories instead of marking the verifier green.
-  - The six-file verifier runs all encodings for those files and can take about 9 minutes.
----
-## 2026-04-23T12:19:11Z - DT-011
-- Rechecked the actor-conn oversized response timeout from the fast bare matrix; it no longer reproduces on the current branch, so no source edit was needed.
-- Files changed: `scripts/ralph/prd.json`, `.agent/notes/driver-test-progress.md`, `scripts/ralph/progress.txt`.
-- Verification: targeted bare oversized response passed; full `actor-conn.test.ts` passed with 69 passed; parallel bare actor-conn suite passed with 23 passed and 46 skipped.
-- **Learnings for future iterations:**
-  - Treat stale DT failures as closeable only after the exact targeted case, whole file, and matrix-shaped repro all pass.
----
-## 2026-04-23T12:22:37Z - DT-046
-- Rechecked the CBOR inspector database named-properties failure from DT-008; it no longer reproduces on the current branch.
-- Confirmed the setup actions, CBOR action serialization, and inspector database execute endpoint all succeed in the targeted and whole-file verifier.
-- Files changed: `scripts/ralph/prd.json`, `.agent/notes/driver-test-progress.md`, `scripts/ralph/progress.txt`.
-- Verification: targeted CBOR named-properties test passed; full `actor-inspector.test.ts` passed with 63 passed; `pnpm -F rivetkit check-types` passed; `pnpm build -F rivetkit` passed.
-- **Learnings for future iterations:**
-  - For stale full-file driver failures, close the spawned story only after the exact encoding-specific target and the full file both pass on the current branch.
----
-## 2026-04-23T12:26:06Z - DT-045
-- Rechecked the bare `actor-conn` onOpen failure from DT-008; it no longer reproduces on the current branch.
-- Confirmed the targeted bare onOpen case and the full `actor-conn.test.ts` verifier both pass.
-- Files changed: `scripts/ralph/prd.json`, `.agent/notes/driver-test-progress.md`, `scripts/ralph/progress.txt`.
-- Verification: targeted bare onOpen test passed; full `actor-conn.test.ts` passed with 69 passed; `pnpm -F rivetkit check-types` passed.
-- **Learnings for future iterations:**
-  - Stale callback-ordering failures should be closed only after the exact encoding-specific test and the full file both pass.
----
-## 2026-04-23T12:40:56Z - DT-012
-- Fixed the actor queue enqueue-and-wait race in `rivetkit-core`: completion waiters are registered before the queue message is published to KV.
-- Added cleanup for the pre-registered waiter if the KV publish fails, preserving the existing fail-fast behavior instead of hiding errors.
-- Files changed: `rivetkit-rust/packages/rivetkit-core/src/actor/queue.rs`, `rivetkit-rust/packages/rivetkit-core/CLAUDE.md`, `.agent/notes/driver-test-progress.md`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
-- Verification: `cargo build -p rivetkit-core` passed; `pnpm --filter @rivetkit/rivetkit-napi build:force` passed; targeted bare and CBOR wait-send tests passed; full `actor-queue.test.ts` passed with 75 tests; parallel bare actor-queue suite passed with 25 tests; `pnpm -F rivetkit check-types` passed.
-- **Learnings for future iterations:**
-  - Queue completion waiters must exist before queue messages become visible in KV, because action/run consumers can drain and complete the message immediately.
-  - A one-off `no_envoys` failure in the full actor-queue file did not reproduce in the isolated run or subsequent full-file verification; keep watching that path if it reappears.
----
-## 2026-04-23T13:06:56Z - DT-014
-- Implemented structured actor-connect WebSocket setup errors in `rivetkit-core`.
-- Fixed connection-level `Error` frames for JSON/CBOR by emitting `actionId: null`, matching the client schema.
-- Files changed: `rivetkit-rust/packages/rivetkit-core/src/registry/actor_connect.rs`, `rivetkit-rust/packages/rivetkit-core/src/registry/websocket.rs`, `rivetkit-rust/packages/rivetkit-core/CLAUDE.md`, `.agent/notes/driver-test-progress.md`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
-- Verification: targeted bare createConnState error passed; full `conn-error-serialization.test.ts` passed with 9 tests; parallel bare conn-error-serialization suite passed with 3 tests; `cargo build -p rivetkit-core` passed; `pnpm --filter @rivetkit/rivetkit-napi build:force` passed; `pnpm build -F rivetkit` passed; `pnpm -F rivetkit check-types` passed.
-- DT-008 recheck remains blocked by existing DT-016 hibernatable WebSocket bare failures: welcome message was undefined and cleanup-on-restore timed out.
-- **Learnings for future iterations:**
-  - Actor-connect setup failures happen before `Init`, so a close-only path can leave queued connection actions unresolved for bare/CBOR clients.
-  - Connection-level protocol errors use `actionId: null`; omitting the field breaks JSON/CBOR client schema validation.
----
-## 2026-04-23T13:11:10Z - DT-013
-- Rechecked the actor-workflow destroy-step failure; it no longer reproduces on the current branch, so no source edit was needed.
-- Confirmed the workflow step calls `destroy`, `onDestroy` is observed, and `client.workflowDestroyActor.get([key]).resolve()` now rejects as `actor/not_found`.
-- Files changed: `scripts/ralph/prd.json`, `.agent/notes/driver-test-progress.md`, `scripts/ralph/progress.txt`.
-- Verification: targeted bare workflow destroy passed; full `actor-workflow.test.ts` passed with 54 tests and 3 skips; parallel bare actor-workflow suite passed with 18 tests and 39 skips; `pnpm -F rivetkit check-types` passed.
-- **Learnings for future iterations:**
-  - Stale workflow/lifecycle driver failures should be closed only after the exact encoding-specific target, the full file, and the matrix-shaped suite all pass on the current branch.
----
-## 2026-04-23T20:15:29Z - DT-019
-- What was implemented
-  - Reduced the pegboard-envoy v1 migration lease from 5 minutes to 60 seconds with a comment that ties the window to the staged import chunk count.
-  - Added `SqliteEngine::invalidate_v1_migration(...)` and called it from the authoritative `CommandStartActor` start path so a crashed owner does not block the next Allocate.
-  - Added a regression test that simulates `commit_stage_begin`, a dead owner, Allocate invalidation, and a successful migration restart without waiting for lease expiry.
-- Files changed
-  - `engine/packages/pegboard-envoy/src/sqlite_runtime.rs`
-  - `engine/packages/sqlite-storage/src/takeover.rs`
-  - `scripts/ralph/prd.json`
-  - `scripts/ralph/progress.txt`
-- **Learnings for future iterations:**
-  - The cheapest production invalidation path was reusing `prepare_v1_migration` cleanup semantics instead of inventing a second staged-row wipe path.
-  - For v1 migration recovery, the authoritative signal is the new `CommandStartActor` delivery, not the old lease timer.
-  - Verification passed for `cargo test -p sqlite-storage`, `cargo test -p pegboard-envoy`, `pnpm check-types`, the targeted CBOR vacuum repro, and the static/http/bare `actor-db.test.ts` slice. The unfiltered `actor-db.test.ts` file still hit an unrelated CBOR `supports shrink and regrow workloads with vacuum` internal-error failure on this branch.
----
-## 2026-04-23T13:23:10Z - DT-008
-- Re-ran the DT-008 six-file verifier for `actor-conn`, `conn-error-serialization`, `actor-inspector`, `actor-workflow`, `actor-sleep-db`, and `hibernatable-websocket-protocol`.
-- DT-008 remains blocked: `pnpm -F rivetkit test tests/driver/actor-conn.test.ts tests/driver/conn-error-serialization.test.ts tests/driver/actor-inspector.test.ts tests/driver/actor-workflow.test.ts tests/driver/actor-sleep-db.test.ts tests/driver/hibernatable-websocket-protocol.test.ts` failed with 240 passed, 3 failed, 33 skipped.
-- Added follow-up stories: DT-047 for the bare `actor-conn` `isConnected should be false before connection opens` failure and DT-048 for the bare/CBOR `conn-error-serialization` `createConnState` timeout under the DT-008 verifier load.
-- Files changed: `scripts/ralph/prd.json`, `.agent/notes/driver-test-progress.md`, `scripts/ralph/progress.txt`.
-- Verification: failed by design for this verifier story; no source code was changed and no commit was made because DT-008 acceptance criteria are not satisfied.
-- **Learnings for future iterations:**
-  - The six-file verifier can expose ordering or load-sensitive regressions even after exact targeted and whole-file story checks have passed.
-  - A closed story can need a new follow-up when the failure only reproduces under the DT-008 combined verifier shape.
----
-## 2026-04-23T13:38:30Z - DT-048
-- Rebuilt `@rivetkit/rivetkit-napi` because the local `.node` artifact was older than `rivetkit-core/src/registry/websocket.rs`.
-- Confirmed the bare/CBOR `createConnState` setup error now reaches pending connection actions as structured `connection/custom_error` again.
-- Files changed: `scripts/ralph/prd.json`, `.agent/notes/driver-test-progress.md`, `scripts/ralph/progress.txt`.
-- Verification: targeted bare createConnState passed; targeted CBOR createConnState passed; full `conn-error-serialization.test.ts` passed with 9 tests; six-file DT-008 verifier had `conn-error-serialization` green across bare/CBOR/JSON and remains blocked only by DT-047 actor-conn; `pnpm build -F rivetkit` passed; `pnpm -F rivetkit check-types` passed.
-- **Learnings for future iterations:**
-  - Driver tests can lie like hell when the checked-out Rust source is newer than the compiled local NAPI artifact; compare timestamps or just rebuild NAPI after core WebSocket/protocol changes.
-  - Do not run separate Vitest driver processes in parallel against the native harness while validating a full file; local runtime startup can race and produce bogus `ECONNREFUSED` failures.
----
-## 2026-04-23T13:51:44Z - DT-047
-- Rechecked the bare `actor-conn` `isConnected should be false before connection opens` failure from the DT-008 verifier; it no longer reproduces on the current branch.
-- Confirmed `actor-conn` passed in the six-file DT-008 verifier shape across bare/CBOR/JSON. The same combined run still failed on the recurring static/CBOR `conn-error-serialization` createConnState timeout, so DT-048 was reopened.
-- Files changed: `scripts/ralph/prd.json`, `.agent/notes/driver-test-progress.md`, `scripts/ralph/progress.txt`.
-- Verification: targeted bare `isConnected` test passed; full `actor-conn.test.ts` passed with 69 tests; six-file DT-008 verifier showed `actor-conn` green and failed only `conn-error-serialization` CBOR; `pnpm -F rivetkit check-types` passed.
-- **Learnings for future iterations:**
-  - A story-specific verifier can pass its target file inside a combined run even when the combined command exits nonzero for a different tracked file; record both facts instead of calling the whole DT-008 slice green.
----
-## 2026-04-23T14:04:08Z - DT-008
-- Re-ran the DT-008 six-file verifier for `actor-conn`, `conn-error-serialization`, `actor-inspector`, `actor-workflow`, `actor-sleep-db`, and `hibernatable-websocket-protocol`.
-- DT-008 remains blocked: `pnpm -F rivetkit test tests/driver/actor-conn.test.ts tests/driver/conn-error-serialization.test.ts tests/driver/actor-inspector.test.ts tests/driver/actor-workflow.test.ts tests/driver/actor-sleep-db.test.ts tests/driver/hibernatable-websocket-protocol.test.ts` failed with 241 passed, 2 failed, 33 skipped.
-- Updated DT-048 to include the same `conn-error-serialization` `createConnState` timeout under static/JSON, and added DT-049 for the new static/JSON `actor-sleep-db` `nested waitUntil inside waitUntil is drained before shutdown` timeout.
-- Files changed: `scripts/ralph/prd.json`, `.agent/notes/driver-test-progress.md`, `scripts/ralph/progress.txt`.
-- Verification: failed by design for this verifier story; no source code was changed and no commit was made because DT-008 acceptance criteria are not satisfied. `hibernatable-websocket-protocol` passed in the combined verifier with 6 passed and 0 failed across bare/CBOR/JSON.
-- **Learnings for future iterations:**
-  - DT-008 combined-load failures can migrate between encodings even when targeted and whole-file checks passed earlier; keep the pending story acceptance criteria aligned with the latest observed encoding.
-  - `hibernatable-websocket-protocol` is currently green in the six-file verifier across bare/CBOR/JSON, but DT-008 remains red until `conn-error-serialization`, `actor-sleep-db`, and `raw-websocket` are all cleared.
----
-## 2026-04-23T14:21:20Z - DT-049
-- Rechecked the actor-sleep-db JSON nested waitUntil timeout from DT-008; it no longer reproduces on the current branch.
-- Confirmed actor-sleep-db passed in the exact JSON target, the full file, and the six-file DT-008 verifier shape across bare/CBOR/JSON.
-- Added DT-050 for the new combined-verifier failure: actor-workflow static/CBOR `starts child workflows created inside workflow steps` reported a child workflow result of `timedOut` instead of completed.
-- Files changed: `scripts/ralph/prd.json`, `.agent/notes/driver-test-progress.md`, `scripts/ralph/progress.txt`.
-- Verification: targeted JSON nested waitUntil passed; full `actor-sleep-db.test.ts` passed with 42 active tests; six-file DT-008 verifier failed only on DT-050 actor-workflow after 242 passed and 33 skipped; `pnpm -F rivetkit check-types` passed.
-- **Learnings for future iterations:**
-  - DT-008 combined-verifier failures can be stale by the next run; close them only after the exact target, full file, and combined shape show the target file green.
-  - A green target file inside a red combined run is still useful closure for that story; add a new DT story for the different failing file instead of keeping the stale story open.
----
-## 2026-04-23T14:32:45Z - DT-008
-- Re-ran the DT-008 six-file verifier for `actor-conn`, `conn-error-serialization`, `actor-inspector`, `actor-workflow`, `actor-sleep-db`, and `hibernatable-websocket-protocol`.
-- DT-008 remains blocked: `pnpm -F rivetkit test tests/driver/actor-conn.test.ts tests/driver/conn-error-serialization.test.ts tests/driver/actor-inspector.test.ts tests/driver/actor-workflow.test.ts tests/driver/actor-sleep-db.test.ts tests/driver/hibernatable-websocket-protocol.test.ts` failed with 241 passed, 2 failed, 33 skipped.
-- The current failures are covered by existing pending stories: DT-048 for `conn-error-serialization` static/JSON `createConnState` timeout, and DT-050 for `actor-workflow` child workflow result `timedOut` under combined verifier load.
-- Updated DT-050 to include static/JSON coverage in addition to the prior static/CBOR failure.
-- Files changed: `scripts/ralph/prd.json`, `.agent/notes/driver-test-progress.md`, `scripts/ralph/progress.txt`.
-- Verification: failed by design for this verifier story; no source code was changed and no commit was made because DT-008 acceptance criteria are not satisfied.
-- **Learnings for future iterations:**
-  - Existing follow-up stories should be broadened when DT-008 exposes the same underlying failure under another encoding; do not spawn duplicate stories for the same file/test/root symptom.
----
-## 2026-04-23T14:55:02Z - DT-008
-- Re-ran the DT-008 six-file verifier for `actor-conn`, `conn-error-serialization`, `actor-inspector`, `actor-workflow`, `actor-sleep-db`, and `hibernatable-websocket-protocol`.
-- DT-008 remains blocked: `pnpm -F rivetkit test tests/driver/actor-conn.test.ts tests/driver/conn-error-serialization.test.ts tests/driver/actor-inspector.test.ts tests/driver/actor-workflow.test.ts tests/driver/actor-sleep-db.test.ts tests/driver/hibernatable-websocket-protocol.test.ts` failed with 240 passed, 3 failed, 33 skipped.
-- The current failures are covered by existing pending story DT-048: `conn-error-serialization` bare/CBOR/JSON `createConnState` timed out at `tests/driver/conn-error-serialization.test.ts:7`.
-- `actor-workflow` passed in this combined verifier run (57 tests, 3 skipped), so the DT-050 symptom did not reproduce this time.
-- Files changed: `scripts/ralph/prd.json`, `.agent/notes/driver-test-progress.md`, `scripts/ralph/progress.txt`.
-- Verification: failed by design for this verifier story; no source code was changed and no commit was made because DT-008 acceptance criteria are not satisfied.
-- **Learnings for future iterations:**
-  - The current DT-008 blocker is isolated to `conn-error-serialization` setup-error handling under combined verifier load; actor-workflow can pass in the same combined shape.
----
-## 2026-04-23T15:18:32Z - DT-048
-- Implemented a gateway fix for immediate actor-connect setup-error closes under DT-008 combined verifier load.
-- `pegboard-gateway2` now drains tunnel messages queued between envoy open acknowledgement and websocket forwarding task startup, then processes those messages before waiting on the receiver.
-- Reopened DT-047 because the six-file verifier now fails the recurring static/bare actor-conn `isConnected should be false before connection opens` case.
-- Files changed: `engine/packages/pegboard-gateway2/src/lib.rs`, `engine/packages/pegboard-gateway2/src/tunnel_to_ws_task.rs`, `scripts/ralph/prd.json`, `.agent/notes/driver-test-progress.md`, `scripts/ralph/progress.txt`.
-- Verification: targeted bare/CBOR/JSON createConnState checks passed; full `conn-error-serialization.test.ts` passed with 9 tests; six-file DT-008 verifier showed `conn-error-serialization` green but failed DT-047 actor-conn after 242 passed and 33 skipped; `cargo build -p pegboard-gateway2` passed; `cargo build -p rivet-engine` passed; `pnpm -F rivetkit check-types` passed.
-- **Learnings for future iterations:**
-  - Actor-connect setup errors can close immediately after the envoy open ack, so the gateway cannot assume the spawned websocket forwarding task will be the first receiver to observe queued tunnel messages.
-  - A combined verifier failure can bounce back to a previously closed story; reopen that story when the exact acceptance target regresses instead of keeping the newly fixed story open.
----
-## 2026-04-23T15:29:56Z - DT-008
-- Re-ran the DT-008 six-file verifier for `actor-conn`, `conn-error-serialization`, `actor-inspector`, `actor-workflow`, `actor-sleep-db`, and `hibernatable-websocket-protocol`.
-- DT-008 remains blocked: `pnpm -F rivetkit test tests/driver/actor-conn.test.ts tests/driver/conn-error-serialization.test.ts tests/driver/actor-inspector.test.ts tests/driver/actor-workflow.test.ts tests/driver/actor-sleep-db.test.ts tests/driver/hibernatable-websocket-protocol.test.ts` failed with 242 passed, 1 failed, 33 skipped.
-- The current failure is covered by reopened story DT-048: static/bare `conn-error-serialization` `createConnState preserves group/code` timed out at `tests/driver/conn-error-serialization.test.ts:7`.
-- Files changed: `scripts/ralph/prd.json`, `.agent/notes/driver-test-progress.md`, `scripts/ralph/progress.txt`.
-- Verification: failed by design for this verifier story; no source code was changed and no commit was made because DT-008 acceptance criteria are not satisfied. Slack notification was sent after the long verifier completed.
-- **Learnings for future iterations:**
-  - The combined verifier can regress a story immediately after a targeted/full-file fix passes; reopen the existing story when the same exact file/test symptom returns instead of spawning a duplicate.
-  - In this run, `actor-conn`, `actor-inspector`, `actor-workflow`, `actor-sleep-db`, and `hibernatable-websocket-protocol` all passed in the six-file shape; the blocker is isolated to bare `conn-error-serialization`.
----
-## 2026-04-23T16:10:02Z - DT-048
-- Implemented deterministic actor-connect setup-error delivery by adding an envoy `WebSocketSender::flush()` barrier and using it before setup-error close frames.
-- Fixed client actor-connect error routing so `actionId: 0` is treated as a valid action error, not a connection-level error.
-- Files changed: `engine/sdks/rust/envoy-client/src/{actor.rs,config.rs}`, `rivetkit-rust/packages/rivetkit-core/src/registry/websocket.rs`, `rivetkit-typescript/packages/rivetkit/src/client/actor-conn.ts`, `rivetkit-rust/packages/rivetkit-core/CLAUDE.md`, `rivetkit-typescript/CLAUDE.md`, `.agent/notes/driver-test-progress.md`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
-- Verification: targeted JSON createConnState passed; full `conn-error-serialization.test.ts` passed with 9 tests; six-file DT-008 verifier passed with 243 passed and 33 skipped; `cargo build -p rivetkit-core` passed; `pnpm --filter @rivetkit/rivetkit-napi build:force` passed; `pnpm -F rivetkit check-types` passed; `pnpm build -F rivetkit` passed. Slack notification was sent after the long verifier completed.
-- **Learnings for future iterations:**
-  - Setup-error `Error` frames queued immediately before close need an explicit sender flush; a scheduler yield is not a protocol boundary.
-  - JSON setup-error handling can pass via close reason alone, so inspect logs for the structured `connection error` message to confirm the protocol frame actually arrived.
-  - Actor-connect `actionId` uses `null` for connection errors; `0` is the first valid action ID.
----
-## 2026-04-23 14:37:50 PDT - DT-030
-- What was implemented
-  - Verified the existing `TODO(#4706)` annotation on the skipped `actor-lifecycle` destroy-during-start test already satisfies DT-030's ticket path, so no runtime or test-source change was needed.
-  - Closed the story in `prd.json` after confirming the annotated skip policy and the full `actor-lifecycle` driver file are green on this branch.
-- Files changed
-  - `scripts/ralph/prd.json`
-  - `scripts/ralph/progress.txt`
-- **Learnings for future iterations:**
-  - For `fix or ticket` PRD stories, do not churn code just to manufacture a diff. If the skip already has an adjacent `TODO(#issue)` and the relevant full test file passes, close the story with verification.
-  - `actor-lifecycle.test.ts` is already covered by the annotated-skip guard from `pnpm run check:test-skips`; use that before assuming a remaining `passes: false` story still needs source changes.
----
-## 2026-04-23T16:23:57Z - DT-008
-- Re-ran the static/http/bare fast and slow driver verifiers for the tracked DT-008 slice.
-- DT-008 remains blocked: fast static/http/bare failed with 285 passed, 2 failed, and 577 skipped; slow static/http/bare passed with 68 passed and 166 skipped.
-- Existing story DT-047 covers the recurring `actor-conn` bare `isConnected should be false before connection opens` failure at `tests/driver/actor-conn.test.ts:419`.
-- Added DT-051 for the new `actor-queue` bare `drains many-queue child actors created from run handlers while connected` failure at `tests/driver/actor-queue.test.ts:303`, where `dispatch_queue_send` returned `actor.overloaded`.
-- Files changed: `scripts/ralph/prd.json`, `.agent/notes/driver-test-progress.md`, `scripts/ralph/progress.txt`.
-- Verification: `RIVETKIT_DRIVER_TEST_PARALLEL=1 pnpm test <fast driver files> -t "static registry.*encoding \\(bare\\)"` failed by design; `RIVETKIT_DRIVER_TEST_PARALLEL=1 pnpm test <slow driver files> -t "static registry.*encoding \\(bare\\)"` passed. No source code was changed.
-- **Learnings for future iterations:**
-  - DT-008 should stay red when the fast parallel bare sweep finds new failures, even if the six-file verifier was green earlier.
-  - A new fast-suite failure needs a concrete PRD story immediately; progress log lines alone are not the work queue.
----
-## 2026-04-23T16:27:47Z - DT-015
-- Rechecked the stale raw-websocket hibernatable ack-state failure; it no longer reproduces on the current branch.
-- Confirmed both targeted static/http/bare ack-state tests and the full raw-websocket file pass.
-- Files changed: `scripts/ralph/prd.json`, `.agent/notes/driver-test-progress.md`, `scripts/ralph/progress.txt`.
-- Verification: targeted indexed ack test passed; targeted threshold-buffered ack test passed; full `raw-websocket.test.ts` passed with 39 tests across bare/CBOR/JSON; `pnpm -F rivetkit check-types` passed.
-- **Learnings for future iterations:**
-  - Stale driver stories can be closed without source changes only after the exact target checks, whole-file verifier, and typecheck all pass on the current branch.
----
-## 2026-04-23T16:44:04Z - DT-008
-- Re-ran the static/http/bare fast and slow driver verifiers for the DT-008 slice.
-- DT-008 remains blocked: fast failed with 285 passed, 2 failed, 577 skipped; slow failed with 67 passed, 1 failed, 166 skipped.
-- Reopened DT-015 for the raw-websocket threshold ack regression, kept DT-047 open for actor-conn, and added DT-052 for the new actor-run startup failure.
-- Files changed: `scripts/ralph/prd.json`, `.agent/notes/driver-test-progress.md`, `scripts/ralph/progress.txt`.
-- Verification: `RIVETKIT_DRIVER_TEST_PARALLEL=1 pnpm test <fast driver files> -t "static registry.*encoding \\(bare\\)"` failed on `actor-conn` and `raw-websocket`; `RIVETKIT_DRIVER_TEST_PARALLEL=1 pnpm test <slow driver files> -t "static registry.*encoding \\(bare\\)"` failed on `actor-run`. No source code was changed and no commit was made because DT-008 acceptance criteria are still not satisfied.
-- **Learnings for future iterations:**
-  - A previously closed driver story is not actually dead until the matrix-shaped verifier stays green; reopen the existing story when the exact same test regresses instead of spawning a duplicate.
-  - The static/http/bare fast and slow parallel sweeps can expose different failures in the same iteration, so finish both runs before deciding which follow-up stories to open.
----
-## 2026-04-23T16:58:02Z - DT-008
-- Re-ran the static/http/bare fast and slow driver verifiers for the DT-008 slice.
-- DT-008 remains blocked: fast failed with 286 passed, 1 failed, 577 skipped; slow passed with 68 passed, 0 failed, 166 skipped.
-- The old fast/slow blockers did not reproduce in this sweep: actor-conn, actor-queue, raw-websocket, and actor-run all passed. Added DT-053 for the new lifecycle-hooks bare `rejects connection with generic error` timeout at `tests/driver/lifecycle-hooks.test.ts:31`.
-- Files changed: `scripts/ralph/prd.json`, `.agent/notes/driver-test-progress.md`, `scripts/ralph/progress.txt`.
-- Verification: `RIVETKIT_DRIVER_TEST_PARALLEL=1 pnpm test <fast driver files> -t "static registry.*encoding \\(bare\\)"` failed only on `lifecycle-hooks`; `RIVETKIT_DRIVER_TEST_PARALLEL=1 pnpm test <slow driver files> -t "static registry.*encoding \\(bare\\)"` passed. No source code was changed and no commit was made because DT-008 acceptance criteria are still not satisfied.
-- **Learnings for future iterations:**
-  - The matrix-shaped verifier can clear several stale blockers and still surface a completely different failing file in the same sweep, so update the suite status to match the latest run instead of leaving old `[!]` markers around.
-  - DT-008 is still a moving target even when the previous follow-up stories stop reproducing; the current blocker list has to come from the newest fast/slow verifier, not yesterday's failures.
----
-## 2026-04-23T10:14:28Z - DT-053
-- Implemented a registry-level timeout around actor-connect websocket setup so `onBeforeConnect` failures cannot leave upgraded sockets hanging until the Vitest client timeout.
-- Files changed: `rivetkit-rust/packages/rivetkit-core/src/registry/websocket.rs`, `rivetkit-rust/packages/rivetkit-core/CLAUDE.md`, `.agent/notes/driver-test-progress.md`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
-- Verification: `cargo build -p rivetkit-core` passed; `pnpm --filter @rivetkit/rivetkit-napi build:force` passed; `pnpm test tests/driver/lifecycle-hooks.test.ts -t "static registry.*encoding \\(bare\\).*rejects connection with generic error"` passed; `pnpm test tests/driver/lifecycle-hooks.test.ts` passed with 24 tests; `RIVETKIT_DRIVER_TEST_PARALLEL=1 pnpm test tests/driver/lifecycle-hooks.test.ts -t "static registry.*encoding \\(bare\\).*Lifecycle Hooks"` passed; `pnpm check-types` passed.
-- **Learnings for future iterations:**
-  - The HTTP websocket upgrade can succeed before `connection_open` responds, so actor-connect setup needs its own timeout at the registry boundary rather than relying on the client-side websocket timeout.
-  - When a Rust core change touches driver behavior, rebuild `@rivetkit/rivetkit-napi` before trusting a TypeScript driver repro; stale `.node` artifacts will waste your time.
-  - `lifecycle-hooks` can pass in an isolated test case while still hanging in the full file, so re-run the whole file before calling the story fixed.
----
-## 2026-04-23T17:27:18Z - DT-008
-- Re-ran the static/http/bare fast and slow driver verifiers for the DT-008 slice.
-- DT-008 remains blocked: fast failed with 286 passed, 1 failed, 577 skipped; slow failed with 67 passed, 1 failed, 166 skipped.
-- Reopened DT-045 for the recurring bare `actor-conn` `onOpen should be called when connection opens` regression, and added DT-054 for the new bare `actor-run` `run handler that throws error sleeps instead of destroying` failure.
-- Files changed: `scripts/ralph/prd.json`, `.agent/notes/driver-test-progress.md`, `scripts/ralph/progress.txt`.
-- Verification: `RIVETKIT_DRIVER_TEST_PARALLEL=1 pnpm test <fast driver files> -t "static registry.*encoding \\(bare\\)"` failed on `actor-conn`; `RIVETKIT_DRIVER_TEST_PARALLEL=1 pnpm test <slow driver files> -t "static registry.*encoding \\(bare\\)"` failed on `actor-run`. No source code was changed and no commit was made because DT-008 acceptance criteria are still not satisfied.
-- **Learnings for future iterations:**
-  - Reopen the exact closed story when the same matrix verifier symptom returns, even if an isolated recheck had looked green earlier.
-  - Do not stuff a new failing test into an existing story just because it shares a file; `actor-run` now has both the startup regression in DT-052 and a separate error-path regression in DT-054.
----
-## 2026-04-23T17:46:03Z - DT-008
-- Re-ran the six DT-008 tracked static/http/bare full-file verifiers plus the fast and slow parallel bare sweeps.
-- DT-008 remains blocked: all six tracked files passed individually, fast parallel failed with 285 passed, 2 failed, 577 skipped, and slow parallel passed with 68 passed, 0 failed, 166 skipped.
-- Existing story DT-047 still covers bare `actor-conn` `isConnected should be false before connection opens`; added DT-055 for bare `actor-db` `handles repeated updates to the same row` failing with `RivetError: An internal error occurred` at `tests/driver/actor-db.test.ts:438`.
-- Files changed: `scripts/ralph/prd.json`, `.agent/notes/driver-test-progress.md`, `scripts/ralph/progress.txt`.
-- Verification: `pnpm test tests/driver/actor-conn.test.ts -t "static registry.*encoding \\(bare\\)"`, `pnpm test tests/driver/conn-error-serialization.test.ts -t "static registry.*encoding \\(bare\\)"`, `pnpm test tests/driver/actor-inspector.test.ts -t "static registry.*encoding \\(bare\\)"`, `pnpm test tests/driver/actor-workflow.test.ts -t "static registry.*encoding \\(bare\\)"`, `pnpm test tests/driver/actor-sleep-db.test.ts -t "static registry.*encoding \\(bare\\)"`, and `pnpm test tests/driver/hibernatable-websocket-protocol.test.ts -t "static registry.*encoding \\(bare\\)"` all passed; `RIVETKIT_DRIVER_TEST_PARALLEL=1 pnpm test <fast driver files> -t "static registry.*encoding \\(bare\\)"` failed on `actor-conn` and `actor-db`; `RIVETKIT_DRIVER_TEST_PARALLEL=1 pnpm test <slow driver files> -t "static registry.*encoding \\(bare\\)"` passed. No source code was changed and no commit was made because DT-008 acceptance criteria are still not satisfied.
-- **Learnings for future iterations:**
-  - Latest verifier state should flip suite markers in both directions. `actor-run` goes back to green when the newest slow sweep passes, and `actor-db` has to be marked dirty the moment the newest fast sweep regresses it.
-  - New DT-008 blockers can appear outside the six tracked verifier files, so the follow-up queue has to come from the newest fast/slow sweep rather than the older tracked-file list.
----
-## 2026-04-23T18:09:23Z - DT-008
-- Re-ran the DT-008 six-file verifier plus the static/http/bare fast and slow sweeps.
-- DT-008 remains blocked: the six-file verifier failed with 242 passed, 1 failed, 33 skipped; fast failed with 286 passed, 1 failed, 577 skipped; slow passed with 68 passed, 0 failed, 166 skipped.
-- Existing story DT-050 still covers the static/CBOR actor-workflow child-workflow timeout; added DT-056 for bare actor-queue `drains many-queue child actors created from actions while connected` failing with `RivetError: Actor reply channel was dropped without a response` at `tests/driver/actor-queue.test.ts:287`.
-- Files changed: `scripts/ralph/prd.json`, `.agent/notes/driver-test-progress.md`, `scripts/ralph/progress.txt`.
-- Verification: the six-file verifier failed only on `tests/driver/actor-workflow.test.ts`; the fast bare sweep failed only on `tests/driver/actor-queue.test.ts`; the slow bare sweep passed; `pnpm -F rivetkit check-types` passed. No source code was changed and no commit was made because DT-008 acceptance criteria are still not satisfied.
-- **Learnings for future iterations:**
-  - The `actor-queue` fast-suite regressions split across two different many-queue paths. Keep the action-created child failure in its own story instead of folding it into DT-051's run-handler path.
-  - The newest verifier run still owns the suite markers. `actor-conn` and `actor-db` go back to green as soon as the latest fast sweep clears them, even if an older run had them marked dirty.
----
-## 2026-04-23T18:30:44Z - DT-008
-- Re-ran the six tracked DT-008 full-file verifiers, then reran the exact static/http/bare fast and slow sweeps using the explicit progress-bucket file lists.
-- DT-008 passed: all six tracked files were green, fast bare passed with 287 passed and 577 skipped, and slow bare passed with 68 passed and 166 skipped.
-- Files changed: `scripts/ralph/prd.json`, `.agent/notes/driver-test-progress.md`, `scripts/ralph/progress.txt`.
-- Verification: full `actor-conn.test.ts` passed with 69 tests; full `conn-error-serialization.test.ts` passed with 9 tests; full `actor-inspector.test.ts` passed with 63 tests; full `actor-workflow.test.ts` passed with 54 tests and 3 skips; full `actor-sleep-db.test.ts` passed with 42 tests and 30 skips; full `hibernatable-websocket-protocol.test.ts` passed with 6 tests; `RIVETKIT_DRIVER_TEST_PARALLEL=1 pnpm -F rivetkit test <fast driver files> -t "static registry.*encoding \\(bare\\)"` passed with 287 passed and 577 skipped; `RIVETKIT_DRIVER_TEST_PARALLEL=1 pnpm -F rivetkit test <slow driver files> -t "static registry.*encoding \\(bare\\)"` passed with 68 passed and 166 skipped; `pnpm -F rivetkit check-types` passed.
-- **Learnings for future iterations:**
-  - DT-008 is only actually done once the tracked full-file batch and the explicit fast/slow bare sweeps are both green in the same pass.
-  - The progress-suite markers need to move back to `[x]` as soon as the newest verifier clears the file, even if an earlier sweep had reopened it.
----
-## 2026-04-23T18:35:53Z - DT-009
-- Ran the DT-009 full-matrix sweep from the top of the driver list using whole-file runs across the default static `bare`/`cbor`/`json` matrix, stopping at the first red file as the driver-test-runner workflow requires.
-- `manager-driver.test.ts` failed first: static/CBOR and static/JSON `input is undefined when not provided` returned `null` instead of `undefined`, while the same case still passed under bare. Added follow-up story DT-057 with the exact repro and acceptance gates.
-- Files changed: `scripts/ralph/prd.json`, `.agent/notes/driver-test-progress.md`, `scripts/ralph/progress.txt`.
-- Verification: `pnpm -F rivetkit test tests/driver/manager-driver.test.ts` failed with 46 passed and 2 failed; `pnpm -F rivetkit test tests/driver/manager-driver.test.ts -t "input is undefined when not provided"` failed with the same two CBOR/JSON assertions at `tests/driver/manager-driver.test.ts:159`. No source code was changed and no commit was made because DT-009 is still blocked.
-- **Learnings for future iterations:**
-  - A file can be green for static/http/bare and still fail immediately in the broader DT-009 matrix because CBOR/JSON normalize omitted values differently.
-  - For DT-009, stop at the first failing file, spawn the concrete DT story immediately, and keep the whole-file plus targeted repro outputs together so the next iteration can jump straight into the real bug.
----
-## 2026-04-23T18:42:27Z - DT-047
-- Rechecked the reopened `actor-conn` before-open state regression and confirmed it is stale on this branch.
-- No source code changed. The exact bare target passed, the full `actor-conn.test.ts` file passed across bare/CBOR/JSON, and `pnpm -F rivetkit check-types` passed.
-- Files changed: `scripts/ralph/prd.json`, `.agent/notes/driver-test-progress.md`, `scripts/ralph/progress.txt`.
-- Verification: `pnpm -F rivetkit test tests/driver/actor-conn.test.ts -t "static registry.*encoding \\(bare\\).*isConnected should be false before connection opens"` passed; `pnpm -F rivetkit test tests/driver/actor-conn.test.ts` passed with 69 tests; `pnpm -F rivetkit check-types` passed. The latest successful DT-008 tracked verifier on this branch already had `actor-conn` green, so DT-047 is closed as a stale non-repro.
-- **Learnings for future iterations:**
-  - A reopened DT-008 verifier story can be stale even when the tracker is still red. Re-run the exact target and the full file before touching `actor-conn` code.
-  - Use the latest successful DT-008 tracked verifier on the branch as the combined-run receipt when a fresh combined rerun is blocked by a different story.
----
-## 2026-04-23T18:55:01Z - DT-057
-- Fixed the manager-driver omitted-input regression by preserving JS `undefined` in opaque payloads that cross the native CBOR/JSON bridge, while leaving structural JSON envelopes untouched.
-- Files changed: `rivetkit-typescript/CLAUDE.md`, `rivetkit-typescript/packages/rivetkit/src/{common/encoding.ts,common/router.ts,serde.ts,registry/native.ts,client/actor-handle.ts,client/actor-conn.ts,client/queue.ts,client/utils.ts,engine-client/mod.ts,engine-client/actor-websocket-client.ts,inspector/actor-inspector.ts,workflow/inspector.ts}`, `.agent/notes/driver-test-progress.md`, `scripts/ralph/{prd.json,progress.txt}`.
-- Verification: `pnpm -F rivetkit test tests/driver/manager-driver.test.ts -t "input is undefined when not provided"` passed; `pnpm -F rivetkit test tests/driver/manager-driver.test.ts` passed with 48 tests; `pnpm -F rivetkit check-types` passed; `pnpm build -F rivetkit` passed.
-- **Learnings for future iterations:**
-  - The native bridge can safely carry `undefined` only inside opaque payload bytes; structural JSON request/response envelopes still need normal omitted-field semantics.
-  - Reviving compat sentinels in shared decode helpers is cheaper than chasing `null`/`undefined` mismatches one transport at a time.
----
-## 2026-04-23T19:01:25Z - DT-015
-- Rechecked the reopened raw-websocket hibernatable threshold ack regression and confirmed it is stale on the current branch.
-- No source code changed. The exact bare threshold target passed, five repeated bare reruns stayed green, the full `raw-websocket.test.ts` file passed across bare/CBOR/JSON, and `pnpm -F rivetkit check-types` passed.
-- Files changed: `.agent/notes/driver-test-progress.md`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
-- Verification: `pnpm -F rivetkit test tests/driver/raw-websocket.test.ts -t "static registry.*encoding \\(bare\\).*acks buffered indexed raw websocket messages immediately at the threshold"` passed; a five-run loop of that same bare target passed every time; `pnpm -F rivetkit test tests/driver/raw-websocket.test.ts` passed with 39 tests; `pnpm -F rivetkit check-types` passed.
-- **Learnings for future iterations:**
-  - Reopened matrix regressions can still be stale ghosts. Re-run the exact target and the whole file before touching raw-websocket code.
-  - A one-off `1006` on a large raw websocket case is not enough evidence for a fix if repeated targeted reruns and the full file stay green on the current branch.
----
-## 2026-04-23T19:16:56Z - DT-016
-- Rechecked the hibernatable websocket replay-ack regression and confirmed it is stale on the current branch.
-- No source code changed. The exact bare replay target passed, the full `hibernatable-websocket-protocol.test.ts` file passed across bare/CBOR/JSON, the static/http/bare parallel slice passed, and `pnpm -F rivetkit check-types` passed.
-- Files changed: `.agent/notes/driver-test-progress.md`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
-- Verification: `pnpm -F rivetkit test tests/driver/hibernatable-websocket-protocol.test.ts -t "static registry.*encoding \\(bare\\).*replays only unacked indexed websocket messages after sleep and wake"` passed; `pnpm -F rivetkit test tests/driver/hibernatable-websocket-protocol.test.ts` passed with 6 tests; `RIVETKIT_DRIVER_TEST_PARALLEL=1 pnpm -F rivetkit test tests/driver/hibernatable-websocket-protocol.test.ts -t "static registry.*encoding \\(bare\\)"` passed with 2 bare tests; `pnpm -F rivetkit check-types` passed.
-- **Learnings for future iterations:**
-  - DT-016 overlaps the later hibernatable ack-state work. On this branch, close it as a stale non-repro instead of inventing a duplicate fix.
-  - The matrix slice matters for stale driver stories; a single passing targeted repro is not enough evidence.
----
-## 2026-04-23T19:13:49Z - DT-017
-- Added the missing `actor-lifecycle` driver coverage for clean run exit followed by sleep by asserting `runSelfInitiatedSleep` records `onSleep` state before the actor wakes again.
-- Added one-line justification comments to the `vi.waitFor(...)` calls in `actor-lifecycle.test.ts` so the file matches the repo's polling rule.
-- Files changed: `rivetkit-typescript/packages/rivetkit/tests/driver/actor-lifecycle.test.ts`, `scripts/ralph/progress.txt`.
-- Verification: `pnpm -F rivetkit test tests/driver/actor-lifecycle.test.ts -t "run-closure-self-initiated-sleep runs onSleep before wake"` passed across bare/CBOR/JSON; `pnpm -F rivetkit test tests/driver/actor-lifecycle.test.ts` passed with 24 tests and 3 skips; `pnpm -F rivetkit check-types` passed; `pnpm build -F rivetkit` passed; `pnpm --filter @rivetkit/rivetkit-napi build:force` passed. `cargo test -p rivetkit-core` is still failing on existing sleep/shutdown tests on this branch, so DT-017 is not marked complete and no commit was made.
-- **Learnings for future iterations:**
-  - The clean-run-exit lifecycle behavior is now covered in two layers: Rust task tests prove the state machine stays in `Started` until Stop arrives, and the TS driver file now proves the sleep hook fires end-to-end.
-  - `cargo test -p rivetkit-core` is currently blocked by broader sleep/shutdown failures outside this test-only diff, so do not mark DT-017 done until that Rust suite is green.
----
-## 2026-04-23T12:52:28-0700 - DT-017
-- What was implemented: kept clean `run` exits alive until the guaranteed `Stop` drives `SleepGrace` or `DestroyGrace`, fixed grace-loop races that were skipping or delaying lifecycle hooks, and added core plus driver coverage proving `onSleep` and `onDestroy` still fire exactly once after `run` returns.
-- Files changed: `rivetkit-rust/packages/rivetkit-core/src/actor/sleep.rs`, `rivetkit-rust/packages/rivetkit-core/src/actor/task.rs`, `rivetkit-rust/packages/rivetkit-core/tests/modules/task.rs`, `rivetkit-rust/packages/rivetkit-core/CLAUDE.md`, `rivetkit-typescript/packages/rivetkit/fixtures/driver-test-suite/run.ts`, `rivetkit-typescript/packages/rivetkit/tests/driver/actor-lifecycle.test.ts`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`
-- **Learnings for future iterations:**
-  - `Terminated` must mean lifecycle cleanup already finished. A clean `run` return while `Started` still owes the single `Stop` and its grace hooks.
-  - Grace paths must keep draining dispatch and alarm work; otherwise late `Stop` cleanup can hang or silently skip replies.
-  - Shutdown tests that model state persistence need to assert through the final `SerializeState` save path, not ad hoc cleanup writes that later serialization will overwrite.
-  - If Rust under `rivetkit-core` changes, rerun the full driver lifecycle file after rebuilding the local NAPI artifact, not just the targeted tests.
----
-## 2026-04-23T20:05:53Z - DT-018
-- What was implemented: fixed SQLite v2 shrink cleanup so commit/finalize and takeover delete above-EOF PIDX rows plus fully-above-EOF SHARD blobs, and shard compaction now filters truncated pages out of partial shard rewrites instead of folding them back in.
-- Files changed: `engine/packages/sqlite-storage/src/commit.rs`, `engine/packages/sqlite-storage/src/takeover.rs`, `engine/packages/sqlite-storage/src/compaction/shard.rs`, `engine/CLAUDE.md`, `.agent/notes/driver-test-progress.md`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`
-- **Learnings for future iterations:**
-  - Shrink cleanup cannot live in compaction alone. The write path has to reclaim above-EOF references immediately or `sqlite_storage_used` keeps lying.
-  - Full SHARD blobs can be deleted only when the shard starts above EOF. Partial shards still need compaction to rewrite the blob with `pgno <= head.db_size_pages`.
-  - Takeover tests that expect compaction scheduling need live PIDX-backed deltas; orphan DELTAs should now be reclaimed during recovery instead of queued for later compaction.
----
-## 2026-04-23T13:29:27-0700 - DT-021
-- What was implemented: audited the removed `rivetkit` subpath exports, restored `rivetkit/test`, `rivetkit/inspector`, and `rivetkit/inspector/client` as real current modules, and documented why `driver-helpers`, `topologies/*`, `dynamic`, and `sandbox/*` stay dead.
-- Files changed: `rivetkit-typescript/packages/rivetkit/package.json`, `rivetkit-typescript/packages/rivetkit/src/test/mod.ts`, `rivetkit-typescript/packages/rivetkit/src/inspector/mod.ts`, `rivetkit-typescript/packages/rivetkit/src/inspector/client.browser.ts`, `rivetkit-typescript/packages/rivetkit/tsup.browser.config.ts`, `rivetkit-typescript/packages/rivetkit/tests/package-surface.test.ts`, `rivetkit-typescript/CLAUDE.md`, `CHANGELOG.md`, `.agent/notes/dt-021-package-exports-audit.md`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`
-- **Learnings for future iterations:**
-  - `rivetkit/test` still matters to examples and docs, but it needs to wrap the native envoy runtime now; the old in-memory TS runtime path is gone.
-  - `rivetkit/inspector/client` is still consumed by frontend code and needs a browser build entry, not just a Node-side tsup export.
-  - Keep `driver-helpers` and `topologies/*` removed unless a real shipping module and consumer come back; `package-surface.test.ts` is already the guardrail for what stays exported vs intentionally dead.
-  - DT-021 checks that passed: `pnpm build -F rivetkit`, `pnpm -F rivetkit check-types`, `pnpm -F rivetkit test tests/package-surface.test.ts tests/inspector-versioned.test.ts`, and the fast static/http/bare driver bare slice (`29` files, `287` passed, `577` skipped).
----
-## 2026-04-23T20:38:18Z - DT-022
-- What was implemented: removed the duplicate NAPI `ready`/`started` Atomics, forwarded `mark_ready` / `mark_started` / `is_ready` / `is_started` through core `ActorContext`, and kept the NAPI-side `cannot start before ready` guard.
-- Files changed: `rivetkit-rust/packages/rivetkit-core/src/actor/context.rs`, `rivetkit-rust/packages/rivetkit-core/src/actor/sleep.rs`, `rivetkit-typescript/packages/rivetkit-napi/src/actor_context.rs`, `rivetkit-typescript/CLAUDE.md`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`
-- **Learnings for future iterations:**
-  - `ActorContextShared::reset_runtime_state()` should only clear NAPI-owned runtime wiring. Lifecycle readiness belongs to core and must follow core state, not shared-cache state.
-  - When filtering a single driver file, the `describeDriverMatrix(...)` suite name has to match exactly or Vitest skips the whole file and hands you fake green.
-  - This refactor stayed green under `cargo test -p rivetkit-core`, `pnpm --filter @rivetkit/rivetkit-napi build:force`, `pnpm -F rivetkit check-types`, `pnpm build -F rivetkit`, and the static/http/bare slices for `actor-sleep`, `actor-sleep-db`, and `actor-lifecycle`.
----
-## 2026-04-23T20:51:39Z - DT-024
-- What was implemented: documented the intentional removal of the old typed error subclasses in `CHANGELOG.md`, including the `instanceof QueueFull` to `isRivetErrorCode(e, "queue", "full")` migration path and a table of common replacement `group`/`code` pairs.
-- Files changed: `CHANGELOG.md`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`
-- **Learnings for future iterations:**
-  - If an API removal is intentional, put the migration recipe in `CHANGELOG.md` instead of making users spelunk Git history.
-  - For native/runtime errors, document the stable `RivetError` `group`/`code` contract, not the old subclass names that no longer survive bridge boundaries.
----
-## 2026-04-23T13:48:19-0700 - DT-023
-- What was implemented: deleted the dead TypeScript `ActorInspector` duplicate plus its unit test, and kept `rivetkit/inspector` as protocol and workflow transport plumbing only so the runtime inspector remains core-owned.
-- Files changed: `rivetkit-typescript/packages/rivetkit/src/inspector/mod.ts`, `rivetkit-typescript/packages/rivetkit/src/inspector/actor-inspector.ts`, `rivetkit-typescript/packages/rivetkit/tests/package-surface.test.ts`, `rivetkit-typescript/packages/rivetkit/tests/actor-inspector.test.ts`, `rivetkit-rust/packages/rivetkit-core/tests/modules/task.rs`, `rivetkit-rust/packages/rivetkit-core/CLAUDE.md`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`
-- Verification: `pnpm -F rivetkit test tests/package-surface.test.ts` passed; `pnpm -F rivetkit check-types` passed; `pnpm build -F rivetkit` passed; `pnpm --filter @rivetkit/rivetkit-napi build:force` passed; `pnpm -F rivetkit test tests/driver/actor-inspector.test.ts` passed; `cargo test -p rivetkit-core` passed.
-- **Learnings for future iterations:**
-  - The runtime inspector behavior is already core-owned in `registry/inspector.rs` and `registry/inspector_ws.rs`; the old TS `ActorInspector` class was only dead duplicate surface plus tests.
-  - Subscriber-capture tests in `rivetkit-core/tests/modules/task.rs` need `test_hook_lock()` when they call `set_default(...)`, or full-suite parallelism turns tracing assertions into flaky garbage.
-  - The `actor_task_logs_lifecycle_dispatch_and_actor_event_flow` test is stable when it focuses on lifecycle plus actor-event logs; the dispatch-command assertions were the brittle part under full-suite contention.
----
-## 2026-04-23T21:02:30Z - DT-025
-- What was implemented: replaced the 50 ms dispatch-cancel polling loop in `registry/native.ts` with event-driven `CancellationToken.onCancelled()` wiring, pushed native `CancellationToken` objects through the NAPI TSF payloads, and deleted the old BigInt registry module `cancel_token.rs`.
-- Files changed: `rivetkit-typescript/packages/rivetkit-napi/src/actor_factory.rs`, `rivetkit-typescript/packages/rivetkit-napi/src/napi_actor_events.rs`, `rivetkit-typescript/packages/rivetkit-napi/src/queue.rs`, `rivetkit-typescript/packages/rivetkit-napi/src/lib.rs`, `rivetkit-typescript/packages/rivetkit-napi/src/cancel_token.rs`, `rivetkit-typescript/packages/rivetkit-napi/index.d.ts`, `rivetkit-typescript/packages/rivetkit-napi/index.js`, `rivetkit-typescript/packages/rivetkit/src/registry/native.ts`, `rivetkit-typescript/CLAUDE.md`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`
-- **Learnings for future iterations:**
-  - NAPI dispatch-cancel plumbing already has a canonical `CancellationToken` TSF surface. If cancel state is crossing into TypeScript, subscribe to that token instead of building a second registry.
-  - Queue wait helpers should accept the real cancellation token object so queue-send, action, and HTTP dispatch all share the same cancel path and teardown behavior.
-  - Verification that passed: `pnpm --filter @rivetkit/rivetkit-napi build:force`, `pnpm build -F rivetkit`, `pnpm -F rivetkit check-types`, and `pnpm -F rivetkit test tests/driver/actor-conn.test.ts tests/driver/actor-destroy.test.ts tests/driver/action-features.test.ts` (135 passed, 0 failed).
----
-## 2026-04-23T21:09:07Z - DT-026
-- What was implemented
-  - Rewrote `registry-constructor.test.ts` to use a real native registry build via `buildNativeRegistry(...)` instead of spying on `Runtime.create`.
-  - Replaced the traces `Date.now` spy helper with fake timers plus `vi.setSystemTime()`, while keeping the allowed `console.warn` silencing spy.
-- Files changed
-  - `rivetkit-typescript/packages/rivetkit/tests/registry-constructor.test.ts`
-  - `rivetkit-typescript/packages/traces/tests/traces.test.ts`
-  - `scripts/ralph/prd.json`
-  - `scripts/ralph/progress.txt`
-- **Learnings for future iterations:**
-  - `registry-constructor.test.ts` should assert the current explicit native startup path, not the removed deferred `Runtime.create` prestart behavior.
-  - Fake timers are enough for wall-clock assertions in traces tests, but monotonic trace time still needs a live-object `performance.now` override so modules using the original object keep seeing the controlled clock.
-  - `buildNativeRegistry(...)` normalizes endpoints with a trailing slash, so assert URL semantics rather than raw string formatting.
----
-## 2026-04-23T21:19:09Z - DT-028
-- What was implemented
-  - Replaced the `expect(true).toBe(true)` sentinel in `actor-lifecycle.test.ts` with a real teardown assertion for the rapid create/destroy race.
-  - Each iteration now waits for both `resolve()` and `destroy()`, proves the resolved actor ID rejects with `actor/not_found`, and counts 10 successful cleanups.
-- Files changed
-  - `rivetkit-typescript/packages/rivetkit/tests/driver/actor-lifecycle.test.ts`
-  - `scripts/ralph/prd.json`
-  - `scripts/ralph/progress.txt`
-- **Learnings for future iterations:**
-  - `getForId(actorId)` is a valid teardown proof in driver tests, but it is relatively expensive because actor lookup polls until registry teardown completes.
-  - Lifecycle race tests should assert an observed cleanup invariant instead of leaving a no-op sentinel that would stay green after the intended check disappeared.
----
-## 2026-04-23T21:30:49Z - DT-029
-- What was implemented
-  - Filed GitHub issues `#4705` through `#4708` and added adjacent `TODO(issue)` comments to every bare `test.skip(...)` in the touched RivetKit driver files.
-  - Added `rivetkit-typescript/packages/rivetkit/scripts/check-annotated-skips.ts` and wired `pnpm run check:test-skips` into package lint so anonymous `test.skip(...)` calls fail fast.
-- Files changed
-  - `rivetkit-typescript/packages/rivetkit/package.json`
-  - `rivetkit-typescript/packages/rivetkit/scripts/check-annotated-skips.ts`
-  - `rivetkit-typescript/packages/rivetkit/tests/driver/actor-lifecycle.test.ts`
-  - `rivetkit-typescript/packages/rivetkit/tests/driver/actor-sleep-db.test.ts`
-  - `rivetkit-typescript/packages/rivetkit/tests/driver/actor-sleep.test.ts`
-  - `rivetkit-typescript/packages/rivetkit/tests/driver/actor-workflow.test.ts`
-  - `scripts/ralph/prd.json`
-  - `scripts/ralph/progress.txt`
-  - `.agent/notes/driver-test-progress.md`
-- **Learnings for future iterations:**
-  - `test.skip(...)` policy is now explicit in this package: keep a tracking ticket on the line above the skip or the new check script will fail.
-  - Audit existing bare skips before you add the guard or you just create your own failing lint bomb.
-  - `actor-sleep-db.test.ts` full-file verification on this branch remains `42 passed, 30 skipped` across static/http/bare after the annotation-only change.
----
-## 2026-04-23 14:57:37 PDT - DT-050
-- What was implemented
-  - Rechecked the static/CBOR and static/JSON child-workflow timeout repro for `starts child workflows created inside workflow steps`.
-  - Confirmed the failure is stale on this branch. No source change was needed.
-  - Re-ran the full `actor-workflow.test.ts` file and the six-file DT-008 verifier. `actor-workflow` stayed green; the combined verifier failed elsewhere in `actor-sleep-db`.
-- Files changed
-  - `scripts/ralph/prd.json`
-  - `scripts/ralph/progress.txt`
-  - `.agent/notes/driver-test-progress.md`
-- **Learnings for future iterations:**
-  - Do not invent a fix for a driver ghost. Re-run the exact encoding-specific repro, then the whole file, then the DT-008 combined verifier before touching workflow code.
-  - If the combined verifier goes red in a different file, close the stale story and leave the real failure to its own follow-up.
----
-## 2026-04-23T22:40:11Z - DT-031
-- What was implemented
-  - Tightened the remaining placeholder `vi.waitFor(...)` comments so they explain the async condition being polled instead of restating the assertion.
-  - Removed stale flake notes for resolved `actor-conn` and inspector replay issues, updated the remaining queue flake note, and kept the `check:wait-for-comments` guard wired into the `rivetkit` package lint scripts.
-  - Collapsed repeated destroy polling in `actor-destroy.test.ts` onto the shared helper and removed stray debug `console.log` noise from `actor-conn-state.test.ts`.
-- Files changed
-  - `.agent/notes/flake-conn-websocket.md`
-  - `.agent/notes/flake-inspector-replay.md`
-  - `.agent/notes/flake-queue-waitsend.md`
-  - `rivetkit-typescript/packages/rivetkit/package.json`
-  - `rivetkit-typescript/packages/rivetkit/scripts/check-wait-for-comments.ts`
-  - `rivetkit-typescript/packages/rivetkit/tests/driver/actor-conn-hibernation.test.ts`
-  - `rivetkit-typescript/packages/rivetkit/tests/driver/actor-conn-state.test.ts`
-  - `rivetkit-typescript/packages/rivetkit/tests/driver/actor-conn.test.ts`
-  - `rivetkit-typescript/packages/rivetkit/tests/driver/actor-db-pragma-migration.test.ts`
-  - `rivetkit-typescript/packages/rivetkit/tests/driver/actor-db-stress.test.ts`
-  - `rivetkit-typescript/packages/rivetkit/tests/driver/actor-db.test.ts`
-  - `rivetkit-typescript/packages/rivetkit/tests/driver/actor-destroy.test.ts`
-  - `rivetkit-typescript/packages/rivetkit/tests/driver/actor-inspector.test.ts`
-  - `rivetkit-typescript/packages/rivetkit/tests/driver/actor-schedule.test.ts`
-  - `rivetkit-typescript/packages/rivetkit/tests/driver/actor-sleep-db.test.ts`
-  - `rivetkit-typescript/packages/rivetkit/tests/driver/actor-sleep.test.ts`
-  - `rivetkit-typescript/packages/rivetkit/tests/driver/actor-workflow.test.ts`
-  - `AGENTS.md`
-- Verification
-  - `pnpm run check:test-skips` passed.
-  - `pnpm run check:wait-for-comments` passed.
-  - `pnpm -F rivetkit check-types` passed.
-  - `pnpm -F rivetkit test tests/driver/actor-destroy.test.ts` passed with 30 tests.
-  - `RIVETKIT_DRIVER_TEST_PARALLEL=1 pnpm -F rivetkit test <fast driver files> -t "static registry.*encoding \\(bare\\)"` failed with 3 `manager-driver.test.ts` timeouts.
-  - Targeted bare recheck of those three `manager-driver` cases passed immediately, so DT-031 remains blocked by a combined fast-matrix regression outside the files changed here.
-- **Learnings for future iterations:**
-  - The wait-for comment guard only checks adjacency. Review the actual wording so the comment explains the async reason for polling instead of repeating the assertion.
-  - A red fast static/http/bare sweep can come from an unrelated file after a comment-only story. Re-run the failing slice in isolation before deciding the current diff caused it.
-  - Full package `pnpm lint` is currently red on unrelated baseline Biome diagnostics in fixtures and helper tests, so DT-031 verification had to use the story-specific comment checks plus typecheck and runtime tests.
----
-## 2026-04-23T23:06:31Z - DT-031
-- What was implemented
-  - Re-ran the full fast static/http/bare driver slice after the earlier `manager-driver` ghost failure and confirmed the comment/flake-note cleanup is green under combined load.
-  - Kept the `vi.waitFor(...)` audit changes, direct event-promise rewrites in `actor-conn.test.ts`, and the `check:wait-for-comments` package guard as the final DT-031 payload.
-- Files changed
-  - `.agent/notes/flake-conn-websocket.md`
-  - `.agent/notes/flake-inspector-replay.md`
-  - `.agent/notes/flake-queue-waitsend.md`
-  - `CLAUDE.md`
-  - `engine/CLAUDE.md`
-  - `rivetkit-typescript/packages/rivetkit/package.json`
-  - `rivetkit-typescript/packages/rivetkit/scripts/check-wait-for-comments.ts`
-  - `rivetkit-typescript/packages/rivetkit/tests/driver/actor-conn-hibernation.test.ts`
-  - `rivetkit-typescript/packages/rivetkit/tests/driver/actor-conn-state.test.ts`
-  - `rivetkit-typescript/packages/rivetkit/tests/driver/actor-conn.test.ts`
-  - `rivetkit-typescript/packages/rivetkit/tests/driver/actor-db-pragma-migration.test.ts`
-  - `rivetkit-typescript/packages/rivetkit/tests/driver/actor-db-stress.test.ts`
-  - `rivetkit-typescript/packages/rivetkit/tests/driver/actor-db.test.ts`
-  - `rivetkit-typescript/packages/rivetkit/tests/driver/actor-destroy.test.ts`
-  - `rivetkit-typescript/packages/rivetkit/tests/driver/actor-inspector.test.ts`
-  - `rivetkit-typescript/packages/rivetkit/tests/driver/actor-schedule.test.ts`
-  - `rivetkit-typescript/packages/rivetkit/tests/driver/actor-sleep-db.test.ts`
-  - `rivetkit-typescript/packages/rivetkit/tests/driver/actor-sleep.test.ts`
-  - `rivetkit-typescript/packages/rivetkit/tests/driver/actor-workflow.test.ts`
-  - `scripts/ralph/prd.json`
-  - `scripts/ralph/progress.txt`
-- Verification
-  - `pnpm -F rivetkit run check:wait-for-comments` passed.
-  - `pnpm -F rivetkit check-types` passed.
-  - `RIVETKIT_DRIVER_TEST_PARALLEL=1 pnpm -F rivetkit test tests/driver/manager-driver.test.ts tests/driver/actor-conn.test.ts tests/driver/actor-conn-state.test.ts tests/driver/conn-error-serialization.test.ts tests/driver/actor-destroy.test.ts tests/driver/request-access.test.ts tests/driver/actor-handle.test.ts tests/driver/action-features.test.ts tests/driver/access-control.test.ts tests/driver/actor-vars.test.ts tests/driver/actor-metadata.test.ts tests/driver/actor-onstatechange.test.ts tests/driver/actor-db.test.ts tests/driver/actor-db-raw.test.ts tests/driver/actor-workflow.test.ts tests/driver/actor-error-handling.test.ts tests/driver/actor-queue.test.ts tests/driver/actor-kv.test.ts tests/driver/actor-stateless.test.ts tests/driver/raw-http.test.ts tests/driver/raw-http-request-properties.test.ts tests/driver/raw-websocket.test.ts tests/driver/actor-inspector.test.ts tests/driver/gateway-query-url.test.ts tests/driver/actor-db-pragma-migration.test.ts tests/driver/actor-state-zod-coercion.test.ts tests/driver/actor-conn-status.test.ts tests/driver/gateway-routing.test.ts tests/driver/lifecycle-hooks.test.ts -t "static registry.*encoding \\(bare\\)"` passed with 287 passed, 0 failed, and 577 skipped.
-  - `pnpm -F rivetkit lint` is still red on pre-existing unrelated Biome diagnostics in fixtures/helpers outside DT-031.
-- **Learnings for future iterations:**
-  - The full fast matrix is the truth serum for comment-only driver stories. If a combined run goes red, rerun the exact slice before assuming the edited files caused it.
-  - `check:wait-for-comments` only proves adjacency. Direct event waits are still better than polling when the test already has a concrete event or callback boundary.
-  - Shared teardown helpers like `waitForActorDestroyed(...)` keep the required polling comments honest and stop the same destroy-loop boilerplate from rotting in four places.
----
-## 2026-04-23T16:27:10-0700 - DT-032
-- What was implemented
-  - Verified that the branch already contained the DT-032 source changes: required-path native adapter config failures now throw structured `RivetError`s, and focused runtime-error coverage already exists for the missing-config cases.
-  - Re-ran the story acceptance gates and marked DT-032 complete in the PRD once the existing fix proved green.
-- Files changed
-  - `scripts/ralph/prd.json`
-  - `scripts/ralph/progress.txt`
-- Verification
-  - `pnpm -F rivetkit test tests/native-runtime-errors.test.ts` passed.
-  - `pnpm -F rivetkit check-types` passed.
-  - `pnpm build -F rivetkit` passed.
-  - `RIVETKIT_DRIVER_TEST_PARALLEL=1 pnpm -F rivetkit test tests/driver/manager-driver.test.ts tests/driver/actor-conn.test.ts tests/driver/actor-conn-state.test.ts tests/driver/conn-error-serialization.test.ts tests/driver/actor-destroy.test.ts tests/driver/request-access.test.ts tests/driver/actor-handle.test.ts tests/driver/action-features.test.ts tests/driver/access-control.test.ts tests/driver/actor-vars.test.ts tests/driver/actor-metadata.test.ts tests/driver/actor-onstatechange.test.ts tests/driver/actor-db.test.ts tests/driver/actor-db-raw.test.ts tests/driver/actor-workflow.test.ts tests/driver/actor-error-handling.test.ts tests/driver/actor-queue.test.ts tests/driver/actor-kv.test.ts tests/driver/actor-stateless.test.ts tests/driver/raw-http.test.ts tests/driver/raw-http-request-properties.test.ts tests/driver/raw-websocket.test.ts tests/driver/actor-inspector.test.ts tests/driver/gateway-query-url.test.ts tests/driver/actor-db-pragma-migration.test.ts tests/driver/actor-state-zod-coercion.test.ts tests/driver/actor-conn-status.test.ts tests/driver/gateway-routing.test.ts tests/driver/lifecycle-hooks.test.ts -t "static registry.*encoding \\(bare\\)"` passed with 287 passed, 0 failed, and 577 skipped.
-- **Learnings for future iterations:**
-  - Public config failures in the native adapter should use explicit `RivetError` codes rather than relying on generic `Error` strings to communicate state back across the bridge.
-  - If the combined fast bare verifier flakes on an unrelated file, rerun the exact failing bare slice before deciding the current story caused it.
-  - `setup()` backfills a default endpoint, so missing-endpoint tests need to clear `registry.parseConfig().endpoint` after parsing instead of assuming the raw setup config stays empty.
----
-## 2026-04-23T16:35:02Z - DT-051
-- What was implemented
-  - Re-ran the exact bare DT-051 repro for `drains many-queue child actors created from run handlers while connected`; it passed.
-  - Re-ran the parallel static/http/bare actor-queue slice; the run-handler-created child path stayed green there too.
-  - Full `actor-queue.test.ts` verification is still blocked by a sibling actor-queue failure, not DT-051 itself. The failing full-file runs surfaced CBOR action-created child scheduling errors (`no_envoys` -> `guard/actor_ready_timeout`, and once `Actor reply channel was dropped without a response`) before the file could go green.
-- Files changed
-  - `scripts/ralph/progress.txt`
-- **Learnings for future iterations:**
-  - DT-051 can look stale in isolation while `actor-queue.test.ts` still has live sibling debt. Do not mark it complete until the whole file is green.
-  - When `actor-queue` full-file verification reports a dropped reply, inspect whether the child actor actually lost scheduling first. In this run the stronger engine-side signal was repeated `no_envoys`.
----
-## 2026-04-23 16:40:03 PDT - DT-051
-- What was implemented
-  - Re-ran DT-051 cleanly after the later queue follow-ups landed. The exact static/bare `drains many-queue child actors created from run handlers while connected` repro passed again.
-  - Re-ran the full `actor-queue.test.ts` file sequentially and it passed with 75/75 tests, including both many-child cases across bare, CBOR, and JSON.
-  - Re-ran the static/http/bare actor-queue slice with `RIVETKIT_DRIVER_TEST_PARALLEL=1`; it passed with 25 passed and 50 skipped. DT-051 is closed as a stale non-repro on the current branch.
-- Files changed
-  - `scripts/ralph/prd.json`
-  - `scripts/ralph/progress.txt`
-  - `.agent/notes/driver-test-progress.md`
-- Verification
-  - `pnpm -F rivetkit test tests/driver/actor-queue.test.ts -t "static registry.*encoding \\(bare\\).*drains many-queue child actors created from run handlers while connected"` passed.
-  - `pnpm -F rivetkit test tests/driver/actor-queue.test.ts` passed with 75 passed, 0 failed.
-  - `RIVETKIT_DRIVER_TEST_PARALLEL=1 pnpm -F rivetkit test tests/driver/actor-queue.test.ts -t "static registry.*encoding \\(bare\\)"` passed with 25 passed, 0 failed, 50 skipped.
-  - `pnpm -F rivetkit check-types` passed.
-- **Learnings for future iterations:**
-  - Do not close a stale driver story on the single repro alone. Close it only after the exact repro, the full file, and the matrix-shaped slice all pass on the current branch.
-  - Do not run multiple native-driver Vitest processes against the same workspace at once unless you want fake `ECONNREFUSED` garbage.
----
-## 2026-04-23 17:29:25 PDT - DT-033
-- What was implemented
-  - Moved the native actor JS runtime caches for vars, SQL wrappers, DB clients, destroy gates, and staged persisted state off actorId-keyed module globals and onto `ActorContext.runtimeState()`.
-  - Added a driver regression that destroys an actor, recreates the same key, and proves `createVars()` state resets to `fresh` instead of leaking the previous generation's JS-only vars.
-  - Documented the `ActorContext.runtimeState()` pattern in `rivetkit-typescript/CLAUDE.md`.
-- Files changed
-  - `rivetkit-typescript/packages/rivetkit-napi/src/actor_context.rs`
-  - `rivetkit-typescript/packages/rivetkit-napi/index.d.ts`
-  - `rivetkit-typescript/packages/rivetkit/src/registry/native.ts`
-  - `rivetkit-typescript/packages/rivetkit/fixtures/driver-test-suite/destroy.ts`
-  - `rivetkit-typescript/packages/rivetkit/tests/driver/actor-destroy.test.ts`
-  - `rivetkit-typescript/CLAUDE.md`
-  - `scripts/ralph/prd.json`
-  - `scripts/ralph/progress.txt`
-- Verification
-  - `pnpm --filter @rivetkit/rivetkit-napi build:force` passed.
-  - `pnpm -F rivetkit check-types` passed.
-  - `pnpm build -F rivetkit` passed.
-  - `pnpm -F rivetkit test tests/driver/actor-destroy.test.ts -t "actor destroy clears ephemeral vars on same-key recreation" --silent=passed-only` passed.
-  - `pnpm -F rivetkit test tests/driver/actor-vars.test.ts -t "static registry.*encoding \\(bare\\)" --silent=passed-only` passed.
-  - `pnpm -F rivetkit test tests/driver/actor-db.test.ts -t "runs db provider cleanup on destroy" --silent=passed-only` passed.
-- **Learnings for future iterations:**
-  - JS-only native actor caches should live on `ActorContext.runtimeState()` so actor teardown and same-key recreation share the core lifecycle boundary instead of ad hoc `Map<string, ...>` cleanup.
-  - If you want to catch native cache leaks, assert on `vars` or other JS-only state after destroy/recreate. Persisted actor state alone will miss the bug.
-  - A broad native-driver DB slice can still go red on unrelated `actor event inbox not configured` or `no_envoys` branch noise, so verify cache-plumbing changes with the most directly relevant DB cleanup test instead of assuming every DB failure came from this diff.
----
-## 2026-04-23 21:45:44 PDT - DT-035
-- What was implemented
-  - Narrowed the exposed TypeScript actor key surface back to `string[]` so `ActorContext.key` matches `ActorKeySchema` and the existing key/query/gateway round-trip contract.
-  - Normalized native numeric key segments to strings before they cross into the TypeScript `ActorContext` adapter instead of leaving a fake wider type on the TS side.
-- Files changed
-  - `rivetkit-typescript/packages/rivetkit/src/actor/config.ts`
-  - `rivetkit-typescript/packages/rivetkit/src/registry/native.ts`
-  - `rivetkit-typescript/CLAUDE.md`
-  - `scripts/ralph/prd.json`
-  - `scripts/ralph/progress.txt`
-- **Learnings for future iterations:**
-  - TypeScript actor keys are string-only today. If someone wants numeric keys, they need to widen `client/query.ts`, key serialization, and gateway parsing together instead of widening a single interface and pretending it round-trips.
-  - Verification passed with `pnpm -F rivetkit check-types`, `pnpm test tests/driver/actor-handle.test.ts tests/driver/actor-inspector.test.ts tests/driver/gateway-query-url.test.ts`, and `pnpm build -F rivetkit`.
----
-## 2026-04-24 00:24:33 PDT - DT-036
-- What was implemented
-  - Re-ran the full DT-036 acceptance stack after reverting the out-of-scope `SleepTsKey` experiment in `engine/packages/pegboard/src/workflows/actor2/runtime.rs` that was poisoning the DB verifier.
-  - Confirmed the story surface is complete: `ActorContext` no longer exposes `ctx.sql`, `rivetkit/db/drizzle` is the public Drizzle entrypoint again, the compat harness typechecks that subpath, and the package-surface test locks the exports down.
-- Files changed
-  - `CHANGELOG.md`
-  - `rivetkit-typescript/CLAUDE.md`
-  - `rivetkit-typescript/packages/rivetkit/scripts/test-drizzle-compat.sh`
-  - `rivetkit-typescript/packages/rivetkit/scripts/drizzle-compat-smoke.ts`
-  - `rivetkit-typescript/packages/rivetkit/src/actor/config.ts`
-  - `rivetkit-typescript/packages/rivetkit/tests/fixtures/napi-runtime-server.ts`
-  - `rivetkit-typescript/packages/rivetkit/tests/package-surface.test.ts`
-  - `rivetkit-typescript/packages/rivetkit/tsconfig.drizzle-compat.json`
-  - `scripts/ralph/prd.json`
-  - `scripts/ralph/progress.txt`
-- **Learnings for future iterations:**
-  - A story-local package-surface change can look blocked by unrelated runtime noise. Re-run the whole acceptance slice on the current branch before closing it, because stale failures can be caused by out-of-scope experiments elsewhere.
-  - The DT-036 Drizzle compatibility check should stay a dedicated typecheck against `rivetkit/db/drizzle`. Running deleted or overly broad driver targets is useless bullshit that only tells you the harness drifted.
-  - Verification status: `pnpm -F rivetkit check-types` passed; `pnpm build -F rivetkit` passed; `pnpm -F rivetkit test tests/package-surface.test.ts` passed; `./scripts/test-drizzle-compat.sh` passed for drizzle `0.44` and `0.45`; `pnpm -F rivetkit test tests/driver/actor-db.test.ts tests/driver/actor-db-raw.test.ts tests/driver/actor-db-pragma-migration.test.ts` passed with 72 tests passing.
----
-## 2026-04-24 00:33:42 PDT - DT-037
-- What was implemented
-  - Restored the missing root `*ContextOf` helper surface by recreating `rivetkit-typescript/packages/rivetkit/src/actor/contexts/index.ts` as a type-only module and re-exporting the helpers from `src/actor/mod.ts`.
-  - Updated the context-type docs and changelog so the restored helper exports and the intentionally removed runtime surfaces are documented in the same place.
-  - Added a package-surface compile smoke test that imports every restored `*ContextOf` helper from `"rivetkit"`.
-- Files changed
-  - `CHANGELOG.md`
-  - `rivetkit-typescript/CLAUDE.md`
-  - `rivetkit-typescript/packages/rivetkit/src/actor/contexts/index.ts`
-  - `rivetkit-typescript/packages/rivetkit/src/actor/mod.ts`
-  - `rivetkit-typescript/packages/rivetkit/tests/package-surface.test.ts`
-  - `website/src/content/docs/actors/index.mdx`
-  - `website/src/content/docs/actors/types.mdx`
-  - `scripts/ralph/prd.json`
-  - `scripts/ralph/progress.txt`
-- **Learnings for future iterations:**
-  - The root `rivetkit` package can drop user-facing type helpers even when runtime APIs stay intact. Keep a compile smoke test around the package surface so missing type exports fail loudly instead of being discovered by users later.
-  - `*ContextOf` docs need to move in lockstep with `src/actor/contexts/index.ts` and `src/actor/mod.ts`, or the docs turn into fiction fast.
-  - Verification status: `pnpm -F rivetkit check-types` passed; `pnpm -F rivetkit test tests/package-surface.test.ts` passed; `pnpm -F rivetkit build` passed; `rg -n "ActionContextOf|BeforeActionResponseContextOf|BeforeConnectContextOf|ConnectContextOf|ConnContextOf|ConnInitContextOf|CreateConnStateContextOf|CreateContextOf|CreateVarsContextOf|DestroyContextOf|DisconnectContextOf|MigrateContextOf|RequestContextOf|RunContextOf|SleepContextOf|StateChangeContextOf|WakeContextOf|WebSocketContextOf" rivetkit-typescript/packages/rivetkit/dist/tsup/mod.d.ts` confirmed the generated declaration surface.
----
-## 2026-04-24 00:57:10 PDT - DT-052
-- What was implemented
-  - Added a runtime-startup acknowledgement handshake so `rivetkit-core` does not finish actor startup until the runtime adapter finishes its preamble.
-  - Wired the ack through the NAPI adapter and the typed Rust wrapper, which fixes the `actor-run` startup race where the first action could beat `onWake`/`run` startup after `getOrCreate`.
-- Files changed
-  - `rivetkit-rust/packages/rivetkit-core/src/actor/lifecycle_hooks.rs`
-  - `rivetkit-rust/packages/rivetkit-core/src/actor/task.rs`
-  - `rivetkit-rust/packages/rivetkit-core/CLAUDE.md`
-  - `rivetkit-typescript/packages/rivetkit-napi/src/actor_factory.rs`
-  - `rivetkit-typescript/packages/rivetkit-napi/src/napi_actor_events.rs`
-  - `rivetkit-rust/packages/rivetkit/src/registry.rs`
-  - `rivetkit-rust/packages/rivetkit/src/start.rs`
-  - `rivetkit-rust/packages/rivetkit/src/event.rs`
-  - `rivetkit-rust/packages/rivetkit/tests/integration_canned_events.rs`
-  - `scripts/ralph/prd.json`
-  - `scripts/ralph/progress.txt`
-- **Learnings for future iterations:**
-  - `ActorTask` flipping to `Started` is not a sufficient readiness signal for native actors. Startup must wait for the runtime adapter to ack that `onWake`/startup preamble finished, or the first `getState()` can outrun the user `run` task.
-  - Do not run targeted and full driver verifiers for the same file in parallel. The shared-engine harness will step on itself and produce fake `ECONNREFUSED` garbage.
-  - Verification status: `pnpm --filter @rivetkit/rivetkit-napi build:force` passed; `pnpm -F rivetkit test tests/driver/actor-run.test.ts -t "static registry.*encoding \\(bare\\).*run handler starts after actor startup"` passed; `pnpm -F rivetkit test tests/driver/actor-run.test.ts` passed; `RIVETKIT_DRIVER_TEST_PARALLEL=1 pnpm -F rivetkit test tests/driver/actor-run.test.ts -t "static registry.*encoding \\(bare\\)"` passed; `cargo build -p rivetkit` passed; `pnpm -F rivetkit check-types` is still failing on this branch with unrelated pre-existing `src/actor/instance/mod.ts` and `src/drivers/engine/actor-driver.ts` errors, so I did not commit.
----
-## 2026-04-24T08:08:55Z - DT-034
-- What was implemented
-  - Documented the `rivetkit-core` decision that `ActorContext::request_save(...)` is intentionally fire-and-forget and only emits a warning when save-request delivery fails.
-  - Mirrored that contract on the typed Rust `Ctx<A>::request_save(...)` wrapper so the public Rust surface points callers at the error-aware alternative.
-- Files changed
-  - `rivetkit-rust/packages/rivetkit-core/src/actor/state.rs`
-  - `rivetkit-rust/packages/rivetkit/src/context.rs`
-  - `scripts/ralph/progress.txt`
-- **Learnings for future iterations:**
-  - `request_save(...)` is the best-effort API. If a caller must know whether the save request reached the lifecycle inbox, use `request_save_and_wait(...)` instead of trying to infer success from the warning log.
-  - When this branch is dirty, isolate DT-034 from unrelated staged work before blaming the docs diff. The remaining blockers came from the in-flight startup-handshake changes already on the branch: `cargo test -p rivetkit-core` now fails 34 task tests on closed `startup_ready` channels plus the grep-gate script, and `pnpm -F rivetkit check-types` is still red in `src/actor/instance/mod.ts` and `src/drivers/engine/actor-driver.ts`.
-  - Verification status: isolated `pnpm --filter @rivetkit/rivetkit-napi build:force` passed; isolated `pnpm build -F rivetkit` passed; isolated `cargo test -p rivetkit-core` failed on pre-existing startup-handshake regressions in `tests/modules/task.rs`; isolated `pnpm -F rivetkit check-types` failed on the pre-existing `actor/instance` and `drivers/engine/actor-driver` errors; I did not run the fast static/http/bare driver matrix once the required gates were already red, so I did not mark the story passed or commit.
----
-## 2026-04-24 01:24:26 PDT - DT-052
-- What was implemented
-  - Cleared the last DT-052 blocker by excluding two dead legacy runtime files from `rivetkit` package typechecking: `src/actor/instance/mod.ts` and `src/drivers/engine/actor-driver.ts`.
-  - Re-ran the DT-052 acceptance stack on the current branch state after that fix and confirmed the startup-handshake work is green end to end.
-- Files changed
-  - `rivetkit-typescript/packages/rivetkit/tsconfig.json`
-  - `.agent/notes/driver-test-progress.md`
-  - `scripts/ralph/prd.json`
-  - `scripts/ralph/progress.txt`
-- **Learnings for future iterations:**
-  - `pnpm -F rivetkit check-types` will still fail on dead files that no current build entrypoint imports, because the package `tsconfig.json` includes `src/**/*`.
-  - If legacy runtime sources stay checked in for reference, explicitly exclude them from the package `tsconfig.json` until they are either ported or deleted.
-  - Verification status: `pnpm -F rivetkit check-types` passed; `pnpm --filter @rivetkit/rivetkit-napi build:force` passed; `cargo build -p rivetkit` passed; `pnpm -F rivetkit test tests/driver/actor-run.test.ts -t "static registry.*encoding \\(bare\\).*run handler starts after actor startup"` passed; `pnpm -F rivetkit test tests/driver/actor-run.test.ts` passed; `RIVETKIT_DRIVER_TEST_PARALLEL=1 pnpm -F rivetkit test tests/driver/actor-run.test.ts -t "static registry.*encoding \\(bare\\)"` passed; `pnpm build -F rivetkit` passed.
----
-## 2026-04-24 03:02:11 PDT - DT-034
-- What was implemented
-  - Re-verified the existing DT-034 `request_save(...)` documentation on the current branch state after DT-052 cleared the earlier unrelated cargo and typecheck blockers.
-  - Confirmed the direct DT-034 gates are green: `cargo test -p rivetkit-core`, `pnpm --filter @rivetkit/rivetkit-napi build:force`, `pnpm build -F rivetkit`, and `pnpm -F rivetkit check-types`.
-- Files changed
-  - `.agent/notes/driver-test-progress.md`
-  - `scripts/ralph/progress.txt`
-- **Learnings for future iterations:**
-  - DT-034 itself is implemented, but it still cannot be marked passing until the required fast static/http/bare verifier is green. This run failed in unrelated areas: `actor-db.test.ts` lifecycle-cleanup assertions and the old `raw-websocket` threshold-ack regression.
-  - Verification status: `cargo test -p rivetkit-core` passed; `pnpm --filter @rivetkit/rivetkit-napi build:force` passed; `pnpm build -F rivetkit` passed; `pnpm -F rivetkit check-types` passed; `RIVETKIT_DRIVER_TEST_PARALLEL=1 pnpm test tests/driver/{manager-driver,actor-conn,actor-conn-state,conn-error-serialization,actor-destroy,request-access,actor-handle,action-features,access-control,actor-vars,actor-metadata,actor-onstatechange,actor-db,actor-db-raw,actor-workflow,actor-error-handling,actor-queue,actor-kv,actor-stateless,raw-http,raw-http-request-properties,raw-websocket,actor-inspector,gateway-query-url,actor-db-pragma-migration,actor-state-zod-coercion,actor-conn-status,gateway-routing,lifecycle-hooks}.test.ts -t "static registry.*encoding \\(bare\\)"` failed with 285 passed, 3 failed, and 579 skipped, so I did not mark DT-034 passed or commit.
----
-## 2026-04-24T10:14:52Z - DT-034
-- What was implemented
-  - Re-verified the existing DT-034 fire-and-forget documentation on the current branch: `ActorContext::request_save(...)` and the typed Rust wrapper already document that overloads only warn and that `request_save_and_wait(...)` is the error-aware path.
-  - Re-ran the acceptance gates instead of touching code again.
-- Files changed
-  - `scripts/ralph/progress.txt`
-- **Learnings for future iterations:**
-  - DT-034 is still blocked by the required fast static/http/bare verifier, not by missing docs. The doc decision is already present on this branch.
-  - This verifier run exited non-zero again. The clearest failure signal I observed during the run was `actor-destroy` recreation hitting `guard/actor_ready_timeout`, so treat the branch as still baseline-red before trying to close stale doc-only stories.
-  - Verification status: `cargo test -p rivetkit-core` passed; `pnpm --filter @rivetkit/rivetkit-napi build:force` passed; `pnpm build -F rivetkit` passed; `pnpm -F rivetkit check-types` passed; `RIVETKIT_DRIVER_TEST_PARALLEL=1 pnpm -F rivetkit test tests/driver/manager-driver.test.ts tests/driver/actor-conn.test.ts tests/driver/actor-conn-state.test.ts tests/driver/conn-error-serialization.test.ts tests/driver/actor-destroy.test.ts tests/driver/request-access.test.ts tests/driver/actor-handle.test.ts tests/driver/action-features.test.ts tests/driver/access-control.test.ts tests/driver/actor-vars.test.ts tests/driver/actor-metadata.test.ts tests/driver/actor-onstatechange.test.ts tests/driver/actor-db.test.ts tests/driver/actor-db-raw.test.ts tests/driver/actor-workflow.test.ts tests/driver/actor-error-handling.test.ts tests/driver/actor-queue.test.ts tests/driver/actor-kv.test.ts tests/driver/actor-stateless.test.ts tests/driver/raw-http.test.ts tests/driver/raw-http-request-properties.test.ts tests/driver/raw-websocket.test.ts tests/driver/actor-inspector.test.ts tests/driver/gateway-query-url.test.ts tests/driver/actor-db-pragma-migration.test.ts tests/driver/actor-state-zod-coercion.test.ts tests/driver/actor-conn-status.test.ts tests/driver/gateway-routing.test.ts tests/driver/lifecycle-hooks.test.ts -t "static registry.*encoding \\(bare\\)"` exited with status `1`, so I did not mark DT-034 passed or commit.
----
-## 2026-04-24T03:21:58Z - DT-034
-- What was implemented
-  - Re-verified that DT-034 is already implemented on this branch: `rivetkit-core` documents `request_save(...)` as intentional fire-and-forget, the typed Rust wrapper mirrors that contract, and the internal state-management docs point callers at `request_save_and_wait(...)`.
-  - Re-ran the acceptance gates without widening scope.
-- Files changed
-  - `scripts/ralph/progress.txt`
-- **Learnings for future iterations:**
-  - DT-034 is still blocked by unrelated branch failures, not missing docs. Do not reopen this story unless the `request_save(...)` contract itself changes.
-  - The current fast static/http/bare verifier failed in `tests/driver/actor-queue.test.ts` before the sweep finished: `complete throws when called twice`, `wait send no longer requires queue completion schema`, `iter can consume queued messages`, and `queue async iterator can consume queued messages` all timed out under bare.
-  - Verification status: `cargo test -p rivetkit-core` passed; `pnpm -F rivetkit check-types` passed; `pnpm --filter @rivetkit/rivetkit-napi build:force` passed; `pnpm build -F rivetkit` passed; `RIVETKIT_DRIVER_TEST_PARALLEL=1 pnpm -F rivetkit test tests/driver/manager-driver.test.ts tests/driver/actor-conn.test.ts tests/driver/actor-conn-state.test.ts tests/driver/conn-error-serialization.test.ts tests/driver/actor-destroy.test.ts tests/driver/request-access.test.ts tests/driver/actor-handle.test.ts tests/driver/action-features.test.ts tests/driver/access-control.test.ts tests/driver/actor-vars.test.ts tests/driver/actor-metadata.test.ts tests/driver/actor-onstatechange.test.ts tests/driver/actor-db.test.ts tests/driver/actor-db-raw.test.ts tests/driver/actor-workflow.test.ts tests/driver/actor-error-handling.test.ts tests/driver/actor-queue.test.ts tests/driver/actor-kv.test.ts tests/driver/actor-stateless.test.ts tests/driver/raw-http.test.ts tests/driver/raw-http-request-properties.test.ts tests/driver/raw-websocket.test.ts tests/driver/actor-inspector.test.ts tests/driver/gateway-query-url.test.ts tests/driver/actor-db-pragma-migration.test.ts tests/driver/actor-state-zod-coercion.test.ts tests/driver/actor-conn-status.test.ts tests/driver/gateway-routing.test.ts tests/driver/lifecycle-hooks.test.ts -t "static registry.*encoding \\(bare\\)"` failed during `actor-queue`, so I did not mark DT-034 passed or commit.
----
-## 2026-04-24 03:24:58 PDT - DT-054
-- What was implemented
-  - Re-ran the exact static/http/bare `run handler that throws error sleeps instead of destroying` repro and it passed on the current branch.
-  - Re-ran the full `actor-run.test.ts` file, the static/http/bare `RIVETKIT_DRIVER_TEST_PARALLEL=1` slice, and `pnpm -F rivetkit check-types`; all passed, so DT-054 is closed as a stale non-repro after the DT-052 actor-run startup fix.
-- Files changed
-  - `.agent/notes/driver-test-progress.md`
-  - `scripts/ralph/prd.json`
-  - `scripts/ralph/progress.txt`
-- **Learnings for future iterations:**
-  - Do not reopen actor-run slow-path follow-ups just because an older verifier log says so. Recheck the exact repro, the full `actor-run.test.ts` file, and the static/http/bare slice on the current branch first.
-  - DT-054 no longer reproduces once the DT-052 startup handshake and the dead-file `check-types` cleanup are both on the branch.
----
-## 2026-04-24T10:31:31Z - DT-034
-- What was implemented
-  - Re-verified that DT-034 is already implemented on this branch: `ActorContext::request_save(...)` documents the intentional fire-and-forget behavior, and the typed Rust `Ctx<A>::request_save(...)` wrapper points callers at the error-aware alternative.
-  - Re-ran the DT-034 acceptance gates on the current branch state instead of widening scope with fake code churn.
-- Files changed
-  - `scripts/ralph/progress.txt`
-- **Learnings for future iterations:**
-  - DT-034 is blocked by the required fast static/http/bare verifier, not by missing docs. Do not reopen the `request_save(...)` contract unless that API behavior itself changes.
-  - The current blocker is still `actor-db` lifecycle cleanup under the fast bare sweep: `runs db provider cleanup on sleep` and `handles parallel actor lifecycle churn` both failed with cleanup count stuck at `0`.
-  - Verification status: `cargo test -p rivetkit-core` passed; `pnpm --filter @rivetkit/rivetkit-napi build:force` passed; `pnpm build -F rivetkit` passed; `pnpm -F rivetkit check-types` passed; `RIVETKIT_DRIVER_TEST_PARALLEL=1 pnpm -F rivetkit test ... -t "static registry.*encoding \\(bare\\)"` failed in `tests/driver/actor-db.test.ts`, so I did not mark DT-034 passed, update `prd.json`, or commit.
----
-## 2026-04-24 03:46:45 PDT - DT-034
-- What was implemented
-  - Re-verified that DT-034 itself is already landed on this branch: `rivetkit-core` and the typed Rust wrapper both document `request_save(...)` as the fire-and-forget path and point callers at `request_save_and_wait(...)` when they need an observable `Result`.
-  - Re-ran the full DT-034 acceptance sequence again. The first `cargo test -p rivetkit-core` run tripped a flaky logging test, the targeted repro passed immediately, and a full rerun passed; NAPI rebuild, package build, and typecheck also passed before the required fast bare verifier failed in `actor-db`.
-- Files changed
-  - `scripts/ralph/progress.txt`
-- **Learnings for future iterations:**
-  - DT-034 is still a stale false flag blocked by unrelated branch regressions, not by missing `request_save(...)` docs.
-  - `cargo test -p rivetkit-core` can flake in `actor_task_logs_lifecycle_dispatch_and_actor_event_flow`; the targeted repro passed and the full rerun passed, so do not confuse that with the actual DT-034 blocker.
-  - The current hard blocker remains the fast static/http/bare `actor-db` cleanup pair: `runs db provider cleanup on sleep` and `handles parallel actor lifecycle churn` both left cleanup counts at `0`.
-  - Verification status: initial `cargo test -p rivetkit-core` failed in `actor_task_logs_lifecycle_dispatch_and_actor_event_flow`; targeted `cargo test -p rivetkit-core actor_task_logs_lifecycle_dispatch_and_actor_event_flow -- --nocapture` passed; rerun `cargo test -p rivetkit-core` passed; `pnpm --filter @rivetkit/rivetkit-napi build:force` passed; `pnpm build -F rivetkit` passed; `pnpm -F rivetkit check-types` passed; `RIVETKIT_DRIVER_TEST_PARALLEL=1 pnpm -F rivetkit test tests/driver/manager-driver.test.ts tests/driver/actor-conn.test.ts tests/driver/actor-conn-state.test.ts tests/driver/conn-error-serialization.test.ts tests/driver/actor-destroy.test.ts tests/driver/request-access.test.ts tests/driver/actor-handle.test.ts tests/driver/action-features.test.ts tests/driver/access-control.test.ts tests/driver/actor-vars.test.ts tests/driver/actor-metadata.test.ts tests/driver/actor-onstatechange.test.ts tests/driver/actor-db.test.ts tests/driver/actor-db-raw.test.ts tests/driver/actor-workflow.test.ts tests/driver/actor-error-handling.test.ts tests/driver/actor-queue.test.ts tests/driver/actor-kv.test.ts tests/driver/actor-stateless.test.ts tests/driver/raw-http.test.ts tests/driver/raw-http-request-properties.test.ts tests/driver/raw-websocket.test.ts tests/driver/actor-inspector.test.ts tests/driver/gateway-query-url.test.ts tests/driver/actor-db-pragma-migration.test.ts tests/driver/actor-state-zod-coercion.test.ts tests/driver/actor-conn-status.test.ts tests/driver/gateway-routing.test.ts tests/driver/lifecycle-hooks.test.ts -t "static registry.*encoding \\(bare\\)"` failed in `tests/driver/actor-db.test.ts`, so I did not mark DT-034 passed, update `prd.json`, or commit.
----
-## 2026-04-24T10:56:13Z - DT-034
-- What was implemented
-  - Tightened the typed Rust wrapper doc on `rivetkit-rust/packages/rivetkit/src/context.rs` so the public `request_save(...)` API explicitly says it is fire-and-forget, that lifecycle-inbox delivery failures only warn, and that `request_save_and_wait(...)` is the error-aware path.
-  - Re-ran the DT-034 acceptance gates on the current branch instead of pretending the story was closable without verification.
-- Files changed
-  - `rivetkit-rust/packages/rivetkit/src/context.rs`
-  - `scripts/ralph/progress.txt`
-- **Learnings for future iterations:**
-  - DT-034 still cannot be closed honestly on this branch. The doc decision is now explicit at the wrapper API surface, but required verification is still red for unrelated reasons.
-  - `cargo test -p rivetkit-core` is currently failing in `actor::task::tests::moved_tests::actor_task_logs_lifecycle_dispatch_and_actor_event_flow`; that failure is unrelated to the `request_save(...)` docs change.
-  - The required 29-file fast static/http/bare verifier is otherwise mostly green and now fails specifically in `tests/driver/actor-db.test.ts`: `runs db provider cleanup on sleep` and `handles parallel actor lifecycle churn`, both with cleanup counts stuck at `0`.
-  - Verification status: `pnpm --filter @rivetkit/rivetkit-napi build:force` passed; `pnpm build -F rivetkit` passed; `pnpm -F rivetkit check-types` passed; `cargo test -p rivetkit-core` failed in `actor_task_logs_lifecycle_dispatch_and_actor_event_flow`; `RIVETKIT_DRIVER_TEST_PARALLEL=1 pnpm test tests/driver/manager-driver.test.ts tests/driver/actor-conn.test.ts tests/driver/actor-conn-state.test.ts tests/driver/conn-error-serialization.test.ts tests/driver/actor-destroy.test.ts tests/driver/request-access.test.ts tests/driver/actor-handle.test.ts tests/driver/action-features.test.ts tests/driver/access-control.test.ts tests/driver/actor-vars.test.ts tests/driver/actor-metadata.test.ts tests/driver/actor-onstatechange.test.ts tests/driver/actor-db.test.ts tests/driver/actor-db-raw.test.ts tests/driver/actor-workflow.test.ts tests/driver/actor-error-handling.test.ts tests/driver/actor-queue.test.ts tests/driver/actor-kv.test.ts tests/driver/actor-stateless.test.ts tests/driver/raw-http.test.ts tests/driver/raw-http-request-properties.test.ts tests/driver/raw-websocket.test.ts tests/driver/actor-inspector.test.ts tests/driver/gateway-query-url.test.ts tests/driver/actor-db-pragma-migration.test.ts tests/driver/actor-state-zod-coercion.test.ts tests/driver/actor-conn-status.test.ts tests/driver/gateway-routing.test.ts tests/driver/lifecycle-hooks.test.ts -t "static registry.*encoding \\(bare\\)"` failed with 2 failing `actor-db` tests after 286 passed and 579 skipped, so I did not mark DT-034 passed, update `prd.json`, or commit.
----
-## 2026-04-24 04:03:21 PDT - DT-055
-- What was implemented
-  - Fixed the native sleep lifecycle bridge so database-backed actors call `closeDatabase(false)` after user `onSleep`, which makes provider `onDestroy` cleanup run on sleep/wake cycles instead of only on destroy.
-  - Verified the fix against the exact bare cleanup regressions, the full `actor-db.test.ts` file across bare/CBOR/JSON, and the bare parallel slice.
-- Files changed
-  - `rivetkit-typescript/packages/rivetkit/src/registry/native.ts`
-  - `rivetkit-typescript/CLAUDE.md`
-  - `.agent/notes/driver-test-progress.md`
-  - `scripts/ralph/prd.json`
-  - `scripts/ralph/progress.txt`
-- **Learnings for future iterations:**
-  - Native DB lifecycle cleanup is not just a destroy concern. Sleep must also close the cached database client through the provider path or provider-level cleanup hooks never fire.
-  - The symptom here was easy to misread as a flaky observer test, but the cleanup count staying at `0` on sleep and churn was a real bridge-ordering bug in `registry/native.ts`.
-  - Verification status: `pnpm -F rivetkit test tests/driver/actor-db.test.ts -t "Actor Db.*static registry.*encoding \\(bare\\)"` passed; `pnpm -F rivetkit test tests/driver/actor-db.test.ts` passed with 48 tests; `pnpm -F rivetkit check-types` passed; `pnpm build -F rivetkit` passed; `RIVETKIT_DRIVER_TEST_PARALLEL=1 pnpm -F rivetkit test tests/driver/actor-db.test.ts -t "static registry.*encoding \\(bare\\)"` passed with 16 passed and 32 skipped.
+## 2026-04-29 04:44:52 PDT - US-001
+- Implemented a UUID-backed `NodeId` type and stored a generated value on each `Pools` instance.
+- Added `Pools::node_id()` plus public/prelude exports so consumers can use it for leases and metric labels.
+- Fixed stale `test-snapshot-gen` actor-create input fields that blocked `cargo check --workspace`.
+- Files changed: `engine/packages/pools/src/node_id.rs`, `engine/packages/pools/src/lib.rs`, `engine/packages/pools/src/pools.rs`, `engine/packages/pools/src/prelude.rs`, `engine/packages/test-snapshot-gen/src/scenarios/actor_v2_2_1_baseline.rs`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
+- **Learnings for future iterations:**
+  - `uuid` already has workspace `v4` and `serde` features, so new UUID-backed pool metadata does not need dependency changes.
+  - `Pools::test` mirrors `Pools::new` for shared pool state and intentionally leaves ClickHouse unset.
+  - `test-snapshot-gen` is part of `cargo check --workspace`, so stale scenario fixtures can break unrelated package changes.
+---
+## 2026-04-29 04:51:26 PDT - US-002
+- Renamed the existing `sqlite-storage` crate to `sqlite-storage-legacy` with `git mv`.
+- Updated workspace members, workspace dependency keys, consumer manifests, Rust imports, and lockfile package references so the legacy crate remains compilable under its new name.
+- Files changed: `Cargo.toml`, `Cargo.lock`, `engine/packages/sqlite-storage-legacy/**`, `engine/packages/{engine,pegboard,pegboard-envoy,pegboard-outbound}/**`, `rivetkit-rust/packages/rivetkit-sqlite/**`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
+- **Learnings for future iterations:**
+  - Hyphenated Rust package names become underscore crate paths, so `sqlite-storage-legacy` is imported as `sqlite_storage_legacy`.
+  - `cargo build -p sqlite-storage-legacy` is a quick package-level check, but `cargo check --workspace` is needed to catch every consumer manifest/import after a rename.
+  - Existing warnings remain in `sqlite-storage-legacy` and `rivetkit-sqlite`; they do not block the rename checks.
+---
+## 2026-04-29 04:55:44 PDT - US-003
+- Scaffolded the new `sqlite-storage` crate with `pump/`, `compactor/`, debug-only `takeover.rs`, copied legacy `ltx.rs`, `page_index.rs`, pruned `error.rs`, lifted `test_utils/`, and placeholder integration test files.
+- Added the new crate to the workspace members, workspace dependency table, and lockfile.
+- Verified `cargo check -p sqlite-storage`, `cargo build -p sqlite-storage`, `cargo test -p sqlite-storage`, and `git diff --check`.
+- Files changed: `Cargo.toml`, `Cargo.lock`, `engine/packages/sqlite-storage/**`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
+- **Learnings for future iterations:**
+  - Copied legacy modules still reference `crate::types` and `crate::udb`; root re-exports keep them compiling until later stories replace the stubs with real modules.
+  - Legacy inline tests were gated behind the opt-in `legacy-inline-tests` feature so the default new-crate test suite stays in `tests/`.
+  - `pump::udb` is intentionally a fail-by-default stub for now; US-005 owns the real UDB compare-and-clear wrapper.
+---
+## 2026-04-29 04:58:10 PDT - US-004
+- Added `pump::keys` with the four split META subkeys plus lifted PIDX, DELTA, SHARD, actor prefix, and decoder helpers.
+- Re-exported `keys` at the crate root so copied modules using `crate::keys` keep compiling.
+- Replaced the placeholder `pump_keys` integration test with coverage for META suffixes, PIDX big-endian ordering, cross-actor key isolation, and data-key prefixes.
+- Verified `cargo check -p sqlite-storage`, `cargo test -p sqlite-storage --test pump_keys`, `cargo test -p sqlite-storage`, and `git diff --check`.
+- Files changed: `engine/packages/sqlite-storage/src/lib.rs`, `engine/packages/sqlite-storage/src/pump/mod.rs`, `engine/packages/sqlite-storage/src/pump/keys.rs`, `engine/packages/sqlite-storage/tests/pump_keys.rs`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
+- **Learnings for future iterations:**
+  - Keep SQLite v2 storage key paths as literal ASCII suffixes under `[0x02][actor_id]`, with numeric suffixes encoded big-endian for scan ordering.
+  - The new stateless layout has no `/META/static`; constants like page size and shard size live in `pump::keys`.
+  - `actor_range` is inherited from the legacy key module and uses `end_of_key_range`, which creates a single-key conflict range rather than a prefix scan bound.
+---
+## 2026-04-29 05:01:06 PDT - US-005
+- Added `pump::types::{DBHead, MetaCompact}` for the split META layout, with `DBHead` limited to `head_txid`, `db_size_pages`, and debug-only `generation`.
+- Added vbare embedded-version encode/decode helpers for `/META/head` and `/META/compact`.
+- Added a `pump::udb::compare_and_clear` wrapper over UniversalDB's existing `MutationType::CompareAndClear`.
+- Files changed: `engine/packages/sqlite-storage/Cargo.toml`, `engine/packages/sqlite-storage/src/pump/types.rs`, `engine/packages/sqlite-storage/src/pump/udb.rs`, `Cargo.lock`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
+- **Learnings for future iterations:**
+  - `sqlite-storage` can keep local persisted META schemas in `pump::types` while still using `vbare::OwnedVersionedData` for version headers.
+  - UniversalDB already exposes compare-and-clear as `MutationType::CompareAndClear`; raw byte keys should call through `tx.informal().atomic_op(...)`.
+  - The new pump types intentionally do not depend on `rivet-sqlite-storage-protocol` because the legacy protocol still contains `next_txid` and `SqliteOrigin`.
+---
+## 2026-04-29 05:03:52 PDT - US-006
+- Implemented `pump::quota` with the 10 GiB quota cap constant, trigger throttle constants, signed little-endian atomic add helper, quota read helper, and quota cap check.
+- Added the typed `SqliteStorageQuotaExceeded { remaining_bytes, payload_size }` error variant and re-exported `quota` from the crate root.
+- Added `pump_quota` integration coverage for missing-key reads, signed atomic add behavior, cap rejection, and trigger constants.
+- Files changed: `engine/packages/sqlite-storage/src/pump/quota.rs`, `engine/packages/sqlite-storage/src/pump/error.rs`, `engine/packages/sqlite-storage/src/pump/mod.rs`, `engine/packages/sqlite-storage/src/lib.rs`, `engine/packages/sqlite-storage/tests/pump_quota.rs`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
+- **Learnings for future iterations:**
+  - Keep `/META/quota` as a raw 8-byte signed LE value rather than vbare so FDB-style atomic add composes exactly.
+  - The new crate's integration tests can spin up a real RocksDB-backed `universaldb::Database` directly when the copied legacy `test_utils` module is intentionally not exported.
+  - Quota cap errors stay typed through `anyhow` when returning `SqliteStorageError::SqliteStorageQuotaExceeded.into()`.
+---
+## 2026-04-29 05:06:10 PDT - US-007
+- Added `pump::actor_db::ActorDb` with the per-actor UDB handle, PIDX cache, quota cache, metering counters, and compaction trigger throttle timestamp.
+- Wired `ActorDb` into `pump/mod.rs`, added the required `new`, `get_pages`, and `commit` public surface, and kept `get_pages`/`commit` as staged `todo!()` implementations for US-008 and US-009.
+- Added the debug-only synchronous `takeover::reconcile` stub called by `ActorDb::new`.
+- Verified `cargo check -p sqlite-storage`, `cargo test -p sqlite-storage`, and `git diff --check`.
+- Files changed: `engine/packages/sqlite-storage/Cargo.toml`, `engine/packages/sqlite-storage/src/pump/actor_db.rs`, `engine/packages/sqlite-storage/src/pump/mod.rs`, `engine/packages/sqlite-storage/src/takeover.rs`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
+- **Learnings for future iterations:**
+  - `ActorDb` owns only per-actor hot-path cache state; the WS connection will own any map of actor ids to `Arc<ActorDb>`.
+  - `takeover::reconcile` is sync for now because `ActorDb::new` is intentionally sync and release builds do no takeover work.
+  - The staged `get_pages` and `commit` methods can import `DirtyPage` and `FetchedPage` from `pump::types` without reintroducing legacy protocol types.
+---
+## 2026-04-29 05:10:32 PDT - US-008
+- Implemented `ActorDb::get_pages` in `pump/read.rs` with `/META/head` loading, warm PIDX cache lookup, cold in-tx PIDX prefix scan, DELTA/SHARD blob fetching, stale-PIDX shard fallback, cache eviction, and read-byte rollup increments.
+- Added focused `pump_read` integration coverage for cold PIDX scan, warm cache reuse, stale PIDX fallback to shard, and above-EOF reads against a real RocksDB-backed UDB.
+- Files changed: `engine/packages/sqlite-storage/Cargo.toml`, `engine/packages/sqlite-storage/src/pump/actor_db.rs`, `engine/packages/sqlite-storage/src/pump/mod.rs`, `engine/packages/sqlite-storage/src/pump/read.rs`, `engine/packages/sqlite-storage/tests/pump_read.rs`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
+- **Learnings for future iterations:**
+  - Raw SQLite storage prefix scans should use `Subspace::from(tuple::Subspace::from_bytes(prefix))` for the range rather than hand-rolled `end_of_key_range` bounds.
+  - `ActorDb` methods implemented in sibling pump modules need `pub(super)` access to the per-actor fields owned by `actor_db.rs`.
+  - The read path can validate cache behavior by deleting PIDX rows after the first read; a warm cache should still route to the cached DELTA until stale fallback evicts it.
+---
+## 2026-04-29 05:15:43 PDT - US-009
+- Implemented `ActorDb::commit` as a single-shot stateless pump write path with lazy `/META/head` init, cold quota loading via `tokio::try_join!`, DELTA chunk writes, PIDX upserts, quota cap checks, local quota/cache updates, and shrink cleanup for above-EOF PIDX/SHARD rows.
+- Replaced the `pump_commit` placeholder with integration coverage for first commit init, steady-state commit plus warm-cache updates, quota rejection before writes, and shrink cleanup.
+- Verified `cargo check -p sqlite-storage`, `cargo test -p sqlite-storage --test pump_commit`, `cargo test -p sqlite-storage`, and `git diff --check`.
+- Files changed: `engine/packages/sqlite-storage/Cargo.toml`, `engine/packages/sqlite-storage/src/pump/actor_db.rs`, `engine/packages/sqlite-storage/src/pump/mod.rs`, `engine/packages/sqlite-storage/src/pump/commit.rs`, `engine/packages/sqlite-storage/tests/pump_commit.rs`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
+- **Learnings for future iterations:**
+  - Keep commit's steady-state UDB reads to `/META/head`; a cold quota cache is the only path that should add the `/META/quota` read.
+  - Commit can split encoded LTX bytes across `DELTA/{txid}/{chunk_idx}` rows and the existing read path will concatenate them by prefix scan.
+  - Do not warm a cold PIDX cache from commit alone; otherwise future reads can skip the full PIDX scan and miss older rows.
+---
+## 2026-04-29 07:14:10 PDT - US-024
+- Added envoy-protocol `v3.bare` with stateless SQLite `get_pages` and single-shot `commit`, optional debug fence fields, and no startup/open/close/staged-commit operation types.
+- Bumped Rust and TypeScript latest protocol exports to v3, updated vbare version handling, and added protocol round-trip coverage for requests, responses, optional fields, version constants, and removed op names.
+- Removed old SQLite startup-data and staged-commit plumbing from envoy-client, pegboard-envoy, pegboard-outbound, rivetkit-core, and rivetkit-sqlite so the workspace compiles against the v3 protocol.
+- Verified `cargo check -p rivet-envoy-protocol`, `cargo test -p rivet-envoy-protocol`, `cargo check --workspace`, `cargo test -p rivetkit-sqlite --lib --no-run`, `pnpm --filter @rivetkit/engine-envoy-protocol check-types`, and `git diff --check`.
+- Files changed: `engine/sdks/schemas/envoy-protocol/v3.bare`, `engine/sdks/rust/envoy-protocol/**`, `engine/sdks/typescript/envoy-protocol/src/index.ts`, `engine/sdks/rust/envoy-client/**`, `engine/packages/{pegboard-envoy,pegboard-outbound,pegboard,engine}/**`, `rivetkit-rust/packages/{rivetkit-core,rivetkit-sqlite}/**`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
+- **Learnings for future iterations:**
+  - The PRD path names for envoy-protocol were stale; use `engine/sdks/rust/envoy-protocol` and package name `rivet-envoy-protocol`.
+  - The Rust build can pass while checked-in TS protocol output is stale if `node_modules/@bare-ts/tools` is absent; regenerate or typecheck the TS package explicitly.
+  - Removing SQLite startup data requires updating callback signatures in tests and runtime callbacks, not just the protocol schema.
+  - `rivetkit-sqlite` has test-only transport doubles in `src/vfs.rs`; compile them with `cargo test -p rivetkit-sqlite --lib --no-run` after changing envoy SQLite protocol shapes.
+---
+## 2026-04-29 05:18:24 PDT - US-010
+- Added stateless pump Prometheus metrics for commit/get_pages duration, dirty page count, requested page count, and PIDX cold scans, all labeled by `node_id`.
+- Stored `rivet_pools::NodeId` on `ActorDb` so production callers can pass `pools.node_id()` when constructing per-actor handles.
+- Wired commit/read metrics into the existing hot paths and updated current integration tests for the new constructor shape.
+- Verified `cargo check -p sqlite-storage`, `cargo test -p sqlite-storage`, and `git diff --check`.
+- Files changed: `engine/packages/sqlite-storage/Cargo.toml`, `engine/packages/sqlite-storage/src/pump/actor_db.rs`, `engine/packages/sqlite-storage/src/pump/commit.rs`, `engine/packages/sqlite-storage/src/pump/metrics.rs`, `engine/packages/sqlite-storage/src/pump/mod.rs`, `engine/packages/sqlite-storage/src/pump/read.rs`, `engine/packages/sqlite-storage/tests/pump_commit.rs`, `engine/packages/sqlite-storage/tests/pump_read.rs`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
+- **Learnings for future iterations:**
+  - Pump metrics should use the exact `sqlite_pump_*` names from the PRD and a single `node_id` label.
+  - Passing `NodeId` into `ActorDb` keeps metric labeling local to the pump without threading `Pools` through hot-path methods.
+  - Histogram timers from `prometheus` observe on drop, so placing them at method entry records both success and early-error exits.
+---
+## 2026-04-29 05:22:59 PDT - US-011
+- Added the `sqlite.compact` UPS subject wrapper and fire-and-forget `publish_compact_trigger` helper for compaction triggers.
+- Added a versioned BARE `SqliteCompactPayload` with encode/decode helpers, currently stubbing metering counters to zero until US-016 wires snapshots.
+- Replaced the compactor dispatch placeholder with tests for subject display, payload vbare round trips, unit return type, nonblocking spawn behavior, and UPS memory-driver delivery.
+- Verified `cargo check -p sqlite-storage`, `cargo test -p sqlite-storage --test compactor_dispatch`, and `cargo test -p sqlite-storage`.
+- Files changed: `engine/packages/sqlite-storage/Cargo.toml`, `engine/packages/sqlite-storage/src/compactor/mod.rs`, `engine/packages/sqlite-storage/src/compactor/publish.rs`, `engine/packages/sqlite-storage/src/compactor/subjects.rs`, `engine/packages/sqlite-storage/tests/compactor_dispatch.rs`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
+- **Learnings for future iterations:**
+  - UPS queue dispatch can be tested with `universalpubsub::driver::memory::MemoryDriver` by queue-subscribing before calling the spawned publisher.
+  - Add `tokio`'s `test-util` feature as a dev-dependency when a crate needs `#[tokio::test(start_paused = true)]`.
+  - The compactor trigger helper intentionally returns `()` so call sites cannot accidentally await publish before responding to the actor.
+---
+## 2026-04-29 05:28:41 PDT - US-012
+- Implemented the UDB-backed compactor lease helpers for take, renew, release, and vbare encode/decode of `/META/compactor_lease`.
+- Added lease tests for empty acquisition, held-lease skip, OCC take races, renewal success, stolen/expired renewal detection, and release cleanup.
+- Verified `cargo test -p sqlite-storage --test compactor_lease`, `cargo check -p sqlite-storage`, and `cargo test -p sqlite-storage`.
+- Files changed: `engine/packages/sqlite-storage/src/compactor/lease.rs`, `engine/packages/sqlite-storage/src/compactor/mod.rs`, `engine/packages/sqlite-storage/tests/compactor_lease.rs`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
+- **Learnings for future iterations:**
+  - Lease values are local vbare payloads with `rivet_pools::NodeId` as the holder, matching the process node id used by future compactor workers.
+  - Lease take and renew must use regular `Serializable` reads so concurrent pods racing the same key conflict through UDB OCC.
+  - UDB's automatic retry hides raw OCC conflicts; set `DatabaseOption::TransactionRetryLimit(1)` in tests that need to assert one racing transaction aborts.
+---
+## 2026-04-29 05:31:59 PDT - US-013
+- Added `compactor::shard::fold_shard` with snapshot SHARD reads, page-size and shard-membership validation, newer update wins merge semantics, and SHARD blob rewrite.
+- Replaced the `compactor_compact` placeholder with real RocksDB-backed tests for empty folds, existing-shard merges, full overwrite, partial overwrite, and distinct-page byte accounting.
+- Verified `cargo check -p sqlite-storage`, `cargo test -p sqlite-storage --test compactor_compact`, `cargo test -p sqlite-storage`, and `git diff --check`.
+- Files changed: `engine/packages/sqlite-storage/src/compactor/shard.rs`, `engine/packages/sqlite-storage/src/compactor/mod.rs`, `engine/packages/sqlite-storage/tests/compactor_compact.rs`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
+- **Learnings for future iterations:**
+  - `fold_shard` should be called inside an existing UDB transaction so US-014 can compose SHARD writes with PIDX `COMPARE_AND_CLEAR`, DELTA cleanup, and `/META/compact` updates.
+  - Existing SHARD blobs are read with snapshot isolation; compaction write-phase conflict behavior belongs around `/META/head`, not the per-shard fold helper.
+  - LTX encodes absolute page numbers and rejects page 0, so use page ranges like `64..128` when testing all 64 pages in shard 1.
+---
+## 2026-04-29 05:38:18 PDT - US-014
+- Implemented `compactor::compact_default_batch` with snapshot planning, fresh write transactions, SHARD folding, PIDX `COMPARE_AND_CLEAR`, DELTA cleanup, compact META updates, quota decrementing, cancellation checks, and compactor counters.
+- Added compaction race coverage for basic folding, stale-PIDX no-op behavior, and shrink conflict aborts.
+- Verified `cargo check -p sqlite-storage`, `cargo test -p sqlite-storage --test compactor_compact`, `cargo test -p sqlite-storage`, and `git diff --check`.
+- Files changed: `engine/packages/sqlite-storage/Cargo.toml`, `engine/packages/sqlite-storage/src/compactor/compact.rs`, `engine/packages/sqlite-storage/src/compactor/metrics.rs`, `engine/packages/sqlite-storage/src/compactor/mod.rs`, `engine/packages/sqlite-storage/tests/compactor_compact.rs`, `CLAUDE.md`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
+- **Learnings for future iterations:**
+  - Compaction race tests can use debug-only pause hooks around the plan/write boundary to deterministically interleave commits and shrink transactions.
+  - `COMPARE_AND_CLEAR` does not report whether it cleared, so the current compactor counts no-ops with a post-write snapshot read of attempted PIDX delete keys.
+  - Prefix clears against raw sqlite-storage byte keys should use UniversalDB subspace ranges, matching prefix scan behavior.
+---
+## 2026-04-29 05:48:24 PDT - US-015
+- Implemented the standalone sqlite compactor worker entrypoint, including `CompactorConfig`, `start`, the UPS queue-subscribe loop, bounded per-trigger worker tasks, lease take/renew/release, local deadline cancellation, and graceful shutdown cancellation.
+- Added dispatch coverage for UPS-triggered compaction, renewal extending the local deadline, and renewal failure cancelling an in-flight compaction.
+- Serialized existing compaction pause-hook tests so shared debug hooks cannot trap unrelated same-actor compaction tests.
+- Verified `cargo check -p sqlite-storage`, `cargo test -p sqlite-storage --test compactor_dispatch`, `cargo test -p sqlite-storage --test compactor_compact`, `cargo test -p sqlite-storage`, and `git diff --check`.
+- Files changed: `engine/packages/sqlite-storage/Cargo.toml`, `Cargo.lock`, `engine/packages/sqlite-storage/src/compactor/mod.rs`, `engine/packages/sqlite-storage/src/compactor/worker.rs`, `engine/packages/sqlite-storage/tests/compactor_dispatch.rs`, `engine/packages/sqlite-storage/tests/compactor_compact.rs`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
+- **Learnings for future iterations:**
+  - Worker tests can drive the real compactor through `worker::test_hooks::handle_trigger_once` after receiving a UPS memory-driver payload.
+  - Lease renewal tests that use the compaction pause hook should either use real time for renewal-extension assertions or explicitly yield before advancing paused time.
+  - Same-actor `compact_default_batch` tests must not run concurrently with installed pause hooks because the hook slot is process-global.
+---
+## 2026-04-29 05:56:48 PDT - US-016
+- Added SQLite namespace metric variants for storage used, commit bytes, and read bytes.
+- Wired compactor metering rollup after successful compaction, reading `/META/quota` and emitting rounded commit/read payload counters through `MetricKey` atomic adds.
+- Added `ActorDb::take_metering_snapshot()` and expanded compact trigger payloads to carry optional namespace id, actor name, and counter snapshots.
+- Verified `cargo check -p sqlite-storage`, `cargo check -p namespace`, `cargo test -p sqlite-storage --test compactor_compact`, `cargo test -p sqlite-storage --test compactor_dispatch`, and `cargo test -p sqlite-storage`.
+- Files changed: `Cargo.lock`, `engine/packages/namespace/src/keys/metric.rs`, `engine/packages/sqlite-storage/Cargo.toml`, `engine/packages/sqlite-storage/src/compactor/mod.rs`, `engine/packages/sqlite-storage/src/compactor/publish.rs`, `engine/packages/sqlite-storage/src/compactor/worker.rs`, `engine/packages/sqlite-storage/src/pump/actor_db.rs`, `engine/packages/sqlite-storage/tests/compactor_compact.rs`, `engine/packages/sqlite-storage/tests/compactor_dispatch.rs`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
+- **Learnings for future iterations:**
+  - The metric key enum lives in the `namespace` crate at `engine/packages/namespace/src/keys/metric.rs`, even though pegboard call sites reach it through `namespace::keys::metric`.
+  - Keep `publish_compact_trigger(&ups, actor_id)` as a zero-counter compatibility helper; use richer compact payloads for metering-aware paths.
+  - The compactor rounds commit/read rollup counters down to `util::metric::KV_BILLABLE_CHUNK` before emitting namespace metrics.
+---
+## 2026-04-29 06:03:57 PDT - US-017
+- Added debug-only `compactor::compact::validate_quota`, which totals PIDX, DELTA, and SHARD bytes in a separate read-only UDB transaction and compares that manual total with `/META/quota`.
+- Wired worker-side per-actor validation cadence through a debug-only `scc::HashMap<String, u32>` and `quota_validate_every`, with structured mismatch logging, the `sqlite_quota_validate_mismatch_total` metric, and test-only panic behavior.
+- Added compactor coverage for a clean compacted-state quota validation pass.
+- Verified `cargo check -p sqlite-storage`, `cargo test -p sqlite-storage --test compactor_compact`, `cargo test -p sqlite-storage`, and `cargo build -p sqlite-storage --release`.
+- Files changed: `engine/packages/sqlite-storage/src/compactor/compact.rs`, `engine/packages/sqlite-storage/src/compactor/metrics.rs`, `engine/packages/sqlite-storage/src/compactor/worker.rs`, `engine/packages/sqlite-storage/tests/compactor_compact.rs`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
+- **Learnings for future iterations:**
+  - Keep the debug quota validator and worker pass counter fully behind `#[cfg(debug_assertions)]`; release builds should have no validation scan, map, or call site.
+  - Put cfg-gated `lazy_static!` metrics in their own cfg-gated macro block. Gating a single static inside a shared block can break release compilation.
+  - `quota_validate_every = 0` is treated as a local debug escape hatch to skip validation cadence and avoid modulo-by-zero.
+---
+## 2026-04-29 06:12:47 PDT - US-018
+- Added the full compactor Prometheus metric set, including node-labeled lease, pass, UPS publish, sampled storage, and debug-only invariant counters.
+- Wired metric observations through compaction, lease take/renew/held paths, UPS publishing, quota validation, and metering rollup.
+- Registered `sqlite_compactor` as a restartable Standalone service in engine run config and added the `sqlite-storage` engine dependency.
+- Added `tests/compactor_metrics.rs` coverage for metric registration, node labels, lease outcome labels, and a trigger-level compactor startup sample.
+- Verified `cargo check -p sqlite-storage`, `cargo test -p sqlite-storage --test compactor_metrics`, `cargo check -p rivet-engine`, `cargo check --workspace`, `cargo build --workspace`, and `git diff --check`.
+- Files changed: `Cargo.lock`, `engine/packages/engine/Cargo.toml`, `engine/packages/engine/src/run_config.rs`, `engine/packages/sqlite-storage/src/compactor/{compact.rs,metrics.rs,mod.rs,publish.rs,worker.rs}`, `engine/packages/sqlite-storage/tests/compactor_metrics.rs`, `.agent/specs/sqlite-storage-pitr-forking.md`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
+- **Learnings for future iterations:**
+  - `sqlite_compactor` registration needs both a `run_config.rs` service entry and a normal `sqlite-storage.workspace = true` dependency on `rivet-engine`.
+  - Keep compatibility wrappers for compactor helpers, then add `*_with_node_id` variants where production callers can thread `pools.node_id()`.
+  - Integration tests can assert Prometheus vector label shapes through the `Collector::desc()` descriptors without emitting every label combination first.
+---
+## 2026-04-29 06:19:01 PDT - US-019
+- Implemented the debug-only takeover invariant scanner for PIDX, DELTA, and SHARD rows.
+- Wired `ActorDb::new` to run the scanner in debug builds and record `sqlite_takeover_invariant_violation_total` with structured violation logs before panicking.
+- Replaced the takeover placeholder with coverage for clean state, above-EOF rows, above-head DELTAs, and dangling PIDX references.
+- Fixed the shrink commit fixture so seeded PIDX rows point at an existing DELTA before debug reconciliation runs.
+- Verified `cargo test -p sqlite-storage --test takeover`, `cargo test -p sqlite-storage`, `cargo check -p sqlite-storage`, `cargo build -p sqlite-storage --release`, `cargo check --workspace`, and `git diff --check`.
+- Files changed: `engine/packages/sqlite-storage/src/takeover.rs`, `engine/packages/sqlite-storage/src/pump/actor_db.rs`, `engine/packages/sqlite-storage/tests/takeover.rs`, `engine/packages/sqlite-storage/tests/pump_commit.rs`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
+- **Learnings for future iterations:**
+  - `ActorDb::new` is still synchronous, so the async debug scanner uses a debug-only blocking wrapper on a short-lived runtime.
+  - Takeover invariant labels are limited to `above_eof`, `above_head_txid`, and `dangling_pidx_ref`.
+  - Fixtures that manually seed PIDX rows must also seed the referenced DELTA row or debug reconciliation will panic before the test reaches the code under test.
+---
+## 2026-04-29 06:23:13 PDT - US-020
+- Wired `ActorDb::commit` to read `/META/compact`, check the compaction delta threshold, throttle per-actor trigger publishes, and send detached UPS compaction payloads after successful commits.
+- Added `COMPACTION_DELTA_THRESHOLD`, threaded UPS through `ActorDb::new`, and updated pump read/commit tests for the new constructor shape.
+- Added paused-time coverage proving first trigger publish, throttle suppression inside 500ms, and a later safety publish after the 30s silence cap.
+- Files changed: `engine/packages/sqlite-storage/src/pump/actor_db.rs`, `engine/packages/sqlite-storage/src/pump/commit.rs`, `engine/packages/sqlite-storage/src/pump/quota.rs`, `engine/packages/sqlite-storage/tests/pump_commit.rs`, `engine/packages/sqlite-storage/tests/pump_read.rs`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
+- **Learnings for future iterations:**
+  - `ActorDb` now owns a cloned `universalpubsub::PubSub` so the pump can publish compaction hints without adding a separate per-connection wrapper inside `sqlite-storage`.
+  - Commit-trigger tests should subscribe before the commit and then decode the vbare UPS payload rather than inspecting internal `last_trigger_at` state.
+  - The trigger path resets metering counters only when a trigger is actually published; throttled commits keep accumulating counters for the next payload.
+---
+## 2026-04-29 06:31:02 PDT - US-021
+- Added the per-connection `actor_dbs` cache to pegboard-envoy with UDB, UPS, and node id handles for constructing `sqlite_storage::pump::ActorDb`.
+- Routed SQLite `get_pages` and `commit` websocket handlers through lazily inserted `ActorDb` instances and removed the old active-actor generation gate from those hot-path requests.
+- Stopped spawning the legacy in-process `CompactionCoordinator`; the legacy engine remains only for still-existing lifecycle and staged-commit paths until the follow-up protocol/lifecycle stories remove them.
+- Files changed: `Cargo.lock`, `engine/packages/pegboard-envoy/Cargo.toml`, `engine/packages/pegboard-envoy/src/conn.rs`, `engine/packages/pegboard-envoy/src/sqlite_runtime.rs`, `engine/packages/pegboard-envoy/src/ws_to_tunnel_task.rs`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
+- **Learnings for future iterations:**
+  - `pegboard-envoy` still needs temporary old-protocol META response helpers until US-024 updates the wire schema to the new stateless shape.
+  - `ActorDb::new` needs `udb`, `ups`, `actor_id`, and `node_id`; conn construction is the right place to clone all process handles from `Pools`.
+  - Legacy commit-stage handlers still downcast `sqlite_storage_legacy::error::SqliteStorageError`, while new pump handlers downcast `sqlite_storage::error::SqliteStorageError`.
+---
+## 2026-04-29 06:34:47 PDT - US-022
+- Deleted the pegboard-envoy `start_actor` lifecycle path, removed the per-conn `active_actors` map, and removed actor-stopped/open/close/force-close SQLite lifecycle side effects.
+- Kept `CommandStartActor` forwarding intact while dropping local start-command dispatch; `CommandStopActor` now only evicts the lazy `actor_dbs` cache.
+- Files changed: `engine/packages/pegboard-envoy/src/actor_lifecycle.rs`, `engine/packages/pegboard-envoy/src/conn.rs`, `engine/packages/pegboard-envoy/src/tunnel_to_ws_task.rs`, `engine/packages/pegboard-envoy/src/ws_to_tunnel_task.rs`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
+- **Learnings for future iterations:**
+  - `actor_lifecycle.rs` is now intentionally cache-only for SQLite lifecycle; do not add actor-presence or legacy engine open/close work back there.
+  - Missed-command replay and tunnel-to-WS forwarding still send `CommandStartActor` to the envoy, but pegboard-envoy should not mutate it for SQLite startup data.
+  - Existing legacy staged-commit request handlers still compile against `sqlite_engine`; US-024 owns removing the old wire operations.
+---
+## 2026-04-29 06:48:44 PDT - US-023
+- Added `actor_sqlite::clear_v2_storage_for_destroy` to clear stateless SQLite META, PIDX, DELTA, SHARD, quota, and compactor lease keys through the caller's UDB transaction.
+- Wired both pegboard actor destroy flows to call the helper from the same `ClearKv` transaction that clears actor KV.
+- Added pegboard-envoy lifecycle tests proving `stop_actor` evicts only the cached `ActorDb`, and pegboard tests proving destroy clears the compactor lease and rolls back all SQLite clears with the caller transaction.
+- Verified `cargo test -p pegboard-envoy --test actor_lifecycle`, `cargo test -p pegboard --test actor_sqlite_destroy`, `cargo test -p pegboard-envoy`, `cargo test -p pegboard`, `cargo check --workspace`, and `git diff --check`.
+- Files changed: `Cargo.lock`, `engine/packages/pegboard-envoy/Cargo.toml`, `engine/packages/pegboard-envoy/tests/actor_lifecycle.rs`, `engine/packages/pegboard/Cargo.toml`, `engine/packages/pegboard/src/actor_sqlite.rs`, `engine/packages/pegboard/src/workflows/actor/destroy.rs`, `engine/packages/pegboard/src/workflows/actor2/mod.rs`, `engine/packages/pegboard/tests/actor_sqlite_destroy.rs`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
+- **Learnings for future iterations:**
+  - `stop_actor` is cache-only; storage cleanup belongs to pegboard destroy, not pegboard-envoy lifecycle handling.
+  - Stateless SQLite actor destroy must clear exact META keys plus SHARD/DELTA/PIDX prefix ranges using `sqlite-storage` key builders.
+  - A rollback test around `clear_v2_storage_for_destroy` verifies the compactor lease clear stays in the same UDB transaction as the other SQLite teardown clears.
+---
+## 2026-04-29 07:42:42 PDT - US-025
+- Deleted `engine/packages/sqlite-storage-legacy` and removed its workspace dependency plus every remaining crate manifest dependency.
+- Rewired pegboard v1 SQLite migration, migration tests, actor v2.2.1 migration tests, pegboard-envoy page sizing, and the `rivetkit-sqlite` direct test transport to use `sqlite_storage::pump::ActorDb`.
+- Fixed stale Rust test shims uncovered by `cargo test --workspace` in `rivet-util`, `rivet-envoy-client`, `rivetkit`, and `rivetkit-napi`; enabled napi-rs `dyn-symbols` so NAPI test binaries link without Node symbols.
+- Verification: `cargo check --workspace` passed; `cargo build --workspace` passed; `cargo test -p pegboard --test actor_sqlite_migration` passed; `cargo test -p rivetkit-sqlite --lib` passed; `rg 'sqlite_storage_legacy|sqlite-storage-legacy' --type rust --type toml Cargo.lock` returned no hits; `git diff --check` passed.
+- `cargo test --workspace` now fails in unrelated `rivet-guard-core` tests with stale `proxy_service`/`custom_serve` imports and callback signatures.
+- Files changed: `Cargo.toml`, `Cargo.lock`, `engine/packages/sqlite-storage-legacy/**`, `engine/packages/{engine,pegboard,pegboard-envoy,pegboard-outbound}/**`, `engine/packages/util/src/check.rs`, `engine/sdks/rust/envoy-client/src/{actor.rs,events.rs}`, `rivetkit-rust/packages/rivetkit-sqlite/**`, `rivetkit-rust/packages/rivetkit/tests/**`, `rivetkit-typescript/packages/rivetkit-napi/Cargo.toml`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
+- **Learnings for future iterations:**
+  - v1 SQLite migration can skip old staged-commit machinery entirely by committing recovered pages through a temporary `ActorDb` with a memory UPS handle.
+  - `rivetkit-sqlite` direct-storage tests need a shared harness storage across opens to preserve close/reopen semantics.
+  - Full workspace tests currently expose guard-core test drift unrelated to stateless SQLite; address that separately before treating `cargo test --workspace` as a clean gate.
+---
+## 2026-04-29 07:46:04 PDT - US-026
+- Updated `engine/CLAUDE.md` SQLite storage and Pegboard Envoy guidance to remove stale `SqliteEngine`, `CompactionCoordinator`, STAGE, takeover cleanup, and old META-fence notes.
+- Added the current stateless design invariants for `ActorDb` WS-conn caches, `/META/quota`, `/META/compactor_lease`, and compaction PIDX `COMPARE_AND_CLEAR`.
+- Verified `cargo check -p sqlite-storage` and `git diff --check`.
+- Files changed: `engine/CLAUDE.md`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
+- **Learnings for future iterations:**
+  - `engine/CLAUDE.md` should keep SQLite storage bullets at the invariant/test-convention level and avoid legacy implementation names.
+  - The preserved shrink-write and PIDX encoding bullets are still valid under the stateless pump design.
+  - Docs-only stories can still use `cargo check -p sqlite-storage` as the typecheck gate when the touched guidance is storage-specific.
+---
+## 2026-04-29 07:53:11 PDT - US-027
+- Added PITR/fork key builders for retention, checkpoints, admin op records, restore/fork markers, split storage counters, checkpoint data, and DELTA metadata.
+- Added vbare types for `RetentionConfig`, restore/fork markers, checkpoint/DELTA metadata, and `admin::types::AdminOpRecord` with status/progress/audit fields.
+- Split quota accounting into live and PITR counters, migrated legacy `/META/quota` into live usage on first cold commit load, and updated current commit/compaction callers to charge live storage.
+- Verified `cargo check -p sqlite-storage`, `cargo test -p sqlite-storage --test pitr_keys`, `cargo test -p sqlite-storage --test quota_split`, `cargo test -p sqlite-storage`, and `git diff --check`.
+- Files changed: `engine/CLAUDE.md`, `engine/packages/sqlite-storage/Cargo.toml`, `engine/packages/sqlite-storage/src/admin/**`, `engine/packages/sqlite-storage/src/{lib.rs,compactor/compact.rs,compactor/worker.rs,pump/actor_db.rs,pump/commit.rs,pump/keys.rs,pump/quota.rs,pump/read.rs,pump/types.rs}`, `engine/packages/sqlite-storage/tests/{compactor_compact.rs,pitr_keys.rs,pump_commit.rs,pump_keys.rs,pump_quota.rs,quota_split.rs}`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
+- **Learnings for future iterations:**
+  - Use `quota::atomic_add_live`/`read_live` for hot-path and compaction live-byte accounting; reserve `atomic_add_pitr`/`read_pitr` for checkpoint and retention overhead.
+  - Keep legacy `/META/quota` hidden inside `migrate_quota_split`; public key builders should only expose the split live/PITR counters.
+  - Any DELTA prefix scan that expects chunks must skip the `META` suffix because `/DELTA/{txid}/META` intentionally shares the commit's DELTA prefix.
+---
+## 2026-04-29 07:58:32 PDT - US-028
+- Implemented per-DELTA metadata writes on pump commit with `{ taken_at_ms, byte_count, refcount: 0 }` stored at `/DELTA/{txid}/META`.
+- Added the `sqlite_admin.actor_restore_in_progress` RivetError and commit-time restore marker guard with the `restore_observed_clear` cache and guard-read metric.
+- Updated compaction delta tracking so clearing a delta prefix also subtracts the DELTA metadata row from live storage accounting.
+- Added pump commit coverage for DELTA metadata, restore blocking/clearing, guard-read caching, and first-run restore guard reads.
+- Files changed: `Cargo.lock`, `engine/artifacts/errors/sqlite_admin.actor_restore_in_progress.json`, `engine/packages/sqlite-storage/Cargo.toml`, `engine/packages/sqlite-storage/src/admin/{errors.rs,mod.rs}`, `engine/packages/sqlite-storage/src/compactor/compact.rs`, `engine/packages/sqlite-storage/src/pump/{actor_db.rs,commit.rs,metrics.rs}`, `engine/packages/sqlite-storage/tests/pump_commit.rs`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
+- **Learnings for future iterations:**
+  - Commit-side DELTA metadata shares the same delta prefix as chunks, so compaction must include its tracked bytes while read/decode paths skip the `META` suffix.
+  - New storage/admin errors should use `RivetError`; deriving it creates a checked-in artifact under `engine/artifacts/errors/`.
+  - The restore guard cache can be asserted without UDB mocks by labeling `sqlite_pump_restore_guard_read_total` with a fresh `NodeId` per test.
+---
+## 2026-04-29 08:08:09 PDT - US-029
+- Added `namespace::types::SqliteNamespaceConfig` with vbare encode/decode helpers, default-disabled PITR flags, default retention/checkpoint settings, and namespace-prefix storage through `sqlite_config_key(namespace_id)`.
+- Added namespace get/put operations plus api-peer and api-public `GET/PUT /namespaces/{ns_id}/sqlite-config` routes with validation for retention bounds, PITR budget consistency, and nonzero admin/fork limits when enabled.
+- Added API and storage tests for default GET, PUT/GET roundtrip, validation failures, and vbare/key roundtrips.
+- Fixed stale actor destroy cleanup to clear split live/PITR SQLite storage counters instead of the removed legacy quota key.
+- Verified `cargo check -p namespace`, `cargo check -p pegboard`, `cargo check -p rivet-api-public`, `cargo test -p pegboard --test sqlite_namespace_config`, `cargo test -p rivet-api-public --test sqlite_namespace_config`, and `git diff --check`.
+- Files changed: `Cargo.lock`, `engine/packages/namespace/**`, `engine/packages/api-peer/src/{namespaces.rs,router.rs}`, `engine/packages/api-public/{Cargo.toml,src/namespaces.rs,src/router.rs,tests/sqlite_namespace_config.rs}`, `engine/packages/pegboard/src/actor_sqlite.rs`, `engine/packages/pegboard/tests/sqlite_namespace_config.rs`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
+- **Learnings for future iterations:**
+  - Namespace-owned SQLite config belongs in the `namespace` crate alongside existing namespace data keys, even when pegboard consumes it later.
+  - Api-public namespace routes should mirror existing leader behavior: authenticate publicly, call api-peer handlers locally on the leader, and forward to the leader peer URL otherwise.
+  - Gas operation macros need one operation per Rust module; split get/put operations into sibling modules under a shared directory.
+  - After the live/PITR quota split, destroy paths must clear `meta_storage_used_live_key` and `meta_storage_used_pitr_key`, not the removed legacy quota key.
+---
+## 2026-04-29 08:20:19 PDT - US-030
+- Implemented PITR checkpoint creation with multi-transaction SHARD/PIDX copying, final META/index publication, PITR quota enforcement, cancellation cleanup, and checkpoint metrics.
+- Threaded plan-time `head_txid` through compaction so checkpoints are labeled with the txid observed during planning, and added `pitr_enabled` plus a separate `max_concurrent_checkpoints` semaphore to the compactor worker.
+- Added `tests/checkpoint_create.rs` coverage for basic creation, plan-time txid races, multi-tx copies, quota skip, disabled flag behavior, semaphore concurrency, and cancellation.
+- Files changed: `engine/packages/sqlite-storage/src/compactor/{checkpoint.rs,compact.rs,metrics.rs,mod.rs,worker.rs}`, `engine/packages/sqlite-storage/tests/{checkpoint_create.rs,compactor_dispatch.rs}`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
+- **Learnings for future iterations:**
+  - Checkpoint readers should key visibility off `/CHECKPOINT/{T}/META` and `/META/checkpoints`; copied checkpoint rows alone are not a published checkpoint.
+  - The compactor can create a checkpoint even when there are no deltas to fold, as long as PITR is enabled and the retention interval says a checkpoint is due.
+  - Namespace PITR budgets are enforced before publication; skipped checkpoints increment `sqlite_checkpoint_skipped_quota_total`.
+---
+## 2026-04-29 08:31:35 PDT - US-031
+- Implemented retention-aware DELTA deletion in compaction, including refcount pins and checkpoint coverage checks before clearing DELTA blobs.
+- Added `compactor::cleanup` with old-checkpoint cleanup, PITR counter adjustment, leaked refcount recovery, and `sqlite_checkpoint_refcount_leak_total`.
+- Added the `SqliteCheckpointPinned` namespace metric and threaded compact payload namespace context into checkpoint cleanup.
+- Fixed DELTA metadata keying so `/DELTA/{txid}/META` lives under the chunk prefix that readers already skip.
+- Files changed: `engine/packages/namespace/src/keys/metric.rs`, `engine/packages/sqlite-storage/src/compactor/{cleanup.rs,compact.rs,metrics.rs,mod.rs,worker.rs}`, `engine/packages/sqlite-storage/src/pump/keys.rs`, `engine/packages/sqlite-storage/tests/{checkpoint_cleanup.rs,retention_compaction.rs}`, `engine/artifacts/openapi.json`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
+- **Learnings for future iterations:**
+  - Use worker payload namespace context for PITR compaction paths that need namespace config or namespace metric emission.
+  - Refcount leak recovery can decode actor-scoped admin op records from `/META/admin_op/*`; `Pending` and `InProgress` records block auto-reset.
+  - Retention tests should seed DELTA `taken_at_ms` relative to real system time because current compactor timestamps use `SystemTime`, not paused Tokio time.
+---
+## 2026-04-29 08:38:38 PDT - US-032
+- Added the `sqlite.op` admin UPS subject, vbare `SqliteOpRequest` protocol, restore/fork target and mode variants, refcount operation types, and the full `sqlite_admin` RivetError enum from the PITR/fork spec.
+- Added persisted `AdminOpRecord` helpers for create, read, status updates, progress updates, completion, and status-transition validation against actor-scoped `/META/admin_op/{operation_id}` records.
+- Added `tests/admin_protocol.rs` coverage for operation vbare round trips, restore target and fork destination variants, every admin error code/message through `RivetError::extract`, and record lifecycle updates.
+- Verified `cargo test -p sqlite-storage --test admin_protocol`, `cargo check -p sqlite-storage`, `cargo test -p sqlite-storage`, and `git diff --check`.
+- Files changed: `Cargo.lock`, `engine/CLAUDE.md`, `engine/artifacts/errors/sqlite_admin.*.json`, `engine/packages/sqlite-storage/Cargo.toml`, `engine/packages/sqlite-storage/src/admin/{errors.rs,mod.rs,record.rs,subjects.rs,types.rs}`, `engine/packages/sqlite-storage/src/compactor/mod.rs`, `engine/packages/sqlite-storage/tests/admin_protocol.rs`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
+- **Learnings for future iterations:**
+  - `SqliteOpSubject` is only the wakeup signal; `/META/admin_op/{operation_id}` is the persisted source of truth and there is no UPS response subject.
+  - The admin record helper signatures update by `op_id`, so they locate the actor-scoped record before writing the exact `/META/admin_op/{operation_id}` key.
+  - New `RivetError` variants with metadata require a direct `serde_json` dependency and generate checked-in artifacts under `engine/artifacts/errors/`.
+---
+## 2026-04-29 08:49:01 PDT - US-033
+- Wired `SqliteOpSubject` into the compactor worker with the shared `compactor` queue group, max-worker semaphore, persisted Pending → InProgress transition, admin handler stubs, in-flight metric, and unsubscribe bail-out behavior.
+- Added `compactor::orphan` scanning for stale Pending admin records, plus orphan metrics and a 10s worker scan interval.
+- Added restore/fork marker resume detection before stub handler dispatch, including matching-op resume and stale-holder takeover checks.
+- Added `tests/admin_dispatch.rs` coverage for UPS dispatch, worker concurrency limiting, orphan marking/skipping, marker resume/takeover, and unsubscribe handling.
+- Verified `cargo check -p sqlite-storage`, `cargo test -p sqlite-storage --test admin_dispatch`, `cargo test -p sqlite-storage`, and `git diff --check`.
+- Files changed: `engine/packages/sqlite-storage/Cargo.toml`, `Cargo.lock`, `engine/packages/sqlite-storage/src/admin/{mod.rs,record.rs}`, `engine/packages/sqlite-storage/src/compactor/{metrics.rs,mod.rs,orphan.rs,worker.rs}`, `engine/packages/sqlite-storage/tests/admin_dispatch.rs`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
+- **Learnings for future iterations:**
+  - Keep admin op dispatch rooted in `AdminOpRecord`; UPS is only the wakeup and the worker must transition persisted state before invoking handlers.
+  - Restore/fork handlers need to inspect in-progress markers before doing real work so later implementations can resume idempotently from `last_completed_step`.
+  - Worker integration tests that publish through the memory UPS driver need a deterministic subscribed signal; memory UPS does not retain pre-subscription messages.
+---
+## 2026-04-29 09:00:21 PDT - US-034
+- Implemented `compactor::restore::handle_restore` with lease acquisition, target resolution, DryRun, marker + live-state clear, checkpoint copy, delta replay, later-DELTA cleanup, live quota recompute via atomic-add delta, final marker clear, and admin record completion/failure.
+- Added restore metrics and a failed-record helper, then wired the compactor worker restore stub into the real handler.
+- Added restore coverage for current-head, past-txid replay, exact checkpoint, DryRun, invalid targets, target resolution, marker/clear ordering, resume, refcount pinning, and commit guard behavior.
+- Verified `cargo check -p sqlite-storage`, all five restore test files, `cargo test -p sqlite-storage`, and `git diff --check`.
+- Files changed: `engine/packages/sqlite-storage/src/admin/{mod.rs,record.rs}`, `engine/packages/sqlite-storage/src/compactor/{metrics.rs,mod.rs,restore.rs,worker.rs}`, `engine/packages/sqlite-storage/tests/{support/mod.rs,restore_basic.rs,restore_validation.rs,restore_target_resolution.rs,restore_resume.rs,restore_commit_guard.rs}`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
+- **Learnings for future iterations:**
+  - Restore target resolution should choose the newest checkpoint at or before the target, then require every `/DELTA/{T}/META` in `(ckp_txid, target_txid]`.
+  - Restore copies checkpoint SHARD/PIDX rows first, then replays retained DELTAs through `fold_shard` so reads remain valid through existing PIDX/DELTA fallback behavior.
+  - The first destructive restore tx must write `/META/restore_in_progress` and clear live SHARD/PIDX prefixes before any pause hook can observe state.
+---
+## 2026-04-29 09:12:27 PDT - US-035
+- Implemented `compactor::fork::handle_fork` with source/destination leases, target resolution, DryRun results, checkpoint and DELTA refcount pinning, destination copy/replay/finalization, cleanup on failure, resume handling, and fork metrics.
+- Wired the admin worker to dispatch real fork operations and added fork coverage for head/past targets, destination allocation/existing validation, DryRun, DELTA pinning, concurrent destinations, resume after pod failure, and refcount sequencing.
+- Verified `cargo check -p sqlite-storage`, `cargo test -p sqlite-storage`, `cargo check --workspace`, and `git diff --check`.
+- Files changed: `engine/packages/sqlite-storage/src/compactor/fork.rs`, `engine/packages/sqlite-storage/src/compactor/{metrics.rs,mod.rs,worker.rs}`, `engine/packages/sqlite-storage/tests/{support/mod.rs,fork_basic.rs,fork_dst_allocation.rs,fork_dryrun.rs,fork_delta_pinning.rs,fork_concurrent.rs,fork_resume.rs,refcount_sequencing.rs}`, `engine/CLAUDE.md`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
+- **Learnings for future iterations:**
+  - Fork destinations need local copies of any source DELTA rows referenced by checkpoint PIDX entries or debug takeover reconciliation will see dangling PIDX refs.
+  - Fork resume treats an existing `/META/fork_in_progress` marker as already pinned work; it skips destination-empty validation and continues from the recorded step.
+  - Concurrent forks from the same source may briefly contend on the source compactor lease, so fork lease acquisition retries before failing.
+---
+## 2026-04-29 09:20:02 PDT - US-036
+- Implemented short-running sqlite admin handlers for DescribeRetention, GetRetention, SetRetention, and ClearRefcount.
+- Added typed admin results for retention views, retention config, and refcount clears; wired the compactor worker to dispatch the real handlers and increment `sqlite_admin_op_total{op,outcome}`.
+- Added `tests/admin_short_ops.rs` coverage for retention views, no-checkpoint windows, pinned reasons, max-retention validation, persisted retention, refcount clearing, invalid txids, and audit hook emission.
+- Files changed: `engine/packages/sqlite-storage/src/admin/{mod.rs,types.rs}`, `engine/packages/sqlite-storage/src/compactor/{admin.rs,metrics.rs,mod.rs,worker.rs}`, `engine/packages/sqlite-storage/tests/{admin_protocol.rs,admin_short_ops.rs}`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
+- **Learnings for future iterations:**
+  - Short admin handlers should own record completion and typed results; the worker should stay a dispatch/metrics shell.
+  - `DescribeRetention` derives pinned checkpoint reasons from live Pending/InProgress admin records when refcount is nonzero.
+  - ClearRefcount updates checkpoint meta and the `/META/checkpoints` mirror together; DELTA refcounts only update `/DELTA/{T}/META`.
+---
+## 2026-04-29 09:29:34 PDT - US-037
+- Added api-public SQLite admin endpoints for restore, fork, operation polling, SSE operation streaming, retention get/set, and refcount clear.
+- Wired POST handlers to create persisted `AdminOpRecord`s, publish typed `SqliteOpSubject` requests, and return immediate 202 pending responses; short retention/refcount endpoints publish through the same path and wait up to 2s for typed results.
+- Added `tests/sqlite_admin_endpoints.rs` coverage for immediate POST behavior, operation polling, SSE progress/terminal behavior, retention get/set, refcount clearing, and RivetError-shaped failures.
+- Verified `cargo check -p rivet-api-public`, `cargo test -p rivet-api-public --test sqlite_admin_endpoints -- --nocapture`, `cargo test -p rivet-api-public`, and `git diff --check`.
+- Files changed: `Cargo.lock`, `engine/packages/api-public/Cargo.toml`, `engine/packages/api-public/src/actors/{mod.rs,sqlite_admin.rs}`, `engine/packages/api-public/src/router.rs`, `engine/packages/api-public/tests/sqlite_admin_endpoints.rs`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
+- **Learnings for future iterations:**
+  - api-public can expose SQLite admin records directly with standard JSON because `AdminOpRecord` and result payloads already derive serde traits.
+  - SSE tests need real HTTP transport from `axum_test::TestServer::builder().http_transport()`; mock transport is fine for normal JSON endpoint tests.
+  - Short admin endpoint tests must start the compactor worker before publishing because UPS does not retain pre-subscription `SqliteOpSubject` messages.
+---
+## 2026-04-29 09:49:48 PDT - US-038
+- Implemented pegboard actor restore suspension state, lifecycle broadcast messages, and resume clearing.
+- Wired pegboard-envoy to track tunnel routes, reject suspended HTTP requests with `503 Retry-After: 30`, reject new WS routes with `1012 actor.restore_in_progress`, and close tracked WS routes on suspend broadcasts.
+- Updated api-public restore creation to suspend before publishing and spawn a monitor that resumes only after `AdminOpRecord` reaches `Completed`.
+- Verified `cargo test -p pegboard-envoy --test restore_lifecycle`, `cargo test -p rivet-api-public --test restore_user_flow`, `cargo check --workspace`, and `git diff --check`.
+- Files changed: `Cargo.lock`, `engine/packages/pegboard/src/{actor_lifecycle.rs,lib.rs}`, `engine/packages/pegboard-envoy/{Cargo.toml,src/{conn.rs,lib.rs,restore_lifecycle.rs,tunnel_to_ws_task.rs,ws_to_tunnel_task.rs},tests/restore_lifecycle.rs}`, `engine/packages/api-public/src/actors/sqlite_admin.rs`, `engine/packages/api-public/tests/restore_user_flow.rs`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
+- **Learnings for future iterations:**
+  - Use pegboard's persisted actor-lifecycle gate as the source of truth; the UPS lifecycle broadcast is only the fast path for existing route closure.
+  - Pegboard-envoy should respond to suspended gateway tunnel messages itself rather than forwarding them to the actor envoy.
+  - Restore API tests can simulate compactor completion by transitioning `AdminOpRecord` through `InProgress` before `Completed`; direct `Pending -> Completed` is an invalid transition.
+---
+## 2026-04-29 10:02:28 PDT - US-039
+- Implemented api-public SQLite admin capability checks, audited namespace injection, structured audit events, per-op token buckets, UDB-backed in-flight Restore/Fork gates, and rate-limit metrics.
+- Added admin errors for PITR admin and fork capability denials, plus checked-in error artifacts.
+- Added authz/audit and rate/concurrency integration tests for the SQLite admin endpoints.
+- Verified `cargo test -p rivet-api-public --test sqlite_admin_authz`, `cargo test -p rivet-api-public --test sqlite_admin_rate_limit`, `cargo test -p rivet-api-public`, and `cargo check --workspace`.
+- Files changed: `Cargo.lock`, `engine/artifacts/errors/sqlite_admin.*.json`, `engine/packages/api-public/Cargo.toml`, `engine/packages/api-public/src/actors/{mod.rs,sqlite_admin.rs,sqlite_admin_metrics.rs}`, `engine/packages/api-public/tests/{sqlite_admin_authz.rs,sqlite_admin_rate_limit.rs}`, `engine/packages/sqlite-storage/src/admin/errors.rs`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
+- **Learnings for future iterations:**
+  - Authz belongs at api-public and the compactor trusts the injected `AuditFields`; namespace config reads use `Id::v1(raw_namespace_uuid, 0)`.
+  - Rate limiting is per namespace and op kind, while concurrent Restore/Fork limits are enforced by scanning persisted `AdminOpRecord`s in the same tx as record creation.
+  - Audit tests should filter by operation id because async restore monitors from other tests can emit into the shared debug sink.
+---
+## 2026-04-29 10:14:59 PDT - US-040
+- Renamed the base SQLite storage namespace metric to `SqliteStorageLiveUsed` and added PITR used, checkpoint count, and checkpoint pinned metric keys.
+- Reworked compactor metering rollup so live/PITR/checkpoint metrics are gauge-like per-actor `MetricKey` values, while commit/read byte counters still accumulate.
+- Added namespace-sum Prometheus gauges and focused coverage for metric key round trips, PITR/checkpoint metric emission, pinned count changes, namespace aggregation, and absence of per-actor checkpoint gauges.
+- Verified `cargo check -p namespace`, `cargo check -p sqlite-storage`, `cargo test -p sqlite-storage --test namespace_metrics`, `cargo test -p sqlite-storage --test compactor_compact`, `cargo test -p sqlite-storage --test compactor_metrics`, `cargo test -p sqlite-storage`, `cargo check --workspace`, and `git diff --check`.
+- Files changed: `engine/packages/namespace/src/keys/metric.rs`, `engine/packages/sqlite-storage/src/compactor/{cleanup.rs,metrics.rs,worker.rs}`, `engine/packages/sqlite-storage/tests/{compactor_compact.rs,compactor_metrics.rs,namespace_metrics.rs}`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
+- **Learnings for future iterations:**
+  - Gauge-like namespace metrics should be set by applying an atomic-add delta from the previous stored value, not by adding the current snapshot every pass.
+  - The compactor can refresh namespace-sum Prometheus gauges by scanning `namespace::keys::metric::MetricKey::subspace(namespace_id)` after it updates actor-level metric keys.
+  - Keep commit/read rollups as counters, but live/PITR/checkpoint metric keys represent current per-actor values.
+---
+## 2026-04-29 10:30:54 PDT - US-041
+- Added read-only SQLite inspector HTTP routes for checkpoints, retention, admin-op history, and namespace overview, plus a JSON WebSocket mirror endpoint.
+- Exposed `sqlite_storage::compactor::inspect_retention_view` so inspector reads can reuse the retention view assembly without creating admin op records.
+- Added focused api-public inspector tests for checkpoint fields, namespace aggregation, paginated history, authz, and WS/HTTP parity.
+- Verified `cargo check -p sqlite-storage`, `cargo check -p rivet-api-public`, `cargo test -p rivet-api-public --test inspector_sqlite -- --nocapture`, `cargo test -p rivet-api-public --test sqlite_admin_endpoints -- --nocapture`, `cargo test -p rivet-api-public --test sqlite_admin_authz -- --nocapture`, `cargo test -p rivet-api-public`, `cargo check --workspace`, and `git diff --check`.
+- Files changed: `Cargo.toml`, `Cargo.lock`, `engine/packages/api-public/{Cargo.toml,src/actors/{mod.rs,sqlite_inspector.rs},src/router.rs,tests/inspector_sqlite.rs}`, `engine/packages/sqlite-storage/src/compactor/{admin.rs,mod.rs}`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
+- **Learnings for future iterations:**
+  - Inspector GETs should avoid creating `AdminOpRecord`s; use read-only UDB scans and helper views for operator debugging.
+  - `axum-test` websocket tests need both the crate `ws` feature and `TestServer::builder().http_transport()`.
+  - Namespace overview can aggregate PITR gauges from `namespace::keys::metric::MetricKey` and count recent ops by scanning actor-scoped `/META/admin_op/` records.
+---
+## 2026-04-29 10:38:28 PDT - US-042
+- Added internal SQLite PITR/forking architecture docs covering storage layout, restore and fork flows, refcount lifecycle, marker recovery, and suspend/resume orchestration.
+- Added public SQLite PITR, operator, and restore-reconnect docs with API request/response shapes, error catalog, retention tuning guidance, and the required PITR-is-not-backup disclaimer.
+- Updated `engine/CLAUDE.md`, `docs-internal/engine/sqlite-storage.md`, docs-sync, and the website sitemap; fixed a stale KV range docs snippet that blocked website code-block typechecking.
+- Verified `pnpm --filter rivet-website build` and `git diff --check`.
+- Files changed: `docs-internal/engine/sqlite-pitr-forking.md`, `docs-internal/engine/sqlite-storage.md`, `engine/CLAUDE.md`, `.claude/reference/docs-sync.md`, `website/src/content/docs/actors/{sqlite-pitr.mdx,sqlite-pitr-operator.mdx,sqlite-restore-reconnect.mdx,kv.mdx}`, `website/src/sitemap/mod.ts`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
+- **Learnings for future iterations:**
+  - Public SQLite PITR docs should use the api-public JSON shape (`kind: "txid"`, `mode: "apply"`), not the Rust enum variant names.
+  - Website docs build runs TypeScript snippet typechecking before Astro output; unrelated stale snippets can block docs-only stories.
+  - The docs build emits existing Vite/Sentry/static-content warnings even when the pages and code-block checks pass.
 ---

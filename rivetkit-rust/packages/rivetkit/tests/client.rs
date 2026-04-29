@@ -177,7 +177,6 @@ impl EnvoyCallbacks for IdleEnvoyCallbacks {
 		_generation: u32,
 		_config: protocol::ActorConfig,
 		_preloaded_kv: Option<protocol::PreloadedKv>,
-		_sqlite_startup_data: Option<protocol::SqliteStartupData>,
 	) -> BoxFuture<anyhow::Result<()>> {
 		Box::pin(async { Ok(()) })
 	}
@@ -217,8 +216,8 @@ impl EnvoyCallbacks for IdleEnvoyCallbacks {
 		_gateway_id: &protocol::GatewayId,
 		_request_id: &protocol::RequestId,
 		_request: &HttpRequest,
-	) -> bool {
-		false
+	) -> BoxFuture<anyhow::Result<bool>> {
+		Box::pin(async { Ok(false) })
 	}
 }
 

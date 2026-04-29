@@ -1,3 +1,3 @@
 pub use clickhouse;
 
-pub use crate::{ClickHousePool, UdbPool, UpsPool};
+pub use crate::{ClickHousePool, NodeId, UdbPool, UpsPool};

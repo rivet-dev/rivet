@@ -10,7 +10,7 @@ autotests = false
 crate-type = ["cdylib"]
 
 [dependencies]
-napi = { version = "2", default-features = false, features = ["napi6", "async", "serde-json"] }
+napi = { version = "2", default-features = false, features = ["napi6", "async", "serde-json", "dyn-symbols"] }
 napi-derive = "2"
 async-trait.workspace = true
 rivetkit-sqlite.workspace = true

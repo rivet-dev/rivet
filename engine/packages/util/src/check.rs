@@ -96,36 +96,42 @@ mod tests {
 	}
 
 	#[test]
-	fn ident_long() {
-		assert!(super::ident_long("x".repeat(super::MAX_IDENT_LONG_LEN)));
-		assert!(!super::ident_long(
-			"x".repeat(super::MAX_IDENT_LONG_LEN + 1)
+	fn ident_with_custom_len() {
+		let max_len = super::MAX_IDENT_LEN * 2;
+		assert!(super::ident_with_len("x".repeat(max_len), false, max_len));
+		assert!(!super::ident_with_len(
+			"x".repeat(max_len + 1),
+			false,
+			max_len
 		));
-		assert!(super::ident_long("test"));
-		assert!(super::ident_long("test-123"));
-		assert!(super::ident_long("test-123-abc"));
-		assert!(!super::ident_long("test--123"));
-		assert!(!super::ident_long("test-123-"));
-		assert!(!super::ident_long("-test-123"));
-		assert!(!super::ident_long("test_123"));
+		assert!(super::ident_with_len("test", false, max_len));
+		assert!(super::ident_with_len("test-123", false, max_len));
+		assert!(super::ident_with_len("test-123-abc", false, max_len));
+		assert!(!super::ident_with_len("test--123", false, max_len));
+		assert!(!super::ident_with_len("test-123-", false, max_len));
+		assert!(!super::ident_with_len("-test-123", false, max_len));
+		assert!(!super::ident_with_len("test_123", false, max_len));
 		assert!(!super::ident("test-ABC"));
 	}
 
 	#[test]
-	fn ident_lenient() {
-		assert!(super::ident_lenient("x".repeat(super::MAX_IDENT_LONG_LEN)));
-		assert!(!super::ident_lenient(
-			"x".repeat(super::MAX_IDENT_LONG_LEN + 1)
+	fn ident_with_custom_len_lenient() {
+		let max_len = super::MAX_IDENT_LEN * 2;
+		assert!(super::ident_with_len("x".repeat(max_len), true, max_len));
+		assert!(!super::ident_with_len(
+			"x".repeat(max_len + 1),
+			true,
+			max_len
 		));
-		assert!(super::ident_lenient("test"));
-		assert!(super::ident_lenient("test-123"));
-		assert!(super::ident_lenient("test-123-abc"));
-		assert!(super::ident_lenient("test--123"));
-		assert!(!super::ident_lenient("test-123-"));
-		assert!(!super::ident_lenient("-test-123"));
-		assert!(super::ident_lenient("test_123"));
-		assert!(super::ident_lenient("test_123-abc"));
-		assert!(super::ident_lenient("test_123_abc"));
-		assert!(super::ident_lenient("test-ABC"));
+		assert!(super::ident_with_len("test", true, max_len));
+		assert!(super::ident_with_len("test-123", true, max_len));
+		assert!(super::ident_with_len("test-123-abc", true, max_len));
+		assert!(super::ident_with_len("test--123", true, max_len));
+		assert!(!super::ident_with_len("test-123-", true, max_len));
+		assert!(!super::ident_with_len("-test-123", true, max_len));
+		assert!(super::ident_with_len("test_123", true, max_len));
+		assert!(super::ident_with_len("test_123-abc", true, max_len));
+		assert!(super::ident_with_len("test_123_abc", true, max_len));
+		assert!(super::ident_with_len("test-ABC", true, max_len));
 	}
 }

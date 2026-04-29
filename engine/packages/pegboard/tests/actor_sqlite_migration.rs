@@ -4,18 +4,16 @@ use std::sync::Arc;
 use anyhow::Result;
 use gas::prelude::{Id, util::timestamp};
 use pegboard::actor_kv::Recipient;
+use rivet_pools::NodeId;
 use rusqlite::{Connection, params};
 use sqlite_storage::{
-	commit::{CommitRequest, CommitStageBeginRequest, CommitStageRequest},
-	engine::SqliteEngine,
-	keys::meta_key,
-	ltx::{LtxHeader, encode_ltx_v3},
-	open::OpenConfig,
-	types::{DirtyPage, SqliteOrigin, encode_db_head},
-	udb::{self, WriteOp},
+	keys::meta_head_key,
+	pump::ActorDb,
+	types::{DirtyPage, SQLITE_PAGE_SIZE, decode_db_head},
 };
 use tempfile::tempdir;
 use universaldb::driver::RocksDbDatabaseDriver;
+use universalpubsub::{PubSub, driver::memory::MemoryDriver};
 
 const SQLITE_V1_PREFIX: u8 = 0x08;
 const SQLITE_V1_SCHEMA_VERSION: u8 = 0x01;
@@ -23,7 +21,6 @@ const SQLITE_V1_META_PREFIX: u8 = 0x00;
 const SQLITE_V1_CHUNK_PREFIX: u8 = 0x01;
 const SQLITE_V1_CHUNK_SIZE: usize = 4096;
 const SQLITE_V1_MAX_MIGRATION_BYTES: u64 = 128 * 1024 * 1024;
-const SQLITE_V1_MIGRATION_LEASE_MS: i64 = 60 * 1000;
 const FILE_TAG_MAIN: u8 = 0x00;
 const FILE_TAG_JOURNAL: u8 = 0x01;
 const FILE_TAG_WAL: u8 = 0x02;
@@ -127,40 +124,69 @@ async fn migrate(
 	.await
 }
 
-async fn age_v1_migration_head(
-	db: &universaldb::Database,
-	engine: &SqliteEngine,
-	actor_id: &str,
-) -> Result<()> {
-	let mut head = engine.load_head(actor_id).await?;
-	head.creation_ts_ms -= SQLITE_V1_MIGRATION_LEASE_MS + 1;
-	udb::apply_write_ops(
-		db,
-		&pegboard::actor_sqlite::sqlite_subspace(),
-		engine.op_counter.as_ref(),
-		vec![WriteOp::put(meta_key(actor_id), encode_db_head(&head)?)],
-	)
-	.await
+fn test_ups() -> PubSub {
+	PubSub::new(Arc::new(MemoryDriver::new(
+		"pegboard-sqlite-migration-test".to_string(),
+	)))
 }
 
-async fn load_v2_bytes(engine: &SqliteEngine, actor_id: &str) -> Result<Vec<u8>> {
-	let meta = engine.load_meta(actor_id).await?;
-	let pages = engine
-		.get_pages(
-			actor_id,
-			meta.generation,
-			(1..=meta.db_size_pages).collect(),
-		)
+fn actor_db(db: &universaldb::Database, actor_id: &str) -> ActorDb {
+	ActorDb::new(
+		Arc::new(db.clone()),
+		test_ups(),
+		actor_id.to_string(),
+		NodeId::new(),
+	)
+}
+
+async fn load_v2_bytes(db: &universaldb::Database, actor_id: &str) -> Result<Vec<u8>> {
+	let actor_id_for_tx = actor_id.to_string();
+	let head = db
+		.run(move |tx| {
+			let actor_id = actor_id_for_tx.clone();
+			async move {
+				let bytes = tx
+					.informal()
+					.get(
+						&meta_head_key(&actor_id),
+						universaldb::utils::IsolationLevel::Snapshot,
+					)
+					.await?
+					.expect("sqlite v2 head should exist");
+				decode_db_head(bytes.as_ref())
+			}
+		})
 		.await?;
-	let mut bytes = Vec::with_capacity(meta.db_size_pages as usize * meta.page_size as usize);
+	let pages = actor_db(db, actor_id)
+		.get_pages((1..=head.db_size_pages).collect())
+		.await?;
+	let mut bytes = Vec::with_capacity(head.db_size_pages as usize * SQLITE_PAGE_SIZE as usize);
 	for page in pages {
 		bytes.extend_from_slice(
 			&page
 				.bytes
-				.unwrap_or_else(|| vec![0; meta.page_size as usize]),
+				.unwrap_or_else(|| vec![0; SQLITE_PAGE_SIZE as usize]),
 		);
 	}
 	Ok(bytes)
+}
+
+async fn seed_v2_bytes(db: &universaldb::Database, actor_id: &str, bytes: &[u8]) -> Result<()> {
+	let dirty_pages = bytes
+		.chunks(SQLITE_PAGE_SIZE as usize)
+		.enumerate()
+		.map(|(idx, bytes)| DirtyPage {
+			pgno: idx as u32 + 1,
+			bytes: bytes.to_vec(),
+		})
+		.collect::<Vec<_>>();
+	actor_db(db, actor_id)
+		.commit(
+			dirty_pages,
+			(bytes.len() / SQLITE_PAGE_SIZE as usize) as u32,
+			timestamp::now(),
+		)
+		.await
 }
 
 fn query_note_values(bytes: &[u8]) -> Result<Vec<String>> {
@@ -234,111 +260,10 @@ async fn migrates_v1_sqlite_into_v2_storage() -> Result<()> {
 
 	assert!(migrate(&db, actor_id).await?.migrated);
 
-	let (engine, _compaction_rx) = pegboard::actor_sqlite::new_engine(db.clone());
 	let actor_id_str = actor_id.to_string();
-	engine
-		.open(&actor_id_str, OpenConfig::new(timestamp::now()))
-		.await?;
-	let meta = engine.load_meta(&actor_id_str).await?;
-	assert_eq!(meta.origin, SqliteOrigin::MigratedFromV1);
 	assert_eq!(
-		query_note_values(&load_v2_bytes(&engine, &actor_id_str).await?)?,
+		query_note_values(&load_v2_bytes(&db, &actor_id_str).await?)?,
 		vec!["alpha", "beta", "gamma", "delta"]
-	);
-
-	Ok(())
-}
-
-#[tokio::test]
-async fn retries_cleanly_after_stale_partial_v1_import() -> Result<()> {
-	let db = test_db().await?;
-	let actor_id = Id::new_v1(1);
-	let recipient = recipient(actor_id);
-	let fixture = build_fixture_db(&["retry-a", "retry-b", "retry-c"])?;
-	seed_v1_file(&db, &recipient, FILE_TAG_MAIN, &fixture).await?;
-	let (engine, _compaction_rx) = pegboard::actor_sqlite::new_engine(db.clone());
-	let actor_id_str = actor_id.to_string();
-
-	let prepared = engine
-		.prepare_v1_migration(&actor_id_str, timestamp::now())
-		.await?;
-	engine
-		.open(&actor_id_str, OpenConfig::new(timestamp::now()))
-		.await?;
-	let stage = engine
-		.commit_stage_begin(
-			&actor_id_str,
-			CommitStageBeginRequest {
-				generation: prepared.meta.generation,
-			},
-		)
-		.await?;
-	let dirty_pages = fixture
-		.chunks(SQLITE_V1_CHUNK_SIZE)
-		.enumerate()
-		.map(|(idx, bytes)| DirtyPage {
-			pgno: idx as u32 + 1,
-			bytes: bytes.to_vec(),
-		})
-		.collect::<Vec<_>>();
-	let encoded = encode_ltx_v3(
-		LtxHeader::delta(stage.txid, dirty_pages.len() as u32, timestamp::now()),
-		&dirty_pages,
-	)?;
-	engine
-		.commit_stage(
-			&actor_id_str,
-			CommitStageRequest {
-				generation: prepared.meta.generation,
-				txid: stage.txid,
-				chunk_idx: 0,
-				bytes: encoded,
-				is_last: true,
-			},
-		)
-		.await?;
-	age_v1_migration_head(&db, &engine, &actor_id_str).await?;
-
-	assert!(migrate(&db, actor_id).await?.migrated);
-	let meta = engine.load_meta(&actor_id_str).await?;
-	assert_eq!(meta.origin, SqliteOrigin::MigratedFromV1);
-	assert_eq!(
-		query_note_values(&load_v2_bytes(&engine, &actor_id_str).await?)?,
-		vec!["retry-a", "retry-b", "retry-c"]
-	);
-
-	Ok(())
-}
-
-#[tokio::test]
-async fn restarts_v1_migration_after_allocate_invalidation() -> Result<()> {
-	let db = test_db().await?;
-	let actor_id = Id::new_v1(1);
-	let recipient = recipient(actor_id);
-	let fixture = build_fixture_db(&["allocate-retry-a", "allocate-retry-b"])?;
-	seed_v1_file(&db, &recipient, FILE_TAG_MAIN, &fixture).await?;
-	let (engine, _compaction_rx) = pegboard::actor_sqlite::new_engine(db.clone());
-	let actor_id_str = actor_id.to_string();
-
-	let prepared = engine
-		.prepare_v1_migration(&actor_id_str, timestamp::now())
-		.await?;
-	engine
-		.open(&actor_id_str, OpenConfig::new(timestamp::now()))
-		.await?;
-	engine
-		.commit_stage_begin(
-			&actor_id_str,
-			CommitStageBeginRequest {
-				generation: prepared.meta.generation,
-			},
-		)
-		.await?;
-
-	assert!(migrate(&db, actor_id).await?.migrated);
-	assert_eq!(
-		query_note_values(&load_v2_bytes(&engine, &actor_id_str).await?)?,
-		vec!["allocate-retry-a", "allocate-retry-b"]
 	);
 
 	Ok(())
@@ -353,37 +278,12 @@ async fn skips_native_v2_state_even_if_v1_tombstone_exists() -> Result<()> {
 	let v1_fixture = build_fixture_db(&["legacy"])?;
 	seed_v1_file(&db, &recipient, FILE_TAG_MAIN, &v1_fixture).await?;
 	let native_fixture = build_fixture_db(&["native"])?;
-	let (engine, _compaction_rx) = pegboard::actor_sqlite::new_engine(db.clone());
-	let opened = engine
-		.open(&actor_id_str, OpenConfig::new(timestamp::now()))
-		.await?;
-	let dirty_pages = native_fixture
-		.chunks(SQLITE_V1_CHUNK_SIZE)
-		.enumerate()
-		.map(|(idx, bytes)| DirtyPage {
-			pgno: idx as u32 + 1,
-			bytes: bytes.to_vec(),
-		})
-		.collect::<Vec<_>>();
-	engine
-		.commit(
-			&actor_id_str,
-			CommitRequest {
-				generation: opened.generation,
-				head_txid: opened.meta.head_txid,
-				db_size_pages: dirty_pages.len() as u32,
-				dirty_pages,
-				now_ms: timestamp::now(),
-			},
-		)
-		.await?;
+	seed_v2_bytes(&db, &actor_id_str, &native_fixture).await?;
 
 	assert!(!migrate(&db, actor_id).await?.migrated);
 
-	let meta = engine.load_meta(&actor_id_str).await?;
-	assert_eq!(meta.origin, SqliteOrigin::CreatedOnV2);
 	assert_eq!(
-		query_note_values(&load_v2_bytes(&engine, &actor_id_str).await?)?,
+		query_note_values(&load_v2_bytes(&db, &actor_id_str).await?)?,
 		vec!["native"]
 	);
 
@@ -398,16 +298,14 @@ async fn bails_when_v2_meta_is_unreadable() -> Result<()> {
 	let actor_id_str = actor_id.to_string();
 	let fixture = build_fixture_db(&["broken-meta"])?;
 	seed_v1_file(&db, &recipient, FILE_TAG_MAIN, &fixture).await?;
-	let (engine, _compaction_rx) = pegboard::actor_sqlite::new_engine(db.clone());
-	udb::apply_write_ops(
-		&db,
-		&pegboard::actor_sqlite::sqlite_subspace(),
-		engine.op_counter.as_ref(),
-		vec![WriteOp::put(
-			meta_key(&actor_id_str),
-			b"not-a-db-head".to_vec(),
-		)],
-	)
+	db.run(move |tx| {
+		let actor_id = actor_id_str.clone();
+		async move {
+			tx.informal()
+				.set(&meta_head_key(&actor_id), b"not-a-db-head");
+			Ok(())
+		}
+	})
 	.await?;
 
 	let err = migrate(&db, actor_id)
@@ -458,15 +356,8 @@ async fn migrates_zero_size_v1_state_without_pages() -> Result<()> {
 
 	assert!(migrate(&db, actor_id).await?.migrated);
 
-	let (engine, _compaction_rx) = pegboard::actor_sqlite::new_engine(db.clone());
 	let actor_id_str = actor_id.to_string();
-	engine
-		.open(&actor_id_str, OpenConfig::new(timestamp::now()))
-		.await?;
-	let meta = engine.load_meta(&actor_id_str).await?;
-	assert_eq!(meta.origin, SqliteOrigin::MigratedFromV1);
-	assert_eq!(meta.db_size_pages, 0);
-	assert!(load_v2_bytes(&engine, &actor_id_str).await?.is_empty());
+	assert!(load_v2_bytes(&db, &actor_id_str).await?.is_empty());
 
 	Ok(())
 }

@@ -1,6 +1,5 @@
 use anyhow::Result;
 use futures_util::{StreamExt, stream::FuturesUnordered};
-use gas::prelude::util::timestamp;
 use gas::prelude::*;
 use pegboard::pubsub_subjects::ServerlessOutboundSubject;
 use reqwest::header::{HeaderName, HeaderValue};
@@ -9,16 +8,9 @@ use rivet_envoy_protocol::{self as protocol, PROTOCOL_VERSION, versioned};
 use rivet_runtime::TermSignal;
 use rivet_types::actor::RunnerPoolError;
 use rivet_types::runner_configs::RunnerConfigKind;
-use sqlite_storage::{
-	compaction::CompactionCoordinator,
-	engine::SqliteEngine,
-	open::{OpenConfig, OpenResult},
-	types::{FetchedPage, SqliteMeta},
-};
 use std::collections::HashMap;
-use std::sync::Arc;
 use std::time::{Duration, Instant};
-use tokio::{sync::OnceCell, task::JoinHandle};
+use tokio::task::JoinHandle;
 use universalpubsub::NextOutput;
 use vbare::OwnedVersionedData;
 
@@ -29,57 +21,6 @@ const X_RIVET_POOL_NAME: HeaderName = HeaderName::from_static("x-rivet-pool-name
 const X_RIVET_TOKEN: HeaderName = HeaderName::from_static("x-rivet-token");
 const X_RIVET_NAMESPACE_NAME: HeaderName = HeaderName::from_static("x-rivet-namespace-name");
 const SHUTDOWN_PROGRESS_INTERVAL: Duration = Duration::from_secs(7);
-static SQLITE_ENGINE: OnceCell<Arc<SqliteEngine>> = OnceCell::const_new();
-
-async fn shared_sqlite_engine(ctx: &StandaloneCtx) -> Result<Arc<SqliteEngine>> {
-	let db = (*ctx.udb()?).clone();
-	let subspace = pegboard::keys::subspace().subspace(&("sqlite-storage",));
-
-	SQLITE_ENGINE
-		.get_or_try_init(|| async move {
-			let (engine, compaction_rx) = SqliteEngine::new(db, subspace.clone());
-			let engine = Arc::new(engine);
-			tokio::spawn(CompactionCoordinator::run(
-				compaction_rx,
-				Arc::clone(&engine),
-			));
-
-			Ok(engine)
-		})
-		.await
-		.cloned()
-}
-
-fn protocol_sqlite_startup_data(startup: OpenResult) -> protocol::SqliteStartupData {
-	protocol::SqliteStartupData {
-		generation: startup.generation,
-		meta: protocol_sqlite_meta(startup.meta),
-		preloaded_pages: startup
-			.preloaded_pages
-			.into_iter()
-			.map(protocol_sqlite_fetched_page)
-			.collect(),
-	}
-}
-
-fn protocol_sqlite_meta(meta: SqliteMeta) -> protocol::SqliteMeta {
-	protocol::SqliteMeta {
-		generation: meta.generation,
-		head_txid: meta.head_txid,
-		materialized_txid: meta.materialized_txid,
-		db_size_pages: meta.db_size_pages,
-		page_size: meta.page_size,
-		creation_ts_ms: meta.creation_ts_ms,
-		max_delta_bytes: meta.max_delta_bytes,
-	}
-}
-
-fn protocol_sqlite_fetched_page(page: FetchedPage) -> protocol::SqliteFetchedPage {
-	protocol::SqliteFetchedPage {
-		pgno: page.pgno,
-		bytes: page.bytes,
-	}
-}
 
 #[tracing::instrument(skip_all)]
 pub async fn start(config: rivet_config::Config, pools: rivet_pools::Pools) -> Result<()> {
@@ -280,20 +221,7 @@ async fn handle(ctx: &StandaloneCtx, packet: protocol::ToOutbound) -> Result<()>
 		return Ok(());
 	};
 	let protocol_version = pool.protocol_version.unwrap_or(PROTOCOL_VERSION);
-	let sqlite_engine = shared_sqlite_engine(ctx).await?;
-	let sqlite_open = sqlite_engine
-		.open(&actor_id.to_string(), OpenConfig::new(timestamp::now()))
-		.await?;
-	let sqlite_generation = sqlite_open.generation;
-
-	// Run the request body inside a closure so every error path closes the
-	// SQLite db. Without this the `?` operators on `serialize`, `signal`, and
-	// the `serverless_outbound_req` call would leak the open db on the
-	// process-wide `SqliteEngine`, blocking re-open until the process
-	// restarts.
-	let actor_id_str = actor_id.to_string();
 	let res = async {
-		let sqlite_startup_data = protocol_sqlite_startup_data(sqlite_open);
 		let payload = versioned::ToEnvoy::wrap_latest(protocol::ToEnvoy::ToEnvoyCommands(vec![
 			protocol::CommandWrapper {
 				checkpoint,
@@ -307,7 +235,6 @@ async fn handle(ctx: &StandaloneCtx, packet: protocol::ToOutbound) -> Result<()>
 						})
 						.collect(),
 					preloaded_kv,
-					sqlite_startup_data: Some(sqlite_startup_data),
 				}),
 			},
 		]))
@@ -353,17 +280,6 @@ async fn handle(ctx: &StandaloneCtx, packet: protocol::ToOutbound) -> Result<()>
 		res
 	}
 	.await;
-
-	if let Err(err) = sqlite_engine.close(&actor_id_str, sqlite_generation).await {
-		tracing::warn!(
-			?err,
-			?actor_id,
-			"close failed for outbound sqlite db, force-evicting open_dbs entry"
-		);
-		// Process-wide engine: a stale entry would block re-opening the same actor until
-		// process restart, so unconditionally evict on close failure.
-		sqlite_engine.force_close(&actor_id_str).await;
-	}
 
 	res
 }

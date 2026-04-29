@@ -1174,6 +1174,7 @@ async fn clear_kv(ctx: &ActivityCtx, input: &ClearKvInput) -> Result<ClearKvOutp
 
 			// Matches `delete_all` from actor kv
 			tx.clear_subspace_range(&subspace);
+			crate::actor_sqlite::clear_v2_storage_for_destroy(&tx, actor_id);
 
 			Ok(final_size)
 		})

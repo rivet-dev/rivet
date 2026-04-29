@@ -1,0 +1,900 @@
+//! Per-actor compaction pass for the stateless sqlite-storage layout.
+
+use std::{
+	collections::{BTreeMap, BTreeSet},
+	sync::Arc,
+};
+
+use anyhow::{Context, Result, bail};
+use futures_util::TryStreamExt;
+use namespace::types::SqliteNamespaceConfig;
+use rivet_pools::NodeId;
+use tokio::sync::Semaphore;
+use tokio_util::sync::CancellationToken;
+use universaldb::{
+	RangeOption,
+	options::StreamingMode,
+	utils::{
+		IsolationLevel::{Serializable, Snapshot},
+	},
+};
+
+use crate::pump::{
+	keys::{self, SHARD_SIZE},
+	ltx::decode_ltx_v3,
+	quota,
+	types::{
+		Checkpoints, MetaCompact, RetentionConfig, decode_checkpoints, decode_db_head,
+		decode_delta_meta, decode_meta_compact, decode_retention_config, encode_meta_compact,
+	},
+	udb,
+};
+
+use super::{checkpoint, cleanup, fold_shard, metrics};
+
+const PIDX_TXID_BYTES: usize = std::mem::size_of::<u64>();
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct CompactionOutcome {
+	pub pages_folded: u64,
+	pub deltas_freed: u64,
+	pub compare_and_clear_noops: u64,
+	pub bytes_freed: i64,
+	pub materialized_txid: u64,
+}
+
+pub async fn compact_default_batch(
+	udb: Arc<universaldb::Database>,
+	actor_id: String,
+	batch_size_deltas: u32,
+	cancel_token: CancellationToken,
+) -> Result<CompactionOutcome> {
+	compact_default_batch_with_node_id(
+		udb,
+		actor_id,
+		batch_size_deltas,
+		cancel_token,
+		NodeId::new(),
+	)
+	.await
+}
+
+pub(crate) async fn compact_default_batch_with_node_id(
+	udb: Arc<universaldb::Database>,
+	actor_id: String,
+	batch_size_deltas: u32,
+	cancel_token: CancellationToken,
+	node_id: NodeId,
+) -> Result<CompactionOutcome> {
+	compact_default_batch_with_checkpoint_config(
+		udb,
+		actor_id,
+		batch_size_deltas,
+		cancel_token,
+		node_id,
+		None,
+	)
+	.await
+}
+
+#[derive(Clone)]
+pub(crate) struct CheckpointConfig {
+	pub namespace_config: SqliteNamespaceConfig,
+	pub semaphore: Arc<Semaphore>,
+	pub namespace_id: Option<gas::prelude::Id>,
+	pub actor_name: Option<String>,
+	pub lease_ttl_ms: u64,
+}
+
+pub(crate) async fn compact_default_batch_with_checkpoint_config(
+	udb: Arc<universaldb::Database>,
+	actor_id: String,
+	batch_size_deltas: u32,
+	cancel_token: CancellationToken,
+	node_id: NodeId,
+	checkpoint_config: Option<CheckpointConfig>,
+) -> Result<CompactionOutcome> {
+	let node_id_value = node_id;
+	let node_id = node_id.to_string();
+	let labels = &[node_id.as_str()];
+	let _timer = metrics::SQLITE_COMPACTOR_PASS_DURATION
+		.with_label_values(labels)
+		.start_timer();
+
+	ensure_not_cancelled(&cancel_token)?;
+	let plan = plan_batch(
+		udb.as_ref(),
+		actor_id.clone(),
+		batch_size_deltas,
+		checkpoint_config.as_ref().map(|config| &config.namespace_config),
+	)
+	.await?;
+	metrics::SQLITE_COMPACTOR_LAG
+		.with_label_values(labels)
+		.observe(plan.selected_delta_txids.len() as f64);
+
+	test_hooks::maybe_pause_after_plan(&actor_id).await;
+	let mut write_result = WriteResult::default();
+	let mut compare_and_clear_noops = 0;
+	if !plan.selected_delta_txids.is_empty() || !plan.deletable_delta_txids.is_empty() {
+		ensure_not_cancelled(&cancel_token)?;
+		write_result = write_batch(udb.as_ref(), actor_id.clone(), plan.clone()).await?;
+
+		ensure_not_cancelled(&cancel_token)?;
+		compare_and_clear_noops = count_compare_and_clear_noops(
+			udb.as_ref(),
+			actor_id.clone(),
+			write_result.attempted_pidx_deletes.clone(),
+		)
+		.await?;
+	}
+
+	if let Some(checkpoint_config) = checkpoint_config.as_ref().filter(|_| plan.checkpoint_due) {
+		ensure_not_cancelled(&cancel_token)?;
+		let _permit = checkpoint_config
+			.semaphore
+			.clone()
+			.acquire_owned()
+			.await
+			.context("sqlite checkpoint semaphore closed")?;
+		let checkpoint_outcome = checkpoint::create_checkpoint_with_node_id(
+			Arc::clone(&udb),
+			actor_id.clone(),
+			plan.head_txid_at_plan,
+			cancel_token.clone(),
+			checkpoint_config.namespace_config.clone(),
+			node_id_value,
+		)
+		.await?;
+		if matches!(checkpoint_outcome, checkpoint::CheckpointOutcome::Created { .. }) {
+			metrics::SQLITE_CHECKPOINT_CREATION_LAG_SECONDS
+				.with_label_values(&["unknown"])
+				.observe(plan.checkpoint_lag_ms.unwrap_or(0) as f64 / 1000.0);
+		}
+	}
+
+	let retention_config = load_retention_for_cleanup(
+		udb.as_ref(),
+		actor_id.clone(),
+		plan.namespace_config.clone(),
+	)
+	.await?;
+	let (namespace_id, actor_name, lease_ttl_ms) = checkpoint_config
+		.as_ref()
+		.map(|context| {
+			(
+				context.namespace_id,
+				context.actor_name.clone(),
+				context.lease_ttl_ms,
+			)
+		})
+		.unwrap_or((None, None, 30_000));
+	let cleanup_now_ms = now_ms()?;
+	cleanup::cleanup_old_checkpoints_with_metric_context(
+		Arc::clone(&udb),
+		actor_id.clone(),
+		retention_config,
+		cleanup_now_ms,
+		namespace_id,
+		actor_name,
+	)
+	.await?;
+	cleanup::detect_refcount_leaks_with_node_id(
+		Arc::clone(&udb),
+		actor_id.clone(),
+		cleanup_now_ms,
+		lease_ttl_ms,
+		node_id_value,
+	)
+	.await?;
+
+	metrics::SQLITE_COMPACTOR_PAGES_FOLDED_TOTAL
+		.with_label_values(labels)
+		.inc_by(write_result.pages_folded);
+	metrics::SQLITE_COMPACTOR_DELTAS_FREED_TOTAL
+		.with_label_values(labels)
+		.inc_by(write_result.deltas_freed);
+	metrics::SQLITE_COMPACTOR_COMPARE_AND_CLEAR_NOOP_TOTAL
+		.with_label_values(labels)
+		.inc_by(compare_and_clear_noops);
+
+	Ok(CompactionOutcome {
+		pages_folded: write_result.pages_folded,
+		deltas_freed: write_result.deltas_freed,
+		compare_and_clear_noops,
+		bytes_freed: write_result.bytes_freed,
+		materialized_txid: write_result.materialized_txid,
+	})
+}
+
+async fn plan_batch(
+	db: &universaldb::Database,
+	actor_id: String,
+	batch_size_deltas: u32,
+	namespace_config: Option<&SqliteNamespaceConfig>,
+) -> Result<CompactionPlan> {
+	let namespace_config = namespace_config.cloned();
+	db.run(move |tx| {
+		let actor_id = actor_id.clone();
+		let namespace_config = namespace_config.clone();
+
+		async move {
+			let Some(head_bytes) = tx_get_value(&tx, &keys::meta_head_key(&actor_id), Snapshot).await?
+			else {
+				return Ok(CompactionPlan::default());
+			};
+			let head = decode_db_head(&head_bytes).context("decode sqlite db head for compaction")?;
+			let checkpoint_state =
+				if let Some(namespace_config) = namespace_config.as_ref() {
+					load_checkpoint_state(&tx, &actor_id, namespace_config).await?
+				} else {
+					CheckpointPlanState::default()
+				};
+			let compact = tx_get_value(&tx, &keys::meta_compact_key(&actor_id), Snapshot)
+				.await?
+				.as_deref()
+				.map(decode_meta_compact)
+				.transpose()
+				.context("decode sqlite compact meta")?
+				.unwrap_or(MetaCompact {
+					materialized_txid: 0,
+				});
+			let has_deltas_to_fold = head.head_txid > compact.materialized_txid && batch_size_deltas != 0;
+			let retention_cleanup_enabled = checkpoint_state
+				.retention
+				.as_ref()
+				.is_some_and(|retention| retention.retention_ms != 0);
+			if !has_deltas_to_fold && !checkpoint_state.due && !retention_cleanup_enabled {
+				return Ok(CompactionPlan {
+					head_txid_at_plan: head.head_txid,
+					checkpoint_due: checkpoint_state.due,
+					checkpoint_lag_ms: checkpoint_state.lag_ms,
+					namespace_config,
+					..CompactionPlan::default()
+				});
+			}
+
+			let pidx_rows = load_pidx_rows(&tx, &actor_id).await?;
+			let delta_entries = load_delta_entries(&tx, &actor_id).await?;
+			let selected_delta_txids = delta_entries
+				.keys()
+				.copied()
+				.filter(|txid| {
+					*txid > compact.materialized_txid && *txid <= head.head_txid
+				})
+				.take(batch_size_deltas as usize)
+				.collect::<Vec<_>>();
+			let selected_delta_txids_set =
+				selected_delta_txids.iter().copied().collect::<BTreeSet<_>>();
+
+			let mut selected_deltas = BTreeMap::new();
+			for txid in &selected_delta_txids {
+				let entry = delta_entries
+					.get(txid)
+					.with_context(|| format!("missing selected delta {txid}"))?;
+				let decoded = decode_ltx_v3(&entry.blob)
+					.with_context(|| format!("decode delta {txid} for compaction"))?;
+				selected_deltas.insert(*txid, decoded);
+			}
+
+			let mut pages_by_shard = BTreeMap::<u32, Vec<FoldPage>>::new();
+			for row in pidx_rows {
+				if row.pgno > head.db_size_pages || !selected_deltas.contains_key(&row.txid) {
+					continue;
+				}
+
+				let bytes = selected_deltas
+					.get(&row.txid)
+					.and_then(|decoded| decoded.get_page(row.pgno))
+					.with_context(|| {
+						format!("PIDX row for page {} pointed at delta {} without the page", row.pgno, row.txid)
+					})?
+					.to_vec();
+				pages_by_shard
+					.entry(row.pgno / SHARD_SIZE)
+					.or_default()
+					.push(FoldPage {
+						pgno: row.pgno,
+						expected_txid: row.txid,
+						bytes,
+					});
+			}
+
+			let materialized_txid = selected_delta_txids
+				.iter()
+				.copied()
+				.max()
+				.unwrap_or(compact.materialized_txid);
+			let deletable_delta_txids = delta_entries
+				.iter()
+				.filter_map(|(txid, entry)| {
+					(*txid <= materialized_txid
+						&& delta_can_be_deleted(
+							*txid,
+							selected_delta_txids_set.contains(txid),
+							entry.meta.as_ref(),
+							checkpoint_state.retention.as_ref(),
+							checkpoint_state.latest_checkpoint_txid,
+							checkpoint_state.now_ms,
+						))
+					.then_some(*txid)
+				})
+				.collect::<Vec<_>>();
+
+			Ok(CompactionPlan {
+				head_txid_at_plan: head.head_txid,
+				checkpoint_due: checkpoint_state.due,
+				checkpoint_lag_ms: checkpoint_state.lag_ms,
+				namespace_config,
+				selected_delta_txids,
+				deletable_delta_entries: delta_entries
+					.iter()
+					.filter(|(txid, _)| deletable_delta_txids.contains(txid))
+					.map(|(txid, entry)| (*txid, entry.clone()))
+					.collect(),
+				deletable_delta_txids,
+				pages_by_shard,
+				materialized_txid,
+			})
+		}
+	})
+	.await
+}
+
+async fn load_checkpoint_state(
+	tx: &universaldb::Transaction,
+	actor_id: &str,
+	namespace_config: &SqliteNamespaceConfig,
+) -> Result<CheckpointPlanState> {
+	let retention = tx_get_value(tx, &keys::meta_retention_key(actor_id), Snapshot)
+		.await?
+		.as_deref()
+		.map(decode_retention_config)
+		.transpose()
+		.context("decode sqlite retention config")?
+		.unwrap_or(RetentionConfig {
+			retention_ms: namespace_config.default_retention_ms,
+			checkpoint_interval_ms: namespace_config.default_checkpoint_interval_ms,
+			max_checkpoints: namespace_config.default_max_checkpoints,
+		});
+	if retention.retention_ms == 0 {
+		return Ok(CheckpointPlanState {
+			retention: Some(retention),
+			now_ms: now_ms()?,
+			..CheckpointPlanState::default()
+		});
+	}
+
+	let checkpoints = tx_get_value(tx, &keys::meta_checkpoints_key(actor_id), Snapshot)
+		.await?
+		.as_deref()
+		.map(decode_checkpoints)
+		.transpose()
+		.context("decode sqlite checkpoints")?
+		.unwrap_or(Checkpoints {
+			entries: Vec::new(),
+		});
+	let now_ms = now_ms()?;
+	let latest_for_due = checkpoints.entries.iter().max_by_key(|entry| entry.taken_at_ms);
+	let latest_checkpoint_txid = checkpoints.entries.iter().map(|entry| entry.ckp_txid).max();
+	let Some(latest_for_due) = latest_for_due else {
+		return Ok(CheckpointPlanState {
+			due: true,
+			lag_ms: None,
+			retention: Some(retention),
+			latest_checkpoint_txid: None,
+			now_ms,
+		});
+	};
+	let age_ms = now_ms.saturating_sub(latest_for_due.taken_at_ms);
+
+	Ok(CheckpointPlanState {
+		due: age_ms >= retention.checkpoint_interval_ms as i64,
+		lag_ms: Some(age_ms.max(0) as u64),
+		retention: Some(retention),
+		latest_checkpoint_txid,
+		now_ms,
+	})
+}
+
+async fn load_retention_for_cleanup(
+	db: &universaldb::Database,
+	actor_id: String,
+	namespace_config: Option<SqliteNamespaceConfig>,
+) -> Result<RetentionConfig> {
+	db.run(move |tx| {
+		let actor_id = actor_id.clone();
+		let namespace_config = namespace_config.clone();
+
+		async move {
+			Ok(tx_get_value(&tx, &keys::meta_retention_key(&actor_id), Snapshot)
+				.await?
+				.as_deref()
+				.map(decode_retention_config)
+				.transpose()
+				.context("decode sqlite retention config")?
+				.unwrap_or_else(|| {
+					namespace_config
+						.map(|config| RetentionConfig {
+							retention_ms: config.default_retention_ms,
+							checkpoint_interval_ms: config.default_checkpoint_interval_ms,
+							max_checkpoints: config.default_max_checkpoints,
+						})
+						.unwrap_or_default()
+				}))
+		}
+	})
+	.await
+}
+
+fn delta_can_be_deleted(
+	txid: u64,
+	selected_for_fold: bool,
+	meta: Option<&crate::pump::types::DeltaMeta>,
+	retention: Option<&RetentionConfig>,
+	latest_checkpoint_txid: Option<u64>,
+	now_ms: i64,
+) -> bool {
+	let Some(retention) = retention else {
+		return selected_for_fold;
+	};
+	if retention.retention_ms == 0 {
+		return selected_for_fold;
+	}
+	let Some(latest_checkpoint_txid) = latest_checkpoint_txid else {
+		return false;
+	};
+	let Some(meta) = meta else {
+		return false;
+	};
+	let cutoff_ms = now_ms.saturating_sub(i64::try_from(retention.retention_ms).unwrap_or(i64::MAX));
+
+	txid <= latest_checkpoint_txid && meta.taken_at_ms < cutoff_ms && meta.refcount == 0
+}
+
+async fn write_batch(
+	db: &universaldb::Database,
+	actor_id: String,
+	plan: CompactionPlan,
+) -> Result<WriteResult> {
+	db.run(move |tx| {
+		let actor_id = actor_id.clone();
+		let plan = plan.clone();
+
+		async move {
+			let Some(head_bytes) = tx_get_value(&tx, &keys::meta_head_key(&actor_id), Serializable).await?
+			else {
+				return Ok(WriteResult::default());
+			};
+			let head = decode_db_head(&head_bytes).context("decode sqlite db head for compaction write")?;
+
+			test_hooks::maybe_pause_after_write_head_read(&actor_id).await;
+
+			let mut attempted_pidx_deletes = Vec::new();
+			let mut pages_folded = 0u64;
+			let mut bytes_freed = 0i64;
+
+			for (shard_id, fold_pages) in &plan.pages_by_shard {
+				let page_updates = fold_pages
+					.iter()
+					.filter(|page| page.pgno <= head.db_size_pages)
+					.map(|page| (page.pgno, page.bytes.clone()))
+					.collect::<Vec<_>>();
+				if page_updates.is_empty() {
+					continue;
+				}
+
+				fold_shard(&tx, &actor_id, *shard_id, page_updates).await?;
+				for page in fold_pages.iter().filter(|page| page.pgno <= head.db_size_pages) {
+					let key = keys::pidx_delta_key(&actor_id, page.pgno);
+					let expected_value = page.expected_txid.to_be_bytes();
+					udb::compare_and_clear(&tx, &key, &expected_value);
+					bytes_freed += tracked_entry_size(&key, &expected_value)?;
+					attempted_pidx_deletes.push(PidxDelete {
+						key,
+						expected_value: expected_value.to_vec(),
+					});
+					pages_folded += 1;
+				}
+			}
+
+			for txid in &plan.deletable_delta_txids {
+				let Some(entry) = plan.deletable_delta_entries.get(txid) else {
+					continue;
+				};
+				bytes_freed += entry.tracked_size;
+				let prefix = keys::delta_chunk_prefix(&actor_id, *txid);
+				let (begin, end) = prefix_range(&prefix);
+				tx.informal().clear_range(&begin, &end);
+			}
+
+			let compact = encode_meta_compact(MetaCompact {
+				materialized_txid: plan.materialized_txid,
+			})
+			.context("encode compact meta")?;
+			tx.informal()
+				.set(&keys::meta_compact_key(&actor_id), &compact);
+			if bytes_freed != 0 {
+				quota::atomic_add_live(&tx, &actor_id, -bytes_freed);
+			}
+
+			Ok(WriteResult {
+				pages_folded,
+				deltas_freed: plan.deletable_delta_txids.len() as u64,
+				bytes_freed,
+				materialized_txid: plan.materialized_txid,
+				attempted_pidx_deletes,
+			})
+		}
+	})
+	.await
+}
+
+#[cfg(debug_assertions)]
+pub async fn validate_quota(
+	udb: Arc<universaldb::Database>,
+	actor_id: String,
+) -> Result<()> {
+	validate_quota_with_node_id(udb, actor_id, NodeId::new()).await
+}
+
+#[cfg(debug_assertions)]
+pub(crate) async fn validate_quota_with_node_id(
+	udb: Arc<universaldb::Database>,
+	actor_id: String,
+	node_id: NodeId,
+) -> Result<()> {
+	let (manual_total, counter_value) = udb
+		.run({
+			let actor_id = actor_id.clone();
+			move |tx| {
+				let actor_id = actor_id.clone();
+
+				async move {
+					let manual_total =
+						scan_tracked_prefix_bytes(&tx, &keys::pidx_delta_prefix(&actor_id)).await?
+							+ scan_tracked_prefix_bytes(&tx, &keys::delta_prefix(&actor_id)).await?
+							+ scan_tracked_prefix_bytes(&tx, &keys::shard_prefix(&actor_id)).await?;
+					let counter_value = quota::read_live(&tx, &actor_id).await?;
+
+					Ok((manual_total, counter_value))
+				}
+			}
+		})
+		.await?;
+
+	if manual_total != counter_value {
+		let node_id = node_id.to_string();
+		metrics::SQLITE_QUOTA_VALIDATE_MISMATCH_TOTAL
+			.with_label_values(&[node_id.as_str()])
+			.inc();
+		tracing::error!(
+			actor_id = %actor_id,
+			manual_total,
+			counter_value,
+			"sqlite quota validation mismatch"
+		);
+
+		#[cfg(test)]
+		panic!(
+			"sqlite quota validation mismatch for actor {actor_id}: manual_total={manual_total}, counter_value={counter_value}"
+		);
+
+		#[cfg(not(test))]
+		bail!("sqlite quota validation mismatch for actor {actor_id}");
+	}
+
+	Ok(())
+}
+
+async fn count_compare_and_clear_noops(
+	db: &universaldb::Database,
+	actor_id: String,
+	attempted_pidx_deletes: Vec<PidxDelete>,
+) -> Result<u64> {
+	db.run(move |tx| {
+		let attempted_pidx_deletes = attempted_pidx_deletes.clone();
+		let actor_id = actor_id.clone();
+
+		async move {
+			let mut noops = 0u64;
+			for delete in attempted_pidx_deletes {
+				if let Some(value) = tx_get_value(&tx, &delete.key, Snapshot).await? {
+					if value != delete.expected_value {
+						noops += 1;
+					} else {
+						bail!("PIDX compare-and-clear left expected value for actor {actor_id}");
+					}
+				}
+			}
+			Ok(noops)
+		}
+	})
+	.await
+}
+
+async fn load_pidx_rows(
+	tx: &universaldb::Transaction,
+	actor_id: &str,
+) -> Result<Vec<PidxRow>> {
+	tx_scan_prefix_values(tx, &keys::pidx_delta_prefix(actor_id))
+		.await?
+		.into_iter()
+		.map(|(key, value)| {
+			Ok(PidxRow {
+				pgno: decode_pidx_pgno(actor_id, &key)?,
+				txid: decode_pidx_txid(&value)?,
+			})
+		})
+		.collect()
+}
+
+async fn load_delta_entries(
+	tx: &universaldb::Transaction,
+	actor_id: &str,
+) -> Result<BTreeMap<u64, DeltaEntry>> {
+	let mut chunks_by_txid = BTreeMap::<u64, Vec<DeltaChunk>>::new();
+	let mut meta_by_txid = BTreeMap::new();
+	let mut meta_bytes_by_txid = BTreeMap::<u64, i64>::new();
+	for (key, value) in tx_scan_prefix_values(tx, &keys::delta_prefix(actor_id)).await? {
+		let txid = keys::decode_delta_chunk_txid(actor_id, &key)?;
+		if key == keys::delta_meta_key(actor_id, txid) {
+			meta_by_txid.insert(
+				txid,
+				decode_delta_meta(&value).context("decode sqlite delta meta for compaction")?,
+			);
+			meta_bytes_by_txid.insert(txid, tracked_entry_size(&key, &value)?);
+			continue;
+		}
+		let chunk_idx = keys::decode_delta_chunk_idx(actor_id, txid, &key)?;
+		chunks_by_txid.entry(txid).or_default().push(DeltaChunk {
+			key,
+			chunk_idx,
+			value,
+		});
+	}
+
+	let mut entries = BTreeMap::new();
+	for (txid, mut chunks) in chunks_by_txid {
+		chunks.sort_by_key(|chunk| chunk.chunk_idx);
+		let mut blob = Vec::new();
+		let mut tracked_size = meta_bytes_by_txid.remove(&txid).unwrap_or(0);
+		for chunk in chunks {
+			tracked_size += tracked_entry_size(&chunk.key, &chunk.value)?;
+			blob.extend_from_slice(&chunk.value);
+		}
+		entries.insert(txid, DeltaEntry {
+			blob,
+			tracked_size,
+			meta: meta_by_txid.remove(&txid),
+		});
+	}
+
+	Ok(entries)
+}
+
+async fn tx_get_value(
+	tx: &universaldb::Transaction,
+	key: &[u8],
+	isolation_level: universaldb::utils::IsolationLevel,
+) -> Result<Option<Vec<u8>>> {
+	Ok(tx
+		.informal()
+		.get(key, isolation_level)
+		.await?
+		.map(Vec::<u8>::from))
+}
+
+async fn tx_scan_prefix_values(
+	tx: &universaldb::Transaction,
+	prefix: &[u8],
+) -> Result<Vec<(Vec<u8>, Vec<u8>)>> {
+	let informal = tx.informal();
+	let prefix_subspace =
+		universaldb::Subspace::from(universaldb::tuple::Subspace::from_bytes(prefix.to_vec()));
+	let mut stream = informal.get_ranges_keyvalues(
+		RangeOption {
+			mode: StreamingMode::WantAll,
+			..RangeOption::from(&prefix_subspace)
+		},
+		Snapshot,
+	);
+	let mut rows = Vec::new();
+
+	while let Some(entry) = stream.try_next().await? {
+		rows.push((entry.key().to_vec(), entry.value().to_vec()));
+	}
+
+	Ok(rows)
+}
+
+#[cfg(debug_assertions)]
+async fn scan_tracked_prefix_bytes(
+	tx: &universaldb::Transaction,
+	prefix: &[u8],
+) -> Result<i64> {
+	tx_scan_prefix_values(tx, prefix)
+		.await?
+		.iter()
+		.map(|(key, value)| tracked_entry_size(key, value))
+		.sum()
+}
+
+fn decode_pidx_pgno(actor_id: &str, key: &[u8]) -> Result<u32> {
+	let prefix = keys::pidx_delta_prefix(actor_id);
+	let suffix = key
+		.strip_prefix(prefix.as_slice())
+		.context("pidx key did not start with expected prefix")?;
+	let bytes: [u8; std::mem::size_of::<u32>()] = suffix
+		.try_into()
+		.map_err(|_| anyhow::anyhow!("pidx key suffix had invalid length"))?;
+
+	Ok(u32::from_be_bytes(bytes))
+}
+
+fn decode_pidx_txid(value: &[u8]) -> Result<u64> {
+	let bytes: [u8; PIDX_TXID_BYTES] = value
+		.try_into()
+		.map_err(|_| anyhow::anyhow!("pidx txid had invalid length"))?;
+
+	Ok(u64::from_be_bytes(bytes))
+}
+
+fn tracked_entry_size(key: &[u8], value: &[u8]) -> Result<i64> {
+	i64::try_from(key.len() + value.len()).context("sqlite tracked entry size exceeded i64")
+}
+
+fn prefix_range(prefix: &[u8]) -> (Vec<u8>, Vec<u8>) {
+	universaldb::tuple::Subspace::from_bytes(prefix.to_vec()).range()
+}
+
+fn ensure_not_cancelled(cancel_token: &CancellationToken) -> Result<()> {
+	if cancel_token.is_cancelled() {
+		bail!("sqlite compaction cancelled");
+	}
+
+	Ok(())
+}
+
+fn now_ms() -> Result<i64> {
+	let elapsed = std::time::SystemTime::now()
+		.duration_since(std::time::UNIX_EPOCH)
+		.context("system clock was before unix epoch")?;
+	i64::try_from(elapsed.as_millis()).context("sqlite compactor timestamp exceeded i64")
+}
+
+#[derive(Debug, Clone, Default)]
+struct CompactionPlan {
+	head_txid_at_plan: u64,
+	checkpoint_due: bool,
+	checkpoint_lag_ms: Option<u64>,
+	namespace_config: Option<SqliteNamespaceConfig>,
+	selected_delta_txids: Vec<u64>,
+	deletable_delta_entries: BTreeMap<u64, DeltaEntry>,
+	deletable_delta_txids: Vec<u64>,
+	pages_by_shard: BTreeMap<u32, Vec<FoldPage>>,
+	materialized_txid: u64,
+}
+
+#[derive(Debug, Clone, Default)]
+struct CheckpointPlanState {
+	due: bool,
+	lag_ms: Option<u64>,
+	retention: Option<RetentionConfig>,
+	latest_checkpoint_txid: Option<u64>,
+	now_ms: i64,
+}
+
+#[derive(Debug, Clone)]
+struct DeltaEntry {
+	blob: Vec<u8>,
+	tracked_size: i64,
+	meta: Option<crate::pump::types::DeltaMeta>,
+}
+
+#[derive(Debug, Clone)]
+struct DeltaChunk {
+	key: Vec<u8>,
+	chunk_idx: u32,
+	value: Vec<u8>,
+}
+
+#[derive(Debug, Clone)]
+struct PidxRow {
+	pgno: u32,
+	txid: u64,
+}
+
+#[derive(Debug, Clone)]
+struct FoldPage {
+	pgno: u32,
+	expected_txid: u64,
+	bytes: Vec<u8>,
+}
+
+#[derive(Debug, Clone, Default)]
+struct WriteResult {
+	pages_folded: u64,
+	deltas_freed: u64,
+	bytes_freed: i64,
+	materialized_txid: u64,
+	attempted_pidx_deletes: Vec<PidxDelete>,
+}
+
+#[derive(Debug, Clone)]
+struct PidxDelete {
+	key: Vec<u8>,
+	expected_value: Vec<u8>,
+}
+
+#[cfg(debug_assertions)]
+pub mod test_hooks {
+	use std::sync::Arc;
+
+	use parking_lot::Mutex;
+	use tokio::sync::Notify;
+
+	static PAUSE_AFTER_PLAN: Mutex<Option<(String, Arc<Notify>, Arc<Notify>)>> = Mutex::new(None);
+	static PAUSE_AFTER_WRITE_HEAD_READ: Mutex<Option<(String, Arc<Notify>, Arc<Notify>)>> =
+		Mutex::new(None);
+
+	pub struct PauseGuard {
+		slot: &'static Mutex<Option<(String, Arc<Notify>, Arc<Notify>)>>,
+	}
+
+	pub fn pause_after_plan(actor_id: &str) -> (PauseGuard, Arc<Notify>, Arc<Notify>) {
+		pause(&PAUSE_AFTER_PLAN, actor_id)
+	}
+
+	pub fn pause_after_write_head_read(actor_id: &str) -> (PauseGuard, Arc<Notify>, Arc<Notify>) {
+		pause(&PAUSE_AFTER_WRITE_HEAD_READ, actor_id)
+	}
+
+	pub(super) async fn maybe_pause_after_plan(actor_id: &str) {
+		maybe_pause(&PAUSE_AFTER_PLAN, actor_id).await;
+	}
+
+	pub(super) async fn maybe_pause_after_write_head_read(actor_id: &str) {
+		maybe_pause(&PAUSE_AFTER_WRITE_HEAD_READ, actor_id).await;
+	}
+
+	fn pause(
+		slot: &'static Mutex<Option<(String, Arc<Notify>, Arc<Notify>)>>,
+		actor_id: &str,
+	) -> (PauseGuard, Arc<Notify>, Arc<Notify>) {
+		let reached = Arc::new(Notify::new());
+		let release = Arc::new(Notify::new());
+		*slot.lock() = Some((actor_id.to_string(), Arc::clone(&reached), Arc::clone(&release)));
+
+		(PauseGuard { slot }, reached, release)
+	}
+
+	async fn maybe_pause(
+		slot: &'static Mutex<Option<(String, Arc<Notify>, Arc<Notify>)>>,
+		actor_id: &str,
+	) {
+		let hook = slot
+			.lock()
+			.as_ref()
+			.filter(|(hook_actor_id, _, _)| hook_actor_id == actor_id)
+			.map(|(_, reached, release)| (Arc::clone(reached), Arc::clone(release)));
+
+		if let Some((reached, release)) = hook {
+			reached.notify_waiters();
+			release.notified().await;
+		}
+	}
+
+	impl Drop for PauseGuard {
+		fn drop(&mut self) {
+			*self.slot.lock() = None;
+		}
+	}
+}
+
+#[cfg(not(debug_assertions))]
+mod test_hooks {
+	pub(super) async fn maybe_pause_after_plan(_actor_id: &str) {}
+
+	pub(super) async fn maybe_pause_after_write_head_read(_actor_id: &str) {}
+}

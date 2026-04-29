@@ -48,7 +48,6 @@ pub async fn handle_commands(ctx: &mut EnvoyContext, commands: Vec<protocol::Com
 					val.config,
 					val.hibernating_requests,
 					val.preloaded_kv,
-					val.sqlite_startup_data,
 				);
 
 				ctx.insert_actor(

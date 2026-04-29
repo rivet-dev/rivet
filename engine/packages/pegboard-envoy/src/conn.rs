@@ -13,13 +13,19 @@ use gas::prelude::*;
 use hyper_tungstenite::tungstenite::Message;
 use rivet_envoy_protocol::{self as protocol, versioned};
 use rivet_guard_core::WebSocketHandle;
+use rivet_pools::NodeId;
 use rivet_types::runner_configs::RunnerConfigKind;
 use scc::HashMap;
-use sqlite_storage::engine::SqliteEngine;
+use sqlite_storage::pump::ActorDb;
 use universaldb::prelude::*;
+use universalpubsub::PubSub;
 use vbare::OwnedVersionedData;
 
-use crate::{actor_lifecycle, errors, metrics, utils::UrlData};
+use crate::{
+	actor_lifecycle, errors, metrics,
+	restore_lifecycle::{RouteKey, RouteState},
+	utils::UrlData,
+};
 
 pub struct Conn {
 	pub namespace_id: Id,
@@ -28,8 +34,14 @@ pub struct Conn {
 	pub protocol_version: u16,
 	pub ws_handle: WebSocketHandle,
 	pub authorized_tunnel_routes: HashMap<(protocol::GatewayId, protocol::RequestId), ()>,
-	pub sqlite_engine: Arc<SqliteEngine>,
-	pub active_actors: HashMap<String, actor_lifecycle::ActiveActor>,
+	pub tunnel_routes: HashMap<RouteKey, RouteState>,
+	pub udb: Arc<universaldb::Database>,
+	pub ups: Arc<PubSub>,
+	pub node_id: NodeId,
+	/// This is a perf-only SQLite pump cache, not authoritative actor presence tracking.
+	/// Envoys can reconnect to different worker nodes mid-flight, so request handlers
+	/// lazily populate it and lifecycle commands only evict stale cache entries.
+	pub actor_dbs: HashMap<String, Arc<ActorDb>>,
 	pub is_serverless: bool,
 	pub last_rtt: AtomicU32,
 	/// Timestamp (epoch ms) of the last pong received from the envoy.
@@ -40,7 +52,6 @@ pub struct Conn {
 pub async fn init_conn(
 	ctx: &StandaloneCtx,
 	ws_handle: WebSocketHandle,
-	sqlite_engine: Arc<SqliteEngine>,
 	UrlData {
 		protocol_version,
 		namespace,
@@ -87,6 +98,9 @@ pub async fn init_conn(
 		.observe(start.elapsed().as_secs_f64());
 
 	let udb = ctx.udb()?;
+	let conn_udb = Arc::new((*udb).clone());
+	let conn_ups = Arc::new(ctx.ups()?);
+	let node_id = ctx.pools().node_id();
 	let (_, (mut missed_commands, runner_config_protocol_changed)) = tokio::try_join!(
 		// Send init packet as soon as possible
 		async {
@@ -301,28 +315,24 @@ pub async fn init_conn(
 		namespace_id: namespace.namespace_id,
 		pool_name,
 		envoy_key,
-		protocol_version,
-		ws_handle,
-		authorized_tunnel_routes: HashMap::new(),
-		sqlite_engine,
-		active_actors: HashMap::new(),
+			protocol_version,
+			ws_handle,
+			authorized_tunnel_routes: HashMap::new(),
+			tunnel_routes: HashMap::new(),
+			udb: conn_udb,
+		ups: conn_ups,
+		node_id,
+		actor_dbs: HashMap::new(),
 		is_serverless,
 		last_rtt: AtomicU32::new(0),
 		last_ping_ts: AtomicI64::new(util::timestamp::now()),
 	});
 
-	// Send missed commands (must be after init packet). If any step fails
-	// after one or more `start_actor` calls already opened SQLite dbs, close
-	// every actor in `conn.active_actors` before returning so we do not leak
-	// process-wide `SqliteEngine.open_dbs` entries that would block re-opening
-	// these actors until the process restarts.
+	// Send missed commands after the init packet.
 	if !missed_commands.is_empty() {
 		let replay_result: Result<()> = async {
 			for cmd_wrapper in &mut missed_commands {
-				if let protocol::Command::CommandStartActor(ref mut start) = cmd_wrapper.inner {
-					actor_lifecycle::start_actor(ctx, &conn, &cmd_wrapper.checkpoint, start)
-						.await?;
-				} else if let protocol::Command::CommandStopActor(_) = cmd_wrapper.inner {
+				if let protocol::Command::CommandStopActor(_) = cmd_wrapper.inner {
 					actor_lifecycle::stop_actor(&conn, &cmd_wrapper.checkpoint).await?;
 				}
 			}

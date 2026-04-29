@@ -13,6 +13,14 @@ pub async fn router(
 			// MARK: Namespaces
 			.route("/namespaces", get(namespaces::list))
 			.route("/namespaces", post(namespaces::create))
+			.route(
+				"/namespaces/{ns_id}/sqlite-config",
+				get(namespaces::get_sqlite_config),
+			)
+			.route(
+				"/namespaces/{ns_id}/sqlite-config",
+				put(namespaces::put_sqlite_config),
+			)
 			// MARK: Runner configs
 			.route("/runner-configs", get(runner_configs::list))
 			.route("/runner-configs/{runner_name}", put(runner_configs::upsert))

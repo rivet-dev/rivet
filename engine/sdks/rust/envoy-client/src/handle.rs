@@ -413,61 +413,6 @@ impl EnvoyHandle {
 		}
 	}
 
-	pub async fn sqlite_commit_stage_begin(
-		&self,
-		request: protocol::SqliteCommitStageBeginRequest,
-	) -> anyhow::Result<protocol::SqliteCommitStageBeginResponse> {
-		match self
-			.send_sqlite_request(SqliteRequest::CommitStageBegin(request))
-			.await?
-		{
-			SqliteResponse::CommitStageBegin(response) => Ok(response),
-			_ => anyhow::bail!("unexpected sqlite commit_stage_begin response type"),
-		}
-	}
-
-	pub async fn sqlite_commit_stage(
-		&self,
-		request: protocol::SqliteCommitStageRequest,
-	) -> anyhow::Result<protocol::SqliteCommitStageResponse> {
-		match self
-			.send_sqlite_request(SqliteRequest::CommitStage(request))
-			.await?
-		{
-			SqliteResponse::CommitStage(response) => Ok(response),
-			_ => anyhow::bail!("unexpected sqlite commit_stage response type"),
-		}
-	}
-
-	pub fn sqlite_commit_stage_fire_and_forget(
-		&self,
-		request: protocol::SqliteCommitStageRequest,
-	) -> anyhow::Result<()> {
-		let (tx, rx) = tokio::sync::oneshot::channel();
-		drop(rx);
-		self.shared
-			.envoy_tx
-			.send(ToEnvoyMessage::SqliteRequest {
-				request: SqliteRequest::CommitStage(request),
-				response_tx: tx,
-			})
-			.map_err(|_| anyhow::anyhow!("envoy channel closed"))?;
-		Ok(())
-	}
-
-	pub async fn sqlite_commit_finalize(
-		&self,
-		request: protocol::SqliteCommitFinalizeRequest,
-	) -> anyhow::Result<protocol::SqliteCommitFinalizeResponse> {
-		match self
-			.send_sqlite_request(SqliteRequest::CommitFinalize(request))
-			.await?
-		{
-			SqliteResponse::CommitFinalize(response) => Ok(response),
-			_ => anyhow::bail!("unexpected sqlite commit_finalize response type"),
-		}
-	}
-
 	pub fn restore_hibernating_requests(
 		&self,
 		actor_id: String,

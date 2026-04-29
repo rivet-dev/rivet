@@ -13,7 +13,9 @@ futures-util.workspace = true
 gas.workspace = true
 include_dir.workspace = true
 indexmap.workspace = true
+lazy_static.workspace = true
 namespace.workspace = true
+parking_lot.workspace = true
 pegboard.workspace = true
 reqwest.workspace = true
 rivet-api-builder.workspace = true
@@ -23,18 +25,28 @@ rivet-api-util.workspace = true
 rivet-config.workspace = true
 rivet-data.workspace = true
 rivet-error.workspace = true
+rivet-metrics.workspace = true
 rivet-pools.workspace = true
 rivet-types.workspace = true
 rivet-util.workspace = true
+scc.workspace = true
 serde_json.workspace = true
 serde.workspace = true
+sqlite-storage.workspace = true
 subtle.workspace = true
 tokio.workspace = true
 tower-http.workspace = true
 tracing.workspace = true
+universaldb.workspace = true
+universalpubsub.workspace = true
 urlencoding.workspace = true
 utoipa.workspace = true
+uuid.workspace = true
 
 [build-dependencies]
 anyhow.workspace = true
 fs_extra.workspace = true
+
+[dev-dependencies]
+axum-test = { workspace = true, features = ["ws"] }
+rivet-test-deps.workspace = true

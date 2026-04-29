@@ -5,27 +5,38 @@ authors.workspace = true
 license.workspace = true
 edition.workspace = true
 
+[features]
+legacy-inline-tests = []
+
 [dependencies]
 anyhow.workspace = true
-async-trait.workspace = true
-bytes.workspace = true
 futures-util.workspace = true
+gas.workspace = true
 lazy_static.workspace = true
 lz4_flex.workspace = true
-moka.workspace = true
+namespace.workspace = true
 parking_lot.workspace = true
-rand.workspace = true
+rivet-cache.workspace = true
+rivet-config.workspace = true
+rivet-error.workspace = true
 rivet-metrics.workspace = true
+rivet-pools.workspace = true
+rivet-runtime.workspace = true
 scc.workspace = true
 serde.workspace = true
 serde_bare.workspace = true
+serde_json.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
+tokio-util.workspace = true
 tracing.workspace = true
-rivet-sqlite-storage-protocol.workspace = true
 universaldb.workspace = true
+universalpubsub.workspace = true
+util.workspace = true
+uuid.workspace = true
+vbare.workspace = true
 
 [dev-dependencies]
+async-trait.workspace = true
 tempfile.workspace = true
-tracing-subscriber.workspace = true
-uuid.workspace = true
+tokio = { workspace = true, features = ["test-util"] }

@@ -28,6 +28,8 @@ use crate::{
 		envoys::list,
 		namespaces::list,
 		namespaces::create,
+		namespaces::get_sqlite_config,
+		namespaces::put_sqlite_config,
 		runner_configs::list::list,
 		runner_configs::upsert::upsert,
 		runner_configs::delete::delete,
@@ -64,6 +66,14 @@ pub async fn router(
 			// MARK: Namespaces
 			.route("/namespaces", axum::routing::get(namespaces::list))
 			.route("/namespaces", axum::routing::post(namespaces::create))
+			.route(
+				"/namespaces/{ns_id}/sqlite-config",
+				axum::routing::get(namespaces::get_sqlite_config),
+			)
+			.route(
+				"/namespaces/{ns_id}/sqlite-config",
+				axum::routing::put(namespaces::put_sqlite_config),
+			)
 			.route("/runner-configs", axum::routing::get(runner_configs::list))
 			.route(
 				"/runner-configs/serverless-health-check",
@@ -107,6 +117,50 @@ pub async fn router(
 			.route(
 				"/actors/{actor_id}/reschedule",
 				axum::routing::post(actors::reschedule::reschedule),
+			)
+			.route(
+				"/actors/{actor_id}/sqlite/restore",
+				axum::routing::post(actors::sqlite_admin::post_restore),
+			)
+			.route(
+				"/actors/{actor_id}/sqlite/fork",
+				axum::routing::post(actors::sqlite_admin::post_fork),
+			)
+			.route(
+				"/actors/{actor_id}/sqlite/operations/{op_id}",
+				axum::routing::get(actors::sqlite_admin::get_operation),
+			)
+			.route(
+				"/actors/{actor_id}/sqlite/operations/{op_id}/sse",
+				axum::routing::get(actors::sqlite_admin::get_operation_sse),
+			)
+			.route(
+				"/actors/{actor_id}/sqlite/retention",
+				axum::routing::get(actors::sqlite_inspector::get_retention),
+			)
+			.route(
+				"/actors/{actor_id}/sqlite/checkpoints",
+				axum::routing::get(actors::sqlite_inspector::get_checkpoints),
+			)
+			.route(
+				"/actors/{actor_id}/sqlite/admin-ops",
+				axum::routing::get(actors::sqlite_inspector::get_admin_ops),
+			)
+			.route(
+				"/actors/{actor_id}/sqlite/retention",
+				axum::routing::put(actors::sqlite_admin::put_retention),
+			)
+			.route(
+				"/actors/{actor_id}/sqlite/refcount/clear",
+				axum::routing::post(actors::sqlite_admin::post_refcount_clear),
+			)
+			.route(
+				"/namespaces/{ns_id}/sqlite/overview",
+				axum::routing::get(actors::sqlite_inspector::get_namespace_overview),
+			)
+			.route(
+				"/sqlite/inspector/ws",
+				axum::routing::get(actors::sqlite_inspector::websocket),
 			)
 			// MARK: Runners
 			.route("/runners", axum::routing::get(runners::list))

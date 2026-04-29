@@ -1,0 +1,5 @@
+{
+  "code": "actor_restore_in_progress",
+  "group": "sqlite_admin",
+  "message": "the actor is being restored; commits are temporarily blocked"
+}

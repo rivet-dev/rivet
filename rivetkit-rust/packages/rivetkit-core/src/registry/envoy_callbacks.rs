@@ -11,7 +11,6 @@ impl EnvoyCallbacks for RegistryCallbacks {
 		generation: u32,
 		config: protocol::ActorConfig,
 		preloaded_kv: Option<protocol::PreloadedKv>,
-		sqlite_startup_data: Option<protocol::SqliteStartupData>,
 	) -> EnvoyBoxFuture<anyhow::Result<()>> {
 		let dispatcher = self.dispatcher.clone();
 		let actor_name = config.name.clone();
@@ -34,7 +33,6 @@ impl EnvoyCallbacks for RegistryCallbacks {
 				generation,
 				&actor_name,
 				key,
-				sqlite_startup_data,
 				factory.as_ref(),
 			);
 
@@ -58,7 +56,7 @@ impl EnvoyCallbacks for RegistryCallbacks {
 		&self,
 		_handle: EnvoyHandle,
 		actor_id: String,
-		generation: u32,
+		_generation: u32,
 		reason: protocol::StopActorReason,
 		stop_handle: ActorStopHandle,
 	) -> EnvoyBoxFuture<anyhow::Result<()>> {

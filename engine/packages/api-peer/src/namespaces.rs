@@ -1,5 +1,6 @@
 use anyhow::Result;
 use gas::prelude::*;
+use namespace::types::SqliteNamespaceConfig;
 use rivet_api_builder::{ApiBadRequest, ApiCtx};
 use rivet_api_types::{namespaces::list::*, pagination::Pagination};
 use rivet_util::Id;
@@ -134,4 +135,73 @@ pub async fn create(
 		.ok_or_else(|| namespace::errors::Namespace::NotFound.build())?;
 
 	Ok(CreateResponse { namespace })
+}
+
+#[derive(Deserialize, Serialize, ToSchema)]
+#[serde(deny_unknown_fields)]
+#[schema(as = NamespacesSqliteConfigPath)]
+pub struct SqliteConfigPath {
+	pub ns_id: Id,
+}
+
+#[tracing::instrument(skip_all)]
+pub async fn get_sqlite_config(
+	ctx: ApiCtx,
+	path: SqliteConfigPath,
+	_query: (),
+) -> Result<SqliteNamespaceConfig> {
+	ctx.op(namespace::ops::sqlite_config::get::Input {
+		namespace_id: path.ns_id,
+	})
+	.await
+}
+
+#[tracing::instrument(skip_all)]
+pub async fn put_sqlite_config(
+	ctx: ApiCtx,
+	path: SqliteConfigPath,
+	_query: (),
+	body: SqliteNamespaceConfig,
+) -> Result<SqliteNamespaceConfig> {
+	validate_sqlite_config(&body)?;
+
+	ctx.op(namespace::ops::sqlite_config::put::Input {
+		namespace_id: path.ns_id,
+		config: body,
+	})
+	.await
+}
+
+fn validate_sqlite_config(config: &SqliteNamespaceConfig) -> Result<()> {
+	if config.default_retention_ms > config.max_retention_ms {
+		return Err(ApiBadRequest {
+			reason: "default_retention_ms must be <= max_retention_ms".to_string(),
+		}
+		.build());
+	}
+
+	if config.pitr_max_bytes_per_actor > config.pitr_namespace_budget_bytes {
+		return Err(ApiBadRequest {
+			reason: "pitr_max_bytes_per_actor must be <= pitr_namespace_budget_bytes".to_string(),
+		}
+		.build());
+	}
+
+	let pitr_or_fork_allowed = config.allow_pitr_read
+		|| config.allow_pitr_destructive
+		|| config.allow_pitr_admin
+		|| config.allow_fork;
+
+	if pitr_or_fork_allowed
+		&& (config.admin_op_rate_per_min == 0
+			|| config.concurrent_admin_ops == 0
+			|| config.concurrent_forks_per_src == 0)
+	{
+		return Err(ApiBadRequest {
+			reason: "admin_op_rate_per_min, concurrent_admin_ops, and concurrent_forks_per_src must be > 0 when PITR or fork is allowed".to_string(),
+		}
+		.build());
+	}
+
+	Ok(())
 }

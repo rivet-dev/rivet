@@ -1,0 +1,5 @@
+{
+  "code": "pitr_namespace_budget_exceeded",
+  "group": "sqlite_admin",
+  "message": "creating this checkpoint would exceed the namespace PITR budget"
+}

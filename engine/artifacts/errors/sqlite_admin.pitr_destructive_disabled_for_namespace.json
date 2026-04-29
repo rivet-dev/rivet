@@ -1,0 +1,5 @@
+{
+  "code": "pitr_destructive_disabled_for_namespace",
+  "group": "sqlite_admin",
+  "message": "destructive PITR (Apply mode restore) is not enabled for this namespace"
+}

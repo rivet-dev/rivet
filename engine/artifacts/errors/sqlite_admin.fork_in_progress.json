@@ -1,0 +1,5 @@
+{
+  "code": "fork_in_progress",
+  "group": "sqlite_admin",
+  "message": "a fork operation is already targeting this destination actor"
+}

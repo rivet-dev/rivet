@@ -1,0 +1,5 @@
+{
+  "code": "invalid_restore_point",
+  "group": "sqlite_admin",
+  "message": "the requested target is not within the retention window or has had its DELTAs cleaned up"
+}

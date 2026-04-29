@@ -1,0 +1,217 @@
+---
+title: "SQLite PITR & Forking"
+description: "Restore or fork a Rivet Actor SQLite database to a retained point in time."
+skill: true
+---
+
+## Overview
+
+SQLite PITR lets you restore an actor database to a retained transaction or fork it into another actor. PITR is disabled by default and must be enabled for the namespace before these APIs can be used.
+
+**PITR is logical recovery only. It is NOT a backup against FoundationDB cluster loss. Object-store tiering is the eventual DR story.**
+
+Use PITR for mistakes like bad migrations, accidental deletes, or corrupt application state. Do not treat it as disaster recovery for the underlying storage cluster.
+
+## Namespace Setup
+
+Configure PITR and fork permissions on the namespace:
+
+```http
+PUT /namespaces/{namespace_id}/sqlite-config
+```
+
+```json
+{
+  "default_retention_ms": 86400000,
+  "default_checkpoint_interval_ms": 3600000,
+  "default_max_checkpoints": 25,
+  "allow_pitr_read": true,
+  "allow_pitr_destructive": true,
+  "allow_pitr_admin": true,
+  "allow_fork": true,
+  "pitr_max_bytes_per_actor": 1073741824,
+  "pitr_namespace_budget_bytes": 1099511627776,
+  "max_retention_ms": 604800000,
+  "admin_op_rate_per_min": 10,
+  "concurrent_admin_ops": 4,
+  "concurrent_forks_per_src": 2
+}
+```
+
+Read the current config with:
+
+```http
+GET /namespaces/{namespace_id}/sqlite-config
+```
+
+Defaults keep PITR off: retention is `0`, capability flags are `false`, and PITR byte caps are `0`.
+
+## Restore
+
+`actor.restore` maps to:
+
+```http
+POST /actors/{actor_id}/sqlite/restore
+```
+
+Request:
+
+```json
+{
+  "target": { "kind": "txid", "txid": 42 },
+  "mode": "apply"
+}
+```
+
+Supported targets:
+
+| Target | Meaning |
+|---|---|
+| `txid` | Restore to a retained transaction id. |
+| `timestamp_ms` | Restore to the newest reachable point at or before a Unix timestamp in milliseconds. |
+| `latest_checkpoint` | Restore to the newest checkpoint. |
+| `checkpoint_txid` | Restore to a specific checkpoint transaction id. |
+
+Supported modes:
+
+| Mode | Effect |
+|---|---|
+| `dry_run` | Validates reachability and returns the checkpoint and DELTAs that would be used. |
+| `apply` | Suspends the actor, restores SQLite state, and resumes after completion. |
+
+Response:
+
+```json
+{
+  "operation_id": "0f17a553-5f03-44a3-86f6-b864f5f22837",
+  "status": "pending"
+}
+```
+
+Restore is asynchronous. Poll the operation or subscribe to SSE for progress.
+
+## Fork
+
+`actor.fork` maps to:
+
+```http
+POST /actors/{actor_id}/sqlite/fork
+```
+
+Request:
+
+```json
+{
+  "target": { "kind": "latest_checkpoint" },
+  "mode": "apply",
+  "dst": {
+    "kind": "allocate",
+    "dst_namespace_id": "8e65d816-34f1-46f0-ae69-ec246f42964e"
+  }
+}
+```
+
+Destination options:
+
+| Destination | Meaning |
+|---|---|
+| `allocate` | Allocate a new destination actor in the given namespace. |
+| `existing` | Copy into an existing empty destination actor. |
+
+Fork returns the same pending operation shape as restore. The source actor remains online. The destination actor is finalized only after checkpoint copy and DELTA replay complete.
+
+## Retention
+
+`actor.describeRetention` maps to:
+
+```http
+GET /actors/{actor_id}/sqlite/retention
+```
+
+Response:
+
+```json
+{
+  "head": {
+    "head_txid": 128,
+    "db_size_pages": 1024
+  },
+  "fine_grained_window": {
+    "from_txid": 100,
+    "to_txid": 128,
+    "from_taken_at_ms": 1761724800000,
+    "to_taken_at_ms": 1761728400000,
+    "delta_count": 29,
+    "total_bytes": 524288
+  },
+  "checkpoints": [
+    {
+      "ckp_txid": 96,
+      "taken_at_ms": 1761721200000,
+      "byte_count": 4194304,
+      "refcount": 0,
+      "pinned_reason": null
+    }
+  ],
+  "storage_used_live_bytes": 8388608,
+  "storage_used_pitr_bytes": 4718592,
+  "pitr_namespace_budget_bytes": 1099511627776,
+  "pitr_namespace_used_bytes": 1073741824
+}
+```
+
+Update actor retention with:
+
+```http
+PUT /actors/{actor_id}/sqlite/retention
+```
+
+```json
+{
+  "retention_ms": 86400000,
+  "checkpoint_interval_ms": 3600000,
+  "max_checkpoints": 25
+}
+```
+
+## Operations
+
+Poll an operation:
+
+```http
+GET /actors/{actor_id}/sqlite/operations/{operation_id}
+```
+
+Stream progress:
+
+```http
+GET /actors/{actor_id}/sqlite/operations/{operation_id}/sse
+```
+
+Statuses are `Pending`, `InProgress`, `Completed`, `Failed`, and `Orphaned`.
+
+## Errors
+
+Errors use the RivetError shape:
+
+```json
+{
+  "group": "sqlite_admin",
+  "code": "invalid_restore_point",
+  "message": "the requested target is not within the retention window or has had its DELTAs cleaned up"
+}
+```
+
+Common codes:
+
+| Code | Meaning |
+|---|---|
+| `pitr_disabled_for_namespace` | PITR read operations are disabled for the namespace. |
+| `pitr_destructive_disabled_for_namespace` | Apply restore is disabled for the namespace. |
+| `pitr_admin_disabled_for_namespace` | Retention or refcount admin operations are disabled. |
+| `fork_disabled_for_namespace` | Forking is disabled for the source or destination namespace. |
+| `invalid_restore_point` | The requested target is outside the retained window. |
+| `actor_restore_in_progress` | A commit was blocked while restore was active. |
+| `admin_op_rate_limited` | Namespace rate or concurrency gates rejected the request. |
+
+During Apply restore, existing WebSocket clients are closed with `1012 actor.restore_in_progress`. See [SQLite Restore Reconnects](/docs/actors/sqlite-restore-reconnect).

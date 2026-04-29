@@ -372,7 +372,6 @@ pub async fn send_outbound(ctx: &ActivityCtx, input: &SendOutboundInput) -> Resu
 				// populated before it reaches the runner
 				hibernating_requests: Vec::new(),
 				preloaded_kv: None,
-				sqlite_startup_data: None,
 			});
 
 			// NOTE: Kinda jank but it works
