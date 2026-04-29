@@ -7,7 +7,7 @@ use anyhow::Result;
 use gas::prelude::*;
 use rivet_guard_core::{
 	WebSocketHandle,
-	errors::{WebSocketServiceHibernate, WebSocketServiceTimeout, WebSocketServiceUnavailable},
+	errors::{WebSocketServiceHibernate, WebSocketServiceTimeout},
 };
 use rivet_runner_protocol as protocol;
 use tokio::sync::{mpsc, watch};
@@ -83,7 +83,11 @@ pub async fn task(
 				if can_hibernate {
 					return Err(WebSocketServiceHibernate.build());
 				} else {
-					return Err(WebSocketServiceUnavailable.build());
+					return Ok(LifecycleResult::ServerClose(protocol::mk2::ToServerWebSocketClose {
+						code: Some(1000),
+						reason: Some("actor.stopped".to_owned()),
+						hibernate: false,
+					}));
 				}
 			}
 			_ = drop_rx.changed() => {

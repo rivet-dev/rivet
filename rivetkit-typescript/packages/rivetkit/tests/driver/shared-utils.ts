@@ -29,6 +29,7 @@ export async function setupDriverTest(
 ): Promise<{
 	client: Client<typeof registry>;
 	endpoint: string;
+	namespace: string;
 	hardCrashActor?: (actorId: string) => Promise<void>;
 	hardCrashPreservesData: boolean;
 	getRuntimeOutput: () => string;
@@ -83,6 +84,7 @@ export async function setupDriverTest(
 	return {
 		client,
 		endpoint,
+		namespace,
 		hardCrashActor,
 		hardCrashPreservesData: hardCrashPreservesData ?? false,
 		getRuntimeOutput: getRuntimeOutput ?? (() => ""),

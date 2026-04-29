@@ -83,7 +83,11 @@ pub async fn task(
 				if can_hibernate {
 					return Err(WebSocketServiceHibernate.build());
 				} else {
-					return Err(WebSocketServiceUnavailable.build());
+					return Ok(LifecycleResult::ServerClose(protocol::ToRivetWebSocketClose {
+						code: Some(1000),
+						reason: Some("actor.stopped".to_owned()),
+						hibernate: false,
+					}));
 				}
 			}
 			_ = drop_rx.changed() => {

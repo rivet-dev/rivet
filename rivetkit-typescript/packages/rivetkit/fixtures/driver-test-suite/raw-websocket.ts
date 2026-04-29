@@ -169,6 +169,10 @@ export const rawWebSocketBinaryActor = actor({
 });
 
 export const rawWebSocketAsyncOpenActor = actor({
+	options: {
+		canHibernateWebSocket: false,
+		sleepGracePeriod: 2_000,
+	},
 	state: {
 		openCount: 0,
 	},
