@@ -46,3 +46,6 @@ rusqlite.workspace = true
 
 pegboard.workspace = true
 namespace.workspace = true
+
+[dev-dependencies]
+uuid.workspace = true

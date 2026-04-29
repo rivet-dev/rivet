@@ -52,6 +52,8 @@ Started: Wed Apr 29 04:36:56 AM PDT 2026
 - Short sqlite admin ops persist rich responses as typed `OpResult` variants; direct handlers in `compactor::admin` transition records to InProgress before completing so tests can call them without the worker.
 - SQLite admin audit fields carry a raw UUID namespace id; tests that need namespace config seed `namespace::keys::sqlite_config_key(Id::v1(audit.namespace_id, 0))`.
 - api-public SQLite admin endpoints create `AdminOpRecord`s locally through `ctx.udb()` and publish typed `SqliteOpSubject` requests through `ctx.ups()`; endpoint tests that need short-op completion must start `sqlite_storage::compactor::worker::test_hooks::run_for_test`.
+- Pegboard restore suspension is a persisted actor-lifecycle gate plus a broadcast lifecycle message; pegboard-envoy still checks UDB on each new tunnel open/request so missed broadcasts cannot reaccept traffic.
+- api-public restore orchestration resumes an actor only after the persisted `AdminOpRecord` reaches `Completed`; `Failed` and `Orphaned` records intentionally leave the actor suspended for operator action.
 
 ## 2026-04-29 04:44:52 PDT - US-001
 - Implemented a UUID-backed `NodeId` type and stored a generated value on each `Pools` instance.
@@ -446,4 +448,15 @@ Started: Wed Apr 29 04:36:56 AM PDT 2026
   - api-public can expose SQLite admin records directly with standard JSON because `AdminOpRecord` and result payloads already derive serde traits.
   - SSE tests need real HTTP transport from `axum_test::TestServer::builder().http_transport()`; mock transport is fine for normal JSON endpoint tests.
   - Short admin endpoint tests must start the compactor worker before publishing because UPS does not retain pre-subscription `SqliteOpSubject` messages.
+---
+## 2026-04-29 09:49:48 PDT - US-038
+- Implemented pegboard actor restore suspension state, lifecycle broadcast messages, and resume clearing.
+- Wired pegboard-envoy to track tunnel routes, reject suspended HTTP requests with `503 Retry-After: 30`, reject new WS routes with `1012 actor.restore_in_progress`, and close tracked WS routes on suspend broadcasts.
+- Updated api-public restore creation to suspend before publishing and spawn a monitor that resumes only after `AdminOpRecord` reaches `Completed`.
+- Verified `cargo test -p pegboard-envoy --test restore_lifecycle`, `cargo test -p rivet-api-public --test restore_user_flow`, `cargo check --workspace`, and `git diff --check`.
+- Files changed: `Cargo.lock`, `engine/packages/pegboard/src/{actor_lifecycle.rs,lib.rs}`, `engine/packages/pegboard-envoy/{Cargo.toml,src/{conn.rs,lib.rs,restore_lifecycle.rs,tunnel_to_ws_task.rs,ws_to_tunnel_task.rs},tests/restore_lifecycle.rs}`, `engine/packages/api-public/src/actors/sqlite_admin.rs`, `engine/packages/api-public/tests/restore_user_flow.rs`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
+- **Learnings for future iterations:**
+  - Use pegboard's persisted actor-lifecycle gate as the source of truth; the UPS lifecycle broadcast is only the fast path for existing route closure.
+  - Pegboard-envoy should respond to suspended gateway tunnel messages itself rather than forwarding them to the actor envoy.
+  - Restore API tests can simulate compactor completion by transitioning `AdminOpRecord` through `InProgress` before `Completed`; direct `Pending -> Completed` is an invalid transition.
 ---

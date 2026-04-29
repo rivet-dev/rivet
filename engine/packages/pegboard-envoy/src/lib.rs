@@ -17,6 +17,7 @@ mod conn;
 mod errors;
 mod metrics;
 mod ping_task;
+pub mod restore_lifecycle;
 pub mod sqlite_runtime;
 mod tunnel_to_ws_task;
 mod utils;
@@ -119,6 +120,13 @@ impl CustomServeTrait for PegboardEnvoyWs {
 				eviction_topic
 			)
 		})?;
+		let lifecycle_topic = pegboard::actor_lifecycle::ActorLifecycleSubject.to_string();
+		let lifecycle_sub = ups.subscribe(&lifecycle_topic).await.with_context(|| {
+			format!(
+				"failed to subscribe to actor lifecycle topic: {}",
+				lifecycle_topic
+			)
+		})?;
 
 		// Create the connection.
 		let conn = conn::init_conn(&ctx, ws_handle.clone(), url_data)
@@ -149,6 +157,7 @@ impl CustomServeTrait for PegboardEnvoyWs {
 			conn.clone(),
 			sub,
 			eviction_sub,
+			lifecycle_sub,
 			tunnel_to_ws_abort_rx,
 		));
 		let ws_to_tunnel = tokio::spawn(ws_to_tunnel_task::task(

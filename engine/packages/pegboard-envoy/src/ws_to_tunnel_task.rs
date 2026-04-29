@@ -9,7 +9,6 @@ use pegboard::pubsub_subjects::GatewayReceiverSubject;
 use rivet_data::converted::{ActorNameKeyData, MetadataKeyData};
 use rivet_envoy_protocol::{self as protocol, PROTOCOL_VERSION, versioned};
 use rivet_guard_core::websocket_handle::WebSocketReceiver;
-use scc::HashMap;
 use sqlite_storage::{error::SqliteStorageError, pump::ActorDb};
 use std::{
 	collections::BTreeSet,
@@ -24,7 +23,8 @@ use universalpubsub::PublishOpts;
 use vbare::OwnedVersionedData;
 
 use crate::{
-	LifecycleResult, actor_event_demuxer::ActorEventDemuxer, conn::Conn, errors, sqlite_runtime,
+	LifecycleResult, actor_event_demuxer::ActorEventDemuxer, conn::Conn, errors, restore_lifecycle,
+	sqlite_runtime,
 };
 
 #[tracing::instrument(name="ws_to_tunnel_task", skip_all, fields(ray_id=?ctx.ray_id(), req_id=?ctx.req_id(), envoy_key=%conn.envoy_key, protocol_version=%conn.protocol_version))]
@@ -395,7 +395,7 @@ async fn handle_message(
 				.observe(timed_response.commit_completed_at.elapsed().as_secs_f64());
 		}
 		protocol::ToRivet::ToRivetTunnelMessage(tunnel_msg) => {
-			handle_tunnel_message(ctx, &conn.authorized_tunnel_routes, tunnel_msg)
+			handle_tunnel_message(ctx, conn, tunnel_msg)
 				.await
 				.context("failed to handle tunnel message")?;
 		}
@@ -571,7 +571,7 @@ async fn handle_metadata(
 #[tracing::instrument(skip_all)]
 async fn handle_tunnel_message(
 	ctx: &StandaloneCtx,
-	_authorized_tunnel_routes: &HashMap<(protocol::GatewayId, protocol::RequestId), ()>,
+	conn: &Conn,
 	msg: protocol::ToRivetTunnelMessage,
 ) -> Result<()> {
 	// Extract inner data length before consuming msg
@@ -592,6 +592,7 @@ async fn handle_tunnel_message(
 	// }
 
 	let gateway_reply_to = GatewayReceiverSubject::new(msg.message_id.gateway_id).to_string();
+	restore_lifecycle::track_from_envoy_tunnel_message(&conn.tunnel_routes, &msg).await;
 	let msg_serialized =
 		versioned::ToGateway::wrap_latest(protocol::ToGateway::ToRivetTunnelMessage(msg))
 			.serialize_with_embedded_version(PROTOCOL_VERSION)

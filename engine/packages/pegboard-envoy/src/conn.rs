@@ -21,7 +21,11 @@ use universaldb::prelude::*;
 use universalpubsub::PubSub;
 use vbare::OwnedVersionedData;
 
-use crate::{actor_lifecycle, errors, metrics, utils::UrlData};
+use crate::{
+	actor_lifecycle, errors, metrics,
+	restore_lifecycle::{RouteKey, RouteState},
+	utils::UrlData,
+};
 
 pub struct Conn {
 	pub namespace_id: Id,
@@ -30,6 +34,7 @@ pub struct Conn {
 	pub protocol_version: u16,
 	pub ws_handle: WebSocketHandle,
 	pub authorized_tunnel_routes: HashMap<(protocol::GatewayId, protocol::RequestId), ()>,
+	pub tunnel_routes: HashMap<RouteKey, RouteState>,
 	pub udb: Arc<universaldb::Database>,
 	pub ups: Arc<PubSub>,
 	pub node_id: NodeId,
@@ -313,6 +318,7 @@ pub async fn init_conn(
 			protocol_version,
 			ws_handle,
 			authorized_tunnel_routes: HashMap::new(),
+			tunnel_routes: HashMap::new(),
 			udb: conn_udb,
 		ups: conn_ups,
 		node_id,

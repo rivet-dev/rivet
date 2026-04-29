@@ -9,7 +9,7 @@ use universalpubsub as ups;
 use universalpubsub::{NextOutput, PublishOpts, Subscriber};
 use vbare::OwnedVersionedData;
 
-use crate::{LifecycleResult, actor_lifecycle, conn::Conn, metrics};
+use crate::{LifecycleResult, actor_lifecycle, conn::Conn, metrics, restore_lifecycle};
 
 #[tracing::instrument(name="tunnel_to_ws_task", skip_all, fields(ray_id=?ctx.ray_id(), req_id=?ctx.req_id(), envoy_key=%conn.envoy_key, protocol_version=%conn.protocol_version))]
 pub async fn task(
@@ -17,6 +17,7 @@ pub async fn task(
 	conn: Arc<Conn>,
 	mut tunnel_sub: Subscriber,
 	mut eviction_sub: Subscriber,
+	mut lifecycle_sub: Subscriber,
 	mut tunnel_to_ws_abort_rx: watch::Receiver<()>,
 ) -> Result<LifecycleResult> {
 	loop {
@@ -24,6 +25,7 @@ pub async fn task(
 			&conn,
 			&mut tunnel_sub,
 			&mut eviction_sub,
+			&mut lifecycle_sub,
 			&mut tunnel_to_ws_abort_rx,
 		)
 		.await?
@@ -43,42 +45,54 @@ async fn recv_msg(
 	conn: &Conn,
 	tunnel_sub: &mut Subscriber,
 	eviction_sub: &mut Subscriber,
+	lifecycle_sub: &mut Subscriber,
 	tunnel_to_ws_abort_rx: &mut watch::Receiver<()>,
 ) -> Result<std::result::Result<ups::Message, LifecycleResult>> {
-	let tunnel_msg = tokio::select! {
-		res = tunnel_sub.next() => {
-			if let NextOutput::Message(tunnel_msg) = res? {
-				tunnel_msg
-			} else {
-				tracing::debug!("tunnel sub closed");
-				bail!("tunnel sub closed");
+	loop {
+		let tunnel_msg = tokio::select! {
+			res = tunnel_sub.next() => {
+				if let NextOutput::Message(tunnel_msg) = res? {
+					tunnel_msg
+				} else {
+					tracing::debug!("tunnel sub closed");
+					bail!("tunnel sub closed");
+				}
 			}
-		}
-		_ = eviction_sub.next() => {
-			tracing::debug!("envoy evicted");
+			_ = eviction_sub.next() => {
+				tracing::debug!("envoy evicted");
 
-			metrics::EVICTION_TOTAL
-				.with_label_values(&[
-					conn.namespace_id.to_string().as_str(),
-					&conn.pool_name,
-					conn.protocol_version.to_string().as_str(),
-				])
-				.inc();
+				metrics::EVICTION_TOTAL
+					.with_label_values(&[
+						conn.namespace_id.to_string().as_str(),
+						&conn.pool_name,
+						conn.protocol_version.to_string().as_str(),
+					])
+					.inc();
 
-			return Ok(Err(LifecycleResult::Evicted));
-		}
-		_ = tunnel_to_ws_abort_rx.changed() => {
-			tracing::debug!("task aborted");
-			return Ok(Err(LifecycleResult::Aborted));
-		}
-	};
+				return Ok(Err(LifecycleResult::Evicted));
+			}
+			res = lifecycle_sub.next() => {
+				if let NextOutput::Message(lifecycle_msg) = res? {
+					restore_lifecycle::handle_lifecycle_message(&conn.ups, &conn.tunnel_routes, &lifecycle_msg.payload).await?;
+					continue;
+				} else {
+					tracing::debug!("actor lifecycle sub closed");
+					bail!("actor lifecycle sub closed");
+				}
+			}
+			_ = tunnel_to_ws_abort_rx.changed() => {
+				tracing::debug!("task aborted");
+				return Ok(Err(LifecycleResult::Aborted));
+			}
+		};
 
-	tracing::debug!(
-		payload_len = tunnel_msg.payload.len(),
-		"received message from pubsub, forwarding to WebSocket"
-	);
+		tracing::debug!(
+			payload_len = tunnel_msg.payload.len(),
+			"received message from pubsub, forwarding to WebSocket"
+		);
 
-	Ok(Ok(tunnel_msg))
+		return Ok(Ok(tunnel_msg));
+	}
 }
 
 async fn handle_message(
@@ -137,6 +151,17 @@ async fn handle_message(
 		}
 		protocol::ToEnvoyConn::ToEnvoyAckEvents(x) => protocol::ToEnvoy::ToEnvoyAckEvents(x),
 		protocol::ToEnvoyConn::ToEnvoyTunnelMessage(x) => {
+			if restore_lifecycle::maybe_reject_suspended_tunnel_message(
+				&conn.udb,
+				&conn.ups,
+				&conn.tunnel_routes,
+				&x,
+			)
+			.await?
+			{
+				return Ok(false);
+			}
+			restore_lifecycle::track_forwarded_tunnel_message(&conn.tunnel_routes, &x).await;
 			let _ = conn
 				.authorized_tunnel_routes
 				.insert_async((x.message_id.gateway_id, x.message_id.request_id), ())

@@ -145,7 +145,7 @@ async fn post_restore_inner(
 		target: body.target.into(),
 		mode: body.mode.into(),
 	};
-	create_and_publish(ctx, op_id, OpKind::Restore, path.actor_id, body.namespace_id, op).await?;
+	create_and_publish_restore(ctx, op_id, path.actor_id, body.namespace_id, op).await?;
 	Ok(accepted(op_id))
 }
 
@@ -355,6 +355,25 @@ async fn create_publish_and_wait(
 	wait_for_terminal(udb, &actor_id, op_id, INLINE_OP_TIMEOUT).await
 }
 
+async fn create_and_publish_restore(
+	ctx: ApiCtx,
+	op_id: Uuid,
+	actor_id: String,
+	namespace_id: Option<Uuid>,
+	op: SqliteOp,
+) -> Result<()> {
+	create_and_publish_inner(
+		ctx,
+		op_id,
+		OpKind::Restore,
+		actor_id,
+		namespace_id,
+		op,
+		true,
+	)
+	.await
+}
+
 async fn create_and_publish(
 	ctx: ApiCtx,
 	op_id: Uuid,
@@ -363,27 +382,94 @@ async fn create_and_publish(
 	namespace_id: Option<Uuid>,
 	op: SqliteOp,
 ) -> Result<()> {
+	create_and_publish_inner(ctx, op_id, op_kind, actor_id, namespace_id, op, false).await
+}
+
+async fn create_and_publish_inner(
+	ctx: ApiCtx,
+	op_id: Uuid,
+	op_kind: OpKind,
+	actor_id: String,
+	namespace_id: Option<Uuid>,
+	op: SqliteOp,
+	suspend_for_restore: bool,
+) -> Result<()> {
 	let audit = AuditFields {
 		caller_id: caller_id(&ctx),
 		request_origin_ts_ms: now_ms()?,
 		namespace_id: namespace_id.unwrap_or_else(Uuid::nil),
 	};
 	let udb = ctx.udb_arc()?;
-	admin::create_record(Arc::clone(&udb), op_id, op_kind, actor_id, audit.clone()).await?;
+	admin::create_record(
+		Arc::clone(&udb),
+		op_id,
+		op_kind,
+		actor_id.clone(),
+		audit.clone(),
+	)
+	.await?;
+	let ups = ctx.ups()?;
+	if suspend_for_restore {
+		pegboard::actor_lifecycle::suspend_actor(
+			&udb,
+			&ups,
+			actor_id.clone(),
+			pegboard::actor_lifecycle::RESTORE_SUSPENSION_REASON,
+			op_id,
+		)
+		.await?;
+	}
 	let request = SqliteOpRequest {
 		request_id: op_id,
 		op,
 		audit,
 	};
-	ctx.ups()?
-		.publish(
+	ups.publish(
 			SqliteOpSubject,
 			&encode_sqlite_op_request(request).context("encode sqlite op request")?,
 			PublishOpts::one(),
 		)
 		.await
 		.with_context(|| format!("publish {SQLITE_OP_SUBJECT} sqlite admin op"))?;
+	if suspend_for_restore {
+		spawn_restore_resume_monitor(ctx, udb, actor_id, op_id);
+	}
 	Ok(())
+}
+
+fn spawn_restore_resume_monitor(
+	ctx: ApiCtx,
+	udb: Arc<universaldb::Database>,
+	actor_id: String,
+	op_id: Uuid,
+) {
+	tokio::spawn(async move {
+		match wait_for_terminal(Arc::clone(&udb), &actor_id, op_id, SSE_TIMEOUT).await {
+			Ok(record) if record.status == OpStatus::Completed => {
+				let ups = match ctx.ups() {
+					Ok(ups) => ups,
+					Err(err) => {
+						tracing::error!(actor_id = %actor_id, %op_id, ?err, "failed to load ups for restore resume");
+						return;
+					}
+				};
+				if let Err(err) = pegboard::actor_lifecycle::resume_actor(&udb, &ups, actor_id.clone()).await {
+					tracing::error!(actor_id = %actor_id, %op_id, ?err, "failed to resume actor after sqlite restore");
+				}
+			}
+			Ok(record) => {
+				tracing::warn!(
+					actor_id = %actor_id,
+					%op_id,
+					status = ?record.status,
+					"sqlite restore finished without completion; leaving actor suspended"
+				);
+			}
+			Err(err) => {
+				tracing::warn!(actor_id = %actor_id, %op_id, ?err, "sqlite restore monitor ended; leaving actor suspended");
+			}
+		}
+	});
 }
 
 async fn read_operation(
