@@ -1,0 +1,5 @@
+{
+  "code": "actor_restore_in_progress",
+  "group": "sqlite_admin",
+  "message": "SQLite restore is in progress for this actor."
+}

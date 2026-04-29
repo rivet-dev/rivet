@@ -41,4 +41,11 @@ lazy_static::lazy_static! {
 		&["node_id"],
 		*REGISTRY
 	).unwrap();
+
+	pub static ref SQLITE_PUMP_RESTORE_GUARD_READ_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
+		"sqlite_pump_restore_guard_read_total",
+		"Total stateless sqlite pump commit calls that read the restore-in-progress marker.",
+		&["node_id"],
+		*REGISTRY
+	).unwrap();
 }

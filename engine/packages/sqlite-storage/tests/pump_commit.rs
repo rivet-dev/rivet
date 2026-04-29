@@ -2,25 +2,28 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Result;
+use rivet_error::RivetError;
 use rivet_pools::NodeId;
 use sqlite_storage::compactor::{
 	SqliteCompactSubject, decode_compact_payload,
 };
 use sqlite_storage::{
 	keys::{
-		PAGE_SIZE, delta_chunk_key, meta_compact_key, meta_head_key, pidx_delta_key, shard_key,
+		PAGE_SIZE, delta_chunk_key, delta_meta_key, meta_compact_key, meta_head_key,
+		meta_restore_in_progress_key, pidx_delta_key, shard_key,
 	},
 	ltx::{LtxHeader, encode_ltx_v3},
-	pump::ActorDb,
+	pump::{ActorDb, metrics},
 	quota::{self, SQLITE_MAX_STORAGE_BYTES},
 	types::{
-		DBHead, DirtyPage, FetchedPage, MetaCompact, decode_db_head, encode_db_head,
-		encode_meta_compact,
+		DBHead, DirtyPage, FetchedPage, MetaCompact, RestoreMarker, RestoreStep, decode_db_head,
+		decode_delta_meta, encode_db_head, encode_meta_compact, encode_restore_marker,
 	},
 };
 use tempfile::Builder;
 use universalpubsub::{NextOutput, PubSub, driver::memory::MemoryDriver};
 use universaldb::utils::IsolationLevel::Snapshot;
+use uuid::Uuid;
 
 const TEST_ACTOR: &str = "test-actor";
 
@@ -57,6 +60,17 @@ fn fetched_page(pgno: u32, fill: u8) -> FetchedPage {
 	FetchedPage {
 		pgno,
 		bytes: Some(vec![fill; PAGE_SIZE as usize]),
+	}
+}
+
+fn restore_marker() -> RestoreMarker {
+	RestoreMarker {
+		target_txid: 1,
+		ckp_txid: 0,
+		started_at_ms: 1_000,
+		last_completed_step: RestoreStep::Started,
+		holder_id: NodeId::new(),
+		op_id: Uuid::new_v4(),
 	}
 }
 
@@ -108,6 +122,12 @@ async fn read_quota(db: &universaldb::Database) -> Result<i64> {
 		.await
 }
 
+fn restore_guard_reads(node_id: NodeId) -> u64 {
+	metrics::SQLITE_PUMP_RESTORE_GUARD_READ_TOTAL
+		.with_label_values(&[node_id.to_string().as_str()])
+		.get()
+}
+
 #[tokio::test]
 async fn commit_lazily_initializes_meta_on_first_write() -> Result<()> {
 	let db = Arc::new(test_db().await?);
@@ -130,6 +150,163 @@ async fn commit_lazily_initializes_meta_on_first_write() -> Result<()> {
 		actor_db.get_pages(vec![1]).await?,
 		vec![fetched_page(1, 0x11)]
 	);
+
+	Ok(())
+}
+
+#[tokio::test]
+async fn delta_meta_written_on_commit() -> Result<()> {
+	let db = Arc::new(test_db().await?);
+	let actor_db = ActorDb::new(db.clone(), test_ups(), TEST_ACTOR.to_string(), NodeId::new());
+
+	actor_db.commit(vec![page(1, 0x11)], 2, 1_234).await?;
+
+	let delta_meta = read_value(&db, delta_meta_key(TEST_ACTOR, 1))
+		.await?
+		.expect("delta meta should exist");
+	let decoded = decode_delta_meta(&delta_meta)?;
+	let chunk_bytes = read_value(&db, delta_chunk_key(TEST_ACTOR, 1, 0))
+		.await?
+		.expect("delta chunk should exist")
+		.len();
+
+	assert_eq!(decoded.taken_at_ms, 1_234);
+	assert_eq!(decoded.byte_count, chunk_bytes as u64);
+	assert_eq!(decoded.refcount, 0);
+
+	Ok(())
+}
+
+#[tokio::test]
+async fn commit_blocks_during_restore() -> Result<()> {
+	let db = Arc::new(test_db().await?);
+	seed(
+		&db,
+		vec![(
+			meta_restore_in_progress_key(TEST_ACTOR),
+			encode_restore_marker(restore_marker())?,
+		)],
+	)
+	.await?;
+
+	let actor_db = ActorDb::new(db.clone(), test_ups(), TEST_ACTOR.to_string(), NodeId::new());
+	let err = actor_db
+		.commit(vec![page(1, 0x11)], 2, 1_000)
+		.await
+		.expect_err("commit should be blocked by restore marker");
+	let rivet_error = RivetError::extract(&err);
+
+	assert_eq!(rivet_error.group(), "sqlite_admin");
+	assert_eq!(rivet_error.code(), "actor_restore_in_progress");
+	assert!(read_value(&db, meta_head_key(TEST_ACTOR)).await?.is_none());
+	assert!(
+		read_value(&db, delta_chunk_key(TEST_ACTOR, 1, 0))
+			.await?
+			.is_none()
+	);
+
+	Ok(())
+}
+
+#[tokio::test]
+async fn commit_proceeds_after_restore_clear() -> Result<()> {
+	let db = Arc::new(test_db().await?);
+	seed(
+		&db,
+		vec![(
+			meta_restore_in_progress_key(TEST_ACTOR),
+			encode_restore_marker(restore_marker())?,
+		)],
+	)
+	.await?;
+
+	let actor_db = ActorDb::new(db.clone(), test_ups(), TEST_ACTOR.to_string(), NodeId::new());
+	assert!(
+		actor_db
+			.commit(vec![page(1, 0x11)], 2, 1_000)
+			.await
+			.is_err()
+	);
+	db.run(|tx| async move {
+		tx.informal()
+			.clear(&meta_restore_in_progress_key(TEST_ACTOR));
+		Ok(())
+	})
+	.await?;
+
+	actor_db.commit(vec![page(1, 0x22)], 2, 1_100).await?;
+
+	assert_eq!(read_head(&db).await?, head(1, 2));
+	assert!(
+		read_value(&db, delta_meta_key(TEST_ACTOR, 1))
+			.await?
+			.is_some()
+	);
+
+	Ok(())
+}
+
+#[tokio::test]
+async fn restore_observed_clear_caches() -> Result<()> {
+	let db = Arc::new(test_db().await?);
+	let node_id = NodeId::new();
+	let actor_db = ActorDb::new(db, test_ups(), TEST_ACTOR.to_string(), node_id);
+	let start_reads = restore_guard_reads(node_id);
+
+	actor_db.commit(vec![page(1, 0x11)], 2, 1_000).await?;
+	assert_eq!(restore_guard_reads(node_id), start_reads + 1);
+
+	actor_db.commit(vec![page(1, 0x22)], 2, 1_100).await?;
+	assert_eq!(restore_guard_reads(node_id), start_reads + 1);
+
+	Ok(())
+}
+
+#[tokio::test]
+async fn restore_observed_clear_resets_on_observed_present() -> Result<()> {
+	let db = Arc::new(test_db().await?);
+	seed(
+		&db,
+		vec![(
+			meta_restore_in_progress_key(TEST_ACTOR),
+			encode_restore_marker(restore_marker())?,
+		)],
+	)
+	.await?;
+	let node_id = NodeId::new();
+	let actor_db = ActorDb::new(db.clone(), test_ups(), TEST_ACTOR.to_string(), node_id);
+	let start_reads = restore_guard_reads(node_id);
+
+	assert!(
+		actor_db
+			.commit(vec![page(1, 0x11)], 2, 1_000)
+			.await
+			.is_err()
+	);
+	assert_eq!(restore_guard_reads(node_id), start_reads + 1);
+
+	db.run(|tx| async move {
+		tx.informal()
+			.clear(&meta_restore_in_progress_key(TEST_ACTOR));
+		Ok(())
+	})
+	.await?;
+	actor_db.commit(vec![page(1, 0x22)], 2, 1_100).await?;
+	assert_eq!(restore_guard_reads(node_id), start_reads + 2);
+
+	Ok(())
+}
+
+#[tokio::test]
+async fn commit_first_run_concurrent_get_count() -> Result<()> {
+	let db = Arc::new(test_db().await?);
+	let node_id = NodeId::new();
+	let actor_db = ActorDb::new(db, test_ups(), TEST_ACTOR.to_string(), node_id);
+	let start_reads = restore_guard_reads(node_id);
+
+	actor_db.commit(vec![page(1, 0x11)], 2, 1_000).await?;
+
+	assert_eq!(restore_guard_reads(node_id), start_reads + 1);
 
 	Ok(())
 }

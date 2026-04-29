@@ -1,4 +1,7 @@
-use std::sync::Arc;
+use std::sync::{
+	Arc,
+	atomic::AtomicBool,
+};
 
 use parking_lot::Mutex;
 use rivet_pools::NodeId;
@@ -24,6 +27,8 @@ pub struct ActorDb {
 	pub(super) read_bytes_since_rollup: Mutex<u64>,
 	/// Last time this actor published a compaction trigger.
 	pub(super) last_trigger_at: Mutex<Option<Instant>>,
+	/// True once this connection has observed no restore marker for this actor.
+	pub(super) restore_observed_clear: AtomicBool,
 }
 
 impl ActorDb {
@@ -42,6 +47,7 @@ impl ActorDb {
 			commit_bytes_since_rollup: Mutex::new(0),
 			read_bytes_since_rollup: Mutex::new(0),
 			last_trigger_at: Mutex::new(None),
+			restore_observed_clear: AtomicBool::new(false),
 		}
 	}
 

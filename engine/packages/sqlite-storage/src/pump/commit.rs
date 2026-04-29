@@ -1,6 +1,10 @@
 //! Single-shot commit path for the stateless sqlite-storage pump.
 
-use std::{collections::BTreeSet, time::Duration};
+use std::{
+	collections::BTreeSet,
+	sync::atomic::Ordering,
+	time::Duration,
+};
 
 use anyhow::{Context, Result};
 use futures_util::TryStreamExt;
@@ -16,7 +20,10 @@ use crate::pump::{
 	ltx::{LtxHeader, encode_ltx_v3},
 	metrics,
 	quota,
-	types::{DBHead, DirtyPage, decode_db_head, decode_meta_compact, encode_db_head},
+	types::{
+		DBHead, DeltaMeta, DirtyPage, decode_db_head, decode_meta_compact, encode_db_head,
+		encode_delta_meta,
+	},
 };
 
 const DELTA_CHUNK_BYTES: usize = 10_000;
@@ -39,6 +46,8 @@ impl ActorDb {
 
 		let cached_storage_used_live = *self.storage_used_live.lock();
 		let cached_storage_used_pitr = *self.storage_used_pitr.lock();
+		let restore_observed_clear = self.restore_observed_clear.load(Ordering::Acquire);
+		let restore_metric_node_id = node_id.clone();
 		let cache_was_warm = !self.cache.lock().range(0, u32::MAX).is_empty();
 		let actor_id = self.actor_id.clone();
 		let dirty_pages_for_tx = dirty_pages.clone();
@@ -48,28 +57,80 @@ impl ActorDb {
 			.run(move |tx| {
 				let actor_id = actor_id.clone();
 				let dirty_pages = dirty_pages_for_tx.clone();
+				let restore_metric_node_id = restore_metric_node_id.clone();
 
 				async move {
 					let head_key = keys::meta_head_key(&actor_id);
-					let (head_bytes, storage_used_live, storage_used_pitr) = if let (
-						Some(storage_used_live),
-						Some(storage_used_pitr),
-					) = (cached_storage_used_live, cached_storage_used_pitr)
-					{
-						(
-							tx_get_value(&tx, &head_key, Serializable).await?,
-							storage_used_live,
-							storage_used_pitr,
+					let restore_marker_bytes = if restore_observed_clear {
+						None
+					} else if cached_storage_used_live.is_some() && cached_storage_used_pitr.is_some() {
+						let restore_labels = &[restore_metric_node_id.as_str()];
+						metrics::SQLITE_PUMP_RESTORE_GUARD_READ_TOTAL
+							.with_label_values(restore_labels)
+							.inc();
+						tx_get_value(
+							&tx,
+							&keys::meta_restore_in_progress_key(&actor_id),
+							Serializable,
 						)
+						.await?
 					} else {
-						quota::migrate_quota_split(&tx, &actor_id).await?;
-						let live_quota_fut = quota::read_live(&tx, &actor_id);
-						let pitr_quota_fut = quota::read_pitr(&tx, &actor_id);
-						let head_fut = tx_get_value(&tx, &head_key, Serializable);
-						let (head_bytes, storage_used_live, storage_used_pitr) =
-							tokio::try_join!(head_fut, live_quota_fut, pitr_quota_fut)?;
-						(head_bytes, storage_used_live, storage_used_pitr)
+						None
 					};
+
+					let (head_bytes, storage_used_live, storage_used_pitr, restore_marker_bytes) =
+						if let (Some(storage_used_live), Some(storage_used_pitr)) =
+							(cached_storage_used_live, cached_storage_used_pitr)
+						{
+							(
+								tx_get_value(&tx, &head_key, Serializable).await?,
+								storage_used_live,
+								storage_used_pitr,
+								restore_marker_bytes,
+							)
+						} else {
+							quota::migrate_quota_split(&tx, &actor_id).await?;
+							let live_quota_fut = quota::read_live(&tx, &actor_id);
+							let pitr_quota_fut = quota::read_pitr(&tx, &actor_id);
+							let head_fut = tx_get_value(&tx, &head_key, Serializable);
+							if restore_observed_clear {
+								let (head_bytes, storage_used_live, storage_used_pitr) =
+									tokio::try_join!(head_fut, live_quota_fut, pitr_quota_fut)?;
+								(head_bytes, storage_used_live, storage_used_pitr, None)
+							} else {
+								let restore_labels = &[restore_metric_node_id.as_str()];
+								metrics::SQLITE_PUMP_RESTORE_GUARD_READ_TOTAL
+									.with_label_values(restore_labels)
+									.inc();
+								let restore_key = keys::meta_restore_in_progress_key(&actor_id);
+								let restore_fut = tx_get_value(
+									&tx,
+									&restore_key,
+									Serializable,
+								);
+								let (
+									head_bytes,
+									storage_used_live,
+									storage_used_pitr,
+									restore_marker_bytes,
+								) = tokio::try_join!(
+									head_fut,
+									live_quota_fut,
+									pitr_quota_fut,
+									restore_fut
+								)?;
+								(
+									head_bytes,
+									storage_used_live,
+									storage_used_pitr,
+									restore_marker_bytes,
+								)
+							}
+						};
+
+					if restore_marker_bytes.is_some() {
+						return Err(crate::admin::SqliteAdminError::ActorRestoreInProgress.build());
+					}
 
 					let previous_head = head_bytes
 						.as_deref()
@@ -111,6 +172,18 @@ impl ActorDb {
 							Ok((keys::delta_chunk_key(&actor_id, txid, chunk_idx), chunk.to_vec()))
 						})
 						.collect::<Result<Vec<_>>>()?;
+					let total_chunk_bytes = delta_chunks
+						.iter()
+						.map(|(_, chunk)| chunk.len())
+						.sum::<usize>();
+					let encoded_delta_meta = encode_delta_meta(DeltaMeta {
+						taken_at_ms: now_ms,
+						byte_count: u64::try_from(total_chunk_bytes)
+							.context("delta chunk byte count exceeded u64")?,
+						refcount: 0,
+					})
+					.context("encode commit delta meta")?;
+					let delta_meta_key = keys::delta_meta_key(&actor_id, txid);
 
 					let new_head = DBHead {
 						head_txid: txid,
@@ -126,6 +199,7 @@ impl ActorDb {
 						.collect::<BTreeSet<_>>();
 
 					let added_bytes = tracked_entry_size(&head_key, &encoded_head)?
+						+ tracked_entry_size(&delta_meta_key, &encoded_delta_meta)?
 						+ delta_chunks
 							.iter()
 							.map(|(key, value)| tracked_entry_size(key, value))
@@ -152,6 +226,7 @@ impl ActorDb {
 					for (key, value) in &delta_chunks {
 						tx.informal().set(key, value);
 					}
+					tx.informal().set(&delta_meta_key, &encoded_delta_meta);
 					for pgno in &dirty_pgnos {
 						tx.informal()
 							.set(&keys::pidx_delta_key(&actor_id, *pgno), &txid_bytes);
@@ -178,8 +253,21 @@ impl ActorDb {
 					})
 				}
 			})
-			.await?;
+			.await;
+		let result = match result {
+			Ok(result) => result,
+			Err(err) => {
+				let rivet_error = rivet_error::RivetError::extract(&err);
+				if rivet_error.group() == "sqlite_admin"
+					&& rivet_error.code() == "actor_restore_in_progress"
+				{
+					self.restore_observed_clear.store(false, Ordering::Release);
+				}
+				return Err(err);
+			}
+		};
 
+		self.restore_observed_clear.store(true, Ordering::Release);
 		*self.storage_used_live.lock() = Some(result.storage_used_live);
 		*self.storage_used_pitr.lock() = Some(result.storage_used_pitr);
 		*self.commit_bytes_since_rollup.lock() += u64::try_from(result.added_bytes)

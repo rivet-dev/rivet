@@ -37,6 +37,8 @@ Started: Wed Apr 29 04:36:56 AM PDT 2026
 - `engine/CLAUDE.md` SQLite guidance now assumes stateless per-conn `ActorDb` caches, tests under `engine/packages/sqlite-storage/tests/`, and a standalone compactor service.
 - PITR splits SQLite storage usage into `/META/storage_used_live` and `/META/storage_used_pitr`; new quota mutations should call `quota::atomic_add_live` or `quota::atomic_add_pitr`, while `/META/quota` is only a private migration key.
 - `/DELTA/{txid}/META` lives under the same `/DELTA/{txid}/` prefix as chunks, so DELTA prefix scanners must explicitly skip the `META` suffix before decoding or concatenating chunk rows.
+- Pump commits write `/DELTA/{txid}/META` and charge it to live storage; compaction byte accounting must include that meta row when clearing a delta prefix.
+- Restore guards use an `ActorDb`-local `restore_observed_clear` cache plus `sqlite_pump_restore_guard_read_total` to verify the first-read/skip behavior in tests.
 
 ## 2026-04-29 04:44:52 PDT - US-001
 - Implemented a UUID-backed `NodeId` type and stored a generated value on each `Pools` instance.
@@ -321,4 +323,15 @@ Started: Wed Apr 29 04:36:56 AM PDT 2026
   - Use `quota::atomic_add_live`/`read_live` for hot-path and compaction live-byte accounting; reserve `atomic_add_pitr`/`read_pitr` for checkpoint and retention overhead.
   - Keep legacy `/META/quota` hidden inside `migrate_quota_split`; public key builders should only expose the split live/PITR counters.
   - Any DELTA prefix scan that expects chunks must skip the `META` suffix because `/DELTA/{txid}/META` intentionally shares the commit's DELTA prefix.
+---
+## 2026-04-29 07:58:32 PDT - US-028
+- Implemented per-DELTA metadata writes on pump commit with `{ taken_at_ms, byte_count, refcount: 0 }` stored at `/DELTA/{txid}/META`.
+- Added the `sqlite_admin.actor_restore_in_progress` RivetError and commit-time restore marker guard with the `restore_observed_clear` cache and guard-read metric.
+- Updated compaction delta tracking so clearing a delta prefix also subtracts the DELTA metadata row from live storage accounting.
+- Added pump commit coverage for DELTA metadata, restore blocking/clearing, guard-read caching, and first-run restore guard reads.
+- Files changed: `Cargo.lock`, `engine/artifacts/errors/sqlite_admin.actor_restore_in_progress.json`, `engine/packages/sqlite-storage/Cargo.toml`, `engine/packages/sqlite-storage/src/admin/{errors.rs,mod.rs}`, `engine/packages/sqlite-storage/src/compactor/compact.rs`, `engine/packages/sqlite-storage/src/pump/{actor_db.rs,commit.rs,metrics.rs}`, `engine/packages/sqlite-storage/tests/pump_commit.rs`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
+- **Learnings for future iterations:**
+  - Commit-side DELTA metadata shares the same delta prefix as chunks, so compaction must include its tracked bytes while read/decode paths skip the `META` suffix.
+  - New storage/admin errors should use `RivetError`; deriving it creates a checked-in artifact under `engine/artifacts/errors/`.
+  - The restore guard cache can be asserted without UDB mocks by labeling `sqlite_pump_restore_guard_read_total` with a fresh `NodeId` per test.
 ---

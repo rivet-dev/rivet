@@ -376,9 +376,11 @@ async fn load_delta_entries(
 	actor_id: &str,
 ) -> Result<BTreeMap<u64, DeltaEntry>> {
 	let mut chunks_by_txid = BTreeMap::<u64, Vec<DeltaChunk>>::new();
+	let mut meta_bytes_by_txid = BTreeMap::<u64, i64>::new();
 	for (key, value) in tx_scan_prefix_values(tx, &keys::delta_prefix(actor_id)).await? {
 		let txid = keys::decode_delta_chunk_txid(actor_id, &key)?;
 		if key == keys::delta_meta_key(actor_id, txid) {
+			meta_bytes_by_txid.insert(txid, tracked_entry_size(&key, &value)?);
 			continue;
 		}
 		let chunk_idx = keys::decode_delta_chunk_idx(actor_id, txid, &key)?;
@@ -393,7 +395,7 @@ async fn load_delta_entries(
 	for (txid, mut chunks) in chunks_by_txid {
 		chunks.sort_by_key(|chunk| chunk.chunk_idx);
 		let mut blob = Vec::new();
-		let mut tracked_size = 0i64;
+		let mut tracked_size = meta_bytes_by_txid.remove(&txid).unwrap_or(0);
 		for chunk in chunks {
 			tracked_size += tracked_entry_size(&chunk.key, &chunk.value)?;
 			blob.extend_from_slice(&chunk.value);
