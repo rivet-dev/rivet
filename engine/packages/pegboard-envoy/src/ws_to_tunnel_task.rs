@@ -381,6 +381,10 @@ async fn handle_message(
 			let response = handle_sqlite_get_pages_response(ctx, conn, req.data).await;
 			send_sqlite_get_pages_response(conn, req.request_id, response).await?;
 		}
+		protocol::ToRivet::ToRivetSqliteGetPageRangeRequest(req) => {
+			let response = handle_sqlite_get_page_range_response(ctx, conn, req.data).await;
+			send_sqlite_get_page_range_response(conn, req.request_id, response).await?;
+		}
 		protocol::ToRivet::ToRivetSqliteCommitRequest(req) => {
 			let actor_id = req.data.actor_id.clone();
 			let request_id = req.request_id;
@@ -486,6 +490,21 @@ async fn handle_sqlite_get_pages_response(
 		Err(err) => {
 			tracing::error!(actor_id = %actor_id, ?err, "sqlite get_pages request failed");
 			protocol::SqliteGetPagesResponse::SqliteErrorResponse(sqlite_error_response(&err))
+		}
+	}
+}
+
+async fn handle_sqlite_get_page_range_response(
+	ctx: &StandaloneCtx,
+	conn: &Conn,
+	request: protocol::SqliteGetPageRangeRequest,
+) -> protocol::SqliteGetPageRangeResponse {
+	let actor_id = request.actor_id.clone();
+	match handle_sqlite_get_page_range(ctx, conn, request).await {
+		Ok(response) => response,
+		Err(err) => {
+			tracing::error!(actor_id = %actor_id, ?err, "sqlite get_page_range request failed");
+			protocol::SqliteGetPageRangeResponse::SqliteErrorResponse(sqlite_error_response(&err))
 		}
 	}
 }
@@ -744,6 +763,42 @@ async fn handle_sqlite_get_pages(
 	}
 }
 
+async fn handle_sqlite_get_page_range(
+	ctx: &StandaloneCtx,
+	conn: &Conn,
+	request: protocol::SqliteGetPageRangeRequest,
+) -> Result<protocol::SqliteGetPageRangeResponse> {
+	ensure!(
+		sqlite_storage::optimization_flags::sqlite_optimization_flags().range_reads,
+		"sqlite range reads are disabled"
+	);
+	validate_sqlite_get_page_range_request(&request)?;
+	validate_sqlite_get_pages_actor(ctx, conn, &request.actor_id, request.generation).await?;
+	ensure_serverless_sqlite_open_for_get_pages(conn, &request.actor_id, request.generation).await?;
+
+	match conn
+		.sqlite_engine
+		.get_page_range(
+			&request.actor_id,
+			request.generation,
+			request.start_pgno,
+			request.max_pages,
+			request.max_bytes,
+		)
+		.await
+	{
+		Ok(result) => Ok(sqlite_get_page_range_ok(&request, result)),
+		Err(err) => match sqlite_storage_error(&err) {
+			Some(SqliteStorageError::FenceMismatch { reason }) => Ok(
+				protocol::SqliteGetPageRangeResponse::SqliteFenceMismatch(
+					sqlite_fence_mismatch(conn, &request.actor_id, reason.clone()).await?,
+				),
+			),
+			_ => Err(err),
+		},
+	}
+}
+
 async fn sqlite_get_pages_ok(
 	conn: &Conn,
 	actor_id: &str,
@@ -767,6 +822,23 @@ async fn sqlite_get_pages_ok(
 			meta: sqlite_runtime::protocol_sqlite_meta(meta),
 		},
 	))
+}
+
+fn sqlite_get_page_range_ok(
+	request: &protocol::SqliteGetPageRangeRequest,
+	result: sqlite_storage::types::GetPagesResult,
+) -> protocol::SqliteGetPageRangeResponse {
+	protocol::SqliteGetPageRangeResponse::SqliteGetPageRangeOk(
+		protocol::SqliteGetPageRangeOk {
+			start_pgno: request.start_pgno,
+			pages: result
+				.pages
+				.into_iter()
+				.map(sqlite_runtime::protocol_sqlite_fetched_page)
+				.collect(),
+			meta: sqlite_runtime::protocol_sqlite_meta(result.meta),
+		},
+	)
 }
 
 async fn handle_sqlite_commit(
@@ -1140,6 +1212,25 @@ fn validate_sqlite_get_pages_request(request: &protocol::SqliteGetPagesRequest) 
 	Ok(())
 }
 
+fn validate_sqlite_get_page_range_request(
+	request: &protocol::SqliteGetPageRangeRequest,
+) -> Result<()> {
+	ensure!(
+		request.start_pgno > 0,
+		"sqlite get_page_range does not accept page 0"
+	);
+	ensure!(
+		request.max_pages > 0,
+		"sqlite get_page_range requires max_pages > 0"
+	);
+	ensure!(
+		request.max_bytes > 0,
+		"sqlite get_page_range requires max_bytes > 0"
+	);
+
+	Ok(())
+}
+
 fn validate_sqlite_dirty_pages(
 	request_name: &str,
 	dirty_pages: &[protocol::SqliteDirtyPage],
@@ -1267,6 +1358,21 @@ async fn send_sqlite_get_pages_response(
 			data,
 		}),
 		"sqlite get_pages response",
+	)
+	.await
+}
+
+async fn send_sqlite_get_page_range_response(
+	conn: &Conn,
+	request_id: u32,
+	data: protocol::SqliteGetPageRangeResponse,
+) -> Result<()> {
+	send_to_envoy(
+		conn,
+		protocol::ToEnvoy::ToEnvoySqliteGetPageRangeResponse(
+			protocol::ToEnvoySqliteGetPageRangeResponse { request_id, data },
+		),
+		"sqlite get_page_range response",
 	)
 	.await
 }

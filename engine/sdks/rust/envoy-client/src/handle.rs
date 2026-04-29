@@ -400,6 +400,19 @@ impl EnvoyHandle {
 		}
 	}
 
+	pub async fn sqlite_get_page_range(
+		&self,
+		request: protocol::SqliteGetPageRangeRequest,
+	) -> anyhow::Result<protocol::SqliteGetPageRangeResponse> {
+		match self
+			.send_sqlite_request(SqliteRequest::GetPageRange(request))
+			.await?
+		{
+			SqliteResponse::GetPageRange(response) => Ok(response),
+			_ => anyhow::bail!("unexpected sqlite get_page_range response type"),
+		}
+	}
+
 	pub async fn sqlite_commit(
 		&self,
 		request: protocol::SqliteCommitRequest,

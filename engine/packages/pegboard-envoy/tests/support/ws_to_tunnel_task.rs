@@ -86,6 +86,7 @@ use sqlite_storage::error::SqliteStorageError;
 use super::{
 	actor_lifecycle::{ActiveActor, ActiveActorState},
 	cached_active_sqlite_actor, cached_serverless_sqlite_generation,
+	validate_sqlite_get_page_range_request,
 };
 
 #[tokio::test]
@@ -166,4 +167,29 @@ async fn cached_serverless_sqlite_generation_reports_fence_mismatch() {
 		err.to_string()
 			.contains("did not match cached generation 7")
 	);
+}
+
+#[test]
+fn validate_sqlite_get_page_range_request_rejects_empty_bounds() {
+	let valid = rivet_envoy_protocol::SqliteGetPageRangeRequest {
+		actor_id: "actor-a".to_string(),
+		generation: 7,
+		start_pgno: 1,
+		max_pages: 1,
+		max_bytes: 4096,
+	};
+
+	validate_sqlite_get_page_range_request(&valid).expect("valid range request");
+
+	let mut invalid = valid.clone();
+	invalid.start_pgno = 0;
+	assert!(validate_sqlite_get_page_range_request(&invalid).is_err());
+
+	let mut invalid = valid.clone();
+	invalid.max_pages = 0;
+	assert!(validate_sqlite_get_page_range_request(&invalid).is_err());
+
+	let mut invalid = valid;
+	invalid.max_bytes = 0;
+	assert!(validate_sqlite_get_page_range_request(&invalid).is_err());
 }
