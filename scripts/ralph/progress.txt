@@ -26,6 +26,7 @@ Started: Wed Apr 29 04:36:56 AM PDT 2026
 - Use `tokio::time::Instant` for actor-local trigger throttles so `#[tokio::test(start_paused = true)]` plus `tokio::time::advance` can cover timing deterministically.
 - `pegboard-envoy` SQLite `get_pages` and `commit` handlers lazily populate a per-conn `actor_dbs` cache and must not use it as authoritative actor presence tracking.
 - `pegboard-envoy` should pass `CommandStartActor` through without local SQLite side effects; only `CommandStopActor` touches the per-conn `actor_dbs` cache.
+- Pegboard actor destroy should call `actor_sqlite::clear_v2_storage_for_destroy` inside the same `ClearKv` UDB transaction as actor KV deletion so stateless SQLite META/PIDX/DELTA/SHARD and compactor lease keys are removed atomically.
 
 ## 2026-04-29 04:44:52 PDT - US-001
 - Implemented a UUID-backed `NodeId` type and stored a generated value on each `Pools` instance.
@@ -254,4 +255,15 @@ Started: Wed Apr 29 04:36:56 AM PDT 2026
   - `actor_lifecycle.rs` is now intentionally cache-only for SQLite lifecycle; do not add actor-presence or legacy engine open/close work back there.
   - Missed-command replay and tunnel-to-WS forwarding still send `CommandStartActor` to the envoy, but pegboard-envoy should not mutate it for SQLite startup data.
   - Existing legacy staged-commit request handlers still compile against `sqlite_engine`; US-024 owns removing the old wire operations.
+---
+## 2026-04-29 06:48:44 PDT - US-023
+- Added `actor_sqlite::clear_v2_storage_for_destroy` to clear stateless SQLite META, PIDX, DELTA, SHARD, quota, and compactor lease keys through the caller's UDB transaction.
+- Wired both pegboard actor destroy flows to call the helper from the same `ClearKv` transaction that clears actor KV.
+- Added pegboard-envoy lifecycle tests proving `stop_actor` evicts only the cached `ActorDb`, and pegboard tests proving destroy clears the compactor lease and rolls back all SQLite clears with the caller transaction.
+- Verified `cargo test -p pegboard-envoy --test actor_lifecycle`, `cargo test -p pegboard --test actor_sqlite_destroy`, `cargo test -p pegboard-envoy`, `cargo test -p pegboard`, `cargo check --workspace`, and `git diff --check`.
+- Files changed: `Cargo.lock`, `engine/packages/pegboard-envoy/Cargo.toml`, `engine/packages/pegboard-envoy/tests/actor_lifecycle.rs`, `engine/packages/pegboard/Cargo.toml`, `engine/packages/pegboard/src/actor_sqlite.rs`, `engine/packages/pegboard/src/workflows/actor/destroy.rs`, `engine/packages/pegboard/src/workflows/actor2/mod.rs`, `engine/packages/pegboard/tests/actor_sqlite_destroy.rs`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
+- **Learnings for future iterations:**
+  - `stop_actor` is cache-only; storage cleanup belongs to pegboard destroy, not pegboard-envoy lifecycle handling.
+  - Stateless SQLite actor destroy must clear exact META keys plus SHARD/DELTA/PIDX prefix ranges using `sqlite-storage` key builders.
+  - A rollback test around `clear_v2_storage_for_destroy` verifies the compactor lease clear stays in the same UDB transaction as the other SQLite teardown clears.
 ---

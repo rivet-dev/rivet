@@ -3,6 +3,7 @@ use std::time::Instant;
 use anyhow::{Context, Result, ensure};
 use gas::prelude::{Id, util::timestamp};
 use rivet_envoy_protocol as protocol;
+use sqlite_storage::keys as sqlite_storage_keys;
 use sqlite_storage_legacy::{
 	commit::{CommitFinalizeRequest, CommitStageBeginRequest, CommitStageRequest},
 	engine::SqliteEngine,
@@ -33,10 +34,38 @@ pub fn sqlite_subspace() -> Subspace {
 	crate::keys::subspace().subspace(&("sqlite-storage",))
 }
 
+pub fn clear_v2_storage_for_destroy(tx: &universaldb::Transaction, actor_id: Id) {
+	let actor_id = actor_id.to_string();
+
+	tx.informal()
+		.clear(&sqlite_storage_keys::meta_head_key(&actor_id));
+	tx.informal()
+		.clear(&sqlite_storage_keys::meta_compact_key(&actor_id));
+	tx.informal()
+		.clear(&sqlite_storage_keys::meta_quota_key(&actor_id));
+	// Clear the lease with the rest of SQLite storage.
+	// Otherwise dead lease keys accumulate in UDB indefinitely.
+	tx.informal()
+		.clear(&sqlite_storage_keys::meta_compactor_lease_key(&actor_id));
+
+	for prefix in [
+		sqlite_storage_keys::shard_prefix(&actor_id),
+		sqlite_storage_keys::delta_prefix(&actor_id),
+		sqlite_storage_keys::pidx_delta_prefix(&actor_id),
+	] {
+		let (begin, end) = prefix_range(&prefix);
+		tx.informal().clear_range(&begin, &end);
+	}
+}
+
 pub fn new_engine(
 	db: universaldb::Database,
 ) -> (SqliteEngine, tokio::sync::mpsc::UnboundedReceiver<String>) {
 	SqliteEngine::new(db, sqlite_subspace())
+}
+
+fn prefix_range(prefix: &[u8]) -> (Vec<u8>, Vec<u8>) {
+	universaldb::tuple::Subspace::from_bytes(prefix.to_vec()).range()
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Hash)]
