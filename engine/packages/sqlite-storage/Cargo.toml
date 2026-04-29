@@ -1,0 +1,22 @@
+[package]
+name = "sqlite-storage"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
+
+[features]
+legacy-inline-tests = []
+
+[dependencies]
+anyhow.workspace = true
+lz4_flex.workspace = true
+scc.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+universaldb.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+tokio.workspace = true
+uuid.workspace = true

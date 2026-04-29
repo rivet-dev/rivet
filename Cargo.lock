@@ -6205,6 +6205,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "sqlite-storage"
+version = "2.3.0-rc.4"
+dependencies = [
+ "anyhow",
+ "lz4_flex",
+ "scc",
+ "serde",
+ "tempfile",
+ "thiserror 1.0.69",
+ "tokio",
+ "universaldb",
+ "uuid",
+]
+
+[[package]]
 name = "sqlite-storage-legacy"
 version = "2.3.0-rc.4"
 dependencies = [
