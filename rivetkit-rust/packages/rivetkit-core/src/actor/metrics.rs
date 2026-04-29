@@ -5,8 +5,8 @@ use std::time::Duration;
 
 use anyhow::{Context, Result};
 use prometheus::{
-	CounterVec, Encoder, Gauge, HistogramOpts, HistogramVec, IntCounter, IntGauge, IntGaugeVec,
-	Opts, Registry, TextEncoder,
+	CounterVec, Encoder, Gauge, Histogram, HistogramOpts, HistogramVec, IntCounter, IntGauge,
+	IntGaugeVec, Opts, Registry, TextEncoder,
 };
 
 use crate::actor::task_types::{ShutdownKind, StateMutationReason, UserTaskKind};
@@ -38,6 +38,32 @@ struct ActorMetricsInner {
 	shutdown_timeout_total: CounterVec,
 	state_mutation_total: CounterVec,
 	direct_subsystem_shutdown_warning_total: CounterVec,
+	#[cfg(feature = "sqlite")]
+	sqlite_vfs_resolve_pages_total: IntCounter,
+	#[cfg(feature = "sqlite")]
+	sqlite_vfs_resolve_pages_requested_total: IntCounter,
+	#[cfg(feature = "sqlite")]
+	sqlite_vfs_resolve_pages_cache_hits_total: IntCounter,
+	#[cfg(feature = "sqlite")]
+	sqlite_vfs_resolve_pages_cache_misses_total: IntCounter,
+	#[cfg(feature = "sqlite")]
+	sqlite_vfs_get_pages_total: IntCounter,
+	#[cfg(feature = "sqlite")]
+	sqlite_vfs_pages_fetched_total: IntCounter,
+	#[cfg(feature = "sqlite")]
+	sqlite_vfs_prefetch_pages_total: IntCounter,
+	#[cfg(feature = "sqlite")]
+	sqlite_vfs_bytes_fetched_total: IntCounter,
+	#[cfg(feature = "sqlite")]
+	sqlite_vfs_prefetch_bytes_total: IntCounter,
+	#[cfg(feature = "sqlite")]
+	sqlite_vfs_get_pages_duration_seconds: Histogram,
+	#[cfg(feature = "sqlite")]
+	sqlite_vfs_commit_total: IntCounter,
+	#[cfg(feature = "sqlite")]
+	sqlite_vfs_commit_phase_duration_seconds_total: CounterVec,
+	#[cfg(feature = "sqlite")]
+	sqlite_vfs_commit_duration_seconds_total: CounterVec,
 }
 
 impl ActorMetrics {
@@ -186,6 +212,95 @@ impl ActorMetrics {
 			&["subsystem", "operation"],
 		)
 		.context("create direct_subsystem_shutdown_warning_total counter")?;
+		#[cfg(feature = "sqlite")]
+		let sqlite_vfs_resolve_pages_total = IntCounter::with_opts(Opts::new(
+			"sqlite_vfs_resolve_pages_total",
+			"total VFS page resolution attempts",
+		))
+		.context("create sqlite_vfs_resolve_pages_total counter")?;
+		#[cfg(feature = "sqlite")]
+		let sqlite_vfs_resolve_pages_requested_total = IntCounter::with_opts(Opts::new(
+			"sqlite_vfs_resolve_pages_requested_total",
+			"total pages requested by VFS page resolution attempts",
+		))
+		.context("create sqlite_vfs_resolve_pages_requested_total counter")?;
+		#[cfg(feature = "sqlite")]
+		let sqlite_vfs_resolve_pages_cache_hits_total = IntCounter::with_opts(Opts::new(
+			"sqlite_vfs_resolve_pages_cache_hits_total",
+			"total pages resolved from the VFS page cache or write buffer",
+		))
+		.context("create sqlite_vfs_resolve_pages_cache_hits_total counter")?;
+		#[cfg(feature = "sqlite")]
+		let sqlite_vfs_resolve_pages_cache_misses_total = IntCounter::with_opts(Opts::new(
+			"sqlite_vfs_resolve_pages_cache_misses_total",
+			"total pages missing from the VFS page cache and write buffer",
+		))
+		.context("create sqlite_vfs_resolve_pages_cache_misses_total counter")?;
+		#[cfg(feature = "sqlite")]
+		let sqlite_vfs_get_pages_total = IntCounter::with_opts(Opts::new(
+			"sqlite_vfs_get_pages_total",
+			"total VFS to engine get_pages requests",
+		))
+		.context("create sqlite_vfs_get_pages_total counter")?;
+		#[cfg(feature = "sqlite")]
+		let sqlite_vfs_pages_fetched_total = IntCounter::with_opts(Opts::new(
+			"sqlite_vfs_pages_fetched_total",
+			"total pages requested from the engine by VFS get_pages calls",
+		))
+		.context("create sqlite_vfs_pages_fetched_total counter")?;
+		#[cfg(feature = "sqlite")]
+		let sqlite_vfs_prefetch_pages_total = IntCounter::with_opts(Opts::new(
+			"sqlite_vfs_prefetch_pages_total",
+			"total pages requested speculatively by VFS prefetch",
+		))
+		.context("create sqlite_vfs_prefetch_pages_total counter")?;
+		#[cfg(feature = "sqlite")]
+		let sqlite_vfs_bytes_fetched_total = IntCounter::with_opts(Opts::new(
+			"sqlite_vfs_bytes_fetched_total",
+			"total bytes requested from the engine by VFS get_pages calls",
+		))
+		.context("create sqlite_vfs_bytes_fetched_total counter")?;
+		#[cfg(feature = "sqlite")]
+		let sqlite_vfs_prefetch_bytes_total = IntCounter::with_opts(Opts::new(
+			"sqlite_vfs_prefetch_bytes_total",
+			"total bytes requested speculatively by VFS prefetch",
+		))
+		.context("create sqlite_vfs_prefetch_bytes_total counter")?;
+		#[cfg(feature = "sqlite")]
+		let sqlite_vfs_get_pages_duration_seconds = Histogram::with_opts(
+			HistogramOpts::new(
+				"sqlite_vfs_get_pages_duration_seconds",
+				"VFS get_pages request duration in seconds",
+			)
+			.buckets(vec![
+				0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0,
+			]),
+		)
+		.context("create sqlite_vfs_get_pages_duration_seconds histogram")?;
+		#[cfg(feature = "sqlite")]
+		let sqlite_vfs_commit_total = IntCounter::with_opts(Opts::new(
+			"sqlite_vfs_commit_total",
+			"total successful VFS commits",
+		))
+		.context("create sqlite_vfs_commit_total counter")?;
+		#[cfg(feature = "sqlite")]
+		let sqlite_vfs_commit_phase_duration_seconds_total = CounterVec::new(
+			Opts::new(
+				"sqlite_vfs_commit_phase_duration_seconds_total",
+				"cumulative VFS commit phase duration in seconds",
+			),
+			&["phase"],
+		)
+		.context("create sqlite_vfs_commit_phase_duration_seconds_total counter")?;
+		#[cfg(feature = "sqlite")]
+		let sqlite_vfs_commit_duration_seconds_total = CounterVec::new(
+			Opts::new(
+				"sqlite_vfs_commit_duration_seconds_total",
+				"cumulative VFS commit duration in seconds",
+			),
+			&["phase"],
+		)
+		.context("create sqlite_vfs_commit_duration_seconds_total counter")?;
 
 		register_metric(&registry, create_state_ms.clone());
 		register_metric(&registry, create_vars_ms.clone());
@@ -206,6 +321,25 @@ impl ActorMetrics {
 		register_metric(&registry, shutdown_timeout_total.clone());
 		register_metric(&registry, state_mutation_total.clone());
 		register_metric(&registry, direct_subsystem_shutdown_warning_total.clone());
+		#[cfg(feature = "sqlite")]
+		{
+			register_metric(&registry, sqlite_vfs_resolve_pages_total.clone());
+			register_metric(&registry, sqlite_vfs_resolve_pages_requested_total.clone());
+			register_metric(&registry, sqlite_vfs_resolve_pages_cache_hits_total.clone());
+			register_metric(&registry, sqlite_vfs_resolve_pages_cache_misses_total.clone());
+			register_metric(&registry, sqlite_vfs_get_pages_total.clone());
+			register_metric(&registry, sqlite_vfs_pages_fetched_total.clone());
+			register_metric(&registry, sqlite_vfs_prefetch_pages_total.clone());
+			register_metric(&registry, sqlite_vfs_bytes_fetched_total.clone());
+			register_metric(&registry, sqlite_vfs_prefetch_bytes_total.clone());
+			register_metric(&registry, sqlite_vfs_get_pages_duration_seconds.clone());
+			register_metric(&registry, sqlite_vfs_commit_total.clone());
+			register_metric(
+				&registry,
+				sqlite_vfs_commit_phase_duration_seconds_total.clone(),
+			);
+			register_metric(&registry, sqlite_vfs_commit_duration_seconds_total.clone());
+		}
 
 		for kind in UserTaskKind::ALL {
 			user_tasks_active
@@ -219,6 +353,13 @@ impl ActorMetrics {
 		for reason in [ShutdownKind::Sleep, ShutdownKind::Destroy] {
 			shutdown_wait_seconds.with_label_values(&[reason.as_metric_label()]);
 			shutdown_timeout_total.with_label_values(&[reason.as_metric_label()]);
+		}
+		#[cfg(feature = "sqlite")]
+		{
+			for phase in ["request_build", "serialize", "transport", "state_update"] {
+				sqlite_vfs_commit_phase_duration_seconds_total.with_label_values(&[phase]);
+			}
+			sqlite_vfs_commit_duration_seconds_total.with_label_values(&["total"]);
 		}
 
 		Ok(ActorMetricsInner {
@@ -242,6 +383,32 @@ impl ActorMetrics {
 			shutdown_timeout_total,
 			state_mutation_total,
 			direct_subsystem_shutdown_warning_total,
+			#[cfg(feature = "sqlite")]
+			sqlite_vfs_resolve_pages_total,
+			#[cfg(feature = "sqlite")]
+			sqlite_vfs_resolve_pages_requested_total,
+			#[cfg(feature = "sqlite")]
+			sqlite_vfs_resolve_pages_cache_hits_total,
+			#[cfg(feature = "sqlite")]
+			sqlite_vfs_resolve_pages_cache_misses_total,
+			#[cfg(feature = "sqlite")]
+			sqlite_vfs_get_pages_total,
+			#[cfg(feature = "sqlite")]
+			sqlite_vfs_pages_fetched_total,
+			#[cfg(feature = "sqlite")]
+			sqlite_vfs_prefetch_pages_total,
+			#[cfg(feature = "sqlite")]
+			sqlite_vfs_bytes_fetched_total,
+			#[cfg(feature = "sqlite")]
+			sqlite_vfs_prefetch_bytes_total,
+			#[cfg(feature = "sqlite")]
+			sqlite_vfs_get_pages_duration_seconds,
+			#[cfg(feature = "sqlite")]
+			sqlite_vfs_commit_total,
+			#[cfg(feature = "sqlite")]
+			sqlite_vfs_commit_phase_duration_seconds_total,
+			#[cfg(feature = "sqlite")]
+			sqlite_vfs_commit_duration_seconds_total,
 		})
 	}
 
@@ -434,7 +601,97 @@ impl ActorMetrics {
 		inner
 			.direct_subsystem_shutdown_warning_total
 			.with_label_values(&[subsystem, operation])
-			.inc();
+				.inc();
+	}
+}
+
+#[cfg(feature = "sqlite")]
+impl rivetkit_sqlite::vfs::SqliteVfsMetrics for ActorMetrics {
+	fn record_resolve_pages(&self, requested_pages: u64) {
+		let Some(inner) = self.inner.as_ref().as_ref() else {
+			return;
+		};
+		inner.sqlite_vfs_resolve_pages_total.inc();
+		inner
+			.sqlite_vfs_resolve_pages_requested_total
+			.inc_by(requested_pages);
+	}
+
+	fn record_resolve_cache_hits(&self, pages: u64) {
+		let Some(inner) = self.inner.as_ref().as_ref() else {
+			return;
+		};
+		inner.sqlite_vfs_resolve_pages_cache_hits_total.inc_by(pages);
+	}
+
+	fn record_resolve_cache_misses(&self, pages: u64) {
+		let Some(inner) = self.inner.as_ref().as_ref() else {
+			return;
+		};
+		inner
+			.sqlite_vfs_resolve_pages_cache_misses_total
+			.inc_by(pages);
+	}
+
+	fn record_get_pages_request(&self, pages: u64, prefetch_pages: u64, page_size: u64) {
+		let Some(inner) = self.inner.as_ref().as_ref() else {
+			return;
+		};
+		inner.sqlite_vfs_get_pages_total.inc();
+		inner.sqlite_vfs_pages_fetched_total.inc_by(pages);
+		inner
+			.sqlite_vfs_prefetch_pages_total
+			.inc_by(prefetch_pages);
+		inner
+			.sqlite_vfs_bytes_fetched_total
+			.inc_by(pages.saturating_mul(page_size));
+		inner
+			.sqlite_vfs_prefetch_bytes_total
+			.inc_by(prefetch_pages.saturating_mul(page_size));
+	}
+
+	fn observe_get_pages_duration(&self, duration_ns: u64) {
+		let Some(inner) = self.inner.as_ref().as_ref() else {
+			return;
+		};
+		inner
+			.sqlite_vfs_get_pages_duration_seconds
+			.observe(ns_to_seconds(duration_ns));
+	}
+
+	fn record_commit(&self) {
+		let Some(inner) = self.inner.as_ref().as_ref() else {
+			return;
+		};
+		inner.sqlite_vfs_commit_total.inc();
+	}
+
+	fn observe_commit_phases(
+		&self,
+		request_build_ns: u64,
+		serialize_ns: u64,
+		transport_ns: u64,
+		state_update_ns: u64,
+		total_ns: u64,
+	) {
+		let Some(inner) = self.inner.as_ref().as_ref() else {
+			return;
+		};
+		for (phase, duration_ns) in [
+			("request_build", request_build_ns),
+			("serialize", serialize_ns),
+			("transport", transport_ns),
+			("state_update", state_update_ns),
+		] {
+			inner
+				.sqlite_vfs_commit_phase_duration_seconds_total
+				.with_label_values(&[phase])
+				.inc_by(ns_to_seconds(duration_ns));
+		}
+		inner
+			.sqlite_vfs_commit_duration_seconds_total
+			.with_label_values(&["total"])
+			.inc_by(ns_to_seconds(total_ns));
 	}
 }
 
@@ -452,6 +709,11 @@ impl fmt::Debug for ActorMetrics {
 
 fn duration_ms(duration: Duration) -> f64 {
 	duration.as_secs_f64() * 1000.0
+}
+
+#[cfg(feature = "sqlite")]
+fn ns_to_seconds(duration_ns: u64) -> f64 {
+	Duration::from_nanos(duration_ns).as_secs_f64()
 }
 
 fn register_metric<M>(registry: &Registry, metric: M)

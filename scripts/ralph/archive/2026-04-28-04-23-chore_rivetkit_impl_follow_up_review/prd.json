@@ -1,0 +1,315 @@
+{
+  "project": "sqlite-cold-read-optimizations",
+  "branchName": "04-28-feat_sqlite_benchmark_cold_reads",
+  "description": "Optimize SQLite cold full-scan reads for actors with existing database data. Baseline has already been measured in `.agent/notes/sqlite-cold-read-before.txt`: insert e2e 16048.5ms, hot read e2e 118.6ms, wake read e2e 20141.0ms, wake read server 19979.9ms, wake overhead estimate 161.2ms, wake read VFS get_pages 1249 calls, VFS fetched 20050 pages / 82124800 bytes, VFS prefetch 18801 pages / 77008896 bytes, VFS transport 19332.8ms.\n\nIf the baseline artifact is missing, regenerate it before any optimization with:\n\n`pnpm --filter kitchen-sink exec tsx scripts/sqlite-cold-start-bench.ts --wake-delay-ms 10000 2>&1 | tee .agent/notes/sqlite-cold-read-before.txt`\n\nAfter every story, run the same benchmark and write the full output to `.agent/notes/sqlite-cold-read-after-<STORY_ID>.txt`:\n\n`pnpm --filter kitchen-sink exec tsx scripts/sqlite-cold-start-bench.ts --wake-delay-ms 10000 2>&1 | tee .agent/notes/sqlite-cold-read-after-<STORY_ID>.txt`\n\nEvery completed story must record these numbers in its `notes`: insert e2e ms, hot read e2e ms, wake read e2e ms, wake read server ms, wake overhead estimate ms, wake read VFS get_pages calls, pages fetched, bytes fetched, prefetch pages, prefetch bytes, and VFS transport ms. Compare against `.agent/notes/sqlite-cold-read-before.txt` and the previous completed story.",
+  "userStories": [
+    {
+      "id": "SQLITE-COLD-001",
+      "title": "Confirm baseline benchmark artifact",
+      "description": "Verify that `.agent/notes/sqlite-cold-read-before.txt` exists and contains a valid cold-read baseline. If it is missing or does not show a cold VFS read, rerun the kitchen-sink benchmark with `--wake-delay-ms 10000` and write the result to that file before any optimization work.",
+      "acceptanceCriteria": [
+        "`.agent/notes/sqlite-cold-read-before.txt` exists",
+        "The baseline file includes wake read e2e, wake read server, VFS get_pages calls, fetched pages/bytes, prefetch pages/bytes, and VFS transport time",
+        "The baseline shows a real cold read with nonzero wake read VFS get_pages calls",
+        "`notes` records the baseline numbers from `.agent/notes/sqlite-cold-read-before.txt`",
+        "Typecheck passes"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "SQLITE-COLD-002",
+      "title": "Increase VFS read-ahead for forward scans",
+      "description": "Increase or adapt VFS prefetch for forward scans to at least shard-sized batches, then evaluate larger adaptive batches if memory and response size are acceptable. Keep point/random reads bounded so they do not over-fetch excessively.",
+      "acceptanceCriteria": [
+        "Forward cold scans issue materially fewer VFS get_pages calls than the 1249-call baseline",
+        "Hot read e2e does not materially regress versus the 118.6ms baseline",
+        "Full benchmark output is written to `.agent/notes/sqlite-cold-read-after-SQLITE-COLD-002.txt`",
+        "`notes` records all required benchmark numbers and compares them to baseline plus SQLITE-COLD-001",
+        "Relevant Rust checks pass for touched packages",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "SQLITE-COLD-003",
+      "title": "Record VFS predictor access on cache hits",
+      "description": "Fix the VFS predictor so cache-hit reads train sequential access patterns. Add a debug log around prefetch prediction so local debugging can see requested pages, missing pages, prediction budget, predicted pages, prefetch pages, total fetch size, and seed page without adding new public metrics or JS APIs.",
+      "acceptanceCriteria": [
+        "Sequential reads through prefetched pages continue to train the predictor",
+        "A VFS debug log reports prefetch prediction details when prefetch is enabled and a fetch happens",
+        "No new JS-exposed VFS metrics or public debug API is added",
+        "Focused VFS coverage exists if practical",
+        "Full benchmark output is written to `.agent/notes/sqlite-cold-read-after-SQLITE-COLD-003.txt`",
+        "`notes` records all required benchmark numbers and compares them to baseline plus SQLITE-COLD-002",
+        "Relevant Rust checks pass for touched packages",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "SQLITE-COLD-004",
+      "title": "Add VFS recent-page hint tracker",
+      "description": "Track recently used SQLite VFS pages in memory as a compact preload hint plan. The tracker should capture hot pages and coalesced recent scan ranges instead of only the last pages touched, and it must stay bounded by a page/range budget.",
+      "acceptanceCriteria": [
+        "The VFS records recently used pages and coalesced ranges without unbounded growth",
+        "Full table scans do not produce a tail-only MRU hint that ignores the start of the scanned range",
+        "The tracker exposes an internal snapshot method suitable for a runtime-side flush task",
+        "Focused VFS tracker coverage exists",
+        "Full benchmark output is written to `.agent/notes/sqlite-cold-read-after-SQLITE-COLD-004.txt`",
+        "`notes` records all required benchmark numbers and compares them to baseline plus SQLITE-COLD-003",
+        "Relevant Rust checks pass for touched packages",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "SQLITE-COLD-005",
+      "title": "Persist recent-page preload hints through envoy-client",
+      "description": "Add a SQLite transport operation for the actor side to flush recent-page preload hints through envoy-client to pegboard-envoy. Pegboard-envoy should validate and fence the request, then sqlite-storage should persist the compact hint under a new SQLite v2 storage key.",
+      "acceptanceCriteria": [
+        "A new SQLite transport request persists preload hints through envoy-client and pegboard-envoy",
+        "The request includes generation fencing so stale takeovers cannot overwrite newer hints",
+        "sqlite-storage persists hints under a separate SQLite v2 key without affecting normal page data",
+        "Hint flush failures are best-effort and do not fail normal SQLite reads or writes unless explicitly required",
+        "Full benchmark output is written to `.agent/notes/sqlite-cold-read-after-SQLITE-COLD-005.txt`",
+        "`notes` records all required benchmark numbers and compares them to baseline plus SQLITE-COLD-004",
+        "Relevant Rust and protocol checks pass for touched packages",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "SQLITE-COLD-006",
+      "title": "Flush preload hints periodically and on actor stop",
+      "description": "Run a runtime-side periodic task while the actor is alive to snapshot VFS recent-page hints and flush them through envoy-client. Also perform a final best-effort flush during actor stop or sleep teardown, because SQLite open/close is takeover-based and close is not guaranteed.",
+      "acceptanceCriteria": [
+        "A runtime-side task periodically flushes recent-page hints while the actor is alive",
+        "Actor stop or sleep teardown performs a final best-effort recent-page hint flush",
+        "The task does not depend on SQLite close being called",
+        "The flush path avoids blocking shutdown indefinitely",
+        "Full benchmark output is written to `.agent/notes/sqlite-cold-read-after-SQLITE-COLD-006.txt`",
+        "`notes` records all required benchmark numbers and compares them to baseline plus SQLITE-COLD-005",
+        "Relevant Rust checks pass for touched packages",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "SQLITE-COLD-007",
+      "title": "Use persisted preload hints on actor start",
+      "description": "Load persisted recent-page preload hints during SQLite open and feed them into `OpenConfig.preload_pgnos`, `OpenConfig.preload_ranges`, and `OpenConfig.max_total_bytes` on the next actor start. Keep preload bounded and measurable.",
+      "acceptanceCriteria": [
+        "sqlite-storage open loads persisted preload hints if present",
+        "pegboard-envoy passes hint-derived pages and ranges into OpenConfig during actor start",
+        "Preload budget is bounded and configurable or locally constant with a clear cap",
+        "A repeated wake touching the same working set preloads useful pages before the action runs",
+        "Full benchmark output is written to `.agent/notes/sqlite-cold-read-after-SQLITE-COLD-007.txt`",
+        "`notes` records all required benchmark numbers and compares them to baseline plus SQLITE-COLD-006",
+        "Relevant Rust checks pass for touched packages",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "SQLITE-COLD-008",
+      "title": "Remove duplicate get_pages meta reads",
+      "description": "Change sqlite-storage `get_pages` to return the meta/head it already read inside the page-read transaction, and update pegboard-envoy to reuse that meta instead of calling `load_meta` again for every successful get_pages response.",
+      "acceptanceCriteria": [
+        "Successful get_pages responses reuse meta from the storage read path",
+        "pegboard-envoy no longer performs a duplicate META read for each successful get_pages response",
+        "Fence mismatch behavior remains unchanged",
+        "Full benchmark output is written to `.agent/notes/sqlite-cold-read-after-SQLITE-COLD-008.txt`",
+        "`notes` records all required benchmark numbers and compares them to baseline plus SQLITE-COLD-007",
+        "Relevant Rust checks pass for touched packages",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "SQLITE-COLD-009",
+      "title": "Cache repeated get_pages actor validation and open checks",
+      "description": "Remove fixed per-call overhead on repeated SQLite get_pages requests by caching pegboard-envoy SQLite actor validation for active actors and fast-pathing local-open checks for already-open serverless SQLite actors.",
+      "acceptanceCriteria": [
+        "Repeated get_pages calls avoid redundant actor validation for the active actor on the connection",
+        "Repeated get_pages calls avoid redundant local-open storage checks for an already-open actor generation",
+        "Authorization and generation mismatch behavior remains explicit and covered",
+        "Full benchmark output is written to `.agent/notes/sqlite-cold-read-after-SQLITE-COLD-009.txt`",
+        "`notes` records all required benchmark numbers and compares them to baseline plus SQLITE-COLD-008",
+        "Relevant Rust checks pass for touched packages",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "SQLITE-COLD-010",
+      "title": "Add sqlite-storage contiguous range read",
+      "description": "Add a sqlite-storage API that can read a contiguous page range with a max page or byte budget. This should reuse existing fencing and source-resolution behavior while reducing page-list construction and preparing the engine for a range protocol.",
+      "acceptanceCriteria": [
+        "sqlite-storage exposes a contiguous range page-read method with generation fencing",
+        "The range read returns the same page bytes as equivalent get_pages calls",
+        "The range read enforces a clear max page or byte budget",
+        "Focused sqlite-storage range-read tests pass",
+        "Full benchmark output is written to `.agent/notes/sqlite-cold-read-after-SQLITE-COLD-010.txt`",
+        "`notes` records all required benchmark numbers and compares them to baseline plus SQLITE-COLD-009",
+        "Relevant Rust checks pass for touched packages",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 10,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "SQLITE-COLD-011",
+      "title": "Wire range get_pages through envoy protocol",
+      "description": "Introduce a range or bulk page-read request shape in the SQLite envoy protocol and pegboard-envoy handlers, such as `start_pgno` plus `max_pages` or `max_bytes`. Preserve stale-owner and generation-fence behavior.",
+      "acceptanceCriteria": [
+        "The SQLite protocol supports a range or bulk page-read request and response",
+        "envoy-client and pegboard-envoy can send and handle the new range read request",
+        "Generation fencing and stale-owner handling match existing get_pages behavior",
+        "Existing page-list get_pages remains compatible unless intentionally migrated in this story",
+        "Full benchmark output is written to `.agent/notes/sqlite-cold-read-after-SQLITE-COLD-011.txt`",
+        "`notes` records all required benchmark numbers and compares them to baseline plus SQLITE-COLD-010",
+        "Relevant Rust and protocol checks pass for touched packages",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 11,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "SQLITE-COLD-012",
+      "title": "Use range reads from the VFS for forward scans",
+      "description": "Teach the VFS to use the new range read transport for forward scan prefetch instead of sending repeated page-list requests. Keep random and point reads bounded, and fall back to existing get_pages where range reads are not useful.",
+      "acceptanceCriteria": [
+        "Forward cold scans use the range read transport for large contiguous fetches",
+        "Random or small point reads do not over-fetch excessively",
+        "Cold full-scan get_pages or range-call count is materially lower than the baseline and the read-ahead-only story",
+        "Full benchmark output is written to `.agent/notes/sqlite-cold-read-after-SQLITE-COLD-012.txt`",
+        "`notes` records all required benchmark numbers and compares them to baseline plus SQLITE-COLD-011",
+        "Relevant Rust checks pass for touched packages",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 12,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "SQLITE-COLD-013",
+      "title": "Reduce chunked-value read amplification",
+      "description": "Reduce sqlite-storage read amplification for large source blobs. Evaluate and implement the smallest safe improvement among larger UniversalDB chunks, range reads for chunk prefixes, or real batched chunk reads so large logical values do not require many serial 10KB chunk gets.",
+      "acceptanceCriteria": [
+        "Large SQLite source blob reads perform fewer serial chunk reads than the current 10KB chunk path",
+        "Chunked value read and write compatibility is preserved for existing data",
+        "Compacted shard and delta-heavy reads remain correct",
+        "Full benchmark output is written to `.agent/notes/sqlite-cold-read-after-SQLITE-COLD-013.txt`",
+        "`notes` records all required benchmark numbers and compares them to baseline plus SQLITE-COLD-012",
+        "Relevant Rust checks pass for touched packages",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 13,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "SQLITE-COLD-014",
+      "title": "Reduce whole-blob LTX decode amplification",
+      "description": "Reduce sqlite-storage CPU and allocation overhead from decoding entire LTX source blobs when only a subset of pages is needed. Prefer decoded blob caching or indexed frame access, whichever is smaller and safer for one Ralph iteration.",
+      "acceptanceCriteria": [
+        "Repeated reads from the same DELTA or SHARD source avoid unnecessary full LTX re-decode where practical",
+        "Subset page reads remain byte-for-byte compatible with full decode behavior",
+        "Compacted shard and delta-heavy reads remain correct",
+        "Full benchmark output is written to `.agent/notes/sqlite-cold-read-after-SQLITE-COLD-014.txt`",
+        "`notes` records all required benchmark numbers and compares them to baseline plus SQLITE-COLD-013",
+        "Relevant Rust checks pass for touched packages",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 14,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "SQLITE-COLD-015",
+      "title": "Make startup preload policy configurable",
+      "description": "Add bounded configuration for SQLite startup preload policy, including preload byte budget and whether to use first pages, persisted recent-page hints, or scan ranges. Defaults should stay conservative.",
+      "acceptanceCriteria": [
+        "SQLite startup preload budget is configurable or clearly centralized",
+        "Startup preload can use first pages, persisted recent-page hints, and scan ranges within the budget",
+        "Defaults remain conservative and do not preload the full database accidentally",
+        "Full benchmark output is written to `.agent/notes/sqlite-cold-read-after-SQLITE-COLD-015.txt`",
+        "`notes` records all required benchmark numbers and compares them to baseline plus SQLITE-COLD-014",
+        "Relevant Rust checks pass for touched packages",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 15,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "SQLITE-COLD-016",
+      "title": "Split benchmark cold wake from cold full read",
+      "description": "Clean up benchmark semantics so actor cold wake/open and SQLite cold full-read throughput are measured separately. Add a no-op or tiny SQLite action after sleep to measure wake/open, then separately measure cold full read.",
+      "acceptanceCriteria": [
+        "Benchmark output includes a cold wake/open measurement that does not scan the 50 MiB payload",
+        "Benchmark output still includes the cold full-read measurement and all VFS metrics",
+        "The main read path removes avoidable CPU noise such as the payload LIKE probe unless preserved as an explicitly separate diagnostic",
+        "Full benchmark output is written to `.agent/notes/sqlite-cold-read-after-SQLITE-COLD-016.txt`",
+        "`notes` records all required benchmark numbers and compares them to baseline plus SQLITE-COLD-015",
+        "Kitchen-sink benchmark runs locally end-to-end",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 16,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "SQLITE-COLD-017",
+      "title": "Benchmark compacted and un-compacted cold reads separately",
+      "description": "Improve benchmark signal by separating worst-case delta-heavy reads from steady-state compacted reads. Keep the current un-compacted scenario, add a compacted or post-compaction scenario, and report both with the same VFS metrics.",
+      "acceptanceCriteria": [
+        "Benchmark output distinguishes un-compacted and compacted cold-read results",
+        "Both variants record wake read e2e, wake read server, VFS get_pages or range-call count, fetched pages/bytes, prefetch pages/bytes, and VFS transport time",
+        "Full benchmark output is written to `.agent/notes/sqlite-cold-read-after-SQLITE-COLD-017.txt`",
+        "`notes` records all required benchmark numbers for each scenario and compares them to baseline plus SQLITE-COLD-016",
+        "Kitchen-sink benchmark runs locally end-to-end",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 17,
+      "passes": false,
+      "notes": ""
+    }
+  ]
+}

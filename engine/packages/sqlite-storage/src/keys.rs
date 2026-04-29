@@ -6,6 +6,7 @@ use universaldb::utils::end_of_key_range;
 pub const SQLITE_SUBSPACE_PREFIX: u8 = 0x02;
 
 const META_PATH: &[u8] = b"/META";
+const PRELOAD_HINTS_PATH: &[u8] = b"/PRELOAD_HINTS";
 const SHARD_PATH: &[u8] = b"/SHARD/";
 const DELTA_PATH: &[u8] = b"/DELTA/";
 const PIDX_DELTA_PATH: &[u8] = b"/PIDX/delta/";
@@ -30,6 +31,14 @@ pub fn meta_key(actor_id: &str) -> Vec<u8> {
 	let mut key = Vec::with_capacity(prefix.len() + META_PATH.len());
 	key.extend_from_slice(&prefix);
 	key.extend_from_slice(META_PATH);
+	key
+}
+
+pub fn preload_hints_key(actor_id: &str) -> Vec<u8> {
+	let prefix = actor_prefix(actor_id);
+	let mut key = Vec::with_capacity(prefix.len() + PRELOAD_HINTS_PATH.len());
+	key.extend_from_slice(&prefix);
+	key.extend_from_slice(PRELOAD_HINTS_PATH);
 	key
 }
 
@@ -144,9 +153,10 @@ pub fn decode_delta_chunk_idx(actor_id: &str, txid: u64, key: &[u8]) -> Result<u
 #[cfg(test)]
 mod tests {
 	use super::{
-		DELTA_PATH, META_PATH, SHARD_PATH, SQLITE_SUBSPACE_PREFIX, actor_prefix,
-		decode_delta_chunk_idx, decode_delta_chunk_txid, delta_chunk_key, delta_chunk_prefix,
-		delta_prefix, meta_key, pidx_delta_key, pidx_delta_prefix, shard_key, shard_prefix,
+		DELTA_PATH, META_PATH, PRELOAD_HINTS_PATH, SHARD_PATH, SQLITE_SUBSPACE_PREFIX,
+		actor_prefix, decode_delta_chunk_idx, decode_delta_chunk_txid, delta_chunk_key,
+		delta_chunk_prefix, delta_prefix, meta_key, pidx_delta_key, pidx_delta_prefix,
+		preload_hints_key, shard_key, shard_prefix,
 	};
 
 	const TEST_ACTOR: &str = "test-actor";
@@ -157,6 +167,15 @@ mod tests {
 		let expected_prefix = actor_prefix(TEST_ACTOR);
 		assert!(key.starts_with(&expected_prefix));
 		assert_eq!(&key[expected_prefix.len()..], META_PATH);
+	}
+
+	#[test]
+	fn preload_hints_key_is_actor_scoped() {
+		let key = preload_hints_key(TEST_ACTOR);
+		let expected_prefix = actor_prefix(TEST_ACTOR);
+		assert!(key.starts_with(&expected_prefix));
+		assert_eq!(&key[expected_prefix.len()..], PRELOAD_HINTS_PATH);
+		assert_ne!(key, preload_hints_key("other-actor"));
 	}
 
 	#[test]

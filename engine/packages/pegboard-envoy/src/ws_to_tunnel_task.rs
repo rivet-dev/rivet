@@ -381,6 +381,10 @@ async fn handle_message(
 			let response = handle_sqlite_get_pages_response(ctx, conn, req.data).await;
 			send_sqlite_get_pages_response(conn, req.request_id, response).await?;
 		}
+		protocol::ToRivet::ToRivetSqliteGetPageRangeRequest(req) => {
+			let response = handle_sqlite_get_page_range_response(ctx, conn, req.data).await;
+			send_sqlite_get_page_range_response(conn, req.request_id, response).await?;
+		}
 		protocol::ToRivet::ToRivetSqliteCommitRequest(req) => {
 			let actor_id = req.data.actor_id.clone();
 			let request_id = req.request_id;
@@ -406,6 +410,11 @@ async fn handle_message(
 		protocol::ToRivet::ToRivetSqliteCommitFinalizeRequest(req) => {
 			let response = handle_sqlite_commit_finalize_response(ctx, conn, req.data).await;
 			send_sqlite_commit_finalize_response(conn, req.request_id, response).await?;
+		}
+		protocol::ToRivet::ToRivetSqlitePersistPreloadHintsRequest(req) => {
+			let response =
+				handle_sqlite_persist_preload_hints_response(ctx, conn, req.data).await;
+			send_sqlite_persist_preload_hints_response(conn, req.request_id, response).await?;
 		}
 		protocol::ToRivet::ToRivetTunnelMessage(tunnel_msg) => {
 			handle_tunnel_message(ctx, &conn.authorized_tunnel_routes, tunnel_msg)
@@ -485,6 +494,21 @@ async fn handle_sqlite_get_pages_response(
 	}
 }
 
+async fn handle_sqlite_get_page_range_response(
+	ctx: &StandaloneCtx,
+	conn: &Conn,
+	request: protocol::SqliteGetPageRangeRequest,
+) -> protocol::SqliteGetPageRangeResponse {
+	let actor_id = request.actor_id.clone();
+	match handle_sqlite_get_page_range(ctx, conn, request).await {
+		Ok(response) => response,
+		Err(err) => {
+			tracing::error!(actor_id = %actor_id, ?err, "sqlite get_page_range request failed");
+			protocol::SqliteGetPageRangeResponse::SqliteErrorResponse(sqlite_error_response(&err))
+		}
+	}
+}
+
 async fn handle_sqlite_commit_response(
 	ctx: &StandaloneCtx,
 	conn: &Conn,
@@ -547,6 +571,23 @@ async fn handle_sqlite_commit_finalize_response(
 		Err(err) => {
 			tracing::error!(actor_id = %actor_id, ?err, "sqlite commit_finalize request failed");
 			protocol::SqliteCommitFinalizeResponse::SqliteErrorResponse(sqlite_error_response(&err))
+		}
+	}
+}
+
+async fn handle_sqlite_persist_preload_hints_response(
+	ctx: &StandaloneCtx,
+	conn: &Conn,
+	request: protocol::SqlitePersistPreloadHintsRequest,
+) -> protocol::SqlitePersistPreloadHintsResponse {
+	let actor_id = request.actor_id.clone();
+	match handle_sqlite_persist_preload_hints(ctx, conn, request).await {
+		Ok(response) => response,
+		Err(err) => {
+			tracing::warn!(actor_id = %actor_id, ?err, "sqlite persist_preload_hints request failed");
+			protocol::SqlitePersistPreloadHintsResponse::SqliteErrorResponse(
+				sqlite_error_response(&err),
+			)
 		}
 	}
 }
@@ -650,7 +691,7 @@ async fn handle_metadata(
 #[tracing::instrument(skip_all)]
 async fn handle_tunnel_message(
 	ctx: &StandaloneCtx,
-	authorized_tunnel_routes: &HashMap<(protocol::GatewayId, protocol::RequestId), ()>,
+	_authorized_tunnel_routes: &HashMap<(protocol::GatewayId, protocol::RequestId), ()>,
 	msg: protocol::ToRivetTunnelMessage,
 ) -> Result<()> {
 	// Extract inner data length before consuming msg
@@ -702,15 +743,15 @@ async fn handle_sqlite_get_pages(
 	request: protocol::SqliteGetPagesRequest,
 ) -> Result<protocol::SqliteGetPagesResponse> {
 	validate_sqlite_get_pages_request(&request)?;
-	validate_sqlite_actor(ctx, conn, &request.actor_id).await?;
-	ensure_serverless_sqlite_open(conn, &request.actor_id, request.generation).await?;
+	validate_sqlite_get_pages_actor(ctx, conn, &request.actor_id, request.generation).await?;
+	ensure_serverless_sqlite_open_for_get_pages(conn, &request.actor_id, request.generation).await?;
 
 	match conn
 		.sqlite_engine
 		.get_pages(&request.actor_id, request.generation, request.pgnos.clone())
 		.await
 	{
-		Ok(pages) => Ok(sqlite_get_pages_ok(conn, &request.actor_id, pages).await?),
+		Ok(result) => Ok(sqlite_get_pages_ok(conn, &request.actor_id, result).await?),
 		Err(err) => match sqlite_storage_error(&err) {
 			Some(SqliteStorageError::FenceMismatch { reason }) => {
 				Ok(protocol::SqliteGetPagesResponse::SqliteFenceMismatch(
@@ -722,22 +763,82 @@ async fn handle_sqlite_get_pages(
 	}
 }
 
+async fn handle_sqlite_get_page_range(
+	ctx: &StandaloneCtx,
+	conn: &Conn,
+	request: protocol::SqliteGetPageRangeRequest,
+) -> Result<protocol::SqliteGetPageRangeResponse> {
+	ensure!(
+		sqlite_storage::optimization_flags::sqlite_optimization_flags().range_reads,
+		"sqlite range reads are disabled"
+	);
+	validate_sqlite_get_page_range_request(&request)?;
+	validate_sqlite_get_pages_actor(ctx, conn, &request.actor_id, request.generation).await?;
+	ensure_serverless_sqlite_open_for_get_pages(conn, &request.actor_id, request.generation).await?;
+
+	match conn
+		.sqlite_engine
+		.get_page_range(
+			&request.actor_id,
+			request.generation,
+			request.start_pgno,
+			request.max_pages,
+			request.max_bytes,
+		)
+		.await
+	{
+		Ok(result) => Ok(sqlite_get_page_range_ok(&request, result)),
+		Err(err) => match sqlite_storage_error(&err) {
+			Some(SqliteStorageError::FenceMismatch { reason }) => Ok(
+				protocol::SqliteGetPageRangeResponse::SqliteFenceMismatch(
+					sqlite_fence_mismatch(conn, &request.actor_id, reason.clone()).await?,
+				),
+			),
+			_ => Err(err),
+		},
+	}
+}
+
 async fn sqlite_get_pages_ok(
 	conn: &Conn,
 	actor_id: &str,
-	pages: Vec<sqlite_storage::types::FetchedPage>,
+	result: sqlite_storage::types::GetPagesResult,
 ) -> Result<protocol::SqliteGetPagesResponse> {
+	let meta = if sqlite_storage::optimization_flags::sqlite_optimization_flags()
+		.dedup_get_pages_meta
+	{
+		result.meta
+	} else {
+		conn.sqlite_engine.load_meta(actor_id).await?
+	};
+
 	Ok(protocol::SqliteGetPagesResponse::SqliteGetPagesOk(
 		protocol::SqliteGetPagesOk {
-			pages: pages
+			pages: result
+				.pages
 				.into_iter()
 				.map(sqlite_runtime::protocol_sqlite_fetched_page)
 				.collect(),
-			meta: sqlite_runtime::protocol_sqlite_meta(
-				conn.sqlite_engine.load_meta(actor_id).await?,
-			),
+			meta: sqlite_runtime::protocol_sqlite_meta(meta),
 		},
 	))
+}
+
+fn sqlite_get_page_range_ok(
+	request: &protocol::SqliteGetPageRangeRequest,
+	result: sqlite_storage::types::GetPagesResult,
+) -> protocol::SqliteGetPageRangeResponse {
+	protocol::SqliteGetPageRangeResponse::SqliteGetPageRangeOk(
+		protocol::SqliteGetPageRangeOk {
+			start_pgno: request.start_pgno,
+			pages: result
+				.pages
+				.into_iter()
+				.map(sqlite_runtime::protocol_sqlite_fetched_page)
+				.collect(),
+			meta: sqlite_runtime::protocol_sqlite_meta(result.meta),
+		},
+	)
 }
 
 async fn handle_sqlite_commit(
@@ -943,6 +1044,40 @@ async fn handle_sqlite_commit_finalize(
 	Ok(response)
 }
 
+async fn handle_sqlite_persist_preload_hints(
+	ctx: &StandaloneCtx,
+	conn: &Conn,
+	request: protocol::SqlitePersistPreloadHintsRequest,
+) -> Result<protocol::SqlitePersistPreloadHintsResponse> {
+	validate_sqlite_preload_hints(&request.hints)?;
+	validate_sqlite_actor(ctx, conn, &request.actor_id).await?;
+	ensure_serverless_sqlite_open(conn, &request.actor_id, request.generation).await?;
+
+	match conn
+		.sqlite_engine
+		.persist_preload_hints(
+			&request.actor_id,
+			sqlite_storage::preload_hints::PersistPreloadHintsRequest {
+				generation: request.generation,
+				hints: sqlite_runtime::storage_preload_hints(request.hints),
+			},
+		)
+		.await
+	{
+		Ok(()) => Ok(
+			protocol::SqlitePersistPreloadHintsResponse::SqlitePersistPreloadHintsOk,
+		),
+		Err(err) => match sqlite_storage_error(&err) {
+			Some(SqliteStorageError::FenceMismatch { reason }) => Ok(
+				protocol::SqlitePersistPreloadHintsResponse::SqliteFenceMismatch(
+					sqlite_fence_mismatch(conn, &request.actor_id, reason.clone()).await?,
+				),
+			),
+			_ => Err(err),
+		},
+	}
+}
+
 async fn validate_sqlite_actor(ctx: &StandaloneCtx, conn: &Conn, actor_id: &str) -> Result<()> {
 	let actor_id = Id::parse(actor_id).context("invalid sqlite actor id")?;
 	let actor = ctx
@@ -955,6 +1090,82 @@ async fn validate_sqlite_actor(ctx: &StandaloneCtx, conn: &Conn, actor_id: &str)
 	}
 
 	Ok(())
+}
+
+async fn validate_sqlite_get_pages_actor(
+	ctx: &StandaloneCtx,
+	conn: &Conn,
+	actor_id: &str,
+	generation: u64,
+) -> Result<()> {
+	if sqlite_storage::optimization_flags::sqlite_optimization_flags()
+		.cache_get_pages_validation
+		&& cached_active_sqlite_actor(&conn.active_actors, actor_id, generation).await
+	{
+		return Ok(());
+	}
+
+	validate_sqlite_actor(ctx, conn, actor_id).await
+}
+
+async fn cached_active_sqlite_actor(
+	active_actors: &HashMap<String, actor_lifecycle::ActiveActor>,
+	actor_id: &str,
+	generation: u64,
+) -> bool {
+	active_actors
+		.read_async(actor_id, |_, active| {
+			let state_allows_reads = match active.state {
+				actor_lifecycle::ActiveActorState::Starting => false,
+				actor_lifecycle::ActiveActorState::Running
+				| actor_lifecycle::ActiveActorState::Stopping => true,
+			};
+
+			state_allows_reads && active.sqlite_generation == Some(generation)
+		})
+		.await
+		.unwrap_or(false)
+}
+
+async fn ensure_serverless_sqlite_open_for_get_pages(
+	conn: &Conn,
+	actor_id: &str,
+	generation: u64,
+) -> Result<()> {
+	if !conn.is_serverless {
+		return Ok(());
+	}
+
+	if sqlite_storage::optimization_flags::sqlite_optimization_flags()
+		.cache_get_pages_validation
+		&& cached_serverless_sqlite_generation(&conn.serverless_sqlite_actors, actor_id, generation)
+			.await?
+	{
+		return Ok(());
+	}
+
+	ensure_serverless_sqlite_open(conn, actor_id, generation).await
+}
+
+async fn cached_serverless_sqlite_generation(
+	serverless_sqlite_actors: &HashMap<String, u64>,
+	actor_id: &str,
+	generation: u64,
+) -> Result<bool> {
+	match serverless_sqlite_actors
+		.read_async(actor_id, |_, cached_generation| *cached_generation)
+		.await
+	{
+		Some(cached_generation) if cached_generation == generation => Ok(true),
+		Some(cached_generation) => Err(SqliteStorageError::FenceMismatch {
+			reason: format!(
+				"ensure_serverless_sqlite_open generation {} did not match cached generation {}",
+				generation, cached_generation
+			),
+		}
+		.into()),
+		None => Ok(false),
+	}
 }
 
 async fn ensure_serverless_sqlite_open(conn: &Conn, actor_id: &str, generation: u64) -> Result<()> {
@@ -1001,6 +1212,25 @@ fn validate_sqlite_get_pages_request(request: &protocol::SqliteGetPagesRequest) 
 	Ok(())
 }
 
+fn validate_sqlite_get_page_range_request(
+	request: &protocol::SqliteGetPageRangeRequest,
+) -> Result<()> {
+	ensure!(
+		request.start_pgno > 0,
+		"sqlite get_page_range does not accept page 0"
+	);
+	ensure!(
+		request.max_pages > 0,
+		"sqlite get_page_range requires max_pages > 0"
+	);
+	ensure!(
+		request.max_bytes > 0,
+		"sqlite get_page_range requires max_bytes > 0"
+	);
+
+	Ok(())
+}
+
 fn validate_sqlite_dirty_pages(
 	request_name: &str,
 	dirty_pages: &[protocol::SqliteDirtyPage],
@@ -1019,6 +1249,39 @@ fn validate_sqlite_dirty_pages(
 			seen.insert(page.pgno),
 			"{request_name} duplicated page {} in a single request",
 			page.pgno
+		);
+	}
+
+	Ok(())
+}
+
+fn validate_sqlite_preload_hints(hints: &protocol::SqlitePreloadHints) -> Result<()> {
+	const MAX_PRELOAD_HINT_PAGES: usize = 512;
+	const MAX_PRELOAD_HINT_RANGES: usize = 64;
+
+	ensure!(
+		hints.pgnos.len() <= MAX_PRELOAD_HINT_PAGES,
+		"sqlite preload hints had {} pages, expected at most {}",
+		hints.pgnos.len(),
+		MAX_PRELOAD_HINT_PAGES
+	);
+	ensure!(
+		hints.ranges.len() <= MAX_PRELOAD_HINT_RANGES,
+		"sqlite preload hints had {} ranges, expected at most {}",
+		hints.ranges.len(),
+		MAX_PRELOAD_HINT_RANGES
+	);
+	for pgno in &hints.pgnos {
+		ensure!(*pgno > 0, "sqlite preload hints do not accept page 0");
+	}
+	for range in &hints.ranges {
+		ensure!(
+			range.start_pgno > 0,
+			"sqlite preload hint ranges do not accept page 0"
+		);
+		ensure!(
+			range.page_count > 0,
+			"sqlite preload hint ranges must include at least one page"
 		);
 	}
 
@@ -1099,6 +1362,21 @@ async fn send_sqlite_get_pages_response(
 	.await
 }
 
+async fn send_sqlite_get_page_range_response(
+	conn: &Conn,
+	request_id: u32,
+	data: protocol::SqliteGetPageRangeResponse,
+) -> Result<()> {
+	send_to_envoy(
+		conn,
+		protocol::ToEnvoy::ToEnvoySqliteGetPageRangeResponse(
+			protocol::ToEnvoySqliteGetPageRangeResponse { request_id, data },
+		),
+		"sqlite get_page_range response",
+	)
+	.await
+}
+
 async fn send_sqlite_commit_response(
 	conn: &Conn,
 	request_id: u32,
@@ -1156,6 +1434,21 @@ async fn send_sqlite_commit_finalize_response(
 			protocol::ToEnvoySqliteCommitFinalizeResponse { request_id, data },
 		),
 		"sqlite commit_finalize response",
+	)
+	.await
+}
+
+async fn send_sqlite_persist_preload_hints_response(
+	conn: &Conn,
+	request_id: u32,
+	data: protocol::SqlitePersistPreloadHintsResponse,
+) -> Result<()> {
+	send_to_envoy(
+		conn,
+		protocol::ToEnvoy::ToEnvoySqlitePersistPreloadHintsResponse(
+			protocol::ToEnvoySqlitePersistPreloadHintsResponse { request_id, data },
+		),
+		"sqlite persist_preload_hints response",
 	)
 	.await
 }

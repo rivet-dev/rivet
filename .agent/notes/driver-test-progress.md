@@ -89,3 +89,13 @@ Config: registry (static), client type (http), encoding (bare)
 - 2026-04-26T14:12:59-07:00 actor-onstatechange: PASS (bare file filter)
 
 - 2026-04-26T14:17:33-07:00 actor-db: FAIL (exit 1, bare file filter)
+
+- 2026-04-28T03:01:07-07:00 actor-sleep: FAIL focused repro `waitUntil accepts promises that resolve to undefined`. Native NAPI logs `actor wait_until promise rejected` with `InvalidArg: undefined cannot be represented as a serde_json::Value` after `triggerWaitUntilVoid`; `triggerWaitUntilWithValue` did not reproduce locally with this checkout.
+
+- 2026-04-28T03:02:10-07:00 actor-sleep: FAIL focused repro updated to exact `counterWaitUntilProbe` shape. Failure occurs on first action `triggerWaitUntilVoid`, before the value and rejection controls run.
+
+- 2026-04-28T03:05:41-07:00 actor-sleep: PASS after native waitUntil bridge normalization. Focused `waitUntil`/`keepAwake` bridge tests pass, and full bare `Actor Sleep Tests` passed (21 passed, 45 skipped).
+
+- 2026-04-28T03:59:04-07:00 raw-websocket: PASS focused native `onWebSocket` connection-context repro after passing raw websocket `ConnHandle` through core/NAPI/TS. Full bare raw-websocket run had one `guard.request_timeout` on `should establish raw WebSocket connection`; isolated rerun passed.
+
+- 2026-04-28T05:18:50-07:00 raw-websocket: PASS focused `/actors/{id}/sleep` repro for non-hibernatable raw websocket disconnect after making non-HWS actor stop terminal in pegboard gateway retry handling. Bare raw-websocket slice passed (16 passed, 32 skipped). Checks passed: `cargo check -p pegboard-gateway2`, `cargo check -p pegboard-gateway`, `pnpm check-types`.

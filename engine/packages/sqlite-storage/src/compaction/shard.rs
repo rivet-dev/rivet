@@ -13,7 +13,7 @@ use crate::keys::{
 };
 use crate::ltx::{LtxHeader, decode_ltx_v3, encode_ltx_v3};
 use crate::quota::{encode_db_head_with_usage, tracked_storage_entry_size};
-use crate::types::{DBHead, DirtyPage, SQLITE_PAGE_SIZE, decode_db_head, encode_db_head, new_db_head};
+use crate::types::{DBHead, DirtyPage, SQLITE_PAGE_SIZE, decode_db_head};
 use crate::udb::{self, WriteOp};
 
 const PIDX_PGNO_BYTES: usize = std::mem::size_of::<u32>();
@@ -92,6 +92,8 @@ mod test_hooks {
 
 impl SqliteEngine {
 	pub async fn compact_shard(&self, actor_id: &str, shard_id: u32) -> Result<bool> {
+		let actor_lock = self.actor_op_lock(actor_id).await;
+		let _actor_guard = actor_lock.lock().await;
 		let meta_bytes = udb::get_value(
 			&self.db,
 			&self.subspace,
@@ -529,7 +531,6 @@ mod tests {
 	use crate::types::{
 		DBHead, DirtyPage, FetchedPage, SQLITE_DEFAULT_MAX_STORAGE_BYTES, SQLITE_PAGE_SIZE,
 		SQLITE_SHARD_SIZE, SQLITE_VFS_V2_SCHEMA_VERSION, SqliteOrigin, encode_db_head,
-		new_db_head,
 	};
 	use crate::udb::{WriteOp, apply_write_ops, test_hooks};
 
@@ -554,6 +555,16 @@ mod tests {
 
 	fn page(fill: u8) -> Vec<u8> {
 		vec![fill; SQLITE_PAGE_SIZE as usize]
+	}
+
+	fn noisy_page(seed: u32) -> Vec<u8> {
+		let mut state = seed.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+		(0..SQLITE_PAGE_SIZE)
+			.map(|_| {
+				state = state.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+				(state >> 24) as u8
+			})
+			.collect()
 	}
 
 	fn delta_blob_key(actor_id: &str, txid: u64) -> Vec<u8> {
@@ -616,6 +627,17 @@ mod tests {
 			.map(|(pgno, fill)| DirtyPage {
 				pgno: *pgno,
 				bytes: page(*fill),
+			})
+			.collect::<Vec<_>>();
+		encode_ltx_v3(LtxHeader::delta(txid, commit, 999), &pages).expect("encode test blob")
+	}
+
+	fn encoded_noisy_blob(txid: u64, commit: u32, pgnos: impl IntoIterator<Item = u32>) -> Vec<u8> {
+		let pages = pgnos
+			.into_iter()
+			.map(|pgno| DirtyPage {
+				pgno,
+				bytes: noisy_page(pgno),
 			})
 			.collect::<Vec<_>>();
 		encode_ltx_v3(LtxHeader::delta(txid, commit, 999), &pages).expect("encode test blob")
@@ -774,6 +796,50 @@ mod tests {
 					bytes: Some(page(0x33)),
 				},
 			]
+		);
+
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn compact_shard_reads_existing_chunked_shard_blob() -> Result<()> {
+		let (db, subspace) = test_db().await?;
+		let mut head = seeded_head();
+		head.head_txid = 2;
+		head.next_txid = 3;
+		head.db_size_pages = SQLITE_SHARD_SIZE;
+		let (engine, _compaction_rx) = SqliteEngine::new(db, subspace);
+		let pgnos = (1..=SQLITE_SHARD_SIZE).collect::<Vec<_>>();
+		let existing_shard = encoded_noisy_blob(1, SQLITE_SHARD_SIZE, pgnos.iter().copied());
+		assert!(existing_shard.len() > crate::udb::VALUE_CHUNK_SIZE * 10);
+		apply_write_ops(
+			&engine.db,
+			&engine.subspace,
+			engine.op_counter.as_ref(),
+			vec![
+				WriteOp::put(meta_key(TEST_ACTOR), encode_db_head(&head)?),
+				WriteOp::put(shard_key(TEST_ACTOR, 0), existing_shard),
+				WriteOp::put(
+					delta_blob_key(TEST_ACTOR, 2),
+					encoded_blob(2, SQLITE_SHARD_SIZE, &[(1, 0x22)]),
+				),
+				WriteOp::put(pidx_delta_key(TEST_ACTOR, 1), 2_u64.to_be_bytes().to_vec()),
+			],
+		)
+		.await?;
+		engine.open(TEST_ACTOR, OpenConfig::new(0)).await?;
+
+		assert!(engine.compact_shard(TEST_ACTOR, 0).await?);
+
+		let shard_blob = read_value(&engine, shard_key(TEST_ACTOR, 0))
+			.await?
+			.expect("shard should exist after compaction");
+		let decoded = decode_ltx_v3(&shard_blob)?;
+		assert_eq!(decoded.get_page(1), Some(page(0x22).as_slice()));
+		assert_eq!(decoded.get_page(2), Some(noisy_page(2).as_slice()));
+		assert_eq!(
+			decoded.get_page(SQLITE_SHARD_SIZE - 1),
+			Some(noisy_page(SQLITE_SHARD_SIZE - 1).as_slice())
 		);
 
 		Ok(())
@@ -1045,7 +1111,7 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn compact_shard_aborts_and_retries_after_concurrent_commit() -> Result<()> {
+	async fn compact_shard_serializes_with_concurrent_commit() -> Result<()> {
 		let (db, subspace) = test_db().await?;
 		let mut head = seeded_head();
 		head.head_txid = 1;
@@ -1076,20 +1142,26 @@ mod tests {
 
 		reached.notified().await;
 
-		let commit = engine
-			.commit(TEST_ACTOR, commit_request(head.generation, 1, &[(2, 0x22)]))
-			.await?;
-		assert_eq!(commit.txid, 2);
+		let generation = head.generation;
+		let commit_engine = std::sync::Arc::clone(&engine);
+		let commit_task = tokio::spawn(async move {
+			commit_engine
+				.commit(TEST_ACTOR, commit_request(generation, 1, &[(2, 0x22)]))
+				.await
+		});
 		release.notify_waiters();
 
-		assert!(!compact_task.await??);
+		assert!(compact_task.await??);
+		let commit = commit_task.await??;
+		assert_eq!(commit.txid, 2);
 		let stored_head = decode_db_head(
 			&read_value(engine.as_ref(), meta_key(TEST_ACTOR))
 				.await?
-				.expect("meta should exist after concurrent commit"),
+				.expect("meta should exist after serialized commit"),
 		)?;
 		assert_eq!(stored_head.head_txid, 2);
 		assert_eq!(stored_head.next_txid, 3);
+		assert_eq!(stored_head.materialized_txid, 1);
 		assert_eq!(
 			engine
 				.get_pages(TEST_ACTOR, head.generation, vec![1, 2])

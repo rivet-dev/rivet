@@ -17,6 +17,9 @@
 /// Unified native database handles and open helpers.
 pub mod database;
 
+/// SQLite optimization feature flags.
+pub mod optimization_flags;
+
 /// SQLite query execution helpers.
 pub mod query;
 

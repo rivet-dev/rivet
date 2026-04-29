@@ -215,17 +215,19 @@ impl ActorContext {
 		)
 	}
 
-	pub(crate) fn build(
-		actor_id: String,
-		name: String,
-		key: ActorKey,
-		region: String,
-		config: ActorConfig,
-		kv: Kv,
-		sql: SqliteDb,
-	) -> Self {
-		let metrics = ActorMetrics::new(actor_id.clone(), name.clone());
-		let diagnostics = ActorDiagnostics::new(actor_id.clone());
+		pub(crate) fn build(
+			actor_id: String,
+			name: String,
+			key: ActorKey,
+			region: String,
+			config: ActorConfig,
+			kv: Kv,
+			mut sql: SqliteDb,
+		) -> Self {
+			let metrics = ActorMetrics::new(actor_id.clone(), name.clone());
+			#[cfg(feature = "sqlite")]
+			sql.set_vfs_metrics(Arc::new(metrics.clone()));
+			let diagnostics = ActorDiagnostics::new(actor_id.clone());
 		let lifecycle_event_inbox_capacity = config.lifecycle_event_inbox_capacity;
 		let state_save_interval = config.state_save_interval;
 		let abort_signal = CancellationToken::new();

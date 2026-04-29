@@ -16,7 +16,7 @@ use crate::keys::{
 };
 use crate::ltx::{LtxHeader, decode_ltx_v3, encode_ltx_v3};
 use crate::quota::{encode_db_head_with_usage, tracked_storage_entry_size};
-use crate::types::{DirtyPage, SQLITE_MAX_DELTA_BYTES, SqliteMeta, SqliteOrigin, decode_db_head, encode_db_head, new_db_head};
+use crate::types::{DirtyPage, SQLITE_MAX_DELTA_BYTES, SqliteMeta, SqliteOrigin, decode_db_head};
 use crate::udb;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -157,6 +157,8 @@ impl SqliteEngine {
 		let start = Instant::now();
 		self.ensure_open(actor_id, request.generation, "commit")
 			.await?;
+		let actor_lock = self.actor_op_lock(actor_id).await;
+		let _actor_guard = actor_lock.lock().await;
 		let dirty_page_count = request.dirty_pages.len();
 		tracing::Span::current().record("dirty_pages", dirty_page_count);
 		let mut dirty_pgnos = request
@@ -419,6 +421,8 @@ impl SqliteEngine {
 	) -> Result<CommitStageBeginResult> {
 		self.ensure_open(actor_id, request.generation, "commit_stage_begin")
 			.await?;
+		let actor_lock = self.actor_op_lock(actor_id).await;
+		let _actor_guard = actor_lock.lock().await;
 		let actor_id = actor_id.to_string();
 		let actor_id_for_tx = actor_id.clone();
 		let subspace = self.subspace.clone();
@@ -499,6 +503,8 @@ impl SqliteEngine {
 		let decode_start = Instant::now();
 		self.ensure_open(actor_id, request.generation, "commit_stage")
 			.await?;
+		let actor_lock = self.actor_op_lock(actor_id).await;
+		let _actor_guard = actor_lock.lock().await;
 		let stage_key = (actor_id.to_string(), request.txid);
 		{
 			let entry = self.pending_stages.get_async(&stage_key).await.ok_or(
@@ -645,6 +651,8 @@ impl SqliteEngine {
 		let start = Instant::now();
 		self.ensure_open(actor_id, request.generation, "commit_finalize")
 			.await?;
+		let actor_lock = self.actor_op_lock(actor_id).await;
+		let _actor_guard = actor_lock.lock().await;
 		let stage_key = (actor_id.to_string(), request.txid);
 		{
 			let entry = self.pending_stages.get_async(&stage_key).await.ok_or(

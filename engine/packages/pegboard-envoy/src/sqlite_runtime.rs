@@ -41,3 +41,19 @@ pub fn protocol_sqlite_fetched_page(
 		bytes: page.bytes,
 	}
 }
+
+pub fn storage_preload_hints(
+	hints: protocol::SqlitePreloadHints,
+) -> sqlite_storage::types::PreloadHints {
+	sqlite_storage::types::PreloadHints {
+		pgnos: hints.pgnos,
+		ranges: hints
+			.ranges
+			.into_iter()
+			.map(|range| sqlite_storage::types::PreloadHintRange {
+				start_pgno: range.start_pgno,
+				page_count: range.page_count,
+			})
+			.collect(),
+	}
+}

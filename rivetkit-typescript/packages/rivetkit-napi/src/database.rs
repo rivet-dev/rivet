@@ -53,33 +53,11 @@ pub struct QueryResult {
 	pub rows: Vec<Vec<serde_json::Value>>,
 }
 
-#[napi(object)]
-pub struct JsSqliteVfsMetrics {
-	pub request_build_ns: i64,
-	pub serialize_ns: i64,
-	pub transport_ns: i64,
-	pub state_update_ns: i64,
-	pub total_ns: i64,
-	pub commit_count: i64,
-}
-
 #[napi]
 impl JsNativeDatabase {
 	#[napi]
 	pub fn take_last_kv_error(&self) -> Option<String> {
 		self.db.take_last_kv_error()
-	}
-
-	#[napi]
-	pub fn get_sqlite_vfs_metrics(&self) -> Option<JsSqliteVfsMetrics> {
-		self.db.metrics().map(|metrics| JsSqliteVfsMetrics {
-			request_build_ns: u64_to_i64(metrics.request_build_ns),
-			serialize_ns: u64_to_i64(metrics.serialize_ns),
-			transport_ns: u64_to_i64(metrics.transport_ns),
-			state_update_ns: u64_to_i64(metrics.state_update_ns),
-			total_ns: u64_to_i64(metrics.total_ns),
-			commit_count: u64_to_i64(metrics.commit_count),
-		})
 	}
 
 	#[napi]
@@ -172,8 +150,4 @@ fn column_value_to_json(value: ColumnValue) -> serde_json::Value {
 			serde_json::Value::Array(value.into_iter().map(serde_json::Value::from).collect())
 		}
 	}
-}
-
-fn u64_to_i64(value: u64) -> i64 {
-	value.min(i64::MAX as u64) as i64
 }

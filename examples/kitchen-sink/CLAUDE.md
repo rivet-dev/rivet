@@ -106,6 +106,12 @@ The kitchen-sink has three SQLite actor types to test:
 
 ## Scripts
 
+### `scripts/sqlite-cold-start-bench.ts` — SQLite cold-read harness
+
+- Keep cold wake/open measured with a tiny SQLite action separately from cold full-read throughput, and keep the main read path free of CPU-heavy diagnostic probes like payload `LIKE` scans.
+- The default SQLite cold-start benchmark runs un-compacted and compacted scenarios separately; keep both on inline transaction sizes unless chunked DELTA reads are being explicitly tested.
+- Use `cold_start_reverse_probe` for reverse VFS scan measurements; large payload overflow rows create scattered reverse page access.
+
 ### `scripts/soak.ts` — Cloud Run soak harness
 
 - Drives sustained workload against the live `kitchen-sink-staging` Cloud Run service to verify correctness, validate autoscale, and detect memory leaks in unstable rivetkit code.

@@ -269,6 +269,12 @@ pub fn stringify_to_rivet(message: &protocol::ToRivet) -> String {
 				val.request_id
 			)
 		}
+		protocol::ToRivet::ToRivetSqliteGetPageRangeRequest(val) => {
+			format!(
+				"ToRivetSqliteGetPageRangeRequest{{requestId: {}}}",
+				val.request_id
+			)
+		}
 		protocol::ToRivet::ToRivetSqliteCommitRequest(val) => {
 			format!(
 				"ToRivetSqliteCommitRequest{{requestId: {}}}",
@@ -290,6 +296,12 @@ pub fn stringify_to_rivet(message: &protocol::ToRivet) -> String {
 		protocol::ToRivet::ToRivetSqliteCommitFinalizeRequest(val) => {
 			format!(
 				"ToRivetSqliteCommitFinalizeRequest{{requestId: {}}}",
+				val.request_id
+			)
+		}
+		protocol::ToRivet::ToRivetSqlitePersistPreloadHintsRequest(val) => {
+			format!(
+				"ToRivetSqlitePersistPreloadHintsRequest{{requestId: {}}}",
 				val.request_id
 			)
 		}
@@ -339,6 +351,12 @@ pub fn stringify_to_envoy(message: &protocol::ToEnvoy) -> String {
 				val.request_id
 			)
 		}
+		protocol::ToEnvoy::ToEnvoySqliteGetPageRangeResponse(val) => {
+			format!(
+				"ToEnvoySqliteGetPageRangeResponse{{requestId: {}}}",
+				val.request_id
+			)
+		}
 		protocol::ToEnvoy::ToEnvoySqliteCommitResponse(val) => {
 			format!(
 				"ToEnvoySqliteCommitResponse{{requestId: {}}}",
@@ -360,6 +378,12 @@ pub fn stringify_to_envoy(message: &protocol::ToEnvoy) -> String {
 		protocol::ToEnvoy::ToEnvoySqliteCommitFinalizeResponse(val) => {
 			format!(
 				"ToEnvoySqliteCommitFinalizeResponse{{requestId: {}}}",
+				val.request_id
+			)
+		}
+		protocol::ToEnvoy::ToEnvoySqlitePersistPreloadHintsResponse(val) => {
+			format!(
+				"ToEnvoySqlitePersistPreloadHintsResponse{{requestId: {}}}",
 				val.request_id
 			)
 		}

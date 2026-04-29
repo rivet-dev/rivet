@@ -88,12 +88,9 @@ export function db<TSchema extends DrizzleSchema = Record<string, never>>({
 				);
 			}
 
-			const nativeDb = await nativeDatabaseProvider.open(ctx.actorId);
-			ctx.metrics?.setSqliteVfsMetricsSource(() => {
-				return nativeDb.getSqliteVfsMetrics?.() ?? null;
-			});
+				const nativeDb = await nativeDatabaseProvider.open(ctx.actorId);
 
-			const mutex = new AsyncMutex();
+				const mutex = new AsyncMutex();
 			let closed = false;
 			const ensureOpen = () => {
 				if (closed) {

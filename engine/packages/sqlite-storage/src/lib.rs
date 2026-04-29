@@ -6,7 +6,9 @@ pub mod keys;
 pub mod ltx;
 pub mod metrics;
 pub mod open;
+pub mod optimization_flags;
 pub mod page_index;
+pub mod preload_hints;
 pub mod quota;
 pub mod read;
 #[cfg(test)]

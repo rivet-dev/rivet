@@ -2,7 +2,7 @@
 //!
 //! This crate now owns the KV-backed SQLite behavior used by `rivetkit-napi`.
 
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use std::ffi::{CStr, CString, c_char, c_int, c_void};
 use std::ptr;
 use std::slice;
@@ -25,11 +25,21 @@ use tokio::runtime::Handle;
 #[cfg(test)]
 use tokio::sync::Notify;
 
-const DEFAULT_CACHE_CAPACITY_PAGES: u64 = 50_000;
-const DEFAULT_PREFETCH_DEPTH: usize = 16;
+use crate::optimization_flags::{SqliteOptimizationFlags, sqlite_optimization_flags};
+
+const DEFAULT_PREFETCH_DEPTH: usize = 64;
+const LEGACY_PREFETCH_DEPTH: usize = 16;
 const DEFAULT_MAX_PREFETCH_BYTES: usize = 256 * 1024;
+const DEFAULT_ADAPTIVE_PREFETCH_DEPTH: usize = 256;
+const DEFAULT_ADAPTIVE_MAX_PREFETCH_BYTES: usize = 1024 * 1024;
 const DEFAULT_MAX_PAGES_PER_STAGE: usize = 4_000;
+const DEFAULT_RECENT_HINT_PAGE_BUDGET: usize = 128;
+const DEFAULT_RECENT_HINT_RANGE_BUDGET: usize = 16;
 const DEFAULT_PAGE_SIZE: usize = 4096;
+const MIN_RECENT_SCAN_RANGE_PAGES: u32 = 8;
+const SCAN_SCORE_THRESHOLD: i32 = 6;
+const SCAN_SCORE_MAX: i32 = 12;
+const SCAN_GAP_TOLERANCE: u32 = 8;
 const MAX_PATHNAME: c_int = 64;
 const TEMP_AUX_PATH_PREFIX: &str = "__sqlite_temp__";
 const EMPTY_DB_PAGE_HEADER_PREFIX: [u8; 108] = [
@@ -164,11 +174,6 @@ impl SqliteTransport {
 								.await
 							{
 								Ok(_) => {}
-								Err(takeover_err)
-									if matches!(
-										sqlite_storage_error(&takeover_err),
-										Some(SqliteStorageError::ConcurrentTakeover)
-									) => {}
 								Err(takeover_err) => {
 									return Ok(
 										protocol::SqliteGetPagesResponse::SqliteErrorResponse(
@@ -211,6 +216,56 @@ impl SqliteTransport {
 			}
 			#[cfg(test)]
 			SqliteTransportInner::Test(protocol) => protocol.get_pages(req).await,
+		}
+	}
+
+	async fn get_page_range(
+		&self,
+		req: protocol::SqliteGetPageRangeRequest,
+	) -> Result<protocol::SqliteGetPageRangeResponse> {
+		match &*self.inner {
+			SqliteTransportInner::Envoy(handle) => handle.sqlite_get_page_range(req).await,
+			#[cfg(test)]
+			SqliteTransportInner::Direct { engine, .. } => {
+				match engine
+					.get_page_range(
+						&req.actor_id,
+						req.generation,
+						req.start_pgno,
+						req.max_pages,
+						req.max_bytes,
+					)
+					.await
+				{
+					Ok(pages) => Ok(protocol::SqliteGetPageRangeResponse::SqliteGetPageRangeOk(
+						protocol::SqliteGetPageRangeOk {
+							start_pgno: req.start_pgno,
+							pages: pages.into_iter().map(protocol_fetched_page).collect(),
+							meta: protocol_sqlite_meta(engine.load_meta(&req.actor_id).await?),
+						},
+					)),
+					Err(err) => {
+						if let Some(SqliteStorageError::FenceMismatch { reason }) =
+							sqlite_storage_error(&err)
+						{
+							Ok(protocol::SqliteGetPageRangeResponse::SqliteFenceMismatch(
+								protocol::SqliteFenceMismatch {
+									actual_meta: protocol_sqlite_meta(
+										engine.load_meta(&req.actor_id).await?,
+									),
+									reason: reason.clone(),
+								},
+							))
+						} else {
+							Ok(protocol::SqliteGetPageRangeResponse::SqliteErrorResponse(
+								sqlite_error_response(&err),
+							))
+						}
+					}
+				}
+			}
+			#[cfg(test)]
+			SqliteTransportInner::Test(protocol) => protocol.get_page_range(req).await,
 		}
 	}
 
@@ -487,7 +542,6 @@ impl DirectTransportHooks {
 #[cfg(test)]
 fn protocol_sqlite_meta(meta: sqlite_storage::types::SqliteMeta) -> protocol::SqliteMeta {
 	protocol::SqliteMeta {
-		schema_version: meta.schema_version,
 		generation: meta.generation,
 		head_txid: meta.head_txid,
 		materialized_txid: meta.materialized_txid,
@@ -549,6 +603,7 @@ struct MockProtocol {
 	stage_response: protocol::SqliteCommitStageResponse,
 	finalize_response: protocol::SqliteCommitFinalizeResponse,
 	get_pages_response: protocol::SqliteGetPagesResponse,
+	get_page_range_response: protocol::SqliteGetPageRangeResponse,
 	mirror_commit_meta: AtomicBool,
 	commit_requests: Mutex<Vec<protocol::SqliteCommitRequest>>,
 	stage_requests: Mutex<Vec<protocol::SqliteCommitStageRequest>>,
@@ -556,6 +611,7 @@ struct MockProtocol {
 	stage_response_awaited: Notify,
 	finalize_requests: Mutex<Vec<protocol::SqliteCommitFinalizeRequest>>,
 	get_pages_requests: Mutex<Vec<protocol::SqliteGetPagesRequest>>,
+	get_page_range_requests: Mutex<Vec<protocol::SqliteGetPageRangeRequest>>,
 	finalize_started: Notify,
 	release_finalize: Notify,
 }
@@ -577,6 +633,13 @@ impl MockProtocol {
 					meta: sqlite_meta(8 * 1024 * 1024),
 				},
 			),
+			get_page_range_response: protocol::SqliteGetPageRangeResponse::SqliteGetPageRangeOk(
+				protocol::SqliteGetPageRangeOk {
+					start_pgno: 1,
+					pages: vec![],
+					meta: sqlite_meta(8 * 1024 * 1024),
+				},
+			),
 			mirror_commit_meta: AtomicBool::new(false),
 			commit_requests: Mutex::new(Vec::new()),
 			stage_requests: Mutex::new(Vec::new()),
@@ -584,6 +647,7 @@ impl MockProtocol {
 			stage_response_awaited: Notify::new(),
 			finalize_requests: Mutex::new(Vec::new()),
 			get_pages_requests: Mutex::new(Vec::new()),
+			get_page_range_requests: Mutex::new(Vec::new()),
 			finalize_started: Notify::new(),
 			release_finalize: Notify::new(),
 		}
@@ -627,6 +691,12 @@ impl MockProtocol {
 		self.get_pages_requests.lock()
 	}
 
+	fn get_page_range_requests(
+		&self,
+	) -> parking_lot::MutexGuard<'_, Vec<protocol::SqliteGetPageRangeRequest>> {
+		self.get_page_range_requests.lock()
+	}
+
 	fn set_mirror_commit_meta(&self, enabled: bool) {
 		self.mirror_commit_meta.store(enabled, Ordering::SeqCst);
 	}
@@ -641,6 +711,14 @@ impl MockProtocol {
 	) -> Result<protocol::SqliteGetPagesResponse> {
 		self.get_pages_requests().push(req);
 		Ok(self.get_pages_response.clone())
+	}
+
+	async fn get_page_range(
+		&self,
+		req: protocol::SqliteGetPageRangeRequest,
+	) -> Result<protocol::SqliteGetPageRangeResponse> {
+		self.get_page_range_requests().push(req);
+		Ok(self.get_page_range_response.clone())
 	}
 
 	async fn commit(
@@ -720,7 +798,6 @@ impl MockProtocol {
 #[cfg(test)]
 fn sqlite_meta(max_delta_bytes: u64) -> protocol::SqliteMeta {
 	protocol::SqliteMeta {
-		schema_version: 2,
 		generation: 7,
 		head_txid: 12,
 		materialized_txid: 12,
@@ -734,20 +811,76 @@ fn sqlite_meta(max_delta_bytes: u64) -> protocol::SqliteMeta {
 #[derive(Debug, Clone)]
 pub struct VfsConfig {
 	pub cache_capacity_pages: u64,
+	pub cache_fetched_pages: bool,
+	pub cache_prefetched_pages: bool,
+	pub cache_startup_preloaded_pages: bool,
+	pub scan_resistant_cache: bool,
+	pub protected_cache_pages: usize,
 	pub prefetch_depth: usize,
+	pub adaptive_prefetch_depth: usize,
 	pub max_prefetch_bytes: usize,
+	pub adaptive_max_prefetch_bytes: usize,
 	pub max_pages_per_stage: usize,
+	pub recent_hint_page_budget: usize,
+	pub recent_hint_range_budget: usize,
+	pub cache_hit_predictor_training: bool,
+	pub recent_page_hints: bool,
+	pub adaptive_read_ahead: bool,
+	pub range_reads: bool,
 }
 
 impl Default for VfsConfig {
 	fn default() -> Self {
+		Self::from_optimization_flags(*sqlite_optimization_flags())
+	}
+}
+
+impl VfsConfig {
+	pub fn from_optimization_flags(flags: SqliteOptimizationFlags) -> Self {
 		Self {
-			cache_capacity_pages: DEFAULT_CACHE_CAPACITY_PAGES,
-			prefetch_depth: DEFAULT_PREFETCH_DEPTH,
+			cache_capacity_pages: flags.vfs_page_cache_capacity_pages,
+			cache_fetched_pages: flags.vfs_cache_fetched_pages,
+			cache_prefetched_pages: flags.vfs_cache_prefetched_pages,
+			cache_startup_preloaded_pages: flags.vfs_cache_startup_preloaded_pages,
+			scan_resistant_cache: flags.vfs_scan_resistant_cache,
+			protected_cache_pages: flags.vfs_protected_cache_pages,
+			prefetch_depth: if flags.read_ahead {
+				DEFAULT_PREFETCH_DEPTH
+			} else {
+				LEGACY_PREFETCH_DEPTH
+			},
+			adaptive_prefetch_depth: DEFAULT_ADAPTIVE_PREFETCH_DEPTH,
 			max_prefetch_bytes: DEFAULT_MAX_PREFETCH_BYTES,
+			adaptive_max_prefetch_bytes: DEFAULT_ADAPTIVE_MAX_PREFETCH_BYTES,
 			max_pages_per_stage: DEFAULT_MAX_PAGES_PER_STAGE,
+			recent_hint_page_budget: if flags.recent_page_hints {
+				DEFAULT_RECENT_HINT_PAGE_BUDGET
+			} else {
+				0
+			},
+			recent_hint_range_budget: if flags.recent_page_hints {
+				DEFAULT_RECENT_HINT_RANGE_BUDGET
+			} else {
+				0
+			},
+			cache_hit_predictor_training: flags.cache_hit_predictor_training,
+			recent_page_hints: flags.recent_page_hints,
+			adaptive_read_ahead: flags.adaptive_read_ahead,
+			range_reads: flags.range_reads,
 		}
 	}
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VfsPreloadHintRange {
+	pub start_pgno: u32,
+	pub page_count: u32,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct VfsPreloadHintSnapshot {
+	pub pgnos: Vec<u32>,
+	pub ranges: Vec<VfsPreloadHintRange>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -781,14 +914,28 @@ pub enum CommitBufferError {
 	Other(String),
 }
 
-#[derive(Debug, Clone, Copy, Default)]
-pub struct SqliteVfsMetricsSnapshot {
-	pub request_build_ns: u64,
-	pub serialize_ns: u64,
-	pub transport_ns: u64,
-	pub state_update_ns: u64,
-	pub total_ns: u64,
-	pub commit_count: u64,
+pub trait SqliteVfsMetrics: Send + Sync {
+	fn record_resolve_pages(&self, _requested_pages: u64) {}
+
+	fn record_resolve_cache_hits(&self, _pages: u64) {}
+
+	fn record_resolve_cache_misses(&self, _pages: u64) {}
+
+	fn record_get_pages_request(&self, _pages: u64, _prefetch_pages: u64, _page_size: u64) {}
+
+	fn observe_get_pages_duration(&self, _duration_ns: u64) {}
+
+	fn record_commit(&self) {}
+
+	fn observe_commit_phases(
+		&self,
+		_request_build_ns: u64,
+		_serialize_ns: u64,
+		_transport_ns: u64,
+		_state_update_ns: u64,
+		_total_ns: u64,
+	) {
+	}
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -811,18 +958,7 @@ pub struct VfsContext {
 	fail_next_aux_delete: Mutex<Option<String>>,
 	commit_atomic_count: AtomicU64,
 	io_methods: Box<sqlite3_io_methods>,
-	// Performance counters
-	pub resolve_pages_total: AtomicU64,
-	pub resolve_pages_cache_hits: AtomicU64,
-	pub resolve_pages_fetches: AtomicU64,
-	pub pages_fetched_total: AtomicU64,
-	pub prefetch_pages_total: AtomicU64,
-	pub commit_total: AtomicU64,
-	pub commit_request_build_ns: AtomicU64,
-	pub commit_serialize_ns: AtomicU64,
-	pub commit_transport_ns: AtomicU64,
-	pub commit_state_update_ns: AtomicU64,
-	pub commit_duration_ns_total: AtomicU64,
+	metrics: Option<Arc<dyn SqliteVfsMetrics>>,
 }
 
 #[derive(Debug, Clone)]
@@ -833,8 +969,11 @@ struct VfsState {
 	page_size: usize,
 	max_delta_bytes: u64,
 	page_cache: Cache<u32, Vec<u8>>,
+	protected_page_cache: ProtectedPageCache,
 	write_buffer: WriteBuffer,
 	predictor: PrefetchPredictor,
+	read_ahead: AdaptiveReadAhead,
+	recent_pages: RecentPageTracker,
 	dead: bool,
 }
 
@@ -854,10 +993,79 @@ struct PrefetchPredictor {
 	transitions: HashMap<i64, HashMap<i64, u32>>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ReadAheadMode {
+	Bounded,
+	ForwardScan,
+	BackwardScan,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct ReadAheadPlan {
+	mode: ReadAheadMode,
+	depth: usize,
+	max_bytes: usize,
+	seed_pgno: Option<u32>,
+}
+
+#[derive(Debug, Clone, Default)]
+struct AdaptiveReadAhead {
+	last_pgno: Option<u32>,
+	scan_tip_pgno: Option<u32>,
+	scan_direction: Option<ScanDirection>,
+	score: i32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ScanDirection {
+	Forward,
+	Backward,
+}
+
+#[derive(Debug, Clone)]
+struct RecentPageTracker {
+	page_budget: usize,
+	range_budget: usize,
+	hot_pages: HashMap<u32, RecentPageAccess>,
+	ranges: VecDeque<VfsPreloadHintRange>,
+	active_scan_start: Option<u32>,
+	active_scan_end: u32,
+	last_pgno: Option<u32>,
+	access_seq: u64,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct RecentPageAccess {
+	count: u32,
+	last_access_seq: u64,
+}
+
+#[derive(Debug, Clone)]
+struct ProtectedPageCache {
+	page_budget: usize,
+	early_page_budget: usize,
+	access_budget: usize,
+	pages: HashMap<u32, Vec<u8>>,
+	order: VecDeque<u32>,
+	access_counts: HashMap<u32, u32>,
+	access_order: VecDeque<u32>,
+	early_pages_seen: usize,
+}
+
 #[derive(Debug)]
 enum GetPagesError {
 	FenceMismatch(String),
 	Other(String),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PageFetchTransport {
+	PageList,
+	Range {
+		start_pgno: u32,
+		max_pages: u32,
+		max_bytes: u64,
+	},
 }
 
 #[repr(C)]
@@ -897,6 +1105,76 @@ pub struct NativeDatabase {
 
 unsafe impl Send for NativeDatabase {}
 
+fn select_page_fetch_transport(
+	to_fetch: &[u32],
+	prefetch: bool,
+	read_ahead_plan: ReadAheadPlan,
+	config: &VfsConfig,
+) -> PageFetchTransport {
+	if !config.range_reads
+		|| !prefetch
+		|| !matches!(
+			read_ahead_plan.mode,
+			ReadAheadMode::ForwardScan | ReadAheadMode::BackwardScan
+		)
+		|| to_fetch.len() <= config.prefetch_depth
+	{
+		return PageFetchTransport::PageList;
+	}
+
+	let Some(start_pgno) = contiguous_page_run_start(to_fetch) else {
+		return PageFetchTransport::PageList;
+	};
+
+	PageFetchTransport::Range {
+		start_pgno,
+		max_pages: to_fetch.len().try_into().unwrap_or(u32::MAX),
+		max_bytes: read_ahead_plan.max_bytes.try_into().unwrap_or(u64::MAX),
+	}
+}
+
+fn contiguous_page_run_start(pgnos: &[u32]) -> Option<u32> {
+	let first = *pgnos.first()?;
+	if pgnos.len() == 1 {
+		return Some(first);
+	}
+
+	if pgnos
+		.windows(2)
+		.all(|window| window[1] == window[0].saturating_add(1))
+	{
+		return Some(first);
+	}
+
+	if pgnos
+		.windows(2)
+		.all(|window| window[0] == window[1].saturating_add(1))
+	{
+		return pgnos.last().copied();
+	}
+
+	None
+}
+
+fn sqlite_get_page_range_response_to_get_pages_response(
+	response: protocol::SqliteGetPageRangeResponse,
+) -> protocol::SqliteGetPagesResponse {
+	match response {
+		protocol::SqliteGetPageRangeResponse::SqliteGetPageRangeOk(ok) => {
+			protocol::SqliteGetPagesResponse::SqliteGetPagesOk(protocol::SqliteGetPagesOk {
+				pages: ok.pages,
+				meta: ok.meta,
+			})
+		}
+		protocol::SqliteGetPageRangeResponse::SqliteFenceMismatch(mismatch) => {
+			protocol::SqliteGetPagesResponse::SqliteFenceMismatch(mismatch)
+		}
+		protocol::SqliteGetPageRangeResponse::SqliteErrorResponse(error) => {
+			protocol::SqliteGetPagesResponse::SqliteErrorResponse(error)
+		}
+	}
+}
+
 impl PrefetchPredictor {
 	fn record(&mut self, pgno: u32) {
 		if let Some(last_pgno) = self.last_pgno {
@@ -930,7 +1208,7 @@ impl PrefetchPredictor {
 		let mut predicted = Vec::with_capacity(depth);
 
 		if let Some(delta) = self.last_delta {
-			if self.stride_run_len >= 2 && delta > 0 {
+			if self.stride_run_len >= 2 && delta != 0 {
 				let mut current = from_pgno as i64;
 				for _ in 0..depth {
 					current += delta;
@@ -975,14 +1253,402 @@ impl PrefetchPredictor {
 	}
 }
 
+impl AdaptiveReadAhead {
+	fn record_and_plan(&mut self, pgnos: &[u32], config: &VfsConfig) -> ReadAheadPlan {
+		let mut scan_seed_pgno = None;
+		let mut scan_direction = None;
+		for pgno in pgnos.iter().copied() {
+			if let Some(direction) = self.record(pgno) {
+				scan_seed_pgno = Some(pgno);
+				scan_direction = Some(direction);
+			}
+		}
+
+		if config.adaptive_read_ahead
+			&& self.score >= SCAN_SCORE_THRESHOLD
+			&& scan_seed_pgno.is_some()
+			&& scan_direction.is_some()
+		{
+			let depth = if self.score >= SCAN_SCORE_THRESHOLD + 4 {
+				config.adaptive_prefetch_depth
+			} else {
+				config
+					.adaptive_prefetch_depth
+					.min(config.prefetch_depth.saturating_mul(2))
+			};
+			ReadAheadPlan {
+				mode: match scan_direction.expect("scan direction checked above") {
+					ScanDirection::Forward => ReadAheadMode::ForwardScan,
+					ScanDirection::Backward => ReadAheadMode::BackwardScan,
+				},
+				depth,
+				max_bytes: config.adaptive_max_prefetch_bytes,
+				seed_pgno: scan_seed_pgno,
+			}
+		} else {
+			ReadAheadPlan {
+				mode: ReadAheadMode::Bounded,
+				depth: config.prefetch_depth,
+				max_bytes: config.max_prefetch_bytes,
+				seed_pgno: pgnos.last().copied(),
+			}
+		}
+	}
+
+	fn record(&mut self, pgno: u32) -> Option<ScanDirection> {
+		let direction_from_last = self
+			.last_pgno
+			.and_then(|last_pgno| scan_direction_between(last_pgno, pgno));
+		let direction_from_scan_tip = self
+			.scan_tip_pgno
+			.and_then(|tip_pgno| scan_direction_between(tip_pgno, pgno));
+		let repeated = self.last_pgno == Some(pgno);
+		let observed_direction = direction_from_last.or(direction_from_scan_tip);
+
+		if let Some(direction) = observed_direction {
+			if self.scan_direction == Some(direction)
+				|| self.scan_direction.is_none()
+				|| self.score < SCAN_SCORE_THRESHOLD
+			{
+				self.score = (self.score + 2).min(SCAN_SCORE_MAX);
+				self.scan_tip_pgno = Some(pgno);
+				self.scan_direction = Some(direction);
+				self.last_pgno = Some(pgno);
+				return Some(direction);
+			}
+
+			self.score = (self.score - 4).max(0);
+			self.scan_tip_pgno = Some(pgno);
+			self.scan_direction = Some(direction);
+		} else if !repeated {
+			if self.score >= SCAN_SCORE_THRESHOLD && self.scan_tip_pgno.is_some() {
+				self.score = (self.score - 1).max(0);
+			} else {
+				self.score = (self.score - 4).max(0);
+				self.scan_tip_pgno = Some(pgno);
+				self.scan_direction = None;
+			}
+		}
+
+		self.last_pgno = Some(pgno);
+		None
+	}
+}
+
+fn scan_direction_between(previous: u32, current: u32) -> Option<ScanDirection> {
+	if let Some(delta) = current.checked_sub(previous) {
+		if (1..=SCAN_GAP_TOLERANCE).contains(&delta) {
+			return Some(ScanDirection::Forward);
+		}
+	}
+	if previous.checked_sub(current) == Some(1) {
+		return Some(ScanDirection::Backward);
+	}
+	None
+}
+
+impl VfsPreloadHintRange {
+	fn new(start_pgno: u32, end_pgno: u32) -> Self {
+		Self {
+			start_pgno,
+			page_count: end_pgno.saturating_sub(start_pgno).saturating_add(1),
+		}
+	}
+
+	fn end_pgno(&self) -> u32 {
+		self.start_pgno
+			.saturating_add(self.page_count)
+			.saturating_sub(1)
+	}
+
+	fn contains(&self, pgno: u32) -> bool {
+		(self.start_pgno..=self.end_pgno()).contains(&pgno)
+	}
+}
+
+impl RecentPageTracker {
+	fn new(page_budget: usize, range_budget: usize) -> Self {
+		Self {
+			page_budget,
+			range_budget,
+			hot_pages: HashMap::new(),
+			ranges: VecDeque::new(),
+			active_scan_start: None,
+			active_scan_end: 0,
+			last_pgno: None,
+			access_seq: 0,
+		}
+	}
+
+	fn record_pages(&mut self, pgnos: impl IntoIterator<Item = u32>) {
+		for pgno in pgnos {
+			self.record_page(pgno);
+		}
+	}
+
+	fn record_page(&mut self, pgno: u32) {
+		self.access_seq = self.access_seq.saturating_add(1);
+		self.record_hot_page(pgno);
+		self.record_scan_page(pgno);
+	}
+
+	fn record_hot_page(&mut self, pgno: u32) {
+		if self.page_budget == 0 {
+			return;
+		}
+
+		if let Some(access) = self.hot_pages.get_mut(&pgno) {
+			access.count = access.count.saturating_add(1);
+			access.last_access_seq = self.access_seq;
+			return;
+		}
+
+		if self.hot_pages.len() >= self.page_budget {
+			if let Some(evict_pgno) = self
+				.hot_pages
+				.iter()
+				.min_by_key(|(_, access)| (access.count, access.last_access_seq))
+				.map(|(pgno, _)| *pgno)
+			{
+				self.hot_pages.remove(&evict_pgno);
+			}
+		}
+
+		self.hot_pages.insert(
+			pgno,
+			RecentPageAccess {
+				count: 1,
+				last_access_seq: self.access_seq,
+			},
+		);
+	}
+
+	fn record_scan_page(&mut self, pgno: u32) {
+		match self.last_pgno {
+			Some(last_pgno) if pgno == last_pgno.saturating_add(1) => {
+				if self.active_scan_start.is_none() {
+					self.active_scan_start = Some(last_pgno);
+				}
+				self.active_scan_end = pgno;
+			}
+			Some(last_pgno) if pgno == last_pgno => {}
+			Some(_) | None => {
+				self.finish_active_scan();
+				self.active_scan_start = None;
+				self.active_scan_end = 0;
+			}
+		}
+		self.last_pgno = Some(pgno);
+	}
+
+	fn finish_active_scan(&mut self) {
+		let Some(start_pgno) = self.active_scan_start else {
+			return;
+		};
+		if self.active_scan_end < start_pgno {
+			return;
+		}
+		let page_count = self.active_scan_end - start_pgno + 1;
+		if page_count < MIN_RECENT_SCAN_RANGE_PAGES {
+			return;
+		}
+		self.push_range(VfsPreloadHintRange::new(start_pgno, self.active_scan_end));
+	}
+
+	fn push_range(&mut self, range: VfsPreloadHintRange) {
+		if self.range_budget == 0 || range.page_count == 0 {
+			return;
+		}
+		push_coalesced_range(&mut self.ranges, range);
+		while self.ranges.len() > self.range_budget {
+			self.ranges.pop_front();
+		}
+	}
+
+	fn snapshot(&self) -> VfsPreloadHintSnapshot {
+		let mut ranges = self.ranges.clone();
+		if let Some(start_pgno) = self.active_scan_start {
+			if self.active_scan_end >= start_pgno {
+				let page_count = self.active_scan_end - start_pgno + 1;
+				if page_count >= MIN_RECENT_SCAN_RANGE_PAGES {
+					push_coalesced_range(
+						&mut ranges,
+						VfsPreloadHintRange::new(start_pgno, self.active_scan_end),
+					);
+				}
+			}
+		}
+		while ranges.len() > self.range_budget {
+			ranges.pop_front();
+		}
+
+		let mut scored_pages = self
+			.hot_pages
+			.iter()
+			.filter(|(pgno, _)| !ranges.iter().any(|range| range.contains(**pgno)))
+			.map(|(pgno, access)| (*pgno, *access))
+			.collect::<Vec<_>>();
+		scored_pages.sort_by(|(left_pgno, left), (right_pgno, right)| {
+			right
+				.count
+				.cmp(&left.count)
+				.then_with(|| right.last_access_seq.cmp(&left.last_access_seq))
+				.then_with(|| left_pgno.cmp(right_pgno))
+		});
+
+		let mut pgnos = scored_pages
+			.into_iter()
+			.take(self.page_budget)
+			.map(|(pgno, _)| pgno)
+			.collect::<Vec<_>>();
+		pgnos.sort_unstable();
+
+		VfsPreloadHintSnapshot {
+			pgnos,
+			ranges: ranges.into_iter().collect(),
+		}
+	}
+}
+
+impl ProtectedPageCache {
+	fn new(page_budget: usize) -> Self {
+		let early_page_budget = page_budget.min(64);
+		let access_budget = page_budget.saturating_mul(4).max(page_budget).min(4096);
+		Self {
+			page_budget,
+			early_page_budget,
+			access_budget,
+			pages: HashMap::new(),
+			order: VecDeque::new(),
+			access_counts: HashMap::new(),
+			access_order: VecDeque::new(),
+			early_pages_seen: 0,
+		}
+	}
+
+	fn get(&self, pgno: &u32) -> Option<Vec<u8>> {
+		self.pages.get(pgno).cloned()
+	}
+
+	fn clear(&mut self) {
+		self.pages.clear();
+		self.order.clear();
+		self.access_counts.clear();
+		self.access_order.clear();
+		self.early_pages_seen = 0;
+	}
+
+	fn protect_startup_page(&mut self, pgno: u32, bytes: Vec<u8>) {
+		self.protect_page(pgno, bytes);
+	}
+
+	fn update_if_protected(&mut self, pgno: u32, bytes: Vec<u8>) {
+		if let Some(existing) = self.pages.get_mut(&pgno) {
+			*existing = bytes;
+		}
+	}
+
+	fn record_target_access(&mut self, pgno: u32, bytes: Vec<u8>) {
+		if self.page_budget == 0 {
+			return;
+		}
+
+		let is_new_access = !self.access_counts.contains_key(&pgno);
+		if is_new_access {
+			self.trim_access_counts_for_new_page();
+			self.access_order.push_back(pgno);
+		}
+		let count = self.access_counts.entry(pgno).or_insert(0);
+		*count = count.saturating_add(1);
+
+		if self.pages.contains_key(&pgno) {
+			self.protect_page(pgno, bytes);
+			return;
+		}
+
+		if self.early_pages_seen < self.early_page_budget {
+			self.early_pages_seen += 1;
+			self.protect_page(pgno, bytes);
+			return;
+		}
+
+		if *count >= 2 {
+			self.protect_page(pgno, bytes);
+		}
+	}
+
+	fn protect_page(&mut self, pgno: u32, bytes: Vec<u8>) {
+		if self.page_budget == 0 {
+			return;
+		}
+
+		if self.pages.insert(pgno, bytes).is_none() {
+			self.order.push_back(pgno);
+		}
+		self.evict_over_budget();
+	}
+
+	fn trim_access_counts_for_new_page(&mut self) {
+		while self.access_counts.len() >= self.access_budget && self.access_budget > 0 {
+			let Some(candidate) = self.access_order.pop_front() else {
+				self.access_counts.clear();
+				return;
+			};
+			if self.pages.contains_key(&candidate) {
+				continue;
+			}
+			self.access_counts.remove(&candidate);
+			return;
+		}
+	}
+
+	fn evict_over_budget(&mut self) {
+		while self.pages.len() > self.page_budget {
+			let Some(candidate) = self.order.pop_front() else {
+				return;
+			};
+			if self.pages.remove(&candidate).is_some() {
+				self.access_counts.remove(&candidate);
+			}
+		}
+	}
+}
+
+fn push_coalesced_range(ranges: &mut VecDeque<VfsPreloadHintRange>, range: VfsPreloadHintRange) {
+	let mut start_pgno = range.start_pgno;
+	let mut end_pgno = range.end_pgno();
+	let mut retained = VecDeque::new();
+	while let Some(existing) = ranges.pop_front() {
+		let existing_end = existing.end_pgno();
+		if existing.start_pgno <= end_pgno.saturating_add(1)
+			&& start_pgno <= existing_end.saturating_add(1)
+		{
+			start_pgno = start_pgno.min(existing.start_pgno);
+			end_pgno = end_pgno.max(existing_end);
+		} else {
+			retained.push_back(existing);
+		}
+	}
+	retained.push_back(VfsPreloadHintRange::new(start_pgno, end_pgno));
+	*ranges = retained;
+}
+
 impl VfsState {
 	fn new(config: &VfsConfig, startup: &protocol::SqliteStartupData) -> Self {
 		let page_cache = Cache::builder()
 			.max_capacity(config.cache_capacity_pages)
 			.build();
-		for page in &startup.preloaded_pages {
-			if let Some(bytes) = &page.bytes {
-				page_cache.insert(page.pgno, bytes.clone());
+		let mut protected_page_cache = ProtectedPageCache::new(if config.scan_resistant_cache {
+			config.protected_cache_pages
+		} else {
+			0
+		});
+		if config.cache_startup_preloaded_pages {
+			for page in &startup.preloaded_pages {
+				if let Some(bytes) = &page.bytes {
+					page_cache.insert(page.pgno, bytes.clone());
+					protected_page_cache.protect_startup_page(page.pgno, bytes.clone());
+				}
 			}
 		}
 
@@ -993,8 +1659,14 @@ impl VfsState {
 			page_size: startup.meta.page_size as usize,
 			max_delta_bytes: startup.meta.max_delta_bytes,
 			page_cache,
+			protected_page_cache,
 			write_buffer: WriteBuffer::default(),
 			predictor: PrefetchPredictor::default(),
+			read_ahead: AdaptiveReadAhead::default(),
+			recent_pages: RecentPageTracker::new(
+				config.recent_hint_page_budget,
+				config.recent_hint_range_budget,
+			),
 			dead: false,
 		};
 		if state.db_size_pages == 0 && !state.page_cache.contains_key(&1) {
@@ -1002,6 +1674,32 @@ impl VfsState {
 			state.db_size_pages = 1;
 		}
 		state
+	}
+
+	fn cache_fetched_page(
+		&mut self,
+		pgno: u32,
+		bytes: Vec<u8>,
+		target_page: bool,
+		config: &VfsConfig,
+	) {
+		let should_cache = if target_page {
+			config.cache_fetched_pages
+		} else {
+			config.cache_prefetched_pages
+		};
+		if should_cache {
+			self.page_cache.insert(pgno, bytes.clone());
+		}
+		if target_page && config.cache_fetched_pages && config.scan_resistant_cache {
+			self.protected_page_cache.record_target_access(pgno, bytes);
+		}
+	}
+
+	fn record_target_cache_access(&mut self, pgno: u32, bytes: Vec<u8>, config: &VfsConfig) {
+		if config.cache_fetched_pages && config.scan_resistant_cache {
+			self.protected_page_cache.record_target_access(pgno, bytes);
+		}
 	}
 
 	fn update_meta(&mut self, meta: &protocol::SqliteMeta) {
@@ -1025,6 +1723,7 @@ impl VfsContext {
 		startup: protocol::SqliteStartupData,
 		config: VfsConfig,
 		io_methods: sqlite3_io_methods,
+		metrics: Option<Arc<dyn SqliteVfsMetrics>>,
 	) -> Self {
 		Self {
 			actor_id,
@@ -1040,17 +1739,7 @@ impl VfsContext {
 			fail_next_aux_delete: Mutex::new(None),
 			commit_atomic_count: AtomicU64::new(0),
 			io_methods: Box::new(io_methods),
-			resolve_pages_total: AtomicU64::new(0),
-			resolve_pages_cache_hits: AtomicU64::new(0),
-			resolve_pages_fetches: AtomicU64::new(0),
-			pages_fetched_total: AtomicU64::new(0),
-			prefetch_pages_total: AtomicU64::new(0),
-			commit_total: AtomicU64::new(0),
-			commit_request_build_ns: AtomicU64::new(0),
-			commit_serialize_ns: AtomicU64::new(0),
-			commit_transport_ns: AtomicU64::new(0),
-			commit_state_update_ns: AtomicU64::new(0),
-			commit_duration_ns_total: AtomicU64::new(0),
+			metrics,
 		}
 	}
 
@@ -1077,26 +1766,14 @@ impl VfsContext {
 		state_update_ns: u64,
 		total_ns: u64,
 	) {
-		self.commit_request_build_ns
-			.fetch_add(request_build_ns, Ordering::Relaxed);
-		self.commit_serialize_ns
-			.fetch_add(transport_metrics.serialize_ns, Ordering::Relaxed);
-		self.commit_transport_ns
-			.fetch_add(transport_metrics.transport_ns, Ordering::Relaxed);
-		self.commit_state_update_ns
-			.fetch_add(state_update_ns, Ordering::Relaxed);
-		self.commit_duration_ns_total
-			.fetch_add(total_ns, Ordering::Relaxed);
-	}
-
-	fn sqlite_vfs_metrics(&self) -> SqliteVfsMetricsSnapshot {
-		SqliteVfsMetricsSnapshot {
-			request_build_ns: self.commit_request_build_ns.load(Ordering::Relaxed),
-			serialize_ns: self.commit_serialize_ns.load(Ordering::Relaxed),
-			transport_ns: self.commit_transport_ns.load(Ordering::Relaxed),
-			state_update_ns: self.commit_state_update_ns.load(Ordering::Relaxed),
-			total_ns: self.commit_duration_ns_total.load(Ordering::Relaxed),
-			commit_count: self.commit_total.load(Ordering::Relaxed),
+		if let Some(metrics) = &self.metrics {
+			metrics.observe_commit_phases(
+				request_build_ns,
+				transport_metrics.serialize_ns,
+				transport_metrics.transport_ns,
+				state_update_ns,
+				total_ns,
+			);
 		}
 	}
 
@@ -1149,13 +1826,21 @@ impl VfsContext {
 		self.state.write().dead = true;
 	}
 
+	fn snapshot_preload_hints(&self) -> VfsPreloadHintSnapshot {
+		if !self.config.recent_page_hints {
+			return VfsPreloadHintSnapshot::default();
+		}
+		self.state.read().recent_pages.snapshot()
+	}
+
 	fn resolve_pages(
 		&self,
 		target_pgnos: &[u32],
 		prefetch: bool,
 	) -> std::result::Result<HashMap<u32, Option<Vec<u8>>>, GetPagesError> {
-		use std::sync::atomic::Ordering::Relaxed;
-		self.resolve_pages_total.fetch_add(1, Relaxed);
+		if let Some(metrics) = &self.metrics {
+			metrics.record_resolve_pages(target_pgnos.len() as u64);
+		}
 
 		let mut resolved = HashMap::new();
 		let mut missing = Vec::new();
@@ -1181,66 +1866,166 @@ impl VfsContext {
 					resolved.insert(pgno, Some(bytes));
 					continue;
 				}
+				if let Some(bytes) = state.protected_page_cache.get(&pgno) {
+					resolved.insert(pgno, Some(bytes));
+					continue;
+				}
 				missing.push(pgno);
 			}
 		}
 
 		if missing.is_empty() {
-			self.resolve_pages_cache_hits
-				.fetch_add(target_pgnos.len() as u64, Relaxed);
+			let mut state = self.state.write();
+			if self.config.cache_hit_predictor_training {
+				for pgno in target_pgnos.iter().copied() {
+					state.predictor.record(pgno);
+				}
+			}
+			state.read_ahead.record_and_plan(target_pgnos, &self.config);
+			if self.config.recent_page_hints {
+				state.recent_pages.record_pages(target_pgnos.iter().copied());
+			}
+			for pgno in target_pgnos.iter().copied() {
+				if let Some(Some(bytes)) = resolved.get(&pgno) {
+					state.record_target_cache_access(pgno, bytes.clone(), &self.config);
+				}
+			}
+			if let Some(metrics) = &self.metrics {
+				metrics.record_resolve_cache_hits(target_pgnos.len() as u64);
+			}
 			return Ok(resolved);
 		}
-		self.resolve_pages_cache_hits
-			.fetch_add((seen.len() - missing.len()) as u64, Relaxed);
+		if let Some(metrics) = &self.metrics {
+			metrics.record_resolve_cache_hits((seen.len() - missing.len()) as u64);
+			metrics.record_resolve_cache_misses(missing.len() as u64);
+		}
 
-		let (generation, to_fetch) = {
+		let (
+			generation,
+			to_fetch,
+			page_size,
+			read_ahead_mode,
+			read_ahead_depth,
+			read_ahead_max_bytes,
+			seed_pgno,
+			prediction_budget,
+			predicted_pgnos,
+			fetch_transport,
+		) = {
 			let mut state = self.state.write();
 			for pgno in target_pgnos.iter().copied() {
 				state.predictor.record(pgno);
 			}
+			let read_ahead_plan = state.read_ahead.record_and_plan(target_pgnos, &self.config);
+			if self.config.recent_page_hints {
+				state.recent_pages.record_pages(target_pgnos.iter().copied());
+			}
 
 			let mut to_fetch = missing.clone();
+			let seed_pgno = read_ahead_plan.seed_pgno;
+			let mut prediction_budget = 0;
+			let mut predicted_pgnos = Vec::new();
 			if prefetch {
-				let page_budget = (self.config.max_prefetch_bytes / state.page_size.max(1)).max(1);
-				let prediction_budget = page_budget.saturating_sub(to_fetch.len());
-				let seed_pgno = target_pgnos.last().copied().unwrap_or_default();
-				for predicted in state.predictor.multi_predict(
-					seed_pgno,
-					prediction_budget.min(self.config.prefetch_depth),
-					state.db_size_pages.max(seed_pgno),
-				) {
+				let page_budget = (read_ahead_plan.max_bytes / state.page_size.max(1)).max(1);
+				prediction_budget = page_budget.saturating_sub(to_fetch.len());
+				let seed = seed_pgno.unwrap_or_default();
+				predicted_pgnos = state.predictor.multi_predict(
+					seed,
+					prediction_budget.min(read_ahead_plan.depth),
+					state.db_size_pages.max(seed),
+				);
+				if read_ahead_plan.mode == ReadAheadMode::Bounded {
+					predicted_pgnos.retain(|predicted| *predicted > seed);
+				} else if read_ahead_plan.mode == ReadAheadMode::BackwardScan {
+					let mut next_pgno = seed.checked_sub(1);
+					predicted_pgnos.retain(|predicted| match next_pgno {
+						Some(expected_pgno) if *predicted == expected_pgno => {
+							next_pgno = predicted.checked_sub(1);
+							true
+						}
+						_ => {
+							next_pgno = None;
+							false
+						}
+					});
+				}
+				for predicted in predicted_pgnos.iter().copied() {
 					if resolved.contains_key(&predicted) || to_fetch.contains(&predicted) {
 						continue;
 					}
 					to_fetch.push(predicted);
 				}
 			}
-			(state.generation, to_fetch)
+			let fetch_transport =
+				select_page_fetch_transport(&to_fetch, prefetch, read_ahead_plan, &self.config);
+			(
+				state.generation,
+				to_fetch,
+				state.page_size.max(1),
+				read_ahead_plan.mode,
+				read_ahead_plan.depth,
+				read_ahead_plan.max_bytes,
+				seed_pgno,
+				prediction_budget,
+				predicted_pgnos,
+				fetch_transport,
+			)
 		};
 
 		{
 			let prefetch_count = to_fetch.len() - missing.len();
-			self.resolve_pages_fetches.fetch_add(1, Relaxed);
-			self.pages_fetched_total
-				.fetch_add(to_fetch.len() as u64, Relaxed);
-			self.prefetch_pages_total
-				.fetch_add(prefetch_count as u64, Relaxed);
+			if let Some(metrics) = &self.metrics {
+				metrics.record_get_pages_request(
+					to_fetch.len() as u64,
+					prefetch_count as u64,
+					page_size as u64,
+				);
+			}
 			tracing::debug!(
-				missing = missing.len(),
-				prefetch = prefetch_count,
-				total_fetch = to_fetch.len(),
-				"vfs get_pages fetch"
+				requested_pages = ?target_pgnos,
+				missing_pages = ?missing,
+				read_ahead_mode = ?read_ahead_mode,
+				read_ahead_depth,
+				read_ahead_max_bytes,
+				fetch_transport = ?fetch_transport,
+				prediction_budget,
+				predicted_pages = ?predicted_pgnos,
+				prefetch_pages = prefetch_count,
+				total_fetch_pages = to_fetch.len(),
+				total_fetch_bytes = to_fetch.len().saturating_mul(page_size),
+				seed_pgno,
+				"vfs page fetch"
 			);
 		}
 
-		let response = self
-			.runtime
-			.block_on(self.transport.get_pages(protocol::SqliteGetPagesRequest {
-				actor_id: self.actor_id.clone(),
-				generation,
-				pgnos: to_fetch.clone(),
-			}))
-			.map_err(|err| GetPagesError::Other(err.to_string()))?;
+		let get_pages_start = Instant::now();
+		let response = match fetch_transport {
+			PageFetchTransport::PageList => self.runtime.block_on(self.transport.get_pages(
+				protocol::SqliteGetPagesRequest {
+					actor_id: self.actor_id.clone(),
+					generation,
+					pgnos: to_fetch.clone(),
+				},
+			)),
+			PageFetchTransport::Range {
+				start_pgno,
+				max_pages,
+				max_bytes,
+			} => self
+				.runtime
+				.block_on(self.transport.get_page_range(protocol::SqliteGetPageRangeRequest {
+					actor_id: self.actor_id.clone(),
+					generation,
+					start_pgno,
+					max_pages,
+					max_bytes,
+				}))
+				.map(sqlite_get_page_range_response_to_get_pages_response),
+		};
+		if let Some(metrics) = &self.metrics {
+			metrics.observe_get_pages_duration(get_pages_start.elapsed().as_nanos() as u64);
+		}
+		let response = response.map_err(|err| GetPagesError::Other(err.to_string()))?;
 
 		match response {
 			protocol::SqliteGetPagesResponse::SqliteFenceMismatch(mismatch) => {
@@ -1249,9 +2034,20 @@ impl VfsContext {
 			protocol::SqliteGetPagesResponse::SqliteGetPagesOk(ok) => {
 				let mut state = self.state.write();
 				state.update_read_meta(&ok.meta);
+				let missing_set = missing.iter().copied().collect::<HashSet<_>>();
+				for pgno in target_pgnos.iter().copied() {
+					if let Some(Some(bytes)) = resolved.get(&pgno) {
+						state.record_target_cache_access(pgno, bytes.clone(), &self.config);
+					}
+				}
 				for fetched in ok.pages {
 					if let Some(bytes) = &fetched.bytes {
-						state.page_cache.insert(fetched.pgno, bytes.clone());
+						state.cache_fetched_page(
+							fetched.pgno,
+							bytes.clone(),
+							missing_set.contains(&fetched.pgno),
+							&self.config,
+						);
 					}
 					resolved.insert(fetched.pgno, fetched.bytes);
 				}
@@ -1321,8 +2117,9 @@ impl VfsContext {
 				return Err(err);
 			}
 		};
-		self.commit_total
-			.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+			if let Some(metrics) = &self.metrics {
+				metrics.record_commit();
+			}
 		tracing::debug!(
 			dirty_pages = request.dirty_pages.len(),
 			path = ?outcome.path,
@@ -1340,6 +2137,9 @@ impl VfsContext {
 			state
 				.page_cache
 				.insert(dirty_page.pgno, dirty_page.bytes.clone());
+			state
+				.protected_page_cache
+				.update_if_protected(dirty_page.pgno, dirty_page.bytes.clone());
 		}
 		state.write_buffer.dirty.clear();
 		let state_update_ns = state_update_start.elapsed().as_nanos() as u64;
@@ -1409,8 +2209,9 @@ impl VfsContext {
 				return Err(err);
 			}
 		};
-		self.commit_total
-			.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+			if let Some(metrics) = &self.metrics {
+				metrics.record_commit();
+			}
 		tracing::debug!(
 			dirty_pages = request.dirty_pages.len(),
 			path = ?outcome.path,
@@ -1434,6 +2235,9 @@ impl VfsContext {
 			state
 				.page_cache
 				.insert(dirty_page.pgno, dirty_page.bytes.clone());
+			state
+				.protected_page_cache
+				.update_if_protected(dirty_page.pgno, dirty_page.bytes.clone());
 		}
 		state.write_buffer.dirty.clear();
 		state.write_buffer.in_atomic_write = false;
@@ -1457,6 +2261,7 @@ impl VfsContext {
 			.dirty
 			.retain(|pgno, _| *pgno <= truncated_pages);
 		state.page_cache.invalidate_all();
+		state.protected_page_cache.clear();
 	}
 }
 
@@ -2562,6 +3367,7 @@ impl SqliteVfs {
 		runtime: Handle,
 		startup: protocol::SqliteStartupData,
 		config: VfsConfig,
+		metrics: Option<Arc<dyn SqliteVfsMetrics>>,
 	) -> std::result::Result<Self, String> {
 		Self::register_with_transport(
 			name,
@@ -2570,6 +3376,7 @@ impl SqliteVfs {
 			runtime,
 			startup,
 			config,
+			metrics,
 		)
 	}
 
@@ -2581,6 +3388,10 @@ impl SqliteVfs {
 		unsafe { (*self.ctx_ptr).clone_last_error() }
 	}
 
+	fn snapshot_preload_hints(&self) -> VfsPreloadHintSnapshot {
+		unsafe { (*self.ctx_ptr).snapshot_preload_hints() }
+	}
+
 	fn register_with_transport(
 		name: &str,
 		transport: SqliteTransport,
@@ -2588,6 +3399,7 @@ impl SqliteVfs {
 		runtime: Handle,
 		startup: protocol::SqliteStartupData,
 		config: VfsConfig,
+		metrics: Option<Arc<dyn SqliteVfsMetrics>>,
 	) -> std::result::Result<Self, String> {
 		let mut io_methods: sqlite3_io_methods = unsafe { std::mem::zeroed() };
 		io_methods.iVersion = 1;
@@ -2605,7 +3417,7 @@ impl SqliteVfs {
 		io_methods.xDeviceCharacteristics = Some(io_device_characteristics);
 
 		let ctx = Box::new(VfsContext::new(
-			actor_id, runtime, transport, startup, config, io_methods,
+			actor_id, runtime, transport, startup, config, io_methods, metrics,
 		));
 		let ctx_ptr = Box::into_raw(ctx);
 		let name_cstring = CString::new(name).map_err(|err| err.to_string())?;
@@ -2670,8 +3482,8 @@ impl NativeDatabase {
 		self._vfs.take_last_error()
 	}
 
-	pub fn sqlite_vfs_metrics(&self) -> SqliteVfsMetricsSnapshot {
-		unsafe { (*self._vfs.ctx_ptr).sqlite_vfs_metrics() }
+	pub fn snapshot_preload_hints(&self) -> VfsPreloadHintSnapshot {
+		self._vfs.snapshot_preload_hints()
 	}
 }
 
@@ -2777,6 +3589,162 @@ mod tests {
 
 	static TEST_ID: AtomicU64 = AtomicU64::new(1);
 
+	#[derive(Default)]
+	struct TestVfsMetrics {
+		resolve_pages_total: AtomicU64,
+		resolve_pages_requested_total: AtomicU64,
+		resolve_pages_cache_hits_total: AtomicU64,
+		resolve_pages_cache_misses_total: AtomicU64,
+		get_pages_total: AtomicU64,
+		pages_fetched_total: AtomicU64,
+		prefetch_pages_total: AtomicU64,
+		bytes_fetched_total: AtomicU64,
+		prefetch_bytes_total: AtomicU64,
+		get_pages_duration_ns_total: AtomicU64,
+		get_pages_duration_count: AtomicU64,
+		commit_total: AtomicU64,
+		commit_request_build_ns_total: AtomicU64,
+		commit_serialize_ns_total: AtomicU64,
+		commit_transport_ns_total: AtomicU64,
+		commit_state_update_ns_total: AtomicU64,
+		commit_duration_ns_total: AtomicU64,
+	}
+
+	#[allow(dead_code)]
+	#[derive(Default)]
+	struct TestVfsMetricsSnapshot {
+		resolve_pages_total: u64,
+		resolve_pages_requested_total: u64,
+		resolve_pages_cache_hits_total: u64,
+		resolve_pages_cache_misses_total: u64,
+		get_pages_total: u64,
+		pages_fetched_total: u64,
+		prefetch_pages_total: u64,
+		bytes_fetched_total: u64,
+		prefetch_bytes_total: u64,
+		get_pages_duration_ns_total: u64,
+		get_pages_duration_count: u64,
+		commit_total: u64,
+		commit_request_build_ns_total: u64,
+		commit_serialize_ns_total: u64,
+		commit_transport_ns_total: u64,
+		commit_state_update_ns_total: u64,
+		commit_duration_ns_total: u64,
+	}
+
+	impl TestVfsMetrics {
+		fn new() -> Arc<Self> {
+			Arc::new(Self::default())
+		}
+
+		fn reset(&self) {
+			let relaxed = AtomicOrdering::Relaxed;
+			self.resolve_pages_total.store(0, relaxed);
+			self.resolve_pages_requested_total.store(0, relaxed);
+			self.resolve_pages_cache_hits_total.store(0, relaxed);
+			self.resolve_pages_cache_misses_total.store(0, relaxed);
+			self.get_pages_total.store(0, relaxed);
+			self.pages_fetched_total.store(0, relaxed);
+			self.prefetch_pages_total.store(0, relaxed);
+			self.bytes_fetched_total.store(0, relaxed);
+			self.prefetch_bytes_total.store(0, relaxed);
+			self.get_pages_duration_ns_total.store(0, relaxed);
+			self.get_pages_duration_count.store(0, relaxed);
+			self.commit_total.store(0, relaxed);
+			self.commit_request_build_ns_total.store(0, relaxed);
+			self.commit_serialize_ns_total.store(0, relaxed);
+			self.commit_transport_ns_total.store(0, relaxed);
+			self.commit_state_update_ns_total.store(0, relaxed);
+			self.commit_duration_ns_total.store(0, relaxed);
+		}
+
+		fn snapshot(&self) -> TestVfsMetricsSnapshot {
+			let relaxed = AtomicOrdering::Relaxed;
+			TestVfsMetricsSnapshot {
+				resolve_pages_total: self.resolve_pages_total.load(relaxed),
+				resolve_pages_requested_total: self.resolve_pages_requested_total.load(relaxed),
+				resolve_pages_cache_hits_total: self.resolve_pages_cache_hits_total.load(relaxed),
+				resolve_pages_cache_misses_total: self
+					.resolve_pages_cache_misses_total
+					.load(relaxed),
+				get_pages_total: self.get_pages_total.load(relaxed),
+				pages_fetched_total: self.pages_fetched_total.load(relaxed),
+				prefetch_pages_total: self.prefetch_pages_total.load(relaxed),
+				bytes_fetched_total: self.bytes_fetched_total.load(relaxed),
+				prefetch_bytes_total: self.prefetch_bytes_total.load(relaxed),
+				get_pages_duration_ns_total: self.get_pages_duration_ns_total.load(relaxed),
+				get_pages_duration_count: self.get_pages_duration_count.load(relaxed),
+				commit_total: self.commit_total.load(relaxed),
+				commit_request_build_ns_total: self.commit_request_build_ns_total.load(relaxed),
+				commit_serialize_ns_total: self.commit_serialize_ns_total.load(relaxed),
+				commit_transport_ns_total: self.commit_transport_ns_total.load(relaxed),
+				commit_state_update_ns_total: self.commit_state_update_ns_total.load(relaxed),
+				commit_duration_ns_total: self.commit_duration_ns_total.load(relaxed),
+			}
+		}
+	}
+
+	impl SqliteVfsMetrics for TestVfsMetrics {
+		fn record_resolve_pages(&self, requested_pages: u64) {
+			let relaxed = AtomicOrdering::Relaxed;
+			self.resolve_pages_total.fetch_add(1, relaxed);
+			self.resolve_pages_requested_total
+				.fetch_add(requested_pages, relaxed);
+		}
+
+		fn record_resolve_cache_hits(&self, pages: u64) {
+			self.resolve_pages_cache_hits_total
+				.fetch_add(pages, AtomicOrdering::Relaxed);
+		}
+
+		fn record_resolve_cache_misses(&self, pages: u64) {
+			self.resolve_pages_cache_misses_total
+				.fetch_add(pages, AtomicOrdering::Relaxed);
+		}
+
+		fn record_get_pages_request(&self, pages: u64, prefetch_pages: u64, page_size: u64) {
+			let relaxed = AtomicOrdering::Relaxed;
+			self.get_pages_total.fetch_add(1, relaxed);
+			self.pages_fetched_total.fetch_add(pages, relaxed);
+			self.prefetch_pages_total.fetch_add(prefetch_pages, relaxed);
+			self.bytes_fetched_total
+				.fetch_add(pages.saturating_mul(page_size), relaxed);
+			self.prefetch_bytes_total
+				.fetch_add(prefetch_pages.saturating_mul(page_size), relaxed);
+		}
+
+		fn observe_get_pages_duration(&self, duration_ns: u64) {
+			let relaxed = AtomicOrdering::Relaxed;
+			self.get_pages_duration_ns_total
+				.fetch_add(duration_ns, relaxed);
+			self.get_pages_duration_count.fetch_add(1, relaxed);
+		}
+
+		fn record_commit(&self) {
+			self.commit_total.fetch_add(1, AtomicOrdering::Relaxed);
+		}
+
+		fn observe_commit_phases(
+			&self,
+			request_build_ns: u64,
+			serialize_ns: u64,
+			transport_ns: u64,
+			state_update_ns: u64,
+			total_ns: u64,
+		) {
+			let relaxed = AtomicOrdering::Relaxed;
+			self.commit_request_build_ns_total
+				.fetch_add(request_build_ns, relaxed);
+			self.commit_serialize_ns_total
+				.fetch_add(serialize_ns, relaxed);
+			self.commit_transport_ns_total
+				.fetch_add(transport_ns, relaxed);
+			self.commit_state_update_ns_total
+				.fetch_add(state_update_ns, relaxed);
+			self.commit_duration_ns_total.fetch_add(total_ns, relaxed);
+		}
+	}
+
 	fn dirty_pages(page_count: u32, fill: u8) -> Vec<protocol::SqliteDirtyPage> {
 		(0..page_count)
 			.map(|offset| protocol::SqliteDirtyPage {
@@ -2864,32 +3832,59 @@ mod tests {
 			self.startup_data_for(&self.actor_id, engine).await
 		}
 
-		fn open_db_on_engine(
-			&self,
-			runtime: &tokio::runtime::Runtime,
-			engine: Arc<SqliteEngine>,
-			actor_id: &str,
-			config: VfsConfig,
-		) -> NativeDatabase {
-			let startup = runtime.block_on(self.startup_data_for(actor_id, &engine));
-			let vfs = SqliteVfs::register_with_transport(
-				&next_test_name("sqlite-direct-vfs"),
-				SqliteTransport::from_direct(engine),
-				actor_id.to_string(),
-				runtime.handle().clone(),
-				startup,
-				config,
-			)
-			.expect("v2 vfs should register");
+			fn open_db_on_engine(
+				&self,
+				runtime: &tokio::runtime::Runtime,
+				engine: Arc<SqliteEngine>,
+				actor_id: &str,
+				config: VfsConfig,
+			) -> NativeDatabase {
+				self.open_db_on_engine_with_metrics(runtime, engine, actor_id, config, None)
+			}
 
-			open_database(vfs, actor_id).expect("sqlite database should open")
-		}
+			fn open_db_on_engine_with_metrics(
+				&self,
+				runtime: &tokio::runtime::Runtime,
+				engine: Arc<SqliteEngine>,
+				actor_id: &str,
+				config: VfsConfig,
+				metrics: Option<Arc<dyn SqliteVfsMetrics>>,
+			) -> NativeDatabase {
+				let startup = runtime.block_on(self.startup_data_for(actor_id, &engine));
+				let vfs = SqliteVfs::register_with_transport(
+					&next_test_name("sqlite-direct-vfs"),
+					SqliteTransport::from_direct(engine),
+					actor_id.to_string(),
+					runtime.handle().clone(),
+					startup,
+					config,
+					metrics,
+				)
+				.expect("v2 vfs should register");
 
-		fn open_db(&self, runtime: &tokio::runtime::Runtime) -> NativeDatabase {
-			let engine = runtime.block_on(self.open_engine());
-			self.open_db_on_engine(runtime, engine, &self.actor_id, VfsConfig::default())
+				open_database(vfs, actor_id).expect("sqlite database should open")
+			}
+
+			fn open_db(&self, runtime: &tokio::runtime::Runtime) -> NativeDatabase {
+				let engine = runtime.block_on(self.open_engine());
+				self.open_db_on_engine(runtime, engine, &self.actor_id, VfsConfig::default())
+			}
+
+			fn open_db_with_metrics(
+				&self,
+				runtime: &tokio::runtime::Runtime,
+				metrics: Arc<TestVfsMetrics>,
+			) -> NativeDatabase {
+				let engine = runtime.block_on(self.open_engine());
+				self.open_db_on_engine_with_metrics(
+					runtime,
+					engine,
+					&self.actor_id,
+					VfsConfig::default(),
+					Some(metrics),
+				)
+			}
 		}
-	}
 
 	fn direct_vfs_ctx(db: &NativeDatabase) -> &VfsContext {
 		unsafe { &*db._vfs.ctx_ptr }
@@ -2994,6 +3989,747 @@ mod tests {
 	}
 
 	#[test]
+	fn predictor_prefers_reverse_stride_after_repeated_reads() {
+		let mut predictor = PrefetchPredictor::default();
+		for pgno in [20, 17, 14, 11] {
+			predictor.record(pgno);
+		}
+
+		assert_eq!(predictor.multi_predict(11, 3, 30), vec![8, 5, 2]);
+	}
+
+	#[test]
+	fn adaptive_read_ahead_tolerates_jumps_and_decays() {
+		let config = VfsConfig::default();
+		let mut read_ahead = AdaptiveReadAhead::default();
+
+		for pgno in 10..=12 {
+			assert_eq!(
+				read_ahead.record_and_plan(&[pgno], &config).mode,
+				ReadAheadMode::Bounded
+			);
+		}
+
+		let scan_plan = read_ahead.record_and_plan(&[13], &config);
+		assert_eq!(scan_plan.mode, ReadAheadMode::ForwardScan);
+		assert!(scan_plan.depth > DEFAULT_PREFETCH_DEPTH);
+
+		let jump_plan = read_ahead.record_and_plan(&[2], &config);
+		assert_eq!(jump_plan.mode, ReadAheadMode::Bounded);
+
+		let resumed_scan_plan = read_ahead.record_and_plan(&[14], &config);
+		assert_eq!(resumed_scan_plan.mode, ReadAheadMode::ForwardScan);
+
+		for pgno in [500, 200, 700, 50, 900, 30] {
+			assert_eq!(
+				read_ahead.record_and_plan(&[pgno], &config).mode,
+				ReadAheadMode::Bounded
+			);
+		}
+
+		let scattered_followup = read_ahead.record_and_plan(&[31], &config);
+		assert_eq!(scattered_followup.mode, ReadAheadMode::Bounded);
+	}
+
+	#[test]
+	fn adaptive_read_ahead_detects_backward_scans_and_decays() {
+		let config = VfsConfig::default();
+		let mut read_ahead = AdaptiveReadAhead::default();
+
+		for pgno in (98..=100).rev() {
+			assert_eq!(
+				read_ahead.record_and_plan(&[pgno], &config).mode,
+				ReadAheadMode::Bounded
+			);
+		}
+
+		let scan_plan = read_ahead.record_and_plan(&[97], &config);
+		assert_eq!(scan_plan.mode, ReadAheadMode::BackwardScan);
+		assert!(scan_plan.depth > DEFAULT_PREFETCH_DEPTH);
+
+		for pgno in [500, 200, 700, 50, 900, 30] {
+			assert_eq!(
+				read_ahead.record_and_plan(&[pgno], &config).mode,
+				ReadAheadMode::Bounded
+			);
+		}
+	}
+
+	#[test]
+	fn recent_page_tracker_keeps_full_scan_as_range_from_start() {
+		let mut tracker = RecentPageTracker::new(4, 2);
+		tracker.record_pages(1..=100);
+
+		let snapshot = tracker.snapshot();
+		assert!(snapshot.pgnos.len() <= 4);
+		assert_eq!(
+			snapshot.ranges,
+			vec![VfsPreloadHintRange {
+				start_pgno: 1,
+				page_count: 100,
+			}]
+		);
+	}
+
+	#[test]
+	fn recent_page_tracker_keeps_hot_pages_bounded() {
+		let mut tracker = RecentPageTracker::new(3, 2);
+		for pgno in [10, 20, 30, 40, 20, 30, 20] {
+			tracker.record_page(pgno);
+		}
+
+		let snapshot = tracker.snapshot();
+		assert!(snapshot.ranges.is_empty());
+		assert_eq!(snapshot.pgnos.len(), 3);
+		assert!(snapshot.pgnos.contains(&20));
+		assert!(snapshot.pgnos.contains(&30));
+	}
+
+	#[test]
+	fn resolve_pages_records_recent_page_hint_snapshot() {
+		let runtime = Builder::new_current_thread()
+			.enable_all()
+			.build()
+			.expect("runtime should build");
+		let protocol = Arc::new(MockProtocol::new(
+			protocol::SqliteCommitResponse::SqliteCommitOk(protocol::SqliteCommitOk {
+				new_head_txid: 13,
+				meta: sqlite_meta(8 * 1024 * 1024),
+			}),
+			protocol::SqliteCommitStageResponse::SqliteCommitStageOk(
+				protocol::SqliteCommitStageOk {
+					chunk_idx_committed: 0,
+				},
+			),
+			protocol::SqliteCommitFinalizeResponse::SqliteCommitFinalizeOk(
+				protocol::SqliteCommitFinalizeOk {
+					new_head_txid: 13,
+					meta: sqlite_meta(8 * 1024 * 1024),
+				},
+			),
+		));
+		let ctx = VfsContext::new(
+			"actor".to_string(),
+			runtime.handle().clone(),
+			SqliteTransport::from_mock(protocol),
+			protocol::SqliteStartupData {
+				generation: 7,
+				meta: protocol::SqliteMeta {
+					db_size_pages: 200,
+					..sqlite_meta(8 * 1024 * 1024)
+				},
+				preloaded_pages: Vec::new(),
+			},
+			VfsConfig {
+				recent_hint_page_budget: 4,
+				recent_hint_range_budget: 2,
+				..VfsConfig::default()
+			},
+			unsafe { std::mem::zeroed() },
+			None,
+		);
+
+		for pgno in 50..=65 {
+			ctx.resolve_pages(&[pgno], true)
+				.expect("page should resolve");
+		}
+
+		assert_eq!(
+			ctx.snapshot_preload_hints().ranges,
+			vec![VfsPreloadHintRange {
+				start_pgno: 50,
+				page_count: 16,
+			}]
+		);
+	}
+
+	#[test]
+	fn default_vfs_config_prefetches_one_shard_for_forward_scan() {
+		let runtime = Builder::new_current_thread()
+			.enable_all()
+			.build()
+			.expect("runtime should build");
+		let protocol = Arc::new(MockProtocol::new(
+			protocol::SqliteCommitResponse::SqliteCommitOk(protocol::SqliteCommitOk {
+				new_head_txid: 13,
+				meta: sqlite_meta(8 * 1024 * 1024),
+			}),
+			protocol::SqliteCommitStageResponse::SqliteCommitStageOk(
+				protocol::SqliteCommitStageOk {
+					chunk_idx_committed: 0,
+				},
+			),
+			protocol::SqliteCommitFinalizeResponse::SqliteCommitFinalizeOk(
+				protocol::SqliteCommitFinalizeOk {
+					new_head_txid: 13,
+					meta: sqlite_meta(8 * 1024 * 1024),
+				},
+			),
+		));
+		let ctx = VfsContext::new(
+			"actor".to_string(),
+			runtime.handle().clone(),
+			SqliteTransport::from_mock(protocol.clone()),
+			protocol::SqliteStartupData {
+				generation: 7,
+				meta: protocol::SqliteMeta {
+					db_size_pages: 200,
+					..sqlite_meta(8 * 1024 * 1024)
+				},
+				preloaded_pages: Vec::new(),
+			},
+			VfsConfig::default(),
+			unsafe { std::mem::zeroed() },
+			None,
+		);
+
+		for pgno in [10, 11, 12] {
+			ctx.resolve_pages(&[pgno], true)
+				.expect("page should resolve");
+		}
+
+		let requests = protocol.get_pages_requests();
+		let shard_fetch = requests.last().expect("scan should fetch missing pages");
+		let expected = (12..76).collect::<Vec<_>>();
+		assert_eq!(shard_fetch.pgnos, expected);
+	}
+
+	#[test]
+	fn default_vfs_config_uses_range_for_backward_scan() {
+		let runtime = Builder::new_current_thread()
+			.enable_all()
+			.build()
+			.expect("runtime should build");
+		let protocol = Arc::new(MockProtocol::new(
+			protocol::SqliteCommitResponse::SqliteCommitOk(protocol::SqliteCommitOk {
+				new_head_txid: 13,
+				meta: sqlite_meta(8 * 1024 * 1024),
+			}),
+			protocol::SqliteCommitStageResponse::SqliteCommitStageOk(
+				protocol::SqliteCommitStageOk {
+					chunk_idx_committed: 0,
+				},
+			),
+			protocol::SqliteCommitFinalizeResponse::SqliteCommitFinalizeOk(
+				protocol::SqliteCommitFinalizeOk {
+					new_head_txid: 13,
+					meta: sqlite_meta(8 * 1024 * 1024),
+				},
+			),
+		));
+		let ctx = VfsContext::new(
+			"actor".to_string(),
+			runtime.handle().clone(),
+			SqliteTransport::from_mock(protocol.clone()),
+			protocol::SqliteStartupData {
+				generation: 7,
+				meta: protocol::SqliteMeta {
+					db_size_pages: 200,
+					..sqlite_meta(8 * 1024 * 1024)
+				},
+				preloaded_pages: Vec::new(),
+			},
+			VfsConfig::default(),
+			unsafe { std::mem::zeroed() },
+			None,
+		);
+
+		for pgno in [75, 74, 73, 72] {
+			ctx.resolve_pages(&[pgno], true)
+				.expect("page should resolve");
+		}
+
+		let requests = protocol.get_pages_requests();
+		assert_eq!(requests.len(), 3);
+		assert_eq!(requests[2].pgnos, vec![73]);
+		let range_requests = protocol.get_page_range_requests();
+		assert_eq!(range_requests.len(), 1);
+		assert_eq!(range_requests[0].start_pgno, 1);
+		assert_eq!(range_requests[0].max_pages, 72);
+		assert_eq!(range_requests[0].max_bytes, 1024 * 1024);
+	}
+
+	#[test]
+	fn disabled_read_ahead_flag_restores_legacy_prefetch_depth() {
+		let config = VfsConfig::from_optimization_flags(SqliteOptimizationFlags {
+			read_ahead: false,
+			..SqliteOptimizationFlags::default()
+		});
+
+		assert_eq!(config.prefetch_depth, LEGACY_PREFETCH_DEPTH);
+	}
+
+	#[test]
+	fn cache_hit_reads_train_forward_scan_prefetch() {
+		let runtime = Builder::new_current_thread()
+			.enable_all()
+			.build()
+			.expect("runtime should build");
+		let mut protocol = MockProtocol::new(
+			protocol::SqliteCommitResponse::SqliteCommitOk(protocol::SqliteCommitOk {
+				new_head_txid: 13,
+				meta: sqlite_meta(8 * 1024 * 1024),
+			}),
+			protocol::SqliteCommitStageResponse::SqliteCommitStageOk(
+				protocol::SqliteCommitStageOk {
+					chunk_idx_committed: 0,
+				},
+			),
+			protocol::SqliteCommitFinalizeResponse::SqliteCommitFinalizeOk(
+				protocol::SqliteCommitFinalizeOk {
+					new_head_txid: 13,
+					meta: sqlite_meta(8 * 1024 * 1024),
+				},
+			),
+		);
+		protocol.get_pages_response =
+			protocol::SqliteGetPagesResponse::SqliteGetPagesOk(protocol::SqliteGetPagesOk {
+				pages: (10..76)
+					.map(|pgno| protocol::SqliteFetchedPage {
+						pgno,
+						bytes: Some(vec![(pgno % 251) as u8; 4096]),
+					})
+					.collect(),
+				meta: sqlite_meta(8 * 1024 * 1024),
+			});
+		protocol.get_page_range_response =
+			protocol::SqliteGetPageRangeResponse::SqliteGetPageRangeOk(
+				protocol::SqliteGetPageRangeOk {
+					start_pgno: 76,
+					pages: (76..332)
+						.map(|pgno| protocol::SqliteFetchedPage {
+							pgno,
+							bytes: Some(vec![(pgno % 251) as u8; 4096]),
+						})
+						.collect(),
+					meta: sqlite_meta(8 * 1024 * 1024),
+				},
+			);
+		let protocol = Arc::new(protocol);
+		let ctx = VfsContext::new(
+			"actor".to_string(),
+			runtime.handle().clone(),
+			SqliteTransport::from_mock(protocol.clone()),
+			protocol::SqliteStartupData {
+				generation: 7,
+				meta: protocol::SqliteMeta {
+					db_size_pages: 400,
+					..sqlite_meta(8 * 1024 * 1024)
+				},
+				preloaded_pages: Vec::new(),
+			},
+			VfsConfig::default(),
+			unsafe { std::mem::zeroed() },
+			None,
+		);
+
+		ctx.resolve_pages(&[10], true)
+			.expect("first missing page should resolve");
+		for pgno in 11..76 {
+			ctx.resolve_pages(&[pgno], true)
+				.expect("cache-hit page should resolve");
+		}
+		ctx.resolve_pages(&[76], true)
+			.expect("next missing page should resolve");
+
+		let requests = protocol.get_pages_requests();
+		assert_eq!(requests.len(), 1);
+		assert_eq!(requests[0].pgnos, vec![10]);
+		let range_requests = protocol.get_page_range_requests();
+		assert_eq!(range_requests.len(), 1);
+		assert_eq!(range_requests[0].start_pgno, 76);
+		assert_eq!(range_requests[0].max_pages, 256);
+		assert_eq!(range_requests[0].max_bytes, 1024 * 1024);
+	}
+
+	#[test]
+	fn disabled_range_reads_keep_forward_scan_on_get_pages() {
+		let runtime = Builder::new_current_thread()
+			.enable_all()
+			.build()
+			.expect("runtime should build");
+		let mut protocol = MockProtocol::new(
+			protocol::SqliteCommitResponse::SqliteCommitOk(protocol::SqliteCommitOk {
+				new_head_txid: 13,
+				meta: sqlite_meta(8 * 1024 * 1024),
+			}),
+			protocol::SqliteCommitStageResponse::SqliteCommitStageOk(
+				protocol::SqliteCommitStageOk {
+					chunk_idx_committed: 0,
+				},
+			),
+			protocol::SqliteCommitFinalizeResponse::SqliteCommitFinalizeOk(
+				protocol::SqliteCommitFinalizeOk {
+					new_head_txid: 13,
+					meta: sqlite_meta(8 * 1024 * 1024),
+				},
+			),
+		);
+		protocol.get_pages_response =
+			protocol::SqliteGetPagesResponse::SqliteGetPagesOk(protocol::SqliteGetPagesOk {
+				pages: (10..76)
+					.map(|pgno| protocol::SqliteFetchedPage {
+						pgno,
+						bytes: Some(vec![(pgno % 251) as u8; 4096]),
+					})
+					.collect(),
+				meta: sqlite_meta(8 * 1024 * 1024),
+			});
+		let protocol = Arc::new(protocol);
+		let ctx = VfsContext::new(
+			"actor".to_string(),
+			runtime.handle().clone(),
+			SqliteTransport::from_mock(protocol.clone()),
+			protocol::SqliteStartupData {
+				generation: 7,
+				meta: protocol::SqliteMeta {
+					db_size_pages: 400,
+					..sqlite_meta(8 * 1024 * 1024)
+				},
+				preloaded_pages: Vec::new(),
+			},
+			VfsConfig::from_optimization_flags(SqliteOptimizationFlags {
+				range_reads: false,
+				..SqliteOptimizationFlags::default()
+			}),
+			unsafe { std::mem::zeroed() },
+			None,
+		);
+
+		ctx.resolve_pages(&[10], true)
+			.expect("first missing page should resolve");
+		for pgno in 11..76 {
+			ctx.resolve_pages(&[pgno], true)
+				.expect("cache-hit page should resolve");
+		}
+		ctx.resolve_pages(&[76], true)
+			.expect("next missing page should resolve");
+
+		assert!(protocol.get_page_range_requests().is_empty());
+		let requests = protocol.get_pages_requests();
+		assert_eq!(requests.len(), 2);
+		assert_eq!(requests[1].pgnos, (76..332).collect::<Vec<_>>());
+	}
+
+	#[test]
+	fn cache_hit_reads_train_backward_scan_range_prefetch() {
+		let runtime = Builder::new_current_thread()
+			.enable_all()
+			.build()
+			.expect("runtime should build");
+		let mut protocol = MockProtocol::new(
+			protocol::SqliteCommitResponse::SqliteCommitOk(protocol::SqliteCommitOk {
+				new_head_txid: 13,
+				meta: sqlite_meta(8 * 1024 * 1024),
+			}),
+			protocol::SqliteCommitStageResponse::SqliteCommitStageOk(
+				protocol::SqliteCommitStageOk {
+					chunk_idx_committed: 0,
+				},
+			),
+			protocol::SqliteCommitFinalizeResponse::SqliteCommitFinalizeOk(
+				protocol::SqliteCommitFinalizeOk {
+					new_head_txid: 13,
+					meta: sqlite_meta(8 * 1024 * 1024),
+				},
+			),
+		);
+		protocol.get_pages_response =
+			protocol::SqliteGetPagesResponse::SqliteGetPagesOk(protocol::SqliteGetPagesOk {
+				pages: (95..=350)
+					.map(|pgno| protocol::SqliteFetchedPage {
+						pgno,
+						bytes: Some(vec![(pgno % 251) as u8; 4096]),
+					})
+					.collect(),
+				meta: sqlite_meta(8 * 1024 * 1024),
+			});
+		protocol.get_page_range_response =
+			protocol::SqliteGetPageRangeResponse::SqliteGetPageRangeOk(
+				protocol::SqliteGetPageRangeOk {
+					start_pgno: 1,
+					pages: (1..95)
+						.map(|pgno| protocol::SqliteFetchedPage {
+							pgno,
+							bytes: Some(vec![(pgno % 251) as u8; 4096]),
+						})
+						.collect(),
+					meta: sqlite_meta(8 * 1024 * 1024),
+				},
+			);
+		let protocol = Arc::new(protocol);
+		let ctx = VfsContext::new(
+			"actor".to_string(),
+			runtime.handle().clone(),
+			SqliteTransport::from_mock(protocol.clone()),
+			protocol::SqliteStartupData {
+				generation: 7,
+				meta: protocol::SqliteMeta {
+					db_size_pages: 400,
+					..sqlite_meta(8 * 1024 * 1024)
+				},
+				preloaded_pages: Vec::new(),
+			},
+			VfsConfig::default(),
+			unsafe { std::mem::zeroed() },
+			None,
+		);
+
+		ctx.resolve_pages(&[350], true)
+			.expect("first missing page should resolve");
+		for pgno in (95..350).rev() {
+			ctx.resolve_pages(&[pgno], true)
+				.expect("cache-hit page should resolve");
+		}
+		ctx.resolve_pages(&[94], true)
+			.expect("next missing page should resolve");
+
+		let requests = protocol.get_pages_requests();
+		assert_eq!(requests.len(), 1);
+		assert_eq!(requests[0].pgnos, vec![350]);
+		let range_requests = protocol.get_page_range_requests();
+		assert_eq!(range_requests.len(), 1);
+		assert_eq!(range_requests[0].start_pgno, 1);
+		assert_eq!(range_requests[0].max_pages, 94);
+		assert_eq!(range_requests[0].max_bytes, 1024 * 1024);
+	}
+
+	#[test]
+	fn disabled_adaptive_read_ahead_keeps_forward_scan_to_one_shard() {
+		let runtime = Builder::new_current_thread()
+			.enable_all()
+			.build()
+			.expect("runtime should build");
+		let mut protocol = MockProtocol::new(
+			protocol::SqliteCommitResponse::SqliteCommitOk(protocol::SqliteCommitOk {
+				new_head_txid: 13,
+				meta: sqlite_meta(8 * 1024 * 1024),
+			}),
+			protocol::SqliteCommitStageResponse::SqliteCommitStageOk(
+				protocol::SqliteCommitStageOk {
+					chunk_idx_committed: 0,
+				},
+			),
+			protocol::SqliteCommitFinalizeResponse::SqliteCommitFinalizeOk(
+				protocol::SqliteCommitFinalizeOk {
+					new_head_txid: 13,
+					meta: sqlite_meta(8 * 1024 * 1024),
+				},
+			),
+		);
+		protocol.get_pages_response =
+			protocol::SqliteGetPagesResponse::SqliteGetPagesOk(protocol::SqliteGetPagesOk {
+				pages: (10..76)
+					.map(|pgno| protocol::SqliteFetchedPage {
+						pgno,
+						bytes: Some(vec![(pgno % 251) as u8; 4096]),
+					})
+					.collect(),
+				meta: sqlite_meta(8 * 1024 * 1024),
+			});
+		let protocol = Arc::new(protocol);
+		let ctx = VfsContext::new(
+			"actor".to_string(),
+			runtime.handle().clone(),
+			SqliteTransport::from_mock(protocol.clone()),
+			protocol::SqliteStartupData {
+				generation: 7,
+				meta: protocol::SqliteMeta {
+					db_size_pages: 400,
+					..sqlite_meta(8 * 1024 * 1024)
+				},
+				preloaded_pages: Vec::new(),
+			},
+			VfsConfig::from_optimization_flags(SqliteOptimizationFlags {
+				adaptive_read_ahead: false,
+				..SqliteOptimizationFlags::default()
+			}),
+			unsafe { std::mem::zeroed() },
+			None,
+		);
+
+		ctx.resolve_pages(&[10], true)
+			.expect("first missing page should resolve");
+		for pgno in 11..76 {
+			ctx.resolve_pages(&[pgno], true)
+				.expect("cache-hit page should resolve");
+		}
+		ctx.resolve_pages(&[76], true)
+			.expect("next missing page should resolve");
+
+		let requests = protocol.get_pages_requests();
+		assert_eq!(requests.len(), 2);
+		assert_eq!(requests[1].pgnos, (76..140).collect::<Vec<_>>());
+	}
+
+	#[test]
+	fn disabled_cache_hit_training_bypasses_hit_path_predictor_updates() {
+		let runtime = Builder::new_current_thread()
+			.enable_all()
+			.build()
+			.expect("runtime should build");
+		let mut protocol = MockProtocol::new(
+			protocol::SqliteCommitResponse::SqliteCommitOk(protocol::SqliteCommitOk {
+				new_head_txid: 13,
+				meta: sqlite_meta(8 * 1024 * 1024),
+			}),
+			protocol::SqliteCommitStageResponse::SqliteCommitStageOk(
+				protocol::SqliteCommitStageOk {
+					chunk_idx_committed: 0,
+				},
+			),
+			protocol::SqliteCommitFinalizeResponse::SqliteCommitFinalizeOk(
+				protocol::SqliteCommitFinalizeOk {
+					new_head_txid: 13,
+					meta: sqlite_meta(8 * 1024 * 1024),
+				},
+			),
+		);
+		protocol.get_pages_response =
+			protocol::SqliteGetPagesResponse::SqliteGetPagesOk(protocol::SqliteGetPagesOk {
+				pages: (10..76)
+					.map(|pgno| protocol::SqliteFetchedPage {
+						pgno,
+						bytes: Some(vec![(pgno % 251) as u8; 4096]),
+					})
+					.collect(),
+				meta: sqlite_meta(8 * 1024 * 1024),
+			});
+		let protocol = Arc::new(protocol);
+		let ctx = VfsContext::new(
+			"actor".to_string(),
+			runtime.handle().clone(),
+			SqliteTransport::from_mock(protocol.clone()),
+			protocol::SqliteStartupData {
+				generation: 7,
+				meta: protocol::SqliteMeta {
+					db_size_pages: 200,
+					..sqlite_meta(8 * 1024 * 1024)
+				},
+				preloaded_pages: Vec::new(),
+			},
+			VfsConfig::from_optimization_flags(SqliteOptimizationFlags {
+				cache_hit_predictor_training: false,
+				..SqliteOptimizationFlags::default()
+			}),
+			unsafe { std::mem::zeroed() },
+			None,
+		);
+
+		ctx.resolve_pages(&[10], true)
+			.expect("first missing page should resolve");
+		for pgno in 11..76 {
+			ctx.resolve_pages(&[pgno], true)
+				.expect("cache-hit page should resolve");
+		}
+		ctx.resolve_pages(&[76], true)
+			.expect("next missing page should resolve");
+
+		let requests = protocol.get_pages_requests();
+		assert_eq!(requests.len(), 2);
+		assert_eq!(requests[1].pgnos, vec![76]);
+	}
+
+	#[test]
+	fn disabled_recent_page_hints_return_empty_snapshot() {
+		let runtime = Builder::new_current_thread()
+			.enable_all()
+			.build()
+			.expect("runtime should build");
+		let protocol = Arc::new(MockProtocol::new(
+			protocol::SqliteCommitResponse::SqliteCommitOk(protocol::SqliteCommitOk {
+				new_head_txid: 13,
+				meta: sqlite_meta(8 * 1024 * 1024),
+			}),
+			protocol::SqliteCommitStageResponse::SqliteCommitStageOk(
+				protocol::SqliteCommitStageOk {
+					chunk_idx_committed: 0,
+				},
+			),
+			protocol::SqliteCommitFinalizeResponse::SqliteCommitFinalizeOk(
+				protocol::SqliteCommitFinalizeOk {
+					new_head_txid: 13,
+					meta: sqlite_meta(8 * 1024 * 1024),
+				},
+			),
+		));
+		let ctx = VfsContext::new(
+			"actor".to_string(),
+			runtime.handle().clone(),
+			SqliteTransport::from_mock(protocol),
+			protocol::SqliteStartupData {
+				generation: 7,
+				meta: protocol::SqliteMeta {
+					db_size_pages: 200,
+					..sqlite_meta(8 * 1024 * 1024)
+				},
+				preloaded_pages: Vec::new(),
+			},
+			VfsConfig::from_optimization_flags(SqliteOptimizationFlags {
+				recent_page_hints: false,
+				..SqliteOptimizationFlags::default()
+			}),
+			unsafe { std::mem::zeroed() },
+			None,
+		);
+
+		for pgno in 50..=65 {
+			ctx.resolve_pages(&[pgno], true)
+				.expect("page should resolve");
+		}
+
+		assert_eq!(ctx.snapshot_preload_hints(), VfsPreloadHintSnapshot::default());
+	}
+
+	#[test]
+	fn default_vfs_config_keeps_point_reads_bounded() {
+		let runtime = Builder::new_current_thread()
+			.enable_all()
+			.build()
+			.expect("runtime should build");
+		let protocol = Arc::new(MockProtocol::new(
+			protocol::SqliteCommitResponse::SqliteCommitOk(protocol::SqliteCommitOk {
+				new_head_txid: 13,
+				meta: sqlite_meta(8 * 1024 * 1024),
+			}),
+			protocol::SqliteCommitStageResponse::SqliteCommitStageOk(
+				protocol::SqliteCommitStageOk {
+					chunk_idx_committed: 0,
+				},
+			),
+			protocol::SqliteCommitFinalizeResponse::SqliteCommitFinalizeOk(
+				protocol::SqliteCommitFinalizeOk {
+					new_head_txid: 13,
+					meta: sqlite_meta(8 * 1024 * 1024),
+				},
+			),
+		));
+		let ctx = VfsContext::new(
+			"actor".to_string(),
+			runtime.handle().clone(),
+			SqliteTransport::from_mock(protocol.clone()),
+			protocol::SqliteStartupData {
+				generation: 7,
+				meta: protocol::SqliteMeta {
+					db_size_pages: 200,
+					..sqlite_meta(8 * 1024 * 1024)
+				},
+				preloaded_pages: Vec::new(),
+			},
+			VfsConfig::default(),
+			unsafe { std::mem::zeroed() },
+			None,
+		);
+
+		ctx.resolve_pages(&[90], true)
+			.expect("point read should resolve");
+
+		let requests = protocol.get_pages_requests();
+		assert_eq!(requests.len(), 1);
+		assert_eq!(requests[0].pgnos, vec![90]);
+	}
+
+	#[test]
 	fn startup_data_populates_cache_without_protocol_calls() {
 		let runtime = Builder::new_current_thread()
 			.enable_all()
@@ -3029,13 +4765,354 @@ mod tests {
 			"actor".to_string(),
 			runtime.handle().clone(),
 			SqliteTransport::from_mock(protocol.clone()),
-			startup,
-			VfsConfig::default(),
-			unsafe { std::mem::zeroed() },
-		);
+				startup,
+				VfsConfig::default(),
+				unsafe { std::mem::zeroed() },
+				None,
+			);
 
 		assert_eq!(ctx.state.read().page_cache.get(&1), Some(vec![7; 4096]));
 		assert!(protocol.get_pages_requests().is_empty());
+	}
+
+	#[test]
+	fn disabled_startup_preloaded_page_cache_fetches_on_first_read() {
+		let runtime = Builder::new_current_thread()
+			.enable_all()
+			.build()
+			.expect("runtime should build");
+		let mut protocol = MockProtocol::new(
+			protocol::SqliteCommitResponse::SqliteCommitOk(protocol::SqliteCommitOk {
+				new_head_txid: 13,
+				meta: sqlite_meta(8 * 1024 * 1024),
+			}),
+			protocol::SqliteCommitStageResponse::SqliteCommitStageOk(
+				protocol::SqliteCommitStageOk {
+					chunk_idx_committed: 0,
+				},
+			),
+			protocol::SqliteCommitFinalizeResponse::SqliteCommitFinalizeOk(
+				protocol::SqliteCommitFinalizeOk {
+					new_head_txid: 13,
+					meta: sqlite_meta(8 * 1024 * 1024),
+				},
+			),
+		);
+		protocol.get_pages_response =
+			protocol::SqliteGetPagesResponse::SqliteGetPagesOk(protocol::SqliteGetPagesOk {
+				pages: vec![protocol::SqliteFetchedPage {
+					pgno: 1,
+					bytes: Some(vec![9; 4096]),
+				}],
+				meta: sqlite_meta(8 * 1024 * 1024),
+			});
+		let protocol = Arc::new(protocol);
+		let ctx = VfsContext::new(
+			"actor".to_string(),
+			runtime.handle().clone(),
+			SqliteTransport::from_mock(protocol.clone()),
+			protocol::SqliteStartupData {
+				generation: 3,
+				meta: sqlite_meta(8 * 1024 * 1024),
+				preloaded_pages: vec![protocol::SqliteFetchedPage {
+					pgno: 1,
+					bytes: Some(vec![7; 4096]),
+				}],
+			},
+			VfsConfig::from_optimization_flags(SqliteOptimizationFlags {
+				vfs_cache_startup_preloaded_pages: false,
+				..SqliteOptimizationFlags::default()
+			}),
+			unsafe { std::mem::zeroed() },
+			None,
+		);
+
+		assert!(ctx.state.read().page_cache.get(&1).is_none());
+		let resolved = ctx
+			.resolve_pages(&[1], false)
+			.expect("disabled startup cache should fetch page");
+
+		assert_eq!(resolved.get(&1), Some(&Some(vec![9; 4096])));
+		assert_eq!(protocol.get_pages_requests().len(), 1);
+	}
+
+	#[test]
+	fn disabled_fetched_page_cache_re_fetches_target_reads() {
+		let runtime = Builder::new_current_thread()
+			.enable_all()
+			.build()
+			.expect("runtime should build");
+		let mut protocol = MockProtocol::new(
+			protocol::SqliteCommitResponse::SqliteCommitOk(protocol::SqliteCommitOk {
+				new_head_txid: 13,
+				meta: sqlite_meta(8 * 1024 * 1024),
+			}),
+			protocol::SqliteCommitStageResponse::SqliteCommitStageOk(
+				protocol::SqliteCommitStageOk {
+					chunk_idx_committed: 0,
+				},
+			),
+			protocol::SqliteCommitFinalizeResponse::SqliteCommitFinalizeOk(
+				protocol::SqliteCommitFinalizeOk {
+					new_head_txid: 13,
+					meta: sqlite_meta(8 * 1024 * 1024),
+				},
+			),
+		);
+		protocol.get_pages_response =
+			protocol::SqliteGetPagesResponse::SqliteGetPagesOk(protocol::SqliteGetPagesOk {
+				pages: vec![protocol::SqliteFetchedPage {
+					pgno: 2,
+					bytes: Some(vec![2; 4096]),
+				}],
+				meta: sqlite_meta(8 * 1024 * 1024),
+			});
+		let protocol = Arc::new(protocol);
+		let ctx = VfsContext::new(
+			"actor".to_string(),
+			runtime.handle().clone(),
+			SqliteTransport::from_mock(protocol.clone()),
+			protocol::SqliteStartupData {
+				generation: 3,
+				meta: protocol::SqliteMeta {
+					db_size_pages: 4,
+					..sqlite_meta(8 * 1024 * 1024)
+				},
+				preloaded_pages: Vec::new(),
+			},
+			VfsConfig::from_optimization_flags(SqliteOptimizationFlags {
+				vfs_cache_fetched_pages: false,
+				..SqliteOptimizationFlags::default()
+			}),
+			unsafe { std::mem::zeroed() },
+			None,
+		);
+
+		ctx.resolve_pages(&[2], false)
+			.expect("first target read should fetch");
+		ctx.resolve_pages(&[2], false)
+			.expect("disabled fetched cache should fetch again");
+
+		assert_eq!(protocol.get_pages_requests().len(), 2);
+	}
+
+	#[test]
+	fn disabled_prefetched_page_cache_re_fetches_prefetch_hits() {
+		let runtime = Builder::new_current_thread()
+			.enable_all()
+			.build()
+			.expect("runtime should build");
+		let mut protocol = MockProtocol::new(
+			protocol::SqliteCommitResponse::SqliteCommitOk(protocol::SqliteCommitOk {
+				new_head_txid: 13,
+				meta: sqlite_meta(8 * 1024 * 1024),
+			}),
+			protocol::SqliteCommitStageResponse::SqliteCommitStageOk(
+				protocol::SqliteCommitStageOk {
+					chunk_idx_committed: 0,
+				},
+			),
+			protocol::SqliteCommitFinalizeResponse::SqliteCommitFinalizeOk(
+				protocol::SqliteCommitFinalizeOk {
+					new_head_txid: 13,
+					meta: sqlite_meta(8 * 1024 * 1024),
+				},
+			),
+		);
+		protocol.get_pages_response =
+			protocol::SqliteGetPagesResponse::SqliteGetPagesOk(protocol::SqliteGetPagesOk {
+				pages: vec![
+					protocol::SqliteFetchedPage {
+						pgno: 2,
+						bytes: Some(vec![2; 4096]),
+					},
+					protocol::SqliteFetchedPage {
+						pgno: 3,
+						bytes: Some(vec![3; 4096]),
+					},
+				],
+				meta: sqlite_meta(8 * 1024 * 1024),
+			});
+		let protocol = Arc::new(protocol);
+		let ctx = VfsContext::new(
+			"actor".to_string(),
+			runtime.handle().clone(),
+			SqliteTransport::from_mock(protocol.clone()),
+			protocol::SqliteStartupData {
+				generation: 3,
+				meta: protocol::SqliteMeta {
+					db_size_pages: 4,
+					..sqlite_meta(8 * 1024 * 1024)
+				},
+				preloaded_pages: Vec::new(),
+			},
+			VfsConfig::from_optimization_flags(SqliteOptimizationFlags {
+				vfs_cache_prefetched_pages: false,
+				..SqliteOptimizationFlags::default()
+			}),
+			unsafe { std::mem::zeroed() },
+			None,
+		);
+
+		ctx.resolve_pages(&[2], false)
+			.expect("first target read should fetch target and prefetch page");
+		ctx.resolve_pages(&[3], false)
+			.expect("disabled prefetch cache should fetch prefetched page again");
+
+		assert_eq!(protocol.get_pages_requests().len(), 2);
+	}
+
+	#[test]
+	fn scan_resistant_cache_preserves_startup_and_early_pages() {
+		let runtime = Builder::new_current_thread()
+			.enable_all()
+			.build()
+			.expect("runtime should build");
+		let mut protocol = MockProtocol::new(
+			protocol::SqliteCommitResponse::SqliteCommitOk(protocol::SqliteCommitOk {
+				new_head_txid: 13,
+				meta: sqlite_meta(8 * 1024 * 1024),
+			}),
+			protocol::SqliteCommitStageResponse::SqliteCommitStageOk(
+				protocol::SqliteCommitStageOk {
+					chunk_idx_committed: 0,
+				},
+			),
+			protocol::SqliteCommitFinalizeResponse::SqliteCommitFinalizeOk(
+				protocol::SqliteCommitFinalizeOk {
+					new_head_txid: 13,
+					meta: sqlite_meta(8 * 1024 * 1024),
+				},
+			),
+		);
+		protocol.get_pages_response =
+			protocol::SqliteGetPagesResponse::SqliteGetPagesOk(protocol::SqliteGetPagesOk {
+				pages: vec![protocol::SqliteFetchedPage {
+					pgno: 2,
+					bytes: Some(vec![2; 4096]),
+				}],
+				meta: sqlite_meta(8 * 1024 * 1024),
+			});
+		let protocol = Arc::new(protocol);
+		let ctx = VfsContext::new(
+			"actor".to_string(),
+			runtime.handle().clone(),
+			SqliteTransport::from_mock(protocol.clone()),
+			protocol::SqliteStartupData {
+				generation: 3,
+				meta: protocol::SqliteMeta {
+					db_size_pages: 100,
+					..sqlite_meta(8 * 1024 * 1024)
+				},
+				preloaded_pages: vec![protocol::SqliteFetchedPage {
+					pgno: 1,
+					bytes: Some(vec![1; 4096]),
+				}],
+			},
+			VfsConfig::from_optimization_flags(SqliteOptimizationFlags {
+				vfs_page_cache_capacity_pages: 2,
+				vfs_protected_cache_pages: 4,
+				..SqliteOptimizationFlags::default()
+			}),
+			unsafe { std::mem::zeroed() },
+			None,
+		);
+
+		ctx.resolve_pages(&[2], false)
+			.expect("early page read should resolve");
+		{
+			let state = ctx.state.write();
+			for pgno in 10..80 {
+				state.page_cache.insert(pgno, vec![(pgno % 251) as u8; 4096]);
+			}
+			state.page_cache.invalidate_all();
+		}
+
+		ctx.resolve_pages(&[1], false)
+			.expect("startup page should survive scan churn");
+		ctx.resolve_pages(&[2], false)
+			.expect("early page should survive scan churn");
+
+		assert_eq!(protocol.get_pages_requests().len(), 1);
+	}
+
+	#[test]
+	fn scan_resistant_cache_preserves_hot_pages_after_scan_churn() {
+		let runtime = Builder::new_current_thread()
+			.enable_all()
+			.build()
+			.expect("runtime should build");
+		let mut protocol = MockProtocol::new(
+			protocol::SqliteCommitResponse::SqliteCommitOk(protocol::SqliteCommitOk {
+				new_head_txid: 13,
+				meta: sqlite_meta(8 * 1024 * 1024),
+			}),
+			protocol::SqliteCommitStageResponse::SqliteCommitStageOk(
+				protocol::SqliteCommitStageOk {
+					chunk_idx_committed: 0,
+				},
+			),
+			protocol::SqliteCommitFinalizeResponse::SqliteCommitFinalizeOk(
+				protocol::SqliteCommitFinalizeOk {
+					new_head_txid: 13,
+					meta: sqlite_meta(8 * 1024 * 1024),
+				},
+			),
+		);
+		protocol.get_pages_response =
+			protocol::SqliteGetPagesResponse::SqliteGetPagesOk(protocol::SqliteGetPagesOk {
+				pages: vec![
+					protocol::SqliteFetchedPage {
+						pgno: 2,
+						bytes: Some(vec![2; 4096]),
+					},
+					protocol::SqliteFetchedPage {
+						pgno: 3,
+						bytes: Some(vec![3; 4096]),
+					},
+				],
+				meta: sqlite_meta(8 * 1024 * 1024),
+			});
+		let protocol = Arc::new(protocol);
+		let ctx = VfsContext::new(
+			"actor".to_string(),
+			runtime.handle().clone(),
+			SqliteTransport::from_mock(protocol.clone()),
+			protocol::SqliteStartupData {
+				generation: 3,
+				meta: protocol::SqliteMeta {
+					db_size_pages: 100,
+					..sqlite_meta(8 * 1024 * 1024)
+				},
+				preloaded_pages: Vec::new(),
+			},
+			VfsConfig::from_optimization_flags(SqliteOptimizationFlags {
+				vfs_page_cache_capacity_pages: 2,
+				vfs_protected_cache_pages: 1,
+				..SqliteOptimizationFlags::default()
+			}),
+			unsafe { std::mem::zeroed() },
+			None,
+		);
+
+		ctx.resolve_pages(&[2], false)
+			.expect("early page read should resolve");
+		ctx.resolve_pages(&[3], false)
+			.expect("first hot page read should hit normal cache");
+		ctx.resolve_pages(&[3], false)
+			.expect("second hot page read should promote protection");
+		{
+			let state = ctx.state.write();
+			for pgno in 10..80 {
+				state.page_cache.insert(pgno, vec![(pgno % 251) as u8; 4096]);
+			}
+			state.page_cache.invalidate_all();
+		}
+
+		ctx.resolve_pages(&[3], false)
+			.expect("hot page should survive scan churn");
+
+		assert_eq!(protocol.get_pages_requests().len(), 1);
 	}
 
 	#[test]
@@ -4401,6 +6478,7 @@ mod tests {
 			runtime.handle().clone(),
 			startup,
 			VfsConfig::default(),
+			None,
 		)
 		.expect("v2 vfs should register");
 		let db = open_database(vfs, &harness.actor_id).expect("sqlite database should open");
@@ -4446,6 +6524,7 @@ mod tests {
 			runtime.handle().clone(),
 			startup,
 			VfsConfig::default(),
+			None,
 		)
 		.expect("v2 vfs should register");
 		let db = open_database(vfs, &harness.actor_id).expect("sqlite database should open");
@@ -4493,6 +6572,7 @@ mod tests {
 			runtime.handle().clone(),
 			startup,
 			VfsConfig::default(),
+			None,
 		)
 		.expect("v2 vfs should register");
 		let db = open_database(vfs, &harness.actor_id).expect("sqlite database should open");
@@ -4824,6 +6904,7 @@ mod tests {
 			runtime.handle().clone(),
 			startup,
 			VfsConfig::default(),
+			None,
 		)
 		.expect("v2 vfs should register");
 		let db = open_database(vfs, &harness.actor_id).expect("sqlite database should open");
@@ -4896,12 +6977,12 @@ mod tests {
 		);
 	}
 
-	#[test]
-	fn direct_engine_aux_open_failure_surfaces_without_poisoning_main_db() {
-		let runtime = direct_runtime();
-		let harness = DirectEngineHarness::new();
-		let db = harness.open_db(&runtime);
-		let ctx = direct_vfs_ctx(&db);
+		#[test]
+		fn direct_engine_aux_open_failure_surfaces_without_poisoning_main_db() {
+			let runtime = direct_runtime();
+			let harness = DirectEngineHarness::new();
+			let db = harness.open_db(&runtime);
+			let ctx = direct_vfs_ctx(&db);
 
 		sqlite_exec(
 			db.as_ptr(),
@@ -4936,12 +7017,12 @@ mod tests {
 		);
 	}
 
-	#[test]
-	fn vfs_delete_surfaces_aux_delete_failure() {
-		let runtime = direct_runtime();
-		let harness = DirectEngineHarness::new();
-		let db = harness.open_db(&runtime);
-		let ctx = direct_vfs_ctx(&db);
+		#[test]
+		fn vfs_delete_surfaces_aux_delete_failure() {
+			let runtime = direct_runtime();
+			let harness = DirectEngineHarness::new();
+			let db = harness.open_db(&runtime);
+			let ctx = direct_vfs_ctx(&db);
 
 		ctx.open_aux_file("actor-journal");
 		ctx.fail_next_aux_delete("InjectedAuxDeleteError: delete failed");
@@ -5072,9 +7153,10 @@ mod tests {
 					..sqlite_meta(8 * 1024 * 1024)
 				},
 				preloaded_pages: Vec::new(),
-			},
-			VfsConfig::default(),
-		)
+				},
+				VfsConfig::default(),
+				None,
+			)
 		.expect("vfs should register");
 		let db = open_database(vfs, "actor").expect("db should open");
 
@@ -5127,9 +7209,10 @@ mod tests {
 					..sqlite_meta(8 * 1024 * 1024)
 				},
 				preloaded_pages: Vec::new(),
-			},
-			VfsConfig::default(),
-		)
+				},
+				VfsConfig::default(),
+				None,
+			)
 		.expect("vfs should register");
 		let db = open_database(vfs, "actor").expect("db should open");
 
@@ -5194,9 +7277,10 @@ mod tests {
 					..sqlite_meta(8 * 1024 * 1024)
 				},
 				preloaded_pages: Vec::new(),
-			},
-			VfsConfig::default(),
-		)
+				},
+				VfsConfig::default(),
+				None,
+			)
 		.expect("vfs should register");
 		let db = open_database(vfs, "actor").expect("db should open");
 
@@ -5261,9 +7345,10 @@ mod tests {
 					..sqlite_meta(8 * 1024 * 1024)
 				},
 				preloaded_pages: Vec::new(),
-			},
-			VfsConfig::default(),
-		)
+				},
+				VfsConfig::default(),
+				None,
+			)
 		.expect("vfs should register");
 		let db = open_database(vfs, "actor").expect("db should open");
 
@@ -5334,9 +7419,10 @@ mod tests {
 					..sqlite_meta(8 * 1024 * 1024)
 				},
 				preloaded_pages: Vec::new(),
-			},
-			VfsConfig::default(),
-		)
+				},
+				VfsConfig::default(),
+				None,
+			)
 		.expect("vfs should register");
 		// Forced-sync: this test moves one SQLite handle between std::thread workers.
 		let db = Arc::new(SyncMutex::new(
@@ -5407,10 +7493,11 @@ mod tests {
 				generation: 7,
 				meta: sqlite_meta(8 * 1024 * 1024),
 				preloaded_pages: Vec::new(),
-			},
-			VfsConfig::default(),
-			unsafe { std::mem::zeroed() },
-		);
+				},
+				VfsConfig::default(),
+				unsafe { std::mem::zeroed() },
+				None,
+			);
 
 		let first = ctx.open_aux_file("actor-journal");
 		first.bytes.lock().extend_from_slice(&[1, 2, 3, 4]);
@@ -5454,10 +7541,11 @@ mod tests {
 				generation: 7,
 				meta: sqlite_meta(8 * 1024 * 1024),
 				preloaded_pages: Vec::new(),
-			},
-			VfsConfig::default(),
-			unsafe { std::mem::zeroed() },
-		));
+				},
+				VfsConfig::default(),
+				unsafe { std::mem::zeroed() },
+				None,
+			));
 		let barrier = Arc::new(Barrier::new(2));
 
 		let first = {
@@ -5526,10 +7614,11 @@ mod tests {
 						bytes: Some(vec![4; 4096]),
 					},
 				],
-			},
-			VfsConfig::default(),
-			unsafe { std::mem::zeroed() },
-		);
+				},
+				VfsConfig::default(),
+				unsafe { std::mem::zeroed() },
+				None,
+			);
 		{
 			let mut state = ctx.state.write();
 			state.write_buffer.dirty.insert(3, vec![3; 4096]);
@@ -5596,10 +7685,11 @@ mod tests {
 					pgno: 1,
 					bytes: Some(vec![1; 4096]),
 				}],
-			},
-			VfsConfig::default(),
-			unsafe { std::mem::zeroed() },
-		);
+				},
+				VfsConfig::default(),
+				unsafe { std::mem::zeroed() },
+				None,
+			);
 
 		let resolved = ctx
 			.resolve_pages(&[2], false)
@@ -5663,10 +7753,11 @@ mod tests {
 					pgno: 1,
 					bytes: Some(vec![1; 4096]),
 				}],
-			},
-			VfsConfig::default(),
-			unsafe { std::mem::zeroed() },
-		);
+				},
+				VfsConfig::default(),
+				unsafe { std::mem::zeroed() },
+				None,
+			);
 
 		let resolved = ctx
 			.resolve_pages(&[4], false)
@@ -5720,10 +7811,11 @@ mod tests {
 					pgno: 1,
 					bytes: Some(vec![1; 4096]),
 				}],
-			},
-			VfsConfig::default(),
-			unsafe { std::mem::zeroed() },
-		);
+				},
+				VfsConfig::default(),
+				unsafe { std::mem::zeroed() },
+				None,
+			);
 
 		let err = ctx
 			.resolve_pages(&[2], false)
@@ -5959,8 +8051,8 @@ mod tests {
 	fn vfs_records_commit_phase_durations() {
 		let runtime = direct_runtime();
 		let harness = DirectEngineHarness::new();
-		let db = harness.open_db(&runtime);
-		let ctx = direct_vfs_ctx(&db);
+		let metrics = TestVfsMetrics::new();
+		let db = harness.open_db_with_metrics(&runtime, Arc::clone(&metrics));
 
 		sqlite_exec(
 			db.as_ptr(),
@@ -5968,13 +8060,7 @@ mod tests {
 		)
 		.expect("create table should succeed");
 
-		let relaxed = std::sync::atomic::Ordering::Relaxed;
-		ctx.commit_request_build_ns.store(0, relaxed);
-		ctx.commit_serialize_ns.store(0, relaxed);
-		ctx.commit_transport_ns.store(0, relaxed);
-		ctx.commit_state_update_ns.store(0, relaxed);
-		ctx.commit_duration_ns_total.store(0, relaxed);
-		ctx.commit_total.store(0, relaxed);
+		metrics.reset();
 
 		sqlite_exec(
 			db.as_ptr(),
@@ -5982,14 +8068,19 @@ mod tests {
 		)
 		.expect("insert should succeed");
 
-		let metrics = db.sqlite_vfs_metrics();
-		assert_eq!(metrics.commit_count, 1);
-		assert!(metrics.request_build_ns > 0);
-		assert!(metrics.serialize_ns > 0);
-		assert!(metrics.transport_ns > 0);
-		assert!(metrics.state_update_ns > 0);
-		assert!(metrics.total_ns >= metrics.request_build_ns);
-		assert!(metrics.request_build_ns + metrics.transport_ns + metrics.state_update_ns > 0);
+		let snapshot = metrics.snapshot();
+		assert_eq!(snapshot.commit_total, 1);
+		assert!(snapshot.commit_request_build_ns_total > 0);
+		assert!(snapshot.commit_serialize_ns_total > 0);
+		assert!(snapshot.commit_transport_ns_total > 0);
+		assert!(snapshot.commit_state_update_ns_total > 0);
+		assert!(snapshot.commit_duration_ns_total >= snapshot.commit_request_build_ns_total);
+		assert!(
+			snapshot.commit_request_build_ns_total
+				+ snapshot.commit_transport_ns_total
+				+ snapshot.commit_state_update_ns_total
+				> 0
+		);
 	}
 
 	#[test]
@@ -5997,8 +8088,8 @@ mod tests {
 		// 5MB = 1280 rows x 4KB blobs in one transaction
 		let runtime = direct_runtime();
 		let harness = DirectEngineHarness::new();
-		let db = harness.open_db(&runtime);
-		let ctx = direct_vfs_ctx(&db);
+		let metrics = TestVfsMetrics::new();
+		let db = harness.open_db_with_metrics(&runtime, Arc::clone(&metrics));
 
 		sqlite_exec(
 			db.as_ptr(),
@@ -6006,13 +8097,7 @@ mod tests {
 		)
 		.expect("create table should succeed");
 
-		let relaxed = std::sync::atomic::Ordering::Relaxed;
-		ctx.resolve_pages_total.store(0, relaxed);
-		ctx.resolve_pages_cache_hits.store(0, relaxed);
-		ctx.resolve_pages_fetches.store(0, relaxed);
-		ctx.pages_fetched_total.store(0, relaxed);
-		ctx.prefetch_pages_total.store(0, relaxed);
-		ctx.commit_total.store(0, relaxed);
+		metrics.reset();
 
 		let start = std::time::Instant::now();
 		sqlite_exec(db.as_ptr(), "BEGIN;").expect("begin");
@@ -6029,12 +8114,13 @@ mod tests {
 		sqlite_exec(db.as_ptr(), "COMMIT;").expect("commit");
 		let elapsed = start.elapsed();
 
-		let resolve_total = ctx.resolve_pages_total.load(relaxed);
-		let cache_hits = ctx.resolve_pages_cache_hits.load(relaxed);
-		let fetches = ctx.resolve_pages_fetches.load(relaxed);
-		let pages_fetched = ctx.pages_fetched_total.load(relaxed);
-		let prefetch = ctx.prefetch_pages_total.load(relaxed);
-		let commits = ctx.commit_total.load(relaxed);
+		let snapshot = metrics.snapshot();
+		let resolve_total = snapshot.resolve_pages_total;
+		let cache_hits = snapshot.resolve_pages_cache_hits_total;
+		let fetches = snapshot.get_pages_total;
+		let pages_fetched = snapshot.pages_fetched_total;
+		let prefetch = snapshot.prefetch_pages_total;
+		let commits = snapshot.commit_total;
 
 		eprintln!("=== 5MB INSERT PROFILE (1280 rows x 4KB) ===");
 		eprintln!("  wall clock:           {:?}", elapsed);
@@ -6067,8 +8153,8 @@ mod tests {
 		// 100 updates to the same row - this is the autocommit case
 		let runtime = direct_runtime();
 		let harness = DirectEngineHarness::new();
-		let db = harness.open_db(&runtime);
-		let ctx = direct_vfs_ctx(&db);
+		let metrics = TestVfsMetrics::new();
+		let db = harness.open_db_with_metrics(&runtime, Arc::clone(&metrics));
 
 		sqlite_exec(
 			db.as_ptr(),
@@ -6077,13 +8163,7 @@ mod tests {
 		.expect("create");
 		sqlite_exec(db.as_ptr(), "INSERT INTO counter VALUES (1, 0);").expect("insert");
 
-		let relaxed = std::sync::atomic::Ordering::Relaxed;
-		ctx.resolve_pages_total.store(0, relaxed);
-		ctx.resolve_pages_cache_hits.store(0, relaxed);
-		ctx.resolve_pages_fetches.store(0, relaxed);
-		ctx.pages_fetched_total.store(0, relaxed);
-		ctx.prefetch_pages_total.store(0, relaxed);
-		ctx.commit_total.store(0, relaxed);
+		metrics.reset();
 
 		let start = std::time::Instant::now();
 		for _ in 0..100 {
@@ -6095,27 +8175,28 @@ mod tests {
 		}
 		let elapsed = start.elapsed();
 
-		let fetches = ctx.resolve_pages_fetches.load(relaxed);
-		let commits = ctx.commit_total.load(relaxed);
+		let snapshot = metrics.snapshot();
+		let fetches = snapshot.get_pages_total;
+		let commits = snapshot.commit_total;
 
 		eprintln!("=== 100 HOT ROW UPDATES (autocommit) ===");
 		eprintln!("  wall clock:           {:?}", elapsed);
 		eprintln!(
 			"  resolve_pages calls:  {}",
-			ctx.resolve_pages_total.load(relaxed)
+			snapshot.resolve_pages_total
 		);
 		eprintln!(
 			"  cache hits (pages):   {}",
-			ctx.resolve_pages_cache_hits.load(relaxed)
+			snapshot.resolve_pages_cache_hits_total
 		);
 		eprintln!("  engine fetches:       {}", fetches);
 		eprintln!(
 			"  pages fetched total:  {}",
-			ctx.pages_fetched_total.load(relaxed)
+			snapshot.pages_fetched_total
 		);
 		eprintln!(
 			"  prefetch pages:       {}",
-			ctx.prefetch_pages_total.load(relaxed)
+			snapshot.prefetch_pages_total
 		);
 		eprintln!("  commits:              {}", commits);
 		eprintln!("=========================================");
@@ -6164,22 +8245,20 @@ mod tests {
 		sqlite_exec(db1.as_ptr(), "COMMIT;").expect("commit");
 		drop(db1);
 
-		// Second pass: reopen with warm cache (takeover preloads page 1, rest from reads)
-		let db2 =
-			harness.open_db_on_engine(&runtime, engine.clone(), actor_id, VfsConfig::default());
-		let ctx = direct_vfs_ctx(&db2);
+			// Second pass: reopen with warm cache (takeover preloads page 1, rest from reads)
+			let metrics = TestVfsMetrics::new();
+			let db2 = harness.open_db_on_engine_with_metrics(
+				&runtime,
+				engine.clone(),
+				actor_id,
+				VfsConfig::default(),
+				Some(metrics.clone()),
+			);
 
 		// Warm the cache by reading everything
 		sqlite_exec(db2.as_ptr(), "SELECT COUNT(*) FROM bench;").expect("count");
 
-		// Reset counters
-		let relaxed = std::sync::atomic::Ordering::Relaxed;
-		ctx.resolve_pages_total.store(0, relaxed);
-		ctx.resolve_pages_cache_hits.store(0, relaxed);
-		ctx.resolve_pages_fetches.store(0, relaxed);
-		ctx.pages_fetched_total.store(0, relaxed);
-		ctx.prefetch_pages_total.store(0, relaxed);
-		ctx.commit_total.store(0, relaxed);
+			metrics.reset();
 
 		let start = std::time::Instant::now();
 		sqlite_exec(db2.as_ptr(), "BEGIN;").expect("begin");
@@ -6196,12 +8275,13 @@ mod tests {
 		sqlite_exec(db2.as_ptr(), "COMMIT;").expect("commit");
 		let elapsed = start.elapsed();
 
-		let resolve_total = ctx.resolve_pages_total.load(relaxed);
-		let cache_hits = ctx.resolve_pages_cache_hits.load(relaxed);
-		let fetches = ctx.resolve_pages_fetches.load(relaxed);
-		let pages_fetched = ctx.pages_fetched_total.load(relaxed);
-		let prefetch = ctx.prefetch_pages_total.load(relaxed);
-		let commits = ctx.commit_total.load(relaxed);
+			let snapshot = metrics.snapshot();
+			let resolve_total = snapshot.resolve_pages_total;
+			let cache_hits = snapshot.resolve_pages_cache_hits_total;
+			let fetches = snapshot.get_pages_total;
+			let pages_fetched = snapshot.pages_fetched_total;
+			let prefetch = snapshot.prefetch_pages_total;
+			let commits = snapshot.commit_total;
 
 		eprintln!("=== 1MB INSERT PROFILE (WARM CACHE) ===");
 		eprintln!("  wall clock:           {:?}", elapsed);
@@ -6231,10 +8311,10 @@ mod tests {
 
 	#[test]
 	fn profile_large_tx_insert_1mb() {
-		let runtime = direct_runtime();
-		let harness = DirectEngineHarness::new();
-		let db = harness.open_db(&runtime);
-		let ctx = direct_vfs_ctx(&db);
+			let runtime = direct_runtime();
+			let harness = DirectEngineHarness::new();
+			let metrics = TestVfsMetrics::new();
+			let db = harness.open_db_with_metrics(&runtime, Arc::clone(&metrics));
 
 		sqlite_exec(
 			db.as_ptr(),
@@ -6242,19 +8322,7 @@ mod tests {
 		)
 		.expect("create table should succeed");
 
-		// Reset counters after schema setup
-		ctx.resolve_pages_total
-			.store(0, std::sync::atomic::Ordering::Relaxed);
-		ctx.resolve_pages_cache_hits
-			.store(0, std::sync::atomic::Ordering::Relaxed);
-		ctx.resolve_pages_fetches
-			.store(0, std::sync::atomic::Ordering::Relaxed);
-		ctx.pages_fetched_total
-			.store(0, std::sync::atomic::Ordering::Relaxed);
-		ctx.prefetch_pages_total
-			.store(0, std::sync::atomic::Ordering::Relaxed);
-		ctx.commit_total
-			.store(0, std::sync::atomic::Ordering::Relaxed);
+			metrics.reset();
 
 		let start = std::time::Instant::now();
 
@@ -6269,17 +8337,16 @@ mod tests {
 			)
 			.expect("insert should succeed");
 		}
-		sqlite_exec(db.as_ptr(), "COMMIT;").expect("commit should succeed");
+			sqlite_exec(db.as_ptr(), "COMMIT;").expect("commit should succeed");
 
-		let elapsed = start.elapsed();
-		let relaxed = std::sync::atomic::Ordering::Relaxed;
-
-		let resolve_total = ctx.resolve_pages_total.load(relaxed);
-		let cache_hits = ctx.resolve_pages_cache_hits.load(relaxed);
-		let fetches = ctx.resolve_pages_fetches.load(relaxed);
-		let pages_fetched = ctx.pages_fetched_total.load(relaxed);
-		let prefetch = ctx.prefetch_pages_total.load(relaxed);
-		let commits = ctx.commit_total.load(relaxed);
+			let elapsed = start.elapsed();
+			let snapshot = metrics.snapshot();
+			let resolve_total = snapshot.resolve_pages_total;
+			let cache_hits = snapshot.resolve_pages_cache_hits_total;
+			let fetches = snapshot.get_pages_total;
+			let pages_fetched = snapshot.pages_fetched_total;
+			let prefetch = snapshot.prefetch_pages_total;
+			let commits = snapshot.commit_total;
 
 		eprintln!("=== 1MB INSERT PROFILE (256 rows x 4KB) ===");
 		eprintln!("  wall clock:           {:?}", elapsed);
@@ -6313,10 +8380,10 @@ mod tests {
 	// sequential commits through the VFS and verifies they all succeed.
 	#[test]
 	fn autocommit_inserts_maintain_head_txid_consistency() {
-		let runtime = direct_runtime();
-		let harness = DirectEngineHarness::new();
-		let db = harness.open_db(&runtime);
-		let ctx = direct_vfs_ctx(&db);
+			let runtime = direct_runtime();
+			let harness = DirectEngineHarness::new();
+			let metrics = TestVfsMetrics::new();
+			let db = harness.open_db_with_metrics(&runtime, Arc::clone(&metrics));
 
 		sqlite_exec(
 			db.as_ptr(),
@@ -6324,8 +8391,7 @@ mod tests {
 		)
 		.expect("create table should succeed");
 
-		let relaxed = std::sync::atomic::Ordering::Relaxed;
-		ctx.commit_total.store(0, relaxed);
+			metrics.reset();
 
 		// 100 sequential autocommit inserts. If fence mismatch is the bug,
 		// this will fail partway through with "commit head_txid X did not
@@ -6338,7 +8404,7 @@ mod tests {
 			.expect("autocommit insert should not fence-mismatch");
 		}
 
-		let commits = ctx.commit_total.load(relaxed);
+			let commits = metrics.snapshot().commit_total;
 		// Each autocommit INSERT = 1 commit. CREATE TABLE was 1 more.
 		// We reset commit_total after CREATE, so expect 100.
 		assert_eq!(commits, 100, "expected exactly 100 commits");

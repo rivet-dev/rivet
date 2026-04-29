@@ -1,0 +1,729 @@
+# MARK: Core Primitives
+
+type Id str
+type Json str
+
+type GatewayId data[4]
+type RequestId data[4]
+type MessageIndex u16
+
+# MARK: KV
+
+# Basic types
+type KvKey data
+type KvValue data
+type KvMetadata struct {
+	version: data
+	updateTs: i64
+}
+
+# Query types
+type KvListAllQuery void
+type KvListRangeQuery struct {
+	start: KvKey
+	end: KvKey
+	exclusive: bool
+}
+
+type KvListPrefixQuery struct {
+	key: KvKey
+}
+
+type KvListQuery union {
+	KvListAllQuery |
+	KvListRangeQuery |
+	KvListPrefixQuery
+}
+
+# Request types
+type KvGetRequest struct {
+	keys: list<KvKey>
+}
+
+type KvListRequest struct {
+	query: KvListQuery
+	reverse: optional<bool>
+	limit: optional<u64>
+}
+
+type KvPutRequest struct {
+	keys: list<KvKey>
+	values: list<KvValue>
+}
+
+type KvDeleteRequest struct {
+	keys: list<KvKey>
+}
+
+type KvDeleteRangeRequest struct {
+	start: KvKey
+	end: KvKey
+}
+
+type KvDropRequest void
+
+# Response types
+type KvErrorResponse struct {
+	message: str
+}
+
+type KvGetResponse struct {
+	keys: list<KvKey>
+	values: list<KvValue>
+	metadata: list<KvMetadata>
+}
+
+type KvListResponse struct {
+	keys: list<KvKey>
+	values: list<KvValue>
+	metadata: list<KvMetadata>
+}
+
+type KvPutResponse void
+type KvDeleteResponse void
+type KvDropResponse void
+
+# Request/Response unions
+type KvRequestData union {
+	KvGetRequest |
+	KvListRequest |
+	KvPutRequest |
+	KvDeleteRequest |
+	KvDeleteRangeRequest |
+	KvDropRequest
+}
+
+type KvResponseData union {
+	KvErrorResponse |
+	KvGetResponse |
+	KvListResponse |
+	KvPutResponse |
+	KvDeleteResponse |
+	KvDropResponse
+}
+
+# MARK: SQLite
+
+type SqliteGeneration u64
+type SqliteTxid u64
+type SqlitePgno u32
+type SqliteStageId u64
+
+type SqlitePageBytes data
+
+type SqliteMeta struct {
+	generation: SqliteGeneration
+	headTxid: SqliteTxid
+	materializedTxid: SqliteTxid
+	dbSizePages: u32
+	pageSize: u32
+	creationTsMs: i64
+	maxDeltaBytes: u64
+}
+
+type SqliteFenceMismatch struct {
+	actualMeta: SqliteMeta
+	reason: str
+}
+
+type SqliteDirtyPage struct {
+	pgno: SqlitePgno
+	bytes: SqlitePageBytes
+}
+
+type SqliteFetchedPage struct {
+	pgno: SqlitePgno
+	bytes: optional<SqlitePageBytes>
+}
+
+type SqliteGetPagesRequest struct {
+	actorId: Id
+	generation: SqliteGeneration
+	pgnos: list<SqlitePgno>
+}
+
+type SqliteGetPageRangeRequest struct {
+	actorId: Id
+	generation: SqliteGeneration
+	startPgno: SqlitePgno
+	maxPages: u32
+	maxBytes: u64
+}
+
+type SqliteGetPagesOk struct {
+	pages: list<SqliteFetchedPage>
+	meta: SqliteMeta
+}
+
+type SqliteGetPageRangeOk struct {
+	startPgno: SqlitePgno
+	pages: list<SqliteFetchedPage>
+	meta: SqliteMeta
+}
+
+type SqliteErrorResponse struct {
+	message: str
+}
+
+type SqliteGetPagesResponse union {
+	SqliteGetPagesOk |
+	SqliteFenceMismatch |
+	SqliteErrorResponse
+}
+
+type SqliteGetPageRangeResponse union {
+	SqliteGetPageRangeOk |
+	SqliteFenceMismatch |
+	SqliteErrorResponse
+}
+
+type SqliteCommitRequest struct {
+	actorId: Id
+	generation: SqliteGeneration
+	expectedHeadTxid: SqliteTxid
+	dirtyPages: list<SqliteDirtyPage>
+	newDbSizePages: u32
+}
+
+type SqliteCommitOk struct {
+	newHeadTxid: SqliteTxid
+	meta: SqliteMeta
+}
+
+type SqliteCommitTooLarge struct {
+	actualSizeBytes: u64
+	maxSizeBytes: u64
+}
+
+type SqliteCommitResponse union {
+	SqliteCommitOk |
+	SqliteFenceMismatch |
+	SqliteCommitTooLarge |
+	SqliteErrorResponse
+}
+
+type SqliteCommitStageBeginRequest struct {
+	actorId: Id
+	generation: SqliteGeneration
+}
+
+type SqliteCommitStageBeginOk struct {
+	txid: SqliteTxid
+}
+
+type SqliteCommitStageBeginResponse union {
+	SqliteCommitStageBeginOk |
+	SqliteFenceMismatch |
+	SqliteErrorResponse
+}
+
+type SqliteCommitStageRequest struct {
+	actorId: Id
+	generation: SqliteGeneration
+	txid: SqliteTxid
+	chunkIdx: u32
+	bytes: data
+	isLast: bool
+}
+
+type SqliteCommitStageOk struct {
+	chunkIdxCommitted: u32
+}
+
+type SqliteCommitStageResponse union {
+	SqliteCommitStageOk |
+	SqliteFenceMismatch |
+	SqliteErrorResponse
+}
+
+type SqliteCommitFinalizeRequest struct {
+	actorId: Id
+	generation: SqliteGeneration
+	expectedHeadTxid: SqliteTxid
+	txid: SqliteTxid
+	newDbSizePages: u32
+}
+
+type SqliteCommitFinalizeOk struct {
+	newHeadTxid: SqliteTxid
+	meta: SqliteMeta
+}
+
+type SqliteStageNotFound struct {
+	stageId: SqliteStageId
+}
+
+type SqliteCommitFinalizeResponse union {
+	SqliteCommitFinalizeOk |
+	SqliteFenceMismatch |
+	SqliteStageNotFound |
+	SqliteErrorResponse
+}
+
+type SqlitePreloadHintRange struct {
+	startPgno: SqlitePgno
+	pageCount: u32
+}
+
+type SqlitePreloadHints struct {
+	pgnos: list<SqlitePgno>
+	ranges: list<SqlitePreloadHintRange>
+}
+
+type SqlitePersistPreloadHintsRequest struct {
+	actorId: Id
+	generation: SqliteGeneration
+	hints: SqlitePreloadHints
+}
+
+type SqlitePersistPreloadHintsOk void
+
+type SqlitePersistPreloadHintsResponse union {
+	SqlitePersistPreloadHintsOk |
+	SqliteFenceMismatch |
+	SqliteErrorResponse
+}
+
+type SqliteStartupData struct {
+	generation: SqliteGeneration
+	meta: SqliteMeta
+	preloadedPages: list<SqliteFetchedPage>
+}
+
+# MARK: Actor
+
+# Core
+type StopCode enum {
+	OK
+	ERROR
+}
+
+type ActorName struct {
+	metadata: Json
+}
+
+type ActorConfig struct {
+	name: str
+	key: optional<str>
+	createTs: i64
+	input: optional<data>
+}
+
+type ActorCheckpoint struct {
+	actorId: Id
+	generation: u32
+	index: i64
+}
+
+# Intent
+type ActorIntentSleep void
+
+type ActorIntentStop void
+
+type ActorIntent union {
+	ActorIntentSleep |
+	ActorIntentStop
+}
+
+# State
+type ActorStateRunning void
+
+type ActorStateStopped struct {
+	code: StopCode
+	message: optional<str>
+}
+
+type ActorState union {
+	ActorStateRunning |
+	ActorStateStopped
+}
+
+# MARK: Events
+type EventActorIntent struct {
+	intent: ActorIntent
+}
+
+type EventActorStateUpdate struct {
+	state: ActorState
+}
+
+type EventActorSetAlarm struct {
+	alarmTs: optional<i64>
+}
+
+type Event union {
+	EventActorIntent |
+	EventActorStateUpdate |
+	EventActorSetAlarm
+}
+
+type EventWrapper struct {
+	checkpoint: ActorCheckpoint
+	inner: Event
+}
+
+# MARK: Preloaded KV
+
+type PreloadedKvEntry struct {
+	key: KvKey
+	value: KvValue
+	metadata: KvMetadata
+}
+
+type PreloadedKv struct {
+	entries: list<PreloadedKvEntry>
+	requestedGetKeys: list<KvKey>
+	requestedPrefixes: list<KvKey>
+}
+
+# MARK: Commands
+
+type HibernatingRequest struct {
+	gatewayId: GatewayId
+	requestId: RequestId
+}
+
+type CommandStartActor struct {
+	config: ActorConfig
+	hibernatingRequests: list<HibernatingRequest>
+	preloadedKv: optional<PreloadedKv>
+	sqliteStartupData: optional<SqliteStartupData>
+}
+
+type StopActorReason enum {
+	SLEEP_INTENT
+	STOP_INTENT
+	DESTROY
+	GOING_AWAY
+	LOST
+}
+
+type CommandStopActor struct {
+	reason: StopActorReason
+}
+
+type Command union {
+	CommandStartActor |
+	CommandStopActor
+}
+
+type CommandWrapper struct {
+	checkpoint: ActorCheckpoint
+	inner: Command
+}
+
+# We redeclare this so its top level
+type ActorCommandKeyData union {
+	CommandStartActor |
+	CommandStopActor
+}
+
+# MARK: Tunnel
+
+# Message ID
+
+type MessageId struct {
+	# Globally unique ID
+	gatewayId: GatewayId
+	# Unique ID to the gateway
+	requestId: RequestId
+	# Unique ID to the request
+	messageIndex: MessageIndex
+}
+
+# HTTP
+type ToEnvoyRequestStart struct {
+	actorId: Id
+	method: str
+	path: str
+	headers: map<str><str>
+	body: optional<data>
+	stream: bool
+}
+
+type ToEnvoyRequestChunk struct {
+	body: data
+	finish: bool
+}
+
+type ToEnvoyRequestAbort void
+
+type ToRivetResponseStart struct {
+	status: u16
+	headers: map<str><str>
+	body: optional<data>
+	stream: bool
+}
+
+type ToRivetResponseChunk struct {
+	body: data
+	finish: bool
+}
+
+type ToRivetResponseAbort void
+
+# WebSocket
+type ToEnvoyWebSocketOpen struct {
+	actorId: Id
+	path: str
+	headers: map<str><str>
+}
+
+type ToEnvoyWebSocketMessage struct {
+	data: data
+	binary: bool
+}
+
+type ToEnvoyWebSocketClose struct {
+	code: optional<u16>
+	reason: optional<str>
+}
+
+type ToRivetWebSocketOpen struct {
+	canHibernate: bool
+}
+
+type ToRivetWebSocketMessage struct {
+	data: data
+	binary: bool
+}
+
+type ToRivetWebSocketMessageAck struct {
+	index: MessageIndex
+}
+
+type ToRivetWebSocketClose struct {
+	code: optional<u16>
+	reason: optional<str>
+	hibernate: bool
+}
+
+# To Rivet
+type ToRivetTunnelMessageKind union {
+	# HTTP
+	ToRivetResponseStart |
+	ToRivetResponseChunk |
+	ToRivetResponseAbort |
+
+	# WebSocket
+	ToRivetWebSocketOpen |
+	ToRivetWebSocketMessage |
+	ToRivetWebSocketMessageAck |
+	ToRivetWebSocketClose
+}
+
+type ToRivetTunnelMessage struct {
+	messageId: MessageId
+	messageKind: ToRivetTunnelMessageKind
+}
+
+# To Envoy
+type ToEnvoyTunnelMessageKind union {
+	# HTTP
+	ToEnvoyRequestStart |
+	ToEnvoyRequestChunk |
+	ToEnvoyRequestAbort |
+
+	# WebSocket
+	ToEnvoyWebSocketOpen |
+	ToEnvoyWebSocketMessage |
+	ToEnvoyWebSocketClose
+}
+
+type ToEnvoyTunnelMessage struct {
+	messageId: MessageId
+	messageKind: ToEnvoyTunnelMessageKind
+}
+
+type ToEnvoyPing struct {
+	ts: i64
+}
+
+# MARK: To Rivet
+type ToRivetMetadata struct {
+	prepopulateActorNames: optional<map<str><ActorName>>
+	metadata: optional<Json>
+}
+
+type ToRivetEvents list<EventWrapper>
+
+type ToRivetAckCommands struct {
+	lastCommandCheckpoints: list<ActorCheckpoint>
+}
+
+type ToRivetStopping void
+
+type ToRivetPong struct {
+	ts: i64
+}
+
+type ToRivetKvRequest struct {
+	actorId: Id
+	requestId: u32
+	data: KvRequestData
+}
+
+type ToRivetSqliteGetPagesRequest struct {
+	requestId: u32
+	data: SqliteGetPagesRequest
+}
+
+type ToRivetSqliteGetPageRangeRequest struct {
+	requestId: u32
+	data: SqliteGetPageRangeRequest
+}
+
+type ToRivetSqliteCommitRequest struct {
+	requestId: u32
+	data: SqliteCommitRequest
+}
+
+type ToRivetSqliteCommitStageBeginRequest struct {
+	requestId: u32
+	data: SqliteCommitStageBeginRequest
+}
+
+type ToRivetSqliteCommitStageRequest struct {
+	requestId: u32
+	data: SqliteCommitStageRequest
+}
+
+type ToRivetSqliteCommitFinalizeRequest struct {
+	requestId: u32
+	data: SqliteCommitFinalizeRequest
+}
+
+type ToRivetSqlitePersistPreloadHintsRequest struct {
+	requestId: u32
+	data: SqlitePersistPreloadHintsRequest
+}
+
+type ToRivet union {
+	ToRivetMetadata |
+	ToRivetEvents |
+	ToRivetAckCommands |
+	ToRivetStopping |
+	ToRivetPong |
+	ToRivetKvRequest |
+	ToRivetTunnelMessage |
+	ToRivetSqliteGetPagesRequest |
+	ToRivetSqliteGetPageRangeRequest |
+	ToRivetSqliteCommitRequest |
+	ToRivetSqliteCommitStageBeginRequest |
+	ToRivetSqliteCommitStageRequest |
+	ToRivetSqliteCommitFinalizeRequest |
+	ToRivetSqlitePersistPreloadHintsRequest
+}
+
+# MARK: To Envoy
+type ProtocolMetadata struct {
+	envoyLostThreshold: i64
+	actorStopThreshold: i64
+	maxResponsePayloadSize: u64
+}
+
+type ToEnvoyInit struct {
+	metadata: ProtocolMetadata
+}
+
+type ToEnvoyCommands list<CommandWrapper>
+
+type ToEnvoyAckEvents struct {
+	lastEventCheckpoints: list<ActorCheckpoint>
+}
+
+type ToEnvoyKvResponse struct {
+	requestId: u32
+	data: KvResponseData
+}
+
+type ToEnvoySqliteGetPagesResponse struct {
+	requestId: u32
+	data: SqliteGetPagesResponse
+}
+
+type ToEnvoySqliteGetPageRangeResponse struct {
+	requestId: u32
+	data: SqliteGetPageRangeResponse
+}
+
+type ToEnvoySqliteCommitResponse struct {
+	requestId: u32
+	data: SqliteCommitResponse
+}
+
+type ToEnvoySqliteCommitStageBeginResponse struct {
+	requestId: u32
+	data: SqliteCommitStageBeginResponse
+}
+
+type ToEnvoySqliteCommitStageResponse struct {
+	requestId: u32
+	data: SqliteCommitStageResponse
+}
+
+type ToEnvoySqliteCommitFinalizeResponse struct {
+	requestId: u32
+	data: SqliteCommitFinalizeResponse
+}
+
+type ToEnvoySqlitePersistPreloadHintsResponse struct {
+	requestId: u32
+	data: SqlitePersistPreloadHintsResponse
+}
+
+type ToEnvoy union {
+	ToEnvoyInit |
+	ToEnvoyCommands |
+	ToEnvoyAckEvents |
+	ToEnvoyKvResponse |
+	ToEnvoyTunnelMessage |
+	ToEnvoyPing |
+	ToEnvoySqliteGetPagesResponse |
+	ToEnvoySqliteGetPageRangeResponse |
+	ToEnvoySqliteCommitResponse |
+	ToEnvoySqliteCommitStageBeginResponse |
+	ToEnvoySqliteCommitStageResponse |
+	ToEnvoySqliteCommitFinalizeResponse |
+	ToEnvoySqlitePersistPreloadHintsResponse
+}
+
+# MARK: To Envoy Conn
+type ToEnvoyConnPing struct {
+	gatewayId: GatewayId
+	requestId: RequestId
+	ts: i64
+}
+
+type ToEnvoyConnClose void
+
+type ToEnvoyConn union {
+	ToEnvoyConnPing |
+	ToEnvoyConnClose |
+	ToEnvoyCommands |
+	ToEnvoyAckEvents |
+	ToEnvoyTunnelMessage
+}
+
+# MARK: To Gateway
+type ToGatewayPong struct {
+	requestId: RequestId
+	ts: i64
+}
+
+type ToGateway union {
+	ToGatewayPong |
+	ToRivetTunnelMessage
+}
+
+# MARK: To Outbound
+type ToOutboundActorStart struct {
+	namespaceId: Id
+	poolName: str
+	checkpoint: ActorCheckpoint
+	actorConfig: ActorConfig
+}
+
+type ToOutbound union {
+	ToOutboundActorStart
+}

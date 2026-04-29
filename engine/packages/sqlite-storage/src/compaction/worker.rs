@@ -27,6 +27,8 @@ impl SqliteEngine {
 		if shards_per_batch == 0 {
 			return Ok(0);
 		}
+		let actor_lock = self.actor_op_lock(actor_id).await;
+		let _actor_guard = actor_lock.lock().await;
 
 		let head = self.load_head(actor_id).await?;
 		let mut pidx_rows = load_pidx_rows(self, actor_id).await?;
@@ -68,7 +70,7 @@ mod tests {
 	use crate::test_utils::{clear_op_count, scan_prefix_values, test_db};
 	use crate::types::{
 		DBHead, DirtyPage, SQLITE_DEFAULT_MAX_STORAGE_BYTES, SQLITE_PAGE_SIZE, SQLITE_SHARD_SIZE,
-		SQLITE_VFS_V2_SCHEMA_VERSION, SqliteOrigin, encode_db_head, new_db_head,
+		SQLITE_VFS_V2_SCHEMA_VERSION, SqliteOrigin, encode_db_head,
 	};
 	use crate::udb::{self, WriteOp, apply_write_ops};
 

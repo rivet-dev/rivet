@@ -80,25 +80,6 @@
       "description": "Host to bind the local HTTP server to.",
       "type": "string"
     },
-    "inspector": {
-      "description": "Inspector configuration for debugging and development.",
-      "type": "object",
-      "properties": {
-        "enabled": {
-          "description": "Whether to enable the Rivet Inspector. Defaults to true in development mode.",
-          "type": "boolean"
-        },
-        "token": {
-          "description": "Token used to access the Inspector.",
-          "type": "string"
-        },
-        "defaultEndpoint": {
-          "description": "Default RivetKit server endpoint for Rivet Inspector to connect to.",
-          "type": "string"
-        }
-      },
-      "additionalProperties": false
-    },
     "startEngine": {
       "description": "Starts the full Rust engine process locally. Default: false",
       "type": "boolean"
@@ -166,6 +147,10 @@
         "basePath": {
           "description": "Base path for serverless API routes. Default: '/api/rivet'",
           "type": "string"
+        },
+        "maxStartPayloadBytes": {
+          "description": "Maximum POST /start body size in bytes. Default: 1048576",
+          "type": "number"
         },
         "publicEndpoint": {
           "description": "The endpoint that clients should connect to. Supports URL auth syntax: https://namespace:token@api.rivet.dev",

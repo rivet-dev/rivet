@@ -400,6 +400,19 @@ impl EnvoyHandle {
 		}
 	}
 
+	pub async fn sqlite_get_page_range(
+		&self,
+		request: protocol::SqliteGetPageRangeRequest,
+	) -> anyhow::Result<protocol::SqliteGetPageRangeResponse> {
+		match self
+			.send_sqlite_request(SqliteRequest::GetPageRange(request))
+			.await?
+		{
+			SqliteResponse::GetPageRange(response) => Ok(response),
+			_ => anyhow::bail!("unexpected sqlite get_page_range response type"),
+		}
+	}
+
 	pub async fn sqlite_commit(
 		&self,
 		request: protocol::SqliteCommitRequest,
@@ -466,6 +479,35 @@ impl EnvoyHandle {
 			SqliteResponse::CommitFinalize(response) => Ok(response),
 			_ => anyhow::bail!("unexpected sqlite commit_finalize response type"),
 		}
+	}
+
+	pub async fn sqlite_persist_preload_hints(
+		&self,
+		request: protocol::SqlitePersistPreloadHintsRequest,
+	) -> anyhow::Result<protocol::SqlitePersistPreloadHintsResponse> {
+		match self
+			.send_sqlite_request(SqliteRequest::PersistPreloadHints(request))
+			.await?
+		{
+			SqliteResponse::PersistPreloadHints(response) => Ok(response),
+			_ => anyhow::bail!("unexpected sqlite persist_preload_hints response type"),
+		}
+	}
+
+	pub fn sqlite_persist_preload_hints_fire_and_forget(
+		&self,
+		request: protocol::SqlitePersistPreloadHintsRequest,
+	) -> anyhow::Result<()> {
+		let (tx, rx) = tokio::sync::oneshot::channel();
+		drop(rx);
+		self.shared
+			.envoy_tx
+			.send(ToEnvoyMessage::SqliteRequest {
+				request: SqliteRequest::PersistPreloadHints(request),
+				response_tx: tx,
+			})
+			.map_err(|_| anyhow::anyhow!("envoy channel closed"))?;
+		Ok(())
 	}
 
 	pub fn restore_hibernating_requests(

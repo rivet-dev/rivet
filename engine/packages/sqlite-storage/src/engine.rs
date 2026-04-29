@@ -4,25 +4,41 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
 
 use anyhow::{Context, Result};
+use moka::future::Cache;
 use scc::{HashMap, hash_map::Entry};
-use tokio::sync::mpsc;
+use tokio::sync::{Mutex, mpsc};
 use universaldb::Subspace;
 
 use crate::keys::{meta_key, pidx_delta_prefix};
+use crate::ltx::DecodedLtx;
 use crate::metrics::SqliteStorageMetrics;
+use crate::optimization_flags::{SqliteOptimizationFlags, sqlite_optimization_flags};
 use crate::page_index::DeltaPageIndex;
 use crate::types::{DBHead, SQLITE_MAX_DELTA_BYTES, SqliteMeta, decode_db_head};
 use crate::udb;
+
+pub const DECODED_LTX_CACHE_MAX_ENTRIES: u64 = 128;
 
 pub struct SqliteEngine {
 	pub db: universaldb::Database,
 	pub subspace: Subspace,
 	pub op_counter: Arc<AtomicUsize>,
+	#[cfg(test)]
+	pub ltx_decode_count: AtomicUsize,
 	pub open_dbs: HashMap<String, OpenDb>,
 	pub page_indices: HashMap<String, DeltaPageIndex>,
+	pub decoded_ltx_blobs: Cache<Vec<u8>, DecodedLtxCacheEntry>,
+	pub optimization_flags: SqliteOptimizationFlags,
 	pub pending_stages: HashMap<(String, u64), PendingStage>,
+	pub actor_op_locks: HashMap<String, Arc<Mutex<()>>>,
 	pub compaction_tx: mpsc::UnboundedSender<String>,
 	pub metrics: SqliteStorageMetrics,
+}
+
+#[derive(Debug, Clone)]
+pub struct DecodedLtxCacheEntry {
+	pub blob: Arc<[u8]>,
+	pub decoded: Arc<DecodedLtx>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -42,14 +58,38 @@ impl SqliteEngine {
 		db: universaldb::Database,
 		subspace: Subspace,
 	) -> (Self, mpsc::UnboundedReceiver<String>) {
+		Self::new_inner(db, subspace, *sqlite_optimization_flags())
+	}
+
+	#[cfg(test)]
+	pub(crate) fn new_with_optimization_flags(
+		db: universaldb::Database,
+		subspace: Subspace,
+		optimization_flags: SqliteOptimizationFlags,
+	) -> (Self, mpsc::UnboundedReceiver<String>) {
+		Self::new_inner(db, subspace, optimization_flags)
+	}
+
+	fn new_inner(
+		db: universaldb::Database,
+		subspace: Subspace,
+		optimization_flags: SqliteOptimizationFlags,
+	) -> (Self, mpsc::UnboundedReceiver<String>) {
 		let (compaction_tx, compaction_rx) = mpsc::unbounded_channel();
 		let engine = Self {
 			db,
 			subspace,
 			op_counter: Arc::new(AtomicUsize::new(0)),
+			#[cfg(test)]
+			ltx_decode_count: AtomicUsize::new(0),
 			open_dbs: HashMap::default(),
 			page_indices: HashMap::default(),
+			decoded_ltx_blobs: Cache::builder()
+				.max_capacity(DECODED_LTX_CACHE_MAX_ENTRIES)
+				.build(),
+			optimization_flags,
 			pending_stages: HashMap::default(),
+			actor_op_locks: HashMap::default(),
 			compaction_tx,
 			metrics: SqliteStorageMetrics,
 		};
@@ -59,6 +99,25 @@ impl SqliteEngine {
 
 	pub fn metrics(&self) -> &SqliteStorageMetrics {
 		&self.metrics
+	}
+
+	#[cfg(test)]
+	pub(crate) fn reset_ltx_decode_count(&self) {
+		self.ltx_decode_count
+			.store(0, std::sync::atomic::Ordering::SeqCst);
+	}
+
+	#[cfg(test)]
+	pub(crate) fn ltx_decode_count(&self) -> usize {
+		self.ltx_decode_count
+			.load(std::sync::atomic::Ordering::SeqCst)
+	}
+
+	pub async fn actor_op_lock(&self, actor_id: &str) -> Arc<Mutex<()>> {
+		match self.actor_op_locks.entry_async(actor_id.to_string()).await {
+			Entry::Occupied(entry) => Arc::clone(entry.get()),
+			Entry::Vacant(entry) => Arc::clone(entry.insert_entry(Arc::new(Mutex::new(()))).get()),
+		}
 	}
 
 	pub async fn load_head(&self, actor_id: &str) -> Result<DBHead> {
