@@ -3728,13 +3728,19 @@ mod tests {
 	use std::sync::atomic::{AtomicBool, AtomicU64, Ordering as AtomicOrdering};
 	use std::sync::{Arc, Barrier};
 	use std::thread;
+	use std::time::Duration;
 
 	use parking_lot::Mutex as SyncMutex;
 	use tempfile::TempDir;
 	use tokio::runtime::Builder;
+	use tokio::sync::oneshot;
+	use tokio::time::timeout;
 	use universaldb::Subspace;
 
 	use super::*;
+	use crate::connection_manager::{
+		NativeConnectionManager, NativeConnectionManagerConfig, NativeConnectionManagerMode,
+	};
 
 	static TEST_ID: AtomicU64 = AtomicU64::new(1);
 
@@ -6654,6 +6660,229 @@ mod tests {
 			SQLITE_READONLY
 		);
 		assert!(ctx.aux_file_exists("reader-owned-journal"));
+	}
+
+	#[test]
+	fn connection_manager_admits_lazy_reads_up_to_limit() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let vfs_name = next_test_name("sqlite-manager-read-limit");
+		let engine = runtime.block_on(harness.open_engine());
+		let vfs = harness.open_vfs_on_engine_with_metrics(
+			&runtime,
+			engine,
+			&harness.actor_id,
+			&vfs_name,
+			VfsConfig::default(),
+			None,
+		);
+		let manager = NativeConnectionManager::new(
+			vfs,
+			harness.actor_id.clone(),
+			NativeConnectionManagerConfig { max_readers: 2 },
+		);
+
+		runtime.block_on(async {
+			manager
+				.with_write_connection(|db| {
+					sqlite_exec(
+						db,
+						"CREATE TABLE manager_reads (id INTEGER PRIMARY KEY, value TEXT);",
+					)
+					.map_err(anyhow::Error::msg)
+				})
+				.await
+				.expect("setup write should succeed");
+
+			let first = manager
+				.acquire_read()
+				.await
+				.expect("first reader should open");
+			let second = manager
+				.acquire_read()
+				.await
+				.expect("second reader should open");
+			let snapshot = manager.snapshot().await;
+			assert_eq!(snapshot.mode, NativeConnectionManagerMode::ReadMode);
+			assert_eq!(snapshot.active_readers, 2);
+			assert_eq!(snapshot.open_readers, 2);
+
+			let third_manager = manager.clone();
+			let third = tokio::spawn(async move {
+				third_manager
+					.acquire_read()
+					.await
+					.expect("third reader should eventually open")
+			});
+			tokio::task::yield_now().await;
+			assert!(!third.is_finished());
+
+			first.release().await;
+			let third = timeout(Duration::from_secs(1), third)
+				.await
+				.expect("third reader should acquire after a slot frees")
+				.expect("third reader task should not panic");
+			second.release().await;
+			third.release().await;
+			manager.close().await.expect("manager close should succeed");
+		});
+	}
+
+	#[test]
+	fn connection_manager_prefers_pending_writer_over_new_readers() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let vfs_name = next_test_name("sqlite-manager-writer-preference");
+		let engine = runtime.block_on(harness.open_engine());
+		let vfs = harness.open_vfs_on_engine_with_metrics(
+			&runtime,
+			engine,
+			&harness.actor_id,
+			&vfs_name,
+			VfsConfig::default(),
+			None,
+		);
+		let manager = NativeConnectionManager::new(
+			vfs,
+			harness.actor_id.clone(),
+			NativeConnectionManagerConfig { max_readers: 2 },
+		);
+
+		runtime.block_on(async {
+			manager
+				.with_write_connection(|db| {
+					sqlite_exec(
+						db,
+						"CREATE TABLE manager_writer_preference (id INTEGER PRIMARY KEY);",
+					)
+					.map_err(anyhow::Error::msg)
+				})
+				.await
+				.expect("setup write should succeed");
+
+			let active_reader = manager
+				.acquire_read()
+				.await
+				.expect("reader should open before writer waits");
+			let writer_manager = manager.clone();
+			let (writer_acquired_tx, writer_acquired_rx) = oneshot::channel();
+			let (release_writer_tx, release_writer_rx) = oneshot::channel();
+			let writer = tokio::spawn(async move {
+				let writer = writer_manager
+					.acquire_write()
+					.await
+					.expect("writer should acquire after reader releases");
+				let _ = writer_acquired_tx.send(());
+				let _ = release_writer_rx.await;
+				writer.release().await;
+			});
+
+			manager
+				.wait_for_snapshot(|snapshot| snapshot.pending_writers == 1)
+				.await;
+
+			let reader_manager = manager.clone();
+			let pending_reader = tokio::spawn(async move {
+				reader_manager
+					.acquire_read()
+					.await
+					.expect("reader should acquire after writer releases")
+			});
+			tokio::task::yield_now().await;
+			assert!(!pending_reader.is_finished());
+
+			active_reader.release().await;
+			timeout(Duration::from_secs(1), writer_acquired_rx)
+				.await
+				.expect("writer should acquire before pending reader")
+				.expect("writer acquired signal should send");
+			let snapshot = manager.snapshot().await;
+			assert_eq!(snapshot.mode, NativeConnectionManagerMode::WriteMode);
+			assert_eq!(snapshot.active_readers, 0);
+			assert_eq!(snapshot.open_readers, 0);
+			assert!(snapshot.active_writer);
+			tokio::task::yield_now().await;
+			assert!(!pending_reader.is_finished());
+
+			let _ = release_writer_tx.send(());
+			writer.await.expect("writer task should not panic");
+			let pending_reader = timeout(Duration::from_secs(1), pending_reader)
+				.await
+				.expect("pending reader should acquire after writer releases")
+				.expect("pending reader task should not panic");
+			pending_reader.release().await;
+			manager.close().await.expect("manager close should succeed");
+		});
+	}
+
+	#[test]
+	fn connection_manager_close_waits_for_active_work_then_unregisters_vfs() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let vfs_name = next_test_name("sqlite-manager-close");
+		let engine = runtime.block_on(harness.open_engine());
+		let vfs = harness.open_vfs_on_engine_with_metrics(
+			&runtime,
+			engine,
+			&harness.actor_id,
+			&vfs_name,
+			VfsConfig::default(),
+			None,
+		);
+		let manager = NativeConnectionManager::new(
+			vfs,
+			harness.actor_id.clone(),
+			NativeConnectionManagerConfig { max_readers: 1 },
+		);
+
+		runtime.block_on(async {
+			manager
+				.with_write_connection(|db| {
+					sqlite_exec(
+						db,
+						"CREATE TABLE manager_close (id INTEGER PRIMARY KEY);",
+					)
+					.map_err(anyhow::Error::msg)
+				})
+				.await
+				.expect("setup write should succeed");
+
+			assert!(sqlite_vfs_registered(&vfs_name));
+			let reader = manager
+				.acquire_read()
+				.await
+				.expect("reader should open before close");
+			let closing_manager = manager.clone();
+			let close_task = tokio::spawn(async move {
+				closing_manager
+					.close()
+					.await
+					.expect("manager close should succeed");
+			});
+			manager
+				.wait_for_snapshot(|snapshot| {
+					snapshot.mode == NativeConnectionManagerMode::Closing
+				})
+				.await;
+
+			let err = match manager.acquire_read().await {
+				Ok(reader) => {
+					reader.release().await;
+					panic!("new reads should be rejected while closing");
+				}
+				Err(err) => err,
+			};
+			assert!(err.to_string().contains("closing"));
+			tokio::task::yield_now().await;
+			assert!(!close_task.is_finished());
+
+			reader.release().await;
+			timeout(Duration::from_secs(1), close_task)
+				.await
+				.expect("close should finish after active reader releases")
+				.expect("close task should not panic");
+			assert!(!sqlite_vfs_registered(&vfs_name));
+		});
 	}
 
 	#[test]
