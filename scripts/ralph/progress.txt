@@ -13,6 +13,7 @@ Started: Tue Apr 28 11:00:38 PM PDT 2026
 - Adaptive SQLite VFS read-ahead is controlled by `RIVETKIT_SQLITE_OPT_ADAPTIVE_READ_AHEAD`; default-enabled scans can grow to larger windows, while disabled mode keeps the existing shard-sized 64-page prefetch.
 - `sqlite-storage::SqliteEngine::get_pages` returns `GetPagesResult` with fetched pages plus transaction-read meta; successful protocol handlers should reuse `result.meta` instead of calling `load_meta`.
 - pegboard-envoy repeated `get_pages` can fast-path actor validation from `Conn.active_actors` and serverless local-open checks from `Conn.serverless_sqlite_actors`; stale cached generations should surface an explicit SQLite fence mismatch.
+- SQLite range page-read protocol details live in `.agent/specs/sqlite-range-page-read-protocol.md`; keep page-list `get_pages` as the compatibility/random-read fallback and preserve existing generation-fence behavior.
 ---
 ## 2026-04-28 23:01:27 PDT - SQLITE-COLD-001
 - What was implemented
@@ -230,4 +231,19 @@ Started: Tue Apr 28 11:00:38 PM PDT 2026
   - `Conn.active_actors` is a safe actor-validation fast path only when the request generation matches the active SQLite generation; starting actors should fall back to the full validation path.
   - `Conn.serverless_sqlite_actors` is a safe local-open fast path for matching generations; mismatched cached generations should return `SqliteStorageError::FenceMismatch` instead of silently re-opening or falling through.
   - Verification status: `cargo check -p pegboard-envoy` passed; `cargo check -p sqlite-storage` passed; focused pegboard-envoy cache tests passed; focused sqlite-storage flag parser test passed; `cargo test -p pegboard-envoy` passed; `cargo test -p sqlite-storage -- --test-threads=1` passed; `pnpm --filter kitchen-sink check-types` passed with the known skip message; `pnpm -F rivetkit check-types` passed.
+---
+## 2026-04-29 00:26:43 PDT - SQLITE-COLD-012
+- What was implemented
+  - Added the concrete SQLite range page-read protocol spec for the upcoming storage, envoy protocol, and VFS implementation stories.
+  - Documented request/response fields, byte and page caps, generation fencing, stale-owner behavior, page-list fallback, VFS range-read selection, and benchmark artifact naming.
+  - Linked the spec from the SQLite optimization tracker and marked `SQLITE-COLD-012` passing in `prd.json`.
+- Files changed
+  - `.agent/specs/sqlite-range-page-read-protocol.md`
+  - `docs-internal/engine/SQLITE_OPTIMIZATIONS.md`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Range reads should reuse existing `get_pages` generation fencing and stale-owner behavior; do not fall back after `SqliteFenceMismatch`.
+  - The VFS should use range reads only for default-enabled `RIVETKIT_SQLITE_OPT_RANGE_READS`, supported protocol versions, forward-scan mode, and contiguous large windows; point, scattered, unsupported, or disabled paths stay on page-list `get_pages`.
+  - Verification status: `pnpm --filter kitchen-sink check-types` passed with the known skip message; `pnpm -F rivetkit check-types` passed; `cargo test -p sqlite-storage -- --test-threads=1` passed; `cargo test -p pegboard-envoy` passed.
 ---

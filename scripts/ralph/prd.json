@@ -228,8 +228,8 @@
         "Tests pass"
       ],
       "priority": 12,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Specified the SQLite range page-read protocol in `.agent/specs/sqlite-range-page-read-protocol.md` and linked it from `docs-internal/engine/SQLITE_OPTIMIZATIONS.md`. The spec documents request and response fields (`actorId`, `generation`, `startPgno`, `maxPages`, `maxBytes`, contiguous fetched pages, and transaction-read `meta`), server byte/page caps, generation fencing and stale-owner behavior matching get_pages, VFS selection versus page-list fallback, and benchmark expectations with after-file naming for SQLITE-COLD-013 through SQLITE-COLD-015. No runtime code changes were made. Checks passed: pnpm --filter kitchen-sink check-types; pnpm -F rivetkit check-types; cargo test -p sqlite-storage -- --test-threads=1; cargo test -p pegboard-envoy."
     },
     {
       "id": "SQLITE-COLD-013",

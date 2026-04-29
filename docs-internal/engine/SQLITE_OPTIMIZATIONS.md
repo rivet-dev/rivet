@@ -6,6 +6,8 @@ Current baseline: `.agent/notes/sqlite-cold-read-before.txt` records a 50 MiB co
 
 Implementation tracking lives in `scripts/ralph/prd.json`.
 
+Range page-read protocol details live in `.agent/specs/sqlite-range-page-read-protocol.md`.
+
 ## Existing Optimizations
 
 - Actor startup can preload SQLite VFS pages through `OpenConfig.preload_pgnos`, `OpenConfig.preload_ranges`, and `OpenConfig.max_total_bytes`; pegboard-envoy currently uses the default config, so this mostly preloads page 1.
