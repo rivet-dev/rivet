@@ -61,8 +61,6 @@ export interface Message<
 	in out Payload extends Schema.Top = Schema.Void,
 	out Success extends Schema.Top = Schema.Never,
 > {
-	new (_: never): object;
-
 	(payload: Payload["~type.make.in"]): Envelope<Tag, Payload, Success>;
 
 	readonly [TypeId]: typeof TypeId;
