@@ -12,22 +12,32 @@ import {
 } from "@/components";
 import * as SingleRunnerConfigForm from "./edit-shared-runner-config-form";
 
-export const formSchema = z.object({
-	datacenters: z
-		.record(
-			z.string(),
-			SingleRunnerConfigForm.formSchema
-				.omit({ regions: true })
-				.and(z.object({ enable: z.boolean().optional() }))
-				.optional(),
-		)
-		.optional()
-		.refine((obj) => {
-			return Object.values(obj || {}).some(
-				(dcConfig) => dcConfig?.enable,
-			);
-		}, "At least one datacenter must be enabled."),
-});
+const dcEntrySchema = SingleRunnerConfigForm.baseFormSchema
+	.omit({ regions: true })
+	.extend({ enable: z.boolean().optional() });
+
+export const formSchema = z
+	.object({
+		datacenters: z
+			.record(z.string(), dcEntrySchema.optional())
+			.optional()
+			.refine((obj) => {
+				return Object.values(obj || {}).some(
+					(dcConfig) => dcConfig?.enable,
+				);
+			}, "At least one datacenter must be enabled."),
+	})
+	.superRefine((values, ctx) => {
+		for (const [regionId, dcConfig] of Object.entries(
+			values.datacenters || {},
+		)) {
+			if (!dcConfig?.enable) continue;
+			SingleRunnerConfigForm.validateRuntimeModeFields(dcConfig, ctx, [
+				"datacenters",
+				regionId,
+			]);
+		}
+	});
 
 export type FormValues = z.infer<typeof formSchema>;
 export type SubmitHandler = (
@@ -73,6 +83,7 @@ export const Datacenters = () => {
 	);
 };
 
+export const Mode = SingleRunnerConfigForm.Mode<FormValues>;
 export const Url = SingleRunnerConfigForm.Url<FormValues>;
 export const MaxRunners = SingleRunnerConfigForm.MaxRunners<FormValues>;
 export const MinRunners = SingleRunnerConfigForm.MinRunners<FormValues>;

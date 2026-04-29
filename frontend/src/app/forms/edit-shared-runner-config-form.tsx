@@ -27,12 +27,18 @@ import {
 } from "@/components";
 import { ActorRegion, useEngineCompatDataProvider } from "@/components/actors";
 import { VisibilitySensor } from "@/components/visibility-sensor";
+import { EndpointHealthIndicator } from "@/app/forms/serverless-endpoint-health";
+import { RunnerConfigToggleGroup } from "@/app/runner-config-toggle-group";
 
-export const formSchema = z.object({
-	url: z.string().url(),
+export const runtimeModeSchema = z.enum(["serverless", "serverfull"]);
+export type RuntimeMode = z.infer<typeof runtimeModeSchema>;
+
+export const baseFormSchema = z.object({
+	mode: runtimeModeSchema.default("serverless"),
+	url: z.string().optional().default(""),
 	maxRunners: z.coerce.number().positive().optional(),
 	minRunners: z.coerce.number().min(0).optional(),
-	requestLifespan: z.coerce.number().positive(),
+	requestLifespan: z.coerce.number().positive().optional(),
 	runnersMargin: z.coerce.number().min(0).optional(),
 	slotsPerRunner: z.coerce.number().positive().optional(),
 	maxConcurrentActors: z.coerce.number().positive().optional(),
@@ -47,6 +53,26 @@ export const formSchema = z.object({
 		}, "At least one region must be selected."),
 });
 
+export function validateRuntimeModeFields(
+	data: { mode?: RuntimeMode; url?: string },
+	ctx: z.RefinementCtx,
+	pathPrefix: (string | number)[] = [],
+) {
+	if (data.mode === "serverless") {
+		if (!data.url || !z.string().url().safeParse(data.url).success) {
+			ctx.addIssue({
+				path: [...pathPrefix, "url"],
+				code: z.ZodIssueCode.custom,
+				message: "Please enter a valid URL.",
+			});
+		}
+	}
+}
+
+export const formSchema = baseFormSchema.superRefine((data, ctx) => {
+	validateRuntimeModeFields(data, ctx);
+});
+
 export type FormValues = z.infer<typeof formSchema>;
 export type SubmitHandler = (
 	values: FormValues,
@@ -56,8 +82,8 @@ export type SubmitHandler = (
 const { Form, Submit, SetValue } = createSchemaForm(formSchema);
 export { Form, Submit, SetValue };
 
-export const Url = <TValues extends Record<string, any> = FormValues>({
-	name = "url" as FieldPath<TValues>,
+export const Mode = <TValues extends Record<string, any> = FormValues>({
+	name = "mode" as FieldPath<TValues>,
 	className,
 }: {
 	name?: FieldPath<TValues>;
@@ -69,13 +95,48 @@ export const Url = <TValues extends Record<string, any> = FormValues>({
 			control={control}
 			name={name}
 			render={({ field }) => (
+				<RunnerConfigToggleGroup
+					mode={(field.value as string) || "serverless"}
+					onChange={field.onChange}
+					className={className ?? "mb-2"}
+				/>
+			)}
+		/>
+	);
+};
+
+export const Url = <TValues extends Record<string, any> = FormValues>({
+	name = "url" as FieldPath<TValues>,
+	headersName,
+	enabledName,
+	className,
+}: {
+	name?: FieldPath<TValues>;
+	headersName?: string;
+	enabledName?: string;
+	className?: string;
+}) => {
+	const { control } = useFormContext<TValues>();
+	return (
+		<FormField
+			control={control}
+			name={name}
+			render={({ field }) => (
 				<FormItem className={className}>
 					<FormLabel className="col-span-1">Endpoint</FormLabel>
 					<FormControl className="row-start-2">
-						<Input
-							placeholder="https://your-rivet-runner"
-							{...field}
-						/>
+						<div className="relative">
+							<Input
+								placeholder="https://your-rivet-runner"
+								className="pr-10"
+								{...field}
+							/>
+							<EndpointHealthIndicator
+								endpointName={name}
+								headersName={headersName}
+								enabledName={enabledName}
+							/>
+						</div>
 					</FormControl>
 					<FormMessage className="col-span-1" />
 				</FormItem>
@@ -396,10 +457,16 @@ export const MaxConcurrentActors = <
 						Max Concurrent Actors
 					</FormLabel>
 					<FormControl className="row-start-2">
-						<Input type="number" {...field} value={field.value ?? ""} />
+						<Input
+							type="number"
+							placeholder="Unlimited"
+							{...field}
+							value={field.value ?? ""}
+						/>
 					</FormControl>
 					<FormDescription className="col-span-1">
 						Maximum actors allowed to run concurrently per runner.
+						Leave blank for unlimited.
 					</FormDescription>
 					<FormMessage className="col-span-1" />
 				</FormItem>
@@ -425,14 +492,19 @@ export const DrainGracePeriod = <
 			render={({ field }) => (
 				<FormItem className={className}>
 					<FormLabel className="col-span-1">
-						Drain Grace Period (s)
+						Drain Grace Period
 					</FormLabel>
 					<FormControl className="row-start-2">
-						<Input type="number" {...field} value={field.value ?? ""} />
+						<Input
+							type="number"
+							placeholder="10"
+							{...field}
+							value={field.value ?? ""}
+						/>
 					</FormControl>
 					<FormDescription className="col-span-1">
-						Time to wait for actors to finish before forcefully
-						stopping.
+						Time (in seconds) to wait for actors to finish before
+						forcefully stopping.
 					</FormDescription>
 					<FormMessage className="col-span-1" />
 				</FormItem>
