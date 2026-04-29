@@ -140,6 +140,11 @@ impl NativeConnectionManager {
 		self.inner.config.read_pool_enabled
 	}
 
+	pub async fn write_mode_active(&self) -> bool {
+		let state = self.inner.state.lock().await;
+		state.active_writer || state.idle_writer.is_some()
+	}
+
 	pub async fn acquire_read(&self) -> Result<NativeReadConnectionLease> {
 		if !self.inner.config.read_pool_enabled {
 			return Err(anyhow!("sqlite read connection pool is disabled"));

@@ -3795,7 +3795,7 @@ mod tests {
 	use crate::connection_manager::{
 		NativeConnectionManager, NativeConnectionManagerConfig, NativeConnectionManagerMode,
 	};
-	use crate::database::NativeDatabaseHandle;
+	use crate::database::{NativeDatabaseHandle, vfs_name_for_actor_database};
 	use crate::query::{ColumnValue, ExecuteRoute};
 
 	static TEST_ID: AtomicU64 = AtomicU64::new(1);
@@ -4114,6 +4114,10 @@ mod tests {
 
 	fn direct_vfs_ctx(db: &NativeDatabase) -> &VfsContext {
 		unsafe { &*db.vfs.inner.ctx_ptr }
+	}
+
+	fn direct_vfs_handle_ctx(vfs: &NativeVfsHandle) -> &VfsContext {
+		unsafe { &*vfs.inner.ctx_ptr }
 	}
 
 	fn direct_connection_vfs_ctx(connection: &NativeConnection) -> &VfsContext {
@@ -7160,6 +7164,230 @@ mod tests {
 	}
 
 	#[test]
+	fn native_database_raw_transaction_keeps_write_mode_across_awaited_user_code() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let engine = runtime.block_on(harness.open_engine());
+		let startup = runtime.block_on(harness.startup_data_for(&harness.actor_id, &engine));
+		let vfs = SqliteVfs::register_with_transport(
+			&next_test_name("sqlite-native-raw-tx-vfs"),
+			SqliteTransport::from_direct(engine),
+			harness.actor_id.clone(),
+			runtime.handle().clone(),
+			startup,
+			VfsConfig::default(),
+			None,
+		)
+		.expect("vfs should register");
+		let db = NativeDatabaseHandle::new(
+			vfs,
+			harness.actor_id.clone(),
+			NativeConnectionManagerConfig { max_readers: 2, ..NativeConnectionManagerConfig::default() },
+		);
+
+		runtime.block_on(async {
+			db.exec(
+				"CREATE TABLE native_raw_tx (id INTEGER PRIMARY KEY, value TEXT NOT NULL);"
+					.to_string(),
+			)
+			.await
+			.expect("setup write should succeed");
+			db.execute("BEGIN".to_string(), None)
+				.await
+				.expect("raw begin should succeed");
+			tokio::task::yield_now().await;
+			let in_tx = db.manager().snapshot().await;
+			assert_eq!(in_tx.mode, NativeConnectionManagerMode::WriteMode);
+			assert!(!in_tx.active_writer);
+			assert_eq!(in_tx.open_readers, 0);
+
+			let reader_db = db.clone();
+			let pending_reader = tokio::spawn(async move {
+				reader_db
+					.query("SELECT COUNT(*) FROM native_raw_tx;".to_string(), None)
+					.await
+			});
+			tokio::task::yield_now().await;
+			assert!(!pending_reader.is_finished());
+
+			db.execute(
+				"INSERT INTO native_raw_tx (id, value) VALUES (1, 'committed')".to_string(),
+				None,
+			)
+			.await
+			.expect("transactional write should reuse writer");
+			tokio::task::yield_now().await;
+			assert!(!pending_reader.is_finished());
+
+			db.execute("COMMIT".to_string(), None)
+				.await
+				.expect("commit should succeed");
+			let read_result = timeout(Duration::from_secs(1), pending_reader)
+				.await
+				.expect("reader should run after commit")
+				.expect("reader task should not panic")
+				.expect("reader should succeed");
+			assert_eq!(read_result.rows[0][0], ColumnValue::Integer(1));
+			let after_commit = db.manager().snapshot().await;
+			assert_ne!(after_commit.mode, NativeConnectionManagerMode::WriteMode);
+			db.close().await.expect("database close should succeed");
+		});
+	}
+
+	#[test]
+	fn native_database_execute_and_query_share_one_routing_gate() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let engine = runtime.block_on(harness.open_engine());
+		let startup = runtime.block_on(harness.startup_data_for(&harness.actor_id, &engine));
+		let vfs = SqliteVfs::register_with_transport(
+			&next_test_name("sqlite-native-shared-gate-vfs"),
+			SqliteTransport::from_direct(engine),
+			harness.actor_id.clone(),
+			runtime.handle().clone(),
+			startup,
+			VfsConfig::default(),
+			None,
+		)
+		.expect("vfs should register");
+		let db = NativeDatabaseHandle::new(
+			vfs,
+			harness.actor_id.clone(),
+			NativeConnectionManagerConfig { max_readers: 2, ..NativeConnectionManagerConfig::default() },
+		);
+
+		runtime.block_on(async {
+			db.exec(
+				"CREATE TABLE shared_gate (id INTEGER PRIMARY KEY, value TEXT NOT NULL);"
+					.to_string(),
+			)
+			.await
+			.expect("setup write should succeed");
+			let held_reader = db
+				.manager()
+				.acquire_read()
+				.await
+				.expect("held user reader should open");
+
+			let inspector_db = db.clone();
+			let inspector_execute = tokio::spawn(async move {
+				inspector_db
+					.execute(
+						"INSERT INTO shared_gate (id, value) VALUES (1, 'inspector')".to_string(),
+						None,
+					)
+					.await
+			});
+			db.manager()
+				.wait_for_snapshot(|snapshot| snapshot.pending_writers == 1)
+				.await;
+
+			let user_db = db.clone();
+			let user_query = tokio::spawn(async move {
+				user_db
+					.query("SELECT value FROM shared_gate WHERE id = 1;".to_string(), None)
+					.await
+			});
+			tokio::task::yield_now().await;
+			assert!(!inspector_execute.is_finished());
+			assert!(!user_query.is_finished());
+
+			held_reader.release().await;
+			let execute_result = timeout(Duration::from_secs(1), inspector_execute)
+				.await
+				.expect("inspector-style execute should complete after reader releases")
+				.expect("execute task should not panic")
+				.expect("inspector-style execute should succeed");
+			assert_eq!(execute_result.route, ExecuteRoute::Write);
+
+			let query_result = timeout(Duration::from_secs(1), user_query)
+				.await
+				.expect("user query should complete after writer")
+				.expect("query task should not panic")
+				.expect("user query should succeed");
+			assert_eq!(
+				query_result.rows[0][0],
+				ColumnValue::Text("inspector".to_string())
+			);
+			let snapshot = db.manager().snapshot().await;
+			assert_eq!(snapshot.pending_writers, 0);
+			assert!(!snapshot.active_writer);
+			db.close().await.expect("database close should succeed");
+		});
+	}
+
+	#[test]
+	fn native_database_reader_fence_mismatch_marks_shared_vfs_dead() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let engine = runtime.block_on(harness.open_engine());
+		let startup = runtime.block_on(harness.startup_data_for(&harness.actor_id, &engine));
+		let vfs = SqliteVfs::register_with_transport(
+			&next_test_name("sqlite-native-reader-fence-vfs"),
+			SqliteTransport::from_direct(Arc::clone(&engine)),
+			harness.actor_id.clone(),
+			runtime.handle().clone(),
+			startup,
+			VfsConfig::default(),
+			None,
+		)
+		.expect("vfs should register");
+		let vfs_for_assertion = vfs.clone();
+		let db = NativeDatabaseHandle::new(
+			vfs,
+			harness.actor_id.clone(),
+			NativeConnectionManagerConfig { max_readers: 2, ..NativeConnectionManagerConfig::default() },
+		);
+
+		runtime.block_on(async {
+			db.exec(
+				"CREATE TABLE reader_fence (id INTEGER PRIMARY KEY, value TEXT NOT NULL);
+				INSERT INTO reader_fence (id, value) VALUES (1, 'before-replacement');"
+					.to_string(),
+			)
+			.await
+			.expect("setup write should succeed");
+			{
+				let mut state = direct_vfs_handle_ctx(&vfs_for_assertion).state.write();
+				state.page_cache.invalidate_all();
+				state.protected_page_cache.clear();
+			}
+			let _replacement_startup = harness.startup_data_for(&harness.actor_id, &engine).await;
+
+			let err = db
+				.query(
+					"SELECT value FROM reader_fence WHERE id = 1;".to_string(),
+					None,
+				)
+				.await
+				.expect_err("stale-generation reader should fail closed");
+			assert!(
+				err.to_string().contains("failed to open sqlite read connection")
+					|| err.to_string().contains("I/O")
+					|| err.to_string().contains("disk I/O"),
+				"unexpected reader fence error: {err:#}",
+			);
+			assert!(
+				direct_vfs_handle_ctx(&vfs_for_assertion).is_dead(),
+				"reader fence mismatch should mark the shared VFS dead",
+			);
+
+			let later_err = db
+				.execute("SELECT COUNT(*) FROM reader_fence;".to_string(), None)
+				.await
+				.expect_err("later database work should fail after VFS is dead");
+			assert!(
+				later_err.to_string().contains("lost its fence")
+					|| later_err.to_string().contains("failed to open sqlite read connection")
+					|| later_err.to_string().contains("I/O")
+					|| later_err.to_string().contains("disk I/O"),
+				"unexpected post-fence error: {later_err:#}",
+			);
+			db.close().await.expect("database close should succeed");
+		});
+	}
+
+	#[test]
 	fn connection_manager_close_waits_for_active_work_then_unregisters_vfs() {
 		let runtime = direct_runtime();
 		let harness = DirectEngineHarness::new();
@@ -7225,6 +7453,101 @@ mod tests {
 				.await
 				.expect("close should finish after active reader releases")
 				.expect("close task should not panic");
+			assert!(!sqlite_vfs_registered(&vfs_name));
+		});
+	}
+
+	#[test]
+	fn connection_manager_sleep_destroy_close_drains_readers_and_rejects_new_work() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let vfs_name = next_test_name("sqlite-manager-shutdown-close");
+		let engine = runtime.block_on(harness.open_engine());
+		let vfs = harness.open_vfs_on_engine_with_metrics(
+			&runtime,
+			engine,
+			&harness.actor_id,
+			&vfs_name,
+			VfsConfig::default(),
+			None,
+		);
+		let manager = NativeConnectionManager::new(
+			vfs,
+			harness.actor_id.clone(),
+			NativeConnectionManagerConfig { max_readers: 2, ..NativeConnectionManagerConfig::default() },
+		);
+
+		runtime.block_on(async {
+			manager
+				.with_write_connection(|db| {
+					sqlite_exec(
+						db,
+						"CREATE TABLE manager_shutdown_close (id INTEGER PRIMARY KEY);",
+					)
+					.map_err(anyhow::Error::msg)
+				})
+				.await
+				.expect("setup write should succeed");
+
+			let active_reader = manager
+				.acquire_read()
+				.await
+				.expect("active reader should open before shutdown");
+			let idle_reader = manager
+				.acquire_read()
+				.await
+				.expect("idle reader should open before shutdown");
+			idle_reader.release().await;
+			let before_close = manager.snapshot().await;
+			assert_eq!(before_close.active_readers, 1);
+			assert_eq!(before_close.idle_readers, 1);
+			assert_eq!(before_close.open_readers, 2);
+
+			let closing_manager = manager.clone();
+			let close_task = tokio::spawn(async move {
+				closing_manager
+					.close()
+					.await
+					.expect("manager close should succeed");
+			});
+			let closing = manager
+				.wait_for_snapshot(|snapshot| {
+					snapshot.mode == NativeConnectionManagerMode::Closing
+						&& snapshot.active_readers == 1
+						&& snapshot.idle_readers == 0
+						&& snapshot.open_readers == 1
+				})
+				.await;
+			assert!(!closing.active_writer);
+
+			let read_err = match manager.acquire_read().await {
+				Ok(reader) => {
+					reader.release().await;
+					panic!("new reads should be rejected during actor shutdown");
+				}
+				Err(err) => err,
+			};
+			assert!(read_err.to_string().contains("closing"));
+			let write_err = match manager.acquire_write().await {
+				Ok(writer) => {
+					writer.release().await;
+					panic!("new writes should be rejected during actor shutdown");
+				}
+				Err(err) => err,
+			};
+			assert!(write_err.to_string().contains("closing"));
+			assert!(!close_task.is_finished());
+
+			active_reader.release().await;
+			timeout(Duration::from_secs(1), close_task)
+				.await
+				.expect("close should finish after active reader releases")
+				.expect("close task should not panic");
+			let closed = manager.snapshot().await;
+			assert_eq!(closed.mode, NativeConnectionManagerMode::Closed);
+			assert_eq!(closed.active_readers, 0);
+			assert_eq!(closed.idle_readers, 0);
+			assert_eq!(closed.open_readers, 0);
 			assert!(!sqlite_vfs_registered(&vfs_name));
 		});
 	}
@@ -7325,6 +7648,50 @@ mod tests {
 			None,
 		)
 		.expect("VFS name should be reusable after the last connection closes");
+	}
+
+	#[test]
+	fn actor_replacement_generation_uses_distinct_vfs_registration_name() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let engine = runtime.block_on(harness.open_engine());
+		let first_startup = runtime.block_on(harness.startup_data_for(&harness.actor_id, &engine));
+		let first_name = vfs_name_for_actor_database(&harness.actor_id, first_startup.generation);
+		let first_vfs = SqliteVfs::register_with_transport(
+			&first_name,
+			SqliteTransport::from_direct(Arc::clone(&engine)),
+			harness.actor_id.clone(),
+			runtime.handle().clone(),
+			first_startup,
+			VfsConfig::default(),
+			None,
+		)
+		.expect("first generation VFS should register");
+		assert!(sqlite_vfs_registered(&first_name));
+
+		let replacement_startup =
+			runtime.block_on(harness.startup_data_for(&harness.actor_id, &engine));
+		let replacement_name =
+			vfs_name_for_actor_database(&harness.actor_id, replacement_startup.generation);
+		assert_ne!(first_name, replacement_name);
+		let replacement_vfs = SqliteVfs::register_with_transport(
+			&replacement_name,
+			SqliteTransport::from_direct(engine),
+			harness.actor_id.clone(),
+			runtime.handle().clone(),
+			replacement_startup,
+			VfsConfig::default(),
+			None,
+		)
+		.expect("replacement generation VFS should register beside stale generation");
+
+		assert!(sqlite_vfs_registered(&first_name));
+		assert!(sqlite_vfs_registered(&replacement_name));
+		drop(first_vfs);
+		assert!(!sqlite_vfs_registered(&first_name));
+		assert!(sqlite_vfs_registered(&replacement_name));
+		drop(replacement_vfs);
+		assert!(!sqlite_vfs_registered(&replacement_name));
 	}
 
 	#[test]

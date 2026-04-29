@@ -108,6 +108,7 @@ docker-compose up -d
 - Native SQLite VFS recent-page preload hints are actor-side Rust state surfaced by `NativeDatabase::snapshot_preload_hints()`; persist and consume them through runtime/envoy wiring, not JS APIs.
 - SQLite VFS file handles must enforce their reader or writer role; reader-owned handles fail closed on mutating callbacks.
 - Native SQLite single-statement work should route through the native execute path; keep `exec` as the multi-statement compatibility path.
+- Native SQLite manual transactions keep an idle writer open until autocommit returns; route subsequent work through the writer instead of reader classification.
 - For NAPI bridge wiring (TSF callback layout, cancellation tokens, `#[napi(object)]` rules), see `docs-internal/engine/napi-bridge.md`.
 
 ## Agent Working Directory

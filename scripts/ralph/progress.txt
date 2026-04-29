@@ -6,6 +6,7 @@ Started: Wed Apr 29 04:23:03 AM PDT 2026
 - New public `rivetkit-sqlite` behavior tests belong under `rivetkit-rust/packages/rivetkit-sqlite/tests/` when they do not need private module access.
 - Native SQLite VFS ownership is ref-counted through `NativeVfsHandle`; each `NativeConnection` holds a handle clone so the VFS unregisters only after the last connection closes.
 - Envoy SQLite VFS names include the actor database startup generation, e.g. `envoy-sqlite-{actor_id}-g{generation}`, to avoid stale registration collisions.
+- Tests that register multiple native SQLite VFS entries in one process should drop stale generations before replacement generations to avoid perturbing SQLite's global VFS registry.
 - SQLite VFS file handles carry a reader or writer role; reader-owned handles must fail closed for mutating VFS callbacks instead of relying on TypeScript routing.
 - Native SQLite work that can invoke VFS callbacks should run on `spawn_blocking`; VFS callbacks synchronously block on the transport runtime and can fail if SQL runs on an async runtime worker.
 - The native SQLite connection manager keeps an idle writer open while `sqlite3_get_autocommit` is false; `COMMIT` or `ROLLBACK` must reuse that writer and close it once autocommit is restored.
@@ -136,7 +137,7 @@ Started: Wed Apr 29 04:23:03 AM PDT 2026
 - Routed `NativeDatabaseHandle::query` and `run` through the native execute path while leaving `exec` as the multi-statement compatibility path.
 - Updated core inspector database execution to use the native execute path through `ActorContext::db_execute`.
 - Files changed:
-  - `AGENTS.md`
+  - `CLAUDE.md`
   - `rivetkit-rust/packages/rivetkit-core/src/actor/context.rs`
   - `rivetkit-rust/packages/rivetkit-core/src/actor/mod.rs`
   - `rivetkit-rust/packages/rivetkit-core/src/actor/sqlite.rs`
@@ -235,4 +236,26 @@ Started: Wed Apr 29 04:23:03 AM PDT 2026
   - `sqlite_read_pool_mode_transitions_total` is label-bearing, so benchmark metric parsing should sum all series for a metric family instead of taking the first sample.
   - Scrape actor metrics once per workload and derive VFS plus read-pool snapshots from the same Prometheus text to keep reported counters comparable.
   - The kitchen-sink package intentionally stubs `check-types`; use its static tests and a `tsx --help` smoke parse for benchmark-script-only changes unless the broader TypeScript config is repaired.
+---
+## 2026-04-29 06:03:27 PDT - US-011
+- Added lifecycle and fencing stress coverage for native SQLite reader pools, including shutdown close ordering, reader fence mismatch fail-closed behavior, generation-specific VFS names, raw manual transaction write-mode retention, and shared routing gates for inspector/user operations.
+- Fixed a manual transaction self-deadlock by routing work through the held writer while the manager is already in write mode.
+- Files changed:
+  - `AGENTS.md`
+  - `rivetkit-rust/packages/rivetkit-sqlite/src/connection_manager.rs`
+  - `rivetkit-rust/packages/rivetkit-sqlite/src/database.rs`
+  - `rivetkit-rust/packages/rivetkit-sqlite/src/vfs.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- Checks:
+  - `cargo test -p rivetkit-sqlite native_database --lib`
+  - `cargo test -p rivetkit-sqlite connection_manager --lib`
+  - `cargo test -p rivetkit-sqlite actor_replacement_generation_uses_distinct_vfs_registration_name --lib`
+  - `cargo test -p rivetkit-sqlite --lib -- --test-threads=1`
+  - `cargo test -p rivetkit-sqlite`
+  - `cargo check -p rivetkit-sqlite`
+- **Learnings for future iterations:**
+  - If `NativeConnectionManager` holds an idle writer for a raw transaction, `NativeDatabaseHandle::execute` must bypass reader classification and reuse that writer for later statements such as `COMMIT`.
+  - Fence-mismatch tests need to clear the VFS page caches after setup so the stale reader is forced to fetch through the engine and observe the replacement generation.
+  - Native VFS registration tests can affect later tests because SQLite's VFS list is process-global; drop the stale registration before the replacement registration during cleanup.
 ---

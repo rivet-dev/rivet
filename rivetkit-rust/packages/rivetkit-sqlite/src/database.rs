@@ -120,6 +120,9 @@ impl NativeDatabaseHandle {
 		if !self.manager.read_pool_enabled() {
 			return self.execute_without_read_pool(sql, params).await;
 		}
+		if self.manager.write_mode_active().await {
+			return self.execute_on_writer_with_classification(sql, params).await;
+		}
 
 		let read_sql = sql.clone();
 		let read_params = params.clone();
@@ -205,6 +208,14 @@ impl NativeDatabaseHandle {
 	}
 
 	async fn execute_without_read_pool(
+		&self,
+		sql: String,
+		params: Option<Vec<BindParam>>,
+	) -> Result<ExecuteResult> {
+		self.execute_on_writer_with_classification(sql, params).await
+	}
+
+	async fn execute_on_writer_with_classification(
 		&self,
 		sql: String,
 		params: Option<Vec<BindParam>>,
