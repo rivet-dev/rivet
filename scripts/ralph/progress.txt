@@ -13,6 +13,7 @@ Started: Wed Apr 29 04:36:56 AM PDT 2026
 - For sqlite-storage raw byte prefix scans, build a `universaldb::Subspace` with `tuple::Subspace::from_bytes(prefix)` and use its range; direct `(prefix, end_of_key_range(prefix))` ranges can miss rows on the RocksDB driver.
 - `ActorDb::commit` should update the in-memory PIDX cache only when it was already warm; leave a cold cache empty so the next read performs the full PIDX scan instead of treating a partial commit-updated cache as authoritative.
 - `sqlite-storage::pump::ActorDb::new` carries a `rivet_pools::NodeId`; production callers should pass `pools.node_id()` so pump metrics are labeled by process node.
+- `sqlite-storage` compactor UPS messages use a typed `Subject`, `PublishOpts::one()`, and local vbare encode/decode helpers so dispatch tests can verify the wire payload through the memory driver.
 
 ## 2026-04-29 04:44:52 PDT - US-001
 - Implemented a UUID-backed `NodeId` type and stored a generated value on each `Pools` instance.
@@ -114,4 +115,15 @@ Started: Wed Apr 29 04:36:56 AM PDT 2026
   - Pump metrics should use the exact `sqlite_pump_*` names from the PRD and a single `node_id` label.
   - Passing `NodeId` into `ActorDb` keeps metric labeling local to the pump without threading `Pools` through hot-path methods.
   - Histogram timers from `prometheus` observe on drop, so placing them at method entry records both success and early-error exits.
+---
+## 2026-04-29 05:22:59 PDT - US-011
+- Added the `sqlite.compact` UPS subject wrapper and fire-and-forget `publish_compact_trigger` helper for compaction triggers.
+- Added a versioned BARE `SqliteCompactPayload` with encode/decode helpers, currently stubbing metering counters to zero until US-016 wires snapshots.
+- Replaced the compactor dispatch placeholder with tests for subject display, payload vbare round trips, unit return type, nonblocking spawn behavior, and UPS memory-driver delivery.
+- Verified `cargo check -p sqlite-storage`, `cargo test -p sqlite-storage --test compactor_dispatch`, and `cargo test -p sqlite-storage`.
+- Files changed: `engine/packages/sqlite-storage/Cargo.toml`, `engine/packages/sqlite-storage/src/compactor/mod.rs`, `engine/packages/sqlite-storage/src/compactor/publish.rs`, `engine/packages/sqlite-storage/src/compactor/subjects.rs`, `engine/packages/sqlite-storage/tests/compactor_dispatch.rs`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
+- **Learnings for future iterations:**
+  - UPS queue dispatch can be tested with `universalpubsub::driver::memory::MemoryDriver` by queue-subscribing before calling the spawned publisher.
+  - Add `tokio`'s `test-util` feature as a dev-dependency when a crate needs `#[tokio::test(start_paused = true)]`.
+  - The compactor trigger helper intentionally returns `()` so call sites cannot accidentally await publish before responding to the actor.
 ---

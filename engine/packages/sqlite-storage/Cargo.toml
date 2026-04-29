@@ -21,9 +21,12 @@ serde.workspace = true
 serde_bare.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
+tracing.workspace = true
 universaldb.workspace = true
+universalpubsub.workspace = true
 vbare.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
+tokio = { workspace = true, features = ["test-util"] }
 uuid.workspace = true
