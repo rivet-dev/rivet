@@ -8,6 +8,7 @@ Started: Wed Apr 29 04:36:56 AM PDT 2026
 - `sqlite-storage` `actor_range` mirrors UniversalDB's single-key conflict range helper (`actor_prefix + 0`) and should not be treated as a full prefix scan range for suffixed actor keys.
 - Use `vbare::OwnedVersionedData` wrappers with embedded versions for sqlite-storage persisted META structs, even when the latest schema lives directly in `pump::types`.
 - For sqlite-storage byte-key atomic mutations, use `tx.informal().atomic_op(...)`; `Transaction::atomic_op` is for typed `FormalKey` tuple keys.
+- `/META/quota` is a raw signed `i64` little-endian atomic counter; missing means zero, and helper code should mutate it with `MutationType::Add` on `tx.informal()`.
 
 ## 2026-04-29 04:44:52 PDT - US-001
 - Implemented a UUID-backed `NodeId` type and stored a generated value on each `Pools` instance.
@@ -58,4 +59,14 @@ Started: Wed Apr 29 04:36:56 AM PDT 2026
   - `sqlite-storage` can keep local persisted META schemas in `pump::types` while still using `vbare::OwnedVersionedData` for version headers.
   - UniversalDB already exposes compare-and-clear as `MutationType::CompareAndClear`; raw byte keys should call through `tx.informal().atomic_op(...)`.
   - The new pump types intentionally do not depend on `rivet-sqlite-storage-protocol` because the legacy protocol still contains `next_txid` and `SqliteOrigin`.
+---
+## 2026-04-29 05:03:52 PDT - US-006
+- Implemented `pump::quota` with the 10 GiB quota cap constant, trigger throttle constants, signed little-endian atomic add helper, quota read helper, and quota cap check.
+- Added the typed `SqliteStorageQuotaExceeded { remaining_bytes, payload_size }` error variant and re-exported `quota` from the crate root.
+- Added `pump_quota` integration coverage for missing-key reads, signed atomic add behavior, cap rejection, and trigger constants.
+- Files changed: `engine/packages/sqlite-storage/src/pump/quota.rs`, `engine/packages/sqlite-storage/src/pump/error.rs`, `engine/packages/sqlite-storage/src/pump/mod.rs`, `engine/packages/sqlite-storage/src/lib.rs`, `engine/packages/sqlite-storage/tests/pump_quota.rs`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
+- **Learnings for future iterations:**
+  - Keep `/META/quota` as a raw 8-byte signed LE value rather than vbare so FDB-style atomic add composes exactly.
+  - The new crate's integration tests can spin up a real RocksDB-backed `universaldb::Database` directly when the copied legacy `test_utils` module is intentionally not exported.
+  - Quota cap errors stay typed through `anyhow` when returning `SqliteStorageError::SqliteStorageQuotaExceeded.into()`.
 ---

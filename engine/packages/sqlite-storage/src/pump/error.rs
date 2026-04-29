@@ -17,6 +17,14 @@ pub enum SqliteStorageError {
 		max_size_bytes: u64,
 	},
 
+	#[error(
+		"SqliteStorageQuotaExceeded: not enough space left in sqlite storage ({remaining_bytes} bytes remaining, current payload is {payload_size} bytes)"
+	)]
+	SqliteStorageQuotaExceeded {
+		remaining_bytes: i64,
+		payload_size: i64,
+	},
+
 	#[error("invalid sqlite v1 migration state")]
 	InvalidV1MigrationState,
 }
