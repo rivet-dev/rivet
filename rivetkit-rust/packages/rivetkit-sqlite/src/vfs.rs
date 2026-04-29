@@ -25,8 +25,11 @@ use tokio::runtime::Handle;
 #[cfg(test)]
 use tokio::sync::Notify;
 
+use crate::optimization_flags::{SqliteOptimizationFlags, sqlite_optimization_flags};
+
 const DEFAULT_CACHE_CAPACITY_PAGES: u64 = 50_000;
 const DEFAULT_PREFETCH_DEPTH: usize = 64;
+const LEGACY_PREFETCH_DEPTH: usize = 16;
 const DEFAULT_MAX_PREFETCH_BYTES: usize = 256 * 1024;
 const DEFAULT_MAX_PAGES_PER_STAGE: usize = 4_000;
 const DEFAULT_RECENT_HINT_PAGE_BUDGET: usize = 128;
@@ -735,17 +738,39 @@ pub struct VfsConfig {
 	pub max_pages_per_stage: usize,
 	pub recent_hint_page_budget: usize,
 	pub recent_hint_range_budget: usize,
+	pub cache_hit_predictor_training: bool,
+	pub recent_page_hints: bool,
 }
 
 impl Default for VfsConfig {
 	fn default() -> Self {
+		Self::from_optimization_flags(*sqlite_optimization_flags())
+	}
+}
+
+impl VfsConfig {
+	pub fn from_optimization_flags(flags: SqliteOptimizationFlags) -> Self {
 		Self {
 			cache_capacity_pages: DEFAULT_CACHE_CAPACITY_PAGES,
-			prefetch_depth: DEFAULT_PREFETCH_DEPTH,
+			prefetch_depth: if flags.read_ahead {
+				DEFAULT_PREFETCH_DEPTH
+			} else {
+				LEGACY_PREFETCH_DEPTH
+			},
 			max_prefetch_bytes: DEFAULT_MAX_PREFETCH_BYTES,
 			max_pages_per_stage: DEFAULT_MAX_PAGES_PER_STAGE,
-			recent_hint_page_budget: DEFAULT_RECENT_HINT_PAGE_BUDGET,
-			recent_hint_range_budget: DEFAULT_RECENT_HINT_RANGE_BUDGET,
+			recent_hint_page_budget: if flags.recent_page_hints {
+				DEFAULT_RECENT_HINT_PAGE_BUDGET
+			} else {
+				0
+			},
+			recent_hint_range_budget: if flags.recent_page_hints {
+				DEFAULT_RECENT_HINT_RANGE_BUDGET
+			} else {
+				0
+			},
+			cache_hit_predictor_training: flags.cache_hit_predictor_training,
+			recent_page_hints: flags.recent_page_hints,
 		}
 	}
 }
@@ -1349,6 +1374,9 @@ impl VfsContext {
 	}
 
 	fn snapshot_preload_hints(&self) -> VfsPreloadHintSnapshot {
+		if !self.config.recent_page_hints {
+			return VfsPreloadHintSnapshot::default();
+		}
 		self.state.read().recent_pages.snapshot()
 	}
 
@@ -1391,10 +1419,14 @@ impl VfsContext {
 
 		if missing.is_empty() {
 			let mut state = self.state.write();
-			for pgno in target_pgnos.iter().copied() {
-				state.predictor.record(pgno);
+			if self.config.cache_hit_predictor_training {
+				for pgno in target_pgnos.iter().copied() {
+					state.predictor.record(pgno);
+				}
 			}
-			state.recent_pages.record_pages(target_pgnos.iter().copied());
+			if self.config.recent_page_hints {
+				state.recent_pages.record_pages(target_pgnos.iter().copied());
+			}
 			if let Some(metrics) = &self.metrics {
 				metrics.record_resolve_cache_hits(target_pgnos.len() as u64);
 			}
@@ -1410,7 +1442,9 @@ impl VfsContext {
 			for pgno in target_pgnos.iter().copied() {
 				state.predictor.record(pgno);
 			}
-			state.recent_pages.record_pages(target_pgnos.iter().copied());
+			if self.config.recent_page_hints {
+				state.recent_pages.record_pages(target_pgnos.iter().copied());
+			}
 
 			let mut to_fetch = missing.clone();
 			let mut seed_pgno = None;
@@ -3561,6 +3595,16 @@ mod tests {
 	}
 
 	#[test]
+	fn disabled_read_ahead_flag_restores_legacy_prefetch_depth() {
+		let config = VfsConfig::from_optimization_flags(SqliteOptimizationFlags {
+			read_ahead: false,
+			..SqliteOptimizationFlags::default()
+		});
+
+		assert_eq!(config.prefetch_depth, LEGACY_PREFETCH_DEPTH);
+	}
+
+	#[test]
 	fn cache_hit_reads_train_forward_scan_prefetch() {
 		let runtime = Builder::new_current_thread()
 			.enable_all()
@@ -3623,6 +3667,125 @@ mod tests {
 		let requests = protocol.get_pages_requests();
 		assert_eq!(requests.len(), 2);
 		assert_eq!(requests[1].pgnos, (76..140).collect::<Vec<_>>());
+	}
+
+	#[test]
+	fn disabled_cache_hit_training_bypasses_hit_path_predictor_updates() {
+		let runtime = Builder::new_current_thread()
+			.enable_all()
+			.build()
+			.expect("runtime should build");
+		let mut protocol = MockProtocol::new(
+			protocol::SqliteCommitResponse::SqliteCommitOk(protocol::SqliteCommitOk {
+				new_head_txid: 13,
+				meta: sqlite_meta(8 * 1024 * 1024),
+			}),
+			protocol::SqliteCommitStageResponse::SqliteCommitStageOk(
+				protocol::SqliteCommitStageOk {
+					chunk_idx_committed: 0,
+				},
+			),
+			protocol::SqliteCommitFinalizeResponse::SqliteCommitFinalizeOk(
+				protocol::SqliteCommitFinalizeOk {
+					new_head_txid: 13,
+					meta: sqlite_meta(8 * 1024 * 1024),
+				},
+			),
+		);
+		protocol.get_pages_response =
+			protocol::SqliteGetPagesResponse::SqliteGetPagesOk(protocol::SqliteGetPagesOk {
+				pages: (10..76)
+					.map(|pgno| protocol::SqliteFetchedPage {
+						pgno,
+						bytes: Some(vec![(pgno % 251) as u8; 4096]),
+					})
+					.collect(),
+				meta: sqlite_meta(8 * 1024 * 1024),
+			});
+		let protocol = Arc::new(protocol);
+		let ctx = VfsContext::new(
+			"actor".to_string(),
+			runtime.handle().clone(),
+			SqliteTransport::from_mock(protocol.clone()),
+			protocol::SqliteStartupData {
+				generation: 7,
+				meta: protocol::SqliteMeta {
+					db_size_pages: 200,
+					..sqlite_meta(8 * 1024 * 1024)
+				},
+				preloaded_pages: Vec::new(),
+			},
+			VfsConfig::from_optimization_flags(SqliteOptimizationFlags {
+				cache_hit_predictor_training: false,
+				..SqliteOptimizationFlags::default()
+			}),
+			unsafe { std::mem::zeroed() },
+			None,
+		);
+
+		ctx.resolve_pages(&[10], true)
+			.expect("first missing page should resolve");
+		for pgno in 11..76 {
+			ctx.resolve_pages(&[pgno], true)
+				.expect("cache-hit page should resolve");
+		}
+		ctx.resolve_pages(&[76], true)
+			.expect("next missing page should resolve");
+
+		let requests = protocol.get_pages_requests();
+		assert_eq!(requests.len(), 2);
+		assert_eq!(requests[1].pgnos, vec![76]);
+	}
+
+	#[test]
+	fn disabled_recent_page_hints_return_empty_snapshot() {
+		let runtime = Builder::new_current_thread()
+			.enable_all()
+			.build()
+			.expect("runtime should build");
+		let protocol = Arc::new(MockProtocol::new(
+			protocol::SqliteCommitResponse::SqliteCommitOk(protocol::SqliteCommitOk {
+				new_head_txid: 13,
+				meta: sqlite_meta(8 * 1024 * 1024),
+			}),
+			protocol::SqliteCommitStageResponse::SqliteCommitStageOk(
+				protocol::SqliteCommitStageOk {
+					chunk_idx_committed: 0,
+				},
+			),
+			protocol::SqliteCommitFinalizeResponse::SqliteCommitFinalizeOk(
+				protocol::SqliteCommitFinalizeOk {
+					new_head_txid: 13,
+					meta: sqlite_meta(8 * 1024 * 1024),
+				},
+			),
+		));
+		let ctx = VfsContext::new(
+			"actor".to_string(),
+			runtime.handle().clone(),
+			SqliteTransport::from_mock(protocol),
+			protocol::SqliteStartupData {
+				generation: 7,
+				meta: protocol::SqliteMeta {
+					db_size_pages: 200,
+					..sqlite_meta(8 * 1024 * 1024)
+				},
+				preloaded_pages: Vec::new(),
+			},
+			VfsConfig::from_optimization_flags(SqliteOptimizationFlags {
+				recent_page_hints: false,
+				..SqliteOptimizationFlags::default()
+			}),
+			unsafe { std::mem::zeroed() },
+			None,
+		);
+
+		for pgno in 50..=65 {
+			ctx.resolve_pages(&[pgno], true)
+				.expect("page should resolve");
+		}
+
+		assert_eq!(ctx.snapshot_preload_hints(), VfsPreloadHintSnapshot::default());
 	}
 
 	#[test]

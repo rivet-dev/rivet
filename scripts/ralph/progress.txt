@@ -5,6 +5,7 @@ Started: Tue Apr 28 11:00:38 PM PDT 2026
 - Cold-start benchmark local-envoy runs need `RIVET_TOKEN=dev`; if port 6420 is already owned, use matching `RIVET_ENDPOINT`, `RIVET__GUARD__PORT`, `RIVET__API_PEER__PORT`, and `RIVET__METRICS__PORT` overrides.
 - For non-default cold-start benchmark ports, set both `RIVET_ENDPOINT=http://127.0.0.1:<guard-port>` and `--endpoint http://127.0.0.1:<guard-port> --start-local-envoy`; otherwise the registry can advertise the default 6420 endpoint while the engine starts elsewhere.
 - Native SQLite VFS preload hints are actor-side Rust state; snapshot them with `NativeDatabase::snapshot_preload_hints()` before adding transport or startup preload wiring.
+- SQLite cold-read optimization flags live in `rivetkit-rust/packages/rivetkit-sqlite/src/optimization_flags.rs`; add future default-enabled env flags there and test disabled paths with `VfsConfig::from_optimization_flags(...)` instead of mutating process env.
 ---
 ## 2026-04-28 23:01:27 PDT - SQLITE-COLD-001
 - What was implemented
@@ -73,4 +74,23 @@ Started: Tue Apr 28 11:00:38 PM PDT 2026
   - Compared with SQLITE-COLD-003: wake get_pages was 219 -> 220, wake e2e was 5873.2ms -> 5884.3ms, wake VFS transport improved 5519.9ms -> 5410.5ms, and hot read was 129.3ms -> 161.7ms. No cold-read speedup is expected until later stories persist and consume the hints.
   - Default parallel `cargo test -p rivetkit-sqlite` reproduced the existing large staged-delta decode flake in `bench_large_tx_insert_100mb`; the single test passed, and a clean serialized full suite passed with `cargo test -p rivetkit-sqlite -- --test-threads=1`.
   - Verification status: `cargo check -p rivetkit-sqlite` passed; focused tracker tests passed; `cargo test -p rivetkit-sqlite -- --test-threads=1` passed; `pnpm --filter kitchen-sink check-types` passed with the known skip message; `pnpm -F rivetkit check-types` passed; `pnpm --filter @rivetkit/rivetkit-napi build:force` passed.
+---
+## 2026-04-28 23:32:03 PDT - SQLITE-COLD-005
+- What was implemented
+  - Added a central `rivetkit-sqlite` optimization flag module backed by `OnceLock` and explicit disable env vars.
+  - Gated the existing shard-sized read-ahead, cache-hit predictor training, and recent-page hint recording/snapshot paths through those flags.
+  - Added focused coverage for default-enabled flag parsing and disabled optimization paths, rebuilt the NAPI addon, and reran the cold-read benchmark.
+- Files changed
+  - `rivetkit-rust/packages/rivetkit-sqlite/src/optimization_flags.rs`
+  - `rivetkit-rust/packages/rivetkit-sqlite/src/lib.rs`
+  - `rivetkit-rust/packages/rivetkit-sqlite/src/vfs.rs`
+  - `.agent/notes/sqlite-cold-read-after-SQLITE-COLD-005.txt`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - SQLITE-COLD-005 benchmark numbers: insert e2e 7755.7ms, hot read e2e 145.1ms, wake read e2e 8287.8ms, wake read server 4170.0ms, wake overhead estimate 4117.8ms, wake VFS get_pages 219 calls, fetched 13713 pages / 56168448 bytes, prefetch 13494 pages / 55271424 bytes, VFS transport 3928.8ms.
+  - Compared with baseline/SQLITE-COLD-001: wake get_pages dropped 1249 -> 219, wake e2e dropped 20141.0ms -> 8287.8ms, wake VFS transport dropped 19332.8ms -> 3928.8ms, and hot read was 118.6ms -> 145.1ms.
+  - Compared with SQLITE-COLD-004: wake get_pages was 220 -> 219, wake e2e was 5884.3ms -> 8287.8ms because local wake overhead was higher, wake server improved 5743.7ms -> 4170.0ms, wake VFS transport improved 5410.5ms -> 3928.8ms, and hot read improved 161.7ms -> 145.1ms.
+  - The flag cache is process-global, so tests should avoid `std::env::set_var` and use `SqliteOptimizationFlags::from_env_reader(...)` or `VfsConfig::from_optimization_flags(...)` for deterministic disabled-path coverage.
+  - Verification status: `cargo check -p rivetkit-sqlite` passed; disabled-path and flag parser tests passed; `cargo test -p rivetkit-sqlite -- --test-threads=1` passed; `pnpm --filter kitchen-sink check-types` passed with the known skip message; `pnpm -F rivetkit check-types` passed; `pnpm --filter @rivetkit/rivetkit-napi build:force` passed.
 ---
