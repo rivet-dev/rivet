@@ -172,8 +172,27 @@ export const sitemap = [
 					},
 					{
 						title: "SQLite",
-						href: "/docs/actors/sqlite",
 						icon: faSqlite,
+						collapsible: true,
+						pages: [
+							{
+								title: "Overview",
+								href: "/docs/actors/sqlite",
+								icon: faSqlite,
+							},
+							{
+								title: "PITR & Forking",
+								href: "/docs/actors/sqlite-pitr",
+							},
+							{
+								title: "PITR Operator Guide",
+								href: "/docs/actors/sqlite-pitr-operator",
+							},
+							{
+								title: "Restore Reconnects",
+								href: "/docs/actors/sqlite-restore-reconnect",
+							},
+						],
 					},
 					// {
 					// 	title: "Persistence",

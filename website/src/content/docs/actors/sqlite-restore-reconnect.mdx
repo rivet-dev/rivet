@@ -1,0 +1,58 @@
+---
+title: "SQLite Restore Reconnects"
+description: "Handle WebSocket reconnects while a Rivet Actor SQLite restore is in progress."
+skill: true
+---
+
+## What Happens During Restore
+
+Apply restore is destructive, so Rivet suspends the actor before rewriting SQLite state.
+
+During suspension:
+
+- Existing WebSocket connections close with code `1012` and reason `actor.restore_in_progress`.
+- New WebSocket attempts are accepted, then closed with the same code and reason.
+- HTTP requests return `503` with `Retry-After: 30`.
+- After the restore operation reaches `Completed`, Rivet resumes the actor.
+
+## Client Behavior
+
+Treat `1012 actor.restore_in_progress` as a temporary maintenance signal. Back off, then reconnect.
+
+```ts @nocheck
+function shouldRetryActorSocket(event: CloseEvent) {
+  return event.code === 1012 && event.reason === "actor.restore_in_progress";
+}
+
+async function reconnectAfterRestore(connect: () => Promise<WebSocket>) {
+  let delayMs = 1000;
+
+  while (true) {
+    try {
+      return await connect();
+    } catch (error) {
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+      delayMs = Math.min(delayMs * 2, 30000);
+    }
+  }
+}
+```
+
+Keep the retry loop bounded by your product's own user experience. For example, show a "restore in progress" state after the first close, then keep retrying in the background.
+
+## HTTP Behavior
+
+For HTTP calls, honor `Retry-After`:
+
+```ts @nocheck
+const res = await fetch(actorUrl);
+
+if (res.status === 503 && res.headers.get("Retry-After")) {
+  const retryAfterSeconds = Number(res.headers.get("Retry-After"));
+  await new Promise((resolve) => setTimeout(resolve, retryAfterSeconds * 1000));
+}
+```
+
+## When Not To Retry
+
+Do not blindly retry every `1012`. Only use this path when the close reason is exactly `actor.restore_in_progress`. Other close reasons can represent version drain, server restart, or policy failures that need different handling.

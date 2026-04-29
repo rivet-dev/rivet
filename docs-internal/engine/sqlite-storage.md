@@ -4,6 +4,8 @@ How the v2 SQLite storage engine reads, writes, compacts, and fences. Read this 
 
 For VFS-side parity rules (native Rust ↔ WASM TS), see [sqlite-vfs.md](sqlite-vfs.md). This doc is about the storage backend that the VFS talks to.
 
+For point-in-time recovery, actor forking, checkpoint retention, and restore suspend/resume orchestration, see [sqlite-pitr-forking.md](sqlite-pitr-forking.md).
+
 ## Storage layout
 
 Every actor's data lives in UDB under per-actor prefix `[0x02][actor_id]` and four kinds of suffix keys:
@@ -98,5 +100,6 @@ The cache is **safe to be stale** because PIDX→DELTA misses always fall back t
 ## Cross-references
 
 - VFS parity rules: [sqlite-vfs.md](sqlite-vfs.md)
+- PITR and forking: [sqlite-pitr-forking.md](sqlite-pitr-forking.md)
 - Storage metrics: [SQLITE_METRICS.md](SQLITE_METRICS.md)
 - Engine-wide CLAUDE notes on SQLite quirks: `engine/CLAUDE.md` `## SQLite storage tests` and `## Pegboard Envoy`

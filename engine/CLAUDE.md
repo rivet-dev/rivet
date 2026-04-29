@@ -68,6 +68,16 @@ Use `test-snapshot-gen` to generate and load RocksDB snapshots of the full UDB K
 - `sqlite-storage` admin operation state is persisted under actor-scoped `/META/admin_op/{operation_id}` records; do not track operation source-of-truth in compactor pod memory.
 - `sqlite-storage` latency tests that depend on `UDB_SIMULATED_LATENCY_MS` should live in a dedicated integration test binary, because UniversalDB caches that env var once per process with `OnceLock`.
 
+## SQLite PITR + Forking
+
+- PITR is logical recovery only; it is not a backup against FoundationDB cluster loss.
+- Restore writes `/META/restore_in_progress` in the same transaction as the first destructive live-state clear.
+- Fork refcount increments must commit before releasing the source compactor lease, and decrements must commit after copied data is safe.
+- Checkpoint creation uses the head txid captured during compaction planning, not a later live head.
+- Restore recomputes quota by scanning current state and applying `atomic_add(delta)` to live/PITR counters.
+- Commits must reject while `/META/restore_in_progress` exists, even if pegboard suspension should already block traffic.
+- Live bytes and PITR overhead stay split between `/META/storage_used_live` and `/META/storage_used_pitr`.
+
 ## Pegboard Envoy
 
 - `PegboardEnvoyWs::new(...)` is constructed per websocket request, so SQLite dispatch uses per-actor `ActorDb` instances cached on the WS conn and populated lazily by `get_pages` or `commit`.

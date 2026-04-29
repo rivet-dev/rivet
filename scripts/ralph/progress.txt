@@ -60,6 +60,7 @@ Started: Wed Apr 29 04:36:56 AM PDT 2026
 - Pegboard restore suspension is a persisted actor-lifecycle gate plus a broadcast lifecycle message; pegboard-envoy still checks UDB on each new tunnel open/request so missed broadcasts cannot reaccept traffic.
 - api-public restore orchestration resumes an actor only after the persisted `AdminOpRecord` reaches `Completed`; `Failed` and `Orphaned` records intentionally leave the actor suspended for operator action.
 - SQLite namespace gauge metrics store per-actor values in `MetricKey`; update them by reading the current value and applying an `atomic_add` delta, then refresh namespace-sum Prometheus gauges from the namespace metric keyspace.
+- Website docs typecheck `c.kv.listRange` and `deleteRange` examples against the current API; range bounds should be `Uint8Array` values, even when returned keys are decoded with `keyType: "text"`.
 
 ## 2026-04-29 04:44:52 PDT - US-001
 - Implemented a UUID-backed `NodeId` type and stored a generated value on each `Pools` instance.
@@ -498,4 +499,15 @@ Started: Wed Apr 29 04:36:56 AM PDT 2026
   - Inspector GETs should avoid creating `AdminOpRecord`s; use read-only UDB scans and helper views for operator debugging.
   - `axum-test` websocket tests need both the crate `ws` feature and `TestServer::builder().http_transport()`.
   - Namespace overview can aggregate PITR gauges from `namespace::keys::metric::MetricKey` and count recent ops by scanning actor-scoped `/META/admin_op/` records.
+---
+## 2026-04-29 10:38:28 PDT - US-042
+- Added internal SQLite PITR/forking architecture docs covering storage layout, restore and fork flows, refcount lifecycle, marker recovery, and suspend/resume orchestration.
+- Added public SQLite PITR, operator, and restore-reconnect docs with API request/response shapes, error catalog, retention tuning guidance, and the required PITR-is-not-backup disclaimer.
+- Updated `engine/CLAUDE.md`, `docs-internal/engine/sqlite-storage.md`, docs-sync, and the website sitemap; fixed a stale KV range docs snippet that blocked website code-block typechecking.
+- Verified `pnpm --filter rivet-website build` and `git diff --check`.
+- Files changed: `docs-internal/engine/sqlite-pitr-forking.md`, `docs-internal/engine/sqlite-storage.md`, `engine/CLAUDE.md`, `.claude/reference/docs-sync.md`, `website/src/content/docs/actors/{sqlite-pitr.mdx,sqlite-pitr-operator.mdx,sqlite-restore-reconnect.mdx,kv.mdx}`, `website/src/sitemap/mod.ts`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
+- **Learnings for future iterations:**
+  - Public SQLite PITR docs should use the api-public JSON shape (`kind: "txid"`, `mode: "apply"`), not the Rust enum variant names.
+  - Website docs build runs TypeScript snippet typechecking before Astro output; unrelated stale snippets can block docs-only stories.
+  - The docs build emits existing Vite/Sentry/static-content warnings even when the pages and code-block checks pass.
 ---

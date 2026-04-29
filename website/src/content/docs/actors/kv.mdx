@@ -106,11 +106,12 @@ const example = actor({
   state: {},
   actions: {
     pruneAndScan: async (c) => {
-      const active = await c.kv.listRange("job:", "joc:", {
+      const encoder = new TextEncoder();
+      const active = await c.kv.listRange(encoder.encode("job:"), encoder.encode("joc:"), {
         keyType: "text",
       });
 
-      await c.kv.deleteRange("job:old:", "job:old;");
+      await c.kv.deleteRange(encoder.encode("job:old:"), encoder.encode("job:old;"));
 
       return active.map(([key, value]) => ({ key, value }));
     }

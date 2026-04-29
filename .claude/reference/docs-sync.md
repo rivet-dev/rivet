@@ -26,3 +26,4 @@ When making engine or RivetKit changes, keep documentation in sync. Check this t
 | **Sandbox providers** (`rivetkit-typescript/packages/rivetkit/src/sandbox/providers/`) | `website/src/content/docs/actors/sandbox.mdx` — provider docs, option tables, custom provider guidance |
 | **Inspector endpoints** | `website/src/metadata/skill-base-rivetkit.md` + `website/src/content/docs/actors/debugging.mdx` |
 | **rivetkit-core state management** (`request_save`, `save_state`, `persist_state`, `set_state_initial` semantics) | `docs-internal/engine/rivetkit-core-state-management.md` |
+| **SQLite PITR admin surface** (`SqliteOpSubject`, SQLite admin endpoints, namespace SQLite config) | Update api-public OpenAPI, regenerate SDKs, and update `website/src/content/docs/actors/sqlite-pitr.mdx` plus `website/src/content/docs/actors/sqlite-pitr-operator.mdx` |
