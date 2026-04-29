@@ -110,8 +110,8 @@
         "Tests pass"
       ],
       "priority": 6,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added adaptive forward-scan read-ahead in the native SQLite VFS, gated by the central `adaptive_read_ahead` optimization flag and default-enabled. Mostly-forward scans can grow from the 64-page shard window to a 256-page / 1 MiB window, while isolated point reads and scattered access stay bounded; debug logs now include read-ahead mode, depth, and byte cap. Benchmark artifact written to `.agent/notes/sqlite-cold-read-after-SQLITE-COLD-006.txt`. Numbers: insert e2e 15810.0ms; hot read e2e 171.0ms; wake read e2e 4074.9ms; wake read server 3945.3ms; wake overhead estimate 129.6ms; wake read VFS get_pages calls 69; pages fetched 13726; bytes fetched 56221696; prefetch pages 13657; prefetch bytes 55939072; VFS transport 3723.1ms. Compared with baseline/SQLITE-COLD-001: get_pages calls dropped 1249 -> 69, wake read e2e dropped 20141.0ms -> 4074.9ms, wake VFS transport dropped 19332.8ms -> 3723.1ms, and hot read e2e was 118.6ms -> 171.0ms. Compared with SQLITE-COLD-005: get_pages calls dropped 219 -> 69, wake read e2e dropped 8287.8ms -> 4074.9ms, wake read server improved 4170.0ms -> 3945.3ms, wake VFS transport improved 3928.8ms -> 3723.1ms, and hot read e2e was 145.1ms -> 171.0ms. Checks passed: cargo check -p rivetkit-sqlite; cargo test -p rivetkit-sqlite adaptive_read_ahead -- --nocapture; cargo test -p rivetkit-sqlite cache_hit_reads_train_forward_scan_prefetch -- --nocapture; cargo test -p rivetkit-sqlite -- --test-threads=1; pnpm --filter kitchen-sink check-types; pnpm -F rivetkit check-types; pnpm --filter @rivetkit/rivetkit-napi build:force."
     },
     {
       "id": "SQLITE-COLD-007",
