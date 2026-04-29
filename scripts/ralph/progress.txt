@@ -24,6 +24,7 @@ Started: Wed Apr 29 04:36:56 AM PDT 2026
 - Debug takeover reconciliation treats seeded SQLite rows as real invariants; test fixtures with PIDX rows must also seed the referenced DELTA row before constructing `ActorDb`.
 - `sqlite-storage::pump::ActorDb::new` requires a UPS handle so commits can publish detached compaction triggers; tests can use `universalpubsub::driver::memory::MemoryDriver`.
 - Use `tokio::time::Instant` for actor-local trigger throttles so `#[tokio::test(start_paused = true)]` plus `tokio::time::advance` can cover timing deterministically.
+- `pegboard-envoy` SQLite `get_pages` and `commit` handlers lazily populate a per-conn `actor_dbs` cache and must not use it as authoritative actor presence tracking.
 
 ## 2026-04-29 04:44:52 PDT - US-001
 - Implemented a UUID-backed `NodeId` type and stored a generated value on each `Pools` instance.
@@ -233,4 +234,14 @@ Started: Wed Apr 29 04:36:56 AM PDT 2026
   - `ActorDb` now owns a cloned `universalpubsub::PubSub` so the pump can publish compaction hints without adding a separate per-connection wrapper inside `sqlite-storage`.
   - Commit-trigger tests should subscribe before the commit and then decode the vbare UPS payload rather than inspecting internal `last_trigger_at` state.
   - The trigger path resets metering counters only when a trigger is actually published; throttled commits keep accumulating counters for the next payload.
+---
+## 2026-04-29 06:31:02 PDT - US-021
+- Added the per-connection `actor_dbs` cache to pegboard-envoy with UDB, UPS, and node id handles for constructing `sqlite_storage::pump::ActorDb`.
+- Routed SQLite `get_pages` and `commit` websocket handlers through lazily inserted `ActorDb` instances and removed the old active-actor generation gate from those hot-path requests.
+- Stopped spawning the legacy in-process `CompactionCoordinator`; the legacy engine remains only for still-existing lifecycle and staged-commit paths until the follow-up protocol/lifecycle stories remove them.
+- Files changed: `Cargo.lock`, `engine/packages/pegboard-envoy/Cargo.toml`, `engine/packages/pegboard-envoy/src/conn.rs`, `engine/packages/pegboard-envoy/src/sqlite_runtime.rs`, `engine/packages/pegboard-envoy/src/ws_to_tunnel_task.rs`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
+- **Learnings for future iterations:**
+  - `pegboard-envoy` still needs temporary old-protocol META response helpers until US-024 updates the wire schema to the new stateless shape.
+  - `ActorDb::new` needs `udb`, `ups`, `actor_id`, and `node_id`; conn construction is the right place to clone all process handles from `Pools`.
+  - Legacy commit-stage handlers still downcast `sqlite_storage_legacy::error::SqliteStorageError`, while new pump handlers downcast `sqlite_storage::error::SqliteStorageError`.
 ---

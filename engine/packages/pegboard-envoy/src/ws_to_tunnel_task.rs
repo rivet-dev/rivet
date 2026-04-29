@@ -10,7 +10,8 @@ use rivet_data::converted::{ActorNameKeyData, MetadataKeyData};
 use rivet_envoy_protocol::{self as protocol, PROTOCOL_VERSION, versioned};
 use rivet_guard_core::websocket_handle::WebSocketReceiver;
 use scc::HashMap;
-use sqlite_storage_legacy::error::SqliteStorageError;
+use sqlite_storage::{error::SqliteStorageError, pump::ActorDb};
+use sqlite_storage_legacy::error::SqliteStorageError as LegacySqliteStorageError;
 use std::{
 	collections::BTreeSet,
 	sync::{Arc, atomic::Ordering},
@@ -703,16 +704,12 @@ async fn handle_sqlite_get_pages(
 ) -> Result<protocol::SqliteGetPagesResponse> {
 	validate_sqlite_get_pages_request(&request)?;
 	validate_sqlite_actor(ctx, conn, &request.actor_id).await?;
-	actor_lifecycle::assert_sqlite_actor_active(conn, &request.actor_id, request.generation)
-		.await?;
 
-	match conn
-		.sqlite_engine
-		.get_pages(&request.actor_id, request.generation, request.pgnos.clone())
-		.await
-	{
+	let actor_db = actor_db(conn, request.actor_id.clone()).await;
+	match actor_db.get_pages(request.pgnos).await {
 		Ok(pages) => Ok(sqlite_get_pages_ok(conn, &request.actor_id, pages).await?),
 		Err(err) => match sqlite_storage_error(&err) {
+			#[cfg(debug_assertions)]
 			Some(SqliteStorageError::FenceMismatch { reason }) => {
 				Ok(protocol::SqliteGetPagesResponse::SqliteFenceMismatch(
 					sqlite_fence_mismatch(conn, &request.actor_id, reason.clone()).await?,
@@ -726,17 +723,15 @@ async fn handle_sqlite_get_pages(
 async fn sqlite_get_pages_ok(
 	conn: &Conn,
 	actor_id: &str,
-	pages: Vec<sqlite_storage_legacy::types::FetchedPage>,
+	pages: Vec<sqlite_storage::types::FetchedPage>,
 ) -> Result<protocol::SqliteGetPagesResponse> {
 	Ok(protocol::SqliteGetPagesResponse::SqliteGetPagesOk(
 		protocol::SqliteGetPagesOk {
 			pages: pages
 				.into_iter()
-				.map(sqlite_runtime::protocol_sqlite_fetched_page)
+				.map(sqlite_runtime::protocol_sqlite_pump_fetched_page)
 				.collect(),
-			meta: sqlite_runtime::protocol_sqlite_meta(
-				conn.sqlite_engine.load_meta(actor_id).await?,
-			),
+			meta: sqlite_runtime::protocol_sqlite_pump_meta(&conn.udb, actor_id).await?,
 		},
 	))
 }
@@ -749,43 +744,36 @@ async fn handle_sqlite_commit(
 	let decode_request_start = Instant::now();
 	validate_sqlite_dirty_pages("sqlite commit", &request.dirty_pages)?;
 	validate_sqlite_actor(ctx, conn, &request.actor_id).await?;
-	actor_lifecycle::assert_sqlite_actor_active(conn, &request.actor_id, request.generation)
-		.await?;
 	let decode_request_duration = decode_request_start.elapsed();
-	conn.sqlite_engine.metrics().observe_commit_phase(
-		"fast",
-		"decode_request",
-		decode_request_duration,
-	);
 	crate::metrics::SQLITE_COMMIT_ENVOY_DISPATCH_DURATION
 		.observe(decode_request_duration.as_secs_f64());
 
-	let engine_result = conn
-		.sqlite_engine
+	let actor_id = request.actor_id.clone();
+	let actor_db = actor_db(conn, actor_id.clone()).await;
+	let engine_result = actor_db
 		.commit(
-			&request.actor_id,
-			sqlite_storage_legacy::commit::CommitRequest {
-				generation: request.generation,
-				head_txid: request.expected_head_txid,
-				db_size_pages: request.new_db_size_pages,
-				dirty_pages: request
-					.dirty_pages
-					.into_iter()
-					.map(storage_dirty_page)
-					.collect(),
-				now_ms: util::timestamp::now(),
-			},
+			request
+				.dirty_pages
+				.into_iter()
+				.map(pump_dirty_page)
+				.collect(),
+			request.new_db_size_pages,
+			util::timestamp::now(),
 		)
 		.await;
 	let response_build_start = Instant::now();
 	let response = match engine_result {
-		Ok(result) => Ok(protocol::SqliteCommitResponse::SqliteCommitOk(
-			protocol::SqliteCommitOk {
-				new_head_txid: result.txid,
-				meta: sqlite_runtime::protocol_sqlite_meta(result.meta),
-			},
-		)),
+		Ok(()) => {
+			let meta = sqlite_runtime::protocol_sqlite_pump_meta(&conn.udb, &actor_id).await?;
+			Ok(protocol::SqliteCommitResponse::SqliteCommitOk(
+				protocol::SqliteCommitOk {
+					new_head_txid: meta.head_txid,
+					meta,
+				},
+			))
+		}
 		Err(err) => match sqlite_storage_error(&err) {
+			#[cfg(debug_assertions)]
 			Some(SqliteStorageError::FenceMismatch { reason }) => {
 				Ok(protocol::SqliteCommitResponse::SqliteFenceMismatch(
 					sqlite_fence_mismatch(conn, &request.actor_id, reason.clone()).await?,
@@ -803,11 +791,8 @@ async fn handle_sqlite_commit(
 			_ => Err(err),
 		},
 	}?;
-	conn.sqlite_engine.metrics().observe_commit_phase(
-		"fast",
-		"response_build",
-		response_build_start.elapsed(),
-	);
+	crate::metrics::SQLITE_COMMIT_ENVOY_RESPONSE_DURATION
+		.observe(response_build_start.elapsed().as_secs_f64());
 	Ok(response)
 }
 
@@ -839,8 +824,8 @@ async fn handle_sqlite_commit_stage(
 				chunk_idx_committed: result.chunk_idx_committed,
 			},
 		)),
-		Err(err) => match sqlite_storage_error(&err) {
-			Some(SqliteStorageError::FenceMismatch { reason }) => {
+		Err(err) => match legacy_sqlite_storage_error(&err) {
+			Some(LegacySqliteStorageError::FenceMismatch { reason }) => {
 				Ok(protocol::SqliteCommitStageResponse::SqliteFenceMismatch(
 					sqlite_fence_mismatch(conn, &request.actor_id, reason.clone()).await?,
 				))
@@ -874,8 +859,8 @@ async fn handle_sqlite_commit_stage_begin(
 				protocol::SqliteCommitStageBeginOk { txid: result.txid },
 			),
 		),
-		Err(err) => match sqlite_storage_error(&err) {
-			Some(SqliteStorageError::FenceMismatch { reason }) => Ok(
+		Err(err) => match legacy_sqlite_storage_error(&err) {
+			Some(LegacySqliteStorageError::FenceMismatch { reason }) => Ok(
 				protocol::SqliteCommitStageBeginResponse::SqliteFenceMismatch(
 					sqlite_fence_mismatch(conn, &request.actor_id, reason.clone()).await?,
 				),
@@ -924,13 +909,13 @@ async fn handle_sqlite_commit_finalize(
 				},
 			),
 		),
-		Err(err) => match sqlite_storage_error(&err) {
-			Some(SqliteStorageError::FenceMismatch { reason }) => {
+		Err(err) => match legacy_sqlite_storage_error(&err) {
+			Some(LegacySqliteStorageError::FenceMismatch { reason }) => {
 				Ok(protocol::SqliteCommitFinalizeResponse::SqliteFenceMismatch(
 					sqlite_fence_mismatch(conn, &request.actor_id, reason.clone()).await?,
 				))
 			}
-			Some(SqliteStorageError::StageNotFound { stage_id }) => {
+			Some(LegacySqliteStorageError::StageNotFound { stage_id }) => {
 				Ok(protocol::SqliteCommitFinalizeResponse::SqliteStageNotFound(
 					protocol::SqliteStageNotFound {
 						stage_id: *stage_id,
@@ -975,11 +960,27 @@ async fn sqlite_fence_mismatch(
 	})
 }
 
-fn storage_dirty_page(page: protocol::SqliteDirtyPage) -> sqlite_storage_legacy::types::DirtyPage {
-	sqlite_storage_legacy::types::DirtyPage {
+fn pump_dirty_page(page: protocol::SqliteDirtyPage) -> sqlite_storage::types::DirtyPage {
+	sqlite_storage::types::DirtyPage {
 		pgno: page.pgno,
 		bytes: page.bytes,
 	}
+}
+
+async fn actor_db(conn: &Conn, actor_id: String) -> Arc<ActorDb> {
+	conn.actor_dbs
+		.entry_async(actor_id.clone())
+		.await
+		.or_insert_with(|| {
+			Arc::new(ActorDb::new(
+				conn.udb.clone(),
+				(*conn.ups).clone(),
+				actor_id,
+				conn.node_id,
+			))
+		})
+		.get()
+		.clone()
 }
 
 fn validate_sqlite_get_pages_request(request: &protocol::SqliteGetPagesRequest) -> Result<()> {
@@ -1016,6 +1017,10 @@ fn validate_sqlite_dirty_pages(
 
 fn sqlite_storage_error(err: &anyhow::Error) -> Option<&SqliteStorageError> {
 	err.downcast_ref::<SqliteStorageError>()
+}
+
+fn legacy_sqlite_storage_error(err: &anyhow::Error) -> Option<&LegacySqliteStorageError> {
+	err.downcast_ref::<LegacySqliteStorageError>()
 }
 
 fn sqlite_error_reason(err: &anyhow::Error) -> String {

@@ -13,10 +13,13 @@ use gas::prelude::*;
 use hyper_tungstenite::tungstenite::Message;
 use rivet_envoy_protocol::{self as protocol, versioned};
 use rivet_guard_core::WebSocketHandle;
+use rivet_pools::NodeId;
 use rivet_types::runner_configs::RunnerConfigKind;
 use scc::HashMap;
+use sqlite_storage::pump::ActorDb;
 use sqlite_storage_legacy::engine::SqliteEngine;
 use universaldb::prelude::*;
+use universalpubsub::PubSub;
 use vbare::OwnedVersionedData;
 
 use crate::{actor_lifecycle, errors, metrics, utils::UrlData};
@@ -29,6 +32,13 @@ pub struct Conn {
 	pub ws_handle: WebSocketHandle,
 	pub authorized_tunnel_routes: HashMap<(protocol::GatewayId, protocol::RequestId), ()>,
 	pub sqlite_engine: Arc<SqliteEngine>,
+	pub udb: Arc<universaldb::Database>,
+	pub ups: Arc<PubSub>,
+	pub node_id: NodeId,
+	/// This is a perf-only SQLite pump cache, not authoritative actor presence tracking.
+	/// Envoys can reconnect to different worker nodes mid-flight, so request handlers
+	/// lazily populate it and lifecycle commands only evict stale cache entries.
+	pub actor_dbs: HashMap<String, Arc<ActorDb>>,
 	pub active_actors: HashMap<String, actor_lifecycle::ActiveActor>,
 	pub is_serverless: bool,
 	pub last_rtt: AtomicU32,
@@ -87,6 +97,9 @@ pub async fn init_conn(
 		.observe(start.elapsed().as_secs_f64());
 
 	let udb = ctx.udb()?;
+	let conn_udb = Arc::new((*udb).clone());
+	let conn_ups = Arc::new(ctx.ups()?);
+	let node_id = ctx.pools().node_id();
 	let (_, (mut missed_commands, runner_config_protocol_changed)) = tokio::try_join!(
 		// Send init packet as soon as possible
 		async {
@@ -305,6 +318,10 @@ pub async fn init_conn(
 		ws_handle,
 		authorized_tunnel_routes: HashMap::new(),
 		sqlite_engine,
+		udb: conn_udb,
+		ups: conn_ups,
+		node_id,
+		actor_dbs: HashMap::new(),
 		active_actors: HashMap::new(),
 		is_serverless,
 		last_rtt: AtomicU32::new(0),
