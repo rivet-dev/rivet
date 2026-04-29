@@ -29,8 +29,6 @@ pub struct Conn {
 	pub ws_handle: WebSocketHandle,
 	pub authorized_tunnel_routes: HashMap<(protocol::GatewayId, protocol::RequestId), ()>,
 	pub sqlite_engine: Arc<SqliteEngine>,
-	pub active_actors: HashMap<String, actor_lifecycle::ActiveActor>,
-	pub serverless_sqlite_actors: HashMap<String, u64>,
 	pub is_serverless: bool,
 	pub last_rtt: AtomicU32,
 	/// Timestamp (epoch ms) of the last pong received from the envoy.
@@ -306,33 +304,24 @@ pub async fn init_conn(
 		ws_handle,
 		authorized_tunnel_routes: HashMap::new(),
 		sqlite_engine,
-		active_actors: HashMap::new(),
-		serverless_sqlite_actors: HashMap::new(),
 		is_serverless,
 		last_rtt: AtomicU32::new(0),
 		last_ping_ts: AtomicI64::new(util::timestamp::now()),
 	});
 
-	// Send missed commands (must be after init packet). If any step fails
-	// after one or more `start_actor` calls already opened SQLite dbs, close
-	// every actor in `conn.active_actors` before returning so we do not leak
-	// process-wide `SqliteEngine.open_dbs` entries that would block re-opening
-	// these actors until the process restarts.
+	// Send missed commands after the init packet.
 	if !missed_commands.is_empty() {
 		let replay_result: Result<()> = async {
 			for cmd_wrapper in &mut missed_commands {
 				if let protocol::Command::CommandStartActor(ref mut start) = cmd_wrapper.inner {
 					actor_lifecycle::start_actor(ctx, &conn, &cmd_wrapper.checkpoint, start)
 						.await?;
-				} else if let protocol::Command::CommandStopActor(_) = cmd_wrapper.inner {
-					actor_lifecycle::stop_actor(&conn, &cmd_wrapper.checkpoint).await?;
 				}
 			}
 			Ok(())
 		}
 		.await;
 		if let Err(err) = replay_result {
-			actor_lifecycle::shutdown_conn_actors(&conn).await;
 			return Err(err);
 		}
 
@@ -344,7 +333,6 @@ pub async fn init_conn(
 			.send(Message::Binary(msg_serialized.into()))
 			.await
 		{
-			actor_lifecycle::shutdown_conn_actors(&conn).await;
 			return Err(err.into());
 		}
 	}

@@ -24,8 +24,7 @@ use universalpubsub::PublishOpts;
 use vbare::OwnedVersionedData;
 
 use crate::{
-	LifecycleResult, actor_event_demuxer::ActorEventDemuxer, actor_lifecycle, conn::Conn, errors,
-	sqlite_runtime,
+	LifecycleResult, actor_event_demuxer::ActorEventDemuxer, conn::Conn, errors, sqlite_runtime,
 };
 
 #[tracing::instrument(name="ws_to_tunnel_task", skip_all, fields(ray_id=?ctx.ray_id(), req_id=?ctx.req_id(), envoy_key=%conn.envoy_key, protocol_version=%conn.protocol_version))]
@@ -418,25 +417,6 @@ async fn handle_message(
 		// Forward to demuxer which forwards to actor wf
 		protocol::ToRivet::ToRivetEvents(events) => {
 			for event in events {
-				if let protocol::Event::EventActorStateUpdate(state_update) = &event.inner {
-					if let protocol::ActorState::ActorStateStopped(_) = &state_update.state {
-						// Log + continue on protocol-level disagreement instead of tearing
-						// down the whole WS for a single bad ActorStateStopped event.
-						// `actor_stopped` itself force-closes the SQLite db and removes
-						// the active_actors entry on failure, so the conn does not retain
-						// half-stopped state for this actor.
-						if let Err(err) =
-							actor_lifecycle::actor_stopped(conn, &event.checkpoint).await
-						{
-							tracing::warn!(
-								actor_id = %event.checkpoint.actor_id,
-								generation = event.checkpoint.generation,
-								?err,
-								"actor_stopped lifecycle update failed; entry already evicted"
-							);
-						}
-					}
-				}
 				event_demuxer.ingest(Id::parse(&event.checkpoint.actor_id)?, event);
 			}
 		}
@@ -650,7 +630,7 @@ async fn handle_metadata(
 #[tracing::instrument(skip_all)]
 async fn handle_tunnel_message(
 	ctx: &StandaloneCtx,
-	authorized_tunnel_routes: &HashMap<(protocol::GatewayId, protocol::RequestId), ()>,
+	_authorized_tunnel_routes: &HashMap<(protocol::GatewayId, protocol::RequestId), ()>,
 	msg: protocol::ToRivetTunnelMessage,
 ) -> Result<()> {
 	// Extract inner data length before consuming msg
@@ -703,13 +683,15 @@ async fn handle_sqlite_get_pages(
 ) -> Result<protocol::SqliteGetPagesResponse> {
 	validate_sqlite_get_pages_request(&request)?;
 	validate_sqlite_actor(ctx, conn, &request.actor_id).await?;
-	ensure_serverless_sqlite_open(conn, &request.actor_id, request.generation).await?;
 
-	match conn
-		.sqlite_engine
-		.get_pages(&request.actor_id, request.generation, request.pgnos.clone())
-		.await
-	{
+	let engine_result = async {
+		ensure_sqlite_open(conn, &request.actor_id, request.generation).await?;
+		conn.sqlite_engine
+			.get_pages(&request.actor_id, request.generation, request.pgnos.clone())
+			.await
+	}
+	.await;
+	match engine_result {
 		Ok(pages) => Ok(sqlite_get_pages_ok(conn, &request.actor_id, pages).await?),
 		Err(err) => match sqlite_storage_error(&err) {
 			Some(SqliteStorageError::FenceMismatch { reason }) => {
@@ -748,7 +730,6 @@ async fn handle_sqlite_commit(
 	let decode_request_start = Instant::now();
 	validate_sqlite_dirty_pages("sqlite commit", &request.dirty_pages)?;
 	validate_sqlite_actor(ctx, conn, &request.actor_id).await?;
-	ensure_serverless_sqlite_open(conn, &request.actor_id, request.generation).await?;
 	let decode_request_duration = decode_request_start.elapsed();
 	conn.sqlite_engine.metrics().observe_commit_phase(
 		"fast",
@@ -758,23 +739,26 @@ async fn handle_sqlite_commit(
 	crate::metrics::SQLITE_COMMIT_ENVOY_DISPATCH_DURATION
 		.observe(decode_request_duration.as_secs_f64());
 
-	let engine_result = conn
-		.sqlite_engine
-		.commit(
-			&request.actor_id,
-			sqlite_storage::commit::CommitRequest {
-				generation: request.generation,
-				head_txid: request.expected_head_txid,
-				db_size_pages: request.new_db_size_pages,
-				dirty_pages: request
-					.dirty_pages
-					.into_iter()
-					.map(storage_dirty_page)
-					.collect(),
-				now_ms: util::timestamp::now(),
-			},
-		)
-		.await;
+	let engine_result = async {
+		ensure_sqlite_open(conn, &request.actor_id, request.generation).await?;
+		conn.sqlite_engine
+			.commit(
+				&request.actor_id,
+				sqlite_storage::commit::CommitRequest {
+					generation: request.generation,
+					head_txid: request.expected_head_txid,
+					db_size_pages: request.new_db_size_pages,
+					dirty_pages: request
+						.dirty_pages
+						.into_iter()
+						.map(storage_dirty_page)
+						.collect(),
+					now_ms: util::timestamp::now(),
+				},
+			)
+			.await
+	}
+	.await;
 	let response_build_start = Instant::now();
 	let response = match engine_result {
 		Ok(result) => Ok(protocol::SqliteCommitResponse::SqliteCommitOk(
@@ -815,22 +799,24 @@ async fn handle_sqlite_commit_stage(
 	request: protocol::SqliteCommitStageRequest,
 ) -> Result<protocol::SqliteCommitStageResponse> {
 	validate_sqlite_actor(ctx, conn, &request.actor_id).await?;
-	ensure_serverless_sqlite_open(conn, &request.actor_id, request.generation).await?;
 
-	match conn
-		.sqlite_engine
-		.commit_stage(
-			&request.actor_id,
-			sqlite_storage::commit::CommitStageRequest {
-				generation: request.generation,
-				txid: request.txid,
-				chunk_idx: request.chunk_idx,
-				bytes: request.bytes,
-				is_last: request.is_last,
-			},
-		)
-		.await
-	{
+	let engine_result = async {
+		ensure_sqlite_open(conn, &request.actor_id, request.generation).await?;
+		conn.sqlite_engine
+			.commit_stage(
+				&request.actor_id,
+				sqlite_storage::commit::CommitStageRequest {
+					generation: request.generation,
+					txid: request.txid,
+					chunk_idx: request.chunk_idx,
+					bytes: request.bytes,
+					is_last: request.is_last,
+				},
+			)
+			.await
+	}
+	.await;
+	match engine_result {
 		Ok(result) => Ok(protocol::SqliteCommitStageResponse::SqliteCommitStageOk(
 			protocol::SqliteCommitStageOk {
 				chunk_idx_committed: result.chunk_idx_committed,
@@ -853,18 +839,20 @@ async fn handle_sqlite_commit_stage_begin(
 	request: protocol::SqliteCommitStageBeginRequest,
 ) -> Result<protocol::SqliteCommitStageBeginResponse> {
 	validate_sqlite_actor(ctx, conn, &request.actor_id).await?;
-	ensure_serverless_sqlite_open(conn, &request.actor_id, request.generation).await?;
 
-	match conn
-		.sqlite_engine
-		.commit_stage_begin(
-			&request.actor_id,
-			sqlite_storage::commit::CommitStageBeginRequest {
-				generation: request.generation,
-			},
-		)
-		.await
-	{
+	let engine_result = async {
+		ensure_sqlite_open(conn, &request.actor_id, request.generation).await?;
+		conn.sqlite_engine
+			.commit_stage_begin(
+				&request.actor_id,
+				sqlite_storage::commit::CommitStageBeginRequest {
+					generation: request.generation,
+				},
+			)
+			.await
+	}
+	.await;
+	match engine_result {
 		Ok(result) => Ok(
 			protocol::SqliteCommitStageBeginResponse::SqliteCommitStageBeginOk(
 				protocol::SqliteCommitStageBeginOk { txid: result.txid },
@@ -888,27 +876,29 @@ async fn handle_sqlite_commit_finalize(
 ) -> Result<protocol::SqliteCommitFinalizeResponse> {
 	let decode_request_start = Instant::now();
 	validate_sqlite_actor(ctx, conn, &request.actor_id).await?;
-	ensure_serverless_sqlite_open(conn, &request.actor_id, request.generation).await?;
 	conn.sqlite_engine.metrics().observe_commit_phase(
 		"slow",
 		"decode_request",
 		decode_request_start.elapsed(),
 	);
 
-	let engine_result = conn
-		.sqlite_engine
-		.commit_finalize(
-			&request.actor_id,
-			sqlite_storage::commit::CommitFinalizeRequest {
-				generation: request.generation,
-				expected_head_txid: request.expected_head_txid,
-				txid: request.txid,
-				new_db_size_pages: request.new_db_size_pages,
-				now_ms: util::timestamp::now(),
-				origin_override: None,
-			},
-		)
-		.await;
+	let engine_result = async {
+		ensure_sqlite_open(conn, &request.actor_id, request.generation).await?;
+		conn.sqlite_engine
+			.commit_finalize(
+				&request.actor_id,
+				sqlite_storage::commit::CommitFinalizeRequest {
+					generation: request.generation,
+					expected_head_txid: request.expected_head_txid,
+					txid: request.txid,
+					new_db_size_pages: request.new_db_size_pages,
+					now_ms: util::timestamp::now(),
+					origin_override: None,
+				},
+			)
+			.await
+	}
+	.await;
 	let response_build_start = Instant::now();
 	let response = match engine_result {
 		Ok(result) => Ok(
@@ -957,20 +947,10 @@ async fn validate_sqlite_actor(ctx: &StandaloneCtx, conn: &Conn, actor_id: &str)
 	Ok(())
 }
 
-async fn ensure_serverless_sqlite_open(conn: &Conn, actor_id: &str, generation: u64) -> Result<()> {
-	if !conn.is_serverless {
-		return Ok(());
-	}
-
+async fn ensure_sqlite_open(conn: &Conn, actor_id: &str, generation: u64) -> Result<()> {
 	conn.sqlite_engine
 		.ensure_local_open(actor_id, generation)
-		.await?;
-
-	conn.serverless_sqlite_actors
-		.upsert_async(actor_id.to_string(), generation)
-		.await;
-
-	Ok(())
+		.await
 }
 
 async fn sqlite_fence_mismatch(

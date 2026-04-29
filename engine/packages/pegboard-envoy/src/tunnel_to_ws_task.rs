@@ -129,8 +129,6 @@ async fn handle_message(
 				if let protocol::Command::CommandStartActor(start) = &mut command_wrapper.inner {
 					actor_lifecycle::start_actor(ctx, conn, &command_wrapper.checkpoint, start)
 						.await?;
-				} else if let protocol::Command::CommandStopActor(_) = &command_wrapper.inner {
-					actor_lifecycle::stop_actor(conn, &command_wrapper.checkpoint).await?;
 				}
 			}
 
