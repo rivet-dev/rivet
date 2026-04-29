@@ -6212,11 +6212,13 @@ dependencies = [
  "lz4_flex",
  "scc",
  "serde",
+ "serde_bare",
  "tempfile",
  "thiserror 1.0.69",
  "tokio",
  "universaldb",
  "uuid",
+ "vbare",
 ]
 
 [[package]]
