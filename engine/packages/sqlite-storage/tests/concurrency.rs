@@ -74,7 +74,7 @@ async fn concurrent_commits_to_different_actors_preserve_isolation() -> Result<(
 
 	while let Some(result) = commits.join_next().await {
 		let (actor_id, generation, fill) = result??;
-		let pages = engine.get_pages(&actor_id, generation, vec![1]).await?;
+		let pages = engine.get_pages(&actor_id, generation, vec![1]).await?.pages;
 		assert_eq!(pages[0].bytes, Some(page(fill)));
 	}
 
@@ -102,7 +102,8 @@ async fn interleaved_commit_compaction_read_keeps_latest_page_visible() -> Resul
 
 	let after_compaction = engine
 		.get_pages(actor_id, open.generation, vec![1, 2])
-		.await?;
+		.await?
+		.pages;
 	assert_eq!(after_compaction[0].bytes, Some(page(0x11)));
 	assert_eq!(after_compaction[1].bytes, Some(page(0x11)));
 
@@ -121,7 +122,8 @@ async fn interleaved_commit_compaction_read_keeps_latest_page_visible() -> Resul
 
 	let latest = engine
 		.get_pages(actor_id, open.generation, vec![1, 2, 3])
-		.await?;
+		.await?
+		.pages;
 	assert_eq!(latest[0].bytes, Some(page(0x44)));
 	assert_eq!(latest[1].bytes, Some(page(0x44)));
 	assert_eq!(latest[2].bytes, Some(page(0x11)));
@@ -160,7 +162,8 @@ async fn concurrent_reads_during_compaction_keep_returning_expected_pages() -> R
 			generation,
 			vec![1, 2, 65, 66, 129, 130, 193, 194],
 		)
-		.await?;
+		.await?
+		.pages;
 	assert_eq!(warmup[0].bytes, Some(page(0x10)));
 	assert_eq!(warmup[2].bytes, Some(page(0x20)));
 	assert_eq!(warmup[4].bytes, Some(page(0x30)));
@@ -193,7 +196,8 @@ async fn concurrent_reads_during_compaction_keep_returning_expected_pages() -> R
 						generation,
 						vec![1, 2, 65, 66, 129, 130, 193, 194],
 					)
-					.await?;
+					.await?
+					.pages;
 				assert_eq!(pages[0].bytes, Some(page(0x10)));
 				assert_eq!(pages[1].bytes, Some(page(0x10)));
 				assert_eq!(pages[2].bytes, Some(page(0x20)));
@@ -215,7 +219,8 @@ async fn concurrent_reads_during_compaction_keep_returning_expected_pages() -> R
 
 	let final_pages = engine
 		.get_pages(&actor_id, generation, vec![1, 65, 129, 193])
-		.await?;
+		.await?
+		.pages;
 	assert_eq!(final_pages[0].bytes, Some(page(0x10)));
 	assert_eq!(final_pages[1].bytes, Some(page(0x20)));
 	assert_eq!(final_pages[2].bytes, Some(page(0x30)));

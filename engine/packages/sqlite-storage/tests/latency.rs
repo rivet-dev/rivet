@@ -103,7 +103,7 @@ async fn latency_paths_use_single_rtt_under_simulated_udb_latency() -> Result<()
 		assert_eq!(pages.meta.generation, open.generation);
 		assert_eq!(pages.meta.head_txid, commit.txid);
 		assert_eq!(pages.meta.db_size_pages, 10);
-		assert!(pages.iter().all(|page| page.bytes.is_some()));
+		assert!(pages.pages.iter().all(|page| page.bytes.is_some()));
 		assert_eq!(engine.op_counter.load(Ordering::SeqCst), 1);
 		assert_single_rtt("get_pages", elapsed);
 	}

@@ -1264,7 +1264,7 @@ mod tests {
 		assert_eq!(stored_head.db_size_pages, 1);
 
 		clear_op_count(&engine);
-		let pages = engine.get_pages(TEST_ACTOR, 4, vec![1]).await?;
+		let pages = engine.get_pages(TEST_ACTOR, 4, vec![1]).await?.pages;
 		assert_eq!(
 			pages,
 			vec![FetchedPage {
@@ -1286,7 +1286,7 @@ mod tests {
 		let result = engine.commit(TEST_ACTOR, request(4, 0)).await?;
 		assert_eq!(result.txid, 1);
 		assert_eq!(
-			engine.get_pages(TEST_ACTOR, 4, vec![1]).await?,
+			engine.get_pages(TEST_ACTOR, 4, vec![1]).await?.pages,
 			vec![FetchedPage {
 				pgno: 1,
 				bytes: Some(page(0x55)),
@@ -1307,7 +1307,7 @@ mod tests {
 			.await?;
 
 		let requested_pages = (1..=100).collect::<Vec<_>>();
-		let fetched_pages = engine.get_pages(TEST_ACTOR, 4, requested_pages).await?;
+		let fetched_pages = engine.get_pages(TEST_ACTOR, 4, requested_pages).await?.pages;
 		assert_eq!(fetched_pages.len(), 100);
 		assert!(
 			fetched_pages
@@ -1342,7 +1342,7 @@ mod tests {
 			.await?;
 
 		assert_eq!(
-			engine.get_pages(TEST_ACTOR, 4, vec![1]).await?,
+			engine.get_pages(TEST_ACTOR, 4, vec![1]).await?.pages,
 			vec![FetchedPage {
 				pgno: 1,
 				bytes: Some(page(0xaa)),
@@ -1361,7 +1361,7 @@ mod tests {
 		engine.commit(TEST_ACTOR, request(4, 0)).await?;
 
 		assert_eq!(
-			engine.get_pages(TEST_ACTOR, 4, vec![2]).await?,
+			engine.get_pages(TEST_ACTOR, 4, vec![2]).await?.pages,
 			vec![FetchedPage {
 				pgno: 2,
 				bytes: None,
@@ -1410,14 +1410,14 @@ mod tests {
 			.await?;
 
 		assert_eq!(
-			engine.get_pages("actor-a", 4, vec![1]).await?,
+			engine.get_pages("actor-a", 4, vec![1]).await?.pages,
 			vec![FetchedPage {
 				pgno: 1,
 				bytes: Some(page(0x1a)),
 			}]
 		);
 		assert_eq!(
-			engine.get_pages("actor-b", 4, vec![1]).await?,
+			engine.get_pages("actor-b", 4, vec![1]).await?.pages,
 			vec![FetchedPage {
 				pgno: 1,
 				bytes: Some(page(0x2b)),
@@ -1456,7 +1456,7 @@ mod tests {
 		)?;
 		assert_eq!(stored_head.db_size_pages, 100);
 		assert_eq!(
-			engine.get_pages(TEST_ACTOR, 4, vec![100]).await?,
+			engine.get_pages(TEST_ACTOR, 4, vec![100]).await?.pages,
 			vec![FetchedPage {
 				pgno: 100,
 				bytes: Some(page(0x64)),
@@ -1861,7 +1861,7 @@ mod tests {
 		assert_eq!(stored_head.db_size_pages, 70);
 
 		clear_op_count(&engine);
-		let pages = engine.get_pages(TEST_ACTOR, 4, vec![1, 2, 70]).await?;
+		let pages = engine.get_pages(TEST_ACTOR, 4, vec![1, 2, 70]).await?.pages;
 		assert_eq!(
 			pages,
 			vec![
@@ -2070,7 +2070,7 @@ mod tests {
 		assert_eq!(txid, 1);
 		assert_eq!(compaction_rx.recv().await, Some(TEST_ACTOR.to_string()));
 		assert_eq!(
-			engine.get_pages(TEST_ACTOR, 4, vec![1, 1025, 3072]).await?,
+			engine.get_pages(TEST_ACTOR, 4, vec![1, 1025, 3072]).await?.pages,
 			vec![
 				FetchedPage {
 					pgno: 1,

@@ -10,7 +10,7 @@ use std::sync::Arc;
 #[cfg(test)]
 use std::sync::atomic::{AtomicBool, AtomicUsize};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use anyhow::Result;
 use libsqlite3_sys::*;
@@ -25,10 +25,12 @@ use tokio::runtime::Handle;
 #[cfg(test)]
 use tokio::sync::Notify;
 
-use crate::optimization_flags::{SqliteOptimizationFlags, sqlite_optimization_flags};
+use crate::optimization_flags::{
+	SqliteOptimizationFlags, SqliteReadAheadMode, SqliteVfsPageCacheMode,
+	sqlite_optimization_flags,
+};
 
 const DEFAULT_PREFETCH_DEPTH: usize = 64;
-const LEGACY_PREFETCH_DEPTH: usize = 16;
 const DEFAULT_MAX_PREFETCH_BYTES: usize = 256 * 1024;
 const DEFAULT_ADAPTIVE_PREFETCH_DEPTH: usize = 256;
 const DEFAULT_ADAPTIVE_MAX_PREFETCH_BYTES: usize = 1024 * 1024;
@@ -142,13 +144,17 @@ impl SqliteTransport {
 			#[cfg(test)]
 			SqliteTransportInner::Direct { engine, .. } => {
 				let pgnos = req.pgnos.clone();
-				match engine.get_pages(&req.actor_id, req.generation, pgnos).await {
-					Ok(pages) => Ok(protocol::SqliteGetPagesResponse::SqliteGetPagesOk(
-						protocol::SqliteGetPagesOk {
-							pages: pages.into_iter().map(protocol_fetched_page).collect(),
-							meta: protocol_sqlite_meta(engine.load_meta(&req.actor_id).await?),
-						},
-					)),
+					match engine.get_pages(&req.actor_id, req.generation, pgnos).await {
+						Ok(result) => Ok(protocol::SqliteGetPagesResponse::SqliteGetPagesOk(
+							protocol::SqliteGetPagesOk {
+								pages: result
+									.pages
+									.into_iter()
+									.map(protocol_fetched_page)
+									.collect(),
+								meta: protocol_sqlite_meta(result.meta),
+							},
+						)),
 					Err(err) => {
 						if let Some(SqliteStorageError::FenceMismatch { reason }) =
 							sqlite_storage_error(&err)
@@ -187,19 +193,18 @@ impl SqliteTransport {
 								.get_pages(&req.actor_id, req.generation, req.pgnos)
 								.await
 							{
-								Ok(pages) => {
-									Ok(protocol::SqliteGetPagesResponse::SqliteGetPagesOk(
-										protocol::SqliteGetPagesOk {
-											pages: pages
-												.into_iter()
-												.map(protocol_fetched_page)
-												.collect(),
-											meta: protocol_sqlite_meta(
-												engine.load_meta(&req.actor_id).await?,
-											),
-										},
-									))
-								}
+									Ok(result) => {
+										Ok(protocol::SqliteGetPagesResponse::SqliteGetPagesOk(
+											protocol::SqliteGetPagesOk {
+												pages: result
+													.pages
+													.into_iter()
+													.map(protocol_fetched_page)
+													.collect(),
+												meta: protocol_sqlite_meta(result.meta),
+											},
+										))
+									}
 								Err(retry_err) => {
 									Ok(protocol::SqliteGetPagesResponse::SqliteErrorResponse(
 										sqlite_error_response(&retry_err),
@@ -237,13 +242,17 @@ impl SqliteTransport {
 					)
 					.await
 				{
-					Ok(pages) => Ok(protocol::SqliteGetPageRangeResponse::SqliteGetPageRangeOk(
-						protocol::SqliteGetPageRangeOk {
-							start_pgno: req.start_pgno,
-							pages: pages.into_iter().map(protocol_fetched_page).collect(),
-							meta: protocol_sqlite_meta(engine.load_meta(&req.actor_id).await?),
-						},
-					)),
+						Ok(result) => Ok(protocol::SqliteGetPageRangeResponse::SqliteGetPageRangeOk(
+							protocol::SqliteGetPageRangeOk {
+								start_pgno: req.start_pgno,
+								pages: result
+									.pages
+									.into_iter()
+									.map(protocol_fetched_page)
+									.collect(),
+								meta: protocol_sqlite_meta(result.meta),
+							},
+						)),
 					Err(err) => {
 						if let Some(SqliteStorageError::FenceMismatch { reason }) =
 							sqlite_storage_error(&err)
@@ -811,11 +820,9 @@ fn sqlite_meta(max_delta_bytes: u64) -> protocol::SqliteMeta {
 #[derive(Debug, Clone)]
 pub struct VfsConfig {
 	pub cache_capacity_pages: u64,
-	pub cache_fetched_pages: bool,
-	pub cache_prefetched_pages: bool,
-	pub cache_startup_preloaded_pages: bool,
-	pub scan_resistant_cache: bool,
+	pub page_cache_mode: SqliteVfsPageCacheMode,
 	pub protected_cache_pages: usize,
+	pub read_ahead_mode: SqliteReadAheadMode,
 	pub prefetch_depth: usize,
 	pub adaptive_prefetch_depth: usize,
 	pub max_prefetch_bytes: usize,
@@ -823,9 +830,7 @@ pub struct VfsConfig {
 	pub max_pages_per_stage: usize,
 	pub recent_hint_page_budget: usize,
 	pub recent_hint_range_budget: usize,
-	pub cache_hit_predictor_training: bool,
 	pub recent_page_hints: bool,
-	pub adaptive_read_ahead: bool,
 	pub range_reads: bool,
 }
 
@@ -839,15 +844,13 @@ impl VfsConfig {
 	pub fn from_optimization_flags(flags: SqliteOptimizationFlags) -> Self {
 		Self {
 			cache_capacity_pages: flags.vfs_page_cache_capacity_pages,
-			cache_fetched_pages: flags.vfs_cache_fetched_pages,
-			cache_prefetched_pages: flags.vfs_cache_prefetched_pages,
-			cache_startup_preloaded_pages: flags.vfs_cache_startup_preloaded_pages,
-			scan_resistant_cache: flags.vfs_scan_resistant_cache,
+			page_cache_mode: flags.vfs_page_cache_mode,
 			protected_cache_pages: flags.vfs_protected_cache_pages,
-			prefetch_depth: if flags.read_ahead {
+			read_ahead_mode: flags.read_ahead_mode,
+			prefetch_depth: if flags.read_ahead_mode.uses_bounded_prefetch() {
 				DEFAULT_PREFETCH_DEPTH
 			} else {
-				LEGACY_PREFETCH_DEPTH
+				0
 			},
 			adaptive_prefetch_depth: DEFAULT_ADAPTIVE_PREFETCH_DEPTH,
 			max_prefetch_bytes: DEFAULT_MAX_PREFETCH_BYTES,
@@ -863,9 +866,7 @@ impl VfsConfig {
 			} else {
 				0
 			},
-			cache_hit_predictor_training: flags.cache_hit_predictor_training,
 			recent_page_hints: flags.recent_page_hints,
-			adaptive_read_ahead: flags.adaptive_read_ahead,
 			range_reads: flags.range_reads,
 		}
 	}
@@ -936,6 +937,28 @@ pub trait SqliteVfsMetrics: Send + Sync {
 		_total_ns: u64,
 	) {
 	}
+
+	fn set_read_pool_active_readers(&self, _readers: u64) {}
+
+	fn set_read_pool_idle_readers(&self, _readers: u64) {}
+
+	fn observe_read_pool_read_wait(&self, _duration: Duration) {}
+
+	fn observe_read_pool_write_wait(&self, _duration: Duration) {}
+
+	fn record_read_pool_routed_read_query(&self) {}
+
+	fn record_read_pool_write_fallback_query(&self) {}
+
+	fn observe_read_pool_manual_transaction(&self, _duration: Duration) {}
+
+	fn record_read_pool_reader_open(&self) {}
+
+	fn record_read_pool_reader_close(&self, _count: u64) {}
+
+	fn record_read_pool_rejected_reader_mutation(&self) {}
+
+	fn record_read_pool_mode_transition(&self, _from: &str, _to: &str) {}
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -951,6 +974,7 @@ pub struct VfsContext {
 	config: VfsConfig,
 	state: RwLock<VfsState>,
 	aux_files: RwLock<BTreeMap<String, Arc<AuxFileState>>>,
+	aux_file_roles: RwLock<BTreeMap<String, VfsFileRole>>,
 	last_error: Mutex<Option<String>>,
 	#[cfg(test)]
 	fail_next_aux_open: Mutex<Option<String>>,
@@ -995,6 +1019,7 @@ struct PrefetchPredictor {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ReadAheadMode {
+	Off,
 	Bounded,
 	ForwardScan,
 	BackwardScan,
@@ -1073,6 +1098,7 @@ struct VfsFile {
 	base: sqlite3_file,
 	ctx: *const VfsContext,
 	aux: *mut AuxFileHandle,
+	role: VfsFileRole,
 }
 
 #[derive(Default)]
@@ -1084,26 +1110,67 @@ struct AuxFileHandle {
 	path: String,
 	state: Arc<AuxFileState>,
 	delete_on_close: bool,
+	role: VfsFileRole,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum VfsFileRole {
+	Reader,
+	Writer,
+}
+
+impl VfsFileRole {
+	fn from_open_flags(flags: c_int) -> Self {
+		if (flags & SQLITE_OPEN_READWRITE) != 0 {
+			Self::Writer
+		} else {
+			Self::Reader
+		}
+	}
+
+	fn out_flags(self, flags: c_int) -> c_int {
+		match self {
+			Self::Reader => (flags | SQLITE_OPEN_READONLY) & !SQLITE_OPEN_READWRITE,
+			Self::Writer => (flags | SQLITE_OPEN_READWRITE) & !SQLITE_OPEN_READONLY,
+		}
+	}
+
+	fn is_reader(self) -> bool {
+		matches!(self, Self::Reader)
+	}
 }
 
 unsafe impl Send for VfsContext {}
 unsafe impl Sync for VfsContext {}
 
-pub struct SqliteVfs {
+struct SqliteVfsInner {
 	vfs_ptr: *mut sqlite3_vfs,
 	_name: CString,
 	ctx_ptr: *mut VfsContext,
 }
 
-unsafe impl Send for SqliteVfs {}
-unsafe impl Sync for SqliteVfs {}
+unsafe impl Send for SqliteVfsInner {}
+unsafe impl Sync for SqliteVfsInner {}
+
+#[derive(Clone)]
+pub struct NativeVfsHandle {
+	inner: Arc<SqliteVfsInner>,
+}
+
+pub type SqliteVfs = NativeVfsHandle;
 
 pub struct NativeDatabase {
+	connection: NativeConnection,
+	vfs: NativeVfsHandle,
+}
+
+pub struct NativeConnection {
 	db: *mut sqlite3,
-	_vfs: SqliteVfs,
+	_vfs: NativeVfsHandle,
 }
 
 unsafe impl Send for NativeDatabase {}
+unsafe impl Send for NativeConnection {}
 
 fn select_page_fetch_transport(
 	to_fetch: &[u32],
@@ -1255,6 +1322,15 @@ impl PrefetchPredictor {
 
 impl AdaptiveReadAhead {
 	fn record_and_plan(&mut self, pgnos: &[u32], config: &VfsConfig) -> ReadAheadPlan {
+		if matches!(config.read_ahead_mode, SqliteReadAheadMode::Off) {
+			return ReadAheadPlan {
+				mode: ReadAheadMode::Off,
+				depth: 0,
+				max_bytes: 0,
+				seed_pgno: pgnos.last().copied(),
+			};
+		}
+
 		let mut scan_seed_pgno = None;
 		let mut scan_direction = None;
 		for pgno in pgnos.iter().copied() {
@@ -1264,7 +1340,7 @@ impl AdaptiveReadAhead {
 			}
 		}
 
-		if config.adaptive_read_ahead
+		if config.read_ahead_mode.uses_adaptive_prefetch()
 			&& self.score >= SCAN_SCORE_THRESHOLD
 			&& scan_seed_pgno.is_some()
 			&& scan_direction.is_some()
@@ -1638,12 +1714,15 @@ impl VfsState {
 		let page_cache = Cache::builder()
 			.max_capacity(config.cache_capacity_pages)
 			.build();
-		let mut protected_page_cache = ProtectedPageCache::new(if config.scan_resistant_cache {
+		let mut protected_page_cache = ProtectedPageCache::new(if config
+			.page_cache_mode
+			.caches_target_pages()
+		{
 			config.protected_cache_pages
 		} else {
 			0
 		});
-		if config.cache_startup_preloaded_pages {
+		if config.page_cache_mode.caches_startup_preloaded_pages() {
 			for page in &startup.preloaded_pages {
 				if let Some(bytes) = &page.bytes {
 					page_cache.insert(page.pgno, bytes.clone());
@@ -1684,20 +1763,20 @@ impl VfsState {
 		config: &VfsConfig,
 	) {
 		let should_cache = if target_page {
-			config.cache_fetched_pages
+			config.page_cache_mode.caches_target_pages()
 		} else {
-			config.cache_prefetched_pages
+			config.page_cache_mode.caches_prefetched_pages()
 		};
 		if should_cache {
 			self.page_cache.insert(pgno, bytes.clone());
 		}
-		if target_page && config.cache_fetched_pages && config.scan_resistant_cache {
+		if target_page && config.page_cache_mode.caches_target_pages() {
 			self.protected_page_cache.record_target_access(pgno, bytes);
 		}
 	}
 
 	fn record_target_cache_access(&mut self, pgno: u32, bytes: Vec<u8>, config: &VfsConfig) {
-		if config.cache_fetched_pages && config.scan_resistant_cache {
+		if config.page_cache_mode.caches_target_pages() {
 			self.protected_page_cache.record_target_access(pgno, bytes);
 		}
 	}
@@ -1732,6 +1811,7 @@ impl VfsContext {
 			config: config.clone(),
 			state: RwLock::new(VfsState::new(&config, &startup)),
 			aux_files: RwLock::new(BTreeMap::new()),
+			aux_file_roles: RwLock::new(BTreeMap::new()),
 			last_error: Mutex::new(None),
 			#[cfg(test)]
 			fail_next_aux_open: Mutex::new(None),
@@ -1781,20 +1861,30 @@ impl VfsContext {
 		self.state.read().page_size.max(DEFAULT_PAGE_SIZE)
 	}
 
-	fn open_aux_file(&self, path: &str) -> Arc<AuxFileState> {
+	fn open_aux_file(&self, path: &str, role: VfsFileRole) -> Arc<AuxFileState> {
 		let mut aux_files = self.aux_files.write();
-		aux_files
+		let state = aux_files
 			.entry(path.to_string())
 			.or_insert_with(|| Arc::new(AuxFileState::default()))
-			.clone()
+			.clone();
+		self.aux_file_roles
+			.write()
+			.entry(path.to_string())
+			.or_insert(role);
+		state
 	}
 
 	fn aux_file_exists(&self, path: &str) -> bool {
 		self.aux_files.read().contains_key(path)
 	}
 
+	fn aux_file_role(&self, path: &str) -> Option<VfsFileRole> {
+		self.aux_file_roles.read().get(path).copied()
+	}
+
 	fn delete_aux_file(&self, path: &str) {
 		self.aux_files.write().remove(path);
+		self.aux_file_roles.write().remove(path);
 	}
 
 	#[cfg(test)]
@@ -1862,13 +1952,15 @@ impl VfsContext {
 					resolved.insert(pgno, Some(bytes.clone()));
 					continue;
 				}
-				if let Some(bytes) = state.page_cache.get(&pgno) {
-					resolved.insert(pgno, Some(bytes));
-					continue;
-				}
-				if let Some(bytes) = state.protected_page_cache.get(&pgno) {
-					resolved.insert(pgno, Some(bytes));
-					continue;
+				if self.config.page_cache_mode.caches_any_pages() {
+					if let Some(bytes) = state.page_cache.get(&pgno) {
+						resolved.insert(pgno, Some(bytes));
+						continue;
+					}
+					if let Some(bytes) = state.protected_page_cache.get(&pgno) {
+						resolved.insert(pgno, Some(bytes));
+						continue;
+					}
 				}
 				missing.push(pgno);
 			}
@@ -1876,7 +1968,7 @@ impl VfsContext {
 
 		if missing.is_empty() {
 			let mut state = self.state.write();
-			if self.config.cache_hit_predictor_training {
+			if self.config.read_ahead_mode.uses_bounded_prefetch() {
 				for pgno in target_pgnos.iter().copied() {
 					state.predictor.record(pgno);
 				}
@@ -1913,8 +2005,10 @@ impl VfsContext {
 			fetch_transport,
 		) = {
 			let mut state = self.state.write();
-			for pgno in target_pgnos.iter().copied() {
-				state.predictor.record(pgno);
+			if self.config.read_ahead_mode.uses_bounded_prefetch() {
+				for pgno in target_pgnos.iter().copied() {
+					state.predictor.record(pgno);
+				}
 			}
 			let read_ahead_plan = state.read_ahead.record_and_plan(target_pgnos, &self.config);
 			if self.config.recent_page_hints {
@@ -2369,6 +2463,15 @@ unsafe fn get_aux_state(file: &VfsFile) -> Option<&AuxFileHandle> {
 	(!file.aux.is_null()).then(|| &*file.aux)
 }
 
+fn reject_reader_mutation(ctx: &VfsContext, operation: &str) {
+	ctx.set_last_error(format!(
+		"reader sqlite VFS handle attempted mutating operation {operation}"
+	));
+	if let Some(metrics) = &ctx.metrics {
+		metrics.record_read_pool_rejected_reader_mutation();
+	}
+}
+
 async fn commit_buffered_pages(
 	transport: &SqliteTransport,
 	request: BufferedCommitRequest,
@@ -2786,6 +2889,10 @@ unsafe extern "C" fn io_close(p_file: *mut sqlite3_file) -> c_int {
 				state.write_buffer.in_atomic_write || !state.write_buffer.dirty.is_empty()
 			};
 			if should_flush {
+				if file.role.is_reader() {
+					reject_reader_mutation(ctx, "dirty xClose");
+					return SQLITE_IOERR;
+				}
 				if ctx.state.read().write_buffer.in_atomic_write {
 					ctx.commit_atomic_write().map(|_| ())
 				} else {
@@ -2910,6 +3017,14 @@ unsafe extern "C" fn io_write(
 		}
 
 		let file = get_file(p_file);
+		let ctx = &*file.ctx;
+		let role = get_aux_state(file)
+			.map(|aux| aux.role)
+			.unwrap_or(file.role);
+		if role.is_reader() {
+			reject_reader_mutation(ctx, "xWrite");
+			return SQLITE_IOERR_WRITE;
+		}
 		if let Some(aux) = get_aux_state(file) {
 			if i_offset < 0 {
 				return SQLITE_IOERR_WRITE;
@@ -2926,7 +3041,6 @@ unsafe extern "C" fn io_write(
 			return SQLITE_OK;
 		}
 
-		let ctx = &*file.ctx;
 		if ctx.is_dead() {
 			return SQLITE_IOERR_WRITE;
 		}
@@ -3033,11 +3147,18 @@ unsafe extern "C" fn io_truncate(p_file: *mut sqlite3_file, size: sqlite3_int64)
 			return SQLITE_IOERR_TRUNCATE;
 		}
 		let file = get_file(p_file);
+		let ctx = &*file.ctx;
+		let role = get_aux_state(file)
+			.map(|aux| aux.role)
+			.unwrap_or(file.role);
+		if role.is_reader() {
+			reject_reader_mutation(ctx, "xTruncate");
+			return SQLITE_IOERR_TRUNCATE;
+		}
 		if let Some(aux) = get_aux_state(file) {
 			aux.state.bytes.lock().truncate(size as usize);
 			return SQLITE_OK;
 		}
-		let ctx = &*file.ctx;
 		ctx.truncate_main_file(size);
 		SQLITE_OK
 	})
@@ -3050,6 +3171,15 @@ unsafe extern "C" fn io_sync(p_file: *mut sqlite3_file, _flags: c_int) -> c_int 
 			return SQLITE_OK;
 		}
 		let ctx = &*file.ctx;
+		if file.role.is_reader() {
+			let state = ctx.state.read();
+			if state.write_buffer.in_atomic_write || !state.write_buffer.dirty.is_empty() {
+				drop(state);
+				reject_reader_mutation(ctx, "dirty xSync");
+				return SQLITE_IOERR_FSYNC;
+			}
+			return SQLITE_OK;
+		}
 		match ctx.flush_dirty_pages() {
 			Ok(_) => SQLITE_OK,
 			Err(err) => {
@@ -3112,13 +3242,22 @@ unsafe extern "C" fn io_file_control(
 
 		match op {
 			SQLITE_FCNTL_BEGIN_ATOMIC_WRITE => {
+				if file.role.is_reader() {
+					reject_reader_mutation(ctx, "begin atomic write file-control");
+					return SQLITE_READONLY;
+				}
 				let mut state = ctx.state.write();
 				state.write_buffer.in_atomic_write = true;
 				state.write_buffer.saved_db_size = state.db_size_pages;
 				state.write_buffer.dirty.clear();
 				SQLITE_OK
 			}
-			SQLITE_FCNTL_COMMIT_ATOMIC_WRITE => match ctx.commit_atomic_write() {
+			SQLITE_FCNTL_COMMIT_ATOMIC_WRITE => {
+				if file.role.is_reader() {
+					reject_reader_mutation(ctx, "commit atomic write file-control");
+					return SQLITE_READONLY;
+				}
+				match ctx.commit_atomic_write() {
 				Ok(()) => {
 					ctx.commit_atomic_count.fetch_add(1, Ordering::Relaxed);
 					SQLITE_OK
@@ -3133,8 +3272,13 @@ unsafe extern "C" fn io_file_control(
 					mark_dead_from_fence_commit_error(ctx, &err);
 					SQLITE_IOERR
 				}
-			},
+				}
+			}
 			SQLITE_FCNTL_ROLLBACK_ATOMIC_WRITE => {
+				if file.role.is_reader() {
+					reject_reader_mutation(ctx, "rollback atomic write file-control");
+					return SQLITE_READONLY;
+				}
 				let mut state = ctx.state.write();
 				state.write_buffer.dirty.clear();
 				state.write_buffer.in_atomic_write = false;
@@ -3153,7 +3297,7 @@ unsafe extern "C" fn io_sector_size(_p_file: *mut sqlite3_file) -> c_int {
 unsafe extern "C" fn io_device_characteristics(p_file: *mut sqlite3_file) -> c_int {
 	vfs_catch_unwind!(0, {
 		let file = get_file(p_file);
-		if get_aux_state(file).is_some() {
+		if file.role.is_reader() || get_aux_state(file).is_some() {
 			0
 		} else {
 			SQLITE_IOCAP_BATCH_ATOMIC
@@ -3185,6 +3329,16 @@ unsafe extern "C" fn vfs_open(
 		};
 		let is_main =
 			path == ctx.actor_id && !delete_on_close && (flags & SQLITE_OPEN_MAIN_DB) != 0;
+		let role = VfsFileRole::from_open_flags(flags);
+
+		if !is_main && role.is_reader() && !ctx.aux_file_exists(&path) {
+			// Reader auxiliary files are not safe yet. A reader connection may only
+			// open an existing auxiliary path without creating new mutable state.
+			ctx.set_last_error(format!(
+				"reader sqlite VFS handle attempted auxiliary file creation for {path}"
+			));
+			return SQLITE_CANTOPEN;
+		}
 
 		#[cfg(test)]
 		if !is_main {
@@ -3202,8 +3356,9 @@ unsafe extern "C" fn vfs_open(
 		} else {
 			Box::into_raw(Box::new(AuxFileHandle {
 				path: path.clone(),
-				state: ctx.open_aux_file(&path),
+				state: ctx.open_aux_file(&path, role),
 				delete_on_close,
+				role,
 			}))
 		};
 		ptr::write(
@@ -3212,11 +3367,12 @@ unsafe extern "C" fn vfs_open(
 				base,
 				ctx: ctx as *const VfsContext,
 				aux,
+				role,
 			},
 		);
 
 		if !p_out_flags.is_null() {
-			*p_out_flags = flags;
+			*p_out_flags = role.out_flags(flags);
 		}
 
 		SQLITE_OK
@@ -3239,6 +3395,10 @@ unsafe extern "C" fn vfs_delete(
 			Err(_) => return SQLITE_OK,
 		};
 		if path != ctx.actor_id {
+			if matches!(ctx.aux_file_role(path), Some(VfsFileRole::Reader)) {
+				reject_reader_mutation(ctx, "xDelete");
+				return SQLITE_READONLY;
+			}
 			#[cfg(test)]
 			if let Some(message) = ctx.take_aux_delete_error() {
 				ctx.set_last_error(message);
@@ -3359,7 +3519,7 @@ unsafe extern "C" fn vfs_get_last_error(
 	})
 }
 
-impl SqliteVfs {
+impl NativeVfsHandle {
 	pub fn register(
 		name: &str,
 		handle: EnvoyHandle,
@@ -3380,16 +3540,16 @@ impl SqliteVfs {
 		)
 	}
 
-	fn take_last_error(&self) -> Option<String> {
-		unsafe { (*self.ctx_ptr).take_last_error() }
+	pub(crate) fn take_last_error(&self) -> Option<String> {
+		unsafe { (*self.inner.ctx_ptr).take_last_error() }
 	}
 
 	fn clone_last_error(&self) -> Option<String> {
-		unsafe { (*self.ctx_ptr).clone_last_error() }
+		unsafe { (*self.inner.ctx_ptr).clone_last_error() }
 	}
 
-	fn snapshot_preload_hints(&self) -> VfsPreloadHintSnapshot {
-		unsafe { (*self.ctx_ptr).snapshot_preload_hints() }
+	pub(crate) fn snapshot_preload_hints(&self) -> VfsPreloadHintSnapshot {
+		unsafe { (*self.inner.ctx_ptr).snapshot_preload_hints() }
 	}
 
 	fn register_with_transport(
@@ -3448,22 +3608,28 @@ impl SqliteVfs {
 		}
 
 		Ok(Self {
+			inner: Arc::new(SqliteVfsInner {
 			vfs_ptr,
 			_name: name_cstring,
 			ctx_ptr,
+			}),
 		})
 	}
 
 	pub fn name_ptr(&self) -> *const c_char {
-		self._name.as_ptr()
+		self.inner._name.as_ptr()
 	}
 
 	fn commit_atomic_count(&self) -> u64 {
-		unsafe { (*self.ctx_ptr).commit_atomic_count.load(Ordering::Relaxed) }
+		unsafe {
+			(*self.inner.ctx_ptr)
+				.commit_atomic_count
+				.load(Ordering::Relaxed)
+		}
 	}
 }
 
-impl Drop for SqliteVfs {
+impl Drop for SqliteVfsInner {
 	fn drop(&mut self) {
 		unsafe {
 			sqlite3_vfs_unregister(self.vfs_ptr);
@@ -3475,19 +3641,29 @@ impl Drop for SqliteVfs {
 
 impl NativeDatabase {
 	pub fn as_ptr(&self) -> *mut sqlite3 {
-		self.db
+		self.connection.as_ptr()
 	}
 
 	pub fn take_last_kv_error(&self) -> Option<String> {
-		self._vfs.take_last_error()
+		self.vfs.take_last_error()
 	}
 
 	pub fn snapshot_preload_hints(&self) -> VfsPreloadHintSnapshot {
-		self._vfs.snapshot_preload_hints()
+		self.vfs.snapshot_preload_hints()
+	}
+
+	pub fn vfs_handle(&self) -> NativeVfsHandle {
+		self.vfs.clone()
 	}
 }
 
-impl Drop for NativeDatabase {
+impl NativeConnection {
+	pub fn as_ptr(&self) -> *mut sqlite3 {
+		self.db
+	}
+}
+
+impl Drop for NativeConnection {
 	fn drop(&mut self) {
 		if !self.db.is_null() {
 			let rc = unsafe { sqlite3_close_v2(self.db) };
@@ -3503,10 +3679,11 @@ impl Drop for NativeDatabase {
 	}
 }
 
-pub fn open_database(
-	vfs: SqliteVfs,
+pub fn open_connection(
+	vfs: NativeVfsHandle,
 	file_name: &str,
-) -> std::result::Result<NativeDatabase, String> {
+	flags: c_int,
+) -> std::result::Result<NativeConnection, String> {
 	let c_name = CString::new(file_name).map_err(|err| err.to_string())?;
 	let mut db: *mut sqlite3 = ptr::null_mut();
 
@@ -3514,7 +3691,7 @@ pub fn open_database(
 		sqlite3_open_v2(
 			c_name.as_ptr(),
 			&mut db,
-			SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE,
+			flags,
 			vfs.name_ptr(),
 		)
 	};
@@ -3535,6 +3712,30 @@ pub fn open_database(
 		return Err(format!("sqlite3_open_v2 failed with code {rc}: {message}"));
 	}
 
+	Ok(NativeConnection { db, _vfs: vfs })
+}
+
+pub fn open_database(
+	vfs: NativeVfsHandle,
+	file_name: &str,
+) -> std::result::Result<NativeDatabase, String> {
+	let connection = open_connection(
+		vfs.clone(),
+		file_name,
+		SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE,
+	)?;
+
+	configure_connection_for_database(connection.as_ptr(), &vfs, file_name)?;
+	verify_batch_atomic_writes(connection.as_ptr(), &vfs, file_name)?;
+
+	Ok(NativeDatabase { connection, vfs })
+}
+
+pub(crate) fn configure_connection_for_database(
+	db: *mut sqlite3,
+	vfs: &NativeVfsHandle,
+	file_name: &str,
+) -> std::result::Result<(), String> {
 	for pragma in &[
 		"PRAGMA page_size = 4096;",
 		"PRAGMA journal_mode = DELETE;",
@@ -3551,27 +3752,29 @@ pub fn open_database(
 				last_error = ?vfs.clone_last_error(),
 				"failed to configure sqlite database"
 			);
-			unsafe {
-				sqlite3_close(db);
-			}
 			return Err(err);
 		}
 	}
 
-	if let Err(err) = assert_batch_atomic_probe(db, &vfs) {
+	Ok(())
+}
+
+pub(crate) fn verify_batch_atomic_writes(
+	db: *mut sqlite3,
+	vfs: &NativeVfsHandle,
+	file_name: &str,
+) -> std::result::Result<(), String> {
+	if let Err(err) = assert_batch_atomic_probe(db, vfs) {
 		tracing::error!(
 			file_name,
 			%err,
 			last_error = ?vfs.clone_last_error(),
 			"failed to verify sqlite batch atomic writes"
 		);
-		unsafe {
-			sqlite3_close(db);
-		}
 		return Err(err);
 	}
 
-	Ok(NativeDatabase { db, _vfs: vfs })
+	Ok(())
 }
 
 #[cfg(test)]
@@ -3579,13 +3782,21 @@ mod tests {
 	use std::sync::atomic::{AtomicBool, AtomicU64, Ordering as AtomicOrdering};
 	use std::sync::{Arc, Barrier};
 	use std::thread;
+	use std::time::Duration;
 
 	use parking_lot::Mutex as SyncMutex;
 	use tempfile::TempDir;
 	use tokio::runtime::Builder;
+	use tokio::sync::oneshot;
+	use tokio::time::timeout;
 	use universaldb::Subspace;
 
 	use super::*;
+	use crate::connection_manager::{
+		NativeConnectionManager, NativeConnectionManagerConfig, NativeConnectionManagerMode,
+	};
+	use crate::database::{NativeDatabaseHandle, vfs_name_for_actor_database};
+	use crate::query::{ColumnValue, ExecuteRoute};
 
 	static TEST_ID: AtomicU64 = AtomicU64::new(1);
 
@@ -3842,6 +4053,28 @@ mod tests {
 				self.open_db_on_engine_with_metrics(runtime, engine, actor_id, config, None)
 			}
 
+			fn open_vfs_on_engine_with_metrics(
+				&self,
+				runtime: &tokio::runtime::Runtime,
+				engine: Arc<SqliteEngine>,
+				actor_id: &str,
+				name: &str,
+				config: VfsConfig,
+				metrics: Option<Arc<dyn SqliteVfsMetrics>>,
+			) -> NativeVfsHandle {
+				let startup = runtime.block_on(self.startup_data_for(actor_id, &engine));
+				SqliteVfs::register_with_transport(
+					name,
+					SqliteTransport::from_direct(engine),
+					actor_id.to_string(),
+					runtime.handle().clone(),
+					startup,
+					config,
+					metrics,
+				)
+				.expect("v2 vfs should register")
+			}
+
 			fn open_db_on_engine_with_metrics(
 				&self,
 				runtime: &tokio::runtime::Runtime,
@@ -3850,17 +4083,10 @@ mod tests {
 				config: VfsConfig,
 				metrics: Option<Arc<dyn SqliteVfsMetrics>>,
 			) -> NativeDatabase {
-				let startup = runtime.block_on(self.startup_data_for(actor_id, &engine));
-				let vfs = SqliteVfs::register_with_transport(
-					&next_test_name("sqlite-direct-vfs"),
-					SqliteTransport::from_direct(engine),
-					actor_id.to_string(),
-					runtime.handle().clone(),
-					startup,
-					config,
-					metrics,
-				)
-				.expect("v2 vfs should register");
+				let vfs_name = next_test_name("sqlite-direct-vfs");
+				let vfs = self.open_vfs_on_engine_with_metrics(
+					runtime, engine, actor_id, &vfs_name, config, metrics,
+				);
 
 				open_database(vfs, actor_id).expect("sqlite database should open")
 			}
@@ -3887,7 +4113,20 @@ mod tests {
 		}
 
 	fn direct_vfs_ctx(db: &NativeDatabase) -> &VfsContext {
-		unsafe { &*db._vfs.ctx_ptr }
+		unsafe { &*db.vfs.inner.ctx_ptr }
+	}
+
+	fn direct_vfs_handle_ctx(vfs: &NativeVfsHandle) -> &VfsContext {
+		unsafe { &*vfs.inner.ctx_ptr }
+	}
+
+	fn direct_connection_vfs_ctx(connection: &NativeConnection) -> &VfsContext {
+		unsafe { &*connection._vfs.inner.ctx_ptr }
+	}
+
+	fn sqlite_vfs_registered(name: &str) -> bool {
+		let name = CString::new(name).expect("vfs name should not contain NUL");
+		unsafe { !sqlite3_vfs_find(name.as_ptr()).is_null() }
 	}
 
 	fn sqlite_query_i64(db: *mut sqlite3, sql: &str) -> std::result::Result<i64, String> {
@@ -3968,6 +4207,21 @@ mod tests {
 		}
 
 		Ok(rc)
+	}
+
+	fn test_vfs_file(ctx: &VfsContext, role: VfsFileRole) -> Box<VfsFile> {
+		Box::new(VfsFile {
+			base: sqlite3_file {
+				pMethods: ctx.io_methods.as_ref(),
+			},
+			ctx: ctx as *const VfsContext,
+			aux: ptr::null_mut(),
+			role,
+		})
+	}
+
+	fn test_vfs_file_ptr(file: &mut VfsFile) -> *mut sqlite3_file {
+		(file as *mut VfsFile).cast()
 	}
 
 	fn direct_runtime() -> tokio::runtime::Runtime {
@@ -4250,13 +4504,13 @@ mod tests {
 	}
 
 	#[test]
-	fn disabled_read_ahead_flag_restores_legacy_prefetch_depth() {
+	fn read_ahead_off_disables_bounded_prefetch() {
 		let config = VfsConfig::from_optimization_flags(SqliteOptimizationFlags {
-			read_ahead: false,
+			read_ahead_mode: SqliteReadAheadMode::Off,
 			..SqliteOptimizationFlags::default()
 		});
 
-		assert_eq!(config.prefetch_depth, LEGACY_PREFETCH_DEPTH);
+		assert_eq!(config.prefetch_depth, 0);
 	}
 
 	#[test]
@@ -4495,7 +4749,7 @@ mod tests {
 	}
 
 	#[test]
-	fn disabled_adaptive_read_ahead_keeps_forward_scan_to_one_shard() {
+	fn bounded_read_ahead_keeps_forward_scan_to_one_shard() {
 		let runtime = Builder::new_current_thread()
 			.enable_all()
 			.build()
@@ -4541,7 +4795,7 @@ mod tests {
 				preloaded_pages: Vec::new(),
 			},
 			VfsConfig::from_optimization_flags(SqliteOptimizationFlags {
-				adaptive_read_ahead: false,
+				read_ahead_mode: SqliteReadAheadMode::Bounded,
 				..SqliteOptimizationFlags::default()
 			}),
 			unsafe { std::mem::zeroed() },
@@ -4560,74 +4814,6 @@ mod tests {
 		let requests = protocol.get_pages_requests();
 		assert_eq!(requests.len(), 2);
 		assert_eq!(requests[1].pgnos, (76..140).collect::<Vec<_>>());
-	}
-
-	#[test]
-	fn disabled_cache_hit_training_bypasses_hit_path_predictor_updates() {
-		let runtime = Builder::new_current_thread()
-			.enable_all()
-			.build()
-			.expect("runtime should build");
-		let mut protocol = MockProtocol::new(
-			protocol::SqliteCommitResponse::SqliteCommitOk(protocol::SqliteCommitOk {
-				new_head_txid: 13,
-				meta: sqlite_meta(8 * 1024 * 1024),
-			}),
-			protocol::SqliteCommitStageResponse::SqliteCommitStageOk(
-				protocol::SqliteCommitStageOk {
-					chunk_idx_committed: 0,
-				},
-			),
-			protocol::SqliteCommitFinalizeResponse::SqliteCommitFinalizeOk(
-				protocol::SqliteCommitFinalizeOk {
-					new_head_txid: 13,
-					meta: sqlite_meta(8 * 1024 * 1024),
-				},
-			),
-		);
-		protocol.get_pages_response =
-			protocol::SqliteGetPagesResponse::SqliteGetPagesOk(protocol::SqliteGetPagesOk {
-				pages: (10..76)
-					.map(|pgno| protocol::SqliteFetchedPage {
-						pgno,
-						bytes: Some(vec![(pgno % 251) as u8; 4096]),
-					})
-					.collect(),
-				meta: sqlite_meta(8 * 1024 * 1024),
-			});
-		let protocol = Arc::new(protocol);
-		let ctx = VfsContext::new(
-			"actor".to_string(),
-			runtime.handle().clone(),
-			SqliteTransport::from_mock(protocol.clone()),
-			protocol::SqliteStartupData {
-				generation: 7,
-				meta: protocol::SqliteMeta {
-					db_size_pages: 200,
-					..sqlite_meta(8 * 1024 * 1024)
-				},
-				preloaded_pages: Vec::new(),
-			},
-			VfsConfig::from_optimization_flags(SqliteOptimizationFlags {
-				cache_hit_predictor_training: false,
-				..SqliteOptimizationFlags::default()
-			}),
-			unsafe { std::mem::zeroed() },
-			None,
-		);
-
-		ctx.resolve_pages(&[10], true)
-			.expect("first missing page should resolve");
-		for pgno in 11..76 {
-			ctx.resolve_pages(&[pgno], true)
-				.expect("cache-hit page should resolve");
-		}
-		ctx.resolve_pages(&[76], true)
-			.expect("next missing page should resolve");
-
-		let requests = protocol.get_pages_requests();
-		assert_eq!(requests.len(), 2);
-		assert_eq!(requests[1].pgnos, vec![76]);
 	}
 
 	#[test]
@@ -4776,7 +4962,7 @@ mod tests {
 	}
 
 	#[test]
-	fn disabled_startup_preloaded_page_cache_fetches_on_first_read() {
+	fn target_page_cache_mode_fetches_startup_pages_on_first_read() {
 		let runtime = Builder::new_current_thread()
 			.enable_all()
 			.build()
@@ -4820,7 +5006,7 @@ mod tests {
 				}],
 			},
 			VfsConfig::from_optimization_flags(SqliteOptimizationFlags {
-				vfs_cache_startup_preloaded_pages: false,
+				vfs_page_cache_mode: SqliteVfsPageCacheMode::Target,
 				..SqliteOptimizationFlags::default()
 			}),
 			unsafe { std::mem::zeroed() },
@@ -4837,7 +5023,7 @@ mod tests {
 	}
 
 	#[test]
-	fn disabled_fetched_page_cache_re_fetches_target_reads() {
+	fn page_cache_off_re_fetches_target_reads() {
 		let runtime = Builder::new_current_thread()
 			.enable_all()
 			.build()
@@ -4881,7 +5067,8 @@ mod tests {
 				preloaded_pages: Vec::new(),
 			},
 			VfsConfig::from_optimization_flags(SqliteOptimizationFlags {
-				vfs_cache_fetched_pages: false,
+				vfs_page_cache_mode: SqliteVfsPageCacheMode::Off,
+				vfs_page_cache_capacity_pages: 0,
 				..SqliteOptimizationFlags::default()
 			}),
 			unsafe { std::mem::zeroed() },
@@ -4897,7 +5084,7 @@ mod tests {
 	}
 
 	#[test]
-	fn disabled_prefetched_page_cache_re_fetches_prefetch_hits() {
+	fn target_page_cache_mode_re_fetches_prefetch_hits() {
 		let runtime = Builder::new_current_thread()
 			.enable_all()
 			.build()
@@ -4947,7 +5134,7 @@ mod tests {
 				preloaded_pages: Vec::new(),
 			},
 			VfsConfig::from_optimization_flags(SqliteOptimizationFlags {
-				vfs_cache_prefetched_pages: false,
+				vfs_page_cache_mode: SqliteVfsPageCacheMode::Target,
 				..SqliteOptimizationFlags::default()
 			}),
 			unsafe { std::mem::zeroed() },
@@ -6341,9 +6528,1170 @@ mod tests {
 		let db = harness.open_db(&runtime);
 
 		assert!(
-			db._vfs.commit_atomic_count() > 0,
+			db.vfs.commit_atomic_count() > 0,
 			"open_database should run the sqlite batch-atomic probe",
 		);
+	}
+
+	#[test]
+	fn reader_vfs_file_rejects_mutating_callbacks() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let db = harness.open_db(&runtime);
+		let ctx = direct_vfs_ctx(&db);
+		let mut file = test_vfs_file(ctx, VfsFileRole::Reader);
+		let p_file = test_vfs_file_ptr(&mut file);
+		let bytes = vec![0x5a; DEFAULT_PAGE_SIZE];
+
+		assert_eq!(
+			unsafe { io_write(p_file, bytes.as_ptr().cast(), bytes.len() as c_int, 0) },
+			SQLITE_IOERR_WRITE
+		);
+		assert_eq!(unsafe { io_truncate(p_file, 0) }, SQLITE_IOERR_TRUNCATE);
+		{
+			let mut state = ctx.state.write();
+			state.write_buffer.dirty.insert(1, vec![0x7a; DEFAULT_PAGE_SIZE]);
+		}
+		assert_eq!(unsafe { io_sync(p_file, 0) }, SQLITE_IOERR_FSYNC);
+		{
+			let mut state = ctx.state.write();
+			state.write_buffer.dirty.clear();
+			state.write_buffer.in_atomic_write = false;
+		}
+		assert_eq!(
+			unsafe { io_file_control(p_file, SQLITE_FCNTL_BEGIN_ATOMIC_WRITE, ptr::null_mut()) },
+			SQLITE_READONLY
+		);
+		assert!(
+			ctx.clone_last_error()
+				.expect("reader mutation should set last error")
+				.contains("reader sqlite VFS handle attempted mutating operation")
+		);
+	}
+
+	#[test]
+	fn writer_vfs_file_supports_write_callback() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let db = harness.open_db(&runtime);
+		let ctx = direct_vfs_ctx(&db);
+		let mut file = test_vfs_file(ctx, VfsFileRole::Writer);
+		let p_file = test_vfs_file_ptr(&mut file);
+		let bytes = vec![0x5a; DEFAULT_PAGE_SIZE];
+
+		assert_eq!(
+			unsafe { io_write(p_file, bytes.as_ptr().cast(), bytes.len() as c_int, 0) },
+			SQLITE_OK
+		);
+		{
+			let mut state = ctx.state.write();
+			assert!(state.write_buffer.dirty.contains_key(&1));
+			state.write_buffer.dirty.clear();
+		}
+	}
+
+	#[test]
+	fn vfs_open_sets_role_flags_and_denies_reader_aux_creation() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let db = harness.open_db(&runtime);
+		let ctx = direct_vfs_ctx(&db);
+		let actor = CString::new(harness.actor_id.as_str()).expect("actor id should be valid");
+		let mut reader_out_flags = 0;
+		let mut reader_file = std::mem::MaybeUninit::<VfsFile>::uninit();
+
+		let rc = unsafe {
+			vfs_open(
+				db.vfs.inner.vfs_ptr,
+				actor.as_ptr(),
+				reader_file.as_mut_ptr().cast(),
+				SQLITE_OPEN_MAIN_DB | SQLITE_OPEN_READONLY,
+				&mut reader_out_flags,
+			)
+		};
+		assert_eq!(rc, SQLITE_OK);
+		assert_ne!(reader_out_flags & SQLITE_OPEN_READONLY, 0);
+		assert_eq!(reader_out_flags & SQLITE_OPEN_READWRITE, 0);
+		let mut reader_file = unsafe { reader_file.assume_init() };
+		assert_eq!(reader_file.role, VfsFileRole::Reader);
+		assert_eq!(
+			unsafe { io_close(test_vfs_file_ptr(&mut reader_file)) },
+			SQLITE_OK
+		);
+
+		let aux_path = CString::new("reader-scratch").expect("aux path should be valid");
+		let mut aux_out_flags = 0;
+		let mut aux_file = std::mem::MaybeUninit::<VfsFile>::uninit();
+		let rc = unsafe {
+			vfs_open(
+				db.vfs.inner.vfs_ptr,
+				aux_path.as_ptr(),
+				aux_file.as_mut_ptr().cast(),
+				SQLITE_OPEN_CREATE | SQLITE_OPEN_READONLY,
+				&mut aux_out_flags,
+			)
+		};
+		assert_eq!(rc, SQLITE_CANTOPEN);
+		assert!(
+			ctx.clone_last_error()
+				.expect("reader aux create should set last error")
+				.contains("auxiliary file creation")
+		);
+	}
+
+	#[test]
+	fn reader_owned_aux_files_reject_delete() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let db = harness.open_db(&runtime);
+		let ctx = direct_vfs_ctx(&db);
+		ctx.open_aux_file("reader-owned-journal", VfsFileRole::Reader);
+		let path = CString::new("reader-owned-journal").expect("aux path should be valid");
+
+		assert_eq!(
+			unsafe { vfs_delete(db.vfs.inner.vfs_ptr, path.as_ptr(), 0) },
+			SQLITE_READONLY
+		);
+		assert!(ctx.aux_file_exists("reader-owned-journal"));
+	}
+
+	#[test]
+	fn connection_manager_admits_lazy_reads_up_to_limit() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let vfs_name = next_test_name("sqlite-manager-read-limit");
+		let engine = runtime.block_on(harness.open_engine());
+		let vfs = harness.open_vfs_on_engine_with_metrics(
+			&runtime,
+			engine,
+			&harness.actor_id,
+			&vfs_name,
+			VfsConfig::default(),
+			None,
+		);
+		let manager = NativeConnectionManager::new(
+			vfs,
+			harness.actor_id.clone(),
+			NativeConnectionManagerConfig { max_readers: 2, ..NativeConnectionManagerConfig::default() },
+		);
+
+		runtime.block_on(async {
+			manager
+				.with_write_connection(|db| {
+					sqlite_exec(
+						db,
+						"CREATE TABLE manager_reads (id INTEGER PRIMARY KEY, value TEXT);",
+					)
+					.map_err(anyhow::Error::msg)
+				})
+				.await
+				.expect("setup write should succeed");
+
+			let first = manager
+				.acquire_read()
+				.await
+				.expect("first reader should open");
+			let second = manager
+				.acquire_read()
+				.await
+				.expect("second reader should open");
+			let snapshot = manager.snapshot().await;
+			assert_eq!(snapshot.mode, NativeConnectionManagerMode::ReadMode);
+			assert_eq!(snapshot.active_readers, 2);
+			assert_eq!(snapshot.open_readers, 2);
+
+			let third_manager = manager.clone();
+			let third = tokio::spawn(async move {
+				third_manager
+					.acquire_read()
+					.await
+					.expect("third reader should eventually open")
+			});
+			tokio::task::yield_now().await;
+			assert!(!third.is_finished());
+
+			first.release().await;
+			let third = timeout(Duration::from_secs(1), third)
+				.await
+				.expect("third reader should acquire after a slot frees")
+				.expect("third reader task should not panic");
+			second.release().await;
+			third.release().await;
+			manager.close().await.expect("manager close should succeed");
+		});
+	}
+
+	#[test]
+	fn connection_manager_prefers_pending_writer_over_new_readers() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let vfs_name = next_test_name("sqlite-manager-writer-preference");
+		let engine = runtime.block_on(harness.open_engine());
+		let vfs = harness.open_vfs_on_engine_with_metrics(
+			&runtime,
+			engine,
+			&harness.actor_id,
+			&vfs_name,
+			VfsConfig::default(),
+			None,
+		);
+		let manager = NativeConnectionManager::new(
+			vfs,
+			harness.actor_id.clone(),
+			NativeConnectionManagerConfig { max_readers: 2, ..NativeConnectionManagerConfig::default() },
+		);
+
+		runtime.block_on(async {
+			manager
+				.with_write_connection(|db| {
+					sqlite_exec(
+						db,
+						"CREATE TABLE manager_writer_preference (id INTEGER PRIMARY KEY);",
+					)
+					.map_err(anyhow::Error::msg)
+				})
+				.await
+				.expect("setup write should succeed");
+
+			let active_reader = manager
+				.acquire_read()
+				.await
+				.expect("reader should open before writer waits");
+			let writer_manager = manager.clone();
+			let (writer_acquired_tx, writer_acquired_rx) = oneshot::channel();
+			let (release_writer_tx, release_writer_rx) = oneshot::channel();
+			let writer = tokio::spawn(async move {
+				let writer = writer_manager
+					.acquire_write()
+					.await
+					.expect("writer should acquire after reader releases");
+				let _ = writer_acquired_tx.send(());
+				let _ = release_writer_rx.await;
+				writer.release().await;
+			});
+
+			manager
+				.wait_for_snapshot(|snapshot| snapshot.pending_writers == 1)
+				.await;
+
+			let reader_manager = manager.clone();
+			let pending_reader = tokio::spawn(async move {
+				reader_manager
+					.acquire_read()
+					.await
+					.expect("reader should acquire after writer releases")
+			});
+			tokio::task::yield_now().await;
+			assert!(!pending_reader.is_finished());
+
+			active_reader.release().await;
+			timeout(Duration::from_secs(1), writer_acquired_rx)
+				.await
+				.expect("writer should acquire before pending reader")
+				.expect("writer acquired signal should send");
+			let snapshot = manager.snapshot().await;
+			assert_eq!(snapshot.mode, NativeConnectionManagerMode::WriteMode);
+			assert_eq!(snapshot.active_readers, 0);
+			assert_eq!(snapshot.open_readers, 0);
+			assert!(snapshot.active_writer);
+			tokio::task::yield_now().await;
+			assert!(!pending_reader.is_finished());
+
+			let _ = release_writer_tx.send(());
+			writer.await.expect("writer task should not panic");
+			let pending_reader = timeout(Duration::from_secs(1), pending_reader)
+				.await
+				.expect("pending reader should acquire after writer releases")
+				.expect("pending reader task should not panic");
+			pending_reader.release().await;
+			manager.close().await.expect("manager close should succeed");
+		});
+	}
+
+	#[test]
+	fn connection_manager_keeps_begin_in_write_mode_until_commit() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let vfs_name = next_test_name("sqlite-manager-begin-gate");
+		let engine = runtime.block_on(harness.open_engine());
+		let vfs = harness.open_vfs_on_engine_with_metrics(
+			&runtime,
+			engine,
+			&harness.actor_id,
+			&vfs_name,
+			VfsConfig::default(),
+			None,
+		);
+		let manager = NativeConnectionManager::new(
+			vfs,
+			harness.actor_id.clone(),
+			NativeConnectionManagerConfig { max_readers: 2, ..NativeConnectionManagerConfig::default() },
+		);
+
+		runtime.block_on(async {
+			manager
+				.with_write_connection(|db| {
+					sqlite_exec(
+						db,
+						"CREATE TABLE manager_begin_gate (id INTEGER PRIMARY KEY, value TEXT);",
+					)
+					.map_err(anyhow::Error::msg)
+				})
+				.await
+				.expect("setup write should succeed");
+
+			manager
+				.with_write_connection(|db| sqlite_exec(db, "BEGIN").map_err(anyhow::Error::msg))
+				.await
+				.expect("begin should succeed");
+			let snapshot = manager.snapshot().await;
+			assert_eq!(snapshot.mode, NativeConnectionManagerMode::WriteMode);
+			assert!(!snapshot.active_writer);
+			assert_eq!(snapshot.open_readers, 0);
+
+			let reader_manager = manager.clone();
+			let pending_reader = tokio::spawn(async move {
+				reader_manager
+					.acquire_read()
+					.await
+					.expect("reader should acquire after commit")
+			});
+			tokio::task::yield_now().await;
+			assert!(!pending_reader.is_finished());
+
+			manager
+				.with_write_connection(|db| {
+					sqlite_exec(
+						db,
+						"INSERT INTO manager_begin_gate (id, value) VALUES (1, 'committed');",
+					)
+					.map_err(anyhow::Error::msg)
+				})
+				.await
+				.expect("transactional insert should succeed");
+			tokio::task::yield_now().await;
+			assert!(!pending_reader.is_finished());
+
+			manager
+				.with_write_connection(|db| sqlite_exec(db, "COMMIT").map_err(anyhow::Error::msg))
+				.await
+				.expect("commit should succeed");
+			let pending_reader = timeout(Duration::from_secs(1), pending_reader)
+				.await
+				.expect("reader should acquire after commit")
+				.expect("reader task should not panic");
+			assert_eq!(
+				sqlite_query_text(
+					pending_reader.as_ptr(),
+					"SELECT value FROM manager_begin_gate WHERE id = 1;",
+				)
+				.expect("reader should see committed write"),
+				"committed"
+			);
+			pending_reader.release().await;
+			manager.close().await.expect("manager close should succeed");
+		});
+	}
+
+	#[test]
+	fn connection_manager_keeps_savepoint_in_write_mode_until_rollback() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let vfs_name = next_test_name("sqlite-manager-savepoint-gate");
+		let engine = runtime.block_on(harness.open_engine());
+		let vfs = harness.open_vfs_on_engine_with_metrics(
+			&runtime,
+			engine,
+			&harness.actor_id,
+			&vfs_name,
+			VfsConfig::default(),
+			None,
+		);
+		let manager = NativeConnectionManager::new(
+			vfs,
+			harness.actor_id.clone(),
+			NativeConnectionManagerConfig { max_readers: 2, ..NativeConnectionManagerConfig::default() },
+		);
+
+		runtime.block_on(async {
+			manager
+				.with_write_connection(|db| {
+					sqlite_exec(
+						db,
+						"CREATE TABLE manager_savepoint_gate (id INTEGER PRIMARY KEY);",
+					)
+					.map_err(anyhow::Error::msg)
+				})
+				.await
+				.expect("setup write should succeed");
+
+			manager
+				.with_write_connection(|db| {
+					sqlite_exec(db, "SAVEPOINT manager_gate")
+						.map_err(anyhow::Error::msg)
+				})
+				.await
+				.expect("savepoint should succeed");
+			let snapshot = manager.snapshot().await;
+			assert_eq!(snapshot.mode, NativeConnectionManagerMode::WriteMode);
+			assert!(!snapshot.active_writer);
+
+			let reader_manager = manager.clone();
+			let pending_reader = tokio::spawn(async move {
+				reader_manager
+					.acquire_read()
+					.await
+					.expect("reader should acquire after rollback")
+			});
+			tokio::task::yield_now().await;
+			assert!(!pending_reader.is_finished());
+
+			manager
+				.with_write_connection(|db| {
+					sqlite_exec(db, "ROLLBACK").map_err(anyhow::Error::msg)
+				})
+				.await
+				.expect("rollback should succeed");
+			let pending_reader = timeout(Duration::from_secs(1), pending_reader)
+				.await
+				.expect("reader should acquire after rollback")
+				.expect("reader task should not panic");
+			pending_reader.release().await;
+			manager.close().await.expect("manager close should succeed");
+		});
+	}
+
+	#[test]
+	fn native_database_routes_concurrent_readonly_queries_to_multiple_readers() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let engine = runtime.block_on(harness.open_engine());
+		let startup = runtime.block_on(harness.startup_data_for(&harness.actor_id, &engine));
+		let vfs = SqliteVfs::register_with_transport(
+			&next_test_name("sqlite-read-routing-vfs"),
+			SqliteTransport::from_direct(engine),
+			harness.actor_id.clone(),
+			runtime.handle().clone(),
+			startup,
+			VfsConfig::default(),
+			None,
+		)
+		.expect("vfs should register");
+		let db = NativeDatabaseHandle::new(
+			vfs,
+			harness.actor_id.clone(),
+			NativeConnectionManagerConfig { max_readers: 2, ..NativeConnectionManagerConfig::default() },
+		);
+
+		runtime.block_on(async {
+			db.exec(
+				"CREATE TABLE read_routing (id INTEGER PRIMARY KEY, value TEXT NOT NULL);
+				INSERT INTO read_routing (id, value) VALUES (1, 'alpha'), (2, 'bravo');"
+					.to_string(),
+			)
+			.await
+			.expect("setup write should succeed");
+
+			let held_reader = db
+				.manager()
+				.acquire_read()
+				.await
+				.expect("held reader should open");
+			let result = timeout(
+				Duration::from_secs(1),
+				db.query(
+					"SELECT value FROM read_routing WHERE id = 2;".to_string(),
+					None,
+				),
+			)
+			.await
+			.expect("read-only query should not wait for write mode")
+			.expect("read-only query should succeed");
+
+			let snapshot = db.manager().snapshot().await;
+			assert_eq!(snapshot.active_readers, 1);
+			assert_eq!(snapshot.idle_readers, 1);
+			assert_eq!(snapshot.open_readers, 2);
+			assert!(!snapshot.active_writer);
+			assert_eq!(result.rows[0][0], ColumnValue::Text("bravo".to_string()));
+
+			held_reader.release().await;
+			db.close().await.expect("database close should succeed");
+		});
+	}
+
+	#[test]
+	fn native_database_reuses_idle_reader_for_readonly_query() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let engine = runtime.block_on(harness.open_engine());
+		let startup = runtime.block_on(harness.startup_data_for(&harness.actor_id, &engine));
+		let vfs = SqliteVfs::register_with_transport(
+			&next_test_name("sqlite-read-reuse-vfs"),
+			SqliteTransport::from_direct(engine),
+			harness.actor_id.clone(),
+			runtime.handle().clone(),
+			startup,
+			VfsConfig::default(),
+			None,
+		)
+		.expect("vfs should register");
+		let db = NativeDatabaseHandle::new(
+			vfs,
+			harness.actor_id.clone(),
+			NativeConnectionManagerConfig { max_readers: 2, ..NativeConnectionManagerConfig::default() },
+		);
+
+		runtime.block_on(async {
+			db.exec(
+				"CREATE TABLE read_reuse (id INTEGER PRIMARY KEY, value TEXT NOT NULL);
+				INSERT INTO read_reuse (id, value) VALUES (1, 'alpha');"
+					.to_string(),
+			)
+			.await
+			.expect("setup write should succeed");
+
+			db.query(
+				"SELECT value FROM read_reuse WHERE id = 1;".to_string(),
+				None,
+			)
+			.await
+			.expect("first read should succeed");
+			let snapshot = db.manager().snapshot().await;
+			assert_eq!(snapshot.idle_readers, 1);
+			assert_eq!(snapshot.open_readers, 1);
+
+			db.query(
+				"SELECT value FROM read_reuse WHERE id = 1;".to_string(),
+				None,
+			)
+			.await
+			.expect("second read should succeed");
+			let snapshot = db.manager().snapshot().await;
+			assert_eq!(snapshot.idle_readers, 1);
+			assert_eq!(snapshot.open_readers, 1);
+
+			db.close().await.expect("database close should succeed");
+		});
+	}
+
+	#[test]
+	fn disabled_read_pool_routes_select_through_single_writer() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let engine = runtime.block_on(harness.open_engine());
+		let startup = runtime.block_on(harness.startup_data_for(&harness.actor_id, &engine));
+		let vfs = SqliteVfs::register_with_transport(
+			&next_test_name("sqlite-read-pool-disabled-vfs"),
+			SqliteTransport::from_direct(engine),
+			harness.actor_id.clone(),
+			runtime.handle().clone(),
+			startup,
+			VfsConfig::default(),
+			None,
+		)
+		.expect("vfs should register");
+		let db = NativeDatabaseHandle::new(
+			vfs,
+			harness.actor_id.clone(),
+			NativeConnectionManagerConfig {
+				read_pool_enabled: false,
+				..NativeConnectionManagerConfig::default()
+			},
+		);
+
+		runtime.block_on(async {
+			db.exec(
+				"CREATE TABLE read_pool_disabled (id INTEGER PRIMARY KEY, value TEXT NOT NULL);
+				INSERT INTO read_pool_disabled (id, value) VALUES (1, 'alpha');"
+					.to_string(),
+			)
+			.await
+			.expect("setup write should succeed");
+
+			let result = db
+				.execute(
+					"SELECT value FROM read_pool_disabled WHERE id = 1;".to_string(),
+					None,
+				)
+				.await
+				.expect("disabled read pool select should use writer");
+			assert_eq!(result.route, ExecuteRoute::WriteFallback);
+			assert_eq!(result.rows[0][0], ColumnValue::Text("alpha".to_string()));
+
+			let snapshot = db.manager().snapshot().await;
+			assert_eq!(snapshot.idle_readers, 0);
+			assert_eq!(snapshot.open_readers, 0);
+			assert_eq!(snapshot.mode, NativeConnectionManagerMode::WriteMode);
+
+			db.close().await.expect("database close should succeed");
+		});
+	}
+
+	#[test]
+	fn native_database_reader_authorizer_denies_unsafe_functions() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let engine = runtime.block_on(harness.open_engine());
+		let startup = runtime.block_on(harness.startup_data_for(&harness.actor_id, &engine));
+		let vfs = SqliteVfs::register_with_transport(
+			&next_test_name("sqlite-reader-authorizer-vfs"),
+			SqliteTransport::from_direct(engine),
+			harness.actor_id.clone(),
+			runtime.handle().clone(),
+			startup,
+			VfsConfig::default(),
+			None,
+		)
+		.expect("vfs should register");
+		let db = NativeDatabaseHandle::new(
+			vfs,
+			harness.actor_id.clone(),
+			NativeConnectionManagerConfig { max_readers: 2, ..NativeConnectionManagerConfig::default() },
+		);
+
+		runtime.block_on(async {
+			let err = db
+				.query("SELECT load_extension('not-present');".to_string(), None)
+				.await
+				.expect_err("reader authorizer should reject unsafe function");
+			assert!(
+				err.to_string().contains("not authorized"),
+				"unexpected error: {err:#}"
+			);
+			db.close().await.expect("database close should succeed");
+		});
+	}
+
+	#[test]
+	fn native_database_raw_transaction_keeps_write_mode_across_awaited_user_code() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let engine = runtime.block_on(harness.open_engine());
+		let startup = runtime.block_on(harness.startup_data_for(&harness.actor_id, &engine));
+		let vfs = SqliteVfs::register_with_transport(
+			&next_test_name("sqlite-native-raw-tx-vfs"),
+			SqliteTransport::from_direct(engine),
+			harness.actor_id.clone(),
+			runtime.handle().clone(),
+			startup,
+			VfsConfig::default(),
+			None,
+		)
+		.expect("vfs should register");
+		let db = NativeDatabaseHandle::new(
+			vfs,
+			harness.actor_id.clone(),
+			NativeConnectionManagerConfig { max_readers: 2, ..NativeConnectionManagerConfig::default() },
+		);
+
+		runtime.block_on(async {
+			db.exec(
+				"CREATE TABLE native_raw_tx (id INTEGER PRIMARY KEY, value TEXT NOT NULL);"
+					.to_string(),
+			)
+			.await
+			.expect("setup write should succeed");
+			db.execute("BEGIN".to_string(), None)
+				.await
+				.expect("raw begin should succeed");
+			tokio::task::yield_now().await;
+			let in_tx = db.manager().snapshot().await;
+			assert_eq!(in_tx.mode, NativeConnectionManagerMode::WriteMode);
+			assert!(!in_tx.active_writer);
+			assert_eq!(in_tx.open_readers, 0);
+
+			let reader_db = db.clone();
+			let pending_reader = tokio::spawn(async move {
+				reader_db
+					.query("SELECT COUNT(*) FROM native_raw_tx;".to_string(), None)
+					.await
+			});
+			tokio::task::yield_now().await;
+			assert!(!pending_reader.is_finished());
+
+			db.execute(
+				"INSERT INTO native_raw_tx (id, value) VALUES (1, 'committed')".to_string(),
+				None,
+			)
+			.await
+			.expect("transactional write should reuse writer");
+			tokio::task::yield_now().await;
+			assert!(!pending_reader.is_finished());
+
+			db.execute("COMMIT".to_string(), None)
+				.await
+				.expect("commit should succeed");
+			let read_result = timeout(Duration::from_secs(1), pending_reader)
+				.await
+				.expect("reader should run after commit")
+				.expect("reader task should not panic")
+				.expect("reader should succeed");
+			assert_eq!(read_result.rows[0][0], ColumnValue::Integer(1));
+			let after_commit = db.manager().snapshot().await;
+			assert_ne!(after_commit.mode, NativeConnectionManagerMode::WriteMode);
+			db.close().await.expect("database close should succeed");
+		});
+	}
+
+	#[test]
+	fn native_database_execute_and_query_share_one_routing_gate() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let engine = runtime.block_on(harness.open_engine());
+		let startup = runtime.block_on(harness.startup_data_for(&harness.actor_id, &engine));
+		let vfs = SqliteVfs::register_with_transport(
+			&next_test_name("sqlite-native-shared-gate-vfs"),
+			SqliteTransport::from_direct(engine),
+			harness.actor_id.clone(),
+			runtime.handle().clone(),
+			startup,
+			VfsConfig::default(),
+			None,
+		)
+		.expect("vfs should register");
+		let db = NativeDatabaseHandle::new(
+			vfs,
+			harness.actor_id.clone(),
+			NativeConnectionManagerConfig { max_readers: 2, ..NativeConnectionManagerConfig::default() },
+		);
+
+		runtime.block_on(async {
+			db.exec(
+				"CREATE TABLE shared_gate (id INTEGER PRIMARY KEY, value TEXT NOT NULL);"
+					.to_string(),
+			)
+			.await
+			.expect("setup write should succeed");
+			let held_reader = db
+				.manager()
+				.acquire_read()
+				.await
+				.expect("held user reader should open");
+
+			let inspector_db = db.clone();
+			let inspector_execute = tokio::spawn(async move {
+				inspector_db
+					.execute(
+						"INSERT INTO shared_gate (id, value) VALUES (1, 'inspector')".to_string(),
+						None,
+					)
+					.await
+			});
+			db.manager()
+				.wait_for_snapshot(|snapshot| snapshot.pending_writers == 1)
+				.await;
+
+			let user_db = db.clone();
+			let user_query = tokio::spawn(async move {
+				user_db
+					.query("SELECT value FROM shared_gate WHERE id = 1;".to_string(), None)
+					.await
+			});
+			tokio::task::yield_now().await;
+			assert!(!inspector_execute.is_finished());
+			assert!(!user_query.is_finished());
+
+			held_reader.release().await;
+			let execute_result = timeout(Duration::from_secs(1), inspector_execute)
+				.await
+				.expect("inspector-style execute should complete after reader releases")
+				.expect("execute task should not panic")
+				.expect("inspector-style execute should succeed");
+			assert_eq!(execute_result.route, ExecuteRoute::Write);
+
+			let query_result = timeout(Duration::from_secs(1), user_query)
+				.await
+				.expect("user query should complete after writer")
+				.expect("query task should not panic")
+				.expect("user query should succeed");
+			assert_eq!(
+				query_result.rows[0][0],
+				ColumnValue::Text("inspector".to_string())
+			);
+			let snapshot = db.manager().snapshot().await;
+			assert_eq!(snapshot.pending_writers, 0);
+			assert!(!snapshot.active_writer);
+			db.close().await.expect("database close should succeed");
+		});
+	}
+
+	#[test]
+	fn native_database_reader_fence_mismatch_marks_shared_vfs_dead() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let engine = runtime.block_on(harness.open_engine());
+		let startup = runtime.block_on(harness.startup_data_for(&harness.actor_id, &engine));
+		let vfs = SqliteVfs::register_with_transport(
+			&next_test_name("sqlite-native-reader-fence-vfs"),
+			SqliteTransport::from_direct(Arc::clone(&engine)),
+			harness.actor_id.clone(),
+			runtime.handle().clone(),
+			startup,
+			VfsConfig::default(),
+			None,
+		)
+		.expect("vfs should register");
+		let vfs_for_assertion = vfs.clone();
+		let db = NativeDatabaseHandle::new(
+			vfs,
+			harness.actor_id.clone(),
+			NativeConnectionManagerConfig { max_readers: 2, ..NativeConnectionManagerConfig::default() },
+		);
+
+		runtime.block_on(async {
+			db.exec(
+				"CREATE TABLE reader_fence (id INTEGER PRIMARY KEY, value TEXT NOT NULL);
+				INSERT INTO reader_fence (id, value) VALUES (1, 'before-replacement');"
+					.to_string(),
+			)
+			.await
+			.expect("setup write should succeed");
+			{
+				let mut state = direct_vfs_handle_ctx(&vfs_for_assertion).state.write();
+				state.page_cache.invalidate_all();
+				state.protected_page_cache.clear();
+			}
+			let _replacement_startup = harness.startup_data_for(&harness.actor_id, &engine).await;
+
+			let err = db
+				.query(
+					"SELECT value FROM reader_fence WHERE id = 1;".to_string(),
+					None,
+				)
+				.await
+				.expect_err("stale-generation reader should fail closed");
+			assert!(
+				err.to_string().contains("failed to open sqlite read connection")
+					|| err.to_string().contains("I/O")
+					|| err.to_string().contains("disk I/O"),
+				"unexpected reader fence error: {err:#}",
+			);
+			assert!(
+				direct_vfs_handle_ctx(&vfs_for_assertion).is_dead(),
+				"reader fence mismatch should mark the shared VFS dead",
+			);
+
+			let later_err = db
+				.execute("SELECT COUNT(*) FROM reader_fence;".to_string(), None)
+				.await
+				.expect_err("later database work should fail after VFS is dead");
+			assert!(
+				later_err.to_string().contains("lost its fence")
+					|| later_err.to_string().contains("failed to open sqlite read connection")
+					|| later_err.to_string().contains("I/O")
+					|| later_err.to_string().contains("disk I/O"),
+				"unexpected post-fence error: {later_err:#}",
+			);
+			db.close().await.expect("database close should succeed");
+		});
+	}
+
+	#[test]
+	fn connection_manager_close_waits_for_active_work_then_unregisters_vfs() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let vfs_name = next_test_name("sqlite-manager-close");
+		let engine = runtime.block_on(harness.open_engine());
+		let vfs = harness.open_vfs_on_engine_with_metrics(
+			&runtime,
+			engine,
+			&harness.actor_id,
+			&vfs_name,
+			VfsConfig::default(),
+			None,
+		);
+		let manager = NativeConnectionManager::new(
+			vfs,
+			harness.actor_id.clone(),
+			NativeConnectionManagerConfig { max_readers: 1, ..NativeConnectionManagerConfig::default() },
+		);
+
+		runtime.block_on(async {
+			manager
+				.with_write_connection(|db| {
+					sqlite_exec(
+						db,
+						"CREATE TABLE manager_close (id INTEGER PRIMARY KEY);",
+					)
+					.map_err(anyhow::Error::msg)
+				})
+				.await
+				.expect("setup write should succeed");
+
+			assert!(sqlite_vfs_registered(&vfs_name));
+			let reader = manager
+				.acquire_read()
+				.await
+				.expect("reader should open before close");
+			let closing_manager = manager.clone();
+			let close_task = tokio::spawn(async move {
+				closing_manager
+					.close()
+					.await
+					.expect("manager close should succeed");
+			});
+			manager
+				.wait_for_snapshot(|snapshot| {
+					snapshot.mode == NativeConnectionManagerMode::Closing
+				})
+				.await;
+
+			let err = match manager.acquire_read().await {
+				Ok(reader) => {
+					reader.release().await;
+					panic!("new reads should be rejected while closing");
+				}
+				Err(err) => err,
+			};
+			assert!(err.to_string().contains("closing"));
+			tokio::task::yield_now().await;
+			assert!(!close_task.is_finished());
+
+			reader.release().await;
+			timeout(Duration::from_secs(1), close_task)
+				.await
+				.expect("close should finish after active reader releases")
+				.expect("close task should not panic");
+			assert!(!sqlite_vfs_registered(&vfs_name));
+		});
+	}
+
+	#[test]
+	fn connection_manager_sleep_destroy_close_drains_readers_and_rejects_new_work() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let vfs_name = next_test_name("sqlite-manager-shutdown-close");
+		let engine = runtime.block_on(harness.open_engine());
+		let vfs = harness.open_vfs_on_engine_with_metrics(
+			&runtime,
+			engine,
+			&harness.actor_id,
+			&vfs_name,
+			VfsConfig::default(),
+			None,
+		);
+		let manager = NativeConnectionManager::new(
+			vfs,
+			harness.actor_id.clone(),
+			NativeConnectionManagerConfig { max_readers: 2, ..NativeConnectionManagerConfig::default() },
+		);
+
+		runtime.block_on(async {
+			manager
+				.with_write_connection(|db| {
+					sqlite_exec(
+						db,
+						"CREATE TABLE manager_shutdown_close (id INTEGER PRIMARY KEY);",
+					)
+					.map_err(anyhow::Error::msg)
+				})
+				.await
+				.expect("setup write should succeed");
+
+			let active_reader = manager
+				.acquire_read()
+				.await
+				.expect("active reader should open before shutdown");
+			let idle_reader = manager
+				.acquire_read()
+				.await
+				.expect("idle reader should open before shutdown");
+			idle_reader.release().await;
+			let before_close = manager.snapshot().await;
+			assert_eq!(before_close.active_readers, 1);
+			assert_eq!(before_close.idle_readers, 1);
+			assert_eq!(before_close.open_readers, 2);
+
+			let closing_manager = manager.clone();
+			let close_task = tokio::spawn(async move {
+				closing_manager
+					.close()
+					.await
+					.expect("manager close should succeed");
+			});
+			let closing = manager
+				.wait_for_snapshot(|snapshot| {
+					snapshot.mode == NativeConnectionManagerMode::Closing
+						&& snapshot.active_readers == 1
+						&& snapshot.idle_readers == 0
+						&& snapshot.open_readers == 1
+				})
+				.await;
+			assert!(!closing.active_writer);
+
+			let read_err = match manager.acquire_read().await {
+				Ok(reader) => {
+					reader.release().await;
+					panic!("new reads should be rejected during actor shutdown");
+				}
+				Err(err) => err,
+			};
+			assert!(read_err.to_string().contains("closing"));
+			let write_err = match manager.acquire_write().await {
+				Ok(writer) => {
+					writer.release().await;
+					panic!("new writes should be rejected during actor shutdown");
+				}
+				Err(err) => err,
+			};
+			assert!(write_err.to_string().contains("closing"));
+			assert!(!close_task.is_finished());
+
+			active_reader.release().await;
+			timeout(Duration::from_secs(1), close_task)
+				.await
+				.expect("close should finish after active reader releases")
+				.expect("close task should not panic");
+			let closed = manager.snapshot().await;
+			assert_eq!(closed.mode, NativeConnectionManagerMode::Closed);
+			assert_eq!(closed.active_readers, 0);
+			assert_eq!(closed.idle_readers, 0);
+			assert_eq!(closed.open_readers, 0);
+			assert!(!sqlite_vfs_registered(&vfs_name));
+		});
+	}
+
+	#[test]
+	fn native_vfs_handle_opens_multiple_connections_against_one_context() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let db = harness.open_db(&runtime);
+		let second_connection = open_connection(
+			db.vfs_handle(),
+			&harness.actor_id,
+			SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE,
+		)
+		.expect("second sqlite connection should open");
+
+		assert_ne!(db.as_ptr(), second_connection.as_ptr());
+		assert!(
+			ptr::eq(direct_vfs_ctx(&db), direct_connection_vfs_ctx(&second_connection)),
+			"connections opened from one NativeVfsHandle should share one VfsContext",
+		);
+
+		sqlite_exec(
+			db.as_ptr(),
+			"CREATE TABLE shared_connections (id INTEGER PRIMARY KEY, value TEXT NOT NULL);",
+		)
+		.expect("create table should succeed");
+		sqlite_exec(
+			db.as_ptr(),
+			"INSERT INTO shared_connections (id, value) VALUES (1, 'visible');",
+		)
+		.expect("insert should succeed");
+		assert_eq!(
+			sqlite_query_text(
+				second_connection.as_ptr(),
+				"SELECT value FROM shared_connections WHERE id = 1;",
+			)
+			.expect("second connection should read through shared VFS"),
+			"visible"
+		);
+
+		drop(db);
+		assert_eq!(
+			sqlite_query_text(
+				second_connection.as_ptr(),
+				"SELECT value FROM shared_connections WHERE id = 1;",
+			)
+			.expect("connection should keep shared VFS alive after manager drop"),
+			"visible"
+		);
+	}
+
+	#[test]
+	fn native_vfs_handle_unregisters_after_last_connection_closes() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let engine = runtime.block_on(harness.open_engine());
+		let name = next_test_name("sqlite-shared-vfs");
+		let startup = runtime.block_on(harness.startup_data_for(&harness.actor_id, &engine));
+		let vfs = SqliteVfs::register_with_transport(
+			&name,
+			SqliteTransport::from_direct(Arc::clone(&engine)),
+			harness.actor_id.clone(),
+			runtime.handle().clone(),
+			startup,
+			VfsConfig::default(),
+			None,
+		)
+		.expect("vfs should register");
+		let connection = open_connection(
+			vfs.clone(),
+			&harness.actor_id,
+			SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE,
+		)
+		.expect("sqlite connection should open");
+		assert!(sqlite_vfs_registered(&name));
+
+		drop(vfs);
+		assert!(
+			sqlite_vfs_registered(&name),
+			"an open connection should keep the VFS registered",
+		);
+
+		drop(connection);
+		assert!(
+			!sqlite_vfs_registered(&name),
+			"VFS should unregister after the last connection closes",
+		);
+		let replacement_startup =
+			runtime.block_on(harness.startup_data_for(&harness.actor_id, &engine));
+		SqliteVfs::register_with_transport(
+			&name,
+			SqliteTransport::from_direct(engine),
+			harness.actor_id.clone(),
+			runtime.handle().clone(),
+			replacement_startup,
+			VfsConfig::default(),
+			None,
+		)
+		.expect("VFS name should be reusable after the last connection closes");
+	}
+
+	#[test]
+	fn actor_replacement_generation_uses_distinct_vfs_registration_name() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let engine = runtime.block_on(harness.open_engine());
+		let first_startup = runtime.block_on(harness.startup_data_for(&harness.actor_id, &engine));
+		let first_name = vfs_name_for_actor_database(&harness.actor_id, first_startup.generation);
+		let first_vfs = SqliteVfs::register_with_transport(
+			&first_name,
+			SqliteTransport::from_direct(Arc::clone(&engine)),
+			harness.actor_id.clone(),
+			runtime.handle().clone(),
+			first_startup,
+			VfsConfig::default(),
+			None,
+		)
+		.expect("first generation VFS should register");
+		assert!(sqlite_vfs_registered(&first_name));
+
+		let replacement_startup =
+			runtime.block_on(harness.startup_data_for(&harness.actor_id, &engine));
+		let replacement_name =
+			vfs_name_for_actor_database(&harness.actor_id, replacement_startup.generation);
+		assert_ne!(first_name, replacement_name);
+		let replacement_vfs = SqliteVfs::register_with_transport(
+			&replacement_name,
+			SqliteTransport::from_direct(engine),
+			harness.actor_id.clone(),
+			runtime.handle().clone(),
+			replacement_startup,
+			VfsConfig::default(),
+			None,
+		)
+		.expect("replacement generation VFS should register beside stale generation");
+
+		assert!(sqlite_vfs_registered(&first_name));
+		assert!(sqlite_vfs_registered(&replacement_name));
+		drop(first_vfs);
+		assert!(!sqlite_vfs_registered(&first_name));
+		assert!(sqlite_vfs_registered(&replacement_name));
+		drop(replacement_vfs);
+		assert!(!sqlite_vfs_registered(&replacement_name));
 	}
 
 	#[test]
@@ -6445,7 +7793,8 @@ mod tests {
 
 		let pages = runtime
 			.block_on(engine.get_pages(&harness.actor_id, startup.generation, vec![1, 1024, 2300]))
-			.expect("pages should read back after slow-path commit");
+			.expect("pages should read back after slow-path commit")
+			.pages;
 		let expected_page_1 = vec![1u8; 4096];
 		let expected_page_1024 = vec![(1024 % 251) as u8; 4096];
 		let expected_page_2300 = vec![(2300 % 251) as u8; 4096];
@@ -7024,11 +8373,11 @@ mod tests {
 			let db = harness.open_db(&runtime);
 			let ctx = direct_vfs_ctx(&db);
 
-		ctx.open_aux_file("actor-journal");
+		ctx.open_aux_file("actor-journal", VfsFileRole::Writer);
 		ctx.fail_next_aux_delete("InjectedAuxDeleteError: delete failed");
 		let path = CString::new("actor-journal").expect("cstring should build");
 
-		let rc = unsafe { vfs_delete(db._vfs.vfs_ptr, path.as_ptr(), 0) };
+		let rc = unsafe { vfs_delete(db.vfs.inner.vfs_ptr, path.as_ptr(), 0) };
 		assert_eq!(rc, SQLITE_IOERR_DELETE);
 		assert_eq!(
 			db.take_last_kv_error().as_deref(),
@@ -7499,15 +8848,20 @@ mod tests {
 				None,
 			);
 
-		let first = ctx.open_aux_file("actor-journal");
+		let first = ctx.open_aux_file("actor-journal", VfsFileRole::Writer);
 		first.bytes.lock().extend_from_slice(&[1, 2, 3, 4]);
-		let second = ctx.open_aux_file("actor-journal");
+		let second = ctx.open_aux_file("actor-journal", VfsFileRole::Writer);
 		assert_eq!(*second.bytes.lock(), vec![1, 2, 3, 4]);
 		assert!(ctx.aux_file_exists("actor-journal"));
 
 		ctx.delete_aux_file("actor-journal");
 		assert!(!ctx.aux_file_exists("actor-journal"));
-		assert!(ctx.open_aux_file("actor-journal").bytes.lock().is_empty());
+		assert!(
+			ctx.open_aux_file("actor-journal", VfsFileRole::Writer)
+				.bytes
+				.lock()
+				.is_empty()
+		);
 	}
 
 	#[test]
@@ -7553,7 +8907,7 @@ mod tests {
 			let barrier = barrier.clone();
 			thread::spawn(move || {
 				barrier.wait();
-				ctx.open_aux_file("actor-journal")
+				ctx.open_aux_file("actor-journal", VfsFileRole::Writer)
 			})
 		};
 		let second = {
@@ -7561,7 +8915,7 @@ mod tests {
 			let barrier = barrier.clone();
 			thread::spawn(move || {
 				barrier.wait();
-				ctx.open_aux_file("actor-journal")
+				ctx.open_aux_file("actor-journal", VfsFileRole::Writer)
 			})
 		};
 

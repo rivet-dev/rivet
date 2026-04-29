@@ -11,15 +11,16 @@ Range page-read protocol details live in `.agent/specs/sqlite-range-page-read-pr
 ## Existing Optimizations
 
 - Actor startup can preload SQLite VFS pages through `OpenConfig.preload_pgnos`, `OpenConfig.preload_ranges`, and persisted `/PRELOAD_HINTS`; first pages, hint mechanisms, and the preload byte budget are configured through central SQLite optimization flags.
-- The VFS keeps an in-memory page cache seeded from `sqlite_startup_data.preloaded_pages`; capacity, fetched/prefetched/startup cache classes, and scan-resistant protected-cache budget are configured through central SQLite optimization flags.
-- The VFS has speculative read-ahead via `prefetch_depth` and `max_prefetch_bytes`; the default forward-scan budget is 64 pages, which reduced the cold-read benchmark from 1,249 to 368 VFS `get_pages` calls.
+- The VFS keeps an in-memory page cache seeded from `sqlite_startup_data.preloaded_pages`; cache behavior is selected with `RIVETKIT_SQLITE_OPT_VFS_PAGE_CACHE_MODE=off|target|startup|prefetch|all`, with capacity and protected-cache budget configured separately.
+- The VFS has speculative read-ahead selected with `RIVETKIT_SQLITE_OPT_READ_AHEAD_MODE=off|bounded|adaptive`; the default bounded budget is 64 pages, which reduced the cold-read benchmark from 1,249 to 368 VFS `get_pages` calls.
 - The VFS tracks bounded recent page hints as hot pages plus coalesced scan ranges; `NativeDatabase::snapshot_preload_hints()` exposes the in-memory plan for future flush wiring.
 - Actor Prometheus metrics expose VFS read counters, fetched bytes, cache hits/misses, and `get_pages` duration at `/gateway/<actor_id>/metrics`.
 - `sqlite-storage` keeps an in-memory PIDX cache and decodes each unique DELTA/SHARD blob once per `get_pages(...)` call.
 - `sqlite-storage` exposes `get_page_range(...)` for bounded contiguous reads; it reuses `get_pages(...)` source resolution and currently caps ranges at 256 pages / 1 MiB.
-- `sqlite-storage` reassembles large chunked logical values with one bounded chunk-prefix range read by default, with `RIVETKIT_SQLITE_OPT_BATCH_CHUNK_READS=false` preserving the serial 10 KB chunk-get path.
+- `sqlite-storage` reassembles large chunked logical values with one bounded chunk-prefix range read by default; `RIVETKIT_SQLITE_OPT_BATCH_CHUNK_READS=false` selects serial 10 KB chunk gets for comparison runs.
 - `sqlite-storage` caches decoded DELTA/SHARD LTX blobs across repeated reads by default, with `RIVETKIT_SQLITE_OPT_DECODED_LTX_CACHE=false` preserving per-read decode behavior.
 - `sqlite-storage` compaction folds DELTA pages into SHARD blobs for steadier read behavior.
+- The native read-mode/write-mode SQLite connection manager routes read-only statements to pooled read-only connections and routes writes, transactions, and fallbacks through exclusive write mode. Read-pool v1 closes readers before writes and does not pin per-reader head txids.
 
 ## Recommended Optimizations
 

@@ -92,6 +92,13 @@ export interface QueryResult {
   columns: Array<string>
   rows: Array<Array<any>>
 }
+export interface NativeExecuteResult {
+  columns: Array<string>
+  rows: Array<Array<any>>
+  changes: number
+  lastInsertRowId?: number
+  route: string
+}
 export interface JsQueueNextOptions {
   names?: Array<string>
   timeoutMs?: number
@@ -240,6 +247,8 @@ export declare class JsNativeDatabase {
   takeLastKvError(): string | null
   run(sql: string, params?: Array<JsBindParam> | undefined | null): Promise<ExecuteResult>
   query(sql: string, params?: Array<JsBindParam> | undefined | null): Promise<QueryResult>
+  execute(sql: string, params?: Array<JsBindParam> | undefined | null): Promise<NativeExecuteResult>
+  executeWrite(sql: string, params?: Array<JsBindParam> | undefined | null): Promise<NativeExecuteResult>
   exec(sql: string): Promise<QueryResult>
   close(): Promise<void>
 }

@@ -14,6 +14,9 @@
 //! - Delete and truncate behavior
 //! - Journal and BATCH_ATOMIC behavior
 
+/// Native SQLite read-mode/write-mode connection manager.
+pub mod connection_manager;
+
 /// Unified native database handles and open helpers.
 pub mod database;
 

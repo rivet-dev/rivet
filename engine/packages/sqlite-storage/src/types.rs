@@ -7,7 +7,6 @@
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
-use std::ops::Deref;
 
 pub use rivet_sqlite_storage_protocol::{DBHead, PreloadHintRange, PreloadHints, SqliteOrigin};
 use rivet_sqlite_storage_protocol::versioned;
@@ -60,35 +59,6 @@ pub struct FetchedPage {
 pub struct GetPagesResult {
 	pub pages: Vec<FetchedPage>,
 	pub meta: SqliteMeta,
-}
-
-impl Deref for GetPagesResult {
-	type Target = [FetchedPage];
-
-	fn deref(&self) -> &Self::Target {
-		&self.pages
-	}
-}
-
-impl IntoIterator for GetPagesResult {
-	type Item = FetchedPage;
-	type IntoIter = std::vec::IntoIter<FetchedPage>;
-
-	fn into_iter(self) -> Self::IntoIter {
-		self.pages.into_iter()
-	}
-}
-
-impl PartialEq<Vec<FetchedPage>> for GetPagesResult {
-	fn eq(&self, other: &Vec<FetchedPage>) -> bool {
-		&self.pages == other
-	}
-}
-
-impl PartialEq<GetPagesResult> for Vec<FetchedPage> {
-	fn eq(&self, other: &GetPagesResult) -> bool {
-		self == &other.pages
-	}
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

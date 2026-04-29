@@ -228,25 +228,26 @@ impl<'a> LtxDecoder<'a> {
 	}
 
 	pub fn decode(&self) -> Result<DecodedLtx> {
-		self.decode_with_footer(self.bytes.len().saturating_sub(LTX_TRAILER_SIZE + 8))
-			.or_else(|_| self.decode_with_footer(self.bytes.len().saturating_sub(8)))
-	}
-
-	fn decode_with_footer(&self, footer_start: usize) -> Result<DecodedLtx> {
 		ensure!(
-			self.bytes.len() >= LTX_HEADER_SIZE + LTX_PAGE_HEADER_SIZE + std::mem::size_of::<u64>(),
+			self.bytes.len()
+				>= LTX_HEADER_SIZE
+					+ LTX_PAGE_HEADER_SIZE
+					+ std::mem::size_of::<u64>()
+					+ LTX_TRAILER_SIZE,
 			"ltx blob too small: {} bytes",
 			self.bytes.len()
 		);
 
 		let header = LtxHeader::decode(&self.bytes[..LTX_HEADER_SIZE])?;
+		let trailer_start = self.bytes.len() - LTX_TRAILER_SIZE;
+		let footer_start = trailer_start - std::mem::size_of::<u64>();
 		ensure!(
-			footer_start + std::mem::size_of::<u64>() <= self.bytes.len(),
-			"ltx footer starts outside blob"
+			self.bytes[trailer_start..].iter().all(|byte| *byte == 0),
+			"ltx trailer checksums must be zeroed"
 		);
 
 		let index_size = u64::from_be_bytes(
-			self.bytes[footer_start..footer_start + std::mem::size_of::<u64>()]
+			self.bytes[footer_start..trailer_start]
 				.try_into()
 				.expect("ltx page index footer should be 8 bytes"),
 		) as usize;
@@ -810,22 +811,7 @@ mod tests {
 	}
 
 	#[test]
-	fn decodes_legacy_blob_without_trailer() {
-		let encoded = LtxEncoder::new(sample_header())
-			.encode_with_index(&[DirtyPage {
-				pgno: 7,
-				bytes: repeated_page(0x77),
-			}])
-			.expect("ltx should encode");
-		let legacy_len = encoded.bytes.len() - LTX_TRAILER_SIZE;
-
-		let decoded = decode_ltx_v3(&encoded.bytes[..legacy_len]).expect("ltx should decode");
-		assert_eq!(decoded.page_index, encoded.page_index);
-		assert_eq!(decoded.get_page(7), Some(repeated_page(0x77).as_slice()));
-	}
-
-	#[test]
-	fn decodes_nonzero_trailer_bytes() {
+	fn rejects_corrupt_trailer_or_index() {
 		let encoded = LtxEncoder::new(sample_header())
 			.encode_with_index(&[DirtyPage {
 				pgno: 7,
@@ -833,23 +819,10 @@ mod tests {
 			}])
 			.expect("ltx should encode");
 
-		let mut checksum_trailer = encoded.bytes.clone();
-		let trailer_idx = checksum_trailer.len() - 1;
-		checksum_trailer[trailer_idx] = 0x01;
-
-		let decoded = decode_ltx_v3(&checksum_trailer).expect("ltx should decode");
-		assert_eq!(decoded.page_index, encoded.page_index);
-		assert_eq!(decoded.get_page(7), Some(repeated_page(0x77).as_slice()));
-	}
-
-	#[test]
-	fn rejects_corrupt_index() {
-		let encoded = LtxEncoder::new(sample_header())
-			.encode_with_index(&[DirtyPage {
-				pgno: 7,
-				bytes: repeated_page(0x77),
-			}])
-			.expect("ltx should encode");
+		let mut bad_trailer = encoded.bytes.clone();
+		let trailer_idx = bad_trailer.len() - 1;
+		bad_trailer[trailer_idx] = 0x01;
+		assert!(decode_ltx_v3(&bad_trailer).is_err());
 
 		let mut bad_index = encoded.bytes.clone();
 		let first_page_offset = encoded.page_index[0].offset as usize;

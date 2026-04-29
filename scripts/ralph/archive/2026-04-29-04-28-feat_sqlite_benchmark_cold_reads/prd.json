@@ -1,0 +1,214 @@
+{
+  "project": "sqlite-read-connection-manager",
+  "branchName": "04-29-feat_sqlite_add_cold_read_benchmarks_and_simplify_optimizations",
+  "description": "Implement a SQLite read-mode/write-mode connection manager so independent read-only queries can run in parallel while write mode holds exactly one writable connection and no readers.",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Add SQLite statement classification helpers",
+      "description": "As a runtime developer, I want native SQLite statement classification helpers so that read-only routing is based on SQLite semantics instead of SQL string heuristics.",
+      "acceptanceCriteria": [
+        "Add a rivetkit-sqlite helper that prepares one statement without stepping and reports whether SQLite considers it read-only via sqlite3_stmt_readonly",
+        "Reject reader routing when sqlite3_prepare_v2 returns non-whitespace tail text after the first statement",
+        "Capture authorizer actions during classification for transaction control, attach, detach, schema writes, temp writes, pragma usage, function calls, and write operations",
+        "Add tests covering SELECT, read-only PRAGMA, mutating PRAGMA, INSERT RETURNING, CTE writes, VACUUM, ATTACH, BEGIN, SAVEPOINT, and multi-statement SQL",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-002",
+      "title": "Split VFS ownership from SQLite connections",
+      "description": "As a runtime developer, I want VFS registration and SQLite connection ownership split apart so that one actor can open multiple connections against one shared VFS cache.",
+      "acceptanceCriteria": [
+        "Introduce native ownership types equivalent to NativeVfsHandle and NativeConnection without changing public TypeScript APIs",
+        "Keep one shared VFS registration and VfsContext per actor database manager while allowing multiple SQLite connection handles",
+        "Use a VFS name that includes an actor database generation or pool generation instead of only the actor id",
+        "Ensure manager close order closes every SQLite connection before unregistering the VFS",
+        "Add tests or assertions covering multiple connections sharing one VFS context and VFS cleanup after connection close",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-003",
+      "title": "Enforce read-only VFS roles",
+      "description": "As a runtime developer, I want VFS file handles to know whether they belong to a reader or writer so that read-only connections cannot mutate actor SQLite state.",
+      "acceptanceCriteria": [
+        "Store reader or writer role on VfsFile and auxiliary file handles opened through the RivetKit SQLite VFS",
+        "Set SQLite pOutFlags consistently with the requested open flags and the assigned role",
+        "Reject reader-owned xWrite, xTruncate, xDelete, dirty sync, and atomic-write file-control operations",
+        "Deny reader auxiliary-file creation unless the path is explicitly proven safe and documented in code",
+        "Add VFS tests proving reader handles fail closed on write-only callbacks while writer handles still support existing write paths",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-004",
+      "title": "Add the connection manager mode gate",
+      "description": "As a runtime developer, I want an actor-local SQLite mode gate so that read mode and write mode are mutually exclusive and write requests cannot starve.",
+      "acceptanceCriteria": [
+        "Add a NativeConnectionManager skeleton with closed, read-mode, write-mode, and closing state",
+        "Allow read mode to hold lazy read-only connections up to a configurable maximum reader count",
+        "When write mode is requested, stop admitting new reads, wait for active readers, close all readers, then open exactly one writable connection",
+        "When closing is requested, stop admitting new work, wait for active work to finish or cancellation to fire, close connections, and unregister the VFS",
+        "Use async coordination for the gate and avoid holding sync lock guards across await points",
+        "Add tests for read admission, writer preference, read-to-write transition, and close ordering",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-005",
+      "title": "Route write work through exclusive write mode",
+      "description": "As a runtime developer, I want every mutation and transaction to run through exclusive write mode so that no reader connection is open while a writable connection exists.",
+      "acceptanceCriteria": [
+        "Route run calls, exec calls, migrations, schema-changing statements, and classification fallbacks through write mode",
+        "Treat raw transaction-control statements as write-mode only even if SQLite reports them as read-only",
+        "Keep the manager in write mode while sqlite3_get_autocommit on the writer returns false",
+        "After write-mode work completes with autocommit restored, close the writable connection before admitting read-mode work",
+        "Add tests proving BEGIN or SAVEPOINT blocks reader creation until COMMIT or ROLLBACK completes",
+        "Add tests proving a pending writer waits for active readers and new readers wait behind the writer",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-006",
+      "title": "Execute read-only statements on read connections",
+      "description": "As a Rivet Actor developer, I want independent read-only statements to run on read connections so that expensive VFS round trips can overlap.",
+      "acceptanceCriteria": [
+        "Route single-statement queries classified as read-only to read-mode connections opened with SQLITE_OPEN_READONLY",
+        "Set PRAGMA query_only = ON on reader connections",
+        "Install a mandatory reader authorizer that denies transaction control, attach, detach, schema writes, temp writes, unsafe pragmas, unsafe functions, and all write actions",
+        "Open readers lazily for concurrent read demand and reuse idle readers while the idle TTL has not expired",
+        "Add a deterministic test with artificial VFS delay proving concurrent read-only statements use multiple reader connections instead of serial execution",
+        "Add tests proving reader authorizer or VFS rejection is treated as a routing bug and fails closed",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-007",
+      "title": "Add a native execute result API",
+      "description": "As a TypeScript runtime maintainer, I want a native execute API that returns rows, columns, changes, and route metadata so that TypeScript does not decide read/write behavior by parsing SQL strings.",
+      "acceptanceCriteria": [
+        "Add a native execute path that prepares, classifies, routes, steps, and returns rows and column names for single-statement SQL",
+        "Return write metadata such as changes and last insert row id when available",
+        "Return route metadata indicating whether the statement used read mode, write mode, or write fallback",
+        "Keep query and run compatibility wrappers working through the native routing path where practical",
+        "Update core inspector database execute handling to use the native execute path instead of bypassing the gate",
+        "Add tests covering SELECT, plain INSERT, INSERT RETURNING, read-only PRAGMA, mutating PRAGMA, and malformed SQL",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-008",
+      "title": "Remove TypeScript read serialization",
+      "description": "As a RivetKit TypeScript user, I want TypeScript database wrappers to allow native parallel reads so that Promise.all over read-only queries actually overlaps VFS work.",
+      "acceptanceCriteria": [
+        "Expose the native execute API through rivetkit-napi and the TypeScript native database wrapper",
+        "Remove or narrow per-query AsyncMutex usage in common/database/mod.ts once native routing is authoritative",
+        "Remove or narrow read-query serialization in common/database/native-database.ts",
+        "Remove or narrow Drizzle callback and raw execute serialization for read-only work in db/drizzle.ts",
+        "Keep closed-state checks with an in-flight counter or close gate so close waits for admitted native calls",
+        "Ensure migration hooks run in native migration mode, where all database calls route through write mode and reader creation is disabled",
+        "Add TypeScript tests proving Promise.all read queries reach native execution concurrently while write operations remain serialized by the native manager",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-009",
+      "title": "Add read pool config flags and metrics",
+      "description": "As an operator, I want read pool configuration and metrics so that the feature can be rolled out, observed, and disabled safely.",
+      "acceptanceCriteria": [
+        "Add central SQLite optimization config for sqlite_read_pool_enabled, sqlite_read_pool_max_readers, and sqlite_read_pool_idle_ttl_ms",
+        "Preserve old single-connection behavior when the read pool feature flag is disabled",
+        "Add Prometheus metrics for active readers, idle readers, read wait duration, write wait duration, routed read queries, write fallbacks, manual transaction duration, reader opens, reader closes, rejected reader mutations, and mode transitions",
+        "Keep existing VFS metrics aggregated at the shared VFS level",
+        "Add tests or snapshots proving config defaults and disabled-path behavior",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-010",
+      "title": "Add kitchen-sink benchmark coverage",
+      "description": "As a performance investigator, I want kitchen-sink benchmark workloads for parallel reads and read-write transitions so that the read connection manager has a repeatable performance signal.",
+      "acceptanceCriteria": [
+        "Ensure the kitchen-sink SQLite real-world benchmark includes a parallel-read-aggregates workload",
+        "Ensure the kitchen-sink SQLite real-world benchmark includes a parallel-read-write-transition workload",
+        "Report benchmark output that makes routed reads, routed writes, and transition metrics visible when the manager metrics exist",
+        "Add static or runtime tests proving the script and actor workload lists stay in sync",
+        "Document any required benchmark command updates in the relevant benchmark file or agent note",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 10,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-011",
+      "title": "Add lifecycle and fencing stress coverage",
+      "description": "As a runtime developer, I want stress coverage around sleep, destroy, and fence errors so that pooled readers do not outlive actor lifecycle authority.",
+      "acceptanceCriteria": [
+        "Add tests proving actor sleep or destroy stops new database work and closes active or idle reader connections in deterministic order",
+        "Add tests proving a fence mismatch from any reader marks the shared VFS dead and causes later database work to fail closed",
+        "Add tests proving actor replacement or generation changes do not collide with stale VFS registration names",
+        "Add tests proving manual raw transactions keep the manager in write mode across awaited user code",
+        "Add tests proving inspector and user database operations share the same native routing gate",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 11,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-012",
+      "title": "Document the SQLite read-mode write-mode invariant",
+      "description": "As a future maintainer, I want the SQLite connection manager invariant documented so that later optimizations do not accidentally reintroduce readers beside a writer.",
+      "acceptanceCriteria": [
+        "Update docs-internal or agent specs to state that read mode may hold multiple read-only connections and write mode must hold exactly one writable connection with no readers open",
+        "Update the SQLite optimization tracker with the read-mode/write-mode connection manager item if it is not already present",
+        "Document that v1 does not allow readers to continue during writes and does not pin per-reader head txids",
+        "Document that TypeScript must not be the policy boundary for read/write routing",
+        "Typecheck passes"
+      ],
+      "priority": 12,
+      "passes": false,
+      "notes": ""
+    }
+  ]
+}

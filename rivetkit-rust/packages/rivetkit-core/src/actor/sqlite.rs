@@ -15,6 +15,8 @@ use serde_json::{Map as JsonMap, Value as JsonValue};
 #[cfg(feature = "sqlite")]
 use tokio::task::JoinHandle;
 #[cfg(feature = "sqlite")]
+use tokio::sync::Mutex as AsyncMutex;
+#[cfg(feature = "sqlite")]
 use tokio::time::{interval, timeout};
 #[cfg(feature = "sqlite")]
 use tracing::Instrument;
@@ -22,12 +24,13 @@ use tracing::Instrument;
 use crate::error::SqliteRuntimeError;
 
 #[cfg(feature = "sqlite")]
-pub use rivetkit_sqlite::query::{BindParam, ColumnValue, ExecResult, QueryResult};
+pub use rivetkit_sqlite::query::{
+	BindParam, ColumnValue, ExecResult, ExecuteResult, ExecuteRoute, QueryResult,
+};
 #[cfg(feature = "sqlite")]
 use rivetkit_sqlite::{
 	database::{NativeDatabaseHandle, open_database_from_envoy},
 	optimization_flags::sqlite_optimization_flags,
-	query::{exec_statements, execute_statement, query_statement},
 	vfs::{SqliteVfsMetrics, VfsPreloadHintSnapshot},
 };
 
@@ -60,6 +63,24 @@ pub struct QueryResult {
 }
 
 #[cfg(not(feature = "sqlite"))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ExecuteRoute {
+	Read,
+	Write,
+	WriteFallback,
+}
+
+#[cfg(not(feature = "sqlite"))]
+#[derive(Clone, Debug, PartialEq)]
+pub struct ExecuteResult {
+	pub columns: Vec<String>,
+	pub rows: Vec<Vec<ColumnValue>>,
+	pub changes: i64,
+	pub last_insert_row_id: Option<i64>,
+	pub route: ExecuteRoute,
+}
+
+#[cfg(not(feature = "sqlite"))]
 #[derive(Clone, Debug, PartialEq)]
 pub enum ColumnValue {
 	Null,
@@ -86,9 +107,11 @@ pub struct SqliteDb {
 	/// not a reliable signal for whether the user opted in; this flag is.
 	enabled: bool,
 	#[cfg(feature = "sqlite")]
-	// Forced-sync: native SQLite handles are used inside spawn_blocking and
-	// synchronous diagnostic accessors.
+	// Forced-sync: native SQLite handles are read from synchronous diagnostic
+	// accessors and closed from cleanup paths.
 	db: Arc<Mutex<Option<NativeDatabaseHandle>>>,
+	#[cfg(feature = "sqlite")]
+	open_lock: Arc<AsyncMutex<()>>,
 	#[cfg(feature = "sqlite")]
 	// Forced-sync: the background task is spawned and aborted from sync cleanup
 	// paths around the native database handle.
@@ -111,6 +134,8 @@ impl SqliteDb {
 			enabled,
 			#[cfg(feature = "sqlite")]
 			db: Default::default(),
+			#[cfg(feature = "sqlite")]
+			open_lock: Default::default(),
 			#[cfg(feature = "sqlite")]
 			preload_hint_flush_task: Default::default(),
 			#[cfg(feature = "sqlite")]
@@ -172,30 +197,25 @@ impl SqliteDb {
 	pub async fn open(&self) -> Result<()> {
 		#[cfg(feature = "sqlite")]
 		{
+			let _open_guard = self.open_lock.lock().await;
+			if self.db.lock().is_some() {
+				return Ok(());
+			}
+
 			let config = self.runtime_config()?;
-			let db = self.db.clone();
 			let vfs_metrics = self.vfs_metrics.clone();
 			let rt_handle = tokio::runtime::Handle::try_current()
 				.context("open sqlite database requires a tokio runtime")?;
 
-			tokio::task::spawn_blocking(move || {
-				let mut guard = db.lock();
-				if guard.is_some() {
-					return Ok::<(), anyhow::Error>(());
-				}
-
-				let native_db = open_database_from_envoy(
-					config.handle,
-					config.actor_id,
-					config.startup_data,
-					rt_handle,
-					vfs_metrics,
-				)?;
-				*guard = Some(native_db);
-				Ok(())
-			})
-			.await
-			.context("join sqlite open task")??;
+			let native_db = open_database_from_envoy(
+				config.handle,
+				config.actor_id,
+				config.startup_data,
+				rt_handle,
+				vfs_metrics,
+			)
+			.await?;
+			*self.db.lock() = Some(native_db);
 			self.ensure_preload_hint_flush_task()?;
 			Ok(())
 		}
@@ -211,16 +231,7 @@ impl SqliteDb {
 		{
 			self.open().await?;
 			let sql = sql.into();
-			let db = self.db.clone();
-			tokio::task::spawn_blocking(move || {
-				let guard = db.lock();
-				let native_db = guard
-					.as_ref()
-					.ok_or_else(|| SqliteRuntimeError::Closed.build())?;
-				exec_statements(native_db.as_ptr(), &sql)
-			})
-			.await
-			.context("join sqlite exec task")?
+			self.native_db_handle()?.exec(sql).await
 		}
 
 		#[cfg(not(feature = "sqlite"))]
@@ -239,16 +250,7 @@ impl SqliteDb {
 		{
 			self.open().await?;
 			let sql = sql.into();
-			let db = self.db.clone();
-			tokio::task::spawn_blocking(move || {
-				let guard = db.lock();
-				let native_db = guard
-					.as_ref()
-					.ok_or_else(|| SqliteRuntimeError::Closed.build())?;
-				query_statement(native_db.as_ptr(), &sql, params.as_deref())
-			})
-			.await
-			.context("join sqlite query task")?
+			self.native_db_handle()?.query(sql, params).await
 		}
 
 		#[cfg(not(feature = "sqlite"))]
@@ -267,16 +269,45 @@ impl SqliteDb {
 		{
 			self.open().await?;
 			let sql = sql.into();
-			let db = self.db.clone();
-			tokio::task::spawn_blocking(move || {
-				let guard = db.lock();
-				let native_db = guard
-					.as_ref()
-					.ok_or_else(|| SqliteRuntimeError::Closed.build())?;
-				execute_statement(native_db.as_ptr(), &sql, params.as_deref())
-			})
-			.await
-			.context("join sqlite run task")?
+			self.native_db_handle()?.run(sql, params).await
+		}
+
+		#[cfg(not(feature = "sqlite"))]
+		{
+			let _ = (sql, params);
+			Err(SqliteRuntimeError::Unavailable.build())
+		}
+	}
+
+	pub async fn execute(
+		&self,
+		sql: impl Into<String>,
+		params: Option<Vec<BindParam>>,
+	) -> Result<ExecuteResult> {
+		#[cfg(feature = "sqlite")]
+		{
+			self.open().await?;
+			let sql = sql.into();
+			self.native_db_handle()?.execute(sql, params).await
+		}
+
+		#[cfg(not(feature = "sqlite"))]
+		{
+			let _ = (sql, params);
+			Err(SqliteRuntimeError::Unavailable.build())
+		}
+	}
+
+	pub async fn execute_write(
+		&self,
+		sql: impl Into<String>,
+		params: Option<Vec<BindParam>>,
+	) -> Result<ExecuteResult> {
+		#[cfg(feature = "sqlite")]
+		{
+			self.open().await?;
+			let sql = sql.into();
+			self.native_db_handle()?.execute_write(sql, params).await
 		}
 
 		#[cfg(not(feature = "sqlite"))]
@@ -290,14 +321,11 @@ impl SqliteDb {
 		#[cfg(feature = "sqlite")]
 		{
 			self.stop_preload_hint_flush_task();
-			let db = self.db.clone();
-			tokio::task::spawn_blocking(move || {
-				let mut guard = db.lock();
-				guard.take();
-				Ok(())
-			})
-			.await
-			.context("join sqlite close task")?
+			let native_db = self.db.lock().take();
+			if let Some(native_db) = native_db {
+				native_db.close().await?;
+			}
+			Ok(())
 		}
 
 		#[cfg(not(feature = "sqlite"))]
@@ -402,6 +430,15 @@ impl SqliteDb {
 		}
 	}
 
+	#[cfg(feature = "sqlite")]
+	fn native_db_handle(&self) -> Result<NativeDatabaseHandle> {
+		self.db
+			.lock()
+			.as_ref()
+			.cloned()
+			.ok_or_else(|| SqliteRuntimeError::Closed.build())
+	}
+
 	pub fn runtime_config(&self) -> Result<SqliteRuntimeConfig> {
 		Ok(SqliteRuntimeConfig {
 			handle: self.handle()?,
@@ -431,6 +468,19 @@ impl SqliteDb {
 	pub(crate) async fn run_cbor(&self, sql: &str, params: Option<&[u8]>) -> Result<ExecResult> {
 		let bind_params = bind_params_from_cbor(sql, params)?;
 		self.run(sql.to_owned(), bind_params).await
+	}
+
+	pub(crate) async fn execute_rows_cbor(
+		&self,
+		sql: &str,
+		params: Option<&[u8]>,
+	) -> Result<Vec<u8>> {
+		let bind_params = bind_params_from_cbor(sql, params)?;
+		let result = self.execute(sql.to_owned(), bind_params).await?;
+		encode_json_as_cbor(&query_result_to_json_rows(&QueryResult {
+			columns: result.columns,
+			rows: result.rows,
+		}))
 	}
 
 	fn handle(&self) -> Result<EnvoyHandle> {

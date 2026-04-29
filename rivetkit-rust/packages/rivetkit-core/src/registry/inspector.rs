@@ -517,7 +517,7 @@ impl RegistryDispatcher {
 		};
 
 		let rows = ctx
-			.db_query(&body.sql, params.as_deref())
+			.db_execute(&body.sql, params.as_deref())
 			.await
 			.context("run inspector database statement")?;
 		Ok(decode_cbor_json_or_null(&rows))
