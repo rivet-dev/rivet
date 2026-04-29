@@ -19,6 +19,7 @@ Started: Tue Apr 28 11:00:38 PM PDT 2026
 - Native SQLite VFS range reads should be selected only for default-enabled, large, contiguous forward-scan prefetch windows; keep point, bounded, scattered, and disabled-flag paths on page-list `get_pages`.
 - Large sqlite-storage chunked logical values use a bounded chunk-prefix range read by default; `RIVETKIT_SQLITE_OPT_BATCH_CHUNK_READS=false` preserves the serial 10 KB chunk-get fallback.
 - `sqlite-storage` caches decoded DELTA/SHARD LTX blobs inside `SqliteEngine` by default; `RIVETKIT_SQLITE_OPT_DECODED_LTX_CACHE=false` preserves per-read decode behavior.
+- SQLite startup preload policy knobs live in `sqlite-storage::optimization_flags`; default preload is first page only plus persisted hints, bounded by `RIVETKIT_SQLITE_OPT_STARTUP_PRELOAD_MAX_BYTES` with an 8 MiB hard cap.
 ---
 ## 2026-04-28 23:01:27 PDT - SQLITE-COLD-001
 - What was implemented
@@ -356,4 +357,27 @@ Started: Tue Apr 28 11:00:38 PM PDT 2026
   - Compared with SQLITE-COLD-016: VFS transport calls stayed 70 -> 70, wake e2e improved 6248.5ms -> 4067.4ms, wake server improved 3955.7ms -> 3834.2ms, VFS transport improved 3706.7ms -> 3598.3ms, and hot read improved 159.9ms -> 157.9ms.
   - Cache entries compare the cached blob bytes before reuse, so same-key rewrites preserve byte-for-byte read behavior while still avoiding repeat LTX decodes for stable source blobs.
   - Verification status: `cargo check -p sqlite-storage` passed; focused decoded-LTX cache tests passed; focused optimization flag parser test passed; `cargo test -p sqlite-storage -- --test-threads=1` passed; `cargo build -p rivet-engine` passed; `pnpm --filter kitchen-sink check-types` passed with the known skip message; `pnpm -F rivetkit check-types` passed.
+---
+## 2026-04-29 01:15:48 PDT - SQLITE-COLD-018
+- What was implemented
+  - Added central startup preload policy config for preload byte budget, first-page preload enablement, and first-page count.
+  - Wired `OpenConfig::new` to use the central startup preload defaults and made page 1 count against the same preload byte budget as explicit pages/ranges and persisted hints.
+  - Added focused tests for disabling startup first pages, enforcing the byte budget, and defaulting/clamping numeric preload config.
+  - Updated SQLite storage notes, the optimization tracker, and reran the cold-read benchmark.
+- Files changed
+  - `engine/packages/sqlite-storage/src/optimization_flags.rs`
+  - `engine/packages/sqlite-storage/src/open.rs`
+  - `engine/packages/sqlite-storage/AGENTS.md`
+  - `engine/packages/sqlite-storage/CLAUDE.md`
+  - `docs-internal/engine/SQLITE_OPTIMIZATIONS.md`
+  - `.agent/notes/sqlite-cold-read-after-SQLITE-COLD-018.txt`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - SQLITE-COLD-018 benchmark numbers: insert e2e 15787.7ms, hot read e2e 170.4ms, wake read e2e 4113.6ms, wake read server 3880.7ms, wake overhead estimate 232.9ms, wake VFS get_pages/range transport 70 calls, fetched 13722 pages / 56205312 bytes, prefetch 13652 pages / 55918592 bytes, VFS transport 3643.3ms.
+  - Compared with baseline/SQLITE-COLD-001: wake transport calls dropped 1249 -> 70, wake e2e dropped 20141.0ms -> 4113.6ms, wake VFS transport dropped 19332.8ms -> 3643.3ms, and hot read was 118.6ms -> 170.4ms.
+  - Compared with SQLITE-COLD-017: wake transport calls stayed 70 -> 70, wake e2e was 4067.4ms -> 4113.6ms, wake server was 3834.2ms -> 3880.7ms, VFS transport was 3598.3ms -> 3643.3ms, and hot read was 157.9ms -> 170.4ms.
+  - Default startup preload policy is conservative: first pages enabled with count 1, persisted hints enabled, hot/early/scan hint mechanisms enabled, 1 MiB byte budget, and 8 MiB hard cap.
+  - The current persisted page hint schema has one pgnos list for hot and early page candidates, so either hot-page or early-page preload enablement includes that shared list; scan ranges are independently represented.
+  - Verification status: `cargo check -p sqlite-storage` passed; `cargo check -p pegboard-envoy` passed; `cargo check -p rivetkit-sqlite` passed with existing Rust 2024 unsafe-operation warnings; focused preload policy tests passed; `cargo test -p sqlite-storage -- --test-threads=1` passed; `cargo build -p rivet-engine` passed; `pnpm --filter kitchen-sink check-types` passed with the known skip message; `pnpm -F rivetkit check-types` passed.
 ---

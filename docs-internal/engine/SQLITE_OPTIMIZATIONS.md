@@ -10,7 +10,7 @@ Range page-read protocol details live in `.agent/specs/sqlite-range-page-read-pr
 
 ## Existing Optimizations
 
-- Actor startup can preload SQLite VFS pages through `OpenConfig.preload_pgnos`, `OpenConfig.preload_ranges`, and `OpenConfig.max_total_bytes`; pegboard-envoy currently uses the default config, so this mostly preloads page 1.
+- Actor startup can preload SQLite VFS pages through `OpenConfig.preload_pgnos`, `OpenConfig.preload_ranges`, and persisted `/PRELOAD_HINTS`; first pages, hint mechanisms, and the preload byte budget are configured through central SQLite optimization flags.
 - The VFS keeps an in-memory page cache seeded from `sqlite_startup_data.preloaded_pages`.
 - The VFS has speculative read-ahead via `prefetch_depth` and `max_prefetch_bytes`; the default forward-scan budget is 64 pages, which reduced the cold-read benchmark from 1,249 to 368 VFS `get_pages` calls.
 - The VFS tracks bounded recent page hints as hot pages plus coalesced scan ranges; `NativeDatabase::snapshot_preload_hints()` exposes the in-memory plan for future flush wiring.
@@ -25,7 +25,6 @@ Range page-read protocol details live in `.agent/specs/sqlite-range-page-read-pr
 
 - Gate SQLite cold-read optimizations behind central env-backed feature flags that default on, so each optimization can be benchmarked on and off.
 - Add adaptive forward-scan read-ahead that can grow beyond shard-sized batches for mostly sequential reads while shrinking back for scattered access.
-- Configure preload hint mechanisms independently with env vars, including hot pages, early-after-wake pages, scan ranges, and first-page/first-range policies.
 - Make the VFS page cache configurable and scan-resistant: tune capacity and cache classes with env vars, and protect hot, early-after-wake, and startup-preloaded pages from scan churn.
 - Record VFS predictor access on cache hits so prefetch learns real sequential scans.
 - Cache repeated pegboard-envoy SQLite actor validation and local-open checks for active actors.

@@ -12,7 +12,9 @@ use crate::keys::{
 	preload_hints_key, shard_key, shard_prefix,
 };
 use crate::ltx::decode_ltx_v3;
-use crate::optimization_flags::{SqliteOptimizationFlags, sqlite_optimization_flags};
+use crate::optimization_flags::{
+	DEFAULT_STARTUP_PRELOAD_MAX_BYTES, SqliteOptimizationFlags, sqlite_optimization_flags,
+};
 use crate::quota::{encode_db_head_with_usage, tracked_storage_entry_size};
 use crate::types::{
 	DBHead, FetchedPage, PreloadHints, SQLITE_MAX_DELTA_BYTES, SqliteMeta, SqliteOrigin,
@@ -20,7 +22,7 @@ use crate::types::{
 };
 use crate::udb::{self, WriteOp};
 
-pub const DEFAULT_PRELOAD_MAX_BYTES: usize = 1024 * 1024;
+pub const DEFAULT_PRELOAD_MAX_BYTES: usize = DEFAULT_STARTUP_PRELOAD_MAX_BYTES;
 
 const PIDX_PGNO_BYTES: usize = std::mem::size_of::<u32>();
 const PIDX_TXID_BYTES: usize = std::mem::size_of::<u64>();
@@ -42,6 +44,8 @@ pub struct OpenConfig {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct OpenPreloadHintConfig {
+	pub first_pages: bool,
+	pub first_page_count: u32,
 	pub enabled: bool,
 	pub hot_pages: bool,
 	pub early_pages: bool,
@@ -51,6 +55,8 @@ pub struct OpenPreloadHintConfig {
 impl OpenPreloadHintConfig {
 	pub fn from_optimization_flags(flags: SqliteOptimizationFlags) -> Self {
 		Self {
+			first_pages: flags.startup_preload_first_pages,
+			first_page_count: flags.startup_preload_first_page_count,
 			enabled: flags.preload_hints_on_open,
 			hot_pages: flags.preload_hint_hot_pages,
 			early_pages: flags.preload_hint_early_pages,
@@ -61,14 +67,13 @@ impl OpenPreloadHintConfig {
 
 impl OpenConfig {
 	pub fn new(now_ms: i64) -> Self {
+		let flags = *sqlite_optimization_flags();
 		Self {
 			now_ms,
 			preload_pgnos: Vec::new(),
 			preload_ranges: Vec::new(),
-			max_total_bytes: DEFAULT_PRELOAD_MAX_BYTES,
-			preload_hints: OpenPreloadHintConfig::from_optimization_flags(
-				*sqlite_optimization_flags(),
-			),
+			max_total_bytes: flags.startup_preload_max_bytes,
+			preload_hints: OpenPreloadHintConfig::from_optimization_flags(flags),
 		}
 	}
 }
@@ -700,7 +705,7 @@ impl SqliteEngine {
 			};
 
 			match page_bytes {
-				Some(bytes) if pgno == 1 || total_bytes + bytes.len() <= config.max_total_bytes => {
+				Some(bytes) if total_bytes + bytes.len() <= config.max_total_bytes => {
 					total_bytes += bytes.len();
 					preloaded_pages.push(FetchedPage {
 						pgno,
@@ -729,7 +734,15 @@ fn collect_preload_pgnos(
 	config: &OpenConfig,
 	persisted_hints: Option<&PreloadHints>,
 ) -> Vec<u32> {
-	let mut requested = BTreeSet::from([1]);
+	let mut requested = BTreeSet::new();
+	if config.preload_hints.first_pages {
+		for pgno in 1..=config.preload_hints.first_page_count {
+			if pgno > 0 {
+				requested.insert(pgno);
+			}
+		}
+	}
+
 	for pgno in &config.preload_pgnos {
 		if *pgno > 0 {
 			requested.insert(*pgno);
@@ -1076,6 +1089,86 @@ mod tests {
 				pgno: 1,
 				bytes: Some(page(0x2a)),
 			}]
+		);
+
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn open_can_disable_startup_first_pages() -> Result<()> {
+		let (db, subspace) = test_db().await?;
+		let mut head = seeded_head();
+		head.db_size_pages = 1;
+		let (engine, _compaction_rx) = SqliteEngine::new(db, subspace);
+		apply_write_ops(
+			&engine.db,
+			&engine.subspace,
+			engine.op_counter.as_ref(),
+			vec![
+				WriteOp::put(meta_key(TEST_ACTOR), encode_db_head(&head)?),
+				WriteOp::put(shard_key(TEST_ACTOR, 0), encoded_blob(1, 1, 0x2a)),
+			],
+		)
+		.await?;
+
+		let mut config = OpenConfig::new(888);
+		config.preload_hints.first_pages = false;
+		let result = engine.open(TEST_ACTOR, config).await?;
+
+		assert_eq!(result.preloaded_pages, Vec::<FetchedPage>::new());
+
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn preload_respects_configured_byte_budget() -> Result<()> {
+		let (db, subspace) = test_db().await?;
+		let mut head = seeded_head();
+		head.db_size_pages = 2;
+		let (engine, _compaction_rx) = SqliteEngine::new(db, subspace);
+		apply_write_ops(
+			&engine.db,
+			&engine.subspace,
+			engine.op_counter.as_ref(),
+			vec![
+				WriteOp::put(meta_key(TEST_ACTOR), encode_db_head(&head)?),
+				WriteOp::put(
+					shard_key(TEST_ACTOR, 0),
+					encode_ltx_v3(
+						LtxHeader::delta(1, 2, 999),
+						&[
+							DirtyPage {
+								pgno: 1,
+								bytes: page(0x11),
+							},
+							DirtyPage {
+								pgno: 2,
+								bytes: page(0x22),
+							},
+						],
+					)?,
+				),
+			],
+		)
+		.await?;
+
+		let mut config = OpenConfig::new(888);
+		config.preload_pgnos = vec![2];
+		config.max_total_bytes = SQLITE_PAGE_SIZE as usize;
+		let result = engine.open(TEST_ACTOR, config).await?;
+
+		assert_eq!(
+			result.preloaded_pages,
+			vec![
+				FetchedPage {
+					pgno: 1,
+					bytes: Some(page(0x11)),
+				},
+				FetchedPage {
+					pgno: 2,
+					bytes: None,
+				},
+			]
 		);
 
 		Ok(())
