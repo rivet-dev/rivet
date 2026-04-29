@@ -2,7 +2,7 @@ use anyhow::Result;
 use gas::prelude::*;
 use universaldb::prelude::*;
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Metric {
 	/// Seconds (actor name)
 	ActorAwake(String),
@@ -25,11 +25,15 @@ pub enum Metric {
 	/// Count (actor name, type)
 	ActiveRequests(String, String),
 	/// Bytes (actor name)
-	SqliteStorageUsed(String),
+	SqliteStorageLiveUsed(String),
 	/// Bytes (actor name)
 	SqliteCommitBytes(String),
 	/// Bytes (actor name)
 	SqliteReadBytes(String),
+	/// Bytes (actor name)
+	SqliteStoragePitrUsed(String),
+	/// Count (actor name)
+	SqliteCheckpointCount(String),
 	/// Count (actor name)
 	SqliteCheckpointPinned(String),
 }
@@ -47,9 +51,11 @@ impl Metric {
 			Metric::GatewayEgress(_, _) => MetricVariant::GatewayEgress,
 			Metric::Requests(_, _) => MetricVariant::Requests,
 			Metric::ActiveRequests(_, _) => MetricVariant::ActiveRequests,
-			Metric::SqliteStorageUsed(_) => MetricVariant::SqliteStorageUsed,
+			Metric::SqliteStorageLiveUsed(_) => MetricVariant::SqliteStorageLiveUsed,
 			Metric::SqliteCommitBytes(_) => MetricVariant::SqliteCommitBytes,
 			Metric::SqliteReadBytes(_) => MetricVariant::SqliteReadBytes,
+			Metric::SqliteStoragePitrUsed(_) => MetricVariant::SqliteStoragePitrUsed,
+			Metric::SqliteCheckpointCount(_) => MetricVariant::SqliteCheckpointCount,
 			Metric::SqliteCheckpointPinned(_) => MetricVariant::SqliteCheckpointPinned,
 		}
 	}
@@ -67,10 +73,12 @@ enum MetricVariant {
 	GatewayEgress = 7,
 	Requests = 8,
 	ActiveRequests = 9,
-	SqliteStorageUsed = 10,
+	SqliteStorageLiveUsed = 10,
 	SqliteCommitBytes = 11,
 	SqliteReadBytes = 12,
 	SqliteCheckpointPinned = 13,
+	SqliteStoragePitrUsed = 14,
+	SqliteCheckpointCount = 15,
 }
 
 impl std::fmt::Display for MetricVariant {
@@ -86,9 +94,11 @@ impl std::fmt::Display for MetricVariant {
 			MetricVariant::GatewayEgress => write!(f, "gateway_egress"),
 			MetricVariant::Requests => write!(f, "requests"),
 			MetricVariant::ActiveRequests => write!(f, "active_requests"),
-			MetricVariant::SqliteStorageUsed => write!(f, "sqlite_storage_used"),
+			MetricVariant::SqliteStorageLiveUsed => write!(f, "sqlite_storage_live_used"),
 			MetricVariant::SqliteCommitBytes => write!(f, "sqlite_commit_bytes"),
 			MetricVariant::SqliteReadBytes => write!(f, "sqlite_read_bytes"),
+			MetricVariant::SqliteStoragePitrUsed => write!(f, "sqlite_storage_pitr_used"),
+			MetricVariant::SqliteCheckpointCount => write!(f, "sqlite_checkpoint_count"),
 			MetricVariant::SqliteCheckpointPinned => write!(f, "sqlite_checkpoint_pinned"),
 		}
 	}
@@ -110,6 +120,10 @@ impl MetricKey {
 
 	pub fn subspace(namespace_id: Id) -> MetricSubspaceKey {
 		MetricSubspaceKey::new(namespace_id)
+	}
+
+	pub fn entire_subspace() -> MetricSubspaceKey {
+		MetricSubspaceKey::entire()
 	}
 }
 
@@ -157,9 +171,11 @@ impl TuplePack for MetricKey {
 			Metric::ActiveRequests(actor_name, req_type) => {
 				(actor_name, req_type).pack(w, tuple_depth)?
 			}
-			Metric::SqliteStorageUsed(actor_name) => actor_name.pack(w, tuple_depth)?,
+			Metric::SqliteStorageLiveUsed(actor_name) => actor_name.pack(w, tuple_depth)?,
 			Metric::SqliteCommitBytes(actor_name) => actor_name.pack(w, tuple_depth)?,
 			Metric::SqliteReadBytes(actor_name) => actor_name.pack(w, tuple_depth)?,
+			Metric::SqliteStoragePitrUsed(actor_name) => actor_name.pack(w, tuple_depth)?,
+			Metric::SqliteCheckpointCount(actor_name) => actor_name.pack(w, tuple_depth)?,
 			Metric::SqliteCheckpointPinned(actor_name) => actor_name.pack(w, tuple_depth)?,
 		};
 
@@ -289,14 +305,14 @@ impl<'de> TupleUnpack<'de> for MetricKey {
 					},
 				)
 			}
-			MetricVariant::SqliteStorageUsed => {
+			MetricVariant::SqliteStorageLiveUsed => {
 				let (input, actor_name) = String::unpack(input, tuple_depth)?;
 
 				(
 					input,
 					MetricKey {
 						namespace_id,
-						metric: Metric::SqliteStorageUsed(actor_name),
+						metric: Metric::SqliteStorageLiveUsed(actor_name),
 					},
 				)
 			}
@@ -322,6 +338,28 @@ impl<'de> TupleUnpack<'de> for MetricKey {
 					},
 				)
 			}
+			MetricVariant::SqliteStoragePitrUsed => {
+				let (input, actor_name) = String::unpack(input, tuple_depth)?;
+
+				(
+					input,
+					MetricKey {
+						namespace_id,
+						metric: Metric::SqliteStoragePitrUsed(actor_name),
+					},
+				)
+			}
+			MetricVariant::SqliteCheckpointCount => {
+				let (input, actor_name) = String::unpack(input, tuple_depth)?;
+
+				(
+					input,
+					MetricKey {
+						namespace_id,
+						metric: Metric::SqliteCheckpointCount(actor_name),
+					},
+				)
+			}
 			MetricVariant::SqliteCheckpointPinned => {
 				let (input, actor_name) = String::unpack(input, tuple_depth)?;
 
@@ -340,12 +378,18 @@ impl<'de> TupleUnpack<'de> for MetricKey {
 }
 
 pub struct MetricSubspaceKey {
-	namespace_id: Id,
+	namespace_id: Option<Id>,
 }
 
 impl MetricSubspaceKey {
 	pub fn new(namespace_id: Id) -> Self {
-		MetricSubspaceKey { namespace_id }
+		MetricSubspaceKey {
+			namespace_id: Some(namespace_id),
+		}
+	}
+
+	pub fn entire() -> Self {
+		MetricSubspaceKey { namespace_id: None }
 	}
 }
 
@@ -355,8 +399,12 @@ impl TuplePack for MetricSubspaceKey {
 		w: &mut W,
 		tuple_depth: TupleDepth,
 	) -> std::io::Result<VersionstampOffset> {
-		let t = (METRIC, self.namespace_id);
-		t.pack(w, tuple_depth)
+		let mut offset = VersionstampOffset::None { size: 0 };
+		offset += METRIC.pack(w, tuple_depth)?;
+		if let Some(namespace_id) = &self.namespace_id {
+			offset += namespace_id.pack(w, tuple_depth)?;
+		}
+		Ok(offset)
 	}
 }
 

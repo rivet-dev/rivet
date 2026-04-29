@@ -69,10 +69,31 @@ lazy_static::lazy_static! {
 		*REGISTRY
 	).unwrap();
 
-	pub static ref SQLITE_STORAGE_USED_BYTES: GaugeVec = register_gauge_vec_with_registry!(
-		"sqlite_storage_used_bytes",
-		"Sampled sqlite storage bytes by actor.",
-		&["node_id", "actor_id"],
+	pub static ref SQLITE_STORAGE_LIVE_USED_BYTES_NAMESPACE_SUM: IntGaugeVec = register_int_gauge_vec_with_registry!(
+		"sqlite_storage_live_used_bytes_namespace_sum",
+		"Total live sqlite storage bytes by namespace.",
+		&["namespace"],
+		*REGISTRY
+	).unwrap();
+
+	pub static ref SQLITE_STORAGE_PITR_USED_BYTES_NAMESPACE_SUM: IntGaugeVec = register_int_gauge_vec_with_registry!(
+		"sqlite_storage_pitr_used_bytes_namespace_sum",
+		"Total PITR sqlite storage bytes by namespace.",
+		&["namespace"],
+		*REGISTRY
+	).unwrap();
+
+	pub static ref SQLITE_CHECKPOINT_COUNT_NAMESPACE_SUM: IntGaugeVec = register_int_gauge_vec_with_registry!(
+		"sqlite_checkpoint_count_namespace_sum",
+		"Total sqlite checkpoints by namespace.",
+		&["namespace"],
+		*REGISTRY
+	).unwrap();
+
+	pub static ref SQLITE_CHECKPOINT_PINNED_NAMESPACE_SUM: IntGaugeVec = register_int_gauge_vec_with_registry!(
+		"sqlite_checkpoint_pinned_namespace_sum",
+		"Total pinned sqlite checkpoints by namespace.",
+		&["namespace"],
 		*REGISTRY
 	).unwrap();
 

@@ -5,6 +5,7 @@ use std::{
 };
 
 use anyhow::{Context, Result, bail};
+use futures_util::TryStreamExt;
 use gas::prelude::{Database, Id, StandaloneCtx, db};
 use rivet_runtime::TermSignal;
 use tokio::{
@@ -12,6 +13,11 @@ use tokio::{
 	task::JoinSet,
 };
 use tokio_util::sync::CancellationToken;
+use universaldb::{
+	RangeOption,
+	options::StreamingMode,
+	utils::IsolationLevel::{Serializable, Snapshot},
+};
 use universalpubsub::NextOutput;
 
 use crate::{
@@ -20,7 +26,8 @@ use crate::{
 		keys,
 		quota,
 		types::{
-			ForkMarker, RestoreMarker, decode_fork_marker, decode_restore_marker,
+			ForkMarker, RestoreMarker, decode_checkpoints, decode_fork_marker,
+			decode_restore_marker,
 		},
 	},
 };
@@ -885,10 +892,9 @@ async fn maybe_validate_quota(
 async fn emit_metering_rollup(
 	udb: Arc<universaldb::Database>,
 	payload: SqliteCompactPayload,
-	node_id: rivet_pools::NodeId,
+	_node_id: rivet_pools::NodeId,
 ) -> Result<()> {
 	let actor_id = payload.actor_id;
-	let node_id = node_id.to_string();
 	let namespace_id = payload.namespace_id;
 	let actor_name = payload.actor_name;
 	let commit_bytes_since_rollup = payload.commit_bytes_since_rollup;
@@ -896,14 +902,13 @@ async fn emit_metering_rollup(
 
 	udb.run(move |tx| {
 		let actor_id = actor_id.clone();
-		let node_id = node_id.clone();
 		let actor_name = actor_name.clone();
 
 		async move {
-			let storage_used = quota::read_live(&tx, &actor_id).await?;
-			metrics::SQLITE_STORAGE_USED_BYTES
-				.with_label_values(&[node_id.as_str(), actor_id.as_str()])
-				.set(storage_used as f64);
+			let storage_live_used = quota::read_live(&tx, &actor_id).await?;
+			let storage_pitr_used = quota::read_pitr(&tx, &actor_id).await?;
+			let (checkpoint_count, checkpoint_pinned) =
+				read_checkpoint_counts(&tx, &actor_id).await?;
 			let Some(namespace_id) = namespace_id else {
 				tracing::debug!(
 					actor_id = %actor_id,
@@ -919,12 +924,34 @@ async fn emit_metering_rollup(
 				return Ok(());
 			};
 			let namespace_tx = tx.with_subspace(namespace::keys::subspace());
-			namespace::keys::metric::inc(
+			set_namespace_metric(
 				&namespace_tx,
 				namespace_id,
-				namespace::keys::metric::Metric::SqliteStorageUsed(actor_name.clone()),
-				storage_used,
-			);
+				namespace::keys::metric::Metric::SqliteStorageLiveUsed(actor_name.clone()),
+				round_up_billable_bytes(storage_live_used)?,
+			)
+			.await?;
+			set_namespace_metric(
+				&namespace_tx,
+				namespace_id,
+				namespace::keys::metric::Metric::SqliteStoragePitrUsed(actor_name.clone()),
+				round_up_billable_bytes(storage_pitr_used)?,
+			)
+			.await?;
+			set_namespace_metric(
+				&namespace_tx,
+				namespace_id,
+				namespace::keys::metric::Metric::SqliteCheckpointCount(actor_name.clone()),
+				checkpoint_count,
+			)
+			.await?;
+			set_namespace_metric(
+				&namespace_tx,
+				namespace_id,
+				namespace::keys::metric::Metric::SqliteCheckpointPinned(actor_name.clone()),
+				checkpoint_pinned,
+			)
+			.await?;
 			namespace::keys::metric::inc(
 				&namespace_tx,
 				namespace_id,
@@ -937,6 +964,7 @@ async fn emit_metering_rollup(
 				namespace::keys::metric::Metric::SqliteReadBytes(actor_name),
 				round_down_billable_bytes(read_bytes_since_rollup)?,
 			);
+			refresh_namespace_metric_gauges(&namespace_tx, namespace_id).await?;
 
 			Ok(())
 		}
@@ -944,8 +972,130 @@ async fn emit_metering_rollup(
 	.await
 }
 
+async fn read_checkpoint_counts(
+	tx: &universaldb::Transaction,
+	actor_id: &str,
+) -> Result<(i64, i64)> {
+	let Some(checkpoints_bytes) = tx
+		.informal()
+		.get(&keys::meta_checkpoints_key(actor_id), Snapshot)
+		.await?
+	else {
+		return Ok((0, 0));
+	};
+	let checkpoints = decode_checkpoints(&checkpoints_bytes)
+		.context("decode sqlite checkpoints for namespace metric rollup")?;
+	let checkpoint_count =
+		i64::try_from(checkpoints.entries.len()).context("sqlite checkpoint count exceeded i64")?;
+	let checkpoint_pinned = i64::try_from(
+		checkpoints
+			.entries
+			.iter()
+			.filter(|entry| entry.refcount > 0)
+			.count(),
+	)
+	.context("sqlite pinned checkpoint count exceeded i64")?;
+	Ok((checkpoint_count, checkpoint_pinned))
+}
+
+async fn set_namespace_metric(
+	tx: &universaldb::Transaction,
+	namespace_id: Id,
+	metric: namespace::keys::metric::Metric,
+	value: i64,
+) -> Result<()> {
+	let current = tx
+		.read_opt(
+			&namespace::keys::metric::MetricKey::new(namespace_id, metric.clone()),
+			Serializable,
+		)
+		.await?
+		.unwrap_or(0);
+	let delta = value
+		.checked_sub(current)
+		.context("sqlite namespace metric delta overflowed")?;
+	if delta != 0 {
+		namespace::keys::metric::inc(tx, namespace_id, metric, delta);
+	}
+	Ok(())
+}
+
+async fn refresh_namespace_metric_gauges(
+	tx: &universaldb::Transaction,
+	namespace_id: Id,
+) -> Result<()> {
+	let metrics_subspace = namespace::keys::subspace()
+		.subspace(&namespace::keys::metric::MetricKey::subspace(namespace_id));
+	let namespace_label = namespace_id.to_string();
+	let mut storage_live_used = 0i64;
+	let mut storage_pitr_used = 0i64;
+	let mut checkpoint_count = 0i64;
+	let mut checkpoint_pinned = 0i64;
+	let mut stream = tx.get_ranges_keyvalues(
+		RangeOption {
+			mode: StreamingMode::WantAll,
+			..(&metrics_subspace).into()
+		},
+		Snapshot,
+	);
+
+	while let Some(entry) = stream.try_next().await? {
+		let (key, value) = tx.read_entry::<namespace::keys::metric::MetricKey>(&entry)?;
+		match key.metric {
+			namespace::keys::metric::Metric::SqliteStorageLiveUsed(_) => {
+				storage_live_used = storage_live_used.saturating_add(value);
+			}
+			namespace::keys::metric::Metric::SqliteStoragePitrUsed(_) => {
+				storage_pitr_used = storage_pitr_used.saturating_add(value);
+			}
+			namespace::keys::metric::Metric::SqliteCheckpointCount(_) => {
+				checkpoint_count = checkpoint_count.saturating_add(value);
+			}
+			namespace::keys::metric::Metric::SqliteCheckpointPinned(_) => {
+				checkpoint_pinned = checkpoint_pinned.saturating_add(value);
+			}
+			namespace::keys::metric::Metric::ActorAwake(_)
+			| namespace::keys::metric::Metric::TotalActors(_)
+			| namespace::keys::metric::Metric::KvStorageUsed(_)
+			| namespace::keys::metric::Metric::KvRead(_)
+			| namespace::keys::metric::Metric::KvWrite(_)
+			| namespace::keys::metric::Metric::AlarmsSet(_)
+			| namespace::keys::metric::Metric::GatewayIngress(_, _)
+			| namespace::keys::metric::Metric::GatewayEgress(_, _)
+			| namespace::keys::metric::Metric::Requests(_, _)
+			| namespace::keys::metric::Metric::ActiveRequests(_, _)
+			| namespace::keys::metric::Metric::SqliteCommitBytes(_)
+			| namespace::keys::metric::Metric::SqliteReadBytes(_) => {}
+		}
+	}
+
+	metrics::SQLITE_STORAGE_LIVE_USED_BYTES_NAMESPACE_SUM
+		.with_label_values(&[namespace_label.as_str()])
+		.set(storage_live_used);
+	metrics::SQLITE_STORAGE_PITR_USED_BYTES_NAMESPACE_SUM
+		.with_label_values(&[namespace_label.as_str()])
+		.set(storage_pitr_used);
+	metrics::SQLITE_CHECKPOINT_COUNT_NAMESPACE_SUM
+		.with_label_values(&[namespace_label.as_str()])
+		.set(checkpoint_count);
+	metrics::SQLITE_CHECKPOINT_PINNED_NAMESPACE_SUM
+		.with_label_values(&[namespace_label.as_str()])
+		.set(checkpoint_pinned);
+
+	Ok(())
+}
+
 fn round_down_billable_bytes(bytes: u64) -> Result<i64> {
 	let rounded = bytes / util::metric::KV_BILLABLE_CHUNK * util::metric::KV_BILLABLE_CHUNK;
+	i64::try_from(rounded).context("sqlite metering bytes exceeded i64")
+}
+
+fn round_up_billable_bytes(bytes: i64) -> Result<i64> {
+	if bytes <= 0 {
+		return Ok(0);
+	}
+	let bytes = u64::try_from(bytes).context("sqlite metering bytes were negative")?;
+	let rounded = bytes.div_ceil(util::metric::KV_BILLABLE_CHUNK) * util::metric::KV_BILLABLE_CHUNK;
 	i64::try_from(rounded).context("sqlite metering bytes exceeded i64")
 }
 
@@ -1232,6 +1382,17 @@ pub mod test_hooks {
 			cancel_token,
 			Arc::new(Semaphore::new(16)),
 		)
+		.await
+	}
+
+	pub async fn refresh_namespace_metrics_once(
+		udb: Arc<universaldb::Database>,
+		namespace_id: Id,
+	) -> Result<()> {
+		udb.run(move |tx| async move {
+			let tx = tx.with_subspace(namespace::keys::subspace());
+			super::refresh_namespace_metric_gauges(&tx, namespace_id).await
+		})
 		.await
 	}
 

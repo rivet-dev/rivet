@@ -80,8 +80,20 @@ fn metrics_register_without_panic() {
 		"sqlite_compactor_ups_publish_total",
 	);
 	assert_metric_name(
-		&*metrics::SQLITE_STORAGE_USED_BYTES,
-		"sqlite_storage_used_bytes",
+		&*metrics::SQLITE_STORAGE_LIVE_USED_BYTES_NAMESPACE_SUM,
+		"sqlite_storage_live_used_bytes_namespace_sum",
+	);
+	assert_metric_name(
+		&*metrics::SQLITE_STORAGE_PITR_USED_BYTES_NAMESPACE_SUM,
+		"sqlite_storage_pitr_used_bytes_namespace_sum",
+	);
+	assert_metric_name(
+		&*metrics::SQLITE_CHECKPOINT_COUNT_NAMESPACE_SUM,
+		"sqlite_checkpoint_count_namespace_sum",
+	);
+	assert_metric_name(
+		&*metrics::SQLITE_CHECKPOINT_PINNED_NAMESPACE_SUM,
+		"sqlite_checkpoint_pinned_namespace_sum",
 	);
 
 	#[cfg(debug_assertions)]
@@ -115,7 +127,16 @@ fn metric_label_set_includes_node_id() {
 		"node_id",
 	);
 	assert_has_label(&*metrics::SQLITE_COMPACTOR_UPS_PUBLISH_TOTAL, "node_id");
-	assert_has_label(&*metrics::SQLITE_STORAGE_USED_BYTES, "node_id");
+	assert_has_label(
+		&*metrics::SQLITE_STORAGE_LIVE_USED_BYTES_NAMESPACE_SUM,
+		"namespace",
+	);
+	assert_has_label(
+		&*metrics::SQLITE_STORAGE_PITR_USED_BYTES_NAMESPACE_SUM,
+		"namespace",
+	);
+	assert_has_label(&*metrics::SQLITE_CHECKPOINT_COUNT_NAMESPACE_SUM, "namespace");
+	assert_has_label(&*metrics::SQLITE_CHECKPOINT_PINNED_NAMESPACE_SUM, "namespace");
 
 	#[cfg(debug_assertions)]
 	{

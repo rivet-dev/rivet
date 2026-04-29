@@ -57,6 +57,7 @@ Started: Wed Apr 29 04:36:56 AM PDT 2026
 - api-public SQLite admin endpoints create `AdminOpRecord`s locally through `ctx.udb()` and publish typed `SqliteOpSubject` requests through `ctx.ups()`; endpoint tests that need short-op completion must start `sqlite_storage::compactor::worker::test_hooks::run_for_test`.
 - Pegboard restore suspension is a persisted actor-lifecycle gate plus a broadcast lifecycle message; pegboard-envoy still checks UDB on each new tunnel open/request so missed broadcasts cannot reaccept traffic.
 - api-public restore orchestration resumes an actor only after the persisted `AdminOpRecord` reaches `Completed`; `Failed` and `Orphaned` records intentionally leave the actor suspended for operator action.
+- SQLite namespace gauge metrics store per-actor values in `MetricKey`; update them by reading the current value and applying an `atomic_add` delta, then refresh namespace-sum Prometheus gauges from the namespace metric keyspace.
 
 ## 2026-04-29 04:44:52 PDT - US-001
 - Implemented a UUID-backed `NodeId` type and stored a generated value on each `Pools` instance.
@@ -473,4 +474,15 @@ Started: Wed Apr 29 04:36:56 AM PDT 2026
   - Authz belongs at api-public and the compactor trusts the injected `AuditFields`; namespace config reads use `Id::v1(raw_namespace_uuid, 0)`.
   - Rate limiting is per namespace and op kind, while concurrent Restore/Fork limits are enforced by scanning persisted `AdminOpRecord`s in the same tx as record creation.
   - Audit tests should filter by operation id because async restore monitors from other tests can emit into the shared debug sink.
+---
+## 2026-04-29 10:14:59 PDT - US-040
+- Renamed the base SQLite storage namespace metric to `SqliteStorageLiveUsed` and added PITR used, checkpoint count, and checkpoint pinned metric keys.
+- Reworked compactor metering rollup so live/PITR/checkpoint metrics are gauge-like per-actor `MetricKey` values, while commit/read byte counters still accumulate.
+- Added namespace-sum Prometheus gauges and focused coverage for metric key round trips, PITR/checkpoint metric emission, pinned count changes, namespace aggregation, and absence of per-actor checkpoint gauges.
+- Verified `cargo check -p namespace`, `cargo check -p sqlite-storage`, `cargo test -p sqlite-storage --test namespace_metrics`, `cargo test -p sqlite-storage --test compactor_compact`, `cargo test -p sqlite-storage --test compactor_metrics`, `cargo test -p sqlite-storage`, `cargo check --workspace`, and `git diff --check`.
+- Files changed: `engine/packages/namespace/src/keys/metric.rs`, `engine/packages/sqlite-storage/src/compactor/{cleanup.rs,metrics.rs,worker.rs}`, `engine/packages/sqlite-storage/tests/{compactor_compact.rs,compactor_metrics.rs,namespace_metrics.rs}`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
+- **Learnings for future iterations:**
+  - Gauge-like namespace metrics should be set by applying an atomic-add delta from the previous stored value, not by adding the current snapshot every pass.
+  - The compactor can refresh namespace-sum Prometheus gauges by scanning `namespace::keys::metric::MetricKey::subspace(namespace_id)` after it updates actor-level metric keys.
+  - Keep commit/read rollups as counters, but live/PITR/checkpoint metric keys represent current per-actor values.
 ---

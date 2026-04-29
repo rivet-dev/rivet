@@ -107,7 +107,7 @@ async fn read_quota(db: &universaldb::Database, actor_id: &str) -> Result<i64> {
 
 #[derive(Clone, Copy)]
 enum TestMetric {
-	StorageUsed,
+	StorageLiveUsed,
 	CommitBytes,
 	ReadBytes,
 }
@@ -123,7 +123,7 @@ async fn read_sqlite_metric(
 		let actor_name = actor_name.clone();
 		async move {
 			let metric = match metric {
-				TestMetric::StorageUsed => Metric::SqliteStorageUsed(actor_name),
+				TestMetric::StorageLiveUsed => Metric::SqliteStorageLiveUsed(actor_name),
 				TestMetric::CommitBytes => Metric::SqliteCommitBytes(actor_name),
 				TestMetric::ReadBytes => Metric::SqliteReadBytes(actor_name),
 			};
@@ -550,8 +550,9 @@ async fn compact_trigger_rolls_up_sqlite_metering_metrics() -> Result<()> {
 
 	let storage_used = read_quota(&db, actor_id).await?;
 	assert_eq!(
-		read_sqlite_metric(&db, namespace_id, actor_name, TestMetric::StorageUsed).await?,
-		storage_used,
+		read_sqlite_metric(&db, namespace_id, actor_name, TestMetric::StorageLiveUsed).await?,
+		((storage_used as u64).div_ceil(util::metric::KV_BILLABLE_CHUNK)
+			* util::metric::KV_BILLABLE_CHUNK) as i64,
 	);
 	assert_eq!(
 		read_sqlite_metric(&db, namespace_id, actor_name, TestMetric::CommitBytes).await?,

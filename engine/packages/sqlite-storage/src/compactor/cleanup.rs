@@ -60,12 +60,11 @@ pub(crate) async fn cleanup_old_checkpoints_with_metric_context(
 	actor_id: String,
 	retention_config: RetentionConfig,
 	now_ms: i64,
-	namespace_id: Option<Id>,
-	actor_name: Option<String>,
+	_namespace_id: Option<Id>,
+	_actor_name: Option<String>,
 ) -> Result<CheckpointCleanupOutcome> {
 	udb.run(move |tx| {
 		let actor_id = actor_id.clone();
-		let actor_name = actor_name.clone();
 
 		async move {
 			let checkpoints_key = keys::meta_checkpoints_key(&actor_id);
@@ -80,24 +79,6 @@ pub(crate) async fn cleanup_old_checkpoints_with_metric_context(
 			else {
 				return Ok(CheckpointCleanupOutcome::default());
 			};
-
-			if let (Some(namespace_id), Some(actor_name)) = (namespace_id, actor_name.as_ref()) {
-				let pinned_count = checkpoints
-					.entries
-					.iter()
-					.filter(|entry| entry.refcount > 0)
-					.count();
-				if pinned_count > 0 {
-					let namespace_tx = tx.with_subspace(namespace::keys::subspace());
-					namespace::keys::metric::inc(
-						&namespace_tx,
-						namespace_id,
-						namespace::keys::metric::Metric::SqliteCheckpointPinned(actor_name.clone()),
-						i64::try_from(pinned_count)
-							.context("sqlite pinned checkpoint count exceeded i64")?,
-					);
-				}
-			}
 
 			let cutoff_ms = retention_cutoff(now_ms, retention_config.retention_ms);
 			let mut delete_txids = Vec::new();
