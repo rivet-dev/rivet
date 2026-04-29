@@ -14,6 +14,7 @@ Started: Tue Apr 28 11:00:38 PM PDT 2026
 - `sqlite-storage::SqliteEngine::get_pages` returns `GetPagesResult` with fetched pages plus transaction-read meta; successful protocol handlers should reuse `result.meta` instead of calling `load_meta`.
 - pegboard-envoy repeated `get_pages` can fast-path actor validation from `Conn.active_actors` and serverless local-open checks from `Conn.serverless_sqlite_actors`; stale cached generations should surface an explicit SQLite fence mismatch.
 - SQLite range page-read protocol details live in `.agent/specs/sqlite-range-page-read-protocol.md`; keep page-list `get_pages` as the compatibility/random-read fallback and preserve existing generation-fence behavior.
+- `sqlite-storage::SqliteEngine::get_page_range` is the storage primitive for contiguous range reads; it shares `get_pages` source resolution through `read_pages` and clamps requests to 256 pages / 1 MiB.
 ---
 ## 2026-04-28 23:01:27 PDT - SQLITE-COLD-001
 - What was implemented
@@ -246,4 +247,24 @@ Started: Tue Apr 28 11:00:38 PM PDT 2026
   - Range reads should reuse existing `get_pages` generation fencing and stale-owner behavior; do not fall back after `SqliteFenceMismatch`.
   - The VFS should use range reads only for default-enabled `RIVETKIT_SQLITE_OPT_RANGE_READS`, supported protocol versions, forward-scan mode, and contiguous large windows; point, scattered, unsupported, or disabled paths stay on page-list `get_pages`.
   - Verification status: `pnpm --filter kitchen-sink check-types` passed with the known skip message; `pnpm -F rivetkit check-types` passed; `cargo test -p sqlite-storage -- --test-threads=1` passed; `cargo test -p pegboard-envoy` passed.
+---
+## 2026-04-29 00:31:43 PDT - SQLITE-COLD-013
+- What was implemented
+  - Added `SqliteEngine::get_page_range(...)` for bounded contiguous SQLite page reads in `sqlite-storage`.
+  - Refactored `get_pages` through shared `read_pages` source resolution so range reads reuse generation fencing, PIDX caching, stale PIDX cleanup, zero-page fallback, and transaction-read meta behavior.
+  - Added focused range-read tests for equivalent bytes/meta, page and byte caps, invalid requests, and generation mismatch.
+  - Recorded the required cold-read benchmark artifact.
+- Files changed
+  - `engine/packages/sqlite-storage/src/read.rs`
+  - `engine/packages/sqlite-storage/CLAUDE.md`
+  - `docs-internal/engine/SQLITE_OPTIMIZATIONS.md`
+  - `.agent/notes/sqlite-cold-read-after-SQLITE-COLD-013.txt`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - SQLITE-COLD-013 benchmark numbers: insert e2e 15808.6ms, hot read e2e 154.6ms, wake read e2e 7599.7ms, wake read server 3933.5ms, wake overhead estimate 3666.2ms, wake VFS get_pages 70 calls, fetched 13722 pages / 56205312 bytes, prefetch 13652 pages / 55918592 bytes, VFS transport 3702.2ms.
+  - Compared with baseline/SQLITE-COLD-001: wake get_pages dropped 1249 -> 70, wake e2e dropped 20141.0ms -> 7599.7ms, wake VFS transport dropped 19332.8ms -> 3702.2ms, and hot read was 118.6ms -> 154.6ms.
+  - Compared with SQLITE-COLD-012/SQLITE-COLD-011: runtime read path is unchanged until protocol/VFS wiring, so wake get_pages stayed 70 -> 70; wake server was 3904.7ms -> 3933.5ms and wake e2e increased because local wake overhead was higher.
+  - Range reads are storage-only in this story; upcoming protocol/VFS stories should gate actual runtime use behind `RIVETKIT_SQLITE_OPT_RANGE_READS`.
+  - Verification status: `cargo check -p sqlite-storage` passed; focused `get_page_range` tests passed; `cargo test -p sqlite-storage -- --test-threads=1` passed; `pnpm --filter kitchen-sink check-types` passed with the known skip message; `pnpm -F rivetkit check-types` passed.
 ---

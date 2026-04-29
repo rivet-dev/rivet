@@ -16,6 +16,7 @@ Range page-read protocol details live in `.agent/specs/sqlite-range-page-read-pr
 - The VFS tracks bounded recent page hints as hot pages plus coalesced scan ranges; `NativeDatabase::snapshot_preload_hints()` exposes the in-memory plan for future flush wiring.
 - Actor Prometheus metrics expose VFS read counters, fetched bytes, cache hits/misses, and `get_pages` duration at `/gateway/<actor_id>/metrics`.
 - `sqlite-storage` keeps an in-memory PIDX cache and decodes each unique DELTA/SHARD blob once per `get_pages(...)` call.
+- `sqlite-storage` exposes `get_page_range(...)` for bounded contiguous reads; it reuses `get_pages(...)` source resolution and currently caps ranges at 256 pages / 1 MiB.
 - `sqlite-storage` compaction folds DELTA pages into SHARD blobs for steadier read behavior.
 
 ## Recommended Optimizations
@@ -23,6 +24,7 @@ Range page-read protocol details live in `.agent/specs/sqlite-range-page-read-pr
 - Gate SQLite cold-read optimizations behind central env-backed feature flags that default on, so each optimization can be benchmarked on and off.
 - Add adaptive forward-scan read-ahead that can grow beyond shard-sized batches for mostly sequential reads while shrinking back for scattered access.
 - Configure preload hint mechanisms independently with env vars, including hot pages, early-after-wake pages, scan ranges, and first-page/first-range policies.
+- Make the VFS page cache configurable and scan-resistant: tune capacity and cache classes with env vars, and protect hot, early-after-wake, and startup-preloaded pages from scan churn.
 - Record VFS predictor access on cache hits so prefetch learns real sequential scans.
 - Cache repeated pegboard-envoy SQLite actor validation and local-open checks for active actors.
 - Return SQLite meta from `sqlite-storage::get_pages(...)` instead of doing a second META read in pegboard-envoy.

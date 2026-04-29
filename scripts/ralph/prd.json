@@ -1,7 +1,7 @@
 {
   "project": "sqlite-cold-read-optimizations",
   "branchName": "04-28-feat_sqlite_benchmark_cold_reads",
-  "description": "Optimize SQLite cold full-scan reads for actors with existing database data. Baseline has already been measured in `.agent/notes/sqlite-cold-read-before.txt`: insert e2e 16048.5ms, hot read e2e 118.6ms, wake read e2e 20141.0ms, wake read server 19979.9ms, wake overhead estimate 161.2ms, wake read VFS get_pages 1249 calls, VFS fetched 20050 pages / 82124800 bytes, VFS prefetch 18801 pages / 77008896 bytes, VFS transport 19332.8ms.\n\nIf the baseline artifact is missing, regenerate it before any optimization with:\n\n`pnpm --filter kitchen-sink exec tsx scripts/sqlite-cold-start-bench.ts --wake-delay-ms 10000 2>&1 | tee .agent/notes/sqlite-cold-read-before.txt`\n\nAfter every implementation story, run the same benchmark and write the full output to `.agent/notes/sqlite-cold-read-after-<STORY_ID>.txt`:\n\n`pnpm --filter kitchen-sink exec tsx scripts/sqlite-cold-start-bench.ts --wake-delay-ms 10000 2>&1 | tee .agent/notes/sqlite-cold-read-after-<STORY_ID>.txt`\n\nEvery completed implementation story must record these numbers in its `notes`: insert e2e ms, hot read e2e ms, wake read e2e ms, wake read server ms, wake overhead estimate ms, wake read VFS get_pages calls, pages fetched, bytes fetched, prefetch pages, prefetch bytes, and VFS transport ms. Compare against `.agent/notes/sqlite-cold-read-before.txt` and the previous completed story. All SQLite cold-read optimization behavior should be behind central env-backed feature flags, enabled by default, so benchmarks can compare individual optimizations on and off.",
+  "description": "Optimize SQLite cold full-scan reads for actors with existing database data. Baseline has already been measured in `.agent/notes/sqlite-cold-read-before.txt`: insert e2e 16048.5ms, hot read e2e 118.6ms, wake read e2e 20141.0ms, wake read server 19979.9ms, wake overhead estimate 161.2ms, wake read VFS get_pages 1249 calls, VFS fetched 20050 pages / 82124800 bytes, VFS prefetch 18801 pages / 77008896 bytes, VFS transport 19332.8ms.\n\nIf the baseline artifact is missing, regenerate it before any optimization with:\n\n`pnpm --filter kitchen-sink exec tsx scripts/sqlite-cold-start-bench.ts --wake-delay-ms 10000 2>&1 | tee .agent/notes/sqlite-cold-read-before.txt`\n\nAfter every implementation story, run the same benchmark and write the full output to `.agent/notes/sqlite-cold-read-after-<STORY_ID>.txt`:\n\n`pnpm --filter kitchen-sink exec tsx scripts/sqlite-cold-start-bench.ts --wake-delay-ms 10000 2>&1 | tee .agent/notes/sqlite-cold-read-after-<STORY_ID>.txt`\n\nEvery completed implementation story must record these numbers in its `notes`: insert e2e ms, hot read e2e ms, wake read server ms, wake read e2e ms, wake overhead estimate ms, wake read VFS get_pages calls, pages fetched, bytes fetched, prefetch pages, prefetch bytes, and VFS transport ms. Compare against `.agent/notes/sqlite-cold-read-before.txt` and the previous completed story. All SQLite cold-read optimization behavior should be behind central env-backed feature flags, enabled by default, so benchmarks can compare individual optimizations on and off.",
   "userStories": [
     {
       "id": "SQLITE-COLD-001",
@@ -248,8 +248,8 @@
         "`notes` records insert e2e ms, hot read e2e ms, wake read e2e ms, wake read server ms, wake overhead estimate ms, wake read VFS get_pages calls, pages fetched, bytes fetched, prefetch pages, prefetch bytes, and VFS transport ms and compares them to baseline plus SQLITE-COLD-012"
       ],
       "priority": 13,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added `SqliteEngine::get_page_range(...)` in sqlite-storage with generation fencing, page-zero and empty-budget validation, and a shared `read_pages` implementation that reuses existing get_pages source resolution, PIDX caching, stale PIDX cleanup, zero-page fallback, and transaction-read meta. Range reads are storage-only in this story; no runtime VFS path consumes them yet, and the existing central `RIVETKIT_SQLITE_OPT_RANGE_READS` flag remains the control point for the upcoming protocol/VFS stories. The range API enforces a 256-page / 1 MiB hard cap plus caller max_pages/max_bytes. Benchmark artifact written to `.agent/notes/sqlite-cold-read-after-SQLITE-COLD-013.txt`. Numbers: insert e2e 15808.6ms; hot read e2e 154.6ms; wake read e2e 7599.7ms; wake read server 3933.5ms; wake overhead estimate 3666.2ms; wake read VFS get_pages calls 70; pages fetched 13722; bytes fetched 56205312; prefetch pages 13652; prefetch bytes 55918592; VFS transport 3702.2ms. Compared with baseline/SQLITE-COLD-001: get_pages calls dropped 1249 -> 70, wake read e2e dropped 20141.0ms -> 7599.7ms, wake VFS transport dropped 19332.8ms -> 3702.2ms, and hot read e2e was 118.6ms -> 154.6ms. Compared with SQLITE-COLD-012/SQLITE-COLD-011: runtime read path is unchanged; get_pages calls stayed 70 -> 70, wake read server was 3904.7ms -> 3933.5ms, VFS transport was 3665.3ms -> 3702.2ms, and wake e2e increased due to higher local wake overhead. Checks passed: cargo check -p sqlite-storage; cargo test -p sqlite-storage get_page_range -- --nocapture; cargo test -p sqlite-storage -- --test-threads=1; pnpm --filter kitchen-sink check-types; pnpm -F rivetkit check-types."
     },
     {
       "id": "SQLITE-COLD-014",
@@ -352,6 +352,27 @@
     },
     {
       "id": "SQLITE-COLD-019",
+      "title": "Make VFS page cache policy configurable and scan-resistant",
+      "description": "Add central env-backed configuration for VFS page cache capacity and cache classes, then protect hot, early-after-wake, and startup-preloaded pages from eviction by full-scan churn. This should make aggressive prefetch and preload hinting easier to compare and more reliable for repeated working-set workloads.",
+      "acceptanceCriteria": [
+        "Any new optimization in this story is controlled by the central SQLite optimization feature flag file and defaults enabled unless this story is only documentation or benchmarking",
+        "VFS page cache capacity is configurable through the central SQLite optimization feature flag/config file, using either pages or bytes with a clear default",
+        "Caching of fetched pages, prefetched pages, and startup-preloaded pages can be independently enabled or disabled through central env-backed config",
+        "Hot pages, early-after-wake pages, and startup-preloaded pages are protected from immediate eviction by long forward scans within a bounded protected budget",
+        "Default behavior remains compatible with existing cache behavior unless the new config flags are changed",
+        "Focused VFS tests prove scan churn does not prematurely evict protected pages",
+        "Full benchmark output is written to `.agent/notes/sqlite-cold-read-after-SQLITE-COLD-019.txt`",
+        "`notes` records insert e2e ms, hot read e2e ms, wake read e2e ms, wake read server ms, wake overhead estimate ms, wake read VFS get_pages calls, pages fetched, bytes fetched, prefetch pages, prefetch bytes, and VFS transport ms and compares them to baseline plus SQLITE-COLD-018",
+        "Relevant Rust checks pass for touched packages",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 19,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "SQLITE-COLD-020",
       "title": "Split benchmark cold wake from cold full read",
       "description": "Clean up benchmark semantics so actor cold wake/open and SQLite cold full-read throughput are measured separately. Add a no-op or tiny SQLite action after sleep to measure wake/open, then separately measure cold full read.",
       "acceptanceCriteria": [
@@ -362,15 +383,15 @@
         "Kitchen-sink benchmark runs locally end-to-end",
         "Typecheck passes",
         "Tests pass",
-        "Full benchmark output is written to `.agent/notes/sqlite-cold-read-after-SQLITE-COLD-019.txt`",
-        "`notes` records insert e2e ms, hot read e2e ms, wake read e2e ms, wake read server ms, wake overhead estimate ms, wake read VFS get_pages calls, pages fetched, bytes fetched, prefetch pages, prefetch bytes, and VFS transport ms and compares them to baseline plus SQLITE-COLD-018"
+        "Full benchmark output is written to `.agent/notes/sqlite-cold-read-after-SQLITE-COLD-020.txt`",
+        "`notes` records insert e2e ms, hot read e2e ms, wake read e2e ms, wake read server ms, wake overhead estimate ms, wake read VFS get_pages calls, pages fetched, bytes fetched, prefetch pages, prefetch bytes, and VFS transport ms and compares them to baseline plus SQLITE-COLD-019"
       ],
-      "priority": 19,
+      "priority": 20,
       "passes": false,
       "notes": ""
     },
     {
-      "id": "SQLITE-COLD-020",
+      "id": "SQLITE-COLD-021",
       "title": "Benchmark compacted and un-compacted cold reads separately",
       "description": "Improve benchmark signal by separating worst-case delta-heavy reads from steady-state compacted reads. Keep the current un-compacted scenario, add a compacted or post-compaction scenario, and report both with the same VFS metrics.",
       "acceptanceCriteria": [
@@ -380,10 +401,10 @@
         "Kitchen-sink benchmark runs locally end-to-end",
         "Typecheck passes",
         "Tests pass",
-        "Full benchmark output is written to `.agent/notes/sqlite-cold-read-after-SQLITE-COLD-020.txt`",
-        "`notes` records insert e2e ms, hot read e2e ms, wake read e2e ms, wake read server ms, wake overhead estimate ms, wake read VFS get_pages calls, pages fetched, bytes fetched, prefetch pages, prefetch bytes, and VFS transport ms and compares them to baseline plus SQLITE-COLD-019"
+        "Full benchmark output is written to `.agent/notes/sqlite-cold-read-after-SQLITE-COLD-021.txt`",
+        "`notes` records insert e2e ms, hot read e2e ms, wake read e2e ms, wake read server ms, wake overhead estimate ms, wake read VFS get_pages calls, pages fetched, bytes fetched, prefetch pages, prefetch bytes, and VFS transport ms and compares them to baseline plus SQLITE-COLD-020"
       ],
-      "priority": 20,
+      "priority": 21,
       "passes": false,
       "notes": ""
     }

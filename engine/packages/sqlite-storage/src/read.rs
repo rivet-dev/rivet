@@ -21,6 +21,8 @@ use crate::udb;
 
 const PIDX_PGNO_BYTES: usize = std::mem::size_of::<u32>();
 const PIDX_TXID_BYTES: usize = std::mem::size_of::<u64>();
+pub const SQLITE_GET_PAGE_RANGE_MAX_PAGES: u32 = 256;
+pub const SQLITE_GET_PAGE_RANGE_MAX_BYTES: u64 = 1024 * 1024;
 
 impl SqliteEngine {
 	pub async fn get_pages(
@@ -29,20 +31,48 @@ impl SqliteEngine {
 		generation: u64,
 		pgnos: Vec<u32>,
 	) -> Result<GetPagesResult> {
-		let start = Instant::now();
-		let requested_page_count = pgnos.len();
-		for pgno in &pgnos {
-			ensure!(*pgno > 0, "get_pages does not accept page 0");
-		}
-		self.ensure_open(actor_id, generation, "get_pages").await?;
+		self.read_pages(actor_id, generation, PageReadRequest::Pages(pgnos))
+			.await
+	}
 
-		let pgnos_in_range = pgnos.iter().copied().collect::<Vec<_>>();
+	pub async fn get_page_range(
+		&self,
+		actor_id: &str,
+		generation: u64,
+		start_pgno: u32,
+		max_pages: u32,
+		max_bytes: u64,
+	) -> Result<GetPagesResult> {
+		self.read_pages(
+			actor_id,
+			generation,
+			PageReadRequest::Range {
+				start_pgno,
+				max_pages,
+				max_bytes,
+			},
+		)
+		.await
+	}
+
+	async fn read_pages(
+		&self,
+		actor_id: &str,
+		generation: u64,
+		request: PageReadRequest,
+	) -> Result<GetPagesResult> {
+		let start = Instant::now();
+		request.validate()?;
+		let operation = request.operation();
+		self.ensure_open(actor_id, generation, operation).await?;
+
+		let pidx_lookup_pgnos = request.pidx_lookup_pgnos();
 		let actor_id = actor_id.to_string();
 		let actor_id_for_tx = actor_id.clone();
 		let subspace = self.subspace.clone();
 		let cached_pidx = match self.page_indices.get_async(&actor_id).await {
 			Some(entry) => Some(
-				pgnos_in_range
+				pidx_lookup_pgnos
 					.iter()
 					.map(|pgno| (*pgno, entry.get().get(*pgno)))
 					.collect::<BTreeMap<_, _>>(),
@@ -53,7 +83,7 @@ impl SqliteEngine {
 			let actor_id = actor_id_for_tx.clone();
 			let subspace = subspace.clone();
 			let cached_pidx = cached_pidx.clone();
-			let pgnos_in_range = pgnos_in_range.clone();
+			let request = request.clone();
 			async move {
 				let meta_key = meta_key(&actor_id);
 				let head =
@@ -62,14 +92,9 @@ impl SqliteEngine {
 					} else {
 						ensure!(
 							generation == 1,
-							SqliteStorageError::MetaMissing {
-								operation: "get_pages",
-							}
+							SqliteStorageError::MetaMissing { operation }
 						);
-						return Err(SqliteStorageError::MetaMissing {
-							operation: "get_pages",
-						}
-						.into());
+						return Err(SqliteStorageError::MetaMissing { operation }.into());
 					};
 				ensure!(
 					head.generation == generation,
@@ -81,13 +106,16 @@ impl SqliteEngine {
 					}
 				);
 
-				let pgnos_in_range = pgnos_in_range
-					.into_iter()
+				let pgnos = request.pgnos_for_head(&head);
+				let pgnos_in_range = pgnos
+					.iter()
+					.copied()
 					.filter(|pgno| *pgno <= head.db_size_pages)
 					.collect::<Vec<_>>();
 				if pgnos_in_range.is_empty() {
 					return Ok(GetPagesTxResult {
 						head,
+						pgnos,
 						loaded_pidx_rows: None,
 						page_sources: BTreeMap::new(),
 						source_blobs: BTreeMap::new(),
@@ -180,6 +208,7 @@ impl SqliteEngine {
 
 				Ok(GetPagesTxResult {
 					head,
+					pgnos,
 					loaded_pidx_rows,
 					page_sources,
 					source_blobs,
@@ -201,6 +230,7 @@ impl SqliteEngine {
 		})?;
 		let GetPagesTxResult {
 			head,
+			pgnos,
 			loaded_pidx_rows,
 			page_sources,
 			source_blobs,
@@ -208,6 +238,7 @@ impl SqliteEngine {
 			pidx_misses,
 			stale_pidx_pgnos,
 		} = tx_result;
+		let requested_page_count = pgnos.len();
 		let mut stale_pidx_pgnos = stale_pidx_pgnos;
 		if let Some(loaded_pidx_rows) = loaded_pidx_rows {
 			let loaded_index = DeltaPageIndex::new();
@@ -350,12 +381,95 @@ impl SqliteEngine {
 
 struct GetPagesTxResult {
 	head: DBHead,
+	pgnos: Vec<u32>,
 	loaded_pidx_rows: Option<Vec<(u32, u64)>>,
 	page_sources: BTreeMap<u32, Vec<u8>>,
 	source_blobs: BTreeMap<Vec<u8>, Vec<u8>>,
 	pidx_hits: usize,
 	pidx_misses: usize,
 	stale_pidx_pgnos: BTreeSet<u32>,
+}
+
+#[derive(Clone)]
+enum PageReadRequest {
+	Pages(Vec<u32>),
+	Range {
+		start_pgno: u32,
+		max_pages: u32,
+		max_bytes: u64,
+	},
+}
+
+impl PageReadRequest {
+	fn operation(&self) -> &'static str {
+		match self {
+			PageReadRequest::Pages(_) => "get_pages",
+			PageReadRequest::Range { .. } => "get_page_range",
+		}
+	}
+
+	fn validate(&self) -> Result<()> {
+		match self {
+			PageReadRequest::Pages(pgnos) => {
+				for pgno in pgnos {
+					ensure!(*pgno > 0, "get_pages does not accept page 0");
+				}
+			}
+			PageReadRequest::Range {
+				start_pgno,
+				max_pages,
+				max_bytes,
+			} => {
+				ensure!(*start_pgno > 0, "get_page_range does not accept page 0");
+				ensure!(*max_pages > 0, "get_page_range requires max_pages > 0");
+				ensure!(*max_bytes > 0, "get_page_range requires max_bytes > 0");
+			}
+		}
+
+		Ok(())
+	}
+
+	fn pidx_lookup_pgnos(&self) -> Vec<u32> {
+		match self {
+			PageReadRequest::Pages(pgnos) => pgnos.clone(),
+			PageReadRequest::Range {
+				start_pgno,
+				max_pages,
+				..
+			} => contiguous_pgnos(
+				*start_pgno,
+				(*max_pages).min(SQLITE_GET_PAGE_RANGE_MAX_PAGES),
+			),
+		}
+	}
+
+	fn pgnos_for_head(&self, head: &DBHead) -> Vec<u32> {
+		match self {
+			PageReadRequest::Pages(pgnos) => pgnos.clone(),
+			PageReadRequest::Range {
+				start_pgno,
+				max_pages,
+				max_bytes,
+			} => contiguous_pgnos(
+				*start_pgno,
+				bounded_range_page_count(head, *max_pages, *max_bytes),
+			),
+		}
+	}
+}
+
+fn bounded_range_page_count(head: &DBHead, max_pages: u32, max_bytes: u64) -> u32 {
+	let page_cap = max_pages.min(SQLITE_GET_PAGE_RANGE_MAX_PAGES);
+	let byte_cap = max_bytes.min(SQLITE_GET_PAGE_RANGE_MAX_BYTES);
+	let page_size = u64::from(head.page_size.max(1));
+	let byte_page_cap = (byte_cap / page_size).max(1);
+	page_cap.min(byte_page_cap.min(u64::from(u32::MAX)) as u32)
+}
+
+fn contiguous_pgnos(start_pgno: u32, page_count: u32) -> Vec<u32> {
+	let available = u32::MAX - start_pgno + 1;
+	let page_count = page_count.min(available);
+	(0..page_count).map(|offset| start_pgno + offset).collect()
 }
 
 async fn load_delta_history_blobs(
@@ -466,7 +580,7 @@ fn decode_pidx_txid(value: &[u8]) -> Result<u64> {
 mod tests {
 	use anyhow::Result;
 
-	use super::decode_db_head;
+	use super::{SQLITE_GET_PAGE_RANGE_MAX_PAGES, decode_db_head};
 	use crate::engine::SqliteEngine;
 	use crate::error::SqliteStorageError;
 	use crate::keys::{delta_chunk_key, meta_key, pidx_delta_key, shard_key};
@@ -564,6 +678,156 @@ mod tests {
 				},
 			]
 		);
+
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn get_page_range_matches_equivalent_get_pages() -> Result<()> {
+		let (db, subspace) = test_db().await?;
+		let mut head = seeded_head();
+		head.head_txid = 9;
+		head.next_txid = 10;
+		head.materialized_txid = 8;
+		head.db_size_pages = 67;
+		let (engine, _compaction_rx) = SqliteEngine::new(db, subspace);
+		apply_write_ops(
+			&engine.db,
+			&engine.subspace,
+			engine.op_counter.as_ref(),
+			vec![
+				WriteOp::put(meta_key(TEST_ACTOR), encode_db_head(&head)?),
+				WriteOp::put(
+					delta_blob_key(TEST_ACTOR, 9),
+					encoded_blob(9, 67, &[(2, 0x22), (3, 0x33)]),
+				),
+				WriteOp::put(
+					shard_key(TEST_ACTOR, 1),
+					encoded_blob(8, 67, &[(65, 0x65), (66, 0x66)]),
+				),
+				WriteOp::put(pidx_delta_key(TEST_ACTOR, 2), 9_u64.to_be_bytes().to_vec()),
+				WriteOp::put(pidx_delta_key(TEST_ACTOR, 3), 9_u64.to_be_bytes().to_vec()),
+			],
+		)
+		.await?;
+		engine.open(TEST_ACTOR, OpenConfig::new(0)).await?;
+
+		let expected = engine
+			.get_pages(TEST_ACTOR, 4, vec![2, 3, 4, 5, 6, 7])
+			.await?;
+		let actual = engine
+			.get_page_range(
+				TEST_ACTOR,
+				4,
+				2,
+				6,
+				u64::from(SQLITE_PAGE_SIZE) * 6,
+			)
+			.await?;
+
+		assert_eq!(actual.pages, expected.pages);
+		assert_eq!(actual.meta, expected.meta);
+
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn get_page_range_applies_page_and_byte_caps() -> Result<()> {
+		let (db, subspace) = test_db().await?;
+		let mut head = seeded_head();
+		head.head_txid = 0;
+		head.next_txid = 1;
+		head.materialized_txid = 0;
+		head.db_size_pages = 400;
+		let (engine, _compaction_rx) = SqliteEngine::new(db, subspace);
+		apply_write_ops(
+			&engine.db,
+			&engine.subspace,
+			engine.op_counter.as_ref(),
+			vec![WriteOp::put(
+				meta_key(TEST_ACTOR),
+				encode_db_head(&head)?,
+			)],
+		)
+		.await?;
+		engine.open(TEST_ACTOR, OpenConfig::new(0)).await?;
+
+		let byte_limited = engine
+			.get_page_range(
+				TEST_ACTOR,
+				4,
+				10,
+				10,
+				u64::from(SQLITE_PAGE_SIZE) * 2,
+			)
+			.await?;
+		assert_eq!(
+			byte_limited.pages.iter().map(|page| page.pgno).collect::<Vec<_>>(),
+			vec![10, 11]
+		);
+
+		let hard_capped = engine
+			.get_page_range(TEST_ACTOR, 4, 1, u32::MAX, u64::MAX)
+			.await?;
+		assert_eq!(
+			hard_capped.pages.len(),
+			SQLITE_GET_PAGE_RANGE_MAX_PAGES as usize
+		);
+		assert_eq!(hard_capped.pages.first().map(|page| page.pgno), Some(1));
+		assert_eq!(
+			hard_capped.pages.last().map(|page| page.pgno),
+			Some(SQLITE_GET_PAGE_RANGE_MAX_PAGES)
+		);
+
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn get_page_range_rejects_invalid_requests_and_generation_mismatch() -> Result<()> {
+		let (db, subspace) = test_db().await?;
+		let head = seeded_head();
+		let (engine, _compaction_rx) = SqliteEngine::new(db, subspace);
+		apply_write_ops(
+			&engine.db,
+			&engine.subspace,
+			engine.op_counter.as_ref(),
+			vec![WriteOp::put(
+				meta_key(TEST_ACTOR),
+				encode_db_head(&head)?,
+			)],
+		)
+		.await?;
+		engine.open(TEST_ACTOR, OpenConfig::new(0)).await?;
+		clear_op_count(&engine);
+
+		let page_zero_error = engine
+			.get_page_range(TEST_ACTOR, 4, 0, 1, u64::from(SQLITE_PAGE_SIZE))
+			.await
+			.expect_err("page zero should fail");
+		assert!(page_zero_error.to_string().contains("page 0"));
+
+		let zero_pages_error = engine
+			.get_page_range(TEST_ACTOR, 4, 1, 0, u64::from(SQLITE_PAGE_SIZE))
+			.await
+			.expect_err("zero max pages should fail");
+		assert!(zero_pages_error.to_string().contains("max_pages"));
+
+		let zero_bytes_error = engine
+			.get_page_range(TEST_ACTOR, 4, 1, 1, 0)
+			.await
+			.expect_err("zero max bytes should fail");
+		assert!(zero_bytes_error.to_string().contains("max_bytes"));
+		assert_op_count(&engine, 0);
+
+		let generation_error = engine
+			.get_page_range(TEST_ACTOR, 99, 1, 1, u64::from(SQLITE_PAGE_SIZE))
+			.await
+			.expect_err("generation mismatch should fail");
+		assert!(generation_error.chain().any(|cause| {
+			let msg = cause.to_string();
+			msg.contains("did not match open generation") || msg.contains("fence mismatch")
+		}));
+		assert_op_count(&engine, 0);
 
 		Ok(())
 	}
