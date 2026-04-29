@@ -13,7 +13,8 @@ use universalpubsub::NextOutput;
 use crate::pump::quota;
 
 use super::{
-	SqliteCompactPayload, SqliteCompactSubject, TakeOutcome, compact_default_batch_with_node_id,
+	SqliteCompactPayload, SqliteCompactSubject, TakeOutcome,
+	compact::{CheckpointConfig, compact_default_batch_with_checkpoint_config},
 	decode_compact_payload, lease, metrics, publish::Ups,
 };
 
@@ -27,6 +28,8 @@ pub struct CompactorConfig {
 	pub compaction_delta_threshold: u32,
 	pub batch_size_deltas: u32,
 	pub max_concurrent_workers: u32,
+	pub pitr_enabled: bool,
+	pub max_concurrent_checkpoints: u32,
 	pub ups_subject: String,
 	#[cfg(debug_assertions)]
 	pub quota_validate_every: u32,
@@ -41,6 +44,8 @@ impl Default for CompactorConfig {
 			compaction_delta_threshold: 32,
 			batch_size_deltas: 32,
 			max_concurrent_workers: 64,
+			pitr_enabled: false,
+			max_concurrent_checkpoints: 16,
 			ups_subject: SqliteCompactSubject.to_string(),
 			#[cfg(debug_assertions)]
 			quota_validate_every: 16,
@@ -108,6 +113,10 @@ async fn run_with_node_id(
 		.context("sqlite compactor max_concurrent_workers exceeded usize")?
 		.max(1);
 	let semaphore = Arc::new(Semaphore::new(max_workers));
+	let max_checkpoints = usize::try_from(compactor_config.max_concurrent_checkpoints)
+		.context("sqlite compactor max_concurrent_checkpoints exceeded usize")?
+		.max(1);
+	let checkpoint_semaphore = Arc::new(Semaphore::new(max_checkpoints));
 	let shutdown = CancellationToken::new();
 	let mut workers = JoinSet::new();
 	#[cfg(debug_assertions)]
@@ -128,6 +137,7 @@ async fn run_with_node_id(
 						let udb = Arc::clone(&udb);
 						let shutdown = shutdown.child_token();
 						let semaphore = Arc::clone(&semaphore);
+						let checkpoint_semaphore = Arc::clone(&checkpoint_semaphore);
 						let compactor_config = compactor_config.clone();
 						#[cfg(debug_assertions)]
 						let quota_validate_counts = Arc::clone(&quota_validate_counts);
@@ -142,6 +152,7 @@ async fn run_with_node_id(
 								compactor_config,
 								holder_id,
 								shutdown,
+								checkpoint_semaphore,
 								#[cfg(debug_assertions)]
 								quota_validate_counts,
 							).await {
@@ -177,6 +188,7 @@ async fn handle_trigger(
 	compactor_config: CompactorConfig,
 	holder_id: rivet_pools::NodeId,
 	shutdown: CancellationToken,
+	checkpoint_semaphore: Arc<Semaphore>,
 	#[cfg(debug_assertions)] quota_validate_counts: Arc<scc::HashMap<String, u32>>,
 ) -> Result<()> {
 	if shutdown.is_cancelled() {
@@ -237,12 +249,23 @@ async fn handle_trigger(
 	let deadline_handle = spawn_deadline_task(deadline_rx, cancel_token.clone());
 
 	let result = async {
-		compact_default_batch_with_node_id(
+		let checkpoint_config = if compactor_config.pitr_enabled {
+			load_checkpoint_config(
+				Arc::clone(&udb),
+				payload.namespace_id,
+				Arc::clone(&checkpoint_semaphore),
+			)
+			.await?
+		} else {
+			None
+		};
+		compact_default_batch_with_checkpoint_config(
 			Arc::clone(&udb),
 			actor_id.clone(),
 			compactor_config.batch_size_deltas,
 			cancel_token.clone(),
 			holder_id,
+			checkpoint_config,
 		)
 		.await?;
 		#[cfg(debug_assertions)]
@@ -280,6 +303,33 @@ async fn handle_trigger(
 		.observe(lease_started_at.elapsed().as_secs_f64());
 
 	result.map(|_| ())
+}
+
+async fn load_checkpoint_config(
+	udb: Arc<universaldb::Database>,
+	namespace_id: Option<Id>,
+	semaphore: Arc<Semaphore>,
+) -> Result<Option<CheckpointConfig>> {
+	let Some(namespace_id) = namespace_id else {
+		return Ok(None);
+	};
+	let namespace_config = udb
+		.run(move |tx| async move {
+			let tx = tx.with_subspace(namespace::keys::subspace());
+			Ok(tx
+				.read_opt(
+					&namespace::keys::sqlite_config_key(namespace_id),
+					universaldb::utils::IsolationLevel::Serializable,
+				)
+				.await?
+				.unwrap_or_default())
+		})
+		.await?;
+
+	Ok(Some(CheckpointConfig {
+		namespace_config,
+		semaphore,
+	}))
 }
 
 #[cfg(debug_assertions)]
@@ -539,12 +589,30 @@ pub mod test_hooks {
 		compactor_config: CompactorConfig,
 		cancel_token: CancellationToken,
 	) -> Result<()> {
+		handle_payload_once_with_checkpoint_semaphore(
+			udb,
+			payload,
+			compactor_config,
+			cancel_token,
+			Arc::new(Semaphore::new(16)),
+		)
+		.await
+	}
+
+	pub async fn handle_payload_once_with_checkpoint_semaphore(
+		udb: Arc<universaldb::Database>,
+		payload: SqliteCompactPayload,
+		compactor_config: CompactorConfig,
+		cancel_token: CancellationToken,
+		checkpoint_semaphore: Arc<Semaphore>,
+	) -> Result<()> {
 		handle_trigger(
 			udb,
 			payload,
 			compactor_config,
 			rivet_pools::NodeId::new(),
 			cancel_token,
+			checkpoint_semaphore,
 			#[cfg(debug_assertions)]
 			Arc::new(scc::HashMap::new()),
 		)
@@ -566,6 +634,8 @@ mod tests {
 		assert_eq!(config.compaction_delta_threshold, 32);
 		assert_eq!(config.batch_size_deltas, 32);
 		assert_eq!(config.max_concurrent_workers, 64);
+		assert!(!config.pitr_enabled);
+		assert_eq!(config.max_concurrent_checkpoints, 16);
 		assert_eq!(config.ups_subject, "sqlite.compact");
 		#[cfg(debug_assertions)]
 		assert_eq!(config.quota_validate_every, 16);

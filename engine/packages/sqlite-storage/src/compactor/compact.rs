@@ -4,7 +4,9 @@ use std::{collections::BTreeMap, sync::Arc};
 
 use anyhow::{Context, Result, bail};
 use futures_util::TryStreamExt;
+use namespace::types::SqliteNamespaceConfig;
 use rivet_pools::NodeId;
+use tokio::sync::Semaphore;
 use tokio_util::sync::CancellationToken;
 use universaldb::{
 	RangeOption,
@@ -18,11 +20,14 @@ use crate::pump::{
 	keys::{self, SHARD_SIZE},
 	ltx::decode_ltx_v3,
 	quota,
-	types::{MetaCompact, decode_db_head, decode_meta_compact, encode_meta_compact},
+	types::{
+		Checkpoints, MetaCompact, RetentionConfig, decode_checkpoints, decode_db_head,
+		decode_meta_compact, decode_retention_config, encode_meta_compact,
+	},
 	udb,
 };
 
-use super::{fold_shard, metrics};
+use super::{checkpoint, fold_shard, metrics};
 
 const PIDX_TXID_BYTES: usize = std::mem::size_of::<u64>();
 
@@ -58,6 +63,32 @@ pub(crate) async fn compact_default_batch_with_node_id(
 	cancel_token: CancellationToken,
 	node_id: NodeId,
 ) -> Result<CompactionOutcome> {
+	compact_default_batch_with_checkpoint_config(
+		udb,
+		actor_id,
+		batch_size_deltas,
+		cancel_token,
+		node_id,
+		None,
+	)
+	.await
+}
+
+#[derive(Clone)]
+pub(crate) struct CheckpointConfig {
+	pub namespace_config: SqliteNamespaceConfig,
+	pub semaphore: Arc<Semaphore>,
+}
+
+pub(crate) async fn compact_default_batch_with_checkpoint_config(
+	udb: Arc<universaldb::Database>,
+	actor_id: String,
+	batch_size_deltas: u32,
+	cancel_token: CancellationToken,
+	node_id: NodeId,
+	checkpoint_config: Option<CheckpointConfig>,
+) -> Result<CompactionOutcome> {
+	let node_id_value = node_id;
 	let node_id = node_id.to_string();
 	let labels = &[node_id.as_str()];
 	let _timer = metrics::SQLITE_COMPACTOR_PASS_DURATION
@@ -65,22 +96,55 @@ pub(crate) async fn compact_default_batch_with_node_id(
 		.start_timer();
 
 	ensure_not_cancelled(&cancel_token)?;
-	let plan = plan_batch(udb.as_ref(), actor_id.clone(), batch_size_deltas).await?;
+	let plan = plan_batch(
+		udb.as_ref(),
+		actor_id.clone(),
+		batch_size_deltas,
+		checkpoint_config.as_ref().map(|config| &config.namespace_config),
+	)
+	.await?;
 	metrics::SQLITE_COMPACTOR_LAG
 		.with_label_values(labels)
 		.observe(plan.selected_delta_txids.len() as f64);
-	if plan.selected_delta_txids.is_empty() {
-		return Ok(CompactionOutcome::default());
-	}
 
 	test_hooks::maybe_pause_after_plan(&actor_id).await;
-	ensure_not_cancelled(&cancel_token)?;
-	let write_result = write_batch(udb.as_ref(), actor_id.clone(), plan).await?;
+	let mut write_result = WriteResult::default();
+	let mut compare_and_clear_noops = 0;
+	if !plan.selected_delta_txids.is_empty() {
+		ensure_not_cancelled(&cancel_token)?;
+		write_result = write_batch(udb.as_ref(), actor_id.clone(), plan.clone()).await?;
 
-	ensure_not_cancelled(&cancel_token)?;
-	let compare_and_clear_noops =
-		count_compare_and_clear_noops(udb.as_ref(), actor_id.clone(), write_result.attempted_pidx_deletes)
-			.await?;
+		ensure_not_cancelled(&cancel_token)?;
+		compare_and_clear_noops = count_compare_and_clear_noops(
+			udb.as_ref(),
+			actor_id.clone(),
+			write_result.attempted_pidx_deletes.clone(),
+		)
+		.await?;
+	}
+
+	if let Some(checkpoint_config) = checkpoint_config.filter(|_| plan.checkpoint_due) {
+		ensure_not_cancelled(&cancel_token)?;
+		let _permit = checkpoint_config
+			.semaphore
+			.acquire_owned()
+			.await
+			.context("sqlite checkpoint semaphore closed")?;
+		let checkpoint_outcome = checkpoint::create_checkpoint_with_node_id(
+			Arc::clone(&udb),
+			actor_id.clone(),
+			plan.head_txid_at_plan,
+			cancel_token.clone(),
+			checkpoint_config.namespace_config,
+			node_id_value,
+		)
+		.await?;
+		if matches!(checkpoint_outcome, checkpoint::CheckpointOutcome::Created { .. }) {
+			metrics::SQLITE_CHECKPOINT_CREATION_LAG_SECONDS
+				.with_label_values(&["unknown"])
+				.observe(plan.checkpoint_lag_ms.unwrap_or(0) as f64 / 1000.0);
+		}
+	}
 
 	metrics::SQLITE_COMPACTOR_PAGES_FOLDED_TOTAL
 		.with_label_values(labels)
@@ -105,9 +169,12 @@ async fn plan_batch(
 	db: &universaldb::Database,
 	actor_id: String,
 	batch_size_deltas: u32,
+	namespace_config: Option<&SqliteNamespaceConfig>,
 ) -> Result<CompactionPlan> {
+	let namespace_config = namespace_config.cloned();
 	db.run(move |tx| {
 		let actor_id = actor_id.clone();
+		let namespace_config = namespace_config.clone();
 
 		async move {
 			let Some(head_bytes) = tx_get_value(&tx, &keys::meta_head_key(&actor_id), Snapshot).await?
@@ -115,6 +182,12 @@ async fn plan_batch(
 				return Ok(CompactionPlan::default());
 			};
 			let head = decode_db_head(&head_bytes).context("decode sqlite db head for compaction")?;
+			let checkpoint_state =
+				if let Some(namespace_config) = namespace_config.as_ref() {
+					load_checkpoint_state(&tx, &actor_id, namespace_config).await?
+				} else {
+					CheckpointPlanState::default()
+				};
 			let compact = tx_get_value(&tx, &keys::meta_compact_key(&actor_id), Snapshot)
 				.await?
 				.as_deref()
@@ -124,8 +197,14 @@ async fn plan_batch(
 				.unwrap_or(MetaCompact {
 					materialized_txid: 0,
 				});
-			if head.head_txid <= compact.materialized_txid || batch_size_deltas == 0 {
-				return Ok(CompactionPlan::default());
+			let has_deltas_to_fold = head.head_txid > compact.materialized_txid && batch_size_deltas != 0;
+			if !has_deltas_to_fold && !checkpoint_state.due {
+				return Ok(CompactionPlan {
+					head_txid_at_plan: head.head_txid,
+					checkpoint_due: checkpoint_state.due,
+					checkpoint_lag_ms: checkpoint_state.lag_ms,
+					..CompactionPlan::default()
+				});
 			}
 
 			let pidx_rows = load_pidx_rows(&tx, &actor_id).await?;
@@ -184,6 +263,9 @@ async fn plan_batch(
 			let materialized_txid = selected_delta_txids.iter().copied().max().unwrap_or(0);
 
 			Ok(CompactionPlan {
+				head_txid_at_plan: head.head_txid,
+				checkpoint_due: checkpoint_state.due,
+				checkpoint_lag_ms: checkpoint_state.lag_ms,
 				selected_delta_txids,
 				selected_delta_entries,
 				pages_by_shard,
@@ -192,6 +274,51 @@ async fn plan_batch(
 		}
 	})
 	.await
+}
+
+async fn load_checkpoint_state(
+	tx: &universaldb::Transaction,
+	actor_id: &str,
+	namespace_config: &SqliteNamespaceConfig,
+) -> Result<CheckpointPlanState> {
+	let retention = tx_get_value(tx, &keys::meta_retention_key(actor_id), Snapshot)
+		.await?
+		.as_deref()
+		.map(decode_retention_config)
+		.transpose()
+		.context("decode sqlite retention config")?
+		.unwrap_or(RetentionConfig {
+			retention_ms: namespace_config.default_retention_ms,
+			checkpoint_interval_ms: namespace_config.default_checkpoint_interval_ms,
+			max_checkpoints: namespace_config.default_max_checkpoints,
+		});
+	if retention.retention_ms == 0 {
+		return Ok(CheckpointPlanState::default());
+	}
+
+	let checkpoints = tx_get_value(tx, &keys::meta_checkpoints_key(actor_id), Snapshot)
+		.await?
+		.as_deref()
+		.map(decode_checkpoints)
+		.transpose()
+		.context("decode sqlite checkpoints")?
+		.unwrap_or(Checkpoints {
+			entries: Vec::new(),
+		});
+	let now_ms = now_ms()?;
+	let latest = checkpoints.entries.iter().max_by_key(|entry| entry.taken_at_ms);
+	let Some(latest) = latest else {
+		return Ok(CheckpointPlanState {
+			due: true,
+			lag_ms: None,
+		});
+	};
+	let age_ms = now_ms.saturating_sub(latest.taken_at_ms);
+
+	Ok(CheckpointPlanState {
+		due: age_ms >= retention.checkpoint_interval_ms as i64,
+		lag_ms: Some(age_ms.max(0) as u64),
+	})
 }
 
 async fn write_batch(
@@ -489,12 +616,28 @@ fn ensure_not_cancelled(cancel_token: &CancellationToken) -> Result<()> {
 	Ok(())
 }
 
+fn now_ms() -> Result<i64> {
+	let elapsed = std::time::SystemTime::now()
+		.duration_since(std::time::UNIX_EPOCH)
+		.context("system clock was before unix epoch")?;
+	i64::try_from(elapsed.as_millis()).context("sqlite compactor timestamp exceeded i64")
+}
+
 #[derive(Debug, Clone, Default)]
 struct CompactionPlan {
+	head_txid_at_plan: u64,
+	checkpoint_due: bool,
+	checkpoint_lag_ms: Option<u64>,
 	selected_delta_txids: Vec<u64>,
 	selected_delta_entries: BTreeMap<u64, DeltaEntry>,
 	pages_by_shard: BTreeMap<u32, Vec<FoldPage>>,
 	materialized_txid: u64,
+}
+
+#[derive(Debug, Clone, Default)]
+struct CheckpointPlanState {
+	due: bool,
+	lag_ms: Option<u64>,
 }
 
 #[derive(Debug, Clone)]

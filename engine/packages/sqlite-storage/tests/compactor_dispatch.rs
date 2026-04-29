@@ -119,6 +119,8 @@ fn fast_config() -> CompactorConfig {
 		compaction_delta_threshold: 1,
 		batch_size_deltas: 32,
 		max_concurrent_workers: 4,
+		pitr_enabled: false,
+		max_concurrent_checkpoints: 16,
 		ups_subject: SQLITE_COMPACT_SUBJECT.to_string(),
 		#[cfg(debug_assertions)]
 		quota_validate_every: 16,

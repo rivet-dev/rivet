@@ -1,3 +1,4 @@
+pub mod checkpoint;
 pub mod compact;
 pub mod lease;
 pub mod metrics;
@@ -6,8 +7,8 @@ pub mod shard;
 pub mod subjects;
 pub mod worker;
 
+pub use checkpoint::{CheckpointOutcome, create_checkpoint};
 pub use compact::{CompactionOutcome, compact_default_batch};
-pub(crate) use compact::compact_default_batch_with_node_id;
 pub use lease::{
 	CompactorLease, RenewOutcome, SQLITE_COMPACTOR_LEASE_VERSION, TakeOutcome, decode_lease,
 	encode_lease, release, renew, take,

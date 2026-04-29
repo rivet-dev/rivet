@@ -75,6 +75,45 @@ lazy_static::lazy_static! {
 		&["node_id", "actor_id"],
 		*REGISTRY
 	).unwrap();
+
+	pub static ref SQLITE_CHECKPOINT_CREATION_DURATION_SECONDS: HistogramVec = register_histogram_vec_with_registry!(
+		"sqlite_checkpoint_creation_duration_seconds",
+		"Duration of sqlite checkpoint creation.",
+		&["node_id"],
+		BUCKETS.to_vec(),
+		*REGISTRY
+	).unwrap();
+
+	pub static ref SQLITE_CHECKPOINT_CREATION_BYTES: HistogramVec = register_histogram_vec_with_registry!(
+		"sqlite_checkpoint_creation_bytes",
+		"Bytes written by sqlite checkpoint creation.",
+		&["node_id"],
+		BUCKETS.to_vec(),
+		*REGISTRY
+	).unwrap();
+
+	pub static ref SQLITE_COMPACTOR_CHECKPOINT_TX_COUNT: HistogramVec = register_histogram_vec_with_registry!(
+		"sqlite_compactor_checkpoint_tx_count",
+		"UDB transaction count used by sqlite checkpoint creation.",
+		&["node_id"],
+		BUCKETS.to_vec(),
+		*REGISTRY
+	).unwrap();
+
+	pub static ref SQLITE_CHECKPOINT_SKIPPED_QUOTA_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
+		"sqlite_checkpoint_skipped_quota_total",
+		"Total sqlite checkpoints skipped because of PITR quota.",
+		&["namespace"],
+		*REGISTRY
+	).unwrap();
+
+	pub static ref SQLITE_CHECKPOINT_CREATION_LAG_SECONDS: HistogramVec = register_histogram_vec_with_registry!(
+		"sqlite_checkpoint_creation_lag_seconds",
+		"Seconds between checkpoint creation and the previous checkpoint.",
+		&["namespace"],
+		BUCKETS.to_vec(),
+		*REGISTRY
+	).unwrap();
 }
 
 #[cfg(debug_assertions)]

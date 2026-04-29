@@ -40,6 +40,8 @@ Started: Wed Apr 29 04:36:56 AM PDT 2026
 - Pump commits write `/DELTA/{txid}/META` and charge it to live storage; compaction byte accounting must include that meta row when clearing a delta prefix.
 - Restore guards use an `ActorDb`-local `restore_observed_clear` cache plus `sqlite_pump_restore_guard_read_total` to verify the first-read/skip behavior in tests.
 - Gas `#[operation]` emits a module-local `Operation` type, so put only one operation macro per module and split paired get/put ops into sibling modules.
+- SQLite checkpoint creation copies data rows first, then makes the checkpoint visible only by writing `/CHECKPOINT/{T}/META` and `/META/checkpoints` in the final tx.
+- PITR checkpoint work is gated by `CompactorConfig::pitr_enabled` and uses a separate checkpoint semaphore; worker-side checkpoint config comes from the compact payload's namespace id.
 
 ## 2026-04-29 04:44:52 PDT - US-001
 - Implemented a UUID-backed `NodeId` type and stored a generated value on each `Pools` instance.
@@ -348,4 +350,14 @@ Started: Wed Apr 29 04:36:56 AM PDT 2026
   - Api-public namespace routes should mirror existing leader behavior: authenticate publicly, call api-peer handlers locally on the leader, and forward to the leader peer URL otherwise.
   - Gas operation macros need one operation per Rust module; split get/put operations into sibling modules under a shared directory.
   - After the live/PITR quota split, destroy paths must clear `meta_storage_used_live_key` and `meta_storage_used_pitr_key`, not the removed legacy quota key.
+---
+## 2026-04-29 08:20:19 PDT - US-030
+- Implemented PITR checkpoint creation with multi-transaction SHARD/PIDX copying, final META/index publication, PITR quota enforcement, cancellation cleanup, and checkpoint metrics.
+- Threaded plan-time `head_txid` through compaction so checkpoints are labeled with the txid observed during planning, and added `pitr_enabled` plus a separate `max_concurrent_checkpoints` semaphore to the compactor worker.
+- Added `tests/checkpoint_create.rs` coverage for basic creation, plan-time txid races, multi-tx copies, quota skip, disabled flag behavior, semaphore concurrency, and cancellation.
+- Files changed: `engine/packages/sqlite-storage/src/compactor/{checkpoint.rs,compact.rs,metrics.rs,mod.rs,worker.rs}`, `engine/packages/sqlite-storage/tests/{checkpoint_create.rs,compactor_dispatch.rs}`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
+- **Learnings for future iterations:**
+  - Checkpoint readers should key visibility off `/CHECKPOINT/{T}/META` and `/META/checkpoints`; copied checkpoint rows alone are not a published checkpoint.
+  - The compactor can create a checkpoint even when there are no deltas to fold, as long as PITR is enabled and the retention interval says a checkpoint is due.
+  - Namespace PITR budgets are enforced before publication; skipped checkpoints increment `sqlite_checkpoint_skipped_quota_total`.
 ---
