@@ -287,8 +287,8 @@
         "`notes` records insert e2e ms, hot read e2e ms, wake read e2e ms, wake read server ms, wake overhead estimate ms, wake read VFS get_pages calls, pages fetched, bytes fetched, prefetch pages, prefetch bytes, and VFS transport ms and compares them to baseline plus SQLITE-COLD-014"
       ],
       "priority": 15,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Taught the native SQLite VFS to use the v3 range page-read transport for large contiguous forward-scan prefetch windows, gated by the central default-enabled `RIVETKIT_SQLITE_OPT_RANGE_READS` flag. Random, point, bounded, non-contiguous, and disabled-flag reads still use page-list `get_pages`; existing VFS metrics continue to count page-fetch transport calls under the get_pages counter, so range calls are included in that call count. Benchmark artifact written to `.agent/notes/sqlite-cold-read-after-SQLITE-COLD-015.txt`. Numbers: insert e2e 15758.9ms; hot read e2e 167.7ms; wake read e2e 4071.2ms; wake read server 3860.8ms; wake overhead estimate 210.4ms; wake read VFS get_pages calls 70; pages fetched 13722; bytes fetched 56205312; prefetch pages 13652; prefetch bytes 55918592; VFS transport 3624.3ms. Compared with baseline/SQLITE-COLD-001: get_pages/range transport calls dropped 1249 -> 70, wake read e2e dropped 20141.0ms -> 4071.2ms, wake VFS transport dropped 19332.8ms -> 3624.3ms, and hot read e2e was 118.6ms -> 167.7ms. Compared with read-ahead-only SQLITE-COLD-002: transport calls dropped 368 -> 70. Compared with SQLITE-COLD-014: transport calls stayed 70 -> 70, wake read e2e improved 5371.1ms -> 4071.2ms, wake read server improved 3946.5ms -> 3860.8ms, wake VFS transport improved 3704.7ms -> 3624.3ms, and hot read e2e was 160.7ms -> 167.7ms. Checks passed: cargo check -p rivetkit-sqlite; cargo test -p rivetkit-sqlite forward_scan -- --nocapture; cargo test -p rivetkit-sqlite range_reads -- --nocapture; cargo test -p rivetkit-sqlite -- --test-threads=1; pnpm --filter kitchen-sink check-types; pnpm -F rivetkit check-types; pnpm --filter @rivetkit/rivetkit-napi build:force."
     },
     {
       "id": "SQLITE-COLD-016",

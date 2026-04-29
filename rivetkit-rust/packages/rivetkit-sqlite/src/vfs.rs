@@ -220,6 +220,56 @@ impl SqliteTransport {
 		}
 	}
 
+	async fn get_page_range(
+		&self,
+		req: protocol::SqliteGetPageRangeRequest,
+	) -> Result<protocol::SqliteGetPageRangeResponse> {
+		match &*self.inner {
+			SqliteTransportInner::Envoy(handle) => handle.sqlite_get_page_range(req).await,
+			#[cfg(test)]
+			SqliteTransportInner::Direct { engine, .. } => {
+				match engine
+					.get_page_range(
+						&req.actor_id,
+						req.generation,
+						req.start_pgno,
+						req.max_pages,
+						req.max_bytes,
+					)
+					.await
+				{
+					Ok(pages) => Ok(protocol::SqliteGetPageRangeResponse::SqliteGetPageRangeOk(
+						protocol::SqliteGetPageRangeOk {
+							start_pgno: req.start_pgno,
+							pages: pages.into_iter().map(protocol_fetched_page).collect(),
+							meta: protocol_sqlite_meta(engine.load_meta(&req.actor_id).await?),
+						},
+					)),
+					Err(err) => {
+						if let Some(SqliteStorageError::FenceMismatch { reason }) =
+							sqlite_storage_error(&err)
+						{
+							Ok(protocol::SqliteGetPageRangeResponse::SqliteFenceMismatch(
+								protocol::SqliteFenceMismatch {
+									actual_meta: protocol_sqlite_meta(
+										engine.load_meta(&req.actor_id).await?,
+									),
+									reason: reason.clone(),
+								},
+							))
+						} else {
+							Ok(protocol::SqliteGetPageRangeResponse::SqliteErrorResponse(
+								sqlite_error_response(&err),
+							))
+						}
+					}
+				}
+			}
+			#[cfg(test)]
+			SqliteTransportInner::Test(protocol) => protocol.get_page_range(req).await,
+		}
+	}
+
 	async fn commit(
 		&self,
 		req: protocol::SqliteCommitRequest,
@@ -554,6 +604,7 @@ struct MockProtocol {
 	stage_response: protocol::SqliteCommitStageResponse,
 	finalize_response: protocol::SqliteCommitFinalizeResponse,
 	get_pages_response: protocol::SqliteGetPagesResponse,
+	get_page_range_response: protocol::SqliteGetPageRangeResponse,
 	mirror_commit_meta: AtomicBool,
 	commit_requests: Mutex<Vec<protocol::SqliteCommitRequest>>,
 	stage_requests: Mutex<Vec<protocol::SqliteCommitStageRequest>>,
@@ -561,6 +612,7 @@ struct MockProtocol {
 	stage_response_awaited: Notify,
 	finalize_requests: Mutex<Vec<protocol::SqliteCommitFinalizeRequest>>,
 	get_pages_requests: Mutex<Vec<protocol::SqliteGetPagesRequest>>,
+	get_page_range_requests: Mutex<Vec<protocol::SqliteGetPageRangeRequest>>,
 	finalize_started: Notify,
 	release_finalize: Notify,
 }
@@ -582,6 +634,13 @@ impl MockProtocol {
 					meta: sqlite_meta(8 * 1024 * 1024),
 				},
 			),
+			get_page_range_response: protocol::SqliteGetPageRangeResponse::SqliteGetPageRangeOk(
+				protocol::SqliteGetPageRangeOk {
+					start_pgno: 1,
+					pages: vec![],
+					meta: sqlite_meta(8 * 1024 * 1024),
+				},
+			),
 			mirror_commit_meta: AtomicBool::new(false),
 			commit_requests: Mutex::new(Vec::new()),
 			stage_requests: Mutex::new(Vec::new()),
@@ -589,6 +648,7 @@ impl MockProtocol {
 			stage_response_awaited: Notify::new(),
 			finalize_requests: Mutex::new(Vec::new()),
 			get_pages_requests: Mutex::new(Vec::new()),
+			get_page_range_requests: Mutex::new(Vec::new()),
 			finalize_started: Notify::new(),
 			release_finalize: Notify::new(),
 		}
@@ -632,6 +692,12 @@ impl MockProtocol {
 		self.get_pages_requests.lock()
 	}
 
+	fn get_page_range_requests(
+		&self,
+	) -> parking_lot::MutexGuard<'_, Vec<protocol::SqliteGetPageRangeRequest>> {
+		self.get_page_range_requests.lock()
+	}
+
 	fn set_mirror_commit_meta(&self, enabled: bool) {
 		self.mirror_commit_meta.store(enabled, Ordering::SeqCst);
 	}
@@ -646,6 +712,14 @@ impl MockProtocol {
 	) -> Result<protocol::SqliteGetPagesResponse> {
 		self.get_pages_requests().push(req);
 		Ok(self.get_pages_response.clone())
+	}
+
+	async fn get_page_range(
+		&self,
+		req: protocol::SqliteGetPageRangeRequest,
+	) -> Result<protocol::SqliteGetPageRangeResponse> {
+		self.get_page_range_requests().push(req);
+		Ok(self.get_page_range_response.clone())
 	}
 
 	async fn commit(
@@ -748,6 +822,7 @@ pub struct VfsConfig {
 	pub cache_hit_predictor_training: bool,
 	pub recent_page_hints: bool,
 	pub adaptive_read_ahead: bool,
+	pub range_reads: bool,
 }
 
 impl Default for VfsConfig {
@@ -782,6 +857,7 @@ impl VfsConfig {
 			cache_hit_predictor_training: flags.cache_hit_predictor_training,
 			recent_page_hints: flags.recent_page_hints,
 			adaptive_read_ahead: flags.adaptive_read_ahead,
+			range_reads: flags.range_reads,
 		}
 	}
 }
@@ -952,6 +1028,16 @@ enum GetPagesError {
 	Other(String),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PageFetchTransport {
+	PageList,
+	Range {
+		start_pgno: u32,
+		max_pages: u32,
+		max_bytes: u64,
+	},
+}
+
 #[repr(C)]
 struct VfsFile {
 	base: sqlite3_file,
@@ -988,6 +1074,54 @@ pub struct NativeDatabase {
 }
 
 unsafe impl Send for NativeDatabase {}
+
+fn select_page_fetch_transport(
+	to_fetch: &[u32],
+	prefetch: bool,
+	read_ahead_plan: ReadAheadPlan,
+	config: &VfsConfig,
+) -> PageFetchTransport {
+	if !config.range_reads
+		|| !prefetch
+		|| read_ahead_plan.mode != ReadAheadMode::ForwardScan
+		|| to_fetch.len() <= config.prefetch_depth
+		|| !is_contiguous_page_run(to_fetch)
+	{
+		return PageFetchTransport::PageList;
+	}
+
+	PageFetchTransport::Range {
+		start_pgno: to_fetch[0],
+		max_pages: to_fetch.len().try_into().unwrap_or(u32::MAX),
+		max_bytes: read_ahead_plan.max_bytes.try_into().unwrap_or(u64::MAX),
+	}
+}
+
+fn is_contiguous_page_run(pgnos: &[u32]) -> bool {
+	!pgnos.is_empty()
+		&& pgnos
+			.windows(2)
+			.all(|window| window[1] == window[0].saturating_add(1))
+}
+
+fn sqlite_get_page_range_response_to_get_pages_response(
+	response: protocol::SqliteGetPageRangeResponse,
+) -> protocol::SqliteGetPagesResponse {
+	match response {
+		protocol::SqliteGetPageRangeResponse::SqliteGetPageRangeOk(ok) => {
+			protocol::SqliteGetPagesResponse::SqliteGetPagesOk(protocol::SqliteGetPagesOk {
+				pages: ok.pages,
+				meta: ok.meta,
+			})
+		}
+		protocol::SqliteGetPageRangeResponse::SqliteFenceMismatch(mismatch) => {
+			protocol::SqliteGetPagesResponse::SqliteFenceMismatch(mismatch)
+		}
+		protocol::SqliteGetPageRangeResponse::SqliteErrorResponse(error) => {
+			protocol::SqliteGetPagesResponse::SqliteErrorResponse(error)
+		}
+	}
+}
 
 impl PrefetchPredictor {
 	fn record(&mut self, pgno: u32) {
@@ -1547,6 +1681,7 @@ impl VfsContext {
 			seed_pgno,
 			prediction_budget,
 			predicted_pgnos,
+			fetch_transport,
 		) = {
 			let mut state = self.state.write();
 			for pgno in target_pgnos.iter().copied() {
@@ -1577,6 +1712,8 @@ impl VfsContext {
 					to_fetch.push(predicted);
 				}
 			}
+			let fetch_transport =
+				select_page_fetch_transport(&to_fetch, prefetch, read_ahead_plan, &self.config);
 			(
 				state.generation,
 				to_fetch,
@@ -1587,6 +1724,7 @@ impl VfsContext {
 				seed_pgno,
 				prediction_budget,
 				predicted_pgnos,
+				fetch_transport,
 			)
 		};
 
@@ -1605,24 +1743,41 @@ impl VfsContext {
 				read_ahead_mode = ?read_ahead_mode,
 				read_ahead_depth,
 				read_ahead_max_bytes,
+				fetch_transport = ?fetch_transport,
 				prediction_budget,
 				predicted_pages = ?predicted_pgnos,
 				prefetch_pages = prefetch_count,
 				total_fetch_pages = to_fetch.len(),
 				total_fetch_bytes = to_fetch.len().saturating_mul(page_size),
 				seed_pgno,
-				"vfs get_pages fetch"
+				"vfs page fetch"
 			);
 		}
 
 		let get_pages_start = Instant::now();
-		let response = self
-			.runtime
-			.block_on(self.transport.get_pages(protocol::SqliteGetPagesRequest {
-				actor_id: self.actor_id.clone(),
-				generation,
-				pgnos: to_fetch.clone(),
-			}));
+		let response = match fetch_transport {
+			PageFetchTransport::PageList => self.runtime.block_on(self.transport.get_pages(
+				protocol::SqliteGetPagesRequest {
+					actor_id: self.actor_id.clone(),
+					generation,
+					pgnos: to_fetch.clone(),
+				},
+			)),
+			PageFetchTransport::Range {
+				start_pgno,
+				max_pages,
+				max_bytes,
+			} => self
+				.runtime
+				.block_on(self.transport.get_page_range(protocol::SqliteGetPageRangeRequest {
+					actor_id: self.actor_id.clone(),
+					generation,
+					start_pgno,
+					max_pages,
+					max_bytes,
+				}))
+				.map(sqlite_get_page_range_response_to_get_pages_response),
+		};
 		if let Some(metrics) = &self.metrics {
 			metrics.observe_get_pages_duration(get_pages_start.elapsed().as_nanos() as u64);
 		}
@@ -3786,6 +3941,19 @@ mod tests {
 					.collect(),
 				meta: sqlite_meta(8 * 1024 * 1024),
 			});
+		protocol.get_page_range_response =
+			protocol::SqliteGetPageRangeResponse::SqliteGetPageRangeOk(
+				protocol::SqliteGetPageRangeOk {
+					start_pgno: 76,
+					pages: (76..332)
+						.map(|pgno| protocol::SqliteFetchedPage {
+							pgno,
+							bytes: Some(vec![(pgno % 251) as u8; 4096]),
+						})
+						.collect(),
+					meta: sqlite_meta(8 * 1024 * 1024),
+				},
+			);
 		let protocol = Arc::new(protocol);
 		let ctx = VfsContext::new(
 			"actor".to_string(),
@@ -3813,6 +3981,80 @@ mod tests {
 		ctx.resolve_pages(&[76], true)
 			.expect("next missing page should resolve");
 
+		let requests = protocol.get_pages_requests();
+		assert_eq!(requests.len(), 1);
+		assert_eq!(requests[0].pgnos, vec![10]);
+		let range_requests = protocol.get_page_range_requests();
+		assert_eq!(range_requests.len(), 1);
+		assert_eq!(range_requests[0].start_pgno, 76);
+		assert_eq!(range_requests[0].max_pages, 256);
+		assert_eq!(range_requests[0].max_bytes, 1024 * 1024);
+	}
+
+	#[test]
+	fn disabled_range_reads_keep_forward_scan_on_get_pages() {
+		let runtime = Builder::new_current_thread()
+			.enable_all()
+			.build()
+			.expect("runtime should build");
+		let mut protocol = MockProtocol::new(
+			protocol::SqliteCommitResponse::SqliteCommitOk(protocol::SqliteCommitOk {
+				new_head_txid: 13,
+				meta: sqlite_meta(8 * 1024 * 1024),
+			}),
+			protocol::SqliteCommitStageResponse::SqliteCommitStageOk(
+				protocol::SqliteCommitStageOk {
+					chunk_idx_committed: 0,
+				},
+			),
+			protocol::SqliteCommitFinalizeResponse::SqliteCommitFinalizeOk(
+				protocol::SqliteCommitFinalizeOk {
+					new_head_txid: 13,
+					meta: sqlite_meta(8 * 1024 * 1024),
+				},
+			),
+		);
+		protocol.get_pages_response =
+			protocol::SqliteGetPagesResponse::SqliteGetPagesOk(protocol::SqliteGetPagesOk {
+				pages: (10..76)
+					.map(|pgno| protocol::SqliteFetchedPage {
+						pgno,
+						bytes: Some(vec![(pgno % 251) as u8; 4096]),
+					})
+					.collect(),
+				meta: sqlite_meta(8 * 1024 * 1024),
+			});
+		let protocol = Arc::new(protocol);
+		let ctx = VfsContext::new(
+			"actor".to_string(),
+			runtime.handle().clone(),
+			SqliteTransport::from_mock(protocol.clone()),
+			protocol::SqliteStartupData {
+				generation: 7,
+				meta: protocol::SqliteMeta {
+					db_size_pages: 400,
+					..sqlite_meta(8 * 1024 * 1024)
+				},
+				preloaded_pages: Vec::new(),
+			},
+			VfsConfig::from_optimization_flags(SqliteOptimizationFlags {
+				range_reads: false,
+				..SqliteOptimizationFlags::default()
+			}),
+			unsafe { std::mem::zeroed() },
+			None,
+		);
+
+		ctx.resolve_pages(&[10], true)
+			.expect("first missing page should resolve");
+		for pgno in 11..76 {
+			ctx.resolve_pages(&[pgno], true)
+				.expect("cache-hit page should resolve");
+		}
+		ctx.resolve_pages(&[76], true)
+			.expect("next missing page should resolve");
+
+		assert!(protocol.get_page_range_requests().is_empty());
 		let requests = protocol.get_pages_requests();
 		assert_eq!(requests.len(), 2);
 		assert_eq!(requests[1].pgnos, (76..332).collect::<Vec<_>>());

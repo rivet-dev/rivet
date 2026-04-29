@@ -16,6 +16,7 @@ Started: Tue Apr 28 11:00:38 PM PDT 2026
 - SQLite range page-read protocol details live in `.agent/specs/sqlite-range-page-read-protocol.md`; keep page-list `get_pages` as the compatibility/random-read fallback and preserve existing generation-fence behavior.
 - `sqlite-storage::SqliteEngine::get_page_range` is the storage primitive for contiguous range reads; it shares `get_pages` source resolution through `read_pages` and clamps requests to 256 pages / 1 MiB.
 - vbare protocol version bumps need enough identity converters for the new latest version; append-only schema changes still panic at runtime if `serialize_converters()` only advertises the previous latest version.
+- Native SQLite VFS range reads should be selected only for default-enabled, large, contiguous forward-scan prefetch windows; keep point, bounded, scattered, and disabled-flag paths on page-list `get_pages`.
 ---
 ## 2026-04-28 23:01:27 PDT - SQLITE-COLD-001
 - What was implemented
@@ -292,4 +293,22 @@ Started: Tue Apr 28 11:00:38 PM PDT 2026
   - vbare protocol version bumps need identity converters for every skipped old version. Without two `Ok` converters for v3, `serialize(PROTOCOL_VERSION)` panics with `proto version (3) greater than latest version (2)`.
   - After envoy-client protocol changes, rebuild both `target/debug/rivet-engine` and the NAPI addon before running the kitchen-sink benchmark, or the benchmark can mix old and new protocol artifacts.
   - Verification status: `cargo check -p rivet-envoy-protocol` passed; `cargo check -p rivet-envoy-client` passed; `cargo check -p pegboard-envoy` passed; `cargo test -p rivet-envoy-protocol` passed; `cargo test -p rivet-envoy-client` passed; `cargo test -p pegboard-envoy` passed; `cargo test -p sqlite-storage -- --test-threads=1` passed; `pnpm --filter @rivetkit/engine-envoy-protocol check-types` passed; `pnpm --filter kitchen-sink check-types` passed with the known skip message; `pnpm -F rivetkit check-types` passed; `cargo build -p rivet-engine` passed; `pnpm --filter @rivetkit/rivetkit-napi build:force` passed with existing Rust 2024 unsafe-operation warnings in `rivetkit-sqlite`.
+---
+## 2026-04-29 00:58:19 PDT - SQLITE-COLD-015
+- What was implemented
+  - Wired the native SQLite VFS to use the v3 `sqlite_get_page_range` transport for large contiguous forward-scan prefetch windows.
+  - Kept point, random, bounded, non-contiguous, and disabled-flag paths on page-list `get_pages`.
+  - Added focused VFS coverage for default range transport and disabled `RIVETKIT_SQLITE_OPT_RANGE_READS` fallback, rebuilt NAPI, and reran the cold-read benchmark.
+- Files changed
+  - `rivetkit-rust/packages/rivetkit-sqlite/src/vfs.rs`
+  - `.agent/notes/sqlite-cold-read-after-SQLITE-COLD-015.txt`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - SQLITE-COLD-015 benchmark numbers: insert e2e 15758.9ms, hot read e2e 167.7ms, wake read e2e 4071.2ms, wake read server 3860.8ms, wake overhead estimate 210.4ms, wake VFS get_pages/range transport 70 calls, fetched 13722 pages / 56205312 bytes, prefetch 13652 pages / 55918592 bytes, VFS transport 3624.3ms.
+  - Compared with baseline/SQLITE-COLD-001: wake transport calls dropped 1249 -> 70, wake e2e dropped 20141.0ms -> 4071.2ms, wake VFS transport dropped 19332.8ms -> 3624.3ms, and hot read was 118.6ms -> 167.7ms.
+  - Compared with read-ahead-only SQLITE-COLD-002: wake transport calls dropped 368 -> 70.
+  - Compared with SQLITE-COLD-014: wake transport calls stayed 70 -> 70, wake e2e improved 5371.1ms -> 4071.2ms, wake server improved 3946.5ms -> 3860.8ms, wake VFS transport improved 3704.7ms -> 3624.3ms, and hot read was 160.7ms -> 167.7ms.
+  - The benchmark still labels the shared VFS page-fetch metric as `get_pages`; after this story that counter includes range transport calls too.
+  - Verification status: `cargo check -p rivetkit-sqlite` passed; focused forward-scan/range tests passed; `cargo test -p rivetkit-sqlite -- --test-threads=1` passed; `pnpm --filter kitchen-sink check-types` passed with the known skip message; `pnpm -F rivetkit check-types` passed; `pnpm --filter @rivetkit/rivetkit-napi build:force` passed with existing Rust 2024 unsafe-operation warnings in `rivetkit-sqlite`.
 ---
