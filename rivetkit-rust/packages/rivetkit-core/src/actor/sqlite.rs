@@ -298,6 +298,25 @@ impl SqliteDb {
 		}
 	}
 
+	pub async fn execute_write(
+		&self,
+		sql: impl Into<String>,
+		params: Option<Vec<BindParam>>,
+	) -> Result<ExecuteResult> {
+		#[cfg(feature = "sqlite")]
+		{
+			self.open().await?;
+			let sql = sql.into();
+			self.native_db_handle()?.execute_write(sql, params).await
+		}
+
+		#[cfg(not(feature = "sqlite"))]
+		{
+			let _ = (sql, params);
+			Err(SqliteRuntimeError::Unavailable.build())
+		}
+	}
+
 	pub async fn close(&self) -> Result<()> {
 		#[cfg(feature = "sqlite")]
 		{

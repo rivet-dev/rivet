@@ -1,5 +1,5 @@
-import type { DatabaseProvider, RawAccess } from "./config";
-import { AsyncMutex, isSqliteBindingObject, toSqliteBindings } from "./shared";
+import type { DatabaseProvider, RawAccess, SqliteDatabase } from "./config";
+import { isSqliteBindingObject, toSqliteBindings } from "./shared";
 
 export type { RawAccess } from "./config";
 
@@ -7,25 +7,13 @@ interface DatabaseFactoryConfig {
 	onMigrate?: (db: RawAccess) => Promise<void> | void;
 }
 
-function sqlReturnsRows(query: string): boolean {
-	const token = query.trimStart().slice(0, 16).toUpperCase();
-	if (token.startsWith("PRAGMA")) {
-		return !/^PRAGMA\b[\s\S]*=/.test(query.trim());
-	}
-	return (
-		token.startsWith("SELECT") ||
-		token.startsWith("WITH") ||
-		/\bRETURNING\b/i.test(query)
-	);
-}
+type RawAccessWithWriteMode = RawAccess & {
+	__rivetWriteMode: <T>(callback: () => Promise<T> | T) => Promise<T>;
+};
 
 function hasMultipleStatements(query: string): boolean {
 	const trimmed = query.trim().replace(/;+$/, "").trimEnd();
 	return trimmed.includes(";");
-}
-
-function isPragmaAssignment(query: string): boolean {
-	return /^PRAGMA\b[\s\S]*=/.test(query.trim());
 }
 
 export function db({
@@ -40,9 +28,8 @@ export function db({
 				);
 			}
 
-				const db = await nativeDatabaseProvider.open(ctx.actorId);
-				let closed = false;
-			const mutex = new AsyncMutex();
+			const db = await nativeDatabaseProvider.open(ctx.actorId);
+			let closed = false;
 			const ensureOpen = () => {
 				if (closed) {
 					throw new Error(
@@ -51,7 +38,7 @@ export function db({
 				}
 			};
 
-			const client = {
+			const client: RawAccessWithWriteMode = {
 				execute: async <
 					TRow extends Record<string, unknown> = Record<
 						string,
@@ -61,111 +48,37 @@ export function db({
 					query: string,
 					...args: unknown[]
 				): Promise<TRow[]> => {
-					return await mutex.run(async () => {
-						ensureOpen();
+					ensureOpen();
 
-						const kvReadsBefore = ctx.metrics?.totalKvReads ?? 0;
-						const kvWritesBefore = ctx.metrics?.totalKvWrites ?? 0;
-						const start = performance.now();
+					const kvReadsBefore = ctx.metrics?.totalKvReads ?? 0;
+					const kvWritesBefore = ctx.metrics?.totalKvWrites ?? 0;
+					const start = performance.now();
 
-						// `db.exec` does not support binding `?` placeholders.
-						// Use `db.query` for statements that return rows and `db.run` for
-						// statements that mutate data when parameters are provided.
-						// Keep using `db.exec` for non-parameterized SQL because it
-						// supports multi-statement migrations.
-						let result: TRow[];
+					try {
 						if (args.length > 0) {
 							const bindings =
 								args.length === 1 &&
 								isSqliteBindingObject(args[0])
 									? toSqliteBindings(args[0])
 									: toSqliteBindings(args);
-							const returnsRows = sqlReturnsRows(query);
-
-							if (returnsRows) {
-								const { rows, columns } = await db.query(
-									query,
-									bindings,
-								);
-								result = rows.map((row: unknown[]) => {
-									const rowObj: Record<string, unknown> = {};
-									for (let i = 0; i < columns.length; i++) {
-										rowObj[columns[i]] = row[i];
-									}
-									return rowObj;
-								}) as TRow[];
-							} else {
-								await db.run(query, bindings);
-								result = [] as TRow[];
-							}
-						} else {
-							const returnsRows = sqlReturnsRows(query);
-							if (!hasMultipleStatements(query)) {
-								if (returnsRows) {
-									const { rows, columns } =
-										await db.query(query);
-									result = rows.map((row: unknown[]) => {
-										const rowObj: Record<string, unknown> =
-											{};
-										for (
-											let i = 0;
-											i < columns.length;
-											i++
-										) {
-											rowObj[columns[i]] = row[i];
-										}
-										return rowObj;
-									}) as TRow[];
-								} else if (isPragmaAssignment(query)) {
-									await db.run(query);
-									result = [] as TRow[];
-								} else {
-									const results: Record<string, unknown>[] =
-										[];
-									let columnNames: string[] | null = null;
-									await db.exec(
-										query,
-										(row: unknown[], columns: string[]) => {
-											if (!columnNames) {
-												columnNames = columns;
-											}
-											const rowObj: Record<
-												string,
-												unknown
-											> = {};
-											for (
-												let i = 0;
-												i < row.length;
-												i++
-											) {
-												rowObj[columnNames[i]] = row[i];
-											}
-											results.push(rowObj);
-										},
-									);
-									result = results as TRow[];
-								}
-							} else {
-								const results: Record<string, unknown>[] = [];
-								let columnNames: string[] | null = null;
-								await db.exec(
-									query,
-									(row: unknown[], columns: string[]) => {
-										if (!columnNames) {
-											columnNames = columns;
-										}
-										const rowObj: Record<string, unknown> =
-											{};
-										for (let i = 0; i < row.length; i++) {
-											rowObj[columnNames[i]] = row[i];
-										}
-										results.push(rowObj);
-									},
-								);
-								result = results as TRow[];
-							}
+							const { rows, columns } = await db.execute(
+								query,
+								bindings,
+							);
+							return rows.map((row) =>
+								rowToObject<TRow>(row, columns),
+							);
 						}
 
+						if (!hasMultipleStatements(query)) {
+							const { rows, columns } = await db.execute(query);
+							return rows.map((row) =>
+								rowToObject<TRow>(row, columns),
+							);
+						}
+
+						return await execMultiStatement<TRow>(db, query);
+					} finally {
 						const durationMs = performance.now() - start;
 						ctx.metrics?.trackSql(query, durationMs);
 						if (ctx.metrics) {
@@ -181,26 +94,67 @@ export function db({
 								kvWrites,
 							});
 						}
-						return result;
-					});
+					}
 				},
 				close: async () => {
-					const shouldClose = await mutex.run(async () => {
-						if (closed) return false;
+					if (!closed) {
 						closed = true;
-						return true;
-					});
-					if (shouldClose) {
 						await db.close();
 					}
 				},
-			} satisfies RawAccess;
+				__rivetWriteMode: async <T>(
+					callback: () => Promise<T> | T,
+				): Promise<T> => {
+					return await db.writeMode(async () => await callback());
+				},
+			};
 			return client;
 		},
 		onMigrate: async (client) => {
 			if (onMigrate) {
-				await onMigrate(client);
+				await dbWriteMode(client, () => onMigrate(client));
 			}
 		},
 	};
+}
+
+function rowToObject<TRow extends Record<string, unknown>>(
+	row: unknown[],
+	columns: string[],
+): TRow {
+	const rowObj: Record<string, unknown> = {};
+	for (let i = 0; i < columns.length; i++) {
+		rowObj[columns[i]] = row[i];
+	}
+	return rowObj as TRow;
+}
+
+async function execMultiStatement<TRow extends Record<string, unknown>>(
+	db: SqliteDatabase,
+	query: string,
+): Promise<TRow[]> {
+	const results: Record<string, unknown>[] = [];
+	let columnNames: string[] | null = null;
+	await db.exec(query, (row: unknown[], columns: string[]) => {
+		if (!columnNames) {
+			columnNames = columns;
+		}
+		results.push(rowToObject(row, columnNames));
+	});
+	return results as TRow[];
+}
+
+async function dbWriteMode<T>(
+	client: RawAccess,
+	callback: () => Promise<T> | T,
+): Promise<T> {
+	const maybeClient = client as RawAccess & {
+		__rivetWriteMode?: <TInner>(
+			callback: () => Promise<TInner> | TInner,
+		) => Promise<TInner>;
+	};
+	if (maybeClient.__rivetWriteMode) {
+		return await maybeClient.__rivetWriteMode(callback);
+	}
+	return await callback();
 }

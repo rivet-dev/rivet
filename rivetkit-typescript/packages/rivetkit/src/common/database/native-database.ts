@@ -1,6 +1,9 @@
 import { decodeBridgeRivetError } from "@/actor/errors";
-import { AsyncMutex } from "./shared";
-import type { SqliteBindings, SqliteDatabase } from "./config";
+import type {
+	SqliteBindings,
+	SqliteDatabase,
+	SqliteExecuteResult,
+} from "./config";
 
 interface NativeBindParam {
 	kind: "null" | "int" | "float" | "text" | "blob";
@@ -24,8 +27,24 @@ interface NativeRunResult {
 	changes: number;
 }
 
+interface NativeExecuteResult {
+	columns: string[];
+	rows: unknown[][];
+	changes: number;
+	lastInsertRowId?: number | null;
+	route: string;
+}
+
 export interface JsNativeDatabaseLike {
 	exec(sql: string): Promise<NativeExecResult>;
+	execute(
+		sql: string,
+		params?: NativeBindParam[] | null,
+	): Promise<NativeExecuteResult>;
+	executeWrite(
+		sql: string,
+		params?: NativeBindParam[] | null,
+	): Promise<NativeExecuteResult>;
 	query(
 		sql: string,
 		params?: NativeBindParam[] | null,
@@ -157,17 +176,80 @@ function toNativeBindings(
 	});
 }
 
-export function wrapJsNativeDatabase(
-	database: JsNativeDatabaseLike,
-): SqliteDatabase {
-	const mutex = new AsyncMutex();
-	let closed = false;
+function normalizeExecuteRoute(route: string): SqliteExecuteResult["route"] {
+	if (route === "read" || route === "write" || route === "writeFallback") {
+		return route;
+	}
+	throw new Error(`unsupported sqlite execute route: ${route}`);
+}
 
-	const ensureOpen = () => {
-		if (closed) {
+class NativeCloseGate {
+	#active = 0;
+	#closed = false;
+	#waiters: (() => void)[] = [];
+
+	enter(): () => void {
+		if (this.#closed) {
 			throw new Error(
 				"Database is closed. This usually means a background timer (setInterval, setTimeout) or a stray promise is still running after the actor stopped. Use c.abortSignal to clean up timers before the actor shuts down.",
 			);
+		}
+
+		this.#active++;
+		let released = false;
+		return () => {
+			if (released) {
+				return;
+			}
+			released = true;
+			this.#active--;
+			if (this.#active === 0) {
+				const waiters = this.#waiters.splice(0);
+				for (const waiter of waiters) {
+					waiter();
+				}
+			}
+		};
+	}
+
+	async close(callback: () => Promise<void>): Promise<void> {
+		if (this.#closed) {
+			return;
+		}
+		this.#closed = true;
+		if (this.#active > 0) {
+			await new Promise<void>((resolve) => this.#waiters.push(resolve));
+		}
+		await callback();
+	}
+}
+
+export function wrapJsNativeDatabase(
+	database: JsNativeDatabaseLike,
+): SqliteDatabase {
+	const gate = new NativeCloseGate();
+	let closePromise: Promise<void> | undefined;
+	let writeModeDepth = 0;
+
+	const executeNative = async (
+		sql: string,
+		params?: SqliteBindings,
+	): Promise<SqliteExecuteResult> => {
+		const release = gate.enter();
+		try {
+			const nativeParams = toNativeBindings(sql, params);
+			const result =
+				writeModeDepth > 0
+					? await database.executeWrite(sql, nativeParams)
+					: await database.execute(sql, nativeParams);
+			return {
+				...result,
+				route: normalizeExecuteRoute(result.route),
+			};
+		} catch (error) {
+			enrichNativeDatabaseError(database, error);
+		} finally {
+			release();
 		}
 	};
 
@@ -176,14 +258,15 @@ export function wrapJsNativeDatabase(
 			sql: string,
 			callback?: (row: unknown[], columns: string[]) => void,
 		): Promise<void> {
-			const result = await mutex.run(async () => {
-				ensureOpen();
-				try {
-					return await database.exec(sql);
-				} catch (error) {
-					enrichNativeDatabaseError(database, error);
-				}
-			});
+			const release = gate.enter();
+			let result: NativeExecResult;
+			try {
+				result = await database.exec(sql);
+			} catch (error) {
+				enrichNativeDatabaseError(database, error);
+			} finally {
+				release();
+			}
 			if (!callback) {
 				return;
 			}
@@ -191,34 +274,30 @@ export function wrapJsNativeDatabase(
 				callback(row, result.columns);
 			}
 		},
+		async execute(
+			sql: string,
+			params?: SqliteBindings,
+		): Promise<SqliteExecuteResult> {
+			return await executeNative(sql, params);
+		},
 		async run(sql: string, params?: SqliteBindings): Promise<void> {
-			await mutex.run(async () => {
-				ensureOpen();
-				try {
-					await database.run(sql, toNativeBindings(sql, params));
-				} catch (error) {
-					enrichNativeDatabaseError(database, error);
-				}
-			});
+			await executeNative(sql, params);
 		},
 		async query(sql: string, params?: SqliteBindings) {
-			return await mutex.run(async () => {
-				ensureOpen();
-				try {
-					return await database.query(sql, toNativeBindings(sql, params));
-				} catch (error) {
-					enrichNativeDatabaseError(database, error);
-				}
-			});
+			const { columns, rows } = await executeNative(sql, params);
+			return { columns, rows };
 		},
-			async close(): Promise<void> {
-			await mutex.run(async () => {
-				if (closed) {
-					return;
-				}
-				closed = true;
-				await database.close();
-			});
+		async writeMode<T>(callback: () => Promise<T>): Promise<T> {
+			writeModeDepth++;
+			try {
+				return await callback();
+			} finally {
+				writeModeDepth--;
+			}
+		},
+		async close(): Promise<void> {
+			closePromise ??= gate.close(() => database.close());
+			await closePromise;
 		},
 	};
 }

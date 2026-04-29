@@ -18,13 +18,24 @@ export interface SqliteQueryResult {
 	rows: unknown[][];
 }
 
+export interface SqliteExecuteResult extends SqliteQueryResult {
+	changes: number;
+	lastInsertRowId?: number | null;
+	route: "read" | "write" | "writeFallback";
+}
+
 export interface SqliteDatabase {
 	exec(
 		sql: string,
 		callback?: (row: unknown[], columns: string[]) => void,
 	): Promise<void>;
+	execute(
+		sql: string,
+		params?: SqliteBindings,
+	): Promise<SqliteExecuteResult>;
 	run(sql: string, params?: SqliteBindings): Promise<void>;
 	query(sql: string, params?: SqliteBindings): Promise<SqliteQueryResult>;
+	writeMode<T>(callback: () => Promise<T>): Promise<T>;
 	close(): Promise<void>;
 }
 

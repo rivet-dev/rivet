@@ -112,6 +112,17 @@ impl NativeDatabaseHandle {
 		.await
 	}
 
+	pub async fn execute_write(
+		&self,
+		sql: String,
+		params: Option<Vec<BindParam>>,
+	) -> Result<ExecuteResult> {
+		self.with_configured_write_connection(move |db| {
+			execute_single_statement(db, &sql, params.as_deref(), ExecuteRoute::Write)
+		})
+		.await
+	}
+
 	pub async fn close(&self) -> Result<()> {
 		self.manager.close().await
 	}

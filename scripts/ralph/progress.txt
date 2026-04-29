@@ -11,6 +11,8 @@ Started: Wed Apr 29 04:23:03 AM PDT 2026
 - The native SQLite connection manager keeps an idle writer open while `sqlite3_get_autocommit` is false; `COMMIT` or `ROLLBACK` must reuse that writer and close it once autocommit is restored.
 - Native SQLite read-query routing must classify before installing the mandatory reader authorizer; statement classification uses a temporary authorizer and clears the connection-global authorizer when it finishes.
 - Native SQLite single-statement work should route through `NativeDatabaseHandle::execute`; keep `exec` as the multi-statement compatibility path.
+- TypeScript SQLite database wrappers should route single-statement work through native `SqliteDatabase.execute`; use `exec` only for multi-statement compatibility.
+- TypeScript SQLite migration hooks should run inside native `writeMode` so setup queries use the writer connection and do not create readers.
 
 ## 2026-04-29 04:27:40 PDT - US-001
 - Implemented native SQLite statement classification with readonly detection, trailing-statement detection, authorizer action capture, and conservative reader eligibility.
@@ -150,4 +152,34 @@ Started: Wed Apr 29 04:23:03 AM PDT 2026
   - `ExecuteRoute` metadata is assigned by the database routing layer; the low-level query helper only prepares, steps, and packages the supplied route.
   - The native execute helper rejects multi-statement SQL by checking SQLite's prepare tail. Use `exec` when multi-statement compatibility is required.
   - Inspector database execution should use `db_execute` so INSERT RETURNING and write statements go through the same native routing policy as user database calls.
+---
+## 2026-04-29 05:36:07 PDT - US-008
+- Exposed native SQLite `execute` and forced-writer `executeWrite` through `rivetkit-napi` and the TypeScript native database wrapper.
+- Removed TS-side per-query serialization from native, raw, and Drizzle database paths; single-statement calls now route through native `execute`, while multi-statement compatibility stays on `exec`.
+- Added a native wrapper close gate so close waits for admitted calls and rejects new work, plus migration `writeMode` so migration hooks use writer execution.
+- Files changed:
+  - `rivetkit-rust/packages/rivetkit-core/src/actor/sqlite.rs`
+  - `rivetkit-rust/packages/rivetkit-sqlite/src/database.rs`
+  - `rivetkit-typescript/packages/rivetkit-napi/src/database.rs`
+  - `rivetkit-typescript/packages/rivetkit-napi/index.d.ts`
+  - `rivetkit-typescript/packages/rivetkit/src/common/database/config.ts`
+  - `rivetkit-typescript/packages/rivetkit/src/common/database/mod.ts`
+  - `rivetkit-typescript/packages/rivetkit/src/common/database/native-database.ts`
+  - `rivetkit-typescript/packages/rivetkit/src/common/database/native-database.test.ts`
+  - `rivetkit-typescript/packages/rivetkit/src/db/drizzle.ts`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- Checks:
+  - `cargo check -p rivetkit-sqlite`
+  - `cargo check -p rivetkit-core`
+  - `cargo check -p rivetkit-napi`
+  - `timeout 240s cargo test -p rivetkit-sqlite`
+  - `pnpm --dir rivetkit-typescript/packages/rivetkit run check-types`
+  - `pnpm --dir rivetkit-typescript/packages/rivetkit exec vitest run src/common/database/native-database.test.ts`
+  - `pnpm --dir rivetkit-typescript/packages/rivetkit exec biome check src/common/database/native-database.ts src/common/database/native-database.test.ts src/common/database/mod.ts src/db/drizzle.ts`
+  - `pnpm --dir rivetkit-typescript/packages/rivetkit run lint` is still blocked by pre-existing unrelated Biome errors in driver fixtures and tests.
+- **Learnings for future iterations:**
+  - Use `SqliteDatabase.execute` in TypeScript wrappers for single statements so native classification owns read/write routing.
+  - A close gate is enough for TS wrapper lifecycle safety; write serialization belongs in the native connection manager.
+  - NAPI-generated route metadata is typed as `string` in `index.d.ts`, so the TS wrapper should normalize it before exposing the public union.
 ---

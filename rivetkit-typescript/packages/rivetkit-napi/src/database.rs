@@ -1,7 +1,8 @@
 use napi::bindgen_prelude::Buffer;
 use napi_derive::napi;
 use rivetkit_core::sqlite::{
-	BindParam, ColumnValue, QueryResult as CoreQueryResult, SqliteDb as CoreSqliteDb,
+	BindParam, ColumnValue, ExecuteResult as CoreExecuteResult, ExecuteRoute,
+	QueryResult as CoreQueryResult, SqliteDb as CoreSqliteDb,
 };
 
 use crate::{NapiInvalidArgument, napi_anyhow_error};
@@ -53,6 +54,15 @@ pub struct QueryResult {
 	pub rows: Vec<Vec<serde_json::Value>>,
 }
 
+#[napi(object)]
+pub struct NativeExecuteResult {
+	pub columns: Vec<String>,
+	pub rows: Vec<Vec<serde_json::Value>>,
+	pub changes: i64,
+	pub last_insert_row_id: Option<i64>,
+	pub route: String,
+}
+
 #[napi]
 impl JsNativeDatabase {
 	#[napi]
@@ -90,6 +100,36 @@ impl JsNativeDatabase {
 			.await
 			.map_err(crate::napi_anyhow_error)?;
 		Ok(core_query_result_to_js(result))
+	}
+
+	#[napi]
+	pub async fn execute(
+		&self,
+		sql: String,
+		params: Option<Vec<JsBindParam>>,
+	) -> napi::Result<NativeExecuteResult> {
+		let params = params.map(js_bind_params_to_core).transpose()?;
+		let result = self
+			.db
+			.execute(sql, params)
+			.await
+			.map_err(crate::napi_anyhow_error)?;
+		Ok(core_execute_result_to_js(result))
+	}
+
+	#[napi]
+	pub async fn execute_write(
+		&self,
+		sql: String,
+		params: Option<Vec<JsBindParam>>,
+	) -> napi::Result<NativeExecuteResult> {
+		let params = params.map(js_bind_params_to_core).transpose()?;
+		let result = self
+			.db
+			.execute_write(sql, params)
+			.await
+			.map_err(crate::napi_anyhow_error)?;
+		Ok(core_execute_result_to_js(result))
 	}
 
 	#[napi]
@@ -137,6 +177,28 @@ fn core_query_result_to_js(result: CoreQueryResult) -> QueryResult {
 			.into_iter()
 			.map(|row| row.into_iter().map(column_value_to_json).collect())
 			.collect(),
+	}
+}
+
+fn core_execute_result_to_js(result: CoreExecuteResult) -> NativeExecuteResult {
+	NativeExecuteResult {
+		columns: result.columns,
+		rows: result
+			.rows
+			.into_iter()
+			.map(|row| row.into_iter().map(column_value_to_json).collect())
+			.collect(),
+		changes: result.changes,
+		last_insert_row_id: result.last_insert_row_id,
+		route: execute_route_to_js(result.route),
+	}
+}
+
+fn execute_route_to_js(route: ExecuteRoute) -> String {
+	match route {
+		ExecuteRoute::Read => "read".to_owned(),
+		ExecuteRoute::Write => "write".to_owned(),
+		ExecuteRoute::WriteFallback => "writeFallback".to_owned(),
 	}
 }
 

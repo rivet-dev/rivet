@@ -1,17 +1,18 @@
-import { createHash } from "node:crypto";
 import {
 	drizzle,
 	type RemoteCallback,
 	type SqliteRemoteDatabase,
 } from "drizzle-orm/sqlite-proxy";
-import { AsyncMutex, toSqliteBindings } from "@/common/database/shared";
 import type {
 	DatabaseProvider,
 	DatabaseProviderContext,
 	RawAccess,
 	SqliteDatabase,
 } from "@/common/database/config";
+import { toSqliteBindings } from "@/common/database/shared";
+import { getNodeCrypto } from "@/utils/node";
 
+export type { SQLiteTable } from "drizzle-orm/sqlite-core";
 export {
 	alias,
 	check,
@@ -25,7 +26,6 @@ export {
 	unique,
 	uniqueIndex,
 } from "drizzle-orm/sqlite-core";
-export type { SQLiteTable } from "drizzle-orm/sqlite-core";
 
 type DrizzleSchema = Record<string, unknown>;
 type DrizzleDatabase<TSchema extends DrizzleSchema> =
@@ -88,9 +88,7 @@ export function db<TSchema extends DrizzleSchema = Record<string, never>>({
 				);
 			}
 
-				const nativeDb = await nativeDatabaseProvider.open(ctx.actorId);
-
-				const mutex = new AsyncMutex();
+			const nativeDb = await nativeDatabaseProvider.open(ctx.actorId);
 			let closed = false;
 			const ensureOpen = () => {
 				if (closed) {
@@ -105,42 +103,37 @@ export function db<TSchema extends DrizzleSchema = Record<string, never>>({
 				params: unknown[],
 				method: "run" | "all" | "values" | "get",
 			) => {
-				return await mutex.run(async () => {
-					ensureOpen();
+				ensureOpen();
 
-					const start = performance.now();
-					const kvReadsBefore = ctx.metrics?.totalKvReads ?? 0;
-					const kvWritesBefore = ctx.metrics?.totalKvWrites ?? 0;
-					try {
-						if (method === "run") {
-							await nativeDb.run(query, toSqliteBindings(params));
-							return { rows: [] };
-						}
-
-						const { rows } = await nativeDb.query(
-							query,
-							toSqliteBindings(params),
-						);
-						if (method === "get") {
-							return { rows: rows[0] };
-						}
-						return { rows };
-					} finally {
-						const durationMs = performance.now() - start;
-						ctx.metrics?.trackSql(query, durationMs);
-						if (ctx.metrics) {
-							ctx.log?.debug({
-								msg: "sql query",
-								query: query.slice(0, 120),
-								durationMs,
-								kvReads:
-									ctx.metrics.totalKvReads - kvReadsBefore,
-								kvWrites:
-									ctx.metrics.totalKvWrites - kvWritesBefore,
-							});
-						}
+				const start = performance.now();
+				const kvReadsBefore = ctx.metrics?.totalKvReads ?? 0;
+				const kvWritesBefore = ctx.metrics?.totalKvWrites ?? 0;
+				try {
+					const { rows } = await nativeDb.execute(
+						query,
+						toSqliteBindings(params),
+					);
+					if (method === "run") {
+						return { rows: [] };
 					}
-				});
+					if (method === "get") {
+						return { rows: rows[0] };
+					}
+					return { rows };
+				} finally {
+					const durationMs = performance.now() - start;
+					ctx.metrics?.trackSql(query, durationMs);
+					if (ctx.metrics) {
+						ctx.log?.debug({
+							msg: "sql query",
+							query: query.slice(0, 120),
+							durationMs,
+							kvReads: ctx.metrics.totalKvReads - kvReadsBefore,
+							kvWrites:
+								ctx.metrics.totalKvWrites - kvWritesBefore,
+						});
+					}
+				}
 			};
 
 			const callback: RemoteCallback = async (query, params, method) => {
@@ -158,7 +151,6 @@ export function db<TSchema extends DrizzleSchema = Record<string, never>>({
 			): Promise<TRow[]> => {
 				return await executeRaw<TRow>(
 					nativeDb,
-					mutex,
 					ctx,
 					ensureOpen,
 					query,
@@ -166,27 +158,48 @@ export function db<TSchema extends DrizzleSchema = Record<string, never>>({
 				);
 			};
 			drizzleDb.close = async () => {
-				const shouldClose = await mutex.run(async () => {
-					if (closed) return false;
+				if (!closed) {
 					closed = true;
-					return true;
-				});
-				if (shouldClose) {
 					await nativeDb.close();
 				}
 			};
+			(
+				drizzleDb as DrizzleDatabase<TSchema> & {
+					__rivetWriteMode: <T>(
+						callback: () => Promise<T> | T,
+					) => Promise<T>;
+				}
+			).__rivetWriteMode = async (callback) =>
+				await nativeDb.writeMode(async () => await callback());
 
 			return drizzleDb;
 		},
 		onMigrate: async (client) => {
-			if (migrations) {
-				await runMigrations(client, migrations);
-			}
-			if (onMigrate) {
-				await onMigrate(client);
-			}
+			await dbWriteMode(client, async () => {
+				if (migrations) {
+					await runMigrations(client, migrations);
+				}
+				if (onMigrate) {
+					await onMigrate(client);
+				}
+			});
 		},
 	};
+}
+
+async function dbWriteMode<T>(
+	client: RawAccess,
+	callback: () => Promise<T> | T,
+): Promise<T> {
+	const maybeClient = client as RawAccess & {
+		__rivetWriteMode?: <TInner>(
+			callback: () => Promise<TInner> | TInner,
+		) => Promise<TInner>;
+	};
+	if (maybeClient.__rivetWriteMode) {
+		return await maybeClient.__rivetWriteMode(callback);
+	}
+	return await callback();
 }
 
 async function runMigrations<TSchema extends DrizzleSchema>(
@@ -231,7 +244,10 @@ async function runMigrations<TSchema extends DrizzleSchema>(
 
 		await db.execute(
 			"INSERT INTO __drizzle_migrations (hash, created_at) VALUES (?, ?)",
-			createHash("sha256").update(migration).digest("hex"),
+			getNodeCrypto()
+				.createHash("sha256")
+				.update(migration)
+				.digest("hex"),
 			entry.when,
 		);
 	}
@@ -252,18 +268,6 @@ function parseMigrationJournal(journal: unknown): {
 	return journal as { entries: DrizzleMigrationJournalEntry[] };
 }
 
-function sqlReturnsRows(query: string): boolean {
-	const token = query.trimStart().slice(0, 16).toUpperCase();
-	if (token.startsWith("PRAGMA")) {
-		return !/^PRAGMA\b[\s\S]*=/.test(query.trim());
-	}
-	return (
-		token.startsWith("SELECT") ||
-		token.startsWith("WITH") ||
-		/\bRETURNING\b/i.test(query)
-	);
-}
-
 function hasMultipleStatements(query: string): boolean {
 	const trimmed = query.trim().replace(/;+$/, "").trimEnd();
 	return trimmed.includes(";");
@@ -282,63 +286,50 @@ function rowToObject<TRow extends Record<string, unknown>>(
 
 async function executeRaw<TRow extends Record<string, unknown>>(
 	db: SqliteDatabase,
-	mutex: AsyncMutex,
 	ctx: DatabaseProviderContext,
 	ensureOpen: () => void,
 	query: string,
 	args: unknown[],
 ): Promise<TRow[]> {
-	return await mutex.run(async () => {
-		ensureOpen();
+	ensureOpen();
 
-		const start = performance.now();
-		const kvReadsBefore = ctx.metrics?.totalKvReads ?? 0;
-		const kvWritesBefore = ctx.metrics?.totalKvWrites ?? 0;
-		try {
-			if (args.length > 0) {
-				if (!sqlReturnsRows(query)) {
-					await db.run(query, toSqliteBindings(args));
-					return [];
-				}
-
-				const { rows, columns } = await db.query(
-					query,
-					toSqliteBindings(args),
-				);
-				return rows.map((row) => rowToObject<TRow>(row, columns));
-			}
-
-			if (!hasMultipleStatements(query)) {
-				if (!sqlReturnsRows(query)) {
-					await db.run(query);
-					return [];
-				}
-
-				const { rows, columns } = await db.query(query);
-				return rows.map((row) => rowToObject<TRow>(row, columns));
-			}
-
-			const results: Record<string, unknown>[] = [];
-			let columnNames: string[] | null = null;
-			await db.exec(query, (row, columns) => {
-				if (!columnNames) {
-					columnNames = columns;
-				}
-				results.push(rowToObject(row, columnNames));
-			});
-			return results as TRow[];
-		} finally {
-			const durationMs = performance.now() - start;
-			ctx.metrics?.trackSql(query, durationMs);
-			if (ctx.metrics) {
-				ctx.log?.debug({
-					msg: "sql query",
-					query: query.slice(0, 120),
-					durationMs,
-					kvReads: ctx.metrics.totalKvReads - kvReadsBefore,
-					kvWrites: ctx.metrics.totalKvWrites - kvWritesBefore,
-				});
-			}
+	const start = performance.now();
+	const kvReadsBefore = ctx.metrics?.totalKvReads ?? 0;
+	const kvWritesBefore = ctx.metrics?.totalKvWrites ?? 0;
+	try {
+		if (args.length > 0) {
+			const { rows, columns } = await db.execute(
+				query,
+				toSqliteBindings(args),
+			);
+			return rows.map((row) => rowToObject<TRow>(row, columns));
 		}
-	});
+
+		if (!hasMultipleStatements(query)) {
+			const { rows, columns } = await db.execute(query);
+			return rows.map((row) => rowToObject<TRow>(row, columns));
+		}
+
+		const results: Record<string, unknown>[] = [];
+		let columnNames: string[] | null = null;
+		await db.exec(query, (row, columns) => {
+			if (!columnNames) {
+				columnNames = columns;
+			}
+			results.push(rowToObject(row, columnNames));
+		});
+		return results as TRow[];
+	} finally {
+		const durationMs = performance.now() - start;
+		ctx.metrics?.trackSql(query, durationMs);
+		if (ctx.metrics) {
+			ctx.log?.debug({
+				msg: "sql query",
+				query: query.slice(0, 120),
+				durationMs,
+				kvReads: ctx.metrics.totalKvReads - kvReadsBefore,
+				kvWrites: ctx.metrics.totalKvWrites - kvWritesBefore,
+			});
+		}
+	}
 }
