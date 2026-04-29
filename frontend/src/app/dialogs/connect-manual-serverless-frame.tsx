@@ -182,7 +182,7 @@ export const buildServerlessConfig = async (
 							requestLifespan: values.requestLifespan,
 							headers,
 							maxRunners: 0,
-							slotsPerRunner: 0,
+							slotsPerRunner: 1,
 							drainGracePeriod: values.drainGracePeriod,
 						}
 					: {
