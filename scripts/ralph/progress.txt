@@ -8,7 +8,8 @@ Started: Tue Apr 28 11:00:38 PM PDT 2026
 - SQLite preload hints persist as a separate v2 storage record at `/PRELOAD_HINTS`; keep them generation-fenced and separate from normal page/shard/delta data.
 - Runtime-side SQLite stop/sleep preload-hint flushes should enqueue the persist request before native DB close instead of awaiting the response during actor shutdown.
 - `sqlite-storage::open` should return the same quota-updated `DBHead` that it writes after `encode_db_head_with_usage(...)`, or runtime metadata can disagree with stored metadata.
-- SQLite cold-read optimization flags live in `rivetkit-rust/packages/rivetkit-sqlite/src/optimization_flags.rs`; add future default-enabled env flags there and test disabled paths with `VfsConfig::from_optimization_flags(...)` instead of mutating process env.
+- SQLite cold-read optimization flags live in `engine/packages/sqlite-storage/src/optimization_flags.rs`; `rivetkit-sqlite` re-exports them, and tests should use config constructors instead of mutating process env.
+- SQLite open-time preload consumes persisted `/PRELOAD_HINTS` through `OpenConfig.preload_hints`; disabled-path tests can toggle the config fields directly.
 - Adaptive SQLite VFS read-ahead is controlled by `RIVETKIT_SQLITE_OPT_ADAPTIVE_READ_AHEAD`; default-enabled scans can grow to larger windows, while disabled mode keeps the existing shard-sized 64-page prefetch.
 ---
 ## 2026-04-28 23:01:27 PDT - SQLITE-COLD-001
@@ -160,4 +161,26 @@ Started: Tue Apr 28 11:00:38 PM PDT 2026
   - Compared with SQLITE-COLD-007: wake get_pages stayed 69 -> 69, wake e2e was 4040.1ms -> 4116.3ms, wake VFS transport was 3650.0ms -> 3738.6ms, and hot read improved 193.5ms -> 156.3ms.
   - Awaiting preload-hint persistence during actor shutdown can time out after sleep teardown begins; queue the shutdown flush before close and let the periodic task use the normal awaited request path.
   - Verification status: `cargo check -p rivet-envoy-client` passed; `cargo check -p rivetkit-core --features sqlite` passed; `cargo test -p rivetkit-sqlite -- --test-threads=1` passed; `pnpm --filter kitchen-sink check-types` passed with the known skip message; `pnpm -F rivetkit check-types` passed; `pnpm --filter @rivetkit/rivetkit-napi build:force` passed; benchmark output passed with no preload-hint flush timeout warnings.
+---
+## 2026-04-29 00:12:40 PDT - SQLITE-COLD-009
+- What was implemented
+  - Added open-time loading of persisted SQLite preload hints from `/PRELOAD_HINTS` in `sqlite-storage`.
+  - Added `OpenConfig.preload_hints` with default-enabled hot/early page and scan-range switches backed by the central once-cached SQLite optimization flags.
+  - Moved the shared SQLite optimization flag implementation into `sqlite-storage::optimization_flags`; `rivetkit-sqlite::optimization_flags` now re-exports it for native VFS callers.
+  - Added focused storage tests for default persisted preload, disabled persisted preload, and disabled scan-range preload.
+  - Rebuilt the NAPI addon and reran the cold-read benchmark.
+- Files changed
+  - `engine/packages/sqlite-storage/src/optimization_flags.rs`
+  - `engine/packages/sqlite-storage/src/lib.rs`
+  - `engine/packages/sqlite-storage/src/open.rs`
+  - `rivetkit-rust/packages/rivetkit-sqlite/src/optimization_flags.rs`
+  - `.agent/notes/sqlite-cold-read-after-SQLITE-COLD-009.txt`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - SQLITE-COLD-009 benchmark numbers: insert e2e 15947.0ms, hot read e2e 167.6ms, wake read e2e 4271.7ms, wake read server 3969.8ms, wake overhead estimate 301.9ms, wake VFS get_pages 69 calls, fetched 13726 pages / 56221696 bytes, prefetch 13657 pages / 55939072 bytes, VFS transport 3749.0ms.
+  - Compared with baseline/SQLITE-COLD-001: wake get_pages dropped 1249 -> 69, wake e2e dropped 20141.0ms -> 4271.7ms, wake VFS transport dropped 19332.8ms -> 3749.0ms, and hot read was 118.6ms -> 167.6ms.
+  - Compared with SQLITE-COLD-008: wake get_pages stayed 69 -> 69, wake e2e was 4116.3ms -> 4271.7ms, wake server was 3967.7ms -> 3969.8ms, wake VFS transport was 3738.6ms -> 3749.0ms, and hot read was 156.3ms -> 167.6ms.
+  - Open-time preload remains bounded by `OpenConfig.max_total_bytes` (1 MiB default), so it improves startup working-set hydration without changing the adaptive full-scan get_pages count in this benchmark.
+  - Verification status: `cargo check -p sqlite-storage` passed; `cargo check -p rivetkit-sqlite` passed with existing Rust 2024 unsafe warnings; `cargo check -p pegboard-envoy` passed; `cargo check -p rivetkit-core --features sqlite` passed with existing warnings; `cargo test -p sqlite-storage -- --test-threads=1` passed; `cargo test -p rivetkit-sqlite -- --test-threads=1` passed with existing Rust 2024 unsafe warnings; `cargo test -p pegboard-envoy` passed; `pnpm --filter kitchen-sink check-types` passed with the known skip message; `pnpm -F rivetkit check-types` passed; `pnpm --filter @rivetkit/rivetkit-napi build:force` passed with existing warnings.
 ---
