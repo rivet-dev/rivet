@@ -16,13 +16,13 @@ use anyhow::{Context, Result};
 use tempfile::Builder;
 use uuid::Uuid;
 
-use sqlite_storage::commit::{
+use sqlite_storage_legacy::commit::{
 	CommitFinalizeRequest, CommitRequest, CommitStageBeginRequest, CommitStageRequest,
 };
-use sqlite_storage::engine::SqliteEngine;
-use sqlite_storage::ltx::{LtxHeader, encode_ltx_v3};
-use sqlite_storage::open::OpenConfig;
-use sqlite_storage::types::{DirtyPage, SQLITE_PAGE_SIZE};
+use sqlite_storage_legacy::engine::SqliteEngine;
+use sqlite_storage_legacy::ltx::{LtxHeader, encode_ltx_v3};
+use sqlite_storage_legacy::open::OpenConfig;
+use sqlite_storage_legacy::types::{DirtyPage, SQLITE_PAGE_SIZE};
 use universaldb::Subspace;
 
 async fn setup() -> Result<(SqliteEngine, tokio::sync::mpsc::UnboundedReceiver<String>)> {

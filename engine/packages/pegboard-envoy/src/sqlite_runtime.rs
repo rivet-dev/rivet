@@ -3,7 +3,7 @@ use std::sync::Arc;
 use anyhow::Result;
 use gas::prelude::StandaloneCtx;
 use rivet_envoy_protocol as protocol;
-use sqlite_storage::{compaction::CompactionCoordinator, engine::SqliteEngine, open::OpenResult};
+use sqlite_storage_legacy::{compaction::CompactionCoordinator, engine::SqliteEngine, open::OpenResult};
 use tokio::sync::OnceCell;
 use universaldb::Subspace;
 
@@ -46,7 +46,7 @@ pub fn protocol_sqlite_startup_data(startup: OpenResult) -> protocol::SqliteStar
 	}
 }
 
-pub fn protocol_sqlite_meta(meta: sqlite_storage::types::SqliteMeta) -> protocol::SqliteMeta {
+pub fn protocol_sqlite_meta(meta: sqlite_storage_legacy::types::SqliteMeta) -> protocol::SqliteMeta {
 	protocol::SqliteMeta {
 		generation: meta.generation,
 		head_txid: meta.head_txid,
@@ -59,7 +59,7 @@ pub fn protocol_sqlite_meta(meta: sqlite_storage::types::SqliteMeta) -> protocol
 }
 
 pub fn protocol_sqlite_fetched_page(
-	page: sqlite_storage::types::FetchedPage,
+	page: sqlite_storage_legacy::types::FetchedPage,
 ) -> protocol::SqliteFetchedPage {
 	protocol::SqliteFetchedPage {
 		pgno: page.pgno,

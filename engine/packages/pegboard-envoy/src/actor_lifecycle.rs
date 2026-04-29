@@ -4,7 +4,7 @@ use anyhow::{Context, Result, ensure};
 use futures_util::{StreamExt, stream};
 use gas::prelude::{Id, StandaloneCtx, util::timestamp};
 use rivet_envoy_protocol as protocol;
-use sqlite_storage::{engine::SqliteEngine, open::OpenConfig};
+use sqlite_storage_legacy::{engine::SqliteEngine, open::OpenConfig};
 
 use crate::{conn::Conn, sqlite_runtime};
 

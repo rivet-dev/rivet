@@ -3,7 +3,7 @@ use std::time::Instant;
 use anyhow::{Context, Result, ensure};
 use gas::prelude::{Id, util::timestamp};
 use rivet_envoy_protocol as protocol;
-use sqlite_storage::{
+use sqlite_storage_legacy::{
 	commit::{CommitFinalizeRequest, CommitStageBeginRequest, CommitStageRequest},
 	engine::SqliteEngine,
 	ltx::{LtxHeader, encode_ltx_v3},

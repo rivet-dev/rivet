@@ -9,7 +9,7 @@ use rivet_envoy_protocol::{self as protocol, PROTOCOL_VERSION, versioned};
 use rivet_runtime::TermSignal;
 use rivet_types::actor::RunnerPoolError;
 use rivet_types::runner_configs::RunnerConfigKind;
-use sqlite_storage::{
+use sqlite_storage_legacy::{
 	compaction::CompactionCoordinator,
 	engine::SqliteEngine,
 	open::{OpenConfig, OpenResult},

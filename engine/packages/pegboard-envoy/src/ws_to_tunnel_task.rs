@@ -10,7 +10,7 @@ use rivet_data::converted::{ActorNameKeyData, MetadataKeyData};
 use rivet_envoy_protocol::{self as protocol, PROTOCOL_VERSION, versioned};
 use rivet_guard_core::websocket_handle::WebSocketReceiver;
 use scc::HashMap;
-use sqlite_storage::error::SqliteStorageError;
+use sqlite_storage_legacy::error::SqliteStorageError;
 use std::{
 	collections::BTreeSet,
 	sync::{Arc, atomic::Ordering},
@@ -726,7 +726,7 @@ async fn handle_sqlite_get_pages(
 async fn sqlite_get_pages_ok(
 	conn: &Conn,
 	actor_id: &str,
-	pages: Vec<sqlite_storage::types::FetchedPage>,
+	pages: Vec<sqlite_storage_legacy::types::FetchedPage>,
 ) -> Result<protocol::SqliteGetPagesResponse> {
 	Ok(protocol::SqliteGetPagesResponse::SqliteGetPagesOk(
 		protocol::SqliteGetPagesOk {
@@ -764,7 +764,7 @@ async fn handle_sqlite_commit(
 		.sqlite_engine
 		.commit(
 			&request.actor_id,
-			sqlite_storage::commit::CommitRequest {
+			sqlite_storage_legacy::commit::CommitRequest {
 				generation: request.generation,
 				head_txid: request.expected_head_txid,
 				db_size_pages: request.new_db_size_pages,
@@ -824,7 +824,7 @@ async fn handle_sqlite_commit_stage(
 		.sqlite_engine
 		.commit_stage(
 			&request.actor_id,
-			sqlite_storage::commit::CommitStageRequest {
+			sqlite_storage_legacy::commit::CommitStageRequest {
 				generation: request.generation,
 				txid: request.txid,
 				chunk_idx: request.chunk_idx,
@@ -863,7 +863,7 @@ async fn handle_sqlite_commit_stage_begin(
 		.sqlite_engine
 		.commit_stage_begin(
 			&request.actor_id,
-			sqlite_storage::commit::CommitStageBeginRequest {
+			sqlite_storage_legacy::commit::CommitStageBeginRequest {
 				generation: request.generation,
 			},
 		)
@@ -904,7 +904,7 @@ async fn handle_sqlite_commit_finalize(
 		.sqlite_engine
 		.commit_finalize(
 			&request.actor_id,
-			sqlite_storage::commit::CommitFinalizeRequest {
+			sqlite_storage_legacy::commit::CommitFinalizeRequest {
 				generation: request.generation,
 				expected_head_txid: request.expected_head_txid,
 				txid: request.txid,
@@ -975,8 +975,8 @@ async fn sqlite_fence_mismatch(
 	})
 }
 
-fn storage_dirty_page(page: protocol::SqliteDirtyPage) -> sqlite_storage::types::DirtyPage {
-	sqlite_storage::types::DirtyPage {
+fn storage_dirty_page(page: protocol::SqliteDirtyPage) -> sqlite_storage_legacy::types::DirtyPage {
+	sqlite_storage_legacy::types::DirtyPage {
 		pgno: page.pgno,
 		bytes: page.bytes,
 	}
@@ -998,11 +998,11 @@ fn validate_sqlite_dirty_pages(
 	for page in dirty_pages {
 		ensure!(page.pgno > 0, "{request_name} does not accept page 0");
 		ensure!(
-			page.bytes.len() == sqlite_storage::types::SQLITE_PAGE_SIZE as usize,
+			page.bytes.len() == sqlite_storage_legacy::types::SQLITE_PAGE_SIZE as usize,
 			"{request_name} page {} had {} bytes, expected {}",
 			page.pgno,
 			page.bytes.len(),
-			sqlite_storage::types::SQLITE_PAGE_SIZE
+			sqlite_storage_legacy::types::SQLITE_PAGE_SIZE
 		);
 		ensure!(
 			seen.insert(page.pgno),

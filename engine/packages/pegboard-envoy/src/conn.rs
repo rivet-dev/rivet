@@ -15,7 +15,7 @@ use rivet_envoy_protocol::{self as protocol, versioned};
 use rivet_guard_core::WebSocketHandle;
 use rivet_types::runner_configs::RunnerConfigKind;
 use scc::HashMap;
-use sqlite_storage::engine::SqliteEngine;
+use sqlite_storage_legacy::engine::SqliteEngine;
 use universaldb::prelude::*;
 use vbare::OwnedVersionedData;
 

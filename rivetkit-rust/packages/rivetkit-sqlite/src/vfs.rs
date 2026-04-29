@@ -18,9 +18,9 @@ use moka::sync::Cache;
 use parking_lot::{Mutex, RwLock};
 use rivet_envoy_client::handle::EnvoyHandle;
 use rivet_envoy_protocol as protocol;
-use sqlite_storage::ltx::{LtxHeader, encode_ltx_v3};
+use sqlite_storage_legacy::ltx::{LtxHeader, encode_ltx_v3};
 #[cfg(test)]
-use sqlite_storage::{engine::SqliteEngine, error::SqliteStorageError};
+use sqlite_storage_legacy::{engine::SqliteEngine, error::SqliteStorageError};
 use tokio::runtime::Handle;
 #[cfg(test)]
 use tokio::sync::Notify;
@@ -159,7 +159,7 @@ impl SqliteTransport {
 							match engine
 								.open(
 									&req.actor_id,
-									sqlite_storage::open::OpenConfig::new(1),
+									sqlite_storage_legacy::open::OpenConfig::new(1),
 								)
 								.await
 							{
@@ -229,7 +229,7 @@ impl SqliteTransport {
 				match engine
 					.commit(
 						&req.actor_id,
-						sqlite_storage::commit::CommitRequest {
+						sqlite_storage_legacy::commit::CommitRequest {
 							generation: req.generation,
 							head_txid: req.expected_head_txid,
 							db_size_pages: req.new_db_size_pages,
@@ -296,7 +296,7 @@ impl SqliteTransport {
 				match engine
 					.commit_stage_begin(
 						&req.actor_id,
-						sqlite_storage::commit::CommitStageBeginRequest {
+						sqlite_storage_legacy::commit::CommitStageBeginRequest {
 							generation: req.generation,
 						},
 					)
@@ -347,7 +347,7 @@ impl SqliteTransport {
 				match engine
 					.commit_stage(
 						&req.actor_id,
-						sqlite_storage::commit::CommitStageRequest {
+						sqlite_storage_legacy::commit::CommitStageRequest {
 							generation: req.generation,
 							txid: req.txid,
 							chunk_idx: req.chunk_idx,
@@ -414,7 +414,7 @@ impl SqliteTransport {
 				match engine
 					.commit_finalize(
 						&req.actor_id,
-						sqlite_storage::commit::CommitFinalizeRequest {
+						sqlite_storage_legacy::commit::CommitFinalizeRequest {
 							generation: req.generation,
 							expected_head_txid: req.expected_head_txid,
 							txid: req.txid,
@@ -485,7 +485,7 @@ impl DirectTransportHooks {
 }
 
 #[cfg(test)]
-fn protocol_sqlite_meta(meta: sqlite_storage::types::SqliteMeta) -> protocol::SqliteMeta {
+fn protocol_sqlite_meta(meta: sqlite_storage_legacy::types::SqliteMeta) -> protocol::SqliteMeta {
 	protocol::SqliteMeta {
 		schema_version: meta.schema_version,
 		generation: meta.generation,
@@ -499,7 +499,7 @@ fn protocol_sqlite_meta(meta: sqlite_storage::types::SqliteMeta) -> protocol::Sq
 }
 
 #[cfg(test)]
-fn protocol_fetched_page(page: sqlite_storage::types::FetchedPage) -> protocol::SqliteFetchedPage {
+fn protocol_fetched_page(page: sqlite_storage_legacy::types::FetchedPage) -> protocol::SqliteFetchedPage {
 	protocol::SqliteFetchedPage {
 		pgno: page.pgno,
 		bytes: page.bytes,
@@ -507,8 +507,8 @@ fn protocol_fetched_page(page: sqlite_storage::types::FetchedPage) -> protocol::
 }
 
 #[cfg(test)]
-fn storage_dirty_page(page: protocol::SqliteDirtyPage) -> sqlite_storage::types::DirtyPage {
-	sqlite_storage::types::DirtyPage {
+fn storage_dirty_page(page: protocol::SqliteDirtyPage) -> sqlite_storage_legacy::types::DirtyPage {
+	sqlite_storage_legacy::types::DirtyPage {
 		pgno: page.pgno,
 		bytes: page.bytes,
 	}
@@ -1612,7 +1612,7 @@ async fn commit_buffered_pages(
 		&request
 			.dirty_pages
 			.iter()
-			.map(|dirty_page| sqlite_storage::types::DirtyPage {
+			.map(|dirty_page| sqlite_storage_legacy::types::DirtyPage {
 				pgno: dirty_page.pgno,
 				bytes: dirty_page.bytes.clone(),
 			})
@@ -2773,7 +2773,7 @@ mod tests {
 			let takeover = engine
 				.open(
 					actor_id,
-					sqlite_storage::open::OpenConfig::new(
+					sqlite_storage_legacy::open::OpenConfig::new(
 						sqlite_now_ms().expect("startup time should resolve"),
 					),
 				)

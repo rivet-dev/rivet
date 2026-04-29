@@ -3439,7 +3439,7 @@ dependencies = [
  "serde",
  "serde_bare",
  "serde_json",
- "sqlite-storage",
+ "sqlite-storage-legacy",
  "strum",
  "tempfile",
  "test-snapshot-gen",
@@ -3485,7 +3485,7 @@ dependencies = [
  "serde",
  "serde_bare",
  "serde_json",
- "sqlite-storage",
+ "sqlite-storage-legacy",
  "tempfile",
  "tokio",
  "tokio-tungstenite",
@@ -3583,7 +3583,7 @@ dependencies = [
  "rivet-metrics",
  "rivet-runtime",
  "rivet-types",
- "sqlite-storage",
+ "sqlite-storage-legacy",
  "tokio",
  "tracing",
  "universaldb",
@@ -4664,7 +4664,7 @@ dependencies = [
  "serde_html_form",
  "serde_json",
  "serde_yaml",
- "sqlite-storage",
+ "sqlite-storage-legacy",
  "strum",
  "tabled",
  "tempfile",
@@ -5353,7 +5353,7 @@ dependencies = [
  "parking_lot",
  "rivet-envoy-client",
  "rivet-envoy-protocol",
- "sqlite-storage",
+ "sqlite-storage-legacy",
  "tempfile",
  "tokio",
  "tracing",
@@ -6205,7 +6205,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "sqlite-storage"
+name = "sqlite-storage-legacy"
 version = "2.3.0-rc.4"
 dependencies = [
  "anyhow",

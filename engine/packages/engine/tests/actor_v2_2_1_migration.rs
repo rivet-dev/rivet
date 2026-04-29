@@ -6,7 +6,7 @@ use pegboard::actor_kv::Recipient;
 use rivet_envoy_protocol as protocol;
 use rusqlite::Connection;
 use serde::Deserialize;
-use sqlite_storage::{engine::SqliteEngine, open::OpenConfig, types::SqliteOrigin};
+use sqlite_storage_legacy::{engine::SqliteEngine, open::OpenConfig, types::SqliteOrigin};
 use test_snapshot::SnapshotTestCtx;
 
 const SNAPSHOT_NAME: &str = "actor-v2-2-1-baseline";

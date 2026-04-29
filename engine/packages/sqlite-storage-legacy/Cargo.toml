@@ -1,5 +1,5 @@
 [package]
-name = "sqlite-storage"
+name = "sqlite-storage-legacy"
 version.workspace = true
 authors.workspace = true
 license.workspace = true

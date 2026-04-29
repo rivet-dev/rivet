@@ -3,10 +3,10 @@ use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 
 use anyhow::Result;
-use sqlite_storage::commit::CommitRequest;
-use sqlite_storage::engine::SqliteEngine;
-use sqlite_storage::open::OpenConfig;
-use sqlite_storage::types::{DirtyPage, SQLITE_PAGE_SIZE};
+use sqlite_storage_legacy::commit::CommitRequest;
+use sqlite_storage_legacy::engine::SqliteEngine;
+use sqlite_storage_legacy::open::OpenConfig;
+use sqlite_storage_legacy::types::{DirtyPage, SQLITE_PAGE_SIZE};
 use tempfile::Builder;
 use tokio::time::sleep;
 use universaldb::Subspace;

@@ -5,7 +5,7 @@ use anyhow::Result;
 use gas::prelude::{Id, util::timestamp};
 use pegboard::actor_kv::Recipient;
 use rusqlite::{Connection, params};
-use sqlite_storage::{
+use sqlite_storage_legacy::{
 	commit::{CommitRequest, CommitStageBeginRequest, CommitStageRequest},
 	engine::SqliteEngine,
 	keys::meta_key,
