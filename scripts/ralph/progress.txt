@@ -14,6 +14,7 @@ Started: Wed Apr 29 04:36:56 AM PDT 2026
 - `ActorDb::commit` should update the in-memory PIDX cache only when it was already warm; leave a cold cache empty so the next read performs the full PIDX scan instead of treating a partial commit-updated cache as authoritative.
 - `sqlite-storage::pump::ActorDb::new` carries a `rivet_pools::NodeId`; production callers should pass `pools.node_id()` so pump metrics are labeled by process node.
 - `sqlite-storage` compactor UPS messages use a typed `Subject`, `PublishOpts::one()`, and local vbare encode/decode helpers so dispatch tests can verify the wire payload through the memory driver.
+- `sqlite-storage` compactor lease take/renew helpers must use `Serializable` reads on `/META/compactor_lease`; use `TransactionRetryLimit(1)` in race tests when you need to observe the OCC abort instead of UDB's automatic retry.
 
 ## 2026-04-29 04:44:52 PDT - US-001
 - Implemented a UUID-backed `NodeId` type and stored a generated value on each `Pools` instance.
@@ -126,4 +127,14 @@ Started: Wed Apr 29 04:36:56 AM PDT 2026
   - UPS queue dispatch can be tested with `universalpubsub::driver::memory::MemoryDriver` by queue-subscribing before calling the spawned publisher.
   - Add `tokio`'s `test-util` feature as a dev-dependency when a crate needs `#[tokio::test(start_paused = true)]`.
   - The compactor trigger helper intentionally returns `()` so call sites cannot accidentally await publish before responding to the actor.
+---
+## 2026-04-29 05:28:41 PDT - US-012
+- Implemented the UDB-backed compactor lease helpers for take, renew, release, and vbare encode/decode of `/META/compactor_lease`.
+- Added lease tests for empty acquisition, held-lease skip, OCC take races, renewal success, stolen/expired renewal detection, and release cleanup.
+- Verified `cargo test -p sqlite-storage --test compactor_lease`, `cargo check -p sqlite-storage`, and `cargo test -p sqlite-storage`.
+- Files changed: `engine/packages/sqlite-storage/src/compactor/lease.rs`, `engine/packages/sqlite-storage/src/compactor/mod.rs`, `engine/packages/sqlite-storage/tests/compactor_lease.rs`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
+- **Learnings for future iterations:**
+  - Lease values are local vbare payloads with `rivet_pools::NodeId` as the holder, matching the process node id used by future compactor workers.
+  - Lease take and renew must use regular `Serializable` reads so concurrent pods racing the same key conflict through UDB OCC.
+  - UDB's automatic retry hides raw OCC conflicts; set `DatabaseOption::TransactionRetryLimit(1)` in tests that need to assert one racing transaction aborts.
 ---
