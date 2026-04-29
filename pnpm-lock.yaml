@@ -1647,12 +1647,6 @@ importers:
       '@ai-sdk/openai':
         specifier: ^0.0.66
         version: 0.0.66(zod@3.25.76)
-      '@hono/node-server':
-        specifier: ^1.19.7
-        version: 1.19.13(hono@4.11.9)
-      '@hono/node-ws':
-        specifier: ^1.3.0
-        version: 1.3.0(@hono/node-server@1.19.13(hono@4.11.9))(hono@4.11.9)
       '@rivetkit/react':
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/react
@@ -1711,82 +1705,6 @@ importers:
       concurrently:
         specifier: ^9.1.2
         version: 9.2.1
-      drizzle-kit:
-        specifier: ^0.31.2
-        version: 0.31.5
-      tsx:
-        specifier: ^4.20.6
-        version: 4.21.0
-      typescript:
-        specifier: ^5.5.2
-        version: 5.9.3
-      vite:
-        specifier: ^5.0.0
-        version: 5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
-
-  examples/kitchen-sink-vercel:
-    dependencies:
-      '@ai-sdk/openai':
-        specifier: ^0.0.66
-        version: 0.0.66(zod@3.25.76)
-      '@hono/node-server':
-        specifier: ^1.19.7
-        version: 1.19.9(hono@4.11.9)
-      '@hono/node-ws':
-        specifier: ^1.3.0
-        version: 1.3.0(@hono/node-server@1.19.9(hono@4.11.9))(hono@4.11.9)
-      '@rivetkit/react':
-        specifier: workspace:*
-        version: link:../../rivetkit-typescript/packages/react
-      '@rivetkit/rivetkit-napi':
-        specifier: workspace:*
-        version: link:../../rivetkit-typescript/packages/rivetkit-napi
-      ai:
-        specifier: ^4.0.38
-        version: 4.3.19(react@19.1.0)(zod@3.25.76)
-      drizzle-orm:
-        specifier: ^0.44.2
-        version: 0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(better-sqlite3@12.8.0)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(sql.js@1.13.0)
-      fdb-tuple:
-        specifier: ^1.0.0
-        version: 1.0.0
-      hono:
-        specifier: ^4.11.3
-        version: 4.11.9
-      lucide-react:
-        specifier: ^0.439.0
-        version: 0.439.0(react@19.1.0)
-      mermaid:
-        specifier: ^11.12.2
-        version: 11.12.2
-      prism-react-renderer:
-        specifier: ^2.4.1
-        version: 2.4.1(react@19.1.0)
-      react:
-        specifier: 19.1.0
-        version: 19.1.0
-      react-dom:
-        specifier: 19.1.0
-        version: 19.1.0(react@19.1.0)
-      rivetkit:
-        specifier: workspace:*
-        version: link:../../rivetkit-typescript/packages/rivetkit
-      zod:
-        specifier: ^3.25.69
-        version: 3.25.76
-    devDependencies:
-      '@types/node':
-        specifier: ^22.13.9
-        version: 22.19.10
-      '@types/react':
-        specifier: ^19
-        version: 19.2.13
-      '@types/react-dom':
-        specifier: ^19
-        version: 19.2.3(@types/react@19.2.13)
-      '@vitejs/plugin-react':
-        specifier: ^4.2.0
-        version: 4.7.0(vite@5.4.21(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0))
       drizzle-kit:
         specifier: ^0.31.2
         version: 0.31.5
@@ -20822,15 +20740,6 @@ snapshots:
   '@hono/node-ws@1.3.0(@hono/node-server@1.14.2(hono@4.11.9))(hono@4.11.9)':
     dependencies:
       '@hono/node-server': 1.14.2(hono@4.11.9)
-      hono: 4.11.9
-      ws: 8.19.0
-    transitivePeerDependencies:
-      - bufferutil
-      - utf-8-validate
-
-  '@hono/node-ws@1.3.0(@hono/node-server@1.19.13(hono@4.11.9))(hono@4.11.9)':
-    dependencies:
-      '@hono/node-server': 1.19.13(hono@4.11.9)
       hono: 4.11.9
       ws: 8.19.0
     transitivePeerDependencies:

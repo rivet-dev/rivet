@@ -4,8 +4,8 @@ use anyhow::{Context, Result, ensure};
 use gas::prelude::{Id, StandaloneCtx, util::timestamp};
 use rivet_envoy_protocol as protocol;
 use sqlite_storage::{
-	compaction::CompactionCoordinator,
 	commit::{CommitFinalizeRequest, CommitStageBeginRequest, CommitStageRequest},
+	compaction::CompactionCoordinator,
 	engine::SqliteEngine,
 	ltx::{LtxHeader, encode_ltx_v3},
 	open::OpenConfig,

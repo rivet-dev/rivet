@@ -1,20 +1,21 @@
 import { z } from "zod";
 import { getRunMetadata } from "@/actor/config";
 import type {
-	BaseActorDefinition,
 	AnyActorDefinition,
+	BaseActorDefinition,
 } from "@/actor/definition";
 import {
 	KEYS,
-	queueMetadataKey,
 	queueMessagesPrefix,
+	queueMetadataKey,
 	workflowStoragePrefix,
 } from "@/actor/keys";
 import { ENGINE_ENDPOINT } from "@/common/engine";
 import { type Logger, LogLevelSchema } from "@/common/log";
-import { DeepReadonly, VERSION } from "@/utils";
+import { VERSION } from "@/utils";
 import { tryParseEndpoint } from "@/utils/endpoint-parser";
 import {
+	getNodeEnv,
 	getRivetEndpoint,
 	getRivetEngine,
 	getRivetNamespace,
@@ -37,7 +38,9 @@ export type RegistryActors = z.infer<typeof ActorsSchema>;
 export const TestConfigSchema = z.object({ enabled: z.boolean() });
 export type TestConfig = z.infer<typeof TestConfigSchema>;
 
-// TODO: Add sane defaults for NODE_ENV=development
+const RuntimeModeSchema = z.enum(["envoy", "serverless"]);
+export type RuntimeMode = z.infer<typeof RuntimeModeSchema>;
+
 export const RegistryConfigSchema = z
 	.object({
 		// MARK: Actors
@@ -147,9 +150,15 @@ export const RegistryConfigSchema = z
 		/**
 		 * @experimental
 		 *
+		 * Runtime mode to use when `registry.start()` is called.
+		 */
+		mode: RuntimeModeSchema.optional(),
+		/**
+		 * @experimental
+		 *
 		 * Starts the full Rust engine process locally.
 		 */
-		startEngine: z.boolean().default(() => getRivetRunEngine()),
+		startEngine: z.boolean().optional(),
 		/** @experimental */
 		engineVersion: z
 			.string()
@@ -193,7 +202,12 @@ export const RegistryConfigSchema = z
 				 *
 				 * Must be >= rivetkit-core's drain timeout (20s) + margin.
 				 */
-				gracePeriodMs: z.number().int().min(1_000).optional().default(30_000),
+				gracePeriodMs: z
+					.number()
+					.int()
+					.min(1_000)
+					.optional()
+					.default(30_000),
 				/**
 				 * If true, rivetkit will not install SIGINT/SIGTERM handlers.
 				 * Use when the host application owns signal policy and will
@@ -202,10 +216,19 @@ export const RegistryConfigSchema = z
 				disableSignalHandlers: z.boolean().optional().default(false),
 			})
 			.optional()
-			.default(() => ({ gracePeriodMs: 30_000, disableSignalHandlers: false })),
+			.default(() => ({
+				gracePeriodMs: 30_000,
+				disableSignalHandlers: false,
+			})),
 	})
 	.transform((config, ctx) => {
 		const isDevEnv = isDev();
+		const isProductionEnv = getNodeEnv() === "production";
+		const envStartEngine = getRivetRunEngine();
+		const explicitStartEngine =
+			config.startEngine !== undefined || envStartEngine;
+		let startEngine = true;
+		let runtimeMode: RuntimeMode = "envoy";
 
 		// Parse endpoint string (env var fallback is applied via transform above)
 		const parsedEndpoint = config.endpoint
@@ -217,16 +240,55 @@ export const RegistryConfigSchema = z
 				})
 			: undefined;
 
-		// Can't start a local engine and connect to a remote endpoint.
-		if (config.startEngine && parsedEndpoint) {
+		if (isProductionEnv) {
+			startEngine = false;
+			runtimeMode = "serverless";
+		}
+
+		if (parsedEndpoint) {
+			startEngine = false;
+			runtimeMode = "serverless";
+		}
+
+		if (config.mode === "envoy") {
+			startEngine = false;
+			runtimeMode = "envoy";
+		} else if (config.mode === "serverless") {
+			startEngine = false;
+			runtimeMode = "serverless";
+		}
+
+		if (explicitStartEngine) {
+			startEngine = config.startEngine ?? envStartEngine;
+			if (startEngine) {
+				runtimeMode = "envoy";
+			}
+		}
+
+		if (explicitStartEngine && startEngine && parsedEndpoint) {
 			ctx.addIssue({
 				code: "custom",
-				message: "cannot specify both startEngine and endpoint",
+				message:
+					"cannot specify startEngine: true with a Rivet endpoint",
+			});
+		}
+
+		if (!startEngine && !parsedEndpoint) {
+			ctx.addIssue({
+				code: "custom",
+				message: "Rivet endpoint is required when startEngine is false",
+			});
+		}
+
+		if (runtimeMode === "serverless" && startEngine) {
+			ctx.addIssue({
+				code: "custom",
+				message: "serverless runtime cannot start the local engine",
 			});
 		}
 
 		// configurePool requires an engine (via endpoint or startEngine).
-		if (config.configurePool && !parsedEndpoint && !config.startEngine) {
+		if (config.configurePool && !parsedEndpoint && !startEngine) {
 			ctx.addIssue({
 				code: "custom",
 				message:
@@ -236,12 +298,11 @@ export const RegistryConfigSchema = z
 
 		// Flatten the endpoint and apply defaults for namespace/token
 		// If startEngine is enabled, set endpoint to the engine endpoint.
-		const endpoint = config.startEngine
+		const endpoint = startEngine
 			? ENGINE_ENDPOINT
-			: (parsedEndpoint?.endpoint ??
-				(isDevEnv ? ENGINE_ENDPOINT : undefined));
+			: parsedEndpoint?.endpoint;
 		const validateServerlessEndpoint = Boolean(
-			config.startEngine || parsedEndpoint,
+			startEngine || parsedEndpoint,
 		);
 		// Namespace priority: parsed from endpoint URL > config value (includes env var) > "default"
 		const namespace =
@@ -272,7 +333,7 @@ export const RegistryConfigSchema = z
 		// In dev mode, clients connect directly to the local Rivet Engine.
 		const publicEndpoint =
 			parsedPublicEndpoint?.endpoint ??
-			(isDevEnv && config.startEngine ? ENGINE_ENDPOINT : undefined);
+			(isDevEnv && startEngine ? ENGINE_ENDPOINT : undefined);
 		// We extract publicNamespace to validate that it matches the backend
 		// namespace (see validation above), not for functional use.
 		const publicNamespace = parsedPublicEndpoint?.namespace;
@@ -282,6 +343,8 @@ export const RegistryConfigSchema = z
 		// If endpoint is set or starting the engine, we'll use the engine driver.
 		return {
 			...config,
+			startEngine,
+			runtimeMode,
 			endpoint,
 			namespace,
 			token,
@@ -516,11 +579,14 @@ export const DocRegistryConfigSchema = z
 			.string()
 			.optional()
 			.describe("Host to bind the local HTTP server to."),
+		mode: RuntimeModeSchema.optional().describe(
+			"Runtime mode for registry.start(). Defaults to 'envoy' for local development and 'serverless' when a Rivet endpoint or production environment is configured.",
+		),
 		startEngine: z
 			.boolean()
 			.optional()
 			.describe(
-				"Starts the full Rust engine process locally. Default: false",
+				"Starts the full Rust engine process locally. Defaults to true for local development and false when a Rivet endpoint or production environment is configured.",
 			),
 		engineVersion: z
 			.string()

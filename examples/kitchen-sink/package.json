@@ -5,10 +5,10 @@
 	"type": "module",
 	"packageManager": "pnpm@10.13.1",
 	"scripts": {
-		"dev": "concurrently -n server,vite \"node --import @rivetkit/sql-loader --import tsx src/server.ts\" \"vite\"",
+		"dev": "concurrently -n registry,vite \"node --import @rivetkit/sql-loader --import tsx src/start.ts\" \"vite\"",
 		"check-types": "echo 'skipped - workflow history types broken'",
 		"build": "vite build",
-		"start": "node --import @rivetkit/sql-loader --import tsx src/server.ts",
+		"start": "node --import @rivetkit/sql-loader --import tsx src/start.ts",
 		"smoke:raw-websocket-serverless": "tsx scripts/raw-websocket-serverless-smoke.ts",
 		"benchmark": "tsx scripts/benchmark.ts",
 		"db:generate": "find src/actors -name drizzle.config.ts -exec drizzle-kit generate --config {} \\;"
@@ -27,8 +27,6 @@
 	"dependencies": {
 		"@ai-sdk/openai": "^0.0.66",
 		"drizzle-orm": "^0.44.2",
-		"@hono/node-server": "^1.19.7",
-		"@hono/node-ws": "^1.3.0",
 		"@rivetkit/react": "*",
 		"@rivetkit/sql-loader": "*",
 		"@rivetkit/rivetkit-napi": "*",

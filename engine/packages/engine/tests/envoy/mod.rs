@@ -1,4 +1,3 @@
-pub mod auth;
 pub mod actors_alarm;
 pub mod actors_kv_crud;
 pub mod actors_kv_delete_range;
@@ -11,4 +10,5 @@ pub mod api_actors_delete;
 pub mod api_actors_get_or_create;
 pub mod api_actors_list;
 pub mod api_actors_list_names;
+pub mod auth;
 pub mod serverless_outbound_sqlite_lifecycle;

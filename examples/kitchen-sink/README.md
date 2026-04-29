@@ -41,9 +41,9 @@ The harness uses raw SQLite only. It checks live rows against an operation log, 
 
 ## Implementation
 
-The kitchen-sink registry imports fixtures and example actors into one setup so each page can expose a curated subset.
+The kitchen-sink registry imports fixtures and example actors into one setup. The local runtime entry point starts it with `registry.start()`.
 
-See the registry in [`src/actors.ts`](https://github.com/rivet-dev/rivet/tree/main/examples/kitchen-sink/src/actors.ts) and the UI in [`frontend/App.tsx`](https://github.com/rivet-dev/rivet/tree/main/examples/kitchen-sink/frontend/App.tsx).
+See the registry in [`src/index.ts`](https://github.com/rivet-dev/rivet/tree/main/examples/kitchen-sink/src/index.ts), the runtime entry in [`src/start.ts`](https://github.com/rivet-dev/rivet/tree/main/examples/kitchen-sink/src/start.ts), and the UI in [`frontend/App.tsx`](https://github.com/rivet-dev/rivet/tree/main/examples/kitchen-sink/frontend/App.tsx).
 
 ## Resources
 

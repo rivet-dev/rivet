@@ -1,6 +1,5 @@
-import { stringifyError } from "@/common/utils";
 import type { Context as HonoContext, Handler as HonoHandler } from "hono";
-import { stringify as uuidstringify } from "uuid";
+import { stringifyError } from "@/common/utils";
 import pkgJson from "../package.json" with { type: "json" };
 import { getLogger } from "./common/log";
 import { assertUnreachable } from "./common/utils";
@@ -143,10 +142,17 @@ export type GetUpgradeWebSocket = () => UpgradeWebSocket;
  * @experimental
  */
 export function getEnvUniversal(key: string): string | undefined {
-	if (typeof Deno !== "undefined") {
-		return Deno.env.get(key);
+	const global = globalThis as typeof globalThis & {
+		Deno?: { env?: { get?: (key: string) => string | undefined } };
+		Bun?: { env?: Record<string, string | undefined> };
+	};
+
+	if (typeof global.Deno?.env?.get === "function") {
+		return global.Deno.env.get(key);
+	} else if (global.Bun?.env?.[key] !== undefined) {
+		return global.Bun.env[key];
 	} else if (typeof process !== "undefined") {
-		// Do this after Deno since `process` is sometimes polyfilled
+		// Do this after Deno and Bun since `process` is sometimes polyfilled.
 		return process.env[key];
 	}
 }

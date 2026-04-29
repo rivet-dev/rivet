@@ -106,5 +106,7 @@ pub enum ServerlessRunnerPool {
 		"failed_to_fetch_metadata",
 		"Failed to fetch serverless metadata: {reason}."
 	)]
-	FailedToFetchMetadata { reason: ServerlessMetadataErrorEnvelope },
+	FailedToFetchMetadata {
+		reason: ServerlessMetadataErrorEnvelope,
+	},
 }

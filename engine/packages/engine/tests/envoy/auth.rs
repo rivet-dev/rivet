@@ -3,11 +3,7 @@ use super::super::common;
 use futures_util::StreamExt;
 use tokio_tungstenite::{
 	connect_async,
-	tungstenite::{
-		Message,
-		client::IntoClientRequest,
-		error::Error as WsError,
-	},
+	tungstenite::{Message, client::IntoClientRequest, error::Error as WsError},
 };
 
 fn envoy_connect_url(port: u16, namespace: &str, envoy_key: &str) -> String {
@@ -27,13 +23,17 @@ fn envoy_connect_rejects_bad_token() {
 			.with_auth_admin_token("good-token")
 			.with_timeout(20),
 		|ctx| async move {
-			let mut request =
-				envoy_connect_url(ctx.leader_dc().guard_port(), "auth-namespace", "bad-token-envoy")
-					.into_client_request()
-					.expect("failed to create envoy connect request");
-			request
-				.headers_mut()
-				.insert("Sec-WebSocket-Protocol", "rivet, rivet_token.bad-token".parse().unwrap());
+			let mut request = envoy_connect_url(
+				ctx.leader_dc().guard_port(),
+				"auth-namespace",
+				"bad-token-envoy",
+			)
+			.into_client_request()
+			.expect("failed to create envoy connect request");
+			request.headers_mut().insert(
+				"Sec-WebSocket-Protocol",
+				"rivet, rivet_token.bad-token".parse().unwrap(),
+			);
 
 			assert_envoy_rejection(request, "forbidden").await;
 		},
@@ -42,35 +42,41 @@ fn envoy_connect_rejects_bad_token() {
 
 #[test]
 fn envoy_connect_rejects_wrong_namespace() {
-	common::run(common::TestOpts::new(1).with_timeout(20), |ctx| async move {
-		let mut request = envoy_connect_url(
-			ctx.leader_dc().guard_port(),
-			"missing-namespace",
-			"wrong-namespace-envoy",
-		)
-		.into_client_request()
-		.expect("failed to create envoy connect request");
-		request
-			.headers_mut()
-			.insert("Sec-WebSocket-Protocol", "rivet".parse().unwrap());
+	common::run(
+		common::TestOpts::new(1).with_timeout(20),
+		|ctx| async move {
+			let mut request = envoy_connect_url(
+				ctx.leader_dc().guard_port(),
+				"missing-namespace",
+				"wrong-namespace-envoy",
+			)
+			.into_client_request()
+			.expect("failed to create envoy connect request");
+			request
+				.headers_mut()
+				.insert("Sec-WebSocket-Protocol", "rivet".parse().unwrap());
 
-		assert_envoy_rejection(request, "namespace").await;
-	});
+			assert_envoy_rejection(request, "namespace").await;
+		},
+	);
 }
 
 #[test]
 fn envoy_connect_rejects_invalid_envoy_key() {
-	common::run(common::TestOpts::new(1).with_timeout(20), |ctx| async move {
-		let (namespace, _) = common::setup_test_namespace(ctx.leader_dc()).await;
-		let mut request = envoy_connect_url(ctx.leader_dc().guard_port(), &namespace, "!!")
-			.into_client_request()
-			.expect("failed to create envoy connect request");
-		request
-			.headers_mut()
-			.insert("Sec-WebSocket-Protocol", "rivet".parse().unwrap());
+	common::run(
+		common::TestOpts::new(1).with_timeout(20),
+		|ctx| async move {
+			let (namespace, _) = common::setup_test_namespace(ctx.leader_dc()).await;
+			let mut request = envoy_connect_url(ctx.leader_dc().guard_port(), &namespace, "!!")
+				.into_client_request()
+				.expect("failed to create envoy connect request");
+			request
+				.headers_mut()
+				.insert("Sec-WebSocket-Protocol", "rivet".parse().unwrap());
 
-		assert_envoy_rejection(request, "invalid_url").await;
-	});
+			assert_envoy_rejection(request, "invalid_url").await;
+		},
+	);
 }
 
 async fn assert_envoy_rejection(

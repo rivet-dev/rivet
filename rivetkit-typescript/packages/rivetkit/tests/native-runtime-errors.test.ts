@@ -1,10 +1,10 @@
+import { describe, expect, test } from "vitest";
 import { actor, setup } from "@/mod";
 import { RivetError } from "../src/actor/errors";
 import {
-	NativeActorContextAdapter,
 	buildNativeRegistry,
+	NativeActorContextAdapter,
 } from "../src/registry/native";
-import { describe, expect, test } from "vitest";
 
 const testActor = actor({
 	state: {},
@@ -83,6 +83,7 @@ describe("native runtime config errors", () => {
 				test: testActor,
 			},
 			startEngine: false,
+			endpoint: "http://127.0.0.1:6642",
 		});
 		const config = registry.parseConfig();
 		config.endpoint = undefined as never;

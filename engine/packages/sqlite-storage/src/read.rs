@@ -464,8 +464,7 @@ mod tests {
 	use crate::test_utils::{assert_op_count, clear_op_count, read_value, test_db};
 	use crate::types::{
 		DBHead, DirtyPage, FetchedPage, SQLITE_DEFAULT_MAX_STORAGE_BYTES, SQLITE_PAGE_SIZE,
-		SQLITE_SHARD_SIZE, SQLITE_VFS_V2_SCHEMA_VERSION, SqliteOrigin, encode_db_head,
-		new_db_head,
+		SQLITE_SHARD_SIZE, SQLITE_VFS_V2_SCHEMA_VERSION, SqliteOrigin, encode_db_head, new_db_head,
 	};
 	use crate::udb::{WriteOp, apply_write_ops};
 
@@ -817,10 +816,7 @@ mod tests {
 			&engine.db,
 			&engine.subspace,
 			engine.op_counter.as_ref(),
-			vec![WriteOp::put(
-				meta_key(TEST_ACTOR),
-				encode_db_head(&head)?,
-			)],
+			vec![WriteOp::put(meta_key(TEST_ACTOR), encode_db_head(&head)?)],
 		)
 		.await?;
 		engine.open(TEST_ACTOR, OpenConfig::new(0)).await?;
@@ -845,10 +841,7 @@ mod tests {
 			&engine.db,
 			&engine.subspace,
 			engine.op_counter.as_ref(),
-			vec![WriteOp::put(
-				meta_key(TEST_ACTOR),
-				encode_db_head(&head)?,
-			)],
+			vec![WriteOp::put(meta_key(TEST_ACTOR), encode_db_head(&head)?)],
 		)
 		.await?;
 		engine.open(TEST_ACTOR, OpenConfig::new(0)).await?;

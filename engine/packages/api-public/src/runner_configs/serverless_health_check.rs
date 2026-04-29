@@ -34,8 +34,12 @@ pub struct ServerlessHealthCheckRequest {
 #[serde(rename_all = "snake_case")]
 #[schema(as = RunnerConfigsServerlessHealthCheckResponse)]
 pub enum ServerlessHealthCheckResponse {
-	Success { version: String },
-	Failure { error: ServerlessMetadataErrorEnvelope },
+	Success {
+		version: String,
+	},
+	Failure {
+		error: ServerlessMetadataErrorEnvelope,
+	},
 }
 
 #[utoipa::path(

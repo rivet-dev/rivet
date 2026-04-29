@@ -94,9 +94,7 @@ async fn serverless_outbound_releases_sqlite_when_outbound_future_is_dropped() -
 	let task_actor_id = actor_id.clone();
 	let task_cleanup_notify = cleanup_notify.clone();
 	let task = tokio::spawn(async move {
-		let open = task_engine
-			.open(&task_actor_id, OpenConfig::new(1))
-			.await?;
+		let open = task_engine.open(&task_actor_id, OpenConfig::new(1)).await?;
 		let _guard = ForceCloseOnDrop {
 			engine: task_engine,
 			actor_id: task_actor_id,
@@ -118,7 +116,9 @@ async fn serverless_outbound_releases_sqlite_when_outbound_future_is_dropped() -
 	);
 
 	task.abort();
-	let join_err = task.await.expect_err("aborted task should not finish cleanly");
+	let join_err = task
+		.await
+		.expect_err("aborted task should not finish cleanly");
 	assert!(join_err.is_cancelled(), "unexpected join error: {join_err}");
 	cleanup_notify.notified().await;
 
@@ -184,8 +184,7 @@ async fn start_mock_serverless_stream_ended_early()
 /// event so the client sees a healthy connection, and then parks indefinitely so the
 /// engine's `serverless_outbound_req` is held in `source.next()` until `request_lifespan`
 /// triggers the drain path.
-async fn start_mock_serverless_hang()
--> (SocketAddr, tokio::task::JoinHandle<()>, Arc<AtomicU32>) {
+async fn start_mock_serverless_hang() -> (SocketAddr, tokio::task::JoinHandle<()>, Arc<AtomicU32>) {
 	let connection_count = Arc::new(AtomicU32::new(0));
 	let connection_count_clone = connection_count.clone();
 
@@ -379,7 +378,8 @@ fn serverless_outbound_releases_sqlite_after_stream_ended_early_integration() {
 			// `create` op dispatches the v2 (actor2) workflow that drives pegboard-outbound.
 			// Without this the actor would fall back to the legacy serverless conn workflow
 			// which does not exercise the bug surface.
-			wait_for_protocol_version(&ctx, &namespace, &runner_name, Duration::from_secs(20)).await;
+			wait_for_protocol_version(&ctx, &namespace, &runner_name, Duration::from_secs(20))
+				.await;
 
 			// Snapshot the log buffer before any test-owned actor runs so leak lines from
 			// earlier tests in the same process are excluded from the assertion.
@@ -468,7 +468,8 @@ fn serverless_outbound_releases_sqlite_when_outbound_request_lifespan_elapses_in
 			)
 			.await;
 
-			wait_for_protocol_version(&ctx, &namespace, &runner_name, Duration::from_secs(20)).await;
+			wait_for_protocol_version(&ctx, &namespace, &runner_name, Duration::from_secs(20))
+				.await;
 
 			let leak_watcher = LeakWatcher::new();
 

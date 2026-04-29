@@ -175,13 +175,9 @@ mod tests {
 
 		let prefix = pidx_delta_prefix(TEST_ACTOR);
 		counter.store(0, std::sync::atomic::Ordering::SeqCst);
-		let index = DeltaPageIndex::load_from_store(
-			&db,
-			&subspace,
-			counter.as_ref(),
-			prefix.clone(),
-		)
-		.await?;
+		let index =
+			DeltaPageIndex::load_from_store(&db, &subspace, counter.as_ref(), prefix.clone())
+				.await?;
 
 		assert_eq!(index.get(2), Some(21));
 		assert_eq!(index.get(8), Some(81));

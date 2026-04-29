@@ -7,9 +7,8 @@
 //   SMOKE_STAGGER_MS=1000 \
 //   pnpm --filter kitchen-sink smoke:raw-websocket-serverless
 //
-// The serverless pool is configured by the kitchen-sink server when
-// RIVET_SERVERLESS_URL is set. It uses a 30s request lifespan and a 5s drain
-// grace period by default.
+// The serverless pool must be configured separately before running this smoke
+// test. This script only drives traffic through the configured pool.
 
 import { createClient } from "rivetkit/client";
 import type { registry } from "../src/index.ts";

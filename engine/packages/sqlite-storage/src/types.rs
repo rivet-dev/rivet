@@ -8,8 +8,8 @@
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
-pub use rivet_sqlite_storage_protocol::{DBHead, SqliteOrigin};
 use rivet_sqlite_storage_protocol::versioned;
+pub use rivet_sqlite_storage_protocol::{DBHead, SqliteOrigin};
 
 pub const SQLITE_VFS_V2_SCHEMA_VERSION: u32 = 2;
 pub const SQLITE_PAGE_SIZE: u32 = 4096;
