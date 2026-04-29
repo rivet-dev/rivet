@@ -39,4 +39,14 @@ impl ActorDb {
 		}
 	}
 
+	pub fn take_metering_snapshot(&self) -> (u64, u64) {
+		let mut commit_bytes = self.commit_bytes_since_rollup.lock();
+		let mut read_bytes = self.read_bytes_since_rollup.lock();
+		let snapshot = (*commit_bytes, *read_bytes);
+
+		*commit_bytes = 0;
+		*read_bytes = 0;
+
+		snapshot
+	}
 }

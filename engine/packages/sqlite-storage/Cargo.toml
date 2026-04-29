@@ -14,6 +14,7 @@ futures-util.workspace = true
 gas.workspace = true
 lazy_static.workspace = true
 lz4_flex.workspace = true
+namespace.workspace = true
 parking_lot.workspace = true
 rivet-cache.workspace = true
 rivet-config.workspace = true
@@ -29,6 +30,7 @@ tokio-util.workspace = true
 tracing.workspace = true
 universaldb.workspace = true
 universalpubsub.workspace = true
+util.workspace = true
 vbare.workspace = true
 
 [dev-dependencies]

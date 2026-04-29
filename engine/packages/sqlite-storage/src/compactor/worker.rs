@@ -10,9 +10,11 @@ use tokio::{
 use tokio_util::sync::CancellationToken;
 use universalpubsub::NextOutput;
 
+use crate::pump::quota;
+
 use super::{
-	SqliteCompactSubject, TakeOutcome, compact_default_batch, decode_compact_payload, lease,
-	publish::Ups,
+	SqliteCompactPayload, SqliteCompactSubject, TakeOutcome, compact_default_batch,
+	decode_compact_payload, lease, publish::Ups,
 };
 
 const COMPACTOR_QUEUE_GROUP: &str = "compactor";
@@ -130,7 +132,7 @@ async fn run_with_node_id(
 							let Ok(_permit) = semaphore.acquire_owned().await else {
 								return;
 							};
-							if let Err(err) = handle_trigger(udb, payload.actor_id, compactor_config, holder_id, shutdown).await {
+							if let Err(err) = handle_trigger(udb, payload, compactor_config, holder_id, shutdown).await {
 								tracing::warn!(?err, "sqlite compactor trigger failed");
 							}
 						});
@@ -159,7 +161,7 @@ async fn run_with_node_id(
 
 async fn handle_trigger(
 	udb: Arc<universaldb::Database>,
-	actor_id: String,
+	payload: SqliteCompactPayload,
 	compactor_config: CompactorConfig,
 	holder_id: rivet_pools::NodeId,
 	shutdown: CancellationToken,
@@ -168,6 +170,7 @@ async fn handle_trigger(
 		return Ok(());
 	}
 
+	let actor_id = payload.actor_id.clone();
 	let now_ms = now_ms()?;
 	let take_outcome = udb
 		.run({
@@ -205,12 +208,16 @@ async fn handle_trigger(
 	);
 	let deadline_handle = spawn_deadline_task(deadline_rx, cancel_token.clone());
 
-	let result = compact_default_batch(
-		Arc::clone(&udb),
-		actor_id.clone(),
-		compactor_config.batch_size_deltas,
-		cancel_token.clone(),
-	)
+	let result = async {
+		compact_default_batch(
+			Arc::clone(&udb),
+			actor_id.clone(),
+			compactor_config.batch_size_deltas,
+			cancel_token.clone(),
+		)
+		.await?;
+		emit_metering_rollup(Arc::clone(&udb), payload).await
+	}
 	.await;
 
 	cancel_token.cancel();
@@ -232,6 +239,65 @@ async fn handle_trigger(
 	}
 
 	result.map(|_| ())
+}
+
+async fn emit_metering_rollup(
+	udb: Arc<universaldb::Database>,
+	payload: SqliteCompactPayload,
+) -> Result<()> {
+	let Some(namespace_id) = payload.namespace_id else {
+		tracing::debug!(
+			actor_id = %payload.actor_id,
+			"skipping sqlite metering rollup without namespace id"
+		);
+		return Ok(());
+	};
+	let Some(actor_name) = payload.actor_name else {
+		tracing::debug!(
+			actor_id = %payload.actor_id,
+			"skipping sqlite metering rollup without actor name"
+		);
+		return Ok(());
+	};
+	let actor_id = payload.actor_id;
+	let commit_bytes_since_rollup = payload.commit_bytes_since_rollup;
+	let read_bytes_since_rollup = payload.read_bytes_since_rollup;
+
+	udb.run(move |tx| {
+		let actor_id = actor_id.clone();
+		let actor_name = actor_name.clone();
+
+		async move {
+			let storage_used = quota::read(&tx, &actor_id).await?;
+			let namespace_tx = tx.with_subspace(namespace::keys::subspace());
+			namespace::keys::metric::inc(
+				&namespace_tx,
+				namespace_id,
+				namespace::keys::metric::Metric::SqliteStorageUsed(actor_name.clone()),
+				storage_used,
+			);
+			namespace::keys::metric::inc(
+				&namespace_tx,
+				namespace_id,
+				namespace::keys::metric::Metric::SqliteCommitBytes(actor_name.clone()),
+				round_down_billable_bytes(commit_bytes_since_rollup)?,
+			);
+			namespace::keys::metric::inc(
+				&namespace_tx,
+				namespace_id,
+				namespace::keys::metric::Metric::SqliteReadBytes(actor_name),
+				round_down_billable_bytes(read_bytes_since_rollup)?,
+			);
+
+			Ok(())
+		}
+	})
+	.await
+}
+
+fn round_down_billable_bytes(bytes: u64) -> Result<i64> {
+	let rounded = bytes / util::metric::KV_BILLABLE_CHUNK * util::metric::KV_BILLABLE_CHUNK;
+	i64::try_from(rounded).context("sqlite metering bytes exceeded i64")
 }
 
 fn spawn_renewal_task(
@@ -362,9 +428,30 @@ pub mod test_hooks {
 		compactor_config: CompactorConfig,
 		cancel_token: CancellationToken,
 	) -> Result<()> {
+		handle_payload_once(
+			udb,
+			SqliteCompactPayload {
+				actor_id,
+				namespace_id: None,
+				actor_name: None,
+				commit_bytes_since_rollup: 0,
+				read_bytes_since_rollup: 0,
+			},
+			compactor_config,
+			cancel_token,
+		)
+		.await
+	}
+
+	pub async fn handle_payload_once(
+		udb: Arc<universaldb::Database>,
+		payload: SqliteCompactPayload,
+		compactor_config: CompactorConfig,
+		cancel_token: CancellationToken,
+	) -> Result<()> {
 		handle_trigger(
 			udb,
-			actor_id,
+			payload,
 			compactor_config,
 			rivet_pools::NodeId::new(),
 			cancel_token,

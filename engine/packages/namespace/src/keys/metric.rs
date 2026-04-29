@@ -24,6 +24,12 @@ pub enum Metric {
 	Requests(String, String),
 	/// Count (actor name, type)
 	ActiveRequests(String, String),
+	/// Bytes (actor name)
+	SqliteStorageUsed(String),
+	/// Bytes (actor name)
+	SqliteCommitBytes(String),
+	/// Bytes (actor name)
+	SqliteReadBytes(String),
 }
 
 impl Metric {
@@ -39,6 +45,9 @@ impl Metric {
 			Metric::GatewayEgress(_, _) => MetricVariant::GatewayEgress,
 			Metric::Requests(_, _) => MetricVariant::Requests,
 			Metric::ActiveRequests(_, _) => MetricVariant::ActiveRequests,
+			Metric::SqliteStorageUsed(_) => MetricVariant::SqliteStorageUsed,
+			Metric::SqliteCommitBytes(_) => MetricVariant::SqliteCommitBytes,
+			Metric::SqliteReadBytes(_) => MetricVariant::SqliteReadBytes,
 		}
 	}
 }
@@ -55,6 +64,9 @@ enum MetricVariant {
 	GatewayEgress = 7,
 	Requests = 8,
 	ActiveRequests = 9,
+	SqliteStorageUsed = 10,
+	SqliteCommitBytes = 11,
+	SqliteReadBytes = 12,
 }
 
 impl std::fmt::Display for MetricVariant {
@@ -70,6 +82,9 @@ impl std::fmt::Display for MetricVariant {
 			MetricVariant::GatewayEgress => write!(f, "gateway_egress"),
 			MetricVariant::Requests => write!(f, "requests"),
 			MetricVariant::ActiveRequests => write!(f, "active_requests"),
+			MetricVariant::SqliteStorageUsed => write!(f, "sqlite_storage_used"),
+			MetricVariant::SqliteCommitBytes => write!(f, "sqlite_commit_bytes"),
+			MetricVariant::SqliteReadBytes => write!(f, "sqlite_read_bytes"),
 		}
 	}
 }
@@ -137,6 +152,9 @@ impl TuplePack for MetricKey {
 			Metric::ActiveRequests(actor_name, req_type) => {
 				(actor_name, req_type).pack(w, tuple_depth)?
 			}
+			Metric::SqliteStorageUsed(actor_name) => actor_name.pack(w, tuple_depth)?,
+			Metric::SqliteCommitBytes(actor_name) => actor_name.pack(w, tuple_depth)?,
+			Metric::SqliteReadBytes(actor_name) => actor_name.pack(w, tuple_depth)?,
 		};
 
 		std::result::Result::Ok(offset)
@@ -262,6 +280,39 @@ impl<'de> TupleUnpack<'de> for MetricKey {
 					MetricKey {
 						namespace_id,
 						metric: Metric::ActiveRequests(actor_name, req_type),
+					},
+				)
+			}
+			MetricVariant::SqliteStorageUsed => {
+				let (input, actor_name) = String::unpack(input, tuple_depth)?;
+
+				(
+					input,
+					MetricKey {
+						namespace_id,
+						metric: Metric::SqliteStorageUsed(actor_name),
+					},
+				)
+			}
+			MetricVariant::SqliteCommitBytes => {
+				let (input, actor_name) = String::unpack(input, tuple_depth)?;
+
+				(
+					input,
+					MetricKey {
+						namespace_id,
+						metric: Metric::SqliteCommitBytes(actor_name),
+					},
+				)
+			}
+			MetricVariant::SqliteReadBytes => {
+				let (input, actor_name) = String::unpack(input, tuple_depth)?;
+
+				(
+					input,
+					MetricKey {
+						namespace_id,
+						metric: Metric::SqliteReadBytes(actor_name),
 					},
 				)
 			}

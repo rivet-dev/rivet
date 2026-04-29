@@ -13,7 +13,7 @@ pub use lease::{
 };
 pub use publish::{
 	SQLITE_COMPACT_PAYLOAD_VERSION, SqliteCompactPayload, Ups, decode_compact_payload,
-	encode_compact_payload, publish_compact_trigger,
+	encode_compact_payload, publish_compact_payload, publish_compact_trigger,
 };
 pub use shard::fold_shard;
 pub use subjects::{SQLITE_COMPACT_SUBJECT, SqliteCompactSubject};

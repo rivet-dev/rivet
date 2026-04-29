@@ -1,6 +1,7 @@
 use std::{sync::Arc, time::Duration};
 
 use anyhow::Result;
+use gas::prelude::Id;
 use rivet_pools::NodeId;
 use sqlite_storage::compactor::{
 	CompactorConfig, CompactorLease, SQLITE_COMPACT_PAYLOAD_VERSION, SQLITE_COMPACT_SUBJECT,
@@ -138,11 +139,15 @@ fn compact_payload_round_trips_with_embedded_version() {
 	for payload in [
 		SqliteCompactPayload {
 			actor_id: String::new(),
+			namespace_id: None,
+			actor_name: None,
 			commit_bytes_since_rollup: 0,
 			read_bytes_since_rollup: 0,
 		},
 		SqliteCompactPayload {
 			actor_id: "actor-a".to_string(),
+			namespace_id: Some(Id::new_v1(1)),
+			actor_name: Some("actor-a".to_string()),
 			commit_bytes_since_rollup: u64::MAX,
 			read_bytes_since_rollup: u64::MAX - 1,
 		},
@@ -198,6 +203,8 @@ async fn publish_compact_trigger_sends_fire_and_forget_ups_message() {
 		payload,
 		SqliteCompactPayload {
 			actor_id: "actor-a".to_string(),
+			namespace_id: None,
+			actor_name: None,
 			commit_bytes_since_rollup: 0,
 			read_bytes_since_rollup: 0,
 		}

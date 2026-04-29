@@ -1,12 +1,15 @@
 use std::sync::Arc;
 
 use anyhow::Result;
+use gas::prelude::Id;
+use namespace::keys::metric::{Metric, MetricKey};
 use sqlite_storage::{
-	compactor::{compact::test_hooks, compact_default_batch, fold_shard},
+	compactor::{SqliteCompactPayload, compact::test_hooks, compact_default_batch, fold_shard, worker},
 	keys::{
 		PAGE_SIZE, delta_chunk_key, meta_compact_key, meta_head_key, pidx_delta_key, shard_key,
 	},
 	ltx::{LtxHeader, decode_ltx_v3, encode_ltx_v3},
+	quota,
 	types::{
 		DBHead, DirtyPage, MetaCompact, decode_meta_compact, encode_db_head,
 		encode_meta_compact,
@@ -89,6 +92,47 @@ async fn read_compact_txid(db: &universaldb::Database) -> Result<u64> {
 	Ok(decode_meta_compact(&bytes)?.materialized_txid)
 }
 
+async fn read_quota(db: &universaldb::Database, actor_id: &str) -> Result<i64> {
+	let actor_id = actor_id.to_string();
+	db.run(move |tx| {
+		let actor_id = actor_id.clone();
+		async move { quota::read(&tx, &actor_id).await }
+	})
+	.await
+}
+
+#[derive(Clone, Copy)]
+enum TestMetric {
+	StorageUsed,
+	CommitBytes,
+	ReadBytes,
+}
+
+async fn read_sqlite_metric(
+	db: &universaldb::Database,
+	namespace_id: Id,
+	actor_name: &str,
+	metric: TestMetric,
+) -> Result<i64> {
+	let actor_name = actor_name.to_string();
+	db.run(move |tx| {
+		let actor_name = actor_name.clone();
+		async move {
+			let metric = match metric {
+				TestMetric::StorageUsed => Metric::SqliteStorageUsed(actor_name),
+				TestMetric::CommitBytes => Metric::SqliteCommitBytes(actor_name),
+				TestMetric::ReadBytes => Metric::SqliteReadBytes(actor_name),
+			};
+			let tx = tx.with_subspace(namespace::keys::subspace());
+			Ok(tx
+				.read_opt(&MetricKey::new(namespace_id, metric), Snapshot)
+				.await?
+				.unwrap_or(0))
+		}
+	})
+	.await
+}
+
 async fn read_shard(db: &universaldb::Database, shard_id: u32) -> Result<Vec<DirtyPage>> {
 	let bytes = db
 		.run(move |tx| async move {
@@ -150,6 +194,18 @@ async fn seed_compaction_case(
 	}
 
 	seed(db, writes).await
+}
+
+async fn seed_quota(db: &universaldb::Database, actor_id: &str, storage_used: i64) -> Result<()> {
+	let actor_id = actor_id.to_string();
+	db.run(move |tx| {
+		let actor_id = actor_id.clone();
+		async move {
+			quota::atomic_add(&tx, &actor_id, storage_used);
+			Ok(())
+		}
+	})
+	.await
 }
 
 async fn write_newer_page(db: &universaldb::Database, pgno: u32, txid: u64, fill: u8) -> Result<()> {
@@ -431,6 +487,59 @@ async fn compact_conflicts_with_concurrent_shrink_after_head_read() -> Result<()
 			.downcast_ref::<DatabaseError>()
 			.is_some_and(|err| matches!(err, DatabaseError::MaxRetriesReached))
 	}));
+
+	Ok(())
+}
+
+#[tokio::test]
+async fn compact_trigger_rolls_up_sqlite_metering_metrics() -> Result<()> {
+	let _compaction_test_lock = COMPACTION_TEST_LOCK.lock().await;
+	let db = Arc::new(test_db().await?);
+	let actor_id = TEST_ACTOR;
+	let actor_name = "metered-actor";
+	let namespace_id = Id::new_v1(42);
+	let commit_bytes = util::metric::KV_BILLABLE_CHUNK * 3 + 123;
+	let read_bytes = util::metric::KV_BILLABLE_CHUNK * 2 + 456;
+
+	seed_compaction_case(
+		&db,
+		1,
+		128,
+		0,
+		&[(1, vec![(3, 0x13), (5, 0x15)])],
+		&[(3, 1), (5, 1)],
+	)
+	.await?;
+	seed_quota(&db, actor_id, 1_000_000).await?;
+
+	worker::test_hooks::handle_payload_once(
+		Arc::clone(&db),
+		SqliteCompactPayload {
+			actor_id: actor_id.to_string(),
+			namespace_id: Some(namespace_id),
+			actor_name: Some(actor_name.to_string()),
+			commit_bytes_since_rollup: commit_bytes,
+			read_bytes_since_rollup: read_bytes,
+		},
+		worker::CompactorConfig::default(),
+		CancellationToken::new(),
+	)
+	.await?;
+
+	let storage_used = read_quota(&db, actor_id).await?;
+	assert_eq!(
+		read_sqlite_metric(&db, namespace_id, actor_name, TestMetric::StorageUsed).await?,
+		storage_used,
+	);
+	assert_eq!(
+		read_sqlite_metric(&db, namespace_id, actor_name, TestMetric::CommitBytes).await?,
+		(commit_bytes / util::metric::KV_BILLABLE_CHUNK * util::metric::KV_BILLABLE_CHUNK)
+			as i64,
+	);
+	assert_eq!(
+		read_sqlite_metric(&db, namespace_id, actor_name, TestMetric::ReadBytes).await?,
+		(read_bytes / util::metric::KV_BILLABLE_CHUNK * util::metric::KV_BILLABLE_CHUNK) as i64,
+	);
 
 	Ok(())
 }

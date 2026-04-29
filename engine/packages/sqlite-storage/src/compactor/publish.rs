@@ -1,4 +1,5 @@
 use anyhow::{Context, Result, bail};
+use gas::prelude::Id;
 use serde::{Deserialize, Serialize};
 use universalpubsub::PublishOpts;
 use vbare::OwnedVersionedData;
@@ -12,6 +13,8 @@ pub const SQLITE_COMPACT_PAYLOAD_VERSION: u16 = 1;
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SqliteCompactPayload {
 	pub actor_id: String,
+	pub namespace_id: Option<Id>,
+	pub actor_name: Option<String>,
 	pub commit_bytes_since_rollup: u64,
 	pub read_bytes_since_rollup: u64,
 }
@@ -59,16 +62,23 @@ pub fn decode_compact_payload(payload: &[u8]) -> Result<SqliteCompactPayload> {
 }
 
 pub fn publish_compact_trigger(ups: &Ups, actor_id: &str) {
-	let ups = ups.clone();
-	let actor_id = actor_id.to_string();
-
-	tokio::spawn(async move {
-		let payload = SqliteCompactPayload {
-			actor_id: actor_id.clone(),
+	publish_compact_payload(
+		ups,
+		SqliteCompactPayload {
+			actor_id: actor_id.to_string(),
+			namespace_id: None,
+			actor_name: None,
 			commit_bytes_since_rollup: 0,
 			read_bytes_since_rollup: 0,
-		};
+		},
+	);
+}
 
+pub fn publish_compact_payload(ups: &Ups, payload: SqliteCompactPayload) {
+	let ups = ups.clone();
+	let actor_id = payload.actor_id.clone();
+
+	tokio::spawn(async move {
 		let payload = match encode_compact_payload(payload) {
 			Ok(payload) => payload,
 			Err(err) => {
