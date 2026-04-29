@@ -22,7 +22,6 @@ interface PayloadRow {
 	rows: number;
 	bytes: number;
 	expected_bytes: number;
-	probe_matches: number;
 }
 
 function positiveInteger(value: number | undefined, fallback: number, name: string) {
@@ -50,8 +49,7 @@ async function readPayloads(
 				MAX(id) AS max_id,
 				COUNT(*) AS rows,
 				0 AS bytes,
-				0 AS expected_bytes,
-				0 AS probe_matches
+				0 AS expected_bytes
 			FROM ${PAYLOAD_TABLE}
 		`,
 	)) as PayloadRow[];
@@ -61,7 +59,6 @@ async function readPayloads(
 	let rows = 0;
 	let bytes = 0;
 	let expectedBytes = 0;
-	let probeMatches = 0;
 	let chunks = 0;
 	const minId = bounds.min_id ?? 0;
 	const maxId = bounds.max_id ?? 0;
@@ -77,8 +74,7 @@ async function readPayloads(
 				SELECT
 					COUNT(*) AS rows,
 					COALESCE(SUM(length(payload)), 0) AS bytes,
-					COALESCE(SUM(payload_bytes), 0) AS expected_bytes,
-					COALESCE(SUM(CASE WHEN payload LIKE '%gggggggg%' THEN 1 ELSE 0 END), 0) AS probe_matches
+					COALESCE(SUM(payload_bytes), 0) AS expected_bytes
 				FROM ${PAYLOAD_TABLE}
 				WHERE id BETWEEN ? AND ?
 			`,
@@ -90,7 +86,6 @@ async function readPayloads(
 		rows += chunk.rows;
 		bytes += chunk.bytes;
 		expectedBytes += chunk.expected_bytes;
-		probeMatches += chunk.probe_matches;
 		chunks += 1;
 	}
 
@@ -102,7 +97,6 @@ async function readPayloads(
 		expectedBytes,
 		chunks,
 		readBatchRows: READ_BATCH_ROWS,
-		probeMatches,
 	};
 }
 
@@ -232,6 +226,17 @@ export const sqliteColdStartBench = actor({
 
 		readAll: async (c) => {
 			return readPayloads(c.db);
+		},
+
+		wakeSqlite: async (c) => {
+			const t0 = performance.now();
+			const [row] = (await c.db.execute(
+				`SELECT COUNT(*) AS rows FROM ${PAYLOAD_TABLE} WHERE id = -1`,
+			)) as Array<{ rows: number }>;
+			return {
+				ms: performance.now() - t0,
+				rows: row?.rows ?? 0,
+			};
 		},
 
 		goToSleep: (c) => {

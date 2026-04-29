@@ -21,6 +21,7 @@ Started: Tue Apr 28 11:00:38 PM PDT 2026
 - `sqlite-storage` caches decoded DELTA/SHARD LTX blobs inside `SqliteEngine` by default; `RIVETKIT_SQLITE_OPT_DECODED_LTX_CACHE=false` preserves per-read decode behavior.
 - SQLite startup preload policy knobs live in `sqlite-storage::optimization_flags`; default preload is first page only plus persisted hints, bounded by `RIVETKIT_SQLITE_OPT_STARTUP_PRELOAD_MAX_BYTES` with an 8 MiB hard cap.
 - Native VFS page cache policy knobs live in `sqlite-storage::optimization_flags`; `rivetkit-sqlite` maps them into `VfsConfig`, so avoid direct env reads in the VFS.
+- The kitchen-sink SQLite cold-start benchmark keeps cold wake/open measured with a tiny SQLite action separately from cold full-read throughput; do not reintroduce payload `LIKE` probes into the main read path.
 ---
 ## 2026-04-28 23:01:27 PDT - SQLITE-COLD-001
 - What was implemented
@@ -402,4 +403,24 @@ Started: Tue Apr 28 11:00:38 PM PDT 2026
   - Compared with SQLITE-COLD-018: wake transport calls stayed 70 -> 70, wake e2e was 4113.6ms -> 4146.1ms, wake server was 3880.7ms -> 3928.7ms, VFS transport was 3643.3ms -> 3679.0ms, and hot read was 170.4ms -> 183.2ms.
   - The protected VFS cache is intentionally a bounded fallback alongside Moka: startup, early, and repeated hot target pages stay available even if long scan inserts churn the normal page cache.
   - Verification status: `cargo check -p sqlite-storage` passed; `cargo check -p rivetkit-sqlite` passed with existing Rust 2024 unsafe-operation warnings; `cargo test -p sqlite-storage -- --test-threads=1` passed; `cargo test -p rivetkit-sqlite cache -- --nocapture` passed; `cargo test -p rivetkit-sqlite -- --test-threads=1` passed with existing Rust 2024 unsafe-operation warnings; `pnpm --filter kitchen-sink check-types` passed with the known skip message; `pnpm -F rivetkit check-types` passed; `pnpm --filter @rivetkit/rivetkit-napi build:force` passed with existing warnings.
+---
+## 2026-04-29 01:28:30 PDT - SQLITE-COLD-020
+- What was implemented
+  - Split the kitchen-sink SQLite cold-start benchmark into a cold wake/open phase and a separate cold full-read phase.
+  - Added `wakeSqlite`, a tiny SQLite action that opens/touches SQLite without scanning the 50 MiB payload.
+  - Removed the payload `LIKE '%gggggggg%'` probe from the main full-read path so read timing is not polluted by diagnostic CPU work.
+  - Recorded the required cold-read benchmark artifact.
+- Files changed
+  - `examples/kitchen-sink/scripts/sqlite-cold-start-bench.ts`
+  - `examples/kitchen-sink/src/actors/testing/sqlite-cold-start-bench.ts`
+  - `examples/kitchen-sink/CLAUDE.md`
+  - `.agent/notes/sqlite-cold-read-after-SQLITE-COLD-020.txt`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - SQLITE-COLD-020 benchmark numbers: insert e2e 16136.7ms, hot read e2e 160.4ms, cold wake/open e2e 294.2ms, cold wake/open server 44.2ms, wake read e2e 4119.2ms, wake read server 3944.2ms, wake overhead estimate 175.0ms, wake VFS get_pages/range transport 68 calls, fetched 13662 pages / 55959552 bytes, prefetch 13594 pages / 55681024 bytes, VFS transport 3734.1ms.
+  - Compared with baseline/SQLITE-COLD-001: wake transport calls dropped 1249 -> 68, wake e2e dropped 20141.0ms -> 4119.2ms, wake VFS transport dropped 19332.8ms -> 3734.1ms, and hot read was 118.6ms -> 160.4ms.
+  - Compared with SQLITE-COLD-019: wake transport calls dropped 70 -> 68, wake e2e improved 4146.1ms -> 4119.2ms, wake server was 3928.7ms -> 3944.2ms, VFS transport was 3679.0ms -> 3734.1ms, and hot read improved 183.2ms -> 160.4ms.
+  - Keep the cold wake/open phase separate from cold full-read throughput when changing this benchmark; the first phase should use a tiny SQLite touch and then sleep again before the full scan.
+  - Verification status: `pnpm --filter kitchen-sink check-types` passed with the known skip message; `pnpm -F rivetkit check-types` passed; `pnpm --filter kitchen-sink build` passed; full benchmark passed with `pnpm --filter kitchen-sink exec tsx scripts/sqlite-cold-start-bench.ts --wake-delay-ms 10000`.
 ---

@@ -387,8 +387,8 @@
         "`notes` records insert e2e ms, hot read e2e ms, wake read e2e ms, wake read server ms, wake overhead estimate ms, wake read VFS get_pages calls, pages fetched, bytes fetched, prefetch pages, prefetch bytes, and VFS transport ms and compares them to baseline plus SQLITE-COLD-019"
       ],
       "priority": 20,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Split the kitchen-sink SQLite cold-start benchmark so cold wake/open is measured with a tiny SQLite action after sleep, then the actor sleeps again before the cold full-read measurement. Removed the payload `LIKE '%gggggggg%'` probe from the main read path so full-read timing focuses on scan throughput instead of extra diagnostic CPU work. Benchmark artifact written to `.agent/notes/sqlite-cold-read-after-SQLITE-COLD-020.txt`. Numbers: insert e2e 16136.7ms; hot read e2e 160.4ms; cold wake/open e2e 294.2ms; cold wake/open server 44.2ms; wake read e2e 4119.2ms; wake read server 3944.2ms; wake overhead estimate 175.0ms; wake read VFS get_pages/range transport calls 68; pages fetched 13662; bytes fetched 55959552; prefetch pages 13594; prefetch bytes 55681024; VFS transport 3734.1ms. Compared with baseline/SQLITE-COLD-001: wake transport calls dropped 1249 -> 68, wake e2e dropped 20141.0ms -> 4119.2ms, wake VFS transport dropped 19332.8ms -> 3734.1ms, and hot read was 118.6ms -> 160.4ms. Compared with SQLITE-COLD-019: wake transport calls dropped 70 -> 68, wake e2e improved 4146.1ms -> 4119.2ms, wake server was 3928.7ms -> 3944.2ms, VFS transport was 3679.0ms -> 3734.1ms, and hot read improved 183.2ms -> 160.4ms. Checks passed: pnpm --filter kitchen-sink check-types; pnpm -F rivetkit check-types; pnpm --filter kitchen-sink build; pnpm --filter kitchen-sink exec tsx scripts/sqlite-cold-start-bench.ts --wake-delay-ms 10000."
     },
     {
       "id": "SQLITE-COLD-021",

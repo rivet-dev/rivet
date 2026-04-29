@@ -42,7 +42,11 @@ interface ReadResult {
 	rows: number;
 	bytes: number;
 	expectedBytes: number;
-	probeMatches: number;
+}
+
+interface WakeOpenResult {
+	ms: number;
+	rows: number;
 }
 
 interface LocalEngine {
@@ -602,6 +606,20 @@ async function main(): Promise<void> {
 			await handle.goToSleep();
 			await sleep(args.wakeDelayMs);
 
+			console.log("cold wake/open...");
+			const wakeHandle = client.sqliteColdStartBench.getOrCreate(actorKey);
+			const wakeOpen = await timed(() => wakeHandle.wakeSqlite());
+			const wakeOpenResult = wakeOpen.result as WakeOpenResult;
+			const afterWakeOpenMetrics = await scrapeMetrics(
+				args.endpoint,
+				actorId,
+				args.metricsToken,
+			);
+
+			console.log("sleep before cold full read...");
+			await wakeHandle.goToSleep();
+			await sleep(args.wakeDelayMs);
+
 			console.log("wake read...");
 			const coldHandle = client.sqliteColdStartBench.getOrCreate(actorKey);
 			const coldRead = await timed(() => coldHandle.readAll());
@@ -614,28 +632,34 @@ async function main(): Promise<void> {
 			);
 
 			console.log("\nResults");
-		console.log(`  rows: ${writeResult.rows}`);
-		console.log(`  transactions: ${writeResult.transactions}`);
-		console.log(`  bytes: ${fmtBytes(writeResult.bytes)}`);
-		console.log(
-			`  insert server: ${fmtMs(writeResult.ms)} (insert=${fmtMs(writeResult.sqliteInsertMs)}, commit=${fmtMs(writeResult.commitMs)}, random_strings=${fmtMs(writeResult.randomStringMs)})`,
-		);
-		console.log(`  insert e2e: ${fmtMs(write.ms)}`);
-		console.log(`  hot read server: ${fmtMs(hotReadResult.ms)}`);
+			console.log(`  rows: ${writeResult.rows}`);
+			console.log(`  transactions: ${writeResult.transactions}`);
+			console.log(`  bytes: ${fmtBytes(writeResult.bytes)}`);
+			console.log(
+				`  insert server: ${fmtMs(writeResult.ms)} (insert=${fmtMs(writeResult.sqliteInsertMs)}, commit=${fmtMs(writeResult.commitMs)}, random_strings=${fmtMs(writeResult.randomStringMs)})`,
+			);
+			console.log(`  insert e2e: ${fmtMs(write.ms)}`);
+			console.log(`  hot read server: ${fmtMs(hotReadResult.ms)}`);
 			console.log(`  hot read e2e: ${fmtMs(hotRead.ms)}`);
+			console.log(`  cold wake/open server: ${fmtMs(wakeOpenResult.ms)}`);
+			console.log(`  cold wake/open e2e: ${fmtMs(wakeOpen.ms)}`);
+			console.log(
+				`  cold wake/open overhead estimate: ${fmtMs(Math.max(0, wakeOpen.ms - wakeOpenResult.ms))}`,
+			);
 			console.log(`  wake read server: ${fmtMs(coldReadResult.ms)}`);
 			console.log(`  wake read e2e: ${fmtMs(coldRead.ms)}`);
 			console.log(
 				`  wake overhead estimate: ${fmtMs(Math.max(0, coldRead.ms - coldReadResult.ms))}`,
 			);
 			printVfsMetricDelta("hot read", hotReadMetrics);
+			printVfsMetricDelta("cold wake/open actor-lifetime", afterWakeOpenMetrics);
 			printVfsMetricDelta("wake read actor-lifetime", afterWakeReadMetrics);
+			console.log(
+				"  cold wake/open uses a tiny SQLite action without scanning the payload.",
+			);
 			console.log(
 				"  wake read actor-lifetime VFS metrics include startup DB work before the read action.",
 			);
-		console.log(
-			`  probe matches: hot=${hotReadResult.probeMatches} wake=${coldReadResult.probeMatches}`,
-		);
 	} catch (err) {
 		const engineLogs = tailEngineLogs(engine);
 		if (engineLogs) {
