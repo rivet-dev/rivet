@@ -957,6 +957,7 @@ pub struct VfsContext {
 	config: VfsConfig,
 	state: RwLock<VfsState>,
 	aux_files: RwLock<BTreeMap<String, Arc<AuxFileState>>>,
+	aux_file_roles: RwLock<BTreeMap<String, VfsFileRole>>,
 	last_error: Mutex<Option<String>>,
 	#[cfg(test)]
 	fail_next_aux_open: Mutex<Option<String>>,
@@ -1079,6 +1080,7 @@ struct VfsFile {
 	base: sqlite3_file,
 	ctx: *const VfsContext,
 	aux: *mut AuxFileHandle,
+	role: VfsFileRole,
 }
 
 #[derive(Default)]
@@ -1090,6 +1092,34 @@ struct AuxFileHandle {
 	path: String,
 	state: Arc<AuxFileState>,
 	delete_on_close: bool,
+	role: VfsFileRole,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum VfsFileRole {
+	Reader,
+	Writer,
+}
+
+impl VfsFileRole {
+	fn from_open_flags(flags: c_int) -> Self {
+		if (flags & SQLITE_OPEN_READWRITE) != 0 {
+			Self::Writer
+		} else {
+			Self::Reader
+		}
+	}
+
+	fn out_flags(self, flags: c_int) -> c_int {
+		match self {
+			Self::Reader => (flags | SQLITE_OPEN_READONLY) & !SQLITE_OPEN_READWRITE,
+			Self::Writer => (flags | SQLITE_OPEN_READWRITE) & !SQLITE_OPEN_READONLY,
+		}
+	}
+
+	fn is_reader(self) -> bool {
+		matches!(self, Self::Reader)
+	}
 }
 
 unsafe impl Send for VfsContext {}
@@ -1751,6 +1781,7 @@ impl VfsContext {
 			config: config.clone(),
 			state: RwLock::new(VfsState::new(&config, &startup)),
 			aux_files: RwLock::new(BTreeMap::new()),
+			aux_file_roles: RwLock::new(BTreeMap::new()),
 			last_error: Mutex::new(None),
 			#[cfg(test)]
 			fail_next_aux_open: Mutex::new(None),
@@ -1800,20 +1831,30 @@ impl VfsContext {
 		self.state.read().page_size.max(DEFAULT_PAGE_SIZE)
 	}
 
-	fn open_aux_file(&self, path: &str) -> Arc<AuxFileState> {
+	fn open_aux_file(&self, path: &str, role: VfsFileRole) -> Arc<AuxFileState> {
 		let mut aux_files = self.aux_files.write();
-		aux_files
+		let state = aux_files
 			.entry(path.to_string())
 			.or_insert_with(|| Arc::new(AuxFileState::default()))
-			.clone()
+			.clone();
+		self.aux_file_roles
+			.write()
+			.entry(path.to_string())
+			.or_insert(role);
+		state
 	}
 
 	fn aux_file_exists(&self, path: &str) -> bool {
 		self.aux_files.read().contains_key(path)
 	}
 
+	fn aux_file_role(&self, path: &str) -> Option<VfsFileRole> {
+		self.aux_file_roles.read().get(path).copied()
+	}
+
 	fn delete_aux_file(&self, path: &str) {
 		self.aux_files.write().remove(path);
+		self.aux_file_roles.write().remove(path);
 	}
 
 	#[cfg(test)]
@@ -2390,6 +2431,12 @@ unsafe fn get_aux_state(file: &VfsFile) -> Option<&AuxFileHandle> {
 	(!file.aux.is_null()).then(|| &*file.aux)
 }
 
+fn reject_reader_mutation(ctx: &VfsContext, operation: &str) {
+	ctx.set_last_error(format!(
+		"reader sqlite VFS handle attempted mutating operation {operation}"
+	));
+}
+
 async fn commit_buffered_pages(
 	transport: &SqliteTransport,
 	request: BufferedCommitRequest,
@@ -2807,6 +2854,10 @@ unsafe extern "C" fn io_close(p_file: *mut sqlite3_file) -> c_int {
 				state.write_buffer.in_atomic_write || !state.write_buffer.dirty.is_empty()
 			};
 			if should_flush {
+				if file.role.is_reader() {
+					reject_reader_mutation(ctx, "dirty xClose");
+					return SQLITE_IOERR;
+				}
 				if ctx.state.read().write_buffer.in_atomic_write {
 					ctx.commit_atomic_write().map(|_| ())
 				} else {
@@ -2931,6 +2982,14 @@ unsafe extern "C" fn io_write(
 		}
 
 		let file = get_file(p_file);
+		let ctx = &*file.ctx;
+		let role = get_aux_state(file)
+			.map(|aux| aux.role)
+			.unwrap_or(file.role);
+		if role.is_reader() {
+			reject_reader_mutation(ctx, "xWrite");
+			return SQLITE_IOERR_WRITE;
+		}
 		if let Some(aux) = get_aux_state(file) {
 			if i_offset < 0 {
 				return SQLITE_IOERR_WRITE;
@@ -2947,7 +3006,6 @@ unsafe extern "C" fn io_write(
 			return SQLITE_OK;
 		}
 
-		let ctx = &*file.ctx;
 		if ctx.is_dead() {
 			return SQLITE_IOERR_WRITE;
 		}
@@ -3054,11 +3112,18 @@ unsafe extern "C" fn io_truncate(p_file: *mut sqlite3_file, size: sqlite3_int64)
 			return SQLITE_IOERR_TRUNCATE;
 		}
 		let file = get_file(p_file);
+		let ctx = &*file.ctx;
+		let role = get_aux_state(file)
+			.map(|aux| aux.role)
+			.unwrap_or(file.role);
+		if role.is_reader() {
+			reject_reader_mutation(ctx, "xTruncate");
+			return SQLITE_IOERR_TRUNCATE;
+		}
 		if let Some(aux) = get_aux_state(file) {
 			aux.state.bytes.lock().truncate(size as usize);
 			return SQLITE_OK;
 		}
-		let ctx = &*file.ctx;
 		ctx.truncate_main_file(size);
 		SQLITE_OK
 	})
@@ -3071,6 +3136,15 @@ unsafe extern "C" fn io_sync(p_file: *mut sqlite3_file, _flags: c_int) -> c_int 
 			return SQLITE_OK;
 		}
 		let ctx = &*file.ctx;
+		if file.role.is_reader() {
+			let state = ctx.state.read();
+			if state.write_buffer.in_atomic_write || !state.write_buffer.dirty.is_empty() {
+				drop(state);
+				reject_reader_mutation(ctx, "dirty xSync");
+				return SQLITE_IOERR_FSYNC;
+			}
+			return SQLITE_OK;
+		}
 		match ctx.flush_dirty_pages() {
 			Ok(_) => SQLITE_OK,
 			Err(err) => {
@@ -3133,13 +3207,22 @@ unsafe extern "C" fn io_file_control(
 
 		match op {
 			SQLITE_FCNTL_BEGIN_ATOMIC_WRITE => {
+				if file.role.is_reader() {
+					reject_reader_mutation(ctx, "begin atomic write file-control");
+					return SQLITE_READONLY;
+				}
 				let mut state = ctx.state.write();
 				state.write_buffer.in_atomic_write = true;
 				state.write_buffer.saved_db_size = state.db_size_pages;
 				state.write_buffer.dirty.clear();
 				SQLITE_OK
 			}
-			SQLITE_FCNTL_COMMIT_ATOMIC_WRITE => match ctx.commit_atomic_write() {
+			SQLITE_FCNTL_COMMIT_ATOMIC_WRITE => {
+				if file.role.is_reader() {
+					reject_reader_mutation(ctx, "commit atomic write file-control");
+					return SQLITE_READONLY;
+				}
+				match ctx.commit_atomic_write() {
 				Ok(()) => {
 					ctx.commit_atomic_count.fetch_add(1, Ordering::Relaxed);
 					SQLITE_OK
@@ -3154,8 +3237,13 @@ unsafe extern "C" fn io_file_control(
 					mark_dead_from_fence_commit_error(ctx, &err);
 					SQLITE_IOERR
 				}
-			},
+				}
+			}
 			SQLITE_FCNTL_ROLLBACK_ATOMIC_WRITE => {
+				if file.role.is_reader() {
+					reject_reader_mutation(ctx, "rollback atomic write file-control");
+					return SQLITE_READONLY;
+				}
 				let mut state = ctx.state.write();
 				state.write_buffer.dirty.clear();
 				state.write_buffer.in_atomic_write = false;
@@ -3174,7 +3262,7 @@ unsafe extern "C" fn io_sector_size(_p_file: *mut sqlite3_file) -> c_int {
 unsafe extern "C" fn io_device_characteristics(p_file: *mut sqlite3_file) -> c_int {
 	vfs_catch_unwind!(0, {
 		let file = get_file(p_file);
-		if get_aux_state(file).is_some() {
+		if file.role.is_reader() || get_aux_state(file).is_some() {
 			0
 		} else {
 			SQLITE_IOCAP_BATCH_ATOMIC
@@ -3206,6 +3294,16 @@ unsafe extern "C" fn vfs_open(
 		};
 		let is_main =
 			path == ctx.actor_id && !delete_on_close && (flags & SQLITE_OPEN_MAIN_DB) != 0;
+		let role = VfsFileRole::from_open_flags(flags);
+
+		if !is_main && role.is_reader() && !ctx.aux_file_exists(&path) {
+			// Reader auxiliary files are not safe yet. A reader connection may only
+			// open an existing auxiliary path without creating new mutable state.
+			ctx.set_last_error(format!(
+				"reader sqlite VFS handle attempted auxiliary file creation for {path}"
+			));
+			return SQLITE_CANTOPEN;
+		}
 
 		#[cfg(test)]
 		if !is_main {
@@ -3223,8 +3321,9 @@ unsafe extern "C" fn vfs_open(
 		} else {
 			Box::into_raw(Box::new(AuxFileHandle {
 				path: path.clone(),
-				state: ctx.open_aux_file(&path),
+				state: ctx.open_aux_file(&path, role),
 				delete_on_close,
+				role,
 			}))
 		};
 		ptr::write(
@@ -3233,11 +3332,12 @@ unsafe extern "C" fn vfs_open(
 				base,
 				ctx: ctx as *const VfsContext,
 				aux,
+				role,
 			},
 		);
 
 		if !p_out_flags.is_null() {
-			*p_out_flags = flags;
+			*p_out_flags = role.out_flags(flags);
 		}
 
 		SQLITE_OK
@@ -3260,6 +3360,10 @@ unsafe extern "C" fn vfs_delete(
 			Err(_) => return SQLITE_OK,
 		};
 		if path != ctx.actor_id {
+			if matches!(ctx.aux_file_role(path), Some(VfsFileRole::Reader)) {
+				reject_reader_mutation(ctx, "xDelete");
+				return SQLITE_READONLY;
+			}
 			#[cfg(test)]
 			if let Some(message) = ctx.take_aux_delete_error() {
 				ctx.set_last_error(message);
@@ -4037,6 +4141,21 @@ mod tests {
 		}
 
 		Ok(rc)
+	}
+
+	fn test_vfs_file(ctx: &VfsContext, role: VfsFileRole) -> Box<VfsFile> {
+		Box::new(VfsFile {
+			base: sqlite3_file {
+				pMethods: ctx.io_methods.as_ref(),
+			},
+			ctx: ctx as *const VfsContext,
+			aux: ptr::null_mut(),
+			role,
+		})
+	}
+
+	fn test_vfs_file_ptr(file: &mut VfsFile) -> *mut sqlite3_file {
+		(file as *mut VfsFile).cast()
 	}
 
 	fn direct_runtime() -> tokio::runtime::Runtime {
@@ -6416,6 +6535,128 @@ mod tests {
 	}
 
 	#[test]
+	fn reader_vfs_file_rejects_mutating_callbacks() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let db = harness.open_db(&runtime);
+		let ctx = direct_vfs_ctx(&db);
+		let mut file = test_vfs_file(ctx, VfsFileRole::Reader);
+		let p_file = test_vfs_file_ptr(&mut file);
+		let bytes = vec![0x5a; DEFAULT_PAGE_SIZE];
+
+		assert_eq!(
+			unsafe { io_write(p_file, bytes.as_ptr().cast(), bytes.len() as c_int, 0) },
+			SQLITE_IOERR_WRITE
+		);
+		assert_eq!(unsafe { io_truncate(p_file, 0) }, SQLITE_IOERR_TRUNCATE);
+		{
+			let mut state = ctx.state.write();
+			state.write_buffer.dirty.insert(1, vec![0x7a; DEFAULT_PAGE_SIZE]);
+		}
+		assert_eq!(unsafe { io_sync(p_file, 0) }, SQLITE_IOERR_FSYNC);
+		{
+			let mut state = ctx.state.write();
+			state.write_buffer.dirty.clear();
+			state.write_buffer.in_atomic_write = false;
+		}
+		assert_eq!(
+			unsafe { io_file_control(p_file, SQLITE_FCNTL_BEGIN_ATOMIC_WRITE, ptr::null_mut()) },
+			SQLITE_READONLY
+		);
+		assert!(
+			ctx.clone_last_error()
+				.expect("reader mutation should set last error")
+				.contains("reader sqlite VFS handle attempted mutating operation")
+		);
+	}
+
+	#[test]
+	fn writer_vfs_file_supports_write_callback() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let db = harness.open_db(&runtime);
+		let ctx = direct_vfs_ctx(&db);
+		let mut file = test_vfs_file(ctx, VfsFileRole::Writer);
+		let p_file = test_vfs_file_ptr(&mut file);
+		let bytes = vec![0x5a; DEFAULT_PAGE_SIZE];
+
+		assert_eq!(
+			unsafe { io_write(p_file, bytes.as_ptr().cast(), bytes.len() as c_int, 0) },
+			SQLITE_OK
+		);
+		{
+			let mut state = ctx.state.write();
+			assert!(state.write_buffer.dirty.contains_key(&1));
+			state.write_buffer.dirty.clear();
+		}
+	}
+
+	#[test]
+	fn vfs_open_sets_role_flags_and_denies_reader_aux_creation() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let db = harness.open_db(&runtime);
+		let ctx = direct_vfs_ctx(&db);
+		let actor = CString::new(harness.actor_id.as_str()).expect("actor id should be valid");
+		let mut reader_out_flags = 0;
+		let mut reader_file = std::mem::MaybeUninit::<VfsFile>::uninit();
+
+		let rc = unsafe {
+			vfs_open(
+				db.vfs.inner.vfs_ptr,
+				actor.as_ptr(),
+				reader_file.as_mut_ptr().cast(),
+				SQLITE_OPEN_MAIN_DB | SQLITE_OPEN_READONLY,
+				&mut reader_out_flags,
+			)
+		};
+		assert_eq!(rc, SQLITE_OK);
+		assert_ne!(reader_out_flags & SQLITE_OPEN_READONLY, 0);
+		assert_eq!(reader_out_flags & SQLITE_OPEN_READWRITE, 0);
+		let mut reader_file = unsafe { reader_file.assume_init() };
+		assert_eq!(reader_file.role, VfsFileRole::Reader);
+		assert_eq!(
+			unsafe { io_close(test_vfs_file_ptr(&mut reader_file)) },
+			SQLITE_OK
+		);
+
+		let aux_path = CString::new("reader-scratch").expect("aux path should be valid");
+		let mut aux_out_flags = 0;
+		let mut aux_file = std::mem::MaybeUninit::<VfsFile>::uninit();
+		let rc = unsafe {
+			vfs_open(
+				db.vfs.inner.vfs_ptr,
+				aux_path.as_ptr(),
+				aux_file.as_mut_ptr().cast(),
+				SQLITE_OPEN_CREATE | SQLITE_OPEN_READONLY,
+				&mut aux_out_flags,
+			)
+		};
+		assert_eq!(rc, SQLITE_CANTOPEN);
+		assert!(
+			ctx.clone_last_error()
+				.expect("reader aux create should set last error")
+				.contains("auxiliary file creation")
+		);
+	}
+
+	#[test]
+	fn reader_owned_aux_files_reject_delete() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let db = harness.open_db(&runtime);
+		let ctx = direct_vfs_ctx(&db);
+		ctx.open_aux_file("reader-owned-journal", VfsFileRole::Reader);
+		let path = CString::new("reader-owned-journal").expect("aux path should be valid");
+
+		assert_eq!(
+			unsafe { vfs_delete(db.vfs.inner.vfs_ptr, path.as_ptr(), 0) },
+			SQLITE_READONLY
+		);
+		assert!(ctx.aux_file_exists("reader-owned-journal"));
+	}
+
+	#[test]
 	fn native_vfs_handle_opens_multiple_connections_against_one_context() {
 		let runtime = direct_runtime();
 		let harness = DirectEngineHarness::new();
@@ -7192,7 +7433,7 @@ mod tests {
 			let db = harness.open_db(&runtime);
 			let ctx = direct_vfs_ctx(&db);
 
-		ctx.open_aux_file("actor-journal");
+		ctx.open_aux_file("actor-journal", VfsFileRole::Writer);
 		ctx.fail_next_aux_delete("InjectedAuxDeleteError: delete failed");
 		let path = CString::new("actor-journal").expect("cstring should build");
 
@@ -7667,15 +7908,20 @@ mod tests {
 				None,
 			);
 
-		let first = ctx.open_aux_file("actor-journal");
+		let first = ctx.open_aux_file("actor-journal", VfsFileRole::Writer);
 		first.bytes.lock().extend_from_slice(&[1, 2, 3, 4]);
-		let second = ctx.open_aux_file("actor-journal");
+		let second = ctx.open_aux_file("actor-journal", VfsFileRole::Writer);
 		assert_eq!(*second.bytes.lock(), vec![1, 2, 3, 4]);
 		assert!(ctx.aux_file_exists("actor-journal"));
 
 		ctx.delete_aux_file("actor-journal");
 		assert!(!ctx.aux_file_exists("actor-journal"));
-		assert!(ctx.open_aux_file("actor-journal").bytes.lock().is_empty());
+		assert!(
+			ctx.open_aux_file("actor-journal", VfsFileRole::Writer)
+				.bytes
+				.lock()
+				.is_empty()
+		);
 	}
 
 	#[test]
@@ -7721,7 +7967,7 @@ mod tests {
 			let barrier = barrier.clone();
 			thread::spawn(move || {
 				barrier.wait();
-				ctx.open_aux_file("actor-journal")
+				ctx.open_aux_file("actor-journal", VfsFileRole::Writer)
 			})
 		};
 		let second = {
@@ -7729,7 +7975,7 @@ mod tests {
 			let barrier = barrier.clone();
 			thread::spawn(move || {
 				barrier.wait();
-				ctx.open_aux_file("actor-journal")
+				ctx.open_aux_file("actor-journal", VfsFileRole::Writer)
 			})
 		};
 
