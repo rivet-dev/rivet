@@ -16,6 +16,7 @@ Started: Wed Apr 29 04:23:03 AM PDT 2026
 - TypeScript SQLite migration hooks should run inside native `writeMode` so setup queries use the writer connection and do not create readers.
 - SQLite read-pool rollout config lives in `sqlite-storage::optimization_flags`; build `NativeConnectionManagerConfig` from `sqlite_optimization_flags()` and use `RIVETKIT_SQLITE_OPT_READ_POOL_ENABLED=false` for single-writer compatibility.
 - Kitchen-sink SQLite real-world benchmark reporting should include read-pool route counters alongside VFS counters so parallel-read and read-write-transition workloads expose manager behavior.
+- Native SQLite read-pool v1 closes readers before writes and does not pin per-reader head txids; TypeScript/NAPI wrappers must treat native execution as the routing policy boundary.
 
 ## 2026-04-29 04:27:40 PDT - US-001
 - Implemented native SQLite statement classification with readonly detection, trailing-statement detection, authorizer action capture, and conservative reader eligibility.
@@ -258,4 +259,21 @@ Started: Wed Apr 29 04:23:03 AM PDT 2026
   - If `NativeConnectionManager` holds an idle writer for a raw transaction, `NativeDatabaseHandle::execute` must bypass reader classification and reuse that writer for later statements such as `COMMIT`.
   - Fence-mismatch tests need to clear the VFS page caches after setup so the stale reader is forced to fetch through the engine and observe the replacement generation.
   - Native VFS registration tests can affect later tests because SQLite's VFS list is process-global; drop the stale registration before the replacement registration during cleanup.
+---
+## 2026-04-29 06:05:43 PDT - US-012
+- Documented the SQLite read-mode/write-mode connection manager invariant in internal VFS docs, including exclusive write mode, no reader/write overlap, and the native routing policy boundary.
+- Moved the read-mode/write-mode manager tracker entry from recommended work into existing optimizations.
+- Preserved the reusable invariant in the root agent notes for future SQLite changes.
+- Files changed:
+  - `AGENTS.md`
+  - `docs-internal/engine/sqlite-vfs.md`
+  - `docs-internal/engine/SQLITE_OPTIMIZATIONS.md`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- Checks:
+  - `cargo check -p rivetkit-sqlite`
+- **Learnings for future iterations:**
+  - Read-pool v1 intentionally avoids reader/writer overlap instead of pinning per-reader head txids or snapshots.
+  - Internal SQLite docs are the right home for cross-layer invariants; keep the optimization tracker limited to benchmark and performance status.
+  - Root `AGENTS.md` already has a SQLite Package section for short reusable constraints that should apply across future implementation work.
 ---

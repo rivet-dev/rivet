@@ -20,6 +20,7 @@ Range page-read protocol details live in `.agent/specs/sqlite-range-page-read-pr
 - `sqlite-storage` reassembles large chunked logical values with one bounded chunk-prefix range read by default; `RIVETKIT_SQLITE_OPT_BATCH_CHUNK_READS=false` selects serial 10 KB chunk gets for comparison runs.
 - `sqlite-storage` caches decoded DELTA/SHARD LTX blobs across repeated reads by default, with `RIVETKIT_SQLITE_OPT_DECODED_LTX_CACHE=false` preserving per-read decode behavior.
 - `sqlite-storage` compaction folds DELTA pages into SHARD blobs for steadier read behavior.
+- The native read-mode/write-mode SQLite connection manager routes read-only statements to pooled read-only connections and routes writes, transactions, and fallbacks through exclusive write mode. Read-pool v1 closes readers before writes and does not pin per-reader head txids.
 
 ## Recommended Optimizations
 
@@ -31,7 +32,6 @@ Range page-read protocol details live in `.agent/specs/sqlite-range-page-read-pr
 - Return SQLite meta from `sqlite-storage::get_pages(...)` instead of doing a second META read in pegboard-envoy.
 - Persist capped VFS preload hints on sleep/close and feed them into `OpenConfig` on the next actor start.
 - Add a bulk or range page-read protocol so cold scans do not require page-list request loops.
-- Add a read-mode/write-mode SQLite connection manager for parallel read-only queries; read mode may hold multiple read-only connections, while write mode must close readers and hold exactly one writable connection.
 - Reduce storage read amplification from whole-blob LTX decode further with page-frame-addressable storage.
 - Benchmark compacted and un-compacted cold reads separately.
 

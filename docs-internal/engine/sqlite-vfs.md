@@ -31,3 +31,10 @@ The native VFS uses the same 4 KiB chunk layout and KV key encoding as the WASM 
 - SQLite VFS aux-file create/open paths mutate `BTreeMap` state under one write lock with `entry(...).or_insert_with(...)`. Avoid read-then-write upgrade patterns.
 - SQLite VFS v2 storage keys use literal ASCII path segments under the `0x02` subspace prefix with big-endian numeric suffixes so `scan_prefix` and `BTreeMap` ordering stay numerically correct.
 - SQLite v2 slow-path staging writes encoded LTX bytes directly under DELTA chunk keys. Do not expect `/STAGE` keys or a fixed one-chunk-per-page mapping in tests or recovery code.
+
+## Read-mode/write-mode connection manager
+
+- The native connection manager is the SQLite read/write routing policy boundary. TypeScript and NAPI wrappers forward calls to native execution and must not decide routing from SQL text.
+- Read mode may hold multiple read-only SQLite connections against one shared VFS context. Write mode must hold exactly one writable SQLite connection and no reader connections.
+- Entering write mode stops admitting new readers, waits for active readers to release, closes idle readers, then opens or reuses the single writable connection.
+- Read-pool v1 intentionally does not let readers continue during writes and does not pin per-reader head txids or snapshots. Any future design that overlaps readers with writers must add explicit snapshot fencing.
