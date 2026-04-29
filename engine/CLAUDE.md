@@ -64,6 +64,7 @@ Use `test-snapshot-gen` to generate and load RocksDB snapshots of the full UDB K
 - `sqlite-storage` compaction should choose shard passes from the live PIDX scan, then delete DELTA blobs by comparing all existing delta keys against the remaining global PIDX references so multi-shard and overwritten deltas only disappear when every page ref is gone.
 - `sqlite-storage` metrics should record compaction pass duration and totals in `compactor/worker.rs`, while shard outcome metrics such as folded pages, deleted deltas, delta gauge updates, and lag stay in `compactor/shard.rs` to avoid double counting.
 - `sqlite-storage` live quota accounting should treat only `/META/head`, SHARD, DELTA, and PIDX keys as billable; `/META/storage_used_live` tracks the sum with signed atomic-add deltas.
+- `sqlite-storage` admin operation state is persisted under actor-scoped `/META/admin_op/{operation_id}` records; do not track operation source-of-truth in compactor pod memory.
 - `sqlite-storage` latency tests that depend on `UDB_SIMULATED_LATENCY_MS` should live in a dedicated integration test binary, because UniversalDB caches that env var once per process with `OnceLock`.
 
 ## Pegboard Envoy

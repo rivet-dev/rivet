@@ -1,0 +1,5 @@
+{
+  "code": "pitr_disabled_for_namespace",
+  "group": "sqlite_admin",
+  "message": "PITR is not enabled for this namespace"
+}

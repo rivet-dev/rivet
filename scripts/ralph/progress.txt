@@ -45,6 +45,7 @@ Started: Wed Apr 29 04:36:56 AM PDT 2026
 - DELTA metadata must live at `/DELTA/{txid}/META` under `delta_chunk_prefix`; DELTA prefix readers concatenate chunks and explicitly skip the `META` row.
 - Retention-aware compaction needs namespace checkpoint config from the compact payload so it can load namespace defaults and emit namespace-level PITR metrics.
 - Checkpoint cleanup must preserve the latest checkpoint even past retention, update `/META/checkpoints`, clear `/CHECKPOINT/{T}/*`, and adjust `/META/storage_used_pitr` in one transaction.
+- SQLite admin operation state lives in actor-scoped `/META/admin_op/{operation_id}` records; helpers that only receive `op_id` locate the persisted record instead of using pod-local state.
 
 ## 2026-04-29 04:44:52 PDT - US-001
 - Implemented a UUID-backed `NodeId` type and stored a generated value on each `Pools` instance.
@@ -374,4 +375,15 @@ Started: Wed Apr 29 04:36:56 AM PDT 2026
   - Use worker payload namespace context for PITR compaction paths that need namespace config or namespace metric emission.
   - Refcount leak recovery can decode actor-scoped admin op records from `/META/admin_op/*`; `Pending` and `InProgress` records block auto-reset.
   - Retention tests should seed DELTA `taken_at_ms` relative to real system time because current compactor timestamps use `SystemTime`, not paused Tokio time.
+---
+## 2026-04-29 08:38:38 PDT - US-032
+- Added the `sqlite.op` admin UPS subject, vbare `SqliteOpRequest` protocol, restore/fork target and mode variants, refcount operation types, and the full `sqlite_admin` RivetError enum from the PITR/fork spec.
+- Added persisted `AdminOpRecord` helpers for create, read, status updates, progress updates, completion, and status-transition validation against actor-scoped `/META/admin_op/{operation_id}` records.
+- Added `tests/admin_protocol.rs` coverage for operation vbare round trips, restore target and fork destination variants, every admin error code/message through `RivetError::extract`, and record lifecycle updates.
+- Verified `cargo test -p sqlite-storage --test admin_protocol`, `cargo check -p sqlite-storage`, `cargo test -p sqlite-storage`, and `git diff --check`.
+- Files changed: `Cargo.lock`, `engine/CLAUDE.md`, `engine/artifacts/errors/sqlite_admin.*.json`, `engine/packages/sqlite-storage/Cargo.toml`, `engine/packages/sqlite-storage/src/admin/{errors.rs,mod.rs,record.rs,subjects.rs,types.rs}`, `engine/packages/sqlite-storage/src/compactor/mod.rs`, `engine/packages/sqlite-storage/tests/admin_protocol.rs`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
+- **Learnings for future iterations:**
+  - `SqliteOpSubject` is only the wakeup signal; `/META/admin_op/{operation_id}` is the persisted source of truth and there is no UPS response subject.
+  - The admin record helper signatures update by `op_id`, so they locate the actor-scoped record before writing the exact `/META/admin_op/{operation_id}` key.
+  - New `RivetError` variants with metadata require a direct `serde_json` dependency and generate checked-in artifacts under `engine/artifacts/errors/`.
 ---

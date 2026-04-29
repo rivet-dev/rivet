@@ -1,0 +1,5 @@
+{
+  "code": "operation_orphaned",
+  "group": "sqlite_admin",
+  "message": "operation has been pending without a working pod for too long; please retry"
+}

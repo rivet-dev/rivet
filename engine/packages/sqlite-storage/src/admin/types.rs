@@ -5,6 +5,73 @@ use uuid::Uuid;
 use vbare::OwnedVersionedData;
 
 pub const SQLITE_ADMIN_RECORD_VERSION: u16 = 1;
+pub const SQLITE_OP_REQUEST_VERSION: u16 = 1;
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SqliteOpRequest {
+	pub request_id: Uuid,
+	pub op: SqliteOp,
+	pub audit: AuditFields,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SqliteOp {
+	Restore {
+		actor_id: String,
+		target: RestoreTarget,
+		mode: RestoreMode,
+	},
+	Fork {
+		src_actor_id: String,
+		target: RestoreTarget,
+		mode: ForkMode,
+		dst: ForkDstSpec,
+	},
+	DescribeRetention {
+		actor_id: String,
+	},
+	SetRetention {
+		actor_id: String,
+		config: crate::pump::types::RetentionConfig,
+	},
+	ClearRefcount {
+		actor_id: String,
+		kind: RefcountKind,
+		txid: u64,
+	},
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum RestoreTarget {
+	Txid(u64),
+	TimestampMs(i64),
+	LatestCheckpoint,
+	CheckpointTxid(u64),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum RestoreMode {
+	Apply,
+	DryRun,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ForkMode {
+	Apply,
+	DryRun,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ForkDstSpec {
+	Allocate { dst_namespace_id: Uuid },
+	Existing { dst_actor_id: String },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum RefcountKind {
+	Checkpoint,
+	Delta,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AdminOpRecord {
@@ -66,6 +133,10 @@ enum VersionedAdminOpRecord {
 	V1(AdminOpRecord),
 }
 
+enum VersionedSqliteOpRequest {
+	V1(SqliteOpRequest),
+}
+
 impl OwnedVersionedData for VersionedAdminOpRecord {
 	type Latest = AdminOpRecord;
 
@@ -100,4 +171,40 @@ pub fn encode_admin_op_record(record: AdminOpRecord) -> Result<Vec<u8>> {
 
 pub fn decode_admin_op_record(payload: &[u8]) -> Result<AdminOpRecord> {
 	VersionedAdminOpRecord::deserialize_with_embedded_version(payload)
+}
+
+impl OwnedVersionedData for VersionedSqliteOpRequest {
+	type Latest = SqliteOpRequest;
+
+	fn wrap_latest(latest: Self::Latest) -> Self {
+		Self::V1(latest)
+	}
+
+	fn unwrap_latest(self) -> Result<Self::Latest> {
+		match self {
+			Self::V1(data) => Ok(data),
+		}
+	}
+
+	fn deserialize_version(payload: &[u8], version: u16) -> Result<Self> {
+		match version {
+			1 => Ok(Self::V1(serde_bare::from_slice(payload)?)),
+			_ => bail!("invalid sqlite op request version: {version}"),
+		}
+	}
+
+	fn serialize_version(self, _version: u16) -> Result<Vec<u8>> {
+		match self {
+			Self::V1(data) => serde_bare::to_vec(&data).map_err(Into::into),
+		}
+	}
+}
+
+pub fn encode_sqlite_op_request(request: SqliteOpRequest) -> Result<Vec<u8>> {
+	VersionedSqliteOpRequest::wrap_latest(request)
+		.serialize_with_embedded_version(SQLITE_OP_REQUEST_VERSION)
+}
+
+pub fn decode_sqlite_op_request(payload: &[u8]) -> Result<SqliteOpRequest> {
+	VersionedSqliteOpRequest::deserialize_with_embedded_version(payload)
 }

@@ -1,0 +1,5 @@
+{
+  "code": "retention_window_exceeded",
+  "group": "sqlite_admin",
+  "message": "target predates the retention window"
+}

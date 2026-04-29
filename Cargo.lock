@@ -6233,6 +6233,7 @@ dependencies = [
  "scc",
  "serde",
  "serde_bare",
+ "serde_json",
  "tempfile",
  "thiserror 1.0.69",
  "tokio",

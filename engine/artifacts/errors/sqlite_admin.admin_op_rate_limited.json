@@ -1,0 +1,5 @@
+{
+  "code": "admin_op_rate_limited",
+  "group": "sqlite_admin",
+  "message": "too many concurrent admin operations for this namespace"
+}

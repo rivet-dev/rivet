@@ -11,6 +11,12 @@ pub mod worker;
 pub use checkpoint::{CheckpointOutcome, create_checkpoint};
 pub use cleanup::{cleanup_old_checkpoints, detect_refcount_leaks};
 pub use compact::{CompactionOutcome, compact_default_batch};
+pub use crate::admin::{
+	AdminOpRecord, AuditFields, ForkDstSpec, ForkMode, OpKind, OpProgress, OpResult, OpStatus,
+	RefcountKind, RestoreMode, RestoreTarget, SQLITE_OP_SUBJECT, SqliteAdminError, SqliteOp,
+	SqliteOpRequest, SqliteOpSubject, complete, create_record, read, update_progress,
+	update_status,
+};
 pub use lease::{
 	CompactorLease, RenewOutcome, SQLITE_COMPACTOR_LEASE_VERSION, TakeOutcome, decode_lease,
 	encode_lease, release, renew, take,
