@@ -1,4 +1,5 @@
 pub mod checkpoint;
+pub mod cleanup;
 pub mod compact;
 pub mod lease;
 pub mod metrics;
@@ -8,6 +9,7 @@ pub mod subjects;
 pub mod worker;
 
 pub use checkpoint::{CheckpointOutcome, create_checkpoint};
+pub use cleanup::{cleanup_old_checkpoints, detect_refcount_leaks};
 pub use compact::{CompactionOutcome, compact_default_batch};
 pub use lease::{
 	CompactorLease, RenewOutcome, SQLITE_COMPACTOR_LEASE_VERSION, TakeOutcome, decode_lease,

@@ -690,6 +690,84 @@
         ]
       }
     },
+    "/namespaces/{ns_id}/sqlite-config": {
+      "get": {
+        "tags": [
+          "namespaces"
+        ],
+        "operationId": "namespaces_get_sqlite_config",
+        "parameters": [
+          {
+            "name": "ns_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/RivetId"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SqliteNamespaceConfig"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "namespaces"
+        ],
+        "operationId": "namespaces_put_sqlite_config",
+        "parameters": [
+          {
+            "name": "ns_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/RivetId"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SqliteNamespaceConfig"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SqliteNamespaceConfig"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
     "/runner-configs": {
       "get": {
         "tags": [
@@ -2201,6 +2279,84 @@
             "items": {
               "$ref": "#/components/schemas/Runner"
             }
+          }
+        },
+        "additionalProperties": false
+      },
+      "SqliteNamespaceConfig": {
+        "type": "object",
+        "required": [
+          "default_retention_ms",
+          "default_checkpoint_interval_ms",
+          "default_max_checkpoints",
+          "allow_pitr_read",
+          "allow_pitr_destructive",
+          "allow_pitr_admin",
+          "allow_fork",
+          "pitr_max_bytes_per_actor",
+          "pitr_namespace_budget_bytes",
+          "max_retention_ms",
+          "admin_op_rate_per_min",
+          "concurrent_admin_ops",
+          "concurrent_forks_per_src"
+        ],
+        "properties": {
+          "admin_op_rate_per_min": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "allow_fork": {
+            "type": "boolean"
+          },
+          "allow_pitr_admin": {
+            "type": "boolean"
+          },
+          "allow_pitr_destructive": {
+            "type": "boolean"
+          },
+          "allow_pitr_read": {
+            "type": "boolean"
+          },
+          "concurrent_admin_ops": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "concurrent_forks_per_src": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "default_checkpoint_interval_ms": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "default_max_checkpoints": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "default_retention_ms": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "max_retention_ms": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "pitr_max_bytes_per_actor": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "pitr_namespace_budget_bytes": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
           }
         },
         "additionalProperties": false

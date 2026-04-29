@@ -20,7 +20,7 @@ const META_FORK_IN_PROGRESS_PATH: &[u8] = b"/META/fork_in_progress";
 const CHECKPOINT_PATH: &[u8] = b"/CHECKPOINT/";
 const SHARD_PATH: &[u8] = b"/SHARD/";
 const DELTA_PATH: &[u8] = b"/DELTA/";
-const DELTA_META_PATH: &[u8] = b"/META";
+const DELTA_META_PATH: &[u8] = b"META";
 const PIDX_DELTA_PATH: &[u8] = b"/PIDX/delta/";
 
 /// Build the common actor-scoped prefix: `[0x02, actor_id_bytes]`.
@@ -187,14 +187,18 @@ pub fn delta_chunk_prefix(actor_id: &str, txid: u64) -> Vec<u8> {
 }
 
 pub fn delta_meta_key(actor_id: &str, txid: u64) -> Vec<u8> {
-	let prefix = actor_prefix(actor_id);
-	let mut key = Vec::with_capacity(
-		prefix.len() + DELTA_PATH.len() + std::mem::size_of::<u64>() + DELTA_META_PATH.len(),
-	);
+	let prefix = delta_chunk_prefix(actor_id, txid);
+	let mut key = Vec::with_capacity(prefix.len() + DELTA_META_PATH.len());
 	key.extend_from_slice(&prefix);
-	key.extend_from_slice(DELTA_PATH);
-	key.extend_from_slice(&txid.to_be_bytes());
 	key.extend_from_slice(DELTA_META_PATH);
+	key
+}
+
+pub fn meta_admin_op_prefix(actor_id: &str) -> Vec<u8> {
+	let prefix = actor_prefix(actor_id);
+	let mut key = Vec::with_capacity(prefix.len() + META_ADMIN_OP_PATH.len());
+	key.extend_from_slice(&prefix);
+	key.extend_from_slice(META_ADMIN_OP_PATH);
 	key
 }
 

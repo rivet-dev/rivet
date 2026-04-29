@@ -253,6 +253,8 @@ async fn handle_trigger(
 			load_checkpoint_config(
 				Arc::clone(&udb),
 				payload.namespace_id,
+				payload.actor_name.clone(),
+				compactor_config.lease_ttl_ms,
 				Arc::clone(&checkpoint_semaphore),
 			)
 			.await?
@@ -308,6 +310,8 @@ async fn handle_trigger(
 async fn load_checkpoint_config(
 	udb: Arc<universaldb::Database>,
 	namespace_id: Option<Id>,
+	actor_name: Option<String>,
+	lease_ttl_ms: u64,
 	semaphore: Arc<Semaphore>,
 ) -> Result<Option<CheckpointConfig>> {
 	let Some(namespace_id) = namespace_id else {
@@ -326,10 +330,13 @@ async fn load_checkpoint_config(
 		})
 		.await?;
 
-	Ok(Some(CheckpointConfig {
-		namespace_config,
-		semaphore,
-	}))
+		Ok(Some(CheckpointConfig {
+			namespace_config,
+			semaphore,
+			namespace_id: Some(namespace_id),
+			actor_name,
+			lease_ttl_ms,
+		}))
 }
 
 #[cfg(debug_assertions)]

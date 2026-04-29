@@ -1,6 +1,9 @@
 //! Per-actor compaction pass for the stateless sqlite-storage layout.
 
-use std::{collections::BTreeMap, sync::Arc};
+use std::{
+	collections::{BTreeMap, BTreeSet},
+	sync::Arc,
+};
 
 use anyhow::{Context, Result, bail};
 use futures_util::TryStreamExt;
@@ -22,12 +25,12 @@ use crate::pump::{
 	quota,
 	types::{
 		Checkpoints, MetaCompact, RetentionConfig, decode_checkpoints, decode_db_head,
-		decode_meta_compact, decode_retention_config, encode_meta_compact,
+		decode_delta_meta, decode_meta_compact, decode_retention_config, encode_meta_compact,
 	},
 	udb,
 };
 
-use super::{checkpoint, fold_shard, metrics};
+use super::{checkpoint, cleanup, fold_shard, metrics};
 
 const PIDX_TXID_BYTES: usize = std::mem::size_of::<u64>();
 
@@ -78,6 +81,9 @@ pub(crate) async fn compact_default_batch_with_node_id(
 pub(crate) struct CheckpointConfig {
 	pub namespace_config: SqliteNamespaceConfig,
 	pub semaphore: Arc<Semaphore>,
+	pub namespace_id: Option<gas::prelude::Id>,
+	pub actor_name: Option<String>,
+	pub lease_ttl_ms: u64,
 }
 
 pub(crate) async fn compact_default_batch_with_checkpoint_config(
@@ -110,7 +116,7 @@ pub(crate) async fn compact_default_batch_with_checkpoint_config(
 	test_hooks::maybe_pause_after_plan(&actor_id).await;
 	let mut write_result = WriteResult::default();
 	let mut compare_and_clear_noops = 0;
-	if !plan.selected_delta_txids.is_empty() {
+	if !plan.selected_delta_txids.is_empty() || !plan.deletable_delta_txids.is_empty() {
 		ensure_not_cancelled(&cancel_token)?;
 		write_result = write_batch(udb.as_ref(), actor_id.clone(), plan.clone()).await?;
 
@@ -123,10 +129,11 @@ pub(crate) async fn compact_default_batch_with_checkpoint_config(
 		.await?;
 	}
 
-	if let Some(checkpoint_config) = checkpoint_config.filter(|_| plan.checkpoint_due) {
+	if let Some(checkpoint_config) = checkpoint_config.as_ref().filter(|_| plan.checkpoint_due) {
 		ensure_not_cancelled(&cancel_token)?;
 		let _permit = checkpoint_config
 			.semaphore
+			.clone()
 			.acquire_owned()
 			.await
 			.context("sqlite checkpoint semaphore closed")?;
@@ -135,7 +142,7 @@ pub(crate) async fn compact_default_batch_with_checkpoint_config(
 			actor_id.clone(),
 			plan.head_txid_at_plan,
 			cancel_token.clone(),
-			checkpoint_config.namespace_config,
+			checkpoint_config.namespace_config.clone(),
 			node_id_value,
 		)
 		.await?;
@@ -145,6 +152,41 @@ pub(crate) async fn compact_default_batch_with_checkpoint_config(
 				.observe(plan.checkpoint_lag_ms.unwrap_or(0) as f64 / 1000.0);
 		}
 	}
+
+	let retention_config = load_retention_for_cleanup(
+		udb.as_ref(),
+		actor_id.clone(),
+		plan.namespace_config.clone(),
+	)
+	.await?;
+	let (namespace_id, actor_name, lease_ttl_ms) = checkpoint_config
+		.as_ref()
+		.map(|context| {
+			(
+				context.namespace_id,
+				context.actor_name.clone(),
+				context.lease_ttl_ms,
+			)
+		})
+		.unwrap_or((None, None, 30_000));
+	let cleanup_now_ms = now_ms()?;
+	cleanup::cleanup_old_checkpoints_with_metric_context(
+		Arc::clone(&udb),
+		actor_id.clone(),
+		retention_config,
+		cleanup_now_ms,
+		namespace_id,
+		actor_name,
+	)
+	.await?;
+	cleanup::detect_refcount_leaks_with_node_id(
+		Arc::clone(&udb),
+		actor_id.clone(),
+		cleanup_now_ms,
+		lease_ttl_ms,
+		node_id_value,
+	)
+	.await?;
 
 	metrics::SQLITE_COMPACTOR_PAGES_FOLDED_TOTAL
 		.with_label_values(labels)
@@ -198,11 +240,16 @@ async fn plan_batch(
 					materialized_txid: 0,
 				});
 			let has_deltas_to_fold = head.head_txid > compact.materialized_txid && batch_size_deltas != 0;
-			if !has_deltas_to_fold && !checkpoint_state.due {
+			let retention_cleanup_enabled = checkpoint_state
+				.retention
+				.as_ref()
+				.is_some_and(|retention| retention.retention_ms != 0);
+			if !has_deltas_to_fold && !checkpoint_state.due && !retention_cleanup_enabled {
 				return Ok(CompactionPlan {
 					head_txid_at_plan: head.head_txid,
 					checkpoint_due: checkpoint_state.due,
 					checkpoint_lag_ms: checkpoint_state.lag_ms,
+					namespace_config,
 					..CompactionPlan::default()
 				});
 			}
@@ -217,6 +264,8 @@ async fn plan_batch(
 				})
 				.take(batch_size_deltas as usize)
 				.collect::<Vec<_>>();
+			let selected_delta_txids_set =
+				selected_delta_txids.iter().copied().collect::<BTreeSet<_>>();
 
 			let mut selected_deltas = BTreeMap::new();
 			for txid in &selected_delta_txids {
@@ -251,23 +300,39 @@ async fn plan_batch(
 					});
 			}
 
-			let selected_delta_entries = selected_delta_txids
+			let materialized_txid = selected_delta_txids
 				.iter()
-				.map(|txid| {
-					let entry = delta_entries
-						.get(txid)
-						.with_context(|| format!("missing selected delta entry {txid}"))?;
-					Ok((*txid, entry.clone()))
+				.copied()
+				.max()
+				.unwrap_or(compact.materialized_txid);
+			let deletable_delta_txids = delta_entries
+				.iter()
+				.filter_map(|(txid, entry)| {
+					(*txid <= materialized_txid
+						&& delta_can_be_deleted(
+							*txid,
+							selected_delta_txids_set.contains(txid),
+							entry.meta.as_ref(),
+							checkpoint_state.retention.as_ref(),
+							checkpoint_state.latest_checkpoint_txid,
+							checkpoint_state.now_ms,
+						))
+					.then_some(*txid)
 				})
-				.collect::<Result<BTreeMap<_, _>>>()?;
-			let materialized_txid = selected_delta_txids.iter().copied().max().unwrap_or(0);
+				.collect::<Vec<_>>();
 
 			Ok(CompactionPlan {
 				head_txid_at_plan: head.head_txid,
 				checkpoint_due: checkpoint_state.due,
 				checkpoint_lag_ms: checkpoint_state.lag_ms,
+				namespace_config,
 				selected_delta_txids,
-				selected_delta_entries,
+				deletable_delta_entries: delta_entries
+					.iter()
+					.filter(|(txid, _)| deletable_delta_txids.contains(txid))
+					.map(|(txid, entry)| (*txid, entry.clone()))
+					.collect(),
+				deletable_delta_txids,
 				pages_by_shard,
 				materialized_txid,
 			})
@@ -293,7 +358,11 @@ async fn load_checkpoint_state(
 			max_checkpoints: namespace_config.default_max_checkpoints,
 		});
 	if retention.retention_ms == 0 {
-		return Ok(CheckpointPlanState::default());
+		return Ok(CheckpointPlanState {
+			retention: Some(retention),
+			now_ms: now_ms()?,
+			..CheckpointPlanState::default()
+		});
 	}
 
 	let checkpoints = tx_get_value(tx, &keys::meta_checkpoints_key(actor_id), Snapshot)
@@ -306,19 +375,81 @@ async fn load_checkpoint_state(
 			entries: Vec::new(),
 		});
 	let now_ms = now_ms()?;
-	let latest = checkpoints.entries.iter().max_by_key(|entry| entry.taken_at_ms);
-	let Some(latest) = latest else {
+	let latest_for_due = checkpoints.entries.iter().max_by_key(|entry| entry.taken_at_ms);
+	let latest_checkpoint_txid = checkpoints.entries.iter().map(|entry| entry.ckp_txid).max();
+	let Some(latest_for_due) = latest_for_due else {
 		return Ok(CheckpointPlanState {
 			due: true,
 			lag_ms: None,
+			retention: Some(retention),
+			latest_checkpoint_txid: None,
+			now_ms,
 		});
 	};
-	let age_ms = now_ms.saturating_sub(latest.taken_at_ms);
+	let age_ms = now_ms.saturating_sub(latest_for_due.taken_at_ms);
 
 	Ok(CheckpointPlanState {
 		due: age_ms >= retention.checkpoint_interval_ms as i64,
 		lag_ms: Some(age_ms.max(0) as u64),
+		retention: Some(retention),
+		latest_checkpoint_txid,
+		now_ms,
 	})
+}
+
+async fn load_retention_for_cleanup(
+	db: &universaldb::Database,
+	actor_id: String,
+	namespace_config: Option<SqliteNamespaceConfig>,
+) -> Result<RetentionConfig> {
+	db.run(move |tx| {
+		let actor_id = actor_id.clone();
+		let namespace_config = namespace_config.clone();
+
+		async move {
+			Ok(tx_get_value(&tx, &keys::meta_retention_key(&actor_id), Snapshot)
+				.await?
+				.as_deref()
+				.map(decode_retention_config)
+				.transpose()
+				.context("decode sqlite retention config")?
+				.unwrap_or_else(|| {
+					namespace_config
+						.map(|config| RetentionConfig {
+							retention_ms: config.default_retention_ms,
+							checkpoint_interval_ms: config.default_checkpoint_interval_ms,
+							max_checkpoints: config.default_max_checkpoints,
+						})
+						.unwrap_or_default()
+				}))
+		}
+	})
+	.await
+}
+
+fn delta_can_be_deleted(
+	txid: u64,
+	selected_for_fold: bool,
+	meta: Option<&crate::pump::types::DeltaMeta>,
+	retention: Option<&RetentionConfig>,
+	latest_checkpoint_txid: Option<u64>,
+	now_ms: i64,
+) -> bool {
+	let Some(retention) = retention else {
+		return selected_for_fold;
+	};
+	if retention.retention_ms == 0 {
+		return selected_for_fold;
+	}
+	let Some(latest_checkpoint_txid) = latest_checkpoint_txid else {
+		return false;
+	};
+	let Some(meta) = meta else {
+		return false;
+	};
+	let cutoff_ms = now_ms.saturating_sub(i64::try_from(retention.retention_ms).unwrap_or(i64::MAX));
+
+	txid <= latest_checkpoint_txid && meta.taken_at_ms < cutoff_ms && meta.refcount == 0
 }
 
 async fn write_batch(
@@ -341,11 +472,7 @@ async fn write_batch(
 
 			let mut attempted_pidx_deletes = Vec::new();
 			let mut pages_folded = 0u64;
-			let mut bytes_freed = plan
-				.selected_delta_entries
-				.values()
-				.map(|entry| entry.tracked_size)
-				.sum::<i64>();
+			let mut bytes_freed = 0i64;
 
 			for (shard_id, fold_pages) in &plan.pages_by_shard {
 				let page_updates = fold_pages
@@ -371,7 +498,11 @@ async fn write_batch(
 				}
 			}
 
-			for txid in &plan.selected_delta_txids {
+			for txid in &plan.deletable_delta_txids {
+				let Some(entry) = plan.deletable_delta_entries.get(txid) else {
+					continue;
+				};
+				bytes_freed += entry.tracked_size;
 				let prefix = keys::delta_chunk_prefix(&actor_id, *txid);
 				let (begin, end) = prefix_range(&prefix);
 				tx.informal().clear_range(&begin, &end);
@@ -389,7 +520,7 @@ async fn write_batch(
 
 			Ok(WriteResult {
 				pages_folded,
-				deltas_freed: plan.selected_delta_txids.len() as u64,
+				deltas_freed: plan.deletable_delta_txids.len() as u64,
 				bytes_freed,
 				materialized_txid: plan.materialized_txid,
 				attempted_pidx_deletes,
@@ -503,10 +634,15 @@ async fn load_delta_entries(
 	actor_id: &str,
 ) -> Result<BTreeMap<u64, DeltaEntry>> {
 	let mut chunks_by_txid = BTreeMap::<u64, Vec<DeltaChunk>>::new();
+	let mut meta_by_txid = BTreeMap::new();
 	let mut meta_bytes_by_txid = BTreeMap::<u64, i64>::new();
 	for (key, value) in tx_scan_prefix_values(tx, &keys::delta_prefix(actor_id)).await? {
 		let txid = keys::decode_delta_chunk_txid(actor_id, &key)?;
 		if key == keys::delta_meta_key(actor_id, txid) {
+			meta_by_txid.insert(
+				txid,
+				decode_delta_meta(&value).context("decode sqlite delta meta for compaction")?,
+			);
 			meta_bytes_by_txid.insert(txid, tracked_entry_size(&key, &value)?);
 			continue;
 		}
@@ -527,7 +663,11 @@ async fn load_delta_entries(
 			tracked_size += tracked_entry_size(&chunk.key, &chunk.value)?;
 			blob.extend_from_slice(&chunk.value);
 		}
-		entries.insert(txid, DeltaEntry { blob, tracked_size });
+		entries.insert(txid, DeltaEntry {
+			blob,
+			tracked_size,
+			meta: meta_by_txid.remove(&txid),
+		});
 	}
 
 	Ok(entries)
@@ -628,8 +768,10 @@ struct CompactionPlan {
 	head_txid_at_plan: u64,
 	checkpoint_due: bool,
 	checkpoint_lag_ms: Option<u64>,
+	namespace_config: Option<SqliteNamespaceConfig>,
 	selected_delta_txids: Vec<u64>,
-	selected_delta_entries: BTreeMap<u64, DeltaEntry>,
+	deletable_delta_entries: BTreeMap<u64, DeltaEntry>,
+	deletable_delta_txids: Vec<u64>,
 	pages_by_shard: BTreeMap<u32, Vec<FoldPage>>,
 	materialized_txid: u64,
 }
@@ -638,12 +780,16 @@ struct CompactionPlan {
 struct CheckpointPlanState {
 	due: bool,
 	lag_ms: Option<u64>,
+	retention: Option<RetentionConfig>,
+	latest_checkpoint_txid: Option<u64>,
+	now_ms: i64,
 }
 
 #[derive(Debug, Clone)]
 struct DeltaEntry {
 	blob: Vec<u8>,
 	tracked_size: i64,
+	meta: Option<crate::pump::types::DeltaMeta>,
 }
 
 #[derive(Debug, Clone)]

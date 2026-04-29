@@ -42,6 +42,9 @@ Started: Wed Apr 29 04:36:56 AM PDT 2026
 - Gas `#[operation]` emits a module-local `Operation` type, so put only one operation macro per module and split paired get/put ops into sibling modules.
 - SQLite checkpoint creation copies data rows first, then makes the checkpoint visible only by writing `/CHECKPOINT/{T}/META` and `/META/checkpoints` in the final tx.
 - PITR checkpoint work is gated by `CompactorConfig::pitr_enabled` and uses a separate checkpoint semaphore; worker-side checkpoint config comes from the compact payload's namespace id.
+- DELTA metadata must live at `/DELTA/{txid}/META` under `delta_chunk_prefix`; DELTA prefix readers concatenate chunks and explicitly skip the `META` row.
+- Retention-aware compaction needs namespace checkpoint config from the compact payload so it can load namespace defaults and emit namespace-level PITR metrics.
+- Checkpoint cleanup must preserve the latest checkpoint even past retention, update `/META/checkpoints`, clear `/CHECKPOINT/{T}/*`, and adjust `/META/storage_used_pitr` in one transaction.
 
 ## 2026-04-29 04:44:52 PDT - US-001
 - Implemented a UUID-backed `NodeId` type and stored a generated value on each `Pools` instance.
@@ -360,4 +363,15 @@ Started: Wed Apr 29 04:36:56 AM PDT 2026
   - Checkpoint readers should key visibility off `/CHECKPOINT/{T}/META` and `/META/checkpoints`; copied checkpoint rows alone are not a published checkpoint.
   - The compactor can create a checkpoint even when there are no deltas to fold, as long as PITR is enabled and the retention interval says a checkpoint is due.
   - Namespace PITR budgets are enforced before publication; skipped checkpoints increment `sqlite_checkpoint_skipped_quota_total`.
+---
+## 2026-04-29 08:31:35 PDT - US-031
+- Implemented retention-aware DELTA deletion in compaction, including refcount pins and checkpoint coverage checks before clearing DELTA blobs.
+- Added `compactor::cleanup` with old-checkpoint cleanup, PITR counter adjustment, leaked refcount recovery, and `sqlite_checkpoint_refcount_leak_total`.
+- Added the `SqliteCheckpointPinned` namespace metric and threaded compact payload namespace context into checkpoint cleanup.
+- Fixed DELTA metadata keying so `/DELTA/{txid}/META` lives under the chunk prefix that readers already skip.
+- Files changed: `engine/packages/namespace/src/keys/metric.rs`, `engine/packages/sqlite-storage/src/compactor/{cleanup.rs,compact.rs,metrics.rs,mod.rs,worker.rs}`, `engine/packages/sqlite-storage/src/pump/keys.rs`, `engine/packages/sqlite-storage/tests/{checkpoint_cleanup.rs,retention_compaction.rs}`, `engine/artifacts/openapi.json`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
+- **Learnings for future iterations:**
+  - Use worker payload namespace context for PITR compaction paths that need namespace config or namespace metric emission.
+  - Refcount leak recovery can decode actor-scoped admin op records from `/META/admin_op/*`; `Pending` and `InProgress` records block auto-reset.
+  - Retention tests should seed DELTA `taken_at_ms` relative to real system time because current compactor timestamps use `SystemTime`, not paused Tokio time.
 ---

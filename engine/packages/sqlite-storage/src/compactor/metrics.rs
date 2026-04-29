@@ -114,6 +114,13 @@ lazy_static::lazy_static! {
 		BUCKETS.to_vec(),
 		*REGISTRY
 	).unwrap();
+
+	pub static ref SQLITE_CHECKPOINT_REFCOUNT_LEAK_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
+		"sqlite_checkpoint_refcount_leak_total",
+		"Total sqlite PITR refcounts reset by compactor leak recovery.",
+		&["node_id", "kind"],
+		*REGISTRY
+	).unwrap();
 }
 
 #[cfg(debug_assertions)]
