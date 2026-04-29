@@ -11,11 +11,15 @@ legacy-inline-tests = []
 [dependencies]
 anyhow.workspace = true
 futures-util.workspace = true
+gas.workspace = true
 lazy_static.workspace = true
 lz4_flex.workspace = true
 parking_lot.workspace = true
+rivet-cache.workspace = true
+rivet-config.workspace = true
 rivet-metrics.workspace = true
 rivet-pools.workspace = true
+rivet-runtime.workspace = true
 scc.workspace = true
 serde.workspace = true
 serde_bare.workspace = true

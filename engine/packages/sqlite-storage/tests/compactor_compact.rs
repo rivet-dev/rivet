@@ -19,6 +19,7 @@ use universaldb::{
 };
 
 const TEST_ACTOR: &str = "test-actor";
+static COMPACTION_TEST_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
 async fn test_db() -> Result<universaldb::Database> {
 	let path = Builder::new().prefix("sqlite-storage-compact-").tempdir()?.keep();
@@ -297,6 +298,7 @@ async fn fold_byte_count_metric() -> Result<()> {
 
 #[tokio::test]
 async fn compact_default_batch_basic_fold() -> Result<()> {
+	let _compaction_test_lock = COMPACTION_TEST_LOCK.lock().await;
 	let db = test_db().await?;
 	seed_compaction_case(
 		&db,
@@ -342,6 +344,7 @@ async fn compact_default_batch_basic_fold() -> Result<()> {
 
 #[tokio::test]
 async fn compact_compare_and_clear_noop_keeps_newer_pidx() -> Result<()> {
+	let _compaction_test_lock = COMPACTION_TEST_LOCK.lock().await;
 	let db = test_db().await?;
 	seed_compaction_case(
 		&db,
@@ -392,6 +395,7 @@ async fn compact_compare_and_clear_noop_keeps_newer_pidx() -> Result<()> {
 
 #[tokio::test]
 async fn compact_conflicts_with_concurrent_shrink_after_head_read() -> Result<()> {
+	let _compaction_test_lock = COMPACTION_TEST_LOCK.lock().await;
 	let db = test_db().await?;
 	db.set_option(DatabaseOption::TransactionRetryLimit(1))?;
 	seed_compaction_case(

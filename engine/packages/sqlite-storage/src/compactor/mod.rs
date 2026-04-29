@@ -4,6 +4,7 @@ pub mod metrics;
 pub mod publish;
 pub mod shard;
 pub mod subjects;
+pub mod worker;
 
 pub use compact::{CompactionOutcome, compact_default_batch};
 pub use lease::{
@@ -16,3 +17,4 @@ pub use publish::{
 };
 pub use shard::fold_shard;
 pub use subjects::{SQLITE_COMPACT_SUBJECT, SqliteCompactSubject};
+pub use worker::{CompactorConfig, start};

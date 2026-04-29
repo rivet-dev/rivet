@@ -17,6 +17,7 @@ Started: Wed Apr 29 04:36:56 AM PDT 2026
 - `sqlite-storage` compactor lease take/renew helpers must use `Serializable` reads on `/META/compactor_lease`; use `TransactionRetryLimit(1)` in race tests when you need to observe the OCC abort instead of UDB's automatic retry.
 - `sqlite-storage` compactor shard folding uses absolute SQLite page numbers; page 0 is invalid for LTX, so full-shard tests use shard 1 pages `64..128`.
 - `sqlite-storage` raw byte prefix clears need the same `universaldb::Subspace::from(tuple::Subspace::from_bytes(prefix)).range()` shape as prefix scans; `end_of_key_range(prefix)` only clears the single prefix key on the RocksDB driver.
+- `sqlite-storage` compaction pause hooks are global per test binary; serialize tests that install those hooks and any same-actor `compact_default_batch` tests with a small async mutex.
 
 ## 2026-04-29 04:44:52 PDT - US-001
 - Implemented a UUID-backed `NodeId` type and stored a generated value on each `Pools` instance.
@@ -159,4 +160,15 @@ Started: Wed Apr 29 04:36:56 AM PDT 2026
   - Compaction race tests can use debug-only pause hooks around the plan/write boundary to deterministically interleave commits and shrink transactions.
   - `COMPARE_AND_CLEAR` does not report whether it cleared, so the current compactor counts no-ops with a post-write snapshot read of attempted PIDX delete keys.
   - Prefix clears against raw sqlite-storage byte keys should use UniversalDB subspace ranges, matching prefix scan behavior.
+---
+## 2026-04-29 05:48:24 PDT - US-015
+- Implemented the standalone sqlite compactor worker entrypoint, including `CompactorConfig`, `start`, the UPS queue-subscribe loop, bounded per-trigger worker tasks, lease take/renew/release, local deadline cancellation, and graceful shutdown cancellation.
+- Added dispatch coverage for UPS-triggered compaction, renewal extending the local deadline, and renewal failure cancelling an in-flight compaction.
+- Serialized existing compaction pause-hook tests so shared debug hooks cannot trap unrelated same-actor compaction tests.
+- Verified `cargo check -p sqlite-storage`, `cargo test -p sqlite-storage --test compactor_dispatch`, `cargo test -p sqlite-storage --test compactor_compact`, `cargo test -p sqlite-storage`, and `git diff --check`.
+- Files changed: `engine/packages/sqlite-storage/Cargo.toml`, `Cargo.lock`, `engine/packages/sqlite-storage/src/compactor/mod.rs`, `engine/packages/sqlite-storage/src/compactor/worker.rs`, `engine/packages/sqlite-storage/tests/compactor_dispatch.rs`, `engine/packages/sqlite-storage/tests/compactor_compact.rs`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
+- **Learnings for future iterations:**
+  - Worker tests can drive the real compactor through `worker::test_hooks::handle_trigger_once` after receiving a UPS memory-driver payload.
+  - Lease renewal tests that use the compaction pause hook should either use real time for renewal-extension assertions or explicitly yield before advancing paused time.
+  - Same-actor `compact_default_batch` tests must not run concurrently with installed pause hooks because the hook slot is process-global.
 ---
