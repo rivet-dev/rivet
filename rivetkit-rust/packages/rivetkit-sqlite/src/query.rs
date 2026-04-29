@@ -1,14 +1,24 @@
-use std::ffi::{CStr, CString, c_char};
+use std::ffi::{CStr, CString};
+use std::os::raw::{c_char, c_int, c_void};
 use std::ptr;
 
 use anyhow::{Result, anyhow};
 use libsqlite3_sys::{
-	SQLITE_BLOB, SQLITE_DONE, SQLITE_FLOAT, SQLITE_INTEGER, SQLITE_NULL, SQLITE_OK, SQLITE_ROW,
-	SQLITE_TEXT, SQLITE_TRANSIENT, sqlite3, sqlite3_bind_blob, sqlite3_bind_double,
-	sqlite3_bind_int64, sqlite3_bind_null, sqlite3_bind_text, sqlite3_changes, sqlite3_column_blob,
+	SQLITE_ALTER_TABLE, SQLITE_ANALYZE, SQLITE_ATTACH, SQLITE_BLOB, SQLITE_CREATE_INDEX,
+	SQLITE_CREATE_TABLE, SQLITE_CREATE_TEMP_INDEX, SQLITE_CREATE_TEMP_TABLE,
+	SQLITE_CREATE_TEMP_TRIGGER, SQLITE_CREATE_TEMP_VIEW, SQLITE_CREATE_TRIGGER,
+	SQLITE_CREATE_VIEW, SQLITE_CREATE_VTABLE, SQLITE_DELETE, SQLITE_DETACH, SQLITE_DONE,
+	SQLITE_DROP_INDEX, SQLITE_DROP_TABLE, SQLITE_DROP_TEMP_INDEX, SQLITE_DROP_TEMP_TABLE,
+	SQLITE_DROP_TEMP_TRIGGER, SQLITE_DROP_TEMP_VIEW, SQLITE_DROP_TRIGGER, SQLITE_DROP_VIEW,
+	SQLITE_DROP_VTABLE, SQLITE_FLOAT, SQLITE_FUNCTION, SQLITE_INSERT, SQLITE_INTEGER,
+	SQLITE_NULL, SQLITE_OK, SQLITE_PRAGMA, SQLITE_READ, SQLITE_REINDEX, SQLITE_ROW,
+	SQLITE_SAVEPOINT, SQLITE_SELECT, SQLITE_TEXT, SQLITE_TRANSACTION, SQLITE_TRANSIENT,
+	SQLITE_UPDATE, sqlite3, sqlite3_bind_blob, sqlite3_bind_double, sqlite3_bind_int64,
+	sqlite3_bind_null, sqlite3_bind_text, sqlite3_changes, sqlite3_column_blob,
 	sqlite3_column_bytes, sqlite3_column_count, sqlite3_column_double, sqlite3_column_int64,
 	sqlite3_column_name, sqlite3_column_text, sqlite3_column_type, sqlite3_errmsg,
-	sqlite3_finalize, sqlite3_prepare_v2, sqlite3_step,
+	sqlite3_finalize, sqlite3_prepare_v2, sqlite3_set_authorizer, sqlite3_step,
+	sqlite3_stmt_readonly,
 };
 
 #[derive(Clone, Debug, PartialEq)]
@@ -38,6 +48,234 @@ pub enum ColumnValue {
 	Float(f64),
 	Text(String),
 	Blob(Vec<u8>),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct StatementClassification {
+	pub has_statement: bool,
+	pub sqlite_readonly: bool,
+	pub has_trailing_sql: bool,
+	pub authorizer: StatementAuthorizerSummary,
+}
+
+impl StatementClassification {
+	pub fn reader_eligible(&self) -> bool {
+		self.has_statement
+			&& self.sqlite_readonly
+			&& !self.has_trailing_sql
+			&& !self.authorizer.requires_write_route()
+	}
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct StatementAuthorizerSummary {
+	pub transaction_control: bool,
+	pub attach: bool,
+	pub detach: bool,
+	pub schema_writes: bool,
+	pub temp_writes: bool,
+	pub pragma_usage: bool,
+	pub function_calls: bool,
+	pub write_operations: bool,
+	pub actions: Vec<StatementAuthorizerAction>,
+}
+
+impl StatementAuthorizerSummary {
+	pub fn requires_write_route(&self) -> bool {
+		self.transaction_control
+			|| self.attach
+			|| self.detach
+			|| self.schema_writes
+			|| self.temp_writes
+			|| self.write_operations
+	}
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct StatementAuthorizerAction {
+	pub kind: StatementAuthorizerActionKind,
+	pub first_arg: Option<String>,
+	pub second_arg: Option<String>,
+	pub database_name: Option<String>,
+	pub trigger_or_view_name: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum StatementAuthorizerActionKind {
+	Read,
+	Select,
+	Transaction,
+	Savepoint,
+	Attach,
+	Detach,
+	Pragma,
+	Function,
+	Insert,
+	Update,
+	Delete,
+	CreateIndex,
+	CreateTable,
+	CreateTrigger,
+	CreateView,
+	CreateVirtualTable,
+	CreateTempIndex,
+	CreateTempTable,
+	CreateTempTrigger,
+	CreateTempView,
+	DropIndex,
+	DropTable,
+	DropTrigger,
+	DropView,
+	DropVirtualTable,
+	DropTempIndex,
+	DropTempTable,
+	DropTempTrigger,
+	DropTempView,
+	AlterTable,
+	Reindex,
+	Analyze,
+	Other(i32),
+}
+
+impl StatementAuthorizerActionKind {
+	fn from_code(code: c_int) -> Self {
+		match code {
+			SQLITE_READ => Self::Read,
+			SQLITE_SELECT => Self::Select,
+			SQLITE_TRANSACTION => Self::Transaction,
+			SQLITE_SAVEPOINT => Self::Savepoint,
+			SQLITE_ATTACH => Self::Attach,
+			SQLITE_DETACH => Self::Detach,
+			SQLITE_PRAGMA => Self::Pragma,
+			SQLITE_FUNCTION => Self::Function,
+			SQLITE_INSERT => Self::Insert,
+			SQLITE_UPDATE => Self::Update,
+			SQLITE_DELETE => Self::Delete,
+			SQLITE_CREATE_INDEX => Self::CreateIndex,
+			SQLITE_CREATE_TABLE => Self::CreateTable,
+			SQLITE_CREATE_TRIGGER => Self::CreateTrigger,
+			SQLITE_CREATE_VIEW => Self::CreateView,
+			SQLITE_CREATE_VTABLE => Self::CreateVirtualTable,
+			SQLITE_CREATE_TEMP_INDEX => Self::CreateTempIndex,
+			SQLITE_CREATE_TEMP_TABLE => Self::CreateTempTable,
+			SQLITE_CREATE_TEMP_TRIGGER => Self::CreateTempTrigger,
+			SQLITE_CREATE_TEMP_VIEW => Self::CreateTempView,
+			SQLITE_DROP_INDEX => Self::DropIndex,
+			SQLITE_DROP_TABLE => Self::DropTable,
+			SQLITE_DROP_TRIGGER => Self::DropTrigger,
+			SQLITE_DROP_VIEW => Self::DropView,
+			SQLITE_DROP_VTABLE => Self::DropVirtualTable,
+			SQLITE_DROP_TEMP_INDEX => Self::DropTempIndex,
+			SQLITE_DROP_TEMP_TABLE => Self::DropTempTable,
+			SQLITE_DROP_TEMP_TRIGGER => Self::DropTempTrigger,
+			SQLITE_DROP_TEMP_VIEW => Self::DropTempView,
+			SQLITE_ALTER_TABLE => Self::AlterTable,
+			SQLITE_REINDEX => Self::Reindex,
+			SQLITE_ANALYZE => Self::Analyze,
+			_ => Self::Other(code),
+		}
+	}
+
+	fn is_schema_write(&self) -> bool {
+		matches!(
+			self,
+			Self::CreateIndex
+				| Self::CreateTable
+				| Self::CreateTrigger
+				| Self::CreateView
+				| Self::CreateVirtualTable
+				| Self::DropIndex
+				| Self::DropTable
+				| Self::DropTrigger
+				| Self::DropView
+				| Self::DropVirtualTable
+				| Self::AlterTable
+				| Self::Reindex
+				| Self::Analyze
+		)
+	}
+
+	fn is_temp_schema_write(&self) -> bool {
+		matches!(
+			self,
+			Self::CreateTempIndex
+				| Self::CreateTempTable
+				| Self::CreateTempTrigger
+				| Self::CreateTempView
+				| Self::DropTempIndex
+				| Self::DropTempTable
+				| Self::DropTempTrigger
+				| Self::DropTempView
+		)
+	}
+
+	fn is_data_write(&self) -> bool {
+		matches!(self, Self::Insert | Self::Update | Self::Delete)
+	}
+}
+
+pub fn classify_statement(db: *mut sqlite3, sql: &str) -> Result<StatementClassification> {
+	let c_sql = CString::new(sql).map_err(|err| anyhow!(err.to_string()))?;
+	let mut summary = StatementAuthorizerSummary::default();
+	let rc = unsafe {
+		sqlite3_set_authorizer(
+			db,
+			Some(capture_authorizer_action),
+			&mut summary as *mut StatementAuthorizerSummary as *mut c_void,
+		)
+	};
+	if rc != SQLITE_OK {
+		return Err(sqlite_error(db, "failed to install sqlite authorizer"));
+	}
+
+	let mut stmt = ptr::null_mut();
+	let mut tail = ptr::null();
+	let prepare_rc = unsafe { sqlite3_prepare_v2(db, c_sql.as_ptr(), -1, &mut stmt, &mut tail) };
+	let prepare_error = if prepare_rc == SQLITE_OK {
+		None
+	} else {
+		Some(sqlite_error(db, "failed to prepare sqlite statement for classification"))
+	};
+
+	let restore_rc = unsafe { sqlite3_set_authorizer(db, None, ptr::null_mut()) };
+	if restore_rc != SQLITE_OK {
+		if !stmt.is_null() {
+			unsafe {
+				sqlite3_finalize(stmt);
+			}
+		}
+		return Err(sqlite_error(db, "failed to clear sqlite authorizer"));
+	}
+
+	if let Some(err) = prepare_error {
+		if !stmt.is_null() {
+			unsafe {
+				sqlite3_finalize(stmt);
+			}
+		}
+		return Err(err);
+	}
+
+	if stmt.is_null() {
+		return Ok(StatementClassification {
+			has_statement: false,
+			sqlite_readonly: true,
+			has_trailing_sql: has_non_whitespace_tail(tail),
+			authorizer: summary,
+		});
+	}
+
+	let sqlite_readonly = unsafe { sqlite3_stmt_readonly(stmt) != 0 };
+	unsafe {
+		sqlite3_finalize(stmt);
+	}
+
+	Ok(StatementClassification {
+		has_statement: true,
+		sqlite_readonly,
+		has_trailing_sql: has_non_whitespace_tail(tail),
+		authorizer: summary,
+	})
 }
 
 pub fn execute_statement(
@@ -281,6 +519,76 @@ fn column_value(stmt: *mut libsqlite3_sys::sqlite3_stmt, index: i32) -> ColumnVa
 		}
 		_ => ColumnValue::Null,
 	}
+}
+
+unsafe extern "C" fn capture_authorizer_action(
+	user_data: *mut c_void,
+	action_code: c_int,
+	first_arg: *const c_char,
+	second_arg: *const c_char,
+	database_name: *const c_char,
+	trigger_or_view_name: *const c_char,
+) -> c_int {
+	if user_data.is_null() {
+		return SQLITE_OK;
+	}
+
+	let summary = unsafe { &mut *(user_data as *mut StatementAuthorizerSummary) };
+	let kind = StatementAuthorizerActionKind::from_code(action_code);
+	let database_name = unsafe { optional_c_string(database_name) };
+
+	match kind {
+		StatementAuthorizerActionKind::Transaction
+		| StatementAuthorizerActionKind::Savepoint => summary.transaction_control = true,
+		StatementAuthorizerActionKind::Attach => summary.attach = true,
+		StatementAuthorizerActionKind::Detach => summary.detach = true,
+		StatementAuthorizerActionKind::Pragma => summary.pragma_usage = true,
+		StatementAuthorizerActionKind::Function => summary.function_calls = true,
+		_ => {}
+	}
+
+	if kind.is_schema_write() {
+		summary.schema_writes = true;
+	}
+	if kind.is_temp_schema_write()
+		|| (kind.is_data_write() && database_name.as_deref() == Some("temp"))
+	{
+		summary.temp_writes = true;
+	}
+	if kind.is_data_write() || kind.is_schema_write() || kind.is_temp_schema_write() {
+		summary.write_operations = true;
+	}
+
+	summary.actions.push(StatementAuthorizerAction {
+		kind,
+		first_arg: unsafe { optional_c_string(first_arg) },
+		second_arg: unsafe { optional_c_string(second_arg) },
+		database_name,
+		trigger_or_view_name: unsafe { optional_c_string(trigger_or_view_name) },
+	});
+
+	SQLITE_OK
+}
+
+unsafe fn optional_c_string(value: *const c_char) -> Option<String> {
+	if value.is_null() {
+		None
+	} else {
+		Some(
+			unsafe { CStr::from_ptr(value) }
+				.to_string_lossy()
+				.into_owned(),
+		)
+	}
+}
+
+fn has_non_whitespace_tail(tail: *const c_char) -> bool {
+	if tail.is_null() {
+		return false;
+	}
+
+	let bytes = unsafe { CStr::from_ptr(tail).to_bytes() };
+	bytes.iter().any(|byte| !byte.is_ascii_whitespace())
 }
 
 fn sqlite_error(db: *mut sqlite3, context: &str) -> anyhow::Error {
