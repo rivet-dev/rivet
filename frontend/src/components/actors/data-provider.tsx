@@ -75,7 +75,7 @@ export const useCloudProjectDataProvider = () => {
 export const useCloudNamespaceDataProvider = () => {
 	return useLoaderData({
 		from: "/_context/orgs/$organization/projects/$project/ns/$namespace",
-		select: (d) => d.dataProvider,
+		select: (d) => d?.dataProvider,
 	});
 };
 
