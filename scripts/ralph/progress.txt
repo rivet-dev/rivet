@@ -51,6 +51,7 @@ Started: Wed Apr 29 04:36:56 AM PDT 2026
 - SQLite fork destination PIDX rows must be self-contained by copying source DELTA rows referenced by checkpoint PIDX entries into the destination actor.
 - Short sqlite admin ops persist rich responses as typed `OpResult` variants; direct handlers in `compactor::admin` transition records to InProgress before completing so tests can call them without the worker.
 - SQLite admin audit fields carry a raw UUID namespace id; tests that need namespace config seed `namespace::keys::sqlite_config_key(Id::v1(audit.namespace_id, 0))`.
+- api-public SQLite admin endpoints create `AdminOpRecord`s locally through `ctx.udb()` and publish typed `SqliteOpSubject` requests through `ctx.ups()`; endpoint tests that need short-op completion must start `sqlite_storage::compactor::worker::test_hooks::run_for_test`.
 
 ## 2026-04-29 04:44:52 PDT - US-001
 - Implemented a UUID-backed `NodeId` type and stored a generated value on each `Pools` instance.
@@ -434,4 +435,15 @@ Started: Wed Apr 29 04:36:56 AM PDT 2026
   - Short admin handlers should own record completion and typed results; the worker should stay a dispatch/metrics shell.
   - `DescribeRetention` derives pinned checkpoint reasons from live Pending/InProgress admin records when refcount is nonzero.
   - ClearRefcount updates checkpoint meta and the `/META/checkpoints` mirror together; DELTA refcounts only update `/DELTA/{T}/META`.
+---
+## 2026-04-29 09:29:34 PDT - US-037
+- Added api-public SQLite admin endpoints for restore, fork, operation polling, SSE operation streaming, retention get/set, and refcount clear.
+- Wired POST handlers to create persisted `AdminOpRecord`s, publish typed `SqliteOpSubject` requests, and return immediate 202 pending responses; short retention/refcount endpoints publish through the same path and wait up to 2s for typed results.
+- Added `tests/sqlite_admin_endpoints.rs` coverage for immediate POST behavior, operation polling, SSE progress/terminal behavior, retention get/set, refcount clearing, and RivetError-shaped failures.
+- Verified `cargo check -p rivet-api-public`, `cargo test -p rivet-api-public --test sqlite_admin_endpoints -- --nocapture`, `cargo test -p rivet-api-public`, and `git diff --check`.
+- Files changed: `Cargo.lock`, `engine/packages/api-public/Cargo.toml`, `engine/packages/api-public/src/actors/{mod.rs,sqlite_admin.rs}`, `engine/packages/api-public/src/router.rs`, `engine/packages/api-public/tests/sqlite_admin_endpoints.rs`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
+- **Learnings for future iterations:**
+  - api-public can expose SQLite admin records directly with standard JSON because `AdminOpRecord` and result payloads already derive serde traits.
+  - SSE tests need real HTTP transport from `axum_test::TestServer::builder().http_transport()`; mock transport is fine for normal JSON endpoint tests.
+  - Short admin endpoint tests must start the compactor worker before publishing because UPS does not retain pre-subscription `SqliteOpSubject` messages.
 ---

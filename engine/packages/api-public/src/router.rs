@@ -118,6 +118,34 @@ pub async fn router(
 				"/actors/{actor_id}/reschedule",
 				axum::routing::post(actors::reschedule::reschedule),
 			)
+			.route(
+				"/actors/{actor_id}/sqlite/restore",
+				axum::routing::post(actors::sqlite_admin::post_restore),
+			)
+			.route(
+				"/actors/{actor_id}/sqlite/fork",
+				axum::routing::post(actors::sqlite_admin::post_fork),
+			)
+			.route(
+				"/actors/{actor_id}/sqlite/operations/{op_id}",
+				axum::routing::get(actors::sqlite_admin::get_operation),
+			)
+			.route(
+				"/actors/{actor_id}/sqlite/operations/{op_id}/sse",
+				axum::routing::get(actors::sqlite_admin::get_operation_sse),
+			)
+			.route(
+				"/actors/{actor_id}/sqlite/retention",
+				axum::routing::get(actors::sqlite_admin::get_retention),
+			)
+			.route(
+				"/actors/{actor_id}/sqlite/retention",
+				axum::routing::put(actors::sqlite_admin::put_retention),
+			)
+			.route(
+				"/actors/{actor_id}/sqlite/refcount/clear",
+				axum::routing::post(actors::sqlite_admin::post_refcount_clear),
+			)
 			// MARK: Runners
 			.route("/runners", axum::routing::get(runners::list))
 			// MARK: Envoys

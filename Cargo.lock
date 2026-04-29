@@ -4442,12 +4442,16 @@ dependencies = [
  "rivet-util",
  "serde",
  "serde_json",
+ "sqlite-storage",
  "subtle",
  "tokio",
  "tower-http",
  "tracing",
+ "universaldb",
+ "universalpubsub",
  "urlencoding",
  "utoipa",
+ "uuid",
 ]
 
 [[package]]
