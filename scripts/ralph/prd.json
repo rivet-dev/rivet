@@ -325,8 +325,8 @@
         "`notes` records insert e2e ms, hot read e2e ms, wake read e2e ms, wake read server ms, wake overhead estimate ms, wake read VFS get_pages calls, pages fetched, bytes fetched, prefetch pages, prefetch bytes, and VFS transport ms and compares them to baseline plus SQLITE-COLD-016"
       ],
       "priority": 17,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added a bounded decoded LTX cache inside `SqliteEngine`, gated by central default-enabled `RIVETKIT_SQLITE_OPT_DECODED_LTX_CACHE`. Repeated reads of the same DELTA or SHARD source now reuse decoded pages across get_pages/get_page_range calls when the stored blob bytes still match, while disabling the flag preserves per-read decode behavior. Added focused storage coverage for default cache reuse and disabled cache fallback; the existing full sqlite-storage suite covers compacted shard and delta-heavy reads. Benchmark artifact written to `.agent/notes/sqlite-cold-read-after-SQLITE-COLD-017.txt`. Numbers: insert e2e 15619.8ms; hot read e2e 157.9ms; wake read e2e 4067.4ms; wake read server 3834.2ms; wake overhead estimate 233.2ms; wake read VFS get_pages calls 70; pages fetched 13722; bytes fetched 56205312; prefetch pages 13652; prefetch bytes 55918592; VFS transport 3598.3ms. Compared with baseline/SQLITE-COLD-001: get_pages/range transport calls dropped 1249 -> 70, wake read e2e dropped 20141.0ms -> 4067.4ms, wake VFS transport dropped 19332.8ms -> 3598.3ms, and hot read e2e was 118.6ms -> 157.9ms. Compared with SQLITE-COLD-016: VFS transport calls stayed 70 -> 70, wake read e2e improved 6248.5ms -> 4067.4ms, wake read server improved 3955.7ms -> 3834.2ms, VFS transport improved 3706.7ms -> 3598.3ms, and hot read e2e improved 159.9ms -> 157.9ms. Checks passed: cargo check -p sqlite-storage; cargo test -p sqlite-storage decoded_ltx_cache -- --nocapture; cargo test -p sqlite-storage flags_default_enabled_and_explicitly_disableable -- --nocapture; cargo test -p sqlite-storage -- --test-threads=1; cargo build -p rivet-engine; pnpm --filter kitchen-sink check-types; pnpm -F rivetkit check-types."
     },
     {
       "id": "SQLITE-COLD-018",

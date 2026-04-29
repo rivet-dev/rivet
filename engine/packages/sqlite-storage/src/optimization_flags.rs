@@ -16,6 +16,7 @@ pub const DEDUP_GET_PAGES_META_ENV: &str = "RIVETKIT_SQLITE_OPT_DEDUP_GET_PAGES_
 pub const CACHE_GET_PAGES_VALIDATION_ENV: &str = "RIVETKIT_SQLITE_OPT_CACHE_GET_PAGES_VALIDATION";
 pub const RANGE_READS_ENV: &str = "RIVETKIT_SQLITE_OPT_RANGE_READS";
 pub const BATCH_CHUNK_READS_ENV: &str = "RIVETKIT_SQLITE_OPT_BATCH_CHUNK_READS";
+pub const DECODED_LTX_CACHE_ENV: &str = "RIVETKIT_SQLITE_OPT_DECODED_LTX_CACHE";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SqliteOptimizationFlags {
@@ -32,6 +33,7 @@ pub struct SqliteOptimizationFlags {
 	pub cache_get_pages_validation: bool,
 	pub range_reads: bool,
 	pub batch_chunk_reads: bool,
+	pub decoded_ltx_cache: bool,
 }
 
 impl Default for SqliteOptimizationFlags {
@@ -50,6 +52,7 @@ impl Default for SqliteOptimizationFlags {
 			cache_get_pages_validation: true,
 			range_reads: true,
 			batch_chunk_reads: true,
+			decoded_ltx_cache: true,
 		}
 	}
 }
@@ -84,6 +87,7 @@ impl SqliteOptimizationFlags {
 			),
 			range_reads: enabled_by_default(read_env(RANGE_READS_ENV).as_deref()),
 			batch_chunk_reads: enabled_by_default(read_env(BATCH_CHUNK_READS_ENV).as_deref()),
+			decoded_ltx_cache: enabled_by_default(read_env(DECODED_LTX_CACHE_ENV).as_deref()),
 		}
 	}
 }
@@ -119,6 +123,7 @@ mod tests {
 			PRELOAD_HINT_SCAN_RANGES_ENV => Some("disabled".to_string()),
 			CACHE_GET_PAGES_VALIDATION_ENV => Some("off".to_string()),
 			BATCH_CHUNK_READS_ENV => Some("no".to_string()),
+			DECODED_LTX_CACHE_ENV => Some("disable".to_string()),
 			_ => None,
 		});
 
@@ -131,5 +136,6 @@ mod tests {
 		assert!(!flags.cache_get_pages_validation);
 		assert!(flags.range_reads);
 		assert!(!flags.batch_chunk_reads);
+		assert!(!flags.decoded_ltx_cache);
 	}
 }

@@ -18,6 +18,7 @@ Started: Tue Apr 28 11:00:38 PM PDT 2026
 - vbare protocol version bumps need enough identity converters for the new latest version; append-only schema changes still panic at runtime if `serialize_converters()` only advertises the previous latest version.
 - Native SQLite VFS range reads should be selected only for default-enabled, large, contiguous forward-scan prefetch windows; keep point, bounded, scattered, and disabled-flag paths on page-list `get_pages`.
 - Large sqlite-storage chunked logical values use a bounded chunk-prefix range read by default; `RIVETKIT_SQLITE_OPT_BATCH_CHUNK_READS=false` preserves the serial 10 KB chunk-get fallback.
+- `sqlite-storage` caches decoded DELTA/SHARD LTX blobs inside `SqliteEngine` by default; `RIVETKIT_SQLITE_OPT_DECODED_LTX_CACHE=false` preserves per-read decode behavior.
 ---
 ## 2026-04-28 23:01:27 PDT - SQLITE-COLD-001
 - What was implemented
@@ -333,4 +334,26 @@ Started: Tue Apr 28 11:00:38 PM PDT 2026
   - Compared with SQLITE-COLD-015: VFS transport calls stayed 70 -> 70 because this story changes internal storage chunk reads rather than actor VFS page transport; wake e2e was 4071.2ms -> 6248.5ms due to higher local wake overhead, wake server was 3860.8ms -> 3955.7ms, VFS transport was 3624.3ms -> 3706.7ms, and hot read improved 167.7ms -> 159.9ms.
   - Chunked UDB values keep the same metadata and 10 KB chunk write format; the read path now range-scans the physical chunk prefix with `limit = chunk_count` and validates expected chunk-key ordering.
   - Verification status: `cargo check -p sqlite-storage` passed; focused chunked-value tests passed; `cargo test -p sqlite-storage -- --test-threads=1` passed; `cargo build -p rivet-engine` passed; `pnpm --filter kitchen-sink check-types` passed with the known skip message; `pnpm -F rivetkit check-types` passed.
+---
+## 2026-04-29 01:10:01 PDT - SQLITE-COLD-017
+- What was implemented
+  - Added a bounded decoded LTX cache inside `SqliteEngine`, gated by default-enabled `RIVETKIT_SQLITE_OPT_DECODED_LTX_CACHE`.
+  - Repeated reads of the same DELTA or SHARD source now reuse decoded pages across `get_pages` and `get_page_range` calls when the fetched blob bytes still match.
+  - Added focused storage tests for default cache reuse and disabled per-read decode fallback, updated SQLite storage notes, rebuilt the engine, and reran the cold-read benchmark.
+- Files changed
+  - `engine/packages/sqlite-storage/src/engine.rs`
+  - `engine/packages/sqlite-storage/src/optimization_flags.rs`
+  - `engine/packages/sqlite-storage/src/read.rs`
+  - `engine/packages/sqlite-storage/AGENTS.md`
+  - `engine/packages/sqlite-storage/CLAUDE.md`
+  - `docs-internal/engine/SQLITE_OPTIMIZATIONS.md`
+  - `.agent/notes/sqlite-cold-read-after-SQLITE-COLD-017.txt`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - SQLITE-COLD-017 benchmark numbers: insert e2e 15619.8ms, hot read e2e 157.9ms, wake read e2e 4067.4ms, wake read server 3834.2ms, wake overhead estimate 233.2ms, wake VFS get_pages/range transport 70 calls, fetched 13722 pages / 56205312 bytes, prefetch 13652 pages / 55918592 bytes, VFS transport 3598.3ms.
+  - Compared with baseline/SQLITE-COLD-001: wake transport calls dropped 1249 -> 70, wake e2e dropped 20141.0ms -> 4067.4ms, wake VFS transport dropped 19332.8ms -> 3598.3ms, and hot read was 118.6ms -> 157.9ms.
+  - Compared with SQLITE-COLD-016: VFS transport calls stayed 70 -> 70, wake e2e improved 6248.5ms -> 4067.4ms, wake server improved 3955.7ms -> 3834.2ms, VFS transport improved 3706.7ms -> 3598.3ms, and hot read improved 159.9ms -> 157.9ms.
+  - Cache entries compare the cached blob bytes before reuse, so same-key rewrites preserve byte-for-byte read behavior while still avoiding repeat LTX decodes for stable source blobs.
+  - Verification status: `cargo check -p sqlite-storage` passed; focused decoded-LTX cache tests passed; focused optimization flag parser test passed; `cargo test -p sqlite-storage -- --test-threads=1` passed; `cargo build -p rivet-engine` passed; `pnpm --filter kitchen-sink check-types` passed with the known skip message; `pnpm -F rivetkit check-types` passed.
 ---

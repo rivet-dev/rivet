@@ -1,12 +1,13 @@
 //! Page read paths for sqlite-storage.
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::sync::Arc;
 use std::time::Instant;
 
 use anyhow::{Context, Result, ensure};
 use scc::hash_map::Entry;
 
-use crate::engine::SqliteEngine;
+use crate::engine::{DecodedLtxCacheEntry, SqliteEngine};
 use crate::error::SqliteStorageError;
 use crate::keys::{
 	decode_delta_chunk_txid, delta_chunk_prefix, delta_prefix, meta_key, pidx_delta_prefix,
@@ -279,7 +280,7 @@ impl SqliteEngine {
 				meta,
 			});
 		}
-		let mut decoded_blobs = BTreeMap::new();
+		let mut decoded_blobs = BTreeMap::<Vec<u8>, Arc<DecodedLtx>>::new();
 		let mut historical_delta_blobs = None;
 		let mut pages = Vec::with_capacity(pgnos.len());
 
@@ -296,41 +297,41 @@ impl SqliteEngine {
 					.cloned()
 					.with_context(|| format!("missing source blob for page {pgno}"))?;
 
-				if !decoded_blobs.contains_key(source_key) {
-					let decoded = decode_ltx_v3(&blob)
-						.with_context(|| format!("decode source blob for page {pgno}"))?;
-					decoded_blobs.insert(source_key.clone(), decoded);
-				}
+				let decoded = self
+					.decode_ltx_source_blob(
+						&mut decoded_blobs,
+						source_key,
+						&blob,
+						|| format!("decode source blob for page {pgno}"),
+					)
+					.await?;
 
-				bytes = decoded_blobs
-					.get(source_key)
-					.and_then(|decoded| decoded.get_page(pgno))
+				bytes = decoded
+					.get_page(pgno)
 					.map(ToOwned::to_owned);
 				if bytes.is_none() {
 					let shard_source_key = shard_key(&actor_id, pgno / head.shard_size);
 					if source_key != &shard_source_key {
 						stale_pidx_pgnos.insert(pgno);
 
-						if !decoded_blobs.contains_key(&shard_source_key) {
-							if let Some(shard_blob) = udb::get_value(
-								&self.db,
-								&self.subspace,
-								self.op_counter.as_ref(),
-								shard_source_key.clone(),
-							)
-							.await?
-							{
-								let decoded = decode_ltx_v3(&shard_blob).with_context(|| {
-									format!("decode shard source blob for stale page {pgno}")
-								})?;
-								decoded_blobs.insert(shard_source_key.clone(), decoded);
-							}
+						if let Some(shard_blob) = udb::get_value(
+							&self.db,
+							&self.subspace,
+							self.op_counter.as_ref(),
+							shard_source_key.clone(),
+						)
+						.await?
+						{
+							let decoded = self
+								.decode_ltx_source_blob(
+									&mut decoded_blobs,
+									&shard_source_key,
+									&shard_blob,
+									|| format!("decode shard source blob for stale page {pgno}"),
+								)
+								.await?;
+							bytes = decoded.get_page(pgno).map(ToOwned::to_owned);
 						}
-
-						bytes = decoded_blobs
-							.get(&shard_source_key)
-							.and_then(|decoded| decoded.get_page(pgno))
-							.map(ToOwned::to_owned);
 					}
 				}
 			}
@@ -376,6 +377,62 @@ impl SqliteEngine {
 			pages,
 			meta: SqliteMeta::from((head, SQLITE_MAX_DELTA_BYTES)),
 		})
+	}
+
+	async fn decode_ltx_source_blob(
+		&self,
+		decoded_blobs: &mut BTreeMap<Vec<u8>, Arc<DecodedLtx>>,
+		source_key: &[u8],
+		blob: &[u8],
+		error_context: impl FnOnce() -> String,
+	) -> Result<Arc<DecodedLtx>> {
+		if let Some(decoded) = decoded_blobs.get(source_key) {
+			return Ok(Arc::clone(decoded));
+		}
+
+		let decoded = self
+			.decode_ltx_blob_cached(source_key, blob)
+			.await
+			.with_context(error_context)?;
+		decoded_blobs.insert(source_key.to_vec(), Arc::clone(&decoded));
+
+		Ok(decoded)
+	}
+
+	async fn decode_ltx_blob_cached(
+		&self,
+		source_key: &[u8],
+		blob: &[u8],
+	) -> Result<Arc<DecodedLtx>> {
+		if !self.optimization_flags.decoded_ltx_cache {
+			return self.decode_ltx_blob_uncached(blob);
+		}
+
+		if let Some(entry) = self.decoded_ltx_blobs.get(source_key).await {
+			if entry.blob.as_ref() == blob {
+				return Ok(Arc::clone(&entry.decoded));
+			}
+		}
+
+		let decoded = self.decode_ltx_blob_uncached(blob)?;
+		self.decoded_ltx_blobs
+			.insert(
+				source_key.to_vec(),
+				DecodedLtxCacheEntry {
+					blob: Arc::from(blob),
+					decoded: Arc::clone(&decoded),
+				},
+			)
+			.await;
+
+		Ok(decoded)
+	}
+
+	fn decode_ltx_blob_uncached(&self, blob: &[u8]) -> Result<Arc<DecodedLtx>> {
+		#[cfg(test)]
+		self.ltx_decode_count
+			.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+		Ok(Arc::new(decode_ltx_v3(blob)?))
 	}
 }
 
@@ -498,13 +555,13 @@ async fn load_delta_history_blobs(
 fn recover_page_from_delta_history(
 	actor_id: &str,
 	pgno: u32,
-	decoded_blobs: &mut BTreeMap<Vec<u8>, DecodedLtx>,
+	decoded_blobs: &mut BTreeMap<Vec<u8>, Arc<DecodedLtx>>,
 	delta_blobs: &BTreeMap<u64, Vec<u8>>,
 ) -> Result<Option<Vec<u8>>> {
 	for (txid, delta_blob) in delta_blobs.iter().rev() {
 		let delta_key = delta_chunk_prefix(actor_id, *txid);
 		if !decoded_blobs.contains_key(&delta_key) {
-			let decoded = decode_ltx_v3(&delta_blob)
+			let decoded = decode_ltx_blob_uncached(delta_blob)
 				.with_context(|| format!("decode historical delta blob for page {pgno}"))?;
 			decoded_blobs.insert(delta_key.clone(), decoded);
 		}
@@ -519,6 +576,10 @@ fn recover_page_from_delta_history(
 	}
 
 	Ok(None)
+}
+
+fn decode_ltx_blob_uncached(blob: &[u8]) -> Result<Arc<DecodedLtx>> {
+	Ok(Arc::new(decode_ltx_v3(blob)?))
 }
 
 async fn load_delta_blob_tx(
@@ -586,6 +647,7 @@ mod tests {
 	use crate::keys::{delta_chunk_key, meta_key, pidx_delta_key, shard_key};
 	use crate::ltx::{LtxHeader, encode_ltx_v3};
 	use crate::open::OpenConfig;
+	use crate::optimization_flags::SqliteOptimizationFlags;
 	use crate::test_utils::{assert_op_count, clear_op_count, read_value, test_db};
 	use crate::types::{
 		DBHead, DirtyPage, FetchedPage, SQLITE_DEFAULT_MAX_STORAGE_BYTES, SQLITE_PAGE_SIZE,
@@ -901,6 +963,120 @@ mod tests {
 		);
 
 		assert_op_count(&engine, 1);
+
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn get_pages_reuses_decoded_ltx_cache_across_reads() -> Result<()> {
+		let (db, subspace) = test_db().await?;
+		let head = seeded_head();
+		let (engine, _compaction_rx) = SqliteEngine::new(db, subspace);
+		apply_write_ops(
+			&engine.db,
+			&engine.subspace,
+			engine.op_counter.as_ref(),
+			vec![
+				WriteOp::put(meta_key(TEST_ACTOR), encode_db_head(&head)?),
+				WriteOp::put(
+					delta_blob_key(TEST_ACTOR, 9),
+					encoded_blob(9, 80, &[(2, 0x24)]),
+				),
+				WriteOp::put(
+					shard_key(TEST_ACTOR, 1),
+					encoded_blob(8, 80, &[(65, 0x65), (70, 0x70)]),
+				),
+				WriteOp::put(pidx_delta_key(TEST_ACTOR, 2), 9_u64.to_be_bytes().to_vec()),
+			],
+		)
+		.await?;
+		engine.open(TEST_ACTOR, OpenConfig::new(0)).await?;
+
+		engine.reset_ltx_decode_count();
+		let pages = engine.get_pages(TEST_ACTOR, 4, vec![2, 65]).await?;
+		assert_eq!(
+			pages.pages,
+			vec![
+				FetchedPage {
+					pgno: 2,
+					bytes: Some(page(0x24)),
+				},
+				FetchedPage {
+					pgno: 65,
+					bytes: Some(page(0x65)),
+				},
+			]
+		);
+		assert_eq!(engine.ltx_decode_count(), 2);
+
+		engine.reset_ltx_decode_count();
+		let pages = engine.get_pages(TEST_ACTOR, 4, vec![2, 65]).await?;
+		assert_eq!(
+			pages.pages,
+			vec![
+				FetchedPage {
+					pgno: 2,
+					bytes: Some(page(0x24)),
+				},
+				FetchedPage {
+					pgno: 65,
+					bytes: Some(page(0x65)),
+				},
+			]
+		);
+		assert_eq!(engine.ltx_decode_count(), 0);
+
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn disabled_decoded_ltx_cache_decodes_repeated_reads() -> Result<()> {
+		let (db, subspace) = test_db().await?;
+		let mut head = seeded_head();
+		head.head_txid = 9;
+		head.next_txid = 10;
+		head.db_size_pages = 3;
+		let flags = SqliteOptimizationFlags {
+			decoded_ltx_cache: false,
+			..SqliteOptimizationFlags::default()
+		};
+		let (engine, _compaction_rx) =
+			SqliteEngine::new_with_optimization_flags(db, subspace, flags);
+		apply_write_ops(
+			&engine.db,
+			&engine.subspace,
+			engine.op_counter.as_ref(),
+			vec![
+				WriteOp::put(meta_key(TEST_ACTOR), encode_db_head(&head)?),
+				WriteOp::put(
+					delta_blob_key(TEST_ACTOR, 9),
+					encoded_blob(9, 3, &[(2, 0x24)]),
+				),
+				WriteOp::put(pidx_delta_key(TEST_ACTOR, 2), 9_u64.to_be_bytes().to_vec()),
+			],
+		)
+		.await?;
+		engine.open(TEST_ACTOR, OpenConfig::new(0)).await?;
+
+		engine.reset_ltx_decode_count();
+		assert_eq!(
+			engine.get_pages(TEST_ACTOR, 4, vec![2]).await?,
+			vec![FetchedPage {
+				pgno: 2,
+				bytes: Some(page(0x24)),
+			}]
+		);
+		assert_eq!(engine.ltx_decode_count(), 1);
+
+		engine.reset_ltx_decode_count();
+		assert_eq!(
+			engine.get_pages(TEST_ACTOR, 4, vec![2]).await?,
+			vec![FetchedPage {
+				pgno: 2,
+				bytes: Some(page(0x24)),
+			}]
+		);
+		assert_eq!(engine.ltx_decode_count(), 1);
 
 		Ok(())
 	}
