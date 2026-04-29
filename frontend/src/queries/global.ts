@@ -10,7 +10,7 @@ import {
 import type { Rivet } from "@rivetkit/engine-api-full";
 import { posthog } from "@/lib/posthog";
 import { toast } from "@/components";
-import { isRivetApiError } from "@/lib/errors";
+import { isAuthError, isRivetApiError } from "@/lib/errors";
 import { modal } from "@/utils/modal-utils";
 import { Changelog } from "./types";
 
@@ -23,11 +23,7 @@ const queryCache = new QueryCache({
 			return;
 		}
 
-		if (
-			query.meta?.mightRequireAuth &&
-			"statusCode" in error &&
-			error.statusCode === 403
-		) {
+		if (query.meta?.mightRequireAuth && isAuthError(error)) {
 			modal.open("ProvideEngineCredentials", { dismissible: false });
 			return;
 		}
