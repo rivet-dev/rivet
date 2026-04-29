@@ -5,6 +5,7 @@ pub mod lease;
 pub mod metrics;
 pub mod orphan;
 pub mod publish;
+pub mod restore;
 pub mod shard;
 pub mod subjects;
 pub mod worker;
@@ -15,8 +16,8 @@ pub use compact::{CompactionOutcome, compact_default_batch};
 pub use crate::admin::{
 	AdminOpRecord, AuditFields, ForkDstSpec, ForkMode, OpKind, OpProgress, OpResult, OpStatus,
 	RefcountKind, RestoreMode, RestoreTarget, SQLITE_OP_SUBJECT, SqliteAdminError, SqliteOp,
-	SqliteOpRequest, SqliteOpSubject, complete, create_record, read, start_work, update_progress,
-	update_status,
+	SqliteOpRequest, SqliteOpSubject, complete, create_record, fail, read, start_work,
+	update_progress, update_status,
 };
 pub use lease::{
 	CompactorLease, RenewOutcome, SQLITE_COMPACTOR_LEASE_VERSION, TakeOutcome, decode_lease,
@@ -27,6 +28,7 @@ pub use publish::{
 	encode_compact_payload, publish_compact_payload, publish_compact_payload_with_node_id,
 	publish_compact_trigger, publish_compact_trigger_with_node_id,
 };
+pub use restore::handle_restore;
 pub use shard::fold_shard;
 pub use subjects::{SQLITE_COMPACT_SUBJECT, SqliteCompactSubject};
 pub use worker::{CompactorConfig, start};

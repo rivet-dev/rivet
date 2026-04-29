@@ -134,6 +134,27 @@ lazy_static::lazy_static! {
 		&["op"],
 		*REGISTRY
 	).unwrap();
+
+	pub static ref SQLITE_RESTORE_DURATION_SECONDS: HistogramVec = register_histogram_vec_with_registry!(
+		"sqlite_restore_duration_seconds",
+		"Duration of sqlite restore operations.",
+		&["outcome"],
+		BUCKETS.to_vec(),
+		*REGISTRY
+	).unwrap();
+
+	pub static ref SQLITE_RESTORE_DELTAS_REPLAYED: Histogram = register_histogram_with_registry!(
+		"sqlite_restore_deltas_replayed",
+		"Number of DELTA transactions replayed by sqlite restore operations.",
+		BUCKETS.to_vec(),
+		*REGISTRY
+	).unwrap();
+
+	pub static ref SQLITE_RESTORE_IN_PROGRESS_ACTIVE: IntGauge = register_int_gauge_with_registry!(
+		"sqlite_restore_in_progress_active",
+		"SQLite restore operations currently holding an in-progress marker.",
+		*REGISTRY
+	).unwrap();
 }
 
 #[cfg(debug_assertions)]

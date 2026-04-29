@@ -28,7 +28,7 @@ use crate::{
 use super::{
 	SqliteCompactPayload, SqliteCompactSubject, SqliteOpSubject, TakeOutcome,
 	compact::{CheckpointConfig, compact_default_batch_with_checkpoint_config},
-	decode_compact_payload, lease, metrics, orphan, publish::Ups,
+	decode_compact_payload, lease, metrics, orphan, publish::Ups, restore,
 };
 
 const COMPACTOR_QUEUE_GROUP: &str = "compactor";
@@ -295,8 +295,8 @@ async fn handle_restore(
 	let resume = restore_resume_state(Arc::clone(&udb), &actor_id, request.request_id).await?;
 	#[cfg(debug_assertions)]
 	if test_hooks::maybe_handle_admin_op(test_hooks::AdminOpHookEvent {
-		request,
-		record,
+		request: request.clone(),
+		record: record.clone(),
 		resume: resume.clone(),
 	})
 	.await?
@@ -304,8 +304,17 @@ async fn handle_restore(
 		return Ok(());
 	}
 
-	let _ = (udb, actor_id, target, mode, holder_id, resume);
-	unimplemented!("sqlite restore admin op handler lands in US-034");
+	let _ = (record, resume);
+	restore::handle_restore(
+		udb,
+		request.request_id,
+		actor_id,
+		target,
+		mode,
+		holder_id,
+		CancellationToken::new(),
+	)
+	.await
 }
 
 async fn handle_fork(

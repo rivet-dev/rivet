@@ -152,6 +152,30 @@ pub async fn complete(
 	.await
 }
 
+pub async fn fail(
+	udb: Arc<universaldb::Database>,
+	op_id: Uuid,
+	result: OpResult,
+) -> Result<()> {
+	let now_ms = now_ms()?;
+	udb.run(move |tx| {
+		let result = result.clone();
+
+		async move {
+			let (key, mut record) = read_record_for_update(&tx, op_id).await?;
+			validate_transition(record.status, OpStatus::Failed)?;
+			record.status = OpStatus::Failed;
+			record.holder_id = None;
+			record.result = Some(result);
+			record.last_progress_at_ms = bumped_at(record.last_progress_at_ms, now_ms);
+			tx.informal()
+				.set(&key, &encode_admin_op_record(record).context("encode sqlite admin op")?);
+			Ok(())
+		}
+	})
+	.await
+}
+
 pub async fn read(
 	udb: Arc<universaldb::Database>,
 	op_id: Uuid,
