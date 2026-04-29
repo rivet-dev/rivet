@@ -8,13 +8,19 @@ use tokio::runtime::Handle;
 use crate::{
 	connection_manager::{NativeConnectionManager, NativeConnectionManagerConfig},
 	query::{
-		BindParam, ExecResult, QueryResult, exec_statements, execute_statement, query_statement,
+		BindParam, ExecResult, QueryResult, classify_statement, exec_statements,
+		execute_statement, install_reader_authorizer, query_statement,
 	},
 	vfs::{
 		NativeVfsHandle, SqliteVfs, SqliteVfsMetrics, VfsConfig, VfsPreloadHintSnapshot,
 		configure_connection_for_database, verify_batch_atomic_writes,
 	},
 };
+
+enum ReadQueryRoute {
+	Read(QueryResult),
+	WriteRequired,
+}
 
 #[derive(Clone)]
 pub struct NativeDatabaseHandle {
@@ -76,6 +82,13 @@ impl NativeDatabaseHandle {
 	}
 
 	pub async fn query(&self, sql: String, params: Option<Vec<BindParam>>) -> Result<QueryResult> {
+		let read_sql = sql.clone();
+		let read_params = params.clone();
+		match self.try_read_query(read_sql, read_params).await? {
+			ReadQueryRoute::Read(result) => return Ok(result),
+			ReadQueryRoute::WriteRequired => {}
+		}
+
 		self.with_configured_write_connection(move |db| {
 			query_statement(db, &sql, params.as_deref())
 		})
@@ -99,6 +112,11 @@ impl NativeDatabaseHandle {
 
 	pub fn snapshot_preload_hints(&self) -> VfsPreloadHintSnapshot {
 		self.vfs.snapshot_preload_hints()
+	}
+
+	#[cfg(test)]
+	pub(crate) fn manager(&self) -> NativeConnectionManager {
+		self.manager.clone()
 	}
 
 	async fn initialize(&self) -> Result<()> {
@@ -132,6 +150,36 @@ impl NativeDatabaseHandle {
 			})
 			.await
 	}
+
+	async fn try_read_query(
+		&self,
+		sql: String,
+		params: Option<Vec<BindParam>>,
+	) -> Result<ReadQueryRoute> {
+		self.manager
+			.with_read_connection_state(move |db, newly_opened| {
+				if newly_opened {
+					configure_reader_connection(db)?;
+				}
+
+				let classification = match classify_statement(db, &sql) {
+					Ok(classification) => classification,
+					Err(_) => return Ok(ReadQueryRoute::WriteRequired),
+				};
+				if !classification.reader_eligible() {
+					return Ok(ReadQueryRoute::WriteRequired);
+				}
+
+				install_reader_authorizer(db)?;
+				query_statement(db, &sql, params.as_deref()).map(ReadQueryRoute::Read)
+			})
+			.await
+	}
+}
+
+fn configure_reader_connection(db: *mut libsqlite3_sys::sqlite3) -> Result<()> {
+	exec_statements(db, "PRAGMA query_only = ON;")?;
+	Ok(())
 }
 
 #[cfg(test)]

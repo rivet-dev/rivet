@@ -3760,6 +3760,8 @@ mod tests {
 	use crate::connection_manager::{
 		NativeConnectionManager, NativeConnectionManagerConfig, NativeConnectionManagerMode,
 	};
+	use crate::database::NativeDatabaseHandle;
+	use crate::query::ColumnValue;
 
 	static TEST_ID: AtomicU64 = AtomicU64::new(1);
 
@@ -6984,6 +6986,155 @@ mod tests {
 				.expect("reader task should not panic");
 			pending_reader.release().await;
 			manager.close().await.expect("manager close should succeed");
+		});
+	}
+
+	#[test]
+	fn native_database_routes_concurrent_readonly_queries_to_multiple_readers() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let engine = runtime.block_on(harness.open_engine());
+		let startup = runtime.block_on(harness.startup_data_for(&harness.actor_id, &engine));
+		let vfs = SqliteVfs::register_with_transport(
+			&next_test_name("sqlite-read-routing-vfs"),
+			SqliteTransport::from_direct(engine),
+			harness.actor_id.clone(),
+			runtime.handle().clone(),
+			startup,
+			VfsConfig::default(),
+			None,
+		)
+		.expect("vfs should register");
+		let db = NativeDatabaseHandle::new(
+			vfs,
+			harness.actor_id.clone(),
+			NativeConnectionManagerConfig { max_readers: 2 },
+		);
+
+		runtime.block_on(async {
+			db.exec(
+				"CREATE TABLE read_routing (id INTEGER PRIMARY KEY, value TEXT NOT NULL);
+				INSERT INTO read_routing (id, value) VALUES (1, 'alpha'), (2, 'bravo');"
+					.to_string(),
+			)
+			.await
+			.expect("setup write should succeed");
+
+			let held_reader = db
+				.manager()
+				.acquire_read()
+				.await
+				.expect("held reader should open");
+			let result = timeout(
+				Duration::from_secs(1),
+				db.query(
+					"SELECT value FROM read_routing WHERE id = 2;".to_string(),
+					None,
+				),
+			)
+			.await
+			.expect("read-only query should not wait for write mode")
+			.expect("read-only query should succeed");
+
+			let snapshot = db.manager().snapshot().await;
+			assert_eq!(snapshot.active_readers, 1);
+			assert_eq!(snapshot.idle_readers, 1);
+			assert_eq!(snapshot.open_readers, 2);
+			assert!(!snapshot.active_writer);
+			assert_eq!(result.rows[0][0], ColumnValue::Text("bravo".to_string()));
+
+			held_reader.release().await;
+			db.close().await.expect("database close should succeed");
+		});
+	}
+
+	#[test]
+	fn native_database_reuses_idle_reader_for_readonly_query() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let engine = runtime.block_on(harness.open_engine());
+		let startup = runtime.block_on(harness.startup_data_for(&harness.actor_id, &engine));
+		let vfs = SqliteVfs::register_with_transport(
+			&next_test_name("sqlite-read-reuse-vfs"),
+			SqliteTransport::from_direct(engine),
+			harness.actor_id.clone(),
+			runtime.handle().clone(),
+			startup,
+			VfsConfig::default(),
+			None,
+		)
+		.expect("vfs should register");
+		let db = NativeDatabaseHandle::new(
+			vfs,
+			harness.actor_id.clone(),
+			NativeConnectionManagerConfig { max_readers: 2 },
+		);
+
+		runtime.block_on(async {
+			db.exec(
+				"CREATE TABLE read_reuse (id INTEGER PRIMARY KEY, value TEXT NOT NULL);
+				INSERT INTO read_reuse (id, value) VALUES (1, 'alpha');"
+					.to_string(),
+			)
+			.await
+			.expect("setup write should succeed");
+
+			db.query(
+				"SELECT value FROM read_reuse WHERE id = 1;".to_string(),
+				None,
+			)
+			.await
+			.expect("first read should succeed");
+			let snapshot = db.manager().snapshot().await;
+			assert_eq!(snapshot.idle_readers, 1);
+			assert_eq!(snapshot.open_readers, 1);
+
+			db.query(
+				"SELECT value FROM read_reuse WHERE id = 1;".to_string(),
+				None,
+			)
+			.await
+			.expect("second read should succeed");
+			let snapshot = db.manager().snapshot().await;
+			assert_eq!(snapshot.idle_readers, 1);
+			assert_eq!(snapshot.open_readers, 1);
+
+			db.close().await.expect("database close should succeed");
+		});
+	}
+
+	#[test]
+	fn native_database_reader_authorizer_denies_unsafe_functions() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let engine = runtime.block_on(harness.open_engine());
+		let startup = runtime.block_on(harness.startup_data_for(&harness.actor_id, &engine));
+		let vfs = SqliteVfs::register_with_transport(
+			&next_test_name("sqlite-reader-authorizer-vfs"),
+			SqliteTransport::from_direct(engine),
+			harness.actor_id.clone(),
+			runtime.handle().clone(),
+			startup,
+			VfsConfig::default(),
+			None,
+		)
+		.expect("vfs should register");
+		let db = NativeDatabaseHandle::new(
+			vfs,
+			harness.actor_id.clone(),
+			NativeConnectionManagerConfig { max_readers: 2 },
+		);
+
+		runtime.block_on(async {
+			let err = db
+				.query("SELECT load_extension('not-present');".to_string(), None)
+				.await
+				.expect_err("reader authorizer should reject unsafe function");
+			assert!(
+				err.to_string().contains("not authorized"),
+				"unexpected error: {err:#}"
+			);
+			db.close().await.expect("database close should succeed");
 		});
 	}
 

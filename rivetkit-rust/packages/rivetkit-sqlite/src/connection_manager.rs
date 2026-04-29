@@ -67,6 +67,7 @@ struct NativeConnectionManagerState {
 pub struct NativeReadConnectionLease {
 	manager: NativeConnectionManager,
 	connection: Option<NativeConnection>,
+	newly_opened: bool,
 }
 
 #[must_use = "release the write connection lease when work is complete"]
@@ -127,6 +128,7 @@ impl NativeConnectionManager {
 					return Ok(NativeReadConnectionLease {
 						manager: self.clone(),
 						connection: Some(connection),
+						newly_opened: false,
 					});
 				} else if state.open_readers < self.inner.config.max_readers {
 					state.active_readers += 1;
@@ -145,11 +147,17 @@ impl NativeConnectionManager {
 			};
 
 			if let Some(vfs) = open_result {
-				match open_connection(vfs, &self.inner.file_name, SQLITE_OPEN_READONLY) {
+				let file_name = self.inner.file_name.clone();
+				match tokio::task::spawn_blocking(move || {
+					open_connection(vfs, &file_name, SQLITE_OPEN_READONLY)
+				})
+				.await?
+				{
 					Ok(connection) => {
 						return Ok(NativeReadConnectionLease {
 							manager: self.clone(),
 							connection: Some(connection),
+							newly_opened: true,
 						});
 					}
 					Err(err) => {
@@ -216,11 +224,16 @@ impl NativeConnectionManager {
 
 			if let Some((vfs, idle_readers)) = open_result {
 				drop(idle_readers);
-				match open_connection(
-					vfs,
-					&self.inner.file_name,
-					SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE,
-				) {
+				let file_name = self.inner.file_name.clone();
+				match tokio::task::spawn_blocking(move || {
+					open_connection(
+						vfs,
+						&file_name,
+						SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE,
+					)
+				})
+				.await?
+				{
 					Ok(connection) => {
 						return Ok(NativeWriteConnectionLease {
 							manager: self.clone(),
@@ -250,14 +263,27 @@ impl NativeConnectionManager {
 		T: Send + 'static,
 		F: FnOnce(*mut sqlite3) -> Result<T> + Send + 'static,
 	{
+		self.with_read_connection_state(move |db, _newly_opened| f(db))
+			.await
+	}
+
+	pub async fn with_read_connection_state<T, F>(
+		&self,
+		f: F,
+	) -> Result<T>
+	where
+		T: Send + 'static,
+		F: FnOnce(*mut sqlite3, bool) -> Result<T> + Send + 'static,
+	{
 		let mut lease = self.acquire_read().await?;
+		let newly_opened = lease.newly_opened;
 		let connection = lease
 			.connection
 			.take()
 			.expect("read connection lease should hold a connection");
 		let (connection, result) =
 			tokio::task::spawn_blocking(move || {
-				let result = f(connection.as_ptr());
+				let result = f(connection.as_ptr(), newly_opened);
 				(connection, result)
 			})
 			.await?;

@@ -7,18 +7,18 @@ use libsqlite3_sys::{
 	SQLITE_ALTER_TABLE, SQLITE_ANALYZE, SQLITE_ATTACH, SQLITE_BLOB, SQLITE_CREATE_INDEX,
 	SQLITE_CREATE_TABLE, SQLITE_CREATE_TEMP_INDEX, SQLITE_CREATE_TEMP_TABLE,
 	SQLITE_CREATE_TEMP_TRIGGER, SQLITE_CREATE_TEMP_VIEW, SQLITE_CREATE_TRIGGER,
-	SQLITE_CREATE_VIEW, SQLITE_CREATE_VTABLE, SQLITE_DELETE, SQLITE_DETACH, SQLITE_DONE,
-	SQLITE_DROP_INDEX, SQLITE_DROP_TABLE, SQLITE_DROP_TEMP_INDEX, SQLITE_DROP_TEMP_TABLE,
-	SQLITE_DROP_TEMP_TRIGGER, SQLITE_DROP_TEMP_VIEW, SQLITE_DROP_TRIGGER, SQLITE_DROP_VIEW,
-	SQLITE_DROP_VTABLE, SQLITE_FLOAT, SQLITE_FUNCTION, SQLITE_INSERT, SQLITE_INTEGER,
-	SQLITE_NULL, SQLITE_OK, SQLITE_PRAGMA, SQLITE_READ, SQLITE_REINDEX, SQLITE_ROW,
-	SQLITE_SAVEPOINT, SQLITE_SELECT, SQLITE_TEXT, SQLITE_TRANSACTION, SQLITE_TRANSIENT,
-	SQLITE_UPDATE, sqlite3, sqlite3_bind_blob, sqlite3_bind_double, sqlite3_bind_int64,
-	sqlite3_bind_null, sqlite3_bind_text, sqlite3_changes, sqlite3_column_blob,
-	sqlite3_column_bytes, sqlite3_column_count, sqlite3_column_double, sqlite3_column_int64,
-	sqlite3_column_name, sqlite3_column_text, sqlite3_column_type, sqlite3_errmsg,
-	sqlite3_finalize, sqlite3_prepare_v2, sqlite3_set_authorizer, sqlite3_step,
-	sqlite3_stmt_readonly,
+	SQLITE_CREATE_VIEW, SQLITE_CREATE_VTABLE, SQLITE_DELETE, SQLITE_DENY, SQLITE_DETACH,
+	SQLITE_DONE, SQLITE_DROP_INDEX, SQLITE_DROP_TABLE, SQLITE_DROP_TEMP_INDEX,
+	SQLITE_DROP_TEMP_TABLE, SQLITE_DROP_TEMP_TRIGGER, SQLITE_DROP_TEMP_VIEW,
+	SQLITE_DROP_TRIGGER, SQLITE_DROP_VIEW, SQLITE_DROP_VTABLE, SQLITE_FLOAT, SQLITE_FUNCTION,
+	SQLITE_INSERT, SQLITE_INTEGER, SQLITE_NULL, SQLITE_OK, SQLITE_PRAGMA, SQLITE_READ,
+	SQLITE_REINDEX, SQLITE_ROW, SQLITE_SAVEPOINT, SQLITE_SELECT, SQLITE_TEXT,
+	SQLITE_TRANSACTION, SQLITE_TRANSIENT, SQLITE_UPDATE, sqlite3, sqlite3_bind_blob,
+	sqlite3_bind_double, sqlite3_bind_int64, sqlite3_bind_null, sqlite3_bind_text,
+	sqlite3_changes, sqlite3_column_blob, sqlite3_column_bytes, sqlite3_column_count,
+	sqlite3_column_double, sqlite3_column_int64, sqlite3_column_name, sqlite3_column_text,
+	sqlite3_column_type, sqlite3_errmsg, sqlite3_finalize, sqlite3_prepare_v2,
+	sqlite3_set_authorizer, sqlite3_step, sqlite3_stmt_readonly,
 };
 
 #[derive(Clone, Debug, PartialEq)]
@@ -276,6 +276,17 @@ pub fn classify_statement(db: *mut sqlite3, sql: &str) -> Result<StatementClassi
 		has_trailing_sql: has_non_whitespace_tail(tail),
 		authorizer: summary,
 	})
+}
+
+pub fn install_reader_authorizer(db: *mut sqlite3) -> Result<()> {
+	let rc = unsafe {
+		sqlite3_set_authorizer(db, Some(reader_authorizer_action), ptr::null_mut())
+	};
+	if rc != SQLITE_OK {
+		return Err(sqlite_error(db, "failed to install sqlite reader authorizer"));
+	}
+
+	Ok(())
 }
 
 pub fn execute_statement(
@@ -568,6 +579,123 @@ unsafe extern "C" fn capture_authorizer_action(
 	});
 
 	SQLITE_OK
+}
+
+unsafe extern "C" fn reader_authorizer_action(
+	_user_data: *mut c_void,
+	action_code: c_int,
+	first_arg: *const c_char,
+	second_arg: *const c_char,
+	database_name: *const c_char,
+	_trigger_or_view_name: *const c_char,
+) -> c_int {
+	let kind = StatementAuthorizerActionKind::from_code(action_code);
+	let database_name = unsafe { optional_c_string(database_name) };
+	let first_arg = unsafe { optional_c_string(first_arg) };
+	let second_arg = unsafe { optional_c_string(second_arg) };
+
+	if kind.is_data_write()
+		|| kind.is_schema_write()
+		|| kind.is_temp_schema_write()
+		|| (kind.is_data_write() && database_name.as_deref() == Some("temp"))
+	{
+		return SQLITE_DENY;
+	}
+
+	match kind {
+		StatementAuthorizerActionKind::Transaction
+		| StatementAuthorizerActionKind::Savepoint
+		| StatementAuthorizerActionKind::Attach
+		| StatementAuthorizerActionKind::Detach => SQLITE_DENY,
+		StatementAuthorizerActionKind::Pragma => {
+			if reader_pragma_allowed(first_arg.as_deref(), second_arg.as_deref()) {
+				SQLITE_OK
+			} else {
+				SQLITE_DENY
+			}
+		}
+		StatementAuthorizerActionKind::Function => {
+			if reader_function_allowed(first_arg.as_deref(), second_arg.as_deref()) {
+				SQLITE_OK
+			} else {
+				SQLITE_DENY
+			}
+		}
+		StatementAuthorizerActionKind::Read
+		| StatementAuthorizerActionKind::Select
+		| StatementAuthorizerActionKind::Other(_) => SQLITE_OK,
+		StatementAuthorizerActionKind::Insert
+		| StatementAuthorizerActionKind::Update
+		| StatementAuthorizerActionKind::Delete
+		| StatementAuthorizerActionKind::CreateIndex
+		| StatementAuthorizerActionKind::CreateTable
+		| StatementAuthorizerActionKind::CreateTrigger
+		| StatementAuthorizerActionKind::CreateView
+		| StatementAuthorizerActionKind::CreateVirtualTable
+		| StatementAuthorizerActionKind::CreateTempIndex
+		| StatementAuthorizerActionKind::CreateTempTable
+		| StatementAuthorizerActionKind::CreateTempTrigger
+		| StatementAuthorizerActionKind::CreateTempView
+		| StatementAuthorizerActionKind::DropIndex
+		| StatementAuthorizerActionKind::DropTable
+		| StatementAuthorizerActionKind::DropTrigger
+		| StatementAuthorizerActionKind::DropView
+		| StatementAuthorizerActionKind::DropVirtualTable
+		| StatementAuthorizerActionKind::DropTempIndex
+		| StatementAuthorizerActionKind::DropTempTable
+		| StatementAuthorizerActionKind::DropTempTrigger
+		| StatementAuthorizerActionKind::DropTempView
+		| StatementAuthorizerActionKind::AlterTable
+		| StatementAuthorizerActionKind::Reindex
+		| StatementAuthorizerActionKind::Analyze => SQLITE_DENY,
+	}
+}
+
+fn reader_pragma_allowed(first_arg: Option<&str>, second_arg: Option<&str>) -> bool {
+	let Some(name) = first_arg else {
+		return false;
+	};
+	if second_arg.is_some() {
+		return false;
+	}
+
+	matches!(
+		name.to_ascii_lowercase().as_str(),
+		"application_id"
+			| "busy_timeout"
+			| "cache_size"
+			| "collation_list"
+			| "compile_options"
+			| "database_list"
+			| "encoding"
+			| "foreign_key_check"
+			| "foreign_key_list"
+			| "freelist_count"
+			| "function_list"
+			| "index_info"
+			| "index_list"
+			| "index_xinfo"
+			| "integrity_check"
+			| "journal_mode"
+			| "module_list"
+			| "page_count"
+			| "page_size"
+			| "pragma_list"
+			| "quick_check"
+			| "schema_version"
+			| "table_info"
+			| "table_list"
+			| "table_xinfo"
+			| "user_version"
+	)
+}
+
+fn reader_function_allowed(first_arg: Option<&str>, second_arg: Option<&str>) -> bool {
+	let name = second_arg.or(first_arg);
+	!matches!(
+		name.map(str::to_ascii_lowercase).as_deref(),
+		Some("load_extension") | Some("writefile")
+	)
 }
 
 unsafe fn optional_c_string(value: *const c_char) -> Option<String> {
