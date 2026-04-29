@@ -6210,6 +6210,7 @@ version = "2.3.0-rc.4"
 dependencies = [
  "anyhow",
  "lz4_flex",
+ "parking_lot",
  "scc",
  "serde",
  "serde_bare",

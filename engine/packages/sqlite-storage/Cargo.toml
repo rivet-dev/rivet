@@ -11,6 +11,7 @@ legacy-inline-tests = []
 [dependencies]
 anyhow.workspace = true
 lz4_flex.workspace = true
+parking_lot.workspace = true
 scc.workspace = true
 serde.workspace = true
 serde_bare.workspace = true

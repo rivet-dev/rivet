@@ -9,6 +9,7 @@ Started: Wed Apr 29 04:36:56 AM PDT 2026
 - Use `vbare::OwnedVersionedData` wrappers with embedded versions for sqlite-storage persisted META structs, even when the latest schema lives directly in `pump::types`.
 - For sqlite-storage byte-key atomic mutations, use `tx.informal().atomic_op(...)`; `Transaction::atomic_op` is for typed `FormalKey` tuple keys.
 - `/META/quota` is a raw signed `i64` little-endian atomic counter; missing means zero, and helper code should mutate it with `MutationType::Add` on `tx.informal()`.
+- `sqlite-storage::pump::ActorDb::new` runs debug-only takeover reconciliation synchronously; keep `takeover::reconcile` sync until the constructor shape changes.
 
 ## 2026-04-29 04:44:52 PDT - US-001
 - Implemented a UUID-backed `NodeId` type and stored a generated value on each `Pools` instance.
@@ -69,4 +70,15 @@ Started: Wed Apr 29 04:36:56 AM PDT 2026
   - Keep `/META/quota` as a raw 8-byte signed LE value rather than vbare so FDB-style atomic add composes exactly.
   - The new crate's integration tests can spin up a real RocksDB-backed `universaldb::Database` directly when the copied legacy `test_utils` module is intentionally not exported.
   - Quota cap errors stay typed through `anyhow` when returning `SqliteStorageError::SqliteStorageQuotaExceeded.into()`.
+---
+## 2026-04-29 05:06:10 PDT - US-007
+- Added `pump::actor_db::ActorDb` with the per-actor UDB handle, PIDX cache, quota cache, metering counters, and compaction trigger throttle timestamp.
+- Wired `ActorDb` into `pump/mod.rs`, added the required `new`, `get_pages`, and `commit` public surface, and kept `get_pages`/`commit` as staged `todo!()` implementations for US-008 and US-009.
+- Added the debug-only synchronous `takeover::reconcile` stub called by `ActorDb::new`.
+- Verified `cargo check -p sqlite-storage`, `cargo test -p sqlite-storage`, and `git diff --check`.
+- Files changed: `engine/packages/sqlite-storage/Cargo.toml`, `engine/packages/sqlite-storage/src/pump/actor_db.rs`, `engine/packages/sqlite-storage/src/pump/mod.rs`, `engine/packages/sqlite-storage/src/takeover.rs`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
+- **Learnings for future iterations:**
+  - `ActorDb` owns only per-actor hot-path cache state; the WS connection will own any map of actor ids to `Arc<ActorDb>`.
+  - `takeover::reconcile` is sync for now because `ActorDb::new` is intentionally sync and release builds do no takeover work.
+  - The staged `get_pages` and `commit` methods can import `DirtyPage` and `FetchedPage` from `pump::types` without reintroducing legacy protocol types.
 ---
