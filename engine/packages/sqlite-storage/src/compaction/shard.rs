@@ -13,7 +13,7 @@ use crate::keys::{
 };
 use crate::ltx::{LtxHeader, decode_ltx_v3, encode_ltx_v3};
 use crate::quota::{encode_db_head_with_usage, tracked_storage_entry_size};
-use crate::types::{DBHead, DirtyPage, SQLITE_PAGE_SIZE, decode_db_head, encode_db_head, new_db_head};
+use crate::types::{DBHead, DirtyPage, SQLITE_PAGE_SIZE, decode_db_head};
 use crate::udb::{self, WriteOp};
 
 const PIDX_PGNO_BYTES: usize = std::mem::size_of::<u32>();
@@ -531,7 +531,6 @@ mod tests {
 	use crate::types::{
 		DBHead, DirtyPage, FetchedPage, SQLITE_DEFAULT_MAX_STORAGE_BYTES, SQLITE_PAGE_SIZE,
 		SQLITE_SHARD_SIZE, SQLITE_VFS_V2_SCHEMA_VERSION, SqliteOrigin, encode_db_head,
-		new_db_head,
 	};
 	use crate::udb::{WriteOp, apply_write_ops, test_hooks};
 

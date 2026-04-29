@@ -5,6 +5,8 @@ Started: Tue Apr 28 11:00:38 PM PDT 2026
 - Cold-start benchmark local-envoy runs need `RIVET_TOKEN=dev`; if port 6420 is already owned, use matching `RIVET_ENDPOINT`, `RIVET__GUARD__PORT`, `RIVET__API_PEER__PORT`, and `RIVET__METRICS__PORT` overrides.
 - For non-default cold-start benchmark ports, set both `RIVET_ENDPOINT=http://127.0.0.1:<guard-port>` and `--endpoint http://127.0.0.1:<guard-port> --start-local-envoy`; otherwise the registry can advertise the default 6420 endpoint while the engine starts elsewhere.
 - Native SQLite VFS preload hints are actor-side Rust state; snapshot them with `NativeDatabase::snapshot_preload_hints()` before adding transport or startup preload wiring.
+- SQLite preload hints persist as a separate v2 storage record at `/PRELOAD_HINTS`; keep them generation-fenced and separate from normal page/shard/delta data.
+- `sqlite-storage::open` should return the same quota-updated `DBHead` that it writes after `encode_db_head_with_usage(...)`, or runtime metadata can disagree with stored metadata.
 - SQLite cold-read optimization flags live in `rivetkit-rust/packages/rivetkit-sqlite/src/optimization_flags.rs`; add future default-enabled env flags there and test disabled paths with `VfsConfig::from_optimization_flags(...)` instead of mutating process env.
 - Adaptive SQLite VFS read-ahead is controlled by `RIVETKIT_SQLITE_OPT_ADAPTIVE_READ_AHEAD`; default-enabled scans can grow to larger windows, while disabled mode keeps the existing shard-sized 64-page prefetch.
 ---
@@ -112,4 +114,31 @@ Started: Tue Apr 28 11:00:38 PM PDT 2026
   - Compared with SQLITE-COLD-005: wake get_pages dropped 219 -> 69, wake e2e dropped 8287.8ms -> 4074.9ms, wake server improved 4170.0ms -> 3945.3ms, wake VFS transport improved 3928.8ms -> 3723.1ms, and hot read was 145.1ms -> 171.0ms.
   - Adaptive read-ahead depends on cache-hit training during prefetched scans; keep hit-path updates in mind when changing VFS prediction.
   - Verification status: `cargo check -p rivetkit-sqlite` passed; adaptive and cache-hit focused tests passed; `cargo test -p rivetkit-sqlite -- --test-threads=1` passed; `pnpm --filter kitchen-sink check-types` passed with the known skip message; `pnpm -F rivetkit check-types` passed; `pnpm --filter @rivetkit/rivetkit-napi build:force` passed.
+---
+## 2026-04-28 23:44:20 PDT - SQLITE-COLD-007
+- What was implemented
+  - Added a SQLite preload-hint persistence request to envoy-protocol, envoy-client, and pegboard-envoy.
+  - Added sqlite-storage v2 `PreloadHints` encoding plus a generation-fenced `/PRELOAD_HINTS` persistence path that stays separate from page data.
+  - Added validation for bounded page/range hints and fence-mismatch responses in pegboard-envoy.
+  - Fixed sqlite-storage open metadata to return the same quota-updated `DBHead` it writes.
+  - Rebuilt the NAPI addon and reran the cold-read benchmark.
+- Files changed
+  - `engine/sdks/schemas/envoy-protocol/v2.bare`
+  - `engine/sdks/typescript/envoy-protocol/src/index.ts`
+  - `engine/sdks/rust/envoy-protocol/src/versioned.rs`
+  - `engine/sdks/rust/envoy-client/src/{envoy.rs,handle.rs,sqlite.rs,stringify.rs,actor.rs,events.rs}`
+  - `engine/sdks/schemas/sqlite-storage/v2.bare`
+  - `engine/sdks/rust/sqlite-storage-protocol/src/{lib.rs,versioned.rs}`
+  - `engine/packages/pegboard-envoy/src/{sqlite_runtime.rs,ws_to_tunnel_task.rs}`
+  - `engine/packages/sqlite-storage/src/{keys.rs,lib.rs,open.rs,types.rs,preload_hints.rs}`
+  - `.agent/notes/sqlite-cold-read-after-SQLITE-COLD-007.txt`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - SQLITE-COLD-007 benchmark numbers: insert e2e 15952.7ms, hot read e2e 193.5ms, wake read e2e 4040.1ms, wake read server 3883.5ms, wake overhead estimate 156.5ms, wake VFS get_pages 69 calls, fetched 13726 pages / 56221696 bytes, prefetch 13657 pages / 55939072 bytes, VFS transport 3650.0ms.
+  - Compared with baseline/SQLITE-COLD-001: wake get_pages dropped 1249 -> 69, wake e2e dropped 20141.0ms -> 4040.1ms, wake VFS transport dropped 19332.8ms -> 3650.0ms, and hot read was 118.6ms -> 193.5ms.
+  - Compared with SQLITE-COLD-006: wake get_pages stayed 69 -> 69, wake e2e improved 4074.9ms -> 4040.1ms, wake server improved 3945.3ms -> 3883.5ms, wake VFS transport improved 3723.1ms -> 3650.0ms, and hot read was 171.0ms -> 193.5ms.
+  - Preload hint persistence is transport/storage only in this story; periodic/final flushing and open-time consumption are separate follow-up stories.
+  - `sqlite-storage::open_inner` must propagate the `DBHead` returned from `encode_db_head_with_usage(...)` or returned `SqliteMeta` can report stale usage after the written META changes size.
+  - Verification status: `cargo check -p sqlite-storage` passed; `cargo check -p pegboard-envoy` passed; `cargo check -p rivet-envoy-client` passed; protocol checks passed; `cargo test -p sqlite-storage -- --test-threads=1` passed; `cargo test -p pegboard-envoy` passed; `cargo test -p rivet-envoy-client` passed; protocol tests passed; `pnpm --filter kitchen-sink check-types` passed with the known skip message; `pnpm -F rivetkit check-types` passed; `pnpm --filter @rivetkit/rivetkit-napi build:force` passed with existing Rust 2024 unsafe-operation warnings in `rivetkit-sqlite`.
 ---

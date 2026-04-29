@@ -9,12 +9,13 @@ use crate::engine::{OpenDb, SqliteEngine};
 use crate::error::SqliteStorageError;
 use crate::keys::{
 	decode_delta_chunk_txid, delta_chunk_prefix, delta_prefix, meta_key, pidx_delta_prefix,
-	shard_key, shard_prefix,
+	preload_hints_key, shard_key, shard_prefix,
 };
 use crate::ltx::decode_ltx_v3;
 use crate::quota::{encode_db_head_with_usage, tracked_storage_entry_size};
 use crate::types::{
-	DBHead, FetchedPage, SQLITE_MAX_DELTA_BYTES, SqliteMeta, SqliteOrigin, decode_db_head, encode_db_head, new_db_head,
+	DBHead, FetchedPage, SQLITE_MAX_DELTA_BYTES, SqliteMeta, SqliteOrigin, decode_db_head,
+	new_db_head,
 };
 use crate::udb::{self, WriteOp};
 
@@ -148,6 +149,8 @@ impl SqliteEngine {
 						udb::tx_delete_value_precise(&tx, &subspace, &key).await?;
 					}
 				}
+				udb::tx_delete_value_precise(&tx, &subspace, &preload_hints_key(&actor_id))
+					.await?;
 
 				let mut head = new_db_head(now_ms);
 				head.origin = SqliteOrigin::MigrationFromV1InProgress;
@@ -345,7 +348,7 @@ impl SqliteEngine {
 						WriteOp::Delete(key) => udb::tx_delete_value(&tx, &subspace, key),
 					}
 				}
-				let (_, encoded_head) =
+				let (head, encoded_head) =
 					encode_db_head_with_usage(&actor_id, &head, head.sqlite_storage_used)?;
 				udb::tx_write_value(&tx, &subspace, &meta_storage_key, &encoded_head)?;
 
@@ -783,7 +786,7 @@ mod tests {
 	use crate::types::{
 		DBHead, DirtyPage, FetchedPage, SQLITE_DEFAULT_MAX_STORAGE_BYTES, SQLITE_MAX_DELTA_BYTES,
 		SQLITE_PAGE_SIZE, SQLITE_SHARD_SIZE, SQLITE_VFS_V2_SCHEMA_VERSION, SqliteOrigin,
-		decode_db_head, encode_db_head, new_db_head,
+		decode_db_head, encode_db_head,
 	};
 	use crate::udb::{WriteOp, apply_write_ops, physical_chunk_key, raw_key_exists};
 

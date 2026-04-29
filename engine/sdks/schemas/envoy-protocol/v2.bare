@@ -240,6 +240,30 @@ type SqliteCommitFinalizeResponse union {
 	SqliteErrorResponse
 }
 
+type SqlitePreloadHintRange struct {
+	startPgno: SqlitePgno
+	pageCount: u32
+}
+
+type SqlitePreloadHints struct {
+	pgnos: list<SqlitePgno>
+	ranges: list<SqlitePreloadHintRange>
+}
+
+type SqlitePersistPreloadHintsRequest struct {
+	actorId: Id
+	generation: SqliteGeneration
+	hints: SqlitePreloadHints
+}
+
+type SqlitePersistPreloadHintsOk void
+
+type SqlitePersistPreloadHintsResponse union {
+	SqlitePersistPreloadHintsOk |
+	SqliteFenceMismatch |
+	SqliteErrorResponse
+}
+
 type SqliteStartupData struct {
 	generation: SqliteGeneration
 	meta: SqliteMeta
@@ -544,6 +568,11 @@ type ToRivetSqliteCommitFinalizeRequest struct {
 	data: SqliteCommitFinalizeRequest
 }
 
+type ToRivetSqlitePersistPreloadHintsRequest struct {
+	requestId: u32
+	data: SqlitePersistPreloadHintsRequest
+}
+
 type ToRivet union {
 	ToRivetMetadata |
 	ToRivetEvents |
@@ -556,7 +585,8 @@ type ToRivet union {
 	ToRivetSqliteCommitRequest |
 	ToRivetSqliteCommitStageBeginRequest |
 	ToRivetSqliteCommitStageRequest |
-	ToRivetSqliteCommitFinalizeRequest
+	ToRivetSqliteCommitFinalizeRequest |
+	ToRivetSqlitePersistPreloadHintsRequest
 }
 
 # MARK: To Envoy
@@ -606,6 +636,11 @@ type ToEnvoySqliteCommitFinalizeResponse struct {
 	data: SqliteCommitFinalizeResponse
 }
 
+type ToEnvoySqlitePersistPreloadHintsResponse struct {
+	requestId: u32
+	data: SqlitePersistPreloadHintsResponse
+}
+
 type ToEnvoy union {
 	ToEnvoyInit |
 	ToEnvoyCommands |
@@ -617,7 +652,8 @@ type ToEnvoy union {
 	ToEnvoySqliteCommitResponse |
 	ToEnvoySqliteCommitStageBeginResponse |
 	ToEnvoySqliteCommitStageResponse |
-	ToEnvoySqliteCommitFinalizeResponse
+	ToEnvoySqliteCommitFinalizeResponse |
+	ToEnvoySqlitePersistPreloadHintsResponse
 }
 
 # MARK: To Envoy Conn

@@ -18,6 +18,8 @@ Implementation tracking lives in `scripts/ralph/prd.json`.
 
 ## Recommended Optimizations
 
+- Gate SQLite cold-read optimizations behind central env-backed feature flags that default on, so each optimization can be benchmarked on and off.
+- Add adaptive forward-scan read-ahead that can grow beyond shard-sized batches for mostly sequential reads while shrinking back for scattered access.
 - Record VFS predictor access on cache hits so prefetch learns real sequential scans.
 - Cache repeated pegboard-envoy SQLite actor validation and local-open checks for active actors.
 - Return SQLite meta from `sqlite-storage::get_pages(...)` instead of doing a second META read in pegboard-envoy.

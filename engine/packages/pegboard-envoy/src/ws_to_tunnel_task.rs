@@ -407,6 +407,11 @@ async fn handle_message(
 			let response = handle_sqlite_commit_finalize_response(ctx, conn, req.data).await;
 			send_sqlite_commit_finalize_response(conn, req.request_id, response).await?;
 		}
+		protocol::ToRivet::ToRivetSqlitePersistPreloadHintsRequest(req) => {
+			let response =
+				handle_sqlite_persist_preload_hints_response(ctx, conn, req.data).await;
+			send_sqlite_persist_preload_hints_response(conn, req.request_id, response).await?;
+		}
 		protocol::ToRivet::ToRivetTunnelMessage(tunnel_msg) => {
 			handle_tunnel_message(ctx, &conn.authorized_tunnel_routes, tunnel_msg)
 				.await
@@ -551,6 +556,23 @@ async fn handle_sqlite_commit_finalize_response(
 	}
 }
 
+async fn handle_sqlite_persist_preload_hints_response(
+	ctx: &StandaloneCtx,
+	conn: &Conn,
+	request: protocol::SqlitePersistPreloadHintsRequest,
+) -> protocol::SqlitePersistPreloadHintsResponse {
+	let actor_id = request.actor_id.clone();
+	match handle_sqlite_persist_preload_hints(ctx, conn, request).await {
+		Ok(response) => response,
+		Err(err) => {
+			tracing::warn!(actor_id = %actor_id, ?err, "sqlite persist_preload_hints request failed");
+			protocol::SqlitePersistPreloadHintsResponse::SqliteErrorResponse(
+				sqlite_error_response(&err),
+			)
+		}
+	}
+}
+
 async fn ack_commands(
 	ctx: &StandaloneCtx,
 	namespace_id: Id,
@@ -650,7 +672,7 @@ async fn handle_metadata(
 #[tracing::instrument(skip_all)]
 async fn handle_tunnel_message(
 	ctx: &StandaloneCtx,
-	authorized_tunnel_routes: &HashMap<(protocol::GatewayId, protocol::RequestId), ()>,
+	_authorized_tunnel_routes: &HashMap<(protocol::GatewayId, protocol::RequestId), ()>,
 	msg: protocol::ToRivetTunnelMessage,
 ) -> Result<()> {
 	// Extract inner data length before consuming msg
@@ -943,6 +965,40 @@ async fn handle_sqlite_commit_finalize(
 	Ok(response)
 }
 
+async fn handle_sqlite_persist_preload_hints(
+	ctx: &StandaloneCtx,
+	conn: &Conn,
+	request: protocol::SqlitePersistPreloadHintsRequest,
+) -> Result<protocol::SqlitePersistPreloadHintsResponse> {
+	validate_sqlite_preload_hints(&request.hints)?;
+	validate_sqlite_actor(ctx, conn, &request.actor_id).await?;
+	ensure_serverless_sqlite_open(conn, &request.actor_id, request.generation).await?;
+
+	match conn
+		.sqlite_engine
+		.persist_preload_hints(
+			&request.actor_id,
+			sqlite_storage::preload_hints::PersistPreloadHintsRequest {
+				generation: request.generation,
+				hints: sqlite_runtime::storage_preload_hints(request.hints),
+			},
+		)
+		.await
+	{
+		Ok(()) => Ok(
+			protocol::SqlitePersistPreloadHintsResponse::SqlitePersistPreloadHintsOk,
+		),
+		Err(err) => match sqlite_storage_error(&err) {
+			Some(SqliteStorageError::FenceMismatch { reason }) => Ok(
+				protocol::SqlitePersistPreloadHintsResponse::SqliteFenceMismatch(
+					sqlite_fence_mismatch(conn, &request.actor_id, reason.clone()).await?,
+				),
+			),
+			_ => Err(err),
+		},
+	}
+}
+
 async fn validate_sqlite_actor(ctx: &StandaloneCtx, conn: &Conn, actor_id: &str) -> Result<()> {
 	let actor_id = Id::parse(actor_id).context("invalid sqlite actor id")?;
 	let actor = ctx
@@ -1019,6 +1075,39 @@ fn validate_sqlite_dirty_pages(
 			seen.insert(page.pgno),
 			"{request_name} duplicated page {} in a single request",
 			page.pgno
+		);
+	}
+
+	Ok(())
+}
+
+fn validate_sqlite_preload_hints(hints: &protocol::SqlitePreloadHints) -> Result<()> {
+	const MAX_PRELOAD_HINT_PAGES: usize = 512;
+	const MAX_PRELOAD_HINT_RANGES: usize = 64;
+
+	ensure!(
+		hints.pgnos.len() <= MAX_PRELOAD_HINT_PAGES,
+		"sqlite preload hints had {} pages, expected at most {}",
+		hints.pgnos.len(),
+		MAX_PRELOAD_HINT_PAGES
+	);
+	ensure!(
+		hints.ranges.len() <= MAX_PRELOAD_HINT_RANGES,
+		"sqlite preload hints had {} ranges, expected at most {}",
+		hints.ranges.len(),
+		MAX_PRELOAD_HINT_RANGES
+	);
+	for pgno in &hints.pgnos {
+		ensure!(*pgno > 0, "sqlite preload hints do not accept page 0");
+	}
+	for range in &hints.ranges {
+		ensure!(
+			range.start_pgno > 0,
+			"sqlite preload hint ranges do not accept page 0"
+		);
+		ensure!(
+			range.page_count > 0,
+			"sqlite preload hint ranges must include at least one page"
 		);
 	}
 
@@ -1156,6 +1245,21 @@ async fn send_sqlite_commit_finalize_response(
 			protocol::ToEnvoySqliteCommitFinalizeResponse { request_id, data },
 		),
 		"sqlite commit_finalize response",
+	)
+	.await
+}
+
+async fn send_sqlite_persist_preload_hints_response(
+	conn: &Conn,
+	request_id: u32,
+	data: protocol::SqlitePersistPreloadHintsResponse,
+) -> Result<()> {
+	send_to_envoy(
+		conn,
+		protocol::ToEnvoy::ToEnvoySqlitePersistPreloadHintsResponse(
+			protocol::ToEnvoySqlitePersistPreloadHintsResponse { request_id, data },
+		),
+		"sqlite persist_preload_hints response",
 	)
 	.await
 }

@@ -468,6 +468,19 @@ impl EnvoyHandle {
 		}
 	}
 
+	pub async fn sqlite_persist_preload_hints(
+		&self,
+		request: protocol::SqlitePersistPreloadHintsRequest,
+	) -> anyhow::Result<protocol::SqlitePersistPreloadHintsResponse> {
+		match self
+			.send_sqlite_request(SqliteRequest::PersistPreloadHints(request))
+			.await?
+		{
+			SqliteResponse::PersistPreloadHints(response) => Ok(response),
+			_ => anyhow::bail!("unexpected sqlite persist_preload_hints response type"),
+		}
+	}
+
 	pub fn restore_hibernating_requests(
 		&self,
 		actor_id: String,

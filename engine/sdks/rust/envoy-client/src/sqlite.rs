@@ -12,6 +12,7 @@ pub enum SqliteRequest {
 	CommitStageBegin(protocol::SqliteCommitStageBeginRequest),
 	CommitStage(protocol::SqliteCommitStageRequest),
 	CommitFinalize(protocol::SqliteCommitFinalizeRequest),
+	PersistPreloadHints(protocol::SqlitePersistPreloadHintsRequest),
 }
 
 pub enum SqliteResponse {
@@ -20,6 +21,7 @@ pub enum SqliteResponse {
 	CommitStageBegin(protocol::SqliteCommitStageBeginResponse),
 	CommitStage(protocol::SqliteCommitStageResponse),
 	CommitFinalize(protocol::SqliteCommitFinalizeResponse),
+	PersistPreloadHints(protocol::SqlitePersistPreloadHintsResponse),
 }
 
 pub struct SqliteRequestEntry {
@@ -116,6 +118,18 @@ pub async fn handle_sqlite_commit_finalize_response(
 	);
 }
 
+pub async fn handle_sqlite_persist_preload_hints_response(
+	ctx: &mut EnvoyContext,
+	response: protocol::ToEnvoySqlitePersistPreloadHintsResponse,
+) {
+	handle_sqlite_response(
+		ctx,
+		response.request_id,
+		SqliteResponse::PersistPreloadHints(response.data),
+		"sqlite_persist_preload_hints",
+	);
+}
+
 fn handle_sqlite_response(
 	ctx: &mut EnvoyContext,
 	request_id: u32,
@@ -161,6 +175,11 @@ pub async fn send_single_sqlite_request(ctx: &mut EnvoyContext, request_id: u32)
 			SqliteRequest::CommitFinalize(data) => {
 				protocol::ToRivet::ToRivetSqliteCommitFinalizeRequest(
 					protocol::ToRivetSqliteCommitFinalizeRequest { request_id, data },
+				)
+			}
+			SqliteRequest::PersistPreloadHints(data) => {
+				protocol::ToRivet::ToRivetSqlitePersistPreloadHintsRequest(
+					protocol::ToRivetSqlitePersistPreloadHintsRequest { request_id, data },
 				)
 			}
 		};

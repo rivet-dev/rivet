@@ -20,7 +20,8 @@ fn ensure_to_envoy_v1_compatible(message: &v2::ToEnvoy) -> Result<()> {
 		| v2::ToEnvoy::ToEnvoySqliteCommitResponse(_)
 		| v2::ToEnvoy::ToEnvoySqliteCommitStageBeginResponse(_)
 		| v2::ToEnvoy::ToEnvoySqliteCommitStageResponse(_)
-		| v2::ToEnvoy::ToEnvoySqliteCommitFinalizeResponse(_) => {
+		| v2::ToEnvoy::ToEnvoySqliteCommitFinalizeResponse(_)
+		| v2::ToEnvoy::ToEnvoySqlitePersistPreloadHintsResponse(_) => {
 			bail!("sqlite responses require envoy-protocol v2")
 		}
 		_ => Ok(()),
@@ -33,7 +34,8 @@ fn ensure_to_rivet_v1_compatible(message: &v2::ToRivet) -> Result<()> {
 		| v2::ToRivet::ToRivetSqliteCommitRequest(_)
 		| v2::ToRivet::ToRivetSqliteCommitStageBeginRequest(_)
 		| v2::ToRivet::ToRivetSqliteCommitStageRequest(_)
-		| v2::ToRivet::ToRivetSqliteCommitFinalizeRequest(_) => {
+		| v2::ToRivet::ToRivetSqliteCommitFinalizeRequest(_)
+		| v2::ToRivet::ToRivetSqlitePersistPreloadHintsRequest(_) => {
 			bail!("sqlite requests require envoy-protocol v2")
 		}
 		_ => Ok(()),

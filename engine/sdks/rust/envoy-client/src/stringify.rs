@@ -293,6 +293,12 @@ pub fn stringify_to_rivet(message: &protocol::ToRivet) -> String {
 				val.request_id
 			)
 		}
+		protocol::ToRivet::ToRivetSqlitePersistPreloadHintsRequest(val) => {
+			format!(
+				"ToRivetSqlitePersistPreloadHintsRequest{{requestId: {}}}",
+				val.request_id
+			)
+		}
 		protocol::ToRivet::ToRivetTunnelMessage(val) => {
 			format!(
 				"ToRivetTunnelMessage{{messageId: {}, messageKind: {}}}",
@@ -360,6 +366,12 @@ pub fn stringify_to_envoy(message: &protocol::ToEnvoy) -> String {
 		protocol::ToEnvoy::ToEnvoySqliteCommitFinalizeResponse(val) => {
 			format!(
 				"ToEnvoySqliteCommitFinalizeResponse{{requestId: {}}}",
+				val.request_id
+			)
+		}
+		protocol::ToEnvoy::ToEnvoySqlitePersistPreloadHintsResponse(val) => {
+			format!(
+				"ToEnvoySqlitePersistPreloadHintsResponse{{requestId: {}}}",
 				val.request_id
 			)
 		}

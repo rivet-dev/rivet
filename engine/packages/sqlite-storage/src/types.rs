@@ -8,7 +8,7 @@
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
-pub use rivet_sqlite_storage_protocol::{DBHead, SqliteOrigin};
+pub use rivet_sqlite_storage_protocol::{DBHead, PreloadHintRange, PreloadHints, SqliteOrigin};
 use rivet_sqlite_storage_protocol::versioned;
 
 pub const SQLITE_VFS_V2_SCHEMA_VERSION: u32 = 2;
@@ -98,12 +98,21 @@ pub fn encode_db_head(head: &DBHead) -> Result<Vec<u8>> {
 	versioned::encode_db_head(head.clone())
 }
 
+pub fn decode_preload_hints(bytes: &[u8]) -> Result<PreloadHints> {
+	versioned::decode_preload_hints(bytes)
+}
+
+pub fn encode_preload_hints(hints: &PreloadHints) -> Result<Vec<u8>> {
+	versioned::encode_preload_hints(hints.clone())
+}
+
 #[cfg(test)]
 mod tests {
 	use super::{
-		DBHead, DirtyPage, FetchedPage, SQLITE_DEFAULT_MAX_STORAGE_BYTES, SQLITE_MAX_DELTA_BYTES,
-		SQLITE_PAGE_SIZE, SQLITE_SHARD_SIZE, SQLITE_VFS_V2_SCHEMA_VERSION, SqliteMeta,
-		SqliteOrigin, decode_db_head, encode_db_head, new_db_head,
+		DBHead, DirtyPage, FetchedPage, PreloadHintRange, PreloadHints,
+		SQLITE_DEFAULT_MAX_STORAGE_BYTES, SQLITE_MAX_DELTA_BYTES, SQLITE_PAGE_SIZE,
+		SQLITE_SHARD_SIZE, SQLITE_VFS_V2_SCHEMA_VERSION, SqliteMeta, SqliteOrigin,
+		decode_db_head, decode_preload_hints, encode_db_head, encode_preload_hints, new_db_head,
 	};
 
 	#[test]
@@ -145,6 +154,22 @@ mod tests {
 		let decoded = decode_db_head(&encoded).expect("db head should deserialize");
 
 		assert_eq!(decoded, head);
+	}
+
+	#[test]
+	fn preload_hints_round_trip_through_versioned_encoding() {
+		let hints = PreloadHints {
+			pgnos: vec![1, 7, 11],
+			ranges: vec![PreloadHintRange {
+				start_pgno: 64,
+				page_count: 32,
+			}],
+		};
+
+		let encoded = encode_preload_hints(&hints).expect("preload hints should serialize");
+		let decoded = decode_preload_hints(&encoded).expect("preload hints should deserialize");
+
+		assert_eq!(decoded, hints);
 	}
 
 	#[test]
