@@ -15,6 +15,7 @@ Started: Wed Apr 29 04:36:56 AM PDT 2026
 - `sqlite-storage::pump::ActorDb::new` carries a `rivet_pools::NodeId`; production callers should pass `pools.node_id()` so pump metrics are labeled by process node.
 - `sqlite-storage` compactor UPS messages use a typed `Subject`, `PublishOpts::one()`, and local vbare encode/decode helpers so dispatch tests can verify the wire payload through the memory driver.
 - `sqlite-storage` compactor lease take/renew helpers must use `Serializable` reads on `/META/compactor_lease`; use `TransactionRetryLimit(1)` in race tests when you need to observe the OCC abort instead of UDB's automatic retry.
+- `sqlite-storage` compactor shard folding uses absolute SQLite page numbers; page 0 is invalid for LTX, so full-shard tests use shard 1 pages `64..128`.
 
 ## 2026-04-29 04:44:52 PDT - US-001
 - Implemented a UUID-backed `NodeId` type and stored a generated value on each `Pools` instance.
@@ -137,4 +138,14 @@ Started: Wed Apr 29 04:36:56 AM PDT 2026
   - Lease values are local vbare payloads with `rivet_pools::NodeId` as the holder, matching the process node id used by future compactor workers.
   - Lease take and renew must use regular `Serializable` reads so concurrent pods racing the same key conflict through UDB OCC.
   - UDB's automatic retry hides raw OCC conflicts; set `DatabaseOption::TransactionRetryLimit(1)` in tests that need to assert one racing transaction aborts.
+---
+## 2026-04-29 05:31:59 PDT - US-013
+- Added `compactor::shard::fold_shard` with snapshot SHARD reads, page-size and shard-membership validation, newer update wins merge semantics, and SHARD blob rewrite.
+- Replaced the `compactor_compact` placeholder with real RocksDB-backed tests for empty folds, existing-shard merges, full overwrite, partial overwrite, and distinct-page byte accounting.
+- Verified `cargo check -p sqlite-storage`, `cargo test -p sqlite-storage --test compactor_compact`, `cargo test -p sqlite-storage`, and `git diff --check`.
+- Files changed: `engine/packages/sqlite-storage/src/compactor/shard.rs`, `engine/packages/sqlite-storage/src/compactor/mod.rs`, `engine/packages/sqlite-storage/tests/compactor_compact.rs`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
+- **Learnings for future iterations:**
+  - `fold_shard` should be called inside an existing UDB transaction so US-014 can compose SHARD writes with PIDX `COMPARE_AND_CLEAR`, DELTA cleanup, and `/META/compact` updates.
+  - Existing SHARD blobs are read with snapshot isolation; compaction write-phase conflict behavior belongs around `/META/head`, not the per-shard fold helper.
+  - LTX encodes absolute page numbers and rejects page 0, so use page ranges like `64..128` when testing all 64 pages in shard 1.
 ---
