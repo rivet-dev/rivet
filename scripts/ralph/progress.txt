@@ -48,6 +48,7 @@ Started: Wed Apr 29 04:36:56 AM PDT 2026
 - SQLite admin operation state lives in actor-scoped `/META/admin_op/{operation_id}` records; helpers that only receive `op_id` locate the persisted record instead of using pod-local state.
 - SQLite admin op workers should call `admin::start_work` before dispatch so `/META/admin_op/{operation_id}` is the source of truth for Pending → InProgress transitions and holder assignment.
 - Restore/fork admin tests that install compactor pause hooks must serialize with a test-local async mutex because the hook slots are process-global.
+- SQLite fork destination PIDX rows must be self-contained by copying source DELTA rows referenced by checkpoint PIDX entries into the destination actor.
 
 ## 2026-04-29 04:44:52 PDT - US-001
 - Implemented a UUID-backed `NodeId` type and stored a generated value on each `Pools` instance.
@@ -411,4 +412,14 @@ Started: Wed Apr 29 04:36:56 AM PDT 2026
   - Restore target resolution should choose the newest checkpoint at or before the target, then require every `/DELTA/{T}/META` in `(ckp_txid, target_txid]`.
   - Restore copies checkpoint SHARD/PIDX rows first, then replays retained DELTAs through `fold_shard` so reads remain valid through existing PIDX/DELTA fallback behavior.
   - The first destructive restore tx must write `/META/restore_in_progress` and clear live SHARD/PIDX prefixes before any pause hook can observe state.
+---
+## 2026-04-29 09:12:27 PDT - US-035
+- Implemented `compactor::fork::handle_fork` with source/destination leases, target resolution, DryRun results, checkpoint and DELTA refcount pinning, destination copy/replay/finalization, cleanup on failure, resume handling, and fork metrics.
+- Wired the admin worker to dispatch real fork operations and added fork coverage for head/past targets, destination allocation/existing validation, DryRun, DELTA pinning, concurrent destinations, resume after pod failure, and refcount sequencing.
+- Verified `cargo check -p sqlite-storage`, `cargo test -p sqlite-storage`, `cargo check --workspace`, and `git diff --check`.
+- Files changed: `engine/packages/sqlite-storage/src/compactor/fork.rs`, `engine/packages/sqlite-storage/src/compactor/{metrics.rs,mod.rs,worker.rs}`, `engine/packages/sqlite-storage/tests/{support/mod.rs,fork_basic.rs,fork_dst_allocation.rs,fork_dryrun.rs,fork_delta_pinning.rs,fork_concurrent.rs,fork_resume.rs,refcount_sequencing.rs}`, `engine/CLAUDE.md`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
+- **Learnings for future iterations:**
+  - Fork destinations need local copies of any source DELTA rows referenced by checkpoint PIDX entries or debug takeover reconciliation will see dangling PIDX refs.
+  - Fork resume treats an existing `/META/fork_in_progress` marker as already pinned work; it skips destination-empty validation and continues from the recorded step.
+  - Concurrent forks from the same source may briefly contend on the source compactor lease, so fork lease acquisition retries before failing.
 ---

@@ -7,12 +7,18 @@ use namespace::types::SqliteNamespaceConfig;
 use rivet_error::RivetError;
 use rivet_pools::NodeId;
 use sqlite_storage::{
-	admin::{self, AuditFields, OpKind, RestoreMode, RestoreTarget},
+	admin::{self, AuditFields, ForkDstSpec, ForkMode, OpKind, RestoreMode, RestoreTarget},
 	compactor::{self, CheckpointOutcome},
-	keys::{PAGE_SIZE, meta_head_key, meta_restore_in_progress_key},
+	keys::{
+		PAGE_SIZE, checkpoint_meta_key, delta_meta_key, meta_fork_in_progress_key, meta_head_key,
+		meta_restore_in_progress_key,
+	},
 	pump::ActorDb,
 	quota,
-	types::{DBHead, DirtyPage, FetchedPage, decode_db_head},
+	types::{
+		CheckpointMeta, DBHead, DeltaMeta, DirtyPage, FetchedPage, decode_checkpoint_meta,
+		decode_db_head, decode_delta_meta,
+	},
 };
 use tempfile::Builder;
 use tokio_util::sync::CancellationToken;
@@ -118,6 +124,25 @@ pub async fn create_restore_record(
 	.await
 }
 
+pub async fn create_fork_record(
+	db: Arc<universaldb::Database>,
+	src_actor_id: &str,
+	op_id: Uuid,
+) -> Result<()> {
+	admin::create_record(
+		db,
+		op_id,
+		OpKind::Fork,
+		src_actor_id.to_string(),
+		AuditFields {
+			caller_id: "tester".to_string(),
+			request_origin_ts_ms: 1_000,
+			namespace_id: Uuid::new_v4(),
+		},
+	)
+	.await
+}
+
 pub async fn run_restore(
 	db: Arc<universaldb::Database>,
 	actor_id: &str,
@@ -132,6 +157,30 @@ pub async fn run_restore(
 		actor_id.to_string(),
 		target,
 		mode,
+		NodeId::new(),
+		CancellationToken::new(),
+	)
+	.await?;
+	Ok(op_id)
+}
+
+pub async fn run_fork(
+	db: Arc<universaldb::Database>,
+	src_actor_id: &str,
+	target: RestoreTarget,
+	mode: ForkMode,
+	dst: ForkDstSpec,
+) -> Result<Uuid> {
+	let op_id = Uuid::new_v4();
+	create_fork_record(Arc::clone(&db), src_actor_id, op_id).await?;
+	compactor::handle_fork(
+		db,
+		test_ups(&format!("fork-{src_actor_id}")),
+		op_id,
+		src_actor_id.to_string(),
+		target,
+		mode,
+		dst,
 		NodeId::new(),
 		CancellationToken::new(),
 	)
@@ -182,6 +231,61 @@ pub async fn marker_exists(db: Arc<universaldb::Database>, actor_id: &str) -> Re
 				.get(&meta_restore_in_progress_key(&actor_id), Snapshot)
 				.await?
 				.is_some())
+		}
+	})
+	.await
+}
+
+pub async fn fork_marker_exists(db: Arc<universaldb::Database>, actor_id: &str) -> Result<bool> {
+	let actor_id = actor_id.to_string();
+	db.run(move |tx| {
+		let actor_id = actor_id.clone();
+		async move {
+			Ok(tx
+				.informal()
+				.get(&meta_fork_in_progress_key(&actor_id), Snapshot)
+				.await?
+				.is_some())
+		}
+	})
+	.await
+}
+
+pub async fn read_checkpoint_meta(
+	db: Arc<universaldb::Database>,
+	actor_id: &str,
+	ckp_txid: u64,
+) -> Result<CheckpointMeta> {
+	let actor_id = actor_id.to_string();
+	db.run(move |tx| {
+		let actor_id = actor_id.clone();
+		async move {
+			let bytes = tx
+				.informal()
+				.get(&checkpoint_meta_key(&actor_id, ckp_txid), Snapshot)
+				.await?
+				.expect("checkpoint meta should exist");
+			decode_checkpoint_meta(&bytes)
+		}
+	})
+	.await
+}
+
+pub async fn read_delta_meta(
+	db: Arc<universaldb::Database>,
+	actor_id: &str,
+	txid: u64,
+) -> Result<DeltaMeta> {
+	let actor_id = actor_id.to_string();
+	db.run(move |tx| {
+		let actor_id = actor_id.clone();
+		async move {
+			let bytes = tx
+				.informal()
+				.get(&delta_meta_key(&actor_id, txid), Snapshot)
+				.await?
+				.expect("delta meta should exist");
+			decode_delta_meta(&bytes)
 		}
 	})
 	.await

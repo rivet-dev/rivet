@@ -1,6 +1,7 @@
 pub mod checkpoint;
 pub mod cleanup;
 pub mod compact;
+pub mod fork;
 pub mod lease;
 pub mod metrics;
 pub mod orphan;
@@ -19,6 +20,7 @@ pub use crate::admin::{
 	SqliteOpRequest, SqliteOpSubject, complete, create_record, fail, read, start_work,
 	update_progress, update_status,
 };
+pub use fork::handle_fork;
 pub use lease::{
 	CompactorLease, RenewOutcome, SQLITE_COMPACTOR_LEASE_VERSION, TakeOutcome, decode_lease,
 	encode_lease, release, renew, take,

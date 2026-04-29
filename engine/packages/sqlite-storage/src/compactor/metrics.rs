@@ -155,6 +155,27 @@ lazy_static::lazy_static! {
 		"SQLite restore operations currently holding an in-progress marker.",
 		*REGISTRY
 	).unwrap();
+
+	pub static ref SQLITE_FORK_DURATION_SECONDS: HistogramVec = register_histogram_vec_with_registry!(
+		"sqlite_fork_duration_seconds",
+		"Duration of sqlite fork operations.",
+		&["outcome"],
+		BUCKETS.to_vec(),
+		*REGISTRY
+	).unwrap();
+
+	pub static ref SQLITE_FORK_DELTAS_REPLAYED: Histogram = register_histogram_with_registry!(
+		"sqlite_fork_deltas_replayed",
+		"Number of DELTA transactions replayed by sqlite fork operations.",
+		BUCKETS.to_vec(),
+		*REGISTRY
+	).unwrap();
+
+	pub static ref SQLITE_FORK_IN_PROGRESS_ACTIVE: IntGauge = register_int_gauge_with_registry!(
+		"sqlite_fork_in_progress_active",
+		"SQLite fork operations currently holding an in-progress marker.",
+		*REGISTRY
+	).unwrap();
 }
 
 #[cfg(debug_assertions)]

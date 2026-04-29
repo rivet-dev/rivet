@@ -62,6 +62,7 @@ Use `test-snapshot-gen` to generate and load RocksDB snapshots of the full UDB K
 - `sqlite-storage` fast-path commits should update an already-cached PIDX in memory after the store write, but must not load PIDX from store just to mutate it or the one-RTT path is gone.
 - `sqlite-storage` shrink writes must delete above-EOF PIDX rows and fully-above-EOF SHARD blobs inside the same commit/takeover transaction; compaction only cleans partial shards by filtering pages at or below `head.db_size_pages`.
 - `sqlite-storage` compaction should choose shard passes from the live PIDX scan, then delete DELTA blobs by comparing all existing delta keys against the remaining global PIDX references so multi-shard and overwritten deltas only disappear when every page ref is gone.
+- `sqlite-storage` forks must copy any source DELTA rows referenced by checkpoint PIDX entries into the destination actor; destination PIDX rows must not point at source-only DELTAs.
 - `sqlite-storage` metrics should record compaction pass duration and totals in `compactor/worker.rs`, while shard outcome metrics such as folded pages, deleted deltas, delta gauge updates, and lag stay in `compactor/shard.rs` to avoid double counting.
 - `sqlite-storage` live quota accounting should treat only `/META/head`, SHARD, DELTA, and PIDX keys as billable; `/META/storage_used_live` tracks the sum with signed atomic-add deltas.
 - `sqlite-storage` admin operation state is persisted under actor-scoped `/META/admin_op/{operation_id}` records; do not track operation source-of-truth in compactor pod memory.

@@ -28,7 +28,7 @@ use crate::{
 use super::{
 	SqliteCompactPayload, SqliteCompactSubject, SqliteOpSubject, TakeOutcome,
 	compact::{CheckpointConfig, compact_default_batch_with_checkpoint_config},
-	decode_compact_payload, lease, metrics, orphan, publish::Ups, restore,
+	decode_compact_payload, fork, lease, metrics, orphan, publish::Ups, restore,
 };
 
 const COMPACTOR_QUEUE_GROUP: &str = "compactor";
@@ -195,13 +195,14 @@ async fn run_with_node_id(
 							}
 						};
 						let udb = Arc::clone(&udb);
+						let ups = ups.clone();
 						let semaphore = Arc::clone(&semaphore);
 
 						workers.spawn(async move {
 							let Ok(_permit) = semaphore.acquire_owned().await else {
 								return;
 							};
-							if let Err(err) = handle_admin_op(udb, request, holder_id).await {
+							if let Err(err) = handle_admin_op(udb, ups, request, holder_id).await {
 								tracing::warn!(?err, "sqlite admin op failed");
 							}
 						});
@@ -236,6 +237,7 @@ async fn run_with_node_id(
 
 async fn handle_admin_op(
 	udb: Arc<universaldb::Database>,
+	ups: Ups,
 	request: SqliteOpRequest,
 	holder_id: rivet_pools::NodeId,
 ) -> Result<()> {
@@ -267,7 +269,7 @@ async fn handle_admin_op(
 			mode,
 			dst,
 		} => {
-			handle_fork(udb, request, record, src_actor_id, target, mode, dst, holder_id).await
+			handle_fork(udb, ups, request, record, src_actor_id, target, mode, dst, holder_id).await
 		}
 		SqliteOp::DescribeRetention { actor_id } => {
 			handle_describe_retention(udb, request, record, actor_id, holder_id).await
@@ -319,6 +321,7 @@ async fn handle_restore(
 
 async fn handle_fork(
 	udb: Arc<universaldb::Database>,
+	ups: Ups,
 	request: SqliteOpRequest,
 	record: admin::AdminOpRecord,
 	src_actor_id: String,
@@ -331,8 +334,8 @@ async fn handle_fork(
 	let resume = fork_resume_state(Arc::clone(&udb), &marker_actor_id, request.request_id).await?;
 	#[cfg(debug_assertions)]
 	if test_hooks::maybe_handle_admin_op(test_hooks::AdminOpHookEvent {
-		request,
-		record,
+		request: request.clone(),
+		record: record.clone(),
 		resume: resume.clone(),
 	})
 	.await?
@@ -340,8 +343,19 @@ async fn handle_fork(
 		return Ok(());
 	}
 
-	let _ = (udb, src_actor_id, target, mode, dst, holder_id, resume);
-	unimplemented!("sqlite fork admin op handler lands in US-035");
+	let _ = (record, resume);
+	fork::handle_fork(
+		udb,
+		ups,
+		request.request_id,
+		src_actor_id,
+		target,
+		mode,
+		dst,
+		holder_id,
+		CancellationToken::new(),
+	)
+	.await
 }
 
 async fn handle_describe_retention(
@@ -1043,7 +1057,7 @@ pub mod test_hooks {
 		request: SqliteOpRequest,
 		holder_id: rivet_pools::NodeId,
 	) -> Result<()> {
-		super::handle_admin_op(udb, request, holder_id).await
+		super::handle_admin_op(udb, test_ups(), request, holder_id).await
 	}
 
 	pub async fn handle_admin_ops_with_limit_for_test(
@@ -1057,13 +1071,14 @@ pub mod test_hooks {
 
 		for request in requests {
 			let udb = Arc::clone(&udb);
+			let ups = test_ups();
 			let semaphore = Arc::clone(&semaphore);
 			workers.spawn(async move {
 				let _permit = semaphore
 					.acquire_owned()
 					.await
 					.context("sqlite admin op semaphore closed")?;
-				super::handle_admin_op(udb, request, holder_id).await
+				super::handle_admin_op(udb, ups, request, holder_id).await
 			});
 		}
 
@@ -1139,6 +1154,15 @@ pub mod test_hooks {
 		.await
 	}
 
+	pub async fn handle_admin_once(
+		udb: Arc<universaldb::Database>,
+		ups: Ups,
+		request: SqliteOpRequest,
+		holder_id: rivet_pools::NodeId,
+	) -> Result<()> {
+		super::handle_admin_op(udb, ups, request, holder_id).await
+	}
+
 	pub async fn handle_payload_once_with_checkpoint_semaphore(
 		udb: Arc<universaldb::Database>,
 		payload: SqliteCompactPayload,
@@ -1157,6 +1181,14 @@ pub mod test_hooks {
 			Arc::new(scc::HashMap::new()),
 		)
 		.await
+	}
+
+	fn test_ups() -> Ups {
+		universalpubsub::PubSub::new(Arc::new(
+			universalpubsub::driver::memory::MemoryDriver::new(
+				"sqlite-admin-worker-test-hook".to_string(),
+			),
+		))
 	}
 }
 
