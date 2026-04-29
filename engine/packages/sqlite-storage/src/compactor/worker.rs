@@ -27,6 +27,7 @@ use crate::{
 
 use super::{
 	SqliteCompactPayload, SqliteCompactSubject, SqliteOpSubject, TakeOutcome,
+	admin as short_admin,
 	compact::{CheckpointConfig, compact_default_batch_with_checkpoint_config},
 	decode_compact_payload, fork, lease, metrics, orphan, publish::Ups, restore,
 };
@@ -243,6 +244,24 @@ async fn handle_admin_op(
 ) -> Result<()> {
 	let op_label = admin_op_label(&request.op);
 	let _in_flight = AdminOpInFlightGuard::new(op_label);
+	let result = handle_admin_op_inner(udb, ups, request, holder_id).await;
+	match &result {
+		Ok(()) => metrics::SQLITE_ADMIN_OP_TOTAL
+			.with_label_values(&[op_label, "success"])
+			.inc(),
+		Err(_) => metrics::SQLITE_ADMIN_OP_TOTAL
+			.with_label_values(&[op_label, "failed"])
+			.inc(),
+	}
+	result
+}
+
+async fn handle_admin_op_inner(
+	udb: Arc<universaldb::Database>,
+	ups: Ups,
+	request: SqliteOpRequest,
+	holder_id: rivet_pools::NodeId,
+) -> Result<()> {
 	let record = match admin::start_work(Arc::clone(&udb), request.request_id, holder_id).await? {
 		Some(record) => record,
 		None => {
@@ -273,6 +292,9 @@ async fn handle_admin_op(
 		}
 		SqliteOp::DescribeRetention { actor_id } => {
 			handle_describe_retention(udb, request, record, actor_id, holder_id).await
+		}
+		SqliteOp::GetRetention { actor_id } => {
+			handle_get_retention(udb, request, record, actor_id, holder_id).await
 		}
 		SqliteOp::SetRetention { actor_id, config } => {
 			handle_set_retention(udb, request, record, actor_id, config, holder_id).await
@@ -359,7 +381,7 @@ async fn handle_fork(
 }
 
 async fn handle_describe_retention(
-	_udb: Arc<universaldb::Database>,
+	udb: Arc<universaldb::Database>,
 	request: SqliteOpRequest,
 	record: admin::AdminOpRecord,
 	actor_id: String,
@@ -367,7 +389,7 @@ async fn handle_describe_retention(
 ) -> Result<()> {
 	#[cfg(debug_assertions)]
 	if test_hooks::maybe_handle_admin_op(test_hooks::AdminOpHookEvent {
-		request,
+		request: request.clone(),
 		record,
 		resume: None,
 	})
@@ -376,12 +398,50 @@ async fn handle_describe_retention(
 		return Ok(());
 	}
 
-	let _ = actor_id;
-	unimplemented!("sqlite describe-retention admin op handler lands in US-036");
+	short_admin::handle_describe_retention(
+		udb,
+		request.request_id,
+		short_admin::DescribeRetentionRequest {
+			actor_id,
+			audit: request.audit,
+		},
+	)
+	.await
+	.map(|_| ())
+}
+
+async fn handle_get_retention(
+	udb: Arc<universaldb::Database>,
+	request: SqliteOpRequest,
+	record: admin::AdminOpRecord,
+	actor_id: String,
+	_holder_id: rivet_pools::NodeId,
+) -> Result<()> {
+	#[cfg(debug_assertions)]
+	if test_hooks::maybe_handle_admin_op(test_hooks::AdminOpHookEvent {
+		request: request.clone(),
+		record,
+		resume: None,
+	})
+	.await?
+	{
+		return Ok(());
+	}
+
+	short_admin::handle_get_retention(
+		udb,
+		request.request_id,
+		short_admin::GetRetentionRequest {
+			actor_id,
+			audit: request.audit,
+		},
+	)
+	.await
+	.map(|_| ())
 }
 
 async fn handle_set_retention(
-	_udb: Arc<universaldb::Database>,
+	udb: Arc<universaldb::Database>,
 	request: SqliteOpRequest,
 	record: admin::AdminOpRecord,
 	actor_id: String,
@@ -390,7 +450,7 @@ async fn handle_set_retention(
 ) -> Result<()> {
 	#[cfg(debug_assertions)]
 	if test_hooks::maybe_handle_admin_op(test_hooks::AdminOpHookEvent {
-		request,
+		request: request.clone(),
 		record,
 		resume: None,
 	})
@@ -399,12 +459,21 @@ async fn handle_set_retention(
 		return Ok(());
 	}
 
-	let _ = (actor_id, config);
-	unimplemented!("sqlite set-retention admin op handler lands in US-036");
+	short_admin::handle_set_retention(
+		udb,
+		request.request_id,
+		short_admin::SetRetentionRequest {
+			actor_id,
+			config,
+			audit: request.audit,
+		},
+	)
+	.await
+	.map(|_| ())
 }
 
 async fn handle_clear_refcount(
-	_udb: Arc<universaldb::Database>,
+	udb: Arc<universaldb::Database>,
 	request: SqliteOpRequest,
 	record: admin::AdminOpRecord,
 	actor_id: String,
@@ -414,7 +483,7 @@ async fn handle_clear_refcount(
 ) -> Result<()> {
 	#[cfg(debug_assertions)]
 	if test_hooks::maybe_handle_admin_op(test_hooks::AdminOpHookEvent {
-		request,
+		request: request.clone(),
 		record,
 		resume: None,
 	})
@@ -423,8 +492,18 @@ async fn handle_clear_refcount(
 		return Ok(());
 	}
 
-	let _ = (actor_id, kind, txid);
-	unimplemented!("sqlite clear-refcount admin op handler lands in US-036");
+	short_admin::handle_clear_refcount(
+		udb,
+		request.request_id,
+		short_admin::ClearRefcountRequest {
+			actor_id,
+			kind,
+			txid,
+			audit: request.audit,
+		},
+	)
+	.await
+	.map(|_| ())
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -570,6 +649,7 @@ fn admin_op_kind(op: &SqliteOp) -> admin::OpKind {
 		SqliteOp::Restore { .. } => admin::OpKind::Restore,
 		SqliteOp::Fork { .. } => admin::OpKind::Fork,
 		SqliteOp::DescribeRetention { .. } => admin::OpKind::DescribeRetention,
+		SqliteOp::GetRetention { .. } => admin::OpKind::GetRetention,
 		SqliteOp::SetRetention { .. } => admin::OpKind::SetRetention,
 		SqliteOp::ClearRefcount { .. } => admin::OpKind::ClearRefcount,
 	}
@@ -580,6 +660,7 @@ fn admin_op_label(op: &SqliteOp) -> &'static str {
 		SqliteOp::Restore { .. } => "restore",
 		SqliteOp::Fork { .. } => "fork",
 		SqliteOp::DescribeRetention { .. } => "describe_retention",
+		SqliteOp::GetRetention { .. } => "get_retention",
 		SqliteOp::SetRetention { .. } => "set_retention",
 		SqliteOp::ClearRefcount { .. } => "clear_refcount",
 	}

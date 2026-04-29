@@ -30,6 +30,9 @@ pub enum SqliteOp {
 	DescribeRetention {
 		actor_id: String,
 	},
+	GetRetention {
+		actor_id: String,
+	},
 	SetRetention {
 		actor_id: String,
 		config: crate::pump::types::RetentionConfig,
@@ -92,6 +95,7 @@ pub enum OpKind {
 	Restore,
 	Fork,
 	DescribeRetention,
+	GetRetention,
 	SetRetention,
 	ClearRefcount,
 }
@@ -120,6 +124,9 @@ pub struct OpProgress {
 pub enum OpResult {
 	Empty,
 	Message { message: String },
+	RetentionView(RetentionView),
+	RetentionConfig(crate::pump::types::RetentionConfig),
+	ClearRefcount(ClearRefcountResult),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -127,6 +134,49 @@ pub struct AuditFields {
 	pub caller_id: String,
 	pub request_origin_ts_ms: i64,
 	pub namespace_id: Uuid,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RetentionView {
+	pub head: HeadView,
+	pub fine_grained_window: Option<FineGrainedWindow>,
+	pub checkpoints: Vec<CheckpointView>,
+	pub retention_config: crate::pump::types::RetentionConfig,
+	pub storage_used_live_bytes: u64,
+	pub storage_used_pitr_bytes: u64,
+	pub pitr_namespace_budget_bytes: u64,
+	pub pitr_namespace_used_bytes: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HeadView {
+	pub head_txid: u64,
+	pub db_size_pages: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FineGrainedWindow {
+	pub from_txid: u64,
+	pub to_txid: u64,
+	pub from_taken_at_ms: i64,
+	pub to_taken_at_ms: i64,
+	pub delta_count: u64,
+	pub total_bytes: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CheckpointView {
+	pub ckp_txid: u64,
+	pub taken_at_ms: i64,
+	pub byte_count: u64,
+	pub refcount: u32,
+	pub pinned_reason: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ClearRefcountResult {
+	pub kind: RefcountKind,
+	pub txid: u64,
 }
 
 enum VersionedAdminOpRecord {

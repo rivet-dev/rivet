@@ -135,6 +135,13 @@ lazy_static::lazy_static! {
 		*REGISTRY
 	).unwrap();
 
+	pub static ref SQLITE_ADMIN_OP_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
+		"sqlite_admin_op_total",
+		"Total sqlite admin operation attempts.",
+		&["op", "outcome"],
+		*REGISTRY
+	).unwrap();
+
 	pub static ref SQLITE_RESTORE_DURATION_SECONDS: HistogramVec = register_histogram_vec_with_registry!(
 		"sqlite_restore_duration_seconds",
 		"Duration of sqlite restore operations.",

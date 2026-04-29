@@ -1,3 +1,4 @@
+pub mod admin;
 pub mod checkpoint;
 pub mod cleanup;
 pub mod compact;
@@ -15,10 +16,15 @@ pub use checkpoint::{CheckpointOutcome, create_checkpoint};
 pub use cleanup::{cleanup_old_checkpoints, detect_refcount_leaks};
 pub use compact::{CompactionOutcome, compact_default_batch};
 pub use crate::admin::{
-	AdminOpRecord, AuditFields, ForkDstSpec, ForkMode, OpKind, OpProgress, OpResult, OpStatus,
-	RefcountKind, RestoreMode, RestoreTarget, SQLITE_OP_SUBJECT, SqliteAdminError, SqliteOp,
+	AdminOpRecord, AuditFields, CheckpointView, ClearRefcountResult, FineGrainedWindow,
+	ForkDstSpec, ForkMode, HeadView, OpKind, OpProgress, OpResult, OpStatus, RefcountKind,
+	RestoreMode, RestoreTarget, RetentionView, SQLITE_OP_SUBJECT, SqliteAdminError, SqliteOp,
 	SqliteOpRequest, SqliteOpSubject, complete, create_record, fail, read, start_work,
 	update_progress, update_status,
+};
+pub use admin::{
+	ClearRefcountRequest, DescribeRetentionRequest, GetRetentionRequest, SetRetentionRequest,
+	handle_clear_refcount, handle_describe_retention, handle_get_retention, handle_set_retention,
 };
 pub use fork::handle_fork;
 pub use lease::{

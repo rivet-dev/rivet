@@ -72,6 +72,9 @@ fn op_request_vbare_roundtrip() -> Result<()> {
 		SqliteOp::DescribeRetention {
 			actor_id: TEST_ACTOR.to_string(),
 		},
+		SqliteOp::GetRetention {
+			actor_id: TEST_ACTOR.to_string(),
+		},
 		SqliteOp::SetRetention {
 			actor_id: TEST_ACTOR.to_string(),
 			config: RetentionConfig {

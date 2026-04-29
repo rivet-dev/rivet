@@ -49,6 +49,8 @@ Started: Wed Apr 29 04:36:56 AM PDT 2026
 - SQLite admin op workers should call `admin::start_work` before dispatch so `/META/admin_op/{operation_id}` is the source of truth for Pending → InProgress transitions and holder assignment.
 - Restore/fork admin tests that install compactor pause hooks must serialize with a test-local async mutex because the hook slots are process-global.
 - SQLite fork destination PIDX rows must be self-contained by copying source DELTA rows referenced by checkpoint PIDX entries into the destination actor.
+- Short sqlite admin ops persist rich responses as typed `OpResult` variants; direct handlers in `compactor::admin` transition records to InProgress before completing so tests can call them without the worker.
+- SQLite admin audit fields carry a raw UUID namespace id; tests that need namespace config seed `namespace::keys::sqlite_config_key(Id::v1(audit.namespace_id, 0))`.
 
 ## 2026-04-29 04:44:52 PDT - US-001
 - Implemented a UUID-backed `NodeId` type and stored a generated value on each `Pools` instance.
@@ -422,4 +424,14 @@ Started: Wed Apr 29 04:36:56 AM PDT 2026
   - Fork destinations need local copies of any source DELTA rows referenced by checkpoint PIDX entries or debug takeover reconciliation will see dangling PIDX refs.
   - Fork resume treats an existing `/META/fork_in_progress` marker as already pinned work; it skips destination-empty validation and continues from the recorded step.
   - Concurrent forks from the same source may briefly contend on the source compactor lease, so fork lease acquisition retries before failing.
+---
+## 2026-04-29 09:20:02 PDT - US-036
+- Implemented short-running sqlite admin handlers for DescribeRetention, GetRetention, SetRetention, and ClearRefcount.
+- Added typed admin results for retention views, retention config, and refcount clears; wired the compactor worker to dispatch the real handlers and increment `sqlite_admin_op_total{op,outcome}`.
+- Added `tests/admin_short_ops.rs` coverage for retention views, no-checkpoint windows, pinned reasons, max-retention validation, persisted retention, refcount clearing, invalid txids, and audit hook emission.
+- Files changed: `engine/packages/sqlite-storage/src/admin/{mod.rs,types.rs}`, `engine/packages/sqlite-storage/src/compactor/{admin.rs,metrics.rs,mod.rs,worker.rs}`, `engine/packages/sqlite-storage/tests/{admin_protocol.rs,admin_short_ops.rs}`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
+- **Learnings for future iterations:**
+  - Short admin handlers should own record completion and typed results; the worker should stay a dispatch/metrics shell.
+  - `DescribeRetention` derives pinned checkpoint reasons from live Pending/InProgress admin records when refcount is nonzero.
+  - ClearRefcount updates checkpoint meta and the `/META/checkpoints` mirror together; DELTA refcounts only update `/DELTA/{T}/META`.
 ---
