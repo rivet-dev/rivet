@@ -47,11 +47,6 @@ pub async fn list_runner_config_enabled_dcs(ctx: &OperationCtx, input: &Input) -
 		.await?;
 
 	let dc_labels = dc_labels.unwrap_or_default();
-	tracing::debug!(
-		duration_ms = %start.elapsed().as_millis(),
-		?dc_labels,
-		"list_runner_config_enabled_dcs completed"
-	);
 
 	Ok(Output { dc_labels })
 }
