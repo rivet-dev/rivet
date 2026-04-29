@@ -12,6 +12,21 @@ export const dbStressActor = actor({
 					created_at INTEGER NOT NULL
 				)
 			`);
+			await db.execute(`
+				CREATE TABLE IF NOT EXISTS stress_meta_kv (
+					key TEXT PRIMARY KEY,
+					value TEXT NOT NULL,
+					updated_at INTEGER NOT NULL
+				)
+			`);
+			await db.execute(`
+				CREATE TABLE IF NOT EXISTS stress_payloads (
+					id INTEGER PRIMARY KEY,
+					tag TEXT NOT NULL,
+					payload TEXT NOT NULL,
+					updated_at INTEGER NOT NULL
+				)
+			`);
 		},
 	}),
 	actions: {
@@ -27,6 +42,144 @@ export const dbStressActor = actor({
 				`INSERT INTO stress_data (value, created_at) VALUES ${values.join(", ")}`,
 			);
 			return { count };
+		},
+
+		upsertMetaRows: async (c, count: number) => {
+			const normalizedCount = Math.max(0, Math.trunc(count));
+			for (let i = 0; i < normalizedCount; i++) {
+				await c.db.execute(
+					"INSERT OR REPLACE INTO stress_meta_kv (key, value, updated_at) VALUES (?, ?, ?)",
+					`key-${i % 32}`,
+					`value-${i}`,
+					Date.now(),
+				);
+			}
+			const results = await c.db.execute<{ count: number }>(
+				`SELECT COUNT(*) as count FROM stress_meta_kv`,
+			);
+			return results[0].count;
+		},
+
+		kitchenSinkSmoke: async (c, rounds: number) => {
+			const normalizedRounds = Math.max(1, Math.trunc(rounds));
+			const startedAt = Date.now();
+
+			await c.db.execute(
+				"INSERT OR REPLACE INTO stress_meta_kv (key, value, updated_at) VALUES (?, ?, ?)",
+				"started-at",
+				String(startedAt),
+				startedAt,
+			);
+
+			for (let round = 0; round < normalizedRounds; round++) {
+				const now = startedAt + round;
+
+				await Promise.all([
+					c.db.execute(
+						"INSERT OR REPLACE INTO stress_meta_kv (key, value, updated_at) VALUES (?, ?, ?)",
+						`parallel-key-${round % 17}`,
+						`parallel-value-${round}`,
+						now,
+					),
+					c.db.execute(
+						"INSERT INTO stress_data (value, created_at) VALUES (?, ?)",
+						`parallel-data-${round}`,
+						now,
+					),
+					c.db.execute<{ count: number }>(
+						"SELECT COUNT(*) as count FROM stress_meta_kv",
+					),
+					c.db.execute<Record<string, unknown>>("PRAGMA page_count"),
+				]);
+
+				await c.db.execute("BEGIN");
+				try {
+					await c.db.execute(
+						"INSERT INTO stress_data (value, created_at) VALUES (?, ?)",
+						`tx-data-${round}`,
+						now,
+					);
+					await c.db.execute(
+						"INSERT OR REPLACE INTO stress_payloads (id, tag, payload, updated_at) VALUES (?, ?, ?, ?)",
+						round + 1,
+						`payload-${round}`,
+						"x".repeat(1024 + (round % 5) * 2048),
+						now,
+					);
+					await c.db.execute("SAVEPOINT payload_patch");
+					await c.db.execute(
+						"UPDATE stress_payloads SET payload = payload || ?, updated_at = ? WHERE id = ?",
+						`-patch-${round}`,
+						now + 1,
+						round + 1,
+					);
+					await c.db.execute("ROLLBACK TO payload_patch");
+					await c.db.execute("RELEASE payload_patch");
+					await c.db.execute(
+						"UPDATE stress_meta_kv SET value = ?, updated_at = ? WHERE key = ?",
+						`tx-value-${round}`,
+						now + 2,
+						`parallel-key-${round % 17}`,
+					);
+					await c.db.execute("COMMIT");
+				} catch (error) {
+					await c.db.execute("ROLLBACK");
+					throw error;
+				}
+
+				await c.db.execute("BEGIN");
+				try {
+					await c.db.execute(
+						"INSERT INTO stress_data (value, created_at) VALUES (?, ?)",
+						`rollback-data-${round}`,
+						now,
+					);
+					await c.db.execute("ROLLBACK");
+				} catch (error) {
+					await c.db.execute("ROLLBACK");
+					throw error;
+				}
+
+				if (round % 3 === 0) {
+					await c.db.execute(
+						"DELETE FROM stress_data WHERE id IN (SELECT id FROM stress_data WHERE value LIKE 'parallel-data-%' ORDER BY id LIMIT 1)",
+					);
+				}
+			}
+
+			await c.db.execute(
+				"INSERT OR REPLACE INTO stress_meta_kv (key, value, updated_at) VALUES (?, ?, ?)",
+				"completed-rounds",
+				String(normalizedRounds),
+				Date.now(),
+			);
+			await c.db.execute("DELETE FROM stress_payloads WHERE id % 11 = 0");
+			await c.db.execute("VACUUM");
+
+			const [metaRows, dataRows, payloadRows, pageRows, integrityRows] =
+				await Promise.all([
+					c.db.execute<{ count: number }>(
+						"SELECT COUNT(*) as count FROM stress_meta_kv",
+					),
+					c.db.execute<{ count: number }>(
+						"SELECT COUNT(*) as count FROM stress_data",
+					),
+					c.db.execute<{ count: number }>(
+						"SELECT COUNT(*) as count FROM stress_payloads",
+					),
+					c.db.execute<Record<string, unknown>>("PRAGMA page_count"),
+					c.db.execute<Record<string, unknown>>(
+						"PRAGMA integrity_check",
+					),
+				]);
+
+			return {
+				metaCount: metaRows[0]?.count ?? 0,
+				dataCount: dataRows[0]?.count ?? 0,
+				payloadCount: payloadRows[0]?.count ?? 0,
+				pageCount: Number(Object.values(pageRows[0] ?? {})[0] ?? 0),
+				integrity: String(Object.values(integrityRows[0] ?? {})[0] ?? ""),
+			};
 		},
 
 		getCount: async (c) => {
@@ -91,6 +244,8 @@ export const dbStressActor = actor({
 
 		reset: async (c) => {
 			await c.db.execute(`DELETE FROM stress_data`);
+			await c.db.execute(`DELETE FROM stress_meta_kv`);
+			await c.db.execute(`DELETE FROM stress_payloads`);
 		},
 
 		destroy: (c) => {

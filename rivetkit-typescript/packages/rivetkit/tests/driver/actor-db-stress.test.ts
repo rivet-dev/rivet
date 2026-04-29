@@ -1,9 +1,27 @@
 import { describeDriverMatrix } from "./shared-matrix";
 import { describe, expect, test, vi } from "vitest";
-import { setupDriverTest } from "./shared-utils";
+import { setupDriverTest, waitFor } from "./shared-utils";
 
 const STRESS_TEST_TIMEOUT_MS = 60_000;
+const KITCHEN_SINK_TEST_TIMEOUT_MS = 120_000;
 const ACTOR_READY_TIMEOUT_MS = 15_000;
+const RUNTIME_LOG_TAIL_CHARS = 20_000;
+
+async function withRuntimeLogTail<T>(
+	getRuntimeOutput: () => string,
+	fn: () => Promise<T>,
+): Promise<T> {
+	try {
+		return await fn();
+	} catch (error) {
+		const runtimeOutput = getRuntimeOutput();
+		const runtimeTail = runtimeOutput.slice(-RUNTIME_LOG_TAIL_CHARS);
+		if (error instanceof Error && runtimeTail) {
+			error.message = `${error.message}\n\nRuntime log tail:\n${runtimeTail}`;
+		}
+		throw error;
+	}
+}
 
 /**
  * Stress and resilience tests for the SQLite database subsystem.
@@ -64,7 +82,10 @@ describeDriverMatrix("Actor Db Stress", (driverTestConfig) => {
 		test(
 			"rapid create-insert-destroy cycles handle DB lifecycle correctly",
 			async (c) => {
-				const { client } = await setupDriverTest(c, driverTestConfig);
+				const { client, getRuntimeOutput } = await setupDriverTest(
+					c,
+					driverTestConfig,
+				);
 
 				// Perform rapid cycles of create -> insert -> destroy.
 				// This exercises the close_database path racing with
@@ -78,7 +99,10 @@ describeDriverMatrix("Actor Db Stress", (driverTestConfig) => {
 					// Poll the first insert because the actor can still be starting when the initial DB action is sent.
 					await vi.waitFor(
 						async () => {
-							await getActor().insertBatch(10);
+							await withRuntimeLogTail(
+								getRuntimeOutput,
+								() => getActor().insertBatch(10),
+							);
 						},
 						{ timeout: ACTOR_READY_TIMEOUT_MS, interval: 100 },
 					);
@@ -88,9 +112,13 @@ describeDriverMatrix("Actor Db Stress", (driverTestConfig) => {
 					// through sleep teardown under the task model.
 					await vi.waitFor(
 						async () => {
-							const count = await client.dbStressActor
-								.getOrCreate(actorKey)
-								.getCount();
+							const count = await withRuntimeLogTail(
+								getRuntimeOutput,
+								() =>
+									client.dbStressActor
+										.getOrCreate(actorKey)
+										.getCount(),
+							);
 							expect(count).toBeGreaterThanOrEqual(10);
 						},
 						{ timeout: ACTOR_READY_TIMEOUT_MS, interval: 100 },
@@ -106,7 +134,10 @@ describeDriverMatrix("Actor Db Stress", (driverTestConfig) => {
 		test(
 			"DB operations complete without excessive blocking",
 			async (c) => {
-				const { client } = await setupDriverTest(c, driverTestConfig);
+				const { client, getRuntimeOutput } = await setupDriverTest(
+					c,
+					driverTestConfig,
+				);
 
 				const actorKey = [`stress-health-${crypto.randomUUID()}`];
 
@@ -117,9 +148,11 @@ describeDriverMatrix("Actor Db Stress", (driverTestConfig) => {
 				// expected because the action itself runs on that loop.
 				const health = await vi.waitFor(
 					async () =>
-						client.dbStressActor
-							.getOrCreate(actorKey)
-							.measureEventLoopHealth(100),
+						withRuntimeLogTail(getRuntimeOutput, () =>
+							client.dbStressActor
+								.getOrCreate(actorKey)
+								.measureEventLoopHealth(100),
+						),
 					{ timeout: ACTOR_READY_TIMEOUT_MS, interval: 100 },
 				);
 
@@ -132,14 +165,101 @@ describeDriverMatrix("Actor Db Stress", (driverTestConfig) => {
 				// Poll the integrity check because the actor may still be finishing the prior async insert loop.
 				const integrity = await vi.waitFor(
 					async () =>
-						client.dbStressActor
-							.getOrCreate(actorKey)
-							.integrityCheck(),
+						withRuntimeLogTail(getRuntimeOutput, () =>
+							client.dbStressActor
+								.getOrCreate(actorKey)
+								.integrityCheck(),
+						),
 					{ timeout: ACTOR_READY_TIMEOUT_MS, interval: 100 },
 				);
 				expect(integrity.toLowerCase()).toBe("ok");
 			},
 			STRESS_TEST_TIMEOUT_MS,
+		);
+
+		test(
+			"repeated autocommit upserts keep sqlite head txid consistent",
+			async (c) => {
+				const { client, getRuntimeOutput } = await setupDriverTest(
+					c,
+					driverTestConfig,
+				);
+				const actor = client.dbStressActor.getOrCreate([
+					`stress-autocommit-upsert-${crypto.randomUUID()}`,
+				]);
+
+				await actor.reset();
+
+				const count = await withRuntimeLogTail(
+					getRuntimeOutput,
+					() => actor.upsertMetaRows(240),
+				);
+				expect(count).toBe(32);
+
+				const integrity = await withRuntimeLogTail(
+					getRuntimeOutput,
+					() => actor.integrityCheck(),
+				);
+				expect(integrity.toLowerCase()).toBe("ok");
+			},
+			STRESS_TEST_TIMEOUT_MS,
+		);
+
+		test(
+			"kitchen sink sqlite smoke survives write churn and wake",
+			async (c) => {
+				const { client, getRuntimeOutput } = await setupDriverTest(
+					c,
+					driverTestConfig,
+				);
+				const actor = client.dbStressActor.getOrCreate([
+					`stress-kitchen-sink-${crypto.randomUUID()}`,
+				]);
+
+				await actor.reset();
+
+				const first = await withRuntimeLogTail(
+					getRuntimeOutput,
+					() => actor.kitchenSinkSmoke(320),
+				);
+				expect(first.metaCount).toBeGreaterThanOrEqual(19);
+				expect(first.dataCount).toBeGreaterThan(0);
+				expect(first.payloadCount).toBeGreaterThan(0);
+				expect(first.pageCount).toBeGreaterThan(0);
+				expect(first.integrity.toLowerCase()).toBe("ok");
+
+				const burst = await withRuntimeLogTail(getRuntimeOutput, () =>
+					Promise.all([
+						actor.upsertMetaRows(320),
+						actor.kitchenSinkSmoke(96),
+						actor.upsertMetaRows(320),
+					]),
+				);
+				expect(burst[0]).toBeGreaterThanOrEqual(32);
+				expect(burst[1].integrity.toLowerCase()).toBe("ok");
+				expect(burst[2]).toBeGreaterThanOrEqual(32);
+
+				await actor.triggerSleep();
+				await waitFor(driverTestConfig, 250);
+
+				// Poll because the actor can still be in the stopping window after triggerSleep.
+				const afterWake = await vi.waitFor(
+					async () =>
+						await withRuntimeLogTail(
+							getRuntimeOutput,
+							() => actor.kitchenSinkSmoke(96),
+						),
+					{ timeout: ACTOR_READY_TIMEOUT_MS, interval: 100 },
+				);
+				expect(afterWake.metaCount).toBeGreaterThanOrEqual(
+					first.metaCount,
+				);
+				expect(afterWake.dataCount).toBeGreaterThan(first.dataCount);
+				expect(afterWake.payloadCount).toBeGreaterThan(0);
+				expect(afterWake.pageCount).toBeGreaterThan(0);
+				expect(afterWake.integrity.toLowerCase()).toBe("ok");
+			},
+			KITCHEN_SINK_TEST_TIMEOUT_MS,
 		);
 	});
 }, { encodings: ["bare"] });
