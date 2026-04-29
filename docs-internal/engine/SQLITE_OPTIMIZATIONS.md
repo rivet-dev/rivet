@@ -17,6 +17,7 @@ Range page-read protocol details live in `.agent/specs/sqlite-range-page-read-pr
 - Actor Prometheus metrics expose VFS read counters, fetched bytes, cache hits/misses, and `get_pages` duration at `/gateway/<actor_id>/metrics`.
 - `sqlite-storage` keeps an in-memory PIDX cache and decodes each unique DELTA/SHARD blob once per `get_pages(...)` call.
 - `sqlite-storage` exposes `get_page_range(...)` for bounded contiguous reads; it reuses `get_pages(...)` source resolution and currently caps ranges at 256 pages / 1 MiB.
+- `sqlite-storage` reassembles large chunked logical values with one bounded chunk-prefix range read by default, with `RIVETKIT_SQLITE_OPT_BATCH_CHUNK_READS=false` preserving the serial 10 KB chunk-get path.
 - `sqlite-storage` compaction folds DELTA pages into SHARD blobs for steadier read behavior.
 
 ## Recommended Optimizations
@@ -30,7 +31,7 @@ Range page-read protocol details live in `.agent/specs/sqlite-range-page-read-pr
 - Return SQLite meta from `sqlite-storage::get_pages(...)` instead of doing a second META read in pegboard-envoy.
 - Persist capped VFS preload hints on sleep/close and feed them into `OpenConfig` on the next actor start.
 - Add a bulk or range page-read protocol so cold scans do not require page-list request loops.
-- Reduce storage read amplification from chunked values and whole-blob LTX decode with larger chunks, range reads, decoded blob caching, or page-frame-addressable storage.
+- Reduce storage read amplification from whole-blob LTX decode with decoded blob caching or page-frame-addressable storage.
 - Benchmark compacted and un-compacted cold reads separately.
 
 ## Preload Hint Policy

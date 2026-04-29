@@ -9,6 +9,8 @@ use universaldb::utils::{
 	Subspace, end_of_key_range,
 };
 
+use crate::optimization_flags::{SqliteOptimizationFlags, sqlite_optimization_flags};
+
 const CHUNK_KEY_PREFIX: u8 = 0x03;
 const INLINE_VALUE_MARKER: u8 = 0x00;
 const CHUNKED_VALUE_MARKER: u8 = 0x01;
@@ -272,6 +274,16 @@ async fn decode_value(
 	key: &[u8],
 	metadata: &[u8],
 ) -> Result<Vec<u8>> {
+	decode_value_with_flags(tx, subspace, key, metadata, sqlite_optimization_flags()).await
+}
+
+async fn decode_value_with_flags(
+	tx: &universaldb::Transaction,
+	subspace: &Subspace,
+	key: &[u8],
+	metadata: &[u8],
+	flags: &SqliteOptimizationFlags,
+) -> Result<Vec<u8>> {
 	let Some(marker) = metadata.first().copied() else {
 		return Ok(Vec::new());
 	};
@@ -296,17 +308,12 @@ async fn decode_value(
 					.try_into()
 					.expect("chunked metadata count bytes should be present"),
 			) as usize;
-			let mut value = Vec::with_capacity(total_len);
-			for chunk_idx in 0..chunk_count {
-				let chunk = tx
-					.get(
-						&physical_key(subspace, &chunk_key(key, chunk_idx as u32)),
-						Snapshot,
-					)
-					.await?
-					.with_context(|| format!("missing chunk {chunk_idx} for key {:?}", key))?;
-				value.extend_from_slice(chunk.as_slice());
-			}
+
+			let mut value = if flags.batch_chunk_reads {
+				read_chunked_value_range(tx, subspace, key, total_len, chunk_count).await?
+			} else {
+				read_chunked_value_serial(tx, subspace, key, total_len, chunk_count).await?
+			};
 			value.truncate(total_len);
 
 			Ok(value)
@@ -316,6 +323,70 @@ async fn decode_value(
 			key
 		)),
 	}
+}
+
+async fn read_chunked_value_serial(
+	tx: &universaldb::Transaction,
+	subspace: &Subspace,
+	key: &[u8],
+	total_len: usize,
+	chunk_count: usize,
+) -> Result<Vec<u8>> {
+	let mut value = Vec::with_capacity(total_len);
+	for chunk_idx in 0..chunk_count {
+		#[cfg(test)]
+		test_hooks::record_chunk_point_get();
+		let chunk = tx
+			.get(
+				&physical_key(subspace, &chunk_key(key, chunk_idx as u32)),
+				Snapshot,
+			)
+			.await?
+			.with_context(|| format!("missing chunk {chunk_idx} for key {:?}", key))?;
+		value.extend_from_slice(chunk.as_slice());
+	}
+
+	Ok(value)
+}
+
+async fn read_chunked_value_range(
+	tx: &universaldb::Transaction,
+	subspace: &Subspace,
+	key: &[u8],
+	total_len: usize,
+	chunk_count: usize,
+) -> Result<Vec<u8>> {
+	let chunk_prefix = chunk_key_prefix(key);
+	let physical_prefix = physical_key(subspace, &chunk_prefix);
+	let physical_prefix_subspace =
+		Subspace::from(universaldb::tuple::Subspace::from_bytes(physical_prefix));
+	#[cfg(test)]
+	test_hooks::record_chunk_range_get();
+	let mut stream = tx.get_ranges_keyvalues(
+		universaldb::RangeOption {
+			limit: Some(chunk_count),
+			mode: universaldb::options::StreamingMode::WantAll,
+			..(&physical_prefix_subspace).into()
+		},
+		Snapshot,
+	);
+
+	let mut value = Vec::with_capacity(total_len);
+	for chunk_idx in 0..chunk_count {
+		let entry = stream
+			.try_next()
+			.await?
+			.with_context(|| format!("missing chunk {chunk_idx} for key {:?}", key))?;
+		let expected_key = physical_key(subspace, &chunk_key(key, chunk_idx as u32));
+		ensure!(
+			entry.key() == expected_key.as_slice(),
+			"missing chunk {chunk_idx} for key {:?}",
+			key
+		);
+		value.extend_from_slice(entry.value());
+	}
+
+	Ok(value)
 }
 
 fn encode_inline(value: &[u8]) -> Vec<u8> {
@@ -361,6 +432,98 @@ pub fn physical_chunk_key(subspace: &Subspace, key: &[u8], chunk_idx: u32) -> Ve
 }
 
 #[cfg(test)]
+mod tests {
+	use std::sync::{Arc, atomic::AtomicUsize};
+
+	use anyhow::Result;
+	use tempfile::Builder;
+	use uuid::Uuid;
+
+	use super::*;
+
+	async fn setup_db() -> Result<(universaldb::Database, Subspace, Arc<AtomicUsize>)> {
+		let path = Builder::new()
+			.prefix("sqlite-storage-udb-")
+			.tempdir()?
+			.keep();
+		let driver = universaldb::driver::RocksDbDatabaseDriver::new(path).await?;
+		let db = universaldb::Database::new(Arc::new(driver));
+		let subspace = Subspace::new(&("sqlite-storage-udb", Uuid::new_v4().to_string()));
+
+		Ok((db, subspace, Arc::new(AtomicUsize::new(0))))
+	}
+
+	async fn write_chunked_value(
+		db: &universaldb::Database,
+		subspace: &Subspace,
+		op_counter: &AtomicUsize,
+		key: Vec<u8>,
+		value: Vec<u8>,
+	) -> Result<()> {
+		apply_write_ops(db, subspace, op_counter, vec![WriteOp::put(key, value)]).await
+	}
+
+	async fn read_with_flags(
+		db: &universaldb::Database,
+		subspace: &Subspace,
+		key: Vec<u8>,
+		flags: SqliteOptimizationFlags,
+	) -> Result<Vec<u8>> {
+		db.run(move |tx| {
+			let subspace = subspace.clone();
+			let key = key.clone();
+			async move {
+				let metadata = tx
+					.get(&physical_key(&subspace, &key), Snapshot)
+					.await?
+					.context("chunked test value should exist")?;
+				decode_value_with_flags(&tx, &subspace, &key, metadata.as_slice(), &flags).await
+			}
+		})
+		.await
+	}
+
+	#[tokio::test]
+	async fn chunked_value_reads_use_bounded_range_by_default() -> Result<()> {
+		let (db, subspace, op_counter) = setup_db().await?;
+		let key = b"large-source-blob".to_vec();
+		let value = vec![0x5a; INLINE_VALUE_LIMIT + VALUE_CHUNK_SIZE * 3 + 123];
+
+		write_chunked_value(&db, &subspace, op_counter.as_ref(), key.clone(), value.clone()).await?;
+		test_hooks::reset_chunk_read_counts();
+		let read = read_with_flags(&db, &subspace, key, SqliteOptimizationFlags::default()).await?;
+
+		assert_eq!(read, value);
+		assert_eq!(test_hooks::chunk_range_get_count(), 1);
+		assert_eq!(test_hooks::chunk_point_get_count(), 0);
+
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn disabled_batch_chunk_reads_use_compatible_serial_chunks() -> Result<()> {
+		let (db, subspace, op_counter) = setup_db().await?;
+		let key = b"legacy-large-source-blob".to_vec();
+		let value = vec![0x42; INLINE_VALUE_LIMIT + VALUE_CHUNK_SIZE * 2 + 1];
+		let chunk_count = value.len().div_ceil(VALUE_CHUNK_SIZE);
+		let flags = SqliteOptimizationFlags {
+			batch_chunk_reads: false,
+			..SqliteOptimizationFlags::default()
+		};
+
+		write_chunked_value(&db, &subspace, op_counter.as_ref(), key.clone(), value.clone()).await?;
+		test_hooks::reset_chunk_read_counts();
+		let read = read_with_flags(&db, &subspace, key, flags).await?;
+
+		assert_eq!(read, value);
+		assert_eq!(test_hooks::chunk_range_get_count(), 0);
+		assert_eq!(test_hooks::chunk_point_get_count(), chunk_count);
+
+		Ok(())
+	}
+}
+
+#[cfg(test)]
 pub async fn raw_key_exists(
 	db: &universaldb::Database,
 	op_counter: &AtomicUsize,
@@ -375,13 +538,18 @@ pub async fn raw_key_exists(
 
 #[cfg(test)]
 pub mod test_hooks {
-	use std::sync::Mutex;
+	use std::sync::{
+		Mutex,
+		atomic::{AtomicUsize, Ordering},
+	};
 
 	use anyhow::{Result, bail};
 
 	use crate::udb::WriteOp;
 
 	static FAIL_NEXT_APPLY_WRITE_OPS_PREFIX: Mutex<Option<Vec<u8>>> = Mutex::new(None);
+	static CHUNK_POINT_GETS: AtomicUsize = AtomicUsize::new(0);
+	static CHUNK_RANGE_GETS: AtomicUsize = AtomicUsize::new(0);
 
 	pub struct ApplyWriteOpsFailureGuard;
 
@@ -407,6 +575,27 @@ pub mod test_hooks {
 		}
 
 		Ok(())
+	}
+
+	pub(crate) fn record_chunk_point_get() {
+		CHUNK_POINT_GETS.fetch_add(1, Ordering::SeqCst);
+	}
+
+	pub(crate) fn record_chunk_range_get() {
+		CHUNK_RANGE_GETS.fetch_add(1, Ordering::SeqCst);
+	}
+
+	pub fn reset_chunk_read_counts() {
+		CHUNK_POINT_GETS.store(0, Ordering::SeqCst);
+		CHUNK_RANGE_GETS.store(0, Ordering::SeqCst);
+	}
+
+	pub fn chunk_point_get_count() -> usize {
+		CHUNK_POINT_GETS.load(Ordering::SeqCst)
+	}
+
+	pub fn chunk_range_get_count() -> usize {
+		CHUNK_RANGE_GETS.load(Ordering::SeqCst)
 	}
 
 	impl Drop for ApplyWriteOpsFailureGuard {
