@@ -51,8 +51,8 @@
         "Tests pass"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Recorded VFS predictor accesses for cache-hit reads so sequential reads through prefetched pages continue training forward-scan prediction, and expanded the VFS debug log with requested pages, missing pages, prediction budget, predicted pages, prefetch pages, total fetch pages/bytes, and seed page. Added focused VFS coverage for cache-hit predictor training. Benchmark artifact written to `.agent/notes/sqlite-cold-read-after-SQLITE-COLD-003.txt`. Numbers: insert e2e 14861.4ms; hot read e2e 129.3ms; wake read e2e 5873.2ms; wake read server 5759.7ms; wake overhead estimate 113.4ms; wake read VFS get_pages calls 219; pages fetched 13713; bytes fetched 56168448; prefetch pages 13494; prefetch bytes 55271424; VFS transport 5519.9ms. Compared with baseline/SQLITE-COLD-001: get_pages calls dropped 1249 -> 219, wake read e2e dropped 20141.0ms -> 5873.2ms, wake VFS transport dropped 19332.8ms -> 5519.9ms, and hot read e2e was 118.6ms -> 129.3ms. Compared with SQLITE-COLD-002: get_pages calls dropped 368 -> 219, wake read e2e dropped 8078.7ms -> 5873.2ms, wake VFS transport dropped 7648.0ms -> 5519.9ms, and hot read e2e was 97.6ms -> 129.3ms. Checks passed: cargo check -p rivetkit-sqlite; cargo test -p rivetkit-sqlite; pnpm --filter kitchen-sink check-types; pnpm -F rivetkit check-types; pnpm --filter @rivetkit/rivetkit-napi build:force."
     },
     {
       "id": "SQLITE-COLD-004",

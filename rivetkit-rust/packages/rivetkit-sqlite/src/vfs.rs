@@ -1162,6 +1162,10 @@ impl VfsContext {
 		}
 
 		if missing.is_empty() {
+			let mut state = self.state.write();
+			for pgno in target_pgnos.iter().copied() {
+				state.predictor.record(pgno);
+			}
 			if let Some(metrics) = &self.metrics {
 				metrics.record_resolve_cache_hits(target_pgnos.len() as u64);
 			}
@@ -1172,30 +1176,42 @@ impl VfsContext {
 			metrics.record_resolve_cache_misses(missing.len() as u64);
 		}
 
-		let (generation, to_fetch, page_size) = {
+		let (generation, to_fetch, page_size, seed_pgno, prediction_budget, predicted_pgnos) = {
 			let mut state = self.state.write();
 			for pgno in target_pgnos.iter().copied() {
 				state.predictor.record(pgno);
 			}
 
 			let mut to_fetch = missing.clone();
+			let mut seed_pgno = None;
+			let mut prediction_budget = 0;
+			let mut predicted_pgnos = Vec::new();
 			if prefetch {
 				let page_budget = (self.config.max_prefetch_bytes / state.page_size.max(1)).max(1);
-				let prediction_budget = page_budget.saturating_sub(to_fetch.len());
-				let seed_pgno = target_pgnos.last().copied().unwrap_or_default();
-				for predicted in state.predictor.multi_predict(
-					seed_pgno,
+				prediction_budget = page_budget.saturating_sub(to_fetch.len());
+				seed_pgno = target_pgnos.last().copied();
+				let seed = seed_pgno.unwrap_or_default();
+				predicted_pgnos = state.predictor.multi_predict(
+					seed,
 					prediction_budget.min(self.config.prefetch_depth),
-					state.db_size_pages.max(seed_pgno),
-				) {
+					state.db_size_pages.max(seed),
+				);
+				for predicted in predicted_pgnos.iter().copied() {
 					if resolved.contains_key(&predicted) || to_fetch.contains(&predicted) {
 						continue;
 					}
 					to_fetch.push(predicted);
-					}
 				}
-				(state.generation, to_fetch, state.page_size.max(1))
-			};
+			}
+			(
+				state.generation,
+				to_fetch,
+				state.page_size.max(1),
+				seed_pgno,
+				prediction_budget,
+				predicted_pgnos,
+			)
+		};
 
 		{
 			let prefetch_count = to_fetch.len() - missing.len();
@@ -1207,9 +1223,14 @@ impl VfsContext {
 				);
 			}
 			tracing::debug!(
-				missing = missing.len(),
-				prefetch = prefetch_count,
-				total_fetch = to_fetch.len(),
+				requested_pages = ?target_pgnos,
+				missing_pages = ?missing,
+				prediction_budget,
+				predicted_pages = ?predicted_pgnos,
+				prefetch_pages = prefetch_count,
+				total_fetch_pages = to_fetch.len(),
+				total_fetch_bytes = to_fetch.len().saturating_mul(page_size),
+				seed_pgno,
 				"vfs get_pages fetch"
 			);
 		}
@@ -3211,6 +3232,71 @@ mod tests {
 		let shard_fetch = requests.last().expect("scan should fetch missing pages");
 		let expected = (12..76).collect::<Vec<_>>();
 		assert_eq!(shard_fetch.pgnos, expected);
+	}
+
+	#[test]
+	fn cache_hit_reads_train_forward_scan_prefetch() {
+		let runtime = Builder::new_current_thread()
+			.enable_all()
+			.build()
+			.expect("runtime should build");
+		let mut protocol = MockProtocol::new(
+			protocol::SqliteCommitResponse::SqliteCommitOk(protocol::SqliteCommitOk {
+				new_head_txid: 13,
+				meta: sqlite_meta(8 * 1024 * 1024),
+			}),
+			protocol::SqliteCommitStageResponse::SqliteCommitStageOk(
+				protocol::SqliteCommitStageOk {
+					chunk_idx_committed: 0,
+				},
+			),
+			protocol::SqliteCommitFinalizeResponse::SqliteCommitFinalizeOk(
+				protocol::SqliteCommitFinalizeOk {
+					new_head_txid: 13,
+					meta: sqlite_meta(8 * 1024 * 1024),
+				},
+			),
+		);
+		protocol.get_pages_response =
+			protocol::SqliteGetPagesResponse::SqliteGetPagesOk(protocol::SqliteGetPagesOk {
+				pages: (10..76)
+					.map(|pgno| protocol::SqliteFetchedPage {
+						pgno,
+						bytes: Some(vec![(pgno % 251) as u8; 4096]),
+					})
+					.collect(),
+				meta: sqlite_meta(8 * 1024 * 1024),
+			});
+		let protocol = Arc::new(protocol);
+		let ctx = VfsContext::new(
+			"actor".to_string(),
+			runtime.handle().clone(),
+			SqliteTransport::from_mock(protocol.clone()),
+			protocol::SqliteStartupData {
+				generation: 7,
+				meta: protocol::SqliteMeta {
+					db_size_pages: 200,
+					..sqlite_meta(8 * 1024 * 1024)
+				},
+				preloaded_pages: Vec::new(),
+			},
+			VfsConfig::default(),
+			unsafe { std::mem::zeroed() },
+			None,
+		);
+
+		ctx.resolve_pages(&[10], true)
+			.expect("first missing page should resolve");
+		for pgno in 11..76 {
+			ctx.resolve_pages(&[pgno], true)
+				.expect("cache-hit page should resolve");
+		}
+		ctx.resolve_pages(&[76], true)
+			.expect("next missing page should resolve");
+
+		let requests = protocol.get_pages_requests();
+		assert_eq!(requests.len(), 2);
+		assert_eq!(requests[1].pgnos, (76..140).collect::<Vec<_>>());
 	}
 
 	#[test]

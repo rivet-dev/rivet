@@ -3,6 +3,7 @@ Started: Tue Apr 28 11:00:38 PM PDT 2026
 ---
 ## Codebase Patterns
 - Cold-start benchmark local-envoy runs need `RIVET_TOKEN=dev`; if port 6420 is already owned, use matching `RIVET_ENDPOINT`, `RIVET__GUARD__PORT`, `RIVET__API_PEER__PORT`, and `RIVET__METRICS__PORT` overrides.
+- For non-default cold-start benchmark ports, set both `RIVET_ENDPOINT=http://127.0.0.1:<guard-port>` and `--endpoint http://127.0.0.1:<guard-port> --start-local-envoy`; otherwise the registry can advertise the default 6420 endpoint while the engine starts elsewhere.
 ---
 ## 2026-04-28 23:01:27 PDT - SQLITE-COLD-001
 - What was implemented
@@ -33,5 +34,23 @@ Started: Tue Apr 28 11:00:38 PM PDT 2026
   - SQLITE-COLD-002 benchmark numbers: insert e2e 15001.2ms, hot read e2e 97.6ms, wake read e2e 8078.7ms, wake read server 7932.6ms, wake overhead estimate 146.1ms, wake VFS get_pages 368 calls, fetched 18851 pages / 77213696 bytes, prefetch 18483 pages / 75706368 bytes, VFS transport 7648.0ms.
   - Compared with baseline/SQLITE-COLD-001: wake get_pages dropped 1249 -> 368, wake e2e dropped 20141.0ms -> 8078.7ms, wake VFS transport dropped 19332.8ms -> 7648.0ms, and hot read improved 118.6ms -> 97.6ms.
   - The benchmark path uses the compiled NAPI addon; after Rust VFS changes, run `pnpm --filter @rivetkit/rivetkit-napi build:force` before measuring.
+  - Verification status: `cargo check -p rivetkit-sqlite` passed; `cargo test -p rivetkit-sqlite` passed; `pnpm --filter kitchen-sink check-types` passed with the known skip message; `pnpm -F rivetkit check-types` passed; `pnpm --filter @rivetkit/rivetkit-napi build:force` passed.
+---
+## 2026-04-28 23:13:01 PDT - SQLITE-COLD-003
+- What was implemented
+  - Recorded VFS predictor accesses for all-cache-hit reads so prefetched sequential pages keep training forward-scan prediction.
+  - Expanded the VFS debug log around fetches with requested pages, missing pages, prediction budget, predicted pages, prefetch pages, total fetch pages/bytes, and seed page.
+  - Added focused VFS coverage proving cache-hit scan reads produce the next full forward prefetch batch.
+  - Rebuilt the NAPI addon and reran the cold-read benchmark with an alternate local endpoint because 6420 was already occupied.
+- Files changed
+  - `rivetkit-rust/packages/rivetkit-sqlite/src/vfs.rs`
+  - `.agent/notes/sqlite-cold-read-after-SQLITE-COLD-003.txt`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - SQLITE-COLD-003 benchmark numbers: insert e2e 14861.4ms, hot read e2e 129.3ms, wake read e2e 5873.2ms, wake read server 5759.7ms, wake overhead estimate 113.4ms, wake VFS get_pages 219 calls, fetched 13713 pages / 56168448 bytes, prefetch 13494 pages / 55271424 bytes, VFS transport 5519.9ms.
+  - Compared with baseline/SQLITE-COLD-001: wake get_pages dropped 1249 -> 219, wake e2e dropped 20141.0ms -> 5873.2ms, wake VFS transport dropped 19332.8ms -> 5519.9ms, and hot read was 118.6ms -> 129.3ms.
+  - Compared with SQLITE-COLD-002: wake get_pages dropped 368 -> 219, wake e2e dropped 8078.7ms -> 5873.2ms, wake VFS transport dropped 7648.0ms -> 5519.9ms, and hot read was 97.6ms -> 129.3ms.
+  - `resolve_pages` previously returned before predictor training on all-cache-hit reads; any future recent-page or scan predictor work should check both miss and hit paths.
   - Verification status: `cargo check -p rivetkit-sqlite` passed; `cargo test -p rivetkit-sqlite` passed; `pnpm --filter kitchen-sink check-types` passed with the known skip message; `pnpm -F rivetkit check-types` passed; `pnpm --filter @rivetkit/rivetkit-napi build:force` passed.
 ---
