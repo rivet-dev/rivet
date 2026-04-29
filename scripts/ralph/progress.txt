@@ -19,6 +19,7 @@ Started: Wed Apr 29 04:36:56 AM PDT 2026
 - `sqlite-storage` raw byte prefix clears need the same `universaldb::Subspace::from(tuple::Subspace::from_bytes(prefix)).range()` shape as prefix scans; `end_of_key_range(prefix)` only clears the single prefix key on the RocksDB driver.
 - `sqlite-storage` compaction pause hooks are global per test binary; serialize tests that install those hooks and any same-actor `compact_default_batch` tests with a small async mutex.
 - `sqlite-storage` compact trigger payloads need namespace id and actor name alongside actor id before the compactor can emit namespace `MetricKey` rollups.
+- Debug-only compactor quota validation is wired from the worker through a per-actor `scc::HashMap<String, u32>` pass counter; the validator itself only scans PIDX, DELTA, and SHARD prefixes before comparing to `/META/quota`.
 
 ## 2026-04-29 04:44:52 PDT - US-001
 - Implemented a UUID-backed `NodeId` type and stored a generated value on each `Pools` instance.
@@ -183,4 +184,15 @@ Started: Wed Apr 29 04:36:56 AM PDT 2026
   - The metric key enum lives in the `namespace` crate at `engine/packages/namespace/src/keys/metric.rs`, even though pegboard call sites reach it through `namespace::keys::metric`.
   - Keep `publish_compact_trigger(&ups, actor_id)` as a zero-counter compatibility helper; use richer compact payloads for metering-aware paths.
   - The compactor rounds commit/read rollup counters down to `util::metric::KV_BILLABLE_CHUNK` before emitting namespace metrics.
+---
+## 2026-04-29 06:03:57 PDT - US-017
+- Added debug-only `compactor::compact::validate_quota`, which totals PIDX, DELTA, and SHARD bytes in a separate read-only UDB transaction and compares that manual total with `/META/quota`.
+- Wired worker-side per-actor validation cadence through a debug-only `scc::HashMap<String, u32>` and `quota_validate_every`, with structured mismatch logging, the `sqlite_quota_validate_mismatch_total` metric, and test-only panic behavior.
+- Added compactor coverage for a clean compacted-state quota validation pass.
+- Verified `cargo check -p sqlite-storage`, `cargo test -p sqlite-storage --test compactor_compact`, `cargo test -p sqlite-storage`, and `cargo build -p sqlite-storage --release`.
+- Files changed: `engine/packages/sqlite-storage/src/compactor/compact.rs`, `engine/packages/sqlite-storage/src/compactor/metrics.rs`, `engine/packages/sqlite-storage/src/compactor/worker.rs`, `engine/packages/sqlite-storage/tests/compactor_compact.rs`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
+- **Learnings for future iterations:**
+  - Keep the debug quota validator and worker pass counter fully behind `#[cfg(debug_assertions)]`; release builds should have no validation scan, map, or call site.
+  - Put cfg-gated `lazy_static!` metrics in their own cfg-gated macro block. Gating a single static inside a shared block can break release compilation.
+  - `quota_validate_every = 0` is treated as a local debug escape hatch to skip validation cadence and avoid modulo-by-zero.
 ---

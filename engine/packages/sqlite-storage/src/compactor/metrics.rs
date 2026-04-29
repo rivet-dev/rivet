@@ -24,3 +24,12 @@ lazy_static::lazy_static! {
 		*REGISTRY
 	).unwrap();
 }
+
+#[cfg(debug_assertions)]
+lazy_static::lazy_static! {
+	pub static ref SQLITE_QUOTA_VALIDATE_MISMATCH_TOTAL: IntCounter = register_int_counter_with_registry!(
+		"sqlite_quota_validate_mismatch_total",
+		"Total debug quota validation passes where the manual byte tally did not match the quota counter.",
+		*REGISTRY
+	).unwrap();
+}

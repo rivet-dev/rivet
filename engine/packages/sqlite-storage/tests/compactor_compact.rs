@@ -4,7 +4,11 @@ use anyhow::Result;
 use gas::prelude::Id;
 use namespace::keys::metric::{Metric, MetricKey};
 use sqlite_storage::{
-	compactor::{SqliteCompactPayload, compact::test_hooks, compact_default_batch, fold_shard, worker},
+	compactor::{
+		SqliteCompactPayload,
+		compact::{test_hooks, validate_quota},
+		compact_default_batch, fold_shard, worker,
+	},
 	keys::{
 		PAGE_SIZE, delta_chunk_key, meta_compact_key, meta_head_key, pidx_delta_key, shard_key,
 	},
@@ -208,6 +212,10 @@ async fn seed_quota(db: &universaldb::Database, actor_id: &str, storage_used: i6
 	.await
 }
 
+fn tracked_entry_size(key: &[u8], value: &[u8]) -> i64 {
+	i64::try_from(key.len() + value.len()).expect("tracked entry should fit in i64")
+}
+
 async fn write_newer_page(db: &universaldb::Database, pgno: u32, txid: u64, fill: u8) -> Result<()> {
 	db.run(move |tx| async move {
 		tx.informal().set(
@@ -394,6 +402,20 @@ async fn compact_default_batch_basic_fold() -> Result<()> {
 			.is_none()
 	);
 	assert_eq!(read_compact_txid(&db).await?, 2);
+
+	Ok(())
+}
+
+#[tokio::test]
+async fn validate_quota_accepts_clean_compacted_state() -> Result<()> {
+	let db = test_db().await?;
+	let shard_key = shard_key(TEST_ACTOR, 0);
+	let shard_blob = encoded_blob(1, &[(3, 0x13), (5, 0x15)])?;
+	let storage_used = tracked_entry_size(&shard_key, &shard_blob);
+	seed(&db, vec![(shard_key, shard_blob)]).await?;
+	seed_quota(&db, TEST_ACTOR, storage_used).await?;
+
+	validate_quota(Arc::new(db), TEST_ACTOR.to_string()).await?;
 
 	Ok(())
 }

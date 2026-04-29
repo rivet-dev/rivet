@@ -110,6 +110,8 @@ async fn run_with_node_id(
 	let semaphore = Arc::new(Semaphore::new(max_workers));
 	let shutdown = CancellationToken::new();
 	let mut workers = JoinSet::new();
+	#[cfg(debug_assertions)]
+	let quota_validate_counts = Arc::new(scc::HashMap::new());
 
 	let loop_result = loop {
 		tokio::select! {
@@ -127,12 +129,22 @@ async fn run_with_node_id(
 						let shutdown = shutdown.child_token();
 						let semaphore = Arc::clone(&semaphore);
 						let compactor_config = compactor_config.clone();
+						#[cfg(debug_assertions)]
+						let quota_validate_counts = Arc::clone(&quota_validate_counts);
 
 						workers.spawn(async move {
 							let Ok(_permit) = semaphore.acquire_owned().await else {
 								return;
 							};
-							if let Err(err) = handle_trigger(udb, payload, compactor_config, holder_id, shutdown).await {
+							if let Err(err) = handle_trigger(
+								udb,
+								payload,
+								compactor_config,
+								holder_id,
+								shutdown,
+								#[cfg(debug_assertions)]
+								quota_validate_counts,
+							).await {
 								tracing::warn!(?err, "sqlite compactor trigger failed");
 							}
 						});
@@ -165,6 +177,7 @@ async fn handle_trigger(
 	compactor_config: CompactorConfig,
 	holder_id: rivet_pools::NodeId,
 	shutdown: CancellationToken,
+	#[cfg(debug_assertions)] quota_validate_counts: Arc<scc::HashMap<String, u32>>,
 ) -> Result<()> {
 	if shutdown.is_cancelled() {
 		return Ok(());
@@ -216,6 +229,14 @@ async fn handle_trigger(
 			cancel_token.clone(),
 		)
 		.await?;
+		#[cfg(debug_assertions)]
+		maybe_validate_quota(
+			Arc::clone(&udb),
+			actor_id.clone(),
+			&compactor_config,
+			&quota_validate_counts,
+		)
+		.await?;
 		emit_metering_rollup(Arc::clone(&udb), payload).await
 	}
 	.await;
@@ -239,6 +260,36 @@ async fn handle_trigger(
 	}
 
 	result.map(|_| ())
+}
+
+#[cfg(debug_assertions)]
+async fn maybe_validate_quota(
+	udb: Arc<universaldb::Database>,
+	actor_id: String,
+	compactor_config: &CompactorConfig,
+	quota_validate_counts: &scc::HashMap<String, u32>,
+) -> Result<()> {
+	if compactor_config.quota_validate_every == 0 {
+		return Ok(());
+	}
+
+	let pass_count = match quota_validate_counts.entry_async(actor_id.clone()).await {
+		scc::hash_map::Entry::Occupied(mut entry) => {
+			let next = entry.get().saturating_add(1);
+			*entry.get_mut() = next;
+			next
+		}
+		scc::hash_map::Entry::Vacant(entry) => {
+			entry.insert_entry(1);
+			1
+		}
+	};
+
+	if pass_count % compactor_config.quota_validate_every == 0 {
+		super::compact::validate_quota(udb, actor_id).await?;
+	}
+
+	Ok(())
 }
 
 async fn emit_metering_rollup(
@@ -455,6 +506,8 @@ pub mod test_hooks {
 			compactor_config,
 			rivet_pools::NodeId::new(),
 			cancel_token,
+			#[cfg(debug_assertions)]
+			Arc::new(scc::HashMap::new()),
 		)
 		.await
 	}

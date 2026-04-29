@@ -247,6 +247,51 @@ async fn write_batch(
 	.await
 }
 
+#[cfg(debug_assertions)]
+pub async fn validate_quota(
+	udb: Arc<universaldb::Database>,
+	actor_id: String,
+) -> Result<()> {
+	let (manual_total, counter_value) = udb
+		.run({
+			let actor_id = actor_id.clone();
+			move |tx| {
+				let actor_id = actor_id.clone();
+
+				async move {
+					let manual_total =
+						scan_tracked_prefix_bytes(&tx, &keys::pidx_delta_prefix(&actor_id)).await?
+							+ scan_tracked_prefix_bytes(&tx, &keys::delta_prefix(&actor_id)).await?
+							+ scan_tracked_prefix_bytes(&tx, &keys::shard_prefix(&actor_id)).await?;
+					let counter_value = quota::read(&tx, &actor_id).await?;
+
+					Ok((manual_total, counter_value))
+				}
+			}
+		})
+		.await?;
+
+	if manual_total != counter_value {
+		metrics::SQLITE_QUOTA_VALIDATE_MISMATCH_TOTAL.inc();
+		tracing::error!(
+			actor_id = %actor_id,
+			manual_total,
+			counter_value,
+			"sqlite quota validation mismatch"
+		);
+
+		#[cfg(test)]
+		panic!(
+			"sqlite quota validation mismatch for actor {actor_id}: manual_total={manual_total}, counter_value={counter_value}"
+		);
+
+		#[cfg(not(test))]
+		bail!("sqlite quota validation mismatch for actor {actor_id}");
+	}
+
+	Ok(())
+}
+
 async fn count_compare_and_clear_noops(
 	db: &universaldb::Database,
 	actor_id: String,
@@ -352,6 +397,18 @@ async fn tx_scan_prefix_values(
 	}
 
 	Ok(rows)
+}
+
+#[cfg(debug_assertions)]
+async fn scan_tracked_prefix_bytes(
+	tx: &universaldb::Transaction,
+	prefix: &[u8],
+) -> Result<i64> {
+	tx_scan_prefix_values(tx, prefix)
+		.await?
+		.iter()
+		.map(|(key, value)| tracked_entry_size(key, value))
+		.sum()
 }
 
 fn decode_pidx_pgno(actor_id: &str, key: &[u8]) -> Result<u32> {
