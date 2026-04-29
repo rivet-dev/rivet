@@ -6,6 +6,6 @@
 - `SqliteEngine::get_page_range` shares `get_pages` source resolution through `read_pages`; use it for contiguous range reads and keep its 256-page / 1 MiB hard cap aligned with the range protocol.
 - SQLite startup preload policy is configured in `optimization_flags.rs`; keep first pages, persisted hint mechanisms, and byte budget there instead of hardcoding open-time preload behavior.
 - Native VFS page cache policy is configured in `optimization_flags.rs`; keep capacity, cache-class toggles, and scan-resistant protected-cache budgets there.
-- Large chunked logical values are reassembled with a bounded chunk-prefix range read by default; `RIVETKIT_SQLITE_OPT_BATCH_CHUNK_READS=false` preserves the serial 10 KB chunk-get fallback.
+- Large chunked logical values are reassembled with a bounded chunk-prefix range read by default; `RIVETKIT_SQLITE_OPT_BATCH_CHUNK_READS=false` selects serial 10 KB chunk gets for comparison runs.
 - Repeated DELTA/SHARD LTX decodes are cached inside `SqliteEngine`; `RIVETKIT_SQLITE_OPT_DECODED_LTX_CACHE=false` preserves per-read decode behavior.
-- LTX decoding validates header, page frames, and page index structure, and accepts both trailer and legacy no-trailer blobs.
+- LTX decoding validates header, page frames, page index structure, and a zeroed checksum trailer.

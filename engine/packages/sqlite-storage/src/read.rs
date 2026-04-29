@@ -721,7 +721,7 @@ mod tests {
 		.await?;
 		engine.open(TEST_ACTOR, OpenConfig::new(0)).await?;
 		clear_op_count(&engine);
-		let pages = engine.get_pages(TEST_ACTOR, 4, vec![1, 2, 4]).await?;
+		let pages = engine.get_pages(TEST_ACTOR, 4, vec![1, 2, 4]).await?.pages;
 
 		assert_eq!(
 			pages,
@@ -946,7 +946,7 @@ mod tests {
 		.await?;
 		engine.open(TEST_ACTOR, OpenConfig::new(0)).await?;
 		clear_op_count(&engine);
-		let pages = engine.get_pages(TEST_ACTOR, 4, vec![2, 65]).await?;
+		let pages = engine.get_pages(TEST_ACTOR, 4, vec![2, 65]).await?.pages;
 
 		assert_eq!(
 			pages,
@@ -993,9 +993,9 @@ mod tests {
 		engine.open(TEST_ACTOR, OpenConfig::new(0)).await?;
 
 		engine.reset_ltx_decode_count();
-		let pages = engine.get_pages(TEST_ACTOR, 4, vec![2, 65]).await?;
+		let pages = engine.get_pages(TEST_ACTOR, 4, vec![2, 65]).await?.pages;
 		assert_eq!(
-			pages.pages,
+			pages,
 			vec![
 				FetchedPage {
 					pgno: 2,
@@ -1010,9 +1010,9 @@ mod tests {
 		assert_eq!(engine.ltx_decode_count(), 2);
 
 		engine.reset_ltx_decode_count();
-		let pages = engine.get_pages(TEST_ACTOR, 4, vec![2, 65]).await?;
+		let pages = engine.get_pages(TEST_ACTOR, 4, vec![2, 65]).await?.pages;
 		assert_eq!(
-			pages.pages,
+			pages,
 			vec![
 				FetchedPage {
 					pgno: 2,
@@ -1060,7 +1060,7 @@ mod tests {
 
 		engine.reset_ltx_decode_count();
 		assert_eq!(
-			engine.get_pages(TEST_ACTOR, 4, vec![2]).await?,
+			engine.get_pages(TEST_ACTOR, 4, vec![2]).await?.pages,
 			vec![FetchedPage {
 				pgno: 2,
 				bytes: Some(page(0x24)),
@@ -1070,7 +1070,7 @@ mod tests {
 
 		engine.reset_ltx_decode_count();
 		assert_eq!(
-			engine.get_pages(TEST_ACTOR, 4, vec![2]).await?,
+			engine.get_pages(TEST_ACTOR, 4, vec![2]).await?.pages,
 			vec![FetchedPage {
 				pgno: 2,
 				bytes: Some(page(0x24)),
@@ -1104,7 +1104,7 @@ mod tests {
 		)
 		.await?;
 		engine.open(TEST_ACTOR, OpenConfig::new(0)).await?;
-		let warmed_pages = engine.get_pages(TEST_ACTOR, 4, vec![3]).await?;
+		let warmed_pages = engine.get_pages(TEST_ACTOR, 4, vec![3]).await?.pages;
 		assert_eq!(
 			warmed_pages,
 			vec![FetchedPage {
@@ -1115,7 +1115,7 @@ mod tests {
 
 		clear_op_count(&engine);
 
-		let pages = engine.get_pages(TEST_ACTOR, 4, vec![3]).await?;
+		let pages = engine.get_pages(TEST_ACTOR, 4, vec![3]).await?.pages;
 		assert_eq!(
 			pages,
 			vec![FetchedPage {
@@ -1154,7 +1154,7 @@ mod tests {
 		.await?;
 		engine.open(TEST_ACTOR, OpenConfig::new(0)).await?;
 		assert_eq!(
-			engine.get_pages(TEST_ACTOR, 4, vec![3]).await?,
+			engine.get_pages(TEST_ACTOR, 4, vec![3]).await?.pages,
 			vec![FetchedPage {
 				pgno: 3,
 				bytes: Some(page(0x33)),
@@ -1175,7 +1175,7 @@ mod tests {
 		clear_op_count(&engine);
 
 		assert_eq!(
-			engine.get_pages(TEST_ACTOR, 4, vec![3]).await?,
+			engine.get_pages(TEST_ACTOR, 4, vec![3]).await?.pages,
 			vec![FetchedPage {
 				pgno: 3,
 				bytes: Some(page(0x44)),
@@ -1211,7 +1211,7 @@ mod tests {
 		.await?;
 		engine.open(TEST_ACTOR, OpenConfig::new(0)).await?;
 		assert_eq!(
-			engine.get_pages(TEST_ACTOR, 4, vec![3]).await?,
+			engine.get_pages(TEST_ACTOR, 4, vec![3]).await?.pages,
 			vec![FetchedPage {
 				pgno: 3,
 				bytes: Some(page(0x33)),
@@ -1234,7 +1234,7 @@ mod tests {
 		clear_op_count(&engine);
 
 		assert_eq!(
-			engine.get_pages(TEST_ACTOR, 4, vec![3]).await?,
+			engine.get_pages(TEST_ACTOR, 4, vec![3]).await?.pages,
 			vec![FetchedPage {
 				pgno: 3,
 				bytes: Some(page(0x44)),
@@ -1243,7 +1243,7 @@ mod tests {
 
 		clear_op_count(&engine);
 		assert_eq!(
-			engine.get_pages(TEST_ACTOR, 4, vec![3]).await?,
+			engine.get_pages(TEST_ACTOR, 4, vec![3]).await?.pages,
 			vec![FetchedPage {
 				pgno: 3,
 				bytes: Some(page(0x44)),
@@ -1276,7 +1276,7 @@ mod tests {
 		engine.open(TEST_ACTOR, OpenConfig::new(0)).await?;
 
 		assert_eq!(
-			engine.get_pages(TEST_ACTOR, 4, vec![3]).await?,
+			engine.get_pages(TEST_ACTOR, 4, vec![3]).await?.pages,
 			vec![FetchedPage {
 				pgno: 3,
 				bytes: Some(vec![0; SQLITE_PAGE_SIZE as usize]),

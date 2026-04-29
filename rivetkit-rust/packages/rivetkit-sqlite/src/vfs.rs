@@ -28,7 +28,6 @@ use tokio::sync::Notify;
 use crate::optimization_flags::{SqliteOptimizationFlags, sqlite_optimization_flags};
 
 const DEFAULT_PREFETCH_DEPTH: usize = 64;
-const LEGACY_PREFETCH_DEPTH: usize = 16;
 const DEFAULT_MAX_PREFETCH_BYTES: usize = 256 * 1024;
 const DEFAULT_ADAPTIVE_PREFETCH_DEPTH: usize = 256;
 const DEFAULT_ADAPTIVE_MAX_PREFETCH_BYTES: usize = 1024 * 1024;
@@ -142,13 +141,17 @@ impl SqliteTransport {
 			#[cfg(test)]
 			SqliteTransportInner::Direct { engine, .. } => {
 				let pgnos = req.pgnos.clone();
-				match engine.get_pages(&req.actor_id, req.generation, pgnos).await {
-					Ok(pages) => Ok(protocol::SqliteGetPagesResponse::SqliteGetPagesOk(
-						protocol::SqliteGetPagesOk {
-							pages: pages.into_iter().map(protocol_fetched_page).collect(),
-							meta: protocol_sqlite_meta(engine.load_meta(&req.actor_id).await?),
-						},
-					)),
+					match engine.get_pages(&req.actor_id, req.generation, pgnos).await {
+						Ok(result) => Ok(protocol::SqliteGetPagesResponse::SqliteGetPagesOk(
+							protocol::SqliteGetPagesOk {
+								pages: result
+									.pages
+									.into_iter()
+									.map(protocol_fetched_page)
+									.collect(),
+								meta: protocol_sqlite_meta(result.meta),
+							},
+						)),
 					Err(err) => {
 						if let Some(SqliteStorageError::FenceMismatch { reason }) =
 							sqlite_storage_error(&err)
@@ -187,19 +190,18 @@ impl SqliteTransport {
 								.get_pages(&req.actor_id, req.generation, req.pgnos)
 								.await
 							{
-								Ok(pages) => {
-									Ok(protocol::SqliteGetPagesResponse::SqliteGetPagesOk(
-										protocol::SqliteGetPagesOk {
-											pages: pages
-												.into_iter()
-												.map(protocol_fetched_page)
-												.collect(),
-											meta: protocol_sqlite_meta(
-												engine.load_meta(&req.actor_id).await?,
-											),
-										},
-									))
-								}
+									Ok(result) => {
+										Ok(protocol::SqliteGetPagesResponse::SqliteGetPagesOk(
+											protocol::SqliteGetPagesOk {
+												pages: result
+													.pages
+													.into_iter()
+													.map(protocol_fetched_page)
+													.collect(),
+												meta: protocol_sqlite_meta(result.meta),
+											},
+										))
+									}
 								Err(retry_err) => {
 									Ok(protocol::SqliteGetPagesResponse::SqliteErrorResponse(
 										sqlite_error_response(&retry_err),
@@ -237,13 +239,17 @@ impl SqliteTransport {
 					)
 					.await
 				{
-					Ok(pages) => Ok(protocol::SqliteGetPageRangeResponse::SqliteGetPageRangeOk(
-						protocol::SqliteGetPageRangeOk {
-							start_pgno: req.start_pgno,
-							pages: pages.into_iter().map(protocol_fetched_page).collect(),
-							meta: protocol_sqlite_meta(engine.load_meta(&req.actor_id).await?),
-						},
-					)),
+						Ok(result) => Ok(protocol::SqliteGetPageRangeResponse::SqliteGetPageRangeOk(
+							protocol::SqliteGetPageRangeOk {
+								start_pgno: req.start_pgno,
+								pages: result
+									.pages
+									.into_iter()
+									.map(protocol_fetched_page)
+									.collect(),
+								meta: protocol_sqlite_meta(result.meta),
+							},
+						)),
 					Err(err) => {
 						if let Some(SqliteStorageError::FenceMismatch { reason }) =
 							sqlite_storage_error(&err)
@@ -847,7 +853,7 @@ impl VfsConfig {
 			prefetch_depth: if flags.read_ahead {
 				DEFAULT_PREFETCH_DEPTH
 			} else {
-				LEGACY_PREFETCH_DEPTH
+				0
 			},
 			adaptive_prefetch_depth: DEFAULT_ADAPTIVE_PREFETCH_DEPTH,
 			max_prefetch_bytes: DEFAULT_MAX_PREFETCH_BYTES,
@@ -1913,8 +1919,10 @@ impl VfsContext {
 			fetch_transport,
 		) = {
 			let mut state = self.state.write();
-			for pgno in target_pgnos.iter().copied() {
-				state.predictor.record(pgno);
+			if self.config.cache_hit_predictor_training {
+				for pgno in target_pgnos.iter().copied() {
+					state.predictor.record(pgno);
+				}
 			}
 			let read_ahead_plan = state.read_ahead.record_and_plan(target_pgnos, &self.config);
 			if self.config.recent_page_hints {
@@ -4250,13 +4258,13 @@ mod tests {
 	}
 
 	#[test]
-	fn disabled_read_ahead_flag_restores_legacy_prefetch_depth() {
+	fn disabled_read_ahead_flag_disables_bounded_prefetch() {
 		let config = VfsConfig::from_optimization_flags(SqliteOptimizationFlags {
 			read_ahead: false,
 			..SqliteOptimizationFlags::default()
 		});
 
-		assert_eq!(config.prefetch_depth, LEGACY_PREFETCH_DEPTH);
+		assert_eq!(config.prefetch_depth, 0);
 	}
 
 	#[test]
@@ -6445,7 +6453,8 @@ mod tests {
 
 		let pages = runtime
 			.block_on(engine.get_pages(&harness.actor_id, startup.generation, vec![1, 1024, 2300]))
-			.expect("pages should read back after slow-path commit");
+			.expect("pages should read back after slow-path commit")
+			.pages;
 		let expected_page_1 = vec![1u8; 4096];
 		let expected_page_1024 = vec![(1024 % 251) as u8; 4096];
 		let expected_page_2300 = vec![(2300 % 251) as u8; 4096];

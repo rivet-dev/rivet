@@ -501,9 +501,9 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn disabled_batch_chunk_reads_use_compatible_serial_chunks() -> Result<()> {
+	async fn disabled_batch_chunk_reads_use_serial_chunks() -> Result<()> {
 		let (db, subspace, op_counter) = setup_db().await?;
-		let key = b"legacy-large-source-blob".to_vec();
+		let key = b"serial-large-source-blob".to_vec();
 		let value = vec![0x42; INLINE_VALUE_LIMIT + VALUE_CHUNK_SIZE * 2 + 1];
 		let chunk_count = value.len().div_ceil(VALUE_CHUNK_SIZE);
 		let flags = SqliteOptimizationFlags {

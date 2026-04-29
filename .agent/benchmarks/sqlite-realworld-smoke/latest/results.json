@@ -1,0 +1,745 @@
+{
+	"schemaVersion": 1,
+	"startedAt": "2026-04-29T10:09:31.295Z",
+	"finishedAt": null,
+	"config": {
+		"endpoint": "http://127.0.0.1:6420",
+		"profile": "smoke",
+		"selectedWorkloads": [
+			"small-rowid-point",
+			"small-schema-read",
+			"small-range-scan",
+			"rowid-range-forward",
+			"rowid-range-backward",
+			"secondary-index-covering-range",
+			"secondary-index-scattered-table",
+			"aggregate-status",
+			"aggregate-time-bucket",
+			"aggregate-tenant-time-range",
+			"feed-order-by-limit",
+			"feed-pagination-adjacent",
+			"join-order-items",
+			"random-point-lookups",
+			"hot-index-cold-table",
+			"ledger-without-rowid-range",
+			"write-batch-after-wake",
+			"update-hot-partition",
+			"delete-churn-range-read",
+			"migration-create-indexes-large",
+			"migration-create-indexes-skewed-large",
+			"migration-table-rebuild-large",
+			"migration-add-column-large",
+			"migration-ddl-small"
+		],
+		"sizes": {
+			"smallBytes": 262144,
+			"mediumBytes": 1048576,
+			"cacheFitBytes": 1048576,
+			"cacheOverflowBytes": 2097152,
+			"largeBytes": 2097152,
+			"rowBytes": 2048
+		},
+		"metricsToken": "dev-metrics",
+		"wakeDelayMs": 1000,
+		"postSetupWaitMs": 0,
+		"startLocalEnvoy": true,
+		"disableStorageCompaction": false,
+		"cacheSizing": {
+			"sqlitePageSizeBytes": 4096,
+			"startupPreloadMaxBytes": 1048576,
+			"vfsPageCacheCapacityPages": 50000,
+			"vfsPageCacheCapacityBytes": 204800000,
+			"standardLargeBytesExceedsDefaultVfsCache": false
+		}
+	},
+	"cacheConfigProbe": {
+		"sqliteCacheSizePragma": -2000,
+		"sqlitePageSize": 4096,
+		"pageCount": 16
+	},
+	"results": [
+		{
+			"workload": "small-rowid-point",
+			"description": "Small cold-wake primary-key point reads.",
+			"category": "canary",
+			"sizeClass": "small",
+			"targetBytes": 262144,
+			"actorKey": [
+				"sqlite-realworld-bench",
+				"sqlite-realworld-1777457369713-0f3d5eb3",
+				"small-rowid-point"
+			],
+			"actorId": "dx9bnn4aorzfbby41dfyhzfcusal00",
+			"setup": {
+				"rows": 128,
+				"targetBytes": 262144,
+				"rowBytes": 2048,
+				"setupMs": 77.65834700000005,
+				"pageCount": 165
+			},
+			"main": {
+				"ms": 36.033308000000034,
+				"workload": "small-rowid-point",
+				"ops": 50,
+				"bytes": 102400,
+				"pageCount": 166
+			},
+			"vfsMetrics": {
+				"resolvePagesTotal": 17,
+				"resolvePagesRequestedTotal": 17,
+				"resolvePagesCacheHitsTotal": 13,
+				"resolvePagesCacheMissesTotal": 4,
+				"getPagesTotal": 4,
+				"pagesFetchedTotal": 67,
+				"prefetchPagesTotal": 63,
+				"bytesFetchedTotal": 274432,
+				"prefetchBytesTotal": 258048,
+				"getPagesDurationSecondsSum": 0.029195393,
+				"getPagesDurationSecondsCount": 4
+			}
+		},
+		{
+			"workload": "small-schema-read",
+			"description": "Small cold-wake schema and table metadata read.",
+			"category": "canary",
+			"sizeClass": "small",
+			"targetBytes": 262144,
+			"actorKey": [
+				"sqlite-realworld-bench",
+				"sqlite-realworld-1777457369713-0f3d5eb3",
+				"small-schema-read"
+			],
+			"actorId": "966vabsdzolgrbcl7bqkam8x5abl00",
+			"setup": {
+				"rows": 128,
+				"targetBytes": 262144,
+				"rowBytes": 2048,
+				"setupMs": 81.72197300000016,
+				"pageCount": 165
+			},
+			"main": {
+				"ms": 5.1256100000000515,
+				"workload": "small-schema-read",
+				"objects": 15,
+				"columns": 7,
+				"rows": 128,
+				"pageCount": 166
+			},
+			"vfsMetrics": {
+				"resolvePagesTotal": 1,
+				"resolvePagesRequestedTotal": 1,
+				"resolvePagesCacheHitsTotal": 0,
+				"resolvePagesCacheMissesTotal": 1,
+				"getPagesTotal": 1,
+				"pagesFetchedTotal": 1,
+				"prefetchPagesTotal": 0,
+				"bytesFetchedTotal": 4096,
+				"prefetchBytesTotal": 0,
+				"getPagesDurationSecondsSum": 0.003278086,
+				"getPagesDurationSecondsCount": 1
+			}
+		},
+		{
+			"workload": "small-range-scan",
+			"description": "Small rowid range scan to catch regressions on tiny databases.",
+			"category": "canary",
+			"sizeClass": "small",
+			"targetBytes": 262144,
+			"actorKey": [
+				"sqlite-realworld-bench",
+				"sqlite-realworld-1777457369713-0f3d5eb3",
+				"small-range-scan"
+			],
+			"actorId": "xowy4uqzsuha8qkx4b2z2f4da4cl00",
+			"setup": {
+				"rows": 128,
+				"targetBytes": 262144,
+				"rowBytes": 2048,
+				"setupMs": 82.87807900000007,
+				"pageCount": 165
+			},
+			"main": {
+				"ms": 60.028753000000506,
+				"workload": "small-range-scan",
+				"rows": 128,
+				"bytes": 262144,
+				"pageCount": 166
+			},
+			"vfsMetrics": {
+				"resolvePagesTotal": 130,
+				"resolvePagesRequestedTotal": 130,
+				"resolvePagesCacheHitsTotal": 124,
+				"resolvePagesCacheMissesTotal": 6,
+				"getPagesTotal": 6,
+				"pagesFetchedTotal": 152,
+				"prefetchPagesTotal": 146,
+				"bytesFetchedTotal": 622592,
+				"prefetchBytesTotal": 598016,
+				"getPagesDurationSecondsSum": 0.056781372000000004,
+				"getPagesDurationSecondsCount": 6
+			}
+		},
+		{
+			"workload": "rowid-range-forward",
+			"description": "Large append-like INTEGER PRIMARY KEY forward range scan.",
+			"category": "read",
+			"sizeClass": "large",
+			"targetBytes": 2097152,
+			"actorKey": [
+				"sqlite-realworld-bench",
+				"sqlite-realworld-1777457369713-0f3d5eb3",
+				"rowid-range-forward"
+			],
+			"actorId": "pieq1057ykk1sfovc92jy2fpvfbl00",
+			"setup": {
+				"rows": 1024,
+				"targetBytes": 2097152,
+				"rowBytes": 2048,
+				"setupMs": 569.1615900000006,
+				"pageCount": 1230
+			},
+			"main": {
+				"ms": 334.62447000000066,
+				"workload": "rowid-range-forward",
+				"rows": 1024,
+				"bytes": 2097152,
+				"pageCount": 1231
+			},
+			"vfsMetrics": {
+				"resolvePagesTotal": 1032,
+				"resolvePagesRequestedTotal": 1032,
+				"resolvePagesCacheHitsTotal": 1017,
+				"resolvePagesCacheMissesTotal": 15,
+				"getPagesTotal": 15,
+				"pagesFetchedTotal": 1223,
+				"prefetchPagesTotal": 1208,
+				"bytesFetchedTotal": 5009408,
+				"prefetchBytesTotal": 4947968,
+				"getPagesDurationSecondsSum": 0.318732369,
+				"getPagesDurationSecondsCount": 15
+			}
+		},
+		{
+			"workload": "rowid-range-backward",
+			"description": "Large append-like INTEGER PRIMARY KEY reverse range scan.",
+			"category": "read",
+			"sizeClass": "large",
+			"targetBytes": 2097152,
+			"actorKey": [
+				"sqlite-realworld-bench",
+				"sqlite-realworld-1777457369713-0f3d5eb3",
+				"rowid-range-backward"
+			],
+			"actorId": "pqgt1c8rhfjycm2lz2pl72wuj4bl00",
+			"setup": {
+				"rows": 1024,
+				"targetBytes": 2097152,
+				"rowBytes": 2048,
+				"setupMs": 594.1582309999994,
+				"pageCount": 1230
+			},
+			"main": {
+				"ms": 356.4189959999985,
+				"workload": "rowid-range-backward",
+				"rows": 1024,
+				"bytes": 2097152,
+				"pageCount": 1231
+			},
+			"vfsMetrics": {
+				"resolvePagesTotal": 1032,
+				"resolvePagesRequestedTotal": 1032,
+				"resolvePagesCacheHitsTotal": 1014,
+				"resolvePagesCacheMissesTotal": 18,
+				"getPagesTotal": 18,
+				"pagesFetchedTotal": 1230,
+				"prefetchPagesTotal": 1212,
+				"bytesFetchedTotal": 5038080,
+				"prefetchBytesTotal": 4964352,
+				"getPagesDurationSecondsSum": 0.33500165699999995,
+				"getPagesDurationSecondsCount": 18
+			}
+		},
+		{
+			"workload": "secondary-index-covering-range",
+			"description": "Large covering secondary-index range scan.",
+			"category": "read",
+			"sizeClass": "large",
+			"targetBytes": 2097152,
+			"actorKey": [
+				"sqlite-realworld-bench",
+				"sqlite-realworld-1777457369713-0f3d5eb3",
+				"secondary-index-covering-range"
+			],
+			"actorId": "dtahu4khfrifx3nq65wosdmfitbl00",
+			"setup": {
+				"rows": 1024,
+				"targetBytes": 2097152,
+				"rowBytes": 2048,
+				"setupMs": 444.2556629999999,
+				"pageCount": 1062
+			},
+			"main": {
+				"ms": 17.90726900000118,
+				"workload": "secondary-index-covering-range",
+				"rows": 1024,
+				"checksum": 4167248384,
+				"pageCount": 1063
+			},
+			"vfsMetrics": {
+				"resolvePagesTotal": 8,
+				"resolvePagesRequestedTotal": 8,
+				"resolvePagesCacheHitsTotal": 0,
+				"resolvePagesCacheMissesTotal": 8,
+				"getPagesTotal": 8,
+				"pagesFetchedTotal": 8,
+				"prefetchPagesTotal": 0,
+				"bytesFetchedTotal": 32768,
+				"prefetchBytesTotal": 0,
+				"getPagesDurationSecondsSum": 0.015729361,
+				"getPagesDurationSecondsCount": 8
+			}
+		},
+		{
+			"workload": "secondary-index-scattered-table",
+			"description": "Large secondary-index range that visits table rows in scattered rowid order.",
+			"category": "read",
+			"sizeClass": "large",
+			"targetBytes": 2097152,
+			"actorKey": [
+				"sqlite-realworld-bench",
+				"sqlite-realworld-1777457369713-0f3d5eb3",
+				"secondary-index-scattered-table"
+			],
+			"actorId": "5r3k84hwr5ctvtdzyol8fa5kiadl00",
+			"setup": {
+				"rows": 1024,
+				"targetBytes": 2097152,
+				"rowBytes": 2048,
+				"setupMs": 455.77538300000015,
+				"pageCount": 1062
+			},
+			"main": {
+				"ms": 2003.7515139999996,
+				"workload": "secondary-index-scattered-table",
+				"rows": 1024,
+				"bytes": 2097152,
+				"pageCount": 1063
+			},
+			"vfsMetrics": {
+				"resolvePagesTotal": 1035,
+				"resolvePagesRequestedTotal": 1035,
+				"resolvePagesCacheHitsTotal": 496,
+				"resolvePagesCacheMissesTotal": 539,
+				"getPagesTotal": 539,
+				"pagesFetchedTotal": 1935,
+				"prefetchPagesTotal": 1396,
+				"bytesFetchedTotal": 7925760,
+				"prefetchBytesTotal": 5718016,
+				"getPagesDurationSecondsSum": 1.93061124,
+				"getPagesDurationSecondsCount": 539
+			}
+		},
+		{
+			"workload": "aggregate-status",
+			"description": "Large GROUP BY status aggregate over an OLTP-style orders table.",
+			"category": "read",
+			"sizeClass": "large",
+			"targetBytes": 2097152,
+			"actorKey": [
+				"sqlite-realworld-bench",
+				"sqlite-realworld-1777457369713-0f3d5eb3",
+				"aggregate-status"
+			],
+			"actorId": "hw7o6jxjuvru7y5nyyhmvd48fsal00",
+			"setup": {
+				"rows": 1024,
+				"targetBytes": 2097152,
+				"rowBytes": 2048,
+				"setupMs": 571.5002700000005,
+				"pageCount": 1230
+			},
+			"main": {
+				"ms": 584.4592300000004,
+				"workload": "aggregate-status",
+				"groups": 4,
+				"rows": 1024,
+				"total": 13353120,
+				"pageCount": 1231
+			},
+			"vfsMetrics": {
+				"resolvePagesTotal": 1034,
+				"resolvePagesRequestedTotal": 1034,
+				"resolvePagesCacheHitsTotal": 1010,
+				"resolvePagesCacheMissesTotal": 24,
+				"getPagesTotal": 24,
+				"pagesFetchedTotal": 2132,
+				"prefetchPagesTotal": 2108,
+				"bytesFetchedTotal": 8732672,
+				"prefetchBytesTotal": 8634368,
+				"getPagesDurationSecondsSum": 0.5639884069999999,
+				"getPagesDurationSecondsCount": 24
+			}
+		},
+		{
+			"workload": "aggregate-time-bucket",
+			"description": "Large time-bucket aggregate over an OLTP-style orders table.",
+			"category": "read",
+			"sizeClass": "large",
+			"targetBytes": 2097152,
+			"actorKey": [
+				"sqlite-realworld-bench",
+				"sqlite-realworld-1777457369713-0f3d5eb3",
+				"aggregate-time-bucket"
+			],
+			"actorId": "9uwzfc20s21tx8u3k04tdhhjjjcl00",
+			"setup": {
+				"rows": 1024,
+				"targetBytes": 2097152,
+				"rowBytes": 2048,
+				"setupMs": 601.0757450000019,
+				"pageCount": 1230
+			},
+			"main": {
+				"ms": 331.5491690000017,
+				"workload": "aggregate-time-bucket",
+				"buckets": 5,
+				"rows": 1024,
+				"total": 13353120,
+				"pageCount": 1231
+			},
+			"vfsMetrics": {
+				"resolvePagesTotal": 1027,
+				"resolvePagesRequestedTotal": 1027,
+				"resolvePagesCacheHitsTotal": 1017,
+				"resolvePagesCacheMissesTotal": 10,
+				"getPagesTotal": 10,
+				"pagesFetchedTotal": 1216,
+				"prefetchPagesTotal": 1206,
+				"bytesFetchedTotal": 4980736,
+				"prefetchBytesTotal": 4939776,
+				"getPagesDurationSecondsSum": 0.314834175,
+				"getPagesDurationSecondsCount": 10
+			}
+		},
+		{
+			"workload": "aggregate-tenant-time-range",
+			"description": "Selective tenant/time-range aggregate over events joined to orders.",
+			"category": "read",
+			"sizeClass": "cache-fit",
+			"targetBytes": 1048576,
+			"actorKey": [
+				"sqlite-realworld-bench",
+				"sqlite-realworld-1777457369713-0f3d5eb3",
+				"aggregate-tenant-time-range"
+			],
+			"actorId": "pmp5o1jrmh1ec07pcvlcpnkpacbl00",
+			"setup": {
+				"rows": 512,
+				"targetBytes": 1048576,
+				"rowBytes": 2048,
+				"setupMs": 275.630081000003,
+				"pageCount": 622
+			},
+			"main": {
+				"ms": 101.45905599999969,
+				"workload": "aggregate-tenant-time-range",
+				"groups": 1,
+				"rows": 16,
+				"total": 164632,
+				"pageCount": 623
+			},
+			"vfsMetrics": {
+				"resolvePagesTotal": 36,
+				"resolvePagesRequestedTotal": 36,
+				"resolvePagesCacheHitsTotal": 4,
+				"resolvePagesCacheMissesTotal": 32,
+				"getPagesTotal": 32,
+				"pagesFetchedTotal": 127,
+				"prefetchPagesTotal": 95,
+				"bytesFetchedTotal": 520192,
+				"prefetchBytesTotal": 389120,
+				"getPagesDurationSecondsSum": 0.09695503900000002,
+				"getPagesDurationSecondsCount": 32
+			}
+		},
+		{
+			"workload": "feed-order-by-limit",
+			"description": "Recent-feed ORDER BY indexed timestamp with LIMIT.",
+			"category": "read",
+			"sizeClass": "medium",
+			"targetBytes": 1048576,
+			"actorKey": [
+				"sqlite-realworld-bench",
+				"sqlite-realworld-1777457369713-0f3d5eb3",
+				"feed-order-by-limit"
+			],
+			"actorId": "5v6dk7r6cht42m22tws9fk7igtal00",
+			"setup": {
+				"rows": 512,
+				"targetBytes": 1048576,
+				"rowBytes": 2048,
+				"setupMs": 273.2814010000002,
+				"pageCount": 622
+			},
+			"main": {
+				"ms": 183.05611299999873,
+				"workload": "feed-order-by-limit",
+				"rows": 512,
+				"pageCount": 623
+			},
+			"vfsMetrics": {
+				"resolvePagesTotal": 516,
+				"resolvePagesRequestedTotal": 516,
+				"resolvePagesCacheHitsTotal": 507,
+				"resolvePagesCacheMissesTotal": 9,
+				"getPagesTotal": 9,
+				"pagesFetchedTotal": 621,
+				"prefetchPagesTotal": 612,
+				"bytesFetchedTotal": 2543616,
+				"prefetchBytesTotal": 2506752,
+				"getPagesDurationSecondsSum": 0.175079722,
+				"getPagesDurationSecondsCount": 9
+			}
+		},
+		{
+			"workload": "feed-pagination-adjacent",
+			"description": "Adjacent cursor pagination over an indexed recent-feed query.",
+			"category": "read",
+			"sizeClass": "medium",
+			"targetBytes": 1048576,
+			"actorKey": [
+				"sqlite-realworld-bench",
+				"sqlite-realworld-1777457369713-0f3d5eb3",
+				"feed-pagination-adjacent"
+			],
+			"actorId": "9yrufyc05u0mrrkywgwbanbjb2cl00",
+			"setup": {
+				"rows": 512,
+				"targetBytes": 1048576,
+				"rowBytes": 2048,
+				"setupMs": 289.43027900000016,
+				"pageCount": 622
+			},
+			"main": {
+				"ms": 49.53507399999944,
+				"workload": "feed-pagination-adjacent",
+				"firstPageRows": 100,
+				"rows": 100,
+				"pageCount": 623
+			},
+			"vfsMetrics": {
+				"resolvePagesTotal": 103,
+				"resolvePagesRequestedTotal": 103,
+				"resolvePagesCacheHitsTotal": 96,
+				"resolvePagesCacheMissesTotal": 7,
+				"getPagesTotal": 7,
+				"pagesFetchedTotal": 135,
+				"prefetchPagesTotal": 128,
+				"bytesFetchedTotal": 552960,
+				"prefetchBytesTotal": 524288,
+				"getPagesDurationSecondsSum": 0.046504661,
+				"getPagesDurationSecondsCount": 7
+			}
+		},
+		{
+			"workload": "join-order-items",
+			"description": "Orders to order-items join with grouped totals.",
+			"category": "read",
+			"sizeClass": "large",
+			"targetBytes": 2097152,
+			"actorKey": [
+				"sqlite-realworld-bench",
+				"sqlite-realworld-1777457369713-0f3d5eb3",
+				"join-order-items"
+			],
+			"actorId": "h8dchv4df7rqozfwtalixrkonobl00",
+			"setup": {
+				"rows": 1024,
+				"targetBytes": 2097152,
+				"rowBytes": 2048,
+				"setupMs": 569.2919690000017,
+				"pageCount": 1230
+			},
+			"main": {
+				"ms": 50.824484000004304,
+				"workload": "join-order-items",
+				"groups": 4,
+				"rows": 2048,
+				"total": 16114484,
+				"pageCount": 1231
+			},
+			"vfsMetrics": {
+				"resolvePagesTotal": 29,
+				"resolvePagesRequestedTotal": 29,
+				"resolvePagesCacheHitsTotal": 0,
+				"resolvePagesCacheMissesTotal": 29,
+				"getPagesTotal": 29,
+				"pagesFetchedTotal": 35,
+				"prefetchPagesTotal": 6,
+				"bytesFetchedTotal": 143360,
+				"prefetchBytesTotal": 24576,
+				"getPagesDurationSecondsSum": 0.048240116,
+				"getPagesDurationSecondsCount": 29
+			}
+		},
+		{
+			"workload": "random-point-lookups",
+			"description": "Deterministic random primary-key point lookups across a large table.",
+			"category": "read",
+			"sizeClass": "large",
+			"targetBytes": 2097152,
+			"actorKey": [
+				"sqlite-realworld-bench",
+				"sqlite-realworld-1777457369713-0f3d5eb3",
+				"random-point-lookups"
+			],
+			"actorId": "th0igap8f11zda8l8xhfy36k91cl00",
+			"setup": {
+				"rows": 1024,
+				"targetBytes": 2097152,
+				"rowBytes": 2048,
+				"setupMs": 574.6555220000009,
+				"pageCount": 1230
+			},
+			"main": {
+				"ms": 2616.359786999994,
+				"workload": "random-point-lookups",
+				"ops": 1000,
+				"bytes": 2048000,
+				"pageCount": 1231
+			},
+			"vfsMetrics": {
+				"resolvePagesTotal": 1008,
+				"resolvePagesRequestedTotal": 1008,
+				"resolvePagesCacheHitsTotal": 416,
+				"resolvePagesCacheMissesTotal": 592,
+				"getPagesTotal": 592,
+				"pagesFetchedTotal": 1981,
+				"prefetchPagesTotal": 1389,
+				"bytesFetchedTotal": 8114176,
+				"prefetchBytesTotal": 5689344,
+				"getPagesDurationSecondsSum": 2.2162359809999996,
+				"getPagesDurationSecondsCount": 592
+			}
+		},
+		{
+			"workload": "hot-index-cold-table",
+			"description": "Hot secondary-index selection followed by cold table-row hydration.",
+			"category": "read",
+			"sizeClass": "cache-overflow",
+			"targetBytes": 2097152,
+			"actorKey": [
+				"sqlite-realworld-bench",
+				"sqlite-realworld-1777457369713-0f3d5eb3",
+				"hot-index-cold-table"
+			],
+			"actorId": "d1t0mnrcy71y60srae41y2dqupal00",
+			"setup": {
+				"rows": 1024,
+				"targetBytes": 2097152,
+				"rowBytes": 2048,
+				"setupMs": 448.0915529999984,
+				"pageCount": 1062
+			},
+			"main": {
+				"ms": 29.939909000000625,
+				"workload": "hot-index-cold-table",
+				"rows": 8,
+				"bytes": 16384,
+				"pageCount": 1063
+			},
+			"vfsMetrics": {
+				"resolvePagesTotal": 13,
+				"resolvePagesRequestedTotal": 13,
+				"resolvePagesCacheHitsTotal": 2,
+				"resolvePagesCacheMissesTotal": 11,
+				"getPagesTotal": 11,
+				"pagesFetchedTotal": 17,
+				"prefetchPagesTotal": 6,
+				"bytesFetchedTotal": 69632,
+				"prefetchBytesTotal": 24576,
+				"getPagesDurationSecondsSum": 0.026829329,
+				"getPagesDurationSecondsCount": 11
+			}
+		},
+		{
+			"workload": "ledger-without-rowid-range",
+			"description": "WITHOUT ROWID composite-primary-key range read.",
+			"category": "read",
+			"sizeClass": "large",
+			"targetBytes": 2097152,
+			"actorKey": [
+				"sqlite-realworld-bench",
+				"sqlite-realworld-1777457369713-0f3d5eb3",
+				"ledger-without-rowid-range"
+			],
+			"actorId": "h0fkh3478g9avbabau77m18q5wbl00",
+			"setup": {
+				"rows": 1024,
+				"targetBytes": 2097152,
+				"rowBytes": 2048,
+				"setupMs": 227.53287199999613,
+				"pageCount": 175
+			},
+			"main": {
+				"ms": 232.5649510000003,
+				"workload": "ledger-without-rowid-range",
+				"rows": 564,
+				"bytes": 288768,
+				"pageCount": 176
+			},
+			"vfsMetrics": {
+				"resolvePagesTotal": 91,
+				"resolvePagesRequestedTotal": 91,
+				"resolvePagesCacheHitsTotal": 47,
+				"resolvePagesCacheMissesTotal": 44,
+				"getPagesTotal": 44,
+				"pagesFetchedTotal": 139,
+				"prefetchPagesTotal": 95,
+				"bytesFetchedTotal": 569344,
+				"prefetchBytesTotal": 389120,
+				"getPagesDurationSecondsSum": 0.21925706000000003,
+				"getPagesDurationSecondsCount": 44
+			}
+		},
+		{
+			"workload": "write-batch-after-wake",
+			"description": "Post-wake transactional insert batch into an existing database.",
+			"category": "write",
+			"sizeClass": "medium",
+			"targetBytes": 1048576,
+			"actorKey": [
+				"sqlite-realworld-bench",
+				"sqlite-realworld-1777457369713-0f3d5eb3",
+				"write-batch-after-wake"
+			],
+			"actorId": "hcgp09mjwyt8ihqs9gwoxbrogeal00",
+			"setup": {
+				"rows": 512,
+				"targetBytes": 1048576,
+				"rowBytes": 2048,
+				"setupMs": 270.18651500000124,
+				"pageCount": 622
+			},
+			"main": {
+				"ms": 358.1510600000038,
+				"workload": "write-batch-after-wake",
+				"rows": 1000,
+				"pageCount": 1642
+			},
+			"vfsMetrics": {
+				"resolvePagesTotal": 12,
+				"resolvePagesRequestedTotal": 12,
+				"resolvePagesCacheHitsTotal": 0,
+				"resolvePagesCacheMissesTotal": 12,
+				"getPagesTotal": 12,
+				"pagesFetchedTotal": 14,
+				"prefetchPagesTotal": 2,
+				"bytesFetchedTotal": 57344,
+				"prefetchBytesTotal": 8192,
+				"getPagesDurationSecondsSum": 0.021715727000000004,
+				"getPagesDurationSecondsCount": 12
+			}
+		}
+	]
+}

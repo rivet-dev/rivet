@@ -709,7 +709,7 @@ mod tests {
 				.expect("meta should exist after compaction"),
 		)?;
 		assert_eq!(stored_head.materialized_txid, 5);
-		let pages = engine.get_pages(TEST_ACTOR, 4, vec![1, 2, 3, 4, 5]).await?;
+		let pages = engine.get_pages(TEST_ACTOR, 4, vec![1, 2, 3, 4, 5]).await?.pages;
 		assert_eq!(
 			pages,
 			vec![
@@ -783,7 +783,7 @@ mod tests {
 				.is_none()
 		);
 
-		let pages = engine.get_pages(TEST_ACTOR, 4, vec![1, 2]).await?;
+		let pages = engine.get_pages(TEST_ACTOR, 4, vec![1, 2]).await?.pages;
 		assert_eq!(
 			pages,
 			vec![
@@ -1016,7 +1016,7 @@ mod tests {
 
 		assert!(engine.compact_shard(FAIL_ACTOR, 0).await?);
 		assert_eq!(
-			engine.get_pages(FAIL_ACTOR, 4, vec![1, 2]).await?,
+			engine.get_pages(FAIL_ACTOR, 4, vec![1, 2]).await?.pages,
 			vec![
 				FetchedPage {
 					pgno: 1,
@@ -1165,7 +1165,8 @@ mod tests {
 		assert_eq!(
 			engine
 				.get_pages(TEST_ACTOR, head.generation, vec![1, 2])
-				.await?,
+				.await?
+				.pages,
 			vec![
 				FetchedPage {
 					pgno: 1,
@@ -1309,7 +1310,7 @@ mod tests {
 				.is_empty()
 		);
 		assert_eq!(
-			engine.get_pages(TEST_ACTOR, 4, vec![1, 65, 129]).await?,
+			engine.get_pages(TEST_ACTOR, 4, vec![1, 65, 129]).await?.pages,
 			vec![
 				FetchedPage {
 					pgno: 1,
@@ -1359,7 +1360,7 @@ mod tests {
 		assert_eq!(engine.compact_worker(TEST_ACTOR, 8).await?, 1);
 		assert_eq!(engine.compact_worker(TEST_ACTOR, 8).await?, 0);
 		assert_eq!(
-			engine.get_pages(TEST_ACTOR, 4, vec![1, 2]).await?,
+			engine.get_pages(TEST_ACTOR, 4, vec![1, 2]).await?.pages,
 			vec![
 				FetchedPage {
 					pgno: 1,

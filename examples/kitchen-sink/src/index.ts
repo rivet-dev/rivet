@@ -118,6 +118,7 @@ import { testCounterSqlite } from "./actors/testing/test-counter-sqlite.ts";
 import { testSqliteLoad } from "./actors/testing/test-sqlite-load.ts";
 import { testSqliteBench } from "./actors/testing/test-sqlite-bench.ts";
 import { sqliteColdStartBench } from "./actors/testing/sqlite-cold-start-bench.ts";
+import { sqliteRealworldBench } from "./actors/testing/sqlite-realworld-bench.ts";
 import { rawSqliteFuzzer } from "./actors/testing/raw-sqlite-fuzzer.ts";
 // AI
 import { aiAgent } from "./actors/ai/ai-agent.ts";
@@ -256,6 +257,7 @@ export const registry = setup({
 		testSqliteLoad,
 		testSqliteBench,
 		sqliteColdStartBench,
+		sqliteRealworldBench,
 		rawSqliteFuzzer,
 		// AI
 		aiAgent,

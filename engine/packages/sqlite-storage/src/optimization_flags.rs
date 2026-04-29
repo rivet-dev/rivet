@@ -17,7 +17,6 @@ pub const PRELOAD_HINTS_ON_OPEN_ENV: &str = "RIVETKIT_SQLITE_OPT_PRELOAD_HINTS_O
 pub const PRELOAD_HINT_HOT_PAGES_ENV: &str = "RIVETKIT_SQLITE_OPT_PRELOAD_HINT_HOT_PAGES";
 pub const PRELOAD_HINT_EARLY_PAGES_ENV: &str = "RIVETKIT_SQLITE_OPT_PRELOAD_HINT_EARLY_PAGES";
 pub const PRELOAD_HINT_SCAN_RANGES_ENV: &str = "RIVETKIT_SQLITE_OPT_PRELOAD_HINT_SCAN_RANGES";
-pub const DEDUP_GET_PAGES_META_ENV: &str = "RIVETKIT_SQLITE_OPT_DEDUP_GET_PAGES_META";
 pub const CACHE_GET_PAGES_VALIDATION_ENV: &str = "RIVETKIT_SQLITE_OPT_CACHE_GET_PAGES_VALIDATION";
 pub const RANGE_READS_ENV: &str = "RIVETKIT_SQLITE_OPT_RANGE_READS";
 pub const BATCH_CHUNK_READS_ENV: &str = "RIVETKIT_SQLITE_OPT_BATCH_CHUNK_READS";
@@ -36,6 +35,7 @@ pub const MAX_STARTUP_PRELOAD_MAX_BYTES: usize = 8 * 1024 * 1024;
 pub const DEFAULT_STARTUP_PRELOAD_FIRST_PAGE_COUNT: u32 = 1;
 pub const MAX_STARTUP_PRELOAD_FIRST_PAGE_COUNT: u32 = 256;
 pub const DEFAULT_VFS_PAGE_CACHE_CAPACITY_PAGES: u64 = 50_000;
+pub const MIN_VFS_PAGE_CACHE_CAPACITY_PAGES: u64 = 1;
 pub const MAX_VFS_PAGE_CACHE_CAPACITY_PAGES: u64 = 500_000;
 pub const DEFAULT_VFS_PROTECTED_CACHE_PAGES: usize = 512;
 pub const MAX_VFS_PROTECTED_CACHE_PAGES: usize = 8_192;
@@ -54,7 +54,6 @@ pub struct SqliteOptimizationFlags {
 	pub preload_hint_hot_pages: bool,
 	pub preload_hint_early_pages: bool,
 	pub preload_hint_scan_ranges: bool,
-	pub dedup_get_pages_meta: bool,
 	pub cache_get_pages_validation: bool,
 	pub range_reads: bool,
 	pub batch_chunk_reads: bool,
@@ -82,7 +81,6 @@ impl Default for SqliteOptimizationFlags {
 			preload_hint_hot_pages: true,
 			preload_hint_early_pages: true,
 			preload_hint_scan_ranges: true,
-			dedup_get_pages_meta: true,
 			cache_get_pages_validation: true,
 			range_reads: true,
 			batch_chunk_reads: true,
@@ -134,7 +132,6 @@ impl SqliteOptimizationFlags {
 			preload_hint_scan_ranges: enabled_by_default(
 				read_env(PRELOAD_HINT_SCAN_RANGES_ENV).as_deref(),
 			),
-			dedup_get_pages_meta: enabled_by_default(read_env(DEDUP_GET_PAGES_META_ENV).as_deref()),
 			cache_get_pages_validation: enabled_by_default(
 				read_env(CACHE_GET_PAGES_VALIDATION_ENV).as_deref(),
 			),
@@ -144,6 +141,7 @@ impl SqliteOptimizationFlags {
 			vfs_page_cache_capacity_pages: u64_bounded_by_default(
 				read_env(VFS_PAGE_CACHE_CAPACITY_PAGES_ENV).as_deref(),
 				DEFAULT_VFS_PAGE_CACHE_CAPACITY_PAGES,
+				MIN_VFS_PAGE_CACHE_CAPACITY_PAGES,
 				MAX_VFS_PAGE_CACHE_CAPACITY_PAGES,
 			),
 			vfs_cache_fetched_pages: enabled_by_default(
@@ -193,10 +191,11 @@ fn usize_bounded_by_default(value: Option<&str>, default: usize, max: usize) -> 
 		.min(max)
 }
 
-fn u64_bounded_by_default(value: Option<&str>, default: u64, max: u64) -> u64 {
+fn u64_bounded_by_default(value: Option<&str>, default: u64, min: u64, max: u64) -> u64 {
 	value
 		.and_then(|value| value.trim().parse::<u64>().ok())
 		.unwrap_or(default)
+		.max(min)
 		.min(max)
 }
 
@@ -215,42 +214,55 @@ mod tests {
 	fn flags_default_enabled_and_explicitly_disableable() {
 		let flags = SqliteOptimizationFlags::from_env_reader(|key| match key {
 			READ_AHEAD_ENV => Some("false".to_string()),
+			CACHE_HIT_PREDICTOR_TRAINING_ENV => Some("false".to_string()),
 			RECENT_PAGE_HINTS_ENV => Some("0".to_string()),
-			STARTUP_PRELOAD_MAX_BYTES_ENV => Some("2048".to_string()),
+			ADAPTIVE_READ_AHEAD_ENV => Some("false".to_string()),
+			PRELOAD_HINT_FLUSH_ENV => Some("false".to_string()),
+			STARTUP_PRELOAD_MAX_BYTES_ENV => Some("0".to_string()),
 			STARTUP_PRELOAD_FIRST_PAGES_ENV => Some("false".to_string()),
-			STARTUP_PRELOAD_FIRST_PAGE_COUNT_ENV => Some("2".to_string()),
+			STARTUP_PRELOAD_FIRST_PAGE_COUNT_ENV => Some("0".to_string()),
+			PRELOAD_HINTS_ON_OPEN_ENV => Some("false".to_string()),
+			PRELOAD_HINT_HOT_PAGES_ENV => Some("false".to_string()),
+			PRELOAD_HINT_EARLY_PAGES_ENV => Some("false".to_string()),
 			PRELOAD_HINT_SCAN_RANGES_ENV => Some("disabled".to_string()),
 			CACHE_GET_PAGES_VALIDATION_ENV => Some("off".to_string()),
+			RANGE_READS_ENV => Some("false".to_string()),
 			BATCH_CHUNK_READS_ENV => Some("no".to_string()),
 			DECODED_LTX_CACHE_ENV => Some("disable".to_string()),
-			VFS_PAGE_CACHE_CAPACITY_PAGES_ENV => Some("128".to_string()),
+			VFS_PAGE_CACHE_CAPACITY_PAGES_ENV => Some("0".to_string()),
 			VFS_CACHE_FETCHED_PAGES_ENV => Some("false".to_string()),
 			VFS_CACHE_PREFETCHED_PAGES_ENV => Some("false".to_string()),
 			VFS_CACHE_STARTUP_PRELOADED_PAGES_ENV => Some("false".to_string()),
 			VFS_SCAN_RESISTANT_CACHE_ENV => Some("false".to_string()),
-			VFS_PROTECTED_CACHE_PAGES_ENV => Some("16".to_string()),
+			VFS_PROTECTED_CACHE_PAGES_ENV => Some("0".to_string()),
 			_ => None,
 		});
 
 		assert!(!flags.read_ahead);
-		assert!(flags.cache_hit_predictor_training);
+		assert!(!flags.cache_hit_predictor_training);
 		assert!(!flags.recent_page_hints);
-		assert_eq!(flags.startup_preload_max_bytes, 2048);
+		assert!(!flags.adaptive_read_ahead);
+		assert!(!flags.preload_hint_flush);
+		assert_eq!(flags.startup_preload_max_bytes, 0);
 		assert!(!flags.startup_preload_first_pages);
-		assert_eq!(flags.startup_preload_first_page_count, 2);
-		assert!(flags.preload_hint_hot_pages);
-		assert!(flags.preload_hint_early_pages);
+		assert_eq!(flags.startup_preload_first_page_count, 0);
+		assert!(!flags.preload_hints_on_open);
+		assert!(!flags.preload_hint_hot_pages);
+		assert!(!flags.preload_hint_early_pages);
 		assert!(!flags.preload_hint_scan_ranges);
 		assert!(!flags.cache_get_pages_validation);
-		assert!(flags.range_reads);
+		assert!(!flags.range_reads);
 		assert!(!flags.batch_chunk_reads);
 		assert!(!flags.decoded_ltx_cache);
-		assert_eq!(flags.vfs_page_cache_capacity_pages, 128);
+		assert_eq!(
+			flags.vfs_page_cache_capacity_pages,
+			MIN_VFS_PAGE_CACHE_CAPACITY_PAGES
+		);
 		assert!(!flags.vfs_cache_fetched_pages);
 		assert!(!flags.vfs_cache_prefetched_pages);
 		assert!(!flags.vfs_cache_startup_preloaded_pages);
 		assert!(!flags.vfs_scan_resistant_cache);
-		assert_eq!(flags.vfs_protected_cache_pages, 16);
+		assert_eq!(flags.vfs_protected_cache_pages, 0);
 	}
 
 	#[test]

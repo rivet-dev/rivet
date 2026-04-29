@@ -17,7 +17,7 @@ Range page-read protocol details live in `.agent/specs/sqlite-range-page-read-pr
 - Actor Prometheus metrics expose VFS read counters, fetched bytes, cache hits/misses, and `get_pages` duration at `/gateway/<actor_id>/metrics`.
 - `sqlite-storage` keeps an in-memory PIDX cache and decodes each unique DELTA/SHARD blob once per `get_pages(...)` call.
 - `sqlite-storage` exposes `get_page_range(...)` for bounded contiguous reads; it reuses `get_pages(...)` source resolution and currently caps ranges at 256 pages / 1 MiB.
-- `sqlite-storage` reassembles large chunked logical values with one bounded chunk-prefix range read by default, with `RIVETKIT_SQLITE_OPT_BATCH_CHUNK_READS=false` preserving the serial 10 KB chunk-get path.
+- `sqlite-storage` reassembles large chunked logical values with one bounded chunk-prefix range read by default; `RIVETKIT_SQLITE_OPT_BATCH_CHUNK_READS=false` selects serial 10 KB chunk gets for comparison runs.
 - `sqlite-storage` caches decoded DELTA/SHARD LTX blobs across repeated reads by default, with `RIVETKIT_SQLITE_OPT_DECODED_LTX_CACHE=false` preserving per-read decode behavior.
 - `sqlite-storage` compaction folds DELTA pages into SHARD blobs for steadier read behavior.
 

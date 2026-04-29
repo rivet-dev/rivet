@@ -1,0 +1,79 @@
+{
+	"schemaVersion": 1,
+	"startedAt": "2026-04-29T10:09:16.917Z",
+	"finishedAt": "2026-04-29T10:09:18.608Z",
+	"config": {
+		"endpoint": "http://127.0.0.1:6420",
+		"profile": "smoke",
+		"selectedWorkloads": [
+			"feed-pagination-adjacent"
+		],
+		"sizes": {
+			"smallBytes": 262144,
+			"mediumBytes": 1048576,
+			"cacheFitBytes": 1048576,
+			"cacheOverflowBytes": 2097152,
+			"largeBytes": 2097152,
+			"rowBytes": 2048
+		},
+		"metricsToken": "dev-metrics",
+		"wakeDelayMs": 1000,
+		"postSetupWaitMs": 0,
+		"startLocalEnvoy": true,
+		"disableStorageCompaction": false,
+		"cacheSizing": {
+			"sqlitePageSizeBytes": 4096,
+			"startupPreloadMaxBytes": 1048576,
+			"vfsPageCacheCapacityPages": 50000,
+			"vfsPageCacheCapacityBytes": 204800000,
+			"standardLargeBytesExceedsDefaultVfsCache": false
+		}
+	},
+	"cacheConfigProbe": {
+		"sqliteCacheSizePragma": -2000,
+		"sqlitePageSize": 4096,
+		"pageCount": 16
+	},
+	"results": [
+		{
+			"workload": "feed-pagination-adjacent",
+			"description": "Adjacent cursor pagination over an indexed recent-feed query.",
+			"category": "read",
+			"sizeClass": "medium",
+			"targetBytes": 1048576,
+			"actorKey": [
+				"sqlite-realworld-bench",
+				"sqlite-realworld-1777457355366-7b780a8f",
+				"feed-pagination-adjacent"
+			],
+			"actorId": "th4hd4y4xocgt7ha3f94wxy7fubl00",
+			"setup": {
+				"rows": 512,
+				"targetBytes": 1048576,
+				"rowBytes": 2048,
+				"setupMs": 302.266161,
+				"pageCount": 622
+			},
+			"main": {
+				"ms": 47.609035000000404,
+				"workload": "feed-pagination-adjacent",
+				"firstPageRows": 100,
+				"rows": 100,
+				"pageCount": 623
+			},
+			"vfsMetrics": {
+				"resolvePagesTotal": 103,
+				"resolvePagesRequestedTotal": 103,
+				"resolvePagesCacheHitsTotal": 96,
+				"resolvePagesCacheMissesTotal": 7,
+				"getPagesTotal": 7,
+				"pagesFetchedTotal": 135,
+				"prefetchPagesTotal": 128,
+				"bytesFetchedTotal": 552960,
+				"prefetchBytesTotal": 524288,
+				"getPagesDurationSecondsSum": 0.044485068,
+				"getPagesDurationSecondsCount": 7
+			}
+		}
+	]
+}
