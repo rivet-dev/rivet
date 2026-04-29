@@ -11,6 +11,7 @@ Started: Tue Apr 28 11:00:38 PM PDT 2026
 - SQLite cold-read optimization flags live in `engine/packages/sqlite-storage/src/optimization_flags.rs`; `rivetkit-sqlite` re-exports them, and tests should use config constructors instead of mutating process env.
 - SQLite open-time preload consumes persisted `/PRELOAD_HINTS` through `OpenConfig.preload_hints`; disabled-path tests can toggle the config fields directly.
 - Adaptive SQLite VFS read-ahead is controlled by `RIVETKIT_SQLITE_OPT_ADAPTIVE_READ_AHEAD`; default-enabled scans can grow to larger windows, while disabled mode keeps the existing shard-sized 64-page prefetch.
+- `sqlite-storage::SqliteEngine::get_pages` returns `GetPagesResult` with fetched pages plus transaction-read meta; successful protocol handlers should reuse `result.meta` instead of calling `load_meta`.
 ---
 ## 2026-04-28 23:01:27 PDT - SQLITE-COLD-001
 - What was implemented
@@ -183,4 +184,27 @@ Started: Tue Apr 28 11:00:38 PM PDT 2026
   - Compared with SQLITE-COLD-008: wake get_pages stayed 69 -> 69, wake e2e was 4116.3ms -> 4271.7ms, wake server was 3967.7ms -> 3969.8ms, wake VFS transport was 3738.6ms -> 3749.0ms, and hot read was 156.3ms -> 167.6ms.
   - Open-time preload remains bounded by `OpenConfig.max_total_bytes` (1 MiB default), so it improves startup working-set hydration without changing the adaptive full-scan get_pages count in this benchmark.
   - Verification status: `cargo check -p sqlite-storage` passed; `cargo check -p rivetkit-sqlite` passed with existing Rust 2024 unsafe warnings; `cargo check -p pegboard-envoy` passed; `cargo check -p rivetkit-core --features sqlite` passed with existing warnings; `cargo test -p sqlite-storage -- --test-threads=1` passed; `cargo test -p rivetkit-sqlite -- --test-threads=1` passed with existing Rust 2024 unsafe warnings; `cargo test -p pegboard-envoy` passed; `pnpm --filter kitchen-sink check-types` passed with the known skip message; `pnpm -F rivetkit check-types` passed; `pnpm --filter @rivetkit/rivetkit-napi build:force` passed with existing warnings.
+---
+## 2026-04-29 00:18:54 PDT - SQLITE-COLD-010
+- What was implemented
+  - Changed `sqlite-storage` `get_pages` to return `GetPagesResult` containing fetched pages plus the `SqliteMeta` derived from the DBHead already read in the page-read transaction.
+  - Updated pegboard-envoy successful get_pages responses to reuse `result.meta` by default instead of issuing a duplicate `load_meta` read; disabling `RIVETKIT_SQLITE_OPT_DEDUP_GET_PAGES_META` preserves the old duplicate-read path.
+  - Added latency test assertions that the returned get_pages meta matches the committed head while the storage read remains a single RTT.
+  - Updated nearby sqlite-storage AGENTS/CLAUDE notes and reran the cold-read benchmark.
+- Files changed
+  - `engine/packages/sqlite-storage/src/types.rs`
+  - `engine/packages/sqlite-storage/src/read.rs`
+  - `engine/packages/sqlite-storage/tests/latency.rs`
+  - `engine/packages/sqlite-storage/AGENTS.md`
+  - `engine/packages/sqlite-storage/CLAUDE.md`
+  - `engine/packages/pegboard-envoy/src/ws_to_tunnel_task.rs`
+  - `.agent/notes/sqlite-cold-read-after-SQLITE-COLD-010.txt`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - SQLITE-COLD-010 benchmark numbers: insert e2e 14779.2ms, hot read e2e 151.6ms, wake read e2e 4209.9ms, wake read server 3974.3ms, wake overhead estimate 235.5ms, wake VFS get_pages 70 calls, fetched 13722 pages / 56205312 bytes, prefetch 13652 pages / 55918592 bytes, VFS transport 3741.3ms.
+  - Compared with baseline/SQLITE-COLD-001: wake get_pages dropped 1249 -> 70, wake e2e dropped 20141.0ms -> 4209.9ms, wake VFS transport dropped 19332.8ms -> 3741.3ms, and hot read was 118.6ms -> 151.6ms.
+  - Compared with SQLITE-COLD-009: wake get_pages was 69 -> 70, wake e2e improved 4271.7ms -> 4209.9ms, wake server was 3969.8ms -> 3974.3ms, wake VFS transport improved 3749.0ms -> 3741.3ms, and hot read improved 167.6ms -> 151.6ms.
+  - `GetPagesResult` implements slice deref/into-iterator compatibility so most storage callers can continue treating it like the returned pages, but protocol code should explicitly consume `pages` and `meta`.
+  - Verification status: `cargo check -p sqlite-storage` passed; `cargo check -p pegboard-envoy` passed; focused latency test passed; `cargo test -p sqlite-storage -- --test-threads=1` passed; `cargo test -p pegboard-envoy` passed; external get_pages test-target compiles passed for `pegboard` and `rivet-engine`; `pnpm --filter kitchen-sink check-types` passed with the known skip message; `pnpm -F rivetkit check-types` passed.
 ---

@@ -732,7 +732,7 @@ async fn handle_sqlite_get_pages(
 		.get_pages(&request.actor_id, request.generation, request.pgnos.clone())
 		.await
 	{
-		Ok(pages) => Ok(sqlite_get_pages_ok(conn, &request.actor_id, pages).await?),
+		Ok(result) => Ok(sqlite_get_pages_ok(conn, &request.actor_id, result).await?),
 		Err(err) => match sqlite_storage_error(&err) {
 			Some(SqliteStorageError::FenceMismatch { reason }) => {
 				Ok(protocol::SqliteGetPagesResponse::SqliteFenceMismatch(
@@ -747,17 +747,24 @@ async fn handle_sqlite_get_pages(
 async fn sqlite_get_pages_ok(
 	conn: &Conn,
 	actor_id: &str,
-	pages: Vec<sqlite_storage::types::FetchedPage>,
+	result: sqlite_storage::types::GetPagesResult,
 ) -> Result<protocol::SqliteGetPagesResponse> {
+	let meta = if sqlite_storage::optimization_flags::sqlite_optimization_flags()
+		.dedup_get_pages_meta
+	{
+		result.meta
+	} else {
+		conn.sqlite_engine.load_meta(actor_id).await?
+	};
+
 	Ok(protocol::SqliteGetPagesResponse::SqliteGetPagesOk(
 		protocol::SqliteGetPagesOk {
-			pages: pages
+			pages: result
+				.pages
 				.into_iter()
 				.map(sqlite_runtime::protocol_sqlite_fetched_page)
 				.collect(),
-			meta: sqlite_runtime::protocol_sqlite_meta(
-				conn.sqlite_engine.load_meta(actor_id).await?,
-			),
+			meta: sqlite_runtime::protocol_sqlite_meta(meta),
 		},
 	))
 }

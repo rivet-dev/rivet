@@ -14,7 +14,9 @@ use crate::keys::{
 };
 use crate::ltx::{DecodedLtx, decode_ltx_v3};
 use crate::page_index::DeltaPageIndex;
-use crate::types::{DBHead, FetchedPage, decode_db_head};
+use crate::types::{
+	DBHead, FetchedPage, GetPagesResult, SQLITE_MAX_DELTA_BYTES, SqliteMeta, decode_db_head,
+};
 use crate::udb;
 
 const PIDX_PGNO_BYTES: usize = std::mem::size_of::<u32>();
@@ -26,7 +28,7 @@ impl SqliteEngine {
 		actor_id: &str,
 		generation: u64,
 		pgnos: Vec<u32>,
-	) -> Result<Vec<FetchedPage>> {
+	) -> Result<GetPagesResult> {
 		let start = Instant::now();
 		let requested_page_count = pgnos.len();
 		for pgno in &pgnos {
@@ -228,17 +230,23 @@ impl SqliteEngine {
 		if page_sources.is_empty() && head.head_txid == 0 {
 			self.metrics
 				.observe_get_pages(requested_page_count, start.elapsed());
-			return Ok(pgnos
-				.into_iter()
-				.map(|pgno| FetchedPage {
-					pgno,
-					bytes: if pgno <= head.db_size_pages {
-						Some(vec![0; head.page_size as usize])
-					} else {
-						None
-					},
-				})
-				.collect());
+			let db_size_pages = head.db_size_pages;
+			let page_size = head.page_size as usize;
+			let meta = SqliteMeta::from((head, SQLITE_MAX_DELTA_BYTES));
+			return Ok(GetPagesResult {
+				pages: pgnos
+					.into_iter()
+					.map(|pgno| FetchedPage {
+						pgno,
+						bytes: if pgno <= db_size_pages {
+							Some(vec![0; page_size])
+						} else {
+							None
+						},
+					})
+					.collect(),
+				meta,
+			});
 		}
 		let mut decoded_blobs = BTreeMap::new();
 		let mut historical_delta_blobs = None;
@@ -333,7 +341,10 @@ impl SqliteEngine {
 		self.metrics
 			.observe_get_pages(requested_page_count, start.elapsed());
 
-		Ok(pages)
+		Ok(GetPagesResult {
+			pages,
+			meta: SqliteMeta::from((head, SQLITE_MAX_DELTA_BYTES)),
+		})
 	}
 }
 
