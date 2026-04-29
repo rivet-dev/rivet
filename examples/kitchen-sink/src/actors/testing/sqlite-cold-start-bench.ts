@@ -7,7 +7,9 @@ const DEFAULT_ROW_BYTES = 16 * 1024;
 const DEFAULT_BATCH_ROWS = 8;
 const DEFAULT_TRANSACTION_BYTES = 64 * 1024;
 const READ_BATCH_ROWS = 64;
+const REVERSE_PROBE_ROWS = 32 * 1024;
 const PAYLOAD_TABLE = "cold_start_payload";
+const REVERSE_PROBE_TABLE = "cold_start_reverse_probe";
 
 interface WriteInput {
 	targetBytes?: number;
@@ -20,6 +22,11 @@ interface PayloadRow {
 	min_id?: number | null;
 	max_id?: number | null;
 	rows: number;
+	bytes: number;
+	expected_bytes: number;
+}
+
+interface PayloadValueRow {
 	bytes: number;
 	expected_bytes: number;
 }
@@ -40,6 +47,7 @@ async function readPayloads(
 	database: {
 		execute: (sql: string, ...args: unknown[]) => Promise<unknown[]>;
 	},
+	direction: "forward" | "backward" = "forward",
 ) {
 	const t0 = performance.now();
 	const [bounds] = (await database.execute(
@@ -62,6 +70,61 @@ async function readPayloads(
 	let chunks = 0;
 	const minId = bounds.min_id ?? 0;
 	const maxId = bounds.max_id ?? 0;
+
+	if (direction === "backward") {
+		const [probeBounds] = (await database.execute(
+			`
+				SELECT
+					MIN(id) AS min_id,
+					MAX(id) AS max_id,
+					COUNT(*) AS rows,
+					0 AS bytes,
+					0 AS expected_bytes
+				FROM ${REVERSE_PROBE_TABLE}
+			`,
+		)) as PayloadRow[];
+		if (!probeBounds) throw new Error("reverse probe query returned no rows");
+		const probeMinId = probeBounds.min_id ?? 0;
+		const probeMaxId = probeBounds.max_id ?? 0;
+
+		for (
+			let upperId = probeMaxId;
+			upperId >= probeMinId && upperId > 0;
+			upperId -= READ_BATCH_ROWS
+		) {
+			const lowerId = Math.max(probeMinId, upperId - READ_BATCH_ROWS + 1);
+			const chunkRows = (await database.execute(
+				`
+					SELECT
+						marker AS bytes,
+						marker AS expected_bytes
+					FROM ${REVERSE_PROBE_TABLE}
+					WHERE id BETWEEN ? AND ?
+					ORDER BY id DESC
+				`,
+				lowerId,
+				upperId,
+			)) as PayloadValueRow[];
+
+			for (const row of chunkRows) {
+				rows += 1;
+				bytes += row.bytes;
+				expectedBytes += row.expected_bytes;
+			}
+			chunks += 1;
+		}
+
+		return {
+			ms: performance.now() - t0,
+			ops: rows,
+			rows,
+			bytes,
+			expectedBytes,
+			chunks,
+			readBatchRows: READ_BATCH_ROWS,
+			direction,
+		};
+	}
 
 	for (
 		let lowerId = minId;
@@ -114,11 +177,18 @@ export const sqliteColdStartBench = actor({
 					created_at INTEGER NOT NULL
 				)
 			`);
+			await database.execute(`
+				CREATE TABLE IF NOT EXISTS cold_start_reverse_probe (
+					id INTEGER PRIMARY KEY,
+					marker INTEGER NOT NULL
+				)
+			`);
 		},
 	}),
 	actions: {
 		reset: async (c) => {
 			await c.db.execute(`DELETE FROM ${PAYLOAD_TABLE}`);
+			await c.db.execute(`DELETE FROM ${REVERSE_PROBE_TABLE}`);
 			return { ok: true };
 		},
 
@@ -202,6 +272,32 @@ export const sqliteColdStartBench = actor({
 					inTransaction = false;
 				}
 
+				await c.db.execute("BEGIN");
+				inTransaction = true;
+				for (
+					let lowerId = 1;
+					lowerId <= REVERSE_PROBE_ROWS;
+					lowerId += 256
+				) {
+					const upperId = Math.min(REVERSE_PROBE_ROWS, lowerId + 255);
+					const placeholders: string[] = [];
+					const args: unknown[] = [];
+					for (let id = lowerId; id <= upperId; id += 1) {
+						placeholders.push("(?, ?)");
+						args.push(id, 1);
+					}
+					const insertT0 = performance.now();
+					await c.db.execute(
+						`INSERT INTO ${REVERSE_PROBE_TABLE} (id, marker) VALUES ${placeholders.join(", ")}`,
+						...args,
+					);
+					sqliteInsertMs += performance.now() - insertT0;
+				}
+				const reverseCommitT0 = performance.now();
+				await c.db.execute("COMMIT");
+				commitMs += performance.now() - reverseCommitT0;
+				inTransaction = false;
+
 				return {
 					ms: sqliteInsertMs + commitMs,
 					writeWallMs: performance.now() - wallT0,
@@ -215,6 +311,7 @@ export const sqliteColdStartBench = actor({
 					rowBytes,
 					batchRows,
 					transactionBytes,
+					reverseProbeRows: REVERSE_PROBE_ROWS,
 				};
 			} catch (err) {
 				if (inTransaction) {
@@ -226,6 +323,10 @@ export const sqliteColdStartBench = actor({
 
 		readAll: async (c) => {
 			return readPayloads(c.db);
+		},
+
+		readAllReverse: async (c) => {
+			return readPayloads(c.db, "backward");
 		},
 
 		wakeSqlite: async (c) => {

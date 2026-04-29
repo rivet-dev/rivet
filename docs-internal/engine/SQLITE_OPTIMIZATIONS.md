@@ -25,6 +25,7 @@ Range page-read protocol details live in `.agent/specs/sqlite-range-page-read-pr
 
 - Gate SQLite cold-read optimizations behind central env-backed feature flags that default on, so each optimization can be benchmarked on and off.
 - Add adaptive forward-scan read-ahead that can grow beyond shard-sized batches for mostly sequential reads while shrinking back for scattered access.
+- Extend adaptive scan read-ahead to support both forward and backward sequential page access.
 - Record VFS predictor access on cache hits so prefetch learns real sequential scans.
 - Cache repeated pegboard-envoy SQLite actor validation and local-open checks for active actors.
 - Return SQLite meta from `sqlite-storage::get_pages(...)` instead of doing a second META read in pegboard-envoy.
@@ -40,6 +41,14 @@ Range page-read protocol details live in `.agent/specs/sqlite-range-page-read-pr
 - Preload hint mechanisms must be independently configurable through the central SQLite optimization feature flag/config file, not scattered `std::env` reads.
 - Supported preload mechanisms should include first pages, persisted hot pages, early-after-wake pages, and persisted scan ranges.
 - All preload mechanisms should default on only when bounded by `OpenConfig.max_total_bytes` or an equivalent preload byte budget.
+
+## Scan Read-Ahead Notes
+
+- SQLite B-trees are sorted logically, not guaranteed linearly by page number; append-heavy `INTEGER PRIMARY KEY` tables are more likely to produce forward page scans than mixed inserts or freelist reuse.
+- `INTEGER PRIMARY KEY` aliases rowid, so rowid/primary-key range scans are usually the best case for forward or backward VFS read-ahead.
+- Non-integer primary keys on rowid tables use a separate index; index range scans can produce scattered table-page reads unless the index order is correlated with rowid or the query is covered by the index.
+- `WITHOUT ROWID` tables are keyed by the declared primary key, but page splits can still make logical key order differ from physical page-number order.
+- Adaptive read-ahead should grow only when observed VFS misses are directional, including both increasing and decreasing page numbers, and shrink for scattered access.
 
 ## Update Rules
 

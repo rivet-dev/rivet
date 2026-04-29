@@ -110,6 +110,7 @@ The kitchen-sink has three SQLite actor types to test:
 
 - Keep cold wake/open measured with a tiny SQLite action separately from cold full-read throughput, and keep the main read path free of CPU-heavy diagnostic probes like payload `LIKE` scans.
 - The default SQLite cold-start benchmark runs un-compacted and compacted scenarios separately; keep both on inline transaction sizes unless chunked DELTA reads are being explicitly tested.
+- Use `cold_start_reverse_probe` for reverse VFS scan measurements; large payload overflow rows create scattered reverse page access.
 
 ### `scripts/soak.ts` — Cloud Run soak harness
 

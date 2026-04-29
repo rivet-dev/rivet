@@ -36,6 +36,7 @@ interface WriteResult {
 	rowBytes: number;
 	batchRows: number;
 	transactionBytes: number;
+	reverseProbeRows: number;
 }
 
 interface ReadResult {
@@ -68,6 +69,7 @@ interface ScenarioResult {
 	hotReadResult?: ReadResult;
 	hotReadMetrics?: VfsMetricSnapshot;
 	coldRead: ColdReadVariant;
+	reverseColdRead: ColdReadVariant;
 }
 
 interface LocalEngine {
@@ -716,6 +718,7 @@ async function main(): Promise<void> {
 			activeHandle: BenchHandle,
 			expectedBytes: number,
 			expectedRows: number,
+			readFull: (handle: BenchHandle) => Promise<unknown>,
 		): Promise<ColdReadVariant> => {
 			console.log(`sleep before ${label} wake/open...`);
 			await activeHandle.goToSleep();
@@ -733,7 +736,7 @@ async function main(): Promise<void> {
 
 			console.log(`${label} wake read...`);
 			const coldHandle = client.sqliteColdStartBench.getOrCreate(scenarioActorKey);
-			const coldRead = await timed(() => coldHandle.readAll());
+			const coldRead = await timed(() => readFull(coldHandle));
 			const coldReadResult = coldRead.result as ReadResult;
 			assertRead(label, coldReadResult, expectedBytes, expectedRows);
 			const metrics = await scrapeMetrics(
@@ -821,6 +824,16 @@ async function main(): Promise<void> {
 				scenarioHandle,
 				writeResult.bytes,
 				writeResult.rows,
+				(handle) => handle.readAll(),
+			);
+			const reverseColdRead = await runColdReadVariant(
+				`${label} reverse`,
+				scenarioActorKey,
+				scenarioActorId,
+				client.sqliteColdStartBench.getOrCreate(scenarioActorKey),
+				writeResult.reverseProbeRows,
+				writeResult.reverseProbeRows,
+				(handle) => handle.readAllReverse(),
 			);
 
 			return {
@@ -831,6 +844,7 @@ async function main(): Promise<void> {
 				hotReadResult,
 				hotReadMetrics,
 				coldRead,
+				reverseColdRead,
 			};
 		};
 
@@ -845,9 +859,13 @@ async function main(): Promise<void> {
 		console.log("\nResults");
 		for (const scenario of [scenarioResult]) {
 			const variant = scenario.coldRead;
+			const reverseVariant = scenario.reverseColdRead;
 			console.log(`  ${scenario.label} rows: ${scenario.writeResult.rows}`);
 			console.log(
 				`  ${scenario.label} transactions: ${scenario.writeResult.transactions}`,
+			);
+			console.log(
+				`  ${scenario.label} reverse probe rows: ${scenario.writeResult.reverseProbeRows}`,
 			);
 			console.log(`  ${scenario.label} bytes: ${fmtBytes(scenario.writeResult.bytes)}`);
 			console.log(
@@ -892,6 +910,28 @@ async function main(): Promise<void> {
 				`${variant.label} wake read actor-lifetime`,
 				variant.metrics,
 			);
+			console.log(
+				`  ${reverseVariant.label} cold wake/open server: ${fmtMs(reverseVariant.wakeOpenResult.ms)}`,
+			);
+			console.log(
+				`  ${reverseVariant.label} cold wake/open e2e: ${fmtMs(reverseVariant.wakeOpen.ms)}`,
+			);
+			console.log(
+				`  ${reverseVariant.label} cold wake/open overhead estimate: ${fmtMs(Math.max(0, reverseVariant.wakeOpen.ms - reverseVariant.wakeOpenResult.ms))}`,
+			);
+			console.log(
+				`  ${reverseVariant.label} wake read server: ${fmtMs(reverseVariant.coldReadResult.ms)}`,
+			);
+			console.log(
+				`  ${reverseVariant.label} wake read e2e: ${fmtMs(reverseVariant.coldRead.ms)}`,
+			);
+			console.log(
+				`  ${reverseVariant.label} wake overhead estimate: ${fmtMs(Math.max(0, reverseVariant.coldRead.ms - reverseVariant.coldReadResult.ms))}`,
+			);
+			printVfsMetricDelta(
+				`${reverseVariant.label} wake read actor-lifetime`,
+				reverseVariant.metrics,
+			);
 		}
 		console.log(
 			"  cold wake/open uses a tiny SQLite action without scanning the payload.",
@@ -904,6 +944,9 @@ async function main(): Promise<void> {
 		);
 		console.log(
 			"  wake read actor-lifetime VFS metrics include startup DB work before the read action.",
+		);
+		console.log(
+			"  reverse wake read scans a dedicated rowid probe table in descending order.",
 		);
 	} catch (err) {
 		const engineLogs = tailEngineLogs(engine);

@@ -37,9 +37,9 @@ const DEFAULT_RECENT_HINT_PAGE_BUDGET: usize = 128;
 const DEFAULT_RECENT_HINT_RANGE_BUDGET: usize = 16;
 const DEFAULT_PAGE_SIZE: usize = 4096;
 const MIN_RECENT_SCAN_RANGE_PAGES: u32 = 8;
-const FORWARD_SCAN_SCORE_THRESHOLD: i32 = 6;
-const FORWARD_SCAN_SCORE_MAX: i32 = 12;
-const FORWARD_SCAN_GAP_TOLERANCE: u32 = 8;
+const SCAN_SCORE_THRESHOLD: i32 = 6;
+const SCAN_SCORE_MAX: i32 = 12;
+const SCAN_GAP_TOLERANCE: u32 = 8;
 const MAX_PATHNAME: c_int = 64;
 const TEMP_AUX_PATH_PREFIX: &str = "__sqlite_temp__";
 const EMPTY_DB_PAGE_HEADER_PREFIX: [u8; 108] = [
@@ -997,6 +997,7 @@ struct PrefetchPredictor {
 enum ReadAheadMode {
 	Bounded,
 	ForwardScan,
+	BackwardScan,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -1011,7 +1012,14 @@ struct ReadAheadPlan {
 struct AdaptiveReadAhead {
 	last_pgno: Option<u32>,
 	scan_tip_pgno: Option<u32>,
+	scan_direction: Option<ScanDirection>,
 	score: i32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ScanDirection {
+	Forward,
+	Backward,
 }
 
 #[derive(Debug, Clone)]
@@ -1105,25 +1113,47 @@ fn select_page_fetch_transport(
 ) -> PageFetchTransport {
 	if !config.range_reads
 		|| !prefetch
-		|| read_ahead_plan.mode != ReadAheadMode::ForwardScan
+		|| !matches!(
+			read_ahead_plan.mode,
+			ReadAheadMode::ForwardScan | ReadAheadMode::BackwardScan
+		)
 		|| to_fetch.len() <= config.prefetch_depth
-		|| !is_contiguous_page_run(to_fetch)
 	{
 		return PageFetchTransport::PageList;
 	}
 
+	let Some(start_pgno) = contiguous_page_run_start(to_fetch) else {
+		return PageFetchTransport::PageList;
+	};
+
 	PageFetchTransport::Range {
-		start_pgno: to_fetch[0],
+		start_pgno,
 		max_pages: to_fetch.len().try_into().unwrap_or(u32::MAX),
 		max_bytes: read_ahead_plan.max_bytes.try_into().unwrap_or(u64::MAX),
 	}
 }
 
-fn is_contiguous_page_run(pgnos: &[u32]) -> bool {
-	!pgnos.is_empty()
-		&& pgnos
-			.windows(2)
-			.all(|window| window[1] == window[0].saturating_add(1))
+fn contiguous_page_run_start(pgnos: &[u32]) -> Option<u32> {
+	let first = *pgnos.first()?;
+	if pgnos.len() == 1 {
+		return Some(first);
+	}
+
+	if pgnos
+		.windows(2)
+		.all(|window| window[1] == window[0].saturating_add(1))
+	{
+		return Some(first);
+	}
+
+	if pgnos
+		.windows(2)
+		.all(|window| window[0] == window[1].saturating_add(1))
+	{
+		return pgnos.last().copied();
+	}
+
+	None
 }
 
 fn sqlite_get_page_range_response_to_get_pages_response(
@@ -1178,7 +1208,7 @@ impl PrefetchPredictor {
 		let mut predicted = Vec::with_capacity(depth);
 
 		if let Some(delta) = self.last_delta {
-			if self.stride_run_len >= 2 && delta > 0 {
+			if self.stride_run_len >= 2 && delta != 0 {
 				let mut current = from_pgno as i64;
 				for _ in 0..depth {
 					current += delta;
@@ -1226,17 +1256,20 @@ impl PrefetchPredictor {
 impl AdaptiveReadAhead {
 	fn record_and_plan(&mut self, pgnos: &[u32], config: &VfsConfig) -> ReadAheadPlan {
 		let mut scan_seed_pgno = None;
+		let mut scan_direction = None;
 		for pgno in pgnos.iter().copied() {
-			if self.record(pgno) {
+			if let Some(direction) = self.record(pgno) {
 				scan_seed_pgno = Some(pgno);
+				scan_direction = Some(direction);
 			}
 		}
 
 		if config.adaptive_read_ahead
-			&& self.score >= FORWARD_SCAN_SCORE_THRESHOLD
+			&& self.score >= SCAN_SCORE_THRESHOLD
 			&& scan_seed_pgno.is_some()
+			&& scan_direction.is_some()
 		{
-			let depth = if self.score >= FORWARD_SCAN_SCORE_THRESHOLD + 4 {
+			let depth = if self.score >= SCAN_SCORE_THRESHOLD + 4 {
 				config.adaptive_prefetch_depth
 			} else {
 				config
@@ -1244,7 +1277,10 @@ impl AdaptiveReadAhead {
 					.min(config.prefetch_depth.saturating_mul(2))
 			};
 			ReadAheadPlan {
-				mode: ReadAheadMode::ForwardScan,
+				mode: match scan_direction.expect("scan direction checked above") {
+					ScanDirection::Forward => ReadAheadMode::ForwardScan,
+					ScanDirection::Backward => ReadAheadMode::BackwardScan,
+				},
 				depth,
 				max_bytes: config.adaptive_max_prefetch_bytes,
 				seed_pgno: scan_seed_pgno,
@@ -1259,33 +1295,56 @@ impl AdaptiveReadAhead {
 		}
 	}
 
-	fn record(&mut self, pgno: u32) -> bool {
-		let forward_from_last = self
+	fn record(&mut self, pgno: u32) -> Option<ScanDirection> {
+		let direction_from_last = self
 			.last_pgno
-			.and_then(|last_pgno| pgno.checked_sub(last_pgno))
-			.is_some_and(|delta| (1..=FORWARD_SCAN_GAP_TOLERANCE).contains(&delta));
-		let forward_from_scan_tip = self
+			.and_then(|last_pgno| scan_direction_between(last_pgno, pgno));
+		let direction_from_scan_tip = self
 			.scan_tip_pgno
-			.and_then(|tip_pgno| pgno.checked_sub(tip_pgno))
-			.is_some_and(|delta| (1..=FORWARD_SCAN_GAP_TOLERANCE).contains(&delta));
+			.and_then(|tip_pgno| scan_direction_between(tip_pgno, pgno));
 		let repeated = self.last_pgno == Some(pgno);
+		let observed_direction = direction_from_last.or(direction_from_scan_tip);
 
-		let forward_scan_page = forward_from_last || forward_from_scan_tip;
-		if forward_scan_page {
-			self.score = (self.score + 2).min(FORWARD_SCAN_SCORE_MAX);
+		if let Some(direction) = observed_direction {
+			if self.scan_direction == Some(direction)
+				|| self.scan_direction.is_none()
+				|| self.score < SCAN_SCORE_THRESHOLD
+			{
+				self.score = (self.score + 2).min(SCAN_SCORE_MAX);
+				self.scan_tip_pgno = Some(pgno);
+				self.scan_direction = Some(direction);
+				self.last_pgno = Some(pgno);
+				return Some(direction);
+			}
+
+			self.score = (self.score - 4).max(0);
 			self.scan_tip_pgno = Some(pgno);
+			self.scan_direction = Some(direction);
 		} else if !repeated {
-			if self.score >= FORWARD_SCAN_SCORE_THRESHOLD && self.scan_tip_pgno.is_some() {
+			if self.score >= SCAN_SCORE_THRESHOLD && self.scan_tip_pgno.is_some() {
 				self.score = (self.score - 1).max(0);
 			} else {
 				self.score = (self.score - 4).max(0);
 				self.scan_tip_pgno = Some(pgno);
+				self.scan_direction = None;
 			}
 		}
 
 		self.last_pgno = Some(pgno);
-		forward_scan_page
+		None
 	}
+}
+
+fn scan_direction_between(previous: u32, current: u32) -> Option<ScanDirection> {
+	if let Some(delta) = current.checked_sub(previous) {
+		if (1..=SCAN_GAP_TOLERANCE).contains(&delta) {
+			return Some(ScanDirection::Forward);
+		}
+	}
+	if previous.checked_sub(current) == Some(1) {
+		return Some(ScanDirection::Backward);
+	}
+	None
 }
 
 impl VfsPreloadHintRange {
@@ -1875,6 +1934,21 @@ impl VfsContext {
 					prediction_budget.min(read_ahead_plan.depth),
 					state.db_size_pages.max(seed),
 				);
+				if read_ahead_plan.mode == ReadAheadMode::Bounded {
+					predicted_pgnos.retain(|predicted| *predicted > seed);
+				} else if read_ahead_plan.mode == ReadAheadMode::BackwardScan {
+					let mut next_pgno = seed.checked_sub(1);
+					predicted_pgnos.retain(|predicted| match next_pgno {
+						Some(expected_pgno) if *predicted == expected_pgno => {
+							next_pgno = predicted.checked_sub(1);
+							true
+						}
+						_ => {
+							next_pgno = None;
+							false
+						}
+					});
+				}
 				for predicted in predicted_pgnos.iter().copied() {
 					if resolved.contains_key(&predicted) || to_fetch.contains(&predicted) {
 						continue;
@@ -3915,6 +3989,16 @@ mod tests {
 	}
 
 	#[test]
+	fn predictor_prefers_reverse_stride_after_repeated_reads() {
+		let mut predictor = PrefetchPredictor::default();
+		for pgno in [20, 17, 14, 11] {
+			predictor.record(pgno);
+		}
+
+		assert_eq!(predictor.multi_predict(11, 3, 30), vec![8, 5, 2]);
+	}
+
+	#[test]
 	fn adaptive_read_ahead_tolerates_jumps_and_decays() {
 		let config = VfsConfig::default();
 		let mut read_ahead = AdaptiveReadAhead::default();
@@ -3945,6 +4029,30 @@ mod tests {
 
 		let scattered_followup = read_ahead.record_and_plan(&[31], &config);
 		assert_eq!(scattered_followup.mode, ReadAheadMode::Bounded);
+	}
+
+	#[test]
+	fn adaptive_read_ahead_detects_backward_scans_and_decays() {
+		let config = VfsConfig::default();
+		let mut read_ahead = AdaptiveReadAhead::default();
+
+		for pgno in (98..=100).rev() {
+			assert_eq!(
+				read_ahead.record_and_plan(&[pgno], &config).mode,
+				ReadAheadMode::Bounded
+			);
+		}
+
+		let scan_plan = read_ahead.record_and_plan(&[97], &config);
+		assert_eq!(scan_plan.mode, ReadAheadMode::BackwardScan);
+		assert!(scan_plan.depth > DEFAULT_PREFETCH_DEPTH);
+
+		for pgno in [500, 200, 700, 50, 900, 30] {
+			assert_eq!(
+				read_ahead.record_and_plan(&[pgno], &config).mode,
+				ReadAheadMode::Bounded
+			);
+		}
 	}
 
 	#[test]
@@ -4084,6 +4192,61 @@ mod tests {
 		let shard_fetch = requests.last().expect("scan should fetch missing pages");
 		let expected = (12..76).collect::<Vec<_>>();
 		assert_eq!(shard_fetch.pgnos, expected);
+	}
+
+	#[test]
+	fn default_vfs_config_uses_range_for_backward_scan() {
+		let runtime = Builder::new_current_thread()
+			.enable_all()
+			.build()
+			.expect("runtime should build");
+		let protocol = Arc::new(MockProtocol::new(
+			protocol::SqliteCommitResponse::SqliteCommitOk(protocol::SqliteCommitOk {
+				new_head_txid: 13,
+				meta: sqlite_meta(8 * 1024 * 1024),
+			}),
+			protocol::SqliteCommitStageResponse::SqliteCommitStageOk(
+				protocol::SqliteCommitStageOk {
+					chunk_idx_committed: 0,
+				},
+			),
+			protocol::SqliteCommitFinalizeResponse::SqliteCommitFinalizeOk(
+				protocol::SqliteCommitFinalizeOk {
+					new_head_txid: 13,
+					meta: sqlite_meta(8 * 1024 * 1024),
+				},
+			),
+		));
+		let ctx = VfsContext::new(
+			"actor".to_string(),
+			runtime.handle().clone(),
+			SqliteTransport::from_mock(protocol.clone()),
+			protocol::SqliteStartupData {
+				generation: 7,
+				meta: protocol::SqliteMeta {
+					db_size_pages: 200,
+					..sqlite_meta(8 * 1024 * 1024)
+				},
+				preloaded_pages: Vec::new(),
+			},
+			VfsConfig::default(),
+			unsafe { std::mem::zeroed() },
+			None,
+		);
+
+		for pgno in [75, 74, 73, 72] {
+			ctx.resolve_pages(&[pgno], true)
+				.expect("page should resolve");
+		}
+
+		let requests = protocol.get_pages_requests();
+		assert_eq!(requests.len(), 3);
+		assert_eq!(requests[2].pgnos, vec![73]);
+		let range_requests = protocol.get_page_range_requests();
+		assert_eq!(range_requests.len(), 1);
+		assert_eq!(range_requests[0].start_pgno, 1);
+		assert_eq!(range_requests[0].max_pages, 72);
+		assert_eq!(range_requests[0].max_bytes, 1024 * 1024);
 	}
 
 	#[test]
@@ -4246,6 +4409,89 @@ mod tests {
 		let requests = protocol.get_pages_requests();
 		assert_eq!(requests.len(), 2);
 		assert_eq!(requests[1].pgnos, (76..332).collect::<Vec<_>>());
+	}
+
+	#[test]
+	fn cache_hit_reads_train_backward_scan_range_prefetch() {
+		let runtime = Builder::new_current_thread()
+			.enable_all()
+			.build()
+			.expect("runtime should build");
+		let mut protocol = MockProtocol::new(
+			protocol::SqliteCommitResponse::SqliteCommitOk(protocol::SqliteCommitOk {
+				new_head_txid: 13,
+				meta: sqlite_meta(8 * 1024 * 1024),
+			}),
+			protocol::SqliteCommitStageResponse::SqliteCommitStageOk(
+				protocol::SqliteCommitStageOk {
+					chunk_idx_committed: 0,
+				},
+			),
+			protocol::SqliteCommitFinalizeResponse::SqliteCommitFinalizeOk(
+				protocol::SqliteCommitFinalizeOk {
+					new_head_txid: 13,
+					meta: sqlite_meta(8 * 1024 * 1024),
+				},
+			),
+		);
+		protocol.get_pages_response =
+			protocol::SqliteGetPagesResponse::SqliteGetPagesOk(protocol::SqliteGetPagesOk {
+				pages: (95..=350)
+					.map(|pgno| protocol::SqliteFetchedPage {
+						pgno,
+						bytes: Some(vec![(pgno % 251) as u8; 4096]),
+					})
+					.collect(),
+				meta: sqlite_meta(8 * 1024 * 1024),
+			});
+		protocol.get_page_range_response =
+			protocol::SqliteGetPageRangeResponse::SqliteGetPageRangeOk(
+				protocol::SqliteGetPageRangeOk {
+					start_pgno: 1,
+					pages: (1..95)
+						.map(|pgno| protocol::SqliteFetchedPage {
+							pgno,
+							bytes: Some(vec![(pgno % 251) as u8; 4096]),
+						})
+						.collect(),
+					meta: sqlite_meta(8 * 1024 * 1024),
+				},
+			);
+		let protocol = Arc::new(protocol);
+		let ctx = VfsContext::new(
+			"actor".to_string(),
+			runtime.handle().clone(),
+			SqliteTransport::from_mock(protocol.clone()),
+			protocol::SqliteStartupData {
+				generation: 7,
+				meta: protocol::SqliteMeta {
+					db_size_pages: 400,
+					..sqlite_meta(8 * 1024 * 1024)
+				},
+				preloaded_pages: Vec::new(),
+			},
+			VfsConfig::default(),
+			unsafe { std::mem::zeroed() },
+			None,
+		);
+
+		ctx.resolve_pages(&[350], true)
+			.expect("first missing page should resolve");
+		for pgno in (95..350).rev() {
+			ctx.resolve_pages(&[pgno], true)
+				.expect("cache-hit page should resolve");
+		}
+		ctx.resolve_pages(&[94], true)
+			.expect("next missing page should resolve");
+
+		let requests = protocol.get_pages_requests();
+		assert_eq!(requests.len(), 1);
+		assert_eq!(requests[0].pgnos, vec![350]);
+		let range_requests = protocol.get_page_range_requests();
+		assert_eq!(range_requests.len(), 1);
+		assert_eq!(range_requests[0].start_pgno, 1);
+		assert_eq!(range_requests[0].max_pages, 94);
+		assert_eq!(range_requests[0].max_bytes, 1024 * 1024);
 	}
 
 	#[test]
