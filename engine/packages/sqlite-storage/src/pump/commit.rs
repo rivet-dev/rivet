@@ -37,7 +37,8 @@ impl ActorDb {
 			.with_label_values(labels)
 			.observe(dirty_pages.len() as f64);
 
-		let cached_storage_used = *self.storage_used.lock();
+		let cached_storage_used_live = *self.storage_used_live.lock();
+		let cached_storage_used_pitr = *self.storage_used_pitr.lock();
 		let cache_was_warm = !self.cache.lock().range(0, u32::MAX).is_empty();
 		let actor_id = self.actor_id.clone();
 		let dirty_pages_for_tx = dirty_pages.clone();
@@ -50,13 +51,24 @@ impl ActorDb {
 
 				async move {
 					let head_key = keys::meta_head_key(&actor_id);
-					let (head_bytes, storage_used) = if let Some(storage_used) = cached_storage_used {
-						(tx_get_value(&tx, &head_key, Serializable).await?, storage_used)
+					let (head_bytes, storage_used_live, storage_used_pitr) = if let (
+						Some(storage_used_live),
+						Some(storage_used_pitr),
+					) = (cached_storage_used_live, cached_storage_used_pitr)
+					{
+						(
+							tx_get_value(&tx, &head_key, Serializable).await?,
+							storage_used_live,
+							storage_used_pitr,
+						)
 					} else {
-						let quota_fut = quota::read(&tx, &actor_id);
+						quota::migrate_quota_split(&tx, &actor_id).await?;
+						let live_quota_fut = quota::read_live(&tx, &actor_id);
+						let pitr_quota_fut = quota::read_pitr(&tx, &actor_id);
 						let head_fut = tx_get_value(&tx, &head_key, Serializable);
-						let (head_bytes, storage_used) = tokio::try_join!(head_fut, quota_fut)?;
-						(head_bytes, storage_used)
+						let (head_bytes, storage_used_live, storage_used_pitr) =
+							tokio::try_join!(head_fut, live_quota_fut, pitr_quota_fut)?;
+						(head_bytes, storage_used_live, storage_used_pitr)
 					};
 
 					let previous_head = head_bytes
@@ -131,11 +143,11 @@ impl ActorDb {
 					let quota_delta = added_bytes
 						.checked_sub(removed_bytes)
 						.context("sqlite commit quota delta overflowed i64")?;
-					let would_be = storage_used
+					let would_be_live = storage_used_live
 						.checked_add(quota_delta)
 						.context("sqlite commit quota check overflowed i64")?;
 
-					quota::cap_check(would_be)?;
+					quota::cap_check_live(would_be_live)?;
 
 					for (key, value) in &delta_chunks {
 						tx.informal().set(key, value);
@@ -152,7 +164,7 @@ impl ActorDb {
 					}
 					tx.informal().set(&head_key, &encoded_head);
 					if quota_delta != 0 {
-						quota::atomic_add(&tx, &actor_id, quota_delta);
+						quota::atomic_add_live(&tx, &actor_id, quota_delta);
 					}
 
 					Ok(CommitTxResult {
@@ -161,13 +173,15 @@ impl ActorDb {
 						dirty_pgnos,
 						truncated_pgnos: truncate_cleanup.truncated_pgnos,
 						added_bytes,
-						storage_used: would_be,
+						storage_used_live: would_be_live,
+						storage_used_pitr,
 					})
 				}
 			})
 			.await?;
 
-		*self.storage_used.lock() = Some(result.storage_used);
+		*self.storage_used_live.lock() = Some(result.storage_used_live);
+		*self.storage_used_pitr.lock() = Some(result.storage_used_pitr);
 		*self.commit_bytes_since_rollup.lock() += u64::try_from(result.added_bytes)
 			.context("commit added bytes should be non-negative")?;
 
@@ -232,7 +246,8 @@ struct CommitTxResult {
 	dirty_pgnos: BTreeSet<u32>,
 	truncated_pgnos: Vec<u32>,
 	added_bytes: i64,
-	storage_used: i64,
+	storage_used_live: i64,
+	storage_used_pitr: i64,
 }
 
 #[derive(Default)]

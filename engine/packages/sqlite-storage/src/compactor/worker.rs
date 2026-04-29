@@ -331,7 +331,7 @@ async fn emit_metering_rollup(
 		let actor_name = actor_name.clone();
 
 		async move {
-			let storage_used = quota::read(&tx, &actor_id).await?;
+			let storage_used = quota::read_live(&tx, &actor_id).await?;
 			metrics::SQLITE_STORAGE_USED_BYTES
 				.with_label_values(&[node_id.as_str(), actor_id.as_str()])
 				.set(storage_used as f64);

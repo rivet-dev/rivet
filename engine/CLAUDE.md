@@ -53,7 +53,7 @@ Use `test-snapshot-gen` to generate and load RocksDB snapshots of the full UDB K
 - `sqlite-storage` tests live in `engine/packages/sqlite-storage/tests/`; do not add inline module test blocks.
 - Run `sqlite-storage` tests against temp RocksDB-backed UniversalDB via `test_db()`, `checkpoint_test_db(...)`, and `reopen_test_db(...)` instead of mocked storage paths.
 - `sqlite-storage` PIDX entries are stored as the PIDX key prefix plus a big-endian `u32` page number, with the value encoded as a raw big-endian `u64` txid.
-- `sqlite-storage` `/META/quota` is a fixed-width little-endian `i64` atomic counter; do not vbare-encode it.
+- `sqlite-storage` storage usage counters are fixed-width little-endian `i64` atomic counters; use `/META/storage_used_live` for live data and `/META/storage_used_pitr` for PITR overhead, not vbare.
 - `sqlite-storage` `/META/compactor_lease` is held with a local timer, cancellation token, and periodic renewal task; compaction work transactions must not revalidate the lease in-tx.
 - `sqlite-storage` compaction PIDX deletes use `COMPARE_AND_CLEAR` so stale entries no-op when commits race compaction.
 - `sqlite-storage` LTX V3 files end the page section with a zeroed 6-byte page-header sentinel before the varint page index, and the index offsets/sizes refer to the full on-wire page frame.
@@ -63,7 +63,7 @@ Use `test-snapshot-gen` to generate and load RocksDB snapshots of the full UDB K
 - `sqlite-storage` shrink writes must delete above-EOF PIDX rows and fully-above-EOF SHARD blobs inside the same commit/takeover transaction; compaction only cleans partial shards by filtering pages at or below `head.db_size_pages`.
 - `sqlite-storage` compaction should choose shard passes from the live PIDX scan, then delete DELTA blobs by comparing all existing delta keys against the remaining global PIDX references so multi-shard and overwritten deltas only disappear when every page ref is gone.
 - `sqlite-storage` metrics should record compaction pass duration and totals in `compactor/worker.rs`, while shard outcome metrics such as folded pages, deleted deltas, delta gauge updates, and lag stay in `compactor/shard.rs` to avoid double counting.
-- `sqlite-storage` quota accounting should treat only `/META/head`, SHARD, DELTA, and PIDX keys as billable; `/META/quota` tracks the sum with signed atomic-add deltas.
+- `sqlite-storage` live quota accounting should treat only `/META/head`, SHARD, DELTA, and PIDX keys as billable; `/META/storage_used_live` tracks the sum with signed atomic-add deltas.
 - `sqlite-storage` latency tests that depend on `UDB_SIMULATED_LATENCY_MS` should live in a dedicated integration test binary, because UniversalDB caches that env var once per process with `OnceLock`.
 
 ## Pegboard Envoy

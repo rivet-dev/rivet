@@ -257,7 +257,7 @@ async fn write_batch(
 			tx.informal()
 				.set(&keys::meta_compact_key(&actor_id), &compact);
 			if bytes_freed != 0 {
-				quota::atomic_add(&tx, &actor_id, -bytes_freed);
+				quota::atomic_add_live(&tx, &actor_id, -bytes_freed);
 			}
 
 			Ok(WriteResult {
@@ -297,7 +297,7 @@ pub(crate) async fn validate_quota_with_node_id(
 						scan_tracked_prefix_bytes(&tx, &keys::pidx_delta_prefix(&actor_id)).await?
 							+ scan_tracked_prefix_bytes(&tx, &keys::delta_prefix(&actor_id)).await?
 							+ scan_tracked_prefix_bytes(&tx, &keys::shard_prefix(&actor_id)).await?;
-					let counter_value = quota::read(&tx, &actor_id).await?;
+					let counter_value = quota::read_live(&tx, &actor_id).await?;
 
 					Ok((manual_total, counter_value))
 				}
@@ -378,6 +378,9 @@ async fn load_delta_entries(
 	let mut chunks_by_txid = BTreeMap::<u64, Vec<DeltaChunk>>::new();
 	for (key, value) in tx_scan_prefix_values(tx, &keys::delta_prefix(actor_id)).await? {
 		let txid = keys::decode_delta_chunk_txid(actor_id, &key)?;
+		if key == keys::delta_meta_key(actor_id, txid) {
+			continue;
+		}
 		let chunk_idx = keys::decode_delta_chunk_idx(actor_id, txid, &key)?;
 		chunks_by_txid.entry(txid).or_default().push(DeltaChunk {
 			key,

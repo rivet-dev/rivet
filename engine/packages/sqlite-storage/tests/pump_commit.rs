@@ -104,7 +104,7 @@ async fn read_head(db: &universaldb::Database) -> Result<DBHead> {
 }
 
 async fn read_quota(db: &universaldb::Database) -> Result<i64> {
-	db.run(|tx| async move { quota::read(&tx, TEST_ACTOR).await })
+	db.run(|tx| async move { quota::read_live(&tx, TEST_ACTOR).await })
 		.await
 }
 
@@ -182,7 +182,7 @@ async fn commit_rejects_quota_cap_before_writes() -> Result<()> {
 	)
 	.await?;
 	db.run(|tx| async move {
-		quota::atomic_add(&tx, TEST_ACTOR, SQLITE_MAX_STORAGE_BYTES - 10);
+		quota::atomic_add_live(&tx, TEST_ACTOR, SQLITE_MAX_STORAGE_BYTES - 10);
 		Ok(())
 	})
 	.await?;
@@ -229,7 +229,7 @@ async fn shrink_commit_deletes_above_eof_pidx_and_shards() -> Result<()> {
 	)
 	.await?;
 	db.run(|tx| async move {
-		quota::atomic_add(&tx, TEST_ACTOR, 50_000);
+		quota::atomic_add_live(&tx, TEST_ACTOR, 50_000);
 		Ok(())
 	})
 	.await?;
@@ -273,7 +273,7 @@ async fn commit_publishes_compaction_trigger_with_throttle() -> Result<()> {
 	)
 	.await?;
 	db.run(|tx| async move {
-		quota::atomic_add(&tx, TEST_ACTOR, 1_000);
+		quota::atomic_add_live(&tx, TEST_ACTOR, 1_000);
 		Ok(())
 	})
 	.await?;

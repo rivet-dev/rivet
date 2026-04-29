@@ -9,10 +9,18 @@ pub const SHARD_SIZE: u32 = 64;
 
 const META_HEAD_PATH: &[u8] = b"/META/head";
 const META_COMPACT_PATH: &[u8] = b"/META/compact";
-const META_QUOTA_PATH: &[u8] = b"/META/quota";
 const META_COMPACTOR_LEASE_PATH: &[u8] = b"/META/compactor_lease";
+const META_RETENTION_PATH: &[u8] = b"/META/retention";
+const META_CHECKPOINTS_PATH: &[u8] = b"/META/checkpoints";
+const META_STORAGE_USED_LIVE_PATH: &[u8] = b"/META/storage_used_live";
+const META_STORAGE_USED_PITR_PATH: &[u8] = b"/META/storage_used_pitr";
+const META_ADMIN_OP_PATH: &[u8] = b"/META/admin_op/";
+const META_RESTORE_IN_PROGRESS_PATH: &[u8] = b"/META/restore_in_progress";
+const META_FORK_IN_PROGRESS_PATH: &[u8] = b"/META/fork_in_progress";
+const CHECKPOINT_PATH: &[u8] = b"/CHECKPOINT/";
 const SHARD_PATH: &[u8] = b"/SHARD/";
 const DELTA_PATH: &[u8] = b"/DELTA/";
+const DELTA_META_PATH: &[u8] = b"/META";
 const PIDX_DELTA_PATH: &[u8] = b"/PIDX/delta/";
 
 /// Build the common actor-scoped prefix: `[0x02, actor_id_bytes]`.
@@ -46,19 +54,99 @@ pub fn meta_compact_key(actor_id: &str) -> Vec<u8> {
 	key
 }
 
-pub fn meta_quota_key(actor_id: &str) -> Vec<u8> {
-	let prefix = actor_prefix(actor_id);
-	let mut key = Vec::with_capacity(prefix.len() + META_QUOTA_PATH.len());
-	key.extend_from_slice(&prefix);
-	key.extend_from_slice(META_QUOTA_PATH);
-	key
-}
-
 pub fn meta_compactor_lease_key(actor_id: &str) -> Vec<u8> {
 	let prefix = actor_prefix(actor_id);
 	let mut key = Vec::with_capacity(prefix.len() + META_COMPACTOR_LEASE_PATH.len());
 	key.extend_from_slice(&prefix);
 	key.extend_from_slice(META_COMPACTOR_LEASE_PATH);
+	key
+}
+
+pub fn meta_retention_key(actor_id: &str) -> Vec<u8> {
+	let prefix = actor_prefix(actor_id);
+	let mut key = Vec::with_capacity(prefix.len() + META_RETENTION_PATH.len());
+	key.extend_from_slice(&prefix);
+	key.extend_from_slice(META_RETENTION_PATH);
+	key
+}
+
+pub fn meta_checkpoints_key(actor_id: &str) -> Vec<u8> {
+	let prefix = actor_prefix(actor_id);
+	let mut key = Vec::with_capacity(prefix.len() + META_CHECKPOINTS_PATH.len());
+	key.extend_from_slice(&prefix);
+	key.extend_from_slice(META_CHECKPOINTS_PATH);
+	key
+}
+
+pub fn meta_storage_used_live_key(actor_id: &str) -> Vec<u8> {
+	let prefix = actor_prefix(actor_id);
+	let mut key = Vec::with_capacity(prefix.len() + META_STORAGE_USED_LIVE_PATH.len());
+	key.extend_from_slice(&prefix);
+	key.extend_from_slice(META_STORAGE_USED_LIVE_PATH);
+	key
+}
+
+pub fn meta_storage_used_pitr_key(actor_id: &str) -> Vec<u8> {
+	let prefix = actor_prefix(actor_id);
+	let mut key = Vec::with_capacity(prefix.len() + META_STORAGE_USED_PITR_PATH.len());
+	key.extend_from_slice(&prefix);
+	key.extend_from_slice(META_STORAGE_USED_PITR_PATH);
+	key
+}
+
+pub fn meta_admin_op_key(actor_id: &str, op_id: uuid::Uuid) -> Vec<u8> {
+	let prefix = actor_prefix(actor_id);
+	let mut key = Vec::with_capacity(prefix.len() + META_ADMIN_OP_PATH.len() + 16);
+	key.extend_from_slice(&prefix);
+	key.extend_from_slice(META_ADMIN_OP_PATH);
+	key.extend_from_slice(op_id.as_bytes());
+	key
+}
+
+pub fn meta_restore_in_progress_key(actor_id: &str) -> Vec<u8> {
+	let prefix = actor_prefix(actor_id);
+	let mut key = Vec::with_capacity(prefix.len() + META_RESTORE_IN_PROGRESS_PATH.len());
+	key.extend_from_slice(&prefix);
+	key.extend_from_slice(META_RESTORE_IN_PROGRESS_PATH);
+	key
+}
+
+pub fn meta_fork_in_progress_key(actor_id: &str) -> Vec<u8> {
+	let prefix = actor_prefix(actor_id);
+	let mut key = Vec::with_capacity(prefix.len() + META_FORK_IN_PROGRESS_PATH.len());
+	key.extend_from_slice(&prefix);
+	key.extend_from_slice(META_FORK_IN_PROGRESS_PATH);
+	key
+}
+
+pub fn checkpoint_prefix(actor_id: &str, ckp_txid: u64) -> Vec<u8> {
+	let prefix = actor_prefix(actor_id);
+	let mut key =
+		Vec::with_capacity(prefix.len() + CHECKPOINT_PATH.len() + std::mem::size_of::<u64>() + 1);
+	key.extend_from_slice(&prefix);
+	key.extend_from_slice(CHECKPOINT_PATH);
+	key.extend_from_slice(&ckp_txid.to_be_bytes());
+	key.push(b'/');
+	key
+}
+
+pub fn checkpoint_meta_key(actor_id: &str, ckp_txid: u64) -> Vec<u8> {
+	let mut key = checkpoint_prefix(actor_id, ckp_txid);
+	key.extend_from_slice(b"META");
+	key
+}
+
+pub fn checkpoint_shard_key(actor_id: &str, ckp_txid: u64, shard_id: u32) -> Vec<u8> {
+	let mut key = checkpoint_prefix(actor_id, ckp_txid);
+	key.extend_from_slice(b"SHARD/");
+	key.extend_from_slice(&shard_id.to_be_bytes());
+	key
+}
+
+pub fn checkpoint_pidx_delta_key(actor_id: &str, ckp_txid: u64, pgno: u32) -> Vec<u8> {
+	let mut key = checkpoint_prefix(actor_id, ckp_txid);
+	key.extend_from_slice(b"PIDX/delta/");
+	key.extend_from_slice(&pgno.to_be_bytes());
 	key
 }
 
@@ -95,6 +183,18 @@ pub fn delta_chunk_prefix(actor_id: &str, txid: u64) -> Vec<u8> {
 	key.extend_from_slice(DELTA_PATH);
 	key.extend_from_slice(&txid.to_be_bytes());
 	key.push(b'/');
+	key
+}
+
+pub fn delta_meta_key(actor_id: &str, txid: u64) -> Vec<u8> {
+	let prefix = actor_prefix(actor_id);
+	let mut key = Vec::with_capacity(
+		prefix.len() + DELTA_PATH.len() + std::mem::size_of::<u64>() + DELTA_META_PATH.len(),
+	);
+	key.extend_from_slice(&prefix);
+	key.extend_from_slice(DELTA_PATH);
+	key.extend_from_slice(&txid.to_be_bytes());
+	key.extend_from_slice(DELTA_META_PATH);
 	key
 }
 

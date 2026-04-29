@@ -1,3 +1,4 @@
+pub mod admin;
 pub mod compactor;
 pub mod pump;
 #[cfg(debug_assertions)]

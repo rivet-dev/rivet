@@ -2,8 +2,8 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use sqlite_storage::quota::{
-	SQLITE_MAX_STORAGE_BYTES, TRIGGER_MAX_SILENCE_MS, TRIGGER_THROTTLE_MS, atomic_add, cap_check,
-	read,
+	SQLITE_MAX_STORAGE_BYTES, TRIGGER_MAX_SILENCE_MS, TRIGGER_THROTTLE_MS, atomic_add_live,
+	atomic_add_pitr, cap_check, read_live, read_pitr,
 };
 use tempfile::Builder;
 
@@ -19,10 +19,14 @@ async fn quota_defaults_to_zero() -> Result<()> {
 	let db = test_db().await?;
 
 	let storage_used = db
-		.run(|tx| async move { read(&tx, "actor-a").await })
+		.run(|tx| async move { read_live(&tx, "actor-a").await })
+		.await?;
+	let pitr_used = db
+		.run(|tx| async move { read_pitr(&tx, "actor-a").await })
 		.await?;
 
 	assert_eq!(storage_used, 0);
+	assert_eq!(pitr_used, 0);
 
 	Ok(())
 }
@@ -32,17 +36,22 @@ async fn atomic_add_uses_signed_little_endian_counter() -> Result<()> {
 	let db = test_db().await?;
 
 	db.run(|tx| async move {
-		atomic_add(&tx, "actor-a", 128);
-		atomic_add(&tx, "actor-a", -8);
+		atomic_add_live(&tx, "actor-a", 128);
+		atomic_add_live(&tx, "actor-a", -8);
+		atomic_add_pitr(&tx, "actor-a", 16);
 		Ok(())
 	})
 	.await?;
 
 	let storage_used = db
-		.run(|tx| async move { read(&tx, "actor-a").await })
+		.run(|tx| async move { read_live(&tx, "actor-a").await })
+		.await?;
+	let pitr_used = db
+		.run(|tx| async move { read_pitr(&tx, "actor-a").await })
 		.await?;
 
 	assert_eq!(storage_used, 120);
+	assert_eq!(pitr_used, 16);
 
 	Ok(())
 }

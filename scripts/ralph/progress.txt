@@ -35,6 +35,8 @@ Started: Wed Apr 29 04:36:56 AM PDT 2026
 - `rivetkit-sqlite` direct VFS tests now use a test-only `DirectStorage` wrapper around `ActorDb`; share it across close/reopen cycles or reopen persistence tests will silently start from empty storage.
 - `rivetkit-napi` needs napi-rs `dyn-symbols` so Rust test binaries can link without Node providing N-API symbols at test-link time.
 - `engine/CLAUDE.md` SQLite guidance now assumes stateless per-conn `ActorDb` caches, tests under `engine/packages/sqlite-storage/tests/`, and a standalone compactor service.
+- PITR splits SQLite storage usage into `/META/storage_used_live` and `/META/storage_used_pitr`; new quota mutations should call `quota::atomic_add_live` or `quota::atomic_add_pitr`, while `/META/quota` is only a private migration key.
+- `/DELTA/{txid}/META` lives under the same `/DELTA/{txid}/` prefix as chunks, so DELTA prefix scanners must explicitly skip the `META` suffix before decoding or concatenating chunk rows.
 
 ## 2026-04-29 04:44:52 PDT - US-001
 - Implemented a UUID-backed `NodeId` type and stored a generated value on each `Pools` instance.
@@ -308,4 +310,15 @@ Started: Wed Apr 29 04:36:56 AM PDT 2026
   - `engine/CLAUDE.md` should keep SQLite storage bullets at the invariant/test-convention level and avoid legacy implementation names.
   - The preserved shrink-write and PIDX encoding bullets are still valid under the stateless pump design.
   - Docs-only stories can still use `cargo check -p sqlite-storage` as the typecheck gate when the touched guidance is storage-specific.
+---
+## 2026-04-29 07:53:11 PDT - US-027
+- Added PITR/fork key builders for retention, checkpoints, admin op records, restore/fork markers, split storage counters, checkpoint data, and DELTA metadata.
+- Added vbare types for `RetentionConfig`, restore/fork markers, checkpoint/DELTA metadata, and `admin::types::AdminOpRecord` with status/progress/audit fields.
+- Split quota accounting into live and PITR counters, migrated legacy `/META/quota` into live usage on first cold commit load, and updated current commit/compaction callers to charge live storage.
+- Verified `cargo check -p sqlite-storage`, `cargo test -p sqlite-storage --test pitr_keys`, `cargo test -p sqlite-storage --test quota_split`, `cargo test -p sqlite-storage`, and `git diff --check`.
+- Files changed: `engine/CLAUDE.md`, `engine/packages/sqlite-storage/Cargo.toml`, `engine/packages/sqlite-storage/src/admin/**`, `engine/packages/sqlite-storage/src/{lib.rs,compactor/compact.rs,compactor/worker.rs,pump/actor_db.rs,pump/commit.rs,pump/keys.rs,pump/quota.rs,pump/read.rs,pump/types.rs}`, `engine/packages/sqlite-storage/tests/{compactor_compact.rs,pitr_keys.rs,pump_commit.rs,pump_keys.rs,pump_quota.rs,quota_split.rs}`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
+- **Learnings for future iterations:**
+  - Use `quota::atomic_add_live`/`read_live` for hot-path and compaction live-byte accounting; reserve `atomic_add_pitr`/`read_pitr` for checkpoint and retention overhead.
+  - Keep legacy `/META/quota` hidden inside `migrate_quota_split`; public key builders should only expose the split live/PITR counters.
+  - Any DELTA prefix scan that expects chunks must skip the `META` suffix because `/DELTA/{txid}/META` intentionally shares the commit's DELTA prefix.
 ---

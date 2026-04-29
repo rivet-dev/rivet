@@ -295,11 +295,14 @@ async fn tx_load_delta_blob(
 	}
 
 	let mut delta_blob = Vec::new();
-	for (_, chunk) in delta_chunks {
+	for (key, chunk) in delta_chunks {
+		if key.strip_prefix(delta_prefix) == Some(b"META".as_slice()) {
+			continue;
+		}
 		delta_blob.extend_from_slice(&chunk);
 	}
 
-	Ok(Some(delta_blob))
+	Ok((!delta_blob.is_empty()).then_some(delta_blob))
 }
 
 fn decode_pidx_pgno(actor_id: &str, key: &[u8]) -> Result<u32> {

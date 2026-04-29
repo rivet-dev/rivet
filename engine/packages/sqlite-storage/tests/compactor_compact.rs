@@ -100,7 +100,7 @@ async fn read_quota(db: &universaldb::Database, actor_id: &str) -> Result<i64> {
 	let actor_id = actor_id.to_string();
 	db.run(move |tx| {
 		let actor_id = actor_id.clone();
-		async move { quota::read(&tx, &actor_id).await }
+		async move { quota::read_live(&tx, &actor_id).await }
 	})
 	.await
 }
@@ -205,7 +205,7 @@ async fn seed_quota(db: &universaldb::Database, actor_id: &str, storage_used: i6
 	db.run(move |tx| {
 		let actor_id = actor_id.clone();
 		async move {
-			quota::atomic_add(&tx, &actor_id, storage_used);
+			quota::atomic_add_live(&tx, &actor_id, storage_used);
 			Ok(())
 		}
 	})

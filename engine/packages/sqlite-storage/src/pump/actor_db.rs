@@ -14,8 +14,10 @@ pub struct ActorDb {
 	pub(super) actor_id: String,
 	pub(super) node_id: NodeId,
 	pub(super) cache: Mutex<DeltaPageIndex>,
-	/// Cached `/META/quota`. Loaded once on the first UDB tx.
-	pub(super) storage_used: Mutex<Option<i64>>,
+	/// Cached `/META/storage_used_live`. Loaded once on the first UDB tx.
+	pub(super) storage_used_live: Mutex<Option<i64>>,
+	/// Cached `/META/storage_used_pitr`. Loaded once alongside live usage.
+	pub(super) storage_used_pitr: Mutex<Option<i64>>,
 	/// Bytes written across commits since the last metering rollup.
 	pub(super) commit_bytes_since_rollup: Mutex<u64>,
 	/// Bytes read across `get_pages` calls since the last metering rollup.
@@ -35,7 +37,8 @@ impl ActorDb {
 			actor_id,
 			node_id,
 			cache: Mutex::new(DeltaPageIndex::new()),
-			storage_used: Mutex::new(None),
+			storage_used_live: Mutex::new(None),
+			storage_used_pitr: Mutex::new(None),
 			commit_bytes_since_rollup: Mutex::new(0),
 			read_bytes_since_rollup: Mutex::new(0),
 			last_trigger_at: Mutex::new(None),
