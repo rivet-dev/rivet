@@ -154,7 +154,8 @@ impl TestCtx {
 				opts.auth_admin_token.clone(),
 			)
 		});
-		let mut dcs: Vec<TestDatacenter> = futures_util::future::try_join_all(setup_futures).await?;
+		let mut dcs: Vec<TestDatacenter> =
+			futures_util::future::try_join_all(setup_futures).await?;
 		dcs.sort_by_key(|dc| dc.config.dc_label());
 
 		Ok(Self { dcs, opts })

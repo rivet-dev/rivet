@@ -157,10 +157,7 @@ impl SqliteTransport {
 								if *operation == "get_pages" && req.generation == 1
 						) {
 							match engine
-								.open(
-									&req.actor_id,
-									sqlite_storage::open::OpenConfig::new(1),
-								)
+								.open(&req.actor_id, sqlite_storage::open::OpenConfig::new(1))
 								.await
 							{
 								Ok(_) => {}

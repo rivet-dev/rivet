@@ -1,14 +1,14 @@
+import { ENGINE_ENDPOINT } from "@/common/engine";
+import { configureServerlessPool } from "@/serverless/configure";
+import { VERSION } from "@/utils";
 import {
 	type RegistryActors,
 	type RegistryConfig,
 	type RegistryConfigInput,
 	RegistryConfigSchema,
 } from "./config";
-import { ENGINE_ENDPOINT } from "@/common/engine";
 import { logger } from "./log";
 import { buildNativeRegistry } from "./native";
-import { configureServerlessPool } from "@/serverless/configure";
-import { VERSION } from "@/utils";
 
 type ShutdownSignal = "SIGINT" | "SIGTERM";
 
@@ -102,7 +102,9 @@ export class Registry<A extends RegistryActors> {
 		}
 
 		let settled = false;
-		let controllerRef: ReadableStreamDefaultController<Uint8Array> | undefined;
+		let controllerRef:
+			| ReadableStreamDefaultController<Uint8Array>
+			| undefined;
 		const backpressureWaiters: Array<() => void> = [];
 		const resolveBackpressure = () => {
 			while (
@@ -138,7 +140,7 @@ export class Registry<A extends RegistryActors> {
 			headers[key] = value;
 		});
 
-		let head;
+		let head: { status: number; headers: Record<string, string> };
 		try {
 			head = await registry.handleServerlessRequest(
 				{
@@ -241,6 +243,19 @@ export class Registry<A extends RegistryActors> {
 		}
 	}
 
+	/**
+	 * Prepares serverless deployments without starting a persistent envoy.
+	 */
+	#startServerless(config: RegistryConfig, printWelcome: boolean) {
+		if (printWelcome) {
+			this.#printWelcome(config, "serverless");
+		}
+		if (config.configurePool && !this.#configureServerlessPoolPromise) {
+			this.#configureServerlessPoolPromise =
+				configureServerlessPool(config);
+		}
+	}
+
 	#installSignalHandlers(
 		config: RegistryConfig,
 		nativeRegistryPromise: ReturnType<typeof buildNativeRegistry>,
@@ -319,10 +334,11 @@ export class Registry<A extends RegistryActors> {
 				})(),
 			];
 			if (this.#nativeServerlessPromise) {
+				const nativeServerlessPromise = this.#nativeServerlessPromise;
 				registries.push(
 					(async () => {
 						try {
-							const { registry } = await this.#nativeServerlessPromise!;
+							const { registry } = await nativeServerlessPromise;
 							await registry.shutdown();
 						} catch (err) {
 							logger().warn(
@@ -335,11 +351,12 @@ export class Registry<A extends RegistryActors> {
 			}
 			await Promise.all(registries);
 
-			if (this.#nativeServePromise) {
+			const nativeServePromise = this.#nativeServePromise;
+			if (nativeServePromise !== undefined) {
 				// Swallow rejection so the race doesn't itself reject; the
 				// always-attached `.catch` at the promise assignment site has
 				// already logged any serve-side error.
-				await this.#nativeServePromise.catch(() => undefined);
+				await nativeServePromise.catch(() => undefined);
 			}
 		};
 		await Promise.race([
@@ -353,10 +370,9 @@ export class Registry<A extends RegistryActors> {
 	}
 
 	#removeSignalHandlers(): void {
-		for (const [signal, handler] of Object.entries(this.#signalHandlers) as [
-			ShutdownSignal,
-			() => void,
-		][]) {
+		for (const [signal, handler] of Object.entries(
+			this.#signalHandlers,
+		) as [ShutdownSignal, () => void][]) {
 			if (handler) process.removeListener(signal, handler);
 		}
 		this.#signalHandlers = {};
@@ -377,7 +393,11 @@ export class Registry<A extends RegistryActors> {
 	 */
 	public start() {
 		const config = this.parseConfig();
-		this.#startEnvoy(config, true);
+		if (config.runtimeMode === "envoy") {
+			this.#startEnvoy(config, true);
+		} else {
+			this.#startServerless(config, true);
+		}
 	}
 
 	#printWelcome(

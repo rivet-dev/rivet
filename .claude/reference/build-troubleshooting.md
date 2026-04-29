@@ -2,6 +2,10 @@
 
 Known foot-guns when building RivetKit packages.
 
+## `registry.start()` fails with missing `@rivetkit/engine-cli-*`
+
+- In monorepo development, `registry.start()` may start the local engine. If the optional `@rivetkit/engine-cli-*` platform package is missing, run `cargo build -p rivet-engine` and set `RIVET_ENGINE_BINARY=/home/nathan/r5/target/debug/rivet-engine`.
+
 ## DTS / type build fails with missing `@rivetkit/*`
 
 - If `rivetkit` type or DTS builds fail with missing `@rivetkit/*` declarations, run `pnpm build -F rivetkit` from repo root (Turbo build path) **before** changing TypeScript `paths`.

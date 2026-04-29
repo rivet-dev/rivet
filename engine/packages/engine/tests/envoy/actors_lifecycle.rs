@@ -70,82 +70,86 @@ fn envoy_actor_basic_create() {
 
 #[test]
 fn envoy_create_actor_with_input() {
-	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
-		let (namespace, _) = common::setup_test_namespace(ctx.leader_dc()).await;
+	common::run(
+		common::TestOpts::new(1).with_timeout(30),
+		|ctx| async move {
+			let (namespace, _) = common::setup_test_namespace(ctx.leader_dc()).await;
 
-		// Generate test input data (base64-encoded String)
-		let input_data = common::generate_test_input_data();
+			// Generate test input data (base64-encoded String)
+			let input_data = common::generate_test_input_data();
 
-		// Decode the base64 data to get the actual bytes the actor will receive
-		// The API automatically decodes base64 input before sending to the envoy
-		let input_data_bytes =
-			base64::Engine::decode(&base64::engine::general_purpose::STANDARD, &input_data)
-				.expect("failed to decode base64 input");
+			// Decode the base64 data to get the actual bytes the actor will receive
+			// The API automatically decodes base64 input before sending to the envoy
+			let input_data_bytes =
+				base64::Engine::decode(&base64::engine::general_purpose::STANDARD, &input_data)
+					.expect("failed to decode base64 input");
 
-		// Create envoy with VerifyInputActor that will validate the input
-		let envoy = common::setup_envoy(ctx.leader_dc(), &namespace, |builder| {
-			builder.with_actor_behavior("test-actor", move |_| {
-				Box::new(common::test_envoy::VerifyInputActor::new(
-					input_data_bytes.clone(),
-				))
+			// Create envoy with VerifyInputActor that will validate the input
+			let envoy = common::setup_envoy(ctx.leader_dc(), &namespace, |builder| {
+				builder.with_actor_behavior("test-actor", move |_| {
+					Box::new(common::test_envoy::VerifyInputActor::new(
+						input_data_bytes.clone(),
+					))
+				})
 			})
-		})
-		.await;
+			.await;
 
-		// Create actor with input data
-		let res = common::api::public::actors_create(
-			ctx.leader_dc().guard_port(),
-			common::api_types::actors::create::CreateQuery {
-				namespace: namespace.clone(),
-			},
-			common::api_types::actors::create::CreateRequest {
-				datacenter: None,
-				name: "test-actor".to_string(),
-				key: None,
-				input: Some(input_data.clone()),
-				runner_name_selector: envoy.pool_name().to_string(),
-				crash_policy: rivet_types::actors::CrashPolicy::Sleep,
-			},
-		)
-		.await
-		.expect("failed to create actor");
+			// Create actor with input data
+			let res = common::api::public::actors_create(
+				ctx.leader_dc().guard_port(),
+				common::api_types::actors::create::CreateQuery {
+					namespace: namespace.clone(),
+				},
+				common::api_types::actors::create::CreateRequest {
+					datacenter: None,
+					name: "test-actor".to_string(),
+					key: None,
+					input: Some(input_data.clone()),
+					runner_name_selector: envoy.pool_name().to_string(),
+					crash_policy: rivet_types::actors::CrashPolicy::Sleep,
+				},
+			)
+			.await
+			.expect("failed to create actor");
 
-		let actor_id = res.actor.actor_id.to_string();
+			let actor_id = res.actor.actor_id.to_string();
 
-		// Poll for actor to become connectable
-		// If input verification fails, the actor will crash and never become connectable
-		let actor = loop {
-			let actor = common::try_get_actor(ctx.leader_dc().guard_port(), &actor_id, &namespace)
-				.await
-				.expect("failed to get actor")
-				.expect("actor should exist");
+			// Poll for actor to become connectable
+			// If input verification fails, the actor will crash and never become connectable
+			let actor = loop {
+				let actor =
+					common::try_get_actor(ctx.leader_dc().guard_port(), &actor_id, &namespace)
+						.await
+						.expect("failed to get actor")
+						.expect("actor should exist");
 
-			// Check if actor crashed (input verification failed)
-			if actor.destroy_ts.is_some() {
-				panic!(
-					"actor crashed during input verification (input data was not received correctly)"
-				);
-			}
+				// Check if actor crashed (input verification failed)
+				if actor.destroy_ts.is_some() {
+					panic!(
+						"actor crashed during input verification (input data was not received correctly)"
+					);
+				}
 
-			// Check if actor is connectable (input verification succeeded)
-			if actor.connectable_ts.is_some() {
-				break actor;
-			}
+				// Check if actor is connectable (input verification succeeded)
+				if actor.connectable_ts.is_some() {
+					break actor;
+				}
 
-			tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
-		};
+				tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+			};
 
-		assert!(
-			actor.connectable_ts.is_some(),
-			"actor should be connectable after successful input verification"
-		);
+			assert!(
+				actor.connectable_ts.is_some(),
+				"actor should be connectable after successful input verification"
+			);
 
-		tracing::info!(
-			?actor_id,
-			input_size = input_data.len(),
-			"actor successfully verified input data"
-		);
-	});
+			tracing::info!(
+				?actor_id,
+				input_size = input_data.len(),
+				"actor successfully verified input data"
+			);
+		},
+	);
 }
 
 // MARK: Running State Management
@@ -211,93 +215,107 @@ fn envoy_actor_starts_and_connectable_via_guard_http() {
 
 #[test]
 fn envoy_http_tunnel_round_trips_request_and_errors() {
-	common::run(common::TestOpts::new(1).with_timeout(20), |ctx| async move {
-		let (namespace, _) = common::setup_test_namespace(ctx.leader_dc()).await;
+	common::run(
+		common::TestOpts::new(1).with_timeout(20),
+		|ctx| async move {
+			let (namespace, _) = common::setup_test_namespace(ctx.leader_dc()).await;
 
-		let envoy = common::setup_envoy(ctx.leader_dc(), &namespace, |builder| {
-			builder.with_actor_behavior("test-actor", |_| {
-				Box::new(common::test_envoy::EchoActor::new())
+			let envoy = common::setup_envoy(ctx.leader_dc(), &namespace, |builder| {
+				builder.with_actor_behavior("test-actor", |_| {
+					Box::new(common::test_envoy::EchoActor::new())
+				})
 			})
-		})
-		.await;
+			.await;
 
-		let res = common::create_actor(
-			ctx.leader_dc().guard_port(),
-			&namespace,
-			"test-actor",
-			envoy.pool_name(),
-			rivet_types::actors::CrashPolicy::Sleep,
-		)
-		.await;
-		let actor_id = res.actor.actor_id.to_string();
-		wait_for_envoy_actor(&envoy, &actor_id).await;
+			let res = common::create_actor(
+				ctx.leader_dc().guard_port(),
+				&namespace,
+				"test-actor",
+				envoy.pool_name(),
+				rivet_types::actors::CrashPolicy::Sleep,
+			)
+			.await;
+			let actor_id = res.actor.actor_id.to_string();
+			wait_for_envoy_actor(&envoy, &actor_id).await;
 
-		let client = reqwest::Client::new();
-		let body = "hello over envoy".as_bytes().to_vec();
-		let response = client
-			.post(format!("http://127.0.0.1:{}/echo", ctx.leader_dc().guard_port()))
-			.header("X-Rivet-Target", "actor")
-			.header("X-Rivet-Actor", &actor_id)
-			.header("X-Test-Header", "from-client")
-			.body(body.clone())
-			.send()
-			.await
-			.expect("failed to send HTTP tunnel request");
+			let client = reqwest::Client::new();
+			let body = "hello over envoy".as_bytes().to_vec();
+			let response = client
+				.post(format!(
+					"http://127.0.0.1:{}/echo",
+					ctx.leader_dc().guard_port()
+				))
+				.header("X-Rivet-Target", "actor")
+				.header("X-Rivet-Actor", &actor_id)
+				.header("X-Test-Header", "from-client")
+				.body(body.clone())
+				.send()
+				.await
+				.expect("failed to send HTTP tunnel request");
 
-		assert_eq!(response.status(), reqwest::StatusCode::CREATED);
-		assert_eq!(
-			response
-				.headers()
-				.get("x-envoy-test")
-				.and_then(|v| v.to_str().ok()),
-			Some("ok")
-		);
-		let payload: serde_json::Value = response.json().await.expect("invalid echo response");
-		assert_eq!(payload["actorId"], actor_id);
-		assert_eq!(payload["method"], "POST");
-		assert_eq!(payload["path"], "/echo");
-		assert_eq!(payload["testHeader"], "from-client");
-		assert_eq!(payload["body"], "hello over envoy");
-		assert_eq!(payload["bodyLen"], body.len());
+			assert_eq!(response.status(), reqwest::StatusCode::CREATED);
+			assert_eq!(
+				response
+					.headers()
+					.get("x-envoy-test")
+					.and_then(|v| v.to_str().ok()),
+				Some("ok")
+			);
+			let payload: serde_json::Value = response.json().await.expect("invalid echo response");
+			assert_eq!(payload["actorId"], actor_id);
+			assert_eq!(payload["method"], "POST");
+			assert_eq!(payload["path"], "/echo");
+			assert_eq!(payload["testHeader"], "from-client");
+			assert_eq!(payload["body"], "hello over envoy");
+			assert_eq!(payload["bodyLen"], body.len());
 
-		let large_body = vec![b'x'; 128 * 1024];
-		let large_response = client
-			.put(format!("http://127.0.0.1:{}/echo", ctx.leader_dc().guard_port()))
-			.header("X-Rivet-Target", "actor")
-			.header("X-Rivet-Actor", &actor_id)
-			.body(large_body.clone())
-			.send()
-			.await
-			.expect("failed to send large HTTP tunnel request");
-		assert_eq!(large_response.status(), reqwest::StatusCode::CREATED);
-		let large_payload: serde_json::Value =
-			large_response.json().await.expect("invalid large echo response");
-		assert_eq!(large_payload["method"], "PUT");
-		assert_eq!(large_payload["bodyLen"], large_body.len());
+			let large_body = vec![b'x'; 128 * 1024];
+			let large_response = client
+				.put(format!(
+					"http://127.0.0.1:{}/echo",
+					ctx.leader_dc().guard_port()
+				))
+				.header("X-Rivet-Target", "actor")
+				.header("X-Rivet-Actor", &actor_id)
+				.body(large_body.clone())
+				.send()
+				.await
+				.expect("failed to send large HTTP tunnel request");
+			assert_eq!(large_response.status(), reqwest::StatusCode::CREATED);
+			let large_payload: serde_json::Value = large_response
+				.json()
+				.await
+				.expect("invalid large echo response");
+			assert_eq!(large_payload["method"], "PUT");
+			assert_eq!(large_payload["bodyLen"], large_body.len());
 
-		let error_response = client
-			.get(format!(
-				"http://127.0.0.1:{}/actor-error",
-				ctx.leader_dc().guard_port()
-			))
-			.header("X-Rivet-Target", "actor")
-			.header("X-Rivet-Actor", &actor_id)
-			.send()
-			.await
-			.expect("failed to send actor error request");
-		assert!(
-			!error_response.status().is_success(),
-			"actor fetch error should map to an HTTP error"
-		);
-		assert_eq!(error_response.status(), reqwest::StatusCode::INTERNAL_SERVER_ERROR);
-		assert_eq!(
-			error_response
-				.headers()
-				.get("x-rivet-error")
-				.and_then(|v| v.to_str().ok()),
-			Some("envoy.fetch_failed")
-		);
-	});
+			let error_response = client
+				.get(format!(
+					"http://127.0.0.1:{}/actor-error",
+					ctx.leader_dc().guard_port()
+				))
+				.header("X-Rivet-Target", "actor")
+				.header("X-Rivet-Actor", &actor_id)
+				.send()
+				.await
+				.expect("failed to send actor error request");
+			assert!(
+				!error_response.status().is_success(),
+				"actor fetch error should map to an HTTP error"
+			);
+			assert_eq!(
+				error_response.status(),
+				reqwest::StatusCode::INTERNAL_SERVER_ERROR
+			);
+			assert_eq!(
+				error_response
+					.headers()
+					.get("x-rivet-error")
+					.and_then(|v| v.to_str().ok()),
+				Some("envoy.fetch_failed")
+			);
+		},
+	);
 }
 
 #[test]
@@ -361,231 +379,246 @@ fn envoy_actor_connectable_via_guard_websocket() {
 
 #[test]
 fn query_get_or_create_from_dc_without_runner_forwards_to_runner_dc() {
-	common::run(common::TestOpts::new(2).with_timeout(45), |ctx| async move {
-		let (namespace, _, _envoy) =
-			common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
-		let wrong_dc = ctx.get_dc(2);
+	common::run(
+		common::TestOpts::new(2).with_timeout(45),
+		|ctx| async move {
+			let (namespace, _, _envoy) =
+				common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
+			let wrong_dc = ctx.get_dc(2);
 
-		let client = reqwest::Client::new();
-		let response = client
-			.get(format!(
-				"http://127.0.0.1:{}/gateway/test-actor/ping",
-				wrong_dc.guard_port()
-			))
-			.query(&[
-				("rvt-namespace", namespace.as_str()),
-				("rvt-method", "getOrCreate"),
-				("rvt-runner", common::TEST_RUNNER_NAME),
-				("rvt-key", "geo-routed-key"),
-			])
-			.send()
-			.await
-			.expect("failed to send query gateway request");
+			let client = reqwest::Client::new();
+			let response = client
+				.get(format!(
+					"http://127.0.0.1:{}/gateway/test-actor/ping",
+					wrong_dc.guard_port()
+				))
+				.query(&[
+					("rvt-namespace", namespace.as_str()),
+					("rvt-method", "getOrCreate"),
+					("rvt-runner", common::TEST_RUNNER_NAME),
+					("rvt-key", "geo-routed-key"),
+				])
+				.send()
+				.await
+				.expect("failed to send query gateway request");
 
-		assert_eq!(
-			response.status(),
-			reqwest::StatusCode::OK,
-			"query gateway should forward to the runner dc"
-		);
+			assert_eq!(
+				response.status(),
+				reqwest::StatusCode::OK,
+				"query gateway should forward to the runner dc"
+			);
 
-		let body: serde_json::Value = response.json().await.expect("invalid ping response");
-		let actor_id = body["actorId"].as_str().expect("missing actor id");
-		assert_eq!(body["status"], "ok");
-		common::assert_actor_in_dc(actor_id, ctx.leader_dc().config.dc_label()).await;
-	});
+			let body: serde_json::Value = response.json().await.expect("invalid ping response");
+			let actor_id = body["actorId"].as_str().expect("missing actor id");
+			assert_eq!(body["status"], "ok");
+			common::assert_actor_in_dc(actor_id, ctx.leader_dc().config.dc_label()).await;
+		},
+	);
 }
 
 #[test]
 fn public_get_or_create_with_unavailable_datacenter_returns_typed_error() {
-	common::run(common::TestOpts::new(2).with_timeout(45), |ctx| async move {
-		let (namespace, _, _envoy) =
-			common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
-		let wrong_dc = ctx.get_dc(2);
+	common::run(
+		common::TestOpts::new(2).with_timeout(45),
+		|ctx| async move {
+			let (namespace, _, _envoy) =
+				common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
+			let wrong_dc = ctx.get_dc(2);
 
-		let request = common::api::public::build_actors_get_or_create_request(
-			ctx.leader_dc().guard_port(),
-			common::api::public::GetOrCreateQuery {
-				namespace: namespace.clone(),
-			},
-			common::api::public::GetOrCreateRequest {
-				datacenter: Some(wrong_dc.config.dc_name().unwrap().to_string()),
-				name: "test-actor".to_string(),
-				key: "public-explicit-wrong-dc-key".to_string(),
-				input: None,
-				runner_name_selector: common::TEST_RUNNER_NAME.to_string(),
-				crash_policy: rivet_types::actors::CrashPolicy::Sleep,
-			},
-		)
-		.await
-		.expect("failed to build request");
-		let response = request.send().await.expect("failed to send request");
+			let request = common::api::public::build_actors_get_or_create_request(
+				ctx.leader_dc().guard_port(),
+				common::api::public::GetOrCreateQuery {
+					namespace: namespace.clone(),
+				},
+				common::api::public::GetOrCreateRequest {
+					datacenter: Some(wrong_dc.config.dc_name().unwrap().to_string()),
+					name: "test-actor".to_string(),
+					key: "public-explicit-wrong-dc-key".to_string(),
+					input: None,
+					runner_name_selector: common::TEST_RUNNER_NAME.to_string(),
+					crash_policy: rivet_types::actors::CrashPolicy::Sleep,
+				},
+			)
+			.await
+			.expect("failed to build request");
+			let response = request.send().await.expect("failed to send request");
 
-		assert_eq!(response.status(), reqwest::StatusCode::BAD_REQUEST);
-		let body: serde_json::Value = response.json().await.expect("invalid error response");
-		assert_eq!(body["group"], "actor");
-		assert_eq!(body["code"], "no_runner_config_configured");
-	});
+			assert_eq!(response.status(), reqwest::StatusCode::BAD_REQUEST);
+			let body: serde_json::Value = response.json().await.expect("invalid error response");
+			assert_eq!(body["group"], "actor");
+			assert_eq!(body["code"], "no_runner_config_configured");
+		},
+	);
 }
 
 #[test]
 fn public_create_with_unavailable_datacenter_returns_typed_error() {
-	common::run(common::TestOpts::new(2).with_timeout(45), |ctx| async move {
-		let (namespace, _, _envoy) =
-			common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
-		let wrong_dc = ctx.get_dc(2);
+	common::run(
+		common::TestOpts::new(2).with_timeout(45),
+		|ctx| async move {
+			let (namespace, _, _envoy) =
+				common::setup_test_namespace_with_envoy(ctx.leader_dc()).await;
+			let wrong_dc = ctx.get_dc(2);
 
-		let request = common::api::public::build_actors_create_request(
-			ctx.leader_dc().guard_port(),
-			common::api_types::actors::create::CreateQuery {
-				namespace: namespace.clone(),
-			},
-			common::api_types::actors::create::CreateRequest {
-				datacenter: Some(wrong_dc.config.dc_name().unwrap().to_string()),
-				name: "test-actor".to_string(),
-				key: Some("public-create-explicit-wrong-dc-key".to_string()),
-				input: None,
-				runner_name_selector: common::TEST_RUNNER_NAME.to_string(),
-				crash_policy: rivet_types::actors::CrashPolicy::Sleep,
-			},
-		)
-		.await
-		.expect("failed to build request");
-		let response = request.send().await.expect("failed to send request");
+			let request = common::api::public::build_actors_create_request(
+				ctx.leader_dc().guard_port(),
+				common::api_types::actors::create::CreateQuery {
+					namespace: namespace.clone(),
+				},
+				common::api_types::actors::create::CreateRequest {
+					datacenter: Some(wrong_dc.config.dc_name().unwrap().to_string()),
+					name: "test-actor".to_string(),
+					key: Some("public-create-explicit-wrong-dc-key".to_string()),
+					input: None,
+					runner_name_selector: common::TEST_RUNNER_NAME.to_string(),
+					crash_policy: rivet_types::actors::CrashPolicy::Sleep,
+				},
+			)
+			.await
+			.expect("failed to build request");
+			let response = request.send().await.expect("failed to send request");
 
-		assert_eq!(response.status(), reqwest::StatusCode::BAD_REQUEST);
-		let body: serde_json::Value = response.json().await.expect("invalid error response");
-		assert_eq!(body["group"], "actor");
-		assert_eq!(body["code"], "no_runner_config_configured");
-	});
+			assert_eq!(response.status(), reqwest::StatusCode::BAD_REQUEST);
+			let body: serde_json::Value = response.json().await.expect("invalid error response");
+			assert_eq!(body["group"], "actor");
+			assert_eq!(body["code"], "no_runner_config_configured");
+		},
+	);
 }
 
 #[test]
 fn envoy_websocket_actor_close_round_trip() {
-	common::run(common::TestOpts::new(1).with_timeout(20), |ctx| async move {
-		use futures_util::{SinkExt, StreamExt};
-		use tokio_tungstenite::{
-			connect_async,
-			tungstenite::{Message, client::IntoClientRequest},
-		};
+	common::run(
+		common::TestOpts::new(1).with_timeout(20),
+		|ctx| async move {
+			use futures_util::{SinkExt, StreamExt};
+			use tokio_tungstenite::{
+				connect_async,
+				tungstenite::{Message, client::IntoClientRequest},
+			};
 
-		let (namespace, _) = common::setup_test_namespace(ctx.leader_dc()).await;
+			let (namespace, _) = common::setup_test_namespace(ctx.leader_dc()).await;
 
-		let envoy = common::setup_envoy(ctx.leader_dc(), &namespace, |builder| {
-			builder.with_actor_behavior("test-actor", |_| {
-				Box::new(common::test_envoy::EchoActor::new())
+			let envoy = common::setup_envoy(ctx.leader_dc(), &namespace, |builder| {
+				builder.with_actor_behavior("test-actor", |_| {
+					Box::new(common::test_envoy::EchoActor::new())
+				})
 			})
-		})
-		.await;
+			.await;
 
-		let res = common::create_actor(
-			ctx.leader_dc().guard_port(),
-			&namespace,
-			"test-actor",
-			envoy.pool_name(),
-			rivet_types::actors::CrashPolicy::Sleep,
-		)
-		.await;
-		let actor_id = res.actor.actor_id.to_string();
-		wait_for_envoy_actor(&envoy, &actor_id).await;
-
-		let mut request = format!("ws://127.0.0.1:{}/ws", ctx.leader_dc().guard_port())
-			.into_client_request()
-			.expect("failed to create WebSocket request");
-		request.headers_mut().insert(
-			"Sec-WebSocket-Protocol",
-			format!(
-				"rivet, rivet_target.actor, rivet_actor.{}",
-				urlencoding::encode(&actor_id)
+			let res = common::create_actor(
+				ctx.leader_dc().guard_port(),
+				&namespace,
+				"test-actor",
+				envoy.pool_name(),
+				rivet_types::actors::CrashPolicy::Sleep,
 			)
-			.parse()
-			.unwrap(),
-		);
+			.await;
+			let actor_id = res.actor.actor_id.to_string();
+			wait_for_envoy_actor(&envoy, &actor_id).await;
 
-		let (ws_stream, response) = connect_async(request)
-			.await
-			.expect("failed to connect WebSocket through guard");
-		assert_eq!(response.status(), 101);
-		let (mut write, mut read) = ws_stream.split();
+			let mut request = format!("ws://127.0.0.1:{}/ws", ctx.leader_dc().guard_port())
+				.into_client_request()
+				.expect("failed to create WebSocket request");
+			request.headers_mut().insert(
+				"Sec-WebSocket-Protocol",
+				format!(
+					"rivet, rivet_target.actor, rivet_actor.{}",
+					urlencoding::encode(&actor_id)
+				)
+				.parse()
+				.unwrap(),
+			);
 
-		write
-			.send(Message::Text("close-from-actor".to_string().into()))
-			.await
-			.expect("failed to send close request");
+			let (ws_stream, response) = connect_async(request)
+				.await
+				.expect("failed to connect WebSocket through guard");
+			assert_eq!(response.status(), 101);
+			let (mut write, mut read) = ws_stream.split();
 
-		let close = tokio::time::timeout(std::time::Duration::from_secs(5), read.next())
-			.await
-			.expect("timed out waiting for actor close")
-			.expect("websocket should yield close frame")
-			.expect("websocket close should not error");
+			write
+				.send(Message::Text("close-from-actor".to_string().into()))
+				.await
+				.expect("failed to send close request");
 
-		match close {
-			Message::Close(Some(frame)) => {
-				assert_eq!(u16::from(frame.code), 4001);
-				assert_eq!(frame.reason, "actor.requested_close");
+			let close = tokio::time::timeout(std::time::Duration::from_secs(5), read.next())
+				.await
+				.expect("timed out waiting for actor close")
+				.expect("websocket should yield close frame")
+				.expect("websocket close should not error");
+
+			match close {
+				Message::Close(Some(frame)) => {
+					assert_eq!(u16::from(frame.code), 4001);
+					assert_eq!(frame.reason, "actor.requested_close");
+				}
+				other => panic!("expected close frame, got {other:?}"),
 			}
-			other => panic!("expected close frame, got {other:?}"),
-		}
-	});
+		},
+	);
 }
 
 // MARK: Stopping and Graceful Shutdown
 #[test]
 fn envoy_actor_graceful_stop_with_destroy_policy() {
-	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
-		let (namespace, _) = common::setup_test_namespace(ctx.leader_dc()).await;
+	common::run(
+		common::TestOpts::new(1).with_timeout(30),
+		|ctx| async move {
+			let (namespace, _) = common::setup_test_namespace(ctx.leader_dc()).await;
 
-		// Create envoy client with stop immediately actor
-		let envoy = common::setup_envoy(ctx.leader_dc(), &namespace, |builder| {
-			builder.with_actor_behavior("stop-actor", move |_| {
-				Box::new(common::test_envoy::StopImmediatelyActor::new())
+			// Create envoy client with stop immediately actor
+			let envoy = common::setup_envoy(ctx.leader_dc(), &namespace, |builder| {
+				builder.with_actor_behavior("stop-actor", move |_| {
+					Box::new(common::test_envoy::StopImmediatelyActor::new())
+				})
 			})
-		})
-		.await;
+			.await;
 
-		tracing::info!("envoy client ready, creating actor that will stop gracefully");
+			tracing::info!("envoy client ready, creating actor that will stop gracefully");
 
-		// Create actor with destroy crash policy
-		let res = common::create_actor(
-			ctx.leader_dc().guard_port(),
-			&namespace,
-			"stop-actor",
-			envoy.pool_name(),
-			rivet_types::actors::CrashPolicy::Sleep,
-		)
-		.await;
+			// Create actor with destroy crash policy
+			let res = common::create_actor(
+				ctx.leader_dc().guard_port(),
+				&namespace,
+				"stop-actor",
+				envoy.pool_name(),
+				rivet_types::actors::CrashPolicy::Sleep,
+			)
+			.await;
 
-		let actor_id_str = res.actor.actor_id.to_string();
+			let actor_id_str = res.actor.actor_id.to_string();
 
-		tracing::info!(?actor_id_str, "actor created, will send stop intent");
+			tracing::info!(?actor_id_str, "actor created, will send stop intent");
 
-		// Poll for actor to be destroyed after graceful stop
-		let actor = loop {
-			let actor =
-				common::try_get_actor(ctx.leader_dc().guard_port(), &actor_id_str, &namespace)
-					.await
-					.expect("failed to get actor")
-					.expect("actor should exist");
+			// Poll for actor to be destroyed after graceful stop
+			let actor = loop {
+				let actor =
+					common::try_get_actor(ctx.leader_dc().guard_port(), &actor_id_str, &namespace)
+						.await
+						.expect("failed to get actor")
+						.expect("actor should exist");
 
-			if actor.destroy_ts.is_some() {
-				break actor;
-			}
+				if actor.destroy_ts.is_some() {
+					break actor;
+				}
 
-			tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
-		};
+				tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+			};
 
-		assert!(
-			actor.destroy_ts.is_some(),
-			"actor should be destroyed after graceful stop with destroy policy"
-		);
+			assert!(
+				actor.destroy_ts.is_some(),
+				"actor should be destroyed after graceful stop with destroy policy"
+			);
 
-		// Verify envoy slot freed (actor no longer on envoy)
-		assert!(
-			!envoy.has_actor(&actor_id_str).await,
-			"actor should be removed from envoy after destroy"
-		);
+			// Verify envoy slot freed (actor no longer on envoy)
+			assert!(
+				!envoy.has_actor(&actor_id_str).await,
+				"actor should be removed from envoy after destroy"
+			);
 
-		tracing::info!(?actor_id_str, "actor gracefully stopped and destroyed");
-	});
+			tracing::info!(?actor_id_str, "actor gracefully stopped and destroyed");
+		},
+	);
 }
 
 #[test]
@@ -667,237 +700,246 @@ fn envoy_actor_explicit_destroy() {
 
 #[test]
 fn envoy_reconnect_replays_pending_start_once() {
-	common::run(common::TestOpts::new(1).with_timeout(20), |ctx| async move {
-		let (namespace, _) = common::setup_test_namespace(ctx.leader_dc()).await;
+	common::run(
+		common::TestOpts::new(1).with_timeout(20),
+		|ctx| async move {
+			let (namespace, _) = common::setup_test_namespace(ctx.leader_dc()).await;
 
-		let start_count = Arc::new(AtomicUsize::new(0));
-		let actor_start_count = start_count.clone();
-		let envoy = common::setup_envoy(ctx.leader_dc(), &namespace, |builder| {
-			builder.with_actor_behavior("replay-actor", move |_| {
-				let actor_start_count = actor_start_count.clone();
-				Box::new(
-					common::test_envoy::CustomActorBuilder::new()
-						.on_start(move |_| {
-							let actor_start_count = actor_start_count.clone();
-							Box::pin(async move {
-								actor_start_count.fetch_add(1, Ordering::SeqCst);
-								Ok(common::test_envoy::ActorStartResult::Running)
+			let start_count = Arc::new(AtomicUsize::new(0));
+			let actor_start_count = start_count.clone();
+			let envoy = common::setup_envoy(ctx.leader_dc(), &namespace, |builder| {
+				builder.with_actor_behavior("replay-actor", move |_| {
+					let actor_start_count = actor_start_count.clone();
+					Box::new(
+						common::test_envoy::CustomActorBuilder::new()
+							.on_start(move |_| {
+								let actor_start_count = actor_start_count.clone();
+								Box::pin(async move {
+									actor_start_count.fetch_add(1, Ordering::SeqCst);
+									Ok(common::test_envoy::ActorStartResult::Running)
+								})
 							})
-						})
-						.build(),
-				)
+							.build(),
+					)
+				})
 			})
-		})
-		.await;
-		envoy.shutdown().await;
+			.await;
+			envoy.shutdown().await;
 
-		let res = common::create_actor(
-			ctx.leader_dc().guard_port(),
-			&namespace,
-			"replay-actor",
-			envoy.pool_name(),
-			rivet_types::actors::CrashPolicy::Sleep,
-		)
-		.await;
-		let actor_id = res.actor.actor_id.to_string();
+			let res = common::create_actor(
+				ctx.leader_dc().guard_port(),
+				&namespace,
+				"replay-actor",
+				envoy.pool_name(),
+				rivet_types::actors::CrashPolicy::Sleep,
+			)
+			.await;
+			let actor_id = res.actor.actor_id.to_string();
 
-		tokio::time::timeout(std::time::Duration::from_secs(5), async {
-			loop {
-				let actor =
-					common::try_get_actor(ctx.leader_dc().guard_port(), &actor_id, &namespace)
-						.await
-						.expect("failed to get actor")
-						.expect("actor should exist");
-				if matches!(&actor.error, Some(rivet_types::actor::ActorError::NoEnvoys)) {
-					break;
+			tokio::time::timeout(std::time::Duration::from_secs(5), async {
+				loop {
+					let actor =
+						common::try_get_actor(ctx.leader_dc().guard_port(), &actor_id, &namespace)
+							.await
+							.expect("failed to get actor")
+							.expect("actor should exist");
+					if matches!(&actor.error, Some(rivet_types::actor::ActorError::NoEnvoys)) {
+						break;
+					}
+					tokio::time::sleep(std::time::Duration::from_millis(50)).await;
 				}
-				tokio::time::sleep(std::time::Duration::from_millis(50)).await;
-			}
-		})
-		.await
-		.expect("actor should wait for envoy while disconnected");
+			})
+			.await
+			.expect("actor should wait for envoy while disconnected");
 
-		envoy.start().await.expect("failed to restart envoy");
-		envoy.wait_ready().await;
-		wait_for_envoy_actor(&envoy, &actor_id).await;
+			envoy.start().await.expect("failed to restart envoy");
+			envoy.wait_ready().await;
+			wait_for_envoy_actor(&envoy, &actor_id).await;
 
-		assert_eq!(
-			start_count.load(Ordering::SeqCst),
-			1,
-			"reconnected envoy should receive the missed start exactly once"
-		);
-		tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-		assert_eq!(
-			start_count.load(Ordering::SeqCst),
-			1,
-			"start command should not be replayed twice after reconnect"
-		);
-	});
+			assert_eq!(
+				start_count.load(Ordering::SeqCst),
+				1,
+				"reconnected envoy should receive the missed start exactly once"
+			);
+			tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+			assert_eq!(
+				start_count.load(Ordering::SeqCst),
+				1,
+				"start command should not be replayed twice after reconnect"
+			);
+		},
+	);
 }
 
 #[test]
 fn envoy_actor_stop_waits_for_completion_before_destroy() {
-	common::run(common::TestOpts::new(1).with_timeout(20), |ctx| async move {
-		let (namespace, _) = common::setup_test_namespace(ctx.leader_dc()).await;
+	common::run(
+		common::TestOpts::new(1).with_timeout(20),
+		|ctx| async move {
+			let (namespace, _) = common::setup_test_namespace(ctx.leader_dc()).await;
 
-		let (stop_started_tx, stop_started_rx) = tokio::sync::oneshot::channel();
-		let stop_started_tx = Arc::new(Mutex::new(Some(stop_started_tx)));
-		let envoy = common::setup_envoy(ctx.leader_dc(), &namespace, |builder| {
-			builder.with_actor_behavior("delayed-stop-actor", move |_| {
-				let stop_started_tx = stop_started_tx.clone();
-				Box::new(
-					common::test_envoy::CustomActorBuilder::new()
-						.on_stop(move || {
-							let stop_started_tx = stop_started_tx.clone();
-							Box::pin(async move {
-								if let Some(tx) =
-									stop_started_tx.lock().expect("stop tx lock").take()
-								{
-									let _ = tx.send(());
-								}
-								tokio::time::sleep(std::time::Duration::from_secs(3)).await;
-								Ok(common::test_envoy::ActorStopResult::Success)
+			let (stop_started_tx, stop_started_rx) = tokio::sync::oneshot::channel();
+			let stop_started_tx = Arc::new(Mutex::new(Some(stop_started_tx)));
+			let envoy = common::setup_envoy(ctx.leader_dc(), &namespace, |builder| {
+				builder.with_actor_behavior("delayed-stop-actor", move |_| {
+					let stop_started_tx = stop_started_tx.clone();
+					Box::new(
+						common::test_envoy::CustomActorBuilder::new()
+							.on_stop(move || {
+								let stop_started_tx = stop_started_tx.clone();
+								Box::pin(async move {
+									if let Some(tx) =
+										stop_started_tx.lock().expect("stop tx lock").take()
+									{
+										let _ = tx.send(());
+									}
+									tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+									Ok(common::test_envoy::ActorStopResult::Success)
+								})
 							})
-						})
-						.build(),
-				)
+							.build(),
+					)
+				})
 			})
-		})
-		.await;
+			.await;
 
-		let res = common::create_actor(
-			ctx.leader_dc().guard_port(),
-			&namespace,
-			"delayed-stop-actor",
-			envoy.pool_name(),
-			rivet_types::actors::CrashPolicy::Sleep,
-		)
-		.await;
-		let actor_id = res.actor.actor_id.to_string();
-		wait_for_envoy_actor(&envoy, &actor_id).await;
-
-		let guard_port = ctx.leader_dc().guard_port();
-		let delete_actor_id = actor_id.clone();
-		let delete_namespace = namespace.clone();
-		let delete_task = tokio::spawn(async move {
-			common::api::public::actors_delete(
-				guard_port,
-				common::api_types::actors::delete::DeletePath {
-					actor_id: delete_actor_id.parse().expect("failed to parse actor_id"),
-				},
-				common::api_types::actors::delete::DeleteQuery {
-					namespace: delete_namespace,
-				},
+			let res = common::create_actor(
+				ctx.leader_dc().guard_port(),
+				&namespace,
+				"delayed-stop-actor",
+				envoy.pool_name(),
+				rivet_types::actors::CrashPolicy::Sleep,
 			)
-			.await
-			.expect("failed to delete actor");
-		});
+			.await;
+			let actor_id = res.actor.actor_id.to_string();
+			wait_for_envoy_actor(&envoy, &actor_id).await;
 
-		stop_started_rx
-			.await
-			.expect("envoy should begin graceful stop");
-
-		let actor_during_stop =
-			common::try_get_actor(ctx.leader_dc().guard_port(), &actor_id, &namespace)
+			let guard_port = ctx.leader_dc().guard_port();
+			let delete_actor_id = actor_id.clone();
+			let delete_namespace = namespace.clone();
+			let delete_task = tokio::spawn(async move {
+				common::api::public::actors_delete(
+					guard_port,
+					common::api_types::actors::delete::DeletePath {
+						actor_id: delete_actor_id.parse().expect("failed to parse actor_id"),
+					},
+					common::api_types::actors::delete::DeleteQuery {
+						namespace: delete_namespace,
+					},
+				)
 				.await
-				.expect("failed to get actor")
-				.expect("actor should exist during stop");
-		assert!(
-			actor_during_stop.destroy_ts.is_none(),
-			"actor should not be destroyed before Envoy stop completion"
-		);
+				.expect("failed to delete actor");
+			});
 
-		delete_task.await.expect("delete task should not panic");
+			stop_started_rx
+				.await
+				.expect("envoy should begin graceful stop");
 
-		tokio::time::timeout(std::time::Duration::from_secs(5), async {
-			loop {
-				let actor =
-					common::try_get_actor(ctx.leader_dc().guard_port(), &actor_id, &namespace)
-						.await
-						.expect("failed to get actor")
-						.expect("actor should exist");
-				if actor.destroy_ts.is_some() {
-					break;
+			let actor_during_stop =
+				common::try_get_actor(ctx.leader_dc().guard_port(), &actor_id, &namespace)
+					.await
+					.expect("failed to get actor")
+					.expect("actor should exist during stop");
+			assert!(
+				actor_during_stop.destroy_ts.is_none(),
+				"actor should not be destroyed before Envoy stop completion"
+			);
+
+			delete_task.await.expect("delete task should not panic");
+
+			tokio::time::timeout(std::time::Duration::from_secs(5), async {
+				loop {
+					let actor =
+						common::try_get_actor(ctx.leader_dc().guard_port(), &actor_id, &namespace)
+							.await
+							.expect("failed to get actor")
+							.expect("actor should exist");
+					if actor.destroy_ts.is_some() {
+						break;
+					}
+					tokio::time::sleep(std::time::Duration::from_millis(50)).await;
 				}
-				tokio::time::sleep(std::time::Duration::from_millis(50)).await;
-			}
-		})
-		.await
-		.expect("actor should be destroyed after Envoy stop completion");
-	});
+			})
+			.await
+			.expect("actor should be destroyed after Envoy stop completion");
+		},
+	);
 }
 
 // MARK: 5. Crash Handling and Policies
 #[test]
 fn envoy_crash_policy_sleep() {
-	common::run(common::TestOpts::new(1).with_timeout(75), |ctx| async move {
-		let (namespace, _) = common::setup_test_namespace(ctx.leader_dc()).await;
+	common::run(
+		common::TestOpts::new(1).with_timeout(75),
+		|ctx| async move {
+			let (namespace, _) = common::setup_test_namespace(ctx.leader_dc()).await;
 
-		// Create channel to be notified when actor crashes
-		let (crash_tx, crash_rx) = tokio::sync::oneshot::channel();
-		let crash_tx = Arc::new(Mutex::new(Some(crash_tx)));
+			// Create channel to be notified when actor crashes
+			let (crash_tx, crash_rx) = tokio::sync::oneshot::channel();
+			let crash_tx = Arc::new(Mutex::new(Some(crash_tx)));
 
-		// Create envoy client with crashing actor
-		let envoy = common::setup_envoy(ctx.leader_dc(), &namespace, |builder| {
-			builder.with_actor_behavior("crash-actor", move |_| {
-				Box::new(common::test_envoy::CrashOnStartActor::new_with_notify(
-					1,
-					crash_tx.clone(),
-				))
+			// Create envoy client with crashing actor
+			let envoy = common::setup_envoy(ctx.leader_dc(), &namespace, |builder| {
+				builder.with_actor_behavior("crash-actor", move |_| {
+					Box::new(common::test_envoy::CrashOnStartActor::new_with_notify(
+						1,
+						crash_tx.clone(),
+					))
+				})
 			})
-		})
-		.await;
+			.await;
 
-		tracing::info!("envoy client ready, creating actor with sleep policy");
+			tracing::info!("envoy client ready, creating actor with sleep policy");
 
-		// Create actor with sleep crash policy
-		let res = common::create_actor(
-			ctx.leader_dc().guard_port(),
-			&namespace,
-			"crash-actor",
-			envoy.pool_name(),
-			rivet_types::actors::CrashPolicy::Sleep,
-		)
-		.await;
+			// Create actor with sleep crash policy
+			let res = common::create_actor(
+				ctx.leader_dc().guard_port(),
+				&namespace,
+				"crash-actor",
+				envoy.pool_name(),
+				rivet_types::actors::CrashPolicy::Sleep,
+			)
+			.await;
 
-		let actor_id_str = res.actor.actor_id.to_string();
+			let actor_id_str = res.actor.actor_id.to_string();
 
-		tracing::info!(?actor_id_str, "actor created with sleep policy");
+			tracing::info!(?actor_id_str, "actor created with sleep policy");
 
-		// Wait for crash notification
-		crash_rx
-			.await
-			.expect("actor should have sent crash notification");
+			// Wait for crash notification
+			crash_rx
+				.await
+				.expect("actor should have sent crash notification");
 
-		// Poll for sleep_ts to be set (system needs to process the crash)
-		let actor = loop {
-			let actor =
-				common::try_get_actor(ctx.leader_dc().guard_port(), &actor_id_str, &namespace)
-					.await
-					.expect("failed to get actor")
-					.expect("actor should exist");
+			// Poll for sleep_ts to be set (system needs to process the crash)
+			let actor = loop {
+				let actor =
+					common::try_get_actor(ctx.leader_dc().guard_port(), &actor_id_str, &namespace)
+						.await
+						.expect("failed to get actor")
+						.expect("actor should exist");
 
-			if actor.sleep_ts.is_some() {
-				break actor;
-			}
+				if actor.sleep_ts.is_some() {
+					break actor;
+				}
 
-			tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
-		};
+				tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+			};
 
-		assert!(
-			actor.sleep_ts.is_some(),
-			"actor should be sleeping after crash with sleep policy"
-		);
-		assert!(
-			actor.connectable_ts.is_none(),
-			"actor should not be connectable while sleeping"
-		);
+			assert!(
+				actor.sleep_ts.is_some(),
+				"actor should be sleeping after crash with sleep policy"
+			);
+			assert!(
+				actor.connectable_ts.is_none(),
+				"actor should not be connectable while sleeping"
+			);
 
-		tracing::info!(
-			?actor_id_str,
-			"actor correctly entered sleep state after crash"
-		);
-	});
+			tracing::info!(
+				?actor_id_str,
+				"actor correctly entered sleep state after crash"
+			);
+		},
+	);
 }
 
 // MARK: 6. Sleep and Wake
@@ -1035,10 +1077,7 @@ fn envoy_actor_pending_allocation_no_envoys() {
 			"actor should not be connectable yet"
 		);
 		assert!(
-			matches!(
-				&actor.error,
-				Some(rivet_types::actor::ActorError::NoEnvoys)
-			),
+			matches!(&actor.error, Some(rivet_types::actor::ActorError::NoEnvoys)),
 			"actor should report no connected envoys before allocation, got {:?}",
 			actor.error
 		);
@@ -1074,87 +1113,93 @@ fn envoy_actor_pending_allocation_no_envoys() {
 
 #[test]
 fn envoy_multiple_pending_allocations_start_after_envoy_reconnect() {
-	common::run(common::TestOpts::new(1).with_timeout(45), |ctx| async move {
-		let (namespace, _) = common::setup_test_namespace(ctx.leader_dc()).await;
+	common::run(
+		common::TestOpts::new(1).with_timeout(45),
+		|ctx| async move {
+			let (namespace, _) = common::setup_test_namespace(ctx.leader_dc()).await;
 
-		// Prime the pool's Envoy protocol version, then disconnect so all actors are
-		// created as actor2 with no active envoys available.
-		let envoy = common::setup_envoy(ctx.leader_dc(), &namespace, |builder| {
-			builder
-				.with_actor_behavior("test-actor-0", |_| {
-					Box::new(common::test_envoy::EchoActor::new())
-				})
-				.with_actor_behavior("test-actor-1", |_| {
-					Box::new(common::test_envoy::EchoActor::new())
-				})
-				.with_actor_behavior("test-actor-2", |_| {
-					Box::new(common::test_envoy::EchoActor::new())
-				})
-		})
-		.await;
-		envoy.shutdown().await;
-
-		tracing::info!("envoy protocol version primed, envoy disconnected");
-
-		// Create 3 actors while no envoy is connected.
-		let mut actor_ids = Vec::new();
-		for i in 0..3 {
-			let name = format!("test-actor-{}", i);
-			let res = common::create_actor(
-				ctx.leader_dc().guard_port(),
-				&namespace,
-				&name,
-				envoy.pool_name(),
-				rivet_types::actors::CrashPolicy::Sleep,
-			)
+			// Prime the pool's Envoy protocol version, then disconnect so all actors are
+			// created as actor2 with no active envoys available.
+			let envoy = common::setup_envoy(ctx.leader_dc(), &namespace, |builder| {
+				builder
+					.with_actor_behavior("test-actor-0", |_| {
+						Box::new(common::test_envoy::EchoActor::new())
+					})
+					.with_actor_behavior("test-actor-1", |_| {
+						Box::new(common::test_envoy::EchoActor::new())
+					})
+					.with_actor_behavior("test-actor-2", |_| {
+						Box::new(common::test_envoy::EchoActor::new())
+					})
+			})
 			.await;
+			envoy.shutdown().await;
 
-			let actor_id = res.actor.actor_id.to_string();
-			tokio::time::timeout(tokio::time::Duration::from_secs(5), async {
-				loop {
-					let actor =
-						common::try_get_actor(ctx.leader_dc().guard_port(), &actor_id, &namespace)
-							.await
-							.expect("failed to get actor")
-							.expect("actor should exist");
+			tracing::info!("envoy protocol version primed, envoy disconnected");
 
-					assert!(
-						actor.connectable_ts.is_none(),
-						"actor should not be connectable before envoy reconnect"
-					);
-					if matches!(&actor.error, Some(rivet_types::actor::ActorError::NoEnvoys)) {
+			// Create 3 actors while no envoy is connected.
+			let mut actor_ids = Vec::new();
+			for i in 0..3 {
+				let name = format!("test-actor-{}", i);
+				let res = common::create_actor(
+					ctx.leader_dc().guard_port(),
+					&namespace,
+					&name,
+					envoy.pool_name(),
+					rivet_types::actors::CrashPolicy::Sleep,
+				)
+				.await;
+
+				let actor_id = res.actor.actor_id.to_string();
+				tokio::time::timeout(tokio::time::Duration::from_secs(5), async {
+					loop {
+						let actor = common::try_get_actor(
+							ctx.leader_dc().guard_port(),
+							&actor_id,
+							&namespace,
+						)
+						.await
+						.expect("failed to get actor")
+						.expect("actor should exist");
+
+						assert!(
+							actor.connectable_ts.is_none(),
+							"actor should not be connectable before envoy reconnect"
+						);
+						if matches!(&actor.error, Some(rivet_types::actor::ActorError::NoEnvoys)) {
+							break;
+						}
+
+						tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+					}
+				})
+				.await
+				.expect("actor should report no connected envoys before allocation");
+
+				actor_ids.push(actor_id);
+			}
+
+			envoy.start().await.expect("failed to restart envoy");
+			envoy.wait_ready().await;
+
+			// Poll for all pending actors to be allocated.
+			loop {
+				let mut all_allocated = true;
+				for actor_id in &actor_ids {
+					if !envoy.has_actor(actor_id).await {
+						all_allocated = false;
 						break;
 					}
-
-					tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
 				}
-			})
-			.await
-			.expect("actor should report no connected envoys before allocation");
-
-			actor_ids.push(actor_id);
-		}
-
-		envoy.start().await.expect("failed to restart envoy");
-		envoy.wait_ready().await;
-
-		// Poll for all pending actors to be allocated.
-		loop {
-			let mut all_allocated = true;
-			for actor_id in &actor_ids {
-				if !envoy.has_actor(actor_id).await {
-					all_allocated = false;
+				if all_allocated {
 					break;
 				}
+				tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
 			}
-			if all_allocated {
-				break;
-			}
-			tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
-		}
 
-		tracing::info!("all pending actors allocated after envoy reconnect");
-	});
+			tracing::info!("all pending actors allocated after envoy reconnect");
+		},
+	);
 }
 
 // MARK: Resource Limits

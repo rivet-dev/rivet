@@ -485,13 +485,7 @@ export const templates: Template[] = [
       "typescript"
     ],
     "tags": [],
-    "noFrontend": false,
-    "providers": {
-      "vercel": {
-        "name": "kitchen-sink-vercel",
-        "deployUrl": "https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Frivet-gg%2Frivet%2Ftree%2Fmain%2Fexamples%2Fkitchen-sink-vercel&project-name=kitchen-sink-vercel"
-      }
-    }
+    "noFrontend": false
   },
   {
     "name": "native-websockets",

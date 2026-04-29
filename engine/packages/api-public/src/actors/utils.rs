@@ -141,10 +141,12 @@ pub async fn find_dc_for_actor_creation(
 ) -> Result<u16> {
 	let requested_dc_label = if let Some(dc_name) = &dc_name {
 		// Use user-configured DC
-		Some(ctx.config()
-			.dc_for_name(dc_name)
-			.ok_or_else(|| rivet_api_util::errors::Datacenter::NotFound.build())?
-			.datacenter_label)
+		Some(
+			ctx.config()
+				.dc_for_name(dc_name)
+				.ok_or_else(|| rivet_api_util::errors::Datacenter::NotFound.build())?
+				.datacenter_label,
+		)
 	} else {
 		None
 	};

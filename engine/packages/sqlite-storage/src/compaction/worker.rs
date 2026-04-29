@@ -115,10 +115,7 @@ mod tests {
 		let (db, subspace) = test_db().await?;
 		let head = seeded_head();
 		let (engine, _compaction_rx) = SqliteEngine::new(db, subspace);
-		let mut mutations = vec![WriteOp::put(
-			meta_key(TEST_ACTOR),
-			encode_db_head(&head)?,
-		)];
+		let mut mutations = vec![WriteOp::put(meta_key(TEST_ACTOR), encode_db_head(&head)?)];
 
 		for shard_id in 0..9u32 {
 			let pgno = shard_id * SQLITE_SHARD_SIZE + 1;
@@ -153,10 +150,7 @@ mod tests {
 		let (db, subspace) = test_db().await?;
 		let head = seeded_head();
 		let (engine, _compaction_rx) = SqliteEngine::new(db, subspace);
-		let mut mutations = vec![WriteOp::put(
-			meta_key(TEST_ACTOR),
-			encode_db_head(&head)?,
-		)];
+		let mut mutations = vec![WriteOp::put(meta_key(TEST_ACTOR), encode_db_head(&head)?)];
 
 		// Seed 8 single-page shards so one compact_worker call triggers all 8 shard passes.
 		for shard_id in 0..8u32 {

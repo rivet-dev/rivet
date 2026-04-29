@@ -36,7 +36,8 @@ pub async fn handle_commands(ctx: &mut EnvoyContext, commands: Vec<protocol::Com
 				continue;
 			}
 		}
-		ctx.processed_command_idx.insert(dedup_key, checkpoint.index);
+		ctx.processed_command_idx
+			.insert(dedup_key, checkpoint.index);
 
 		match command_wrapper.inner {
 			protocol::Command::CommandStartActor(val) => {

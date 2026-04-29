@@ -587,42 +587,45 @@ fn kv_delete_existing_key() {
 
 #[test]
 fn kv_delete_nonexistent_key() {
-	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
-		let (namespace, _) = common::setup_test_namespace(ctx.leader_dc()).await;
+	common::run(
+		common::TestOpts::new(1).with_timeout(30),
+		|ctx| async move {
+			let (namespace, _) = common::setup_test_namespace(ctx.leader_dc()).await;
 
-		let (notify_tx, notify_rx) = tokio::sync::oneshot::channel();
-		let notify_tx = Arc::new(Mutex::new(Some(notify_tx)));
+			let (notify_tx, notify_rx) = tokio::sync::oneshot::channel();
+			let notify_tx = Arc::new(Mutex::new(Some(notify_tx)));
 
-		let runner = common::setup_envoy(ctx.leader_dc(), &namespace, |builder| {
-			builder.with_actor_behavior("kv-delete-nonexistent", move |_| {
-				Box::new(DeleteNonexistentKeyActor::new(notify_tx.clone()))
+			let runner = common::setup_envoy(ctx.leader_dc(), &namespace, |builder| {
+				builder.with_actor_behavior("kv-delete-nonexistent", move |_| {
+					Box::new(DeleteNonexistentKeyActor::new(notify_tx.clone()))
+				})
 			})
-		})
-		.await;
+			.await;
 
-		let res = common::create_actor(
-			ctx.leader_dc().guard_port(),
-			&namespace,
-			"kv-delete-nonexistent",
-			runner.pool_name(),
-			rivet_types::actors::CrashPolicy::Sleep,
-		)
-		.await;
+			let res = common::create_actor(
+				ctx.leader_dc().guard_port(),
+				&namespace,
+				"kv-delete-nonexistent",
+				runner.pool_name(),
+				rivet_types::actors::CrashPolicy::Sleep,
+			)
+			.await;
 
-		let actor_id = res.actor.actor_id.to_string();
+			let actor_id = res.actor.actor_id.to_string();
 
-		// Wait for actor to complete KV operations
-		let result = notify_rx.await.expect("actor should send test result");
+			// Wait for actor to complete KV operations
+			let result = notify_rx.await.expect("actor should send test result");
 
-		match result {
-			KvTestResult::Success => {
-				tracing::info!(?actor_id, "delete nonexistent key test succeeded");
+			match result {
+				KvTestResult::Success => {
+					tracing::info!(?actor_id, "delete nonexistent key test succeeded");
+				}
+				KvTestResult::Failure(msg) => {
+					panic!("delete nonexistent key test failed: {}", msg);
+				}
 			}
-			KvTestResult::Failure(msg) => {
-				panic!("delete nonexistent key test failed: {}", msg);
-			}
-		}
-	});
+		},
+	);
 }
 // MARK: Batch Operations Tests
 
@@ -880,41 +883,44 @@ impl Actor for BatchDeleteActor {
 
 #[test]
 fn kv_put_multiple_keys() {
-	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
-		let (namespace, _) = common::setup_test_namespace(ctx.leader_dc()).await;
+	common::run(
+		common::TestOpts::new(1).with_timeout(30),
+		|ctx| async move {
+			let (namespace, _) = common::setup_test_namespace(ctx.leader_dc()).await;
 
-		let (notify_tx, notify_rx) = tokio::sync::oneshot::channel();
-		let notify_tx = Arc::new(Mutex::new(Some(notify_tx)));
+			let (notify_tx, notify_rx) = tokio::sync::oneshot::channel();
+			let notify_tx = Arc::new(Mutex::new(Some(notify_tx)));
 
-		let runner = common::setup_envoy(ctx.leader_dc(), &namespace, |builder| {
-			builder.with_actor_behavior("kv-batch-put", move |_| {
-				Box::new(BatchPutActor::new(notify_tx.clone()))
+			let runner = common::setup_envoy(ctx.leader_dc(), &namespace, |builder| {
+				builder.with_actor_behavior("kv-batch-put", move |_| {
+					Box::new(BatchPutActor::new(notify_tx.clone()))
+				})
 			})
-		})
-		.await;
+			.await;
 
-		let res = common::create_actor(
-			ctx.leader_dc().guard_port(),
-			&namespace,
-			"kv-batch-put",
-			runner.pool_name(),
-			rivet_types::actors::CrashPolicy::Sleep,
-		)
-		.await;
+			let res = common::create_actor(
+				ctx.leader_dc().guard_port(),
+				&namespace,
+				"kv-batch-put",
+				runner.pool_name(),
+				rivet_types::actors::CrashPolicy::Sleep,
+			)
+			.await;
 
-		let actor_id = res.actor.actor_id.to_string();
+			let actor_id = res.actor.actor_id.to_string();
 
-		let result = notify_rx.await.expect("actor should send test result");
+			let result = notify_rx.await.expect("actor should send test result");
 
-		match result {
-			KvTestResult::Success => {
-				tracing::info!(?actor_id, "batch put test succeeded");
+			match result {
+				KvTestResult::Success => {
+					tracing::info!(?actor_id, "batch put test succeeded");
+				}
+				KvTestResult::Failure(msg) => {
+					panic!("batch put test failed: {}", msg);
+				}
 			}
-			KvTestResult::Failure(msg) => {
-				panic!("batch put test failed: {}", msg);
-			}
-		}
-	});
+		},
+	);
 }
 
 #[test]

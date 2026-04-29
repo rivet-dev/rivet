@@ -165,7 +165,8 @@ mod moved_tests {
 		let ctx = ActorContext::new_for_sleep_tests("actor-sleep-destroy");
 		ctx.set_started(true);
 
-		ctx.sleep().expect("sleep should succeed after started is set");
+		ctx.sleep()
+			.expect("sleep should succeed after started is set");
 		ctx.destroy()
 			.expect("destroy should succeed after started is set");
 
