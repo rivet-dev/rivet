@@ -105,6 +105,7 @@ docker-compose up -d
 
 - RivetKit SQLite is native-only: VFS and query execution live in `rivetkit-rust/packages/rivetkit-sqlite/`, core owns lifecycle, and NAPI only marshals JS types.
 - Actor2 workflows and envoy actors always use the SQLite v2 storage format; only old actor v1 workflows and pegboard runners use the v1 storage format. ("v2" here refers to the on-disk storage format, not envoy-protocol v2.)
+- For `sqlite-storage` raw byte prefix scans and clears, build a `universaldb::Subspace` with `tuple::Subspace::from_bytes(prefix)` and use its range.
 - For NAPI bridge wiring (TSF callback layout, cancellation tokens, `#[napi(object)]` rules), see `docs-internal/engine/napi-bridge.md`.
 
 ## Agent Working Directory

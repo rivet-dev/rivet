@@ -1,8 +1,11 @@
+pub mod compact;
 pub mod lease;
+pub mod metrics;
 pub mod publish;
 pub mod shard;
 pub mod subjects;
 
+pub use compact::{CompactionOutcome, compact_default_batch};
 pub use lease::{
 	CompactorLease, RenewOutcome, SQLITE_COMPACTOR_LEASE_VERSION, TakeOutcome, decode_lease,
 	encode_lease, release, renew, take,

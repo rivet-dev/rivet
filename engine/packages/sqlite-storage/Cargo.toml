@@ -21,6 +21,7 @@ serde.workspace = true
 serde_bare.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
+tokio-util.workspace = true
 tracing.workspace = true
 universaldb.workspace = true
 universalpubsub.workspace = true

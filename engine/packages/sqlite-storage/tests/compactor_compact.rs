@@ -2,13 +2,21 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use sqlite_storage::{
-	compactor::fold_shard,
-	keys::{PAGE_SIZE, shard_key},
+	compactor::{compact::test_hooks, compact_default_batch, fold_shard},
+	keys::{
+		PAGE_SIZE, delta_chunk_key, meta_compact_key, meta_head_key, pidx_delta_key, shard_key,
+	},
 	ltx::{LtxHeader, decode_ltx_v3, encode_ltx_v3},
-	types::DirtyPage,
+	types::{
+		DBHead, DirtyPage, MetaCompact, decode_meta_compact, encode_db_head,
+		encode_meta_compact,
+	},
 };
 use tempfile::Builder;
-use universaldb::utils::IsolationLevel::Snapshot;
+use tokio_util::sync::CancellationToken;
+use universaldb::{
+	error::DatabaseError, options::DatabaseOption, utils::IsolationLevel::Snapshot,
+};
 
 const TEST_ACTOR: &str = "test-actor";
 
@@ -52,6 +60,34 @@ async fn seed(db: &universaldb::Database, writes: Vec<(Vec<u8>, Vec<u8>)>) -> Re
 	.await
 }
 
+async fn read_value(db: &universaldb::Database, key: Vec<u8>) -> Result<Option<Vec<u8>>> {
+	db.run(move |tx| {
+		let key = key.clone();
+		async move {
+			Ok(tx
+				.informal()
+				.get(&key, Snapshot)
+				.await?
+				.map(Vec::<u8>::from))
+		}
+	})
+	.await
+}
+
+async fn read_pidx_txid(db: &universaldb::Database, pgno: u32) -> Result<Option<u64>> {
+	Ok(read_value(db, pidx_delta_key(TEST_ACTOR, pgno))
+		.await?
+		.map(|value| u64::from_be_bytes(value.try_into().expect("pidx txid should be u64"))))
+}
+
+async fn read_compact_txid(db: &universaldb::Database) -> Result<u64> {
+	let bytes = read_value(db, meta_compact_key(TEST_ACTOR))
+		.await?
+		.expect("compact meta should exist");
+
+	Ok(decode_meta_compact(&bytes)?.materialized_txid)
+}
+
 async fn read_shard(db: &universaldb::Database, shard_id: u32) -> Result<Vec<DirtyPage>> {
 	let bytes = db
 		.run(move |tx| async move {
@@ -75,6 +111,82 @@ async fn fold(
 	db.run(move |tx| {
 		let updates = updates.clone();
 		async move { fold_shard(&tx, TEST_ACTOR, shard_id, updates).await }
+	})
+	.await
+}
+
+async fn seed_compaction_case(
+	db: &universaldb::Database,
+	head_txid: u64,
+	db_size_pages: u32,
+	compact_txid: u64,
+	deltas: &[(u64, Vec<(u32, u8)>)],
+	pidx_rows: &[(u32, u64)],
+) -> Result<()> {
+	let mut writes = vec![
+		(
+			meta_head_key(TEST_ACTOR),
+			encode_db_head(DBHead {
+				head_txid,
+				db_size_pages,
+				#[cfg(debug_assertions)]
+				generation: 0,
+			})?,
+		),
+		(
+			meta_compact_key(TEST_ACTOR),
+			encode_meta_compact(MetaCompact {
+				materialized_txid: compact_txid,
+			})?,
+		),
+	];
+
+	for (txid, pages) in deltas {
+		writes.push((delta_chunk_key(TEST_ACTOR, *txid, 0), encoded_blob(*txid, pages)?));
+	}
+	for (pgno, txid) in pidx_rows {
+		writes.push((pidx_delta_key(TEST_ACTOR, *pgno), txid.to_be_bytes().to_vec()));
+	}
+
+	seed(db, writes).await
+}
+
+async fn write_newer_page(db: &universaldb::Database, pgno: u32, txid: u64, fill: u8) -> Result<()> {
+	db.run(move |tx| async move {
+		tx.informal().set(
+			&delta_chunk_key(TEST_ACTOR, txid, 0),
+			&encoded_blob(txid, &[(pgno, fill)])?,
+		);
+		tx.informal()
+			.set(&pidx_delta_key(TEST_ACTOR, pgno), &txid.to_be_bytes());
+		tx.informal().set(
+			&meta_head_key(TEST_ACTOR),
+			&encode_db_head(DBHead {
+				head_txid: txid,
+				db_size_pages: 128,
+				#[cfg(debug_assertions)]
+				generation: 0,
+			})?,
+		);
+		Ok(())
+	})
+	.await
+}
+
+async fn shrink_head(db: &universaldb::Database, head_txid: u64, db_size_pages: u32) -> Result<()> {
+	db.run(move |tx| async move {
+		tx.informal()
+			.clear(&pidx_delta_key(TEST_ACTOR, db_size_pages + 60));
+		tx.informal().set(
+			&meta_head_key(TEST_ACTOR),
+			&encode_db_head(DBHead {
+				head_txid,
+				db_size_pages,
+				#[cfg(debug_assertions)]
+				generation: 0,
+			})?,
+		);
+		Ok(())
 	})
 	.await
 }
@@ -180,5 +292,141 @@ async fn fold_byte_count_metric() -> Result<()> {
 		2 * PAGE_SIZE as usize
 	);
 	assert_pages(&pages, &[(3, 0x33), (5, 0x66)]);
+	Ok(())
+}
+
+#[tokio::test]
+async fn compact_default_batch_basic_fold() -> Result<()> {
+	let db = test_db().await?;
+	seed_compaction_case(
+		&db,
+		2,
+		128,
+		0,
+		&[(1, vec![(3, 0x13), (5, 0x15)]), (2, vec![(70, 0x70)])],
+		&[(3, 1), (5, 1), (70, 2)],
+	)
+	.await?;
+
+	let outcome = compact_default_batch(
+		Arc::new(db.clone()),
+		TEST_ACTOR.to_string(),
+		10,
+		CancellationToken::new(),
+	)
+	.await?;
+
+	assert_eq!(outcome.pages_folded, 3);
+	assert_eq!(outcome.deltas_freed, 2);
+	assert_eq!(outcome.compare_and_clear_noops, 0);
+	assert_eq!(outcome.materialized_txid, 2);
+	assert_pages(&read_shard(&db, 0).await?, &[(3, 0x13), (5, 0x15)]);
+	assert_pages(&read_shard(&db, 1).await?, &[(70, 0x70)]);
+	assert_eq!(read_pidx_txid(&db, 3).await?, None);
+	assert_eq!(read_pidx_txid(&db, 5).await?, None);
+	assert_eq!(read_pidx_txid(&db, 70).await?, None);
+	assert!(
+		read_value(&db, delta_chunk_key(TEST_ACTOR, 1, 0))
+			.await?
+			.is_none()
+	);
+	assert!(
+		read_value(&db, delta_chunk_key(TEST_ACTOR, 2, 0))
+			.await?
+			.is_none()
+	);
+	assert_eq!(read_compact_txid(&db).await?, 2);
+
+	Ok(())
+}
+
+#[tokio::test]
+async fn compact_compare_and_clear_noop_keeps_newer_pidx() -> Result<()> {
+	let db = test_db().await?;
+	seed_compaction_case(
+		&db,
+		1,
+		128,
+		0,
+		&[(1, vec![(3, 0x13)])],
+		&[(3, 1)],
+	)
+	.await?;
+	let (_guard, reached, release) = test_hooks::pause_after_plan(TEST_ACTOR);
+	let task = tokio::spawn({
+		let db = Arc::new(db.clone());
+		async move {
+			compact_default_batch(
+				db,
+				TEST_ACTOR.to_string(),
+				10,
+				CancellationToken::new(),
+			)
+			.await
+		}
+	});
+
+	reached.notified().await;
+	write_newer_page(&db, 3, 2, 0x23).await?;
+	release.notify_waiters();
+
+	let outcome = task.await??;
+	assert_eq!(outcome.pages_folded, 1);
+	assert_eq!(outcome.deltas_freed, 1);
+	assert_eq!(outcome.compare_and_clear_noops, 1);
+	assert_eq!(read_pidx_txid(&db, 3).await?, Some(2));
+	assert!(
+		read_value(&db, delta_chunk_key(TEST_ACTOR, 1, 0))
+			.await?
+			.is_none()
+	);
+	assert!(
+		read_value(&db, delta_chunk_key(TEST_ACTOR, 2, 0))
+			.await?
+			.is_some()
+	);
+	assert_pages(&read_shard(&db, 0).await?, &[(3, 0x13)]);
+
+	Ok(())
+}
+
+#[tokio::test]
+async fn compact_conflicts_with_concurrent_shrink_after_head_read() -> Result<()> {
+	let db = test_db().await?;
+	db.set_option(DatabaseOption::TransactionRetryLimit(1))?;
+	seed_compaction_case(
+		&db,
+		1,
+		128,
+		0,
+		&[(1, vec![(70, 0x70)])],
+		&[(70, 1)],
+	)
+	.await?;
+	let (_guard, reached, release) = test_hooks::pause_after_write_head_read(TEST_ACTOR);
+	let task = tokio::spawn({
+		let db = Arc::new(db.clone());
+		async move {
+			compact_default_batch(
+				db,
+				TEST_ACTOR.to_string(),
+				10,
+				CancellationToken::new(),
+			)
+			.await
+		}
+	});
+
+	reached.notified().await;
+	shrink_head(&db, 2, 10).await?;
+	release.notify_waiters();
+
+	let err = task.await?.expect_err("compaction should hit an OCC retry limit");
+	assert!(err.chain().any(|cause| {
+		cause
+			.downcast_ref::<DatabaseError>()
+			.is_some_and(|err| matches!(err, DatabaseError::MaxRetriesReached))
+	}));
+
 	Ok(())
 }

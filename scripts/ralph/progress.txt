@@ -16,6 +16,7 @@ Started: Wed Apr 29 04:36:56 AM PDT 2026
 - `sqlite-storage` compactor UPS messages use a typed `Subject`, `PublishOpts::one()`, and local vbare encode/decode helpers so dispatch tests can verify the wire payload through the memory driver.
 - `sqlite-storage` compactor lease take/renew helpers must use `Serializable` reads on `/META/compactor_lease`; use `TransactionRetryLimit(1)` in race tests when you need to observe the OCC abort instead of UDB's automatic retry.
 - `sqlite-storage` compactor shard folding uses absolute SQLite page numbers; page 0 is invalid for LTX, so full-shard tests use shard 1 pages `64..128`.
+- `sqlite-storage` raw byte prefix clears need the same `universaldb::Subspace::from(tuple::Subspace::from_bytes(prefix)).range()` shape as prefix scans; `end_of_key_range(prefix)` only clears the single prefix key on the RocksDB driver.
 
 ## 2026-04-29 04:44:52 PDT - US-001
 - Implemented a UUID-backed `NodeId` type and stored a generated value on each `Pools` instance.
@@ -148,4 +149,14 @@ Started: Wed Apr 29 04:36:56 AM PDT 2026
   - `fold_shard` should be called inside an existing UDB transaction so US-014 can compose SHARD writes with PIDX `COMPARE_AND_CLEAR`, DELTA cleanup, and `/META/compact` updates.
   - Existing SHARD blobs are read with snapshot isolation; compaction write-phase conflict behavior belongs around `/META/head`, not the per-shard fold helper.
   - LTX encodes absolute page numbers and rejects page 0, so use page ranges like `64..128` when testing all 64 pages in shard 1.
+---
+## 2026-04-29 05:38:18 PDT - US-014
+- Implemented `compactor::compact_default_batch` with snapshot planning, fresh write transactions, SHARD folding, PIDX `COMPARE_AND_CLEAR`, DELTA cleanup, compact META updates, quota decrementing, cancellation checks, and compactor counters.
+- Added compaction race coverage for basic folding, stale-PIDX no-op behavior, and shrink conflict aborts.
+- Verified `cargo check -p sqlite-storage`, `cargo test -p sqlite-storage --test compactor_compact`, `cargo test -p sqlite-storage`, and `git diff --check`.
+- Files changed: `engine/packages/sqlite-storage/Cargo.toml`, `engine/packages/sqlite-storage/src/compactor/compact.rs`, `engine/packages/sqlite-storage/src/compactor/metrics.rs`, `engine/packages/sqlite-storage/src/compactor/mod.rs`, `engine/packages/sqlite-storage/tests/compactor_compact.rs`, `CLAUDE.md`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
+- **Learnings for future iterations:**
+  - Compaction race tests can use debug-only pause hooks around the plan/write boundary to deterministically interleave commits and shrink transactions.
+  - `COMPARE_AND_CLEAR` does not report whether it cleared, so the current compactor counts no-ops with a post-write snapshot read of attempted PIDX delete keys.
+  - Prefix clears against raw sqlite-storage byte keys should use UniversalDB subspace ranges, matching prefix scan behavior.
 ---
