@@ -4,6 +4,8 @@ Started: Wed Apr 29 04:23:03 AM PDT 2026
 ## Codebase Patterns
 - `rivetkit-sqlite` statement routing classification should prepare exactly one statement with `sqlite3_prepare_v2`, read SQLite's decision through `sqlite3_stmt_readonly`, and capture prepare-time authorizer actions with `sqlite3_set_authorizer`.
 - New public `rivetkit-sqlite` behavior tests belong under `rivetkit-rust/packages/rivetkit-sqlite/tests/` when they do not need private module access.
+- Native SQLite VFS ownership is ref-counted through `NativeVfsHandle`; each `NativeConnection` holds a handle clone so the VFS unregisters only after the last connection closes.
+- Envoy SQLite VFS names include the actor database startup generation, e.g. `envoy-sqlite-{actor_id}-g{generation}`, to avoid stale registration collisions.
 
 ## 2026-04-29 04:27:40 PDT - US-001
 - Implemented native SQLite statement classification with readonly detection, trailing-statement detection, authorizer action capture, and conservative reader eligibility.
@@ -20,4 +22,21 @@ Started: Wed Apr 29 04:23:03 AM PDT 2026
   - SQLite reports raw `BEGIN` and `SAVEPOINT` as readonly, so authorizer transaction-control capture must block reader routing separately.
   - `sqlite3_prepare_v2` exposes unconsumed trailing SQL through the tail pointer; non-whitespace tail text should make reader routing ineligible.
   - Existing `rivetkit-sqlite` builds currently emit pre-existing Rust 2024 unsafe-op warnings from `src/vfs.rs`, but the package check and tests pass.
+---
+## 2026-04-29 04:33:10 PDT - US-002
+- Implemented split native SQLite ownership with `NativeVfsHandle`, `NativeConnection`, and the existing `NativeDatabase` compatibility wrapper.
+- Added generation-bearing envoy VFS names and tests for shared VFS context reuse plus unregister-after-last-connection cleanup.
+- Files changed:
+  - `rivetkit-rust/packages/rivetkit-sqlite/src/database.rs`
+  - `rivetkit-rust/packages/rivetkit-sqlite/src/vfs.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- Checks:
+  - `cargo check -p rivetkit-sqlite`
+  - `cargo test -p rivetkit-sqlite native_vfs_handle --lib`
+  - `cargo test -p rivetkit-sqlite`
+- **Learnings for future iterations:**
+  - `sqlite3_vfs_register` duplicate-name behavior is not a good lifetime assertion; use `sqlite3_vfs_find` when tests need to inspect VFS registration state.
+  - Keeping a `NativeVfsHandle` clone inside each `NativeConnection` makes close ordering fail-closed even if a connection outlives its manager wrapper.
+  - `cargo test -p rivetkit-sqlite` may emit existing Rust 2024 unsafe-op warnings from `src/vfs.rs`; this session's full rerun passed.
 ---

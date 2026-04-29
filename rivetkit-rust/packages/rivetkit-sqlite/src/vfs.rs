@@ -1095,21 +1095,34 @@ struct AuxFileHandle {
 unsafe impl Send for VfsContext {}
 unsafe impl Sync for VfsContext {}
 
-pub struct SqliteVfs {
+struct SqliteVfsInner {
 	vfs_ptr: *mut sqlite3_vfs,
 	_name: CString,
 	ctx_ptr: *mut VfsContext,
 }
 
-unsafe impl Send for SqliteVfs {}
-unsafe impl Sync for SqliteVfs {}
+unsafe impl Send for SqliteVfsInner {}
+unsafe impl Sync for SqliteVfsInner {}
+
+#[derive(Clone)]
+pub struct NativeVfsHandle {
+	inner: Arc<SqliteVfsInner>,
+}
+
+pub type SqliteVfs = NativeVfsHandle;
 
 pub struct NativeDatabase {
+	connection: NativeConnection,
+	vfs: NativeVfsHandle,
+}
+
+pub struct NativeConnection {
 	db: *mut sqlite3,
-	_vfs: SqliteVfs,
+	_vfs: NativeVfsHandle,
 }
 
 unsafe impl Send for NativeDatabase {}
+unsafe impl Send for NativeConnection {}
 
 fn select_page_fetch_transport(
 	to_fetch: &[u32],
@@ -3367,7 +3380,7 @@ unsafe extern "C" fn vfs_get_last_error(
 	})
 }
 
-impl SqliteVfs {
+impl NativeVfsHandle {
 	pub fn register(
 		name: &str,
 		handle: EnvoyHandle,
@@ -3389,15 +3402,15 @@ impl SqliteVfs {
 	}
 
 	fn take_last_error(&self) -> Option<String> {
-		unsafe { (*self.ctx_ptr).take_last_error() }
+		unsafe { (*self.inner.ctx_ptr).take_last_error() }
 	}
 
 	fn clone_last_error(&self) -> Option<String> {
-		unsafe { (*self.ctx_ptr).clone_last_error() }
+		unsafe { (*self.inner.ctx_ptr).clone_last_error() }
 	}
 
 	fn snapshot_preload_hints(&self) -> VfsPreloadHintSnapshot {
-		unsafe { (*self.ctx_ptr).snapshot_preload_hints() }
+		unsafe { (*self.inner.ctx_ptr).snapshot_preload_hints() }
 	}
 
 	fn register_with_transport(
@@ -3456,22 +3469,28 @@ impl SqliteVfs {
 		}
 
 		Ok(Self {
+			inner: Arc::new(SqliteVfsInner {
 			vfs_ptr,
 			_name: name_cstring,
 			ctx_ptr,
+			}),
 		})
 	}
 
 	pub fn name_ptr(&self) -> *const c_char {
-		self._name.as_ptr()
+		self.inner._name.as_ptr()
 	}
 
 	fn commit_atomic_count(&self) -> u64 {
-		unsafe { (*self.ctx_ptr).commit_atomic_count.load(Ordering::Relaxed) }
+		unsafe {
+			(*self.inner.ctx_ptr)
+				.commit_atomic_count
+				.load(Ordering::Relaxed)
+		}
 	}
 }
 
-impl Drop for SqliteVfs {
+impl Drop for SqliteVfsInner {
 	fn drop(&mut self) {
 		unsafe {
 			sqlite3_vfs_unregister(self.vfs_ptr);
@@ -3483,19 +3502,29 @@ impl Drop for SqliteVfs {
 
 impl NativeDatabase {
 	pub fn as_ptr(&self) -> *mut sqlite3 {
-		self.db
+		self.connection.as_ptr()
 	}
 
 	pub fn take_last_kv_error(&self) -> Option<String> {
-		self._vfs.take_last_error()
+		self.vfs.take_last_error()
 	}
 
 	pub fn snapshot_preload_hints(&self) -> VfsPreloadHintSnapshot {
-		self._vfs.snapshot_preload_hints()
+		self.vfs.snapshot_preload_hints()
+	}
+
+	pub fn vfs_handle(&self) -> NativeVfsHandle {
+		self.vfs.clone()
 	}
 }
 
-impl Drop for NativeDatabase {
+impl NativeConnection {
+	pub fn as_ptr(&self) -> *mut sqlite3 {
+		self.db
+	}
+}
+
+impl Drop for NativeConnection {
 	fn drop(&mut self) {
 		if !self.db.is_null() {
 			let rc = unsafe { sqlite3_close_v2(self.db) };
@@ -3511,10 +3540,11 @@ impl Drop for NativeDatabase {
 	}
 }
 
-pub fn open_database(
-	vfs: SqliteVfs,
+pub fn open_connection(
+	vfs: NativeVfsHandle,
 	file_name: &str,
-) -> std::result::Result<NativeDatabase, String> {
+	flags: c_int,
+) -> std::result::Result<NativeConnection, String> {
 	let c_name = CString::new(file_name).map_err(|err| err.to_string())?;
 	let mut db: *mut sqlite3 = ptr::null_mut();
 
@@ -3522,7 +3552,7 @@ pub fn open_database(
 		sqlite3_open_v2(
 			c_name.as_ptr(),
 			&mut db,
-			SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE,
+			flags,
 			vfs.name_ptr(),
 		)
 	};
@@ -3543,6 +3573,19 @@ pub fn open_database(
 		return Err(format!("sqlite3_open_v2 failed with code {rc}: {message}"));
 	}
 
+	Ok(NativeConnection { db, _vfs: vfs })
+}
+
+pub fn open_database(
+	vfs: NativeVfsHandle,
+	file_name: &str,
+) -> std::result::Result<NativeDatabase, String> {
+	let connection = open_connection(
+		vfs.clone(),
+		file_name,
+		SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE,
+	)?;
+
 	for pragma in &[
 		"PRAGMA page_size = 4096;",
 		"PRAGMA journal_mode = DELETE;",
@@ -3551,7 +3594,7 @@ pub fn open_database(
 		"PRAGMA auto_vacuum = NONE;",
 		"PRAGMA locking_mode = EXCLUSIVE;",
 	] {
-		if let Err(err) = sqlite_exec(db, pragma) {
+		if let Err(err) = sqlite_exec(connection.as_ptr(), pragma) {
 			tracing::error!(
 				file_name,
 				pragma,
@@ -3559,27 +3602,21 @@ pub fn open_database(
 				last_error = ?vfs.clone_last_error(),
 				"failed to configure sqlite database"
 			);
-			unsafe {
-				sqlite3_close(db);
-			}
 			return Err(err);
 		}
 	}
 
-	if let Err(err) = assert_batch_atomic_probe(db, &vfs) {
+	if let Err(err) = assert_batch_atomic_probe(connection.as_ptr(), &vfs) {
 		tracing::error!(
 			file_name,
 			%err,
 			last_error = ?vfs.clone_last_error(),
 			"failed to verify sqlite batch atomic writes"
 		);
-		unsafe {
-			sqlite3_close(db);
-		}
 		return Err(err);
 	}
 
-	Ok(NativeDatabase { db, _vfs: vfs })
+	Ok(NativeDatabase { connection, vfs })
 }
 
 #[cfg(test)]
@@ -3850,6 +3887,28 @@ mod tests {
 				self.open_db_on_engine_with_metrics(runtime, engine, actor_id, config, None)
 			}
 
+			fn open_vfs_on_engine_with_metrics(
+				&self,
+				runtime: &tokio::runtime::Runtime,
+				engine: Arc<SqliteEngine>,
+				actor_id: &str,
+				name: &str,
+				config: VfsConfig,
+				metrics: Option<Arc<dyn SqliteVfsMetrics>>,
+			) -> NativeVfsHandle {
+				let startup = runtime.block_on(self.startup_data_for(actor_id, &engine));
+				SqliteVfs::register_with_transport(
+					name,
+					SqliteTransport::from_direct(engine),
+					actor_id.to_string(),
+					runtime.handle().clone(),
+					startup,
+					config,
+					metrics,
+				)
+				.expect("v2 vfs should register")
+			}
+
 			fn open_db_on_engine_with_metrics(
 				&self,
 				runtime: &tokio::runtime::Runtime,
@@ -3858,17 +3917,10 @@ mod tests {
 				config: VfsConfig,
 				metrics: Option<Arc<dyn SqliteVfsMetrics>>,
 			) -> NativeDatabase {
-				let startup = runtime.block_on(self.startup_data_for(actor_id, &engine));
-				let vfs = SqliteVfs::register_with_transport(
-					&next_test_name("sqlite-direct-vfs"),
-					SqliteTransport::from_direct(engine),
-					actor_id.to_string(),
-					runtime.handle().clone(),
-					startup,
-					config,
-					metrics,
-				)
-				.expect("v2 vfs should register");
+				let vfs_name = next_test_name("sqlite-direct-vfs");
+				let vfs = self.open_vfs_on_engine_with_metrics(
+					runtime, engine, actor_id, &vfs_name, config, metrics,
+				);
 
 				open_database(vfs, actor_id).expect("sqlite database should open")
 			}
@@ -3895,7 +3947,16 @@ mod tests {
 		}
 
 	fn direct_vfs_ctx(db: &NativeDatabase) -> &VfsContext {
-		unsafe { &*db._vfs.ctx_ptr }
+		unsafe { &*db.vfs.inner.ctx_ptr }
+	}
+
+	fn direct_connection_vfs_ctx(connection: &NativeConnection) -> &VfsContext {
+		unsafe { &*connection._vfs.inner.ctx_ptr }
+	}
+
+	fn sqlite_vfs_registered(name: &str) -> bool {
+		let name = CString::new(name).expect("vfs name should not contain NUL");
+		unsafe { !sqlite3_vfs_find(name.as_ptr()).is_null() }
 	}
 
 	fn sqlite_query_i64(db: *mut sqlite3, sql: &str) -> std::result::Result<i64, String> {
@@ -6349,9 +6410,107 @@ mod tests {
 		let db = harness.open_db(&runtime);
 
 		assert!(
-			db._vfs.commit_atomic_count() > 0,
+			db.vfs.commit_atomic_count() > 0,
 			"open_database should run the sqlite batch-atomic probe",
 		);
+	}
+
+	#[test]
+	fn native_vfs_handle_opens_multiple_connections_against_one_context() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let db = harness.open_db(&runtime);
+		let second_connection = open_connection(
+			db.vfs_handle(),
+			&harness.actor_id,
+			SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE,
+		)
+		.expect("second sqlite connection should open");
+
+		assert_ne!(db.as_ptr(), second_connection.as_ptr());
+		assert!(
+			ptr::eq(direct_vfs_ctx(&db), direct_connection_vfs_ctx(&second_connection)),
+			"connections opened from one NativeVfsHandle should share one VfsContext",
+		);
+
+		sqlite_exec(
+			db.as_ptr(),
+			"CREATE TABLE shared_connections (id INTEGER PRIMARY KEY, value TEXT NOT NULL);",
+		)
+		.expect("create table should succeed");
+		sqlite_exec(
+			db.as_ptr(),
+			"INSERT INTO shared_connections (id, value) VALUES (1, 'visible');",
+		)
+		.expect("insert should succeed");
+		assert_eq!(
+			sqlite_query_text(
+				second_connection.as_ptr(),
+				"SELECT value FROM shared_connections WHERE id = 1;",
+			)
+			.expect("second connection should read through shared VFS"),
+			"visible"
+		);
+
+		drop(db);
+		assert_eq!(
+			sqlite_query_text(
+				second_connection.as_ptr(),
+				"SELECT value FROM shared_connections WHERE id = 1;",
+			)
+			.expect("connection should keep shared VFS alive after manager drop"),
+			"visible"
+		);
+	}
+
+	#[test]
+	fn native_vfs_handle_unregisters_after_last_connection_closes() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let engine = runtime.block_on(harness.open_engine());
+		let name = next_test_name("sqlite-shared-vfs");
+		let startup = runtime.block_on(harness.startup_data_for(&harness.actor_id, &engine));
+		let vfs = SqliteVfs::register_with_transport(
+			&name,
+			SqliteTransport::from_direct(Arc::clone(&engine)),
+			harness.actor_id.clone(),
+			runtime.handle().clone(),
+			startup,
+			VfsConfig::default(),
+			None,
+		)
+		.expect("vfs should register");
+		let connection = open_connection(
+			vfs.clone(),
+			&harness.actor_id,
+			SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE,
+		)
+		.expect("sqlite connection should open");
+		assert!(sqlite_vfs_registered(&name));
+
+		drop(vfs);
+		assert!(
+			sqlite_vfs_registered(&name),
+			"an open connection should keep the VFS registered",
+		);
+
+		drop(connection);
+		assert!(
+			!sqlite_vfs_registered(&name),
+			"VFS should unregister after the last connection closes",
+		);
+		let replacement_startup =
+			runtime.block_on(harness.startup_data_for(&harness.actor_id, &engine));
+		SqliteVfs::register_with_transport(
+			&name,
+			SqliteTransport::from_direct(engine),
+			harness.actor_id.clone(),
+			runtime.handle().clone(),
+			replacement_startup,
+			VfsConfig::default(),
+			None,
+		)
+		.expect("VFS name should be reusable after the last connection closes");
 	}
 
 	#[test]
@@ -7037,7 +7196,7 @@ mod tests {
 		ctx.fail_next_aux_delete("InjectedAuxDeleteError: delete failed");
 		let path = CString::new("actor-journal").expect("cstring should build");
 
-		let rc = unsafe { vfs_delete(db._vfs.vfs_ptr, path.as_ptr(), 0) };
+		let rc = unsafe { vfs_delete(db.vfs.inner.vfs_ptr, path.as_ptr(), 0) };
 		assert_eq!(rc, SQLITE_IOERR_DELETE);
 		assert_eq!(
 			db.take_last_kv_error().as_deref(),
