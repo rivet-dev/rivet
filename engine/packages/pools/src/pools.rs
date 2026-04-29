@@ -4,10 +4,11 @@ use anyhow::*;
 use rivet_config::Config;
 use tokio_util::sync::{CancellationToken, DropGuard};
 
-use crate::{ClickHousePool, Error, UdbPool, UpsPool};
+use crate::{ClickHousePool, Error, NodeId, UdbPool, UpsPool};
 
 // TODO: Automatically shutdown all pools on drop
 pub(crate) struct PoolsInner {
+	pub(crate) node_id: NodeId,
 	pub(crate) _guard: DropGuard,
 	pub(crate) ups: Option<UpsPool>,
 	pub(crate) clickhouse: Option<clickhouse::Client>,
@@ -23,6 +24,7 @@ impl Pools {
 		// TODO: Choose client name for this service
 		let client_name = "rivet";
 		let token = CancellationToken::new();
+		let node_id = NodeId::new();
 
 		let (ups, udb) = tokio::try_join!(
 			crate::db::ups::setup(&config, client_name),
@@ -31,6 +33,7 @@ impl Pools {
 		let clickhouse = crate::db::clickhouse::setup(&config)?;
 
 		let pool = Pools(Arc::new(PoolsInner {
+			node_id,
 			_guard: token.clone().drop_guard(),
 			ups: Some(ups),
 			clickhouse,
@@ -50,6 +53,7 @@ impl Pools {
 		// TODO: Choose client name for this service
 		let client_name = "rivet";
 		let token = CancellationToken::new();
+		let node_id = NodeId::new();
 
 		let (ups, udb) = tokio::try_join!(
 			crate::db::ups::setup(&config, client_name),
@@ -57,6 +61,7 @@ impl Pools {
 		)?;
 
 		let pool = Pools(Arc::new(PoolsInner {
+			node_id,
 			_guard: token.clone().drop_guard(),
 			ups: Some(ups),
 			clickhouse: None,
@@ -67,6 +72,10 @@ impl Pools {
 	}
 
 	// MARK: Getters
+	pub fn node_id(&self) -> NodeId {
+		self.0.node_id
+	}
+
 	pub fn ups_option(&self) -> Option<&UpsPool> {
 		self.0.ups.as_ref()
 	}

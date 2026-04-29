@@ -55,8 +55,6 @@ impl Scenario for ActorV221Baseline {
 			runner_name_selector: RUNNER_NAME.to_string(),
 			input: None,
 			crash_policy: CrashPolicy::Sleep,
-			start_immediately: false,
-			create_ts: None,
 			forward_request: false,
 			datacenter_name: None,
 		})

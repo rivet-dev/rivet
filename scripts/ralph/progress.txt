@@ -1,5 +1,16 @@
 # Ralph Progress Log
-Started: Wed Apr 29 04:35:45 AM PDT 2026
+Started: Wed Apr 29 04:36:56 AM PDT 2026
 ---
-
 ## Codebase Patterns
+- `rivet-pools` keeps process-wide metadata on `PoolsInner`; initialize it in both `Pools::new` and `Pools::test`, with the test constructor only omitting optional service pools like ClickHouse.
+
+## 2026-04-29 04:44:52 PDT - US-001
+- Implemented a UUID-backed `NodeId` type and stored a generated value on each `Pools` instance.
+- Added `Pools::node_id()` plus public/prelude exports so consumers can use it for leases and metric labels.
+- Fixed stale `test-snapshot-gen` actor-create input fields that blocked `cargo check --workspace`.
+- Files changed: `engine/packages/pools/src/node_id.rs`, `engine/packages/pools/src/lib.rs`, `engine/packages/pools/src/pools.rs`, `engine/packages/pools/src/prelude.rs`, `engine/packages/test-snapshot-gen/src/scenarios/actor_v2_2_1_baseline.rs`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
+- **Learnings for future iterations:**
+  - `uuid` already has workspace `v4` and `serde` features, so new UUID-backed pool metadata does not need dependency changes.
+  - `Pools::test` mirrors `Pools::new` for shared pool state and intentionally leaves ClickHouse unset.
+  - `test-snapshot-gen` is part of `cargo check --workspace`, so stale scenario fixtures can break unrelated package changes.
+---
