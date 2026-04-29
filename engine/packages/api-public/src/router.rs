@@ -28,6 +28,8 @@ use crate::{
 		envoys::list,
 		namespaces::list,
 		namespaces::create,
+		namespaces::get_sqlite_config,
+		namespaces::put_sqlite_config,
 		runner_configs::list::list,
 		runner_configs::upsert::upsert,
 		runner_configs::delete::delete,
@@ -64,6 +66,14 @@ pub async fn router(
 			// MARK: Namespaces
 			.route("/namespaces", axum::routing::get(namespaces::list))
 			.route("/namespaces", axum::routing::post(namespaces::create))
+			.route(
+				"/namespaces/{ns_id}/sqlite-config",
+				axum::routing::get(namespaces::get_sqlite_config),
+			)
+			.route(
+				"/namespaces/{ns_id}/sqlite-config",
+				axum::routing::put(namespaces::put_sqlite_config),
+			)
 			.route("/runner-configs", axum::routing::get(runner_configs::list))
 			.route(
 				"/runner-configs/serverless-health-check",

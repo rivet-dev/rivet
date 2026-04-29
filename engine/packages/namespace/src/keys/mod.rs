@@ -2,6 +2,10 @@ use anyhow::Result;
 use gas::prelude::*;
 use universaldb::prelude::*;
 
+use crate::types::{
+	SqliteNamespaceConfig, decode_sqlite_namespace_config, encode_sqlite_namespace_config,
+};
+
 pub mod metric;
 
 pub fn subspace() -> universaldb::utils::Subspace {
@@ -139,6 +143,55 @@ impl<'de> TupleUnpack<'de> for CreateTsKey {
 	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
 		let (input, (_, namespace_id, _)) = <(usize, Id, usize)>::unpack(input, tuple_depth)?;
 		let v = CreateTsKey { namespace_id };
+
+		Ok((input, v))
+	}
+}
+
+#[derive(Debug)]
+pub struct SqliteConfigKey {
+	namespace_id: Id,
+}
+
+impl SqliteConfigKey {
+	pub fn new(namespace_id: Id) -> Self {
+		SqliteConfigKey { namespace_id }
+	}
+}
+
+pub fn sqlite_config_key(namespace_id: Id) -> SqliteConfigKey {
+	SqliteConfigKey::new(namespace_id)
+}
+
+impl FormalKey for SqliteConfigKey {
+	type Value = SqliteNamespaceConfig;
+
+	fn deserialize(&self, raw: &[u8]) -> Result<Self::Value> {
+		decode_sqlite_namespace_config(raw)
+	}
+
+	fn serialize(&self, value: Self::Value) -> Result<Vec<u8>> {
+		encode_sqlite_namespace_config(value)
+	}
+}
+
+impl TuplePack for SqliteConfigKey {
+	fn pack<W: std::io::Write>(
+		&self,
+		w: &mut W,
+		tuple_depth: TupleDepth,
+	) -> std::io::Result<VersionstampOffset> {
+		let t = (DATA, self.namespace_id, CONFIG, "sqlite");
+		t.pack(w, tuple_depth)
+	}
+}
+
+impl<'de> TupleUnpack<'de> for SqliteConfigKey {
+	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
+		let (input, (_, namespace_id, _, _)) =
+			<(usize, Id, usize, String)>::unpack(input, tuple_depth)?;
+
+		let v = SqliteConfigKey { namespace_id };
 
 		Ok((input, v))
 	}

@@ -39,6 +39,7 @@ Started: Wed Apr 29 04:36:56 AM PDT 2026
 - `/DELTA/{txid}/META` lives under the same `/DELTA/{txid}/` prefix as chunks, so DELTA prefix scanners must explicitly skip the `META` suffix before decoding or concatenating chunk rows.
 - Pump commits write `/DELTA/{txid}/META` and charge it to live storage; compaction byte accounting must include that meta row when clearing a delta prefix.
 - Restore guards use an `ActorDb`-local `restore_observed_clear` cache plus `sqlite_pump_restore_guard_read_total` to verify the first-read/skip behavior in tests.
+- Gas `#[operation]` emits a module-local `Operation` type, so put only one operation macro per module and split paired get/put ops into sibling modules.
 
 ## 2026-04-29 04:44:52 PDT - US-001
 - Implemented a UUID-backed `NodeId` type and stored a generated value on each `Pools` instance.
@@ -334,4 +335,17 @@ Started: Wed Apr 29 04:36:56 AM PDT 2026
   - Commit-side DELTA metadata shares the same delta prefix as chunks, so compaction must include its tracked bytes while read/decode paths skip the `META` suffix.
   - New storage/admin errors should use `RivetError`; deriving it creates a checked-in artifact under `engine/artifacts/errors/`.
   - The restore guard cache can be asserted without UDB mocks by labeling `sqlite_pump_restore_guard_read_total` with a fresh `NodeId` per test.
+---
+## 2026-04-29 08:08:09 PDT - US-029
+- Added `namespace::types::SqliteNamespaceConfig` with vbare encode/decode helpers, default-disabled PITR flags, default retention/checkpoint settings, and namespace-prefix storage through `sqlite_config_key(namespace_id)`.
+- Added namespace get/put operations plus api-peer and api-public `GET/PUT /namespaces/{ns_id}/sqlite-config` routes with validation for retention bounds, PITR budget consistency, and nonzero admin/fork limits when enabled.
+- Added API and storage tests for default GET, PUT/GET roundtrip, validation failures, and vbare/key roundtrips.
+- Fixed stale actor destroy cleanup to clear split live/PITR SQLite storage counters instead of the removed legacy quota key.
+- Verified `cargo check -p namespace`, `cargo check -p pegboard`, `cargo check -p rivet-api-public`, `cargo test -p pegboard --test sqlite_namespace_config`, `cargo test -p rivet-api-public --test sqlite_namespace_config`, and `git diff --check`.
+- Files changed: `Cargo.lock`, `engine/packages/namespace/**`, `engine/packages/api-peer/src/{namespaces.rs,router.rs}`, `engine/packages/api-public/{Cargo.toml,src/namespaces.rs,src/router.rs,tests/sqlite_namespace_config.rs}`, `engine/packages/pegboard/src/actor_sqlite.rs`, `engine/packages/pegboard/tests/sqlite_namespace_config.rs`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
+- **Learnings for future iterations:**
+  - Namespace-owned SQLite config belongs in the `namespace` crate alongside existing namespace data keys, even when pegboard consumes it later.
+  - Api-public namespace routes should mirror existing leader behavior: authenticate publicly, call api-peer handlers locally on the leader, and forward to the leader peer URL otherwise.
+  - Gas operation macros need one operation per Rust module; split get/put operations into sibling modules under a shared directory.
+  - After the live/PITR quota split, destroy paths must clear `meta_storage_used_live_key` and `meta_storage_used_pitr_key`, not the removed legacy quota key.
 ---

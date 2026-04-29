@@ -35,7 +35,9 @@ pub fn clear_v2_storage_for_destroy(tx: &universaldb::Transaction, actor_id: Id)
 	tx.informal()
 		.clear(&sqlite_storage_keys::meta_compact_key(&actor_id));
 	tx.informal()
-		.clear(&sqlite_storage_keys::meta_quota_key(&actor_id));
+		.clear(&sqlite_storage_keys::meta_storage_used_live_key(&actor_id));
+	tx.informal()
+		.clear(&sqlite_storage_keys::meta_storage_used_pitr_key(&actor_id));
 	// Clear the lease with the rest of SQLite storage.
 	// Otherwise dead lease keys accumulate in UDB indefinitely.
 	tx.informal()

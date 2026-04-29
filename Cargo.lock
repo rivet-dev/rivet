@@ -2909,6 +2909,7 @@ dependencies = [
  "rivet-types",
  "rivet-util",
  "serde",
+ "serde_bare",
  "strum",
  "tracing",
  "universaldb",
@@ -4418,6 +4419,7 @@ version = "2.3.0-rc.4"
 dependencies = [
  "anyhow",
  "axum 0.8.4",
+ "axum-test",
  "epoxy",
  "fs_extra",
  "futures-util",
@@ -4435,6 +4437,7 @@ dependencies = [
  "rivet-data",
  "rivet-error",
  "rivet-pools",
+ "rivet-test-deps",
  "rivet-types",
  "rivet-util",
  "serde",
