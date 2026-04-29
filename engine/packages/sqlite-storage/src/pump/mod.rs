@@ -1,4 +1,5 @@
 pub mod actor_db;
+pub mod commit;
 pub mod error;
 pub mod keys;
 pub mod ltx;

@@ -1,13 +1,9 @@
 use std::{sync::Arc, time::Instant};
 
-use anyhow::Result;
 use parking_lot::Mutex;
 use universaldb::Database;
 
-use crate::{
-	page_index::DeltaPageIndex,
-	types::DirtyPage,
-};
+use crate::page_index::DeltaPageIndex;
 
 #[allow(dead_code)]
 pub struct ActorDb {
@@ -40,12 +36,4 @@ impl ActorDb {
 		}
 	}
 
-	pub async fn commit(
-		&self,
-		_dirty_pages: Vec<DirtyPage>,
-		_db_size_pages: u32,
-		_now_ms: i64,
-	) -> Result<()> {
-		todo!("implemented by US-009")
-	}
 }
