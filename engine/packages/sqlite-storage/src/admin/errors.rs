@@ -33,6 +33,18 @@ pub enum SqliteAdminError {
 	PitrDestructiveDisabledForNamespace,
 
 	#[error(
+		"pitr_admin_disabled_for_namespace",
+		"PITR admin operations are not enabled for this namespace"
+	)]
+	PitrAdminDisabledForNamespace,
+
+	#[error(
+		"fork_disabled_for_namespace",
+		"SQLite fork operations are not enabled for this namespace"
+	)]
+	ForkDisabledForNamespace,
+
+	#[error(
 		"retention_window_exceeded",
 		"target predates the retention window"
 	)]

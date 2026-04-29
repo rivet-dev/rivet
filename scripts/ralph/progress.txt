@@ -3,6 +3,9 @@ Started: Wed Apr 29 04:36:56 AM PDT 2026
 ---
 ## Codebase Patterns
 - `rivet-pools` keeps process-wide metadata on `PoolsInner`; initialize it in both `Pools::new` and `Pools::test`, with the test constructor only omitting optional service pools like ClickHouse.
+- api-public SQLite admin endpoints resolve namespace config from a parsed Rivet actor id when possible, with explicit `namespace_id` request hints only used for synthetic/non-Rivet-id admin test paths.
+- SQLite admin rate/concurrency gates belong at api-public before UPS publish; create the `AdminOpRecord` in the same UDB transaction that scans in-flight records so concurrent Restore/Fork requests reject instead of queueing.
+- SQLite admin audit events use structured tracing plus the debug test sink in `actors::sqlite_admin::test_hooks`; the compactor trusts injected `AuditFields` and does not re-check authz.
 - After renaming a hyphenated crate, update both the workspace dependency key (`sqlite-storage-legacy.workspace`) and Rust import path (`sqlite_storage_legacy`) for every consumer.
 - When scaffolding `sqlite-storage` from copied legacy modules, root-level `pub use pump::{...}` preserves legacy `crate::types` and `crate::udb` paths while the real modules live under `pump/`.
 - `sqlite-storage` `actor_range` mirrors UniversalDB's single-key conflict range helper (`actor_prefix + 0`) and should not be treated as a full prefix scan range for suffixed actor keys.
@@ -459,4 +462,15 @@ Started: Wed Apr 29 04:36:56 AM PDT 2026
   - Use pegboard's persisted actor-lifecycle gate as the source of truth; the UPS lifecycle broadcast is only the fast path for existing route closure.
   - Pegboard-envoy should respond to suspended gateway tunnel messages itself rather than forwarding them to the actor envoy.
   - Restore API tests can simulate compactor completion by transitioning `AdminOpRecord` through `InProgress` before `Completed`; direct `Pending -> Completed` is an invalid transition.
+---
+## 2026-04-29 10:02:28 PDT - US-039
+- Implemented api-public SQLite admin capability checks, audited namespace injection, structured audit events, per-op token buckets, UDB-backed in-flight Restore/Fork gates, and rate-limit metrics.
+- Added admin errors for PITR admin and fork capability denials, plus checked-in error artifacts.
+- Added authz/audit and rate/concurrency integration tests for the SQLite admin endpoints.
+- Verified `cargo test -p rivet-api-public --test sqlite_admin_authz`, `cargo test -p rivet-api-public --test sqlite_admin_rate_limit`, `cargo test -p rivet-api-public`, and `cargo check --workspace`.
+- Files changed: `Cargo.lock`, `engine/artifacts/errors/sqlite_admin.*.json`, `engine/packages/api-public/Cargo.toml`, `engine/packages/api-public/src/actors/{mod.rs,sqlite_admin.rs,sqlite_admin_metrics.rs}`, `engine/packages/api-public/tests/{sqlite_admin_authz.rs,sqlite_admin_rate_limit.rs}`, `engine/packages/sqlite-storage/src/admin/errors.rs`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
+- **Learnings for future iterations:**
+  - Authz belongs at api-public and the compactor trusts the injected `AuditFields`; namespace config reads use `Id::v1(raw_namespace_uuid, 0)`.
+  - Rate limiting is per namespace and op kind, while concurrent Restore/Fork limits are enforced by scanning persisted `AdminOpRecord`s in the same tx as record creation.
+  - Audit tests should filter by operation id because async restore monitors from other tests can emit into the shared debug sink.
 ---
