@@ -1,6 +1,7 @@
 ## Codebase Patterns
 - `sqlite-storage` pump payload structs use `serde::{Serialize, Deserialize}` as the local serde_bare/vbare-compatible derive pattern; add `OwnedVersionedData` wrappers when adding concrete encode/decode helpers.
 - Use `BookmarkStr` instead of raw `String` for bookmark-bearing pump records so the 33-character ASCII wire format is enforced at construction and decode.
+- Until root branch allocation is wired, legacy `DBHead` constructors use `ActorBranchId::nil()` and `post_apply_checksum: 0` as a compatibility bridge.
 
 # Ralph Progress Log
 Started: Wed Apr 29 03:29:23 PM PDT 2026
@@ -31,4 +32,25 @@ Started: Wed Apr 29 03:29:23 PM PDT 2026
   - `BookmarkStr` should be the shared type for persisted bookmark references; it validates the 33-byte ASCII wire shape on construction and serde decode.
   - `BranchManifest` is modeled as one joined struct in code even though its fields are stored in separate FDB sub-keys by owner.
   - `cargo check -p sqlite-storage` currently passes with an unrelated runner-protocol warning when `node_modules/@bare-ts/tools` is missing.
+---
+## 2026-04-29 16:52 PDT - US-003
+- Added the cold manifest, layer, bookmark index, pointer snapshot, bookmark record, pinned bookmark record, extended `CommitRow`, and extended `DBHead` types in `pump/types.rs`.
+- Added `schema_version` fields to S3-persisted cold-tier records and kept FDB bookmark records schema-version-free per the spec split.
+- Updated existing `DBHead` construction sites to carry `post_apply_checksum` and the temporary nil branch id until root branch allocation lands.
+- Verified with `cargo check -p sqlite-storage` and `cargo test -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/src/pump/types.rs`
+  - `engine/packages/sqlite-storage/src/pump/commit.rs`
+  - `engine/packages/sqlite-storage/src/takeover.rs`
+  - `engine/packages/sqlite-storage/tests/compactor_compact.rs`
+  - `engine/packages/sqlite-storage/tests/compactor_dispatch.rs`
+  - `engine/packages/sqlite-storage/tests/pump_commit.rs`
+  - `engine/packages/sqlite-storage/tests/pump_read.rs`
+  - `engine/packages/sqlite-storage/tests/takeover.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - S3-bound cold-tier structs in `pump/types.rs` carry `schema_version: u32`; FDB-resident records rely on embedded vbare versions instead of an explicit schema field.
+  - `DBHead.branch_id` is present now, but real branch identity is not wired until a later story; existing actor-scoped paths preserve behavior with `ActorBranchId::nil()`.
+  - `BookmarkIndexEntry` uses `BookmarkStr`, not raw `String`, to preserve the bookmark validation invariant in cold-tier indexes.
 ---

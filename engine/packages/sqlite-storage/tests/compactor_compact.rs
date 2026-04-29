@@ -15,7 +15,7 @@ use sqlite_storage::{
 	ltx::{LtxHeader, decode_ltx_v3, encode_ltx_v3},
 	quota,
 	types::{
-		DBHead, DirtyPage, MetaCompact, decode_meta_compact, encode_db_head,
+		ActorBranchId, DBHead, DirtyPage, MetaCompact, decode_meta_compact, encode_db_head,
 		encode_meta_compact,
 	},
 };
@@ -178,6 +178,8 @@ async fn seed_compaction_case(
 			encode_db_head(DBHead {
 				head_txid,
 				db_size_pages,
+				post_apply_checksum: 0,
+				branch_id: ActorBranchId::nil(),
 				#[cfg(debug_assertions)]
 				generation: 0,
 			})?,
@@ -229,6 +231,8 @@ async fn write_newer_page(db: &universaldb::Database, pgno: u32, txid: u64, fill
 			&encode_db_head(DBHead {
 				head_txid: txid,
 				db_size_pages: 128,
+				post_apply_checksum: 0,
+				branch_id: ActorBranchId::nil(),
 				#[cfg(debug_assertions)]
 				generation: 0,
 			})?,
@@ -247,6 +251,8 @@ async fn shrink_head(db: &universaldb::Database, head_txid: u64, db_size_pages: 
 			&encode_db_head(DBHead {
 				head_txid,
 				db_size_pages,
+				post_apply_checksum: 0,
+				branch_id: ActorBranchId::nil(),
 				#[cfg(debug_assertions)]
 				generation: 0,
 			})?,

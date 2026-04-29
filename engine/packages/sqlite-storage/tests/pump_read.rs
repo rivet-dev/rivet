@@ -6,7 +6,7 @@ use sqlite_storage::{
 	keys::{delta_chunk_key, meta_head_key, pidx_delta_key, shard_key, PAGE_SIZE},
 	ltx::{LtxHeader, encode_ltx_v3},
 	pump::ActorDb,
-	types::{DBHead, DirtyPage, FetchedPage, encode_db_head},
+	types::{ActorBranchId, DBHead, DirtyPage, FetchedPage, encode_db_head},
 };
 use tempfile::Builder;
 use universalpubsub::{PubSub, driver::memory::MemoryDriver};
@@ -30,6 +30,8 @@ fn head(db_size_pages: u32) -> DBHead {
 	DBHead {
 		head_txid: 4,
 		db_size_pages,
+		post_apply_checksum: 0,
+		branch_id: ActorBranchId::nil(),
 		#[cfg(debug_assertions)]
 		generation: 1,
 	}

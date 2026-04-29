@@ -4,7 +4,7 @@ use anyhow::Result;
 use sqlite_storage::{
 	keys::{delta_chunk_key, meta_head_key, pidx_delta_key, shard_key},
 	takeover,
-	types::{DBHead, encode_db_head},
+	types::{ActorBranchId, DBHead, encode_db_head},
 };
 use tempfile::Builder;
 
@@ -21,6 +21,8 @@ fn head(head_txid: u64, db_size_pages: u32) -> DBHead {
 	DBHead {
 		head_txid,
 		db_size_pages,
+		post_apply_checksum: 0,
+		branch_id: ActorBranchId::nil(),
 		#[cfg(debug_assertions)]
 		generation: 0,
 	}

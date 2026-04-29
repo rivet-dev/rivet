@@ -14,8 +14,8 @@ use sqlite_storage::{
 	pump::ActorDb,
 	quota::{self, SQLITE_MAX_STORAGE_BYTES},
 	types::{
-		DBHead, DirtyPage, FetchedPage, MetaCompact, decode_db_head, encode_db_head,
-		encode_meta_compact,
+		ActorBranchId, DBHead, DirtyPage, FetchedPage, MetaCompact, decode_db_head,
+		encode_db_head, encode_meta_compact,
 	},
 };
 use tempfile::Builder;
@@ -41,6 +41,8 @@ fn head(head_txid: u64, db_size_pages: u32) -> DBHead {
 	DBHead {
 		head_txid,
 		db_size_pages,
+		post_apply_checksum: 0,
+		branch_id: ActorBranchId::nil(),
 		#[cfg(debug_assertions)]
 		generation: 0,
 	}

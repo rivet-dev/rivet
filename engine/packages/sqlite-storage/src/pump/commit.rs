@@ -16,7 +16,7 @@ use crate::pump::{
 	ltx::{LtxHeader, encode_ltx_v3},
 	metrics,
 	quota,
-	types::{DBHead, DirtyPage, decode_db_head, decode_meta_compact, encode_db_head},
+	types::{ActorBranchId, DBHead, DirtyPage, decode_db_head, decode_meta_compact, encode_db_head},
 };
 
 const DELTA_CHUNK_BYTES: usize = 10_000;
@@ -103,6 +103,12 @@ impl ActorDb {
 					let new_head = DBHead {
 						head_txid: txid,
 						db_size_pages,
+						post_apply_checksum: previous_head
+							.as_ref()
+							.map_or(0, |head| head.post_apply_checksum),
+						branch_id: previous_head
+							.as_ref()
+							.map_or_else(ActorBranchId::nil, |head| head.branch_id),
 						#[cfg(debug_assertions)]
 						generation: previous_head.as_ref().map_or(0, |head| head.generation),
 					};

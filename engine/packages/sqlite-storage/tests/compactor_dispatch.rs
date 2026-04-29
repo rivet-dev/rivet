@@ -11,7 +11,7 @@ use sqlite_storage::compactor::{
 use sqlite_storage::{
 	keys::{PAGE_SIZE, delta_chunk_key, meta_compact_key, meta_compactor_lease_key, meta_head_key, pidx_delta_key},
 	ltx::{LtxHeader, encode_ltx_v3},
-	types::{DBHead, DirtyPage, MetaCompact, encode_db_head, encode_meta_compact},
+	types::{ActorBranchId, DBHead, DirtyPage, MetaCompact, encode_db_head, encode_meta_compact},
 };
 use tempfile::Builder;
 use tokio_util::sync::CancellationToken;
@@ -59,6 +59,8 @@ async fn seed_compaction_case(db: &universaldb::Database, actor_id: &str) -> Res
 				&encode_db_head(DBHead {
 					head_txid: 1,
 					db_size_pages: 128,
+					post_apply_checksum: 0,
+					branch_id: ActorBranchId::nil(),
 					#[cfg(debug_assertions)]
 					generation: 0,
 				})?,

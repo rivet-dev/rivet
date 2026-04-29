@@ -15,7 +15,7 @@ use crate::{
 	compactor::metrics,
 	pump::{
 		keys,
-		types::{decode_db_head, DBHead},
+		types::{ActorBranchId, decode_db_head, DBHead},
 	},
 };
 
@@ -236,6 +236,8 @@ fn empty_head() -> DBHead {
 	DBHead {
 		head_txid: 0,
 		db_size_pages: 0,
+		post_apply_checksum: 0,
+		branch_id: ActorBranchId::nil(),
 		#[cfg(debug_assertions)]
 		generation: 0,
 	}

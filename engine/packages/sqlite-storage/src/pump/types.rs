@@ -4,6 +4,7 @@ use uuid::Uuid;
 use vbare::OwnedVersionedData;
 
 pub const SQLITE_STORAGE_META_VERSION: u16 = 1;
+pub const SQLITE_STORAGE_COLD_SCHEMA_VERSION: u32 = 1;
 pub const SQLITE_PAGE_SIZE: u32 = crate::keys::PAGE_SIZE;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -28,6 +29,10 @@ macro_rules! impl_uuid_id {
 				Self(Uuid::new_v4())
 			}
 
+			pub fn nil() -> Self {
+				Self(Uuid::nil())
+			}
+
 			pub fn from_uuid(uuid: Uuid) -> Self {
 				Self(uuid)
 			}
@@ -44,6 +49,9 @@ impl_uuid_id!(NamespacePointerId);
 impl_uuid_id!(ActorPointerId);
 impl_uuid_id!(NamespaceBranchId);
 impl_uuid_id!(ActorBranchId);
+
+pub type ActorIdStr = String;
+pub type NamespaceIdUuid = NamespaceId;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
 pub struct BookmarkStr(String);
@@ -177,11 +185,105 @@ pub struct BranchManifest {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CommitRow {
+	pub wall_clock_ms: i64,
+	pub versionstamp: [u8; 16],
+	pub db_size_pages: u32,
+	pub post_apply_checksum: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DBHead {
 	pub head_txid: u64,
 	pub db_size_pages: u32,
+	pub post_apply_checksum: u64,
+	pub branch_id: ActorBranchId,
 	#[cfg(debug_assertions)]
 	pub generation: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ColdManifestIndex {
+	pub schema_version: u32,
+	pub branch_id: ActorBranchId,
+	pub chunks: Vec<ColdManifestChunkRef>,
+	pub last_pass_at_ms: i64,
+	pub last_pass_versionstamp: [u8; 16],
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ColdManifestChunkRef {
+	pub object_key: String,
+	pub pass_versionstamp: [u8; 16],
+	pub min_versionstamp: [u8; 16],
+	pub max_versionstamp: [u8; 16],
+	pub byte_size: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ColdManifestChunk {
+	pub schema_version: u32,
+	pub branch_id: ActorBranchId,
+	pub pass_versionstamp: [u8; 16],
+	pub layers: Vec<LayerEntry>,
+	pub bookmarks: Vec<BookmarkIndexEntry>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LayerEntry {
+	pub kind: LayerKind,
+	pub shard_id: Option<u32>,
+	pub min_txid: u64,
+	pub max_txid: u64,
+	pub min_versionstamp: [u8; 16],
+	pub max_versionstamp: [u8; 16],
+	pub byte_size: u64,
+	pub checksum: u64,
+	pub object_key: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum LayerKind {
+	Image,
+	Delta,
+	Pin,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BookmarkIndexEntry {
+	pub schema_version: u32,
+	pub bookmark_str: BookmarkStr,
+	pub pinned: bool,
+	pub pin_object_key: Option<String>,
+	pub pin_status: PinStatus,
+	pub created_at_ms: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PointerSnapshot {
+	pub schema_version: u32,
+	pub pass_versionstamp: [u8; 16],
+	pub actors: Vec<(ActorIdStr, NamespaceBranchId, ActorBranchId)>,
+	pub namespaces: Vec<(NamespaceIdUuid, NamespaceBranchId)>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BookmarkRecord {
+	pub bookmark: BookmarkStr,
+	pub actor_branch_id: ActorBranchId,
+	pub created_at_ms: i64,
+	pub resolved: Option<ResolvedVersionstamp>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PinnedBookmarkRecord {
+	pub bookmark: BookmarkStr,
+	pub actor_branch_id: ActorBranchId,
+	pub versionstamp: [u8; 16],
+	pub status: PinStatus,
+	pub pin_object_key: Option<String>,
+	pub created_at_ms: i64,
+	pub updated_at_ms: i64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -296,6 +398,8 @@ mod tests {
 		let head = DBHead {
 			head_txid: 42,
 			db_size_pages: 128,
+			post_apply_checksum: 9,
+			branch_id: super::ActorBranchId::nil(),
 			#[cfg(debug_assertions)]
 			generation: 7,
 		};
