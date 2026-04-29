@@ -34,6 +34,7 @@ Started: Wed Apr 29 04:36:56 AM PDT 2026
 - After deleting `sqlite-storage-legacy`, pegboard v1 SQLite migration writes directly through `sqlite_storage::pump::ActorDb`; tests should verify bytes by reading v2 pages from `ActorDb` rather than using a legacy `SqliteEngine`.
 - `rivetkit-sqlite` direct VFS tests now use a test-only `DirectStorage` wrapper around `ActorDb`; share it across close/reopen cycles or reopen persistence tests will silently start from empty storage.
 - `rivetkit-napi` needs napi-rs `dyn-symbols` so Rust test binaries can link without Node providing N-API symbols at test-link time.
+- `engine/CLAUDE.md` SQLite guidance now assumes stateless per-conn `ActorDb` caches, tests under `engine/packages/sqlite-storage/tests/`, and a standalone compactor service.
 
 ## 2026-04-29 04:44:52 PDT - US-001
 - Implemented a UUID-backed `NodeId` type and stored a generated value on each `Pools` instance.
@@ -297,4 +298,14 @@ Started: Wed Apr 29 04:36:56 AM PDT 2026
   - v1 SQLite migration can skip old staged-commit machinery entirely by committing recovered pages through a temporary `ActorDb` with a memory UPS handle.
   - `rivetkit-sqlite` direct-storage tests need a shared harness storage across opens to preserve close/reopen semantics.
   - Full workspace tests currently expose guard-core test drift unrelated to stateless SQLite; address that separately before treating `cargo test --workspace` as a clean gate.
+---
+## 2026-04-29 07:46:04 PDT - US-026
+- Updated `engine/CLAUDE.md` SQLite storage and Pegboard Envoy guidance to remove stale `SqliteEngine`, `CompactionCoordinator`, STAGE, takeover cleanup, and old META-fence notes.
+- Added the current stateless design invariants for `ActorDb` WS-conn caches, `/META/quota`, `/META/compactor_lease`, and compaction PIDX `COMPARE_AND_CLEAR`.
+- Verified `cargo check -p sqlite-storage` and `git diff --check`.
+- Files changed: `engine/CLAUDE.md`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
+- **Learnings for future iterations:**
+  - `engine/CLAUDE.md` should keep SQLite storage bullets at the invariant/test-convention level and avoid legacy implementation names.
+  - The preserved shrink-write and PIDX encoding bullets are still valid under the stateless pump design.
+  - Docs-only stories can still use `cargo check -p sqlite-storage` as the typecheck gate when the touched guidance is storage-specific.
 ---

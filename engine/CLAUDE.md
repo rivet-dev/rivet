@@ -50,28 +50,25 @@ Use `test-snapshot-gen` to generate and load RocksDB snapshots of the full UDB K
 
 ## SQLite storage tests
 
-- In `sqlite-storage` failure-injection tests, inspect state with `MemoryStore::snapshot()` because store calls still consume the `fail_after_ops` budget after the first injected error.
-- Keep `sqlite-storage` integration coverage inline in the module test blocks and run it against temp RocksDB-backed UniversalDB via `test_db()` plus real `SqliteEngine` methods instead of mocked storage paths.
-- For `sqlite-storage` background task coordinators, inject the worker future in tests so dedup and restart behavior can be verified without depending on the real worker implementation.
+- `sqlite-storage` tests live in `engine/packages/sqlite-storage/tests/`; do not add inline module test blocks.
+- Run `sqlite-storage` tests against temp RocksDB-backed UniversalDB via `test_db()`, `checkpoint_test_db(...)`, and `reopen_test_db(...)` instead of mocked storage paths.
 - `sqlite-storage` PIDX entries are stored as the PIDX key prefix plus a big-endian `u32` page number, with the value encoded as a raw big-endian `u64` txid.
-- When lazily populating `sqlite-storage` caches with `scc::HashMap::entry_async`, drop the vacant entry before awaiting a store load, then re-check `entry_async` before inserting.
-- `sqlite-storage` takeover should batch orphan DELTA/STAGE/PIDX cleanup with the bumped META write in one `atomic_write`, then evict the actor's cached PIDX so later reads reload cleaned state.
+- `sqlite-storage` `/META/quota` is a fixed-width little-endian `i64` atomic counter; do not vbare-encode it.
+- `sqlite-storage` `/META/compactor_lease` is held with a local timer, cancellation token, and periodic renewal task; compaction work transactions must not revalidate the lease in-tx.
+- `sqlite-storage` compaction PIDX deletes use `COMPARE_AND_CLEAR` so stale entries no-op when commits race compaction.
 - `sqlite-storage` LTX V3 files end the page section with a zeroed 6-byte page-header sentinel before the varint page index, and the index offsets/sizes refer to the full on-wire page frame.
 - `sqlite-storage` LTX decoders should validate the varint page index against the actual page-frame layout instead of trusting footer offsets alone.
-- `sqlite-storage` `get_pages(...)` should keep META, cold PIDX loads, and DELTA/SHARD blob fetches inside one `db.run(...)` transaction, then decode each unique blob once and evict stale cached PIDX rows that now need SHARD fallback.
+- `sqlite-storage` `get_pages(...)` should keep `/META/head`, cold PIDX loads, and DELTA/SHARD blob fetches inside one UDB transaction, then decode each unique blob once and evict stale cached PIDX rows that now need SHARD fallback.
 - `sqlite-storage` fast-path commits should update an already-cached PIDX in memory after the store write, but must not load PIDX from store just to mutate it or the one-RTT path is gone.
 - `sqlite-storage` shrink writes must delete above-EOF PIDX rows and fully-above-EOF SHARD blobs inside the same commit/takeover transaction; compaction only cleans partial shards by filtering pages at or below `head.db_size_pages`.
-- `sqlite-storage` fast-path cutoffs should use raw dirty-page bytes, and slow-path finalize must accept larger encoded DELTA blobs because UniversalDB chunks logical values internally.
 - `sqlite-storage` compaction should choose shard passes from the live PIDX scan, then delete DELTA blobs by comparing all existing delta keys against the remaining global PIDX references so multi-shard and overwritten deltas only disappear when every page ref is gone.
-- `sqlite-storage` compaction must re-read META inside its write transaction and fence on `generation` plus `head_txid` before updating `materialized_txid` or quota fields, so takeover and commits cannot rewind the head.
-- `sqlite-storage` metrics should record compaction pass duration and totals in `compaction/worker.rs`, while shard outcome metrics such as folded pages, deleted deltas, delta gauge updates, and lag stay in `compaction/shard.rs` to avoid double counting.
-- `sqlite-storage` quota accounting should treat only META, SHARD, DELTA, and PIDX keys as billable, and META writes need fixed-point `sqlite_storage_used` recomputation because the serialized head size includes the usage field itself.
-- `sqlite-storage` crash-recovery tests should snapshot RocksDB with `checkpoint_test_db(...)` and reopen it with `reopen_test_db(...)` so takeover cleanup runs against a real persisted restart state.
+- `sqlite-storage` metrics should record compaction pass duration and totals in `compactor/worker.rs`, while shard outcome metrics such as folded pages, deleted deltas, delta gauge updates, and lag stay in `compactor/shard.rs` to avoid double counting.
+- `sqlite-storage` quota accounting should treat only `/META/head`, SHARD, DELTA, and PIDX keys as billable; `/META/quota` tracks the sum with signed atomic-add deltas.
 - `sqlite-storage` latency tests that depend on `UDB_SIMULATED_LATENCY_MS` should live in a dedicated integration test binary, because UniversalDB caches that env var once per process with `OnceLock`.
 
 ## Pegboard Envoy
 
-- `PegboardEnvoyWs::new(...)` is constructed per websocket request, so shared sqlite dispatch state such as the `SqliteEngine` and `CompactionCoordinator` must live behind a process-wide `OnceCell` instead of per-connection fields.
+- `PegboardEnvoyWs::new(...)` is constructed per websocket request, so SQLite dispatch uses per-actor `ActorDb` instances cached on the WS conn and populated lazily by `get_pages` or `commit`.
 - Restored hibernatable WebSockets must rebuild runtime WebSocket handlers from callbacks and call `on_open`; pre-sleep NAPI callbacks are not reusable after actor wake.
 - `pegboard-envoy` SQLite websocket handlers must validate page numbers, page sizes, and duplicate dirty pages at the websocket trust boundary and return `SqliteErrorResponse` for unexpected failures instead of bubbling them through the shared connection task.
-- SQLite start-command schema dispatch should probe actor KV prefix `0x08` at startup instead of persisting a schema version in pegboard config or actor workflow state.
+- `pegboard-envoy` forwards `CommandStartActor` without local SQLite side effects; `CommandStopActor` only evicts the WS conn's cached `ActorDb`.
