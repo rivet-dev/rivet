@@ -3,6 +3,7 @@ pub mod cleanup;
 pub mod compact;
 pub mod lease;
 pub mod metrics;
+pub mod orphan;
 pub mod publish;
 pub mod shard;
 pub mod subjects;
@@ -14,7 +15,7 @@ pub use compact::{CompactionOutcome, compact_default_batch};
 pub use crate::admin::{
 	AdminOpRecord, AuditFields, ForkDstSpec, ForkMode, OpKind, OpProgress, OpResult, OpStatus,
 	RefcountKind, RestoreMode, RestoreTarget, SQLITE_OP_SUBJECT, SqliteAdminError, SqliteOp,
-	SqliteOpRequest, SqliteOpSubject, complete, create_record, read, update_progress,
+	SqliteOpRequest, SqliteOpSubject, complete, create_record, read, start_work, update_progress,
 	update_status,
 };
 pub use lease::{

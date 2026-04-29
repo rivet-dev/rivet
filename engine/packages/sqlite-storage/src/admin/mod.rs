@@ -4,7 +4,7 @@ pub mod subjects;
 pub mod types;
 
 pub use errors::SqliteAdminError;
-pub use record::{complete, create_record, read, update_progress, update_status};
+pub use record::{complete, create_record, read, start_work, update_progress, update_status};
 pub use subjects::{SQLITE_OP_SUBJECT, SqliteOpSubject};
 pub use types::{
 	AdminOpRecord, AuditFields, ForkDstSpec, ForkMode, OpKind, OpProgress, OpResult, OpStatus,

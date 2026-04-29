@@ -72,6 +72,35 @@ pub async fn update_status(
 	.await
 }
 
+pub async fn start_work(
+	udb: Arc<universaldb::Database>,
+	op_id: Uuid,
+	holder: NodeId,
+) -> Result<Option<AdminOpRecord>> {
+	let now_ms = now_ms()?;
+	udb.run(move |tx| async move {
+		let Some((key, mut record)) = find_record(&tx, op_id).await? else {
+			return Ok(None);
+		};
+
+		match record.status {
+			OpStatus::Pending => {
+				record.status = OpStatus::InProgress;
+				record.holder_id = Some(holder);
+				record.last_progress_at_ms = bumped_at(record.last_progress_at_ms, now_ms);
+				tx.informal().set(
+					&key,
+					&encode_admin_op_record(record.clone()).context("encode sqlite admin op")?,
+				);
+				Ok(Some(record))
+			}
+			OpStatus::InProgress => Ok(Some(record)),
+			OpStatus::Completed | OpStatus::Failed | OpStatus::Orphaned => Ok(None),
+		}
+	})
+	.await
+}
+
 pub async fn update_progress(
 	udb: Arc<universaldb::Database>,
 	op_id: Uuid,

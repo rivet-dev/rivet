@@ -46,6 +46,7 @@ Started: Wed Apr 29 04:36:56 AM PDT 2026
 - Retention-aware compaction needs namespace checkpoint config from the compact payload so it can load namespace defaults and emit namespace-level PITR metrics.
 - Checkpoint cleanup must preserve the latest checkpoint even past retention, update `/META/checkpoints`, clear `/CHECKPOINT/{T}/*`, and adjust `/META/storage_used_pitr` in one transaction.
 - SQLite admin operation state lives in actor-scoped `/META/admin_op/{operation_id}` records; helpers that only receive `op_id` locate the persisted record instead of using pod-local state.
+- SQLite admin op workers should call `admin::start_work` before dispatch so `/META/admin_op/{operation_id}` is the source of truth for Pending → InProgress transitions and holder assignment.
 
 ## 2026-04-29 04:44:52 PDT - US-001
 - Implemented a UUID-backed `NodeId` type and stored a generated value on each `Pools` instance.
@@ -386,4 +387,16 @@ Started: Wed Apr 29 04:36:56 AM PDT 2026
   - `SqliteOpSubject` is only the wakeup signal; `/META/admin_op/{operation_id}` is the persisted source of truth and there is no UPS response subject.
   - The admin record helper signatures update by `op_id`, so they locate the actor-scoped record before writing the exact `/META/admin_op/{operation_id}` key.
   - New `RivetError` variants with metadata require a direct `serde_json` dependency and generate checked-in artifacts under `engine/artifacts/errors/`.
+---
+## 2026-04-29 08:49:01 PDT - US-033
+- Wired `SqliteOpSubject` into the compactor worker with the shared `compactor` queue group, max-worker semaphore, persisted Pending → InProgress transition, admin handler stubs, in-flight metric, and unsubscribe bail-out behavior.
+- Added `compactor::orphan` scanning for stale Pending admin records, plus orphan metrics and a 10s worker scan interval.
+- Added restore/fork marker resume detection before stub handler dispatch, including matching-op resume and stale-holder takeover checks.
+- Added `tests/admin_dispatch.rs` coverage for UPS dispatch, worker concurrency limiting, orphan marking/skipping, marker resume/takeover, and unsubscribe handling.
+- Verified `cargo check -p sqlite-storage`, `cargo test -p sqlite-storage --test admin_dispatch`, `cargo test -p sqlite-storage`, and `git diff --check`.
+- Files changed: `engine/packages/sqlite-storage/Cargo.toml`, `Cargo.lock`, `engine/packages/sqlite-storage/src/admin/{mod.rs,record.rs}`, `engine/packages/sqlite-storage/src/compactor/{metrics.rs,mod.rs,orphan.rs,worker.rs}`, `engine/packages/sqlite-storage/tests/admin_dispatch.rs`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
+- **Learnings for future iterations:**
+  - Keep admin op dispatch rooted in `AdminOpRecord`; UPS is only the wakeup and the worker must transition persisted state before invoking handlers.
+  - Restore/fork handlers need to inspect in-progress markers before doing real work so later implementations can resume idempotently from `last_completed_step`.
+  - Worker integration tests that publish through the memory UPS driver need a deterministic subscribed signal; memory UPS does not retain pre-subscription messages.
 ---

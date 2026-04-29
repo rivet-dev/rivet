@@ -121,6 +121,19 @@ lazy_static::lazy_static! {
 		&["node_id", "kind"],
 		*REGISTRY
 	).unwrap();
+
+	pub static ref SQLITE_ADMIN_OP_ORPHANED_TOTAL: IntCounter = register_int_counter_with_registry!(
+		"sqlite_admin_op_orphaned_total",
+		"Total sqlite admin operations marked orphaned by the compactor.",
+		*REGISTRY
+	).unwrap();
+
+	pub static ref SQLITE_ADMIN_OP_IN_FLIGHT: IntGaugeVec = register_int_gauge_vec_with_registry!(
+		"sqlite_admin_op_in_flight",
+		"SQLite admin operations currently running in the compactor.",
+		&["op"],
+		*REGISTRY
+	).unwrap();
 }
 
 #[cfg(debug_assertions)]

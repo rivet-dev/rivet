@@ -1,6 +1,10 @@
-use std::{ops::Deref, sync::Arc, time::{Duration, Instant}};
+use std::{
+	ops::Deref,
+	sync::Arc,
+	time::{Duration, Instant},
+};
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use gas::prelude::{Database, Id, StandaloneCtx, db};
 use rivet_runtime::TermSignal;
 use tokio::{
@@ -10,15 +14,25 @@ use tokio::{
 use tokio_util::sync::CancellationToken;
 use universalpubsub::NextOutput;
 
-use crate::pump::quota;
+use crate::{
+	admin::{self, SqliteOp, SqliteOpRequest},
+	pump::{
+		keys,
+		quota,
+		types::{
+			ForkMarker, RestoreMarker, decode_fork_marker, decode_restore_marker,
+		},
+	},
+};
 
 use super::{
-	SqliteCompactPayload, SqliteCompactSubject, TakeOutcome,
+	SqliteCompactPayload, SqliteCompactSubject, SqliteOpSubject, TakeOutcome,
 	compact::{CheckpointConfig, compact_default_batch_with_checkpoint_config},
-	decode_compact_payload, lease, metrics, publish::Ups,
+	decode_compact_payload, lease, metrics, orphan, publish::Ups,
 };
 
 const COMPACTOR_QUEUE_GROUP: &str = "compactor";
+const ORPHAN_SCAN_INTERVAL: Duration = Duration::from_secs(10);
 
 #[derive(Clone, Debug)]
 pub struct CompactorConfig {
@@ -106,8 +120,11 @@ async fn run_with_node_id(
 	compactor_config: CompactorConfig,
 	holder_id: rivet_pools::NodeId,
 ) -> Result<()> {
-	let mut sub = ups
+	let mut compact_sub = ups
 		.queue_subscribe(compactor_config.ups_subject.as_str(), COMPACTOR_QUEUE_GROUP)
+		.await?;
+	let mut op_sub = ups
+		.queue_subscribe(SqliteOpSubject, COMPACTOR_QUEUE_GROUP)
 		.await?;
 	let max_workers = usize::try_from(compactor_config.max_concurrent_workers)
 		.context("sqlite compactor max_concurrent_workers exceeded usize")?
@@ -119,12 +136,16 @@ async fn run_with_node_id(
 	let checkpoint_semaphore = Arc::new(Semaphore::new(max_checkpoints));
 	let shutdown = CancellationToken::new();
 	let mut workers = JoinSet::new();
+	let mut orphan_interval = tokio::time::interval(ORPHAN_SCAN_INTERVAL);
+	orphan_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+	#[cfg(debug_assertions)]
+	test_hooks::notify_run_ready();
 	#[cfg(debug_assertions)]
 	let quota_validate_counts = Arc::new(scc::HashMap::new());
 
 	let loop_result = loop {
 		tokio::select! {
-			msg = sub.next() => {
+			msg = compact_sub.next() => {
 				match msg? {
 					NextOutput::Message(msg) => {
 						let payload = match decode_compact_payload(&msg.payload) {
@@ -160,7 +181,38 @@ async fn run_with_node_id(
 							}
 						});
 					}
-					NextOutput::Unsubscribed => break Err(anyhow::anyhow!("sqlite compactor sub unsubscribed")),
+					NextOutput::Unsubscribed => break Err(anyhow::anyhow!("sqlite compactor compact sub unsubscribed")),
+				}
+			}
+			msg = op_sub.next() => {
+				match msg? {
+					NextOutput::Message(msg) => {
+						let request = match admin::decode_sqlite_op_request(&msg.payload) {
+							Ok(request) => request,
+							Err(err) => {
+								tracing::warn!(?err, "received invalid sqlite admin op request");
+								continue;
+							}
+						};
+						let udb = Arc::clone(&udb);
+						let semaphore = Arc::clone(&semaphore);
+
+						workers.spawn(async move {
+							let Ok(_permit) = semaphore.acquire_owned().await else {
+								return;
+							};
+							if let Err(err) = handle_admin_op(udb, request, holder_id).await {
+								tracing::warn!(?err, "sqlite admin op failed");
+							}
+						});
+					}
+					NextOutput::Unsubscribed => break Err(anyhow::anyhow!("sqlite compactor op sub unsubscribed")),
+				}
+			}
+			_ = orphan_interval.tick() => {
+				let now_ms = now_ms()?;
+				if let Err(err) = orphan::scan_for_orphans(Arc::clone(&udb), now_ms).await {
+					tracing::warn!(?err, "sqlite admin orphan scan failed");
 				}
 			}
 			_ = term_signal.recv() => break Ok(()),
@@ -180,6 +232,362 @@ async fn run_with_node_id(
 	}
 
 	loop_result
+}
+
+async fn handle_admin_op(
+	udb: Arc<universaldb::Database>,
+	request: SqliteOpRequest,
+	holder_id: rivet_pools::NodeId,
+) -> Result<()> {
+	let op_label = admin_op_label(&request.op);
+	let _in_flight = AdminOpInFlightGuard::new(op_label);
+	let record = match admin::start_work(Arc::clone(&udb), request.request_id, holder_id).await? {
+		Some(record) => record,
+		None => {
+			tracing::debug!(
+				operation_id = %request.request_id,
+				"sqlite admin op has no runnable record"
+			);
+			return Ok(());
+		}
+	};
+	validate_admin_request_matches_record(&request, &record)?;
+
+	match request.op.clone() {
+		SqliteOp::Restore {
+			actor_id,
+			target,
+			mode,
+		} => {
+			handle_restore(udb, request, record, actor_id, target, mode, holder_id).await
+		}
+		SqliteOp::Fork {
+			src_actor_id,
+			target,
+			mode,
+			dst,
+		} => {
+			handle_fork(udb, request, record, src_actor_id, target, mode, dst, holder_id).await
+		}
+		SqliteOp::DescribeRetention { actor_id } => {
+			handle_describe_retention(udb, request, record, actor_id, holder_id).await
+		}
+		SqliteOp::SetRetention { actor_id, config } => {
+			handle_set_retention(udb, request, record, actor_id, config, holder_id).await
+		}
+		SqliteOp::ClearRefcount {
+			actor_id,
+			kind,
+			txid,
+		} => handle_clear_refcount(udb, request, record, actor_id, kind, txid, holder_id).await,
+	}
+}
+
+async fn handle_restore(
+	udb: Arc<universaldb::Database>,
+	request: SqliteOpRequest,
+	record: admin::AdminOpRecord,
+	actor_id: String,
+	target: admin::RestoreTarget,
+	mode: admin::RestoreMode,
+	holder_id: rivet_pools::NodeId,
+) -> Result<()> {
+	let resume = restore_resume_state(Arc::clone(&udb), &actor_id, request.request_id).await?;
+	#[cfg(debug_assertions)]
+	if test_hooks::maybe_handle_admin_op(test_hooks::AdminOpHookEvent {
+		request,
+		record,
+		resume: resume.clone(),
+	})
+	.await?
+	{
+		return Ok(());
+	}
+
+	let _ = (udb, actor_id, target, mode, holder_id, resume);
+	unimplemented!("sqlite restore admin op handler lands in US-034");
+}
+
+async fn handle_fork(
+	udb: Arc<universaldb::Database>,
+	request: SqliteOpRequest,
+	record: admin::AdminOpRecord,
+	src_actor_id: String,
+	target: admin::RestoreTarget,
+	mode: admin::ForkMode,
+	dst: admin::ForkDstSpec,
+	holder_id: rivet_pools::NodeId,
+) -> Result<()> {
+	let marker_actor_id = fork_marker_actor_id(&src_actor_id, &dst);
+	let resume = fork_resume_state(Arc::clone(&udb), &marker_actor_id, request.request_id).await?;
+	#[cfg(debug_assertions)]
+	if test_hooks::maybe_handle_admin_op(test_hooks::AdminOpHookEvent {
+		request,
+		record,
+		resume: resume.clone(),
+	})
+	.await?
+	{
+		return Ok(());
+	}
+
+	let _ = (udb, src_actor_id, target, mode, dst, holder_id, resume);
+	unimplemented!("sqlite fork admin op handler lands in US-035");
+}
+
+async fn handle_describe_retention(
+	_udb: Arc<universaldb::Database>,
+	request: SqliteOpRequest,
+	record: admin::AdminOpRecord,
+	actor_id: String,
+	_holder_id: rivet_pools::NodeId,
+) -> Result<()> {
+	#[cfg(debug_assertions)]
+	if test_hooks::maybe_handle_admin_op(test_hooks::AdminOpHookEvent {
+		request,
+		record,
+		resume: None,
+	})
+	.await?
+	{
+		return Ok(());
+	}
+
+	let _ = actor_id;
+	unimplemented!("sqlite describe-retention admin op handler lands in US-036");
+}
+
+async fn handle_set_retention(
+	_udb: Arc<universaldb::Database>,
+	request: SqliteOpRequest,
+	record: admin::AdminOpRecord,
+	actor_id: String,
+	config: crate::pump::types::RetentionConfig,
+	_holder_id: rivet_pools::NodeId,
+) -> Result<()> {
+	#[cfg(debug_assertions)]
+	if test_hooks::maybe_handle_admin_op(test_hooks::AdminOpHookEvent {
+		request,
+		record,
+		resume: None,
+	})
+	.await?
+	{
+		return Ok(());
+	}
+
+	let _ = (actor_id, config);
+	unimplemented!("sqlite set-retention admin op handler lands in US-036");
+}
+
+async fn handle_clear_refcount(
+	_udb: Arc<universaldb::Database>,
+	request: SqliteOpRequest,
+	record: admin::AdminOpRecord,
+	actor_id: String,
+	kind: admin::RefcountKind,
+	txid: u64,
+	_holder_id: rivet_pools::NodeId,
+) -> Result<()> {
+	#[cfg(debug_assertions)]
+	if test_hooks::maybe_handle_admin_op(test_hooks::AdminOpHookEvent {
+		request,
+		record,
+		resume: None,
+	})
+	.await?
+	{
+		return Ok(());
+	}
+
+	let _ = (actor_id, kind, txid);
+	unimplemented!("sqlite clear-refcount admin op handler lands in US-036");
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum AdminResumeState {
+	RestoreMatching {
+		marker: RestoreMarker,
+	},
+	RestoreTakeover {
+		previous_op_id: uuid::Uuid,
+		marker: RestoreMarker,
+	},
+	ForkMatching {
+		marker: ForkMarker,
+	},
+	ForkTakeover {
+		previous_op_id: uuid::Uuid,
+		marker: ForkMarker,
+	},
+}
+
+async fn restore_resume_state(
+	udb: Arc<universaldb::Database>,
+	actor_id: &str,
+	op_id: uuid::Uuid,
+) -> Result<Option<AdminResumeState>> {
+	let actor_id = actor_id.to_string();
+	udb.run(move |tx| {
+		let actor_id = actor_id.clone();
+		async move {
+			let Some(marker) = read_restore_marker(&tx, &actor_id).await? else {
+				return Ok(None);
+			};
+			if marker.op_id == op_id {
+				return Ok(Some(AdminResumeState::RestoreMatching { marker }));
+			}
+			ensure_marker_holder_is_stale(&tx, &actor_id, marker.holder_id).await?;
+			Ok(Some(AdminResumeState::RestoreTakeover {
+				previous_op_id: marker.op_id,
+				marker,
+			}))
+		}
+	})
+	.await
+}
+
+async fn fork_resume_state(
+	udb: Arc<universaldb::Database>,
+	actor_id: &str,
+	op_id: uuid::Uuid,
+) -> Result<Option<AdminResumeState>> {
+	let actor_id = actor_id.to_string();
+	udb.run(move |tx| {
+		let actor_id = actor_id.clone();
+		async move {
+			let Some(marker) = read_fork_marker(&tx, &actor_id).await? else {
+				return Ok(None);
+			};
+			if marker.op_id == op_id {
+				return Ok(Some(AdminResumeState::ForkMatching { marker }));
+			}
+			ensure_marker_holder_is_stale(&tx, &actor_id, marker.holder_id).await?;
+			Ok(Some(AdminResumeState::ForkTakeover {
+				previous_op_id: marker.op_id,
+				marker,
+			}))
+		}
+	})
+	.await
+}
+
+async fn read_restore_marker(
+	tx: &universaldb::Transaction,
+	actor_id: &str,
+) -> Result<Option<RestoreMarker>> {
+	Ok(match tx
+		.informal()
+		.get(
+			&keys::meta_restore_in_progress_key(actor_id),
+			universaldb::utils::IsolationLevel::Serializable,
+		)
+		.await?
+	{
+		Some(value) => Some(decode_restore_marker(&value)?),
+		None => None,
+	})
+}
+
+async fn read_fork_marker(
+	tx: &universaldb::Transaction,
+	actor_id: &str,
+) -> Result<Option<ForkMarker>> {
+	Ok(match tx
+		.informal()
+		.get(
+			&keys::meta_fork_in_progress_key(actor_id),
+			universaldb::utils::IsolationLevel::Serializable,
+		)
+		.await?
+	{
+		Some(value) => Some(decode_fork_marker(&value)?),
+		None => None,
+	})
+}
+
+async fn ensure_marker_holder_is_stale(
+	tx: &universaldb::Transaction,
+	actor_id: &str,
+	marker_holder: rivet_pools::NodeId,
+) -> Result<()> {
+	let Some(lease_value) = tx
+		.informal()
+		.get(
+			&keys::meta_compactor_lease_key(actor_id),
+			universaldb::utils::IsolationLevel::Serializable,
+		)
+		.await?
+	else {
+		return Ok(());
+	};
+	let lease = lease::decode_lease(&lease_value)?;
+	let now_ms = now_ms()?;
+	if lease.holder_id == marker_holder && lease.expires_at_ms > now_ms {
+		bail!("sqlite admin marker holder still has a live lease");
+	}
+	Ok(())
+}
+
+fn validate_admin_request_matches_record(
+	request: &SqliteOpRequest,
+	record: &admin::AdminOpRecord,
+) -> Result<()> {
+	if request.request_id != record.operation_id {
+		bail!("sqlite admin op request id did not match persisted record");
+	}
+	if admin_op_kind(&request.op) != record.op_kind {
+		bail!("sqlite admin op kind did not match persisted record");
+	}
+	Ok(())
+}
+
+fn admin_op_kind(op: &SqliteOp) -> admin::OpKind {
+	match op {
+		SqliteOp::Restore { .. } => admin::OpKind::Restore,
+		SqliteOp::Fork { .. } => admin::OpKind::Fork,
+		SqliteOp::DescribeRetention { .. } => admin::OpKind::DescribeRetention,
+		SqliteOp::SetRetention { .. } => admin::OpKind::SetRetention,
+		SqliteOp::ClearRefcount { .. } => admin::OpKind::ClearRefcount,
+	}
+}
+
+fn admin_op_label(op: &SqliteOp) -> &'static str {
+	match op {
+		SqliteOp::Restore { .. } => "restore",
+		SqliteOp::Fork { .. } => "fork",
+		SqliteOp::DescribeRetention { .. } => "describe_retention",
+		SqliteOp::SetRetention { .. } => "set_retention",
+		SqliteOp::ClearRefcount { .. } => "clear_refcount",
+	}
+}
+
+fn fork_marker_actor_id(src_actor_id: &str, dst: &admin::ForkDstSpec) -> String {
+	match dst {
+		admin::ForkDstSpec::Allocate { .. } => src_actor_id.to_string(),
+		admin::ForkDstSpec::Existing { dst_actor_id } => dst_actor_id.clone(),
+	}
+}
+
+struct AdminOpInFlightGuard {
+	op: &'static str,
+}
+
+impl AdminOpInFlightGuard {
+	fn new(op: &'static str) -> Self {
+		metrics::SQLITE_ADMIN_OP_IN_FLIGHT
+			.with_label_values(&[op])
+			.inc();
+		Self { op }
+	}
+}
+
+impl Drop for AdminOpInFlightGuard {
+	fn drop(&mut self) {
+		metrics::SQLITE_ADMIN_OP_IN_FLIGHT
+			.with_label_values(&[self.op])
+			.dec();
+	}
 }
 
 async fn handle_trigger(
@@ -567,7 +975,123 @@ fn now_ms() -> Result<i64> {
 
 #[cfg(debug_assertions)]
 pub mod test_hooks {
+	use std::{future::Future, pin::Pin};
+
+	use parking_lot::Mutex;
+
 	use super::*;
+
+	type HookFuture = Pin<Box<dyn Future<Output = Result<bool>> + Send>>;
+	type AdminOpHook = dyn Fn(AdminOpHookEvent) -> HookFuture + Send + Sync + 'static;
+
+	static ADMIN_OP_HOOK: Mutex<Option<Arc<AdminOpHook>>> = Mutex::new(None);
+	static RUN_READY_SIGNAL: Mutex<Option<tokio::sync::oneshot::Sender<()>>> = Mutex::new(None);
+
+	#[derive(Clone, Debug)]
+	pub struct AdminOpHookEvent {
+		pub request: SqliteOpRequest,
+		pub record: admin::AdminOpRecord,
+		pub resume: Option<AdminResumeState>,
+	}
+
+	pub struct AdminOpHookGuard;
+
+	impl Drop for AdminOpHookGuard {
+		fn drop(&mut self) {
+			*ADMIN_OP_HOOK.lock() = None;
+		}
+	}
+
+	pub fn set_admin_op_hook<F, Fut>(hook: F) -> AdminOpHookGuard
+	where
+		F: Fn(AdminOpHookEvent) -> Fut + Send + Sync + 'static,
+		Fut: Future<Output = Result<bool>> + Send + 'static,
+	{
+		*ADMIN_OP_HOOK.lock() = Some(Arc::new(move |event| Box::pin(hook(event))));
+		AdminOpHookGuard
+	}
+
+	pub fn set_run_ready_signal(tx: tokio::sync::oneshot::Sender<()>) {
+		*RUN_READY_SIGNAL.lock() = Some(tx);
+	}
+
+	pub(super) fn notify_run_ready() {
+		if let Some(tx) = RUN_READY_SIGNAL.lock().take() {
+			let _ = tx.send(());
+		}
+	}
+
+	pub(super) async fn maybe_handle_admin_op(event: AdminOpHookEvent) -> Result<bool> {
+		let hook = ADMIN_OP_HOOK.lock().clone();
+		match hook {
+			Some(hook) => hook(event).await,
+			None => Ok(false),
+		}
+	}
+
+	pub async fn handle_admin_op_once(
+		udb: Arc<universaldb::Database>,
+		request: SqliteOpRequest,
+		holder_id: rivet_pools::NodeId,
+	) -> Result<()> {
+		super::handle_admin_op(udb, request, holder_id).await
+	}
+
+	pub async fn handle_admin_ops_with_limit_for_test(
+		udb: Arc<universaldb::Database>,
+		requests: Vec<SqliteOpRequest>,
+		holder_id: rivet_pools::NodeId,
+		max_concurrent_workers: usize,
+	) -> Result<()> {
+		let semaphore = Arc::new(Semaphore::new(max_concurrent_workers.max(1)));
+		let mut workers = JoinSet::new();
+
+		for request in requests {
+			let udb = Arc::clone(&udb);
+			let semaphore = Arc::clone(&semaphore);
+			workers.spawn(async move {
+				let _permit = semaphore
+					.acquire_owned()
+					.await
+					.context("sqlite admin op semaphore closed")?;
+				super::handle_admin_op(udb, request, holder_id).await
+			});
+		}
+
+		while let Some(join_result) = workers.join_next().await {
+			join_result.context("sqlite admin op worker panicked")??;
+		}
+
+		Ok(())
+	}
+
+	pub async fn run_for_test(
+		udb: Arc<universaldb::Database>,
+		ups: Ups,
+		compactor_config: CompactorConfig,
+		holder_id: rivet_pools::NodeId,
+	) -> Result<()> {
+		super::run_with_node_id(
+			udb,
+			ups,
+			TermSignal::get(),
+			compactor_config,
+			holder_id,
+		)
+		.await
+	}
+
+	pub async fn unsubscribe_probe_for_test(ups: Ups) -> Result<()> {
+		let mut compact_sub = ups
+			.queue_subscribe(SqliteCompactSubject, COMPACTOR_QUEUE_GROUP)
+			.await?;
+		match compact_sub.next().await? {
+			NextOutput::Message(_) => Ok(()),
+			NextOutput::Unsubscribed => {
+				Err(anyhow::anyhow!("sqlite compactor compact sub unsubscribed"))
+			}
+		}
+	}
 
 	pub async fn handle_trigger_once(
 		udb: Arc<universaldb::Database>,

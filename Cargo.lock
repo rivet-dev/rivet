@@ -6217,6 +6217,7 @@ name = "sqlite-storage"
 version = "2.3.0-rc.4"
 dependencies = [
  "anyhow",
+ "async-trait",
  "futures-util",
  "gasoline",
  "lazy_static",
