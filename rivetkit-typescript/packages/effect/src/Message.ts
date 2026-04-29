@@ -1,4 +1,3 @@
-import { type Pipeable, pipeArguments } from "effect/Pipeable";
 import * as Predicate from "effect/Predicate";
 import * as Schema from "effect/Schema";
 
@@ -61,7 +60,7 @@ export interface Message<
 	in out Tag extends string,
 	in out Payload extends Schema.Top = Schema.Void,
 	out Success extends Schema.Top = Schema.Never,
-> extends Pipeable {
+> {
 	new (_: never): object;
 
 	(payload: Payload["~type.make.in"]): Envelope<Tag, Payload, Success>;
@@ -102,7 +101,7 @@ export interface Envelope<
  * Type-erased view of any `Message`. Useful for collections of
  * messages where the specific schemas don't matter.
  */
-export interface Any extends Pipeable {
+export interface Any {
 	readonly [TypeId]: typeof TypeId;
 	readonly _tag: string;
 	readonly key: string;
@@ -113,7 +112,7 @@ export interface Any extends Pipeable {
  * Like `Any`, but with the prop fields (`*Schema`) accessible. Used
  * by internal builders that need to read schemas off a message.
  */
-export interface AnyWithProps extends Pipeable {
+export interface AnyWithProps {
 	readonly [TypeId]: typeof TypeId;
 	readonly _tag: string;
 	readonly key: string;
@@ -234,10 +233,6 @@ export type EnvelopeOf<R> =
 
 const Proto = {
 	[TypeId]: TypeId,
-	pipe() {
-		// biome-ignore lint/complexity/noArguments: required by Effect's Pipeable contract
-		return pipeArguments(this, arguments);
-	},
 };
 
 const makeProto = <

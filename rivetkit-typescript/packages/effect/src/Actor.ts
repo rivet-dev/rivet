@@ -1,7 +1,6 @@
 import * as Context from "effect/Context";
 import type * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import { type Pipeable, pipeArguments } from "effect/Pipeable";
 import * as Predicate from "effect/Predicate";
 import type * as PubSub from "effect/PubSub";
 import type * as Queue from "effect/Queue";
@@ -290,7 +289,7 @@ export interface Actor<
 	Actions extends Action.AnyWithProps = never,
 	Messages extends Message.AnyWithProps = never,
 	Events extends EventSchemas = {},
-> extends Pipeable {
+> {
 	readonly [TypeId]: typeof TypeId;
 	readonly _tag: Name;
 	readonly key: string;
@@ -339,7 +338,7 @@ export interface Actor<
 /**
  * Type-erased view of any actor contract.
  */
-export interface Any extends Pipeable {
+export interface Any {
 	readonly [TypeId]: typeof TypeId;
 	readonly _tag: string;
 	readonly key: string;
@@ -449,10 +448,6 @@ const identity = <A>(value: A): A => value;
 
 const Proto = {
 	[TypeId]: TypeId,
-	pipe() {
-		// biome-ignore lint/complexity/noArguments: required by Effect's Pipeable contract
-		return pipeArguments(this, arguments);
-	},
 	of: identity,
 	toLayer(this: AnyWithProps) {
 		throw new Error(
