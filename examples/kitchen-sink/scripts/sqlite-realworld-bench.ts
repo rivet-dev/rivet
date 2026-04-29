@@ -148,6 +148,7 @@ interface BenchmarkResult {
 	setup: SetupResult | null;
 	main: MainResult;
 	vfsMetrics: VfsMetricSnapshot;
+	readPoolMetrics: ReadPoolMetricSnapshot;
 }
 
 interface VfsMetricSnapshot {
@@ -162,6 +163,23 @@ interface VfsMetricSnapshot {
 	prefetchBytesTotal: number;
 	getPagesDurationSecondsSum: number;
 	getPagesDurationSecondsCount: number;
+}
+
+interface ReadPoolMetricSnapshot {
+	activeReaders: number;
+	idleReaders: number;
+	readWaitDurationSecondsSum: number;
+	readWaitDurationSecondsCount: number;
+	writeWaitDurationSecondsSum: number;
+	writeWaitDurationSecondsCount: number;
+	routedReadQueriesTotal: number;
+	writeFallbackQueriesTotal: number;
+	manualTransactionDurationSecondsSum: number;
+	manualTransactionDurationSecondsCount: number;
+	readerOpensTotal: number;
+	readerClosesTotal: number;
+	rejectedReaderMutationsTotal: number;
+	modeTransitionsTotal: number;
 }
 
 const WORKLOAD_SPECS: WorkloadSpec[] = [
@@ -843,6 +861,8 @@ function parsePrometheusLabels(raw: string | undefined): Record<string, string> 
 }
 
 function metricValue(text: string, name: string): number {
+	let total = 0;
+	let found = false;
 	for (const line of text.split("\n")) {
 		if (line.length === 0 || line.startsWith("#")) continue;
 		const [series, value] = line.trim().split(/\s+/, 2);
@@ -850,16 +870,17 @@ function metricValue(text: string, name: string): number {
 		const match = /^([^{]+)(\{.*\})?$/.exec(series);
 		if (!match || match[1] !== name) continue;
 		parsePrometheusLabels(match[2]);
-		return Number.parseFloat(value);
+		total += Number.parseFloat(value);
+		found = true;
 	}
-	return 0;
+	return found ? total : 0;
 }
 
-async function scrapeVfsMetrics(
+async function scrapeActorMetricsText(
 	endpoint: string,
 	actorId: string,
 	metricsToken: string,
-): Promise<VfsMetricSnapshot> {
+): Promise<string> {
 	const base = endpoint.replace(/\/$/, "");
 	const gatewayToken = process.env.RIVET_TOKEN
 		? `@${encodeURIComponent(process.env.RIVET_TOKEN)}`
@@ -877,7 +898,10 @@ async function scrapeVfsMetrics(
 			`failed to scrape actor metrics: ${response.status} ${await response.text()}`,
 		);
 	}
-	const text = await response.text();
+	return await response.text();
+}
+
+function scrapeVfsMetrics(text: string): VfsMetricSnapshot {
 	return {
 		resolvePagesTotal: metricValue(text, "sqlite_vfs_resolve_pages_total"),
 		resolvePagesRequestedTotal: metricValue(
@@ -908,17 +932,62 @@ async function scrapeVfsMetrics(
 	};
 }
 
-function diffVfsMetrics(
-	after: VfsMetricSnapshot,
-	before: VfsMetricSnapshot,
-): VfsMetricSnapshot {
+function scrapeReadPoolMetrics(text: string): ReadPoolMetricSnapshot {
+	return {
+		activeReaders: metricValue(text, "sqlite_read_pool_active_readers"),
+		idleReaders: metricValue(text, "sqlite_read_pool_idle_readers"),
+		readWaitDurationSecondsSum: metricValue(
+			text,
+			"sqlite_read_pool_read_wait_duration_seconds_sum",
+		),
+		readWaitDurationSecondsCount: metricValue(
+			text,
+			"sqlite_read_pool_read_wait_duration_seconds_count",
+		),
+		writeWaitDurationSecondsSum: metricValue(
+			text,
+			"sqlite_read_pool_write_wait_duration_seconds_sum",
+		),
+		writeWaitDurationSecondsCount: metricValue(
+			text,
+			"sqlite_read_pool_write_wait_duration_seconds_count",
+		),
+		routedReadQueriesTotal: metricValue(
+			text,
+			"sqlite_read_pool_routed_read_queries_total",
+		),
+		writeFallbackQueriesTotal: metricValue(
+			text,
+			"sqlite_read_pool_write_fallback_queries_total",
+		),
+		manualTransactionDurationSecondsSum: metricValue(
+			text,
+			"sqlite_read_pool_manual_transaction_duration_seconds_sum",
+		),
+		manualTransactionDurationSecondsCount: metricValue(
+			text,
+			"sqlite_read_pool_manual_transaction_duration_seconds_count",
+		),
+		readerOpensTotal: metricValue(text, "sqlite_read_pool_reader_opens_total"),
+		readerClosesTotal: metricValue(text, "sqlite_read_pool_reader_closes_total"),
+		rejectedReaderMutationsTotal: metricValue(
+			text,
+			"sqlite_read_pool_rejected_reader_mutations_total",
+		),
+		modeTransitionsTotal: metricValue(
+			text,
+			"sqlite_read_pool_mode_transitions_total",
+		),
+	};
+}
+
+function diffMetrics<T extends object>(after: T, before: T): T {
 	return Object.fromEntries(
 		Object.keys(after).map((key) => [
 			key,
-			after[key as keyof VfsMetricSnapshot] -
-				before[key as keyof VfsMetricSnapshot],
+			(after[key as keyof T] as number) - (before[key as keyof T] as number),
 		]),
-	) as unknown as VfsMetricSnapshot;
+	) as T;
 }
 
 function emptyVfsMetrics(): VfsMetricSnapshot {
@@ -937,6 +1006,25 @@ function emptyVfsMetrics(): VfsMetricSnapshot {
 	};
 }
 
+function emptyReadPoolMetrics(): ReadPoolMetricSnapshot {
+	return {
+		activeReaders: 0,
+		idleReaders: 0,
+		readWaitDurationSecondsSum: 0,
+		readWaitDurationSecondsCount: 0,
+		writeWaitDurationSecondsSum: 0,
+		writeWaitDurationSecondsCount: 0,
+		routedReadQueriesTotal: 0,
+		writeFallbackQueriesTotal: 0,
+		manualTransactionDurationSecondsSum: 0,
+		manualTransactionDurationSecondsCount: 0,
+		readerOpensTotal: 0,
+		readerClosesTotal: 0,
+		rejectedReaderMutationsTotal: 0,
+		modeTransitionsTotal: 0,
+	};
+}
+
 function writeResults(outputDir: string, document: unknown): void {
 	mkdirSync(outputDir, { recursive: true });
 	writeFileSync(
@@ -951,8 +1039,8 @@ function writeSummary(outputDir: string, results: BenchmarkResult[]): void {
 		"",
 		"Server SQLite time only. Setup time, sleep delay, wake/cold-start time, and client RTT are not included.",
 		"",
-		"| workload | category | size | server_ms | get_pages | fetched_pages | cache_hits | cache_misses | rows/ops | pages |",
-		"| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+		"| workload | category | size | server_ms | routed_reads | write_fallbacks | mode_transitions | reader_opens | reader_closes | get_pages | fetched_pages | cache_hits | cache_misses | rows/ops | pages |",
+		"| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
 	];
 	for (const result of results) {
 		const rowsOrOps =
@@ -962,7 +1050,7 @@ function writeSummary(outputDir: string, results: BenchmarkResult[]): void {
 					? result.main.ops
 					: "";
 		lines.push(
-			`| ${result.workload} | ${result.category} | ${fmtBytes(result.targetBytes)} | ${result.main.ms.toFixed(1)} | ${result.vfsMetrics.getPagesTotal} | ${result.vfsMetrics.pagesFetchedTotal} | ${result.vfsMetrics.resolvePagesCacheHitsTotal} | ${result.vfsMetrics.resolvePagesCacheMissesTotal} | ${rowsOrOps} | ${result.main.pageCount} |`,
+			`| ${result.workload} | ${result.category} | ${fmtBytes(result.targetBytes)} | ${result.main.ms.toFixed(1)} | ${result.readPoolMetrics.routedReadQueriesTotal} | ${result.readPoolMetrics.writeFallbackQueriesTotal} | ${result.readPoolMetrics.modeTransitionsTotal} | ${result.readPoolMetrics.readerOpensTotal} | ${result.readPoolMetrics.readerClosesTotal} | ${result.vfsMetrics.getPagesTotal} | ${result.vfsMetrics.pagesFetchedTotal} | ${result.vfsMetrics.resolvePagesCacheHitsTotal} | ${result.vfsMetrics.resolvePagesCacheMissesTotal} | ${rowsOrOps} | ${result.main.pageCount} |`,
 		);
 	}
 	writeFileSync(join(outputDir, "summary.md"), `${lines.join("\n")}\n`);
@@ -1121,14 +1209,21 @@ async function main(): Promise<void> {
 					targetBytes,
 				}),
 			)) as MainResult;
-			const afterMainMetrics = await scrapeVfsMetrics(
+			const afterMainMetricsText = await scrapeActorMetricsText(
 				args.endpoint,
 				actorId,
 				args.metricsToken,
 			);
-			const vfsMetrics = diffVfsMetrics(afterMainMetrics, emptyVfsMetrics());
+			const vfsMetrics = diffMetrics(
+				scrapeVfsMetrics(afterMainMetricsText),
+				emptyVfsMetrics(),
+			);
+			const readPoolMetrics = diffMetrics(
+				scrapeReadPoolMetrics(afterMainMetricsText),
+				emptyReadPoolMetrics(),
+			);
 			console.log(
-				`  server=${fmtMs(mainResult.ms)} pages=${mainResult.pageCount} get_pages=${vfsMetrics.getPagesTotal} fetched_pages=${vfsMetrics.pagesFetchedTotal}`,
+				`  server=${fmtMs(mainResult.ms)} pages=${mainResult.pageCount} routed_reads=${readPoolMetrics.routedReadQueriesTotal} write_fallbacks=${readPoolMetrics.writeFallbackQueriesTotal} mode_transitions=${readPoolMetrics.modeTransitionsTotal} get_pages=${vfsMetrics.getPagesTotal} fetched_pages=${vfsMetrics.pagesFetchedTotal}`,
 			);
 
 			results.push({
@@ -1142,6 +1237,7 @@ async function main(): Promise<void> {
 				setup,
 				main: mainResult,
 				vfsMetrics,
+				readPoolMetrics,
 			});
 			writeResults(outputDir, resultDocument);
 			writeSummary(outputDir, results);
@@ -1154,7 +1250,7 @@ async function main(): Promise<void> {
 		console.log("\nResults");
 		for (const result of results) {
 			console.log(
-				`  ${result.workload}: server=${fmtMs(result.main.ms)} size=${fmtBytes(result.targetBytes)} get_pages=${result.vfsMetrics.getPagesTotal} fetched_pages=${result.vfsMetrics.pagesFetchedTotal}`,
+				`  ${result.workload}: server=${fmtMs(result.main.ms)} size=${fmtBytes(result.targetBytes)} routed_reads=${result.readPoolMetrics.routedReadQueriesTotal} write_fallbacks=${result.readPoolMetrics.writeFallbackQueriesTotal} mode_transitions=${result.readPoolMetrics.modeTransitionsTotal} get_pages=${result.vfsMetrics.getPagesTotal} fetched_pages=${result.vfsMetrics.pagesFetchedTotal}`,
 			);
 		}
 		console.log(`\nwrote ${join(outputDir, "results.json")}`);

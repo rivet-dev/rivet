@@ -14,6 +14,7 @@ Started: Wed Apr 29 04:23:03 AM PDT 2026
 - TypeScript SQLite database wrappers should route single-statement work through native `SqliteDatabase.execute`; use `exec` only for multi-statement compatibility.
 - TypeScript SQLite migration hooks should run inside native `writeMode` so setup queries use the writer connection and do not create readers.
 - SQLite read-pool rollout config lives in `sqlite-storage::optimization_flags`; build `NativeConnectionManagerConfig` from `sqlite_optimization_flags()` and use `RIVETKIT_SQLITE_OPT_READ_POOL_ENABLED=false` for single-writer compatibility.
+- Kitchen-sink SQLite real-world benchmark reporting should include read-pool route counters alongside VFS counters so parallel-read and read-write-transition workloads expose manager behavior.
 
 ## 2026-04-29 04:27:40 PDT - US-001
 - Implemented native SQLite statement classification with readonly detection, trailing-statement detection, authorizer action capture, and conservative reader eligibility.
@@ -213,4 +214,25 @@ Started: Wed Apr 29 04:23:03 AM PDT 2026
   - The read pool is enabled by default to preserve prior native parallel-read behavior; disabled mode intentionally keeps one writer connection open and reports readonly statements as write fallbacks.
   - Existing actor metrics already implement the SQLite VFS metrics trait, so read-pool internals can be exposed by extending that trait without adding a second metrics plumbing path.
   - Idle reader TTL cleanup is lazy on read admission; there is no background timer for reader expiry.
+---
+## 2026-04-29 05:49:07 PDT - US-010
+- Implemented kitchen-sink SQLite real-world benchmark reporting for read-pool route and transition metrics, including routed reads, write fallbacks, mode transitions, reader opens, and reader closes in both console output and `summary.md`.
+- Tightened the static benchmark test so the runner and actor workload catalogs remain in sync and read-pool metric reporting stays visible.
+- Added a reusable examples agent note for kitchen-sink SQLite real-world benchmark catalog sync and summary reporting.
+- Files changed:
+  - `examples/CLAUDE.md`
+  - `examples/kitchen-sink/scripts/sqlite-realworld-bench.ts`
+  - `examples/kitchen-sink/tests/sqlite-realworld-bench.test.ts`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- Checks:
+  - `pnpm --dir examples/kitchen-sink test`
+  - `pnpm --dir examples/kitchen-sink exec tsx scripts/sqlite-realworld-bench.ts --help`
+  - `pnpm --dir examples/kitchen-sink exec biome check --formatter-enabled=false --assist-enabled=false scripts/sqlite-realworld-bench.ts tests/sqlite-realworld-bench.test.ts`
+  - `pnpm --dir examples/kitchen-sink run check-types` is the package-declared typecheck and currently prints `skipped - workflow history types broken`.
+  - Direct `tsc --noEmit` remains blocked by pre-existing kitchen-sink/server, Drizzle dependency, and workflow declaration errors outside this story.
+- **Learnings for future iterations:**
+  - `sqlite_read_pool_mode_transitions_total` is label-bearing, so benchmark metric parsing should sum all series for a metric family instead of taking the first sample.
+  - Scrape actor metrics once per workload and derive VFS plus read-pool snapshots from the same Prometheus text to keep reported counters comparable.
+  - The kitchen-sink package intentionally stubs `check-types`; use its static tests and a `tsx --help` smoke parse for benchmark-script-only changes unless the broader TypeScript config is repaired.
 ---

@@ -2,6 +2,7 @@
 
 - Follow these guidelines when creating and maintaining examples in this repository.
 - Keep `onStateChange` examples read-only against `c.state`; use `vars` for callback counters or derived runtime-only values.
+- Kitchen-sink SQLite real-world benchmark changes must keep the runner and actor `WORKLOADS` catalogs in sync and keep read-pool route metrics visible in `summary.md`.
 
 ## README Format
 

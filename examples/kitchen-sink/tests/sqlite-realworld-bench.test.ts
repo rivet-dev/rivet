@@ -42,4 +42,15 @@ test("SQLite real-world benchmark includes read-mode/write-mode scenarios", () =
 	);
 	assert.match(actor, /Promise\.all\(\[/);
 	assert.match(actor, /UPDATE rw_orders SET total_cents = total_cents \+ 1/);
+	for (const metric of [
+		"sqlite_read_pool_routed_read_queries_total",
+		"sqlite_read_pool_write_fallback_queries_total",
+		"sqlite_read_pool_mode_transitions_total",
+	]) {
+		assert.match(runner, new RegExp(metric));
+	}
+	assert.match(
+		runner,
+		/\| workload \| category \| size \| server_ms \| routed_reads \| write_fallbacks \| mode_transitions \|/,
+	);
 });
