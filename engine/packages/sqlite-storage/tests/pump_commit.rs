@@ -201,6 +201,10 @@ async fn shrink_commit_deletes_above_eof_pidx_and_shards() -> Result<()> {
 		&db,
 		vec![
 			(meta_head_key(TEST_ACTOR), encode_db_head(head(7, 130))?),
+			(
+				delta_chunk_key(TEST_ACTOR, 7, 0),
+				encoded_blob(7, &[(64, 0x64), (129, 0x81)])?,
+			),
 			(pidx_delta_key(TEST_ACTOR, 64), 7_u64.to_be_bytes().to_vec()),
 			(pidx_delta_key(TEST_ACTOR, 129), 7_u64.to_be_bytes().to_vec()),
 			(shard_key(TEST_ACTOR, 1), encoded_blob(7, &[(64, 0x64)])?),

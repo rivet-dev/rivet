@@ -21,6 +21,7 @@ Started: Wed Apr 29 04:36:56 AM PDT 2026
 - `sqlite-storage` compact trigger payloads need namespace id and actor name alongside actor id before the compactor can emit namespace `MetricKey` rollups.
 - Debug-only compactor quota validation is wired from the worker through a per-actor `scc::HashMap<String, u32>` pass counter; the validator itself only scans PIDX, DELTA, and SHARD prefixes before comparing to `/META/quota`.
 - Compactor Prometheus metric vectors use `node_id` as the first label, with secondary labels like `outcome` or `actor_id` after it.
+- Debug takeover reconciliation treats seeded SQLite rows as real invariants; test fixtures with PIDX rows must also seed the referenced DELTA row before constructing `ActorDb`.
 
 ## 2026-04-29 04:44:52 PDT - US-001
 - Implemented a UUID-backed `NodeId` type and stored a generated value on each `Pools` instance.
@@ -208,4 +209,16 @@ Started: Wed Apr 29 04:36:56 AM PDT 2026
   - `sqlite_compactor` registration needs both a `run_config.rs` service entry and a normal `sqlite-storage.workspace = true` dependency on `rivet-engine`.
   - Keep compatibility wrappers for compactor helpers, then add `*_with_node_id` variants where production callers can thread `pools.node_id()`.
   - Integration tests can assert Prometheus vector label shapes through the `Collector::desc()` descriptors without emitting every label combination first.
+---
+## 2026-04-29 06:19:01 PDT - US-019
+- Implemented the debug-only takeover invariant scanner for PIDX, DELTA, and SHARD rows.
+- Wired `ActorDb::new` to run the scanner in debug builds and record `sqlite_takeover_invariant_violation_total` with structured violation logs before panicking.
+- Replaced the takeover placeholder with coverage for clean state, above-EOF rows, above-head DELTAs, and dangling PIDX references.
+- Fixed the shrink commit fixture so seeded PIDX rows point at an existing DELTA before debug reconciliation runs.
+- Verified `cargo test -p sqlite-storage --test takeover`, `cargo test -p sqlite-storage`, `cargo check -p sqlite-storage`, `cargo build -p sqlite-storage --release`, `cargo check --workspace`, and `git diff --check`.
+- Files changed: `engine/packages/sqlite-storage/src/takeover.rs`, `engine/packages/sqlite-storage/src/pump/actor_db.rs`, `engine/packages/sqlite-storage/tests/takeover.rs`, `engine/packages/sqlite-storage/tests/pump_commit.rs`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
+- **Learnings for future iterations:**
+  - `ActorDb::new` is still synchronous, so the async debug scanner uses a debug-only blocking wrapper on a short-lived runtime.
+  - Takeover invariant labels are limited to `above_eof`, `above_head_txid`, and `dangling_pidx_ref`.
+  - Fixtures that manually seed PIDX rows must also seed the referenced DELTA row or debug reconciliation will panic before the test reaches the code under test.
 ---

@@ -25,7 +25,7 @@ pub struct ActorDb {
 impl ActorDb {
 	pub fn new(udb: Arc<Database>, actor_id: String, node_id: NodeId) -> Self {
 		#[cfg(debug_assertions)]
-		crate::takeover::reconcile(&udb, &actor_id);
+		crate::takeover::reconcile_blocking(udb.clone(), actor_id.clone(), node_id);
 
 		Self {
 			udb,
