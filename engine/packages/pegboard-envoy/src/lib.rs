@@ -258,8 +258,6 @@ impl CustomServeTrait for PegboardEnvoyWs {
 			}
 		}
 
-		actor_lifecycle::shutdown_conn_actors(&conn).await;
-
 		tracing::debug!(%topic, "envoy websocket closed");
 
 		metrics::CONNECTION_ACTIVE

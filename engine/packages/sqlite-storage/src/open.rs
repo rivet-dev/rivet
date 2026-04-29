@@ -405,18 +405,27 @@ impl SqliteEngine {
 			},
 		);
 
+		// FDB head.generation is the durable fence and was already verified
+		// above. The in-memory open_dbs entry is a per-process cache, not the
+		// source of truth. Reject only when the cache shows a strictly-newer
+		// owner, otherwise advance the cache to match FDB so later close and
+		// ensure_open calls see the right generation.
 		match self.open_dbs.entry_async(actor_id.to_string()).await {
-			scc::hash_map::Entry::Occupied(entry) => {
+			scc::hash_map::Entry::Occupied(mut entry) => {
+				let cached = entry.get().generation;
 				ensure!(
-					entry.get().generation == generation,
+					cached <= generation,
 					SqliteStorageError::FenceMismatch {
 						reason: format!(
-							"ensure_local_open generation {} did not match open generation {}",
-							generation,
-							entry.get().generation
+							"ensure_local_open generation {} is stale; \
+							 open generation {} is newer (this conn was taken over)",
+							generation, cached
 						),
 					},
 				);
+				if cached < generation {
+					entry.get_mut().generation = generation;
+				}
 			}
 			scc::hash_map::Entry::Vacant(entry) => {
 				entry.insert_entry(OpenDb { generation });

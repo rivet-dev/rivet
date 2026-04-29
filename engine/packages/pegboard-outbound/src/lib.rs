@@ -267,83 +267,63 @@ async fn handle(ctx: &StandaloneCtx, packet: protocol::ToOutbound) -> Result<()>
 	let sqlite_open = sqlite_engine
 		.open(&actor_id.to_string(), OpenConfig::new(timestamp::now()))
 		.await?;
-	let sqlite_generation = sqlite_open.generation;
 
-	// Run the request body inside a closure so every error path closes the
-	// SQLite db. Without this the `?` operators on `serialize`, `signal`, and
-	// the `serverless_outbound_req` call would leak the open db on the
-	// process-wide `SqliteEngine`, blocking re-open until the process
-	// restarts.
-	let actor_id_str = actor_id.to_string();
-	let res = async {
-		let sqlite_startup_data = protocol_sqlite_startup_data(sqlite_open);
-		let payload = versioned::ToEnvoy::wrap_latest(protocol::ToEnvoy::ToEnvoyCommands(vec![
-			protocol::CommandWrapper {
-				checkpoint,
-				inner: protocol::Command::CommandStartActor(protocol::CommandStartActor {
-					config: actor_config,
-					hibernating_requests: hibernating_requests
-						.into_iter()
-						.map(|x| protocol::HibernatingRequest {
-							gateway_id: x.gateway_id,
-							request_id: x.request_id,
-						})
-						.collect(),
-					preloaded_kv,
-					sqlite_startup_data: Some(sqlite_startup_data),
-				}),
-			},
-		]))
-		.serialize_with_embedded_version(protocol_version)?;
+	let sqlite_startup_data = protocol_sqlite_startup_data(sqlite_open);
+	let payload = versioned::ToEnvoy::wrap_latest(protocol::ToEnvoy::ToEnvoyCommands(vec![
+		protocol::CommandWrapper {
+			checkpoint,
+			inner: protocol::Command::CommandStartActor(protocol::CommandStartActor {
+				config: actor_config,
+				hibernating_requests: hibernating_requests
+					.into_iter()
+					.map(|x| protocol::HibernatingRequest {
+						gateway_id: x.gateway_id,
+						request_id: x.request_id,
+					})
+					.collect(),
+				preloaded_kv,
+				sqlite_startup_data: Some(sqlite_startup_data),
+			}),
+		},
+	]))
+	.serialize_with_embedded_version(protocol_version)?;
 
-		// Send ack to actor wf before starting an outbound req
-		ctx.signal(pegboard::workflows::actor2::Allocated { generation })
-			.to_workflow::<pegboard::workflows::actor2::Workflow>()
-			.tag("actor_id", &actor_id)
-			.send()
-			.await?;
+	// Send ack to actor wf before starting an outbound req
+	ctx.signal(pegboard::workflows::actor2::Allocated { generation })
+		.to_workflow::<pegboard::workflows::actor2::Workflow>()
+		.tag("actor_id", &actor_id)
+		.send()
+		.await?;
 
-		metrics::REQ_ACTIVE
-			.with_label_values(&[&namespace_id.to_string(), &pool_name])
-			.inc();
+	metrics::REQ_ACTIVE
+		.with_label_values(&[&namespace_id.to_string(), &pool_name])
+		.inc();
 
-		let token = if let Some(auth) = &ctx.config().auth {
-			Some(auth.admin_token.read().as_str())
-		} else {
-			None
-		};
+	let token = if let Some(auth) = &ctx.config().auth {
+		Some(auth.admin_token.read().as_str())
+	} else {
+		None
+	};
 
-		let res = serverless_outbound_req(
-			ctx,
-			namespace_id,
-			&pool_name,
-			&namespace.name,
-			actor_id,
-			generation,
-			payload,
-			&url,
-			headers,
-			request_lifespan,
-			drain_grace_period,
-			token,
-		)
-		.await;
-
-		metrics::REQ_ACTIVE
-			.with_label_values(&[&namespace_id.to_string(), &pool_name])
-			.dec();
-
-		res
-	}
+	let res = serverless_outbound_req(
+		ctx,
+		namespace_id,
+		&pool_name,
+		&namespace.name,
+		actor_id,
+		generation,
+		payload,
+		&url,
+		headers,
+		request_lifespan,
+		drain_grace_period,
+		token,
+	)
 	.await;
 
-	if let Err(err) = sqlite_engine.close(&actor_id_str, sqlite_generation).await {
-		tracing::warn!(
-			?err,
-			?actor_id,
-			"close failed for outbound sqlite db"
-		);
-	}
+	metrics::REQ_ACTIVE
+		.with_label_values(&[&namespace_id.to_string(), &pool_name])
+		.dec();
 
 	res
 }
