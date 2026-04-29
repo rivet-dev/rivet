@@ -7,6 +7,7 @@ export const ConfigurePoolSchema = z
 		url: z.string(),
 		headers: z.record(z.string(), z.string()).optional(),
 		requestLifespan: z.number().optional(),
+		drainGracePeriod: z.number().optional(),
 		metadata: z.record(z.string(), z.unknown()).optional(),
 		metadataPollInterval: z.number().optional(),
 		drainOnVersionUpgrade: z.boolean().optional(),

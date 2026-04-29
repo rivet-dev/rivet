@@ -133,6 +133,10 @@
           "description": "Maximum lifespan of a request in seconds.",
           "type": "number"
         },
+        "drainGracePeriod": {
+          "description": "Grace period before the serverless request is forcibly closed, in seconds.",
+          "type": "number"
+        },
         "metadata": {
           "description": "Additional metadata to pass to the serverless platform.",
           "type": "object",

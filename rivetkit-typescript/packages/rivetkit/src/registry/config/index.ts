@@ -366,6 +366,12 @@ export const DocConfigurePoolSchema = z
 			.number()
 			.optional()
 			.describe("Maximum lifespan of a request in seconds."),
+		drainGracePeriod: z
+			.number()
+			.optional()
+			.describe(
+				"Grace period before the serverless request is forcibly closed, in seconds.",
+			),
 		metadata: z
 			.record(z.string(), z.unknown())
 			.optional()
