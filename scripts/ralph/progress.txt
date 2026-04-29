@@ -13,6 +13,7 @@ Started: Wed Apr 29 04:23:03 AM PDT 2026
 - Native SQLite single-statement work should route through `NativeDatabaseHandle::execute`; keep `exec` as the multi-statement compatibility path.
 - TypeScript SQLite database wrappers should route single-statement work through native `SqliteDatabase.execute`; use `exec` only for multi-statement compatibility.
 - TypeScript SQLite migration hooks should run inside native `writeMode` so setup queries use the writer connection and do not create readers.
+- SQLite read-pool rollout config lives in `sqlite-storage::optimization_flags`; build `NativeConnectionManagerConfig` from `sqlite_optimization_flags()` and use `RIVETKIT_SQLITE_OPT_READ_POOL_ENABLED=false` for single-writer compatibility.
 
 ## 2026-04-29 04:27:40 PDT - US-001
 - Implemented native SQLite statement classification with readonly detection, trailing-statement detection, authorizer action capture, and conservative reader eligibility.
@@ -182,4 +183,34 @@ Started: Wed Apr 29 04:23:03 AM PDT 2026
   - Use `SqliteDatabase.execute` in TypeScript wrappers for single statements so native classification owns read/write routing.
   - A close gate is enough for TS wrapper lifecycle safety; write serialization belongs in the native connection manager.
   - NAPI-generated route metadata is typed as `string` in `index.d.ts`, so the TS wrapper should normalize it before exposing the public union.
+---
+## 2026-04-29 05:45:00 PDT - US-009
+- Added central SQLite read-pool rollout flags for enabled/disabled state, max readers, and idle reader TTL, then wired `open_database_from_envoy` through `NativeConnectionManagerConfig::from_optimization_flags`.
+- Added read-pool Prometheus metrics for reader gauges, wait histograms, routed reads, write fallbacks, manual transaction duration, reader opens/closes, rejected reader mutations, and mode transitions.
+- Preserved disabled single-writer behavior by routing all statements through the writer when `RIVETKIT_SQLITE_OPT_READ_POOL_ENABLED=false`, with a regression test proving SELECT does not open readers.
+- Files changed:
+  - `engine/packages/sqlite-storage/src/optimization_flags.rs`
+  - `rivetkit-rust/packages/rivetkit-sqlite/src/connection_manager.rs`
+  - `rivetkit-rust/packages/rivetkit-sqlite/src/database.rs`
+  - `rivetkit-rust/packages/rivetkit-sqlite/src/vfs.rs`
+  - `rivetkit-rust/packages/rivetkit-core/src/actor/metrics.rs`
+  - `rivetkit-rust/packages/rivetkit-core/tests/metrics.rs`
+  - `examples/kitchen-sink/scripts/sqlite-realworld-bench.ts`
+  - `engine/packages/sqlite-storage/AGENTS.md`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- Checks:
+  - `cargo check -p sqlite-storage`
+  - `cargo check -p rivetkit-sqlite`
+  - `cargo check -p rivetkit-core`
+  - `cargo check -p rivetkit-core --features sqlite`
+  - `cargo test -p sqlite-storage optimization_flags`
+  - `cargo test -p rivetkit-sqlite disabled_read_pool_routes_select_through_single_writer --lib`
+  - `cargo test -p rivetkit-core --features sqlite sqlite_read_pool_metrics_render`
+  - `timeout 240s cargo test -p rivetkit-sqlite`
+  - `pnpm --dir examples/kitchen-sink test`
+- **Learnings for future iterations:**
+  - The read pool is enabled by default to preserve prior native parallel-read behavior; disabled mode intentionally keeps one writer connection open and reports readonly statements as write fallbacks.
+  - Existing actor metrics already implement the SQLite VFS metrics trait, so read-pool internals can be exposed by extending that trait without adding a second metrics plumbing path.
+  - Idle reader TTL cleanup is lazy on read admission; there is no background timer for reader expiry.
 ---

@@ -2,11 +2,8 @@
 
 use std::{env, sync::OnceLock};
 
-pub const READ_AHEAD_ENV: &str = "RIVETKIT_SQLITE_OPT_READ_AHEAD";
-pub const CACHE_HIT_PREDICTOR_TRAINING_ENV: &str =
-	"RIVETKIT_SQLITE_OPT_CACHE_HIT_PREDICTOR_TRAINING";
+pub const READ_AHEAD_MODE_ENV: &str = "RIVETKIT_SQLITE_OPT_READ_AHEAD_MODE";
 pub const RECENT_PAGE_HINTS_ENV: &str = "RIVETKIT_SQLITE_OPT_RECENT_PAGE_HINTS";
-pub const ADAPTIVE_READ_AHEAD_ENV: &str = "RIVETKIT_SQLITE_OPT_ADAPTIVE_READ_AHEAD";
 pub const PRELOAD_HINT_FLUSH_ENV: &str = "RIVETKIT_SQLITE_OPT_PRELOAD_HINT_FLUSH";
 pub const STARTUP_PRELOAD_MAX_BYTES_ENV: &str = "RIVETKIT_SQLITE_OPT_STARTUP_PRELOAD_MAX_BYTES";
 pub const STARTUP_PRELOAD_FIRST_PAGES_ENV: &str =
@@ -21,31 +18,75 @@ pub const CACHE_GET_PAGES_VALIDATION_ENV: &str = "RIVETKIT_SQLITE_OPT_CACHE_GET_
 pub const RANGE_READS_ENV: &str = "RIVETKIT_SQLITE_OPT_RANGE_READS";
 pub const BATCH_CHUNK_READS_ENV: &str = "RIVETKIT_SQLITE_OPT_BATCH_CHUNK_READS";
 pub const DECODED_LTX_CACHE_ENV: &str = "RIVETKIT_SQLITE_OPT_DECODED_LTX_CACHE";
+pub const VFS_PAGE_CACHE_MODE_ENV: &str = "RIVETKIT_SQLITE_OPT_VFS_PAGE_CACHE_MODE";
 pub const VFS_PAGE_CACHE_CAPACITY_PAGES_ENV: &str =
 	"RIVETKIT_SQLITE_OPT_VFS_PAGE_CACHE_CAPACITY_PAGES";
-pub const VFS_CACHE_FETCHED_PAGES_ENV: &str = "RIVETKIT_SQLITE_OPT_VFS_CACHE_FETCHED_PAGES";
-pub const VFS_CACHE_PREFETCHED_PAGES_ENV: &str = "RIVETKIT_SQLITE_OPT_VFS_CACHE_PREFETCHED_PAGES";
-pub const VFS_CACHE_STARTUP_PRELOADED_PAGES_ENV: &str =
-	"RIVETKIT_SQLITE_OPT_VFS_CACHE_STARTUP_PRELOADED_PAGES";
-pub const VFS_SCAN_RESISTANT_CACHE_ENV: &str = "RIVETKIT_SQLITE_OPT_VFS_SCAN_RESISTANT_CACHE";
 pub const VFS_PROTECTED_CACHE_PAGES_ENV: &str = "RIVETKIT_SQLITE_OPT_VFS_PROTECTED_CACHE_PAGES";
+pub const SQLITE_READ_POOL_ENABLED_ENV: &str = "RIVETKIT_SQLITE_OPT_READ_POOL_ENABLED";
+pub const SQLITE_READ_POOL_MAX_READERS_ENV: &str = "RIVETKIT_SQLITE_OPT_READ_POOL_MAX_READERS";
+pub const SQLITE_READ_POOL_IDLE_TTL_MS_ENV: &str = "RIVETKIT_SQLITE_OPT_READ_POOL_IDLE_TTL_MS";
 
 pub const DEFAULT_STARTUP_PRELOAD_MAX_BYTES: usize = 1024 * 1024;
 pub const MAX_STARTUP_PRELOAD_MAX_BYTES: usize = 8 * 1024 * 1024;
 pub const DEFAULT_STARTUP_PRELOAD_FIRST_PAGE_COUNT: u32 = 1;
 pub const MAX_STARTUP_PRELOAD_FIRST_PAGE_COUNT: u32 = 256;
 pub const DEFAULT_VFS_PAGE_CACHE_CAPACITY_PAGES: u64 = 50_000;
-pub const MIN_VFS_PAGE_CACHE_CAPACITY_PAGES: u64 = 1;
 pub const MAX_VFS_PAGE_CACHE_CAPACITY_PAGES: u64 = 500_000;
 pub const DEFAULT_VFS_PROTECTED_CACHE_PAGES: usize = 512;
 pub const MAX_VFS_PROTECTED_CACHE_PAGES: usize = 8_192;
+pub const DEFAULT_SQLITE_READ_POOL_MAX_READERS: usize = 4;
+pub const MAX_SQLITE_READ_POOL_MAX_READERS: usize = 64;
+pub const DEFAULT_SQLITE_READ_POOL_IDLE_TTL_MS: u64 = 60_000;
+pub const MAX_SQLITE_READ_POOL_IDLE_TTL_MS: u64 = 3_600_000;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SqliteReadAheadMode {
+	Off,
+	Bounded,
+	Adaptive,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SqliteVfsPageCacheMode {
+	Off,
+	Target,
+	Startup,
+	Prefetch,
+	All,
+}
+
+impl SqliteReadAheadMode {
+	pub fn uses_bounded_prefetch(self) -> bool {
+		matches!(self, Self::Bounded | Self::Adaptive)
+	}
+
+	pub fn uses_adaptive_prefetch(self) -> bool {
+		matches!(self, Self::Adaptive)
+	}
+}
+
+impl SqliteVfsPageCacheMode {
+	pub fn caches_any_pages(self) -> bool {
+		!matches!(self, Self::Off)
+	}
+
+	pub fn caches_target_pages(self) -> bool {
+		matches!(self, Self::Target | Self::Startup | Self::Prefetch | Self::All)
+	}
+
+	pub fn caches_prefetched_pages(self) -> bool {
+		matches!(self, Self::Prefetch | Self::All)
+	}
+
+	pub fn caches_startup_preloaded_pages(self) -> bool {
+		matches!(self, Self::Startup | Self::All)
+	}
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SqliteOptimizationFlags {
-	pub read_ahead: bool,
-	pub cache_hit_predictor_training: bool,
+	pub read_ahead_mode: SqliteReadAheadMode,
 	pub recent_page_hints: bool,
-	pub adaptive_read_ahead: bool,
 	pub preload_hint_flush: bool,
 	pub startup_preload_max_bytes: usize,
 	pub startup_preload_first_pages: bool,
@@ -58,21 +99,19 @@ pub struct SqliteOptimizationFlags {
 	pub range_reads: bool,
 	pub batch_chunk_reads: bool,
 	pub decoded_ltx_cache: bool,
+	pub vfs_page_cache_mode: SqliteVfsPageCacheMode,
 	pub vfs_page_cache_capacity_pages: u64,
-	pub vfs_cache_fetched_pages: bool,
-	pub vfs_cache_prefetched_pages: bool,
-	pub vfs_cache_startup_preloaded_pages: bool,
-	pub vfs_scan_resistant_cache: bool,
 	pub vfs_protected_cache_pages: usize,
+	pub sqlite_read_pool_enabled: bool,
+	pub sqlite_read_pool_max_readers: usize,
+	pub sqlite_read_pool_idle_ttl_ms: u64,
 }
 
 impl Default for SqliteOptimizationFlags {
 	fn default() -> Self {
 		Self {
-			read_ahead: true,
-			cache_hit_predictor_training: true,
+			read_ahead_mode: SqliteReadAheadMode::Adaptive,
 			recent_page_hints: true,
-			adaptive_read_ahead: true,
 			preload_hint_flush: true,
 			startup_preload_max_bytes: DEFAULT_STARTUP_PRELOAD_MAX_BYTES,
 			startup_preload_first_pages: true,
@@ -85,12 +124,12 @@ impl Default for SqliteOptimizationFlags {
 			range_reads: true,
 			batch_chunk_reads: true,
 			decoded_ltx_cache: true,
+			vfs_page_cache_mode: SqliteVfsPageCacheMode::All,
 			vfs_page_cache_capacity_pages: DEFAULT_VFS_PAGE_CACHE_CAPACITY_PAGES,
-			vfs_cache_fetched_pages: true,
-			vfs_cache_prefetched_pages: true,
-			vfs_cache_startup_preloaded_pages: true,
-			vfs_scan_resistant_cache: true,
 			vfs_protected_cache_pages: DEFAULT_VFS_PROTECTED_CACHE_PAGES,
+			sqlite_read_pool_enabled: true,
+			sqlite_read_pool_max_readers: DEFAULT_SQLITE_READ_POOL_MAX_READERS,
+			sqlite_read_pool_idle_ttl_ms: DEFAULT_SQLITE_READ_POOL_IDLE_TTL_MS,
 		}
 	}
 }
@@ -102,12 +141,11 @@ impl SqliteOptimizationFlags {
 
 	pub fn from_env_reader(mut read_env: impl FnMut(&str) -> Option<String>) -> Self {
 		Self {
-			read_ahead: enabled_by_default(read_env(READ_AHEAD_ENV).as_deref()),
-			cache_hit_predictor_training: enabled_by_default(
-				read_env(CACHE_HIT_PREDICTOR_TRAINING_ENV).as_deref(),
+			read_ahead_mode: read_ahead_mode_by_default(
+				read_env(READ_AHEAD_MODE_ENV).as_deref(),
+				SqliteReadAheadMode::Adaptive,
 			),
 			recent_page_hints: enabled_by_default(read_env(RECENT_PAGE_HINTS_ENV).as_deref()),
-			adaptive_read_ahead: enabled_by_default(read_env(ADAPTIVE_READ_AHEAD_ENV).as_deref()),
 			preload_hint_flush: enabled_by_default(read_env(PRELOAD_HINT_FLUSH_ENV).as_deref()),
 			startup_preload_max_bytes: usize_bounded_by_default(
 				read_env(STARTUP_PRELOAD_MAX_BYTES_ENV).as_deref(),
@@ -138,28 +176,32 @@ impl SqliteOptimizationFlags {
 			range_reads: enabled_by_default(read_env(RANGE_READS_ENV).as_deref()),
 			batch_chunk_reads: enabled_by_default(read_env(BATCH_CHUNK_READS_ENV).as_deref()),
 			decoded_ltx_cache: enabled_by_default(read_env(DECODED_LTX_CACHE_ENV).as_deref()),
+			vfs_page_cache_mode: vfs_page_cache_mode_by_default(
+				read_env(VFS_PAGE_CACHE_MODE_ENV).as_deref(),
+				SqliteVfsPageCacheMode::All,
+			),
 			vfs_page_cache_capacity_pages: u64_bounded_by_default(
 				read_env(VFS_PAGE_CACHE_CAPACITY_PAGES_ENV).as_deref(),
 				DEFAULT_VFS_PAGE_CACHE_CAPACITY_PAGES,
-				MIN_VFS_PAGE_CACHE_CAPACITY_PAGES,
 				MAX_VFS_PAGE_CACHE_CAPACITY_PAGES,
-			),
-			vfs_cache_fetched_pages: enabled_by_default(
-				read_env(VFS_CACHE_FETCHED_PAGES_ENV).as_deref(),
-			),
-			vfs_cache_prefetched_pages: enabled_by_default(
-				read_env(VFS_CACHE_PREFETCHED_PAGES_ENV).as_deref(),
-			),
-			vfs_cache_startup_preloaded_pages: enabled_by_default(
-				read_env(VFS_CACHE_STARTUP_PRELOADED_PAGES_ENV).as_deref(),
-			),
-			vfs_scan_resistant_cache: enabled_by_default(
-				read_env(VFS_SCAN_RESISTANT_CACHE_ENV).as_deref(),
 			),
 			vfs_protected_cache_pages: usize_bounded_by_default(
 				read_env(VFS_PROTECTED_CACHE_PAGES_ENV).as_deref(),
 				DEFAULT_VFS_PROTECTED_CACHE_PAGES,
 				MAX_VFS_PROTECTED_CACHE_PAGES,
+			),
+			sqlite_read_pool_enabled: enabled_by_default(
+				read_env(SQLITE_READ_POOL_ENABLED_ENV).as_deref(),
+			),
+			sqlite_read_pool_max_readers: usize_bounded_by_default(
+				read_env(SQLITE_READ_POOL_MAX_READERS_ENV).as_deref(),
+				DEFAULT_SQLITE_READ_POOL_MAX_READERS,
+				MAX_SQLITE_READ_POOL_MAX_READERS,
+			),
+			sqlite_read_pool_idle_ttl_ms: u64_bounded_by_default(
+				read_env(SQLITE_READ_POOL_IDLE_TTL_MS_ENV).as_deref(),
+				DEFAULT_SQLITE_READ_POOL_IDLE_TTL_MS,
+				MAX_SQLITE_READ_POOL_IDLE_TTL_MS,
 			),
 		}
 	}
@@ -191,11 +233,10 @@ fn usize_bounded_by_default(value: Option<&str>, default: usize, max: usize) -> 
 		.min(max)
 }
 
-fn u64_bounded_by_default(value: Option<&str>, default: u64, min: u64, max: u64) -> u64 {
+fn u64_bounded_by_default(value: Option<&str>, default: u64, max: u64) -> u64 {
 	value
 		.and_then(|value| value.trim().parse::<u64>().ok())
 		.unwrap_or(default)
-		.max(min)
 		.min(max)
 }
 
@@ -206,6 +247,50 @@ fn u32_bounded_by_default(value: Option<&str>, default: u32, max: u32) -> u32 {
 		.min(max)
 }
 
+fn read_ahead_mode_by_default(
+	value: Option<&str>,
+	default: SqliteReadAheadMode,
+) -> SqliteReadAheadMode {
+	match value.map(|value| value.trim().to_ascii_lowercase()) {
+		Some(value)
+			if matches!(
+				value.as_str(),
+				"off" | "0" | "false" | "no" | "disabled" | "disable"
+			) =>
+		{
+			SqliteReadAheadMode::Off
+		}
+		Some(value) if value == "bounded" => SqliteReadAheadMode::Bounded,
+		Some(value) if value == "adaptive" || value == "on" || value == "true" || value == "1" => {
+			SqliteReadAheadMode::Adaptive
+		}
+		_ => default,
+	}
+}
+
+fn vfs_page_cache_mode_by_default(
+	value: Option<&str>,
+	default: SqliteVfsPageCacheMode,
+) -> SqliteVfsPageCacheMode {
+	match value.map(|value| value.trim().to_ascii_lowercase()) {
+		Some(value)
+			if matches!(
+				value.as_str(),
+				"off" | "0" | "false" | "no" | "disabled" | "disable"
+			) =>
+		{
+			SqliteVfsPageCacheMode::Off
+		}
+		Some(value) if value == "target" => SqliteVfsPageCacheMode::Target,
+		Some(value) if value == "startup" => SqliteVfsPageCacheMode::Startup,
+		Some(value) if value == "prefetch" => SqliteVfsPageCacheMode::Prefetch,
+		Some(value) if value == "all" || value == "on" || value == "true" || value == "1" => {
+			SqliteVfsPageCacheMode::All
+		}
+		_ => default,
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -213,10 +298,8 @@ mod tests {
 	#[test]
 	fn flags_default_enabled_and_explicitly_disableable() {
 		let flags = SqliteOptimizationFlags::from_env_reader(|key| match key {
-			READ_AHEAD_ENV => Some("false".to_string()),
-			CACHE_HIT_PREDICTOR_TRAINING_ENV => Some("false".to_string()),
+			READ_AHEAD_MODE_ENV => Some("off".to_string()),
 			RECENT_PAGE_HINTS_ENV => Some("0".to_string()),
-			ADAPTIVE_READ_AHEAD_ENV => Some("false".to_string()),
 			PRELOAD_HINT_FLUSH_ENV => Some("false".to_string()),
 			STARTUP_PRELOAD_MAX_BYTES_ENV => Some("0".to_string()),
 			STARTUP_PRELOAD_FIRST_PAGES_ENV => Some("false".to_string()),
@@ -229,19 +312,17 @@ mod tests {
 			RANGE_READS_ENV => Some("false".to_string()),
 			BATCH_CHUNK_READS_ENV => Some("no".to_string()),
 			DECODED_LTX_CACHE_ENV => Some("disable".to_string()),
+			VFS_PAGE_CACHE_MODE_ENV => Some("off".to_string()),
 			VFS_PAGE_CACHE_CAPACITY_PAGES_ENV => Some("0".to_string()),
-			VFS_CACHE_FETCHED_PAGES_ENV => Some("false".to_string()),
-			VFS_CACHE_PREFETCHED_PAGES_ENV => Some("false".to_string()),
-			VFS_CACHE_STARTUP_PRELOADED_PAGES_ENV => Some("false".to_string()),
-			VFS_SCAN_RESISTANT_CACHE_ENV => Some("false".to_string()),
 			VFS_PROTECTED_CACHE_PAGES_ENV => Some("0".to_string()),
+			SQLITE_READ_POOL_ENABLED_ENV => Some("false".to_string()),
+			SQLITE_READ_POOL_MAX_READERS_ENV => Some("0".to_string()),
+			SQLITE_READ_POOL_IDLE_TTL_MS_ENV => Some("0".to_string()),
 			_ => None,
 		});
 
-		assert!(!flags.read_ahead);
-		assert!(!flags.cache_hit_predictor_training);
+		assert_eq!(flags.read_ahead_mode, SqliteReadAheadMode::Off);
 		assert!(!flags.recent_page_hints);
-		assert!(!flags.adaptive_read_ahead);
 		assert!(!flags.preload_hint_flush);
 		assert_eq!(flags.startup_preload_max_bytes, 0);
 		assert!(!flags.startup_preload_first_pages);
@@ -254,15 +335,12 @@ mod tests {
 		assert!(!flags.range_reads);
 		assert!(!flags.batch_chunk_reads);
 		assert!(!flags.decoded_ltx_cache);
-		assert_eq!(
-			flags.vfs_page_cache_capacity_pages,
-			MIN_VFS_PAGE_CACHE_CAPACITY_PAGES
-		);
-		assert!(!flags.vfs_cache_fetched_pages);
-		assert!(!flags.vfs_cache_prefetched_pages);
-		assert!(!flags.vfs_cache_startup_preloaded_pages);
-		assert!(!flags.vfs_scan_resistant_cache);
+		assert_eq!(flags.vfs_page_cache_mode, SqliteVfsPageCacheMode::Off);
+		assert_eq!(flags.vfs_page_cache_capacity_pages, 0);
 		assert_eq!(flags.vfs_protected_cache_pages, 0);
+		assert!(!flags.sqlite_read_pool_enabled);
+		assert_eq!(flags.sqlite_read_pool_max_readers, 0);
+		assert_eq!(flags.sqlite_read_pool_idle_ttl_ms, 0);
 	}
 
 	#[test]
@@ -272,6 +350,8 @@ mod tests {
 			STARTUP_PRELOAD_FIRST_PAGE_COUNT_ENV => Some("nope".to_string()),
 			VFS_PAGE_CACHE_CAPACITY_PAGES_ENV => Some("invalid".to_string()),
 			VFS_PROTECTED_CACHE_PAGES_ENV => Some("invalid".to_string()),
+			SQLITE_READ_POOL_MAX_READERS_ENV => Some("invalid".to_string()),
+			SQLITE_READ_POOL_IDLE_TTL_MS_ENV => Some("invalid".to_string()),
 			_ => None,
 		});
 		assert_eq!(
@@ -290,6 +370,15 @@ mod tests {
 			invalid.vfs_protected_cache_pages,
 			DEFAULT_VFS_PROTECTED_CACHE_PAGES
 		);
+		assert!(invalid.sqlite_read_pool_enabled);
+		assert_eq!(
+			invalid.sqlite_read_pool_max_readers,
+			DEFAULT_SQLITE_READ_POOL_MAX_READERS
+		);
+		assert_eq!(
+			invalid.sqlite_read_pool_idle_ttl_ms,
+			DEFAULT_SQLITE_READ_POOL_IDLE_TTL_MS
+		);
 
 		let clamped = SqliteOptimizationFlags::from_env_reader(|key| match key {
 			STARTUP_PRELOAD_MAX_BYTES_ENV => Some((MAX_STARTUP_PRELOAD_MAX_BYTES + 1).to_string()),
@@ -300,6 +389,12 @@ mod tests {
 				Some((MAX_VFS_PAGE_CACHE_CAPACITY_PAGES + 1).to_string())
 			}
 			VFS_PROTECTED_CACHE_PAGES_ENV => Some((MAX_VFS_PROTECTED_CACHE_PAGES + 1).to_string()),
+			SQLITE_READ_POOL_MAX_READERS_ENV => {
+				Some((MAX_SQLITE_READ_POOL_MAX_READERS + 1).to_string())
+			}
+			SQLITE_READ_POOL_IDLE_TTL_MS_ENV => {
+				Some((MAX_SQLITE_READ_POOL_IDLE_TTL_MS + 1).to_string())
+			}
 			_ => None,
 		});
 		assert_eq!(
@@ -317,6 +412,14 @@ mod tests {
 		assert_eq!(
 			clamped.vfs_protected_cache_pages,
 			MAX_VFS_PROTECTED_CACHE_PAGES
+		);
+		assert_eq!(
+			clamped.sqlite_read_pool_max_readers,
+			MAX_SQLITE_READ_POOL_MAX_READERS
+		);
+		assert_eq!(
+			clamped.sqlite_read_pool_idle_ttl_ms,
+			MAX_SQLITE_READ_POOL_IDLE_TTL_MS
 		);
 	}
 }

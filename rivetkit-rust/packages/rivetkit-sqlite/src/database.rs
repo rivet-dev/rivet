@@ -7,6 +7,7 @@ use tokio::runtime::Handle;
 
 use crate::{
 	connection_manager::{NativeConnectionManager, NativeConnectionManagerConfig},
+	optimization_flags::sqlite_optimization_flags,
 	query::{
 		BindParam, ExecResult, ExecuteResult, ExecuteRoute, QueryResult, classify_statement,
 		exec_statements, execute_single_statement, install_reader_authorizer,
@@ -27,6 +28,7 @@ pub struct NativeDatabaseHandle {
 	file_name: String,
 	vfs: NativeVfsHandle,
 	manager: NativeConnectionManager,
+	metrics: Option<Arc<dyn SqliteVfsMetrics>>,
 }
 
 pub fn vfs_name_for_actor_database(actor_id: &str, generation: u64) -> String {
@@ -50,14 +52,15 @@ pub async fn open_database_from_envoy(
 		rt_handle,
 		startup,
 		VfsConfig::default(),
-		metrics,
+		metrics.clone(),
 	)
 	.map_err(|e| anyhow!("failed to register sqlite VFS: {e}"))?;
 
-	let native_db = NativeDatabaseHandle::new(
+	let native_db = NativeDatabaseHandle::new_with_metrics(
 		vfs,
 		actor_id,
-		NativeConnectionManagerConfig::default(),
+		NativeConnectionManagerConfig::from_optimization_flags(*sqlite_optimization_flags()),
+		metrics,
 	);
 	native_db.initialize().await?;
 	Ok(native_db)
@@ -69,10 +72,25 @@ impl NativeDatabaseHandle {
 		file_name: String,
 		config: NativeConnectionManagerConfig,
 	) -> Self {
+		Self::new_with_metrics(vfs, file_name, config, None)
+	}
+
+	pub fn new_with_metrics(
+		vfs: NativeVfsHandle,
+		file_name: String,
+		config: NativeConnectionManagerConfig,
+		metrics: Option<Arc<dyn SqliteVfsMetrics>>,
+	) -> Self {
 		Self {
 			file_name: file_name.clone(),
-			manager: NativeConnectionManager::new(vfs.clone(), file_name, config),
+			manager: NativeConnectionManager::new_with_metrics(
+				vfs.clone(),
+				file_name,
+				config,
+				metrics.clone(),
+			),
 			vfs,
+			metrics,
 		}
 	}
 
@@ -99,12 +117,26 @@ impl NativeDatabaseHandle {
 		sql: String,
 		params: Option<Vec<BindParam>>,
 	) -> Result<ExecuteResult> {
+		if !self.manager.read_pool_enabled() {
+			return self.execute_without_read_pool(sql, params).await;
+		}
+
 		let read_sql = sql.clone();
 		let read_params = params.clone();
 		let route = match self.try_read_execute(read_sql, read_params).await? {
-			ReadQueryRoute::Read(result) => return Ok(result),
+			ReadQueryRoute::Read(result) => {
+				if let Some(metrics) = &self.metrics {
+					metrics.record_read_pool_routed_read_query();
+				}
+				return Ok(result);
+			}
 			ReadQueryRoute::WriteRequired(route) => route,
 		};
+		if matches!(route, ExecuteRoute::WriteFallback) {
+			if let Some(metrics) = &self.metrics {
+				metrics.record_read_pool_write_fallback_query();
+			}
+		}
 
 		self.with_configured_write_connection(move |db| {
 			execute_single_statement(db, &sql, params.as_deref(), route)
@@ -172,11 +204,32 @@ impl NativeDatabaseHandle {
 			.await
 	}
 
+	async fn execute_without_read_pool(
+		&self,
+		sql: String,
+		params: Option<Vec<BindParam>>,
+	) -> Result<ExecuteResult> {
+		let metrics = self.metrics.clone();
+		self.with_configured_write_connection(move |db| {
+			let route = classify_statement(db, &sql)
+				.map(|classification| write_route_for_classification(&classification))
+				.unwrap_or(ExecuteRoute::WriteFallback);
+			if matches!(route, ExecuteRoute::WriteFallback) {
+				if let Some(metrics) = &metrics {
+					metrics.record_read_pool_write_fallback_query();
+				}
+			}
+			execute_single_statement(db, &sql, params.as_deref(), route)
+		})
+		.await
+	}
+
 	async fn try_read_execute(
 		&self,
 		sql: String,
 		params: Option<Vec<BindParam>>,
 	) -> Result<ReadQueryRoute> {
+		let metrics = self.metrics.clone();
 		self.manager
 			.with_read_connection_state(move |db, newly_opened| {
 				if newly_opened {
@@ -196,11 +249,29 @@ impl NativeDatabaseHandle {
 				}
 
 				install_reader_authorizer(db)?;
-				execute_single_statement(db, &sql, params.as_deref(), ExecuteRoute::Read)
-					.map(ReadQueryRoute::Read)
+				match execute_single_statement(db, &sql, params.as_deref(), ExecuteRoute::Read) {
+					Ok(result) => Ok(ReadQueryRoute::Read(result)),
+					Err(error) => {
+						if reader_rejection_error(&error) {
+							if let Some(metrics) = &metrics {
+								metrics.record_read_pool_rejected_reader_mutation();
+							}
+							return Err(error);
+						}
+						Err(error)
+					}
+				}
 			})
 			.await
 	}
+}
+
+fn reader_rejection_error(error: &anyhow::Error) -> bool {
+	let message = error.to_string().to_ascii_lowercase();
+	message.contains("not authorized")
+		|| message.contains("readonly")
+		|| message.contains("read-only")
+		|| message.contains("attempt to write")
 }
 
 fn write_route_for_classification(

@@ -10,7 +10,7 @@ use std::sync::Arc;
 #[cfg(test)]
 use std::sync::atomic::{AtomicBool, AtomicUsize};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use anyhow::Result;
 use libsqlite3_sys::*;
@@ -25,7 +25,10 @@ use tokio::runtime::Handle;
 #[cfg(test)]
 use tokio::sync::Notify;
 
-use crate::optimization_flags::{SqliteOptimizationFlags, sqlite_optimization_flags};
+use crate::optimization_flags::{
+	SqliteOptimizationFlags, SqliteReadAheadMode, SqliteVfsPageCacheMode,
+	sqlite_optimization_flags,
+};
 
 const DEFAULT_PREFETCH_DEPTH: usize = 64;
 const DEFAULT_MAX_PREFETCH_BYTES: usize = 256 * 1024;
@@ -817,11 +820,9 @@ fn sqlite_meta(max_delta_bytes: u64) -> protocol::SqliteMeta {
 #[derive(Debug, Clone)]
 pub struct VfsConfig {
 	pub cache_capacity_pages: u64,
-	pub cache_fetched_pages: bool,
-	pub cache_prefetched_pages: bool,
-	pub cache_startup_preloaded_pages: bool,
-	pub scan_resistant_cache: bool,
+	pub page_cache_mode: SqliteVfsPageCacheMode,
 	pub protected_cache_pages: usize,
+	pub read_ahead_mode: SqliteReadAheadMode,
 	pub prefetch_depth: usize,
 	pub adaptive_prefetch_depth: usize,
 	pub max_prefetch_bytes: usize,
@@ -829,9 +830,7 @@ pub struct VfsConfig {
 	pub max_pages_per_stage: usize,
 	pub recent_hint_page_budget: usize,
 	pub recent_hint_range_budget: usize,
-	pub cache_hit_predictor_training: bool,
 	pub recent_page_hints: bool,
-	pub adaptive_read_ahead: bool,
 	pub range_reads: bool,
 }
 
@@ -845,12 +844,10 @@ impl VfsConfig {
 	pub fn from_optimization_flags(flags: SqliteOptimizationFlags) -> Self {
 		Self {
 			cache_capacity_pages: flags.vfs_page_cache_capacity_pages,
-			cache_fetched_pages: flags.vfs_cache_fetched_pages,
-			cache_prefetched_pages: flags.vfs_cache_prefetched_pages,
-			cache_startup_preloaded_pages: flags.vfs_cache_startup_preloaded_pages,
-			scan_resistant_cache: flags.vfs_scan_resistant_cache,
+			page_cache_mode: flags.vfs_page_cache_mode,
 			protected_cache_pages: flags.vfs_protected_cache_pages,
-			prefetch_depth: if flags.read_ahead {
+			read_ahead_mode: flags.read_ahead_mode,
+			prefetch_depth: if flags.read_ahead_mode.uses_bounded_prefetch() {
 				DEFAULT_PREFETCH_DEPTH
 			} else {
 				0
@@ -869,9 +866,7 @@ impl VfsConfig {
 			} else {
 				0
 			},
-			cache_hit_predictor_training: flags.cache_hit_predictor_training,
 			recent_page_hints: flags.recent_page_hints,
-			adaptive_read_ahead: flags.adaptive_read_ahead,
 			range_reads: flags.range_reads,
 		}
 	}
@@ -942,6 +937,28 @@ pub trait SqliteVfsMetrics: Send + Sync {
 		_total_ns: u64,
 	) {
 	}
+
+	fn set_read_pool_active_readers(&self, _readers: u64) {}
+
+	fn set_read_pool_idle_readers(&self, _readers: u64) {}
+
+	fn observe_read_pool_read_wait(&self, _duration: Duration) {}
+
+	fn observe_read_pool_write_wait(&self, _duration: Duration) {}
+
+	fn record_read_pool_routed_read_query(&self) {}
+
+	fn record_read_pool_write_fallback_query(&self) {}
+
+	fn observe_read_pool_manual_transaction(&self, _duration: Duration) {}
+
+	fn record_read_pool_reader_open(&self) {}
+
+	fn record_read_pool_reader_close(&self, _count: u64) {}
+
+	fn record_read_pool_rejected_reader_mutation(&self) {}
+
+	fn record_read_pool_mode_transition(&self, _from: &str, _to: &str) {}
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -1002,6 +1019,7 @@ struct PrefetchPredictor {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ReadAheadMode {
+	Off,
 	Bounded,
 	ForwardScan,
 	BackwardScan,
@@ -1304,6 +1322,15 @@ impl PrefetchPredictor {
 
 impl AdaptiveReadAhead {
 	fn record_and_plan(&mut self, pgnos: &[u32], config: &VfsConfig) -> ReadAheadPlan {
+		if matches!(config.read_ahead_mode, SqliteReadAheadMode::Off) {
+			return ReadAheadPlan {
+				mode: ReadAheadMode::Off,
+				depth: 0,
+				max_bytes: 0,
+				seed_pgno: pgnos.last().copied(),
+			};
+		}
+
 		let mut scan_seed_pgno = None;
 		let mut scan_direction = None;
 		for pgno in pgnos.iter().copied() {
@@ -1313,7 +1340,7 @@ impl AdaptiveReadAhead {
 			}
 		}
 
-		if config.adaptive_read_ahead
+		if config.read_ahead_mode.uses_adaptive_prefetch()
 			&& self.score >= SCAN_SCORE_THRESHOLD
 			&& scan_seed_pgno.is_some()
 			&& scan_direction.is_some()
@@ -1687,12 +1714,15 @@ impl VfsState {
 		let page_cache = Cache::builder()
 			.max_capacity(config.cache_capacity_pages)
 			.build();
-		let mut protected_page_cache = ProtectedPageCache::new(if config.scan_resistant_cache {
+		let mut protected_page_cache = ProtectedPageCache::new(if config
+			.page_cache_mode
+			.caches_target_pages()
+		{
 			config.protected_cache_pages
 		} else {
 			0
 		});
-		if config.cache_startup_preloaded_pages {
+		if config.page_cache_mode.caches_startup_preloaded_pages() {
 			for page in &startup.preloaded_pages {
 				if let Some(bytes) = &page.bytes {
 					page_cache.insert(page.pgno, bytes.clone());
@@ -1733,20 +1763,20 @@ impl VfsState {
 		config: &VfsConfig,
 	) {
 		let should_cache = if target_page {
-			config.cache_fetched_pages
+			config.page_cache_mode.caches_target_pages()
 		} else {
-			config.cache_prefetched_pages
+			config.page_cache_mode.caches_prefetched_pages()
 		};
 		if should_cache {
 			self.page_cache.insert(pgno, bytes.clone());
 		}
-		if target_page && config.cache_fetched_pages && config.scan_resistant_cache {
+		if target_page && config.page_cache_mode.caches_target_pages() {
 			self.protected_page_cache.record_target_access(pgno, bytes);
 		}
 	}
 
 	fn record_target_cache_access(&mut self, pgno: u32, bytes: Vec<u8>, config: &VfsConfig) {
-		if config.cache_fetched_pages && config.scan_resistant_cache {
+		if config.page_cache_mode.caches_target_pages() {
 			self.protected_page_cache.record_target_access(pgno, bytes);
 		}
 	}
@@ -1922,13 +1952,15 @@ impl VfsContext {
 					resolved.insert(pgno, Some(bytes.clone()));
 					continue;
 				}
-				if let Some(bytes) = state.page_cache.get(&pgno) {
-					resolved.insert(pgno, Some(bytes));
-					continue;
-				}
-				if let Some(bytes) = state.protected_page_cache.get(&pgno) {
-					resolved.insert(pgno, Some(bytes));
-					continue;
+				if self.config.page_cache_mode.caches_any_pages() {
+					if let Some(bytes) = state.page_cache.get(&pgno) {
+						resolved.insert(pgno, Some(bytes));
+						continue;
+					}
+					if let Some(bytes) = state.protected_page_cache.get(&pgno) {
+						resolved.insert(pgno, Some(bytes));
+						continue;
+					}
 				}
 				missing.push(pgno);
 			}
@@ -1936,7 +1968,7 @@ impl VfsContext {
 
 		if missing.is_empty() {
 			let mut state = self.state.write();
-			if self.config.cache_hit_predictor_training {
+			if self.config.read_ahead_mode.uses_bounded_prefetch() {
 				for pgno in target_pgnos.iter().copied() {
 					state.predictor.record(pgno);
 				}
@@ -1973,7 +2005,7 @@ impl VfsContext {
 			fetch_transport,
 		) = {
 			let mut state = self.state.write();
-			if self.config.cache_hit_predictor_training {
+			if self.config.read_ahead_mode.uses_bounded_prefetch() {
 				for pgno in target_pgnos.iter().copied() {
 					state.predictor.record(pgno);
 				}
@@ -2435,6 +2467,9 @@ fn reject_reader_mutation(ctx: &VfsContext, operation: &str) {
 	ctx.set_last_error(format!(
 		"reader sqlite VFS handle attempted mutating operation {operation}"
 	));
+	if let Some(metrics) = &ctx.metrics {
+		metrics.record_read_pool_rejected_reader_mutation();
+	}
 }
 
 async fn commit_buffered_pages(
@@ -3761,7 +3796,7 @@ mod tests {
 		NativeConnectionManager, NativeConnectionManagerConfig, NativeConnectionManagerMode,
 	};
 	use crate::database::NativeDatabaseHandle;
-	use crate::query::ColumnValue;
+	use crate::query::{ColumnValue, ExecuteRoute};
 
 	static TEST_ID: AtomicU64 = AtomicU64::new(1);
 
@@ -4465,9 +4500,9 @@ mod tests {
 	}
 
 	#[test]
-	fn disabled_read_ahead_flag_disables_bounded_prefetch() {
+	fn read_ahead_off_disables_bounded_prefetch() {
 		let config = VfsConfig::from_optimization_flags(SqliteOptimizationFlags {
-			read_ahead: false,
+			read_ahead_mode: SqliteReadAheadMode::Off,
 			..SqliteOptimizationFlags::default()
 		});
 
@@ -4710,7 +4745,7 @@ mod tests {
 	}
 
 	#[test]
-	fn disabled_adaptive_read_ahead_keeps_forward_scan_to_one_shard() {
+	fn bounded_read_ahead_keeps_forward_scan_to_one_shard() {
 		let runtime = Builder::new_current_thread()
 			.enable_all()
 			.build()
@@ -4756,7 +4791,7 @@ mod tests {
 				preloaded_pages: Vec::new(),
 			},
 			VfsConfig::from_optimization_flags(SqliteOptimizationFlags {
-				adaptive_read_ahead: false,
+				read_ahead_mode: SqliteReadAheadMode::Bounded,
 				..SqliteOptimizationFlags::default()
 			}),
 			unsafe { std::mem::zeroed() },
@@ -4775,74 +4810,6 @@ mod tests {
 		let requests = protocol.get_pages_requests();
 		assert_eq!(requests.len(), 2);
 		assert_eq!(requests[1].pgnos, (76..140).collect::<Vec<_>>());
-	}
-
-	#[test]
-	fn disabled_cache_hit_training_bypasses_hit_path_predictor_updates() {
-		let runtime = Builder::new_current_thread()
-			.enable_all()
-			.build()
-			.expect("runtime should build");
-		let mut protocol = MockProtocol::new(
-			protocol::SqliteCommitResponse::SqliteCommitOk(protocol::SqliteCommitOk {
-				new_head_txid: 13,
-				meta: sqlite_meta(8 * 1024 * 1024),
-			}),
-			protocol::SqliteCommitStageResponse::SqliteCommitStageOk(
-				protocol::SqliteCommitStageOk {
-					chunk_idx_committed: 0,
-				},
-			),
-			protocol::SqliteCommitFinalizeResponse::SqliteCommitFinalizeOk(
-				protocol::SqliteCommitFinalizeOk {
-					new_head_txid: 13,
-					meta: sqlite_meta(8 * 1024 * 1024),
-				},
-			),
-		);
-		protocol.get_pages_response =
-			protocol::SqliteGetPagesResponse::SqliteGetPagesOk(protocol::SqliteGetPagesOk {
-				pages: (10..76)
-					.map(|pgno| protocol::SqliteFetchedPage {
-						pgno,
-						bytes: Some(vec![(pgno % 251) as u8; 4096]),
-					})
-					.collect(),
-				meta: sqlite_meta(8 * 1024 * 1024),
-			});
-		let protocol = Arc::new(protocol);
-		let ctx = VfsContext::new(
-			"actor".to_string(),
-			runtime.handle().clone(),
-			SqliteTransport::from_mock(protocol.clone()),
-			protocol::SqliteStartupData {
-				generation: 7,
-				meta: protocol::SqliteMeta {
-					db_size_pages: 200,
-					..sqlite_meta(8 * 1024 * 1024)
-				},
-				preloaded_pages: Vec::new(),
-			},
-			VfsConfig::from_optimization_flags(SqliteOptimizationFlags {
-				cache_hit_predictor_training: false,
-				..SqliteOptimizationFlags::default()
-			}),
-			unsafe { std::mem::zeroed() },
-			None,
-		);
-
-		ctx.resolve_pages(&[10], true)
-			.expect("first missing page should resolve");
-		for pgno in 11..76 {
-			ctx.resolve_pages(&[pgno], true)
-				.expect("cache-hit page should resolve");
-		}
-		ctx.resolve_pages(&[76], true)
-			.expect("next missing page should resolve");
-
-		let requests = protocol.get_pages_requests();
-		assert_eq!(requests.len(), 2);
-		assert_eq!(requests[1].pgnos, vec![76]);
 	}
 
 	#[test]
@@ -4991,7 +4958,7 @@ mod tests {
 	}
 
 	#[test]
-	fn disabled_startup_preloaded_page_cache_fetches_on_first_read() {
+	fn target_page_cache_mode_fetches_startup_pages_on_first_read() {
 		let runtime = Builder::new_current_thread()
 			.enable_all()
 			.build()
@@ -5035,7 +5002,7 @@ mod tests {
 				}],
 			},
 			VfsConfig::from_optimization_flags(SqliteOptimizationFlags {
-				vfs_cache_startup_preloaded_pages: false,
+				vfs_page_cache_mode: SqliteVfsPageCacheMode::Target,
 				..SqliteOptimizationFlags::default()
 			}),
 			unsafe { std::mem::zeroed() },
@@ -5052,7 +5019,7 @@ mod tests {
 	}
 
 	#[test]
-	fn disabled_fetched_page_cache_re_fetches_target_reads() {
+	fn page_cache_off_re_fetches_target_reads() {
 		let runtime = Builder::new_current_thread()
 			.enable_all()
 			.build()
@@ -5096,7 +5063,8 @@ mod tests {
 				preloaded_pages: Vec::new(),
 			},
 			VfsConfig::from_optimization_flags(SqliteOptimizationFlags {
-				vfs_cache_fetched_pages: false,
+				vfs_page_cache_mode: SqliteVfsPageCacheMode::Off,
+				vfs_page_cache_capacity_pages: 0,
 				..SqliteOptimizationFlags::default()
 			}),
 			unsafe { std::mem::zeroed() },
@@ -5112,7 +5080,7 @@ mod tests {
 	}
 
 	#[test]
-	fn disabled_prefetched_page_cache_re_fetches_prefetch_hits() {
+	fn target_page_cache_mode_re_fetches_prefetch_hits() {
 		let runtime = Builder::new_current_thread()
 			.enable_all()
 			.build()
@@ -5162,7 +5130,7 @@ mod tests {
 				preloaded_pages: Vec::new(),
 			},
 			VfsConfig::from_optimization_flags(SqliteOptimizationFlags {
-				vfs_cache_prefetched_pages: false,
+				vfs_page_cache_mode: SqliteVfsPageCacheMode::Target,
 				..SqliteOptimizationFlags::default()
 			}),
 			unsafe { std::mem::zeroed() },
@@ -6700,7 +6668,7 @@ mod tests {
 		let manager = NativeConnectionManager::new(
 			vfs,
 			harness.actor_id.clone(),
-			NativeConnectionManagerConfig { max_readers: 2 },
+			NativeConnectionManagerConfig { max_readers: 2, ..NativeConnectionManagerConfig::default() },
 		);
 
 		runtime.block_on(async {
@@ -6766,7 +6734,7 @@ mod tests {
 		let manager = NativeConnectionManager::new(
 			vfs,
 			harness.actor_id.clone(),
-			NativeConnectionManagerConfig { max_readers: 2 },
+			NativeConnectionManagerConfig { max_readers: 2, ..NativeConnectionManagerConfig::default() },
 		);
 
 		runtime.block_on(async {
@@ -6853,7 +6821,7 @@ mod tests {
 		let manager = NativeConnectionManager::new(
 			vfs,
 			harness.actor_id.clone(),
-			NativeConnectionManagerConfig { max_readers: 2 },
+			NativeConnectionManagerConfig { max_readers: 2, ..NativeConnectionManagerConfig::default() },
 		);
 
 		runtime.block_on(async {
@@ -6938,7 +6906,7 @@ mod tests {
 		let manager = NativeConnectionManager::new(
 			vfs,
 			harness.actor_id.clone(),
-			NativeConnectionManagerConfig { max_readers: 2 },
+			NativeConnectionManagerConfig { max_readers: 2, ..NativeConnectionManagerConfig::default() },
 		);
 
 		runtime.block_on(async {
@@ -7008,7 +6976,7 @@ mod tests {
 		let db = NativeDatabaseHandle::new(
 			vfs,
 			harness.actor_id.clone(),
-			NativeConnectionManagerConfig { max_readers: 2 },
+			NativeConnectionManagerConfig { max_readers: 2, ..NativeConnectionManagerConfig::default() },
 		);
 
 		runtime.block_on(async {
@@ -7067,7 +7035,7 @@ mod tests {
 		let db = NativeDatabaseHandle::new(
 			vfs,
 			harness.actor_id.clone(),
-			NativeConnectionManagerConfig { max_readers: 2 },
+			NativeConnectionManagerConfig { max_readers: 2, ..NativeConnectionManagerConfig::default() },
 		);
 
 		runtime.block_on(async {
@@ -7104,6 +7072,59 @@ mod tests {
 	}
 
 	#[test]
+	fn disabled_read_pool_routes_select_through_single_writer() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let engine = runtime.block_on(harness.open_engine());
+		let startup = runtime.block_on(harness.startup_data_for(&harness.actor_id, &engine));
+		let vfs = SqliteVfs::register_with_transport(
+			&next_test_name("sqlite-read-pool-disabled-vfs"),
+			SqliteTransport::from_direct(engine),
+			harness.actor_id.clone(),
+			runtime.handle().clone(),
+			startup,
+			VfsConfig::default(),
+			None,
+		)
+		.expect("vfs should register");
+		let db = NativeDatabaseHandle::new(
+			vfs,
+			harness.actor_id.clone(),
+			NativeConnectionManagerConfig {
+				read_pool_enabled: false,
+				..NativeConnectionManagerConfig::default()
+			},
+		);
+
+		runtime.block_on(async {
+			db.exec(
+				"CREATE TABLE read_pool_disabled (id INTEGER PRIMARY KEY, value TEXT NOT NULL);
+				INSERT INTO read_pool_disabled (id, value) VALUES (1, 'alpha');"
+					.to_string(),
+			)
+			.await
+			.expect("setup write should succeed");
+
+			let result = db
+				.execute(
+					"SELECT value FROM read_pool_disabled WHERE id = 1;".to_string(),
+					None,
+				)
+				.await
+				.expect("disabled read pool select should use writer");
+			assert_eq!(result.route, ExecuteRoute::WriteFallback);
+			assert_eq!(result.rows[0][0], ColumnValue::Text("alpha".to_string()));
+
+			let snapshot = db.manager().snapshot().await;
+			assert_eq!(snapshot.idle_readers, 0);
+			assert_eq!(snapshot.open_readers, 0);
+			assert_eq!(snapshot.mode, NativeConnectionManagerMode::WriteMode);
+
+			db.close().await.expect("database close should succeed");
+		});
+	}
+
+	#[test]
 	fn native_database_reader_authorizer_denies_unsafe_functions() {
 		let runtime = direct_runtime();
 		let harness = DirectEngineHarness::new();
@@ -7122,7 +7143,7 @@ mod tests {
 		let db = NativeDatabaseHandle::new(
 			vfs,
 			harness.actor_id.clone(),
-			NativeConnectionManagerConfig { max_readers: 2 },
+			NativeConnectionManagerConfig { max_readers: 2, ..NativeConnectionManagerConfig::default() },
 		);
 
 		runtime.block_on(async {
@@ -7155,7 +7176,7 @@ mod tests {
 		let manager = NativeConnectionManager::new(
 			vfs,
 			harness.actor_id.clone(),
-			NativeConnectionManagerConfig { max_readers: 1 },
+			NativeConnectionManagerConfig { max_readers: 1, ..NativeConnectionManagerConfig::default() },
 		);
 
 		runtime.block_on(async {

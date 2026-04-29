@@ -11,8 +11,8 @@ Range page-read protocol details live in `.agent/specs/sqlite-range-page-read-pr
 ## Existing Optimizations
 
 - Actor startup can preload SQLite VFS pages through `OpenConfig.preload_pgnos`, `OpenConfig.preload_ranges`, and persisted `/PRELOAD_HINTS`; first pages, hint mechanisms, and the preload byte budget are configured through central SQLite optimization flags.
-- The VFS keeps an in-memory page cache seeded from `sqlite_startup_data.preloaded_pages`; capacity, fetched/prefetched/startup cache classes, and scan-resistant protected-cache budget are configured through central SQLite optimization flags.
-- The VFS has speculative read-ahead via `prefetch_depth` and `max_prefetch_bytes`; the default forward-scan budget is 64 pages, which reduced the cold-read benchmark from 1,249 to 368 VFS `get_pages` calls.
+- The VFS keeps an in-memory page cache seeded from `sqlite_startup_data.preloaded_pages`; cache behavior is selected with `RIVETKIT_SQLITE_OPT_VFS_PAGE_CACHE_MODE=off|target|startup|prefetch|all`, with capacity and protected-cache budget configured separately.
+- The VFS has speculative read-ahead selected with `RIVETKIT_SQLITE_OPT_READ_AHEAD_MODE=off|bounded|adaptive`; the default bounded budget is 64 pages, which reduced the cold-read benchmark from 1,249 to 368 VFS `get_pages` calls.
 - The VFS tracks bounded recent page hints as hot pages plus coalesced scan ranges; `NativeDatabase::snapshot_preload_hints()` exposes the in-memory plan for future flush wiring.
 - Actor Prometheus metrics expose VFS read counters, fetched bytes, cache hits/misses, and `get_pages` duration at `/gateway/<actor_id>/metrics`.
 - `sqlite-storage` keeps an in-memory PIDX cache and decodes each unique DELTA/SHARD blob once per `get_pages(...)` call.
@@ -31,6 +31,7 @@ Range page-read protocol details live in `.agent/specs/sqlite-range-page-read-pr
 - Return SQLite meta from `sqlite-storage::get_pages(...)` instead of doing a second META read in pegboard-envoy.
 - Persist capped VFS preload hints on sleep/close and feed them into `OpenConfig` on the next actor start.
 - Add a bulk or range page-read protocol so cold scans do not require page-list request loops.
+- Add a read-mode/write-mode SQLite connection manager for parallel read-only queries; read mode may hold multiple read-only connections, while write mode must close readers and hold exactly one writable connection.
 - Reduce storage read amplification from whole-blob LTX decode further with page-frame-addressable storage.
 - Benchmark compacted and un-compacted cold reads separately.
 

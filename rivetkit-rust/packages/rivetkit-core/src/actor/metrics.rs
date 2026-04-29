@@ -64,6 +64,28 @@ struct ActorMetricsInner {
 	sqlite_vfs_commit_phase_duration_seconds_total: CounterVec,
 	#[cfg(feature = "sqlite")]
 	sqlite_vfs_commit_duration_seconds_total: CounterVec,
+	#[cfg(feature = "sqlite")]
+	sqlite_read_pool_active_readers: IntGauge,
+	#[cfg(feature = "sqlite")]
+	sqlite_read_pool_idle_readers: IntGauge,
+	#[cfg(feature = "sqlite")]
+	sqlite_read_pool_read_wait_duration_seconds: Histogram,
+	#[cfg(feature = "sqlite")]
+	sqlite_read_pool_write_wait_duration_seconds: Histogram,
+	#[cfg(feature = "sqlite")]
+	sqlite_read_pool_routed_read_queries_total: IntCounter,
+	#[cfg(feature = "sqlite")]
+	sqlite_read_pool_write_fallback_queries_total: IntCounter,
+	#[cfg(feature = "sqlite")]
+	sqlite_read_pool_manual_transaction_duration_seconds: Histogram,
+	#[cfg(feature = "sqlite")]
+	sqlite_read_pool_reader_opens_total: IntCounter,
+	#[cfg(feature = "sqlite")]
+	sqlite_read_pool_reader_closes_total: IntCounter,
+	#[cfg(feature = "sqlite")]
+	sqlite_read_pool_rejected_reader_mutations_total: IntCounter,
+	#[cfg(feature = "sqlite")]
+	sqlite_read_pool_mode_transitions_total: CounterVec,
 }
 
 impl ActorMetrics {
@@ -301,6 +323,84 @@ impl ActorMetrics {
 			&["phase"],
 		)
 		.context("create sqlite_vfs_commit_duration_seconds_total counter")?;
+		#[cfg(feature = "sqlite")]
+		let sqlite_read_pool_active_readers = IntGauge::with_opts(Opts::new(
+			"sqlite_read_pool_active_readers",
+			"current active SQLite read-pool readers",
+		))
+		.context("create sqlite_read_pool_active_readers gauge")?;
+		#[cfg(feature = "sqlite")]
+		let sqlite_read_pool_idle_readers = IntGauge::with_opts(Opts::new(
+			"sqlite_read_pool_idle_readers",
+			"current idle SQLite read-pool readers",
+		))
+		.context("create sqlite_read_pool_idle_readers gauge")?;
+		#[cfg(feature = "sqlite")]
+		let sqlite_read_pool_read_wait_duration_seconds = Histogram::with_opts(
+			HistogramOpts::new(
+				"sqlite_read_pool_read_wait_duration_seconds",
+				"SQLite read-pool read admission wait duration in seconds",
+			)
+			.buckets(sqlite_pool_wait_buckets()),
+		)
+		.context("create sqlite_read_pool_read_wait_duration_seconds histogram")?;
+		#[cfg(feature = "sqlite")]
+		let sqlite_read_pool_write_wait_duration_seconds = Histogram::with_opts(
+			HistogramOpts::new(
+				"sqlite_read_pool_write_wait_duration_seconds",
+				"SQLite read-pool write-mode admission wait duration in seconds",
+			)
+			.buckets(sqlite_pool_wait_buckets()),
+		)
+		.context("create sqlite_read_pool_write_wait_duration_seconds histogram")?;
+		#[cfg(feature = "sqlite")]
+		let sqlite_read_pool_routed_read_queries_total = IntCounter::with_opts(Opts::new(
+			"sqlite_read_pool_routed_read_queries_total",
+			"total SQLite statements routed to read-pool readers",
+		))
+		.context("create sqlite_read_pool_routed_read_queries_total counter")?;
+		#[cfg(feature = "sqlite")]
+		let sqlite_read_pool_write_fallback_queries_total = IntCounter::with_opts(Opts::new(
+			"sqlite_read_pool_write_fallback_queries_total",
+			"total SQLite statements routed to write mode as read-pool fallbacks",
+		))
+		.context("create sqlite_read_pool_write_fallback_queries_total counter")?;
+		#[cfg(feature = "sqlite")]
+		let sqlite_read_pool_manual_transaction_duration_seconds = Histogram::with_opts(
+			HistogramOpts::new(
+				"sqlite_read_pool_manual_transaction_duration_seconds",
+				"SQLite read-pool manual transaction write-mode duration in seconds",
+			)
+			.buckets(sqlite_pool_wait_buckets()),
+		)
+		.context("create sqlite_read_pool_manual_transaction_duration_seconds histogram")?;
+		#[cfg(feature = "sqlite")]
+		let sqlite_read_pool_reader_opens_total = IntCounter::with_opts(Opts::new(
+			"sqlite_read_pool_reader_opens_total",
+			"total SQLite read-pool reader connection opens",
+		))
+		.context("create sqlite_read_pool_reader_opens_total counter")?;
+		#[cfg(feature = "sqlite")]
+		let sqlite_read_pool_reader_closes_total = IntCounter::with_opts(Opts::new(
+			"sqlite_read_pool_reader_closes_total",
+			"total SQLite read-pool reader connection closes",
+		))
+		.context("create sqlite_read_pool_reader_closes_total counter")?;
+		#[cfg(feature = "sqlite")]
+		let sqlite_read_pool_rejected_reader_mutations_total = IntCounter::with_opts(Opts::new(
+			"sqlite_read_pool_rejected_reader_mutations_total",
+			"total SQLite reader mutation attempts rejected by read-pool safeguards",
+		))
+		.context("create sqlite_read_pool_rejected_reader_mutations_total counter")?;
+		#[cfg(feature = "sqlite")]
+		let sqlite_read_pool_mode_transitions_total = CounterVec::new(
+			Opts::new(
+				"sqlite_read_pool_mode_transitions_total",
+				"total SQLite read-pool mode transitions",
+			),
+			&["from", "to"],
+		)
+		.context("create sqlite_read_pool_mode_transitions_total counter")?;
 
 		register_metric(&registry, create_state_ms.clone());
 		register_metric(&registry, create_vars_ms.clone());
@@ -339,6 +439,29 @@ impl ActorMetrics {
 				sqlite_vfs_commit_phase_duration_seconds_total.clone(),
 			);
 			register_metric(&registry, sqlite_vfs_commit_duration_seconds_total.clone());
+			register_metric(&registry, sqlite_read_pool_active_readers.clone());
+			register_metric(&registry, sqlite_read_pool_idle_readers.clone());
+			register_metric(
+				&registry,
+				sqlite_read_pool_read_wait_duration_seconds.clone(),
+			);
+			register_metric(
+				&registry,
+				sqlite_read_pool_write_wait_duration_seconds.clone(),
+			);
+			register_metric(&registry, sqlite_read_pool_routed_read_queries_total.clone());
+			register_metric(&registry, sqlite_read_pool_write_fallback_queries_total.clone());
+			register_metric(
+				&registry,
+				sqlite_read_pool_manual_transaction_duration_seconds.clone(),
+			);
+			register_metric(&registry, sqlite_read_pool_reader_opens_total.clone());
+			register_metric(&registry, sqlite_read_pool_reader_closes_total.clone());
+			register_metric(
+				&registry,
+				sqlite_read_pool_rejected_reader_mutations_total.clone(),
+			);
+			register_metric(&registry, sqlite_read_pool_mode_transitions_total.clone());
 		}
 
 		for kind in UserTaskKind::ALL {
@@ -360,6 +483,17 @@ impl ActorMetrics {
 				sqlite_vfs_commit_phase_duration_seconds_total.with_label_values(&[phase]);
 			}
 			sqlite_vfs_commit_duration_seconds_total.with_label_values(&["total"]);
+			for (from, to) in [
+				("closed", "read"),
+				("closed", "write"),
+				("read", "write"),
+				("write", "read"),
+				("read", "closing"),
+				("write", "closing"),
+				("closing", "closed"),
+			] {
+				sqlite_read_pool_mode_transitions_total.with_label_values(&[from, to]);
+			}
 		}
 
 		Ok(ActorMetricsInner {
@@ -409,6 +543,28 @@ impl ActorMetrics {
 			sqlite_vfs_commit_phase_duration_seconds_total,
 			#[cfg(feature = "sqlite")]
 			sqlite_vfs_commit_duration_seconds_total,
+			#[cfg(feature = "sqlite")]
+			sqlite_read_pool_active_readers,
+			#[cfg(feature = "sqlite")]
+			sqlite_read_pool_idle_readers,
+			#[cfg(feature = "sqlite")]
+			sqlite_read_pool_read_wait_duration_seconds,
+			#[cfg(feature = "sqlite")]
+			sqlite_read_pool_write_wait_duration_seconds,
+			#[cfg(feature = "sqlite")]
+			sqlite_read_pool_routed_read_queries_total,
+			#[cfg(feature = "sqlite")]
+			sqlite_read_pool_write_fallback_queries_total,
+			#[cfg(feature = "sqlite")]
+			sqlite_read_pool_manual_transaction_duration_seconds,
+			#[cfg(feature = "sqlite")]
+			sqlite_read_pool_reader_opens_total,
+			#[cfg(feature = "sqlite")]
+			sqlite_read_pool_reader_closes_total,
+			#[cfg(feature = "sqlite")]
+			sqlite_read_pool_rejected_reader_mutations_total,
+			#[cfg(feature = "sqlite")]
+			sqlite_read_pool_mode_transitions_total,
 		})
 	}
 
@@ -693,6 +849,96 @@ impl rivetkit_sqlite::vfs::SqliteVfsMetrics for ActorMetrics {
 			.with_label_values(&["total"])
 			.inc_by(ns_to_seconds(total_ns));
 	}
+
+	fn set_read_pool_active_readers(&self, readers: u64) {
+		let Some(inner) = self.inner.as_ref().as_ref() else {
+			return;
+		};
+		inner
+			.sqlite_read_pool_active_readers
+			.set(readers.try_into().unwrap_or(i64::MAX));
+	}
+
+	fn set_read_pool_idle_readers(&self, readers: u64) {
+		let Some(inner) = self.inner.as_ref().as_ref() else {
+			return;
+		};
+		inner
+			.sqlite_read_pool_idle_readers
+			.set(readers.try_into().unwrap_or(i64::MAX));
+	}
+
+	fn observe_read_pool_read_wait(&self, duration: Duration) {
+		let Some(inner) = self.inner.as_ref().as_ref() else {
+			return;
+		};
+		inner
+			.sqlite_read_pool_read_wait_duration_seconds
+			.observe(duration.as_secs_f64());
+	}
+
+	fn observe_read_pool_write_wait(&self, duration: Duration) {
+		let Some(inner) = self.inner.as_ref().as_ref() else {
+			return;
+		};
+		inner
+			.sqlite_read_pool_write_wait_duration_seconds
+			.observe(duration.as_secs_f64());
+	}
+
+	fn record_read_pool_routed_read_query(&self) {
+		let Some(inner) = self.inner.as_ref().as_ref() else {
+			return;
+		};
+		inner.sqlite_read_pool_routed_read_queries_total.inc();
+	}
+
+	fn record_read_pool_write_fallback_query(&self) {
+		let Some(inner) = self.inner.as_ref().as_ref() else {
+			return;
+		};
+		inner.sqlite_read_pool_write_fallback_queries_total.inc();
+	}
+
+	fn observe_read_pool_manual_transaction(&self, duration: Duration) {
+		let Some(inner) = self.inner.as_ref().as_ref() else {
+			return;
+		};
+		inner
+			.sqlite_read_pool_manual_transaction_duration_seconds
+			.observe(duration.as_secs_f64());
+	}
+
+	fn record_read_pool_reader_open(&self) {
+		let Some(inner) = self.inner.as_ref().as_ref() else {
+			return;
+		};
+		inner.sqlite_read_pool_reader_opens_total.inc();
+	}
+
+	fn record_read_pool_reader_close(&self, count: u64) {
+		let Some(inner) = self.inner.as_ref().as_ref() else {
+			return;
+		};
+		inner.sqlite_read_pool_reader_closes_total.inc_by(count);
+	}
+
+	fn record_read_pool_rejected_reader_mutation(&self) {
+		let Some(inner) = self.inner.as_ref().as_ref() else {
+			return;
+		};
+		inner.sqlite_read_pool_rejected_reader_mutations_total.inc();
+	}
+
+	fn record_read_pool_mode_transition(&self, from: &str, to: &str) {
+		let Some(inner) = self.inner.as_ref().as_ref() else {
+			return;
+		};
+		inner
+			.sqlite_read_pool_mode_transitions_total
+			.with_label_values(&[from, to])
+			.inc();
+	}
 }
 
 impl Default for ActorMetrics {
@@ -714,6 +960,14 @@ fn duration_ms(duration: Duration) -> f64 {
 #[cfg(feature = "sqlite")]
 fn ns_to_seconds(duration_ns: u64) -> f64 {
 	Duration::from_nanos(duration_ns).as_secs_f64()
+}
+
+#[cfg(feature = "sqlite")]
+fn sqlite_pool_wait_buckets() -> Vec<f64> {
+	vec![
+		0.000_1, 0.000_5, 0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5,
+		5.0,
+	]
 }
 
 fn register_metric<M>(registry: &Registry, metric: M)

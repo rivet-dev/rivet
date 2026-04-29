@@ -24,6 +24,8 @@ const WORKLOADS = [
 	"aggregate-status",
 	"aggregate-time-bucket",
 	"aggregate-tenant-time-range",
+	"parallel-read-aggregates",
+	"parallel-read-write-transition",
 	"feed-order-by-limit",
 	"feed-pagination-adjacent",
 	"join-order-items",
@@ -609,6 +611,8 @@ export const sqliteRealworldBench = actor({
 				case "aggregate-status":
 				case "aggregate-time-bucket":
 				case "aggregate-tenant-time-range":
+				case "parallel-read-aggregates":
+				case "parallel-read-write-transition":
 				case "feed-order-by-limit":
 				case "feed-pagination-adjacent":
 				case "join-order-items":
@@ -754,6 +758,101 @@ export const sqliteRealworldBench = actor({
 						groups: rows.length,
 						rows: rows.reduce((sum, row) => sum + row.rows, 0),
 						total: rows.reduce((sum, row) => sum + row.total, 0),
+					};
+					break;
+				}
+				case "parallel-read-aggregates": {
+					const [
+						statusRows,
+						bucketRows,
+						tenantRows,
+						joinRows,
+					] = await Promise.all([
+						c.db.execute(
+							`SELECT status, COUNT(*) AS rows, SUM(total_cents) AS total
+						FROM rw_orders
+						GROUP BY status
+						ORDER BY status`,
+						),
+						c.db.execute(
+							`SELECT (created_at / 300000) AS bucket, COUNT(*) AS rows, SUM(total_cents) AS total
+						FROM rw_orders
+						GROUP BY bucket
+						ORDER BY bucket`,
+						),
+						c.db.execute(
+							`SELECT e.event_type, COUNT(*) AS rows, SUM(o.total_cents) AS total
+						FROM rw_events e
+						JOIN rw_orders o ON o.id = CAST(substr(e.entity_key, 7) AS INTEGER)
+						WHERE e.account_id = ? AND e.created_at BETWEEN ? AND ?
+						GROUP BY e.event_type
+						ORDER BY e.event_type`,
+							"acct-7",
+							1_700_000_000_000,
+							1_700_000_000_000 + 86_400_000,
+						),
+						c.db.execute(
+							`SELECT o.status, COUNT(*) AS rows, SUM(oi.quantity * oi.price_cents) AS total
+						FROM rw_orders o
+						JOIN rw_order_items oi ON oi.order_id = o.id
+						GROUP BY o.status
+						ORDER BY o.status`,
+						),
+					]);
+					const aggregates = [
+						...typedRows<AggregateRow>(statusRows),
+						...typedRows<AggregateRow>(bucketRows),
+						...typedRows<AggregateRow>(tenantRows),
+						...typedRows<AggregateRow>(joinRows),
+					];
+					details = {
+						ops: 4,
+						groups: aggregates.length,
+						rows: aggregates.reduce((sum, row) => sum + row.rows, 0),
+						total: aggregates.reduce((sum, row) => sum + row.total, 0),
+					};
+					break;
+				}
+				case "parallel-read-write-transition": {
+					const readStatus = c.db.execute(
+						`SELECT status, COUNT(*) AS rows, SUM(total_cents) AS total
+						FROM rw_orders
+						GROUP BY status
+						ORDER BY status`,
+					);
+					const readJoin = c.db.execute(
+						`SELECT o.status, COUNT(*) AS rows, SUM(oi.quantity * oi.price_cents) AS total
+						FROM rw_orders o
+						JOIN rw_order_items oi ON oi.order_id = o.id
+						GROUP BY o.status
+						ORDER BY o.status`,
+					);
+					const writeHotShard = c.db.execute(
+						"UPDATE rw_orders SET total_cents = total_cents + 1 WHERE shard BETWEEN 0 AND 7",
+					);
+					const readAfterWrite = c.db.execute(
+						"SELECT COUNT(*) AS rows FROM rw_orders WHERE shard BETWEEN 0 AND 7",
+					);
+					const [statusRows, joinRows, , shardRows] = await Promise.all([
+						readStatus,
+						readJoin,
+						writeHotShard,
+						readAfterWrite,
+					]);
+					const aggregates = [
+						...typedRows<AggregateRow>(statusRows),
+						...typedRows<AggregateRow>(joinRows),
+					];
+					const [shardCount] = typedRows<CountRow>(shardRows);
+					details = {
+						ops: 4,
+						readOps: 3,
+						writeOps: 1,
+						groups: aggregates.length,
+						rows:
+							aggregates.reduce((sum, row) => sum + row.rows, 0) +
+							(shardCount?.rows ?? 0),
+						total: aggregates.reduce((sum, row) => sum + row.total, 0),
 					};
 					break;
 				}

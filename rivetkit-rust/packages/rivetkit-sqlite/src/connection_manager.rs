@@ -1,3 +1,8 @@
+use std::{
+	sync::Arc,
+	time::{Duration, Instant},
+};
+
 use anyhow::{Result, anyhow};
 use libsqlite3_sys::{
 	SQLITE_OPEN_CREATE, SQLITE_OPEN_READONLY, SQLITE_OPEN_READWRITE, sqlite3,
@@ -5,19 +10,30 @@ use libsqlite3_sys::{
 };
 use tokio::sync::{Mutex, Notify};
 
-use crate::vfs::{NativeConnection, NativeVfsHandle, open_connection};
-
-const DEFAULT_MAX_READERS: usize = 4;
+use crate::{
+	optimization_flags::SqliteOptimizationFlags,
+	vfs::{NativeConnection, NativeVfsHandle, SqliteVfsMetrics, open_connection},
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct NativeConnectionManagerConfig {
+	pub read_pool_enabled: bool,
 	pub max_readers: usize,
+	pub idle_ttl: Duration,
 }
 
 impl Default for NativeConnectionManagerConfig {
 	fn default() -> Self {
+		Self::from_optimization_flags(SqliteOptimizationFlags::default())
+	}
+}
+
+impl NativeConnectionManagerConfig {
+	pub fn from_optimization_flags(flags: SqliteOptimizationFlags) -> Self {
 		Self {
-			max_readers: DEFAULT_MAX_READERS,
+			read_pool_enabled: flags.sqlite_read_pool_enabled,
+			max_readers: flags.sqlite_read_pool_max_readers,
+			idle_ttl: Duration::from_millis(flags.sqlite_read_pool_idle_ttl_ms),
 		}
 	}
 }
@@ -48,6 +64,7 @@ pub struct NativeConnectionManager {
 struct NativeConnectionManagerInner {
 	file_name: String,
 	config: NativeConnectionManagerConfig,
+	metrics: Option<Arc<dyn SqliteVfsMetrics>>,
 	state: Mutex<NativeConnectionManagerState>,
 	changed: Notify,
 }
@@ -55,12 +72,18 @@ struct NativeConnectionManagerInner {
 struct NativeConnectionManagerState {
 	vfs: Option<NativeVfsHandle>,
 	mode: NativeConnectionManagerMode,
-	idle_readers: Vec<NativeConnection>,
+	idle_readers: Vec<IdleReadConnection>,
 	idle_writer: Option<NativeConnection>,
 	active_readers: usize,
 	open_readers: usize,
 	pending_writers: usize,
 	active_writer: bool,
+	manual_transaction_started_at: Option<Instant>,
+}
+
+struct IdleReadConnection {
+	connection: NativeConnection,
+	idle_since: Instant,
 }
 
 #[must_use = "release the read connection lease when work is complete"]
@@ -83,10 +106,20 @@ impl NativeConnectionManager {
 		file_name: impl Into<String>,
 		config: NativeConnectionManagerConfig,
 	) -> Self {
+		Self::new_with_metrics(vfs, file_name, config, None)
+	}
+
+	pub fn new_with_metrics(
+		vfs: NativeVfsHandle,
+		file_name: impl Into<String>,
+		config: NativeConnectionManagerConfig,
+		metrics: Option<Arc<dyn SqliteVfsMetrics>>,
+	) -> Self {
 		Self {
 			inner: std::sync::Arc::new(NativeConnectionManagerInner {
 				file_name: file_name.into(),
 				config,
+				metrics,
 				state: Mutex::new(NativeConnectionManagerState {
 					vfs: Some(vfs),
 					mode: NativeConnectionManagerMode::Closed,
@@ -96,21 +129,33 @@ impl NativeConnectionManager {
 					open_readers: 0,
 					pending_writers: 0,
 					active_writer: false,
+					manual_transaction_started_at: None,
 				}),
 				changed: Notify::new(),
 			}),
 		}
 	}
 
+	pub fn read_pool_enabled(&self) -> bool {
+		self.inner.config.read_pool_enabled
+	}
+
 	pub async fn acquire_read(&self) -> Result<NativeReadConnectionLease> {
+		if !self.inner.config.read_pool_enabled {
+			return Err(anyhow!("sqlite read connection pool is disabled"));
+		}
 		if self.inner.config.max_readers == 0 {
 			return Err(anyhow!("sqlite read connection manager has no reader slots"));
 		}
 
+		let wait_started_at = Instant::now();
 		loop {
 			let notified = self.inner.changed.notified();
 			let open_result = {
 				let mut state = self.inner.state.lock().await;
+				let closed_readers = state.prune_expired_readers(self.inner.config.idle_ttl);
+				self.record_reader_closes(closed_readers);
+				self.record_reader_gauges(&state);
 				if state.vfs.is_none() {
 					return Err(anyhow!("sqlite connection manager is closed"));
 				}
@@ -124,16 +169,19 @@ impl NativeConnectionManager {
 					None
 				} else if let Some(connection) = state.idle_readers.pop() {
 					state.active_readers += 1;
-					state.refresh_mode();
+					self.record_mode_transition(state.refresh_mode());
+					self.record_reader_gauges(&state);
+					self.observe_read_wait(wait_started_at.elapsed());
 					return Ok(NativeReadConnectionLease {
 						manager: self.clone(),
-						connection: Some(connection),
+						connection: Some(connection.connection),
 						newly_opened: false,
 					});
 				} else if state.open_readers < self.inner.config.max_readers {
 					state.active_readers += 1;
 					state.open_readers += 1;
-					state.mode = NativeConnectionManagerMode::ReadMode;
+					self.record_mode_transition(state.set_mode(NativeConnectionManagerMode::ReadMode));
+					self.record_reader_gauges(&state);
 					Some(
 						state
 							.vfs
@@ -154,6 +202,8 @@ impl NativeConnectionManager {
 				.await?
 				{
 					Ok(connection) => {
+						self.record_reader_open();
+						self.observe_read_wait(wait_started_at.elapsed());
 						return Ok(NativeReadConnectionLease {
 							manager: self.clone(),
 							connection: Some(connection),
@@ -164,7 +214,8 @@ impl NativeConnectionManager {
 						let mut state = self.inner.state.lock().await;
 						state.active_readers = state.active_readers.saturating_sub(1);
 						state.open_readers = state.open_readers.saturating_sub(1);
-						state.refresh_mode();
+						self.record_mode_transition(state.refresh_mode());
+						self.record_reader_gauges(&state);
 						self.inner.changed.notify_waiters();
 						return Err(anyhow!("failed to open sqlite read connection: {err}"));
 					}
@@ -177,6 +228,7 @@ impl NativeConnectionManager {
 
 	pub async fn acquire_write(&self) -> Result<NativeWriteConnectionLease> {
 		let mut pending_registered = false;
+		let wait_started_at = Instant::now();
 
 		loop {
 			let notified = self.inner.changed.notified();
@@ -201,8 +253,11 @@ impl NativeConnectionManager {
 					state.open_readers = state.open_readers.saturating_sub(idle_readers.len());
 					state.pending_writers = state.pending_writers.saturating_sub(1);
 					state.active_writer = true;
-					state.mode = NativeConnectionManagerMode::WriteMode;
+					self.record_reader_closes(idle_readers.len());
+					self.record_mode_transition(state.set_mode(NativeConnectionManagerMode::WriteMode));
+					self.record_reader_gauges(&state);
 					if let Some(connection) = state.idle_writer.take() {
+						self.observe_write_wait(wait_started_at.elapsed());
 						return Ok(NativeWriteConnectionLease {
 							manager: self.clone(),
 							connection: Some(connection),
@@ -235,6 +290,7 @@ impl NativeConnectionManager {
 				.await?
 				{
 					Ok(connection) => {
+						self.observe_write_wait(wait_started_at.elapsed());
 						return Ok(NativeWriteConnectionLease {
 							manager: self.clone(),
 							connection: Some(connection),
@@ -244,7 +300,7 @@ impl NativeConnectionManager {
 					Err(err) => {
 						let mut state = self.inner.state.lock().await;
 						state.active_writer = false;
-						state.refresh_mode();
+						self.record_mode_transition(state.refresh_mode());
 						self.inner.changed.notify_waiters();
 						return Err(anyhow!("failed to open sqlite write connection: {err}"));
 					}
@@ -339,6 +395,8 @@ impl NativeConnectionManager {
 			state.open_readers = state.open_readers.saturating_sub(state.idle_readers.len());
 			self.inner.changed.notify_waiters();
 			state.idle_writer.take();
+			self.record_reader_closes(state.idle_readers.len());
+			self.record_reader_gauges(&state);
 			std::mem::take(&mut state.idle_readers)
 		};
 		drop(idle_readers);
@@ -348,7 +406,7 @@ impl NativeConnectionManager {
 			let vfs = {
 				let mut state = self.inner.state.lock().await;
 				if state.active_readers == 0 && !state.active_writer {
-					state.mode = NativeConnectionManagerMode::Closed;
+					self.record_mode_transition(state.set_mode(NativeConnectionManagerMode::Closed));
 					state.vfs.take()
 				} else {
 					None
@@ -384,6 +442,58 @@ impl NativeConnectionManager {
 			notified.await;
 		}
 	}
+
+	fn record_reader_gauges(&self, state: &NativeConnectionManagerState) {
+		if let Some(metrics) = &self.inner.metrics {
+			metrics.set_read_pool_active_readers(state.active_readers as u64);
+			metrics.set_read_pool_idle_readers(state.idle_readers.len() as u64);
+		}
+	}
+
+	fn record_reader_open(&self) {
+		if let Some(metrics) = &self.inner.metrics {
+			metrics.record_read_pool_reader_open();
+		}
+	}
+
+	fn record_reader_closes(&self, count: usize) {
+		if count == 0 {
+			return;
+		}
+		if let Some(metrics) = &self.inner.metrics {
+			metrics.record_read_pool_reader_close(count as u64);
+		}
+	}
+
+	fn observe_read_wait(&self, duration: Duration) {
+		if let Some(metrics) = &self.inner.metrics {
+			metrics.observe_read_pool_read_wait(duration);
+		}
+	}
+
+	fn observe_write_wait(&self, duration: Duration) {
+		if let Some(metrics) = &self.inner.metrics {
+			metrics.observe_read_pool_write_wait(duration);
+		}
+	}
+
+	fn record_mode_transition(
+		&self,
+		transition: Option<(NativeConnectionManagerMode, NativeConnectionManagerMode)>,
+	) {
+		let Some((from, to)) = transition else {
+			return;
+		};
+		if let Some(metrics) = &self.inner.metrics {
+			metrics.record_read_pool_mode_transition(from.as_metric_label(), to.as_metric_label());
+		}
+	}
+
+	fn observe_manual_transaction(&self, duration: Duration) {
+		if let Some(metrics) = &self.inner.metrics {
+			metrics.observe_read_pool_manual_transaction(duration);
+		}
+	}
 }
 
 impl NativeReadConnectionLease {
@@ -405,15 +515,23 @@ impl NativeReadConnectionLease {
 				&& state.pending_writers == 0
 				&& !matches!(state.mode, NativeConnectionManagerMode::Closing)
 			{
-				state.idle_readers.push(connection);
-				state.refresh_mode();
+				state.idle_readers.push(IdleReadConnection {
+					connection,
+					idle_since: Instant::now(),
+				});
+				self.manager.record_mode_transition(state.refresh_mode());
+				self.manager.record_reader_gauges(&state);
 				None
 			} else {
 				state.open_readers = state.open_readers.saturating_sub(1);
-				state.refresh_mode();
+				self.manager.record_mode_transition(state.refresh_mode());
+				self.manager.record_reader_gauges(&state);
 				Some(connection)
 			}
 		};
+		if idle_connection.is_some() {
+			self.manager.record_reader_closes(1);
+		}
 		drop(idle_connection);
 		self.manager.inner.changed.notify_waiters();
 	}
@@ -443,7 +561,10 @@ impl NativeWriteConnectionLease {
 		let connection = self.connection.take();
 		let keep_writer_open = connection
 			.as_ref()
-			.is_some_and(|connection| unsafe { sqlite3_get_autocommit(connection.as_ptr()) == 0 });
+			.is_some_and(|connection| {
+				!self.manager.inner.config.read_pool_enabled
+					|| unsafe { sqlite3_get_autocommit(connection.as_ptr()) == 0 }
+			});
 		let close_connection = {
 			let mut state = self.manager.inner.state.lock().await;
 			state.active_writer = false;
@@ -451,11 +572,25 @@ impl NativeWriteConnectionLease {
 				&& state.vfs.is_some()
 				&& !matches!(state.mode, NativeConnectionManagerMode::Closing)
 			{
+				if state.manual_transaction_started_at.is_none()
+					&& connection
+						.as_ref()
+						.is_some_and(|connection| unsafe {
+							sqlite3_get_autocommit(connection.as_ptr()) == 0
+						})
+				{
+					state.manual_transaction_started_at = Some(Instant::now());
+				}
 				state.idle_writer = connection;
-				state.mode = NativeConnectionManagerMode::WriteMode;
+				self.manager.record_mode_transition(
+					state.set_mode(NativeConnectionManagerMode::WriteMode),
+				);
 				None
 			} else {
-				state.refresh_mode();
+				if let Some(started_at) = state.manual_transaction_started_at.take() {
+					self.manager.observe_manual_transaction(started_at.elapsed());
+				}
+				self.manager.record_mode_transition(state.refresh_mode());
 				connection
 			}
 		};
@@ -473,11 +608,20 @@ impl Drop for NativeWriteConnectionLease {
 }
 
 impl NativeConnectionManagerState {
-	fn refresh_mode(&mut self) {
+	fn set_mode(
+		&mut self,
+		mode: NativeConnectionManagerMode,
+	) -> Option<(NativeConnectionManagerMode, NativeConnectionManagerMode)> {
+		let previous = self.mode;
+		self.mode = mode;
+		(previous != mode).then_some((previous, mode))
+	}
+
+	fn refresh_mode(&mut self) -> Option<(NativeConnectionManagerMode, NativeConnectionManagerMode)> {
 		if matches!(self.mode, NativeConnectionManagerMode::Closing) {
-			return;
+			return None;
 		}
-		self.mode = if self.active_writer {
+		let mode = if self.active_writer {
 			NativeConnectionManagerMode::WriteMode
 		} else if self.idle_writer.is_some() {
 			NativeConnectionManagerMode::WriteMode
@@ -486,6 +630,7 @@ impl NativeConnectionManagerState {
 		} else {
 			NativeConnectionManagerMode::Closed
 		};
+		self.set_mode(mode)
 	}
 
 	fn snapshot(&self) -> NativeConnectionManagerSnapshot {
@@ -496,6 +641,30 @@ impl NativeConnectionManagerState {
 			open_readers: self.open_readers,
 			pending_writers: self.pending_writers,
 			active_writer: self.active_writer,
+		}
+	}
+
+	fn prune_expired_readers(&mut self, idle_ttl: Duration) -> usize {
+		let now = Instant::now();
+		let before = self.idle_readers.len();
+		self.idle_readers
+			.retain(|reader| now.duration_since(reader.idle_since) < idle_ttl);
+		let closed = before - self.idle_readers.len();
+		self.open_readers = self.open_readers.saturating_sub(closed);
+		if closed > 0 {
+			self.refresh_mode();
+		}
+		closed
+	}
+}
+
+impl NativeConnectionManagerMode {
+	fn as_metric_label(self) -> &'static str {
+		match self {
+			Self::Closed => "closed",
+			Self::ReadMode => "read",
+			Self::WriteMode => "write",
+			Self::Closing => "closing",
 		}
 	}
 }

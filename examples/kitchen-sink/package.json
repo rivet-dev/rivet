@@ -8,6 +8,7 @@
 		"dev": "concurrently -n server,vite \"node --import @rivetkit/sql-loader --import tsx src/server.ts\" \"vite\"",
 		"check-types": "echo 'skipped - workflow history types broken'",
 		"build": "vite build",
+		"test": "node --import tsx --test tests/*.test.ts",
 		"start": "node --import @rivetkit/sql-loader --import tsx src/server.ts",
 		"smoke:raw-websocket-serverless": "tsx scripts/raw-websocket-serverless-smoke.ts",
 		"benchmark": "tsx scripts/benchmark.ts",

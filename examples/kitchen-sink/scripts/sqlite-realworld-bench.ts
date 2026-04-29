@@ -21,11 +21,12 @@ const REPO_ENGINE_BINARY = fileURLToPath(
 );
 const REPO_ROOT = fileURLToPath(new URL("../../..", import.meta.url));
 const DEFAULT_RESULTS_ROOT = ".agent/benchmarks/sqlite-realworld";
+const SQLITE_OPT_MODE_ENVS = [
+	"RIVETKIT_SQLITE_OPT_READ_AHEAD_MODE",
+	"RIVETKIT_SQLITE_OPT_VFS_PAGE_CACHE_MODE",
+] as const;
 const SQLITE_OPT_BOOLEAN_ENVS = [
-	"RIVETKIT_SQLITE_OPT_READ_AHEAD",
-	"RIVETKIT_SQLITE_OPT_CACHE_HIT_PREDICTOR_TRAINING",
 	"RIVETKIT_SQLITE_OPT_RECENT_PAGE_HINTS",
-	"RIVETKIT_SQLITE_OPT_ADAPTIVE_READ_AHEAD",
 	"RIVETKIT_SQLITE_OPT_PRELOAD_HINT_FLUSH",
 	"RIVETKIT_SQLITE_OPT_STARTUP_PRELOAD_FIRST_PAGES",
 	"RIVETKIT_SQLITE_OPT_PRELOAD_HINTS_ON_OPEN",
@@ -36,16 +37,15 @@ const SQLITE_OPT_BOOLEAN_ENVS = [
 	"RIVETKIT_SQLITE_OPT_RANGE_READS",
 	"RIVETKIT_SQLITE_OPT_BATCH_CHUNK_READS",
 	"RIVETKIT_SQLITE_OPT_DECODED_LTX_CACHE",
-	"RIVETKIT_SQLITE_OPT_VFS_CACHE_FETCHED_PAGES",
-	"RIVETKIT_SQLITE_OPT_VFS_CACHE_PREFETCHED_PAGES",
-	"RIVETKIT_SQLITE_OPT_VFS_CACHE_STARTUP_PRELOADED_PAGES",
-	"RIVETKIT_SQLITE_OPT_VFS_SCAN_RESISTANT_CACHE",
+	"RIVETKIT_SQLITE_OPT_READ_POOL_ENABLED",
 ] as const;
 const SQLITE_OPT_NUMERIC_ENVS = [
 	"RIVETKIT_SQLITE_OPT_STARTUP_PRELOAD_MAX_BYTES",
 	"RIVETKIT_SQLITE_OPT_STARTUP_PRELOAD_FIRST_PAGE_COUNT",
 	"RIVETKIT_SQLITE_OPT_VFS_PAGE_CACHE_CAPACITY_PAGES",
 	"RIVETKIT_SQLITE_OPT_VFS_PROTECTED_CACHE_PAGES",
+	"RIVETKIT_SQLITE_OPT_READ_POOL_MAX_READERS",
+	"RIVETKIT_SQLITE_OPT_READ_POOL_IDLE_TTL_MS",
 ] as const;
 
 const WORKLOADS = [
@@ -59,6 +59,8 @@ const WORKLOADS = [
 	"aggregate-status",
 	"aggregate-time-bucket",
 	"aggregate-tenant-time-range",
+	"parallel-read-aggregates",
+	"parallel-read-write-transition",
 	"feed-order-by-limit",
 	"feed-pagination-adjacent",
 	"join-order-items",
@@ -242,6 +244,22 @@ const WORKLOAD_SPECS: WorkloadSpec[] = [
 		category: "read",
 		sizeClass: "cache-fit",
 		description: "Selective tenant/time-range aggregate over events joined to orders.",
+	},
+	{
+		// Included to measure future read-mode parallelism where several read-only SQLite connections overlap VFS misses.
+		// Today this captures the serialized baseline; after the connection manager lands, independent aggregate reads should overlap.
+		name: "parallel-read-aggregates",
+		category: "read",
+		sizeClass: "large",
+		description: "Concurrent read-only aggregates over one actor-local SQLite database.",
+	},
+	{
+		// Included to measure the read-mode to write-mode transition.
+		// Future write mode must wait for active readers, close them, run exactly one writable connection, then allow fresh readers.
+		name: "parallel-read-write-transition",
+		category: "write",
+		sizeClass: "medium",
+		description: "Concurrent read aggregates with a queued write-mode update.",
 	},
 	{
 		// Included for the first page of a timeline, inbox, or event feed after actor wake.
@@ -529,14 +547,15 @@ function parseArgs(argv: string[]): Args {
 
 function disabledSqliteOptimizationEnv(): Record<string, string> {
 	const env: Record<string, string> = {};
+	for (const name of SQLITE_OPT_MODE_ENVS) {
+		env[name] = "off";
+	}
 	for (const name of SQLITE_OPT_BOOLEAN_ENVS) {
 		env[name] = "false";
 	}
 	for (const name of SQLITE_OPT_NUMERIC_ENVS) {
 		env[name] = "0";
 	}
-	// The VFS needs one structural page for opening empty SQLite databases.
-	env.RIVETKIT_SQLITE_OPT_VFS_PAGE_CACHE_CAPACITY_PAGES = "1";
 	return env;
 }
 
@@ -546,7 +565,7 @@ function applyDisabledSqliteOptimizations(target: NodeJS.ProcessEnv): void {
 
 function sqliteOptimizationEnvSnapshot(): Record<string, string | null> {
 	const snapshot: Record<string, string | null> = {};
-	for (const name of [...SQLITE_OPT_BOOLEAN_ENVS, ...SQLITE_OPT_NUMERIC_ENVS]) {
+	for (const name of [...SQLITE_OPT_MODE_ENVS, ...SQLITE_OPT_BOOLEAN_ENVS, ...SQLITE_OPT_NUMERIC_ENVS]) {
 		snapshot[name] = process.env[name] ?? null;
 	}
 	return snapshot;
