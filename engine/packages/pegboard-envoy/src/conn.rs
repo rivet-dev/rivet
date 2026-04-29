@@ -39,7 +39,6 @@ pub struct Conn {
 	/// Envoys can reconnect to different worker nodes mid-flight, so request handlers
 	/// lazily populate it and lifecycle commands only evict stale cache entries.
 	pub actor_dbs: HashMap<String, Arc<ActorDb>>,
-	pub active_actors: HashMap<String, actor_lifecycle::ActiveActor>,
 	pub is_serverless: bool,
 	pub last_rtt: AtomicU32,
 	/// Timestamp (epoch ms) of the last pong received from the envoy.
@@ -322,24 +321,16 @@ pub async fn init_conn(
 		ups: conn_ups,
 		node_id,
 		actor_dbs: HashMap::new(),
-		active_actors: HashMap::new(),
 		is_serverless,
 		last_rtt: AtomicU32::new(0),
 		last_ping_ts: AtomicI64::new(util::timestamp::now()),
 	});
 
-	// Send missed commands (must be after init packet). If any step fails
-	// after one or more `start_actor` calls already opened SQLite dbs, close
-	// every actor in `conn.active_actors` before returning so we do not leak
-	// process-wide `SqliteEngine.open_dbs` entries that would block re-opening
-	// these actors until the process restarts.
+	// Send missed commands after the init packet.
 	if !missed_commands.is_empty() {
 		let replay_result: Result<()> = async {
 			for cmd_wrapper in &mut missed_commands {
-				if let protocol::Command::CommandStartActor(ref mut start) = cmd_wrapper.inner {
-					actor_lifecycle::start_actor(ctx, &conn, &cmd_wrapper.checkpoint, start)
-						.await?;
-				} else if let protocol::Command::CommandStopActor(_) = cmd_wrapper.inner {
+				if let protocol::Command::CommandStopActor(_) = cmd_wrapper.inner {
 					actor_lifecycle::stop_actor(&conn, &cmd_wrapper.checkpoint).await?;
 				}
 			}

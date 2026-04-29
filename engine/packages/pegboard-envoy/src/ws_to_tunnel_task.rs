@@ -25,8 +25,7 @@ use universalpubsub::PublishOpts;
 use vbare::OwnedVersionedData;
 
 use crate::{
-	LifecycleResult, actor_event_demuxer::ActorEventDemuxer, actor_lifecycle, conn::Conn, errors,
-	sqlite_runtime,
+	LifecycleResult, actor_event_demuxer::ActorEventDemuxer, conn::Conn, errors, sqlite_runtime,
 };
 
 #[tracing::instrument(name="ws_to_tunnel_task", skip_all, fields(ray_id=?ctx.ray_id(), req_id=?ctx.req_id(), envoy_key=%conn.envoy_key, protocol_version=%conn.protocol_version))]
@@ -419,25 +418,6 @@ async fn handle_message(
 		// Forward to demuxer which forwards to actor wf
 		protocol::ToRivet::ToRivetEvents(events) => {
 			for event in events {
-				if let protocol::Event::EventActorStateUpdate(state_update) = &event.inner {
-					if let protocol::ActorState::ActorStateStopped(_) = &state_update.state {
-						// Log + continue on protocol-level disagreement instead of tearing
-						// down the whole WS for a single bad ActorStateStopped event.
-						// `actor_stopped` itself force-closes the SQLite db and removes
-						// the active_actors entry on failure, so the conn does not retain
-						// half-stopped state for this actor.
-						if let Err(err) =
-							actor_lifecycle::actor_stopped(conn, &event.checkpoint).await
-						{
-							tracing::warn!(
-								actor_id = %event.checkpoint.actor_id,
-								generation = event.checkpoint.generation,
-								?err,
-								"actor_stopped lifecycle update failed; entry already evicted"
-							);
-						}
-					}
-				}
 				event_demuxer.ingest(Id::parse(&event.checkpoint.actor_id)?, event);
 			}
 		}
@@ -651,7 +631,7 @@ async fn handle_metadata(
 #[tracing::instrument(skip_all)]
 async fn handle_tunnel_message(
 	ctx: &StandaloneCtx,
-	authorized_tunnel_routes: &HashMap<(protocol::GatewayId, protocol::RequestId), ()>,
+	_authorized_tunnel_routes: &HashMap<(protocol::GatewayId, protocol::RequestId), ()>,
 	msg: protocol::ToRivetTunnelMessage,
 ) -> Result<()> {
 	// Extract inner data length before consuming msg
@@ -802,8 +782,6 @@ async fn handle_sqlite_commit_stage(
 	request: protocol::SqliteCommitStageRequest,
 ) -> Result<protocol::SqliteCommitStageResponse> {
 	validate_sqlite_actor(ctx, conn, &request.actor_id).await?;
-	actor_lifecycle::assert_sqlite_actor_active(conn, &request.actor_id, request.generation)
-		.await?;
 
 	match conn
 		.sqlite_engine
@@ -841,8 +819,6 @@ async fn handle_sqlite_commit_stage_begin(
 	request: protocol::SqliteCommitStageBeginRequest,
 ) -> Result<protocol::SqliteCommitStageBeginResponse> {
 	validate_sqlite_actor(ctx, conn, &request.actor_id).await?;
-	actor_lifecycle::assert_sqlite_actor_active(conn, &request.actor_id, request.generation)
-		.await?;
 
 	match conn
 		.sqlite_engine
@@ -877,8 +853,6 @@ async fn handle_sqlite_commit_finalize(
 ) -> Result<protocol::SqliteCommitFinalizeResponse> {
 	let decode_request_start = Instant::now();
 	validate_sqlite_actor(ctx, conn, &request.actor_id).await?;
-	actor_lifecycle::assert_sqlite_actor_active(conn, &request.actor_id, request.generation)
-		.await?;
 	conn.sqlite_engine.metrics().observe_commit_phase(
 		"slow",
 		"decode_request",

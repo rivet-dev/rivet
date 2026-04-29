@@ -25,6 +25,7 @@ Started: Wed Apr 29 04:36:56 AM PDT 2026
 - `sqlite-storage::pump::ActorDb::new` requires a UPS handle so commits can publish detached compaction triggers; tests can use `universalpubsub::driver::memory::MemoryDriver`.
 - Use `tokio::time::Instant` for actor-local trigger throttles so `#[tokio::test(start_paused = true)]` plus `tokio::time::advance` can cover timing deterministically.
 - `pegboard-envoy` SQLite `get_pages` and `commit` handlers lazily populate a per-conn `actor_dbs` cache and must not use it as authoritative actor presence tracking.
+- `pegboard-envoy` should pass `CommandStartActor` through without local SQLite side effects; only `CommandStopActor` touches the per-conn `actor_dbs` cache.
 
 ## 2026-04-29 04:44:52 PDT - US-001
 - Implemented a UUID-backed `NodeId` type and stored a generated value on each `Pools` instance.
@@ -244,4 +245,13 @@ Started: Wed Apr 29 04:36:56 AM PDT 2026
   - `pegboard-envoy` still needs temporary old-protocol META response helpers until US-024 updates the wire schema to the new stateless shape.
   - `ActorDb::new` needs `udb`, `ups`, `actor_id`, and `node_id`; conn construction is the right place to clone all process handles from `Pools`.
   - Legacy commit-stage handlers still downcast `sqlite_storage_legacy::error::SqliteStorageError`, while new pump handlers downcast `sqlite_storage::error::SqliteStorageError`.
+---
+## 2026-04-29 06:34:47 PDT - US-022
+- Deleted the pegboard-envoy `start_actor` lifecycle path, removed the per-conn `active_actors` map, and removed actor-stopped/open/close/force-close SQLite lifecycle side effects.
+- Kept `CommandStartActor` forwarding intact while dropping local start-command dispatch; `CommandStopActor` now only evicts the lazy `actor_dbs` cache.
+- Files changed: `engine/packages/pegboard-envoy/src/actor_lifecycle.rs`, `engine/packages/pegboard-envoy/src/conn.rs`, `engine/packages/pegboard-envoy/src/tunnel_to_ws_task.rs`, `engine/packages/pegboard-envoy/src/ws_to_tunnel_task.rs`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
+- **Learnings for future iterations:**
+  - `actor_lifecycle.rs` is now intentionally cache-only for SQLite lifecycle; do not add actor-presence or legacy engine open/close work back there.
+  - Missed-command replay and tunnel-to-WS forwarding still send `CommandStartActor` to the envoy, but pegboard-envoy should not mutate it for SQLite startup data.
+  - Existing legacy staged-commit request handlers still compile against `sqlite_engine`; US-024 owns removing the old wire operations.
 ---

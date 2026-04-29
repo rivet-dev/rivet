@@ -126,10 +126,7 @@ async fn handle_message(
 		protocol::ToEnvoyConn::ToEnvoyCommands(mut command_wrappers) => {
 			// TODO: Parallelize
 			for command_wrapper in &mut command_wrappers {
-				if let protocol::Command::CommandStartActor(start) = &mut command_wrapper.inner {
-					actor_lifecycle::start_actor(ctx, conn, &command_wrapper.checkpoint, start)
-						.await?;
-				} else if let protocol::Command::CommandStopActor(_) = &command_wrapper.inner {
+				if let protocol::Command::CommandStopActor(_) = &command_wrapper.inner {
 					actor_lifecycle::stop_actor(conn, &command_wrapper.checkpoint).await?;
 				}
 			}
