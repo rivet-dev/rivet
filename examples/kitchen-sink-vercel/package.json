@@ -6,6 +6,7 @@
 	"scripts": {
 		"dev": "vercel dev",
 		"build": "vite build",
+		"smoke:raw-websocket-serverless": "tsx scripts/raw-websocket-serverless-smoke.ts",
 		"check-types": "tsc --noEmit"
 	},
 	"dependencies": {

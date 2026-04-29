@@ -9,6 +9,7 @@
 		"check-types": "echo 'skipped - workflow history types broken'",
 		"build": "vite build",
 		"start": "node --import @rivetkit/sql-loader --import tsx src/server.ts",
+		"smoke:raw-websocket-serverless": "tsx scripts/raw-websocket-serverless-smoke.ts",
 		"benchmark": "tsx scripts/benchmark.ts",
 		"db:generate": "find src/actors -name drizzle.config.ts -exec drizzle-kit generate --config {} \\;"
 	},
