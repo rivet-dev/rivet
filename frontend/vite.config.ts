@@ -35,9 +35,6 @@ function isFlagEnabled(featureFlags: string | undefined, flag: string): boolean 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
 	const env = commonEnvSchema.parse(loadEnv(mode, process.cwd(), ""));
-	const featureFlags = process.env.VITE_FEATURE_FLAGS;
-	const supportEnabled = isFlagEnabled(featureFlags, "support");
-	const multitenancyEnabled = isFlagEnabled(featureFlags, "multitenancy");
 
 	console.log(
 		env.SENTRY_AUTH_TOKEN
@@ -46,7 +43,7 @@ export default defineConfig(({ mode }) => {
 	);
 
 	return mergeConfig(baseViteConfig(), {
-		base: multitenancyEnabled ? "/" : "/ui",
+		base: env.BASE_URL ?? "/",
 		plugins: [
 			tanstackRouter({ target: "react", autoCodeSplitting: true }),
 			react(),

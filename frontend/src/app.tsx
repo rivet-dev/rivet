@@ -1,7 +1,11 @@
 import * as Sentry from "@sentry/react";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
-import { createRouter, RouterProvider } from "@tanstack/react-router";
+import {
+	createRouter,
+	ErrorComponent,
+	RouterProvider,
+} from "@tanstack/react-router";
 import { Suspense } from "react";
 import {
 	ConfigProvider,
@@ -21,6 +25,8 @@ import {
 } from "./app/data-providers/cache";
 import { NotFoundCard } from "./app/not-found-card";
 import { RouteLayout } from "./app/route-layout";
+import { isAuthError } from "@/lib/errors";
+import { modal } from "@/utils/modal-utils";
 import { queryClient } from "./queries/global";
 import { routeTree } from "./routeTree.gen";
 
@@ -58,8 +64,16 @@ export const router = createRouter({
 	defaultPendingMinMs: 300,
 	defaultPendingComponent: FullscreenLoading,
 	defaultOnCatch: (error) => {
+		if (isAuthError(error)) {
+			modal.open("ProvideEngineCredentials", { dismissible: false });
+			return;
+		}
 		console.error("Router caught an error:", error);
 		Sentry.captureException(error);
+	},
+	defaultErrorComponent: (props) => {
+		if (isAuthError(props.error)) return null;
+		return <ErrorComponent {...props} />;
 	},
 	defaultNotFoundComponent: () => (
 		<RouteLayout>

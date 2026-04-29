@@ -4,7 +4,7 @@
 	"tasks": {
 		"build": {
 			"dependsOn": ["^build"],
-			"env": ["VITE_APP_*", "VITE_FEATURE_FLAGS", "DEPLOYMENT_TYPE"],
+			"env": ["VITE_APP_*", "VITE_FEATURE_FLAGS", "DEPLOYMENT_TYPE", "BASE_URL"],
 			"outputs": ["dist/**"]
 		},
 		"dev": {

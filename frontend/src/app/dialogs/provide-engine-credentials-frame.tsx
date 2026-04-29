@@ -1,3 +1,4 @@
+import { useRouter } from "@tanstack/react-router";
 import * as EngineCredentialsForm from "@/app/forms/engine-credentials-form";
 import {
 	type DialogContentProps,
@@ -17,6 +18,7 @@ interface ProvideEngineCredentialsDialogContentProps
 export default function ProvideEngineCredentialsDialogContent({
 	onClose,
 }: ProvideEngineCredentialsDialogContentProps) {
+	const router = useRouter();
 	return (
 		<EngineCredentialsForm.Form
 			data-testid={TEST_IDS.Engine.AdminTokenForm}
@@ -41,6 +43,7 @@ export default function ProvideEngineCredentialsDialogContent({
 					);
 
 					await queryClient.refetchQueries();
+					await router.invalidate();
 
 					onClose?.();
 				} catch (e) {
