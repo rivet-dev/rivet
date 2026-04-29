@@ -52,6 +52,8 @@ Use `test-snapshot-gen` to generate and load RocksDB snapshots of the full UDB K
 ## Metrics
 
 - RivetKit core exposes per-actor Prometheus metrics at `/gateway/<actor_id>/metrics`, gated by `_RIVET_METRICS_TOKEN`; prefer this endpoint for actor and VFS performance tuning metrics.
+- Track SQLite cold-read, VFS, storage, and preload optimization ideas in `docs-internal/engine/SQLITE_OPTIMIZATIONS.md`.
+- Track SQLite cold-read optimization implementation and per-step benchmark deltas in `scripts/ralph/prd.json`.
 
 ## SQLite storage tests
 

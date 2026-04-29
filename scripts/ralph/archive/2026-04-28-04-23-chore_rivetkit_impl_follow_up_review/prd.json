@@ -15,8 +15,8 @@
         "Typecheck passes"
       ],
       "priority": 1,
-      "passes": true,
-      "notes": "Baseline artifact verified at `.agent/notes/sqlite-cold-read-before.txt`. Numbers: insert e2e 16048.5ms; hot read e2e 118.6ms; wake read e2e 20141.0ms; wake read server 19979.9ms; wake overhead estimate 161.2ms; wake read VFS get_pages calls 1249; pages fetched 20050; bytes fetched 82124800; prefetch pages 18801; prefetch bytes 77008896; VFS transport 19332.8ms. This is the baseline story, so comparison target is the baseline artifact itself. Typecheck passed with `pnpm --filter kitchen-sink check-types` and `pnpm -F rivetkit check-types`."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "SQLITE-COLD-002",
