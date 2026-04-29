@@ -1,5 +1,6 @@
 ## Codebase Patterns
 - `sqlite-storage` pump payload structs use `serde::{Serialize, Deserialize}` as the local serde_bare/vbare-compatible derive pattern; add `OwnedVersionedData` wrappers when adding concrete encode/decode helpers.
+- Use `BookmarkStr` instead of raw `String` for bookmark-bearing pump records so the 33-character ASCII wire format is enforced at construction and decode.
 
 # Ralph Progress Log
 Started: Wed Apr 29 03:29:23 PM PDT 2026
@@ -16,4 +17,18 @@ Started: Wed Apr 29 03:29:23 PM PDT 2026
   - `sqlite-storage` currently uses `serde` derives plus `serde_bare` and `OwnedVersionedData` wrappers for vbare-compatible payloads.
   - New UUID-backed persisted types need `uuid.workspace = true` under normal dependencies, not only dev-dependencies.
   - `BookmarkRef` is needed by branch records before the bookmark story fully shapes `BookmarkStr`.
+---
+## 2026-04-29 16:43 PDT - US-002
+- Added the namespace tier state, resolved versionstamp, branch manifest, pin status, and validated bookmark string types in `pump/types.rs`.
+- Updated `BookmarkRef` to carry `BookmarkStr` instead of a raw string.
+- Verified with `cargo check -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/CLAUDE.md` (via `AGENTS.md` symlink)
+  - `engine/packages/sqlite-storage/src/pump/types.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - `BookmarkStr` should be the shared type for persisted bookmark references; it validates the 33-byte ASCII wire shape on construction and serde decode.
+  - `BranchManifest` is modeled as one joined struct in code even though its fields are stored in separate FDB sub-keys by owner.
+  - `cargo check -p sqlite-storage` currently passes with an unrelated runner-protocol warning when `node_modules/@bare-ts/tools` is missing.
 ---

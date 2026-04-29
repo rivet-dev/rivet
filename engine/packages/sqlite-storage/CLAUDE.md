@@ -54,6 +54,7 @@ These come from `r2-prior-art/.agent/research/sqlite/requirements.md` and supers
 ## Bookmarks
 
 - **Bookmark wire format is 33-char `{timestamp_ms_hex_be:016}-{txid_hex_be:016}`.** Branch identity is **not** in the wire format; bookmarks are interpreted relative to a branch context (actor's current head by default, explicit `branch_id` argument otherwise).
+- **Pump records carry bookmarks as `BookmarkStr`, not raw `String`.** The wrapper validates the 33-character ASCII wire format at construction and decode.
 - **Lex order = chronological order within a single branch's parent chain.** Across sibling branches (forks of the same parent), bookmarks are not orderable in any meaningful way. APIs do not support cross-branch comparison.
 - **Bookmarks are sender-scoped.** A caller resolving a bookmark on another actor's branch returns `BranchNotReachable`. Cross-actor isolation is enforced at the engine edge, not in this package.
 

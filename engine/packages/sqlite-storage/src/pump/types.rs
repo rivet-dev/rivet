@@ -1,5 +1,5 @@
 use anyhow::{Context, Result, bail};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use uuid::Uuid;
 use vbare::OwnedVersionedData;
 
@@ -45,10 +45,64 @@ impl_uuid_id!(ActorPointerId);
 impl_uuid_id!(NamespaceBranchId);
 impl_uuid_id!(ActorBranchId);
 
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
+pub struct BookmarkStr(String);
+
+impl BookmarkStr {
+	pub fn new(bookmark: impl Into<String>) -> Result<Self> {
+		let bookmark = bookmark.into();
+		if bookmark.len() != 33 || !bookmark.is_ascii() {
+			bail!("sqlite bookmark must be exactly 33 ASCII characters");
+		}
+
+		Ok(Self(bookmark))
+	}
+
+	pub fn as_str(&self) -> &str {
+		&self.0
+	}
+
+	pub fn into_string(self) -> String {
+		self.0
+	}
+}
+
+impl<'de> Deserialize<'de> for BookmarkStr {
+	fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+	where
+		D: Deserializer<'de>,
+	{
+		let bookmark = String::deserialize(deserializer)?;
+		Self::new(bookmark).map_err(serde::de::Error::custom)
+	}
+}
+
+impl TryFrom<String> for BookmarkStr {
+	type Error = anyhow::Error;
+
+	fn try_from(value: String) -> Result<Self> {
+		Self::new(value)
+	}
+}
+
+impl TryFrom<&str> for BookmarkStr {
+	type Error = anyhow::Error;
+
+	fn try_from(value: &str) -> Result<Self> {
+		Self::new(value)
+	}
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BookmarkRef {
-	pub bookmark: String,
+	pub bookmark: BookmarkStr,
 	pub resolved_versionstamp: Option<[u8; 16]>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ResolvedVersionstamp {
+	pub versionstamp: [u8; 16],
+	pub bookmark: Option<BookmarkRef>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -96,9 +150,30 @@ pub struct NamespacePointer {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NamespaceTierState {
+	pub tier: Tier,
+	pub promoted_at_versionstamp: [u8; 16],
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ActorPointer {
 	pub current_branch: ActorBranchId,
 	pub last_swapped_at_ms: i64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum PinStatus {
+	Pending,
+	Ready,
+	Failed,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BranchManifest {
+	pub cold_drained_txid: u64,
+	pub last_hot_pass_txid: u64,
+	pub last_access_ts_ms: i64,
+	pub last_access_bucket: i64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
