@@ -739,6 +739,28 @@ The platform may force an actor to migrate to a new machine during version upgra
 
 Use `onSleep`, `waitUntil`, or `keepAwake` to control the length of the grace period before the actor moves to another machine.
 
+### Manual Lifecycle Controls
+
+You can also trigger lifecycle transitions from the Rivet Cloud API. These endpoints are useful for operational workflows, debugging, and forcing an actor to move through the same sleep or reschedule path that the platform would normally trigger.
+
+```bash
+curl -X POST \
+  "https://cloud-api.rivet.dev/actors/$ACTOR_ID/sleep?namespace=$NAMESPACE" \
+  -H "Authorization: Bearer $RIVET_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{}'
+```
+
+```bash
+curl -X POST \
+  "https://cloud-api.rivet.dev/actors/$ACTOR_ID/reschedule?namespace=$NAMESPACE" \
+  -H "Authorization: Bearer $RIVET_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{}'
+```
+
+`/sleep` asks the actor to enter the normal sleep shutdown sequence. `/reschedule` asks the platform to allocate the actor again, which is useful after crashes or when you need to force a fresh placement. Both endpoints require the actor ID and namespace.
+
 ### Keeping the Actor Awake
 
 RivetKit gives you two primitives for holding the actor awake across background work. Both take a `Promise` and differ in how they interact with idle sleep and the grace period.
