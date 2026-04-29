@@ -31,6 +31,9 @@ Started: Wed Apr 29 04:36:56 AM PDT 2026
 - Checked-in TS envoy-protocol output lives at `engine/sdks/typescript/envoy-protocol/src/index.ts`; if Rust build.rs skips TS generation because `@bare-ts/tools` is missing, regenerate it with the same BARE schema and post-process import/assert/VERSION like build.rs.
 - Stateless SQLite v3 envoy protocol has only `get_pages` and single-shot `commit`; remove startup-data and commit-stage plumbing from envoy-client, pegboard-envoy, pegboard-outbound, rivetkit-core, and rivetkit-sqlite together.
 - Protocol changes that touch `rivetkit-sqlite/src/vfs.rs` should include `cargo test -p rivetkit-sqlite --lib --no-run` because cfg(test) transport doubles can reference removed wire types even when `cargo check --workspace` passes.
+- After deleting `sqlite-storage-legacy`, pegboard v1 SQLite migration writes directly through `sqlite_storage::pump::ActorDb`; tests should verify bytes by reading v2 pages from `ActorDb` rather than using a legacy `SqliteEngine`.
+- `rivetkit-sqlite` direct VFS tests now use a test-only `DirectStorage` wrapper around `ActorDb`; share it across close/reopen cycles or reopen persistence tests will silently start from empty storage.
+- `rivetkit-napi` needs napi-rs `dyn-symbols` so Rust test binaries can link without Node providing N-API symbols at test-link time.
 
 ## 2026-04-29 04:44:52 PDT - US-001
 - Implemented a UUID-backed `NodeId` type and stored a generated value on each `Pools` instance.
@@ -282,4 +285,16 @@ Started: Wed Apr 29 04:36:56 AM PDT 2026
   - `stop_actor` is cache-only; storage cleanup belongs to pegboard destroy, not pegboard-envoy lifecycle handling.
   - Stateless SQLite actor destroy must clear exact META keys plus SHARD/DELTA/PIDX prefix ranges using `sqlite-storage` key builders.
   - A rollback test around `clear_v2_storage_for_destroy` verifies the compactor lease clear stays in the same UDB transaction as the other SQLite teardown clears.
+---
+## 2026-04-29 07:42:42 PDT - US-025
+- Deleted `engine/packages/sqlite-storage-legacy` and removed its workspace dependency plus every remaining crate manifest dependency.
+- Rewired pegboard v1 SQLite migration, migration tests, actor v2.2.1 migration tests, pegboard-envoy page sizing, and the `rivetkit-sqlite` direct test transport to use `sqlite_storage::pump::ActorDb`.
+- Fixed stale Rust test shims uncovered by `cargo test --workspace` in `rivet-util`, `rivet-envoy-client`, `rivetkit`, and `rivetkit-napi`; enabled napi-rs `dyn-symbols` so NAPI test binaries link without Node symbols.
+- Verification: `cargo check --workspace` passed; `cargo build --workspace` passed; `cargo test -p pegboard --test actor_sqlite_migration` passed; `cargo test -p rivetkit-sqlite --lib` passed; `rg 'sqlite_storage_legacy|sqlite-storage-legacy' --type rust --type toml Cargo.lock` returned no hits; `git diff --check` passed.
+- `cargo test --workspace` now fails in unrelated `rivet-guard-core` tests with stale `proxy_service`/`custom_serve` imports and callback signatures.
+- Files changed: `Cargo.toml`, `Cargo.lock`, `engine/packages/sqlite-storage-legacy/**`, `engine/packages/{engine,pegboard,pegboard-envoy,pegboard-outbound}/**`, `engine/packages/util/src/check.rs`, `engine/sdks/rust/envoy-client/src/{actor.rs,events.rs}`, `rivetkit-rust/packages/rivetkit-sqlite/**`, `rivetkit-rust/packages/rivetkit/tests/**`, `rivetkit-typescript/packages/rivetkit-napi/Cargo.toml`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
+- **Learnings for future iterations:**
+  - v1 SQLite migration can skip old staged-commit machinery entirely by committing recovered pages through a temporary `ActorDb` with a memory UPS handle.
+  - `rivetkit-sqlite` direct-storage tests need a shared harness storage across opens to preserve close/reopen semantics.
+  - Full workspace tests currently expose guard-core test drift unrelated to stateless SQLite; address that separately before treating `cargo test --workspace` as a clean gate.
 ---

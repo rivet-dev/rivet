@@ -189,6 +189,7 @@ mod tests {
 				next_sqlite_request_id: 0,
 				request_to_actor: crate::utils::BufferMap::new(),
 				buffered_messages: Vec::new(),
+				processed_command_idx: HashMap::new(),
 			},
 			handle,
 		)

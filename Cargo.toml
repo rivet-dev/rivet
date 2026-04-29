@@ -39,7 +39,6 @@ members = [
   "engine/packages/runtime",
   "engine/packages/service-manager",
   "engine/packages/sqlite-storage",
-  "engine/packages/sqlite-storage-legacy",
   "engine/packages/telemetry",
   "engine/packages/test-deps",
   "engine/packages/test-deps-docker",
@@ -478,9 +477,6 @@ members = [
 
     [workspace.dependencies.rivet-runtime]
     path = "engine/packages/runtime"
-
-    [workspace.dependencies.sqlite-storage-legacy]
-    path = "engine/packages/sqlite-storage-legacy"
 
     [workspace.dependencies.sqlite-storage]
     path = "engine/packages/sqlite-storage"

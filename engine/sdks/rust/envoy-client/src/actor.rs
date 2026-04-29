@@ -1805,8 +1805,6 @@ mod tests {
 			actor_config(),
 			Vec::new(),
 			None,
-			0,
-			None,
 		);
 
 		actor_tx
@@ -1846,8 +1844,6 @@ mod tests {
 			1,
 			actor_config(),
 			Vec::new(),
-			None,
-			0,
 			None,
 		);
 
@@ -1893,8 +1889,6 @@ mod tests {
 			actor_config(),
 			Vec::new(),
 			None,
-			0,
-			None,
 		);
 
 		actor_tx
@@ -1927,8 +1921,6 @@ mod tests {
 			1,
 			actor_config(),
 			Vec::new(),
-			None,
-			0,
 			None,
 		);
 

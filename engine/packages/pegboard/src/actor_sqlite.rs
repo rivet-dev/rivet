@@ -1,17 +1,15 @@
-use std::time::Instant;
+use std::{sync::Arc, time::Instant};
 
 use anyhow::{Context, Result, ensure};
 use gas::prelude::{Id, util::timestamp};
 use rivet_envoy_protocol as protocol;
-use sqlite_storage::keys as sqlite_storage_keys;
-use sqlite_storage_legacy::{
-	commit::{CommitFinalizeRequest, CommitStageBeginRequest, CommitStageRequest},
-	engine::SqliteEngine,
-	ltx::{LtxHeader, encode_ltx_v3},
-	open::OpenConfig,
-	types::{DirtyPage, SQLITE_PAGE_SIZE, SqliteOrigin},
+use rivet_pools::NodeId;
+use sqlite_storage::{
+	keys as sqlite_storage_keys,
+	pump::ActorDb,
+	types::{DBHead, DirtyPage, SQLITE_PAGE_SIZE, decode_db_head},
 };
-use universaldb::Subspace;
+use universalpubsub::{PubSub, driver::memory::MemoryDriver};
 
 use crate::{actor_kv::Recipient, metrics};
 
@@ -23,16 +21,11 @@ const SQLITE_V1_META_VERSION: u16 = 1;
 const SQLITE_V1_META_LEN: usize = 10;
 const SQLITE_V1_CHUNK_SIZE: usize = 4096;
 const SQLITE_V1_MAX_MIGRATION_BYTES: u64 = 128 * 1024 * 1024;
-const SQLITE_V1_MIGRATION_LEASE_MS: i64 = 60 * 1000;
 const FILE_TAG_MAIN: u8 = 0x00;
 const FILE_TAG_JOURNAL: u8 = 0x01;
 const FILE_TAG_WAL: u8 = 0x02;
 const FILE_TAG_SHM: u8 = 0x03;
 const SQLITE_MAGIC: &[u8; 16] = b"SQLite format 3\0";
-
-pub fn sqlite_subspace() -> Subspace {
-	crate::keys::subspace().subspace(&("sqlite-storage",))
-}
 
 pub fn clear_v2_storage_for_destroy(tx: &universaldb::Transaction, actor_id: Id) {
 	let actor_id = actor_id.to_string();
@@ -58,12 +51,6 @@ pub fn clear_v2_storage_for_destroy(tx: &universaldb::Transaction, actor_id: Id)
 	}
 }
 
-pub fn new_engine(
-	db: universaldb::Database,
-) -> (SqliteEngine, tokio::sync::mpsc::UnboundedReceiver<String>) {
-	SqliteEngine::new(db, sqlite_subspace())
-}
-
 fn prefix_range(prefix: &[u8]) -> (Vec<u8>, Vec<u8>) {
 	universaldb::tuple::Subspace::from_bytes(prefix.to_vec()).range()
 }
@@ -84,36 +71,19 @@ pub async fn migrate_v1_to_v2(
 	db: universaldb::Database,
 	input: MigrateV1ToV2Input,
 ) -> Result<MigrateV1ToV2Output> {
-	// Per-call engine is intentional. Migration is bounded, all reads and
-	// writes go through UDB, and the live pegboard-envoy engine refreshes
-	// META and PIDX from UDB on next access. The dropped compaction_rx is
-	// fine because migration writes one delta and one finalize; ordinary
-	// compaction pressure runs through the live engine afterwards.
-	let (sqlite_engine, _compaction_rx) = new_engine(db.clone());
 	let recipient = Recipient {
 		actor_id: input.actor_id,
 		namespace_id: input.namespace_id,
 		name: input.name,
 	};
 
-	let actor_id = input.actor_id.to_string();
-	if sqlite_engine
-		.invalidate_v1_migration(&actor_id, timestamp::now())
-		.await?
-	{
-		tracing::info!(
-			actor_id = %actor_id,
-			"reset stale v1 migration after authoritative actor allocation"
-		);
-	}
-	let migrated = maybe_migrate_v1_to_v2(&db, &sqlite_engine, &recipient).await?;
+	let migrated = maybe_migrate_v1_to_v2(&db, &recipient).await?;
 
 	Ok(MigrateV1ToV2Output { migrated })
 }
 
 async fn maybe_migrate_v1_to_v2(
 	db: &universaldb::Database,
-	sqlite_engine: &SqliteEngine,
 	recipient: &Recipient,
 ) -> Result<bool> {
 	if !crate::actor_kv::sqlite_v1_data_exists(db, recipient.actor_id).await? {
@@ -122,20 +92,8 @@ async fn maybe_migrate_v1_to_v2(
 
 	let actor_id = recipient.actor_id.to_string();
 
-	if let Some(head) = sqlite_engine.try_load_head(&actor_id).await? {
-		match head.origin {
-			SqliteOrigin::CreatedOnV2 | SqliteOrigin::MigratedFromV1 => return Ok(false),
-			SqliteOrigin::MigrationFromV1InProgress => {
-				let migration_started_at = head.creation_ts_ms;
-				let lease_expires_at =
-					migration_started_at.saturating_add(SQLITE_V1_MIGRATION_LEASE_MS);
-				let stage_in_progress = head.next_txid > head.head_txid.saturating_add(1);
-				ensure!(
-					!stage_in_progress || lease_expires_at <= timestamp::now(),
-					"sqlite v1 migration for actor {actor_id} is already in progress"
-				);
-			}
-		}
+	if load_v2_head(db, &actor_id).await?.is_some() {
+		return Ok(false);
 	}
 
 	metrics::SQLITE_MIGRATION_ATTEMPTS_TOTAL.inc();
@@ -154,26 +112,6 @@ async fn maybe_migrate_v1_to_v2(
 		"starting v1→v2 migration"
 	);
 
-	let prepared = sqlite_engine
-		.prepare_v1_migration(&actor_id, timestamp::now())
-		.await
-		.map_err(|err| migration_error(&actor_id, "takeover", err))?;
-	// Register the actor in the engine's open_dbs map so the
-	// commit_stage_begin / commit_stage / commit_finalize calls below pass
-	// the `ensure_open` lifecycle gate added in the open/close work.
-	sqlite_engine
-		.open(&actor_id, OpenConfig::new(timestamp::now()))
-		.await
-		.map_err(|err| migration_error(&actor_id, "open", err))?;
-	let stage_begin = sqlite_engine
-		.commit_stage_begin(
-			&actor_id,
-			CommitStageBeginRequest {
-				generation: prepared.meta.generation,
-			},
-		)
-		.await
-		.map_err(|err| migration_error(&actor_id, "stage", err))?;
 	let dirty_pages = recovered
 		.bytes
 		.chunks(SQLITE_PAGE_SIZE as usize)
@@ -183,47 +121,14 @@ async fn maybe_migrate_v1_to_v2(
 			bytes: bytes.to_vec(),
 		})
 		.collect::<Vec<_>>();
-	let encoded_delta = encode_ltx_v3(
-		LtxHeader::delta(stage_begin.txid, recovered.total_pages, timestamp::now()),
-		&dirty_pages,
-	)
-	.map_err(|err| migration_error(&actor_id, "stage", err.into()))?;
-	let staged_chunks = split_bytes(
-		&encoded_delta,
-		prepared
-			.meta
-			.max_delta_bytes
-			.try_into()
-			.context("sqlite max_delta_bytes exceeded usize")
-			.map_err(|err| migration_error(&actor_id, "stage", err))?,
+	let actor_db = ActorDb::new(
+		Arc::new(db.clone()),
+		migration_ups(),
+		actor_id.clone(),
+		NodeId::new(),
 	);
-	for (chunk_idx, chunk) in staged_chunks.iter().enumerate() {
-		sqlite_engine
-			.commit_stage(
-				&actor_id,
-				CommitStageRequest {
-					generation: prepared.meta.generation,
-					txid: stage_begin.txid,
-					chunk_idx: chunk_idx as u32,
-					bytes: chunk.clone(),
-					is_last: chunk_idx + 1 == staged_chunks.len(),
-				},
-			)
-			.await
-			.map_err(|err| migration_error(&actor_id, "stage", err))?;
-	}
-	sqlite_engine
-		.commit_finalize(
-			&actor_id,
-			CommitFinalizeRequest {
-				generation: prepared.meta.generation,
-				expected_head_txid: prepared.meta.head_txid,
-				txid: stage_begin.txid,
-				new_db_size_pages: recovered.total_pages,
-				now_ms: timestamp::now(),
-				origin_override: Some(SqliteOrigin::MigratedFromV1),
-			},
-		)
+	actor_db
+		.commit(dirty_pages, recovered.total_pages, timestamp::now())
 		.await
 		.map_err(|err| migration_error(&actor_id, "finalize", err))?;
 
@@ -237,6 +142,31 @@ async fn maybe_migrate_v1_to_v2(
 	);
 
 	Ok(true)
+}
+
+async fn load_v2_head(db: &universaldb::Database, actor_id: &str) -> Result<Option<DBHead>> {
+	let actor_id = actor_id.to_string();
+	db.run(move |tx| {
+		let actor_id = actor_id.clone();
+		async move {
+			tx.informal()
+				.get(
+					&sqlite_storage_keys::meta_head_key(&actor_id),
+					universaldb::utils::IsolationLevel::Snapshot,
+				)
+				.await?
+				.map(|bytes| decode_db_head(bytes.as_ref()))
+				.transpose()
+				.context("decode sqlite db head")
+		}
+	})
+	.await
+}
+
+fn migration_ups() -> PubSub {
+	PubSub::new(Arc::new(MemoryDriver::new(
+		"sqlite-v1-migration".to_string(),
+	)))
 }
 
 fn migration_error(actor_id: &str, phase: &'static str, err: anyhow::Error) -> anyhow::Error {
@@ -483,17 +413,6 @@ fn decode_v1_chunk_index(file_tag: u8, key: &[u8]) -> Result<u32> {
 			.try_into()
 			.expect("sqlite v1 chunk key index bytes should exist"),
 	))
-}
-
-fn split_bytes(bytes: &[u8], max_chunk_bytes: usize) -> Vec<Vec<u8>> {
-	if bytes.is_empty() || max_chunk_bytes == 0 {
-		return vec![bytes.to_vec()];
-	}
-
-	bytes
-		.chunks(max_chunk_bytes)
-		.map(|chunk| chunk.to_vec())
-		.collect()
 }
 
 fn v1_meta_key(file_tag: u8) -> [u8; 4] {

@@ -745,11 +745,11 @@ fn validate_sqlite_dirty_pages(
 	for page in dirty_pages {
 		ensure!(page.pgno > 0, "{request_name} does not accept page 0");
 		ensure!(
-			page.bytes.len() == sqlite_storage_legacy::types::SQLITE_PAGE_SIZE as usize,
+			page.bytes.len() == sqlite_storage::types::SQLITE_PAGE_SIZE as usize,
 			"{request_name} page {} had {} bytes, expected {}",
 			page.pgno,
 			page.bytes.len(),
-			sqlite_storage_legacy::types::SQLITE_PAGE_SIZE
+			sqlite_storage::types::SQLITE_PAGE_SIZE
 		);
 		ensure!(
 			seen.insert(page.pgno),

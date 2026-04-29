@@ -20,8 +20,12 @@ getrandom = "0.2"
 rivet-envoy-protocol.workspace = true
 moka = { version = "0.12", default-features = false, features = ["sync"] }
 parking_lot.workspace = true
-sqlite-storage-legacy.workspace = true
 
 [dev-dependencies]
+rivet-pools.workspace = true
+scc.workspace = true
+sqlite-storage.workspace = true
 tempfile.workspace = true
+tokio-util.workspace = true
 universaldb.workspace = true
+universalpubsub.workspace = true

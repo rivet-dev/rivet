@@ -19,7 +19,6 @@ rivet-envoy-protocol.workspace = true
 rivet-metrics.workspace = true
 rivet-runtime.workspace = true
 rivet-types.workspace = true
-sqlite-storage-legacy.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 universaldb.workspace = true

@@ -3440,7 +3440,6 @@ dependencies = [
  "serde_bare",
  "serde_json",
  "sqlite-storage",
- "sqlite-storage-legacy",
  "strum",
  "tempfile",
  "test-snapshot-gen",
@@ -3488,7 +3487,6 @@ dependencies = [
  "serde_bare",
  "serde_json",
  "sqlite-storage",
- "sqlite-storage-legacy",
  "tempfile",
  "tokio",
  "tokio-tungstenite",
@@ -3586,7 +3584,6 @@ dependencies = [
  "rivet-metrics",
  "rivet-runtime",
  "rivet-types",
- "sqlite-storage-legacy",
  "tokio",
  "tracing",
  "universaldb",
@@ -4668,7 +4665,6 @@ dependencies = [
  "serde_json",
  "serde_yaml",
  "sqlite-storage",
- "sqlite-storage-legacy",
  "strum",
  "tabled",
  "tempfile",
@@ -4679,6 +4675,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "universaldb",
+ "universalpubsub",
  "url",
  "urlencoding",
  "uuid",
@@ -5357,11 +5354,15 @@ dependencies = [
  "parking_lot",
  "rivet-envoy-client",
  "rivet-envoy-protocol",
- "sqlite-storage-legacy",
+ "rivet-pools",
+ "scc",
+ "sqlite-storage",
  "tempfile",
  "tokio",
+ "tokio-util",
  "tracing",
  "universaldb",
+ "universalpubsub",
 ]
 
 [[package]]
@@ -6237,33 +6238,6 @@ dependencies = [
  "universalpubsub",
  "uuid",
  "vbare",
-]
-
-[[package]]
-name = "sqlite-storage-legacy"
-version = "2.3.0-rc.4"
-dependencies = [
- "anyhow",
- "async-trait",
- "bytes",
- "futures-util",
- "lazy_static",
- "lz4_flex",
- "moka",
- "parking_lot",
- "rand 0.8.5",
- "rivet-metrics",
- "rivet-sqlite-storage-protocol",
- "scc",
- "serde",
- "serde_bare",
- "tempfile",
- "thiserror 1.0.69",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "universaldb",
- "uuid",
 ]
 
 [[package]]

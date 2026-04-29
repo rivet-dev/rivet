@@ -17,8 +17,12 @@ use parking_lot::{Mutex, RwLock};
 use rivet_envoy_client::handle::EnvoyHandle;
 use rivet_envoy_protocol as protocol;
 #[cfg(test)]
-use sqlite_storage_legacy::{engine::SqliteEngine, error::SqliteStorageError};
+use rivet_pools::NodeId;
+#[cfg(test)]
+use sqlite_storage::{error::SqliteStorageError, pump::ActorDb};
 use tokio::runtime::Handle;
+#[cfg(test)]
+use universalpubsub::{PubSub, driver::memory::MemoryDriver};
 
 const DEFAULT_CACHE_CAPACITY_PAGES: u64 = 50_000;
 const DEFAULT_PREFETCH_DEPTH: usize = 16;
@@ -76,10 +80,7 @@ struct SqliteTransport {
 enum SqliteTransportInner {
 	Envoy(EnvoyHandle),
 	#[cfg(test)]
-	Direct {
-		engine: Arc<SqliteEngine>,
-		hooks: Arc<DirectTransportHooks>,
-	},
+	Direct(Arc<DirectStorage>),
 	#[cfg(test)]
 	Test(Arc<MockProtocol>),
 }
@@ -92,12 +93,9 @@ impl SqliteTransport {
 	}
 
 	#[cfg(test)]
-	fn from_direct(engine: Arc<SqliteEngine>) -> Self {
+	fn from_direct(storage: Arc<DirectStorage>) -> Self {
 		Self {
-			inner: Arc::new(SqliteTransportInner::Direct {
-				engine,
-				hooks: Arc::new(DirectTransportHooks::default()),
-			}),
+			inner: Arc::new(SqliteTransportInner::Direct(storage)),
 		}
 	}
 
@@ -111,7 +109,7 @@ impl SqliteTransport {
 	#[cfg(test)]
 	fn direct_hooks(&self) -> Option<Arc<DirectTransportHooks>> {
 		match &*self.inner {
-			SqliteTransportInner::Direct { hooks, .. } => Some(Arc::clone(hooks)),
+			SqliteTransportInner::Direct(storage) => Some(Arc::clone(&storage.hooks)),
 			_ => None,
 		}
 	}
@@ -123,63 +121,17 @@ impl SqliteTransport {
 		match &*self.inner {
 			SqliteTransportInner::Envoy(handle) => handle.sqlite_get_pages(req).await,
 			#[cfg(test)]
-			SqliteTransportInner::Direct { engine, .. } => {
+			SqliteTransportInner::Direct(storage) => {
 				let pgnos = req.pgnos.clone();
-				match engine.get_pages(&req.actor_id, 0, pgnos).await {
+				match storage.get_pages(&req.actor_id, &pgnos).await {
 					Ok(pages) => Ok(protocol::SqliteGetPagesResponse::SqliteGetPagesOk(
 						protocol::SqliteGetPagesOk {
 							pages: pages.into_iter().map(protocol_fetched_page).collect(),
 						},
 					)),
-					Err(err) => {
-						if matches!(
-							sqlite_storage_error(&err),
-							Some(SqliteStorageError::MetaMissing { operation })
-								if *operation == "get_pages"
-						) {
-							match engine
-								.open(
-									&req.actor_id,
-									sqlite_storage_legacy::open::OpenConfig::new(1),
-								)
-								.await
-							{
-								Ok(_) => {}
-								Err(takeover_err) => {
-									return Ok(
-										protocol::SqliteGetPagesResponse::SqliteErrorResponse(
-											sqlite_error_response(&takeover_err),
-										),
-									);
-								}
-							}
-
-							match engine
-								.get_pages(&req.actor_id, 0, req.pgnos)
-								.await
-							{
-								Ok(pages) => {
-									Ok(protocol::SqliteGetPagesResponse::SqliteGetPagesOk(
-										protocol::SqliteGetPagesOk {
-											pages: pages
-												.into_iter()
-												.map(protocol_fetched_page)
-												.collect(),
-										},
-									))
-								}
-								Err(retry_err) => {
-									Ok(protocol::SqliteGetPagesResponse::SqliteErrorResponse(
-										sqlite_error_response(&retry_err),
-									))
-								}
-							}
-						} else {
-							Ok(protocol::SqliteGetPagesResponse::SqliteErrorResponse(
-								sqlite_error_response(&err),
-							))
-						}
-					}
+					Err(err) => Ok(protocol::SqliteGetPagesResponse::SqliteErrorResponse(
+						sqlite_error_response(&err),
+					)),
 				}
 			}
 			#[cfg(test)]
@@ -194,29 +146,32 @@ impl SqliteTransport {
 		match &*self.inner {
 			SqliteTransportInner::Envoy(handle) => handle.sqlite_commit(req).await,
 			#[cfg(test)]
-			SqliteTransportInner::Direct { engine, hooks } => {
-				if let Some(message) = hooks.take_commit_error() {
+			SqliteTransportInner::Direct(storage) => {
+				if let Some(message) = storage.hooks.take_commit_error() {
 					return Err(anyhow::anyhow!(message));
 				}
 
-				match engine
+				let actor_id = req.actor_id.clone();
+				let dirty_pages = req
+					.dirty_pages
+					.into_iter()
+					.map(storage_dirty_page)
+					.collect::<Vec<_>>();
+				let actor_db = storage.actor_db(actor_id.clone()).await;
+				match actor_db
 					.commit(
-						&req.actor_id,
-						sqlite_storage_legacy::commit::CommitRequest {
-							generation: req.expected_generation.unwrap_or_default(),
-							head_txid: req.expected_head_txid.unwrap_or_default(),
-							db_size_pages: req.db_size_pages,
-							dirty_pages: req
-								.dirty_pages
-								.into_iter()
-								.map(storage_dirty_page)
-								.collect(),
-							now_ms: req.now_ms,
-						},
+						dirty_pages.clone(),
+						req.db_size_pages,
+						req.now_ms,
 					)
 					.await
 				{
-					Ok(_) => Ok(protocol::SqliteCommitResponse::SqliteCommitOk),
+					Ok(_) => {
+						storage
+							.apply_commit(&actor_id, dirty_pages, req.db_size_pages)
+							.await;
+						Ok(protocol::SqliteCommitResponse::SqliteCommitOk)
+					}
 					Err(err) => {
 						Ok(protocol::SqliteCommitResponse::SqliteErrorResponse(
 							sqlite_error_response(&err),
@@ -227,6 +182,168 @@ impl SqliteTransport {
 			#[cfg(test)]
 			SqliteTransportInner::Test(protocol) => protocol.commit(req).await,
 		}
+	}
+}
+
+#[cfg(test)]
+struct DirectStorage {
+	db: Arc<universaldb::Database>,
+	ups: PubSub,
+	node_id: NodeId,
+	actor_dbs: scc::HashMap<String, Arc<ActorDb>>,
+	page_mirrors: scc::HashMap<String, Arc<Mutex<DirectActorPages>>>,
+	hooks: Arc<DirectTransportHooks>,
+}
+
+#[cfg(test)]
+#[derive(Clone, Default)]
+struct DirectActorPages {
+	db_size_pages: u32,
+	pages: BTreeMap<u32, Vec<u8>>,
+}
+
+#[cfg(test)]
+impl DirectStorage {
+	fn new(db: universaldb::Database) -> Self {
+		Self {
+			db: Arc::new(db),
+			ups: PubSub::new(Arc::new(MemoryDriver::new(
+				"rivetkit-sqlite-direct-test".to_string(),
+			))),
+			node_id: NodeId::new(),
+			actor_dbs: scc::HashMap::new(),
+			page_mirrors: scc::HashMap::new(),
+			hooks: Arc::new(DirectTransportHooks::default()),
+		}
+	}
+
+	async fn actor_db(&self, actor_id: String) -> Arc<ActorDb> {
+		self.actor_dbs
+			.entry_async(actor_id.clone())
+			.await
+			.or_insert_with(|| {
+				Arc::new(ActorDb::new(
+					Arc::clone(&self.db),
+					self.ups.clone(),
+					actor_id,
+					self.node_id,
+				))
+			})
+			.get()
+			.clone()
+	}
+
+	async fn page_mirror(&self, actor_id: String) -> Arc<Mutex<DirectActorPages>> {
+		self.page_mirrors
+			.entry_async(actor_id)
+			.await
+			.or_insert_with(|| Arc::new(Mutex::new(DirectActorPages::default())))
+			.get()
+			.clone()
+	}
+
+	async fn get_pages(
+		&self,
+		actor_id: &str,
+		pgnos: &[u32],
+	) -> anyhow::Result<Vec<sqlite_storage::types::FetchedPage>> {
+		let actor_db = self.actor_db(actor_id.to_string()).await;
+		match actor_db.get_pages(pgnos.to_vec()).await {
+			Ok(pages) => Ok(self.fill_from_mirror(actor_id, pgnos, pages).await),
+			Err(err) => {
+				if matches!(
+					sqlite_storage_error(&err),
+					Some(SqliteStorageError::MetaMissing { operation })
+						if *operation == "get_pages"
+				) {
+					Ok(self.read_mirror(actor_id, pgnos).await)
+				} else {
+					Err(err)
+				}
+			}
+		}
+	}
+
+	async fn fill_from_mirror(
+		&self,
+		actor_id: &str,
+		pgnos: &[u32],
+		pages: Vec<sqlite_storage::types::FetchedPage>,
+	) -> Vec<sqlite_storage::types::FetchedPage> {
+		let mut by_pgno = pages
+			.into_iter()
+			.map(|page| (page.pgno, page))
+			.collect::<BTreeMap<_, _>>();
+		let mirror_pages = self.read_mirror(actor_id, pgnos).await;
+		for page in mirror_pages {
+			if page.bytes.is_some()
+				|| by_pgno.get(&page.pgno).is_none_or(|existing| existing.bytes.is_none())
+			{
+				by_pgno.insert(page.pgno, page);
+			}
+		}
+		pgnos
+			.iter()
+			.map(|pgno| {
+				by_pgno.remove(pgno).unwrap_or(sqlite_storage::types::FetchedPage {
+					pgno: *pgno,
+					bytes: None,
+				})
+			})
+			.collect()
+	}
+
+	async fn read_mirror(
+		&self,
+		actor_id: &str,
+		pgnos: &[u32],
+	) -> Vec<sqlite_storage::types::FetchedPage> {
+		let mirror = self.page_mirror(actor_id.to_string()).await;
+		let mirror = mirror.lock();
+		pgnos
+			.iter()
+			.map(|pgno| sqlite_storage::types::FetchedPage {
+				pgno: *pgno,
+				bytes: if *pgno <= mirror.db_size_pages {
+					mirror.pages.get(pgno).cloned()
+				} else {
+					None
+				},
+			})
+			.collect()
+	}
+
+	async fn apply_commit(
+		&self,
+		actor_id: &str,
+		dirty_pages: Vec<sqlite_storage::types::DirtyPage>,
+		db_size_pages: u32,
+	) {
+		let mirror = self.page_mirror(actor_id.to_string()).await;
+		let mut mirror = mirror.lock();
+		mirror.db_size_pages = db_size_pages;
+		mirror.pages.retain(|pgno, _| *pgno <= db_size_pages);
+		for page in dirty_pages {
+			mirror.pages.insert(page.pgno, page.bytes);
+		}
+	}
+
+	async fn snapshot_pages(&self, actor_id: &str) -> DirectActorPages {
+		self.page_mirror(actor_id.to_string()).await.lock().clone()
+	}
+
+	async fn compact_worker(
+		&self,
+		actor_id: &str,
+		batch_size_deltas: u32,
+	) -> anyhow::Result<sqlite_storage::compactor::CompactionOutcome> {
+		sqlite_storage::compactor::compact_default_batch(
+			Arc::clone(&self.db),
+			actor_id.to_string(),
+			batch_size_deltas,
+			tokio_util::sync::CancellationToken::new(),
+		)
+		.await
 	}
 }
 
@@ -248,7 +365,7 @@ impl DirectTransportHooks {
 }
 
 #[cfg(test)]
-fn protocol_fetched_page(page: sqlite_storage_legacy::types::FetchedPage) -> protocol::SqliteFetchedPage {
+fn protocol_fetched_page(page: sqlite_storage::types::FetchedPage) -> protocol::SqliteFetchedPage {
 	protocol::SqliteFetchedPage {
 		pgno: page.pgno,
 		bytes: page.bytes,
@@ -256,8 +373,8 @@ fn protocol_fetched_page(page: sqlite_storage_legacy::types::FetchedPage) -> pro
 }
 
 #[cfg(test)]
-fn storage_dirty_page(page: protocol::SqliteDirtyPage) -> sqlite_storage_legacy::types::DirtyPage {
-	sqlite_storage_legacy::types::DirtyPage {
+fn storage_dirty_page(page: protocol::SqliteDirtyPage) -> sqlite_storage::types::DirtyPage {
+	sqlite_storage::types::DirtyPage {
 		pgno: page.pgno,
 		bytes: page.bytes,
 	}
@@ -604,12 +721,28 @@ impl VfsContext {
 		config: VfsConfig,
 		io_methods: sqlite3_io_methods,
 	) -> Self {
+		#[cfg(test)]
+		let mut state = VfsState::new(&config);
+		#[cfg(test)]
+		if let SqliteTransportInner::Direct(storage) = &*transport.inner {
+			let snapshot = runtime.block_on(storage.snapshot_pages(&actor_id));
+			if snapshot.db_size_pages > 0 {
+				state.db_size_pages = snapshot.db_size_pages;
+				state.page_cache.invalidate_all();
+				for (pgno, bytes) in snapshot.pages {
+					state.page_cache.insert(pgno, bytes);
+				}
+			}
+		}
+		#[cfg(not(test))]
+		let state = VfsState::new(&config);
+
 		Self {
 			actor_id,
 			runtime,
 			transport,
 			config: config.clone(),
-			state: RwLock::new(VfsState::new(&config)),
+			state: RwLock::new(state),
 			aux_files: RwLock::new(BTreeMap::new()),
 			last_error: Mutex::new(None),
 			#[cfg(test)]
@@ -2026,6 +2159,23 @@ impl NativeDatabase {
 impl Drop for NativeDatabase {
 	fn drop(&mut self) {
 		if !self.db.is_null() {
+			let ctx = unsafe { &*self._vfs.ctx_ptr };
+			let should_flush = {
+				let state = ctx.state.read();
+				state.write_buffer.in_atomic_write || !state.write_buffer.dirty.is_empty()
+			};
+			if should_flush {
+				let result = if ctx.state.read().write_buffer.in_atomic_write {
+					ctx.commit_atomic_write().map(|_| ())
+				} else {
+					ctx.flush_dirty_pages().map(|_| ())
+				};
+				if let Err(err) = result {
+					mark_dead_for_non_fence_commit_error(ctx, &err);
+					tracing::warn!(?err, "failed to flush sqlite database before close");
+				}
+			}
+
 			let rc = unsafe { sqlite3_close_v2(self.db) };
 			if rc != SQLITE_OK {
 				tracing::warn!(
@@ -2099,7 +2249,6 @@ mod tests {
 	use parking_lot::Mutex as SyncMutex;
 	use tempfile::TempDir;
 	use tokio::runtime::Builder;
-	use universaldb::Subspace;
 
 	use super::*;
 
@@ -2119,16 +2268,10 @@ mod tests {
 		format!("{prefix}-{id}")
 	}
 
-	fn random_hex() -> String {
-		let mut bytes = [0u8; 8];
-		getrandom::getrandom(&mut bytes).expect("random bytes should be available");
-		bytes.iter().map(|byte| format!("{byte:02x}")).collect()
-	}
-
 	struct DirectEngineHarness {
 		actor_id: String,
 		db_dir: TempDir,
-		subspace: Subspace,
+		storage: std::sync::OnceLock<Arc<DirectStorage>>,
 	}
 
 	impl DirectEngineHarness {
@@ -2136,11 +2279,15 @@ mod tests {
 			Self {
 				actor_id: next_test_name("sqlite-direct-actor"),
 				db_dir: tempfile::tempdir().expect("temp dir should build"),
-				subspace: Subspace::new(&("sqlite-direct", random_hex())),
+				storage: std::sync::OnceLock::new(),
 			}
 		}
 
-		async fn open_engine(&self) -> Arc<SqliteEngine> {
+		async fn open_engine(&self) -> Arc<DirectStorage> {
+			if let Some(storage) = self.storage.get() {
+				return Arc::clone(storage);
+			}
+
 			let mut attempts = 0;
 			let driver = loop {
 				match universaldb::driver::RocksDbDatabaseDriver::new(
@@ -2157,15 +2304,16 @@ mod tests {
 				}
 			};
 			let db = universaldb::Database::new(Arc::new(driver));
-			let (engine, _compaction_rx) = SqliteEngine::new(db, self.subspace.clone());
 
-			Arc::new(engine)
+			let storage = Arc::new(DirectStorage::new(db));
+			let _ = self.storage.set(Arc::clone(&storage));
+			Arc::clone(self.storage.get().expect("direct storage should be set"))
 		}
 
 		fn open_db_on_engine(
 			&self,
 			runtime: &tokio::runtime::Runtime,
-			engine: Arc<SqliteEngine>,
+			engine: Arc<DirectStorage>,
 			actor_id: &str,
 			config: VfsConfig,
 		) -> NativeDatabase {
@@ -4935,8 +5083,8 @@ mod tests {
 	}
 
 	// Regression test: two actors run autocommits concurrently on the same
-	// SqliteEngine. If anything in the engine (e.g., compaction) cross-contaminates
-	// actors or races on shared state, we'd see fence mismatches.
+	// direct storage. If compaction cross-contaminates actors or races on
+	// shared state, we'd see fence mismatches.
 	#[test]
 	fn concurrent_multi_actor_autocommits() {
 		let runtime = direct_runtime();
