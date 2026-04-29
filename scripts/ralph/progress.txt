@@ -4,6 +4,8 @@ Started: Wed Apr 29 04:36:56 AM PDT 2026
 ## Codebase Patterns
 - `rivet-pools` keeps process-wide metadata on `PoolsInner`; initialize it in both `Pools::new` and `Pools::test`, with the test constructor only omitting optional service pools like ClickHouse.
 - After renaming a hyphenated crate, update both the workspace dependency key (`sqlite-storage-legacy.workspace`) and Rust import path (`sqlite_storage_legacy`) for every consumer.
+- When scaffolding `sqlite-storage` from copied legacy modules, root-level `pub use pump::{...}` preserves legacy `crate::types` and `crate::udb` paths while the real modules live under `pump/`.
+- `sqlite-storage` `actor_range` mirrors UniversalDB's single-key conflict range helper (`actor_prefix + 0`) and should not be treated as a full prefix scan range for suffixed actor keys.
 
 ## 2026-04-29 04:44:52 PDT - US-001
 - Implemented a UUID-backed `NodeId` type and stored a generated value on each `Pools` instance.
@@ -23,4 +25,25 @@ Started: Wed Apr 29 04:36:56 AM PDT 2026
   - Hyphenated Rust package names become underscore crate paths, so `sqlite-storage-legacy` is imported as `sqlite_storage_legacy`.
   - `cargo build -p sqlite-storage-legacy` is a quick package-level check, but `cargo check --workspace` is needed to catch every consumer manifest/import after a rename.
   - Existing warnings remain in `sqlite-storage-legacy` and `rivetkit-sqlite`; they do not block the rename checks.
+---
+## 2026-04-29 04:55:44 PDT - US-003
+- Scaffolded the new `sqlite-storage` crate with `pump/`, `compactor/`, debug-only `takeover.rs`, copied legacy `ltx.rs`, `page_index.rs`, pruned `error.rs`, lifted `test_utils/`, and placeholder integration test files.
+- Added the new crate to the workspace members, workspace dependency table, and lockfile.
+- Verified `cargo check -p sqlite-storage`, `cargo build -p sqlite-storage`, `cargo test -p sqlite-storage`, and `git diff --check`.
+- Files changed: `Cargo.toml`, `Cargo.lock`, `engine/packages/sqlite-storage/**`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
+- **Learnings for future iterations:**
+  - Copied legacy modules still reference `crate::types` and `crate::udb`; root re-exports keep them compiling until later stories replace the stubs with real modules.
+  - Legacy inline tests were gated behind the opt-in `legacy-inline-tests` feature so the default new-crate test suite stays in `tests/`.
+  - `pump::udb` is intentionally a fail-by-default stub for now; US-005 owns the real UDB compare-and-clear wrapper.
+---
+## 2026-04-29 04:58:10 PDT - US-004
+- Added `pump::keys` with the four split META subkeys plus lifted PIDX, DELTA, SHARD, actor prefix, and decoder helpers.
+- Re-exported `keys` at the crate root so copied modules using `crate::keys` keep compiling.
+- Replaced the placeholder `pump_keys` integration test with coverage for META suffixes, PIDX big-endian ordering, cross-actor key isolation, and data-key prefixes.
+- Verified `cargo check -p sqlite-storage`, `cargo test -p sqlite-storage --test pump_keys`, `cargo test -p sqlite-storage`, and `git diff --check`.
+- Files changed: `engine/packages/sqlite-storage/src/lib.rs`, `engine/packages/sqlite-storage/src/pump/mod.rs`, `engine/packages/sqlite-storage/src/pump/keys.rs`, `engine/packages/sqlite-storage/tests/pump_keys.rs`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`.
+- **Learnings for future iterations:**
+  - Keep SQLite v2 storage key paths as literal ASCII suffixes under `[0x02][actor_id]`, with numeric suffixes encoded big-endian for scan ordering.
+  - The new stateless layout has no `/META/static`; constants like page size and shard size live in `pump::keys`.
+  - `actor_range` is inherited from the legacy key module and uses `end_of_key_range`, which creates a single-key conflict range rather than a prefix scan bound.
 ---
