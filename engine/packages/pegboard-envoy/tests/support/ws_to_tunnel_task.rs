@@ -80,3 +80,90 @@
 // 		.unwrap();
 // 	assert!(matches!(msg, NextOutput::Message(_)));
 // }
+
+use sqlite_storage::error::SqliteStorageError;
+
+use super::{
+	actor_lifecycle::{ActiveActor, ActiveActorState},
+	cached_active_sqlite_actor, cached_serverless_sqlite_generation,
+};
+
+#[tokio::test]
+async fn cached_active_sqlite_actor_accepts_running_actor_generation() {
+	let active_actors = scc::HashMap::new();
+	active_actors
+		.insert_async(
+			"actor-a".to_string(),
+			ActiveActor {
+				actor_generation: 1,
+				sqlite_generation: Some(7),
+				state: ActiveActorState::Running,
+			},
+		)
+		.await
+		.expect("insert active actor");
+
+	assert!(cached_active_sqlite_actor(&active_actors, "actor-a", 7).await);
+	assert!(!cached_active_sqlite_actor(&active_actors, "actor-a", 8).await);
+	assert!(!cached_active_sqlite_actor(&active_actors, "actor-b", 7).await);
+}
+
+#[tokio::test]
+async fn cached_active_sqlite_actor_rejects_starting_actor() {
+	let active_actors = scc::HashMap::new();
+	active_actors
+		.insert_async(
+			"actor-a".to_string(),
+			ActiveActor {
+				actor_generation: 1,
+				sqlite_generation: Some(7),
+				state: ActiveActorState::Starting,
+			},
+		)
+		.await
+		.expect("insert active actor");
+
+	assert!(!cached_active_sqlite_actor(&active_actors, "actor-a", 7).await);
+}
+
+#[tokio::test]
+async fn cached_serverless_sqlite_generation_accepts_matching_generation() {
+	let serverless_sqlite_actors = scc::HashMap::new();
+	serverless_sqlite_actors
+		.insert_async("actor-a".to_string(), 7)
+		.await
+		.expect("insert serverless actor");
+
+	assert!(
+		cached_serverless_sqlite_generation(&serverless_sqlite_actors, "actor-a", 7)
+			.await
+			.expect("matching cached generation succeeds")
+	);
+	assert!(
+		!cached_serverless_sqlite_generation(&serverless_sqlite_actors, "actor-b", 7)
+			.await
+			.expect("missing cached generation falls back")
+	);
+}
+
+#[tokio::test]
+async fn cached_serverless_sqlite_generation_reports_fence_mismatch() {
+	let serverless_sqlite_actors = scc::HashMap::new();
+	serverless_sqlite_actors
+		.insert_async("actor-a".to_string(), 7)
+		.await
+		.expect("insert serverless actor");
+
+	let err = cached_serverless_sqlite_generation(&serverless_sqlite_actors, "actor-a", 8)
+		.await
+		.expect_err("stale generation should be fenced");
+
+	assert!(matches!(
+		err.downcast_ref::<SqliteStorageError>(),
+		Some(SqliteStorageError::FenceMismatch { .. })
+	));
+	assert!(
+		err.to_string()
+			.contains("did not match cached generation 7")
+	);
+}

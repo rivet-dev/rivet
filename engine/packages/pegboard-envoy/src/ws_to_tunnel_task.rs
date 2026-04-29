@@ -724,8 +724,8 @@ async fn handle_sqlite_get_pages(
 	request: protocol::SqliteGetPagesRequest,
 ) -> Result<protocol::SqliteGetPagesResponse> {
 	validate_sqlite_get_pages_request(&request)?;
-	validate_sqlite_actor(ctx, conn, &request.actor_id).await?;
-	ensure_serverless_sqlite_open(conn, &request.actor_id, request.generation).await?;
+	validate_sqlite_get_pages_actor(ctx, conn, &request.actor_id, request.generation).await?;
+	ensure_serverless_sqlite_open_for_get_pages(conn, &request.actor_id, request.generation).await?;
 
 	match conn
 		.sqlite_engine
@@ -1018,6 +1018,82 @@ async fn validate_sqlite_actor(ctx: &StandaloneCtx, conn: &Conn, actor_id: &str)
 	}
 
 	Ok(())
+}
+
+async fn validate_sqlite_get_pages_actor(
+	ctx: &StandaloneCtx,
+	conn: &Conn,
+	actor_id: &str,
+	generation: u64,
+) -> Result<()> {
+	if sqlite_storage::optimization_flags::sqlite_optimization_flags()
+		.cache_get_pages_validation
+		&& cached_active_sqlite_actor(&conn.active_actors, actor_id, generation).await
+	{
+		return Ok(());
+	}
+
+	validate_sqlite_actor(ctx, conn, actor_id).await
+}
+
+async fn cached_active_sqlite_actor(
+	active_actors: &HashMap<String, actor_lifecycle::ActiveActor>,
+	actor_id: &str,
+	generation: u64,
+) -> bool {
+	active_actors
+		.read_async(actor_id, |_, active| {
+			let state_allows_reads = match active.state {
+				actor_lifecycle::ActiveActorState::Starting => false,
+				actor_lifecycle::ActiveActorState::Running
+				| actor_lifecycle::ActiveActorState::Stopping => true,
+			};
+
+			state_allows_reads && active.sqlite_generation == Some(generation)
+		})
+		.await
+		.unwrap_or(false)
+}
+
+async fn ensure_serverless_sqlite_open_for_get_pages(
+	conn: &Conn,
+	actor_id: &str,
+	generation: u64,
+) -> Result<()> {
+	if !conn.is_serverless {
+		return Ok(());
+	}
+
+	if sqlite_storage::optimization_flags::sqlite_optimization_flags()
+		.cache_get_pages_validation
+		&& cached_serverless_sqlite_generation(&conn.serverless_sqlite_actors, actor_id, generation)
+			.await?
+	{
+		return Ok(());
+	}
+
+	ensure_serverless_sqlite_open(conn, actor_id, generation).await
+}
+
+async fn cached_serverless_sqlite_generation(
+	serverless_sqlite_actors: &HashMap<String, u64>,
+	actor_id: &str,
+	generation: u64,
+) -> Result<bool> {
+	match serverless_sqlite_actors
+		.read_async(actor_id, |_, cached_generation| *cached_generation)
+		.await
+	{
+		Some(cached_generation) if cached_generation == generation => Ok(true),
+		Some(cached_generation) => Err(SqliteStorageError::FenceMismatch {
+			reason: format!(
+				"ensure_serverless_sqlite_open generation {} did not match cached generation {}",
+				generation, cached_generation
+			),
+		}
+		.into()),
+		None => Ok(false),
+	}
 }
 
 async fn ensure_serverless_sqlite_open(conn: &Conn, actor_id: &str, generation: u64) -> Result<()> {

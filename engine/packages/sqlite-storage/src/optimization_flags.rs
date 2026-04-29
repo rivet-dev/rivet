@@ -113,6 +113,7 @@ mod tests {
 			READ_AHEAD_ENV => Some("false".to_string()),
 			RECENT_PAGE_HINTS_ENV => Some("0".to_string()),
 			PRELOAD_HINT_SCAN_RANGES_ENV => Some("disabled".to_string()),
+			CACHE_GET_PAGES_VALIDATION_ENV => Some("off".to_string()),
 			_ => None,
 		});
 
@@ -122,6 +123,7 @@ mod tests {
 		assert!(flags.preload_hint_hot_pages);
 		assert!(flags.preload_hint_early_pages);
 		assert!(!flags.preload_hint_scan_ranges);
+		assert!(!flags.cache_get_pages_validation);
 		assert!(flags.range_reads);
 	}
 }
