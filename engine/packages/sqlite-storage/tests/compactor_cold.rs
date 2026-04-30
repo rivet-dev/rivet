@@ -24,7 +24,7 @@ use sqlite_storage::{
 		branch_commit_key, branch_manifest_cold_drained_txid_key,
 		branch_manifest_last_hot_pass_txid_key, branch_meta_cold_compact_key,
 		branch_meta_cold_lease_key, branch_meta_compact_key, branch_shard_key, branch_vtx_key,
-		branches_list_key,
+		branches_bk_pin_key, branches_list_key, branches_refcount_key,
 	},
 	types::{
 		ActorBranchId, ActorBranchRecord, BookmarkStr, BranchState, CommitRow, LayerKind,
@@ -177,6 +177,10 @@ async fn seed_phase_a_branch(db: &universaldb::Database) -> Result<()> {
 				state: BranchState::Live,
 			})?,
 		);
+		tx.informal()
+			.set(&branches_refcount_key(branch_id), &1_i64.to_le_bytes());
+		tx.informal()
+			.set(&branches_bk_pin_key(branch_id), &[7; 16]);
 		tx.informal().set(
 			&branch_meta_compact_key(branch_id),
 			&encode_meta_compact(MetaCompact {
@@ -680,6 +684,136 @@ async fn create_pinned_bookmark_reaches_ready_through_cold_worker() -> Result<()
 	let pinned = decode_pinned_bookmark_record(&pinned_bytes)?;
 	assert_eq!(pinned.status, PinStatus::Ready);
 	assert!(pinned.pin_object_key.is_some());
+
+	Ok(())
+}
+
+#[tokio::test]
+async fn cold_sweep_deletes_layers_after_pinned_bookmark_delete() -> Result<()> {
+	let db = Arc::new(test_db().await?);
+	let ups = test_ups();
+	let mut sub = ups
+		.queue_subscribe(SqliteColdCompactSubject, "cold-compactor")
+		.await?;
+	let actor_db = ActorDb::new(
+		Arc::clone(&db),
+		ups,
+		test_namespace(),
+		"actor-a".to_string(),
+		NodeId::new(),
+	);
+	actor_db.commit(vec![page(1, 0x11)], 2, 1_000).await?;
+	let branch_id = db
+		.run(|tx| async move {
+			sqlite_storage::pump::branch::resolve_actor_branch(
+				&tx,
+				sqlite_storage::types::NamespaceId::from_gas_id(test_namespace()),
+				"actor-a",
+				universaldb::utils::IsolationLevel::Serializable,
+			)
+			.await?
+			.ok_or_else(|| anyhow::anyhow!("actor branch should exist"))
+		})
+		.await?;
+	db.run(move |tx| async move {
+		tx.informal().set(
+			&branch_meta_compact_key(branch_id),
+			&encode_meta_compact(MetaCompact {
+				materialized_txid: 1,
+			})?,
+		);
+		tx.informal()
+			.set(&branch_manifest_last_hot_pass_txid_key(branch_id), &1u64.to_be_bytes());
+		tx.informal()
+			.set(&branch_shard_key(branch_id, 0, 1), b"image-one");
+		Ok(())
+	})
+	.await?;
+
+	let bookmark = actor_db.create_pinned_bookmark(1_010).await?;
+	let msg = timeout(Duration::from_secs(1), sub.next())
+		.await
+		.expect("cold trigger should publish")?;
+	let NextOutput::Message(msg) = msg else {
+		panic!("subscriber unexpectedly unsubscribed");
+	};
+	let create_payload = decode_cold_compact_payload(&msg.payload)?;
+	let cold_root = Builder::new().prefix("sqlite-cold-sweep").tempdir()?;
+	let tier = Arc::new(FilesystemColdTier::new(cold_root.path()));
+
+	worker::test_hooks::handle_payload_once_with_cold_tier(
+		Arc::clone(&db),
+		create_payload,
+		ColdCompactorConfig::default(),
+		CancellationToken::new(),
+		tier.clone(),
+	)
+	.await?;
+
+	let dynamic_branch_object_prefix = format!("db/{}", branch_id.as_uuid().simple());
+	let index_key = format!("{dynamic_branch_object_prefix}/cold_manifest/index.bare");
+	let index = decode_cold_manifest_index(
+		&tier
+			.get_object(&index_key)
+			.await?
+			.expect("manifest index should exist after pin create"),
+	)?;
+	assert_eq!(index.chunks.len(), 1);
+	let chunk_key = index.chunks[0].object_key.clone();
+	let chunk = decode_cold_manifest_chunk(
+		&tier
+			.get_object(&chunk_key)
+			.await?
+			.expect("manifest chunk should exist after pin create"),
+	)?;
+	let layer_keys = chunk
+		.layers
+		.iter()
+		.map(|layer| layer.object_key.clone())
+		.collect::<Vec<_>>();
+	assert!(!layer_keys.is_empty());
+
+	db.run(move |tx| async move {
+		tx.informal()
+			.set(&branches_refcount_key(branch_id), &0_i64.to_le_bytes());
+		Ok(())
+	})
+	.await?;
+	actor_db.delete_pinned_bookmark(bookmark).await?;
+	let msg = timeout(Duration::from_secs(1), sub.next())
+		.await
+		.expect("delete cold trigger should publish")?;
+	let NextOutput::Message(msg) = msg else {
+		panic!("subscriber unexpectedly unsubscribed");
+	};
+	let delete_payload = decode_cold_compact_payload(&msg.payload)?;
+
+	worker::test_hooks::handle_payload_once_with_cold_tier(
+		Arc::clone(&db),
+		delete_payload,
+		ColdCompactorConfig::default(),
+		CancellationToken::new(),
+		tier.clone(),
+	)
+	.await?;
+
+	let index = decode_cold_manifest_index(
+		&tier
+			.get_object(&index_key)
+			.await?
+			.expect("manifest index should remain after sweep"),
+	)?;
+	assert!(
+		!index
+			.chunks
+			.iter()
+			.any(|chunk_ref| chunk_ref.object_key == chunk_key),
+		"fully unpinned manifest chunks should be removed before layer deletion"
+	);
+	assert_eq!(tier.get_object(&chunk_key).await?, None);
+	for layer_key in layer_keys {
+		assert_eq!(tier.get_object(&layer_key).await?, None);
+	}
 
 	Ok(())
 }

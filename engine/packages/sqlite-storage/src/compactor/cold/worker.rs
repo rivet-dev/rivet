@@ -19,7 +19,7 @@ use crate::{
 	pump::types::ActorBranchId,
 };
 
-use super::{lease, phase_a, phase_b, phase_c};
+use super::{lease, phase_a, phase_b, phase_c, phase_d};
 
 const COLD_COMPACTOR_QUEUE_GROUP: &str = "cold_compactor";
 
@@ -327,7 +327,7 @@ async fn run_scaffold_pass(
 		udb,
 		&plan,
 		&phase_b_output,
-		cancel_token,
+		cancel_token.clone(),
 		now_ms()?,
 	)
 	.await?;
@@ -337,6 +337,21 @@ async fn run_scaffold_pass(
 		cold_drained_txid = phase_c_output.cold_drained_txid,
 		ready_pins = phase_c_output.ready_pins,
 		"sqlite cold compactor phase C committed pass"
+	);
+	let sweep_output = phase_d::run(
+		udb,
+		Arc::clone(&cold_tier),
+		plan.branch_id,
+		cancel_token,
+	)
+	.await?;
+	tracing::debug!(
+		branch_id = ?plan.branch_id,
+		pass_uuid = %plan.pass_uuid,
+		removed_chunks = sweep_output.removed_chunks,
+		removed_layers = sweep_output.removed_layers,
+		deleted_objects = sweep_output.deleted_objects,
+		"sqlite cold compactor follow-up sweep finished"
 	);
 
 	Ok(())

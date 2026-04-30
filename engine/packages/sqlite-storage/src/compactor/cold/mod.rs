@@ -2,6 +2,7 @@ pub mod lease;
 pub mod phase_a;
 pub mod phase_b;
 pub mod phase_c;
+pub mod phase_d;
 pub mod worker;
 
 pub use lease::{
@@ -15,4 +16,5 @@ pub use phase_a::{
 };
 pub use phase_b::ColdPhaseBOutput;
 pub use phase_c::ColdPhaseCOutput;
+pub use phase_d::ColdSweepOutput;
 pub use worker::{ColdCompactorConfig, start};

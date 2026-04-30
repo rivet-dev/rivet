@@ -37,6 +37,8 @@
 - Cold Phase B rewrites the pending marker with the complete object-key set before uploading image, delta, pin, manifest, and pointer snapshot objects.
 - Cold Phase C is the FDB-only finalizer: regular-read fence `cold_drained_txid`, then advance cold state + manifest cursor, clear `in_flight_uuid`, and mark uploaded pins `Ready`.
 - Cold Phase B pin upload failures mark pending bookmarks `Failed`; Phase C OCC failures leave pins `Pending` for retry.
+- Cold follow-up sweeps compute the branch GC pin from refcount/root_versionstamp, desc_pin, and bk_pin, then rewrite manifest metadata before deleting cold objects.
+- Cold sweeps treat zero layer versionstamps as unknown and not deletable; only concrete versionstamps below the computed GC pin are reclaimed.
 
 # Ralph Progress Log
 Started: Wed Apr 29 03:29:23 PM PDT 2026
@@ -76,7 +78,6 @@ Started: Wed Apr 29 03:29:23 PM PDT 2026
   - Cold pin-create success and failure deliberately split by phase: Phase C marks uploaded pins `Ready`; Phase B upload failures mark still-pending pins `Failed`; Phase C OCC failures preserve `Pending` for retry.
   - Full pin-create cold-worker tests can use the UPS memory driver to capture the published payload, then pass it through `worker::test_hooks::handle_payload_once_with_cold_tier`.
   - A branch with a manually seeded `META/compact` cursor and versioned SHARD row is enough to exercise filesystem pin upload without running a hot compactor pass first.
----
 ## 2026-04-29 21:11 PDT - US-036
 - Implemented the cold compactor scaffold with a `compactor/cold/` module, branch-scoped cold lease helpers, a UPS subscriber loop on `SqliteColdCompactSubject`, local deadline + renewal tasks, and a standalone `sqlite_cold_compactor` service registration.
 - Added cold compactor tests for subject/payload encoding, cold lease acquire/renew/release behavior, and handler behavior for acquired and already-held leases.
@@ -729,4 +730,21 @@ Started: Wed Apr 29 03:29:23 PM PDT 2026
   - Phase B should remain S3-only; pass any FDB finalization inputs forward in `ColdPhaseBOutput` instead of reading FDB during uploads.
   - Phase C should leave the pending marker object intact for stale-marker cleanup. The FDB `in_flight_uuid` is the active-pass marker.
   - Integration tests can inject a `ColdTier` wrapper to mutate FDB between Phase B and Phase C for deterministic OCC-fence coverage.
+---
+## 2026-04-29 21:49 PDT - US-041
+- Implemented the cold compactor follow-up sweep after Phase C. It computes the branch GC pin from refcount/root versionstamp, descendant pin, and bookmark pin, removes obsolete manifest chunk references before deleting layer objects, and skips deletion if the pin moves backward before S3 mutation.
+- Added coverage for create pinned bookmark -> cold pin upload -> delete pinned bookmark -> cleanup pass, verifying the old manifest chunk and layer objects disappear after the pin is recomputed away.
+- Verified with `cargo check -p sqlite-storage`, `cargo test -p sqlite-storage --test compactor_cold`, and `cargo test -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/CLAUDE.md`
+  - `engine/packages/sqlite-storage/src/compactor/cold/mod.rs`
+  - `engine/packages/sqlite-storage/src/compactor/cold/phase_d.rs`
+  - `engine/packages/sqlite-storage/src/compactor/cold/worker.rs`
+  - `engine/packages/sqlite-storage/tests/compactor_cold.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Cold follow-up sweeps should only delete layers with concrete nonzero versionstamps; zero is an unknown placeholder from incomplete test fixtures or missing VTX coverage.
+  - Manifest chunk rewrites and index rewrites must happen before cold-tier deletes so a manifest reference never outlives its layer object.
+  - Tests for GC cleanup can simulate engine-owned database orphaning by setting the branch refcount to zero before deleting the last pinned bookmark.
 ---
