@@ -965,3 +965,16 @@ Started: Wed Apr 29 03:29:23 PM PDT 2026
   - Fork depth limits are best tested through the public `fork_actor`/`fork_namespace` APIs: depth 16 succeeds, and the next derivation returns the typed depth error.
   - A retry-driven bk_pin race exercises the same OCC fence path as concurrent GC without adding production-only test hooks.
 ---
+## 2026-04-29 23:03 PDT - US-058
+- Added the dedicated `tests/bookmarks.rs` integration test binary for ephemeral bookmark resolution, filesystem cold-tier pin readiness, namespace parent fall-through, hot-retention expiry, and unreachable actor cases.
+- Verified pinned bookmarks transition `Pending -> Ready` by consuming the real UPS payload and driving the cold worker against `FilesystemColdTier`.
+- Verified old ephemeral bookmarks return `BookmarkExpired` after the hot compactor retention sweep clears the matching `COMMITS` and `VTX` rows.
+- Verified with `cargo test -p sqlite-storage --test bookmarks -- --nocapture`, `cargo check -p sqlite-storage`, and `cargo test -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/tests/bookmarks.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Bookmark integration tests can combine public `ActorDb` APIs with direct branch metadata seeding when the scenario needs a cold pass without first running a hot compaction pass.
+  - Namespace-fork bookmark coverage should include both sides of the cap: a pre-fork bookmark resolves through the parent namespace, while a post-fork source bookmark returns `BranchNotReachable`.
+---
