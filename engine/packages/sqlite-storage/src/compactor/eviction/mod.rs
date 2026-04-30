@@ -56,6 +56,7 @@ pub struct EvictionCandidate {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EvictableShardVersion {
 	pub branch_id: ActorBranchId,
+	pub last_access_bucket: i64,
 	pub shard_id: u32,
 	pub as_of_txid: u64,
 	pub last_hot_pass_txid_at_plan: u64,
@@ -331,6 +332,7 @@ async fn plan_evictable_shard_versions(
 
 		evictable.push(EvictableShardVersion {
 			branch_id,
+			last_access_bucket,
 			shard_id: version.shard_id,
 			as_of_txid: version.as_of_txid,
 			last_hot_pass_txid_at_plan: last_hot_pass_txid,
@@ -379,6 +381,9 @@ async fn clear_evictable_shard_versions(
 							return Ok(EvictionClearOutcome::HotPassAdvanced);
 						}
 					}
+					let fully_evicted_index_keys =
+						fully_evicted_index_keys_after_clear(&tx, &evictable_shard_versions)
+							.await?;
 
 					for version in &evictable_shard_versions {
 						for pidx in &version.pidx_deletes {
@@ -393,6 +398,9 @@ async fn clear_evictable_shard_versions(
 							),
 							&version.shard_value,
 						);
+					}
+					for key in fully_evicted_index_keys {
+						tx.informal().clear(&key);
 					}
 
 					Ok(EvictionClearOutcome::Cleared)
@@ -422,6 +430,51 @@ fn planned_hot_pass_txids_by_branch(
 			.or_insert(version.last_hot_pass_txid_at_plan);
 	}
 	planned
+}
+
+async fn fully_evicted_index_keys_after_clear(
+	tx: &universaldb::Transaction,
+	evictable_shard_versions: &[EvictableShardVersion],
+) -> Result<Vec<Vec<u8>>> {
+	let mut planned = BTreeMap::<ActorBranchId, PlannedBranchEviction>::new();
+	for version in evictable_shard_versions {
+		let branch_plan = planned
+			.entry(version.branch_id)
+			.or_insert_with(PlannedBranchEviction::default);
+		branch_plan.last_access_bucket = Some(version.last_access_bucket);
+		branch_plan.shard_versions.insert(
+			(version.shard_id, version.as_of_txid),
+			version.shard_value.clone(),
+		);
+	}
+
+	let mut keys = Vec::new();
+	for (branch_id, branch_plan) in planned {
+		let Some(last_access_bucket) = branch_plan.last_access_bucket else {
+			continue;
+		};
+		let current_shards = load_branch_shard_versions(tx, branch_id).await?;
+		if current_shards.is_empty() {
+			continue;
+		}
+		let all_current_shards_planned = current_shards.iter().all(|shard| {
+			branch_plan
+				.shard_versions
+				.get(&(shard.shard_id, shard.as_of_txid))
+				.is_some_and(|expected_value| expected_value == &shard.value)
+		});
+		if all_current_shards_planned {
+			keys.push(keys::ctr_eviction_index_key(last_access_bucket, branch_id));
+		}
+	}
+
+	Ok(keys)
+}
+
+#[derive(Debug, Default)]
+struct PlannedBranchEviction {
+	last_access_bucket: Option<i64>,
+	shard_versions: BTreeMap<(u32, u64), Vec<u8>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

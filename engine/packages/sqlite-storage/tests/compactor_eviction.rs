@@ -213,6 +213,7 @@ async fn predicate_returns_evictable_when_all_gates_pass() -> Result<()> {
 		evictable,
 		vec![EvictableShardVersion {
 			branch_id,
+			last_access_bucket: 0,
 			shard_id: 4,
 			as_of_txid: 10,
 			last_hot_pass_txid_at_plan: 100 + SHARD_RETENTION_MARGIN + 1,
@@ -286,6 +287,44 @@ async fn sweep_clears_planned_rows_with_compare_and_clear() -> Result<()> {
 		read_value(&db, branch_shard_key(branch_id, 0, 100)).await?,
 		Some(vec![2])
 	);
+	assert_eq!(
+		read_value(&db, ctr_eviction_index_key(0, branch_id)).await?,
+		Some(Vec::new())
+	);
+
+	Ok(())
+}
+
+#[tokio::test]
+async fn clear_removes_eviction_index_when_last_shard_is_cleared() -> Result<()> {
+	let db = test_db().await?;
+	let branch_id = branch_id(0x1115);
+
+	seed_eviction_index(&db, vec![(0, branch_id)]).await?;
+	db.run(move |tx| async move {
+		tx.informal()
+			.set(&branch_shard_key(branch_id, 0, 10), &[1]);
+		Ok(())
+	})
+	.await?;
+
+	let cleared = test_hooks::clear_evictable_shard_versions_for_test(
+		&db,
+		vec![EvictableShardVersion {
+			branch_id,
+			last_access_bucket: 0,
+			shard_id: 0,
+			as_of_txid: 10,
+			last_hot_pass_txid_at_plan: 0,
+			shard_value: vec![1],
+			pidx_deletes: Vec::new(),
+		}],
+	)
+	.await?;
+
+	assert_eq!(cleared.len(), 1);
+	assert!(read_value(&db, branch_shard_key(branch_id, 0, 10)).await?.is_none());
+	assert!(read_value(&db, ctr_eviction_index_key(0, branch_id)).await?.is_none());
 
 	Ok(())
 }

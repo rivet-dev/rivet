@@ -50,6 +50,7 @@ These come from `r2-prior-art/.agent/research/sqlite/requirements.md` and supers
 - **Eviction compactor coordination is global.** The service lives under `compactor/eviction/`, takes `CMPC/lease_global/{kind=eviction}`, and scans `CTR/eviction_index` in `batch_size` chunks before predicate-specific clearing.
 - **Eviction predicate is shard-version scoped.** Require a newer FDB SHARD version, hot-cache age, cold-drain coverage, `last_hot_pass_txid - SHARD_RETENTION_MARGIN >= as_of_txid`, and no `desc_pin` or `bk_pin` at or below that txid before clearing.
 - **Eviction clears are plan-then-fence.** Capture expected SHARD/PIDX values at plan time, then regular-read `last_hot_pass_txid` in the clear tx and use `COMPARE_AND_CLEAR` for every planned key.
+- **Fully evicted branches exit the eviction index.** Clear `CTR/eviction_index` only when the current SHARD rows are all covered by the planned compare-and-clear set.
 - **`COMMITS/{txid_be}` stores `CommitRow` via `SetVersionstampedValue`; `VTX/{versionstamp}` is written via `SetVersionstampedKey` and maps to raw u64 BE txid.**
 - **Hot retention clears `COMMITS` and matching `VTX` rows together.** Do this inside the hot compactor write tx and keep quota accounting paired with the cleared keys.
 - **Branch records live under `[BRANCHES]/list/{branch_id}` with FDB atomic-add refcount plus `desc_pin` and `bk_pin` atomic-min keys.** GC reads these scalars instead of walking the descendant tree.
