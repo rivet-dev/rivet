@@ -226,12 +226,29 @@ pub(super) async fn touch_access_if_bucket_advanced(
 	Ok(Some(bucket))
 }
 
+#[cfg(debug_assertions)]
+pub mod test_hooks {
+	use super::*;
+
+	pub async fn touch_access_if_bucket_advanced_for_test(
+		tx: &universaldb::Transaction,
+		branch_id: ActorBranchId,
+		cached_bucket: Option<i64>,
+		now_ms: i64,
+	) -> Result<Option<i64>> {
+		touch_access_if_bucket_advanced(tx, branch_id, cached_bucket, now_ms).await
+	}
+}
+
 fn decode_i64_le(bytes: &[u8]) -> Result<i64> {
-	Ok(i64::from_le_bytes(
-		bytes
-			.try_into()
-			.context("sqlite access bucket should be exactly 8 bytes")?,
-	))
+	let bytes: [u8; std::mem::size_of::<i64>()] = bytes.try_into().with_context(|| {
+		format!(
+			"sqlite access bucket should be exactly 8 bytes, got {}",
+			bytes.len()
+		)
+	})?;
+
+	Ok(i64::from_le_bytes(bytes))
 }
 
 pub(super) async fn load_branch_ancestry(

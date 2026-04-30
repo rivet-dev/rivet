@@ -52,9 +52,24 @@
 - Debug historical reads cannot trust PIDX because PIDX is the current owner map; scan DELTA history up to the target txid before falling through to SHARD/cold layers.
 - Fork integration tests can share setup through `tests/fork_common`; to test bk_pin OCC races, stage a derive in one transaction, advance the pin in a nested transaction, then let the retry observe `ForkOutOfRetention`.
 - Cold compactor retries reuse `ColdCompactState.in_flight_uuid`; manifest index writes should replace the chunk ref for that pass UUID so Phase B crashes stay idempotent.
+- Access-touch throttle regressions can use `actor_db::test_hooks::touch_access_if_bucket_advanced_for_test` to exercise eviction-index re-keying without thousands of full commits.
 
 # Ralph Progress Log
 Started: Wed Apr 29 03:29:23 PM PDT 2026
+---
+## 2026-04-29 23:12 PDT - US-060
+- Added eviction compactor integration coverage for 1ms-cadence access-touch throttling across a full `ACCESS_TOUCH_THROTTLE_MS` bucket.
+- Exposed a debug-assertions-only `actor_db` test hook for the shared access-touch helper and tightened malformed access-bucket decode context.
+- Verified with `cargo test -p sqlite-storage --test compactor_eviction -- --nocapture`, `cargo check -p sqlite-storage`, and `cargo test -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/src/pump/actor_db.rs`
+  - `engine/packages/sqlite-storage/tests/compactor_eviction.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Access-touch throttling can be tested directly through the shared helper so the full 60-second, 1ms cadence path stays deterministic and fast.
+  - The eviction index should keep the old bucket key until `ACCESS_TOUCH_THROTTLE_MS` advances, then clear the old bucket and write the new one in the same touch.
+  - Adding byte-length context around persisted scalar decodes makes intermittent fixture corruption much faster to diagnose.
 ---
 ## 2026-04-29 23:08 PDT - US-059
 - Added `tests/cold_compactor.rs` covering Phase A handoff-before-marker behavior, Phase B upload-time FDB independence, Phase C cold-drain OCC aborts, and retry after a Phase B crash.

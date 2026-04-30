@@ -11,10 +11,12 @@ use sqlite_storage::{
 	constants::{ACCESS_TOUCH_THROTTLE_MS, HOT_CACHE_WINDOW_MS, SHARD_RETENTION_MARGIN},
 	keys::{
 		CompactorQueueKind, branch_manifest_cold_drained_txid_key,
+		branch_manifest_last_access_bucket_key, branch_manifest_last_access_ts_ms_key,
 		branch_manifest_last_hot_pass_txid_key, branch_pidx_key, branch_shard_key, branch_vtx_key,
 		branches_bk_pin_key, branches_desc_pin_key, compactor_global_lease_key,
 		ctr_eviction_index_key,
 	},
+	pump::actor_db,
 	types::ActorBranchId,
 };
 use tempfile::Builder;
@@ -47,6 +49,17 @@ async fn read_value(db: &universaldb::Database, key: Vec<u8>) -> Result<Option<V
 		}
 	})
 	.await
+}
+
+async fn read_i64_le(db: &universaldb::Database, key: Vec<u8>) -> Result<Option<i64>> {
+	read_value(db, key).await?.map(|value| {
+		Ok(i64::from_le_bytes(
+			value
+				.as_slice()
+				.try_into()
+				.expect("test value should be i64"),
+		))
+	}).transpose()
 }
 
 async fn seed_eviction_index(
@@ -119,6 +132,82 @@ fn eviction_occ_abort_count() -> u64 {
 	metrics::SQLITE_EVICTION_OCC_ABORT_TOTAL
 		.with_label_values(&[node_id.as_str(), "hot_pass_advanced"])
 		.get()
+}
+
+#[tokio::test]
+async fn access_touch_throttle_bounds_eviction_index_churn_at_1ms_cadence() -> Result<()> {
+	let db = test_db().await?;
+	let branch_id = branch_id(0x1116);
+
+	db.run(move |tx| async move {
+		let first_bucket = actor_db::test_hooks::touch_access_if_bucket_advanced_for_test(
+			&tx,
+			branch_id,
+			None,
+			1,
+		)
+		.await?;
+		assert_eq!(first_bucket, Some(0));
+		Ok(())
+	})
+	.await?;
+
+	db.run(move |tx| async move {
+		for now_ms in 2..ACCESS_TOUCH_THROTTLE_MS {
+			let touched = actor_db::test_hooks::touch_access_if_bucket_advanced_for_test(
+				&tx,
+				branch_id,
+				Some(0),
+				now_ms,
+			)
+			.await?;
+			assert_eq!(touched, None);
+		}
+		Ok(())
+	})
+	.await?;
+
+	assert_eq!(
+		read_i64_le(&db, branch_manifest_last_access_ts_ms_key(branch_id)).await?,
+		Some(1)
+	);
+	assert_eq!(
+		read_i64_le(&db, branch_manifest_last_access_bucket_key(branch_id)).await?,
+		Some(0)
+	);
+	assert_eq!(
+		read_value(&db, ctr_eviction_index_key(0, branch_id)).await?,
+		Some(Vec::new())
+	);
+
+	db.run(move |tx| async move {
+		let next_bucket = actor_db::test_hooks::touch_access_if_bucket_advanced_for_test(
+			&tx,
+			branch_id,
+			Some(0),
+			ACCESS_TOUCH_THROTTLE_MS,
+		)
+		.await?;
+		assert_eq!(next_bucket, Some(1));
+		Ok(())
+	})
+	.await?;
+
+	assert_eq!(
+		read_i64_le(&db, branch_manifest_last_access_ts_ms_key(branch_id)).await?,
+		Some(ACCESS_TOUCH_THROTTLE_MS)
+	);
+	assert_eq!(
+		read_i64_le(&db, branch_manifest_last_access_bucket_key(branch_id)).await?,
+		Some(1)
+	);
+	assert!(read_value(&db, ctr_eviction_index_key(0, branch_id)).await?.is_none());
+	assert_eq!(
+		read_value(&db, ctr_eviction_index_key(1, branch_id)).await?,
+		Some(Vec::new())
+	);
+
+	Ok(())
 }
 
 #[tokio::test]
