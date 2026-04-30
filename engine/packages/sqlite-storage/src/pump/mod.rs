@@ -1,4 +1,5 @@
 pub mod actor_db;
+pub mod bookmark;
 pub mod branch;
 pub mod commit;
 pub mod constants;

@@ -511,6 +511,14 @@ enum VersionedMetaCompact {
 	V1(MetaCompact),
 }
 
+enum VersionedBookmarkRecord {
+	V1(BookmarkRecord),
+}
+
+enum VersionedPinnedBookmarkRecord {
+	V1(PinnedBookmarkRecord),
+}
+
 impl OwnedVersionedData for VersionedMetaCompact {
 	type Latest = MetaCompact;
 
@@ -528,6 +536,60 @@ impl OwnedVersionedData for VersionedMetaCompact {
 		match version {
 			1 => Ok(Self::V1(serde_bare::from_slice(payload)?)),
 			_ => bail!("invalid sqlite-storage MetaCompact version: {version}"),
+		}
+	}
+
+	fn serialize_version(self, _version: u16) -> Result<Vec<u8>> {
+		match self {
+			Self::V1(data) => serde_bare::to_vec(&data).map_err(Into::into),
+		}
+	}
+}
+
+impl OwnedVersionedData for VersionedBookmarkRecord {
+	type Latest = BookmarkRecord;
+
+	fn wrap_latest(latest: Self::Latest) -> Self {
+		Self::V1(latest)
+	}
+
+	fn unwrap_latest(self) -> Result<Self::Latest> {
+		match self {
+			Self::V1(data) => Ok(data),
+		}
+	}
+
+	fn deserialize_version(payload: &[u8], version: u16) -> Result<Self> {
+		match version {
+			1 => Ok(Self::V1(serde_bare::from_slice(payload)?)),
+			_ => bail!("invalid sqlite-storage BookmarkRecord version: {version}"),
+		}
+	}
+
+	fn serialize_version(self, _version: u16) -> Result<Vec<u8>> {
+		match self {
+			Self::V1(data) => serde_bare::to_vec(&data).map_err(Into::into),
+		}
+	}
+}
+
+impl OwnedVersionedData for VersionedPinnedBookmarkRecord {
+	type Latest = PinnedBookmarkRecord;
+
+	fn wrap_latest(latest: Self::Latest) -> Self {
+		Self::V1(latest)
+	}
+
+	fn unwrap_latest(self) -> Result<Self::Latest> {
+		match self {
+			Self::V1(data) => Ok(data),
+		}
+	}
+
+	fn deserialize_version(payload: &[u8], version: u16) -> Result<Self> {
+		match version {
+			1 => Ok(Self::V1(serde_bare::from_slice(payload)?)),
+			_ => bail!("invalid sqlite-storage PinnedBookmarkRecord version: {version}"),
 		}
 	}
 
@@ -612,6 +674,28 @@ pub fn encode_meta_compact(compact: MetaCompact) -> Result<Vec<u8>> {
 pub fn decode_meta_compact(payload: &[u8]) -> Result<MetaCompact> {
 	VersionedMetaCompact::deserialize_with_embedded_version(payload)
 		.context("decode sqlite compact meta")
+}
+
+pub fn encode_bookmark_record(record: BookmarkRecord) -> Result<Vec<u8>> {
+	VersionedBookmarkRecord::wrap_latest(record)
+		.serialize_with_embedded_version(SQLITE_STORAGE_META_VERSION)
+		.context("encode sqlite bookmark record")
+}
+
+pub fn decode_bookmark_record(payload: &[u8]) -> Result<BookmarkRecord> {
+	VersionedBookmarkRecord::deserialize_with_embedded_version(payload)
+		.context("decode sqlite bookmark record")
+}
+
+pub fn encode_pinned_bookmark_record(record: PinnedBookmarkRecord) -> Result<Vec<u8>> {
+	VersionedPinnedBookmarkRecord::wrap_latest(record)
+		.serialize_with_embedded_version(SQLITE_STORAGE_META_VERSION)
+		.context("encode sqlite pinned bookmark record")
+}
+
+pub fn decode_pinned_bookmark_record(payload: &[u8]) -> Result<PinnedBookmarkRecord> {
+	VersionedPinnedBookmarkRecord::deserialize_with_embedded_version(payload)
+		.context("decode sqlite pinned bookmark record")
 }
 
 #[cfg(test)]

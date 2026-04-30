@@ -17,6 +17,7 @@
 - Rollback swaps APTR, so ActorDb must resolve APTR before using branch-local caches and clear PIDX/storage caches when the current branch changes.
 - Namespace rollback mirrors actor rollback at the pointer layer: derive the new NSBRANCH, freeze the old NSBRANCH, append `NSPTR/history`, decrement the old pointer refcount, then swap `NSPTR/cur`.
 - Use `BookmarkStr::format(ts_ms, txid)` and `BookmarkStr::parse()` for bookmark wire strings; avoid hand-formatting the 33-character `{timestamp_ms_hex_be:016}-{txid_hex_be:016}` shape.
+- Ephemeral bookmark creation is read-only: derive `BookmarkStr` from the caller timestamp and current branch head txid; only pinned bookmarks write `BOOKMARK/{actor_id}/{bookmark}/pinned`.
 
 # Ralph Progress Log
 Started: Wed Apr 29 03:29:23 PM PDT 2026
@@ -376,4 +377,21 @@ Started: Wed Apr 29 03:29:23 PM PDT 2026
   - `BookmarkStr::new` now validates the full wire shape, not just length, so deserializing bookmark-bearing pump records rejects malformed bookmark bytes early.
   - Generated bookmarks use lowercase fixed-width hex through `BookmarkStr::format`; use `parse()` instead of slicing bookmark strings at call sites.
   - The bookmark tests are pure integration tests and do not need a UDB fixture.
+---
+## 2026-04-29 19:21 PDT - US-020
+- Implemented ephemeral bookmark creation and pinned bookmark status reads through a new `pump::bookmark` module, with `ActorDb` convenience methods.
+- Added vbare encode/decode helpers for `BookmarkRecord` and `PinnedBookmarkRecord`, plus tests for read-only ephemeral creation and absent/ready pinned status lookup.
+- Verified with `cargo test -p sqlite-storage --test pump_bookmark`, `cargo check -p sqlite-storage`, and `cargo test -p sqlite-storage`; reran `cargo test -p sqlite-storage --test pump_bookmark` after the final test cleanup.
+- Files changed:
+  - `engine/packages/sqlite-storage/CLAUDE.md`
+  - `engine/packages/sqlite-storage/src/pump/bookmark.rs`
+  - `engine/packages/sqlite-storage/src/pump/mod.rs`
+  - `engine/packages/sqlite-storage/src/pump/types.rs`
+  - `engine/packages/sqlite-storage/tests/pump_bookmark.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - `create_bookmark` is read-only and formats the caller timestamp with the current branch head txid.
+  - `bookmark_status` returns `Option<PinStatus>`; `None` means the pinned bookmark record is absent.
+  - Tests that seed pinned bookmark records should use the new `encode_pinned_bookmark_record` helper instead of raw `serde_bare`.
 ---
