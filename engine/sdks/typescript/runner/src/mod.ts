@@ -1189,6 +1189,13 @@ export class Runner {
 		const actorId = commandWrapper.checkpoint.actorId;
 		const generation = commandWrapper.checkpoint.generation;
 
+		// CommandStopActor is always an engine-authorized graceful stop (sleep or
+		// destroy). Mark stopIntentSent so #sendActorStateUpdate sends StopCode.Ok
+		// instead of StopCode.Error. The #handleLost path intentionally omits this
+		// mark so unresponsive actors still surface as errors.
+		const actor = this.getActor(actorId, generation);
+		if (actor) actor.stopIntentSent = true;
+
 		await this.forceStopActor(actorId, generation);
 	}
 
