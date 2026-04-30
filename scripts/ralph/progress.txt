@@ -23,6 +23,7 @@
 - Pinned bookmark deletion should clear both bookmark keys, decrement namespace `pin_count`, recompute branch `bk_pin` from remaining actor pinned-bookmark records, and publish `SqliteColdCompactPayload::DeletePinnedBookmark`.
 - Restore-to-bookmark captures the undo commit before rollback, performs the APTR rollback, then writes the undo pinned bookmark so rollback durability does not depend on cold-tier pin work.
 - ActorDb's flattened ancestry cache stores branch ids plus parent versionstamp caps; read txs still resolve cap versionstamps to txids before PIDX/SHARD lookup.
+- Branch ancestry reads must ignore PIDX owners newer than that source branch's fork cap, then fall through to the latest SHARD version at or below the cap.
 - Do not add APTR/NSPTR `last_swapped_at_ms` cache validation; the v4 spec makes branches immutable and treats the US-026 invalidation contract as obsolete.
 
 # Ralph Progress Log
@@ -493,4 +494,18 @@ Started: Wed Apr 29 03:29:23 PM PDT 2026
 - **Learnings for future iterations:**
   - The v4 spec removes the storage-layer cache invalidation contract; do not read APTR/NSPTR `last_swapped_at_ms` in commit or get_pages for US-026.
   - US-067 is marked complete in the PRD even though pointer-era code remains in the current tree, so story notes must be checked before implementing older acceptance criteria.
+---
+## 2026-04-29 20:08 PDT - US-027
+- Implemented ancestry-capped PIDX reads in `get_pages`, so parent rows newer than a fork cap are ignored and reads fall through to the capped SHARD version instead.
+- Added a regression where a parent writes after a fork; the forked actor still reads the parent shard as of the fork point.
+- Verified with `cargo test -p sqlite-storage --test pump_branch`, `cargo check -p sqlite-storage`, and `cargo test -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/src/pump/read.rs`
+  - `engine/packages/sqlite-storage/tests/pump_branch.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - `ReadSource::max_txid` is the per-source read cap; apply it to PIDX rows before considering DELTA ownership.
+  - Parent branches can keep writing after a fork, so a child read must treat newer parent PIDX entries as invisible and rely on versioned SHARD fallback.
+  - The existing runner-protocol warning about missing `node_modules/@bare-ts/tools` is unrelated to `sqlite-storage` checks.
 ---

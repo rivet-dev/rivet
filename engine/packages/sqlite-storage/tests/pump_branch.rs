@@ -9,11 +9,12 @@ use sqlite_storage::{
 		actor_pointer_cur_key, actor_pointer_history_prefix, branch_commit_key,
 		branch_meta_head_at_fork_key, branch_meta_head_key, branches_bk_pin_key,
 		branches_desc_pin_key, branches_list_key, branches_refcount_key,
-		namespace_branches_actor_tombstone_key, namespace_branches_bk_pin_key,
+		branch_shard_key, namespace_branches_actor_tombstone_key, namespace_branches_bk_pin_key,
 		namespace_branches_desc_pin_key, namespace_branches_list_key,
 		namespace_branches_refcount_key, namespace_pointer_cur_key,
 		namespace_pointer_history_prefix,
 	},
+	ltx::{LtxHeader, encode_ltx_v3},
 	pump::{ActorDb, branch},
 	types::{
 		ActorBranchId, ActorBranchRecord, BranchState, DBHead, DirtyPage, NamespaceBranchId,
@@ -63,6 +64,10 @@ fn page(pgno: u32, fill: u8) -> DirtyPage {
 
 fn page_bytes(fill: u8) -> Vec<u8> {
 	vec![fill; sqlite_storage::keys::PAGE_SIZE as usize]
+}
+
+fn encoded_blob(txid: u64, pages: Vec<DirtyPage>) -> Result<Vec<u8>> {
+	encode_ltx_v3(LtxHeader::delta(txid, 1, 999), &pages)
 }
 
 async fn read_value(db: &universaldb::Database, key: Vec<u8>) -> Result<Option<Vec<u8>>> {
@@ -784,6 +789,59 @@ async fn fork_actor_writes_target_pointer_and_reads_source_data() -> Result<()> 
 		db,
 		test_ups(),
 		target_namespace(),
+		forked_actor_id,
+		NodeId::new(),
+	);
+	let pages = forked_actor_db.get_pages(vec![1]).await?;
+	assert_eq!(pages[0].bytes, Some(page_bytes(0x11)));
+
+	Ok(())
+}
+
+#[tokio::test]
+async fn fork_actor_reads_parent_shard_when_parent_pidx_is_newer_than_fork() -> Result<()> {
+	let db = Arc::new(test_db().await?);
+	let source_actor_db = ActorDb::new(
+		db.clone(),
+		test_ups(),
+		test_namespace(),
+		TEST_ACTOR.to_string(),
+		NodeId::new(),
+	);
+	source_actor_db.commit(vec![page(1, 0x11)], 2, 1_000).await?;
+	let source_branch_id = read_branch_id(&db).await?;
+	let source_commit_bytes = read_value(&db, branch_commit_key(source_branch_id, 1))
+		.await?
+		.expect("source commit row should exist");
+	let source_commit = decode_commit_row(&source_commit_bytes)?;
+
+	db.run(move |tx| async move {
+		tx.informal().set(
+			&branch_shard_key(source_branch_id, 0, 1),
+			&encoded_blob(1, vec![page(1, 0x11)])?,
+		);
+		Ok(())
+	})
+	.await?;
+
+	let forked_actor_id = branch::fork_actor(
+		&db,
+		NamespaceId::from_gas_id(test_namespace()),
+		TEST_ACTOR.to_string(),
+		ResolvedVersionstamp {
+			versionstamp: source_commit.versionstamp,
+			bookmark: None,
+		},
+		NamespaceId::from_gas_id(test_namespace()),
+	)
+	.await?;
+
+	source_actor_db.commit(vec![page(1, 0x22)], 2, 2_000).await?;
+
+	let forked_actor_db = ActorDb::new(
+		db,
+		test_ups(),
+		test_namespace(),
 		forked_actor_id,
 		NodeId::new(),
 	);

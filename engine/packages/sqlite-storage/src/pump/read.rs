@@ -123,12 +123,14 @@ impl ActorDb {
 						(cache_source, cached_pidx.as_ref())
 					{
 						for (pgno, txid) in cached_pidx {
-							if let Some(txid) = txid {
+							if let Some(txid) =
+								txid.filter(|txid| *txid <= cache_source.max_txid(head.head_txid))
+							{
 								pidx_by_pgno.insert(
 									*pgno,
 									PageRef {
 										source: cache_source,
-										txid: *txid,
+										txid,
 									},
 								);
 							}
@@ -143,6 +145,9 @@ impl ActorDb {
 									for (key, value) in rows {
 										let pgno = source.decode_pidx_pgno(&actor_id, &key)?;
 										let txid = decode_pidx_txid(&value)?;
+										if txid > source.max_txid(head.head_txid) {
+											continue;
+										}
 										pidx_by_pgno.entry(pgno).or_insert(PageRef {
 											source: *source,
 											txid,
@@ -166,6 +171,10 @@ impl ActorDb {
 										))
 									})
 									.collect::<Result<Vec<_>>>()?;
+								let decoded_rows = decoded_rows
+									.into_iter()
+									.filter(|(_, txid)| *txid <= ReadSource::Legacy.max_txid(head.head_txid))
+									.collect::<Vec<_>>();
 								for (pgno, txid) in &decoded_rows {
 									pidx_by_pgno.insert(
 										*pgno,
@@ -408,6 +417,13 @@ impl ReadSource {
 		match self {
 			Self::Branch(source) => keys::branch_delta_chunk_prefix(source.branch_id, txid),
 			Self::Legacy => keys::delta_chunk_prefix(actor_id, txid),
+		}
+	}
+
+	fn max_txid(self, legacy_as_of_txid: u64) -> u64 {
+		match self {
+			Self::Branch(source) => source.max_txid,
+			Self::Legacy => legacy_as_of_txid,
 		}
 	}
 }
