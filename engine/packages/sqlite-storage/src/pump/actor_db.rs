@@ -11,8 +11,9 @@ use crate::{compactor::Ups, page_index::DeltaPageIndex};
 
 use super::{
 	branch,
-	constants::MAX_FORK_DEPTH,
+	constants::{ACCESS_TOUCH_THROTTLE_MS, MAX_FORK_DEPTH},
 	error::SqliteStorageError,
+	keys,
 	types::{ActorBranchId, NamespaceId},
 };
 
@@ -51,6 +52,8 @@ pub struct ActorDb {
 	pub(super) branch_id: Mutex<Option<ActorBranchId>>,
 	/// Cached immutable branch ancestry. This is a perf cache for read planning.
 	pub(super) ancestors: Mutex<Option<BranchAncestry>>,
+	/// Cached access bucket for throttling manifest and eviction-index touches.
+	pub(super) last_access_bucket: Mutex<Option<i64>>,
 	pub(super) cache: Mutex<DeltaPageIndex>,
 	/// Cached `/META/quota`. Loaded once on the first UDB tx.
 	pub(super) storage_used: Mutex<Option<i64>>,
@@ -81,6 +84,7 @@ impl ActorDb {
 			node_id,
 			branch_id: Mutex::new(None),
 			ancestors: Mutex::new(None),
+			last_access_bucket: Mutex::new(None),
 			cache: Mutex::new(DeltaPageIndex::new()),
 			storage_used: Mutex::new(None),
 			commit_bytes_since_rollup: Mutex::new(0),
@@ -103,6 +107,54 @@ impl ActorDb {
 
 		snapshot
 	}
+}
+
+pub(super) fn access_bucket(now_ms: i64) -> i64 {
+	now_ms.div_euclid(ACCESS_TOUCH_THROTTLE_MS)
+}
+
+pub(super) async fn touch_access_if_bucket_advanced(
+	tx: &universaldb::Transaction,
+	branch_id: ActorBranchId,
+	cached_bucket: Option<i64>,
+	now_ms: i64,
+) -> Result<Option<i64>> {
+	let bucket = access_bucket(now_ms);
+	if cached_bucket == Some(bucket) {
+		return Ok(None);
+	}
+
+	let bucket_key = keys::branch_manifest_last_access_bucket_key(branch_id);
+	let stored_bucket = tx
+		.informal()
+		.get(&bucket_key, universaldb::utils::IsolationLevel::Serializable)
+		.await?
+		.map(|bytes| decode_i64_le(&bytes))
+		.transpose()
+		.context("decode sqlite last access bucket")?;
+	if stored_bucket == Some(bucket) {
+		return Ok(Some(bucket));
+	}
+
+	if let Some(stored_bucket) = stored_bucket {
+		tx.informal()
+			.clear(&keys::ctr_eviction_index_key(stored_bucket, branch_id));
+	}
+	tx.informal()
+		.set(&keys::branch_manifest_last_access_ts_ms_key(branch_id), &now_ms.to_le_bytes());
+	tx.informal().set(&bucket_key, &bucket.to_le_bytes());
+	tx.informal()
+		.set(&keys::ctr_eviction_index_key(bucket, branch_id), &[]);
+
+	Ok(Some(bucket))
+}
+
+fn decode_i64_le(bytes: &[u8]) -> Result<i64> {
+	Ok(i64::from_le_bytes(
+		bytes
+			.try_into()
+			.context("sqlite access bucket should be exactly 8 bytes")?,
+	))
 }
 
 pub(super) async fn load_branch_ancestry(

@@ -30,6 +30,7 @@
 - Hot compaction enforces `MAX_SHARD_VERSIONS_PER_SHARD` inside the write tx before folding; missing VTX for a non-empty pin is treated conservatively as pinned.
 - Hot compactor branch passes update `BR/{branch_id}/META/compact` and `BR/{branch_id}/META/manifest/last_hot_pass_txid` together; a nil namespace `ActorDb` exercises branch-scoped compaction through public `compact_default_batch`.
 - Hot retention sweeps clear `COMMITS` and matching `VTX` rows together inside the hot compactor write tx, with quota accounting adjusted for both keys.
+- ActorDb access-touch writes `last_access_ts_ms`, `last_access_bucket`, and `CTR/eviction_index` through the shared `touch_access_if_bucket_advanced` helper; per-connection cache suppresses same-bucket writes.
 
 # Ralph Progress Log
 Started: Wed Apr 29 03:29:23 PM PDT 2026
@@ -593,4 +594,21 @@ Started: Wed Apr 29 03:29:23 PM PDT 2026
   - Hot retention should live in the hot compactor write tx so `META/compact`, SHARD folding, `COMMITS`, `VTX`, and quota accounting advance atomically for the pass.
   - Use branch/legacy scoped key helpers for retention scans; branch storage is primary, but legacy helpers still protect compatibility tests and seeded state.
   - Namespace-specific compaction in integration tests can use `worker::test_hooks::handle_payload_once` with a `SqliteCompactPayload` carrying `namespace_id`.
+---
+## 2026-04-29 20:52 PDT - US-034
+- Implemented throttled ActorDb access-touch for commit and read activity.
+- Added a per-connection cached access bucket and a shared helper that updates `BR/{branch_id}/META/manifest/last_access_ts_ms`, `last_access_bucket`, and `CTR/eviction_index/{bucket}/{branch_id}` only when the bucket advances.
+- Added tests for repeated 1ms commits staying in one access bucket and for read activity touching a fresh connection's access bucket.
+- Verified with `cargo test -p sqlite-storage --test pump_commit access -- --nocapture`, `cargo check -p sqlite-storage`, and `cargo test -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/src/pump/actor_db.rs`
+  - `engine/packages/sqlite-storage/src/pump/commit.rs`
+  - `engine/packages/sqlite-storage/src/pump/read.rs`
+  - `engine/packages/sqlite-storage/tests/pump_commit.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Access-touch should stay branch-scoped and should not affect branch quota accounting.
+  - Use a serializable read of `last_access_bucket` before re-keying the global eviction index so concurrent touches do not leave stale bucket entries behind.
+  - Read-side access-touch uses wall-clock time inside `get_pages`; commit-side touch uses the commit's caller-provided `now_ms`.
 ---

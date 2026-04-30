@@ -1,6 +1,9 @@
 //! Page read path for the stateless sqlite-storage pump.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::{
+	collections::{BTreeMap, BTreeSet},
+	time::{SystemTime, UNIX_EPOCH},
+};
 
 use anyhow::{Context, Result, ensure};
 use futures_util::TryStreamExt;
@@ -12,7 +15,7 @@ use universaldb::{
 
 use crate::pump::{
 	ActorDb,
-	actor_db::{BranchAncestry, load_branch_ancestry},
+	actor_db::{BranchAncestry, load_branch_ancestry, touch_access_if_bucket_advanced},
 	branch,
 	error::SqliteStorageError,
 	keys::{self, PAGE_SIZE, SHARD_SIZE},
@@ -59,7 +62,9 @@ impl ActorDb {
 		let namespace_id = self.sqlite_namespace_id();
 		let cached_branch_id = *self.branch_id.lock();
 		let cached_ancestry = self.ancestors.lock().clone();
+		let cached_access_bucket = *self.last_access_bucket.lock();
 		let pgnos_for_tx = pgnos.clone();
+		let now_ms = now_ms()?;
 		let tx_result = self
 			.udb
 			.run(move |tx| {
@@ -68,6 +73,7 @@ impl ActorDb {
 				let pgnos = pgnos_for_tx.clone();
 				let cached_pidx = cached_pidx.clone();
 				let cached_ancestry = cached_ancestry.clone();
+				let cached_access_bucket = cached_access_bucket;
 
 				async move {
 					let scope = resolve_storage_scope(
@@ -101,9 +107,21 @@ impl ActorDb {
 						.filter(|pgno| *pgno <= head.db_size_pages)
 						.collect::<Vec<_>>();
 					if pgnos_in_range.is_empty() {
+						let access_bucket = if let Some(branch_id) = scope.branch_id() {
+							touch_access_if_bucket_advanced(
+								&tx,
+								branch_id,
+								cached_access_bucket,
+								now_ms,
+							)
+							.await?
+						} else {
+							None
+						};
 						return Ok(GetPagesTxResult {
 							branch_id: scope.branch_id(),
 							branch_ancestry: scope.branch_ancestry(),
+							access_bucket,
 							db_size_pages: head.db_size_pages,
 							loaded_pidx_rows: None,
 							page_sources: BTreeMap::new(),
@@ -252,9 +270,22 @@ impl ActorDb {
 						}
 					}
 
+					let access_bucket = if let Some(branch_id) = scope.branch_id() {
+						touch_access_if_bucket_advanced(
+							&tx,
+							branch_id,
+							cached_access_bucket,
+							now_ms,
+						)
+						.await?
+					} else {
+						None
+					};
+
 					Ok(GetPagesTxResult {
 						branch_id: scope.branch_id(),
 						branch_ancestry: scope.branch_ancestry(),
+						access_bucket,
 						db_size_pages: head.db_size_pages,
 						loaded_pidx_rows,
 						page_sources,
@@ -344,6 +375,9 @@ impl ActorDb {
 			}
 			*self.branch_id.lock() = Some(branch_id);
 			*self.ancestors.lock() = tx_result.branch_ancestry;
+			if let Some(access_bucket) = tx_result.access_bucket {
+				*self.last_access_bucket.lock() = Some(access_bucket);
+			}
 		} else {
 			*self.ancestors.lock() = None;
 		}
@@ -355,11 +389,19 @@ impl ActorDb {
 struct GetPagesTxResult {
 	branch_id: Option<ActorBranchId>,
 	branch_ancestry: Option<BranchAncestry>,
+	access_bucket: Option<i64>,
 	db_size_pages: u32,
 	loaded_pidx_rows: Option<Vec<(u32, u64)>>,
 	page_sources: BTreeMap<u32, Vec<u8>>,
 	source_blobs: BTreeMap<Vec<u8>, Vec<u8>>,
 	stale_pidx_pgnos: BTreeSet<u32>,
+}
+
+fn now_ms() -> Result<i64> {
+	let duration = SystemTime::now()
+		.duration_since(UNIX_EPOCH)
+		.context("system time is before unix epoch")?;
+	i64::try_from(duration.as_millis()).context("current time exceeded i64 milliseconds")
 }
 
 #[derive(Debug, Clone)]

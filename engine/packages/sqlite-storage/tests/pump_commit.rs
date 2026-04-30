@@ -8,10 +8,12 @@ use sqlite_storage::compactor::{
 	SqliteCompactSubject, decode_compact_payload,
 };
 use sqlite_storage::{
+	ACCESS_TOUCH_THROTTLE_MS,
 		keys::{
 			PAGE_SIZE, actor_pointer_cur_key, branch_commit_key, branch_delta_chunk_key,
+			branch_manifest_last_access_bucket_key, branch_manifest_last_access_ts_ms_key,
 			branch_meta_compact_key, branch_meta_head_key, branch_pidx_key, branch_shard_key,
-			branch_vtx_key, branches_list_key, namespace_branches_list_key,
+			branch_vtx_key, branches_list_key, ctr_eviction_index_key, namespace_branches_list_key,
 			namespace_branches_refcount_key, namespace_pointer_cur_key,
 		},
 	ltx::{LtxHeader, encode_ltx_v3},
@@ -105,6 +107,17 @@ async fn read_value(db: &universaldb::Database, key: Vec<u8>) -> Result<Option<V
 		}
 	})
 	.await
+}
+
+async fn read_i64_le(db: &universaldb::Database, key: Vec<u8>) -> Result<Option<i64>> {
+	read_value(db, key).await?.map(|value| {
+		Ok(i64::from_le_bytes(
+			value
+				.as_slice()
+				.try_into()
+				.expect("test value should be i64"),
+		))
+	}).transpose()
 }
 
 async fn read_head(db: &universaldb::Database) -> Result<DBHead> {
@@ -262,6 +275,97 @@ async fn commit_writes_commit_row_and_vtx_index() -> Result<()> {
 	assert_eq!(
 		read_value(&db, branch_vtx_key(branch_id, second_row.versionstamp)).await?,
 		Some(2_u64.to_be_bytes().to_vec())
+	);
+
+	Ok(())
+}
+
+#[tokio::test]
+async fn commit_throttles_access_touch_by_bucket() -> Result<()> {
+	let db = Arc::new(test_db().await?);
+	let actor_db = ActorDb::new(db.clone(), test_ups(), test_namespace(), TEST_ACTOR.to_string(), NodeId::new());
+
+	actor_db.commit(vec![page(1, 0x01)], 1, 1).await?;
+	let branch_id = read_branch_id(&db).await?;
+	assert_eq!(
+		read_i64_le(&db, branch_manifest_last_access_ts_ms_key(branch_id)).await?,
+		Some(1)
+	);
+	assert_eq!(
+		read_i64_le(&db, branch_manifest_last_access_bucket_key(branch_id)).await?,
+		Some(0)
+	);
+	assert_eq!(
+		read_value(&db, ctr_eviction_index_key(0, branch_id)).await?,
+		Some(Vec::new())
+	);
+
+	for now_ms in 2..=120 {
+		actor_db
+			.commit(vec![page(1, now_ms as u8)], 1, now_ms)
+			.await?;
+	}
+	assert_eq!(
+		read_i64_le(&db, branch_manifest_last_access_ts_ms_key(branch_id)).await?,
+		Some(1)
+	);
+	assert_eq!(
+		read_i64_le(&db, branch_manifest_last_access_bucket_key(branch_id)).await?,
+		Some(0)
+	);
+	assert_eq!(
+		read_value(&db, ctr_eviction_index_key(0, branch_id)).await?,
+		Some(Vec::new())
+	);
+
+	actor_db
+		.commit(vec![page(1, 0xfe)], 1, ACCESS_TOUCH_THROTTLE_MS)
+		.await?;
+	assert_eq!(
+		read_i64_le(&db, branch_manifest_last_access_ts_ms_key(branch_id)).await?,
+		Some(ACCESS_TOUCH_THROTTLE_MS)
+	);
+	assert_eq!(
+		read_i64_le(&db, branch_manifest_last_access_bucket_key(branch_id)).await?,
+		Some(1)
+	);
+	assert!(read_value(&db, ctr_eviction_index_key(0, branch_id)).await?.is_none());
+	assert_eq!(
+		read_value(&db, ctr_eviction_index_key(1, branch_id)).await?,
+		Some(Vec::new())
+	);
+
+	Ok(())
+}
+
+#[tokio::test]
+async fn get_pages_touches_access_bucket_on_read() -> Result<()> {
+	let db = Arc::new(test_db().await?);
+	let writer = ActorDb::new(db.clone(), test_ups(), test_namespace(), TEST_ACTOR.to_string(), NodeId::new());
+	writer.commit(vec![page(1, 0x11)], 1, 1).await?;
+	let branch_id = read_branch_id(&db).await?;
+
+	let reader = ActorDb::new(db.clone(), test_ups(), test_namespace(), TEST_ACTOR.to_string(), NodeId::new());
+	assert_eq!(
+		reader.get_pages(vec![1]).await?,
+		vec![fetched_page(1, 0x11)]
+	);
+
+	let last_access_ts_ms = read_i64_le(&db, branch_manifest_last_access_ts_ms_key(branch_id))
+		.await?
+		.expect("last access timestamp should exist");
+	let last_access_bucket = read_i64_le(&db, branch_manifest_last_access_bucket_key(branch_id))
+		.await?
+		.expect("last access bucket should exist");
+	assert!(last_access_ts_ms > 1);
+	assert_eq!(
+		last_access_bucket,
+		last_access_ts_ms.div_euclid(ACCESS_TOUCH_THROTTLE_MS)
+	);
+	assert!(read_value(&db, ctr_eviction_index_key(0, branch_id)).await?.is_none());
+	assert_eq!(
+		read_value(&db, ctr_eviction_index_key(last_access_bucket, branch_id)).await?,
+		Some(Vec::new())
 	);
 
 	Ok(())

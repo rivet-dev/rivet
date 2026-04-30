@@ -46,6 +46,7 @@ These come from `r2-prior-art/.agent/research/sqlite/requirements.md` and supers
 - **PITR tunable constants live in `pump/constants.rs`.** Import shared limits and retention windows from there instead of duplicating literals.
 - **Pump persisted payload structs use `serde::{Serialize, Deserialize}` as the serde_bare/vbare-compatible derive pattern.** Add `OwnedVersionedData` wrappers when introducing encode/decode helpers.
 - **META splits into single-writer sub-keys:** `/META/head` (commit-owned), `/META/compact` (hot compactor-owned), `/META/cold_compact` (cold compactor-owned), `/META/quota` (atomic-add counter, raw i64 LE — not vbare), `/META/manifest` (branch metadata), `/META/compactor_lease`, `/META/cold_lease`. Disjoint owners; commit/compaction never conflict on a META sub-key.
+- **Access-touch uses manifest sub-keys plus the global eviction index.** Route commit/read touches through `touch_access_if_bucket_advanced`; it is branch-scoped, throttled by `ACCESS_TOUCH_THROTTLE_MS`, and not part of branch quota accounting.
 - **`COMMITS/{txid_be}` stores `CommitRow` via `SetVersionstampedValue`; `VTX/{versionstamp}` is written via `SetVersionstampedKey` and maps to raw u64 BE txid.**
 - **Hot retention clears `COMMITS` and matching `VTX` rows together.** Do this inside the hot compactor write tx and keep quota accounting paired with the cleared keys.
 - **Branch records live under `[BRANCHES]/list/{branch_id}` with FDB atomic-add refcount plus `desc_pin` and `bk_pin` atomic-min keys.** GC reads these scalars instead of walking the descendant tree.
