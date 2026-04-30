@@ -29,6 +29,7 @@
 - Namespace catalog (`NSCAT`) markers store database branch ids with 16-byte versionstamped values; list walks namespace parents, caps inherited entries by `parent_versionstamp`, and applies database tombstones before inherited entries.
 - Hot compaction enforces `MAX_SHARD_VERSIONS_PER_SHARD` inside the write tx before folding; missing VTX for a non-empty pin is treated conservatively as pinned.
 - Hot compactor branch passes update `BR/{branch_id}/META/compact` and `BR/{branch_id}/META/manifest/last_hot_pass_txid` together; a nil namespace `ActorDb` exercises branch-scoped compaction through public `compact_default_batch`.
+- Hot retention sweeps clear `COMMITS` and matching `VTX` rows together inside the hot compactor write tx, with quota accounting adjusted for both keys.
 
 # Ralph Progress Log
 Started: Wed Apr 29 03:29:23 PM PDT 2026
@@ -575,4 +576,21 @@ Started: Wed Apr 29 03:29:23 PM PDT 2026
   - Use a nil namespace `ActorDb` when an integration test needs to exercise branch-scoped compaction through the public `compact_default_batch` helper.
   - The hot compactor stores `last_hot_pass_txid` as a big-endian u64 manifest sub-key, independent from `cold_drained_txid` and access-touch manifest fields.
   - A branch-scoped pass should keep `BR/{branch_id}/META/compact.materialized_txid` and `BR/{branch_id}/META/manifest/last_hot_pass_txid` in lockstep.
+---
+## 2026-04-29 20:44 PDT - US-033
+- Implemented the universal hot-tier retention sweep in the hot compactor write transaction.
+- Old `CommitRow` entries are selected by `wall_clock_ms < now - HOT_RETENTION_FLOOR_MS`; each swept row clears both `COMMITS/{txid}` and the matching `VTX/{versionstamp}` and adjusts branch/legacy quota accounting.
+- Added compactor coverage for old-row expiry, recent-row preservation, bookmark expiry with no cold layer, no-selected-delta passes, and equivalent behavior across nil and non-nil namespaces.
+- Verified with `cargo test -p sqlite-storage --test compactor_compact -- --nocapture`, `cargo check -p sqlite-storage`, and `cargo test -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/AGENTS.md`
+  - `engine/packages/sqlite-storage/src/compactor/compact.rs`
+  - `engine/packages/sqlite-storage/src/pump/keys.rs`
+  - `engine/packages/sqlite-storage/tests/compactor_compact.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Hot retention should live in the hot compactor write tx so `META/compact`, SHARD folding, `COMMITS`, `VTX`, and quota accounting advance atomically for the pass.
+  - Use branch/legacy scoped key helpers for retention scans; branch storage is primary, but legacy helpers still protect compatibility tests and seeded state.
+  - Namespace-specific compaction in integration tests can use `worker::test_hooks::handle_payload_once` with a `SqliteCompactPayload` carrying `namespace_id`.
 ---

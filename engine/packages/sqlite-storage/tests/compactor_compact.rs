@@ -10,19 +10,21 @@ use sqlite_storage::{
 		compact::{test_hooks, validate_quota},
 		compact_default_batch, fold_shard, worker,
 	},
-	constants::MAX_SHARD_VERSIONS_PER_SHARD,
+	constants::{HOT_RETENTION_FLOOR_MS, MAX_SHARD_VERSIONS_PER_SHARD},
 	error::SqliteStorageError,
 	keys::{
-		PAGE_SIZE, actor_pointer_cur_key, branch_manifest_last_hot_pass_txid_key,
-		branches_bk_pin_key, delta_chunk_key, meta_compact_key, meta_head_key,
-		namespace_pointer_cur_key, pidx_delta_key, shard_key, shard_version_key, vtx_key,
+		PAGE_SIZE, actor_pointer_cur_key, branch_commit_key,
+		branch_manifest_last_hot_pass_txid_key, branch_vtx_key, branches_bk_pin_key,
+		delta_chunk_key, meta_compact_key, meta_head_key, namespace_pointer_cur_key,
+		pidx_delta_key, shard_key, shard_version_key, vtx_key,
 	},
 	ltx::{LtxHeader, decode_ltx_v3, encode_ltx_v3},
 	pump::ActorDb,
 	quota,
 	types::{
-		ActorBranchId, DBHead, DirtyPage, MetaCompact, NamespaceId, decode_actor_pointer,
-		decode_meta_compact, decode_namespace_pointer, encode_db_head, encode_meta_compact,
+		ActorBranchId, BookmarkStr, CommitRow, DBHead, DirtyPage, MetaCompact, NamespaceId,
+		decode_actor_pointer, decode_commit_row, decode_meta_compact, decode_namespace_pointer,
+		encode_db_head, encode_meta_compact,
 	},
 };
 use tempfile::Builder;
@@ -50,6 +52,17 @@ fn test_ups() -> PubSub {
 
 fn nil_namespace() -> Id {
 	Id::v1(uuid::Uuid::nil(), 1)
+}
+
+fn other_namespace() -> Id {
+	Id::v1(uuid::Uuid::from_u128(1), 1)
+}
+
+fn now_ms() -> i64 {
+	let elapsed = std::time::SystemTime::now()
+		.duration_since(std::time::UNIX_EPOCH)
+		.expect("system clock should be after unix epoch");
+	i64::try_from(elapsed.as_millis()).expect("timestamp should fit i64")
 }
 
 fn page(pgno: u32, fill: u8) -> DirtyPage {
@@ -109,16 +122,35 @@ async fn read_manifest_last_hot_pass_txid(
 }
 
 async fn read_branch_id(db: &universaldb::Database) -> Result<ActorBranchId> {
-	let namespace_id = NamespaceId::from_gas_id(nil_namespace());
+	read_branch_id_for(db, nil_namespace(), TEST_ACTOR).await
+}
+
+async fn read_branch_id_for(
+	db: &universaldb::Database,
+	namespace_id: Id,
+	actor_id: &str,
+) -> Result<ActorBranchId> {
+	let namespace_id = NamespaceId::from_gas_id(namespace_id);
 	let namespace_pointer_bytes = read_value(db, namespace_pointer_cur_key(namespace_id))
 		.await?
 		.expect("namespace pointer should exist");
 	let namespace_branch = decode_namespace_pointer(&namespace_pointer_bytes)?.current_branch;
-	let actor_pointer_bytes = read_value(db, actor_pointer_cur_key(namespace_branch, TEST_ACTOR))
+	let actor_pointer_bytes = read_value(db, actor_pointer_cur_key(namespace_branch, actor_id))
 		.await?
 		.expect("actor pointer should exist");
 
 	Ok(decode_actor_pointer(&actor_pointer_bytes)?.current_branch)
+}
+
+async fn read_commit_row(
+	db: &universaldb::Database,
+	branch_id: ActorBranchId,
+	txid: u64,
+) -> Result<Option<CommitRow>> {
+	Ok(read_value(db, branch_commit_key(branch_id, txid))
+		.await?
+		.map(|value| decode_commit_row(&value))
+		.transpose()?)
 }
 
 async fn read_pidx_txid(db: &universaldb::Database, pgno: u32) -> Result<Option<u64>> {
@@ -537,6 +569,187 @@ async fn compact_updates_branch_manifest_last_hot_pass_txid_each_pass() -> Resul
 	assert_eq!(second.materialized_txid, 3);
 	assert_eq!(read_branch_compact_txid(&db, branch_id).await?, 3);
 	assert_eq!(read_manifest_last_hot_pass_txid(&db, branch_id).await?, Some(3));
+
+	Ok(())
+}
+
+#[tokio::test]
+async fn compact_sweeps_old_commits_and_vtx_without_tier_gate() -> Result<()> {
+	let _compaction_test_lock = COMPACTION_TEST_LOCK.lock().await;
+	let db = Arc::new(test_db().await?);
+	let actor_db = ActorDb::new(
+		db.clone(),
+		test_ups(),
+		nil_namespace(),
+		TEST_ACTOR.to_string(),
+		NodeId::new(),
+	);
+	let current_ms = now_ms();
+	let old_ms = current_ms - HOT_RETENTION_FLOOR_MS - 1_000;
+	let recent_ms = current_ms - 1_000;
+
+	actor_db.commit(vec![page(3, 0x13)], 8, old_ms).await?;
+	let old_bookmark = BookmarkStr::format(old_ms, 1)?;
+	actor_db.commit(vec![page(5, 0x15)], 8, recent_ms).await?;
+	let branch_id = read_branch_id(&db).await?;
+	let old_row = read_commit_row(&db, branch_id, 1)
+		.await?
+		.expect("old commit row should exist before compaction");
+	let recent_row = read_commit_row(&db, branch_id, 2)
+		.await?
+		.expect("recent commit row should exist before compaction");
+
+	compact_default_batch(
+		db.clone(),
+		TEST_ACTOR.to_string(),
+		10,
+		CancellationToken::new(),
+	)
+	.await?;
+
+	assert!(read_commit_row(&db, branch_id, 1).await?.is_none());
+	assert!(
+		read_value(&db, branch_vtx_key(branch_id, old_row.versionstamp))
+			.await?
+			.is_none()
+	);
+	assert!(read_commit_row(&db, branch_id, 2).await?.is_some());
+	assert!(
+		read_value(&db, branch_vtx_key(branch_id, recent_row.versionstamp))
+			.await?
+			.is_some()
+	);
+
+	let err = actor_db
+		.resolve_bookmark(old_bookmark)
+		.await
+		.expect_err("bookmark for swept hot row should be expired without cold layer coverage");
+	assert!(err.chain().any(|cause| {
+		cause
+			.downcast_ref::<SqliteStorageError>()
+			.is_some_and(|err| matches!(err, SqliteStorageError::BookmarkExpired))
+	}));
+
+	Ok(())
+}
+
+#[tokio::test]
+async fn compact_sweeps_old_commits_even_without_selected_deltas() -> Result<()> {
+	let _compaction_test_lock = COMPACTION_TEST_LOCK.lock().await;
+	let db = Arc::new(test_db().await?);
+	let actor_db = ActorDb::new(
+		db.clone(),
+		test_ups(),
+		nil_namespace(),
+		TEST_ACTOR.to_string(),
+		NodeId::new(),
+	);
+	let old_ms = now_ms() - HOT_RETENTION_FLOOR_MS - 1_000;
+
+	actor_db.commit(vec![page(3, 0x13)], 8, old_ms).await?;
+	let branch_id = read_branch_id(&db).await?;
+	let old_row = read_commit_row(&db, branch_id, 1)
+		.await?
+		.expect("old commit row should exist before compaction");
+	seed(
+		&db,
+		vec![(
+			sqlite_storage::keys::branch_meta_compact_key(branch_id),
+			encode_meta_compact(MetaCompact {
+				materialized_txid: 1,
+			})?,
+		)],
+	)
+	.await?;
+
+	let outcome = compact_default_batch(
+		db.clone(),
+		TEST_ACTOR.to_string(),
+		10,
+		CancellationToken::new(),
+	)
+	.await?;
+
+	assert_eq!(outcome.deltas_freed, 0);
+	assert_eq!(outcome.materialized_txid, 1);
+	assert!(read_commit_row(&db, branch_id, 1).await?.is_none());
+	assert!(
+		read_value(&db, branch_vtx_key(branch_id, old_row.versionstamp))
+			.await?
+			.is_none()
+	);
+
+	Ok(())
+}
+
+#[tokio::test]
+async fn compact_retention_sweep_applies_across_namespaces() -> Result<()> {
+	let _compaction_test_lock = COMPACTION_TEST_LOCK.lock().await;
+	let db = Arc::new(test_db().await?);
+	let current_ms = now_ms();
+	let old_ms = current_ms - HOT_RETENTION_FLOOR_MS - 1_000;
+	let recent_ms = current_ms - 1_000;
+	let other_actor = "other-actor";
+	let other_namespace = other_namespace();
+	let first = ActorDb::new(
+		db.clone(),
+		test_ups(),
+		nil_namespace(),
+		TEST_ACTOR.to_string(),
+		NodeId::new(),
+	);
+	let second = ActorDb::new(
+		db.clone(),
+		test_ups(),
+		other_namespace,
+		other_actor.to_string(),
+		NodeId::new(),
+	);
+
+	first.commit(vec![page(3, 0x13)], 8, old_ms).await?;
+	first.commit(vec![page(5, 0x15)], 8, recent_ms).await?;
+	second.commit(vec![page(7, 0x17)], 8, old_ms).await?;
+	second.commit(vec![page(9, 0x19)], 8, recent_ms).await?;
+	let first_branch_id = read_branch_id(&db).await?;
+	let second_branch_id = read_branch_id_for(&db, other_namespace, other_actor).await?;
+
+	compact_default_batch(
+		db.clone(),
+		TEST_ACTOR.to_string(),
+		10,
+		CancellationToken::new(),
+	)
+	.await?;
+	assert!(read_commit_row(&db, first_branch_id, 1).await?.is_none());
+	assert!(
+		read_commit_row(&db, second_branch_id, 1)
+			.await?
+			.is_some()
+	);
+
+	worker::test_hooks::handle_payload_once(
+		db.clone(),
+		SqliteCompactPayload {
+			actor_id: other_actor.to_string(),
+			namespace_id: Some(other_namespace),
+			actor_name: None,
+			commit_bytes_since_rollup: 0,
+			read_bytes_since_rollup: 0,
+		},
+		worker::CompactorConfig {
+			batch_size_deltas: 10,
+			..Default::default()
+		},
+		CancellationToken::new(),
+	)
+	.await?;
+
+	assert!(read_commit_row(&db, second_branch_id, 1).await?.is_none());
+	assert!(
+		read_commit_row(&db, second_branch_id, 2)
+			.await?
+			.is_some()
+	);
 
 	Ok(())
 }

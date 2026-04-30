@@ -1,6 +1,10 @@
 //! Per-actor compaction pass for the stateless sqlite-storage layout.
 
-use std::{collections::BTreeMap, sync::Arc};
+use std::{
+	collections::BTreeMap,
+	sync::Arc,
+	time::{SystemTime, UNIX_EPOCH},
+};
 
 use anyhow::{Context, Result, bail};
 use futures_util::TryStreamExt;
@@ -16,14 +20,14 @@ use universaldb::{
 
 use crate::pump::{
 	branch,
-	constants::MAX_SHARD_VERSIONS_PER_SHARD,
+	constants::{HOT_RETENTION_FLOOR_MS, MAX_SHARD_VERSIONS_PER_SHARD},
 	error::SqliteStorageError,
 	keys::{self, SHARD_SIZE},
 	ltx::decode_ltx_v3,
 	quota,
 	types::{
-		ActorBranchId, MetaCompact, NamespaceId, decode_db_head, decode_meta_compact,
-		encode_meta_compact,
+		ActorBranchId, MetaCompact, NamespaceId, decode_commit_row, decode_db_head,
+		decode_meta_compact, encode_meta_compact,
 	},
 	udb,
 };
@@ -85,9 +89,6 @@ pub(crate) async fn compact_default_batch_with_node_id(
 	metrics::SQLITE_COMPACTOR_LAG
 		.with_label_values(labels)
 		.observe(plan.selected_delta_txids.len() as f64);
-	if plan.selected_delta_txids.is_empty() {
-		return Ok(CompactionOutcome::default());
-	}
 
 	test_hooks::maybe_pause_after_plan(&actor_id).await;
 	ensure_not_cancelled(&cancel_token)?;
@@ -143,9 +144,6 @@ async fn plan_batch(
 				.unwrap_or(MetaCompact {
 					materialized_txid: 0,
 				});
-			if head.head_txid <= compact.materialized_txid || batch_size_deltas == 0 {
-				return Ok(CompactionPlan::default());
-			}
 
 			let pidx_rows = load_pidx_rows(&tx, &scope, &actor_id).await?;
 			let delta_entries = load_delta_entries(&tx, &scope, &actor_id).await?;
@@ -200,7 +198,14 @@ async fn plan_batch(
 					Ok((*txid, entry.clone()))
 				})
 				.collect::<Result<BTreeMap<_, _>>>()?;
-			let materialized_txid = selected_delta_txids.iter().copied().max().unwrap_or(0);
+			let materialized_txid = selected_delta_txids
+				.iter()
+				.copied()
+				.max()
+				.unwrap_or(compact.materialized_txid);
+			let retention_cutoff_ms = now_ms()?
+				.checked_sub(HOT_RETENTION_FLOOR_MS)
+				.context("sqlite hot retention cutoff underflowed")?;
 
 			Ok(CompactionPlan {
 				scope,
@@ -208,6 +213,7 @@ async fn plan_batch(
 				selected_delta_entries,
 				pages_by_shard,
 				materialized_txid,
+				retention_cutoff_ms,
 			})
 		}
 	})
@@ -291,6 +297,13 @@ async fn write_batch(
 				let (begin, end) = prefix_range(&prefix);
 				tx.informal().clear_range(&begin, &end);
 			}
+			bytes_freed += sweep_hot_retention(
+				&tx,
+				plan.scope,
+				&actor_id,
+				plan.retention_cutoff_ms,
+			)
+			.await?;
 
 			let compact = encode_meta_compact(MetaCompact {
 				materialized_txid: plan.materialized_txid,
@@ -510,6 +523,35 @@ async fn load_pin_txid(
 	Ok(Some(u64::from_be_bytes(txid_bytes)))
 }
 
+async fn sweep_hot_retention(
+	tx: &universaldb::Transaction,
+	scope: StorageScope,
+	actor_id: &str,
+	retention_cutoff_ms: i64,
+) -> Result<i64> {
+	let mut bytes_freed = 0;
+	for (commit_key, commit_value) in
+		tx_scan_prefix_values_at(tx, &scope.commit_prefix(actor_id), Serializable).await?
+	{
+		let commit_row = decode_commit_row(&commit_value)
+			.context("decode sqlite commit row during hot retention sweep")?;
+		if commit_row.wall_clock_ms >= retention_cutoff_ms {
+			continue;
+		}
+
+		bytes_freed += tracked_entry_size(&commit_key, &commit_value)?;
+		tx.informal().clear(&commit_key);
+
+		let vtx_key = scope.vtx_key(actor_id, commit_row.versionstamp);
+		if let Some(vtx_value) = tx_get_value(tx, &vtx_key, Serializable).await? {
+			bytes_freed += tracked_entry_size(&vtx_key, &vtx_value)?;
+			tx.informal().clear(&vtx_key);
+		}
+	}
+
+	Ok(bytes_freed)
+}
+
 fn is_shard_version_pinned(as_of_txid: u64, pin_txids: &[u64]) -> bool {
 	pin_txids.iter().any(|pin_txid| *pin_txid <= as_of_txid)
 }
@@ -691,6 +733,13 @@ fn ensure_not_cancelled(cancel_token: &CancellationToken) -> Result<()> {
 	Ok(())
 }
 
+fn now_ms() -> Result<i64> {
+	let elapsed = SystemTime::now()
+		.duration_since(UNIX_EPOCH)
+		.context("system clock was before unix epoch")?;
+	i64::try_from(elapsed.as_millis()).context("sqlite compactor timestamp exceeded i64")
+}
+
 #[derive(Debug, Clone, Default)]
 struct CompactionPlan {
 	scope: StorageScope,
@@ -698,6 +747,7 @@ struct CompactionPlan {
 	selected_delta_entries: BTreeMap<u64, DeltaEntry>,
 	pages_by_shard: BTreeMap<u32, Vec<FoldPage>>,
 	materialized_txid: u64,
+	retention_cutoff_ms: i64,
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -747,6 +797,13 @@ impl StorageScope {
 		match self {
 			Self::Branch(branch_id) => keys::branch_delta_chunk_prefix(branch_id, txid),
 			Self::Legacy => keys::delta_chunk_prefix(actor_id, txid),
+		}
+	}
+
+	fn commit_prefix(self, actor_id: &str) -> Vec<u8> {
+		match self {
+			Self::Branch(branch_id) => keys::branch_commit_prefix(branch_id),
+			Self::Legacy => keys::commit_prefix(actor_id),
 		}
 	}
 

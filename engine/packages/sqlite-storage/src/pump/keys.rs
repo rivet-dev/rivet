@@ -355,15 +355,23 @@ pub fn branch_manifest_last_access_bucket_key(branch_id: ActorBranchId) -> Vec<u
 }
 
 pub fn branch_commit_key(branch_id: ActorBranchId, txid: u64) -> Vec<u8> {
-	let mut key = with_suffix(actor_branch_base(branch_id), COMMITS_PATH);
+	let mut key = branch_commit_prefix(branch_id);
 	key.extend_from_slice(&txid.to_be_bytes());
 	key
 }
 
+pub fn branch_commit_prefix(branch_id: ActorBranchId) -> Vec<u8> {
+	with_suffix(actor_branch_base(branch_id), COMMITS_PATH)
+}
+
 pub fn branch_vtx_key(branch_id: ActorBranchId, versionstamp: [u8; 16]) -> Vec<u8> {
-	let mut key = with_suffix(actor_branch_base(branch_id), VTX_PATH);
+	let mut key = branch_vtx_prefix(branch_id);
 	key.extend_from_slice(&versionstamp);
 	key
+}
+
+pub fn branch_vtx_prefix(branch_id: ActorBranchId) -> Vec<u8> {
+	with_suffix(actor_branch_base(branch_id), VTX_PATH)
 }
 
 pub fn branch_pidx_key(branch_id: ActorBranchId, pgno: u32) -> Vec<u8> {
@@ -535,20 +543,30 @@ pub fn meta_compactor_lease_key(actor_id: &str) -> Vec<u8> {
 }
 
 pub fn commit_key(actor_id: &str, txid: u64) -> Vec<u8> {
-	let prefix = actor_prefix(actor_id);
-	let mut key = Vec::with_capacity(prefix.len() + COMMITS_PATH.len() + std::mem::size_of::<u64>());
-	key.extend_from_slice(&prefix);
-	key.extend_from_slice(COMMITS_PATH);
+	let mut key = commit_prefix(actor_id);
 	key.extend_from_slice(&txid.to_be_bytes());
 	key
 }
 
-pub fn vtx_key(actor_id: &str, versionstamp: [u8; 16]) -> Vec<u8> {
+pub fn commit_prefix(actor_id: &str) -> Vec<u8> {
 	let prefix = actor_prefix(actor_id);
-	let mut key = Vec::with_capacity(prefix.len() + VTX_PATH.len() + versionstamp.len());
+	let mut key = Vec::with_capacity(prefix.len() + COMMITS_PATH.len());
+	key.extend_from_slice(&prefix);
+	key.extend_from_slice(COMMITS_PATH);
+	key
+}
+
+pub fn vtx_key(actor_id: &str, versionstamp: [u8; 16]) -> Vec<u8> {
+	let mut key = vtx_prefix(actor_id);
+	key.extend_from_slice(&versionstamp);
+	key
+}
+
+pub fn vtx_prefix(actor_id: &str) -> Vec<u8> {
+	let prefix = actor_prefix(actor_id);
+	let mut key = Vec::with_capacity(prefix.len() + VTX_PATH.len());
 	key.extend_from_slice(&prefix);
 	key.extend_from_slice(VTX_PATH);
-	key.extend_from_slice(&versionstamp);
 	key
 }
 
