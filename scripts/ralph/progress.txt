@@ -23,6 +23,7 @@
 - Pinned bookmark deletion should clear both bookmark keys, decrement namespace `pin_count`, recompute branch `bk_pin` from remaining actor pinned-bookmark records, and publish `SqliteColdCompactPayload::DeletePinnedBookmark`.
 - Restore-to-bookmark captures the undo commit before rollback, performs the APTR rollback, then writes the undo pinned bookmark so rollback durability does not depend on cold-tier pin work.
 - ActorDb's flattened ancestry cache stores branch ids plus parent versionstamp caps; read txs still resolve cap versionstamps to txids before PIDX/SHARD lookup.
+- Do not add APTR/NSPTR `last_swapped_at_ms` cache validation; the v4 spec makes branches immutable and treats the US-026 invalidation contract as obsolete.
 
 # Ralph Progress Log
 Started: Wed Apr 29 03:29:23 PM PDT 2026
@@ -482,4 +483,14 @@ Started: Wed Apr 29 03:29:23 PM PDT 2026
   - `ActorDb.ancestors` is a perf cache of immutable branch ids and parent versionstamp caps; it must not store txid lookups because hot retention can change VTX availability.
   - Fresh forks still read `/META/head_at_fork`; the ancestry cache only avoids rereading branch records.
   - The current code still supports pointer-era rollback, so the cache is replaced when APTR resolves to a different branch even though the v4 model removes that invalidation path.
+---
+## 2026-04-29 20:02 PDT - US-026
+- Closed US-026 as obsolete under the v4 rollback-removal spec instead of adding APTR/NSPTR `last_swapped_at_ms` validation that the PRD notes explicitly reject.
+- Left commit/get_pages behavior unchanged; the current ancestry cache remains branch-id based and is not guarded by pointer timestamp reads.
+- Files changed:
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - The v4 spec removes the storage-layer cache invalidation contract; do not read APTR/NSPTR `last_swapped_at_ms` in commit or get_pages for US-026.
+  - US-067 is marked complete in the PRD even though pointer-era code remains in the current tree, so story notes must be checked before implementing older acceptance criteria.
 ---

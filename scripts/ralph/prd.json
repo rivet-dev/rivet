@@ -474,7 +474,7 @@
         "Typecheck passes"
       ],
       "priority": 26,
-      "passes": false,
+      "passes": true,
       "notes": "Obsolete after v4 rollback removal (US-067). Cache invalidation contract on last_swapped_at_ms is gone — branches are immutable, the database_id IS the branch id, and pegboard exclusivity guarantees no other writer can hijack the database's branch underneath the conn. No parallel APTR/NSPTR reads on commit/get_pages."
     },
     {
