@@ -60,6 +60,23 @@
 # Ralph Progress Log
 Started: Wed Apr 29 03:29:23 PM PDT 2026
 ---
+## 2026-04-29 23:34 PDT - US-063
+- Created the required `docs-internal/engine/sqlite/` folder with five internal docs covering storage structure, components, VFS interaction, design constraints, and comparisons to prior systems.
+- Kept the docs aligned to the current v4 model: immutable namespace/database branch ids, NSCAT catalog inheritance, versioned SHARDs, split manifest keys, cold Phase A/B/C, and global eviction.
+- Verified with `cargo check -p sqlite-storage`.
+- Files changed:
+  - `docs-internal/engine/sqlite/storage-structure.md`
+  - `docs-internal/engine/sqlite/components.md`
+  - `docs-internal/engine/sqlite/vfs-brief.md`
+  - `docs-internal/engine/sqlite/constraints-and-design-decisions.md`
+  - `docs-internal/engine/sqlite/comparison-to-other-systems.md`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - The new sqlite docs should describe the v4 immutable id model: `NamespaceId` and `DatabaseId` are branch ids, with no APTR/NSPTR pointer layer.
+  - US-064 owns the AGENTS/CLAUDE reference wiring for these docs, so US-063 should stay scoped to creating the five doc files.
+  - `cargo check -p sqlite-storage` is sufficient typecheck coverage for docs-only sqlite-storage story validation.
+---
 ## 2026-04-29 23:12 PDT - US-060
 - Added eviction compactor integration coverage for 1ms-cadence access-touch throttling across a full `ACCESS_TOUCH_THROTTLE_MS` bucket.
 - Exposed a debug-assertions-only `actor_db` test hook for the shared access-touch helper and tightened malformed access-bucket decode context.
