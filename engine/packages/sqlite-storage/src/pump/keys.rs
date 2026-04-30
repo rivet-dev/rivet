@@ -480,6 +480,36 @@ pub fn ctr_eviction_index_key(last_access_bucket: i64, branch_id: ActorBranchId)
 	key
 }
 
+pub fn ctr_eviction_index_prefix() -> Vec<u8> {
+	with_suffix(partition_prefix(CTR_PARTITION), CTR_EVICTION_INDEX_PATH)
+}
+
+pub fn ctr_eviction_index_range() -> (Vec<u8>, Vec<u8>) {
+	universaldb::tuple::Subspace::from_bytes(ctr_eviction_index_prefix()).range()
+}
+
+pub fn decode_ctr_eviction_index_key(key: &[u8]) -> Result<(i64, ActorBranchId)> {
+	let prefix = ctr_eviction_index_prefix();
+	let suffix = key
+		.strip_prefix(prefix.as_slice())
+		.context("eviction index key did not start with expected prefix")?;
+	let expected_len = std::mem::size_of::<i64>() + 1 + std::mem::size_of::<uuid::Uuid>();
+	ensure!(
+		suffix.len() == expected_len,
+		"eviction index key suffix had {} bytes, expected {}",
+		suffix.len(),
+		expected_len
+	);
+	let bucket_bytes: [u8; std::mem::size_of::<i64>()] = suffix[..8]
+		.try_into()
+		.context("decode eviction index bucket")?;
+	ensure!(suffix[8] == b'/', "eviction index key missing branch separator");
+	let branch_id =
+		uuid::Uuid::from_slice(&suffix[9..]).context("decode eviction index branch id")?;
+
+	Ok((i64::from_be_bytes(bucket_bytes), ActorBranchId::from_uuid(branch_id)))
+}
+
 pub fn bookmark_key(actor_id: &str, bookmark: &str) -> Vec<u8> {
 	let mut key = with_suffix(partition_prefix(BOOKMARK_PARTITION), BOOKMARK_PATH);
 	append_actor_id(&mut key, actor_id);

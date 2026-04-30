@@ -52,6 +52,18 @@ pub fn config(_rivet_config: rivet_config::Config) -> Result<RunConfigData> {
 			true,
 		),
 		Service::new(
+			"sqlite_eviction_compactor",
+			ServiceKind::Standalone,
+			|config, pools| {
+				Box::pin(sqlite_storage::compactor::eviction::start(
+					config,
+					pools,
+					sqlite_storage::compactor::eviction::EvictionCompactorConfig::default(),
+				))
+			},
+			true,
+		),
+		Service::new(
 			"bootstrap",
 			ServiceKind::Oneshot,
 			|config, pools| Box::pin(rivet_bootstrap::start(config, pools)),

@@ -40,6 +40,8 @@
 - Cold follow-up sweeps compute the branch GC pin from refcount/root_versionstamp, desc_pin, and bk_pin, then rewrite manifest metadata before deleting cold objects.
 - Cold sweeps treat zero layer versionstamps as unknown and not deletable; only concrete versionstamps below the computed GC pin are reclaimed.
 - ActorDb cold-tier reads use `new_with_cold_tier` plus a bounded per-connection manifest cache; the default constructor keeps no read cold tier for compatibility.
+- Eviction compactor service code lives under `sqlite_storage::compactor::eviction`; use the global `CMPC/lease_global/{kind=eviction}` lease and scan `CTR/eviction_index` by oldest access bucket with an explicit batch cap.
+- For prefix range scans in `sqlite-storage`, build `RangeOption` from `universaldb::tuple::Subspace::from_bytes(prefix)` so RocksDB/FDB drivers see the same prefix bounds.
 
 # Ralph Progress Log
 Started: Wed Apr 29 03:29:23 PM PDT 2026
@@ -764,4 +766,23 @@ Started: Wed Apr 29 03:29:23 PM PDT 2026
   - Keep S3/filesystem GETs outside the UDB read transaction; the read tx should only decide hot misses and cold candidates.
   - Cold read tests can seed `ColdManifestIndex` + `ColdManifestChunk` directly in a `FilesystemColdTier`, then clear branch hot DELTA/PIDX keys to simulate eviction.
   - Default `ActorDb::new` intentionally has no cold-tier read backend so legacy and focused hot-path tests keep their old zero-fill behavior on complete hot misses.
+---
+## 2026-04-29 22:01 PDT - US-043
+- Implemented the eviction compactor scaffold: a standalone sweep loop, global eviction CMPC lease, bounded `CTR/eviction_index` range scan, and `sqlite_eviction_compactor` service registration.
+- Added key helpers for eviction-index prefix/range/decode and focused tests for lease skip, oldest-bucket scan order, and batch limiting.
+- Verified with `cargo test -p sqlite-storage --test compactor_eviction`, `cargo test -p sqlite-storage --test pump_keys`, `cargo check -p sqlite-storage`, and `cargo test -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/engine/src/run_config.rs`
+  - `engine/packages/sqlite-storage/AGENTS.md`
+  - `engine/packages/sqlite-storage/src/compactor/eviction/mod.rs`
+  - `engine/packages/sqlite-storage/src/compactor/mod.rs`
+  - `engine/packages/sqlite-storage/src/pump/keys.rs`
+  - `engine/packages/sqlite-storage/tests/compactor_eviction.rs`
+  - `engine/packages/sqlite-storage/tests/pump_keys.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Eviction coordinator work is global, not per-branch: take `CMPC/lease_global/{kind=eviction}` before scanning candidates.
+  - `CTR/eviction_index` scans should use `Subspace::from_bytes(prefix)` to get true prefix bounds; `end_of_key_range` is for single-key conflict ranges.
+  - US-043 intentionally does not clear hot data. Predicate gates and OCC-fenced deletion are left to US-044 through US-046.
 ---

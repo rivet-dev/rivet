@@ -10,13 +10,14 @@ use sqlite_storage::pump::keys::{
 		branch_meta_head_at_fork_key, branch_meta_head_key, branch_meta_quota_key, branch_pidx_key,
 		branch_prefix, branch_range, branch_shard_key, branch_shard_version_prefix, branch_vtx_key,
 		branches_bk_pin_key, branches_desc_pin_key, branches_list_key, branches_refcount_key,
-		commit_key, compactor_enqueue_key, compactor_global_lease_key, ctr_eviction_index_key,
+		commit_key, compactor_enqueue_key, compactor_global_lease_key,
+		ctr_eviction_index_key, ctr_eviction_index_range, decode_ctr_eviction_index_key,
 		ctr_quota_global_key, delta_chunk_key, delta_chunk_prefix, delta_prefix, meta_compact_key,
-		meta_compactor_lease_key, meta_head_key, meta_quota_key, namespace_branches_actor_tombstone_key,
-		namespace_branches_bk_pin_key, namespace_branches_desc_pin_key, namespace_branches_list_key,
-		namespace_branches_refcount_key, namespace_pointer_cur_key, namespace_pointer_history_key,
-		pidx_delta_key, pidx_delta_prefix, shard_key, shard_prefix, shard_version_key,
-		shard_version_prefix, vtx_key,
+		meta_compactor_lease_key, meta_head_key, meta_quota_key,
+		namespace_branches_actor_tombstone_key, namespace_branches_bk_pin_key,
+		namespace_branches_desc_pin_key, namespace_branches_list_key, namespace_branches_refcount_key,
+		namespace_pointer_cur_key, namespace_pointer_history_key, pidx_delta_key, pidx_delta_prefix,
+		shard_key, shard_prefix, shard_version_key, shard_version_prefix, vtx_key,
 	};
 use sqlite_storage::pump::types::{ActorBranchId, NamespaceBranchId, NamespaceId};
 use uuid::Uuid;
@@ -283,6 +284,10 @@ fn global_bookmark_and_compactor_keys_match_expected_suffixes() {
 	let eviction = ctr_eviction_index_key(42, branch);
 	assert!(eviction.starts_with(&[SQLITE_SUBSPACE_PREFIX, CTR_PARTITION]));
 	assert!(eviction.ends_with(actor_branch_id().as_uuid().as_bytes()));
+	assert_eq!(decode_ctr_eviction_index_key(&eviction).unwrap(), (42, branch));
+	let (eviction_start, eviction_end) = ctr_eviction_index_range();
+	assert!(eviction >= eviction_start);
+	assert!(eviction < eviction_end);
 
 	assert_eq!(
 		bookmark_pinned_key(TEST_ACTOR, TEST_BOOKMARK),

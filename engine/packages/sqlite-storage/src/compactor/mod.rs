@@ -1,5 +1,6 @@
 pub mod cold;
 pub mod compact;
+pub mod eviction;
 pub mod lease;
 pub mod metrics;
 pub mod publish;
