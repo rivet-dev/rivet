@@ -31,6 +31,7 @@
 - Hot compactor branch passes update `BR/{branch_id}/META/compact` and `BR/{branch_id}/META/manifest/last_hot_pass_txid` together; a nil namespace `ActorDb` exercises branch-scoped compaction through public `compact_default_batch`.
 - Hot retention sweeps clear `COMMITS` and matching `VTX` rows together inside the hot compactor write tx, with quota accounting adjusted for both keys.
 - ActorDb access-touch writes `last_access_ts_ms`, `last_access_bucket`, and `CTR/eviction_index` through the shared `touch_access_if_bucket_advanced` helper; per-connection cache suppresses same-bucket writes.
+- Cold-tier implementations live under `sqlite_storage::cold_tier`; use relative object keys, `FilesystemColdTier` for local tests, and `FaultyColdTier` for injected latency/failures.
 
 # Ralph Progress Log
 Started: Wed Apr 29 03:29:23 PM PDT 2026
@@ -611,4 +612,22 @@ Started: Wed Apr 29 03:29:23 PM PDT 2026
   - Access-touch should stay branch-scoped and should not affect branch quota accounting.
   - Use a serializable read of `last_access_bucket` before re-keying the global eviction index so concurrent touches do not leave stale bucket entries behind.
   - Read-side access-touch uses wall-clock time inside `get_pages`; commit-side touch uses the commit's caller-provided `now_ms`.
+---
+## 2026-04-29 21:01 PDT - US-035
+- Added the `ColdTier` async trait with `put_object`, `get_object`, `delete_objects`, and `list_prefix` operations.
+- Implemented filesystem, S3, and fault-injection cold-tier backends; the S3 backend uses `aws-sdk-s3` with env/default credential loading and optional endpoint override.
+- Added focused cold-tier tests and verified the full `sqlite-storage` test suite.
+- Files changed:
+  - `Cargo.lock`
+  - `engine/packages/sqlite-storage/CLAUDE.md`
+  - `engine/packages/sqlite-storage/Cargo.toml`
+  - `engine/packages/sqlite-storage/src/cold_tier/mod.rs`
+  - `engine/packages/sqlite-storage/src/lib.rs`
+  - `engine/packages/sqlite-storage/tests/cold_tier.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Cold-tier object keys are S3-style relative keys; reject empty keys, absolute paths, and parent-directory traversal.
+  - `FilesystemColdTier` is the local stand-in for S3 tests, while `FaultyColdTier` wraps any `ColdTier` implementation to inject latency or failures.
+  - Adding the AWS SDK stack is dependency-heavy; if disk is full, clearing stale `target/debug/incremental` artifacts can unblock checks without touching source.
 ---

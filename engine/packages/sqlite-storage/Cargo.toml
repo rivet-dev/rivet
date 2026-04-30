@@ -10,6 +10,9 @@ legacy-inline-tests = []
 
 [dependencies]
 anyhow.workspace = true
+async-trait.workspace = true
+aws-config = "1"
+aws-sdk-s3 = "1"
 futures-util.workspace = true
 gas.workspace = true
 lazy_static.workspace = true

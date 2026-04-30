@@ -65,6 +65,7 @@ These come from `r2-prior-art/.agent/research/sqlite/requirements.md` and supers
 - **HWM `pending/{uuid}.marker` objects gate orphan cleanup.** A pending marker older than `STALE_MARKER_AGE_MS` indicates a crashed prior pass; the next pass deletes the marker and its associated layer file before continuing.
 - **Cold compactor pass runs as Phase A (FDB read tx) → Phase B (S3-only, no FDB tx) → Phase C (FDB write tx with regular-read OCC fence on `cold_drained_txid`).** Phase A/C tx-age budget is independent of S3 latency.
 - **Schema version on every persisted S3 object** (`schema_version: u32` on `ColdManifest`, `BookmarkIndex`, `BranchColdState`). Cold compactor reads old version + writes new version on every pass; reader code retains old-version paths for at least one full retention window past rollout.
+- **ColdTier object keys are relative S3-style keys.** Reject empty object keys, absolute paths, and `..`; use `FilesystemColdTier` for local tests and `FaultyColdTier` for injected latency or failures.
 
 ## Bookmarks
 
