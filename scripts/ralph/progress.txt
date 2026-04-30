@@ -3,6 +3,7 @@
 - Use `BookmarkStr` instead of raw `String` for bookmark-bearing pump records so the 33-character ASCII wire format is enforced at construction and decode.
 - Until root branch allocation is wired, legacy `DBHead` constructors use `ActorBranchId::nil()` and `post_apply_checksum: 0` as a compatibility bridge.
 - PITR key builders use top-level `[0x02][partition]` prefixes; legacy actor-scoped key helpers remain only as compatibility until the hot path migrates to branch IDs.
+- PITR tunable constants live in `engine/packages/sqlite-storage/src/pump/constants.rs` and are re-exported at the `sqlite_storage` crate root.
 
 # Ralph Progress Log
 Started: Wed Apr 29 03:29:23 PM PDT 2026
@@ -70,4 +71,21 @@ Started: Wed Apr 29 03:29:23 PM PDT 2026
   - New PITR builders are branch-ID based and live under top-level partition bytes; existing actor-ID helpers should not be removed until the commit/read path is migrated.
   - `CompactorQueueKind` encodes cold as `0x00` and eviction as `0x01` for CMPC enqueue and lease keys.
   - `cargo check -p sqlite-storage` still emits the unrelated runner-protocol SDK-generation warning when `node_modules/@bare-ts/tools` is missing.
+---
+## 2026-04-29 17:06 PDT - US-005
+- Added a dedicated PITR constants module with fork-depth, namespace-depth, pin-count, shard-version, retention-window, access-touch, stale-marker, and burst-mode defaults.
+- Re-exported the constants from the `sqlite_storage` crate root and added focused coverage for the defaults.
+- Verified with `cargo test -p sqlite-storage --test pump_constants` and `cargo check -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/CLAUDE.md` (via `AGENTS.md` symlink)
+  - `engine/packages/sqlite-storage/src/lib.rs`
+  - `engine/packages/sqlite-storage/src/pump/constants.rs`
+  - `engine/packages/sqlite-storage/src/pump/mod.rs`
+  - `engine/packages/sqlite-storage/tests/pump_constants.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Shared PITR limits and windows should come from `pump/constants.rs`; avoid duplicating literals in operation, compactor, and test code.
+  - `STALE_MARKER_AGE_MS` uses the earlier PITR spec's documented 10-minute HWM cleanup default.
+  - `FROZEN_BRANCH_RETENTION_MS` follows the 30-day PITR retention window because the rough spec leaves it namespace-configurable but does not assign a narrower default.
 ---
