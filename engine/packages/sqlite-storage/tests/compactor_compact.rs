@@ -9,9 +9,11 @@ use sqlite_storage::{
 		compact::{test_hooks, validate_quota},
 		compact_default_batch, fold_shard, worker,
 	},
+	constants::MAX_SHARD_VERSIONS_PER_SHARD,
+	error::SqliteStorageError,
 	keys::{
-		PAGE_SIZE, branch_manifest_last_hot_pass_txid_key, delta_chunk_key, meta_compact_key,
-		meta_head_key, pidx_delta_key, shard_key, shard_version_key,
+		PAGE_SIZE, branch_manifest_last_hot_pass_txid_key, branches_bk_pin_key, delta_chunk_key,
+		meta_compact_key, meta_head_key, pidx_delta_key, shard_key, shard_version_key, vtx_key,
 	},
 	ltx::{LtxHeader, decode_ltx_v3, encode_ltx_v3},
 	quota,
@@ -223,6 +225,23 @@ async fn seed_quota(db: &universaldb::Database, actor_id: &str, storage_used: i6
 	.await
 }
 
+async fn seed_shard_versions(
+	db: &universaldb::Database,
+	shard_id: u32,
+	txids: std::ops::RangeInclusive<u64>,
+) -> Result<()> {
+	let writes = txids
+		.map(|txid| {
+			Ok((
+				shard_version_key(TEST_ACTOR, shard_id, txid),
+				encoded_blob(txid, &[(3, txid as u8)])?,
+			))
+		})
+		.collect::<Result<Vec<_>>>()?;
+
+	seed(db, writes).await
+}
+
 fn tracked_entry_size(key: &[u8], value: &[u8]) -> i64 {
 	i64::try_from(key.len() + value.len()).expect("tracked entry should fit in i64")
 }
@@ -427,6 +446,104 @@ async fn compact_default_batch_basic_fold() -> Result<()> {
 			.is_none()
 	);
 	assert_eq!(read_compact_txid(&db).await?, 2);
+
+	Ok(())
+}
+
+#[tokio::test]
+async fn compact_force_evicts_oldest_unpinned_shard_version_at_cap() -> Result<()> {
+	let _compaction_test_lock = COMPACTION_TEST_LOCK.lock().await;
+	let db = test_db().await?;
+	let cap = MAX_SHARD_VERSIONS_PER_SHARD as u64;
+	seed_compaction_case(
+		&db,
+		cap + 1,
+		128,
+		cap,
+		&[(cap + 1, vec![(3, 0xee)])],
+		&[(3, cap + 1)],
+	)
+	.await?;
+	seed_shard_versions(&db, 0, 1..=cap).await?;
+
+	let outcome = compact_default_batch(
+		Arc::new(db.clone()),
+		TEST_ACTOR.to_string(),
+		10,
+		CancellationToken::new(),
+	)
+	.await?;
+
+	assert_eq!(outcome.materialized_txid, cap + 1);
+	assert!(
+		read_value(&db, shard_version_key(TEST_ACTOR, 0, 1))
+			.await?
+			.is_none()
+	);
+	assert!(
+		read_value(&db, shard_version_key(TEST_ACTOR, 0, cap))
+			.await?
+			.is_some()
+	);
+	assert_pages(
+		&read_shard(&db, 0, cap + 1).await?,
+		&[(3, 0xee)],
+	);
+
+	Ok(())
+}
+
+#[tokio::test]
+async fn compact_errors_when_all_shard_versions_are_pinned_at_cap() -> Result<()> {
+	let _compaction_test_lock = COMPACTION_TEST_LOCK.lock().await;
+	let db = test_db().await?;
+	let cap = MAX_SHARD_VERSIONS_PER_SHARD as u64;
+	let pin_versionstamp = [0x11; 16];
+	seed_compaction_case(
+		&db,
+		cap + 1,
+		128,
+		cap,
+		&[(cap + 1, vec![(3, 0xee)])],
+		&[(3, cap + 1)],
+	)
+	.await?;
+	seed_shard_versions(&db, 0, 1..=cap).await?;
+	seed(
+		&db,
+		vec![
+			(
+				branches_bk_pin_key(ActorBranchId::nil()),
+				pin_versionstamp.to_vec(),
+			),
+			(vtx_key(TEST_ACTOR, pin_versionstamp), 1_u64.to_be_bytes().to_vec()),
+		],
+	)
+	.await?;
+
+	let err = compact_default_batch(
+		Arc::new(db.clone()),
+		TEST_ACTOR.to_string(),
+		10,
+		CancellationToken::new(),
+	)
+	.await
+	.expect_err("compaction should fail when every shard version is pinned");
+	assert!(err.chain().any(|cause| {
+		cause
+			.downcast_ref::<SqliteStorageError>()
+			.is_some_and(|err| matches!(err, SqliteStorageError::ShardVersionCapExhausted))
+	}));
+	assert!(
+		read_value(&db, shard_version_key(TEST_ACTOR, 0, 1))
+			.await?
+			.is_some()
+	);
+	assert!(
+		read_value(&db, shard_version_key(TEST_ACTOR, 0, cap + 1))
+			.await?
+			.is_none()
+	);
 
 	Ok(())
 }

@@ -27,6 +27,7 @@
 - Do not add APTR/NSPTR `last_swapped_at_ms` cache validation; the v4 spec makes branches immutable and treats the US-026 invalidation contract as obsolete.
 - Fresh fork actor branches keep `/META/head_at_fork` until their first local commit; commits treat it as the previous `DBHead`, then write `/META/head` and clear the snapshot in the same tx.
 - Namespace catalog (`NSCAT`) markers store database branch ids with 16-byte versionstamped values; list walks namespace parents, caps inherited entries by `parent_versionstamp`, and applies database tombstones before inherited entries.
+- Hot compaction enforces `MAX_SHARD_VERSIONS_PER_SHARD` inside the write tx before folding; missing VTX for a non-empty pin is treated conservatively as pinned.
 
 # Ralph Progress Log
 Started: Wed Apr 29 03:29:23 PM PDT 2026
@@ -543,4 +544,20 @@ Started: Wed Apr 29 03:29:23 PM PDT 2026
   - Current code still uses pointer-era `ActorBranchId`, so `list_databases` returns database branch ids while the later database rename remains pending.
   - NSCAT markers should be written with `SetVersionstampedValue`; that stored 16-byte value is the create-time cap checked by namespace parent walks.
   - Database tombstones are scanned before NSCAT entries for each namespace branch so a tombstone masks both local and inherited catalog visibility.
+---
+## 2026-04-29 20:31 PDT - US-031
+- Implemented hot-compactor shard-version cap enforcement before each shard fold: count existing versions, record `sqlite_shard_versions_per_shard`, evict the oldest unpinned version at the cap, and return `ShardVersionCapExhausted` when every slot is pinned.
+- Added compactor coverage for inline force-eviction and all-pinned cap exhaustion.
+- Verified with `cargo test -p sqlite-storage --test compactor_compact compact_ -- --nocapture`, `cargo check -p sqlite-storage`, and `cargo test -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/CLAUDE.md` (via `AGENTS.md` symlink)
+  - `engine/packages/sqlite-storage/src/compactor/compact.rs`
+  - `engine/packages/sqlite-storage/src/compactor/metrics.rs`
+  - `engine/packages/sqlite-storage/tests/compactor_compact.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Shard-version cap enforcement belongs in the hot compactor write transaction so the eviction decision and new SHARD write share the same OCC surface.
+  - Pinned shard-version checks use branch `desc_pin`/`bk_pin` converted through VTX; if a non-empty pin no longer has a VTX row, treat it as pinned rather than clearing history.
+  - Legacy actor-scoped compaction still uses `DBHead.branch_id` for branch pin keys while branch-scoped storage continues through `BR/{branch_id}` helpers.
 ---

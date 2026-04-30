@@ -62,6 +62,13 @@ lazy_static::lazy_static! {
 		*REGISTRY
 	).unwrap();
 
+	pub static ref SQLITE_SHARD_VERSIONS_PER_SHARD: Histogram = register_histogram_with_registry!(
+		"sqlite_shard_versions_per_shard",
+		"Observed sqlite SHARD versions per shard before a hot compaction write.",
+		BUCKETS.to_vec(),
+		*REGISTRY
+	).unwrap();
+
 	pub static ref SQLITE_COMPACTOR_UPS_PUBLISH_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
 		"sqlite_compactor_ups_publish_total",
 		"Total sqlite compactor UPS publish attempts.",

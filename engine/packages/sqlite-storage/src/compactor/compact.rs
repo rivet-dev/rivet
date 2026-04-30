@@ -16,6 +16,8 @@ use universaldb::{
 
 use crate::pump::{
 	branch,
+	constants::MAX_SHARD_VERSIONS_PER_SHARD,
+	error::SqliteStorageError,
 	keys::{self, SHARD_SIZE},
 	ltx::decode_ltx_v3,
 	quota,
@@ -29,6 +31,8 @@ use crate::pump::{
 use super::{fold_branch_shard, fold_shard, metrics};
 
 const PIDX_TXID_BYTES: usize = std::mem::size_of::<u64>();
+const VERSIONSTAMP_ZERO: [u8; 16] = [0; 16];
+const VERSIONSTAMP_INFINITY: [u8; 16] = [0xff; 16];
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct CompactionOutcome {
@@ -247,6 +251,17 @@ async fn write_batch(
 					continue;
 				}
 
+				let evicted_bytes = enforce_shard_version_cap(
+					&tx,
+					plan.scope,
+					&actor_id,
+					head.branch_id,
+					*shard_id,
+					plan.materialized_txid,
+				)
+				.await?;
+				bytes_freed += evicted_bytes;
+
 				let bytes_added = match plan.scope {
 					StorageScope::Branch(branch_id) => {
 						fold_branch_shard(&tx, branch_id, *shard_id, plan.materialized_txid, page_updates)
@@ -392,6 +407,113 @@ pub(crate) async fn validate_quota_with_node_id(
 	Ok(())
 }
 
+async fn enforce_shard_version_cap(
+	tx: &universaldb::Transaction,
+	scope: StorageScope,
+	actor_id: &str,
+	legacy_branch_id: ActorBranchId,
+	shard_id: u32,
+	new_as_of_txid: u64,
+) -> Result<i64> {
+	let versions = load_shard_versions(tx, scope, actor_id, shard_id).await?;
+	metrics::SQLITE_SHARD_VERSIONS_PER_SHARD.observe(versions.len() as f64);
+	if versions.len() < MAX_SHARD_VERSIONS_PER_SHARD as usize
+		|| versions.iter().any(|version| version.as_of_txid == new_as_of_txid)
+	{
+		return Ok(0);
+	}
+
+	let branch_id = match scope {
+		StorageScope::Branch(branch_id) => branch_id,
+		StorageScope::Legacy => legacy_branch_id,
+	};
+	let pins = load_branch_pin_txids(tx, scope, actor_id, branch_id).await?;
+	let Some(oldest_unpinned) = versions
+		.iter()
+		.find(|version| !is_shard_version_pinned(version.as_of_txid, &pins))
+	else {
+		return Err(SqliteStorageError::ShardVersionCapExhausted.into());
+	};
+
+	tx.informal().clear(&oldest_unpinned.key);
+	Ok(oldest_unpinned.tracked_size)
+}
+
+async fn load_shard_versions(
+	tx: &universaldb::Transaction,
+	scope: StorageScope,
+	actor_id: &str,
+	shard_id: u32,
+) -> Result<Vec<ShardVersion>> {
+	let prefix = scope.shard_version_prefix(actor_id, shard_id);
+	tx_scan_prefix_values_at(tx, &prefix, Serializable)
+		.await?
+		.into_iter()
+		.map(|(key, value)| {
+			Ok(ShardVersion {
+				as_of_txid: scope.decode_shard_as_of_txid(actor_id, shard_id, &key)?,
+				tracked_size: tracked_entry_size(&key, &value)?,
+				key,
+			})
+		})
+		.collect()
+}
+
+async fn load_branch_pin_txids(
+	tx: &universaldb::Transaction,
+	scope: StorageScope,
+	actor_id: &str,
+	branch_id: ActorBranchId,
+) -> Result<Vec<u64>> {
+	let mut pins = Vec::new();
+	for key in [
+		keys::branches_desc_pin_key(branch_id),
+		keys::branches_bk_pin_key(branch_id),
+	] {
+		if let Some(txid) = load_pin_txid(tx, scope, actor_id, &key).await? {
+			pins.push(txid);
+		}
+	}
+
+	Ok(pins)
+}
+
+async fn load_pin_txid(
+	tx: &universaldb::Transaction,
+	scope: StorageScope,
+	actor_id: &str,
+	pin_key: &[u8],
+) -> Result<Option<u64>> {
+	let Some(bytes) = tx.informal().get(pin_key, Serializable).await? else {
+		return Ok(None);
+	};
+	let pin: [u8; 16] = Vec::<u8>::from(bytes)
+		.as_slice()
+		.try_into()
+		.context("sqlite branch pin should be exactly 16 bytes")?;
+	if pin == VERSIONSTAMP_ZERO || pin == VERSIONSTAMP_INFINITY {
+		return Ok(None);
+	}
+
+	let Some(txid_bytes) = tx
+		.informal()
+		.get(&scope.vtx_key(actor_id, pin), Serializable)
+		.await?
+	else {
+		return Ok(Some(0));
+	};
+	let txid_bytes: [u8; std::mem::size_of::<u64>()] = Vec::<u8>::from(txid_bytes)
+		.as_slice()
+		.try_into()
+		.context("sqlite VTX entry should be exactly 8 bytes")?;
+
+	Ok(Some(u64::from_be_bytes(txid_bytes)))
+}
+
+fn is_shard_version_pinned(as_of_txid: u64, pin_txids: &[u64]) -> bool {
+	pin_txids.iter().any(|pin_txid| *pin_txid <= as_of_txid)
+}
+
 async fn count_compare_and_clear_noops(
 	db: &universaldb::Database,
 	actor_id: String,
@@ -482,6 +604,14 @@ async fn tx_scan_prefix_values(
 	tx: &universaldb::Transaction,
 	prefix: &[u8],
 ) -> Result<Vec<(Vec<u8>, Vec<u8>)>> {
+	tx_scan_prefix_values_at(tx, prefix, Snapshot).await
+}
+
+async fn tx_scan_prefix_values_at(
+	tx: &universaldb::Transaction,
+	prefix: &[u8],
+	isolation_level: universaldb::utils::IsolationLevel,
+) -> Result<Vec<(Vec<u8>, Vec<u8>)>> {
 	let informal = tx.informal();
 	let prefix_subspace =
 		universaldb::Subspace::from(universaldb::tuple::Subspace::from_bytes(prefix.to_vec()));
@@ -490,7 +620,7 @@ async fn tx_scan_prefix_values(
 			mode: StreamingMode::WantAll,
 			..RangeOption::from(&prefix_subspace)
 		},
-		Snapshot,
+		isolation_level,
 	);
 	let mut rows = Vec::new();
 
@@ -640,6 +770,32 @@ impl StorageScope {
 			Self::Legacy => keys::decode_delta_chunk_idx(actor_id, txid, key),
 		}
 	}
+
+	fn shard_version_prefix(self, actor_id: &str, shard_id: u32) -> Vec<u8> {
+		match self {
+			Self::Branch(branch_id) => keys::branch_shard_version_prefix(branch_id, shard_id),
+			Self::Legacy => keys::shard_version_prefix(actor_id, shard_id),
+		}
+	}
+
+	fn vtx_key(self, actor_id: &str, versionstamp: [u8; 16]) -> Vec<u8> {
+		match self {
+			Self::Branch(branch_id) => keys::branch_vtx_key(branch_id, versionstamp),
+			Self::Legacy => keys::vtx_key(actor_id, versionstamp),
+		}
+	}
+
+	fn decode_shard_as_of_txid(self, actor_id: &str, shard_id: u32, key: &[u8]) -> Result<u64> {
+		let prefix = self.shard_version_prefix(actor_id, shard_id);
+		let suffix = key
+			.strip_prefix(prefix.as_slice())
+			.context("shard version key did not start with expected prefix")?;
+		let bytes: [u8; std::mem::size_of::<u64>()] = suffix
+			.try_into()
+			.map_err(|_| anyhow::anyhow!("shard version key suffix had invalid length"))?;
+
+		Ok(u64::from_be_bytes(bytes))
+	}
 }
 
 async fn resolve_storage_scope(
@@ -702,6 +858,13 @@ struct WriteResult {
 struct PidxDelete {
 	key: Vec<u8>,
 	expected_value: Vec<u8>,
+}
+
+#[derive(Debug, Clone)]
+struct ShardVersion {
+	key: Vec<u8>,
+	as_of_txid: u64,
+	tracked_size: i64,
 }
 
 #[cfg(debug_assertions)]
