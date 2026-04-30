@@ -17,6 +17,7 @@ use universaldb::{
 };
 
 use crate::pump::{
+	constants::{ACCESS_TOUCH_THROTTLE_MS, HOT_CACHE_WINDOW_MS, SHARD_RETENTION_MARGIN},
 	keys::{self, CompactorQueueKind},
 	types::ActorBranchId,
 };
@@ -24,6 +25,8 @@ use crate::pump::{
 use super::{CompactorLease, TakeOutcome, decode_lease, encode_lease};
 
 const EVICTION_COMPACTOR_NAME: &str = "sqlite_eviction_compactor";
+const VERSIONSTAMP_ZERO: [u8; 16] = [0; 16];
+const VERSIONSTAMP_INFINITY: [u8; 16] = [0xff; 16];
 
 #[derive(Clone, Debug)]
 pub struct EvictionCompactorConfig {
@@ -49,9 +52,18 @@ pub struct EvictionCandidate {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EvictableShardVersion {
+	pub branch_id: ActorBranchId,
+	pub shard_id: u32,
+	pub as_of_txid: u64,
+	pub last_hot_pass_txid_at_plan: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EvictionSweepOutcome {
 	pub lease_acquired: bool,
 	pub scanned_candidates: Vec<EvictionCandidate>,
+	pub evictable_shard_versions: Vec<EvictableShardVersion>,
 }
 
 #[tracing::instrument(skip_all)]
@@ -142,10 +154,11 @@ pub async fn sweep_once(
 		return Ok(EvictionSweepOutcome {
 			lease_acquired: false,
 			scanned_candidates: Vec::new(),
+			evictable_shard_versions: Vec::new(),
 		});
 	}
 
-	let result = scan_eviction_index(udb, eviction_config.batch_size, cancel_token).await;
+	let result = scan_eviction_index(udb, eviction_config.batch_size, now_ms, cancel_token).await;
 	let release_result = udb
 		.run(move |tx| async move { release_global_lease(&tx).await })
 		.await;
@@ -154,10 +167,11 @@ pub async fn sweep_once(
 		tracing::warn!(?err, "failed to release sqlite eviction compactor lease");
 	}
 
-	let scanned_candidates = result?;
+	let (scanned_candidates, evictable_shard_versions) = result?;
 	tracing::debug!(
 		node_id = %holder_id,
 		scanned_candidates = scanned_candidates.len(),
+		evictable_shard_versions = evictable_shard_versions.len(),
 		batch_size = eviction_config.batch_size,
 		"sqlite eviction compactor scanned eviction index"
 	);
@@ -165,6 +179,7 @@ pub async fn sweep_once(
 	Ok(EvictionSweepOutcome {
 		lease_acquired: true,
 		scanned_candidates,
+		evictable_shard_versions,
 	})
 }
 
@@ -202,10 +217,11 @@ async fn release_global_lease(tx: &universaldb::Transaction) -> Result<()> {
 async fn scan_eviction_index(
 	udb: &universaldb::Database,
 	batch_size: usize,
+	now_ms: i64,
 	cancel_token: CancellationToken,
-) -> Result<Vec<EvictionCandidate>> {
+) -> Result<(Vec<EvictionCandidate>, Vec<EvictableShardVersion>)> {
 	if batch_size == 0 {
-		return Ok(Vec::new());
+		return Ok((Vec::new(), Vec::new()));
 	}
 
 	udb.run(move |tx| {
@@ -228,20 +244,199 @@ async fn scan_eviction_index(
 				Snapshot,
 			);
 			let mut rows = Vec::new();
+			let mut evictable = Vec::new();
 
 			while let Some(entry) = stream.try_next().await? {
 				let (last_access_bucket, branch_id) =
 					keys::decode_ctr_eviction_index_key(entry.key())?;
+				evictable.extend(
+					plan_evictable_shard_versions(&tx, branch_id, last_access_bucket, now_ms)
+						.await?,
+				);
 				rows.push(EvictionCandidate {
 					last_access_bucket,
 					branch_id,
 				});
 			}
 
-			Ok(rows)
+			Ok((rows, evictable))
 		}
 	})
 	.await
+}
+
+async fn plan_evictable_shard_versions(
+	tx: &universaldb::Transaction,
+	branch_id: ActorBranchId,
+	last_access_bucket: i64,
+	now_ms: i64,
+) -> Result<Vec<EvictableShardVersion>> {
+	if !is_past_hot_cache_window(last_access_bucket, now_ms)? {
+		return Ok(Vec::new());
+	}
+
+	let cold_drained_txid = read_u64_be(
+		tx,
+		&keys::branch_manifest_cold_drained_txid_key(branch_id),
+		Serializable,
+	)
+	.await?
+	.unwrap_or(0);
+	let last_hot_pass_txid = read_u64_be(
+		tx,
+		&keys::branch_manifest_last_hot_pass_txid_key(branch_id),
+		Serializable,
+	)
+	.await?
+	.unwrap_or(0);
+	let desc_pin_txid = read_pin_txid(tx, branch_id, &keys::branches_desc_pin_key(branch_id)).await?;
+	let bk_pin_txid = read_pin_txid(tx, branch_id, &keys::branches_bk_pin_key(branch_id)).await?;
+	let shard_versions = load_branch_shard_versions(tx, branch_id).await?;
+
+	let mut evictable = Vec::new();
+	for (idx, version) in shard_versions.iter().enumerate() {
+		let newer_version_exists = shard_versions[idx + 1..]
+			.iter()
+			.any(|newer| newer.shard_id == version.shard_id);
+		if !newer_version_exists {
+			continue;
+		}
+		if cold_drained_txid < version.as_of_txid {
+			continue;
+		}
+		if last_hot_pass_txid.saturating_sub(SHARD_RETENTION_MARGIN) < version.as_of_txid {
+			continue;
+		}
+		if is_pinned(version.as_of_txid, desc_pin_txid) || is_pinned(version.as_of_txid, bk_pin_txid) {
+			continue;
+		}
+
+		evictable.push(EvictableShardVersion {
+			branch_id,
+			shard_id: version.shard_id,
+			as_of_txid: version.as_of_txid,
+			last_hot_pass_txid_at_plan: last_hot_pass_txid,
+		});
+	}
+
+	Ok(evictable)
+}
+
+fn is_past_hot_cache_window(last_access_bucket: i64, now_ms: i64) -> Result<bool> {
+	let last_access_ms = last_access_bucket
+		.checked_mul(ACCESS_TOUCH_THROTTLE_MS)
+		.context("sqlite eviction access bucket timestamp overflowed")?;
+	Ok(now_ms.saturating_sub(last_access_ms) >= HOT_CACHE_WINDOW_MS)
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct BranchShardVersion {
+	shard_id: u32,
+	as_of_txid: u64,
+}
+
+async fn load_branch_shard_versions(
+	tx: &universaldb::Transaction,
+	branch_id: ActorBranchId,
+) -> Result<Vec<BranchShardVersion>> {
+	let prefix = keys::branch_shard_prefix(branch_id);
+	let prefix_subspace =
+		universaldb::Subspace::from(universaldb::tuple::Subspace::from_bytes(prefix));
+	let informal = tx.informal();
+	let mut stream = informal.get_ranges_keyvalues(
+		RangeOption {
+			mode: StreamingMode::WantAll,
+			..RangeOption::from(&prefix_subspace)
+		},
+		Snapshot,
+	);
+	let mut versions = Vec::new();
+
+	while let Some(entry) = stream.try_next().await? {
+		if let Some(version) = decode_branch_shard_version_key(branch_id, entry.key())? {
+			versions.push(version);
+		}
+	}
+
+	Ok(versions)
+}
+
+fn decode_branch_shard_version_key(
+	branch_id: ActorBranchId,
+	key: &[u8],
+) -> Result<Option<BranchShardVersion>> {
+	let prefix = keys::branch_shard_prefix(branch_id);
+	let suffix = key
+		.strip_prefix(prefix.as_slice())
+		.context("branch shard key did not start with expected prefix")?;
+	if suffix.len() == std::mem::size_of::<u32>() {
+		return Ok(None);
+	}
+	if suffix.len() != std::mem::size_of::<u32>() + 1 + std::mem::size_of::<u64>()
+		|| suffix[std::mem::size_of::<u32>()] != b'/'
+	{
+		anyhow::bail!("branch shard version key suffix had invalid length");
+	}
+
+	let shard_id = u32::from_be_bytes(
+		suffix[..std::mem::size_of::<u32>()]
+			.try_into()
+			.context("decode branch shard id")?,
+	);
+	let as_of_txid = u64::from_be_bytes(
+		suffix[std::mem::size_of::<u32>() + 1..]
+			.try_into()
+			.context("decode branch shard txid")?,
+	);
+
+	Ok(Some(BranchShardVersion {
+		shard_id,
+		as_of_txid,
+	}))
+}
+
+async fn read_u64_be(
+	tx: &universaldb::Transaction,
+	key: &[u8],
+	isolation_level: universaldb::utils::IsolationLevel,
+) -> Result<Option<u64>> {
+	let Some(bytes) = tx.informal().get(key, isolation_level).await? else {
+		return Ok(None);
+	};
+	let bytes: [u8; std::mem::size_of::<u64>()] = Vec::<u8>::from(bytes)
+		.as_slice()
+		.try_into()
+		.context("sqlite eviction txid value should be exactly 8 bytes")?;
+
+	Ok(Some(u64::from_be_bytes(bytes)))
+}
+
+async fn read_pin_txid(
+	tx: &universaldb::Transaction,
+	branch_id: ActorBranchId,
+	pin_key: &[u8],
+) -> Result<Option<u64>> {
+	let Some(bytes) = tx.informal().get(pin_key, Serializable).await? else {
+		return Ok(None);
+	};
+	let pin: [u8; 16] = Vec::<u8>::from(bytes)
+		.as_slice()
+		.try_into()
+		.context("sqlite branch pin should be exactly 16 bytes")?;
+	if pin == VERSIONSTAMP_ZERO || pin == VERSIONSTAMP_INFINITY {
+		return Ok(None);
+	}
+
+	let Some(txid) = read_u64_be(tx, &keys::branch_vtx_key(branch_id, pin), Serializable).await?
+	else {
+		return Ok(Some(0));
+	};
+
+	Ok(Some(txid))
+}
+
+fn is_pinned(as_of_txid: u64, pin_txid: Option<u64>) -> bool {
+	pin_txid.is_some_and(|pin_txid| pin_txid <= as_of_txid)
 }
 
 fn expires_at_ms(now_ms: i64, ttl_ms: u64) -> Result<i64> {
@@ -270,6 +465,18 @@ pub mod test_hooks {
 		cancel_token: CancellationToken,
 	) -> Result<EvictionSweepOutcome> {
 		sweep_once(udb, eviction_config, holder_id, cancel_token).await
+	}
+
+	pub async fn plan_evictable_shard_versions_for_test(
+		udb: &universaldb::Database,
+		branch_id: ActorBranchId,
+		last_access_bucket: i64,
+		now_ms: i64,
+	) -> Result<Vec<EvictableShardVersion>> {
+		udb.run(move |tx| async move {
+			plan_evictable_shard_versions(&tx, branch_id, last_access_bucket, now_ms).await
+		})
+		.await
 	}
 }
 

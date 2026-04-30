@@ -42,6 +42,7 @@
 - ActorDb cold-tier reads use `new_with_cold_tier` plus a bounded per-connection manifest cache; the default constructor keeps no read cold tier for compatibility.
 - Eviction compactor service code lives under `sqlite_storage::compactor::eviction`; use the global `CMPC/lease_global/{kind=eviction}` lease and scan `CTR/eviction_index` by oldest access bucket with an explicit batch cap.
 - For prefix range scans in `sqlite-storage`, build `RangeOption` from `universaldb::tuple::Subspace::from_bytes(prefix)` so RocksDB/FDB drivers see the same prefix bounds.
+- Eviction predicate planning is SHARD-version scoped: require a newer FDB SHARD version, hot-cache age, cold-drain coverage, hot-pass margin, and no descendant/bookmark pin resolved through VTX before clearing.
 
 # Ralph Progress Log
 Started: Wed Apr 29 03:29:23 PM PDT 2026
@@ -785,4 +786,19 @@ Started: Wed Apr 29 03:29:23 PM PDT 2026
   - Eviction coordinator work is global, not per-branch: take `CMPC/lease_global/{kind=eviction}` before scanning candidates.
   - `CTR/eviction_index` scans should use `Subspace::from_bytes(prefix)` to get true prefix bounds; `end_of_key_range` is for single-key conflict ranges.
   - US-043 intentionally does not clear hot data. Predicate gates and OCC-fenced deletion are left to US-044 through US-046.
+---
+## 2026-04-29 22:05 PDT - US-044
+- Implemented eviction predicate planning inside the eviction compactor sweep. The sweep now reports evictable SHARD versions after checking hot-cache age, cold-drain coverage, newer SHARD existence, hot-pass retention margin, and descendant/bookmark pins resolved through VTX.
+- Added focused eviction compactor tests for the all-gates-pass case plus hot window, cold drain, descendant pin, bookmark pin, newer-version, and hot-pass-margin blockers.
+- Verified with `cargo test -p sqlite-storage --test compactor_eviction`, `cargo check -p sqlite-storage`, and `cargo test -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/CLAUDE.md`
+  - `engine/packages/sqlite-storage/src/compactor/eviction/mod.rs`
+  - `engine/packages/sqlite-storage/tests/compactor_eviction.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Eviction planning can stay side-effect free for US-044; later US-045/US-046 work should consume the planned `EvictableShardVersion` rows for OCC fencing and clearing.
+  - Branch pins remain versionstamp-valued, so eviction resolves `desc_pin` and `bk_pin` through branch-local VTX before comparing against a SHARD version's `as_of_txid`.
+  - A missing VTX entry for a non-empty pin should be treated conservatively as pinned, matching the hot compactor cap-enforcement behavior.
 ---
