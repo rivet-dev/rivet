@@ -58,6 +58,7 @@ These come from `r2-prior-art/.agent/research/sqlite/requirements.md` and supers
 - **Branch records live under `[BRANCHES]/list/{branch_id}` with FDB atomic-add refcount plus `desc_pin` and `bk_pin` atomic-min keys.** GC reads these scalars instead of walking the descendant tree.
 - **Branch GC pin computation lives in `sqlite_storage::gc`.** Use it for cold sweeps, hot-history cleanup, and debug estimates instead of duplicating refcount/root/desc/bookmark pin math.
 - **Namespace catalog entries store branch ids with 16-byte versionstamped values.** `list_databases` walks namespace parents, caps inherited NSCAT rows by `parent_versionstamp`, and lets database tombstones mask inherited visibility.
+- **Database tombstones store 16-byte versionstamped values.** `list_databases` applies the same namespace parent cap to tombstones so deletions after a namespace fork do not hide databases in the older fork.
 - **Branch pin atomic-min writes use `MutationType::ByteMin`** because versionstamps are 16-byte lexicographic big-endian values.
 - **Cold and eviction behavior is unconditional.** There is no per-namespace tier state or promotion path.
 - **PITR, forking, and `restore_to_bookmark` are all the same primitive: branch-at-position.** PITR creates a new branch at the resolved bookmark; the broader system (pegboard) decides whether to swap the actor's head pointer onto it.

@@ -28,6 +28,7 @@
 - Do not add APTR/NSPTR `last_swapped_at_ms` cache validation; the v4 spec makes branches immutable and treats the US-026 invalidation contract as obsolete.
 - Fresh fork actor branches keep `/META/head_at_fork` until their first local commit; commits treat it as the previous `DBHead`, then write `/META/head` and clear the snapshot in the same tx.
 - Namespace catalog (`NSCAT`) markers store database branch ids with 16-byte versionstamped values; list walks namespace parents, caps inherited entries by `parent_versionstamp`, and applies database tombstones before inherited entries.
+- Namespace database tombstones store 16-byte versionstamped values; list walks apply the namespace parent cap so tombstones written after a fork do not hide databases in that older fork.
 - Hot compaction enforces `MAX_SHARD_VERSIONS_PER_SHARD` inside the write tx before folding; missing VTX for a non-empty pin is treated conservatively as pinned.
 - Hot compactor branch passes update `BR/{branch_id}/META/compact` and `BR/{branch_id}/META/manifest/last_hot_pass_txid` together; a nil namespace `ActorDb` exercises branch-scoped compaction through public `compact_default_batch`.
 - Hot retention sweeps clear `COMMITS` and matching `VTX` rows together inside the hot compactor write tx, with quota accounting adjusted for both keys.
@@ -1009,4 +1010,22 @@ Started: Wed Apr 29 03:29:23 PM PDT 2026
 - **Learnings for future iterations:**
   - Bookmark integration tests can combine public `ActorDb` APIs with direct branch metadata seeding when the scenario needs a cold pass without first running a hot compaction pass.
   - Namespace-fork bookmark coverage should include both sides of the cap: a pre-fork bookmark resolves through the parent namespace, while a post-fork source bookmark returns `BranchNotReachable`.
+---
+## 2026-04-29 23:17 PDT - US-061
+- Added GC coverage for dependency-graph branch deletion when a branch has refcount zero and no descendant/bookmark pins.
+- Added deep namespace list coverage for versionstamp-capped database tombstones, including forks taken before and after a parent deletion.
+- Fixed `delete_database` to write versionstamped tombstones and made `list_databases` cap tombstones by namespace fork versionstamp.
+- Verified with `cargo test -p sqlite-storage --test gc -- --nocapture`, `cargo test -p sqlite-storage --test list_databases -- --nocapture`, `cargo check -p sqlite-storage`, and `cargo test -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/CLAUDE.md`
+  - `engine/packages/sqlite-storage/src/gc/mod.rs`
+  - `engine/packages/sqlite-storage/src/pump/branch.rs`
+  - `engine/packages/sqlite-storage/tests/gc.rs`
+  - `engine/packages/sqlite-storage/tests/list_databases.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Versionstamp-cap filtering applies to namespace tombstones as well as NSCAT rows.
+  - Empty legacy tombstone values decode as versionstamp zero so old tombstones remain conservative and inherited.
+  - For RocksDB-backed UDB tests, GC branch deletion should clear scanned prefix keys explicitly instead of relying on range clear behavior.
 ---

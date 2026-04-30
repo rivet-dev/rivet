@@ -2,10 +2,14 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use sqlite_storage::{
-	gc::{VERSIONSTAMP_INFINITY, estimate_branch_gc_pin, sweep_branch_hot_history},
+	gc::{
+		VERSIONSTAMP_INFINITY, estimate_branch_gc_pin, sweep_branch_hot_history,
+		sweep_unreferenced_branch,
+	},
 	keys::{
-		branch_commit_key, branch_delta_chunk_key, branch_vtx_key, branches_bk_pin_key,
-		branches_desc_pin_key, branches_list_key, branches_refcount_key,
+		branch_commit_key, branch_delta_chunk_key, branch_meta_head_key, branch_pidx_key,
+		branch_shard_key, branch_vtx_key, branches_bk_pin_key, branches_desc_pin_key,
+		branches_list_key, branches_refcount_key,
 	},
 	types::{
 		ActorBranchId, ActorBranchRecord, BranchState, CommitRow, NamespaceBranchId,
@@ -128,6 +132,56 @@ async fn branch_gc_pin_recomputes_from_current_counters_without_ratchet() -> Res
 		.await?
 		.expect("branch should have a GC pin");
 	assert_eq!(pin.gc_pin, VERSIONSTAMP_INFINITY);
+
+	Ok(())
+}
+
+#[tokio::test]
+async fn unreferenced_unpinned_branch_sweep_deletes_hot_branch_data() -> Result<()> {
+	let db = test_db().await?;
+	let branch_id = branch_id();
+	seed_branch(&db, 0, [6; 16]).await?;
+	write_commit(&db, 3, [3; 16]).await?;
+	write_commit(&db, 6, [6; 16]).await?;
+
+	db.run(move |tx| async move {
+		tx.informal()
+			.set(&branches_desc_pin_key(branch_id), &VERSIONSTAMP_INFINITY);
+		tx.informal().set(&branches_bk_pin_key(branch_id), &VERSIONSTAMP_INFINITY);
+		tx.informal()
+			.set(&branch_meta_head_key(branch_id), b"head");
+		tx.informal()
+			.set(&branch_pidx_key(branch_id, 7), &6_u64.to_be_bytes());
+		tx.informal()
+			.set(&branch_delta_chunk_key(branch_id, 3, 0), b"delta-three");
+		tx.informal()
+			.set(&branch_shard_key(branch_id, 0, 6), b"shard-six");
+		Ok(())
+	})
+	.await?;
+
+	let outcome = sweep_unreferenced_branch(&db, branch_id)
+		.await?
+		.expect("branch should be swept");
+	assert!(outcome.branch_deleted);
+	assert_eq!(outcome.gc_pin, VERSIONSTAMP_INFINITY);
+	assert!(outcome.keys_deleted >= 9);
+
+	assert_eq!(read_value(&db, branches_list_key(branch_id)).await?, None);
+	assert_eq!(read_value(&db, branches_refcount_key(branch_id)).await?, None);
+	assert_eq!(read_value(&db, branches_desc_pin_key(branch_id)).await?, None);
+	assert_eq!(read_value(&db, branches_bk_pin_key(branch_id)).await?, None);
+	assert_eq!(read_value(&db, branch_meta_head_key(branch_id)).await?, None);
+	assert_eq!(read_value(&db, branch_commit_key(branch_id, 3)).await?, None);
+	assert_eq!(read_value(&db, branch_commit_key(branch_id, 6)).await?, None);
+	assert_eq!(read_value(&db, branch_vtx_key(branch_id, [3; 16])).await?, None);
+	assert_eq!(read_value(&db, branch_vtx_key(branch_id, [6; 16])).await?, None);
+	assert_eq!(read_value(&db, branch_pidx_key(branch_id, 7)).await?, None);
+	assert_eq!(
+		read_value(&db, branch_delta_chunk_key(branch_id, 3, 0)).await?,
+		None
+	);
+	assert_eq!(read_value(&db, branch_shard_key(branch_id, 0, 6)).await?, None);
 
 	Ok(())
 }

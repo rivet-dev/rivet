@@ -33,6 +33,13 @@ pub struct BranchHotGcOutcome {
 	pub delta_chunks_deleted: usize,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BranchDeletionOutcome {
+	pub gc_pin: [u8; 16],
+	pub branch_deleted: bool,
+	pub keys_deleted: usize,
+}
+
 pub async fn estimate_branch_gc_pin(
 	db: &universaldb::Database,
 	branch_id: ActorBranchId,
@@ -46,6 +53,14 @@ pub async fn sweep_branch_hot_history(
 	branch_id: ActorBranchId,
 ) -> Result<Option<BranchHotGcOutcome>> {
 	db.run(move |tx| async move { sweep_branch_hot_history_tx(&tx, branch_id).await })
+		.await
+}
+
+pub async fn sweep_unreferenced_branch(
+	db: &universaldb::Database,
+	branch_id: ActorBranchId,
+) -> Result<Option<BranchDeletionOutcome>> {
+	db.run(move |tx| async move { sweep_unreferenced_branch_tx(&tx, branch_id).await })
 		.await
 }
 
@@ -134,6 +149,50 @@ pub(crate) async fn sweep_branch_hot_history_tx(
 		commits_deleted,
 		vtx_deleted,
 		delta_chunks_deleted,
+	}))
+}
+
+async fn sweep_unreferenced_branch_tx(
+	tx: &universaldb::Transaction,
+	branch_id: ActorBranchId,
+) -> Result<Option<BranchDeletionOutcome>> {
+	let Some(pin) = read_branch_gc_pin_tx(tx, branch_id).await? else {
+		return Ok(None);
+	};
+
+	if pin.refcount > 0
+		|| pin.desc_pin != VERSIONSTAMP_INFINITY
+		|| pin.bk_pin != VERSIONSTAMP_INFINITY
+	{
+		return Ok(Some(BranchDeletionOutcome {
+			gc_pin: pin.gc_pin,
+			branch_deleted: false,
+			keys_deleted: 0,
+		}));
+	}
+
+	let branch_rows = scan_prefix(tx, &keys::branch_prefix(branch_id), Snapshot).await?;
+	let mut keys_deleted = branch_rows.len();
+	for (key, _value) in branch_rows {
+		tx.informal().clear(&key);
+	}
+
+	for key in [
+		keys::branches_list_key(branch_id),
+		keys::branches_refcount_key(branch_id),
+		keys::branches_desc_pin_key(branch_id),
+		keys::branches_bk_pin_key(branch_id),
+	] {
+		if tx.informal().get(&key, Snapshot).await?.is_some() {
+			keys_deleted += 1;
+		}
+		tx.informal().clear(&key);
+	}
+
+	Ok(Some(BranchDeletionOutcome {
+		gc_pin: pin.gc_pin,
+		branch_deleted: true,
+		keys_deleted,
 	}))
 }
 

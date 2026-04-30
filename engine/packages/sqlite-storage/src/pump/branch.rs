@@ -319,9 +319,11 @@ pub async fn delete_database(
 			return Err(SqliteStorageError::ActorNotFound.into());
 		}
 
-		tx.informal().set(
+		tx.informal().atomic_op(
 			&keys::namespace_branches_database_tombstone_key(namespace_branch_id, database_id),
-			&[],
+			&versionstamped_marker_value()
+				.context("prepare versionstamped sqlite namespace database tombstone")?,
+			MutationType::SetVersionstampedValue,
 		);
 		tx.informal().atomic_op(
 			&keys::branches_refcount_key(database_id),
@@ -705,9 +707,13 @@ async fn list_databases_in_namespace_branch(
 	let mut versionstamp_cap = [0xff; 16];
 
 	for depth in 0..=MAX_NAMESPACE_DEPTH {
-		for database_id in scan_database_tombstones(tx, current_branch_id).await? {
-			tombstones.insert(database_id);
-			result.remove(&database_id);
+		for (database_id, tombstone_versionstamp) in
+			scan_database_tombstones(tx, current_branch_id).await?
+		{
+			if tombstone_versionstamp <= versionstamp_cap {
+				tombstones.insert(database_id);
+				result.remove(&database_id);
+			}
 		}
 
 		for (database_id, catalog_versionstamp) in
@@ -750,18 +756,21 @@ fn write_namespace_catalog_marker(
 	namespace_branch_id: NamespaceBranchId,
 	database_id: ActorBranchId,
 ) -> Result<()> {
-	let value = udb::append_versionstamp_offset(
-		udb::INCOMPLETE_VERSIONSTAMP.to_vec(),
-		&udb::INCOMPLETE_VERSIONSTAMP,
-	)
-	.context("prepare versionstamped sqlite namespace catalog marker")?;
 	tx.informal().atomic_op(
 		&keys::namespace_catalog_key(namespace_branch_id, database_id),
-		&value,
+		&versionstamped_marker_value()
+			.context("prepare versionstamped sqlite namespace catalog marker")?,
 		MutationType::SetVersionstampedValue,
 	);
 
 	Ok(())
+}
+
+fn versionstamped_marker_value() -> Result<Vec<u8>> {
+	udb::append_versionstamp_offset(
+		udb::INCOMPLETE_VERSIONSTAMP.to_vec(),
+		&udb::INCOMPLETE_VERSIONSTAMP,
+	)
 }
 
 async fn scan_namespace_catalog(
@@ -783,15 +792,24 @@ async fn scan_namespace_catalog(
 async fn scan_database_tombstones(
 	tx: &universaldb::Transaction,
 	namespace_branch_id: NamespaceBranchId,
-) -> Result<Vec<ActorBranchId>> {
+) -> Result<Vec<(ActorBranchId, [u8; 16])>> {
 	let rows = tx_scan_prefix_values(
 		tx,
 		&keys::namespace_branches_database_tombstone_prefix(namespace_branch_id),
 	)
 	.await?;
 	rows.into_iter()
-		.map(|(key, _)| {
-			keys::decode_namespace_branches_database_tombstone_id(namespace_branch_id, &key)
+		.map(|(key, value)| {
+			let database_id =
+				keys::decode_namespace_branches_database_tombstone_id(namespace_branch_id, &key)?;
+			let versionstamp = if value.is_empty() {
+				[0; 16]
+			} else {
+				decode_versionstamp_value(&value)
+					.context("decode sqlite namespace database tombstone versionstamp")?
+			};
+
+			Ok((database_id, versionstamp))
 		})
 		.collect()
 }

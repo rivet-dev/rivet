@@ -199,3 +199,80 @@ async fn fork_namespace_filters_source_databases_created_after_fork() -> Result<
 
 	Ok(())
 }
+
+#[tokio::test]
+async fn parent_tombstone_visibility_is_capped_across_deep_namespace_chain() -> Result<()> {
+	let db = Arc::new(test_db().await?);
+	let namespace = NamespaceId::from_gas_id(test_namespace());
+	let first_db = ActorDb::new(
+		db.clone(),
+		test_ups(),
+		test_namespace(),
+		FIRST_ACTOR.to_string(),
+		NodeId::new(),
+	);
+	first_db.commit(vec![page(1, 0x11)], 1, 1_000).await?;
+	let first_database_id = read_actor_branch_id(&db, namespace, FIRST_ACTOR).await?;
+	let first_commit = read_head_commit(&db, first_database_id).await?;
+
+	let before_delete_namespace = branch::fork_namespace(
+		&db,
+		&test_ups(),
+		namespace,
+		ResolvedVersionstamp {
+			versionstamp: first_commit.versionstamp,
+			bookmark: None,
+		},
+	)
+	.await?;
+
+	branch::delete_database(&db, namespace, first_database_id).await?;
+
+	let second_db = ActorDb::new(
+		db.clone(),
+		test_ups(),
+		test_namespace(),
+		SECOND_ACTOR.to_string(),
+		NodeId::new(),
+	);
+	second_db.commit(vec![page(1, 0x22)], 1, 2_000).await?;
+	let second_database_id = read_actor_branch_id(&db, namespace, SECOND_ACTOR).await?;
+	let second_commit = read_head_commit(&db, second_database_id).await?;
+
+	let after_delete_namespace = branch::fork_namespace(
+		&db,
+		&test_ups(),
+		namespace,
+		ResolvedVersionstamp {
+			versionstamp: second_commit.versionstamp,
+			bookmark: None,
+		},
+	)
+	.await?;
+	let deep_after_delete_namespace = branch::fork_namespace(
+		&db,
+		&test_ups(),
+		after_delete_namespace,
+		ResolvedVersionstamp {
+			versionstamp: second_commit.versionstamp,
+			bookmark: None,
+		},
+	)
+	.await?;
+
+	assert_eq!(
+		branch::list_databases(&db, before_delete_namespace).await?,
+		vec![first_database_id]
+	);
+	assert_eq!(branch::list_databases(&db, namespace).await?, vec![second_database_id]);
+	assert_eq!(
+		branch::list_databases(&db, after_delete_namespace).await?,
+		vec![second_database_id]
+	);
+	assert_eq!(
+		branch::list_databases(&db, deep_after_delete_namespace).await?,
+		vec![second_database_id]
+	);
+
+	Ok(())
+}
