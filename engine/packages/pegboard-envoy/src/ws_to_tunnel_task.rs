@@ -721,6 +721,7 @@ async fn actor_db(conn: &Conn, actor_id: String) -> Arc<ActorDb> {
 			Arc::new(ActorDb::new(
 				conn.udb.clone(),
 				(*conn.ups).clone(),
+				conn.namespace_id,
 				actor_id,
 				conn.node_id,
 			))

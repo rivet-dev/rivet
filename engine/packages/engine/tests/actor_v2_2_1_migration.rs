@@ -8,9 +8,9 @@ use rivet_pools::NodeId;
 use rusqlite::Connection;
 use serde::Deserialize;
 use sqlite_storage::{
-	keys::meta_head_key,
-	pump::ActorDb,
-	types::{SQLITE_PAGE_SIZE, decode_db_head},
+	keys::{branch_meta_head_key, meta_head_key},
+	pump::{branch as sqlite_storage_branch, ActorDb},
+	types::{NamespaceId, SQLITE_PAGE_SIZE, decode_db_head},
 };
 use test_snapshot::SnapshotTestCtx;
 use universalpubsub::{PubSub, driver::memory::MemoryDriver};
@@ -82,7 +82,7 @@ async fn actor_v2_2_1_baseline_migrates_to_current_layout() -> Result<()> {
 	.await?;
 
 	assert_eq!(
-		query_sqlite_notes(&load_v2_sqlite_bytes(&db, actor.actor_id).await?)?,
+		query_sqlite_notes(&load_v2_sqlite_bytes(&db, namespace.namespace_id, actor.actor_id).await?)?,
 		vec!["sqlite-from-v2.2.1"]
 	);
 
@@ -212,35 +212,50 @@ fn test_ups() -> PubSub {
 	)))
 }
 
-fn actor_db(db: &universaldb::Database, actor_id: &str) -> ActorDb {
+fn actor_db(db: &universaldb::Database, namespace_id: Id, actor_id: &str) -> ActorDb {
 	ActorDb::new(
 		Arc::new(db.clone()),
 		test_ups(),
+		namespace_id,
 		actor_id.to_string(),
 		NodeId::new(),
 	)
 }
 
-async fn load_v2_sqlite_bytes(db: &universaldb::Database, actor_id: Id) -> Result<Vec<u8>> {
+async fn load_v2_sqlite_bytes(
+	db: &universaldb::Database,
+	namespace_id: Id,
+	actor_id: Id,
+) -> Result<Vec<u8>> {
 	let actor_id = actor_id.to_string();
 	let actor_id_for_tx = actor_id.clone();
 	let head = db
 		.run(move |tx| {
 			let actor_id = actor_id_for_tx.clone();
+			let namespace_id = NamespaceId::from_gas_id(namespace_id);
 			async move {
+				let key = if let Some(branch_id) = sqlite_storage_branch::resolve_actor_branch(
+					&tx,
+					namespace_id,
+					&actor_id,
+					universaldb::utils::IsolationLevel::Snapshot,
+				)
+				.await?
+				{
+					branch_meta_head_key(branch_id)
+				} else {
+					meta_head_key(&actor_id)
+				};
 				let bytes = tx
 					.informal()
-					.get(
-						&meta_head_key(&actor_id),
-						universaldb::utils::IsolationLevel::Snapshot,
-					)
+					.get(&key, universaldb::utils::IsolationLevel::Snapshot)
 					.await?
 					.context("sqlite v2 head should exist")?;
 				decode_db_head(bytes.as_ref())
 			}
 		})
 		.await?;
-	let pages = actor_db(db, &actor_id)
+	let pages = actor_db(db, namespace_id, &actor_id)
 		.get_pages((1..=head.db_size_pages).collect())
 		.await?;
 	let mut bytes = Vec::with_capacity(head.db_size_pages as usize * SQLITE_PAGE_SIZE as usize);

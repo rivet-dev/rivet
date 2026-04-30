@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use anyhow::Result;
+use gas::prelude::Id;
 use rivet_envoy_protocol as protocol;
 use rivet_pools::NodeId;
 use scc::HashMap;
@@ -31,6 +32,7 @@ mod conn {
 mod actor_lifecycle;
 
 const TEST_ACTOR: &str = "actor-lifecycle-test";
+const TEST_NAMESPACE_LABEL: u16 = 1;
 
 async fn test_db() -> Result<universaldb::Database> {
 	let path = Builder::new()
@@ -100,6 +102,7 @@ async fn stop_actor_evicts_cached_actor_db() -> Result<()> {
 	let actor_db = Arc::new(ActorDb::new(
 		db,
 		test_ups(),
+		Id::new_v1(TEST_NAMESPACE_LABEL),
 		TEST_ACTOR.to_string(),
 		NodeId::new(),
 	));
@@ -125,6 +128,7 @@ async fn stop_actor_does_not_touch_udb() -> Result<()> {
 	let actor_db = Arc::new(ActorDb::new(
 		Arc::clone(&db),
 		test_ups(),
+		Id::new_v1(TEST_NAMESPACE_LABEL),
 		TEST_ACTOR.to_string(),
 		NodeId::new(),
 	));

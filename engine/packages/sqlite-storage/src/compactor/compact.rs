@@ -19,7 +19,10 @@ use crate::pump::{
 	keys::{self, SHARD_SIZE},
 	ltx::decode_ltx_v3,
 	quota,
-	types::{ActorBranchId, MetaCompact, decode_db_head, decode_meta_compact, encode_meta_compact},
+	types::{
+		ActorBranchId, MetaCompact, NamespaceId, decode_db_head, decode_meta_compact,
+		encode_meta_compact,
+	},
 	udb,
 };
 
@@ -44,6 +47,7 @@ pub async fn compact_default_batch(
 ) -> Result<CompactionOutcome> {
 	compact_default_batch_with_node_id(
 		udb,
+		None,
 		actor_id,
 		batch_size_deltas,
 		cancel_token,
@@ -54,6 +58,7 @@ pub async fn compact_default_batch(
 
 pub(crate) async fn compact_default_batch_with_node_id(
 	udb: Arc<universaldb::Database>,
+	namespace_id: Option<NamespaceId>,
 	actor_id: String,
 	batch_size_deltas: u32,
 	cancel_token: CancellationToken,
@@ -66,7 +71,13 @@ pub(crate) async fn compact_default_batch_with_node_id(
 		.start_timer();
 
 	ensure_not_cancelled(&cancel_token)?;
-	let plan = plan_batch(udb.as_ref(), actor_id.clone(), batch_size_deltas).await?;
+	let plan = plan_batch(
+		udb.as_ref(),
+		namespace_id,
+		actor_id.clone(),
+		batch_size_deltas,
+	)
+	.await?;
 	metrics::SQLITE_COMPACTOR_LAG
 		.with_label_values(labels)
 		.observe(plan.selected_delta_txids.len() as f64);
@@ -104,14 +115,16 @@ pub(crate) async fn compact_default_batch_with_node_id(
 
 async fn plan_batch(
 	db: &universaldb::Database,
+	namespace_id: Option<NamespaceId>,
 	actor_id: String,
 	batch_size_deltas: u32,
 ) -> Result<CompactionPlan> {
 	db.run(move |tx| {
 		let actor_id = actor_id.clone();
+		let namespace_id = namespace_id;
 
 		async move {
-			let scope = resolve_storage_scope(&tx, &actor_id, Snapshot).await?;
+			let scope = resolve_storage_scope(&tx, namespace_id, &actor_id, Snapshot).await?;
 			let Some(head_bytes) = tx_get_value(&tx, &scope.meta_head_key(&actor_id), Snapshot).await?
 			else {
 				return Ok(CompactionPlan::default());
@@ -306,25 +319,34 @@ pub async fn validate_quota(
 	udb: Arc<universaldb::Database>,
 	actor_id: String,
 ) -> Result<()> {
-	validate_quota_with_node_id(udb, actor_id, NodeId::new()).await
+	validate_quota_with_node_id(udb, None, actor_id, NodeId::new()).await
 }
 
 #[cfg(debug_assertions)]
 pub(crate) async fn validate_quota_with_node_id(
 	udb: Arc<universaldb::Database>,
+	namespace_id: Option<NamespaceId>,
 	actor_id: String,
 	node_id: NodeId,
 ) -> Result<()> {
 	let (manual_total, counter_value) = udb
 		.run({
 			let actor_id = actor_id.clone();
+			let namespace_id = namespace_id;
 			move |tx| {
 				let actor_id = actor_id.clone();
+				let namespace_id = namespace_id;
 
 				async move {
 					let manual_total =
 						if let Some(branch_id) =
-							branch::resolve_actor_branch(&tx, &actor_id, Snapshot).await?
+							branch::resolve_actor_branch(
+								&tx,
+								namespace_id.unwrap_or_else(NamespaceId::nil),
+								&actor_id,
+								Snapshot,
+							)
+							.await?
 						{
 							scan_tracked_prefix_bytes(&tx, &keys::branch_pidx_prefix(branch_id)).await?
 								+ scan_tracked_prefix_bytes(&tx, &keys::branch_delta_prefix(branch_id)).await?
@@ -334,7 +356,11 @@ pub(crate) async fn validate_quota_with_node_id(
 								+ scan_tracked_prefix_bytes(&tx, &keys::delta_prefix(&actor_id)).await?
 								+ scan_tracked_prefix_bytes(&tx, &keys::shard_prefix(&actor_id)).await?
 						};
-					let counter_value = quota::read(&tx, &actor_id).await?;
+					let counter_value = if let Some(namespace_id) = namespace_id {
+						quota::read_in_namespace(&tx, namespace_id, &actor_id).await?
+					} else {
+						quota::read(&tx, &actor_id).await?
+					};
 
 					Ok((manual_total, counter_value))
 				}
@@ -618,11 +644,19 @@ impl StorageScope {
 
 async fn resolve_storage_scope(
 	tx: &universaldb::Transaction,
+	namespace_id: Option<NamespaceId>,
 	actor_id: &str,
 	isolation_level: universaldb::utils::IsolationLevel,
 ) -> Result<StorageScope> {
 	Ok(
-		match branch::resolve_actor_branch(tx, actor_id, isolation_level).await? {
+		match branch::resolve_actor_branch(
+			tx,
+			namespace_id.unwrap_or_else(NamespaceId::nil),
+			actor_id,
+			isolation_level,
+		)
+		.await?
+		{
 			Some(branch_id) => StorageScope::Branch(branch_id),
 			None => StorageScope::Legacy,
 		},

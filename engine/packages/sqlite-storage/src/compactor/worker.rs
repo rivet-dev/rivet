@@ -10,7 +10,7 @@ use tokio::{
 use tokio_util::sync::CancellationToken;
 use universalpubsub::NextOutput;
 
-use crate::pump::quota;
+use crate::pump::{quota, types::NamespaceId};
 
 use super::{
 	SqliteCompactPayload, SqliteCompactSubject, TakeOutcome, compact_default_batch_with_node_id,
@@ -235,10 +235,12 @@ async fn handle_trigger(
 		deadline_tx,
 	);
 	let deadline_handle = spawn_deadline_task(deadline_rx, cancel_token.clone());
+	let storage_namespace_id = payload.namespace_id.map(NamespaceId::from_gas_id);
 
 	let result = async {
 		compact_default_batch_with_node_id(
 			Arc::clone(&udb),
+			storage_namespace_id,
 			actor_id.clone(),
 			compactor_config.batch_size_deltas,
 			cancel_token.clone(),
@@ -248,6 +250,7 @@ async fn handle_trigger(
 		#[cfg(debug_assertions)]
 		maybe_validate_quota(
 			Arc::clone(&udb),
+			storage_namespace_id,
 			actor_id.clone(),
 			&compactor_config,
 			&quota_validate_counts,
@@ -285,6 +288,7 @@ async fn handle_trigger(
 #[cfg(debug_assertions)]
 async fn maybe_validate_quota(
 	udb: Arc<universaldb::Database>,
+	namespace_id: Option<NamespaceId>,
 	actor_id: String,
 	compactor_config: &CompactorConfig,
 	quota_validate_counts: &scc::HashMap<String, u32>,
@@ -307,7 +311,7 @@ async fn maybe_validate_quota(
 	};
 
 	if pass_count % compactor_config.quota_validate_every == 0 {
-		super::compact::validate_quota_with_node_id(udb, actor_id, node_id).await?;
+		super::compact::validate_quota_with_node_id(udb, namespace_id, actor_id, node_id).await?;
 	}
 
 	Ok(())

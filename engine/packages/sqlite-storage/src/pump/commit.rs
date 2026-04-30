@@ -20,9 +20,10 @@ use crate::pump::{
 	quota,
 	types::{
 		ActorBranchId, ActorBranchRecord, ActorPointer, BranchState, CommitRow, DBHead, DirtyPage,
-		NamespaceBranchId, decode_db_head, decode_meta_compact, encode_actor_branch_record,
-		encode_actor_pointer, encode_commit_row, encode_db_head,
+		NamespaceBranchId, NamespaceId, decode_db_head, decode_meta_compact,
+		encode_actor_branch_record, encode_actor_pointer, encode_commit_row, encode_db_head,
 	},
+	udb,
 };
 
 const DELTA_CHUNK_BYTES: usize = 10_000;
@@ -50,17 +51,20 @@ impl ActorDb {
 		let cached_branch_id = *self.branch_id.lock();
 		let cache_was_warm = !self.cache.lock().range(0, u32::MAX).is_empty();
 		let actor_id = self.actor_id.clone();
+		let namespace_id = self.sqlite_namespace_id();
 		let dirty_pages_for_tx = dirty_pages.clone();
 
 		let result = self
 			.udb
 			.run(move |tx| {
 				let actor_id = actor_id.clone();
+				let namespace_id = namespace_id;
 				let dirty_pages = dirty_pages_for_tx.clone();
 
 				async move {
-					let (branch_id, branch_initialized) =
-						resolve_or_allocate_branch(&tx, &actor_id, cached_branch_id).await?;
+					let branch_resolution =
+						resolve_or_allocate_branch(&tx, namespace_id, &actor_id, cached_branch_id).await?;
+					let branch_id = branch_resolution.branch_id;
 					let head_key = keys::branch_meta_head_key(branch_id);
 					let (head_bytes, storage_used) = if let Some(storage_used) = cached_storage_used {
 						(tx_get_value(&tx, &head_key, Serializable).await?, storage_used)
@@ -137,7 +141,7 @@ impl ActorDb {
 					};
 					let encoded_commit_row =
 						encode_commit_row(commit_row).context("encode sqlite commit row")?;
-					let versionstamped_commit_row = append_versionstamp_offset(
+					let versionstamped_commit_row = udb::append_versionstamp_offset(
 						encoded_commit_row.clone(),
 						&INCOMPLETE_COMMIT_VERSIONSTAMP,
 					)
@@ -145,7 +149,7 @@ impl ActorDb {
 					let commit_key = keys::branch_commit_key(branch_id, txid);
 					let vtx_storage_key =
 						keys::branch_vtx_key(branch_id, INCOMPLETE_COMMIT_VERSIONSTAMP);
-					let versionstamped_vtx_key = append_versionstamp_offset(
+					let versionstamped_vtx_key = udb::append_versionstamp_offset(
 						vtx_storage_key.clone(),
 						&INCOMPLETE_COMMIT_VERSIONSTAMP,
 					)
@@ -195,10 +199,20 @@ impl ActorDb {
 						tx.informal().clear(key);
 					}
 					tx.informal().set(&head_key, &encoded_head);
-					if branch_initialized {
+					if branch_resolution.namespace_initialized {
+						branch::write_root_namespace_metadata(
+							&tx,
+							namespace_id,
+							branch_resolution.namespace_branch_id,
+							now_ms,
+							&INCOMPLETE_COMMIT_VERSIONSTAMP,
+						)?;
+					}
+					if branch_resolution.actor_initialized {
 						write_root_branch_metadata(
 							&tx,
 							branch_id,
+							branch_resolution.namespace_branch_id,
 							&actor_id,
 							now_ms,
 							&INCOMPLETE_COMMIT_VERSIONSTAMP,
@@ -280,7 +294,7 @@ impl ActorDb {
 				&self.ups,
 				crate::compactor::SqliteCompactPayload {
 					actor_id: self.actor_id.clone(),
-					namespace_id: None,
+					namespace_id: Some(self.namespace_id),
 					actor_name: None,
 					commit_bytes_since_rollup,
 					read_bytes_since_rollup,
@@ -340,30 +354,58 @@ async fn collect_truncate_cleanup(
 	Ok(cleanup)
 }
 
+struct BranchResolution {
+	branch_id: ActorBranchId,
+	namespace_branch_id: NamespaceBranchId,
+	namespace_initialized: bool,
+	actor_initialized: bool,
+}
+
 async fn resolve_or_allocate_branch(
 	tx: &universaldb::Transaction,
+	namespace_id: NamespaceId,
 	actor_id: &str,
 	cached_branch_id: Option<ActorBranchId>,
-) -> Result<(ActorBranchId, bool)> {
+) -> Result<BranchResolution> {
+	let namespace = branch::resolve_or_allocate_root_namespace_branch(tx, namespace_id).await?;
+
 	if let Some(branch_id) = cached_branch_id {
-		return Ok((branch_id, false));
+		return Ok(BranchResolution {
+			branch_id,
+			namespace_branch_id: namespace.branch_id,
+			namespace_initialized: namespace.initialized,
+			actor_initialized: false,
+		});
 	}
 
-	if let Some(branch_id) = branch::resolve_actor_branch(tx, actor_id, Serializable).await? {
-		return Ok((branch_id, false));
+	if let Some(branch_id) =
+		branch::resolve_actor_branch_in_namespace(tx, namespace.branch_id, actor_id, Serializable)
+			.await?
+	{
+		return Ok(BranchResolution {
+			branch_id,
+			namespace_branch_id: namespace.branch_id,
+			namespace_initialized: namespace.initialized,
+			actor_initialized: false,
+		});
 	}
 
-	Ok((ActorBranchId::new_v4(), true))
+	Ok(BranchResolution {
+		branch_id: ActorBranchId::new_v4(),
+		namespace_branch_id: namespace.branch_id,
+		namespace_initialized: namespace.initialized,
+		actor_initialized: true,
+	})
 }
 
 fn write_root_branch_metadata(
 	tx: &universaldb::Transaction,
 	branch_id: ActorBranchId,
+	namespace_branch: NamespaceBranchId,
 	actor_id: &str,
 	now_ms: i64,
 	root_versionstamp: &[u8; 16],
 ) -> Result<()> {
-	let namespace_branch = NamespaceBranchId::nil();
 	let record = ActorBranchRecord {
 		branch_id,
 		namespace_branch,
@@ -377,7 +419,7 @@ fn write_root_branch_metadata(
 	};
 	let encoded_record =
 		encode_actor_branch_record(record).context("encode sqlite root actor branch record")?;
-	let versionstamped_record = append_versionstamp_offset(encoded_record, root_versionstamp)
+	let versionstamped_record = udb::append_versionstamp_offset(encoded_record, root_versionstamp)
 		.context("prepare versionstamped sqlite root actor branch record")?;
 	tx.informal().atomic_op(
 		&keys::branches_list_key(branch_id),
@@ -405,16 +447,6 @@ fn write_root_branch_metadata(
 
 fn tracked_entry_size(key: &[u8], value: &[u8]) -> Result<i64> {
 	i64::try_from(key.len() + value.len()).context("sqlite tracked entry size exceeded i64")
-}
-
-fn append_versionstamp_offset(mut bytes: Vec<u8>, versionstamp: &[u8; 16]) -> Result<Vec<u8>> {
-	let offset = bytes
-		.windows(versionstamp.len())
-		.position(|window| window == versionstamp)
-		.context("versionstamp placeholder not found")?;
-	let offset = u32::try_from(offset).context("versionstamp offset exceeded u32")?;
-	bytes.extend_from_slice(&offset.to_le_bytes());
-	Ok(bytes)
 }
 
 async fn tx_get_value(

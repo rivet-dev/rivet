@@ -1,4 +1,5 @@
 use anyhow::{Context, Result, bail};
+use gas::prelude::Id;
 use serde::{Deserialize, Deserializer, Serialize};
 use uuid::Uuid;
 use vbare::OwnedVersionedData;
@@ -49,6 +50,14 @@ impl_uuid_id!(NamespacePointerId);
 impl_uuid_id!(ActorPointerId);
 impl_uuid_id!(NamespaceBranchId);
 impl_uuid_id!(ActorBranchId);
+
+impl NamespaceId {
+	pub fn from_gas_id(id: Id) -> Self {
+		let bytes = id.as_bytes();
+		let uuid = Uuid::from_slice(&bytes[1..17]).expect("gas v1 ids carry 16 uuid bytes");
+		Self(uuid)
+	}
+}
 
 pub type ActorIdStr = String;
 pub type NamespaceIdUuid = NamespaceId;
@@ -427,6 +436,99 @@ impl OwnedVersionedData for VersionedActorPointer {
 	}
 }
 
+enum VersionedNamespaceBranchRecord {
+	V1(NamespaceBranchRecord),
+}
+
+impl OwnedVersionedData for VersionedNamespaceBranchRecord {
+	type Latest = NamespaceBranchRecord;
+
+	fn wrap_latest(latest: Self::Latest) -> Self {
+		Self::V1(latest)
+	}
+
+	fn unwrap_latest(self) -> Result<Self::Latest> {
+		match self {
+			Self::V1(data) => Ok(data),
+		}
+	}
+
+	fn deserialize_version(payload: &[u8], version: u16) -> Result<Self> {
+		match version {
+			1 => Ok(Self::V1(serde_bare::from_slice(payload)?)),
+			_ => bail!("invalid sqlite-storage NamespaceBranchRecord version: {version}"),
+		}
+	}
+
+	fn serialize_version(self, _version: u16) -> Result<Vec<u8>> {
+		match self {
+			Self::V1(data) => serde_bare::to_vec(&data).map_err(Into::into),
+		}
+	}
+}
+
+enum VersionedNamespacePointer {
+	V1(NamespacePointer),
+}
+
+impl OwnedVersionedData for VersionedNamespacePointer {
+	type Latest = NamespacePointer;
+
+	fn wrap_latest(latest: Self::Latest) -> Self {
+		Self::V1(latest)
+	}
+
+	fn unwrap_latest(self) -> Result<Self::Latest> {
+		match self {
+			Self::V1(data) => Ok(data),
+		}
+	}
+
+	fn deserialize_version(payload: &[u8], version: u16) -> Result<Self> {
+		match version {
+			1 => Ok(Self::V1(serde_bare::from_slice(payload)?)),
+			_ => bail!("invalid sqlite-storage NamespacePointer version: {version}"),
+		}
+	}
+
+	fn serialize_version(self, _version: u16) -> Result<Vec<u8>> {
+		match self {
+			Self::V1(data) => serde_bare::to_vec(&data).map_err(Into::into),
+		}
+	}
+}
+
+enum VersionedNamespaceTierState {
+	V1(NamespaceTierState),
+}
+
+impl OwnedVersionedData for VersionedNamespaceTierState {
+	type Latest = NamespaceTierState;
+
+	fn wrap_latest(latest: Self::Latest) -> Self {
+		Self::V1(latest)
+	}
+
+	fn unwrap_latest(self) -> Result<Self::Latest> {
+		match self {
+			Self::V1(data) => Ok(data),
+		}
+	}
+
+	fn deserialize_version(payload: &[u8], version: u16) -> Result<Self> {
+		match version {
+			1 => Ok(Self::V1(serde_bare::from_slice(payload)?)),
+			_ => bail!("invalid sqlite-storage NamespaceTierState version: {version}"),
+		}
+	}
+
+	fn serialize_version(self, _version: u16) -> Result<Vec<u8>> {
+		match self {
+			Self::V1(data) => serde_bare::to_vec(&data).map_err(Into::into),
+		}
+	}
+}
+
 enum VersionedMetaCompact {
 	V1(MetaCompact),
 }
@@ -499,6 +601,39 @@ pub fn encode_actor_pointer(pointer: ActorPointer) -> Result<Vec<u8>> {
 pub fn decode_actor_pointer(payload: &[u8]) -> Result<ActorPointer> {
 	VersionedActorPointer::deserialize_with_embedded_version(payload)
 		.context("decode sqlite actor pointer")
+}
+
+pub fn encode_namespace_branch_record(record: NamespaceBranchRecord) -> Result<Vec<u8>> {
+	VersionedNamespaceBranchRecord::wrap_latest(record)
+		.serialize_with_embedded_version(SQLITE_STORAGE_META_VERSION)
+		.context("encode sqlite namespace branch record")
+}
+
+pub fn decode_namespace_branch_record(payload: &[u8]) -> Result<NamespaceBranchRecord> {
+	VersionedNamespaceBranchRecord::deserialize_with_embedded_version(payload)
+		.context("decode sqlite namespace branch record")
+}
+
+pub fn encode_namespace_pointer(pointer: NamespacePointer) -> Result<Vec<u8>> {
+	VersionedNamespacePointer::wrap_latest(pointer)
+		.serialize_with_embedded_version(SQLITE_STORAGE_META_VERSION)
+		.context("encode sqlite namespace pointer")
+}
+
+pub fn decode_namespace_pointer(payload: &[u8]) -> Result<NamespacePointer> {
+	VersionedNamespacePointer::deserialize_with_embedded_version(payload)
+		.context("decode sqlite namespace pointer")
+}
+
+pub fn encode_namespace_tier_state(state: NamespaceTierState) -> Result<Vec<u8>> {
+	VersionedNamespaceTierState::wrap_latest(state)
+		.serialize_with_embedded_version(SQLITE_STORAGE_META_VERSION)
+		.context("encode sqlite namespace tier state")
+}
+
+pub fn decode_namespace_tier_state(payload: &[u8]) -> Result<NamespaceTierState> {
+	VersionedNamespaceTierState::deserialize_with_embedded_version(payload)
+		.context("decode sqlite namespace tier state")
 }
 
 pub fn encode_meta_compact(compact: MetaCompact) -> Result<Vec<u8>> {

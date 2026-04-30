@@ -6,7 +6,7 @@
 - PITR tunable constants live in `engine/packages/sqlite-storage/src/pump/constants.rs` and are re-exported at the `sqlite_storage` crate root.
 - `SqliteStorageError` uses `RivetError` derive plus a manual `Display`/`Error` impl so errors can produce checked-in `engine/artifacts/errors/*.json` schemas while staying downcastable as `SqliteStorageError`.
 - `ActorDb` resolves the current actor branch through APTR and caches the branch id as a perf cache; FDB remains the source of truth.
-- Until namespace branch allocation is wired, root actor branches use `NamespaceBranchId::nil()` for the APTR namespace branch.
+- `ActorDb` is namespace-scoped: pass the engine namespace id into constructors, derive `NamespaceId` from it, and resolve APTR through NSPTR/NSBRANCH before branch-scoped storage.
 - New ActorDb writes store META/COMMITS/VTX/PIDX/DELTA/SHARD under `BR/{branch_id}`; legacy actor-scoped helpers remain compatibility fallback for old seeded state.
 - `universaldb` raw `SetVersionstampedKey` and `SetVersionstampedValue` payloads use FDB-style trailing little-endian u32 offsets and substitute the first 10 versionstamp bytes.
 
@@ -179,4 +179,33 @@ Started: Wed Apr 29 03:29:23 PM PDT 2026
   - APTR resolution currently uses the nil namespace branch bridge until US-010 wires real namespace branches.
   - `ActorDb.branch_id` is only a perf cache; commit/read/compactor code must still resolve APTR when the cache is cold.
   - New hot-path data should use branch key builders; legacy actor-scoped paths are now compatibility fallbacks rather than the primary layout.
+---
+## 2026-04-29 18:01 PDT - US-010
+- Added lazy root namespace branch initialization for SQLite storage: NSPTR, NSBRANCH, namespace refcount, and T0 tier state are written with the first actor branch in a namespace.
+- Made `ActorDb` namespace-scoped, propagated namespace ids through pegboard-envoy, migration, compactor payloads, reads, commits, and quota validation, and recorded the namespace branch on root actor branches.
+- Updated migration/readback helpers and tests to resolve branch-scoped heads through NSPTR/APTR with legacy actor-scoped fallback.
+- Files changed:
+  - `engine/packages/sqlite-storage/CLAUDE.md`
+  - `engine/packages/sqlite-storage/src/compactor/compact.rs`
+  - `engine/packages/sqlite-storage/src/compactor/worker.rs`
+  - `engine/packages/sqlite-storage/src/pump/actor_db.rs`
+  - `engine/packages/sqlite-storage/src/pump/branch.rs`
+  - `engine/packages/sqlite-storage/src/pump/commit.rs`
+  - `engine/packages/sqlite-storage/src/pump/quota.rs`
+  - `engine/packages/sqlite-storage/src/pump/read.rs`
+  - `engine/packages/sqlite-storage/src/pump/types.rs`
+  - `engine/packages/sqlite-storage/src/pump/udb.rs`
+  - `engine/packages/sqlite-storage/tests/pump_commit.rs`
+  - `engine/packages/sqlite-storage/tests/pump_read.rs`
+  - `engine/packages/pegboard/src/actor_sqlite.rs`
+  - `engine/packages/pegboard/tests/actor_sqlite_migration.rs`
+  - `engine/packages/pegboard-envoy/src/ws_to_tunnel_task.rs`
+  - `engine/packages/pegboard-envoy/tests/actor_lifecycle.rs`
+  - `engine/packages/engine/tests/actor_v2_2_1_migration.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Root namespace metadata is created lazily inside the first SQLite commit for a namespace because sqlite-storage does not own the engine namespace creation workflow.
+  - Tests that assert namespace-scoped storage need deterministic `gas::Id` namespace values; `Id::new_v1` creates a fresh random UUID each call.
+  - Migration helpers must resolve through NSPTR/APTR first, then fall back to legacy actor-scoped `/META/head` for old seeded v2 state.
 ---

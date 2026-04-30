@@ -6,8 +6,8 @@ use rivet_envoy_protocol as protocol;
 use rivet_pools::NodeId;
 use sqlite_storage::{
 	keys as sqlite_storage_keys,
-	pump::ActorDb,
-	types::{DBHead, DirtyPage, SQLITE_PAGE_SIZE, decode_db_head},
+	pump::{branch as sqlite_storage_branch, ActorDb},
+	types::{DBHead, DirtyPage, NamespaceId, SQLITE_PAGE_SIZE, decode_db_head},
 };
 use universalpubsub::{PubSub, driver::memory::MemoryDriver};
 
@@ -92,7 +92,10 @@ async fn maybe_migrate_v1_to_v2(
 
 	let actor_id = recipient.actor_id.to_string();
 
-	if load_v2_head(db, &actor_id).await?.is_some() {
+	if load_v2_head(db, recipient.namespace_id, &actor_id)
+		.await?
+		.is_some()
+	{
 		return Ok(false);
 	}
 
@@ -124,6 +127,7 @@ async fn maybe_migrate_v1_to_v2(
 	let actor_db = ActorDb::new(
 		Arc::new(db.clone()),
 		migration_ups(),
+		recipient.namespace_id,
 		actor_id.clone(),
 		NodeId::new(),
 	);
@@ -144,16 +148,31 @@ async fn maybe_migrate_v1_to_v2(
 	Ok(true)
 }
 
-async fn load_v2_head(db: &universaldb::Database, actor_id: &str) -> Result<Option<DBHead>> {
+async fn load_v2_head(
+	db: &universaldb::Database,
+	namespace_id: Id,
+	actor_id: &str,
+) -> Result<Option<DBHead>> {
 	let actor_id = actor_id.to_string();
+	let namespace_id = NamespaceId::from_gas_id(namespace_id);
 	db.run(move |tx| {
 		let actor_id = actor_id.clone();
+		let namespace_id = namespace_id;
 		async move {
+			let key = if let Some(branch_id) = sqlite_storage_branch::resolve_actor_branch(
+				&tx,
+				namespace_id,
+				&actor_id,
+				universaldb::utils::IsolationLevel::Snapshot,
+			)
+			.await?
+			{
+				sqlite_storage_keys::branch_meta_head_key(branch_id)
+			} else {
+				sqlite_storage_keys::meta_head_key(&actor_id)
+			};
 			tx.informal()
-				.get(
-					&sqlite_storage_keys::meta_head_key(&actor_id),
-					universaldb::utils::IsolationLevel::Snapshot,
-				)
+				.get(&key, universaldb::utils::IsolationLevel::Snapshot)
 				.await?
 				.map(|bytes| decode_db_head(bytes.as_ref()))
 				.transpose()

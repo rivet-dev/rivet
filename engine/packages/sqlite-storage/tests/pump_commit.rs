@@ -2,6 +2,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Result;
+use gas::prelude::Id;
 use rivet_pools::NodeId;
 use sqlite_storage::compactor::{
 	SqliteCompactSubject, decode_compact_payload,
@@ -10,15 +11,18 @@ use sqlite_storage::{
 	keys::{
 		PAGE_SIZE, actor_pointer_cur_key, branch_commit_key, branch_delta_chunk_key,
 		branch_meta_compact_key, branch_meta_head_key, branch_pidx_key, branch_shard_key,
-		branch_vtx_key, branches_list_key,
+		branch_vtx_key, branches_list_key, namespace_branches_list_key,
+		namespace_branches_refcount_key, namespace_branches_tier_state_key,
+		namespace_pointer_cur_key,
 	},
 	ltx::{LtxHeader, encode_ltx_v3},
 	pump::ActorDb,
 	quota::{self, SQLITE_MAX_STORAGE_BYTES},
 	types::{
-		ActorBranchId, DBHead, DirtyPage, FetchedPage, MetaCompact, NamespaceBranchId,
+		ActorBranchId, DBHead, DirtyPage, FetchedPage, MetaCompact, NamespaceId, Tier,
 		decode_actor_branch_record, decode_actor_pointer, decode_commit_row, decode_db_head,
-		encode_db_head, encode_meta_compact,
+		decode_namespace_branch_record, decode_namespace_pointer,
+		decode_namespace_tier_state, encode_db_head, encode_meta_compact,
 	},
 };
 use tempfile::Builder;
@@ -26,6 +30,10 @@ use universalpubsub::{NextOutput, PubSub, driver::memory::MemoryDriver};
 use universaldb::utils::IsolationLevel::Snapshot;
 
 const TEST_ACTOR: &str = "test-actor";
+
+fn test_namespace() -> Id {
+	Id::v1(uuid::Uuid::from_u128(0x1234), 1)
+}
 
 async fn test_db() -> Result<universaldb::Database> {
 	let path = Builder::new().prefix("sqlite-storage-commit-").tempdir()?.keep();
@@ -110,9 +118,14 @@ async fn read_head(db: &universaldb::Database) -> Result<DBHead> {
 }
 
 async fn read_branch_id(db: &universaldb::Database) -> Result<ActorBranchId> {
+	let namespace_id = NamespaceId::from_gas_id(test_namespace());
+	let namespace_pointer_bytes = read_value(db, namespace_pointer_cur_key(namespace_id))
+		.await?
+		.expect("namespace pointer should exist");
+	let namespace_branch = decode_namespace_pointer(&namespace_pointer_bytes)?.current_branch;
 	let bytes = read_value(
 		db,
-		actor_pointer_cur_key(NamespaceBranchId::nil(), TEST_ACTOR),
+		actor_pointer_cur_key(namespace_branch, TEST_ACTOR),
 	)
 	.await?
 	.expect("actor pointer should exist");
@@ -121,25 +134,53 @@ async fn read_branch_id(db: &universaldb::Database) -> Result<ActorBranchId> {
 }
 
 async fn read_quota(db: &universaldb::Database) -> Result<i64> {
-	db.run(|tx| async move { quota::read(&tx, TEST_ACTOR).await })
+	db.run(|tx| async move {
+		quota::read_in_namespace(&tx, NamespaceId::from_gas_id(test_namespace()), TEST_ACTOR).await
+	})
 		.await
 }
 
 #[tokio::test]
 async fn commit_lazily_initializes_meta_on_first_write() -> Result<()> {
 	let db = Arc::new(test_db().await?);
-	let actor_db = ActorDb::new(db.clone(), test_ups(), TEST_ACTOR.to_string(), NodeId::new());
+	let actor_db = ActorDb::new(
+		db.clone(),
+		test_ups(),
+		test_namespace(),
+		TEST_ACTOR.to_string(),
+		NodeId::new(),
+	);
 
 	actor_db.commit(vec![page(1, 0x11)], 2, 1_000).await?;
 	let branch_id = read_branch_id(&db).await?;
 
 	assert_eq!(read_head(&db).await?, head_with_branch(branch_id, 1, 2));
+	let namespace_id = NamespaceId::from_gas_id(test_namespace());
+	let namespace_pointer_bytes = read_value(&db, namespace_pointer_cur_key(namespace_id))
+		.await?
+		.expect("namespace pointer should exist");
+	let namespace_branch = decode_namespace_pointer(&namespace_pointer_bytes)?.current_branch;
+	let namespace_record_bytes = read_value(&db, namespace_branches_list_key(namespace_branch))
+		.await?
+		.expect("namespace branch record should exist");
+	let namespace_record = decode_namespace_branch_record(&namespace_record_bytes)?;
+	assert_eq!(namespace_record.branch_id, namespace_branch);
+	assert_eq!(namespace_record.parent, None);
+	assert_eq!(
+		read_value(&db, namespace_branches_refcount_key(namespace_branch)).await?,
+		Some(1_i64.to_le_bytes().to_vec())
+	);
+	let tier_state_bytes = read_value(&db, namespace_branches_tier_state_key(namespace_branch))
+		.await?
+		.expect("namespace tier state should exist");
+	let tier_state = decode_namespace_tier_state(&tier_state_bytes)?;
+	assert_eq!(tier_state.tier, Tier::T0);
 	let branch_record_bytes = read_value(&db, branches_list_key(branch_id))
 		.await?
 		.expect("branch record should exist");
 	let branch_record = decode_actor_branch_record(&branch_record_bytes)?;
 	assert_eq!(branch_record.branch_id, branch_id);
-	assert_eq!(branch_record.namespace_branch, NamespaceBranchId::nil());
+	assert_eq!(branch_record.namespace_branch, namespace_branch);
 	assert_eq!(branch_record.parent, None);
 	assert_eq!(
 		read_value(&db, branch_pidx_key(branch_id, 1)).await?,
@@ -162,7 +203,7 @@ async fn commit_lazily_initializes_meta_on_first_write() -> Result<()> {
 #[tokio::test]
 async fn commit_advances_head_and_updates_warm_cache() -> Result<()> {
 	let db = Arc::new(test_db().await?);
-	let actor_db = ActorDb::new(db.clone(), test_ups(), TEST_ACTOR.to_string(), NodeId::new());
+	let actor_db = ActorDb::new(db.clone(), test_ups(), test_namespace(), TEST_ACTOR.to_string(), NodeId::new());
 
 	actor_db.commit(vec![page(1, 0x11)], 2, 1_000).await?;
 	let branch_id = read_branch_id(&db).await?;
@@ -199,7 +240,7 @@ async fn commit_advances_head_and_updates_warm_cache() -> Result<()> {
 #[tokio::test]
 async fn commit_writes_commit_row_and_vtx_index() -> Result<()> {
 	let db = Arc::new(test_db().await?);
-	let actor_db = ActorDb::new(db.clone(), test_ups(), TEST_ACTOR.to_string(), NodeId::new());
+	let actor_db = ActorDb::new(db.clone(), test_ups(), test_namespace(), TEST_ACTOR.to_string(), NodeId::new());
 
 	actor_db.commit(vec![page(1, 0x11)], 2, 1_000).await?;
 	actor_db.commit(vec![page(2, 0x22)], 3, 2_000).await?;
@@ -236,7 +277,7 @@ async fn commit_writes_commit_row_and_vtx_index() -> Result<()> {
 #[tokio::test]
 async fn commit_rejects_quota_cap_before_writes() -> Result<()> {
 	let db = Arc::new(test_db().await?);
-	let actor_db = ActorDb::new(db.clone(), test_ups(), TEST_ACTOR.to_string(), NodeId::new());
+	let actor_db = ActorDb::new(db.clone(), test_ups(), test_namespace(), TEST_ACTOR.to_string(), NodeId::new());
 	actor_db.commit(vec![page(1, 0x11)], 1, 1_000).await?;
 	let branch_id = read_branch_id(&db).await?;
 	db.run(|tx| async move {
@@ -245,7 +286,7 @@ async fn commit_rejects_quota_cap_before_writes() -> Result<()> {
 	})
 	.await?;
 
-	let actor_db = ActorDb::new(db.clone(), test_ups(), TEST_ACTOR.to_string(), NodeId::new());
+	let actor_db = ActorDb::new(db.clone(), test_ups(), test_namespace(), TEST_ACTOR.to_string(), NodeId::new());
 	let err = actor_db
 		.commit(vec![page(1, 0x44)], 1, 3_000)
 		.await
@@ -271,7 +312,7 @@ async fn commit_rejects_quota_cap_before_writes() -> Result<()> {
 #[tokio::test]
 async fn shrink_commit_deletes_above_eof_pidx_and_shards() -> Result<()> {
 	let db = Arc::new(test_db().await?);
-	let actor_db = ActorDb::new(db.clone(), test_ups(), TEST_ACTOR.to_string(), NodeId::new());
+	let actor_db = ActorDb::new(db.clone(), test_ups(), test_namespace(), TEST_ACTOR.to_string(), NodeId::new());
 	actor_db.commit(vec![page(1, 0x01)], 130, 1_000).await?;
 	let branch_id = read_branch_id(&db).await?;
 	seed(
@@ -298,7 +339,7 @@ async fn shrink_commit_deletes_above_eof_pidx_and_shards() -> Result<()> {
 	})
 	.await?;
 
-	let actor_db = ActorDb::new(db.clone(), test_ups(), TEST_ACTOR.to_string(), NodeId::new());
+	let actor_db = ActorDb::new(db.clone(), test_ups(), test_namespace(), TEST_ACTOR.to_string(), NodeId::new());
 	actor_db.commit(vec![page(1, 0x11)], 63, 4_000).await?;
 
 	assert_eq!(read_head(&db).await?, head_with_branch(branch_id, 8, 63));
@@ -323,7 +364,7 @@ async fn commit_publishes_compaction_trigger_with_throttle() -> Result<()> {
 	let db = Arc::new(test_db().await?);
 	let ups = test_ups();
 	let mut sub = ups.queue_subscribe(SqliteCompactSubject, "compactor").await?;
-	let actor_db = ActorDb::new(db.clone(), ups.clone(), TEST_ACTOR.to_string(), NodeId::new());
+	let actor_db = ActorDb::new(db.clone(), ups.clone(), test_namespace(), TEST_ACTOR.to_string(), NodeId::new());
 	actor_db.commit(vec![page(1, 0x01)], 1, 1_000).await?;
 	let branch_id = read_branch_id(&db).await?;
 	seed(
@@ -348,7 +389,7 @@ async fn commit_publishes_compaction_trigger_with_throttle() -> Result<()> {
 	})
 	.await?;
 
-	let actor_db = ActorDb::new(db, ups, TEST_ACTOR.to_string(), NodeId::new());
+	let actor_db = ActorDb::new(db, ups, test_namespace(), TEST_ACTOR.to_string(), NodeId::new());
 	actor_db.commit(vec![page(1, 0x11)], 1, 5_000).await?;
 	let first = next_trigger(&mut sub).await?;
 	assert_eq!(first.actor_id, TEST_ACTOR);

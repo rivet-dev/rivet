@@ -5,7 +5,7 @@ use crate::pump::{
 	branch,
 	error::SqliteStorageError,
 	keys,
-	types::ActorBranchId,
+	types::{ActorBranchId, NamespaceId},
 };
 
 pub const SQLITE_MAX_STORAGE_BYTES: i64 = 10 * 1024 * 1024 * 1024;
@@ -30,8 +30,16 @@ pub fn atomic_add_branch(tx: &universaldb::Transaction, branch_id: ActorBranchId
 }
 
 pub async fn read(tx: &universaldb::Transaction, actor_id: &str) -> Result<i64> {
+	read_in_namespace(tx, NamespaceId::nil(), actor_id).await
+}
+
+pub async fn read_in_namespace(
+	tx: &universaldb::Transaction,
+	namespace_id: NamespaceId,
+	actor_id: &str,
+) -> Result<i64> {
 	if let Some(branch_id) =
-		branch::resolve_actor_branch(tx, actor_id, Snapshot)
+		branch::resolve_actor_branch(tx, namespace_id, actor_id, Snapshot)
 			.await
 			.context("resolve sqlite actor branch for quota read")?
 	{

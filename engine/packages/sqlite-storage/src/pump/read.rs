@@ -55,17 +55,20 @@ impl ActorDb {
 		};
 
 		let actor_id = self.actor_id.clone();
+		let namespace_id = self.sqlite_namespace_id();
 		let cached_branch_id = *self.branch_id.lock();
 		let pgnos_for_tx = pgnos.clone();
 		let tx_result = self
 			.udb
 			.run(move |tx| {
 				let actor_id = actor_id.clone();
+				let namespace_id = namespace_id;
 				let pgnos = pgnos_for_tx.clone();
 				let cached_pidx = cached_pidx.clone();
 
 				async move {
-					let scope = resolve_storage_scope(&tx, &actor_id, cached_branch_id).await?;
+					let scope =
+						resolve_storage_scope(&tx, namespace_id, &actor_id, cached_branch_id).await?;
 					let head_bytes = tx_get_value(&tx, &scope.meta_head_key(&actor_id)).await?;
 					let Some(head_bytes) = head_bytes else {
 						return Err(SqliteStorageError::MetaMissing {
@@ -317,6 +320,7 @@ impl StorageScope {
 
 async fn resolve_storage_scope(
 	tx: &universaldb::Transaction,
+	namespace_id: crate::pump::types::NamespaceId,
 	actor_id: &str,
 	cached_branch_id: Option<ActorBranchId>,
 ) -> Result<StorageScope> {
@@ -325,7 +329,7 @@ async fn resolve_storage_scope(
 	}
 
 	Ok(
-		match branch::resolve_actor_branch(tx, actor_id, Snapshot).await? {
+		match branch::resolve_actor_branch(tx, namespace_id, actor_id, Snapshot).await? {
 			Some(branch_id) => StorageScope::Branch(branch_id),
 			None => StorageScope::Legacy,
 		},

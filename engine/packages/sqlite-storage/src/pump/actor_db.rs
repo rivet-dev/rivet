@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use gas::prelude::Id;
 use parking_lot::Mutex;
 use rivet_pools::NodeId;
 use tokio::time::Instant;
@@ -7,12 +8,13 @@ use universaldb::Database;
 
 use crate::{compactor::Ups, page_index::DeltaPageIndex};
 
-use super::types::ActorBranchId;
+use super::types::{ActorBranchId, NamespaceId};
 
 #[allow(dead_code)]
 pub struct ActorDb {
 	pub(super) udb: Arc<Database>,
 	pub(super) ups: Ups,
+	pub(super) namespace_id: Id,
 	pub(super) actor_id: String,
 	pub(super) node_id: NodeId,
 	/// Cached actor branch id. This is a perf cache; FDB remains the source of truth.
@@ -29,13 +31,20 @@ pub struct ActorDb {
 }
 
 impl ActorDb {
-	pub fn new(udb: Arc<Database>, ups: Ups, actor_id: String, node_id: NodeId) -> Self {
+	pub fn new(
+		udb: Arc<Database>,
+		ups: Ups,
+		namespace_id: Id,
+		actor_id: String,
+		node_id: NodeId,
+	) -> Self {
 		#[cfg(debug_assertions)]
 		crate::takeover::reconcile_blocking(udb.clone(), actor_id.clone(), node_id);
 
 		Self {
 			udb,
 			ups,
+			namespace_id,
 			actor_id,
 			node_id,
 			branch_id: Mutex::new(None),
@@ -45,6 +54,10 @@ impl ActorDb {
 			read_bytes_since_rollup: Mutex::new(0),
 			last_trigger_at: Mutex::new(None),
 		}
+	}
+
+	pub(super) fn sqlite_namespace_id(&self) -> NamespaceId {
+		NamespaceId::from_gas_id(self.namespace_id)
 	}
 
 	pub fn take_metering_snapshot(&self) -> (u64, u64) {

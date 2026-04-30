@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use anyhow::Result;
+use gas::prelude::Id;
 use rivet_pools::NodeId;
 use sqlite_storage::{
 	keys::{delta_chunk_key, meta_head_key, pidx_delta_key, shard_key, shard_version_key, PAGE_SIZE},
@@ -12,6 +13,10 @@ use tempfile::Builder;
 use universalpubsub::{PubSub, driver::memory::MemoryDriver};
 
 const TEST_ACTOR: &str = "test-actor";
+
+fn test_namespace() -> Id {
+	Id::v1(uuid::Uuid::from_u128(0x5678), 1)
+}
 
 async fn test_db() -> Result<universaldb::Database> {
 	let path = Builder::new().prefix("sqlite-storage-read-").tempdir()?.keep();
@@ -92,7 +97,7 @@ async fn get_pages_reads_with_cold_pidx_scan() -> Result<()> {
 	)
 	.await?;
 
-	let actor_db = ActorDb::new(db, test_ups(), TEST_ACTOR.to_string(), NodeId::new());
+	let actor_db = ActorDb::new(db, test_ups(), test_namespace(), TEST_ACTOR.to_string(), NodeId::new());
 
 	assert_eq!(
 		actor_db.get_pages(vec![2]).await?,
@@ -119,7 +124,7 @@ async fn get_pages_uses_warm_cache_without_pidx_row() -> Result<()> {
 	)
 	.await?;
 
-	let actor_db = ActorDb::new(db.clone(), test_ups(), TEST_ACTOR.to_string(), NodeId::new());
+	let actor_db = ActorDb::new(db.clone(), test_ups(), test_namespace(), TEST_ACTOR.to_string(), NodeId::new());
 	assert_eq!(
 		actor_db.get_pages(vec![2]).await?,
 		vec![FetchedPage {
@@ -155,7 +160,7 @@ async fn get_pages_falls_back_to_shard_when_cached_pidx_is_stale() -> Result<()>
 	)
 	.await?;
 
-	let actor_db = ActorDb::new(db.clone(), test_ups(), TEST_ACTOR.to_string(), NodeId::new());
+	let actor_db = ActorDb::new(db.clone(), test_ups(), test_namespace(), TEST_ACTOR.to_string(), NodeId::new());
 	assert_eq!(
 		actor_db.get_pages(vec![2]).await?,
 		vec![FetchedPage {
@@ -200,7 +205,7 @@ async fn get_pages_reads_latest_shard_version_not_past_head() -> Result<()> {
 	)
 	.await?;
 
-	let actor_db = ActorDb::new(db, test_ups(), TEST_ACTOR.to_string(), NodeId::new());
+	let actor_db = ActorDb::new(db, test_ups(), test_namespace(), TEST_ACTOR.to_string(), NodeId::new());
 
 	assert_eq!(
 		actor_db.get_pages(vec![2]).await?,
@@ -223,7 +228,7 @@ async fn get_pages_returns_none_above_eof() -> Result<()> {
 	)
 	.await?;
 
-	let actor_db = ActorDb::new(db, test_ups(), TEST_ACTOR.to_string(), NodeId::new());
+	let actor_db = ActorDb::new(db, test_ups(), test_namespace(), TEST_ACTOR.to_string(), NodeId::new());
 
 	assert_eq!(
 		actor_db.get_pages(vec![4]).await?,

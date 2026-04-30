@@ -34,7 +34,7 @@ These come from `r2-prior-art/.agent/research/sqlite/requirements.md` and supers
 ## Storage layout
 
 - **All PITR actor state is per-branch.** ActorDb resolves APTR, caches the branch id as a perf cache, and writes hot-path data under top-level `[0x02][0x30]/{branch_id}/<suffix>` keys.
-- **Root actor branches temporarily use the nil namespace branch.** Replace `NamespaceBranchId::nil()` bridge points when namespace branch allocation is wired.
+- **ActorDb is namespace-scoped.** New ActorDb instances receive the engine namespace id, lazily seed NSPTR/NSBRANCH/tier_state, and write APTR under the resolved namespace branch.
 - **Legacy actor-scoped storage is compatibility fallback only.** New ActorDb writes use branch-scoped META, COMMITS, VTX, PIDX, DELTA, and SHARD keys.
 - **PITR tunable constants live in `pump/constants.rs`.** Import shared limits and retention windows from there instead of duplicating literals.
 - **Pump persisted payload structs use `serde::{Serialize, Deserialize}` as the serde_bare/vbare-compatible derive pattern.** Add `OwnedVersionedData` wrappers when introducing encode/decode helpers.
