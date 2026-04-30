@@ -115,6 +115,7 @@ We explicitly do **not** import:
 - Crash recovery tests use `checkpoint_test_db()` + `reopen_test_db()` for real persisted-restart state.
 - Failure-injection tests use `MemoryStore::snapshot()`. The `fail_after_ops` budget keeps decrementing past the first injected error.
 - Lease-expiry and time-window tests use `tokio::time::pause()` + `advance()` for determinism.
+- Use a nil namespace `ActorDb` to exercise branch-scoped hot compaction through public `compact_default_batch`.
 - Latency tests that depend on `UDB_SIMULATED_LATENCY_MS` must live in a dedicated integration test binary because UDB caches the env var once per process via `OnceLock`.
 
 ## Specs

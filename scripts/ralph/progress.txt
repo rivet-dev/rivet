@@ -28,6 +28,7 @@
 - Fresh fork actor branches keep `/META/head_at_fork` until their first local commit; commits treat it as the previous `DBHead`, then write `/META/head` and clear the snapshot in the same tx.
 - Namespace catalog (`NSCAT`) markers store database branch ids with 16-byte versionstamped values; list walks namespace parents, caps inherited entries by `parent_versionstamp`, and applies database tombstones before inherited entries.
 - Hot compaction enforces `MAX_SHARD_VERSIONS_PER_SHARD` inside the write tx before folding; missing VTX for a non-empty pin is treated conservatively as pinned.
+- Hot compactor branch passes update `BR/{branch_id}/META/compact` and `BR/{branch_id}/META/manifest/last_hot_pass_txid` together; a nil namespace `ActorDb` exercises branch-scoped compaction through public `compact_default_batch`.
 
 # Ralph Progress Log
 Started: Wed Apr 29 03:29:23 PM PDT 2026
@@ -560,4 +561,18 @@ Started: Wed Apr 29 03:29:23 PM PDT 2026
   - Shard-version cap enforcement belongs in the hot compactor write transaction so the eviction decision and new SHARD write share the same OCC surface.
   - Pinned shard-version checks use branch `desc_pin`/`bk_pin` converted through VTX; if a non-empty pin no longer has a VTX row, treat it as pinned rather than clearing history.
   - Legacy actor-scoped compaction still uses `DBHead.branch_id` for branch pin keys while branch-scoped storage continues through `BR/{branch_id}` helpers.
+---
+## 2026-04-29 20:37 PDT - US-032
+- Added regression coverage proving hot compactor passes write and advance `BR/{branch_id}/META/manifest/last_hot_pass_txid` on the real branch-scoped manifest sub-key.
+- Confirmed the existing hot compactor write updates the split manifest sub-key together with branch `/META/compact`.
+- Verified with `cargo test -p sqlite-storage --test compactor_compact compact_updates_branch_manifest_last_hot_pass_txid_each_pass -- --nocapture`, `cargo check -p sqlite-storage`, and `cargo test -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/CLAUDE.md` (via `AGENTS.md` symlink)
+  - `engine/packages/sqlite-storage/tests/compactor_compact.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Use a nil namespace `ActorDb` when an integration test needs to exercise branch-scoped compaction through the public `compact_default_batch` helper.
+  - The hot compactor stores `last_hot_pass_txid` as a big-endian u64 manifest sub-key, independent from `cold_drained_txid` and access-touch manifest fields.
+  - A branch-scoped pass should keep `BR/{branch_id}/META/compact.materialized_txid` and `BR/{branch_id}/META/manifest/last_hot_pass_txid` in lockstep.
 ---

@@ -3,6 +3,7 @@ use std::sync::Arc;
 use anyhow::Result;
 use gas::prelude::Id;
 use namespace::keys::metric::{Metric, MetricKey};
+use rivet_pools::NodeId;
 use sqlite_storage::{
 	compactor::{
 		SqliteCompactPayload,
@@ -12,18 +13,21 @@ use sqlite_storage::{
 	constants::MAX_SHARD_VERSIONS_PER_SHARD,
 	error::SqliteStorageError,
 	keys::{
-		PAGE_SIZE, branch_manifest_last_hot_pass_txid_key, branches_bk_pin_key, delta_chunk_key,
-		meta_compact_key, meta_head_key, pidx_delta_key, shard_key, shard_version_key, vtx_key,
+		PAGE_SIZE, actor_pointer_cur_key, branch_manifest_last_hot_pass_txid_key,
+		branches_bk_pin_key, delta_chunk_key, meta_compact_key, meta_head_key,
+		namespace_pointer_cur_key, pidx_delta_key, shard_key, shard_version_key, vtx_key,
 	},
 	ltx::{LtxHeader, decode_ltx_v3, encode_ltx_v3},
+	pump::ActorDb,
 	quota,
 	types::{
-		ActorBranchId, DBHead, DirtyPage, MetaCompact, decode_meta_compact, encode_db_head,
-		encode_meta_compact,
+		ActorBranchId, DBHead, DirtyPage, MetaCompact, NamespaceId, decode_actor_pointer,
+		decode_meta_compact, decode_namespace_pointer, encode_db_head, encode_meta_compact,
 	},
 };
 use tempfile::Builder;
 use tokio_util::sync::CancellationToken;
+use universalpubsub::{PubSub, driver::memory::MemoryDriver};
 use universaldb::{
 	error::DatabaseError, options::DatabaseOption, utils::IsolationLevel::Snapshot,
 };
@@ -36,6 +40,16 @@ async fn test_db() -> Result<universaldb::Database> {
 	let driver = universaldb::driver::RocksDbDatabaseDriver::new(path).await?;
 
 	Ok(universaldb::Database::new(Arc::new(driver)))
+}
+
+fn test_ups() -> PubSub {
+	PubSub::new(Arc::new(MemoryDriver::new(
+		"sqlite-storage-compact-test".to_string(),
+	)))
+}
+
+fn nil_namespace() -> Id {
+	Id::v1(uuid::Uuid::nil(), 1)
 }
 
 fn page(pgno: u32, fill: u8) -> DirtyPage {
@@ -85,6 +99,28 @@ async fn read_value(db: &universaldb::Database, key: Vec<u8>) -> Result<Option<V
 	.await
 }
 
+async fn read_manifest_last_hot_pass_txid(
+	db: &universaldb::Database,
+	branch_id: ActorBranchId,
+) -> Result<Option<u64>> {
+	Ok(read_value(db, branch_manifest_last_hot_pass_txid_key(branch_id))
+		.await?
+		.map(|value| u64::from_be_bytes(value.try_into().expect("manifest txid should be u64"))))
+}
+
+async fn read_branch_id(db: &universaldb::Database) -> Result<ActorBranchId> {
+	let namespace_id = NamespaceId::from_gas_id(nil_namespace());
+	let namespace_pointer_bytes = read_value(db, namespace_pointer_cur_key(namespace_id))
+		.await?
+		.expect("namespace pointer should exist");
+	let namespace_branch = decode_namespace_pointer(&namespace_pointer_bytes)?.current_branch;
+	let actor_pointer_bytes = read_value(db, actor_pointer_cur_key(namespace_branch, TEST_ACTOR))
+		.await?
+		.expect("actor pointer should exist");
+
+	Ok(decode_actor_pointer(&actor_pointer_bytes)?.current_branch)
+}
+
 async fn read_pidx_txid(db: &universaldb::Database, pgno: u32) -> Result<Option<u64>> {
 	Ok(read_value(db, pidx_delta_key(TEST_ACTOR, pgno))
 		.await?
@@ -95,6 +131,17 @@ async fn read_compact_txid(db: &universaldb::Database) -> Result<u64> {
 	let bytes = read_value(db, meta_compact_key(TEST_ACTOR))
 		.await?
 		.expect("compact meta should exist");
+
+	Ok(decode_meta_compact(&bytes)?.materialized_txid)
+}
+
+async fn read_branch_compact_txid(
+	db: &universaldb::Database,
+	branch_id: ActorBranchId,
+) -> Result<u64> {
+	let bytes = read_value(db, sqlite_storage::keys::branch_meta_compact_key(branch_id))
+		.await?
+		.expect("branch compact meta should exist");
 
 	Ok(decode_meta_compact(&bytes)?.materialized_txid)
 }
@@ -446,6 +493,50 @@ async fn compact_default_batch_basic_fold() -> Result<()> {
 			.is_none()
 	);
 	assert_eq!(read_compact_txid(&db).await?, 2);
+
+	Ok(())
+}
+
+#[tokio::test]
+async fn compact_updates_branch_manifest_last_hot_pass_txid_each_pass() -> Result<()> {
+	let _compaction_test_lock = COMPACTION_TEST_LOCK.lock().await;
+	let db = Arc::new(test_db().await?);
+	let actor_db = ActorDb::new(
+		db.clone(),
+		test_ups(),
+		nil_namespace(),
+		TEST_ACTOR.to_string(),
+		NodeId::new(),
+	);
+
+	actor_db.commit(vec![page(3, 0x13)], 8, 1_000).await?;
+	actor_db.commit(vec![page(5, 0x15)], 8, 2_000).await?;
+	let branch_id = read_branch_id(&db).await?;
+
+	let first = compact_default_batch(
+		db.clone(),
+		TEST_ACTOR.to_string(),
+		1,
+		CancellationToken::new(),
+	)
+	.await?;
+
+	assert_eq!(first.materialized_txid, 1);
+	assert_eq!(read_branch_compact_txid(&db, branch_id).await?, 1);
+	assert_eq!(read_manifest_last_hot_pass_txid(&db, branch_id).await?, Some(1));
+
+	actor_db.commit(vec![page(7, 0x17)], 8, 3_000).await?;
+	let second = compact_default_batch(
+		db.clone(),
+		TEST_ACTOR.to_string(),
+		10,
+		CancellationToken::new(),
+	)
+	.await?;
+
+	assert_eq!(second.materialized_txid, 3);
+	assert_eq!(read_branch_compact_txid(&db, branch_id).await?, 3);
+	assert_eq!(read_manifest_last_hot_pass_txid(&db, branch_id).await?, Some(3));
 
 	Ok(())
 }
