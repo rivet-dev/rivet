@@ -16,6 +16,7 @@ use sqlite_storage::pump::keys::{
 	namespace_branches_bk_pin_key, namespace_branches_desc_pin_key, namespace_branches_list_key,
 	namespace_branches_refcount_key, namespace_branches_tier_state_key, namespace_pointer_cur_key,
 	namespace_pointer_history_key, pidx_delta_key, pidx_delta_prefix, shard_key, shard_prefix,
+	shard_version_key, shard_version_prefix,
 };
 use sqlite_storage::pump::types::{ActorBranchId, NamespaceBranchId, NamespaceId};
 use uuid::Uuid;
@@ -124,6 +125,8 @@ fn data_prefixes_match_full_keys() {
 			.starts_with(&delta_chunk_prefix(TEST_ACTOR, 0x0102_0304_0506_0708))
 	);
 	assert!(shard_key(TEST_ACTOR, 3).starts_with(&shard_prefix(TEST_ACTOR)));
+	assert!(shard_version_key(TEST_ACTOR, 3, 7).starts_with(&shard_version_prefix(TEST_ACTOR, 3)));
+	assert!(shard_version_key(TEST_ACTOR, 3, 8) > shard_version_key(TEST_ACTOR, 3, 7));
 }
 
 #[test]

@@ -408,6 +408,18 @@ pub fn shard_key(actor_id: &str, shard_id: u32) -> Vec<u8> {
 	key
 }
 
+pub fn shard_version_prefix(actor_id: &str, shard_id: u32) -> Vec<u8> {
+	let mut key = shard_key(actor_id, shard_id);
+	key.push(b'/');
+	key
+}
+
+pub fn shard_version_key(actor_id: &str, shard_id: u32, as_of_txid: u64) -> Vec<u8> {
+	let mut key = shard_version_prefix(actor_id, shard_id);
+	key.extend_from_slice(&as_of_txid.to_be_bytes());
+	key
+}
+
 pub fn shard_prefix(actor_id: &str) -> Vec<u8> {
 	let prefix = actor_prefix(actor_id);
 	let mut key = Vec::with_capacity(prefix.len() + SHARD_PATH.len());

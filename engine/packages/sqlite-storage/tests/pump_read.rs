@@ -3,7 +3,7 @@ use std::sync::Arc;
 use anyhow::Result;
 use rivet_pools::NodeId;
 use sqlite_storage::{
-	keys::{delta_chunk_key, meta_head_key, pidx_delta_key, shard_key, PAGE_SIZE},
+	keys::{delta_chunk_key, meta_head_key, pidx_delta_key, shard_key, shard_version_key, PAGE_SIZE},
 	ltx::{LtxHeader, encode_ltx_v3},
 	pump::ActorDb,
 	types::{ActorBranchId, DBHead, DirtyPage, FetchedPage, encode_db_head},
@@ -27,8 +27,12 @@ fn test_ups() -> PubSub {
 }
 
 fn head(db_size_pages: u32) -> DBHead {
+	head_at(4, db_size_pages)
+}
+
+fn head_at(head_txid: u64, db_size_pages: u32) -> DBHead {
 	DBHead {
-		head_txid: 4,
+		head_txid,
 		db_size_pages,
 		post_apply_checksum: 0,
 		branch_id: ActorBranchId::nil(),
@@ -169,6 +173,34 @@ async fn get_pages_falls_back_to_shard_when_cached_pidx_is_stale() -> Result<()>
 		],
 	)
 	.await?;
+
+	assert_eq!(
+		actor_db.get_pages(vec![2]).await?,
+		vec![FetchedPage {
+			pgno: 2,
+			bytes: Some(page(0x44)),
+		}]
+	);
+
+	Ok(())
+}
+
+#[tokio::test]
+async fn get_pages_reads_latest_shard_version_not_past_head() -> Result<()> {
+	let db = Arc::new(test_db().await?);
+	seed(
+		&db,
+		vec![
+			(meta_head_key(TEST_ACTOR), encode_db_head(head_at(4, 3))?),
+			(shard_version_key(TEST_ACTOR, 0, 2), encoded_blob(2, &[(2, 0x22)])?),
+			(shard_version_key(TEST_ACTOR, 0, 4), encoded_blob(4, &[(2, 0x44)])?),
+			(shard_version_key(TEST_ACTOR, 0, 5), encoded_blob(5, &[(2, 0x55)])?),
+		],
+		Vec::new(),
+	)
+	.await?;
+
+	let actor_db = ActorDb::new(db, test_ups(), TEST_ACTOR.to_string(), NodeId::new());
 
 	assert_eq!(
 		actor_db.get_pages(vec![2]).await?,

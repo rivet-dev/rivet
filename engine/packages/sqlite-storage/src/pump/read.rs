@@ -7,7 +7,7 @@ use futures_util::TryStreamExt;
 use universaldb::{
 	RangeOption,
 	options::StreamingMode,
-	utils::IsolationLevel::Snapshot,
+	utils::{IsolationLevel::Snapshot, end_of_key_range},
 };
 
 use crate::pump::{
@@ -111,6 +111,7 @@ impl ActorDb {
 					let mut page_sources = BTreeMap::new();
 					let mut source_blobs = BTreeMap::new();
 					let mut missing_delta_prefixes = BTreeSet::new();
+					let mut shard_sources = BTreeMap::<u32, Option<(Vec<u8>, Vec<u8>)>>::new();
 					let mut stale_pidx_pgnos = BTreeSet::new();
 
 					for pgno in &pgnos_in_range {
@@ -119,44 +120,50 @@ impl ActorDb {
 							.copied()
 							.map(|txid| keys::delta_chunk_prefix(&actor_id, txid));
 
-						let mut source_key = preferred_delta_prefix
-							.clone()
-							.unwrap_or_else(|| keys::shard_key(&actor_id, pgno / SHARD_SIZE));
 						if preferred_delta_prefix
 							.as_ref()
 							.is_some_and(|prefix| missing_delta_prefixes.contains(prefix))
 						{
 							stale_pidx_pgnos.insert(*pgno);
-							source_key = keys::shard_key(&actor_id, pgno / SHARD_SIZE);
 						}
 
-						if !source_blobs.contains_key(&source_key) {
-							let mut blob = if source_key.starts_with(&keys::delta_prefix(&actor_id)) {
-								tx_load_delta_blob(&tx, &source_key).await?
-							} else {
-								tx_get_value(&tx, &source_key).await?
-							};
-
-							if blob.is_none() {
-								if let Some(delta_prefix) = preferred_delta_prefix.as_ref() {
+						if let Some(delta_prefix) = preferred_delta_prefix
+							.as_ref()
+							.filter(|prefix| !missing_delta_prefixes.contains(*prefix))
+						{
+							if !source_blobs.contains_key(delta_prefix) {
+								let blob = tx_load_delta_blob(&tx, delta_prefix).await?;
+								if let Some(blob) = blob {
+									source_blobs.insert(delta_prefix.clone(), blob);
+								} else {
 									missing_delta_prefixes.insert(delta_prefix.clone());
 									stale_pidx_pgnos.insert(*pgno);
-									source_key = keys::shard_key(&actor_id, pgno / SHARD_SIZE);
-									blob = match source_blobs.get(&source_key).cloned() {
-										Some(existing) => Some(existing),
-										None => tx_get_value(&tx, &source_key).await?,
-									};
 								}
 							}
 
-							if let Some(blob) = blob {
-								source_blobs.insert(source_key.clone(), blob);
-							} else {
+							if source_blobs.contains_key(delta_prefix) {
+								page_sources.insert(*pgno, delta_prefix.clone());
 								continue;
 							}
 						}
 
-						page_sources.insert(*pgno, source_key);
+						let shard_id = pgno / SHARD_SIZE;
+						if !shard_sources.contains_key(&shard_id) {
+							let source = tx_load_latest_shard_blob(&tx, &actor_id, shard_id, head.head_txid)
+								.await?;
+							shard_sources.insert(shard_id, source);
+						}
+
+						if let Some((source_key, blob)) = shard_sources
+							.get(&shard_id)
+							.cloned()
+							.flatten()
+						{
+							if !source_blobs.contains_key(&source_key) {
+								source_blobs.insert(source_key.clone(), blob);
+							}
+							page_sources.insert(*pgno, source_key);
+						}
 					}
 
 					Ok(GetPagesTxResult {
@@ -300,6 +307,40 @@ async fn tx_load_delta_blob(
 	}
 
 	Ok(Some(delta_blob))
+}
+
+async fn tx_load_latest_shard_blob(
+	tx: &universaldb::Transaction,
+	actor_id: &str,
+	shard_id: u32,
+	as_of_txid: u64,
+) -> Result<Option<(Vec<u8>, Vec<u8>)>> {
+	let prefix = keys::shard_version_prefix(actor_id, shard_id);
+	let end = end_of_key_range(&keys::shard_version_key(actor_id, shard_id, as_of_txid));
+	let informal = tx.informal();
+	let mut stream = informal.get_ranges_keyvalues(
+		RangeOption {
+			mode: StreamingMode::WantAll,
+			..(prefix.as_slice(), end.as_slice()).into()
+		},
+		Snapshot,
+	);
+
+	let mut latest = None;
+	while let Some(entry) = stream.try_next().await? {
+		latest = Some((entry.key().to_vec(), entry.value().to_vec()));
+	}
+
+	if latest.is_some() {
+		return Ok(latest);
+	}
+
+	let legacy_key = keys::shard_key(actor_id, shard_id);
+	Ok(tx
+		.informal()
+		.get(&legacy_key, Snapshot)
+		.await?
+		.map(|value| (legacy_key, value.to_vec())))
 }
 
 fn decode_pidx_pgno(actor_id: &str, key: &[u8]) -> Result<u32> {

@@ -5,6 +5,7 @@
 - PITR key builders use top-level `[0x02][partition]` prefixes; legacy actor-scoped key helpers remain only as compatibility until the hot path migrates to branch IDs.
 - PITR tunable constants live in `engine/packages/sqlite-storage/src/pump/constants.rs` and are re-exported at the `sqlite_storage` crate root.
 - `SqliteStorageError` uses `RivetError` derive plus a manual `Display`/`Error` impl so errors can produce checked-in `engine/artifacts/errors/*.json` schemas while staying downcastable as `SqliteStorageError`.
+- During the actor-scoped-to-branch migration, versioned SHARD writes use legacy `/SHARD/{shard_id}/{as_of_txid}` keys and readers keep fallback support for old `/SHARD/{shard_id}` blobs.
 
 # Ralph Progress Log
 Started: Wed Apr 29 03:29:23 PM PDT 2026
@@ -106,4 +107,26 @@ Started: Wed Apr 29 03:29:23 PM PDT 2026
   - `RivetError` derives generate checked-in JSON schemas under `engine/artifacts/errors/`; include those artifacts with the code change.
   - The derive macro needs `serde::Serialize` in scope and `serde_json` available to the crate when variants carry metadata fields.
   - Keep `SqliteStorageError` downcastable because envoy, VFS, and existing tests inspect typed variants directly.
+---
+## 2026-04-29 17:22 PDT - US-007
+- Migrated hot compaction to write versioned legacy SHARD keys at `/SHARD/{shard_id}/{max_folded_txid}` and to record `last_hot_pass_txid` through the current `DBHead.branch_id` bridge.
+- Updated page reads to choose the latest SHARD version not newer than `head_txid`, with fallback for old unversioned SHARD blobs; truncate and takeover decoding now accept both key shapes.
+- Verified with `cargo test -p sqlite-storage` and `cargo check -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/CLAUDE.md` (via `AGENTS.md` symlink)
+  - `engine/packages/sqlite-storage/src/compactor/compact.rs`
+  - `engine/packages/sqlite-storage/src/compactor/shard.rs`
+  - `engine/packages/sqlite-storage/src/pump/commit.rs`
+  - `engine/packages/sqlite-storage/src/pump/keys.rs`
+  - `engine/packages/sqlite-storage/src/pump/read.rs`
+  - `engine/packages/sqlite-storage/src/takeover.rs`
+  - `engine/packages/sqlite-storage/tests/compactor_compact.rs`
+  - `engine/packages/sqlite-storage/tests/pump_keys.rs`
+  - `engine/packages/sqlite-storage/tests/pump_read.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Versioned legacy SHARD keys coexist with old unversioned SHARD blobs until root branch allocation moves storage under `BR/{branch_id}`.
+  - `fold_shard` now returns the net bytes added for its versioned SHARD write so hot compaction quota accounting stays balanced.
+  - The RocksDB-backed test driver did not produce the expected newest row from the reverse range shape here; the bounded scan keeps the newest matching SHARD version and is acceptable with the 32-version cap.
 ---

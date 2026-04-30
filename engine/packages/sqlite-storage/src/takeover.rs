@@ -226,8 +226,16 @@ fn decode_shard_id(actor_id: &str, key: &[u8]) -> Result<u32> {
 		.strip_prefix(prefix.as_slice())
 		.context("shard key did not start with expected prefix")?;
 	let bytes: [u8; SHARD_ID_BYTES] = suffix
+		.get(..SHARD_ID_BYTES)
+		.context("shard key suffix had invalid length")?
 		.try_into()
 		.map_err(|_| anyhow!("shard key suffix had invalid length"))?;
+	if suffix.len() != SHARD_ID_BYTES
+		&& (suffix.len() != SHARD_ID_BYTES + 1 + std::mem::size_of::<u64>()
+			|| suffix[SHARD_ID_BYTES] != b'/')
+	{
+		anyhow::bail!("shard key suffix had invalid length");
+	}
 
 	Ok(u32::from_be_bytes(bytes))
 }

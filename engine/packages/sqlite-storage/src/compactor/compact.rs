@@ -230,7 +230,10 @@ async fn write_batch(
 					continue;
 				}
 
-				fold_shard(&tx, &actor_id, *shard_id, page_updates).await?;
+				let bytes_added =
+					fold_shard(&tx, &actor_id, *shard_id, plan.materialized_txid, page_updates)
+						.await?;
+				bytes_freed -= bytes_added;
 				for page in fold_pages.iter().filter(|page| page.pgno <= head.db_size_pages) {
 					let key = keys::pidx_delta_key(&actor_id, page.pgno);
 					let expected_value = page.expected_txid.to_be_bytes();
@@ -256,6 +259,10 @@ async fn write_batch(
 			.context("encode compact meta")?;
 			tx.informal()
 				.set(&keys::meta_compact_key(&actor_id), &compact);
+			tx.informal().set(
+				&keys::branch_manifest_last_hot_pass_txid_key(head.branch_id),
+				&plan.materialized_txid.to_be_bytes(),
+			);
 			if bytes_freed != 0 {
 				quota::atomic_add(&tx, &actor_id, -bytes_freed);
 			}

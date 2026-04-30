@@ -10,7 +10,8 @@ use sqlite_storage::{
 		compact_default_batch, fold_shard, worker,
 	},
 	keys::{
-		PAGE_SIZE, delta_chunk_key, meta_compact_key, meta_head_key, pidx_delta_key, shard_key,
+		PAGE_SIZE, branch_manifest_last_hot_pass_txid_key, delta_chunk_key, meta_compact_key,
+		meta_head_key, pidx_delta_key, shard_key, shard_version_key,
 	},
 	ltx::{LtxHeader, decode_ltx_v3, encode_ltx_v3},
 	quota,
@@ -137,12 +138,16 @@ async fn read_sqlite_metric(
 	.await
 }
 
-async fn read_shard(db: &universaldb::Database, shard_id: u32) -> Result<Vec<DirtyPage>> {
+async fn read_shard(
+	db: &universaldb::Database,
+	shard_id: u32,
+	as_of_txid: u64,
+) -> Result<Vec<DirtyPage>> {
 	let bytes = db
 		.run(move |tx| async move {
 			Ok(tx
 				.informal()
-				.get(&shard_key(TEST_ACTOR, shard_id), Snapshot)
+				.get(&shard_version_key(TEST_ACTOR, shard_id, as_of_txid), Snapshot)
 				.await?
 				.map(Vec::<u8>::from))
 		})
@@ -155,11 +160,15 @@ async fn read_shard(db: &universaldb::Database, shard_id: u32) -> Result<Vec<Dir
 async fn fold(
 	db: &universaldb::Database,
 	shard_id: u32,
+	as_of_txid: u64,
 	updates: Vec<(u32, Vec<u8>)>,
 ) -> Result<()> {
 	db.run(move |tx| {
 		let updates = updates.clone();
-		async move { fold_shard(&tx, TEST_ACTOR, shard_id, updates).await }
+		async move {
+			fold_shard(&tx, TEST_ACTOR, shard_id, as_of_txid, updates).await?;
+			Ok(())
+		}
 	})
 	.await
 }
@@ -274,9 +283,9 @@ fn assert_pages(actual: &[DirtyPage], expected: &[(u32, u8)]) {
 async fn fold_into_empty_shard() -> Result<()> {
 	let db = test_db().await?;
 
-	fold(&db, 0, vec![update(3, 0x33), update(5, 0x55)]).await?;
+	fold(&db, 0, 1, vec![update(3, 0x33), update(5, 0x55)]).await?;
 
-	assert_pages(&read_shard(&db, 0).await?, &[(3, 0x33), (5, 0x55)]);
+	assert_pages(&read_shard(&db, 0, 1).await?, &[(3, 0x33), (5, 0x55)]);
 	Ok(())
 }
 
@@ -292,10 +301,10 @@ async fn fold_into_existing_shard_newer_wins() -> Result<()> {
 	)
 	.await?;
 
-	fold(&db, 0, vec![update(3, 0x23), update(7, 0x17)]).await?;
+	fold(&db, 0, 2, vec![update(3, 0x23), update(7, 0x17)]).await?;
 
 	assert_pages(
-		&read_shard(&db, 0).await?,
+		&read_shard(&db, 0, 2).await?,
 		&[(3, 0x23), (5, 0x15), (7, 0x17)],
 	);
 	Ok(())
@@ -319,9 +328,9 @@ async fn fold_overwrite_all_pages() -> Result<()> {
 	)
 	.await?;
 
-	fold(&db, 1, updates).await?;
+	fold(&db, 1, 2, updates).await?;
 
-	assert_pages(&read_shard(&db, 1).await?, &expected);
+	assert_pages(&read_shard(&db, 1, 2).await?, &expected);
 	Ok(())
 }
 
@@ -339,9 +348,9 @@ async fn fold_partial_shard_keeps_unmodified_pages() -> Result<()> {
 	)
 	.await?;
 
-	fold(&db, 1, vec![update(96, 0xee)]).await?;
+	fold(&db, 1, 2, vec![update(96, 0xee)]).await?;
 
-	assert_pages(&read_shard(&db, 1).await?, &expected);
+	assert_pages(&read_shard(&db, 1, 2).await?, &expected);
 	Ok(())
 }
 
@@ -352,11 +361,12 @@ async fn fold_byte_count_metric() -> Result<()> {
 	fold(
 		&db,
 		0,
+		1,
 		vec![update(3, 0x33), update(5, 0x55), update(5, 0x66)],
 	)
 	.await?;
 
-	let pages = read_shard(&db, 0).await?;
+	let pages = read_shard(&db, 0, 1).await?;
 	assert_eq!(pages.len(), 2);
 	assert_eq!(
 		pages.iter().map(|page| page.bytes.len()).sum::<usize>(),
@@ -392,11 +402,20 @@ async fn compact_default_batch_basic_fold() -> Result<()> {
 	assert_eq!(outcome.deltas_freed, 2);
 	assert_eq!(outcome.compare_and_clear_noops, 0);
 	assert_eq!(outcome.materialized_txid, 2);
-	assert_pages(&read_shard(&db, 0).await?, &[(3, 0x13), (5, 0x15)]);
-	assert_pages(&read_shard(&db, 1).await?, &[(70, 0x70)]);
+	assert_pages(&read_shard(&db, 0, 2).await?, &[(3, 0x13), (5, 0x15)]);
+	assert_pages(&read_shard(&db, 1, 2).await?, &[(70, 0x70)]);
 	assert_eq!(read_pidx_txid(&db, 3).await?, None);
 	assert_eq!(read_pidx_txid(&db, 5).await?, None);
 	assert_eq!(read_pidx_txid(&db, 70).await?, None);
+	assert_eq!(
+		read_value(
+			&db,
+			branch_manifest_last_hot_pass_txid_key(ActorBranchId::nil())
+		)
+		.await?
+		.map(|value| u64::from_be_bytes(value.try_into().expect("manifest txid should be u64"))),
+		Some(2)
+	);
 	assert!(
 		read_value(&db, delta_chunk_key(TEST_ACTOR, 1, 0))
 			.await?
@@ -472,7 +491,7 @@ async fn compact_compare_and_clear_noop_keeps_newer_pidx() -> Result<()> {
 			.await?
 			.is_some()
 	);
-	assert_pages(&read_shard(&db, 0).await?, &[(3, 0x13)]);
+	assert_pages(&read_shard(&db, 0, 1).await?, &[(3, 0x13)]);
 
 	Ok(())
 }
