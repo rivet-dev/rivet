@@ -1,5 +1,6 @@
 pub mod cold_tier;
 pub mod compactor;
+pub mod gc;
 pub mod pump;
 #[cfg(debug_assertions)]
 pub mod takeover;

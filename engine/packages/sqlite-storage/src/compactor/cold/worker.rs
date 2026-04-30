@@ -16,6 +16,7 @@ use crate::{
 		SqliteColdCompactPayload, SqliteColdCompactSubject, decode_cold_compact_payload,
 		publish::Ups,
 	},
+	gc,
 	pump::types::ActorBranchId,
 };
 
@@ -353,6 +354,19 @@ async fn run_scaffold_pass(
 		deleted_objects = sweep_output.deleted_objects,
 		"sqlite cold compactor follow-up sweep finished"
 	);
+	let hot_gc_output = gc::sweep_branch_hot_history(udb, plan.branch_id).await?;
+	if let Some(hot_gc_output) = hot_gc_output {
+		tracing::debug!(
+			branch_id = ?plan.branch_id,
+			pass_uuid = %plan.pass_uuid,
+			gc_pin = ?hot_gc_output.gc_pin,
+			txid_floor = ?hot_gc_output.txid_floor,
+			commits_deleted = hot_gc_output.commits_deleted,
+			vtx_deleted = hot_gc_output.vtx_deleted,
+			delta_chunks_deleted = hot_gc_output.delta_chunks_deleted,
+			"sqlite cold compactor hot history GC finished"
+		);
+	}
 
 	Ok(())
 }

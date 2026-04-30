@@ -1,22 +1,17 @@
 use std::{collections::BTreeSet, sync::Arc};
 
 use anyhow::{Context, Result, bail};
-use universaldb::utils::IsolationLevel::Serializable;
 
 use crate::{
 	cold_tier::ColdTier,
+	gc::{VERSIONSTAMP_ZERO, read_branch_gc_pin_tx},
 	pump::{
-		keys,
 		types::{
-			ActorBranchId, ColdManifestChunk, ColdManifestChunkRef, decode_actor_branch_record,
-			decode_cold_manifest_chunk, decode_cold_manifest_index, encode_cold_manifest_chunk,
-			encode_cold_manifest_index,
+			ActorBranchId, ColdManifestChunk, ColdManifestChunkRef, decode_cold_manifest_chunk,
+			decode_cold_manifest_index, encode_cold_manifest_chunk, encode_cold_manifest_index,
 		},
 	},
 };
-
-const VERSIONSTAMP_INFINITY: [u8; 16] = [0xff; 16];
-const VERSIONSTAMP_ZERO: [u8; 16] = [0; 16];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ColdSweepOutput {
@@ -166,54 +161,11 @@ async fn read_gc_pin(
 	branch_id: ActorBranchId,
 ) -> Result<Option<[u8; 16]>> {
 	db.run(move |tx| async move {
-		let Some(record_bytes) = tx
-			.informal()
-			.get(&keys::branches_list_key(branch_id), Serializable)
+		Ok(read_branch_gc_pin_tx(&tx, branch_id)
 			.await?
-		else {
-			return Ok(None);
-		};
-		let record = decode_actor_branch_record(&record_bytes)
-			.context("decode sqlite branch record during cold sweep")?;
-		let refcount = read_i64_le(&tx, &keys::branches_refcount_key(branch_id)).await?;
-		let root_pin = if refcount > 0 {
-			record.root_versionstamp
-		} else {
-			VERSIONSTAMP_INFINITY
-		};
-		let desc_pin = read_versionstamp_pin(&tx, &keys::branches_desc_pin_key(branch_id)).await?;
-		let bk_pin = read_versionstamp_pin(&tx, &keys::branches_bk_pin_key(branch_id)).await?;
-
-		Ok(Some(root_pin.min(desc_pin).min(bk_pin)))
+			.map(|pin| pin.gc_pin))
 	})
 	.await
-}
-
-async fn read_i64_le(tx: &universaldb::Transaction, key: &[u8]) -> Result<i64> {
-	let Some(bytes) = tx.informal().get(key, Serializable).await? else {
-		return Ok(0);
-	};
-	let bytes: [u8; std::mem::size_of::<i64>()] = Vec::<u8>::from(bytes)
-		.as_slice()
-		.try_into()
-		.context("sqlite branch refcount should be exactly 8 bytes")?;
-
-	Ok(i64::from_le_bytes(bytes))
-}
-
-async fn read_versionstamp_pin(tx: &universaldb::Transaction, key: &[u8]) -> Result<[u8; 16]> {
-	let Some(bytes) = tx.informal().get(key, Serializable).await? else {
-		return Ok(VERSIONSTAMP_INFINITY);
-	};
-	let pin: [u8; 16] = Vec::<u8>::from(bytes)
-		.as_slice()
-		.try_into()
-		.context("sqlite branch pin should be exactly 16 bytes")?;
-	if pin == VERSIONSTAMP_ZERO {
-		return Ok(VERSIONSTAMP_INFINITY);
-	}
-
-	Ok(pin)
 }
 
 fn retain_manifest_chunk(

@@ -45,9 +45,29 @@
 - Eviction predicate planning is SHARD-version scoped: require a newer FDB SHARD version, hot-cache age, cold-drain coverage, hot-pass margin, and no descendant/bookmark pin resolved through VTX before clearing.
 - Eviction clear work is plan-then-fence: carry expected SHARD/PIDX values from the plan, regular-read `last_hot_pass_txid` in the clear tx, then use `COMPARE_AND_CLEAR`.
 - Fully evicted branches clear `CTR/eviction_index` only when the branch's current SHARD rows are all covered by the planned compare-and-clear set; keep the index while any SHARD remains.
+- Branch GC pin computation lives in `sqlite_storage::gc`; reuse it for cold sweeps, hot-history cleanup, and debug estimates so refcount/root/desc/bookmark pin math stays consistent.
 
 # Ralph Progress Log
 Started: Wed Apr 29 03:29:23 PM PDT 2026
+---
+## 2026-04-29 22:19 PDT - US-047
+- Implemented shared branch GC pin computation in `sqlite_storage::gc`, using refcount/root_versionstamp plus descendant and bookmark pins with no persisted ratchet.
+- Added hot-history GC that translates the computed versionstamp pin through `VTX` and clears eligible branch `COMMITS`, `VTX`, and `DELTA` rows.
+- Wired the cold compactor follow-up path to run the shared hot-history sweep after S3 manifest/layer cleanup.
+- Verified with `cargo test -p sqlite-storage --test gc`, `cargo check -p sqlite-storage`, and `cargo test -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/CLAUDE.md`
+  - `engine/packages/sqlite-storage/src/compactor/cold/phase_d.rs`
+  - `engine/packages/sqlite-storage/src/compactor/cold/worker.rs`
+  - `engine/packages/sqlite-storage/src/gc/mod.rs`
+  - `engine/packages/sqlite-storage/src/lib.rs`
+  - `engine/packages/sqlite-storage/tests/gc.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Branch GC pin math should go through `sqlite_storage::gc` so cold object sweeps, hot FDB cleanup, and future debug APIs agree on refcount/root/desc/bookmark pin semantics.
+  - For txid-keyed rows, GC uses `VTX[gc_pin] -> txid_floor` and deletes only rows below that floor; missing VTX is treated conservatively as no hot-history deletion.
+  - Descendant/bookmark pins are recomputed from current counters each pass, not ratcheted, so deleting a descendant or bookmark can immediately advance the GC floor.
 ---
 ## 2026-04-29 22:14 PDT - US-046
 - Implemented eviction-index cleanup for fully evicted branches by carrying the candidate access bucket into each planned SHARD eviction and clearing `CTR/eviction_index` when no current SHARD row will survive the fenced clear tx.
