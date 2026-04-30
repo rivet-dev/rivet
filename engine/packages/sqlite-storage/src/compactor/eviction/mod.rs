@@ -1,4 +1,5 @@
 use std::{
+	collections::BTreeMap,
 	ops::Deref,
 	sync::Arc,
 	time::{Duration, SystemTime, UNIX_EPOCH},
@@ -20,9 +21,10 @@ use crate::pump::{
 	constants::{ACCESS_TOUCH_THROTTLE_MS, HOT_CACHE_WINDOW_MS, SHARD_RETENTION_MARGIN},
 	keys::{self, CompactorQueueKind},
 	types::ActorBranchId,
+	udb,
 };
 
-use super::{CompactorLease, TakeOutcome, decode_lease, encode_lease};
+use super::{CompactorLease, TakeOutcome, decode_lease, encode_lease, metrics};
 
 const EVICTION_COMPACTOR_NAME: &str = "sqlite_eviction_compactor";
 const VERSIONSTAMP_ZERO: [u8; 16] = [0; 16];
@@ -57,6 +59,14 @@ pub struct EvictableShardVersion {
 	pub shard_id: u32,
 	pub as_of_txid: u64,
 	pub last_hot_pass_txid_at_plan: u64,
+	pub shard_value: Vec<u8>,
+	pub pidx_deletes: Vec<EvictablePidxEntry>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EvictablePidxEntry {
+	pub key: Vec<u8>,
+	pub expected_value: Vec<u8>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -158,7 +168,14 @@ pub async fn sweep_once(
 		});
 	}
 
-	let result = scan_eviction_index(udb, eviction_config.batch_size, now_ms, cancel_token).await;
+	let result = async {
+		let (scanned_candidates, evictable_shard_versions) =
+			scan_eviction_index(udb, eviction_config.batch_size, now_ms, cancel_token).await?;
+		let evictable_shard_versions =
+			clear_evictable_shard_versions(udb, evictable_shard_versions).await?;
+		Ok::<_, anyhow::Error>((scanned_candidates, evictable_shard_versions))
+	}
+	.await;
 	let release_result = udb
 		.run(move |tx| async move { release_global_lease(&tx).await })
 		.await;
@@ -292,6 +309,7 @@ async fn plan_evictable_shard_versions(
 	let desc_pin_txid = read_pin_txid(tx, branch_id, &keys::branches_desc_pin_key(branch_id)).await?;
 	let bk_pin_txid = read_pin_txid(tx, branch_id, &keys::branches_bk_pin_key(branch_id)).await?;
 	let shard_versions = load_branch_shard_versions(tx, branch_id).await?;
+	let pidx_rows = load_branch_pidx_rows(tx, branch_id).await?;
 
 	let mut evictable = Vec::new();
 	for (idx, version) in shard_versions.iter().enumerate() {
@@ -316,10 +334,100 @@ async fn plan_evictable_shard_versions(
 			shard_id: version.shard_id,
 			as_of_txid: version.as_of_txid,
 			last_hot_pass_txid_at_plan: last_hot_pass_txid,
+			shard_value: version.value.clone(),
+			pidx_deletes: pidx_rows
+				.iter()
+				.filter(|row| {
+					row.shard_id == version.shard_id && row.owner_txid <= version.as_of_txid
+				})
+				.map(|row| EvictablePidxEntry {
+					key: row.key.clone(),
+					expected_value: row.value.clone(),
+				})
+				.collect(),
 		});
 	}
 
 	Ok(evictable)
+}
+
+async fn clear_evictable_shard_versions(
+	udb: &universaldb::Database,
+	evictable_shard_versions: Vec<EvictableShardVersion>,
+) -> Result<Vec<EvictableShardVersion>> {
+	if evictable_shard_versions.is_empty() {
+		return Ok(evictable_shard_versions);
+	}
+
+	let clear_outcome = udb
+		.run({
+			let evictable_shard_versions = evictable_shard_versions.clone();
+			move |tx| {
+				let evictable_shard_versions = evictable_shard_versions.clone();
+				async move {
+					let planned_hot_pass_txids =
+						planned_hot_pass_txids_by_branch(&evictable_shard_versions);
+					for (branch_id, planned_txid) in planned_hot_pass_txids {
+						let current_txid = read_u64_be(
+							&tx,
+							&keys::branch_manifest_last_hot_pass_txid_key(branch_id),
+							Serializable,
+						)
+						.await?
+						.unwrap_or(0);
+						if current_txid != planned_txid {
+							return Ok(EvictionClearOutcome::HotPassAdvanced);
+						}
+					}
+
+					for version in &evictable_shard_versions {
+						for pidx in &version.pidx_deletes {
+							udb::compare_and_clear(&tx, &pidx.key, &pidx.expected_value);
+						}
+						udb::compare_and_clear(
+							&tx,
+							&keys::branch_shard_key(
+								version.branch_id,
+								version.shard_id,
+								version.as_of_txid,
+							),
+							&version.shard_value,
+						);
+					}
+
+					Ok(EvictionClearOutcome::Cleared)
+				}
+			}
+		})
+		.await?;
+
+	match clear_outcome {
+		EvictionClearOutcome::Cleared => Ok(evictable_shard_versions),
+		EvictionClearOutcome::HotPassAdvanced => {
+			metrics::SQLITE_EVICTION_OCC_ABORT_TOTAL
+				.with_label_values(&["hot_pass_advanced"])
+				.inc();
+			Ok(Vec::new())
+		}
+	}
+}
+
+fn planned_hot_pass_txids_by_branch(
+	evictable_shard_versions: &[EvictableShardVersion],
+) -> BTreeMap<ActorBranchId, u64> {
+	let mut planned = BTreeMap::new();
+	for version in evictable_shard_versions {
+		planned
+			.entry(version.branch_id)
+			.or_insert(version.last_hot_pass_txid_at_plan);
+	}
+	planned
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum EvictionClearOutcome {
+	Cleared,
+	HotPassAdvanced,
 }
 
 fn is_past_hot_cache_window(last_access_bucket: i64, now_ms: i64) -> Result<bool> {
@@ -333,6 +441,15 @@ fn is_past_hot_cache_window(last_access_bucket: i64, now_ms: i64) -> Result<bool
 struct BranchShardVersion {
 	shard_id: u32,
 	as_of_txid: u64,
+	value: Vec<u8>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct BranchPidxRow {
+	shard_id: u32,
+	owner_txid: u64,
+	key: Vec<u8>,
+	value: Vec<u8>,
 }
 
 async fn load_branch_shard_versions(
@@ -353,18 +470,56 @@ async fn load_branch_shard_versions(
 	let mut versions = Vec::new();
 
 	while let Some(entry) = stream.try_next().await? {
-		if let Some(version) = decode_branch_shard_version_key(branch_id, entry.key())? {
-			versions.push(version);
+		if let Some((shard_id, as_of_txid)) =
+			decode_branch_shard_version_key(branch_id, entry.key())?
+		{
+			versions.push(BranchShardVersion {
+				shard_id,
+				as_of_txid,
+				value: entry.value().to_vec(),
+			});
 		}
 	}
 
 	Ok(versions)
 }
 
+async fn load_branch_pidx_rows(
+	tx: &universaldb::Transaction,
+	branch_id: ActorBranchId,
+) -> Result<Vec<BranchPidxRow>> {
+	let prefix = keys::branch_pidx_prefix(branch_id);
+	let prefix_subspace =
+		universaldb::Subspace::from(universaldb::tuple::Subspace::from_bytes(prefix));
+	let informal = tx.informal();
+	let mut stream = informal.get_ranges_keyvalues(
+		RangeOption {
+			mode: StreamingMode::WantAll,
+			..RangeOption::from(&prefix_subspace)
+		},
+		Snapshot,
+	);
+	let mut rows = Vec::new();
+
+	while let Some(entry) = stream.try_next().await? {
+		let pgno = decode_branch_pidx_pgno(branch_id, entry.key())?;
+		let value = entry.value().to_vec();
+		let owner_txid = decode_pidx_txid(&value)?;
+		rows.push(BranchPidxRow {
+			shard_id: pgno / keys::SHARD_SIZE,
+			owner_txid,
+			key: entry.key().to_vec(),
+			value,
+		});
+	}
+
+	Ok(rows)
+}
+
 fn decode_branch_shard_version_key(
 	branch_id: ActorBranchId,
 	key: &[u8],
-) -> Result<Option<BranchShardVersion>> {
+) -> Result<Option<(u32, u64)>> {
 	let prefix = keys::branch_shard_prefix(branch_id);
 	let suffix = key
 		.strip_prefix(prefix.as_slice())
@@ -389,10 +544,27 @@ fn decode_branch_shard_version_key(
 			.context("decode branch shard txid")?,
 	);
 
-	Ok(Some(BranchShardVersion {
-		shard_id,
-		as_of_txid,
-	}))
+	Ok(Some((shard_id, as_of_txid)))
+}
+
+fn decode_branch_pidx_pgno(branch_id: ActorBranchId, key: &[u8]) -> Result<u32> {
+	let prefix = keys::branch_pidx_prefix(branch_id);
+	let suffix = key
+		.strip_prefix(prefix.as_slice())
+		.context("branch pidx key did not start with expected prefix")?;
+	let suffix: [u8; std::mem::size_of::<u32>()] = suffix
+		.try_into()
+		.context("branch pidx key suffix had invalid length")?;
+
+	Ok(u32::from_be_bytes(suffix))
+}
+
+fn decode_pidx_txid(value: &[u8]) -> Result<u64> {
+	let bytes: [u8; std::mem::size_of::<u64>()] = value
+		.try_into()
+		.context("pidx txid had invalid length")?;
+
+	Ok(u64::from_be_bytes(bytes))
 }
 
 async fn read_u64_be(
@@ -477,6 +649,13 @@ pub mod test_hooks {
 			plan_evictable_shard_versions(&tx, branch_id, last_access_bucket, now_ms).await
 		})
 		.await
+	}
+
+	pub async fn clear_evictable_shard_versions_for_test(
+		udb: &universaldb::Database,
+		evictable_shard_versions: Vec<EvictableShardVersion>,
+	) -> Result<Vec<EvictableShardVersion>> {
+		clear_evictable_shard_versions(udb, evictable_shard_versions).await
 	}
 }
 

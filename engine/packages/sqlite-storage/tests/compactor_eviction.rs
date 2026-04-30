@@ -5,12 +5,13 @@ use rivet_pools::NodeId;
 use sqlite_storage::{
 	compactor::{
 		CompactorLease, encode_lease,
-		eviction::{EvictableShardVersion, EvictionCompactorConfig, test_hooks},
+		eviction::{EvictablePidxEntry, EvictableShardVersion, EvictionCompactorConfig, test_hooks},
+		metrics,
 	},
 	constants::{ACCESS_TOUCH_THROTTLE_MS, HOT_CACHE_WINDOW_MS, SHARD_RETENTION_MARGIN},
 	keys::{
 		CompactorQueueKind, branch_manifest_cold_drained_txid_key,
-		branch_manifest_last_hot_pass_txid_key, branch_shard_key, branch_vtx_key,
+		branch_manifest_last_hot_pass_txid_key, branch_pidx_key, branch_shard_key, branch_vtx_key,
 		branches_bk_pin_key, branches_desc_pin_key, compactor_global_lease_key,
 		ctr_eviction_index_key,
 	},
@@ -113,6 +114,12 @@ async fn write_branch_pin(
 	.await
 }
 
+fn eviction_occ_abort_count() -> u64 {
+	metrics::SQLITE_EVICTION_OCC_ABORT_TOTAL
+		.with_label_values(&["hot_pass_advanced"])
+		.get()
+}
+
 #[tokio::test]
 async fn sweep_takes_global_lease_and_scans_oldest_candidates_first() -> Result<()> {
 	let db = test_db().await?;
@@ -209,6 +216,8 @@ async fn predicate_returns_evictable_when_all_gates_pass() -> Result<()> {
 			shard_id: 4,
 			as_of_txid: 10,
 			last_hot_pass_txid_at_plan: 100 + SHARD_RETENTION_MARGIN + 1,
+			shard_value: vec![1],
+			pidx_deletes: Vec::new(),
 		}]
 	);
 
@@ -227,6 +236,98 @@ async fn predicate_requires_hot_cache_window_to_pass() -> Result<()> {
 		test_hooks::plan_evictable_shard_versions_for_test(&db, branch_id, 0, now_ms).await?;
 
 	assert!(evictable.is_empty());
+
+	Ok(())
+}
+
+#[tokio::test]
+async fn sweep_clears_planned_rows_with_compare_and_clear() -> Result<()> {
+	let db = test_db().await?;
+	let branch_id = branch_id(0x1113);
+	let old_pidx_key = branch_pidx_key(branch_id, 4);
+	let newer_pidx_key = branch_pidx_key(branch_id, 5);
+
+	seed_eviction_index(&db, vec![(0, branch_id)]).await?;
+	seed_evictable_shard_candidate(&db, branch_id, 0, 10, 100).await?;
+	db.run({
+		let old_pidx_key = old_pidx_key.clone();
+		let newer_pidx_key = newer_pidx_key.clone();
+		move |tx| {
+			let old_pidx_key = old_pidx_key.clone();
+			let newer_pidx_key = newer_pidx_key.clone();
+			async move {
+				tx.informal().set(&old_pidx_key, &10u64.to_be_bytes());
+				tx.informal().set(&newer_pidx_key, &101u64.to_be_bytes());
+				Ok(())
+			}
+		}
+	})
+	.await?;
+
+	let outcome = test_hooks::sweep_once_for_test(
+		&db,
+		&EvictionCompactorConfig {
+			batch_size: 1,
+			..EvictionCompactorConfig::default()
+		},
+		NodeId::new(),
+		CancellationToken::new(),
+	)
+	.await?;
+
+	assert_eq!(outcome.evictable_shard_versions.len(), 1);
+	assert!(read_value(&db, branch_shard_key(branch_id, 0, 10)).await?.is_none());
+	assert!(read_value(&db, old_pidx_key).await?.is_none());
+	assert_eq!(
+		read_value(&db, newer_pidx_key).await?,
+		Some(101u64.to_be_bytes().to_vec())
+	);
+	assert_eq!(
+		read_value(&db, branch_shard_key(branch_id, 0, 100)).await?,
+		Some(vec![2])
+	);
+
+	Ok(())
+}
+
+#[tokio::test]
+async fn sweep_aborts_clear_when_hot_pass_advances_after_plan() -> Result<()> {
+	let db = test_db().await?;
+	let branch_id = branch_id(0x1114);
+	let before_metric = eviction_occ_abort_count();
+
+	seed_evictable_shard_candidate(&db, branch_id, 0, 10, 100).await?;
+	let mut evictable =
+		test_hooks::plan_evictable_shard_versions_for_test(&db, branch_id, 0, HOT_CACHE_WINDOW_MS)
+			.await?;
+	assert_eq!(evictable.len(), 1);
+	evictable[0].pidx_deletes.push(EvictablePidxEntry {
+		key: branch_pidx_key(branch_id, 1),
+		expected_value: 10u64.to_be_bytes().to_vec(),
+	});
+	db.run(move |tx| async move {
+		tx.informal()
+			.set(&branch_pidx_key(branch_id, 1), &10u64.to_be_bytes());
+		tx.informal().set(
+			&branch_manifest_last_hot_pass_txid_key(branch_id),
+			&(100 + SHARD_RETENTION_MARGIN + 2).to_be_bytes(),
+		);
+		Ok(())
+	})
+	.await?;
+
+	let cleared = test_hooks::clear_evictable_shard_versions_for_test(&db, evictable).await?;
+
+	assert!(cleared.is_empty());
+	assert_eq!(eviction_occ_abort_count(), before_metric + 1);
+	assert_eq!(
+		read_value(&db, branch_shard_key(branch_id, 0, 10)).await?,
+		Some(vec![1])
+	);
+	assert_eq!(
+		read_value(&db, branch_pidx_key(branch_id, 1)).await?,
+		Some(10u64.to_be_bytes().to_vec())
+	);
 
 	Ok(())
 }

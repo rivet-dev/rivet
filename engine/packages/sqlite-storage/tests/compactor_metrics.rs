@@ -76,6 +76,10 @@ fn metrics_register_without_panic() {
 		"sqlite_compactor_compare_and_clear_noop_total",
 	);
 	assert_metric_name(
+		&*metrics::SQLITE_EVICTION_OCC_ABORT_TOTAL,
+		"sqlite_eviction_occ_abort_total",
+	);
+	assert_metric_name(
 		&*metrics::SQLITE_COMPACTOR_UPS_PUBLISH_TOTAL,
 		"sqlite_compactor_ups_publish_total",
 	);
@@ -114,6 +118,7 @@ fn metric_label_set_includes_node_id() {
 		&*metrics::SQLITE_COMPACTOR_COMPARE_AND_CLEAR_NOOP_TOTAL,
 		"node_id",
 	);
+	assert_has_label(&*metrics::SQLITE_EVICTION_OCC_ABORT_TOTAL, "reason");
 	assert_has_label(&*metrics::SQLITE_COMPACTOR_UPS_PUBLISH_TOTAL, "node_id");
 	assert_has_label(&*metrics::SQLITE_STORAGE_USED_BYTES, "node_id");
 

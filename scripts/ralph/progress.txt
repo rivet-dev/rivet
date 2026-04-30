@@ -43,9 +43,28 @@
 - Eviction compactor service code lives under `sqlite_storage::compactor::eviction`; use the global `CMPC/lease_global/{kind=eviction}` lease and scan `CTR/eviction_index` by oldest access bucket with an explicit batch cap.
 - For prefix range scans in `sqlite-storage`, build `RangeOption` from `universaldb::tuple::Subspace::from_bytes(prefix)` so RocksDB/FDB drivers see the same prefix bounds.
 - Eviction predicate planning is SHARD-version scoped: require a newer FDB SHARD version, hot-cache age, cold-drain coverage, hot-pass margin, and no descendant/bookmark pin resolved through VTX before clearing.
+- Eviction clear work is plan-then-fence: carry expected SHARD/PIDX values from the plan, regular-read `last_hot_pass_txid` in the clear tx, then use `COMPARE_AND_CLEAR`.
 
 # Ralph Progress Log
 Started: Wed Apr 29 03:29:23 PM PDT 2026
+---
+## 2026-04-29 22:10 PDT - US-045
+- Implemented eviction clear execution for planned SHARD versions with a regular-read OCC fence on `BR/{branch_id}/META/manifest/last_hot_pass_txid`.
+- Added compare-and-clear clearing for planned SHARD values and eligible branch PIDX rows, plus the `sqlite_eviction_occ_abort_total{reason="hot_pass_advanced"}` metric.
+- Added regression coverage for successful compare-and-clear eviction and the hot-pass-advanced abort path.
+- Verified with `cargo test -p sqlite-storage --test compactor_eviction`, `cargo test -p sqlite-storage --test compactor_metrics`, `cargo check -p sqlite-storage`, and `cargo test -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/CLAUDE.md`
+  - `engine/packages/sqlite-storage/src/compactor/eviction/mod.rs`
+  - `engine/packages/sqlite-storage/src/compactor/metrics.rs`
+  - `engine/packages/sqlite-storage/tests/compactor_eviction.rs`
+  - `engine/packages/sqlite-storage/tests/compactor_metrics.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Eviction holds the global lease across both predicate planning and clear execution; releasing before clear would let another sweeper race the planned work.
+  - `last_hot_pass_txid` mismatch is a clean no-op result for the clear phase, not a hard sweep failure; it increments the hot-pass OCC abort metric and returns no cleared versions.
+  - PIDX rows planned for eviction should keep their exact expected values so `COMPARE_AND_CLEAR` cannot clobber a newer owner.
 ---
 ## 2026-04-29 21:23 PDT - US-037
 - Implemented cold compactor Phase A: a short FDB handoff tx records `ColdCompactState.in_flight_uuid`, then the pending marker is written through the cold tier, then a bounded snapshot read builds the branch upload plan from SHARD, DELTA, COMMITS, VTX, and branch-record rows.
