@@ -1,0 +1,18 @@
+{
+	"extends": "../../../tsconfig.base.json",
+	"compilerOptions": {
+		"types": [],
+		"verbatimModuleSyntax": true,
+		"plugins": [
+			{
+				"name": "@effect/language-service",
+				"namespaceImportPackages": [
+					"effect",
+					"@effect/*",
+					"@rivetkit/effect"
+				]
+			}
+		]
+	},
+	"include": ["src/**/*", "test/**/*"]
+}

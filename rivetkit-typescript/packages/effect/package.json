@@ -1,0 +1,47 @@
+{
+	"name": "@rivetkit/effect",
+	"version": "2.3.0-rc.4",
+	"description": "Effect SDK for Rivet Actors",
+	"license": "Apache-2.0",
+	"type": "module",
+	"sideEffects": [
+		"./dist/chunk-*.js",
+		"./dist/chunk-*.cjs"
+	],
+	"files": [
+		"dist",
+		"package.json"
+	],
+	"exports": {
+		".": {
+			"import": {
+				"types": "./dist/mod.d.ts",
+				"default": "./dist/mod.js"
+			},
+			"require": {
+				"types": "./dist/mod.d.cts",
+				"default": "./dist/mod.cjs"
+			}
+		}
+	},
+	"scripts": {
+		"build": "tsup src/mod.ts",
+		"dev": "tsup src/mod.ts --watch",
+		"check-types": "tsc --noEmit",
+		"test": "vitest run"
+	},
+	"dependencies": {
+		"rivetkit": "workspace:*"
+	},
+	"peerDependencies": {
+		"effect": "^4.0.0-beta.57"
+	},
+	"devDependencies": {
+		"@effect/language-service": "^0.85.1",
+		"@effect/vitest": "^4.0.0-beta.57",
+		"effect": "^4.0.0-beta.57",
+		"tsup": "^8.4.0",
+		"typescript": "^5.9.2",
+		"vitest": "^4.1.5"
+	}
+}

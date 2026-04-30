@@ -1,0 +1,26 @@
+{
+	"name": "effect",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"dev": "tsx watch src/main.ts",
+		"start": "tsx src/main.ts",
+		"check-types": "tsc --noEmit"
+	},
+	"dependencies": {
+		"rivetkit": "workspace:*",
+		"@rivetkit/effect": "workspace:*",
+		"effect": "4.0.0-beta.57",
+		"@effect/platform-node": "4.0.0-beta.57"
+	},
+	"devDependencies": {
+		"@types/node": "^22.13.9",
+		"tsx": "^4.20.5",
+		"typescript": "^5.5.2"
+	},
+	"template": {
+		"noFrontend": true,
+		"skipVercel": true
+	},
+	"license": "MIT"
+}
