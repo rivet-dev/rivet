@@ -11,6 +11,7 @@
 - `universaldb` raw `SetVersionstampedKey` and `SetVersionstampedValue` payloads use FDB-style trailing little-endian u32 offsets and substitute the first 10 versionstamp bytes.
 - Branch pin versionstamps are 16-byte lexicographic big-endian values, so descendant/bookmark pin atomic-min writes use `MutationType::ByteMin`, not integer `Min`.
 - Namespace branch derivation mirrors actor branch derivation for refcounts and pins, but leaves `tier_state` absent on the child so `ensure_tier_at_least` can lazily inherit or promote later.
+- Namespace tier promotion is an OCC/CAS-style serializable read plus write to `NSBRANCH/{branch}/tier_state`; concurrent first promoters rely on UDB retry and then re-read T1.
 
 # Ralph Progress Log
 Started: Wed Apr 29 03:29:23 PM PDT 2026
@@ -240,4 +241,18 @@ Started: Wed Apr 29 03:29:23 PM PDT 2026
   - Namespace branch derivation is metadata-only and does not write APTR catalog rows or child `tier_state`.
   - Namespace branch `bk_pin` and `desc_pin` values use the same lexicographic versionstamp `ByteMin` pattern as actor branches.
   - `NamespaceBranchRecord.fork_depth` is the local depth source for enforcing `MAX_NAMESPACE_DEPTH`.
+---
+## 2026-04-29 18:23 PDT - US-013
+- Implemented `ensure_tier_at_least` for namespace branch tier promotion and wired fork-derived actor and namespace branches to promote their source namespace branch to Tier 1.
+- Added focused tests for one-time T0→T1 promotion, concurrent promotion convergence, actor fork-triggered promotion, and namespace fork-triggered promotion without writing child `tier_state`.
+- Verified with `cargo test -p sqlite-storage --test pump_branch`, `cargo check -p sqlite-storage`, and `cargo test -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/src/pump/branch.rs`
+  - `engine/packages/sqlite-storage/tests/pump_branch.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - `ensure_tier_at_least` uses a serializable read on `tier_state` plus a write/atomic versionstamped write so UDB/FDB conflicts turn concurrent promoters into retry-and-reread behavior.
+  - Missing child `tier_state` reads through the namespace parent chain and can materialize the inherited state locally without rewriting actor branch records.
+  - Fork primitives now perform Tier 1 engagement before writing derived branch metadata, but still leave the new namespace branch's own `tier_state` absent for lazy inheritance.
 ---
