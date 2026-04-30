@@ -68,11 +68,33 @@ pub struct BookmarkStr(String);
 impl BookmarkStr {
 	pub fn new(bookmark: impl Into<String>) -> Result<Self> {
 		let bookmark = bookmark.into();
-		if bookmark.len() != 33 || !bookmark.is_ascii() {
-			bail!("sqlite bookmark must be exactly 33 ASCII characters");
+		let bytes = bookmark.as_bytes();
+		if bytes.len() != 33
+			|| bytes[16] != b'-'
+			|| !bytes[..16].iter().all(|byte| byte.is_ascii_hexdigit())
+			|| !bytes[17..].iter().all(|byte| byte.is_ascii_hexdigit())
+		{
+			bail!("sqlite bookmark must match 0000000000000000-0000000000000000");
 		}
 
 		Ok(Self(bookmark))
+	}
+
+	pub fn format(ts_ms: i64, txid: u64) -> Result<Self> {
+		if ts_ms < 0 {
+			bail!("sqlite bookmark timestamp must be non-negative");
+		}
+
+		Self::new(format!("{:016x}-{txid:016x}", ts_ms as u64))
+	}
+
+	pub fn parse(&self) -> Result<(i64, u64)> {
+		let ts_ms = u64::from_str_radix(&self.0[..16], 16)
+			.context("parse sqlite bookmark timestamp")?;
+		let txid = u64::from_str_radix(&self.0[17..], 16).context("parse sqlite bookmark txid")?;
+		let ts_ms = i64::try_from(ts_ms).context("sqlite bookmark timestamp exceeds i64 range")?;
+
+		Ok((ts_ms, txid))
 	}
 
 	pub fn as_str(&self) -> &str {

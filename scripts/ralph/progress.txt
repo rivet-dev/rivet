@@ -16,6 +16,7 @@
 - Actor pointer resolution walks namespace branch parents on APTR miss; namespace-branch tombstones return `ActorNotFound` and must not fall back to legacy actor-scoped storage.
 - Rollback swaps APTR, so ActorDb must resolve APTR before using branch-local caches and clear PIDX/storage caches when the current branch changes.
 - Namespace rollback mirrors actor rollback at the pointer layer: derive the new NSBRANCH, freeze the old NSBRANCH, append `NSPTR/history`, decrement the old pointer refcount, then swap `NSPTR/cur`.
+- Use `BookmarkStr::format(ts_ms, txid)` and `BookmarkStr::parse()` for bookmark wire strings; avoid hand-formatting the 33-character `{timestamp_ms_hex_be:016}-{txid_hex_be:016}` shape.
 
 # Ralph Progress Log
 Started: Wed Apr 29 03:29:23 PM PDT 2026
@@ -360,4 +361,19 @@ Started: Wed Apr 29 03:29:23 PM PDT 2026
   - Namespace rollback should use `derive_namespace_branch_at` for the branch metadata/refcount/pin behavior, then only handle pointer history and pointer swap locally.
   - The old namespace branch remains refcounted by the new child branch after rollback even though its direct pointer refcount is decremented.
   - `NSPTR/history` tests can scan `namespace_pointer_history_prefix(...)` and decode `NamespacePointer` values directly.
+---
+## 2026-04-29 19:14 PDT - US-019
+- Implemented strict `BookmarkStr` wire-format validation plus `format(ts_ms, txid)` and `parse()` helpers for 33-character PITR bookmark strings.
+- Added bookmark tests covering fixed-width formatting, malformed inputs, negative timestamp rejection, representative round-trips, and lexicographic chronological ordering.
+- Verified with `cargo test -p sqlite-storage --test pump_bookmark`, `cargo check -p sqlite-storage`, and `cargo test -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/AGENTS.md`
+  - `engine/packages/sqlite-storage/src/pump/types.rs`
+  - `engine/packages/sqlite-storage/tests/pump_bookmark.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - `BookmarkStr::new` now validates the full wire shape, not just length, so deserializing bookmark-bearing pump records rejects malformed bookmark bytes early.
+  - Generated bookmarks use lowercase fixed-width hex through `BookmarkStr::format`; use `parse()` instead of slicing bookmark strings at call sites.
+  - The bookmark tests are pure integration tests and do not need a UDB fixture.
 ---
