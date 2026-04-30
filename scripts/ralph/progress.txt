@@ -8,6 +8,7 @@
 - `ActorDb` resolves the current actor branch through APTR and caches the branch id as a perf cache; FDB remains the source of truth.
 - `ActorDb` is namespace-scoped: pass the engine namespace id into constructors, derive `NamespaceId` from it, and resolve APTR through NSPTR/NSBRANCH before branch-scoped storage.
 - New ActorDb writes store META/COMMITS/VTX/PIDX/DELTA/SHARD under `BR/{branch_id}`; legacy actor-scoped helpers remain compatibility fallback for old seeded state.
+- Branch ancestry reads need branch-aware sources; only use the simple PIDX cache when the read plan has one source branch.
 - `universaldb` raw `SetVersionstampedKey` and `SetVersionstampedValue` payloads use FDB-style trailing little-endian u32 offsets and substitute the first 10 versionstamp bytes.
 - Branch pin versionstamps are 16-byte lexicographic big-endian values, so descendant/bookmark pin atomic-min writes use `MutationType::ByteMin`, not integer `Min`.
 - Namespace branch derivation mirrors actor branch derivation for refcounts and pins, but leaves `tier_state` absent on the child so `ensure_tier_at_least` can lazily inherit or promote later.
@@ -255,4 +256,20 @@ Started: Wed Apr 29 03:29:23 PM PDT 2026
   - `ensure_tier_at_least` uses a serializable read on `tier_state` plus a write/atomic versionstamped write so UDB/FDB conflicts turn concurrent promoters into retry-and-reread behavior.
   - Missing child `tier_state` reads through the namespace parent chain and can materialize the inherited state locally without rewriting actor branch records.
   - Fork primitives now perform Tier 1 engagement before writing derived branch metadata, but still leave the new namespace branch's own `tier_state` absent for lazy inheritance.
+---
+## 2026-04-29 18:34 PDT - US-014
+- Implemented `fork_actor` as a metadata-only operation that resolves source and target namespace branches, derives a fresh actor branch, and writes the target APTR for a fresh actor id.
+- Extended actor branch reads to use `/META/head_at_fork` and walk parent branch sources so fresh forks can read inherited pages through root, depth-1, and deeper source chains.
+- Verified with `cargo test -p sqlite-storage --test pump_branch`, `cargo check -p sqlite-storage`, and `cargo test -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/CLAUDE.md`
+  - `engine/packages/sqlite-storage/src/pump/branch.rs`
+  - `engine/packages/sqlite-storage/src/pump/read.rs`
+  - `engine/packages/sqlite-storage/tests/pump_branch.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - `fork_actor` requires both source and target namespaces to have NSPTR roots; tests can seed the target namespace with a normal `ActorDb` commit.
+  - Fresh fork reads use `/META/head_at_fork` for EOF and then resolve page sources through branch ancestry.
+  - The current PIDX cache stores only `pgno -> txid`, so fork ancestry reads can only use it when exactly one source branch is involved.
 ---

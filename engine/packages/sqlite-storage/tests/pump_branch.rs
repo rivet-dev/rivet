@@ -14,10 +14,10 @@ use sqlite_storage::{
 	pump::{ActorDb, branch},
 	types::{
 		ActorBranchId, ActorBranchRecord, BranchState, DBHead, DirtyPage, NamespaceBranchId,
-		NamespaceBranchRecord, NamespaceId, NamespaceTierState, Tier, decode_actor_branch_record,
-		decode_actor_pointer, decode_commit_row, decode_db_head, decode_namespace_branch_record,
-		decode_namespace_pointer, decode_namespace_tier_state, encode_actor_branch_record,
-		encode_namespace_branch_record, encode_namespace_tier_state,
+		NamespaceBranchRecord, NamespaceId, NamespaceTierState, ResolvedVersionstamp, Tier,
+		decode_actor_branch_record, decode_actor_pointer, decode_commit_row, decode_db_head,
+		decode_namespace_branch_record, decode_namespace_pointer, decode_namespace_tier_state,
+		encode_actor_branch_record, encode_namespace_branch_record, encode_namespace_tier_state,
 	},
 };
 use tempfile::Builder;
@@ -28,6 +28,10 @@ const TEST_ACTOR: &str = "test-actor";
 
 fn test_namespace() -> Id {
 	Id::v1(uuid::Uuid::from_u128(0x1234), 1)
+}
+
+fn target_namespace() -> Id {
+	Id::v1(uuid::Uuid::from_u128(0x5678), 1)
 }
 
 async fn test_db() -> Result<universaldb::Database> {
@@ -50,6 +54,10 @@ fn page(pgno: u32, fill: u8) -> DirtyPage {
 	}
 }
 
+fn page_bytes(fill: u8) -> Vec<u8> {
+	vec![fill; sqlite_storage::keys::PAGE_SIZE as usize]
+}
+
 async fn read_value(db: &universaldb::Database, key: Vec<u8>) -> Result<Option<Vec<u8>>> {
 	db.run(move |tx| {
 		let key = key.clone();
@@ -65,7 +73,14 @@ async fn read_value(db: &universaldb::Database, key: Vec<u8>) -> Result<Option<V
 }
 
 async fn read_namespace_branch_id(db: &universaldb::Database) -> Result<NamespaceBranchId> {
-	let namespace_id = NamespaceId::from_gas_id(test_namespace());
+	read_namespace_branch_id_for(db, test_namespace()).await
+}
+
+async fn read_namespace_branch_id_for(
+	db: &universaldb::Database,
+	namespace_id: Id,
+) -> Result<NamespaceBranchId> {
+	let namespace_id = NamespaceId::from_gas_id(namespace_id);
 	let namespace_pointer_bytes = read_value(db, namespace_pointer_cur_key(namespace_id))
 		.await?
 		.expect("namespace pointer should exist");
@@ -73,13 +88,21 @@ async fn read_namespace_branch_id(db: &universaldb::Database) -> Result<Namespac
 	Ok(decode_namespace_pointer(&namespace_pointer_bytes)?.current_branch)
 }
 
-async fn read_branch_id(db: &universaldb::Database) -> Result<ActorBranchId> {
-	let namespace_branch = read_namespace_branch_id(db).await?;
-	let bytes = read_value(db, actor_pointer_cur_key(namespace_branch, TEST_ACTOR))
+async fn read_actor_branch_id(
+	db: &universaldb::Database,
+	namespace_id: Id,
+	actor_id: &str,
+) -> Result<ActorBranchId> {
+	let namespace_branch = read_namespace_branch_id_for(db, namespace_id).await?;
+	let bytes = read_value(db, actor_pointer_cur_key(namespace_branch, actor_id))
 		.await?
 		.expect("actor pointer should exist");
 
 	Ok(decode_actor_pointer(&bytes)?.current_branch)
+}
+
+async fn read_branch_id(db: &universaldb::Database) -> Result<ActorBranchId> {
+	read_actor_branch_id(db, test_namespace(), TEST_ACTOR).await
 }
 
 async fn read_refcount(db: &universaldb::Database, branch_id: ActorBranchId) -> Result<i64> {
@@ -495,6 +518,235 @@ async fn derive_namespace_branch_at_enforces_max_namespace_depth() -> Result<()>
 			.await?
 			.is_none()
 	);
+
+	Ok(())
+}
+
+#[tokio::test]
+async fn fork_actor_writes_target_pointer_and_reads_source_data() -> Result<()> {
+	let db = Arc::new(test_db().await?);
+	let source_actor_db = ActorDb::new(
+		db.clone(),
+		test_ups(),
+		test_namespace(),
+		TEST_ACTOR.to_string(),
+		NodeId::new(),
+	);
+	source_actor_db.commit(vec![page(1, 0x11)], 2, 1_000).await?;
+	let source_branch_id = read_branch_id(&db).await?;
+	let source_commit_bytes = read_value(&db, branch_commit_key(source_branch_id, 1))
+		.await?
+		.expect("source commit row should exist");
+	let source_commit = decode_commit_row(&source_commit_bytes)?;
+
+	let target_seed = ActorDb::new(
+		db.clone(),
+		test_ups(),
+		target_namespace(),
+		"target-seed".to_string(),
+		NodeId::new(),
+	);
+	target_seed.commit(vec![page(1, 0xaa)], 1, 1_100).await?;
+	let target_namespace_branch = read_namespace_branch_id_for(&db, target_namespace()).await?;
+
+	let forked_actor_id = branch::fork_actor(
+		&db,
+		NamespaceId::from_gas_id(test_namespace()),
+		TEST_ACTOR.to_string(),
+		ResolvedVersionstamp {
+			versionstamp: source_commit.versionstamp,
+			bookmark: None,
+		},
+		NamespaceId::from_gas_id(target_namespace()),
+	)
+	.await?;
+
+	assert_ne!(forked_actor_id, TEST_ACTOR);
+	let forked_branch_id = read_actor_branch_id(&db, target_namespace(), &forked_actor_id).await?;
+	let forked_record_bytes = read_value(&db, branches_list_key(forked_branch_id))
+		.await?
+		.expect("forked actor branch record should exist");
+	let forked_record = decode_actor_branch_record(&forked_record_bytes)?;
+	assert_eq!(forked_record.namespace_branch, target_namespace_branch);
+	assert_eq!(forked_record.parent, Some(source_branch_id));
+	assert_eq!(
+		forked_record.parent_versionstamp,
+		Some(source_commit.versionstamp)
+	);
+	assert_eq!(read_refcount(&db, source_branch_id).await?, 2);
+	assert_eq!(read_refcount(&db, forked_branch_id).await?, 1);
+
+	let forked_actor_db = ActorDb::new(
+		db,
+		test_ups(),
+		target_namespace(),
+		forked_actor_id,
+		NodeId::new(),
+	);
+	let pages = forked_actor_db.get_pages(vec![1]).await?;
+	assert_eq!(pages[0].bytes, Some(page_bytes(0x11)));
+
+	Ok(())
+}
+
+#[tokio::test]
+async fn fork_actor_can_use_depth_one_source_branch() -> Result<()> {
+	let db = Arc::new(test_db().await?);
+	let root_actor_db = ActorDb::new(
+		db.clone(),
+		test_ups(),
+		test_namespace(),
+		TEST_ACTOR.to_string(),
+		NodeId::new(),
+	);
+	root_actor_db.commit(vec![page(1, 0x11)], 2, 1_000).await?;
+	let root_branch_id = read_branch_id(&db).await?;
+	let root_commit_bytes = read_value(&db, branch_commit_key(root_branch_id, 1))
+		.await?
+		.expect("root commit row should exist");
+	let root_commit = decode_commit_row(&root_commit_bytes)?;
+
+	let depth_one_actor_id = branch::fork_actor(
+		&db,
+		NamespaceId::from_gas_id(test_namespace()),
+		TEST_ACTOR.to_string(),
+		ResolvedVersionstamp {
+			versionstamp: root_commit.versionstamp,
+			bookmark: None,
+		},
+		NamespaceId::from_gas_id(test_namespace()),
+	)
+	.await?;
+	let depth_one_actor_db = ActorDb::new(
+		db.clone(),
+		test_ups(),
+		test_namespace(),
+		depth_one_actor_id.clone(),
+		NodeId::new(),
+	);
+	depth_one_actor_db
+		.commit(vec![page(2, 0x22)], 3, 2_000)
+		.await?;
+	let depth_one_branch_id =
+		read_actor_branch_id(&db, test_namespace(), &depth_one_actor_id).await?;
+	let depth_one_commit_bytes = read_value(&db, branch_commit_key(depth_one_branch_id, 1))
+		.await?
+		.expect("depth-one commit row should exist");
+	let depth_one_commit = decode_commit_row(&depth_one_commit_bytes)?;
+
+	let depth_two_actor_id = branch::fork_actor(
+		&db,
+		NamespaceId::from_gas_id(test_namespace()),
+		depth_one_actor_id,
+		ResolvedVersionstamp {
+			versionstamp: depth_one_commit.versionstamp,
+			bookmark: None,
+		},
+		NamespaceId::from_gas_id(test_namespace()),
+	)
+	.await?;
+	let depth_two_branch_id =
+		read_actor_branch_id(&db, test_namespace(), &depth_two_actor_id).await?;
+	let depth_two_record_bytes = read_value(&db, branches_list_key(depth_two_branch_id))
+		.await?
+		.expect("depth-two branch record should exist");
+	let depth_two_record = decode_actor_branch_record(&depth_two_record_bytes)?;
+	assert_eq!(depth_two_record.parent, Some(depth_one_branch_id));
+	assert_eq!(depth_two_record.fork_depth, 2);
+
+	let depth_two_actor_db = ActorDb::new(
+		db,
+		test_ups(),
+		test_namespace(),
+		depth_two_actor_id,
+		NodeId::new(),
+	);
+	let pages = depth_two_actor_db.get_pages(vec![1, 2]).await?;
+	assert_eq!(pages[0].bytes, Some(page_bytes(0x11)));
+	assert_eq!(pages[1].bytes, Some(page_bytes(0x22)));
+
+	Ok(())
+}
+
+#[tokio::test]
+async fn fork_actor_can_use_deep_source_branch() -> Result<()> {
+	let db = Arc::new(test_db().await?);
+	let root_actor_db = ActorDb::new(
+		db.clone(),
+		test_ups(),
+		test_namespace(),
+		TEST_ACTOR.to_string(),
+		NodeId::new(),
+	);
+	root_actor_db.commit(vec![page(1, 0x11)], 2, 1_000).await?;
+	let mut source_actor_id = TEST_ACTOR.to_string();
+	let mut source_branch_id = read_branch_id(&db).await?;
+	let mut source_commit = decode_commit_row(
+		&read_value(&db, branch_commit_key(source_branch_id, 1))
+			.await?
+			.expect("root commit row should exist"),
+	)?;
+
+	for depth in 1..=3 {
+		let forked_actor_id = branch::fork_actor(
+			&db,
+			NamespaceId::from_gas_id(test_namespace()),
+			source_actor_id,
+			ResolvedVersionstamp {
+				versionstamp: source_commit.versionstamp,
+				bookmark: None,
+			},
+			NamespaceId::from_gas_id(test_namespace()),
+		)
+		.await?;
+		let forked_actor_db = ActorDb::new(
+			db.clone(),
+			test_ups(),
+			test_namespace(),
+			forked_actor_id.clone(),
+			NodeId::new(),
+		);
+		forked_actor_db
+			.commit(vec![page(depth + 1, 0x20 + depth as u8)], depth + 2, 2_000 + depth as i64)
+			.await?;
+		source_actor_id = forked_actor_id;
+		source_branch_id = read_actor_branch_id(&db, test_namespace(), &source_actor_id).await?;
+		let commit_bytes = read_value(&db, branch_commit_key(source_branch_id, 1))
+			.await?
+			.expect("fork commit row should exist");
+		source_commit = decode_commit_row(&commit_bytes)?;
+	}
+
+	let final_actor_id = branch::fork_actor(
+		&db,
+		NamespaceId::from_gas_id(test_namespace()),
+		source_actor_id,
+		ResolvedVersionstamp {
+			versionstamp: source_commit.versionstamp,
+			bookmark: None,
+		},
+		NamespaceId::from_gas_id(test_namespace()),
+	)
+	.await?;
+	let final_branch_id = read_actor_branch_id(&db, test_namespace(), &final_actor_id).await?;
+	let final_record_bytes = read_value(&db, branches_list_key(final_branch_id))
+		.await?
+		.expect("final branch record should exist");
+	let final_record = decode_actor_branch_record(&final_record_bytes)?;
+	assert_eq!(final_record.fork_depth, 4);
+
+	let final_actor_db = ActorDb::new(
+		db,
+		test_ups(),
+		test_namespace(),
+		final_actor_id,
+		NodeId::new(),
+	);
+	let pages = final_actor_db.get_pages(vec![1, 2, 3, 4]).await?;
+	assert_eq!(pages[0].bytes, Some(page_bytes(0x11)));
+	assert_eq!(pages[1].bytes, Some(page_bytes(0x21)));
+	assert_eq!(pages[2].bytes, Some(page_bytes(0x22)));
+	assert_eq!(pages[3].bytes, Some(page_bytes(0x23)));
 
 	Ok(())
 }

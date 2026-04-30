@@ -12,11 +12,11 @@ use super::{
 	keys, udb,
 	types::{
 		ActorBranchId, ActorBranchRecord, BookmarkRef, BranchState, DBHead, NamespaceBranchId,
-		NamespaceBranchRecord, NamespaceId, NamespacePointer, NamespaceTierState, Tier,
-		decode_actor_branch_record, decode_actor_pointer, decode_commit_row,
+		NamespaceBranchRecord, NamespaceId, NamespacePointer, NamespaceTierState,
+		ResolvedVersionstamp, Tier, decode_actor_branch_record, decode_actor_pointer, decode_commit_row,
 		decode_namespace_branch_record, decode_namespace_pointer, decode_namespace_tier_state,
-		encode_actor_branch_record, encode_db_head, encode_namespace_branch_record,
-		encode_namespace_pointer, encode_namespace_tier_state,
+		encode_actor_branch_record, encode_actor_pointer, encode_db_head,
+		encode_namespace_branch_record, encode_namespace_pointer, encode_namespace_tier_state,
 	},
 };
 
@@ -154,19 +154,118 @@ pub async fn resolve_actor_branch_in_namespace(
 	actor_id: &str,
 	isolation_level: IsolationLevel,
 ) -> Result<Option<ActorBranchId>> {
-	let Some(pointer_bytes) = tx
-		.informal()
-		.get(
-			&keys::actor_pointer_cur_key(namespace_branch_id, actor_id),
-			isolation_level,
-		)
-		.await?
-	else {
-		return Ok(None);
-	};
+	let mut current_branch_id = namespace_branch_id;
 
-	let pointer = decode_actor_pointer(&pointer_bytes).context("decode sqlite actor pointer")?;
-	Ok(Some(pointer.current_branch))
+	for _ in 0..=MAX_NAMESPACE_DEPTH {
+		if let Some(pointer_bytes) = tx
+			.informal()
+			.get(
+				&keys::actor_pointer_cur_key(current_branch_id, actor_id),
+				isolation_level,
+			)
+			.await?
+		{
+			let pointer = decode_actor_pointer(&pointer_bytes).context("decode sqlite actor pointer")?;
+			return Ok(Some(pointer.current_branch));
+		}
+
+		if current_branch_id == NamespaceBranchId::nil() {
+			return Ok(None);
+		}
+
+		if tx
+			.informal()
+			.get(
+				&keys::namespace_branches_actor_tombstone_key(current_branch_id, actor_id),
+				isolation_level,
+			)
+			.await?
+			.is_some()
+		{
+			return Ok(None);
+		}
+
+		let Some(record_bytes) = tx
+			.informal()
+			.get(&keys::namespace_branches_list_key(current_branch_id), isolation_level)
+			.await?
+		else {
+			return Ok(None);
+		};
+		let record = decode_namespace_branch_record(&record_bytes)
+			.context("decode sqlite namespace branch record")?;
+		let Some(parent) = record.parent else {
+			return Ok(None);
+		};
+		current_branch_id = parent;
+	}
+
+	Err(SqliteStorageError::NamespaceForkChainTooDeep.into())
+}
+
+pub async fn fork_actor(
+	udb: &universaldb::Database,
+	source_namespace: NamespaceId,
+	source_actor_id: String,
+	at: ResolvedVersionstamp,
+	target_namespace: NamespaceId,
+) -> Result<String> {
+	let new_actor_id = format!("fork-{}", uuid::Uuid::new_v4().simple());
+	let new_actor_branch_id = ActorBranchId::new_v4();
+
+	udb.run({
+		let new_actor_id = new_actor_id.clone();
+		move |tx| {
+			let source_actor_id = source_actor_id.clone();
+			let new_actor_id = new_actor_id.clone();
+			let at = at.clone();
+
+			async move {
+				let source_namespace_branch =
+					resolve_namespace_branch(&tx, source_namespace, Serializable)
+						.await?
+						.ok_or(SqliteStorageError::ActorNotFound)?;
+				let source_actor_branch = resolve_actor_branch_in_namespace(
+					&tx,
+					source_namespace_branch,
+					&source_actor_id,
+					Serializable,
+				)
+				.await?
+				.ok_or(SqliteStorageError::ActorNotFound)?;
+				let target_namespace_branch =
+					resolve_namespace_branch(&tx, target_namespace, Serializable)
+						.await?
+						.ok_or(SqliteStorageError::ActorNotFound)?;
+
+				derive_branch_at(
+					&tx,
+					source_actor_branch,
+					at.versionstamp,
+					new_actor_branch_id,
+					target_namespace_branch,
+					at.bookmark,
+				)
+				.await?;
+
+				let pointer = super::types::ActorPointer {
+					current_branch: new_actor_branch_id,
+					last_swapped_at_ms: now_ms()?,
+				};
+				let encoded_pointer =
+					encode_actor_pointer(pointer).context("encode sqlite fork actor pointer")?;
+				tx.informal().set(
+					&keys::actor_pointer_cur_key(target_namespace_branch, &new_actor_id),
+					&encoded_pointer,
+				);
+
+				Ok(())
+			}
+		}
+	})
+	.await?;
+
+	Ok(new_actor_id)
 }
 
 pub async fn derive_branch_at(
@@ -339,7 +438,7 @@ pub async fn ensure_tier_at_least(
 	Ok(promoted_state)
 }
 
-async fn read_actor_branch_record(
+pub(super) async fn read_actor_branch_record(
 	tx: &universaldb::Transaction,
 	branch_id: ActorBranchId,
 ) -> Result<ActorBranchRecord> {

@@ -18,7 +18,7 @@ use crate::pump::{
 	ltx::{DecodedLtx, decode_ltx_v3},
 	metrics,
 	page_index::DeltaPageIndex,
-	types::{ActorBranchId, FetchedPage, decode_db_head},
+	types::{ActorBranchId, DBHead, FetchedPage, decode_db_head},
 };
 
 const PIDX_PGNO_BYTES: usize = std::mem::size_of::<u32>();
@@ -69,14 +69,19 @@ impl ActorDb {
 				async move {
 					let scope =
 						resolve_storage_scope(&tx, namespace_id, &actor_id, cached_branch_id).await?;
-					let head_bytes = tx_get_value(&tx, &scope.meta_head_key(&actor_id)).await?;
-					let Some(head_bytes) = head_bytes else {
-						return Err(SqliteStorageError::MetaMissing {
-							operation: "get_pages",
+					let head = match &scope {
+						StorageScope::Branch(plan) => plan.head.clone(),
+						StorageScope::Legacy => {
+							let head_bytes = tx_get_value(&tx, &keys::meta_head_key(&actor_id)).await?;
+							let Some(head_bytes) = head_bytes else {
+								return Err(SqliteStorageError::MetaMissing {
+									operation: "get_pages",
+								}
+								.into());
+							};
+							decode_db_head(&head_bytes)?
 						}
-						.into());
 					};
-					let head = decode_db_head(&head_bytes)?;
 
 					let pgnos_in_range = pgnos
 						.into_iter()
@@ -93,26 +98,72 @@ impl ActorDb {
 						});
 					}
 
-					let mut pidx_by_pgno = BTreeMap::new();
+					let mut pidx_by_pgno = BTreeMap::<u32, PageRef>::new();
 					let mut loaded_pidx_rows = None;
-					if let Some(cached_pidx) = cached_pidx.as_ref() {
+					let cache_source = match &scope {
+						StorageScope::Branch(plan) if plan.sources.len() == 1 => Some(plan.sources[0]),
+						StorageScope::Legacy => Some(ReadSource::Legacy),
+						StorageScope::Branch(_) => None,
+					};
+					if let (Some(cache_source), Some(cached_pidx)) =
+						(cache_source, cached_pidx.as_ref())
+					{
 						for (pgno, txid) in cached_pidx {
 							if let Some(txid) = txid {
-								pidx_by_pgno.insert(*pgno, *txid);
+								pidx_by_pgno.insert(
+									*pgno,
+									PageRef {
+										source: cache_source,
+										txid: *txid,
+									},
+								);
 							}
 						}
 					} else {
-						let rows = tx_scan_prefix_values(&tx, &scope.pidx_prefix(&actor_id)).await?;
-						let decoded_rows = rows
-							.into_iter()
-							.map(|(key, value)| {
-								Ok((scope.decode_pidx_pgno(&actor_id, &key)?, decode_pidx_txid(&value)?))
-							})
-							.collect::<Result<Vec<_>>>()?;
-						for (pgno, txid) in &decoded_rows {
-							pidx_by_pgno.insert(*pgno, *txid);
+						match &scope {
+							StorageScope::Branch(plan) => {
+								for source in &plan.sources {
+									let rows =
+										tx_scan_prefix_values(&tx, &source.pidx_prefix(&actor_id)).await?;
+									let mut decoded_rows = Vec::new();
+									for (key, value) in rows {
+										let pgno = source.decode_pidx_pgno(&actor_id, &key)?;
+										let txid = decode_pidx_txid(&value)?;
+										pidx_by_pgno.entry(pgno).or_insert(PageRef {
+											source: *source,
+											txid,
+										});
+										decoded_rows.push((pgno, txid));
+									}
+									if plan.sources.len() == 1 {
+										loaded_pidx_rows = Some(decoded_rows);
+									}
+								}
+							}
+							StorageScope::Legacy => {
+								let legacy_prefix = ReadSource::Legacy.pidx_prefix(&actor_id);
+								let rows = tx_scan_prefix_values(&tx, &legacy_prefix).await?;
+								let decoded_rows = rows
+									.into_iter()
+									.map(|(key, value)| {
+										Ok((
+											ReadSource::Legacy.decode_pidx_pgno(&actor_id, &key)?,
+											decode_pidx_txid(&value)?,
+										))
+									})
+									.collect::<Result<Vec<_>>>()?;
+								for (pgno, txid) in &decoded_rows {
+									pidx_by_pgno.insert(
+										*pgno,
+										PageRef {
+											source: ReadSource::Legacy,
+											txid: *txid,
+										},
+									);
+								}
+								loaded_pidx_rows = Some(decoded_rows);
+							}
 						}
-						loaded_pidx_rows = Some(decoded_rows);
 					}
 
 					let mut page_sources = BTreeMap::new();
@@ -122,21 +173,21 @@ impl ActorDb {
 					let mut stale_pidx_pgnos = BTreeSet::new();
 
 					for pgno in &pgnos_in_range {
-						let preferred_delta_prefix = pidx_by_pgno
+						let preferred_delta = pidx_by_pgno
 							.get(pgno)
 							.copied()
-							.map(|txid| scope.delta_chunk_prefix(&actor_id, txid));
+							.map(|page_ref| (page_ref.source.delta_chunk_prefix(&actor_id, page_ref.txid), page_ref.source));
 
-						if preferred_delta_prefix
+						if preferred_delta
 							.as_ref()
-							.is_some_and(|prefix| missing_delta_prefixes.contains(prefix))
+							.is_some_and(|(prefix, _)| missing_delta_prefixes.contains(prefix))
 						{
 							stale_pidx_pgnos.insert(*pgno);
 						}
 
-						if let Some(delta_prefix) = preferred_delta_prefix
+						if let Some((delta_prefix, delta_source)) = preferred_delta
 							.as_ref()
-							.filter(|prefix| !missing_delta_prefixes.contains(*prefix))
+							.filter(|(prefix, _)| !missing_delta_prefixes.contains(prefix))
 						{
 							if !source_blobs.contains_key(delta_prefix) {
 								let blob = tx_load_delta_blob(&tx, delta_prefix).await?;
@@ -152,12 +203,17 @@ impl ActorDb {
 								page_sources.insert(*pgno, delta_prefix.clone());
 								continue;
 							}
+
+							if matches!(delta_source, ReadSource::Legacy | ReadSource::Branch(_)) {
+								stale_pidx_pgnos.insert(*pgno);
+							}
 						}
 
 						let shard_id = pgno / SHARD_SIZE;
 						if !shard_sources.contains_key(&shard_id) {
-							let source = tx_load_latest_shard_blob(&tx, &scope, &actor_id, shard_id, head.head_txid)
-								.await?;
+							let source =
+								tx_load_latest_shard_blob(&tx, &scope, &actor_id, shard_id, head.head_txid)
+									.await?;
 							shard_sources.insert(shard_id, source);
 						}
 
@@ -275,47 +331,67 @@ struct GetPagesTxResult {
 	stale_pidx_pgnos: BTreeSet<u32>,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 enum StorageScope {
-	Branch(ActorBranchId),
+	Branch(BranchReadPlan),
 	Legacy,
 }
 
 impl StorageScope {
 	fn branch_id(self) -> Option<ActorBranchId> {
 		match self {
-			Self::Branch(branch_id) => Some(branch_id),
+			Self::Branch(plan) => Some(plan.branch_id),
 			Self::Legacy => None,
 		}
 	}
+}
 
-	fn meta_head_key(self, actor_id: &str) -> Vec<u8> {
-		match self {
-			Self::Branch(branch_id) => keys::branch_meta_head_key(branch_id),
-			Self::Legacy => keys::meta_head_key(actor_id),
-		}
-	}
+#[derive(Debug, Clone)]
+struct BranchReadPlan {
+	branch_id: ActorBranchId,
+	head: DBHead,
+	sources: Vec<ReadSource>,
+}
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum ReadSource {
+	Branch(BranchSource),
+	Legacy,
+}
+
+impl ReadSource {
 	fn pidx_prefix(self, actor_id: &str) -> Vec<u8> {
 		match self {
-			Self::Branch(branch_id) => keys::branch_pidx_prefix(branch_id),
+			Self::Branch(source) => keys::branch_pidx_prefix(source.branch_id),
 			Self::Legacy => keys::pidx_delta_prefix(actor_id),
-		}
-	}
-
-	fn delta_chunk_prefix(self, actor_id: &str, txid: u64) -> Vec<u8> {
-		match self {
-			Self::Branch(branch_id) => keys::branch_delta_chunk_prefix(branch_id, txid),
-			Self::Legacy => keys::delta_chunk_prefix(actor_id, txid),
 		}
 	}
 
 	fn decode_pidx_pgno(self, actor_id: &str, key: &[u8]) -> Result<u32> {
 		match self {
-			Self::Branch(branch_id) => decode_branch_pidx_pgno(branch_id, key),
+			Self::Branch(source) => decode_branch_pidx_pgno(source.branch_id, key),
 			Self::Legacy => decode_pidx_pgno(actor_id, key),
 		}
 	}
+
+	fn delta_chunk_prefix(self, actor_id: &str, txid: u64) -> Vec<u8> {
+		match self {
+			Self::Branch(source) => keys::branch_delta_chunk_prefix(source.branch_id, txid),
+			Self::Legacy => keys::delta_chunk_prefix(actor_id, txid),
+		}
+	}
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+struct BranchSource {
+	branch_id: ActorBranchId,
+	max_txid: u64,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct PageRef {
+	source: ReadSource,
+	txid: u64,
 }
 
 async fn resolve_storage_scope(
@@ -325,15 +401,82 @@ async fn resolve_storage_scope(
 	cached_branch_id: Option<ActorBranchId>,
 ) -> Result<StorageScope> {
 	if let Some(branch_id) = cached_branch_id {
-		return Ok(StorageScope::Branch(branch_id));
+		return Ok(StorageScope::Branch(
+			load_branch_read_plan(tx, branch_id).await?,
+		));
 	}
 
 	Ok(
 		match branch::resolve_actor_branch(tx, namespace_id, actor_id, Snapshot).await? {
-			Some(branch_id) => StorageScope::Branch(branch_id),
+			Some(branch_id) => StorageScope::Branch(load_branch_read_plan(tx, branch_id).await?),
 			None => StorageScope::Legacy,
 		},
 	)
+}
+
+async fn load_branch_read_plan(
+	tx: &universaldb::Transaction,
+	branch_id: ActorBranchId,
+) -> Result<BranchReadPlan> {
+	let head_bytes = tx_get_value(tx, &keys::branch_meta_head_key(branch_id)).await?;
+	let has_local_head = head_bytes.is_some();
+	let head = if let Some(head_bytes) = head_bytes {
+		decode_db_head(&head_bytes)?
+	} else {
+		let head_at_fork_bytes = tx_get_value(tx, &keys::branch_meta_head_at_fork_key(branch_id))
+			.await?
+			.ok_or(SqliteStorageError::MetaMissing {
+				operation: "get_pages",
+			})?;
+		decode_db_head(&head_at_fork_bytes)?
+	};
+
+	let mut sources = Vec::new();
+	if has_local_head {
+		sources.push(ReadSource::Branch(BranchSource {
+			branch_id,
+			max_txid: head.head_txid,
+		}));
+	}
+
+	let mut current_branch_id = branch_id;
+	for _ in 0..=crate::constants::MAX_FORK_DEPTH {
+		let record = branch::read_actor_branch_record(tx, current_branch_id).await?;
+		let Some(parent_branch_id) = record.parent else {
+			break;
+		};
+		let parent_versionstamp = record
+			.parent_versionstamp
+			.context("sqlite actor branch parent versionstamp is missing")?;
+		let max_txid = lookup_txid_for_read(tx, parent_branch_id, parent_versionstamp).await?;
+		sources.push(ReadSource::Branch(BranchSource {
+			branch_id: parent_branch_id,
+			max_txid,
+		}));
+		current_branch_id = parent_branch_id;
+	}
+
+	Ok(BranchReadPlan {
+		branch_id,
+		head,
+		sources,
+	})
+}
+
+async fn lookup_txid_for_read(
+	tx: &universaldb::Transaction,
+	branch_id: ActorBranchId,
+	versionstamp: [u8; 16],
+) -> Result<u64> {
+	let bytes = tx_get_value(tx, &keys::branch_vtx_key(branch_id, versionstamp))
+		.await?
+		.ok_or(SqliteStorageError::BookmarkExpired)?;
+	let bytes: [u8; std::mem::size_of::<u64>()] = bytes
+		.as_slice()
+		.try_into()
+		.context("sqlite VTX entry should be exactly 8 bytes")?;
+
+	Ok(u64::from_be_bytes(bytes))
 }
 
 async fn tx_get_value(
@@ -392,46 +535,62 @@ async fn tx_load_latest_shard_blob(
 	scope: &StorageScope,
 	actor_id: &str,
 	shard_id: u32,
-	as_of_txid: u64,
+	legacy_as_of_txid: u64,
 ) -> Result<Option<(Vec<u8>, Vec<u8>)>> {
-	let prefix = match scope {
-		StorageScope::Branch(branch_id) => keys::branch_shard_version_prefix(*branch_id, shard_id),
-		StorageScope::Legacy => keys::shard_version_prefix(actor_id, shard_id),
+	let sources = match scope {
+		StorageScope::Branch(plan) => plan.sources.clone(),
+		StorageScope::Legacy => vec![ReadSource::Legacy],
 	};
-	let end_key = match scope {
-		StorageScope::Branch(branch_id) => keys::branch_shard_key(*branch_id, shard_id, as_of_txid),
-		StorageScope::Legacy => keys::shard_version_key(actor_id, shard_id, as_of_txid),
-	};
-	let end = end_of_key_range(&end_key);
-	let informal = tx.informal();
-	let mut stream = informal.get_ranges_keyvalues(
-		RangeOption {
-			mode: StreamingMode::WantAll,
-			..(prefix.as_slice(), end.as_slice()).into()
-		},
-		Snapshot,
-	);
 
-	let mut latest = None;
-	while let Some(entry) = stream.try_next().await? {
-		latest = Some((entry.key().to_vec(), entry.value().to_vec()));
-	}
+	for source in sources {
+		let as_of_txid = match source {
+			ReadSource::Branch(source) => source.max_txid,
+			ReadSource::Legacy => legacy_as_of_txid,
+		};
+		let prefix = match source {
+			ReadSource::Branch(source) => {
+				keys::branch_shard_version_prefix(source.branch_id, shard_id)
+			}
+			ReadSource::Legacy => keys::shard_version_prefix(actor_id, shard_id),
+		};
+		let end_key = match source {
+			ReadSource::Branch(source) => {
+				keys::branch_shard_key(source.branch_id, shard_id, as_of_txid)
+			}
+			ReadSource::Legacy => keys::shard_version_key(actor_id, shard_id, as_of_txid),
+		};
+		let end = end_of_key_range(&end_key);
+		let informal = tx.informal();
+		let mut stream = informal.get_ranges_keyvalues(
+			RangeOption {
+				mode: StreamingMode::WantAll,
+				..(prefix.as_slice(), end.as_slice()).into()
+			},
+			Snapshot,
+		);
 
-	if latest.is_some() {
-		return Ok(latest);
-	}
+		let mut latest = None;
+		while let Some(entry) = stream.try_next().await? {
+			latest = Some((entry.key().to_vec(), entry.value().to_vec()));
+		}
 
-	match scope {
-		StorageScope::Branch(_branch_id) => Ok(None),
-		StorageScope::Legacy => {
+		if latest.is_some() {
+			return Ok(latest);
+		}
+
+		if matches!(source, ReadSource::Legacy) {
 			let legacy_key = keys::shard_key(actor_id, shard_id);
-			Ok(tx
+			if let Some(value) = tx
 				.informal()
 				.get(&legacy_key, Snapshot)
 				.await?
-				.map(|value| (legacy_key, value.to_vec())))
+			{
+				return Ok(Some((legacy_key, value.to_vec())));
+			}
 		}
 	}
+
+	Ok(None)
 }
 
 fn decode_branch_pidx_pgno(branch_id: ActorBranchId, key: &[u8]) -> Result<u32> {
