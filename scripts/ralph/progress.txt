@@ -6,6 +6,8 @@
 - PITR tunable constants live in `engine/packages/sqlite-storage/src/pump/constants.rs` and are re-exported at the `sqlite_storage` crate root.
 - `SqliteStorageError` uses `RivetError` derive plus a manual `Display`/`Error` impl so errors can produce checked-in `engine/artifacts/errors/*.json` schemas while staying downcastable as `SqliteStorageError`.
 - During the actor-scoped-to-branch migration, versioned SHARD writes use legacy `/SHARD/{shard_id}/{as_of_txid}` keys and readers keep fallback support for old `/SHARD/{shard_id}` blobs.
+- During the actor-scoped-to-branch migration, commit history uses legacy `/COMMITS/{txid}` and `/VTX/{versionstamp}` helpers; both should move under `BR/{branch_id}` with the rest of the hot path.
+- `universaldb` raw `SetVersionstampedKey` and `SetVersionstampedValue` payloads use FDB-style trailing little-endian u32 offsets and substitute the first 10 versionstamp bytes.
 
 # Ralph Progress Log
 Started: Wed Apr 29 03:29:23 PM PDT 2026
@@ -129,4 +131,25 @@ Started: Wed Apr 29 03:29:23 PM PDT 2026
   - Versioned legacy SHARD keys coexist with old unversioned SHARD blobs until root branch allocation moves storage under `BR/{branch_id}`.
   - `fold_shard` now returns the net bytes added for its versioned SHARD write so hot compaction quota accounting stays balanced.
   - The RocksDB-backed test driver did not produce the expected newest row from the reverse range shape here; the bounded scan keeps the newest matching SHARD version and is acceptable with the 32-version cap.
+---
+## 2026-04-29 17:32 PDT - US-008
+- Implemented commit-row and VTX index writes on every SQLite commit using `SetVersionstampedValue` for `COMMITS/{txid}` and `SetVersionstampedKey` for `VTX/{versionstamp}`.
+- Added raw versionstamp-offset substitution support to the RocksDB and Postgres `universaldb` drivers so local tests exercise the same atomic-op shape.
+- Added coverage that decodes `CommitRow.versionstamp` and verifies `VTX[versionstamp] -> txid` for two commits.
+- Files changed:
+  - `engine/packages/sqlite-storage/CLAUDE.md` (via `AGENTS.md` symlink)
+  - `engine/packages/sqlite-storage/src/pump/commit.rs`
+  - `engine/packages/sqlite-storage/src/pump/keys.rs`
+  - `engine/packages/sqlite-storage/src/pump/types.rs`
+  - `engine/packages/sqlite-storage/tests/pump_commit.rs`
+  - `engine/packages/sqlite-storage/tests/pump_keys.rs`
+  - `engine/packages/universaldb/src/driver/postgres/transaction_task.rs`
+  - `engine/packages/universaldb/src/driver/rocksdb/transaction_task.rs`
+  - `engine/packages/universaldb/src/versionstamp.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - `CommitRow` now has concrete vbare encode/decode helpers and is written in the commit tx, not just defined as a future type.
+  - Until US-009 moves storage under `BR/{branch_id}`, commit history and VTX use legacy actor-scoped key helpers.
+  - Local UDB drivers need raw offset substitution for `SetVersionstampedKey` and `SetVersionstampedValue`; tuple-style versionstamp helpers are not enough for FDB atomic-op payloads.
 ---

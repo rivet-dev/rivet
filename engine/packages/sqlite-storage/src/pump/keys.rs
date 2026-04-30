@@ -399,6 +399,24 @@ pub fn meta_compactor_lease_key(actor_id: &str) -> Vec<u8> {
 	key
 }
 
+pub fn commit_key(actor_id: &str, txid: u64) -> Vec<u8> {
+	let prefix = actor_prefix(actor_id);
+	let mut key = Vec::with_capacity(prefix.len() + COMMITS_PATH.len() + std::mem::size_of::<u64>());
+	key.extend_from_slice(&prefix);
+	key.extend_from_slice(COMMITS_PATH);
+	key.extend_from_slice(&txid.to_be_bytes());
+	key
+}
+
+pub fn vtx_key(actor_id: &str, versionstamp: [u8; 16]) -> Vec<u8> {
+	let prefix = actor_prefix(actor_id);
+	let mut key = Vec::with_capacity(prefix.len() + VTX_PATH.len() + versionstamp.len());
+	key.extend_from_slice(&prefix);
+	key.extend_from_slice(VTX_PATH);
+	key.extend_from_slice(&versionstamp);
+	key
+}
+
 pub fn shard_key(actor_id: &str, shard_id: u32) -> Vec<u8> {
 	let prefix = actor_prefix(actor_id);
 	let mut key = Vec::with_capacity(prefix.len() + SHARD_PATH.len() + std::mem::size_of::<u32>());

@@ -8,14 +8,15 @@ use sqlite_storage::compactor::{
 };
 use sqlite_storage::{
 	keys::{
-		PAGE_SIZE, delta_chunk_key, meta_compact_key, meta_head_key, pidx_delta_key, shard_key,
+		PAGE_SIZE, commit_key, delta_chunk_key, meta_compact_key, meta_head_key, pidx_delta_key,
+		shard_key, vtx_key,
 	},
 	ltx::{LtxHeader, encode_ltx_v3},
 	pump::ActorDb,
 	quota::{self, SQLITE_MAX_STORAGE_BYTES},
 	types::{
-		ActorBranchId, DBHead, DirtyPage, FetchedPage, MetaCompact, decode_db_head,
-		encode_db_head, encode_meta_compact,
+		ActorBranchId, DBHead, DirtyPage, FetchedPage, MetaCompact, decode_commit_row,
+		decode_db_head, encode_db_head, encode_meta_compact,
 	},
 };
 use tempfile::Builder;
@@ -167,6 +168,42 @@ async fn commit_advances_head_and_updates_warm_cache() -> Result<()> {
 	assert_eq!(
 		actor_db.get_pages(vec![1, 2]).await?,
 		vec![fetched_page(1, 0x11), fetched_page(2, 0x22)]
+	);
+
+	Ok(())
+}
+
+#[tokio::test]
+async fn commit_writes_commit_row_and_vtx_index() -> Result<()> {
+	let db = Arc::new(test_db().await?);
+	let actor_db = ActorDb::new(db.clone(), test_ups(), TEST_ACTOR.to_string(), NodeId::new());
+
+	actor_db.commit(vec![page(1, 0x11)], 2, 1_000).await?;
+	actor_db.commit(vec![page(2, 0x22)], 3, 2_000).await?;
+
+	let first_row_bytes = read_value(&db, commit_key(TEST_ACTOR, 1))
+		.await?
+		.expect("first commit row should exist");
+	let first_row = decode_commit_row(&first_row_bytes)?;
+	assert_eq!(first_row.wall_clock_ms, 1_000);
+	assert_eq!(first_row.db_size_pages, 2);
+	assert_eq!(first_row.post_apply_checksum, 0);
+	assert_ne!(&first_row.versionstamp[..10], &[0xff; 10]);
+	assert_eq!(
+		read_value(&db, vtx_key(TEST_ACTOR, first_row.versionstamp)).await?,
+		Some(1_u64.to_be_bytes().to_vec())
+	);
+
+	let second_row_bytes = read_value(&db, commit_key(TEST_ACTOR, 2))
+		.await?
+		.expect("second commit row should exist");
+	let second_row = decode_commit_row(&second_row_bytes)?;
+	assert_eq!(second_row.wall_clock_ms, 2_000);
+	assert_eq!(second_row.db_size_pages, 3);
+	assert_ne!(second_row.versionstamp, first_row.versionstamp);
+	assert_eq!(
+		read_value(&db, vtx_key(TEST_ACTOR, second_row.versionstamp)).await?,
+		Some(2_u64.to_be_bytes().to_vec())
 	);
 
 	Ok(())

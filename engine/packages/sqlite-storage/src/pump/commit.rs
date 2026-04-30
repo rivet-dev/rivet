@@ -5,6 +5,7 @@ use std::{collections::BTreeSet, time::Duration};
 use anyhow::{Context, Result};
 use futures_util::TryStreamExt;
 use universaldb::{
+	options::MutationType,
 	RangeOption,
 	options::StreamingMode,
 	utils::IsolationLevel::{Serializable, Snapshot},
@@ -16,10 +17,16 @@ use crate::pump::{
 	ltx::{LtxHeader, encode_ltx_v3},
 	metrics,
 	quota,
-	types::{ActorBranchId, DBHead, DirtyPage, decode_db_head, decode_meta_compact, encode_db_head},
+	types::{
+		ActorBranchId, CommitRow, DBHead, DirtyPage, decode_db_head, decode_meta_compact,
+		encode_commit_row, encode_db_head,
+	},
 };
 
 const DELTA_CHUNK_BYTES: usize = 10_000;
+const INCOMPLETE_COMMIT_VERSIONSTAMP: [u8; 16] = [
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0, 0, 0, 0, 0, 0,
+];
 
 impl ActorDb {
 	pub async fn commit(
@@ -112,14 +119,37 @@ impl ActorDb {
 						#[cfg(debug_assertions)]
 						generation: previous_head.as_ref().map_or(0, |head| head.generation),
 					};
-					let encoded_head = encode_db_head(new_head).context("encode new sqlite db head")?;
+					let encoded_head =
+						encode_db_head(new_head.clone()).context("encode new sqlite db head")?;
 					let txid_bytes = txid.to_be_bytes();
+					let commit_row = CommitRow {
+						wall_clock_ms: now_ms,
+						versionstamp: INCOMPLETE_COMMIT_VERSIONSTAMP,
+						db_size_pages,
+						post_apply_checksum: new_head.post_apply_checksum,
+					};
+					let encoded_commit_row =
+						encode_commit_row(commit_row).context("encode sqlite commit row")?;
+					let versionstamped_commit_row = append_versionstamp_offset(
+						encoded_commit_row.clone(),
+						&INCOMPLETE_COMMIT_VERSIONSTAMP,
+					)
+					.context("prepare versionstamped sqlite commit row")?;
+					let commit_key = keys::commit_key(&actor_id, txid);
+					let vtx_storage_key = keys::vtx_key(&actor_id, INCOMPLETE_COMMIT_VERSIONSTAMP);
+					let versionstamped_vtx_key = append_versionstamp_offset(
+						vtx_storage_key.clone(),
+						&INCOMPLETE_COMMIT_VERSIONSTAMP,
+					)
+					.context("prepare versionstamped sqlite vtx key")?;
 					let dirty_pgnos = dirty_pages
 						.iter()
 						.map(|page| page.pgno)
 						.collect::<BTreeSet<_>>();
 
 					let added_bytes = tracked_entry_size(&head_key, &encoded_head)?
+						+ tracked_entry_size(&commit_key, &encoded_commit_row)?
+						+ tracked_entry_size(&vtx_storage_key, &txid_bytes)?
 						+ delta_chunks
 							.iter()
 							.map(|(key, value)| tracked_entry_size(key, value))
@@ -157,6 +187,16 @@ impl ActorDb {
 						tx.informal().clear(key);
 					}
 					tx.informal().set(&head_key, &encoded_head);
+					tx.informal().atomic_op(
+						&commit_key,
+						&versionstamped_commit_row,
+						MutationType::SetVersionstampedValue,
+					);
+					tx.informal().atomic_op(
+						&versionstamped_vtx_key,
+						&txid_bytes,
+						MutationType::SetVersionstampedKey,
+					);
 					if quota_delta != 0 {
 						quota::atomic_add(&tx, &actor_id, quota_delta);
 					}
@@ -282,6 +322,16 @@ async fn collect_truncate_cleanup(
 
 fn tracked_entry_size(key: &[u8], value: &[u8]) -> Result<i64> {
 	i64::try_from(key.len() + value.len()).context("sqlite tracked entry size exceeded i64")
+}
+
+fn append_versionstamp_offset(mut bytes: Vec<u8>, versionstamp: &[u8; 16]) -> Result<Vec<u8>> {
+	let offset = bytes
+		.windows(versionstamp.len())
+		.position(|window| window == versionstamp)
+		.context("versionstamp placeholder not found")?;
+	let offset = u32::try_from(offset).context("versionstamp offset exceeded u32")?;
+	bytes.extend_from_slice(&offset.to_le_bytes());
+	Ok(bytes)
 }
 
 async fn tx_get_value(

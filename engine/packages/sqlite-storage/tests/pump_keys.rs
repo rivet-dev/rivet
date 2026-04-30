@@ -10,13 +10,13 @@ use sqlite_storage::pump::keys::{
 	branch_meta_head_at_fork_key, branch_meta_head_key, branch_meta_quota_key, branch_pidx_key,
 	branch_prefix, branch_range, branch_shard_key, branch_shard_version_prefix, branch_vtx_key,
 	branches_bk_pin_key, branches_desc_pin_key, branches_list_key, branches_refcount_key,
-	compactor_enqueue_key, compactor_global_lease_key, ctr_eviction_index_key,
+	commit_key, compactor_enqueue_key, compactor_global_lease_key, ctr_eviction_index_key,
 	ctr_quota_global_key, delta_chunk_key, delta_chunk_prefix, delta_prefix, meta_compact_key,
 	meta_compactor_lease_key, meta_head_key, meta_quota_key, namespace_branches_actor_tombstone_key,
 	namespace_branches_bk_pin_key, namespace_branches_desc_pin_key, namespace_branches_list_key,
 	namespace_branches_refcount_key, namespace_branches_tier_state_key, namespace_pointer_cur_key,
 	namespace_pointer_history_key, pidx_delta_key, pidx_delta_prefix, shard_key, shard_prefix,
-	shard_version_key, shard_version_prefix,
+	shard_version_key, shard_version_prefix, vtx_key,
 };
 use sqlite_storage::pump::types::{ActorBranchId, NamespaceBranchId, NamespaceId};
 use uuid::Uuid;
@@ -115,6 +115,8 @@ fn actor_scoped_keys_do_not_collide() {
 	});
 	assert!(shard_key(actor_a, 3).starts_with(&actor_prefix(actor_a)));
 	assert!(shard_key(actor_b, 3).starts_with(&actor_prefix(actor_b)));
+	assert_ne!(commit_key(actor_a, 7), commit_key(actor_b, 7));
+	assert_ne!(vtx_key(actor_a, [3; 16]), vtx_key(actor_b, [3; 16]));
 }
 
 #[test]
@@ -127,6 +129,7 @@ fn data_prefixes_match_full_keys() {
 	assert!(shard_key(TEST_ACTOR, 3).starts_with(&shard_prefix(TEST_ACTOR)));
 	assert!(shard_version_key(TEST_ACTOR, 3, 7).starts_with(&shard_version_prefix(TEST_ACTOR, 3)));
 	assert!(shard_version_key(TEST_ACTOR, 3, 8) > shard_version_key(TEST_ACTOR, 3, 7));
+	assert!(commit_key(TEST_ACTOR, 8) > commit_key(TEST_ACTOR, 7));
 }
 
 #[test]

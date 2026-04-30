@@ -115,6 +115,39 @@ pub fn substitute_versionstamp(
 	Ok(())
 }
 
+pub fn substitute_raw_versionstamp(
+	mut data: Vec<u8>,
+	versionstamp: &Versionstamp,
+) -> Result<Vec<u8>, String> {
+	if data.len() < 4 {
+		return Err("Packed data too short to contain versionstamp offset".to_string());
+	}
+
+	let offset_bytes = data.split_off(data.len() - 4);
+	let offset = u32::from_le_bytes([
+		offset_bytes[0],
+		offset_bytes[1],
+		offset_bytes[2],
+		offset_bytes[3],
+	]) as usize;
+	let versionstamp_len = 10;
+	let versionstamp_end = offset
+		.checked_add(versionstamp_len)
+		.ok_or_else(|| "Versionstamp offset overflowed".to_string())?;
+
+	if versionstamp_end > data.len() {
+		return Err(format!(
+			"Invalid versionstamp offset: {} exceeds data length {}",
+			offset,
+			data.len()
+		));
+	}
+
+	data[offset..versionstamp_end].copy_from_slice(&versionstamp.as_bytes()[..versionstamp_len]);
+
+	Ok(data)
+}
+
 pub fn pack_and_substitute_versionstamp<T: TuplePack>(
 	value: &T,
 	user_version: u16,

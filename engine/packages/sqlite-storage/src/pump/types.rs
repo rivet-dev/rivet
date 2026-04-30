@@ -334,6 +334,37 @@ impl OwnedVersionedData for VersionedDBHead {
 	}
 }
 
+enum VersionedCommitRow {
+	V1(CommitRow),
+}
+
+impl OwnedVersionedData for VersionedCommitRow {
+	type Latest = CommitRow;
+
+	fn wrap_latest(latest: Self::Latest) -> Self {
+		Self::V1(latest)
+	}
+
+	fn unwrap_latest(self) -> Result<Self::Latest> {
+		match self {
+			Self::V1(data) => Ok(data),
+		}
+	}
+
+	fn deserialize_version(payload: &[u8], version: u16) -> Result<Self> {
+		match version {
+			1 => Ok(Self::V1(serde_bare::from_slice(payload)?)),
+			_ => bail!("invalid sqlite-storage CommitRow version: {version}"),
+		}
+	}
+
+	fn serialize_version(self, _version: u16) -> Result<Vec<u8>> {
+		match self {
+			Self::V1(data) => serde_bare::to_vec(&data).map_err(Into::into),
+		}
+	}
+}
+
 enum VersionedMetaCompact {
 	V1(MetaCompact),
 }
@@ -373,6 +404,17 @@ pub fn encode_db_head(head: DBHead) -> Result<Vec<u8>> {
 
 pub fn decode_db_head(payload: &[u8]) -> Result<DBHead> {
 	VersionedDBHead::deserialize_with_embedded_version(payload).context("decode sqlite db head")
+}
+
+pub fn encode_commit_row(row: CommitRow) -> Result<Vec<u8>> {
+	VersionedCommitRow::wrap_latest(row)
+		.serialize_with_embedded_version(SQLITE_STORAGE_META_VERSION)
+		.context("encode sqlite commit row")
+}
+
+pub fn decode_commit_row(payload: &[u8]) -> Result<CommitRow> {
+	VersionedCommitRow::deserialize_with_embedded_version(payload)
+		.context("decode sqlite commit row")
 }
 
 pub fn encode_meta_compact(compact: MetaCompact) -> Result<Vec<u8>> {
