@@ -13,6 +13,7 @@
 - Branch pin versionstamps are 16-byte lexicographic big-endian values, so descendant/bookmark pin atomic-min writes use `MutationType::ByteMin`, not integer `Min`.
 - Namespace branch derivation mirrors actor branch derivation for refcounts and pins, but leaves `tier_state` absent on the child so `ensure_tier_at_least` can lazily inherit or promote later.
 - Namespace tier promotion is an OCC/CAS-style serializable read plus write to `NSBRANCH/{branch}/tier_state`; concurrent first promoters rely on UDB retry and then re-read T1.
+- Namespace forks are metadata-only: write the child `NSPTR` + `NSBRANCH` records and rely on namespace-branch parent walking instead of eagerly materializing child `APTR` rows.
 
 # Ralph Progress Log
 Started: Wed Apr 29 03:29:23 PM PDT 2026
@@ -272,4 +273,18 @@ Started: Wed Apr 29 03:29:23 PM PDT 2026
   - `fork_actor` requires both source and target namespaces to have NSPTR roots; tests can seed the target namespace with a normal `ActorDb` commit.
   - Fresh fork reads use `/META/head_at_fork` for EOF and then resolve page sources through branch ancestry.
   - The current PIDX cache stores only `pgno -> txid`, so fork ancestry reads can only use it when exactly one source branch is involved.
+---
+## 2026-04-29 18:41 PDT - US-015
+- Implemented `fork_namespace` as a metadata-only namespace fork that allocates a new namespace and namespace branch, derives branch metadata, and writes the child `NSPTR`.
+- Added coverage for child pointer/record creation, source desc-pin and refcount updates, no eager child `APTR` rows, and max namespace depth enforcement.
+- Verified with `cargo test -p sqlite-storage --test pump_branch fork_namespace -- --nocapture`, `cargo check -p sqlite-storage`, and `cargo test -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/src/pump/branch.rs`
+  - `engine/packages/sqlite-storage/tests/pump_branch.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - `fork_namespace` should delegate branch metadata/refcount/pin/depth behavior to `derive_namespace_branch_at` and only add the new namespace pointer.
+  - Child namespace branches intentionally start with an empty APTR space; actor lookup inheritance belongs to the namespace parent-walk resolver.
+  - Repeated namespace forks can reuse the same resolved commit versionstamp for depth-cap tests because namespace derivation only needs a versionstamp boundary.
 ---

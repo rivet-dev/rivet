@@ -132,6 +132,20 @@ async fn read_namespace_refcount(
 	Ok(i64::from_le_bytes(bytes))
 }
 
+async fn read_namespace_pin(
+	db: &universaldb::Database,
+	branch_id: NamespaceBranchId,
+) -> Result<[u8; 16]> {
+	let bytes = read_value(db, namespace_branches_desc_pin_key(branch_id))
+		.await?
+		.expect("namespace branch desc pin should exist");
+
+	Ok(bytes
+		.as_slice()
+		.try_into()
+		.expect("namespace branch desc pin should be 16 bytes"))
+}
+
 #[tokio::test]
 async fn derive_branch_at_snapshots_head_and_writes_branch_metadata() -> Result<()> {
 	let db = Arc::new(test_db().await?);
@@ -517,6 +531,114 @@ async fn derive_namespace_branch_at_enforces_max_namespace_depth() -> Result<()>
 		read_value(&db, namespace_branches_list_key(new_branch_id))
 			.await?
 			.is_none()
+	);
+
+	Ok(())
+}
+
+#[tokio::test]
+async fn fork_namespace_writes_pointer_and_metadata_without_eager_aptr() -> Result<()> {
+	let db = Arc::new(test_db().await?);
+	let actor_db = ActorDb::new(
+		db.clone(),
+		test_ups(),
+		test_namespace(),
+		TEST_ACTOR.to_string(),
+		NodeId::new(),
+	);
+	actor_db.commit(vec![page(1, 0x11)], 2, 1_000).await?;
+	let source_namespace_id = NamespaceId::from_gas_id(test_namespace());
+	let source_namespace_branch = read_namespace_branch_id(&db).await?;
+	let source_actor_branch = read_branch_id(&db).await?;
+	let source_commit_bytes = read_value(&db, branch_commit_key(source_actor_branch, 1))
+		.await?
+		.expect("source commit row should exist");
+	let source_commit = decode_commit_row(&source_commit_bytes)?;
+
+	let forked_namespace_id = branch::fork_namespace(
+		&db,
+		source_namespace_id,
+		ResolvedVersionstamp {
+			versionstamp: source_commit.versionstamp,
+			bookmark: None,
+		},
+	)
+	.await?;
+
+	assert_ne!(forked_namespace_id, source_namespace_id);
+	let pointer_bytes = read_value(&db, namespace_pointer_cur_key(forked_namespace_id))
+		.await?
+		.expect("forked namespace pointer should exist");
+	let forked_pointer = decode_namespace_pointer(&pointer_bytes)?;
+	let forked_branch_record_bytes =
+		read_value(&db, namespace_branches_list_key(forked_pointer.current_branch))
+			.await?
+			.expect("forked namespace branch record should exist");
+	let forked_record = decode_namespace_branch_record(&forked_branch_record_bytes)?;
+	assert_eq!(forked_record.parent, Some(source_namespace_branch));
+	assert_eq!(
+		forked_record.parent_versionstamp,
+		Some(source_commit.versionstamp)
+	);
+	assert_eq!(forked_record.fork_depth, 1);
+	assert_eq!(forked_record.state, BranchState::Live);
+	assert_eq!(read_namespace_refcount(&db, source_namespace_branch).await?, 2);
+	assert_eq!(
+		read_namespace_refcount(&db, forked_pointer.current_branch).await?,
+		1
+	);
+	assert_eq!(
+		read_namespace_pin(&db, source_namespace_branch).await?,
+		source_commit.versionstamp
+	);
+	assert!(
+		read_value(
+			&db,
+			actor_pointer_cur_key(forked_pointer.current_branch, TEST_ACTOR)
+		)
+		.await?
+		.is_none()
+	);
+
+	Ok(())
+}
+
+#[tokio::test]
+async fn fork_namespace_enforces_max_namespace_depth() -> Result<()> {
+	let db = Arc::new(test_db().await?);
+	let actor_db = ActorDb::new(
+		db.clone(),
+		test_ups(),
+		test_namespace(),
+		TEST_ACTOR.to_string(),
+		NodeId::new(),
+	);
+	actor_db.commit(vec![page(1, 0x11)], 2, 1_000).await?;
+	let source_actor_branch = read_branch_id(&db).await?;
+	let source_commit_bytes = read_value(&db, branch_commit_key(source_actor_branch, 1))
+		.await?
+		.expect("source commit row should exist");
+	let source_commit = decode_commit_row(&source_commit_bytes)?;
+	let at = ResolvedVersionstamp {
+		versionstamp: source_commit.versionstamp,
+		bookmark: None,
+	};
+	let mut source_namespace_id = NamespaceId::from_gas_id(test_namespace());
+
+	for _ in 0..sqlite_storage::constants::MAX_NAMESPACE_DEPTH {
+		source_namespace_id = branch::fork_namespace(&db, source_namespace_id, at.clone()).await?;
+	}
+
+	let err = branch::fork_namespace(&db, source_namespace_id, at)
+		.await
+		.expect_err("namespace fork depth should be capped");
+
+	assert!(
+		err.downcast_ref::<sqlite_storage::error::SqliteStorageError>()
+			.is_some_and(|err| matches!(
+				err,
+				sqlite_storage::error::SqliteStorageError::NamespaceForkChainTooDeep
+			))
 	);
 
 	Ok(())

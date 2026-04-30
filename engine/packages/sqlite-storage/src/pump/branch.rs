@@ -268,6 +268,53 @@ pub async fn fork_actor(
 	Ok(new_actor_id)
 }
 
+pub async fn fork_namespace(
+	udb: &universaldb::Database,
+	source_namespace: NamespaceId,
+	at: ResolvedVersionstamp,
+) -> Result<NamespaceId> {
+	let new_namespace_id = NamespaceId::new_v4();
+	let new_namespace_branch_id = NamespaceBranchId::new_v4();
+
+	udb.run({
+		let at = at.clone();
+
+		move |tx| {
+			let at = at.clone();
+
+			async move {
+				let source_namespace_branch =
+					resolve_namespace_branch(&tx, source_namespace, Serializable)
+						.await?
+						.ok_or(SqliteStorageError::ActorNotFound)?;
+
+				derive_namespace_branch_at(
+					&tx,
+					source_namespace_branch,
+					at.versionstamp,
+					new_namespace_branch_id,
+					at.bookmark,
+				)
+				.await?;
+
+				let pointer = NamespacePointer {
+					current_branch: new_namespace_branch_id,
+					last_swapped_at_ms: now_ms()?,
+				};
+				let encoded_pointer =
+					encode_namespace_pointer(pointer).context("encode sqlite fork namespace pointer")?;
+				tx.informal()
+					.set(&keys::namespace_pointer_cur_key(new_namespace_id), &encoded_pointer);
+
+				Ok(())
+			}
+		}
+	})
+	.await?;
+
+	Ok(new_namespace_id)
+}
+
 pub async fn derive_branch_at(
 	tx: &universaldb::Transaction,
 	source_branch_id: ActorBranchId,
