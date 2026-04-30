@@ -13,6 +13,7 @@ use universaldb::{
 
 use crate::pump::{
 	ActorDb,
+	actor_db::{BranchAncestry, load_branch_ancestry},
 	branch,
 	keys::{self, SHARD_SIZE},
 	ltx::{LtxHeader, encode_ltx_v3},
@@ -49,6 +50,7 @@ impl ActorDb {
 
 		let cached_storage_used = *self.storage_used.lock();
 		let cached_branch_id = *self.branch_id.lock();
+		let cached_ancestry = self.ancestors.lock().clone();
 		let cache_was_warm = !self.cache.lock().range(0, u32::MAX).is_empty();
 		let actor_id = self.actor_id.clone();
 		let namespace_id = self.sqlite_namespace_id();
@@ -60,11 +62,21 @@ impl ActorDb {
 				let actor_id = actor_id.clone();
 				let namespace_id = namespace_id;
 				let dirty_pages = dirty_pages_for_tx.clone();
+				let cached_ancestry = cached_ancestry.clone();
 
 				async move {
 					let branch_resolution =
 						resolve_or_allocate_branch(&tx, namespace_id, &actor_id).await?;
 					let branch_id = branch_resolution.branch_id;
+					let branch_ancestry = if branch_resolution.actor_initialized {
+						BranchAncestry::root(branch_id)
+					} else if let Some(cached_ancestry) =
+						cached_ancestry.filter(|ancestry| ancestry.root_branch_id == branch_id)
+					{
+						cached_ancestry
+					} else {
+						load_branch_ancestry(&tx, branch_id).await?
+					};
 					let head_key = keys::branch_meta_head_key(branch_id);
 					let branch_cache_matches = cached_branch_id == Some(branch_id);
 					let (head_bytes, storage_used) =
@@ -236,6 +248,7 @@ impl ActorDb {
 
 					Ok(CommitTxResult {
 						branch_id,
+						branch_ancestry,
 						txid,
 						materialized_txid,
 						dirty_pgnos,
@@ -249,6 +262,7 @@ impl ActorDb {
 
 		*self.storage_used.lock() = Some(result.storage_used);
 		*self.branch_id.lock() = Some(result.branch_id);
+		*self.ancestors.lock() = Some(result.branch_ancestry.clone());
 		*self.commit_bytes_since_rollup.lock() += u64::try_from(result.added_bytes)
 			.context("commit added bytes should be non-negative")?;
 
@@ -313,6 +327,7 @@ impl ActorDb {
 
 struct CommitTxResult {
 	branch_id: ActorBranchId,
+	branch_ancestry: BranchAncestry,
 	txid: u64,
 	materialized_txid: u64,
 	dirty_pgnos: BTreeSet<u32>,

@@ -12,6 +12,7 @@ use universaldb::{
 
 use crate::pump::{
 	ActorDb,
+	actor_db::{BranchAncestry, load_branch_ancestry},
 	branch,
 	error::SqliteStorageError,
 	keys::{self, PAGE_SIZE, SHARD_SIZE},
@@ -57,6 +58,7 @@ impl ActorDb {
 		let actor_id = self.actor_id.clone();
 		let namespace_id = self.sqlite_namespace_id();
 		let cached_branch_id = *self.branch_id.lock();
+		let cached_ancestry = self.ancestors.lock().clone();
 		let pgnos_for_tx = pgnos.clone();
 		let tx_result = self
 			.udb
@@ -65,10 +67,16 @@ impl ActorDb {
 				let namespace_id = namespace_id;
 				let pgnos = pgnos_for_tx.clone();
 				let cached_pidx = cached_pidx.clone();
+				let cached_ancestry = cached_ancestry.clone();
 
 				async move {
-					let scope =
-						resolve_storage_scope(&tx, namespace_id, &actor_id).await?;
+					let scope = resolve_storage_scope(
+						&tx,
+						namespace_id,
+						&actor_id,
+						cached_ancestry.as_ref(),
+					)
+					.await?;
 					let cached_pidx = if scope.branch_id() == cached_branch_id {
 						cached_pidx
 					} else {
@@ -95,6 +103,7 @@ impl ActorDb {
 					if pgnos_in_range.is_empty() {
 						return Ok(GetPagesTxResult {
 							branch_id: scope.branch_id(),
+							branch_ancestry: scope.branch_ancestry(),
 							db_size_pages: head.db_size_pages,
 							loaded_pidx_rows: None,
 							page_sources: BTreeMap::new(),
@@ -236,6 +245,7 @@ impl ActorDb {
 
 					Ok(GetPagesTxResult {
 						branch_id: scope.branch_id(),
+						branch_ancestry: scope.branch_ancestry(),
 						db_size_pages: head.db_size_pages,
 						loaded_pidx_rows,
 						page_sources,
@@ -324,6 +334,9 @@ impl ActorDb {
 				self.cache.lock().clear();
 			}
 			*self.branch_id.lock() = Some(branch_id);
+			*self.ancestors.lock() = tx_result.branch_ancestry;
+		} else {
+			*self.ancestors.lock() = None;
 		}
 
 		Ok(pages)
@@ -332,6 +345,7 @@ impl ActorDb {
 
 struct GetPagesTxResult {
 	branch_id: Option<ActorBranchId>,
+	branch_ancestry: Option<BranchAncestry>,
 	db_size_pages: u32,
 	loaded_pidx_rows: Option<Vec<(u32, u64)>>,
 	page_sources: BTreeMap<u32, Vec<u8>>,
@@ -352,12 +366,20 @@ impl StorageScope {
 			Self::Legacy => None,
 		}
 	}
+
+	fn branch_ancestry(&self) -> Option<BranchAncestry> {
+		match self {
+			Self::Branch(plan) => Some(plan.ancestry.clone()),
+			Self::Legacy => None,
+		}
+	}
 }
 
 #[derive(Debug, Clone)]
 struct BranchReadPlan {
 	branch_id: ActorBranchId,
 	head: DBHead,
+	ancestry: BranchAncestry,
 	sources: Vec<ReadSource>,
 }
 
@@ -406,10 +428,13 @@ async fn resolve_storage_scope(
 	tx: &universaldb::Transaction,
 	namespace_id: crate::pump::types::NamespaceId,
 	actor_id: &str,
+	cached_ancestry: Option<&BranchAncestry>,
 ) -> Result<StorageScope> {
 	Ok(
 		match branch::resolve_actor_branch(tx, namespace_id, actor_id, Snapshot).await? {
-			Some(branch_id) => StorageScope::Branch(load_branch_read_plan(tx, branch_id).await?),
+			Some(branch_id) => {
+				StorageScope::Branch(load_branch_read_plan(tx, branch_id, cached_ancestry).await?)
+			}
 			None => StorageScope::Legacy,
 		},
 	)
@@ -418,6 +443,7 @@ async fn resolve_storage_scope(
 async fn load_branch_read_plan(
 	tx: &universaldb::Transaction,
 	branch_id: ActorBranchId,
+	cached_ancestry: Option<&BranchAncestry>,
 ) -> Result<BranchReadPlan> {
 	let head_bytes = tx_get_value(tx, &keys::branch_meta_head_key(branch_id)).await?;
 	let has_local_head = head_bytes.is_some();
@@ -432,34 +458,35 @@ async fn load_branch_read_plan(
 		decode_db_head(&head_at_fork_bytes)?
 	};
 
-	let mut sources = Vec::new();
-	if has_local_head {
-		sources.push(ReadSource::Branch(BranchSource {
-			branch_id,
-			max_txid: head.head_txid,
-		}));
-	}
+	let ancestry = if let Some(cached_ancestry) =
+		cached_ancestry.filter(|ancestry| ancestry.root_branch_id == branch_id)
+	{
+		cached_ancestry.clone()
+	} else {
+		load_branch_ancestry(tx, branch_id).await?
+	};
 
-	let mut current_branch_id = branch_id;
-	for _ in 0..=crate::constants::MAX_FORK_DEPTH {
-		let record = branch::read_actor_branch_record(tx, current_branch_id).await?;
-		let Some(parent_branch_id) = record.parent else {
-			break;
+	let mut sources = Vec::new();
+	for ancestor in &ancestry.ancestors {
+		if ancestor.parent_versionstamp_cap.is_none() && !has_local_head {
+			continue;
+		}
+		let max_txid = match ancestor.parent_versionstamp_cap {
+			Some(parent_versionstamp) => {
+				lookup_txid_for_read(tx, ancestor.branch_id, parent_versionstamp).await?
+			}
+			None => head.head_txid,
 		};
-		let parent_versionstamp = record
-			.parent_versionstamp
-			.context("sqlite actor branch parent versionstamp is missing")?;
-		let max_txid = lookup_txid_for_read(tx, parent_branch_id, parent_versionstamp).await?;
 		sources.push(ReadSource::Branch(BranchSource {
-			branch_id: parent_branch_id,
+			branch_id: ancestor.branch_id,
 			max_txid,
 		}));
-		current_branch_id = parent_branch_id;
 	}
 
 	Ok(BranchReadPlan {
 		branch_id,
 		head,
+		ancestry,
 		sources,
 	})
 }

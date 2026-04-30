@@ -79,6 +79,17 @@ async fn read_value(db: &universaldb::Database, key: Vec<u8>) -> Result<Option<V
 	.await
 }
 
+async fn clear_value(db: &universaldb::Database, key: Vec<u8>) -> Result<()> {
+	db.run(move |tx| {
+		let key = key.clone();
+		async move {
+			tx.informal().clear(&key);
+			Ok(())
+		}
+	})
+	.await
+}
+
 async fn read_prefix_values(
 	db: &universaldb::Database,
 	prefix: Vec<u8>,
@@ -855,6 +866,86 @@ async fn fork_actor_can_use_depth_one_source_branch() -> Result<()> {
 		NodeId::new(),
 	);
 	let pages = depth_two_actor_db.get_pages(vec![1, 2]).await?;
+	assert_eq!(pages[0].bytes, Some(page_bytes(0x11)));
+	assert_eq!(pages[1].bytes, Some(page_bytes(0x22)));
+
+	Ok(())
+}
+
+#[tokio::test]
+async fn actor_db_reuses_cached_branch_ancestry_for_reads() -> Result<()> {
+	let db = Arc::new(test_db().await?);
+	let root_actor_db = ActorDb::new(
+		db.clone(),
+		test_ups(),
+		test_namespace(),
+		TEST_ACTOR.to_string(),
+		NodeId::new(),
+	);
+	root_actor_db.commit(vec![page(1, 0x11)], 2, 1_000).await?;
+	let root_branch_id = read_branch_id(&db).await?;
+	let root_commit = decode_commit_row(
+		&read_value(&db, branch_commit_key(root_branch_id, 1))
+			.await?
+			.expect("root commit row should exist"),
+	)?;
+
+	let child_actor_id = branch::fork_actor(
+		&db,
+		NamespaceId::from_gas_id(test_namespace()),
+		TEST_ACTOR.to_string(),
+		ResolvedVersionstamp {
+			versionstamp: root_commit.versionstamp,
+			bookmark: None,
+		},
+		NamespaceId::from_gas_id(test_namespace()),
+	)
+	.await?;
+	let child_actor_db = ActorDb::new(
+		db.clone(),
+		test_ups(),
+		test_namespace(),
+		child_actor_id.clone(),
+		NodeId::new(),
+	);
+	child_actor_db.commit(vec![page(2, 0x22)], 3, 2_000).await?;
+	let child_branch_id = read_actor_branch_id(&db, test_namespace(), &child_actor_id).await?;
+	let child_commit = decode_commit_row(
+		&read_value(&db, branch_commit_key(child_branch_id, 1))
+			.await?
+			.expect("child commit row should exist"),
+	)?;
+
+	let grandchild_actor_id = branch::fork_actor(
+		&db,
+		NamespaceId::from_gas_id(test_namespace()),
+		child_actor_id,
+		ResolvedVersionstamp {
+			versionstamp: child_commit.versionstamp,
+			bookmark: None,
+		},
+		NamespaceId::from_gas_id(test_namespace()),
+	)
+	.await?;
+	let grandchild_branch_id =
+		read_actor_branch_id(&db, test_namespace(), &grandchild_actor_id).await?;
+	let grandchild_actor_db = ActorDb::new(
+		db.clone(),
+		test_ups(),
+		test_namespace(),
+		grandchild_actor_id,
+		NodeId::new(),
+	);
+
+	let pages = grandchild_actor_db.get_pages(vec![1, 2]).await?;
+	assert_eq!(pages[0].bytes, Some(page_bytes(0x11)));
+	assert_eq!(pages[1].bytes, Some(page_bytes(0x22)));
+
+	clear_value(&db, branches_list_key(grandchild_branch_id)).await?;
+	clear_value(&db, branches_list_key(child_branch_id)).await?;
+	clear_value(&db, branches_list_key(root_branch_id)).await?;
+
+	let pages = grandchild_actor_db.get_pages(vec![1, 2]).await?;
 	assert_eq!(pages[0].bytes, Some(page_bytes(0x11)));
 	assert_eq!(pages[1].bytes, Some(page_bytes(0x22)));
 

@@ -22,6 +22,7 @@
 - Pinned bookmark creation is FDB-first: write `PinStatus::Pending`, actor branch `bk_pin`, and namespace `pin_count` before publishing `SqliteColdCompactPayload::CreatePinnedBookmark`.
 - Pinned bookmark deletion should clear both bookmark keys, decrement namespace `pin_count`, recompute branch `bk_pin` from remaining actor pinned-bookmark records, and publish `SqliteColdCompactPayload::DeletePinnedBookmark`.
 - Restore-to-bookmark captures the undo commit before rollback, performs the APTR rollback, then writes the undo pinned bookmark so rollback durability does not depend on cold-tier pin work.
+- ActorDb's flattened ancestry cache stores branch ids plus parent versionstamp caps; read txs still resolve cap versionstamps to txids before PIDX/SHARD lookup.
 
 # Ralph Progress Log
 Started: Wed Apr 29 03:29:23 PM PDT 2026
@@ -464,4 +465,21 @@ Started: Wed Apr 29 03:29:23 PM PDT 2026
   - The PRD says rollback is obsolete after US-067, but the current code still exposes pointer-era rollback APIs, so US-024 was implemented against the actual code layout.
   - Restore-to-bookmark should pin the pre-rollback branch/versionstamp after the rollback instead of calling the normal current-branch `create_pinned_bookmark`.
   - Parent PIDX reads are not versionstamp-capped yet; tests for rollback/restore should assert the new branch `head_at_fork` until US-027 fixes ancestry page reads.
+---
+## 2026-04-29 19:59 PDT - US-025
+- Implemented a per-ActorDb flattened branch ancestry cache and wired get_pages to reuse it for immutable branch parent chains.
+- Seeded the cache after commit so root branches have an ancestry plan before the first read, and kept read planning responsible for resolving versionstamp caps to txids inside each transaction.
+- Added a regression test that warms a fork descendant's ancestry cache, removes branch records, and verifies the same connection still reads inherited pages.
+- Files changed:
+  - `engine/packages/sqlite-storage/CLAUDE.md`
+  - `engine/packages/sqlite-storage/src/pump/actor_db.rs`
+  - `engine/packages/sqlite-storage/src/pump/commit.rs`
+  - `engine/packages/sqlite-storage/src/pump/read.rs`
+  - `engine/packages/sqlite-storage/tests/pump_branch.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - `ActorDb.ancestors` is a perf cache of immutable branch ids and parent versionstamp caps; it must not store txid lookups because hot retention can change VTX availability.
+  - Fresh forks still read `/META/head_at_fork`; the ancestry cache only avoids rereading branch records.
+  - The current code still supports pointer-era rollback, so the cache is replaced when APTR resolves to a different branch even though the v4 model removes that invalidation path.
 ---

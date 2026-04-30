@@ -39,6 +39,7 @@ These come from `r2-prior-art/.agent/research/sqlite/requirements.md` and supers
 - **ActorDb branch and PIDX caches must be invalidated when APTR moves.** Rollback swaps can make cached branch id, quota, and PIDX rows stale; resolve APTR as the source of truth before using cached branch-local state.
 - **Legacy actor-scoped storage is compatibility fallback only.** New ActorDb writes use branch-scoped META, COMMITS, VTX, PIDX, DELTA, and SHARD keys.
 - **Branch ancestry reads use branch-aware sources.** The PIDX cache is safe only when the read plan has one source branch; multi-branch ancestry reads must scan PIDX with branch identity.
+- **Flattened ancestry caches store versionstamp caps.** Resolve cached parent versionstamps to txids inside each read transaction before PIDX/SHARD lookup.
 - **PITR tunable constants live in `pump/constants.rs`.** Import shared limits and retention windows from there instead of duplicating literals.
 - **Pump persisted payload structs use `serde::{Serialize, Deserialize}` as the serde_bare/vbare-compatible derive pattern.** Add `OwnedVersionedData` wrappers when introducing encode/decode helpers.
 - **META splits into single-writer sub-keys:** `/META/head` (commit-owned), `/META/compact` (hot compactor-owned), `/META/cold_compact` (cold compactor-owned), `/META/quota` (atomic-add counter, raw i64 LE — not vbare), `/META/manifest` (branch metadata), `/META/compactor_lease`, `/META/cold_lease`. Disjoint owners; commit/compaction never conflict on a META sub-key.
