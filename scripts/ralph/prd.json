@@ -365,8 +365,8 @@
         "Typecheck passes"
       ],
       "priority": 21,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Implemented against the current pointer-era sqlite-storage layout: namespace visibility is APTR/NSPTR parent-walk with cap-by-versionstamp rather than v4 NSCAT."
     },
     {
       "id": "US-022",

@@ -1,13 +1,17 @@
 use anyhow::{Context, Result};
-use universaldb::utils::IsolationLevel::Snapshot;
+use universaldb::utils::IsolationLevel::{Serializable, Snapshot};
 
 use super::{
 	ActorDb, branch, keys,
 	error::SqliteStorageError,
 	types::{
-		BookmarkStr, NamespaceId, PinStatus, decode_db_head, decode_pinned_bookmark_record,
+		ActorBranchId, BookmarkRef, BookmarkStr, NamespaceBranchId, NamespaceId, PinStatus,
+		ResolvedVersionstamp, decode_actor_pointer, decode_commit_row, decode_db_head,
+		decode_namespace_branch_record, decode_pinned_bookmark_record,
 	},
 };
+
+const VERSIONSTAMP_INFINITY: [u8; 16] = [0xff; 16];
 
 impl ActorDb {
 	pub async fn create_bookmark(&self, at_ms: i64) -> Result<BookmarkStr> {
@@ -22,6 +26,16 @@ impl ActorDb {
 
 	pub async fn bookmark_status(&self, bookmark: BookmarkStr) -> Result<Option<PinStatus>> {
 		bookmark_status(
+			&self.udb,
+			self.sqlite_namespace_id(),
+			self.actor_id.clone(),
+			bookmark,
+		)
+		.await
+	}
+
+	pub async fn resolve_bookmark(&self, bookmark: BookmarkStr) -> Result<ResolvedVersionstamp> {
+		resolve_bookmark(
 			&self.udb,
 			self.sqlite_namespace_id(),
 			self.actor_id.clone(),
@@ -85,4 +99,204 @@ pub async fn bookmark_status(
 		}
 	})
 	.await
+}
+
+pub async fn resolve_bookmark(
+	udb: &universaldb::Database,
+	namespace_id: NamespaceId,
+	actor_id: String,
+	bookmark: BookmarkStr,
+) -> Result<ResolvedVersionstamp> {
+	udb.run(move |tx| {
+		let actor_id = actor_id.clone();
+		let bookmark = bookmark.clone();
+
+		async move {
+			let (branch_id, namespace_cap) =
+				resolve_visible_actor_branch_for_bookmark(&tx, namespace_id, &actor_id).await?;
+			resolve_bookmark_in_branch_chain(&tx, &actor_id, branch_id, namespace_cap, bookmark).await
+		}
+	})
+	.await
+}
+
+async fn resolve_visible_actor_branch_for_bookmark(
+	tx: &universaldb::Transaction,
+	namespace_id: NamespaceId,
+	actor_id: &str,
+) -> Result<(ActorBranchId, [u8; 16])> {
+	let Some(mut namespace_branch_id) =
+		branch::resolve_namespace_branch(tx, namespace_id, Snapshot).await?
+	else {
+		if let Some(pointer) =
+			branch::resolve_actor_pointer(tx, NamespaceBranchId::nil(), actor_id, Snapshot).await?
+		{
+			return Ok((pointer.current_branch, VERSIONSTAMP_INFINITY));
+		}
+
+		return Err(SqliteStorageError::BranchNotReachable.into());
+	};
+
+	let mut cap = VERSIONSTAMP_INFINITY;
+	for _ in 0..=crate::constants::MAX_NAMESPACE_DEPTH {
+		if let Some(pointer_bytes) = tx
+			.informal()
+			.get(
+				&keys::actor_pointer_cur_key(namespace_branch_id, actor_id),
+				Snapshot,
+			)
+			.await?
+		{
+			let pointer = decode_actor_pointer(&pointer_bytes)
+				.context("decode sqlite actor pointer during bookmark resolution")?;
+			return Ok((pointer.current_branch, cap));
+		}
+
+		if tx
+			.informal()
+			.get(
+				&keys::namespace_branches_actor_tombstone_key(namespace_branch_id, actor_id),
+				Snapshot,
+			)
+			.await?
+			.is_some()
+		{
+			return Err(SqliteStorageError::BranchNotReachable.into());
+		}
+
+		let Some(record_bytes) = tx
+			.informal()
+			.get(&keys::namespace_branches_list_key(namespace_branch_id), Snapshot)
+			.await?
+		else {
+			return Err(SqliteStorageError::BranchNotReachable.into());
+		};
+		let record = decode_namespace_branch_record(&record_bytes)
+			.context("decode sqlite namespace branch record during bookmark resolution")?;
+		let Some(parent) = record.parent else {
+			return Err(SqliteStorageError::BranchNotReachable.into());
+		};
+		if let Some(parent_versionstamp) = record.parent_versionstamp {
+			cap = cap.min(parent_versionstamp);
+		}
+		namespace_branch_id = parent;
+	}
+
+	Err(SqliteStorageError::NamespaceForkChainTooDeep.into())
+}
+
+async fn resolve_bookmark_in_branch_chain(
+	tx: &universaldb::Transaction,
+	actor_id: &str,
+	branch_id: ActorBranchId,
+	namespace_cap: [u8; 16],
+	bookmark: BookmarkStr,
+) -> Result<ResolvedVersionstamp> {
+	let (_ts_ms, bookmark_txid) = bookmark.parse()?;
+	let pinned_record = tx
+		.informal()
+		.get(
+			&keys::bookmark_pinned_key(actor_id, bookmark.as_str()),
+			Snapshot,
+		)
+		.await?
+		.map(|bytes| {
+			decode_pinned_bookmark_record(&bytes)
+				.context("decode sqlite pinned bookmark record during bookmark resolution")
+		})
+		.transpose()?;
+
+	let mut current_branch_id = branch_id;
+	let mut cap = namespace_cap;
+	let mut saw_branch = false;
+	for _ in 0..=crate::constants::MAX_FORK_DEPTH {
+		saw_branch = true;
+
+		if let Some(record) = pinned_record.as_ref().filter(|record| {
+			record.actor_branch_id == current_branch_id && record.versionstamp <= cap
+		}) {
+			return Ok(ResolvedVersionstamp {
+				versionstamp: record.versionstamp,
+				bookmark: Some(BookmarkRef {
+					bookmark: bookmark.clone(),
+					resolved_versionstamp: Some(record.versionstamp),
+				}),
+			});
+		}
+
+		if let Some(row) = read_commit_row(tx, current_branch_id, bookmark_txid).await? {
+			if row.versionstamp > cap {
+				return Err(SqliteStorageError::BranchNotReachable.into());
+			}
+
+			let Some(vtx_txid) = lookup_vtx_txid(tx, current_branch_id, row.versionstamp).await?
+			else {
+				return Err(SqliteStorageError::BookmarkExpired.into());
+			};
+			if vtx_txid == bookmark_txid {
+				return Ok(ResolvedVersionstamp {
+					versionstamp: row.versionstamp,
+					bookmark: Some(BookmarkRef {
+						bookmark: bookmark.clone(),
+						resolved_versionstamp: Some(row.versionstamp),
+					}),
+				});
+			}
+		}
+
+		let record = branch::read_actor_branch_record(tx, current_branch_id).await?;
+		let Some(parent) = record.parent else {
+			break;
+		};
+		let parent_versionstamp = record
+			.parent_versionstamp
+			.context("sqlite actor branch parent versionstamp is missing")?;
+		cap = cap.min(parent_versionstamp);
+		current_branch_id = parent;
+	}
+
+	if pinned_record.is_some() && saw_branch {
+		return Err(SqliteStorageError::BranchNotReachable.into());
+	}
+
+	Err(SqliteStorageError::BookmarkExpired.into())
+}
+
+async fn read_commit_row(
+	tx: &universaldb::Transaction,
+	branch_id: ActorBranchId,
+	txid: u64,
+) -> Result<Option<super::types::CommitRow>> {
+	let Some(bytes) = tx
+		.informal()
+		.get(&keys::branch_commit_key(branch_id, txid), Serializable)
+		.await?
+	else {
+		return Ok(None);
+	};
+
+	Ok(Some(
+		decode_commit_row(&bytes).context("decode sqlite commit row during bookmark resolution")?,
+	))
+}
+
+async fn lookup_vtx_txid(
+	tx: &universaldb::Transaction,
+	branch_id: ActorBranchId,
+	versionstamp: [u8; 16],
+) -> Result<Option<u64>> {
+	let Some(bytes) = tx
+		.informal()
+		.get(&keys::branch_vtx_key(branch_id, versionstamp), Serializable)
+		.await?
+	else {
+		return Ok(None);
+	};
+	let bytes = Vec::<u8>::from(bytes);
+	let bytes: [u8; std::mem::size_of::<u64>()] = bytes
+		.as_slice()
+		.try_into()
+		.context("sqlite VTX entry should be exactly 8 bytes")?;
+
+	Ok(Some(u64::from_be_bytes(bytes)))
 }

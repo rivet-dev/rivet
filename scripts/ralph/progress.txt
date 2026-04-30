@@ -18,6 +18,7 @@
 - Namespace rollback mirrors actor rollback at the pointer layer: derive the new NSBRANCH, freeze the old NSBRANCH, append `NSPTR/history`, decrement the old pointer refcount, then swap `NSPTR/cur`.
 - Use `BookmarkStr::format(ts_ms, txid)` and `BookmarkStr::parse()` for bookmark wire strings; avoid hand-formatting the 33-character `{timestamp_ms_hex_be:016}-{txid_hex_be:016}` shape.
 - Ephemeral bookmark creation is read-only: derive `BookmarkStr` from the caller timestamp and current branch head txid; only pinned bookmarks write `BOOKMARK/{actor_id}/{bookmark}/pinned`.
+- Bookmark resolution must direct-walk namespace parents and carry the namespace fork versionstamp cap into actor branch ancestry; recursive APTR resolution loses that cap.
 
 # Ralph Progress Log
 Started: Wed Apr 29 03:29:23 PM PDT 2026
@@ -394,4 +395,19 @@ Started: Wed Apr 29 03:29:23 PM PDT 2026
   - `create_bookmark` is read-only and formats the caller timestamp with the current branch head txid.
   - `bookmark_status` returns `Option<PinStatus>`; `None` means the pinned bookmark record is absent.
   - Tests that seed pinned bookmark records should use the new `encode_pinned_bookmark_record` helper instead of raw `serde_bare`.
+---
+## 2026-04-29 19:31 PDT - US-021
+- Implemented `resolve_bookmark` for the current pointer-era sqlite-storage layout, bridging namespace parent walks and actor branch ancestry with versionstamp caps.
+- Added coverage for ephemeral VTX-backed resolution, missing VTX expiry, pinned bookmark precedence, actor parent-chain resolution, and namespace fork cap rejection.
+- Verified with `cargo test -p sqlite-storage --test pump_bookmark -- --nocapture`, `cargo check -p sqlite-storage`, and `cargo test -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/AGENTS.md`
+  - `engine/packages/sqlite-storage/src/pump/bookmark.rs`
+  - `engine/packages/sqlite-storage/tests/pump_bookmark.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - The checked-in crate still uses APTR/NSPTR despite the v4 PRD text; bookmark resolution was implemented against the actual current layout and noted in the PRD.
+  - Namespace bookmark resolution must direct-walk namespace parents so inherited APTR rows carry the child namespace's `parent_versionstamp` cap.
+  - Ephemeral resolution verifies the branch VTX entry for the resolved commit row before returning the commit's versionstamp.
 ---
