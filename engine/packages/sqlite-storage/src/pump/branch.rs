@@ -312,6 +312,71 @@ pub async fn fork_namespace(
 	Ok(new_namespace_id)
 }
 
+pub async fn rollback_namespace(
+	udb: &universaldb::Database,
+	namespace: NamespaceId,
+	at: ResolvedVersionstamp,
+) -> Result<NamespaceBranchId> {
+	let rolled_branch_id = NamespaceBranchId::new_v4();
+
+	udb.run({
+		let at = at.clone();
+
+		move |tx| {
+			let at = at.clone();
+
+			async move {
+				let cur_ptr_bytes = tx
+					.informal()
+					.get(&keys::namespace_pointer_cur_key(namespace), Serializable)
+					.await?
+					.ok_or(SqliteStorageError::ActorNotFound)?;
+				let cur_ptr = decode_namespace_pointer(&cur_ptr_bytes)
+					.context("decode sqlite namespace pointer for rollback")?;
+				let cur_record = read_namespace_branch_record(&tx, cur_ptr.current_branch).await?;
+
+				derive_namespace_branch_at(
+					&tx,
+					cur_ptr.current_branch,
+					at.versionstamp,
+					rolled_branch_id,
+					at.bookmark,
+				)
+				.await?;
+				freeze_namespace_branch(&tx, cur_record).await?;
+
+				let now_ms = now_ms()?;
+				let nonce = uuid::Uuid::new_v4().as_u128() as u32;
+				let encoded_history_pointer = encode_namespace_pointer(cur_ptr.clone())
+					.context("encode sqlite rollback namespace pointer history")?;
+				tx.informal().set(
+					&keys::namespace_pointer_history_key(namespace, now_ms, nonce),
+					&encoded_history_pointer,
+				);
+				tx.informal().atomic_op(
+					&keys::namespace_branches_refcount_key(cur_ptr.current_branch),
+					&(-1_i64).to_le_bytes(),
+					MutationType::Add,
+				);
+
+				let new_ptr = NamespacePointer {
+					current_branch: rolled_branch_id,
+					last_swapped_at_ms: now_ms,
+				};
+				let encoded_pointer =
+					encode_namespace_pointer(new_ptr).context("encode sqlite rollback namespace pointer")?;
+				tx.informal()
+					.set(&keys::namespace_pointer_cur_key(namespace), &encoded_pointer);
+
+				Ok(())
+			}
+		}
+	})
+	.await?;
+
+	Ok(rolled_branch_id)
+}
+
 pub async fn rollback_actor(
 	udb: &universaldb::Database,
 	namespace: NamespaceId,
@@ -481,6 +546,20 @@ async fn freeze_actor_branch(
 		encode_actor_branch_record(record).context("encode frozen sqlite actor branch record")?;
 	tx.informal()
 		.set(&keys::branches_list_key(branch_id), &encoded_record);
+
+	Ok(())
+}
+
+async fn freeze_namespace_branch(
+	tx: &universaldb::Transaction,
+	mut record: NamespaceBranchRecord,
+) -> Result<()> {
+	record.state = BranchState::Frozen;
+	let branch_id = record.branch_id;
+	let encoded_record =
+		encode_namespace_branch_record(record).context("encode frozen sqlite namespace branch record")?;
+	tx.informal()
+		.set(&keys::namespace_branches_list_key(branch_id), &encoded_record);
 
 	Ok(())
 }

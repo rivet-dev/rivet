@@ -15,6 +15,7 @@
 - Namespace forks are metadata-only: write the child `NSPTR` + `NSBRANCH` records and rely on namespace-branch parent walking instead of eagerly materializing child `APTR` rows.
 - Actor pointer resolution walks namespace branch parents on APTR miss; namespace-branch tombstones return `ActorNotFound` and must not fall back to legacy actor-scoped storage.
 - Rollback swaps APTR, so ActorDb must resolve APTR before using branch-local caches and clear PIDX/storage caches when the current branch changes.
+- Namespace rollback mirrors actor rollback at the pointer layer: derive the new NSBRANCH, freeze the old NSBRANCH, append `NSPTR/history`, decrement the old pointer refcount, then swap `NSPTR/cur`.
 
 # Ralph Progress Log
 Started: Wed Apr 29 03:29:23 PM PDT 2026
@@ -344,4 +345,19 @@ Started: Wed Apr 29 03:29:23 PM PDT 2026
   - Rollback pointer swaps can stale `ActorDb` branch id, quota, and PIDX caches; resolve APTR first and clear branch-local caches when the branch changes.
   - Existing parent-branch PIDX rows are latest-only, so exact historical page reads before the next write need later versioned/as-of read work rather than rollback-specific hacks.
   - `APTR/history` tests can scan a new `actor_pointer_history_prefix(...)` helper and decode `ActorPointer` values directly.
+---
+## 2026-04-29 19:08 PDT - US-018
+- Implemented `rollback_namespace` with namespace branch derivation, old namespace branch freezing, NSPTR history, old-branch refcount decrement, and NSPTR current-pointer swap.
+- Added a `namespace_pointer_history_prefix(...)` key helper and coverage verifying the history row, branch state/refcount updates, and inherited actor visibility after the namespace pointer moves.
+- Verified with `cargo test -p sqlite-storage --test pump_branch rollback_namespace -- --nocapture`, `cargo check -p sqlite-storage`, and `cargo test -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/src/pump/branch.rs`
+  - `engine/packages/sqlite-storage/src/pump/keys.rs`
+  - `engine/packages/sqlite-storage/tests/pump_branch.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Namespace rollback should use `derive_namespace_branch_at` for the branch metadata/refcount/pin behavior, then only handle pointer history and pointer swap locally.
+  - The old namespace branch remains refcounted by the new child branch after rollback even though its direct pointer refcount is decremented.
+  - `NSPTR/history` tests can scan `namespace_pointer_history_prefix(...)` and decode `NamespacePointer` values directly.
 ---

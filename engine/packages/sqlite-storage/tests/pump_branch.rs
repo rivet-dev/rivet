@@ -12,6 +12,7 @@ use sqlite_storage::{
 		namespace_branches_actor_tombstone_key, namespace_branches_bk_pin_key,
 		namespace_branches_desc_pin_key, namespace_branches_list_key,
 		namespace_branches_refcount_key, namespace_pointer_cur_key,
+		namespace_pointer_history_prefix,
 	},
 	pump::{ActorDb, branch},
 	types::{
@@ -1021,6 +1022,83 @@ async fn rollback_actor_freezes_old_branch_and_swaps_pointer() -> Result<()> {
 		.expect("old branch head should still exist");
 	let old_head = decode_db_head(&old_head_bytes)?;
 	assert_eq!(old_head.head_txid, 2);
+
+	Ok(())
+}
+
+#[tokio::test]
+async fn rollback_namespace_freezes_old_branch_and_swaps_pointer() -> Result<()> {
+	let db = Arc::new(test_db().await?);
+	let actor_db = ActorDb::new(
+		db.clone(),
+		test_ups(),
+		test_namespace(),
+		TEST_ACTOR.to_string(),
+		NodeId::new(),
+	);
+	actor_db.commit(vec![page(1, 0x11)], 2, 1_000).await?;
+	let old_namespace_branch_id = read_namespace_branch_id(&db).await?;
+	let actor_branch_id = read_branch_id(&db).await?;
+	let first_commit = decode_commit_row(
+		&read_value(&db, branch_commit_key(actor_branch_id, 1))
+			.await?
+			.expect("first commit row should exist"),
+	)?;
+
+	let rolled_namespace_branch_id = branch::rollback_namespace(
+		&db,
+		NamespaceId::from_gas_id(test_namespace()),
+		ResolvedVersionstamp {
+			versionstamp: first_commit.versionstamp,
+			bookmark: None,
+		},
+	)
+	.await?;
+
+	assert_ne!(rolled_namespace_branch_id, old_namespace_branch_id);
+	let current_namespace_branch_id = read_namespace_branch_id(&db).await?;
+	assert_eq!(current_namespace_branch_id, rolled_namespace_branch_id);
+
+	let old_record_bytes = read_value(&db, namespace_branches_list_key(old_namespace_branch_id))
+		.await?
+		.expect("old namespace branch record should exist");
+	let old_record = decode_namespace_branch_record(&old_record_bytes)?;
+	assert_eq!(old_record.state, BranchState::Frozen);
+	assert_eq!(read_namespace_refcount(&db, old_namespace_branch_id).await?, 1);
+	assert_eq!(
+		read_namespace_refcount(&db, rolled_namespace_branch_id).await?,
+		1
+	);
+
+	let rolled_record_bytes = read_value(&db, namespace_branches_list_key(rolled_namespace_branch_id))
+		.await?
+		.expect("rolled namespace branch record should exist");
+	let rolled_record = decode_namespace_branch_record(&rolled_record_bytes)?;
+	assert_eq!(rolled_record.parent, Some(old_namespace_branch_id));
+	assert_eq!(
+		rolled_record.parent_versionstamp,
+		Some(first_commit.versionstamp)
+	);
+	assert_eq!(rolled_record.state, BranchState::Live);
+
+	let history_values = read_prefix_values(
+		&db,
+		namespace_pointer_history_prefix(NamespaceId::from_gas_id(test_namespace())),
+	)
+	.await?;
+	assert_eq!(history_values.len(), 1);
+	let history_pointer = decode_namespace_pointer(&history_values[0])?;
+	assert_eq!(history_pointer.current_branch, old_namespace_branch_id);
+
+	let rolled_actor_db = ActorDb::new(
+		db,
+		test_ups(),
+		test_namespace(),
+		TEST_ACTOR.to_string(),
+		NodeId::new(),
+	);
+	let pages = rolled_actor_db.get_pages(vec![1]).await?;
+	assert_eq!(pages[0].bytes, Some(page_bytes(0x11)));
 
 	Ok(())
 }

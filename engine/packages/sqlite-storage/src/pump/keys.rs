@@ -171,9 +171,13 @@ pub fn namespace_pointer_history_key(
 	ts_ms: i64,
 	nonce: u32,
 ) -> Vec<u8> {
-	let mut key = with_suffix(namespace_pointer_base(namespace_id), HISTORY_PATH);
+	let mut key = namespace_pointer_history_prefix(namespace_id);
 	append_ts_nonce(&mut key, ts_ms, nonce);
 	key
+}
+
+pub fn namespace_pointer_history_prefix(namespace_id: NamespaceId) -> Vec<u8> {
+	with_suffix(namespace_pointer_base(namespace_id), HISTORY_PATH)
 }
 
 pub fn branches_list_key(branch_id: ActorBranchId) -> Vec<u8> {
