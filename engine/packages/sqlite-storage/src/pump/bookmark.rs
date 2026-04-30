@@ -1,6 +1,8 @@
 use anyhow::{Context, Result};
-use universaldb::options::MutationType;
+use futures_util::TryStreamExt;
+use universaldb::options::{MutationType, StreamingMode};
 use universaldb::utils::IsolationLevel::{Serializable, Snapshot};
+use universaldb::RangeOption;
 
 use super::{
 	ActorDb, branch, keys,
@@ -41,6 +43,17 @@ impl ActorDb {
 	pub async fn bookmark_status(&self, bookmark: BookmarkStr) -> Result<Option<PinStatus>> {
 		bookmark_status(
 			&self.udb,
+			self.sqlite_namespace_id(),
+			self.actor_id.clone(),
+			bookmark,
+		)
+		.await
+	}
+
+	pub async fn delete_pinned_bookmark(&self, bookmark: BookmarkStr) -> Result<()> {
+		delete_pinned_bookmark(
+			&self.udb,
+			&self.ups,
 			self.sqlite_namespace_id(),
 			self.actor_id.clone(),
 			bookmark,
@@ -173,6 +186,66 @@ pub async fn create_pinned_bookmark(
 	crate::compactor::publish_cold_compact_payload(ups, result.payload).await?;
 
 	Ok(result.bookmark)
+}
+
+pub async fn delete_pinned_bookmark(
+	udb: &universaldb::Database,
+	ups: &crate::compactor::Ups,
+	namespace_id: NamespaceId,
+	actor_id: String,
+	bookmark: BookmarkStr,
+) -> Result<()> {
+	let result = udb
+		.run(move |tx| {
+			let actor_id = actor_id.clone();
+			let bookmark = bookmark.clone();
+
+			async move {
+				let pinned_key = keys::bookmark_pinned_key(&actor_id, bookmark.as_str());
+				let Some(pinned_bytes) = tx.informal().get(&pinned_key, Serializable).await? else {
+					return Ok(None);
+				};
+				let pinned = decode_pinned_bookmark_record(&pinned_bytes)
+					.context("decode sqlite pinned bookmark record")?;
+				let namespace_branch_id =
+					branch::resolve_namespace_branch(&tx, namespace_id, Serializable)
+						.await?
+						.unwrap_or_else(NamespaceBranchId::nil);
+				let pin_count_key = keys::namespace_branches_pin_count_key(namespace_branch_id);
+
+				tx.informal()
+					.clear(&keys::bookmark_key(&actor_id, bookmark.as_str()));
+				tx.informal().clear(&pinned_key);
+				tx.informal().atomic_op(
+					&pin_count_key,
+					&(-1_i64).to_le_bytes(),
+					MutationType::Add,
+				);
+
+				let recomputed_pin =
+					recompute_actor_branch_bk_pin(&tx, &actor_id, pinned.actor_branch_id, &pinned_key)
+						.await?;
+				tx.informal()
+					.set(&keys::branches_bk_pin_key(pinned.actor_branch_id), &recomputed_pin);
+
+				Ok(Some(
+					crate::compactor::SqliteColdCompactPayload::DeletePinnedBookmark {
+						actor_id,
+						actor_branch_id: pinned.actor_branch_id,
+						bookmark,
+						versionstamp: pinned.versionstamp,
+						pin_object_key: pinned.pin_object_key,
+					},
+				))
+			}
+		})
+		.await?;
+
+	if let Some(payload) = result {
+		crate::compactor::publish_cold_compact_payload(ups, payload).await?;
+	}
+
+	Ok(())
 }
 
 pub async fn bookmark_status(
@@ -403,6 +476,40 @@ async fn lookup_vtx_txid(
 		.context("sqlite VTX entry should be exactly 8 bytes")?;
 
 	Ok(Some(u64::from_be_bytes(bytes)))
+}
+
+async fn recompute_actor_branch_bk_pin(
+	tx: &universaldb::Transaction,
+	actor_id: &str,
+	branch_id: ActorBranchId,
+	deleted_pinned_key: &[u8],
+) -> Result<[u8; 16]> {
+	let start = keys::bookmark_key(actor_id, "");
+	let prefix_subspace =
+		universaldb::Subspace::from(universaldb::tuple::Subspace::from_bytes(start));
+	let informal = tx.informal();
+	let mut stream = informal.get_ranges_keyvalues(
+		RangeOption {
+			mode: StreamingMode::WantAll,
+			..RangeOption::from(&prefix_subspace)
+		},
+		Serializable,
+	);
+	let mut pin = VERSIONSTAMP_INFINITY;
+
+	while let Some(entry) = stream.try_next().await? {
+		if entry.key() == deleted_pinned_key || !entry.key().ends_with(b"/pinned") {
+			continue;
+		}
+
+		let record = decode_pinned_bookmark_record(entry.value())
+			.context("decode sqlite pinned bookmark record during pin recompute")?;
+		if record.actor_branch_id == branch_id {
+			pin = pin.min(record.versionstamp);
+		}
+	}
+
+	Ok(pin)
 }
 
 struct PinnedBookmarkCreateResult {

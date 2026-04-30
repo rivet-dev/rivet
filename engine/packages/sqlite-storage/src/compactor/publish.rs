@@ -31,6 +31,13 @@ pub enum SqliteColdCompactPayload {
 		bookmark: BookmarkStr,
 		versionstamp: [u8; 16],
 	},
+	DeletePinnedBookmark {
+		actor_id: String,
+		actor_branch_id: ActorBranchId,
+		bookmark: BookmarkStr,
+		versionstamp: [u8; 16],
+		pin_object_key: Option<String>,
+	},
 }
 
 enum VersionedSqliteCompactPayload {

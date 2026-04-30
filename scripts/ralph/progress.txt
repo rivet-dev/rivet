@@ -20,6 +20,7 @@
 - Ephemeral bookmark creation is read-only: derive `BookmarkStr` from the caller timestamp and current branch head txid; only pinned bookmarks write `BOOKMARK/{actor_id}/{bookmark}/pinned`.
 - Bookmark resolution must direct-walk namespace parents and carry the namespace fork versionstamp cap into actor branch ancestry; recursive APTR resolution loses that cap.
 - Pinned bookmark creation is FDB-first: write `PinStatus::Pending`, actor branch `bk_pin`, and namespace `pin_count` before publishing `SqliteColdCompactPayload::CreatePinnedBookmark`.
+- Pinned bookmark deletion should clear both bookmark keys, decrement namespace `pin_count`, recompute branch `bk_pin` from remaining actor pinned-bookmark records, and publish `SqliteColdCompactPayload::DeletePinnedBookmark`.
 
 # Ralph Progress Log
 Started: Wed Apr 29 03:29:23 PM PDT 2026
@@ -431,4 +432,21 @@ Started: Wed Apr 29 03:29:23 PM PDT 2026
   - Pinned bookmark creation should keep S3 work out of the request path; the only synchronous work is the FDB retention pin and Pending record.
   - The namespace pin cap currently lives on `NSBRANCH/list/{namespace_branch}/pin_count` as a raw i64 little-endian atomic counter.
   - Cold compactor message handling has a payload type now, but the actual subscriber/service remains for US-036/US-040.
+---
+## 2026-04-29 19:46 PDT - US-023
+- Implemented `delete_pinned_bookmark` for `ActorDb` and the free bookmark API: existing pinned records are decoded, both bookmark keys are cleared, namespace `pin_count` is decremented, and branch `bk_pin` is recomputed from remaining pinned records.
+- Added `SqliteColdCompactPayload::DeletePinnedBookmark` so the cold compactor can clean up deleted pin objects during its follow-up sweep.
+- Added bookmark coverage for deleting the current floor pin, preserving the next pinned bookmark, advancing `bk_pin`, decrementing `pin_count`, and publishing the cold cleanup payload.
+- Verified with `cargo check -p sqlite-storage` and `cargo test -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/CLAUDE.md`
+  - `engine/packages/sqlite-storage/src/compactor/publish.rs`
+  - `engine/packages/sqlite-storage/src/pump/bookmark.rs`
+  - `engine/packages/sqlite-storage/tests/pump_bookmark.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Use the existing UDB `Subspace` prefix scan pattern for actor bookmark ranges; raw prefix/end ranges can miss rows in the RocksDB test driver path.
+  - `delete_pinned_bookmark` is idempotent for absent pinned records and only publishes a cold cleanup payload when a record was actually removed.
+  - Branch `bk_pin` recompute is bounded by `MAX_PINS_PER_NAMESPACE`, so scanning the actor bookmark subspace is acceptable for this delete path.
 ---

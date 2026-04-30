@@ -7,7 +7,7 @@ use sqlite_storage::{
 	compactor::{SqliteColdCompactPayload, SqliteColdCompactSubject, decode_cold_compact_payload},
 	error::SqliteStorageError,
 	keys::{
-		bookmark_key, branch_commit_key, branch_vtx_key, branches_bk_pin_key,
+		bookmark_key, bookmark_pinned_key, branch_commit_key, branch_vtx_key, branches_bk_pin_key,
 		namespace_branches_pin_count_key,
 	},
 	pump::{ActorDb, bookmark, branch},
@@ -374,6 +374,90 @@ async fn create_pinned_bookmark_enforces_namespace_pin_cap() -> Result<()> {
 		.expect_err("pin cap should reject new pinned bookmarks");
 
 	assert_sqlite_error(err, SqliteStorageError::TooManyPins);
+
+	Ok(())
+}
+
+#[tokio::test]
+async fn delete_pinned_bookmark_removes_pin_and_schedules_recompute() -> Result<()> {
+	let db = Arc::new(test_db().await?);
+	let ups = test_ups();
+	let mut sub = ups
+		.queue_subscribe(SqliteColdCompactSubject, "cold-compactor")
+		.await?;
+	let actor_db = ActorDb::new(
+		db.clone(),
+		ups,
+		test_namespace(),
+		TEST_ACTOR.to_string(),
+		NodeId::new(),
+	);
+	actor_db.commit(vec![page(1, 0x11)], 2, 1_000).await?;
+	let first = actor_db.create_pinned_bookmark(1_010).await?;
+	let namespace_id = NamespaceId::from_gas_id(test_namespace());
+	let branch_id = actor_branch_id(&db, namespace_id, TEST_ACTOR).await?;
+	let namespace_branch_id = namespace_branch_id(&db, namespace_id).await?;
+	let first_row = commit_row(&db, branch_id, 1).await?;
+	let NextOutput::Message(_) = timeout(Duration::from_secs(1), sub.next()).await?? else {
+		panic!("subscriber unexpectedly unsubscribed");
+	};
+
+	actor_db.commit(vec![page(2, 0x22)], 3, 1_020).await?;
+	let second = actor_db.create_pinned_bookmark(1_030).await?;
+	let second_row = commit_row(&db, branch_id, 2).await?;
+	let NextOutput::Message(_) = timeout(Duration::from_secs(1), sub.next()).await?? else {
+		panic!("subscriber unexpectedly unsubscribed");
+	};
+	assert_eq!(
+		read_value(&db, branches_bk_pin_key(branch_id))
+			.await?
+			.expect("branch bk_pin should be the oldest pin"),
+		first_row.versionstamp
+	);
+
+	actor_db.delete_pinned_bookmark(first.clone()).await?;
+
+	assert_eq!(
+		read_value(&db, bookmark_key(TEST_ACTOR, first.as_str())).await?,
+		None
+	);
+	assert_eq!(
+		read_value(&db, bookmark_pinned_key(TEST_ACTOR, first.as_str())).await?,
+		None
+	);
+	assert!(
+		read_value(&db, bookmark_pinned_key(TEST_ACTOR, second.as_str()))
+			.await?
+			.is_some()
+	);
+	assert_eq!(
+		read_value(&db, branches_bk_pin_key(branch_id))
+			.await?
+			.expect("branch bk_pin should advance to the next remaining pin"),
+		second_row.versionstamp
+	);
+	let pin_count = read_value(&db, namespace_branches_pin_count_key(namespace_branch_id))
+		.await?
+		.expect("namespace pin count should remain present");
+	assert_eq!(decode_i64_counter(&pin_count), 1);
+
+	let msg = timeout(Duration::from_secs(1), sub.next())
+		.await
+		.expect("cold trigger should publish")?;
+	let NextOutput::Message(msg) = msg else {
+		panic!("subscriber unexpectedly unsubscribed");
+	};
+	let payload = decode_cold_compact_payload(&msg.payload)?;
+	assert_eq!(
+		payload,
+		SqliteColdCompactPayload::DeletePinnedBookmark {
+			actor_id: TEST_ACTOR.to_string(),
+			actor_branch_id: branch_id,
+			bookmark: first,
+			versionstamp: first_row.versionstamp,
+			pin_object_key: None,
+		}
+	);
 
 	Ok(())
 }
