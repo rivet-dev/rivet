@@ -6,13 +6,17 @@ use rivet_pools::NodeId;
 use sqlite_storage::{
 	keys::{
 		actor_pointer_cur_key, branch_commit_key, branch_meta_head_at_fork_key, branches_bk_pin_key,
-		branches_desc_pin_key, branches_list_key, branches_refcount_key, namespace_pointer_cur_key,
+		branches_desc_pin_key, branches_list_key, branches_refcount_key,
+		namespace_branches_bk_pin_key, namespace_branches_desc_pin_key,
+		namespace_branches_list_key, namespace_branches_refcount_key,
+		namespace_branches_tier_state_key, namespace_pointer_cur_key,
 	},
 	pump::{ActorDb, branch},
 	types::{
 		ActorBranchId, ActorBranchRecord, BranchState, DBHead, DirtyPage, NamespaceBranchId,
-		NamespaceId, decode_actor_branch_record, decode_actor_pointer, decode_commit_row,
-		decode_db_head, decode_namespace_pointer, encode_actor_branch_record,
+		NamespaceBranchRecord, NamespaceId, decode_actor_branch_record, decode_actor_pointer,
+		decode_commit_row, decode_db_head, decode_namespace_branch_record, decode_namespace_pointer,
+		encode_actor_branch_record, encode_namespace_branch_record,
 	},
 };
 use tempfile::Builder;
@@ -85,6 +89,21 @@ async fn read_refcount(db: &universaldb::Database, branch_id: ActorBranchId) -> 
 		.as_slice()
 		.try_into()
 		.expect("branch refcount should be i64 LE");
+
+	Ok(i64::from_le_bytes(bytes))
+}
+
+async fn read_namespace_refcount(
+	db: &universaldb::Database,
+	branch_id: NamespaceBranchId,
+) -> Result<i64> {
+	let bytes = read_value(db, namespace_branches_refcount_key(branch_id))
+		.await?
+		.expect("namespace branch refcount should exist");
+	let bytes: [u8; 8] = bytes
+		.as_slice()
+		.try_into()
+		.expect("namespace branch refcount should be i64 LE");
 
 	Ok(i64::from_le_bytes(bytes))
 }
@@ -255,6 +274,139 @@ async fn derive_branch_at_enforces_max_fork_depth() -> Result<()> {
 	Ok(())
 }
 
+#[tokio::test]
+async fn derive_namespace_branch_at_writes_branch_metadata_without_tier_state() -> Result<()> {
+	let db = test_db().await?;
+	let source_branch_id = NamespaceBranchId::from_uuid(uuid::Uuid::from_u128(0x7777));
+	let new_branch_id = NamespaceBranchId::from_uuid(uuid::Uuid::from_u128(0x8888));
+	let at_versionstamp = [3; 16];
+
+	seed_namespace_branch_record(&db, source_branch_id, 0).await?;
+
+	db.run(move |tx| async move {
+		branch::derive_namespace_branch_at(
+			&tx,
+			source_branch_id,
+			at_versionstamp,
+			new_branch_id,
+			None,
+		)
+		.await
+	})
+	.await?;
+
+	let record_bytes = read_value(&db, namespace_branches_list_key(new_branch_id))
+		.await?
+		.expect("derived namespace branch record should exist");
+	let record = decode_namespace_branch_record(&record_bytes)?;
+	assert_eq!(record.branch_id, new_branch_id);
+	assert_eq!(record.parent, Some(source_branch_id));
+	assert_eq!(record.parent_versionstamp, Some(at_versionstamp));
+	assert_eq!(record.root_versionstamp, at_versionstamp);
+	assert_eq!(record.fork_depth, 1);
+	assert_eq!(record.created_from_bookmark, None);
+	assert_eq!(record.state, BranchState::Live);
+	assert_eq!(read_namespace_refcount(&db, source_branch_id).await?, 2);
+	assert_eq!(read_namespace_refcount(&db, new_branch_id).await?, 1);
+	assert_eq!(
+		read_value(&db, namespace_branches_desc_pin_key(source_branch_id)).await?,
+		Some(at_versionstamp.to_vec())
+	);
+	assert!(
+		read_value(&db, namespace_branches_tier_state_key(new_branch_id))
+			.await?
+			.is_none()
+	);
+
+	Ok(())
+}
+
+#[tokio::test]
+async fn derive_namespace_branch_at_rejects_expired_pin_before_writing_record() -> Result<()> {
+	let db = test_db().await?;
+	let source_branch_id = NamespaceBranchId::from_uuid(uuid::Uuid::from_u128(0x9999));
+	let new_branch_id = NamespaceBranchId::from_uuid(uuid::Uuid::from_u128(0xaaaa));
+	let at_versionstamp = [1; 16];
+	let pin_versionstamp = [2; 16];
+
+	seed_namespace_branch_record(&db, source_branch_id, 0).await?;
+	db.run(move |tx| async move {
+		tx.informal().atomic_op(
+			&namespace_branches_bk_pin_key(source_branch_id),
+			&pin_versionstamp,
+			MutationType::ByteMin,
+		);
+		Ok(())
+	})
+	.await?;
+
+	let err = db
+		.run(move |tx| async move {
+			branch::derive_namespace_branch_at(
+				&tx,
+				source_branch_id,
+				at_versionstamp,
+				new_branch_id,
+				None,
+			)
+			.await
+		})
+		.await
+		.expect_err("namespace fork should be outside retention");
+
+	assert!(
+		err.downcast_ref::<sqlite_storage::error::SqliteStorageError>()
+			.is_some_and(|err| matches!(
+				err,
+				sqlite_storage::error::SqliteStorageError::ForkOutOfRetention
+			))
+	);
+	assert!(
+		read_value(&db, namespace_branches_list_key(new_branch_id))
+			.await?
+			.is_none()
+	);
+
+	Ok(())
+}
+
+#[tokio::test]
+async fn derive_namespace_branch_at_enforces_max_namespace_depth() -> Result<()> {
+	let db = test_db().await?;
+	let source_branch_id = NamespaceBranchId::from_uuid(uuid::Uuid::from_u128(0xbbbb));
+	let new_branch_id = NamespaceBranchId::from_uuid(uuid::Uuid::from_u128(0xcccc));
+
+	seed_namespace_branch_record(
+		&db,
+		source_branch_id,
+		sqlite_storage::constants::MAX_NAMESPACE_DEPTH,
+	)
+	.await?;
+
+	let err = db
+		.run(move |tx| async move {
+			branch::derive_namespace_branch_at(&tx, source_branch_id, [1; 16], new_branch_id, None)
+				.await
+		})
+		.await
+		.expect_err("namespace fork depth should be capped");
+
+	assert!(
+		err.downcast_ref::<sqlite_storage::error::SqliteStorageError>()
+			.is_some_and(|err| matches!(
+				err,
+				sqlite_storage::error::SqliteStorageError::NamespaceForkChainTooDeep
+			))
+	);
+	assert!(
+		read_value(&db, namespace_branches_list_key(new_branch_id))
+			.await?
+			.is_none()
+	);
+
+	Ok(())
+}
+
 async fn seed_branch_record(
 	db: &universaldb::Database,
 	branch_id: ActorBranchId,
@@ -278,6 +430,38 @@ async fn seed_branch_record(
 		async move {
 			tx.informal()
 				.set(&branches_list_key(branch_id), &encoded_record);
+			Ok(())
+		}
+	})
+	.await
+}
+
+async fn seed_namespace_branch_record(
+	db: &universaldb::Database,
+	branch_id: NamespaceBranchId,
+	fork_depth: u8,
+) -> Result<()> {
+	let record = NamespaceBranchRecord {
+		branch_id,
+		parent: None,
+		parent_versionstamp: None,
+		root_versionstamp: [0; 16],
+		fork_depth,
+		created_at_ms: 1_000,
+		created_from_bookmark: None,
+		state: BranchState::Live,
+	};
+	let encoded_record = encode_namespace_branch_record(record)?;
+	db.run(move |tx| {
+		let encoded_record = encoded_record.clone();
+		async move {
+			tx.informal()
+				.set(&namespace_branches_list_key(branch_id), &encoded_record);
+			tx.informal().atomic_op(
+				&namespace_branches_refcount_key(branch_id),
+				&1_i64.to_le_bytes(),
+				MutationType::Add,
+			);
 			Ok(())
 		}
 	})

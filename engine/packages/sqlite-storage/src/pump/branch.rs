@@ -7,15 +7,16 @@ use universaldb::{
 };
 
 use super::{
-	constants::MAX_FORK_DEPTH,
+	constants::{MAX_FORK_DEPTH, MAX_NAMESPACE_DEPTH},
 	error::SqliteStorageError,
 	keys, udb,
 	types::{
 		ActorBranchId, ActorBranchRecord, BookmarkRef, BranchState, DBHead, NamespaceBranchId,
 		NamespaceBranchRecord, NamespaceId, NamespacePointer, NamespaceTierState, Tier,
-		decode_actor_branch_record, decode_actor_pointer, decode_commit_row, decode_namespace_pointer,
-		encode_actor_branch_record, encode_db_head, encode_namespace_branch_record,
-		encode_namespace_pointer, encode_namespace_tier_state,
+		decode_actor_branch_record, decode_actor_pointer, decode_commit_row,
+		decode_namespace_branch_record, decode_namespace_pointer, encode_actor_branch_record,
+		encode_db_head, encode_namespace_branch_record, encode_namespace_pointer,
+		encode_namespace_tier_state,
 	},
 };
 
@@ -251,6 +252,57 @@ pub async fn derive_branch_at(
 	Ok(())
 }
 
+pub async fn derive_namespace_branch_at(
+	tx: &universaldb::Transaction,
+	source_branch_id: NamespaceBranchId,
+	at_versionstamp: [u8; 16],
+	new_branch_id: NamespaceBranchId,
+	bookmark_ref: Option<BookmarkRef>,
+) -> Result<()> {
+	let source = read_namespace_branch_record(tx, source_branch_id).await?;
+	if source.fork_depth >= MAX_NAMESPACE_DEPTH {
+		return Err(SqliteStorageError::NamespaceForkChainTooDeep.into());
+	}
+
+	let bk_pin =
+		read_versionstamp_pin(tx, &keys::namespace_branches_bk_pin_key(source_branch_id)).await?;
+	if bk_pin > at_versionstamp {
+		return Err(SqliteStorageError::ForkOutOfRetention.into());
+	}
+
+	let new_record = NamespaceBranchRecord {
+		branch_id: new_branch_id,
+		parent: Some(source_branch_id),
+		parent_versionstamp: Some(at_versionstamp),
+		root_versionstamp: at_versionstamp,
+		fork_depth: source.fork_depth + 1,
+		created_at_ms: now_ms()?,
+		created_from_bookmark: bookmark_ref,
+		state: BranchState::Live,
+	};
+	let encoded_record = encode_namespace_branch_record(new_record)
+		.context("encode sqlite derived namespace branch record")?;
+	tx.informal()
+		.set(&keys::namespace_branches_list_key(new_branch_id), &encoded_record);
+	tx.informal().atomic_op(
+		&keys::namespace_branches_refcount_key(source_branch_id),
+		&1_i64.to_le_bytes(),
+		MutationType::Add,
+	);
+	tx.informal().atomic_op(
+		&keys::namespace_branches_refcount_key(new_branch_id),
+		&1_i64.to_le_bytes(),
+		MutationType::Add,
+	);
+	tx.informal().atomic_op(
+		&keys::namespace_branches_desc_pin_key(source_branch_id),
+		&at_versionstamp,
+		MutationType::ByteMin,
+	);
+
+	Ok(())
+}
+
 async fn read_actor_branch_record(
 	tx: &universaldb::Transaction,
 	branch_id: ActorBranchId,
@@ -262,6 +314,19 @@ async fn read_actor_branch_record(
 		.context("sqlite actor branch record is missing")?;
 
 	decode_actor_branch_record(&bytes).context("decode sqlite actor branch record")
+}
+
+async fn read_namespace_branch_record(
+	tx: &universaldb::Transaction,
+	branch_id: NamespaceBranchId,
+) -> Result<NamespaceBranchRecord> {
+	let bytes = tx
+		.informal()
+		.get(&keys::namespace_branches_list_key(branch_id), Serializable)
+		.await?
+		.context("sqlite namespace branch record is missing")?;
+
+	decode_namespace_branch_record(&bytes).context("decode sqlite namespace branch record")
 }
 
 async fn read_versionstamp_pin(

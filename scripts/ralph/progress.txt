@@ -10,6 +10,7 @@
 - New ActorDb writes store META/COMMITS/VTX/PIDX/DELTA/SHARD under `BR/{branch_id}`; legacy actor-scoped helpers remain compatibility fallback for old seeded state.
 - `universaldb` raw `SetVersionstampedKey` and `SetVersionstampedValue` payloads use FDB-style trailing little-endian u32 offsets and substitute the first 10 versionstamp bytes.
 - Branch pin versionstamps are 16-byte lexicographic big-endian values, so descendant/bookmark pin atomic-min writes use `MutationType::ByteMin`, not integer `Min`.
+- Namespace branch derivation mirrors actor branch derivation for refcounts and pins, but leaves `tier_state` absent on the child so `ensure_tier_at_least` can lazily inherit or promote later.
 
 # Ralph Progress Log
 Started: Wed Apr 29 03:29:23 PM PDT 2026
@@ -224,4 +225,19 @@ Started: Wed Apr 29 03:29:23 PM PDT 2026
   - Actor branch derivation should rebuild fork heads from `VTX/{versionstamp} -> txid` plus `COMMITS/{txid}` instead of copying the mutable `/META/head`.
   - Branch `bk_pin` and `desc_pin` values are lexicographic versionstamp bytes; use `MutationType::ByteMin`.
   - `derive_branch_at` currently leaves namespace tier promotion for the dedicated `ensure_tier_at_least` story.
+---
+## 2026-04-29 18:15 PDT - US-012
+- Implemented `derive_namespace_branch_at` for namespace branches with source record lookup, MAX_NAMESPACE_DEPTH enforcement, bookmark-pin OCC fencing, child branch metadata, refcount atomics, and descendant pin writes.
+- Added branch tests for namespace metadata/refcounts, lazy tier-state inheritance, out-of-retention rejection, and max-depth rejection.
+- Verified with `cargo test -p sqlite-storage --test pump_branch`, `cargo check -p sqlite-storage`, and `cargo test -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/CLAUDE.md`
+  - `engine/packages/sqlite-storage/src/pump/branch.rs`
+  - `engine/packages/sqlite-storage/tests/pump_branch.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Namespace branch derivation is metadata-only and does not write APTR catalog rows or child `tier_state`.
+  - Namespace branch `bk_pin` and `desc_pin` values use the same lexicographic versionstamp `ByteMin` pattern as actor branches.
+  - `NamespaceBranchRecord.fork_depth` is the local depth source for enforcing `MAX_NAMESPACE_DEPTH`.
 ---
