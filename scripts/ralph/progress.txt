@@ -32,9 +32,29 @@
 - Hot retention sweeps clear `COMMITS` and matching `VTX` rows together inside the hot compactor write tx, with quota accounting adjusted for both keys.
 - ActorDb access-touch writes `last_access_ts_ms`, `last_access_bucket`, and `CTR/eviction_index` through the shared `touch_access_if_bucket_advanced` helper; per-connection cache suppresses same-bucket writes.
 - Cold-tier implementations live under `sqlite_storage::cold_tier`; use relative object keys, `FilesystemColdTier` for local tests, and `FaultyColdTier` for injected latency/failures.
+- Cold compactor service code lives under `sqlite_storage::compactor::cold`; it uses `SqliteColdCompactSubject`, queue group `cold_compactor`, and branch-scoped `BR/{branch_id}/META/cold_lease`.
 
 # Ralph Progress Log
 Started: Wed Apr 29 03:29:23 PM PDT 2026
+---
+## 2026-04-29 21:11 PDT - US-036
+- Implemented the cold compactor scaffold with a `compactor/cold/` module, branch-scoped cold lease helpers, a UPS subscriber loop on `SqliteColdCompactSubject`, local deadline + renewal tasks, and a standalone `sqlite_cold_compactor` service registration.
+- Added cold compactor tests for subject/payload encoding, cold lease acquire/renew/release behavior, and handler behavior for acquired and already-held leases.
+- Verified with `cargo check -p sqlite-storage` and `cargo test -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/engine/src/run_config.rs`
+  - `engine/packages/sqlite-storage/CLAUDE.md`
+  - `engine/packages/sqlite-storage/src/compactor/cold/mod.rs`
+  - `engine/packages/sqlite-storage/src/compactor/cold/lease.rs`
+  - `engine/packages/sqlite-storage/src/compactor/cold/worker.rs`
+  - `engine/packages/sqlite-storage/src/compactor/mod.rs`
+  - `engine/packages/sqlite-storage/tests/compactor_cold.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Cold compactor service code should stay under `compactor/cold/` rather than mixing cold pass orchestration into the hot compactor worker.
+  - The cold lease mirrors the hot lease lifecycle but is keyed by `ActorBranchId` through `branch_meta_cold_lease_key`.
+  - The existing `SqliteColdCompactPayload` variants currently carry bookmark pin work; future threshold-driven cold passes should extend the same subject/payload surface instead of adding a second cold queue.
 ---
 ## 2026-04-29 16:36 PDT - US-001
 - Implemented the foundational PITR/fork identifier, branch record, pointer, tier, and branch state types in `pump/types.rs`.

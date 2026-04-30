@@ -1,3 +1,4 @@
+pub mod cold;
 pub mod compact;
 pub mod lease;
 pub mod metrics;
