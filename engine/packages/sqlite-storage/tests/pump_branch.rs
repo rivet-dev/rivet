@@ -4,20 +4,19 @@ use anyhow::Result;
 use gas::prelude::Id;
 use rivet_pools::NodeId;
 use sqlite_storage::{
-	keys::{
-		actor_pointer_cur_key, branch_commit_key, branch_meta_head_at_fork_key, branches_bk_pin_key,
-		branches_desc_pin_key, branches_list_key, branches_refcount_key,
-		namespace_branches_bk_pin_key, namespace_branches_desc_pin_key,
-		namespace_branches_list_key, namespace_branches_refcount_key,
-		namespace_branches_tier_state_key, namespace_pointer_cur_key,
-	},
+		keys::{
+			actor_pointer_cur_key, branch_commit_key, branch_meta_head_at_fork_key, branches_bk_pin_key,
+			branches_desc_pin_key, branches_list_key, branches_refcount_key,
+			namespace_branches_bk_pin_key, namespace_branches_desc_pin_key,
+			namespace_branches_list_key, namespace_branches_refcount_key, namespace_pointer_cur_key,
+		},
 	pump::{ActorDb, branch},
 	types::{
 		ActorBranchId, ActorBranchRecord, BranchState, DBHead, DirtyPage, NamespaceBranchId,
-		NamespaceBranchRecord, NamespaceId, NamespaceTierState, ResolvedVersionstamp, Tier,
+		NamespaceBranchRecord, NamespaceId, ResolvedVersionstamp,
 		decode_actor_branch_record, decode_actor_pointer, decode_commit_row, decode_db_head,
-		decode_namespace_branch_record, decode_namespace_pointer, decode_namespace_tier_state,
-		encode_actor_branch_record, encode_namespace_branch_record, encode_namespace_tier_state,
+		decode_namespace_branch_record, decode_namespace_pointer, encode_actor_branch_record,
+		encode_namespace_branch_record,
 	},
 };
 use tempfile::Builder;
@@ -211,12 +210,6 @@ async fn derive_branch_at_snapshots_head_and_writes_branch_metadata() -> Result<
 		read_value(&db, branches_desc_pin_key(source_branch_id)).await?,
 		Some(first_commit.versionstamp.to_vec())
 	);
-	let tier_state_bytes = read_value(&db, namespace_branches_tier_state_key(namespace_branch_id))
-		.await?
-		.expect("namespace tier state should exist");
-	let tier_state = decode_namespace_tier_state(&tier_state_bytes)?;
-	assert_eq!(tier_state.tier, Tier::T1);
-	assert_ne!(tier_state.promoted_at_versionstamp, [0; 16]);
 
 	Ok(())
 }
@@ -319,14 +312,13 @@ async fn derive_branch_at_enforces_max_fork_depth() -> Result<()> {
 }
 
 #[tokio::test]
-async fn derive_namespace_branch_at_writes_branch_metadata_without_tier_state() -> Result<()> {
+async fn derive_namespace_branch_at_writes_branch_metadata() -> Result<()> {
 	let db = test_db().await?;
 	let source_branch_id = NamespaceBranchId::from_uuid(uuid::Uuid::from_u128(0x7777));
 	let new_branch_id = NamespaceBranchId::from_uuid(uuid::Uuid::from_u128(0x8888));
 	let at_versionstamp = [3; 16];
 
 	seed_namespace_branch_record(&db, source_branch_id, 0).await?;
-	seed_namespace_tier_state(&db, source_branch_id, Tier::T0, [1; 16]).await?;
 
 	db.run(move |tx| async move {
 		branch::derive_namespace_branch_at(
@@ -357,95 +349,6 @@ async fn derive_namespace_branch_at_writes_branch_metadata_without_tier_state() 
 		read_value(&db, namespace_branches_desc_pin_key(source_branch_id)).await?,
 		Some(at_versionstamp.to_vec())
 	);
-	assert!(
-		read_value(&db, namespace_branches_tier_state_key(new_branch_id))
-			.await?
-			.is_none()
-	);
-	let source_tier_state_bytes = read_value(&db, namespace_branches_tier_state_key(source_branch_id))
-		.await?
-		.expect("source namespace tier state should exist");
-	let source_tier_state = decode_namespace_tier_state(&source_tier_state_bytes)?;
-	assert_eq!(source_tier_state.tier, Tier::T1);
-	assert_ne!(source_tier_state.promoted_at_versionstamp, [0; 16]);
-
-	Ok(())
-}
-
-#[tokio::test]
-async fn ensure_tier_at_least_promotes_t0_to_t1_once() -> Result<()> {
-	let db = test_db().await?;
-	let branch_id = NamespaceBranchId::from_uuid(uuid::Uuid::from_u128(0xdddd));
-
-	seed_namespace_branch_record(&db, branch_id, 0).await?;
-	seed_namespace_tier_state(&db, branch_id, Tier::T0, [1; 16]).await?;
-
-	db.run(move |tx| async move {
-		branch::ensure_tier_at_least(&tx, branch_id, Tier::T1).await?;
-		Ok(())
-	})
-	.await?;
-
-	let tier_state_bytes = read_value(&db, namespace_branches_tier_state_key(branch_id))
-		.await?
-		.expect("namespace tier state should exist");
-	let promoted_state = decode_namespace_tier_state(&tier_state_bytes)?;
-	assert_eq!(promoted_state.tier, Tier::T1);
-	assert_ne!(promoted_state.promoted_at_versionstamp, [0; 16]);
-
-	db.run(move |tx| async move {
-		branch::ensure_tier_at_least(&tx, branch_id, Tier::T1).await?;
-		Ok(())
-	})
-	.await?;
-
-	let tier_state_bytes = read_value(&db, namespace_branches_tier_state_key(branch_id))
-		.await?
-		.expect("namespace tier state should still exist");
-	let stable_state = decode_namespace_tier_state(&tier_state_bytes)?;
-	assert_eq!(stable_state, promoted_state);
-
-	Ok(())
-}
-
-#[tokio::test]
-async fn ensure_tier_at_least_concurrent_promotions_converge_on_t1() -> Result<()> {
-	let db = Arc::new(test_db().await?);
-	let branch_id = NamespaceBranchId::from_uuid(uuid::Uuid::from_u128(0xeeee));
-
-	seed_namespace_branch_record(&db, branch_id, 0).await?;
-	seed_namespace_tier_state(&db, branch_id, Tier::T0, [1; 16]).await?;
-
-	let first = {
-		let db = db.clone();
-		tokio::spawn(async move {
-			db.run(move |tx| async move {
-				branch::ensure_tier_at_least(&tx, branch_id, Tier::T1).await?;
-				Ok(())
-			})
-			.await
-		})
-	};
-	let second = {
-		let db = db.clone();
-		tokio::spawn(async move {
-			db.run(move |tx| async move {
-				branch::ensure_tier_at_least(&tx, branch_id, Tier::T1).await?;
-				Ok(())
-			})
-			.await
-		})
-	};
-
-	first.await??;
-	second.await??;
-
-	let tier_state_bytes = read_value(&db, namespace_branches_tier_state_key(branch_id))
-		.await?
-		.expect("namespace tier state should exist");
-	let tier_state = decode_namespace_tier_state(&tier_state_bytes)?;
-	assert_eq!(tier_state.tier, Tier::T1);
-	assert_ne!(tier_state.promoted_at_versionstamp, [0; 16]);
 
 	Ok(())
 }
@@ -928,28 +831,6 @@ async fn seed_namespace_branch_record(
 				&1_i64.to_le_bytes(),
 				MutationType::Add,
 			);
-			Ok(())
-		}
-	})
-	.await
-}
-
-async fn seed_namespace_tier_state(
-	db: &universaldb::Database,
-	branch_id: NamespaceBranchId,
-	tier: Tier,
-	promoted_at_versionstamp: [u8; 16],
-) -> Result<()> {
-	let state = NamespaceTierState {
-		tier,
-		promoted_at_versionstamp,
-	};
-	let encoded_state = encode_namespace_tier_state(state)?;
-	db.run(move |tx| {
-		let encoded_state = encoded_state.clone();
-		async move {
-			tx.informal()
-				.set(&namespace_branches_tier_state_key(branch_id), &encoded_state);
 			Ok(())
 		}
 	})

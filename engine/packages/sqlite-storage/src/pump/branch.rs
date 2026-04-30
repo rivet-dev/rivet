@@ -12,11 +12,11 @@ use super::{
 	keys, udb,
 	types::{
 		ActorBranchId, ActorBranchRecord, BookmarkRef, BranchState, DBHead, NamespaceBranchId,
-		NamespaceBranchRecord, NamespaceId, NamespacePointer, NamespaceTierState,
-		ResolvedVersionstamp, Tier, decode_actor_branch_record, decode_actor_pointer, decode_commit_row,
-		decode_namespace_branch_record, decode_namespace_pointer, decode_namespace_tier_state,
-		encode_actor_branch_record, encode_actor_pointer, encode_db_head,
-		encode_namespace_branch_record, encode_namespace_pointer, encode_namespace_tier_state,
+		NamespaceBranchRecord, NamespaceId, NamespacePointer, ResolvedVersionstamp,
+		decode_actor_branch_record, decode_actor_pointer, decode_commit_row,
+		decode_namespace_branch_record, decode_namespace_pointer, encode_actor_branch_record,
+		encode_actor_pointer, encode_db_head, encode_namespace_branch_record,
+		encode_namespace_pointer,
 	},
 };
 
@@ -102,21 +102,6 @@ pub fn write_root_namespace_metadata(
 		encode_namespace_pointer(pointer).context("encode sqlite namespace pointer")?;
 	tx.informal()
 		.set(&keys::namespace_pointer_cur_key(namespace_id), &encoded_pointer);
-
-	let tier_state = NamespaceTierState {
-		tier: Tier::T0,
-		promoted_at_versionstamp: *root_versionstamp,
-	};
-	let encoded_tier_state =
-		encode_namespace_tier_state(tier_state).context("encode sqlite namespace tier state")?;
-	let versionstamped_tier_state =
-		udb::append_versionstamp_offset(encoded_tier_state, root_versionstamp)
-			.context("prepare versionstamped sqlite namespace tier state")?;
-	tx.informal().atomic_op(
-		&keys::namespace_branches_tier_state_key(branch_id),
-		&versionstamped_tier_state,
-		MutationType::SetVersionstampedValue,
-	);
 
 	Ok(())
 }
@@ -332,7 +317,6 @@ pub async fn derive_branch_at(
 	if bk_pin > at_versionstamp {
 		return Err(SqliteStorageError::ForkOutOfRetention.into());
 	}
-	ensure_tier_at_least(tx, source.namespace_branch, Tier::T1).await?;
 
 	let txid_at_versionstamp = lookup_txid_at_versionstamp(tx, source_branch_id, at_versionstamp)
 		.await
@@ -416,7 +400,6 @@ pub async fn derive_namespace_branch_at(
 	if bk_pin > at_versionstamp {
 		return Err(SqliteStorageError::ForkOutOfRetention.into());
 	}
-	ensure_tier_at_least(tx, source_branch_id, Tier::T1).await?;
 
 	let new_record = NamespaceBranchRecord {
 		branch_id: new_branch_id,
@@ -451,40 +434,6 @@ pub async fn derive_namespace_branch_at(
 	Ok(())
 }
 
-pub async fn ensure_tier_at_least(
-	tx: &universaldb::Transaction,
-	namespace_branch_id: NamespaceBranchId,
-	target_tier: Tier,
-) -> Result<NamespaceTierState> {
-	let (current_state, is_local) = read_namespace_tier_state(tx, namespace_branch_id).await?;
-	if tier_rank(current_state.tier) >= tier_rank(target_tier) {
-		if !is_local {
-			let encoded_state = encode_namespace_tier_state(current_state.clone())
-				.context("encode sqlite namespace tier state")?;
-			tx.informal()
-				.set(&keys::namespace_branches_tier_state_key(namespace_branch_id), &encoded_state);
-		}
-
-		return Ok(current_state);
-	}
-
-	let promoted_state = NamespaceTierState {
-		tier: target_tier,
-		promoted_at_versionstamp: [0; 16],
-	};
-	let encoded_state = encode_namespace_tier_state(promoted_state.clone())
-		.context("encode sqlite namespace tier state")?;
-	let versionstamped_state = udb::append_versionstamp_offset(encoded_state, &[0; 16])
-		.context("prepare versionstamped sqlite namespace tier state")?;
-	tx.informal().atomic_op(
-		&keys::namespace_branches_tier_state_key(namespace_branch_id),
-		&versionstamped_state,
-		MutationType::SetVersionstampedValue,
-	);
-
-	Ok(promoted_state)
-}
-
 pub(super) async fn read_actor_branch_record(
 	tx: &universaldb::Transaction,
 	branch_id: ActorBranchId,
@@ -509,37 +458,6 @@ async fn read_namespace_branch_record(
 		.context("sqlite namespace branch record is missing")?;
 
 	decode_namespace_branch_record(&bytes).context("decode sqlite namespace branch record")
-}
-
-async fn read_namespace_tier_state(
-	tx: &universaldb::Transaction,
-	branch_id: NamespaceBranchId,
-) -> Result<(NamespaceTierState, bool)> {
-	let mut current_branch_id = branch_id;
-
-	for _ in 0..=MAX_NAMESPACE_DEPTH {
-		let tier_state_key = keys::namespace_branches_tier_state_key(current_branch_id);
-		if let Some(bytes) = tx.informal().get(&tier_state_key, Serializable).await? {
-			let tier_state =
-				decode_namespace_tier_state(&bytes).context("decode sqlite namespace tier state")?;
-			return Ok((tier_state, current_branch_id == branch_id));
-		}
-
-		let record = read_namespace_branch_record(tx, current_branch_id).await?;
-		if let Some(parent) = record.parent {
-			current_branch_id = parent;
-		} else {
-			return Ok((
-				NamespaceTierState {
-					tier: Tier::T0,
-					promoted_at_versionstamp: record.root_versionstamp,
-				},
-				current_branch_id == branch_id,
-			));
-		}
-	}
-
-	Err(SqliteStorageError::NamespaceForkChainTooDeep.into())
 }
 
 async fn read_versionstamp_pin(
@@ -595,12 +513,4 @@ fn now_ms() -> Result<i64> {
 		.context("system clock is before unix epoch")?
 		.as_millis();
 	i64::try_from(millis).context("current timestamp exceeded i64 milliseconds")
-}
-
-fn tier_rank(tier: Tier) -> u8 {
-	match tier {
-		Tier::T0 => 0,
-		Tier::T1 => 1,
-		Tier::T2 => 2,
-	}
 }

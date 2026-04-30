@@ -10,8 +10,8 @@ pub const MAX_PINS_PER_NAMESPACE: u32 = 1024;
 /// Spec section 12.1 caps FDB shard-version amplification when eviction lags hot compaction.
 pub const MAX_SHARD_VERSIONS_PER_SHARD: u32 = 32;
 
-/// Spec section 12.1 keeps Tier 0 commit and VTX history for recent bookmark resolution.
-pub const COMMITS_TIER0_RETENTION_MS: i64 = 7 * 24 * 60 * 60 * 1000;
+/// Spec section 12.1 keeps hot commit and VTX history for recent bookmark resolution.
+pub const HOT_RETENTION_FLOOR_MS: i64 = 7 * 24 * 60 * 60 * 1000;
 
 /// Spec section 12.3 buckets access touches to bound eviction-index churn to about one write per minute.
 pub const ACCESS_TOUCH_THROTTLE_MS: i64 = 60_000;

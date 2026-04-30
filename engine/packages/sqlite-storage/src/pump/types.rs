@@ -123,13 +123,6 @@ pub struct ResolvedVersionstamp {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum Tier {
-	T0,
-	T1,
-	T2,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum BranchState {
 	Live,
 	Frozen,
@@ -164,12 +157,6 @@ pub struct ActorBranchRecord {
 pub struct NamespacePointer {
 	pub current_branch: NamespaceBranchId,
 	pub last_swapped_at_ms: i64,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct NamespaceTierState {
-	pub tier: Tier,
-	pub promoted_at_versionstamp: [u8; 16],
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -498,37 +485,6 @@ impl OwnedVersionedData for VersionedNamespacePointer {
 	}
 }
 
-enum VersionedNamespaceTierState {
-	V1(NamespaceTierState),
-}
-
-impl OwnedVersionedData for VersionedNamespaceTierState {
-	type Latest = NamespaceTierState;
-
-	fn wrap_latest(latest: Self::Latest) -> Self {
-		Self::V1(latest)
-	}
-
-	fn unwrap_latest(self) -> Result<Self::Latest> {
-		match self {
-			Self::V1(data) => Ok(data),
-		}
-	}
-
-	fn deserialize_version(payload: &[u8], version: u16) -> Result<Self> {
-		match version {
-			1 => Ok(Self::V1(serde_bare::from_slice(payload)?)),
-			_ => bail!("invalid sqlite-storage NamespaceTierState version: {version}"),
-		}
-	}
-
-	fn serialize_version(self, _version: u16) -> Result<Vec<u8>> {
-		match self {
-			Self::V1(data) => serde_bare::to_vec(&data).map_err(Into::into),
-		}
-	}
-}
-
 enum VersionedMetaCompact {
 	V1(MetaCompact),
 }
@@ -623,17 +579,6 @@ pub fn encode_namespace_pointer(pointer: NamespacePointer) -> Result<Vec<u8>> {
 pub fn decode_namespace_pointer(payload: &[u8]) -> Result<NamespacePointer> {
 	VersionedNamespacePointer::deserialize_with_embedded_version(payload)
 		.context("decode sqlite namespace pointer")
-}
-
-pub fn encode_namespace_tier_state(state: NamespaceTierState) -> Result<Vec<u8>> {
-	VersionedNamespaceTierState::wrap_latest(state)
-		.serialize_with_embedded_version(SQLITE_STORAGE_META_VERSION)
-		.context("encode sqlite namespace tier state")
-}
-
-pub fn decode_namespace_tier_state(payload: &[u8]) -> Result<NamespaceTierState> {
-	VersionedNamespaceTierState::deserialize_with_embedded_version(payload)
-		.context("decode sqlite namespace tier state")
 }
 
 pub fn encode_meta_compact(compact: MetaCompact) -> Result<Vec<u8>> {

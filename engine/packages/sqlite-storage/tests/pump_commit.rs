@@ -8,21 +8,19 @@ use sqlite_storage::compactor::{
 	SqliteCompactSubject, decode_compact_payload,
 };
 use sqlite_storage::{
-	keys::{
-		PAGE_SIZE, actor_pointer_cur_key, branch_commit_key, branch_delta_chunk_key,
-		branch_meta_compact_key, branch_meta_head_key, branch_pidx_key, branch_shard_key,
-		branch_vtx_key, branches_list_key, namespace_branches_list_key,
-		namespace_branches_refcount_key, namespace_branches_tier_state_key,
-		namespace_pointer_cur_key,
-	},
+		keys::{
+			PAGE_SIZE, actor_pointer_cur_key, branch_commit_key, branch_delta_chunk_key,
+			branch_meta_compact_key, branch_meta_head_key, branch_pidx_key, branch_shard_key,
+			branch_vtx_key, branches_list_key, namespace_branches_list_key,
+			namespace_branches_refcount_key, namespace_pointer_cur_key,
+		},
 	ltx::{LtxHeader, encode_ltx_v3},
 	pump::ActorDb,
 	quota::{self, SQLITE_MAX_STORAGE_BYTES},
 	types::{
-		ActorBranchId, DBHead, DirtyPage, FetchedPage, MetaCompact, NamespaceId, Tier,
+		ActorBranchId, DBHead, DirtyPage, FetchedPage, MetaCompact, NamespaceId,
 		decode_actor_branch_record, decode_actor_pointer, decode_commit_row, decode_db_head,
-		decode_namespace_branch_record, decode_namespace_pointer,
-		decode_namespace_tier_state, encode_db_head, encode_meta_compact,
+		decode_namespace_branch_record, decode_namespace_pointer, encode_db_head, encode_meta_compact,
 	},
 };
 use tempfile::Builder;
@@ -170,11 +168,6 @@ async fn commit_lazily_initializes_meta_on_first_write() -> Result<()> {
 		read_value(&db, namespace_branches_refcount_key(namespace_branch)).await?,
 		Some(1_i64.to_le_bytes().to_vec())
 	);
-	let tier_state_bytes = read_value(&db, namespace_branches_tier_state_key(namespace_branch))
-		.await?
-		.expect("namespace tier state should exist");
-	let tier_state = decode_namespace_tier_state(&tier_state_bytes)?;
-	assert_eq!(tier_state.tier, Tier::T0);
 	let branch_record_bytes = read_value(&db, branches_list_key(branch_id))
 		.await?
 		.expect("branch record should exist");

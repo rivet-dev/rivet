@@ -36,7 +36,6 @@ const LIST_PATH: &[u8] = b"/list/";
 const REFCOUNT_PATH: &[u8] = b"/refcount";
 const DESC_PIN_PATH: &[u8] = b"/desc_pin";
 const BK_PIN_PATH: &[u8] = b"/bk_pin";
-const TIER_STATE_PATH: &[u8] = b"/tier_state";
 const ACTOR_TOMBSTONES_PATH: &[u8] = b"/actor_tombstones/";
 const MANIFEST_COLD_DRAINED_TXID_PATH: &[u8] = b"/META/manifest/cold_drained_txid";
 const MANIFEST_LAST_HOT_PASS_TXID_PATH: &[u8] = b"/META/manifest/last_hot_pass_txid";
@@ -200,10 +199,6 @@ pub fn namespace_branches_desc_pin_key(branch_id: NamespaceBranchId) -> Vec<u8> 
 
 pub fn namespace_branches_bk_pin_key(branch_id: NamespaceBranchId) -> Vec<u8> {
 	with_suffix(namespace_branch_record_base(branch_id), BK_PIN_PATH)
-}
-
-pub fn namespace_branches_tier_state_key(branch_id: NamespaceBranchId) -> Vec<u8> {
-	with_suffix(namespace_branch_record_base(branch_id), TIER_STATE_PATH)
 }
 
 pub fn namespace_branches_actor_tombstone_key(

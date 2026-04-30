@@ -230,6 +230,29 @@
       "notes": ""
     },
     {
+      "id": "US-066",
+      "title": "Flatten tier model — remove Tier types, tier_state, and ensure_tier_at_least; make cold + eviction unconditional",
+      "description": "Flatten the SQLite storage tier model per the v3 spec at .agent/specs/sqlite-rough-pitr.md. The v3 revision drops the per-namespace tier (T0/T1/T2) abstraction in favor of a uniform LSM-shaped storage flow where every namespace's data passes through hot-tier (FDB) DELTAs, folded SHARD versions, and cold-tier (S3) layers identically. Concretely: remove the `Tier` enum and `NamespaceTierState` struct from `engine/packages/sqlite-storage/src/pump/types.rs`; delete the `tier_state` write performed during root namespace branch allocation (added in US-010); delete the `ensure_tier_at_least` helper (added in US-013) and remove all of its call sites in `derive_branch_at`, `derive_namespace_branch_at`, and any code US-014 may have added to `fork_actor`; drop the `tier_state` FDB key builder and related callers in `pump/keys.rs`; rename the constant `COMMITS_TIER0_RETENTION_MS` to `HOT_RETENTION_FLOOR_MS` everywhere it is referenced (definition + usages); remove the tier-related tests in `engine/packages/sqlite-storage/tests/pump_branch.rs` (the T0→T1 promotion test, the concurrent-promotion test, and the actor/namespace fork-triggered-promotion tests) while keeping branch primitive tests that do not depend on tier state. The hot compactor must not read tier state on its pass loop; cold compactor and eviction compactor run unconditionally without any tier gate. Verify with `cargo check -p sqlite-storage` and `cargo test -p sqlite-storage`. The spec at `.agent/specs/sqlite-rough-pitr.md` has been updated to v3 reflecting this flattening.",
+      "acceptanceCriteria": [
+        "`Tier` enum removed from pump/types.rs",
+        "`NamespaceTierState` struct removed from pump/types.rs",
+        "`ensure_tier_at_least` helper removed",
+        "`tier_state` FDB key builder removed",
+        "`tier_state` write removed from namespace branch allocation",
+        "`ensure_tier_at_least` call sites removed from `derive_branch_at` and `derive_namespace_branch_at`",
+        "Hot compactor no longer reads `tier_state`",
+        "Cold compactor + eviction compactor run unconditionally (no tier check)",
+        "Constant renamed: `COMMITS_TIER0_RETENTION_MS` → `HOT_RETENTION_FLOOR_MS`",
+        "Tier-related tests removed from `pump_branch.rs`; surviving tests cover non-tier branch primitive behavior",
+        "`cargo check -p sqlite-storage` passes",
+        "`cargo test -p sqlite-storage` passes",
+        "Typecheck passes"
+      ],
+      "priority": 14.5,
+      "passes": true,
+      "notes": ""
+    },
+    {
       "id": "US-015",
       "title": "Implement fork_namespace operation",
       "description": "Implement fork_namespace(source_ns_id, at) per spec section 8.1. Allocates new NamespaceId + NamespaceBranchId, writes NSPTR + NSBRANCH, atomic-min desc_pin on source, refcount adds. Does NOT eagerly materialize APTR entries; lazy resolution handled in a later story.",
@@ -348,14 +371,14 @@
     {
       "id": "US-022",
       "title": "Implement create_pinned_bookmark (Pending) with bk_pin atomic-min and UPS enqueue",
-      "description": "Implement create_pinned_bookmark(namespace, actor_id, at_ms): in a single FDB tx, write BOOKMARK/.../pinned with PinStatus::Pending, atomic-min the actor branch's bk_pin to the bookmark's versionstamp, enforce MAX_PINS_PER_NAMESPACE, and enqueue a UPS message for the cold compactor to perform the S3 PUT. Returns the bookmark string immediately.",
+      "description": "Implement create_pinned_bookmark(namespace, actor_id, at_ms): in a single FDB tx, write BOOKMARK/.../pinned with PinStatus::Pending, atomic-min the actor branch's bk_pin to the bookmark's versionstamp, enforce MAX_PINS_PER_NAMESPACE, and enqueue a UPS message for the cold compactor to perform the S3 PUT. Returns the bookmark string immediately. Pinned bookmark creation does NOT call ensure_tier_at_least or perform any tier promotion; per the v3 spec there is no per-namespace tier model.",
       "acceptanceCriteria": [
         "Sync FDB tx writes PinnedBookmarkRecord with PinStatus::Pending",
         "bk_pin atomic-min on the actor branch to the bookmark's versionstamp",
         "MAX_PINS_PER_NAMESPACE enforcement returns TooManyPins",
         "UPS message enqueued to the cold compactor with the bookmark + actor branch info",
         "Returns BookmarkStr immediately (sub-FDB-tx latency)",
-        "Tier 0 -> T1 promotion CAS happens in the same tx if needed",
+        "No tier promotion logic on the create path (no ensure_tier_at_least call)",
         "Tests pass",
         "Typecheck passes"
       ],
@@ -488,8 +511,8 @@
         "Typecheck passes"
       ],
       "priority": 30,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Obsolete after tier flattening (US-066). No tier read needed; hot compactor is uniform."
     },
     {
       "id": "US-031",
@@ -524,13 +547,14 @@
     },
     {
       "id": "US-033",
-      "title": "Hot compactor Tier 0 COMMITS + VTX retention sweep",
-      "description": "Hot compactor on Tier 0 namespaces also GCs COMMITS and VTX rows older than COMMITS_TIER0_RETENTION_MS (default 7 days) on each pass. After watermark, bookmark resolution beyond returns BookmarkExpired.",
+      "title": "Hot compactor universal hot-tier retention sweep",
+      "description": "Hot compactor on every namespace GCs COMMITS and VTX rows older than HOT_RETENTION_FLOOR_MS (default 7 days) on each pass per spec section 12.1. The sweep is universal with no per-namespace tier branching. After the watermark, bookmark resolution beyond the floor returns BookmarkExpired unless a cold layer or pin extends retention.",
       "acceptanceCriteria": [
-        "Tier 0 hot pass deletes COMMITS rows older than wall-clock now - COMMITS_TIER0_RETENTION_MS",
-        "Tier 0 hot pass deletes the corresponding VTX entries",
-        "Tier 1+ does not perform this sweep (cold compactor handles eventual deletion)",
-        "Test verifies bookmarks beyond retention return BookmarkExpired on Tier 0",
+        "Hot pass deletes COMMITS rows older than wall-clock now - HOT_RETENTION_FLOOR_MS on every namespace",
+        "Hot pass deletes the corresponding VTX entries in the same sweep",
+        "No tier branching in the sweep code path; all namespaces share the same retention behavior",
+        "Test verifies bookmarks beyond HOT_RETENTION_FLOOR_MS return BookmarkExpired when no cold layer covers the versionstamp",
+        "Test covers the universal sweep across multiple namespaces with no tier configuration",
         "Tests pass",
         "Typecheck passes"
       ],
@@ -557,14 +581,14 @@
     },
     {
       "id": "US-035",
-      "title": "Add ColdTier trait with Disabled/Filesystem/S3 implementations",
-      "description": "Define the ColdTier trait abstraction in cold_tier/ with PUT/GET/DELETE/LIST methods. Provide ColdTier::Disabled (no-op), ColdTier::Filesystem (local fs stand-in for tests), and ColdTier::S3 (real S3 driver) implementations. Also include ColdTier::Faulty wrapper for fault injection.",
+      "title": "Add ColdTier trait with Filesystem/S3 implementations",
+      "description": "Define the ColdTier trait abstraction in cold_tier/ with PUT/GET/DELETE/LIST methods. Provide ColdTier::Filesystem (local fs stand-in for tests) and ColdTier::S3 (real S3 driver) implementations. Also include ColdTier::Faulty wrapper for fault injection. There is no Disabled variant; per the v3 spec, every namespace's data flows through the cold tier and the cold compactor always runs (idle namespaces simply produce small or infrequent layer files).",
       "acceptanceCriteria": [
         "ColdTier trait defines async put_object, get_object, delete_objects, list_prefix",
-        "Disabled returns errors for all calls (Tier 0 path never invokes it)",
         "Filesystem implementation reads/writes under a configured root directory",
         "S3 implementation uses aws-sdk-s3 with proper credentials wiring",
         "Faulty wrapper allows configurable failures/latencies for tests",
+        "No Disabled variant; the trait surface assumes a working cold tier is always present",
         "Tests pass",
         "Typecheck passes"
       ],
@@ -677,7 +701,7 @@
     {
       "id": "US-042",
       "title": "Cold-tier read fall-through on FDB miss",
-      "description": "Update get_pages to fall through to S3 when a hot-tier read misses (PIDX entry pointing at a cold-evicted DELTA, or no SHARD version covers the read txid). Loads cold_manifest index + relevant chunks, finds layer covering owner_txid, GETs it, decodes, returns the page.",
+      "description": "Update get_pages to fall through to S3 when a hot-tier read misses (PIDX entry pointing at a cold-evicted DELTA, or no SHARD version covers the read txid). Loads cold_manifest index + relevant chunks, finds layer covering owner_txid, GETs it, decodes, returns the page. This is the LSM read path's L2 step and applies uniformly to every namespace; there is no per-tier conditional gating.",
       "acceptanceCriteria": [
         "On FDB DELTA/SHARD miss, get_pages loads ColdManifestIndex + relevant ColdManifestChunk(s)",
         "Identifies LayerEntry whose (min_txid, max_txid) covers the owner_txid",
@@ -818,18 +842,19 @@
         "Typecheck passes"
       ],
       "priority": 50,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Obsolete after tier flattening (US-066). No tier transition exists."
     },
     {
       "id": "US-051",
       "title": "Implement burst-mode hot quota cap",
-      "description": "Add burst_mode.rs that derives a burst signal from FDB lag in /META/manifest.cold_drained_txid - /META/head.head_txid. When burst is active, raise the hot quota cap from 10 GiB to 20 GiB (HOT_BURST_MULTIPLIER=2). Reverts when cold tier recovers.",
+      "description": "Add burst_mode.rs that derives a burst signal from FDB lag in /META/manifest.cold_drained_txid - /META/head.head_txid. When burst is active, raise the hot quota cap from 10 GiB to 20 GiB (HOT_BURST_MULTIPLIER=2). Reverts when cold tier recovers. Burst mode is a universal hot-tier overflow guard; it applies to every namespace uniformly without any tier coupling.",
       "acceptanceCriteria": [
         "Burst signal computed from FDB cold-lag, not pod 5xx counter",
         "Hot quota cap doubles to 20 GiB when burst active",
         "Reverts to 10 GiB when cold lag recovers",
         "Quota check on commit consults burst-mode-adjusted cap",
+        "No tier branching in burst signal computation or quota check",
         "Tests pass",
         "Typecheck passes"
       ],
@@ -986,10 +1011,9 @@
     },
     {
       "id": "US-061",
-      "title": "Add tier transition + GC + list_actors integration tests",
-      "description": "Add tests/tier_transition.rs (T0 -> T1 promotion via tier_state CAS, race), tests/gc.rs (pin computation, dependency-graph deletion, APTR history GC, frozen branch retention), tests/list_actors.rs (tombstone-aware ns-chain walk).",
+      "title": "Add GC + list_actors integration tests",
+      "description": "Add tests/gc.rs (pin computation, dependency-graph deletion, APTR history GC, frozen branch retention) and tests/list_actors.rs (tombstone-aware ns-chain walk). Tier transition tests are not included; per the v3 spec there is no tier transition path to test.",
       "acceptanceCriteria": [
-        "tests/tier_transition.rs verifies CAS promotion + concurrent first-fork race",
         "tests/gc.rs verifies pin formula + dependency-graph deletion + APTR history GC",
         "tests/list_actors.rs verifies tombstones across deep ns fork chain",
         "Tests pass",
@@ -1042,6 +1066,27 @@
         "Typecheck passes"
       ],
       "priority": 64,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-065",
+      "title": "Rename 'actor' storage entity to 'database' across sqlite-storage (one DB per actor, fully decoupled)",
+      "description": "Rename the storage-layer 'actor' entity to 'database' so the storage primitives speak in terms of (namespace, database) instead of (namespace, actor). The storage layer must own no coupling between databases and actors: a database is identified by its own DatabaseId (replacing ActorId in storage APIs), has its own pointer/branch/lifecycle, and is independently fork/rollback/bookmark-able. The mapping 'one database per actor' lives at the engine/pegboard layer, not in sqlite-storage. This is a pure rename + decoupling pass within sqlite-storage; no behavior change. Update the spec at .agent/specs/sqlite-rough-pitr.md, the FDB key partitions, the four operations (fork_database, rollback_database, fork_namespace, rollback_namespace), bookmark APIs, BRANCHES partition (now keyed by DatabaseBranchId), APTR -> DBPTR, ActorBranchId -> DatabaseBranchId, ActorBranchRecord -> DatabaseBranchRecord, ActorPointer -> DatabasePointer, ActorDb -> Db (or similar). Engine-edge callers translate actor_id <-> database_id at the pegboard/envoy boundary; sqlite-storage exposes only database APIs. Update all docs-internal/engine/sqlite/ files and CLAUDE.md sections accordingly. Two top-level entities post-rename: namespace and database.",
+      "acceptanceCriteria": [
+        "All ActorId/ActorBranchId/ActorPointer/ActorBranchRecord/ActorDb identifiers in engine/packages/sqlite-storage/ renamed to Database* equivalents",
+        "FDB partition rename: APTR -> DBPTR (key bytes unchanged or migrated; document choice in the spec)",
+        "Public storage APIs renamed: fork_actor -> fork_database, rollback_actor -> rollback_database, list_actors -> list_databases, actor_tombstones -> database_tombstones, etc.",
+        "sqlite-storage carries no actor-shaped types; the only entities are Namespace and Database",
+        "Pegboard/envoy callers translate actor_id <-> database_id at the boundary (typically 1:1) but sqlite-storage no longer references actors",
+        ".agent/specs/sqlite-rough-pitr.md updated with the rename throughout",
+        "docs-internal/engine/sqlite/ docs (storage-structure, components, constraints-and-design-decisions, comparison-to-other-systems) updated",
+        "engine/packages/sqlite-storage/CLAUDE.md and engine/CLAUDE.md updated; any 'per-actor' phrasing in storage context becomes 'per-database'",
+        "All tests under engine/packages/sqlite-storage/tests/ updated and passing",
+        "cargo check -p rivet-sqlite-storage passes",
+        "Typecheck passes across the workspace"
+      ],
+      "priority": 65,
       "passes": false,
       "notes": ""
     }

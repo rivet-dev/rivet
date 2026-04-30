@@ -5,19 +5,19 @@ use sqlite_storage::pump::keys::{
 	actor_prefix, actor_range, bookmark_key, bookmark_pinned_key, branch_commit_key,
 	branch_delta_chunk_key, branch_manifest_cold_drained_txid_key,
 	branch_manifest_last_access_bucket_key, branch_manifest_last_access_ts_ms_key,
-	branch_manifest_last_hot_pass_txid_key, branch_meta_cold_compact_key,
-	branch_meta_cold_lease_key, branch_meta_compact_key, branch_meta_compactor_lease_key,
-	branch_meta_head_at_fork_key, branch_meta_head_key, branch_meta_quota_key, branch_pidx_key,
-	branch_prefix, branch_range, branch_shard_key, branch_shard_version_prefix, branch_vtx_key,
-	branches_bk_pin_key, branches_desc_pin_key, branches_list_key, branches_refcount_key,
-	commit_key, compactor_enqueue_key, compactor_global_lease_key, ctr_eviction_index_key,
-	ctr_quota_global_key, delta_chunk_key, delta_chunk_prefix, delta_prefix, meta_compact_key,
-	meta_compactor_lease_key, meta_head_key, meta_quota_key, namespace_branches_actor_tombstone_key,
-	namespace_branches_bk_pin_key, namespace_branches_desc_pin_key, namespace_branches_list_key,
-	namespace_branches_refcount_key, namespace_branches_tier_state_key, namespace_pointer_cur_key,
-	namespace_pointer_history_key, pidx_delta_key, pidx_delta_prefix, shard_key, shard_prefix,
-	shard_version_key, shard_version_prefix, vtx_key,
-};
+		branch_manifest_last_hot_pass_txid_key, branch_meta_cold_compact_key,
+		branch_meta_cold_lease_key, branch_meta_compact_key, branch_meta_compactor_lease_key,
+		branch_meta_head_at_fork_key, branch_meta_head_key, branch_meta_quota_key, branch_pidx_key,
+		branch_prefix, branch_range, branch_shard_key, branch_shard_version_prefix, branch_vtx_key,
+		branches_bk_pin_key, branches_desc_pin_key, branches_list_key, branches_refcount_key,
+		commit_key, compactor_enqueue_key, compactor_global_lease_key, ctr_eviction_index_key,
+		ctr_quota_global_key, delta_chunk_key, delta_chunk_prefix, delta_prefix, meta_compact_key,
+		meta_compactor_lease_key, meta_head_key, meta_quota_key, namespace_branches_actor_tombstone_key,
+		namespace_branches_bk_pin_key, namespace_branches_desc_pin_key, namespace_branches_list_key,
+		namespace_branches_refcount_key, namespace_pointer_cur_key, namespace_pointer_history_key,
+		pidx_delta_key, pidx_delta_prefix, shard_key, shard_prefix, shard_version_key,
+		shard_version_prefix, vtx_key,
+	};
 use sqlite_storage::pump::types::{ActorBranchId, NamespaceBranchId, NamespaceId};
 use uuid::Uuid;
 
@@ -227,10 +227,6 @@ fn branch_record_keys_include_counter_and_pin_subkeys() {
 	assert_eq!(
 		namespace_branches_bk_pin_key(namespace_branch),
 		[namespace_base.as_slice(), b"/bk_pin"].concat()
-	);
-	assert_eq!(
-		namespace_branches_tier_state_key(namespace_branch),
-		[namespace_base.as_slice(), b"/tier_state"].concat()
 	);
 	assert_eq!(
 		namespace_branches_actor_tombstone_key(namespace_branch, TEST_ACTOR),

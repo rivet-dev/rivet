@@ -11,8 +11,7 @@
 - Branch ancestry reads need branch-aware sources; only use the simple PIDX cache when the read plan has one source branch.
 - `universaldb` raw `SetVersionstampedKey` and `SetVersionstampedValue` payloads use FDB-style trailing little-endian u32 offsets and substitute the first 10 versionstamp bytes.
 - Branch pin versionstamps are 16-byte lexicographic big-endian values, so descendant/bookmark pin atomic-min writes use `MutationType::ByteMin`, not integer `Min`.
-- Namespace branch derivation mirrors actor branch derivation for refcounts and pins, but leaves `tier_state` absent on the child so `ensure_tier_at_least` can lazily inherit or promote later.
-- Namespace tier promotion is an OCC/CAS-style serializable read plus write to `NSBRANCH/{branch}/tier_state`; concurrent first promoters rely on UDB retry and then re-read T1.
+- PITR storage has no per-namespace tier model; cold and eviction paths should run unconditionally without `tier_state` or `ensure_tier_at_least`.
 - Namespace forks are metadata-only: write the child `NSPTR` + `NSBRANCH` records and rely on namespace-branch parent walking instead of eagerly materializing child `APTR` rows.
 
 # Ralph Progress Log
@@ -287,4 +286,25 @@ Started: Wed Apr 29 03:29:23 PM PDT 2026
   - `fork_namespace` should delegate branch metadata/refcount/pin/depth behavior to `derive_namespace_branch_at` and only add the new namespace pointer.
   - Child namespace branches intentionally start with an empty APTR space; actor lookup inheritance belongs to the namespace parent-walk resolver.
   - Repeated namespace forks can reuse the same resolved commit versionstamp for depth-cap tests because namespace derivation only needs a versionstamp boundary.
+---
+## 2026-04-29 18:47 PDT - US-066
+- Flattened the SQLite PITR tier model by removing `Tier`, `NamespaceTierState`, `ensure_tier_at_least`, the `tier_state` key builder, and all fork/root allocation tier writes.
+- Renamed `COMMITS_TIER0_RETENTION_MS` to `HOT_RETENTION_FLOOR_MS` and pruned tier-promotion assertions/tests while keeping non-tier branch primitive coverage.
+- Verified with `cargo check -p sqlite-storage` and `cargo test -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/CLAUDE.md`
+  - `engine/packages/sqlite-storage/src/pump/branch.rs`
+  - `engine/packages/sqlite-storage/src/pump/constants.rs`
+  - `engine/packages/sqlite-storage/src/pump/keys.rs`
+  - `engine/packages/sqlite-storage/src/pump/types.rs`
+  - `engine/packages/sqlite-storage/tests/pump_branch.rs`
+  - `engine/packages/sqlite-storage/tests/pump_commit.rs`
+  - `engine/packages/sqlite-storage/tests/pump_constants.rs`
+  - `engine/packages/sqlite-storage/tests/pump_keys.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - PITR storage now has a uniform hot/cold/eviction flow; do not add per-namespace tier state or promotion hooks.
+  - Root namespace initialization writes only NSPTR, NSBRANCH, and refcount metadata.
+  - Branch derivation should remain metadata-only with refcount/pin updates and no cold-tier gating.
 ---

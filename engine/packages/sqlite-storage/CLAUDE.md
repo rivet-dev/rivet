@@ -34,7 +34,7 @@ These come from `r2-prior-art/.agent/research/sqlite/requirements.md` and supers
 ## Storage layout
 
 - **All PITR actor state is per-branch.** ActorDb resolves APTR, caches the branch id as a perf cache, and writes hot-path data under top-level `[0x02][0x30]/{branch_id}/<suffix>` keys.
-- **ActorDb is namespace-scoped.** New ActorDb instances receive the engine namespace id, lazily seed NSPTR/NSBRANCH/tier_state, and write APTR under the resolved namespace branch.
+- **ActorDb is namespace-scoped.** New ActorDb instances receive the engine namespace id, lazily seed NSPTR/NSBRANCH, and write APTR under the resolved namespace branch.
 - **Legacy actor-scoped storage is compatibility fallback only.** New ActorDb writes use branch-scoped META, COMMITS, VTX, PIDX, DELTA, and SHARD keys.
 - **Branch ancestry reads use branch-aware sources.** The PIDX cache is safe only when the read plan has one source branch; multi-branch ancestry reads must scan PIDX with branch identity.
 - **PITR tunable constants live in `pump/constants.rs`.** Import shared limits and retention windows from there instead of duplicating literals.
@@ -43,7 +43,7 @@ These come from `r2-prior-art/.agent/research/sqlite/requirements.md` and supers
 - **`COMMITS/{txid_be}` stores `CommitRow` via `SetVersionstampedValue`; `VTX/{versionstamp}` is written via `SetVersionstampedKey` and maps to raw u64 BE txid.**
 - **Branch records live under `[BRANCHES]/list/{branch_id}` with FDB atomic-add refcount plus `desc_pin` and `bk_pin` atomic-min keys.** GC reads these scalars instead of walking the descendant tree.
 - **Branch pin atomic-min writes use `MutationType::ByteMin`** because versionstamps are 16-byte lexicographic big-endian values.
-- **Namespace branch derivation mirrors actor branch pin/refcount updates but leaves child `tier_state` absent.** `ensure_tier_at_least` handles lazy tier inheritance or promotion later.
+- **Cold and eviction behavior is unconditional.** There is no per-namespace tier state or promotion path.
 - **PITR, forking, and `restore_to_bookmark` are all the same primitive: branch-at-position.** PITR creates a new branch at the resolved bookmark; the broader system (pegboard) decides whether to swap the actor's head pointer onto it.
 - **`MAX_FORK_DEPTH = 16`.** Deeper trees indicate misuse.
 
