@@ -1,0 +1,5 @@
+{
+  "code": "fork_out_of_retention",
+  "group": "sqlite_storage",
+  "message": "Cannot fork from a point that has fallen out of retention."
+}

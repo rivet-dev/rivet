@@ -4,6 +4,7 @@
 - Until root branch allocation is wired, legacy `DBHead` constructors use `ActorBranchId::nil()` and `post_apply_checksum: 0` as a compatibility bridge.
 - PITR key builders use top-level `[0x02][partition]` prefixes; legacy actor-scoped key helpers remain only as compatibility until the hot path migrates to branch IDs.
 - PITR tunable constants live in `engine/packages/sqlite-storage/src/pump/constants.rs` and are re-exported at the `sqlite_storage` crate root.
+- `SqliteStorageError` uses `RivetError` derive plus a manual `Display`/`Error` impl so errors can produce checked-in `engine/artifacts/errors/*.json` schemas while staying downcastable as `SqliteStorageError`.
 
 # Ralph Progress Log
 Started: Wed Apr 29 03:29:23 PM PDT 2026
@@ -88,4 +89,21 @@ Started: Wed Apr 29 03:29:23 PM PDT 2026
   - Shared PITR limits and windows should come from `pump/constants.rs`; avoid duplicating literals in operation, compactor, and test code.
   - `STALE_MARKER_AGE_MS` uses the earlier PITR spec's documented 10-minute HWM cleanup default.
   - `FROZEN_BRANCH_RETENTION_MS` follows the 30-day PITR retention window because the rough spec leaves it namespace-configurable but does not assign a narrower default.
+---
+## 2026-04-29 17:13 PDT - US-006
+- Added PITR/fork `SqliteStorageError` variants for fork-depth, retention, bookmark resolution, shard-version, pin-count, and actor lookup failures.
+- Converted `SqliteStorageError` to the repo `RivetError` derive pattern while preserving typed downcasts with manual `Display`/`Error` impls, and checked in the generated sqlite-storage error artifacts.
+- Verified with `cargo check -p sqlite-storage`, `cargo test -p sqlite-storage --test pump_error`, and `cargo test -p sqlite-storage`.
+- Files changed:
+  - `Cargo.lock`
+  - `engine/artifacts/errors/sqlite_storage.*.json`
+  - `engine/packages/sqlite-storage/Cargo.toml`
+  - `engine/packages/sqlite-storage/src/pump/error.rs`
+  - `engine/packages/sqlite-storage/tests/pump_error.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - `RivetError` derives generate checked-in JSON schemas under `engine/artifacts/errors/`; include those artifacts with the code change.
+  - The derive macro needs `serde::Serialize` in scope and `serde_json` available to the crate when variants carry metadata fields.
+  - Keep `SqliteStorageError` downcastable because envoy, VFS, and existing tests inspect typed variants directly.
 ---

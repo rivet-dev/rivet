@@ -1,0 +1,5 @@
+{
+  "code": "bookmark_expired",
+  "group": "sqlite_storage",
+  "message": "Bookmark history is no longer retained."
+}

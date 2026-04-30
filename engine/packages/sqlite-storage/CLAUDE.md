@@ -85,6 +85,7 @@ We explicitly do **not** import:
 
 - All failable functions return `anyhow::Error`. Use `.context(...)` instead of `anyhow!`.
 - Public error variants on this package's surface are `RivetError`-derived (`SqliteStorageError::*`).
+- Keep `SqliteStorageError` downcastable with a manual `Display`/`Error` impl when using `RivetError` derive; envoy and VFS inspect typed variants.
 - Quota cap rejection uses `SqliteStorageQuotaExceeded { remaining_bytes, payload_size }` mirroring actor KV's shape.
 - Bookmark-out-of-retention returns `BookmarkExpired`; bookmark on unreachable branch returns `BranchNotReachable`; fork at GC'd point returns `ForkOutOfRetention`; deeper than `MAX_FORK_DEPTH` returns `ForkChainTooDeep`.
 
