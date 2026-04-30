@@ -6,6 +6,8 @@ pub mod pump;
 #[cfg(debug_assertions)]
 pub mod takeover;
 
+#[cfg(debug_assertions)]
+pub use pump::debug;
 pub use pump::{constants, error, keys, ltx, page_index, quota, types, udb};
 pub use pump::constants::*;
 

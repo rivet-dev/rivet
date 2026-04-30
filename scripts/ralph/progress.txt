@@ -48,6 +48,7 @@
 - Fully evicted branches clear `CTR/eviction_index` only when the branch's current SHARD rows are all covered by the planned compare-and-clear set; keep the index while any SHARD remains.
 - Branch GC pin computation lives in `sqlite_storage::gc`; reuse it for cold sweeps, hot-history cleanup, and debug estimates so refcount/root/desc/bookmark pin math stays consistent.
 - Burst-mode hot quota checks go through `sqlite_storage::burst_mode`, which derives the signal from branch `head_txid - cold_drained_txid` in FDB and applies no tier or pod-health state.
+- Debug historical reads cannot trust PIDX because PIDX is the current owner map; scan DELTA history up to the target txid before falling through to SHARD/cold layers.
 
 # Ralph Progress Log
 Started: Wed Apr 29 03:29:23 PM PDT 2026
@@ -905,4 +906,22 @@ Started: Wed Apr 29 03:29:23 PM PDT 2026
   - Fork warmup is actor-branch scoped; namespace fork warmup is a notification hook because namespace forks are metadata-only and do not create child database branches.
   - Child manifests should own child-prefixed copied layer objects so child cold sweeps never delete parent-owned layer files.
   - Fresh fork reads can include the child branch as a cold-layer candidate even before the first local commit; without warmup it falls through to the parent manifest.
+---
+## 2026-04-29 22:40 PDT - US-054
+- Implemented debug-only PITR helpers under `sqlite_storage::debug` for actor ancestry, branch pins, bookmark listing, cold manifest dumping, GC pin estimation, and versionstamp page-state reads.
+- Added focused debug tests for bookmark/pin/GC diagnostics, `read_at` reconstruction, and filesystem cold-manifest diagnostics.
+- Updated US-054 to passing in `prd.json`.
+- Verified with `cargo test -p sqlite-storage --test debug`, `cargo check -p sqlite-storage`, and `cargo test -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/CLAUDE.md`
+  - `engine/packages/sqlite-storage/src/lib.rs`
+  - `engine/packages/sqlite-storage/src/pump/debug.rs`
+  - `engine/packages/sqlite-storage/src/pump/mod.rs`
+  - `engine/packages/sqlite-storage/tests/debug.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Debug APIs are gated with `#[cfg(debug_assertions)]` and re-exported at `sqlite_storage::debug`.
+  - `debug::read_at` must scan branch DELTA history up to the target txid; PIDX is the current owner map and can point past historical versionstamps.
+  - `debug::estimate_gc_pin` should call `sqlite_storage::gc` instead of duplicating refcount/root/desc/bookmark pin math.
 ---

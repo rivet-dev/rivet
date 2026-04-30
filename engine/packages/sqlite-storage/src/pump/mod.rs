@@ -3,6 +3,8 @@ pub mod bookmark;
 pub mod branch;
 pub mod commit;
 pub mod constants;
+#[cfg(debug_assertions)]
+pub mod debug;
 pub mod error;
 pub mod keys;
 pub mod ltx;
