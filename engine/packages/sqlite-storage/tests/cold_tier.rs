@@ -1,6 +1,6 @@
 use anyhow::Result;
 use sqlite_storage::cold_tier::{
-	ColdTier, ColdTierOperation, FaultyColdTier, FilesystemColdTier,
+	ColdTier, ColdTierOperation, DisabledColdTier, FaultyColdTier, FilesystemColdTier,
 };
 use tempfile::Builder;
 
@@ -68,6 +68,17 @@ async fn faulty_tier_injects_operation_failures() -> Result<()> {
 		Some(b"image".to_vec()),
 		tier.get_object("db/a/image/0001.ltx").await?
 	);
+
+	Ok(())
+}
+
+#[tokio::test]
+async fn disabled_tier_fails_explicitly() -> Result<()> {
+	let tier = DisabledColdTier;
+
+	assert!(tier.put_object("db/a/image/0001.ltx", b"image").await.is_err());
+	assert!(tier.get_object("db/a/image/0001.ltx").await.is_err());
+	assert!(tier.list_prefix("db/a").await.is_err());
 
 	Ok(())
 }

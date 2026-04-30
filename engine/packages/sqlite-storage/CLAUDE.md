@@ -66,6 +66,7 @@ These come from `r2-prior-art/.agent/research/sqlite/requirements.md` and supers
 - **Cold compactor pass runs as Phase A (FDB read tx) → Phase B (S3-only, no FDB tx) → Phase C (FDB write tx with regular-read OCC fence on `cold_drained_txid`).** Phase A/C tx-age budget is independent of S3 latency.
 - **Cold compactor service code lives under `compactor/cold/`.** Its UPS queue group is `cold_compactor`, and its per-branch lease uses `BR/{branch_id}/META/cold_lease` with the same 30s/10s/5s local-renewal shape as the hot compactor.
 - **Schema version on every persisted S3 object** (`schema_version: u32` on `ColdManifest`, `BookmarkIndex`, `BranchColdState`). Cold compactor reads old version + writes new version on every pass; reader code retains old-version paths for at least one full retention window past rollout.
+- **Cold compactor tests inject a concrete cold tier.** The service default is `DisabledColdTier` until runtime config selects filesystem or S3, so test hooks must pass `FilesystemColdTier` explicitly when a pass should write objects.
 - **ColdTier object keys are relative S3-style keys.** Reject empty object keys, absolute paths, and `..`; use `FilesystemColdTier` for local tests and `FaultyColdTier` for injected latency or failures.
 
 ## Bookmarks

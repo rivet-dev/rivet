@@ -11,6 +11,7 @@ use tokio_util::sync::CancellationToken;
 use universalpubsub::NextOutput;
 
 use crate::{
+	cold_tier::{ColdTier, DisabledColdTier},
 	compactor::{
 		SqliteColdCompactPayload, SqliteColdCompactSubject, decode_cold_compact_payload,
 		publish::Ups,
@@ -18,7 +19,7 @@ use crate::{
 	pump::types::ActorBranchId,
 };
 
-use super::lease;
+use super::{lease, phase_a};
 
 const COLD_COMPACTOR_QUEUE_GROUP: &str = "cold_compactor";
 
@@ -28,6 +29,7 @@ pub struct ColdCompactorConfig {
 	pub lease_renew_interval_ms: u64,
 	pub lease_margin_ms: u64,
 	pub cold_compact_delta_threshold: u32,
+	pub phase_a_read_timeout_ms: u64,
 	pub max_concurrent_workers: u32,
 	pub ups_subject: String,
 }
@@ -39,6 +41,7 @@ impl Default for ColdCompactorConfig {
 			lease_renew_interval_ms: 10_000,
 			lease_margin_ms: 5_000,
 			cold_compact_delta_threshold: 1024,
+			phase_a_read_timeout_ms: 5_000,
 			max_concurrent_workers: 64,
 			ups_subject: SqliteColdCompactSubject.to_string(),
 		}
@@ -67,6 +70,7 @@ pub async fn start(
 		Arc::new(ctx.udb()?.deref().clone()),
 		ctx.ups()?,
 		TermSignal::get(),
+		default_cold_tier(),
 		cold_config,
 		node_id,
 	)
@@ -85,6 +89,7 @@ pub(crate) async fn run(
 		udb,
 		ups,
 		term_signal,
+		default_cold_tier(),
 		cold_config,
 		rivet_pools::NodeId::new(),
 	)
@@ -95,6 +100,7 @@ async fn run_with_node_id(
 	udb: Arc<universaldb::Database>,
 	ups: Ups,
 	mut term_signal: TermSignal,
+	cold_tier: Arc<dyn ColdTier>,
 	cold_config: ColdCompactorConfig,
 	holder_id: rivet_pools::NodeId,
 ) -> Result<()> {
@@ -123,6 +129,7 @@ async fn run_with_node_id(
 						let udb = Arc::clone(&udb);
 						let shutdown = shutdown.child_token();
 						let semaphore = Arc::clone(&semaphore);
+						let cold_tier = Arc::clone(&cold_tier);
 						let cold_config = cold_config.clone();
 
 						workers.spawn(async move {
@@ -132,6 +139,7 @@ async fn run_with_node_id(
 							if let Err(err) = handle_trigger(
 								udb,
 								payload,
+								cold_tier,
 								cold_config,
 								holder_id,
 								shutdown,
@@ -165,6 +173,7 @@ async fn run_with_node_id(
 async fn handle_trigger(
 	udb: Arc<universaldb::Database>,
 	payload: SqliteColdCompactPayload,
+	cold_tier: Arc<dyn ColdTier>,
 	cold_config: ColdCompactorConfig,
 	holder_id: rivet_pools::NodeId,
 	shutdown: CancellationToken,
@@ -202,7 +211,15 @@ async fn handle_trigger(
 	);
 	let deadline_handle = spawn_deadline_task(deadline_rx, cancel_token.clone());
 
-	let result = run_scaffold_pass(payload, &cold_config, cancel_token.clone(), holder_id).await;
+	let result = run_scaffold_pass(
+		udb.as_ref(),
+		payload,
+		cold_tier,
+		&cold_config,
+		cancel_token.clone(),
+		holder_id,
+	)
+	.await;
 
 	cancel_token.cancel();
 	renewal_handle.abort();
@@ -227,7 +244,9 @@ async fn handle_trigger(
 }
 
 async fn run_scaffold_pass(
+	udb: &universaldb::Database,
 	payload: SqliteColdCompactPayload,
+	cold_tier: Arc<dyn ColdTier>,
 	cold_config: &ColdCompactorConfig,
 	cancel_token: CancellationToken,
 	holder_id: rivet_pools::NodeId,
@@ -241,6 +260,26 @@ async fn run_scaffold_pass(
 		node_id = %holder_id,
 		cold_compact_delta_threshold = cold_config.cold_compact_delta_threshold,
 		"sqlite cold compactor pass scaffold received trigger"
+	);
+
+	let plan = phase_a::run(
+		udb,
+		cold_tier,
+		payload,
+		cold_config,
+		cancel_token,
+		now_ms()?,
+	)
+	.await?;
+	tracing::debug!(
+		branch_id = ?plan.branch_id,
+		pass_uuid = %plan.pass_uuid,
+		planned_object_keys = plan.marker.planned_object_keys.len(),
+		shard_versions = plan.shard_versions.len(),
+		delta_chunks = plan.delta_chunks.len(),
+		commit_rows = plan.commit_rows.len(),
+		vtx_rows = plan.vtx_rows.len(),
+		"sqlite cold compactor phase A planned pass"
 	);
 
 	Ok(())
@@ -363,6 +402,10 @@ fn now_ms() -> Result<i64> {
 	i64::try_from(elapsed.as_millis()).context("sqlite cold compactor timestamp exceeded i64")
 }
 
+fn default_cold_tier() -> Arc<dyn ColdTier> {
+	Arc::new(DisabledColdTier)
+}
+
 #[cfg(debug_assertions)]
 pub mod test_hooks {
 	use super::*;
@@ -373,9 +416,27 @@ pub mod test_hooks {
 		cold_config: ColdCompactorConfig,
 		cancel_token: CancellationToken,
 	) -> Result<()> {
+		handle_payload_once_with_cold_tier(
+			udb,
+			payload,
+			cold_config,
+			cancel_token,
+			default_cold_tier(),
+		)
+		.await
+	}
+
+	pub async fn handle_payload_once_with_cold_tier(
+		udb: Arc<universaldb::Database>,
+		payload: SqliteColdCompactPayload,
+		cold_config: ColdCompactorConfig,
+		cancel_token: CancellationToken,
+		cold_tier: Arc<dyn ColdTier>,
+	) -> Result<()> {
 		handle_trigger(
 			udb,
 			payload,
+			cold_tier,
 			cold_config,
 			rivet_pools::NodeId::new(),
 			cancel_token,
@@ -396,6 +457,7 @@ mod tests {
 		assert_eq!(config.lease_renew_interval_ms, 10_000);
 		assert_eq!(config.lease_margin_ms, 5_000);
 		assert_eq!(config.cold_compact_delta_threshold, 1024);
+		assert_eq!(config.phase_a_read_timeout_ms, 5_000);
 		assert_eq!(config.max_concurrent_workers, 64);
 		assert_eq!(config.ups_subject, "sqlite.cold_compact");
 	}

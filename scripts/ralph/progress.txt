@@ -33,9 +33,30 @@
 - ActorDb access-touch writes `last_access_ts_ms`, `last_access_bucket`, and `CTR/eviction_index` through the shared `touch_access_if_bucket_advanced` helper; per-connection cache suppresses same-bucket writes.
 - Cold-tier implementations live under `sqlite_storage::cold_tier`; use relative object keys, `FilesystemColdTier` for local tests, and `FaultyColdTier` for injected latency/failures.
 - Cold compactor service code lives under `sqlite_storage::compactor::cold`; it uses `SqliteColdCompactSubject`, queue group `cold_compactor`, and branch-scoped `BR/{branch_id}/META/cold_lease`.
+- Cold compactor tests that expect object writes should inject `FilesystemColdTier`; the default service tier is `DisabledColdTier` until runtime config selects a backend.
 
 # Ralph Progress Log
 Started: Wed Apr 29 03:29:23 PM PDT 2026
+---
+## 2026-04-29 21:23 PDT - US-037
+- Implemented cold compactor Phase A: a short FDB handoff tx records `ColdCompactState.in_flight_uuid`, then the pending marker is written through the cold tier, then a bounded snapshot read builds the branch upload plan from SHARD, DELTA, COMMITS, VTX, and branch-record rows.
+- Added vbare encode/decode helpers for cold compact state and pending markers, plus an explicit `DisabledColdTier` default so unconfigured services fail clearly instead of pretending local temp storage is durable.
+- Verified marker ordering with a cold-tier test double that can observe the committed FDB handoff during `put_object`.
+- Verified with `cargo check -p sqlite-storage`, `cargo test -p sqlite-storage --test cold_tier`, `cargo test -p sqlite-storage --test compactor_cold`, and `cargo test -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/CLAUDE.md`
+  - `engine/packages/sqlite-storage/src/cold_tier/mod.rs`
+  - `engine/packages/sqlite-storage/src/compactor/cold/mod.rs`
+  - `engine/packages/sqlite-storage/src/compactor/cold/phase_a.rs`
+  - `engine/packages/sqlite-storage/src/compactor/cold/worker.rs`
+  - `engine/packages/sqlite-storage/tests/cold_tier.rs`
+  - `engine/packages/sqlite-storage/tests/compactor_cold.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Cold Phase A is split deliberately: record `in_flight_uuid` in FDB first, perform the S3 marker PUT outside any UDB tx, then run the snapshot scan under a 5s timeout.
+  - Pending markers are vbare-encoded S3 objects with a `schema_version` and `planned_object_keys`; future Phase B/C work should extend the same marker rather than introducing a parallel marker format.
+  - The cold compactor service has no real cold-tier config yet, so tests inject `FilesystemColdTier` and the default worker tier is fail-by-default.
 ---
 ## 2026-04-29 21:11 PDT - US-036
 - Implemented the cold compactor scaffold with a `compactor/cold/` module, branch-scoped cold lease helpers, a UPS subscriber loop on `SqliteColdCompactSubject`, local deadline + renewal tasks, and a standalone `sqlite_cold_compactor` service registration.
