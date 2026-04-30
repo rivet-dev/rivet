@@ -2,6 +2,7 @@
 - `sqlite-storage` pump payload structs use `serde::{Serialize, Deserialize}` as the local serde_bare/vbare-compatible derive pattern; add `OwnedVersionedData` wrappers when adding concrete encode/decode helpers.
 - Use `BookmarkStr` instead of raw `String` for bookmark-bearing pump records so the 33-character ASCII wire format is enforced at construction and decode.
 - Until root branch allocation is wired, legacy `DBHead` constructors use `ActorBranchId::nil()` and `post_apply_checksum: 0` as a compatibility bridge.
+- PITR key builders use top-level `[0x02][partition]` prefixes; legacy actor-scoped key helpers remain only as compatibility until the hot path migrates to branch IDs.
 
 # Ralph Progress Log
 Started: Wed Apr 29 03:29:23 PM PDT 2026
@@ -53,4 +54,20 @@ Started: Wed Apr 29 03:29:23 PM PDT 2026
   - S3-bound cold-tier structs in `pump/types.rs` carry `schema_version: u32`; FDB-resident records rely on embedded vbare versions instead of an explicit schema field.
   - `DBHead.branch_id` is present now, but real branch identity is not wired until a later story; existing actor-scoped paths preserve behavior with `ActorBranchId::nil()`.
   - `BookmarkIndexEntry` uses `BookmarkStr`, not raw `String`, to preserve the bookmark validation invariant in cold-tier indexes.
+---
+## 2026-04-29 17:00 PDT - US-004
+- Added PITR/FDB key-builder partitions in `pump/keys.rs` for APTR, NSPTR, BRANCHES, NSBRANCH, BR, CTR, BOOKMARK, and CMPC.
+- Added branch-scoped BR builders for META, manifest, COMMITS, VTX, PIDX, DELTA, and versioned SHARD paths, while leaving the current legacy actor-scoped hot-path helpers intact for later migration stories.
+- Added `pump_keys` coverage for partition bytes, pointer history keys, record counter/pin subkeys, branch data paths, bookmark keys, and compactor queue kind bytes.
+- Verified with `cargo test -p sqlite-storage --test pump_keys` and `cargo check -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/CLAUDE.md` (via `AGENTS.md` symlink)
+  - `engine/packages/sqlite-storage/src/pump/keys.rs`
+  - `engine/packages/sqlite-storage/tests/pump_keys.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - New PITR builders are branch-ID based and live under top-level partition bytes; existing actor-ID helpers should not be removed until the commit/read path is migrated.
+  - `CompactorQueueKind` encodes cold as `0x00` and eviction as `0x01` for CMPC enqueue and lease keys.
+  - `cargo check -p sqlite-storage` still emits the unrelated runner-protocol SDK-generation warning when `node_modules/@bare-ts/tools` is missing.
 ---
