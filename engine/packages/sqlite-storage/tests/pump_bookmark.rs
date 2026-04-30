@@ -7,14 +7,14 @@ use sqlite_storage::{
 	compactor::{SqliteColdCompactPayload, SqliteColdCompactSubject, decode_cold_compact_payload},
 	error::SqliteStorageError,
 	keys::{
-		bookmark_key, bookmark_pinned_key, branch_commit_key, branch_vtx_key, branches_bk_pin_key,
-		namespace_branches_pin_count_key,
+		bookmark_key, bookmark_pinned_key, branch_commit_key, branch_meta_head_at_fork_key,
+		branch_vtx_key, branches_bk_pin_key, namespace_branches_pin_count_key,
 	},
 	pump::{ActorDb, bookmark, branch},
 	types::{
 		ActorBranchId, BookmarkRef, BookmarkStr, CommitRow, DirtyPage, NamespaceId, PinStatus,
 		PinnedBookmarkRecord, ResolvedVersionstamp, decode_commit_row,
-		decode_pinned_bookmark_record, encode_pinned_bookmark_record,
+		decode_db_head, decode_pinned_bookmark_record, encode_pinned_bookmark_record,
 	},
 };
 use tempfile::Builder;
@@ -456,6 +456,81 @@ async fn delete_pinned_bookmark_removes_pin_and_schedules_recompute() -> Result<
 			bookmark: first,
 			versionstamp: first_row.versionstamp,
 			pin_object_key: None,
+		}
+	);
+
+	Ok(())
+}
+
+#[tokio::test]
+async fn restore_to_bookmark_rolls_back_then_pins_undo_bookmark() -> Result<()> {
+	let db = Arc::new(test_db().await?);
+	let ups = test_ups();
+	let mut sub = ups
+		.queue_subscribe(SqliteColdCompactSubject, "cold-compactor")
+		.await?;
+	let actor_db = ActorDb::new(
+		db.clone(),
+		ups,
+		test_namespace(),
+		TEST_ACTOR.to_string(),
+		NodeId::new(),
+	);
+	actor_db.commit(vec![page(1, 0x11)], 2, 1_000).await?;
+	let target = actor_db.create_bookmark(1_010).await?;
+	actor_db
+		.commit(vec![page(1, 0x22), page(2, 0x33)], 3, 2_000)
+		.await?;
+	let namespace_id = NamespaceId::from_gas_id(test_namespace());
+	let namespace_branch_id = namespace_branch_id(&db, namespace_id).await?;
+	let old_branch_id = actor_branch_id(&db, namespace_id, TEST_ACTOR).await?;
+	let undo_row = commit_row(&db, old_branch_id, 2).await?;
+
+	let undo = actor_db.restore_to_bookmark(target).await?;
+
+	assert_eq!(undo.parse()?, (2_000, 2));
+	let new_branch_id = actor_branch_id(&db, namespace_id, TEST_ACTOR).await?;
+	assert_ne!(new_branch_id, old_branch_id);
+	let restored_head_bytes = read_value(&db, branch_meta_head_at_fork_key(new_branch_id))
+		.await?
+		.expect("rollback branch should snapshot head_at_fork");
+	let restored_head = decode_db_head(&restored_head_bytes)?;
+	assert_eq!(restored_head.head_txid, 1);
+	assert_eq!(restored_head.db_size_pages, 2);
+
+	let pinned_bytes = read_value(&db, bookmark_pinned_key(TEST_ACTOR, undo.as_str()))
+		.await?
+		.expect("undo pinned bookmark should exist");
+	let pinned = decode_pinned_bookmark_record(&pinned_bytes)?;
+	assert_eq!(pinned.bookmark, undo);
+	assert_eq!(pinned.actor_branch_id, old_branch_id);
+	assert_eq!(pinned.versionstamp, undo_row.versionstamp);
+	assert_eq!(pinned.status, PinStatus::Pending);
+	assert_eq!(
+		read_value(&db, branches_bk_pin_key(old_branch_id))
+			.await?
+			.expect("old branch bk_pin should pin the undo point"),
+		undo_row.versionstamp
+	);
+	let pin_count = read_value(&db, namespace_branches_pin_count_key(namespace_branch_id))
+		.await?
+		.expect("namespace pin count should be incremented");
+	assert_eq!(decode_i64_counter(&pin_count), 1);
+
+	let msg = timeout(Duration::from_secs(1), sub.next())
+		.await
+		.expect("cold trigger should publish")?;
+	let NextOutput::Message(msg) = msg else {
+		panic!("subscriber unexpectedly unsubscribed");
+	};
+	let payload = decode_cold_compact_payload(&msg.payload)?;
+	assert_eq!(
+		payload,
+		SqliteColdCompactPayload::CreatePinnedBookmark {
+			actor_id: TEST_ACTOR.to_string(),
+			actor_branch_id: old_branch_id,
+			bookmark: undo,
+			versionstamp: undo_row.versionstamp,
 		}
 	);
 

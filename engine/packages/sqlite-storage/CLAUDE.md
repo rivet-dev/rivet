@@ -67,6 +67,7 @@ These come from `r2-prior-art/.agent/research/sqlite/requirements.md` and supers
 - **Ephemeral bookmark creation is read-only.** Format the caller timestamp with the current branch head txid; only pinned bookmarks write `BOOKMARK/{actor_id}/{bookmark}/pinned`.
 - **Pinned bookmark creation is two-phase.** The request tx writes `PinStatus::Pending`, branch `bk_pin`, and namespace `pin_count`; the cold compactor UPS message makes the S3 pin layer and later flips status.
 - **Pinned bookmark deletion removes both bookmark keys, decrements `pin_count`, recomputes branch `bk_pin`, and publishes cold-compactor cleanup.**
+- **Restore-to-bookmark captures the undo commit before rollback, then writes the undo pinned bookmark after APTR moves.**
 - **Bookmark resolution carries namespace fork caps into actor branch ancestry.** Do not use recursive APTR resolution when resolving inherited bookmarks; direct-walk namespace parents so parent commits after `parent_versionstamp` stay unreachable.
 - **Lex order = chronological order within a single branch's parent chain.** Across sibling branches (forks of the same parent), bookmarks are not orderable in any meaningful way. APIs do not support cross-branch comparison.
 - **Bookmarks are sender-scoped.** A caller resolving a bookmark on another actor's branch returns `BranchNotReachable`. Cross-actor isolation is enforced at the engine edge, not in this package.

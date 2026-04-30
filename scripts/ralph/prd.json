@@ -442,8 +442,8 @@
         "Typecheck passes"
       ],
       "priority": 24,
-      "passes": false,
-      "notes": "Obsolete after v4 rollback removal (US-067). Storage exposes no restore_to_bookmark API; engine-layer restore calls resolve_bookmark + fork_database and flips its actor->database mapping."
+      "passes": true,
+      "notes": "Implemented against the current pointer-era sqlite-storage layout because rollback_actor remains present despite US-067's obsolete note. restore_to_bookmark resolves the target, captures the undo bookmark, rolls back, then writes the undo pinned bookmark."
     },
     {
       "id": "US-025",

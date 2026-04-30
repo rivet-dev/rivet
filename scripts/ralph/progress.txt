@@ -21,6 +21,7 @@
 - Bookmark resolution must direct-walk namespace parents and carry the namespace fork versionstamp cap into actor branch ancestry; recursive APTR resolution loses that cap.
 - Pinned bookmark creation is FDB-first: write `PinStatus::Pending`, actor branch `bk_pin`, and namespace `pin_count` before publishing `SqliteColdCompactPayload::CreatePinnedBookmark`.
 - Pinned bookmark deletion should clear both bookmark keys, decrement namespace `pin_count`, recompute branch `bk_pin` from remaining actor pinned-bookmark records, and publish `SqliteColdCompactPayload::DeletePinnedBookmark`.
+- Restore-to-bookmark captures the undo commit before rollback, performs the APTR rollback, then writes the undo pinned bookmark so rollback durability does not depend on cold-tier pin work.
 
 # Ralph Progress Log
 Started: Wed Apr 29 03:29:23 PM PDT 2026
@@ -449,4 +450,18 @@ Started: Wed Apr 29 03:29:23 PM PDT 2026
   - Use the existing UDB `Subspace` prefix scan pattern for actor bookmark ranges; raw prefix/end ranges can miss rows in the RocksDB test driver path.
   - `delete_pinned_bookmark` is idempotent for absent pinned records and only publishes a cold cleanup payload when a record was actually removed.
   - Branch `bk_pin` recompute is bounded by `MAX_PINS_PER_NAMESPACE`, so scanning the actor bookmark subspace is acceptable for this delete path.
+---
+## 2026-04-29 19:52 PDT - US-024
+- Implemented `restore_to_bookmark` for `ActorDb` and the free bookmark API: resolve target bookmark, capture the current head as an undo bookmark, call `rollback_actor`, then write a Pending pinned bookmark for the undo point.
+- Added coverage that verifies rollback creates a new `head_at_fork`, the undo bookmark is valid, the old branch is pinned, namespace pin count increments, and the cold compactor create-pin payload is published.
+- Verified with `cargo test -p sqlite-storage --test pump_bookmark restore_to_bookmark -- --nocapture`, `cargo check -p sqlite-storage`, and `cargo test -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/src/pump/bookmark.rs`
+  - `engine/packages/sqlite-storage/tests/pump_bookmark.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - The PRD says rollback is obsolete after US-067, but the current code still exposes pointer-era rollback APIs, so US-024 was implemented against the actual code layout.
+  - Restore-to-bookmark should pin the pre-rollback branch/versionstamp after the rollback instead of calling the normal current-branch `create_pinned_bookmark`.
+  - Parent PIDX reads are not versionstamp-capped yet; tests for rollback/restore should assert the new branch `head_at_fork` until US-027 fixes ancestry page reads.
 ---
