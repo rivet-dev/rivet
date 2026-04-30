@@ -2,6 +2,7 @@ use std::sync::{
 	Arc,
 	atomic::{AtomicBool, Ordering},
 };
+use std::time::Duration;
 
 use anyhow::Result;
 use async_trait::async_trait;
@@ -32,10 +33,13 @@ use sqlite_storage::{
 		encode_actor_branch_record, encode_commit_row, encode_meta_compact,
 		encode_pinned_bookmark_record,
 	},
+	pump::ActorDb,
 };
 use tempfile::Builder;
+use tokio::time::timeout;
 use tokio_util::sync::CancellationToken;
 use universaldb::utils::IsolationLevel::Snapshot;
+use universalpubsub::{NextOutput, PubSub, driver::memory::MemoryDriver};
 
 fn actor_branch_id() -> ActorBranchId {
 	ActorBranchId::from_uuid(uuid::Uuid::from_u128(0x1234_5678_9abc_def0_0123_4567_89ab_cdef))
@@ -55,6 +59,23 @@ fn payload() -> SqliteColdCompactPayload {
 		actor_branch_id: actor_branch_id(),
 		bookmark: bookmark(),
 		versionstamp: [7; 16],
+	}
+}
+
+fn test_ups() -> PubSub {
+	PubSub::new(Arc::new(MemoryDriver::new(
+		"sqlite-storage-cold-compactor-test".to_string(),
+	)))
+}
+
+fn test_namespace() -> gas::prelude::Id {
+	gas::prelude::Id::v1(uuid::Uuid::from_u128(0x1234), 1)
+}
+
+fn page(pgno: u32, fill: u8) -> sqlite_storage::types::DirtyPage {
+	sqlite_storage::types::DirtyPage {
+		pgno,
+		bytes: vec![fill; sqlite_storage::keys::PAGE_SIZE as usize],
 	}
 }
 
@@ -212,6 +233,12 @@ struct AdvancingColdDrainedTier {
 	advanced: Arc<AtomicBool>,
 }
 
+#[derive(Clone)]
+struct PinFailingColdTier {
+	inner: FilesystemColdTier,
+	failed: Arc<AtomicBool>,
+}
+
 #[async_trait]
 impl ColdTier for AdvancingColdDrainedTier {
 	async fn put_object(&self, key: &str, bytes: &[u8]) -> Result<()> {
@@ -231,6 +258,29 @@ impl ColdTier for AdvancingColdDrainedTier {
 				Ok(())
 			})
 			.await?;
+		}
+
+		self.inner.put_object(key, bytes).await
+	}
+
+	async fn get_object(&self, key: &str) -> Result<Option<Vec<u8>>> {
+		self.inner.get_object(key).await
+	}
+
+	async fn delete_objects(&self, keys: &[String]) -> Result<()> {
+		self.inner.delete_objects(keys).await
+	}
+
+	async fn list_prefix(&self, prefix: &str) -> Result<Vec<ColdTierObjectMetadata>> {
+		self.inner.list_prefix(prefix).await
+	}
+}
+
+#[async_trait]
+impl ColdTier for PinFailingColdTier {
+	async fn put_object(&self, key: &str, bytes: &[u8]) -> Result<()> {
+		if key.contains("/pin/") && !self.failed.swap(true, Ordering::SeqCst) {
+			anyhow::bail!("injected pin upload failure");
 		}
 
 		self.inner.put_object(key, bytes).await
@@ -560,6 +610,81 @@ async fn cold_phase_b_uploads_layers_manifest_snapshot_and_cleans_stale_markers(
 }
 
 #[tokio::test]
+async fn create_pinned_bookmark_reaches_ready_through_cold_worker() -> Result<()> {
+	let db = Arc::new(test_db().await?);
+	let ups = test_ups();
+	let mut sub = ups
+		.queue_subscribe(SqliteColdCompactSubject, "cold-compactor")
+		.await?;
+	let actor_db = ActorDb::new(
+		Arc::clone(&db),
+		ups,
+		test_namespace(),
+		"actor-a".to_string(),
+		NodeId::new(),
+	);
+	actor_db.commit(vec![page(1, 0x11)], 2, 1_000).await?;
+	let branch_id = db
+		.run(|tx| async move {
+			sqlite_storage::pump::branch::resolve_actor_branch(
+				&tx,
+				sqlite_storage::types::NamespaceId::from_gas_id(test_namespace()),
+				"actor-a",
+				universaldb::utils::IsolationLevel::Serializable,
+			)
+			.await?
+			.ok_or_else(|| anyhow::anyhow!("actor branch should exist"))
+		})
+		.await?;
+	db.run(move |tx| async move {
+		tx.informal().set(
+			&branch_meta_compact_key(branch_id),
+			&encode_meta_compact(MetaCompact {
+				materialized_txid: 1,
+			})?,
+		);
+		tx.informal()
+			.set(&branch_manifest_last_hot_pass_txid_key(branch_id), &1u64.to_be_bytes());
+		tx.informal()
+			.set(&branch_shard_key(branch_id, 0, 1), b"image-one");
+		Ok(())
+	})
+	.await?;
+
+	let bookmark = actor_db.create_pinned_bookmark(1_010).await?;
+	let msg = timeout(Duration::from_secs(1), sub.next())
+		.await
+		.expect("cold trigger should publish")?;
+	let NextOutput::Message(msg) = msg else {
+		panic!("subscriber unexpectedly unsubscribed");
+	};
+	let payload = decode_cold_compact_payload(&msg.payload)?;
+	let cold_root = Builder::new().prefix("sqlite-cold-ready").tempdir()?;
+	let tier = Arc::new(FilesystemColdTier::new(cold_root.path()));
+
+	worker::test_hooks::handle_payload_once_with_cold_tier(
+		Arc::clone(&db),
+		payload,
+		ColdCompactorConfig::default(),
+		CancellationToken::new(),
+		tier,
+	)
+	.await?;
+
+	let pinned_bytes = read_value(
+		&db,
+		sqlite_storage::keys::bookmark_pinned_key("actor-a", bookmark.as_str()),
+	)
+	.await?
+	.expect("pinned bookmark record should exist");
+	let pinned = decode_pinned_bookmark_record(&pinned_bytes)?;
+	assert_eq!(pinned.status, PinStatus::Ready);
+	assert!(pinned.pin_object_key.is_some());
+
+	Ok(())
+}
+
+#[tokio::test]
 async fn cold_phase_c_aborts_when_cold_drained_txid_changes() -> Result<()> {
 	let db = Arc::new(test_db().await?);
 	seed_phase_a_branch(&db).await?;
@@ -597,6 +722,44 @@ async fn cold_phase_c_aborts_when_cold_drained_txid_changes() -> Result<()> {
 	.expect("pinned bookmark record should exist");
 	let pinned = decode_pinned_bookmark_record(&pinned_bytes)?;
 	assert_eq!(pinned.status, PinStatus::Pending);
+
+	Ok(())
+}
+
+#[tokio::test]
+async fn cold_phase_b_pin_upload_failure_marks_pin_failed() -> Result<()> {
+	let db = Arc::new(test_db().await?);
+	seed_phase_a_branch(&db).await?;
+
+	let cold_root = Builder::new().prefix("sqlite-cold-pin-failure").tempdir()?;
+	let tier = Arc::new(PinFailingColdTier {
+		inner: FilesystemColdTier::new(cold_root.path()),
+		failed: Arc::new(AtomicBool::new(false)),
+	});
+
+	let err = worker::test_hooks::handle_payload_once_with_cold_tier(
+		Arc::clone(&db),
+		payload(),
+		ColdCompactorConfig::default(),
+		CancellationToken::new(),
+		tier,
+	)
+	.await
+	.expect_err("pin upload should fail");
+
+	assert!(
+		format!("{err:?}").contains("injected pin upload failure"),
+		"unexpected error: {err:?}"
+	);
+	let pinned_bytes = read_value(
+		&db,
+		sqlite_storage::keys::bookmark_pinned_key("actor-a", bookmark().as_str()),
+	)
+	.await?
+	.expect("pinned bookmark record should exist");
+	let pinned = decode_pinned_bookmark_record(&pinned_bytes)?;
+	assert_eq!(pinned.status, PinStatus::Failed);
+	assert_eq!(pinned.pin_object_key, None);
 
 	Ok(())
 }

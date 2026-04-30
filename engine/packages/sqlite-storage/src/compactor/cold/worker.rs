@@ -262,6 +262,7 @@ async fn run_scaffold_pass(
 		"sqlite cold compactor pass scaffold received trigger"
 	);
 
+	let payload_for_failure = payload.clone();
 	let plan = phase_a::run(
 		udb,
 		Arc::clone(&cold_tier),
@@ -281,13 +282,39 @@ async fn run_scaffold_pass(
 		vtx_rows = plan.vtx_rows.len(),
 		"sqlite cold compactor phase A planned pass"
 	);
-	let phase_b_output = phase_b::run(
+	let phase_b_output = match phase_b::run(
 		Arc::clone(&cold_tier),
 		&plan,
 		cancel_token.clone(),
 		now_ms()?,
 	)
-	.await?;
+	.await
+	{
+		Ok(output) => output,
+		Err(err) => {
+			match phase_c::mark_payload_pins_failed(udb, &payload_for_failure, now_ms()?).await {
+				Ok(failed_pins) => {
+					tracing::warn!(
+						branch_id = ?plan.branch_id,
+						pass_uuid = %plan.pass_uuid,
+						failed_pins,
+						?err,
+						"sqlite cold compactor phase B failed and marked pins failed"
+					);
+				}
+				Err(mark_err) => {
+					tracing::warn!(
+						branch_id = ?plan.branch_id,
+						pass_uuid = %plan.pass_uuid,
+						?err,
+						?mark_err,
+						"sqlite cold compactor phase B failed and failed to mark pins failed"
+					);
+				}
+			}
+			return Err(err);
+		}
+	};
 	tracing::debug!(
 		branch_id = ?plan.branch_id,
 		pass_uuid = %plan.pass_uuid,

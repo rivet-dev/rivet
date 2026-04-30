@@ -36,6 +36,7 @@
 - Cold compactor tests that expect object writes should inject `FilesystemColdTier`; the default service tier is `DisabledColdTier` until runtime config selects a backend.
 - Cold Phase B rewrites the pending marker with the complete object-key set before uploading image, delta, pin, manifest, and pointer snapshot objects.
 - Cold Phase C is the FDB-only finalizer: regular-read fence `cold_drained_txid`, then advance cold state + manifest cursor, clear `in_flight_uuid`, and mark uploaded pins `Ready`.
+- Cold Phase B pin upload failures mark pending bookmarks `Failed`; Phase C OCC failures leave pins `Pending` for retry.
 
 # Ralph Progress Log
 Started: Wed Apr 29 03:29:23 PM PDT 2026
@@ -59,6 +60,22 @@ Started: Wed Apr 29 03:29:23 PM PDT 2026
   - Cold Phase A is split deliberately: record `in_flight_uuid` in FDB first, perform the S3 marker PUT outside any UDB tx, then run the snapshot scan under a 5s timeout.
   - Pending markers are vbare-encoded S3 objects with a `schema_version` and `planned_object_keys`; future Phase B/C work should extend the same marker rather than introducing a parallel marker format.
   - The cold compactor service has no real cold-tier config yet, so tests inject `FilesystemColdTier` and the default worker tier is fail-by-default.
+---
+## 2026-04-29 21:44 PDT - US-040
+- Wired pinned-bookmark create payloads through the cold worker so Phase B pin upload failures transition matching pending bookmarks to `Failed`, while successful filesystem cold-tier passes still transition them to `Ready` in Phase C.
+- Added end-to-end coverage from `ActorDb::create_pinned_bookmark` through the UPS payload and cold worker with `FilesystemColdTier`, plus a focused injected pin upload failure test.
+- Verified with `cargo test -p sqlite-storage --test compactor_cold`, `cargo check -p sqlite-storage`, and `cargo test -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/CLAUDE.md`
+  - `engine/packages/sqlite-storage/src/compactor/cold/phase_c.rs`
+  - `engine/packages/sqlite-storage/src/compactor/cold/worker.rs`
+  - `engine/packages/sqlite-storage/tests/compactor_cold.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Cold pin-create success and failure deliberately split by phase: Phase C marks uploaded pins `Ready`; Phase B upload failures mark still-pending pins `Failed`; Phase C OCC failures preserve `Pending` for retry.
+  - Full pin-create cold-worker tests can use the UPS memory driver to capture the published payload, then pass it through `worker::test_hooks::handle_payload_once_with_cold_tier`.
+  - A branch with a manually seeded `META/compact` cursor and versioned SHARD row is enough to exercise filesystem pin upload without running a hot compactor pass first.
 ---
 ## 2026-04-29 21:11 PDT - US-036
 - Implemented the cold compactor scaffold with a `compactor/cold/` module, branch-scoped cold lease helpers, a UPS subscriber loop on `SqliteColdCompactSubject`, local deadline + renewal tasks, and a standalone `sqlite_cold_compactor` service registration.

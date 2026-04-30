@@ -1,9 +1,12 @@
 use anyhow::{Context, Result, bail};
 use universaldb::utils::IsolationLevel::Serializable;
 
-use crate::pump::{
-	keys,
-	types::{PinStatus, decode_pinned_bookmark_record, encode_pinned_bookmark_record},
+use crate::{
+	compactor::SqliteColdCompactPayload,
+	pump::{
+		keys,
+		types::{PinStatus, decode_pinned_bookmark_record, encode_pinned_bookmark_record},
+	},
 };
 
 use super::{
@@ -125,6 +128,59 @@ async fn mark_pin_ready(
 	);
 
 	Ok(true)
+}
+
+pub(crate) async fn mark_payload_pins_failed(
+	db: &universaldb::Database,
+	payload: &SqliteColdCompactPayload,
+	now_ms: i64,
+) -> Result<usize> {
+	let SqliteColdCompactPayload::CreatePinnedBookmark {
+		actor_id,
+		actor_branch_id,
+		bookmark,
+		versionstamp,
+	} = payload
+	else {
+		return Ok(0);
+	};
+	let actor_id = actor_id.clone();
+	let actor_branch_id = *actor_branch_id;
+	let bookmark = bookmark.clone();
+	let versionstamp = *versionstamp;
+
+	db.run(move |tx| {
+		let actor_id = actor_id.clone();
+		let bookmark = bookmark.clone();
+
+		async move {
+			let pinned_key = keys::bookmark_pinned_key(&actor_id, bookmark.as_str());
+			let Some(bytes) = tx.informal().get(&pinned_key, Serializable).await? else {
+				return Ok(0);
+			};
+			let mut record = decode_pinned_bookmark_record(&bytes)
+				.context("decode sqlite pinned bookmark record during cold failure handling")?;
+
+			if record.actor_branch_id != actor_branch_id
+				|| record.versionstamp != versionstamp
+				|| record.bookmark != bookmark
+				|| record.status != PinStatus::Pending
+			{
+				return Ok(0);
+			}
+
+			record.status = PinStatus::Failed;
+			record.updated_at_ms = now_ms;
+			tx.informal().set(
+				&pinned_key,
+				&encode_pinned_bookmark_record(record)
+					.context("encode sqlite pinned bookmark record during cold failure handling")?,
+			);
+
+			Ok(1)
+		}
+	})
+	.await
 }
 
 fn ensure_not_cancelled(cancel_token: &tokio_util::sync::CancellationToken) -> Result<()> {
