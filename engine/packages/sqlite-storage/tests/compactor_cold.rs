@@ -14,7 +14,8 @@ use sqlite_storage::{
 		cold::{
 			ColdCompactorConfig, ColdCompactorLease, ColdRenewOutcome, ColdTakeOutcome,
 			decode_cold_compact_state, decode_cold_lease, decode_pending_marker,
-			encode_cold_lease, encode_pending_marker, release, renew, take, worker,
+			encode_cold_compact_state, encode_cold_lease, encode_pending_marker, release, renew,
+			take, worker,
 		},
 		decode_cold_compact_payload, encode_cold_compact_payload,
 	},
@@ -26,9 +27,10 @@ use sqlite_storage::{
 	},
 	types::{
 		ActorBranchId, ActorBranchRecord, BookmarkStr, BranchState, CommitRow, LayerKind,
-		MetaCompact, decode_cold_manifest_chunk, decode_cold_manifest_index,
-		decode_pointer_snapshot, encode_actor_branch_record, encode_commit_row,
-		encode_meta_compact,
+		MetaCompact, PinStatus, PinnedBookmarkRecord, decode_cold_manifest_chunk,
+		decode_cold_manifest_index, decode_pinned_bookmark_record, decode_pointer_snapshot,
+		encode_actor_branch_record, encode_commit_row, encode_meta_compact,
+		encode_pinned_bookmark_record,
 	},
 };
 use tempfile::Builder;
@@ -101,6 +103,41 @@ async fn read_value(db: &universaldb::Database, key: Vec<u8>) -> Result<Option<V
 	.await
 }
 
+async fn read_cold_state(
+	db: &universaldb::Database,
+) -> Result<Option<sqlite_storage::compactor::cold::ColdCompactState>> {
+	read_value(db, branch_meta_cold_compact_key(actor_branch_id()))
+		.await?
+		.as_deref()
+		.map(decode_cold_compact_state)
+		.transpose()
+}
+
+async fn read_u64_be(db: &universaldb::Database, key: Vec<u8>) -> Result<Option<u64>> {
+	let Some(value) = read_value(db, key).await? else {
+		return Ok(None);
+	};
+	let bytes: [u8; std::mem::size_of::<u64>()] =
+		value.as_slice().try_into().expect("test value should be u64");
+
+	Ok(Some(u64::from_be_bytes(bytes)))
+}
+
+async fn single_pending_marker(
+	tier: &FilesystemColdTier,
+) -> Result<(String, sqlite_storage::compactor::cold::ColdPendingMarker)> {
+	let prefix = format!("{}/pending/", branch_object_prefix());
+	let markers = tier.list_prefix(&prefix).await?;
+	assert_eq!(markers.len(), 1, "expected one pending marker");
+	let key = markers[0].key.clone();
+	let bytes = tier
+		.get_object(&key)
+		.await?
+		.expect("pending marker should exist");
+
+	Ok((key, decode_pending_marker(&bytes)?))
+}
+
 async fn seed_phase_a_branch(db: &universaldb::Database) -> Result<()> {
 	let branch_id = actor_branch_id();
 
@@ -144,6 +181,18 @@ async fn seed_phase_a_branch(db: &universaldb::Database) -> Result<()> {
 		);
 		tx.informal()
 			.set(&branch_vtx_key(branch_id, [6; 16]), &6u64.to_be_bytes());
+		tx.informal().set(
+			&sqlite_storage::keys::bookmark_pinned_key("actor-a", bookmark().as_str()),
+			&encode_pinned_bookmark_record(PinnedBookmarkRecord {
+				bookmark: bookmark(),
+				actor_branch_id: branch_id,
+				versionstamp: [7; 16],
+				status: PinStatus::Pending,
+				pin_object_key: None,
+				created_at_ms: 1_000,
+				updated_at_ms: 1_000,
+			})?,
+		);
 		Ok(())
 	})
 	.await
@@ -154,6 +203,50 @@ struct ObservingColdTier {
 	inner: FilesystemColdTier,
 	db: Arc<universaldb::Database>,
 	saw_committed_handoff: Arc<AtomicBool>,
+}
+
+#[derive(Clone)]
+struct AdvancingColdDrainedTier {
+	inner: FilesystemColdTier,
+	db: Arc<universaldb::Database>,
+	advanced: Arc<AtomicBool>,
+}
+
+#[async_trait]
+impl ColdTier for AdvancingColdDrainedTier {
+	async fn put_object(&self, key: &str, bytes: &[u8]) -> Result<()> {
+		if key.ends_with("/cold_manifest/index.bare")
+			&& !self.advanced.swap(true, Ordering::SeqCst)
+		{
+			let db = Arc::clone(&self.db);
+			db.run(|tx| async move {
+				let state = sqlite_storage::compactor::cold::ColdCompactState {
+					cold_drained_txid: 4,
+					in_flight_uuid: Some(uuid::Uuid::nil()),
+				};
+				tx.informal().set(
+					&branch_meta_cold_compact_key(actor_branch_id()),
+					&encode_cold_compact_state(state)?,
+				);
+				Ok(())
+			})
+			.await?;
+		}
+
+		self.inner.put_object(key, bytes).await
+	}
+
+	async fn get_object(&self, key: &str) -> Result<Option<Vec<u8>>> {
+		self.inner.get_object(key).await
+	}
+
+	async fn delete_objects(&self, keys: &[String]) -> Result<()> {
+		self.inner.delete_objects(keys).await
+	}
+
+	async fn list_prefix(&self, prefix: &str) -> Result<Vec<ColdTierObjectMetadata>> {
+		self.inner.list_prefix(prefix).await
+	}
 }
 
 #[async_trait]
@@ -284,24 +377,15 @@ async fn cold_phase_a_writes_handoff_then_pending_marker_and_snapshot_plan() -> 
 	)
 	.await?;
 
-	let state_bytes = read_value(&db, branch_meta_cold_compact_key(actor_branch_id()))
+	let state = read_cold_state(&db)
 		.await?
 		.expect("cold compact state should be written");
-	let state = decode_cold_compact_state(&state_bytes)?;
-	assert_eq!(state.cold_drained_txid, 3);
-	let pass_uuid = state
-		.in_flight_uuid
-		.expect("phase A should register an in-flight uuid");
+	assert_eq!(state.cold_drained_txid, 7);
+	assert_eq!(state.in_flight_uuid, None);
 
-	let marker_key = format!("{}/pending/{}.marker", branch_object_prefix(), pass_uuid.simple());
-	let marker_bytes = tier
-		.get_object(&marker_key)
-		.await?
-		.expect("pending marker should exist");
-	let marker = decode_pending_marker(&marker_bytes)?;
+	let (_marker_key, marker) = single_pending_marker(&tier).await?;
 
 	assert_eq!(marker.branch_id, actor_branch_id());
-	assert_eq!(marker.pass_uuid, pass_uuid);
 	assert_eq!(marker.cold_drained_txid, 3);
 	assert_eq!(marker.materialized_txid, 7);
 	assert_eq!(marker.last_hot_pass_txid, 7);
@@ -365,13 +449,18 @@ async fn cold_phase_b_uploads_layers_manifest_snapshot_and_cleans_stale_markers(
 	)
 	.await?;
 
-	let state_bytes = read_value(&db, branch_meta_cold_compact_key(actor_branch_id()))
+	let state = read_cold_state(&db)
 		.await?
 		.expect("cold compact state should be written");
-	let state = decode_cold_compact_state(&state_bytes)?;
-	let pass_uuid = state
-		.in_flight_uuid
-		.expect("phase A should register an in-flight uuid");
+	assert_eq!(state.cold_drained_txid, 7);
+	assert_eq!(state.in_flight_uuid, None);
+	assert_eq!(
+		read_u64_be(&db, branch_manifest_cold_drained_txid_key(actor_branch_id())).await?,
+		Some(7)
+	);
+
+	let (_marker_key, marker) = single_pending_marker(&tier).await?;
+	let pass_uuid = marker.pass_uuid;
 
 	let image_key = format!(
 		"{}/image/00000000/00000002-0000000000000005.ltx",
@@ -456,6 +545,58 @@ async fn cold_phase_b_uploads_layers_manifest_snapshot_and_cleans_stale_markers(
 	assert!(marker.planned_object_keys.contains(&image_key));
 	assert!(marker.planned_object_keys.contains(&chunk_key));
 	assert!(marker.planned_object_keys.contains(&snapshot_key));
+
+	let pinned_bytes = read_value(
+		&db,
+		sqlite_storage::keys::bookmark_pinned_key("actor-a", bookmark().as_str()),
+	)
+	.await?
+	.expect("pinned bookmark record should exist");
+	let pinned = decode_pinned_bookmark_record(&pinned_bytes)?;
+	assert_eq!(pinned.status, PinStatus::Ready);
+	assert_eq!(pinned.pin_object_key.as_deref(), Some(pin_key.as_str()));
+
+	Ok(())
+}
+
+#[tokio::test]
+async fn cold_phase_c_aborts_when_cold_drained_txid_changes() -> Result<()> {
+	let db = Arc::new(test_db().await?);
+	seed_phase_a_branch(&db).await?;
+
+	let cold_root = Builder::new().prefix("sqlite-cold-phase-c-occ").tempdir()?;
+	let tier = Arc::new(AdvancingColdDrainedTier {
+		inner: FilesystemColdTier::new(cold_root.path()),
+		db: Arc::clone(&db),
+		advanced: Arc::new(AtomicBool::new(false)),
+	});
+
+	let err = worker::test_hooks::handle_payload_once_with_cold_tier(
+		Arc::clone(&db),
+		payload(),
+		ColdCompactorConfig::default(),
+		CancellationToken::new(),
+		tier,
+	)
+	.await
+	.expect_err("phase C should reject a changed cold drain cursor");
+
+	assert!(
+		format!("{err:?}").contains("cold_drained_txid fence changed"),
+		"unexpected error: {err:?}"
+	);
+	assert_eq!(
+		read_u64_be(&db, branch_manifest_cold_drained_txid_key(actor_branch_id())).await?,
+		Some(3)
+	);
+	let pinned_bytes = read_value(
+		&db,
+		sqlite_storage::keys::bookmark_pinned_key("actor-a", bookmark().as_str()),
+	)
+	.await?
+	.expect("pinned bookmark record should exist");
+	let pinned = decode_pinned_bookmark_record(&pinned_bytes)?;
+	assert_eq!(pinned.status, PinStatus::Pending);
 
 	Ok(())
 }

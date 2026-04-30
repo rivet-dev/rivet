@@ -82,6 +82,7 @@ pub(crate) async fn run(
 	}
 
 	let mut bookmarks = Vec::new();
+	let mut uploaded_pins = Vec::new();
 	ensure_not_cancelled(&cancel_token)?;
 	for pin in &plan.pin_uploads {
 		let object_key = pin_object_key(plan, pin);
@@ -107,9 +108,16 @@ pub(crate) async fn run(
 			schema_version: SQLITE_STORAGE_COLD_SCHEMA_VERSION,
 			bookmark_str: pin.bookmark.clone(),
 			pinned: true,
-			pin_object_key: Some(object_key),
+			pin_object_key: Some(object_key.clone()),
 			pin_status: PinStatus::Pending,
 			created_at_ms: plan.marker.created_at_ms,
+		});
+		uploaded_pins.push(ColdUploadedPin {
+			actor_id: pin.actor_id.clone(),
+			actor_branch_id: plan.branch_id,
+			bookmark: pin.bookmark.clone(),
+			versionstamp: pin.versionstamp,
+			object_key,
 		});
 	}
 
@@ -170,14 +178,25 @@ pub(crate) async fn run(
 		layer_count: chunk.layers.len(),
 		bookmark_count: chunk.bookmarks.len(),
 		stale_markers_cleaned,
+		uploaded_pins,
 	})
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ColdPhaseBOutput {
 	pub layer_count: usize,
 	pub bookmark_count: usize,
 	pub stale_markers_cleaned: usize,
+	pub uploaded_pins: Vec<ColdUploadedPin>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ColdUploadedPin {
+	pub actor_id: String,
+	pub actor_branch_id: crate::pump::types::ActorBranchId,
+	pub bookmark: crate::pump::types::BookmarkStr,
+	pub versionstamp: [u8; 16],
+	pub object_key: String,
 }
 
 fn planned_object_keys(plan: &ColdPhaseAPlan) -> BTreeSet<String> {

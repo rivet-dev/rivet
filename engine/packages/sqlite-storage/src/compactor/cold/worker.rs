@@ -19,7 +19,7 @@ use crate::{
 	pump::types::ActorBranchId,
 };
 
-use super::{lease, phase_a, phase_b};
+use super::{lease, phase_a, phase_b, phase_c};
 
 const COLD_COMPACTOR_QUEUE_GROUP: &str = "cold_compactor";
 
@@ -284,7 +284,7 @@ async fn run_scaffold_pass(
 	let phase_b_output = phase_b::run(
 		Arc::clone(&cold_tier),
 		&plan,
-		cancel_token,
+		cancel_token.clone(),
 		now_ms()?,
 	)
 	.await?;
@@ -295,6 +295,21 @@ async fn run_scaffold_pass(
 		bookmarks = phase_b_output.bookmark_count,
 		stale_markers_cleaned = phase_b_output.stale_markers_cleaned,
 		"sqlite cold compactor phase B uploaded pass"
+	);
+	let phase_c_output = phase_c::run(
+		udb,
+		&plan,
+		&phase_b_output,
+		cancel_token,
+		now_ms()?,
+	)
+	.await?;
+	tracing::debug!(
+		branch_id = ?plan.branch_id,
+		pass_uuid = %plan.pass_uuid,
+		cold_drained_txid = phase_c_output.cold_drained_txid,
+		ready_pins = phase_c_output.ready_pins,
+		"sqlite cold compactor phase C committed pass"
 	);
 
 	Ok(())

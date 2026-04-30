@@ -35,6 +35,7 @@
 - Cold compactor service code lives under `sqlite_storage::compactor::cold`; it uses `SqliteColdCompactSubject`, queue group `cold_compactor`, and branch-scoped `BR/{branch_id}/META/cold_lease`.
 - Cold compactor tests that expect object writes should inject `FilesystemColdTier`; the default service tier is `DisabledColdTier` until runtime config selects a backend.
 - Cold Phase B rewrites the pending marker with the complete object-key set before uploading image, delta, pin, manifest, and pointer snapshot objects.
+- Cold Phase C is the FDB-only finalizer: regular-read fence `cold_drained_txid`, then advance cold state + manifest cursor, clear `in_flight_uuid`, and mark uploaded pins `Ready`.
 
 # Ralph Progress Log
 Started: Wed Apr 29 03:29:23 PM PDT 2026
@@ -692,4 +693,23 @@ Started: Wed Apr 29 03:29:23 PM PDT 2026
   - Phase B should stay S3-only and consume the snapshot data collected by Phase A; Phase C is the next FDB write boundary.
   - The pending marker starts as the Phase A handoff marker and is overwritten with the final object list once SHARD, DELTA, and pin work is known.
   - Cold manifest index/chunk and pointer snapshot objects use the same `OwnedVersionedData` wrapper pattern as other persisted pump records.
+---
+## 2026-04-29 21:39 PDT - US-039
+- Implemented cold compactor Phase C as a single FDB write transaction with a regular-read fence on the Phase A `cold_drained_txid`, manifest cursor update, and `in_flight_uuid` clearing.
+- Threaded uploaded pin object keys from Phase B into Phase C so pending pinned-bookmark records can transition to `PinStatus::Ready` with their cold object key.
+- Added cold compactor coverage for Phase C final state, pinned bookmark readiness, and a failure-injection OCC abort when the drain cursor changes before Phase C commits.
+- Verified with `cargo check -p sqlite-storage`, `cargo test -p sqlite-storage --test compactor_cold -- --nocapture`, and `cargo test -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/CLAUDE.md`
+  - `engine/packages/sqlite-storage/src/compactor/cold/mod.rs`
+  - `engine/packages/sqlite-storage/src/compactor/cold/phase_b.rs`
+  - `engine/packages/sqlite-storage/src/compactor/cold/phase_c.rs`
+  - `engine/packages/sqlite-storage/src/compactor/cold/worker.rs`
+  - `engine/packages/sqlite-storage/tests/compactor_cold.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Phase B should remain S3-only; pass any FDB finalization inputs forward in `ColdPhaseBOutput` instead of reading FDB during uploads.
+  - Phase C should leave the pending marker object intact for stale-marker cleanup. The FDB `in_flight_uuid` is the active-pass marker.
+  - Integration tests can inject a `ColdTier` wrapper to mutate FDB between Phase B and Phase C for deterministic OCC-fence coverage.
 ---
