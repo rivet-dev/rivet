@@ -150,9 +150,16 @@ pub fn actor_pointer_history_key(
 	ts_ms: i64,
 	nonce: u32,
 ) -> Vec<u8> {
-	let mut key = with_suffix(actor_pointer_base(namespace_branch_id, actor_id), HISTORY_PATH);
+	let mut key = actor_pointer_history_prefix(namespace_branch_id, actor_id);
 	append_ts_nonce(&mut key, ts_ms, nonce);
 	key
+}
+
+pub fn actor_pointer_history_prefix(
+	namespace_branch_id: NamespaceBranchId,
+	actor_id: &str,
+) -> Vec<u8> {
+	with_suffix(actor_pointer_base(namespace_branch_id, actor_id), HISTORY_PATH)
 }
 
 pub fn namespace_pointer_cur_key(namespace_id: NamespaceId) -> Vec<u8> {

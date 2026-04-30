@@ -63,17 +63,19 @@ impl ActorDb {
 
 				async move {
 					let branch_resolution =
-						resolve_or_allocate_branch(&tx, namespace_id, &actor_id, cached_branch_id).await?;
+						resolve_or_allocate_branch(&tx, namespace_id, &actor_id).await?;
 					let branch_id = branch_resolution.branch_id;
 					let head_key = keys::branch_meta_head_key(branch_id);
-					let (head_bytes, storage_used) = if let Some(storage_used) = cached_storage_used {
-						(tx_get_value(&tx, &head_key, Serializable).await?, storage_used)
-					} else {
-						let quota_fut = quota::read_branch(&tx, branch_id);
-						let head_fut = tx_get_value(&tx, &head_key, Serializable);
-						let (head_bytes, storage_used) = tokio::try_join!(head_fut, quota_fut)?;
-						(head_bytes, storage_used)
-					};
+					let branch_cache_matches = cached_branch_id == Some(branch_id);
+					let (head_bytes, storage_used) =
+						if let (true, Some(storage_used)) = (branch_cache_matches, cached_storage_used) {
+							(tx_get_value(&tx, &head_key, Serializable).await?, storage_used)
+						} else {
+							let quota_fut = quota::read_branch(&tx, branch_id);
+							let head_fut = tx_get_value(&tx, &head_key, Serializable);
+							let (head_bytes, storage_used) = tokio::try_join!(head_fut, quota_fut)?;
+							(head_bytes, storage_used)
+						};
 
 					let previous_head = head_bytes
 						.as_deref()
@@ -250,7 +252,11 @@ impl ActorDb {
 		*self.commit_bytes_since_rollup.lock() += u64::try_from(result.added_bytes)
 			.context("commit added bytes should be non-negative")?;
 
-		if cache_was_warm {
+		let branch_changed = cached_branch_id.is_some_and(|branch_id| branch_id != result.branch_id);
+		if branch_changed {
+			self.cache.lock().clear();
+		}
+		if cache_was_warm || branch_changed {
 			let cache = self.cache.lock();
 			for pgno in result.truncated_pgnos {
 				cache.remove(pgno);
@@ -365,18 +371,8 @@ async fn resolve_or_allocate_branch(
 	tx: &universaldb::Transaction,
 	namespace_id: NamespaceId,
 	actor_id: &str,
-	cached_branch_id: Option<ActorBranchId>,
 ) -> Result<BranchResolution> {
 	let namespace = branch::resolve_or_allocate_root_namespace_branch(tx, namespace_id).await?;
-
-	if let Some(branch_id) = cached_branch_id {
-		return Ok(BranchResolution {
-			branch_id,
-			namespace_branch_id: namespace.branch_id,
-			namespace_initialized: namespace.initialized,
-			actor_initialized: false,
-		});
-	}
 
 	if let Some(branch_id) =
 		branch::resolve_actor_branch_in_namespace(tx, namespace.branch_id, actor_id, Serializable)

@@ -1,16 +1,18 @@
 use std::sync::Arc;
 
 use anyhow::Result;
+use futures_util::TryStreamExt;
 use gas::prelude::Id;
 use rivet_pools::NodeId;
 use sqlite_storage::{
-		keys::{
-			actor_pointer_cur_key, branch_commit_key, branch_meta_head_at_fork_key, branches_bk_pin_key,
-			branches_desc_pin_key, branches_list_key, branches_refcount_key,
-			namespace_branches_actor_tombstone_key, namespace_branches_bk_pin_key,
-			namespace_branches_desc_pin_key, namespace_branches_list_key,
-			namespace_branches_refcount_key, namespace_pointer_cur_key,
-		},
+	keys::{
+		actor_pointer_cur_key, actor_pointer_history_prefix, branch_commit_key,
+		branch_meta_head_at_fork_key, branch_meta_head_key, branches_bk_pin_key,
+		branches_desc_pin_key, branches_list_key, branches_refcount_key,
+		namespace_branches_actor_tombstone_key, namespace_branches_bk_pin_key,
+		namespace_branches_desc_pin_key, namespace_branches_list_key,
+		namespace_branches_refcount_key, namespace_pointer_cur_key,
+	},
 	pump::{ActorDb, branch},
 	types::{
 		ActorBranchId, ActorBranchRecord, BranchState, DBHead, DirtyPage, NamespaceBranchId,
@@ -21,7 +23,11 @@ use sqlite_storage::{
 	},
 };
 use tempfile::Builder;
-use universaldb::{options::MutationType, utils::IsolationLevel::Snapshot};
+use universaldb::{
+	RangeOption,
+	options::{MutationType, StreamingMode},
+	utils::IsolationLevel::Snapshot,
+};
 use universalpubsub::{PubSub, driver::memory::MemoryDriver};
 
 const TEST_ACTOR: &str = "test-actor";
@@ -67,6 +73,36 @@ async fn read_value(db: &universaldb::Database, key: Vec<u8>) -> Result<Option<V
 				.get(&key, Snapshot)
 				.await?
 				.map(Vec::<u8>::from))
+		}
+	})
+	.await
+}
+
+async fn read_prefix_values(
+	db: &universaldb::Database,
+	prefix: Vec<u8>,
+) -> Result<Vec<Vec<u8>>> {
+	db.run(move |tx| {
+		let prefix = prefix.clone();
+		async move {
+			let prefix_subspace = universaldb::Subspace::from(
+				universaldb::tuple::Subspace::from_bytes(prefix),
+			);
+			let informal = tx.informal();
+			let mut stream = informal.get_ranges_keyvalues(
+				RangeOption {
+					mode: StreamingMode::WantAll,
+					..RangeOption::from(&prefix_subspace)
+				},
+				Snapshot,
+			);
+			let mut values = Vec::new();
+
+			while let Some(entry) = stream.try_next().await? {
+				values.push(entry.value().to_vec());
+			}
+
+			Ok(values)
 		}
 	})
 	.await
@@ -903,6 +939,88 @@ async fn fork_actor_can_use_deep_source_branch() -> Result<()> {
 	assert_eq!(pages[1].bytes, Some(page_bytes(0x21)));
 	assert_eq!(pages[2].bytes, Some(page_bytes(0x22)));
 	assert_eq!(pages[3].bytes, Some(page_bytes(0x23)));
+
+	Ok(())
+}
+
+#[tokio::test]
+async fn rollback_actor_freezes_old_branch_and_swaps_pointer() -> Result<()> {
+	let db = Arc::new(test_db().await?);
+	let actor_db = ActorDb::new(
+		db.clone(),
+		test_ups(),
+		test_namespace(),
+		TEST_ACTOR.to_string(),
+		NodeId::new(),
+	);
+	actor_db.commit(vec![page(1, 0x11)], 2, 1_000).await?;
+	actor_db.commit(vec![page(1, 0x22)], 2, 2_000).await?;
+	let old_branch_id = read_branch_id(&db).await?;
+	let namespace_branch_id = read_namespace_branch_id(&db).await?;
+	let first_commit = decode_commit_row(
+		&read_value(&db, branch_commit_key(old_branch_id, 1))
+			.await?
+			.expect("first commit row should exist"),
+	)?;
+	let pages = actor_db.get_pages(vec![1]).await?;
+	assert_eq!(pages[0].bytes, Some(page_bytes(0x22)));
+
+	let rolled_branch_id = branch::rollback_actor(
+		&db,
+		NamespaceId::from_gas_id(test_namespace()),
+		TEST_ACTOR.to_string(),
+		ResolvedVersionstamp {
+			versionstamp: first_commit.versionstamp,
+			bookmark: None,
+		},
+	)
+	.await?;
+
+	assert_ne!(rolled_branch_id, old_branch_id);
+	let current_branch_id = read_branch_id(&db).await?;
+	assert_eq!(current_branch_id, rolled_branch_id);
+
+	let old_record_bytes = read_value(&db, branches_list_key(old_branch_id))
+		.await?
+		.expect("old branch record should exist");
+	let old_record = decode_actor_branch_record(&old_record_bytes)?;
+	assert_eq!(old_record.state, BranchState::Frozen);
+	assert_eq!(read_refcount(&db, old_branch_id).await?, 1);
+	assert_eq!(read_refcount(&db, rolled_branch_id).await?, 1);
+
+	let rolled_record_bytes = read_value(&db, branches_list_key(rolled_branch_id))
+		.await?
+		.expect("rolled branch record should exist");
+	let rolled_record = decode_actor_branch_record(&rolled_record_bytes)?;
+	assert_eq!(rolled_record.parent, Some(old_branch_id));
+	assert_eq!(
+		rolled_record.parent_versionstamp,
+		Some(first_commit.versionstamp)
+	);
+	assert_eq!(rolled_record.state, BranchState::Live);
+
+	let history_values = read_prefix_values(
+		&db,
+		actor_pointer_history_prefix(namespace_branch_id, TEST_ACTOR),
+	)
+	.await?;
+	assert_eq!(history_values.len(), 1);
+	let history_pointer = decode_actor_pointer(&history_values[0])?;
+	assert_eq!(history_pointer.current_branch, old_branch_id);
+
+	actor_db.commit(vec![page(2, 0x33)], 3, 3_000).await?;
+
+	let new_head_bytes = read_value(&db, branch_meta_head_key(rolled_branch_id))
+		.await?
+		.expect("rolled branch head should exist after commit");
+	let new_head = decode_db_head(&new_head_bytes)?;
+	assert_eq!(new_head.branch_id, rolled_branch_id);
+	assert_eq!(new_head.db_size_pages, 3);
+	let old_head_bytes = read_value(&db, branch_meta_head_key(old_branch_id))
+		.await?
+		.expect("old branch head should still exist");
+	let old_head = decode_db_head(&old_head_bytes)?;
+	assert_eq!(old_head.head_txid, 2);
 
 	Ok(())
 }

@@ -14,6 +14,7 @@
 - PITR storage has no per-namespace tier model; cold and eviction paths should run unconditionally without `tier_state` or `ensure_tier_at_least`.
 - Namespace forks are metadata-only: write the child `NSPTR` + `NSBRANCH` records and rely on namespace-branch parent walking instead of eagerly materializing child `APTR` rows.
 - Actor pointer resolution walks namespace branch parents on APTR miss; namespace-branch tombstones return `ActorNotFound` and must not fall back to legacy actor-scoped storage.
+- Rollback swaps APTR, so ActorDb must resolve APTR before using branch-local caches and clear PIDX/storage caches when the current branch changes.
 
 # Ralph Progress Log
 Started: Wed Apr 29 03:29:23 PM PDT 2026
@@ -324,4 +325,23 @@ Started: Wed Apr 29 03:29:23 PM PDT 2026
   - Use `branch::resolve_actor_pointer` when pointer metadata matters; `resolve_actor_branch_in_namespace` is only a convenience wrapper for the current branch id.
   - A tombstone in a child namespace branch is a hard `ActorNotFound`, not a cache miss.
   - Forked namespace tests can reconstruct an `Id` from `NamespaceId::as_uuid()` with `Id::v1(..., 1)` because sqlite-storage derives namespace identity from the UUID bytes.
+---
+## 2026-04-29 19:03 PDT - US-017
+- Implemented `rollback_actor` with branch derivation, old-branch freezing, APTR history, refcount decrement, and APTR current-pointer swap.
+- Made ActorDb resolve APTR before trusting branch-local caches so a same-object commit after rollback writes to the new branch.
+- Verified with `cargo check -p sqlite-storage`, `cargo test -p sqlite-storage --test pump_branch`, and `cargo test -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/CLAUDE.md` (via `AGENTS.md` symlink)
+  - `engine/packages/sqlite-storage/src/pump/branch.rs`
+  - `engine/packages/sqlite-storage/src/pump/commit.rs`
+  - `engine/packages/sqlite-storage/src/pump/keys.rs`
+  - `engine/packages/sqlite-storage/src/pump/page_index.rs`
+  - `engine/packages/sqlite-storage/src/pump/read.rs`
+  - `engine/packages/sqlite-storage/tests/pump_branch.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Rollback pointer swaps can stale `ActorDb` branch id, quota, and PIDX caches; resolve APTR first and clear branch-local caches when the branch changes.
+  - Existing parent-branch PIDX rows are latest-only, so exact historical page reads before the next write need later versioned/as-of read work rather than rollback-specific hacks.
+  - `APTR/history` tests can scan a new `actor_pointer_history_prefix(...)` helper and decode `ActorPointer` values directly.
 ---

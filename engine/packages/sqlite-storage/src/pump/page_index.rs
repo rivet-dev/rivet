@@ -52,6 +52,10 @@ impl DeltaPageIndex {
 		self.entries.remove_sync(&pgno).map(|(_, txid)| txid)
 	}
 
+	pub fn clear(&self) {
+		self.entries.clear_sync();
+	}
+
 	pub fn range(&self, start: u32, end: u32) -> Vec<(u32, u64)> {
 		if start > end {
 			return Vec::new();

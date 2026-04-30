@@ -36,6 +36,7 @@ These come from `r2-prior-art/.agent/research/sqlite/requirements.md` and supers
 - **All PITR actor state is per-branch.** ActorDb resolves APTR, caches the branch id as a perf cache, and writes hot-path data under top-level `[0x02][0x30]/{branch_id}/<suffix>` keys.
 - **ActorDb is namespace-scoped.** New ActorDb instances receive the engine namespace id, lazily seed NSPTR/NSBRANCH, and write APTR under the resolved namespace branch.
 - **Actor pointer resolution walks namespace branch parents on APTR miss.** Namespace-branch tombstones return `ActorNotFound` and must not fall back to legacy actor-scoped storage.
+- **ActorDb branch and PIDX caches must be invalidated when APTR moves.** Rollback swaps can make cached branch id, quota, and PIDX rows stale; resolve APTR as the source of truth before using cached branch-local state.
 - **Legacy actor-scoped storage is compatibility fallback only.** New ActorDb writes use branch-scoped META, COMMITS, VTX, PIDX, DELTA, and SHARD keys.
 - **Branch ancestry reads use branch-aware sources.** The PIDX cache is safe only when the read plan has one source branch; multi-branch ancestry reads must scan PIDX with branch identity.
 - **PITR tunable constants live in `pump/constants.rs`.** Import shared limits and retention windows from there instead of duplicating literals.

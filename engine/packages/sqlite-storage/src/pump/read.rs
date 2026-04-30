@@ -68,7 +68,12 @@ impl ActorDb {
 
 				async move {
 					let scope =
-						resolve_storage_scope(&tx, namespace_id, &actor_id, cached_branch_id).await?;
+						resolve_storage_scope(&tx, namespace_id, &actor_id).await?;
+					let cached_pidx = if scope.branch_id() == cached_branch_id {
+						cached_pidx
+					} else {
+						None
+					};
 					let head = match &scope {
 						StorageScope::Branch(plan) => plan.head.clone(),
 						StorageScope::Legacy => {
@@ -315,6 +320,9 @@ impl ActorDb {
 
 		*self.read_bytes_since_rollup.lock() += returned_bytes;
 		if let Some(branch_id) = tx_result.branch_id {
+			if cached_branch_id.is_some_and(|cached_branch_id| cached_branch_id != branch_id) {
+				self.cache.lock().clear();
+			}
 			*self.branch_id.lock() = Some(branch_id);
 		}
 
@@ -338,7 +346,7 @@ enum StorageScope {
 }
 
 impl StorageScope {
-	fn branch_id(self) -> Option<ActorBranchId> {
+	fn branch_id(&self) -> Option<ActorBranchId> {
 		match self {
 			Self::Branch(plan) => Some(plan.branch_id),
 			Self::Legacy => None,
@@ -398,14 +406,7 @@ async fn resolve_storage_scope(
 	tx: &universaldb::Transaction,
 	namespace_id: crate::pump::types::NamespaceId,
 	actor_id: &str,
-	cached_branch_id: Option<ActorBranchId>,
 ) -> Result<StorageScope> {
-	if let Some(branch_id) = cached_branch_id {
-		return Ok(StorageScope::Branch(
-			load_branch_read_plan(tx, branch_id).await?,
-		));
-	}
-
 	Ok(
 		match branch::resolve_actor_branch(tx, namespace_id, actor_id, Snapshot).await? {
 			Some(branch_id) => StorageScope::Branch(load_branch_read_plan(tx, branch_id).await?),
