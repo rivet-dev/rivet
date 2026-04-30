@@ -50,6 +50,7 @@
 - Branch GC pin computation lives in `sqlite_storage::gc`; reuse it for cold sweeps, hot-history cleanup, and debug estimates so refcount/root/desc/bookmark pin math stays consistent.
 - Burst-mode hot quota checks go through `sqlite_storage::burst_mode`, which derives the signal from branch `head_txid - cold_drained_txid` in FDB and applies no tier or pod-health state.
 - Debug historical reads cannot trust PIDX because PIDX is the current owner map; scan DELTA history up to the target txid before falling through to SHARD/cold layers.
+- Fork integration tests can share setup through `tests/fork_common`; to test bk_pin OCC races, stage a derive in one transaction, advance the pin in a nested transaction, then let the retry observe `ForkOutOfRetention`.
 
 # Ralph Progress Log
 Started: Wed Apr 29 03:29:23 PM PDT 2026
@@ -948,4 +949,19 @@ Started: Wed Apr 29 03:29:23 PM PDT 2026
   - Debug APIs are gated with `#[cfg(debug_assertions)]` and re-exported at `sqlite_storage::debug`.
   - `debug::read_at` must scan branch DELTA history up to the target txid; PIDX is the current owner map and can point past historical versionstamps.
   - `debug::estimate_gc_pin` should call `sqlite_storage::gc` instead of duplicating refcount/root/desc/bookmark pin math.
+---
+## 2026-04-29 22:59 PDT - US-056
+- Added dedicated `fork_actor` and `fork_namespace` integration test binaries covering root, depth-1, and deeper source branches.
+- Covered cross-namespace actor fork reads, MAX_FORK_DEPTH/MAX_NAMESPACE_DEPTH boundary behavior, and concurrent bk_pin advancement resolving to `ForkOutOfRetention`.
+- Verified with `cargo test -p sqlite-storage --test fork_actor`, `cargo test -p sqlite-storage --test fork_namespace`, `cargo check -p sqlite-storage`, and `cargo test -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/tests/fork_actor.rs`
+  - `engine/packages/sqlite-storage/tests/fork_common/mod.rs`
+  - `engine/packages/sqlite-storage/tests/fork_namespace.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Dedicated integration test binaries can reuse helper setup from a sibling `tests/<name>/mod.rs` module without becoming their own test target.
+  - Fork depth limits are best tested through the public `fork_actor`/`fork_namespace` APIs: depth 16 succeeds, and the next derivation returns the typed depth error.
+  - A retry-driven bk_pin race exercises the same OCC fence path as concurrent GC without adding production-only test hooks.
 ---
