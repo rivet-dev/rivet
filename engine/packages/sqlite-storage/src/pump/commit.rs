@@ -28,10 +28,6 @@ use crate::pump::{
 };
 
 const DELTA_CHUNK_BYTES: usize = 10_000;
-const INCOMPLETE_COMMIT_VERSIONSTAMP: [u8; 16] = [
-	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0, 0, 0, 0, 0, 0,
-];
-
 impl ActorDb {
 	pub async fn commit(
 		&self,
@@ -156,7 +152,7 @@ impl ActorDb {
 					let txid_bytes = txid.to_be_bytes();
 					let commit_row = CommitRow {
 						wall_clock_ms: now_ms,
-						versionstamp: INCOMPLETE_COMMIT_VERSIONSTAMP,
+						versionstamp: udb::INCOMPLETE_VERSIONSTAMP,
 						db_size_pages,
 						post_apply_checksum: new_head.post_apply_checksum,
 					};
@@ -164,15 +160,15 @@ impl ActorDb {
 						encode_commit_row(commit_row).context("encode sqlite commit row")?;
 					let versionstamped_commit_row = udb::append_versionstamp_offset(
 						encoded_commit_row.clone(),
-						&INCOMPLETE_COMMIT_VERSIONSTAMP,
+						&udb::INCOMPLETE_VERSIONSTAMP,
 					)
 					.context("prepare versionstamped sqlite commit row")?;
 					let commit_key = keys::branch_commit_key(branch_id, txid);
 					let vtx_storage_key =
-						keys::branch_vtx_key(branch_id, INCOMPLETE_COMMIT_VERSIONSTAMP);
+						keys::branch_vtx_key(branch_id, udb::INCOMPLETE_VERSIONSTAMP);
 					let versionstamped_vtx_key = udb::append_versionstamp_offset(
 						vtx_storage_key.clone(),
-						&INCOMPLETE_COMMIT_VERSIONSTAMP,
+						&udb::INCOMPLETE_VERSIONSTAMP,
 					)
 					.context("prepare versionstamped sqlite vtx key")?;
 					let dirty_pgnos = dirty_pages
@@ -229,19 +225,19 @@ impl ActorDb {
 							namespace_id,
 							branch_resolution.namespace_branch_id,
 							now_ms,
-							&INCOMPLETE_COMMIT_VERSIONSTAMP,
+							&udb::INCOMPLETE_VERSIONSTAMP,
 						)?;
 					}
 					if branch_resolution.actor_initialized {
 						write_root_branch_metadata(
 							&tx,
-							branch_id,
-							branch_resolution.namespace_branch_id,
-							&actor_id,
-							now_ms,
-							&INCOMPLETE_COMMIT_VERSIONSTAMP,
-						)?;
-					}
+						branch_id,
+						branch_resolution.namespace_branch_id,
+						&actor_id,
+						now_ms,
+						&udb::INCOMPLETE_VERSIONSTAMP,
+					)?;
+				}
 					tx.informal().atomic_op(
 						&commit_key,
 						&versionstamped_commit_row,
@@ -451,6 +447,12 @@ fn write_root_branch_metadata(
 		&keys::branches_refcount_key(branch_id),
 		&1_i64.to_le_bytes(),
 		MutationType::Add,
+	);
+	tx.informal().atomic_op(
+		&keys::namespace_catalog_key(namespace_branch, branch_id),
+		&udb::append_versionstamp_offset(udb::INCOMPLETE_VERSIONSTAMP.to_vec(), root_versionstamp)
+			.context("prepare versionstamped sqlite namespace catalog marker")?,
+		MutationType::SetVersionstampedValue,
 	);
 
 	let pointer = ActorPointer {

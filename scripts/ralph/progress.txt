@@ -26,6 +26,7 @@
 - Branch ancestry reads must ignore PIDX owners newer than that source branch's fork cap, then fall through to the latest SHARD version at or below the cap.
 - Do not add APTR/NSPTR `last_swapped_at_ms` cache validation; the v4 spec makes branches immutable and treats the US-026 invalidation contract as obsolete.
 - Fresh fork actor branches keep `/META/head_at_fork` until their first local commit; commits treat it as the previous `DBHead`, then write `/META/head` and clear the snapshot in the same tx.
+- Namespace catalog (`NSCAT`) markers store database branch ids with 16-byte versionstamped values; list walks namespace parents, caps inherited entries by `parent_versionstamp`, and applies database tombstones before inherited entries.
 
 # Ralph Progress Log
 Started: Wed Apr 29 03:29:23 PM PDT 2026
@@ -524,4 +525,22 @@ Started: Wed Apr 29 03:29:23 PM PDT 2026
   - Fresh fork commits continue from the fork snapshot's `head_txid`; tests should read the branch head before looking up that branch's latest `CommitRow`.
   - `/META/head_at_fork` is temporary fork metadata and is removed when the child branch writes its first `/META/head`.
   - The existing runner-protocol warning about missing `node_modules/@bare-ts/tools` is unrelated to `sqlite-storage` checks.
+---
+## 2026-04-29 20:22 PDT - US-029
+- Implemented namespace database enumeration with NSCAT range scans, per-ancestor versionstamp caps, and database tombstones.
+- Added NSCAT marker writes for root actor branch creation and `fork_actor`, plus `delete_database` tombstone/refcount handling.
+- Verified with `cargo test -p sqlite-storage --test list_databases -- --nocapture`, `cargo check -p sqlite-storage`, and `cargo test -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/AGENTS.md`
+  - `engine/packages/sqlite-storage/src/pump/branch.rs`
+  - `engine/packages/sqlite-storage/src/pump/commit.rs`
+  - `engine/packages/sqlite-storage/src/pump/keys.rs`
+  - `engine/packages/sqlite-storage/src/pump/udb.rs`
+  - `engine/packages/sqlite-storage/tests/list_databases.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Current code still uses pointer-era `ActorBranchId`, so `list_databases` returns database branch ids while the later database rename remains pending.
+  - NSCAT markers should be written with `SetVersionstampedValue`; that stored 16-byte value is the create-time cap checked by namespace parent walks.
+  - Database tombstones are scanned before NSCAT entries for each namespace branch so a tombstone masks both local and inherited catalog visibility.
 ---

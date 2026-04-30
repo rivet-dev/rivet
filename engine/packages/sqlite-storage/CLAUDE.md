@@ -47,6 +47,7 @@ These come from `r2-prior-art/.agent/research/sqlite/requirements.md` and supers
 - **META splits into single-writer sub-keys:** `/META/head` (commit-owned), `/META/compact` (hot compactor-owned), `/META/cold_compact` (cold compactor-owned), `/META/quota` (atomic-add counter, raw i64 LE — not vbare), `/META/manifest` (branch metadata), `/META/compactor_lease`, `/META/cold_lease`. Disjoint owners; commit/compaction never conflict on a META sub-key.
 - **`COMMITS/{txid_be}` stores `CommitRow` via `SetVersionstampedValue`; `VTX/{versionstamp}` is written via `SetVersionstampedKey` and maps to raw u64 BE txid.**
 - **Branch records live under `[BRANCHES]/list/{branch_id}` with FDB atomic-add refcount plus `desc_pin` and `bk_pin` atomic-min keys.** GC reads these scalars instead of walking the descendant tree.
+- **Namespace catalog entries store branch ids with 16-byte versionstamped values.** `list_databases` walks namespace parents, caps inherited NSCAT rows by `parent_versionstamp`, and lets database tombstones mask inherited visibility.
 - **Branch pin atomic-min writes use `MutationType::ByteMin`** because versionstamps are 16-byte lexicographic big-endian values.
 - **Cold and eviction behavior is unconditional.** There is no per-namespace tier state or promotion path.
 - **PITR, forking, and `restore_to_bookmark` are all the same primitive: branch-at-position.** PITR creates a new branch at the resolved bookmark; the broader system (pegboard) decides whether to swap the actor's head pointer onto it.

@@ -4,6 +4,10 @@ use anyhow::{Context, Result, bail};
 use universaldb::options::MutationType;
 use universaldb::Subspace;
 
+pub const INCOMPLETE_VERSIONSTAMP: [u8; 16] = [
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0, 0, 0, 0, 0, 0,
+];
+
 pub fn compare_and_clear(
 	tx: &universaldb::Transaction,
 	key: &[u8],

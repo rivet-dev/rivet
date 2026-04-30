@@ -8,6 +8,7 @@ use super::types::{ActorBranchId, NamespaceBranchId, NamespaceId};
 pub const SQLITE_SUBSPACE_PREFIX: u8 = 0x02;
 pub const APTR_PARTITION: u8 = 0x10;
 pub const NSPTR_PARTITION: u8 = 0x11;
+pub const NSCAT_PARTITION: u8 = 0x12;
 pub const BRANCHES_PARTITION: u8 = 0x20;
 pub const NSBRANCH_PARTITION: u8 = 0x21;
 pub const BR_PARTITION: u8 = 0x30;
@@ -38,6 +39,7 @@ const DESC_PIN_PATH: &[u8] = b"/desc_pin";
 const BK_PIN_PATH: &[u8] = b"/bk_pin";
 const PIN_COUNT_PATH: &[u8] = b"/pin_count";
 const ACTOR_TOMBSTONES_PATH: &[u8] = b"/actor_tombstones/";
+const DATABASE_TOMBSTONES_PATH: &[u8] = b"/database_tombstones/";
 const MANIFEST_COLD_DRAINED_TXID_PATH: &[u8] = b"/META/manifest/cold_drained_txid";
 const MANIFEST_LAST_HOT_PASS_TXID_PATH: &[u8] = b"/META/manifest/last_hot_pass_txid";
 const MANIFEST_LAST_ACCESS_TS_MS_PATH: &[u8] = b"/META/manifest/last_access_ts_ms";
@@ -118,6 +120,14 @@ fn namespace_pointer_base(namespace_id: NamespaceId) -> Vec<u8> {
 	let mut key = partition_prefix(NSPTR_PARTITION);
 	key.push(b'/');
 	append_uuid(&mut key, namespace_id.as_uuid());
+	key
+}
+
+fn namespace_catalog_base(namespace_branch_id: NamespaceBranchId) -> Vec<u8> {
+	let mut key = partition_prefix(NSCAT_PARTITION);
+	key.push(b'/');
+	append_uuid(&mut key, namespace_branch_id.as_uuid());
+	key.push(b'/');
 	key
 }
 
@@ -224,6 +234,70 @@ pub fn namespace_branches_actor_tombstone_key(
 	let mut key = with_suffix(namespace_branch_record_base(branch_id), ACTOR_TOMBSTONES_PATH);
 	append_actor_id(&mut key, actor_id);
 	key
+}
+
+pub fn namespace_branches_database_tombstone_key(
+	branch_id: NamespaceBranchId,
+	database_id: ActorBranchId,
+) -> Vec<u8> {
+	let mut key = with_suffix(namespace_branch_record_base(branch_id), DATABASE_TOMBSTONES_PATH);
+	append_uuid(&mut key, database_id.as_uuid());
+	key
+}
+
+pub fn namespace_branches_database_tombstone_prefix(branch_id: NamespaceBranchId) -> Vec<u8> {
+	with_suffix(namespace_branch_record_base(branch_id), DATABASE_TOMBSTONES_PATH)
+}
+
+pub fn decode_namespace_branches_database_tombstone_id(
+	branch_id: NamespaceBranchId,
+	key: &[u8],
+) -> Result<ActorBranchId> {
+	let prefix = namespace_branches_database_tombstone_prefix(branch_id);
+	let suffix = key
+		.strip_prefix(prefix.as_slice())
+		.context("namespace database tombstone key did not start with expected prefix")?;
+	ensure!(
+		suffix.len() == std::mem::size_of::<uuid::Uuid>(),
+		"namespace database tombstone key suffix had {} bytes, expected {}",
+		suffix.len(),
+		std::mem::size_of::<uuid::Uuid>()
+	);
+	let uuid = uuid::Uuid::from_slice(suffix).context("decode namespace database tombstone uuid")?;
+
+	Ok(ActorBranchId::from_uuid(uuid))
+}
+
+pub fn namespace_catalog_key(
+	namespace_branch_id: NamespaceBranchId,
+	database_id: ActorBranchId,
+) -> Vec<u8> {
+	let mut key = namespace_catalog_prefix(namespace_branch_id);
+	append_uuid(&mut key, database_id.as_uuid());
+	key
+}
+
+pub fn namespace_catalog_prefix(namespace_branch_id: NamespaceBranchId) -> Vec<u8> {
+	namespace_catalog_base(namespace_branch_id)
+}
+
+pub fn decode_namespace_catalog_database_id(
+	namespace_branch_id: NamespaceBranchId,
+	key: &[u8],
+) -> Result<ActorBranchId> {
+	let prefix = namespace_catalog_prefix(namespace_branch_id);
+	let suffix = key
+		.strip_prefix(prefix.as_slice())
+		.context("namespace catalog key did not start with expected prefix")?;
+	ensure!(
+		suffix.len() == std::mem::size_of::<uuid::Uuid>(),
+		"namespace catalog key suffix had {} bytes, expected {}",
+		suffix.len(),
+		std::mem::size_of::<uuid::Uuid>()
+	);
+	let uuid = uuid::Uuid::from_slice(suffix).context("decode namespace catalog database uuid")?;
+
+	Ok(ActorBranchId::from_uuid(uuid))
 }
 
 pub fn branch_prefix(branch_id: ActorBranchId) -> Vec<u8> {

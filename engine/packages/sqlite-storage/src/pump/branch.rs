@@ -1,8 +1,14 @@
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::{
+	collections::BTreeSet,
+	time::{SystemTime, UNIX_EPOCH},
+};
 
 use anyhow::{Context, Result};
+use futures_util::TryStreamExt;
 use universaldb::{
+	RangeOption,
 	options::MutationType,
+	options::StreamingMode,
 	utils::IsolationLevel::{self, Serializable},
 };
 
@@ -255,6 +261,7 @@ pub async fn fork_actor(
 					&keys::actor_pointer_cur_key(target_namespace_branch, &new_actor_id),
 					&encoded_pointer,
 				);
+				write_namespace_catalog_marker(&tx, target_namespace_branch, new_actor_branch_id)?;
 
 				Ok(())
 			}
@@ -263,6 +270,53 @@ pub async fn fork_actor(
 	.await?;
 
 	Ok(new_actor_id)
+}
+
+pub async fn list_databases(
+	udb: &universaldb::Database,
+	namespace: NamespaceId,
+) -> Result<Vec<ActorBranchId>> {
+	udb.run(move |tx| async move {
+		let Some(namespace_branch_id) =
+			resolve_namespace_branch(&tx, namespace, Serializable).await?
+		else {
+			return Ok(Vec::new());
+		};
+
+		list_databases_in_namespace_branch(&tx, namespace_branch_id).await
+	})
+	.await
+}
+
+pub async fn delete_database(
+	udb: &universaldb::Database,
+	namespace: NamespaceId,
+	database_id: ActorBranchId,
+) -> Result<()> {
+	udb.run(move |tx| async move {
+		let namespace_branch_id = resolve_namespace_branch(&tx, namespace, Serializable)
+			.await?
+			.ok_or(SqliteStorageError::ActorNotFound)?;
+
+		let visible =
+			is_database_visible_in_namespace_branch(&tx, namespace_branch_id, database_id).await?;
+		if !visible {
+			return Err(SqliteStorageError::ActorNotFound.into());
+		}
+
+		tx.informal().set(
+			&keys::namespace_branches_database_tombstone_key(namespace_branch_id, database_id),
+			&[],
+		);
+		tx.informal().atomic_op(
+			&keys::branches_refcount_key(database_id),
+			&(-1_i64).to_le_bytes(),
+			MutationType::Add,
+		);
+
+		Ok(())
+	})
+	.await
 }
 
 pub async fn fork_namespace(
@@ -613,6 +667,136 @@ pub async fn derive_namespace_branch_at(
 	);
 
 	Ok(())
+}
+
+async fn list_databases_in_namespace_branch(
+	tx: &universaldb::Transaction,
+	namespace_branch_id: NamespaceBranchId,
+) -> Result<Vec<ActorBranchId>> {
+	let mut result = BTreeSet::new();
+	let mut tombstones = BTreeSet::new();
+	let mut current_branch_id = namespace_branch_id;
+	let mut versionstamp_cap = [0xff; 16];
+
+	for depth in 0..=MAX_NAMESPACE_DEPTH {
+		for database_id in scan_database_tombstones(tx, current_branch_id).await? {
+			tombstones.insert(database_id);
+			result.remove(&database_id);
+		}
+
+		for (database_id, catalog_versionstamp) in
+			scan_namespace_catalog(tx, current_branch_id).await?
+		{
+			if catalog_versionstamp <= versionstamp_cap && !tombstones.contains(&database_id) {
+				result.insert(database_id);
+			}
+		}
+
+		let record = read_namespace_branch_record(tx, current_branch_id).await?;
+		let Some(parent_branch_id) = record.parent else {
+			return Ok(result.into_iter().collect());
+		};
+		if depth == MAX_NAMESPACE_DEPTH {
+			return Err(SqliteStorageError::NamespaceForkChainTooDeep.into());
+		}
+
+		versionstamp_cap = record
+			.parent_versionstamp
+			.context("sqlite namespace branch parent versionstamp is missing")?;
+		current_branch_id = parent_branch_id;
+	}
+
+	Err(SqliteStorageError::NamespaceForkChainTooDeep.into())
+}
+
+async fn is_database_visible_in_namespace_branch(
+	tx: &universaldb::Transaction,
+	namespace_branch_id: NamespaceBranchId,
+	database_id: ActorBranchId,
+) -> Result<bool> {
+	Ok(list_databases_in_namespace_branch(tx, namespace_branch_id)
+		.await?
+		.contains(&database_id))
+}
+
+fn write_namespace_catalog_marker(
+	tx: &universaldb::Transaction,
+	namespace_branch_id: NamespaceBranchId,
+	database_id: ActorBranchId,
+) -> Result<()> {
+	let value = udb::append_versionstamp_offset(
+		udb::INCOMPLETE_VERSIONSTAMP.to_vec(),
+		&udb::INCOMPLETE_VERSIONSTAMP,
+	)
+	.context("prepare versionstamped sqlite namespace catalog marker")?;
+	tx.informal().atomic_op(
+		&keys::namespace_catalog_key(namespace_branch_id, database_id),
+		&value,
+		MutationType::SetVersionstampedValue,
+	);
+
+	Ok(())
+}
+
+async fn scan_namespace_catalog(
+	tx: &universaldb::Transaction,
+	namespace_branch_id: NamespaceBranchId,
+) -> Result<Vec<(ActorBranchId, [u8; 16])>> {
+	let rows = tx_scan_prefix_values(tx, &keys::namespace_catalog_prefix(namespace_branch_id)).await?;
+	rows.into_iter()
+		.map(|(key, value)| {
+			let database_id = keys::decode_namespace_catalog_database_id(namespace_branch_id, &key)?;
+			let versionstamp = decode_versionstamp_value(&value)
+				.context("decode sqlite namespace catalog versionstamp")?;
+
+			Ok((database_id, versionstamp))
+		})
+		.collect()
+}
+
+async fn scan_database_tombstones(
+	tx: &universaldb::Transaction,
+	namespace_branch_id: NamespaceBranchId,
+) -> Result<Vec<ActorBranchId>> {
+	let rows = tx_scan_prefix_values(
+		tx,
+		&keys::namespace_branches_database_tombstone_prefix(namespace_branch_id),
+	)
+	.await?;
+	rows.into_iter()
+		.map(|(key, _)| {
+			keys::decode_namespace_branches_database_tombstone_id(namespace_branch_id, &key)
+		})
+		.collect()
+}
+
+fn decode_versionstamp_value(bytes: &[u8]) -> Result<[u8; 16]> {
+	bytes
+		.try_into()
+		.context("sqlite versionstamp value should be exactly 16 bytes")
+}
+
+async fn tx_scan_prefix_values(
+	tx: &universaldb::Transaction,
+	prefix: &[u8],
+) -> Result<Vec<(Vec<u8>, Vec<u8>)>> {
+	let prefix_subspace =
+		universaldb::Subspace::from(universaldb::tuple::Subspace::from_bytes(prefix.to_vec()));
+	let informal = tx.informal();
+	let mut stream = informal.get_ranges_keyvalues(
+		RangeOption {
+			mode: StreamingMode::WantAll,
+			..RangeOption::from(&prefix_subspace)
+		},
+		Serializable,
+	);
+	let mut rows = Vec::new();
+
+	while let Some(entry) = stream.try_next().await? {
+		rows.push((entry.key().to_vec(), entry.value().to_vec()));
+	}
+
+	Ok(rows)
 }
 
 pub(super) async fn read_actor_branch_record(
