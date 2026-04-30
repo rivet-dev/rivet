@@ -1,5 +1,6 @@
 pub mod lease;
 pub mod phase_a;
+pub mod phase_b;
 pub mod worker;
 
 pub use lease::{
@@ -11,4 +12,5 @@ pub use phase_a::{
 	SQLITE_COLD_PENDING_MARKER_VERSION, decode_cold_compact_state, decode_pending_marker,
 	encode_cold_compact_state, encode_pending_marker,
 };
+pub use phase_b::ColdPhaseBOutput;
 pub use worker::{ColdCompactorConfig, start};

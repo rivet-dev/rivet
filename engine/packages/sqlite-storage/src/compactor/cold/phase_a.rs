@@ -16,7 +16,7 @@ use crate::{
 	pump::{
 		keys,
 		types::{
-			ActorBranchId, ActorBranchRecord, CommitRow, MetaCompact,
+			ActorBranchId, ActorBranchRecord, BookmarkStr, CommitRow, MetaCompact,
 			SQLITE_STORAGE_COLD_SCHEMA_VERSION, decode_actor_branch_record, decode_commit_row,
 			decode_meta_compact,
 		},
@@ -60,6 +60,8 @@ pub struct ColdPhaseAPlan {
 	pub delta_chunks: Vec<ColdDeltaChunk>,
 	pub commit_rows: Vec<ColdCommitRow>,
 	pub vtx_rows: Vec<ColdVtxRow>,
+	pub pin_uploads: Vec<ColdPinUpload>,
+	pub actor_id: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -86,6 +88,13 @@ pub struct ColdCommitRow {
 pub struct ColdVtxRow {
 	pub versionstamp: [u8; 16],
 	pub txid: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ColdPinUpload {
+	pub actor_id: String,
+	pub bookmark: BookmarkStr,
+	pub versionstamp: [u8; 16],
 }
 
 enum VersionedColdCompactState {
@@ -186,6 +195,8 @@ pub(crate) async fn run(
 	let pass_uuid = uuid::Uuid::new_v4();
 	let handoff = register_pending_handoff(db, branch_id, pass_uuid).await?;
 	let marker_key = pending_marker_key(branch_id, pass_uuid);
+	let pin_uploads = payload_pin_uploads(&payload);
+	let actor_id = payload_actor_id(&payload);
 	let marker = ColdPendingMarker {
 		schema_version: SQLITE_STORAGE_COLD_SCHEMA_VERSION,
 		branch_id,
@@ -207,7 +218,15 @@ pub(crate) async fn run(
 	let read_timeout = Duration::from_millis(cold_config.phase_a_read_timeout_ms);
 	let read_plan = tokio::time::timeout(
 		read_timeout,
-		read_snapshot_plan(db, branch_id, pass_uuid, marker_key.clone(), marker.clone()),
+		read_snapshot_plan(
+			db,
+			branch_id,
+			pass_uuid,
+			marker_key.clone(),
+			marker.clone(),
+			pin_uploads,
+			actor_id,
+		),
 	)
 	.await
 	.context("sqlite cold phase A snapshot read exceeded tx-age budget")??;
@@ -270,10 +289,14 @@ async fn read_snapshot_plan(
 	pass_uuid: uuid::Uuid,
 	pending_marker_key: String,
 	marker: ColdPendingMarker,
+	pin_uploads: Vec<ColdPinUpload>,
+	actor_id: Option<String>,
 ) -> Result<ColdPhaseAPlan> {
 	db.run(move |tx| {
 		let marker = marker.clone();
 		let pending_marker_key = pending_marker_key.clone();
+		let pin_uploads = pin_uploads.clone();
+		let actor_id = actor_id.clone();
 		async move {
 			let branch_record = tx
 				.informal()
@@ -323,6 +346,8 @@ async fn read_snapshot_plan(
 				delta_chunks,
 				commit_rows,
 				vtx_rows,
+				pin_uploads,
+				actor_id,
 			})
 		}
 	})
@@ -500,7 +525,7 @@ fn initial_planned_object_keys(
 		format!("{prefix}/branch_record.bare"),
 		format!("{prefix}/cold_manifest/index.bare"),
 		format!("{prefix}/cold_manifest/chunks/{}.bare", pass_uuid.simple()),
-		format!("{prefix}/catalog_snapshot/{}.bare", pass_uuid.simple()),
+		format!("{prefix}/pointer_snapshot/{}.bare", pass_uuid.simple()),
 	]);
 
 	if handoff.materialized_txid > handoff.state.cold_drained_txid {
@@ -602,6 +627,29 @@ fn payload_branch_id(payload: &SqliteColdCompactPayload) -> ActorBranchId {
 		| SqliteColdCompactPayload::DeletePinnedBookmark {
 			actor_branch_id, ..
 		} => *actor_branch_id,
+	}
+}
+
+fn payload_pin_uploads(payload: &SqliteColdCompactPayload) -> Vec<ColdPinUpload> {
+	match payload {
+		SqliteColdCompactPayload::CreatePinnedBookmark {
+			actor_id,
+			bookmark,
+			versionstamp,
+			..
+		} => vec![ColdPinUpload {
+			actor_id: actor_id.clone(),
+			bookmark: bookmark.clone(),
+			versionstamp: *versionstamp,
+		}],
+		SqliteColdCompactPayload::DeletePinnedBookmark { .. } => Vec::new(),
+	}
+}
+
+fn payload_actor_id(payload: &SqliteColdCompactPayload) -> Option<String> {
+	match payload {
+		SqliteColdCompactPayload::CreatePinnedBookmark { actor_id, .. }
+		| SqliteColdCompactPayload::DeletePinnedBookmark { actor_id, .. } => Some(actor_id.clone()),
 	}
 }
 

@@ -519,6 +519,18 @@ enum VersionedPinnedBookmarkRecord {
 	V1(PinnedBookmarkRecord),
 }
 
+enum VersionedColdManifestIndex {
+	V1(ColdManifestIndex),
+}
+
+enum VersionedColdManifestChunk {
+	V1(ColdManifestChunk),
+}
+
+enum VersionedPointerSnapshot {
+	V1(PointerSnapshot),
+}
+
 impl OwnedVersionedData for VersionedMetaCompact {
 	type Latest = MetaCompact;
 
@@ -590,6 +602,87 @@ impl OwnedVersionedData for VersionedPinnedBookmarkRecord {
 		match version {
 			1 => Ok(Self::V1(serde_bare::from_slice(payload)?)),
 			_ => bail!("invalid sqlite-storage PinnedBookmarkRecord version: {version}"),
+		}
+	}
+
+	fn serialize_version(self, _version: u16) -> Result<Vec<u8>> {
+		match self {
+			Self::V1(data) => serde_bare::to_vec(&data).map_err(Into::into),
+		}
+	}
+}
+
+impl OwnedVersionedData for VersionedColdManifestIndex {
+	type Latest = ColdManifestIndex;
+
+	fn wrap_latest(latest: Self::Latest) -> Self {
+		Self::V1(latest)
+	}
+
+	fn unwrap_latest(self) -> Result<Self::Latest> {
+		match self {
+			Self::V1(data) => Ok(data),
+		}
+	}
+
+	fn deserialize_version(payload: &[u8], version: u16) -> Result<Self> {
+		match version {
+			1 => Ok(Self::V1(serde_bare::from_slice(payload)?)),
+			_ => bail!("invalid sqlite-storage ColdManifestIndex version: {version}"),
+		}
+	}
+
+	fn serialize_version(self, _version: u16) -> Result<Vec<u8>> {
+		match self {
+			Self::V1(data) => serde_bare::to_vec(&data).map_err(Into::into),
+		}
+	}
+}
+
+impl OwnedVersionedData for VersionedColdManifestChunk {
+	type Latest = ColdManifestChunk;
+
+	fn wrap_latest(latest: Self::Latest) -> Self {
+		Self::V1(latest)
+	}
+
+	fn unwrap_latest(self) -> Result<Self::Latest> {
+		match self {
+			Self::V1(data) => Ok(data),
+		}
+	}
+
+	fn deserialize_version(payload: &[u8], version: u16) -> Result<Self> {
+		match version {
+			1 => Ok(Self::V1(serde_bare::from_slice(payload)?)),
+			_ => bail!("invalid sqlite-storage ColdManifestChunk version: {version}"),
+		}
+	}
+
+	fn serialize_version(self, _version: u16) -> Result<Vec<u8>> {
+		match self {
+			Self::V1(data) => serde_bare::to_vec(&data).map_err(Into::into),
+		}
+	}
+}
+
+impl OwnedVersionedData for VersionedPointerSnapshot {
+	type Latest = PointerSnapshot;
+
+	fn wrap_latest(latest: Self::Latest) -> Self {
+		Self::V1(latest)
+	}
+
+	fn unwrap_latest(self) -> Result<Self::Latest> {
+		match self {
+			Self::V1(data) => Ok(data),
+		}
+	}
+
+	fn deserialize_version(payload: &[u8], version: u16) -> Result<Self> {
+		match version {
+			1 => Ok(Self::V1(serde_bare::from_slice(payload)?)),
+			_ => bail!("invalid sqlite-storage PointerSnapshot version: {version}"),
 		}
 	}
 
@@ -696,6 +789,39 @@ pub fn encode_pinned_bookmark_record(record: PinnedBookmarkRecord) -> Result<Vec
 pub fn decode_pinned_bookmark_record(payload: &[u8]) -> Result<PinnedBookmarkRecord> {
 	VersionedPinnedBookmarkRecord::deserialize_with_embedded_version(payload)
 		.context("decode sqlite pinned bookmark record")
+}
+
+pub fn encode_cold_manifest_index(index: ColdManifestIndex) -> Result<Vec<u8>> {
+	VersionedColdManifestIndex::wrap_latest(index)
+		.serialize_with_embedded_version(SQLITE_STORAGE_META_VERSION)
+		.context("encode sqlite cold manifest index")
+}
+
+pub fn decode_cold_manifest_index(payload: &[u8]) -> Result<ColdManifestIndex> {
+	VersionedColdManifestIndex::deserialize_with_embedded_version(payload)
+		.context("decode sqlite cold manifest index")
+}
+
+pub fn encode_cold_manifest_chunk(chunk: ColdManifestChunk) -> Result<Vec<u8>> {
+	VersionedColdManifestChunk::wrap_latest(chunk)
+		.serialize_with_embedded_version(SQLITE_STORAGE_META_VERSION)
+		.context("encode sqlite cold manifest chunk")
+}
+
+pub fn decode_cold_manifest_chunk(payload: &[u8]) -> Result<ColdManifestChunk> {
+	VersionedColdManifestChunk::deserialize_with_embedded_version(payload)
+		.context("decode sqlite cold manifest chunk")
+}
+
+pub fn encode_pointer_snapshot(snapshot: PointerSnapshot) -> Result<Vec<u8>> {
+	VersionedPointerSnapshot::wrap_latest(snapshot)
+		.serialize_with_embedded_version(SQLITE_STORAGE_META_VERSION)
+		.context("encode sqlite pointer snapshot")
+}
+
+pub fn decode_pointer_snapshot(payload: &[u8]) -> Result<PointerSnapshot> {
+	VersionedPointerSnapshot::deserialize_with_embedded_version(payload)
+		.context("decode sqlite pointer snapshot")
 }
 
 #[cfg(test)]

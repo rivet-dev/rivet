@@ -14,7 +14,7 @@ use sqlite_storage::{
 		cold::{
 			ColdCompactorConfig, ColdCompactorLease, ColdRenewOutcome, ColdTakeOutcome,
 			decode_cold_compact_state, decode_cold_lease, decode_pending_marker,
-			encode_cold_lease, release, renew, take, worker,
+			encode_cold_lease, encode_pending_marker, release, renew, take, worker,
 		},
 		decode_cold_compact_payload, encode_cold_compact_payload,
 	},
@@ -25,8 +25,10 @@ use sqlite_storage::{
 		branches_list_key,
 	},
 	types::{
-		ActorBranchId, ActorBranchRecord, BookmarkStr, BranchState, CommitRow, MetaCompact,
-		encode_actor_branch_record, encode_commit_row, encode_meta_compact,
+		ActorBranchId, ActorBranchRecord, BookmarkStr, BranchState, CommitRow, LayerKind,
+		MetaCompact, decode_cold_manifest_chunk, decode_cold_manifest_index,
+		decode_pointer_snapshot, encode_actor_branch_record, encode_commit_row,
+		encode_meta_compact,
 	},
 };
 use tempfile::Builder;
@@ -312,7 +314,7 @@ async fn cold_phase_a_writes_handoff_then_pending_marker_and_snapshot_plan() -> 
 		marker
 			.planned_object_keys
 			.iter()
-			.any(|key| key.ends_with("/delta/0000000000000004-0000000000000007.ltx"))
+			.any(|key| key.ends_with("/delta/0000000000000006-0000000000000006.ltx"))
 	);
 	assert!(
 		marker
@@ -320,6 +322,140 @@ async fn cold_phase_a_writes_handoff_then_pending_marker_and_snapshot_plan() -> 
 			.iter()
 			.any(|key| key.ends_with("/pin/07070707070707070707070707070707.ltx"))
 	);
+
+	Ok(())
+}
+
+#[tokio::test]
+async fn cold_phase_b_uploads_layers_manifest_snapshot_and_cleans_stale_markers() -> Result<()> {
+	let db = Arc::new(test_db().await?);
+	seed_phase_a_branch(&db).await?;
+
+	let cold_root = Builder::new().prefix("sqlite-cold-phase-b").tempdir()?;
+	let tier = Arc::new(FilesystemColdTier::new(cold_root.path()));
+	let stale_object_key = format!("{}/delta/leaked.ltx", branch_object_prefix());
+	tier.put_object(&stale_object_key, b"leaked").await?;
+	let stale_uuid = uuid::Uuid::from_u128(0xaaaaaaaa_bbbb_cccc_dddd_eeeeeeeeeeee);
+	let stale_marker_key = format!(
+		"{}/pending/{}.marker",
+		branch_object_prefix(),
+		stale_uuid.simple()
+	);
+	tier.put_object(
+		&stale_marker_key,
+		&encode_pending_marker(sqlite_storage::compactor::cold::ColdPendingMarker {
+			schema_version: sqlite_storage::types::SQLITE_STORAGE_COLD_SCHEMA_VERSION,
+			branch_id: actor_branch_id(),
+			pass_uuid: stale_uuid,
+			created_at_ms: 0,
+			cold_drained_txid: 0,
+			materialized_txid: 1,
+			last_hot_pass_txid: 1,
+			planned_object_keys: vec![stale_object_key.clone()],
+		})?,
+	)
+	.await?;
+
+	worker::test_hooks::handle_payload_once_with_cold_tier(
+		Arc::clone(&db),
+		payload(),
+		ColdCompactorConfig::default(),
+		CancellationToken::new(),
+		tier.clone(),
+	)
+	.await?;
+
+	let state_bytes = read_value(&db, branch_meta_cold_compact_key(actor_branch_id()))
+		.await?
+		.expect("cold compact state should be written");
+	let state = decode_cold_compact_state(&state_bytes)?;
+	let pass_uuid = state
+		.in_flight_uuid
+		.expect("phase A should register an in-flight uuid");
+
+	let image_key = format!(
+		"{}/image/00000000/00000002-0000000000000005.ltx",
+		branch_object_prefix()
+	);
+	let delta_key = format!(
+		"{}/delta/0000000000000006-0000000000000006.ltx",
+		branch_object_prefix()
+	);
+	let pin_key = format!("{}/pin/07070707070707070707070707070707.ltx", branch_object_prefix());
+	let chunk_key = format!(
+		"{}/cold_manifest/chunks/{}.bare",
+		branch_object_prefix(),
+		pass_uuid.simple()
+	);
+	let index_key = format!("{}/cold_manifest/index.bare", branch_object_prefix());
+	let snapshot_key = format!(
+		"{}/pointer_snapshot/{}.bare",
+		branch_object_prefix(),
+		pass_uuid.simple()
+	);
+
+	assert_eq!(
+		tier.get_object(&image_key).await?,
+		Some(b"shard-five".to_vec())
+	);
+	assert_eq!(
+		tier.get_object(&delta_key).await?,
+		Some(b"delta-six".to_vec())
+	);
+	assert_eq!(tier.get_object(&pin_key).await?, Some(b"shard-five".to_vec()));
+	assert!(
+		tier.get_object(&format!("{}/branch_record.bare", branch_object_prefix()))
+			.await?
+			.is_some()
+	);
+
+	let chunk = decode_cold_manifest_chunk(
+		&tier
+			.get_object(&chunk_key)
+			.await?
+			.expect("manifest chunk should exist"),
+	)?;
+	assert_eq!(chunk.branch_id, actor_branch_id());
+	assert_eq!(chunk.layers.len(), 3);
+	assert!(chunk.layers.iter().any(|layer| layer.kind == LayerKind::Image));
+	assert!(chunk.layers.iter().any(|layer| layer.kind == LayerKind::Delta));
+	assert!(chunk.layers.iter().any(|layer| layer.kind == LayerKind::Pin));
+	assert_eq!(chunk.bookmarks.len(), 1);
+	assert_eq!(chunk.bookmarks[0].pin_object_key.as_deref(), Some(pin_key.as_str()));
+
+	let index = decode_cold_manifest_index(
+		&tier
+			.get_object(&index_key)
+			.await?
+			.expect("manifest index should exist"),
+	)?;
+	assert_eq!(index.branch_id, actor_branch_id());
+	assert_eq!(index.chunks.len(), 1);
+	assert_eq!(index.chunks[0].object_key, chunk_key);
+
+	let snapshot = decode_pointer_snapshot(
+		&tier
+			.get_object(&snapshot_key)
+			.await?
+			.expect("pointer snapshot should exist"),
+	)?;
+	assert_eq!(snapshot.actors.len(), 1);
+	assert_eq!(snapshot.actors[0].0, "actor-a");
+	assert_eq!(snapshot.actors[0].2, actor_branch_id());
+
+	assert_eq!(tier.get_object(&stale_object_key).await?, None);
+	assert_eq!(tier.get_object(&stale_marker_key).await?, None);
+
+	let marker_key = format!("{}/pending/{}.marker", branch_object_prefix(), pass_uuid.simple());
+	let marker = decode_pending_marker(
+		&tier
+			.get_object(&marker_key)
+			.await?
+			.expect("current pending marker should exist"),
+	)?;
+	assert!(marker.planned_object_keys.contains(&image_key));
+	assert!(marker.planned_object_keys.contains(&chunk_key));
+	assert!(marker.planned_object_keys.contains(&snapshot_key));
 
 	Ok(())
 }

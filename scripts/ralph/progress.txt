@@ -34,6 +34,7 @@
 - Cold-tier implementations live under `sqlite_storage::cold_tier`; use relative object keys, `FilesystemColdTier` for local tests, and `FaultyColdTier` for injected latency/failures.
 - Cold compactor service code lives under `sqlite_storage::compactor::cold`; it uses `SqliteColdCompactSubject`, queue group `cold_compactor`, and branch-scoped `BR/{branch_id}/META/cold_lease`.
 - Cold compactor tests that expect object writes should inject `FilesystemColdTier`; the default service tier is `DisabledColdTier` until runtime config selects a backend.
+- Cold Phase B rewrites the pending marker with the complete object-key set before uploading image, delta, pin, manifest, and pointer snapshot objects.
 
 # Ralph Progress Log
 Started: Wed Apr 29 03:29:23 PM PDT 2026
@@ -671,4 +672,24 @@ Started: Wed Apr 29 03:29:23 PM PDT 2026
   - Cold-tier object keys are S3-style relative keys; reject empty keys, absolute paths, and parent-directory traversal.
   - `FilesystemColdTier` is the local stand-in for S3 tests, while `FaultyColdTier` wraps any `ColdTier` implementation to inject latency or failures.
   - Adding the AWS SDK stack is dependency-heavy; if disk is full, clearing stale `target/debug/incremental` artifacts can unblock checks without touching source.
+---
+## 2026-04-29 21:33 PDT - US-038
+- Implemented cold compactor Phase B uploads for branch image layers, consolidated delta layers, pending pin layers, branch records, manifest chunks/indexes, and pointer snapshots.
+- Rewrote each pending marker with the complete object-key set before Phase B uploads, then cleaned stale pending markers and their listed objects after the pass.
+- Added vbare encode/decode helpers for cold manifest indexes, manifest chunks, and pointer snapshots.
+- Verified with `cargo test -p sqlite-storage --test compactor_cold`, `cargo check -p sqlite-storage`, and `cargo test -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/CLAUDE.md`
+  - `engine/packages/sqlite-storage/src/compactor/cold/mod.rs`
+  - `engine/packages/sqlite-storage/src/compactor/cold/phase_a.rs`
+  - `engine/packages/sqlite-storage/src/compactor/cold/phase_b.rs`
+  - `engine/packages/sqlite-storage/src/compactor/cold/worker.rs`
+  - `engine/packages/sqlite-storage/src/pump/types.rs`
+  - `engine/packages/sqlite-storage/tests/compactor_cold.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Phase B should stay S3-only and consume the snapshot data collected by Phase A; Phase C is the next FDB write boundary.
+  - The pending marker starts as the Phase A handoff marker and is overwritten with the final object list once SHARD, DELTA, and pin work is known.
+  - Cold manifest index/chunk and pointer snapshot objects use the same `OwnedVersionedData` wrapper pattern as other persisted pump records.
 ---
