@@ -78,20 +78,27 @@ impl ActorDb {
 						load_branch_ancestry(&tx, branch_id).await?
 					};
 					let head_key = keys::branch_meta_head_key(branch_id);
+					let head_at_fork_key = keys::branch_meta_head_at_fork_key(branch_id);
 					let branch_cache_matches = cached_branch_id == Some(branch_id);
-					let (head_bytes, storage_used) =
+					let (head_bytes, head_at_fork_bytes, storage_used) =
 						if let (true, Some(storage_used)) = (branch_cache_matches, cached_storage_used) {
-							(tx_get_value(&tx, &head_key, Serializable).await?, storage_used)
+							(
+								tx_get_value(&tx, &head_key, Serializable).await?,
+								tx_get_value(&tx, &head_at_fork_key, Serializable).await?,
+								storage_used,
+							)
 						} else {
 							let quota_fut = quota::read_branch(&tx, branch_id);
 							let head_fut = tx_get_value(&tx, &head_key, Serializable);
-							let (head_bytes, storage_used) = tokio::try_join!(head_fut, quota_fut)?;
-							(head_bytes, storage_used)
+							let head_at_fork_fut = tx_get_value(&tx, &head_at_fork_key, Serializable);
+							let (head_bytes, head_at_fork_bytes, storage_used) =
+								tokio::try_join!(head_fut, head_at_fork_fut, quota_fut)?;
+							(head_bytes, head_at_fork_bytes, storage_used)
 						};
 
-					let previous_head = head_bytes
-						.as_deref()
-						.map(decode_db_head)
+					let previous_head_bytes = head_bytes.as_ref().or(head_at_fork_bytes.as_ref());
+					let previous_head = previous_head_bytes
+						.map(|bytes| decode_db_head(bytes.as_slice()))
 						.transpose()
 						.context("decode current sqlite db head")?;
 					let materialized_txid =
@@ -213,6 +220,9 @@ impl ActorDb {
 						tx.informal().clear(key);
 					}
 					tx.informal().set(&head_key, &encoded_head);
+					if head_at_fork_bytes.is_some() {
+						tx.informal().clear(&head_at_fork_key);
+					}
 					if branch_resolution.namespace_initialized {
 						branch::write_root_namespace_metadata(
 							&tx,

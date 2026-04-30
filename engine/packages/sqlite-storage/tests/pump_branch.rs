@@ -17,8 +17,8 @@ use sqlite_storage::{
 	ltx::{LtxHeader, encode_ltx_v3},
 	pump::{ActorDb, branch},
 	types::{
-		ActorBranchId, ActorBranchRecord, BranchState, DBHead, DirtyPage, NamespaceBranchId,
-		NamespaceBranchRecord, NamespaceId, ResolvedVersionstamp,
+		ActorBranchId, ActorBranchRecord, BranchState, CommitRow, DBHead, DirtyPage,
+		NamespaceBranchId, NamespaceBranchRecord, NamespaceId, ResolvedVersionstamp,
 		decode_actor_branch_record, decode_actor_pointer, decode_commit_row, decode_db_head,
 		decode_namespace_branch_record, decode_namespace_pointer, encode_actor_branch_record,
 		encode_namespace_branch_record,
@@ -156,6 +156,29 @@ async fn read_actor_branch_id(
 
 async fn read_branch_id(db: &universaldb::Database) -> Result<ActorBranchId> {
 	read_actor_branch_id(db, test_namespace(), TEST_ACTOR).await
+}
+
+async fn read_branch_head(
+	db: &universaldb::Database,
+	branch_id: ActorBranchId,
+) -> Result<DBHead> {
+	let bytes = read_value(db, branch_meta_head_key(branch_id))
+		.await?
+		.expect("branch head should exist");
+
+	decode_db_head(&bytes)
+}
+
+async fn read_head_commit(
+	db: &universaldb::Database,
+	branch_id: ActorBranchId,
+) -> Result<CommitRow> {
+	let head = read_branch_head(db, branch_id).await?;
+	let commit_bytes = read_value(db, branch_commit_key(branch_id, head.head_txid))
+		.await?
+		.expect("head commit row should exist");
+
+	decode_commit_row(&commit_bytes)
 }
 
 async fn read_refcount(db: &universaldb::Database, branch_id: ActorBranchId) -> Result<i64> {
@@ -799,6 +822,83 @@ async fn fork_actor_writes_target_pointer_and_reads_source_data() -> Result<()> 
 }
 
 #[tokio::test]
+async fn fresh_fork_uses_head_at_fork_until_first_commit() -> Result<()> {
+	let db = Arc::new(test_db().await?);
+	let source_actor_db = ActorDb::new(
+		db.clone(),
+		test_ups(),
+		test_namespace(),
+		TEST_ACTOR.to_string(),
+		NodeId::new(),
+	);
+	source_actor_db.commit(vec![page(1, 0x11)], 2, 1_000).await?;
+	let source_branch_id = read_branch_id(&db).await?;
+	let source_commit = decode_commit_row(
+		&read_value(&db, branch_commit_key(source_branch_id, 1))
+			.await?
+			.expect("source commit row should exist"),
+	)?;
+
+	let forked_actor_id = branch::fork_actor(
+		&db,
+		NamespaceId::from_gas_id(test_namespace()),
+		TEST_ACTOR.to_string(),
+		ResolvedVersionstamp {
+			versionstamp: source_commit.versionstamp,
+			bookmark: None,
+		},
+		NamespaceId::from_gas_id(test_namespace()),
+	)
+	.await?;
+	let forked_branch_id = read_actor_branch_id(&db, test_namespace(), &forked_actor_id).await?;
+	assert!(
+		read_value(&db, branch_meta_head_key(forked_branch_id))
+			.await?
+			.is_none()
+	);
+	let head_at_fork = decode_db_head(
+		&read_value(&db, branch_meta_head_at_fork_key(forked_branch_id))
+			.await?
+			.expect("forked branch head_at_fork should exist"),
+	)?;
+	assert_eq!(head_at_fork.head_txid, 1);
+	assert_eq!(head_at_fork.db_size_pages, 2);
+
+	let forked_actor_db = ActorDb::new(
+		db.clone(),
+		test_ups(),
+		test_namespace(),
+		forked_actor_id,
+		NodeId::new(),
+	);
+	let pages = forked_actor_db.get_pages(vec![1]).await?;
+	assert_eq!(pages[0].bytes, Some(page_bytes(0x11)));
+
+	forked_actor_db
+		.commit(vec![page(2, 0x22)], 3, 2_000)
+		.await?;
+	assert!(
+		read_value(&db, branch_meta_head_at_fork_key(forked_branch_id))
+			.await?
+			.is_none()
+	);
+	let forked_head = read_branch_head(&db, forked_branch_id).await?;
+	assert_eq!(forked_head.head_txid, 2);
+	assert_eq!(forked_head.db_size_pages, 3);
+	assert!(
+		read_value(&db, branch_commit_key(forked_branch_id, 2))
+			.await?
+			.is_some()
+	);
+
+	let pages = forked_actor_db.get_pages(vec![1, 2]).await?;
+	assert_eq!(pages[0].bytes, Some(page_bytes(0x11)));
+	assert_eq!(pages[1].bytes, Some(page_bytes(0x22)));
+
+	Ok(())
+}
+
+#[tokio::test]
 async fn fork_actor_reads_parent_shard_when_parent_pidx_is_newer_than_fork() -> Result<()> {
 	let db = Arc::new(test_db().await?);
 	let source_actor_db = ActorDb::new(
@@ -891,10 +991,7 @@ async fn fork_actor_can_use_depth_one_source_branch() -> Result<()> {
 		.await?;
 	let depth_one_branch_id =
 		read_actor_branch_id(&db, test_namespace(), &depth_one_actor_id).await?;
-	let depth_one_commit_bytes = read_value(&db, branch_commit_key(depth_one_branch_id, 1))
-		.await?
-		.expect("depth-one commit row should exist");
-	let depth_one_commit = decode_commit_row(&depth_one_commit_bytes)?;
+	let depth_one_commit = read_head_commit(&db, depth_one_branch_id).await?;
 
 	let depth_two_actor_id = branch::fork_actor(
 		&db,
@@ -968,11 +1065,7 @@ async fn actor_db_reuses_cached_branch_ancestry_for_reads() -> Result<()> {
 	);
 	child_actor_db.commit(vec![page(2, 0x22)], 3, 2_000).await?;
 	let child_branch_id = read_actor_branch_id(&db, test_namespace(), &child_actor_id).await?;
-	let child_commit = decode_commit_row(
-		&read_value(&db, branch_commit_key(child_branch_id, 1))
-			.await?
-			.expect("child commit row should exist"),
-	)?;
+	let child_commit = read_head_commit(&db, child_branch_id).await?;
 
 	let grandchild_actor_id = branch::fork_actor(
 		&db,
@@ -1053,10 +1146,7 @@ async fn fork_actor_can_use_deep_source_branch() -> Result<()> {
 			.await?;
 		source_actor_id = forked_actor_id;
 		source_branch_id = read_actor_branch_id(&db, test_namespace(), &source_actor_id).await?;
-		let commit_bytes = read_value(&db, branch_commit_key(source_branch_id, 1))
-			.await?
-			.expect("fork commit row should exist");
-		source_commit = decode_commit_row(&commit_bytes)?;
+		source_commit = read_head_commit(&db, source_branch_id).await?;
 	}
 
 	let final_actor_id = branch::fork_actor(

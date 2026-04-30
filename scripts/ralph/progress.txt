@@ -25,6 +25,7 @@
 - ActorDb's flattened ancestry cache stores branch ids plus parent versionstamp caps; read txs still resolve cap versionstamps to txids before PIDX/SHARD lookup.
 - Branch ancestry reads must ignore PIDX owners newer than that source branch's fork cap, then fall through to the latest SHARD version at or below the cap.
 - Do not add APTR/NSPTR `last_swapped_at_ms` cache validation; the v4 spec makes branches immutable and treats the US-026 invalidation contract as obsolete.
+- Fresh fork actor branches keep `/META/head_at_fork` until their first local commit; commits treat it as the previous `DBHead`, then write `/META/head` and clear the snapshot in the same tx.
 
 # Ralph Progress Log
 Started: Wed Apr 29 03:29:23 PM PDT 2026
@@ -375,7 +376,7 @@ Started: Wed Apr 29 03:29:23 PM PDT 2026
 - Added bookmark tests covering fixed-width formatting, malformed inputs, negative timestamp rejection, representative round-trips, and lexicographic chronological ordering.
 - Verified with `cargo test -p sqlite-storage --test pump_bookmark`, `cargo check -p sqlite-storage`, and `cargo test -p sqlite-storage`.
 - Files changed:
-  - `engine/packages/sqlite-storage/AGENTS.md`
+  - `engine/packages/sqlite-storage/CLAUDE.md` (via `AGENTS.md` symlink)
   - `engine/packages/sqlite-storage/src/pump/types.rs`
   - `engine/packages/sqlite-storage/tests/pump_bookmark.rs`
   - `scripts/ralph/prd.json`
@@ -507,5 +508,20 @@ Started: Wed Apr 29 03:29:23 PM PDT 2026
 - **Learnings for future iterations:**
   - `ReadSource::max_txid` is the per-source read cap; apply it to PIDX rows before considering DELTA ownership.
   - Parent branches can keep writing after a fork, so a child read must treat newer parent PIDX entries as invisible and rely on versioned SHARD fallback.
+  - The existing runner-protocol warning about missing `node_modules/@bare-ts/tools` is unrelated to `sqlite-storage` checks.
+---
+## 2026-04-29 20:14 PDT - US-028
+- Implemented fresh-fork head handling in `ActorDb::commit`: it now reads `/META/head_at_fork` when `/META/head` is absent, advances from that snapshot, writes the real head, and clears the snapshot in the same transaction.
+- Added branch regression coverage for reading a freshly forked actor before its first commit and then committing local pages with the expected `head_txid`.
+- Verified with `cargo test -p sqlite-storage --test pump_branch fresh_fork_uses_head_at_fork_until_first_commit -- --nocapture`, `cargo test -p sqlite-storage --test pump_branch`, `cargo check -p sqlite-storage`, and `cargo test -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/AGENTS.md`
+  - `engine/packages/sqlite-storage/src/pump/commit.rs`
+  - `engine/packages/sqlite-storage/tests/pump_branch.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Fresh fork commits continue from the fork snapshot's `head_txid`; tests should read the branch head before looking up that branch's latest `CommitRow`.
+  - `/META/head_at_fork` is temporary fork metadata and is removed when the child branch writes its first `/META/head`.
   - The existing runner-protocol warning about missing `node_modules/@bare-ts/tools` is unrelated to `sqlite-storage` checks.
 ---
