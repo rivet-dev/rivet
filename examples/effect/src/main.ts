@@ -1,6 +1,6 @@
 import { Layer } from "effect"
 import { NodeRuntime } from "@effect/platform-node"
-import { Registry, TestRegistry } from "@rivetkit/effect"
+import { Registry } from "@rivetkit/effect"
 import { CounterLive } from "./actors/counter/live.ts"
 // import { ChatRoomLive } from "./actors/chat-room/live.ts"
 
@@ -11,10 +11,6 @@ const ActorsLayer = Layer.mergeAll(
 
 const MainLayer = ActorsLayer.pipe(
 	Layer.provide(Registry.layer({ storagePath: "./data" })),
-)
-
-const TestLayer = ActorsLayer.pipe(
-	Layer.provide(TestRegistry.layer),
 )
 
 // Keeps the layer alive. Tears down on SIGINT/SIGTERM.

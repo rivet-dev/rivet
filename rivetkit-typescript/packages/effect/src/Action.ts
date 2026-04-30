@@ -126,12 +126,9 @@ export type ServicesServer<R> =
 /**
  * Extract the action with the matching tag from a union of actions.
  */
-export type ExtractTag<R extends Any, Tag extends string> = R extends Action<
-	Tag,
-	infer _Payload,
-	infer _Success,
-	infer _Error
->
+export type ExtractTag<R extends Any, Tag extends string> = R extends {
+	readonly _tag: Tag;
+}
 	? R
 	: never;
 

@@ -1,5 +1,5 @@
-import { Effect, Schema } from "effect"
-import { Actor, Action, Message } from "@rivetkit/effect"
+import { Schema } from "effect"
+import { Actor, Action } from "@rivetkit/effect"
 
 // --- Errors ---
 
@@ -41,37 +41,15 @@ export const GetCount = Action.make("GetCount", {
 	success: Schema.Number,
 })
 
-// --- Messages ---
-
-// Non-completable (fire-and-forget)
-export const Reset = Message.make("Reset", {
-	payload: { reason: Schema.String },
-})
-
-// Completable (sender can await a typed response)
-export const IncrementBy = Message.make("IncrementBy", {
-	payload: { amount: Schema.Number },
-	success: Schema.Number,
-})
-
 // --- Actor Definition ---
 
 // The definition is the actor's public contract. It carries no
 // implementation. Both server and client code import this;
 // the implementation stays server-only.
 export const Counter = Actor.make("Counter", {
-	state: Schema.Struct({
-		count: Schema.Number.pipe(
-			Schema.withConstructorDefault(Effect.succeed(0)),
-		),
-	}),
-	actions: [Increment, GetCount],	// synchronous request-response
-	messages: [Reset, IncrementBy],	// durable, queued, background
-	events: { countChanged: Schema.Number },
+	actions: [Increment, GetCount],
 	options: {
-		name: "Counter",				// Human-friendly display name
-		icon: "comments", 				// FontAwesome icon name
-		maxQueueSize: 1000,				// Max number of pending messages
-		maxQueueMessageSize: 64 * 1024,	// Max bytes per message
+		name: "Counter",	// Human-friendly display name
+		icon: "comments",	// FontAwesome icon name
 	},
 })
