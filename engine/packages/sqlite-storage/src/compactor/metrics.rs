@@ -148,6 +148,13 @@ lazy_static::lazy_static! {
 		&["node_id"],
 		*REGISTRY
 	).unwrap();
+
+	pub static ref SQLITE_S3_REQUEST_FAILURES_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
+		"sqlite_s3_request_failures_total",
+		"Total sqlite cold-tier request failures.",
+		&["node_id", "op"],
+		*REGISTRY
+	).unwrap();
 }
 
 #[cfg(debug_assertions)]

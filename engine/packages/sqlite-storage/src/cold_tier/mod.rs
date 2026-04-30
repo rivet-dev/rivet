@@ -8,6 +8,10 @@ use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::time::Duration;
 use tokio::io::AsyncWriteExt;
 
+use crate::compactor::metrics;
+
+const UNKNOWN_NODE_ID: &str = "unknown";
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ColdTierObjectMetadata {
 	pub key: String,
@@ -472,10 +476,24 @@ impl<T> FaultyColdTier<T> {
 			.is_ok();
 
 		if fail_by_operation || fail_next {
+			metrics::SQLITE_S3_REQUEST_FAILURES_TOTAL
+				.with_label_values(&[UNKNOWN_NODE_ID, operation.as_label()])
+				.inc();
 			anyhow::bail!("injected cold-tier failure for {operation:?}");
 		}
 
 		Ok(())
+	}
+}
+
+impl ColdTierOperation {
+	fn as_label(self) -> &'static str {
+		match self {
+			ColdTierOperation::Put => "put",
+			ColdTierOperation::Get => "get",
+			ColdTierOperation::Delete => "delete",
+			ColdTierOperation::List => "list",
+		}
 	}
 }
 

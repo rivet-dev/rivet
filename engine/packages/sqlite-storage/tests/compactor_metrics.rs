@@ -137,6 +137,10 @@ fn metrics_register_without_panic() {
 		&*compactor_metrics::SQLITE_PENDING_MARKER_ORPHAN_CLEANED_TOTAL,
 		"sqlite_pending_marker_orphan_cleaned_total",
 	);
+	assert_metric_name(
+		&*compactor_metrics::SQLITE_S3_REQUEST_FAILURES_TOTAL,
+		"sqlite_s3_request_failures_total",
+	);
 	assert_metric_name(&*pump_metrics::SQLITE_BRANCH_FORK_TOTAL, "sqlite_branch_fork_total");
 	assert_metric_name(
 		&*pump_metrics::SQLITE_BRANCH_DELETE_TOTAL,
@@ -220,6 +224,10 @@ fn metric_label_set_includes_node_id() {
 	assert_has_label(&*compactor_metrics::SQLITE_EVICTION_PASS_DELTAS_CLEARED_TOTAL, "node_id");
 	assert_has_label(
 		&*compactor_metrics::SQLITE_PENDING_MARKER_ORPHAN_CLEANED_TOTAL,
+		"node_id",
+	);
+	assert_has_label(
+		&*compactor_metrics::SQLITE_S3_REQUEST_FAILURES_TOTAL,
 		"node_id",
 	);
 	assert_has_label(&*pump_metrics::SQLITE_BRANCH_FORK_TOTAL, "node_id");

@@ -54,6 +54,8 @@
 - Fork integration tests can share setup through `tests/fork_common`; to test bk_pin OCC races, stage a derive in one transaction, advance the pin in a nested transaction, then let the retry observe `ForkOutOfRetention`.
 - Cold compactor retries reuse `ColdCompactState.in_flight_uuid`; manifest index writes should replace the chunk ref for that pass UUID so Phase B crashes stay idempotent.
 - Access-touch throttle regressions can use `actor_db::test_hooks::touch_access_if_bucket_advanced_for_test` to exercise eviction-index re-keying without thousands of full commits.
+- Eviction clear transactions must re-check branch descendant/bookmark pins because forks can land after the sweep plan and before compare-and-clear execution.
+- When recomputing a branch bookmark pin after deleting the last pinned bookmark, store zero for "unpinned"; `0xff..ff` remains the advanced-retention fence for fork checks.
 
 # Ralph Progress Log
 Started: Wed Apr 29 03:29:23 PM PDT 2026
@@ -71,6 +73,33 @@ Started: Wed Apr 29 03:29:23 PM PDT 2026
   - Access-touch throttling can be tested directly through the shared helper so the full 60-second, 1ms cadence path stays deterministic and fast.
   - The eviction index should keep the old bucket key until `ACCESS_TOUCH_THROTTLE_MS` advances, then clear the old bucket and write the new one in the same touch.
   - Adding byte-length context around persisted scalar decodes makes intermittent fixture corruption much faster to diagnose.
+---
+## 2026-04-29 23:27 PDT - US-062
+- Added the seven critical fault-injection integration test files from spec section 21, plus a shared `tests/fault_common` helper for focused RocksDB/FDB and filesystem cold-tier setup.
+- Added cold-tier failure metric coverage, Phase A latency coverage, Phase B/Phase C retry coverage, active-read eviction protection, fork-vs-eviction pin protection, bookmark-delete GC race coverage, and S3-only DR replay scaffolding coverage.
+- Fixed two race/sentinel issues surfaced by the tests: eviction clear now re-checks branch pins inside the clear tx, and deleting the last pinned bookmark recomputes `bk_pin` to zero instead of the fork-retention fence.
+- Verified with `cargo test -p sqlite-storage --test cold_compactor_5xx_phase_b --test cold_compactor_phase_a_pending_put_5s --test cold_compactor_lease_loss_b_to_c --test eviction_during_active_read --test concurrent_fork_during_eviction --test gc_pin_recompute_under_bookmark_delete_race --test dr_replay_from_s3_alone -- --nocapture`, `cargo check -p sqlite-storage`, and `cargo test -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/CLAUDE.md` (`AGENTS.md` symlink)
+  - `engine/packages/sqlite-storage/src/cold_tier/mod.rs`
+  - `engine/packages/sqlite-storage/src/compactor/eviction/mod.rs`
+  - `engine/packages/sqlite-storage/src/compactor/metrics.rs`
+  - `engine/packages/sqlite-storage/src/pump/bookmark.rs`
+  - `engine/packages/sqlite-storage/tests/cold_compactor_5xx_phase_b.rs`
+  - `engine/packages/sqlite-storage/tests/cold_compactor_lease_loss_b_to_c.rs`
+  - `engine/packages/sqlite-storage/tests/cold_compactor_phase_a_pending_put_5s.rs`
+  - `engine/packages/sqlite-storage/tests/compactor_metrics.rs`
+  - `engine/packages/sqlite-storage/tests/concurrent_fork_during_eviction.rs`
+  - `engine/packages/sqlite-storage/tests/dr_replay_from_s3_alone.rs`
+  - `engine/packages/sqlite-storage/tests/eviction_during_active_read.rs`
+  - `engine/packages/sqlite-storage/tests/fault_common/mod.rs`
+  - `engine/packages/sqlite-storage/tests/gc_pin_recompute_under_bookmark_delete_race.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Fault-injection tests can share deterministic cold branch setup through `tests/fault_common` while still using real RocksDB-backed UDB and `FilesystemColdTier`.
+  - `FaultyColdTier` is the right place to increment `sqlite_s3_request_failures_total{node_id, op}` because it centralizes injected S3-style failures.
+  - Fork/eviction races need a clear-phase pin re-check; plan-time pin checks alone are stale as soon as `derive_branch_at` can write `desc_pin`.
 ---
 ## 2026-04-29 23:08 PDT - US-059
 - Added `tests/cold_compactor.rs` covering Phase A handoff-before-marker behavior, Phase B upload-time FDB independence, Phase C cold-drain OCC aborts, and retry after a Phase B crash.

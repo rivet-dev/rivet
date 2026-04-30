@@ -389,6 +389,8 @@ async fn clear_evictable_shard_versions(
 							return Ok(EvictionClearOutcome::HotPassAdvanced);
 						}
 					}
+					let evictable_shard_versions =
+						filter_now_pinned_versions(&tx, &evictable_shard_versions).await?;
 					let fully_evicted_index_keys =
 						fully_evicted_index_keys_after_clear(&tx, &evictable_shard_versions)
 							.await?;
@@ -411,14 +413,14 @@ async fn clear_evictable_shard_versions(
 						tx.informal().clear(&key);
 					}
 
-					Ok(EvictionClearOutcome::Cleared)
+					Ok(EvictionClearOutcome::Cleared(evictable_shard_versions))
 				}
 			}
 		})
 		.await?;
 
 	match clear_outcome {
-		EvictionClearOutcome::Cleared => Ok(evictable_shard_versions),
+		EvictionClearOutcome::Cleared(cleared_versions) => Ok(cleared_versions),
 		EvictionClearOutcome::HotPassAdvanced => {
 			let holder_label = holder_id.to_string();
 			metrics::SQLITE_EVICTION_OCC_ABORT_TOTAL
@@ -427,6 +429,37 @@ async fn clear_evictable_shard_versions(
 			Ok(Vec::new())
 		}
 	}
+}
+
+async fn filter_now_pinned_versions(
+	tx: &universaldb::Transaction,
+	evictable_shard_versions: &[EvictableShardVersion],
+) -> Result<Vec<EvictableShardVersion>> {
+	let mut pins_by_branch = BTreeMap::new();
+	for version in evictable_shard_versions {
+		if pins_by_branch.contains_key(&version.branch_id) {
+			continue;
+		}
+		let desc_pin_txid =
+			read_pin_txid(tx, version.branch_id, &keys::branches_desc_pin_key(version.branch_id))
+				.await?;
+		let bk_pin_txid =
+			read_pin_txid(tx, version.branch_id, &keys::branches_bk_pin_key(version.branch_id))
+				.await?;
+		pins_by_branch.insert(version.branch_id, (desc_pin_txid, bk_pin_txid));
+	}
+
+	Ok(evictable_shard_versions
+		.iter()
+		.filter(|version| {
+			let Some((desc_pin_txid, bk_pin_txid)) = pins_by_branch.get(&version.branch_id) else {
+				return false;
+			};
+			!is_pinned(version.as_of_txid, *desc_pin_txid)
+				&& !is_pinned(version.as_of_txid, *bk_pin_txid)
+		})
+		.cloned()
+		.collect())
 }
 
 fn planned_hot_pass_txids_by_branch(
@@ -486,9 +519,9 @@ struct PlannedBranchEviction {
 	shard_versions: BTreeMap<(u32, u64), Vec<u8>>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 enum EvictionClearOutcome {
-	Cleared,
+	Cleared(Vec<EvictableShardVersion>),
 	HotPassAdvanced,
 }
 

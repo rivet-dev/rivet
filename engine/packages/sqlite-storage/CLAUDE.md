@@ -52,6 +52,7 @@ These come from `r2-prior-art/.agent/research/sqlite/requirements.md` and supers
 - **Eviction compactor coordination is global.** The service lives under `compactor/eviction/`, takes `CMPC/lease_global/{kind=eviction}`, and scans `CTR/eviction_index` in `batch_size` chunks before predicate-specific clearing.
 - **Eviction predicate is shard-version scoped.** Require a newer FDB SHARD version, hot-cache age, cold-drain coverage, `last_hot_pass_txid - SHARD_RETENTION_MARGIN >= as_of_txid`, and no `desc_pin` or `bk_pin` at or below that txid before clearing.
 - **Eviction clears are plan-then-fence.** Capture expected SHARD/PIDX values at plan time, then regular-read `last_hot_pass_txid` in the clear tx and use `COMPARE_AND_CLEAR` for every planned key.
+- **Eviction clears re-check branch pins in the clear tx.** A fork can land after planning and before clearing; newly pinned SHARD versions must no-op instead of being deleted from under the fork.
 - **Fully evicted branches exit the eviction index.** Clear `CTR/eviction_index` only when the current SHARD rows are all covered by the planned compare-and-clear set.
 - **`COMMITS/{txid_be}` stores `CommitRow` via `SetVersionstampedValue`; `VTX/{versionstamp}` is written via `SetVersionstampedKey` and maps to raw u64 BE txid.**
 - **Hot retention clears `COMMITS` and matching `VTX` rows together.** Do this inside the hot compactor write tx and keep quota accounting paired with the cleared keys.
@@ -92,6 +93,7 @@ These come from `r2-prior-art/.agent/research/sqlite/requirements.md` and supers
 - **Ephemeral bookmark creation is read-only.** Format the caller timestamp with the current branch head txid; only pinned bookmarks write `BOOKMARK/{actor_id}/{bookmark}/pinned`.
 - **Pinned bookmark creation is two-phase.** The request tx writes `PinStatus::Pending`, branch `bk_pin`, and namespace `pin_count`; the cold compactor UPS message makes the S3 pin layer and later flips status.
 - **Pinned bookmark deletion removes both bookmark keys, decrements `pin_count`, recomputes branch `bk_pin`, and publishes cold-compactor cleanup.**
+- **An empty recomputed bookmark pin is stored as zero.** `0xff..ff` is the advanced-retention fence for fork checks; GC treats zero as unpinned.
 - **Restore-to-bookmark captures the undo commit before rollback, then writes the undo pinned bookmark after APTR moves.**
 - **Bookmark resolution carries namespace fork caps into actor branch ancestry.** Do not use recursive APTR resolution when resolving inherited bookmarks; direct-walk namespace parents so parent commits after `parent_versionstamp` stay unreachable.
 - **Lex order = chronological order within a single branch's parent chain.** Across sibling branches (forks of the same parent), bookmarks are not orderable in any meaningful way. APIs do not support cross-branch comparison.

@@ -673,7 +673,7 @@ async fn recompute_actor_branch_bk_pin(
 		},
 		Serializable,
 	);
-	let mut pin = VERSIONSTAMP_INFINITY;
+	let mut pin = None;
 
 	while let Some(entry) = stream.try_next().await? {
 		if entry.key() == deleted_pinned_key || !entry.key().ends_with(b"/pinned") {
@@ -683,11 +683,15 @@ async fn recompute_actor_branch_bk_pin(
 		let record = decode_pinned_bookmark_record(entry.value())
 			.context("decode sqlite pinned bookmark record during pin recompute")?;
 		if record.actor_branch_id == branch_id {
-			pin = pin.min(record.versionstamp);
+			pin = Some(
+				pin
+					.map(|current: [u8; 16]| current.min(record.versionstamp))
+					.unwrap_or(record.versionstamp),
+			);
 		}
 	}
 
-	Ok(pin)
+	Ok(pin.unwrap_or([0; 16]))
 }
 
 struct PinnedBookmarkCreateResult {
