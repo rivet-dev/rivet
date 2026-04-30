@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use universalpubsub::PublishOpts;
 use vbare::OwnedVersionedData;
 
-use crate::pump::types::{ActorBranchId, BookmarkStr, NamespaceBranchId};
+use crate::pump::types::{DatabaseBranchId, BookmarkStr, NamespaceBranchId};
 
 use super::{metrics, subjects::{SqliteColdCompactSubject, SqliteCompactSubject}};
 
@@ -16,9 +16,9 @@ pub const SQLITE_COLD_COMPACT_PAYLOAD_VERSION: u16 = 1;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SqliteCompactPayload {
-	pub actor_id: String,
+	pub database_id: String,
 	pub namespace_id: Option<Id>,
-	pub actor_name: Option<String>,
+	pub database_name: Option<String>,
 	pub commit_bytes_since_rollup: u64,
 	pub read_bytes_since_rollup: u64,
 }
@@ -26,21 +26,21 @@ pub struct SqliteCompactPayload {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SqliteColdCompactPayload {
 	CreatePinnedBookmark {
-		actor_id: String,
-		actor_branch_id: ActorBranchId,
+		database_id: String,
+		database_branch_id: DatabaseBranchId,
 		bookmark: BookmarkStr,
 		versionstamp: [u8; 16],
 	},
 	DeletePinnedBookmark {
-		actor_id: String,
-		actor_branch_id: ActorBranchId,
+		database_id: String,
+		database_branch_id: DatabaseBranchId,
 		bookmark: BookmarkStr,
 		versionstamp: [u8; 16],
 		pin_object_key: Option<String>,
 	},
 	ForkWarmup {
-		source_actor_branch_id: ActorBranchId,
-		target_actor_branch_id: ActorBranchId,
+		source_database_branch_id: DatabaseBranchId,
+		target_database_branch_id: DatabaseBranchId,
 		at_versionstamp: [u8; 16],
 	},
 	NamespaceForkWarmup {
@@ -144,17 +144,17 @@ pub async fn publish_cold_compact_payload(
 		.context("publish sqlite cold compact trigger")
 }
 
-pub fn publish_compact_trigger(ups: &Ups, actor_id: &str) {
-	publish_compact_trigger_with_node_id(ups, actor_id, NodeId::new());
+pub fn publish_compact_trigger(ups: &Ups, database_id: &str) {
+	publish_compact_trigger_with_node_id(ups, database_id, NodeId::new());
 }
 
-pub fn publish_compact_trigger_with_node_id(ups: &Ups, actor_id: &str, node_id: NodeId) {
+pub fn publish_compact_trigger_with_node_id(ups: &Ups, database_id: &str, node_id: NodeId) {
 	publish_compact_payload_with_node_id(
 		ups,
 		SqliteCompactPayload {
-			actor_id: actor_id.to_string(),
+			database_id: database_id.to_string(),
 			namespace_id: None,
-			actor_name: None,
+			database_name: None,
 			commit_bytes_since_rollup: 0,
 			read_bytes_since_rollup: 0,
 		},
@@ -172,7 +172,7 @@ pub fn publish_compact_payload_with_node_id(
 	node_id: NodeId,
 ) {
 	let ups = ups.clone();
-	let actor_id = payload.actor_id.clone();
+	let database_id = payload.database_id.clone();
 	let node_id = node_id.to_string();
 
 	tokio::spawn(async move {
@@ -182,7 +182,7 @@ pub fn publish_compact_payload_with_node_id(
 				metrics::SQLITE_COMPACTOR_UPS_PUBLISH_TOTAL
 					.with_label_values(&[node_id.as_str(), "err"])
 					.inc();
-				tracing::error!(?err, actor_id = %actor_id, "failed to encode sqlite compact trigger");
+				tracing::error!(?err, database_id = %database_id, "failed to encode sqlite compact trigger");
 				return;
 			}
 		};
@@ -194,7 +194,7 @@ pub fn publish_compact_payload_with_node_id(
 			metrics::SQLITE_COMPACTOR_UPS_PUBLISH_TOTAL
 				.with_label_values(&[node_id.as_str(), "err"])
 				.inc();
-			tracing::warn!(?err, actor_id = %actor_id, "failed to publish sqlite compact trigger");
+			tracing::warn!(?err, database_id = %database_id, "failed to publish sqlite compact trigger");
 		} else {
 			metrics::SQLITE_COMPACTOR_UPS_PUBLISH_TOTAL
 				.with_label_values(&[node_id.as_str(), "ok"])

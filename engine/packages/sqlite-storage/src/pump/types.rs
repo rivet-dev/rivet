@@ -15,13 +15,13 @@ pub struct NamespaceId(Uuid);
 pub struct NamespacePointerId(Uuid);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-pub struct ActorPointerId(Uuid);
+pub struct DatabasePointerId(Uuid);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct NamespaceBranchId(Uuid);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-pub struct ActorBranchId(Uuid);
+pub struct DatabaseBranchId(Uuid);
 
 macro_rules! impl_uuid_id {
 	($type:ident) => {
@@ -47,9 +47,9 @@ macro_rules! impl_uuid_id {
 
 impl_uuid_id!(NamespaceId);
 impl_uuid_id!(NamespacePointerId);
-impl_uuid_id!(ActorPointerId);
+impl_uuid_id!(DatabasePointerId);
 impl_uuid_id!(NamespaceBranchId);
-impl_uuid_id!(ActorBranchId);
+impl_uuid_id!(DatabaseBranchId);
 
 impl NamespaceId {
 	pub fn from_gas_id(id: Id) -> Self {
@@ -59,7 +59,7 @@ impl NamespaceId {
 	}
 }
 
-pub type ActorIdStr = String;
+pub type DatabaseIdStr = String;
 pub type NamespaceIdUuid = NamespaceId;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
@@ -163,10 +163,10 @@ pub struct NamespaceBranchRecord {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ActorBranchRecord {
-	pub branch_id: ActorBranchId,
+pub struct DatabaseBranchRecord {
+	pub branch_id: DatabaseBranchId,
 	pub namespace_branch: NamespaceBranchId,
-	pub parent: Option<ActorBranchId>,
+	pub parent: Option<DatabaseBranchId>,
 	pub parent_versionstamp: Option<[u8; 16]>,
 	pub root_versionstamp: [u8; 16],
 	pub fork_depth: u8,
@@ -182,8 +182,8 @@ pub struct NamespacePointer {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ActorPointer {
-	pub current_branch: ActorBranchId,
+pub struct DatabasePointer {
+	pub current_branch: DatabaseBranchId,
 	pub last_swapped_at_ms: i64,
 }
 
@@ -215,7 +215,7 @@ pub struct DBHead {
 	pub head_txid: u64,
 	pub db_size_pages: u32,
 	pub post_apply_checksum: u64,
-	pub branch_id: ActorBranchId,
+	pub branch_id: DatabaseBranchId,
 	#[cfg(debug_assertions)]
 	pub generation: u64,
 }
@@ -223,7 +223,7 @@ pub struct DBHead {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ColdManifestIndex {
 	pub schema_version: u32,
-	pub branch_id: ActorBranchId,
+	pub branch_id: DatabaseBranchId,
 	pub chunks: Vec<ColdManifestChunkRef>,
 	pub last_pass_at_ms: i64,
 	pub last_pass_versionstamp: [u8; 16],
@@ -241,7 +241,7 @@ pub struct ColdManifestChunkRef {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ColdManifestChunk {
 	pub schema_version: u32,
-	pub branch_id: ActorBranchId,
+	pub branch_id: DatabaseBranchId,
 	pub pass_versionstamp: [u8; 16],
 	pub layers: Vec<LayerEntry>,
 	pub bookmarks: Vec<BookmarkIndexEntry>,
@@ -281,14 +281,14 @@ pub struct BookmarkIndexEntry {
 pub struct PointerSnapshot {
 	pub schema_version: u32,
 	pub pass_versionstamp: [u8; 16],
-	pub actors: Vec<(ActorIdStr, NamespaceBranchId, ActorBranchId)>,
+	pub databases: Vec<(DatabaseIdStr, NamespaceBranchId, DatabaseBranchId)>,
 	pub namespaces: Vec<(NamespaceIdUuid, NamespaceBranchId)>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BookmarkRecord {
 	pub bookmark: BookmarkStr,
-	pub actor_branch_id: ActorBranchId,
+	pub database_branch_id: DatabaseBranchId,
 	pub created_at_ms: i64,
 	pub resolved: Option<ResolvedVersionstamp>,
 }
@@ -296,7 +296,7 @@ pub struct BookmarkRecord {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PinnedBookmarkRecord {
 	pub bookmark: BookmarkStr,
-	pub actor_branch_id: ActorBranchId,
+	pub database_branch_id: DatabaseBranchId,
 	pub versionstamp: [u8; 16],
 	pub status: PinStatus,
 	pub pin_object_key: Option<String>,
@@ -383,12 +383,12 @@ impl OwnedVersionedData for VersionedCommitRow {
 	}
 }
 
-enum VersionedActorBranchRecord {
-	V1(ActorBranchRecord),
+enum VersionedDatabaseBranchRecord {
+	V1(DatabaseBranchRecord),
 }
 
-impl OwnedVersionedData for VersionedActorBranchRecord {
-	type Latest = ActorBranchRecord;
+impl OwnedVersionedData for VersionedDatabaseBranchRecord {
+	type Latest = DatabaseBranchRecord;
 
 	fn wrap_latest(latest: Self::Latest) -> Self {
 		Self::V1(latest)
@@ -403,7 +403,7 @@ impl OwnedVersionedData for VersionedActorBranchRecord {
 	fn deserialize_version(payload: &[u8], version: u16) -> Result<Self> {
 		match version {
 			1 => Ok(Self::V1(serde_bare::from_slice(payload)?)),
-			_ => bail!("invalid sqlite-storage ActorBranchRecord version: {version}"),
+			_ => bail!("invalid sqlite-storage DatabaseBranchRecord version: {version}"),
 		}
 	}
 
@@ -414,12 +414,12 @@ impl OwnedVersionedData for VersionedActorBranchRecord {
 	}
 }
 
-enum VersionedActorPointer {
-	V1(ActorPointer),
+enum VersionedDatabasePointer {
+	V1(DatabasePointer),
 }
 
-impl OwnedVersionedData for VersionedActorPointer {
-	type Latest = ActorPointer;
+impl OwnedVersionedData for VersionedDatabasePointer {
+	type Latest = DatabasePointer;
 
 	fn wrap_latest(latest: Self::Latest) -> Self {
 		Self::V1(latest)
@@ -434,7 +434,7 @@ impl OwnedVersionedData for VersionedActorPointer {
 	fn deserialize_version(payload: &[u8], version: u16) -> Result<Self> {
 		match version {
 			1 => Ok(Self::V1(serde_bare::from_slice(payload)?)),
-			_ => bail!("invalid sqlite-storage ActorPointer version: {version}"),
+			_ => bail!("invalid sqlite-storage DatabasePointer version: {version}"),
 		}
 	}
 
@@ -714,26 +714,26 @@ pub fn decode_commit_row(payload: &[u8]) -> Result<CommitRow> {
 		.context("decode sqlite commit row")
 }
 
-pub fn encode_actor_branch_record(record: ActorBranchRecord) -> Result<Vec<u8>> {
-	VersionedActorBranchRecord::wrap_latest(record)
+pub fn encode_database_branch_record(record: DatabaseBranchRecord) -> Result<Vec<u8>> {
+	VersionedDatabaseBranchRecord::wrap_latest(record)
 		.serialize_with_embedded_version(SQLITE_STORAGE_META_VERSION)
-		.context("encode sqlite actor branch record")
+		.context("encode sqlite database branch record")
 }
 
-pub fn decode_actor_branch_record(payload: &[u8]) -> Result<ActorBranchRecord> {
-	VersionedActorBranchRecord::deserialize_with_embedded_version(payload)
-		.context("decode sqlite actor branch record")
+pub fn decode_database_branch_record(payload: &[u8]) -> Result<DatabaseBranchRecord> {
+	VersionedDatabaseBranchRecord::deserialize_with_embedded_version(payload)
+		.context("decode sqlite database branch record")
 }
 
-pub fn encode_actor_pointer(pointer: ActorPointer) -> Result<Vec<u8>> {
-	VersionedActorPointer::wrap_latest(pointer)
+pub fn encode_database_pointer(pointer: DatabasePointer) -> Result<Vec<u8>> {
+	VersionedDatabasePointer::wrap_latest(pointer)
 		.serialize_with_embedded_version(SQLITE_STORAGE_META_VERSION)
-		.context("encode sqlite actor pointer")
+		.context("encode sqlite database pointer")
 }
 
-pub fn decode_actor_pointer(payload: &[u8]) -> Result<ActorPointer> {
-	VersionedActorPointer::deserialize_with_embedded_version(payload)
-		.context("decode sqlite actor pointer")
+pub fn decode_database_pointer(payload: &[u8]) -> Result<DatabasePointer> {
+	VersionedDatabasePointer::deserialize_with_embedded_version(payload)
+		.context("decode sqlite database pointer")
 }
 
 pub fn encode_namespace_branch_record(record: NamespaceBranchRecord) -> Result<Vec<u8>> {
@@ -837,7 +837,7 @@ mod tests {
 			head_txid: 42,
 			db_size_pages: 128,
 			post_apply_checksum: 9,
-			branch_id: super::ActorBranchId::nil(),
+			branch_id: super::DatabaseBranchId::nil(),
 			#[cfg(debug_assertions)]
 			generation: 7,
 		};

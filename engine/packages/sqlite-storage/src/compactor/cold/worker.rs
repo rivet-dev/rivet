@@ -18,7 +18,7 @@ use crate::{
 		publish::Ups,
 	},
 	gc,
-	pump::types::ActorBranchId,
+	pump::types::DatabaseBranchId,
 };
 
 use super::{lease, phase_a, phase_b, phase_c, phase_d, phase_warmup};
@@ -275,23 +275,23 @@ async fn run_scaffold_pass(
 	);
 
 	if let SqliteColdCompactPayload::ForkWarmup {
-		source_actor_branch_id,
-		target_actor_branch_id,
+		source_database_branch_id,
+		target_database_branch_id,
 		at_versionstamp,
 	} = payload
 	{
-		let output = phase_warmup::run_actor(
+		let output = phase_warmup::run_database(
 			Arc::clone(&cold_tier),
-			source_actor_branch_id,
-			target_actor_branch_id,
+			source_database_branch_id,
+			target_database_branch_id,
 			at_versionstamp,
 			cancel_token,
 			now_ms()?,
 		)
 		.await?;
 		tracing::debug!(
-			source_branch_id = ?source_actor_branch_id,
-			target_branch_id = ?target_actor_branch_id,
+			source_branch_id = ?source_database_branch_id,
+			target_branch_id = ?target_database_branch_id,
 			copied_layers = output.copied_layers,
 			source_chunks_read = output.source_chunks_read,
 			"sqlite cold compactor fork warmup finished"
@@ -443,18 +443,18 @@ async fn run_scaffold_pass(
 	Ok(())
 }
 
-fn payload_branch_id(payload: &SqliteColdCompactPayload) -> Option<ActorBranchId> {
+fn payload_branch_id(payload: &SqliteColdCompactPayload) -> Option<DatabaseBranchId> {
 	match payload {
 		SqliteColdCompactPayload::CreatePinnedBookmark {
-			actor_branch_id, ..
+			database_branch_id, ..
 		}
 		| SqliteColdCompactPayload::DeletePinnedBookmark {
-			actor_branch_id, ..
-		} => Some(*actor_branch_id),
+			database_branch_id, ..
+		} => Some(*database_branch_id),
 		SqliteColdCompactPayload::ForkWarmup {
-			target_actor_branch_id,
+			target_database_branch_id,
 			..
-		} => Some(*target_actor_branch_id),
+		} => Some(*target_database_branch_id),
 		SqliteColdCompactPayload::NamespaceForkWarmup { .. } => None,
 	}
 }
@@ -481,7 +481,7 @@ fn handle_namespace_warmup(payload: SqliteColdCompactPayload) -> Result<()> {
 
 fn spawn_renewal_task(
 	udb: Arc<universaldb::Database>,
-	branch_id: ActorBranchId,
+	branch_id: DatabaseBranchId,
 	holder_id: rivet_pools::NodeId,
 	cold_config: ColdCompactorConfig,
 	cancel_token: CancellationToken,

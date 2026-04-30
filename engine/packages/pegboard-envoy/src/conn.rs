@@ -16,7 +16,7 @@ use rivet_guard_core::WebSocketHandle;
 use rivet_pools::NodeId;
 use rivet_types::runner_configs::RunnerConfigKind;
 use scc::HashMap;
-use sqlite_storage::pump::ActorDb;
+use sqlite_storage::pump::Db;
 use universaldb::prelude::*;
 use universalpubsub::PubSub;
 use vbare::OwnedVersionedData;
@@ -36,7 +36,7 @@ pub struct Conn {
 	/// This is a perf-only SQLite pump cache, not authoritative actor presence tracking.
 	/// Envoys can reconnect to different worker nodes mid-flight, so request handlers
 	/// lazily populate it and lifecycle commands only evict stale cache entries.
-	pub actor_dbs: HashMap<String, Arc<ActorDb>>,
+	pub actor_dbs: HashMap<String, Arc<Db>>,
 	pub is_serverless: bool,
 	pub last_rtt: AtomicU32,
 	/// Timestamp (epoch ms) of the last pong received from the envoy.

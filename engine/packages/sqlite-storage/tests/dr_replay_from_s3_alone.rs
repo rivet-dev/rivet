@@ -8,12 +8,12 @@ use sqlite_storage::{
 	cold_tier::{ColdTier, FilesystemColdTier},
 	compactor::cold::worker,
 	keys::{
-		actor_pointer_cur_key, branch_meta_head_key, branch_shard_key, branches_list_key,
+		database_pointer_cur_key, branch_meta_head_key, branch_shard_key, branches_list_key,
 		namespace_pointer_cur_key,
 	},
 	types::{
-		ActorPointer, DBHead, NamespaceId, NamespacePointer, decode_actor_branch_record,
-		decode_pointer_snapshot, encode_actor_pointer, encode_db_head, encode_namespace_pointer,
+		DatabasePointer, DBHead, NamespaceId, NamespacePointer, decode_database_branch_record,
+		decode_pointer_snapshot, encode_database_pointer, encode_db_head, encode_namespace_pointer,
 	},
 };
 use tempfile::Builder;
@@ -54,20 +54,20 @@ async fn dr_replay_from_s3_alone() -> Result<()> {
 		.get_object(&branch_record_key)
 		.await?
 		.context("branch record object should exist")?;
-	let branch_record = decode_actor_branch_record(&branch_record_bytes)?;
+	let branch_record = decode_database_branch_record(&branch_record_bytes)?;
 	let image_key = format!("{branch_prefix}/image/00000000/00000002-0000000000000005.ltx");
 	let image_bytes = tier
 		.get_object(&image_key)
 		.await?
 		.context("image layer should exist")?;
-	let snapshot_actor = snapshot.actors[0].clone();
+	let snapshot_database = snapshot.databases[0].clone();
 	let branch_record_bytes_for_restore = branch_record_bytes.clone();
 	let image_bytes_for_restore = image_bytes.clone();
 
 	let restored = fault_common::test_db("sqlite-storage-dr-restored-").await?;
 	restored
 		.run(move |tx| {
-			let snapshot_actor = snapshot_actor.clone();
+			let snapshot_database = snapshot_database.clone();
 			let branch_record_bytes = branch_record_bytes_for_restore.clone();
 			let image_bytes = image_bytes_for_restore.clone();
 			async move {
@@ -77,47 +77,47 @@ async fn dr_replay_from_s3_alone() -> Result<()> {
 						1,
 					))),
 					&encode_namespace_pointer(NamespacePointer {
-						current_branch: snapshot_actor.1,
+						current_branch: snapshot_database.1,
 						last_swapped_at_ms: 0,
 					})?,
 				);
 				tx.informal().set(
-					&actor_pointer_cur_key(snapshot_actor.1, &snapshot_actor.0),
-					&encode_actor_pointer(ActorPointer {
-						current_branch: snapshot_actor.2,
+					&database_pointer_cur_key(snapshot_database.1, &snapshot_database.0),
+					&encode_database_pointer(DatabasePointer {
+						current_branch: snapshot_database.2,
 						last_swapped_at_ms: 0,
 					})?,
 				);
 				tx.informal()
-					.set(&branches_list_key(snapshot_actor.2), &branch_record_bytes);
+					.set(&branches_list_key(snapshot_database.2), &branch_record_bytes);
 				tx.informal().set(
-					&branch_meta_head_key(snapshot_actor.2),
+					&branch_meta_head_key(snapshot_database.2),
 					&encode_db_head(DBHead {
 						head_txid: 5,
 						db_size_pages: 64,
 						post_apply_checksum: 99,
-						branch_id: snapshot_actor.2,
+						branch_id: snapshot_database.2,
 						#[cfg(debug_assertions)]
 						generation: 0,
 					})?,
 				);
 				tx.informal()
-					.set(&branch_shard_key(snapshot_actor.2, 2, 5), &image_bytes);
+					.set(&branch_shard_key(snapshot_database.2, 2, 5), &image_bytes);
 				Ok(())
 			}
 		})
 		.await?;
 
-	assert_eq!(branch_record.branch_id, fault_common::actor_branch_id());
+	assert_eq!(branch_record.branch_id, fault_common::database_branch_id());
 	assert_eq!(
-		fault_common::read_value(&restored, branches_list_key(fault_common::actor_branch_id()))
+		fault_common::read_value(&restored, branches_list_key(fault_common::database_branch_id()))
 			.await?,
 		Some(branch_record_bytes)
 	);
 	assert_eq!(
 		fault_common::read_value(
 			&restored,
-			branch_shard_key(fault_common::actor_branch_id(), 2, 5)
+			branch_shard_key(fault_common::database_branch_id(), 2, 5)
 		)
 		.await?,
 		Some(b"shard-five".to_vec())

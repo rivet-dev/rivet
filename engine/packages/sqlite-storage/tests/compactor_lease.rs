@@ -14,7 +14,7 @@ use tempfile::Builder;
 use tokio::sync::Barrier;
 use universaldb::{error::DatabaseError, options::DatabaseOption, utils::IsolationLevel::Snapshot};
 
-const TEST_ACTOR: &str = "lease-actor";
+const TEST_DATABASE: &str = "lease-database";
 
 async fn test_db() -> Result<universaldb::Database> {
 	let path = Builder::new().prefix("sqlite-storage-lease-").tempdir()?.keep();
@@ -27,7 +27,7 @@ async fn read_lease(db: &universaldb::Database) -> Result<Option<CompactorLease>
 	db.run(|tx| async move {
 		let Some(value) = tx
 			.informal()
-			.get(&meta_compactor_lease_key(TEST_ACTOR), Snapshot)
+			.get(&meta_compactor_lease_key(TEST_DATABASE), Snapshot)
 			.await?
 		else {
 			return Ok(None);
@@ -41,7 +41,7 @@ async fn read_lease(db: &universaldb::Database) -> Result<Option<CompactorLease>
 async fn write_lease(db: &universaldb::Database, lease: CompactorLease) -> Result<()> {
 	db.run(move |tx| async move {
 		tx.informal()
-			.set(&meta_compactor_lease_key(TEST_ACTOR), &encode_lease(lease)?);
+			.set(&meta_compactor_lease_key(TEST_DATABASE), &encode_lease(lease)?);
 		Ok(())
 	})
 	.await
@@ -53,7 +53,7 @@ async fn acquire_on_empty_key() -> Result<()> {
 	let holder = NodeId::new();
 
 	let outcome = db
-		.run(move |tx| async move { take(&tx, TEST_ACTOR, holder, 30_000, 1_000).await })
+		.run(move |tx| async move { take(&tx, TEST_DATABASE, holder, 30_000, 1_000).await })
 		.await?;
 
 	assert_eq!(outcome, TakeOutcome::Acquired);
@@ -74,11 +74,11 @@ async fn skip_when_another_pod_holds_then_acquire_after_expiry() -> Result<()> {
 	let holder_a = NodeId::new();
 	let holder_b = NodeId::new();
 
-	db.run(move |tx| async move { take(&tx, TEST_ACTOR, holder_a, 1_000, 0).await })
+	db.run(move |tx| async move { take(&tx, TEST_DATABASE, holder_a, 1_000, 0).await })
 		.await?;
 
 	let outcome = db
-		.run(move |tx| async move { take(&tx, TEST_ACTOR, holder_b, 1_000, 500).await })
+		.run(move |tx| async move { take(&tx, TEST_DATABASE, holder_b, 1_000, 500).await })
 		.await?;
 	assert_eq!(outcome, TakeOutcome::Skip);
 	assert_eq!(read_lease(&db).await?.expect("lease should exist").holder_id, holder_a);
@@ -86,7 +86,7 @@ async fn skip_when_another_pod_holds_then_acquire_after_expiry() -> Result<()> {
 	tokio::time::advance(Duration::from_millis(1_001)).await;
 
 	let outcome = db
-		.run(move |tx| async move { take(&tx, TEST_ACTOR, holder_b, 1_000, 1_001).await })
+		.run(move |tx| async move { take(&tx, TEST_DATABASE, holder_b, 1_000, 1_001).await })
 		.await?;
 	assert_eq!(outcome, TakeOutcome::Acquired);
 	assert_eq!(read_lease(&db).await?.expect("lease should exist").holder_id, holder_b);
@@ -110,7 +110,7 @@ async fn racing_takes_leave_one_winner_and_one_occ_abort() -> Result<()> {
 			db.run(move |tx| {
 				let barrier = barrier.clone();
 				async move {
-					let outcome = take(&tx, TEST_ACTOR, holder_a, 30_000, 0).await?;
+					let outcome = take(&tx, TEST_DATABASE, holder_a, 30_000, 0).await?;
 					barrier.wait().await;
 					Ok(outcome)
 				}
@@ -126,7 +126,7 @@ async fn racing_takes_leave_one_winner_and_one_occ_abort() -> Result<()> {
 			db.run(move |tx| {
 				let barrier = barrier.clone();
 				async move {
-					let outcome = take(&tx, TEST_ACTOR, holder_b, 30_000, 0).await?;
+					let outcome = take(&tx, TEST_DATABASE, holder_b, 30_000, 0).await?;
 					barrier.wait().await;
 					Ok(outcome)
 				}
@@ -169,11 +169,11 @@ async fn renew_success_extends_expiration() -> Result<()> {
 	let db = test_db().await?;
 	let holder = NodeId::new();
 
-	db.run(move |tx| async move { take(&tx, TEST_ACTOR, holder, 1_000, 0).await })
+	db.run(move |tx| async move { take(&tx, TEST_DATABASE, holder, 1_000, 0).await })
 		.await?;
 
 	let outcome = db
-		.run(move |tx| async move { renew(&tx, TEST_ACTOR, holder, 2_000, 500).await })
+		.run(move |tx| async move { renew(&tx, TEST_DATABASE, holder, 2_000, 500).await })
 		.await?;
 
 	assert_eq!(outcome, RenewOutcome::Renewed);
@@ -204,7 +204,7 @@ async fn renew_detects_steal() -> Result<()> {
 	.await?;
 
 	let outcome = db
-		.run(move |tx| async move { renew(&tx, TEST_ACTOR, holder_a, 30_000, 1_000).await })
+		.run(move |tx| async move { renew(&tx, TEST_DATABASE, holder_a, 30_000, 1_000).await })
 		.await?;
 
 	assert_eq!(outcome, RenewOutcome::Stolen);
@@ -218,12 +218,12 @@ async fn renew_detects_expiry() -> Result<()> {
 	let db = test_db().await?;
 	let holder = NodeId::new();
 
-	db.run(move |tx| async move { take(&tx, TEST_ACTOR, holder, 1_000, 0).await })
+	db.run(move |tx| async move { take(&tx, TEST_DATABASE, holder, 1_000, 0).await })
 		.await?;
 	tokio::time::advance(Duration::from_millis(1_001)).await;
 
 	let outcome = db
-		.run(move |tx| async move { renew(&tx, TEST_ACTOR, holder, 1_000, 1_001).await })
+		.run(move |tx| async move { renew(&tx, TEST_DATABASE, holder, 1_000, 1_001).await })
 		.await?;
 
 	assert_eq!(outcome, RenewOutcome::Expired);
@@ -237,9 +237,9 @@ async fn release_clears_key() -> Result<()> {
 	let db = test_db().await?;
 	let holder = NodeId::new();
 
-	db.run(move |tx| async move { take(&tx, TEST_ACTOR, holder, 30_000, 0).await })
+	db.run(move |tx| async move { take(&tx, TEST_DATABASE, holder, 30_000, 0).await })
 		.await?;
-	db.run(move |tx| async move { release(&tx, TEST_ACTOR, holder).await })
+	db.run(move |tx| async move { release(&tx, TEST_DATABASE, holder).await })
 		.await?;
 
 	assert!(read_lease(&db).await?.is_none());

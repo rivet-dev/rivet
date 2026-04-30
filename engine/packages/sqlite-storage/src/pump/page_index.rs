@@ -118,7 +118,7 @@ mod tests {
 	use crate::test_utils::test_db;
 	use crate::udb::{WriteOp, apply_write_ops};
 
-	const TEST_ACTOR: &str = "test-actor";
+	const TEST_DATABASE: &str = "test-database";
 
 	#[test]
 	fn insert_get_and_remove_round_trip() {
@@ -167,17 +167,17 @@ mod tests {
 			&subspace,
 			counter.as_ref(),
 			vec![
-				WriteOp::put(pidx_delta_key(TEST_ACTOR, 8), 81_u64.to_be_bytes().to_vec()),
-				WriteOp::put(pidx_delta_key(TEST_ACTOR, 2), 21_u64.to_be_bytes().to_vec()),
+				WriteOp::put(pidx_delta_key(TEST_DATABASE, 8), 81_u64.to_be_bytes().to_vec()),
+				WriteOp::put(pidx_delta_key(TEST_DATABASE, 2), 21_u64.to_be_bytes().to_vec()),
 				WriteOp::put(
-					pidx_delta_key(TEST_ACTOR, 17),
+					pidx_delta_key(TEST_DATABASE, 17),
 					171_u64.to_be_bytes().to_vec(),
 				),
 			],
 		)
 		.await?;
 
-		let prefix = pidx_delta_prefix(TEST_ACTOR);
+		let prefix = pidx_delta_prefix(TEST_DATABASE);
 		counter.store(0, std::sync::atomic::Ordering::SeqCst);
 		let index = DeltaPageIndex::load_from_store(
 			&db,

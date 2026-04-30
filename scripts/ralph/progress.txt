@@ -57,9 +57,33 @@
 - Eviction clear transactions must re-check branch descendant/bookmark pins because forks can land after the sweep plan and before compare-and-clear execution.
 - When recomputing a branch bookmark pin after deleting the last pinned bookmark, store zero for "unpinned"; `0xff..ff` remains the advanced-retention fence for fork checks.
 - `engine/packages/sqlite-storage/AGENTS.md` is a symlink to `CLAUDE.md`; update `CLAUDE.md` for sqlite-storage agent guidance.
+- Inside `sqlite-storage`, use database terminology (`Db`, `DatabaseBranchId`, DBPTR); keep actor terminology only at pegboard/envoy boundaries where actor ids are translated 1:1 to database ids.
 
 # Ralph Progress Log
 Started: Wed Apr 29 03:29:23 PM PDT 2026
+---
+## 2026-04-29 23:49 PDT - US-065
+- Renamed sqlite-storage's storage-facing actor API surface to database terminology: `ActorDb` became `Db`, `ActorBranch*` became `DatabaseBranch*`, `ActorPointer` became `DatabasePointer`, `fork_actor` became `fork_database`, and APTR key-builder names became DBPTR while preserving the `0x10` partition byte.
+- Updated pegboard, pegboard-envoy, and rivetkit-sqlite callers to translate actor ids at the boundary and use the renamed `Db` storage handle.
+- Updated sqlite internal docs, sqlite-storage/engine CLAUDE guidance, error artifacts, the v4 rough PITR spec, and tests to use database terminology.
+- Verified with `cargo check -p sqlite-storage`, `cargo check -p rivetkit-sqlite`, `cargo check -p pegboard`, `cargo check -p pegboard-envoy`, `cargo check -p rivet-engine`, `cargo test -p sqlite-storage --no-run`, and `cargo test -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/src/**`
+  - `engine/packages/sqlite-storage/tests/**`
+  - `engine/packages/pegboard*/**`
+  - `engine/packages/engine/tests/actor_v2_2_1_migration.rs`
+  - `rivetkit-rust/packages/rivetkit-sqlite/src/vfs.rs`
+  - `docs-internal/engine/sqlite/*.md`
+  - `.agent/specs/sqlite-rough-pitr.md`
+  - `engine/CLAUDE.md`
+  - `engine/packages/sqlite-storage/CLAUDE.md`
+  - `engine/artifacts/errors/sqlite_storage.*.json`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - The sqlite-storage crate now treats `database_id` as the storage-layer identity; pegboard/envoy may still talk about actor ids, but they pass those values into sqlite-storage as 1:1 database ids.
+  - The DBPTR partition keeps APTR's existing byte (`0x10`) for key continuity; the rename is API/key-builder terminology, not a keyspace migration.
+  - Test helpers named `db` collide badly with local `Db` handles; use `make_db` for constructors and `database_db` for storage handles in sqlite-storage tests.
 ---
 ## 2026-04-29 23:34 PDT - US-063
 - Created the required `docs-internal/engine/sqlite/` folder with five internal docs covering storage structure, components, VFS interaction, design constraints, and comparisons to prior systems.

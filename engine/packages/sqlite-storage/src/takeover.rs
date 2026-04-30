@@ -15,7 +15,7 @@ use crate::{
 	compactor::metrics,
 	pump::{
 		keys,
-		types::{ActorBranchId, decode_db_head, DBHead},
+		types::{DatabaseBranchId, decode_db_head, DBHead},
 	},
 };
 
@@ -24,19 +24,19 @@ const PIDX_TXID_BYTES: usize = std::mem::size_of::<u64>();
 const SHARD_ID_BYTES: usize = std::mem::size_of::<u32>();
 const UNKNOWN_NODE_ID: &str = "unknown";
 
-pub async fn reconcile(udb: &Database, actor_id: &str) -> Result<()> {
-	reconcile_inner(udb, actor_id, None).await
+pub async fn reconcile(udb: &Database, database_id: &str) -> Result<()> {
+	reconcile_inner(udb, database_id, None).await
 }
 
 pub(crate) async fn reconcile_with_node_id(
 	udb: &Database,
-	actor_id: &str,
+	database_id: &str,
 	node_id: NodeId,
 ) -> Result<()> {
-	reconcile_inner(udb, actor_id, Some(node_id)).await
+	reconcile_inner(udb, database_id, Some(node_id)).await
 }
 
-pub(crate) fn reconcile_blocking(udb: Arc<Database>, actor_id: String, node_id: NodeId) {
+pub(crate) fn reconcile_blocking(udb: Arc<Database>, database_id: String, node_id: NodeId) {
 	let result = std::thread::Builder::new()
 		.name("sqlite-takeover-reconcile".to_string())
 		.spawn(move || -> Result<()> {
@@ -45,7 +45,7 @@ pub(crate) fn reconcile_blocking(udb: Arc<Database>, actor_id: String, node_id: 
 				.build()
 				.context("build sqlite takeover reconciliation runtime")?;
 
-			runtime.block_on(reconcile_with_node_id(&udb, &actor_id, node_id))
+			runtime.block_on(reconcile_with_node_id(&udb, &database_id, node_id))
 		})
 		.expect("spawn sqlite takeover reconciliation thread")
 		.join()
@@ -58,43 +58,43 @@ pub(crate) fn reconcile_blocking(udb: Arc<Database>, actor_id: String, node_id: 
 
 async fn reconcile_inner(
 	udb: &Database,
-	actor_id: &str,
+	database_id: &str,
 	node_id: Option<NodeId>,
 ) -> Result<()> {
-	let actor_id = actor_id.to_string();
-	let actor_id_for_tx = actor_id.clone();
+	let database_id = database_id.to_string();
+	let database_id_for_tx = database_id.clone();
 	let scan = udb
 		.run(move |tx| {
-			let actor_id = actor_id_for_tx.clone();
+			let database_id = database_id_for_tx.clone();
 
 			async move {
 				let head = tx
 					.informal()
-					.get(&keys::meta_head_key(&actor_id), Snapshot)
+					.get(&keys::meta_head_key(&database_id), Snapshot)
 					.await?
 					.map(|bytes| decode_db_head(bytes.as_ref()))
 					.transpose()
 					.context("decode sqlite db head for takeover reconciliation")?
 					.unwrap_or_else(empty_head);
 
-				let delta_rows = tx_scan_prefix_values(&tx, &keys::delta_prefix(&actor_id)).await?;
-				let pidx_rows = tx_scan_prefix_values(&tx, &keys::pidx_delta_prefix(&actor_id)).await?;
-				let shard_rows = tx_scan_prefix_values(&tx, &keys::shard_prefix(&actor_id)).await?;
+				let delta_rows = tx_scan_prefix_values(&tx, &keys::delta_prefix(&database_id)).await?;
+				let pidx_rows = tx_scan_prefix_values(&tx, &keys::pidx_delta_prefix(&database_id)).await?;
+				let shard_rows = tx_scan_prefix_values(&tx, &keys::shard_prefix(&database_id)).await?;
 
-				classify_rows(&actor_id, &head, delta_rows, pidx_rows, shard_rows)
+				classify_rows(&database_id, &head, delta_rows, pidx_rows, shard_rows)
 			}
 		})
 		.await?;
 
 	if let Some(violation) = scan.violation {
-		return Err(report_violation(actor_id.as_str(), node_id, violation));
+		return Err(report_violation(database_id.as_str(), node_id, violation));
 	}
 
 	Ok(())
 }
 
 fn classify_rows(
-	actor_id: &str,
+	database_id: &str,
 	head: &DBHead,
 	delta_rows: Vec<(Vec<u8>, Vec<u8>)>,
 	pidx_rows: Vec<(Vec<u8>, Vec<u8>)>,
@@ -103,7 +103,7 @@ fn classify_rows(
 	let mut delta_txids = BTreeSet::new();
 
 	for (key, _value) in &delta_rows {
-		let txid = keys::decode_delta_chunk_txid(actor_id, key)?;
+		let txid = keys::decode_delta_chunk_txid(database_id, key)?;
 		if txid > head.head_txid {
 			return Ok(ReconcileScan::violated(
 				TakeoverViolationKind::AboveHeadTxid,
@@ -114,7 +114,7 @@ fn classify_rows(
 	}
 
 	for (key, value) in &pidx_rows {
-		let pgno = decode_pidx_pgno(actor_id, key)?;
+		let pgno = decode_pidx_pgno(database_id, key)?;
 		let txid = decode_pidx_txid(value)?;
 
 		if pgno == 0 || pgno > head.db_size_pages {
@@ -138,7 +138,7 @@ fn classify_rows(
 	}
 
 	for (key, _value) in &shard_rows {
-		let shard_id = decode_shard_id(actor_id, key)?;
+		let shard_id = decode_shard_id(database_id, key)?;
 		if shard_id.saturating_mul(keys::SHARD_SIZE) > head.db_size_pages {
 			return Ok(ReconcileScan::violated(
 				TakeoverViolationKind::AboveEof,
@@ -151,7 +151,7 @@ fn classify_rows(
 }
 
 fn report_violation(
-	actor_id: &str,
+	database_id: &str,
 	node_id: Option<NodeId>,
 	violation: TakeoverViolation,
 ) -> anyhow::Error {
@@ -165,14 +165,14 @@ fn report_violation(
 		.with_label_values(&[node_id.as_str(), kind])
 		.inc();
 	tracing::error!(
-		actor_id = %actor_id,
+		database_id = %database_id,
 		kind,
 		key_snippet = ?key_snippet,
 		"sqlite takeover invariant violation"
 	);
 
 	anyhow!(
-		"sqlite takeover invariant violation for actor {actor_id}: {kind} at key {:?}",
+		"sqlite takeover invariant violation for database {database_id}: {kind} at key {:?}",
 		key_snippet
 	)
 }
@@ -200,8 +200,8 @@ async fn tx_scan_prefix_values(
 	Ok(rows)
 }
 
-fn decode_pidx_pgno(actor_id: &str, key: &[u8]) -> Result<u32> {
-	let prefix = keys::pidx_delta_prefix(actor_id);
+fn decode_pidx_pgno(database_id: &str, key: &[u8]) -> Result<u32> {
+	let prefix = keys::pidx_delta_prefix(database_id);
 	let suffix = key
 		.strip_prefix(prefix.as_slice())
 		.context("pidx key did not start with expected prefix")?;
@@ -220,8 +220,8 @@ fn decode_pidx_txid(value: &[u8]) -> Result<u64> {
 	Ok(u64::from_be_bytes(bytes))
 }
 
-fn decode_shard_id(actor_id: &str, key: &[u8]) -> Result<u32> {
-	let prefix = keys::shard_prefix(actor_id);
+fn decode_shard_id(database_id: &str, key: &[u8]) -> Result<u32> {
+	let prefix = keys::shard_prefix(database_id);
 	let suffix = key
 		.strip_prefix(prefix.as_slice())
 		.context("shard key did not start with expected prefix")?;
@@ -245,7 +245,7 @@ fn empty_head() -> DBHead {
 		head_txid: 0,
 		db_size_pages: 0,
 		post_apply_checksum: 0,
-		branch_id: ActorBranchId::nil(),
+		branch_id: DatabaseBranchId::nil(),
 		#[cfg(debug_assertions)]
 		generation: 0,
 	}

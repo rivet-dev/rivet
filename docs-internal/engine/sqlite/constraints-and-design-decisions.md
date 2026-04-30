@@ -10,14 +10,14 @@ This page records the constraints that shape the PITR/forking storage design. Th
 - **Per-commit granularity.** PITR targets commits/versionstamps, not individual WAL frames inside a commit.
 - **FDB is the hot source of truth.** S3 is retained history and disaster-recovery material, not the synchronous commit authority.
 - **Branches are immutable.** A namespace id is its namespace branch id, and a database id is its database branch id.
-- **Rollback is engine-owned.** Storage exposes fork primitives; the engine decides which database id an actor currently uses.
+- **Rollback is engine-owned.** Storage exposes fork primitives; the engine decides which database id an database currently uses.
 - **Persisted wire/storage records use vbare.** Raw fixed-width bytes are reserved for atomic counters and simple indexes such as `VTX`.
 
 ## Rough PITR By Default
 
 The design keeps rough PITR cheap by preserving enough history for branch-at-position recovery without writing a full image for every commit. Exact recovery is opt-in through pinned bookmarks, which ask the cold compactor to upload a full image for that versionstamp.
 
-Compared with Neon's exact-PITR posture, this trades precision for lower steady-state cost. That fits Rivet Actor-style workloads where "fork near this point" is usually enough, and exact bookmarks can be created explicitly for critical moments.
+Compared with Neon's exact-PITR posture, this trades precision for lower steady-state cost. That fits Rivet Database-style workloads where "fork near this point" is usually enough, and exact bookmarks can be created explicitly for critical moments.
 
 ## Pages Are Self-Describing
 
@@ -43,9 +43,9 @@ This avoids read-your-writes ambiguity after a fork. A child branch can refer to
 
 ## Why Immutable Branch Ids
 
-Earlier pointer-based designs needed mutable APTR/NSPTR rows, pointer history, frozen branch state, and cache invalidation when rollback swapped a pointer. The v4 model removes that storage-layer rollback primitive.
+Earlier pointer-based designs needed mutable DBPTR/NSPTR rows, pointer history, frozen branch state, and cache invalidation when rollback swapped a pointer. The v4 model removes that storage-layer rollback primitive.
 
-Now the external id is the branch id. Forking creates a new immutable branch record with a parent link. Engine-layer rollback is just: fork a new database at the target versionstamp, then update the engine-owned actor mapping.
+Now the external id is the branch id. Forking creates a new immutable branch record with a parent link. Engine-layer rollback is just: fork a new database at the target versionstamp, then update the engine-owned database mapping.
 
 This keeps storage invariants simple:
 

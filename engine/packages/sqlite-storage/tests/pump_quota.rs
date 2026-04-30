@@ -19,7 +19,7 @@ async fn quota_defaults_to_zero() -> Result<()> {
 	let db = test_db().await?;
 
 	let storage_used = db
-		.run(|tx| async move { read(&tx, "actor-a").await })
+		.run(|tx| async move { read(&tx, "database-a").await })
 		.await?;
 
 	assert_eq!(storage_used, 0);
@@ -32,14 +32,14 @@ async fn atomic_add_uses_signed_little_endian_counter() -> Result<()> {
 	let db = test_db().await?;
 
 	db.run(|tx| async move {
-		atomic_add(&tx, "actor-a", 128);
-		atomic_add(&tx, "actor-a", -8);
+		atomic_add(&tx, "database-a", 128);
+		atomic_add(&tx, "database-a", -8);
 		Ok(())
 	})
 	.await?;
 
 	let storage_used = db
-		.run(|tx| async move { read(&tx, "actor-a").await })
+		.run(|tx| async move { read(&tx, "database-a").await })
 		.await?;
 
 	assert_eq!(storage_used, 120);

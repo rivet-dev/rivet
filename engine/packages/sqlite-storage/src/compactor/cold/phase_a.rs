@@ -16,8 +16,8 @@ use crate::{
 	pump::{
 		keys,
 		types::{
-			ActorBranchId, ActorBranchRecord, BookmarkStr, CommitRow, MetaCompact,
-			SQLITE_STORAGE_COLD_SCHEMA_VERSION, decode_actor_branch_record, decode_commit_row,
+			DatabaseBranchId, DatabaseBranchRecord, BookmarkStr, CommitRow, MetaCompact,
+			SQLITE_STORAGE_COLD_SCHEMA_VERSION, decode_database_branch_record, decode_commit_row,
 			decode_meta_compact,
 		},
 	},
@@ -37,7 +37,7 @@ pub struct ColdCompactState {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ColdPendingMarker {
 	pub schema_version: u32,
-	pub branch_id: ActorBranchId,
+	pub branch_id: DatabaseBranchId,
 	pub pass_uuid: uuid::Uuid,
 	pub created_at_ms: i64,
 	pub cold_drained_txid: u64,
@@ -48,20 +48,20 @@ pub struct ColdPendingMarker {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ColdPhaseAPlan {
-	pub branch_id: ActorBranchId,
+	pub branch_id: DatabaseBranchId,
 	pub pass_uuid: uuid::Uuid,
 	pub pending_marker_key: String,
 	pub marker: ColdPendingMarker,
 	pub state_before: ColdCompactState,
 	pub materialized_txid: u64,
 	pub last_hot_pass_txid: u64,
-	pub branch_record: Option<ActorBranchRecord>,
+	pub branch_record: Option<DatabaseBranchRecord>,
 	pub shard_versions: Vec<ColdShardVersion>,
 	pub delta_chunks: Vec<ColdDeltaChunk>,
 	pub commit_rows: Vec<ColdCommitRow>,
 	pub vtx_rows: Vec<ColdVtxRow>,
 	pub pin_uploads: Vec<ColdPinUpload>,
-	pub actor_id: Option<String>,
+	pub database_id: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -92,7 +92,7 @@ pub struct ColdVtxRow {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ColdPinUpload {
-	pub actor_id: String,
+	pub database_id: String,
 	pub bookmark: BookmarkStr,
 	pub versionstamp: [u8; 16],
 }
@@ -200,7 +200,7 @@ pub(crate) async fn run(
 		.context("sqlite cold phase A handoff did not record pass uuid")?;
 	let marker_key = pending_marker_key(branch_id, pass_uuid);
 	let pin_uploads = payload_pin_uploads(&payload);
-	let actor_id = payload_actor_id(&payload);
+	let database_id = payload_database_id(&payload);
 	let marker = ColdPendingMarker {
 		schema_version: SQLITE_STORAGE_COLD_SCHEMA_VERSION,
 		branch_id,
@@ -229,7 +229,7 @@ pub(crate) async fn run(
 			marker_key.clone(),
 			marker.clone(),
 			pin_uploads,
-			actor_id,
+			database_id,
 		),
 	)
 	.await
@@ -243,7 +243,7 @@ pub(crate) async fn run(
 
 async fn register_pending_handoff(
 	db: &universaldb::Database,
-	branch_id: ActorBranchId,
+	branch_id: DatabaseBranchId,
 	candidate_pass_uuid: uuid::Uuid,
 ) -> Result<ColdPhaseAHandoff> {
 	db.run(move |tx| async move {
@@ -290,25 +290,25 @@ async fn register_pending_handoff(
 
 async fn read_snapshot_plan(
 	db: &universaldb::Database,
-	branch_id: ActorBranchId,
+	branch_id: DatabaseBranchId,
 	pass_uuid: uuid::Uuid,
 	pending_marker_key: String,
 	marker: ColdPendingMarker,
 	pin_uploads: Vec<ColdPinUpload>,
-	actor_id: Option<String>,
+	database_id: Option<String>,
 ) -> Result<ColdPhaseAPlan> {
 	db.run(move |tx| {
 		let marker = marker.clone();
 		let pending_marker_key = pending_marker_key.clone();
 		let pin_uploads = pin_uploads.clone();
-		let actor_id = actor_id.clone();
+		let database_id = database_id.clone();
 		async move {
 			let branch_record = tx
 				.informal()
 				.get(&keys::branches_list_key(branch_id), Snapshot)
 				.await?
 				.as_deref()
-				.map(|bytes| decode_actor_branch_record(bytes))
+				.map(|bytes| decode_database_branch_record(bytes))
 				.transpose()
 				.context("decode sqlite cold phase A branch record")?;
 			let materialized_txid = read_meta_compact(&tx, branch_id, Snapshot)
@@ -352,7 +352,7 @@ async fn read_snapshot_plan(
 				commit_rows,
 				vtx_rows,
 				pin_uploads,
-				actor_id,
+				database_id,
 			})
 		}
 	})
@@ -361,7 +361,7 @@ async fn read_snapshot_plan(
 
 async fn read_cold_state(
 	tx: &universaldb::Transaction,
-	branch_id: ActorBranchId,
+	branch_id: DatabaseBranchId,
 	isolation_level: universaldb::utils::IsolationLevel,
 ) -> Result<ColdCompactState> {
 	let Some(bytes) = tx
@@ -380,7 +380,7 @@ async fn read_cold_state(
 
 async fn read_meta_compact(
 	tx: &universaldb::Transaction,
-	branch_id: ActorBranchId,
+	branch_id: DatabaseBranchId,
 	isolation_level: universaldb::utils::IsolationLevel,
 ) -> Result<Option<MetaCompact>> {
 	tx.informal()
@@ -409,7 +409,7 @@ async fn read_u64_be(
 
 async fn load_shard_versions(
 	tx: &universaldb::Transaction,
-	branch_id: ActorBranchId,
+	branch_id: DatabaseBranchId,
 	cold_drained_txid: u64,
 ) -> Result<Vec<ColdShardVersion>> {
 	let mut out = Vec::new();
@@ -432,7 +432,7 @@ async fn load_shard_versions(
 
 async fn load_delta_chunks(
 	tx: &universaldb::Transaction,
-	branch_id: ActorBranchId,
+	branch_id: DatabaseBranchId,
 	cold_drained_txid: u64,
 ) -> Result<Vec<ColdDeltaChunk>> {
 	let mut out = Vec::new();
@@ -455,7 +455,7 @@ async fn load_delta_chunks(
 
 async fn load_commit_rows(
 	tx: &universaldb::Transaction,
-	branch_id: ActorBranchId,
+	branch_id: DatabaseBranchId,
 	cold_drained_txid: u64,
 ) -> Result<Vec<ColdCommitRow>> {
 	let mut out = Vec::new();
@@ -476,7 +476,7 @@ async fn load_commit_rows(
 
 async fn load_vtx_rows(
 	tx: &universaldb::Transaction,
-	branch_id: ActorBranchId,
+	branch_id: DatabaseBranchId,
 	cold_drained_txid: u64,
 ) -> Result<Vec<ColdVtxRow>> {
 	let mut out = Vec::new();
@@ -520,7 +520,7 @@ async fn scan_prefix(
 }
 
 fn initial_planned_object_keys(
-	branch_id: ActorBranchId,
+	branch_id: DatabaseBranchId,
 	pass_uuid: uuid::Uuid,
 	payload: &SqliteColdCompactPayload,
 	handoff: &ColdPhaseAHandoff,
@@ -548,7 +548,7 @@ fn initial_planned_object_keys(
 	keys.into_iter().collect()
 }
 
-fn pending_marker_key(branch_id: ActorBranchId, pass_uuid: uuid::Uuid) -> String {
+fn pending_marker_key(branch_id: DatabaseBranchId, pass_uuid: uuid::Uuid) -> String {
 	format!(
 		"{}/pending/{}.marker",
 		branch_object_prefix(branch_id),
@@ -556,12 +556,12 @@ fn pending_marker_key(branch_id: ActorBranchId, pass_uuid: uuid::Uuid) -> String
 	)
 }
 
-fn branch_object_prefix(branch_id: ActorBranchId) -> String {
+fn branch_object_prefix(branch_id: DatabaseBranchId) -> String {
 	format!("db/{}", branch_id.as_uuid().simple())
 }
 
 fn decode_branch_shard_version_key(
-	branch_id: ActorBranchId,
+	branch_id: DatabaseBranchId,
 	key: &[u8],
 ) -> Result<Option<(u32, u64)>> {
 	let prefix = keys::branch_shard_prefix(branch_id);
@@ -624,20 +624,20 @@ fn hex_bytes(bytes: &[u8]) -> String {
 	bytes.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
-fn payload_branch_id(payload: &SqliteColdCompactPayload) -> ActorBranchId {
+fn payload_branch_id(payload: &SqliteColdCompactPayload) -> DatabaseBranchId {
 	match payload {
 		SqliteColdCompactPayload::CreatePinnedBookmark {
-			actor_branch_id, ..
+			database_branch_id, ..
 		}
 		| SqliteColdCompactPayload::DeletePinnedBookmark {
-			actor_branch_id, ..
-		} => *actor_branch_id,
+			database_branch_id, ..
+		} => *database_branch_id,
 		SqliteColdCompactPayload::ForkWarmup {
-			target_actor_branch_id,
+			target_database_branch_id,
 			..
-		} => *target_actor_branch_id,
+		} => *target_database_branch_id,
 		SqliteColdCompactPayload::NamespaceForkWarmup { .. } => {
-			ActorBranchId::nil()
+			DatabaseBranchId::nil()
 		}
 	}
 }
@@ -645,12 +645,12 @@ fn payload_branch_id(payload: &SqliteColdCompactPayload) -> ActorBranchId {
 fn payload_pin_uploads(payload: &SqliteColdCompactPayload) -> Vec<ColdPinUpload> {
 	match payload {
 		SqliteColdCompactPayload::CreatePinnedBookmark {
-			actor_id,
+			database_id,
 			bookmark,
 			versionstamp,
 			..
 		} => vec![ColdPinUpload {
-			actor_id: actor_id.clone(),
+			database_id: database_id.clone(),
 			bookmark: bookmark.clone(),
 			versionstamp: *versionstamp,
 		}],
@@ -660,10 +660,10 @@ fn payload_pin_uploads(payload: &SqliteColdCompactPayload) -> Vec<ColdPinUpload>
 	}
 }
 
-fn payload_actor_id(payload: &SqliteColdCompactPayload) -> Option<String> {
+fn payload_database_id(payload: &SqliteColdCompactPayload) -> Option<String> {
 	match payload {
-		SqliteColdCompactPayload::CreatePinnedBookmark { actor_id, .. }
-		| SqliteColdCompactPayload::DeletePinnedBookmark { actor_id, .. } => Some(actor_id.clone()),
+		SqliteColdCompactPayload::CreatePinnedBookmark { database_id, .. }
+		| SqliteColdCompactPayload::DeletePinnedBookmark { database_id, .. } => Some(database_id.clone()),
 		SqliteColdCompactPayload::ForkWarmup { .. }
 		| SqliteColdCompactPayload::NamespaceForkWarmup { .. } => None,
 	}

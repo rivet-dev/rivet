@@ -7,7 +7,7 @@ use crate::{
 	gc::{VERSIONSTAMP_ZERO, read_branch_gc_pin_tx},
 	pump::{
 		types::{
-			ActorBranchId, ColdManifestChunk, ColdManifestChunkRef, decode_cold_manifest_chunk,
+			DatabaseBranchId, ColdManifestChunk, ColdManifestChunkRef, decode_cold_manifest_chunk,
 			decode_cold_manifest_index, encode_cold_manifest_chunk, encode_cold_manifest_index,
 		},
 	},
@@ -23,7 +23,7 @@ pub struct ColdSweepOutput {
 pub(crate) async fn run(
 	db: &universaldb::Database,
 	cold_tier: Arc<dyn ColdTier>,
-	branch_id: ActorBranchId,
+	branch_id: DatabaseBranchId,
 	cancel_token: tokio_util::sync::CancellationToken,
 ) -> Result<ColdSweepOutput> {
 	ensure_not_cancelled(&cancel_token)?;
@@ -158,7 +158,7 @@ pub(crate) async fn run(
 
 async fn read_gc_pin(
 	db: &universaldb::Database,
-	branch_id: ActorBranchId,
+	branch_id: DatabaseBranchId,
 ) -> Result<Option<[u8; 16]>> {
 	db.run(move |tx| async move {
 		Ok(read_branch_gc_pin_tx(&tx, branch_id)
@@ -202,11 +202,11 @@ fn max_layer_versionstamp(chunk: &ColdManifestChunk) -> [u8; 16] {
 		.unwrap_or(chunk.pass_versionstamp)
 }
 
-fn manifest_index_object_key(branch_id: ActorBranchId) -> String {
+fn manifest_index_object_key(branch_id: DatabaseBranchId) -> String {
 	format!("{}/cold_manifest/index.bare", branch_object_prefix(branch_id))
 }
 
-fn branch_object_prefix(branch_id: ActorBranchId) -> String {
+fn branch_object_prefix(branch_id: DatabaseBranchId) -> String {
 	format!("db/{}", branch_id.as_uuid().simple())
 }
 

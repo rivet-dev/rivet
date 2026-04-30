@@ -5,7 +5,7 @@ use crate::{
 	HOT_BURST_COLD_LAG_THRESHOLD_TXIDS, HOT_BURST_MULTIPLIER,
 	pump::{
 		keys,
-		types::{ActorBranchId, decode_db_head},
+		types::{DatabaseBranchId, decode_db_head},
 	},
 };
 
@@ -30,7 +30,7 @@ pub fn signal_from_txids(head_txid: u64, cold_drained_txid: u64) -> BurstSignal 
 
 pub async fn read_branch_signal(
 	tx: &universaldb::Transaction,
-	branch_id: ActorBranchId,
+	branch_id: DatabaseBranchId,
 	isolation_level: IsolationLevel,
 ) -> Result<BurstSignal> {
 	let head_txid = tx
@@ -47,7 +47,7 @@ pub async fn read_branch_signal(
 
 pub async fn read_branch_signal_for_head(
 	tx: &universaldb::Transaction,
-	branch_id: ActorBranchId,
+	branch_id: DatabaseBranchId,
 	head_txid: u64,
 	isolation_level: IsolationLevel,
 ) -> Result<BurstSignal> {

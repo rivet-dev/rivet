@@ -83,7 +83,7 @@ pub(crate) async fn run(
 
 async fn read_cold_state(
 	tx: &universaldb::Transaction,
-	branch_id: crate::pump::types::ActorBranchId,
+	branch_id: crate::pump::types::DatabaseBranchId,
 ) -> Result<ColdCompactState> {
 	let Some(bytes) = tx
 		.informal()
@@ -104,14 +104,14 @@ async fn mark_pin_ready(
 	pin: ColdUploadedPin,
 	now_ms: i64,
 ) -> Result<bool> {
-	let pinned_key = keys::bookmark_pinned_key(&pin.actor_id, pin.bookmark.as_str());
+	let pinned_key = keys::bookmark_pinned_key(&pin.database_id, pin.bookmark.as_str());
 	let Some(bytes) = tx.informal().get(&pinned_key, Serializable).await? else {
 		return Ok(false);
 	};
 	let mut record = decode_pinned_bookmark_record(&bytes)
 		.context("decode sqlite pinned bookmark record during cold phase C")?;
 
-	if record.actor_branch_id != pin.actor_branch_id
+	if record.database_branch_id != pin.database_branch_id
 		|| record.versionstamp != pin.versionstamp
 		|| record.bookmark != pin.bookmark
 	{
@@ -136,32 +136,32 @@ pub(crate) async fn mark_payload_pins_failed(
 	now_ms: i64,
 ) -> Result<usize> {
 	let SqliteColdCompactPayload::CreatePinnedBookmark {
-		actor_id,
-		actor_branch_id,
+		database_id,
+		database_branch_id,
 		bookmark,
 		versionstamp,
 	} = payload
 	else {
 		return Ok(0);
 	};
-	let actor_id = actor_id.clone();
-	let actor_branch_id = *actor_branch_id;
+	let database_id = database_id.clone();
+	let database_branch_id = *database_branch_id;
 	let bookmark = bookmark.clone();
 	let versionstamp = *versionstamp;
 
 	db.run(move |tx| {
-		let actor_id = actor_id.clone();
+		let database_id = database_id.clone();
 		let bookmark = bookmark.clone();
 
 		async move {
-			let pinned_key = keys::bookmark_pinned_key(&actor_id, bookmark.as_str());
+			let pinned_key = keys::bookmark_pinned_key(&database_id, bookmark.as_str());
 			let Some(bytes) = tx.informal().get(&pinned_key, Serializable).await? else {
 				return Ok(0);
 			};
 			let mut record = decode_pinned_bookmark_record(&bytes)
 				.context("decode sqlite pinned bookmark record during cold failure handling")?;
 
-			if record.actor_branch_id != actor_branch_id
+			if record.database_branch_id != database_branch_id
 				|| record.versionstamp != versionstamp
 				|| record.bookmark != bookmark
 				|| record.status != PinStatus::Pending

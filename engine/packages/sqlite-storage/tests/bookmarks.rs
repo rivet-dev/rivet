@@ -16,9 +16,9 @@ use sqlite_storage::{
 		branch_commit_key, branch_manifest_last_hot_pass_txid_key, branch_meta_compact_key,
 		branch_shard_key, branch_vtx_key,
 	},
-	pump::{ActorDb, bookmark, branch},
+	pump::{Db, bookmark, branch},
 	types::{
-		ActorBranchId, BookmarkRef, CommitRow, DirtyPage, NamespaceId, PinStatus,
+		DatabaseBranchId, BookmarkRef, CommitRow, DirtyPage, NamespaceId, PinStatus,
 		decode_commit_row, decode_pinned_bookmark_record, encode_meta_compact,
 	},
 };
@@ -28,7 +28,7 @@ use tokio_util::sync::CancellationToken;
 use universaldb::utils::IsolationLevel::{Serializable, Snapshot};
 use universalpubsub::{NextOutput, PubSub, driver::memory::MemoryDriver};
 
-const TEST_ACTOR: &str = "bookmark-source";
+const TEST_DATABASE: &str = "bookmark-source";
 const OTHER_ACTOR: &str = "bookmark-other";
 
 static COMPACTION_TEST_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
@@ -58,8 +58,8 @@ fn nil_namespace() -> Id {
 	Id::v1(uuid::Uuid::nil(), 1)
 }
 
-fn actor_db(db: Arc<universaldb::Database>, namespace_id: Id, actor_id: &str) -> ActorDb {
-	ActorDb::new(db, test_ups(), namespace_id, actor_id.to_string(), NodeId::new())
+fn make_db(db: Arc<universaldb::Database>, namespace_id: Id, database_id: &str) -> Db {
+	Db::new(db, test_ups(), namespace_id, database_id.to_string(), NodeId::new())
 }
 
 fn page(pgno: u32, fill: u8) -> DirtyPage {
@@ -90,24 +90,24 @@ async fn read_value(db: &universaldb::Database, key: Vec<u8>) -> Result<Option<V
 	.await
 }
 
-async fn actor_branch_id(
+async fn database_branch_id(
 	db: &universaldb::Database,
 	namespace_id: Id,
-	actor_id: &str,
-) -> Result<ActorBranchId> {
+	database_id: &str,
+) -> Result<DatabaseBranchId> {
 	let namespace_id = NamespaceId::from_gas_id(namespace_id);
 
 	db.run(move |tx| async move {
-		branch::resolve_actor_branch(&tx, namespace_id, actor_id, Serializable)
+		branch::resolve_database_branch(&tx, namespace_id, database_id, Serializable)
 			.await?
-			.context("actor branch should exist")
+			.context("database branch should exist")
 	})
 	.await
 }
 
 async fn commit_row(
 	db: &universaldb::Database,
-	branch_id: ActorBranchId,
+	branch_id: DatabaseBranchId,
 	txid: u64,
 ) -> Result<CommitRow> {
 	let bytes = read_value(db, branch_commit_key(branch_id, txid))
@@ -131,14 +131,14 @@ fn assert_storage_error(err: anyhow::Error, expected: SqliteStorageError) {
 #[tokio::test]
 async fn ephemeral_bookmark_resolves_to_commit_versionstamp() -> Result<()> {
 	let db = test_db().await?;
-	let actor_db = actor_db(Arc::clone(&db), namespace(), TEST_ACTOR);
+	let database_db = make_db(Arc::clone(&db), namespace(), TEST_DATABASE);
 
-	actor_db.commit(vec![page(1, 0x11)], 2, 1_000).await?;
-	let bookmark = actor_db.create_bookmark(1_010).await?;
-	let branch_id = actor_branch_id(&db, namespace(), TEST_ACTOR).await?;
+	database_db.commit(vec![page(1, 0x11)], 2, 1_000).await?;
+	let bookmark = database_db.create_bookmark(1_010).await?;
+	let branch_id = database_branch_id(&db, namespace(), TEST_DATABASE).await?;
 	let row = commit_row(&db, branch_id, 1).await?;
 
-	let resolved = actor_db.resolve_bookmark(bookmark.clone()).await?;
+	let resolved = database_db.resolve_bookmark(bookmark.clone()).await?;
 
 	assert_eq!(resolved.versionstamp, row.versionstamp);
 	assert_eq!(
@@ -159,15 +159,15 @@ async fn pinned_bookmark_reaches_ready_through_filesystem_cold_tier() -> Result<
 	let mut sub = ups
 		.queue_subscribe(SqliteColdCompactSubject, "cold-compactor")
 		.await?;
-	let actor_db = ActorDb::new(
+	let database_db = Db::new(
 		Arc::clone(&db),
 		ups,
 		namespace(),
-		TEST_ACTOR.to_string(),
+		TEST_DATABASE.to_string(),
 		NodeId::new(),
 	);
-	actor_db.commit(vec![page(1, 0x11)], 2, 1_000).await?;
-	let branch_id = actor_branch_id(&db, namespace(), TEST_ACTOR).await?;
+	database_db.commit(vec![page(1, 0x11)], 2, 1_000).await?;
+	let branch_id = database_branch_id(&db, namespace(), TEST_DATABASE).await?;
 
 	db.run(move |tx| async move {
 		tx.informal().set(
@@ -184,8 +184,8 @@ async fn pinned_bookmark_reaches_ready_through_filesystem_cold_tier() -> Result<
 	})
 	.await?;
 
-	let bookmark = actor_db.create_pinned_bookmark(1_010).await?;
-	assert_eq!(actor_db.bookmark_status(bookmark.clone()).await?, Some(PinStatus::Pending));
+	let bookmark = database_db.create_pinned_bookmark(1_010).await?;
+	assert_eq!(database_db.bookmark_status(bookmark.clone()).await?, Some(PinStatus::Pending));
 
 	let msg = timeout(Duration::from_secs(1), sub.next())
 		.await
@@ -208,13 +208,13 @@ async fn pinned_bookmark_reaches_ready_through_filesystem_cold_tier() -> Result<
 
 	let pinned_bytes = read_value(
 		&db,
-		sqlite_storage::keys::bookmark_pinned_key(TEST_ACTOR, bookmark.as_str()),
+		sqlite_storage::keys::bookmark_pinned_key(TEST_DATABASE, bookmark.as_str()),
 	)
 	.await?
 	.context("pinned bookmark record should exist")?;
 	let pinned = decode_pinned_bookmark_record(&pinned_bytes)?;
 	assert_eq!(pinned.status, PinStatus::Ready);
-	assert_eq!(actor_db.bookmark_status(bookmark).await?, Some(PinStatus::Ready));
+	assert_eq!(database_db.bookmark_status(bookmark).await?, Some(PinStatus::Ready));
 	assert!(pinned.pin_object_key.is_some());
 	assert!(tier.get_object(pinned.pin_object_key.as_deref().unwrap()).await?.is_some());
 
@@ -224,10 +224,10 @@ async fn pinned_bookmark_reaches_ready_through_filesystem_cold_tier() -> Result<
 #[tokio::test]
 async fn parent_namespace_bookmark_resolves_from_forked_namespace() -> Result<()> {
 	let db = test_db().await?;
-	let source = actor_db(Arc::clone(&db), namespace(), TEST_ACTOR);
+	let source = make_db(Arc::clone(&db), namespace(), TEST_DATABASE);
 	source.commit(vec![page(1, 0x11)], 2, 1_000).await?;
 	let bookmark = source.create_bookmark(1_010).await?;
-	let source_branch = actor_branch_id(&db, namespace(), TEST_ACTOR).await?;
+	let source_branch = database_branch_id(&db, namespace(), TEST_DATABASE).await?;
 	let fork_point = commit_row(&db, source_branch, 1).await?;
 	let forked_namespace = branch::fork_namespace(
 		&db,
@@ -241,7 +241,7 @@ async fn parent_namespace_bookmark_resolves_from_forked_namespace() -> Result<()
 	.await?;
 
 	let resolved =
-		bookmark::resolve_bookmark(&db, forked_namespace, TEST_ACTOR.to_string(), bookmark).await?;
+		bookmark::resolve_bookmark(&db, forked_namespace, TEST_DATABASE.to_string(), bookmark).await?;
 
 	assert_eq!(resolved.versionstamp, fork_point.versionstamp);
 
@@ -250,7 +250,7 @@ async fn parent_namespace_bookmark_resolves_from_forked_namespace() -> Result<()
 	let err = bookmark::resolve_bookmark(
 		&db,
 		forked_namespace,
-		TEST_ACTOR.to_string(),
+		TEST_DATABASE.to_string(),
 		post_fork_bookmark,
 	)
 	.await
@@ -264,20 +264,20 @@ async fn parent_namespace_bookmark_resolves_from_forked_namespace() -> Result<()
 async fn bookmark_past_hot_retention_returns_expired() -> Result<()> {
 	let _compaction_test_lock = COMPACTION_TEST_LOCK.lock().await;
 	let db = test_db().await?;
-	let actor_db = actor_db(Arc::clone(&db), nil_namespace(), TEST_ACTOR);
+	let database_db = make_db(Arc::clone(&db), nil_namespace(), TEST_DATABASE);
 	let current_ms = now_ms();
 	let old_ms = current_ms - HOT_RETENTION_FLOOR_MS - 1_000;
 	let recent_ms = current_ms - 1_000;
 
-	actor_db.commit(vec![page(1, 0x11)], 2, old_ms).await?;
-	let old_bookmark = actor_db.create_bookmark(old_ms).await?;
-	actor_db.commit(vec![page(2, 0x22)], 3, recent_ms).await?;
-	let branch_id = actor_branch_id(&db, nil_namespace(), TEST_ACTOR).await?;
+	database_db.commit(vec![page(1, 0x11)], 2, old_ms).await?;
+	let old_bookmark = database_db.create_bookmark(old_ms).await?;
+	database_db.commit(vec![page(2, 0x22)], 3, recent_ms).await?;
+	let branch_id = database_branch_id(&db, nil_namespace(), TEST_DATABASE).await?;
 	let old_row = commit_row(&db, branch_id, 1).await?;
 
 	compact_default_batch(
 		Arc::clone(&db),
-		TEST_ACTOR.to_string(),
+		TEST_DATABASE.to_string(),
 		10,
 		CancellationToken::new(),
 	)
@@ -294,7 +294,7 @@ async fn bookmark_past_hot_retention_returns_expired() -> Result<()> {
 			.is_none()
 	);
 
-	let err = actor_db
+	let err = database_db
 		.resolve_bookmark(old_bookmark)
 		.await
 		.expect_err("swept bookmark should be expired");
@@ -304,12 +304,12 @@ async fn bookmark_past_hot_retention_returns_expired() -> Result<()> {
 }
 
 #[tokio::test]
-async fn unrelated_actor_bookmark_returns_branch_not_reachable() -> Result<()> {
+async fn unrelated_database_bookmark_returns_branch_not_reachable() -> Result<()> {
 	let db = test_db().await?;
-	let source = actor_db(Arc::clone(&db), namespace(), TEST_ACTOR);
+	let source = make_db(Arc::clone(&db), namespace(), TEST_DATABASE);
 	source.commit(vec![page(1, 0x11)], 2, 1_000).await?;
 	let bookmark = source.create_bookmark(1_010).await?;
-	let other = actor_db(Arc::clone(&db), other_namespace(), OTHER_ACTOR);
+	let other = make_db(Arc::clone(&db), other_namespace(), OTHER_ACTOR);
 	other.commit(vec![page(1, 0x22)], 2, 1_000).await?;
 
 	let err = bookmark::resolve_bookmark(
@@ -319,7 +319,7 @@ async fn unrelated_actor_bookmark_returns_branch_not_reachable() -> Result<()> {
 		bookmark,
 	)
 	.await
-	.expect_err("actor from another namespace should not be reachable here");
+	.expect_err("database from another namespace should not be reachable here");
 
 	assert_storage_error(err, SqliteStorageError::BranchNotReachable);
 

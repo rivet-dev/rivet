@@ -11,15 +11,15 @@ use sqlite_storage::{
 		branch_manifest_last_hot_pass_txid_key, branch_shard_key,
 	},
 	pump::branch,
-	types::{ActorBranchId, NamespaceBranchId, decode_commit_row},
+	types::{DatabaseBranchId, NamespaceBranchId, decode_commit_row},
 };
 
 #[tokio::test]
 async fn concurrent_fork_during_eviction() -> Result<()> {
 	let db = Arc::new(fault_common::test_db("sqlite-storage-fork-during-evict-").await?);
-	let actor_db = fault_common::actor_db(Arc::clone(&db), fault_common::TEST_ACTOR);
-	actor_db.commit(vec![fault_common::page(1, 0x11)], 2, 1_000).await?;
-	let branch_id = fault_common::actor_branch_id_for(&db, fault_common::TEST_ACTOR).await?;
+	let database_db = fault_common::make_db(Arc::clone(&db), fault_common::TEST_DATABASE);
+	database_db.commit(vec![fault_common::page(1, 0x11)], 2, 1_000).await?;
+	let branch_id = fault_common::database_branch_id_for(&db, fault_common::TEST_DATABASE).await?;
 	let commit_bytes = fault_common::read_value(&db, branch_commit_key(branch_id, 1))
 		.await?
 		.context("commit row should exist")?;
@@ -49,7 +49,7 @@ async fn concurrent_fork_during_eviction() -> Result<()> {
 	.await?;
 	assert_eq!(planned.len(), 1);
 
-	let forked_branch_id = ActorBranchId::from_uuid(uuid::Uuid::from_u128(0xfeed));
+	let forked_branch_id = DatabaseBranchId::from_uuid(uuid::Uuid::from_u128(0xfeed));
 	db.run(move |tx| async move {
 		branch::derive_branch_at(
 			&tx,

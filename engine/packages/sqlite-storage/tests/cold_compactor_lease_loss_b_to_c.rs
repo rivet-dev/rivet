@@ -73,7 +73,7 @@ async fn cold_compactor_lease_loss_b_to_c() -> Result<()> {
 	assert!(
 		fault_common::read_value(
 			&db,
-			sqlite_storage::keys::branch_meta_cold_lease_key(fault_common::actor_branch_id())
+			sqlite_storage::keys::branch_meta_cold_lease_key(fault_common::database_branch_id())
 		)
 		.await?
 		.is_none(),
@@ -82,7 +82,7 @@ async fn cold_compactor_lease_loss_b_to_c() -> Result<()> {
 	assert_eq!(
 		fault_common::read_u64_be(
 			&db,
-			branch_manifest_cold_drained_txid_key(fault_common::actor_branch_id())
+			branch_manifest_cold_drained_txid_key(fault_common::database_branch_id())
 		)
 		.await?,
 		Some(3)
@@ -99,14 +99,14 @@ async fn cold_compactor_lease_loss_b_to_c() -> Result<()> {
 	assert_eq!(
 		fault_common::read_u64_be(
 			&db,
-			branch_manifest_cold_drained_txid_key(fault_common::actor_branch_id())
+			branch_manifest_cold_drained_txid_key(fault_common::database_branch_id())
 		)
 		.await?,
 		Some(7)
 	);
 	let state = fault_common::read_value(
 		&db,
-		branch_meta_cold_compact_key(fault_common::actor_branch_id()),
+		branch_meta_cold_compact_key(fault_common::database_branch_id()),
 	)
 	.await?
 	.expect("cold compact state should exist");

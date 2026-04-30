@@ -1,6 +1,6 @@
 # sqlite-storage
 
-The per-actor SQLite storage engine. FDB is the hot tier; S3 is the cold tier (PITR + retention). LTX V3 file format throughout.
+The per-database SQLite storage engine. FDB is the hot tier; S3 is the cold tier (PITR + retention). LTX V3 file format throughout.
 
 For implementation-level wiring (key encodings, RTT count for `commit`, LTX byte layout, compaction shard rules, test harness setup) see the `## SQLite storage tests` and `## Pegboard Envoy` sections in `engine/CLAUDE.md`. The bullets here are the **architectural constraints** that shape what does and does not belong in this package.
 
@@ -8,18 +8,18 @@ For implementation-level wiring (key encodings, RTT count for `commit`, LTX byte
 
 These come from `r2-prior-art/.agent/research/sqlite/requirements.md` and supersede any contradiction in older specs.
 
-- **Single writer per database.** Pegboard exclusivity (lost-timeout + ping protocol) holds. Never two writers on the same actor at the same instant. Do not implement MVCC, page-versioned read-set tracking, optimistic conflict detection at commit, content-addressed dedup, or commit-intent logs. mvSQLite's PLCC / DLCC / MPC / versionstamps are explicitly out — single writer makes them dead weight.
+- **Single writer per database.** Pegboard exclusivity (lost-timeout + ping protocol) holds. Never two writers on the same database at the same instant. Do not implement MVCC, page-versioned read-set tracking, optimistic conflict detection at commit, content-addressed dedup, or commit-intent logs. mvSQLite's PLCC / DLCC / MPC / versionstamps are explicitly out — single writer makes them dead weight.
 - **No local SQLite files. Ever.** Not on disk, not on tmpfs, not as a hydrated cache file. The authoritative store is FDB (hot) and S3 (cold). The VFS speaks to them directly. Forks do not materialize local files. Anything that puts a real SQLite file on a pegboard node is out of scope.
-- **Lazy read only.** No bulk pre-load at actor open. Pages are fetched on demand from the hot tier. The per-WS-conn PIDX cache + flattened ancestry cache amortize the per-fetch cost. Fork warmup is a *background* cold→hot copy, not a synchronous bulk hydrate at first SQL statement.
+- **Lazy read only.** No bulk pre-load at database open. Pages are fetched on demand from the hot tier. The per-WS-conn PIDX cache + flattened ancestry cache amortize the per-fetch cost. Fork warmup is a *background* cold→hot copy, not a synchronous bulk hydrate at first SQL statement.
 - **Per-commit granularity.** The smallest addressable unit is a committed transaction. No sub-commit PITR, no WAL-frame-level shipping.
 
 ## Statelessness contract
 
-- **The hot path (pegboard-envoy → ActorDb) is pod-stateless.** Every request self-describes its fence (branch_id, expected generation/head_txid in debug) and runs against the current FDB state. In-memory state on `ActorDb` is allowed only as a **perf cache** — never as the source of truth, never as a correctness fence, never as something that must survive across requests. WS conn drop = cache drop. No `open` / `close` lifecycle.
+- **The hot path (pegboard-envoy → Db) is pod-stateless.** Every request self-describes its fence (branch_id, expected generation/head_txid in debug) and runs against the current FDB state. In-memory state on `Db` is allowed only as a **perf cache** — never as the source of truth, never as a correctness fence, never as something that must survive across requests. WS conn drop = cache drop. No `open` / `close` lifecycle.
 - **Both compactors (hot + cold) are pod-stateless.** All coordination state lives in FDB or S3. A compactor pod can crash mid-pass and the next pod that takes the lease picks up correctly. Pods churn freely; HPA scales without drain modes.
-  - Hot compactor: stateless. Throttle (`last_trigger_at`) lives on the envoy's `ActorDb`, not on the compactor.
+  - Hot compactor: stateless. Throttle (`last_trigger_at`) lives on the envoy's `Db`, not on the compactor.
   - Cold compactor: stateless. Burst-mode signal is **derived from FDB lag** (`head_txid - cold_drained_txid`), not from a per-pod 5xx-ratio tracker. Debug `validate_quota` cadence is **derived from `materialized_txid % N`**, not from a per-pod pass-count counter.
-- **Pegboard-envoy WS conn is stateless w.r.t. actor identity.** Envoys can reconnect to a different worker mid-flight while an actor is active; the new worker never sees the original `CommandStartActor`. The only per-conn state is the perf-only `scc::HashMap<actor_id, Arc<ActorDb>>`, populated lazily by SQLite request handlers. No `active_actors` HashMap, no presence tracking, no `start_actor` handler. `stop_actor` only evicts the cache entry.
+- **Pegboard-envoy WS conn is stateless w.r.t. database identity.** Envoys can reconnect to a different worker mid-flight while a database is active; the new worker never sees the original actor start command. The only per-conn state is the perf-only `scc::HashMap<database_id, Arc<Db>>`, populated lazily by SQLite request handlers. No active-database registry, no presence tracking, no start handler. Stop only evicts the cache entry.
 - **Defensive runtime checks for "this should never happen" are `#[cfg(debug_assertions)]` only.** Trust the surrounding contracts (pegboard exclusivity, FDB tx isolation, lease-based compactor exclusion). Belt-and-suspenders fences that duplicate work the surrounding system already does belong in debug builds, not in release.
 
 ## Concurrency model
@@ -34,11 +34,11 @@ These come from `r2-prior-art/.agent/research/sqlite/requirements.md` and supers
 
 ## Storage layout
 
-- **All PITR actor state is per-branch.** ActorDb resolves APTR, caches the branch id as a perf cache, and writes hot-path data under top-level `[0x02][0x30]/{branch_id}/<suffix>` keys.
-- **ActorDb is namespace-scoped.** New ActorDb instances receive the engine namespace id, lazily seed NSPTR/NSBRANCH, and write APTR under the resolved namespace branch.
-- **Actor pointer resolution walks namespace branch parents on APTR miss.** Namespace-branch tombstones return `ActorNotFound` and must not fall back to legacy actor-scoped storage.
-- **ActorDb branch and PIDX caches must be invalidated when APTR moves.** Rollback swaps can make cached branch id, quota, and PIDX rows stale; resolve APTR as the source of truth before using cached branch-local state.
-- **Legacy actor-scoped storage is compatibility fallback only.** New ActorDb writes use branch-scoped META, COMMITS, VTX, PIDX, DELTA, and SHARD keys.
+- **All PITR database state is per-branch.** Db resolves DBPTR, caches the branch id as a perf cache, and writes hot-path data under top-level `[0x02][0x30]/{branch_id}/<suffix>` keys.
+- **Db is namespace-scoped.** New Db instances receive the engine namespace id, lazily seed NSPTR/NSBRANCH, and write DBPTR under the resolved namespace branch.
+- **Database pointer resolution walks namespace branch parents on DBPTR miss.** Namespace-branch tombstones return `DatabaseNotFound` and must not fall back to legacy database-scoped storage.
+- **Db branch and PIDX caches must be invalidated when DBPTR moves.** Rollback swaps can make cached branch id, quota, and PIDX rows stale; resolve DBPTR as the source of truth before using cached branch-local state.
+- **Legacy database-scoped storage is compatibility fallback only.** New Db writes use branch-scoped META, COMMITS, VTX, PIDX, DELTA, and SHARD keys.
 - **Branch ancestry reads use branch-aware sources.** The PIDX cache is safe only when the read plan has one source branch; multi-branch ancestry reads must scan PIDX with branch identity.
 - **Flattened ancestry caches store versionstamp caps.** Resolve cached parent versionstamps to txids inside each read transaction before PIDX/SHARD lookup.
 - **Ancestor PIDX reads are capped by fork point.** Ignore PIDX owners newer than that source's cap and fall through to the latest SHARD version at or below the cap.
@@ -62,7 +62,7 @@ These come from `r2-prior-art/.agent/research/sqlite/requirements.md` and supers
 - **Database tombstones store 16-byte versionstamped values.** `list_databases` applies the same namespace parent cap to tombstones so deletions after a namespace fork do not hide databases in the older fork.
 - **Branch pin atomic-min writes use `MutationType::ByteMin`** because versionstamps are 16-byte lexicographic big-endian values.
 - **Cold and eviction behavior is unconditional.** There is no per-namespace tier state or promotion path.
-- **PITR, forking, and `restore_to_bookmark` are all the same primitive: branch-at-position.** PITR creates a new branch at the resolved bookmark; the broader system (pegboard) decides whether to swap the actor's head pointer onto it.
+- **PITR, forking, and `restore_to_bookmark` are all the same primitive: branch-at-position.** PITR creates a new branch at the resolved bookmark; the broader system (pegboard) decides whether to swap the database's head pointer onto it.
 - **`MAX_FORK_DEPTH = 16`.** Deeper trees indicate misuse.
 
 ## Cold tier (S3)
@@ -83,21 +83,21 @@ These come from `r2-prior-art/.agent/research/sqlite/requirements.md` and supers
 - **Schema version on every persisted S3 object** (`schema_version: u32` on `ColdManifest`, `BookmarkIndex`, `BranchColdState`). Cold compactor reads old version + writes new version on every pass; reader code retains old-version paths for at least one full retention window past rollout.
 - **Cold compactor tests inject a concrete cold tier.** The service default is `DisabledColdTier` until runtime config selects filesystem or S3, so test hooks must pass `FilesystemColdTier` explicitly when a pass should write objects.
 - **ColdTier object keys are relative S3-style keys.** Reject empty object keys, absolute paths, and `..`; use `FilesystemColdTier` for local tests and `FaultyColdTier` for injected latency or failures.
-- **Cold read fall-through keeps ColdTier GETs outside UDB transactions.** `ActorDb::new_with_cold_tier` supplies the backend and read-side manifests are cached per connection.
+- **Cold read fall-through keeps ColdTier GETs outside UDB transactions.** `Db::new_with_cold_tier` supplies the backend and read-side manifests are cached per connection.
 
 ## Bookmarks
 
-- **Bookmark wire format is 33-char `{timestamp_ms_hex_be:016}-{txid_hex_be:016}`.** Branch identity is **not** in the wire format; bookmarks are interpreted relative to a branch context (actor's current head by default, explicit `branch_id` argument otherwise).
+- **Bookmark wire format is 33-char `{timestamp_ms_hex_be:016}-{txid_hex_be:016}`.** Branch identity is **not** in the wire format; bookmarks are interpreted relative to a branch context (database's current head by default, explicit `branch_id` argument otherwise).
 - **Pump records carry bookmarks as `BookmarkStr`, not raw `String`.** The wrapper validates the 33-character ASCII wire format at construction and decode.
 - **Use `BookmarkStr::format(ts_ms, txid)` and `BookmarkStr::parse()`** instead of hand-formatting or slicing bookmark strings.
-- **Ephemeral bookmark creation is read-only.** Format the caller timestamp with the current branch head txid; only pinned bookmarks write `BOOKMARK/{actor_id}/{bookmark}/pinned`.
+- **Ephemeral bookmark creation is read-only.** Format the caller timestamp with the current branch head txid; only pinned bookmarks write `BOOKMARK/{database_id}/{bookmark}/pinned`.
 - **Pinned bookmark creation is two-phase.** The request tx writes `PinStatus::Pending`, branch `bk_pin`, and namespace `pin_count`; the cold compactor UPS message makes the S3 pin layer and later flips status.
 - **Pinned bookmark deletion removes both bookmark keys, decrements `pin_count`, recomputes branch `bk_pin`, and publishes cold-compactor cleanup.**
 - **An empty recomputed bookmark pin is stored as zero.** `0xff..ff` is the advanced-retention fence for fork checks; GC treats zero as unpinned.
-- **Restore-to-bookmark captures the undo commit before rollback, then writes the undo pinned bookmark after APTR moves.**
-- **Bookmark resolution carries namespace fork caps into actor branch ancestry.** Do not use recursive APTR resolution when resolving inherited bookmarks; direct-walk namespace parents so parent commits after `parent_versionstamp` stay unreachable.
+- **Restore-to-bookmark captures the undo commit before rollback, then writes the undo pinned bookmark after DBPTR moves.**
+- **Bookmark resolution carries namespace fork caps into database branch ancestry.** Do not use recursive DBPTR resolution when resolving inherited bookmarks; direct-walk namespace parents so parent commits after `parent_versionstamp` stay unreachable.
 - **Lex order = chronological order within a single branch's parent chain.** Across sibling branches (forks of the same parent), bookmarks are not orderable in any meaningful way. APIs do not support cross-branch comparison.
-- **Bookmarks are sender-scoped.** A caller resolving a bookmark on another actor's branch returns `BranchNotReachable`. Cross-actor isolation is enforced at the engine edge, not in this package.
+- **Bookmarks are sender-scoped.** A caller resolving a bookmark on another database's branch returns `BranchNotReachable`. Cross-database isolation is enforced at the engine edge, not in this package.
 
 ## What we don't import from prior art
 
@@ -118,7 +118,7 @@ We explicitly do **not** import:
 - LiteFS / libSQL local SQLite file (no local files).
 - LiteFS / DO multi-replica WAL stream (FDB durability replaces it).
 - CF DO 3-of-5 follower quorum (FDB durability replaces it).
-- Hydration-at-actor-open (lazy read only).
+- Hydration-at-database-open (lazy read only).
 - WAL-frame-level shipping (per-commit granularity).
 
 ## Errors
@@ -126,7 +126,7 @@ We explicitly do **not** import:
 - All failable functions return `anyhow::Error`. Use `.context(...)` instead of `anyhow!`.
 - Public error variants on this package's surface are `RivetError`-derived (`SqliteStorageError::*`).
 - Keep `SqliteStorageError` downcastable with a manual `Display`/`Error` impl when using `RivetError` derive; envoy and VFS inspect typed variants.
-- Quota cap rejection uses `SqliteStorageQuotaExceeded { remaining_bytes, payload_size }` mirroring actor KV's shape.
+- Quota cap rejection uses `SqliteStorageQuotaExceeded { remaining_bytes, payload_size }` mirroring database KV's shape.
 - Bookmark-out-of-retention returns `BookmarkExpired`; bookmark on unreachable branch returns `BranchNotReachable`; fork at GC'd point returns `ForkOutOfRetention`; deeper than `MAX_FORK_DEPTH` returns `ForkChainTooDeep`.
 
 ## Testing
@@ -137,7 +137,7 @@ We explicitly do **not** import:
 - Crash recovery tests use `checkpoint_test_db()` + `reopen_test_db()` for real persisted-restart state.
 - Failure-injection tests use `MemoryStore::snapshot()`. The `fail_after_ops` budget keeps decrementing past the first injected error.
 - Lease-expiry and time-window tests use `tokio::time::pause()` + `advance()` for determinism.
-- Use a nil namespace `ActorDb` to exercise branch-scoped hot compaction through public `compact_default_batch`.
+- Use a nil namespace `Db` to exercise branch-scoped hot compaction through public `compact_default_batch`.
 - Latency tests that depend on `UDB_SIMULATED_LATENCY_MS` must live in a dedicated integration test binary because UDB caches the env var once per process via `OnceLock`.
 
 ## Metrics

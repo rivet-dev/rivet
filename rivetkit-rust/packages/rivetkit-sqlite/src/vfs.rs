@@ -19,7 +19,7 @@ use rivet_envoy_protocol as protocol;
 #[cfg(test)]
 use rivet_pools::NodeId;
 #[cfg(test)]
-use sqlite_storage::{error::SqliteStorageError, pump::ActorDb};
+use sqlite_storage::{error::SqliteStorageError, pump::Db};
 use tokio::runtime::Handle;
 #[cfg(test)]
 use universalpubsub::{PubSub, driver::memory::MemoryDriver};
@@ -190,7 +190,7 @@ struct DirectStorage {
 	db: Arc<universaldb::Database>,
 	ups: PubSub,
 	node_id: NodeId,
-	actor_dbs: scc::HashMap<String, Arc<ActorDb>>,
+	actor_dbs: scc::HashMap<String, Arc<Db>>,
 	page_mirrors: scc::HashMap<String, Arc<Mutex<DirectActorPages>>>,
 	hooks: Arc<DirectTransportHooks>,
 }
@@ -217,12 +217,12 @@ impl DirectStorage {
 		}
 	}
 
-	async fn actor_db(&self, actor_id: String) -> Arc<ActorDb> {
+	async fn actor_db(&self, actor_id: String) -> Arc<Db> {
 		self.actor_dbs
 			.entry_async(actor_id.clone())
 			.await
 			.or_insert_with(|| {
-				Arc::new(ActorDb::new(
+				Arc::new(Db::new(
 					Arc::clone(&self.db),
 					self.ups.clone(),
 					actor_id,

@@ -35,7 +35,7 @@ fn pitr_errors_have_rivet_error_codes() {
 			"shard_version_cap_exhausted",
 		),
 		(SqliteStorageError::TooManyPins, "too_many_pins"),
-		(SqliteStorageError::ActorNotFound, "actor_not_found"),
+		(SqliteStorageError::DatabaseNotFound, "database_not_found"),
 	];
 
 	for (err, code) in cases {

@@ -11,7 +11,7 @@ use crate::{
 			BookmarkIndexEntry, ColdManifestChunk, ColdManifestChunkRef, ColdManifestIndex,
 			DirtyPage, LayerEntry, LayerKind, PinStatus, PointerSnapshot,
 			SQLITE_STORAGE_COLD_SCHEMA_VERSION, decode_cold_manifest_index,
-			encode_actor_branch_record, encode_cold_manifest_chunk, encode_cold_manifest_index,
+			encode_database_branch_record, encode_cold_manifest_chunk, encode_cold_manifest_index,
 			encode_pointer_snapshot,
 		},
 	},
@@ -119,8 +119,8 @@ pub(crate) async fn run(
 			created_at_ms: plan.marker.created_at_ms,
 		});
 		uploaded_pins.push(ColdUploadedPin {
-			actor_id: pin.actor_id.clone(),
-			actor_branch_id: plan.branch_id,
+			database_id: pin.database_id.clone(),
+			database_branch_id: plan.branch_id,
 			bookmark: pin.bookmark.clone(),
 			versionstamp: pin.versionstamp,
 			object_key,
@@ -130,7 +130,7 @@ pub(crate) async fn run(
 	ensure_not_cancelled(&cancel_token)?;
 	if let Some(record) = plan.branch_record.clone() {
 		let object_key = branch_record_object_key(plan);
-		let record_bytes = encode_actor_branch_record(record)?;
+		let record_bytes = encode_database_branch_record(record)?;
 		bytes_uploaded += record_bytes.len() as u64;
 		cold_tier
 			.put_object(&object_key, &record_bytes)
@@ -207,8 +207,8 @@ pub struct ColdPhaseBOutput {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ColdUploadedPin {
-	pub actor_id: String,
-	pub actor_branch_id: crate::pump::types::ActorBranchId,
+	pub database_id: String,
+	pub database_branch_id: crate::pump::types::DatabaseBranchId,
 	pub bookmark: crate::pump::types::BookmarkStr,
 	pub versionstamp: [u8; 16],
 	pub object_key: String,
@@ -332,12 +332,12 @@ fn concat_shard_bytes(plan: &ColdPhaseAPlan, pin_txid: u64) -> Vec<u8> {
 }
 
 fn pointer_snapshot(plan: &ColdPhaseAPlan, pass_versionstamp: [u8; 16]) -> PointerSnapshot {
-	let actors = plan
-		.actor_id
+	let databases = plan
+		.database_id
 		.as_ref()
-		.map(|actor_id| {
+		.map(|database_id| {
 			vec![(
-				actor_id.clone(),
+				database_id.clone(),
 				plan.branch_record
 					.as_ref()
 					.map_or_else(crate::types::NamespaceBranchId::nil, |record| {
@@ -351,7 +351,7 @@ fn pointer_snapshot(plan: &ColdPhaseAPlan, pass_versionstamp: [u8; 16]) -> Point
 	PointerSnapshot {
 		schema_version: SQLITE_STORAGE_COLD_SCHEMA_VERSION,
 		pass_versionstamp,
-		actors,
+		databases,
 		namespaces: Vec::new(),
 	}
 }

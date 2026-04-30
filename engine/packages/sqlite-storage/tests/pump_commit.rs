@@ -10,7 +10,7 @@ use sqlite_storage::compactor::{
 use sqlite_storage::{
 	ACCESS_TOUCH_THROTTLE_MS,
 		keys::{
-			PAGE_SIZE, actor_pointer_cur_key, branch_commit_key, branch_delta_chunk_key,
+			PAGE_SIZE, database_pointer_cur_key, branch_commit_key, branch_delta_chunk_key,
 			branch_manifest_cold_drained_txid_key, branch_manifest_last_access_bucket_key,
 			branch_manifest_last_access_ts_ms_key, branch_meta_compact_key, branch_meta_head_key,
 			branch_pidx_key, branch_shard_key, branch_vtx_key, branches_list_key,
@@ -18,11 +18,11 @@ use sqlite_storage::{
 			namespace_pointer_cur_key,
 		},
 	ltx::{LtxHeader, encode_ltx_v3},
-	pump::ActorDb,
+	pump::Db,
 	quota::{self, SQLITE_MAX_STORAGE_BYTES},
 	types::{
-		ActorBranchId, DBHead, DirtyPage, FetchedPage, MetaCompact, NamespaceId,
-		decode_actor_branch_record, decode_actor_pointer, decode_commit_row, decode_db_head,
+		DatabaseBranchId, DBHead, DirtyPage, FetchedPage, MetaCompact, NamespaceId,
+		decode_database_branch_record, decode_database_pointer, decode_commit_row, decode_db_head,
 		decode_namespace_branch_record, decode_namespace_pointer, encode_db_head, encode_meta_compact,
 	},
 };
@@ -30,7 +30,7 @@ use tempfile::Builder;
 use universalpubsub::{NextOutput, PubSub, driver::memory::MemoryDriver};
 use universaldb::utils::IsolationLevel::Snapshot;
 
-const TEST_ACTOR: &str = "test-actor";
+const TEST_DATABASE: &str = "test-database";
 
 fn test_namespace() -> Id {
 	Id::v1(uuid::Uuid::from_u128(0x1234), 1)
@@ -49,7 +49,7 @@ fn test_ups() -> PubSub {
 	)))
 }
 
-fn head_with_branch(branch_id: ActorBranchId, head_txid: u64, db_size_pages: u32) -> DBHead {
+fn head_with_branch(branch_id: DatabaseBranchId, head_txid: u64, db_size_pages: u32) -> DBHead {
 	DBHead {
 		head_txid,
 		db_size_pages,
@@ -129,7 +129,7 @@ async fn read_head(db: &universaldb::Database) -> Result<DBHead> {
 	decode_db_head(&bytes)
 }
 
-async fn read_branch_id(db: &universaldb::Database) -> Result<ActorBranchId> {
+async fn read_branch_id(db: &universaldb::Database) -> Result<DatabaseBranchId> {
 	let namespace_id = NamespaceId::from_gas_id(test_namespace());
 	let namespace_pointer_bytes = read_value(db, namespace_pointer_cur_key(namespace_id))
 		.await?
@@ -137,17 +137,17 @@ async fn read_branch_id(db: &universaldb::Database) -> Result<ActorBranchId> {
 	let namespace_branch = decode_namespace_pointer(&namespace_pointer_bytes)?.current_branch;
 	let bytes = read_value(
 		db,
-		actor_pointer_cur_key(namespace_branch, TEST_ACTOR),
+		database_pointer_cur_key(namespace_branch, TEST_DATABASE),
 	)
 	.await?
-	.expect("actor pointer should exist");
+	.expect("database pointer should exist");
 
-	Ok(decode_actor_pointer(&bytes)?.current_branch)
+	Ok(decode_database_pointer(&bytes)?.current_branch)
 }
 
 async fn read_quota(db: &universaldb::Database) -> Result<i64> {
 	db.run(|tx| async move {
-		quota::read_in_namespace(&tx, NamespaceId::from_gas_id(test_namespace()), TEST_ACTOR).await
+		quota::read_in_namespace(&tx, NamespaceId::from_gas_id(test_namespace()), TEST_DATABASE).await
 	})
 		.await
 }
@@ -155,15 +155,15 @@ async fn read_quota(db: &universaldb::Database) -> Result<i64> {
 #[tokio::test]
 async fn commit_lazily_initializes_meta_on_first_write() -> Result<()> {
 	let db = Arc::new(test_db().await?);
-	let actor_db = ActorDb::new(
+	let database_db = Db::new(
 		db.clone(),
 		test_ups(),
 		test_namespace(),
-		TEST_ACTOR.to_string(),
+		TEST_DATABASE.to_string(),
 		NodeId::new(),
 	);
 
-	actor_db.commit(vec![page(1, 0x11)], 2, 1_000).await?;
+	database_db.commit(vec![page(1, 0x11)], 2, 1_000).await?;
 	let branch_id = read_branch_id(&db).await?;
 
 	assert_eq!(read_head(&db).await?, head_with_branch(branch_id, 1, 2));
@@ -185,7 +185,7 @@ async fn commit_lazily_initializes_meta_on_first_write() -> Result<()> {
 	let branch_record_bytes = read_value(&db, branches_list_key(branch_id))
 		.await?
 		.expect("branch record should exist");
-	let branch_record = decode_actor_branch_record(&branch_record_bytes)?;
+	let branch_record = decode_database_branch_record(&branch_record_bytes)?;
 	assert_eq!(branch_record.branch_id, branch_id);
 	assert_eq!(branch_record.namespace_branch, namespace_branch);
 	assert_eq!(branch_record.parent, None);
@@ -200,7 +200,7 @@ async fn commit_lazily_initializes_meta_on_first_write() -> Result<()> {
 	);
 	assert!(read_quota(&db).await? > 0);
 	assert_eq!(
-		actor_db.get_pages(vec![1]).await?,
+		database_db.get_pages(vec![1]).await?,
 		vec![fetched_page(1, 0x11)]
 	);
 
@@ -210,16 +210,16 @@ async fn commit_lazily_initializes_meta_on_first_write() -> Result<()> {
 #[tokio::test]
 async fn commit_advances_head_and_updates_warm_cache() -> Result<()> {
 	let db = Arc::new(test_db().await?);
-	let actor_db = ActorDb::new(db.clone(), test_ups(), test_namespace(), TEST_ACTOR.to_string(), NodeId::new());
+	let database_db = Db::new(db.clone(), test_ups(), test_namespace(), TEST_DATABASE.to_string(), NodeId::new());
 
-	actor_db.commit(vec![page(1, 0x11)], 2, 1_000).await?;
+	database_db.commit(vec![page(1, 0x11)], 2, 1_000).await?;
 	let branch_id = read_branch_id(&db).await?;
 	assert_eq!(
-		actor_db.get_pages(vec![1]).await?,
+		database_db.get_pages(vec![1]).await?,
 		vec![fetched_page(1, 0x11)]
 	);
 
-	actor_db.commit(vec![page(2, 0x22)], 3, 2_000).await?;
+	database_db.commit(vec![page(2, 0x22)], 3, 2_000).await?;
 
 	assert_eq!(read_head(&db).await?, head_with_branch(branch_id, 2, 3));
 	assert_eq!(
@@ -237,7 +237,7 @@ async fn commit_advances_head_and_updates_warm_cache() -> Result<()> {
 	})
 	.await?;
 	assert_eq!(
-		actor_db.get_pages(vec![1, 2]).await?,
+		database_db.get_pages(vec![1, 2]).await?,
 		vec![fetched_page(1, 0x11), fetched_page(2, 0x22)]
 	);
 
@@ -247,10 +247,10 @@ async fn commit_advances_head_and_updates_warm_cache() -> Result<()> {
 #[tokio::test]
 async fn commit_writes_commit_row_and_vtx_index() -> Result<()> {
 	let db = Arc::new(test_db().await?);
-	let actor_db = ActorDb::new(db.clone(), test_ups(), test_namespace(), TEST_ACTOR.to_string(), NodeId::new());
+	let database_db = Db::new(db.clone(), test_ups(), test_namespace(), TEST_DATABASE.to_string(), NodeId::new());
 
-	actor_db.commit(vec![page(1, 0x11)], 2, 1_000).await?;
-	actor_db.commit(vec![page(2, 0x22)], 3, 2_000).await?;
+	database_db.commit(vec![page(1, 0x11)], 2, 1_000).await?;
+	database_db.commit(vec![page(2, 0x22)], 3, 2_000).await?;
 	let branch_id = read_branch_id(&db).await?;
 
 	let first_row_bytes = read_value(&db, branch_commit_key(branch_id, 1))
@@ -284,9 +284,9 @@ async fn commit_writes_commit_row_and_vtx_index() -> Result<()> {
 #[tokio::test]
 async fn commit_throttles_access_touch_by_bucket() -> Result<()> {
 	let db = Arc::new(test_db().await?);
-	let actor_db = ActorDb::new(db.clone(), test_ups(), test_namespace(), TEST_ACTOR.to_string(), NodeId::new());
+	let database_db = Db::new(db.clone(), test_ups(), test_namespace(), TEST_DATABASE.to_string(), NodeId::new());
 
-	actor_db.commit(vec![page(1, 0x01)], 1, 1).await?;
+	database_db.commit(vec![page(1, 0x01)], 1, 1).await?;
 	let branch_id = read_branch_id(&db).await?;
 	assert_eq!(
 		read_i64_le(&db, branch_manifest_last_access_ts_ms_key(branch_id)).await?,
@@ -302,7 +302,7 @@ async fn commit_throttles_access_touch_by_bucket() -> Result<()> {
 	);
 
 	for now_ms in 2..=120 {
-		actor_db
+		database_db
 			.commit(vec![page(1, now_ms as u8)], 1, now_ms)
 			.await?;
 	}
@@ -319,7 +319,7 @@ async fn commit_throttles_access_touch_by_bucket() -> Result<()> {
 		Some(Vec::new())
 	);
 
-	actor_db
+	database_db
 		.commit(vec![page(1, 0xfe)], 1, ACCESS_TOUCH_THROTTLE_MS)
 		.await?;
 	assert_eq!(
@@ -342,11 +342,11 @@ async fn commit_throttles_access_touch_by_bucket() -> Result<()> {
 #[tokio::test]
 async fn get_pages_touches_access_bucket_on_read() -> Result<()> {
 	let db = Arc::new(test_db().await?);
-	let writer = ActorDb::new(db.clone(), test_ups(), test_namespace(), TEST_ACTOR.to_string(), NodeId::new());
+	let writer = Db::new(db.clone(), test_ups(), test_namespace(), TEST_DATABASE.to_string(), NodeId::new());
 	writer.commit(vec![page(1, 0x11)], 1, 1).await?;
 	let branch_id = read_branch_id(&db).await?;
 
-	let reader = ActorDb::new(db.clone(), test_ups(), test_namespace(), TEST_ACTOR.to_string(), NodeId::new());
+	let reader = Db::new(db.clone(), test_ups(), test_namespace(), TEST_DATABASE.to_string(), NodeId::new());
 	assert_eq!(
 		reader.get_pages(vec![1]).await?,
 		vec![fetched_page(1, 0x11)]
@@ -375,8 +375,8 @@ async fn get_pages_touches_access_bucket_on_read() -> Result<()> {
 #[tokio::test]
 async fn commit_rejects_quota_cap_before_writes() -> Result<()> {
 	let db = Arc::new(test_db().await?);
-	let actor_db = ActorDb::new(db.clone(), test_ups(), test_namespace(), TEST_ACTOR.to_string(), NodeId::new());
-	actor_db.commit(vec![page(1, 0x11)], 1, 1_000).await?;
+	let database_db = Db::new(db.clone(), test_ups(), test_namespace(), TEST_DATABASE.to_string(), NodeId::new());
+	database_db.commit(vec![page(1, 0x11)], 1, 1_000).await?;
 	let branch_id = read_branch_id(&db).await?;
 	db.run(|tx| async move {
 		quota::atomic_add_branch(&tx, branch_id, SQLITE_MAX_STORAGE_BYTES);
@@ -384,8 +384,8 @@ async fn commit_rejects_quota_cap_before_writes() -> Result<()> {
 	})
 	.await?;
 
-	let actor_db = ActorDb::new(db.clone(), test_ups(), test_namespace(), TEST_ACTOR.to_string(), NodeId::new());
-	let err = actor_db
+	let database_db = Db::new(db.clone(), test_ups(), test_namespace(), TEST_DATABASE.to_string(), NodeId::new());
+	let err = database_db
 		.commit(vec![page(1, 0x44)], 1, 3_000)
 		.await
 		.expect_err("commit should exceed quota");
@@ -410,8 +410,8 @@ async fn commit_rejects_quota_cap_before_writes() -> Result<()> {
 #[tokio::test]
 async fn commit_uses_burst_adjusted_quota_cap() -> Result<()> {
 	let db = Arc::new(test_db().await?);
-	let actor_db = ActorDb::new(db.clone(), test_ups(), test_namespace(), TEST_ACTOR.to_string(), NodeId::new());
-	actor_db.commit(vec![page(1, 0x11)], 1, 1_000).await?;
+	let database_db = Db::new(db.clone(), test_ups(), test_namespace(), TEST_DATABASE.to_string(), NodeId::new());
+	database_db.commit(vec![page(1, 0x11)], 1, 1_000).await?;
 	let branch_id = read_branch_id(&db).await?;
 	let storage_used = read_quota(&db).await?;
 
@@ -435,8 +435,8 @@ async fn commit_uses_burst_adjusted_quota_cap() -> Result<()> {
 	})
 	.await?;
 
-	let actor_db = ActorDb::new(db.clone(), test_ups(), test_namespace(), TEST_ACTOR.to_string(), NodeId::new());
-	actor_db.commit(vec![page(1, 0x44)], 1, 3_000).await?;
+	let database_db = Db::new(db.clone(), test_ups(), test_namespace(), TEST_DATABASE.to_string(), NodeId::new());
+	database_db.commit(vec![page(1, 0x44)], 1, 3_000).await?;
 	assert!(read_quota(&db).await? > SQLITE_MAX_STORAGE_BYTES);
 
 	seed(
@@ -447,7 +447,7 @@ async fn commit_uses_burst_adjusted_quota_cap() -> Result<()> {
 		)],
 	)
 	.await?;
-	let err = actor_db
+	let err = database_db
 		.commit(vec![page(1, 0x55)], 1, 4_000)
 		.await
 		.expect_err("commit should exceed quota after cold lag recovers");
@@ -466,8 +466,8 @@ async fn commit_uses_burst_adjusted_quota_cap() -> Result<()> {
 #[tokio::test]
 async fn shrink_commit_deletes_above_eof_pidx_and_shards() -> Result<()> {
 	let db = Arc::new(test_db().await?);
-	let actor_db = ActorDb::new(db.clone(), test_ups(), test_namespace(), TEST_ACTOR.to_string(), NodeId::new());
-	actor_db.commit(vec![page(1, 0x01)], 130, 1_000).await?;
+	let database_db = Db::new(db.clone(), test_ups(), test_namespace(), TEST_DATABASE.to_string(), NodeId::new());
+	database_db.commit(vec![page(1, 0x01)], 130, 1_000).await?;
 	let branch_id = read_branch_id(&db).await?;
 	seed(
 		&db,
@@ -493,8 +493,8 @@ async fn shrink_commit_deletes_above_eof_pidx_and_shards() -> Result<()> {
 	})
 	.await?;
 
-	let actor_db = ActorDb::new(db.clone(), test_ups(), test_namespace(), TEST_ACTOR.to_string(), NodeId::new());
-	actor_db.commit(vec![page(1, 0x11)], 63, 4_000).await?;
+	let database_db = Db::new(db.clone(), test_ups(), test_namespace(), TEST_DATABASE.to_string(), NodeId::new());
+	database_db.commit(vec![page(1, 0x11)], 63, 4_000).await?;
 
 	assert_eq!(read_head(&db).await?, head_with_branch(branch_id, 8, 63));
 	assert!(read_value(&db, branch_pidx_key(branch_id, 64)).await?.is_none());
@@ -518,8 +518,8 @@ async fn commit_publishes_compaction_trigger_with_throttle() -> Result<()> {
 	let db = Arc::new(test_db().await?);
 	let ups = test_ups();
 	let mut sub = ups.queue_subscribe(SqliteCompactSubject, "compactor").await?;
-	let actor_db = ActorDb::new(db.clone(), ups.clone(), test_namespace(), TEST_ACTOR.to_string(), NodeId::new());
-	actor_db.commit(vec![page(1, 0x01)], 1, 1_000).await?;
+	let database_db = Db::new(db.clone(), ups.clone(), test_namespace(), TEST_DATABASE.to_string(), NodeId::new());
+	database_db.commit(vec![page(1, 0x01)], 1, 1_000).await?;
 	let branch_id = read_branch_id(&db).await?;
 	seed(
 		&db,
@@ -543,19 +543,19 @@ async fn commit_publishes_compaction_trigger_with_throttle() -> Result<()> {
 	})
 	.await?;
 
-	let actor_db = ActorDb::new(db, ups, test_namespace(), TEST_ACTOR.to_string(), NodeId::new());
-	actor_db.commit(vec![page(1, 0x11)], 1, 5_000).await?;
+	let database_db = Db::new(db, ups, test_namespace(), TEST_DATABASE.to_string(), NodeId::new());
+	database_db.commit(vec![page(1, 0x11)], 1, 5_000).await?;
 	let first = next_trigger(&mut sub).await?;
-	assert_eq!(first.actor_id, TEST_ACTOR);
+	assert_eq!(first.database_id, TEST_DATABASE);
 	assert!(first.commit_bytes_since_rollup > 0);
 
-	actor_db.commit(vec![page(1, 0x22)], 1, 5_100).await?;
+	database_db.commit(vec![page(1, 0x22)], 1, 5_100).await?;
 	assert_no_trigger(&mut sub).await?;
 
 	tokio::time::advance(Duration::from_millis(quota::TRIGGER_MAX_SILENCE_MS + 1)).await;
-	actor_db.commit(vec![page(1, 0x33)], 1, 5_200).await?;
+	database_db.commit(vec![page(1, 0x33)], 1, 5_200).await?;
 	let after_silence = next_trigger(&mut sub).await?;
-	assert_eq!(after_silence.actor_id, TEST_ACTOR);
+	assert_eq!(after_silence.database_id, TEST_DATABASE);
 
 	Ok(())
 }

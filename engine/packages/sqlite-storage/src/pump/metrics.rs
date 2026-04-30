@@ -80,7 +80,7 @@ lazy_static::lazy_static! {
 
 	pub static ref SQLITE_BRANCH_ANCESTRY_WALK_DEPTH: HistogramVec = register_histogram_vec_with_registry!(
 		"sqlite_branch_ancestry_walk_depth",
-		"Observed sqlite actor branch ancestry walk depth.",
+		"Observed sqlite database branch ancestry walk depth.",
 		&["node_id"],
 		vec![0.0, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0],
 		*REGISTRY
@@ -116,8 +116,8 @@ lazy_static::lazy_static! {
 
 	pub static ref SQLITE_COLD_LAG_VERSIONSTAMPS: GaugeVec = register_gauge_vec_with_registry!(
 		"sqlite_cold_lag_versionstamps",
-		"Sampled sqlite cold lag in versionstamp units by actor.",
-		&["node_id", "actor_id"],
+		"Sampled sqlite cold lag in versionstamp units by database.",
+		&["node_id", "database_id"],
 		*REGISTRY
 	).unwrap();
 

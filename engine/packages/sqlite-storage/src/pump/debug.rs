@@ -13,10 +13,10 @@ use universaldb::{
 use crate::{
 	gc,
 	pump::{
-		ActorDb, actor_db::load_branch_ancestry, branch, keys,
+		Db, db::load_branch_ancestry, branch, keys,
 		ltx::{DecodedLtx, decode_ltx_v3},
 		types::{
-			ActorBranchId, BookmarkIndexEntry, BookmarkStr, ColdManifestChunk,
+			DatabaseBranchId, BookmarkIndexEntry, BookmarkStr, ColdManifestChunk,
 			ColdManifestIndex, CommitRow, FetchedPage, LayerEntry,
 			LayerKind, PinStatus, SQLITE_STORAGE_COLD_SCHEMA_VERSION, decode_cold_manifest_chunk,
 			decode_cold_manifest_index, decode_commit_row, decode_db_head,
@@ -27,7 +27,7 @@ use crate::{
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BranchPins {
-	pub branch_id: ActorBranchId,
+	pub branch_id: DatabaseBranchId,
 	pub refcount: i64,
 	pub desc_pin: [u8; 16],
 	pub bk_pin: [u8; 16],
@@ -35,14 +35,14 @@ pub struct BranchPins {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ColdManifest {
-	pub branch_id: ActorBranchId,
+	pub branch_id: DatabaseBranchId,
 	pub index: Option<ColdManifestIndex>,
 	pub chunks: Vec<ColdManifestChunk>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PageState {
-	pub branch_id: ActorBranchId,
+	pub branch_id: DatabaseBranchId,
 	pub txid: u64,
 	pub versionstamp: [u8; 16],
 	pub db_size_pages: u32,
@@ -51,15 +51,15 @@ pub struct PageState {
 
 #[derive(Debug, Clone, Copy)]
 struct DebugReadSource {
-	branch_id: ActorBranchId,
+	branch_id: DatabaseBranchId,
 	max_txid: u64,
 }
 
-pub async fn dump_actor_ancestry(
-	actor_db: &ActorDb,
-) -> Result<Vec<(ActorBranchId, Option<[u8; 16]>)>> {
-	let branch_id = resolve_current_branch(actor_db).await?;
-	let ancestry = actor_db
+pub async fn dump_database_ancestry(
+	db: &Db,
+) -> Result<Vec<(DatabaseBranchId, Option<[u8; 16]>)>> {
+	let branch_id = resolve_current_branch(db).await?;
+	let ancestry = db
 		.udb
 		.run(move |tx| async move { load_branch_ancestry(&tx, branch_id).await })
 		.await?;
@@ -71,9 +71,9 @@ pub async fn dump_actor_ancestry(
 		.collect())
 }
 
-pub async fn dump_branch_pins(actor_db: &ActorDb) -> Result<BranchPins> {
-	let branch_id = resolve_current_branch(actor_db).await?;
-	let pin = gc::estimate_branch_gc_pin(&actor_db.udb, branch_id)
+pub async fn dump_branch_pins(db: &Db) -> Result<BranchPins> {
+	let branch_id = resolve_current_branch(db).await?;
+	let pin = gc::estimate_branch_gc_pin(&db.udb, branch_id)
 		.await?
 		.context("sqlite branch was missing while dumping pins")?;
 
@@ -85,14 +85,14 @@ pub async fn dump_branch_pins(actor_db: &ActorDb) -> Result<BranchPins> {
 	})
 }
 
-pub async fn list_bookmarks(actor_db: &ActorDb) -> Result<Vec<BookmarkIndexEntry>> {
-	let actor_id = actor_db.actor_id.clone();
-	let branch_id = resolve_current_branch(actor_db).await?;
+pub async fn list_bookmarks(db: &Db) -> Result<Vec<BookmarkIndexEntry>> {
+	let database_id = db.database_id.clone();
+	let branch_id = resolve_current_branch(db).await?;
 
-	actor_db
+	db
 		.udb
 		.run(move |tx| {
-			let actor_id = actor_id.clone();
+			let database_id = database_id.clone();
 
 			async move {
 				let mut entries = Vec::new();
@@ -114,7 +114,7 @@ pub async fn list_bookmarks(actor_db: &ActorDb) -> Result<Vec<BookmarkIndexEntry
 					}
 				}
 
-				for (key, value) in scan_prefix(&tx, &keys::bookmark_key(&actor_id, "")).await? {
+				for (key, value) in scan_prefix(&tx, &keys::bookmark_key(&database_id, "")).await? {
 					if !key.ends_with(b"/pinned") {
 						continue;
 					}
@@ -141,9 +141,9 @@ pub async fn list_bookmarks(actor_db: &ActorDb) -> Result<Vec<BookmarkIndexEntry
 		.await
 }
 
-pub async fn dump_cold_manifest(actor_db: &ActorDb) -> Result<ColdManifest> {
-	let branch_id = resolve_current_branch(actor_db).await?;
-	let Some(cold_tier) = &actor_db.cold_tier else {
+pub async fn dump_cold_manifest(db: &Db) -> Result<ColdManifest> {
+	let branch_id = resolve_current_branch(db).await?;
+	let Some(cold_tier) = &db.cold_tier else {
 		return Ok(ColdManifest {
 			branch_id,
 			index: None,
@@ -190,19 +190,19 @@ pub async fn dump_cold_manifest(actor_db: &ActorDb) -> Result<ColdManifest> {
 	})
 }
 
-pub async fn estimate_gc_pin(actor_db: &ActorDb) -> Result<[u8; 16]> {
-	let branch_id = resolve_current_branch(actor_db).await?;
-	Ok(gc::estimate_branch_gc_pin(&actor_db.udb, branch_id)
+pub async fn estimate_gc_pin(db: &Db) -> Result<[u8; 16]> {
+	let branch_id = resolve_current_branch(db).await?;
+	Ok(gc::estimate_branch_gc_pin(&db.udb, branch_id)
 		.await?
 		.context("sqlite branch was missing while estimating GC pin")?
 		.gc_pin)
 }
 
-pub async fn read_at(actor_db: &ActorDb, versionstamp: [u8; 16]) -> Result<PageState> {
-	let root_branch_id = resolve_current_branch(actor_db).await?;
-	let cold_tier = actor_db.cold_tier.clone();
+pub async fn read_at(db: &Db, versionstamp: [u8; 16]) -> Result<PageState> {
+	let root_branch_id = resolve_current_branch(db).await?;
+	let cold_tier = db.cold_tier.clone();
 	let branch_id_for_tx = root_branch_id;
-	let read_plan = actor_db
+	let read_plan = db
 		.udb
 		.run(move |tx| async move {
 			let ancestry = load_branch_ancestry(&tx, branch_id_for_tx).await?;
@@ -221,7 +221,7 @@ pub async fn read_at(actor_db: &ActorDb, versionstamp: [u8; 16]) -> Result<PageS
 				break;
 			}
 			let (target_idx, target_ancestor, target_txid) =
-				target.context("sqlite versionstamp was not reachable from actor branch")?;
+				target.context("sqlite versionstamp was not reachable from database branch")?;
 			let commit = read_commit_row(&tx, target_ancestor.branch_id, target_txid)
 				.await?
 				.context("sqlite commit row was missing for debug read_at")?;
@@ -275,7 +275,7 @@ pub async fn read_at(actor_db: &ActorDb, versionstamp: [u8; 16]) -> Result<PageS
 }
 
 struct DebugReadPlan {
-	branch_id: ActorBranchId,
+	branch_id: DatabaseBranchId,
 	txid: u64,
 	versionstamp: [u8; 16],
 	db_size_pages: u32,
@@ -283,18 +283,18 @@ struct DebugReadPlan {
 	sources: Vec<DebugReadSource>,
 }
 
-async fn resolve_current_branch(actor_db: &ActorDb) -> Result<ActorBranchId> {
-	let namespace_id = actor_db.sqlite_namespace_id();
-	let actor_id = actor_db.actor_id.clone();
-	actor_db
+async fn resolve_current_branch(db: &Db) -> Result<DatabaseBranchId> {
+	let namespace_id = db.sqlite_namespace_id();
+	let database_id = db.database_id.clone();
+	db
 		.udb
 		.run(move |tx| {
-			let actor_id = actor_id.clone();
+			let database_id = database_id.clone();
 
 			async move {
-				branch::resolve_actor_branch(&tx, namespace_id, &actor_id, Snapshot)
+				branch::resolve_database_branch(&tx, namespace_id, &database_id, Snapshot)
 					.await?
-					.context("sqlite actor branch is missing")
+					.context("sqlite database branch is missing")
 			}
 		})
 		.await
@@ -467,7 +467,7 @@ async fn load_manifest_layers(
 
 async fn read_commit_row(
 	tx: &universaldb::Transaction,
-	branch_id: ActorBranchId,
+	branch_id: DatabaseBranchId,
 	txid: u64,
 ) -> Result<Option<CommitRow>> {
 	let Some(bytes) = tx_get_value(tx, &keys::branch_commit_key(branch_id, txid)).await? else {
@@ -481,7 +481,7 @@ async fn read_commit_row(
 
 async fn lookup_vtx_txid(
 	tx: &universaldb::Transaction,
-	branch_id: ActorBranchId,
+	branch_id: DatabaseBranchId,
 	versionstamp: [u8; 16],
 ) -> Result<Option<u64>> {
 	let Some(bytes) = tx_get_value(tx, &keys::branch_vtx_key(branch_id, versionstamp)).await? else {
@@ -590,7 +590,7 @@ async fn tx_load_latest_shard_blob(
 	Ok(None)
 }
 
-fn cold_manifest_index_object_key(branch_id: ActorBranchId) -> String {
+fn cold_manifest_index_object_key(branch_id: DatabaseBranchId) -> String {
 	format!("db/{}/cold_manifest/index.bare", branch_id.as_uuid().simple())
 }
 

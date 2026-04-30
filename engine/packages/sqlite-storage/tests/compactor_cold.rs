@@ -27,14 +27,14 @@ use sqlite_storage::{
 		branches_bk_pin_key, branches_list_key, branches_refcount_key,
 	},
 	types::{
-		ActorBranchId, ActorBranchRecord, BookmarkStr, BranchState, ColdManifestChunk,
+		DatabaseBranchId, DatabaseBranchRecord, BookmarkStr, BranchState, ColdManifestChunk,
 		ColdManifestChunkRef, ColdManifestIndex, CommitRow, LayerEntry, LayerKind,
 		MetaCompact, PinStatus, PinnedBookmarkRecord, decode_cold_manifest_chunk,
 		decode_cold_manifest_index, decode_pinned_bookmark_record, decode_pointer_snapshot,
-		encode_actor_branch_record, encode_cold_manifest_chunk, encode_cold_manifest_index,
+		encode_database_branch_record, encode_cold_manifest_chunk, encode_cold_manifest_index,
 		encode_commit_row, encode_meta_compact, encode_pinned_bookmark_record,
 	},
-	pump::ActorDb,
+	pump::Db,
 };
 use tempfile::Builder;
 use tokio::time::timeout;
@@ -42,8 +42,8 @@ use tokio_util::sync::CancellationToken;
 use universaldb::utils::IsolationLevel::Snapshot;
 use universalpubsub::{NextOutput, PubSub, driver::memory::MemoryDriver};
 
-fn actor_branch_id() -> ActorBranchId {
-	ActorBranchId::from_uuid(uuid::Uuid::from_u128(0x1234_5678_9abc_def0_0123_4567_89ab_cdef))
+fn database_branch_id() -> DatabaseBranchId {
+	DatabaseBranchId::from_uuid(uuid::Uuid::from_u128(0x1234_5678_9abc_def0_0123_4567_89ab_cdef))
 }
 
 fn bookmark() -> BookmarkStr {
@@ -51,17 +51,17 @@ fn bookmark() -> BookmarkStr {
 }
 
 fn branch_object_prefix() -> String {
-	branch_object_prefix_for(actor_branch_id())
+	branch_object_prefix_for(database_branch_id())
 }
 
-fn branch_object_prefix_for(branch_id: ActorBranchId) -> String {
+fn branch_object_prefix_for(branch_id: DatabaseBranchId) -> String {
 	format!("db/{}", branch_id.as_uuid().simple())
 }
 
 fn payload() -> SqliteColdCompactPayload {
 	SqliteColdCompactPayload::CreatePinnedBookmark {
-		actor_id: "actor-a".to_string(),
-		actor_branch_id: actor_branch_id(),
+		database_id: "database-a".to_string(),
+		database_branch_id: database_branch_id(),
 		bookmark: bookmark(),
 		versionstamp: [7; 16],
 	}
@@ -95,7 +95,7 @@ async fn read_lease(db: &universaldb::Database) -> Result<Option<ColdCompactorLe
 	db.run(|tx| async move {
 		let Some(value) = tx
 			.informal()
-			.get(&branch_meta_cold_lease_key(actor_branch_id()), Snapshot)
+			.get(&branch_meta_cold_lease_key(database_branch_id()), Snapshot)
 			.await?
 		else {
 			return Ok(None);
@@ -109,7 +109,7 @@ async fn read_lease(db: &universaldb::Database) -> Result<Option<ColdCompactorLe
 async fn write_lease(db: &universaldb::Database, lease: ColdCompactorLease) -> Result<()> {
 	db.run(move |tx| async move {
 		tx.informal()
-			.set(&branch_meta_cold_lease_key(actor_branch_id()), &encode_cold_lease(lease)?);
+			.set(&branch_meta_cold_lease_key(database_branch_id()), &encode_cold_lease(lease)?);
 		Ok(())
 	})
 	.await
@@ -132,7 +132,7 @@ async fn read_value(db: &universaldb::Database, key: Vec<u8>) -> Result<Option<V
 async fn read_cold_state(
 	db: &universaldb::Database,
 ) -> Result<Option<sqlite_storage::compactor::cold::ColdCompactState>> {
-	read_value(db, branch_meta_cold_compact_key(actor_branch_id()))
+	read_value(db, branch_meta_cold_compact_key(database_branch_id()))
 		.await?
 		.as_deref()
 		.map(decode_cold_compact_state)
@@ -165,12 +165,12 @@ async fn single_pending_marker(
 }
 
 async fn seed_phase_a_branch(db: &universaldb::Database) -> Result<()> {
-	let branch_id = actor_branch_id();
+	let branch_id = database_branch_id();
 
 	db.run(move |tx| async move {
 		tx.informal().set(
 			&branches_list_key(branch_id),
-			&encode_actor_branch_record(ActorBranchRecord {
+			&encode_database_branch_record(DatabaseBranchRecord {
 				branch_id,
 				namespace_branch: sqlite_storage::types::NamespaceBranchId::nil(),
 				parent: None,
@@ -212,10 +212,10 @@ async fn seed_phase_a_branch(db: &universaldb::Database) -> Result<()> {
 		tx.informal()
 			.set(&branch_vtx_key(branch_id, [6; 16]), &6u64.to_be_bytes());
 		tx.informal().set(
-			&sqlite_storage::keys::bookmark_pinned_key("actor-a", bookmark().as_str()),
+			&sqlite_storage::keys::bookmark_pinned_key("database-a", bookmark().as_str()),
 			&encode_pinned_bookmark_record(PinnedBookmarkRecord {
 				bookmark: bookmark(),
-				actor_branch_id: branch_id,
+				database_branch_id: branch_id,
 				versionstamp: [7; 16],
 				status: PinStatus::Pending,
 				pin_object_key: None,
@@ -261,7 +261,7 @@ impl ColdTier for AdvancingColdDrainedTier {
 					in_flight_uuid: Some(uuid::Uuid::nil()),
 				};
 				tx.informal().set(
-					&branch_meta_cold_compact_key(actor_branch_id()),
+					&branch_meta_cold_compact_key(database_branch_id()),
 					&encode_cold_compact_state(state)?,
 				);
 				Ok(())
@@ -313,7 +313,7 @@ impl ColdTier for ObservingColdTier {
 	async fn put_object(&self, key: &str, bytes: &[u8]) -> Result<()> {
 		if key.ends_with(".marker") {
 			let state_exists =
-				read_value(&self.db, branch_meta_cold_compact_key(actor_branch_id()))
+				read_value(&self.db, branch_meta_cold_compact_key(database_branch_id()))
 					.await?
 					.is_some();
 			self.saw_committed_handoff
@@ -358,7 +358,7 @@ fn cold_payload_round_trips_with_embedded_version() {
 async fn cold_lease_acquire_renew_and_release() -> Result<()> {
 	let db = test_db().await?;
 	let holder = NodeId::new();
-	let branch_id = actor_branch_id();
+	let branch_id = database_branch_id();
 
 	let outcome = db
 		.run(move |tx| async move { take(&tx, branch_id, holder, 30_000, 1_000).await })
@@ -444,7 +444,7 @@ async fn cold_phase_a_writes_handoff_then_pending_marker_and_snapshot_plan() -> 
 
 	let (_marker_key, marker) = single_pending_marker(&tier).await?;
 
-	assert_eq!(marker.branch_id, actor_branch_id());
+	assert_eq!(marker.branch_id, database_branch_id());
 	assert_eq!(marker.cold_drained_txid, 3);
 	assert_eq!(marker.materialized_txid, 7);
 	assert_eq!(marker.last_hot_pass_txid, 7);
@@ -488,7 +488,7 @@ async fn cold_phase_b_uploads_layers_manifest_snapshot_and_cleans_stale_markers(
 		&stale_marker_key,
 		&encode_pending_marker(sqlite_storage::compactor::cold::ColdPendingMarker {
 			schema_version: sqlite_storage::types::SQLITE_STORAGE_COLD_SCHEMA_VERSION,
-			branch_id: actor_branch_id(),
+			branch_id: database_branch_id(),
 			pass_uuid: stale_uuid,
 			created_at_ms: 0,
 			cold_drained_txid: 0,
@@ -514,7 +514,7 @@ async fn cold_phase_b_uploads_layers_manifest_snapshot_and_cleans_stale_markers(
 	assert_eq!(state.cold_drained_txid, 7);
 	assert_eq!(state.in_flight_uuid, None);
 	assert_eq!(
-		read_u64_be(&db, branch_manifest_cold_drained_txid_key(actor_branch_id())).await?,
+		read_u64_be(&db, branch_manifest_cold_drained_txid_key(database_branch_id())).await?,
 		Some(7)
 	);
 
@@ -563,7 +563,7 @@ async fn cold_phase_b_uploads_layers_manifest_snapshot_and_cleans_stale_markers(
 			.await?
 			.expect("manifest chunk should exist"),
 	)?;
-	assert_eq!(chunk.branch_id, actor_branch_id());
+	assert_eq!(chunk.branch_id, database_branch_id());
 	assert_eq!(chunk.layers.len(), 3);
 	assert!(chunk.layers.iter().any(|layer| layer.kind == LayerKind::Image));
 	assert!(chunk.layers.iter().any(|layer| layer.kind == LayerKind::Delta));
@@ -577,7 +577,7 @@ async fn cold_phase_b_uploads_layers_manifest_snapshot_and_cleans_stale_markers(
 			.await?
 			.expect("manifest index should exist"),
 	)?;
-	assert_eq!(index.branch_id, actor_branch_id());
+	assert_eq!(index.branch_id, database_branch_id());
 	assert_eq!(index.chunks.len(), 1);
 	assert_eq!(index.chunks[0].object_key, chunk_key);
 
@@ -587,9 +587,9 @@ async fn cold_phase_b_uploads_layers_manifest_snapshot_and_cleans_stale_markers(
 			.await?
 			.expect("pointer snapshot should exist"),
 	)?;
-	assert_eq!(snapshot.actors.len(), 1);
-	assert_eq!(snapshot.actors[0].0, "actor-a");
-	assert_eq!(snapshot.actors[0].2, actor_branch_id());
+	assert_eq!(snapshot.databases.len(), 1);
+	assert_eq!(snapshot.databases[0].0, "database-a");
+	assert_eq!(snapshot.databases[0].2, database_branch_id());
 
 	assert_eq!(tier.get_object(&stale_object_key).await?, None);
 	assert_eq!(tier.get_object(&stale_marker_key).await?, None);
@@ -607,7 +607,7 @@ async fn cold_phase_b_uploads_layers_manifest_snapshot_and_cleans_stale_markers(
 
 	let pinned_bytes = read_value(
 		&db,
-		sqlite_storage::keys::bookmark_pinned_key("actor-a", bookmark().as_str()),
+		sqlite_storage::keys::bookmark_pinned_key("database-a", bookmark().as_str()),
 	)
 	.await?
 	.expect("pinned bookmark record should exist");
@@ -625,24 +625,24 @@ async fn create_pinned_bookmark_reaches_ready_through_cold_worker() -> Result<()
 	let mut sub = ups
 		.queue_subscribe(SqliteColdCompactSubject, "cold-compactor")
 		.await?;
-	let actor_db = ActorDb::new(
+	let database_db = Db::new(
 		Arc::clone(&db),
 		ups,
 		test_namespace(),
-		"actor-a".to_string(),
+		"database-a".to_string(),
 		NodeId::new(),
 	);
-	actor_db.commit(vec![page(1, 0x11)], 2, 1_000).await?;
+	database_db.commit(vec![page(1, 0x11)], 2, 1_000).await?;
 	let branch_id = db
 		.run(|tx| async move {
-			sqlite_storage::pump::branch::resolve_actor_branch(
+			sqlite_storage::pump::branch::resolve_database_branch(
 				&tx,
 				sqlite_storage::types::NamespaceId::from_gas_id(test_namespace()),
-				"actor-a",
+				"database-a",
 				universaldb::utils::IsolationLevel::Serializable,
 			)
 			.await?
-			.ok_or_else(|| anyhow::anyhow!("actor branch should exist"))
+			.ok_or_else(|| anyhow::anyhow!("database branch should exist"))
 		})
 		.await?;
 	db.run(move |tx| async move {
@@ -660,7 +660,7 @@ async fn create_pinned_bookmark_reaches_ready_through_cold_worker() -> Result<()
 	})
 	.await?;
 
-	let bookmark = actor_db.create_pinned_bookmark(1_010).await?;
+	let bookmark = database_db.create_pinned_bookmark(1_010).await?;
 	let msg = timeout(Duration::from_secs(1), sub.next())
 		.await
 		.expect("cold trigger should publish")?;
@@ -682,7 +682,7 @@ async fn create_pinned_bookmark_reaches_ready_through_cold_worker() -> Result<()
 
 	let pinned_bytes = read_value(
 		&db,
-		sqlite_storage::keys::bookmark_pinned_key("actor-a", bookmark.as_str()),
+		sqlite_storage::keys::bookmark_pinned_key("database-a", bookmark.as_str()),
 	)
 	.await?
 	.expect("pinned bookmark record should exist");
@@ -700,24 +700,24 @@ async fn cold_sweep_deletes_layers_after_pinned_bookmark_delete() -> Result<()> 
 	let mut sub = ups
 		.queue_subscribe(SqliteColdCompactSubject, "cold-compactor")
 		.await?;
-	let actor_db = ActorDb::new(
+	let database_db = Db::new(
 		Arc::clone(&db),
 		ups,
 		test_namespace(),
-		"actor-a".to_string(),
+		"database-a".to_string(),
 		NodeId::new(),
 	);
-	actor_db.commit(vec![page(1, 0x11)], 2, 1_000).await?;
+	database_db.commit(vec![page(1, 0x11)], 2, 1_000).await?;
 	let branch_id = db
 		.run(|tx| async move {
-			sqlite_storage::pump::branch::resolve_actor_branch(
+			sqlite_storage::pump::branch::resolve_database_branch(
 				&tx,
 				sqlite_storage::types::NamespaceId::from_gas_id(test_namespace()),
-				"actor-a",
+				"database-a",
 				universaldb::utils::IsolationLevel::Serializable,
 			)
 			.await?
-			.ok_or_else(|| anyhow::anyhow!("actor branch should exist"))
+			.ok_or_else(|| anyhow::anyhow!("database branch should exist"))
 		})
 		.await?;
 	db.run(move |tx| async move {
@@ -735,7 +735,7 @@ async fn cold_sweep_deletes_layers_after_pinned_bookmark_delete() -> Result<()> 
 	})
 	.await?;
 
-	let bookmark = actor_db.create_pinned_bookmark(1_010).await?;
+	let bookmark = database_db.create_pinned_bookmark(1_010).await?;
 	let msg = timeout(Duration::from_secs(1), sub.next())
 		.await
 		.expect("cold trigger should publish")?;
@@ -784,7 +784,7 @@ async fn cold_sweep_deletes_layers_after_pinned_bookmark_delete() -> Result<()> 
 		Ok(())
 	})
 	.await?;
-	actor_db.delete_pinned_bookmark(bookmark).await?;
+	database_db.delete_pinned_bookmark(bookmark).await?;
 	let msg = timeout(Duration::from_secs(1), sub.next())
 		.await
 		.expect("delete cold trigger should publish")?;
@@ -850,12 +850,12 @@ async fn cold_phase_c_aborts_when_cold_drained_txid_changes() -> Result<()> {
 		"unexpected error: {err:?}"
 	);
 	assert_eq!(
-		read_u64_be(&db, branch_manifest_cold_drained_txid_key(actor_branch_id())).await?,
+		read_u64_be(&db, branch_manifest_cold_drained_txid_key(database_branch_id())).await?,
 		Some(3)
 	);
 	let pinned_bytes = read_value(
 		&db,
-		sqlite_storage::keys::bookmark_pinned_key("actor-a", bookmark().as_str()),
+		sqlite_storage::keys::bookmark_pinned_key("database-a", bookmark().as_str()),
 	)
 	.await?
 	.expect("pinned bookmark record should exist");
@@ -892,7 +892,7 @@ async fn cold_phase_b_pin_upload_failure_marks_pin_failed() -> Result<()> {
 	);
 	let pinned_bytes = read_value(
 		&db,
-		sqlite_storage::keys::bookmark_pinned_key("actor-a", bookmark().as_str()),
+		sqlite_storage::keys::bookmark_pinned_key("database-a", bookmark().as_str()),
 	)
 	.await?
 	.expect("pinned bookmark record should exist");
@@ -936,9 +936,9 @@ async fn fork_warmup_copies_parent_image_layers_into_child_manifest() -> Result<
 	let db = Arc::new(test_db().await?);
 	let cold_root = Builder::new().prefix("sqlite-cold-fork-warmup").tempdir()?;
 	let tier = Arc::new(FilesystemColdTier::new(cold_root.path()));
-	let source_branch_id = actor_branch_id();
+	let source_branch_id = database_branch_id();
 	let target_branch_id =
-		ActorBranchId::from_uuid(uuid::Uuid::from_u128(0x2234_5678_9abc_def0_0123_4567_89ab_cdef));
+		DatabaseBranchId::from_uuid(uuid::Uuid::from_u128(0x2234_5678_9abc_def0_0123_4567_89ab_cdef));
 	let source_prefix = branch_object_prefix_for(source_branch_id);
 	let target_prefix = branch_object_prefix_for(target_branch_id);
 	let source_layer_key = format!("{source_prefix}/image/00000000/00000000-0000000000000007.ltx");
@@ -989,8 +989,8 @@ async fn fork_warmup_copies_parent_image_layers_into_child_manifest() -> Result<
 	worker::test_hooks::handle_payload_once_with_cold_tier(
 		Arc::clone(&db),
 		SqliteColdCompactPayload::ForkWarmup {
-			source_actor_branch_id: source_branch_id,
-			target_actor_branch_id: target_branch_id,
+			source_database_branch_id: source_branch_id,
+			target_database_branch_id: target_branch_id,
 			at_versionstamp: [7; 16],
 		},
 		ColdCompactorConfig::default(),

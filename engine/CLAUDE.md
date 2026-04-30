@@ -69,7 +69,7 @@ Use `test-snapshot-gen` to generate and load RocksDB snapshots of the full UDB K
 
 ## Pegboard Envoy
 
-- `PegboardEnvoyWs::new(...)` is constructed per websocket request, so SQLite dispatch uses per-actor `ActorDb` instances cached on the WS conn and populated lazily by `get_pages` or `commit`.
+- `PegboardEnvoyWs::new(...)` is constructed per websocket request, so SQLite dispatch translates the actor id to a 1:1 SQLite `database_id` at the boundary and caches per-database `Db` handles on the WS conn.
 - Restored hibernatable WebSockets must rebuild runtime WebSocket handlers from callbacks and call `on_open`; pre-sleep NAPI callbacks are not reusable after actor wake.
 - `pegboard-envoy` SQLite websocket handlers must validate page numbers, page sizes, and duplicate dirty pages at the websocket trust boundary and return `SqliteErrorResponse` for unexpected failures instead of bubbling them through the shared connection task.
-- `pegboard-envoy` forwards `CommandStartActor` without local SQLite side effects; `CommandStopActor` only evicts the WS conn's cached `ActorDb`.
+- `pegboard-envoy` forwards `CommandStartActor` without local SQLite side effects; `CommandStopActor` only evicts the WS conn's cached SQLite `Db`.

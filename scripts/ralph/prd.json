@@ -1115,7 +1115,7 @@
         "Typecheck passes across the workspace"
       ],
       "priority": 65,
-      "passes": false,
+      "passes": true,
       "notes": ""
     }
   ]

@@ -1,4 +1,4 @@
-/// Spec section 8 caps actor branch ancestry so fork, read, and bookmark walks stay bounded.
+/// Spec section 8 caps database branch ancestry so fork, read, and bookmark walks stay bounded.
 pub const MAX_FORK_DEPTH: u8 = 16;
 
 /// Spec section 8.1 caps namespace branch ancestry so namespace resolution stays bounded.

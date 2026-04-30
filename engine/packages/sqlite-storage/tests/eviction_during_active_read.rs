@@ -16,9 +16,9 @@ use tokio_util::sync::CancellationToken;
 #[tokio::test]
 async fn eviction_during_active_read() -> Result<()> {
 	let db = Arc::new(fault_common::test_db("sqlite-storage-evict-active-read-").await?);
-	let actor_db = fault_common::actor_db(Arc::clone(&db), fault_common::TEST_ACTOR);
-	actor_db.commit(vec![fault_common::page(1, 0x11)], 2, 1_000).await?;
-	let branch_id = fault_common::actor_branch_id_for(&db, fault_common::TEST_ACTOR).await?;
+	let database_db = fault_common::make_db(Arc::clone(&db), fault_common::TEST_DATABASE);
+	database_db.commit(vec![fault_common::page(1, 0x11)], 2, 1_000).await?;
+	let branch_id = fault_common::database_branch_id_for(&db, fault_common::TEST_DATABASE).await?;
 
 	db.run(move |tx| async move {
 		tx.informal()
@@ -37,7 +37,7 @@ async fn eviction_during_active_read() -> Result<()> {
 	})
 	.await?;
 
-	let pages = actor_db.get_pages(vec![1]).await?;
+	let pages = database_db.get_pages(vec![1]).await?;
 	assert_eq!(pages[0].bytes, Some(vec![0x11; sqlite_storage::keys::PAGE_SIZE as usize]));
 	assert!(
 		fault_common::read_value(&db, ctr_eviction_index_key(0, branch_id))

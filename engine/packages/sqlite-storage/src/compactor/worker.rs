@@ -183,18 +183,18 @@ async fn handle_trigger(
 		return Ok(());
 	}
 
-	let actor_id = payload.actor_id.clone();
+	let database_id = payload.database_id.clone();
 	let now_ms = now_ms()?;
 	let node_id = holder_id.to_string();
 	let take_result = udb
 		.run({
-			let actor_id = actor_id.clone();
+			let database_id = database_id.clone();
 			move |tx| {
-				let actor_id = actor_id.clone();
+				let database_id = database_id.clone();
 				async move {
 					lease::take(
 						&tx,
-						&actor_id,
+						&database_id,
 						holder_id,
 						compactor_config.lease_ttl_ms,
 						now_ms,
@@ -228,7 +228,7 @@ async fn handle_trigger(
 	let (deadline_tx, deadline_rx) = watch::channel(initial_deadline);
 	let renewal_handle = spawn_renewal_task(
 		Arc::clone(&udb),
-		actor_id.clone(),
+		database_id.clone(),
 		holder_id,
 		compactor_config.clone(),
 		cancel_token.clone(),
@@ -241,7 +241,7 @@ async fn handle_trigger(
 		compact_default_batch_with_node_id(
 			Arc::clone(&udb),
 			storage_namespace_id,
-			actor_id.clone(),
+			database_id.clone(),
 			compactor_config.batch_size_deltas,
 			cancel_token.clone(),
 			holder_id,
@@ -251,7 +251,7 @@ async fn handle_trigger(
 		maybe_validate_quota(
 			Arc::clone(&udb),
 			storage_namespace_id,
-			actor_id.clone(),
+			database_id.clone(),
 			&compactor_config,
 			&quota_validate_counts,
 			holder_id,
@@ -267,16 +267,16 @@ async fn handle_trigger(
 
 	let release_result = udb
 		.run({
-			let actor_id = actor_id.clone();
+			let database_id = database_id.clone();
 			move |tx| {
-				let actor_id = actor_id.clone();
-				async move { lease::release(&tx, &actor_id, holder_id).await }
+				let database_id = database_id.clone();
+				async move { lease::release(&tx, &database_id, holder_id).await }
 			}
 		})
 		.await;
 
 	if let Err(err) = release_result {
-		tracing::warn!(?err, actor_id = %actor_id, "failed to release sqlite compactor lease");
+		tracing::warn!(?err, database_id = %database_id, "failed to release sqlite compactor lease");
 	}
 	metrics::SQLITE_COMPACTOR_LEASE_HELD_SECONDS
 		.with_label_values(&[node_id.as_str()])
@@ -289,7 +289,7 @@ async fn handle_trigger(
 async fn maybe_validate_quota(
 	udb: Arc<universaldb::Database>,
 	namespace_id: Option<NamespaceId>,
-	actor_id: String,
+	database_id: String,
 	compactor_config: &CompactorConfig,
 	quota_validate_counts: &scc::HashMap<String, u32>,
 	node_id: rivet_pools::NodeId,
@@ -298,7 +298,7 @@ async fn maybe_validate_quota(
 		return Ok(());
 	}
 
-	let pass_count = match quota_validate_counts.entry_async(actor_id.clone()).await {
+	let pass_count = match quota_validate_counts.entry_async(database_id.clone()).await {
 		scc::hash_map::Entry::Occupied(mut entry) => {
 			let next = entry.get().saturating_add(1);
 			*entry.get_mut() = next;
@@ -311,7 +311,7 @@ async fn maybe_validate_quota(
 	};
 
 	if pass_count % compactor_config.quota_validate_every == 0 {
-		super::compact::validate_quota_with_node_id(udb, namespace_id, actor_id, node_id).await?;
+		super::compact::validate_quota_with_node_id(udb, namespace_id, database_id, node_id).await?;
 	}
 
 	Ok(())
@@ -322,34 +322,34 @@ async fn emit_metering_rollup(
 	payload: SqliteCompactPayload,
 	node_id: rivet_pools::NodeId,
 ) -> Result<()> {
-	let actor_id = payload.actor_id;
+	let database_id = payload.database_id;
 	let node_id = node_id.to_string();
 	let namespace_id = payload.namespace_id;
-	let actor_name = payload.actor_name;
+	let database_name = payload.database_name;
 	let commit_bytes_since_rollup = payload.commit_bytes_since_rollup;
 	let read_bytes_since_rollup = payload.read_bytes_since_rollup;
 
 	udb.run(move |tx| {
-		let actor_id = actor_id.clone();
+		let database_id = database_id.clone();
 		let node_id = node_id.clone();
-		let actor_name = actor_name.clone();
+		let database_name = database_name.clone();
 
 		async move {
-			let storage_used = quota::read(&tx, &actor_id).await?;
+			let storage_used = quota::read(&tx, &database_id).await?;
 			metrics::SQLITE_STORAGE_USED_BYTES
-				.with_label_values(&[node_id.as_str(), actor_id.as_str()])
+				.with_label_values(&[node_id.as_str(), database_id.as_str()])
 				.set(storage_used as f64);
 			let Some(namespace_id) = namespace_id else {
 				tracing::debug!(
-					actor_id = %actor_id,
+					database_id = %database_id,
 					"skipping sqlite metering rollup without namespace id"
 				);
 				return Ok(());
 			};
-			let Some(actor_name) = actor_name else {
+			let Some(database_name) = database_name else {
 				tracing::debug!(
-					actor_id = %actor_id,
-					"skipping sqlite metering rollup without actor name"
+					database_id = %database_id,
+					"skipping sqlite metering rollup without database name"
 				);
 				return Ok(());
 			};
@@ -357,19 +357,19 @@ async fn emit_metering_rollup(
 			namespace::keys::metric::inc(
 				&namespace_tx,
 				namespace_id,
-				namespace::keys::metric::Metric::SqliteStorageUsed(actor_name.clone()),
+				namespace::keys::metric::Metric::SqliteStorageUsed(database_name.clone()),
 				storage_used,
 			);
 			namespace::keys::metric::inc(
 				&namespace_tx,
 				namespace_id,
-				namespace::keys::metric::Metric::SqliteCommitBytes(actor_name.clone()),
+				namespace::keys::metric::Metric::SqliteCommitBytes(database_name.clone()),
 				round_down_billable_bytes(commit_bytes_since_rollup)?,
 			);
 			namespace::keys::metric::inc(
 				&namespace_tx,
 				namespace_id,
-				namespace::keys::metric::Metric::SqliteReadBytes(actor_name),
+				namespace::keys::metric::Metric::SqliteReadBytes(database_name),
 				round_down_billable_bytes(read_bytes_since_rollup)?,
 			);
 
@@ -386,7 +386,7 @@ fn round_down_billable_bytes(bytes: u64) -> Result<i64> {
 
 fn spawn_renewal_task(
 	udb: Arc<universaldb::Database>,
-	actor_id: String,
+	database_id: String,
 	holder_id: rivet_pools::NodeId,
 	compactor_config: CompactorConfig,
 	cancel_token: CancellationToken,
@@ -409,20 +409,20 @@ fn spawn_renewal_task(
 					let now_ms = match now_ms() {
 						Ok(now_ms) => now_ms,
 						Err(err) => {
-							tracing::warn!(?err, actor_id = %actor_id, "failed to compute sqlite compactor renewal timestamp");
+							tracing::warn!(?err, database_id = %database_id, "failed to compute sqlite compactor renewal timestamp");
 							cancel_token.cancel();
 							return;
 						}
 					};
 					let renew_result = udb
 						.run({
-							let actor_id = actor_id.clone();
+							let database_id = database_id.clone();
 							move |tx| {
-								let actor_id = actor_id.clone();
+								let database_id = database_id.clone();
 								async move {
 									lease::renew(
 										&tx,
-										&actor_id,
+										&database_id,
 										holder_id,
 										compactor_config.lease_ttl_ms,
 										now_ms,
@@ -443,7 +443,7 @@ fn spawn_renewal_task(
 									let _ = deadline_tx.send(tokio::time::Instant::now() + deadline_after);
 								}
 								Err(err) => {
-									tracing::warn!(?err, actor_id = %actor_id, "failed to compute sqlite compactor lease deadline");
+									tracing::warn!(?err, database_id = %database_id, "failed to compute sqlite compactor lease deadline");
 									cancel_token.cancel();
 									return;
 								}
@@ -453,7 +453,7 @@ fn spawn_renewal_task(
 							metrics::SQLITE_COMPACTOR_LEASE_RENEWAL_TOTAL
 								.with_label_values(&[node_id.as_str(), "stolen"])
 								.inc();
-							tracing::warn!(?outcome, actor_id = %actor_id, "sqlite compactor lease renewal stopped compaction");
+							tracing::warn!(?outcome, database_id = %database_id, "sqlite compactor lease renewal stopped compaction");
 							cancel_token.cancel();
 							return;
 						}
@@ -461,7 +461,7 @@ fn spawn_renewal_task(
 							metrics::SQLITE_COMPACTOR_LEASE_RENEWAL_TOTAL
 								.with_label_values(&[node_id.as_str(), "err"])
 								.inc();
-							tracing::warn!(?err, actor_id = %actor_id, "sqlite compactor lease renewal failed");
+							tracing::warn!(?err, database_id = %database_id, "sqlite compactor lease renewal failed");
 							cancel_token.cancel();
 							return;
 						}
@@ -518,16 +518,16 @@ pub mod test_hooks {
 
 	pub async fn handle_trigger_once(
 		udb: Arc<universaldb::Database>,
-		actor_id: String,
+		database_id: String,
 		compactor_config: CompactorConfig,
 		cancel_token: CancellationToken,
 	) -> Result<()> {
 		handle_payload_once(
 			udb,
 			SqliteCompactPayload {
-				actor_id,
+				database_id,
 				namespace_id: None,
-				actor_name: None,
+				database_name: None,
 				commit_bytes_since_rollup: 0,
 				read_bytes_since_rollup: 0,
 			},

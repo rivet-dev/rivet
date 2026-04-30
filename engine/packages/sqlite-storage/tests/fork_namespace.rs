@@ -15,7 +15,7 @@ use sqlite_storage::{
 use universaldb::options::MutationType;
 
 use fork_common::{
-	TEST_ACTOR, actor_db, assert_storage_error, page, page_bytes, read_actor_branch_id,
+	TEST_DATABASE, make_db, assert_storage_error, page, page_bytes, read_database_branch_id,
 	read_commit, read_namespace_branch_id_for, read_namespace_branch_record, test_db,
 	test_namespace, test_ups,
 };
@@ -27,10 +27,10 @@ fn namespace_id_to_gas_id(namespace_id: NamespaceId) -> Id {
 #[tokio::test]
 async fn fork_namespace_covers_root_depth_one_and_deep_sources() -> Result<()> {
 	let db = test_db().await?;
-	let source = actor_db(db.clone(), test_namespace(), TEST_ACTOR);
+	let source = make_db(db.clone(), test_namespace(), TEST_DATABASE);
 	source.commit(vec![page(1, 0x11)], 2, 1_000).await?;
-	let root_actor_branch = read_actor_branch_id(&db, test_namespace(), TEST_ACTOR).await?;
-	let root_commit = read_commit(&db, root_actor_branch, 1).await?;
+	let root_database_branch = read_database_branch_id(&db, test_namespace(), TEST_DATABASE).await?;
+	let root_commit = read_commit(&db, root_database_branch, 1).await?;
 	let mut source_namespace = NamespaceId::from_gas_id(test_namespace());
 	let mut source_namespace_branch = read_namespace_branch_id_for(&db, test_namespace()).await?;
 
@@ -51,12 +51,12 @@ async fn fork_namespace_covers_root_depth_one_and_deep_sources() -> Result<()> {
 		assert_eq!(forked_record.parent, Some(source_namespace_branch));
 		assert_eq!(forked_record.fork_depth, depth);
 
-		let forked_actor_db = actor_db(
+		let forked_database_db = make_db(
 			db.clone(),
 			namespace_id_to_gas_id(forked_namespace),
-			TEST_ACTOR,
+			TEST_DATABASE,
 		);
-		let pages = forked_actor_db.get_pages(vec![1]).await?;
+		let pages = forked_database_db.get_pages(vec![1]).await?;
 		assert_eq!(pages[0].bytes, Some(page_bytes(0x11)));
 
 		source_namespace = forked_namespace;
@@ -69,10 +69,10 @@ async fn fork_namespace_covers_root_depth_one_and_deep_sources() -> Result<()> {
 #[tokio::test]
 async fn fork_namespace_bk_pin_race_returns_out_of_retention() -> Result<()> {
 	let db = test_db().await?;
-	let source = actor_db(db.clone(), test_namespace(), TEST_ACTOR);
+	let source = make_db(db.clone(), test_namespace(), TEST_DATABASE);
 	source.commit(vec![page(1, 0x11)], 2, 1_000).await?;
-	let root_actor_branch = read_actor_branch_id(&db, test_namespace(), TEST_ACTOR).await?;
-	let root_commit = read_commit(&db, root_actor_branch, 1).await?;
+	let root_database_branch = read_database_branch_id(&db, test_namespace(), TEST_DATABASE).await?;
+	let root_commit = read_commit(&db, root_database_branch, 1).await?;
 	let source_namespace_branch = read_namespace_branch_id_for(&db, test_namespace()).await?;
 	let new_branch = NamespaceBranchId::new_v4();
 	let pin_after_fork_point = [0xff; 16];
@@ -122,10 +122,10 @@ async fn fork_namespace_bk_pin_race_returns_out_of_retention() -> Result<()> {
 #[tokio::test]
 async fn fork_namespace_allows_depth_sixteen_and_rejects_depth_seventeen() -> Result<()> {
 	let db = test_db().await?;
-	let source = actor_db(db.clone(), test_namespace(), TEST_ACTOR);
+	let source = make_db(db.clone(), test_namespace(), TEST_DATABASE);
 	source.commit(vec![page(1, 0x11)], 2, 1_000).await?;
-	let root_actor_branch = read_actor_branch_id(&db, test_namespace(), TEST_ACTOR).await?;
-	let root_commit = read_commit(&db, root_actor_branch, 1).await?;
+	let root_database_branch = read_database_branch_id(&db, test_namespace(), TEST_DATABASE).await?;
+	let root_commit = read_commit(&db, root_database_branch, 1).await?;
 	let mut source_namespace = NamespaceId::from_gas_id(test_namespace());
 	let mut source_namespace_branch = read_namespace_branch_id_for(&db, test_namespace()).await?;
 

@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use universaldb::utils::IsolationLevel::Serializable;
 use vbare::OwnedVersionedData;
 
-use crate::pump::{keys, types::ActorBranchId};
+use crate::pump::{keys, types::DatabaseBranchId};
 
 pub const SQLITE_COLD_COMPACTOR_LEASE_VERSION: u16 = 1;
 
@@ -71,7 +71,7 @@ pub fn decode_cold_lease(payload: &[u8]) -> Result<ColdCompactorLease> {
 
 pub async fn take(
 	tx: &universaldb::Transaction,
-	branch_id: ActorBranchId,
+	branch_id: DatabaseBranchId,
 	holder_id: NodeId,
 	ttl_ms: u64,
 	now_ms: i64,
@@ -97,7 +97,7 @@ pub async fn take(
 
 pub async fn renew(
 	tx: &universaldb::Transaction,
-	branch_id: ActorBranchId,
+	branch_id: DatabaseBranchId,
 	holder_id: NodeId,
 	ttl_ms: u64,
 	now_ms: i64,
@@ -127,7 +127,7 @@ pub async fn renew(
 
 pub async fn release(
 	tx: &universaldb::Transaction,
-	branch_id: ActorBranchId,
+	branch_id: DatabaseBranchId,
 	_holder_id: NodeId,
 ) -> Result<()> {
 	tx.informal().clear(&keys::branch_meta_cold_lease_key(branch_id));

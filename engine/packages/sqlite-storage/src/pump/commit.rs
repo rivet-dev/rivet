@@ -14,23 +14,23 @@ use universaldb::{
 use crate::{
 	burst_mode,
 	pump::{
-		ActorDb,
-		actor_db::{BranchAncestry, load_branch_ancestry, touch_access_if_bucket_advanced},
+		Db,
+		db::{BranchAncestry, load_branch_ancestry, touch_access_if_bucket_advanced},
 		branch,
 		keys::{self, SHARD_SIZE},
 		ltx::{LtxHeader, encode_ltx_v3},
 		metrics, quota,
 		types::{
-			ActorBranchId, ActorBranchRecord, ActorPointer, BranchState, CommitRow, DBHead,
+			DatabaseBranchId, DatabaseBranchRecord, DatabasePointer, BranchState, CommitRow, DBHead,
 			DirtyPage, NamespaceBranchId, NamespaceId, decode_db_head, decode_meta_compact,
-			encode_actor_branch_record, encode_actor_pointer, encode_commit_row, encode_db_head,
+			encode_database_branch_record, encode_database_pointer, encode_commit_row, encode_db_head,
 		},
 		udb,
 	},
 };
 
 const DELTA_CHUNK_BYTES: usize = 10_000;
-impl ActorDb {
+impl Db {
 	pub async fn commit(
 		&self,
 		dirty_pages: Vec<DirtyPage>,
@@ -51,14 +51,14 @@ impl ActorDb {
 		let cached_ancestry = self.ancestors.lock().clone();
 		let cached_access_bucket = *self.last_access_bucket.lock();
 		let cache_was_warm = !self.cache.lock().range(0, u32::MAX).is_empty();
-		let actor_id = self.actor_id.clone();
+		let database_id = self.database_id.clone();
 		let namespace_id = self.sqlite_namespace_id();
 		let dirty_pages_for_tx = dirty_pages.clone();
 
 		let result = self
 			.udb
 			.run(move |tx| {
-				let actor_id = actor_id.clone();
+				let database_id = database_id.clone();
 				let namespace_id = namespace_id;
 				let dirty_pages = dirty_pages_for_tx.clone();
 				let cached_ancestry = cached_ancestry.clone();
@@ -66,9 +66,9 @@ impl ActorDb {
 
 				async move {
 					let branch_resolution =
-						resolve_or_allocate_branch(&tx, namespace_id, &actor_id).await?;
+						resolve_or_allocate_branch(&tx, namespace_id, &database_id).await?;
 					let branch_id = branch_resolution.branch_id;
-					let branch_ancestry = if branch_resolution.actor_initialized {
+					let branch_ancestry = if branch_resolution.database_initialized {
 						BranchAncestry::root(branch_id)
 					} else if let Some(cached_ancestry) =
 						cached_ancestry.filter(|ancestry| ancestry.root_branch_id == branch_id)
@@ -242,12 +242,12 @@ impl ActorDb {
 							&udb::INCOMPLETE_VERSIONSTAMP,
 						)?;
 					}
-					if branch_resolution.actor_initialized {
+					if branch_resolution.database_initialized {
 						write_root_branch_metadata(
 							&tx,
 						branch_id,
 						branch_resolution.namespace_branch_id,
-						&actor_id,
+						&database_id,
 						now_ms,
 						&udb::INCOMPLETE_VERSIONSTAMP,
 					)?;
@@ -344,9 +344,9 @@ impl ActorDb {
 			crate::compactor::publish_compact_payload_with_node_id(
 				&self.ups,
 				crate::compactor::SqliteCompactPayload {
-					actor_id: self.actor_id.clone(),
+					database_id: self.database_id.clone(),
 					namespace_id: Some(self.namespace_id),
-					actor_name: None,
+					database_name: None,
 					commit_bytes_since_rollup,
 					read_bytes_since_rollup,
 				},
@@ -357,7 +357,7 @@ impl ActorDb {
 }
 
 struct CommitTxResult {
-	branch_id: ActorBranchId,
+	branch_id: DatabaseBranchId,
 	branch_ancestry: BranchAncestry,
 	access_bucket: Option<i64>,
 	txid: u64,
@@ -378,7 +378,7 @@ struct TruncateCleanup {
 
 async fn collect_truncate_cleanup(
 	tx: &universaldb::Transaction,
-	branch_id: ActorBranchId,
+	branch_id: DatabaseBranchId,
 	previous_db_size_pages: u32,
 	new_db_size_pages: u32,
 ) -> Result<TruncateCleanup> {
@@ -408,48 +408,48 @@ async fn collect_truncate_cleanup(
 }
 
 struct BranchResolution {
-	branch_id: ActorBranchId,
+	branch_id: DatabaseBranchId,
 	namespace_branch_id: NamespaceBranchId,
 	namespace_initialized: bool,
-	actor_initialized: bool,
+	database_initialized: bool,
 }
 
 async fn resolve_or_allocate_branch(
 	tx: &universaldb::Transaction,
 	namespace_id: NamespaceId,
-	actor_id: &str,
+	database_id: &str,
 ) -> Result<BranchResolution> {
 	let namespace = branch::resolve_or_allocate_root_namespace_branch(tx, namespace_id).await?;
 
 	if let Some(branch_id) =
-		branch::resolve_actor_branch_in_namespace(tx, namespace.branch_id, actor_id, Serializable)
+		branch::resolve_database_branch_in_namespace(tx, namespace.branch_id, database_id, Serializable)
 			.await?
 	{
 		return Ok(BranchResolution {
 			branch_id,
 			namespace_branch_id: namespace.branch_id,
 			namespace_initialized: namespace.initialized,
-			actor_initialized: false,
+			database_initialized: false,
 		});
 	}
 
 	Ok(BranchResolution {
-		branch_id: ActorBranchId::new_v4(),
+		branch_id: DatabaseBranchId::new_v4(),
 		namespace_branch_id: namespace.branch_id,
 		namespace_initialized: namespace.initialized,
-		actor_initialized: true,
+		database_initialized: true,
 	})
 }
 
 fn write_root_branch_metadata(
 	tx: &universaldb::Transaction,
-	branch_id: ActorBranchId,
+	branch_id: DatabaseBranchId,
 	namespace_branch: NamespaceBranchId,
-	actor_id: &str,
+	database_id: &str,
 	now_ms: i64,
 	root_versionstamp: &[u8; 16],
 ) -> Result<()> {
-	let record = ActorBranchRecord {
+	let record = DatabaseBranchRecord {
 		branch_id,
 		namespace_branch,
 		parent: None,
@@ -461,9 +461,9 @@ fn write_root_branch_metadata(
 		state: BranchState::Live,
 	};
 	let encoded_record =
-		encode_actor_branch_record(record).context("encode sqlite root actor branch record")?;
+		encode_database_branch_record(record).context("encode sqlite root database branch record")?;
 	let versionstamped_record = udb::append_versionstamp_offset(encoded_record, root_versionstamp)
-		.context("prepare versionstamped sqlite root actor branch record")?;
+		.context("prepare versionstamped sqlite root database branch record")?;
 	tx.informal().atomic_op(
 		&keys::branches_list_key(branch_id),
 		&versionstamped_record,
@@ -481,13 +481,13 @@ fn write_root_branch_metadata(
 		MutationType::SetVersionstampedValue,
 	);
 
-	let pointer = ActorPointer {
+	let pointer = DatabasePointer {
 		current_branch: branch_id,
 		last_swapped_at_ms: now_ms,
 	};
-	let encoded_pointer = encode_actor_pointer(pointer).context("encode sqlite actor pointer")?;
+	let encoded_pointer = encode_database_pointer(pointer).context("encode sqlite database pointer")?;
 	tx.informal().set(
-		&keys::actor_pointer_cur_key(namespace_branch, actor_id),
+		&keys::database_pointer_cur_key(namespace_branch, database_id),
 		&encoded_pointer,
 	);
 
@@ -533,7 +533,7 @@ async fn tx_scan_prefix_values(
 	Ok(rows)
 }
 
-fn decode_branch_pidx_pgno(branch_id: ActorBranchId, key: &[u8]) -> Result<u32> {
+fn decode_branch_pidx_pgno(branch_id: DatabaseBranchId, key: &[u8]) -> Result<u32> {
 	let prefix = keys::branch_pidx_prefix(branch_id);
 	let suffix = key
 		.strip_prefix(prefix.as_slice())
@@ -545,7 +545,7 @@ fn decode_branch_pidx_pgno(branch_id: ActorBranchId, key: &[u8]) -> Result<u32> 
 	Ok(u32::from_be_bytes(bytes))
 }
 
-fn decode_branch_shard_id(branch_id: ActorBranchId, key: &[u8]) -> Result<u32> {
+fn decode_branch_shard_id(branch_id: DatabaseBranchId, key: &[u8]) -> Result<u32> {
 	let prefix = keys::branch_shard_prefix(branch_id);
 	let suffix = key
 		.strip_prefix(prefix.as_slice())

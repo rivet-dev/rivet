@@ -14,8 +14,8 @@ use universaldb::{
 };
 
 use crate::pump::{
-	ActorDb,
-	actor_db::{
+	Db,
+	db::{
 		BranchAncestry, CachedColdManifest, load_branch_ancestry,
 		touch_access_if_bucket_advanced,
 	},
@@ -26,7 +26,7 @@ use crate::pump::{
 	metrics,
 	page_index::DeltaPageIndex,
 	types::{
-		ActorBranchId, DBHead, FetchedPage, LayerEntry, LayerKind,
+		DatabaseBranchId, DBHead, FetchedPage, LayerEntry, LayerKind,
 		decode_cold_manifest_chunk, decode_cold_manifest_index, decode_db_head,
 	},
 };
@@ -34,7 +34,7 @@ use crate::pump::{
 const PIDX_PGNO_BYTES: usize = std::mem::size_of::<u32>();
 const PIDX_TXID_BYTES: usize = std::mem::size_of::<u64>();
 
-impl ActorDb {
+impl Db {
 	pub async fn get_pages(&self, pgnos: Vec<u32>) -> Result<Vec<FetchedPage>> {
 		let node_id = self.node_id.to_string();
 		let labels = &[node_id.as_str()];
@@ -64,7 +64,7 @@ impl ActorDb {
 			}
 		};
 
-		let actor_id = self.actor_id.clone();
+		let database_id = self.database_id.clone();
 		let namespace_id = self.sqlite_namespace_id();
 		let cached_branch_id = *self.branch_id.lock();
 		let cached_ancestry = self.ancestors.lock().clone();
@@ -74,7 +74,7 @@ impl ActorDb {
 		let tx_result = self
 			.udb
 			.run(move |tx| {
-				let actor_id = actor_id.clone();
+				let database_id = database_id.clone();
 				let namespace_id = namespace_id;
 				let pgnos = pgnos_for_tx.clone();
 				let cached_pidx = cached_pidx.clone();
@@ -85,7 +85,7 @@ impl ActorDb {
 					let scope = resolve_storage_scope(
 						&tx,
 						namespace_id,
-						&actor_id,
+						&database_id,
 						cached_ancestry.as_ref(),
 					)
 					.await?;
@@ -97,7 +97,7 @@ impl ActorDb {
 					let head = match &scope {
 						StorageScope::Branch(plan) => plan.head.clone(),
 						StorageScope::Legacy => {
-							let head_bytes = tx_get_value(&tx, &keys::meta_head_key(&actor_id)).await?;
+							let head_bytes = tx_get_value(&tx, &keys::meta_head_key(&database_id)).await?;
 							let Some(head_bytes) = head_bytes else {
 								return Err(SqliteStorageError::MetaMissing {
 									operation: "get_pages",
@@ -165,10 +165,10 @@ impl ActorDb {
 							StorageScope::Branch(plan) => {
 								for source in &plan.sources {
 									let rows =
-										tx_scan_prefix_values(&tx, &source.pidx_prefix(&actor_id)).await?;
+										tx_scan_prefix_values(&tx, &source.pidx_prefix(&database_id)).await?;
 									let mut decoded_rows = Vec::new();
 									for (key, value) in rows {
-										let pgno = source.decode_pidx_pgno(&actor_id, &key)?;
+										let pgno = source.decode_pidx_pgno(&database_id, &key)?;
 										let txid = decode_pidx_txid(&value)?;
 										if txid > source.max_txid(head.head_txid) {
 											continue;
@@ -185,13 +185,13 @@ impl ActorDb {
 								}
 							}
 							StorageScope::Legacy => {
-								let legacy_prefix = ReadSource::Legacy.pidx_prefix(&actor_id);
+								let legacy_prefix = ReadSource::Legacy.pidx_prefix(&database_id);
 								let rows = tx_scan_prefix_values(&tx, &legacy_prefix).await?;
 								let decoded_rows = rows
 									.into_iter()
 									.map(|(key, value)| {
 										Ok((
-											ReadSource::Legacy.decode_pidx_pgno(&actor_id, &key)?,
+											ReadSource::Legacy.decode_pidx_pgno(&database_id, &key)?,
 											decode_pidx_txid(&value)?,
 										))
 									})
@@ -228,7 +228,7 @@ impl ActorDb {
 							.copied()
 							.map(|page_ref| {
 								(
-									page_ref.source.delta_chunk_prefix(&actor_id, page_ref.txid),
+									page_ref.source.delta_chunk_prefix(&database_id, page_ref.txid),
 									page_ref.source,
 									page_ref.txid,
 								)
@@ -275,7 +275,7 @@ impl ActorDb {
 						let shard_id = pgno / SHARD_SIZE;
 						if !shard_sources.contains_key(&shard_id) {
 							let source =
-								tx_load_latest_shard_blob(&tx, &scope, &actor_id, shard_id, head.head_txid)
+								tx_load_latest_shard_blob(&tx, &scope, &database_id, shard_id, head.head_txid)
 									.await?;
 							shard_sources.insert(shard_id, source);
 						}
@@ -378,7 +378,7 @@ impl ActorDb {
 					.get(source_key)
 					.and_then(|decoded: &DecodedLtx| decoded.get_page(pgno))
 					.map(ToOwned::to_owned);
-				if bytes.is_none() && source_key.starts_with(&keys::delta_prefix(&self.actor_id)) {
+				if bytes.is_none() && source_key.starts_with(&keys::delta_prefix(&self.database_id)) {
 					stale_pidx_pgnos.insert(pgno);
 				}
 				if let Some(branch_id) = tx_result.branch_id {
@@ -424,7 +424,7 @@ impl ActorDb {
 }
 
 struct GetPagesTxResult {
-	branch_id: Option<ActorBranchId>,
+	branch_id: Option<DatabaseBranchId>,
 	branch_ancestry: Option<BranchAncestry>,
 	access_bucket: Option<i64>,
 	db_size_pages: u32,
@@ -437,12 +437,12 @@ struct GetPagesTxResult {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct ColdLayerCandidate {
-	branch_id: ActorBranchId,
+	branch_id: DatabaseBranchId,
 	owner_txid: u64,
 	shard_id: u32,
 }
 
-impl ActorDb {
+impl Db {
 	async fn load_cold_page_blobs(
 		&self,
 		page_candidates: &BTreeMap<u32, Vec<ColdLayerCandidate>>,
@@ -534,7 +534,7 @@ impl ActorDb {
 
 	async fn load_cold_manifest(
 		&self,
-		branch_id: ActorBranchId,
+		branch_id: DatabaseBranchId,
 	) -> Result<CachedColdManifest> {
 		if let Some(manifest) = self.cold_manifest_cache.lock().get(branch_id) {
 			return Ok(manifest);
@@ -606,7 +606,7 @@ fn cold_source_key(object_key: &str) -> Vec<u8> {
 	key
 }
 
-fn cold_manifest_index_object_key(branch_id: ActorBranchId) -> String {
+fn cold_manifest_index_object_key(branch_id: DatabaseBranchId) -> String {
 	format!("db/{}/cold_manifest/index.bare", branch_id.as_uuid().simple())
 }
 
@@ -624,7 +624,7 @@ enum StorageScope {
 }
 
 impl StorageScope {
-	fn branch_id(&self) -> Option<ActorBranchId> {
+	fn branch_id(&self) -> Option<DatabaseBranchId> {
 		match self {
 			Self::Branch(plan) => Some(plan.branch_id),
 			Self::Legacy => None,
@@ -664,7 +664,7 @@ impl StorageScope {
 
 #[derive(Debug, Clone)]
 struct BranchReadPlan {
-	branch_id: ActorBranchId,
+	branch_id: DatabaseBranchId,
 	head: DBHead,
 	ancestry: BranchAncestry,
 	sources: Vec<ReadSource>,
@@ -677,24 +677,24 @@ enum ReadSource {
 }
 
 impl ReadSource {
-	fn pidx_prefix(self, actor_id: &str) -> Vec<u8> {
+	fn pidx_prefix(self, database_id: &str) -> Vec<u8> {
 		match self {
 			Self::Branch(source) => keys::branch_pidx_prefix(source.branch_id),
-			Self::Legacy => keys::pidx_delta_prefix(actor_id),
+			Self::Legacy => keys::pidx_delta_prefix(database_id),
 		}
 	}
 
-	fn decode_pidx_pgno(self, actor_id: &str, key: &[u8]) -> Result<u32> {
+	fn decode_pidx_pgno(self, database_id: &str, key: &[u8]) -> Result<u32> {
 		match self {
 			Self::Branch(source) => decode_branch_pidx_pgno(source.branch_id, key),
-			Self::Legacy => decode_pidx_pgno(actor_id, key),
+			Self::Legacy => decode_pidx_pgno(database_id, key),
 		}
 	}
 
-	fn delta_chunk_prefix(self, actor_id: &str, txid: u64) -> Vec<u8> {
+	fn delta_chunk_prefix(self, database_id: &str, txid: u64) -> Vec<u8> {
 		match self {
 			Self::Branch(source) => keys::branch_delta_chunk_prefix(source.branch_id, txid),
-			Self::Legacy => keys::delta_chunk_prefix(actor_id, txid),
+			Self::Legacy => keys::delta_chunk_prefix(database_id, txid),
 		}
 	}
 
@@ -708,7 +708,7 @@ impl ReadSource {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 struct BranchSource {
-	branch_id: ActorBranchId,
+	branch_id: DatabaseBranchId,
 	max_txid: u64,
 }
 
@@ -721,11 +721,11 @@ struct PageRef {
 async fn resolve_storage_scope(
 	tx: &universaldb::Transaction,
 	namespace_id: crate::pump::types::NamespaceId,
-	actor_id: &str,
+	database_id: &str,
 	cached_ancestry: Option<&BranchAncestry>,
 ) -> Result<StorageScope> {
 	Ok(
-		match branch::resolve_actor_branch(tx, namespace_id, actor_id, Snapshot).await? {
+		match branch::resolve_database_branch(tx, namespace_id, database_id, Snapshot).await? {
 			Some(branch_id) => {
 				StorageScope::Branch(load_branch_read_plan(tx, branch_id, cached_ancestry).await?)
 			}
@@ -736,7 +736,7 @@ async fn resolve_storage_scope(
 
 async fn load_branch_read_plan(
 	tx: &universaldb::Transaction,
-	branch_id: ActorBranchId,
+	branch_id: DatabaseBranchId,
 	cached_ancestry: Option<&BranchAncestry>,
 ) -> Result<BranchReadPlan> {
 	let head_bytes = tx_get_value(tx, &keys::branch_meta_head_key(branch_id)).await?;
@@ -783,7 +783,7 @@ async fn load_branch_read_plan(
 
 async fn lookup_txid_for_read(
 	tx: &universaldb::Transaction,
-	branch_id: ActorBranchId,
+	branch_id: DatabaseBranchId,
 	versionstamp: [u8; 16],
 ) -> Result<u64> {
 	let bytes = tx_get_value(tx, &keys::branch_vtx_key(branch_id, versionstamp))
@@ -851,7 +851,7 @@ async fn tx_load_delta_blob(
 async fn tx_load_latest_shard_blob(
 	tx: &universaldb::Transaction,
 	scope: &StorageScope,
-	actor_id: &str,
+	database_id: &str,
 	shard_id: u32,
 	legacy_as_of_txid: u64,
 ) -> Result<Option<(Vec<u8>, Vec<u8>)>> {
@@ -869,13 +869,13 @@ async fn tx_load_latest_shard_blob(
 			ReadSource::Branch(source) => {
 				keys::branch_shard_version_prefix(source.branch_id, shard_id)
 			}
-			ReadSource::Legacy => keys::shard_version_prefix(actor_id, shard_id),
+			ReadSource::Legacy => keys::shard_version_prefix(database_id, shard_id),
 		};
 		let end_key = match source {
 			ReadSource::Branch(source) => {
 				keys::branch_shard_key(source.branch_id, shard_id, as_of_txid)
 			}
-			ReadSource::Legacy => keys::shard_version_key(actor_id, shard_id, as_of_txid),
+			ReadSource::Legacy => keys::shard_version_key(database_id, shard_id, as_of_txid),
 		};
 		let end = end_of_key_range(&end_key);
 		let informal = tx.informal();
@@ -897,7 +897,7 @@ async fn tx_load_latest_shard_blob(
 		}
 
 		if matches!(source, ReadSource::Legacy) {
-			let legacy_key = keys::shard_key(actor_id, shard_id);
+			let legacy_key = keys::shard_key(database_id, shard_id);
 			if let Some(value) = tx
 				.informal()
 				.get(&legacy_key, Snapshot)
@@ -911,7 +911,7 @@ async fn tx_load_latest_shard_blob(
 	Ok(None)
 }
 
-fn decode_branch_pidx_pgno(branch_id: ActorBranchId, key: &[u8]) -> Result<u32> {
+fn decode_branch_pidx_pgno(branch_id: DatabaseBranchId, key: &[u8]) -> Result<u32> {
 	let prefix = keys::branch_pidx_prefix(branch_id);
 	ensure!(
 		key.starts_with(&prefix),
@@ -933,8 +933,8 @@ fn decode_branch_pidx_pgno(branch_id: ActorBranchId, key: &[u8]) -> Result<u32> 
 	))
 }
 
-fn decode_pidx_pgno(actor_id: &str, key: &[u8]) -> Result<u32> {
-	let prefix = keys::pidx_delta_prefix(actor_id);
+fn decode_pidx_pgno(database_id: &str, key: &[u8]) -> Result<u32> {
+	let prefix = keys::pidx_delta_prefix(database_id);
 	ensure!(
 		key.starts_with(&prefix),
 		"pidx key did not start with expected prefix"

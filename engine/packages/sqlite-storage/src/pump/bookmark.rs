@@ -5,12 +5,12 @@ use universaldb::utils::IsolationLevel::{Serializable, Snapshot};
 use universaldb::RangeOption;
 
 use super::{
-	ActorDb, branch, keys, metrics,
+	Db, branch, keys, metrics,
 	constants::MAX_PINS_PER_NAMESPACE,
 	error::SqliteStorageError,
 	types::{
-		ActorBranchId, BookmarkRef, BookmarkStr, NamespaceBranchId, NamespaceId, PinStatus,
-		PinnedBookmarkRecord, ResolvedVersionstamp, decode_actor_pointer, decode_commit_row,
+		DatabaseBranchId, BookmarkRef, BookmarkStr, NamespaceBranchId, NamespaceId, PinStatus,
+		PinnedBookmarkRecord, ResolvedVersionstamp, decode_database_pointer, decode_commit_row,
 		decode_db_head, decode_namespace_branch_record, decode_pinned_bookmark_record,
 		encode_pinned_bookmark_record,
 	},
@@ -18,13 +18,13 @@ use super::{
 
 const VERSIONSTAMP_INFINITY: [u8; 16] = [0xff; 16];
 
-impl ActorDb {
+impl Db {
 	pub async fn create_bookmark(&self, at_ms: i64) -> Result<BookmarkStr> {
 		let node_id = self.node_id.to_string();
 		let result = create_bookmark(
 			&self.udb,
 			self.sqlite_namespace_id(),
-			self.actor_id.clone(),
+			self.database_id.clone(),
 			at_ms,
 		)
 		.await;
@@ -44,7 +44,7 @@ impl ActorDb {
 			&self.udb,
 			&self.ups,
 			self.sqlite_namespace_id(),
-			self.actor_id.clone(),
+			self.database_id.clone(),
 			at_ms,
 		)
 		.await;
@@ -62,7 +62,7 @@ impl ActorDb {
 		bookmark_status(
 			&self.udb,
 			self.sqlite_namespace_id(),
-			self.actor_id.clone(),
+			self.database_id.clone(),
 			bookmark,
 		)
 		.await
@@ -73,7 +73,7 @@ impl ActorDb {
 			&self.udb,
 			&self.ups,
 			self.sqlite_namespace_id(),
-			self.actor_id.clone(),
+			self.database_id.clone(),
 			bookmark,
 		)
 		.await
@@ -87,7 +87,7 @@ impl ActorDb {
 		let result = resolve_bookmark(
 			&self.udb,
 			self.sqlite_namespace_id(),
-			self.actor_id.clone(),
+			self.database_id.clone(),
 			bookmark,
 		)
 		.await;
@@ -102,7 +102,7 @@ impl ActorDb {
 			&self.udb,
 			&self.ups,
 			self.sqlite_namespace_id(),
-			self.actor_id.clone(),
+			self.database_id.clone(),
 			bookmark,
 		)
 		.await
@@ -129,22 +129,22 @@ fn bookmark_resolve_outcome(err: Option<&anyhow::Error>) -> &'static str {
 pub async fn create_bookmark(
 	udb: &universaldb::Database,
 	namespace_id: NamespaceId,
-	actor_id: String,
+	database_id: String,
 	at_ms: i64,
 ) -> Result<BookmarkStr> {
 	udb.run(move |tx| {
-		let actor_id = actor_id.clone();
+		let database_id = database_id.clone();
 
 		async move {
-			let branch_id = branch::resolve_actor_branch(&tx, namespace_id, &actor_id, Snapshot)
+			let branch_id = branch::resolve_database_branch(&tx, namespace_id, &database_id, Snapshot)
 				.await?
-				.ok_or(SqliteStorageError::ActorNotFound)?;
+				.ok_or(SqliteStorageError::DatabaseNotFound)?;
 			let head_bytes = tx
 				.informal()
 				.get(&keys::branch_meta_head_key(branch_id), Snapshot)
 				.await?
-				.context("sqlite actor branch head is missing")?;
-			let head = decode_db_head(&head_bytes).context("decode sqlite actor branch head")?;
+				.context("sqlite database branch head is missing")?;
+			let head = decode_db_head(&head_bytes).context("decode sqlite database branch head")?;
 
 			BookmarkStr::format(at_ms, head.head_txid)
 		}
@@ -156,36 +156,36 @@ pub async fn create_pinned_bookmark(
 	udb: &universaldb::Database,
 	ups: &crate::compactor::Ups,
 	namespace_id: NamespaceId,
-	actor_id: String,
+	database_id: String,
 	at_ms: i64,
 ) -> Result<BookmarkStr> {
 	let result = udb
 		.run(move |tx| {
-			let actor_id = actor_id.clone();
+			let database_id = database_id.clone();
 
 			async move {
 				let namespace_branch_id =
 					branch::resolve_namespace_branch(&tx, namespace_id, Serializable)
 						.await?
 						.unwrap_or_else(NamespaceBranchId::nil);
-				let branch_id = branch::resolve_actor_branch(&tx, namespace_id, &actor_id, Serializable)
+				let branch_id = branch::resolve_database_branch(&tx, namespace_id, &database_id, Serializable)
 					.await?
-					.ok_or(SqliteStorageError::ActorNotFound)?;
+					.ok_or(SqliteStorageError::DatabaseNotFound)?;
 				let head_bytes = tx
 					.informal()
 					.get(&keys::branch_meta_head_key(branch_id), Serializable)
 					.await?
-					.context("sqlite actor branch head is missing")?;
-				let head = decode_db_head(&head_bytes).context("decode sqlite actor branch head")?;
+					.context("sqlite database branch head is missing")?;
+				let head = decode_db_head(&head_bytes).context("decode sqlite database branch head")?;
 				let commit_bytes = tx
 					.informal()
 					.get(&keys::branch_commit_key(branch_id, head.head_txid), Serializable)
 					.await?
-					.context("sqlite actor branch head commit row is missing")?;
+					.context("sqlite database branch head commit row is missing")?;
 				let commit =
-					decode_commit_row(&commit_bytes).context("decode sqlite actor branch commit row")?;
+					decode_commit_row(&commit_bytes).context("decode sqlite database branch commit row")?;
 				let bookmark = BookmarkStr::format(at_ms, head.head_txid)?;
-				let pinned_key = keys::bookmark_pinned_key(&actor_id, bookmark.as_str());
+				let pinned_key = keys::bookmark_pinned_key(&database_id, bookmark.as_str());
 
 				if tx.informal().get(&pinned_key, Serializable).await?.is_none() {
 					let pin_count_key = keys::namespace_branches_pin_count_key(namespace_branch_id);
@@ -202,7 +202,7 @@ pub async fn create_pinned_bookmark(
 
 					let record = PinnedBookmarkRecord {
 						bookmark: bookmark.clone(),
-						actor_branch_id: branch_id,
+						database_branch_id: branch_id,
 						versionstamp: commit.versionstamp,
 						status: PinStatus::Pending,
 						pin_object_key: None,
@@ -227,8 +227,8 @@ pub async fn create_pinned_bookmark(
 				Ok(PinnedBookmarkCreateResult {
 					bookmark: bookmark.clone(),
 					payload: crate::compactor::SqliteColdCompactPayload::CreatePinnedBookmark {
-						actor_id,
-						actor_branch_id: branch_id,
+						database_id,
+						database_branch_id: branch_id,
 						bookmark,
 						versionstamp: commit.versionstamp,
 					},
@@ -246,16 +246,16 @@ pub async fn restore_to_bookmark(
 	udb: &universaldb::Database,
 	ups: &crate::compactor::Ups,
 	namespace_id: NamespaceId,
-	actor_id: String,
+	database_id: String,
 	bookmark: BookmarkStr,
 ) -> Result<BookmarkStr> {
 	let target =
-		resolve_bookmark(udb, namespace_id, actor_id.clone(), bookmark).await?;
-	let undo = capture_current_bookmark_for_restore(udb, namespace_id, actor_id.clone()).await?;
+		resolve_bookmark(udb, namespace_id, database_id.clone(), bookmark).await?;
+	let undo = capture_current_bookmark_for_restore(udb, namespace_id, database_id.clone()).await?;
 
-	branch::rollback_actor(udb, namespace_id, actor_id.clone(), target).await?;
+	branch::rollback_database(udb, namespace_id, database_id.clone(), target).await?;
 	let result =
-		create_pinned_bookmark_for_resolved(udb, namespace_id, actor_id, undo).await?;
+		create_pinned_bookmark_for_resolved(udb, namespace_id, database_id, undo).await?;
 	crate::compactor::publish_cold_compact_payload(ups, result.payload).await?;
 
 	Ok(result.bookmark)
@@ -265,16 +265,16 @@ pub async fn delete_pinned_bookmark(
 	udb: &universaldb::Database,
 	ups: &crate::compactor::Ups,
 	namespace_id: NamespaceId,
-	actor_id: String,
+	database_id: String,
 	bookmark: BookmarkStr,
 ) -> Result<()> {
 	let result = udb
 		.run(move |tx| {
-			let actor_id = actor_id.clone();
+			let database_id = database_id.clone();
 			let bookmark = bookmark.clone();
 
 			async move {
-				let pinned_key = keys::bookmark_pinned_key(&actor_id, bookmark.as_str());
+				let pinned_key = keys::bookmark_pinned_key(&database_id, bookmark.as_str());
 				let Some(pinned_bytes) = tx.informal().get(&pinned_key, Serializable).await? else {
 					return Ok(None);
 				};
@@ -287,7 +287,7 @@ pub async fn delete_pinned_bookmark(
 				let pin_count_key = keys::namespace_branches_pin_count_key(namespace_branch_id);
 
 				tx.informal()
-					.clear(&keys::bookmark_key(&actor_id, bookmark.as_str()));
+					.clear(&keys::bookmark_key(&database_id, bookmark.as_str()));
 				tx.informal().clear(&pinned_key);
 				tx.informal().atomic_op(
 					&pin_count_key,
@@ -296,15 +296,15 @@ pub async fn delete_pinned_bookmark(
 				);
 
 				let recomputed_pin =
-					recompute_actor_branch_bk_pin(&tx, &actor_id, pinned.actor_branch_id, &pinned_key)
+					recompute_database_branch_bk_pin(&tx, &database_id, pinned.database_branch_id, &pinned_key)
 						.await?;
 				tx.informal()
-					.set(&keys::branches_bk_pin_key(pinned.actor_branch_id), &recomputed_pin);
+					.set(&keys::branches_bk_pin_key(pinned.database_branch_id), &recomputed_pin);
 
 				Ok(Some(
 					crate::compactor::SqliteColdCompactPayload::DeletePinnedBookmark {
-						actor_id,
-						actor_branch_id: pinned.actor_branch_id,
+						database_id,
+						database_branch_id: pinned.database_branch_id,
 						bookmark,
 						versionstamp: pinned.versionstamp,
 						pin_object_key: pinned.pin_object_key,
@@ -324,18 +324,18 @@ pub async fn delete_pinned_bookmark(
 pub async fn bookmark_status(
 	udb: &universaldb::Database,
 	_namespace_id: NamespaceId,
-	actor_id: String,
+	database_id: String,
 	bookmark: BookmarkStr,
 ) -> Result<Option<PinStatus>> {
 	udb.run(move |tx| {
-		let actor_id = actor_id.clone();
+		let database_id = database_id.clone();
 		let bookmark = bookmark.clone();
 
 		async move {
 			let Some(bytes) = tx
 				.informal()
 				.get(
-					&keys::bookmark_pinned_key(&actor_id, bookmark.as_str()),
+					&keys::bookmark_pinned_key(&database_id, bookmark.as_str()),
 					Snapshot,
 				)
 				.await?
@@ -354,32 +354,32 @@ pub async fn bookmark_status(
 async fn capture_current_bookmark_for_restore(
 	udb: &universaldb::Database,
 	namespace_id: NamespaceId,
-	actor_id: String,
+	database_id: String,
 ) -> Result<ResolvedBookmarkPin> {
 	udb.run(move |tx| {
-		let actor_id = actor_id.clone();
+		let database_id = database_id.clone();
 
 		async move {
-			let branch_id = branch::resolve_actor_branch(&tx, namespace_id, &actor_id, Serializable)
+			let branch_id = branch::resolve_database_branch(&tx, namespace_id, &database_id, Serializable)
 				.await?
-				.ok_or(SqliteStorageError::ActorNotFound)?;
+				.ok_or(SqliteStorageError::DatabaseNotFound)?;
 			let head_bytes = tx
 				.informal()
 				.get(&keys::branch_meta_head_key(branch_id), Serializable)
 				.await?
-				.context("sqlite actor branch head is missing")?;
-			let head = decode_db_head(&head_bytes).context("decode sqlite actor branch head")?;
+				.context("sqlite database branch head is missing")?;
+			let head = decode_db_head(&head_bytes).context("decode sqlite database branch head")?;
 			let commit_bytes = tx
 				.informal()
 				.get(&keys::branch_commit_key(branch_id, head.head_txid), Serializable)
 				.await?
-				.context("sqlite actor branch head commit row is missing")?;
+				.context("sqlite database branch head commit row is missing")?;
 			let commit =
-				decode_commit_row(&commit_bytes).context("decode sqlite actor branch commit row")?;
+				decode_commit_row(&commit_bytes).context("decode sqlite database branch commit row")?;
 
 			Ok(ResolvedBookmarkPin {
 				bookmark: BookmarkStr::format(commit.wall_clock_ms, head.head_txid)?,
-				actor_branch_id: branch_id,
+				database_branch_id: branch_id,
 				versionstamp: commit.versionstamp,
 				created_at_ms: commit.wall_clock_ms,
 			})
@@ -391,11 +391,11 @@ async fn capture_current_bookmark_for_restore(
 async fn create_pinned_bookmark_for_resolved(
 	udb: &universaldb::Database,
 	namespace_id: NamespaceId,
-	actor_id: String,
+	database_id: String,
 	pin: ResolvedBookmarkPin,
 ) -> Result<PinnedBookmarkCreateResult> {
 	udb.run(move |tx| {
-		let actor_id = actor_id.clone();
+		let database_id = database_id.clone();
 		let pin = pin.clone();
 
 		async move {
@@ -403,7 +403,7 @@ async fn create_pinned_bookmark_for_resolved(
 				branch::resolve_namespace_branch(&tx, namespace_id, Serializable)
 					.await?
 					.unwrap_or_else(NamespaceBranchId::nil);
-			let pinned_key = keys::bookmark_pinned_key(&actor_id, pin.bookmark.as_str());
+			let pinned_key = keys::bookmark_pinned_key(&database_id, pin.bookmark.as_str());
 
 			if tx.informal().get(&pinned_key, Serializable).await?.is_none() {
 				let pin_count_key = keys::namespace_branches_pin_count_key(namespace_branch_id);
@@ -420,7 +420,7 @@ async fn create_pinned_bookmark_for_resolved(
 
 				let record = PinnedBookmarkRecord {
 					bookmark: pin.bookmark.clone(),
-					actor_branch_id: pin.actor_branch_id,
+					database_branch_id: pin.database_branch_id,
 					versionstamp: pin.versionstamp,
 					status: PinStatus::Pending,
 					pin_object_key: None,
@@ -437,7 +437,7 @@ async fn create_pinned_bookmark_for_resolved(
 				);
 			}
 			tx.informal().atomic_op(
-				&keys::branches_bk_pin_key(pin.actor_branch_id),
+				&keys::branches_bk_pin_key(pin.database_branch_id),
 				&pin.versionstamp,
 				MutationType::ByteMin,
 			);
@@ -445,8 +445,8 @@ async fn create_pinned_bookmark_for_resolved(
 			Ok(PinnedBookmarkCreateResult {
 				bookmark: pin.bookmark.clone(),
 				payload: crate::compactor::SqliteColdCompactPayload::CreatePinnedBookmark {
-					actor_id,
-					actor_branch_id: pin.actor_branch_id,
+					database_id,
+					database_branch_id: pin.database_branch_id,
 					bookmark: pin.bookmark,
 					versionstamp: pin.versionstamp,
 				},
@@ -459,32 +459,32 @@ async fn create_pinned_bookmark_for_resolved(
 pub async fn resolve_bookmark(
 	udb: &universaldb::Database,
 	namespace_id: NamespaceId,
-	actor_id: String,
+	database_id: String,
 	bookmark: BookmarkStr,
 ) -> Result<ResolvedVersionstamp> {
 	udb.run(move |tx| {
-		let actor_id = actor_id.clone();
+		let database_id = database_id.clone();
 		let bookmark = bookmark.clone();
 
 		async move {
 			let (branch_id, namespace_cap) =
-				resolve_visible_actor_branch_for_bookmark(&tx, namespace_id, &actor_id).await?;
-			resolve_bookmark_in_branch_chain(&tx, &actor_id, branch_id, namespace_cap, bookmark).await
+				resolve_visible_database_branch_for_bookmark(&tx, namespace_id, &database_id).await?;
+			resolve_bookmark_in_branch_chain(&tx, &database_id, branch_id, namespace_cap, bookmark).await
 		}
 	})
 	.await
 }
 
-async fn resolve_visible_actor_branch_for_bookmark(
+async fn resolve_visible_database_branch_for_bookmark(
 	tx: &universaldb::Transaction,
 	namespace_id: NamespaceId,
-	actor_id: &str,
-) -> Result<(ActorBranchId, [u8; 16])> {
+	database_id: &str,
+) -> Result<(DatabaseBranchId, [u8; 16])> {
 	let Some(mut namespace_branch_id) =
 		branch::resolve_namespace_branch(tx, namespace_id, Snapshot).await?
 	else {
 		if let Some(pointer) =
-			branch::resolve_actor_pointer(tx, NamespaceBranchId::nil(), actor_id, Snapshot).await?
+			branch::resolve_database_pointer(tx, NamespaceBranchId::nil(), database_id, Snapshot).await?
 		{
 			return Ok((pointer.current_branch, VERSIONSTAMP_INFINITY));
 		}
@@ -497,20 +497,20 @@ async fn resolve_visible_actor_branch_for_bookmark(
 		if let Some(pointer_bytes) = tx
 			.informal()
 			.get(
-				&keys::actor_pointer_cur_key(namespace_branch_id, actor_id),
+				&keys::database_pointer_cur_key(namespace_branch_id, database_id),
 				Snapshot,
 			)
 			.await?
 		{
-			let pointer = decode_actor_pointer(&pointer_bytes)
-				.context("decode sqlite actor pointer during bookmark resolution")?;
+			let pointer = decode_database_pointer(&pointer_bytes)
+				.context("decode sqlite database pointer during bookmark resolution")?;
 			return Ok((pointer.current_branch, cap));
 		}
 
 		if tx
 			.informal()
 			.get(
-				&keys::namespace_branches_actor_tombstone_key(namespace_branch_id, actor_id),
+				&keys::namespace_branches_database_name_tombstone_key(namespace_branch_id, database_id),
 				Snapshot,
 			)
 			.await?
@@ -542,8 +542,8 @@ async fn resolve_visible_actor_branch_for_bookmark(
 
 async fn resolve_bookmark_in_branch_chain(
 	tx: &universaldb::Transaction,
-	actor_id: &str,
-	branch_id: ActorBranchId,
+	database_id: &str,
+	branch_id: DatabaseBranchId,
 	namespace_cap: [u8; 16],
 	bookmark: BookmarkStr,
 ) -> Result<ResolvedVersionstamp> {
@@ -551,7 +551,7 @@ async fn resolve_bookmark_in_branch_chain(
 	let pinned_record = tx
 		.informal()
 		.get(
-			&keys::bookmark_pinned_key(actor_id, bookmark.as_str()),
+			&keys::bookmark_pinned_key(database_id, bookmark.as_str()),
 			Snapshot,
 		)
 		.await?
@@ -568,7 +568,7 @@ async fn resolve_bookmark_in_branch_chain(
 		saw_branch = true;
 
 		if let Some(record) = pinned_record.as_ref().filter(|record| {
-			record.actor_branch_id == current_branch_id && record.versionstamp <= cap
+			record.database_branch_id == current_branch_id && record.versionstamp <= cap
 		}) {
 			return Ok(ResolvedVersionstamp {
 				versionstamp: record.versionstamp,
@@ -599,13 +599,13 @@ async fn resolve_bookmark_in_branch_chain(
 			}
 		}
 
-		let record = branch::read_actor_branch_record(tx, current_branch_id).await?;
+		let record = branch::read_database_branch_record(tx, current_branch_id).await?;
 		let Some(parent) = record.parent else {
 			break;
 		};
 		let parent_versionstamp = record
 			.parent_versionstamp
-			.context("sqlite actor branch parent versionstamp is missing")?;
+			.context("sqlite database branch parent versionstamp is missing")?;
 		cap = cap.min(parent_versionstamp);
 		current_branch_id = parent;
 	}
@@ -619,7 +619,7 @@ async fn resolve_bookmark_in_branch_chain(
 
 async fn read_commit_row(
 	tx: &universaldb::Transaction,
-	branch_id: ActorBranchId,
+	branch_id: DatabaseBranchId,
 	txid: u64,
 ) -> Result<Option<super::types::CommitRow>> {
 	let Some(bytes) = tx
@@ -637,7 +637,7 @@ async fn read_commit_row(
 
 async fn lookup_vtx_txid(
 	tx: &universaldb::Transaction,
-	branch_id: ActorBranchId,
+	branch_id: DatabaseBranchId,
 	versionstamp: [u8; 16],
 ) -> Result<Option<u64>> {
 	let Some(bytes) = tx
@@ -656,13 +656,13 @@ async fn lookup_vtx_txid(
 	Ok(Some(u64::from_be_bytes(bytes)))
 }
 
-async fn recompute_actor_branch_bk_pin(
+async fn recompute_database_branch_bk_pin(
 	tx: &universaldb::Transaction,
-	actor_id: &str,
-	branch_id: ActorBranchId,
+	database_id: &str,
+	branch_id: DatabaseBranchId,
 	deleted_pinned_key: &[u8],
 ) -> Result<[u8; 16]> {
-	let start = keys::bookmark_key(actor_id, "");
+	let start = keys::bookmark_key(database_id, "");
 	let prefix_subspace =
 		universaldb::Subspace::from(universaldb::tuple::Subspace::from_bytes(start));
 	let informal = tx.informal();
@@ -682,7 +682,7 @@ async fn recompute_actor_branch_bk_pin(
 
 		let record = decode_pinned_bookmark_record(entry.value())
 			.context("decode sqlite pinned bookmark record during pin recompute")?;
-		if record.actor_branch_id == branch_id {
+		if record.database_branch_id == branch_id {
 			pin = Some(
 				pin
 					.map(|current: [u8; 16]| current.min(record.versionstamp))
@@ -702,7 +702,7 @@ struct PinnedBookmarkCreateResult {
 #[derive(Clone)]
 struct ResolvedBookmarkPin {
 	bookmark: BookmarkStr,
-	actor_branch_id: ActorBranchId,
+	database_branch_id: DatabaseBranchId,
 	versionstamp: [u8; 16],
 	created_at_ms: i64,
 }

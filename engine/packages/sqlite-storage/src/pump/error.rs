@@ -45,7 +45,7 @@ pub enum SqliteStorageError {
 
 	#[error(
 		"fork_chain_too_deep",
-		"Actor branch fork chain is too deep."
+		"Database branch fork chain is too deep."
 	)]
 	ForkChainTooDeep,
 
@@ -69,7 +69,7 @@ pub enum SqliteStorageError {
 
 	#[error(
 		"branch_not_reachable",
-		"Bookmark branch is not reachable from this actor branch chain."
+		"Bookmark branch is not reachable from this database branch chain."
 	)]
 	BranchNotReachable,
 
@@ -85,8 +85,8 @@ pub enum SqliteStorageError {
 	)]
 	TooManyPins,
 
-	#[error("actor_not_found", "Actor was not found in this namespace branch.")]
-	ActorNotFound,
+	#[error("database_not_found", "Database was not found in this namespace branch.")]
+	DatabaseNotFound,
 }
 
 impl fmt::Display for SqliteStorageError {
@@ -117,7 +117,7 @@ impl fmt::Display for SqliteStorageError {
 				write!(f, "invalid sqlite v1 migration state")
 			}
 			SqliteStorageError::ForkChainTooDeep => {
-				write!(f, "sqlite actor branch fork chain is too deep")
+				write!(f, "sqlite database branch fork chain is too deep")
 			}
 			SqliteStorageError::NamespaceForkChainTooDeep => {
 				write!(f, "sqlite namespace branch fork chain is too deep")
@@ -129,7 +129,7 @@ impl fmt::Display for SqliteStorageError {
 				write!(f, "sqlite bookmark history is no longer retained")
 			}
 			SqliteStorageError::BranchNotReachable => {
-				write!(f, "sqlite bookmark branch is not reachable from this actor branch chain")
+				write!(f, "sqlite bookmark branch is not reachable from this database branch chain")
 			}
 			SqliteStorageError::ShardVersionCapExhausted => {
 				write!(f, "sqlite shard version cap is exhausted")
@@ -137,8 +137,8 @@ impl fmt::Display for SqliteStorageError {
 			SqliteStorageError::TooManyPins => {
 				write!(f, "sqlite namespace has too many pinned bookmarks")
 			}
-			SqliteStorageError::ActorNotFound => {
-				write!(f, "sqlite actor was not found in this namespace branch")
+			SqliteStorageError::DatabaseNotFound => {
+				write!(f, "sqlite database was not found in this namespace branch")
 			}
 		}
 	}

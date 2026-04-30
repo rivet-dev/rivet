@@ -20,7 +20,7 @@ use universaldb::{
 use crate::pump::{
 	constants::{ACCESS_TOUCH_THROTTLE_MS, HOT_CACHE_WINDOW_MS, SHARD_RETENTION_MARGIN},
 	keys::{self, CompactorQueueKind},
-	types::ActorBranchId,
+	types::DatabaseBranchId,
 	udb,
 };
 
@@ -50,12 +50,12 @@ impl Default for EvictionCompactorConfig {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EvictionCandidate {
 	pub last_access_bucket: i64,
-	pub branch_id: ActorBranchId,
+	pub branch_id: DatabaseBranchId,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EvictableShardVersion {
-	pub branch_id: ActorBranchId,
+	pub branch_id: DatabaseBranchId,
 	pub last_access_bucket: i64,
 	pub shard_id: u32,
 	pub as_of_txid: u64,
@@ -292,7 +292,7 @@ async fn scan_eviction_index(
 
 async fn plan_evictable_shard_versions(
 	tx: &universaldb::Transaction,
-	branch_id: ActorBranchId,
+	branch_id: DatabaseBranchId,
 	last_access_bucket: i64,
 	now_ms: i64,
 ) -> Result<Vec<EvictableShardVersion>> {
@@ -464,7 +464,7 @@ async fn filter_now_pinned_versions(
 
 fn planned_hot_pass_txids_by_branch(
 	evictable_shard_versions: &[EvictableShardVersion],
-) -> BTreeMap<ActorBranchId, u64> {
+) -> BTreeMap<DatabaseBranchId, u64> {
 	let mut planned = BTreeMap::new();
 	for version in evictable_shard_versions {
 		planned
@@ -478,7 +478,7 @@ async fn fully_evicted_index_keys_after_clear(
 	tx: &universaldb::Transaction,
 	evictable_shard_versions: &[EvictableShardVersion],
 ) -> Result<Vec<Vec<u8>>> {
-	let mut planned = BTreeMap::<ActorBranchId, PlannedBranchEviction>::new();
+	let mut planned = BTreeMap::<DatabaseBranchId, PlannedBranchEviction>::new();
 	for version in evictable_shard_versions {
 		let branch_plan = planned
 			.entry(version.branch_id)
@@ -549,7 +549,7 @@ struct BranchPidxRow {
 
 async fn load_branch_shard_versions(
 	tx: &universaldb::Transaction,
-	branch_id: ActorBranchId,
+	branch_id: DatabaseBranchId,
 ) -> Result<Vec<BranchShardVersion>> {
 	let prefix = keys::branch_shard_prefix(branch_id);
 	let prefix_subspace =
@@ -581,7 +581,7 @@ async fn load_branch_shard_versions(
 
 async fn load_branch_pidx_rows(
 	tx: &universaldb::Transaction,
-	branch_id: ActorBranchId,
+	branch_id: DatabaseBranchId,
 ) -> Result<Vec<BranchPidxRow>> {
 	let prefix = keys::branch_pidx_prefix(branch_id);
 	let prefix_subspace =
@@ -612,7 +612,7 @@ async fn load_branch_pidx_rows(
 }
 
 fn decode_branch_shard_version_key(
-	branch_id: ActorBranchId,
+	branch_id: DatabaseBranchId,
 	key: &[u8],
 ) -> Result<Option<(u32, u64)>> {
 	let prefix = keys::branch_shard_prefix(branch_id);
@@ -642,7 +642,7 @@ fn decode_branch_shard_version_key(
 	Ok(Some((shard_id, as_of_txid)))
 }
 
-fn decode_branch_pidx_pgno(branch_id: ActorBranchId, key: &[u8]) -> Result<u32> {
+fn decode_branch_pidx_pgno(branch_id: DatabaseBranchId, key: &[u8]) -> Result<u32> {
 	let prefix = keys::branch_pidx_prefix(branch_id);
 	let suffix = key
 		.strip_prefix(prefix.as_slice())
@@ -680,7 +680,7 @@ async fn read_u64_be(
 
 async fn read_pin_txid(
 	tx: &universaldb::Transaction,
-	branch_id: ActorBranchId,
+	branch_id: DatabaseBranchId,
 	pin_key: &[u8],
 ) -> Result<Option<u64>> {
 	let Some(bytes) = tx.informal().get(pin_key, Serializable).await? else {
@@ -736,7 +736,7 @@ pub mod test_hooks {
 
 	pub async fn plan_evictable_shard_versions_for_test(
 		udb: &universaldb::Database,
-		branch_id: ActorBranchId,
+		branch_id: DatabaseBranchId,
 		last_access_bucket: i64,
 		now_ms: i64,
 	) -> Result<Vec<EvictableShardVersion>> {

@@ -19,12 +19,12 @@ use super::{
 	error::SqliteStorageError,
 	keys, udb,
 	types::{
-		ActorBranchId, ActorBranchRecord, ActorPointer, BookmarkRef, BranchState, DBHead,
+		DatabaseBranchId, DatabaseBranchRecord, DatabasePointer, BookmarkRef, BranchState, DBHead,
 		NamespaceBranchId, NamespaceBranchRecord, NamespaceId, NamespacePointer,
 		ResolvedVersionstamp,
-		decode_actor_branch_record, decode_actor_pointer, decode_commit_row,
-		decode_namespace_branch_record, decode_namespace_pointer, encode_actor_branch_record,
-		encode_actor_pointer, encode_db_head, encode_namespace_branch_record,
+		decode_database_branch_record, decode_database_pointer, decode_commit_row,
+		decode_namespace_branch_record, decode_namespace_pointer, encode_database_branch_record,
+		encode_database_pointer, encode_db_head, encode_namespace_branch_record,
 		encode_namespace_pointer,
 	},
 };
@@ -115,62 +115,62 @@ pub fn write_root_namespace_metadata(
 	Ok(())
 }
 
-pub async fn resolve_actor_branch(
+pub async fn resolve_database_branch(
 	tx: &universaldb::Transaction,
 	namespace_id: NamespaceId,
-	actor_id: &str,
+	database_id: &str,
 	isolation_level: IsolationLevel,
-) -> Result<Option<ActorBranchId>> {
+) -> Result<Option<DatabaseBranchId>> {
 	let Some(namespace_branch_id) =
 		resolve_namespace_branch(tx, namespace_id, isolation_level).await?
 	else {
-		return resolve_actor_branch_in_namespace(
+		return resolve_database_branch_in_namespace(
 			tx,
 			NamespaceBranchId::nil(),
-			actor_id,
+			database_id,
 			isolation_level,
 		)
 		.await;
 	};
 
 	if let Some(branch_id) =
-		resolve_actor_branch_in_namespace(tx, namespace_branch_id, actor_id, isolation_level).await?
+		resolve_database_branch_in_namespace(tx, namespace_branch_id, database_id, isolation_level).await?
 	{
 		return Ok(Some(branch_id));
 	}
 
-	resolve_actor_branch_in_namespace(tx, NamespaceBranchId::nil(), actor_id, isolation_level).await
+	resolve_database_branch_in_namespace(tx, NamespaceBranchId::nil(), database_id, isolation_level).await
 }
 
-pub async fn resolve_actor_branch_in_namespace(
+pub async fn resolve_database_branch_in_namespace(
 	tx: &universaldb::Transaction,
 	namespace_branch_id: NamespaceBranchId,
-	actor_id: &str,
+	database_id: &str,
 	isolation_level: IsolationLevel,
-) -> Result<Option<ActorBranchId>> {
-	Ok(resolve_actor_pointer(tx, namespace_branch_id, actor_id, isolation_level)
+) -> Result<Option<DatabaseBranchId>> {
+	Ok(resolve_database_pointer(tx, namespace_branch_id, database_id, isolation_level)
 		.await?
 		.map(|pointer| pointer.current_branch))
 }
 
-pub async fn resolve_actor_pointer(
+pub async fn resolve_database_pointer(
 	tx: &universaldb::Transaction,
 	namespace_branch_id: NamespaceBranchId,
-	actor_id: &str,
+	database_id: &str,
 	isolation_level: IsolationLevel,
-) -> Result<Option<ActorPointer>> {
+) -> Result<Option<DatabasePointer>> {
 	let mut current_branch_id = namespace_branch_id;
 
 	for _ in 0..=MAX_NAMESPACE_DEPTH {
 		if let Some(pointer_bytes) = tx
 			.informal()
 			.get(
-				&keys::actor_pointer_cur_key(current_branch_id, actor_id),
+				&keys::database_pointer_cur_key(current_branch_id, database_id),
 				isolation_level,
 			)
 			.await?
 		{
-			let pointer = decode_actor_pointer(&pointer_bytes).context("decode sqlite actor pointer")?;
+			let pointer = decode_database_pointer(&pointer_bytes).context("decode sqlite database pointer")?;
 			return Ok(Some(pointer));
 		}
 
@@ -181,13 +181,13 @@ pub async fn resolve_actor_pointer(
 		if tx
 			.informal()
 			.get(
-				&keys::namespace_branches_actor_tombstone_key(current_branch_id, actor_id),
+				&keys::namespace_branches_database_name_tombstone_key(current_branch_id, database_id),
 				isolation_level,
 			)
 			.await?
 			.is_some()
 		{
-			return Err(SqliteStorageError::ActorNotFound.into());
+			return Err(SqliteStorageError::DatabaseNotFound.into());
 		}
 
 		let Some(record_bytes) = tx
@@ -208,67 +208,67 @@ pub async fn resolve_actor_pointer(
 	Err(SqliteStorageError::NamespaceForkChainTooDeep.into())
 }
 
-pub async fn fork_actor(
+pub async fn fork_database(
 	udb: &universaldb::Database,
 	ups: &Ups,
 	source_namespace: NamespaceId,
-	source_actor_id: String,
+	source_database_id: String,
 	at: ResolvedVersionstamp,
 	target_namespace: NamespaceId,
 ) -> Result<String> {
-	let new_actor_id = format!("fork-{}", uuid::Uuid::new_v4().simple());
-	let new_actor_branch_id = ActorBranchId::new_v4();
+	let new_database_id = format!("fork-{}", uuid::Uuid::new_v4().simple());
+	let new_database_branch_id = DatabaseBranchId::new_v4();
 	let at_versionstamp = at.versionstamp;
 	let at_for_tx = at.clone();
 
-	let source_actor_branch_id = udb.run({
-		let new_actor_id = new_actor_id.clone();
+	let source_database_branch_id = udb.run({
+		let new_database_id = new_database_id.clone();
 		move |tx| {
-			let source_actor_id = source_actor_id.clone();
-			let new_actor_id = new_actor_id.clone();
+			let source_database_id = source_database_id.clone();
+			let new_database_id = new_database_id.clone();
 			let at = at_for_tx.clone();
 
 			async move {
 				let source_namespace_branch =
 					resolve_namespace_branch(&tx, source_namespace, Serializable)
 						.await?
-						.ok_or(SqliteStorageError::ActorNotFound)?;
-				let source_actor_branch = resolve_actor_branch_in_namespace(
+						.ok_or(SqliteStorageError::DatabaseNotFound)?;
+				let source_database_branch = resolve_database_branch_in_namespace(
 					&tx,
 					source_namespace_branch,
-					&source_actor_id,
+					&source_database_id,
 					Serializable,
 				)
 				.await?
-				.ok_or(SqliteStorageError::ActorNotFound)?;
+				.ok_or(SqliteStorageError::DatabaseNotFound)?;
 				let target_namespace_branch =
 					resolve_namespace_branch(&tx, target_namespace, Serializable)
 						.await?
-						.ok_or(SqliteStorageError::ActorNotFound)?;
+						.ok_or(SqliteStorageError::DatabaseNotFound)?;
 
 				derive_branch_at(
 					&tx,
-					source_actor_branch,
+					source_database_branch,
 					at.versionstamp,
-					new_actor_branch_id,
+					new_database_branch_id,
 					target_namespace_branch,
 					at.bookmark,
 				)
 				.await?;
 
-				let pointer = super::types::ActorPointer {
-					current_branch: new_actor_branch_id,
+				let pointer = super::types::DatabasePointer {
+					current_branch: new_database_branch_id,
 					last_swapped_at_ms: now_ms()?,
 				};
 				let encoded_pointer =
-					encode_actor_pointer(pointer).context("encode sqlite fork actor pointer")?;
+					encode_database_pointer(pointer).context("encode sqlite fork database pointer")?;
 				tx.informal().set(
-					&keys::actor_pointer_cur_key(target_namespace_branch, &new_actor_id),
+					&keys::database_pointer_cur_key(target_namespace_branch, &new_database_id),
 					&encoded_pointer,
 				);
-				write_namespace_catalog_marker(&tx, target_namespace_branch, new_actor_branch_id)?;
+				write_namespace_catalog_marker(&tx, target_namespace_branch, new_database_branch_id)?;
 
-				Ok(source_actor_branch)
+				Ok(source_database_branch)
 			}
 		}
 	})
@@ -277,20 +277,20 @@ pub async fn fork_actor(
 	publish_cold_compact_payload(
 		ups,
 		SqliteColdCompactPayload::ForkWarmup {
-			source_actor_branch_id,
-			target_actor_branch_id: new_actor_branch_id,
+			source_database_branch_id,
+			target_database_branch_id: new_database_branch_id,
 			at_versionstamp,
 		},
 	)
 	.await?;
 
-	Ok(new_actor_id)
+	Ok(new_database_id)
 }
 
 pub async fn list_databases(
 	udb: &universaldb::Database,
 	namespace: NamespaceId,
-) -> Result<Vec<ActorBranchId>> {
+) -> Result<Vec<DatabaseBranchId>> {
 	udb.run(move |tx| async move {
 		let Some(namespace_branch_id) =
 			resolve_namespace_branch(&tx, namespace, Serializable).await?
@@ -306,17 +306,17 @@ pub async fn list_databases(
 pub async fn delete_database(
 	udb: &universaldb::Database,
 	namespace: NamespaceId,
-	database_id: ActorBranchId,
+	database_id: DatabaseBranchId,
 ) -> Result<()> {
 	udb.run(move |tx| async move {
 		let namespace_branch_id = resolve_namespace_branch(&tx, namespace, Serializable)
 			.await?
-			.ok_or(SqliteStorageError::ActorNotFound)?;
+			.ok_or(SqliteStorageError::DatabaseNotFound)?;
 
 		let visible =
 			is_database_visible_in_namespace_branch(&tx, namespace_branch_id, database_id).await?;
 		if !visible {
-			return Err(SqliteStorageError::ActorNotFound.into());
+			return Err(SqliteStorageError::DatabaseNotFound.into());
 		}
 
 		tx.informal().atomic_op(
@@ -355,7 +355,7 @@ pub async fn fork_namespace(
 				let source_namespace_branch =
 					resolve_namespace_branch(&tx, source_namespace, Serializable)
 						.await?
-						.ok_or(SqliteStorageError::ActorNotFound)?;
+						.ok_or(SqliteStorageError::DatabaseNotFound)?;
 
 				derive_namespace_branch_at(
 					&tx,
@@ -412,7 +412,7 @@ pub async fn rollback_namespace(
 					.informal()
 					.get(&keys::namespace_pointer_cur_key(namespace), Serializable)
 					.await?
-					.ok_or(SqliteStorageError::ActorNotFound)?;
+					.ok_or(SqliteStorageError::DatabaseNotFound)?;
 				let cur_ptr = decode_namespace_pointer(&cur_ptr_bytes)
 					.context("decode sqlite namespace pointer for rollback")?;
 				let cur_record = read_namespace_branch_record(&tx, cur_ptr.current_branch).await?;
@@ -459,36 +459,36 @@ pub async fn rollback_namespace(
 	Ok(rolled_branch_id)
 }
 
-pub async fn rollback_actor(
+pub async fn rollback_database(
 	udb: &universaldb::Database,
 	namespace: NamespaceId,
-	actor_id: String,
+	database_id: String,
 	at: ResolvedVersionstamp,
-) -> Result<ActorBranchId> {
-	let rolled_branch_id = ActorBranchId::new_v4();
+) -> Result<DatabaseBranchId> {
+	let rolled_branch_id = DatabaseBranchId::new_v4();
 
 	udb.run({
-		let actor_id = actor_id.clone();
+		let database_id = database_id.clone();
 		let at = at.clone();
 
 		move |tx| {
-			let actor_id = actor_id.clone();
+			let database_id = database_id.clone();
 			let at = at.clone();
 
 			async move {
 				let namespace_branch =
 					resolve_namespace_branch(&tx, namespace, Serializable)
 						.await?
-						.ok_or(SqliteStorageError::ActorNotFound)?;
-				let cur_ptr = resolve_actor_pointer(
+						.ok_or(SqliteStorageError::DatabaseNotFound)?;
+				let cur_ptr = resolve_database_pointer(
 					&tx,
 					namespace_branch,
-					&actor_id,
+					&database_id,
 					Serializable,
 				)
 				.await?
-				.ok_or(SqliteStorageError::ActorNotFound)?;
-				let cur_record = read_actor_branch_record(&tx, cur_ptr.current_branch).await?;
+				.ok_or(SqliteStorageError::DatabaseNotFound)?;
+				let cur_record = read_database_branch_record(&tx, cur_ptr.current_branch).await?;
 
 				derive_branch_at(
 					&tx,
@@ -499,14 +499,14 @@ pub async fn rollback_actor(
 					at.bookmark,
 				)
 				.await?;
-				freeze_actor_branch(&tx, cur_record).await?;
+				freeze_database_branch(&tx, cur_record).await?;
 
 				let now_ms = now_ms()?;
 				let nonce = uuid::Uuid::new_v4().as_u128() as u32;
-				let encoded_history_pointer = encode_actor_pointer(cur_ptr.clone())
-					.context("encode sqlite rollback actor pointer history")?;
+				let encoded_history_pointer = encode_database_pointer(cur_ptr.clone())
+					.context("encode sqlite rollback database pointer history")?;
 				tx.informal().set(
-					&keys::actor_pointer_history_key(namespace_branch, &actor_id, now_ms, nonce),
+					&keys::database_pointer_history_key(namespace_branch, &database_id, now_ms, nonce),
 					&encoded_history_pointer,
 				);
 				tx.informal().atomic_op(
@@ -515,14 +515,14 @@ pub async fn rollback_actor(
 					MutationType::Add,
 				);
 
-				let new_ptr = ActorPointer {
+				let new_ptr = DatabasePointer {
 					current_branch: rolled_branch_id,
 					last_swapped_at_ms: now_ms,
 				};
 				let encoded_pointer =
-					encode_actor_pointer(new_ptr).context("encode sqlite rollback actor pointer")?;
+					encode_database_pointer(new_ptr).context("encode sqlite rollback database pointer")?;
 				tx.informal().set(
-					&keys::actor_pointer_cur_key(namespace_branch, &actor_id),
+					&keys::database_pointer_cur_key(namespace_branch, &database_id),
 					&encoded_pointer,
 				);
 
@@ -537,13 +537,13 @@ pub async fn rollback_actor(
 
 pub async fn derive_branch_at(
 	tx: &universaldb::Transaction,
-	source_branch_id: ActorBranchId,
+	source_branch_id: DatabaseBranchId,
 	at_versionstamp: [u8; 16],
-	new_branch_id: ActorBranchId,
+	new_branch_id: DatabaseBranchId,
 	namespace_branch: NamespaceBranchId,
 	bookmark_ref: Option<BookmarkRef>,
 ) -> Result<()> {
-	let source = read_actor_branch_record(tx, source_branch_id).await?;
+	let source = read_database_branch_record(tx, source_branch_id).await?;
 	if source.fork_depth >= MAX_FORK_DEPTH {
 		return Err(SqliteStorageError::ForkChainTooDeep.into());
 	}
@@ -557,7 +557,7 @@ pub async fn derive_branch_at(
 		.await
 		.with_context(|| {
 			format!(
-				"lookup sqlite VTX entry for actor branch {}",
+				"lookup sqlite VTX entry for database branch {}",
 				source_branch_id.as_uuid()
 			)
 		})?;
@@ -565,7 +565,7 @@ pub async fn derive_branch_at(
 		.await
 		.with_context(|| {
 			format!(
-				"read sqlite commit row {txid_at_versionstamp} for actor branch {}",
+				"read sqlite commit row {txid_at_versionstamp} for database branch {}",
 				source_branch_id.as_uuid()
 			)
 		})?;
@@ -584,7 +584,7 @@ pub async fn derive_branch_at(
 		&encoded_head_at_fork,
 	);
 
-	let new_record = ActorBranchRecord {
+	let new_record = DatabaseBranchRecord {
 		branch_id: new_branch_id,
 		namespace_branch,
 		parent: Some(source_branch_id),
@@ -596,7 +596,7 @@ pub async fn derive_branch_at(
 		state: BranchState::Live,
 	};
 	let encoded_record =
-		encode_actor_branch_record(new_record).context("encode sqlite derived actor branch record")?;
+		encode_database_branch_record(new_record).context("encode sqlite derived database branch record")?;
 	tx.informal()
 		.set(&keys::branches_list_key(new_branch_id), &encoded_record);
 	tx.informal().atomic_op(
@@ -618,14 +618,14 @@ pub async fn derive_branch_at(
 	Ok(())
 }
 
-async fn freeze_actor_branch(
+async fn freeze_database_branch(
 	tx: &universaldb::Transaction,
-	mut record: ActorBranchRecord,
+	mut record: DatabaseBranchRecord,
 ) -> Result<()> {
 	record.state = BranchState::Frozen;
 	let branch_id = record.branch_id;
 	let encoded_record =
-		encode_actor_branch_record(record).context("encode frozen sqlite actor branch record")?;
+		encode_database_branch_record(record).context("encode frozen sqlite database branch record")?;
 	tx.informal()
 		.set(&keys::branches_list_key(branch_id), &encoded_record);
 
@@ -700,7 +700,7 @@ pub async fn derive_namespace_branch_at(
 async fn list_databases_in_namespace_branch(
 	tx: &universaldb::Transaction,
 	namespace_branch_id: NamespaceBranchId,
-) -> Result<Vec<ActorBranchId>> {
+) -> Result<Vec<DatabaseBranchId>> {
 	let mut result = BTreeSet::new();
 	let mut tombstones = BTreeSet::new();
 	let mut current_branch_id = namespace_branch_id;
@@ -744,7 +744,7 @@ async fn list_databases_in_namespace_branch(
 async fn is_database_visible_in_namespace_branch(
 	tx: &universaldb::Transaction,
 	namespace_branch_id: NamespaceBranchId,
-	database_id: ActorBranchId,
+	database_id: DatabaseBranchId,
 ) -> Result<bool> {
 	Ok(list_databases_in_namespace_branch(tx, namespace_branch_id)
 		.await?
@@ -754,7 +754,7 @@ async fn is_database_visible_in_namespace_branch(
 fn write_namespace_catalog_marker(
 	tx: &universaldb::Transaction,
 	namespace_branch_id: NamespaceBranchId,
-	database_id: ActorBranchId,
+	database_id: DatabaseBranchId,
 ) -> Result<()> {
 	tx.informal().atomic_op(
 		&keys::namespace_catalog_key(namespace_branch_id, database_id),
@@ -776,7 +776,7 @@ fn versionstamped_marker_value() -> Result<Vec<u8>> {
 async fn scan_namespace_catalog(
 	tx: &universaldb::Transaction,
 	namespace_branch_id: NamespaceBranchId,
-) -> Result<Vec<(ActorBranchId, [u8; 16])>> {
+) -> Result<Vec<(DatabaseBranchId, [u8; 16])>> {
 	let rows = tx_scan_prefix_values(tx, &keys::namespace_catalog_prefix(namespace_branch_id)).await?;
 	rows.into_iter()
 		.map(|(key, value)| {
@@ -792,7 +792,7 @@ async fn scan_namespace_catalog(
 async fn scan_database_tombstones(
 	tx: &universaldb::Transaction,
 	namespace_branch_id: NamespaceBranchId,
-) -> Result<Vec<(ActorBranchId, [u8; 16])>> {
+) -> Result<Vec<(DatabaseBranchId, [u8; 16])>> {
 	let rows = tx_scan_prefix_values(
 		tx,
 		&keys::namespace_branches_database_tombstone_prefix(namespace_branch_id),
@@ -843,17 +843,17 @@ async fn tx_scan_prefix_values(
 	Ok(rows)
 }
 
-pub(super) async fn read_actor_branch_record(
+pub(super) async fn read_database_branch_record(
 	tx: &universaldb::Transaction,
-	branch_id: ActorBranchId,
-) -> Result<ActorBranchRecord> {
+	branch_id: DatabaseBranchId,
+) -> Result<DatabaseBranchRecord> {
 	let bytes = tx
 		.informal()
 		.get(&keys::branches_list_key(branch_id), Serializable)
 		.await?
-		.context("sqlite actor branch record is missing")?;
+		.context("sqlite database branch record is missing")?;
 
-	decode_actor_branch_record(&bytes).context("decode sqlite actor branch record")
+	decode_database_branch_record(&bytes).context("decode sqlite database branch record")
 }
 
 async fn read_namespace_branch_record(
@@ -885,7 +885,7 @@ async fn read_versionstamp_pin(
 
 async fn lookup_txid_at_versionstamp(
 	tx: &universaldb::Transaction,
-	branch_id: ActorBranchId,
+	branch_id: DatabaseBranchId,
 	versionstamp: [u8; 16],
 ) -> Result<u64> {
 	let bytes = tx
@@ -904,7 +904,7 @@ async fn lookup_txid_at_versionstamp(
 
 async fn read_commit_row(
 	tx: &universaldb::Transaction,
-	branch_id: ActorBranchId,
+	branch_id: DatabaseBranchId,
 	txid: u64,
 ) -> Result<super::types::CommitRow> {
 	let bytes = tx

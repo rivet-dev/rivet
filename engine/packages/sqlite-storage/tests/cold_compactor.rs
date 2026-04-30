@@ -25,8 +25,8 @@ use sqlite_storage::{
 		branches_list_key, branches_refcount_key,
 	},
 	types::{
-		ActorBranchId, ActorBranchRecord, BookmarkStr, BranchState, ColdManifestIndex,
-		CommitRow, MetaCompact, decode_cold_manifest_index, encode_actor_branch_record,
+		DatabaseBranchId, DatabaseBranchRecord, BookmarkStr, BranchState, ColdManifestIndex,
+		CommitRow, MetaCompact, decode_cold_manifest_index, encode_database_branch_record,
 		encode_commit_row, encode_meta_compact,
 	},
 };
@@ -34,8 +34,8 @@ use tempfile::Builder;
 use tokio_util::sync::CancellationToken;
 use universaldb::utils::IsolationLevel::Snapshot;
 
-fn actor_branch_id() -> ActorBranchId {
-	ActorBranchId::from_uuid(uuid::Uuid::from_u128(0x1234_5678_9abc_def0_0123_4567_89ab_cdef))
+fn database_branch_id() -> DatabaseBranchId {
+	DatabaseBranchId::from_uuid(uuid::Uuid::from_u128(0x1234_5678_9abc_def0_0123_4567_89ab_cdef))
 }
 
 fn bookmark() -> BookmarkStr {
@@ -44,8 +44,8 @@ fn bookmark() -> BookmarkStr {
 
 fn payload() -> SqliteColdCompactPayload {
 	SqliteColdCompactPayload::DeletePinnedBookmark {
-		actor_id: "actor-a".to_string(),
-		actor_branch_id: actor_branch_id(),
+		database_id: "database-a".to_string(),
+		database_branch_id: database_branch_id(),
 		bookmark: bookmark(),
 		versionstamp: [7; 16],
 		pin_object_key: None,
@@ -53,7 +53,7 @@ fn payload() -> SqliteColdCompactPayload {
 }
 
 fn branch_object_prefix() -> String {
-	format!("db/{}", actor_branch_id().as_uuid().simple())
+	format!("db/{}", database_branch_id().as_uuid().simple())
 }
 
 fn cold_config() -> ColdCompactorConfig {
@@ -79,12 +79,12 @@ async fn test_db() -> Result<universaldb::Database> {
 }
 
 async fn seed_branch(db: &universaldb::Database) -> Result<()> {
-	let branch_id = actor_branch_id();
+	let branch_id = database_branch_id();
 
 	db.run(move |tx| async move {
 		tx.informal().set(
 			&branches_list_key(branch_id),
-			&encode_actor_branch_record(ActorBranchRecord {
+			&encode_database_branch_record(DatabaseBranchRecord {
 				branch_id,
 				namespace_branch: sqlite_storage::types::NamespaceBranchId::nil(),
 				parent: None,
@@ -181,7 +181,7 @@ impl ColdTier for ObservingColdTier {
 	async fn put_object(&self, key: &str, bytes: &[u8]) -> Result<()> {
 		if key.ends_with(".marker") {
 			let state_exists =
-				read_value(&self.db, branch_meta_cold_compact_key(actor_branch_id()))
+				read_value(&self.db, branch_meta_cold_compact_key(database_branch_id()))
 					.await?
 					.is_some();
 			self.saw_committed_handoff
@@ -218,7 +218,7 @@ impl ColdTier for PhaseBFdbProbeTier {
 			let db = Arc::clone(&self.db);
 			db.run(|tx| async move {
 				tx.informal().set(
-					&branch_manifest_last_hot_pass_txid_key(actor_branch_id()),
+					&branch_manifest_last_hot_pass_txid_key(database_branch_id()),
 					&8u64.to_be_bytes(),
 				);
 				Ok(())
@@ -258,7 +258,7 @@ impl ColdTier for AdvancingColdDrainedTier {
 			let db = Arc::clone(&self.db);
 			db.run(|tx| async move {
 				tx.informal().set(
-					&branch_meta_cold_compact_key(actor_branch_id()),
+					&branch_meta_cold_compact_key(database_branch_id()),
 					&encode_cold_compact_state(sqlite_storage::compactor::cold::ColdCompactState {
 						cold_drained_txid: 4,
 						in_flight_uuid: Some(uuid::Uuid::nil()),
@@ -383,11 +383,11 @@ async fn phase_b_uploads_allow_independent_fdb_work() -> Result<()> {
 		"phase B image upload should run the FDB probe"
 	);
 	assert_eq!(
-		read_u64_be(&db, branch_manifest_last_hot_pass_txid_key(actor_branch_id())).await?,
+		read_u64_be(&db, branch_manifest_last_hot_pass_txid_key(database_branch_id())).await?,
 		Some(8)
 	);
 	assert_eq!(
-		read_u64_be(&db, branch_manifest_cold_drained_txid_key(actor_branch_id())).await?,
+		read_u64_be(&db, branch_manifest_cold_drained_txid_key(database_branch_id())).await?,
 		Some(7)
 	);
 
@@ -420,7 +420,7 @@ async fn phase_c_aborts_when_cold_drained_txid_changes_after_phase_a() -> Result
 		"unexpected error: {err:?}"
 	);
 	assert_eq!(
-		read_u64_be(&db, branch_manifest_cold_drained_txid_key(actor_branch_id())).await?,
+		read_u64_be(&db, branch_manifest_cold_drained_txid_key(database_branch_id())).await?,
 		Some(3)
 	);
 
@@ -509,10 +509,10 @@ async fn retry_after_phase_b_crash_reuses_inflight_uuid_and_overwrites_layers() 
 		"retry should replace the previous chunk ref for the same pass"
 	);
 	assert_eq!(
-		read_u64_be(&db, branch_manifest_cold_drained_txid_key(actor_branch_id())).await?,
+		read_u64_be(&db, branch_manifest_cold_drained_txid_key(database_branch_id())).await?,
 		Some(7)
 	);
-	let state = read_value(&db, branch_meta_cold_compact_key(actor_branch_id()))
+	let state = read_value(&db, branch_meta_cold_compact_key(database_branch_id()))
 		.await?
 		.expect("cold compact state should exist");
 	assert_eq!(decode_cold_compact_state(&state)?.in_flight_uuid, None);

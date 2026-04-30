@@ -10,9 +10,9 @@ use sqlite_storage::{
 		bookmark_key, bookmark_pinned_key, branch_commit_key, branch_meta_head_at_fork_key,
 		branch_vtx_key, branches_bk_pin_key, namespace_branches_pin_count_key,
 	},
-	pump::{ActorDb, bookmark, branch},
+	pump::{Db, bookmark, branch},
 	types::{
-		ActorBranchId, BookmarkRef, BookmarkStr, CommitRow, DirtyPage, NamespaceId, PinStatus,
+		DatabaseBranchId, BookmarkRef, BookmarkStr, CommitRow, DirtyPage, NamespaceId, PinStatus,
 		PinnedBookmarkRecord, ResolvedVersionstamp, decode_commit_row,
 		decode_db_head, decode_pinned_bookmark_record, encode_pinned_bookmark_record,
 	},
@@ -22,7 +22,7 @@ use tokio::time::timeout;
 use universaldb::utils::IsolationLevel::{Serializable, Snapshot};
 use universalpubsub::{NextOutput, PubSub, driver::memory::MemoryDriver};
 
-const TEST_ACTOR: &str = "test-actor";
+const TEST_DATABASE: &str = "test-database";
 
 fn test_namespace() -> Id {
 	Id::v1(uuid::Uuid::from_u128(0x1234), 1)
@@ -75,15 +75,15 @@ async fn clear_value(db: &universaldb::Database, key: Vec<u8>) -> Result<()> {
 	.await
 }
 
-async fn actor_branch_id(
+async fn database_branch_id(
 	db: &universaldb::Database,
 	namespace_id: NamespaceId,
-	actor_id: &str,
-) -> Result<ActorBranchId> {
+	database_id: &str,
+) -> Result<DatabaseBranchId> {
 	db.run(move |tx| async move {
-		branch::resolve_actor_branch(&tx, namespace_id, actor_id, Serializable)
+		branch::resolve_database_branch(&tx, namespace_id, database_id, Serializable)
 			.await?
-			.ok_or_else(|| anyhow::anyhow!("actor branch should exist"))
+			.ok_or_else(|| anyhow::anyhow!("database branch should exist"))
 	})
 	.await
 }
@@ -102,7 +102,7 @@ async fn namespace_branch_id(
 
 async fn commit_row(
 	db: &universaldb::Database,
-	branch_id: ActorBranchId,
+	branch_id: DatabaseBranchId,
 	txid: u64,
 ) -> Result<CommitRow> {
 	let bytes = read_value(db, branch_commit_key(branch_id, txid))
@@ -201,21 +201,21 @@ fn bookmark_lex_order_matches_chronological_order_for_one_branch() {
 #[tokio::test]
 async fn create_bookmark_returns_ephemeral_bookmark_for_latest_commit() -> Result<()> {
 	let db = Arc::new(test_db().await?);
-	let actor_db = ActorDb::new(
+	let database_db = Db::new(
 		db.clone(),
 		test_ups(),
 		test_namespace(),
-		TEST_ACTOR.to_string(),
+		TEST_DATABASE.to_string(),
 		NodeId::new(),
 	);
 
-	actor_db.commit(vec![page(1, 0x11)], 2, 1_000).await?;
-	let bookmark = actor_db.create_bookmark(1_000).await?;
+	database_db.commit(vec![page(1, 0x11)], 2, 1_000).await?;
+	let bookmark = database_db.create_bookmark(1_000).await?;
 
 	assert_eq!(bookmark.as_str().len(), 33);
 	assert_eq!(bookmark.parse()?, (1_000, 1));
 	assert_eq!(
-		read_value(&db, bookmark_key(TEST_ACTOR, bookmark.as_str())).await?,
+		read_value(&db, bookmark_key(TEST_DATABASE, bookmark.as_str())).await?,
 		None
 	);
 
@@ -225,20 +225,20 @@ async fn create_bookmark_returns_ephemeral_bookmark_for_latest_commit() -> Resul
 #[tokio::test]
 async fn bookmark_status_reads_pinned_record_or_absent() -> Result<()> {
 	let db = Arc::new(test_db().await?);
-	let actor_db = ActorDb::new(
+	let database_db = Db::new(
 		db.clone(),
 		test_ups(),
 		test_namespace(),
-		TEST_ACTOR.to_string(),
+		TEST_DATABASE.to_string(),
 		NodeId::new(),
 	);
-	actor_db.commit(vec![page(1, 0x11)], 2, 1_000).await?;
-	let bookmark = actor_db.create_bookmark(1_000).await?;
+	database_db.commit(vec![page(1, 0x11)], 2, 1_000).await?;
+	let bookmark = database_db.create_bookmark(1_000).await?;
 	let namespace_id = NamespaceId::from_gas_id(test_namespace());
 
-	assert_eq!(actor_db.bookmark_status(bookmark.clone()).await?, None);
+	assert_eq!(database_db.bookmark_status(bookmark.clone()).await?, None);
 
-	let actor_branch_id = db
+	let database_branch_id = db
 		.run({
 			let bookmark = bookmark.clone();
 
@@ -247,14 +247,14 @@ async fn bookmark_status_reads_pinned_record_or_absent() -> Result<()> {
 
 				async move {
 					let branch_id =
-						branch::resolve_actor_branch(&tx, namespace_id, TEST_ACTOR, Serializable)
+						branch::resolve_database_branch(&tx, namespace_id, TEST_DATABASE, Serializable)
 							.await?
-							.expect("actor branch should exist");
+							.expect("database branch should exist");
 					let pinned_key =
-						sqlite_storage::keys::bookmark_pinned_key(TEST_ACTOR, bookmark.as_str());
+						sqlite_storage::keys::bookmark_pinned_key(TEST_DATABASE, bookmark.as_str());
 					let record = PinnedBookmarkRecord {
 						bookmark,
-						actor_branch_id: branch_id,
+						database_branch_id: branch_id,
 						versionstamp: [9; 16],
 						status: PinStatus::Ready,
 						pin_object_key: Some("pin/ready.ltx".to_string()),
@@ -270,10 +270,10 @@ async fn bookmark_status_reads_pinned_record_or_absent() -> Result<()> {
 		})
 		.await?;
 
-	assert_ne!(actor_branch_id.as_uuid(), uuid::Uuid::nil());
-	assert_eq!(actor_db.bookmark_status(bookmark.clone()).await?, Some(PinStatus::Ready));
+	assert_ne!(database_branch_id.as_uuid(), uuid::Uuid::nil());
+	assert_eq!(database_db.bookmark_status(bookmark.clone()).await?, Some(PinStatus::Ready));
 	assert_eq!(
-		bookmark::bookmark_status(&db, namespace_id, TEST_ACTOR.to_string(), bookmark).await?,
+		bookmark::bookmark_status(&db, namespace_id, TEST_DATABASE.to_string(), bookmark).await?,
 		Some(PinStatus::Ready)
 	);
 
@@ -287,31 +287,31 @@ async fn create_pinned_bookmark_writes_pending_pin_and_cold_trigger() -> Result<
 	let mut sub = ups
 		.queue_subscribe(SqliteColdCompactSubject, "cold-compactor")
 		.await?;
-	let actor_db = ActorDb::new(
+	let database_db = Db::new(
 		db.clone(),
 		ups,
 		test_namespace(),
-		TEST_ACTOR.to_string(),
+		TEST_DATABASE.to_string(),
 		NodeId::new(),
 	);
-	actor_db.commit(vec![page(1, 0x11)], 2, 1_000).await?;
+	database_db.commit(vec![page(1, 0x11)], 2, 1_000).await?;
 	let namespace_id = NamespaceId::from_gas_id(test_namespace());
-	let branch_id = actor_branch_id(&db, namespace_id, TEST_ACTOR).await?;
+	let branch_id = database_branch_id(&db, namespace_id, TEST_DATABASE).await?;
 	let namespace_branch_id = namespace_branch_id(&db, namespace_id).await?;
 	let row = commit_row(&db, branch_id, 1).await?;
 
-	let bookmark = actor_db.create_pinned_bookmark(1_010).await?;
+	let bookmark = database_db.create_pinned_bookmark(1_010).await?;
 
 	assert_eq!(bookmark.parse()?, (1_010, 1));
 	let pinned_bytes = read_value(
 		&db,
-		sqlite_storage::keys::bookmark_pinned_key(TEST_ACTOR, bookmark.as_str()),
+		sqlite_storage::keys::bookmark_pinned_key(TEST_DATABASE, bookmark.as_str()),
 	)
 	.await?
 	.expect("pinned bookmark record should exist");
 	let pinned = decode_pinned_bookmark_record(&pinned_bytes)?;
 	assert_eq!(pinned.bookmark, bookmark);
-	assert_eq!(pinned.actor_branch_id, branch_id);
+	assert_eq!(pinned.database_branch_id, branch_id);
 	assert_eq!(pinned.versionstamp, row.versionstamp);
 	assert_eq!(pinned.status, PinStatus::Pending);
 	assert_eq!(pinned.pin_object_key, None);
@@ -336,8 +336,8 @@ async fn create_pinned_bookmark_writes_pending_pin_and_cold_trigger() -> Result<
 	assert_eq!(
 		payload,
 		SqliteColdCompactPayload::CreatePinnedBookmark {
-			actor_id: TEST_ACTOR.to_string(),
-			actor_branch_id: branch_id,
+			database_id: TEST_DATABASE.to_string(),
+			database_branch_id: branch_id,
 			bookmark,
 			versionstamp: row.versionstamp,
 		}
@@ -349,14 +349,14 @@ async fn create_pinned_bookmark_writes_pending_pin_and_cold_trigger() -> Result<
 #[tokio::test]
 async fn create_pinned_bookmark_enforces_namespace_pin_cap() -> Result<()> {
 	let db = Arc::new(test_db().await?);
-	let actor_db = ActorDb::new(
+	let database_db = Db::new(
 		db.clone(),
 		test_ups(),
 		test_namespace(),
-		TEST_ACTOR.to_string(),
+		TEST_DATABASE.to_string(),
 		NodeId::new(),
 	);
-	actor_db.commit(vec![page(1, 0x11)], 2, 1_000).await?;
+	database_db.commit(vec![page(1, 0x11)], 2, 1_000).await?;
 	let namespace_id = NamespaceId::from_gas_id(test_namespace());
 	let namespace_branch_id = namespace_branch_id(&db, namespace_id).await?;
 	db.run(move |tx| async move {
@@ -368,7 +368,7 @@ async fn create_pinned_bookmark_enforces_namespace_pin_cap() -> Result<()> {
 	})
 	.await?;
 
-	let err = actor_db
+	let err = database_db
 		.create_pinned_bookmark(1_010)
 		.await
 		.expect_err("pin cap should reject new pinned bookmarks");
@@ -385,25 +385,25 @@ async fn delete_pinned_bookmark_removes_pin_and_schedules_recompute() -> Result<
 	let mut sub = ups
 		.queue_subscribe(SqliteColdCompactSubject, "cold-compactor")
 		.await?;
-	let actor_db = ActorDb::new(
+	let database_db = Db::new(
 		db.clone(),
 		ups,
 		test_namespace(),
-		TEST_ACTOR.to_string(),
+		TEST_DATABASE.to_string(),
 		NodeId::new(),
 	);
-	actor_db.commit(vec![page(1, 0x11)], 2, 1_000).await?;
-	let first = actor_db.create_pinned_bookmark(1_010).await?;
+	database_db.commit(vec![page(1, 0x11)], 2, 1_000).await?;
+	let first = database_db.create_pinned_bookmark(1_010).await?;
 	let namespace_id = NamespaceId::from_gas_id(test_namespace());
-	let branch_id = actor_branch_id(&db, namespace_id, TEST_ACTOR).await?;
+	let branch_id = database_branch_id(&db, namespace_id, TEST_DATABASE).await?;
 	let namespace_branch_id = namespace_branch_id(&db, namespace_id).await?;
 	let first_row = commit_row(&db, branch_id, 1).await?;
 	let NextOutput::Message(_) = timeout(Duration::from_secs(1), sub.next()).await?? else {
 		panic!("subscriber unexpectedly unsubscribed");
 	};
 
-	actor_db.commit(vec![page(2, 0x22)], 3, 1_020).await?;
-	let second = actor_db.create_pinned_bookmark(1_030).await?;
+	database_db.commit(vec![page(2, 0x22)], 3, 1_020).await?;
+	let second = database_db.create_pinned_bookmark(1_030).await?;
 	let second_row = commit_row(&db, branch_id, 2).await?;
 	let NextOutput::Message(_) = timeout(Duration::from_secs(1), sub.next()).await?? else {
 		panic!("subscriber unexpectedly unsubscribed");
@@ -415,18 +415,18 @@ async fn delete_pinned_bookmark_removes_pin_and_schedules_recompute() -> Result<
 		first_row.versionstamp
 	);
 
-	actor_db.delete_pinned_bookmark(first.clone()).await?;
+	database_db.delete_pinned_bookmark(first.clone()).await?;
 
 	assert_eq!(
-		read_value(&db, bookmark_key(TEST_ACTOR, first.as_str())).await?,
+		read_value(&db, bookmark_key(TEST_DATABASE, first.as_str())).await?,
 		None
 	);
 	assert_eq!(
-		read_value(&db, bookmark_pinned_key(TEST_ACTOR, first.as_str())).await?,
+		read_value(&db, bookmark_pinned_key(TEST_DATABASE, first.as_str())).await?,
 		None
 	);
 	assert!(
-		read_value(&db, bookmark_pinned_key(TEST_ACTOR, second.as_str()))
+		read_value(&db, bookmark_pinned_key(TEST_DATABASE, second.as_str()))
 			.await?
 			.is_some()
 	);
@@ -451,8 +451,8 @@ async fn delete_pinned_bookmark_removes_pin_and_schedules_recompute() -> Result<
 	assert_eq!(
 		payload,
 		SqliteColdCompactPayload::DeletePinnedBookmark {
-			actor_id: TEST_ACTOR.to_string(),
-			actor_branch_id: branch_id,
+			database_id: TEST_DATABASE.to_string(),
+			database_branch_id: branch_id,
 			bookmark: first,
 			versionstamp: first_row.versionstamp,
 			pin_object_key: None,
@@ -469,27 +469,27 @@ async fn restore_to_bookmark_rolls_back_then_pins_undo_bookmark() -> Result<()> 
 	let mut sub = ups
 		.queue_subscribe(SqliteColdCompactSubject, "cold-compactor")
 		.await?;
-	let actor_db = ActorDb::new(
+	let database_db = Db::new(
 		db.clone(),
 		ups,
 		test_namespace(),
-		TEST_ACTOR.to_string(),
+		TEST_DATABASE.to_string(),
 		NodeId::new(),
 	);
-	actor_db.commit(vec![page(1, 0x11)], 2, 1_000).await?;
-	let target = actor_db.create_bookmark(1_010).await?;
-	actor_db
+	database_db.commit(vec![page(1, 0x11)], 2, 1_000).await?;
+	let target = database_db.create_bookmark(1_010).await?;
+	database_db
 		.commit(vec![page(1, 0x22), page(2, 0x33)], 3, 2_000)
 		.await?;
 	let namespace_id = NamespaceId::from_gas_id(test_namespace());
 	let namespace_branch_id = namespace_branch_id(&db, namespace_id).await?;
-	let old_branch_id = actor_branch_id(&db, namespace_id, TEST_ACTOR).await?;
+	let old_branch_id = database_branch_id(&db, namespace_id, TEST_DATABASE).await?;
 	let undo_row = commit_row(&db, old_branch_id, 2).await?;
 
-	let undo = actor_db.restore_to_bookmark(target).await?;
+	let undo = database_db.restore_to_bookmark(target).await?;
 
 	assert_eq!(undo.parse()?, (2_000, 2));
-	let new_branch_id = actor_branch_id(&db, namespace_id, TEST_ACTOR).await?;
+	let new_branch_id = database_branch_id(&db, namespace_id, TEST_DATABASE).await?;
 	assert_ne!(new_branch_id, old_branch_id);
 	let restored_head_bytes = read_value(&db, branch_meta_head_at_fork_key(new_branch_id))
 		.await?
@@ -498,12 +498,12 @@ async fn restore_to_bookmark_rolls_back_then_pins_undo_bookmark() -> Result<()> 
 	assert_eq!(restored_head.head_txid, 1);
 	assert_eq!(restored_head.db_size_pages, 2);
 
-	let pinned_bytes = read_value(&db, bookmark_pinned_key(TEST_ACTOR, undo.as_str()))
+	let pinned_bytes = read_value(&db, bookmark_pinned_key(TEST_DATABASE, undo.as_str()))
 		.await?
 		.expect("undo pinned bookmark should exist");
 	let pinned = decode_pinned_bookmark_record(&pinned_bytes)?;
 	assert_eq!(pinned.bookmark, undo);
-	assert_eq!(pinned.actor_branch_id, old_branch_id);
+	assert_eq!(pinned.database_branch_id, old_branch_id);
 	assert_eq!(pinned.versionstamp, undo_row.versionstamp);
 	assert_eq!(pinned.status, PinStatus::Pending);
 	assert_eq!(
@@ -527,8 +527,8 @@ async fn restore_to_bookmark_rolls_back_then_pins_undo_bookmark() -> Result<()> 
 	assert_eq!(
 		payload,
 		SqliteColdCompactPayload::CreatePinnedBookmark {
-			actor_id: TEST_ACTOR.to_string(),
-			actor_branch_id: old_branch_id,
+			database_id: TEST_DATABASE.to_string(),
+			database_branch_id: old_branch_id,
 			bookmark: undo,
 			versionstamp: undo_row.versionstamp,
 		}
@@ -540,20 +540,20 @@ async fn restore_to_bookmark_rolls_back_then_pins_undo_bookmark() -> Result<()> 
 #[tokio::test]
 async fn resolve_bookmark_returns_ephemeral_commit_versionstamp_via_vtx() -> Result<()> {
 	let db = Arc::new(test_db().await?);
-	let actor_db = ActorDb::new(
+	let database_db = Db::new(
 		db.clone(),
 		test_ups(),
 		test_namespace(),
-		TEST_ACTOR.to_string(),
+		TEST_DATABASE.to_string(),
 		NodeId::new(),
 	);
-	actor_db.commit(vec![page(1, 0x11)], 2, 1_000).await?;
-	let bookmark = actor_db.create_bookmark(1_010).await?;
+	database_db.commit(vec![page(1, 0x11)], 2, 1_000).await?;
+	let bookmark = database_db.create_bookmark(1_010).await?;
 	let namespace_id = NamespaceId::from_gas_id(test_namespace());
-	let branch_id = actor_branch_id(&db, namespace_id, TEST_ACTOR).await?;
+	let branch_id = database_branch_id(&db, namespace_id, TEST_DATABASE).await?;
 	let row = commit_row(&db, branch_id, 1).await?;
 
-	let resolved = actor_db.resolve_bookmark(bookmark.clone()).await?;
+	let resolved = database_db.resolve_bookmark(bookmark.clone()).await?;
 
 	assert_eq!(resolved.versionstamp, row.versionstamp);
 	assert_eq!(
@@ -565,7 +565,7 @@ async fn resolve_bookmark_returns_ephemeral_commit_versionstamp_via_vtx() -> Res
 	);
 
 	clear_value(&db, branch_vtx_key(branch_id, row.versionstamp)).await?;
-	let err = actor_db
+	let err = database_db
 		.resolve_bookmark(bookmark)
 		.await
 		.expect_err("missing VTX should make the bookmark expired");
@@ -577,17 +577,17 @@ async fn resolve_bookmark_returns_ephemeral_commit_versionstamp_via_vtx() -> Res
 #[tokio::test]
 async fn resolve_bookmark_prefers_exact_pinned_record() -> Result<()> {
 	let db = Arc::new(test_db().await?);
-	let actor_db = ActorDb::new(
+	let database_db = Db::new(
 		db.clone(),
 		test_ups(),
 		test_namespace(),
-		TEST_ACTOR.to_string(),
+		TEST_DATABASE.to_string(),
 		NodeId::new(),
 	);
-	actor_db.commit(vec![page(1, 0x11)], 2, 1_000).await?;
-	let bookmark = actor_db.create_bookmark(1_010).await?;
+	database_db.commit(vec![page(1, 0x11)], 2, 1_000).await?;
+	let bookmark = database_db.create_bookmark(1_010).await?;
 	let namespace_id = NamespaceId::from_gas_id(test_namespace());
-	let branch_id = actor_branch_id(&db, namespace_id, TEST_ACTOR).await?;
+	let branch_id = database_branch_id(&db, namespace_id, TEST_DATABASE).await?;
 	let pinned_versionstamp = [9; 16];
 	db.run({
 		let bookmark = bookmark.clone();
@@ -598,7 +598,7 @@ async fn resolve_bookmark_prefers_exact_pinned_record() -> Result<()> {
 			async move {
 				let record = PinnedBookmarkRecord {
 					bookmark: bookmark.clone(),
-					actor_branch_id: branch_id,
+					database_branch_id: branch_id,
 					versionstamp: pinned_versionstamp,
 					status: PinStatus::Ready,
 					pin_object_key: Some("pin/exact.ltx".to_string()),
@@ -606,7 +606,7 @@ async fn resolve_bookmark_prefers_exact_pinned_record() -> Result<()> {
 					updated_at_ms: 1_100,
 				};
 				tx.informal().set(
-					&sqlite_storage::keys::bookmark_pinned_key(TEST_ACTOR, bookmark.as_str()),
+					&sqlite_storage::keys::bookmark_pinned_key(TEST_DATABASE, bookmark.as_str()),
 					&encode_pinned_bookmark_record(record)?,
 				);
 				Ok(())
@@ -615,7 +615,7 @@ async fn resolve_bookmark_prefers_exact_pinned_record() -> Result<()> {
 	})
 	.await?;
 
-	let resolved = actor_db.resolve_bookmark(bookmark.clone()).await?;
+	let resolved = database_db.resolve_bookmark(bookmark.clone()).await?;
 
 	assert_eq!(resolved.versionstamp, pinned_versionstamp);
 	assert_eq!(
@@ -630,27 +630,27 @@ async fn resolve_bookmark_prefers_exact_pinned_record() -> Result<()> {
 }
 
 #[tokio::test]
-async fn resolve_bookmark_walks_actor_parent_chain() -> Result<()> {
+async fn resolve_bookmark_walks_database_parent_chain() -> Result<()> {
 	let db = Arc::new(test_db().await?);
-	let source_actor_db = ActorDb::new(
+	let source_database_db = Db::new(
 		db.clone(),
 		test_ups(),
 		test_namespace(),
-		TEST_ACTOR.to_string(),
+		TEST_DATABASE.to_string(),
 		NodeId::new(),
 	);
-	source_actor_db
+	source_database_db
 		.commit(vec![page(1, 0x11)], 2, 1_000)
 		.await?;
-	let bookmark = source_actor_db.create_bookmark(1_010).await?;
+	let bookmark = source_database_db.create_bookmark(1_010).await?;
 	let namespace_id = NamespaceId::from_gas_id(test_namespace());
-	let source_branch_id = actor_branch_id(&db, namespace_id, TEST_ACTOR).await?;
+	let source_branch_id = database_branch_id(&db, namespace_id, TEST_DATABASE).await?;
 	let source_commit = commit_row(&db, source_branch_id, 1).await?;
-	let forked_actor_id = branch::fork_actor(
+	let forked_database_id = branch::fork_database(
 		&db,
 		&test_ups(),
 		namespace_id,
-		TEST_ACTOR.to_string(),
+		TEST_DATABASE.to_string(),
 		ResolvedVersionstamp {
 			versionstamp: source_commit.versionstamp,
 			bookmark: None,
@@ -660,7 +660,7 @@ async fn resolve_bookmark_walks_actor_parent_chain() -> Result<()> {
 	.await?;
 
 	let resolved =
-		bookmark::resolve_bookmark(&db, namespace_id, forked_actor_id, bookmark).await?;
+		bookmark::resolve_bookmark(&db, namespace_id, forked_database_id, bookmark).await?;
 
 	assert_eq!(resolved.versionstamp, source_commit.versionstamp);
 
@@ -670,18 +670,18 @@ async fn resolve_bookmark_walks_actor_parent_chain() -> Result<()> {
 #[tokio::test]
 async fn resolve_bookmark_honors_namespace_fork_versionstamp_cap() -> Result<()> {
 	let db = Arc::new(test_db().await?);
-	let source_actor_db = ActorDb::new(
+	let source_database_db = Db::new(
 		db.clone(),
 		test_ups(),
 		test_namespace(),
-		TEST_ACTOR.to_string(),
+		TEST_DATABASE.to_string(),
 		NodeId::new(),
 	);
-	source_actor_db
+	source_database_db
 		.commit(vec![page(1, 0x11)], 2, 1_000)
 		.await?;
 	let namespace_id = NamespaceId::from_gas_id(test_namespace());
-	let source_branch_id = actor_branch_id(&db, namespace_id, TEST_ACTOR).await?;
+	let source_branch_id = database_branch_id(&db, namespace_id, TEST_DATABASE).await?;
 	let fork_point = commit_row(&db, source_branch_id, 1).await?;
 	let forked_namespace = branch::fork_namespace(
 		&db,
@@ -694,15 +694,15 @@ async fn resolve_bookmark_honors_namespace_fork_versionstamp_cap() -> Result<()>
 	)
 	.await?;
 
-	source_actor_db
+	source_database_db
 		.commit(vec![page(2, 0x22)], 3, 2_000)
 		.await?;
-	let post_fork_bookmark = source_actor_db.create_bookmark(2_010).await?;
+	let post_fork_bookmark = source_database_db.create_bookmark(2_010).await?;
 
 	let err = bookmark::resolve_bookmark(
 		&db,
 		forked_namespace,
-		TEST_ACTOR.to_string(),
+		TEST_DATABASE.to_string(),
 		post_fork_bookmark,
 	)
 	.await

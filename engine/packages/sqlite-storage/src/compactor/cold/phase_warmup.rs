@@ -5,7 +5,7 @@ use anyhow::{Context, Result, bail};
 use crate::{
 	cold_tier::ColdTier,
 	pump::types::{
-		ActorBranchId, ColdManifestChunk, ColdManifestChunkRef, ColdManifestIndex, LayerKind,
+		DatabaseBranchId, ColdManifestChunk, ColdManifestChunkRef, ColdManifestIndex, LayerKind,
 		SQLITE_STORAGE_COLD_SCHEMA_VERSION, decode_cold_manifest_chunk,
 		decode_cold_manifest_index, encode_cold_manifest_chunk, encode_cold_manifest_index,
 	},
@@ -17,10 +17,10 @@ pub struct ColdForkWarmupOutput {
 	pub source_chunks_read: usize,
 }
 
-pub(crate) async fn run_actor(
+pub(crate) async fn run_database(
 	cold_tier: Arc<dyn ColdTier>,
-	source_branch_id: ActorBranchId,
-	target_branch_id: ActorBranchId,
+	source_branch_id: DatabaseBranchId,
+	target_branch_id: DatabaseBranchId,
 	at_versionstamp: [u8; 16],
 	cancel_token: tokio_util::sync::CancellationToken,
 	now_ms: i64,
@@ -141,7 +141,7 @@ pub(crate) async fn run_actor(
 
 async fn load_target_manifest_index(
 	cold_tier: &dyn ColdTier,
-	target_branch_id: ActorBranchId,
+	target_branch_id: DatabaseBranchId,
 	target_index_key: &str,
 ) -> Result<ColdManifestIndex> {
 	let Some(bytes) = cold_tier.get_object(target_index_key).await? else {
@@ -158,8 +158,8 @@ async fn load_target_manifest_index(
 }
 
 fn warm_layer_object_key(
-	source_branch_id: ActorBranchId,
-	target_branch_id: ActorBranchId,
+	source_branch_id: DatabaseBranchId,
+	target_branch_id: DatabaseBranchId,
 	pass_uuid: uuid::Uuid,
 	source_key: &str,
 ) -> Result<String> {
@@ -182,7 +182,7 @@ fn warm_layer_object_key(
 }
 
 fn warm_manifest_chunk_object_key(
-	branch_id: ActorBranchId,
+	branch_id: DatabaseBranchId,
 	pass_uuid: uuid::Uuid,
 ) -> String {
 	format!(
@@ -192,11 +192,11 @@ fn warm_manifest_chunk_object_key(
 	)
 }
 
-fn manifest_index_object_key(branch_id: ActorBranchId) -> String {
+fn manifest_index_object_key(branch_id: DatabaseBranchId) -> String {
 	format!("{}/cold_manifest/index.bare", branch_object_prefix(branch_id))
 }
 
-fn branch_object_prefix(branch_id: ActorBranchId) -> String {
+fn branch_object_prefix(branch_id: DatabaseBranchId) -> String {
 	format!("db/{}", branch_id.as_uuid().simple())
 }
 

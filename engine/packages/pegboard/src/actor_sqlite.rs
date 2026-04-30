@@ -6,7 +6,7 @@ use rivet_envoy_protocol as protocol;
 use rivet_pools::NodeId;
 use sqlite_storage::{
 	keys as sqlite_storage_keys,
-	pump::{branch as sqlite_storage_branch, ActorDb},
+	pump::{branch as sqlite_storage_branch, Db},
 	types::{DBHead, DirtyPage, NamespaceId, SQLITE_PAGE_SIZE, decode_db_head},
 };
 use universalpubsub::{PubSub, driver::memory::MemoryDriver};
@@ -124,7 +124,7 @@ async fn maybe_migrate_v1_to_v2(
 			bytes: bytes.to_vec(),
 		})
 		.collect::<Vec<_>>();
-	let actor_db = ActorDb::new(
+	let actor_db = Db::new(
 		Arc::new(db.clone()),
 		migration_ups(),
 		recipient.namespace_id,
@@ -159,7 +159,7 @@ async fn load_v2_head(
 		let actor_id = actor_id.clone();
 		let namespace_id = namespace_id;
 		async move {
-			let key = if let Some(branch_id) = sqlite_storage_branch::resolve_actor_branch(
+			let key = if let Some(branch_id) = sqlite_storage_branch::resolve_database_branch(
 				&tx,
 				namespace_id,
 				&actor_id,

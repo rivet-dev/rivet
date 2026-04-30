@@ -7,13 +7,13 @@ use gas::prelude::Id;
 use rivet_pools::NodeId;
 use sqlite_storage::{
 	keys::{
-		actor_pointer_cur_key, branch_commit_key, branch_meta_head_key, branches_list_key,
+		database_pointer_cur_key, branch_commit_key, branch_meta_head_key, branches_list_key,
 		namespace_branches_list_key, namespace_pointer_cur_key,
 	},
-	pump::ActorDb,
+	pump::Db,
 	types::{
-		ActorBranchId, ActorBranchRecord, CommitRow, DirtyPage, NamespaceBranchId,
-		NamespaceBranchRecord, NamespaceId, decode_actor_branch_record, decode_actor_pointer,
+		DatabaseBranchId, DatabaseBranchRecord, CommitRow, DirtyPage, NamespaceBranchId,
+		NamespaceBranchRecord, NamespaceId, decode_database_branch_record, decode_database_pointer,
 		decode_commit_row, decode_db_head, decode_namespace_branch_record, decode_namespace_pointer,
 	},
 };
@@ -21,7 +21,7 @@ use tempfile::Builder;
 use universaldb::utils::IsolationLevel::Snapshot;
 use universalpubsub::{PubSub, driver::memory::MemoryDriver};
 
-pub const TEST_ACTOR: &str = "fork-source";
+pub const TEST_DATABASE: &str = "fork-source";
 
 pub fn test_namespace() -> Id {
 	Id::v1(uuid::Uuid::from_u128(0x1234), 1)
@@ -44,12 +44,12 @@ pub fn test_ups() -> PubSub {
 	)))
 }
 
-pub fn actor_db(
+pub fn make_db(
 	db: Arc<universaldb::Database>,
 	namespace_id: Id,
-	actor_id: impl Into<String>,
-) -> ActorDb {
-	ActorDb::new(db, test_ups(), namespace_id, actor_id.into(), NodeId::new())
+	database_id: impl Into<String>,
+) -> Db {
+	Db::new(db, test_ups(), namespace_id, database_id.into(), NodeId::new())
 }
 
 pub fn page(pgno: u32, fill: u8) -> DirtyPage {
@@ -92,28 +92,28 @@ pub async fn read_namespace_branch_id_for(
 	Ok(decode_namespace_pointer(&namespace_pointer_bytes)?.current_branch)
 }
 
-pub async fn read_actor_branch_id(
+pub async fn read_database_branch_id(
 	db: &universaldb::Database,
 	namespace_id: Id,
-	actor_id: &str,
-) -> Result<ActorBranchId> {
+	database_id: &str,
+) -> Result<DatabaseBranchId> {
 	let namespace_branch = read_namespace_branch_id_for(db, namespace_id).await?;
-	let bytes = read_value(db, actor_pointer_cur_key(namespace_branch, actor_id))
+	let bytes = read_value(db, database_pointer_cur_key(namespace_branch, database_id))
 		.await?
-		.expect("actor pointer should exist");
+		.expect("database pointer should exist");
 
-	Ok(decode_actor_pointer(&bytes)?.current_branch)
+	Ok(decode_database_pointer(&bytes)?.current_branch)
 }
 
-pub async fn read_actor_branch_record(
+pub async fn read_database_branch_record(
 	db: &universaldb::Database,
-	branch_id: ActorBranchId,
-) -> Result<ActorBranchRecord> {
+	branch_id: DatabaseBranchId,
+) -> Result<DatabaseBranchRecord> {
 	let bytes = read_value(db, branches_list_key(branch_id))
 		.await?
-		.expect("actor branch record should exist");
+		.expect("database branch record should exist");
 
-	decode_actor_branch_record(&bytes)
+	decode_database_branch_record(&bytes)
 }
 
 pub async fn read_namespace_branch_record(
@@ -129,7 +129,7 @@ pub async fn read_namespace_branch_record(
 
 pub async fn read_head_commit(
 	db: &universaldb::Database,
-	branch_id: ActorBranchId,
+	branch_id: DatabaseBranchId,
 ) -> Result<CommitRow> {
 	let head_bytes = read_value(db, branch_meta_head_key(branch_id))
 		.await?
@@ -144,7 +144,7 @@ pub async fn read_head_commit(
 
 pub async fn read_commit(
 	db: &universaldb::Database,
-	branch_id: ActorBranchId,
+	branch_id: DatabaseBranchId,
 	txid: u64,
 ) -> Result<CommitRow> {
 	let bytes = read_value(db, branch_commit_key(branch_id, txid))

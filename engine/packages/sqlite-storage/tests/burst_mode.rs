@@ -5,7 +5,7 @@ use sqlite_storage::{
 	HOT_BURST_COLD_LAG_THRESHOLD_TXIDS,
 	burst_mode,
 	keys::{branch_manifest_cold_drained_txid_key, branch_meta_head_key},
-	types::{ActorBranchId, DBHead, encode_db_head},
+	types::{DatabaseBranchId, DBHead, encode_db_head},
 };
 use tempfile::Builder;
 use universaldb::utils::IsolationLevel::Snapshot;
@@ -17,7 +17,7 @@ async fn test_db() -> Result<universaldb::Database> {
 	Ok(universaldb::Database::new(Arc::new(driver)))
 }
 
-fn head_with_branch(branch_id: ActorBranchId, head_txid: u64) -> DBHead {
+fn head_with_branch(branch_id: DatabaseBranchId, head_txid: u64) -> DBHead {
 	DBHead {
 		head_txid,
 		db_size_pages: 1,
@@ -31,7 +31,7 @@ fn head_with_branch(branch_id: ActorBranchId, head_txid: u64) -> DBHead {
 #[tokio::test]
 async fn burst_signal_is_derived_from_fdb_cold_lag() -> Result<()> {
 	let db = test_db().await?;
-	let branch_id = ActorBranchId::new_v4();
+	let branch_id = DatabaseBranchId::new_v4();
 	db.run(move |tx| async move {
 		tx.informal().set(
 			&branch_meta_head_key(branch_id),

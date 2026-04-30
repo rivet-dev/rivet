@@ -12,10 +12,10 @@ use sqlite_storage::{
 		branch_manifest_last_hot_pass_txid_key, branch_meta_compact_key, branch_shard_key,
 		branch_vtx_key, branches_bk_pin_key, branches_list_key, branches_refcount_key,
 	},
-	pump::{ActorDb, branch},
+	pump::{Db, branch},
 	types::{
-		ActorBranchId, ActorBranchRecord, BranchState, CommitRow, DirtyPage, MetaCompact,
-		NamespaceBranchId, NamespaceId, encode_actor_branch_record, encode_commit_row,
+		DatabaseBranchId, DatabaseBranchRecord, BranchState, CommitRow, DirtyPage, MetaCompact,
+		NamespaceBranchId, NamespaceId, encode_database_branch_record, encode_commit_row,
 		encode_meta_compact,
 	},
 };
@@ -23,18 +23,18 @@ use tempfile::Builder;
 use universaldb::utils::IsolationLevel::{Serializable, Snapshot};
 use universalpubsub::{PubSub, driver::memory::MemoryDriver};
 
-pub const TEST_ACTOR: &str = "actor-a";
+pub const TEST_DATABASE: &str = "database-a";
 
 pub fn namespace() -> Id {
 	Id::v1(uuid::Uuid::from_u128(0x1234), 1)
 }
 
-pub fn actor_branch_id() -> ActorBranchId {
-	ActorBranchId::from_uuid(uuid::Uuid::from_u128(0x1234_5678_9abc_def0_0123_4567_89ab_cdef))
+pub fn database_branch_id() -> DatabaseBranchId {
+	DatabaseBranchId::from_uuid(uuid::Uuid::from_u128(0x1234_5678_9abc_def0_0123_4567_89ab_cdef))
 }
 
 pub fn branch_object_prefix() -> String {
-	format!("db/{}", actor_branch_id().as_uuid().simple())
+	format!("db/{}", database_branch_id().as_uuid().simple())
 }
 
 pub fn bookmark() -> sqlite_storage::types::BookmarkStr {
@@ -44,8 +44,8 @@ pub fn bookmark() -> sqlite_storage::types::BookmarkStr {
 
 pub fn cold_payload() -> SqliteColdCompactPayload {
 	SqliteColdCompactPayload::DeletePinnedBookmark {
-		actor_id: TEST_ACTOR.to_string(),
-		actor_branch_id: actor_branch_id(),
+		database_id: TEST_DATABASE.to_string(),
+		database_branch_id: database_branch_id(),
 		bookmark: bookmark(),
 		versionstamp: [7; 16],
 		pin_object_key: None,
@@ -70,8 +70,8 @@ pub fn test_ups() -> PubSub {
 	)))
 }
 
-pub fn actor_db(db: Arc<universaldb::Database>, actor_id: &str) -> ActorDb {
-	ActorDb::new(db, test_ups(), namespace(), actor_id.to_string(), NodeId::new())
+pub fn make_db(db: Arc<universaldb::Database>, database_id: &str) -> Db {
+	Db::new(db, test_ups(), namespace(), database_id.to_string(), NodeId::new())
 }
 
 pub fn page(pgno: u32, fill: u8) -> DirtyPage {
@@ -117,12 +117,12 @@ pub async fn read_u64_be(db: &universaldb::Database, key: Vec<u8>) -> Result<Opt
 }
 
 pub async fn seed_cold_branch(db: &universaldb::Database) -> Result<()> {
-	let branch_id = actor_branch_id();
+	let branch_id = database_branch_id();
 
 	db.run(move |tx| async move {
 		tx.informal().set(
 			&branches_list_key(branch_id),
-			&encode_actor_branch_record(ActorBranchRecord {
+			&encode_database_branch_record(DatabaseBranchRecord {
 				branch_id,
 				namespace_branch: NamespaceBranchId::nil(),
 				parent: None,
@@ -168,23 +168,23 @@ pub async fn seed_cold_branch(db: &universaldb::Database) -> Result<()> {
 	.await
 }
 
-pub async fn actor_branch_id_for(
+pub async fn database_branch_id_for(
 	db: &universaldb::Database,
-	actor_id: &str,
-) -> Result<ActorBranchId> {
+	database_id: &str,
+) -> Result<DatabaseBranchId> {
 	db.run({
-		let actor_id = actor_id.to_string();
+		let database_id = database_id.to_string();
 		move |tx| {
-			let actor_id = actor_id.clone();
+			let database_id = database_id.clone();
 			async move {
-				branch::resolve_actor_branch(
+				branch::resolve_database_branch(
 					&tx,
 					NamespaceId::from_gas_id(namespace()),
-					&actor_id,
+					&database_id,
 					Serializable,
 				)
 				.await?
-				.context("actor branch should exist")
+				.context("database branch should exist")
 			}
 		}
 	})

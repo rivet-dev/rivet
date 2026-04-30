@@ -9,7 +9,7 @@ use rusqlite::Connection;
 use serde::Deserialize;
 use sqlite_storage::{
 	keys::{branch_meta_head_key, meta_head_key},
-	pump::{branch as sqlite_storage_branch, ActorDb},
+	pump::{branch as sqlite_storage_branch, Db},
 	types::{NamespaceId, SQLITE_PAGE_SIZE, decode_db_head},
 };
 use test_snapshot::SnapshotTestCtx;
@@ -212,8 +212,8 @@ fn test_ups() -> PubSub {
 	)))
 }
 
-fn actor_db(db: &universaldb::Database, namespace_id: Id, actor_id: &str) -> ActorDb {
-	ActorDb::new(
+fn actor_db(db: &universaldb::Database, namespace_id: Id, actor_id: &str) -> Db {
+	Db::new(
 		Arc::new(db.clone()),
 		test_ups(),
 		namespace_id,
@@ -234,7 +234,7 @@ async fn load_v2_sqlite_bytes(
 			let actor_id = actor_id_for_tx.clone();
 			let namespace_id = NamespaceId::from_gas_id(namespace_id);
 			async move {
-				let key = if let Some(branch_id) = sqlite_storage_branch::resolve_actor_branch(
+				let key = if let Some(branch_id) = sqlite_storage_branch::resolve_database_branch(
 					&tx,
 					namespace_id,
 					&actor_id,

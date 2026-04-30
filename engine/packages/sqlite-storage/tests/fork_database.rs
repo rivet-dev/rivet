@@ -9,33 +9,33 @@ use anyhow::Result;
 use sqlite_storage::{
 	keys::branches_bk_pin_key,
 	pump::branch,
-	types::{ActorBranchId, NamespaceId, ResolvedVersionstamp},
+	types::{DatabaseBranchId, NamespaceId, ResolvedVersionstamp},
 };
 use universaldb::options::MutationType;
 
 use fork_common::{
-	TEST_ACTOR, actor_db, assert_storage_error, page, page_bytes, read_actor_branch_id,
-	read_actor_branch_record, read_commit, read_head_commit, read_namespace_branch_id_for,
+	TEST_DATABASE, make_db, assert_storage_error, page, page_bytes, read_database_branch_id,
+	read_database_branch_record, read_commit, read_head_commit, read_namespace_branch_id_for,
 	target_namespace, test_db, test_namespace, test_ups,
 };
 
 #[tokio::test]
-async fn fork_actor_covers_root_depth_one_deep_and_cross_namespace_sources() -> Result<()> {
+async fn fork_database_covers_root_depth_one_deep_and_cross_namespace_sources() -> Result<()> {
 	let db = test_db().await?;
-	let source = actor_db(db.clone(), test_namespace(), TEST_ACTOR);
+	let source = make_db(db.clone(), test_namespace(), TEST_DATABASE);
 	source.commit(vec![page(1, 0x11)], 2, 1_000).await?;
-	let root_branch = read_actor_branch_id(&db, test_namespace(), TEST_ACTOR).await?;
+	let root_branch = read_database_branch_id(&db, test_namespace(), TEST_DATABASE).await?;
 	let root_commit = read_commit(&db, root_branch, 1).await?;
 
-	let target_seed = actor_db(db.clone(), target_namespace(), "target-seed");
+	let target_seed = make_db(db.clone(), target_namespace(), "target-seed");
 	target_seed.commit(vec![page(1, 0xaa)], 1, 1_100).await?;
 	let target_namespace_branch = read_namespace_branch_id_for(&db, target_namespace()).await?;
 
-	let cross_namespace_actor = branch::fork_actor(
+	let cross_namespace_database = branch::fork_database(
 		&db,
 		&test_ups(),
 		NamespaceId::from_gas_id(test_namespace()),
-		TEST_ACTOR.to_string(),
+		TEST_DATABASE.to_string(),
 		ResolvedVersionstamp {
 			versionstamp: root_commit.versionstamp,
 			bookmark: None,
@@ -44,25 +44,25 @@ async fn fork_actor_covers_root_depth_one_deep_and_cross_namespace_sources() -> 
 	)
 	.await?;
 	let cross_namespace_branch =
-		read_actor_branch_id(&db, target_namespace(), &cross_namespace_actor).await?;
-	let cross_namespace_record = read_actor_branch_record(&db, cross_namespace_branch).await?;
+		read_database_branch_id(&db, target_namespace(), &cross_namespace_database).await?;
+	let cross_namespace_record = read_database_branch_record(&db, cross_namespace_branch).await?;
 	assert_eq!(cross_namespace_record.namespace_branch, target_namespace_branch);
 	assert_eq!(cross_namespace_record.parent, Some(root_branch));
 	assert_eq!(cross_namespace_record.fork_depth, 1);
-	let cross_namespace_db = actor_db(db.clone(), target_namespace(), cross_namespace_actor);
+	let cross_namespace_db = make_db(db.clone(), target_namespace(), cross_namespace_database);
 	let pages = cross_namespace_db.get_pages(vec![1]).await?;
 	assert_eq!(pages[0].bytes, Some(page_bytes(0x11)));
 
-	let mut source_actor_id = TEST_ACTOR.to_string();
+	let mut source_database_id = TEST_DATABASE.to_string();
 	let mut source_commit = root_commit;
 	let mut expected_pages = vec![(1, 0x11)];
 
 	for depth in 1..=4 {
-		let forked_actor_id = branch::fork_actor(
+		let forked_database_id = branch::fork_database(
 			&db,
 			&test_ups(),
 			NamespaceId::from_gas_id(test_namespace()),
-			source_actor_id.clone(),
+			source_database_id.clone(),
 			ResolvedVersionstamp {
 				versionstamp: source_commit.versionstamp,
 				bookmark: None,
@@ -70,11 +70,11 @@ async fn fork_actor_covers_root_depth_one_deep_and_cross_namespace_sources() -> 
 			NamespaceId::from_gas_id(test_namespace()),
 		)
 		.await?;
-		let forked_branch = read_actor_branch_id(&db, test_namespace(), &forked_actor_id).await?;
-		let forked_record = read_actor_branch_record(&db, forked_branch).await?;
+		let forked_branch = read_database_branch_id(&db, test_namespace(), &forked_database_id).await?;
+		let forked_record = read_database_branch_record(&db, forked_branch).await?;
 		assert_eq!(forked_record.fork_depth, depth);
 
-		let forked_db = actor_db(db.clone(), test_namespace(), forked_actor_id.clone());
+		let forked_db = make_db(db.clone(), test_namespace(), forked_database_id.clone());
 		let pgnos = expected_pages.iter().map(|(pgno, _)| *pgno).collect();
 		let pages = forked_db.get_pages(pgnos).await?;
 		for (page, (_, fill)) in pages.iter().zip(expected_pages.iter()) {
@@ -89,7 +89,7 @@ async fn fork_actor_covers_root_depth_one_deep_and_cross_namespace_sources() -> 
 				.await?;
 			expected_pages.push((pgno, fill));
 			source_commit = read_head_commit(&db, forked_branch).await?;
-			source_actor_id = forked_actor_id;
+			source_database_id = forked_database_id;
 		}
 	}
 
@@ -97,14 +97,14 @@ async fn fork_actor_covers_root_depth_one_deep_and_cross_namespace_sources() -> 
 }
 
 #[tokio::test]
-async fn fork_actor_bk_pin_race_returns_out_of_retention() -> Result<()> {
+async fn fork_database_bk_pin_race_returns_out_of_retention() -> Result<()> {
 	let db = test_db().await?;
-	let source = actor_db(db.clone(), test_namespace(), TEST_ACTOR);
+	let source = make_db(db.clone(), test_namespace(), TEST_DATABASE);
 	source.commit(vec![page(1, 0x11)], 2, 1_000).await?;
-	let source_branch = read_actor_branch_id(&db, test_namespace(), TEST_ACTOR).await?;
+	let source_branch = read_database_branch_id(&db, test_namespace(), TEST_DATABASE).await?;
 	let namespace_branch = read_namespace_branch_id_for(&db, test_namespace()).await?;
 	let source_commit = read_commit(&db, source_branch, 1).await?;
-	let new_branch = ActorBranchId::new_v4();
+	let new_branch = DatabaseBranchId::new_v4();
 	let pin_after_fork_point = [0xff; 16];
 	let raced = Arc::new(AtomicBool::new(false));
 
@@ -151,20 +151,20 @@ async fn fork_actor_bk_pin_race_returns_out_of_retention() -> Result<()> {
 }
 
 #[tokio::test]
-async fn fork_actor_allows_depth_sixteen_and_rejects_depth_seventeen() -> Result<()> {
+async fn fork_database_allows_depth_sixteen_and_rejects_depth_seventeen() -> Result<()> {
 	let db = test_db().await?;
-	let root = actor_db(db.clone(), test_namespace(), TEST_ACTOR);
+	let root = make_db(db.clone(), test_namespace(), TEST_DATABASE);
 	root.commit(vec![page(1, 0x11)], 2, 1_000).await?;
-	let mut source_actor_id = TEST_ACTOR.to_string();
-	let mut source_branch = read_actor_branch_id(&db, test_namespace(), TEST_ACTOR).await?;
+	let mut source_database_id = TEST_DATABASE.to_string();
+	let mut source_branch = read_database_branch_id(&db, test_namespace(), TEST_DATABASE).await?;
 	let mut source_commit = read_commit(&db, source_branch, 1).await?;
 
 	for depth in 1..=sqlite_storage::constants::MAX_FORK_DEPTH {
-		let forked_actor_id = branch::fork_actor(
+		let forked_database_id = branch::fork_database(
 			&db,
 			&test_ups(),
 			NamespaceId::from_gas_id(test_namespace()),
-			source_actor_id.clone(),
+			source_database_id.clone(),
 			ResolvedVersionstamp {
 				versionstamp: source_commit.versionstamp,
 				bookmark: None,
@@ -172,30 +172,30 @@ async fn fork_actor_allows_depth_sixteen_and_rejects_depth_seventeen() -> Result
 			NamespaceId::from_gas_id(test_namespace()),
 		)
 		.await?;
-		let forked_branch = read_actor_branch_id(&db, test_namespace(), &forked_actor_id).await?;
-		let forked_record = read_actor_branch_record(&db, forked_branch).await?;
+		let forked_branch = read_database_branch_id(&db, test_namespace(), &forked_database_id).await?;
+		let forked_record = read_database_branch_record(&db, forked_branch).await?;
 		assert_eq!(forked_record.fork_depth, depth);
 
 		if depth < sqlite_storage::constants::MAX_FORK_DEPTH {
-			let forked_db = actor_db(db.clone(), test_namespace(), forked_actor_id.clone());
+			let forked_db = make_db(db.clone(), test_namespace(), forked_database_id.clone());
 			let pgno = depth as u32 + 1;
 			forked_db
 				.commit(vec![page(pgno, 0x30 + depth)], pgno + 1, 3_000 + depth as i64)
 				.await?;
 			source_commit = read_head_commit(&db, forked_branch).await?;
-			source_actor_id = forked_actor_id;
+			source_database_id = forked_database_id;
 			source_branch = forked_branch;
 		} else {
-			source_actor_id = forked_actor_id;
+			source_database_id = forked_database_id;
 			source_branch = forked_branch;
 		}
 	}
 
-	let err = branch::fork_actor(
+	let err = branch::fork_database(
 		&db,
 		&test_ups(),
 		NamespaceId::from_gas_id(test_namespace()),
-		source_actor_id,
+		source_database_id,
 		ResolvedVersionstamp {
 			versionstamp: source_commit.versionstamp,
 			bookmark: None,
@@ -207,7 +207,7 @@ async fn fork_actor_allows_depth_sixteen_and_rejects_depth_seventeen() -> Result
 
 	assert_storage_error(&err, sqlite_storage::error::SqliteStorageError::ForkChainTooDeep);
 	assert_eq!(
-		read_actor_branch_record(&db, source_branch).await?.fork_depth,
+		read_database_branch_record(&db, source_branch).await?.fork_depth,
 		sqlite_storage::constants::MAX_FORK_DEPTH
 	);
 

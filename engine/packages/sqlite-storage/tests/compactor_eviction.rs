@@ -16,15 +16,15 @@ use sqlite_storage::{
 		branches_bk_pin_key, branches_desc_pin_key, compactor_global_lease_key,
 		ctr_eviction_index_key,
 	},
-	pump::actor_db,
-	types::ActorBranchId,
+	pump::db,
+	types::DatabaseBranchId,
 };
 use tempfile::Builder;
 use tokio_util::sync::CancellationToken;
 use universaldb::utils::IsolationLevel::Snapshot;
 
-fn branch_id(value: u128) -> ActorBranchId {
-	ActorBranchId::from_uuid(uuid::Uuid::from_u128(value))
+fn branch_id(value: u128) -> DatabaseBranchId {
+	DatabaseBranchId::from_uuid(uuid::Uuid::from_u128(value))
 }
 
 async fn test_db() -> Result<universaldb::Database> {
@@ -64,7 +64,7 @@ async fn read_i64_le(db: &universaldb::Database, key: Vec<u8>) -> Result<Option<
 
 async fn seed_eviction_index(
 	db: &universaldb::Database,
-	rows: Vec<(i64, ActorBranchId)>,
+	rows: Vec<(i64, DatabaseBranchId)>,
 ) -> Result<()> {
 	db.run(move |tx| {
 		let rows = rows.clone();
@@ -81,7 +81,7 @@ async fn seed_eviction_index(
 
 async fn seed_evictable_shard_candidate(
 	db: &universaldb::Database,
-	branch_id: ActorBranchId,
+	branch_id: DatabaseBranchId,
 	shard_id: u32,
 	as_of_txid: u64,
 	newer_as_of_txid: u64,
@@ -110,7 +110,7 @@ async fn seed_evictable_shard_candidate(
 
 async fn write_branch_pin(
 	db: &universaldb::Database,
-	branch_id: ActorBranchId,
+	branch_id: DatabaseBranchId,
 	pin_key: Vec<u8>,
 	versionstamp: [u8; 16],
 	txid: u64,
@@ -140,7 +140,7 @@ async fn access_touch_throttle_bounds_eviction_index_churn_at_1ms_cadence() -> R
 	let branch_id = branch_id(0x1116);
 
 	db.run(move |tx| async move {
-		let first_bucket = actor_db::test_hooks::touch_access_if_bucket_advanced_for_test(
+		let first_bucket = db::test_hooks::touch_access_if_bucket_advanced_for_test(
 			&tx,
 			branch_id,
 			None,
@@ -154,7 +154,7 @@ async fn access_touch_throttle_bounds_eviction_index_churn_at_1ms_cadence() -> R
 
 	db.run(move |tx| async move {
 		for now_ms in 2..ACCESS_TOUCH_THROTTLE_MS {
-			let touched = actor_db::test_hooks::touch_access_if_bucket_advanced_for_test(
+			let touched = db::test_hooks::touch_access_if_bucket_advanced_for_test(
 				&tx,
 				branch_id,
 				Some(0),
@@ -181,7 +181,7 @@ async fn access_touch_throttle_bounds_eviction_index_churn_at_1ms_cadence() -> R
 	);
 
 	db.run(move |tx| async move {
-		let next_bucket = actor_db::test_hooks::touch_access_if_bucket_advanced_for_test(
+		let next_bucket = db::test_hooks::touch_access_if_bucket_advanced_for_test(
 			&tx,
 			branch_id,
 			Some(0),

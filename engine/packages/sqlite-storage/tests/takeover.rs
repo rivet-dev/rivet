@@ -4,11 +4,11 @@ use anyhow::Result;
 use sqlite_storage::{
 	keys::{delta_chunk_key, meta_head_key, pidx_delta_key, shard_key},
 	takeover,
-	types::{ActorBranchId, DBHead, encode_db_head},
+	types::{DatabaseBranchId, DBHead, encode_db_head},
 };
 use tempfile::Builder;
 
-const TEST_ACTOR: &str = "test-actor";
+const TEST_DATABASE: &str = "test-database";
 
 async fn test_db() -> Result<universaldb::Database> {
 	let path = Builder::new().prefix("sqlite-storage-takeover-").tempdir()?.keep();
@@ -22,7 +22,7 @@ fn head(head_txid: u64, db_size_pages: u32) -> DBHead {
 		head_txid,
 		db_size_pages,
 		post_apply_checksum: 0,
-		branch_id: ActorBranchId::nil(),
+		branch_id: DatabaseBranchId::nil(),
 		#[cfg(debug_assertions)]
 		generation: 0,
 	}
@@ -47,15 +47,15 @@ async fn clean_state_passes() -> Result<()> {
 	seed(
 		&db,
 		vec![
-			(meta_head_key(TEST_ACTOR), encode_db_head(head(4, 128))?),
-			(delta_chunk_key(TEST_ACTOR, 4, 0), b"delta".to_vec()),
-			(pidx_delta_key(TEST_ACTOR, 2), 4_u64.to_be_bytes().to_vec()),
-			(shard_key(TEST_ACTOR, 1), b"shard".to_vec()),
+			(meta_head_key(TEST_DATABASE), encode_db_head(head(4, 128))?),
+			(delta_chunk_key(TEST_DATABASE, 4, 0), b"delta".to_vec()),
+			(pidx_delta_key(TEST_DATABASE, 2), 4_u64.to_be_bytes().to_vec()),
+			(shard_key(TEST_DATABASE, 1), b"shard".to_vec()),
 		],
 	)
 	.await?;
 
-	takeover::reconcile(&db, TEST_ACTOR).await?;
+	takeover::reconcile(&db, TEST_DATABASE).await?;
 
 	Ok(())
 }
@@ -68,17 +68,17 @@ async fn orphan_above_eof_panics() {
 		&db,
 		vec![
 			(
-				meta_head_key(TEST_ACTOR),
+				meta_head_key(TEST_DATABASE),
 				encode_db_head(head(4, 3)).expect("head should encode"),
 			),
-			(delta_chunk_key(TEST_ACTOR, 4, 0), b"delta".to_vec()),
-			(pidx_delta_key(TEST_ACTOR, 4), 4_u64.to_be_bytes().to_vec()),
+			(delta_chunk_key(TEST_DATABASE, 4, 0), b"delta".to_vec()),
+			(pidx_delta_key(TEST_DATABASE, 4), 4_u64.to_be_bytes().to_vec()),
 		],
 	)
 	.await
 	.expect("seed should succeed");
 
-	takeover::reconcile(&db, TEST_ACTOR)
+	takeover::reconcile(&db, TEST_DATABASE)
 		.await
 		.expect("reconcile should panic before returning");
 }
@@ -91,16 +91,16 @@ async fn orphan_above_head_txid_panics() {
 		&db,
 		vec![
 			(
-				meta_head_key(TEST_ACTOR),
+				meta_head_key(TEST_DATABASE),
 				encode_db_head(head(4, 128)).expect("head should encode"),
 			),
-			(delta_chunk_key(TEST_ACTOR, 5, 0), b"delta".to_vec()),
+			(delta_chunk_key(TEST_DATABASE, 5, 0), b"delta".to_vec()),
 		],
 	)
 	.await
 	.expect("seed should succeed");
 
-	takeover::reconcile(&db, TEST_ACTOR)
+	takeover::reconcile(&db, TEST_DATABASE)
 		.await
 		.expect("reconcile should panic before returning");
 }
@@ -113,16 +113,16 @@ async fn dangling_pidx_ref_panics() {
 		&db,
 		vec![
 			(
-				meta_head_key(TEST_ACTOR),
+				meta_head_key(TEST_DATABASE),
 				encode_db_head(head(4, 128)).expect("head should encode"),
 			),
-			(pidx_delta_key(TEST_ACTOR, 2), 4_u64.to_be_bytes().to_vec()),
+			(pidx_delta_key(TEST_DATABASE, 2), 4_u64.to_be_bytes().to_vec()),
 		],
 	)
 	.await
 	.expect("seed should succeed");
 
-	takeover::reconcile(&db, TEST_ACTOR)
+	takeover::reconcile(&db, TEST_DATABASE)
 		.await
 		.expect("reconcile should panic before returning");
 }

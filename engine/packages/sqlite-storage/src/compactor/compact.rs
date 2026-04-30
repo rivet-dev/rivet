@@ -1,4 +1,4 @@
-//! Per-actor compaction pass for the stateless sqlite-storage layout.
+//! Per-database compaction pass for the stateless sqlite-storage layout.
 
 use std::{
 	collections::BTreeMap,
@@ -26,7 +26,7 @@ use crate::pump::{
 	ltx::decode_ltx_v3,
 	quota,
 	types::{
-		ActorBranchId, MetaCompact, NamespaceId, decode_commit_row, decode_db_head,
+		DatabaseBranchId, MetaCompact, NamespaceId, decode_commit_row, decode_db_head,
 		decode_meta_compact, encode_meta_compact,
 	},
 	udb,
@@ -49,14 +49,14 @@ pub struct CompactionOutcome {
 
 pub async fn compact_default_batch(
 	udb: Arc<universaldb::Database>,
-	actor_id: String,
+	database_id: String,
 	batch_size_deltas: u32,
 	cancel_token: CancellationToken,
 ) -> Result<CompactionOutcome> {
 	compact_default_batch_with_node_id(
 		udb,
 		None,
-		actor_id,
+		database_id,
 		batch_size_deltas,
 		cancel_token,
 		NodeId::new(),
@@ -67,7 +67,7 @@ pub async fn compact_default_batch(
 pub(crate) async fn compact_default_batch_with_node_id(
 	udb: Arc<universaldb::Database>,
 	namespace_id: Option<NamespaceId>,
-	actor_id: String,
+	database_id: String,
 	batch_size_deltas: u32,
 	cancel_token: CancellationToken,
 	node_id: NodeId,
@@ -82,7 +82,7 @@ pub(crate) async fn compact_default_batch_with_node_id(
 	let plan = plan_batch(
 		udb.as_ref(),
 		namespace_id,
-		actor_id.clone(),
+		database_id.clone(),
 		batch_size_deltas,
 	)
 	.await?;
@@ -90,13 +90,13 @@ pub(crate) async fn compact_default_batch_with_node_id(
 		.with_label_values(labels)
 		.observe(plan.selected_delta_txids.len() as f64);
 
-	test_hooks::maybe_pause_after_plan(&actor_id).await;
+	test_hooks::maybe_pause_after_plan(&database_id).await;
 	ensure_not_cancelled(&cancel_token)?;
-	let write_result = write_batch(udb.as_ref(), actor_id.clone(), plan, node_id.clone()).await?;
+	let write_result = write_batch(udb.as_ref(), database_id.clone(), plan, node_id.clone()).await?;
 
 	ensure_not_cancelled(&cancel_token)?;
 	let compare_and_clear_noops =
-		count_compare_and_clear_noops(udb.as_ref(), actor_id.clone(), write_result.attempted_pidx_deletes)
+		count_compare_and_clear_noops(udb.as_ref(), database_id.clone(), write_result.attempted_pidx_deletes)
 			.await?;
 
 	metrics::SQLITE_COMPACTOR_PAGES_FOLDED_TOTAL
@@ -121,21 +121,21 @@ pub(crate) async fn compact_default_batch_with_node_id(
 async fn plan_batch(
 	db: &universaldb::Database,
 	namespace_id: Option<NamespaceId>,
-	actor_id: String,
+	database_id: String,
 	batch_size_deltas: u32,
 ) -> Result<CompactionPlan> {
 	db.run(move |tx| {
-		let actor_id = actor_id.clone();
+		let database_id = database_id.clone();
 		let namespace_id = namespace_id;
 
 		async move {
-			let scope = resolve_storage_scope(&tx, namespace_id, &actor_id, Snapshot).await?;
-			let Some(head_bytes) = tx_get_value(&tx, &scope.meta_head_key(&actor_id), Snapshot).await?
+			let scope = resolve_storage_scope(&tx, namespace_id, &database_id, Snapshot).await?;
+			let Some(head_bytes) = tx_get_value(&tx, &scope.meta_head_key(&database_id), Snapshot).await?
 			else {
 				return Ok(CompactionPlan::default());
 			};
 			let head = decode_db_head(&head_bytes).context("decode sqlite db head for compaction")?;
-			let compact = tx_get_value(&tx, &scope.meta_compact_key(&actor_id), Snapshot)
+			let compact = tx_get_value(&tx, &scope.meta_compact_key(&database_id), Snapshot)
 				.await?
 				.as_deref()
 				.map(decode_meta_compact)
@@ -145,8 +145,8 @@ async fn plan_batch(
 					materialized_txid: 0,
 				});
 
-			let pidx_rows = load_pidx_rows(&tx, &scope, &actor_id).await?;
-			let delta_entries = load_delta_entries(&tx, &scope, &actor_id).await?;
+			let pidx_rows = load_pidx_rows(&tx, &scope, &database_id).await?;
+			let delta_entries = load_delta_entries(&tx, &scope, &database_id).await?;
 			let selected_delta_txids = delta_entries
 				.keys()
 				.copied()
@@ -222,24 +222,24 @@ async fn plan_batch(
 
 async fn write_batch(
 	db: &universaldb::Database,
-	actor_id: String,
+	database_id: String,
 	plan: CompactionPlan,
 	node_id: String,
 ) -> Result<WriteResult> {
 	db.run(move |tx| {
-		let actor_id = actor_id.clone();
+		let database_id = database_id.clone();
 		let plan = plan.clone();
 		let node_id = node_id.clone();
 
 		async move {
 			let Some(head_bytes) =
-				tx_get_value(&tx, &plan.scope.meta_head_key(&actor_id), Serializable).await?
+				tx_get_value(&tx, &plan.scope.meta_head_key(&database_id), Serializable).await?
 			else {
 				return Ok(WriteResult::default());
 			};
 			let head = decode_db_head(&head_bytes).context("decode sqlite db head for compaction write")?;
 
-			test_hooks::maybe_pause_after_write_head_read(&actor_id).await;
+			test_hooks::maybe_pause_after_write_head_read(&database_id).await;
 
 			let mut attempted_pidx_deletes = Vec::new();
 			let mut pages_folded = 0u64;
@@ -262,7 +262,7 @@ async fn write_batch(
 				let evicted_bytes = enforce_shard_version_cap(
 					&tx,
 					plan.scope,
-					&actor_id,
+					&database_id,
 					head.branch_id,
 					*shard_id,
 					plan.materialized_txid,
@@ -277,13 +277,13 @@ async fn write_batch(
 							.await?
 					}
 					StorageScope::Legacy => {
-						fold_shard(&tx, &actor_id, *shard_id, plan.materialized_txid, page_updates)
+						fold_shard(&tx, &database_id, *shard_id, plan.materialized_txid, page_updates)
 							.await?
 					}
 				};
 				bytes_freed -= bytes_added;
 				for page in fold_pages.iter().filter(|page| page.pgno <= head.db_size_pages) {
-					let key = plan.scope.pidx_key(&actor_id, page.pgno);
+					let key = plan.scope.pidx_key(&database_id, page.pgno);
 					let expected_value = page.expected_txid.to_be_bytes();
 					udb::compare_and_clear(&tx, &key, &expected_value);
 					bytes_freed += tracked_entry_size(&key, &expected_value)?;
@@ -296,14 +296,14 @@ async fn write_batch(
 			}
 
 			for txid in &plan.selected_delta_txids {
-				let prefix = plan.scope.delta_chunk_prefix(&actor_id, *txid);
+				let prefix = plan.scope.delta_chunk_prefix(&database_id, *txid);
 				let (begin, end) = prefix_range(&prefix);
 				tx.informal().clear_range(&begin, &end);
 			}
 			bytes_freed += sweep_hot_retention(
 				&tx,
 				plan.scope,
-				&actor_id,
+				&database_id,
 				plan.retention_cutoff_ms,
 			)
 			.await?;
@@ -313,7 +313,7 @@ async fn write_batch(
 			})
 			.context("encode compact meta")?;
 			tx.informal()
-				.set(&plan.scope.meta_compact_key(&actor_id), &compact);
+				.set(&plan.scope.meta_compact_key(&database_id), &compact);
 			let manifest_branch_id = match plan.scope {
 				StorageScope::Branch(branch_id) => branch_id,
 				StorageScope::Legacy => head.branch_id,
@@ -328,7 +328,7 @@ async fn write_batch(
 						quota::atomic_add_branch(&tx, branch_id, -bytes_freed);
 					}
 					StorageScope::Legacy => {
-						quota::atomic_add(&tx, &actor_id, -bytes_freed);
+						quota::atomic_add(&tx, &database_id, -bytes_freed);
 					}
 				}
 			}
@@ -348,33 +348,33 @@ async fn write_batch(
 #[cfg(debug_assertions)]
 pub async fn validate_quota(
 	udb: Arc<universaldb::Database>,
-	actor_id: String,
+	database_id: String,
 ) -> Result<()> {
-	validate_quota_with_node_id(udb, None, actor_id, NodeId::new()).await
+	validate_quota_with_node_id(udb, None, database_id, NodeId::new()).await
 }
 
 #[cfg(debug_assertions)]
 pub(crate) async fn validate_quota_with_node_id(
 	udb: Arc<universaldb::Database>,
 	namespace_id: Option<NamespaceId>,
-	actor_id: String,
+	database_id: String,
 	node_id: NodeId,
 ) -> Result<()> {
 	let (manual_total, counter_value) = udb
 		.run({
-			let actor_id = actor_id.clone();
+			let database_id = database_id.clone();
 			let namespace_id = namespace_id;
 			move |tx| {
-				let actor_id = actor_id.clone();
+				let database_id = database_id.clone();
 				let namespace_id = namespace_id;
 
 				async move {
 					let manual_total =
 						if let Some(branch_id) =
-							branch::resolve_actor_branch(
+							branch::resolve_database_branch(
 								&tx,
 								namespace_id.unwrap_or_else(NamespaceId::nil),
-								&actor_id,
+								&database_id,
 								Snapshot,
 							)
 							.await?
@@ -383,14 +383,14 @@ pub(crate) async fn validate_quota_with_node_id(
 								+ scan_tracked_prefix_bytes(&tx, &keys::branch_delta_prefix(branch_id)).await?
 								+ scan_tracked_prefix_bytes(&tx, &keys::branch_shard_prefix(branch_id)).await?
 						} else {
-							scan_tracked_prefix_bytes(&tx, &keys::pidx_delta_prefix(&actor_id)).await?
-								+ scan_tracked_prefix_bytes(&tx, &keys::delta_prefix(&actor_id)).await?
-								+ scan_tracked_prefix_bytes(&tx, &keys::shard_prefix(&actor_id)).await?
+							scan_tracked_prefix_bytes(&tx, &keys::pidx_delta_prefix(&database_id)).await?
+								+ scan_tracked_prefix_bytes(&tx, &keys::delta_prefix(&database_id)).await?
+								+ scan_tracked_prefix_bytes(&tx, &keys::shard_prefix(&database_id)).await?
 						};
 					let counter_value = if let Some(namespace_id) = namespace_id {
-						quota::read_in_namespace(&tx, namespace_id, &actor_id).await?
+						quota::read_in_namespace(&tx, namespace_id, &database_id).await?
 					} else {
-						quota::read(&tx, &actor_id).await?
+						quota::read(&tx, &database_id).await?
 					};
 
 					Ok((manual_total, counter_value))
@@ -405,7 +405,7 @@ pub(crate) async fn validate_quota_with_node_id(
 			.with_label_values(&[node_id.as_str()])
 			.inc();
 		tracing::error!(
-			actor_id = %actor_id,
+			database_id = %database_id,
 			manual_total,
 			counter_value,
 			"sqlite quota validation mismatch"
@@ -413,11 +413,11 @@ pub(crate) async fn validate_quota_with_node_id(
 
 		#[cfg(test)]
 		panic!(
-			"sqlite quota validation mismatch for actor {actor_id}: manual_total={manual_total}, counter_value={counter_value}"
+			"sqlite quota validation mismatch for database {database_id}: manual_total={manual_total}, counter_value={counter_value}"
 		);
 
 		#[cfg(not(test))]
-		bail!("sqlite quota validation mismatch for actor {actor_id}");
+		bail!("sqlite quota validation mismatch for database {database_id}");
 	}
 
 	Ok(())
@@ -426,13 +426,13 @@ pub(crate) async fn validate_quota_with_node_id(
 async fn enforce_shard_version_cap(
 	tx: &universaldb::Transaction,
 	scope: StorageScope,
-	actor_id: &str,
-	legacy_branch_id: ActorBranchId,
+	database_id: &str,
+	legacy_branch_id: DatabaseBranchId,
 	shard_id: u32,
 	new_as_of_txid: u64,
 	node_id: &str,
 ) -> Result<i64> {
-	let versions = load_shard_versions(tx, scope, actor_id, shard_id).await?;
+	let versions = load_shard_versions(tx, scope, database_id, shard_id).await?;
 	metrics::SQLITE_SHARD_VERSIONS_PER_SHARD
 		.with_label_values(&[node_id])
 		.observe(versions.len() as f64);
@@ -446,7 +446,7 @@ async fn enforce_shard_version_cap(
 		StorageScope::Branch(branch_id) => branch_id,
 		StorageScope::Legacy => legacy_branch_id,
 	};
-	let pins = load_branch_pin_txids(tx, scope, actor_id, branch_id).await?;
+	let pins = load_branch_pin_txids(tx, scope, database_id, branch_id).await?;
 	let Some(oldest_unpinned) = versions
 		.iter()
 		.find(|version| !is_shard_version_pinned(version.as_of_txid, &pins))
@@ -461,16 +461,16 @@ async fn enforce_shard_version_cap(
 async fn load_shard_versions(
 	tx: &universaldb::Transaction,
 	scope: StorageScope,
-	actor_id: &str,
+	database_id: &str,
 	shard_id: u32,
 ) -> Result<Vec<ShardVersion>> {
-	let prefix = scope.shard_version_prefix(actor_id, shard_id);
+	let prefix = scope.shard_version_prefix(database_id, shard_id);
 	tx_scan_prefix_values_at(tx, &prefix, Serializable)
 		.await?
 		.into_iter()
 		.map(|(key, value)| {
 			Ok(ShardVersion {
-				as_of_txid: scope.decode_shard_as_of_txid(actor_id, shard_id, &key)?,
+				as_of_txid: scope.decode_shard_as_of_txid(database_id, shard_id, &key)?,
 				tracked_size: tracked_entry_size(&key, &value)?,
 				key,
 			})
@@ -481,15 +481,15 @@ async fn load_shard_versions(
 async fn load_branch_pin_txids(
 	tx: &universaldb::Transaction,
 	scope: StorageScope,
-	actor_id: &str,
-	branch_id: ActorBranchId,
+	database_id: &str,
+	branch_id: DatabaseBranchId,
 ) -> Result<Vec<u64>> {
 	let mut pins = Vec::new();
 	for key in [
 		keys::branches_desc_pin_key(branch_id),
 		keys::branches_bk_pin_key(branch_id),
 	] {
-		if let Some(txid) = load_pin_txid(tx, scope, actor_id, &key).await? {
+		if let Some(txid) = load_pin_txid(tx, scope, database_id, &key).await? {
 			pins.push(txid);
 		}
 	}
@@ -500,7 +500,7 @@ async fn load_branch_pin_txids(
 async fn load_pin_txid(
 	tx: &universaldb::Transaction,
 	scope: StorageScope,
-	actor_id: &str,
+	database_id: &str,
 	pin_key: &[u8],
 ) -> Result<Option<u64>> {
 	let Some(bytes) = tx.informal().get(pin_key, Serializable).await? else {
@@ -516,7 +516,7 @@ async fn load_pin_txid(
 
 	let Some(txid_bytes) = tx
 		.informal()
-		.get(&scope.vtx_key(actor_id, pin), Serializable)
+		.get(&scope.vtx_key(database_id, pin), Serializable)
 		.await?
 	else {
 		return Ok(Some(0));
@@ -532,12 +532,12 @@ async fn load_pin_txid(
 async fn sweep_hot_retention(
 	tx: &universaldb::Transaction,
 	scope: StorageScope,
-	actor_id: &str,
+	database_id: &str,
 	retention_cutoff_ms: i64,
 ) -> Result<i64> {
 	let mut bytes_freed = 0;
 	for (commit_key, commit_value) in
-		tx_scan_prefix_values_at(tx, &scope.commit_prefix(actor_id), Serializable).await?
+		tx_scan_prefix_values_at(tx, &scope.commit_prefix(database_id), Serializable).await?
 	{
 		let commit_row = decode_commit_row(&commit_value)
 			.context("decode sqlite commit row during hot retention sweep")?;
@@ -548,7 +548,7 @@ async fn sweep_hot_retention(
 		bytes_freed += tracked_entry_size(&commit_key, &commit_value)?;
 		tx.informal().clear(&commit_key);
 
-		let vtx_key = scope.vtx_key(actor_id, commit_row.versionstamp);
+		let vtx_key = scope.vtx_key(database_id, commit_row.versionstamp);
 		if let Some(vtx_value) = tx_get_value(tx, &vtx_key, Serializable).await? {
 			bytes_freed += tracked_entry_size(&vtx_key, &vtx_value)?;
 			tx.informal().clear(&vtx_key);
@@ -564,12 +564,12 @@ fn is_shard_version_pinned(as_of_txid: u64, pin_txids: &[u64]) -> bool {
 
 async fn count_compare_and_clear_noops(
 	db: &universaldb::Database,
-	actor_id: String,
+	database_id: String,
 	attempted_pidx_deletes: Vec<PidxDelete>,
 ) -> Result<u64> {
 	db.run(move |tx| {
 		let attempted_pidx_deletes = attempted_pidx_deletes.clone();
-		let actor_id = actor_id.clone();
+		let database_id = database_id.clone();
 
 		async move {
 			let mut noops = 0u64;
@@ -578,7 +578,7 @@ async fn count_compare_and_clear_noops(
 					if value != delete.expected_value {
 						noops += 1;
 					} else {
-						bail!("PIDX compare-and-clear left expected value for actor {actor_id}");
+						bail!("PIDX compare-and-clear left expected value for database {database_id}");
 					}
 				}
 			}
@@ -591,14 +591,14 @@ async fn count_compare_and_clear_noops(
 async fn load_pidx_rows(
 	tx: &universaldb::Transaction,
 	scope: &StorageScope,
-	actor_id: &str,
+	database_id: &str,
 ) -> Result<Vec<PidxRow>> {
-	tx_scan_prefix_values(tx, &scope.pidx_prefix(actor_id))
+	tx_scan_prefix_values(tx, &scope.pidx_prefix(database_id))
 		.await?
 		.into_iter()
 		.map(|(key, value)| {
 			Ok(PidxRow {
-				pgno: scope.decode_pidx_pgno(actor_id, &key)?,
+				pgno: scope.decode_pidx_pgno(database_id, &key)?,
 				txid: decode_pidx_txid(&value)?,
 			})
 		})
@@ -608,12 +608,12 @@ async fn load_pidx_rows(
 async fn load_delta_entries(
 	tx: &universaldb::Transaction,
 	scope: &StorageScope,
-	actor_id: &str,
+	database_id: &str,
 ) -> Result<BTreeMap<u64, DeltaEntry>> {
 	let mut chunks_by_txid = BTreeMap::<u64, Vec<DeltaChunk>>::new();
-	for (key, value) in tx_scan_prefix_values(tx, &scope.delta_prefix(actor_id)).await? {
-		let txid = scope.decode_delta_chunk_txid(actor_id, &key)?;
-		let chunk_idx = scope.decode_delta_chunk_idx(actor_id, txid, &key)?;
+	for (key, value) in tx_scan_prefix_values(tx, &scope.delta_prefix(database_id)).await? {
+		let txid = scope.decode_delta_chunk_txid(database_id, &key)?;
+		let chunk_idx = scope.decode_delta_chunk_idx(database_id, txid, &key)?;
 		chunks_by_txid.entry(txid).or_default().push(DeltaChunk {
 			key,
 			chunk_idx,
@@ -691,8 +691,8 @@ async fn scan_tracked_prefix_bytes(
 		.sum()
 }
 
-fn decode_pidx_pgno(actor_id: &str, key: &[u8]) -> Result<u32> {
-	let prefix = keys::pidx_delta_prefix(actor_id);
+fn decode_pidx_pgno(database_id: &str, key: &[u8]) -> Result<u32> {
+	let prefix = keys::pidx_delta_prefix(database_id);
 	let suffix = key
 		.strip_prefix(prefix.as_slice())
 		.context("pidx key did not start with expected prefix")?;
@@ -703,7 +703,7 @@ fn decode_pidx_pgno(actor_id: &str, key: &[u8]) -> Result<u32> {
 	Ok(u32::from_be_bytes(bytes))
 }
 
-fn decode_branch_pidx_pgno(branch_id: ActorBranchId, key: &[u8]) -> Result<u32> {
+fn decode_branch_pidx_pgno(branch_id: DatabaseBranchId, key: &[u8]) -> Result<u32> {
 	let prefix = keys::branch_pidx_prefix(branch_id);
 	let suffix = key
 		.strip_prefix(prefix.as_slice())
@@ -758,98 +758,98 @@ struct CompactionPlan {
 
 #[derive(Debug, Clone, Copy, Default)]
 enum StorageScope {
-	Branch(ActorBranchId),
+	Branch(DatabaseBranchId),
 	#[default]
 	Legacy,
 }
 
 impl StorageScope {
-	fn meta_head_key(self, actor_id: &str) -> Vec<u8> {
+	fn meta_head_key(self, database_id: &str) -> Vec<u8> {
 		match self {
 			Self::Branch(branch_id) => keys::branch_meta_head_key(branch_id),
-			Self::Legacy => keys::meta_head_key(actor_id),
+			Self::Legacy => keys::meta_head_key(database_id),
 		}
 	}
 
-	fn meta_compact_key(self, actor_id: &str) -> Vec<u8> {
+	fn meta_compact_key(self, database_id: &str) -> Vec<u8> {
 		match self {
 			Self::Branch(branch_id) => keys::branch_meta_compact_key(branch_id),
-			Self::Legacy => keys::meta_compact_key(actor_id),
+			Self::Legacy => keys::meta_compact_key(database_id),
 		}
 	}
 
-	fn pidx_key(self, actor_id: &str, pgno: u32) -> Vec<u8> {
+	fn pidx_key(self, database_id: &str, pgno: u32) -> Vec<u8> {
 		match self {
 			Self::Branch(branch_id) => keys::branch_pidx_key(branch_id, pgno),
-			Self::Legacy => keys::pidx_delta_key(actor_id, pgno),
+			Self::Legacy => keys::pidx_delta_key(database_id, pgno),
 		}
 	}
 
-	fn pidx_prefix(self, actor_id: &str) -> Vec<u8> {
+	fn pidx_prefix(self, database_id: &str) -> Vec<u8> {
 		match self {
 			Self::Branch(branch_id) => keys::branch_pidx_prefix(branch_id),
-			Self::Legacy => keys::pidx_delta_prefix(actor_id),
+			Self::Legacy => keys::pidx_delta_prefix(database_id),
 		}
 	}
 
-	fn delta_prefix(self, actor_id: &str) -> Vec<u8> {
+	fn delta_prefix(self, database_id: &str) -> Vec<u8> {
 		match self {
 			Self::Branch(branch_id) => keys::branch_delta_prefix(branch_id),
-			Self::Legacy => keys::delta_prefix(actor_id),
+			Self::Legacy => keys::delta_prefix(database_id),
 		}
 	}
 
-	fn delta_chunk_prefix(self, actor_id: &str, txid: u64) -> Vec<u8> {
+	fn delta_chunk_prefix(self, database_id: &str, txid: u64) -> Vec<u8> {
 		match self {
 			Self::Branch(branch_id) => keys::branch_delta_chunk_prefix(branch_id, txid),
-			Self::Legacy => keys::delta_chunk_prefix(actor_id, txid),
+			Self::Legacy => keys::delta_chunk_prefix(database_id, txid),
 		}
 	}
 
-	fn commit_prefix(self, actor_id: &str) -> Vec<u8> {
+	fn commit_prefix(self, database_id: &str) -> Vec<u8> {
 		match self {
 			Self::Branch(branch_id) => keys::branch_commit_prefix(branch_id),
-			Self::Legacy => keys::commit_prefix(actor_id),
+			Self::Legacy => keys::commit_prefix(database_id),
 		}
 	}
 
-	fn decode_pidx_pgno(self, actor_id: &str, key: &[u8]) -> Result<u32> {
+	fn decode_pidx_pgno(self, database_id: &str, key: &[u8]) -> Result<u32> {
 		match self {
 			Self::Branch(branch_id) => decode_branch_pidx_pgno(branch_id, key),
-			Self::Legacy => decode_pidx_pgno(actor_id, key),
+			Self::Legacy => decode_pidx_pgno(database_id, key),
 		}
 	}
 
-	fn decode_delta_chunk_txid(self, actor_id: &str, key: &[u8]) -> Result<u64> {
+	fn decode_delta_chunk_txid(self, database_id: &str, key: &[u8]) -> Result<u64> {
 		match self {
 			Self::Branch(branch_id) => keys::decode_branch_delta_chunk_txid(branch_id, key),
-			Self::Legacy => keys::decode_delta_chunk_txid(actor_id, key),
+			Self::Legacy => keys::decode_delta_chunk_txid(database_id, key),
 		}
 	}
 
-	fn decode_delta_chunk_idx(self, actor_id: &str, txid: u64, key: &[u8]) -> Result<u32> {
+	fn decode_delta_chunk_idx(self, database_id: &str, txid: u64, key: &[u8]) -> Result<u32> {
 		match self {
 			Self::Branch(branch_id) => keys::decode_branch_delta_chunk_idx(branch_id, txid, key),
-			Self::Legacy => keys::decode_delta_chunk_idx(actor_id, txid, key),
+			Self::Legacy => keys::decode_delta_chunk_idx(database_id, txid, key),
 		}
 	}
 
-	fn shard_version_prefix(self, actor_id: &str, shard_id: u32) -> Vec<u8> {
+	fn shard_version_prefix(self, database_id: &str, shard_id: u32) -> Vec<u8> {
 		match self {
 			Self::Branch(branch_id) => keys::branch_shard_version_prefix(branch_id, shard_id),
-			Self::Legacy => keys::shard_version_prefix(actor_id, shard_id),
+			Self::Legacy => keys::shard_version_prefix(database_id, shard_id),
 		}
 	}
 
-	fn vtx_key(self, actor_id: &str, versionstamp: [u8; 16]) -> Vec<u8> {
+	fn vtx_key(self, database_id: &str, versionstamp: [u8; 16]) -> Vec<u8> {
 		match self {
 			Self::Branch(branch_id) => keys::branch_vtx_key(branch_id, versionstamp),
-			Self::Legacy => keys::vtx_key(actor_id, versionstamp),
+			Self::Legacy => keys::vtx_key(database_id, versionstamp),
 		}
 	}
 
-	fn decode_shard_as_of_txid(self, actor_id: &str, shard_id: u32, key: &[u8]) -> Result<u64> {
-		let prefix = self.shard_version_prefix(actor_id, shard_id);
+	fn decode_shard_as_of_txid(self, database_id: &str, shard_id: u32, key: &[u8]) -> Result<u64> {
+		let prefix = self.shard_version_prefix(database_id, shard_id);
 		let suffix = key
 			.strip_prefix(prefix.as_slice())
 			.context("shard version key did not start with expected prefix")?;
@@ -864,14 +864,14 @@ impl StorageScope {
 async fn resolve_storage_scope(
 	tx: &universaldb::Transaction,
 	namespace_id: Option<NamespaceId>,
-	actor_id: &str,
+	database_id: &str,
 	isolation_level: universaldb::utils::IsolationLevel,
 ) -> Result<StorageScope> {
 	Ok(
-		match branch::resolve_actor_branch(
+		match branch::resolve_database_branch(
 			tx,
 			namespace_id.unwrap_or_else(NamespaceId::nil),
-			actor_id,
+			database_id,
 			isolation_level,
 		)
 		.await?
@@ -945,41 +945,41 @@ pub mod test_hooks {
 		slot: &'static Mutex<Option<(String, Arc<Notify>, Arc<Notify>)>>,
 	}
 
-	pub fn pause_after_plan(actor_id: &str) -> (PauseGuard, Arc<Notify>, Arc<Notify>) {
-		pause(&PAUSE_AFTER_PLAN, actor_id)
+	pub fn pause_after_plan(database_id: &str) -> (PauseGuard, Arc<Notify>, Arc<Notify>) {
+		pause(&PAUSE_AFTER_PLAN, database_id)
 	}
 
-	pub fn pause_after_write_head_read(actor_id: &str) -> (PauseGuard, Arc<Notify>, Arc<Notify>) {
-		pause(&PAUSE_AFTER_WRITE_HEAD_READ, actor_id)
+	pub fn pause_after_write_head_read(database_id: &str) -> (PauseGuard, Arc<Notify>, Arc<Notify>) {
+		pause(&PAUSE_AFTER_WRITE_HEAD_READ, database_id)
 	}
 
-	pub(super) async fn maybe_pause_after_plan(actor_id: &str) {
-		maybe_pause(&PAUSE_AFTER_PLAN, actor_id).await;
+	pub(super) async fn maybe_pause_after_plan(database_id: &str) {
+		maybe_pause(&PAUSE_AFTER_PLAN, database_id).await;
 	}
 
-	pub(super) async fn maybe_pause_after_write_head_read(actor_id: &str) {
-		maybe_pause(&PAUSE_AFTER_WRITE_HEAD_READ, actor_id).await;
+	pub(super) async fn maybe_pause_after_write_head_read(database_id: &str) {
+		maybe_pause(&PAUSE_AFTER_WRITE_HEAD_READ, database_id).await;
 	}
 
 	fn pause(
 		slot: &'static Mutex<Option<(String, Arc<Notify>, Arc<Notify>)>>,
-		actor_id: &str,
+		database_id: &str,
 	) -> (PauseGuard, Arc<Notify>, Arc<Notify>) {
 		let reached = Arc::new(Notify::new());
 		let release = Arc::new(Notify::new());
-		*slot.lock() = Some((actor_id.to_string(), Arc::clone(&reached), Arc::clone(&release)));
+		*slot.lock() = Some((database_id.to_string(), Arc::clone(&reached), Arc::clone(&release)));
 
 		(PauseGuard { slot }, reached, release)
 	}
 
 	async fn maybe_pause(
 		slot: &'static Mutex<Option<(String, Arc<Notify>, Arc<Notify>)>>,
-		actor_id: &str,
+		database_id: &str,
 	) {
 		let hook = slot
 			.lock()
 			.as_ref()
-			.filter(|(hook_actor_id, _, _)| hook_actor_id == actor_id)
+			.filter(|(hook_database_id, _, _)| hook_database_id == database_id)
 			.map(|(_, reached, release)| (Arc::clone(reached), Arc::clone(release)));
 
 		if let Some((reached, release)) = hook {
@@ -997,7 +997,7 @@ pub mod test_hooks {
 
 #[cfg(not(debug_assertions))]
 mod test_hooks {
-	pub(super) async fn maybe_pause_after_plan(_actor_id: &str) {}
+	pub(super) async fn maybe_pause_after_plan(_database_id: &str) {}
 
-	pub(super) async fn maybe_pause_after_write_head_read(_actor_id: &str) {}
+	pub(super) async fn maybe_pause_after_write_head_read(_database_id: &str) {}
 }

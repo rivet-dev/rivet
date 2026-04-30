@@ -9,7 +9,7 @@ SQLite storage has two external ids:
 - `NamespaceId`: the namespace branch id. There is no separate namespace pointer id.
 - `DatabaseId`: the database branch id. There is no separate database pointer id.
 
-Both branch records are immutable once written. Forks allocate a new id and write a parent pointer to the source branch plus the fork versionstamp. Engine-layer rollback is implemented outside this crate by forking a database and changing the engine's actor-to-database mapping.
+Both branch records are immutable once written. Forks allocate a new id and write a parent pointer to the source branch plus the fork versionstamp. Engine-layer rollback is implemented outside this crate by forking a database and changing the engine's database-to-database mapping.
 
 Namespace database membership is stored in `NSCAT`. Namespace forks do not copy catalog entries. Reads walk namespace parents and accept inherited entries only when the entry versionstamp is at or before the walking branch's `parent_versionstamp`.
 

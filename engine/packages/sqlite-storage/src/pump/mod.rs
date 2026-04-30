@@ -1,4 +1,4 @@
-pub mod actor_db;
+pub mod db;
 pub mod bookmark;
 pub mod branch;
 pub mod commit;
@@ -15,4 +15,4 @@ pub mod read;
 pub mod types;
 pub mod udb;
 
-pub use actor_db::ActorDb;
+pub use db::Db;

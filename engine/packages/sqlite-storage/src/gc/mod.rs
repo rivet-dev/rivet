@@ -8,7 +8,7 @@ use universaldb::{
 
 use crate::pump::{
 	keys,
-	types::{ActorBranchId, decode_actor_branch_record},
+	types::{DatabaseBranchId, decode_database_branch_record},
 };
 
 pub const VERSIONSTAMP_INFINITY: [u8; 16] = [0xff; 16];
@@ -16,7 +16,7 @@ pub const VERSIONSTAMP_ZERO: [u8; 16] = [0; 16];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BranchGcPin {
-	pub branch_id: ActorBranchId,
+	pub branch_id: DatabaseBranchId,
 	pub refcount: i64,
 	pub root_pin: [u8; 16],
 	pub desc_pin: [u8; 16],
@@ -42,7 +42,7 @@ pub struct BranchDeletionOutcome {
 
 pub async fn estimate_branch_gc_pin(
 	db: &universaldb::Database,
-	branch_id: ActorBranchId,
+	branch_id: DatabaseBranchId,
 ) -> Result<Option<BranchGcPin>> {
 	db.run(move |tx| async move { read_branch_gc_pin_tx(&tx, branch_id).await })
 		.await
@@ -50,7 +50,7 @@ pub async fn estimate_branch_gc_pin(
 
 pub async fn sweep_branch_hot_history(
 	db: &universaldb::Database,
-	branch_id: ActorBranchId,
+	branch_id: DatabaseBranchId,
 ) -> Result<Option<BranchHotGcOutcome>> {
 	db.run(move |tx| async move { sweep_branch_hot_history_tx(&tx, branch_id).await })
 		.await
@@ -58,7 +58,7 @@ pub async fn sweep_branch_hot_history(
 
 pub async fn sweep_unreferenced_branch(
 	db: &universaldb::Database,
-	branch_id: ActorBranchId,
+	branch_id: DatabaseBranchId,
 ) -> Result<Option<BranchDeletionOutcome>> {
 	db.run(move |tx| async move { sweep_unreferenced_branch_tx(&tx, branch_id).await })
 		.await
@@ -66,7 +66,7 @@ pub async fn sweep_unreferenced_branch(
 
 pub(crate) async fn read_branch_gc_pin_tx(
 	tx: &universaldb::Transaction,
-	branch_id: ActorBranchId,
+	branch_id: DatabaseBranchId,
 ) -> Result<Option<BranchGcPin>> {
 	let Some(record_bytes) = tx
 		.informal()
@@ -76,7 +76,7 @@ pub(crate) async fn read_branch_gc_pin_tx(
 		return Ok(None);
 	};
 	let record =
-		decode_actor_branch_record(&record_bytes).context("decode sqlite branch record for GC")?;
+		decode_database_branch_record(&record_bytes).context("decode sqlite branch record for GC")?;
 	let refcount = read_i64_le(tx, &keys::branches_refcount_key(branch_id)).await?;
 	let root_pin = if refcount > 0 {
 		record.root_versionstamp
@@ -99,7 +99,7 @@ pub(crate) async fn read_branch_gc_pin_tx(
 
 pub(crate) async fn sweep_branch_hot_history_tx(
 	tx: &universaldb::Transaction,
-	branch_id: ActorBranchId,
+	branch_id: DatabaseBranchId,
 ) -> Result<Option<BranchHotGcOutcome>> {
 	let Some(pin) = read_branch_gc_pin_tx(tx, branch_id).await? else {
 		return Ok(None);
@@ -154,7 +154,7 @@ pub(crate) async fn sweep_branch_hot_history_tx(
 
 async fn sweep_unreferenced_branch_tx(
 	tx: &universaldb::Transaction,
-	branch_id: ActorBranchId,
+	branch_id: DatabaseBranchId,
 ) -> Result<Option<BranchDeletionOutcome>> {
 	let Some(pin) = read_branch_gc_pin_tx(tx, branch_id).await? else {
 		return Ok(None);
@@ -198,7 +198,7 @@ async fn sweep_unreferenced_branch_tx(
 
 async fn gc_pin_txid_floor(
 	tx: &universaldb::Transaction,
-	branch_id: ActorBranchId,
+	branch_id: DatabaseBranchId,
 	gc_pin: [u8; 16],
 ) -> Result<Option<u64>> {
 	if gc_pin == VERSIONSTAMP_ZERO {

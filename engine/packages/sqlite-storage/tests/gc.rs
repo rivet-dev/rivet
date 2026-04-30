@@ -12,15 +12,15 @@ use sqlite_storage::{
 		branches_list_key, branches_refcount_key,
 	},
 	types::{
-		ActorBranchId, ActorBranchRecord, BranchState, CommitRow, NamespaceBranchId,
-		encode_actor_branch_record, encode_commit_row,
+		DatabaseBranchId, DatabaseBranchRecord, BranchState, CommitRow, NamespaceBranchId,
+		encode_database_branch_record, encode_commit_row,
 	},
 };
 use tempfile::Builder;
 use universaldb::utils::IsolationLevel::Snapshot;
 
-fn branch_id() -> ActorBranchId {
-	ActorBranchId::from_uuid(uuid::Uuid::from_u128(0x1234_5678_9abc_def0_0123_4567_89ab_cdef))
+fn branch_id() -> DatabaseBranchId {
+	DatabaseBranchId::from_uuid(uuid::Uuid::from_u128(0x1234_5678_9abc_def0_0123_4567_89ab_cdef))
 }
 
 async fn test_db() -> Result<universaldb::Database> {
@@ -53,7 +53,7 @@ async fn seed_branch(
 	db.run(move |tx| async move {
 		tx.informal().set(
 			&branches_list_key(branch_id),
-			&encode_actor_branch_record(ActorBranchRecord {
+			&encode_database_branch_record(DatabaseBranchRecord {
 				branch_id,
 				namespace_branch: NamespaceBranchId::nil(),
 				parent: None,

@@ -41,7 +41,7 @@ async fn cold_compactor_phase_a_pending_put_5s() -> Result<()> {
 		tokio::task::yield_now().await;
 		if fault_common::read_value(
 			&db,
-			branch_meta_cold_compact_key(fault_common::actor_branch_id()),
+			branch_meta_cold_compact_key(fault_common::database_branch_id()),
 		)
 		.await?
 		.is_some()

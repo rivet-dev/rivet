@@ -3,10 +3,10 @@
 use anyhow::{Context, Result, ensure};
 use universaldb::utils::end_of_key_range;
 
-use super::types::{ActorBranchId, NamespaceBranchId, NamespaceId};
+use super::types::{DatabaseBranchId, NamespaceBranchId, NamespaceId};
 
 pub const SQLITE_SUBSPACE_PREFIX: u8 = 0x02;
-pub const APTR_PARTITION: u8 = 0x10;
+pub const DBPTR_PARTITION: u8 = 0x10;
 pub const NSPTR_PARTITION: u8 = 0x11;
 pub const NSCAT_PARTITION: u8 = 0x12;
 pub const BRANCHES_PARTITION: u8 = 0x20;
@@ -38,7 +38,6 @@ const REFCOUNT_PATH: &[u8] = b"/refcount";
 const DESC_PIN_PATH: &[u8] = b"/desc_pin";
 const BK_PIN_PATH: &[u8] = b"/bk_pin";
 const PIN_COUNT_PATH: &[u8] = b"/pin_count";
-const ACTOR_TOMBSTONES_PATH: &[u8] = b"/actor_tombstones/";
 const DATABASE_TOMBSTONES_PATH: &[u8] = b"/database_tombstones/";
 const MANIFEST_COLD_DRAINED_TXID_PATH: &[u8] = b"/META/manifest/cold_drained_txid";
 const MANIFEST_LAST_HOT_PASS_TXID_PATH: &[u8] = b"/META/manifest/last_hot_pass_txid";
@@ -82,11 +81,11 @@ fn append_ts_nonce(key: &mut Vec<u8>, ts_ms: i64, nonce: u32) {
 	key.extend_from_slice(&nonce.to_be_bytes());
 }
 
-fn append_actor_id(key: &mut Vec<u8>, actor_id: &str) {
-	key.extend_from_slice(actor_id.as_bytes());
+fn append_database_id(key: &mut Vec<u8>, database_id: &str) {
+	key.extend_from_slice(database_id.as_bytes());
 }
 
-fn branch_record_base(branch_id: ActorBranchId) -> Vec<u8> {
+fn branch_record_base(branch_id: DatabaseBranchId) -> Vec<u8> {
 	let mut key = partition_prefix(BRANCHES_PARTITION);
 	key.extend_from_slice(LIST_PATH);
 	append_uuid(&mut key, branch_id.as_uuid());
@@ -100,19 +99,19 @@ fn namespace_branch_record_base(branch_id: NamespaceBranchId) -> Vec<u8> {
 	key
 }
 
-fn actor_branch_base(branch_id: ActorBranchId) -> Vec<u8> {
+fn database_branch_base(branch_id: DatabaseBranchId) -> Vec<u8> {
 	let mut key = partition_prefix(BR_PARTITION);
 	key.push(b'/');
 	append_uuid(&mut key, branch_id.as_uuid());
 	key
 }
 
-fn actor_pointer_base(namespace_branch_id: NamespaceBranchId, actor_id: &str) -> Vec<u8> {
-	let mut key = partition_prefix(APTR_PARTITION);
+fn database_pointer_base(namespace_branch_id: NamespaceBranchId, database_id: &str) -> Vec<u8> {
+	let mut key = partition_prefix(DBPTR_PARTITION);
 	key.push(b'/');
 	append_uuid(&mut key, namespace_branch_id.as_uuid());
 	key.push(b'/');
-	append_actor_id(&mut key, actor_id);
+	append_database_id(&mut key, database_id);
 	key
 }
 
@@ -136,41 +135,41 @@ fn with_suffix(mut prefix: Vec<u8>, suffix: &[u8]) -> Vec<u8> {
 	prefix
 }
 
-/// Build the common actor-scoped prefix: `[0x02, actor_id_bytes]`.
-pub fn actor_prefix(actor_id: &str) -> Vec<u8> {
-	let actor_bytes = actor_id.as_bytes();
-	let mut key = Vec::with_capacity(1 + actor_bytes.len());
+/// Build the common database-scoped prefix: `[0x02, database_id_bytes]`.
+pub fn database_prefix(database_id: &str) -> Vec<u8> {
+	let database_bytes = database_id.as_bytes();
+	let mut key = Vec::with_capacity(1 + database_bytes.len());
 	key.push(SQLITE_SUBSPACE_PREFIX);
-	key.extend_from_slice(actor_bytes);
+	key.extend_from_slice(database_bytes);
 	key
 }
 
-pub fn actor_range(actor_id: &str) -> (Vec<u8>, Vec<u8>) {
-	let start = actor_prefix(actor_id);
+pub fn database_range(database_id: &str) -> (Vec<u8>, Vec<u8>) {
+	let start = database_prefix(database_id);
 	let end = end_of_key_range(&start);
 	(start, end)
 }
 
-pub fn actor_pointer_cur_key(namespace_branch_id: NamespaceBranchId, actor_id: &str) -> Vec<u8> {
-	with_suffix(actor_pointer_base(namespace_branch_id, actor_id), CUR_PATH)
+pub fn database_pointer_cur_key(namespace_branch_id: NamespaceBranchId, database_id: &str) -> Vec<u8> {
+	with_suffix(database_pointer_base(namespace_branch_id, database_id), CUR_PATH)
 }
 
-pub fn actor_pointer_history_key(
+pub fn database_pointer_history_key(
 	namespace_branch_id: NamespaceBranchId,
-	actor_id: &str,
+	database_id: &str,
 	ts_ms: i64,
 	nonce: u32,
 ) -> Vec<u8> {
-	let mut key = actor_pointer_history_prefix(namespace_branch_id, actor_id);
+	let mut key = database_pointer_history_prefix(namespace_branch_id, database_id);
 	append_ts_nonce(&mut key, ts_ms, nonce);
 	key
 }
 
-pub fn actor_pointer_history_prefix(
+pub fn database_pointer_history_prefix(
 	namespace_branch_id: NamespaceBranchId,
-	actor_id: &str,
+	database_id: &str,
 ) -> Vec<u8> {
-	with_suffix(actor_pointer_base(namespace_branch_id, actor_id), HISTORY_PATH)
+	with_suffix(database_pointer_base(namespace_branch_id, database_id), HISTORY_PATH)
 }
 
 pub fn namespace_pointer_cur_key(namespace_id: NamespaceId) -> Vec<u8> {
@@ -191,19 +190,19 @@ pub fn namespace_pointer_history_prefix(namespace_id: NamespaceId) -> Vec<u8> {
 	with_suffix(namespace_pointer_base(namespace_id), HISTORY_PATH)
 }
 
-pub fn branches_list_key(branch_id: ActorBranchId) -> Vec<u8> {
+pub fn branches_list_key(branch_id: DatabaseBranchId) -> Vec<u8> {
 	branch_record_base(branch_id)
 }
 
-pub fn branches_refcount_key(branch_id: ActorBranchId) -> Vec<u8> {
+pub fn branches_refcount_key(branch_id: DatabaseBranchId) -> Vec<u8> {
 	with_suffix(branch_record_base(branch_id), REFCOUNT_PATH)
 }
 
-pub fn branches_desc_pin_key(branch_id: ActorBranchId) -> Vec<u8> {
+pub fn branches_desc_pin_key(branch_id: DatabaseBranchId) -> Vec<u8> {
 	with_suffix(branch_record_base(branch_id), DESC_PIN_PATH)
 }
 
-pub fn branches_bk_pin_key(branch_id: ActorBranchId) -> Vec<u8> {
+pub fn branches_bk_pin_key(branch_id: DatabaseBranchId) -> Vec<u8> {
 	with_suffix(branch_record_base(branch_id), BK_PIN_PATH)
 }
 
@@ -227,18 +226,18 @@ pub fn namespace_branches_pin_count_key(branch_id: NamespaceBranchId) -> Vec<u8>
 	with_suffix(namespace_branch_record_base(branch_id), PIN_COUNT_PATH)
 }
 
-pub fn namespace_branches_actor_tombstone_key(
+pub fn namespace_branches_database_name_tombstone_key(
 	branch_id: NamespaceBranchId,
-	actor_id: &str,
+	database_id: &str,
 ) -> Vec<u8> {
-	let mut key = with_suffix(namespace_branch_record_base(branch_id), ACTOR_TOMBSTONES_PATH);
-	append_actor_id(&mut key, actor_id);
+	let mut key = with_suffix(namespace_branch_record_base(branch_id), DATABASE_TOMBSTONES_PATH);
+	append_database_id(&mut key, database_id);
 	key
 }
 
 pub fn namespace_branches_database_tombstone_key(
 	branch_id: NamespaceBranchId,
-	database_id: ActorBranchId,
+	database_id: DatabaseBranchId,
 ) -> Vec<u8> {
 	let mut key = with_suffix(namespace_branch_record_base(branch_id), DATABASE_TOMBSTONES_PATH);
 	append_uuid(&mut key, database_id.as_uuid());
@@ -252,7 +251,7 @@ pub fn namespace_branches_database_tombstone_prefix(branch_id: NamespaceBranchId
 pub fn decode_namespace_branches_database_tombstone_id(
 	branch_id: NamespaceBranchId,
 	key: &[u8],
-) -> Result<ActorBranchId> {
+) -> Result<DatabaseBranchId> {
 	let prefix = namespace_branches_database_tombstone_prefix(branch_id);
 	let suffix = key
 		.strip_prefix(prefix.as_slice())
@@ -265,12 +264,12 @@ pub fn decode_namespace_branches_database_tombstone_id(
 	);
 	let uuid = uuid::Uuid::from_slice(suffix).context("decode namespace database tombstone uuid")?;
 
-	Ok(ActorBranchId::from_uuid(uuid))
+	Ok(DatabaseBranchId::from_uuid(uuid))
 }
 
 pub fn namespace_catalog_key(
 	namespace_branch_id: NamespaceBranchId,
-	database_id: ActorBranchId,
+	database_id: DatabaseBranchId,
 ) -> Vec<u8> {
 	let mut key = namespace_catalog_prefix(namespace_branch_id);
 	append_uuid(&mut key, database_id.as_uuid());
@@ -284,7 +283,7 @@ pub fn namespace_catalog_prefix(namespace_branch_id: NamespaceBranchId) -> Vec<u
 pub fn decode_namespace_catalog_database_id(
 	namespace_branch_id: NamespaceBranchId,
 	key: &[u8],
-) -> Result<ActorBranchId> {
+) -> Result<DatabaseBranchId> {
 	let prefix = namespace_catalog_prefix(namespace_branch_id);
 	let suffix = key
 		.strip_prefix(prefix.as_slice())
@@ -297,111 +296,111 @@ pub fn decode_namespace_catalog_database_id(
 	);
 	let uuid = uuid::Uuid::from_slice(suffix).context("decode namespace catalog database uuid")?;
 
-	Ok(ActorBranchId::from_uuid(uuid))
+	Ok(DatabaseBranchId::from_uuid(uuid))
 }
 
-pub fn branch_prefix(branch_id: ActorBranchId) -> Vec<u8> {
-	actor_branch_base(branch_id)
+pub fn branch_prefix(branch_id: DatabaseBranchId) -> Vec<u8> {
+	database_branch_base(branch_id)
 }
 
-pub fn branch_range(branch_id: ActorBranchId) -> (Vec<u8>, Vec<u8>) {
+pub fn branch_range(branch_id: DatabaseBranchId) -> (Vec<u8>, Vec<u8>) {
 	let start = branch_prefix(branch_id);
 	let end = end_of_key_range(&start);
 	(start, end)
 }
 
-pub fn branch_meta_head_key(branch_id: ActorBranchId) -> Vec<u8> {
-	with_suffix(actor_branch_base(branch_id), META_HEAD_PATH)
+pub fn branch_meta_head_key(branch_id: DatabaseBranchId) -> Vec<u8> {
+	with_suffix(database_branch_base(branch_id), META_HEAD_PATH)
 }
 
-pub fn branch_meta_head_at_fork_key(branch_id: ActorBranchId) -> Vec<u8> {
-	with_suffix(actor_branch_base(branch_id), META_HEAD_AT_FORK_PATH)
+pub fn branch_meta_head_at_fork_key(branch_id: DatabaseBranchId) -> Vec<u8> {
+	with_suffix(database_branch_base(branch_id), META_HEAD_AT_FORK_PATH)
 }
 
-pub fn branch_meta_compact_key(branch_id: ActorBranchId) -> Vec<u8> {
-	with_suffix(actor_branch_base(branch_id), META_COMPACT_PATH)
+pub fn branch_meta_compact_key(branch_id: DatabaseBranchId) -> Vec<u8> {
+	with_suffix(database_branch_base(branch_id), META_COMPACT_PATH)
 }
 
-pub fn branch_meta_cold_compact_key(branch_id: ActorBranchId) -> Vec<u8> {
-	with_suffix(actor_branch_base(branch_id), META_COLD_COMPACT_PATH)
+pub fn branch_meta_cold_compact_key(branch_id: DatabaseBranchId) -> Vec<u8> {
+	with_suffix(database_branch_base(branch_id), META_COLD_COMPACT_PATH)
 }
 
-pub fn branch_meta_quota_key(branch_id: ActorBranchId) -> Vec<u8> {
-	with_suffix(actor_branch_base(branch_id), META_QUOTA_PATH)
+pub fn branch_meta_quota_key(branch_id: DatabaseBranchId) -> Vec<u8> {
+	with_suffix(database_branch_base(branch_id), META_QUOTA_PATH)
 }
 
-pub fn branch_meta_compactor_lease_key(branch_id: ActorBranchId) -> Vec<u8> {
-	with_suffix(actor_branch_base(branch_id), META_COMPACTOR_LEASE_PATH)
+pub fn branch_meta_compactor_lease_key(branch_id: DatabaseBranchId) -> Vec<u8> {
+	with_suffix(database_branch_base(branch_id), META_COMPACTOR_LEASE_PATH)
 }
 
-pub fn branch_meta_cold_lease_key(branch_id: ActorBranchId) -> Vec<u8> {
-	with_suffix(actor_branch_base(branch_id), META_COLD_LEASE_PATH)
+pub fn branch_meta_cold_lease_key(branch_id: DatabaseBranchId) -> Vec<u8> {
+	with_suffix(database_branch_base(branch_id), META_COLD_LEASE_PATH)
 }
 
-pub fn branch_manifest_cold_drained_txid_key(branch_id: ActorBranchId) -> Vec<u8> {
-	with_suffix(actor_branch_base(branch_id), MANIFEST_COLD_DRAINED_TXID_PATH)
+pub fn branch_manifest_cold_drained_txid_key(branch_id: DatabaseBranchId) -> Vec<u8> {
+	with_suffix(database_branch_base(branch_id), MANIFEST_COLD_DRAINED_TXID_PATH)
 }
 
-pub fn branch_manifest_last_hot_pass_txid_key(branch_id: ActorBranchId) -> Vec<u8> {
-	with_suffix(actor_branch_base(branch_id), MANIFEST_LAST_HOT_PASS_TXID_PATH)
+pub fn branch_manifest_last_hot_pass_txid_key(branch_id: DatabaseBranchId) -> Vec<u8> {
+	with_suffix(database_branch_base(branch_id), MANIFEST_LAST_HOT_PASS_TXID_PATH)
 }
 
-pub fn branch_manifest_last_access_ts_ms_key(branch_id: ActorBranchId) -> Vec<u8> {
-	with_suffix(actor_branch_base(branch_id), MANIFEST_LAST_ACCESS_TS_MS_PATH)
+pub fn branch_manifest_last_access_ts_ms_key(branch_id: DatabaseBranchId) -> Vec<u8> {
+	with_suffix(database_branch_base(branch_id), MANIFEST_LAST_ACCESS_TS_MS_PATH)
 }
 
-pub fn branch_manifest_last_access_bucket_key(branch_id: ActorBranchId) -> Vec<u8> {
-	with_suffix(actor_branch_base(branch_id), MANIFEST_LAST_ACCESS_BUCKET_PATH)
+pub fn branch_manifest_last_access_bucket_key(branch_id: DatabaseBranchId) -> Vec<u8> {
+	with_suffix(database_branch_base(branch_id), MANIFEST_LAST_ACCESS_BUCKET_PATH)
 }
 
-pub fn branch_commit_key(branch_id: ActorBranchId, txid: u64) -> Vec<u8> {
+pub fn branch_commit_key(branch_id: DatabaseBranchId, txid: u64) -> Vec<u8> {
 	let mut key = branch_commit_prefix(branch_id);
 	key.extend_from_slice(&txid.to_be_bytes());
 	key
 }
 
-pub fn branch_commit_prefix(branch_id: ActorBranchId) -> Vec<u8> {
-	with_suffix(actor_branch_base(branch_id), COMMITS_PATH)
+pub fn branch_commit_prefix(branch_id: DatabaseBranchId) -> Vec<u8> {
+	with_suffix(database_branch_base(branch_id), COMMITS_PATH)
 }
 
-pub fn branch_vtx_key(branch_id: ActorBranchId, versionstamp: [u8; 16]) -> Vec<u8> {
+pub fn branch_vtx_key(branch_id: DatabaseBranchId, versionstamp: [u8; 16]) -> Vec<u8> {
 	let mut key = branch_vtx_prefix(branch_id);
 	key.extend_from_slice(&versionstamp);
 	key
 }
 
-pub fn branch_vtx_prefix(branch_id: ActorBranchId) -> Vec<u8> {
-	with_suffix(actor_branch_base(branch_id), VTX_PATH)
+pub fn branch_vtx_prefix(branch_id: DatabaseBranchId) -> Vec<u8> {
+	with_suffix(database_branch_base(branch_id), VTX_PATH)
 }
 
-pub fn branch_pidx_key(branch_id: ActorBranchId, pgno: u32) -> Vec<u8> {
-	let mut key = with_suffix(actor_branch_base(branch_id), BR_PIDX_PATH);
+pub fn branch_pidx_key(branch_id: DatabaseBranchId, pgno: u32) -> Vec<u8> {
+	let mut key = with_suffix(database_branch_base(branch_id), BR_PIDX_PATH);
 	key.extend_from_slice(&pgno.to_be_bytes());
 	key
 }
 
-pub fn branch_pidx_prefix(branch_id: ActorBranchId) -> Vec<u8> {
-	with_suffix(actor_branch_base(branch_id), BR_PIDX_PATH)
+pub fn branch_pidx_prefix(branch_id: DatabaseBranchId) -> Vec<u8> {
+	with_suffix(database_branch_base(branch_id), BR_PIDX_PATH)
 }
 
-pub fn branch_delta_prefix(branch_id: ActorBranchId) -> Vec<u8> {
-	with_suffix(actor_branch_base(branch_id), DELTA_PATH)
+pub fn branch_delta_prefix(branch_id: DatabaseBranchId) -> Vec<u8> {
+	with_suffix(database_branch_base(branch_id), DELTA_PATH)
 }
 
-pub fn branch_delta_chunk_prefix(branch_id: ActorBranchId, txid: u64) -> Vec<u8> {
+pub fn branch_delta_chunk_prefix(branch_id: DatabaseBranchId, txid: u64) -> Vec<u8> {
 	let mut key = branch_delta_prefix(branch_id);
 	key.extend_from_slice(&txid.to_be_bytes());
 	key.push(b'/');
 	key
 }
 
-pub fn branch_delta_chunk_key(branch_id: ActorBranchId, txid: u64, chunk_idx: u32) -> Vec<u8> {
+pub fn branch_delta_chunk_key(branch_id: DatabaseBranchId, txid: u64, chunk_idx: u32) -> Vec<u8> {
 	let mut key = branch_delta_chunk_prefix(branch_id, txid);
 	key.extend_from_slice(&chunk_idx.to_be_bytes());
 	key
 }
 
-pub fn decode_branch_delta_chunk_txid(branch_id: ActorBranchId, key: &[u8]) -> Result<u64> {
+pub fn decode_branch_delta_chunk_txid(branch_id: DatabaseBranchId, key: &[u8]) -> Result<u64> {
 	let prefix = branch_delta_prefix(branch_id);
 	ensure!(
 		key.starts_with(&prefix),
@@ -427,7 +426,7 @@ pub fn decode_branch_delta_chunk_txid(branch_id: ActorBranchId, key: &[u8]) -> R
 }
 
 pub fn decode_branch_delta_chunk_idx(
-	branch_id: ActorBranchId,
+	branch_id: DatabaseBranchId,
 	txid: u64,
 	key: &[u8],
 ) -> Result<u32> {
@@ -451,18 +450,18 @@ pub fn decode_branch_delta_chunk_idx(
 	))
 }
 
-pub fn branch_shard_prefix(branch_id: ActorBranchId) -> Vec<u8> {
-	with_suffix(actor_branch_base(branch_id), SHARD_PATH)
+pub fn branch_shard_prefix(branch_id: DatabaseBranchId) -> Vec<u8> {
+	with_suffix(database_branch_base(branch_id), SHARD_PATH)
 }
 
-pub fn branch_shard_version_prefix(branch_id: ActorBranchId, shard_id: u32) -> Vec<u8> {
+pub fn branch_shard_version_prefix(branch_id: DatabaseBranchId, shard_id: u32) -> Vec<u8> {
 	let mut key = branch_shard_prefix(branch_id);
 	key.extend_from_slice(&shard_id.to_be_bytes());
 	key.push(b'/');
 	key
 }
 
-pub fn branch_shard_key(branch_id: ActorBranchId, shard_id: u32, as_of_txid: u64) -> Vec<u8> {
+pub fn branch_shard_key(branch_id: DatabaseBranchId, shard_id: u32, as_of_txid: u64) -> Vec<u8> {
 	let mut key = branch_shard_version_prefix(branch_id, shard_id);
 	key.extend_from_slice(&as_of_txid.to_be_bytes());
 	key
@@ -472,7 +471,7 @@ pub fn ctr_quota_global_key() -> Vec<u8> {
 	with_suffix(partition_prefix(CTR_PARTITION), CTR_QUOTA_GLOBAL_PATH)
 }
 
-pub fn ctr_eviction_index_key(last_access_bucket: i64, branch_id: ActorBranchId) -> Vec<u8> {
+pub fn ctr_eviction_index_key(last_access_bucket: i64, branch_id: DatabaseBranchId) -> Vec<u8> {
 	let mut key = with_suffix(partition_prefix(CTR_PARTITION), CTR_EVICTION_INDEX_PATH);
 	key.extend_from_slice(&last_access_bucket.to_be_bytes());
 	key.push(b'/');
@@ -488,7 +487,7 @@ pub fn ctr_eviction_index_range() -> (Vec<u8>, Vec<u8>) {
 	universaldb::tuple::Subspace::from_bytes(ctr_eviction_index_prefix()).range()
 }
 
-pub fn decode_ctr_eviction_index_key(key: &[u8]) -> Result<(i64, ActorBranchId)> {
+pub fn decode_ctr_eviction_index_key(key: &[u8]) -> Result<(i64, DatabaseBranchId)> {
 	let prefix = ctr_eviction_index_prefix();
 	let suffix = key
 		.strip_prefix(prefix.as_slice())
@@ -507,28 +506,28 @@ pub fn decode_ctr_eviction_index_key(key: &[u8]) -> Result<(i64, ActorBranchId)>
 	let branch_id =
 		uuid::Uuid::from_slice(&suffix[9..]).context("decode eviction index branch id")?;
 
-	Ok((i64::from_be_bytes(bucket_bytes), ActorBranchId::from_uuid(branch_id)))
+	Ok((i64::from_be_bytes(bucket_bytes), DatabaseBranchId::from_uuid(branch_id)))
 }
 
-pub fn bookmark_key(actor_id: &str, bookmark: &str) -> Vec<u8> {
+pub fn bookmark_key(database_id: &str, bookmark: &str) -> Vec<u8> {
 	let mut key = with_suffix(partition_prefix(BOOKMARK_PARTITION), BOOKMARK_PATH);
-	append_actor_id(&mut key, actor_id);
+	append_database_id(&mut key, database_id);
 	key.push(b'/');
 	key.extend_from_slice(bookmark.as_bytes());
 	key
 }
 
-pub fn bookmark_pinned_key(actor_id: &str, bookmark: &str) -> Vec<u8> {
-	let mut key = bookmark_key(actor_id, bookmark);
+pub fn bookmark_pinned_key(database_id: &str, bookmark: &str) -> Vec<u8> {
+	let mut key = bookmark_key(database_id, bookmark);
 	key.extend_from_slice(b"/pinned");
 	key
 }
 
-pub fn compactor_enqueue_key(ts_ms: i64, actor_id: &str, kind: CompactorQueueKind) -> Vec<u8> {
+pub fn compactor_enqueue_key(ts_ms: i64, database_id: &str, kind: CompactorQueueKind) -> Vec<u8> {
 	let mut key = with_suffix(partition_prefix(CMPC_PARTITION), CMPC_ENQUEUE_PATH);
 	key.extend_from_slice(&ts_ms.to_be_bytes());
 	key.push(b'/');
-	append_actor_id(&mut key, actor_id);
+	append_database_id(&mut key, database_id);
 	key.push(b'/');
 	key.push(kind.as_byte());
 	key
@@ -540,68 +539,68 @@ pub fn compactor_global_lease_key(kind: CompactorQueueKind) -> Vec<u8> {
 	key
 }
 
-pub fn meta_head_key(actor_id: &str) -> Vec<u8> {
-	let prefix = actor_prefix(actor_id);
+pub fn meta_head_key(database_id: &str) -> Vec<u8> {
+	let prefix = database_prefix(database_id);
 	let mut key = Vec::with_capacity(prefix.len() + META_HEAD_PATH.len());
 	key.extend_from_slice(&prefix);
 	key.extend_from_slice(META_HEAD_PATH);
 	key
 }
 
-pub fn meta_compact_key(actor_id: &str) -> Vec<u8> {
-	let prefix = actor_prefix(actor_id);
+pub fn meta_compact_key(database_id: &str) -> Vec<u8> {
+	let prefix = database_prefix(database_id);
 	let mut key = Vec::with_capacity(prefix.len() + META_COMPACT_PATH.len());
 	key.extend_from_slice(&prefix);
 	key.extend_from_slice(META_COMPACT_PATH);
 	key
 }
 
-pub fn meta_quota_key(actor_id: &str) -> Vec<u8> {
-	let prefix = actor_prefix(actor_id);
+pub fn meta_quota_key(database_id: &str) -> Vec<u8> {
+	let prefix = database_prefix(database_id);
 	let mut key = Vec::with_capacity(prefix.len() + META_QUOTA_PATH.len());
 	key.extend_from_slice(&prefix);
 	key.extend_from_slice(META_QUOTA_PATH);
 	key
 }
 
-pub fn meta_compactor_lease_key(actor_id: &str) -> Vec<u8> {
-	let prefix = actor_prefix(actor_id);
+pub fn meta_compactor_lease_key(database_id: &str) -> Vec<u8> {
+	let prefix = database_prefix(database_id);
 	let mut key = Vec::with_capacity(prefix.len() + META_COMPACTOR_LEASE_PATH.len());
 	key.extend_from_slice(&prefix);
 	key.extend_from_slice(META_COMPACTOR_LEASE_PATH);
 	key
 }
 
-pub fn commit_key(actor_id: &str, txid: u64) -> Vec<u8> {
-	let mut key = commit_prefix(actor_id);
+pub fn commit_key(database_id: &str, txid: u64) -> Vec<u8> {
+	let mut key = commit_prefix(database_id);
 	key.extend_from_slice(&txid.to_be_bytes());
 	key
 }
 
-pub fn commit_prefix(actor_id: &str) -> Vec<u8> {
-	let prefix = actor_prefix(actor_id);
+pub fn commit_prefix(database_id: &str) -> Vec<u8> {
+	let prefix = database_prefix(database_id);
 	let mut key = Vec::with_capacity(prefix.len() + COMMITS_PATH.len());
 	key.extend_from_slice(&prefix);
 	key.extend_from_slice(COMMITS_PATH);
 	key
 }
 
-pub fn vtx_key(actor_id: &str, versionstamp: [u8; 16]) -> Vec<u8> {
-	let mut key = vtx_prefix(actor_id);
+pub fn vtx_key(database_id: &str, versionstamp: [u8; 16]) -> Vec<u8> {
+	let mut key = vtx_prefix(database_id);
 	key.extend_from_slice(&versionstamp);
 	key
 }
 
-pub fn vtx_prefix(actor_id: &str) -> Vec<u8> {
-	let prefix = actor_prefix(actor_id);
+pub fn vtx_prefix(database_id: &str) -> Vec<u8> {
+	let prefix = database_prefix(database_id);
 	let mut key = Vec::with_capacity(prefix.len() + VTX_PATH.len());
 	key.extend_from_slice(&prefix);
 	key.extend_from_slice(VTX_PATH);
 	key
 }
 
-pub fn shard_key(actor_id: &str, shard_id: u32) -> Vec<u8> {
-	let prefix = actor_prefix(actor_id);
+pub fn shard_key(database_id: &str, shard_id: u32) -> Vec<u8> {
+	let prefix = database_prefix(database_id);
 	let mut key = Vec::with_capacity(prefix.len() + SHARD_PATH.len() + std::mem::size_of::<u32>());
 	key.extend_from_slice(&prefix);
 	key.extend_from_slice(SHARD_PATH);
@@ -609,36 +608,36 @@ pub fn shard_key(actor_id: &str, shard_id: u32) -> Vec<u8> {
 	key
 }
 
-pub fn shard_version_prefix(actor_id: &str, shard_id: u32) -> Vec<u8> {
-	let mut key = shard_key(actor_id, shard_id);
+pub fn shard_version_prefix(database_id: &str, shard_id: u32) -> Vec<u8> {
+	let mut key = shard_key(database_id, shard_id);
 	key.push(b'/');
 	key
 }
 
-pub fn shard_version_key(actor_id: &str, shard_id: u32, as_of_txid: u64) -> Vec<u8> {
-	let mut key = shard_version_prefix(actor_id, shard_id);
+pub fn shard_version_key(database_id: &str, shard_id: u32, as_of_txid: u64) -> Vec<u8> {
+	let mut key = shard_version_prefix(database_id, shard_id);
 	key.extend_from_slice(&as_of_txid.to_be_bytes());
 	key
 }
 
-pub fn shard_prefix(actor_id: &str) -> Vec<u8> {
-	let prefix = actor_prefix(actor_id);
+pub fn shard_prefix(database_id: &str) -> Vec<u8> {
+	let prefix = database_prefix(database_id);
 	let mut key = Vec::with_capacity(prefix.len() + SHARD_PATH.len());
 	key.extend_from_slice(&prefix);
 	key.extend_from_slice(SHARD_PATH);
 	key
 }
 
-pub fn delta_prefix(actor_id: &str) -> Vec<u8> {
-	let prefix = actor_prefix(actor_id);
+pub fn delta_prefix(database_id: &str) -> Vec<u8> {
+	let prefix = database_prefix(database_id);
 	let mut key = Vec::with_capacity(prefix.len() + DELTA_PATH.len());
 	key.extend_from_slice(&prefix);
 	key.extend_from_slice(DELTA_PATH);
 	key
 }
 
-pub fn delta_chunk_prefix(actor_id: &str, txid: u64) -> Vec<u8> {
-	let prefix = actor_prefix(actor_id);
+pub fn delta_chunk_prefix(database_id: &str, txid: u64) -> Vec<u8> {
+	let prefix = database_prefix(database_id);
 	let mut key =
 		Vec::with_capacity(prefix.len() + DELTA_PATH.len() + std::mem::size_of::<u64>() + 1);
 	key.extend_from_slice(&prefix);
@@ -648,16 +647,16 @@ pub fn delta_chunk_prefix(actor_id: &str, txid: u64) -> Vec<u8> {
 	key
 }
 
-pub fn delta_chunk_key(actor_id: &str, txid: u64, chunk_idx: u32) -> Vec<u8> {
-	let prefix = delta_chunk_prefix(actor_id, txid);
+pub fn delta_chunk_key(database_id: &str, txid: u64, chunk_idx: u32) -> Vec<u8> {
+	let prefix = delta_chunk_prefix(database_id, txid);
 	let mut key = Vec::with_capacity(prefix.len() + std::mem::size_of::<u32>());
 	key.extend_from_slice(&prefix);
 	key.extend_from_slice(&chunk_idx.to_be_bytes());
 	key
 }
 
-pub fn pidx_delta_key(actor_id: &str, pgno: u32) -> Vec<u8> {
-	let prefix = actor_prefix(actor_id);
+pub fn pidx_delta_key(database_id: &str, pgno: u32) -> Vec<u8> {
+	let prefix = database_prefix(database_id);
 	let mut key =
 		Vec::with_capacity(prefix.len() + PIDX_DELTA_PATH.len() + std::mem::size_of::<u32>());
 	key.extend_from_slice(&prefix);
@@ -666,16 +665,16 @@ pub fn pidx_delta_key(actor_id: &str, pgno: u32) -> Vec<u8> {
 	key
 }
 
-pub fn pidx_delta_prefix(actor_id: &str) -> Vec<u8> {
-	let prefix = actor_prefix(actor_id);
+pub fn pidx_delta_prefix(database_id: &str) -> Vec<u8> {
+	let prefix = database_prefix(database_id);
 	let mut key = Vec::with_capacity(prefix.len() + PIDX_DELTA_PATH.len());
 	key.extend_from_slice(&prefix);
 	key.extend_from_slice(PIDX_DELTA_PATH);
 	key
 }
 
-pub fn decode_delta_chunk_txid(actor_id: &str, key: &[u8]) -> Result<u64> {
-	let prefix = delta_prefix(actor_id);
+pub fn decode_delta_chunk_txid(database_id: &str, key: &[u8]) -> Result<u64> {
+	let prefix = delta_prefix(database_id);
 	ensure!(
 		key.starts_with(&prefix),
 		"delta key did not start with expected prefix"
@@ -699,8 +698,8 @@ pub fn decode_delta_chunk_txid(actor_id: &str, key: &[u8]) -> Result<u64> {
 	))
 }
 
-pub fn decode_delta_chunk_idx(actor_id: &str, txid: u64, key: &[u8]) -> Result<u32> {
-	let prefix = delta_chunk_prefix(actor_id, txid);
+pub fn decode_delta_chunk_idx(database_id: &str, txid: u64, key: &[u8]) -> Result<u32> {
+	let prefix = delta_chunk_prefix(database_id, txid);
 	ensure!(
 		key.starts_with(&prefix),
 		"delta chunk key did not start with expected prefix"

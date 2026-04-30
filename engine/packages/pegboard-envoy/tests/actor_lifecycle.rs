@@ -10,7 +10,7 @@ use sqlite_storage::{
 		delta_chunk_key, meta_compact_key, meta_compactor_lease_key, meta_head_key, meta_quota_key,
 		pidx_delta_key, shard_key,
 	},
-	pump::ActorDb,
+	pump::Db,
 };
 use tempfile::Builder;
 use universaldb::utils::IsolationLevel::Snapshot;
@@ -20,10 +20,10 @@ mod conn {
 	use std::sync::Arc;
 
 	use scc::HashMap;
-	use sqlite_storage::pump::ActorDb;
+	use sqlite_storage::pump::Db;
 
 	pub struct Conn {
-		pub actor_dbs: HashMap<String, Arc<ActorDb>>,
+		pub actor_dbs: HashMap<String, Arc<Db>>,
 	}
 }
 
@@ -99,7 +99,7 @@ fn sqlite_keys(actor_id: &str) -> Vec<Vec<u8>> {
 #[tokio::test]
 async fn stop_actor_evicts_cached_actor_db() -> Result<()> {
 	let db = Arc::new(test_db().await?);
-	let actor_db = Arc::new(ActorDb::new(
+	let actor_db = Arc::new(Db::new(
 		db,
 		test_ups(),
 		Id::new_v1(TEST_NAMESPACE_LABEL),
@@ -125,7 +125,7 @@ async fn stop_actor_evicts_cached_actor_db() -> Result<()> {
 #[tokio::test]
 async fn stop_actor_does_not_touch_udb() -> Result<()> {
 	let db = Arc::new(test_db().await?);
-	let actor_db = Arc::new(ActorDb::new(
+	let actor_db = Arc::new(Db::new(
 		Arc::clone(&db),
 		test_ups(),
 		Id::new_v1(TEST_NAMESPACE_LABEL),

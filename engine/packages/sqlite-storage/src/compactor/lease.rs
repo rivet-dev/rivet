@@ -71,12 +71,12 @@ pub fn decode_lease(payload: &[u8]) -> Result<CompactorLease> {
 
 pub async fn take(
 	tx: &universaldb::Transaction,
-	actor_id: &str,
+	database_id: &str,
 	holder_id: NodeId,
 	ttl_ms: u64,
 	now_ms: i64,
 ) -> Result<TakeOutcome> {
-	let key = keys::meta_compactor_lease_key(actor_id);
+	let key = keys::meta_compactor_lease_key(database_id);
 	let current = tx.informal().get(&key, Serializable).await?;
 
 	if let Some(current) = current {
@@ -97,12 +97,12 @@ pub async fn take(
 
 pub async fn renew(
 	tx: &universaldb::Transaction,
-	actor_id: &str,
+	database_id: &str,
 	holder_id: NodeId,
 	ttl_ms: u64,
 	now_ms: i64,
 ) -> Result<RenewOutcome> {
-	let key = keys::meta_compactor_lease_key(actor_id);
+	let key = keys::meta_compactor_lease_key(database_id);
 	let Some(current) = tx.informal().get(&key, Serializable).await? else {
 		return Ok(RenewOutcome::Expired);
 	};
@@ -127,10 +127,10 @@ pub async fn renew(
 
 pub async fn release(
 	tx: &universaldb::Transaction,
-	actor_id: &str,
+	database_id: &str,
 	_holder_id: NodeId,
 ) -> Result<()> {
-	tx.informal().clear(&keys::meta_compactor_lease_key(actor_id));
+	tx.informal().clear(&keys::meta_compactor_lease_key(database_id));
 	Ok(())
 }
 

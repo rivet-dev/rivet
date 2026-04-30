@@ -10,7 +10,7 @@ use rivet_data::converted::{ActorNameKeyData, MetadataKeyData};
 use rivet_envoy_protocol::{self as protocol, PROTOCOL_VERSION, versioned};
 use rivet_guard_core::websocket_handle::WebSocketReceiver;
 use scc::HashMap;
-use sqlite_storage::{error::SqliteStorageError, pump::ActorDb};
+use sqlite_storage::{error::SqliteStorageError, pump::Db};
 use std::{
 	collections::BTreeSet,
 	sync::{Arc, atomic::Ordering},
@@ -713,12 +713,12 @@ fn pump_dirty_page(page: protocol::SqliteDirtyPage) -> sqlite_storage::types::Di
 	}
 }
 
-async fn actor_db(conn: &Conn, actor_id: String) -> Arc<ActorDb> {
+async fn actor_db(conn: &Conn, actor_id: String) -> Arc<Db> {
 	conn.actor_dbs
 		.entry_async(actor_id.clone())
 		.await
 		.or_insert_with(|| {
-			Arc::new(ActorDb::new(
+			Arc::new(Db::new(
 				conn.udb.clone(),
 				(*conn.ups).clone(),
 				conn.namespace_id,

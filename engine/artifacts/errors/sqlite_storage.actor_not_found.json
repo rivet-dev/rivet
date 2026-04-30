@@ -1,5 +1,0 @@
-{
-  "code": "actor_not_found",
-  "group": "sqlite_storage",
-  "message": "Actor was not found in this namespace branch."
-}

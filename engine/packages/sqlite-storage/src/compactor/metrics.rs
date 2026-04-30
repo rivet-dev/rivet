@@ -86,8 +86,8 @@ lazy_static::lazy_static! {
 
 	pub static ref SQLITE_STORAGE_USED_BYTES: GaugeVec = register_gauge_vec_with_registry!(
 		"sqlite_storage_used_bytes",
-		"Sampled sqlite storage bytes by actor.",
-		&["node_id", "actor_id"],
+		"Sampled sqlite storage bytes by database.",
+		&["node_id", "database_id"],
 		*REGISTRY
 	).unwrap();
 

@@ -13,17 +13,17 @@ use sqlite_storage::{
 	constants::{HOT_RETENTION_FLOOR_MS, MAX_SHARD_VERSIONS_PER_SHARD},
 	error::SqliteStorageError,
 	keys::{
-		PAGE_SIZE, actor_pointer_cur_key, branch_commit_key,
+		PAGE_SIZE, database_pointer_cur_key, branch_commit_key,
 		branch_manifest_last_hot_pass_txid_key, branch_vtx_key, branches_bk_pin_key,
 		delta_chunk_key, meta_compact_key, meta_head_key, namespace_pointer_cur_key,
 		pidx_delta_key, shard_key, shard_version_key, vtx_key,
 	},
 	ltx::{LtxHeader, decode_ltx_v3, encode_ltx_v3},
-	pump::ActorDb,
+	pump::Db,
 	quota,
 	types::{
-		ActorBranchId, BookmarkStr, CommitRow, DBHead, DirtyPage, MetaCompact, NamespaceId,
-		decode_actor_pointer, decode_commit_row, decode_meta_compact, decode_namespace_pointer,
+		DatabaseBranchId, BookmarkStr, CommitRow, DBHead, DirtyPage, MetaCompact, NamespaceId,
+		decode_database_pointer, decode_commit_row, decode_meta_compact, decode_namespace_pointer,
 		encode_db_head, encode_meta_compact,
 	},
 };
@@ -34,7 +34,7 @@ use universaldb::{
 	error::DatabaseError, options::DatabaseOption, utils::IsolationLevel::Snapshot,
 };
 
-const TEST_ACTOR: &str = "test-actor";
+const TEST_DATABASE: &str = "test-database";
 static COMPACTION_TEST_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
 async fn test_db() -> Result<universaldb::Database> {
@@ -114,37 +114,37 @@ async fn read_value(db: &universaldb::Database, key: Vec<u8>) -> Result<Option<V
 
 async fn read_manifest_last_hot_pass_txid(
 	db: &universaldb::Database,
-	branch_id: ActorBranchId,
+	branch_id: DatabaseBranchId,
 ) -> Result<Option<u64>> {
 	Ok(read_value(db, branch_manifest_last_hot_pass_txid_key(branch_id))
 		.await?
 		.map(|value| u64::from_be_bytes(value.try_into().expect("manifest txid should be u64"))))
 }
 
-async fn read_branch_id(db: &universaldb::Database) -> Result<ActorBranchId> {
-	read_branch_id_for(db, nil_namespace(), TEST_ACTOR).await
+async fn read_branch_id(db: &universaldb::Database) -> Result<DatabaseBranchId> {
+	read_branch_id_for(db, nil_namespace(), TEST_DATABASE).await
 }
 
 async fn read_branch_id_for(
 	db: &universaldb::Database,
 	namespace_id: Id,
-	actor_id: &str,
-) -> Result<ActorBranchId> {
+	database_id: &str,
+) -> Result<DatabaseBranchId> {
 	let namespace_id = NamespaceId::from_gas_id(namespace_id);
 	let namespace_pointer_bytes = read_value(db, namespace_pointer_cur_key(namespace_id))
 		.await?
 		.expect("namespace pointer should exist");
 	let namespace_branch = decode_namespace_pointer(&namespace_pointer_bytes)?.current_branch;
-	let actor_pointer_bytes = read_value(db, actor_pointer_cur_key(namespace_branch, actor_id))
+	let database_pointer_bytes = read_value(db, database_pointer_cur_key(namespace_branch, database_id))
 		.await?
-		.expect("actor pointer should exist");
+		.expect("database pointer should exist");
 
-	Ok(decode_actor_pointer(&actor_pointer_bytes)?.current_branch)
+	Ok(decode_database_pointer(&database_pointer_bytes)?.current_branch)
 }
 
 async fn read_commit_row(
 	db: &universaldb::Database,
-	branch_id: ActorBranchId,
+	branch_id: DatabaseBranchId,
 	txid: u64,
 ) -> Result<Option<CommitRow>> {
 	Ok(read_value(db, branch_commit_key(branch_id, txid))
@@ -154,13 +154,13 @@ async fn read_commit_row(
 }
 
 async fn read_pidx_txid(db: &universaldb::Database, pgno: u32) -> Result<Option<u64>> {
-	Ok(read_value(db, pidx_delta_key(TEST_ACTOR, pgno))
+	Ok(read_value(db, pidx_delta_key(TEST_DATABASE, pgno))
 		.await?
 		.map(|value| u64::from_be_bytes(value.try_into().expect("pidx txid should be u64"))))
 }
 
 async fn read_compact_txid(db: &universaldb::Database) -> Result<u64> {
-	let bytes = read_value(db, meta_compact_key(TEST_ACTOR))
+	let bytes = read_value(db, meta_compact_key(TEST_DATABASE))
 		.await?
 		.expect("compact meta should exist");
 
@@ -169,7 +169,7 @@ async fn read_compact_txid(db: &universaldb::Database) -> Result<u64> {
 
 async fn read_branch_compact_txid(
 	db: &universaldb::Database,
-	branch_id: ActorBranchId,
+	branch_id: DatabaseBranchId,
 ) -> Result<u64> {
 	let bytes = read_value(db, sqlite_storage::keys::branch_meta_compact_key(branch_id))
 		.await?
@@ -178,11 +178,11 @@ async fn read_branch_compact_txid(
 	Ok(decode_meta_compact(&bytes)?.materialized_txid)
 }
 
-async fn read_quota(db: &universaldb::Database, actor_id: &str) -> Result<i64> {
-	let actor_id = actor_id.to_string();
+async fn read_quota(db: &universaldb::Database, database_id: &str) -> Result<i64> {
+	let database_id = database_id.to_string();
 	db.run(move |tx| {
-		let actor_id = actor_id.clone();
-		async move { quota::read(&tx, &actor_id).await }
+		let database_id = database_id.clone();
+		async move { quota::read(&tx, &database_id).await }
 	})
 	.await
 }
@@ -197,17 +197,17 @@ enum TestMetric {
 async fn read_sqlite_metric(
 	db: &universaldb::Database,
 	namespace_id: Id,
-	actor_name: &str,
+	database_name: &str,
 	metric: TestMetric,
 ) -> Result<i64> {
-	let actor_name = actor_name.to_string();
+	let database_name = database_name.to_string();
 	db.run(move |tx| {
-		let actor_name = actor_name.clone();
+		let database_name = database_name.clone();
 		async move {
 			let metric = match metric {
-				TestMetric::StorageUsed => Metric::SqliteStorageUsed(actor_name),
-				TestMetric::CommitBytes => Metric::SqliteCommitBytes(actor_name),
-				TestMetric::ReadBytes => Metric::SqliteReadBytes(actor_name),
+				TestMetric::StorageUsed => Metric::SqliteStorageUsed(database_name),
+				TestMetric::CommitBytes => Metric::SqliteCommitBytes(database_name),
+				TestMetric::ReadBytes => Metric::SqliteReadBytes(database_name),
 			};
 			let tx = tx.with_subspace(namespace::keys::subspace());
 			Ok(tx
@@ -228,7 +228,7 @@ async fn read_shard(
 		.run(move |tx| async move {
 			Ok(tx
 				.informal()
-				.get(&shard_version_key(TEST_ACTOR, shard_id, as_of_txid), Snapshot)
+				.get(&shard_version_key(TEST_DATABASE, shard_id, as_of_txid), Snapshot)
 				.await?
 				.map(Vec::<u8>::from))
 		})
@@ -247,7 +247,7 @@ async fn fold(
 	db.run(move |tx| {
 		let updates = updates.clone();
 		async move {
-			fold_shard(&tx, TEST_ACTOR, shard_id, as_of_txid, updates).await?;
+			fold_shard(&tx, TEST_DATABASE, shard_id, as_of_txid, updates).await?;
 			Ok(())
 		}
 	})
@@ -264,18 +264,18 @@ async fn seed_compaction_case(
 ) -> Result<()> {
 	let mut writes = vec![
 		(
-			meta_head_key(TEST_ACTOR),
+			meta_head_key(TEST_DATABASE),
 			encode_db_head(DBHead {
 				head_txid,
 				db_size_pages,
 				post_apply_checksum: 0,
-				branch_id: ActorBranchId::nil(),
+				branch_id: DatabaseBranchId::nil(),
 				#[cfg(debug_assertions)]
 				generation: 0,
 			})?,
 		),
 		(
-			meta_compact_key(TEST_ACTOR),
+			meta_compact_key(TEST_DATABASE),
 			encode_meta_compact(MetaCompact {
 				materialized_txid: compact_txid,
 			})?,
@@ -283,21 +283,21 @@ async fn seed_compaction_case(
 	];
 
 	for (txid, pages) in deltas {
-		writes.push((delta_chunk_key(TEST_ACTOR, *txid, 0), encoded_blob(*txid, pages)?));
+		writes.push((delta_chunk_key(TEST_DATABASE, *txid, 0), encoded_blob(*txid, pages)?));
 	}
 	for (pgno, txid) in pidx_rows {
-		writes.push((pidx_delta_key(TEST_ACTOR, *pgno), txid.to_be_bytes().to_vec()));
+		writes.push((pidx_delta_key(TEST_DATABASE, *pgno), txid.to_be_bytes().to_vec()));
 	}
 
 	seed(db, writes).await
 }
 
-async fn seed_quota(db: &universaldb::Database, actor_id: &str, storage_used: i64) -> Result<()> {
-	let actor_id = actor_id.to_string();
+async fn seed_quota(db: &universaldb::Database, database_id: &str, storage_used: i64) -> Result<()> {
+	let database_id = database_id.to_string();
 	db.run(move |tx| {
-		let actor_id = actor_id.clone();
+		let database_id = database_id.clone();
 		async move {
-			quota::atomic_add(&tx, &actor_id, storage_used);
+			quota::atomic_add(&tx, &database_id, storage_used);
 			Ok(())
 		}
 	})
@@ -312,7 +312,7 @@ async fn seed_shard_versions(
 	let writes = txids
 		.map(|txid| {
 			Ok((
-				shard_version_key(TEST_ACTOR, shard_id, txid),
+				shard_version_key(TEST_DATABASE, shard_id, txid),
 				encoded_blob(txid, &[(3, txid as u8)])?,
 			))
 		})
@@ -328,18 +328,18 @@ fn tracked_entry_size(key: &[u8], value: &[u8]) -> i64 {
 async fn write_newer_page(db: &universaldb::Database, pgno: u32, txid: u64, fill: u8) -> Result<()> {
 	db.run(move |tx| async move {
 		tx.informal().set(
-			&delta_chunk_key(TEST_ACTOR, txid, 0),
+			&delta_chunk_key(TEST_DATABASE, txid, 0),
 			&encoded_blob(txid, &[(pgno, fill)])?,
 		);
 		tx.informal()
-			.set(&pidx_delta_key(TEST_ACTOR, pgno), &txid.to_be_bytes());
+			.set(&pidx_delta_key(TEST_DATABASE, pgno), &txid.to_be_bytes());
 		tx.informal().set(
-			&meta_head_key(TEST_ACTOR),
+			&meta_head_key(TEST_DATABASE),
 			&encode_db_head(DBHead {
 				head_txid: txid,
 				db_size_pages: 128,
 				post_apply_checksum: 0,
-				branch_id: ActorBranchId::nil(),
+				branch_id: DatabaseBranchId::nil(),
 				#[cfg(debug_assertions)]
 				generation: 0,
 			})?,
@@ -352,14 +352,14 @@ async fn write_newer_page(db: &universaldb::Database, pgno: u32, txid: u64, fill
 async fn shrink_head(db: &universaldb::Database, head_txid: u64, db_size_pages: u32) -> Result<()> {
 	db.run(move |tx| async move {
 		tx.informal()
-			.clear(&pidx_delta_key(TEST_ACTOR, db_size_pages + 60));
+			.clear(&pidx_delta_key(TEST_DATABASE, db_size_pages + 60));
 		tx.informal().set(
-			&meta_head_key(TEST_ACTOR),
+			&meta_head_key(TEST_DATABASE),
 			&encode_db_head(DBHead {
 				head_txid,
 				db_size_pages,
 				post_apply_checksum: 0,
-				branch_id: ActorBranchId::nil(),
+				branch_id: DatabaseBranchId::nil(),
 				#[cfg(debug_assertions)]
 				generation: 0,
 			})?,
@@ -393,7 +393,7 @@ async fn fold_into_existing_shard_newer_wins() -> Result<()> {
 	seed(
 		&db,
 		vec![(
-			shard_key(TEST_ACTOR, 0),
+			shard_key(TEST_DATABASE, 0),
 			encoded_blob(1, &[(3, 0x13), (5, 0x15)])?,
 		)],
 	)
@@ -422,7 +422,7 @@ async fn fold_overwrite_all_pages() -> Result<()> {
 		.collect::<Vec<_>>();
 	seed(
 		&db,
-		vec![(shard_key(TEST_ACTOR, 1), encoded_blob(1, &existing)?)],
+		vec![(shard_key(TEST_DATABASE, 1), encoded_blob(1, &existing)?)],
 	)
 	.await?;
 
@@ -442,7 +442,7 @@ async fn fold_partial_shard_keeps_unmodified_pages() -> Result<()> {
 	expected[32] = (96, 0xee);
 	seed(
 		&db,
-		vec![(shard_key(TEST_ACTOR, 1), encoded_blob(1, &existing)?)],
+		vec![(shard_key(TEST_DATABASE, 1), encoded_blob(1, &existing)?)],
 	)
 	.await?;
 
@@ -490,7 +490,7 @@ async fn compact_default_batch_basic_fold() -> Result<()> {
 
 	let outcome = compact_default_batch(
 		Arc::new(db.clone()),
-		TEST_ACTOR.to_string(),
+		TEST_DATABASE.to_string(),
 		10,
 		CancellationToken::new(),
 	)
@@ -508,19 +508,19 @@ async fn compact_default_batch_basic_fold() -> Result<()> {
 	assert_eq!(
 		read_value(
 			&db,
-			branch_manifest_last_hot_pass_txid_key(ActorBranchId::nil())
+			branch_manifest_last_hot_pass_txid_key(DatabaseBranchId::nil())
 		)
 		.await?
 		.map(|value| u64::from_be_bytes(value.try_into().expect("manifest txid should be u64"))),
 		Some(2)
 	);
 	assert!(
-		read_value(&db, delta_chunk_key(TEST_ACTOR, 1, 0))
+		read_value(&db, delta_chunk_key(TEST_DATABASE, 1, 0))
 			.await?
 			.is_none()
 	);
 	assert!(
-		read_value(&db, delta_chunk_key(TEST_ACTOR, 2, 0))
+		read_value(&db, delta_chunk_key(TEST_DATABASE, 2, 0))
 			.await?
 			.is_none()
 	);
@@ -533,21 +533,21 @@ async fn compact_default_batch_basic_fold() -> Result<()> {
 async fn compact_updates_branch_manifest_last_hot_pass_txid_each_pass() -> Result<()> {
 	let _compaction_test_lock = COMPACTION_TEST_LOCK.lock().await;
 	let db = Arc::new(test_db().await?);
-	let actor_db = ActorDb::new(
+	let database_db = Db::new(
 		db.clone(),
 		test_ups(),
 		nil_namespace(),
-		TEST_ACTOR.to_string(),
+		TEST_DATABASE.to_string(),
 		NodeId::new(),
 	);
 
-	actor_db.commit(vec![page(3, 0x13)], 8, 1_000).await?;
-	actor_db.commit(vec![page(5, 0x15)], 8, 2_000).await?;
+	database_db.commit(vec![page(3, 0x13)], 8, 1_000).await?;
+	database_db.commit(vec![page(5, 0x15)], 8, 2_000).await?;
 	let branch_id = read_branch_id(&db).await?;
 
 	let first = compact_default_batch(
 		db.clone(),
-		TEST_ACTOR.to_string(),
+		TEST_DATABASE.to_string(),
 		1,
 		CancellationToken::new(),
 	)
@@ -557,10 +557,10 @@ async fn compact_updates_branch_manifest_last_hot_pass_txid_each_pass() -> Resul
 	assert_eq!(read_branch_compact_txid(&db, branch_id).await?, 1);
 	assert_eq!(read_manifest_last_hot_pass_txid(&db, branch_id).await?, Some(1));
 
-	actor_db.commit(vec![page(7, 0x17)], 8, 3_000).await?;
+	database_db.commit(vec![page(7, 0x17)], 8, 3_000).await?;
 	let second = compact_default_batch(
 		db.clone(),
-		TEST_ACTOR.to_string(),
+		TEST_DATABASE.to_string(),
 		10,
 		CancellationToken::new(),
 	)
@@ -577,20 +577,20 @@ async fn compact_updates_branch_manifest_last_hot_pass_txid_each_pass() -> Resul
 async fn compact_sweeps_old_commits_and_vtx_without_tier_gate() -> Result<()> {
 	let _compaction_test_lock = COMPACTION_TEST_LOCK.lock().await;
 	let db = Arc::new(test_db().await?);
-	let actor_db = ActorDb::new(
+	let database_db = Db::new(
 		db.clone(),
 		test_ups(),
 		nil_namespace(),
-		TEST_ACTOR.to_string(),
+		TEST_DATABASE.to_string(),
 		NodeId::new(),
 	);
 	let current_ms = now_ms();
 	let old_ms = current_ms - HOT_RETENTION_FLOOR_MS - 1_000;
 	let recent_ms = current_ms - 1_000;
 
-	actor_db.commit(vec![page(3, 0x13)], 8, old_ms).await?;
+	database_db.commit(vec![page(3, 0x13)], 8, old_ms).await?;
 	let old_bookmark = BookmarkStr::format(old_ms, 1)?;
-	actor_db.commit(vec![page(5, 0x15)], 8, recent_ms).await?;
+	database_db.commit(vec![page(5, 0x15)], 8, recent_ms).await?;
 	let branch_id = read_branch_id(&db).await?;
 	let old_row = read_commit_row(&db, branch_id, 1)
 		.await?
@@ -601,7 +601,7 @@ async fn compact_sweeps_old_commits_and_vtx_without_tier_gate() -> Result<()> {
 
 	compact_default_batch(
 		db.clone(),
-		TEST_ACTOR.to_string(),
+		TEST_DATABASE.to_string(),
 		10,
 		CancellationToken::new(),
 	)
@@ -620,7 +620,7 @@ async fn compact_sweeps_old_commits_and_vtx_without_tier_gate() -> Result<()> {
 			.is_some()
 	);
 
-	let err = actor_db
+	let err = database_db
 		.resolve_bookmark(old_bookmark)
 		.await
 		.expect_err("bookmark for swept hot row should be expired without cold layer coverage");
@@ -637,16 +637,16 @@ async fn compact_sweeps_old_commits_and_vtx_without_tier_gate() -> Result<()> {
 async fn compact_sweeps_old_commits_even_without_selected_deltas() -> Result<()> {
 	let _compaction_test_lock = COMPACTION_TEST_LOCK.lock().await;
 	let db = Arc::new(test_db().await?);
-	let actor_db = ActorDb::new(
+	let database_db = Db::new(
 		db.clone(),
 		test_ups(),
 		nil_namespace(),
-		TEST_ACTOR.to_string(),
+		TEST_DATABASE.to_string(),
 		NodeId::new(),
 	);
 	let old_ms = now_ms() - HOT_RETENTION_FLOOR_MS - 1_000;
 
-	actor_db.commit(vec![page(3, 0x13)], 8, old_ms).await?;
+	database_db.commit(vec![page(3, 0x13)], 8, old_ms).await?;
 	let branch_id = read_branch_id(&db).await?;
 	let old_row = read_commit_row(&db, branch_id, 1)
 		.await?
@@ -664,7 +664,7 @@ async fn compact_sweeps_old_commits_even_without_selected_deltas() -> Result<()>
 
 	let outcome = compact_default_batch(
 		db.clone(),
-		TEST_ACTOR.to_string(),
+		TEST_DATABASE.to_string(),
 		10,
 		CancellationToken::new(),
 	)
@@ -689,20 +689,20 @@ async fn compact_retention_sweep_applies_across_namespaces() -> Result<()> {
 	let current_ms = now_ms();
 	let old_ms = current_ms - HOT_RETENTION_FLOOR_MS - 1_000;
 	let recent_ms = current_ms - 1_000;
-	let other_actor = "other-actor";
+	let other_database = "other-database";
 	let other_namespace = other_namespace();
-	let first = ActorDb::new(
+	let first = Db::new(
 		db.clone(),
 		test_ups(),
 		nil_namespace(),
-		TEST_ACTOR.to_string(),
+		TEST_DATABASE.to_string(),
 		NodeId::new(),
 	);
-	let second = ActorDb::new(
+	let second = Db::new(
 		db.clone(),
 		test_ups(),
 		other_namespace,
-		other_actor.to_string(),
+		other_database.to_string(),
 		NodeId::new(),
 	);
 
@@ -711,11 +711,11 @@ async fn compact_retention_sweep_applies_across_namespaces() -> Result<()> {
 	second.commit(vec![page(7, 0x17)], 8, old_ms).await?;
 	second.commit(vec![page(9, 0x19)], 8, recent_ms).await?;
 	let first_branch_id = read_branch_id(&db).await?;
-	let second_branch_id = read_branch_id_for(&db, other_namespace, other_actor).await?;
+	let second_branch_id = read_branch_id_for(&db, other_namespace, other_database).await?;
 
 	compact_default_batch(
 		db.clone(),
-		TEST_ACTOR.to_string(),
+		TEST_DATABASE.to_string(),
 		10,
 		CancellationToken::new(),
 	)
@@ -730,9 +730,9 @@ async fn compact_retention_sweep_applies_across_namespaces() -> Result<()> {
 	worker::test_hooks::handle_payload_once(
 		db.clone(),
 		SqliteCompactPayload {
-			actor_id: other_actor.to_string(),
+			database_id: other_database.to_string(),
 			namespace_id: Some(other_namespace),
-			actor_name: None,
+			database_name: None,
 			commit_bytes_since_rollup: 0,
 			read_bytes_since_rollup: 0,
 		},
@@ -772,7 +772,7 @@ async fn compact_force_evicts_oldest_unpinned_shard_version_at_cap() -> Result<(
 
 	let outcome = compact_default_batch(
 		Arc::new(db.clone()),
-		TEST_ACTOR.to_string(),
+		TEST_DATABASE.to_string(),
 		10,
 		CancellationToken::new(),
 	)
@@ -780,12 +780,12 @@ async fn compact_force_evicts_oldest_unpinned_shard_version_at_cap() -> Result<(
 
 	assert_eq!(outcome.materialized_txid, cap + 1);
 	assert!(
-		read_value(&db, shard_version_key(TEST_ACTOR, 0, 1))
+		read_value(&db, shard_version_key(TEST_DATABASE, 0, 1))
 			.await?
 			.is_none()
 	);
 	assert!(
-		read_value(&db, shard_version_key(TEST_ACTOR, 0, cap))
+		read_value(&db, shard_version_key(TEST_DATABASE, 0, cap))
 			.await?
 			.is_some()
 	);
@@ -817,17 +817,17 @@ async fn compact_errors_when_all_shard_versions_are_pinned_at_cap() -> Result<()
 		&db,
 		vec![
 			(
-				branches_bk_pin_key(ActorBranchId::nil()),
+				branches_bk_pin_key(DatabaseBranchId::nil()),
 				pin_versionstamp.to_vec(),
 			),
-			(vtx_key(TEST_ACTOR, pin_versionstamp), 1_u64.to_be_bytes().to_vec()),
+			(vtx_key(TEST_DATABASE, pin_versionstamp), 1_u64.to_be_bytes().to_vec()),
 		],
 	)
 	.await?;
 
 	let err = compact_default_batch(
 		Arc::new(db.clone()),
-		TEST_ACTOR.to_string(),
+		TEST_DATABASE.to_string(),
 		10,
 		CancellationToken::new(),
 	)
@@ -839,12 +839,12 @@ async fn compact_errors_when_all_shard_versions_are_pinned_at_cap() -> Result<()
 			.is_some_and(|err| matches!(err, SqliteStorageError::ShardVersionCapExhausted))
 	}));
 	assert!(
-		read_value(&db, shard_version_key(TEST_ACTOR, 0, 1))
+		read_value(&db, shard_version_key(TEST_DATABASE, 0, 1))
 			.await?
 			.is_some()
 	);
 	assert!(
-		read_value(&db, shard_version_key(TEST_ACTOR, 0, cap + 1))
+		read_value(&db, shard_version_key(TEST_DATABASE, 0, cap + 1))
 			.await?
 			.is_none()
 	);
@@ -855,13 +855,13 @@ async fn compact_errors_when_all_shard_versions_are_pinned_at_cap() -> Result<()
 #[tokio::test]
 async fn validate_quota_accepts_clean_compacted_state() -> Result<()> {
 	let db = test_db().await?;
-	let shard_key = shard_key(TEST_ACTOR, 0);
+	let shard_key = shard_key(TEST_DATABASE, 0);
 	let shard_blob = encoded_blob(1, &[(3, 0x13), (5, 0x15)])?;
 	let storage_used = tracked_entry_size(&shard_key, &shard_blob);
 	seed(&db, vec![(shard_key, shard_blob)]).await?;
-	seed_quota(&db, TEST_ACTOR, storage_used).await?;
+	seed_quota(&db, TEST_DATABASE, storage_used).await?;
 
-	validate_quota(Arc::new(db), TEST_ACTOR.to_string()).await?;
+	validate_quota(Arc::new(db), TEST_DATABASE.to_string()).await?;
 
 	Ok(())
 }
@@ -879,13 +879,13 @@ async fn compact_compare_and_clear_noop_keeps_newer_pidx() -> Result<()> {
 		&[(3, 1)],
 	)
 	.await?;
-	let (_guard, reached, release) = test_hooks::pause_after_plan(TEST_ACTOR);
+	let (_guard, reached, release) = test_hooks::pause_after_plan(TEST_DATABASE);
 	let task = tokio::spawn({
 		let db = Arc::new(db.clone());
 		async move {
 			compact_default_batch(
 				db,
-				TEST_ACTOR.to_string(),
+				TEST_DATABASE.to_string(),
 				10,
 				CancellationToken::new(),
 			)
@@ -903,12 +903,12 @@ async fn compact_compare_and_clear_noop_keeps_newer_pidx() -> Result<()> {
 	assert_eq!(outcome.compare_and_clear_noops, 1);
 	assert_eq!(read_pidx_txid(&db, 3).await?, Some(2));
 	assert!(
-		read_value(&db, delta_chunk_key(TEST_ACTOR, 1, 0))
+		read_value(&db, delta_chunk_key(TEST_DATABASE, 1, 0))
 			.await?
 			.is_none()
 	);
 	assert!(
-		read_value(&db, delta_chunk_key(TEST_ACTOR, 2, 0))
+		read_value(&db, delta_chunk_key(TEST_DATABASE, 2, 0))
 			.await?
 			.is_some()
 	);
@@ -931,13 +931,13 @@ async fn compact_conflicts_with_concurrent_shrink_after_head_read() -> Result<()
 		&[(70, 1)],
 	)
 	.await?;
-	let (_guard, reached, release) = test_hooks::pause_after_write_head_read(TEST_ACTOR);
+	let (_guard, reached, release) = test_hooks::pause_after_write_head_read(TEST_DATABASE);
 	let task = tokio::spawn({
 		let db = Arc::new(db.clone());
 		async move {
 			compact_default_batch(
 				db,
-				TEST_ACTOR.to_string(),
+				TEST_DATABASE.to_string(),
 				10,
 				CancellationToken::new(),
 			)
@@ -963,8 +963,8 @@ async fn compact_conflicts_with_concurrent_shrink_after_head_read() -> Result<()
 async fn compact_trigger_rolls_up_sqlite_metering_metrics() -> Result<()> {
 	let _compaction_test_lock = COMPACTION_TEST_LOCK.lock().await;
 	let db = Arc::new(test_db().await?);
-	let actor_id = TEST_ACTOR;
-	let actor_name = "metered-actor";
+	let database_id = TEST_DATABASE;
+	let database_name = "metered-database";
 	let namespace_id = Id::new_v1(42);
 	let commit_bytes = util::metric::KV_BILLABLE_CHUNK * 3 + 123;
 	let read_bytes = util::metric::KV_BILLABLE_CHUNK * 2 + 456;
@@ -978,14 +978,14 @@ async fn compact_trigger_rolls_up_sqlite_metering_metrics() -> Result<()> {
 		&[(3, 1), (5, 1)],
 	)
 	.await?;
-	seed_quota(&db, actor_id, 1_000_000).await?;
+	seed_quota(&db, database_id, 1_000_000).await?;
 
 	worker::test_hooks::handle_payload_once(
 		Arc::clone(&db),
 		SqliteCompactPayload {
-			actor_id: actor_id.to_string(),
+			database_id: database_id.to_string(),
 			namespace_id: Some(namespace_id),
-			actor_name: Some(actor_name.to_string()),
+			database_name: Some(database_name.to_string()),
 			commit_bytes_since_rollup: commit_bytes,
 			read_bytes_since_rollup: read_bytes,
 		},
@@ -994,18 +994,18 @@ async fn compact_trigger_rolls_up_sqlite_metering_metrics() -> Result<()> {
 	)
 	.await?;
 
-	let storage_used = read_quota(&db, actor_id).await?;
+	let storage_used = read_quota(&db, database_id).await?;
 	assert_eq!(
-		read_sqlite_metric(&db, namespace_id, actor_name, TestMetric::StorageUsed).await?,
+		read_sqlite_metric(&db, namespace_id, database_name, TestMetric::StorageUsed).await?,
 		storage_used,
 	);
 	assert_eq!(
-		read_sqlite_metric(&db, namespace_id, actor_name, TestMetric::CommitBytes).await?,
+		read_sqlite_metric(&db, namespace_id, database_name, TestMetric::CommitBytes).await?,
 		(commit_bytes / util::metric::KV_BILLABLE_CHUNK * util::metric::KV_BILLABLE_CHUNK)
 			as i64,
 	);
 	assert_eq!(
-		read_sqlite_metric(&db, namespace_id, actor_name, TestMetric::ReadBytes).await?,
+		read_sqlite_metric(&db, namespace_id, database_name, TestMetric::ReadBytes).await?,
 		(read_bytes / util::metric::KV_BILLABLE_CHUNK * util::metric::KV_BILLABLE_CHUNK) as i64,
 	);
 

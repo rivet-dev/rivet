@@ -305,7 +305,7 @@ fn pitr_metrics_increment_and_scrape() {
 		.with_label_values(&[node_id])
 		.set(7.0);
 	pump_metrics::SQLITE_COLD_LAG_VERSIONSTAMPS
-		.with_label_values(&[node_id, "actor-a"])
+		.with_label_values(&[node_id, "database-a"])
 		.set(42.0);
 	pump_metrics::SQLITE_BOOKMARK_RESOLUTION_CHAIN_DEPTH
 		.with_label_values(&[node_id])
@@ -365,9 +365,9 @@ async fn compactor_service_starts() -> Result<()> {
 	worker::test_hooks::handle_payload_once(
 		db,
 		SqliteCompactPayload {
-			actor_id: "metrics-actor".to_string(),
+			database_id: "metrics-database".to_string(),
 			namespace_id: None,
-			actor_name: None,
+			database_name: None,
 			commit_bytes_since_rollup: 0,
 			read_bytes_since_rollup: 0,
 		},

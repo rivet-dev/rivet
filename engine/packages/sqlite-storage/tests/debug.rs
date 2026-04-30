@@ -7,9 +7,9 @@ use sqlite_storage::{
 	cold_tier::{ColdTier, FilesystemColdTier},
 	debug,
 	keys::{PAGE_SIZE, branch_commit_key},
-	pump::ActorDb,
+	pump::Db,
 	types::{
-		ActorBranchId, BookmarkStr, ColdManifestChunk, ColdManifestChunkRef, ColdManifestIndex,
+		DatabaseBranchId, BookmarkStr, ColdManifestChunk, ColdManifestChunkRef, ColdManifestIndex,
 		DirtyPage, LayerEntry, LayerKind, SQLITE_STORAGE_COLD_SCHEMA_VERSION, decode_commit_row,
 		encode_cold_manifest_chunk, encode_cold_manifest_index,
 	},
@@ -18,7 +18,7 @@ use tempfile::Builder;
 use universaldb::utils::IsolationLevel::Snapshot;
 use universalpubsub::{PubSub, driver::memory::MemoryDriver};
 
-const TEST_ACTOR: &str = "test-actor";
+const TEST_DATABASE: &str = "test-database";
 
 fn test_namespace() -> Id {
 	Id::v1(uuid::Uuid::from_u128(0x5678), 1)
@@ -46,7 +46,7 @@ fn page(pgno: u32, fill: u8) -> DirtyPage {
 
 async fn commit_row(
 	db: &universaldb::Database,
-	branch_id: ActorBranchId,
+	branch_id: DatabaseBranchId,
 	txid: u64,
 ) -> Result<sqlite_storage::types::CommitRow> {
 	db.run(move |tx| async move {
@@ -64,29 +64,29 @@ async fn commit_row(
 #[tokio::test]
 async fn debug_dumps_ancestry_pins_bookmarks_and_gc_pin() -> Result<()> {
 	let db = Arc::new(test_db().await?);
-	let actor_db = ActorDb::new(
+	let database_db = Db::new(
 		db.clone(),
 		test_ups(),
 		test_namespace(),
-		TEST_ACTOR.to_string(),
+		TEST_DATABASE.to_string(),
 		NodeId::new(),
 	);
 
-	actor_db.commit(vec![page(1, 0x11)], 2, 1_000).await?;
-	let branch_id = debug::dump_actor_ancestry(&actor_db).await?[0].0;
+	database_db.commit(vec![page(1, 0x11)], 2, 1_000).await?;
+	let branch_id = debug::dump_database_ancestry(&database_db).await?[0].0;
 	let first_commit = commit_row(&db, branch_id, 1).await?;
-	let pinned = actor_db.create_pinned_bookmark(1_010).await?;
-	actor_db.commit(vec![page(2, 0x22)], 3, 2_000).await?;
+	let pinned = database_db.create_pinned_bookmark(1_010).await?;
+	database_db.commit(vec![page(2, 0x22)], 3, 2_000).await?;
 
-	let ancestry = debug::dump_actor_ancestry(&actor_db).await?;
+	let ancestry = debug::dump_database_ancestry(&database_db).await?;
 	assert_eq!(ancestry, vec![(branch_id, None)]);
 
-	let pins = debug::dump_branch_pins(&actor_db).await?;
+	let pins = debug::dump_branch_pins(&database_db).await?;
 	assert_eq!(pins.branch_id, branch_id);
 	assert_eq!(pins.refcount, 1);
 	assert_eq!(pins.bk_pin, first_commit.versionstamp);
 
-	let bookmarks = debug::list_bookmarks(&actor_db).await?;
+	let bookmarks = debug::list_bookmarks(&database_db).await?;
 	assert!(bookmarks.iter().any(|entry| {
 		!entry.pinned && entry.bookmark_str == BookmarkStr::format(2_000, 2).unwrap()
 	}));
@@ -94,7 +94,7 @@ async fn debug_dumps_ancestry_pins_bookmarks_and_gc_pin() -> Result<()> {
 		entry.pinned && entry.bookmark_str == pinned && entry.pin_status == sqlite_storage::types::PinStatus::Pending
 	}));
 
-	assert_eq!(debug::estimate_gc_pin(&actor_db).await?, first_commit.versionstamp);
+	assert_eq!(debug::estimate_gc_pin(&database_db).await?, first_commit.versionstamp);
 
 	Ok(())
 }
@@ -102,29 +102,29 @@ async fn debug_dumps_ancestry_pins_bookmarks_and_gc_pin() -> Result<()> {
 #[tokio::test]
 async fn debug_read_at_returns_page_state_for_versionstamp() -> Result<()> {
 	let db = Arc::new(test_db().await?);
-	let actor_db = ActorDb::new(
+	let database_db = Db::new(
 		db.clone(),
 		test_ups(),
 		test_namespace(),
-		TEST_ACTOR.to_string(),
+		TEST_DATABASE.to_string(),
 		NodeId::new(),
 	);
 
-	actor_db.commit(vec![page(1, 0x11)], 2, 1_000).await?;
-	let branch_id = debug::dump_actor_ancestry(&actor_db).await?[0].0;
+	database_db.commit(vec![page(1, 0x11)], 2, 1_000).await?;
+	let branch_id = debug::dump_database_ancestry(&database_db).await?[0].0;
 	let first_commit = commit_row(&db, branch_id, 1).await?;
-	actor_db
+	database_db
 		.commit(vec![page(1, 0x22), page(2, 0x33)], 3, 2_000)
 		.await?;
 	let second_commit = commit_row(&db, branch_id, 2).await?;
 
-	let first_state = debug::read_at(&actor_db, first_commit.versionstamp).await?;
+	let first_state = debug::read_at(&database_db, first_commit.versionstamp).await?;
 	assert_eq!(first_state.txid, 1);
 	assert_eq!(first_state.db_size_pages, 2);
 	assert_eq!(first_state.pages[0].bytes.as_deref(), Some(&vec![0x11; PAGE_SIZE as usize][..]));
 	assert_eq!(first_state.pages[1].bytes.as_deref(), Some(&vec![0; PAGE_SIZE as usize][..]));
 
-	let second_state = debug::read_at(&actor_db, second_commit.versionstamp).await?;
+	let second_state = debug::read_at(&database_db, second_commit.versionstamp).await?;
 	assert_eq!(second_state.txid, 2);
 	assert_eq!(second_state.db_size_pages, 3);
 	assert_eq!(second_state.pages[0].bytes.as_deref(), Some(&vec![0x22; PAGE_SIZE as usize][..]));
@@ -141,16 +141,16 @@ async fn debug_dump_cold_manifest_reads_index_and_chunks() -> Result<()> {
 		.tempdir()?
 		.keep();
 	let cold_tier = Arc::new(FilesystemColdTier::new(cold_path));
-	let actor_db = ActorDb::new_with_cold_tier(
+	let database_db = Db::new_with_cold_tier(
 		db.clone(),
 		test_ups(),
 		test_namespace(),
-		TEST_ACTOR.to_string(),
+		TEST_DATABASE.to_string(),
 		NodeId::new(),
 		cold_tier.clone(),
 	);
-	actor_db.commit(vec![page(1, 0x11)], 2, 1_000).await?;
-	let branch_id = debug::dump_actor_ancestry(&actor_db).await?[0].0;
+	database_db.commit(vec![page(1, 0x11)], 2, 1_000).await?;
+	let branch_id = debug::dump_database_ancestry(&database_db).await?[0].0;
 	let chunk_key = format!(
 		"db/{}/cold_manifest/chunks/debug.bare",
 		branch_id.as_uuid().simple()
@@ -198,7 +198,7 @@ async fn debug_dump_cold_manifest_reads_index_and_chunks() -> Result<()> {
 		)
 		.await?;
 
-	let manifest = debug::dump_cold_manifest(&actor_db).await?;
+	let manifest = debug::dump_cold_manifest(&database_db).await?;
 	assert_eq!(manifest.branch_id, branch_id);
 	assert!(manifest.index.is_some());
 	assert_eq!(manifest.chunks.len(), 1);

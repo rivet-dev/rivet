@@ -21,7 +21,7 @@ use super::{
 	constants::{ACCESS_TOUCH_THROTTLE_MS, MAX_FORK_DEPTH},
 	error::SqliteStorageError,
 	keys,
-	types::{ActorBranchId, ColdManifestChunk, NamespaceId},
+	types::{DatabaseBranchId, ColdManifestChunk, NamespaceId},
 };
 
 const COLD_MANIFEST_CACHE_BRANCHES: usize = 16;
@@ -33,12 +33,12 @@ pub(super) struct CachedColdManifest {
 
 #[derive(Debug, Default)]
 pub(super) struct ColdManifestCache {
-	entries: BTreeMap<ActorBranchId, CachedColdManifest>,
-	lru: VecDeque<ActorBranchId>,
+	entries: BTreeMap<DatabaseBranchId, CachedColdManifest>,
+	lru: VecDeque<DatabaseBranchId>,
 }
 
 impl ColdManifestCache {
-	pub(super) fn get(&mut self, branch_id: ActorBranchId) -> Option<CachedColdManifest> {
+	pub(super) fn get(&mut self, branch_id: DatabaseBranchId) -> Option<CachedColdManifest> {
 		let manifest = self.entries.get(&branch_id)?.clone();
 		self.touch(branch_id);
 		Some(manifest)
@@ -46,7 +46,7 @@ impl ColdManifestCache {
 
 	pub(super) fn insert(
 		&mut self,
-		branch_id: ActorBranchId,
+		branch_id: DatabaseBranchId,
 		manifest: CachedColdManifest,
 	) {
 		self.entries.insert(branch_id, manifest);
@@ -62,7 +62,7 @@ impl ColdManifestCache {
 		}
 	}
 
-	fn touch(&mut self, branch_id: ActorBranchId) {
+	fn touch(&mut self, branch_id: DatabaseBranchId) {
 		self.lru.retain(|cached| *cached != branch_id);
 		self.lru.push_back(branch_id);
 	}
@@ -70,18 +70,18 @@ impl ColdManifestCache {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct BranchAncestry {
-	pub root_branch_id: ActorBranchId,
+	pub root_branch_id: DatabaseBranchId,
 	pub ancestors: Vec<BranchAncestor>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) struct BranchAncestor {
-	pub branch_id: ActorBranchId,
+	pub branch_id: DatabaseBranchId,
 	pub parent_versionstamp_cap: Option<[u8; 16]>,
 }
 
 impl BranchAncestry {
-	pub(super) fn root(branch_id: ActorBranchId) -> Self {
+	pub(super) fn root(branch_id: DatabaseBranchId) -> Self {
 		Self {
 			root_branch_id: branch_id,
 			ancestors: vec![BranchAncestor {
@@ -93,14 +93,14 @@ impl BranchAncestry {
 }
 
 #[allow(dead_code)]
-pub struct ActorDb {
+pub struct Db {
 	pub(super) udb: Arc<Database>,
 	pub(super) ups: Ups,
 	pub(super) namespace_id: Id,
-	pub(super) actor_id: String,
+	pub(super) database_id: String,
 	pub(super) node_id: NodeId,
-	/// Cached actor branch id. This is a perf cache; FDB remains the source of truth.
-	pub(super) branch_id: Mutex<Option<ActorBranchId>>,
+	/// Cached database branch id. This is a perf cache; FDB remains the source of truth.
+	pub(super) branch_id: Mutex<Option<DatabaseBranchId>>,
 	/// Cached immutable branch ancestry. This is a perf cache for read planning.
 	pub(super) ancestors: Mutex<Option<BranchAncestry>>,
 	pub(super) cold_tier: Option<Arc<dyn ColdTier>>,
@@ -114,48 +114,48 @@ pub struct ActorDb {
 	pub(super) commit_bytes_since_rollup: Mutex<u64>,
 	/// Bytes read across `get_pages` calls since the last metering rollup.
 	pub(super) read_bytes_since_rollup: Mutex<u64>,
-	/// Last time this actor published a compaction trigger.
+	/// Last time this database published a compaction trigger.
 	pub(super) last_trigger_at: Mutex<Option<Instant>>,
 }
 
-impl ActorDb {
+impl Db {
 	pub fn new(
 		udb: Arc<Database>,
 		ups: Ups,
 		namespace_id: Id,
-		actor_id: String,
+		database_id: String,
 		node_id: NodeId,
 	) -> Self {
-		Self::new_inner(udb, ups, namespace_id, actor_id, node_id, None)
+		Self::new_inner(udb, ups, namespace_id, database_id, node_id, None)
 	}
 
 	pub fn new_with_cold_tier(
 		udb: Arc<Database>,
 		ups: Ups,
 		namespace_id: Id,
-		actor_id: String,
+		database_id: String,
 		node_id: NodeId,
 		cold_tier: Arc<dyn ColdTier>,
 	) -> Self {
-		Self::new_inner(udb, ups, namespace_id, actor_id, node_id, Some(cold_tier))
+		Self::new_inner(udb, ups, namespace_id, database_id, node_id, Some(cold_tier))
 	}
 
 	fn new_inner(
 		udb: Arc<Database>,
 		ups: Ups,
 		namespace_id: Id,
-		actor_id: String,
+		database_id: String,
 		node_id: NodeId,
 		cold_tier: Option<Arc<dyn ColdTier>>,
 	) -> Self {
 		#[cfg(debug_assertions)]
-		crate::takeover::reconcile_blocking(udb.clone(), actor_id.clone(), node_id);
+		crate::takeover::reconcile_blocking(udb.clone(), database_id.clone(), node_id);
 
 		Self {
 			udb,
 			ups,
 			namespace_id,
-			actor_id,
+			database_id,
 			node_id,
 			branch_id: Mutex::new(None),
 			ancestors: Mutex::new(None),
@@ -192,7 +192,7 @@ pub(super) fn access_bucket(now_ms: i64) -> i64 {
 
 pub(super) async fn touch_access_if_bucket_advanced(
 	tx: &universaldb::Transaction,
-	branch_id: ActorBranchId,
+	branch_id: DatabaseBranchId,
 	cached_bucket: Option<i64>,
 	now_ms: i64,
 ) -> Result<Option<i64>> {
@@ -232,7 +232,7 @@ pub mod test_hooks {
 
 	pub async fn touch_access_if_bucket_advanced_for_test(
 		tx: &universaldb::Transaction,
-		branch_id: ActorBranchId,
+		branch_id: DatabaseBranchId,
 		cached_bucket: Option<i64>,
 		now_ms: i64,
 	) -> Result<Option<i64>> {
@@ -253,7 +253,7 @@ fn decode_i64_le(bytes: &[u8]) -> Result<i64> {
 
 pub(super) async fn load_branch_ancestry(
 	tx: &universaldb::Transaction,
-	branch_id: ActorBranchId,
+	branch_id: DatabaseBranchId,
 ) -> Result<BranchAncestry> {
 	let mut ancestors = vec![BranchAncestor {
 		branch_id,
@@ -262,7 +262,7 @@ pub(super) async fn load_branch_ancestry(
 	let mut current_branch_id = branch_id;
 
 	for depth in 0..=MAX_FORK_DEPTH {
-		let record = branch::read_actor_branch_record(tx, current_branch_id).await?;
+		let record = branch::read_database_branch_record(tx, current_branch_id).await?;
 		let Some(parent_branch_id) = record.parent else {
 			return Ok(BranchAncestry {
 				root_branch_id: branch_id,
@@ -275,7 +275,7 @@ pub(super) async fn load_branch_ancestry(
 
 		let parent_versionstamp = record
 			.parent_versionstamp
-			.context("sqlite actor branch parent versionstamp is missing")?;
+			.context("sqlite database branch parent versionstamp is missing")?;
 		ancestors.push(BranchAncestor {
 			branch_id: parent_branch_id,
 			parent_versionstamp_cap: Some(parent_versionstamp),

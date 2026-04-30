@@ -8,7 +8,7 @@ use rivet_pools::NodeId;
 use rusqlite::{Connection, params};
 use sqlite_storage::{
 	keys::{branch_meta_head_key, meta_head_key},
-	pump::{branch as sqlite_storage_branch, ActorDb},
+	pump::{branch as sqlite_storage_branch, Db},
 	types::{DirtyPage, NamespaceId, SQLITE_PAGE_SIZE, decode_db_head},
 };
 use tempfile::tempdir;
@@ -134,8 +134,8 @@ fn test_ups() -> PubSub {
 	)))
 }
 
-fn actor_db(db: &universaldb::Database, actor_id: &str) -> ActorDb {
-	ActorDb::new(
+fn actor_db(db: &universaldb::Database, actor_id: &str) -> Db {
+	Db::new(
 		Arc::new(db.clone()),
 		test_ups(),
 		test_namespace(),
@@ -151,7 +151,7 @@ async fn load_v2_bytes(db: &universaldb::Database, actor_id: &str) -> Result<Vec
 			let actor_id = actor_id_for_tx.clone();
 			async move {
 				let namespace_id = NamespaceId::from_gas_id(test_namespace());
-				let key = if let Some(branch_id) = sqlite_storage_branch::resolve_actor_branch(
+				let key = if let Some(branch_id) = sqlite_storage_branch::resolve_database_branch(
 					&tx,
 					namespace_id,
 					&actor_id,

@@ -10,9 +10,9 @@ use sqlite_storage::{
 		shard_key, shard_version_key, PAGE_SIZE,
 	},
 	ltx::{LtxHeader, encode_ltx_v3},
-	pump::{ActorDb, branch},
+	pump::{Db, branch},
 	types::{
-		ActorBranchId, ColdManifestChunk, ColdManifestChunkRef, ColdManifestIndex, DBHead,
+		DatabaseBranchId, ColdManifestChunk, ColdManifestChunkRef, ColdManifestIndex, DBHead,
 		DirtyPage, FetchedPage, LayerEntry, LayerKind, SQLITE_STORAGE_COLD_SCHEMA_VERSION,
 		encode_cold_manifest_chunk, encode_cold_manifest_index, encode_db_head,
 	},
@@ -21,7 +21,7 @@ use tempfile::Builder;
 use universaldb::utils::IsolationLevel::Serializable;
 use universalpubsub::{PubSub, driver::memory::MemoryDriver};
 
-const TEST_ACTOR: &str = "test-actor";
+const TEST_DATABASE: &str = "test-database";
 
 fn test_namespace() -> Id {
 	Id::v1(uuid::Uuid::from_u128(0x5678), 1)
@@ -49,7 +49,7 @@ fn head_at(head_txid: u64, db_size_pages: u32) -> DBHead {
 		head_txid,
 		db_size_pages,
 		post_apply_checksum: 0,
-		branch_id: ActorBranchId::nil(),
+		branch_id: DatabaseBranchId::nil(),
 		#[cfg(debug_assertions)]
 		generation: 1,
 	}
@@ -78,16 +78,16 @@ fn encoded_blob(txid: u64, pages: &[(u32, u8)]) -> Result<Vec<u8>> {
 	encode_ltx_v3(LtxHeader::delta(txid, 1, 999), &pages)
 }
 
-async fn read_actor_branch_id(db: &universaldb::Database) -> Result<ActorBranchId> {
+async fn read_database_branch_id(db: &universaldb::Database) -> Result<DatabaseBranchId> {
 	db.run(|tx| async move {
-		branch::resolve_actor_branch(
+		branch::resolve_database_branch(
 			&tx,
 			sqlite_storage::types::NamespaceId::from_gas_id(test_namespace()),
-			TEST_ACTOR,
+			TEST_DATABASE,
 			Serializable,
 		)
 		.await?
-		.ok_or_else(|| anyhow::anyhow!("actor branch should exist"))
+		.ok_or_else(|| anyhow::anyhow!("database branch should exist"))
 	})
 	.await
 }
@@ -119,18 +119,18 @@ async fn get_pages_reads_with_cold_pidx_scan() -> Result<()> {
 	seed(
 		&db,
 		vec![
-			(meta_head_key(TEST_ACTOR), encode_db_head(head(3))?),
-			(delta_chunk_key(TEST_ACTOR, 4, 0), encoded_blob(4, &[(2, 0x22)])?),
-			(pidx_delta_key(TEST_ACTOR, 2), 4_u64.to_be_bytes().to_vec()),
+			(meta_head_key(TEST_DATABASE), encode_db_head(head(3))?),
+			(delta_chunk_key(TEST_DATABASE, 4, 0), encoded_blob(4, &[(2, 0x22)])?),
+			(pidx_delta_key(TEST_DATABASE, 2), 4_u64.to_be_bytes().to_vec()),
 		],
 		Vec::new(),
 	)
 	.await?;
 
-	let actor_db = ActorDb::new(db, test_ups(), test_namespace(), TEST_ACTOR.to_string(), NodeId::new());
+	let database_db = Db::new(db, test_ups(), test_namespace(), TEST_DATABASE.to_string(), NodeId::new());
 
 	assert_eq!(
-		actor_db.get_pages(vec![2]).await?,
+		database_db.get_pages(vec![2]).await?,
 		vec![FetchedPage {
 			pgno: 2,
 			bytes: Some(page(0x22)),
@@ -146,27 +146,27 @@ async fn get_pages_uses_warm_cache_without_pidx_row() -> Result<()> {
 	seed(
 		&db,
 		vec![
-			(meta_head_key(TEST_ACTOR), encode_db_head(head(3))?),
-			(delta_chunk_key(TEST_ACTOR, 4, 0), encoded_blob(4, &[(2, 0x22)])?),
-			(pidx_delta_key(TEST_ACTOR, 2), 4_u64.to_be_bytes().to_vec()),
+			(meta_head_key(TEST_DATABASE), encode_db_head(head(3))?),
+			(delta_chunk_key(TEST_DATABASE, 4, 0), encoded_blob(4, &[(2, 0x22)])?),
+			(pidx_delta_key(TEST_DATABASE, 2), 4_u64.to_be_bytes().to_vec()),
 		],
 		Vec::new(),
 	)
 	.await?;
 
-	let actor_db = ActorDb::new(db.clone(), test_ups(), test_namespace(), TEST_ACTOR.to_string(), NodeId::new());
+	let database_db = Db::new(db.clone(), test_ups(), test_namespace(), TEST_DATABASE.to_string(), NodeId::new());
 	assert_eq!(
-		actor_db.get_pages(vec![2]).await?,
+		database_db.get_pages(vec![2]).await?,
 		vec![FetchedPage {
 			pgno: 2,
 			bytes: Some(page(0x22)),
 		}]
 	);
 
-	seed(&db, Vec::new(), vec![pidx_delta_key(TEST_ACTOR, 2)]).await?;
+	seed(&db, Vec::new(), vec![pidx_delta_key(TEST_DATABASE, 2)]).await?;
 
 	assert_eq!(
-		actor_db.get_pages(vec![2]).await?,
+		database_db.get_pages(vec![2]).await?,
 		vec![FetchedPage {
 			pgno: 2,
 			bytes: Some(page(0x22)),
@@ -182,17 +182,17 @@ async fn get_pages_falls_back_to_shard_when_cached_pidx_is_stale() -> Result<()>
 	seed(
 		&db,
 		vec![
-			(meta_head_key(TEST_ACTOR), encode_db_head(head(3))?),
-			(delta_chunk_key(TEST_ACTOR, 4, 0), encoded_blob(4, &[(2, 0x22)])?),
-			(pidx_delta_key(TEST_ACTOR, 2), 4_u64.to_be_bytes().to_vec()),
+			(meta_head_key(TEST_DATABASE), encode_db_head(head(3))?),
+			(delta_chunk_key(TEST_DATABASE, 4, 0), encoded_blob(4, &[(2, 0x22)])?),
+			(pidx_delta_key(TEST_DATABASE, 2), 4_u64.to_be_bytes().to_vec()),
 		],
 		Vec::new(),
 	)
 	.await?;
 
-	let actor_db = ActorDb::new(db.clone(), test_ups(), test_namespace(), TEST_ACTOR.to_string(), NodeId::new());
+	let database_db = Db::new(db.clone(), test_ups(), test_namespace(), TEST_DATABASE.to_string(), NodeId::new());
 	assert_eq!(
-		actor_db.get_pages(vec![2]).await?,
+		database_db.get_pages(vec![2]).await?,
 		vec![FetchedPage {
 			pgno: 2,
 			bytes: Some(page(0x22)),
@@ -201,16 +201,16 @@ async fn get_pages_falls_back_to_shard_when_cached_pidx_is_stale() -> Result<()>
 
 	seed(
 		&db,
-		vec![(shard_key(TEST_ACTOR, 0), encoded_blob(4, &[(2, 0x44)])?)],
+		vec![(shard_key(TEST_DATABASE, 0), encoded_blob(4, &[(2, 0x44)])?)],
 		vec![
-			delta_chunk_key(TEST_ACTOR, 4, 0),
-			pidx_delta_key(TEST_ACTOR, 2),
+			delta_chunk_key(TEST_DATABASE, 4, 0),
+			pidx_delta_key(TEST_DATABASE, 2),
 		],
 	)
 	.await?;
 
 	assert_eq!(
-		actor_db.get_pages(vec![2]).await?,
+		database_db.get_pages(vec![2]).await?,
 		vec![FetchedPage {
 			pgno: 2,
 			bytes: Some(page(0x44)),
@@ -226,19 +226,19 @@ async fn get_pages_reads_latest_shard_version_not_past_head() -> Result<()> {
 	seed(
 		&db,
 		vec![
-			(meta_head_key(TEST_ACTOR), encode_db_head(head_at(4, 3))?),
-			(shard_version_key(TEST_ACTOR, 0, 2), encoded_blob(2, &[(2, 0x22)])?),
-			(shard_version_key(TEST_ACTOR, 0, 4), encoded_blob(4, &[(2, 0x44)])?),
-			(shard_version_key(TEST_ACTOR, 0, 5), encoded_blob(5, &[(2, 0x55)])?),
+			(meta_head_key(TEST_DATABASE), encode_db_head(head_at(4, 3))?),
+			(shard_version_key(TEST_DATABASE, 0, 2), encoded_blob(2, &[(2, 0x22)])?),
+			(shard_version_key(TEST_DATABASE, 0, 4), encoded_blob(4, &[(2, 0x44)])?),
+			(shard_version_key(TEST_DATABASE, 0, 5), encoded_blob(5, &[(2, 0x55)])?),
 		],
 		Vec::new(),
 	)
 	.await?;
 
-	let actor_db = ActorDb::new(db, test_ups(), test_namespace(), TEST_ACTOR.to_string(), NodeId::new());
+	let database_db = Db::new(db, test_ups(), test_namespace(), TEST_DATABASE.to_string(), NodeId::new());
 
 	assert_eq!(
-		actor_db.get_pages(vec![2]).await?,
+		database_db.get_pages(vec![2]).await?,
 		vec![FetchedPage {
 			pgno: 2,
 			bytes: Some(page(0x44)),
@@ -253,16 +253,16 @@ async fn get_pages_falls_through_to_cold_tier_when_hot_branch_data_is_evicted() 
 	let db = Arc::new(test_db().await?);
 	let cold_root = Builder::new().prefix("sqlite-storage-read-cold-").tempdir()?;
 	let tier = Arc::new(FilesystemColdTier::new(cold_root.path()));
-	let actor_db = ActorDb::new_with_cold_tier(
+	let database_db = Db::new_with_cold_tier(
 		db.clone(),
 		test_ups(),
 		test_namespace(),
-		TEST_ACTOR.to_string(),
+		TEST_DATABASE.to_string(),
 		NodeId::new(),
 		tier.clone(),
 	);
-	actor_db.commit(vec![dirty_page(1, 0x66)], 1, 1_000).await?;
-	let branch_id = read_actor_branch_id(&db).await?;
+	database_db.commit(vec![dirty_page(1, 0x66)], 1, 1_000).await?;
+	let branch_id = read_database_branch_id(&db).await?;
 	let layer_key = format!(
 		"db/{}/image/00000000/00000000-0000000000000001.ltx",
 		branch_id.as_uuid().simple()
@@ -325,7 +325,7 @@ async fn get_pages_falls_through_to_cold_tier_when_hot_branch_data_is_evicted() 
 	.await?;
 
 	assert_eq!(
-		actor_db.get_pages(vec![1]).await?,
+		database_db.get_pages(vec![1]).await?,
 		vec![FetchedPage {
 			pgno: 1,
 			bytes: Some(page(0x66)),
@@ -340,15 +340,15 @@ async fn get_pages_returns_none_above_eof() -> Result<()> {
 	let db = Arc::new(test_db().await?);
 	seed(
 		&db,
-		vec![(meta_head_key(TEST_ACTOR), encode_db_head(head(3))?)],
+		vec![(meta_head_key(TEST_DATABASE), encode_db_head(head(3))?)],
 		Vec::new(),
 	)
 	.await?;
 
-	let actor_db = ActorDb::new(db, test_ups(), test_namespace(), TEST_ACTOR.to_string(), NodeId::new());
+	let database_db = Db::new(db, test_ups(), test_namespace(), TEST_DATABASE.to_string(), NodeId::new());
 
 	assert_eq!(
-		actor_db.get_pages(vec![4]).await?,
+		database_db.get_pages(vec![4]).await?,
 		vec![FetchedPage {
 			pgno: 4,
 			bytes: None,
