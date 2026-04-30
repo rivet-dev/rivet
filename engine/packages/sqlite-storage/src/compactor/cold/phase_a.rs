@@ -627,6 +627,13 @@ fn payload_branch_id(payload: &SqliteColdCompactPayload) -> ActorBranchId {
 		| SqliteColdCompactPayload::DeletePinnedBookmark {
 			actor_branch_id, ..
 		} => *actor_branch_id,
+		SqliteColdCompactPayload::ForkWarmup {
+			target_actor_branch_id,
+			..
+		} => *target_actor_branch_id,
+		SqliteColdCompactPayload::NamespaceForkWarmup { .. } => {
+			ActorBranchId::nil()
+		}
 	}
 }
 
@@ -643,6 +650,8 @@ fn payload_pin_uploads(payload: &SqliteColdCompactPayload) -> Vec<ColdPinUpload>
 			versionstamp: *versionstamp,
 		}],
 		SqliteColdCompactPayload::DeletePinnedBookmark { .. } => Vec::new(),
+		SqliteColdCompactPayload::ForkWarmup { .. }
+		| SqliteColdCompactPayload::NamespaceForkWarmup { .. } => Vec::new(),
 	}
 }
 
@@ -650,6 +659,8 @@ fn payload_actor_id(payload: &SqliteColdCompactPayload) -> Option<String> {
 	match payload {
 		SqliteColdCompactPayload::CreatePinnedBookmark { actor_id, .. }
 		| SqliteColdCompactPayload::DeletePinnedBookmark { actor_id, .. } => Some(actor_id.clone()),
+		SqliteColdCompactPayload::ForkWarmup { .. }
+		| SqliteColdCompactPayload::NamespaceForkWarmup { .. } => None,
 	}
 }
 

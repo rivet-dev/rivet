@@ -1,10 +1,13 @@
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use anyhow::Result;
 use futures_util::TryStreamExt;
 use gas::prelude::Id;
 use rivet_pools::NodeId;
 use sqlite_storage::{
+	compactor::{
+		SqliteColdCompactPayload, SqliteColdCompactSubject, decode_cold_compact_payload,
+	},
 	keys::{
 		actor_pointer_cur_key, actor_pointer_history_prefix, branch_commit_key,
 		branch_meta_head_at_fork_key, branch_meta_head_key, branches_bk_pin_key,
@@ -25,12 +28,13 @@ use sqlite_storage::{
 	},
 };
 use tempfile::Builder;
+use tokio::time::timeout;
 use universaldb::{
 	RangeOption,
 	options::{MutationType, StreamingMode},
 	utils::IsolationLevel::Snapshot,
 };
-use universalpubsub::{PubSub, driver::memory::MemoryDriver};
+use universalpubsub::{NextOutput, PubSub, driver::memory::MemoryDriver};
 
 const TEST_ACTOR: &str = "test-actor";
 
@@ -534,9 +538,14 @@ async fn fork_namespace_writes_pointer_and_metadata_without_eager_aptr() -> Resu
 		.await?
 		.expect("source commit row should exist");
 	let source_commit = decode_commit_row(&source_commit_bytes)?;
+	let ups = test_ups();
+	let mut sub = ups
+		.queue_subscribe(SqliteColdCompactSubject, "cold-compactor")
+		.await?;
 
 	let forked_namespace_id = branch::fork_namespace(
 		&db,
+		&ups,
 		source_namespace_id,
 		ResolvedVersionstamp {
 			versionstamp: source_commit.versionstamp,
@@ -570,6 +579,20 @@ async fn fork_namespace_writes_pointer_and_metadata_without_eager_aptr() -> Resu
 	assert_eq!(
 		read_namespace_pin(&db, source_namespace_branch).await?,
 		source_commit.versionstamp
+	);
+	let msg = timeout(Duration::from_secs(1), sub.next())
+		.await
+		.expect("namespace fork warmup trigger should publish")?;
+	let NextOutput::Message(msg) = msg else {
+		panic!("subscriber unexpectedly unsubscribed");
+	};
+	assert_eq!(
+		decode_cold_compact_payload(&msg.payload)?,
+		SqliteColdCompactPayload::NamespaceForkWarmup {
+			source_namespace_branch_id: source_namespace_branch,
+			target_namespace_branch_id: forked_pointer.current_branch,
+			at_versionstamp: source_commit.versionstamp,
+		}
 	);
 	assert!(
 		read_value(
@@ -606,10 +629,10 @@ async fn fork_namespace_enforces_max_namespace_depth() -> Result<()> {
 	let mut source_namespace_id = NamespaceId::from_gas_id(test_namespace());
 
 	for _ in 0..sqlite_storage::constants::MAX_NAMESPACE_DEPTH {
-		source_namespace_id = branch::fork_namespace(&db, source_namespace_id, at.clone()).await?;
+		source_namespace_id = branch::fork_namespace(&db, &test_ups(), source_namespace_id, at.clone()).await?;
 	}
 
-	let err = branch::fork_namespace(&db, source_namespace_id, at)
+	let err = branch::fork_namespace(&db, &test_ups(), source_namespace_id, at)
 		.await
 		.expect_err("namespace fork depth should be capped");
 
@@ -643,6 +666,7 @@ async fn resolve_actor_pointer_walks_namespace_parent_chain_after_fork() -> Resu
 
 	let forked_namespace_id = branch::fork_namespace(
 		&db,
+		&test_ups(),
 		NamespaceId::from_gas_id(test_namespace()),
 		ResolvedVersionstamp {
 			versionstamp: source_commit.versionstamp,
@@ -696,6 +720,7 @@ async fn resolve_actor_pointer_honors_namespace_branch_tombstones() -> Result<()
 
 	let forked_namespace_id = branch::fork_namespace(
 		&db,
+		&test_ups(),
 		NamespaceId::from_gas_id(test_namespace()),
 		ResolvedVersionstamp {
 			versionstamp: source_commit.versionstamp,
@@ -780,9 +805,14 @@ async fn fork_actor_writes_target_pointer_and_reads_source_data() -> Result<()> 
 	);
 	target_seed.commit(vec![page(1, 0xaa)], 1, 1_100).await?;
 	let target_namespace_branch = read_namespace_branch_id_for(&db, target_namespace()).await?;
+	let ups = test_ups();
+	let mut sub = ups
+		.queue_subscribe(SqliteColdCompactSubject, "cold-compactor")
+		.await?;
 
 	let forked_actor_id = branch::fork_actor(
 		&db,
+		&ups,
 		NamespaceId::from_gas_id(test_namespace()),
 		TEST_ACTOR.to_string(),
 		ResolvedVersionstamp {
@@ -807,6 +837,21 @@ async fn fork_actor_writes_target_pointer_and_reads_source_data() -> Result<()> 
 	);
 	assert_eq!(read_refcount(&db, source_branch_id).await?, 2);
 	assert_eq!(read_refcount(&db, forked_branch_id).await?, 1);
+
+	let msg = timeout(Duration::from_secs(1), sub.next())
+		.await
+		.expect("fork warmup trigger should publish")?;
+	let NextOutput::Message(msg) = msg else {
+		panic!("subscriber unexpectedly unsubscribed");
+	};
+	assert_eq!(
+		decode_cold_compact_payload(&msg.payload)?,
+		SqliteColdCompactPayload::ForkWarmup {
+			source_actor_branch_id: source_branch_id,
+			target_actor_branch_id: forked_branch_id,
+			at_versionstamp: source_commit.versionstamp,
+		}
+	);
 
 	let forked_actor_db = ActorDb::new(
 		db,
@@ -841,6 +886,7 @@ async fn fresh_fork_uses_head_at_fork_until_first_commit() -> Result<()> {
 
 	let forked_actor_id = branch::fork_actor(
 		&db,
+		&test_ups(),
 		NamespaceId::from_gas_id(test_namespace()),
 		TEST_ACTOR.to_string(),
 		ResolvedVersionstamp {
@@ -926,6 +972,7 @@ async fn fork_actor_reads_parent_shard_when_parent_pidx_is_newer_than_fork() -> 
 
 	let forked_actor_id = branch::fork_actor(
 		&db,
+		&test_ups(),
 		NamespaceId::from_gas_id(test_namespace()),
 		TEST_ACTOR.to_string(),
 		ResolvedVersionstamp {
@@ -970,6 +1017,7 @@ async fn fork_actor_can_use_depth_one_source_branch() -> Result<()> {
 
 	let depth_one_actor_id = branch::fork_actor(
 		&db,
+		&test_ups(),
 		NamespaceId::from_gas_id(test_namespace()),
 		TEST_ACTOR.to_string(),
 		ResolvedVersionstamp {
@@ -995,6 +1043,7 @@ async fn fork_actor_can_use_depth_one_source_branch() -> Result<()> {
 
 	let depth_two_actor_id = branch::fork_actor(
 		&db,
+		&test_ups(),
 		NamespaceId::from_gas_id(test_namespace()),
 		depth_one_actor_id,
 		ResolvedVersionstamp {
@@ -1047,6 +1096,7 @@ async fn actor_db_reuses_cached_branch_ancestry_for_reads() -> Result<()> {
 
 	let child_actor_id = branch::fork_actor(
 		&db,
+		&test_ups(),
 		NamespaceId::from_gas_id(test_namespace()),
 		TEST_ACTOR.to_string(),
 		ResolvedVersionstamp {
@@ -1069,6 +1119,7 @@ async fn actor_db_reuses_cached_branch_ancestry_for_reads() -> Result<()> {
 
 	let grandchild_actor_id = branch::fork_actor(
 		&db,
+		&test_ups(),
 		NamespaceId::from_gas_id(test_namespace()),
 		child_actor_id,
 		ResolvedVersionstamp {
@@ -1125,6 +1176,7 @@ async fn fork_actor_can_use_deep_source_branch() -> Result<()> {
 	for depth in 1..=3 {
 		let forked_actor_id = branch::fork_actor(
 			&db,
+			&test_ups(),
 			NamespaceId::from_gas_id(test_namespace()),
 			source_actor_id,
 			ResolvedVersionstamp {
@@ -1151,6 +1203,7 @@ async fn fork_actor_can_use_deep_source_branch() -> Result<()> {
 
 	let final_actor_id = branch::fork_actor(
 		&db,
+		&test_ups(),
 		NamespaceId::from_gas_id(test_namespace()),
 		source_actor_id,
 		ResolvedVersionstamp {

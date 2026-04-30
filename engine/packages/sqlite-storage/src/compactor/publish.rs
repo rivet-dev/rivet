@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use universalpubsub::PublishOpts;
 use vbare::OwnedVersionedData;
 
-use crate::pump::types::{ActorBranchId, BookmarkStr};
+use crate::pump::types::{ActorBranchId, BookmarkStr, NamespaceBranchId};
 
 use super::{metrics, subjects::{SqliteColdCompactSubject, SqliteCompactSubject}};
 
@@ -37,6 +37,16 @@ pub enum SqliteColdCompactPayload {
 		bookmark: BookmarkStr,
 		versionstamp: [u8; 16],
 		pin_object_key: Option<String>,
+	},
+	ForkWarmup {
+		source_actor_branch_id: ActorBranchId,
+		target_actor_branch_id: ActorBranchId,
+		at_versionstamp: [u8; 16],
+	},
+	NamespaceForkWarmup {
+		source_namespace_branch_id: NamespaceBranchId,
+		target_namespace_branch_id: NamespaceBranchId,
+		at_versionstamp: [u8; 16],
 	},
 }
 

@@ -27,11 +27,12 @@ use sqlite_storage::{
 		branches_bk_pin_key, branches_list_key, branches_refcount_key,
 	},
 	types::{
-		ActorBranchId, ActorBranchRecord, BookmarkStr, BranchState, CommitRow, LayerKind,
+		ActorBranchId, ActorBranchRecord, BookmarkStr, BranchState, ColdManifestChunk,
+		ColdManifestChunkRef, ColdManifestIndex, CommitRow, LayerEntry, LayerKind,
 		MetaCompact, PinStatus, PinnedBookmarkRecord, decode_cold_manifest_chunk,
 		decode_cold_manifest_index, decode_pinned_bookmark_record, decode_pointer_snapshot,
-		encode_actor_branch_record, encode_commit_row, encode_meta_compact,
-		encode_pinned_bookmark_record,
+		encode_actor_branch_record, encode_cold_manifest_chunk, encode_cold_manifest_index,
+		encode_commit_row, encode_meta_compact, encode_pinned_bookmark_record,
 	},
 	pump::ActorDb,
 };
@@ -50,7 +51,11 @@ fn bookmark() -> BookmarkStr {
 }
 
 fn branch_object_prefix() -> String {
-	format!("db/{}", actor_branch_id().as_uuid().simple())
+	branch_object_prefix_for(actor_branch_id())
+}
+
+fn branch_object_prefix_for(branch_id: ActorBranchId) -> String {
+	format!("db/{}", branch_id.as_uuid().simple())
 }
 
 fn payload() -> SqliteColdCompactPayload {
@@ -921,6 +926,100 @@ async fn cold_phase_a_puts_pending_marker_after_handoff_tx_commits() -> Result<(
 	assert!(
 		saw_committed_handoff.load(Ordering::SeqCst),
 		"pending marker PUT should observe the committed FDB handoff"
+	);
+
+	Ok(())
+}
+
+#[tokio::test]
+async fn fork_warmup_copies_parent_image_layers_into_child_manifest() -> Result<()> {
+	let db = Arc::new(test_db().await?);
+	let cold_root = Builder::new().prefix("sqlite-cold-fork-warmup").tempdir()?;
+	let tier = Arc::new(FilesystemColdTier::new(cold_root.path()));
+	let source_branch_id = actor_branch_id();
+	let target_branch_id =
+		ActorBranchId::from_uuid(uuid::Uuid::from_u128(0x2234_5678_9abc_def0_0123_4567_89ab_cdef));
+	let source_prefix = branch_object_prefix_for(source_branch_id);
+	let target_prefix = branch_object_prefix_for(target_branch_id);
+	let source_layer_key = format!("{source_prefix}/image/00000000/00000000-0000000000000007.ltx");
+	let source_chunk_key = format!("{source_prefix}/cold_manifest/chunks/source.bare");
+	let source_index_key = format!("{source_prefix}/cold_manifest/index.bare");
+	let layer_bytes = b"image-layer".to_vec();
+
+	tier.put_object(&source_layer_key, &layer_bytes).await?;
+	tier.put_object(
+		&source_chunk_key,
+		&encode_cold_manifest_chunk(ColdManifestChunk {
+			schema_version: sqlite_storage::types::SQLITE_STORAGE_COLD_SCHEMA_VERSION,
+			branch_id: source_branch_id,
+			pass_versionstamp: [7; 16],
+			layers: vec![LayerEntry {
+				kind: LayerKind::Image,
+				shard_id: Some(0),
+				min_txid: 7,
+				max_txid: 7,
+				min_versionstamp: [7; 16],
+				max_versionstamp: [7; 16],
+				byte_size: layer_bytes.len() as u64,
+				checksum: 123,
+				object_key: source_layer_key.clone(),
+			}],
+			bookmarks: Vec::new(),
+		})?,
+	)
+	.await?;
+	tier.put_object(
+		&source_index_key,
+		&encode_cold_manifest_index(ColdManifestIndex {
+			schema_version: sqlite_storage::types::SQLITE_STORAGE_COLD_SCHEMA_VERSION,
+			branch_id: source_branch_id,
+			chunks: vec![ColdManifestChunkRef {
+				object_key: source_chunk_key,
+				pass_versionstamp: [7; 16],
+				min_versionstamp: [7; 16],
+				max_versionstamp: [7; 16],
+				byte_size: 1,
+			}],
+			last_pass_at_ms: 1_000,
+			last_pass_versionstamp: [7; 16],
+		})?,
+	)
+	.await?;
+
+	worker::test_hooks::handle_payload_once_with_cold_tier(
+		Arc::clone(&db),
+		SqliteColdCompactPayload::ForkWarmup {
+			source_actor_branch_id: source_branch_id,
+			target_actor_branch_id: target_branch_id,
+			at_versionstamp: [7; 16],
+		},
+		ColdCompactorConfig::default(),
+		CancellationToken::new(),
+		tier.clone(),
+	)
+	.await?;
+
+	let target_index = decode_cold_manifest_index(
+		&tier
+			.get_object(&format!("{target_prefix}/cold_manifest/index.bare"))
+			.await?
+			.expect("target warmup index should exist"),
+	)?;
+	assert_eq!(target_index.branch_id, target_branch_id);
+	assert_eq!(target_index.chunks.len(), 1);
+
+	let target_chunk = decode_cold_manifest_chunk(
+		&tier
+			.get_object(&target_index.chunks[0].object_key)
+			.await?
+			.expect("target warmup chunk should exist"),
+	)?;
+	assert_eq!(target_chunk.branch_id, target_branch_id);
+	assert_eq!(target_chunk.layers.len(), 1);
+	assert_eq!(target_chunk.layers[0].object_key, source_layer_key.replace(&source_prefix, &target_prefix));
+	assert_eq!(
+		tier.get_object(&target_chunk.layers[0].object_key).await?,
+		Some(layer_bytes)
 	);
 
 	Ok(())

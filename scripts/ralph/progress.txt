@@ -40,6 +40,7 @@
 - Cold follow-up sweeps compute the branch GC pin from refcount/root_versionstamp, desc_pin, and bk_pin, then rewrite manifest metadata before deleting cold objects.
 - Cold sweeps treat zero layer versionstamps as unknown and not deletable; only concrete versionstamps below the computed GC pin are reclaimed.
 - ActorDb cold-tier reads use `new_with_cold_tier` plus a bounded per-connection manifest cache; the default constructor keeps no read cold tier for compatibility.
+- Fork warmup should copy parent image layer bytes into the child branch prefix and write child-prefixed manifest entries, not point child manifests at parent-owned objects.
 - Eviction compactor service code lives under `sqlite_storage::compactor::eviction`; use the global `CMPC/lease_global/{kind=eviction}` lease and scan `CTR/eviction_index` by oldest access bucket with an explicit batch cap.
 - For prefix range scans in `sqlite-storage`, build `RangeOption` from `universaldb::tuple::Subspace::from_bytes(prefix)` so RocksDB/FDB drivers see the same prefix bounds.
 - Eviction predicate planning is SHARD-version scoped: require a newer FDB SHARD version, hot-cache age, cold-drain coverage, hot-pass margin, and no descendant/bookmark pin resolved through VTX before clearing.
@@ -878,4 +879,30 @@ Started: Wed Apr 29 03:29:23 PM PDT 2026
   - Eviction planning can stay side-effect free for US-044; later US-045/US-046 work should consume the planned `EvictableShardVersion` rows for OCC fencing and clearing.
   - Branch pins remain versionstamp-valued, so eviction resolves `desc_pin` and `bk_pin` through branch-local VTX before comparing against a SHARD version's `as_of_txid`.
   - A missing VTX entry for a non-empty pin should be treated conservatively as pinned, matching the hot compactor cap-enforcement behavior.
+---
+## 2026-04-29 22:31 PDT - US-053
+- Implemented cold-compactor fork warmup payloads for actor and namespace forks.
+- `fork_actor` and `fork_namespace` now publish cold warmup UPS events after the metadata transaction commits.
+- Added a cold warmup phase that copies reachable parent image layer bytes into the child branch cold prefix and writes a child manifest chunk/index.
+- Adjusted fresh fork reads so a child branch can consult its own warmed cold manifest before falling through to parent ancestry.
+- Verified with `cargo test -p sqlite-storage --test compactor_cold fork_warmup_copies_parent_image_layers_into_child_manifest -- --nocapture`, focused `pump_branch` fork tests, `cargo test -p sqlite-storage --test pump_branch`, `cargo test -p sqlite-storage --test compactor_cold`, and `cargo check -p sqlite-storage && cargo test -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/AGENTS.md`
+  - `engine/packages/sqlite-storage/src/compactor/cold/mod.rs`
+  - `engine/packages/sqlite-storage/src/compactor/cold/phase_a.rs`
+  - `engine/packages/sqlite-storage/src/compactor/cold/phase_warmup.rs`
+  - `engine/packages/sqlite-storage/src/compactor/cold/worker.rs`
+  - `engine/packages/sqlite-storage/src/compactor/publish.rs`
+  - `engine/packages/sqlite-storage/src/pump/branch.rs`
+  - `engine/packages/sqlite-storage/src/pump/read.rs`
+  - `engine/packages/sqlite-storage/tests/compactor_cold.rs`
+  - `engine/packages/sqlite-storage/tests/list_databases.rs`
+  - `engine/packages/sqlite-storage/tests/pump_bookmark.rs`
+  - `engine/packages/sqlite-storage/tests/pump_branch.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Fork warmup is actor-branch scoped; namespace fork warmup is a notification hook because namespace forks are metadata-only and do not create child database branches.
+  - Child manifests should own child-prefixed copied layer objects so child cold sweeps never delete parent-owned layer files.
+  - Fresh fork reads can include the child branch as a cold-layer candidate even before the first local commit; without warmup it falls through to the parent manifest.
 ---

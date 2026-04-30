@@ -740,7 +740,6 @@ async fn load_branch_read_plan(
 	cached_ancestry: Option<&BranchAncestry>,
 ) -> Result<BranchReadPlan> {
 	let head_bytes = tx_get_value(tx, &keys::branch_meta_head_key(branch_id)).await?;
-	let has_local_head = head_bytes.is_some();
 	let head = if let Some(head_bytes) = head_bytes {
 		decode_db_head(&head_bytes)?
 	} else {
@@ -762,9 +761,6 @@ async fn load_branch_read_plan(
 
 	let mut sources = Vec::new();
 	for ancestor in &ancestry.ancestors {
-		if ancestor.parent_versionstamp_cap.is_none() && !has_local_head {
-			continue;
-		}
 		let max_txid = match ancestor.parent_versionstamp_cap {
 			Some(parent_versionstamp) => {
 				lookup_txid_for_read(tx, ancestor.branch_id, parent_versionstamp).await?

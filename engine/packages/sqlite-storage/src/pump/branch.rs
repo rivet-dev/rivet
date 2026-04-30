@@ -12,6 +12,8 @@ use universaldb::{
 	utils::IsolationLevel::{self, Serializable},
 };
 
+use crate::compactor::{SqliteColdCompactPayload, Ups, publish_cold_compact_payload};
+
 use super::{
 	constants::{MAX_FORK_DEPTH, MAX_NAMESPACE_DEPTH},
 	error::SqliteStorageError,
@@ -208,6 +210,7 @@ pub async fn resolve_actor_pointer(
 
 pub async fn fork_actor(
 	udb: &universaldb::Database,
+	ups: &Ups,
 	source_namespace: NamespaceId,
 	source_actor_id: String,
 	at: ResolvedVersionstamp,
@@ -215,13 +218,15 @@ pub async fn fork_actor(
 ) -> Result<String> {
 	let new_actor_id = format!("fork-{}", uuid::Uuid::new_v4().simple());
 	let new_actor_branch_id = ActorBranchId::new_v4();
+	let at_versionstamp = at.versionstamp;
+	let at_for_tx = at.clone();
 
-	udb.run({
+	let source_actor_branch_id = udb.run({
 		let new_actor_id = new_actor_id.clone();
 		move |tx| {
 			let source_actor_id = source_actor_id.clone();
 			let new_actor_id = new_actor_id.clone();
-			let at = at.clone();
+			let at = at_for_tx.clone();
 
 			async move {
 				let source_namespace_branch =
@@ -263,10 +268,20 @@ pub async fn fork_actor(
 				);
 				write_namespace_catalog_marker(&tx, target_namespace_branch, new_actor_branch_id)?;
 
-				Ok(())
+				Ok(source_actor_branch)
 			}
 		}
 	})
+	.await?;
+
+	publish_cold_compact_payload(
+		ups,
+		SqliteColdCompactPayload::ForkWarmup {
+			source_actor_branch_id,
+			target_actor_branch_id: new_actor_branch_id,
+			at_versionstamp,
+		},
+	)
 	.await?;
 
 	Ok(new_actor_id)
@@ -321,17 +336,18 @@ pub async fn delete_database(
 
 pub async fn fork_namespace(
 	udb: &universaldb::Database,
+	ups: &Ups,
 	source_namespace: NamespaceId,
 	at: ResolvedVersionstamp,
 ) -> Result<NamespaceId> {
 	let new_namespace_id = NamespaceId::new_v4();
 	let new_namespace_branch_id = NamespaceBranchId::new_v4();
+	let at_versionstamp = at.versionstamp;
+	let at_for_tx = at.clone();
 
-	udb.run({
-		let at = at.clone();
-
+	let source_namespace_branch_id = udb.run({
 		move |tx| {
-			let at = at.clone();
+			let at = at_for_tx.clone();
 
 			async move {
 				let source_namespace_branch =
@@ -357,10 +373,20 @@ pub async fn fork_namespace(
 				tx.informal()
 					.set(&keys::namespace_pointer_cur_key(new_namespace_id), &encoded_pointer);
 
-				Ok(())
+				Ok(source_namespace_branch)
 			}
 		}
 	})
+	.await?;
+
+	publish_cold_compact_payload(
+		ups,
+		SqliteColdCompactPayload::NamespaceForkWarmup {
+			source_namespace_branch_id,
+			target_namespace_branch_id: new_namespace_branch_id,
+			at_versionstamp,
+		},
+	)
 	.await?;
 
 	Ok(new_namespace_id)

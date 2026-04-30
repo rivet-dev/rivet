@@ -648,6 +648,7 @@ async fn resolve_bookmark_walks_actor_parent_chain() -> Result<()> {
 	let source_commit = commit_row(&db, source_branch_id, 1).await?;
 	let forked_actor_id = branch::fork_actor(
 		&db,
+		&test_ups(),
 		namespace_id,
 		TEST_ACTOR.to_string(),
 		ResolvedVersionstamp {
@@ -684,6 +685,7 @@ async fn resolve_bookmark_honors_namespace_fork_versionstamp_cap() -> Result<()>
 	let fork_point = commit_row(&db, source_branch_id, 1).await?;
 	let forked_namespace = branch::fork_namespace(
 		&db,
+		&test_ups(),
 		namespace_id,
 		ResolvedVersionstamp {
 			versionstamp: fork_point.versionstamp,

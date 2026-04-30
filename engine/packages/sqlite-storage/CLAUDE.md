@@ -73,6 +73,7 @@ These come from `r2-prior-art/.agent/research/sqlite/requirements.md` and supers
 - **Cold compactor pass runs as Phase A (FDB read tx) → Phase B (S3-only, no FDB tx) → Phase C (FDB write tx with regular-read OCC fence on `cold_drained_txid`).** Phase A/C tx-age budget is independent of S3 latency.
 - **Cold Phase C is the only phase that advances `cold_drained_txid`, clears `in_flight_uuid`, and flips uploaded pinned bookmarks to `Ready`.**
 - **Cold Phase B pin upload failures mark pending bookmarks `Failed`; Phase C OCC failures leave them `Pending` for retry.**
+- **Fork warmup copies parent image layer bytes into the child branch prefix.** Child manifests must own child-prefixed object keys so later child sweeps cannot delete parent-owned cold objects.
 - **Cold follow-up sweeps rewrite manifest chunks/index before deleting layer objects.** Treat zero layer versionstamps as unknown and not reclaimable.
 - **Cold compactor service code lives under `compactor/cold/`.** Its UPS queue group is `cold_compactor`, and its per-branch lease uses `BR/{branch_id}/META/cold_lease` with the same 30s/10s/5s local-renewal shape as the hot compactor.
 - **Schema version on every persisted S3 object** (`schema_version: u32` on `ColdManifest`, `BookmarkIndex`, `BranchColdState`). Cold compactor reads old version + writes new version on every pass; reader code retains old-version paths for at least one full retention window past rollout.

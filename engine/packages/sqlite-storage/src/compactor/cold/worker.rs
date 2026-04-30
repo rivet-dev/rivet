@@ -20,7 +20,7 @@ use crate::{
 	pump::types::ActorBranchId,
 };
 
-use super::{lease, phase_a, phase_b, phase_c, phase_d};
+use super::{lease, phase_a, phase_b, phase_c, phase_d, phase_warmup};
 
 const COLD_COMPACTOR_QUEUE_GROUP: &str = "cold_compactor";
 
@@ -183,7 +183,9 @@ async fn handle_trigger(
 		return Ok(());
 	}
 
-	let branch_id = payload_branch_id(&payload);
+	let Some(branch_id) = payload_branch_id(&payload) else {
+		return handle_namespace_warmup(payload);
+	};
 	let now_ms = now_ms()?;
 	let lease_ttl_ms = cold_config.lease_ttl_ms;
 	let take_outcome = udb
@@ -262,6 +264,32 @@ async fn run_scaffold_pass(
 		cold_compact_delta_threshold = cold_config.cold_compact_delta_threshold,
 		"sqlite cold compactor pass scaffold received trigger"
 	);
+
+	if let SqliteColdCompactPayload::ForkWarmup {
+		source_actor_branch_id,
+		target_actor_branch_id,
+		at_versionstamp,
+	} = payload
+	{
+		let output = phase_warmup::run_actor(
+			Arc::clone(&cold_tier),
+			source_actor_branch_id,
+			target_actor_branch_id,
+			at_versionstamp,
+			cancel_token,
+			now_ms()?,
+		)
+		.await?;
+		tracing::debug!(
+			source_branch_id = ?source_actor_branch_id,
+			target_branch_id = ?target_actor_branch_id,
+			copied_layers = output.copied_layers,
+			source_chunks_read = output.source_chunks_read,
+			"sqlite cold compactor fork warmup finished"
+		);
+
+		return Ok(());
+	}
 
 	let payload_for_failure = payload.clone();
 	let plan = phase_a::run(
@@ -371,15 +399,40 @@ async fn run_scaffold_pass(
 	Ok(())
 }
 
-fn payload_branch_id(payload: &SqliteColdCompactPayload) -> ActorBranchId {
+fn payload_branch_id(payload: &SqliteColdCompactPayload) -> Option<ActorBranchId> {
 	match payload {
 		SqliteColdCompactPayload::CreatePinnedBookmark {
 			actor_branch_id, ..
 		}
 		| SqliteColdCompactPayload::DeletePinnedBookmark {
 			actor_branch_id, ..
-		} => *actor_branch_id,
+		} => Some(*actor_branch_id),
+		SqliteColdCompactPayload::ForkWarmup {
+			target_actor_branch_id,
+			..
+		} => Some(*target_actor_branch_id),
+		SqliteColdCompactPayload::NamespaceForkWarmup { .. } => None,
 	}
+}
+
+fn handle_namespace_warmup(payload: SqliteColdCompactPayload) -> Result<()> {
+	let SqliteColdCompactPayload::NamespaceForkWarmup {
+		source_namespace_branch_id,
+		target_namespace_branch_id,
+		at_versionstamp,
+	} = payload
+	else {
+		return Ok(());
+	};
+
+	tracing::debug!(
+		?source_namespace_branch_id,
+		?target_namespace_branch_id,
+		?at_versionstamp,
+		"sqlite cold compactor received namespace fork warmup"
+	);
+
+	Ok(())
 }
 
 fn spawn_renewal_task(

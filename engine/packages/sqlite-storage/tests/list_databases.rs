@@ -127,6 +127,7 @@ async fn delete_database_in_forked_namespace_hides_in_child_only() -> Result<()>
 	let commit = read_head_commit(&db, database_id).await?;
 	let forked_namespace = branch::fork_namespace(
 		&db,
+		&test_ups(),
 		namespace,
 		ResolvedVersionstamp {
 			versionstamp: commit.versionstamp,
@@ -165,6 +166,7 @@ async fn fork_namespace_filters_source_databases_created_after_fork() -> Result<
 	let first_commit = read_head_commit(&db, first_database_id).await?;
 	let forked_namespace = branch::fork_namespace(
 		&db,
+		&test_ups(),
 		namespace,
 		ResolvedVersionstamp {
 			versionstamp: first_commit.versionstamp,
