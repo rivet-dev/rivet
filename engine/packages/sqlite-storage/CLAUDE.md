@@ -144,6 +144,15 @@ We explicitly do **not** import:
 
 - Prometheus metrics live with their owner module (`pump::metrics` or `compactor::metrics`) and must include a `node_id` label.
 
+## Reference Docs
+
+- `docs-internal/engine/sqlite/storage-structure.md` - FDB and S3 key layout.
+- `docs-internal/engine/sqlite/components.md` - pump, hot compactor, cold compactor, and eviction responsibilities.
+- `docs-internal/engine/sqlite/vfs-brief.md` - SQLite VFS interaction summary and links to VFS docs.
+- `docs-internal/engine/sqlite/constraints-and-design-decisions.md` - PITR, branching, retention, and cold-tier rationale.
+- `docs-internal/engine/sqlite/comparison-to-other-systems.md` - comparison against Neon, Cloudflare Durable Objects, Snowflake, LiteFS, Litestream, mvSQLite, and Turso.
+- When changing FDB or S3 key layout, branch metadata, or compactor responsibilities, update `docs-internal/engine/sqlite/{storage-structure,components,constraints-and-design-decisions}.md` in the same change.
+
 ## Specs
 
 - `.agent/specs/sqlite-storage-stateless.md` — base architecture (hot tier only, two compactors, pegboard-envoy stateless).

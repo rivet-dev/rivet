@@ -56,6 +56,7 @@
 - Access-touch throttle regressions can use `actor_db::test_hooks::touch_access_if_bucket_advanced_for_test` to exercise eviction-index re-keying without thousands of full commits.
 - Eviction clear transactions must re-check branch descendant/bookmark pins because forks can land after the sweep plan and before compare-and-clear execution.
 - When recomputing a branch bookmark pin after deleting the last pinned bookmark, store zero for "unpinned"; `0xff..ff` remains the advanced-retention fence for fork checks.
+- `engine/packages/sqlite-storage/AGENTS.md` is a symlink to `CLAUDE.md`; update `CLAUDE.md` for sqlite-storage agent guidance.
 
 # Ralph Progress Log
 Started: Wed Apr 29 03:29:23 PM PDT 2026
@@ -1074,4 +1075,18 @@ Started: Wed Apr 29 03:29:23 PM PDT 2026
   - Versionstamp-cap filtering applies to namespace tombstones as well as NSCAT rows.
   - Empty legacy tombstone values decode as versionstamp zero so old tombstones remain conservative and inherited.
   - For RocksDB-backed UDB tests, GC branch deletion should clear scanned prefix keys explicitly instead of relying on range clear behavior.
+---
+## 2026-04-29 23:36 PDT - US-064
+- Added the sqlite-storage Reference Docs section with entries for the five new `docs-internal/engine/sqlite/` docs.
+- Added the maintenance rule for keeping storage structure, component, and design-decision docs in sync with key layout, branch metadata, and compactor responsibility changes.
+- Pointed `engine/CLAUDE.md` SQLite guidance at the new sqlite docs folder.
+- Verified with `cargo check -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/CLAUDE.md`
+  - `engine/CLAUDE.md`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - `engine/packages/sqlite-storage/AGENTS.md` is a symlink to `CLAUDE.md`, so sqlite-storage agent guidance should be edited in `CLAUDE.md`.
+  - Docs-only sqlite-storage stories still use `cargo check -p sqlite-storage` as the lightweight validation gate.
 ---

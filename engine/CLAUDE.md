@@ -50,6 +50,7 @@ Use `test-snapshot-gen` to generate and load RocksDB snapshots of the full UDB K
 
 ## SQLite storage tests
 
+- For SQLite storage key layout, component responsibilities, VFS interaction, design constraints, and prior-art comparisons, read `docs-internal/engine/sqlite/`.
 - `sqlite-storage` tests live in `engine/packages/sqlite-storage/tests/`; do not add inline module test blocks.
 - Run `sqlite-storage` tests against temp RocksDB-backed UniversalDB via `test_db()`, `checkpoint_test_db(...)`, and `reopen_test_db(...)` instead of mocked storage paths.
 - `sqlite-storage` PIDX entries are stored as the PIDX key prefix plus a big-endian `u32` page number, with the value encoded as a raw big-endian `u64` txid.
