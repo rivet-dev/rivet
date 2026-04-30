@@ -1,21 +1,26 @@
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use anyhow::Result;
 use gas::prelude::Id;
 use rivet_pools::NodeId;
 use sqlite_storage::{
+	compactor::{SqliteColdCompactPayload, SqliteColdCompactSubject, decode_cold_compact_payload},
 	error::SqliteStorageError,
-	keys::{bookmark_key, branch_commit_key, branch_vtx_key},
+	keys::{
+		bookmark_key, branch_commit_key, branch_vtx_key, branches_bk_pin_key,
+		namespace_branches_pin_count_key,
+	},
 	pump::{ActorDb, bookmark, branch},
 	types::{
 		ActorBranchId, BookmarkRef, BookmarkStr, CommitRow, DirtyPage, NamespaceId, PinStatus,
 		PinnedBookmarkRecord, ResolvedVersionstamp, decode_commit_row,
-		encode_pinned_bookmark_record,
+		decode_pinned_bookmark_record, encode_pinned_bookmark_record,
 	},
 };
 use tempfile::Builder;
+use tokio::time::timeout;
 use universaldb::utils::IsolationLevel::{Serializable, Snapshot};
-use universalpubsub::{PubSub, driver::memory::MemoryDriver};
+use universalpubsub::{NextOutput, PubSub, driver::memory::MemoryDriver};
 
 const TEST_ACTOR: &str = "test-actor";
 
@@ -83,6 +88,18 @@ async fn actor_branch_id(
 	.await
 }
 
+async fn namespace_branch_id(
+	db: &universaldb::Database,
+	namespace_id: NamespaceId,
+) -> Result<sqlite_storage::types::NamespaceBranchId> {
+	db.run(move |tx| async move {
+		branch::resolve_namespace_branch(&tx, namespace_id, Serializable)
+			.await?
+			.ok_or_else(|| anyhow::anyhow!("namespace branch should exist"))
+	})
+	.await
+}
+
 async fn commit_row(
 	db: &universaldb::Database,
 	branch_id: ActorBranchId,
@@ -99,6 +116,10 @@ fn assert_sqlite_error(err: anyhow::Error, expected: SqliteStorageError) {
 		.downcast_ref::<SqliteStorageError>()
 		.expect("error should be a SqliteStorageError");
 	assert_eq!(actual, &expected);
+}
+
+fn decode_i64_counter(bytes: &[u8]) -> i64 {
+	i64::from_le_bytes(bytes.try_into().expect("counter should be 8 bytes"))
 }
 
 #[test]
@@ -255,6 +276,104 @@ async fn bookmark_status_reads_pinned_record_or_absent() -> Result<()> {
 		bookmark::bookmark_status(&db, namespace_id, TEST_ACTOR.to_string(), bookmark).await?,
 		Some(PinStatus::Ready)
 	);
+
+	Ok(())
+}
+
+#[tokio::test]
+async fn create_pinned_bookmark_writes_pending_pin_and_cold_trigger() -> Result<()> {
+	let db = Arc::new(test_db().await?);
+	let ups = test_ups();
+	let mut sub = ups
+		.queue_subscribe(SqliteColdCompactSubject, "cold-compactor")
+		.await?;
+	let actor_db = ActorDb::new(
+		db.clone(),
+		ups,
+		test_namespace(),
+		TEST_ACTOR.to_string(),
+		NodeId::new(),
+	);
+	actor_db.commit(vec![page(1, 0x11)], 2, 1_000).await?;
+	let namespace_id = NamespaceId::from_gas_id(test_namespace());
+	let branch_id = actor_branch_id(&db, namespace_id, TEST_ACTOR).await?;
+	let namespace_branch_id = namespace_branch_id(&db, namespace_id).await?;
+	let row = commit_row(&db, branch_id, 1).await?;
+
+	let bookmark = actor_db.create_pinned_bookmark(1_010).await?;
+
+	assert_eq!(bookmark.parse()?, (1_010, 1));
+	let pinned_bytes = read_value(
+		&db,
+		sqlite_storage::keys::bookmark_pinned_key(TEST_ACTOR, bookmark.as_str()),
+	)
+	.await?
+	.expect("pinned bookmark record should exist");
+	let pinned = decode_pinned_bookmark_record(&pinned_bytes)?;
+	assert_eq!(pinned.bookmark, bookmark);
+	assert_eq!(pinned.actor_branch_id, branch_id);
+	assert_eq!(pinned.versionstamp, row.versionstamp);
+	assert_eq!(pinned.status, PinStatus::Pending);
+	assert_eq!(pinned.pin_object_key, None);
+	assert_eq!(
+		read_value(&db, branches_bk_pin_key(branch_id))
+			.await?
+			.expect("branch bk_pin should be written"),
+		row.versionstamp
+	);
+	let pin_count = read_value(&db, namespace_branches_pin_count_key(namespace_branch_id))
+		.await?
+		.expect("namespace pin count should be incremented");
+	assert_eq!(decode_i64_counter(&pin_count), 1);
+
+	let msg = timeout(Duration::from_secs(1), sub.next())
+		.await
+		.expect("cold trigger should publish")?;
+	let NextOutput::Message(msg) = msg else {
+		panic!("subscriber unexpectedly unsubscribed");
+	};
+	let payload = decode_cold_compact_payload(&msg.payload)?;
+	assert_eq!(
+		payload,
+		SqliteColdCompactPayload::CreatePinnedBookmark {
+			actor_id: TEST_ACTOR.to_string(),
+			actor_branch_id: branch_id,
+			bookmark,
+			versionstamp: row.versionstamp,
+		}
+	);
+
+	Ok(())
+}
+
+#[tokio::test]
+async fn create_pinned_bookmark_enforces_namespace_pin_cap() -> Result<()> {
+	let db = Arc::new(test_db().await?);
+	let actor_db = ActorDb::new(
+		db.clone(),
+		test_ups(),
+		test_namespace(),
+		TEST_ACTOR.to_string(),
+		NodeId::new(),
+	);
+	actor_db.commit(vec![page(1, 0x11)], 2, 1_000).await?;
+	let namespace_id = NamespaceId::from_gas_id(test_namespace());
+	let namespace_branch_id = namespace_branch_id(&db, namespace_id).await?;
+	db.run(move |tx| async move {
+		tx.informal().set(
+			&namespace_branches_pin_count_key(namespace_branch_id),
+			&i64::from(sqlite_storage::constants::MAX_PINS_PER_NAMESPACE).to_le_bytes(),
+		);
+		Ok(())
+	})
+	.await?;
+
+	let err = actor_db
+		.create_pinned_bookmark(1_010)
+		.await
+		.expect_err("pin cap should reject new pinned bookmarks");
+
+	assert_sqlite_error(err, SqliteStorageError::TooManyPins);
 
 	Ok(())
 }

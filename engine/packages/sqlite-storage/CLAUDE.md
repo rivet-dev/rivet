@@ -65,6 +65,7 @@ These come from `r2-prior-art/.agent/research/sqlite/requirements.md` and supers
 - **Pump records carry bookmarks as `BookmarkStr`, not raw `String`.** The wrapper validates the 33-character ASCII wire format at construction and decode.
 - **Use `BookmarkStr::format(ts_ms, txid)` and `BookmarkStr::parse()`** instead of hand-formatting or slicing bookmark strings.
 - **Ephemeral bookmark creation is read-only.** Format the caller timestamp with the current branch head txid; only pinned bookmarks write `BOOKMARK/{actor_id}/{bookmark}/pinned`.
+- **Pinned bookmark creation is two-phase.** The request tx writes `PinStatus::Pending`, branch `bk_pin`, and namespace `pin_count`; the cold compactor UPS message makes the S3 pin layer and later flips status.
 - **Bookmark resolution carries namespace fork caps into actor branch ancestry.** Do not use recursive APTR resolution when resolving inherited bookmarks; direct-walk namespace parents so parent commits after `parent_versionstamp` stay unreachable.
 - **Lex order = chronological order within a single branch's parent chain.** Across sibling branches (forks of the same parent), bookmarks are not orderable in any meaningful way. APIs do not support cross-branch comparison.
 - **Bookmarks are sender-scoped.** A caller resolving a bookmark on another actor's branch returns `BranchNotReachable`. Cross-actor isolation is enforced at the engine edge, not in this package.

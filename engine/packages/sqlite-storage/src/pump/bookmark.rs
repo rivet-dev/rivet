@@ -1,13 +1,16 @@
 use anyhow::{Context, Result};
+use universaldb::options::MutationType;
 use universaldb::utils::IsolationLevel::{Serializable, Snapshot};
 
 use super::{
 	ActorDb, branch, keys,
+	constants::MAX_PINS_PER_NAMESPACE,
 	error::SqliteStorageError,
 	types::{
 		ActorBranchId, BookmarkRef, BookmarkStr, NamespaceBranchId, NamespaceId, PinStatus,
-		ResolvedVersionstamp, decode_actor_pointer, decode_commit_row, decode_db_head,
-		decode_namespace_branch_record, decode_pinned_bookmark_record,
+		PinnedBookmarkRecord, ResolvedVersionstamp, decode_actor_pointer, decode_commit_row,
+		decode_db_head, decode_namespace_branch_record, decode_pinned_bookmark_record,
+		encode_pinned_bookmark_record,
 	},
 };
 
@@ -17,6 +20,17 @@ impl ActorDb {
 	pub async fn create_bookmark(&self, at_ms: i64) -> Result<BookmarkStr> {
 		create_bookmark(
 			&self.udb,
+			self.sqlite_namespace_id(),
+			self.actor_id.clone(),
+			at_ms,
+		)
+		.await
+	}
+
+	pub async fn create_pinned_bookmark(&self, at_ms: i64) -> Result<BookmarkStr> {
+		create_pinned_bookmark(
+			&self.udb,
+			&self.ups,
 			self.sqlite_namespace_id(),
 			self.actor_id.clone(),
 			at_ms,
@@ -69,6 +83,96 @@ pub async fn create_bookmark(
 		}
 	})
 	.await
+}
+
+pub async fn create_pinned_bookmark(
+	udb: &universaldb::Database,
+	ups: &crate::compactor::Ups,
+	namespace_id: NamespaceId,
+	actor_id: String,
+	at_ms: i64,
+) -> Result<BookmarkStr> {
+	let result = udb
+		.run(move |tx| {
+			let actor_id = actor_id.clone();
+
+			async move {
+				let namespace_branch_id =
+					branch::resolve_namespace_branch(&tx, namespace_id, Serializable)
+						.await?
+						.unwrap_or_else(NamespaceBranchId::nil);
+				let branch_id = branch::resolve_actor_branch(&tx, namespace_id, &actor_id, Serializable)
+					.await?
+					.ok_or(SqliteStorageError::ActorNotFound)?;
+				let head_bytes = tx
+					.informal()
+					.get(&keys::branch_meta_head_key(branch_id), Serializable)
+					.await?
+					.context("sqlite actor branch head is missing")?;
+				let head = decode_db_head(&head_bytes).context("decode sqlite actor branch head")?;
+				let commit_bytes = tx
+					.informal()
+					.get(&keys::branch_commit_key(branch_id, head.head_txid), Serializable)
+					.await?
+					.context("sqlite actor branch head commit row is missing")?;
+				let commit =
+					decode_commit_row(&commit_bytes).context("decode sqlite actor branch commit row")?;
+				let bookmark = BookmarkStr::format(at_ms, head.head_txid)?;
+				let pinned_key = keys::bookmark_pinned_key(&actor_id, bookmark.as_str());
+
+				if tx.informal().get(&pinned_key, Serializable).await?.is_none() {
+					let pin_count_key = keys::namespace_branches_pin_count_key(namespace_branch_id);
+					let pin_count = tx
+						.informal()
+						.get(&pin_count_key, Serializable)
+						.await?
+						.map(|bytes| decode_i64_counter(&bytes))
+						.transpose()?
+						.unwrap_or(0);
+					if pin_count >= i64::from(MAX_PINS_PER_NAMESPACE) {
+						return Err(SqliteStorageError::TooManyPins.into());
+					}
+
+					let record = PinnedBookmarkRecord {
+						bookmark: bookmark.clone(),
+						actor_branch_id: branch_id,
+						versionstamp: commit.versionstamp,
+						status: PinStatus::Pending,
+						pin_object_key: None,
+						created_at_ms: at_ms,
+						updated_at_ms: at_ms,
+					};
+					let encoded = encode_pinned_bookmark_record(record)
+						.context("encode sqlite pinned bookmark record")?;
+					tx.informal().set(&pinned_key, &encoded);
+					tx.informal().atomic_op(
+						&pin_count_key,
+						&1_i64.to_le_bytes(),
+						MutationType::Add,
+					);
+				}
+				tx.informal().atomic_op(
+					&keys::branches_bk_pin_key(branch_id),
+					&commit.versionstamp,
+					MutationType::ByteMin,
+				);
+
+				Ok(PinnedBookmarkCreateResult {
+					bookmark: bookmark.clone(),
+					payload: crate::compactor::SqliteColdCompactPayload::CreatePinnedBookmark {
+						actor_id,
+						actor_branch_id: branch_id,
+						bookmark,
+						versionstamp: commit.versionstamp,
+					},
+				})
+			}
+		})
+		.await?;
+
+	crate::compactor::publish_cold_compact_payload(ups, result.payload).await?;
+
+	Ok(result.bookmark)
 }
 
 pub async fn bookmark_status(
@@ -299,4 +403,17 @@ async fn lookup_vtx_txid(
 		.context("sqlite VTX entry should be exactly 8 bytes")?;
 
 	Ok(Some(u64::from_be_bytes(bytes)))
+}
+
+struct PinnedBookmarkCreateResult {
+	bookmark: BookmarkStr,
+	payload: crate::compactor::SqliteColdCompactPayload,
+}
+
+fn decode_i64_counter(bytes: &[u8]) -> Result<i64> {
+	let bytes: [u8; std::mem::size_of::<i64>()] = bytes
+		.try_into()
+		.context("sqlite counter should be exactly 8 bytes")?;
+
+	Ok(i64::from_le_bytes(bytes))
 }

@@ -19,6 +19,7 @@
 - Use `BookmarkStr::format(ts_ms, txid)` and `BookmarkStr::parse()` for bookmark wire strings; avoid hand-formatting the 33-character `{timestamp_ms_hex_be:016}-{txid_hex_be:016}` shape.
 - Ephemeral bookmark creation is read-only: derive `BookmarkStr` from the caller timestamp and current branch head txid; only pinned bookmarks write `BOOKMARK/{actor_id}/{bookmark}/pinned`.
 - Bookmark resolution must direct-walk namespace parents and carry the namespace fork versionstamp cap into actor branch ancestry; recursive APTR resolution loses that cap.
+- Pinned bookmark creation is FDB-first: write `PinStatus::Pending`, actor branch `bk_pin`, and namespace `pin_count` before publishing `SqliteColdCompactPayload::CreatePinnedBookmark`.
 
 # Ralph Progress Log
 Started: Wed Apr 29 03:29:23 PM PDT 2026
@@ -410,4 +411,24 @@ Started: Wed Apr 29 03:29:23 PM PDT 2026
   - The checked-in crate still uses APTR/NSPTR despite the v4 PRD text; bookmark resolution was implemented against the actual current layout and noted in the PRD.
   - Namespace bookmark resolution must direct-walk namespace parents so inherited APTR rows carry the child namespace's `parent_versionstamp` cap.
   - Ephemeral resolution verifies the branch VTX entry for the resolved commit row before returning the commit's versionstamp.
+---
+## 2026-04-29 19:39 PDT - US-022
+- Implemented `create_pinned_bookmark` for `ActorDb` and the free bookmark API, writing `PinnedBookmarkRecord { status: Pending }`, branch `bk_pin`, and the namespace pin counter in the request transaction.
+- Added cold-compactor UPS subject and versioned `SqliteColdCompactPayload::CreatePinnedBookmark` encoding so pinned bookmark creation can wake the future cold compactor with actor branch, bookmark, and versionstamp details.
+- Added bookmark tests for pending record creation, `bk_pin` atomic-min, namespace pin count, cold trigger payload, and `MAX_PINS_PER_NAMESPACE` rejection.
+- Verified with `cargo test -p sqlite-storage --test pump_bookmark`, `cargo check -p sqlite-storage`, and `cargo test -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/CLAUDE.md` (via `AGENTS.md` symlink)
+  - `engine/packages/sqlite-storage/src/compactor/mod.rs`
+  - `engine/packages/sqlite-storage/src/compactor/publish.rs`
+  - `engine/packages/sqlite-storage/src/compactor/subjects.rs`
+  - `engine/packages/sqlite-storage/src/pump/bookmark.rs`
+  - `engine/packages/sqlite-storage/src/pump/keys.rs`
+  - `engine/packages/sqlite-storage/tests/pump_bookmark.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Pinned bookmark creation should keep S3 work out of the request path; the only synchronous work is the FDB retention pin and Pending record.
+  - The namespace pin cap currently lives on `NSBRANCH/list/{namespace_branch}/pin_count` as a raw i64 little-endian atomic counter.
+  - Cold compactor message handling has a payload type now, but the actual subscriber/service remains for US-036/US-040.
 ---

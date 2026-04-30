@@ -5,11 +5,14 @@ use serde::{Deserialize, Serialize};
 use universalpubsub::PublishOpts;
 use vbare::OwnedVersionedData;
 
-use super::{metrics, subjects::SqliteCompactSubject};
+use crate::pump::types::{ActorBranchId, BookmarkStr};
+
+use super::{metrics, subjects::{SqliteColdCompactSubject, SqliteCompactSubject}};
 
 pub type Ups = universalpubsub::PubSub;
 
 pub const SQLITE_COMPACT_PAYLOAD_VERSION: u16 = 1;
+pub const SQLITE_COLD_COMPACT_PAYLOAD_VERSION: u16 = 1;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SqliteCompactPayload {
@@ -20,8 +23,22 @@ pub struct SqliteCompactPayload {
 	pub read_bytes_since_rollup: u64,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SqliteColdCompactPayload {
+	CreatePinnedBookmark {
+		actor_id: String,
+		actor_branch_id: ActorBranchId,
+		bookmark: BookmarkStr,
+		versionstamp: [u8; 16],
+	},
+}
+
 enum VersionedSqliteCompactPayload {
 	V1(SqliteCompactPayload),
+}
+
+enum VersionedSqliteColdCompactPayload {
+	V1(SqliteColdCompactPayload),
 }
 
 impl OwnedVersionedData for VersionedSqliteCompactPayload {
@@ -51,6 +68,33 @@ impl OwnedVersionedData for VersionedSqliteCompactPayload {
 	}
 }
 
+impl OwnedVersionedData for VersionedSqliteColdCompactPayload {
+	type Latest = SqliteColdCompactPayload;
+
+	fn wrap_latest(latest: Self::Latest) -> Self {
+		Self::V1(latest)
+	}
+
+	fn unwrap_latest(self) -> Result<Self::Latest> {
+		match self {
+			Self::V1(data) => Ok(data),
+		}
+	}
+
+	fn deserialize_version(payload: &[u8], version: u16) -> Result<Self> {
+		match version {
+			1 => Ok(Self::V1(serde_bare::from_slice(payload)?)),
+			_ => bail!("invalid sqlite cold compact payload version: {version}"),
+		}
+	}
+
+	fn serialize_version(self, _version: u16) -> Result<Vec<u8>> {
+		match self {
+			Self::V1(data) => serde_bare::to_vec(&data).map_err(Into::into),
+		}
+	}
+}
+
 pub fn encode_compact_payload(payload: SqliteCompactPayload) -> Result<Vec<u8>> {
 	VersionedSqliteCompactPayload::wrap_latest(payload)
 		.serialize_with_embedded_version(SQLITE_COMPACT_PAYLOAD_VERSION)
@@ -60,6 +104,27 @@ pub fn encode_compact_payload(payload: SqliteCompactPayload) -> Result<Vec<u8>> 
 pub fn decode_compact_payload(payload: &[u8]) -> Result<SqliteCompactPayload> {
 	VersionedSqliteCompactPayload::deserialize_with_embedded_version(payload)
 		.context("decode sqlite compact payload")
+}
+
+pub fn encode_cold_compact_payload(payload: SqliteColdCompactPayload) -> Result<Vec<u8>> {
+	VersionedSqliteColdCompactPayload::wrap_latest(payload)
+		.serialize_with_embedded_version(SQLITE_COLD_COMPACT_PAYLOAD_VERSION)
+		.context("encode sqlite cold compact payload")
+}
+
+pub fn decode_cold_compact_payload(payload: &[u8]) -> Result<SqliteColdCompactPayload> {
+	VersionedSqliteColdCompactPayload::deserialize_with_embedded_version(payload)
+		.context("decode sqlite cold compact payload")
+}
+
+pub async fn publish_cold_compact_payload(
+	ups: &Ups,
+	payload: SqliteColdCompactPayload,
+) -> Result<()> {
+	let encoded = encode_cold_compact_payload(payload).context("encode sqlite cold compact trigger")?;
+	ups.publish(SqliteColdCompactSubject, &encoded, PublishOpts::one())
+		.await
+		.context("publish sqlite cold compact trigger")
 }
 
 pub fn publish_compact_trigger(ups: &Ups, actor_id: &str) {
