@@ -4,12 +4,21 @@ use anyhow::Result;
 use gas::prelude::Id;
 use rivet_pools::NodeId;
 use sqlite_storage::{
-	keys::{delta_chunk_key, meta_head_key, pidx_delta_key, shard_key, shard_version_key, PAGE_SIZE},
+	cold_tier::{ColdTier, FilesystemColdTier},
+	keys::{
+		branch_delta_chunk_key, branch_pidx_key, delta_chunk_key, meta_head_key, pidx_delta_key,
+		shard_key, shard_version_key, PAGE_SIZE,
+	},
 	ltx::{LtxHeader, encode_ltx_v3},
-	pump::ActorDb,
-	types::{ActorBranchId, DBHead, DirtyPage, FetchedPage, encode_db_head},
+	pump::{ActorDb, branch},
+	types::{
+		ActorBranchId, ColdManifestChunk, ColdManifestChunkRef, ColdManifestIndex, DBHead,
+		DirtyPage, FetchedPage, LayerEntry, LayerKind, SQLITE_STORAGE_COLD_SCHEMA_VERSION,
+		encode_cold_manifest_chunk, encode_cold_manifest_index, encode_db_head,
+	},
 };
 use tempfile::Builder;
+use universaldb::utils::IsolationLevel::Serializable;
 use universalpubsub::{PubSub, driver::memory::MemoryDriver};
 
 const TEST_ACTOR: &str = "test-actor";
@@ -50,6 +59,13 @@ fn page(fill: u8) -> Vec<u8> {
 	vec![fill; PAGE_SIZE as usize]
 }
 
+fn dirty_page(pgno: u32, fill: u8) -> DirtyPage {
+	DirtyPage {
+		pgno,
+		bytes: page(fill),
+	}
+}
+
 fn encoded_blob(txid: u64, pages: &[(u32, u8)]) -> Result<Vec<u8>> {
 	let pages = pages
 		.iter()
@@ -60,6 +76,20 @@ fn encoded_blob(txid: u64, pages: &[(u32, u8)]) -> Result<Vec<u8>> {
 		.collect::<Vec<_>>();
 
 	encode_ltx_v3(LtxHeader::delta(txid, 1, 999), &pages)
+}
+
+async fn read_actor_branch_id(db: &universaldb::Database) -> Result<ActorBranchId> {
+	db.run(|tx| async move {
+		branch::resolve_actor_branch(
+			&tx,
+			sqlite_storage::types::NamespaceId::from_gas_id(test_namespace()),
+			TEST_ACTOR,
+			Serializable,
+		)
+		.await?
+		.ok_or_else(|| anyhow::anyhow!("actor branch should exist"))
+	})
+	.await
 }
 
 async fn seed(
@@ -212,6 +242,93 @@ async fn get_pages_reads_latest_shard_version_not_past_head() -> Result<()> {
 		vec![FetchedPage {
 			pgno: 2,
 			bytes: Some(page(0x44)),
+		}]
+	);
+
+	Ok(())
+}
+
+#[tokio::test]
+async fn get_pages_falls_through_to_cold_tier_when_hot_branch_data_is_evicted() -> Result<()> {
+	let db = Arc::new(test_db().await?);
+	let cold_root = Builder::new().prefix("sqlite-storage-read-cold-").tempdir()?;
+	let tier = Arc::new(FilesystemColdTier::new(cold_root.path()));
+	let actor_db = ActorDb::new_with_cold_tier(
+		db.clone(),
+		test_ups(),
+		test_namespace(),
+		TEST_ACTOR.to_string(),
+		NodeId::new(),
+		tier.clone(),
+	);
+	actor_db.commit(vec![dirty_page(1, 0x66)], 1, 1_000).await?;
+	let branch_id = read_actor_branch_id(&db).await?;
+	let layer_key = format!(
+		"db/{}/image/00000000/00000000-0000000000000001.ltx",
+		branch_id.as_uuid().simple()
+	);
+	let chunk_key = format!(
+		"db/{}/cold_manifest/chunks/read-cold.bare",
+		branch_id.as_uuid().simple()
+	);
+	let index_key = format!("db/{}/cold_manifest/index.bare", branch_id.as_uuid().simple());
+	let layer_bytes = encoded_blob(1, &[(1, 0x66)])?;
+
+	tier.put_object(&layer_key, &layer_bytes).await?;
+	tier.put_object(
+		&chunk_key,
+		&encode_cold_manifest_chunk(ColdManifestChunk {
+			schema_version: SQLITE_STORAGE_COLD_SCHEMA_VERSION,
+			branch_id,
+			pass_versionstamp: [1; 16],
+			layers: vec![LayerEntry {
+				kind: LayerKind::Image,
+				shard_id: Some(0),
+				min_txid: 1,
+				max_txid: 1,
+				min_versionstamp: [1; 16],
+				max_versionstamp: [1; 16],
+				byte_size: layer_bytes.len() as u64,
+				checksum: 0,
+				object_key: layer_key,
+			}],
+			bookmarks: Vec::new(),
+		})?,
+	)
+	.await?;
+	tier.put_object(
+		&index_key,
+		&encode_cold_manifest_index(ColdManifestIndex {
+			schema_version: SQLITE_STORAGE_COLD_SCHEMA_VERSION,
+			branch_id,
+			chunks: vec![ColdManifestChunkRef {
+				object_key: chunk_key,
+				pass_versionstamp: [1; 16],
+				min_versionstamp: [1; 16],
+				max_versionstamp: [1; 16],
+				byte_size: 1,
+			}],
+			last_pass_at_ms: 1_000,
+			last_pass_versionstamp: [1; 16],
+		})?,
+	)
+	.await?;
+
+	seed(
+		&db,
+		Vec::new(),
+		vec![
+			branch_delta_chunk_key(branch_id, 1, 0),
+			branch_pidx_key(branch_id, 1),
+		],
+	)
+	.await?;
+
+	assert_eq!(
+		actor_db.get_pages(vec![1]).await?,
+		vec![FetchedPage {
+			pgno: 1,
+			bytes: Some(page(0x66)),
 		}]
 	);
 

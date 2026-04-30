@@ -39,6 +39,7 @@
 - Cold Phase B pin upload failures mark pending bookmarks `Failed`; Phase C OCC failures leave pins `Pending` for retry.
 - Cold follow-up sweeps compute the branch GC pin from refcount/root_versionstamp, desc_pin, and bk_pin, then rewrite manifest metadata before deleting cold objects.
 - Cold sweeps treat zero layer versionstamps as unknown and not deletable; only concrete versionstamps below the computed GC pin are reclaimed.
+- ActorDb cold-tier reads use `new_with_cold_tier` plus a bounded per-connection manifest cache; the default constructor keeps no read cold tier for compatibility.
 
 # Ralph Progress Log
 Started: Wed Apr 29 03:29:23 PM PDT 2026
@@ -747,4 +748,20 @@ Started: Wed Apr 29 03:29:23 PM PDT 2026
   - Cold follow-up sweeps should only delete layers with concrete nonzero versionstamps; zero is an unknown placeholder from incomplete test fixtures or missing VTX coverage.
   - Manifest chunk rewrites and index rewrites must happen before cold-tier deletes so a manifest reference never outlives its layer object.
   - Tests for GC cleanup can simulate engine-owned database orphaning by setting the branch refcount to zero before deleting the last pinned bookmark.
+---
+## 2026-04-29 21:55 PDT - US-042
+- Implemented cold-tier read fall-through for branch reads: hot DELTA/SHARD misses now collect cold layer candidates, load the branch cold manifest through `ColdTier`, pick covering layers by txid/shard, decode LTX, and return page bytes.
+- Added a bounded per-connection cold manifest cache on `ActorDb` and a `new_with_cold_tier` constructor for callers/tests that have a concrete cold backend.
+- Verified with `cargo test -p sqlite-storage --test pump_read`, `cargo check -p sqlite-storage`, and `cargo test -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/CLAUDE.md`
+  - `engine/packages/sqlite-storage/src/pump/actor_db.rs`
+  - `engine/packages/sqlite-storage/src/pump/read.rs`
+  - `engine/packages/sqlite-storage/tests/pump_read.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Keep S3/filesystem GETs outside the UDB read transaction; the read tx should only decide hot misses and cold candidates.
+  - Cold read tests can seed `ColdManifestIndex` + `ColdManifestChunk` directly in a `FilesystemColdTier`, then clear branch hot DELTA/PIDX keys to simulate eviction.
+  - Default `ActorDb::new` intentionally has no cold-tier read backend so legacy and focused hot-path tests keep their old zero-fill behavior on complete hot misses.
 ---

@@ -72,6 +72,7 @@ These come from `r2-prior-art/.agent/research/sqlite/requirements.md` and supers
 - **Schema version on every persisted S3 object** (`schema_version: u32` on `ColdManifest`, `BookmarkIndex`, `BranchColdState`). Cold compactor reads old version + writes new version on every pass; reader code retains old-version paths for at least one full retention window past rollout.
 - **Cold compactor tests inject a concrete cold tier.** The service default is `DisabledColdTier` until runtime config selects filesystem or S3, so test hooks must pass `FilesystemColdTier` explicitly when a pass should write objects.
 - **ColdTier object keys are relative S3-style keys.** Reject empty object keys, absolute paths, and `..`; use `FilesystemColdTier` for local tests and `FaultyColdTier` for injected latency or failures.
+- **Cold read fall-through keeps ColdTier GETs outside UDB transactions.** `ActorDb::new_with_cold_tier` supplies the backend and read-side manifests are cached per connection.
 
 ## Bookmarks
 

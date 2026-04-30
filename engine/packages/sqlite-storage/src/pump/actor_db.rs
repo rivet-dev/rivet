@@ -1,4 +1,7 @@
-use std::sync::Arc;
+use std::{
+	collections::{BTreeMap, VecDeque},
+	sync::Arc,
+};
 
 use anyhow::{Context, Result};
 use gas::prelude::Id;
@@ -7,15 +10,63 @@ use rivet_pools::NodeId;
 use tokio::time::Instant;
 use universaldb::Database;
 
-use crate::{compactor::Ups, page_index::DeltaPageIndex};
+use crate::{
+	cold_tier::ColdTier,
+	compactor::Ups,
+	page_index::DeltaPageIndex,
+};
 
 use super::{
 	branch,
 	constants::{ACCESS_TOUCH_THROTTLE_MS, MAX_FORK_DEPTH},
 	error::SqliteStorageError,
 	keys,
-	types::{ActorBranchId, NamespaceId},
+	types::{ActorBranchId, ColdManifestChunk, NamespaceId},
 };
+
+const COLD_MANIFEST_CACHE_BRANCHES: usize = 16;
+
+#[derive(Debug, Clone)]
+pub(super) struct CachedColdManifest {
+	pub chunks: Vec<ColdManifestChunk>,
+}
+
+#[derive(Debug, Default)]
+pub(super) struct ColdManifestCache {
+	entries: BTreeMap<ActorBranchId, CachedColdManifest>,
+	lru: VecDeque<ActorBranchId>,
+}
+
+impl ColdManifestCache {
+	pub(super) fn get(&mut self, branch_id: ActorBranchId) -> Option<CachedColdManifest> {
+		let manifest = self.entries.get(&branch_id)?.clone();
+		self.touch(branch_id);
+		Some(manifest)
+	}
+
+	pub(super) fn insert(
+		&mut self,
+		branch_id: ActorBranchId,
+		manifest: CachedColdManifest,
+	) {
+		self.entries.insert(branch_id, manifest);
+		self.touch(branch_id);
+
+		while self.entries.len() > COLD_MANIFEST_CACHE_BRANCHES {
+			let Some(evict) = self.lru.pop_front() else {
+				break;
+			};
+			if self.entries.remove(&evict).is_some() {
+				self.lru.retain(|cached| *cached != evict);
+			}
+		}
+	}
+
+	fn touch(&mut self, branch_id: ActorBranchId) {
+		self.lru.retain(|cached| *cached != branch_id);
+		self.lru.push_back(branch_id);
+	}
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct BranchAncestry {
@@ -52,6 +103,8 @@ pub struct ActorDb {
 	pub(super) branch_id: Mutex<Option<ActorBranchId>>,
 	/// Cached immutable branch ancestry. This is a perf cache for read planning.
 	pub(super) ancestors: Mutex<Option<BranchAncestry>>,
+	pub(super) cold_tier: Option<Arc<dyn ColdTier>>,
+	pub(super) cold_manifest_cache: Mutex<ColdManifestCache>,
 	/// Cached access bucket for throttling manifest and eviction-index touches.
 	pub(super) last_access_bucket: Mutex<Option<i64>>,
 	pub(super) cache: Mutex<DeltaPageIndex>,
@@ -73,6 +126,28 @@ impl ActorDb {
 		actor_id: String,
 		node_id: NodeId,
 	) -> Self {
+		Self::new_inner(udb, ups, namespace_id, actor_id, node_id, None)
+	}
+
+	pub fn new_with_cold_tier(
+		udb: Arc<Database>,
+		ups: Ups,
+		namespace_id: Id,
+		actor_id: String,
+		node_id: NodeId,
+		cold_tier: Arc<dyn ColdTier>,
+	) -> Self {
+		Self::new_inner(udb, ups, namespace_id, actor_id, node_id, Some(cold_tier))
+	}
+
+	fn new_inner(
+		udb: Arc<Database>,
+		ups: Ups,
+		namespace_id: Id,
+		actor_id: String,
+		node_id: NodeId,
+		cold_tier: Option<Arc<dyn ColdTier>>,
+	) -> Self {
 		#[cfg(debug_assertions)]
 		crate::takeover::reconcile_blocking(udb.clone(), actor_id.clone(), node_id);
 
@@ -84,6 +159,8 @@ impl ActorDb {
 			node_id,
 			branch_id: Mutex::new(None),
 			ancestors: Mutex::new(None),
+			cold_tier,
+			cold_manifest_cache: Mutex::new(ColdManifestCache::default()),
 			last_access_bucket: Mutex::new(None),
 			cache: Mutex::new(DeltaPageIndex::new()),
 			storage_used: Mutex::new(None),

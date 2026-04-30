@@ -15,14 +15,20 @@ use universaldb::{
 
 use crate::pump::{
 	ActorDb,
-	actor_db::{BranchAncestry, load_branch_ancestry, touch_access_if_bucket_advanced},
+	actor_db::{
+		BranchAncestry, CachedColdManifest, load_branch_ancestry,
+		touch_access_if_bucket_advanced,
+	},
 	branch,
 	error::SqliteStorageError,
 	keys::{self, PAGE_SIZE, SHARD_SIZE},
 	ltx::{DecodedLtx, decode_ltx_v3},
 	metrics,
 	page_index::DeltaPageIndex,
-	types::{ActorBranchId, DBHead, FetchedPage, decode_db_head},
+	types::{
+		ActorBranchId, DBHead, FetchedPage, LayerEntry, LayerKind,
+		decode_cold_manifest_chunk, decode_cold_manifest_index, decode_db_head,
+	},
 };
 
 const PIDX_PGNO_BYTES: usize = std::mem::size_of::<u32>();
@@ -126,6 +132,7 @@ impl ActorDb {
 							loaded_pidx_rows: None,
 							page_sources: BTreeMap::new(),
 							source_blobs: BTreeMap::new(),
+							cold_page_candidates: BTreeMap::new(),
 							stale_pidx_pgnos: BTreeSet::new(),
 						});
 					}
@@ -212,23 +219,31 @@ impl ActorDb {
 					let mut missing_delta_prefixes = BTreeSet::new();
 					let mut shard_sources = BTreeMap::<u32, Option<(Vec<u8>, Vec<u8>)>>::new();
 					let mut stale_pidx_pgnos = BTreeSet::new();
+					let mut cold_page_candidates = BTreeMap::<u32, Vec<ColdLayerCandidate>>::new();
 
 					for pgno in &pgnos_in_range {
+						let mut cold_candidates = Vec::new();
 						let preferred_delta = pidx_by_pgno
 							.get(pgno)
 							.copied()
-							.map(|page_ref| (page_ref.source.delta_chunk_prefix(&actor_id, page_ref.txid), page_ref.source));
+							.map(|page_ref| {
+								(
+									page_ref.source.delta_chunk_prefix(&actor_id, page_ref.txid),
+									page_ref.source,
+									page_ref.txid,
+								)
+							});
 
 						if preferred_delta
 							.as_ref()
-							.is_some_and(|(prefix, _)| missing_delta_prefixes.contains(prefix))
+							.is_some_and(|(prefix, _, _)| missing_delta_prefixes.contains(prefix))
 						{
 							stale_pidx_pgnos.insert(*pgno);
 						}
 
-						if let Some((delta_prefix, delta_source)) = preferred_delta
+						if let Some((delta_prefix, delta_source, delta_txid)) = preferred_delta
 							.as_ref()
-							.filter(|(prefix, _)| !missing_delta_prefixes.contains(prefix))
+							.filter(|(prefix, _, _)| !missing_delta_prefixes.contains(prefix))
 						{
 							if !source_blobs.contains_key(delta_prefix) {
 								let blob = tx_load_delta_blob(&tx, delta_prefix).await?;
@@ -237,6 +252,13 @@ impl ActorDb {
 								} else {
 									missing_delta_prefixes.insert(delta_prefix.clone());
 									stale_pidx_pgnos.insert(*pgno);
+									if let ReadSource::Branch(source) = *delta_source {
+										cold_candidates.push(ColdLayerCandidate {
+											branch_id: source.branch_id,
+											owner_txid: *delta_txid,
+											shard_id: pgno / SHARD_SIZE,
+										});
+									}
 								}
 							}
 
@@ -267,6 +289,11 @@ impl ActorDb {
 								source_blobs.insert(source_key.clone(), blob);
 							}
 							page_sources.insert(*pgno, source_key);
+						} else {
+							cold_candidates.extend(scope.cold_layer_candidates(*pgno));
+							if !cold_candidates.is_empty() {
+								cold_page_candidates.insert(*pgno, cold_candidates);
+							}
 						}
 					}
 
@@ -290,11 +317,21 @@ impl ActorDb {
 						loaded_pidx_rows,
 						page_sources,
 						source_blobs,
+						cold_page_candidates,
 						stale_pidx_pgnos,
 					})
 				}
 			})
 			.await?;
+
+		let mut tx_result = tx_result;
+		let cold_pages = self
+			.load_cold_page_blobs(&tx_result.cold_page_candidates)
+			.await?;
+		for (pgno, (source_key, blob)) in cold_pages {
+			tx_result.page_sources.insert(pgno, source_key.clone());
+			tx_result.source_blobs.entry(source_key).or_insert(blob);
+		}
 
 		let mut stale_pidx_pgnos = tx_result.stale_pidx_pgnos;
 		if let Some(loaded_pidx_rows) = tx_result.loaded_pidx_rows {
@@ -394,7 +431,183 @@ struct GetPagesTxResult {
 	loaded_pidx_rows: Option<Vec<(u32, u64)>>,
 	page_sources: BTreeMap<u32, Vec<u8>>,
 	source_blobs: BTreeMap<Vec<u8>, Vec<u8>>,
+	cold_page_candidates: BTreeMap<u32, Vec<ColdLayerCandidate>>,
 	stale_pidx_pgnos: BTreeSet<u32>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct ColdLayerCandidate {
+	branch_id: ActorBranchId,
+	owner_txid: u64,
+	shard_id: u32,
+}
+
+impl ActorDb {
+	async fn load_cold_page_blobs(
+		&self,
+		page_candidates: &BTreeMap<u32, Vec<ColdLayerCandidate>>,
+	) -> Result<BTreeMap<u32, (Vec<u8>, Vec<u8>)>> {
+		if page_candidates.is_empty() || self.cold_tier.is_none() {
+			return Ok(BTreeMap::new());
+		}
+
+		let mut out = BTreeMap::new();
+		let mut loaded_objects = BTreeMap::<String, Vec<u8>>::new();
+		let mut decoded_objects = BTreeMap::<String, DecodedLtx>::new();
+
+		for (pgno, candidates) in page_candidates {
+			for candidate in candidates {
+				for layer in self.find_cold_layers(*candidate).await? {
+					let object_key = layer.object_key.clone();
+					if !loaded_objects.contains_key(&object_key) {
+						let Some(cold_tier) = &self.cold_tier else {
+							continue;
+						};
+						let Some(bytes) = cold_tier
+							.get_object(&object_key)
+							.await
+							.with_context(|| format!("get sqlite cold layer {object_key}"))?
+						else {
+							continue;
+						};
+						loaded_objects.insert(object_key.clone(), bytes);
+					}
+
+					if !decoded_objects.contains_key(&object_key) {
+						let bytes = loaded_objects
+							.get(&object_key)
+							.expect("cold object should be loaded before decode");
+						let decoded = decode_ltx_v3(bytes)
+							.with_context(|| format!("decode sqlite cold layer {object_key}"))?;
+						decoded_objects.insert(object_key.clone(), decoded);
+					}
+
+					if decoded_objects
+						.get(&object_key)
+						.and_then(|decoded| decoded.get_page(*pgno))
+						.is_none()
+					{
+						continue;
+					}
+
+					let bytes = loaded_objects
+						.get(&object_key)
+						.expect("cold object should be loaded before return")
+						.clone();
+					out.insert(*pgno, (cold_source_key(&object_key), bytes));
+					break;
+				}
+				if out.contains_key(pgno) {
+					break;
+				}
+			}
+		}
+
+		Ok(out)
+	}
+
+	async fn find_cold_layers(
+		&self,
+		candidate: ColdLayerCandidate,
+	) -> Result<Vec<LayerEntry>> {
+		let manifest = self.load_cold_manifest(candidate.branch_id).await?;
+		let mut layers = Vec::new();
+
+		for chunk in &manifest.chunks {
+			for layer in &chunk.layers {
+				if !layer_covers_candidate(layer, candidate) {
+					continue;
+				}
+
+				layers.push(layer.clone());
+			}
+		}
+
+		layers.sort_by(|a, b| {
+			b.max_txid
+				.cmp(&a.max_txid)
+				.then_with(|| layer_kind_rank(b.kind).cmp(&layer_kind_rank(a.kind)))
+		});
+
+		Ok(layers)
+	}
+
+	async fn load_cold_manifest(
+		&self,
+		branch_id: ActorBranchId,
+	) -> Result<CachedColdManifest> {
+		if let Some(manifest) = self.cold_manifest_cache.lock().get(branch_id) {
+			return Ok(manifest);
+		}
+
+		let Some(cold_tier) = &self.cold_tier else {
+			return Ok(CachedColdManifest { chunks: Vec::new() });
+		};
+		let index_key = cold_manifest_index_object_key(branch_id);
+		let Some(index_bytes) = cold_tier
+			.get_object(&index_key)
+			.await
+			.with_context(|| format!("get sqlite cold manifest index {index_key}"))?
+		else {
+			return Ok(CachedColdManifest { chunks: Vec::new() });
+		};
+		let index = decode_cold_manifest_index(&index_bytes)
+			.with_context(|| format!("decode sqlite cold manifest index {index_key}"))?;
+		let mut chunks = Vec::new();
+
+		for chunk_ref in index.chunks {
+			let Some(chunk_bytes) = cold_tier
+				.get_object(&chunk_ref.object_key)
+				.await
+				.with_context(|| {
+					format!("get sqlite cold manifest chunk {}", chunk_ref.object_key)
+				})?
+			else {
+				continue;
+			};
+			chunks.push(
+				decode_cold_manifest_chunk(&chunk_bytes).with_context(|| {
+					format!("decode sqlite cold manifest chunk {}", chunk_ref.object_key)
+				})?,
+			);
+		}
+
+		let manifest = CachedColdManifest { chunks };
+		self.cold_manifest_cache
+			.lock()
+			.insert(branch_id, manifest.clone());
+
+		Ok(manifest)
+	}
+}
+
+fn layer_covers_candidate(layer: &LayerEntry, candidate: ColdLayerCandidate) -> bool {
+	if candidate.owner_txid < layer.min_txid || candidate.owner_txid > layer.max_txid {
+		return false;
+	}
+
+	match layer.kind {
+		LayerKind::Image => layer.shard_id == Some(candidate.shard_id),
+		LayerKind::Delta | LayerKind::Pin => true,
+	}
+}
+
+fn layer_kind_rank(kind: LayerKind) -> u8 {
+	match kind {
+		LayerKind::Pin => 3,
+		LayerKind::Delta => 2,
+		LayerKind::Image => 1,
+	}
+}
+
+fn cold_source_key(object_key: &str) -> Vec<u8> {
+	let mut key = b"cold:".to_vec();
+	key.extend_from_slice(object_key.as_bytes());
+	key
+}
+
+fn cold_manifest_index_object_key(branch_id: ActorBranchId) -> String {
+	format!("db/{}/cold_manifest/index.bare", branch_id.as_uuid().simple())
 }
 
 fn now_ms() -> Result<i64> {
@@ -422,6 +635,29 @@ impl StorageScope {
 		match self {
 			Self::Branch(plan) => Some(plan.ancestry.clone()),
 			Self::Legacy => None,
+		}
+	}
+
+	fn cold_layer_candidates(
+		&self,
+		pgno: u32,
+	) -> Vec<ColdLayerCandidate> {
+		match self {
+			Self::Branch(plan) => plan
+				.sources
+				.iter()
+				.filter_map(|source| match source {
+					ReadSource::Branch(source) => Some(ColdLayerCandidate {
+						branch_id: source.branch_id,
+						owner_txid: source.max_txid,
+						shard_id: pgno / SHARD_SIZE,
+					}),
+					ReadSource::Legacy => None,
+				})
+				.collect(),
+			Self::Legacy => {
+				Vec::new()
+			}
 		}
 	}
 }
