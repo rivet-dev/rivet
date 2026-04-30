@@ -90,11 +90,15 @@ pub async fn read_branch(tx: &universaldb::Transaction, branch_id: ActorBranchId
 }
 
 pub fn cap_check(would_be: i64) -> Result<()> {
-	if would_be > SQLITE_MAX_STORAGE_BYTES {
+	cap_check_with_cap(would_be, SQLITE_MAX_STORAGE_BYTES)
+}
+
+pub fn cap_check_with_cap(would_be: i64, cap_bytes: i64) -> Result<()> {
+	if would_be > cap_bytes {
 		return Err(SqliteStorageError::SqliteStorageQuotaExceeded {
 			remaining_bytes: 0,
 			payload_size: would_be
-				.checked_sub(SQLITE_MAX_STORAGE_BYTES)
+				.checked_sub(cap_bytes)
 				.context("sqlite quota excess overflowed i64")?,
 		}
 		.into());

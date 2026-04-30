@@ -11,20 +11,22 @@ use universaldb::{
 	utils::IsolationLevel::{Serializable, Snapshot},
 };
 
-use crate::pump::{
-	ActorDb,
-	actor_db::{BranchAncestry, load_branch_ancestry, touch_access_if_bucket_advanced},
-	branch,
-	keys::{self, SHARD_SIZE},
-	ltx::{LtxHeader, encode_ltx_v3},
-	metrics,
-	quota,
-	types::{
-		ActorBranchId, ActorBranchRecord, ActorPointer, BranchState, CommitRow, DBHead, DirtyPage,
-		NamespaceBranchId, NamespaceId, decode_db_head, decode_meta_compact,
-		encode_actor_branch_record, encode_actor_pointer, encode_commit_row, encode_db_head,
+use crate::{
+	burst_mode,
+	pump::{
+		ActorDb,
+		actor_db::{BranchAncestry, load_branch_ancestry, touch_access_if_bucket_advanced},
+		branch,
+		keys::{self, SHARD_SIZE},
+		ltx::{LtxHeader, encode_ltx_v3},
+		metrics, quota,
+		types::{
+			ActorBranchId, ActorBranchRecord, ActorPointer, BranchState, CommitRow, DBHead,
+			DirtyPage, NamespaceBranchId, NamespaceId, decode_db_head, decode_meta_compact,
+			encode_actor_branch_record, encode_actor_pointer, encode_commit_row, encode_db_head,
+		},
+		udb,
 	},
-	udb,
 };
 
 const DELTA_CHUNK_BYTES: usize = 10_000;
@@ -201,8 +203,18 @@ impl ActorDb {
 					let would_be = storage_used
 						.checked_add(quota_delta)
 						.context("sqlite commit quota check overflowed i64")?;
-
-					quota::cap_check(would_be)?;
+					let burst_signal = burst_mode::read_branch_signal_for_head(
+						&tx,
+						branch_id,
+						txid,
+						Snapshot,
+					)
+					.await?;
+					let hot_quota_cap = burst_mode::adjusted_hot_quota_cap(
+						quota::SQLITE_MAX_STORAGE_BYTES,
+						burst_signal,
+					)?;
+					quota::cap_check_with_cap(would_be, hot_quota_cap)?;
 
 					for (key, value) in &delta_chunks {
 						tx.informal().set(key, value);

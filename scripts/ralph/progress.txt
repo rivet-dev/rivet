@@ -46,9 +46,32 @@
 - Eviction clear work is plan-then-fence: carry expected SHARD/PIDX values from the plan, regular-read `last_hot_pass_txid` in the clear tx, then use `COMPARE_AND_CLEAR`.
 - Fully evicted branches clear `CTR/eviction_index` only when the branch's current SHARD rows are all covered by the planned compare-and-clear set; keep the index while any SHARD remains.
 - Branch GC pin computation lives in `sqlite_storage::gc`; reuse it for cold sweeps, hot-history cleanup, and debug estimates so refcount/root/desc/bookmark pin math stays consistent.
+- Burst-mode hot quota checks go through `sqlite_storage::burst_mode`, which derives the signal from branch `head_txid - cold_drained_txid` in FDB and applies no tier or pod-health state.
 
 # Ralph Progress Log
 Started: Wed Apr 29 03:29:23 PM PDT 2026
+---
+## 2026-04-29 22:24 PDT - US-051
+- Implemented burst-mode hot quota cap calculation from branch FDB lag between `/META/head.head_txid` and `/META/manifest/cold_drained_txid`.
+- Wired commit quota checks to use the burst-adjusted cap, doubling the 10 GiB base cap while cold lag exceeds the configured threshold and reverting after cold catch-up.
+- Added focused burst-mode and commit quota regression tests.
+- Verified with `cargo test -p sqlite-storage --test burst_mode`, `cargo test -p sqlite-storage --test pump_commit commit_uses_burst_adjusted_quota_cap -- --nocapture`, `cargo check -p sqlite-storage`, and `cargo test -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/AGENTS.md`
+  - `engine/packages/sqlite-storage/src/burst_mode.rs`
+  - `engine/packages/sqlite-storage/src/lib.rs`
+  - `engine/packages/sqlite-storage/src/pump/commit.rs`
+  - `engine/packages/sqlite-storage/src/pump/constants.rs`
+  - `engine/packages/sqlite-storage/src/pump/quota.rs`
+  - `engine/packages/sqlite-storage/tests/burst_mode.rs`
+  - `engine/packages/sqlite-storage/tests/pump_commit.rs`
+  - `engine/packages/sqlite-storage/tests/pump_constants.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Burst mode is a soft hot-quota overflow guard driven only by persisted branch lag, not by cold-pod failure counters.
+  - The commit path should pass the about-to-be-written head txid into `burst_mode::read_branch_signal_for_head` so the cap reflects the new commit's lag.
+  - Keep burst quota logic tier-free; cold and eviction remain universal.
 ---
 ## 2026-04-29 22:19 PDT - US-047
 - Implemented shared branch GC pin computation in `sqlite_storage::gc`, using refcount/root_versionstamp plus descendant and bookmark pins with no persisted ratchet.

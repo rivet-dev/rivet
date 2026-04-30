@@ -30,3 +30,6 @@ pub const STALE_MARKER_AGE_MS: i64 = 10 * 60 * 1000;
 
 /// Spec section 12.2 burst mode doubles the hot quota while the cold tier is degraded.
 pub const HOT_BURST_MULTIPLIER: i64 = 2;
+
+/// Spec section 12.2 derives burst mode from cold-drain lag, matching the cold trigger window.
+pub const HOT_BURST_COLD_LAG_THRESHOLD_TXIDS: u64 = 1024;

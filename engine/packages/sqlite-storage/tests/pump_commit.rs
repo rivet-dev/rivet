@@ -11,10 +11,11 @@ use sqlite_storage::{
 	ACCESS_TOUCH_THROTTLE_MS,
 		keys::{
 			PAGE_SIZE, actor_pointer_cur_key, branch_commit_key, branch_delta_chunk_key,
-			branch_manifest_last_access_bucket_key, branch_manifest_last_access_ts_ms_key,
-			branch_meta_compact_key, branch_meta_head_key, branch_pidx_key, branch_shard_key,
-			branch_vtx_key, branches_list_key, ctr_eviction_index_key, namespace_branches_list_key,
-			namespace_branches_refcount_key, namespace_pointer_cur_key,
+			branch_manifest_cold_drained_txid_key, branch_manifest_last_access_bucket_key,
+			branch_manifest_last_access_ts_ms_key, branch_meta_compact_key, branch_meta_head_key,
+			branch_pidx_key, branch_shard_key, branch_vtx_key, branches_list_key,
+			ctr_eviction_index_key, namespace_branches_list_key, namespace_branches_refcount_key,
+			namespace_pointer_cur_key,
 		},
 	ltx::{LtxHeader, encode_ltx_v3},
 	pump::ActorDb,
@@ -402,6 +403,62 @@ async fn commit_rejects_quota_cap_before_writes() -> Result<()> {
 			.await?
 			.is_none()
 	);
+
+	Ok(())
+}
+
+#[tokio::test]
+async fn commit_uses_burst_adjusted_quota_cap() -> Result<()> {
+	let db = Arc::new(test_db().await?);
+	let actor_db = ActorDb::new(db.clone(), test_ups(), test_namespace(), TEST_ACTOR.to_string(), NodeId::new());
+	actor_db.commit(vec![page(1, 0x11)], 1, 1_000).await?;
+	let branch_id = read_branch_id(&db).await?;
+	let storage_used = read_quota(&db).await?;
+
+	seed(
+		&db,
+		vec![
+			(
+				branch_meta_head_key(branch_id),
+				encode_db_head(head_with_branch(branch_id, 1024, 1))?,
+			),
+			(
+				branch_manifest_cold_drained_txid_key(branch_id),
+				0_u64.to_be_bytes().to_vec(),
+			),
+		],
+	)
+	.await?;
+	db.run(move |tx| async move {
+		quota::atomic_add_branch(&tx, branch_id, SQLITE_MAX_STORAGE_BYTES - storage_used);
+		Ok(())
+	})
+	.await?;
+
+	let actor_db = ActorDb::new(db.clone(), test_ups(), test_namespace(), TEST_ACTOR.to_string(), NodeId::new());
+	actor_db.commit(vec![page(1, 0x44)], 1, 3_000).await?;
+	assert!(read_quota(&db).await? > SQLITE_MAX_STORAGE_BYTES);
+
+	seed(
+		&db,
+		vec![(
+			branch_manifest_cold_drained_txid_key(branch_id),
+			1025_u64.to_be_bytes().to_vec(),
+		)],
+	)
+	.await?;
+	let err = actor_db
+		.commit(vec![page(1, 0x55)], 1, 4_000)
+		.await
+		.expect_err("commit should exceed quota after cold lag recovers");
+	assert!(
+		err.downcast_ref::<sqlite_storage::error::SqliteStorageError>()
+			.is_some_and(|err| matches!(
+				err,
+				sqlite_storage::error::SqliteStorageError::SqliteStorageQuotaExceeded { .. }
+			))
+	);
+	assert_eq!(read_head(&db).await?, head_with_branch(branch_id, 1025, 1));
 
 	Ok(())
 }

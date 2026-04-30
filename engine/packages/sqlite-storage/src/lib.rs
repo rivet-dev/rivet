@@ -1,3 +1,4 @@
+pub mod burst_mode;
 pub mod cold_tier;
 pub mod compactor;
 pub mod gc;
