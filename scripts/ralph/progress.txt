@@ -13,6 +13,7 @@
 - Branch pin versionstamps are 16-byte lexicographic big-endian values, so descendant/bookmark pin atomic-min writes use `MutationType::ByteMin`, not integer `Min`.
 - PITR storage has no per-namespace tier model; cold and eviction paths should run unconditionally without `tier_state` or `ensure_tier_at_least`.
 - Namespace forks are metadata-only: write the child `NSPTR` + `NSBRANCH` records and rely on namespace-branch parent walking instead of eagerly materializing child `APTR` rows.
+- Actor pointer resolution walks namespace branch parents on APTR miss; namespace-branch tombstones return `ActorNotFound` and must not fall back to legacy actor-scoped storage.
 
 # Ralph Progress Log
 Started: Wed Apr 29 03:29:23 PM PDT 2026
@@ -307,4 +308,20 @@ Started: Wed Apr 29 03:29:23 PM PDT 2026
   - PITR storage now has a uniform hot/cold/eviction flow; do not add per-namespace tier state or promotion hooks.
   - Root namespace initialization writes only NSPTR, NSBRANCH, and refcount metadata.
   - Branch derivation should remain metadata-only with refcount/pin updates and no cold-tier gating.
+---
+## 2026-04-29 18:54 PDT - US-016
+- Implemented `resolve_actor_pointer` as the shared APTR resolver and kept `resolve_actor_branch_in_namespace` as a branch-id wrapper.
+- Made namespace-branch tombstones return `ActorNotFound` so deleted actors do not fall through to parent APTR rows or legacy actor-scoped storage.
+- Added coverage for lazy actor pointer inheritance after `fork_namespace` and tombstone-blocked inheritance.
+- Verified with `cargo test -p sqlite-storage --test pump_branch resolve_actor_pointer -- --nocapture`, `cargo check -p sqlite-storage`, and `cargo test -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/CLAUDE.md`
+  - `engine/packages/sqlite-storage/src/pump/branch.rs`
+  - `engine/packages/sqlite-storage/tests/pump_branch.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Use `branch::resolve_actor_pointer` when pointer metadata matters; `resolve_actor_branch_in_namespace` is only a convenience wrapper for the current branch id.
+  - A tombstone in a child namespace branch is a hard `ActorNotFound`, not a cache miss.
+  - Forked namespace tests can reconstruct an `Id` from `NamespaceId::as_uuid()` with `Id::v1(..., 1)` because sqlite-storage derives namespace identity from the UUID bytes.
 ---

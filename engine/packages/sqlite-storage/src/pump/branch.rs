@@ -11,8 +11,9 @@ use super::{
 	error::SqliteStorageError,
 	keys, udb,
 	types::{
-		ActorBranchId, ActorBranchRecord, BookmarkRef, BranchState, DBHead, NamespaceBranchId,
-		NamespaceBranchRecord, NamespaceId, NamespacePointer, ResolvedVersionstamp,
+		ActorBranchId, ActorBranchRecord, ActorPointer, BookmarkRef, BranchState, DBHead,
+		NamespaceBranchId, NamespaceBranchRecord, NamespaceId, NamespacePointer,
+		ResolvedVersionstamp,
 		decode_actor_branch_record, decode_actor_pointer, decode_commit_row,
 		decode_namespace_branch_record, decode_namespace_pointer, encode_actor_branch_record,
 		encode_actor_pointer, encode_db_head, encode_namespace_branch_record,
@@ -139,6 +140,17 @@ pub async fn resolve_actor_branch_in_namespace(
 	actor_id: &str,
 	isolation_level: IsolationLevel,
 ) -> Result<Option<ActorBranchId>> {
+	Ok(resolve_actor_pointer(tx, namespace_branch_id, actor_id, isolation_level)
+		.await?
+		.map(|pointer| pointer.current_branch))
+}
+
+pub async fn resolve_actor_pointer(
+	tx: &universaldb::Transaction,
+	namespace_branch_id: NamespaceBranchId,
+	actor_id: &str,
+	isolation_level: IsolationLevel,
+) -> Result<Option<ActorPointer>> {
 	let mut current_branch_id = namespace_branch_id;
 
 	for _ in 0..=MAX_NAMESPACE_DEPTH {
@@ -151,7 +163,7 @@ pub async fn resolve_actor_branch_in_namespace(
 			.await?
 		{
 			let pointer = decode_actor_pointer(&pointer_bytes).context("decode sqlite actor pointer")?;
-			return Ok(Some(pointer.current_branch));
+			return Ok(Some(pointer));
 		}
 
 		if current_branch_id == NamespaceBranchId::nil() {
@@ -167,7 +179,7 @@ pub async fn resolve_actor_branch_in_namespace(
 			.await?
 			.is_some()
 		{
-			return Ok(None);
+			return Err(SqliteStorageError::ActorNotFound.into());
 		}
 
 		let Some(record_bytes) = tx

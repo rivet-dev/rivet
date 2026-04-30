@@ -7,8 +7,9 @@ use sqlite_storage::{
 		keys::{
 			actor_pointer_cur_key, branch_commit_key, branch_meta_head_at_fork_key, branches_bk_pin_key,
 			branches_desc_pin_key, branches_list_key, branches_refcount_key,
-			namespace_branches_bk_pin_key, namespace_branches_desc_pin_key,
-			namespace_branches_list_key, namespace_branches_refcount_key, namespace_pointer_cur_key,
+			namespace_branches_actor_tombstone_key, namespace_branches_bk_pin_key,
+			namespace_branches_desc_pin_key, namespace_branches_list_key,
+			namespace_branches_refcount_key, namespace_pointer_cur_key,
 		},
 	pump::{ActorDb, branch},
 	types::{
@@ -541,6 +542,136 @@ async fn fork_namespace_enforces_max_namespace_depth() -> Result<()> {
 			.is_some_and(|err| matches!(
 				err,
 				sqlite_storage::error::SqliteStorageError::NamespaceForkChainTooDeep
+			))
+	);
+
+	Ok(())
+}
+
+#[tokio::test]
+async fn resolve_actor_pointer_walks_namespace_parent_chain_after_fork() -> Result<()> {
+	let db = Arc::new(test_db().await?);
+	let actor_db = ActorDb::new(
+		db.clone(),
+		test_ups(),
+		test_namespace(),
+		TEST_ACTOR.to_string(),
+		NodeId::new(),
+	);
+	actor_db.commit(vec![page(1, 0x11)], 2, 1_000).await?;
+	let source_actor_branch = read_branch_id(&db).await?;
+	let source_commit_bytes = read_value(&db, branch_commit_key(source_actor_branch, 1))
+		.await?
+		.expect("source commit row should exist");
+	let source_commit = decode_commit_row(&source_commit_bytes)?;
+
+	let forked_namespace_id = branch::fork_namespace(
+		&db,
+		NamespaceId::from_gas_id(test_namespace()),
+		ResolvedVersionstamp {
+			versionstamp: source_commit.versionstamp,
+			bookmark: None,
+		},
+	)
+	.await?;
+	let pointer_bytes = read_value(&db, namespace_pointer_cur_key(forked_namespace_id))
+		.await?
+		.expect("forked namespace pointer should exist");
+	let forked_pointer = decode_namespace_pointer(&pointer_bytes)?;
+
+	let resolved_pointer = db
+		.run(move |tx| async move {
+			branch::resolve_actor_pointer(&tx, forked_pointer.current_branch, TEST_ACTOR, Snapshot)
+				.await
+		})
+		.await?
+		.expect("actor pointer should be inherited from parent namespace branch");
+	assert_eq!(resolved_pointer.current_branch, source_actor_branch);
+
+	let forked_actor_db = ActorDb::new(
+		db,
+		test_ups(),
+		Id::v1(forked_namespace_id.as_uuid(), 1),
+		TEST_ACTOR.to_string(),
+		NodeId::new(),
+	);
+	let pages = forked_actor_db.get_pages(vec![1]).await?;
+	assert_eq!(pages[0].bytes, Some(page_bytes(0x11)));
+
+	Ok(())
+}
+
+#[tokio::test]
+async fn resolve_actor_pointer_honors_namespace_branch_tombstones() -> Result<()> {
+	let db = Arc::new(test_db().await?);
+	let actor_db = ActorDb::new(
+		db.clone(),
+		test_ups(),
+		test_namespace(),
+		TEST_ACTOR.to_string(),
+		NodeId::new(),
+	);
+	actor_db.commit(vec![page(1, 0x11)], 2, 1_000).await?;
+	let source_actor_branch = read_branch_id(&db).await?;
+	let source_commit_bytes = read_value(&db, branch_commit_key(source_actor_branch, 1))
+		.await?
+		.expect("source commit row should exist");
+	let source_commit = decode_commit_row(&source_commit_bytes)?;
+
+	let forked_namespace_id = branch::fork_namespace(
+		&db,
+		NamespaceId::from_gas_id(test_namespace()),
+		ResolvedVersionstamp {
+			versionstamp: source_commit.versionstamp,
+			bookmark: None,
+		},
+	)
+	.await?;
+	let pointer_bytes = read_value(&db, namespace_pointer_cur_key(forked_namespace_id))
+		.await?
+		.expect("forked namespace pointer should exist");
+	let forked_pointer = decode_namespace_pointer(&pointer_bytes)?;
+	let forked_namespace_branch = forked_pointer.current_branch;
+
+	db.run(move |tx| async move {
+		tx.informal().set(
+			&namespace_branches_actor_tombstone_key(forked_namespace_branch, TEST_ACTOR),
+			&[],
+		);
+		Ok(())
+	})
+	.await?;
+
+	let err = db
+		.run(move |tx| async move {
+			branch::resolve_actor_pointer(&tx, forked_namespace_branch, TEST_ACTOR, Snapshot).await
+		})
+		.await
+		.expect_err("tombstone should block inherited actor pointer");
+	assert!(
+		err.downcast_ref::<sqlite_storage::error::SqliteStorageError>()
+			.is_some_and(|err| matches!(
+				err,
+				sqlite_storage::error::SqliteStorageError::ActorNotFound
+			))
+	);
+
+	let forked_actor_db = ActorDb::new(
+		db,
+		test_ups(),
+		Id::v1(forked_namespace_id.as_uuid(), 1),
+		TEST_ACTOR.to_string(),
+		NodeId::new(),
+	);
+	let err = forked_actor_db
+		.get_pages(vec![1])
+		.await
+		.expect_err("tombstoned actor should not fall back to legacy storage");
+	assert!(
+		err.downcast_ref::<sqlite_storage::error::SqliteStorageError>()
+			.is_some_and(|err| matches!(
+				err,
+				sqlite_storage::error::SqliteStorageError::ActorNotFound
 			))
 	);
 
