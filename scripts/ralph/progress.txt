@@ -9,6 +9,7 @@
 - `ActorDb` is namespace-scoped: pass the engine namespace id into constructors, derive `NamespaceId` from it, and resolve APTR through NSPTR/NSBRANCH before branch-scoped storage.
 - New ActorDb writes store META/COMMITS/VTX/PIDX/DELTA/SHARD under `BR/{branch_id}`; legacy actor-scoped helpers remain compatibility fallback for old seeded state.
 - `universaldb` raw `SetVersionstampedKey` and `SetVersionstampedValue` payloads use FDB-style trailing little-endian u32 offsets and substitute the first 10 versionstamp bytes.
+- Branch pin versionstamps are 16-byte lexicographic big-endian values, so descendant/bookmark pin atomic-min writes use `MutationType::ByteMin`, not integer `Min`.
 
 # Ralph Progress Log
 Started: Wed Apr 29 03:29:23 PM PDT 2026
@@ -208,4 +209,19 @@ Started: Wed Apr 29 03:29:23 PM PDT 2026
   - Root namespace metadata is created lazily inside the first SQLite commit for a namespace because sqlite-storage does not own the engine namespace creation workflow.
   - Tests that assert namespace-scoped storage need deterministic `gas::Id` namespace values; `Id::new_v1` creates a fresh random UUID each call.
   - Migration helpers must resolve through NSPTR/APTR first, then fall back to legacy actor-scoped `/META/head` for old seeded v2 state.
+---
+## 2026-04-29 18:10 PDT - US-011
+- Implemented the shared `derive_branch_at` primitive for actor branches, including source branch reads, fork-depth enforcement, bookmark-pin OCC fencing, VTX-to-COMMITS synthetic head reconstruction, new branch metadata, refcount atomics, and descendant pin writes.
+- Added branch-primitive tests that seed commits through `ActorDb`, verify `/META/head_at_fork`, branch records, refcounts, desc_pin behavior, out-of-retention rejection, and max-depth rejection.
+- Verified with `cargo check -p sqlite-storage`, `cargo test -p sqlite-storage --test pump_branch`, and `cargo test -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/CLAUDE.md`
+  - `engine/packages/sqlite-storage/src/pump/branch.rs`
+  - `engine/packages/sqlite-storage/tests/pump_branch.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Actor branch derivation should rebuild fork heads from `VTX/{versionstamp} -> txid` plus `COMMITS/{txid}` instead of copying the mutable `/META/head`.
+  - Branch `bk_pin` and `desc_pin` values are lexicographic versionstamp bytes; use `MutationType::ByteMin`.
+  - `derive_branch_at` currently leaves namespace tier promotion for the dedicated `ensure_tier_at_least` story.
 ---
