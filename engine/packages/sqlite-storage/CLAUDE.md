@@ -71,6 +71,7 @@ These come from `r2-prior-art/.agent/research/sqlite/requirements.md` and supers
 - **Layer filenames omit content checksum** (`delta/{min_txid}-{max_txid}.ltx`). Re-uploads after lease loss overwrite cleanly. Per-layer checksum still lives in the LTX V3 trailer + `LayerEntry.checksum`.
 - **HWM `pending/{uuid}.marker` objects gate orphan cleanup.** A pending marker older than `STALE_MARKER_AGE_MS` indicates a crashed prior pass; the next pass deletes the marker and its associated layer file before continuing.
 - **Cold Phase B rewrites the pending marker before uploads.** Phase A's handoff marker is overwritten with the complete image, delta, pin, manifest, and pointer snapshot object list once the snapshot plan is known.
+- **Cold Phase A reuses `in_flight_uuid` on retry.** Phase B manifest index writes replace the chunk ref for that pass UUID so crashes after upload can re-run idempotently.
 - **Cold compactor pass runs as Phase A (FDB read tx) → Phase B (S3-only, no FDB tx) → Phase C (FDB write tx with regular-read OCC fence on `cold_drained_txid`).** Phase A/C tx-age budget is independent of S3 latency.
 - **Cold Phase C is the only phase that advances `cold_drained_txid`, clears `in_flight_uuid`, and flips uploaded pinned bookmarks to `Ready`.**
 - **Cold Phase B pin upload failures mark pending bookmarks `Failed`; Phase C OCC failures leave them `Pending` for retry.**

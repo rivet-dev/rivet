@@ -158,6 +158,9 @@ pub(crate) async fn run(
 
 	let index_key = manifest_index_object_key(plan);
 	let mut index = load_manifest_index(cold_tier.as_ref(), plan, &index_key).await?;
+	index
+		.chunks
+		.retain(|chunk_ref| chunk_ref.object_key != chunk_key);
 	index.chunks.push(ColdManifestChunkRef {
 		object_key: chunk_key.clone(),
 		pass_versionstamp,

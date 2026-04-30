@@ -192,8 +192,12 @@ pub(crate) async fn run(
 	ensure_not_cancelled(&cancel_token)?;
 
 	let branch_id = payload_branch_id(&payload);
-	let pass_uuid = uuid::Uuid::new_v4();
-	let handoff = register_pending_handoff(db, branch_id, pass_uuid).await?;
+	let candidate_pass_uuid = uuid::Uuid::new_v4();
+	let handoff = register_pending_handoff(db, branch_id, candidate_pass_uuid).await?;
+	let pass_uuid = handoff
+		.state
+		.in_flight_uuid
+		.context("sqlite cold phase A handoff did not record pass uuid")?;
 	let marker_key = pending_marker_key(branch_id, pass_uuid);
 	let pin_uploads = payload_pin_uploads(&payload);
 	let actor_id = payload_actor_id(&payload);
@@ -240,7 +244,7 @@ pub(crate) async fn run(
 async fn register_pending_handoff(
 	db: &universaldb::Database,
 	branch_id: ActorBranchId,
-	pass_uuid: uuid::Uuid,
+	candidate_pass_uuid: uuid::Uuid,
 ) -> Result<ColdPhaseAHandoff> {
 	db.run(move |tx| async move {
 		let state = read_cold_state(&tx, branch_id, Serializable).await?;
@@ -264,6 +268,7 @@ async fn register_pending_handoff(
 			.await?
 			.unwrap_or_default(),
 		);
+		let pass_uuid = state.in_flight_uuid.unwrap_or(candidate_pass_uuid);
 		let state = ColdCompactState {
 			cold_drained_txid,
 			in_flight_uuid: Some(pass_uuid),

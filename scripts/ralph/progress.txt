@@ -51,9 +51,26 @@
 - Burst-mode hot quota checks go through `sqlite_storage::burst_mode`, which derives the signal from branch `head_txid - cold_drained_txid` in FDB and applies no tier or pod-health state.
 - Debug historical reads cannot trust PIDX because PIDX is the current owner map; scan DELTA history up to the target txid before falling through to SHARD/cold layers.
 - Fork integration tests can share setup through `tests/fork_common`; to test bk_pin OCC races, stage a derive in one transaction, advance the pin in a nested transaction, then let the retry observe `ForkOutOfRetention`.
+- Cold compactor retries reuse `ColdCompactState.in_flight_uuid`; manifest index writes should replace the chunk ref for that pass UUID so Phase B crashes stay idempotent.
 
 # Ralph Progress Log
 Started: Wed Apr 29 03:29:23 PM PDT 2026
+---
+## 2026-04-29 23:08 PDT - US-059
+- Added `tests/cold_compactor.rs` covering Phase A handoff-before-marker behavior, Phase B upload-time FDB independence, Phase C cold-drain OCC aborts, and retry after a Phase B crash.
+- Made cold Phase A reuse an existing `in_flight_uuid` on retry and made Phase B manifest index writes replace the chunk ref for the same pass UUID instead of duplicating it.
+- Verified with `cargo test -p sqlite-storage --test cold_compactor -- --nocapture`, `cargo check -p sqlite-storage`, and `cargo test -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/CLAUDE.md`
+  - `engine/packages/sqlite-storage/src/compactor/cold/phase_a.rs`
+  - `engine/packages/sqlite-storage/src/compactor/cold/phase_b.rs`
+  - `engine/packages/sqlite-storage/tests/cold_compactor.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Cold compactor crash-retry determinism depends on reusing `ColdCompactState.in_flight_uuid`; new pass UUIDs create duplicate manifest chunks and stale markers.
+  - Phase B integration tests can wrap `FilesystemColdTier` to inject FDB writes or post-upload crashes without mocking the storage backend.
+  - Manifest index retries should replace same-object chunk refs before pushing so re-running a completed Phase B upload is idempotent.
 ---
 ## 2026-04-29 22:49 PDT - US-055
 - Added the PITR/forking Prometheus metric surface across `pump::metrics` and `compactor::metrics`, with `node_id` labels and documented op/outcome/status labels.
