@@ -115,8 +115,9 @@ async fn write_branch_pin(
 }
 
 fn eviction_occ_abort_count() -> u64 {
+	let node_id = uuid::Uuid::nil().to_string();
 	metrics::SQLITE_EVICTION_OCC_ABORT_TOTAL
-		.with_label_values(&["hot_pass_advanced"])
+		.with_label_values(&[node_id.as_str(), "hot_pass_advanced"])
 		.get()
 }
 

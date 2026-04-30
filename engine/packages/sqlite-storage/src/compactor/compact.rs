@@ -92,7 +92,7 @@ pub(crate) async fn compact_default_batch_with_node_id(
 
 	test_hooks::maybe_pause_after_plan(&actor_id).await;
 	ensure_not_cancelled(&cancel_token)?;
-	let write_result = write_batch(udb.as_ref(), actor_id.clone(), plan).await?;
+	let write_result = write_batch(udb.as_ref(), actor_id.clone(), plan, node_id.clone()).await?;
 
 	ensure_not_cancelled(&cancel_token)?;
 	let compare_and_clear_noops =
@@ -224,10 +224,12 @@ async fn write_batch(
 	db: &universaldb::Database,
 	actor_id: String,
 	plan: CompactionPlan,
+	node_id: String,
 ) -> Result<WriteResult> {
 	db.run(move |tx| {
 		let actor_id = actor_id.clone();
 		let plan = plan.clone();
+		let node_id = node_id.clone();
 
 		async move {
 			let Some(head_bytes) =
@@ -264,6 +266,7 @@ async fn write_batch(
 					head.branch_id,
 					*shard_id,
 					plan.materialized_txid,
+					&node_id,
 				)
 				.await?;
 				bytes_freed += evicted_bytes;
@@ -427,9 +430,12 @@ async fn enforce_shard_version_cap(
 	legacy_branch_id: ActorBranchId,
 	shard_id: u32,
 	new_as_of_txid: u64,
+	node_id: &str,
 ) -> Result<i64> {
 	let versions = load_shard_versions(tx, scope, actor_id, shard_id).await?;
-	metrics::SQLITE_SHARD_VERSIONS_PER_SHARD.observe(versions.len() as f64);
+	metrics::SQLITE_SHARD_VERSIONS_PER_SHARD
+		.with_label_values(&[node_id])
+		.observe(versions.len() as f64);
 	if versions.len() < MAX_SHARD_VERSIONS_PER_SHARD as usize
 		|| versions.iter().any(|version| version.as_of_txid == new_as_of_txid)
 	{

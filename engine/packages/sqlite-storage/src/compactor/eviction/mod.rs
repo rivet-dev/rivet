@@ -170,10 +170,17 @@ pub async fn sweep_once(
 	}
 
 	let result = async {
+		let holder_label = holder_id.to_string();
+		let _timer = metrics::SQLITE_EVICTION_PASS_DURATION
+			.with_label_values(&[holder_label.as_str()])
+			.start_timer();
 		let (scanned_candidates, evictable_shard_versions) =
 			scan_eviction_index(udb, eviction_config.batch_size, now_ms, cancel_token).await?;
 		let evictable_shard_versions =
-			clear_evictable_shard_versions(udb, evictable_shard_versions).await?;
+			clear_evictable_shard_versions(udb, evictable_shard_versions, holder_id).await?;
+		metrics::SQLITE_EVICTION_PASS_SHARDS_CLEARED_TOTAL
+			.with_label_values(&[holder_label.as_str()])
+			.inc_by(evictable_shard_versions.len() as u64);
 		Ok::<_, anyhow::Error>((scanned_candidates, evictable_shard_versions))
 	}
 	.await;
@@ -356,6 +363,7 @@ async fn plan_evictable_shard_versions(
 async fn clear_evictable_shard_versions(
 	udb: &universaldb::Database,
 	evictable_shard_versions: Vec<EvictableShardVersion>,
+	holder_id: NodeId,
 ) -> Result<Vec<EvictableShardVersion>> {
 	if evictable_shard_versions.is_empty() {
 		return Ok(evictable_shard_versions);
@@ -412,8 +420,9 @@ async fn clear_evictable_shard_versions(
 	match clear_outcome {
 		EvictionClearOutcome::Cleared => Ok(evictable_shard_versions),
 		EvictionClearOutcome::HotPassAdvanced => {
+			let holder_label = holder_id.to_string();
 			metrics::SQLITE_EVICTION_OCC_ABORT_TOTAL
-				.with_label_values(&["hot_pass_advanced"])
+				.with_label_values(&[holder_label.as_str(), "hot_pass_advanced"])
 				.inc();
 			Ok(Vec::new())
 		}
@@ -708,7 +717,12 @@ pub mod test_hooks {
 		udb: &universaldb::Database,
 		evictable_shard_versions: Vec<EvictableShardVersion>,
 	) -> Result<Vec<EvictableShardVersion>> {
-		clear_evictable_shard_versions(udb, evictable_shard_versions).await
+		clear_evictable_shard_versions(
+			udb,
+			evictable_shard_versions,
+			NodeId::from(uuid::Uuid::nil()),
+		)
+		.await
 	}
 }
 

@@ -5,7 +5,7 @@ use universaldb::utils::IsolationLevel::{Serializable, Snapshot};
 use universaldb::RangeOption;
 
 use super::{
-	ActorDb, branch, keys,
+	ActorDb, branch, keys, metrics,
 	constants::MAX_PINS_PER_NAMESPACE,
 	error::SqliteStorageError,
 	types::{
@@ -20,24 +20,42 @@ const VERSIONSTAMP_INFINITY: [u8; 16] = [0xff; 16];
 
 impl ActorDb {
 	pub async fn create_bookmark(&self, at_ms: i64) -> Result<BookmarkStr> {
-		create_bookmark(
+		let node_id = self.node_id.to_string();
+		let result = create_bookmark(
 			&self.udb,
 			self.sqlite_namespace_id(),
 			self.actor_id.clone(),
 			at_ms,
 		)
-		.await
+		.await;
+		metrics::SQLITE_BOOKMARK_CREATE_TOTAL
+			.with_label_values(&[
+				node_id.as_str(),
+				"ephemeral",
+				bookmark_create_outcome(result.as_ref().err()),
+			])
+			.inc();
+		result
 	}
 
 	pub async fn create_pinned_bookmark(&self, at_ms: i64) -> Result<BookmarkStr> {
-		create_pinned_bookmark(
+		let node_id = self.node_id.to_string();
+		let result = create_pinned_bookmark(
 			&self.udb,
 			&self.ups,
 			self.sqlite_namespace_id(),
 			self.actor_id.clone(),
 			at_ms,
 		)
-		.await
+		.await;
+		metrics::SQLITE_BOOKMARK_CREATE_TOTAL
+			.with_label_values(&[
+				node_id.as_str(),
+				"pinned",
+				bookmark_create_outcome(result.as_ref().err()),
+			])
+			.inc();
+		result
 	}
 
 	pub async fn bookmark_status(&self, bookmark: BookmarkStr) -> Result<Option<PinStatus>> {
@@ -62,13 +80,21 @@ impl ActorDb {
 	}
 
 	pub async fn resolve_bookmark(&self, bookmark: BookmarkStr) -> Result<ResolvedVersionstamp> {
-		resolve_bookmark(
+		let node_id = self.node_id.to_string();
+		let _timer = metrics::SQLITE_BOOKMARK_RESOLVE_DURATION
+			.with_label_values(&[node_id.as_str()])
+			.start_timer();
+		let result = resolve_bookmark(
 			&self.udb,
 			self.sqlite_namespace_id(),
 			self.actor_id.clone(),
 			bookmark,
 		)
-		.await
+		.await;
+		metrics::SQLITE_BOOKMARK_RESOLVE_TOTAL
+			.with_label_values(&[node_id.as_str(), bookmark_resolve_outcome(result.as_ref().err())])
+			.inc();
+		result
 	}
 
 	pub async fn restore_to_bookmark(&self, bookmark: BookmarkStr) -> Result<BookmarkStr> {
@@ -80,6 +106,23 @@ impl ActorDb {
 			bookmark,
 		)
 		.await
+	}
+}
+
+fn bookmark_create_outcome(err: Option<&anyhow::Error>) -> &'static str {
+	if err.is_none() {
+		"ok"
+	} else {
+		"err"
+	}
+}
+
+fn bookmark_resolve_outcome(err: Option<&anyhow::Error>) -> &'static str {
+	match err.and_then(|err| err.downcast_ref::<SqliteStorageError>()) {
+		None => "ok",
+		Some(SqliteStorageError::BookmarkExpired) => "expired",
+		Some(SqliteStorageError::BranchNotReachable) => "unreachable",
+		Some(_) => "err",
 	}
 }
 

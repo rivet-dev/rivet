@@ -35,8 +35,11 @@ pub(crate) async fn run(
 		planned_object_keys: object_keys.iter().cloned().collect(),
 		..plan.marker.clone()
 	};
+	let mut bytes_uploaded = 0u64;
+	let marker_bytes = encode_pending_marker(marker)?;
+	bytes_uploaded += marker_bytes.len() as u64;
 	cold_tier
-		.put_object(&plan.pending_marker_key, &encode_pending_marker(marker)?)
+		.put_object(&plan.pending_marker_key, &marker_bytes)
 		.await
 		.with_context(|| format!("update sqlite cold pending marker {}", plan.pending_marker_key))?;
 
@@ -49,6 +52,7 @@ pub(crate) async fn run(
 			.put_object(&object_key, &shard.bytes)
 			.await
 			.with_context(|| format!("put sqlite cold image layer {object_key}"))?;
+		bytes_uploaded += shard.bytes.len() as u64;
 		layers.push(LayerEntry {
 			kind: LayerKind::Image,
 			shard_id: Some(shard.shard_id),
@@ -68,6 +72,7 @@ pub(crate) async fn run(
 			.put_object(&object_key, &bytes)
 			.await
 			.with_context(|| format!("put sqlite cold delta layer {object_key}"))?;
+		bytes_uploaded += bytes.len() as u64;
 		layers.push(LayerEntry {
 			kind: LayerKind::Delta,
 			shard_id: None,
@@ -92,6 +97,7 @@ pub(crate) async fn run(
 			.put_object(&object_key, &bytes)
 			.await
 			.with_context(|| format!("put sqlite cold pin layer {object_key}"))?;
+		bytes_uploaded += bytes.len() as u64;
 		let txid = txid_for_versionstamp(plan, pin.versionstamp).unwrap_or(plan.materialized_txid);
 		layers.push(LayerEntry {
 			kind: LayerKind::Pin,
@@ -124,8 +130,10 @@ pub(crate) async fn run(
 	ensure_not_cancelled(&cancel_token)?;
 	if let Some(record) = plan.branch_record.clone() {
 		let object_key = branch_record_object_key(plan);
+		let record_bytes = encode_actor_branch_record(record)?;
+		bytes_uploaded += record_bytes.len() as u64;
 		cold_tier
-			.put_object(&object_key, &encode_actor_branch_record(record)?)
+			.put_object(&object_key, &record_bytes)
 			.await
 			.with_context(|| format!("put sqlite cold branch record {object_key}"))?;
 	}
@@ -140,6 +148,7 @@ pub(crate) async fn run(
 		bookmarks,
 	};
 	let chunk_bytes = encode_cold_manifest_chunk(chunk.clone())?;
+	bytes_uploaded += chunk_bytes.len() as u64;
 
 	ensure_not_cancelled(&cancel_token)?;
 	cold_tier
@@ -158,17 +167,18 @@ pub(crate) async fn run(
 	});
 	index.last_pass_at_ms = now_ms;
 	index.last_pass_versionstamp = pass_versionstamp;
+	let index_bytes = encode_cold_manifest_index(index)?;
+	bytes_uploaded += index_bytes.len() as u64;
 	cold_tier
-		.put_object(&index_key, &encode_cold_manifest_index(index)?)
+		.put_object(&index_key, &index_bytes)
 		.await
 		.with_context(|| format!("put sqlite cold manifest index {index_key}"))?;
 
 	let snapshot_key = pointer_snapshot_object_key(plan);
+	let snapshot_bytes = encode_pointer_snapshot(pointer_snapshot(plan, pass_versionstamp))?;
+	bytes_uploaded += snapshot_bytes.len() as u64;
 	cold_tier
-		.put_object(
-			&snapshot_key,
-			&encode_pointer_snapshot(pointer_snapshot(plan, pass_versionstamp))?,
-		)
+		.put_object(&snapshot_key, &snapshot_bytes)
 		.await
 		.with_context(|| format!("put sqlite cold pointer snapshot {snapshot_key}"))?;
 
@@ -178,6 +188,7 @@ pub(crate) async fn run(
 		layer_count: chunk.layers.len(),
 		bookmark_count: chunk.bookmarks.len(),
 		stale_markers_cleaned,
+		bytes_uploaded,
 		uploaded_pins,
 	})
 }
@@ -187,6 +198,7 @@ pub struct ColdPhaseBOutput {
 	pub layer_count: usize,
 	pub bookmark_count: usize,
 	pub stale_markers_cleaned: usize,
+	pub bytes_uploaded: u64,
 	pub uploaded_pins: Vec<ColdUploadedPin>,
 }
 

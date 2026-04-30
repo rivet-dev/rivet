@@ -14,6 +14,7 @@ use crate::{
 	cold_tier::{ColdTier, DisabledColdTier},
 	compactor::{
 		SqliteColdCompactPayload, SqliteColdCompactSubject, decode_cold_compact_payload,
+		metrics,
 		publish::Ups,
 	},
 	gc,
@@ -195,6 +196,14 @@ async fn handle_trigger(
 			}
 		})
 		.await?;
+	let holder_label = holder_id.to_string();
+	let take_outcome_label = match take_outcome {
+		lease::ColdTakeOutcome::Acquired => "acquired",
+		lease::ColdTakeOutcome::Skip => "skipped",
+	};
+	metrics::SQLITE_COLD_LEASE_TAKE_TOTAL
+		.with_label_values(&[holder_label.as_str(), take_outcome_label])
+		.inc();
 
 	if matches!(take_outcome, lease::ColdTakeOutcome::Skip) {
 		return Ok(());
@@ -292,15 +301,21 @@ async fn run_scaffold_pass(
 	}
 
 	let payload_for_failure = payload.clone();
-	let plan = phase_a::run(
-		udb,
-		Arc::clone(&cold_tier),
-		payload,
-		cold_config,
-		cancel_token.clone(),
-		now_ms()?,
-	)
-	.await?;
+	let holder_label = holder_id.to_string();
+	let plan = {
+		let _timer = metrics::SQLITE_COLD_PASS_DURATION
+			.with_label_values(&[holder_label.as_str(), "A"])
+			.start_timer();
+		phase_a::run(
+			udb,
+			Arc::clone(&cold_tier),
+			payload,
+			cold_config,
+			cancel_token.clone(),
+			now_ms()?,
+		)
+		.await?
+	};
 	tracing::debug!(
 		branch_id = ?plan.branch_id,
 		pass_uuid = %plan.pass_uuid,
@@ -311,14 +326,19 @@ async fn run_scaffold_pass(
 		vtx_rows = plan.vtx_rows.len(),
 		"sqlite cold compactor phase A planned pass"
 	);
-	let phase_b_output = match phase_b::run(
-		Arc::clone(&cold_tier),
-		&plan,
-		cancel_token.clone(),
-		now_ms()?,
-	)
-	.await
-	{
+	let phase_b_result = {
+		let _timer = metrics::SQLITE_COLD_PASS_DURATION
+			.with_label_values(&[holder_label.as_str(), "B"])
+			.start_timer();
+		phase_b::run(
+			Arc::clone(&cold_tier),
+			&plan,
+			cancel_token.clone(),
+			now_ms()?,
+		)
+		.await
+	};
+	let phase_b_output = match phase_b_result {
 		Ok(output) => output,
 		Err(err) => {
 			match phase_c::mark_payload_pins_failed(udb, &payload_for_failure, now_ms()?).await {
@@ -344,6 +364,25 @@ async fn run_scaffold_pass(
 			return Err(err);
 		}
 	};
+	metrics::SQLITE_COLD_PASS_LAYERS_UPLOADED_TOTAL
+		.with_label_values(&[holder_label.as_str(), "image"])
+		.inc_by(plan.shard_versions.len() as u64);
+	metrics::SQLITE_COLD_PASS_LAYERS_UPLOADED_TOTAL
+		.with_label_values(&[holder_label.as_str(), "pin"])
+		.inc_by(phase_b_output.uploaded_pins.len() as u64);
+	let delta_layers = phase_b_output
+		.layer_count
+		.saturating_sub(plan.shard_versions.len())
+		.saturating_sub(phase_b_output.uploaded_pins.len());
+	metrics::SQLITE_COLD_PASS_LAYERS_UPLOADED_TOTAL
+		.with_label_values(&[holder_label.as_str(), "delta"])
+		.inc_by(delta_layers as u64);
+	metrics::SQLITE_COLD_PASS_BYTES_UPLOADED_TOTAL
+		.with_label_values(&[holder_label.as_str()])
+		.inc_by(phase_b_output.bytes_uploaded);
+	metrics::SQLITE_PENDING_MARKER_ORPHAN_CLEANED_TOTAL
+		.with_label_values(&[holder_label.as_str()])
+		.inc_by(phase_b_output.stale_markers_cleaned as u64);
 	tracing::debug!(
 		branch_id = ?plan.branch_id,
 		pass_uuid = %plan.pass_uuid,
@@ -352,14 +391,19 @@ async fn run_scaffold_pass(
 		stale_markers_cleaned = phase_b_output.stale_markers_cleaned,
 		"sqlite cold compactor phase B uploaded pass"
 	);
-	let phase_c_output = phase_c::run(
-		udb,
-		&plan,
-		&phase_b_output,
-		cancel_token.clone(),
-		now_ms()?,
-	)
-	.await?;
+	let phase_c_output = {
+		let _timer = metrics::SQLITE_COLD_PASS_DURATION
+			.with_label_values(&[holder_label.as_str(), "C"])
+			.start_timer();
+		phase_c::run(
+			udb,
+			&plan,
+			&phase_b_output,
+			cancel_token.clone(),
+			now_ms()?,
+		)
+		.await?
+	};
 	tracing::debug!(
 		branch_id = ?plan.branch_id,
 		pass_uuid = %plan.pass_uuid,

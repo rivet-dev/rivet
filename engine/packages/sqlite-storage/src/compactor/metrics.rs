@@ -65,13 +65,14 @@ lazy_static::lazy_static! {
 	pub static ref SQLITE_EVICTION_OCC_ABORT_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
 		"sqlite_eviction_occ_abort_total",
 		"Total sqlite eviction compactor OCC aborts.",
-		&["reason"],
+		&["node_id", "reason"],
 		*REGISTRY
 	).unwrap();
 
-	pub static ref SQLITE_SHARD_VERSIONS_PER_SHARD: Histogram = register_histogram_with_registry!(
+	pub static ref SQLITE_SHARD_VERSIONS_PER_SHARD: HistogramVec = register_histogram_vec_with_registry!(
 		"sqlite_shard_versions_per_shard",
 		"Observed sqlite SHARD versions per shard before a hot compaction write.",
+		&["node_id"],
 		BUCKETS.to_vec(),
 		*REGISTRY
 	).unwrap();
@@ -87,6 +88,64 @@ lazy_static::lazy_static! {
 		"sqlite_storage_used_bytes",
 		"Sampled sqlite storage bytes by actor.",
 		&["node_id", "actor_id"],
+		*REGISTRY
+	).unwrap();
+
+	pub static ref SQLITE_COLD_PASS_DURATION: HistogramVec = register_histogram_vec_with_registry!(
+		"sqlite_cold_pass_duration_seconds",
+		"Duration of sqlite cold compactor phases.",
+		&["node_id", "phase"],
+		BUCKETS.to_vec(),
+		*REGISTRY
+	).unwrap();
+
+	pub static ref SQLITE_COLD_PASS_LAYERS_UPLOADED_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
+		"sqlite_cold_pass_layers_uploaded_total",
+		"Total sqlite cold compactor layer uploads.",
+		&["node_id", "kind"],
+		*REGISTRY
+	).unwrap();
+
+	pub static ref SQLITE_COLD_PASS_BYTES_UPLOADED_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
+		"sqlite_cold_pass_bytes_uploaded_total",
+		"Total sqlite cold compactor bytes uploaded.",
+		&["node_id"],
+		*REGISTRY
+	).unwrap();
+
+	pub static ref SQLITE_COLD_LEASE_TAKE_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
+		"sqlite_cold_lease_take_total",
+		"Total sqlite cold compactor lease take attempts.",
+		&["node_id", "outcome"],
+		*REGISTRY
+	).unwrap();
+
+	pub static ref SQLITE_EVICTION_PASS_DURATION: HistogramVec = register_histogram_vec_with_registry!(
+		"sqlite_eviction_pass_duration_seconds",
+		"Duration of sqlite eviction compactor passes.",
+		&["node_id"],
+		BUCKETS.to_vec(),
+		*REGISTRY
+	).unwrap();
+
+	pub static ref SQLITE_EVICTION_PASS_SHARDS_CLEARED_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
+		"sqlite_eviction_pass_shards_cleared_total",
+		"Total sqlite SHARD versions cleared by eviction passes.",
+		&["node_id"],
+		*REGISTRY
+	).unwrap();
+
+	pub static ref SQLITE_EVICTION_PASS_DELTAS_CLEARED_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
+		"sqlite_eviction_pass_deltas_cleared_total",
+		"Total sqlite DELTA chunks cleared by eviction passes.",
+		&["node_id"],
+		*REGISTRY
+	).unwrap();
+
+	pub static ref SQLITE_PENDING_MARKER_ORPHAN_CLEANED_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
+		"sqlite_pending_marker_orphan_cleaned_total",
+		"Total stale sqlite cold pending markers cleaned.",
+		&["node_id"],
 		*REGISTRY
 	).unwrap();
 }

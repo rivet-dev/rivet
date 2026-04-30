@@ -1,4 +1,5 @@
 ## Codebase Patterns
+- Prometheus metrics in `sqlite-storage` live with their owner module (`pump::metrics` or `compactor::metrics`) and every metric should carry a `node_id` label.
 - `sqlite-storage` pump payload structs use `serde::{Serialize, Deserialize}` as the local serde_bare/vbare-compatible derive pattern; add `OwnedVersionedData` wrappers when adding concrete encode/decode helpers.
 - Use `BookmarkStr` instead of raw `String` for bookmark-bearing pump records so the 33-character ASCII wire format is enforced at construction and decode.
 - Until root branch allocation is wired, legacy `DBHead` constructors use `ActorBranchId::nil()` and `post_apply_checksum: 0` as a compatibility bridge.
@@ -52,6 +53,29 @@
 
 # Ralph Progress Log
 Started: Wed Apr 29 03:29:23 PM PDT 2026
+---
+## 2026-04-29 22:49 PDT - US-055
+- Added the PITR/forking Prometheus metric surface across `pump::metrics` and `compactor::metrics`, with `node_id` labels and documented op/outcome/status labels.
+- Instrumented bookmark create/resolve, cold compactor phase/lease/upload counters, eviction pass counters, eviction OCC aborts, and SHARD-version histograms.
+- Added scrape-based metric coverage and updated the sqlite-storage AGENTS/CLAUDE metrics convention.
+- Verified with `cargo test -p sqlite-storage --test compactor_metrics`, `cargo test -p sqlite-storage --test compactor_eviction`, `cargo check -p sqlite-storage`, and `cargo test -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/CLAUDE.md`
+  - `engine/packages/sqlite-storage/src/compactor/cold/phase_b.rs`
+  - `engine/packages/sqlite-storage/src/compactor/cold/worker.rs`
+  - `engine/packages/sqlite-storage/src/compactor/compact.rs`
+  - `engine/packages/sqlite-storage/src/compactor/eviction/mod.rs`
+  - `engine/packages/sqlite-storage/src/compactor/metrics.rs`
+  - `engine/packages/sqlite-storage/src/pump/bookmark.rs`
+  - `engine/packages/sqlite-storage/src/pump/metrics.rs`
+  - `engine/packages/sqlite-storage/tests/compactor_eviction.rs`
+  - `engine/packages/sqlite-storage/tests/compactor_metrics.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Keep sqlite-storage Prometheus definitions in the owning module instead of creating a central PITR metrics file.
+  - Metric vectors should include `node_id` even when the domain-specific labels already identify the operation or outcome.
+  - `compactor_metrics` can use the global `REGISTRY` + `TextEncoder` scrape path to verify newly registered metrics emit real Prometheus text.
 ---
 ## 2026-04-29 22:24 PDT - US-051
 - Implemented burst-mode hot quota cap calculation from branch FDB lag between `/META/head.head_txid` and `/META/manifest/cold_drained_txid`.

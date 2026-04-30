@@ -136,6 +136,10 @@ We explicitly do **not** import:
 - Use a nil namespace `ActorDb` to exercise branch-scoped hot compaction through public `compact_default_batch`.
 - Latency tests that depend on `UDB_SIMULATED_LATENCY_MS` must live in a dedicated integration test binary because UDB caches the env var once per process via `OnceLock`.
 
+## Metrics
+
+- Prometheus metrics live with their owner module (`pump::metrics` or `compactor::metrics`) and must include a `node_id` label.
+
 ## Specs
 
 - `.agent/specs/sqlite-storage-stateless.md` — base architecture (hot tier only, two compactors, pegboard-envoy stateless).
