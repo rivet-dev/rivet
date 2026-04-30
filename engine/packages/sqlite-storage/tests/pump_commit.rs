@@ -8,15 +8,17 @@ use sqlite_storage::compactor::{
 };
 use sqlite_storage::{
 	keys::{
-		PAGE_SIZE, commit_key, delta_chunk_key, meta_compact_key, meta_head_key, pidx_delta_key,
-		shard_key, vtx_key,
+		PAGE_SIZE, actor_pointer_cur_key, branch_commit_key, branch_delta_chunk_key,
+		branch_meta_compact_key, branch_meta_head_key, branch_pidx_key, branch_shard_key,
+		branch_vtx_key, branches_list_key,
 	},
 	ltx::{LtxHeader, encode_ltx_v3},
 	pump::ActorDb,
 	quota::{self, SQLITE_MAX_STORAGE_BYTES},
 	types::{
-		ActorBranchId, DBHead, DirtyPage, FetchedPage, MetaCompact, decode_commit_row,
-		decode_db_head, encode_db_head, encode_meta_compact,
+		ActorBranchId, DBHead, DirtyPage, FetchedPage, MetaCompact, NamespaceBranchId,
+		decode_actor_branch_record, decode_actor_pointer, decode_commit_row, decode_db_head,
+		encode_db_head, encode_meta_compact,
 	},
 };
 use tempfile::Builder;
@@ -38,12 +40,12 @@ fn test_ups() -> PubSub {
 	)))
 }
 
-fn head(head_txid: u64, db_size_pages: u32) -> DBHead {
+fn head_with_branch(branch_id: ActorBranchId, head_txid: u64, db_size_pages: u32) -> DBHead {
 	DBHead {
 		head_txid,
 		db_size_pages,
 		post_apply_checksum: 0,
-		branch_id: ActorBranchId::nil(),
+		branch_id,
 		#[cfg(debug_assertions)]
 		generation: 0,
 	}
@@ -100,10 +102,22 @@ async fn read_value(db: &universaldb::Database, key: Vec<u8>) -> Result<Option<V
 }
 
 async fn read_head(db: &universaldb::Database) -> Result<DBHead> {
-	let bytes = read_value(db, meta_head_key(TEST_ACTOR))
+	let branch_id = read_branch_id(db).await?;
+	let bytes = read_value(db, branch_meta_head_key(branch_id))
 		.await?
 		.expect("head should exist");
 	decode_db_head(&bytes)
+}
+
+async fn read_branch_id(db: &universaldb::Database) -> Result<ActorBranchId> {
+	let bytes = read_value(
+		db,
+		actor_pointer_cur_key(NamespaceBranchId::nil(), TEST_ACTOR),
+	)
+	.await?
+	.expect("actor pointer should exist");
+
+	Ok(decode_actor_pointer(&bytes)?.current_branch)
 }
 
 async fn read_quota(db: &universaldb::Database) -> Result<i64> {
@@ -117,14 +131,22 @@ async fn commit_lazily_initializes_meta_on_first_write() -> Result<()> {
 	let actor_db = ActorDb::new(db.clone(), test_ups(), TEST_ACTOR.to_string(), NodeId::new());
 
 	actor_db.commit(vec![page(1, 0x11)], 2, 1_000).await?;
+	let branch_id = read_branch_id(&db).await?;
 
-	assert_eq!(read_head(&db).await?, head(1, 2));
+	assert_eq!(read_head(&db).await?, head_with_branch(branch_id, 1, 2));
+	let branch_record_bytes = read_value(&db, branches_list_key(branch_id))
+		.await?
+		.expect("branch record should exist");
+	let branch_record = decode_actor_branch_record(&branch_record_bytes)?;
+	assert_eq!(branch_record.branch_id, branch_id);
+	assert_eq!(branch_record.namespace_branch, NamespaceBranchId::nil());
+	assert_eq!(branch_record.parent, None);
 	assert_eq!(
-		read_value(&db, pidx_delta_key(TEST_ACTOR, 1)).await?,
+		read_value(&db, branch_pidx_key(branch_id, 1)).await?,
 		Some(1_u64.to_be_bytes().to_vec())
 	);
 	assert!(
-		read_value(&db, delta_chunk_key(TEST_ACTOR, 1, 0))
+		read_value(&db, branch_delta_chunk_key(branch_id, 1, 0))
 			.await?
 			.is_some()
 	);
@@ -143,6 +165,7 @@ async fn commit_advances_head_and_updates_warm_cache() -> Result<()> {
 	let actor_db = ActorDb::new(db.clone(), test_ups(), TEST_ACTOR.to_string(), NodeId::new());
 
 	actor_db.commit(vec![page(1, 0x11)], 2, 1_000).await?;
+	let branch_id = read_branch_id(&db).await?;
 	assert_eq!(
 		actor_db.get_pages(vec![1]).await?,
 		vec![fetched_page(1, 0x11)]
@@ -150,18 +173,18 @@ async fn commit_advances_head_and_updates_warm_cache() -> Result<()> {
 
 	actor_db.commit(vec![page(2, 0x22)], 3, 2_000).await?;
 
-	assert_eq!(read_head(&db).await?, head(2, 3));
+	assert_eq!(read_head(&db).await?, head_with_branch(branch_id, 2, 3));
 	assert_eq!(
-		read_value(&db, pidx_delta_key(TEST_ACTOR, 1)).await?,
+		read_value(&db, branch_pidx_key(branch_id, 1)).await?,
 		Some(1_u64.to_be_bytes().to_vec())
 	);
 	assert_eq!(
-		read_value(&db, pidx_delta_key(TEST_ACTOR, 2)).await?,
+		read_value(&db, branch_pidx_key(branch_id, 2)).await?,
 		Some(2_u64.to_be_bytes().to_vec())
 	);
 
 	db.run(|tx| async move {
-		tx.informal().clear(&pidx_delta_key(TEST_ACTOR, 2));
+		tx.informal().clear(&branch_pidx_key(branch_id, 2));
 		Ok(())
 	})
 	.await?;
@@ -180,8 +203,9 @@ async fn commit_writes_commit_row_and_vtx_index() -> Result<()> {
 
 	actor_db.commit(vec![page(1, 0x11)], 2, 1_000).await?;
 	actor_db.commit(vec![page(2, 0x22)], 3, 2_000).await?;
+	let branch_id = read_branch_id(&db).await?;
 
-	let first_row_bytes = read_value(&db, commit_key(TEST_ACTOR, 1))
+	let first_row_bytes = read_value(&db, branch_commit_key(branch_id, 1))
 		.await?
 		.expect("first commit row should exist");
 	let first_row = decode_commit_row(&first_row_bytes)?;
@@ -190,11 +214,11 @@ async fn commit_writes_commit_row_and_vtx_index() -> Result<()> {
 	assert_eq!(first_row.post_apply_checksum, 0);
 	assert_ne!(&first_row.versionstamp[..10], &[0xff; 10]);
 	assert_eq!(
-		read_value(&db, vtx_key(TEST_ACTOR, first_row.versionstamp)).await?,
+		read_value(&db, branch_vtx_key(branch_id, first_row.versionstamp)).await?,
 		Some(1_u64.to_be_bytes().to_vec())
 	);
 
-	let second_row_bytes = read_value(&db, commit_key(TEST_ACTOR, 2))
+	let second_row_bytes = read_value(&db, branch_commit_key(branch_id, 2))
 		.await?
 		.expect("second commit row should exist");
 	let second_row = decode_commit_row(&second_row_bytes)?;
@@ -202,7 +226,7 @@ async fn commit_writes_commit_row_and_vtx_index() -> Result<()> {
 	assert_eq!(second_row.db_size_pages, 3);
 	assert_ne!(second_row.versionstamp, first_row.versionstamp);
 	assert_eq!(
-		read_value(&db, vtx_key(TEST_ACTOR, second_row.versionstamp)).await?,
+		read_value(&db, branch_vtx_key(branch_id, second_row.versionstamp)).await?,
 		Some(2_u64.to_be_bytes().to_vec())
 	);
 
@@ -212,16 +236,11 @@ async fn commit_writes_commit_row_and_vtx_index() -> Result<()> {
 #[tokio::test]
 async fn commit_rejects_quota_cap_before_writes() -> Result<()> {
 	let db = Arc::new(test_db().await?);
-	seed(
-		&db,
-		vec![(
-			meta_head_key(TEST_ACTOR),
-			encode_db_head(head(4, 1)).expect("head should encode"),
-		)],
-	)
-	.await?;
+	let actor_db = ActorDb::new(db.clone(), test_ups(), TEST_ACTOR.to_string(), NodeId::new());
+	actor_db.commit(vec![page(1, 0x11)], 1, 1_000).await?;
+	let branch_id = read_branch_id(&db).await?;
 	db.run(|tx| async move {
-		quota::atomic_add(&tx, TEST_ACTOR, SQLITE_MAX_STORAGE_BYTES - 10);
+		quota::atomic_add_branch(&tx, branch_id, SQLITE_MAX_STORAGE_BYTES);
 		Ok(())
 	})
 	.await?;
@@ -239,9 +258,9 @@ async fn commit_rejects_quota_cap_before_writes() -> Result<()> {
 				sqlite_storage::error::SqliteStorageError::SqliteStorageQuotaExceeded { .. }
 			))
 	);
-	assert_eq!(read_head(&db).await?, head(4, 1));
+	assert_eq!(read_head(&db).await?, head_with_branch(branch_id, 1, 1));
 	assert!(
-		read_value(&db, delta_chunk_key(TEST_ACTOR, 5, 0))
+		read_value(&db, branch_delta_chunk_key(branch_id, 2, 0))
 			.await?
 			.is_none()
 	);
@@ -252,23 +271,29 @@ async fn commit_rejects_quota_cap_before_writes() -> Result<()> {
 #[tokio::test]
 async fn shrink_commit_deletes_above_eof_pidx_and_shards() -> Result<()> {
 	let db = Arc::new(test_db().await?);
+	let actor_db = ActorDb::new(db.clone(), test_ups(), TEST_ACTOR.to_string(), NodeId::new());
+	actor_db.commit(vec![page(1, 0x01)], 130, 1_000).await?;
+	let branch_id = read_branch_id(&db).await?;
 	seed(
 		&db,
 		vec![
-			(meta_head_key(TEST_ACTOR), encode_db_head(head(7, 130))?),
 			(
-				delta_chunk_key(TEST_ACTOR, 7, 0),
+				branch_meta_head_key(branch_id),
+				encode_db_head(head_with_branch(branch_id, 7, 130))?,
+			),
+			(
+				branch_delta_chunk_key(branch_id, 7, 0),
 				encoded_blob(7, &[(64, 0x64), (129, 0x81)])?,
 			),
-			(pidx_delta_key(TEST_ACTOR, 64), 7_u64.to_be_bytes().to_vec()),
-			(pidx_delta_key(TEST_ACTOR, 129), 7_u64.to_be_bytes().to_vec()),
-			(shard_key(TEST_ACTOR, 1), encoded_blob(7, &[(64, 0x64)])?),
-			(shard_key(TEST_ACTOR, 2), encoded_blob(7, &[(129, 0x81)])?),
+			(branch_pidx_key(branch_id, 64), 7_u64.to_be_bytes().to_vec()),
+			(branch_pidx_key(branch_id, 129), 7_u64.to_be_bytes().to_vec()),
+			(branch_shard_key(branch_id, 1, 7), encoded_blob(7, &[(64, 0x64)])?),
+			(branch_shard_key(branch_id, 2, 7), encoded_blob(7, &[(129, 0x81)])?),
 		],
 	)
 	.await?;
 	db.run(|tx| async move {
-		quota::atomic_add(&tx, TEST_ACTOR, 50_000);
+		quota::atomic_add_branch(&tx, branch_id, 50_000);
 		Ok(())
 	})
 	.await?;
@@ -276,17 +301,17 @@ async fn shrink_commit_deletes_above_eof_pidx_and_shards() -> Result<()> {
 	let actor_db = ActorDb::new(db.clone(), test_ups(), TEST_ACTOR.to_string(), NodeId::new());
 	actor_db.commit(vec![page(1, 0x11)], 63, 4_000).await?;
 
-	assert_eq!(read_head(&db).await?, head(8, 63));
-	assert!(read_value(&db, pidx_delta_key(TEST_ACTOR, 64)).await?.is_none());
+	assert_eq!(read_head(&db).await?, head_with_branch(branch_id, 8, 63));
+	assert!(read_value(&db, branch_pidx_key(branch_id, 64)).await?.is_none());
 	assert!(
-		read_value(&db, pidx_delta_key(TEST_ACTOR, 129))
+		read_value(&db, branch_pidx_key(branch_id, 129))
 			.await?
 			.is_none()
 	);
-	assert!(read_value(&db, shard_key(TEST_ACTOR, 1)).await?.is_none());
-	assert!(read_value(&db, shard_key(TEST_ACTOR, 2)).await?.is_none());
+	assert!(read_value(&db, branch_shard_key(branch_id, 1, 7)).await?.is_none());
+	assert!(read_value(&db, branch_shard_key(branch_id, 2, 7)).await?.is_none());
 	assert_eq!(
-		read_value(&db, pidx_delta_key(TEST_ACTOR, 1)).await?,
+		read_value(&db, branch_pidx_key(branch_id, 1)).await?,
 		Some(8_u64.to_be_bytes().to_vec())
 	);
 
@@ -298,12 +323,18 @@ async fn commit_publishes_compaction_trigger_with_throttle() -> Result<()> {
 	let db = Arc::new(test_db().await?);
 	let ups = test_ups();
 	let mut sub = ups.queue_subscribe(SqliteCompactSubject, "compactor").await?;
+	let actor_db = ActorDb::new(db.clone(), ups.clone(), TEST_ACTOR.to_string(), NodeId::new());
+	actor_db.commit(vec![page(1, 0x01)], 1, 1_000).await?;
+	let branch_id = read_branch_id(&db).await?;
 	seed(
 		&db,
 		vec![
-			(meta_head_key(TEST_ACTOR), encode_db_head(head(31, 1))?),
 			(
-				meta_compact_key(TEST_ACTOR),
+				branch_meta_head_key(branch_id),
+				encode_db_head(head_with_branch(branch_id, 31, 1))?,
+			),
+			(
+				branch_meta_compact_key(branch_id),
 				encode_meta_compact(MetaCompact {
 					materialized_txid: 0,
 				})?,
@@ -312,7 +343,7 @@ async fn commit_publishes_compaction_trigger_with_throttle() -> Result<()> {
 	)
 	.await?;
 	db.run(|tx| async move {
-		quota::atomic_add(&tx, TEST_ACTOR, 1_000);
+		quota::atomic_add_branch(&tx, branch_id, 1_000);
 		Ok(())
 	})
 	.await?;

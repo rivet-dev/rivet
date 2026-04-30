@@ -33,8 +33,9 @@ These come from `r2-prior-art/.agent/research/sqlite/requirements.md` and supers
 
 ## Storage layout
 
-- **All PITR actor state is per-branch.** New builders use top-level `[0x02][0x30]/{branch_id}/<suffix>` keys; legacy actor-scoped helpers remain only until the hot path migrates.
-- **Legacy actor-scoped SHARD migration is versioned.** New writes use `/SHARD/{shard_id}/{as_of_txid}` while readers keep fallback to old `/SHARD/{shard_id}` blobs until branch-scoped storage is wired.
+- **All PITR actor state is per-branch.** ActorDb resolves APTR, caches the branch id as a perf cache, and writes hot-path data under top-level `[0x02][0x30]/{branch_id}/<suffix>` keys.
+- **Root actor branches temporarily use the nil namespace branch.** Replace `NamespaceBranchId::nil()` bridge points when namespace branch allocation is wired.
+- **Legacy actor-scoped storage is compatibility fallback only.** New ActorDb writes use branch-scoped META, COMMITS, VTX, PIDX, DELTA, and SHARD keys.
 - **PITR tunable constants live in `pump/constants.rs`.** Import shared limits and retention windows from there instead of duplicating literals.
 - **Pump persisted payload structs use `serde::{Serialize, Deserialize}` as the serde_bare/vbare-compatible derive pattern.** Add `OwnedVersionedData` wrappers when introducing encode/decode helpers.
 - **META splits into single-writer sub-keys:** `/META/head` (commit-owned), `/META/compact` (hot compactor-owned), `/META/cold_compact` (cold compactor-owned), `/META/quota` (atomic-add counter, raw i64 LE — not vbare), `/META/manifest` (branch metadata), `/META/compactor_lease`, `/META/cold_lease`. Disjoint owners; commit/compaction never conflict on a META sub-key.

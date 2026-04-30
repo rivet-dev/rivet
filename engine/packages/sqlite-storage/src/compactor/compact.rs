@@ -15,14 +15,15 @@ use universaldb::{
 };
 
 use crate::pump::{
+	branch,
 	keys::{self, SHARD_SIZE},
 	ltx::decode_ltx_v3,
 	quota,
-	types::{MetaCompact, decode_db_head, decode_meta_compact, encode_meta_compact},
+	types::{ActorBranchId, MetaCompact, decode_db_head, decode_meta_compact, encode_meta_compact},
 	udb,
 };
 
-use super::{fold_shard, metrics};
+use super::{fold_branch_shard, fold_shard, metrics};
 
 const PIDX_TXID_BYTES: usize = std::mem::size_of::<u64>();
 
@@ -110,12 +111,13 @@ async fn plan_batch(
 		let actor_id = actor_id.clone();
 
 		async move {
-			let Some(head_bytes) = tx_get_value(&tx, &keys::meta_head_key(&actor_id), Snapshot).await?
+			let scope = resolve_storage_scope(&tx, &actor_id, Snapshot).await?;
+			let Some(head_bytes) = tx_get_value(&tx, &scope.meta_head_key(&actor_id), Snapshot).await?
 			else {
 				return Ok(CompactionPlan::default());
 			};
 			let head = decode_db_head(&head_bytes).context("decode sqlite db head for compaction")?;
-			let compact = tx_get_value(&tx, &keys::meta_compact_key(&actor_id), Snapshot)
+			let compact = tx_get_value(&tx, &scope.meta_compact_key(&actor_id), Snapshot)
 				.await?
 				.as_deref()
 				.map(decode_meta_compact)
@@ -128,8 +130,8 @@ async fn plan_batch(
 				return Ok(CompactionPlan::default());
 			}
 
-			let pidx_rows = load_pidx_rows(&tx, &actor_id).await?;
-			let delta_entries = load_delta_entries(&tx, &actor_id).await?;
+			let pidx_rows = load_pidx_rows(&tx, &scope, &actor_id).await?;
+			let delta_entries = load_delta_entries(&tx, &scope, &actor_id).await?;
 			let selected_delta_txids = delta_entries
 				.keys()
 				.copied()
@@ -184,6 +186,7 @@ async fn plan_batch(
 			let materialized_txid = selected_delta_txids.iter().copied().max().unwrap_or(0);
 
 			Ok(CompactionPlan {
+				scope,
 				selected_delta_txids,
 				selected_delta_entries,
 				pages_by_shard,
@@ -204,7 +207,8 @@ async fn write_batch(
 		let plan = plan.clone();
 
 		async move {
-			let Some(head_bytes) = tx_get_value(&tx, &keys::meta_head_key(&actor_id), Serializable).await?
+			let Some(head_bytes) =
+				tx_get_value(&tx, &plan.scope.meta_head_key(&actor_id), Serializable).await?
 			else {
 				return Ok(WriteResult::default());
 			};
@@ -230,12 +234,19 @@ async fn write_batch(
 					continue;
 				}
 
-				let bytes_added =
-					fold_shard(&tx, &actor_id, *shard_id, plan.materialized_txid, page_updates)
-						.await?;
+				let bytes_added = match plan.scope {
+					StorageScope::Branch(branch_id) => {
+						fold_branch_shard(&tx, branch_id, *shard_id, plan.materialized_txid, page_updates)
+							.await?
+					}
+					StorageScope::Legacy => {
+						fold_shard(&tx, &actor_id, *shard_id, plan.materialized_txid, page_updates)
+							.await?
+					}
+				};
 				bytes_freed -= bytes_added;
 				for page in fold_pages.iter().filter(|page| page.pgno <= head.db_size_pages) {
-					let key = keys::pidx_delta_key(&actor_id, page.pgno);
+					let key = plan.scope.pidx_key(&actor_id, page.pgno);
 					let expected_value = page.expected_txid.to_be_bytes();
 					udb::compare_and_clear(&tx, &key, &expected_value);
 					bytes_freed += tracked_entry_size(&key, &expected_value)?;
@@ -248,7 +259,7 @@ async fn write_batch(
 			}
 
 			for txid in &plan.selected_delta_txids {
-				let prefix = keys::delta_chunk_prefix(&actor_id, *txid);
+				let prefix = plan.scope.delta_chunk_prefix(&actor_id, *txid);
 				let (begin, end) = prefix_range(&prefix);
 				tx.informal().clear_range(&begin, &end);
 			}
@@ -258,13 +269,24 @@ async fn write_batch(
 			})
 			.context("encode compact meta")?;
 			tx.informal()
-				.set(&keys::meta_compact_key(&actor_id), &compact);
+				.set(&plan.scope.meta_compact_key(&actor_id), &compact);
+			let manifest_branch_id = match plan.scope {
+				StorageScope::Branch(branch_id) => branch_id,
+				StorageScope::Legacy => head.branch_id,
+			};
 			tx.informal().set(
-				&keys::branch_manifest_last_hot_pass_txid_key(head.branch_id),
+				&keys::branch_manifest_last_hot_pass_txid_key(manifest_branch_id),
 				&plan.materialized_txid.to_be_bytes(),
 			);
 			if bytes_freed != 0 {
-				quota::atomic_add(&tx, &actor_id, -bytes_freed);
+				match plan.scope {
+					StorageScope::Branch(branch_id) => {
+						quota::atomic_add_branch(&tx, branch_id, -bytes_freed);
+					}
+					StorageScope::Legacy => {
+						quota::atomic_add(&tx, &actor_id, -bytes_freed);
+					}
+				}
 			}
 
 			Ok(WriteResult {
@@ -301,9 +323,17 @@ pub(crate) async fn validate_quota_with_node_id(
 
 				async move {
 					let manual_total =
-						scan_tracked_prefix_bytes(&tx, &keys::pidx_delta_prefix(&actor_id)).await?
-							+ scan_tracked_prefix_bytes(&tx, &keys::delta_prefix(&actor_id)).await?
-							+ scan_tracked_prefix_bytes(&tx, &keys::shard_prefix(&actor_id)).await?;
+						if let Some(branch_id) =
+							branch::resolve_actor_branch(&tx, &actor_id, Snapshot).await?
+						{
+							scan_tracked_prefix_bytes(&tx, &keys::branch_pidx_prefix(branch_id)).await?
+								+ scan_tracked_prefix_bytes(&tx, &keys::branch_delta_prefix(branch_id)).await?
+								+ scan_tracked_prefix_bytes(&tx, &keys::branch_shard_prefix(branch_id)).await?
+						} else {
+							scan_tracked_prefix_bytes(&tx, &keys::pidx_delta_prefix(&actor_id)).await?
+								+ scan_tracked_prefix_bytes(&tx, &keys::delta_prefix(&actor_id)).await?
+								+ scan_tracked_prefix_bytes(&tx, &keys::shard_prefix(&actor_id)).await?
+						};
 					let counter_value = quota::read(&tx, &actor_id).await?;
 
 					Ok((manual_total, counter_value))
@@ -364,14 +394,15 @@ async fn count_compare_and_clear_noops(
 
 async fn load_pidx_rows(
 	tx: &universaldb::Transaction,
+	scope: &StorageScope,
 	actor_id: &str,
 ) -> Result<Vec<PidxRow>> {
-	tx_scan_prefix_values(tx, &keys::pidx_delta_prefix(actor_id))
+	tx_scan_prefix_values(tx, &scope.pidx_prefix(actor_id))
 		.await?
 		.into_iter()
 		.map(|(key, value)| {
 			Ok(PidxRow {
-				pgno: decode_pidx_pgno(actor_id, &key)?,
+				pgno: scope.decode_pidx_pgno(actor_id, &key)?,
 				txid: decode_pidx_txid(&value)?,
 			})
 		})
@@ -380,12 +411,13 @@ async fn load_pidx_rows(
 
 async fn load_delta_entries(
 	tx: &universaldb::Transaction,
+	scope: &StorageScope,
 	actor_id: &str,
 ) -> Result<BTreeMap<u64, DeltaEntry>> {
 	let mut chunks_by_txid = BTreeMap::<u64, Vec<DeltaChunk>>::new();
-	for (key, value) in tx_scan_prefix_values(tx, &keys::delta_prefix(actor_id)).await? {
-		let txid = keys::decode_delta_chunk_txid(actor_id, &key)?;
-		let chunk_idx = keys::decode_delta_chunk_idx(actor_id, txid, &key)?;
+	for (key, value) in tx_scan_prefix_values(tx, &scope.delta_prefix(actor_id)).await? {
+		let txid = scope.decode_delta_chunk_txid(actor_id, &key)?;
+		let chunk_idx = scope.decode_delta_chunk_idx(actor_id, txid, &key)?;
 		chunks_by_txid.entry(txid).or_default().push(DeltaChunk {
 			key,
 			chunk_idx,
@@ -467,6 +499,18 @@ fn decode_pidx_pgno(actor_id: &str, key: &[u8]) -> Result<u32> {
 	Ok(u32::from_be_bytes(bytes))
 }
 
+fn decode_branch_pidx_pgno(branch_id: ActorBranchId, key: &[u8]) -> Result<u32> {
+	let prefix = keys::branch_pidx_prefix(branch_id);
+	let suffix = key
+		.strip_prefix(prefix.as_slice())
+		.context("branch pidx key did not start with expected prefix")?;
+	let bytes: [u8; std::mem::size_of::<u32>()] = suffix
+		.try_into()
+		.map_err(|_| anyhow::anyhow!("branch pidx key suffix had invalid length"))?;
+
+	Ok(u32::from_be_bytes(bytes))
+}
+
 fn decode_pidx_txid(value: &[u8]) -> Result<u64> {
 	let bytes: [u8; PIDX_TXID_BYTES] = value
 		.try_into()
@@ -493,10 +537,96 @@ fn ensure_not_cancelled(cancel_token: &CancellationToken) -> Result<()> {
 
 #[derive(Debug, Clone, Default)]
 struct CompactionPlan {
+	scope: StorageScope,
 	selected_delta_txids: Vec<u64>,
 	selected_delta_entries: BTreeMap<u64, DeltaEntry>,
 	pages_by_shard: BTreeMap<u32, Vec<FoldPage>>,
 	materialized_txid: u64,
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+enum StorageScope {
+	Branch(ActorBranchId),
+	#[default]
+	Legacy,
+}
+
+impl StorageScope {
+	fn meta_head_key(self, actor_id: &str) -> Vec<u8> {
+		match self {
+			Self::Branch(branch_id) => keys::branch_meta_head_key(branch_id),
+			Self::Legacy => keys::meta_head_key(actor_id),
+		}
+	}
+
+	fn meta_compact_key(self, actor_id: &str) -> Vec<u8> {
+		match self {
+			Self::Branch(branch_id) => keys::branch_meta_compact_key(branch_id),
+			Self::Legacy => keys::meta_compact_key(actor_id),
+		}
+	}
+
+	fn pidx_key(self, actor_id: &str, pgno: u32) -> Vec<u8> {
+		match self {
+			Self::Branch(branch_id) => keys::branch_pidx_key(branch_id, pgno),
+			Self::Legacy => keys::pidx_delta_key(actor_id, pgno),
+		}
+	}
+
+	fn pidx_prefix(self, actor_id: &str) -> Vec<u8> {
+		match self {
+			Self::Branch(branch_id) => keys::branch_pidx_prefix(branch_id),
+			Self::Legacy => keys::pidx_delta_prefix(actor_id),
+		}
+	}
+
+	fn delta_prefix(self, actor_id: &str) -> Vec<u8> {
+		match self {
+			Self::Branch(branch_id) => keys::branch_delta_prefix(branch_id),
+			Self::Legacy => keys::delta_prefix(actor_id),
+		}
+	}
+
+	fn delta_chunk_prefix(self, actor_id: &str, txid: u64) -> Vec<u8> {
+		match self {
+			Self::Branch(branch_id) => keys::branch_delta_chunk_prefix(branch_id, txid),
+			Self::Legacy => keys::delta_chunk_prefix(actor_id, txid),
+		}
+	}
+
+	fn decode_pidx_pgno(self, actor_id: &str, key: &[u8]) -> Result<u32> {
+		match self {
+			Self::Branch(branch_id) => decode_branch_pidx_pgno(branch_id, key),
+			Self::Legacy => decode_pidx_pgno(actor_id, key),
+		}
+	}
+
+	fn decode_delta_chunk_txid(self, actor_id: &str, key: &[u8]) -> Result<u64> {
+		match self {
+			Self::Branch(branch_id) => keys::decode_branch_delta_chunk_txid(branch_id, key),
+			Self::Legacy => keys::decode_delta_chunk_txid(actor_id, key),
+		}
+	}
+
+	fn decode_delta_chunk_idx(self, actor_id: &str, txid: u64, key: &[u8]) -> Result<u32> {
+		match self {
+			Self::Branch(branch_id) => keys::decode_branch_delta_chunk_idx(branch_id, txid, key),
+			Self::Legacy => keys::decode_delta_chunk_idx(actor_id, txid, key),
+		}
+	}
+}
+
+async fn resolve_storage_scope(
+	tx: &universaldb::Transaction,
+	actor_id: &str,
+	isolation_level: universaldb::utils::IsolationLevel,
+) -> Result<StorageScope> {
+	Ok(
+		match branch::resolve_actor_branch(tx, actor_id, isolation_level).await? {
+			Some(branch_id) => StorageScope::Branch(branch_id),
+			None => StorageScope::Legacy,
+		},
+	)
 }
 
 #[derive(Debug, Clone)]

@@ -13,13 +13,15 @@ use universaldb::{
 
 use crate::pump::{
 	ActorDb,
+	branch,
 	keys::{self, SHARD_SIZE},
 	ltx::{LtxHeader, encode_ltx_v3},
 	metrics,
 	quota,
 	types::{
-		ActorBranchId, CommitRow, DBHead, DirtyPage, decode_db_head, decode_meta_compact,
-		encode_commit_row, encode_db_head,
+		ActorBranchId, ActorBranchRecord, ActorPointer, BranchState, CommitRow, DBHead, DirtyPage,
+		NamespaceBranchId, decode_db_head, decode_meta_compact, encode_actor_branch_record,
+		encode_actor_pointer, encode_commit_row, encode_db_head,
 	},
 };
 
@@ -45,6 +47,7 @@ impl ActorDb {
 			.observe(dirty_pages.len() as f64);
 
 		let cached_storage_used = *self.storage_used.lock();
+		let cached_branch_id = *self.branch_id.lock();
 		let cache_was_warm = !self.cache.lock().range(0, u32::MAX).is_empty();
 		let actor_id = self.actor_id.clone();
 		let dirty_pages_for_tx = dirty_pages.clone();
@@ -56,11 +59,13 @@ impl ActorDb {
 				let dirty_pages = dirty_pages_for_tx.clone();
 
 				async move {
-					let head_key = keys::meta_head_key(&actor_id);
+					let (branch_id, branch_initialized) =
+						resolve_or_allocate_branch(&tx, &actor_id, cached_branch_id).await?;
+					let head_key = keys::branch_meta_head_key(branch_id);
 					let (head_bytes, storage_used) = if let Some(storage_used) = cached_storage_used {
 						(tx_get_value(&tx, &head_key, Serializable).await?, storage_used)
 					} else {
-						let quota_fut = quota::read(&tx, &actor_id);
+						let quota_fut = quota::read_branch(&tx, branch_id);
 						let head_fut = tx_get_value(&tx, &head_key, Serializable);
 						let (head_bytes, storage_used) = tokio::try_join!(head_fut, quota_fut)?;
 						(head_bytes, storage_used)
@@ -71,13 +76,14 @@ impl ActorDb {
 						.map(decode_db_head)
 						.transpose()
 						.context("decode current sqlite db head")?;
-					let materialized_txid = tx_get_value(&tx, &keys::meta_compact_key(&actor_id), Snapshot)
-						.await?
-						.as_deref()
-						.map(decode_meta_compact)
-						.transpose()
-						.context("decode sqlite compact meta for trigger")?
-						.map_or(0, |compact| compact.materialized_txid);
+					let materialized_txid =
+						tx_get_value(&tx, &keys::branch_meta_compact_key(branch_id), Snapshot)
+							.await?
+							.as_deref()
+							.map(decode_meta_compact)
+							.transpose()
+							.context("decode sqlite compact meta for trigger")?
+							.map_or(0, |compact| compact.materialized_txid);
 					let previous_db_size_pages =
 						previous_head.as_ref().map_or(db_size_pages, |head| head.db_size_pages);
 					let txid = match previous_head.as_ref() {
@@ -89,7 +95,7 @@ impl ActorDb {
 					};
 
 					let truncate_cleanup =
-						collect_truncate_cleanup(&tx, &actor_id, previous_db_size_pages, db_size_pages)
+						collect_truncate_cleanup(&tx, branch_id, previous_db_size_pages, db_size_pages)
 							.await?;
 
 					let encoded_delta = encode_ltx_v3(
@@ -103,7 +109,10 @@ impl ActorDb {
 						.map(|(chunk_idx, chunk)| {
 							let chunk_idx = u32::try_from(chunk_idx)
 								.context("delta chunk index exceeded u32")?;
-							Ok((keys::delta_chunk_key(&actor_id, txid, chunk_idx), chunk.to_vec()))
+							Ok((
+								keys::branch_delta_chunk_key(branch_id, txid, chunk_idx),
+								chunk.to_vec(),
+							))
 						})
 						.collect::<Result<Vec<_>>>()?;
 
@@ -113,9 +122,7 @@ impl ActorDb {
 						post_apply_checksum: previous_head
 							.as_ref()
 							.map_or(0, |head| head.post_apply_checksum),
-						branch_id: previous_head
-							.as_ref()
-							.map_or_else(ActorBranchId::nil, |head| head.branch_id),
+						branch_id,
 						#[cfg(debug_assertions)]
 						generation: previous_head.as_ref().map_or(0, |head| head.generation),
 					};
@@ -135,8 +142,9 @@ impl ActorDb {
 						&INCOMPLETE_COMMIT_VERSIONSTAMP,
 					)
 					.context("prepare versionstamped sqlite commit row")?;
-					let commit_key = keys::commit_key(&actor_id, txid);
-					let vtx_storage_key = keys::vtx_key(&actor_id, INCOMPLETE_COMMIT_VERSIONSTAMP);
+					let commit_key = keys::branch_commit_key(branch_id, txid);
+					let vtx_storage_key =
+						keys::branch_vtx_key(branch_id, INCOMPLETE_COMMIT_VERSIONSTAMP);
 					let versionstamped_vtx_key = append_versionstamp_offset(
 						vtx_storage_key.clone(),
 						&INCOMPLETE_COMMIT_VERSIONSTAMP,
@@ -157,7 +165,7 @@ impl ActorDb {
 						+ dirty_pgnos
 							.iter()
 							.map(|pgno| {
-								tracked_entry_size(&keys::pidx_delta_key(&actor_id, *pgno), &txid_bytes)
+								tracked_entry_size(&keys::branch_pidx_key(branch_id, *pgno), &txid_bytes)
 							})
 							.sum::<Result<i64>>()?;
 					let removed_bytes = head_bytes
@@ -178,7 +186,7 @@ impl ActorDb {
 					}
 					for pgno in &dirty_pgnos {
 						tx.informal()
-							.set(&keys::pidx_delta_key(&actor_id, *pgno), &txid_bytes);
+							.set(&keys::branch_pidx_key(branch_id, *pgno), &txid_bytes);
 					}
 					for key in &truncate_cleanup.pidx_keys {
 						tx.informal().clear(key);
@@ -187,6 +195,15 @@ impl ActorDb {
 						tx.informal().clear(key);
 					}
 					tx.informal().set(&head_key, &encoded_head);
+					if branch_initialized {
+						write_root_branch_metadata(
+							&tx,
+							branch_id,
+							&actor_id,
+							now_ms,
+							&INCOMPLETE_COMMIT_VERSIONSTAMP,
+						)?;
+					}
 					tx.informal().atomic_op(
 						&commit_key,
 						&versionstamped_commit_row,
@@ -198,10 +215,11 @@ impl ActorDb {
 						MutationType::SetVersionstampedKey,
 					);
 					if quota_delta != 0 {
-						quota::atomic_add(&tx, &actor_id, quota_delta);
+						quota::atomic_add_branch(&tx, branch_id, quota_delta);
 					}
 
 					Ok(CommitTxResult {
+						branch_id,
 						txid,
 						materialized_txid,
 						dirty_pgnos,
@@ -214,6 +232,7 @@ impl ActorDb {
 			.await?;
 
 		*self.storage_used.lock() = Some(result.storage_used);
+		*self.branch_id.lock() = Some(result.branch_id);
 		*self.commit_bytes_since_rollup.lock() += u64::try_from(result.added_bytes)
 			.context("commit added bytes should be non-negative")?;
 
@@ -273,6 +292,7 @@ impl ActorDb {
 }
 
 struct CommitTxResult {
+	branch_id: ActorBranchId,
 	txid: u64,
 	materialized_txid: u64,
 	dirty_pgnos: BTreeSet<u32>,
@@ -291,7 +311,7 @@ struct TruncateCleanup {
 
 async fn collect_truncate_cleanup(
 	tx: &universaldb::Transaction,
-	actor_id: &str,
+	branch_id: ActorBranchId,
 	previous_db_size_pages: u32,
 	new_db_size_pages: u32,
 ) -> Result<TruncateCleanup> {
@@ -300,8 +320,8 @@ async fn collect_truncate_cleanup(
 	}
 
 	let mut cleanup = TruncateCleanup::default();
-	for (key, value) in tx_scan_prefix_values(tx, &keys::pidx_delta_prefix(actor_id)).await? {
-		let pgno = decode_pidx_pgno(actor_id, &key)?;
+	for (key, value) in tx_scan_prefix_values(tx, &keys::branch_pidx_prefix(branch_id)).await? {
+		let pgno = decode_branch_pidx_pgno(branch_id, &key)?;
 		if pgno > new_db_size_pages {
 			cleanup.deleted_bytes += tracked_entry_size(&key, &value)?;
 			cleanup.truncated_pgnos.push(pgno);
@@ -309,8 +329,8 @@ async fn collect_truncate_cleanup(
 		}
 	}
 
-	for (key, value) in tx_scan_prefix_values(tx, &keys::shard_prefix(actor_id)).await? {
-		let shard_id = decode_shard_id(actor_id, &key)?;
+	for (key, value) in tx_scan_prefix_values(tx, &keys::branch_shard_prefix(branch_id)).await? {
+		let shard_id = decode_branch_shard_id(branch_id, &key)?;
 		if shard_id.saturating_mul(SHARD_SIZE) > new_db_size_pages {
 			cleanup.deleted_bytes += tracked_entry_size(&key, &value)?;
 			cleanup.shard_keys.push(key);
@@ -318,6 +338,69 @@ async fn collect_truncate_cleanup(
 	}
 
 	Ok(cleanup)
+}
+
+async fn resolve_or_allocate_branch(
+	tx: &universaldb::Transaction,
+	actor_id: &str,
+	cached_branch_id: Option<ActorBranchId>,
+) -> Result<(ActorBranchId, bool)> {
+	if let Some(branch_id) = cached_branch_id {
+		return Ok((branch_id, false));
+	}
+
+	if let Some(branch_id) = branch::resolve_actor_branch(tx, actor_id, Serializable).await? {
+		return Ok((branch_id, false));
+	}
+
+	Ok((ActorBranchId::new_v4(), true))
+}
+
+fn write_root_branch_metadata(
+	tx: &universaldb::Transaction,
+	branch_id: ActorBranchId,
+	actor_id: &str,
+	now_ms: i64,
+	root_versionstamp: &[u8; 16],
+) -> Result<()> {
+	let namespace_branch = NamespaceBranchId::nil();
+	let record = ActorBranchRecord {
+		branch_id,
+		namespace_branch,
+		parent: None,
+		parent_versionstamp: None,
+		root_versionstamp: *root_versionstamp,
+		fork_depth: 0,
+		created_at_ms: now_ms,
+		created_from_bookmark: None,
+		state: BranchState::Live,
+	};
+	let encoded_record =
+		encode_actor_branch_record(record).context("encode sqlite root actor branch record")?;
+	let versionstamped_record = append_versionstamp_offset(encoded_record, root_versionstamp)
+		.context("prepare versionstamped sqlite root actor branch record")?;
+	tx.informal().atomic_op(
+		&keys::branches_list_key(branch_id),
+		&versionstamped_record,
+		MutationType::SetVersionstampedValue,
+	);
+	tx.informal().atomic_op(
+		&keys::branches_refcount_key(branch_id),
+		&1_i64.to_le_bytes(),
+		MutationType::Add,
+	);
+
+	let pointer = ActorPointer {
+		current_branch: branch_id,
+		last_swapped_at_ms: now_ms,
+	};
+	let encoded_pointer = encode_actor_pointer(pointer).context("encode sqlite actor pointer")?;
+	tx.informal().set(
+		&keys::actor_pointer_cur_key(namespace_branch, actor_id),
+		&encoded_pointer,
+	);
+
+	Ok(())
 }
 
 fn tracked_entry_size(key: &[u8], value: &[u8]) -> Result<i64> {
@@ -369,8 +452,8 @@ async fn tx_scan_prefix_values(
 	Ok(rows)
 }
 
-fn decode_pidx_pgno(actor_id: &str, key: &[u8]) -> Result<u32> {
-	let prefix = keys::pidx_delta_prefix(actor_id);
+fn decode_branch_pidx_pgno(branch_id: ActorBranchId, key: &[u8]) -> Result<u32> {
+	let prefix = keys::branch_pidx_prefix(branch_id);
 	let suffix = key
 		.strip_prefix(prefix.as_slice())
 		.context("pidx key did not start with expected prefix")?;
@@ -381,8 +464,8 @@ fn decode_pidx_pgno(actor_id: &str, key: &[u8]) -> Result<u32> {
 	Ok(u32::from_be_bytes(bytes))
 }
 
-fn decode_shard_id(actor_id: &str, key: &[u8]) -> Result<u32> {
-	let prefix = keys::shard_prefix(actor_id);
+fn decode_branch_shard_id(branch_id: ActorBranchId, key: &[u8]) -> Result<u32> {
+	let prefix = keys::branch_shard_prefix(branch_id);
 	let suffix = key
 		.strip_prefix(prefix.as_slice())
 		.context("shard key did not start with expected prefix")?;

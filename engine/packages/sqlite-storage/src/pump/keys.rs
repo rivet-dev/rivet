@@ -308,6 +308,56 @@ pub fn branch_delta_chunk_key(branch_id: ActorBranchId, txid: u64, chunk_idx: u3
 	key
 }
 
+pub fn decode_branch_delta_chunk_txid(branch_id: ActorBranchId, key: &[u8]) -> Result<u64> {
+	let prefix = branch_delta_prefix(branch_id);
+	ensure!(
+		key.starts_with(&prefix),
+		"branch delta key did not start with expected prefix"
+	);
+	let suffix = &key[prefix.len()..];
+	ensure!(
+		suffix.len() >= std::mem::size_of::<u64>() + 1,
+		"branch delta key suffix had {} bytes, expected at least {}",
+		suffix.len(),
+		std::mem::size_of::<u64>() + 1
+	);
+	ensure!(
+		suffix[std::mem::size_of::<u64>()] == b'/',
+		"branch delta key missing txid/chunk separator"
+	);
+
+	Ok(u64::from_be_bytes(
+		suffix[..std::mem::size_of::<u64>()]
+			.try_into()
+			.context("branch delta txid suffix should decode as u64")?,
+	))
+}
+
+pub fn decode_branch_delta_chunk_idx(
+	branch_id: ActorBranchId,
+	txid: u64,
+	key: &[u8],
+) -> Result<u32> {
+	let prefix = branch_delta_chunk_prefix(branch_id, txid);
+	ensure!(
+		key.starts_with(&prefix),
+		"branch delta chunk key did not start with expected prefix"
+	);
+	let suffix = &key[prefix.len()..];
+	ensure!(
+		suffix.len() == std::mem::size_of::<u32>(),
+		"branch delta chunk key suffix had {} bytes, expected {}",
+		suffix.len(),
+		std::mem::size_of::<u32>()
+	);
+
+	Ok(u32::from_be_bytes(
+		suffix
+			.try_into()
+			.context("branch delta chunk suffix should decode as u32")?,
+	))
+}
+
 pub fn branch_shard_prefix(branch_id: ActorBranchId) -> Vec<u8> {
 	with_suffix(actor_branch_base(branch_id), SHARD_PATH)
 }

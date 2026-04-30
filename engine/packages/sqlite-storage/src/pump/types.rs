@@ -365,6 +365,68 @@ impl OwnedVersionedData for VersionedCommitRow {
 	}
 }
 
+enum VersionedActorBranchRecord {
+	V1(ActorBranchRecord),
+}
+
+impl OwnedVersionedData for VersionedActorBranchRecord {
+	type Latest = ActorBranchRecord;
+
+	fn wrap_latest(latest: Self::Latest) -> Self {
+		Self::V1(latest)
+	}
+
+	fn unwrap_latest(self) -> Result<Self::Latest> {
+		match self {
+			Self::V1(data) => Ok(data),
+		}
+	}
+
+	fn deserialize_version(payload: &[u8], version: u16) -> Result<Self> {
+		match version {
+			1 => Ok(Self::V1(serde_bare::from_slice(payload)?)),
+			_ => bail!("invalid sqlite-storage ActorBranchRecord version: {version}"),
+		}
+	}
+
+	fn serialize_version(self, _version: u16) -> Result<Vec<u8>> {
+		match self {
+			Self::V1(data) => serde_bare::to_vec(&data).map_err(Into::into),
+		}
+	}
+}
+
+enum VersionedActorPointer {
+	V1(ActorPointer),
+}
+
+impl OwnedVersionedData for VersionedActorPointer {
+	type Latest = ActorPointer;
+
+	fn wrap_latest(latest: Self::Latest) -> Self {
+		Self::V1(latest)
+	}
+
+	fn unwrap_latest(self) -> Result<Self::Latest> {
+		match self {
+			Self::V1(data) => Ok(data),
+		}
+	}
+
+	fn deserialize_version(payload: &[u8], version: u16) -> Result<Self> {
+		match version {
+			1 => Ok(Self::V1(serde_bare::from_slice(payload)?)),
+			_ => bail!("invalid sqlite-storage ActorPointer version: {version}"),
+		}
+	}
+
+	fn serialize_version(self, _version: u16) -> Result<Vec<u8>> {
+		match self {
+			Self::V1(data) => serde_bare::to_vec(&data).map_err(Into::into),
+		}
+	}
+}
+
 enum VersionedMetaCompact {
 	V1(MetaCompact),
 }
@@ -415,6 +477,28 @@ pub fn encode_commit_row(row: CommitRow) -> Result<Vec<u8>> {
 pub fn decode_commit_row(payload: &[u8]) -> Result<CommitRow> {
 	VersionedCommitRow::deserialize_with_embedded_version(payload)
 		.context("decode sqlite commit row")
+}
+
+pub fn encode_actor_branch_record(record: ActorBranchRecord) -> Result<Vec<u8>> {
+	VersionedActorBranchRecord::wrap_latest(record)
+		.serialize_with_embedded_version(SQLITE_STORAGE_META_VERSION)
+		.context("encode sqlite actor branch record")
+}
+
+pub fn decode_actor_branch_record(payload: &[u8]) -> Result<ActorBranchRecord> {
+	VersionedActorBranchRecord::deserialize_with_embedded_version(payload)
+		.context("decode sqlite actor branch record")
+}
+
+pub fn encode_actor_pointer(pointer: ActorPointer) -> Result<Vec<u8>> {
+	VersionedActorPointer::wrap_latest(pointer)
+		.serialize_with_embedded_version(SQLITE_STORAGE_META_VERSION)
+		.context("encode sqlite actor pointer")
+}
+
+pub fn decode_actor_pointer(payload: &[u8]) -> Result<ActorPointer> {
+	VersionedActorPointer::deserialize_with_embedded_version(payload)
+		.context("decode sqlite actor pointer")
 }
 
 pub fn encode_meta_compact(compact: MetaCompact) -> Result<Vec<u8>> {

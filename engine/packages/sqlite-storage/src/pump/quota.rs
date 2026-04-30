@@ -1,7 +1,12 @@
 use anyhow::{Context, Result};
 use universaldb::{options::MutationType, utils::IsolationLevel::Snapshot};
 
-use crate::pump::{error::SqliteStorageError, keys};
+use crate::pump::{
+	branch,
+	error::SqliteStorageError,
+	keys,
+	types::ActorBranchId,
+};
 
 pub const SQLITE_MAX_STORAGE_BYTES: i64 = 10 * 1024 * 1024 * 1024;
 pub const COMPACTION_DELTA_THRESHOLD: u64 = 32;
@@ -16,7 +21,23 @@ pub fn atomic_add(tx: &universaldb::Transaction, actor_id: &str, delta_bytes: i6
 	);
 }
 
+pub fn atomic_add_branch(tx: &universaldb::Transaction, branch_id: ActorBranchId, delta_bytes: i64) {
+	tx.informal().atomic_op(
+		&keys::branch_meta_quota_key(branch_id),
+		&delta_bytes.to_le_bytes(),
+		MutationType::Add,
+	);
+}
+
 pub async fn read(tx: &universaldb::Transaction, actor_id: &str) -> Result<i64> {
+	if let Some(branch_id) =
+		branch::resolve_actor_branch(tx, actor_id, Snapshot)
+			.await
+			.context("resolve sqlite actor branch for quota read")?
+	{
+		return read_branch(tx, branch_id).await;
+	}
+
 	let Some(value) = tx
 		.informal()
 		.get(&keys::meta_quota_key(actor_id), Snapshot)
@@ -30,6 +51,28 @@ pub async fn read(tx: &universaldb::Transaction, actor_id: &str) -> Result<i64> 
 		.map_err(|value: Vec<u8>| {
 			anyhow::anyhow!(
 				"sqlite quota counter had {} bytes, expected {}",
+				value.len(),
+				std::mem::size_of::<i64>()
+			)
+		})?;
+
+	Ok(i64::from_le_bytes(bytes))
+}
+
+pub async fn read_branch(tx: &universaldb::Transaction, branch_id: ActorBranchId) -> Result<i64> {
+	let Some(value) = tx
+		.informal()
+		.get(&keys::branch_meta_quota_key(branch_id), Snapshot)
+		.await?
+	else {
+		return Ok(0);
+	};
+
+	let bytes: [u8; std::mem::size_of::<i64>()] = Vec::from(value)
+		.try_into()
+		.map_err(|value: Vec<u8>| {
+			anyhow::anyhow!(
+				"sqlite branch quota counter had {} bytes, expected {}",
 				value.len(),
 				std::mem::size_of::<i64>()
 			)

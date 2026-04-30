@@ -7,12 +7,16 @@ use universaldb::Database;
 
 use crate::{compactor::Ups, page_index::DeltaPageIndex};
 
+use super::types::ActorBranchId;
+
 #[allow(dead_code)]
 pub struct ActorDb {
 	pub(super) udb: Arc<Database>,
 	pub(super) ups: Ups,
 	pub(super) actor_id: String,
 	pub(super) node_id: NodeId,
+	/// Cached actor branch id. This is a perf cache; FDB remains the source of truth.
+	pub(super) branch_id: Mutex<Option<ActorBranchId>>,
 	pub(super) cache: Mutex<DeltaPageIndex>,
 	/// Cached `/META/quota`. Loaded once on the first UDB tx.
 	pub(super) storage_used: Mutex<Option<i64>>,
@@ -34,6 +38,7 @@ impl ActorDb {
 			ups,
 			actor_id,
 			node_id,
+			branch_id: Mutex::new(None),
 			cache: Mutex::new(DeltaPageIndex::new()),
 			storage_used: Mutex::new(None),
 			commit_bytes_since_rollup: Mutex::new(0),

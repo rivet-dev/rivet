@@ -17,6 +17,6 @@ pub use publish::{
 	encode_compact_payload, publish_compact_payload, publish_compact_payload_with_node_id,
 	publish_compact_trigger, publish_compact_trigger_with_node_id,
 };
-pub use shard::fold_shard;
+pub use shard::{fold_branch_shard, fold_shard};
 pub use subjects::{SQLITE_COMPACT_SUBJECT, SqliteCompactSubject};
 pub use worker::{CompactorConfig, start};

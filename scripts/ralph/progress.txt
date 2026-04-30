@@ -5,8 +5,9 @@
 - PITR key builders use top-level `[0x02][partition]` prefixes; legacy actor-scoped key helpers remain only as compatibility until the hot path migrates to branch IDs.
 - PITR tunable constants live in `engine/packages/sqlite-storage/src/pump/constants.rs` and are re-exported at the `sqlite_storage` crate root.
 - `SqliteStorageError` uses `RivetError` derive plus a manual `Display`/`Error` impl so errors can produce checked-in `engine/artifacts/errors/*.json` schemas while staying downcastable as `SqliteStorageError`.
-- During the actor-scoped-to-branch migration, versioned SHARD writes use legacy `/SHARD/{shard_id}/{as_of_txid}` keys and readers keep fallback support for old `/SHARD/{shard_id}` blobs.
-- During the actor-scoped-to-branch migration, commit history uses legacy `/COMMITS/{txid}` and `/VTX/{versionstamp}` helpers; both should move under `BR/{branch_id}` with the rest of the hot path.
+- `ActorDb` resolves the current actor branch through APTR and caches the branch id as a perf cache; FDB remains the source of truth.
+- Until namespace branch allocation is wired, root actor branches use `NamespaceBranchId::nil()` for the APTR namespace branch.
+- New ActorDb writes store META/COMMITS/VTX/PIDX/DELTA/SHARD under `BR/{branch_id}`; legacy actor-scoped helpers remain compatibility fallback for old seeded state.
 - `universaldb` raw `SetVersionstampedKey` and `SetVersionstampedValue` payloads use FDB-style trailing little-endian u32 offsets and substitute the first 10 versionstamp bytes.
 
 # Ralph Progress Log
@@ -152,4 +153,30 @@ Started: Wed Apr 29 03:29:23 PM PDT 2026
   - `CommitRow` now has concrete vbare encode/decode helpers and is written in the commit tx, not just defined as a future type.
   - Until US-009 moves storage under `BR/{branch_id}`, commit history and VTX use legacy actor-scoped key helpers.
   - Local UDB drivers need raw offset substitution for `SetVersionstampedKey` and `SetVersionstampedValue`; tuple-style versionstamp helpers are not enough for FDB atomic-op payloads.
+---
+## 2026-04-29 17:44 PDT - US-009
+- Allocated a root `ActorBranchId` on first actor commit and wrote the root `ActorBranchRecord`, APTR pointer, and refcount metadata.
+- Migrated new ActorDb hot-path writes and reads for META, quota, COMMITS, VTX, PIDX, DELTA, and SHARD data under `BR/{branch_id}` while keeping legacy fallback reads for old seeded state.
+- Updated hot compaction to resolve APTR and compact branch-scoped data, with branch-aware quota accounting and shard folding.
+- Verified with `cargo check -p sqlite-storage` and `cargo test -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/CLAUDE.md` (via `AGENTS.md` symlink)
+  - `engine/packages/sqlite-storage/src/compactor/compact.rs`
+  - `engine/packages/sqlite-storage/src/compactor/mod.rs`
+  - `engine/packages/sqlite-storage/src/compactor/shard.rs`
+  - `engine/packages/sqlite-storage/src/pump/actor_db.rs`
+  - `engine/packages/sqlite-storage/src/pump/branch.rs`
+  - `engine/packages/sqlite-storage/src/pump/commit.rs`
+  - `engine/packages/sqlite-storage/src/pump/keys.rs`
+  - `engine/packages/sqlite-storage/src/pump/mod.rs`
+  - `engine/packages/sqlite-storage/src/pump/quota.rs`
+  - `engine/packages/sqlite-storage/src/pump/read.rs`
+  - `engine/packages/sqlite-storage/src/pump/types.rs`
+  - `engine/packages/sqlite-storage/tests/pump_commit.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - APTR resolution currently uses the nil namespace branch bridge until US-010 wires real namespace branches.
+  - `ActorDb.branch_id` is only a perf cache; commit/read/compactor code must still resolve APTR when the cache is cold.
+  - New hot-path data should use branch key builders; legacy actor-scoped paths are now compatibility fallbacks rather than the primary layout.
 ---
