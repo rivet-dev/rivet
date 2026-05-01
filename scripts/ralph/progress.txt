@@ -7,6 +7,7 @@
 - Workflow compaction branch workflows use `DATABASE_BRANCH_ID_TAG` as their only stable unique tag; the manager stores companion workflow ids before entering its durable loop.
 - Workflow compaction dirty admission lives in `engine/packages/depot/src/conveyer/commit.rs`; runtime callers inject a signaler into `Db` to create or target the unique manager workflow.
 - Workflow compaction manager planning refreshes FDB in `RefreshManager` activity, records active jobs in durable manager state, and signals persistent companion workflows instead of spawning per-job workflows.
+- Workflow hot compaction writes staged LTX blobs under `CMP/stage/{job_id}/hot_shard`; successful outputs stay as the manager's active hot job until a manager install story publishes or rejects them.
 
 # Ralph Progress Log
 Started: Thu Apr 30 09:07:22 PM PDT 2026
@@ -125,4 +126,22 @@ Started: Thu Apr 30 09:07:22 PM PDT 2026
   - Manager FDB reads belong in activities so workflow history captures the planned job id and input fingerprint.
   - `DeltasAvailable` remains only a hint; manager planning must recompute lag from FDB and skip scheduling when `active_hot_job` is already set.
   - Tests can seed depot branch keys through `TestCtx`'s UDB pool and assert manager durable state via Gasoline debug `Loop` events.
+---
+## 2026-04-30 22:15:13 PDT - US-008
+- Implemented staged hot SHARD output for the persistent hot compacter workflow.
+- Added `StageHotJob` FDB activity validation for live branch state, base manifest generation, and recomputed hot input fingerprints before writing staged LTX blobs.
+- The hot compacter now reports `HotJobFinished` to the unique manager workflow, while successful staged output remains active until the manager install path is implemented.
+- Verified with `cargo test -p depot --test workflow_compaction_skeletons`, `cargo check -p depot`, and `cargo test -p depot`.
+- Files changed:
+  - `engine/packages/depot/src/workflows/compaction.rs`
+  - `engine/packages/depot/tests/workflow_compaction_skeletons.rs`
+  - `engine/packages/depot/Cargo.toml`
+  - `engine/packages/depot/CLAUDE.md`
+  - `Cargo.lock`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Hot compacter retries can stay idempotent by rewriting the same job-scoped staging key and checksum for the same `job_id`.
+  - The manager must not clear a successful hot job before the publish/install story advances `CMP/root`; otherwise deadline refreshes will plan duplicate hot jobs against unchanged FDB state.
+  - Workflow compaction tests that exercise staged output need valid LTX delta blobs, not placeholder bytes.
 ---

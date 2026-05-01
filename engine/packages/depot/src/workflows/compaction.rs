@@ -1,11 +1,17 @@
-use anyhow::{Context, Result, bail};
+use std::collections::BTreeMap;
+
+use anyhow::{Context, Result, bail, ensure};
 use futures_util::{FutureExt, TryStreamExt};
 use gas::prelude::*;
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use universaldb::{
 	RangeOption,
 	options::StreamingMode,
-	utils::IsolationLevel::{Serializable, Snapshot},
+	utils::{
+		IsolationLevel::{Serializable, Snapshot},
+		end_of_key_range,
+	},
 };
 use vbare::OwnedVersionedData;
 
@@ -14,9 +20,10 @@ use crate::{
 	HOT_BURST_COLD_LAG_THRESHOLD_TXIDS,
 	conveyer::{
 		keys, quota,
+		ltx::{DecodedLtx, LtxHeader, decode_ltx_v3, encode_ltx_v3},
 		types::{
 			BranchState, ColdShardRef, CommitRow, CompactionRoot, DBHead, DatabaseBranchId,
-			DatabaseBranchRecord, DbHistoryPin, SqliteCmpDirty, decode_commit_row,
+			DatabaseBranchRecord, DbHistoryPin, DirtyPage, SqliteCmpDirty, decode_commit_row,
 			decode_compaction_root, decode_database_branch_record, decode_db_head,
 			decode_db_history_pin, decode_sqlite_cmp_dirty,
 		},
@@ -49,7 +56,7 @@ pub struct DbReclaimerInput {
 	pub database_branch_id: DatabaseBranchId,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum CompactionJobKind {
 	Hot,
 	Cold,
@@ -64,13 +71,13 @@ pub enum CompactionJobStatus {
 	Failed { error: String },
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct TxidRange {
 	pub min_txid: u64,
 	pub max_txid: u64,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct HotJobInputRange {
 	pub txids: TxidRange,
 	pub max_pages: u32,
@@ -375,6 +382,22 @@ pub struct CompanionRunningJob {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Hash)]
+pub struct StageHotJobInput {
+	pub database_branch_id: DatabaseBranchId,
+	pub job_id: Id,
+	pub job_kind: CompactionJobKind,
+	pub base_manifest_generation: u64,
+	pub input_fingerprint: CompactionInputFingerprint,
+	pub input_range: HotJobInputRange,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StageHotJobOutput {
+	pub status: CompactionJobStatus,
+	pub output_refs: Vec<HotShardOutputRef>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Hash)]
 pub struct RefreshManagerInput {
 	pub database_branch_id: DatabaseBranchId,
 }
@@ -463,7 +486,11 @@ pub async fn db_manager(ctx: &mut WorkflowCtx, input: &DbManagerInput) -> Result
 						}
 						DbManagerSignal::HotJobFinished(signal) => {
 							if signal.database_branch_id == input.database_branch_id {
-								state.active_hot_job = None;
+								match signal.status {
+									CompactionJobStatus::Requested | CompactionJobStatus::Succeeded => {}
+									CompactionJobStatus::Rejected { .. }
+									| CompactionJobStatus::Failed { .. } => state.active_hot_job = None,
+								}
 							}
 						}
 						DbManagerSignal::ColdJobFinished(signal) => {
@@ -650,6 +677,106 @@ pub async fn refresh_manager(
 		branch_is_live,
 		db_pin_count: snapshot.db_pins.len(),
 	})
+}
+
+#[activity(StageHotJob)]
+pub async fn stage_hot_job(
+	ctx: &ActivityCtx,
+	input: &StageHotJobInput,
+) -> Result<StageHotJobOutput> {
+	let input = input.clone();
+
+	ctx.udb()?
+		.run(move |tx| {
+			let input = input.clone();
+			async move { stage_hot_job_tx(&tx, &input).await }
+		})
+		.await
+}
+
+async fn stage_hot_job_tx(
+	tx: &universaldb::Transaction,
+	input: &StageHotJobInput,
+) -> Result<StageHotJobOutput> {
+	if input.job_kind != CompactionJobKind::Hot {
+		return Ok(rejected_hot_job("hot compacter received a non-hot job"));
+	}
+
+	let branch_record = tx_get_value(
+		tx,
+		&keys::branches_list_key(input.database_branch_id),
+		Serializable,
+	)
+	.await?
+	.as_deref()
+	.map(decode_database_branch_record)
+	.transpose()
+	.context("decode sqlite database branch record for hot compaction")?;
+	if !branch_record
+		.as_ref()
+		.is_some_and(|record| record.state == BranchState::Live)
+	{
+		return Ok(rejected_hot_job("database branch is not live"));
+	}
+
+	let root = tx_get_value(
+		tx,
+		&keys::branch_compaction_root_key(input.database_branch_id),
+		Serializable,
+	)
+	.await?
+	.as_deref()
+	.map(decode_compaction_root)
+	.transpose()
+	.context("decode sqlite compaction root for hot compaction")?
+	.unwrap_or(CompactionRoot {
+		schema_version: 1,
+		manifest_generation: 0,
+		hot_watermark_txid: 0,
+		cold_watermark_txid: 0,
+		cold_watermark_versionstamp: [0; 16],
+	});
+	if root.manifest_generation != input.base_manifest_generation {
+		return Ok(rejected_hot_job("base manifest generation changed"));
+	}
+
+	let Some(head) = tx_get_value(
+		tx,
+		&keys::branch_meta_head_key(input.database_branch_id),
+		Serializable,
+	)
+	.await?
+	.as_deref()
+	.map(decode_db_head)
+	.transpose()
+	.context("decode sqlite head for hot compaction")?
+	else {
+		return Ok(rejected_hot_job("database branch head is missing"));
+	};
+
+	let hot_inputs =
+		read_hot_input_snapshot(tx, input.database_branch_id, Some(&head), &root).await?;
+	let input_fingerprint =
+		fingerprint_hot_inputs(input.database_branch_id, &root, &head, &hot_inputs);
+	if input_fingerprint != input.input_fingerprint {
+		return Ok(rejected_hot_job("hot compaction input fingerprint changed"));
+	}
+
+	let output_refs = write_staged_hot_shards(tx, input, &head, &hot_inputs).await?;
+
+	Ok(StageHotJobOutput {
+		status: CompactionJobStatus::Succeeded,
+		output_refs,
+	})
+}
+
+fn rejected_hot_job(reason: impl Into<String>) -> StageHotJobOutput {
+	StageHotJobOutput {
+		status: CompactionJobStatus::Rejected {
+			reason: reason.into(),
+		},
+		output_refs: Vec::new(),
+	}
 }
 
 async fn read_manager_fdb_snapshot(
@@ -885,6 +1012,215 @@ fn mix_fingerprint(fingerprint: &mut CompactionInputFingerprint, bytes: &[u8]) {
 	}
 }
 
+async fn write_staged_hot_shards(
+	tx: &universaldb::Transaction,
+	input: &StageHotJobInput,
+	head: &DBHead,
+	hot_inputs: &HotInputSnapshot,
+) -> Result<Vec<HotShardOutputRef>> {
+	let deltas = decode_hot_delta_chunks(input.database_branch_id, &hot_inputs.delta_chunks)?;
+	let pages_by_shard = collect_hot_pages_by_shard(
+		input.database_branch_id,
+		head,
+		&deltas,
+		&hot_inputs.pidx_entries,
+	)?;
+	let mut output_refs = Vec::with_capacity(pages_by_shard.len());
+
+	for (shard_id, page_updates) in pages_by_shard {
+		let encoded = build_staged_hot_shard_blob(
+			tx,
+			input.database_branch_id,
+			shard_id,
+			input.input_range.txids.max_txid,
+			page_updates,
+		)
+		.await?;
+		let key = keys::branch_compaction_stage_hot_shard_key(
+			input.database_branch_id,
+			input.job_id,
+			shard_id,
+			input.input_range.txids.max_txid,
+			0,
+		);
+		let content_hash = content_hash(&encoded);
+
+		tx.informal().set(&key, &encoded);
+		output_refs.push(HotShardOutputRef {
+			shard_id,
+			as_of_txid: input.input_range.txids.max_txid,
+			min_txid: input.input_range.txids.min_txid,
+			max_txid: input.input_range.txids.max_txid,
+			size_bytes: u64::try_from(encoded.len()).unwrap_or(u64::MAX),
+			content_hash,
+		});
+	}
+
+	Ok(output_refs)
+}
+
+fn decode_hot_delta_chunks(
+	branch_id: DatabaseBranchId,
+	delta_chunks: &[(Vec<u8>, Vec<u8>)],
+) -> Result<BTreeMap<u64, DecodedLtx>> {
+	let mut chunks_by_txid = BTreeMap::<u64, BTreeMap<u32, Vec<u8>>>::new();
+	for (key, value) in delta_chunks {
+		let txid = keys::decode_branch_delta_chunk_txid(branch_id, key)?;
+		let chunk_idx = keys::decode_branch_delta_chunk_idx(branch_id, txid, key)?;
+		chunks_by_txid
+			.entry(txid)
+			.or_default()
+			.insert(chunk_idx, value.clone());
+	}
+
+	chunks_by_txid
+		.into_iter()
+		.map(|(txid, chunks)| {
+			let bytes = chunks
+				.into_values()
+				.flatten()
+				.collect::<Vec<_>>();
+			let decoded =
+				decode_ltx_v3(&bytes).with_context(|| format!("decode hot delta {txid}"))?;
+
+			Ok((txid, decoded))
+		})
+		.collect()
+}
+
+fn collect_hot_pages_by_shard(
+	branch_id: DatabaseBranchId,
+	head: &DBHead,
+	deltas: &BTreeMap<u64, DecodedLtx>,
+	pidx_entries: &[(Vec<u8>, Vec<u8>)],
+) -> Result<BTreeMap<u32, Vec<(u32, Vec<u8>)>>> {
+	let mut pages_by_shard = BTreeMap::<u32, Vec<(u32, Vec<u8>)>>::new();
+
+	for (key, value) in pidx_entries {
+		let txid = decode_pidx_txid(value)?;
+		let Some(delta) = deltas.get(&txid) else {
+			continue;
+		};
+		let pgno = decode_branch_pidx_pgno(branch_id, key)?;
+		if pgno > head.db_size_pages {
+			continue;
+		}
+		let bytes = delta
+			.get_page(pgno)
+			.with_context(|| {
+				format!("PIDX row for page {pgno} pointed at delta {txid} without the page")
+			})?
+			.to_vec();
+
+		pages_by_shard
+			.entry(pgno / keys::SHARD_SIZE)
+			.or_default()
+			.push((pgno, bytes));
+	}
+
+	Ok(pages_by_shard)
+}
+
+async fn build_staged_hot_shard_blob(
+	tx: &universaldb::Transaction,
+	branch_id: DatabaseBranchId,
+	shard_id: u32,
+	as_of_txid: u64,
+	page_updates: Vec<(u32, Vec<u8>)>,
+) -> Result<Vec<u8>> {
+	let existing_blob = load_latest_branch_shard_blob(tx, branch_id, shard_id, as_of_txid).await?;
+	let mut merged_pages = BTreeMap::<u32, Vec<u8>>::new();
+	let mut timestamp_ms = 0;
+
+	if let Some(existing_blob) = existing_blob {
+		let decoded = decode_ltx_v3(&existing_blob).context("decode existing branch shard blob")?;
+		timestamp_ms = decoded.header.timestamp_ms;
+		for page in decoded.pages {
+			if page.pgno / keys::SHARD_SIZE == shard_id {
+				ensure!(
+					page.bytes.len() == keys::PAGE_SIZE as usize,
+					"page {} had {} bytes, expected {}",
+					page.pgno,
+					page.bytes.len(),
+					keys::PAGE_SIZE
+				);
+				merged_pages.insert(page.pgno, page.bytes);
+			}
+		}
+	}
+
+	for (pgno, bytes) in page_updates {
+		ensure!(pgno > 0, "page number must be greater than zero");
+		ensure!(
+			pgno / keys::SHARD_SIZE == shard_id,
+			"page {} does not belong to shard {}",
+			pgno,
+			shard_id
+		);
+		ensure!(
+			bytes.len() == keys::PAGE_SIZE as usize,
+			"page {} had {} bytes, expected {}",
+			pgno,
+			bytes.len(),
+			keys::PAGE_SIZE
+		);
+		merged_pages.insert(pgno, bytes);
+	}
+
+	let pages = merged_pages
+		.into_iter()
+		.map(|(pgno, bytes)| DirtyPage { pgno, bytes })
+		.collect::<Vec<_>>();
+	let commit = pages.iter().map(|page| page.pgno).max().unwrap_or(1);
+	let header = LtxHeader::delta(as_of_txid, commit, timestamp_ms);
+
+	encode_ltx_v3(header, &pages).context("encode staged hot shard blob")
+}
+
+async fn load_latest_branch_shard_blob(
+	tx: &universaldb::Transaction,
+	branch_id: DatabaseBranchId,
+	shard_id: u32,
+	as_of_txid: u64,
+) -> Result<Option<Vec<u8>>> {
+	let prefix = keys::branch_shard_version_prefix(branch_id, shard_id);
+	let end = end_of_key_range(&keys::branch_shard_key(branch_id, shard_id, as_of_txid));
+	let informal = tx.informal();
+	let mut stream = informal.get_ranges_keyvalues(
+		RangeOption {
+			mode: StreamingMode::WantAll,
+			..(prefix.as_slice(), end.as_slice()).into()
+		},
+		Snapshot,
+	);
+
+	let mut latest = None;
+	while let Some(entry) = stream.try_next().await? {
+		latest = Some(entry.value().to_vec());
+	}
+
+	Ok(latest)
+}
+
+fn decode_branch_pidx_pgno(branch_id: DatabaseBranchId, key: &[u8]) -> Result<u32> {
+	let prefix = keys::branch_pidx_prefix(branch_id);
+	let suffix = key
+		.strip_prefix(prefix.as_slice())
+		.context("branch PIDX key did not start with expected prefix")?;
+	let bytes: [u8; std::mem::size_of::<u32>()] = suffix
+		.try_into()
+		.map_err(|_| anyhow::anyhow!("branch PIDX key suffix had invalid length"))?;
+
+	Ok(u32::from_be_bytes(bytes))
+}
+
+fn content_hash(bytes: &[u8]) -> [u8; 32] {
+	let digest = Sha256::digest(bytes);
+	let mut hash = [0_u8; 32];
+	hash.copy_from_slice(&digest);
+	hash
+}
+
 fn decode_branch_commit_txid(branch_id: DatabaseBranchId, key: &[u8]) -> Result<u64> {
 	let prefix = keys::branch_commit_prefix(branch_id);
 	let suffix = key
@@ -964,14 +1300,13 @@ async fn run_companion_loop(
 							match signal {
 								DbHotCompacterSignal::RunHotJob(signal) => {
 									if signal.database_branch_id == database_branch_id {
-										record_companion_job(
+										run_hot_compaction_job(
+											ctx,
 											state,
 											database_branch_id,
-											CompactionJobKind::Hot,
-											signal.job_id,
-											signal.base_manifest_generation,
-											signal.input_fingerprint,
-										);
+											signal,
+										)
+										.await?;
 									}
 								}
 								DbHotCompacterSignal::DestroyDatabaseBranch(signal) => {
@@ -998,7 +1333,9 @@ async fn run_companion_loop(
 											signal.job_id,
 											signal.base_manifest_generation,
 											signal.input_fingerprint,
+											ctx.create_ts(),
 										);
+										*state = CompanionWorkflowState::Idle;
 									}
 								}
 								DbColdCompacterSignal::DestroyDatabaseBranch(signal) => {
@@ -1025,7 +1362,9 @@ async fn run_companion_loop(
 											signal.job_id,
 											signal.base_manifest_generation,
 											signal.input_fingerprint,
+											ctx.create_ts(),
 										);
+										*state = CompanionWorkflowState::Idle;
 									}
 								}
 								DbReclaimerSignal::DestroyDatabaseBranch(signal) => {
@@ -1050,7 +1389,54 @@ async fn run_companion_loop(
 			}
 			.boxed()
 		})
-		.await
+	.await
+}
+
+async fn run_hot_compaction_job(
+	ctx: &mut WorkflowCtx,
+	state: &mut CompanionWorkflowState,
+	database_branch_id: DatabaseBranchId,
+	signal: RunHotJob,
+) -> Result<()> {
+	record_companion_job(
+		state,
+		database_branch_id,
+		CompactionJobKind::Hot,
+		signal.job_id,
+		signal.base_manifest_generation,
+		signal.input_fingerprint,
+		ctx.create_ts(),
+	);
+
+	let output = ctx
+		.activity(StageHotJobInput {
+			database_branch_id,
+			job_id: signal.job_id,
+			job_kind: signal.job_kind,
+			base_manifest_generation: signal.base_manifest_generation,
+			input_fingerprint: signal.input_fingerprint,
+			input_range: signal.input_range,
+		})
+		.await?;
+
+	let tag_value = database_branch_tag_value(database_branch_id);
+	ctx.signal(HotJobFinished {
+		database_branch_id,
+		job_id: signal.job_id,
+		job_kind: CompactionJobKind::Hot,
+		base_manifest_generation: signal.base_manifest_generation,
+		input_fingerprint: signal.input_fingerprint,
+		status: output.status,
+		output_refs: output.output_refs,
+	})
+	.to_workflow::<DbManagerWorkflow>()
+	.tag(DATABASE_BRANCH_ID_TAG, &tag_value)
+	.send()
+	.await?;
+
+	*state = CompanionWorkflowState::Idle;
+
+	Ok(())
 }
 
 fn record_companion_job(
@@ -1060,6 +1446,7 @@ fn record_companion_job(
 	job_id: Id,
 	base_manifest_generation: u64,
 	input_fingerprint: CompactionInputFingerprint,
+	started_at_ms: i64,
 ) {
 	*state = CompanionWorkflowState::Running(CompanionRunningJob {
 		database_branch_id,
@@ -1067,10 +1454,9 @@ fn record_companion_job(
 		job_kind,
 		base_manifest_generation,
 		input_fingerprint,
-		started_at_ms: 0,
+		started_at_ms,
 		attempt: 0,
 	});
-	*state = CompanionWorkflowState::Idle;
 }
 
 fn record_companion_stop(

@@ -1,20 +1,25 @@
 use std::time::{Duration, Instant};
 
 use anyhow::{Result, bail};
+use futures_util::TryStreamExt;
 use depot::{
 	keys::{
-		branch_commit_key, branch_compaction_root_key, branch_delta_chunk_key, branch_meta_head_key,
-		branch_pidx_key, branches_list_key, sqlite_cmp_dirty_key,
+		PAGE_SIZE, branch_commit_key, branch_compaction_root_key,
+		branch_compaction_stage_hot_shard_prefix, branch_delta_chunk_key, branch_meta_head_key,
+		branch_pidx_key, branch_shard_key, branches_list_key, sqlite_cmp_dirty_key,
 	},
+	ltx::{LtxHeader, encode_ltx_v3},
 	types::{
 		BranchState, CommitRow, CompactionRoot, DBHead, DatabaseBranchId, DatabaseBranchRecord,
-		NamespaceBranchId, SqliteCmpDirty, encode_commit_row, encode_compaction_root,
+		DirtyPage, NamespaceBranchId, SqliteCmpDirty, encode_commit_row, encode_compaction_root,
 		encode_database_branch_record, encode_db_head, encode_sqlite_cmp_dirty,
 	},
 	workflows::compaction::{
-		DATABASE_BRANCH_ID_TAG, DbColdCompacterWorkflow, DbHotCompacterWorkflow, DbManagerInput,
-		DbManagerState, DbManagerWorkflow, DbReclaimerWorkflow, DeltasAvailable,
-		PlannedInputRange, database_branch_tag_value,
+		CompactionJobKind, CompactionJobStatus, DATABASE_BRANCH_ID_TAG, DbColdCompacterWorkflow,
+		DbHotCompacterWorkflow, DbManagerInput, DbManagerState, DbManagerWorkflow,
+		DbReclaimerWorkflow, DeltasAvailable, HotJobInputRange, PlannedInputRange, RunHotJob,
+		TxidRange,
+		database_branch_tag_value,
 	},
 };
 use gas::db::debug::DatabaseDebug;
@@ -165,6 +170,28 @@ async fn wait_for_dirty_marker_cleared(
 	}
 }
 
+async fn wait_for_staged_hot_rows(
+	test_ctx: &TestCtx,
+	database_branch_id: DatabaseBranchId,
+	job_id: Id,
+) -> Result<Vec<(Vec<u8>, Vec<u8>)>> {
+	let started_at = Instant::now();
+	let prefix = branch_compaction_stage_hot_shard_prefix(database_branch_id, job_id);
+
+	loop {
+		let rows = read_prefix_values(test_ctx, prefix.clone()).await?;
+		if !rows.is_empty() {
+			return Ok(rows);
+		}
+
+		if started_at.elapsed() > Duration::from_secs(5) {
+			bail!("timed out waiting for staged hot shard rows");
+		}
+
+		tokio::time::sleep(Duration::from_millis(25)).await;
+	}
+}
+
 async fn read_value(test_ctx: &TestCtx, key: Vec<u8>) -> Result<Option<Vec<u8>>> {
 	let db = test_ctx.pools().udb()?;
 	db.run(move |tx| {
@@ -175,6 +202,35 @@ async fn read_value(test_ctx: &TestCtx, key: Vec<u8>) -> Result<Option<Vec<u8>>>
 				.get(&key, Snapshot)
 				.await?
 				.map(Vec::<u8>::from))
+		}
+	})
+	.await
+}
+
+async fn read_prefix_values(test_ctx: &TestCtx, prefix: Vec<u8>) -> Result<Vec<(Vec<u8>, Vec<u8>)>> {
+	let db = test_ctx.pools().udb()?;
+	db.run(move |tx| {
+		let prefix = prefix.clone();
+		async move {
+			let prefix_subspace = universaldb::Subspace::from(
+				universaldb::tuple::Subspace::from_bytes(prefix),
+			);
+			let rows = tx
+				.informal()
+				.get_ranges_keyvalues(
+					universaldb::RangeOption {
+						mode: universaldb::options::StreamingMode::WantAll,
+						..universaldb::RangeOption::from(&prefix_subspace)
+					},
+					Snapshot,
+				)
+				.try_collect::<Vec<_>>()
+				.await?;
+
+			Ok(rows
+				.into_iter()
+				.map(|entry| (entry.key().to_vec(), entry.value().to_vec()))
+				.collect())
 		}
 	})
 	.await
@@ -233,8 +289,15 @@ async fn seed_manager_branch(
 						post_apply_checksum: txid,
 					})?,
 				);
+				let delta_blob = encode_ltx_v3(
+					LtxHeader::delta(txid, 1, 1_000 + i64::try_from(txid).unwrap_or(i64::MAX)),
+					&[DirtyPage {
+						pgno: 1,
+						bytes: vec![txid as u8; PAGE_SIZE as usize],
+					}],
+				)?;
 				tx.informal()
-					.set(&branch_delta_chunk_key(database_branch_id, txid, 0), &[txid as u8]);
+					.set(&branch_delta_chunk_key(database_branch_id, txid, 0), &delta_blob);
 			}
 			tx.informal().set(
 				&branch_pidx_key(database_branch_id, 1),
@@ -487,6 +550,158 @@ async fn duplicate_deltas_available_does_not_create_duplicate_hot_job() -> Resul
 		.job_id;
 
 	assert_eq!(second_job_id, first_job_id);
+
+	test_ctx.shutdown().await?;
+	Ok(())
+}
+
+#[tokio::test]
+async fn hot_compacter_writes_idempotent_staged_shard_output() -> Result<()> {
+	let database_branch_id = database_branch_id(0x4040_2233_4455_6677_8899_aabb_ccdd_eeff);
+	let tag_value = database_branch_tag_value(database_branch_id);
+	let mut test_ctx = TestCtx::new(build_registry()).await?;
+	seed_manager_branch(
+		&test_ctx,
+		database_branch_id,
+		quota_threshold_head(),
+		None,
+		Some(SqliteCmpDirty {
+			observed_head_txid: quota_threshold_head(),
+			updated_at_ms: 1_714_000_000_000,
+		}),
+	)
+	.await?;
+
+	let manager_workflow_id = test_ctx
+		.workflow(DbManagerInput { database_branch_id })
+		.tag(DATABASE_BRANCH_ID_TAG, &tag_value)
+		.unique()
+		.dispatch()
+		.await?;
+	let hot_workflow_id =
+		wait_for_workflow::<DbHotCompacterWorkflow>(&test_ctx, database_branch_id).await?;
+	let manager_state =
+		wait_for_manager_state(&test_ctx, manager_workflow_id, |state| state.active_hot_job.is_some())
+			.await?;
+	let active_hot_job = manager_state
+		.active_hot_job
+		.expect("manager should record active hot job");
+	let first_staged_rows =
+		wait_for_staged_hot_rows(&test_ctx, database_branch_id, active_hot_job.job_id).await?;
+
+	assert_eq!(first_staged_rows.len(), 1);
+	assert!(
+		read_value(
+			&test_ctx,
+			branch_shard_key(database_branch_id, 0, quota_threshold_head()),
+		)
+		.await?
+		.is_none()
+	);
+	assert!(
+		read_value(
+			&test_ctx,
+			branch_delta_chunk_key(database_branch_id, quota_threshold_head(), 0),
+		)
+		.await?
+		.is_some()
+	);
+	assert_eq!(
+		read_value(&test_ctx, branch_pidx_key(database_branch_id, 1)).await?,
+		Some(quota_threshold_head().to_be_bytes().to_vec())
+	);
+
+	let input_range = match active_hot_job.input_range {
+		PlannedInputRange::Hot(input_range) => input_range,
+		PlannedInputRange::Cold(_) | PlannedInputRange::Reclaim(_) => {
+			bail!("expected hot input range")
+		}
+	};
+	let signal_id = test_ctx
+		.signal(RunHotJob {
+			database_branch_id,
+			job_id: active_hot_job.job_id,
+			job_kind: CompactionJobKind::Hot,
+			base_manifest_generation: active_hot_job.base_manifest_generation,
+			input_fingerprint: active_hot_job.input_fingerprint,
+			status: CompactionJobStatus::Requested,
+			input_range,
+		})
+		.to_workflow_id(hot_workflow_id)
+		.send()
+		.await?
+		.expect("signal should target hot compacter workflow");
+	wait_for_signal_ack(&test_ctx, signal_id).await?;
+
+	let second_staged_rows = read_prefix_values(
+		&test_ctx,
+		branch_compaction_stage_hot_shard_prefix(database_branch_id, active_hot_job.job_id),
+	)
+	.await?;
+	assert_eq!(second_staged_rows, first_staged_rows);
+
+	test_ctx.shutdown().await?;
+	Ok(())
+}
+
+#[tokio::test]
+async fn hot_compacter_rejects_stale_base_generation_without_staging() -> Result<()> {
+	let database_branch_id = database_branch_id(0x5050_2233_4455_6677_8899_aabb_ccdd_eeff);
+	let tag_value = database_branch_tag_value(database_branch_id);
+	let mut test_ctx = TestCtx::new(build_registry()).await?;
+	seed_manager_branch(
+		&test_ctx,
+		database_branch_id,
+		1,
+		Some(CompactionRoot {
+			schema_version: 1,
+			manifest_generation: 2,
+			hot_watermark_txid: 0,
+			cold_watermark_txid: 0,
+			cold_watermark_versionstamp: [0; 16],
+		}),
+		None,
+	)
+	.await?;
+
+	let _manager_workflow_id = test_ctx
+		.workflow(DbManagerInput { database_branch_id })
+		.tag(DATABASE_BRANCH_ID_TAG, &tag_value)
+		.unique()
+		.dispatch()
+		.await?;
+	let hot_workflow_id =
+		wait_for_workflow::<DbHotCompacterWorkflow>(&test_ctx, database_branch_id).await?;
+	let stale_job_id = Id::new_v1(42);
+	let signal_id = test_ctx
+		.signal(RunHotJob {
+			database_branch_id,
+			job_id: stale_job_id,
+			job_kind: CompactionJobKind::Hot,
+			base_manifest_generation: 1,
+			input_fingerprint: [7; 32],
+			status: CompactionJobStatus::Requested,
+			input_range: HotJobInputRange {
+				txids: TxidRange {
+					min_txid: 1,
+					max_txid: 1,
+				},
+				max_pages: 1,
+				max_bytes: 1,
+			},
+		})
+		.to_workflow_id(hot_workflow_id)
+		.send()
+		.await?
+		.expect("signal should target hot compacter workflow");
+	wait_for_signal_ack(&test_ctx, signal_id).await?;
+
+	let staged_rows = read_prefix_values(
+		&test_ctx,
+		branch_compaction_stage_hot_shard_prefix(database_branch_id, stale_job_id),
+	)
+	.await?;
+	assert!(staged_rows.is_empty());
 
 	test_ctx.shutdown().await?;
 	Ok(())
