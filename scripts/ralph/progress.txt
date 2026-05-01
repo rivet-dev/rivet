@@ -3,6 +3,7 @@
 - PITR and workflow compaction limit constants live in `engine/packages/depot/src/conveyer/constants.rs` and are re-exported at the `depot` crate root.
 - Workflow compaction persisted payload structs live in `engine/packages/depot/src/conveyer/types.rs`; expose vbare encode/decode helpers there and cover them from `engine/packages/depot/tests/`.
 - Depot page reads prefer PIDX/DELTA, then latest branch SHARD at or below the read cap, then workflow `CMP/cold_shard` refs and legacy cold manifest layers outside the UDB transaction.
+- Workflow compaction signals and durable workflow state live in `engine/packages/depot/src/workflows/compaction.rs`; expose vbare encode/decode helpers there and cover them from `engine/packages/depot/tests/`.
 
 # Ralph Progress Log
 Started: Thu Apr 30 09:07:22 PM PDT 2026
@@ -18,7 +19,7 @@ Started: Thu Apr 30 09:07:22 PM PDT 2026
   - `engine/packages/depot/tests/conveyer_constants.rs`
   - `engine/packages/depot/tests/conveyer_keys.rs`
   - `docs-internal/engine/sqlite/storage-structure.md`
-  - `engine/packages/depot/AGENTS.md`
+  - `engine/packages/depot/CLAUDE.md`
   - `scripts/ralph/prd.json`
   - `scripts/ralph/progress.txt`
 - **Learnings for future iterations:**
@@ -53,4 +54,21 @@ Started: Thu Apr 30 09:07:22 PM PDT 2026
 - **Learnings for future iterations:**
   - Read-side workflow compaction support should preserve the existing hot-tier order: PIDX/DELTA wins, SHARD is fallback, cold refs are last.
   - Cold-tier object reads stay outside the UDB transaction; the transaction only collects candidate object keys and hot-tier blobs.
+---
+## 2026-04-30 21:45:56 PDT - US-004
+- Implemented Gasoline signal payloads for DB manager and companion workflow coordination.
+- Added durable manager state and companion workflow state contracts with vbare encode/decode helpers.
+- Added integration coverage for stable signal names and versioned round-trips for every new signal/state payload.
+- Verified with `cargo test -p depot --test workflow_compaction_payloads`, `cargo check -p depot`, and `cargo test -p depot`.
+- Files changed:
+  - `engine/packages/depot/src/lib.rs`
+  - `engine/packages/depot/src/workflows/mod.rs`
+  - `engine/packages/depot/src/workflows/compaction.rs`
+  - `engine/packages/depot/tests/workflow_compaction_payloads.rs`
+  - `engine/packages/depot/AGENTS.md`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Gasoline `#[signal]` payload structs can still be encoded through the depot vbare helper pattern because the macro derives serde for them.
+  - Workflow compaction contracts now live under `depot::workflows::compaction`; future workflow skeletons should reuse these signal and state payloads instead of redefining them locally.
 ---

@@ -3,6 +3,7 @@ pub mod cold_tier;
 pub mod compactor;
 pub mod gc;
 pub mod conveyer;
+pub mod workflows;
 #[cfg(debug_assertions)]
 pub mod takeover;
 
