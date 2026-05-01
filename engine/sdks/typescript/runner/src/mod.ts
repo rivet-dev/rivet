@@ -287,6 +287,7 @@ export class Runner {
 		const actor = this.getActor(actorId, generation);
 		if (!actor) return;
 
+		actor.stopIntentSent = true;
 		// Keep the actor instance in memory during sleep
 		this.#sendActorIntent(actorId, actor.generation, "sleep");
 
