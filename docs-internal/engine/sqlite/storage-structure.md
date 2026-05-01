@@ -114,7 +114,7 @@ BR/{database_id_be:16}/CMP/stage/{job_id}/hot_shard/{shard_id_be:4}/{as_of_txid_
   -> staged LTX shard blob
 ```
 
-The DB manager owns published `CMP` metadata. Staged hot shard keys are not reader-visible until the manager copies them to `SHARD`.
+The DB manager owns published `CMP` metadata. Staged hot shard keys are not reader-visible until the manager validates the active job and copies them to `SHARD`; the same install transaction advances `CMP/root` and compare-and-clears matching PIDX rows.
 
 ## Branch Manifest Subkeys
 

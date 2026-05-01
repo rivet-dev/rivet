@@ -8,6 +8,7 @@
 - Workflow compaction dirty admission lives in `engine/packages/depot/src/conveyer/commit.rs`; runtime callers inject a signaler into `Db` to create or target the unique manager workflow.
 - Workflow compaction manager planning refreshes FDB in `RefreshManager` activity, records active jobs in durable manager state, and signals persistent companion workflows instead of spawning per-job workflows.
 - Workflow hot compaction writes staged LTX blobs under `CMP/stage/{job_id}/hot_shard`; successful outputs stay as the manager's active hot job until a manager install story publishes or rejects them.
+- Workflow hot install belongs in the DB manager: accept only the matching active job fingerprint, validate staged checksums, copy to reader-visible `SHARD`, advance `CMP/root`, and clear PIDX with `COMPARE_AND_CLEAR`.
 
 # Ralph Progress Log
 Started: Thu Apr 30 09:07:22 PM PDT 2026
@@ -144,4 +145,22 @@ Started: Thu Apr 30 09:07:22 PM PDT 2026
   - Hot compacter retries can stay idempotent by rewriting the same job-scoped staging key and checksum for the same `job_id`.
   - The manager must not clear a successful hot job before the publish/install story advances `CMP/root`; otherwise deadline refreshes will plan duplicate hot jobs against unchanged FDB state.
   - Workflow compaction tests that exercise staged output need valid LTX delta blobs, not placeholder bytes.
+---
+## 2026-04-30 22:23:55 PDT - US-009
+- Implemented manager-side hot install for successful `HotJobFinished` signals that match the active hot job.
+- Added serializable install validation for branch lifecycle, manifest generation, head, hot input fingerprint, staged shard size/hash, and expected PIDX rows before publishing `SHARD`.
+- Added an end-to-end workflow test that commits DELTAs, runs manager/hot workflows, publishes a SHARD, clears PIDX, leaves DELTAs untouched, and reads through the published SHARD.
+- Verified with `cargo test -p depot --test workflow_compaction_skeletons`, `cargo check -p depot`, and `cargo test -p depot`.
+- Files changed:
+  - `engine/packages/depot/src/workflows/compaction.rs`
+  - `engine/packages/depot/tests/workflow_compaction_skeletons.rs`
+  - `engine/packages/depot/AGENTS.md`
+  - `docs-internal/engine/sqlite/components.md`
+  - `docs-internal/engine/sqlite/storage-structure.md`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Hot install should run as a manager activity so active-job matching stays in durable workflow state while FDB validation stays transactional.
+  - `HotJobFinished` must be ignored unless job id, kind, base generation, and input fingerprint match the manager's active hot job.
+  - After US-009, successful hot jobs are transient in manager state because the manager installs and clears them instead of holding them indefinitely.
 ---

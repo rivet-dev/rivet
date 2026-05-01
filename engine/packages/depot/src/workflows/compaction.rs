@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use anyhow::{Context, Result, bail, ensure};
 use futures_util::{FutureExt, TryStreamExt};
@@ -25,7 +25,7 @@ use crate::{
 			BranchState, ColdShardRef, CommitRow, CompactionRoot, DBHead, DatabaseBranchId,
 			DatabaseBranchRecord, DbHistoryPin, DirtyPage, SqliteCmpDirty, decode_commit_row,
 			decode_compaction_root, decode_database_branch_record, decode_db_head,
-			decode_db_history_pin, decode_sqlite_cmp_dirty,
+			decode_db_history_pin, decode_sqlite_cmp_dirty, encode_compaction_root,
 		},
 		udb,
 	},
@@ -106,7 +106,7 @@ pub enum PlannedInputRange {
 	Reclaim(ReclaimJobInputRange),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct HotShardOutputRef {
 	pub shard_id: u32,
 	pub as_of_txid: u64,
@@ -398,6 +398,23 @@ pub struct StageHotJobOutput {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Hash)]
+pub struct InstallHotJobInput {
+	pub database_branch_id: DatabaseBranchId,
+	pub job_id: Id,
+	pub job_kind: CompactionJobKind,
+	pub base_manifest_generation: u64,
+	pub input_fingerprint: CompactionInputFingerprint,
+	pub input_range: HotJobInputRange,
+	pub output_refs: Vec<HotShardOutputRef>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InstallHotJobOutput {
+	pub status: CompactionJobStatus,
+	pub output_refs: Vec<HotShardOutputRef>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Hash)]
 pub struct RefreshManagerInput {
 	pub database_branch_id: DatabaseBranchId,
 }
@@ -486,10 +503,45 @@ pub async fn db_manager(ctx: &mut WorkflowCtx, input: &DbManagerInput) -> Result
 						}
 						DbManagerSignal::HotJobFinished(signal) => {
 							if signal.database_branch_id == input.database_branch_id {
-								match signal.status {
-									CompactionJobStatus::Requested | CompactionJobStatus::Succeeded => {}
-									CompactionJobStatus::Rejected { .. }
-									| CompactionJobStatus::Failed { .. } => state.active_hot_job = None,
+								if let Some(active_job) = state.active_hot_job.as_ref() {
+									if hot_job_finished_matches_active(&signal, active_job) {
+										match &signal.status {
+											CompactionJobStatus::Requested => {}
+											CompactionJobStatus::Succeeded => {
+												let input_range = match active_job.input_range.clone() {
+													PlannedInputRange::Hot(input_range) => input_range,
+													PlannedInputRange::Cold(_)
+													| PlannedInputRange::Reclaim(_) => {
+														bail!("active hot job carried non-hot input range")
+													}
+												};
+												let install = ctx
+													.activity(InstallHotJobInput {
+														database_branch_id: signal.database_branch_id,
+														job_id: signal.job_id,
+														job_kind: signal.job_kind,
+														base_manifest_generation: signal
+															.base_manifest_generation,
+														input_fingerprint: signal.input_fingerprint,
+														input_range,
+														output_refs: signal.output_refs.clone(),
+													})
+													.await?;
+												match install.status {
+													CompactionJobStatus::Requested => {}
+													CompactionJobStatus::Succeeded
+													| CompactionJobStatus::Rejected { .. }
+													| CompactionJobStatus::Failed { .. } => {
+														state.active_hot_job = None
+													}
+												}
+											}
+											CompactionJobStatus::Rejected { .. }
+											| CompactionJobStatus::Failed { .. } => {
+												state.active_hot_job = None
+											}
+										}
+									}
 								}
 							}
 						}
@@ -679,6 +731,16 @@ pub async fn refresh_manager(
 	})
 }
 
+fn hot_job_finished_matches_active(
+	signal: &HotJobFinished,
+	active_job: &ActiveCompactionJob,
+) -> bool {
+	signal.job_id == active_job.job_id
+		&& signal.job_kind == active_job.job_kind
+		&& signal.base_manifest_generation == active_job.base_manifest_generation
+		&& signal.input_fingerprint == active_job.input_fingerprint
+}
+
 #[activity(StageHotJob)]
 pub async fn stage_hot_job(
 	ctx: &ActivityCtx,
@@ -755,7 +817,8 @@ async fn stage_hot_job_tx(
 	};
 
 	let hot_inputs =
-		read_hot_input_snapshot(tx, input.database_branch_id, Some(&head), &root).await?;
+		read_hot_input_snapshot(tx, input.database_branch_id, Some(&head), &root, Snapshot)
+			.await?;
 	let input_fingerprint =
 		fingerprint_hot_inputs(input.database_branch_id, &root, &head, &hot_inputs);
 	if input_fingerprint != input.input_fingerprint {
@@ -772,6 +835,177 @@ async fn stage_hot_job_tx(
 
 fn rejected_hot_job(reason: impl Into<String>) -> StageHotJobOutput {
 	StageHotJobOutput {
+		status: CompactionJobStatus::Rejected {
+			reason: reason.into(),
+		},
+		output_refs: Vec::new(),
+	}
+}
+
+#[activity(InstallHotJob)]
+pub async fn install_hot_job(
+	ctx: &ActivityCtx,
+	input: &InstallHotJobInput,
+) -> Result<InstallHotJobOutput> {
+	let input = input.clone();
+
+	ctx.udb()?
+		.run(move |tx| {
+			let input = input.clone();
+			async move { install_hot_job_tx(&tx, &input).await }
+		})
+		.await
+}
+
+async fn install_hot_job_tx(
+	tx: &universaldb::Transaction,
+	input: &InstallHotJobInput,
+) -> Result<InstallHotJobOutput> {
+	if input.job_kind != CompactionJobKind::Hot {
+		return Ok(rejected_hot_install("manager received a non-hot job"));
+	}
+
+	let branch_record = tx_get_value(
+		tx,
+		&keys::branches_list_key(input.database_branch_id),
+		Serializable,
+	)
+	.await?
+	.as_deref()
+	.map(decode_database_branch_record)
+	.transpose()
+	.context("decode sqlite database branch record for hot install")?;
+	if !branch_record
+		.as_ref()
+		.is_some_and(|record| record.state == BranchState::Live)
+	{
+		return Ok(rejected_hot_install("database branch is not live"));
+	}
+
+	let root = tx_get_value(
+		tx,
+		&keys::branch_compaction_root_key(input.database_branch_id),
+		Serializable,
+	)
+	.await?
+	.as_deref()
+	.map(decode_compaction_root)
+	.transpose()
+	.context("decode sqlite compaction root for hot install")?
+	.unwrap_or(CompactionRoot {
+		schema_version: 1,
+		manifest_generation: 0,
+		hot_watermark_txid: 0,
+		cold_watermark_txid: 0,
+		cold_watermark_versionstamp: [0; 16],
+	});
+	if root.manifest_generation != input.base_manifest_generation {
+		return Ok(rejected_hot_install("base manifest generation changed"));
+	}
+
+	let Some(head) = tx_get_value(
+		tx,
+		&keys::branch_meta_head_key(input.database_branch_id),
+		Serializable,
+	)
+	.await?
+	.as_deref()
+	.map(decode_db_head)
+	.transpose()
+	.context("decode sqlite head for hot install")?
+	else {
+		return Ok(rejected_hot_install("database branch head is missing"));
+	};
+
+	let hot_inputs = read_hot_input_snapshot(
+		tx,
+		input.database_branch_id,
+		Some(&head),
+		&root,
+		Serializable,
+	)
+	.await?;
+	let input_fingerprint =
+		fingerprint_hot_inputs(input.database_branch_id, &root, &head, &hot_inputs);
+	if input_fingerprint != input.input_fingerprint {
+		return Ok(rejected_hot_install("hot compaction input fingerprint changed"));
+	}
+
+	let mut staged_blobs = Vec::with_capacity(input.output_refs.len());
+	let mut staged_shards = BTreeSet::new();
+	for output_ref in &input.output_refs {
+		if output_ref.as_of_txid != input.input_range.txids.max_txid
+			|| output_ref.min_txid != input.input_range.txids.min_txid
+			|| output_ref.max_txid != input.input_range.txids.max_txid
+		{
+			return Ok(rejected_hot_install("hot output ref does not match planned txid range"));
+		}
+		if !staged_shards.insert(output_ref.shard_id) {
+			return Ok(rejected_hot_install("duplicate staged hot shard output ref"));
+		}
+
+		let stage_key = keys::branch_compaction_stage_hot_shard_key(
+			input.database_branch_id,
+			input.job_id,
+			output_ref.shard_id,
+			output_ref.as_of_txid,
+			0,
+		);
+		let Some(staged_blob) = tx_get_value(tx, &stage_key, Serializable).await? else {
+			return Ok(rejected_hot_install("staged hot shard is missing"));
+		};
+		if output_ref.size_bytes != u64::try_from(staged_blob.len()).unwrap_or(u64::MAX)
+			|| output_ref.content_hash != content_hash(&staged_blob)
+		{
+			return Ok(rejected_hot_install("staged hot shard checksum mismatch"));
+		}
+		staged_blobs.push((output_ref.clone(), staged_blob));
+	}
+
+	for (output_ref, staged_blob) in &staged_blobs {
+		tx.informal().set(
+			&keys::branch_shard_key(
+				input.database_branch_id,
+				output_ref.shard_id,
+				output_ref.as_of_txid,
+			),
+			staged_blob,
+		);
+	}
+
+	for (key, value) in &hot_inputs.pidx_entries {
+		let pgno = decode_branch_pidx_pgno(input.database_branch_id, key)?;
+		let shard_id = pgno / keys::SHARD_SIZE;
+		if !staged_shards.contains(&shard_id) {
+			return Ok(rejected_hot_install("missing staged hot shard for PIDX row"));
+		}
+		decode_pidx_txid(value)?;
+	}
+
+	for (key, value) in &hot_inputs.pidx_entries {
+		udb::compare_and_clear(tx, key, value);
+	}
+
+	let next_root = CompactionRoot {
+		schema_version: root.schema_version,
+		manifest_generation: root.manifest_generation.saturating_add(1),
+		hot_watermark_txid: root.hot_watermark_txid.max(input.input_range.txids.max_txid),
+		cold_watermark_txid: root.cold_watermark_txid,
+		cold_watermark_versionstamp: root.cold_watermark_versionstamp,
+	};
+	tx.informal().set(
+		&keys::branch_compaction_root_key(input.database_branch_id),
+		&encode_compaction_root(next_root).context("encode sqlite compaction root for hot install")?,
+	);
+
+	Ok(InstallHotJobOutput {
+		status: CompactionJobStatus::Succeeded,
+		output_refs: input.output_refs.clone(),
+	})
+}
+
+fn rejected_hot_install(reason: impl Into<String>) -> InstallHotJobOutput {
+	InstallHotJobOutput {
 		status: CompactionJobStatus::Rejected {
 			reason: reason.into(),
 		},
@@ -816,7 +1050,7 @@ async fn read_manager_fdb_snapshot(
 		.transpose()
 		.context("decode sqlite dirty marker for compaction manager")?;
 	let db_pins = read_db_history_pins(tx, branch_id).await?;
-	let hot_inputs = read_hot_input_snapshot(tx, branch_id, head.as_ref(), &root).await?;
+	let hot_inputs = read_hot_input_snapshot(tx, branch_id, head.as_ref(), &root, Snapshot).await?;
 	let hot_lag = head
 		.as_ref()
 		.map_or(0, |head| head.head_txid.saturating_sub(root.hot_watermark_txid));
@@ -864,6 +1098,7 @@ async fn read_hot_input_snapshot(
 	branch_id: DatabaseBranchId,
 	head: Option<&DBHead>,
 	root: &CompactionRoot,
+	isolation_level: universaldb::utils::IsolationLevel,
 ) -> Result<HotInputSnapshot> {
 	let Some(head) = head else {
 		return Ok(HotInputSnapshot::default());
@@ -876,8 +1111,8 @@ async fn read_hot_input_snapshot(
 	let max_txid = head.head_txid;
 	let mut snapshot = HotInputSnapshot::default();
 
-	for (key, value) in tx_scan_prefix_values(tx, &keys::branch_commit_prefix(branch_id), Snapshot)
-		.await?
+	for (key, value) in
+		tx_scan_prefix_values(tx, &keys::branch_commit_prefix(branch_id), isolation_level).await?
 	{
 		let txid = decode_branch_commit_txid(branch_id, &key)?;
 		if txid < min_txid || txid > max_txid {
@@ -897,8 +1132,8 @@ async fn read_hot_input_snapshot(
 		}
 	}
 
-	for (key, value) in tx_scan_prefix_values(tx, &keys::branch_delta_prefix(branch_id), Snapshot)
-		.await?
+	for (key, value) in
+		tx_scan_prefix_values(tx, &keys::branch_delta_prefix(branch_id), isolation_level).await?
 	{
 		let txid = keys::decode_branch_delta_chunk_txid(branch_id, &key)?;
 		if txid < min_txid || txid > max_txid {
@@ -915,8 +1150,8 @@ async fn read_hot_input_snapshot(
 		}
 	}
 
-	for (key, value) in tx_scan_prefix_values(tx, &keys::branch_pidx_prefix(branch_id), Snapshot)
-		.await?
+	for (key, value) in
+		tx_scan_prefix_values(tx, &keys::branch_pidx_prefix(branch_id), isolation_level).await?
 	{
 		if let Ok(txid) = decode_pidx_txid(&value) {
 			if txid < min_txid || txid > max_txid {

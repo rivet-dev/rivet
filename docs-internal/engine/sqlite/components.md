@@ -35,6 +35,19 @@ Responsibilities:
 
 Lease ownership: per-database `BR/{database_id}/META/compactor_lease`.
 
+## Workflow Compaction
+
+The workflow compaction path uses one persistent DB manager plus hot, cold, and reclaim companion workflows per database branch.
+
+Responsibilities:
+
+- Coalesce commit wakeups through `SQLITE_CMP_DIRTY/{database_branch_id}` and `DeltasAvailable` signals.
+- Plan hot jobs from current FDB state instead of trusting signal payloads.
+- Have the hot companion write staged shard blobs under `CMP/stage/{job_id}/hot_shard`.
+- Install matching hot job output by copying staged blobs to reader-visible `SHARD`, advancing `CMP/root`, and compare-and-clearing expected PIDX rows.
+
+Lease ownership: none. Gasoline workflow uniqueness uses only the database branch id tag.
+
 ## Cold Compactor
 
 The cold compactor moves durable history from FDB into S3 or the filesystem cold-tier test backend.
@@ -105,6 +118,7 @@ Lease ownership: global `CMPC/lease_global/{kind=eviction}`. Sweeps are batch-li
 |---|---|---|
 | Conveyer | `META/head`, `COMMITS`, `VTX`, `PIDX`, `DELTA`, branch records, bookmarks | None |
 | Hot compactor | `SHARD`, `META/compact`, `META/manifest/last_hot_pass_txid` | `META/compactor_lease` |
+| Workflow DB manager | `CMP/root`, staged hot output install to `SHARD`, matching PIDX clears | None |
 | Cold compactor | S3 objects, `META/cold_compact`, `META/manifest/cold_drained_txid`, pin status | `META/cold_lease` |
 | Eviction compactor | Clears FDB SHARD/PIDX/DELTA rows, eviction index | `CMPC/lease_global/{kind=eviction}` |
 

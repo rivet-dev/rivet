@@ -1,23 +1,30 @@
-use std::time::{Duration, Instant};
+use std::{
+	sync::Arc,
+	time::{Duration, Instant},
+};
 
 use anyhow::{Result, bail};
 use futures_util::TryStreamExt;
+use rivet_pools::NodeId;
 use depot::{
+	conveyer::{Db, branch},
 	keys::{
 		PAGE_SIZE, branch_commit_key, branch_compaction_root_key,
 		branch_compaction_stage_hot_shard_prefix, branch_delta_chunk_key, branch_meta_head_key,
-		branch_pidx_key, branch_shard_key, branches_list_key, sqlite_cmp_dirty_key,
+		branch_pidx_key, branch_shard_key, branch_shard_prefix, branches_list_key,
+		sqlite_cmp_dirty_key,
 	},
 	ltx::{LtxHeader, encode_ltx_v3},
 	types::{
 		BranchState, CommitRow, CompactionRoot, DBHead, DatabaseBranchId, DatabaseBranchRecord,
-		DirtyPage, NamespaceBranchId, SqliteCmpDirty, encode_commit_row, encode_compaction_root,
-		encode_database_branch_record, encode_db_head, encode_sqlite_cmp_dirty,
+		DirtyPage, FetchedPage, NamespaceBranchId, SqliteCmpDirty, decode_compaction_root,
+		encode_commit_row, encode_compaction_root, encode_database_branch_record, encode_db_head,
+		encode_sqlite_cmp_dirty,
 	},
 	workflows::compaction::{
 		CompactionJobKind, CompactionJobStatus, DATABASE_BRANCH_ID_TAG, DbColdCompacterWorkflow,
 		DbHotCompacterWorkflow, DbManagerInput, DbManagerState, DbManagerWorkflow,
-		DbReclaimerWorkflow, DeltasAvailable, HotJobInputRange, PlannedInputRange, RunHotJob,
+		DbReclaimerWorkflow, DeltasAvailable, HotJobInputRange, RunHotJob,
 		TxidRange,
 		database_branch_tag_value,
 	},
@@ -25,10 +32,34 @@ use depot::{
 use gas::db::debug::DatabaseDebug;
 use gas::prelude::{Id, Registry, SignalTrait, TestCtx, WorkflowTrait};
 use universaldb::utils::IsolationLevel::Snapshot;
+use universalpubsub::{PubSub, driver::memory::MemoryDriver};
 use uuid::Uuid;
+
+const TEST_DATABASE: &str = "workflow-compaction-test";
 
 fn database_branch_id(value: u128) -> DatabaseBranchId {
 	DatabaseBranchId::from_uuid(Uuid::from_u128(value))
+}
+
+fn test_namespace() -> Id {
+	Id::v1(Uuid::from_u128(0x5678), 1)
+}
+
+fn test_ups() -> PubSub {
+	PubSub::new(Arc::new(MemoryDriver::new(
+		"depot-workflow-compaction-test".to_string(),
+	)))
+}
+
+fn page(fill: u8) -> Vec<u8> {
+	vec![fill; PAGE_SIZE as usize]
+}
+
+fn dirty_page(pgno: u32, fill: u8) -> DirtyPage {
+	DirtyPage {
+		pgno,
+		bytes: page(fill),
+	}
 }
 
 fn build_registry() -> Registry {
@@ -82,6 +113,30 @@ async fn wait_for_signal_ack(test_ctx: &TestCtx, signal_id: Id) -> Result<()> {
 
 		if started_at.elapsed() > Duration::from_secs(5) {
 			bail!("timed out waiting for signal ack");
+		}
+
+		tokio::time::sleep(Duration::from_millis(25)).await;
+	}
+}
+
+async fn wait_for_run_hot_job(test_ctx: &TestCtx, hot_workflow_id: Id) -> Result<RunHotJob> {
+	let started_at = Instant::now();
+
+	loop {
+		let signals = DatabaseDebug::find_signals(
+			test_ctx.debug_db(),
+			&[],
+			Some(hot_workflow_id),
+			Some(<RunHotJob as SignalTrait>::NAME),
+			None,
+		)
+		.await?;
+		if let Some(signal) = signals.into_iter().next() {
+			return Ok(serde_json::from_value(signal.body)?);
+		}
+
+		if started_at.elapsed() > Duration::from_secs(5) {
+			bail!("timed out waiting for RunHotJob signal");
 		}
 
 		tokio::time::sleep(Duration::from_millis(25)).await;
@@ -192,6 +247,40 @@ async fn wait_for_staged_hot_rows(
 	}
 }
 
+async fn wait_for_hot_install(
+	test_ctx: &TestCtx,
+	database_branch_id: DatabaseBranchId,
+	as_of_txid: u64,
+) -> Result<CompactionRoot> {
+	let started_at = Instant::now();
+
+	loop {
+		let root = read_value(test_ctx, branch_compaction_root_key(database_branch_id))
+			.await?
+			.as_deref()
+			.map(decode_compaction_root)
+			.transpose()?;
+		let pidx = read_value(test_ctx, branch_pidx_key(database_branch_id, 1)).await?;
+		let shard = read_value(test_ctx, branch_shard_key(database_branch_id, 0, as_of_txid)).await?;
+
+		if let Some(root) = root {
+			if root.manifest_generation == 1
+				&& root.hot_watermark_txid == as_of_txid
+				&& pidx.is_none()
+				&& shard.is_some()
+			{
+				return Ok(root);
+			}
+		}
+
+		if started_at.elapsed() > Duration::from_secs(5) {
+			bail!("timed out waiting for hot install");
+		}
+
+		tokio::time::sleep(Duration::from_millis(25)).await;
+	}
+}
+
 async fn read_value(test_ctx: &TestCtx, key: Vec<u8>) -> Result<Option<Vec<u8>>> {
 	let db = test_ctx.pools().udb()?;
 	db.run(move |tx| {
@@ -203,6 +292,21 @@ async fn read_value(test_ctx: &TestCtx, key: Vec<u8>) -> Result<Option<Vec<u8>>>
 				.await?
 				.map(Vec::<u8>::from))
 		}
+	})
+	.await
+}
+
+async fn read_database_branch_id(test_ctx: &TestCtx) -> Result<DatabaseBranchId> {
+	let db = test_ctx.pools().udb()?;
+	db.run(|tx| async move {
+		branch::resolve_database_branch(
+			&tx,
+			depot::types::NamespaceId::from_gas_id(test_namespace()),
+			TEST_DATABASE,
+			universaldb::utils::IsolationLevel::Serializable,
+		)
+		.await?
+		.ok_or_else(|| anyhow::anyhow!("database branch should exist"))
 	})
 	.await
 }
@@ -474,26 +578,21 @@ async fn manager_refresh_plans_first_hot_job_from_fdb_state() -> Result<()> {
 		.dispatch()
 		.await?;
 
+	wait_for_hot_install(&test_ctx, database_branch_id, quota_threshold_head()).await?;
 	let manager_state =
-		wait_for_manager_state(&test_ctx, manager_workflow_id, |state| state.active_hot_job.is_some())
+		wait_for_manager_state(&test_ctx, manager_workflow_id, |state| state.active_hot_job.is_none())
 			.await?;
-	let active_hot_job = manager_state
-		.active_hot_job
-		.expect("manager should record active hot job");
 
-	assert_eq!(active_hot_job.database_branch_id, database_branch_id);
-	assert_eq!(active_hot_job.base_manifest_generation, 0);
-	assert_ne!(active_hot_job.input_fingerprint, [0; 32]);
-	match active_hot_job.input_range {
-		PlannedInputRange::Hot(range) => {
-			assert_eq!(range.txids.min_txid, 1);
-			assert_eq!(range.txids.max_txid, quota_threshold_head());
-			assert!(range.max_bytes > 0);
-		}
-		PlannedInputRange::Cold(_) | PlannedInputRange::Reclaim(_) => {
-			bail!("expected hot input range")
-		}
-	}
+	assert!(manager_state.active_hot_job.is_none());
+	assert!(read_value(&test_ctx, branch_pidx_key(database_branch_id, 1)).await?.is_none());
+	assert!(
+		read_value(
+			&test_ctx,
+			branch_shard_key(database_branch_id, 0, quota_threshold_head()),
+		)
+		.await?
+		.is_some()
+	);
 
 	test_ctx.shutdown().await?;
 	Ok(())
@@ -522,14 +621,7 @@ async fn duplicate_deltas_available_does_not_create_duplicate_hot_job() -> Resul
 		.unique()
 		.dispatch()
 		.await?;
-	let first_state =
-		wait_for_manager_state(&test_ctx, manager_workflow_id, |state| state.active_hot_job.is_some())
-			.await?;
-	let first_job_id = first_state
-		.active_hot_job
-		.as_ref()
-		.expect("manager should have active hot job")
-		.job_id;
+	wait_for_hot_install(&test_ctx, database_branch_id, quota_threshold_head()).await?;
 
 	let signal_id = test_ctx
 		.signal(DeltasAvailable {
@@ -543,13 +635,18 @@ async fn duplicate_deltas_available_does_not_create_duplicate_hot_job() -> Resul
 		.expect("signal should target manager workflow");
 	wait_for_signal_ack(&test_ctx, signal_id).await?;
 	let second_state = wait_for_manager_cursor(&test_ctx, manager_workflow_id, 99).await?;
-	let second_job_id = second_state
-		.active_hot_job
-		.as_ref()
-		.expect("manager should keep active hot job")
-		.job_id;
+	let root = read_value(&test_ctx, branch_compaction_root_key(database_branch_id))
+		.await?
+		.as_deref()
+		.map(decode_compaction_root)
+		.transpose()?
+		.expect("hot install should publish compaction root");
+	let shard_rows = read_prefix_values(&test_ctx, branch_shard_prefix(database_branch_id)).await?;
 
-	assert_eq!(second_job_id, first_job_id);
+	assert!(second_state.active_hot_job.is_none());
+	assert_eq!(root.manifest_generation, 1);
+	assert_eq!(root.hot_watermark_txid, quota_threshold_head());
+	assert_eq!(shard_rows.len(), 1);
 
 	test_ctx.shutdown().await?;
 	Ok(())
@@ -572,7 +669,7 @@ async fn hot_compacter_writes_idempotent_staged_shard_output() -> Result<()> {
 	)
 	.await?;
 
-	let manager_workflow_id = test_ctx
+	let _manager_workflow_id = test_ctx
 		.workflow(DbManagerInput { database_branch_id })
 		.tag(DATABASE_BRANCH_ID_TAG, &tag_value)
 		.unique()
@@ -580,24 +677,12 @@ async fn hot_compacter_writes_idempotent_staged_shard_output() -> Result<()> {
 		.await?;
 	let hot_workflow_id =
 		wait_for_workflow::<DbHotCompacterWorkflow>(&test_ctx, database_branch_id).await?;
-	let manager_state =
-		wait_for_manager_state(&test_ctx, manager_workflow_id, |state| state.active_hot_job.is_some())
-			.await?;
-	let active_hot_job = manager_state
-		.active_hot_job
-		.expect("manager should record active hot job");
+	let run_hot_job = wait_for_run_hot_job(&test_ctx, hot_workflow_id).await?;
 	let first_staged_rows =
-		wait_for_staged_hot_rows(&test_ctx, database_branch_id, active_hot_job.job_id).await?;
+		wait_for_staged_hot_rows(&test_ctx, database_branch_id, run_hot_job.job_id).await?;
 
 	assert_eq!(first_staged_rows.len(), 1);
-	assert!(
-		read_value(
-			&test_ctx,
-			branch_shard_key(database_branch_id, 0, quota_threshold_head()),
-		)
-		.await?
-		.is_none()
-	);
+	wait_for_hot_install(&test_ctx, database_branch_id, quota_threshold_head()).await?;
 	assert!(
 		read_value(
 			&test_ctx,
@@ -608,25 +693,11 @@ async fn hot_compacter_writes_idempotent_staged_shard_output() -> Result<()> {
 	);
 	assert_eq!(
 		read_value(&test_ctx, branch_pidx_key(database_branch_id, 1)).await?,
-		Some(quota_threshold_head().to_be_bytes().to_vec())
+		None
 	);
 
-	let input_range = match active_hot_job.input_range {
-		PlannedInputRange::Hot(input_range) => input_range,
-		PlannedInputRange::Cold(_) | PlannedInputRange::Reclaim(_) => {
-			bail!("expected hot input range")
-		}
-	};
 	let signal_id = test_ctx
-		.signal(RunHotJob {
-			database_branch_id,
-			job_id: active_hot_job.job_id,
-			job_kind: CompactionJobKind::Hot,
-			base_manifest_generation: active_hot_job.base_manifest_generation,
-			input_fingerprint: active_hot_job.input_fingerprint,
-			status: CompactionJobStatus::Requested,
-			input_range,
-		})
+		.signal(run_hot_job.clone())
 		.to_workflow_id(hot_workflow_id)
 		.send()
 		.await?
@@ -635,7 +706,7 @@ async fn hot_compacter_writes_idempotent_staged_shard_output() -> Result<()> {
 
 	let second_staged_rows = read_prefix_values(
 		&test_ctx,
-		branch_compaction_stage_hot_shard_prefix(database_branch_id, active_hot_job.job_id),
+		branch_compaction_stage_hot_shard_prefix(database_branch_id, run_hot_job.job_id),
 	)
 	.await?;
 	assert_eq!(second_staged_rows, first_staged_rows);
@@ -702,6 +773,64 @@ async fn hot_compacter_rejects_stale_base_generation_without_staging() -> Result
 	)
 	.await?;
 	assert!(staged_rows.is_empty());
+
+	test_ctx.shutdown().await?;
+	Ok(())
+}
+
+#[tokio::test]
+async fn manager_publishes_hot_output_and_reads_through_shard_after_pidx_clear() -> Result<()> {
+	let mut test_ctx = TestCtx::new(build_registry()).await?;
+	let udb_pool = test_ctx.pools().udb()?;
+	let udb = Arc::new((*udb_pool).clone());
+	let database_db = Db::new(
+		udb,
+		test_ups(),
+		test_namespace(),
+		TEST_DATABASE.to_string(),
+		NodeId::new(),
+	);
+
+	for txid in 1..=quota_threshold_head() {
+		database_db
+			.commit(
+				vec![dirty_page(1, u8::try_from(txid).unwrap_or(u8::MAX))],
+				1,
+				1_000 + i64::try_from(txid).unwrap_or(i64::MAX),
+			)
+			.await?;
+	}
+	let database_branch_id = read_database_branch_id(&test_ctx).await?;
+	let tag_value = database_branch_tag_value(database_branch_id);
+
+	let manager_workflow_id = test_ctx
+		.workflow(DbManagerInput { database_branch_id })
+		.tag(DATABASE_BRANCH_ID_TAG, &tag_value)
+		.unique()
+		.dispatch()
+		.await?;
+
+	wait_for_hot_install(&test_ctx, database_branch_id, quota_threshold_head()).await?;
+	let manager_state =
+		wait_for_manager_state(&test_ctx, manager_workflow_id, |state| state.active_hot_job.is_none())
+			.await?;
+
+	assert!(manager_state.active_hot_job.is_none());
+	assert!(
+		read_value(
+			&test_ctx,
+			branch_delta_chunk_key(database_branch_id, quota_threshold_head(), 0),
+		)
+		.await?
+		.is_some()
+	);
+	assert_eq!(
+		database_db.get_pages(vec![1]).await?,
+		vec![FetchedPage {
+			pgno: 1,
+			bytes: Some(page(u8::try_from(quota_threshold_head()).unwrap_or(u8::MAX))),
+		}]
+	);
 
 	test_ctx.shutdown().await?;
 	Ok(())
