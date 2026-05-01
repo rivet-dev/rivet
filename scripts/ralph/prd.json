@@ -1,1121 +1,334 @@
 {
-  "project": "sqlite-pitr-fork",
-  "branchName": "04-29-feat_sqlite_pitr_forking",
-  "description": "Add continuous point-in-time recovery (PITR) and first-class forking to the SQLite v2 storage layer. Branches become the unit of identity; bookmarks (33-char lex-sortable strings) name commits; `fork()` and `restore_to_bookmark()` are metadata-only at the storage layer (copy-on-write at the layer level). FoundationDB stays the hot tier. S3 (or filesystem in dev) is the cold tier holding LTX V3 layer files for history. A new cold compactor service drains DELTAs into immutable layers, maintains a sparse BookmarkIndex, and runs dependency-graph GC against a 30-day retention window. Both compactors are UPS-driven (no cron). The spec lives at `.agent/specs/sqlite-rough-pitr.md`. Read it first.\n\n===== KEY INVARIANTS =====\n\n- Branches are the unit of identity. An actor's storage = the chain of branches reachable from its head by parent pointers. New keys: `[BRANCHES]/head`, `[BRANCHES]/list/{id}`, `[BR][branch_id]/...` for per-branch storage.\n- Bookmarks are 33 chars: `{timestamp_ms_hex_be:016}-{txid_hex_be:016}`. Branch identity is NOT in the wire format; bookmarks are interpreted relative to a branch context. Lex order = chronological within a single branch's parent chain only; siblings break global lex order.\n- Fork is metadata-only: regular-read parent's `retention_pin_txid` (OCC fence), depth check (cap MAX_FORK_DEPTH=16), allocate Uuid, write Branch, atomic-min `oldest_descendant_parent_txid`, atomic-add refcount. No data copy. `restore_to_bookmark` is the same primitive; pegboard decides whether to swap head.\n- FoundationDB is hot tier. S3 is cold tier (`ColdTier::Disabled` for local dev, `ColdTier::Filesystem` for tests, `ColdTier::S3` for prod, `ColdTier::Faulty` wrapper for fault injection).\n- Rolling checksum lives on `/META/head` as `post_apply_checksum: u64` (CRC-ISO-64 XOR fold). Hot-path commit RTT count is unchanged from stateless spec (1).\n- `COMMITS/{T}` value is just `i64 LE wall_clock_ms` (no checksum); checksum is on `/META/head` (rolling) and per-layer LTX trailers (cold).\n- Cold compactor is UPS-driven (NO periodic cron). Drain trigger fires when hot compactor's pass advances `materialized_txid` past `cold_compact_delta_threshold` (1024 deltas) beyond `cold_drained_txid`. Fork warmup is its own UPS payload. GC self-publishes at end of drain pass.\n- Cold pass is Phase A (FDB read tx, <2s) → Phase B (S3-only, no FDB tx) → Phase C (FDB write tx, <3s with OCC fence on `cold_drained_txid`). Phase B uses HWM `pending/{uuid}.marker` files for orphan reconciliation.\n- Layer filenames `delta/{min_txid}-{max_txid}.ltx` OMIT checksum so re-uploads are idempotent at the S3 key level.\n- GC runs as Phase C-2 holding the cold lease. Pin = min(time_floor_txid, oldest_descendant_parent_txid). NO monotonic ratchet. Frozen branches use creation-relative wall-clock retention, not head-relative.\n- Branch deletion cascade: refcount=0 check → state=Tombstoned → clear hot prefix synchronously → cold compactor's next pass walks S3 prefix → state=Deleted. Actor-destroy uses a gasoline workflow for batch DeleteObjects.\n- Read path on a fork descendant uses flattened ancestry (ancestors[] vec, capped at MAX_FORK_DEPTH=16, with lazy PIDX cache per ancestor). Worst case 16 ancestors × 2 in-tx gets per pgno on cold cache; mitigated by lazy cache + fork warmup that pre-stages parent image layers in the descendant.\n- Burst mode: when cold-pod 5xx ratio exceeds threshold over 3 passes, hot quota cap raises from 10 GiB to 20 GiB (HOT_BURST_MULTIPLIER=2). Reverts when cold tier recovers.\n- Billable cold bytes per branch = sum of layer files OWNED by this branch (created by its own cold passes, including fork-warmup-copied layers). Fork descendants start at 0 billable cold bytes.\n- All cross-pod-persisted S3 objects (`ColdManifest`, `BranchColdState`, `BookmarkIndex`) carry `schema_version: u32` via vbare. The cold compactor reads old version + writes new version on every pass; reader retains prior-version code paths for one full retention window past any version bump.\n- Breaking changes are unconditionally acceptable. The system has not shipped to production. Wire shape, on-disk key layout, and existing schemas are all free to change.\n\n===== ARCHITECTURAL CONTEXT =====\n\n- All work is in `engine/packages/sqlite-storage/`. Spec is `.agent/specs/sqlite-rough-pitr.md`.\n- New top-level modules: `pump/branches.rs`, `pump/bookmark.rs`, `pump/checksum.rs`, `pump/ancestry.rs`, `cold_compactor/`, `cold_tier/`, `burst_mode.rs`.\n- Cold compactor is a new `ServiceKind::Standalone` service registered in `engine/packages/engine/src/run_config.rs` next to the hot compactor.\n- Stateless spec (`sqlite-storage-stateless.md`) is the prerequisite; this work extends it. Hot compactor, ActorDb, META split, lease pattern, UPS triggers, atomic-add quota — all already exist and stay in place.\n- All tests live under `tests/` (no inline `#[cfg(test)] mod tests` in `src/`).\n- Use `vbare::OwnedVersionedData` + versioned `*.bare` schema for all persisted/wire formats. Raw `serde_bare` only for ephemeral in-memory encodings.\n- Use `scc::HashMap` / `moka::Cache` / `DashMap` for concurrent maps; never `Mutex<HashMap>`. Use `tokio::sync::Mutex` / `RwLock` in async code; `parking_lot` only in forced-sync contexts.\n- Errors: `anyhow` from failable functions, `RivetError` derive for typed errors, no glob imports from anyhow, prefer `.context()` over `anyhow!`.\n- Logs: `tracing::info!(?x, \"foo\")` with structured fields; lowercase messages; no `println!`/`eprintln!`.\n\n===== RUN COMMANDS =====\n\nFrom repo root:\n\n- Compile-check a crate: `cargo check -p <package-name>` (preferred for verification).\n- Build a crate: `cargo build -p <package-name>`.\n- Run all tests for a crate: `cargo test -p <package-name>`.\n- Run a single test file: `cargo test -p sqlite-storage --test <file_stem>`.\n- Run a single test: `cargo test -p <package-name> <test_name> -- --nocapture`.\n- Never run `cargo fmt` or `./scripts/cargo/fix.sh` — the team formats at merge time.\n\n===== READ BEFORE STARTING =====\n\n- `.agent/specs/sqlite-rough-pitr.md` — the full v2 spec this PRD implements.\n- `.agent/specs/sqlite-storage-stateless.md` — the prerequisite stateless spec.\n- `.agent/research/review-architecture.md`, `review-performance.md`, `review-operations.md` — adversarial reviews that shaped v2.\n- `engine/CLAUDE.md` — VBARE migration rules, Epoxy keys, SQLite storage tests.\n- `CLAUDE.md` at repo root — layer constraints, fail-by-default rules, async lock rules, error handling.\n- `docs-internal/engine/sqlite-storage.md` — current SQLite storage crash course.\n- `docs-internal/engine/sqlite-vfs.md` — VFS parity rules.\n- `engine/packages/sqlite-storage/src/` — current crate (already stateless).\n- `engine/packages/sqlite-storage/src/compactor/` — reference pattern for the cold compactor (lease, UPS subscriber, pass orchestration).",
+  "project": "depot-sqlite-workflow-compaction",
+  "branchName": "04-30-chore_sqlite_comapctor_wf",
+  "description": "Implement `.agent/specs/sqlite-workflow-compaction-architecture.md` in the `depot` package. Optimize for a working version quickly: keep commits direct to FDB, introduce the new FDB/S3 manifest shapes, add persistent Gasoline workflows per database branch, ship hot compaction first, then add reclaim, pin awareness, namespace-fork safety, cold storage, and legacy cleanup. Read the spec first. Do not route commits through workflows. Use versioned BARE for persisted or workflow wire payloads. Prefer small, verifiable slices and keep each story focused enough for one Ralph iteration.",
   "userStories": [
     {
       "id": "US-001",
-      "title": "Add new identifier types and branch records to pump/types.rs",
-      "description": "Introduce the new identifier types (NamespaceId, NamespacePointerId, ActorPointerId, NamespaceBranchId, ActorBranchId) and the immutable branch records (NamespaceBranchRecord, ActorBranchRecord, NamespacePointer, ActorPointer) with vbare-compatible derives in pump/types.rs. Also add Tier and BranchState (with Live and Frozen variants) enums. Do not yet wire them into commit/read paths.",
+      "title": "Add workflow compaction constants and FDB key helpers",
+      "description": "As a depot developer, I need the new workflow compaction keyspace available before wiring readers or workflows.",
       "acceptanceCriteria": [
-        "NamespaceId, NamespacePointerId, ActorPointerId, NamespaceBranchId, ActorBranchId types are defined matching spec section 5.1",
-        "ActorBranchRecord and NamespaceBranchRecord structs match spec section 5.3 and 5.4 exactly (parent, parent_versionstamp, root_versionstamp, fork_depth, created_at_ms, created_from_bookmark, state)",
-        "ActorPointer and NamespacePointer carry current_branch and last_swapped_at_ms",
-        "Tier enum has T0/T1/T2 variants; BranchState has Live and Frozen variants",
-        "All structs derive Encode/Decode via vbare conventions used elsewhere in the crate",
-        "Typecheck passes"
+        "Add constants for the initial activity and payload limits from the spec: signal 64 KiB, job descriptor 256 KiB, FDB batch 500 keys or 2 MiB, S3 upload 64 MiB or one object, S3 delete 100 objects, activity target 30 seconds",
+        "Add key helpers for `BR/{branch}/CMP/root`, `CMP/cold_shard`, `CMP/retired_cold_object`, `CMP/stage/{job_id}/hot_shard`, and `SQLITE_CMP_DIRTY/{database_branch_id}`",
+        "Add key helpers for unified `DB_PIN/{database_branch_id}/{pin_id}` and namespace proof keys `NS_FORK_PIN`, `NS_CHILD`, `NSCAT_BY_DB`, and `NS_PROOF_EPOCH`",
+        "Key helper tests verify byte ordering for txid, shard id, versionstamp, and object-key hash components",
+        "Typecheck passes",
+        "Tests pass"
       ],
       "priority": 1,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-002",
-      "title": "Add namespace tier state, pin status, resolved versionstamp, and branch manifest types",
-      "description": "Add NamespaceTierState, PinStatus (Pending|Ready|Failed), ResolvedVersionstamp, BranchManifest, BookmarkRef, and BookmarkStr to pump/types.rs. These are referenced by operations and commit paths added later.",
+      "title": "Add versioned payload types for compaction metadata",
+      "description": "As a depot developer, I need strongly typed persisted values for the new manifest, dirty marker, pins, and cold-object retirement state.",
       "acceptanceCriteria": [
-        "NamespaceTierState carries tier and promoted_at_versionstamp",
-        "PinStatus enum has Pending/Ready/Failed",
-        "ResolvedVersionstamp carries versionstamp + Option<BookmarkRef>",
-        "BranchManifest carries cold_drained_txid, last_hot_pass_txid, last_access_ts_ms, last_access_bucket per spec section 6",
-        "BookmarkRef carries bookmark + Option<resolved_versionstamp>; BookmarkStr is length-checked at construction",
-        "Typecheck passes"
+        "Add vbare-backed payloads for `CompactionRoot`, `ColdShardRef`, `RetiredColdObject`, `SqliteCmpDirty`, and `DbHistoryPin`",
+        "`CompactionRoot` contains schema version, manifest generation, hot watermark txid, cold watermark txid, and cold watermark versionstamp",
+        "`ColdShardRef` contains object key, object generation id, shard id, txid/versionstamp bounds, size, content hash, and publish generation",
+        "`RetiredColdObject` contains object key, object generation id, content hash, retired manifest generation, retired_at_ms, delete_after_ms, and delete_state",
+        "`DbHistoryPin` supports `DatabaseFork`, `NamespaceFork`, and `Bookmark` kinds and records exact versionstamp and txid cut points",
+        "Round-trip tests cover every new persisted payload through the versioned encoding path",
+        "Typecheck passes",
+        "Tests pass"
       ],
       "priority": 2,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-003",
-      "title": "Add cold-tier and pointer-snapshot data types",
-      "description": "Add ColdManifestIndex, ColdManifestChunkRef, ColdManifestChunk, LayerEntry, LayerKind, BookmarkIndexEntry, PointerSnapshot, BookmarkRecord, PinnedBookmarkRecord, CommitRow (extended), DBHead (extended) types matching spec sections 6 and 7. Each persisted S3 type carries schema_version: u32.",
+      "title": "Teach readers the new published manifest fallback",
+      "description": "As a SQLite reader, I need reads to understand the new manager-owned SHARD and cold refs before compaction starts publishing them.",
       "acceptanceCriteria": [
-        "DBHead extended with post_apply_checksum and branch_id fields",
-        "CommitRow carries wall_clock_ms, versionstamp, db_size_pages, post_apply_checksum",
-        "ColdManifestIndex/ColdManifestChunk/LayerEntry/BookmarkIndexEntry/PointerSnapshot types match spec section 7",
-        "BookmarkRecord and PinnedBookmarkRecord defined for FDB BOOKMARK partition",
-        "All persisted S3-bound types carry schema_version: u32",
-        "Typecheck passes"
+        "The read path still checks PIDX and DELTA first for normal latest reads",
+        "If a referenced DELTA is missing or reclaimed, the read path falls back to the latest published SHARD at or below the read cap",
+        "If no SHARD covers the page, the read path can locate a matching published `ColdShardRef` without requiring cold payload fetch to be implemented yet",
+        "Empty or absent `CMP/root` behaves like the current system and does not break existing reads",
+        "Tests cover DELTA-first reads, SHARD fallback reads, and absent-manifest compatibility",
+        "Typecheck passes",
+        "Tests pass"
       ],
       "priority": 3,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-004",
-      "title": "Add new FDB key-builder partitions in pump/keys.rs",
-      "description": "Add FDB key builders for the new partitions: APTR (0x10), NSPTR (0x11), BRANCHES (0x20), NSBRANCH (0x21), CTR (0x40), BOOKMARK (0x50), CMPC (0x60), and update BR (0x30) prefix to live under `BR/{actor_branch_id}/`. Include /cur, /history/{ts:8}{nonce:4}, /refcount, /desc_pin, /bk_pin, /tier_state, /actor_tombstones, /eviction_index sub-keys per spec section 6. Also add VTX/{versionstamp_be:16} and META/head_at_fork.",
+      "title": "Add workflow signal and durable state types",
+      "description": "As a workflow implementer, I need exact signal and state types for the four branch workflows before adding behavior.",
       "acceptanceCriteria": [
-        "APTR key builders for cur and history/{ts_ms_be:8}{nonce_be:4}, keyed by (namespace_branch_id, actor_id)",
-        "NSPTR key builders for cur and history",
-        "BRANCHES list/{actor_branch_id}/ with refcount, desc_pin, bk_pin sub-keys",
-        "NSBRANCH list/{ns_branch_id}/ with refcount, desc_pin, bk_pin, tier_state, actor_tombstones/{actor_id} sub-keys",
-        "BR/{actor_branch_id}/ keys for META/head, META/head_at_fork, META/compact, META/cold_compact, META/quota, META/compactor_lease, META/cold_lease, META/manifest/{cold_drained_txid|last_hot_pass_txid|last_access_ts_ms|last_access_bucket}, COMMITS/{txid_be:8}, VTX/{versionstamp_be:16}, PIDX/{pgno_be:4}, DELTA/{txid_be:8}/{chunk_be:4}, SHARD/{shard_id_be:4}/{as_of_txid_be:8}",
-        "CTR/quota_global, CTR/eviction_index/{bucket_be:8}/{actor_branch_id}, BOOKMARK/{actor_id}/{bookmark_str}, CMPC/enqueue, CMPC/lease_global keys",
-        "Typecheck passes"
+        "Add DB manager signals: `DeltasAvailable`, `HotJobFinished`, `ColdJobFinished`, `ReclaimJobFinished`, and `DestroyDatabaseBranch`",
+        "Add companion signals: `RunHotJob`, `RunColdJob`, `RunReclaimJob`, and `DestroyDatabaseBranch`",
+        "Signal payloads include job id, base manifest generation, input fingerprint, status, and bounded output refs where applicable",
+        "Add durable manager state for companion workflow ids, active hot/cold/reclaim jobs, retry cursors, planning deadlines, and branch stop state",
+        "Add durable companion state with `idle`, `running`, and `stopping` states for one active job per branch",
+        "Versioned encoding tests cover every signal and workflow state payload",
+        "Typecheck passes",
+        "Tests pass"
       ],
       "priority": 4,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-005",
-      "title": "Add tunable constants for PITR + forking",
-      "description": "Add the public constants used throughout the crate: MAX_FORK_DEPTH=16, MAX_NAMESPACE_DEPTH=16, MAX_PINS_PER_NAMESPACE=1024, MAX_SHARD_VERSIONS_PER_SHARD=32, COMMITS_TIER0_RETENTION_MS=7 days, ACCESS_TOUCH_THROTTLE_MS=60_000, SHARD_RETENTION_MARGIN=64, FROZEN_BRANCH_RETENTION_MS, HOT_CACHE_WINDOW_MS, STALE_MARKER_AGE_MS, HOT_BURST_MULTIPLIER=2. Place in a single constants module.",
+      "title": "Create persistent branch workflow skeletons",
+      "description": "As a depot operator, I need one manager, hot compacter, cold compacter, and reclaimer workflow per active database branch.",
       "acceptanceCriteria": [
-        "All constants from spec section 12.1 defined with the documented defaults",
-        "Constants live in a single dedicated module (e.g. pump/constants.rs) and are pub use at crate root",
-        "Documentation comments cite the spec rationale for each constant",
-        "Typecheck passes"
+        "Add `db_manager`, `db_hot_compacter`, `db_cold_compacter`, and `db_reclaimer` workflows with stable unique tags containing only `database_branch_id`",
+        "The manager spawns the three companion workflows and stores their workflow ids in durable manager state",
+        "Companion workflows listen while idle and do not complete while the branch is live",
+        "The manager loop waits for signals or the nearest planning deadline without publishing a durable `Tick` signal",
+        "No workflow performs compaction, publish, or deletion work in this story",
+        "A workflow test proves the manager can start, spawn companions, receive `DeltasAvailable`, and return to idle",
+        "Typecheck passes",
+        "Tests pass"
       ],
       "priority": 5,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-006",
-      "title": "Add error variants for PITR + fork operations",
-      "description": "Extend the SqliteStorageError enum with ForkChainTooDeep, NamespaceForkChainTooDeep, ForkOutOfRetention, BookmarkExpired, BranchNotReachable, ShardVersionCapExhausted, TooManyPins, ActorNotFound, and any other variants referenced by the spec's operation pseudocode.",
+      "title": "Wire dirty marker admission and DeltasAvailable",
+      "description": "As the commit path, I need a coalesced workflow wakeup that does not emit one Gasoline signal per commit.",
       "acceptanceCriteria": [
-        "All error variants referenced in spec sections 8, 9, 12 added",
-        "Errors integrate with existing RivetError derive pattern in the crate",
-        "Each variant carries a meaningful message with structured fields where useful",
-        "Typecheck passes"
+        "After commit, conveyer updates `SQLITE_CMP_DIRTY/{database_branch_id}` only when hot or cold lag crosses the configured threshold",
+        "The first writer that turns a branch dirty sends `DeltasAvailable` to the branch manager immediately",
+        "Continued commits refresh the dirty marker and send throttled `DeltasAvailable` signals instead of one signal per commit",
+        "The manager clears the dirty marker only after refreshing FDB and confirming no actionable hot, cold, or reclaim lag",
+        "Dirty marker clearing compare-and-clears the exact observed value with a Serializable read conflict",
+        "Tests cover first-writer wake, throttled wake, and stale dirty-marker clear rejection",
+        "Typecheck passes",
+        "Tests pass"
       ],
       "priority": 6,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-007",
-      "title": "Migrate commit path to versioned SHARD writes",
-      "description": "Update the hot compactor commit path so SHARDs are written under SHARD/{shard_id_be:4}/{as_of_txid_be:8} instead of overwriting a single SHARD per shard_id. Reads still take the largest as_of_txid <= read_txid. Ensure existing tests still pass with single-version-per-shard behavior.",
+      "title": "Implement manager FDB refresh and hot-job planning",
+      "description": "As the DB manager, I need to observe current branch state and plan a bounded hot job for the latest head.",
       "acceptanceCriteria": [
-        "Hot compactor writes SHARD/{shard_id}/{max_folded_txid} keys instead of overwrites",
-        "SHARD reads do reverse-range scan on SHARD/{shard_id}/ constrained by as_of_txid <= V",
-        "Hot compactor records max_folded_txid in BranchManifest.last_hot_pass_txid sub-key",
-        "Existing single-branch tests pass without behavior change",
+        "Manager refresh reads branch lifecycle, `META/head`, `CMP/root`, dirty marker, current pins, and relevant commit-owned hot keys",
+        "Manager computes hot lag from FDB state instead of trusting `DeltasAvailable` payloads",
+        "Manager schedules at most one active hot job per branch and records job id, base manifest generation, input fingerprint, and selected input range in workflow state",
+        "Manager sets future planning deadlines for hot, cold, reclaim, and final-settle checks even when no signal arrives",
+        "Planning handles absent `CMP/root` by initializing an in-memory candidate root without publishing it yet",
+        "Tests cover no-op refresh, first hot-job planning, and duplicate `DeltasAvailable` not creating duplicate active hot jobs",
         "Typecheck passes",
         "Tests pass"
       ],
       "priority": 7,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-008",
-      "title": "Write VTX index entry on every commit",
-      "description": "Extend pump/commit.rs to write `VTX/{versionstamp_be:16} = u64 BE txid` via SetVersionstampedKey on each commit alongside COMMITS. CommitRow now carries the captured versionstamp + db_size_pages + post_apply_checksum. No extra RTT (folds into existing tx batch).",
+      "title": "Build staged hot SHARD output",
+      "description": "As the hot compacter workflow, I need to materialize candidate SHARD output under non-reader-visible staging keys.",
       "acceptanceCriteria": [
-        "Every commit writes a VTX/{versionstamp:16} entry mapping versionstamp -> txid",
-        "VTX writes use SetVersionstampedKey so they share the same versionstamp as the COMMITS row",
-        "CommitRow includes wall_clock_ms, versionstamp, db_size_pages, post_apply_checksum",
-        "Test verifies VTX[v] -> txid lookup matches the txid of the commit with versionstamp v",
+        "Hot compacter accepts `RunHotJob`, validates branch lifecycle and base manifest generation, and reads the planned input fingerprint from FDB",
+        "Hot compacter writes staged SHARD chunks under `CMP/stage/{job_id}/hot_shard/...` only",
+        "Retrying the same job id writes the same staging keys or no-ops",
+        "Hot compacter reports `HotJobFinished` with job id, base generation, input fingerprint, output refs, and checksums",
+        "Hot compacter does not write reader-visible SHARD keys, clear PIDX, or delete DELTAs",
+        "Tests cover idempotent staged output and stale-base-generation rejection",
         "Typecheck passes",
         "Tests pass"
       ],
       "priority": 8,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-009",
-      "title": "Allocate root branch on first actor commit and migrate META under BR/{branch_id}/",
-      "description": "Update ActorDb so that on first commit it allocates a root ActorBranchId, writes the ActorBranchRecord to BRANCHES/list/{...}, writes the APTR/{ns_branch_id}/{actor_id}/cur pointer, and stores all subsequent META/COMMITS/PIDX/DELTA/SHARD under BR/{branch_id}/ instead of the legacy per-actor prefix. Existing tests with a single-branch actor must still pass.",
+      "title": "Publish latest-head hot compaction output",
+      "description": "As the DB manager, I need to install hot compaction output for the latest head so the workflow path produces useful reader-visible data.",
       "acceptanceCriteria": [
-        "First commit on an actor allocates a root ActorBranchRecord and writes APTR + BRANCHES",
-        "All META/COMMITS/PIDX/DELTA/SHARD writes for that actor land under BR/{branch_id}/",
-        "ActorDb caches the resolved branch_id on its in-memory struct",
-        "Existing single-branch crate tests pass unmodified",
+        "Manager accepts `HotJobFinished` only when job id, kind, base generation, and fingerprint match the active hot job",
+        "Hot install transaction Serializable-reads branch lifecycle, `CMP/root`, `META/head`, relevant commit-owned inputs, staged output checksums, and expected PIDX values",
+        "Hot install copies staged SHARD output into reader-visible `BR/{branch}/SHARD/{shard_id}/{as_of_txid}/...` keys",
+        "Hot install advances `CMP/root.hot_watermark_txid` and `manifest_generation`",
+        "PIDX entries are cleared or rewritten only when the expected txid/value still matches",
+        "DELTA deletion remains untouched in this story",
+        "An integration test proves a branch can commit deltas, run manager/hot workflows, publish SHARD output, and read through the published SHARD after PIDX is cleared",
         "Typecheck passes",
         "Tests pass"
       ],
       "priority": 9,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-010",
-      "title": "Allocate root namespace branch and write NSPTR on namespace creation",
-      "description": "Wire namespace creation so that creating a namespace allocates a root NamespaceBranchId, writes NamespaceBranchRecord under NSBRANCH/list/{...}, writes the NamespacePointer under NSPTR/{ns_id}/cur, and seeds the NamespaceTierState at T0. Adds the namespace branch_id to ActorBranchRecord on actor creation.",
+      "title": "Add direct DB history pins to hot planning",
+      "description": "As a branch with forks or bookmarks, I need hot compaction to preserve exact pinned txids instead of only latest head.",
       "acceptanceCriteria": [
-        "Namespace creation writes a NamespaceBranchRecord with parent=None, root_versionstamp set",
-        "NamespacePointer.cur points at the new branch with last_swapped_at_ms",
-        "NamespaceTierState is initialized at T0",
-        "Actor creation in that namespace records namespace_branch on ActorBranchRecord",
-        "Test verifies a fresh namespace has NSPTR + NSBRANCH + tier_state populated",
+        "Add helpers to write, read, and delete unified `DB_PIN` records for database forks and bookmarks",
+        "Manager refresh includes live `DB_PIN` records and computes coverage targets as latest head plus exact pinned txids",
+        "Hot-job planning includes selected pinned txid cut points when they would otherwise keep DELTAs live",
+        "Hot install can publish SHARD output at both latest head and selected pinned txids",
+        "Pins do not expire by retention-window age and no pin TTL policy is introduced",
+        "Tests cover exact pinned txid materialization and prove pinned txid 50 does not get rounded to latest head 100",
         "Typecheck passes",
         "Tests pass"
       ],
       "priority": 10,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-011",
-      "title": "Implement derive_branch_at primitive",
-      "description": "Implement the shared derive_branch_at primitive (spec section 8) that snapshots source's /META/head into the new branch's /META/head_at_fork via VTX + COMMITS lookup, OCC-fences on bk_pin, allocates the new branch record, atomic-mins desc_pin on the source, and atomic-adds refcounts. Used by both fork_actor and rollback_actor. Enforces MAX_FORK_DEPTH.",
+      "title": "Implement FDB DELTA reclaim after coverage proof",
+      "description": "As the reclaimer workflow, I need to delete obsolete hot rows only after the manager proves reads no longer depend on them.",
       "acceptanceCriteria": [
-        "derive_branch_at(tx, source, at_versionstamp, new_id, ns_branch, bookmark_ref) implemented per spec section 8",
-        "OCC fence reads source's bk_pin and aborts with ForkOutOfRetention if pin > at_versionstamp",
-        "head_at_fork is reconstructed via VTX[v] -> txid then COMMITS[txid] read",
-        "Refcounts atomic-add on both source (descendant ref) and new branch (own pointer ref)",
-        "Source desc_pin atomic-min'd to at_versionstamp",
-        "MAX_FORK_DEPTH enforcement returns ForkChainTooDeep",
-        "Tests pass",
-        "Typecheck passes"
+        "Manager schedules bounded FDB reclaim jobs only after recomputing manifest generation, branch lifecycle, DB pins, PIDX dependencies, and replacement SHARD coverage",
+        "Reclaimer FDB delete activity revalidates branch lifecycle, manifest generation, DB pins, expected PIDX values, and replacement coverage in the delete transaction",
+        "DELTA, COMMITS, and VTX rows are deleted only with conditional semantics when stale execution could remove changed data",
+        "`clear_range` is not used unless the same transaction fences every key in the range",
+        "Hot and cold watermarks are treated as scheduling summaries only and are not sufficient for deletion",
+        "Tests cover successful reclaim, stale PIDX rejection, stale manifest rejection, and pinned-version retention",
+        "Typecheck passes",
+        "Tests pass"
       ],
       "priority": 11,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-012",
-      "title": "Implement derive_namespace_branch_at primitive",
-      "description": "Implement the namespace twin of derive_branch_at: snapshots source NS branch parent_versionstamp, OCC-fences bk_pin, enforces MAX_NAMESPACE_DEPTH, allocates a NamespaceBranchRecord, atomic-mins desc_pin and adds refcounts. Used by both fork_namespace and rollback_namespace.",
+      "title": "Resolve namespace-derived pins before deletion",
+      "description": "As a namespace fork, I need cheap fork records to protect database history before any DB manager deletes it.",
       "acceptanceCriteria": [
-        "derive_namespace_branch_at implemented matching spec section 8.1 fork_namespace structure",
-        "MAX_NAMESPACE_DEPTH enforcement returns NamespaceForkChainTooDeep",
-        "OCC fence on source NSBRANCH bk_pin",
-        "Refcount atomic-add on source and new ns branch",
-        "Tier state inheritance left lazy via ensure_tier_at_least CAS",
-        "Tests pass",
-        "Typecheck passes"
+        "Namespace fork writes unresolved `NS_FORK_PIN` and `NS_CHILD` facts without eagerly writing one DB pin per inherited database",
+        "`NSCAT_BY_DB` records explicit database membership with catalog and tombstone versionstamp windows",
+        "`NS_PROOF_EPOCH/{root_namespace_branch_id}` increments on namespace fork, catalog membership, and catalog tombstone mutations",
+        "Before install or reclaim planning can delete history, the manager checks relevant unresolved namespace fork facts for the database branch",
+        "If a namespace fork can inherit the database at versionstamp V, the manager resolves V through `BR/{branch}/VTX` and `COMMITS` to an exact txid and materializes `DB_PIN(kind=NamespaceFork)`",
+        "If the bounded proof is too large, missing, or ambiguous, the manager retains history and logs structured fields",
+        "Tests cover lazy namespace-derived pin materialization before DELTA reclaim and retain-history behavior for ambiguous proof",
+        "Typecheck passes",
+        "Tests pass"
       ],
       "priority": 12,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-013",
-      "title": "Implement ensure_tier_at_least CAS helper for T0 -> T1 promotion",
-      "description": "Implement ensure_tier_at_least(tx, ns_branch_id, target_tier) which reads the namespace branch's tier_state mutable key and CAS-promotes T0 -> T1 atomically if needed. First fork or pinned bookmark on a namespace triggers the promotion.",
+      "title": "Implement cold upload and manager publish",
+      "description": "As the cold compacter workflow, I need to upload bulky shard payloads to S3 and let the manager publish FDB cold refs.",
       "acceptanceCriteria": [
-        "ensure_tier_at_least reads NSBRANCH/list/{nb}/tier_state and CAS-promotes if below target",
-        "Promotion writes NamespaceTierState with tier=T1 and promoted_at_versionstamp",
-        "Concurrent promotion races resolve to a single winner; losers re-read T1",
-        "Test verifies first fork on a T0 namespace promotes to T1 atomically",
-        "Tests pass",
-        "Typecheck passes"
+        "Cold compacter accepts `RunColdJob`, validates branch lifecycle and base manifest generation, and uploads one cold shard object per bounded activity",
+        "S3 object keys match `db/{database_branch_id_hex}/shard/{shard_id_be_hex:8}/{as_of_txid_be_hex:16}-{object_generation_id}-{content_hash_hex}.ltx`",
+        "`object_generation_id` is the cold job id and the same job retry reuses the same object key",
+        "Cold compacter reports bounded output refs, sizes, and content hashes through `ColdJobFinished`",
+        "Manager cold publish transaction reads branch lifecycle, `CMP/root`, DB pins, namespace proof state, retired-object key for the candidate, and exact covered commit-owned inputs",
+        "Manager writes `CMP/cold_shard` refs, advances cold watermarks, and bumps manifest generation",
+        "Tests cover idempotent upload, stale cold publish rejection, and read fallback locating a published cold ref",
+        "Typecheck passes",
+        "Tests pass"
       ],
       "priority": 13,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-014",
-      "title": "Implement fork_actor operation",
-      "description": "Implement fork_actor(source_namespace, source_actor_id, at, target_namespace) per spec section 8.2. Resolves source APTR via ns branch chain, calls derive_branch_at, allocates new actor id, writes APTR for target namespace branch.",
+      "title": "Add retired cold-object grace deletion",
+      "description": "As the reclaimer workflow, I need to delete S3 cold objects safely even though FDB snapshots are MVCC and S3 is not.",
       "acceptanceCriteria": [
-        "fork_actor returns a fresh ActorId with a new ActorBranchId",
-        "APTR/{target_ns_branch}/{new_actor_id}/cur points at the new branch",
-        "Source actor's data is reachable through the new branch's parent chain",
-        "Cross-namespace fork is supported (target_namespace != source_namespace)",
-        "Test forks at root, depth-1, and depth-N source branches",
-        "Tests pass",
-        "Typecheck passes"
+        "Cold object deletion is split into FDB retire, grace-window wait, S3 delete, and FDB cleanup",
+        "FDB retire transaction removes the live `ColdShardRef`, writes `CMP/retired_cold_object`, and bumps manifest generation",
+        "S3 delete activity runs only after `delete_after_ms` and deletes the exact manager-provided object key",
+        "Before calling S3, the activity marks or treats the retired record as `DeleteIssued` for reconciliation",
+        "FDB cleanup clears or completes the retired record only if the exact cold ref is still absent and the retired record still matches",
+        "The same object key is never republished after retirement, even if a later job produces the same bytes",
+        "Tests cover grace-window blocking, exact-key delete, no parallel FDB/S3 delete, and live-ref-to-DeleteIssued corruption logging",
+        "Typecheck passes",
+        "Tests pass"
       ],
       "priority": 14,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-066",
-      "title": "Flatten tier model — remove Tier types, tier_state, and ensure_tier_at_least; make cold + eviction unconditional",
-      "description": "Flatten the SQLite storage tier model per the v3 spec at .agent/specs/sqlite-rough-pitr.md. The v3 revision drops the per-namespace tier (T0/T1/T2) abstraction in favor of a uniform LSM-shaped storage flow where every namespace's data passes through hot-tier (FDB) DELTAs, folded SHARD versions, and cold-tier (S3) layers identically. Concretely: remove the `Tier` enum and `NamespaceTierState` struct from `engine/packages/sqlite-storage/src/pump/types.rs`; delete the `tier_state` write performed during root namespace branch allocation (added in US-010); delete the `ensure_tier_at_least` helper (added in US-013) and remove all of its call sites in `derive_branch_at`, `derive_namespace_branch_at`, and any code US-014 may have added to `fork_actor`; drop the `tier_state` FDB key builder and related callers in `pump/keys.rs`; rename the constant `COMMITS_TIER0_RETENTION_MS` to `HOT_RETENTION_FLOOR_MS` everywhere it is referenced (definition + usages); remove the tier-related tests in `engine/packages/sqlite-storage/tests/pump_branch.rs` (the T0→T1 promotion test, the concurrent-promotion test, and the actor/namespace fork-triggered-promotion tests) while keeping branch primitive tests that do not depend on tier state. The hot compactor must not read tier state on its pass loop; cold compactor and eviction compactor run unconditionally without any tier gate. Verify with `cargo check -p sqlite-storage` and `cargo test -p sqlite-storage`. The spec at `.agent/specs/sqlite-rough-pitr.md` has been updated to v3 reflecting this flattening.",
-      "acceptanceCriteria": [
-        "`Tier` enum removed from pump/types.rs",
-        "`NamespaceTierState` struct removed from pump/types.rs",
-        "`ensure_tier_at_least` helper removed",
-        "`tier_state` FDB key builder removed",
-        "`tier_state` write removed from namespace branch allocation",
-        "`ensure_tier_at_least` call sites removed from `derive_branch_at` and `derive_namespace_branch_at`",
-        "Hot compactor no longer reads `tier_state`",
-        "Cold compactor + eviction compactor run unconditionally (no tier check)",
-        "Constant renamed: `COMMITS_TIER0_RETENTION_MS` → `HOT_RETENTION_FLOOR_MS`",
-        "Tier-related tests removed from `pump_branch.rs`; surviving tests cover non-tier branch primitive behavior",
-        "`cargo check -p sqlite-storage` passes",
-        "`cargo test -p sqlite-storage` passes",
-        "Typecheck passes"
-      ],
-      "priority": 14.5,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-067",
-      "title": "Remove rollback machinery from sqlite-storage; storage exposes only fork",
-      "description": "Apply the v4 rollback-removal surgery per the updated spec at .agent/specs/sqlite-rough-pitr.md (section 'Revision: post-rollback-removal v4'). Storage now exposes only `fork_database` and `fork_namespace`; rollback semantics are implemented at the engine layer (pegboard's actor abstraction, separately renamed to `Db` by US-065) by calling `fork_database` and flipping its own `actor -> current_database_id` mapping. Concrete edits: remove `rollback_database` / `rollback_namespace` / `restore_to_bookmark` public APIs and their implementations; drop the `ActorPointer` / `DatabasePointer` / `NamespacePointer` types from pump/types.rs; drop the APTR (0x10) and NSPTR (0x11) FDB key partitions and their `cur` + `history/{ts}{nonce}` sub-keys from pump/keys.rs; add the new NSCAT (0x10) presence-marker partition keyed by (namespace_id, database_id) with a 16-byte FDB versionstamp value written via SetVersionstampedValue; collapse the v3 split id types so `DatabaseId` is the only database type (no `DatabaseBranchId` / `DatabasePointerId`) and `NamespaceId` is the only namespace type (no `NamespaceBranchId` / `NamespacePointerId`); drop the `BranchState` enum and the `state: BranchState` field from `DatabaseBranchRecord` and `NamespaceBranchRecord`; remove the cache invalidation contract on `last_swapped_at_ms` from commit + get_pages tx (no parallel APTR/NSPTR last_swapped reads); update `derive_branch_at` so it no longer writes any pointer record (just allocates the branch record + NSCAT entry + counters); remove pointer history GC and APTR-history GC code paths; remove Frozen branch retention sweep; rename `actor_tombstones` to `database_tombstones` under NSBRANCH and adjust visibility semantics for fork inheritance per spec section 6 (tombstones in source ns visible in ns forks taken AFTER the deletion, invisible to ns forks taken BEFORE). Tests under engine/packages/sqlite-storage/tests/ for rollback / pointer-flip / Frozen state are removed; surviving tests cover fork-only behavior. Verify with `cargo check -p sqlite-storage` and `cargo test -p sqlite-storage`. The spec at .agent/specs/sqlite-rough-pitr.md has been updated to v4 reflecting this.",
-      "acceptanceCriteria": [
-        "`rollback_database` / `rollback_namespace` / `restore_to_bookmark` APIs removed",
-        "`ActorPointer` / `DatabasePointer` / `NamespacePointer` types removed",
-        "APTR + NSPTR FDB key builders removed (both `cur` and `history`)",
-        "NSCAT FDB key builder added: `[0x10] NSCAT /{namespace_id}/{database_id}` with 16-byte versionstamp value (SetVersionstampedValue)",
-        "`DatabaseId` is one type (no separate `DatabaseBranchId` / `DatabasePointerId`); `NamespaceId` is one type (no separate `NamespaceBranchId` / `NamespacePointerId`)",
-        "`BranchState` enum + `state` field removed from branch records",
-        "Cache invalidation contract on `last_swapped_at_ms` removed from commit + get_pages tx",
-        "`derive_branch_at` no longer writes pointers; just allocates branch record + NSCAT entry + counters",
-        "Pointer history GC + APTR/NSPTR history GC removed",
-        "Frozen branch retention sweep removed",
-        "`actor_tombstones` renamed to `database_tombstones` under NSBRANCH",
-        "Tests under `engine/packages/sqlite-storage/tests/` for rollback / pointer-flip / Frozen state removed; surviving tests cover fork-only behavior",
-        "`cargo check -p sqlite-storage` passes",
-        "`cargo test -p sqlite-storage` passes",
-        "Typecheck passes"
-      ],
-      "priority": 14.6,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-015",
-      "title": "Implement fork_namespace operation",
-      "description": "Implement fork_namespace(source_ns_id, at) per spec section 8.1. Allocates new NamespaceId + NamespaceBranchId, writes NSPTR + NSBRANCH, atomic-min desc_pin on source, refcount adds. Does NOT eagerly materialize APTR entries; lazy resolution handled in a later story.",
+      "title": "Add branch destruction workflow lifecycle",
+      "description": "As a branch owner, I need database branch deletion to stop workflow scheduling and complete companion workflows cleanly.",
       "acceptanceCriteria": [
-        "fork_namespace returns a fresh NamespaceId with a new NamespaceBranchId",
-        "NSPTR/{new_ns_id}/cur points at the new branch with parent_versionstamp set",
-        "Source NS branch desc_pin atomic-min'd; refcount incremented",
-        "MAX_NAMESPACE_DEPTH enforcement",
-        "No APTR keys written eagerly under the new ns branch",
-        "Tests pass",
-        "Typecheck passes"
+        "Extend the database branch record with a monotonic lifecycle generation if it does not already exist",
+        "Commits require live writable branch state",
+        "Hot install, cold publish, and reclaim transactions read `BRANCHES/list/{database_branch_id}` and abort if missing, deleted, or lifecycle generation changed",
+        "Manager handles `DestroyDatabaseBranch` by recording stop state, stopping new scheduling, and signaling all companions to destroy the same branch generation",
+        "Companion workflows abandon or finish bounded idempotent work and complete after `DestroyDatabaseBranch`",
+        "A manager recreated by stable tags observes FDB branch deletion state and does not schedule new compaction work",
+        "Tests cover destroy during idle, destroy during active hot job, and stale generation publish rejection",
+        "Typecheck passes",
+        "Tests pass"
       ],
       "priority": 15,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-016",
-      "title": "Implement resolve_actor_pointer with lazy ns-branch parent walk",
-      "description": "Implement resolve_actor_pointer(tx, ns_branch_id, actor_id) which tries APTR/{ns_branch_id}/{actor_id}/cur first, then walks the namespace branch parent chain capped by parent_versionstamp on miss. Honor actor_tombstones (return ActorNotFound if any tombstone is present in the chain between cur and the first hit).",
+      "title": "Add repair logging and orphan cleanup paths",
+      "description": "As an operator, I need structured inconsistency handling for stale workflow outputs, orphan staged FDB data, and orphan S3 objects.",
       "acceptanceCriteria": [
-        "Direct APTR hit returns immediately",
-        "Miss falls through to ns branch parent chain via NSBRANCH parent links",
-        "Tombstone in any intermediate ns branch returns ActorNotFound",
-        "Walk is capped by MAX_NAMESPACE_DEPTH",
-        "Test verifies lazy resolution after fork_namespace without re-materialization",
-        "Tests pass",
-        "Typecheck passes"
+        "Manager treats unmatched job completions as stale orphan output and schedules cleanup instead of publishing them",
+        "Reclaimer can clear staged FDB output that is not referenced by manifest or active workflow state",
+        "Reclaimer can delete S3 objects that are referenced by neither live FDB refs, retired-object records, nor active workflow state",
+        "FDB live ref to missing S3 object logs corruption and does not silently remove the ref",
+        "FDB live ref to a `DeleteIssued` object logs corruption and does not assume the delete is stale",
+        "All inconsistency logs include database branch id, manifest generation, object/key ref, job id when available, and selected repair action",
+        "Tests cover stale job completion, staged FDB orphan cleanup, S3 orphan cleanup, and corruption logging",
+        "Typecheck passes",
+        "Tests pass"
       ],
       "priority": 16,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-017",
-      "title": "Implement rollback_actor operation with branch freezing",
-      "description": "Implement rollback_actor(namespace, actor_id, at) per spec section 8.4. Calls derive_branch_at, freezes the previous branch (BranchState::Frozen), writes APTR history row with nonce, decrements old branch refcount, swaps APTR pointer.",
+      "title": "Remove legacy compactor coordination mechanisms",
+      "description": "As a maintainer, I need the workflow system to be the only compaction writer because this code has not shipped and legacy coexistence is out of scope.",
       "acceptanceCriteria": [
-        "rollback_actor allocates a new ActorBranchId at the rollback point",
-        "Previous branch transitions to BranchState::Frozen",
-        "APTR history row written under APTR/{ns_branch}/{actor_id}/history/{ts:8}{nonce:4}",
-        "APTR/cur swapped to new branch; old branch refcount atomic-add(-1)",
-        "Subsequent commit on the actor lands on the new branch's /META/head",
-        "Tests pass",
-        "Typecheck passes"
+        "Remove or disable old standalone hot compactor mutation paths after workflow hot publish is working",
+        "Remove or disable old standalone cold compactor mutation paths after workflow cold publish is working",
+        "Remove old eviction/global deletion mutation paths as correctness authorities",
+        "Remove compactor leases, cold `in_flight_uuid`, pending markers, pending-pin handoff state, and old obsolete/delete queue state from active code paths",
+        "Remove `last_hot_pass_txid` as an eviction OCC fence from active deletion logic",
+        "No legacy/workflow coexistence mode or rollback compatibility path remains",
+        "Regression tests prove commits still go direct to FDB and workflow manager owns publish/delete decisions",
+        "Typecheck passes",
+        "Tests pass"
       ],
       "priority": 17,
-      "passes": true,
-      "notes": "Obsolete after v4 rollback removal (US-067). Storage exposes no rollback primitive; engine-layer rollback calls fork_database and flips the engine's actor->database mapping."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-018",
-      "title": "Implement rollback_namespace operation",
-      "description": "Implement rollback_namespace(ns_id, at) per spec section 8.3. Calls derive_namespace_branch_at, freezes previous ns branch, writes NSPTR history with nonce, decrements old branch refcount, swaps NSPTR pointer.",
+      "title": "Add end-to-end workflow compaction coverage",
+      "description": "As a release owner, I need integrated tests that exercise the new architecture across commits, forks, compaction, reclaim, cold storage, and branch deletion.",
       "acceptanceCriteria": [
-        "rollback_namespace allocates a new NamespaceBranchId at the rollback point",
-        "Previous ns branch transitions to BranchState::Frozen",
-        "NSPTR history row written under NSPTR/{ns_id}/history/{ts:8}{nonce:4}",
-        "NSPTR/cur swapped to new ns branch; old refcount atomic-add(-1)",
-        "Tests pass",
-        "Typecheck passes"
+        "Add an end-to-end test that commits multiple deltas, wakes the manager, publishes hot SHARD coverage, reclaims safe DELTAs, and verifies reads",
+        "Add a fork race test where a fork or bookmark pin appears after hot job planning and before install, and DELTA deletion is blocked until exact pinned coverage exists",
+        "Add a namespace fork test where a lazy namespace-derived DB pin is materialized before history deletion",
+        "Add a cold compaction test that publishes cold refs, retires an obsolete cold object, waits the grace window, deletes the exact S3 key, and verifies reconciliation state",
+        "Add a branch deletion test that stops all four workflows and rejects stale publishes after lifecycle generation changes",
+        "`cargo check -p depot` passes",
+        "Typecheck passes",
+        "Tests pass"
       ],
       "priority": 18,
-      "passes": true,
-      "notes": "Obsolete after v4 rollback removal (US-067). Storage exposes no rollback primitive."
-    },
-    {
-      "id": "US-019",
-      "title": "Add bookmark wire format parsing/formatting helpers",
-      "description": "Implement BookmarkStr construction with length validation. Provide format(ts_ms, txid) -> 33-char string and parse(s) -> (ts_ms, txid_hex). Lex order = chronological within a single branch's parent chain.",
-      "acceptanceCriteria": [
-        "BookmarkStr::new validates length is exactly 33 ASCII chars matching `{ts_ms_hex_be:16}-{txid_hex_be:16}`",
-        "format(ts_ms, txid) returns a 33-char BookmarkStr",
-        "parse() returns (i64 ts_ms, u64 txid_hex_be) and rejects malformed input",
-        "Round-trip property test: parse(format(ts, txid)) == (ts, txid)",
-        "Tests pass",
-        "Typecheck passes"
-      ],
-      "priority": 19,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-020",
-      "title": "Implement create_bookmark (ephemeral) and bookmark_status APIs",
-      "description": "Implement create_bookmark(namespace, actor_id, at_ms) returning an ephemeral 33-char bookmark string derived from cached versionstamp + at_ms, and bookmark_status(namespace, actor_id, bookmark) returning PinStatus by reading the BOOKMARK record.",
-      "acceptanceCriteria": [
-        "create_bookmark returns a length-33 BookmarkStr without an FDB write (ephemeral)",
-        "bookmark_status reads BOOKMARK/{actor_id}/{bookmark_str}/pinned and returns PinStatus or absent",
-        "Test creates an ephemeral bookmark immediately after a commit and verifies parse() yields the commit's (ts_ms, txid)",
-        "Tests pass",
-        "Typecheck passes"
-      ],
-      "priority": 20,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-021",
-      "title": "Implement resolve_bookmark with two-level fork-chain bridging",
-      "description": "Implement resolve_bookmark(namespace_id, database_id, bookmark) per spec section 9 (v4). Bridges both database parent chain AND namespace parent chain. Uses VTX[bookmark_versionstamp] -> txid for O(1) lookup. Returns ResolvedVersionstamp + bookmark ref or BookmarkExpired/BranchNotReachable. Per v4: no APTR/NSPTR pointer dereference; namespace_id IS the namespace branch id, database_id IS the database branch id; resolution starts directly at the immutable branch records.",
-      "acceptanceCriteria": [
-        "Resolution starts at namespace_id (which IS the namespace branch id) and walks namespace parents",
-        "Database visibility check: NSCAT/{namespace_id}/{database_id} present (via parent walk + cap-by-versionstamp); BranchNotReachable if absent",
-        "NS cap: walk parents until parent_versionstamp_i <= bookmark.versionstamp",
-        "Database cap: walk capped by min(ns_versionstamp_cap, parent_versionstamp)",
-        "Pinned bookmark hit (exact ts/txid match) returns its stored versionstamp + bookmark ref",
-        "VTX[v] used for O(1) versionstamp -> txid lookup",
-        "BookmarkExpired returned when below GC pin; BranchNotReachable when chain misses",
-        "Tests pass",
-        "Typecheck passes"
-      ],
-      "priority": 21,
-      "passes": true,
-      "notes": "Implemented against the current pointer-era sqlite-storage layout: namespace visibility is APTR/NSPTR parent-walk with cap-by-versionstamp rather than v4 NSCAT."
-    },
-    {
-      "id": "US-022",
-      "title": "Implement create_pinned_bookmark (Pending) with bk_pin atomic-min and UPS enqueue",
-      "description": "Implement create_pinned_bookmark(namespace, actor_id, at_ms): in a single FDB tx, write BOOKMARK/.../pinned with PinStatus::Pending, atomic-min the actor branch's bk_pin to the bookmark's versionstamp, enforce MAX_PINS_PER_NAMESPACE, and enqueue a UPS message for the cold compactor to perform the S3 PUT. Returns the bookmark string immediately. Pinned bookmark creation does NOT call ensure_tier_at_least or perform any tier promotion; per the v3 spec there is no per-namespace tier model.",
-      "acceptanceCriteria": [
-        "Sync FDB tx writes PinnedBookmarkRecord with PinStatus::Pending",
-        "bk_pin atomic-min on the actor branch to the bookmark's versionstamp",
-        "MAX_PINS_PER_NAMESPACE enforcement returns TooManyPins",
-        "UPS message enqueued to the cold compactor with the bookmark + actor branch info",
-        "Returns BookmarkStr immediately (sub-FDB-tx latency)",
-        "No tier promotion logic on the create path (no ensure_tier_at_least call)",
-        "Tests pass",
-        "Typecheck passes"
-      ],
-      "priority": 22,
-      "passes": true,
-      "notes": "Implemented against the current pointer-era sqlite-storage layout: pinned bookmark records are keyed by actor id, branch pinning uses the resolved actor branch id, and cold compactor UPS handling is scaffolded with SqliteColdCompactPayload."
-    },
-    {
-      "id": "US-023",
-      "title": "Implement delete_pinned_bookmark with pin recompute scheduling",
-      "description": "Implement delete_pinned_bookmark(namespace, actor_id, bookmark) which removes the BOOKMARK record and enqueues a cold-compactor follow-up sweep to recompute bk_pin and delete the S3 pin object if no longer covered.",
-      "acceptanceCriteria": [
-        "delete_pinned_bookmark removes BOOKMARK/{actor_id}/{bookmark_str} and /pinned records",
-        "Pin recompute is scheduled (UPS message) for the cold compactor's follow-up sweep",
-        "If the deleted bookmark's versionstamp was the floor, recompute eventually advances bk_pin",
-        "Test verifies subsequent GC can advance past the deleted bookmark's versionstamp",
-        "Tests pass",
-        "Typecheck passes"
-      ],
-      "priority": 23,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-024",
-      "title": "Implement restore_to_bookmark wrapper (rollback then async pin)",
-      "description": "Implement restore_to_bookmark(namespace, actor_id, bookmark) which resolves the bookmark, calls rollback_actor first, then create_pinned_bookmark for the pre-rollback moment per spec section 8.4 fix #8 ordering. Returns the undo bookmark string.",
-      "acceptanceCriteria": [
-        "Resolves bookmark first to a ResolvedVersionstamp",
-        "rollback_actor is called before any pin write (durability ordering, fix #8)",
-        "create_pinned_bookmark called after rollback succeeds; pin status starts Pending",
-        "Returned undo bookmark is a valid 33-char string usable as input to restore_to_bookmark",
-        "Test verifies rollback is durable in FDB even if subsequent pin S3 PUT fails (PinStatus::Failed)",
-        "Tests pass",
-        "Typecheck passes"
-      ],
-      "priority": 24,
-      "passes": true,
-      "notes": "Implemented against the current pointer-era sqlite-storage layout because rollback_actor remains present despite US-067's obsolete note. restore_to_bookmark resolves the target, captures the undo bookmark, rolls back, then writes the undo pinned bookmark."
-    },
-    {
-      "id": "US-025",
-      "title": "Implement flattened ancestry cache on Db",
-      "description": "Add a per-conn flattened ancestry cache to the database connection (ActorDb -> Db post-US-065): Vec<(database_id, parent_versionstamp_cap_for_reads)> computed on first get_pages or commit and reused. Per the v4 spec section 10, branches are immutable for life, so the cache is stable for the entire Db lifetime — there is NO cache-invalidation contract on `last_swapped_at_ms` (which no longer exists post-US-067). Pegboard exclusivity guarantees no other writer can hijack the database's branch underneath the conn.",
-      "acceptanceCriteria": [
-        "Db carries an ancestors: Vec<(DatabaseId, ParentVersionstampCap)> field",
-        "Built once per Db lifetime by walking BRANCHES/list/{...}.parent links",
-        "Capped at MAX_FORK_DEPTH; deeper chains return an error",
-        "Cache lives for the lifetime of the conn; no invalidation logic (branches are immutable)",
-        "Tests pass",
-        "Typecheck passes"
-      ],
-      "priority": 25,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-026",
-      "title": "Implement cache invalidation contract on commit and get_pages",
-      "description": "Extend commit and get_pages to read APTR.last_swapped_at_ms and NSPTR.last_swapped_at_ms in parallel with /META/head via try_join! per spec section 10. On mismatch with cached values, the tx aborts; the caller drops the ancestry cache and re-resolves before retrying.",
-      "acceptanceCriteria": [
-        "Every commit and get_pages reads APTR + NSPTR last_swapped_at_ms in parallel with /META/head",
-        "Mismatch aborts the tx and drops the ancestry cache",
-        "Caller re-resolves and retries automatically",
-        "Test verifies a rolled-back commit never lands on the old branch's /META/head",
-        "Tests pass",
-        "Typecheck passes"
-      ],
-      "priority": 26,
-      "passes": true,
-      "notes": "Obsolete after v4 rollback removal (US-067). Cache invalidation contract on last_swapped_at_ms is gone — branches are immutable, the database_id IS the branch id, and pegboard exclusivity guarantees no other writer can hijack the database's branch underneath the conn. No parallel APTR/NSPTR reads on commit/get_pages."
-    },
-    {
-      "id": "US-027",
-      "title": "Implement get_pages walking ancestry chain with PIDX/SHARD fallthrough",
-      "description": "Update get_pages to walk the cached ancestry chain. For each pgno, walk current_branch -> root, doing PIDX read capped by parent_versionstamp on each ancestor; on PIDX miss fall through to versioned SHARD read with as_of_txid <= cap. Return zero page if exhausted.",
-      "acceptanceCriteria": [
-        "get_pages reads PIDX[branch_id][pgno] capped by parent_versionstamp_cap on each ancestor",
-        "On PIDX miss, falls through to SHARD/{shard_id}/ reverse-range scan capped by as_of_txid",
-        "Walk continues to parent on miss, exhausting yields zero page",
-        "Test verifies correct page reads on a fork descendant where some pages live in parent",
-        "Tests pass",
-        "Typecheck passes"
-      ],
-      "priority": 27,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-028",
-      "title": "Implement /META/head_at_fork read on fresh forks until first commit",
-      "description": "Update get_pages and commit on a fresh-fork branch (no /META/head yet) to read /META/head_at_fork instead. First commit on the new branch writes /META/head and clears /META/head_at_fork.",
-      "acceptanceCriteria": [
-        "Fresh-fork branch reads /META/head_at_fork as the source of head_txid + db_size_pages + post_apply_checksum",
-        "First commit writes /META/head and clears /META/head_at_fork in the same tx",
-        "Test verifies a freshly forked actor reads pages correctly before its first own commit",
-        "Tests pass",
-        "Typecheck passes"
-      ],
-      "priority": 28,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-029",
-      "title": "Implement list_databases with NSCAT walk + cap-by-versionstamp + tombstones",
-      "description": "Implement list_databases(namespace_id) per spec section 10.5 (v4). Walks the namespace parent chain via NSCAT range scans, applying cap-by-versionstamp filtering on each NSCAT entry's stored versionstamp suffix (databases created in source after a fork have versionstamps > the fork's parent_versionstamp and are filtered out). Honors database_tombstones written in any namespace on the walk path. delete_database writes a database_tombstone and atomic-add(-1) on the database refcount.",
-      "acceptanceCriteria": [
-        "list_databases walks namespace parents and unions NSCAT entries",
-        "Each NSCAT entry's stored versionstamp is compared against the walking namespace's parent_versionstamp; entries created AFTER the fork point are filtered out",
-        "Tombstones in child namespaces mask databases inherited from parent namespaces",
-        "delete_database writes NSBRANCH/{ns}/database_tombstones/{database_id} and atomic-add(-1) on the database refcount",
-        "Test verifies a deleted database in a forked ns is hidden in that ns but still visible in the parent ns",
-        "Test verifies fork_namespace AS-OF correctness: a database created in source AFTER fork_namespace is invisible in the fork",
-        "Tests pass",
-        "Typecheck passes"
-      ],
-      "priority": 29,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-030",
-      "title": "Update hot compactor to read tier from NSBRANCH tier_state",
-      "description": "Update the hot compactor pass loop to read tier from NSBRANCH/{ns_branch_id}/tier_state.tier instead of any per-actor tier field. Switches DELTA-deletion and pin behavior based on Tier 0 vs Tier 1+.",
-      "acceptanceCriteria": [
-        "Hot compactor reads NamespaceTierState on every pass",
-        "Tier 0 path deletes folded DELTAs unconditionally after SHARD write commits",
-        "Tier 1+ path deletes folded DELTAs only when max_folded_txid <= cold_drained_txid",
-        "Test verifies tier transition is observable on the next hot pass without rewriting actor records",
-        "Tests pass",
-        "Typecheck passes"
-      ],
-      "priority": 30,
-      "passes": true,
-      "notes": "Obsolete after tier flattening (US-066). No tier read needed; hot compactor is uniform."
-    },
-    {
-      "id": "US-031",
-      "title": "Hot compactor enforces MAX_SHARD_VERSIONS_PER_SHARD with inline force-eviction",
-      "description": "Hot compactor checks the count of SHARD versions for a shard before producing a new one. When at MAX_SHARD_VERSIONS_PER_SHARD, force-evict the oldest unpinned shard version inline. If all 32 are pinned, abort with ShardVersionCapExhausted.",
-      "acceptanceCriteria": [
-        "Hot pass counts SHARD/{shard_id}/* versions before writing a new one",
-        "At cap, force-evicts oldest unpinned version inline",
-        "If all versions pinned (covered by desc_pin or bk_pin), aborts with ShardVersionCapExhausted",
-        "Metric sqlite_shard_versions_per_shard recorded",
-        "Tests pass",
-        "Typecheck passes"
-      ],
-      "priority": 31,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-032",
-      "title": "Hot compactor writes last_hot_pass_txid sub-key",
-      "description": "Hot compactor writes BR/{branch_id}/META/manifest/last_hot_pass_txid on every pass. Eviction compactor reads this for OCC fence (later story).",
-      "acceptanceCriteria": [
-        "Every hot pass writes last_hot_pass_txid = max_folded_txid",
-        "Sub-key is split from cold_drained_txid and access fields per spec section 6",
-        "Test verifies the value advances strictly on each pass",
-        "Tests pass",
-        "Typecheck passes"
-      ],
-      "priority": 32,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-033",
-      "title": "Hot compactor universal hot-tier retention sweep",
-      "description": "Hot compactor on every namespace GCs COMMITS and VTX rows older than HOT_RETENTION_FLOOR_MS (default 7 days) on each pass per spec section 12.1. The sweep is universal with no per-namespace tier branching. After the watermark, bookmark resolution beyond the floor returns BookmarkExpired unless a cold layer or pin extends retention.",
-      "acceptanceCriteria": [
-        "Hot pass deletes COMMITS rows older than wall-clock now - HOT_RETENTION_FLOOR_MS on every namespace",
-        "Hot pass deletes the corresponding VTX entries in the same sweep",
-        "No tier branching in the sweep code path; all namespaces share the same retention behavior",
-        "Test verifies bookmarks beyond HOT_RETENTION_FLOOR_MS return BookmarkExpired when no cold layer covers the versionstamp",
-        "Test covers the universal sweep across multiple namespaces with no tier configuration",
-        "Tests pass",
-        "Typecheck passes"
-      ],
-      "priority": 33,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-034",
-      "title": "Implement throttled access-touch on ActorDb",
-      "description": "On read/write activity, ActorDb writes last_access_ts_ms and re-keys the eviction_index entry only when the ACCESS_TOUCH_THROTTLE_MS bucket has advanced. Per-conn cache suppresses redundant writes.",
-      "acceptanceCriteria": [
-        "ActorDb caches last_access_bucket per conn",
-        "Touch is suppressed when current bucket equals cached bucket",
-        "On bucket advance: write BR/{}/META/manifest/last_access_ts_ms + last_access_bucket and re-key CTR/eviction_index/{bucket}/{actor_branch_id}",
-        "Default ACCESS_TOUCH_THROTTLE_MS = 60_000",
-        "Test verifies at 1ms commit cadence, eviction_index churn drops to ~1 write/min",
-        "Tests pass",
-        "Typecheck passes"
-      ],
-      "priority": 34,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-035",
-      "title": "Add ColdTier trait with Filesystem/S3 implementations",
-      "description": "Define the ColdTier trait abstraction in cold_tier/ with PUT/GET/DELETE/LIST methods. Provide ColdTier::Filesystem (local fs stand-in for tests) and ColdTier::S3 (real S3 driver) implementations. Also include ColdTier::Faulty wrapper for fault injection. There is no Disabled variant; per the v3 spec, every namespace's data flows through the cold tier and the cold compactor always runs (idle namespaces simply produce small or infrequent layer files).",
-      "acceptanceCriteria": [
-        "ColdTier trait defines async put_object, get_object, delete_objects, list_prefix",
-        "Filesystem implementation reads/writes under a configured root directory",
-        "S3 implementation uses aws-sdk-s3 with proper credentials wiring",
-        "Faulty wrapper allows configurable failures/latencies for tests",
-        "No Disabled variant; the trait surface assumes a working cold tier is always present",
-        "Tests pass",
-        "Typecheck passes"
-      ],
-      "priority": 35,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-036",
-      "title": "Cold compactor scaffold (Standalone service + UPS subscriber + lease)",
-      "description": "Add cold compactor module under compactor/cold/ with worker scaffold, SqliteColdCompactSubject UPS subscriber, and per-branch cold_lease pattern (30s TTL, 10s renew, 5s margin, local-timer + cancel-token + renewal task). Registered as ServiceKind::Standalone in run_config.rs.",
-      "acceptanceCriteria": [
-        "compactor/cold/mod.rs has the worker scaffold mirroring hot compactor patterns",
-        "SqliteColdCompactSubject defined with queue group `cold_compactor`",
-        "Per-branch cold_lease at BR/{branch_id}/META/cold_lease with TTL/renew/margin",
-        "Standalone service registered in engine/packages/engine/src/run_config.rs as sqlite_cold_compactor",
-        "Lease renewal handled by background task outside any FDB tx",
-        "Tests pass",
-        "Typecheck passes"
-      ],
-      "priority": 36,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-037",
-      "title": "Cold compactor Phase A (pre-tx pending marker registration + read tx)",
-      "description": "Implement Phase A per spec section 12.2: brief FDB tx writes /META/cold_compact.in_flight_uuid, then PUT pending/{uuid}.marker in S3 OUTSIDE any FDB tx, then resume Phase A snapshot read tx (SHARD versions, DELTAs, COMMITS, VTX, branch record, tier_state) computing the upload plan.",
-      "acceptanceCriteria": [
-        "Brief FDB tx writes /META/cold_compact.in_flight_uuid = uuid before any S3 op",
-        "Pending marker PUT happens after FDB tx commits (outside any tx)",
-        "Pending marker is self-describing (lists planned object keys)",
-        "Phase A read tx is snapshot-mode, bounded by 5s tx age",
-        "Test verifies FDB tx never holds open during S3 PUT",
-        "Tests pass",
-        "Typecheck passes"
-      ],
-      "priority": 37,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-038",
-      "title": "Cold compactor Phase B (S3 image/delta/pin uploads, manifest chunk, pointer snapshot)",
-      "description": "Implement Phase B per spec section 12.2: PUT image/{...}.ltx (one shard per file), delta/{...}.ltx, pin/{versionstamp}.ltx (Pending pins), branch_record.bare, append cold_manifest/chunks/{pass_versionstamp}.bare, rewrite cold_manifest/index.bare, PUT pointer_snapshot/{pass_versionstamp}.bare. No FDB tx held during this phase.",
-      "acceptanceCriteria": [
-        "Encodes and PUTs image layers (one shard per file, fix #15)",
-        "Encodes and PUTs delta layers consolidating planned DELTA ranges",
-        "Encodes and PUTs pin layers for Pending bookmarks (full DB image at versionstamp)",
-        "Appends ColdManifestChunk; rewrites ColdManifestIndex with new chunk ref + last_pass metadata",
-        "Writes PointerSnapshot capturing actor + namespace pointers at pass time",
-        "Stale pending markers older than STALE_MARKER_AGE_MS deleted with their listed object keys",
-        "Tests pass",
-        "Typecheck passes"
-      ],
-      "priority": 38,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-039",
-      "title": "Cold compactor Phase C (FDB write tx with OCC fence)",
-      "description": "Implement Phase C per spec section 12.2: regular-read /META/cold_compact.cold_drained_txid for OCC assertion against Phase A value, update /META/cold_compact + /META/manifest/cold_drained_txid sub-key, transition Pending pins to Ready (Failed on partial), clear in_flight_uuid. Single FDB tx.",
-      "acceptanceCriteria": [
-        "OCC fence reads cold_drained_txid and aborts if changed since Phase A",
-        "Updates /META/cold_compact and /META/manifest/cold_drained_txid sub-key",
-        "Pending pin records transition to PinStatus::Ready (or Failed) in same tx",
-        "Clears /META/cold_compact.in_flight_uuid",
-        "Failure injection test for OCC abort on concurrent hot pass",
-        "Tests pass",
-        "Typecheck passes"
-      ],
-      "priority": 39,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-040",
-      "title": "Cold compactor handles pinned-bookmark create messages from UPS",
-      "description": "Wire UPS message handling for create_pinned_bookmark events: on receiving the message, the cold compactor schedules a pin pass that uploads pin/{versionstamp}.ltx (full DB image) and transitions PinStatus to Ready. On 5xx, status moves to Failed.",
-      "acceptanceCriteria": [
-        "UPS message types include CreatePinnedBookmark { actor_branch_id, bookmark_str, versionstamp }",
-        "Cold compactor enqueues a pin upload job that becomes part of the next pass plan",
-        "After successful S3 PUT, BOOKMARK/.../pinned.status -> Ready in Phase C",
-        "On S3 5xx after retries, status -> Failed",
-        "Test verifies create_pinned_bookmark -> Ready end-to-end via filesystem ColdTier",
-        "Tests pass",
-        "Typecheck passes"
-      ],
-      "priority": 40,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-041",
-      "title": "Cold compactor follow-up sweep deletes orphaned S3 objects after pin recompute",
-      "description": "After Phase C commits, cold compactor runs a follow-up sweep that reads the three pin counters for the branch and DELETEs S3 layer files whose (min_versionstamp, max_versionstamp) range is entirely below the pin. Manifest chunks updated before layer deletion so no orphan reference outlives its layer.",
-      "acceptanceCriteria": [
-        "Follow-up sweep reads desc_pin + bk_pin + refcount-derived root pin",
-        "Manifest index updated to remove chunks fully below pin BEFORE deleting layer files",
-        "Same OCC pattern (no-op if a fork during sweep pulls pin back)",
-        "Test verifies orphaned layers are cleaned after delete_pinned_bookmark + GC pass",
-        "Tests pass",
-        "Typecheck passes"
-      ],
-      "priority": 41,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-042",
-      "title": "Cold-tier read fall-through on FDB miss",
-      "description": "Update get_pages to fall through to S3 when a hot-tier read misses (PIDX entry pointing at a cold-evicted DELTA, or no SHARD version covers the read txid). Loads cold_manifest index + relevant chunks, finds layer covering owner_txid, GETs it, decodes, returns the page. This is the LSM read path's L2 step and applies uniformly to every namespace; there is no per-tier conditional gating.",
-      "acceptanceCriteria": [
-        "On FDB DELTA/SHARD miss, get_pages loads ColdManifestIndex + relevant ColdManifestChunk(s)",
-        "Identifies LayerEntry whose (min_txid, max_txid) covers the owner_txid",
-        "GETs the layer file via ColdTier; decodes LTX; returns the page bytes",
-        "Per-conn perf cache (LRU, bounded) for cold manifests",
-        "Test verifies fall-through on an evicted branch using filesystem ColdTier",
-        "Tests pass",
-        "Typecheck passes"
-      ],
-      "priority": 42,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-043",
-      "title": "Eviction compactor scaffold (Standalone service + global lease)",
-      "description": "Add eviction compactor module under compactor/eviction/ with sweep loop, global CMPC/lease_global/{kind=eviction} lease, and Standalone service registration in run_config.rs. Sweep is bounded by BATCH_SIZE per pass.",
-      "acceptanceCriteria": [
-        "compactor/eviction/mod.rs implements the sweep loop with global lease",
-        "CMPC/lease_global/{kind=eviction} (sweep coordinator) lease pattern",
-        "Standalone service registered as sqlite_eviction_compactor in run_config.rs",
-        "Sweep range_scans CTR/eviction_index/ ordered by last_access_bucket",
-        "BATCH_SIZE caps per-pass work",
-        "Tests pass",
-        "Typecheck passes"
-      ],
-      "priority": 43,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-044",
-      "title": "Implement eviction predicate (3-gate: hot window + descendant pin + bookmark pin)",
-      "description": "Implement the eviction predicate per spec section 12.3. Computes evictability via three gates: (1) older than HOT_CACHE_WINDOW_MS, (2) cold_drained_txid >= max_folded_txid, (3) no descendant pin (desc_pin > as_of_txid) and no bookmark pin (bk_pin > as_of_txid). Also enforces last_hot_pass_txid - SHARD_RETENTION_MARGIN >= as_of_txid.",
-      "acceptanceCriteria": [
-        "Predicate returns true only when all three gates pass + hot pass margin satisfied",
-        "Newer SHARD version exists in FDB (eviction is shard-version-level)",
-        "Test for each gate independently: hot window, desc pin, bk pin",
-        "Tests pass",
-        "Typecheck passes"
-      ],
-      "priority": 44,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-045",
-      "title": "Eviction OCC fence on last_hot_pass_txid",
-      "description": "Eviction tx regular-reads /META/manifest/last_hot_pass_txid and asserts equality with the value captured at plan time per spec section 12.3 fix #6. Aborts and re-plans on mismatch. Uses COMPARE_AND_CLEAR for evictable shard versions.",
-      "acceptanceCriteria": [
-        "Plan-time capture of last_hot_pass_txid_at_plan",
-        "Eviction tx aborts if last_hot_pass_txid changed",
-        "COMPARE_AND_CLEAR semantics on PIDX + shard-version clears",
-        "Test injects a hot pass between plan and clear; eviction aborts cleanly",
-        "Metric sqlite_eviction_occ_abort_total{reason=hot_pass_advanced} increments",
-        "Tests pass",
-        "Typecheck passes"
-      ],
-      "priority": 45,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-046",
-      "title": "Eviction removes branch from index on full evict",
-      "description": "When a branch is fully evicted (no SHARD remains in FDB), the eviction compactor removes the branch's eviction_index entry. Future reads on that actor lazy-rehydrate from S3 via cold-tier fall-through.",
-      "acceptanceCriteria": [
-        "After clearing all evictable SHARD versions, eviction-index entry removed",
-        "Subsequent get_pages falls through to S3 (cold tier read path)",
-        "Test verifies a fully-evicted branch is readable via cold tier",
-        "Tests pass",
-        "Typecheck passes"
-      ],
-      "priority": 46,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-047",
-      "title": "Implement GC pin formula and pass logic",
-      "description": "Implement gc/mod.rs computing per-branch gc_pin = min(refcount > 0 ? root_versionstamp : INFINITY, oldest_descendant_pin, oldest_bookmark_pin) per spec section 13. Pin recomputed per pass; never persisted. Translate to txid floor via VTX[gc_pin] -> txid for COMMITS/DELTA range deletes.",
-      "acceptanceCriteria": [
-        "gc_pin computation reads refcount, desc_pin, bk_pin, branch.root_versionstamp",
-        "Refcount=0 collapses the root term to infinity (so the branch's tail is GC-eligible)",
-        "VTX lookup translates gc_pin versionstamp to txid floor",
-        "COMMITS / VTX / DELTA range deletes use the txid floor",
-        "Test for pin recompute decreasing when descendants are deleted (no monotonic ratchet)",
-        "Tests pass",
-        "Typecheck passes"
-      ],
-      "priority": 47,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-048",
-      "title": "Implement frozen branch retention sweep",
-      "description": "GC pass deletes a frozen branch (state=Frozen, refcount=0, no desc_pin, no bk_pin) once it is older than FROZEN_BRANCH_RETENTION_MS by created_at_ms. Sweeps META, COMMITS, VTX, PIDX, DELTA, SHARD, plus S3 layers under actor/{branch_id}/.",
-      "acceptanceCriteria": [
-        "Frozen branch retention check uses created_at_ms-relative wall clock (not head)",
-        "All gates required: state=Frozen + refcount=0 + no pins + age > FROZEN_BRANCH_RETENTION_MS",
-        "Sweep deletes FDB BR/{branch_id}/* keys plus S3 actor/{branch_id}/ prefix",
-        "Test verifies cycle: rollback -> frozen -> retention expiry -> sweep",
-        "Tests pass",
-        "Typecheck passes"
-      ],
-      "priority": 48,
-      "passes": true,
-      "notes": "Obsolete after v4 rollback removal (US-067). BranchState::Frozen no longer exists; branches are deleted by the standard refcount + pin pass when refcount reaches zero (covered by US-047)."
-    },
-    {
-      "id": "US-049",
-      "title": "Implement APTR/NSPTR history GC",
-      "description": "GC pass also deletes APTR/{ns_branch}/{actor_id}/history/* and NSPTR/{ns_id}/history/* rows older than gc_pin (resolve gc_pin versionstamp to wall-clock via COMMITS.wall_clock_ms). Bounds rollback audit log growth.",
-      "acceptanceCriteria": [
-        "GC translates gc_pin versionstamp -> wall_clock_ms via COMMITS row",
-        "APTR history rows older than wall-clock floor are deleted",
-        "NSPTR history rows older than wall-clock floor are deleted",
-        "Test verifies rollback-spam does not grow FDB unboundedly",
-        "Tests pass",
-        "Typecheck passes"
-      ],
-      "priority": 49,
-      "passes": true,
-      "notes": "Obsolete after v4 rollback removal (US-067). APTR + NSPTR partitions and their /history/* sub-keys are deleted; there is no pointer history audit log to GC."
-    },
-    {
-      "id": "US-050",
-      "title": "Tier transition wiring on first fork or pinned bookmark",
-      "description": "Wire ensure_tier_at_least into fork_actor, fork_namespace, and create_pinned_bookmark so the first such call on a Tier 0 namespace CAS-promotes to Tier 1 atomically in the same FDB tx.",
-      "acceptanceCriteria": [
-        "fork_actor calls ensure_tier_at_least before deriving the new branch",
-        "fork_namespace calls ensure_tier_at_least on source ns branch",
-        "create_pinned_bookmark calls ensure_tier_at_least",
-        "Test verifies first fork on T0 namespace promotes to T1; concurrent first-forks race to a single winner",
-        "Metric sqlite_tier_engagement_total increments",
-        "Tests pass",
-        "Typecheck passes"
-      ],
-      "priority": 50,
-      "passes": true,
-      "notes": "Obsolete after tier flattening (US-066). No tier transition exists."
-    },
-    {
-      "id": "US-051",
-      "title": "Implement burst-mode hot quota cap",
-      "description": "Add burst_mode.rs that derives a burst signal from FDB lag in /META/manifest.cold_drained_txid - /META/head.head_txid. When burst is active, raise the hot quota cap from 10 GiB to 20 GiB (HOT_BURST_MULTIPLIER=2). Reverts when cold tier recovers. Burst mode is a universal hot-tier overflow guard; it applies to every namespace uniformly without any tier coupling.",
-      "acceptanceCriteria": [
-        "Burst signal computed from FDB cold-lag, not pod 5xx counter",
-        "Hot quota cap doubles to 20 GiB when burst active",
-        "Reverts to 10 GiB when cold lag recovers",
-        "Quota check on commit consults burst-mode-adjusted cap",
-        "No tier branching in burst signal computation or quota check",
-        "Tests pass",
-        "Typecheck passes"
-      ],
-      "priority": 51,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-052",
-      "title": "Wire pegboard cache invalidation broadcast on rollback",
-      "description": "On rollback_actor or rollback_namespace, publish a UPS message so pegboard / connected ActorDb instances drop their cached APTR/NSPTR snapshot. Storage layer exposes the primitive (publish on commit); consumers subscribe out of band.",
-      "acceptanceCriteria": [
-        "rollback_actor and rollback_namespace publish a cache-invalidation UPS event after commit",
-        "Event carries (ns_id, actor_id?) + new pointer values",
-        "ActorDb subscribes and drops the ancestry cache on receipt",
-        "Test verifies a connected ActorDb sees rollback effect on next read without an explicit invalidation tx",
-        "Tests pass",
-        "Typecheck passes"
-      ],
-      "priority": 52,
-      "passes": true,
-      "notes": "Obsolete after v4 rollback removal (US-067). Storage exposes no rollback primitive, so there is no rollback event to broadcast. Engine-layer rollback flips the engine's actor->database mapping and tears down + reopens the Db connection; storage need not coordinate."
-    },
-    {
-      "id": "US-053",
-      "title": "Cold compactor handles fork-warmup UPS messages",
-      "description": "When a fork creates a new branch on Tier 1+, publish a UPS message to the cold compactor to pre-stage the parent's resident layer set into the new branch's cold prefix (or pre-warm a cache). Optimization for cold-read latency on fork descendants.",
-      "acceptanceCriteria": [
-        "fork_actor and fork_namespace publish a fork-warmup UPS event after commit",
-        "Cold compactor handles the event by enqueueing a warmup pass for the new branch",
-        "Warmup copies parent image layer references into the new branch's cold manifest (or pre-stages bytes)",
-        "Test verifies subsequent cold reads on the fork descendant hit fewer cold layers",
-        "Tests pass",
-        "Typecheck passes"
-      ],
-      "priority": 53,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-054",
-      "title": "Add debug APIs (read_at, dump_actor_ancestry, dump_branch_pins, list_bookmarks, dump_cold_manifest, estimate_gc_pin)",
-      "description": "Expose the debug helpers listed in spec section 20 under a `debug` module gated behind a feature or test-only flag.",
-      "acceptanceCriteria": [
-        "debug::dump_actor_ancestry returns the full chain Vec<(branch_id, parent_versionstamp)>",
-        "debug::dump_branch_pins returns refcount + desc_pin + bk_pin",
-        "debug::list_bookmarks returns Vec<BookmarkIndexEntry> (ephemeral resolved at call time + pinned)",
-        "debug::dump_cold_manifest returns the full ColdManifest",
-        "debug::estimate_gc_pin returns the gc_pin computed at call time",
-        "debug::read_at(actor_id, versionstamp) returns the page state at the given versionstamp",
-        "Typecheck passes"
-      ],
-      "priority": 54,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-055",
-      "title": "Add Prometheus metrics for PITR + forking",
-      "description": "Add the Prometheus metrics from spec section 20: branch_fork_total, branch_delete_total, bookmark_create_total, bookmark_resolve_total, bookmark_resolve_duration_seconds, branch_ancestry_walk_depth, branch_pin_advance_total, cold_pass_duration_seconds, cold_pass_layers_uploaded_total, cold_lease_take_total, eviction_pass_duration_seconds, pending_marker_orphan_cleaned_total, pin_status, eviction_occ_abort_total, shard_versions_per_shard, dr_posture, pinned_bookmark_count_per_namespace, cold_lag_versionstamps, bookmark_resolution_chain_depth. Per v4 the tier_engagement_total and pre_tier_transition_pinned_commits_total metrics are gone (no tier model) and aptr_history_rows_per_actor is gone (no APTR pointer history).",
-      "acceptanceCriteria": [
-        "All metrics from spec section 20 registered with documented labels",
-        "Histograms for resolve duration, ancestry walk depth, cold pass duration, eviction duration, shard versions, resolution chain depth",
-        "Counters for fork/delete/bookmark/eviction outcomes",
-        "Gauges for pin status, dr posture, pin count, cold lag",
-        "Test verifies metric increments via metric scrape harness",
-        "Typecheck passes"
-      ],
-      "priority": 55,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-056",
-      "title": "Add fork_actor and fork_namespace integration tests",
-      "description": "Add tests/fork_actor.rs and tests/fork_namespace.rs covering forks at root, depth-1, and depth-N source branches; OCC fence races; cross-namespace fork; MAX_FORK_DEPTH and MAX_NAMESPACE_DEPTH enforcement.",
-      "acceptanceCriteria": [
-        "tests/fork_actor.rs covers root + depth-1 + depth-N forks",
-        "tests/fork_namespace.rs covers root + depth-1 + depth-N forks",
-        "OCC fence test injects concurrent GC bk_pin advance and asserts ForkOutOfRetention",
-        "MAX_FORK_DEPTH test: fork at depth 16 succeeds, 17 fails with ForkChainTooDeep",
-        "MAX_NAMESPACE_DEPTH analog test",
-        "Tests pass",
-        "Typecheck passes"
-      ],
-      "priority": 56,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-057",
-      "title": "Add rollback_actor and rollback_namespace integration tests",
-      "description": "Add tests/rollback_actor.rs and tests/rollback_namespace.rs covering rollback to ephemeral, rollback to pinned, undo via restore_to_bookmark, and rollback-then-pin-failure ordering.",
-      "acceptanceCriteria": [
-        "tests/rollback_actor.rs covers rollback to ephemeral + pinned bookmark",
-        "tests/rollback_namespace.rs analog",
-        "Test for restore_to_bookmark wrapper returns valid undo bookmark",
-        "Test verifies rollback durable + pin failure (PinStatus::Failed)",
-        "Tests pass",
-        "Typecheck passes"
-      ],
-      "priority": 57,
-      "passes": true,
-      "notes": "Obsolete after v4 rollback removal (US-067). No rollback APIs exist at the storage layer. Engine-layer rollback semantics are tested at the engine layer, not in sqlite-storage."
-    },
-    {
-      "id": "US-058",
-      "title": "Add bookmarks integration tests (ephemeral, pinned, parent fall-through, ns-fork bridging)",
-      "description": "Add tests/bookmarks.rs covering ephemeral creation/resolution, pinned creation -> Pending -> Ready transitions, parent-chain fall-through, namespace-fork bridging (fix #14), and BookmarkExpired / BranchNotReachable edge cases.",
-      "acceptanceCriteria": [
-        "Ephemeral bookmark resolves to correct versionstamp post-commit",
-        "Pinned bookmark transitions Pending -> Ready via filesystem ColdTier",
-        "Parent fall-through: bookmark created in parent ns resolves correctly in forked ns",
-        "BookmarkExpired returned past Tier 0 retention",
-        "BranchNotReachable returned for unrelated actor's bookmark",
-        "Tests pass",
-        "Typecheck passes"
-      ],
-      "priority": 58,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-059",
-      "title": "Add cold compactor integration tests (Phase A/B/C orchestration, OCC fence, pending markers)",
-      "description": "Add tests/cold_compactor.rs covering Phase A/B/C orchestration, OCC fence on cold_drained_txid, pending marker outside FDB tx behavior (fix #7), and idempotent re-uploads on retry. Use ColdTier::Filesystem.",
-      "acceptanceCriteria": [
-        "Test verifies Phase A FDB tx commits before Phase A.4 S3 PUT",
-        "Test verifies Phase B holds no FDB tx during S3 uploads",
-        "Test verifies Phase C OCC abort on concurrent hot pass advancing cold_drained_txid",
-        "Test verifies idempotent retry: rerun pass after Phase B crash succeeds via deterministic keys",
-        "Tests pass",
-        "Typecheck passes"
-      ],
-      "priority": 59,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-060",
-      "title": "Add eviction compactor integration tests (predicate gates, OCC fence, throttle)",
-      "description": "Add tests/eviction_compactor.rs covering each predicate gate independently (hot window, descendant pin, bookmark pin), OCC fence on last_hot_pass_txid (fix #6), and access-touch throttle (fix #11) reducing eviction-index churn.",
-      "acceptanceCriteria": [
-        "Test for each gate: hot window, desc pin, bk pin",
-        "Test for OCC abort on hot pass between plan and clear",
-        "Test verifies access-touch throttle bounds writes to ~1/min at 1ms commit cadence",
-        "Test verifies fully-evicted branch removed from eviction_index",
-        "Tests pass",
-        "Typecheck passes"
-      ],
-      "priority": 60,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-061",
-      "title": "Add GC + list_actors integration tests",
-      "description": "Add tests/gc.rs (pin computation, dependency-graph deletion, APTR history GC, frozen branch retention) and tests/list_actors.rs (tombstone-aware ns-chain walk). Tier transition tests are not included; per the v3 spec there is no tier transition path to test.",
-      "acceptanceCriteria": [
-        "tests/gc.rs verifies pin formula + dependency-graph deletion + APTR history GC",
-        "tests/list_actors.rs verifies tombstones across deep ns fork chain",
-        "Tests pass",
-        "Typecheck passes"
-      ],
-      "priority": 61,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-062",
-      "title": "Add critical fault-injection tests from spec section 21",
-      "description": "Add the 7 fault-injection tests from spec section 21 (v4): cold_compactor_5xx_phase_b, cold_compactor_phase_a_pending_put_5s, cold_compactor_lease_loss_b_to_c, eviction_during_active_read, concurrent_fork_during_eviction, gc_pin_recompute_under_bookmark_delete_race, dr_replay_from_s3_alone. The v3 tier_transition_inflight_commit test is gone (no tier model post-v3) and the v3 restore_to_bookmark_rollback_then_pin_failure test is gone (no rollback API post-v4).",
-      "acceptanceCriteria": [
-        "All 7 named test files added under engine/packages/sqlite-storage/tests/",
-        "Each test asserts the spec-listed invariants for its scenario",
-        "ColdTier::Faulty wrapper used for S3 5xx + latency injection",
-        "MemoryStore::snapshot used for cold-pass crash recovery scenarios",
-        "Tests pass",
-        "Typecheck passes"
-      ],
-      "priority": 62,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-063",
-      "title": "Create docs-internal/engine/sqlite/ folder with five docs",
-      "description": "Create the five required docs per spec section 23: storage-structure.md (full FDB + S3 key layout), components.md (pump, hot, cold, eviction compactor responsibilities), vfs-brief.md (links to existing VFS docs), constraints-and-design-decisions.md (rough-PITR rationale, versioned SHARDs, two-level indirection), comparison-to-other-systems.md (Neon, CF DO, Snowflake, LiteFS, Litestream, mvSQLite, Turso).",
-      "acceptanceCriteria": [
-        "docs-internal/engine/sqlite/storage-structure.md created with full FDB + S3 key layout",
-        "docs-internal/engine/sqlite/components.md created with per-component responsibilities + lease ownership",
-        "docs-internal/engine/sqlite/vfs-brief.md created and links to existing VFS docs",
-        "docs-internal/engine/sqlite/constraints-and-design-decisions.md created with rationale",
-        "docs-internal/engine/sqlite/comparison-to-other-systems.md created with all 7 systems",
-        "Typecheck passes"
-      ],
-      "priority": 63,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-064",
-      "title": "Update sqlite-storage CLAUDE.md and engine CLAUDE.md to reference new docs",
-      "description": "Update engine/packages/sqlite-storage/CLAUDE.md to reference the new docs-internal/engine/sqlite/ folder and add the maintenance bullet (per spec section 23). Update engine/CLAUDE.md SQLite sections to point at the new docs index.",
-      "acceptanceCriteria": [
-        "engine/packages/sqlite-storage/CLAUDE.md adds Reference Docs entries for the five new docs",
-        "Maintenance bullet added: 'When changing FDB or S3 key layout, branch metadata, or compactor responsibilities, update docs-internal/engine/sqlite/{storage-structure,components,constraints-and-design-decisions}.md in the same change.'",
-        "engine/CLAUDE.md SQLite sections updated to reference the new docs folder",
-        "Typecheck passes"
-      ],
-      "priority": 64,
-      "passes": true,
-      "notes": ""
-    },
-    {
-      "id": "US-065",
-      "title": "Rename 'actor' storage entity to 'database' across sqlite-storage (one DB per actor, fully decoupled)",
-      "description": "Rename the storage-layer 'actor' entity to 'database' so the storage primitives speak in terms of (namespace, database) instead of (namespace, actor). The storage layer must own no coupling between databases and actors: a database is identified by its own DatabaseId (replacing ActorId in storage APIs), has its own pointer/branch/lifecycle, and is independently fork/rollback/bookmark-able. The mapping 'one database per actor' lives at the engine/pegboard layer, not in sqlite-storage. This is a pure rename + decoupling pass within sqlite-storage; no behavior change. Update the spec at .agent/specs/sqlite-rough-pitr.md, the FDB key partitions, the four operations (fork_database, rollback_database, fork_namespace, rollback_namespace), bookmark APIs, BRANCHES partition (now keyed by DatabaseBranchId), APTR -> DBPTR, ActorBranchId -> DatabaseBranchId, ActorBranchRecord -> DatabaseBranchRecord, ActorPointer -> DatabasePointer, ActorDb -> Db (or similar). Engine-edge callers translate actor_id <-> database_id at the pegboard/envoy boundary; sqlite-storage exposes only database APIs. Update all docs-internal/engine/sqlite/ files and CLAUDE.md sections accordingly. Two top-level entities post-rename: namespace and database.",
-      "acceptanceCriteria": [
-        "All ActorId/ActorBranchId/ActorPointer/ActorBranchRecord/ActorDb identifiers in engine/packages/sqlite-storage/ renamed to Database* equivalents",
-        "FDB partition rename: APTR -> DBPTR (key bytes unchanged or migrated; document choice in the spec)",
-        "Public storage APIs renamed: fork_actor -> fork_database, rollback_actor -> rollback_database, list_actors -> list_databases, actor_tombstones -> database_tombstones, etc.",
-        "sqlite-storage carries no actor-shaped types; the only entities are Namespace and Database",
-        "Pegboard/envoy callers translate actor_id <-> database_id at the boundary (typically 1:1) but sqlite-storage no longer references actors",
-        ".agent/specs/sqlite-rough-pitr.md updated with the rename throughout",
-        "docs-internal/engine/sqlite/ docs (storage-structure, components, constraints-and-design-decisions, comparison-to-other-systems) updated",
-        "engine/packages/sqlite-storage/CLAUDE.md and engine/CLAUDE.md updated; any 'per-actor' phrasing in storage context becomes 'per-database'",
-        "All tests under engine/packages/sqlite-storage/tests/ updated and passing",
-        "cargo check -p rivet-sqlite-storage passes",
-        "Typecheck passes across the workspace"
-      ],
-      "priority": 65,
-      "passes": true,
+      "passes": false,
       "notes": ""
     }
   ]
