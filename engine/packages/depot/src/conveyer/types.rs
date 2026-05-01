@@ -310,6 +310,71 @@ pub struct MetaCompact {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CompactionRoot {
+	pub schema_version: u32,
+	pub manifest_generation: u64,
+	pub hot_watermark_txid: u64,
+	pub cold_watermark_txid: u64,
+	pub cold_watermark_versionstamp: [u8; 16],
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ColdShardRef {
+	pub object_key: String,
+	pub object_generation_id: Id,
+	pub shard_id: u32,
+	pub as_of_txid: u64,
+	pub min_txid: u64,
+	pub max_txid: u64,
+	pub min_versionstamp: [u8; 16],
+	pub max_versionstamp: [u8; 16],
+	pub size_bytes: u64,
+	pub content_hash: [u8; 32],
+	pub publish_generation: u64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum RetiredColdObjectDeleteState {
+	Retired,
+	DeleteIssued,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RetiredColdObject {
+	pub object_key: String,
+	pub object_generation_id: Id,
+	pub content_hash: [u8; 32],
+	pub retired_manifest_generation: u64,
+	pub retired_at_ms: i64,
+	pub delete_after_ms: i64,
+	pub delete_state: RetiredColdObjectDeleteState,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SqliteCmpDirty {
+	pub observed_head_txid: u64,
+	pub updated_at_ms: i64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DbHistoryPinKind {
+	DatabaseFork,
+	NamespaceFork,
+	Bookmark,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DbHistoryPin {
+	pub at_versionstamp: [u8; 16],
+	pub at_txid: u64,
+	pub kind: DbHistoryPinKind,
+	pub owner_database_branch_id: Option<DatabaseBranchId>,
+	pub owner_namespace_branch_id: Option<NamespaceBranchId>,
+	pub owner_bookmark: Option<BookmarkStr>,
+	pub created_at_ms: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DirtyPage {
 	pub pgno: u32,
 	pub bytes: Vec<u8>,
@@ -530,6 +595,67 @@ enum VersionedColdManifestChunk {
 enum VersionedPointerSnapshot {
 	V1(PointerSnapshot),
 }
+
+enum VersionedCompactionRoot {
+	V1(CompactionRoot),
+}
+
+enum VersionedColdShardRef {
+	V1(ColdShardRef),
+}
+
+enum VersionedRetiredColdObject {
+	V1(RetiredColdObject),
+}
+
+enum VersionedSqliteCmpDirty {
+	V1(SqliteCmpDirty),
+}
+
+enum VersionedDbHistoryPin {
+	V1(DbHistoryPin),
+}
+
+macro_rules! impl_compaction_versioned_data {
+	($versioned:ident, $latest:ty, $name:literal) => {
+		impl OwnedVersionedData for $versioned {
+			type Latest = $latest;
+
+			fn wrap_latest(latest: Self::Latest) -> Self {
+				Self::V1(latest)
+			}
+
+			fn unwrap_latest(self) -> Result<Self::Latest> {
+				match self {
+					Self::V1(data) => Ok(data),
+				}
+			}
+
+			fn deserialize_version(payload: &[u8], version: u16) -> Result<Self> {
+				match version {
+					1 => Ok(Self::V1(serde_bare::from_slice(payload)?)),
+					_ => bail!("invalid depot {} version: {version}", $name),
+				}
+			}
+
+			fn serialize_version(self, _version: u16) -> Result<Vec<u8>> {
+				match self {
+					Self::V1(data) => serde_bare::to_vec(&data).map_err(Into::into),
+				}
+			}
+		}
+	};
+}
+
+impl_compaction_versioned_data!(VersionedCompactionRoot, CompactionRoot, "CompactionRoot");
+impl_compaction_versioned_data!(VersionedColdShardRef, ColdShardRef, "ColdShardRef");
+impl_compaction_versioned_data!(
+	VersionedRetiredColdObject,
+	RetiredColdObject,
+	"RetiredColdObject"
+);
+impl_compaction_versioned_data!(VersionedSqliteCmpDirty, SqliteCmpDirty, "SqliteCmpDirty");
+impl_compaction_versioned_data!(VersionedDbHistoryPin, DbHistoryPin, "DbHistoryPin");
 
 impl OwnedVersionedData for VersionedMetaCompact {
 	type Latest = MetaCompact;
@@ -822,6 +948,61 @@ pub fn encode_pointer_snapshot(snapshot: PointerSnapshot) -> Result<Vec<u8>> {
 pub fn decode_pointer_snapshot(payload: &[u8]) -> Result<PointerSnapshot> {
 	VersionedPointerSnapshot::deserialize_with_embedded_version(payload)
 		.context("decode sqlite pointer snapshot")
+}
+
+pub fn encode_compaction_root(root: CompactionRoot) -> Result<Vec<u8>> {
+	VersionedCompactionRoot::wrap_latest(root)
+		.serialize_with_embedded_version(SQLITE_STORAGE_META_VERSION)
+		.context("encode sqlite compaction root")
+}
+
+pub fn decode_compaction_root(payload: &[u8]) -> Result<CompactionRoot> {
+	VersionedCompactionRoot::deserialize_with_embedded_version(payload)
+		.context("decode sqlite compaction root")
+}
+
+pub fn encode_cold_shard_ref(reference: ColdShardRef) -> Result<Vec<u8>> {
+	VersionedColdShardRef::wrap_latest(reference)
+		.serialize_with_embedded_version(SQLITE_STORAGE_META_VERSION)
+		.context("encode sqlite cold shard ref")
+}
+
+pub fn decode_cold_shard_ref(payload: &[u8]) -> Result<ColdShardRef> {
+	VersionedColdShardRef::deserialize_with_embedded_version(payload)
+		.context("decode sqlite cold shard ref")
+}
+
+pub fn encode_retired_cold_object(object: RetiredColdObject) -> Result<Vec<u8>> {
+	VersionedRetiredColdObject::wrap_latest(object)
+		.serialize_with_embedded_version(SQLITE_STORAGE_META_VERSION)
+		.context("encode sqlite retired cold object")
+}
+
+pub fn decode_retired_cold_object(payload: &[u8]) -> Result<RetiredColdObject> {
+	VersionedRetiredColdObject::deserialize_with_embedded_version(payload)
+		.context("decode sqlite retired cold object")
+}
+
+pub fn encode_sqlite_cmp_dirty(dirty: SqliteCmpDirty) -> Result<Vec<u8>> {
+	VersionedSqliteCmpDirty::wrap_latest(dirty)
+		.serialize_with_embedded_version(SQLITE_STORAGE_META_VERSION)
+		.context("encode sqlite compaction dirty marker")
+}
+
+pub fn decode_sqlite_cmp_dirty(payload: &[u8]) -> Result<SqliteCmpDirty> {
+	VersionedSqliteCmpDirty::deserialize_with_embedded_version(payload)
+		.context("decode sqlite compaction dirty marker")
+}
+
+pub fn encode_db_history_pin(pin: DbHistoryPin) -> Result<Vec<u8>> {
+	VersionedDbHistoryPin::wrap_latest(pin)
+		.serialize_with_embedded_version(SQLITE_STORAGE_META_VERSION)
+		.context("encode sqlite db history pin")
+}
+
+pub fn decode_db_history_pin(payload: &[u8]) -> Result<DbHistoryPin> {
+	VersionedDbHistoryPin::deserialize_with_embedded_version(payload)
+		.context("decode sqlite db history pin")
 }
 
 #[cfg(test)]

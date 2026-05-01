@@ -1,6 +1,7 @@
 ## Codebase Patterns
 - Workflow compaction key helpers live in `engine/packages/depot/src/conveyer/keys.rs`; branch-local manifest/staging keys stay under `BR/{branch_id}/CMP`, while global pin/proof/dirty indexes use reserved partitions `0x70..=0x75`.
 - PITR and workflow compaction limit constants live in `engine/packages/depot/src/conveyer/constants.rs` and are re-exported at the `depot` crate root.
+- Workflow compaction persisted payload structs live in `engine/packages/depot/src/conveyer/types.rs`; expose vbare encode/decode helpers there and cover them from `engine/packages/depot/tests/`.
 
 # Ralph Progress Log
 Started: Thu Apr 30 09:07:22 PM PDT 2026
@@ -23,4 +24,17 @@ Started: Thu Apr 30 09:07:22 PM PDT 2026
   - Depot key builders use reserved partition bytes under the crate-owned `[0x02]` prefix and encode numeric sort components as big-endian bytes.
   - Gasoline `Id` values can be embedded in deterministic staging keys with `Id::as_bytes()`.
   - FDB/S3 layout changes in depot should update `docs-internal/engine/sqlite/storage-structure.md` in the same story.
+---
+## 2026-04-30 21:16:17 PDT - US-002
+- Implemented vbare-backed compaction metadata payloads for `CompactionRoot`, `ColdShardRef`, `RetiredColdObject`, `SqliteCmpDirty`, and `DbHistoryPin`.
+- Added encode/decode helpers for each new payload and round-trip coverage through the embedded-version path.
+- Verified with `cargo test -p depot --test conveyer_compaction_payloads`, `cargo check -p depot`, and `cargo test -p depot`.
+- Files changed:
+  - `engine/packages/depot/src/conveyer/types.rs`
+  - `engine/packages/depot/tests/conveyer_compaction_payloads.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - New depot persisted payloads should follow the existing `OwnedVersionedData` wrapper pattern in `conveyer/types.rs`.
+  - `gas::prelude::Id` already serializes cleanly through serde_bare/vbare, so workflow job ids can be used directly in persisted payloads.
 ---
