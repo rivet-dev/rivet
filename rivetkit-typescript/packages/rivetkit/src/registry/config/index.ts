@@ -21,6 +21,7 @@ import {
 	getRivetNamespace,
 	getRivetRunEngine,
 	getRivetRunEngineVersion,
+	getRivetRuntimeMode,
 	getRivetToken,
 	isDev,
 } from "@/utils/env-vars";
@@ -151,6 +152,8 @@ export const RegistryConfigSchema = z
 		 * @experimental
 		 *
 		 * Runtime mode to use when `registry.start()` is called.
+		 *
+		 * Can also be set via RIVET_RUNTIME_MODE.
 		 */
 		mode: RuntimeModeSchema.optional(),
 		/**
@@ -225,10 +228,30 @@ export const RegistryConfigSchema = z
 		const isDevEnv = isDev();
 		const isProductionEnv = getNodeEnv() === "production";
 		const envStartEngine = getRivetRunEngine();
+		const envRuntimeMode =
+			config.mode === undefined ? getRivetRuntimeMode() : undefined;
+		const parsedEnvRuntimeMode =
+			envRuntimeMode === undefined
+				? undefined
+				: RuntimeModeSchema.safeParse(envRuntimeMode);
+		const configuredRuntimeMode =
+			config.mode ??
+			(parsedEnvRuntimeMode?.success
+				? parsedEnvRuntimeMode.data
+				: undefined);
 		const explicitStartEngine =
 			config.startEngine !== undefined || envStartEngine;
 		let startEngine = true;
 		let runtimeMode: RuntimeMode = "envoy";
+
+		if (parsedEnvRuntimeMode && !parsedEnvRuntimeMode.success) {
+			ctx.addIssue({
+				code: "custom",
+				message:
+					"RIVET_RUNTIME_MODE must be either envoy or serverless",
+				path: ["mode"],
+			});
+		}
 
 		// Parse endpoint string (env var fallback is applied via transform above)
 		const parsedEndpoint = config.endpoint
@@ -250,10 +273,10 @@ export const RegistryConfigSchema = z
 			runtimeMode = "serverless";
 		}
 
-		if (config.mode === "envoy") {
+		if (configuredRuntimeMode === "envoy") {
 			startEngine = false;
 			runtimeMode = "envoy";
-		} else if (config.mode === "serverless") {
+		} else if (configuredRuntimeMode === "serverless") {
 			startEngine = false;
 			runtimeMode = "serverless";
 		}
@@ -580,7 +603,7 @@ export const DocRegistryConfigSchema = z
 			.optional()
 			.describe("Host to bind the local HTTP server to."),
 		mode: RuntimeModeSchema.optional().describe(
-			"Runtime mode for registry.start(). Defaults to 'envoy' for local development and 'serverless' when a Rivet endpoint or production environment is configured.",
+			"Runtime mode for registry.start(). Can also be set via RIVET_RUNTIME_MODE. Defaults to 'envoy' for local development and 'serverless' when a Rivet endpoint or production environment is configured.",
 		),
 		startEngine: z
 			.boolean()

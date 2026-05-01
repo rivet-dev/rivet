@@ -24,6 +24,8 @@ export const getRivetRunEngine = (): boolean =>
 	getEnvUniversal("RIVET_RUN_ENGINE") === "1";
 export const getRivetRunEngineVersion = (): string | undefined =>
 	getEnvUniversal("RIVET_RUN_ENGINE_VERSION");
+export const getRivetRuntimeMode = (): string | undefined =>
+	getEnvUniversal("RIVET_RUNTIME_MODE");
 export const getRivetEnvoyKind = (): string | undefined =>
 	getEnvUniversal("RIVET_ENVOY_KIND");
 export const getRivetEnvoyVersion = (): number | undefined => {
