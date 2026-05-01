@@ -17,7 +17,7 @@ use crate::compactor::{SqliteColdCompactPayload, Ups, publish_cold_compact_paylo
 use super::{
 	constants::{MAX_FORK_DEPTH, MAX_NAMESPACE_DEPTH},
 	error::SqliteStorageError,
-	keys, udb,
+	history_pin, keys, udb,
 	types::{
 		DatabaseBranchId, DatabaseBranchRecord, DatabasePointer, BookmarkRef, BranchState, DBHead,
 		NamespaceBranchId, NamespaceBranchRecord, NamespaceId, NamespacePointer,
@@ -569,6 +569,7 @@ pub async fn derive_branch_at(
 				source_branch_id.as_uuid()
 			)
 		})?;
+	let now_ms = now_ms()?;
 	let head_at_fork = DBHead {
 		head_txid: txid_at_versionstamp,
 		db_size_pages: commit_at_versionstamp.db_size_pages,
@@ -591,7 +592,7 @@ pub async fn derive_branch_at(
 		parent_versionstamp: Some(at_versionstamp),
 		root_versionstamp: at_versionstamp,
 		fork_depth: source.fork_depth + 1,
-		created_at_ms: now_ms()?,
+		created_at_ms: now_ms,
 		created_from_bookmark: bookmark_ref,
 		state: BranchState::Live,
 	};
@@ -614,6 +615,14 @@ pub async fn derive_branch_at(
 		&at_versionstamp,
 		MutationType::ByteMin,
 	);
+	history_pin::write_database_fork_pin(
+		tx,
+		source_branch_id,
+		new_branch_id,
+		at_versionstamp,
+		txid_at_versionstamp,
+		now_ms,
+	)?;
 
 	Ok(())
 }

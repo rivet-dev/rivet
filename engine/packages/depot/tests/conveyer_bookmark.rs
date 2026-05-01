@@ -8,13 +8,13 @@ use depot::{
 	error::SqliteStorageError,
 	keys::{
 		bookmark_key, bookmark_pinned_key, branch_commit_key, branch_meta_head_at_fork_key,
-		branch_vtx_key, branches_bk_pin_key, namespace_branches_pin_count_key,
+		branch_vtx_key, branches_bk_pin_key, db_pin_key, namespace_branches_pin_count_key,
 	},
-	conveyer::{Db, bookmark, branch},
+	conveyer::{Db, bookmark, branch, history_pin},
 	types::{
-		DatabaseBranchId, BookmarkRef, BookmarkStr, CommitRow, DirtyPage, NamespaceId, PinStatus,
+		DatabaseBranchId, BookmarkRef, BookmarkStr, CommitRow, DbHistoryPinKind, DirtyPage, NamespaceId, PinStatus,
 		PinnedBookmarkRecord, ResolvedVersionstamp, decode_commit_row,
-		decode_db_head, decode_pinned_bookmark_record, encode_pinned_bookmark_record,
+		decode_db_head, decode_db_history_pin, decode_pinned_bookmark_record, encode_pinned_bookmark_record,
 	},
 };
 use tempfile::Builder;
@@ -321,6 +321,17 @@ async fn create_pinned_bookmark_writes_pending_pin_and_cold_trigger() -> Result<
 			.expect("branch bk_pin should be written"),
 		row.versionstamp
 	);
+	let db_pin_bytes = read_value(
+		&db,
+		db_pin_key(branch_id, &history_pin::bookmark_pin_id(&bookmark)),
+	)
+	.await?
+	.expect("bookmark DB_PIN should exist");
+	let db_pin = decode_db_history_pin(&db_pin_bytes)?;
+	assert_eq!(db_pin.kind, DbHistoryPinKind::Bookmark);
+	assert_eq!(db_pin.at_txid, 1);
+	assert_eq!(db_pin.at_versionstamp, row.versionstamp);
+	assert_eq!(db_pin.owner_bookmark, Some(bookmark.clone()));
 	let pin_count = read_value(&db, namespace_branches_pin_count_key(namespace_branch_id))
 		.await?
 		.expect("namespace pin count should be incremented");
@@ -425,8 +436,17 @@ async fn delete_pinned_bookmark_removes_pin_and_schedules_recompute() -> Result<
 		read_value(&db, bookmark_pinned_key(TEST_DATABASE, first.as_str())).await?,
 		None
 	);
+	assert_eq!(
+		read_value(&db, db_pin_key(branch_id, &history_pin::bookmark_pin_id(&first))).await?,
+		None
+	);
 	assert!(
 		read_value(&db, bookmark_pinned_key(TEST_DATABASE, second.as_str()))
+			.await?
+			.is_some()
+	);
+	assert!(
+		read_value(&db, db_pin_key(branch_id, &history_pin::bookmark_pin_id(&second)))
 			.await?
 			.is_some()
 	);

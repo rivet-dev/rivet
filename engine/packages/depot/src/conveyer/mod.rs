@@ -6,6 +6,7 @@ pub mod constants;
 #[cfg(debug_assertions)]
 pub mod debug;
 pub mod error;
+pub mod history_pin;
 pub mod keys;
 pub mod ltx;
 pub mod metrics;

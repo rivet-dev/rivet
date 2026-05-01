@@ -12,17 +12,18 @@ use depot::{
 		database_pointer_cur_key, database_pointer_history_prefix, branch_commit_key,
 		branch_meta_head_at_fork_key, branch_meta_head_key, branches_bk_pin_key,
 		branches_desc_pin_key, branches_list_key, branches_refcount_key,
-		branch_shard_key, namespace_branches_database_name_tombstone_key, namespace_branches_bk_pin_key,
+		branch_shard_key, db_pin_key, namespace_branches_database_name_tombstone_key, namespace_branches_bk_pin_key,
 		namespace_branches_desc_pin_key, namespace_branches_list_key,
 		namespace_branches_refcount_key, namespace_pointer_cur_key,
 		namespace_pointer_history_prefix,
 	},
 	ltx::{LtxHeader, encode_ltx_v3},
-	conveyer::{Db, branch},
+	conveyer::{Db, branch, history_pin},
 	types::{
-		DatabaseBranchId, DatabaseBranchRecord, BranchState, CommitRow, DBHead, DirtyPage,
+		DatabaseBranchId, DatabaseBranchRecord, BranchState, CommitRow, DBHead, DbHistoryPinKind, DirtyPage,
 		NamespaceBranchId, NamespaceBranchRecord, NamespaceId, ResolvedVersionstamp,
 		decode_database_branch_record, decode_database_pointer, decode_commit_row, decode_db_head,
+		decode_db_history_pin,
 		decode_namespace_branch_record, decode_namespace_pointer, encode_database_branch_record,
 		encode_namespace_branch_record,
 	},
@@ -291,6 +292,20 @@ async fn derive_branch_at_snapshots_head_and_writes_branch_metadata() -> Result<
 		read_value(&db, branches_desc_pin_key(source_branch_id)).await?,
 		Some(first_commit.versionstamp.to_vec())
 	);
+	let pin_bytes = read_value(
+		&db,
+		db_pin_key(
+			source_branch_id,
+			&history_pin::database_fork_pin_id(new_branch_id),
+		),
+	)
+	.await?
+	.expect("database fork DB_PIN should exist");
+	let pin = decode_db_history_pin(&pin_bytes)?;
+	assert_eq!(pin.kind, DbHistoryPinKind::DatabaseFork);
+	assert_eq!(pin.at_txid, 1);
+	assert_eq!(pin.at_versionstamp, first_commit.versionstamp);
+	assert_eq!(pin.owner_database_branch_id, Some(new_branch_id));
 
 	Ok(())
 }

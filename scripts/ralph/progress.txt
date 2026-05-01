@@ -9,6 +9,7 @@
 - Workflow compaction manager planning refreshes FDB in `RefreshManager` activity, records active jobs in durable manager state, and signals persistent companion workflows instead of spawning per-job workflows.
 - Workflow hot compaction writes staged LTX blobs under `CMP/stage/{job_id}/hot_shard`; successful outputs stay as the manager's active hot job until a manager install story publishes or rejects them.
 - Workflow hot install belongs in the DB manager: accept only the matching active job fingerprint, validate staged checksums, copy to reader-visible `SHARD`, advance `CMP/root`, and clear PIDX with `COMPARE_AND_CLEAR`.
+- Unified DB history pin helpers live in `engine/packages/depot/src/conveyer/history_pin.rs`; workflow hot planning carries exact pinned txids in `HotJobInputRange.coverage_txids`.
 
 # Ralph Progress Log
 Started: Thu Apr 30 09:07:22 PM PDT 2026
@@ -163,4 +164,27 @@ Started: Thu Apr 30 09:07:22 PM PDT 2026
   - Hot install should run as a manager activity so active-job matching stays in durable workflow state while FDB validation stays transactional.
   - `HotJobFinished` must be ignored unless job id, kind, base generation, and input fingerprint match the manager's active hot job.
   - After US-009, successful hot jobs are transient in manager state because the manager installs and clears them instead of holding them indefinitely.
+---
+## 2026-04-30 22:30:56 PDT - US-010
+- Implemented unified DB history pin helpers for database forks, bookmarks, namespace-derived pins, reads, and deletes.
+- Wired database forks and pinned bookmark create/delete to maintain `DB_PIN` records alongside the existing scalar branch pins.
+- Updated hot planning, staging, and install to include exact pinned coverage txids and publish SHARD output at both pinned txids and latest head.
+- Verified with `cargo test -p depot --test conveyer_bookmark --test conveyer_branch --test workflow_compaction_payloads --test workflow_compaction_skeletons`, `cargo check -p depot`, and `cargo test -p depot`.
+- Files changed:
+  - `engine/packages/depot/src/conveyer/history_pin.rs`
+  - `engine/packages/depot/src/conveyer/bookmark.rs`
+  - `engine/packages/depot/src/conveyer/branch.rs`
+  - `engine/packages/depot/src/conveyer/mod.rs`
+  - `engine/packages/depot/src/workflows/compaction.rs`
+  - `engine/packages/depot/tests/conveyer_bookmark.rs`
+  - `engine/packages/depot/tests/conveyer_branch.rs`
+  - `engine/packages/depot/tests/workflow_compaction_payloads.rs`
+  - `engine/packages/depot/tests/workflow_compaction_skeletons.rs`
+  - `engine/packages/depot/AGENTS.md`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Keep legacy scalar `desc_pin`/`bk_pin` writes for existing GC and fork checks, but use unified `DB_PIN` records for workflow compaction coverage targets.
+  - Hot compaction fingerprints should include selected coverage txids so new pins force stale job rejection instead of publishing rounded coverage.
+  - Staged hot output can use the same job id with multiple `as_of_txid` values; install should only clear PIDX after latest-head coverage is present.
 ---

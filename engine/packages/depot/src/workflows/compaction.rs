@@ -19,13 +19,13 @@ use crate::{
 	CMP_FDB_BATCH_MAX_KEYS, CMP_FDB_BATCH_MAX_VALUE_BYTES,
 	HOT_BURST_COLD_LAG_THRESHOLD_TXIDS,
 	conveyer::{
-		keys, quota,
+		history_pin, keys, quota,
 		ltx::{DecodedLtx, LtxHeader, decode_ltx_v3, encode_ltx_v3},
 		types::{
 			BranchState, ColdShardRef, CommitRow, CompactionRoot, DBHead, DatabaseBranchId,
 			DatabaseBranchRecord, DbHistoryPin, DirtyPage, SqliteCmpDirty, decode_commit_row,
 			decode_compaction_root, decode_database_branch_record, decode_db_head,
-			decode_db_history_pin, decode_sqlite_cmp_dirty, encode_compaction_root,
+			decode_sqlite_cmp_dirty, encode_compaction_root,
 		},
 		udb,
 	},
@@ -80,6 +80,7 @@ pub struct TxidRange {
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct HotJobInputRange {
 	pub txids: TxidRange,
+	pub coverage_txids: Vec<u64>,
 	pub max_pages: u32,
 	pub max_bytes: u64,
 }
@@ -816,11 +817,23 @@ async fn stage_hot_job_tx(
 		return Ok(rejected_hot_job("database branch head is missing"));
 	};
 
+	let db_pins =
+		history_pin::read_db_history_pins(tx, input.database_branch_id, Snapshot).await?;
+	let coverage_txids = selected_hot_coverage_txids(&root, &head, &db_pins);
+	if coverage_txids != input.input_range.coverage_txids {
+		return Ok(rejected_hot_job("hot compaction coverage targets changed"));
+	}
+
 	let hot_inputs =
 		read_hot_input_snapshot(tx, input.database_branch_id, Some(&head), &root, Snapshot)
 			.await?;
-	let input_fingerprint =
-		fingerprint_hot_inputs(input.database_branch_id, &root, &head, &hot_inputs);
+	let input_fingerprint = fingerprint_hot_inputs(
+		input.database_branch_id,
+		&root,
+		&head,
+		&coverage_txids,
+		&hot_inputs,
+	);
 	if input_fingerprint != input.input_fingerprint {
 		return Ok(rejected_hot_job("hot compaction input fingerprint changed"));
 	}
@@ -917,6 +930,13 @@ async fn install_hot_job_tx(
 		return Ok(rejected_hot_install("database branch head is missing"));
 	};
 
+	let db_pins =
+		history_pin::read_db_history_pins(tx, input.database_branch_id, Serializable).await?;
+	let coverage_txids = selected_hot_coverage_txids(&root, &head, &db_pins);
+	if coverage_txids != input.input_range.coverage_txids {
+		return Ok(rejected_hot_install("hot compaction coverage targets changed"));
+	}
+
 	let hot_inputs = read_hot_input_snapshot(
 		tx,
 		input.database_branch_id,
@@ -925,23 +945,40 @@ async fn install_hot_job_tx(
 		Serializable,
 	)
 	.await?;
-	let input_fingerprint =
-		fingerprint_hot_inputs(input.database_branch_id, &root, &head, &hot_inputs);
+	let input_fingerprint = fingerprint_hot_inputs(
+		input.database_branch_id,
+		&root,
+		&head,
+		&coverage_txids,
+		&hot_inputs,
+	);
 	if input_fingerprint != input.input_fingerprint {
 		return Ok(rejected_hot_install("hot compaction input fingerprint changed"));
 	}
 
 	let mut staged_blobs = Vec::with_capacity(input.output_refs.len());
-	let mut staged_shards = BTreeSet::new();
+	let mut staged_outputs = BTreeSet::new();
+	let mut latest_staged_shards = BTreeSet::new();
+	let coverage_txids = input
+		.input_range
+		.coverage_txids
+		.iter()
+		.copied()
+		.collect::<BTreeSet<_>>();
 	for output_ref in &input.output_refs {
-		if output_ref.as_of_txid != input.input_range.txids.max_txid
+		if !coverage_txids.contains(&output_ref.as_of_txid)
 			|| output_ref.min_txid != input.input_range.txids.min_txid
-			|| output_ref.max_txid != input.input_range.txids.max_txid
+			|| output_ref.max_txid != output_ref.as_of_txid
 		{
 			return Ok(rejected_hot_install("hot output ref does not match planned txid range"));
 		}
-		if !staged_shards.insert(output_ref.shard_id) {
+		if !staged_outputs.insert((output_ref.shard_id, output_ref.as_of_txid)) {
 			return Ok(rejected_hot_install("duplicate staged hot shard output ref"));
+		}
+		if output_ref.as_of_txid == input.input_range.txids.max_txid
+			&& !latest_staged_shards.insert(output_ref.shard_id)
+		{
+			return Ok(rejected_hot_install("duplicate latest hot shard output ref"));
 		}
 
 		let stage_key = keys::branch_compaction_stage_hot_shard_key(
@@ -976,7 +1013,7 @@ async fn install_hot_job_tx(
 	for (key, value) in &hot_inputs.pidx_entries {
 		let pgno = decode_branch_pidx_pgno(input.database_branch_id, key)?;
 		let shard_id = pgno / keys::SHARD_SIZE;
-		if !staged_shards.contains(&shard_id) {
+		if !latest_staged_shards.contains(&shard_id) {
 			return Ok(rejected_hot_install("missing staged hot shard for PIDX row"));
 		}
 		decode_pidx_txid(value)?;
@@ -1049,7 +1086,7 @@ async fn read_manager_fdb_snapshot(
 		.map(decode_sqlite_cmp_dirty)
 		.transpose()
 		.context("decode sqlite dirty marker for compaction manager")?;
-	let db_pins = read_db_history_pins(tx, branch_id).await?;
+	let db_pins = history_pin::read_db_history_pins(tx, branch_id, Serializable).await?;
 	let hot_inputs = read_hot_input_snapshot(tx, branch_id, head.as_ref(), &root, Snapshot).await?;
 	let hot_lag = head
 		.as_ref()
@@ -1079,18 +1116,6 @@ async fn read_manager_fdb_snapshot(
 		hot_inputs,
 		cleared_dirty,
 	})
-}
-
-async fn read_db_history_pins(
-	tx: &universaldb::Transaction,
-	branch_id: DatabaseBranchId,
-) -> Result<Vec<DbHistoryPin>> {
-	let rows = tx_scan_prefix_values(tx, &keys::db_pin_prefix(branch_id), Serializable).await?;
-
-	rows.into_iter()
-		.map(|(_, value)| decode_db_history_pin(&value))
-		.collect::<Result<Vec<_>>>()
-		.context("decode sqlite db history pins for compaction manager")
 }
 
 async fn read_hot_input_snapshot(
@@ -1173,6 +1198,23 @@ async fn read_hot_input_snapshot(
 	Ok(snapshot)
 }
 
+fn selected_hot_coverage_txids(
+	root: &CompactionRoot,
+	head: &DBHead,
+	db_pins: &[DbHistoryPin],
+) -> Vec<u64> {
+	let mut coverage_txids = BTreeSet::new();
+	coverage_txids.insert(head.head_txid);
+
+	for pin in db_pins {
+		if pin.at_txid > root.hot_watermark_txid && pin.at_txid <= head.head_txid {
+			coverage_txids.insert(pin.at_txid);
+		}
+	}
+
+	coverage_txids.into_iter().collect()
+}
+
 fn plan_hot_job(
 	database_branch_id: DatabaseBranchId,
 	snapshot: &ManagerFdbSnapshot,
@@ -1181,7 +1223,11 @@ fn plan_hot_job(
 ) -> Option<ActiveCompactionJob> {
 	let head = snapshot.head.as_ref()?;
 	let hot_lag = head.head_txid.saturating_sub(snapshot.root.hot_watermark_txid);
-	if hot_lag < quota::COMPACTION_DELTA_THRESHOLD {
+	let coverage_txids = selected_hot_coverage_txids(&snapshot.root, head, &snapshot.db_pins);
+	let has_uncovered_pin = coverage_txids
+		.iter()
+		.any(|txid| *txid != head.head_txid && *txid > snapshot.root.hot_watermark_txid);
+	if hot_lag < quota::COMPACTION_DELTA_THRESHOLD && !has_uncovered_pin {
 		return None;
 	}
 
@@ -1190,11 +1236,17 @@ fn plan_hot_job(
 			min_txid: snapshot.root.hot_watermark_txid.saturating_add(1),
 			max_txid: head.head_txid,
 		},
+		coverage_txids: coverage_txids.clone(),
 		max_pages: u32::try_from(snapshot.hot_inputs.pidx_entries.len()).unwrap_or(u32::MAX),
 		max_bytes: snapshot.hot_inputs.total_value_bytes,
 	};
-	let input_fingerprint =
-		fingerprint_hot_inputs(database_branch_id, &snapshot.root, head, &snapshot.hot_inputs);
+	let input_fingerprint = fingerprint_hot_inputs(
+		database_branch_id,
+		&snapshot.root,
+		head,
+		&coverage_txids,
+		&snapshot.hot_inputs,
+	);
 
 	Some(ActiveCompactionJob {
 		database_branch_id,
@@ -1212,6 +1264,7 @@ fn fingerprint_hot_inputs(
 	database_branch_id: DatabaseBranchId,
 	root: &CompactionRoot,
 	head: &DBHead,
+	coverage_txids: &[u64],
 	hot_inputs: &HotInputSnapshot,
 ) -> CompactionInputFingerprint {
 	let mut fingerprint = [0_u8; 32];
@@ -1219,6 +1272,9 @@ fn fingerprint_hot_inputs(
 	mix_fingerprint(&mut fingerprint, &root.manifest_generation.to_be_bytes());
 	mix_fingerprint(&mut fingerprint, &root.hot_watermark_txid.to_be_bytes());
 	mix_fingerprint(&mut fingerprint, &head.head_txid.to_be_bytes());
+	for txid in coverage_txids {
+		mix_fingerprint(&mut fingerprint, &txid.to_be_bytes());
+	}
 	for (txid, commit) in &hot_inputs.commits {
 		mix_fingerprint(&mut fingerprint, &txid.to_be_bytes());
 		mix_fingerprint(&mut fingerprint, &commit.wall_clock_ms.to_be_bytes());
@@ -1254,41 +1310,39 @@ async fn write_staged_hot_shards(
 	hot_inputs: &HotInputSnapshot,
 ) -> Result<Vec<HotShardOutputRef>> {
 	let deltas = decode_hot_delta_chunks(input.database_branch_id, &hot_inputs.delta_chunks)?;
-	let pages_by_shard = collect_hot_pages_by_shard(
-		input.database_branch_id,
-		head,
-		&deltas,
-		&hot_inputs.pidx_entries,
-	)?;
-	let mut output_refs = Vec::with_capacity(pages_by_shard.len());
+	let mut output_refs = Vec::new();
 
-	for (shard_id, page_updates) in pages_by_shard {
-		let encoded = build_staged_hot_shard_blob(
-			tx,
-			input.database_branch_id,
-			shard_id,
-			input.input_range.txids.max_txid,
-			page_updates,
-		)
-		.await?;
-		let key = keys::branch_compaction_stage_hot_shard_key(
-			input.database_branch_id,
-			input.job_id,
-			shard_id,
-			input.input_range.txids.max_txid,
-			0,
-		);
-		let content_hash = content_hash(&encoded);
+	for as_of_txid in &input.input_range.coverage_txids {
+		let pages_by_shard = collect_hot_pages_by_shard(head, &deltas, *as_of_txid)?;
 
-		tx.informal().set(&key, &encoded);
-		output_refs.push(HotShardOutputRef {
-			shard_id,
-			as_of_txid: input.input_range.txids.max_txid,
-			min_txid: input.input_range.txids.min_txid,
-			max_txid: input.input_range.txids.max_txid,
-			size_bytes: u64::try_from(encoded.len()).unwrap_or(u64::MAX),
-			content_hash,
-		});
+		for (shard_id, page_updates) in pages_by_shard {
+			let encoded = build_staged_hot_shard_blob(
+				tx,
+				input.database_branch_id,
+				shard_id,
+				*as_of_txid,
+				page_updates,
+			)
+			.await?;
+			let key = keys::branch_compaction_stage_hot_shard_key(
+				input.database_branch_id,
+				input.job_id,
+				shard_id,
+				*as_of_txid,
+				0,
+			);
+			let content_hash = content_hash(&encoded);
+
+			tx.informal().set(&key, &encoded);
+			output_refs.push(HotShardOutputRef {
+				shard_id,
+				as_of_txid: *as_of_txid,
+				min_txid: input.input_range.txids.min_txid,
+				max_txid: *as_of_txid,
+				size_bytes: u64::try_from(encoded.len()).unwrap_or(u64::MAX),
+				content_hash,
+			});
+		}
 	}
 
 	Ok(output_refs)
@@ -1324,35 +1378,27 @@ fn decode_hot_delta_chunks(
 }
 
 fn collect_hot_pages_by_shard(
-	branch_id: DatabaseBranchId,
 	head: &DBHead,
 	deltas: &BTreeMap<u64, DecodedLtx>,
-	pidx_entries: &[(Vec<u8>, Vec<u8>)],
+	as_of_txid: u64,
 ) -> Result<BTreeMap<u32, Vec<(u32, Vec<u8>)>>> {
-	let mut pages_by_shard = BTreeMap::<u32, Vec<(u32, Vec<u8>)>>::new();
+	let mut pages_by_number = BTreeMap::<u32, Vec<u8>>::new();
 
-	for (key, value) in pidx_entries {
-		let txid = decode_pidx_txid(value)?;
-		let Some(delta) = deltas.get(&txid) else {
-			continue;
-		};
-		let pgno = decode_branch_pidx_pgno(branch_id, key)?;
-		if pgno > head.db_size_pages {
+	for (txid, delta) in deltas {
+		if *txid > as_of_txid {
 			continue;
 		}
-		let bytes = delta
-			.get_page(pgno)
-			.with_context(|| {
-				format!("PIDX row for page {pgno} pointed at delta {txid} without the page")
-			})?
-			.to_vec();
-
-		pages_by_shard
-			.entry(pgno / keys::SHARD_SIZE)
-			.or_default()
-			.push((pgno, bytes));
+		for page in &delta.pages {
+			if page.pgno <= head.db_size_pages {
+				pages_by_number.insert(page.pgno, page.bytes.clone());
+			}
+		}
 	}
 
+	let mut pages_by_shard = BTreeMap::<u32, Vec<(u32, Vec<u8>)>>::new();
+	for (pgno, bytes) in pages_by_number {
+		pages_by_shard.entry(pgno / keys::SHARD_SIZE).or_default().push((pgno, bytes));
+	}
 	Ok(pages_by_shard)
 }
 

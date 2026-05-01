@@ -5,7 +5,7 @@ use universaldb::utils::IsolationLevel::{Serializable, Snapshot};
 use universaldb::RangeOption;
 
 use super::{
-	Db, branch, keys, metrics,
+	Db, branch, history_pin, keys, metrics,
 	constants::MAX_PINS_PER_NAMESPACE,
 	error::SqliteStorageError,
 	types::{
@@ -212,6 +212,14 @@ pub async fn create_pinned_bookmark(
 					let encoded = encode_pinned_bookmark_record(record)
 						.context("encode sqlite pinned bookmark record")?;
 					tx.informal().set(&pinned_key, &encoded);
+					history_pin::write_bookmark_pin(
+						&tx,
+						branch_id,
+						bookmark.clone(),
+						commit.versionstamp,
+						head.head_txid,
+						at_ms,
+					)?;
 					tx.informal().atomic_op(
 						&pin_count_key,
 						&1_i64.to_le_bytes(),
@@ -289,6 +297,7 @@ pub async fn delete_pinned_bookmark(
 				tx.informal()
 					.clear(&keys::bookmark_key(&database_id, bookmark.as_str()));
 				tx.informal().clear(&pinned_key);
+				history_pin::delete_bookmark_pin(&tx, pinned.database_branch_id, &bookmark);
 				tx.informal().atomic_op(
 					&pin_count_key,
 					&(-1_i64).to_le_bytes(),
@@ -430,6 +439,15 @@ async fn create_pinned_bookmark_for_resolved(
 				let encoded =
 					encode_pinned_bookmark_record(record).context("encode sqlite pinned bookmark record")?;
 				tx.informal().set(&pinned_key, &encoded);
+				let (_, bookmark_txid) = pin.bookmark.parse()?;
+				history_pin::write_bookmark_pin(
+					&tx,
+					pin.database_branch_id,
+					pin.bookmark.clone(),
+					pin.versionstamp,
+					bookmark_txid,
+					pin.created_at_ms,
+				)?;
 				tx.informal().atomic_op(
 					&pin_count_key,
 					&1_i64.to_le_bytes(),

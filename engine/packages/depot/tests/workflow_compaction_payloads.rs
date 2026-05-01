@@ -34,6 +34,7 @@ fn txids() -> TxidRange {
 fn hot_input() -> HotJobInputRange {
 	HotJobInputRange {
 		txids: txids(),
+		coverage_txids: vec![12, 20],
 		max_pages: 128,
 		max_bytes: 512 * 1024,
 	}

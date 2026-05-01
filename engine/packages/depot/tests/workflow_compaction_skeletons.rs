@@ -7,19 +7,19 @@ use anyhow::{Result, bail};
 use futures_util::TryStreamExt;
 use rivet_pools::NodeId;
 use depot::{
-	conveyer::{Db, branch},
+	conveyer::{Db, branch, history_pin},
 	keys::{
 		PAGE_SIZE, branch_commit_key, branch_compaction_root_key,
 		branch_compaction_stage_hot_shard_prefix, branch_delta_chunk_key, branch_meta_head_key,
 		branch_pidx_key, branch_shard_key, branch_shard_prefix, branches_list_key,
 		sqlite_cmp_dirty_key,
 	},
-	ltx::{LtxHeader, encode_ltx_v3},
+	ltx::{LtxHeader, decode_ltx_v3, encode_ltx_v3},
 	types::{
-		BranchState, CommitRow, CompactionRoot, DBHead, DatabaseBranchId, DatabaseBranchRecord,
-		DirtyPage, FetchedPage, NamespaceBranchId, SqliteCmpDirty, decode_compaction_root,
-		encode_commit_row, encode_compaction_root, encode_database_branch_record, encode_db_head,
-		encode_sqlite_cmp_dirty,
+		BookmarkStr, BranchState, CommitRow, CompactionRoot, DBHead, DatabaseBranchId, DatabaseBranchRecord,
+		DirtyPage, FetchedPage, NamespaceBranchId, SqliteCmpDirty, decode_commit_row,
+		decode_compaction_root, encode_commit_row, encode_compaction_root,
+		encode_database_branch_record, encode_db_head, encode_sqlite_cmp_dirty,
 	},
 	workflows::compaction::{
 		CompactionJobKind, CompactionJobStatus, DATABASE_BRANCH_ID_TAG, DbColdCompacterWorkflow,
@@ -425,6 +425,40 @@ async fn seed_manager_branch(
 	.await
 }
 
+async fn seed_bookmark_db_pin(
+	test_ctx: &TestCtx,
+	database_branch_id: DatabaseBranchId,
+	at_txid: u64,
+) -> Result<BookmarkStr> {
+	let bookmark = BookmarkStr::format(1_000 + i64::try_from(at_txid).unwrap_or(i64::MAX), at_txid)?;
+	let db = test_ctx.pools().udb()?;
+	db.run({
+		let bookmark = bookmark.clone();
+		move |tx| {
+			let bookmark = bookmark.clone();
+			async move {
+				let commit_bytes = tx
+					.informal()
+					.get(&branch_commit_key(database_branch_id, at_txid), Snapshot)
+					.await?
+					.expect("pinned commit row should exist");
+				let commit = decode_commit_row(&commit_bytes)?;
+				history_pin::write_bookmark_pin(
+					&tx,
+					database_branch_id,
+					bookmark,
+					commit.versionstamp,
+					at_txid,
+					commit.wall_clock_ms,
+				)
+			}
+		}
+	})
+	.await?;
+
+	Ok(bookmark)
+}
+
 #[test]
 fn compaction_workflow_names_are_stable() {
 	assert_eq!(<DbManagerWorkflow as WorkflowTrait>::NAME, "db_manager");
@@ -757,6 +791,7 @@ async fn hot_compacter_rejects_stale_base_generation_without_staging() -> Result
 					min_txid: 1,
 					max_txid: 1,
 				},
+				coverage_txids: vec![1],
 				max_pages: 1,
 				max_bytes: 1,
 			},
@@ -830,6 +865,60 @@ async fn manager_publishes_hot_output_and_reads_through_shard_after_pidx_clear()
 			pgno: 1,
 			bytes: Some(page(u8::try_from(quota_threshold_head()).unwrap_or(u8::MAX))),
 		}]
+	);
+
+	test_ctx.shutdown().await?;
+	Ok(())
+}
+
+#[tokio::test]
+async fn manager_hot_planning_materializes_exact_pinned_txid() -> Result<()> {
+	let database_branch_id = database_branch_id(0x6060_2233_4455_6677_8899_aabb_ccdd_eeff);
+	let tag_value = database_branch_tag_value(database_branch_id);
+	let mut test_ctx = TestCtx::new(build_registry()).await?;
+	seed_manager_branch(
+		&test_ctx,
+		database_branch_id,
+		100,
+		None,
+		Some(SqliteCmpDirty {
+			observed_head_txid: 100,
+			updated_at_ms: 1_714_000_000_000,
+		}),
+	)
+	.await?;
+	let _bookmark = seed_bookmark_db_pin(&test_ctx, database_branch_id, 50).await?;
+
+	let _manager_workflow_id = test_ctx
+		.workflow(DbManagerInput { database_branch_id })
+		.tag(DATABASE_BRANCH_ID_TAG, &tag_value)
+		.unique()
+		.dispatch()
+		.await?;
+	let hot_workflow_id =
+		wait_for_workflow::<DbHotCompacterWorkflow>(&test_ctx, database_branch_id).await?;
+	let run_hot_job = wait_for_run_hot_job(&test_ctx, hot_workflow_id).await?;
+
+	assert_eq!(run_hot_job.input_range.txids.max_txid, 100);
+	assert_eq!(run_hot_job.input_range.coverage_txids, vec![50, 100]);
+
+	wait_for_hot_install(&test_ctx, database_branch_id, 100).await?;
+	let pinned_shard = read_value(&test_ctx, branch_shard_key(database_branch_id, 0, 50))
+		.await?
+		.expect("pinned txid shard should be published");
+	let latest_shard = read_value(&test_ctx, branch_shard_key(database_branch_id, 0, 100))
+		.await?
+		.expect("latest head shard should be published");
+
+	let pinned_decoded = decode_ltx_v3(&pinned_shard)?;
+	let latest_decoded = decode_ltx_v3(&latest_shard)?;
+	assert_eq!(pinned_decoded.header.max_txid, 50);
+	assert_eq!(latest_decoded.header.max_txid, 100);
+	assert_eq!(pinned_decoded.get_page(1), Some(page(50).as_slice()));
+	assert_eq!(latest_decoded.get_page(1), Some(page(100).as_slice()));
+	assert_eq!(
+		read_value(&test_ctx, branch_shard_key(database_branch_id, 0, 99)).await?,
+		None
 	);
 
 	test_ctx.shutdown().await?;
