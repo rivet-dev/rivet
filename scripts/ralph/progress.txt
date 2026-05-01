@@ -5,6 +5,7 @@
 - Depot page reads prefer PIDX/DELTA, then latest branch SHARD at or below the read cap, then workflow `CMP/cold_shard` refs and legacy cold manifest layers outside the UDB transaction.
 - Workflow compaction signals and durable workflow state live in `engine/packages/depot/src/workflows/compaction.rs`; expose vbare encode/decode helpers there and cover them from `engine/packages/depot/tests/`.
 - Workflow compaction branch workflows use `DATABASE_BRANCH_ID_TAG` as their only stable unique tag; the manager stores companion workflow ids before entering its durable loop.
+- Workflow compaction dirty admission lives in `engine/packages/depot/src/conveyer/commit.rs`; runtime callers inject a signaler into `Db` to create or target the unique manager workflow.
 
 # Ralph Progress Log
 Started: Thu Apr 30 09:07:22 PM PDT 2026
@@ -88,4 +89,23 @@ Started: Thu Apr 30 09:07:22 PM PDT 2026
   - Gasoline branch workflow identity should use stable unique tags, not derivable workflow ids.
   - Durable loop state is easiest to assert from Gasoline debug history `Loop` events in tests.
   - `ctx.listen_n_until` is the existing no-`Tick` path for waiting on signals or planning deadlines.
+---
+## 2026-04-30 22:00:07 PDT - US-006
+- Implemented workflow compaction dirty-marker admission on the commit path for hot and cold lag thresholds.
+- Added throttled `DeltasAvailable` wakeups through an injected `Db` signaler, and wired pegboard-envoy to create or target the unique DB manager workflow by branch tag.
+- Added exact-value dirty-marker compare-and-clear support for idle manager refreshes.
+- Verified with `cargo test -p depot --test conveyer_commit`, `cargo check -p depot`, `cargo check -p pegboard-envoy`, and `cargo test -p depot`.
+- Files changed:
+  - `engine/packages/depot/src/conveyer/commit.rs`
+  - `engine/packages/depot/src/conveyer/db.rs`
+  - `engine/packages/depot/tests/conveyer_commit.rs`
+  - `engine/packages/pegboard-envoy/src/ws_to_tunnel_task.rs`
+  - `docs-internal/engine/sqlite/components.md`
+  - `engine/packages/depot/AGENTS.md`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - The commit path can keep storage semantics independent from Gasoline by returning a wakeup hint and invoking an injected async signaler after the FDB transaction commits.
+  - `SQLITE_CMP_DIRTY` clears must regular-read the exact encoded dirty payload before issuing `CompareAndClear`.
+  - Runtime `DeltasAvailable` senders should dispatch the unique `DbManagerWorkflow` with only `DATABASE_BRANCH_ID_TAG`, then send the signal to that workflow id.
 ---

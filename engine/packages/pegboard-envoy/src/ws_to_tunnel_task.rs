@@ -1,6 +1,6 @@
 use anyhow::{Context, bail, ensure};
 use bytes::Bytes;
-use futures_util::TryStreamExt;
+use futures_util::{FutureExt, TryStreamExt};
 use gas::prelude::Id;
 use gas::prelude::*;
 use hyper_tungstenite::tungstenite::Message;
@@ -10,7 +10,14 @@ use rivet_data::converted::{ActorNameKeyData, MetadataKeyData};
 use rivet_envoy_protocol::{self as protocol, PROTOCOL_VERSION, versioned};
 use rivet_guard_core::websocket_handle::WebSocketReceiver;
 use scc::HashMap;
-use depot::{error::SqliteStorageError, conveyer::Db};
+use depot::{
+	conveyer::Db,
+	error::SqliteStorageError,
+	workflows::compaction::{
+		DATABASE_BRANCH_ID_TAG, DbManagerInput, DeltasAvailable,
+		database_branch_tag_value,
+	},
+};
 use std::{
 	collections::BTreeSet,
 	sync::{Arc, atomic::Ordering},
@@ -625,7 +632,7 @@ async fn handle_sqlite_get_pages(
 	validate_sqlite_get_pages_request(&request)?;
 	validate_sqlite_actor(ctx, conn, &request.actor_id).await?;
 
-	let actor_db = actor_db(conn, request.actor_id.clone()).await;
+	let actor_db = actor_db(ctx, conn, request.actor_id.clone()).await;
 	match actor_db.get_pages(request.pgnos).await {
 		Ok(pages) => Ok(sqlite_get_pages_ok(pages).await?),
 		Err(err) => Err(err),
@@ -658,7 +665,7 @@ async fn handle_sqlite_commit(
 		.observe(decode_request_duration.as_secs_f64());
 
 	let actor_id = request.actor_id.clone();
-	let actor_db = actor_db(conn, actor_id.clone()).await;
+	let actor_db = actor_db(ctx, conn, actor_id.clone()).await;
 	let engine_result = actor_db
 		.commit(
 			request
@@ -713,17 +720,41 @@ fn pump_dirty_page(page: protocol::SqliteDirtyPage) -> depot::types::DirtyPage {
 	}
 }
 
-async fn actor_db(conn: &Conn, actor_id: String) -> Arc<Db> {
+async fn actor_db(ctx: &StandaloneCtx, conn: &Conn, actor_id: String) -> Arc<Db> {
 	conn.actor_dbs
 		.entry_async(actor_id.clone())
 		.await
 		.or_insert_with(|| {
-			Arc::new(Db::new(
+			let signal_ctx = ctx.clone();
+			let compaction_signaler = Arc::new(move |signal: DeltasAvailable| {
+				let signal_ctx = signal_ctx.clone();
+				async move {
+					let tag_value = database_branch_tag_value(signal.database_branch_id);
+					let workflow_id = signal_ctx
+						.workflow(DbManagerInput {
+							database_branch_id: signal.database_branch_id,
+						})
+						.tag(DATABASE_BRANCH_ID_TAG, &tag_value)
+						.unique()
+						.dispatch()
+						.await?;
+					signal_ctx
+						.signal(signal)
+						.to_workflow_id(workflow_id)
+						.send()
+						.await?;
+					Ok(())
+				}
+				.boxed()
+			});
+
+			Arc::new(Db::new_with_compaction_signaler(
 				conn.udb.clone(),
 				(*conn.ups).clone(),
 				conn.namespace_id,
 				actor_id,
 				conn.node_id,
+				compaction_signaler,
 			))
 		})
 		.get()

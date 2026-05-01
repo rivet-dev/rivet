@@ -4,6 +4,7 @@ use std::{
 };
 
 use anyhow::{Context, Result};
+use futures_util::future::BoxFuture;
 use gas::prelude::Id;
 use parking_lot::Mutex;
 use rivet_pools::NodeId;
@@ -13,6 +14,7 @@ use universaldb::Database;
 use crate::{
 	cold_tier::ColdTier,
 	compactor::Ups,
+	workflows::compaction::DeltasAvailable,
 	page_index::DeltaPageIndex,
 };
 
@@ -25,6 +27,9 @@ use super::{
 };
 
 const COLD_MANIFEST_CACHE_BRANCHES: usize = 16;
+
+pub type CompactionSignaler =
+	Arc<dyn Fn(DeltasAvailable) -> BoxFuture<'static, Result<()>> + Send + Sync>;
 
 #[derive(Debug, Clone)]
 pub(super) struct CachedColdManifest {
@@ -116,6 +121,9 @@ pub struct Db {
 	pub(super) read_bytes_since_rollup: Mutex<u64>,
 	/// Last time this database published a compaction trigger.
 	pub(super) last_trigger_at: Mutex<Option<Instant>>,
+	/// Last wall-clock time this database sent a workflow compaction wakeup.
+	pub(super) last_deltas_available_at_ms: Mutex<Option<i64>>,
+	pub(super) compaction_signaler: Option<CompactionSignaler>,
 }
 
 impl Db {
@@ -126,7 +134,7 @@ impl Db {
 		database_id: String,
 		node_id: NodeId,
 	) -> Self {
-		Self::new_inner(udb, ups, namespace_id, database_id, node_id, None)
+		Self::new_inner(udb, ups, namespace_id, database_id, node_id, None, None)
 	}
 
 	pub fn new_with_cold_tier(
@@ -137,7 +145,34 @@ impl Db {
 		node_id: NodeId,
 		cold_tier: Arc<dyn ColdTier>,
 	) -> Self {
-		Self::new_inner(udb, ups, namespace_id, database_id, node_id, Some(cold_tier))
+		Self::new_inner(
+			udb,
+			ups,
+			namespace_id,
+			database_id,
+			node_id,
+			Some(cold_tier),
+			None,
+		)
+	}
+
+	pub fn new_with_compaction_signaler(
+		udb: Arc<Database>,
+		ups: Ups,
+		namespace_id: Id,
+		database_id: String,
+		node_id: NodeId,
+		compaction_signaler: CompactionSignaler,
+	) -> Self {
+		Self::new_inner(
+			udb,
+			ups,
+			namespace_id,
+			database_id,
+			node_id,
+			None,
+			Some(compaction_signaler),
+		)
 	}
 
 	fn new_inner(
@@ -147,6 +182,7 @@ impl Db {
 		database_id: String,
 		node_id: NodeId,
 		cold_tier: Option<Arc<dyn ColdTier>>,
+		compaction_signaler: Option<CompactionSignaler>,
 	) -> Self {
 		#[cfg(debug_assertions)]
 		crate::takeover::reconcile_blocking(udb.clone(), database_id.clone(), node_id);
@@ -167,6 +203,8 @@ impl Db {
 			commit_bytes_since_rollup: Mutex::new(0),
 			read_bytes_since_rollup: Mutex::new(0),
 			last_trigger_at: Mutex::new(None),
+			last_deltas_available_at_ms: Mutex::new(None),
+			compaction_signaler,
 		}
 	}
 

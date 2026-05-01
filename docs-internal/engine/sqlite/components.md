@@ -13,6 +13,7 @@ Responsibilities:
 - Write PIDX owner rows for dirty pages.
 - Write `COMMITS/{txid}` and `VTX/{versionstamp}` in the same commit transaction.
 - Maintain `META/head`, quota counters, access-touch manifest fields, and the global eviction index bucket.
+- Update `SQLITE_CMP_DIRTY/{database_branch_id}` and send throttled `DeltasAvailable` workflow wakeups when hot or cold lag crosses compaction thresholds.
 - Create namespaces, create databases, fork namespaces, fork databases, and write branch records/catalog markers.
 - Create and resolve bookmarks. Pinned bookmarks publish cold-compactor work and start as `PinStatus::Pending`.
 

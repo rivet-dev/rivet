@@ -22,11 +22,15 @@ use crate::{
 		metrics, quota,
 		types::{
 			DatabaseBranchId, DatabaseBranchRecord, DatabasePointer, BranchState, CommitRow, DBHead,
-			DirtyPage, NamespaceBranchId, NamespaceId, decode_db_head, decode_meta_compact,
+			CompactionRoot, DirtyPage, NamespaceBranchId, NamespaceId, SqliteCmpDirty,
+			decode_compaction_root, decode_db_head, decode_meta_compact, decode_sqlite_cmp_dirty,
 			encode_database_branch_record, encode_database_pointer, encode_commit_row, encode_db_head,
+			encode_sqlite_cmp_dirty,
 		},
 		udb,
 	},
+	HOT_BURST_COLD_LAG_THRESHOLD_TXIDS,
+	workflows::compaction::DeltasAvailable,
 };
 
 const DELTA_CHUNK_BYTES: usize = 10_000;
@@ -50,6 +54,7 @@ impl Db {
 		let cached_branch_id = *self.branch_id.lock();
 		let cached_ancestry = self.ancestors.lock().clone();
 		let cached_access_bucket = *self.last_access_bucket.lock();
+		let last_deltas_available_at_ms = *self.last_deltas_available_at_ms.lock();
 		let cache_was_warm = !self.cache.lock().range(0, u32::MAX).is_empty();
 		let database_id = self.database_id.clone();
 		let namespace_id = self.sqlite_namespace_id();
@@ -63,6 +68,7 @@ impl Db {
 				let dirty_pages = dirty_pages_for_tx.clone();
 				let cached_ancestry = cached_ancestry.clone();
 				let cached_access_bucket = cached_access_bucket;
+				let last_deltas_available_at_ms = last_deltas_available_at_ms;
 
 				async move {
 					let branch_resolution =
@@ -109,6 +115,16 @@ impl Db {
 							.transpose()
 							.context("decode sqlite compact meta for trigger")?
 							.map_or(0, |compact| compact.materialized_txid);
+					let compaction_root = tx_get_value(
+						&tx,
+						&keys::branch_compaction_root_key(branch_id),
+						Snapshot,
+					)
+					.await?
+					.as_deref()
+					.map(decode_compaction_root)
+					.transpose()
+					.context("decode sqlite compaction root for dirty admission")?;
 					let previous_db_size_pages =
 						previous_head.as_ref().map_or(db_size_pages, |head| head.db_size_pages);
 					let txid = match previous_head.as_ref() {
@@ -210,6 +226,17 @@ impl Db {
 						Snapshot,
 					)
 					.await?;
+					let deltas_available = admit_deltas_available(
+						&tx,
+						branch_id,
+						txid,
+						materialized_txid,
+						compaction_root.as_ref(),
+						burst_signal.cold_drained_txid,
+						now_ms,
+						last_deltas_available_at_ms,
+					)
+					.await?;
 					let hot_quota_cap = burst_mode::adjusted_hot_quota_cap(
 						quota::SQLITE_MAX_STORAGE_BYTES,
 						burst_signal,
@@ -279,6 +306,7 @@ impl Db {
 						access_bucket,
 						txid,
 						materialized_txid,
+						deltas_available,
 						dirty_pgnos,
 						truncated_pgnos: truncate_cleanup.truncated_pgnos,
 						added_bytes,
@@ -311,9 +339,28 @@ impl Db {
 			}
 		}
 
+		self.publish_deltas_available_if_needed(result.deltas_available)
+			.await;
 		self.publish_compact_trigger_if_needed(result.txid, result.materialized_txid);
 
 		Ok(())
+	}
+
+	async fn publish_deltas_available_if_needed(&self, signal: Option<DeltasAvailable>) {
+		let Some(signal) = signal else {
+			return;
+		};
+		let Some(signaler) = &self.compaction_signaler else {
+			return;
+		};
+
+		let signal_at_ms = signal.dirty_updated_at_ms;
+		if let Err(err) = signaler(signal).await {
+			tracing::warn!(?err, "failed to send sqlite workflow compaction wakeup");
+			return;
+		}
+
+		*self.last_deltas_available_at_ms.lock() = Some(signal_at_ms);
 	}
 
 	fn publish_compact_trigger_if_needed(&self, head_txid: u64, materialized_txid: u64) {
@@ -362,10 +409,150 @@ struct CommitTxResult {
 	access_bucket: Option<i64>,
 	txid: u64,
 	materialized_txid: u64,
+	deltas_available: Option<DeltasAvailable>,
 	dirty_pgnos: BTreeSet<u32>,
 	truncated_pgnos: Vec<u32>,
 	added_bytes: i64,
 	storage_used: i64,
+}
+
+async fn admit_deltas_available(
+	tx: &universaldb::Transaction,
+	branch_id: DatabaseBranchId,
+	head_txid: u64,
+	legacy_materialized_txid: u64,
+	compaction_root: Option<&CompactionRoot>,
+	cold_drained_txid: u64,
+	now_ms: i64,
+	last_signal_at_ms: Option<i64>,
+) -> Result<Option<DeltasAvailable>> {
+	if !has_actionable_lag(
+		head_txid,
+		legacy_materialized_txid,
+		compaction_root,
+		cold_drained_txid,
+	) {
+		return Ok(None);
+	}
+
+	let dirty_key = keys::sqlite_cmp_dirty_key(branch_id);
+	let previous_dirty = tx_get_value(tx, &dirty_key, Serializable)
+		.await?
+		.as_deref()
+		.map(decode_sqlite_cmp_dirty)
+		.transpose()
+		.context("decode sqlite compaction dirty marker")?;
+	let dirty = SqliteCmpDirty {
+		observed_head_txid: head_txid,
+		updated_at_ms: now_ms,
+	};
+	let encoded_dirty =
+		encode_sqlite_cmp_dirty(dirty.clone()).context("encode sqlite compaction dirty marker")?;
+	tx.informal().set(&dirty_key, &encoded_dirty);
+
+	let first_dirty_writer = previous_dirty.is_none();
+	let throttled_signal_due = last_signal_at_ms.is_none_or(|last_signal_at_ms| {
+		now_ms.saturating_sub(last_signal_at_ms)
+			>= i64::try_from(quota::TRIGGER_THROTTLE_MS).unwrap_or(i64::MAX)
+	});
+	if first_dirty_writer || throttled_signal_due {
+		Ok(Some(DeltasAvailable {
+			database_branch_id: branch_id,
+			observed_head_txid: dirty.observed_head_txid,
+			dirty_updated_at_ms: dirty.updated_at_ms,
+		}))
+	} else {
+		Ok(None)
+	}
+}
+
+fn has_actionable_lag(
+	head_txid: u64,
+	legacy_materialized_txid: u64,
+	compaction_root: Option<&CompactionRoot>,
+	cold_drained_txid: u64,
+) -> bool {
+	let hot_watermark_txid =
+		compaction_root.map_or(legacy_materialized_txid, |root| root.hot_watermark_txid);
+	let cold_watermark_txid =
+		compaction_root.map_or(cold_drained_txid, |root| root.cold_watermark_txid);
+	let hot_lag = head_txid.saturating_sub(hot_watermark_txid);
+	let cold_lag = head_txid.saturating_sub(cold_watermark_txid);
+
+	hot_lag >= quota::COMPACTION_DELTA_THRESHOLD
+		|| cold_lag >= HOT_BURST_COLD_LAG_THRESHOLD_TXIDS
+}
+
+pub async fn clear_sqlite_cmp_dirty_if_observed_idle(
+	db: &universaldb::Database,
+	branch_id: DatabaseBranchId,
+	observed_dirty: SqliteCmpDirty,
+) -> Result<bool> {
+	db.run(move |tx| {
+		let observed_dirty = observed_dirty.clone();
+		async move {
+			let dirty_key = keys::sqlite_cmp_dirty_key(branch_id);
+			let expected_dirty = encode_sqlite_cmp_dirty(observed_dirty.clone())
+				.context("encode observed sqlite compaction dirty marker")?;
+			let Some(current_dirty) = tx_get_value(&tx, &dirty_key, Serializable).await? else {
+				return Ok(false);
+			};
+			if current_dirty != expected_dirty {
+				return Ok(false);
+			}
+			if branch_has_actionable_lag(&tx, branch_id).await? {
+				return Ok(false);
+			}
+
+			udb::compare_and_clear(&tx, &dirty_key, &expected_dirty);
+			Ok(true)
+		}
+	})
+	.await
+}
+
+async fn branch_has_actionable_lag(
+	tx: &universaldb::Transaction,
+	branch_id: DatabaseBranchId,
+) -> Result<bool> {
+	let head_txid = tx_get_value(tx, &keys::branch_meta_head_key(branch_id), Serializable)
+		.await?
+		.as_deref()
+		.map(decode_db_head)
+		.transpose()
+		.context("decode sqlite db head for dirty clear")?
+		.map_or(0, |head| head.head_txid);
+	let legacy_materialized_txid =
+		tx_get_value(tx, &keys::branch_meta_compact_key(branch_id), Serializable)
+			.await?
+			.as_deref()
+			.map(decode_meta_compact)
+			.transpose()
+			.context("decode sqlite compact meta for dirty clear")?
+			.map_or(0, |compact| compact.materialized_txid);
+	let compaction_root = tx_get_value(tx, &keys::branch_compaction_root_key(branch_id), Serializable)
+		.await?
+		.as_deref()
+		.map(decode_compaction_root)
+		.transpose()
+		.context("decode sqlite compaction root for dirty clear")?;
+	let cold_drained_txid = tx
+		.informal()
+		.get(
+			&keys::branch_manifest_cold_drained_txid_key(branch_id),
+			Serializable,
+		)
+		.await?
+		.map(|value| decode_u64_be(value.as_ref(), "sqlite dirty clear cold_drained_txid"))
+		.transpose()?
+		.unwrap_or_default();
+
+	Ok(has_actionable_lag(
+		head_txid,
+		legacy_materialized_txid,
+		compaction_root.as_ref(),
+		cold_drained_txid,
+	))
 }
 
 #[derive(Default)]
@@ -496,6 +683,13 @@ fn write_root_branch_metadata(
 
 fn tracked_entry_size(key: &[u8], value: &[u8]) -> Result<i64> {
 	i64::try_from(key.len() + value.len()).context("sqlite tracked entry size exceeded i64")
+}
+
+fn decode_u64_be(bytes: &[u8], context: &'static str) -> Result<u64> {
+	let bytes = <[u8; std::mem::size_of::<u64>()]>::try_from(bytes)
+		.map_err(|_| anyhow::anyhow!("{context} had {} bytes", bytes.len()))?;
+
+	Ok(u64::from_be_bytes(bytes))
 }
 
 async fn tx_get_value(

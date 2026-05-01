@@ -2,29 +2,40 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Result;
+use futures_util::FutureExt;
 use gas::prelude::Id;
+use parking_lot::Mutex;
 use rivet_pools::NodeId;
 use depot::compactor::{
 	SqliteCompactSubject, decode_compact_payload,
 };
 use depot::{
 	ACCESS_TOUCH_THROTTLE_MS,
+	conveyer::{
+		commit::clear_sqlite_cmp_dirty_if_observed_idle,
+		db::CompactionSignaler,
+	},
 		keys::{
 			PAGE_SIZE, database_pointer_cur_key, branch_commit_key, branch_delta_chunk_key,
+			branch_compaction_root_key,
 			branch_manifest_cold_drained_txid_key, branch_manifest_last_access_bucket_key,
 			branch_manifest_last_access_ts_ms_key, branch_meta_compact_key, branch_meta_head_key,
 			branch_pidx_key, branch_shard_key, branch_vtx_key, branches_list_key,
 			ctr_eviction_index_key, namespace_branches_list_key, namespace_branches_refcount_key,
-			namespace_pointer_cur_key,
+			namespace_pointer_cur_key, sqlite_cmp_dirty_key,
 		},
 	ltx::{LtxHeader, encode_ltx_v3},
 	conveyer::Db,
 	quota::{self, SQLITE_MAX_STORAGE_BYTES},
 	types::{
-		DatabaseBranchId, DBHead, DirtyPage, FetchedPage, MetaCompact, NamespaceId,
+		CompactionRoot, DatabaseBranchId, DBHead, DirtyPage, FetchedPage, MetaCompact, NamespaceId,
+		SqliteCmpDirty,
+		decode_sqlite_cmp_dirty, encode_compaction_root,
 		decode_database_branch_record, decode_database_pointer, decode_commit_row, decode_db_head,
 		decode_namespace_branch_record, decode_namespace_pointer, encode_db_head, encode_meta_compact,
+		encode_sqlite_cmp_dirty,
 	},
+	workflows::compaction::DeltasAvailable,
 };
 use tempfile::Builder;
 use universalpubsub::{NextOutput, PubSub, driver::memory::MemoryDriver};
@@ -47,6 +58,19 @@ fn test_ups() -> PubSub {
 	PubSub::new(Arc::new(MemoryDriver::new(
 		"depot-conveyer-commit-test".to_string(),
 	)))
+}
+
+fn recording_compaction_signaler(
+	signals: Arc<Mutex<Vec<DeltasAvailable>>>,
+) -> CompactionSignaler {
+	Arc::new(move |signal| {
+		let signals = Arc::clone(&signals);
+		async move {
+			signals.lock().push(signal);
+			Ok(())
+		}
+		.boxed()
+	})
 }
 
 fn head_with_branch(branch_id: DatabaseBranchId, head_txid: u64, db_size_pages: u32) -> DBHead {
@@ -127,6 +151,16 @@ async fn read_head(db: &universaldb::Database) -> Result<DBHead> {
 		.await?
 		.expect("head should exist");
 	decode_db_head(&bytes)
+}
+
+async fn read_dirty_marker(
+	db: &universaldb::Database,
+	branch_id: DatabaseBranchId,
+) -> Result<Option<SqliteCmpDirty>> {
+	read_value(db, sqlite_cmp_dirty_key(branch_id))
+		.await?
+		.map(|value| decode_sqlite_cmp_dirty(&value))
+		.transpose()
 }
 
 async fn read_branch_id(db: &universaldb::Database) -> Result<DatabaseBranchId> {
@@ -556,6 +590,193 @@ async fn commit_publishes_compaction_trigger_with_throttle() -> Result<()> {
 	database_db.commit(vec![page(1, 0x33)], 1, 5_200).await?;
 	let after_silence = next_trigger(&mut sub).await?;
 	assert_eq!(after_silence.database_id, TEST_DATABASE);
+
+	Ok(())
+}
+
+#[tokio::test]
+async fn commit_writes_dirty_marker_and_sends_first_deltas_available() -> Result<()> {
+	let db = Arc::new(test_db().await?);
+	let signals = Arc::new(Mutex::new(Vec::new()));
+	let database_db = Db::new_with_compaction_signaler(
+		db.clone(),
+		test_ups(),
+		test_namespace(),
+		TEST_DATABASE.to_string(),
+		NodeId::new(),
+		recording_compaction_signaler(Arc::clone(&signals)),
+	);
+	database_db.commit(vec![page(1, 0x01)], 1, 1_000).await?;
+	let branch_id = read_branch_id(&db).await?;
+	seed(
+		&db,
+		vec![
+			(
+				branch_meta_head_key(branch_id),
+				encode_db_head(head_with_branch(branch_id, 31, 1))?,
+			),
+			(
+				branch_meta_compact_key(branch_id),
+				encode_meta_compact(MetaCompact {
+					materialized_txid: 0,
+				})?,
+			),
+		],
+	)
+	.await?;
+	db.run(|tx| async move {
+		quota::atomic_add_branch(&tx, branch_id, 1_000);
+		Ok(())
+	})
+	.await?;
+
+	database_db.commit(vec![page(1, 0x11)], 1, 5_000).await?;
+
+	let dirty = read_dirty_marker(&db, branch_id)
+		.await?
+		.expect("dirty marker should exist");
+	assert_eq!(dirty.observed_head_txid, 32);
+	assert_eq!(dirty.updated_at_ms, 5_000);
+	let signals = signals.lock().clone();
+	assert_eq!(
+		signals,
+		vec![DeltasAvailable {
+			database_branch_id: branch_id,
+			observed_head_txid: 32,
+			dirty_updated_at_ms: 5_000,
+		}]
+	);
+
+	Ok(())
+}
+
+#[tokio::test]
+async fn commit_refreshes_dirty_marker_and_throttles_deltas_available() -> Result<()> {
+	let db = Arc::new(test_db().await?);
+	let signals = Arc::new(Mutex::new(Vec::new()));
+	let database_db = Db::new_with_compaction_signaler(
+		db.clone(),
+		test_ups(),
+		test_namespace(),
+		TEST_DATABASE.to_string(),
+		NodeId::new(),
+		recording_compaction_signaler(Arc::clone(&signals)),
+	);
+	database_db.commit(vec![page(1, 0x01)], 1, 1_000).await?;
+	let branch_id = read_branch_id(&db).await?;
+	seed(
+		&db,
+		vec![
+			(
+				branch_meta_head_key(branch_id),
+				encode_db_head(head_with_branch(branch_id, 31, 1))?,
+			),
+			(
+				branch_meta_compact_key(branch_id),
+				encode_meta_compact(MetaCompact {
+					materialized_txid: 0,
+				})?,
+			),
+		],
+	)
+	.await?;
+	db.run(|tx| async move {
+		quota::atomic_add_branch(&tx, branch_id, 1_000);
+		Ok(())
+	})
+	.await?;
+
+	database_db.commit(vec![page(1, 0x11)], 1, 5_000).await?;
+	database_db.commit(vec![page(1, 0x22)], 1, 5_100).await?;
+	let dirty = read_dirty_marker(&db, branch_id)
+		.await?
+		.expect("dirty marker should refresh");
+	assert_eq!(dirty.observed_head_txid, 33);
+	assert_eq!(dirty.updated_at_ms, 5_100);
+	assert_eq!(signals.lock().len(), 1);
+
+	database_db.commit(vec![page(1, 0x33)], 1, 5_500).await?;
+	let dirty = read_dirty_marker(&db, branch_id)
+		.await?
+		.expect("dirty marker should refresh again");
+	assert_eq!(dirty.observed_head_txid, 34);
+	assert_eq!(dirty.updated_at_ms, 5_500);
+	let signals = signals.lock().clone();
+	assert_eq!(signals.len(), 2);
+	assert_eq!(signals[1].observed_head_txid, 34);
+	assert_eq!(signals[1].dirty_updated_at_ms, 5_500);
+
+	Ok(())
+}
+
+#[tokio::test]
+async fn dirty_marker_clear_rejects_stale_observed_value() -> Result<()> {
+	let db = test_db().await?;
+	let branch_id = DatabaseBranchId::new_v4();
+	let old_dirty = SqliteCmpDirty {
+		observed_head_txid: 40,
+		updated_at_ms: 1_000,
+	};
+	let new_dirty = SqliteCmpDirty {
+		observed_head_txid: 41,
+		updated_at_ms: 1_100,
+	};
+	seed(
+		&db,
+		vec![(
+			sqlite_cmp_dirty_key(branch_id),
+			encode_sqlite_cmp_dirty(new_dirty.clone())?,
+		)],
+	)
+	.await?;
+
+	assert!(
+		!clear_sqlite_cmp_dirty_if_observed_idle(&db, branch_id, old_dirty).await?,
+		"stale dirty marker should not clear"
+	);
+	assert_eq!(read_dirty_marker(&db, branch_id).await?, Some(new_dirty));
+
+	Ok(())
+}
+
+#[tokio::test]
+async fn dirty_marker_clear_removes_exact_idle_marker() -> Result<()> {
+	let db = test_db().await?;
+	let branch_id = DatabaseBranchId::new_v4();
+	let dirty = SqliteCmpDirty {
+		observed_head_txid: 40,
+		updated_at_ms: 1_000,
+	};
+	seed(
+		&db,
+		vec![
+			(
+				branch_meta_head_key(branch_id),
+				encode_db_head(head_with_branch(branch_id, 40, 1))?,
+			),
+			(
+				sqlite_cmp_dirty_key(branch_id),
+				encode_sqlite_cmp_dirty(dirty.clone())?,
+			),
+			(
+				branch_compaction_root_key(branch_id),
+				encode_compaction_root(CompactionRoot {
+					schema_version: 1,
+					manifest_generation: 7,
+					hot_watermark_txid: 40,
+					cold_watermark_txid: 40,
+					cold_watermark_versionstamp: [0x22; 16],
+				})?,
+			),
+		],
+	)
+	.await?;
+
+	assert!(
+		clear_sqlite_cmp_dirty_if_observed_idle(&db, branch_id, dirty).await?,
+		"idle exact marker should clear"
+	);
+	assert!(read_dirty_marker(&db, branch_id).await?.is_none());
 
 	Ok(())
 }
