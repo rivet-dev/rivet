@@ -21,13 +21,13 @@ use depot::{
 	types::{
 		BookmarkStr, BranchState, ColdShardRef, CommitRow, CompactionRoot, DBHead,
 		DatabaseBranchId, DatabaseBranchRecord, DbHistoryPinKind, DirtyPage, FetchedPage,
-		NamespaceBranchId, NamespaceCatalogDbFact, NamespaceForkFact,
+		NamespaceBranchId, NamespaceCatalogDbFact, NamespaceForkFact, NamespaceId,
 		RetiredColdObject, RetiredColdObjectDeleteState, SqliteCmpDirty, decode_cold_shard_ref,
 		decode_commit_row, decode_compaction_root, decode_db_head, decode_db_history_pin,
 		decode_retired_cold_object, encode_cold_shard_ref, encode_commit_row,
 		encode_compaction_root, encode_database_branch_record, encode_db_head,
 		encode_namespace_catalog_db_fact, encode_retired_cold_object,
-		encode_namespace_fork_fact, encode_sqlite_cmp_dirty,
+		encode_namespace_fork_fact, encode_sqlite_cmp_dirty, ResolvedVersionstamp,
 	},
 	workflows::compaction::{
 		CompactionJobKind, CompactionJobStatus, DATABASE_BRANCH_ID_TAG, DbColdCompacterWorkflow,
@@ -73,6 +73,31 @@ fn test_ups() -> PubSub {
 	PubSub::new(Arc::new(MemoryDriver::new(
 		"depot-workflow-compaction-test".to_string(),
 	)))
+}
+
+fn make_test_db(test_ctx: &TestCtx) -> Result<Db> {
+	let udb_pool = test_ctx.pools().udb()?;
+	let udb = Arc::new((*udb_pool).clone());
+	Ok(Db::new(
+		udb,
+		test_ups(),
+		test_namespace(),
+		TEST_DATABASE.to_string(),
+		NodeId::new(),
+	))
+}
+
+fn make_test_db_with_cold_tier(test_ctx: &TestCtx, cold_tier: Arc<dyn ColdTier>) -> Result<Db> {
+	let udb_pool = test_ctx.pools().udb()?;
+	let udb = Arc::new((*udb_pool).clone());
+	Ok(Db::new_with_cold_tier(
+		udb,
+		test_ups(),
+		test_namespace(),
+		TEST_DATABASE.to_string(),
+		NodeId::new(),
+		cold_tier,
+	))
 }
 
 fn page(fill: u8) -> Vec<u8> {
@@ -487,9 +512,7 @@ async fn wait_for_cold_publish(
 		.transpose()?;
 
 		if let (Some(root), Some(cold_ref)) = (&root, &cold_ref) {
-			if root.cold_watermark_txid == as_of_txid
-				&& root.cold_watermark_versionstamp[8..16] == as_of_txid.to_be_bytes()
-			{
+			if root.cold_watermark_txid == as_of_txid && cold_ref.as_of_txid == as_of_txid {
 				return Ok(cold_ref.clone());
 			}
 		}
@@ -618,6 +641,20 @@ async fn read_database_branch_id(test_ctx: &TestCtx) -> Result<DatabaseBranchId>
 		)
 		.await?
 		.ok_or_else(|| anyhow::anyhow!("database branch should exist"))
+	})
+	.await
+}
+
+async fn read_namespace_branch_id(test_ctx: &TestCtx) -> Result<NamespaceBranchId> {
+	let db = test_ctx.pools().udb()?;
+	db.run(|tx| async move {
+		branch::resolve_namespace_branch(
+			&tx,
+			NamespaceId::from_gas_id(test_namespace()),
+			universaldb::utils::IsolationLevel::Serializable,
+		)
+		.await?
+		.ok_or_else(|| anyhow::anyhow!("namespace branch should exist"))
 	})
 	.await
 }
@@ -1456,6 +1493,409 @@ async fn force_reclaim_waits_for_reclaim_completion() -> Result<()> {
 			.await?
 			.is_none()
 	);
+
+	test_ctx.shutdown().await?;
+	Ok(())
+}
+
+#[tokio::test]
+async fn e2e_force_hot_compaction_preserves_reads_after_pidx_clear() -> Result<()> {
+	let mut test_ctx = TestCtx::new(build_registry()).await?;
+	let database_db = make_test_db(&test_ctx)?;
+	database_db
+		.commit(vec![dirty_page(1, 0x11), dirty_page(2, 0x22)], 3, 1_001)
+		.await?;
+	let database_branch_id = read_database_branch_id(&test_ctx).await?;
+	let tag_value = database_branch_tag_value(database_branch_id);
+	let manager_workflow_id = test_ctx
+		.workflow(DbManagerInput { database_branch_id })
+		.tag(DATABASE_BRANCH_ID_TAG, &tag_value)
+		.unique()
+		.dispatch()
+		.await?;
+
+	let result = force_compaction_and_wait_idle(
+		&test_ctx,
+		manager_workflow_id,
+		database_branch_id,
+		Id::new_v1(45),
+		ForceCompactionWork {
+			hot: true,
+			cold: false,
+			reclaim: false,
+			final_settle: false,
+		},
+	)
+	.await?;
+
+	assert_eq!(result.attempted_job_kinds, vec![CompactionJobKind::Hot]);
+	assert!(result.terminal_error.is_none());
+	assert_eq!(
+		database_db.get_pages(vec![1, 2]).await?,
+		vec![
+			FetchedPage {
+				pgno: 1,
+				bytes: Some(page(0x11)),
+			},
+			FetchedPage {
+				pgno: 2,
+				bytes: Some(page(0x22)),
+			},
+		]
+	);
+	assert!(read_value(&test_ctx, branch_pidx_key(database_branch_id, 1)).await?.is_none());
+	assert!(read_value(&test_ctx, branch_pidx_key(database_branch_id, 2)).await?.is_none());
+	assert!(read_value(&test_ctx, branch_shard_key(database_branch_id, 0, 1)).await?.is_some());
+	let root = read_value(&test_ctx, branch_compaction_root_key(database_branch_id))
+		.await?
+		.as_deref()
+		.map(decode_compaction_root)
+		.transpose()?
+		.expect("hot force compaction should publish a root");
+	assert_eq!(root.hot_watermark_txid, 1);
+
+	test_ctx.shutdown().await?;
+	Ok(())
+}
+
+#[tokio::test]
+async fn e2e_force_reclaim_removes_hot_rows_and_keeps_reads() -> Result<()> {
+	let mut test_ctx = TestCtx::new(build_registry()).await?;
+	let database_db = make_test_db(&test_ctx)?;
+	database_db.commit(vec![dirty_page(1, 0x33)], 2, 1_001).await?;
+	let database_branch_id = read_database_branch_id(&test_ctx).await?;
+	let commit = read_value(&test_ctx, branch_commit_key(database_branch_id, 1))
+		.await?
+		.as_deref()
+		.map(decode_commit_row)
+		.transpose()?
+		.expect("commit should exist before reclaim");
+	let tag_value = database_branch_tag_value(database_branch_id);
+	let manager_workflow_id = test_ctx
+		.workflow(DbManagerInput { database_branch_id })
+		.tag(DATABASE_BRANCH_ID_TAG, &tag_value)
+		.unique()
+		.dispatch()
+		.await?;
+
+	force_compaction_and_wait_idle(
+		&test_ctx,
+		manager_workflow_id,
+		database_branch_id,
+		Id::new_v1(46),
+		ForceCompactionWork {
+			hot: true,
+			cold: false,
+			reclaim: false,
+			final_settle: false,
+		},
+	)
+	.await?;
+	let result = force_compaction_and_wait_idle(
+		&test_ctx,
+		manager_workflow_id,
+		database_branch_id,
+		Id::new_v1(47),
+		ForceCompactionWork {
+			hot: false,
+			cold: false,
+			reclaim: true,
+			final_settle: false,
+		},
+	)
+	.await?;
+
+	assert!(
+		result.attempted_job_kinds.is_empty()
+			|| result.attempted_job_kinds == vec![CompactionJobKind::Reclaim]
+	);
+	assert!(result.terminal_error.is_none());
+	assert_eq!(
+		database_db.get_pages(vec![1]).await?,
+		vec![FetchedPage {
+			pgno: 1,
+			bytes: Some(page(0x33)),
+		}]
+	);
+	assert!(
+		read_value(&test_ctx, branch_delta_chunk_key(database_branch_id, 1, 0))
+			.await?
+			.is_none()
+	);
+	assert!(read_value(&test_ctx, branch_commit_key(database_branch_id, 1)).await?.is_none());
+	assert!(
+		read_value(&test_ctx, branch_vtx_key(database_branch_id, commit.versionstamp))
+			.await?
+			.is_none()
+	);
+	assert!(read_value(&test_ctx, branch_shard_key(database_branch_id, 0, 1)).await?.is_some());
+
+	test_ctx.shutdown().await?;
+	Ok(())
+}
+
+#[tokio::test]
+async fn e2e_force_compaction_preserves_exact_pinned_bookmark_txid() -> Result<()> {
+	let mut test_ctx = TestCtx::new(build_registry()).await?;
+	let database_db = make_test_db(&test_ctx)?;
+	database_db.commit(vec![dirty_page(1, 0x41)], 2, 1_001).await?;
+	let bookmark = database_db.create_pinned_bookmark(1_001).await?;
+	database_db.commit(vec![dirty_page(1, 0x42)], 2, 1_002).await?;
+	let database_branch_id = read_database_branch_id(&test_ctx).await?;
+	let tag_value = database_branch_tag_value(database_branch_id);
+	let manager_workflow_id = test_ctx
+		.workflow(DbManagerInput { database_branch_id })
+		.tag(DATABASE_BRANCH_ID_TAG, &tag_value)
+		.unique()
+		.dispatch()
+		.await?;
+
+	force_compaction_and_wait_idle(
+		&test_ctx,
+		manager_workflow_id,
+		database_branch_id,
+		Id::new_v1(48),
+		ForceCompactionWork {
+			hot: true,
+			cold: false,
+			reclaim: false,
+			final_settle: false,
+		},
+	)
+	.await?;
+	force_compaction_and_wait_idle(
+		&test_ctx,
+		manager_workflow_id,
+		database_branch_id,
+		Id::new_v1(49),
+		ForceCompactionWork {
+			hot: false,
+			cold: false,
+			reclaim: true,
+			final_settle: false,
+		},
+	)
+	.await?;
+
+	assert_eq!(
+		database_db.get_pages(vec![1]).await?,
+		vec![FetchedPage {
+			pgno: 1,
+			bytes: Some(page(0x42)),
+		}]
+	);
+	let pinned_shard = read_value(&test_ctx, branch_shard_key(database_branch_id, 0, 1))
+		.await?
+		.expect("pinned txid shard should be published exactly");
+	let latest_shard = read_value(&test_ctx, branch_shard_key(database_branch_id, 0, 2))
+		.await?
+		.expect("latest txid shard should be published");
+	assert_eq!(decode_ltx_v3(&pinned_shard)?.get_page(1), Some(page(0x41).as_slice()));
+	assert_eq!(decode_ltx_v3(&latest_shard)?.get_page(1), Some(page(0x42).as_slice()));
+	assert!(read_value(&test_ctx, branch_delta_chunk_key(database_branch_id, 1, 0)).await?.is_some());
+	assert!(read_value(&test_ctx, branch_commit_key(database_branch_id, 1)).await?.is_some());
+	let pin_bytes = read_value(
+		&test_ctx,
+		db_pin_key(database_branch_id, &history_pin::bookmark_pin_id(&bookmark)),
+	)
+	.await?
+	.expect("bookmark DB_PIN should exist");
+	let pin = decode_db_history_pin(&pin_bytes)?;
+	assert_eq!(pin.kind, DbHistoryPinKind::Bookmark);
+	assert_eq!(pin.at_txid, 1);
+
+	test_ctx.shutdown().await?;
+	Ok(())
+}
+
+#[tokio::test]
+async fn e2e_force_reclaim_materializes_namespace_fork_pin() -> Result<()> {
+	let mut test_ctx = TestCtx::new(build_registry()).await?;
+	let database_db = make_test_db(&test_ctx)?;
+	database_db.commit(vec![dirty_page(1, 0x51)], 2, 1_001).await?;
+	let database_branch_id = read_database_branch_id(&test_ctx).await?;
+	let source_namespace_branch_id = read_namespace_branch_id(&test_ctx).await?;
+	let fork_commit = read_value(&test_ctx, branch_commit_key(database_branch_id, 1))
+		.await?
+		.as_deref()
+		.map(decode_commit_row)
+		.transpose()?
+		.expect("fork-point commit should exist");
+	let udb_pool = test_ctx.pools().udb()?;
+	let udb = Arc::new((*udb_pool).clone());
+	let forked_namespace = branch::fork_namespace(
+		udb.as_ref(),
+		&test_ups(),
+		NamespaceId::from_gas_id(test_namespace()),
+		ResolvedVersionstamp {
+			versionstamp: fork_commit.versionstamp,
+			bookmark: None,
+		},
+	)
+	.await?;
+	database_db.commit(vec![dirty_page(1, 0x52)], 2, 1_002).await?;
+	let tag_value = database_branch_tag_value(database_branch_id);
+	let manager_workflow_id = test_ctx
+		.workflow(DbManagerInput { database_branch_id })
+		.tag(DATABASE_BRANCH_ID_TAG, &tag_value)
+		.unique()
+		.dispatch()
+		.await?;
+
+	force_compaction_and_wait_idle(
+		&test_ctx,
+		manager_workflow_id,
+		database_branch_id,
+		Id::new_v1(50),
+		ForceCompactionWork {
+			hot: true,
+			cold: false,
+			reclaim: false,
+			final_settle: false,
+		},
+	)
+	.await?;
+	let result = force_compaction_and_wait_idle(
+		&test_ctx,
+		manager_workflow_id,
+		database_branch_id,
+		Id::new_v1(51),
+		ForceCompactionWork {
+			hot: false,
+			cold: false,
+			reclaim: true,
+			final_settle: false,
+		},
+	)
+	.await?;
+
+	assert!(
+		result.attempted_job_kinds.is_empty()
+			|| result.attempted_job_kinds == vec![CompactionJobKind::Reclaim]
+	);
+	assert!(result.terminal_error.is_none());
+	assert_eq!(
+		database_db.get_pages(vec![1]).await?,
+		vec![FetchedPage {
+			pgno: 1,
+			bytes: Some(page(0x52)),
+		}]
+	);
+	let forked_namespace_branch_id = udb
+		.run(move |tx| async move {
+			branch::resolve_namespace_branch(
+				&tx,
+				forked_namespace,
+				universaldb::utils::IsolationLevel::Serializable,
+			)
+			.await?
+			.ok_or_else(|| anyhow::anyhow!("forked namespace branch should exist"))
+		})
+		.await?;
+	assert!(
+		read_value(
+			&test_ctx,
+			ns_fork_pin_key(
+				source_namespace_branch_id,
+				fork_commit.versionstamp,
+				forked_namespace_branch_id,
+			),
+		)
+		.await?
+		.is_some()
+	);
+	let pin_bytes = read_value(
+		&test_ctx,
+		db_pin_key(
+			database_branch_id,
+			&history_pin::namespace_fork_pin_id(forked_namespace_branch_id),
+		),
+	)
+	.await?
+	.expect("namespace-derived DB_PIN should be materialized");
+	let pin = decode_db_history_pin(&pin_bytes)?;
+	assert_eq!(pin.kind, DbHistoryPinKind::NamespaceFork);
+	assert_eq!(pin.at_txid, 1);
+	assert!(read_value(&test_ctx, branch_delta_chunk_key(database_branch_id, 1, 0)).await?.is_some());
+
+	test_ctx.shutdown().await?;
+	Ok(())
+}
+
+#[tokio::test]
+async fn e2e_force_cold_publish_reads_after_hot_rows_removed() -> Result<()> {
+	let _cold_test_lock = WORKFLOW_COLD_TEST_LOCK.lock().await;
+	let cold_root = Builder::new()
+		.prefix("depot-workflow-force-cold-e2e-")
+		.tempdir()?;
+	let tier = Arc::new(FilesystemColdTier::new(cold_root.path()));
+	set_workflow_test_cold_tier_for_test(Some(tier.clone()));
+	let _cold_tier_guard = WorkflowColdTierTestGuard;
+
+	let mut test_ctx = TestCtx::new(build_registry()).await?;
+	let database_db = make_test_db_with_cold_tier(&test_ctx, tier.clone())?;
+	database_db.commit(vec![dirty_page(1, 0x61)], 2, 1_001).await?;
+	let _bookmark = database_db.create_pinned_bookmark(1_001).await?;
+	let database_branch_id = read_database_branch_id(&test_ctx).await?;
+	let tag_value = database_branch_tag_value(database_branch_id);
+	let manager_workflow_id = test_ctx
+		.workflow(DbManagerInput { database_branch_id })
+		.tag(DATABASE_BRANCH_ID_TAG, &tag_value)
+		.unique()
+		.dispatch()
+		.await?;
+
+	force_compaction_and_wait_idle(
+		&test_ctx,
+		manager_workflow_id,
+		database_branch_id,
+		Id::new_v1(52),
+		ForceCompactionWork {
+			hot: true,
+			cold: false,
+			reclaim: false,
+			final_settle: false,
+		},
+	)
+	.await?;
+	let result = force_compaction_and_wait_idle(
+		&test_ctx,
+		manager_workflow_id,
+		database_branch_id,
+		Id::new_v1(53),
+		ForceCompactionWork {
+			hot: false,
+			cold: true,
+			reclaim: false,
+			final_settle: false,
+		},
+	)
+	.await?;
+
+	assert!(
+		result.attempted_job_kinds.is_empty()
+			|| result.attempted_job_kinds == vec![CompactionJobKind::Cold]
+	);
+	assert!(result.terminal_error.is_none());
+	let cold_ref = wait_for_cold_publish(&test_ctx, database_branch_id, 1).await?;
+	assert!(tier.get_object(&cold_ref.object_key).await?.is_some());
+	clear_hot_rows_for_cold_read(&test_ctx, database_branch_id, 1).await?;
+	assert_eq!(
+		database_db.get_pages(vec![1]).await?,
+		vec![FetchedPage {
+			pgno: 1,
+			bytes: Some(page(0x61)),
+		}]
+	);
+	assert!(
+		read_value(
+			&test_ctx,
+			branch_compaction_cold_shard_key(database_branch_id, 0, 1),
+		)
+		.await?
+		.is_some()
+	);
+	assert!(read_value(&test_ctx, branch_shard_key(database_branch_id, 0, 1)).await?.is_none());
 
 	test_ctx.shutdown().await?;
 	Ok(())

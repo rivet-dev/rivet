@@ -149,6 +149,7 @@ We explicitly do **not** import:
 - All tests live under `engine/packages/depot/tests/`. **No inline `#[cfg(test)] mod tests` in `src/`.**
 - Tests run against real UDB via `test_db()` (RocksDB-backed temp instance). No mocks for storage paths.
 - Cold-tier tests use `ColdTier::Filesystem` (local filesystem stand-in for S3). UPS dispatch tests use the UPS memory driver. No real S3 required.
+- Workflow compaction tests using real `Db::commit` should assert versionstamp-independent invariants; real UDB versionstamps do not encode txid bytes.
 - Crash recovery tests use `checkpoint_test_db()` + `reopen_test_db()` for real persisted-restart state.
 - Failure-injection tests use `MemoryStore::snapshot()`. The `fail_after_ops` budget keeps decrementing past the first injected error.
 - Lease-expiry and time-window tests use `tokio::time::pause()` + `advance()` for determinism.

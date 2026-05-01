@@ -17,6 +17,7 @@
 - Workflow branch lifecycle is fenced by `DatabaseBranchRecord.lifecycle_generation`; planned workflow jobs carry the base generation and reject stage, publish, or reclaim work after branch deletion or recreation.
 - Workflow repair cleanup is reclaimer-owned: unmatched hot completions clear exact staged FDB rows, unmatched cold completions delete unreferenced S3 objects, and live cold refs with missing S3 or `DeleteIssued` retired records are logged and retained.
 - Workflow force-compaction is manager-owned: send `ForceCompaction`, bypass only lag thresholds in `RefreshManager`, and wait on durable `force_compaction_results`.
+- Workflow compaction tests that use real `Db::commit` must not assume versionstamp bytes encode txids; assert cold refs and watermarks by txid separately from real UDB versionstamps.
 
 # Ralph Progress Log
 Started: Thu Apr 30 09:07:22 PM PDT 2026
@@ -333,4 +334,19 @@ Started: Thu Apr 30 09:07:22 PM PDT 2026
   - Force compaction should stay as a manager-side test/internal control plane so companion workflows still run the normal stage/upload/reclaim activities.
   - When adding fields to vbare-backed workflow state, add a legacy version wrapper and bump only that payload's embedded version.
   - Test wait-idle helpers can observe durable manager `Loop` state and request-scoped results instead of manipulating planner deadlines.
+---
+## 2026-04-30 23:53:55 PDT - US-018
+- Added depot-level workflow compaction end-to-end tests driven through real `Db::commit`, `Db::get_pages`, pinned bookmark creation, namespace fork facts, and manager `ForceCompaction` signals.
+- Covered force hot publish/read after PIDX clear, force reclaim after SHARD coverage, exact pinned bookmark coverage, namespace-derived pin materialization, and cold publish/read after hot rows are removed.
+- Adjusted the cold publish wait helper to work with real UDB versionstamps instead of the hand-seeded txid-in-versionstamp convention.
+- Verified with `cargo test -p depot --test workflow_compaction_skeletons e2e_ -- --nocapture`, `cargo test -p depot --test workflow_compaction_skeletons -- --nocapture`, `cargo check -p depot`, and `cargo test -p depot`.
+- Files changed:
+  - `engine/packages/depot/tests/workflow_compaction_skeletons.rs`
+  - `engine/packages/depot/CLAUDE.md`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Force-compaction e2e tests should assert durable storage outcomes because the manager can complete follow-on work before a later force signal observes it.
+  - Cold publish tests that use real commits should pin the source commit when a later assertion needs commit rows to remain available for cold planning.
+  - Real UDB versionstamps are not synthetic txid bytes; cold-ref tests should check `cold_watermark_txid` and `ColdShardRef.as_of_txid` separately.
 ---
