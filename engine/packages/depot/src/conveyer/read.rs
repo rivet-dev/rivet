@@ -26,8 +26,9 @@ use crate::conveyer::{
 	metrics,
 	page_index::DeltaPageIndex,
 	types::{
-		DatabaseBranchId, DBHead, FetchedPage, LayerEntry, LayerKind,
-		decode_cold_manifest_chunk, decode_cold_manifest_index, decode_db_head,
+		ColdShardRef, CompactionRoot, DatabaseBranchId, DBHead, FetchedPage, LayerEntry, LayerKind,
+		decode_cold_manifest_chunk, decode_cold_manifest_index, decode_cold_shard_ref,
+		decode_compaction_root, decode_db_head,
 	},
 };
 
@@ -219,7 +220,7 @@ impl Db {
 					let mut missing_delta_prefixes = BTreeSet::new();
 					let mut shard_sources = BTreeMap::<u32, Option<(Vec<u8>, Vec<u8>)>>::new();
 					let mut stale_pidx_pgnos = BTreeSet::new();
-					let mut cold_page_candidates = BTreeMap::<u32, Vec<ColdLayerCandidate>>::new();
+					let mut cold_page_candidates = BTreeMap::<u32, Vec<ColdPageCandidate>>::new();
 
 					for pgno in &pgnos_in_range {
 						let mut cold_candidates = Vec::new();
@@ -257,7 +258,8 @@ impl Db {
 											branch_id: source.branch_id,
 											owner_txid: *delta_txid,
 											shard_id: pgno / SHARD_SIZE,
-										});
+										}
+										.into());
 									}
 								}
 							}
@@ -290,7 +292,22 @@ impl Db {
 							}
 							page_sources.insert(*pgno, source_key);
 						} else {
-							cold_candidates.extend(scope.cold_layer_candidates(*pgno));
+							if let Some(reference) =
+								tx_load_latest_compaction_cold_ref(
+									&tx,
+									&scope,
+									shard_id,
+								)
+								.await?
+							{
+								cold_candidates.push(reference.into());
+							}
+							cold_candidates.extend(
+								scope
+									.cold_layer_candidates(*pgno)
+									.into_iter()
+									.map(ColdPageCandidate::from),
+							);
 							if !cold_candidates.is_empty() {
 								cold_page_candidates.insert(*pgno, cold_candidates);
 							}
@@ -431,7 +448,7 @@ struct GetPagesTxResult {
 	loaded_pidx_rows: Option<Vec<(u32, u64)>>,
 	page_sources: BTreeMap<u32, Vec<u8>>,
 	source_blobs: BTreeMap<Vec<u8>, Vec<u8>>,
-	cold_page_candidates: BTreeMap<u32, Vec<ColdLayerCandidate>>,
+	cold_page_candidates: BTreeMap<u32, Vec<ColdPageCandidate>>,
 	stale_pidx_pgnos: BTreeSet<u32>,
 }
 
@@ -442,10 +459,28 @@ struct ColdLayerCandidate {
 	shard_id: u32,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum ColdPageCandidate {
+	ColdManifestLayer(ColdLayerCandidate),
+	CompactionColdShard(ColdShardRef),
+}
+
+impl From<ColdLayerCandidate> for ColdPageCandidate {
+	fn from(candidate: ColdLayerCandidate) -> Self {
+		Self::ColdManifestLayer(candidate)
+	}
+}
+
+impl From<ColdShardRef> for ColdPageCandidate {
+	fn from(reference: ColdShardRef) -> Self {
+		Self::CompactionColdShard(reference)
+	}
+}
+
 impl Db {
 	async fn load_cold_page_blobs(
 		&self,
-		page_candidates: &BTreeMap<u32, Vec<ColdLayerCandidate>>,
+		page_candidates: &BTreeMap<u32, Vec<ColdPageCandidate>>,
 	) -> Result<BTreeMap<u32, (Vec<u8>, Vec<u8>)>> {
 		if page_candidates.is_empty() || self.cold_tier.is_none() {
 			return Ok(BTreeMap::new());
@@ -457,45 +492,36 @@ impl Db {
 
 		for (pgno, candidates) in page_candidates {
 			for candidate in candidates {
-				for layer in self.find_cold_layers(*candidate).await? {
-					let object_key = layer.object_key.clone();
-					if !loaded_objects.contains_key(&object_key) {
-						let Some(cold_tier) = &self.cold_tier else {
-							continue;
-						};
-						let Some(bytes) = cold_tier
-							.get_object(&object_key)
-							.await
-							.with_context(|| format!("get sqlite cold layer {object_key}"))?
-						else {
-							continue;
-						};
-						loaded_objects.insert(object_key.clone(), bytes);
+				match candidate {
+					ColdPageCandidate::ColdManifestLayer(candidate) => {
+						for layer in self.find_cold_layers(*candidate).await? {
+							if let Some(bytes) = self
+								.load_cold_object_for_page(
+									*pgno,
+									&layer.object_key,
+									&mut loaded_objects,
+									&mut decoded_objects,
+								)
+								.await?
+							{
+								out.insert(*pgno, (cold_source_key(&layer.object_key), bytes));
+								break;
+							}
+						}
 					}
-
-					if !decoded_objects.contains_key(&object_key) {
-						let bytes = loaded_objects
-							.get(&object_key)
-							.expect("cold object should be loaded before decode");
-						let decoded = decode_ltx_v3(bytes)
-							.with_context(|| format!("decode sqlite cold layer {object_key}"))?;
-						decoded_objects.insert(object_key.clone(), decoded);
+					ColdPageCandidate::CompactionColdShard(reference) => {
+						if let Some(bytes) = self
+							.load_cold_object_for_page(
+								*pgno,
+								&reference.object_key,
+								&mut loaded_objects,
+								&mut decoded_objects,
+							)
+							.await?
+						{
+							out.insert(*pgno, (cold_source_key(&reference.object_key), bytes));
+						}
 					}
-
-					if decoded_objects
-						.get(&object_key)
-						.and_then(|decoded| decoded.get_page(*pgno))
-						.is_none()
-					{
-						continue;
-					}
-
-					let bytes = loaded_objects
-						.get(&object_key)
-						.expect("cold object should be loaded before return")
-						.clone();
-					out.insert(*pgno, (cold_source_key(&object_key), bytes));
-					break;
 				}
 				if out.contains_key(pgno) {
 					break;
@@ -504,6 +530,47 @@ impl Db {
 		}
 
 		Ok(out)
+	}
+
+	async fn load_cold_object_for_page(
+		&self,
+		pgno: u32,
+		object_key: &str,
+		loaded_objects: &mut BTreeMap<String, Vec<u8>>,
+		decoded_objects: &mut BTreeMap<String, DecodedLtx>,
+	) -> Result<Option<Vec<u8>>> {
+		if !loaded_objects.contains_key(object_key) {
+			let Some(cold_tier) = &self.cold_tier else {
+				return Ok(None);
+			};
+			let Some(bytes) = cold_tier
+				.get_object(object_key)
+				.await
+				.with_context(|| format!("get sqlite cold layer {object_key}"))?
+			else {
+				return Ok(None);
+			};
+			loaded_objects.insert(object_key.to_string(), bytes);
+		}
+
+		if !decoded_objects.contains_key(object_key) {
+			let bytes = loaded_objects
+				.get(object_key)
+				.expect("cold object should be loaded before decode");
+			let decoded = decode_ltx_v3(bytes)
+				.with_context(|| format!("decode sqlite cold layer {object_key}"))?;
+			decoded_objects.insert(object_key.to_string(), decoded);
+		}
+
+		if decoded_objects
+			.get(object_key)
+			.and_then(|decoded| decoded.get_page(pgno))
+			.is_none()
+		{
+			return Ok(None);
+		}
+
+		Ok(loaded_objects.get(object_key).cloned())
 	}
 
 	async fn find_cold_layers(
@@ -909,6 +976,70 @@ async fn tx_load_latest_shard_blob(
 	}
 
 	Ok(None)
+}
+
+async fn tx_load_latest_compaction_cold_ref(
+	tx: &universaldb::Transaction,
+	scope: &StorageScope,
+	shard_id: u32,
+) -> Result<Option<ColdShardRef>> {
+	let sources = match scope {
+		StorageScope::Branch(plan) => plan.sources.clone(),
+		StorageScope::Legacy => vec![ReadSource::Legacy],
+	};
+
+	for source in sources {
+		let ReadSource::Branch(source) = source else {
+			continue;
+		};
+		let Some(root) = tx_load_compaction_root(tx, source.branch_id).await? else {
+			continue;
+		};
+		let as_of_txid = source.max_txid;
+		let prefix = keys::branch_compaction_cold_shard_version_prefix(source.branch_id, shard_id);
+		let end_key = keys::branch_compaction_cold_shard_key(source.branch_id, shard_id, as_of_txid);
+		let end = end_of_key_range(&end_key);
+		let informal = tx.informal();
+		let mut stream = informal.get_ranges_keyvalues(
+			RangeOption {
+				mode: StreamingMode::WantAll,
+				..(prefix.as_slice(), end.as_slice()).into()
+			},
+			Snapshot,
+		);
+
+		let mut latest = None;
+		while let Some(entry) = stream.try_next().await? {
+			latest = Some(entry.value().to_vec());
+		}
+
+		let Some(value) = latest else {
+			continue;
+		};
+		let reference = decode_cold_shard_ref(&value)?;
+		if reference.shard_id == shard_id
+			&& reference.as_of_txid <= as_of_txid
+			&& reference.publish_generation <= root.manifest_generation
+		{
+			return Ok(Some(reference));
+		}
+	}
+
+	Ok(None)
+}
+
+async fn tx_load_compaction_root(
+	tx: &universaldb::Transaction,
+	branch_id: DatabaseBranchId,
+) -> Result<Option<CompactionRoot>> {
+	let Some(bytes) = tx_get_value(tx, &keys::branch_compaction_root_key(branch_id)).await? else {
+		return Ok(None);
+	};
+	if bytes.is_empty() {
+		return Ok(None);
+	}
+
+	Ok(Some(decode_compaction_root(&bytes)?))
 }
 
 fn decode_branch_pidx_pgno(branch_id: DatabaseBranchId, key: &[u8]) -> Result<u32> {

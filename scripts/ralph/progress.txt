@@ -2,6 +2,7 @@
 - Workflow compaction key helpers live in `engine/packages/depot/src/conveyer/keys.rs`; branch-local manifest/staging keys stay under `BR/{branch_id}/CMP`, while global pin/proof/dirty indexes use reserved partitions `0x70..=0x75`.
 - PITR and workflow compaction limit constants live in `engine/packages/depot/src/conveyer/constants.rs` and are re-exported at the `depot` crate root.
 - Workflow compaction persisted payload structs live in `engine/packages/depot/src/conveyer/types.rs`; expose vbare encode/decode helpers there and cover them from `engine/packages/depot/tests/`.
+- Depot page reads prefer PIDX/DELTA, then latest branch SHARD at or below the read cap, then workflow `CMP/cold_shard` refs and legacy cold manifest layers outside the UDB transaction.
 
 # Ralph Progress Log
 Started: Thu Apr 30 09:07:22 PM PDT 2026
@@ -37,4 +38,19 @@ Started: Thu Apr 30 09:07:22 PM PDT 2026
 - **Learnings for future iterations:**
   - New depot persisted payloads should follow the existing `OwnedVersionedData` wrapper pattern in `conveyer/types.rs`.
   - `gas::prelude::Id` already serializes cleanly through serde_bare/vbare, so workflow job ids can be used directly in persisted payloads.
+---
+## 2026-04-30 21:41:11 PDT - US-003
+- Implemented read-path fallback for the workflow compaction manifest by decoding `CMP/root` and published `CMP/cold_shard` refs.
+- Kept current-read precedence on PIDX/DELTA before SHARD fallback, and allowed missing DELTA chunks to fall through to the latest published branch SHARD at or below the read cap.
+- Added read tests for DELTA-first behavior, missing-DELTA SHARD fallback, absent-manifest compatibility, and published workflow cold-ref fallback.
+- Verified with `cargo test -p depot --test conveyer_read`, `cargo check -p depot`, and `cargo test -p depot`.
+- Files changed:
+  - `engine/packages/depot/src/conveyer/read.rs`
+  - `engine/packages/depot/tests/conveyer_read.rs`
+  - `engine/packages/depot/AGENTS.md`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Read-side workflow compaction support should preserve the existing hot-tier order: PIDX/DELTA wins, SHARD is fallback, cold refs are last.
+  - Cold-tier object reads stay outside the UDB transaction; the transaction only collects candidate object keys and hot-tier blobs.
 ---

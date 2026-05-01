@@ -6,15 +6,17 @@ use rivet_pools::NodeId;
 use depot::{
 	cold_tier::{ColdTier, FilesystemColdTier},
 	keys::{
-		branch_delta_chunk_key, branch_pidx_key, delta_chunk_key, meta_head_key, pidx_delta_key,
+		branch_compaction_cold_shard_key, branch_compaction_root_key, branch_delta_chunk_key,
+		branch_pidx_key, branch_shard_key, delta_chunk_key, meta_head_key, pidx_delta_key,
 		shard_key, shard_version_key, PAGE_SIZE,
 	},
 	ltx::{LtxHeader, encode_ltx_v3},
 	conveyer::{Db, branch},
 	types::{
-		DatabaseBranchId, ColdManifestChunk, ColdManifestChunkRef, ColdManifestIndex, DBHead,
-		DirtyPage, FetchedPage, LayerEntry, LayerKind, SQLITE_STORAGE_COLD_SCHEMA_VERSION,
-		encode_cold_manifest_chunk, encode_cold_manifest_index, encode_db_head,
+		ColdManifestChunk, ColdManifestChunkRef, ColdManifestIndex, ColdShardRef, CompactionRoot,
+		DBHead, DatabaseBranchId, DirtyPage, FetchedPage, LayerEntry, LayerKind,
+		SQLITE_STORAGE_COLD_SCHEMA_VERSION, encode_cold_manifest_chunk,
+		encode_cold_manifest_index, encode_cold_shard_ref, encode_compaction_root, encode_db_head,
 	},
 };
 use tempfile::Builder;
@@ -76,6 +78,38 @@ fn encoded_blob(txid: u64, pages: &[(u32, u8)]) -> Result<Vec<u8>> {
 		.collect::<Vec<_>>();
 
 	encode_ltx_v3(LtxHeader::delta(txid, 1, 999), &pages)
+}
+
+fn compaction_root(manifest_generation: u64) -> CompactionRoot {
+	CompactionRoot {
+		schema_version: 1,
+		manifest_generation,
+		hot_watermark_txid: 0,
+		cold_watermark_txid: 0,
+		cold_watermark_versionstamp: [0; 16],
+	}
+}
+
+fn cold_shard_ref(
+	object_key: String,
+	shard_id: u32,
+	as_of_txid: u64,
+	publish_generation: u64,
+	size_bytes: u64,
+) -> ColdShardRef {
+	ColdShardRef {
+		object_key,
+		object_generation_id: Id::v1(uuid::Uuid::from_u128(0x1234), 7),
+		shard_id,
+		as_of_txid,
+		min_txid: 1,
+		max_txid: as_of_txid,
+		min_versionstamp: [1; 16],
+		max_versionstamp: [2; 16],
+		size_bytes,
+		content_hash: [3; 32],
+		publish_generation,
+	}
 }
 
 async fn read_database_branch_id(db: &universaldb::Database) -> Result<DatabaseBranchId> {
@@ -242,6 +276,143 @@ async fn get_pages_reads_latest_shard_version_not_past_head() -> Result<()> {
 		vec![FetchedPage {
 			pgno: 2,
 			bytes: Some(page(0x44)),
+		}]
+	);
+
+	Ok(())
+}
+
+#[tokio::test]
+async fn get_pages_reads_delta_before_published_branch_shard() -> Result<()> {
+	let db = Arc::new(test_db().await?);
+	let database_db = Db::new(db.clone(), test_ups(), test_namespace(), TEST_DATABASE.to_string(), NodeId::new());
+	database_db.commit(vec![dirty_page(1, 0x11)], 1, 1_000).await?;
+	let branch_id = read_database_branch_id(&db).await?;
+
+	seed(
+		&db,
+		vec![
+			(branch_compaction_root_key(branch_id), encode_compaction_root(compaction_root(1))?),
+			(branch_shard_key(branch_id, 0, 1), encoded_blob(1, &[(1, 0x44)])?),
+		],
+		Vec::new(),
+	)
+	.await?;
+
+	assert_eq!(
+		database_db.get_pages(vec![1]).await?,
+		vec![FetchedPage {
+			pgno: 1,
+			bytes: Some(page(0x11)),
+		}]
+	);
+
+	Ok(())
+}
+
+#[tokio::test]
+async fn get_pages_falls_back_to_published_branch_shard_when_delta_is_missing() -> Result<()> {
+	let db = Arc::new(test_db().await?);
+	let database_db = Db::new(db.clone(), test_ups(), test_namespace(), TEST_DATABASE.to_string(), NodeId::new());
+	database_db.commit(vec![dirty_page(1, 0x11)], 1, 1_000).await?;
+	let branch_id = read_database_branch_id(&db).await?;
+
+	seed(
+		&db,
+		vec![
+			(branch_compaction_root_key(branch_id), encode_compaction_root(compaction_root(1))?),
+			(branch_shard_key(branch_id, 0, 1), encoded_blob(1, &[(1, 0x44)])?),
+		],
+		vec![branch_delta_chunk_key(branch_id, 1, 0)],
+	)
+	.await?;
+
+	assert_eq!(
+		database_db.get_pages(vec![1]).await?,
+		vec![FetchedPage {
+			pgno: 1,
+			bytes: Some(page(0x44)),
+		}]
+	);
+
+	Ok(())
+}
+
+#[tokio::test]
+async fn get_pages_keeps_branch_shard_fallback_without_compaction_root() -> Result<()> {
+	let db = Arc::new(test_db().await?);
+	let database_db = Db::new(db.clone(), test_ups(), test_namespace(), TEST_DATABASE.to_string(), NodeId::new());
+	database_db.commit(vec![dirty_page(1, 0x11)], 1, 1_000).await?;
+	let branch_id = read_database_branch_id(&db).await?;
+
+	seed(
+		&db,
+		vec![(branch_shard_key(branch_id, 0, 1), encoded_blob(1, &[(1, 0x44)])?)],
+		vec![branch_delta_chunk_key(branch_id, 1, 0)],
+	)
+	.await?;
+
+	assert_eq!(
+		database_db.get_pages(vec![1]).await?,
+		vec![FetchedPage {
+			pgno: 1,
+			bytes: Some(page(0x44)),
+		}]
+	);
+
+	Ok(())
+}
+
+#[tokio::test]
+async fn get_pages_falls_back_to_compaction_cold_shard_ref() -> Result<()> {
+	let db = Arc::new(test_db().await?);
+	let cold_root = Builder::new().prefix("depot-read-workflow-cold-").tempdir()?;
+	let tier = Arc::new(FilesystemColdTier::new(cold_root.path()));
+	let database_db = Db::new_with_cold_tier(
+		db.clone(),
+		test_ups(),
+		test_namespace(),
+		TEST_DATABASE.to_string(),
+		NodeId::new(),
+		tier.clone(),
+	);
+	database_db.commit(vec![dirty_page(1, 0x11)], 1, 1_000).await?;
+	let branch_id = read_database_branch_id(&db).await?;
+	let object_key = format!(
+		"db/{}/shard/00000000/0000000000000001-{}-workflow.ltx",
+		branch_id.as_uuid().simple(),
+		Id::v1(uuid::Uuid::from_u128(0x1234), 7)
+	);
+	let object_bytes = encoded_blob(1, &[(1, 0x66)])?;
+
+	tier.put_object(&object_key, &object_bytes).await?;
+	seed(
+		&db,
+		vec![
+			(branch_compaction_root_key(branch_id), encode_compaction_root(compaction_root(2))?),
+			(
+				branch_compaction_cold_shard_key(branch_id, 0, 1),
+				encode_cold_shard_ref(cold_shard_ref(
+					object_key,
+					0,
+					1,
+					2,
+					object_bytes.len() as u64,
+				))?,
+			),
+		],
+		vec![
+			branch_delta_chunk_key(branch_id, 1, 0),
+			branch_pidx_key(branch_id, 1),
+		],
+	)
+	.await?;
+
+	assert_eq!(
+		database_db.get_pages(vec![1]).await?,
+		vec![FetchedPage {
+			pgno: 1,
+			bytes: Some(page(0x66)),
 		}]
 	);
 
