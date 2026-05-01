@@ -7,9 +7,11 @@ use anyhow::{Result, bail};
 use futures_util::TryStreamExt;
 use rivet_pools::NodeId;
 use depot::{
+	cold_tier::{ColdTier, FilesystemColdTier},
 	conveyer::{Db, branch, history_pin},
 	keys::{
-		PAGE_SIZE, branch_commit_key, branch_compaction_root_key,
+		PAGE_SIZE, branch_commit_key, branch_compaction_cold_shard_key,
+		branch_compaction_root_key,
 		branch_compaction_stage_hot_shard_prefix, branch_delta_chunk_key, branch_meta_head_key,
 		branch_pidx_key, branch_shard_key, branch_shard_prefix, branch_vtx_key, branches_list_key,
 		db_pin_key, ns_child_key, ns_fork_pin_key, nscat_by_db_key, sqlite_cmp_dirty_key,
@@ -19,25 +21,38 @@ use depot::{
 		BookmarkStr, BranchState, CommitRow, CompactionRoot, DBHead, DatabaseBranchId, DatabaseBranchRecord,
 		DbHistoryPinKind, DirtyPage, FetchedPage, NamespaceBranchId, NamespaceCatalogDbFact,
 		NamespaceForkFact, SqliteCmpDirty, decode_commit_row, decode_compaction_root,
-		decode_db_history_pin, encode_commit_row, encode_compaction_root,
-		encode_database_branch_record, encode_db_head, encode_namespace_catalog_db_fact,
+		decode_cold_shard_ref, decode_db_head, decode_db_history_pin, encode_commit_row,
+		encode_compaction_root, encode_database_branch_record, encode_db_head,
+		encode_namespace_catalog_db_fact,
 		encode_namespace_fork_fact, encode_sqlite_cmp_dirty,
 	},
 	workflows::compaction::{
 		CompactionJobKind, CompactionJobStatus, DATABASE_BRANCH_ID_TAG, DbColdCompacterWorkflow,
 		DbHotCompacterWorkflow, DbManagerInput, DbManagerState, DbManagerWorkflow,
-		DbReclaimerWorkflow, DeltasAvailable, HotJobInputRange, RunHotJob, RunReclaimJob,
-		TxidRange,
-		database_branch_tag_value,
+		DbReclaimerWorkflow, DeltasAvailable, HotJobInputRange, RunColdJob, RunHotJob,
+		RunReclaimJob, TxidRange, database_branch_tag_value, set_workflow_test_cold_tier_for_test,
 	},
 };
 use gas::db::debug::DatabaseDebug;
 use gas::prelude::{Id, Registry, SignalTrait, TestCtx, WorkflowTrait};
+use tempfile::Builder;
 use universaldb::utils::IsolationLevel::Snapshot;
 use universalpubsub::{PubSub, driver::memory::MemoryDriver};
 use uuid::Uuid;
 
 const TEST_DATABASE: &str = "workflow-compaction-test";
+
+lazy_static::lazy_static! {
+	static ref WORKFLOW_COLD_TEST_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::new(());
+}
+
+struct WorkflowColdTierTestGuard;
+
+impl Drop for WorkflowColdTierTestGuard {
+	fn drop(&mut self) {
+		set_workflow_test_cold_tier_for_test(None);
+	}
+}
 
 fn database_branch_id(value: u128) -> DatabaseBranchId {
 	DatabaseBranchId::from_uuid(Uuid::from_u128(value))
@@ -139,6 +154,30 @@ async fn wait_for_run_hot_job(test_ctx: &TestCtx, hot_workflow_id: Id) -> Result
 
 		if started_at.elapsed() > Duration::from_secs(5) {
 			bail!("timed out waiting for RunHotJob signal");
+		}
+
+		tokio::time::sleep(Duration::from_millis(25)).await;
+	}
+}
+
+async fn wait_for_run_cold_job(test_ctx: &TestCtx, cold_workflow_id: Id) -> Result<RunColdJob> {
+	let started_at = Instant::now();
+
+	loop {
+		let signals = DatabaseDebug::find_signals(
+			test_ctx.debug_db(),
+			&[],
+			Some(cold_workflow_id),
+			Some(<RunColdJob as SignalTrait>::NAME),
+			None,
+		)
+		.await?;
+		if let Some(signal) = signals.into_iter().next() {
+			return Ok(serde_json::from_value(signal.body)?);
+		}
+
+		if started_at.elapsed() > Duration::from_secs(5) {
+			bail!("timed out waiting for RunColdJob signal");
 		}
 
 		tokio::time::sleep(Duration::from_millis(25)).await;
@@ -299,6 +338,52 @@ async fn wait_for_reclaim_delete(
 
 		if started_at.elapsed() > Duration::from_secs(5) {
 			bail!("timed out waiting for reclaim delete");
+		}
+
+		tokio::time::sleep(Duration::from_millis(25)).await;
+	}
+}
+
+async fn wait_for_cold_publish(
+	test_ctx: &TestCtx,
+	database_branch_id: DatabaseBranchId,
+	as_of_txid: u64,
+) -> Result<depot::types::ColdShardRef> {
+	let started_at = Instant::now();
+
+	loop {
+		let root = read_value(test_ctx, branch_compaction_root_key(database_branch_id))
+			.await?
+			.as_deref()
+			.map(decode_compaction_root)
+			.transpose()?;
+		let cold_ref = read_value(
+			test_ctx,
+			branch_compaction_cold_shard_key(database_branch_id, 0, as_of_txid),
+		)
+		.await?
+		.as_deref()
+		.map(decode_cold_shard_ref)
+		.transpose()?;
+
+		if let (Some(root), Some(cold_ref)) = (&root, &cold_ref) {
+			if root.cold_watermark_txid == as_of_txid
+				&& root.cold_watermark_versionstamp[8..16] == as_of_txid.to_be_bytes()
+			{
+				return Ok(cold_ref.clone());
+			}
+		}
+
+		if started_at.elapsed() > Duration::from_secs(5) {
+			let cold_rows = read_prefix_values(
+				test_ctx,
+				depot::keys::branch_compaction_cold_shard_prefix(database_branch_id),
+			)
+			.await?;
+			bail!(
+				"timed out waiting for cold publish: root={root:?} cold_ref={cold_ref:?} cold_rows={}",
+				cold_rows.len()
+			);
 		}
 
 		tokio::time::sleep(Duration::from_millis(25)).await;
@@ -516,6 +601,23 @@ async fn set_test_pidx(
 	db.run(move |tx| async move {
 		tx.informal()
 			.set(&branch_pidx_key(database_branch_id, 1), &txid.to_be_bytes());
+		Ok(())
+	})
+	.await
+}
+
+async fn clear_hot_rows_for_cold_read(
+	test_ctx: &TestCtx,
+	database_branch_id: DatabaseBranchId,
+	txid: u64,
+) -> Result<()> {
+	let db = test_ctx.pools().udb()?;
+	db.run(move |tx| async move {
+		tx.informal()
+			.clear(&branch_shard_key(database_branch_id, 0, txid));
+		tx.informal()
+			.clear(&branch_delta_chunk_key(database_branch_id, txid, 0));
+		tx.informal().clear(&branch_pidx_key(database_branch_id, 1));
 		Ok(())
 	})
 	.await
@@ -969,6 +1071,185 @@ async fn manager_publishes_hot_output_and_reads_through_shard_after_pidx_clear()
 }
 
 #[tokio::test]
+async fn manager_publishes_cold_output_and_reads_through_cold_ref() -> Result<()> {
+	let _cold_test_lock = WORKFLOW_COLD_TEST_LOCK.lock().await;
+	let cold_root = Builder::new()
+		.prefix("depot-workflow-cold-")
+		.tempdir()?;
+	let tier = Arc::new(FilesystemColdTier::new(cold_root.path()));
+	set_workflow_test_cold_tier_for_test(Some(tier.clone()));
+	let _cold_tier_guard = WorkflowColdTierTestGuard;
+
+	let mut test_ctx = TestCtx::new(build_registry()).await?;
+	let udb_pool = test_ctx.pools().udb()?;
+	let udb = Arc::new((*udb_pool).clone());
+	let database_db = Db::new_with_cold_tier(
+		udb,
+		test_ups(),
+		test_namespace(),
+		TEST_DATABASE.to_string(),
+		NodeId::new(),
+		tier.clone(),
+	);
+
+	database_db.commit(vec![dirty_page(1, 1)], 1, 1_001).await?;
+	let database_branch_id = read_database_branch_id(&test_ctx).await?;
+	let tag_value = database_branch_tag_value(database_branch_id);
+	seed_manager_branch(
+		&test_ctx,
+		database_branch_id,
+		cold_threshold_head(),
+		Some(CompactionRoot {
+			schema_version: 1,
+			manifest_generation: 1,
+			hot_watermark_txid: cold_threshold_head(),
+			cold_watermark_txid: 0,
+			cold_watermark_versionstamp: [0; 16],
+		}),
+		None,
+	)
+	.await?;
+	publish_test_shard_and_clear_pidx(&test_ctx, database_branch_id, cold_threshold_head()).await?;
+	let seeded_root = read_value(&test_ctx, branch_compaction_root_key(database_branch_id))
+		.await?
+		.as_deref()
+		.map(decode_compaction_root)
+		.transpose()?
+		.expect("seeded compaction root should exist");
+	assert_eq!(seeded_root.hot_watermark_txid, cold_threshold_head());
+	let seeded_head = read_value(&test_ctx, branch_meta_head_key(database_branch_id))
+		.await?
+		.as_deref()
+		.map(decode_db_head)
+		.transpose()?
+		.expect("seeded head should exist");
+	assert_eq!(seeded_head.head_txid, cold_threshold_head());
+
+	let manager_workflow_id = test_ctx
+		.workflow(DbManagerInput { database_branch_id })
+		.tag(DATABASE_BRANCH_ID_TAG, &tag_value)
+		.unique()
+		.dispatch()
+		.await?;
+	let cold_workflow_id =
+		wait_for_workflow::<DbColdCompacterWorkflow>(&test_ctx, database_branch_id).await?;
+
+	let run_cold_job = wait_for_run_cold_job(&test_ctx, cold_workflow_id).await?;
+	let cold_ref = wait_for_cold_publish(&test_ctx, database_branch_id, cold_threshold_head()).await?;
+	let manager_state =
+		wait_for_manager_state(&test_ctx, manager_workflow_id, |state| state.active_cold_job.is_none())
+			.await?;
+
+	assert!(manager_state.active_cold_job.is_none());
+	assert_eq!(run_cold_job.job_id, cold_ref.object_generation_id);
+	assert_eq!(cold_ref.shard_id, 0);
+	assert_eq!(cold_ref.as_of_txid, cold_threshold_head());
+	assert_eq!(cold_ref.publish_generation, 2);
+	assert!(cold_ref.object_key.starts_with(&format!(
+		"db/{}/shard/00000000/{:016x}-{}-",
+		database_branch_id.as_uuid().simple(),
+		cold_threshold_head(),
+		run_cold_job.job_id
+	)));
+	assert!(cold_ref.object_key.ends_with(".ltx"));
+	assert!(
+		tier.get_object(&cold_ref.object_key)
+			.await?
+			.expect("cold object should be uploaded")
+			.len() > 0
+	);
+
+	clear_hot_rows_for_cold_read(&test_ctx, database_branch_id, cold_threshold_head()).await?;
+	assert_eq!(
+		database_db.get_pages(vec![1]).await?,
+		vec![FetchedPage {
+			pgno: 1,
+			bytes: Some(page(cold_threshold_head() as u8)),
+		}]
+	);
+
+	test_ctx.shutdown().await?;
+	Ok(())
+}
+
+#[tokio::test]
+async fn cold_compacter_rejects_stale_base_generation_without_publish() -> Result<()> {
+	let _cold_test_lock = WORKFLOW_COLD_TEST_LOCK.lock().await;
+	let cold_root = Builder::new()
+		.prefix("depot-workflow-cold-stale-")
+		.tempdir()?;
+	let tier = Arc::new(FilesystemColdTier::new(cold_root.path()));
+	set_workflow_test_cold_tier_for_test(Some(tier.clone()));
+	let _cold_tier_guard = WorkflowColdTierTestGuard;
+
+	let database_branch_id = database_branch_id(0xd0d0_2233_4455_6677_8899_aabb_ccdd_eeff);
+	let tag_value = database_branch_tag_value(database_branch_id);
+	let mut test_ctx = TestCtx::new(build_registry()).await?;
+	seed_manager_branch(
+		&test_ctx,
+		database_branch_id,
+		1,
+		Some(CompactionRoot {
+			schema_version: 1,
+			manifest_generation: 2,
+			hot_watermark_txid: 1,
+			cold_watermark_txid: 0,
+			cold_watermark_versionstamp: [0; 16],
+		}),
+		None,
+	)
+	.await?;
+	publish_test_shard_and_clear_pidx(&test_ctx, database_branch_id, 1).await?;
+
+	let _manager_workflow_id = test_ctx
+		.workflow(DbManagerInput { database_branch_id })
+		.tag(DATABASE_BRANCH_ID_TAG, &tag_value)
+		.unique()
+		.dispatch()
+		.await?;
+	let cold_workflow_id =
+		wait_for_workflow::<DbColdCompacterWorkflow>(&test_ctx, database_branch_id).await?;
+	let mut versionstamp = [0; 16];
+	versionstamp[8..16].copy_from_slice(&1_u64.to_be_bytes());
+	let signal_id = test_ctx
+		.signal(RunColdJob {
+			database_branch_id,
+			job_id: Id::new_v1(42),
+			job_kind: CompactionJobKind::Cold,
+			base_manifest_generation: 1,
+			input_fingerprint: [9; 32],
+			status: CompactionJobStatus::Requested,
+			input_range: depot::workflows::compaction::ColdJobInputRange {
+				txids: TxidRange {
+					min_txid: 1,
+					max_txid: 1,
+				},
+				min_versionstamp: versionstamp,
+				max_versionstamp: versionstamp,
+				max_bytes: 1,
+			},
+		})
+		.to_workflow_id(cold_workflow_id)
+		.send()
+		.await?
+		.expect("signal should target cold compacter workflow");
+	wait_for_signal_ack(&test_ctx, signal_id).await?;
+
+	assert!(
+		read_value(
+			&test_ctx,
+			branch_compaction_cold_shard_key(database_branch_id, 0, 1),
+		)
+		.await?
+		.is_none()
+	);
+	assert!(tier.list_prefix("").await?.is_empty());
+
+	test_ctx.shutdown().await?;
+	Ok(())
+}
+
+#[tokio::test]
 async fn manager_hot_planning_materializes_exact_pinned_txid() -> Result<()> {
 	let database_branch_id = database_branch_id(0x6060_2233_4455_6677_8899_aabb_ccdd_eeff);
 	let tag_value = database_branch_tag_value(database_branch_id);
@@ -1371,4 +1652,8 @@ async fn reclaimer_retains_history_when_namespace_proof_is_ambiguous() -> Result
 
 fn quota_threshold_head() -> u64 {
 	depot::quota::COMPACTION_DELTA_THRESHOLD
+}
+
+fn cold_threshold_head() -> u64 {
+	depot::HOT_BURST_COLD_LAG_THRESHOLD_TXIDS
 }

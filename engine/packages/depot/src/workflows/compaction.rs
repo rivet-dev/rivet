@@ -1,4 +1,8 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::{
+	collections::{BTreeMap, BTreeSet},
+	env,
+	sync::Arc,
+};
 
 use anyhow::{Context, Result, bail, ensure};
 use futures_util::{FutureExt, TryStreamExt};
@@ -16,7 +20,8 @@ use universaldb::{
 use vbare::OwnedVersionedData;
 
 use crate::{
-	CMP_FDB_BATCH_MAX_KEYS, CMP_FDB_BATCH_MAX_VALUE_BYTES, MAX_NAMESPACE_DEPTH,
+	CMP_FDB_BATCH_MAX_KEYS, CMP_FDB_BATCH_MAX_VALUE_BYTES, CMP_S3_UPLOAD_LIMIT_BYTES,
+	CMP_S3_UPLOAD_MAX_OBJECTS, MAX_NAMESPACE_DEPTH,
 	HOT_BURST_COLD_LAG_THRESHOLD_TXIDS,
 	conveyer::{
 		history_pin, keys, quota,
@@ -27,16 +32,23 @@ use crate::{
 			NamespaceForkFact, SqliteCmpDirty, decode_commit_row,
 			decode_compaction_root, decode_database_branch_record, decode_db_head,
 			decode_namespace_catalog_db_fact, decode_namespace_fork_fact, decode_sqlite_cmp_dirty,
-			encode_compaction_root,
+			encode_cold_shard_ref, encode_compaction_root,
 		},
 		udb,
 	},
+	cold_tier::{ColdTier, DisabledColdTier, FilesystemColdTier, S3ColdTier},
 };
 
 pub const SQLITE_COMPACTION_WORKFLOW_PAYLOAD_VERSION: u16 = 1;
 pub const DATABASE_BRANCH_ID_TAG: &str = "database_branch_id";
 
 pub type CompactionInputFingerprint = [u8; 32];
+
+#[cfg(debug_assertions)]
+lazy_static::lazy_static! {
+	static ref WORKFLOW_TEST_COLD_TIER: parking_lot::Mutex<Option<Arc<dyn ColdTier>>> =
+		parking_lot::Mutex::new(None);
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DbManagerInput {
@@ -87,7 +99,7 @@ pub struct HotJobInputRange {
 	pub max_bytes: u64,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct ColdJobInputRange {
 	pub txids: TxidRange,
 	pub min_versionstamp: [u8; 16],
@@ -425,6 +437,39 @@ pub struct InstallHotJobOutput {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Hash)]
+pub struct UploadColdJobInput {
+	pub database_branch_id: DatabaseBranchId,
+	pub job_id: Id,
+	pub job_kind: CompactionJobKind,
+	pub base_manifest_generation: u64,
+	pub input_fingerprint: CompactionInputFingerprint,
+	pub input_range: ColdJobInputRange,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UploadColdJobOutput {
+	pub status: CompactionJobStatus,
+	pub output_refs: Vec<ColdShardRef>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Hash)]
+pub struct PublishColdJobInput {
+	pub database_branch_id: DatabaseBranchId,
+	pub job_id: Id,
+	pub job_kind: CompactionJobKind,
+	pub base_manifest_generation: u64,
+	pub input_fingerprint: CompactionInputFingerprint,
+	pub input_range: ColdJobInputRange,
+	pub output_refs: Vec<ColdShardRef>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PublishColdJobOutput {
+	pub status: CompactionJobStatus,
+	pub output_refs: Vec<ColdShardRef>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Hash)]
 pub struct ReclaimFdbJobInput {
 	pub database_branch_id: DatabaseBranchId,
 	pub job_id: Id,
@@ -449,6 +494,7 @@ pub struct RefreshManagerInput {
 pub struct RefreshManagerOutput {
 	pub planning_deadlines: ManagerPlanningDeadlines,
 	pub planned_hot_job: Option<ActiveCompactionJob>,
+	pub planned_cold_job: Option<ActiveCompactionJob>,
 	pub planned_reclaim_job: Option<ActiveCompactionJob>,
 	pub observed_dirty: Option<SqliteCmpDirty>,
 	pub head_txid: Option<u64>,
@@ -464,6 +510,7 @@ struct ManagerFdbSnapshot {
 	dirty: Option<SqliteCmpDirty>,
 	db_pins: Vec<DbHistoryPin>,
 	hot_inputs: HotInputSnapshot,
+	cold_inputs: ColdInputSnapshot,
 	reclaim_inputs: ReclaimInputSnapshot,
 	namespace_proof_blocked_reclaim: bool,
 	cleared_dirty: bool,
@@ -475,6 +522,23 @@ struct HotInputSnapshot {
 	delta_chunks: Vec<(Vec<u8>, Vec<u8>)>,
 	pidx_entries: Vec<(Vec<u8>, Vec<u8>)>,
 	total_value_bytes: u64,
+}
+
+#[derive(Debug, Default)]
+struct ColdInputSnapshot {
+	commits: Vec<(u64, CommitRow)>,
+	shard_blobs: Vec<ColdShardBlob>,
+	total_value_bytes: u64,
+	min_versionstamp: [u8; 16],
+	max_versionstamp: [u8; 16],
+}
+
+#[derive(Debug, Clone)]
+struct ColdShardBlob {
+	shard_id: u32,
+	as_of_txid: u64,
+	key: Vec<u8>,
+	bytes: Vec<u8>,
 }
 
 #[derive(Debug, Default)]
@@ -587,7 +651,46 @@ pub async fn db_manager(ctx: &mut WorkflowCtx, input: &DbManagerInput) -> Result
 						}
 						DbManagerSignal::ColdJobFinished(signal) => {
 							if signal.database_branch_id == input.database_branch_id {
-								state.active_cold_job = None;
+								if let Some(active_job) = state.active_cold_job.as_ref() {
+									if cold_job_finished_matches_active(&signal, active_job) {
+										match &signal.status {
+											CompactionJobStatus::Requested => {}
+											CompactionJobStatus::Succeeded => {
+												let input_range = match active_job.input_range.clone() {
+													PlannedInputRange::Cold(input_range) => input_range,
+													PlannedInputRange::Hot(_)
+													| PlannedInputRange::Reclaim(_) => {
+														bail!("active cold job carried non-cold input range")
+													}
+												};
+												let publish = ctx
+													.activity(PublishColdJobInput {
+														database_branch_id: signal.database_branch_id,
+														job_id: signal.job_id,
+														job_kind: signal.job_kind,
+														base_manifest_generation: signal
+															.base_manifest_generation,
+														input_fingerprint: signal.input_fingerprint,
+														input_range,
+														output_refs: signal.output_refs.clone(),
+													})
+													.await?;
+												match publish.status {
+													CompactionJobStatus::Requested => {}
+													CompactionJobStatus::Succeeded
+													| CompactionJobStatus::Rejected { .. }
+													| CompactionJobStatus::Failed { .. } => {
+														state.active_cold_job = None
+													}
+												}
+											}
+											CompactionJobStatus::Rejected { .. }
+											| CompactionJobStatus::Failed { .. } => {
+												state.active_cold_job = None
+											}
+										}
+									}
+								}
 							}
 						}
 						DbManagerSignal::ReclaimJobFinished(signal) => {
@@ -664,7 +767,40 @@ pub async fn db_manager(ctx: &mut WorkflowCtx, input: &DbManagerInput) -> Result
 					}
 				}
 
+				if state.active_cold_job.is_none()
+					&& matches!(state.branch_stop_state, BranchStopState::Running)
+				{
+					if let Some(active_job) = refresh.planned_cold_job {
+						let cold_compacter_workflow_id = state
+							.companion_workflow_ids
+							.cold_compacter_workflow_id
+							.context("cold compacter workflow id missing from manager state")?;
+						let input_range = match active_job.input_range.clone() {
+							PlannedInputRange::Cold(input_range) => input_range,
+							PlannedInputRange::Hot(_) | PlannedInputRange::Reclaim(_) => {
+								bail!("planned cold job carried non-cold input range")
+							}
+						};
+
+						ctx.signal(RunColdJob {
+							database_branch_id: active_job.database_branch_id,
+							job_id: active_job.job_id,
+							job_kind: CompactionJobKind::Cold,
+							base_manifest_generation: active_job.base_manifest_generation,
+							input_fingerprint: active_job.input_fingerprint,
+							status: CompactionJobStatus::Requested,
+							input_range,
+						})
+						.to_workflow_id(cold_compacter_workflow_id)
+						.send()
+						.await?;
+
+						state.active_cold_job = Some(active_job);
+					}
+				}
+
 				if state.active_reclaim_job.is_none()
+					&& state.active_cold_job.is_none()
 					&& matches!(state.branch_stop_state, BranchStopState::Running)
 				{
 					if let Some(active_job) = refresh.planned_reclaim_job {
@@ -799,6 +935,16 @@ pub async fn refresh_manager(
 	} else {
 		None
 	};
+	let planned_cold_job = if branch_is_live {
+		plan_cold_job(
+			database_branch_id,
+			&snapshot,
+			Id::new_v1(ctx.config().dc_label()),
+			now_ms,
+		)
+	} else {
+		None
+	};
 	let planned_reclaim_job = if branch_is_live {
 		plan_reclaim_job(
 			database_branch_id,
@@ -813,6 +959,7 @@ pub async fn refresh_manager(
 	Ok(RefreshManagerOutput {
 		planning_deadlines: ManagerPlanningDeadlines::after_refresh(now_ms),
 		planned_hot_job,
+		planned_cold_job,
 		planned_reclaim_job,
 		observed_dirty: if snapshot.cleared_dirty {
 			None
@@ -827,6 +974,16 @@ pub async fn refresh_manager(
 
 fn hot_job_finished_matches_active(
 	signal: &HotJobFinished,
+	active_job: &ActiveCompactionJob,
+) -> bool {
+	signal.job_id == active_job.job_id
+		&& signal.job_kind == active_job.job_kind
+		&& signal.base_manifest_generation == active_job.base_manifest_generation
+		&& signal.input_fingerprint == active_job.input_fingerprint
+}
+
+fn cold_job_finished_matches_active(
+	signal: &ColdJobFinished,
 	active_job: &ActiveCompactionJob,
 ) -> bool {
 	signal.job_id == active_job.job_id
@@ -1156,6 +1313,325 @@ fn rejected_hot_install(reason: impl Into<String>) -> InstallHotJobOutput {
 	}
 }
 
+#[activity(UploadColdJob)]
+pub async fn upload_cold_job(
+	ctx: &ActivityCtx,
+	input: &UploadColdJobInput,
+) -> Result<UploadColdJobOutput> {
+	let input = input.clone();
+	let upload = ctx
+		.udb()?
+		.run(move |tx| {
+			let input = input.clone();
+			async move { prepare_cold_upload_tx(&tx, &input).await }
+		})
+		.await?;
+
+	let PreparedColdUpload {
+		status,
+		output_refs,
+		objects,
+	} = upload;
+	if !matches!(status, CompactionJobStatus::Succeeded) {
+		return Ok(UploadColdJobOutput {
+			status,
+			output_refs: Vec::new(),
+		});
+	}
+
+	let cold_tier = workflow_cold_tier().await?;
+	for object in objects {
+		cold_tier
+			.put_object(&object.object_key, &object.bytes)
+			.await
+			.with_context(|| format!("put sqlite workflow cold shard {}", object.object_key))?;
+	}
+
+	Ok(UploadColdJobOutput {
+		status,
+		output_refs,
+	})
+}
+
+#[derive(Debug)]
+struct PreparedColdUpload {
+	status: CompactionJobStatus,
+	output_refs: Vec<ColdShardRef>,
+	objects: Vec<ColdUploadObject>,
+}
+
+#[derive(Debug)]
+struct ColdUploadObject {
+	object_key: String,
+	bytes: Vec<u8>,
+}
+
+async fn prepare_cold_upload_tx(
+	tx: &universaldb::Transaction,
+	input: &UploadColdJobInput,
+) -> Result<PreparedColdUpload> {
+	if input.job_kind != CompactionJobKind::Cold {
+		return Ok(rejected_cold_upload("cold compacter received a non-cold job"));
+	}
+
+	let branch_record = tx_get_value(
+		tx,
+		&keys::branches_list_key(input.database_branch_id),
+		Serializable,
+	)
+	.await?
+	.as_deref()
+	.map(decode_database_branch_record)
+	.transpose()
+	.context("decode sqlite database branch record for cold upload")?;
+	if !branch_record
+		.as_ref()
+		.is_some_and(|record| record.state == BranchState::Live)
+	{
+		return Ok(rejected_cold_upload("database branch is not live"));
+	}
+
+	let root = tx_get_value(
+		tx,
+		&keys::branch_compaction_root_key(input.database_branch_id),
+		Serializable,
+	)
+	.await?
+	.as_deref()
+	.map(decode_compaction_root)
+	.transpose()
+	.context("decode sqlite compaction root for cold upload")?
+	.unwrap_or(CompactionRoot {
+		schema_version: 1,
+		manifest_generation: 0,
+		hot_watermark_txid: 0,
+		cold_watermark_txid: 0,
+		cold_watermark_versionstamp: [0; 16],
+	});
+	if root.manifest_generation != input.base_manifest_generation {
+		return Ok(rejected_cold_upload("base manifest generation changed"));
+	}
+
+	let cold_inputs =
+		read_cold_input_snapshot(tx, input.database_branch_id, &root, Serializable).await?;
+	if cold_inputs.shard_blobs.is_empty() {
+		return Ok(rejected_cold_upload("no cold shard input is available"));
+	}
+	if cold_inputs.min_versionstamp != input.input_range.min_versionstamp
+		|| cold_inputs.max_versionstamp != input.input_range.max_versionstamp
+	{
+		return Ok(rejected_cold_upload("cold compaction versionstamp bounds changed"));
+	}
+	let input_fingerprint =
+		fingerprint_cold_inputs(input.database_branch_id, &root, &cold_inputs);
+	if input_fingerprint != input.input_fingerprint {
+		return Ok(rejected_cold_upload("cold compaction input fingerprint changed"));
+	}
+
+	let mut output_refs = Vec::with_capacity(cold_inputs.shard_blobs.len());
+	let mut objects = Vec::with_capacity(cold_inputs.shard_blobs.len());
+	let publish_generation = root.manifest_generation.saturating_add(1);
+	for blob in cold_inputs.shard_blobs {
+		if blob.as_of_txid != input.input_range.txids.max_txid {
+			return Ok(rejected_cold_upload("cold shard txid does not match planned range"));
+		}
+		let content_hash = content_hash(&blob.bytes);
+		let object_key = cold_shard_object_key(
+			input.database_branch_id,
+			blob.shard_id,
+			blob.as_of_txid,
+			input.job_id,
+			content_hash,
+		);
+		output_refs.push(ColdShardRef {
+			object_key: object_key.clone(),
+			object_generation_id: input.job_id,
+			shard_id: blob.shard_id,
+			as_of_txid: blob.as_of_txid,
+			min_txid: input.input_range.txids.min_txid,
+			max_txid: blob.as_of_txid,
+			min_versionstamp: input.input_range.min_versionstamp,
+			max_versionstamp: input.input_range.max_versionstamp,
+			size_bytes: u64::try_from(blob.bytes.len()).unwrap_or(u64::MAX),
+			content_hash,
+			publish_generation,
+		});
+		objects.push(ColdUploadObject {
+			object_key,
+			bytes: blob.bytes,
+		});
+	}
+
+	Ok(PreparedColdUpload {
+		status: CompactionJobStatus::Succeeded,
+		output_refs,
+		objects,
+	})
+}
+
+fn rejected_cold_upload(reason: impl Into<String>) -> PreparedColdUpload {
+	PreparedColdUpload {
+		status: CompactionJobStatus::Rejected {
+			reason: reason.into(),
+		},
+		output_refs: Vec::new(),
+		objects: Vec::new(),
+	}
+}
+
+#[activity(PublishColdJob)]
+pub async fn publish_cold_job(
+	ctx: &ActivityCtx,
+	input: &PublishColdJobInput,
+) -> Result<PublishColdJobOutput> {
+	let input = input.clone();
+
+	ctx.udb()?
+		.run(move |tx| {
+			let input = input.clone();
+			async move { publish_cold_job_tx(&tx, &input).await }
+		})
+		.await
+}
+
+async fn publish_cold_job_tx(
+	tx: &universaldb::Transaction,
+	input: &PublishColdJobInput,
+) -> Result<PublishColdJobOutput> {
+	if input.job_kind != CompactionJobKind::Cold {
+		return Ok(rejected_cold_publish("manager received a non-cold job"));
+	}
+
+	let branch_record = tx_get_value(
+		tx,
+		&keys::branches_list_key(input.database_branch_id),
+		Serializable,
+	)
+	.await?
+	.as_deref()
+	.map(decode_database_branch_record)
+	.transpose()
+	.context("decode sqlite database branch record for cold publish")?;
+	if !branch_record
+		.as_ref()
+		.is_some_and(|record| record.state == BranchState::Live)
+	{
+		return Ok(rejected_cold_publish("database branch is not live"));
+	}
+
+	let root = tx_get_value(
+		tx,
+		&keys::branch_compaction_root_key(input.database_branch_id),
+		Serializable,
+	)
+	.await?
+	.as_deref()
+	.map(decode_compaction_root)
+	.transpose()
+	.context("decode sqlite compaction root for cold publish")?
+	.unwrap_or(CompactionRoot {
+		schema_version: 1,
+		manifest_generation: 0,
+		hot_watermark_txid: 0,
+		cold_watermark_txid: 0,
+		cold_watermark_versionstamp: [0; 16],
+	});
+	if root.manifest_generation != input.base_manifest_generation {
+		return Ok(rejected_cold_publish("base manifest generation changed"));
+	}
+
+	let mut db_pins =
+		history_pin::read_db_history_pins(tx, input.database_branch_id, Serializable).await?;
+	if resolve_namespace_fork_pins(tx, input.database_branch_id, &mut db_pins).await? {
+		return Ok(rejected_cold_publish("namespace fork proof is ambiguous"));
+	}
+
+	let cold_inputs =
+		read_cold_input_snapshot(tx, input.database_branch_id, &root, Serializable).await?;
+	if cold_inputs.shard_blobs.is_empty() {
+		return Ok(rejected_cold_publish("no cold shard input is available"));
+	}
+	if cold_inputs.min_versionstamp != input.input_range.min_versionstamp
+		|| cold_inputs.max_versionstamp != input.input_range.max_versionstamp
+	{
+		return Ok(rejected_cold_publish("cold compaction versionstamp bounds changed"));
+	}
+	let input_fingerprint =
+		fingerprint_cold_inputs(input.database_branch_id, &root, &cold_inputs);
+	if input_fingerprint != input.input_fingerprint {
+		return Ok(rejected_cold_publish("cold compaction input fingerprint changed"));
+	}
+
+	let publish_generation = root.manifest_generation.saturating_add(1);
+	let expected_outputs = expected_cold_output_refs(input, &cold_inputs, publish_generation);
+	if expected_outputs != input.output_refs {
+		return Ok(rejected_cold_publish("cold output refs do not match planned inputs"));
+	}
+
+	let mut seen_outputs = BTreeSet::new();
+	for output_ref in &input.output_refs {
+		if !seen_outputs.insert((output_ref.shard_id, output_ref.as_of_txid)) {
+			return Ok(rejected_cold_publish("duplicate cold shard output ref"));
+		}
+		if tx_get_value(
+			tx,
+			&keys::branch_compaction_retired_cold_object_key(
+				input.database_branch_id,
+				content_hash(output_ref.object_key.as_bytes()),
+			),
+			Serializable,
+		)
+		.await?
+		.is_some()
+		{
+			return Ok(rejected_cold_publish("cold object was already retired"));
+		}
+	}
+
+	for output_ref in &input.output_refs {
+		tx.informal().set(
+			&keys::branch_compaction_cold_shard_key(
+				input.database_branch_id,
+				output_ref.shard_id,
+				output_ref.as_of_txid,
+			),
+			&encode_cold_shard_ref(output_ref.clone())
+				.context("encode sqlite cold shard ref for cold publish")?,
+		);
+	}
+
+	let next_root = CompactionRoot {
+		schema_version: root.schema_version,
+		manifest_generation: publish_generation,
+		hot_watermark_txid: root.hot_watermark_txid,
+		cold_watermark_txid: root
+			.cold_watermark_txid
+			.max(input.input_range.txids.max_txid),
+		cold_watermark_versionstamp: root
+			.cold_watermark_versionstamp
+			.max(input.input_range.max_versionstamp),
+	};
+	tx.informal().set(
+		&keys::branch_compaction_root_key(input.database_branch_id),
+		&encode_compaction_root(next_root)
+			.context("encode sqlite compaction root for cold publish")?,
+	);
+
+	Ok(PublishColdJobOutput {
+		status: CompactionJobStatus::Succeeded,
+		output_refs: input.output_refs.clone(),
+	})
+}
+
+fn rejected_cold_publish(reason: impl Into<String>) -> PublishColdJobOutput {
+	PublishColdJobOutput {
+		status: CompactionJobStatus::Rejected {
+			reason: reason.into(),
+		},
+		output_refs: Vec::new(),
+	}
+}
+
 #[activity(ReclaimFdbJob)]
 pub async fn reclaim_fdb_job(
 	ctx: &ActivityCtx,
@@ -1326,6 +1802,7 @@ async fn read_manager_fdb_snapshot(
 	let namespace_proof_blocked_reclaim =
 		resolve_namespace_fork_pins(tx, branch_id, &mut db_pins).await?;
 	let hot_inputs = read_hot_input_snapshot(tx, branch_id, head.as_ref(), &root, Snapshot).await?;
+	let cold_inputs = read_cold_input_snapshot(tx, branch_id, &root, Snapshot).await?;
 	let reclaim_inputs =
 		read_reclaim_input_snapshot(tx, branch_id, &root, &db_pins, Snapshot).await?;
 	let hot_lag = head
@@ -1335,7 +1812,7 @@ async fn read_manager_fdb_snapshot(
 		.as_ref()
 		.map_or(0, |head| head.head_txid.saturating_sub(root.cold_watermark_txid));
 	let has_actionable_lag = hot_lag >= quota::COMPACTION_DELTA_THRESHOLD
-		|| cold_lag >= HOT_BURST_COLD_LAG_THRESHOLD_TXIDS
+		|| (cold_lag >= HOT_BURST_COLD_LAG_THRESHOLD_TXIDS && !cold_inputs.shard_blobs.is_empty())
 		|| reclaim_coverage_is_complete(&reclaim_inputs);
 	let cleared_dirty = if !has_actionable_lag {
 		if let Some(expected_dirty) = dirty_bytes {
@@ -1355,6 +1832,7 @@ async fn read_manager_fdb_snapshot(
 		dirty,
 		db_pins,
 		hot_inputs,
+		cold_inputs,
 		reclaim_inputs,
 		namespace_proof_blocked_reclaim,
 		cleared_dirty,
@@ -1641,11 +2119,6 @@ async fn read_hot_input_snapshot(
 			txid,
 			decode_commit_row(&value).context("decode sqlite commit row for hot planning")?,
 		));
-		if snapshot.commits.len() >= CMP_FDB_BATCH_MAX_KEYS
-			|| snapshot.total_value_bytes >= CMP_FDB_BATCH_MAX_VALUE_BYTES as u64
-		{
-			break;
-		}
 	}
 
 	for (key, value) in
@@ -1717,11 +2190,6 @@ async fn read_reclaim_input_snapshot(
 			versionstamp: commit.versionstamp,
 		});
 		snapshot.commits.push((txid, key, value, commit));
-		if snapshot.commits.len() >= CMP_FDB_BATCH_MAX_KEYS
-			|| snapshot.total_value_bytes >= CMP_FDB_BATCH_MAX_VALUE_BYTES as u64
-		{
-			break;
-		}
 	}
 
 	let selected_txids = snapshot
@@ -1767,6 +2235,73 @@ async fn read_reclaim_input_snapshot(
 		let key = keys::branch_shard_key(branch_id, shard_id, root.hot_watermark_txid);
 		if let Some(value) = tx_get_value(tx, &key, isolation_level).await? {
 			snapshot.coverage_shards.push((key, value));
+		}
+	}
+
+	Ok(snapshot)
+}
+
+async fn read_cold_input_snapshot(
+	tx: &universaldb::Transaction,
+	branch_id: DatabaseBranchId,
+	root: &CompactionRoot,
+	isolation_level: universaldb::utils::IsolationLevel,
+) -> Result<ColdInputSnapshot> {
+	if root.hot_watermark_txid <= root.cold_watermark_txid {
+		return Ok(ColdInputSnapshot::default());
+	}
+
+	let min_txid = root.cold_watermark_txid.saturating_add(1);
+	let max_txid = root.hot_watermark_txid;
+	let mut snapshot = ColdInputSnapshot::default();
+
+	for (key, value) in
+		tx_scan_prefix_values(tx, &keys::branch_commit_prefix(branch_id), isolation_level).await?
+	{
+		let txid = decode_branch_commit_txid(branch_id, &key)?;
+		if txid < min_txid || txid > max_txid {
+			continue;
+		}
+		let commit = decode_commit_row(&value).context("decode sqlite commit row for cold planning")?;
+		if snapshot.commits.is_empty() {
+			snapshot.min_versionstamp = commit.versionstamp;
+			snapshot.max_versionstamp = commit.versionstamp;
+		} else {
+			snapshot.min_versionstamp = snapshot.min_versionstamp.min(commit.versionstamp);
+			snapshot.max_versionstamp = snapshot.max_versionstamp.max(commit.versionstamp);
+		}
+		snapshot.total_value_bytes = snapshot
+			.total_value_bytes
+			.saturating_add(u64::try_from(value.len()).unwrap_or(u64::MAX));
+		snapshot.commits.push((txid, commit));
+	}
+
+	if snapshot.commits.is_empty() {
+		return Ok(ColdInputSnapshot::default());
+	}
+
+	for (key, value) in
+		tx_scan_prefix_values(tx, &keys::branch_shard_prefix(branch_id), isolation_level).await?
+	{
+		let Some((shard_id, as_of_txid)) = decode_branch_shard_version_key(branch_id, &key)? else {
+			continue;
+		};
+		if as_of_txid != max_txid {
+			continue;
+		}
+		snapshot.total_value_bytes = snapshot
+			.total_value_bytes
+			.saturating_add(u64::try_from(value.len()).unwrap_or(u64::MAX));
+		snapshot.shard_blobs.push(ColdShardBlob {
+			shard_id,
+			as_of_txid,
+			key,
+			bytes: value,
+		});
+		if snapshot.shard_blobs.len() >= CMP_S3_UPLOAD_MAX_OBJECTS
+			|| snapshot.total_value_bytes >= CMP_S3_UPLOAD_LIMIT_BYTES as u64
+		{
+			break;
 		}
 	}
 
@@ -1837,6 +2372,9 @@ fn plan_hot_job(
 	now_ms: i64,
 ) -> Option<ActiveCompactionJob> {
 	let head = snapshot.head.as_ref()?;
+	if head.head_txid <= snapshot.root.hot_watermark_txid {
+		return None;
+	}
 	let hot_lag = head.head_txid.saturating_sub(snapshot.root.hot_watermark_txid);
 	let coverage_txids = selected_hot_coverage_txids(&snapshot.root, head, &snapshot.db_pins);
 	let has_uncovered_pin = coverage_txids
@@ -1870,6 +2408,47 @@ fn plan_hot_job(
 		base_manifest_generation: snapshot.root.manifest_generation,
 		input_fingerprint,
 		input_range: PlannedInputRange::Hot(input_range),
+		planned_at_ms: now_ms,
+		attempt: 0,
+	})
+}
+
+fn plan_cold_job(
+	database_branch_id: DatabaseBranchId,
+	snapshot: &ManagerFdbSnapshot,
+	job_id: Id,
+	now_ms: i64,
+) -> Option<ActiveCompactionJob> {
+	if snapshot.cold_inputs.shard_blobs.is_empty() {
+		return None;
+	}
+	let cold_lag = snapshot
+		.root
+		.hot_watermark_txid
+		.saturating_sub(snapshot.root.cold_watermark_txid);
+	if cold_lag < HOT_BURST_COLD_LAG_THRESHOLD_TXIDS {
+		return None;
+	}
+
+	let input_range = ColdJobInputRange {
+		txids: TxidRange {
+			min_txid: snapshot.root.cold_watermark_txid.saturating_add(1),
+			max_txid: snapshot.root.hot_watermark_txid,
+		},
+		min_versionstamp: snapshot.cold_inputs.min_versionstamp,
+		max_versionstamp: snapshot.cold_inputs.max_versionstamp,
+		max_bytes: snapshot.cold_inputs.total_value_bytes,
+	};
+	let input_fingerprint =
+		fingerprint_cold_inputs(database_branch_id, &snapshot.root, &snapshot.cold_inputs);
+
+	Some(ActiveCompactionJob {
+		database_branch_id,
+		job_id,
+		job_kind: CompactionJobKind::Cold,
+		base_manifest_generation: snapshot.root.manifest_generation,
+		input_fingerprint,
+		input_range: PlannedInputRange::Cold(input_range),
 		planned_at_ms: now_ms,
 		attempt: 0,
 	})
@@ -1977,6 +2556,35 @@ fn fingerprint_reclaim_inputs(
 	for (key, value) in &reclaim_inputs.coverage_shards {
 		mix_fingerprint(&mut fingerprint, key);
 		mix_fingerprint(&mut fingerprint, value);
+	}
+	fingerprint
+}
+
+fn fingerprint_cold_inputs(
+	database_branch_id: DatabaseBranchId,
+	root: &CompactionRoot,
+	cold_inputs: &ColdInputSnapshot,
+) -> CompactionInputFingerprint {
+	let mut fingerprint = [0_u8; 32];
+	mix_fingerprint(&mut fingerprint, database_branch_id.as_uuid().as_bytes());
+	mix_fingerprint(&mut fingerprint, &root.manifest_generation.to_be_bytes());
+	mix_fingerprint(&mut fingerprint, &root.hot_watermark_txid.to_be_bytes());
+	mix_fingerprint(&mut fingerprint, &root.cold_watermark_txid.to_be_bytes());
+	mix_fingerprint(&mut fingerprint, &root.cold_watermark_versionstamp);
+	mix_fingerprint(&mut fingerprint, &cold_inputs.min_versionstamp);
+	mix_fingerprint(&mut fingerprint, &cold_inputs.max_versionstamp);
+	for (txid, commit) in &cold_inputs.commits {
+		mix_fingerprint(&mut fingerprint, &txid.to_be_bytes());
+		mix_fingerprint(&mut fingerprint, &commit.wall_clock_ms.to_be_bytes());
+		mix_fingerprint(&mut fingerprint, &commit.versionstamp);
+		mix_fingerprint(&mut fingerprint, &commit.db_size_pages.to_be_bytes());
+		mix_fingerprint(&mut fingerprint, &commit.post_apply_checksum.to_be_bytes());
+	}
+	for blob in &cold_inputs.shard_blobs {
+		mix_fingerprint(&mut fingerprint, &blob.shard_id.to_be_bytes());
+		mix_fingerprint(&mut fingerprint, &blob.as_of_txid.to_be_bytes());
+		mix_fingerprint(&mut fingerprint, &blob.key);
+		mix_fingerprint(&mut fingerprint, &blob.bytes);
 	}
 	fingerprint
 }
@@ -2190,6 +2798,120 @@ fn content_hash(bytes: &[u8]) -> [u8; 32] {
 	hash
 }
 
+fn expected_cold_output_refs(
+	input: &PublishColdJobInput,
+	cold_inputs: &ColdInputSnapshot,
+	publish_generation: u64,
+) -> Vec<ColdShardRef> {
+	cold_inputs
+		.shard_blobs
+		.iter()
+		.map(|blob| {
+			let content_hash = content_hash(&blob.bytes);
+			ColdShardRef {
+				object_key: cold_shard_object_key(
+					input.database_branch_id,
+					blob.shard_id,
+					blob.as_of_txid,
+					input.job_id,
+					content_hash,
+				),
+				object_generation_id: input.job_id,
+				shard_id: blob.shard_id,
+				as_of_txid: blob.as_of_txid,
+				min_txid: input.input_range.txids.min_txid,
+				max_txid: blob.as_of_txid,
+				min_versionstamp: input.input_range.min_versionstamp,
+				max_versionstamp: input.input_range.max_versionstamp,
+				size_bytes: u64::try_from(blob.bytes.len()).unwrap_or(u64::MAX),
+				content_hash,
+				publish_generation,
+			}
+		})
+		.collect()
+}
+
+fn cold_shard_object_key(
+	branch_id: DatabaseBranchId,
+	shard_id: u32,
+	as_of_txid: u64,
+	object_generation_id: Id,
+	content_hash: [u8; 32],
+) -> String {
+	format!(
+		"db/{}/shard/{shard_id:08x}/{as_of_txid:016x}-{object_generation_id}-{}.ltx",
+		branch_id.as_uuid().simple(),
+		hex_lower(&content_hash)
+	)
+}
+
+fn hex_lower(bytes: &[u8]) -> String {
+	const HEX: &[u8; 16] = b"0123456789abcdef";
+	let mut out = String::with_capacity(bytes.len() * 2);
+	for byte in bytes {
+		out.push(HEX[(byte >> 4) as usize] as char);
+		out.push(HEX[(byte & 0x0f) as usize] as char);
+	}
+	out
+}
+
+async fn workflow_cold_tier() -> Result<Arc<dyn ColdTier>> {
+	#[cfg(debug_assertions)]
+	if let Some(cold_tier) = WORKFLOW_TEST_COLD_TIER.lock().clone() {
+		return Ok(cold_tier);
+	}
+
+	if let Ok(root) = env::var("RIVET_SQLITE_WORKFLOW_COLD_TIER_FS_ROOT") {
+		return Ok(Arc::new(FilesystemColdTier::new(root)));
+	}
+
+	if let Ok(bucket) = env::var("RIVET_SQLITE_WORKFLOW_COLD_TIER_S3_BUCKET") {
+		let prefix =
+			env::var("RIVET_SQLITE_WORKFLOW_COLD_TIER_S3_PREFIX").unwrap_or_default();
+		let endpoint_url = env::var("RIVET_SQLITE_WORKFLOW_COLD_TIER_S3_ENDPOINT").ok();
+		return Ok(Arc::new(
+			S3ColdTier::from_env(bucket, prefix, endpoint_url).await?,
+		));
+	}
+
+	Ok(Arc::new(DisabledColdTier))
+}
+
+#[cfg(debug_assertions)]
+pub fn set_workflow_test_cold_tier_for_test(cold_tier: Option<Arc<dyn ColdTier>>) {
+	*WORKFLOW_TEST_COLD_TIER.lock() = cold_tier;
+}
+
+fn decode_branch_shard_version_key(
+	branch_id: DatabaseBranchId,
+	key: &[u8],
+) -> Result<Option<(u32, u64)>> {
+	let prefix = keys::branch_shard_prefix(branch_id);
+	let suffix = key
+		.strip_prefix(prefix.as_slice())
+		.context("branch shard key did not start with expected prefix")?;
+	if suffix.len() == std::mem::size_of::<u32>() {
+		return Ok(None);
+	}
+	if suffix.len() != std::mem::size_of::<u32>() + 1 + std::mem::size_of::<u64>()
+		|| suffix[std::mem::size_of::<u32>()] != b'/'
+	{
+		bail!("branch shard version key suffix had invalid length");
+	}
+	let shard_id = u32::from_be_bytes(
+		suffix[..std::mem::size_of::<u32>()]
+			.try_into()
+			.context("decode branch shard id")?,
+	);
+	let as_of_txid = u64::from_be_bytes(
+		suffix[std::mem::size_of::<u32>() + 1..]
+			.try_into()
+			.context("decode branch shard txid")?,
+	);
+
+	Ok(Some((shard_id, as_of_txid)))
+}
+
 fn decode_branch_commit_txid(branch_id: DatabaseBranchId, key: &[u8]) -> Result<u64> {
 	let prefix = keys::branch_commit_prefix(branch_id);
 	let suffix = key
@@ -2295,16 +3017,13 @@ async fn run_companion_loop(
 							match signal {
 								DbColdCompacterSignal::RunColdJob(signal) => {
 									if signal.database_branch_id == database_branch_id {
-										record_companion_job(
+										run_cold_compaction_job(
+											ctx,
 											state,
 											database_branch_id,
-											CompactionJobKind::Cold,
-											signal.job_id,
-											signal.base_manifest_generation,
-											signal.input_fingerprint,
-											ctx.create_ts(),
-										);
-										*state = CompanionWorkflowState::Idle;
+											signal,
+										)
+										.await?;
 									}
 								}
 								DbColdCompacterSignal::DestroyDatabaseBranch(signal) => {
@@ -2385,6 +3104,53 @@ async fn run_hot_compaction_job(
 		database_branch_id,
 		job_id: signal.job_id,
 		job_kind: CompactionJobKind::Hot,
+		base_manifest_generation: signal.base_manifest_generation,
+		input_fingerprint: signal.input_fingerprint,
+		status: output.status,
+		output_refs: output.output_refs,
+	})
+	.to_workflow::<DbManagerWorkflow>()
+	.tag(DATABASE_BRANCH_ID_TAG, &tag_value)
+	.send()
+	.await?;
+
+	*state = CompanionWorkflowState::Idle;
+
+	Ok(())
+}
+
+async fn run_cold_compaction_job(
+	ctx: &mut WorkflowCtx,
+	state: &mut CompanionWorkflowState,
+	database_branch_id: DatabaseBranchId,
+	signal: RunColdJob,
+) -> Result<()> {
+	record_companion_job(
+		state,
+		database_branch_id,
+		CompactionJobKind::Cold,
+		signal.job_id,
+		signal.base_manifest_generation,
+		signal.input_fingerprint,
+		ctx.create_ts(),
+	);
+
+	let output = ctx
+		.activity(UploadColdJobInput {
+			database_branch_id,
+			job_id: signal.job_id,
+			job_kind: signal.job_kind,
+			base_manifest_generation: signal.base_manifest_generation,
+			input_fingerprint: signal.input_fingerprint,
+			input_range: signal.input_range,
+		})
+		.await?;
+
+	let tag_value = database_branch_tag_value(database_branch_id);
+	ctx.signal(ColdJobFinished {
+		database_branch_id,
+		job_id: signal.job_id,
+		job_kind: CompactionJobKind::Cold,
 		base_manifest_generation: signal.base_manifest_generation,
 		input_fingerprint: signal.input_fingerprint,
 		status: output.status,

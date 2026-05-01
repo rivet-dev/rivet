@@ -318,7 +318,7 @@ pub struct CompactionRoot {
 	pub cold_watermark_versionstamp: [u8; 16],
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct ColdShardRef {
 	pub object_key: String,
 	pub object_generation_id: Id,

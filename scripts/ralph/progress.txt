@@ -12,6 +12,7 @@
 - Unified DB history pin helpers live in `engine/packages/depot/src/conveyer/history_pin.rs`; workflow hot planning carries exact pinned txids in `HotJobInputRange.coverage_txids`.
 - Workflow FDB reclaim is planned by the DB manager from current manifest, DB pins, PIDX, and SHARD coverage, then revalidated and deleted by the reclaimer with `COMPARE_AND_CLEAR`.
 - Namespace fork proof facts are written from namespace/catalog mutation paths; workflow reclaim must resolve `NS_CHILD`/`NS_FORK_PIN` into exact `DB_PIN(kind=NamespaceFork)` records or retain history.
+- Workflow cold compaction uploads through `ColdTier`, publishes `CMP/cold_shard` refs from the DB manager, and should schedule before reclaim so reclaim cannot delete the exact hot inputs cold publish revalidates.
 
 # Ralph Progress Log
 Started: Thu Apr 30 09:07:22 PM PDT 2026
@@ -229,4 +230,20 @@ Started: Thu Apr 30 09:07:22 PM PDT 2026
   - Namespace catalog writes must maintain both `NSCAT` and `NSCAT_BY_DB`, and namespace fork/delete mutations must bump the root `NS_PROOF_EPOCH`.
   - Reclaim planning should treat missing namespace proof rows as a retention blocker instead of an error path.
   - Namespace-derived pins resolve through the branch `VTX` index by taking the latest commit versionstamp at or below the namespace fork cap.
+---
+## 2026-04-30 23:04:55 PDT - US-013
+- Implemented cold workflow upload and manager publish for workflow compaction.
+- The cold compacter now validates branch/root/input fingerprints, uploads deterministic LTX shard objects through `ColdTier`, and reports bounded `ColdShardRef` outputs.
+- The DB manager now accepts matching successful cold jobs, revalidates DB pins, namespace proof state, retired-object absence, and exact cold inputs, then publishes `CMP/cold_shard` refs and advances cold watermarks.
+- Verified with `cargo test -p depot --test workflow_compaction_skeletons cold_ -- --nocapture`, `cargo test -p depot --test workflow_compaction_skeletons -- --nocapture`, `cargo check -p depot`, and `cargo test -p depot`.
+- Files changed:
+  - `engine/packages/depot/src/workflows/compaction.rs`
+  - `engine/packages/depot/src/conveyer/types.rs`
+  - `engine/packages/depot/tests/workflow_compaction_skeletons.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Cold workflow tests that inject a process-global cold tier must serialize with an async test lock and reset the hook with a drop guard.
+  - Cold publish must re-read the same hot `SHARD`/`COMMITS` inputs used by upload so a stale job cannot publish refs after manifest or input drift.
+  - Reclaim scheduling should wait while a cold job is active because cold publish validates hot rows that reclaim may otherwise delete.
 ---
