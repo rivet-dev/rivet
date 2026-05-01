@@ -5,6 +5,7 @@ use uuid::Uuid;
 use vbare::OwnedVersionedData;
 
 pub const SQLITE_STORAGE_META_VERSION: u16 = 1;
+const SQLITE_DATABASE_BRANCH_RECORD_VERSION: u16 = 2;
 pub const SQLITE_STORAGE_COLD_SCHEMA_VERSION: u32 = 1;
 pub const SQLITE_PAGE_SIZE: u32 = crate::keys::PAGE_SIZE;
 
@@ -148,6 +149,7 @@ pub struct ResolvedVersionstamp {
 pub enum BranchState {
 	Live,
 	Frozen,
+	Deleted,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -173,6 +175,7 @@ pub struct DatabaseBranchRecord {
 	pub created_at_ms: i64,
 	pub created_from_bookmark: Option<BookmarkRef>,
 	pub state: BranchState,
+	pub lifecycle_generation: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -465,26 +468,59 @@ impl OwnedVersionedData for VersionedCommitRow {
 	}
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+struct LegacyDatabaseBranchRecord {
+	pub branch_id: DatabaseBranchId,
+	pub namespace_branch: NamespaceBranchId,
+	pub parent: Option<DatabaseBranchId>,
+	pub parent_versionstamp: Option<[u8; 16]>,
+	pub root_versionstamp: [u8; 16],
+	pub fork_depth: u8,
+	pub created_at_ms: i64,
+	pub created_from_bookmark: Option<BookmarkRef>,
+	pub state: BranchState,
+}
+
+impl From<LegacyDatabaseBranchRecord> for DatabaseBranchRecord {
+	fn from(record: LegacyDatabaseBranchRecord) -> Self {
+		DatabaseBranchRecord {
+			branch_id: record.branch_id,
+			namespace_branch: record.namespace_branch,
+			parent: record.parent,
+			parent_versionstamp: record.parent_versionstamp,
+			root_versionstamp: record.root_versionstamp,
+			fork_depth: record.fork_depth,
+			created_at_ms: record.created_at_ms,
+			created_from_bookmark: record.created_from_bookmark,
+			state: record.state,
+			lifecycle_generation: 0,
+		}
+	}
+}
+
 enum VersionedDatabaseBranchRecord {
-	V1(DatabaseBranchRecord),
+	V1(LegacyDatabaseBranchRecord),
+	V2(DatabaseBranchRecord),
 }
 
 impl OwnedVersionedData for VersionedDatabaseBranchRecord {
 	type Latest = DatabaseBranchRecord;
 
 	fn wrap_latest(latest: Self::Latest) -> Self {
-		Self::V1(latest)
+		Self::V2(latest)
 	}
 
 	fn unwrap_latest(self) -> Result<Self::Latest> {
 		match self {
-			Self::V1(data) => Ok(data),
+			Self::V2(data) => Ok(data),
+			Self::V1(_) => bail!("version not latest"),
 		}
 	}
 
 	fn deserialize_version(payload: &[u8], version: u16) -> Result<Self> {
 		match version {
 			1 => Ok(Self::V1(serde_bare::from_slice(payload)?)),
+			2 => Ok(Self::V2(serde_bare::from_slice(payload)?)),
 			_ => bail!("invalid depot DatabaseBranchRecord version: {version}"),
 		}
 	}
@@ -492,7 +528,29 @@ impl OwnedVersionedData for VersionedDatabaseBranchRecord {
 	fn serialize_version(self, _version: u16) -> Result<Vec<u8>> {
 		match self {
 			Self::V1(data) => serde_bare::to_vec(&data).map_err(Into::into),
+			Self::V2(data) => serde_bare::to_vec(&data).map_err(Into::into),
 		}
+	}
+
+	fn deserialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
+		vec![Self::v1_to_v2]
+	}
+
+	fn serialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
+		vec![Self::v2_to_v1]
+	}
+}
+
+impl VersionedDatabaseBranchRecord {
+	fn v1_to_v2(self) -> Result<Self> {
+		match self {
+			Self::V1(data) => Ok(Self::V2(data.into())),
+			Self::V2(_) => bail!("unexpected sqlite database branch record version"),
+		}
+	}
+
+	fn v2_to_v1(self) -> Result<Self> {
+		bail!("cannot downgrade sqlite database branch record from v2 to v1")
 	}
 }
 
@@ -877,7 +935,7 @@ pub fn decode_commit_row(payload: &[u8]) -> Result<CommitRow> {
 
 pub fn encode_database_branch_record(record: DatabaseBranchRecord) -> Result<Vec<u8>> {
 	VersionedDatabaseBranchRecord::wrap_latest(record)
-		.serialize_with_embedded_version(SQLITE_STORAGE_META_VERSION)
+		.serialize_with_embedded_version(SQLITE_DATABASE_BRANCH_RECORD_VERSION)
 		.context("encode sqlite database branch record")
 }
 

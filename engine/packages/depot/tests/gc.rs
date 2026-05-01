@@ -63,6 +63,7 @@ async fn seed_branch(
 				created_at_ms: 1_000,
 				created_from_bookmark: None,
 				state: BranchState::Live,
+				lifecycle_generation: 0,
 			})?,
 		);
 		tx.informal()

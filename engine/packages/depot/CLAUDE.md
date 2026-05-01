@@ -49,6 +49,7 @@ These come from `r2-prior-art/.agent/research/sqlite/requirements.md` and supers
 - **Workflow compaction key helpers live in `conveyer/keys.rs`.** Branch-local manifest/staging keys stay under `BR/{branch_id}/CMP`, while global pin/proof/dirty indexes use reserved partitions `0x70..=0x75`.
 - **Workflow compaction signal and durable state contracts live in `workflows/compaction.rs`.** Add vbare encode/decode helpers and integration coverage when introducing new workflow payloads.
 - **Workflow compaction branch workflows use `DATABASE_BRANCH_ID_TAG` as their only stable unique tag.** The manager stores companion workflow ids before entering its durable loop.
+- **Workflow compaction jobs carry the database branch lifecycle generation.** Stage, publish, and reclaim activities must reject stale work when the branch record is missing, deleted, or generation-changed.
 - **Workflow compaction manager planning runs through `RefreshManager` activities.** Recompute branch lag from FDB, record one active job in durable state, then signal the persistent companion workflow.
 - **Workflow hot compaction writes only staged LTX blobs under `CMP/stage/{job_id}/hot_shard`.** Successful staged results stay as the manager's active hot job until the manager install path publishes or rejects them.
 - **Workflow hot install runs in the DB manager.** It accepts only the active job fingerprint, copies staged hot shards to reader-visible `SHARD`, advances `CMP/root`, and clears matching PIDX rows with `COMPARE_AND_CLEAR`.

@@ -116,6 +116,7 @@ fn active_job(kind: CompactionJobKind) -> ActiveCompactionJob {
 		database_branch_id: database_branch_id(0xaaaa_bbbb_cccc_dddd_eeee_ffff_0000_1111),
 		job_id: gas_id(0x0101_0202_0303_0404_0505_0606_0707_0808, 17),
 		job_kind: kind,
+		base_lifecycle_generation: 7,
 		base_manifest_generation: 41,
 		input_fingerprint: fingerprint(5),
 		input_range,
@@ -234,6 +235,7 @@ fn manager_signals_round_trip_with_embedded_version() {
 	assert_round_trip!(
 		DestroyDatabaseBranch {
 			database_branch_id,
+			lifecycle_generation: 7,
 			requested_at_ms: 1_714_000_010_000,
 			reason: "branch deleted".into(),
 		},
@@ -251,6 +253,7 @@ fn companion_signals_round_trip_with_embedded_version() {
 			database_branch_id,
 			job_id: gas_id(0x4000_5000_6000_7000_8000_9000_a000_b000, 13),
 			job_kind: CompactionJobKind::Hot,
+			base_lifecycle_generation: 7,
 			base_manifest_generation: 44,
 			input_fingerprint: fingerprint(9),
 			status: CompactionJobStatus::Requested,
@@ -265,6 +268,7 @@ fn companion_signals_round_trip_with_embedded_version() {
 			database_branch_id,
 			job_id: gas_id(0x5000_6000_7000_8000_9000_a000_b000_c000, 14),
 			job_kind: CompactionJobKind::Cold,
+			base_lifecycle_generation: 8,
 			base_manifest_generation: 45,
 			input_fingerprint: fingerprint(10),
 			status: CompactionJobStatus::Requested,
@@ -279,6 +283,7 @@ fn companion_signals_round_trip_with_embedded_version() {
 			database_branch_id,
 			job_id: gas_id(0x6000_7000_8000_9000_a000_b000_c000_d000, 15),
 			job_kind: CompactionJobKind::Reclaim,
+			base_lifecycle_generation: 9,
 			base_manifest_generation: 46,
 			input_fingerprint: fingerprint(11),
 			status: CompactionJobStatus::Requested,
@@ -334,6 +339,7 @@ fn workflow_states_round_trip_with_embedded_version() {
 				final_settle_check_at_ms: Some(1_714_000_070_000),
 			},
 			branch_stop_state: BranchStopState::DestroyRequested {
+				lifecycle_generation: 7,
 				requested_at_ms: 1_714_000_080_000,
 				reason: "delete requested".into(),
 			},
@@ -351,6 +357,7 @@ fn workflow_states_round_trip_with_embedded_version() {
 			database_branch_id: database_branch_id(0xaaaa_bbbb_cccc_dddd_eeee_ffff_0000_2222),
 			job_id: gas_id(0xa000_b000_c000_d000_e000_f000_0001_0002, 23),
 			job_kind: CompactionJobKind::Hot,
+			base_lifecycle_generation: 7,
 			base_manifest_generation: 47,
 			input_fingerprint: fingerprint(12),
 			started_at_ms: 1_714_000_090_000,
@@ -363,6 +370,7 @@ fn workflow_states_round_trip_with_embedded_version() {
 	assert_round_trip!(
 		CompanionWorkflowState::Stopping {
 			active_job: None,
+			lifecycle_generation: 7,
 			requested_at_ms: 1_714_000_100_000,
 			reason: "branch deleted".into(),
 		},

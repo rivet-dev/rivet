@@ -208,6 +208,7 @@ pub struct ReclaimJobFinished {
 #[signal("depot_sqlite_cmp_destroy_database_branch")]
 pub struct DestroyDatabaseBranch {
 	pub database_branch_id: DatabaseBranchId,
+	pub lifecycle_generation: u64,
 	pub requested_at_ms: i64,
 	pub reason: String,
 }
@@ -218,6 +219,7 @@ pub struct RunHotJob {
 	pub database_branch_id: DatabaseBranchId,
 	pub job_id: Id,
 	pub job_kind: CompactionJobKind,
+	pub base_lifecycle_generation: u64,
 	pub base_manifest_generation: u64,
 	pub input_fingerprint: CompactionInputFingerprint,
 	pub status: CompactionJobStatus,
@@ -230,6 +232,7 @@ pub struct RunColdJob {
 	pub database_branch_id: DatabaseBranchId,
 	pub job_id: Id,
 	pub job_kind: CompactionJobKind,
+	pub base_lifecycle_generation: u64,
 	pub base_manifest_generation: u64,
 	pub input_fingerprint: CompactionInputFingerprint,
 	pub status: CompactionJobStatus,
@@ -242,6 +245,7 @@ pub struct RunReclaimJob {
 	pub database_branch_id: DatabaseBranchId,
 	pub job_id: Id,
 	pub job_kind: CompactionJobKind,
+	pub base_lifecycle_generation: u64,
 	pub base_manifest_generation: u64,
 	pub input_fingerprint: CompactionInputFingerprint,
 	pub status: CompactionJobStatus,
@@ -310,6 +314,7 @@ pub struct ActiveCompactionJob {
 	pub database_branch_id: DatabaseBranchId,
 	pub job_id: Id,
 	pub job_kind: CompactionJobKind,
+	pub base_lifecycle_generation: u64,
 	pub base_manifest_generation: u64,
 	pub input_fingerprint: CompactionInputFingerprint,
 	pub input_range: PlannedInputRange,
@@ -384,8 +389,16 @@ impl ManagerPlanningDeadlines {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum BranchStopState {
 	Running,
-	DestroyRequested { requested_at_ms: i64, reason: String },
-	Stopping { requested_at_ms: i64, reason: String },
+	DestroyRequested {
+		lifecycle_generation: u64,
+		requested_at_ms: i64,
+		reason: String,
+	},
+	Stopping {
+		lifecycle_generation: u64,
+		requested_at_ms: i64,
+		reason: String,
+	},
 	Stopped { stopped_at_ms: i64 },
 }
 
@@ -401,6 +414,7 @@ pub enum CompanionWorkflowState {
 	Running(CompanionRunningJob),
 	Stopping {
 		active_job: Option<CompanionRunningJob>,
+		lifecycle_generation: u64,
 		requested_at_ms: i64,
 		reason: String,
 	},
@@ -411,6 +425,7 @@ pub struct CompanionRunningJob {
 	pub database_branch_id: DatabaseBranchId,
 	pub job_id: Id,
 	pub job_kind: CompactionJobKind,
+	pub base_lifecycle_generation: u64,
 	pub base_manifest_generation: u64,
 	pub input_fingerprint: CompactionInputFingerprint,
 	pub started_at_ms: i64,
@@ -422,6 +437,7 @@ pub struct StageHotJobInput {
 	pub database_branch_id: DatabaseBranchId,
 	pub job_id: Id,
 	pub job_kind: CompactionJobKind,
+	pub base_lifecycle_generation: u64,
 	pub base_manifest_generation: u64,
 	pub input_fingerprint: CompactionInputFingerprint,
 	pub input_range: HotJobInputRange,
@@ -438,6 +454,7 @@ pub struct InstallHotJobInput {
 	pub database_branch_id: DatabaseBranchId,
 	pub job_id: Id,
 	pub job_kind: CompactionJobKind,
+	pub base_lifecycle_generation: u64,
 	pub base_manifest_generation: u64,
 	pub input_fingerprint: CompactionInputFingerprint,
 	pub input_range: HotJobInputRange,
@@ -455,6 +472,7 @@ pub struct UploadColdJobInput {
 	pub database_branch_id: DatabaseBranchId,
 	pub job_id: Id,
 	pub job_kind: CompactionJobKind,
+	pub base_lifecycle_generation: u64,
 	pub base_manifest_generation: u64,
 	pub input_fingerprint: CompactionInputFingerprint,
 	pub input_range: ColdJobInputRange,
@@ -471,6 +489,7 @@ pub struct PublishColdJobInput {
 	pub database_branch_id: DatabaseBranchId,
 	pub job_id: Id,
 	pub job_kind: CompactionJobKind,
+	pub base_lifecycle_generation: u64,
 	pub base_manifest_generation: u64,
 	pub input_fingerprint: CompactionInputFingerprint,
 	pub input_range: ColdJobInputRange,
@@ -488,6 +507,7 @@ pub struct ReclaimFdbJobInput {
 	pub database_branch_id: DatabaseBranchId,
 	pub job_id: Id,
 	pub job_kind: CompactionJobKind,
+	pub base_lifecycle_generation: u64,
 	pub base_manifest_generation: u64,
 	pub input_fingerprint: CompactionInputFingerprint,
 	pub input_range: ReclaimJobInputRange,
@@ -504,6 +524,7 @@ pub struct RetireColdObjectsInput {
 	pub database_branch_id: DatabaseBranchId,
 	pub job_id: Id,
 	pub job_kind: CompactionJobKind,
+	pub base_lifecycle_generation: u64,
 	pub base_manifest_generation: u64,
 	pub input_fingerprint: CompactionInputFingerprint,
 	pub cold_objects: Vec<ReclaimColdObjectRef>,
@@ -556,6 +577,7 @@ pub struct RefreshManagerOutput {
 	pub observed_dirty: Option<SqliteCmpDirty>,
 	pub head_txid: Option<u64>,
 	pub branch_is_live: bool,
+	pub branch_lifecycle_generation: Option<u64>,
 	pub db_pin_count: usize,
 }
 
@@ -682,6 +704,8 @@ pub async fn db_manager(ctx: &mut WorkflowCtx, input: &DbManagerInput) -> Result
 														database_branch_id: signal.database_branch_id,
 														job_id: signal.job_id,
 														job_kind: signal.job_kind,
+														base_lifecycle_generation: active_job
+															.base_lifecycle_generation,
 														base_manifest_generation: signal
 															.base_manifest_generation,
 														input_fingerprint: signal.input_fingerprint,
@@ -726,6 +750,8 @@ pub async fn db_manager(ctx: &mut WorkflowCtx, input: &DbManagerInput) -> Result
 														database_branch_id: signal.database_branch_id,
 														job_id: signal.job_id,
 														job_kind: signal.job_kind,
+														base_lifecycle_generation: active_job
+															.base_lifecycle_generation,
 														base_manifest_generation: signal
 															.base_manifest_generation,
 														input_fingerprint: signal.input_fingerprint,
@@ -770,12 +796,37 @@ pub async fn db_manager(ctx: &mut WorkflowCtx, input: &DbManagerInput) -> Result
 						DbManagerSignal::DestroyDatabaseBranch(signal) => {
 							if signal.database_branch_id == input.database_branch_id {
 								state.branch_stop_state = BranchStopState::DestroyRequested {
+									lifecycle_generation: signal.lifecycle_generation,
 									requested_at_ms: signal.requested_at_ms,
 									reason: signal.reason,
 								};
 							}
 						}
 					}
+				}
+
+				if let BranchStopState::DestroyRequested {
+					lifecycle_generation,
+					requested_at_ms,
+					reason,
+				} = state.branch_stop_state.clone()
+				{
+					signal_companions_destroy(
+						ctx,
+						input.database_branch_id,
+						&state.companion_workflow_ids,
+						lifecycle_generation,
+						requested_at_ms,
+						reason.clone(),
+					)
+					.await?;
+					state.active_hot_job = None;
+					state.active_cold_job = None;
+					state.active_reclaim_job = None;
+					state.branch_stop_state = BranchStopState::Stopped {
+						stopped_at_ms: ctx.create_ts(),
+					};
+					return Ok(Loop::Break(()));
 				}
 
 				let refresh = ctx
@@ -791,6 +842,28 @@ pub async fn db_manager(ctx: &mut WorkflowCtx, input: &DbManagerInput) -> Result
 						observed_head_txid: dirty.observed_head_txid,
 						dirty_updated_at_ms: dirty.updated_at_ms,
 					});
+				}
+				if !refresh.branch_is_live
+					&& matches!(state.branch_stop_state, BranchStopState::Running)
+				{
+					let lifecycle_generation =
+						refresh.branch_lifecycle_generation.unwrap_or_default();
+					signal_companions_destroy(
+						ctx,
+						input.database_branch_id,
+						&state.companion_workflow_ids,
+						lifecycle_generation,
+						ctx.create_ts(),
+						"database branch is not live".to_string(),
+					)
+					.await?;
+					state.active_hot_job = None;
+					state.active_cold_job = None;
+					state.active_reclaim_job = None;
+					state.branch_stop_state = BranchStopState::Stopped {
+						stopped_at_ms: ctx.create_ts(),
+					};
+					return Ok(Loop::Break(()));
 				}
 
 				if state.active_hot_job.is_none()
@@ -812,6 +885,7 @@ pub async fn db_manager(ctx: &mut WorkflowCtx, input: &DbManagerInput) -> Result
 							database_branch_id: active_job.database_branch_id,
 							job_id: active_job.job_id,
 							job_kind: CompactionJobKind::Hot,
+							base_lifecycle_generation: active_job.base_lifecycle_generation,
 							base_manifest_generation: active_job.base_manifest_generation,
 							input_fingerprint: active_job.input_fingerprint,
 							status: CompactionJobStatus::Requested,
@@ -844,6 +918,7 @@ pub async fn db_manager(ctx: &mut WorkflowCtx, input: &DbManagerInput) -> Result
 							database_branch_id: active_job.database_branch_id,
 							job_id: active_job.job_id,
 							job_kind: CompactionJobKind::Cold,
+							base_lifecycle_generation: active_job.base_lifecycle_generation,
 							base_manifest_generation: active_job.base_manifest_generation,
 							input_fingerprint: active_job.input_fingerprint,
 							status: CompactionJobStatus::Requested,
@@ -877,6 +952,7 @@ pub async fn db_manager(ctx: &mut WorkflowCtx, input: &DbManagerInput) -> Result
 							database_branch_id: active_job.database_branch_id,
 							job_id: active_job.job_id,
 							job_kind: CompactionJobKind::Reclaim,
+							base_lifecycle_generation: active_job.base_lifecycle_generation,
 							base_manifest_generation: active_job.base_manifest_generation,
 							input_fingerprint: active_job.input_fingerprint,
 							status: CompactionJobStatus::Requested,
@@ -944,6 +1020,48 @@ async fn dispatch_companion_workflows(
 	))
 }
 
+async fn signal_companions_destroy(
+	ctx: &mut WorkflowCtx,
+	database_branch_id: DatabaseBranchId,
+	companion_workflow_ids: &CompanionWorkflowIds,
+	lifecycle_generation: u64,
+	requested_at_ms: i64,
+	reason: String,
+) -> Result<()> {
+	let destroy = DestroyDatabaseBranch {
+		database_branch_id,
+		lifecycle_generation,
+		requested_at_ms,
+		reason,
+	};
+
+	let hot_compacter_workflow_id = companion_workflow_ids
+		.hot_compacter_workflow_id
+		.context("hot compacter workflow id missing from manager state")?;
+	ctx.signal(destroy.clone())
+		.to_workflow_id(hot_compacter_workflow_id)
+		.send()
+		.await?;
+
+	let cold_compacter_workflow_id = companion_workflow_ids
+		.cold_compacter_workflow_id
+		.context("cold compacter workflow id missing from manager state")?;
+	ctx.signal(destroy.clone())
+		.to_workflow_id(cold_compacter_workflow_id)
+		.send()
+		.await?;
+
+	let reclaimer_workflow_id = companion_workflow_ids
+		.reclaimer_workflow_id
+		.context("reclaimer workflow id missing from manager state")?;
+	ctx.signal(destroy)
+		.to_workflow_id(reclaimer_workflow_id)
+		.send()
+		.await?;
+
+	Ok(())
+}
+
 async fn listen_for_manager_signals(
 	ctx: &mut WorkflowCtx,
 	planning_deadlines: &ManagerPlanningDeadlines,
@@ -982,6 +1100,10 @@ pub async fn refresh_manager(
 		.branch_record
 		.as_ref()
 		.is_some_and(|record| record.state == BranchState::Live);
+	let branch_lifecycle_generation = snapshot
+		.branch_record
+		.as_ref()
+		.map(|record| record.lifecycle_generation);
 	let head_txid = snapshot.head.as_ref().map(|head| head.head_txid);
 	let planned_hot_job = if branch_is_live {
 		plan_hot_job(
@@ -1026,6 +1148,7 @@ pub async fn refresh_manager(
 		},
 		head_txid,
 		branch_is_live,
+		branch_lifecycle_generation,
 		db_pin_count: snapshot.db_pins.len(),
 	})
 }
@@ -1058,6 +1181,15 @@ fn reclaim_job_finished_matches_active(
 		&& signal.job_kind == active_job.job_kind
 		&& signal.base_manifest_generation == active_job.base_manifest_generation
 		&& signal.input_fingerprint == active_job.input_fingerprint
+}
+
+fn branch_record_is_live_at_generation(
+	branch_record: Option<&DatabaseBranchRecord>,
+	lifecycle_generation: u64,
+) -> bool {
+	branch_record.is_some_and(|record| {
+		record.state == BranchState::Live && record.lifecycle_generation == lifecycle_generation
+	})
 }
 
 #[activity(StageHotJob)]
@@ -1093,11 +1225,11 @@ async fn stage_hot_job_tx(
 	.map(decode_database_branch_record)
 	.transpose()
 	.context("decode sqlite database branch record for hot compaction")?;
-	if !branch_record
-		.as_ref()
-		.is_some_and(|record| record.state == BranchState::Live)
-	{
-		return Ok(rejected_hot_job("database branch is not live"));
+	if !branch_record_is_live_at_generation(
+		branch_record.as_ref(),
+		input.base_lifecycle_generation,
+	) {
+		return Ok(rejected_hot_job("database branch lifecycle changed"));
 	}
 
 	let root = tx_get_value(
@@ -1206,11 +1338,11 @@ async fn install_hot_job_tx(
 	.map(decode_database_branch_record)
 	.transpose()
 	.context("decode sqlite database branch record for hot install")?;
-	if !branch_record
-		.as_ref()
-		.is_some_and(|record| record.state == BranchState::Live)
-	{
-		return Ok(rejected_hot_install("database branch is not live"));
+	if !branch_record_is_live_at_generation(
+		branch_record.as_ref(),
+		input.base_lifecycle_generation,
+	) {
+		return Ok(rejected_hot_install("database branch lifecycle changed"));
 	}
 
 	let root = tx_get_value(
@@ -1442,11 +1574,11 @@ async fn prepare_cold_upload_tx(
 	.map(decode_database_branch_record)
 	.transpose()
 	.context("decode sqlite database branch record for cold upload")?;
-	if !branch_record
-		.as_ref()
-		.is_some_and(|record| record.state == BranchState::Live)
-	{
-		return Ok(rejected_cold_upload("database branch is not live"));
+	if !branch_record_is_live_at_generation(
+		branch_record.as_ref(),
+		input.base_lifecycle_generation,
+	) {
+		return Ok(rejected_cold_upload("database branch lifecycle changed"));
 	}
 
 	let root = tx_get_value(
@@ -1570,11 +1702,11 @@ async fn publish_cold_job_tx(
 	.map(decode_database_branch_record)
 	.transpose()
 	.context("decode sqlite database branch record for cold publish")?;
-	if !branch_record
-		.as_ref()
-		.is_some_and(|record| record.state == BranchState::Live)
-	{
-		return Ok(rejected_cold_publish("database branch is not live"));
+	if !branch_record_is_live_at_generation(
+		branch_record.as_ref(),
+		input.base_lifecycle_generation,
+	) {
+		return Ok(rejected_cold_publish("database branch lifecycle changed"));
 	}
 
 	let root = tx_get_value(
@@ -1723,11 +1855,11 @@ async fn reclaim_fdb_job_tx(
 	.map(decode_database_branch_record)
 	.transpose()
 	.context("decode sqlite database branch record for FDB reclaim")?;
-	if !branch_record
-		.as_ref()
-		.is_some_and(|record| record.state == BranchState::Live)
-	{
-		return Ok(rejected_reclaim_job("database branch is not live"));
+	if !branch_record_is_live_at_generation(
+		branch_record.as_ref(),
+		input.base_lifecycle_generation,
+	) {
+		return Ok(rejected_reclaim_job("database branch lifecycle changed"));
 	}
 
 	let root = tx_get_value(
@@ -1879,11 +2011,11 @@ async fn retire_cold_objects_tx(
 	.map(decode_database_branch_record)
 	.transpose()
 	.context("decode sqlite database branch record for cold retire")?;
-	if !branch_record
-		.as_ref()
-		.is_some_and(|record| record.state == BranchState::Live)
-	{
-		return Ok(rejected_cold_object_retire("database branch is not live"));
+	if !branch_record_is_live_at_generation(
+		branch_record.as_ref(),
+		input.base_lifecycle_generation,
+	) {
+		return Ok(rejected_cold_object_retire("database branch lifecycle changed"));
 	}
 
 	let root = tx_get_value(
@@ -2801,6 +2933,7 @@ fn plan_hot_job(
 	job_id: Id,
 	now_ms: i64,
 ) -> Option<ActiveCompactionJob> {
+	let branch_record = snapshot.branch_record.as_ref()?;
 	let head = snapshot.head.as_ref()?;
 	if head.head_txid <= snapshot.root.hot_watermark_txid {
 		return None;
@@ -2835,6 +2968,7 @@ fn plan_hot_job(
 		database_branch_id,
 		job_id,
 		job_kind: CompactionJobKind::Hot,
+		base_lifecycle_generation: branch_record.lifecycle_generation,
 		base_manifest_generation: snapshot.root.manifest_generation,
 		input_fingerprint,
 		input_range: PlannedInputRange::Hot(input_range),
@@ -2849,6 +2983,7 @@ fn plan_cold_job(
 	job_id: Id,
 	now_ms: i64,
 ) -> Option<ActiveCompactionJob> {
+	let branch_record = snapshot.branch_record.as_ref()?;
 	if snapshot.cold_inputs.shard_blobs.is_empty() {
 		return None;
 	}
@@ -2876,6 +3011,7 @@ fn plan_cold_job(
 		database_branch_id,
 		job_id,
 		job_kind: CompactionJobKind::Cold,
+		base_lifecycle_generation: branch_record.lifecycle_generation,
 		base_manifest_generation: snapshot.root.manifest_generation,
 		input_fingerprint,
 		input_range: PlannedInputRange::Cold(input_range),
@@ -2890,6 +3026,7 @@ fn plan_reclaim_job(
 	job_id: Id,
 	now_ms: i64,
 ) -> Option<ActiveCompactionJob> {
+	let branch_record = snapshot.branch_record.as_ref()?;
 	if snapshot.namespace_proof_blocked_reclaim {
 		return None;
 	}
@@ -2931,6 +3068,7 @@ fn plan_reclaim_job(
 		database_branch_id,
 		job_id,
 		job_kind: CompactionJobKind::Reclaim,
+		base_lifecycle_generation: branch_record.lifecycle_generation,
 		base_manifest_generation: snapshot.root.manifest_generation,
 		input_fingerprint,
 		input_range: PlannedInputRange::Reclaim(input_range),
@@ -3478,6 +3616,7 @@ async fn run_companion_loop(
 									if signal.database_branch_id == database_branch_id {
 										record_companion_stop(
 											state,
+											signal.lifecycle_generation,
 											signal.requested_at_ms,
 											signal.reason,
 										);
@@ -3504,6 +3643,7 @@ async fn run_companion_loop(
 									if signal.database_branch_id == database_branch_id {
 										record_companion_stop(
 											state,
+											signal.lifecycle_generation,
 											signal.requested_at_ms,
 											signal.reason,
 										);
@@ -3525,6 +3665,7 @@ async fn run_companion_loop(
 									if signal.database_branch_id == database_branch_id {
 										record_companion_stop(
 											state,
+											signal.lifecycle_generation,
 											signal.requested_at_ms,
 											signal.reason,
 										);
@@ -3552,11 +3693,15 @@ async fn run_hot_compaction_job(
 	database_branch_id: DatabaseBranchId,
 	signal: RunHotJob,
 ) -> Result<()> {
+	if matches!(state, CompanionWorkflowState::Stopping { .. }) {
+		return Ok(());
+	}
 	record_companion_job(
 		state,
 		database_branch_id,
 		CompactionJobKind::Hot,
 		signal.job_id,
+		signal.base_lifecycle_generation,
 		signal.base_manifest_generation,
 		signal.input_fingerprint,
 		ctx.create_ts(),
@@ -3567,6 +3712,7 @@ async fn run_hot_compaction_job(
 			database_branch_id,
 			job_id: signal.job_id,
 			job_kind: signal.job_kind,
+			base_lifecycle_generation: signal.base_lifecycle_generation,
 			base_manifest_generation: signal.base_manifest_generation,
 			input_fingerprint: signal.input_fingerprint,
 			input_range: signal.input_range,
@@ -3599,11 +3745,15 @@ async fn run_cold_compaction_job(
 	database_branch_id: DatabaseBranchId,
 	signal: RunColdJob,
 ) -> Result<()> {
+	if matches!(state, CompanionWorkflowState::Stopping { .. }) {
+		return Ok(());
+	}
 	record_companion_job(
 		state,
 		database_branch_id,
 		CompactionJobKind::Cold,
 		signal.job_id,
+		signal.base_lifecycle_generation,
 		signal.base_manifest_generation,
 		signal.input_fingerprint,
 		ctx.create_ts(),
@@ -3614,6 +3764,7 @@ async fn run_cold_compaction_job(
 			database_branch_id,
 			job_id: signal.job_id,
 			job_kind: signal.job_kind,
+			base_lifecycle_generation: signal.base_lifecycle_generation,
 			base_manifest_generation: signal.base_manifest_generation,
 			input_fingerprint: signal.input_fingerprint,
 			input_range: signal.input_range,
@@ -3646,11 +3797,15 @@ async fn run_reclaim_job(
 	database_branch_id: DatabaseBranchId,
 	signal: RunReclaimJob,
 ) -> Result<()> {
+	if matches!(state, CompanionWorkflowState::Stopping { .. }) {
+		return Ok(());
+	}
 	record_companion_job(
 		state,
 		database_branch_id,
 		CompactionJobKind::Reclaim,
 		signal.job_id,
+		signal.base_lifecycle_generation,
 		signal.base_manifest_generation,
 		signal.input_fingerprint,
 		ctx.create_ts(),
@@ -3661,6 +3816,7 @@ async fn run_reclaim_job(
 			database_branch_id,
 			job_id: signal.job_id,
 			job_kind: signal.job_kind,
+			base_lifecycle_generation: signal.base_lifecycle_generation,
 			base_manifest_generation: signal.base_manifest_generation,
 			input_fingerprint: signal.input_fingerprint,
 			input_range: signal.input_range.clone(),
@@ -3678,6 +3834,7 @@ async fn run_reclaim_job(
 				database_branch_id,
 				job_id: signal.job_id,
 				job_kind: signal.job_kind,
+				base_lifecycle_generation: signal.base_lifecycle_generation,
 				base_manifest_generation: signal.base_manifest_generation,
 				input_fingerprint: signal.input_fingerprint,
 				cold_objects: signal.input_range.cold_objects.clone(),
@@ -3740,6 +3897,7 @@ fn record_companion_job(
 	database_branch_id: DatabaseBranchId,
 	job_kind: CompactionJobKind,
 	job_id: Id,
+	base_lifecycle_generation: u64,
 	base_manifest_generation: u64,
 	input_fingerprint: CompactionInputFingerprint,
 	started_at_ms: i64,
@@ -3748,6 +3906,7 @@ fn record_companion_job(
 		database_branch_id,
 		job_id,
 		job_kind,
+		base_lifecycle_generation,
 		base_manifest_generation,
 		input_fingerprint,
 		started_at_ms,
@@ -3757,6 +3916,7 @@ fn record_companion_job(
 
 fn record_companion_stop(
 	state: &mut CompanionWorkflowState,
+	lifecycle_generation: u64,
 	requested_at_ms: i64,
 	reason: String,
 ) {
@@ -3768,6 +3928,7 @@ fn record_companion_stop(
 
 	*state = CompanionWorkflowState::Stopping {
 		active_job,
+		lifecycle_generation,
 		requested_at_ms,
 		reason,
 	};

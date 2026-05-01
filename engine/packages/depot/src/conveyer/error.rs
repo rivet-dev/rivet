@@ -74,6 +74,13 @@ pub enum SqliteStorageError {
 	BranchNotReachable,
 
 	#[error(
+		"branch_not_writable",
+		"Database branch is not writable.",
+		"Database branch is not writable because it is missing or no longer live."
+	)]
+	BranchNotWritable,
+
+	#[error(
 		"shard_version_cap_exhausted",
 		"SQLite shard version cap is exhausted."
 	)]
@@ -130,6 +137,9 @@ impl fmt::Display for SqliteStorageError {
 			}
 			SqliteStorageError::BranchNotReachable => {
 				write!(f, "sqlite bookmark branch is not reachable from this database branch chain")
+			}
+			SqliteStorageError::BranchNotWritable => {
+				write!(f, "sqlite database branch is not writable")
 			}
 			SqliteStorageError::ShardVersionCapExhausted => {
 				write!(f, "sqlite shard version cap is exhausted")

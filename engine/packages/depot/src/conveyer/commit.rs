@@ -17,15 +17,16 @@ use crate::{
 		Db,
 		db::{BranchAncestry, load_branch_ancestry, touch_access_if_bucket_advanced},
 		branch,
+		error::SqliteStorageError,
 		keys::{self, SHARD_SIZE},
 		ltx::{LtxHeader, encode_ltx_v3},
 		metrics, quota,
 		types::{
 			DatabaseBranchId, DatabaseBranchRecord, DatabasePointer, BranchState, CommitRow, DBHead,
 			CompactionRoot, DirtyPage, NamespaceBranchId, NamespaceId, SqliteCmpDirty,
-			decode_compaction_root, decode_db_head, decode_meta_compact, decode_sqlite_cmp_dirty,
-			encode_database_branch_record, encode_database_pointer, encode_commit_row, encode_db_head,
-			encode_sqlite_cmp_dirty,
+			decode_compaction_root, decode_database_branch_record, decode_db_head,
+			decode_meta_compact, decode_sqlite_cmp_dirty, encode_database_branch_record,
+			encode_database_pointer, encode_commit_row, encode_db_head, encode_sqlite_cmp_dirty,
 		},
 		udb,
 	},
@@ -74,6 +75,24 @@ impl Db {
 					let branch_resolution =
 						resolve_or_allocate_branch(&tx, namespace_id, &database_id).await?;
 					let branch_id = branch_resolution.branch_id;
+					if !branch_resolution.database_initialized {
+						let branch_record = tx_get_value(
+							&tx,
+							&keys::branches_list_key(branch_id),
+							Serializable,
+						)
+						.await?
+						.as_deref()
+						.map(decode_database_branch_record)
+						.transpose()
+						.context("decode sqlite database branch record for commit")?;
+						if !branch_record
+							.as_ref()
+							.is_some_and(|record| record.state == BranchState::Live)
+						{
+							return Err(SqliteStorageError::BranchNotWritable.into());
+						}
+					}
 					let branch_ancestry = if branch_resolution.database_initialized {
 						BranchAncestry::root(branch_id)
 					} else if let Some(cached_ancestry) =
@@ -649,6 +668,7 @@ async fn write_root_branch_metadata(
 		created_at_ms: now_ms,
 		created_from_bookmark: None,
 		state: BranchState::Live,
+		lifecycle_generation: 0,
 	};
 	let encoded_record =
 		encode_database_branch_record(record).context("encode sqlite root database branch record")?;

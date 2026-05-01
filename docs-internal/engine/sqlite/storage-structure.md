@@ -9,7 +9,7 @@ Depot has two external ids:
 - `NamespaceId`: the namespace branch id. There is no separate namespace pointer id.
 - `DatabaseId`: the database branch id. There is no separate database pointer id.
 
-Both branch records are immutable once written. Forks allocate a new id and write a parent pointer to the source branch plus the fork versionstamp. Engine-layer rollback is implemented outside this crate by forking a database and changing the engine's database-to-database mapping.
+Branch records are append-only for ancestry fields. Database branch records also carry mutable lifecycle state and a monotonic lifecycle generation used to reject stale workflow compaction work. Forks allocate a new id and write a parent pointer to the source branch plus the fork versionstamp. Engine-layer rollback is implemented outside this crate by forking a database and changing the engine's database-to-database mapping.
 
 Namespace database membership is stored in `NSCAT`. Namespace forks do not copy catalog entries. Reads walk namespace parents and accept inherited entries only when the entry versionstamp is at or before the walking branch's `parent_versionstamp`.
 
@@ -20,7 +20,7 @@ All Depot keys live under the crate-owned `[0x02]` prefix. The next byte is the 
 | Partition | Prefix | Owner | Purpose |
 |---|---|---|---|
 | `NSCAT` | `[0x02][0x10]` | create/fork/delete database paths | Namespace catalog membership markers. |
-| `BRANCHES` | `[0x02][0x20]` | branch operations, GC | Immutable database branch records plus mutable counters. |
+| `BRANCHES` | `[0x02][0x20]` | branch operations, GC, workflow compaction | Database branch records plus mutable counters and lifecycle state. |
 | `NSBRANCH` | `[0x02][0x21]` | namespace operations, GC | Immutable namespace branch records plus mutable counters and tombstones. |
 | `BR` | `[0x02][0x30]` | conveyer and compactors | Per-database hot data, metadata, and leases. |
 | `CTR` | `[0x02][0x40]` | quota, eviction access touch | Global counters and eviction index. |

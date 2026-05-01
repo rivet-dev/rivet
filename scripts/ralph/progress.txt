@@ -14,6 +14,7 @@
 - Namespace fork proof facts are written from namespace/catalog mutation paths; workflow reclaim must resolve `NS_CHILD`/`NS_FORK_PIN` into exact `DB_PIN(kind=NamespaceFork)` records or retain history.
 - Workflow cold compaction uploads through `ColdTier`, publishes `CMP/cold_shard` refs from the DB manager, and should schedule before reclaim so reclaim cannot delete the exact hot inputs cold publish revalidates.
 - Workflow cold-object reclaim retires exact manager-provided `ColdShardRef` refs before S3 deletion, waits the grace window, marks `DeleteIssued`, deletes the exact object key, and leaves a completed retired record to block republish.
+- Workflow branch lifecycle is fenced by `DatabaseBranchRecord.lifecycle_generation`; planned workflow jobs carry the base generation and reject stage, publish, or reclaim work after branch deletion or recreation.
 
 # Ralph Progress Log
 Started: Thu Apr 30 09:07:22 PM PDT 2026
@@ -266,4 +267,33 @@ Started: Thu Apr 30 09:07:22 PM PDT 2026
   - Cold-object reclaim should keep a terminal retired record instead of clearing it so `PublishColdJob` can keep rejecting reused object keys.
   - Use the activity run timestamp for retirement grace windows; workflow `create_ts()` can be older than the actual retire activity.
   - Reclaim jobs may carry cold-object work without hot-row deletes, but the FDB activity should still revalidate manifest generation and exact cold-object refs before the S3 lane runs.
+---
+## 2026-04-30 23:27:42 PDT - US-015
+- Implemented database branch lifecycle generation and deleted branch state with V1-to-V2 vbare migration for branch records.
+- Added live-branch commit admission, lifecycle-generation fences for workflow stage/publish/reclaim activities, and manager/companion destroy handling through `DestroyDatabaseBranch`.
+- Added workflow tests for idle destroy, deleted-branch manager recreation, destroy after a scheduled hot job, and stale lifecycle-generation rejection.
+- Verified with `cargo check -p depot`, `cargo test -p depot --test workflow_compaction_payloads --test workflow_compaction_skeletons`, and `cargo test -p depot`.
+- Files changed:
+  - `engine/packages/depot/src/conveyer/types.rs`
+  - `engine/packages/depot/src/conveyer/branch.rs`
+  - `engine/packages/depot/src/conveyer/commit.rs`
+  - `engine/packages/depot/src/conveyer/error.rs`
+  - `engine/packages/depot/src/workflows/compaction.rs`
+  - `engine/packages/depot/tests/cold_compactor.rs`
+  - `engine/packages/depot/tests/compactor_cold.rs`
+  - `engine/packages/depot/tests/conveyer_branch.rs`
+  - `engine/packages/depot/tests/fault_common/mod.rs`
+  - `engine/packages/depot/tests/gc.rs`
+  - `engine/packages/depot/tests/workflow_compaction_payloads.rs`
+  - `engine/packages/depot/tests/workflow_compaction_skeletons.rs`
+  - `engine/artifacts/errors/depot.branch_not_writable.json`
+  - `docs-internal/engine/sqlite/storage-structure.md`
+  - `docs-internal/engine/sqlite/components.md`
+  - `engine/packages/depot/AGENTS.md`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - `OwnedVersionedData` needs converter functions before a bumped embedded version is considered the latest version.
+  - Workflow destroy should target the stored companion workflow ids directly, then complete the manager so stable-tag recreation can observe non-live branch state.
+  - New `SqliteStorageError` variants generate checked-in artifacts under `engine/artifacts/errors/`.
 ---

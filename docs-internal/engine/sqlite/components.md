@@ -43,8 +43,10 @@ Responsibilities:
 
 - Coalesce commit wakeups through `SQLITE_CMP_DIRTY/{database_branch_id}` and `DeltasAvailable` signals.
 - Plan hot jobs from current FDB state instead of trusting signal payloads.
+- Carry the branch lifecycle generation through planned jobs and reject stale stage, publish, or reclaim work after branch deletion or recreation.
 - Have the hot companion write staged shard blobs under `CMP/stage/{job_id}/hot_shard`.
 - Install matching hot job output by copying staged blobs to reader-visible `SHARD`, advancing `CMP/root`, and compare-and-clearing expected PIDX rows.
+- Stop the manager and companion workflows through `DestroyDatabaseBranch` when a database branch is no longer live.
 
 Lease ownership: none. Gasoline workflow uniqueness uses only the database branch id tag.
 

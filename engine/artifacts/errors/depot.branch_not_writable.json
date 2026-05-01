@@ -1,0 +1,5 @@
+{
+  "code": "branch_not_writable",
+  "group": "depot",
+  "message": "Database branch is not writable."
+}

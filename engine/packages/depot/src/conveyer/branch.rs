@@ -604,6 +604,7 @@ pub async fn derive_branch_at(
 		created_at_ms: now_ms,
 		created_from_bookmark: bookmark_ref,
 		state: BranchState::Live,
+		lifecycle_generation: 0,
 	};
 	let encoded_record =
 		encode_database_branch_record(new_record).context("encode sqlite derived database branch record")?;

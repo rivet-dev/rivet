@@ -31,11 +31,13 @@ use depot::{
 	workflows::compaction::{
 		CompactionJobKind, CompactionJobStatus, DATABASE_BRANCH_ID_TAG, DbColdCompacterWorkflow,
 		DbHotCompacterWorkflow, DbManagerInput, DbManagerState, DbManagerWorkflow,
-		DbReclaimerWorkflow, DeltasAvailable, HotJobInputRange, RunColdJob, RunHotJob,
-		RunReclaimJob, TxidRange, database_branch_tag_value, set_workflow_test_cold_tier_for_test,
+		DbReclaimerWorkflow, DeltasAvailable, DestroyDatabaseBranch, HotJobInputRange,
+		RunColdJob, RunHotJob, RunReclaimJob, TxidRange, database_branch_tag_value,
+		set_workflow_test_cold_tier_for_test,
 	},
 };
 use gas::db::debug::DatabaseDebug;
+use gas::db::debug::WorkflowState;
 use gas::prelude::{Id, Registry, SignalTrait, TestCtx, WorkflowTrait};
 use sha2::{Digest, Sha256};
 use tempfile::Builder;
@@ -243,6 +245,31 @@ async fn wait_for_manager_state(
 
 		if started_at.elapsed() > Duration::from_secs(5) {
 			bail!("timed out waiting for manager state");
+		}
+
+		tokio::time::sleep(Duration::from_millis(25)).await;
+	}
+}
+
+async fn wait_for_workflow_state(
+	test_ctx: &TestCtx,
+	workflow_id: Id,
+	expected_state: WorkflowState,
+) -> Result<()> {
+	let started_at = Instant::now();
+
+	loop {
+		let workflow = DatabaseDebug::get_workflows(test_ctx.debug_db(), vec![workflow_id])
+			.await?
+			.into_iter()
+			.next()
+			.ok_or_else(|| anyhow::anyhow!("workflow not found"))?;
+		if workflow.state == expected_state {
+			return Ok(());
+		}
+
+		if started_at.elapsed() > Duration::from_secs(5) {
+			bail!("timed out waiting for workflow state {:?}", expected_state);
 		}
 
 		tokio::time::sleep(Duration::from_millis(25)).await;
@@ -534,6 +561,7 @@ async fn seed_manager_branch(
 				created_at_ms: 1_000,
 				created_from_bookmark: None,
 				state: BranchState::Live,
+				lifecycle_generation: 0,
 			};
 			tx.informal().set(
 				&branches_list_key(database_branch_id),
@@ -592,6 +620,30 @@ async fn seed_manager_branch(
 			}
 			Ok(())
 		}
+	})
+	.await
+}
+
+async fn update_branch_lifecycle(
+	test_ctx: &TestCtx,
+	database_branch_id: DatabaseBranchId,
+	state: BranchState,
+	lifecycle_generation: u64,
+) -> Result<()> {
+	let db = test_ctx.pools().udb()?;
+	db.run(move |tx| async move {
+		let key = branches_list_key(database_branch_id);
+		let record_bytes = tx
+			.informal()
+			.get(&key, Snapshot)
+			.await?
+			.expect("database branch record should exist");
+		let mut record = depot::types::decode_database_branch_record(&record_bytes)?;
+		record.state = state;
+		record.lifecycle_generation = lifecycle_generation;
+		tx.informal()
+			.set(&key, &encode_database_branch_record(record)?);
+		Ok(())
 	})
 	.await
 }
@@ -804,6 +856,7 @@ async fn manager_spawns_companions_and_records_deltas_available() -> Result<()> 
 	let database_branch_id = database_branch_id(0x0011_2233_4455_6677_8899_aabb_ccdd_eeff);
 	let tag_value = database_branch_tag_value(database_branch_id);
 	let mut test_ctx = TestCtx::new(build_registry()).await?;
+	seed_manager_branch(&test_ctx, database_branch_id, 0, None, None).await?;
 
 	let manager_workflow_id = test_ctx
 		.workflow(DbManagerInput { database_branch_id })
@@ -866,6 +919,138 @@ async fn manager_spawns_companions_and_records_deltas_available() -> Result<()> 
 		<DeltasAvailable as SignalTrait>::NAME,
 		"depot_sqlite_cmp_deltas_available"
 	);
+
+	test_ctx.shutdown().await?;
+	Ok(())
+}
+
+#[tokio::test]
+async fn manager_destroy_stops_idle_companions() -> Result<()> {
+	let database_branch_id = database_branch_id(0x0d10_2233_4455_6677_8899_aabb_ccdd_eeff);
+	let tag_value = database_branch_tag_value(database_branch_id);
+	let mut test_ctx = TestCtx::new(build_registry()).await?;
+	seed_manager_branch(&test_ctx, database_branch_id, 0, None, None).await?;
+
+	let manager_workflow_id = test_ctx
+		.workflow(DbManagerInput { database_branch_id })
+		.tag(DATABASE_BRANCH_ID_TAG, &tag_value)
+		.unique()
+		.dispatch()
+		.await?;
+	let hot_workflow_id =
+		wait_for_workflow::<DbHotCompacterWorkflow>(&test_ctx, database_branch_id).await?;
+	let cold_workflow_id =
+		wait_for_workflow::<DbColdCompacterWorkflow>(&test_ctx, database_branch_id).await?;
+	let reclaimer_workflow_id =
+		wait_for_workflow::<DbReclaimerWorkflow>(&test_ctx, database_branch_id).await?;
+
+	let signal_id = test_ctx
+		.signal(DestroyDatabaseBranch {
+			database_branch_id,
+			lifecycle_generation: 0,
+			requested_at_ms: 1_714_000_000_000,
+			reason: "test destroy".into(),
+		})
+		.to_workflow_id(manager_workflow_id)
+		.send()
+		.await?
+		.expect("signal should target manager workflow");
+	wait_for_signal_ack(&test_ctx, signal_id).await?;
+
+	wait_for_workflow_state(&test_ctx, manager_workflow_id, WorkflowState::Complete).await?;
+	wait_for_workflow_state(&test_ctx, hot_workflow_id, WorkflowState::Complete).await?;
+	wait_for_workflow_state(&test_ctx, cold_workflow_id, WorkflowState::Complete).await?;
+	wait_for_workflow_state(&test_ctx, reclaimer_workflow_id, WorkflowState::Complete).await?;
+
+	test_ctx.shutdown().await?;
+	Ok(())
+}
+
+#[tokio::test]
+async fn manager_recreated_for_deleted_branch_stops_without_scheduling() -> Result<()> {
+	let database_branch_id = database_branch_id(0x0d11_2233_4455_6677_8899_aabb_ccdd_eeff);
+	let tag_value = database_branch_tag_value(database_branch_id);
+	let mut test_ctx = TestCtx::new(build_registry()).await?;
+	seed_manager_branch(
+		&test_ctx,
+		database_branch_id,
+		quota_threshold_head(),
+		None,
+		Some(SqliteCmpDirty {
+			observed_head_txid: quota_threshold_head(),
+			updated_at_ms: 1_714_000_000_000,
+		}),
+	)
+	.await?;
+	update_branch_lifecycle(&test_ctx, database_branch_id, BranchState::Deleted, 1).await?;
+
+	let manager_workflow_id = test_ctx
+		.workflow(DbManagerInput { database_branch_id })
+		.tag(DATABASE_BRANCH_ID_TAG, &tag_value)
+		.unique()
+		.dispatch()
+		.await?;
+	let hot_workflow_id =
+		wait_for_workflow::<DbHotCompacterWorkflow>(&test_ctx, database_branch_id).await?;
+
+	wait_for_workflow_state(&test_ctx, manager_workflow_id, WorkflowState::Complete).await?;
+	wait_for_workflow_state(&test_ctx, hot_workflow_id, WorkflowState::Complete).await?;
+	let run_hot_signals = DatabaseDebug::find_signals(
+		test_ctx.debug_db(),
+		&[],
+		Some(hot_workflow_id),
+		Some(<RunHotJob as SignalTrait>::NAME),
+		None,
+	)
+	.await?;
+	assert!(run_hot_signals.is_empty());
+
+	test_ctx.shutdown().await?;
+	Ok(())
+}
+
+#[tokio::test]
+async fn manager_destroy_during_active_hot_job_completes() -> Result<()> {
+	let database_branch_id = database_branch_id(0x0d12_2233_4455_6677_8899_aabb_ccdd_eeff);
+	let tag_value = database_branch_tag_value(database_branch_id);
+	let mut test_ctx = TestCtx::new(build_registry()).await?;
+	seed_manager_branch(
+		&test_ctx,
+		database_branch_id,
+		quota_threshold_head(),
+		None,
+		Some(SqliteCmpDirty {
+			observed_head_txid: quota_threshold_head(),
+			updated_at_ms: 1_714_000_000_000,
+		}),
+	)
+	.await?;
+
+	let manager_workflow_id = test_ctx
+		.workflow(DbManagerInput { database_branch_id })
+		.tag(DATABASE_BRANCH_ID_TAG, &tag_value)
+		.unique()
+		.dispatch()
+		.await?;
+	let hot_workflow_id =
+		wait_for_workflow::<DbHotCompacterWorkflow>(&test_ctx, database_branch_id).await?;
+	let _run_hot_job = wait_for_run_hot_job(&test_ctx, hot_workflow_id).await?;
+
+	let signal_id = test_ctx
+		.signal(DestroyDatabaseBranch {
+			database_branch_id,
+			lifecycle_generation: 0,
+			requested_at_ms: 1_714_000_000_001,
+			reason: "test destroy during hot".into(),
+		})
+		.to_workflow_id(manager_workflow_id)
+		.send()
+		.await?
+		.expect("signal should target manager workflow");
+	wait_for_signal_ack(&test_ctx, signal_id).await?;
+
+	wait_for_workflow_state(&test_ctx, manager_workflow_id, WorkflowState::Complete).await?;
+	wait_for_workflow_state(&test_ctx, hot_workflow_id, WorkflowState::Complete).await?;
 
 	test_ctx.shutdown().await?;
 	Ok(())
@@ -1098,8 +1283,75 @@ async fn hot_compacter_rejects_stale_base_generation_without_staging() -> Result
 			database_branch_id,
 			job_id: stale_job_id,
 			job_kind: CompactionJobKind::Hot,
+			base_lifecycle_generation: 0,
 			base_manifest_generation: 1,
 			input_fingerprint: [7; 32],
+			status: CompactionJobStatus::Requested,
+			input_range: HotJobInputRange {
+				txids: TxidRange {
+					min_txid: 1,
+					max_txid: 1,
+				},
+				coverage_txids: vec![1],
+				max_pages: 1,
+				max_bytes: 1,
+			},
+		})
+		.to_workflow_id(hot_workflow_id)
+		.send()
+		.await?
+		.expect("signal should target hot compacter workflow");
+	wait_for_signal_ack(&test_ctx, signal_id).await?;
+
+	let staged_rows = read_prefix_values(
+		&test_ctx,
+		branch_compaction_stage_hot_shard_prefix(database_branch_id, stale_job_id),
+	)
+	.await?;
+	assert!(staged_rows.is_empty());
+
+	test_ctx.shutdown().await?;
+	Ok(())
+}
+
+#[tokio::test]
+async fn hot_compacter_rejects_stale_lifecycle_generation_without_staging() -> Result<()> {
+	let database_branch_id = database_branch_id(0x5051_2233_4455_6677_8899_aabb_ccdd_eeff);
+	let tag_value = database_branch_tag_value(database_branch_id);
+	let mut test_ctx = TestCtx::new(build_registry()).await?;
+	seed_manager_branch(
+		&test_ctx,
+		database_branch_id,
+		1,
+		Some(CompactionRoot {
+			schema_version: 1,
+			manifest_generation: 0,
+			hot_watermark_txid: 0,
+			cold_watermark_txid: 0,
+			cold_watermark_versionstamp: [0; 16],
+		}),
+		None,
+	)
+	.await?;
+	update_branch_lifecycle(&test_ctx, database_branch_id, BranchState::Live, 1).await?;
+
+	let _manager_workflow_id = test_ctx
+		.workflow(DbManagerInput { database_branch_id })
+		.tag(DATABASE_BRANCH_ID_TAG, &tag_value)
+		.unique()
+		.dispatch()
+		.await?;
+	let hot_workflow_id =
+		wait_for_workflow::<DbHotCompacterWorkflow>(&test_ctx, database_branch_id).await?;
+	let stale_job_id = Id::new_v1(43);
+	let signal_id = test_ctx
+		.signal(RunHotJob {
+			database_branch_id,
+			job_id: stale_job_id,
+			job_kind: CompactionJobKind::Hot,
+			base_lifecycle_generation: 0,
+			base_manifest_generation: 0,
+			input_fingerprint: [8; 32],
 			status: CompactionJobStatus::Requested,
 			input_range: HotJobInputRange {
 				txids: TxidRange {
@@ -1462,6 +1714,7 @@ async fn cold_compacter_rejects_stale_base_generation_without_publish() -> Resul
 			database_branch_id,
 			job_id: Id::new_v1(42),
 			job_kind: CompactionJobKind::Cold,
+			base_lifecycle_generation: 0,
 			base_manifest_generation: 1,
 			input_fingerprint: [9; 32],
 			status: CompactionJobStatus::Requested,
@@ -1683,6 +1936,7 @@ async fn reclaimer_rejects_stale_manifest_generation() -> Result<()> {
 			database_branch_id,
 			job_id: Id::new_v1(42),
 			job_kind: CompactionJobKind::Reclaim,
+			base_lifecycle_generation: 0,
 			base_manifest_generation: 0,
 			input_fingerprint: [3; 32],
 			status: CompactionJobStatus::Requested,
