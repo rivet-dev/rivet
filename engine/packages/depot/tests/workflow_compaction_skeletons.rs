@@ -11,7 +11,7 @@ use depot::{
 	keys::{
 		PAGE_SIZE, branch_commit_key, branch_compaction_root_key,
 		branch_compaction_stage_hot_shard_prefix, branch_delta_chunk_key, branch_meta_head_key,
-		branch_pidx_key, branch_shard_key, branch_shard_prefix, branches_list_key,
+		branch_pidx_key, branch_shard_key, branch_shard_prefix, branch_vtx_key, branches_list_key,
 		sqlite_cmp_dirty_key,
 	},
 	ltx::{LtxHeader, decode_ltx_v3, encode_ltx_v3},
@@ -24,7 +24,7 @@ use depot::{
 	workflows::compaction::{
 		CompactionJobKind, CompactionJobStatus, DATABASE_BRANCH_ID_TAG, DbColdCompacterWorkflow,
 		DbHotCompacterWorkflow, DbManagerInput, DbManagerState, DbManagerWorkflow,
-		DbReclaimerWorkflow, DeltasAvailable, HotJobInputRange, RunHotJob,
+		DbReclaimerWorkflow, DeltasAvailable, HotJobInputRange, RunHotJob, RunReclaimJob,
 		TxidRange,
 		database_branch_tag_value,
 	},
@@ -281,6 +281,28 @@ async fn wait_for_hot_install(
 	}
 }
 
+async fn wait_for_reclaim_delete(
+	test_ctx: &TestCtx,
+	database_branch_id: DatabaseBranchId,
+	txid: u64,
+) -> Result<()> {
+	let started_at = Instant::now();
+
+	loop {
+		let delta = read_value(test_ctx, branch_delta_chunk_key(database_branch_id, txid, 0)).await?;
+		let commit = read_value(test_ctx, branch_commit_key(database_branch_id, txid)).await?;
+		if delta.is_none() && commit.is_none() {
+			return Ok(());
+		}
+
+		if started_at.elapsed() > Duration::from_secs(5) {
+			bail!("timed out waiting for reclaim delete");
+		}
+
+		tokio::time::sleep(Duration::from_millis(25)).await;
+	}
+}
+
 async fn read_value(test_ctx: &TestCtx, key: Vec<u8>) -> Result<Option<Vec<u8>>> {
 	let db = test_ctx.pools().udb()?;
 	db.run(move |tx| {
@@ -393,6 +415,8 @@ async fn seed_manager_branch(
 						post_apply_checksum: txid,
 					})?,
 				);
+				tx.informal()
+					.set(&branch_vtx_key(database_branch_id, versionstamp), &txid.to_be_bytes());
 				let delta_blob = encode_ltx_v3(
 					LtxHeader::delta(txid, 1, 1_000 + i64::try_from(txid).unwrap_or(i64::MAX)),
 					&[DirtyPage {
@@ -457,6 +481,42 @@ async fn seed_bookmark_db_pin(
 	.await?;
 
 	Ok(bookmark)
+}
+
+async fn publish_test_shard_and_clear_pidx(
+	test_ctx: &TestCtx,
+	database_branch_id: DatabaseBranchId,
+	as_of_txid: u64,
+) -> Result<()> {
+	let db = test_ctx.pools().udb()?;
+	db.run(move |tx| async move {
+		let shard_blob = encode_ltx_v3(
+			LtxHeader::delta(as_of_txid, 1, 1_000),
+			&[DirtyPage {
+				pgno: 1,
+				bytes: vec![as_of_txid as u8; PAGE_SIZE as usize],
+			}],
+		)?;
+		tx.informal()
+			.set(&branch_shard_key(database_branch_id, 0, as_of_txid), &shard_blob);
+		tx.informal().clear(&branch_pidx_key(database_branch_id, 1));
+		Ok(())
+	})
+	.await
+}
+
+async fn set_test_pidx(
+	test_ctx: &TestCtx,
+	database_branch_id: DatabaseBranchId,
+	txid: u64,
+) -> Result<()> {
+	let db = test_ctx.pools().udb()?;
+	db.run(move |tx| async move {
+		tx.informal()
+			.set(&branch_pidx_key(database_branch_id, 1), &txid.to_be_bytes());
+		Ok(())
+	})
+	.await
 }
 
 #[test]
@@ -717,14 +777,6 @@ async fn hot_compacter_writes_idempotent_staged_shard_output() -> Result<()> {
 
 	assert_eq!(first_staged_rows.len(), 1);
 	wait_for_hot_install(&test_ctx, database_branch_id, quota_threshold_head()).await?;
-	assert!(
-		read_value(
-			&test_ctx,
-			branch_delta_chunk_key(database_branch_id, quota_threshold_head(), 0),
-		)
-		.await?
-		.is_some()
-	);
 	assert_eq!(
 		read_value(&test_ctx, branch_pidx_key(database_branch_id, 1)).await?,
 		None
@@ -851,14 +903,6 @@ async fn manager_publishes_hot_output_and_reads_through_shard_after_pidx_clear()
 			.await?;
 
 	assert!(manager_state.active_hot_job.is_none());
-	assert!(
-		read_value(
-			&test_ctx,
-			branch_delta_chunk_key(database_branch_id, quota_threshold_head(), 0),
-		)
-		.await?
-		.is_some()
-	);
 	assert_eq!(
 		database_db.get_pages(vec![1]).await?,
 		vec![FetchedPage {
@@ -919,6 +963,222 @@ async fn manager_hot_planning_materializes_exact_pinned_txid() -> Result<()> {
 	assert_eq!(
 		read_value(&test_ctx, branch_shard_key(database_branch_id, 0, 99)).await?,
 		None
+	);
+
+	test_ctx.shutdown().await?;
+	Ok(())
+}
+
+#[tokio::test]
+async fn reclaimer_deletes_obsolete_fdb_rows_after_hot_coverage() -> Result<()> {
+	let database_branch_id = database_branch_id(0x7070_2233_4455_6677_8899_aabb_ccdd_eeff);
+	let tag_value = database_branch_tag_value(database_branch_id);
+	let mut test_ctx = TestCtx::new(build_registry()).await?;
+	seed_manager_branch(
+		&test_ctx,
+		database_branch_id,
+		quota_threshold_head(),
+		None,
+		Some(SqliteCmpDirty {
+			observed_head_txid: quota_threshold_head(),
+			updated_at_ms: 1_714_000_000_000,
+		}),
+	)
+	.await?;
+
+	let _manager_workflow_id = test_ctx
+		.workflow(DbManagerInput { database_branch_id })
+		.tag(DATABASE_BRANCH_ID_TAG, &tag_value)
+		.unique()
+		.dispatch()
+		.await?;
+
+	wait_for_hot_install(&test_ctx, database_branch_id, quota_threshold_head()).await?;
+	wait_for_reclaim_delete(&test_ctx, database_branch_id, quota_threshold_head()).await?;
+
+	let mut versionstamp = [0; 16];
+	versionstamp[8..16].copy_from_slice(&quota_threshold_head().to_be_bytes());
+	assert!(
+		read_value(&test_ctx, branch_vtx_key(database_branch_id, versionstamp))
+			.await?
+			.is_none()
+	);
+	assert!(
+		read_value(
+			&test_ctx,
+			branch_shard_key(database_branch_id, 0, quota_threshold_head()),
+		)
+		.await?
+		.is_some()
+	);
+
+	test_ctx.shutdown().await?;
+	Ok(())
+}
+
+#[tokio::test]
+async fn reclaimer_retains_rows_when_pidx_still_references_deleted_txid() -> Result<()> {
+	let database_branch_id = database_branch_id(0x8080_2233_4455_6677_8899_aabb_ccdd_eeff);
+	let tag_value = database_branch_tag_value(database_branch_id);
+	let mut test_ctx = TestCtx::new(build_registry()).await?;
+	seed_manager_branch(
+		&test_ctx,
+		database_branch_id,
+		quota_threshold_head(),
+		Some(CompactionRoot {
+			schema_version: 1,
+			manifest_generation: 1,
+			hot_watermark_txid: quota_threshold_head(),
+			cold_watermark_txid: 0,
+			cold_watermark_versionstamp: [0; 16],
+		}),
+		None,
+	)
+	.await?;
+	publish_test_shard_and_clear_pidx(&test_ctx, database_branch_id, quota_threshold_head()).await?;
+	set_test_pidx(&test_ctx, database_branch_id, 1).await?;
+
+	let manager_workflow_id = test_ctx
+		.workflow(DbManagerInput { database_branch_id })
+		.tag(DATABASE_BRANCH_ID_TAG, &tag_value)
+		.unique()
+		.dispatch()
+		.await?;
+	let manager_state =
+		wait_for_manager_state(&test_ctx, manager_workflow_id, |state| {
+			state.planning_deadlines.next_reclaim_check_at_ms.is_some()
+		})
+		.await?;
+
+	assert!(manager_state.active_reclaim_job.is_none());
+	assert!(
+		read_value(&test_ctx, branch_delta_chunk_key(database_branch_id, 1, 0))
+			.await?
+			.is_some()
+	);
+	assert!(
+		read_value(&test_ctx, branch_commit_key(database_branch_id, 1))
+			.await?
+			.is_some()
+	);
+
+	test_ctx.shutdown().await?;
+	Ok(())
+}
+
+#[tokio::test]
+async fn reclaimer_rejects_stale_manifest_generation() -> Result<()> {
+	let database_branch_id = database_branch_id(0x9090_2233_4455_6677_8899_aabb_ccdd_eeff);
+	let tag_value = database_branch_tag_value(database_branch_id);
+	let mut test_ctx = TestCtx::new(build_registry()).await?;
+	seed_manager_branch(
+		&test_ctx,
+		database_branch_id,
+		1,
+		Some(CompactionRoot {
+			schema_version: 1,
+			manifest_generation: 1,
+			hot_watermark_txid: 1,
+			cold_watermark_txid: 0,
+			cold_watermark_versionstamp: [0; 16],
+		}),
+		None,
+	)
+	.await?;
+	publish_test_shard_and_clear_pidx(&test_ctx, database_branch_id, 1).await?;
+	set_test_pidx(&test_ctx, database_branch_id, 1).await?;
+
+	let _manager_workflow_id = test_ctx
+		.workflow(DbManagerInput { database_branch_id })
+		.tag(DATABASE_BRANCH_ID_TAG, &tag_value)
+		.unique()
+		.dispatch()
+		.await?;
+	let reclaimer_workflow_id =
+		wait_for_workflow::<DbReclaimerWorkflow>(&test_ctx, database_branch_id).await?;
+	let mut versionstamp = [0; 16];
+	versionstamp[8..16].copy_from_slice(&1_u64.to_be_bytes());
+	let signal_id = test_ctx
+		.signal(RunReclaimJob {
+			database_branch_id,
+			job_id: Id::new_v1(42),
+			job_kind: CompactionJobKind::Reclaim,
+			base_manifest_generation: 0,
+			input_fingerprint: [3; 32],
+			status: CompactionJobStatus::Requested,
+			input_range: depot::workflows::compaction::ReclaimJobInputRange {
+				txids: TxidRange {
+					min_txid: 1,
+					max_txid: 1,
+				},
+				txid_refs: vec![depot::workflows::compaction::ReclaimTxidRef {
+					txid: 1,
+					versionstamp,
+				}],
+				max_keys: 500,
+				max_bytes: 2 * 1024 * 1024,
+			},
+		})
+		.to_workflow_id(reclaimer_workflow_id)
+		.send()
+		.await?
+		.expect("signal should target reclaimer workflow");
+	wait_for_signal_ack(&test_ctx, signal_id).await?;
+
+	assert!(
+		read_value(&test_ctx, branch_delta_chunk_key(database_branch_id, 1, 0))
+			.await?
+			.is_some()
+	);
+	assert!(
+		read_value(&test_ctx, branch_commit_key(database_branch_id, 1))
+			.await?
+			.is_some()
+	);
+
+	test_ctx.shutdown().await?;
+	Ok(())
+}
+
+#[tokio::test]
+async fn reclaimer_retains_pinned_txid_history() -> Result<()> {
+	let database_branch_id = database_branch_id(0xa0a0_2233_4455_6677_8899_aabb_ccdd_eeff);
+	let tag_value = database_branch_tag_value(database_branch_id);
+	let mut test_ctx = TestCtx::new(build_registry()).await?;
+	seed_manager_branch(
+		&test_ctx,
+		database_branch_id,
+		100,
+		Some(CompactionRoot {
+			schema_version: 1,
+			manifest_generation: 1,
+			hot_watermark_txid: 100,
+			cold_watermark_txid: 0,
+			cold_watermark_versionstamp: [0; 16],
+		}),
+		None,
+	)
+	.await?;
+	publish_test_shard_and_clear_pidx(&test_ctx, database_branch_id, 100).await?;
+	let _bookmark = seed_bookmark_db_pin(&test_ctx, database_branch_id, 50).await?;
+
+	let _manager_workflow_id = test_ctx
+		.workflow(DbManagerInput { database_branch_id })
+		.tag(DATABASE_BRANCH_ID_TAG, &tag_value)
+		.unique()
+		.dispatch()
+		.await?;
+
+	wait_for_reclaim_delete(&test_ctx, database_branch_id, 49).await?;
+	assert!(
+		read_value(&test_ctx, branch_delta_chunk_key(database_branch_id, 50, 0))
+			.await?
+			.is_some()
+	);
+	assert!(
+		read_value(&test_ctx, branch_commit_key(database_branch_id, 50))
+			.await?
+			.is_some()
 	);
 
 	test_ctx.shutdown().await?;

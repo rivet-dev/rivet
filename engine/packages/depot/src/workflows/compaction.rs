@@ -93,11 +93,18 @@ pub struct ColdJobInputRange {
 	pub max_bytes: u64,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct ReclaimJobInputRange {
 	pub txids: TxidRange,
+	pub txid_refs: Vec<ReclaimTxidRef>,
 	pub max_keys: u32,
 	pub max_bytes: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct ReclaimTxidRef {
+	pub txid: u64,
+	pub versionstamp: [u8; 16],
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -416,6 +423,22 @@ pub struct InstallHotJobOutput {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Hash)]
+pub struct ReclaimFdbJobInput {
+	pub database_branch_id: DatabaseBranchId,
+	pub job_id: Id,
+	pub job_kind: CompactionJobKind,
+	pub base_manifest_generation: u64,
+	pub input_fingerprint: CompactionInputFingerprint,
+	pub input_range: ReclaimJobInputRange,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReclaimFdbJobOutput {
+	pub status: CompactionJobStatus,
+	pub output_refs: Vec<ReclaimOutputRef>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Hash)]
 pub struct RefreshManagerInput {
 	pub database_branch_id: DatabaseBranchId,
 }
@@ -424,6 +447,7 @@ pub struct RefreshManagerInput {
 pub struct RefreshManagerOutput {
 	pub planning_deadlines: ManagerPlanningDeadlines,
 	pub planned_hot_job: Option<ActiveCompactionJob>,
+	pub planned_reclaim_job: Option<ActiveCompactionJob>,
 	pub observed_dirty: Option<SqliteCmpDirty>,
 	pub head_txid: Option<u64>,
 	pub branch_is_live: bool,
@@ -438,6 +462,7 @@ struct ManagerFdbSnapshot {
 	dirty: Option<SqliteCmpDirty>,
 	db_pins: Vec<DbHistoryPin>,
 	hot_inputs: HotInputSnapshot,
+	reclaim_inputs: ReclaimInputSnapshot,
 	cleared_dirty: bool,
 }
 
@@ -446,6 +471,17 @@ struct HotInputSnapshot {
 	commits: Vec<(u64, CommitRow)>,
 	delta_chunks: Vec<(Vec<u8>, Vec<u8>)>,
 	pidx_entries: Vec<(Vec<u8>, Vec<u8>)>,
+	total_value_bytes: u64,
+}
+
+#[derive(Debug, Default)]
+struct ReclaimInputSnapshot {
+	txid_refs: Vec<ReclaimTxidRef>,
+	commits: Vec<(u64, Vec<u8>, Vec<u8>, CommitRow)>,
+	delta_chunks: Vec<(Vec<u8>, Vec<u8>)>,
+	pidx_entries: Vec<(Vec<u8>, Vec<u8>)>,
+	coverage_shards: Vec<(Vec<u8>, Vec<u8>)>,
+	required_coverage_shard_count: usize,
 	total_value_bytes: u64,
 }
 
@@ -553,7 +589,18 @@ pub async fn db_manager(ctx: &mut WorkflowCtx, input: &DbManagerInput) -> Result
 						}
 						DbManagerSignal::ReclaimJobFinished(signal) => {
 							if signal.database_branch_id == input.database_branch_id {
-								state.active_reclaim_job = None;
+								if let Some(active_job) = state.active_reclaim_job.as_ref() {
+									if reclaim_job_finished_matches_active(&signal, active_job) {
+										match signal.status {
+											CompactionJobStatus::Requested => {}
+											CompactionJobStatus::Succeeded
+											| CompactionJobStatus::Rejected { .. }
+											| CompactionJobStatus::Failed { .. } => {
+												state.active_reclaim_job = None
+											}
+										}
+									}
+								}
 							}
 						}
 						DbManagerSignal::DestroyDatabaseBranch(signal) => {
@@ -611,6 +658,38 @@ pub async fn db_manager(ctx: &mut WorkflowCtx, input: &DbManagerInput) -> Result
 						.await?;
 
 						state.active_hot_job = Some(active_job);
+					}
+				}
+
+				if state.active_reclaim_job.is_none()
+					&& matches!(state.branch_stop_state, BranchStopState::Running)
+				{
+					if let Some(active_job) = refresh.planned_reclaim_job {
+						let reclaimer_workflow_id = state
+							.companion_workflow_ids
+							.reclaimer_workflow_id
+							.context("reclaimer workflow id missing from manager state")?;
+						let input_range = match active_job.input_range.clone() {
+							PlannedInputRange::Reclaim(input_range) => input_range,
+							PlannedInputRange::Hot(_) | PlannedInputRange::Cold(_) => {
+								bail!("planned reclaim job carried non-reclaim input range")
+							}
+						};
+
+						ctx.signal(RunReclaimJob {
+							database_branch_id: active_job.database_branch_id,
+							job_id: active_job.job_id,
+							job_kind: CompactionJobKind::Reclaim,
+							base_manifest_generation: active_job.base_manifest_generation,
+							input_fingerprint: active_job.input_fingerprint,
+							status: CompactionJobStatus::Requested,
+							input_range,
+						})
+						.to_workflow_id(reclaimer_workflow_id)
+						.send()
+						.await?;
+
+						state.active_reclaim_job = Some(active_job);
 					}
 				}
 
@@ -717,10 +796,21 @@ pub async fn refresh_manager(
 	} else {
 		None
 	};
+	let planned_reclaim_job = if branch_is_live {
+		plan_reclaim_job(
+			database_branch_id,
+			&snapshot,
+			Id::new_v1(ctx.config().dc_label()),
+			now_ms,
+		)
+	} else {
+		None
+	};
 
 	Ok(RefreshManagerOutput {
 		planning_deadlines: ManagerPlanningDeadlines::after_refresh(now_ms),
 		planned_hot_job,
+		planned_reclaim_job,
 		observed_dirty: if snapshot.cleared_dirty {
 			None
 		} else {
@@ -734,6 +824,16 @@ pub async fn refresh_manager(
 
 fn hot_job_finished_matches_active(
 	signal: &HotJobFinished,
+	active_job: &ActiveCompactionJob,
+) -> bool {
+	signal.job_id == active_job.job_id
+		&& signal.job_kind == active_job.job_kind
+		&& signal.base_manifest_generation == active_job.base_manifest_generation
+		&& signal.input_fingerprint == active_job.input_fingerprint
+}
+
+fn reclaim_job_finished_matches_active(
+	signal: &ReclaimJobFinished,
 	active_job: &ActiveCompactionJob,
 ) -> bool {
 	signal.job_id == active_job.job_id
@@ -1050,6 +1150,133 @@ fn rejected_hot_install(reason: impl Into<String>) -> InstallHotJobOutput {
 	}
 }
 
+#[activity(ReclaimFdbJob)]
+pub async fn reclaim_fdb_job(
+	ctx: &ActivityCtx,
+	input: &ReclaimFdbJobInput,
+) -> Result<ReclaimFdbJobOutput> {
+	let input = input.clone();
+
+	ctx.udb()?
+		.run(move |tx| {
+			let input = input.clone();
+			async move { reclaim_fdb_job_tx(&tx, &input).await }
+		})
+		.await
+}
+
+async fn reclaim_fdb_job_tx(
+	tx: &universaldb::Transaction,
+	input: &ReclaimFdbJobInput,
+) -> Result<ReclaimFdbJobOutput> {
+	if input.job_kind != CompactionJobKind::Reclaim {
+		return Ok(rejected_reclaim_job("reclaimer received a non-reclaim job"));
+	}
+
+	let branch_record = tx_get_value(
+		tx,
+		&keys::branches_list_key(input.database_branch_id),
+		Serializable,
+	)
+	.await?
+	.as_deref()
+	.map(decode_database_branch_record)
+	.transpose()
+	.context("decode sqlite database branch record for FDB reclaim")?;
+	if !branch_record
+		.as_ref()
+		.is_some_and(|record| record.state == BranchState::Live)
+	{
+		return Ok(rejected_reclaim_job("database branch is not live"));
+	}
+
+	let root = tx_get_value(
+		tx,
+		&keys::branch_compaction_root_key(input.database_branch_id),
+		Serializable,
+	)
+	.await?
+	.as_deref()
+	.map(decode_compaction_root)
+	.transpose()
+	.context("decode sqlite compaction root for FDB reclaim")?
+	.unwrap_or(CompactionRoot {
+		schema_version: 1,
+		manifest_generation: 0,
+		hot_watermark_txid: 0,
+		cold_watermark_txid: 0,
+		cold_watermark_versionstamp: [0; 16],
+	});
+	if root.manifest_generation != input.base_manifest_generation {
+		return Ok(rejected_reclaim_job("base manifest generation changed"));
+	}
+
+	let db_pins =
+		history_pin::read_db_history_pins(tx, input.database_branch_id, Serializable).await?;
+	let snapshot =
+		read_reclaim_input_snapshot(tx, input.database_branch_id, &root, &db_pins, Serializable)
+			.await?;
+	if snapshot.txid_refs != input.input_range.txid_refs {
+		return Ok(rejected_reclaim_job("reclaim txid set changed"));
+	}
+	if !snapshot.pidx_entries.is_empty() {
+		return Ok(rejected_reclaim_job("PIDX still references reclaim txids"));
+	}
+	if !reclaim_coverage_is_complete(&snapshot) {
+		return Ok(rejected_reclaim_job("replacement SHARD coverage is missing"));
+	}
+
+	let input_fingerprint =
+		fingerprint_reclaim_inputs(input.database_branch_id, &root, &snapshot);
+	if input_fingerprint != input.input_fingerprint {
+		return Ok(rejected_reclaim_job("reclaim input fingerprint changed"));
+	}
+
+	let mut key_count = 0_u32;
+	let mut byte_count = 0_u64;
+	for (txid, key, value, commit) in &snapshot.commits {
+		udb::compare_and_clear(tx, key, value);
+		key_count = key_count.saturating_add(1);
+		byte_count = byte_count.saturating_add(u64::try_from(value.len()).unwrap_or(u64::MAX));
+
+		let vtx_key = keys::branch_vtx_key(input.database_branch_id, commit.versionstamp);
+		if let Some(vtx_value) = tx_get_value(tx, &vtx_key, Serializable).await? {
+			if vtx_value == txid.to_be_bytes() {
+				udb::compare_and_clear(tx, &vtx_key, &vtx_value);
+				key_count = key_count.saturating_add(1);
+				byte_count =
+					byte_count.saturating_add(u64::try_from(vtx_value.len()).unwrap_or(u64::MAX));
+			} else {
+				return Ok(rejected_reclaim_job("VTX row changed for reclaim txid"));
+			}
+		}
+	}
+	for (key, value) in &snapshot.delta_chunks {
+		udb::compare_and_clear(tx, key, value);
+		key_count = key_count.saturating_add(1);
+		byte_count = byte_count.saturating_add(u64::try_from(value.len()).unwrap_or(u64::MAX));
+	}
+
+	Ok(ReclaimFdbJobOutput {
+		status: CompactionJobStatus::Succeeded,
+		output_refs: vec![ReclaimOutputRef {
+			key_count,
+			byte_count,
+			min_txid: input.input_range.txids.min_txid,
+			max_txid: input.input_range.txids.max_txid,
+		}],
+	})
+}
+
+fn rejected_reclaim_job(reason: impl Into<String>) -> ReclaimFdbJobOutput {
+	ReclaimFdbJobOutput {
+		status: CompactionJobStatus::Rejected {
+			reason: reason.into(),
+		},
+		output_refs: Vec::new(),
+	}
+}
+
 async fn read_manager_fdb_snapshot(
 	tx: &universaldb::Transaction,
 	branch_id: DatabaseBranchId,
@@ -1088,6 +1315,8 @@ async fn read_manager_fdb_snapshot(
 		.context("decode sqlite dirty marker for compaction manager")?;
 	let db_pins = history_pin::read_db_history_pins(tx, branch_id, Serializable).await?;
 	let hot_inputs = read_hot_input_snapshot(tx, branch_id, head.as_ref(), &root, Snapshot).await?;
+	let reclaim_inputs =
+		read_reclaim_input_snapshot(tx, branch_id, &root, &db_pins, Snapshot).await?;
 	let hot_lag = head
 		.as_ref()
 		.map_or(0, |head| head.head_txid.saturating_sub(root.hot_watermark_txid));
@@ -1095,7 +1324,8 @@ async fn read_manager_fdb_snapshot(
 		.as_ref()
 		.map_or(0, |head| head.head_txid.saturating_sub(root.cold_watermark_txid));
 	let has_actionable_lag = hot_lag >= quota::COMPACTION_DELTA_THRESHOLD
-		|| cold_lag >= HOT_BURST_COLD_LAG_THRESHOLD_TXIDS;
+		|| cold_lag >= HOT_BURST_COLD_LAG_THRESHOLD_TXIDS
+		|| reclaim_coverage_is_complete(&reclaim_inputs);
 	let cleared_dirty = if !has_actionable_lag {
 		if let Some(expected_dirty) = dirty_bytes {
 			udb::compare_and_clear(tx, &dirty_key, &expected_dirty);
@@ -1114,6 +1344,7 @@ async fn read_manager_fdb_snapshot(
 		dirty,
 		db_pins,
 		hot_inputs,
+		reclaim_inputs,
 		cleared_dirty,
 	})
 }
@@ -1198,6 +1429,130 @@ async fn read_hot_input_snapshot(
 	Ok(snapshot)
 }
 
+async fn read_reclaim_input_snapshot(
+	tx: &universaldb::Transaction,
+	branch_id: DatabaseBranchId,
+	root: &CompactionRoot,
+	db_pins: &[DbHistoryPin],
+	isolation_level: universaldb::utils::IsolationLevel,
+) -> Result<ReclaimInputSnapshot> {
+	let Some(max_reclaim_txid) = reclaim_delete_upper_bound(root, db_pins) else {
+		return Ok(ReclaimInputSnapshot::default());
+	};
+
+	let mut snapshot = ReclaimInputSnapshot::default();
+	for (key, value) in
+		tx_scan_prefix_values(tx, &keys::branch_commit_prefix(branch_id), isolation_level).await?
+	{
+		let txid = decode_branch_commit_txid(branch_id, &key)?;
+		if txid > max_reclaim_txid {
+			continue;
+		}
+		let commit = decode_commit_row(&value).context("decode sqlite commit row for reclaim")?;
+		snapshot.total_value_bytes = snapshot
+			.total_value_bytes
+			.saturating_add(u64::try_from(value.len()).unwrap_or(u64::MAX));
+		snapshot.txid_refs.push(ReclaimTxidRef {
+			txid,
+			versionstamp: commit.versionstamp,
+		});
+		snapshot.commits.push((txid, key, value, commit));
+		if snapshot.commits.len() >= CMP_FDB_BATCH_MAX_KEYS
+			|| snapshot.total_value_bytes >= CMP_FDB_BATCH_MAX_VALUE_BYTES as u64
+		{
+			break;
+		}
+	}
+
+	let selected_txids = snapshot
+		.txid_refs
+		.iter()
+		.map(|txid_ref| txid_ref.txid)
+		.collect::<BTreeSet<_>>();
+	if selected_txids.is_empty() {
+		return Ok(snapshot);
+	}
+
+	for (key, value) in
+		tx_scan_prefix_values(tx, &keys::branch_delta_prefix(branch_id), isolation_level).await?
+	{
+		let txid = keys::decode_branch_delta_chunk_txid(branch_id, &key)?;
+		if !selected_txids.contains(&txid) {
+			continue;
+		}
+		snapshot.total_value_bytes = snapshot
+			.total_value_bytes
+			.saturating_add(u64::try_from(value.len()).unwrap_or(u64::MAX));
+		snapshot.delta_chunks.push((key, value));
+		if snapshot.txid_refs.len() + snapshot.delta_chunks.len() >= CMP_FDB_BATCH_MAX_KEYS
+			|| snapshot.total_value_bytes >= CMP_FDB_BATCH_MAX_VALUE_BYTES as u64
+		{
+			break;
+		}
+	}
+
+	for (key, value) in
+		tx_scan_prefix_values(tx, &keys::branch_pidx_prefix(branch_id), isolation_level).await?
+	{
+		if let Ok(txid) = decode_pidx_txid(&value) {
+			if selected_txids.contains(&txid) {
+				snapshot.pidx_entries.push((key, value));
+			}
+		}
+	}
+
+	let shard_ids = reclaim_delta_shard_ids(branch_id, &snapshot.delta_chunks)?;
+	snapshot.required_coverage_shard_count = shard_ids.len();
+	for shard_id in shard_ids {
+		let key = keys::branch_shard_key(branch_id, shard_id, root.hot_watermark_txid);
+		if let Some(value) = tx_get_value(tx, &key, isolation_level).await? {
+			snapshot.coverage_shards.push((key, value));
+		}
+	}
+
+	Ok(snapshot)
+}
+
+fn reclaim_delete_upper_bound(
+	root: &CompactionRoot,
+	db_pins: &[DbHistoryPin],
+) -> Option<u64> {
+	if root.hot_watermark_txid == 0 {
+		return None;
+	}
+
+	let pinned_floor = db_pins
+		.iter()
+		.filter(|pin| pin.at_txid <= root.hot_watermark_txid)
+		.map(|pin| pin.at_txid)
+		.min();
+	let max_reclaim_txid = pinned_floor
+		.map(|txid| txid.saturating_sub(1))
+		.unwrap_or(root.hot_watermark_txid);
+
+	(max_reclaim_txid > 0).then_some(max_reclaim_txid)
+}
+
+fn reclaim_delta_shard_ids(
+	branch_id: DatabaseBranchId,
+	delta_chunks: &[(Vec<u8>, Vec<u8>)],
+) -> Result<BTreeSet<u32>> {
+	let deltas = decode_hot_delta_chunks(branch_id, delta_chunks)?;
+	let mut shard_ids = BTreeSet::new();
+	for delta in deltas.values() {
+		for page in &delta.pages {
+			shard_ids.insert(page.pgno / keys::SHARD_SIZE);
+		}
+	}
+	Ok(shard_ids)
+}
+
+fn reclaim_coverage_is_complete(snapshot: &ReclaimInputSnapshot) -> bool {
+	!snapshot.delta_chunks.is_empty()
+		&& snapshot.required_coverage_shard_count > 0
+		&& snapshot.coverage_shards.len() == snapshot.required_coverage_shard_count
+}
+
 fn selected_hot_coverage_txids(
 	root: &CompactionRoot,
 	head: &DBHead,
@@ -1260,6 +1615,42 @@ fn plan_hot_job(
 	})
 }
 
+fn plan_reclaim_job(
+	database_branch_id: DatabaseBranchId,
+	snapshot: &ManagerFdbSnapshot,
+	job_id: Id,
+	now_ms: i64,
+) -> Option<ActiveCompactionJob> {
+	if snapshot.reclaim_inputs.txid_refs.is_empty()
+		|| !snapshot.reclaim_inputs.pidx_entries.is_empty()
+		|| !reclaim_coverage_is_complete(&snapshot.reclaim_inputs)
+	{
+		return None;
+	}
+
+	let min_txid = snapshot.reclaim_inputs.txid_refs.first()?.txid;
+	let max_txid = snapshot.reclaim_inputs.txid_refs.last()?.txid;
+	let input_range = ReclaimJobInputRange {
+		txids: TxidRange { min_txid, max_txid },
+		txid_refs: snapshot.reclaim_inputs.txid_refs.clone(),
+		max_keys: CMP_FDB_BATCH_MAX_KEYS as u32,
+		max_bytes: CMP_FDB_BATCH_MAX_VALUE_BYTES as u64,
+	};
+	let input_fingerprint =
+		fingerprint_reclaim_inputs(database_branch_id, &snapshot.root, &snapshot.reclaim_inputs);
+
+	Some(ActiveCompactionJob {
+		database_branch_id,
+		job_id,
+		job_kind: CompactionJobKind::Reclaim,
+		base_manifest_generation: snapshot.root.manifest_generation,
+		input_fingerprint,
+		input_range: PlannedInputRange::Reclaim(input_range),
+		planned_at_ms: now_ms,
+		attempt: 0,
+	})
+}
+
 fn fingerprint_hot_inputs(
 	database_branch_id: DatabaseBranchId,
 	root: &CompactionRoot,
@@ -1287,6 +1678,40 @@ fn fingerprint_hot_inputs(
 		mix_fingerprint(&mut fingerprint, value);
 	}
 	for (key, value) in &hot_inputs.pidx_entries {
+		mix_fingerprint(&mut fingerprint, key);
+		mix_fingerprint(&mut fingerprint, value);
+	}
+	fingerprint
+}
+
+fn fingerprint_reclaim_inputs(
+	database_branch_id: DatabaseBranchId,
+	root: &CompactionRoot,
+	reclaim_inputs: &ReclaimInputSnapshot,
+) -> CompactionInputFingerprint {
+	let mut fingerprint = [0_u8; 32];
+	mix_fingerprint(&mut fingerprint, database_branch_id.as_uuid().as_bytes());
+	mix_fingerprint(&mut fingerprint, &root.manifest_generation.to_be_bytes());
+	mix_fingerprint(&mut fingerprint, &root.hot_watermark_txid.to_be_bytes());
+	for txid_ref in &reclaim_inputs.txid_refs {
+		mix_fingerprint(&mut fingerprint, &txid_ref.txid.to_be_bytes());
+		mix_fingerprint(&mut fingerprint, &txid_ref.versionstamp);
+	}
+	for (txid, key, value, commit) in &reclaim_inputs.commits {
+		mix_fingerprint(&mut fingerprint, &txid.to_be_bytes());
+		mix_fingerprint(&mut fingerprint, key);
+		mix_fingerprint(&mut fingerprint, value);
+		mix_fingerprint(&mut fingerprint, &commit.versionstamp);
+	}
+	for (key, value) in &reclaim_inputs.delta_chunks {
+		mix_fingerprint(&mut fingerprint, key);
+		mix_fingerprint(&mut fingerprint, value);
+	}
+	for (key, value) in &reclaim_inputs.pidx_entries {
+		mix_fingerprint(&mut fingerprint, key);
+		mix_fingerprint(&mut fingerprint, value);
+	}
+	for (key, value) in &reclaim_inputs.coverage_shards {
 		mix_fingerprint(&mut fingerprint, key);
 		mix_fingerprint(&mut fingerprint, value);
 	}
@@ -1636,16 +2061,8 @@ async fn run_companion_loop(
 							match signal {
 								DbReclaimerSignal::RunReclaimJob(signal) => {
 									if signal.database_branch_id == database_branch_id {
-										record_companion_job(
-											state,
-											database_branch_id,
-											CompactionJobKind::Reclaim,
-											signal.job_id,
-											signal.base_manifest_generation,
-											signal.input_fingerprint,
-											ctx.create_ts(),
-										);
-										*state = CompanionWorkflowState::Idle;
+										run_reclaim_job(ctx, state, database_branch_id, signal)
+											.await?;
 									}
 								}
 								DbReclaimerSignal::DestroyDatabaseBranch(signal) => {
@@ -1705,6 +2122,53 @@ async fn run_hot_compaction_job(
 		database_branch_id,
 		job_id: signal.job_id,
 		job_kind: CompactionJobKind::Hot,
+		base_manifest_generation: signal.base_manifest_generation,
+		input_fingerprint: signal.input_fingerprint,
+		status: output.status,
+		output_refs: output.output_refs,
+	})
+	.to_workflow::<DbManagerWorkflow>()
+	.tag(DATABASE_BRANCH_ID_TAG, &tag_value)
+	.send()
+	.await?;
+
+	*state = CompanionWorkflowState::Idle;
+
+	Ok(())
+}
+
+async fn run_reclaim_job(
+	ctx: &mut WorkflowCtx,
+	state: &mut CompanionWorkflowState,
+	database_branch_id: DatabaseBranchId,
+	signal: RunReclaimJob,
+) -> Result<()> {
+	record_companion_job(
+		state,
+		database_branch_id,
+		CompactionJobKind::Reclaim,
+		signal.job_id,
+		signal.base_manifest_generation,
+		signal.input_fingerprint,
+		ctx.create_ts(),
+	);
+
+	let output = ctx
+		.activity(ReclaimFdbJobInput {
+			database_branch_id,
+			job_id: signal.job_id,
+			job_kind: signal.job_kind,
+			base_manifest_generation: signal.base_manifest_generation,
+			input_fingerprint: signal.input_fingerprint,
+			input_range: signal.input_range,
+		})
+		.await?;
+
+	let tag_value = database_branch_tag_value(database_branch_id);
+	ctx.signal(ReclaimJobFinished {
+		database_branch_id,
+		job_id: signal.job_id,
+		job_kind: CompactionJobKind::Reclaim,
 		base_manifest_generation: signal.base_manifest_generation,
 		input_fingerprint: signal.input_fingerprint,
 		status: output.status,

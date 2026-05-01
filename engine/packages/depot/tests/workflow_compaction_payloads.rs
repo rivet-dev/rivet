@@ -52,6 +52,10 @@ fn cold_input() -> ColdJobInputRange {
 fn reclaim_input() -> ReclaimJobInputRange {
 	ReclaimJobInputRange {
 		txids: txids(),
+		txid_refs: vec![ReclaimTxidRef {
+			txid: 10,
+			versionstamp: [9; 16],
+		}],
 		max_keys: 500,
 		max_bytes: 2 * 1024 * 1024,
 	}

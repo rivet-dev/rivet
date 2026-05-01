@@ -10,6 +10,7 @@
 - Workflow hot compaction writes staged LTX blobs under `CMP/stage/{job_id}/hot_shard`; successful outputs stay as the manager's active hot job until a manager install story publishes or rejects them.
 - Workflow hot install belongs in the DB manager: accept only the matching active job fingerprint, validate staged checksums, copy to reader-visible `SHARD`, advance `CMP/root`, and clear PIDX with `COMPARE_AND_CLEAR`.
 - Unified DB history pin helpers live in `engine/packages/depot/src/conveyer/history_pin.rs`; workflow hot planning carries exact pinned txids in `HotJobInputRange.coverage_txids`.
+- Workflow FDB reclaim is planned by the DB manager from current manifest, DB pins, PIDX, and SHARD coverage, then revalidated and deleted by the reclaimer with `COMPARE_AND_CLEAR`.
 
 # Ralph Progress Log
 Started: Thu Apr 30 09:07:22 PM PDT 2026
@@ -187,4 +188,21 @@ Started: Thu Apr 30 09:07:22 PM PDT 2026
   - Keep legacy scalar `desc_pin`/`bk_pin` writes for existing GC and fork checks, but use unified `DB_PIN` records for workflow compaction coverage targets.
   - Hot compaction fingerprints should include selected coverage txids so new pins force stale job rejection instead of publishing rounded coverage.
   - Staged hot output can use the same job id with multiple `as_of_txid` values; install should only clear PIDX after latest-head coverage is present.
+---
+## 2026-04-30 22:37:38 PDT - US-011
+- Implemented manager-planned FDB reclaim jobs after published SHARD coverage is present.
+- Added the reclaimer FDB activity that revalidates branch lifecycle, manifest generation, DB pins, PIDX dependencies, and SHARD coverage before conditional hot-row deletes.
+- Deleted obsolete `DELTA`, `COMMITS`, and `VTX` rows with `COMPARE_AND_CLEAR`, and kept pinned txids retained.
+- Verified with `cargo check -p depot`, `cargo test -p depot --test workflow_compaction_payloads --test workflow_compaction_skeletons`, and `cargo test -p depot`.
+- Files changed:
+  - `engine/packages/depot/src/workflows/compaction.rs`
+  - `engine/packages/depot/tests/workflow_compaction_payloads.rs`
+  - `engine/packages/depot/tests/workflow_compaction_skeletons.rs`
+  - `engine/packages/depot/AGENTS.md`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Reclaim jobs should carry exact txid/versionstamp refs plus a fingerprint, but values are re-read in the delete transaction to keep workflow signals bounded.
+  - Dirty-marker clearing must consider reclaim lag, not only hot and cold compaction lag.
+  - Workflow compaction tests seed `VTX` rows when testing reclaim because the reclaimer deletes commit rows and versionstamp indexes together.
 ---
