@@ -4,6 +4,7 @@
 - Workflow compaction persisted payload structs live in `engine/packages/depot/src/conveyer/types.rs`; expose vbare encode/decode helpers there and cover them from `engine/packages/depot/tests/`.
 - Depot page reads prefer PIDX/DELTA, then latest branch SHARD at or below the read cap, then workflow `CMP/cold_shard` refs and legacy cold manifest layers outside the UDB transaction.
 - Workflow compaction signals and durable workflow state live in `engine/packages/depot/src/workflows/compaction.rs`; expose vbare encode/decode helpers there and cover them from `engine/packages/depot/tests/`.
+- Workflow compaction branch workflows use `DATABASE_BRANCH_ID_TAG` as their only stable unique tag; the manager stores companion workflow ids before entering its durable loop.
 
 # Ralph Progress Log
 Started: Thu Apr 30 09:07:22 PM PDT 2026
@@ -71,4 +72,20 @@ Started: Thu Apr 30 09:07:22 PM PDT 2026
 - **Learnings for future iterations:**
   - Gasoline `#[signal]` payload structs can still be encoded through the depot vbare helper pattern because the macro derives serde for them.
   - Workflow compaction contracts now live under `depot::workflows::compaction`; future workflow skeletons should reuse these signal and state payloads instead of redefining them locally.
+---
+## 2026-04-30 21:52:25 PDT - US-005
+- Implemented persistent `db_manager`, `db_hot_compacter`, `db_cold_compacter`, and `db_reclaimer` workflow skeletons for each database branch.
+- The manager now spawns unique companion workflows tagged only by `database_branch_id`, stores their workflow ids in durable manager state, and listens for manager signals or planning deadlines.
+- Companion workflows listen in idle state and stay alive for live branches without doing compaction, publish, or deletion work.
+- Verified with `cargo check -p depot`, `cargo test -p depot --test workflow_compaction_payloads --test workflow_compaction_skeletons`, and `cargo test -p depot`.
+- Files changed:
+  - `engine/packages/depot/src/workflows/compaction.rs`
+  - `engine/packages/depot/tests/workflow_compaction_skeletons.rs`
+  - `engine/packages/depot/AGENTS.md`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Gasoline branch workflow identity should use stable unique tags, not derivable workflow ids.
+  - Durable loop state is easiest to assert from Gasoline debug history `Loop` events in tests.
+  - `ctx.listen_n_until` is the existing no-`Tick` path for waiting on signals or planning deadlines.
 ---
