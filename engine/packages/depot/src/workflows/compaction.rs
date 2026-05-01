@@ -1,10 +1,28 @@
 use anyhow::{Context, Result, bail};
-use futures_util::FutureExt;
+use futures_util::{FutureExt, TryStreamExt};
 use gas::prelude::*;
 use serde::{Deserialize, Serialize};
+use universaldb::{
+	RangeOption,
+	options::StreamingMode,
+	utils::IsolationLevel::{Serializable, Snapshot},
+};
 use vbare::OwnedVersionedData;
 
-use crate::conveyer::types::{ColdShardRef, DatabaseBranchId};
+use crate::{
+	CMP_FDB_BATCH_MAX_KEYS, CMP_FDB_BATCH_MAX_VALUE_BYTES,
+	HOT_BURST_COLD_LAG_THRESHOLD_TXIDS,
+	conveyer::{
+		keys, quota,
+		types::{
+			BranchState, ColdShardRef, CommitRow, CompactionRoot, DBHead, DatabaseBranchId,
+			DatabaseBranchRecord, DbHistoryPin, SqliteCmpDirty, decode_commit_row,
+			decode_compaction_root, decode_database_branch_record, decode_db_head,
+			decode_db_history_pin, decode_sqlite_cmp_dirty,
+		},
+		udb,
+	},
+};
 
 pub const SQLITE_COMPACTION_WORKFLOW_PAYLOAD_VERSION: u16 = 1;
 pub const DATABASE_BRANCH_ID_TAG: &str = "database_branch_id";
@@ -212,6 +230,15 @@ impl DbManagerState {
 			last_dirty_cursor: None,
 		}
 	}
+
+	pub fn new_with_initial_deadline(
+		companion_workflow_ids: CompanionWorkflowIds,
+		now_ms: i64,
+	) -> Self {
+		let mut state = Self::new(companion_workflow_ids);
+		state.planning_deadlines = ManagerPlanningDeadlines::after_refresh(now_ms);
+		state
+	}
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -300,6 +327,17 @@ impl Default for ManagerPlanningDeadlines {
 	}
 }
 
+impl ManagerPlanningDeadlines {
+	fn after_refresh(now_ms: i64) -> Self {
+		ManagerPlanningDeadlines {
+			next_hot_check_at_ms: Some(now_ms + 500),
+			next_cold_check_at_ms: Some(now_ms + 5_000),
+			next_reclaim_check_at_ms: Some(now_ms + 10_000),
+			final_settle_check_at_ms: Some(now_ms + 30_000),
+		}
+	}
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum BranchStopState {
 	Running,
@@ -336,6 +374,40 @@ pub struct CompanionRunningJob {
 	pub attempt: u32,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Hash)]
+pub struct RefreshManagerInput {
+	pub database_branch_id: DatabaseBranchId,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RefreshManagerOutput {
+	pub planning_deadlines: ManagerPlanningDeadlines,
+	pub planned_hot_job: Option<ActiveCompactionJob>,
+	pub observed_dirty: Option<SqliteCmpDirty>,
+	pub head_txid: Option<u64>,
+	pub branch_is_live: bool,
+	pub db_pin_count: usize,
+}
+
+#[derive(Debug)]
+struct ManagerFdbSnapshot {
+	branch_record: Option<DatabaseBranchRecord>,
+	head: Option<DBHead>,
+	root: CompactionRoot,
+	dirty: Option<SqliteCmpDirty>,
+	db_pins: Vec<DbHistoryPin>,
+	hot_inputs: HotInputSnapshot,
+	cleared_dirty: bool,
+}
+
+#[derive(Debug, Default)]
+struct HotInputSnapshot {
+	commits: Vec<(u64, CommitRow)>,
+	delta_chunks: Vec<(Vec<u8>, Vec<u8>)>,
+	pidx_entries: Vec<(Vec<u8>, Vec<u8>)>,
+	total_value_bytes: u64,
+}
+
 gas::prelude::join_signal!(pub DbManagerSignal {
 	DeltasAvailable,
 	HotJobFinished,
@@ -366,10 +438,14 @@ pub fn database_branch_tag_value(database_branch_id: DatabaseBranchId) -> String
 #[workflow(DbManagerWorkflow)]
 pub async fn db_manager(ctx: &mut WorkflowCtx, input: &DbManagerInput) -> Result<()> {
 	let companion_workflow_ids = dispatch_companion_workflows(ctx, input.database_branch_id).await?;
+	let initial_deadline_ms = ctx.create_ts();
 
 	ctx.lupe()
 		.commit_interval(1)
-		.with_state(DbManagerState::new(companion_workflow_ids))
+		.with_state(DbManagerState::new_with_initial_deadline(
+			companion_workflow_ids,
+			initial_deadline_ms,
+		))
 		.run(|ctx, state| {
 			let input = input.clone();
 			async move {
@@ -408,6 +484,53 @@ pub async fn db_manager(ctx: &mut WorkflowCtx, input: &DbManagerInput) -> Result
 								};
 							}
 						}
+					}
+				}
+
+				let refresh = ctx
+					.activity(RefreshManagerInput {
+						database_branch_id: input.database_branch_id,
+					})
+					.await?;
+				state.planning_deadlines = refresh.planning_deadlines;
+				if state.last_dirty_cursor.is_none()
+					&& let Some(dirty) = refresh.observed_dirty
+				{
+					state.last_dirty_cursor = Some(DirtyCursor {
+						observed_head_txid: dirty.observed_head_txid,
+						dirty_updated_at_ms: dirty.updated_at_ms,
+					});
+				}
+
+				if state.active_hot_job.is_none()
+					&& matches!(state.branch_stop_state, BranchStopState::Running)
+				{
+					if let Some(active_job) = refresh.planned_hot_job {
+						let hot_compacter_workflow_id = state
+							.companion_workflow_ids
+							.hot_compacter_workflow_id
+							.context("hot compacter workflow id missing from manager state")?;
+						let input_range = match active_job.input_range.clone() {
+							PlannedInputRange::Hot(input_range) => input_range,
+							PlannedInputRange::Cold(_) | PlannedInputRange::Reclaim(_) => {
+								bail!("planned hot job carried non-hot input range")
+							}
+						};
+
+						ctx.signal(RunHotJob {
+							database_branch_id: active_job.database_branch_id,
+							job_id: active_job.job_id,
+							job_kind: CompactionJobKind::Hot,
+							base_manifest_generation: active_job.base_manifest_generation,
+							input_fingerprint: active_job.input_fingerprint,
+							status: CompactionJobStatus::Requested,
+							input_range,
+						})
+						.to_workflow_id(hot_compacter_workflow_id)
+						.send()
+						.await?;
+
+						state.active_hot_job = Some(active_job);
 					}
 				}
 
@@ -486,6 +609,336 @@ fn nearest_planning_deadline(planning_deadlines: &ManagerPlanningDeadlines) -> O
 	.into_iter()
 	.flatten()
 	.min()
+}
+
+#[activity(RefreshManager)]
+pub async fn refresh_manager(
+	ctx: &ActivityCtx,
+	input: &RefreshManagerInput,
+) -> Result<RefreshManagerOutput> {
+	let now_ms = ctx.ts();
+	let database_branch_id = input.database_branch_id;
+	let snapshot = ctx
+		.udb()?
+		.run(move |tx| async move { read_manager_fdb_snapshot(&tx, database_branch_id).await })
+		.await?;
+	let branch_is_live = snapshot
+		.branch_record
+		.as_ref()
+		.is_some_and(|record| record.state == BranchState::Live);
+	let head_txid = snapshot.head.as_ref().map(|head| head.head_txid);
+	let planned_hot_job = if branch_is_live {
+		plan_hot_job(
+			database_branch_id,
+			&snapshot,
+			Id::new_v1(ctx.config().dc_label()),
+			now_ms,
+		)
+	} else {
+		None
+	};
+
+	Ok(RefreshManagerOutput {
+		planning_deadlines: ManagerPlanningDeadlines::after_refresh(now_ms),
+		planned_hot_job,
+		observed_dirty: if snapshot.cleared_dirty {
+			None
+		} else {
+			snapshot.dirty
+		},
+		head_txid,
+		branch_is_live,
+		db_pin_count: snapshot.db_pins.len(),
+	})
+}
+
+async fn read_manager_fdb_snapshot(
+	tx: &universaldb::Transaction,
+	branch_id: DatabaseBranchId,
+) -> Result<ManagerFdbSnapshot> {
+	let branch_record = tx_get_value(tx, &keys::branches_list_key(branch_id), Serializable)
+		.await?
+		.as_deref()
+		.map(decode_database_branch_record)
+		.transpose()
+		.context("decode sqlite database branch record for compaction manager")?;
+	let head = tx_get_value(tx, &keys::branch_meta_head_key(branch_id), Serializable)
+		.await?
+		.as_deref()
+		.map(decode_db_head)
+		.transpose()
+		.context("decode sqlite head for compaction manager")?;
+	let root = tx_get_value(tx, &keys::branch_compaction_root_key(branch_id), Serializable)
+		.await?
+		.as_deref()
+		.map(decode_compaction_root)
+		.transpose()
+		.context("decode sqlite compaction root for manager refresh")?
+		.unwrap_or(CompactionRoot {
+			schema_version: 1,
+			manifest_generation: 0,
+			hot_watermark_txid: 0,
+			cold_watermark_txid: 0,
+			cold_watermark_versionstamp: [0; 16],
+		});
+	let dirty_key = keys::sqlite_cmp_dirty_key(branch_id);
+	let dirty_bytes = tx_get_value(tx, &dirty_key, Serializable).await?;
+	let dirty = dirty_bytes
+		.as_deref()
+		.map(decode_sqlite_cmp_dirty)
+		.transpose()
+		.context("decode sqlite dirty marker for compaction manager")?;
+	let db_pins = read_db_history_pins(tx, branch_id).await?;
+	let hot_inputs = read_hot_input_snapshot(tx, branch_id, head.as_ref(), &root).await?;
+	let hot_lag = head
+		.as_ref()
+		.map_or(0, |head| head.head_txid.saturating_sub(root.hot_watermark_txid));
+	let cold_lag = head
+		.as_ref()
+		.map_or(0, |head| head.head_txid.saturating_sub(root.cold_watermark_txid));
+	let has_actionable_lag = hot_lag >= quota::COMPACTION_DELTA_THRESHOLD
+		|| cold_lag >= HOT_BURST_COLD_LAG_THRESHOLD_TXIDS;
+	let cleared_dirty = if !has_actionable_lag {
+		if let Some(expected_dirty) = dirty_bytes {
+			udb::compare_and_clear(tx, &dirty_key, &expected_dirty);
+			true
+		} else {
+			false
+		}
+	} else {
+		false
+	};
+
+	Ok(ManagerFdbSnapshot {
+		branch_record,
+		head,
+		root,
+		dirty,
+		db_pins,
+		hot_inputs,
+		cleared_dirty,
+	})
+}
+
+async fn read_db_history_pins(
+	tx: &universaldb::Transaction,
+	branch_id: DatabaseBranchId,
+) -> Result<Vec<DbHistoryPin>> {
+	let rows = tx_scan_prefix_values(tx, &keys::db_pin_prefix(branch_id), Serializable).await?;
+
+	rows.into_iter()
+		.map(|(_, value)| decode_db_history_pin(&value))
+		.collect::<Result<Vec<_>>>()
+		.context("decode sqlite db history pins for compaction manager")
+}
+
+async fn read_hot_input_snapshot(
+	tx: &universaldb::Transaction,
+	branch_id: DatabaseBranchId,
+	head: Option<&DBHead>,
+	root: &CompactionRoot,
+) -> Result<HotInputSnapshot> {
+	let Some(head) = head else {
+		return Ok(HotInputSnapshot::default());
+	};
+	if head.head_txid <= root.hot_watermark_txid {
+		return Ok(HotInputSnapshot::default());
+	}
+
+	let min_txid = root.hot_watermark_txid.saturating_add(1);
+	let max_txid = head.head_txid;
+	let mut snapshot = HotInputSnapshot::default();
+
+	for (key, value) in tx_scan_prefix_values(tx, &keys::branch_commit_prefix(branch_id), Snapshot)
+		.await?
+	{
+		let txid = decode_branch_commit_txid(branch_id, &key)?;
+		if txid < min_txid || txid > max_txid {
+			continue;
+		}
+		snapshot.total_value_bytes = snapshot
+			.total_value_bytes
+			.saturating_add(u64::try_from(value.len()).unwrap_or(u64::MAX));
+		snapshot.commits.push((
+			txid,
+			decode_commit_row(&value).context("decode sqlite commit row for hot planning")?,
+		));
+		if snapshot.commits.len() >= CMP_FDB_BATCH_MAX_KEYS
+			|| snapshot.total_value_bytes >= CMP_FDB_BATCH_MAX_VALUE_BYTES as u64
+		{
+			break;
+		}
+	}
+
+	for (key, value) in tx_scan_prefix_values(tx, &keys::branch_delta_prefix(branch_id), Snapshot)
+		.await?
+	{
+		let txid = keys::decode_branch_delta_chunk_txid(branch_id, &key)?;
+		if txid < min_txid || txid > max_txid {
+			continue;
+		}
+		snapshot.total_value_bytes = snapshot
+			.total_value_bytes
+			.saturating_add(u64::try_from(value.len()).unwrap_or(u64::MAX));
+		snapshot.delta_chunks.push((key, value));
+		if snapshot.delta_chunks.len() + snapshot.commits.len() >= CMP_FDB_BATCH_MAX_KEYS
+			|| snapshot.total_value_bytes >= CMP_FDB_BATCH_MAX_VALUE_BYTES as u64
+		{
+			break;
+		}
+	}
+
+	for (key, value) in tx_scan_prefix_values(tx, &keys::branch_pidx_prefix(branch_id), Snapshot)
+		.await?
+	{
+		if let Ok(txid) = decode_pidx_txid(&value) {
+			if txid < min_txid || txid > max_txid {
+				continue;
+			}
+		}
+		snapshot.total_value_bytes = snapshot
+			.total_value_bytes
+			.saturating_add(u64::try_from(value.len()).unwrap_or(u64::MAX));
+		snapshot.pidx_entries.push((key, value));
+		if snapshot.pidx_entries.len() + snapshot.delta_chunks.len() + snapshot.commits.len()
+			>= CMP_FDB_BATCH_MAX_KEYS
+			|| snapshot.total_value_bytes >= CMP_FDB_BATCH_MAX_VALUE_BYTES as u64
+		{
+			break;
+		}
+	}
+
+	Ok(snapshot)
+}
+
+fn plan_hot_job(
+	database_branch_id: DatabaseBranchId,
+	snapshot: &ManagerFdbSnapshot,
+	job_id: Id,
+	now_ms: i64,
+) -> Option<ActiveCompactionJob> {
+	let head = snapshot.head.as_ref()?;
+	let hot_lag = head.head_txid.saturating_sub(snapshot.root.hot_watermark_txid);
+	if hot_lag < quota::COMPACTION_DELTA_THRESHOLD {
+		return None;
+	}
+
+	let input_range = HotJobInputRange {
+		txids: TxidRange {
+			min_txid: snapshot.root.hot_watermark_txid.saturating_add(1),
+			max_txid: head.head_txid,
+		},
+		max_pages: u32::try_from(snapshot.hot_inputs.pidx_entries.len()).unwrap_or(u32::MAX),
+		max_bytes: snapshot.hot_inputs.total_value_bytes,
+	};
+	let input_fingerprint =
+		fingerprint_hot_inputs(database_branch_id, &snapshot.root, head, &snapshot.hot_inputs);
+
+	Some(ActiveCompactionJob {
+		database_branch_id,
+		job_id,
+		job_kind: CompactionJobKind::Hot,
+		base_manifest_generation: snapshot.root.manifest_generation,
+		input_fingerprint,
+		input_range: PlannedInputRange::Hot(input_range),
+		planned_at_ms: now_ms,
+		attempt: 0,
+	})
+}
+
+fn fingerprint_hot_inputs(
+	database_branch_id: DatabaseBranchId,
+	root: &CompactionRoot,
+	head: &DBHead,
+	hot_inputs: &HotInputSnapshot,
+) -> CompactionInputFingerprint {
+	let mut fingerprint = [0_u8; 32];
+	mix_fingerprint(&mut fingerprint, database_branch_id.as_uuid().as_bytes());
+	mix_fingerprint(&mut fingerprint, &root.manifest_generation.to_be_bytes());
+	mix_fingerprint(&mut fingerprint, &root.hot_watermark_txid.to_be_bytes());
+	mix_fingerprint(&mut fingerprint, &head.head_txid.to_be_bytes());
+	for (txid, commit) in &hot_inputs.commits {
+		mix_fingerprint(&mut fingerprint, &txid.to_be_bytes());
+		mix_fingerprint(&mut fingerprint, &commit.wall_clock_ms.to_be_bytes());
+		mix_fingerprint(&mut fingerprint, &commit.versionstamp);
+		mix_fingerprint(&mut fingerprint, &commit.db_size_pages.to_be_bytes());
+		mix_fingerprint(&mut fingerprint, &commit.post_apply_checksum.to_be_bytes());
+	}
+	for (key, value) in &hot_inputs.delta_chunks {
+		mix_fingerprint(&mut fingerprint, key);
+		mix_fingerprint(&mut fingerprint, value);
+	}
+	for (key, value) in &hot_inputs.pidx_entries {
+		mix_fingerprint(&mut fingerprint, key);
+		mix_fingerprint(&mut fingerprint, value);
+	}
+	fingerprint
+}
+
+fn mix_fingerprint(fingerprint: &mut CompactionInputFingerprint, bytes: &[u8]) {
+	for (idx, byte) in bytes.iter().enumerate() {
+		let slot = idx % fingerprint.len();
+		fingerprint[slot] = fingerprint[slot]
+			.wrapping_mul(31)
+			.wrapping_add(*byte)
+			.wrapping_add(slot as u8);
+	}
+}
+
+fn decode_branch_commit_txid(branch_id: DatabaseBranchId, key: &[u8]) -> Result<u64> {
+	let prefix = keys::branch_commit_prefix(branch_id);
+	let suffix = key
+		.strip_prefix(prefix.as_slice())
+		.context("branch commit key did not start with expected prefix")?;
+	let bytes: [u8; std::mem::size_of::<u64>()] = suffix
+		.try_into()
+		.map_err(|_| anyhow::anyhow!("branch commit key suffix had invalid length"))?;
+
+	Ok(u64::from_be_bytes(bytes))
+}
+
+fn decode_pidx_txid(value: &[u8]) -> Result<u64> {
+	let bytes: [u8; std::mem::size_of::<u64>()] = value
+		.try_into()
+		.map_err(|_| anyhow::anyhow!("branch pidx value had invalid length"))?;
+
+	Ok(u64::from_be_bytes(bytes))
+}
+
+async fn tx_get_value(
+	tx: &universaldb::Transaction,
+	key: &[u8],
+	isolation_level: universaldb::utils::IsolationLevel,
+) -> Result<Option<Vec<u8>>> {
+	Ok(tx
+		.informal()
+		.get(key, isolation_level)
+		.await?
+		.map(Vec::<u8>::from))
+}
+
+async fn tx_scan_prefix_values(
+	tx: &universaldb::Transaction,
+	prefix: &[u8],
+	isolation_level: universaldb::utils::IsolationLevel,
+) -> Result<Vec<(Vec<u8>, Vec<u8>)>> {
+	let informal = tx.informal();
+	let prefix_subspace =
+		universaldb::Subspace::from(universaldb::tuple::Subspace::from_bytes(prefix.to_vec()));
+	let mut stream = informal.get_ranges_keyvalues(
+		RangeOption {
+			mode: StreamingMode::WantAll,
+			..RangeOption::from(&prefix_subspace)
+		},
+		isolation_level,
+	);
+	let mut rows = Vec::new();
+
+	while let Some(entry) = stream.try_next().await? {
+		rows.push((entry.key().to_vec(), entry.value().to_vec()));
+	}
+
+	Ok(rows)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

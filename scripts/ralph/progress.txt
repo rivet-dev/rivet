@@ -6,6 +6,7 @@
 - Workflow compaction signals and durable workflow state live in `engine/packages/depot/src/workflows/compaction.rs`; expose vbare encode/decode helpers there and cover them from `engine/packages/depot/tests/`.
 - Workflow compaction branch workflows use `DATABASE_BRANCH_ID_TAG` as their only stable unique tag; the manager stores companion workflow ids before entering its durable loop.
 - Workflow compaction dirty admission lives in `engine/packages/depot/src/conveyer/commit.rs`; runtime callers inject a signaler into `Db` to create or target the unique manager workflow.
+- Workflow compaction manager planning refreshes FDB in `RefreshManager` activity, records active jobs in durable manager state, and signals persistent companion workflows instead of spawning per-job workflows.
 
 # Ralph Progress Log
 Started: Thu Apr 30 09:07:22 PM PDT 2026
@@ -50,7 +51,7 @@ Started: Thu Apr 30 09:07:22 PM PDT 2026
 - Files changed:
   - `engine/packages/depot/src/conveyer/read.rs`
   - `engine/packages/depot/tests/conveyer_read.rs`
-  - `engine/packages/depot/AGENTS.md`
+  - `engine/packages/depot/AGENTS.md` (symlink to `CLAUDE.md`)
   - `scripts/ralph/prd.json`
   - `scripts/ralph/progress.txt`
 - **Learnings for future iterations:**
@@ -108,4 +109,20 @@ Started: Thu Apr 30 09:07:22 PM PDT 2026
   - The commit path can keep storage semantics independent from Gasoline by returning a wakeup hint and invoking an injected async signaler after the FDB transaction commits.
   - `SQLITE_CMP_DIRTY` clears must regular-read the exact encoded dirty payload before issuing `CompareAndClear`.
   - Runtime `DeltasAvailable` senders should dispatch the unique `DbManagerWorkflow` with only `DATABASE_BRANCH_ID_TAG`, then send the signal to that workflow id.
+---
+## 2026-04-30 22:07:57 PDT - US-007
+- Implemented manager FDB refresh and first hot-job planning for workflow compaction.
+- The manager now reads branch lifecycle, head, `CMP/root`, dirty marker, DB pins, and bounded hot inputs from FDB, computes hot lag from that state, records one active hot job, and signals the persistent hot compacter.
+- Added durable planning deadlines after every refresh and idle dirty-marker cleanup when no hot or cold lag remains.
+- Verified with `cargo test -p depot --test workflow_compaction_skeletons`, `cargo check -p depot`, and `cargo test -p depot`.
+- Files changed:
+  - `engine/packages/depot/src/workflows/compaction.rs`
+  - `engine/packages/depot/tests/workflow_compaction_skeletons.rs`
+  - `engine/packages/depot/AGENTS.md`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Manager FDB reads belong in activities so workflow history captures the planned job id and input fingerprint.
+  - `DeltasAvailable` remains only a hint; manager planning must recompute lag from FDB and skip scheduling when `active_hot_job` is already set.
+  - Tests can seed depot branch keys through `TestCtx`'s UDB pool and assert manager durable state via Gasoline debug `Loop` events.
 ---
