@@ -8,6 +8,7 @@ const ENV_KEYS = [
 	"RIVET_ENGINE",
 	"RIVET_ENVOY_VERSION",
 	"RIVET_RUN_ENGINE",
+	"RIVET_RUNTIME_MODE",
 ] as const;
 
 type BunGlobal = typeof globalThis & {
@@ -127,6 +128,39 @@ describe("registry start mode config", () => {
 		expect(config.startEngine).toBe(false);
 		expect(config.runtimeMode).toBe("serverless");
 		expect(config.endpoint).toBe("https://api.rivet.dev/");
+	});
+
+	test("RIVET_RUNTIME_MODE overrides endpoint inference", () => {
+		process.env.RIVET_ENDPOINT = "https://api.rivet.dev";
+		process.env.RIVET_RUNTIME_MODE = "envoy";
+
+		const config = parseRegistryConfig();
+
+		expect(config.startEngine).toBe(false);
+		expect(config.runtimeMode).toBe("envoy");
+		expect(config.endpoint).toBe("https://api.rivet.dev/");
+	});
+
+	test("explicit mode overrides RIVET_RUNTIME_MODE", () => {
+		process.env.RIVET_ENDPOINT = "https://api.rivet.dev";
+		process.env.RIVET_RUNTIME_MODE = "local";
+
+		const config = parseRegistryConfig({
+			mode: "envoy",
+		});
+
+		expect(config.startEngine).toBe(false);
+		expect(config.runtimeMode).toBe("envoy");
+		expect(config.endpoint).toBe("https://api.rivet.dev/");
+	});
+
+	test("invalid RIVET_RUNTIME_MODE is rejected", () => {
+		process.env.RIVET_ENDPOINT = "https://api.rivet.dev";
+		process.env.RIVET_RUNTIME_MODE = "local";
+
+		expect(() => parseRegistryConfig()).toThrow(
+			/RIVET_RUNTIME_MODE must be either envoy or serverless/,
+		);
 	});
 
 	test("explicit envoy mode disables local engine startup", () => {
