@@ -375,6 +375,22 @@ pub struct DbHistoryPin {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NamespaceForkFact {
+	pub source_namespace_branch_id: NamespaceBranchId,
+	pub target_namespace_branch_id: NamespaceBranchId,
+	pub fork_versionstamp: [u8; 16],
+	pub parent_cap_versionstamp: [u8; 16],
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NamespaceCatalogDbFact {
+	pub database_branch_id: DatabaseBranchId,
+	pub namespace_branch_id: NamespaceBranchId,
+	pub catalog_versionstamp: [u8; 16],
+	pub tombstone_versionstamp: Option<[u8; 16]>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DirtyPage {
 	pub pgno: u32,
 	pub bytes: Vec<u8>,
@@ -616,6 +632,14 @@ enum VersionedDbHistoryPin {
 	V1(DbHistoryPin),
 }
 
+enum VersionedNamespaceForkFact {
+	V1(NamespaceForkFact),
+}
+
+enum VersionedNamespaceCatalogDbFact {
+	V1(NamespaceCatalogDbFact),
+}
+
 macro_rules! impl_compaction_versioned_data {
 	($versioned:ident, $latest:ty, $name:literal) => {
 		impl OwnedVersionedData for $versioned {
@@ -656,6 +680,16 @@ impl_compaction_versioned_data!(
 );
 impl_compaction_versioned_data!(VersionedSqliteCmpDirty, SqliteCmpDirty, "SqliteCmpDirty");
 impl_compaction_versioned_data!(VersionedDbHistoryPin, DbHistoryPin, "DbHistoryPin");
+impl_compaction_versioned_data!(
+	VersionedNamespaceForkFact,
+	NamespaceForkFact,
+	"NamespaceForkFact"
+);
+impl_compaction_versioned_data!(
+	VersionedNamespaceCatalogDbFact,
+	NamespaceCatalogDbFact,
+	"NamespaceCatalogDbFact"
+);
 
 impl OwnedVersionedData for VersionedMetaCompact {
 	type Latest = MetaCompact;
@@ -1003,6 +1037,28 @@ pub fn encode_db_history_pin(pin: DbHistoryPin) -> Result<Vec<u8>> {
 pub fn decode_db_history_pin(payload: &[u8]) -> Result<DbHistoryPin> {
 	VersionedDbHistoryPin::deserialize_with_embedded_version(payload)
 		.context("decode sqlite db history pin")
+}
+
+pub fn encode_namespace_fork_fact(fact: NamespaceForkFact) -> Result<Vec<u8>> {
+	VersionedNamespaceForkFact::wrap_latest(fact)
+		.serialize_with_embedded_version(SQLITE_STORAGE_META_VERSION)
+		.context("encode sqlite namespace fork fact")
+}
+
+pub fn decode_namespace_fork_fact(payload: &[u8]) -> Result<NamespaceForkFact> {
+	VersionedNamespaceForkFact::deserialize_with_embedded_version(payload)
+		.context("decode sqlite namespace fork fact")
+}
+
+pub fn encode_namespace_catalog_db_fact(fact: NamespaceCatalogDbFact) -> Result<Vec<u8>> {
+	VersionedNamespaceCatalogDbFact::wrap_latest(fact)
+		.serialize_with_embedded_version(SQLITE_STORAGE_META_VERSION)
+		.context("encode sqlite namespace catalog db fact")
+}
+
+pub fn decode_namespace_catalog_db_fact(payload: &[u8]) -> Result<NamespaceCatalogDbFact> {
+	VersionedNamespaceCatalogDbFact::deserialize_with_embedded_version(payload)
+		.context("decode sqlite namespace catalog db fact")
 }
 
 #[cfg(test)]

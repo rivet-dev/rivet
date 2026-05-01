@@ -8,15 +8,21 @@ use std::sync::{
 use anyhow::Result;
 use gas::prelude::Id;
 use depot::{
-	keys::namespace_branches_bk_pin_key,
+	keys::{
+		ns_child_key, ns_fork_pin_key, ns_proof_epoch_key, nscat_by_db_key,
+		namespace_branches_bk_pin_key,
+	},
 	conveyer::branch,
-	types::{NamespaceBranchId, NamespaceId, ResolvedVersionstamp},
+	types::{
+		NamespaceBranchId, NamespaceId, ResolvedVersionstamp, decode_namespace_catalog_db_fact,
+		decode_namespace_fork_fact,
+	},
 };
 use universaldb::options::MutationType;
 
 use fork_common::{
 	TEST_DATABASE, make_db, assert_storage_error, page, page_bytes, read_database_branch_id,
-	read_commit, read_namespace_branch_id_for, read_namespace_branch_record, test_db,
+	read_commit, read_namespace_branch_id_for, read_namespace_branch_record, read_value, test_db,
 	test_namespace, test_ups,
 };
 
@@ -62,6 +68,76 @@ async fn fork_namespace_covers_root_depth_one_and_deep_sources() -> Result<()> {
 		source_namespace = forked_namespace;
 		source_namespace_branch = forked_namespace_branch;
 	}
+
+	Ok(())
+}
+
+#[tokio::test]
+async fn fork_namespace_writes_unresolved_proof_facts() -> Result<()> {
+	let db = test_db().await?;
+	let source = make_db(db.clone(), test_namespace(), TEST_DATABASE);
+	source.commit(vec![page(1, 0x11)], 2, 1_000).await?;
+	let root_database_branch = read_database_branch_id(&db, test_namespace(), TEST_DATABASE).await?;
+	let root_commit = read_commit(&db, root_database_branch, 1).await?;
+	let source_namespace_branch = read_namespace_branch_id_for(&db, test_namespace()).await?;
+
+	let forked_namespace = branch::fork_namespace(
+		&db,
+		&test_ups(),
+		NamespaceId::from_gas_id(test_namespace()),
+		ResolvedVersionstamp {
+			versionstamp: root_commit.versionstamp,
+			bookmark: None,
+		},
+	)
+	.await?;
+	let forked_namespace_branch =
+		read_namespace_branch_id_for(&db, namespace_id_to_gas_id(forked_namespace)).await?;
+
+	let nscat_fact_bytes = read_value(
+		&db,
+		nscat_by_db_key(root_database_branch, source_namespace_branch),
+	)
+	.await?
+	.expect("namespace catalog proof fact should exist");
+	let nscat_fact = decode_namespace_catalog_db_fact(&nscat_fact_bytes)?;
+	assert_eq!(nscat_fact.database_branch_id, root_database_branch);
+	assert_eq!(nscat_fact.namespace_branch_id, source_namespace_branch);
+	assert!(nscat_fact.catalog_versionstamp <= root_commit.versionstamp);
+	assert_eq!(nscat_fact.tombstone_versionstamp, None);
+
+	let fork_fact_bytes = read_value(
+		&db,
+		ns_fork_pin_key(
+			source_namespace_branch,
+			root_commit.versionstamp,
+			forked_namespace_branch,
+		),
+	)
+	.await?
+	.expect("namespace fork pin fact should exist");
+	let child_fact_bytes = read_value(
+		&db,
+		ns_child_key(
+			source_namespace_branch,
+			root_commit.versionstamp,
+			forked_namespace_branch,
+		),
+	)
+	.await?
+	.expect("namespace child fact should exist");
+	let fork_fact = decode_namespace_fork_fact(&fork_fact_bytes)?;
+	let child_fact = decode_namespace_fork_fact(&child_fact_bytes)?;
+	assert_eq!(fork_fact, child_fact);
+	assert_eq!(fork_fact.source_namespace_branch_id, source_namespace_branch);
+	assert_eq!(fork_fact.target_namespace_branch_id, forked_namespace_branch);
+	assert_eq!(fork_fact.fork_versionstamp, root_commit.versionstamp);
+
+	assert!(
+		read_value(&db, ns_proof_epoch_key(source_namespace_branch))
+			.await?
+			.is_some()
+	);
 
 	Ok(())
 }

@@ -22,6 +22,12 @@ pub fn bookmark_pin_id(bookmark: &BookmarkStr) -> Vec<u8> {
 	pin_id
 }
 
+pub fn namespace_fork_pin_id(owner_namespace_branch_id: NamespaceBranchId) -> Vec<u8> {
+	let mut pin_id = b"namespace_fork/".to_vec();
+	pin_id.extend_from_slice(owner_namespace_branch_id.as_uuid().as_bytes());
+	pin_id
+}
+
 pub fn write_database_fork_pin(
 	tx: &universaldb::Transaction,
 	source_branch_id: DatabaseBranchId,
@@ -73,7 +79,6 @@ pub fn write_bookmark_pin(
 pub fn write_namespace_fork_pin(
 	tx: &universaldb::Transaction,
 	branch_id: DatabaseBranchId,
-	pin_id: &[u8],
 	owner_namespace_branch_id: NamespaceBranchId,
 	at_versionstamp: [u8; 16],
 	at_txid: u64,
@@ -82,7 +87,7 @@ pub fn write_namespace_fork_pin(
 	write_db_history_pin(
 		tx,
 		branch_id,
-		pin_id,
+		&namespace_fork_pin_id(owner_namespace_branch_id),
 		DbHistoryPin {
 			at_versionstamp,
 			at_txid,

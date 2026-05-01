@@ -20,11 +20,13 @@ use super::{
 	history_pin, keys, udb,
 	types::{
 		DatabaseBranchId, DatabaseBranchRecord, DatabasePointer, BookmarkRef, BranchState, DBHead,
-		NamespaceBranchId, NamespaceBranchRecord, NamespaceId, NamespacePointer,
+		NamespaceBranchId, NamespaceBranchRecord, NamespaceCatalogDbFact, NamespaceForkFact,
+		NamespaceId, NamespacePointer,
 		ResolvedVersionstamp,
 		decode_database_branch_record, decode_database_pointer, decode_commit_row,
-		decode_namespace_branch_record, decode_namespace_pointer, encode_database_branch_record,
-		encode_database_pointer, encode_db_head, encode_namespace_branch_record,
+		decode_namespace_branch_record, decode_namespace_catalog_db_fact, decode_namespace_pointer,
+		encode_database_branch_record, encode_database_pointer, encode_db_head,
+		encode_namespace_branch_record, encode_namespace_catalog_db_fact, encode_namespace_fork_fact,
 		encode_namespace_pointer,
 	},
 };
@@ -266,7 +268,13 @@ pub async fn fork_database(
 					&keys::database_pointer_cur_key(target_namespace_branch, &new_database_id),
 					&encoded_pointer,
 				);
-				write_namespace_catalog_marker(&tx, target_namespace_branch, new_database_branch_id)?;
+				write_namespace_catalog_marker(
+					&tx,
+					target_namespace_branch,
+					new_database_branch_id,
+					&udb::INCOMPLETE_VERSIONSTAMP,
+				)
+				.await?;
 
 				Ok(source_database_branch)
 			}
@@ -325,6 +333,7 @@ pub async fn delete_database(
 				.context("prepare versionstamped sqlite namespace database tombstone")?,
 			MutationType::SetVersionstampedValue,
 		);
+		write_namespace_catalog_tombstone_marker(&tx, namespace_branch_id, database_id).await?;
 		tx.informal().atomic_op(
 			&keys::branches_refcount_key(database_id),
 			&(-1_i64).to_le_bytes(),
@@ -702,6 +711,7 @@ pub async fn derive_namespace_branch_at(
 		&at_versionstamp,
 		MutationType::ByteMin,
 	);
+	write_namespace_fork_facts(tx, source_branch_id, new_branch_id, at_versionstamp).await?;
 
 	Ok(())
 }
@@ -760,19 +770,155 @@ async fn is_database_visible_in_namespace_branch(
 		.contains(&database_id))
 }
 
-fn write_namespace_catalog_marker(
+pub(crate) async fn write_namespace_catalog_marker(
+	tx: &universaldb::Transaction,
+	namespace_branch_id: NamespaceBranchId,
+	database_id: DatabaseBranchId,
+	catalog_versionstamp: &[u8; 16],
+) -> Result<()> {
+	let root_namespace_branch_id = read_namespace_root_branch_id(tx, namespace_branch_id).await?;
+	write_namespace_catalog_marker_with_root(
+		tx,
+		root_namespace_branch_id,
+		namespace_branch_id,
+		database_id,
+		catalog_versionstamp,
+	)
+}
+
+pub(crate) fn write_namespace_catalog_marker_with_root(
+	tx: &universaldb::Transaction,
+	root_namespace_branch_id: NamespaceBranchId,
+	namespace_branch_id: NamespaceBranchId,
+	database_id: DatabaseBranchId,
+	catalog_versionstamp: &[u8; 16],
+) -> Result<()> {
+	tx.informal().atomic_op(
+		&keys::namespace_catalog_key(namespace_branch_id, database_id),
+		&udb::append_versionstamp_offset(catalog_versionstamp.to_vec(), catalog_versionstamp)
+			.context("prepare versionstamped sqlite namespace catalog marker")?,
+		MutationType::SetVersionstampedValue,
+	);
+	let fact = NamespaceCatalogDbFact {
+		database_branch_id: database_id,
+		namespace_branch_id,
+		catalog_versionstamp: *catalog_versionstamp,
+		tombstone_versionstamp: None,
+	};
+	let encoded_fact = encode_namespace_catalog_db_fact(fact)
+		.context("encode sqlite namespace catalog proof fact")?;
+	tx.informal().atomic_op(
+		&keys::nscat_by_db_key(database_id, namespace_branch_id),
+		&udb::append_versionstamp_offset(encoded_fact, catalog_versionstamp)
+			.context("prepare versionstamped sqlite namespace catalog proof fact")?,
+		MutationType::SetVersionstampedValue,
+	);
+	bump_namespace_proof_epoch(tx, root_namespace_branch_id);
+
+	Ok(())
+}
+
+async fn write_namespace_catalog_tombstone_marker(
 	tx: &universaldb::Transaction,
 	namespace_branch_id: NamespaceBranchId,
 	database_id: DatabaseBranchId,
 ) -> Result<()> {
+	let root_namespace_branch_id = read_namespace_root_branch_id(tx, namespace_branch_id).await?;
+	let existing_fact = tx
+		.informal()
+		.get(&keys::nscat_by_db_key(database_id, namespace_branch_id), Serializable)
+		.await?
+		.as_deref()
+		.map(|bytes| decode_namespace_catalog_db_fact(bytes))
+		.transpose()
+		.context("decode sqlite namespace catalog proof fact before tombstone")?;
+	let fact = NamespaceCatalogDbFact {
+		database_branch_id: database_id,
+		namespace_branch_id,
+		catalog_versionstamp: existing_fact
+			.as_ref()
+			.map_or([0; 16], |fact| fact.catalog_versionstamp),
+		tombstone_versionstamp: Some(udb::INCOMPLETE_VERSIONSTAMP),
+	};
+	let encoded_fact = encode_namespace_catalog_db_fact(fact)
+		.context("encode sqlite namespace catalog tombstone proof fact")?;
 	tx.informal().atomic_op(
-		&keys::namespace_catalog_key(namespace_branch_id, database_id),
-		&versionstamped_marker_value()
-			.context("prepare versionstamped sqlite namespace catalog marker")?,
+		&keys::nscat_by_db_key(database_id, namespace_branch_id),
+		&udb::append_versionstamp_offset(encoded_fact, &udb::INCOMPLETE_VERSIONSTAMP)
+			.context("prepare versionstamped sqlite namespace catalog tombstone proof fact")?,
 		MutationType::SetVersionstampedValue,
 	);
+	bump_namespace_proof_epoch(tx, root_namespace_branch_id);
 
 	Ok(())
+}
+
+async fn write_namespace_fork_facts(
+	tx: &universaldb::Transaction,
+	source_namespace_branch_id: NamespaceBranchId,
+	target_namespace_branch_id: NamespaceBranchId,
+	fork_versionstamp: [u8; 16],
+) -> Result<()> {
+	let root_namespace_branch_id =
+		read_namespace_root_branch_id(tx, source_namespace_branch_id).await?;
+	let fact = NamespaceForkFact {
+		source_namespace_branch_id,
+		target_namespace_branch_id,
+		fork_versionstamp,
+		parent_cap_versionstamp: fork_versionstamp,
+	};
+	let encoded_fact =
+		encode_namespace_fork_fact(fact).context("encode sqlite namespace fork proof fact")?;
+	tx.informal().set(
+		&keys::ns_fork_pin_key(
+			source_namespace_branch_id,
+			fork_versionstamp,
+			target_namespace_branch_id,
+		),
+		&encoded_fact,
+	);
+	tx.informal().set(
+		&keys::ns_child_key(
+			source_namespace_branch_id,
+			fork_versionstamp,
+			target_namespace_branch_id,
+		),
+		&encoded_fact,
+	);
+	bump_namespace_proof_epoch(tx, root_namespace_branch_id);
+
+	Ok(())
+}
+
+async fn read_namespace_root_branch_id(
+	tx: &universaldb::Transaction,
+	namespace_branch_id: NamespaceBranchId,
+) -> Result<NamespaceBranchId> {
+	let mut current_branch_id = namespace_branch_id;
+
+	for depth in 0..=MAX_NAMESPACE_DEPTH {
+		let record = read_namespace_branch_record(tx, current_branch_id).await?;
+		let Some(parent_branch_id) = record.parent else {
+			return Ok(current_branch_id);
+		};
+		if depth == MAX_NAMESPACE_DEPTH {
+			return Err(SqliteStorageError::NamespaceForkChainTooDeep.into());
+		}
+		current_branch_id = parent_branch_id;
+	}
+
+	Err(SqliteStorageError::NamespaceForkChainTooDeep.into())
+}
+
+fn bump_namespace_proof_epoch(
+	tx: &universaldb::Transaction,
+	root_namespace_branch_id: NamespaceBranchId,
+) {
+	tx.informal().atomic_op(
+		&keys::ns_proof_epoch_key(root_namespace_branch_id),
+		&1_i64.to_le_bytes(),
+		MutationType::Add,
+	);
 }
 
 fn versionstamped_marker_value() -> Result<Vec<u8>> {

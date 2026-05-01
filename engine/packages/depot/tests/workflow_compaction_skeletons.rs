@@ -12,14 +12,16 @@ use depot::{
 		PAGE_SIZE, branch_commit_key, branch_compaction_root_key,
 		branch_compaction_stage_hot_shard_prefix, branch_delta_chunk_key, branch_meta_head_key,
 		branch_pidx_key, branch_shard_key, branch_shard_prefix, branch_vtx_key, branches_list_key,
-		sqlite_cmp_dirty_key,
+		db_pin_key, ns_child_key, ns_fork_pin_key, nscat_by_db_key, sqlite_cmp_dirty_key,
 	},
 	ltx::{LtxHeader, decode_ltx_v3, encode_ltx_v3},
 	types::{
 		BookmarkStr, BranchState, CommitRow, CompactionRoot, DBHead, DatabaseBranchId, DatabaseBranchRecord,
-		DirtyPage, FetchedPage, NamespaceBranchId, SqliteCmpDirty, decode_commit_row,
-		decode_compaction_root, encode_commit_row, encode_compaction_root,
-		encode_database_branch_record, encode_db_head, encode_sqlite_cmp_dirty,
+		DbHistoryPinKind, DirtyPage, FetchedPage, NamespaceBranchId, NamespaceCatalogDbFact,
+		NamespaceForkFact, SqliteCmpDirty, decode_commit_row, decode_compaction_root,
+		decode_db_history_pin, encode_commit_row, encode_compaction_root,
+		encode_database_branch_record, encode_db_head, encode_namespace_catalog_db_fact,
+		encode_namespace_fork_fact, encode_sqlite_cmp_dirty,
 	},
 	workflows::compaction::{
 		CompactionJobKind, CompactionJobStatus, DATABASE_BRANCH_ID_TAG, DbColdCompacterWorkflow,
@@ -514,6 +516,57 @@ async fn set_test_pidx(
 	db.run(move |tx| async move {
 		tx.informal()
 			.set(&branch_pidx_key(database_branch_id, 1), &txid.to_be_bytes());
+		Ok(())
+	})
+	.await
+}
+
+async fn seed_namespace_fork_proof(
+	test_ctx: &TestCtx,
+	database_branch_id: DatabaseBranchId,
+	source_namespace_branch_id: NamespaceBranchId,
+	target_namespace_branch_id: NamespaceBranchId,
+	fork_txid: u64,
+	write_fork_pin_fact: bool,
+) -> Result<()> {
+	let db = test_ctx.pools().udb()?;
+	db.run(move |tx| async move {
+		let mut fork_versionstamp = [0; 16];
+		fork_versionstamp[8..16].copy_from_slice(&fork_txid.to_be_bytes());
+		tx.informal().set(
+			&nscat_by_db_key(database_branch_id, source_namespace_branch_id),
+			&encode_namespace_catalog_db_fact(NamespaceCatalogDbFact {
+				database_branch_id,
+				namespace_branch_id: source_namespace_branch_id,
+				catalog_versionstamp: [0; 16],
+				tombstone_versionstamp: None,
+			})?,
+		);
+		let fact = NamespaceForkFact {
+			source_namespace_branch_id,
+			target_namespace_branch_id,
+			fork_versionstamp,
+			parent_cap_versionstamp: fork_versionstamp,
+		};
+		let encoded_fact = encode_namespace_fork_fact(fact)?;
+		tx.informal().set(
+			&ns_child_key(
+				source_namespace_branch_id,
+				fork_versionstamp,
+				target_namespace_branch_id,
+			),
+			&encoded_fact,
+		);
+		if write_fork_pin_fact {
+			tx.informal().set(
+				&ns_fork_pin_key(
+					source_namespace_branch_id,
+					fork_versionstamp,
+					target_namespace_branch_id,
+				),
+				&encoded_fact,
+			);
+		}
 		Ok(())
 	})
 	.await
@@ -1177,6 +1230,137 @@ async fn reclaimer_retains_pinned_txid_history() -> Result<()> {
 	);
 	assert!(
 		read_value(&test_ctx, branch_commit_key(database_branch_id, 50))
+			.await?
+			.is_some()
+	);
+
+	test_ctx.shutdown().await?;
+	Ok(())
+}
+
+#[tokio::test]
+async fn reclaimer_materializes_namespace_fork_pin_before_delete() -> Result<()> {
+	let database_branch_id = database_branch_id(0xb0b0_2233_4455_6677_8899_aabb_ccdd_eeff);
+	let tag_value = database_branch_tag_value(database_branch_id);
+	let source_namespace_branch_id = NamespaceBranchId::from_uuid(Uuid::from_u128(
+		0x1111_2222_3333_4444_5555_6666_7777_8888,
+	));
+	let target_namespace_branch_id = NamespaceBranchId::from_uuid(Uuid::from_u128(
+		0x9999_aaaa_bbbb_cccc_dddd_eeee_ffff_0001,
+	));
+	let mut test_ctx = TestCtx::new(build_registry()).await?;
+	seed_manager_branch(
+		&test_ctx,
+		database_branch_id,
+		100,
+		Some(CompactionRoot {
+			schema_version: 1,
+			manifest_generation: 1,
+			hot_watermark_txid: 100,
+			cold_watermark_txid: 0,
+			cold_watermark_versionstamp: [0; 16],
+		}),
+		None,
+	)
+	.await?;
+	publish_test_shard_and_clear_pidx(&test_ctx, database_branch_id, 100).await?;
+	seed_namespace_fork_proof(
+		&test_ctx,
+		database_branch_id,
+		source_namespace_branch_id,
+		target_namespace_branch_id,
+		50,
+		true,
+	)
+	.await?;
+
+	let _manager_workflow_id = test_ctx
+		.workflow(DbManagerInput { database_branch_id })
+		.tag(DATABASE_BRANCH_ID_TAG, &tag_value)
+		.unique()
+		.dispatch()
+		.await?;
+
+	wait_for_reclaim_delete(&test_ctx, database_branch_id, 49).await?;
+	let pin_bytes = read_value(
+		&test_ctx,
+		db_pin_key(
+			database_branch_id,
+			&history_pin::namespace_fork_pin_id(target_namespace_branch_id),
+		),
+	)
+	.await?
+	.expect("namespace-derived DB_PIN should be materialized");
+	let pin = decode_db_history_pin(&pin_bytes)?;
+	assert_eq!(pin.kind, DbHistoryPinKind::NamespaceFork);
+	assert_eq!(pin.owner_namespace_branch_id, Some(target_namespace_branch_id));
+	assert_eq!(pin.at_txid, 50);
+	assert!(
+		read_value(&test_ctx, branch_delta_chunk_key(database_branch_id, 50, 0))
+			.await?
+			.is_some()
+	);
+
+	test_ctx.shutdown().await?;
+	Ok(())
+}
+
+#[tokio::test]
+async fn reclaimer_retains_history_when_namespace_proof_is_ambiguous() -> Result<()> {
+	let database_branch_id = database_branch_id(0xc0c0_2233_4455_6677_8899_aabb_ccdd_eeff);
+	let tag_value = database_branch_tag_value(database_branch_id);
+	let source_namespace_branch_id = NamespaceBranchId::from_uuid(Uuid::from_u128(
+		0x2222_3333_4444_5555_6666_7777_8888_9999,
+	));
+	let target_namespace_branch_id = NamespaceBranchId::from_uuid(Uuid::from_u128(
+		0xaaaa_bbbb_cccc_dddd_eeee_ffff_0001_0002,
+	));
+	let mut test_ctx = TestCtx::new(build_registry()).await?;
+	seed_manager_branch(
+		&test_ctx,
+		database_branch_id,
+		100,
+		Some(CompactionRoot {
+			schema_version: 1,
+			manifest_generation: 1,
+			hot_watermark_txid: 100,
+			cold_watermark_txid: 0,
+			cold_watermark_versionstamp: [0; 16],
+		}),
+		None,
+	)
+	.await?;
+	publish_test_shard_and_clear_pidx(&test_ctx, database_branch_id, 100).await?;
+	seed_namespace_fork_proof(
+		&test_ctx,
+		database_branch_id,
+		source_namespace_branch_id,
+		target_namespace_branch_id,
+		50,
+		false,
+	)
+	.await?;
+
+	let manager_workflow_id = test_ctx
+		.workflow(DbManagerInput { database_branch_id })
+		.tag(DATABASE_BRANCH_ID_TAG, &tag_value)
+		.unique()
+		.dispatch()
+		.await?;
+	let manager_state =
+		wait_for_manager_state(&test_ctx, manager_workflow_id, |state| {
+			state.planning_deadlines.next_reclaim_check_at_ms.is_some()
+		})
+		.await?;
+
+	assert!(manager_state.active_reclaim_job.is_none());
+	assert!(
+		read_value(&test_ctx, branch_delta_chunk_key(database_branch_id, 1, 0))
+			.await?
+			.is_some()
+	);
+	assert!(
+		read_value(&test_ctx, branch_commit_key(database_branch_id, 1))
 			.await?
 			.is_some()
 	);

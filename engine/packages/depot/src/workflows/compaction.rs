@@ -16,16 +16,18 @@ use universaldb::{
 use vbare::OwnedVersionedData;
 
 use crate::{
-	CMP_FDB_BATCH_MAX_KEYS, CMP_FDB_BATCH_MAX_VALUE_BYTES,
+	CMP_FDB_BATCH_MAX_KEYS, CMP_FDB_BATCH_MAX_VALUE_BYTES, MAX_NAMESPACE_DEPTH,
 	HOT_BURST_COLD_LAG_THRESHOLD_TXIDS,
 	conveyer::{
 		history_pin, keys, quota,
 		ltx::{DecodedLtx, LtxHeader, decode_ltx_v3, encode_ltx_v3},
 		types::{
 			BranchState, ColdShardRef, CommitRow, CompactionRoot, DBHead, DatabaseBranchId,
-			DatabaseBranchRecord, DbHistoryPin, DirtyPage, SqliteCmpDirty, decode_commit_row,
+			DatabaseBranchRecord, DbHistoryPin, DirtyPage, NamespaceCatalogDbFact,
+			NamespaceForkFact, SqliteCmpDirty, decode_commit_row,
 			decode_compaction_root, decode_database_branch_record, decode_db_head,
-			decode_sqlite_cmp_dirty, encode_compaction_root,
+			decode_namespace_catalog_db_fact, decode_namespace_fork_fact, decode_sqlite_cmp_dirty,
+			encode_compaction_root,
 		},
 		udb,
 	},
@@ -463,6 +465,7 @@ struct ManagerFdbSnapshot {
 	db_pins: Vec<DbHistoryPin>,
 	hot_inputs: HotInputSnapshot,
 	reclaim_inputs: ReclaimInputSnapshot,
+	namespace_proof_blocked_reclaim: bool,
 	cleared_dirty: bool,
 }
 
@@ -1030,8 +1033,11 @@ async fn install_hot_job_tx(
 		return Ok(rejected_hot_install("database branch head is missing"));
 	};
 
-	let db_pins =
+	let mut db_pins =
 		history_pin::read_db_history_pins(tx, input.database_branch_id, Serializable).await?;
+	if resolve_namespace_fork_pins(tx, input.database_branch_id, &mut db_pins).await? {
+		return Ok(rejected_hot_install("namespace fork proof is ambiguous"));
+	}
 	let coverage_txids = selected_hot_coverage_txids(&root, &head, &db_pins);
 	if coverage_txids != input.input_range.coverage_txids {
 		return Ok(rejected_hot_install("hot compaction coverage targets changed"));
@@ -1211,8 +1217,11 @@ async fn reclaim_fdb_job_tx(
 		return Ok(rejected_reclaim_job("base manifest generation changed"));
 	}
 
-	let db_pins =
+	let mut db_pins =
 		history_pin::read_db_history_pins(tx, input.database_branch_id, Serializable).await?;
+	if resolve_namespace_fork_pins(tx, input.database_branch_id, &mut db_pins).await? {
+		return Ok(rejected_reclaim_job("namespace fork proof is ambiguous"));
+	}
 	let snapshot =
 		read_reclaim_input_snapshot(tx, input.database_branch_id, &root, &db_pins, Serializable)
 			.await?;
@@ -1313,7 +1322,9 @@ async fn read_manager_fdb_snapshot(
 		.map(decode_sqlite_cmp_dirty)
 		.transpose()
 		.context("decode sqlite dirty marker for compaction manager")?;
-	let db_pins = history_pin::read_db_history_pins(tx, branch_id, Serializable).await?;
+	let mut db_pins = history_pin::read_db_history_pins(tx, branch_id, Serializable).await?;
+	let namespace_proof_blocked_reclaim =
+		resolve_namespace_fork_pins(tx, branch_id, &mut db_pins).await?;
 	let hot_inputs = read_hot_input_snapshot(tx, branch_id, head.as_ref(), &root, Snapshot).await?;
 	let reclaim_inputs =
 		read_reclaim_input_snapshot(tx, branch_id, &root, &db_pins, Snapshot).await?;
@@ -1345,8 +1356,257 @@ async fn read_manager_fdb_snapshot(
 		db_pins,
 		hot_inputs,
 		reclaim_inputs,
+		namespace_proof_blocked_reclaim,
 		cleared_dirty,
 	})
+}
+
+async fn resolve_namespace_fork_pins(
+	tx: &universaldb::Transaction,
+	branch_id: DatabaseBranchId,
+	db_pins: &mut Vec<DbHistoryPin>,
+) -> Result<bool> {
+	let catalog_rows =
+		tx_scan_prefix_values(tx, &keys::nscat_by_db_prefix(branch_id), Serializable).await?;
+	if catalog_rows.len() >= CMP_FDB_BATCH_MAX_KEYS {
+		tracing::warn!(
+			?branch_id,
+			row_count = catalog_rows.len(),
+			"retaining sqlite history because namespace catalog proof is too large"
+		);
+		return Ok(true);
+	}
+
+	for (_, value) in catalog_rows {
+		let catalog_fact = decode_namespace_catalog_db_fact(&value)
+			.context("decode sqlite namespace catalog proof fact")?;
+		if catalog_fact.database_branch_id != branch_id {
+			tracing::warn!(
+				?branch_id,
+				?catalog_fact,
+				"retaining sqlite history because namespace catalog proof has wrong branch"
+			);
+			return Ok(true);
+		}
+		if resolve_namespace_catalog_forks(tx, branch_id, db_pins, &catalog_fact).await? {
+			return Ok(true);
+		}
+	}
+
+	Ok(false)
+}
+
+async fn resolve_namespace_catalog_forks(
+	tx: &universaldb::Transaction,
+	branch_id: DatabaseBranchId,
+	db_pins: &mut Vec<DbHistoryPin>,
+	catalog_fact: &NamespaceCatalogDbFact,
+) -> Result<bool> {
+	let mut queue = vec![catalog_fact.namespace_branch_id];
+	let mut visited = BTreeSet::new();
+	let mut inspected_rows = 0_usize;
+
+	for depth in 0..=MAX_NAMESPACE_DEPTH {
+		let Some(source_namespace_branch_id) = queue.pop() else {
+			return Ok(false);
+		};
+		if !visited.insert(source_namespace_branch_id) {
+			continue;
+		}
+
+		let child_rows =
+			tx_scan_prefix_values(tx, &keys::ns_child_prefix(source_namespace_branch_id), Serializable)
+				.await?;
+		inspected_rows = inspected_rows.saturating_add(child_rows.len());
+		if inspected_rows >= CMP_FDB_BATCH_MAX_KEYS {
+			tracing::warn!(
+				?branch_id,
+				?source_namespace_branch_id,
+				row_count = inspected_rows,
+				"retaining sqlite history because namespace child proof is too large"
+			);
+			return Ok(true);
+		}
+
+		for (_, value) in child_rows {
+			let child_fact =
+				decode_namespace_fork_fact(&value).context("decode sqlite namespace child fact")?;
+			if child_fact.source_namespace_branch_id != source_namespace_branch_id {
+				tracing::warn!(
+					?branch_id,
+					?child_fact,
+					"retaining sqlite history because namespace child proof has wrong source"
+				);
+				return Ok(true);
+			}
+			if !namespace_fork_can_inherit_database(&child_fact, catalog_fact) {
+				continue;
+			}
+			if namespace_fork_pin_fact_is_missing_or_changed(tx, &child_fact).await? {
+				tracing::warn!(
+					?branch_id,
+					?child_fact,
+					"retaining sqlite history because namespace fork proof is missing"
+				);
+				return Ok(true);
+			}
+			if materialize_namespace_fork_pin(tx, branch_id, db_pins, &child_fact).await? {
+				return Ok(true);
+			}
+			queue.push(child_fact.target_namespace_branch_id);
+		}
+
+		if depth == MAX_NAMESPACE_DEPTH && !queue.is_empty() {
+			tracing::warn!(
+				?branch_id,
+				"retaining sqlite history because namespace proof exceeded max depth"
+			);
+			return Ok(true);
+		}
+	}
+
+	Ok(false)
+}
+
+fn namespace_fork_can_inherit_database(
+	fork_fact: &NamespaceForkFact,
+	catalog_fact: &NamespaceCatalogDbFact,
+) -> bool {
+	fork_fact.fork_versionstamp >= catalog_fact.catalog_versionstamp
+		&& catalog_fact
+			.tombstone_versionstamp
+			.map_or(true, |tombstone_versionstamp| {
+				fork_fact.fork_versionstamp < tombstone_versionstamp
+			})
+}
+
+async fn namespace_fork_pin_fact_is_missing_or_changed(
+	tx: &universaldb::Transaction,
+	child_fact: &NamespaceForkFact,
+) -> Result<bool> {
+	let Some(fork_pin_bytes) = tx_get_value(
+		tx,
+		&keys::ns_fork_pin_key(
+			child_fact.source_namespace_branch_id,
+			child_fact.fork_versionstamp,
+			child_fact.target_namespace_branch_id,
+		),
+		Serializable,
+	)
+	.await?
+	else {
+		return Ok(true);
+	};
+	let fork_pin_fact =
+		decode_namespace_fork_fact(&fork_pin_bytes).context("decode sqlite namespace fork fact")?;
+
+	Ok(fork_pin_fact != *child_fact)
+}
+
+async fn materialize_namespace_fork_pin(
+	tx: &universaldb::Transaction,
+	branch_id: DatabaseBranchId,
+	db_pins: &mut Vec<DbHistoryPin>,
+	fork_fact: &NamespaceForkFact,
+) -> Result<bool> {
+	let Some((at_txid, at_versionstamp, commit)) =
+		latest_commit_at_or_before_versionstamp(tx, branch_id, fork_fact.fork_versionstamp).await?
+	else {
+		tracing::warn!(
+			?branch_id,
+			?fork_fact,
+			"retaining sqlite history because namespace fork versionstamp could not be resolved"
+		);
+		return Ok(true);
+	};
+
+	history_pin::write_namespace_fork_pin(
+		tx,
+		branch_id,
+		fork_fact.target_namespace_branch_id,
+		at_versionstamp,
+		at_txid,
+		commit.wall_clock_ms,
+	)?;
+	db_pins
+		.retain(|pin| pin.owner_namespace_branch_id != Some(fork_fact.target_namespace_branch_id));
+	db_pins.push(DbHistoryPin {
+		at_versionstamp,
+		at_txid,
+		kind: crate::types::DbHistoryPinKind::NamespaceFork,
+		owner_database_branch_id: None,
+		owner_namespace_branch_id: Some(fork_fact.target_namespace_branch_id),
+		owner_bookmark: None,
+		created_at_ms: commit.wall_clock_ms,
+	});
+
+	Ok(false)
+}
+
+async fn latest_commit_at_or_before_versionstamp(
+	tx: &universaldb::Transaction,
+	branch_id: DatabaseBranchId,
+	versionstamp_cap: [u8; 16],
+) -> Result<Option<(u64, [u8; 16], CommitRow)>> {
+	let mut selected = None;
+	let mut inspected_rows = 0_usize;
+
+	for (key, value) in
+		tx_scan_prefix_values(tx, &keys::branch_vtx_prefix(branch_id), Serializable).await?
+	{
+		let versionstamp = decode_branch_vtx_versionstamp(branch_id, &key)?;
+		if versionstamp > versionstamp_cap {
+			break;
+		}
+		inspected_rows = inspected_rows.saturating_add(1);
+		if inspected_rows >= CMP_FDB_BATCH_MAX_KEYS {
+			tracing::warn!(
+				?branch_id,
+				row_count = inspected_rows,
+				"retaining sqlite history because namespace VTX proof is too large"
+			);
+			return Ok(None);
+		}
+		let txid = decode_txid_value(&value)?;
+		selected = Some((txid, versionstamp));
+	}
+
+	let Some((txid, versionstamp)) = selected else {
+		return Ok(None);
+	};
+	let Some(commit_bytes) = tx_get_value(tx, &keys::branch_commit_key(branch_id, txid), Serializable).await?
+	else {
+		return Ok(None);
+	};
+	let commit = decode_commit_row(&commit_bytes).context("decode sqlite namespace pin commit row")?;
+
+	Ok(Some((txid, versionstamp, commit)))
+}
+
+fn decode_branch_vtx_versionstamp(
+	branch_id: DatabaseBranchId,
+	key: &[u8],
+) -> Result<[u8; 16]> {
+	let prefix = keys::branch_vtx_prefix(branch_id);
+	let suffix = key
+		.strip_prefix(prefix.as_slice())
+		.context("branch VTX key did not start with expected prefix")?;
+	ensure!(
+		suffix.len() == 16,
+		"branch VTX versionstamp suffix had {} bytes, expected 16",
+		suffix.len()
+	);
+
+	suffix
+		.try_into()
+		.context("branch VTX versionstamp suffix should decode as 16 bytes")
+}
+
+fn decode_txid_value(value: &[u8]) -> Result<u64> {
+	let bytes = <[u8; 8]>::try_from(value)
+		.map_err(|_| anyhow::anyhow!("txid value had {} bytes, expected 8", value.len()))?;
+
+	Ok(u64::from_be_bytes(bytes))
 }
 
 async fn read_hot_input_snapshot(
@@ -1621,6 +1881,9 @@ fn plan_reclaim_job(
 	job_id: Id,
 	now_ms: i64,
 ) -> Option<ActiveCompactionJob> {
+	if snapshot.namespace_proof_blocked_reclaim {
+		return None;
+	}
 	if snapshot.reclaim_inputs.txid_refs.is_empty()
 		|| !snapshot.reclaim_inputs.pidx_entries.is_empty()
 		|| !reclaim_coverage_is_complete(&snapshot.reclaim_inputs)

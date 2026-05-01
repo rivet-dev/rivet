@@ -272,13 +272,15 @@ impl Db {
 					if branch_resolution.database_initialized {
 						write_root_branch_metadata(
 							&tx,
-						branch_id,
-						branch_resolution.namespace_branch_id,
-						&database_id,
-						now_ms,
-						&udb::INCOMPLETE_VERSIONSTAMP,
-					)?;
-				}
+							branch_id,
+							branch_resolution.namespace_branch_id,
+							&database_id,
+							now_ms,
+							&udb::INCOMPLETE_VERSIONSTAMP,
+							branch_resolution.namespace_initialized,
+						)
+						.await?;
+					}
 					tx.informal().atomic_op(
 						&commit_key,
 						&versionstamped_commit_row,
@@ -628,13 +630,14 @@ async fn resolve_or_allocate_branch(
 	})
 }
 
-fn write_root_branch_metadata(
+async fn write_root_branch_metadata(
 	tx: &universaldb::Transaction,
 	branch_id: DatabaseBranchId,
 	namespace_branch: NamespaceBranchId,
 	database_id: &str,
 	now_ms: i64,
 	root_versionstamp: &[u8; 16],
+	namespace_initialized: bool,
 ) -> Result<()> {
 	let record = DatabaseBranchRecord {
 		branch_id,
@@ -661,12 +664,18 @@ fn write_root_branch_metadata(
 		&1_i64.to_le_bytes(),
 		MutationType::Add,
 	);
-	tx.informal().atomic_op(
-		&keys::namespace_catalog_key(namespace_branch, branch_id),
-		&udb::append_versionstamp_offset(udb::INCOMPLETE_VERSIONSTAMP.to_vec(), root_versionstamp)
-			.context("prepare versionstamped sqlite namespace catalog marker")?,
-		MutationType::SetVersionstampedValue,
-	);
+	if namespace_initialized {
+		branch::write_namespace_catalog_marker_with_root(
+			tx,
+			namespace_branch,
+			namespace_branch,
+			branch_id,
+			root_versionstamp,
+		)?;
+	} else {
+		branch::write_namespace_catalog_marker(tx, namespace_branch, branch_id, root_versionstamp)
+			.await?;
+	}
 
 	let pointer = DatabasePointer {
 		current_branch: branch_id,

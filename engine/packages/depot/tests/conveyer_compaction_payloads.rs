@@ -1,10 +1,12 @@
 use depot::types::{
 	BookmarkStr, ColdShardRef, CompactionRoot, DatabaseBranchId, DbHistoryPin, DbHistoryPinKind,
-	NamespaceBranchId, RetiredColdObject, RetiredColdObjectDeleteState,
-	SQLITE_STORAGE_META_VERSION, SqliteCmpDirty, decode_cold_shard_ref,
-	decode_compaction_root, decode_db_history_pin, decode_retired_cold_object,
+	NamespaceBranchId, NamespaceCatalogDbFact, NamespaceForkFact, RetiredColdObject,
+	RetiredColdObjectDeleteState, SQLITE_STORAGE_META_VERSION, SqliteCmpDirty,
+	decode_cold_shard_ref, decode_compaction_root, decode_db_history_pin,
+	decode_namespace_catalog_db_fact, decode_namespace_fork_fact, decode_retired_cold_object,
 	decode_sqlite_cmp_dirty, encode_cold_shard_ref, encode_compaction_root,
-	encode_db_history_pin, encode_retired_cold_object, encode_sqlite_cmp_dirty,
+	encode_db_history_pin, encode_namespace_catalog_db_fact, encode_namespace_fork_fact,
+	encode_retired_cold_object, encode_sqlite_cmp_dirty,
 };
 use gas::prelude::Id;
 use uuid::Uuid;
@@ -147,4 +149,41 @@ fn db_history_pin_round_trips_each_kind_with_embedded_version() {
 		let decoded = decode_db_history_pin(&encoded).expect("history pin should decode");
 		assert_eq!(decoded, pin);
 	}
+}
+
+#[test]
+fn namespace_proof_facts_round_trip_with_embedded_version() {
+	let source_namespace_branch_id =
+		namespace_branch_id(0x1111_2222_3333_4444_5555_6666_7777_8888);
+	let target_namespace_branch_id =
+		namespace_branch_id(0x9999_aaaa_bbbb_cccc_dddd_eeee_ffff_0000);
+	let fork_fact = NamespaceForkFact {
+		source_namespace_branch_id,
+		target_namespace_branch_id,
+		fork_versionstamp: [8; 16],
+		parent_cap_versionstamp: [8; 16],
+	};
+	let catalog_fact = NamespaceCatalogDbFact {
+		database_branch_id: database_branch_id(0x1234_5678_90ab_cdef_1111_2222_3333_4444),
+		namespace_branch_id: source_namespace_branch_id,
+		catalog_versionstamp: [7; 16],
+		tombstone_versionstamp: Some([9; 16]),
+	};
+
+	let encoded_fork =
+		encode_namespace_fork_fact(fork_fact.clone()).expect("namespace fork fact should encode");
+	assert_embedded_version(&encoded_fork);
+	assert_eq!(
+		decode_namespace_fork_fact(&encoded_fork).expect("namespace fork fact should decode"),
+		fork_fact
+	);
+
+	let encoded_catalog = encode_namespace_catalog_db_fact(catalog_fact.clone())
+		.expect("namespace catalog fact should encode");
+	assert_embedded_version(&encoded_catalog);
+	assert_eq!(
+		decode_namespace_catalog_db_fact(&encoded_catalog)
+			.expect("namespace catalog fact should decode"),
+		catalog_fact
+	);
 }

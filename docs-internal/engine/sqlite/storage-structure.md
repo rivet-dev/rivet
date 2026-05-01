@@ -154,13 +154,13 @@ CMPC/lease_global/{kind:1}
 DB_PIN/{database_id_be:16}/{pin_id}
   -> DbHistoryPin (vbare-versioned)
 NS_FORK_PIN/{source_namespace_id_be:16}/{fork_versionstamp_be:16}/{target_namespace_id_be:16}
-  -> namespace fork proof fact
+  -> NamespaceForkFact (vbare-versioned)
 NS_CHILD/{source_namespace_id_be:16}/{fork_versionstamp_be:16}/{target_namespace_id_be:16}
-  -> namespace child edge proof fact
+  -> NamespaceForkFact (vbare-versioned)
 NSCAT_BY_DB/{database_id_be:16}/{namespace_id_be:16}
-  -> namespace catalog membership proof fact
+  -> NamespaceCatalogDbFact (vbare-versioned)
 NS_PROOF_EPOCH/{root_namespace_id_be:16}
-  -> proof invalidation epoch
+  -> proof invalidation epoch (atomic i64 LE)
 SQLITE_CMP_DIRTY/{database_id_be:16}
   -> SqliteCmpDirty (vbare-versioned)
 ```
