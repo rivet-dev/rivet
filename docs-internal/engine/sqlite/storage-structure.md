@@ -26,6 +26,12 @@ All Depot keys live under the crate-owned `[0x02]` prefix. The next byte is the 
 | `CTR` | `[0x02][0x40]` | quota, eviction access touch | Global counters and eviction index. |
 | `BOOKMARK` | `[0x02][0x50]` | bookmark APIs, cold compactor | Bookmark records and pinned bookmark state. |
 | `CMPC` | `[0x02][0x60]` | compactor dispatch | Cold/eviction work queue and global leases. |
+| `DB_PIN` | `[0x02][0x70]` | workflow compaction | Unified database history pins. |
+| `NS_FORK_PIN` | `[0x02][0x71]` | namespace fork, workflow compaction | Unresolved namespace fork retention facts. |
+| `NS_CHILD` | `[0x02][0x72]` | namespace fork, workflow compaction | Namespace child edges for bounded proof walks. |
+| `NSCAT_BY_DB` | `[0x02][0x73]` | namespace catalog, workflow compaction | Reverse namespace membership index by database branch. |
+| `NS_PROOF_EPOCH` | `[0x02][0x74]` | namespace fork/catalog mutation | Namespace-tree proof invalidation epoch. |
+| `SQLITE_CMP_DIRTY` | `[0x02][0x75]` | conveyer, workflow compaction | Coalesced compaction wake marker by database branch. |
 
 ## Namespace Catalog
 
@@ -95,6 +101,21 @@ BR/{database_id_be:16}/SHARD/{shard_id_be:4}/{as_of_txid_be:8}
 
 `SHARD` is versioned by `as_of_txid`. Reads choose the largest `as_of_txid <= read_txid`. Hot compaction writes new SHARD versions and does not overwrite older ones.
 
+## Workflow Compaction Metadata
+
+```text
+BR/{database_id_be:16}/CMP/root
+  -> CompactionRoot (vbare-versioned)
+BR/{database_id_be:16}/CMP/cold_shard/{shard_id_be:4}/{as_of_txid_be:8}
+  -> ColdShardRef (vbare-versioned)
+BR/{database_id_be:16}/CMP/retired_cold_object/{object_key_hash:32}
+  -> RetiredColdObject (vbare-versioned)
+BR/{database_id_be:16}/CMP/stage/{job_id}/hot_shard/{shard_id_be:4}/{as_of_txid_be:8}/{chunk_be:4}
+  -> staged LTX shard blob
+```
+
+The DB manager owns published `CMP` metadata. Staged hot shard keys are not reader-visible until the manager copies them to `SHARD`.
+
 ## Branch Manifest Subkeys
 
 `BranchManifest` is exposed as one logical struct but stored as owner-specific keys to avoid read-modify-write conflicts.
@@ -129,6 +150,19 @@ CMPC/enqueue/{ts_ms_be:8}/{database_id}/{kind:1}
   -> empty
 CMPC/lease_global/{kind:1}
   -> Lease
+
+DB_PIN/{database_id_be:16}/{pin_id}
+  -> DbHistoryPin (vbare-versioned)
+NS_FORK_PIN/{source_namespace_id_be:16}/{fork_versionstamp_be:16}/{target_namespace_id_be:16}
+  -> namespace fork proof fact
+NS_CHILD/{source_namespace_id_be:16}/{fork_versionstamp_be:16}/{target_namespace_id_be:16}
+  -> namespace child edge proof fact
+NSCAT_BY_DB/{database_id_be:16}/{namespace_id_be:16}
+  -> namespace catalog membership proof fact
+NS_PROOF_EPOCH/{root_namespace_id_be:16}
+  -> proof invalidation epoch
+SQLITE_CMP_DIRTY/{database_id_be:16}
+  -> SqliteCmpDirty (vbare-versioned)
 ```
 
 `kind` is `0x00` for cold compaction and `0x01` for eviction. The eviction index bucket is `floor(last_access_ts_ms / ACCESS_TOUCH_THROTTLE_MS)` and is re-keyed only when the bucket advances.

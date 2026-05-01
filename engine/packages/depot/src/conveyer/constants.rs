@@ -33,3 +33,27 @@ pub const HOT_BURST_MULTIPLIER: i64 = 2;
 
 /// Spec section 12.2 derives burst mode from cold-drain lag, matching the cold trigger window.
 pub const HOT_BURST_COLD_LAG_THRESHOLD_TXIDS: u64 = 1024;
+
+/// Workflow compaction signal payloads stay below Gasoline's durable signal size budget.
+pub const CMP_SIGNAL_PAYLOAD_LIMIT_BYTES: usize = 64 * 1024;
+
+/// Workflow compaction job descriptors stay small enough for durable workflow state.
+pub const CMP_JOB_DESCRIPTOR_LIMIT_BYTES: usize = 256 * 1024;
+
+/// Workflow compaction install and reclaim activities cap each FDB transaction by key count.
+pub const CMP_FDB_BATCH_MAX_KEYS: usize = 500;
+
+/// Workflow compaction install and reclaim activities cap each FDB transaction by value bytes.
+pub const CMP_FDB_BATCH_MAX_VALUE_BYTES: usize = 2 * 1024 * 1024;
+
+/// Workflow compaction uploads at most one cold shard object per S3 activity.
+pub const CMP_S3_UPLOAD_MAX_OBJECTS: usize = 1;
+
+/// Workflow compaction caps cold shard upload activity payloads.
+pub const CMP_S3_UPLOAD_LIMIT_BYTES: usize = 64 * 1024 * 1024;
+
+/// Workflow compaction caps S3 delete activity batches.
+pub const CMP_S3_DELETE_MAX_OBJECTS: usize = 100;
+
+/// Workflow compaction splits planned activities expected to exceed this wall time.
+pub const CMP_ACTIVITY_TARGET_MS: i64 = 30 * 1000;

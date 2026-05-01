@@ -1,0 +1,1116 @@
+## Codebase Patterns
+- Prometheus metrics in `sqlite-storage` live with their owner module (`pump::metrics` or `compactor::metrics`) and every metric should carry a `node_id` label.
+- `sqlite-storage` pump payload structs use `serde::{Serialize, Deserialize}` as the local serde_bare/vbare-compatible derive pattern; add `OwnedVersionedData` wrappers when adding concrete encode/decode helpers.
+- Use `BookmarkStr` instead of raw `String` for bookmark-bearing pump records so the 33-character ASCII wire format is enforced at construction and decode.
+- Until root branch allocation is wired, legacy `DBHead` constructors use `ActorBranchId::nil()` and `post_apply_checksum: 0` as a compatibility bridge.
+- PITR key builders use top-level `[0x02][partition]` prefixes; legacy actor-scoped key helpers remain only as compatibility until the hot path migrates to branch IDs.
+- PITR tunable constants live in `engine/packages/sqlite-storage/src/pump/constants.rs` and are re-exported at the `sqlite_storage` crate root.
+- `SqliteStorageError` uses `RivetError` derive plus a manual `Display`/`Error` impl so errors can produce checked-in `engine/artifacts/errors/*.json` schemas while staying downcastable as `SqliteStorageError`.
+- `ActorDb` resolves the current actor branch through APTR and caches the branch id as a perf cache; FDB remains the source of truth.
+- `ActorDb` is namespace-scoped: pass the engine namespace id into constructors, derive `NamespaceId` from it, and resolve APTR through NSPTR/NSBRANCH before branch-scoped storage.
+- New ActorDb writes store META/COMMITS/VTX/PIDX/DELTA/SHARD under `BR/{branch_id}`; legacy actor-scoped helpers remain compatibility fallback for old seeded state.
+- Branch ancestry reads need branch-aware sources; only use the simple PIDX cache when the read plan has one source branch.
+- `universaldb` raw `SetVersionstampedKey` and `SetVersionstampedValue` payloads use FDB-style trailing little-endian u32 offsets and substitute the first 10 versionstamp bytes.
+- Branch pin versionstamps are 16-byte lexicographic big-endian values, so descendant/bookmark pin atomic-min writes use `MutationType::ByteMin`, not integer `Min`.
+- PITR storage has no per-namespace tier model; cold and eviction paths should run unconditionally without `tier_state` or `ensure_tier_at_least`.
+- Namespace forks are metadata-only: write the child `NSPTR` + `NSBRANCH` records and rely on namespace-branch parent walking instead of eagerly materializing child `APTR` rows.
+- Actor pointer resolution walks namespace branch parents on APTR miss; namespace-branch tombstones return `ActorNotFound` and must not fall back to legacy actor-scoped storage.
+- Rollback swaps APTR, so ActorDb must resolve APTR before using branch-local caches and clear PIDX/storage caches when the current branch changes.
+- Namespace rollback mirrors actor rollback at the pointer layer: derive the new NSBRANCH, freeze the old NSBRANCH, append `NSPTR/history`, decrement the old pointer refcount, then swap `NSPTR/cur`.
+- Use `BookmarkStr::format(ts_ms, txid)` and `BookmarkStr::parse()` for bookmark wire strings; avoid hand-formatting the 33-character `{timestamp_ms_hex_be:016}-{txid_hex_be:016}` shape.
+- Ephemeral bookmark creation is read-only: derive `BookmarkStr` from the caller timestamp and current branch head txid; only pinned bookmarks write `BOOKMARK/{actor_id}/{bookmark}/pinned`.
+- Bookmark resolution must direct-walk namespace parents and carry the namespace fork versionstamp cap into actor branch ancestry; recursive APTR resolution loses that cap.
+- Pinned bookmark creation is FDB-first: write `PinStatus::Pending`, actor branch `bk_pin`, and namespace `pin_count` before publishing `SqliteColdCompactPayload::CreatePinnedBookmark`.
+- Pinned bookmark deletion should clear both bookmark keys, decrement namespace `pin_count`, recompute branch `bk_pin` from remaining actor pinned-bookmark records, and publish `SqliteColdCompactPayload::DeletePinnedBookmark`.
+- Restore-to-bookmark captures the undo commit before rollback, performs the APTR rollback, then writes the undo pinned bookmark so rollback durability does not depend on cold-tier pin work.
+- ActorDb's flattened ancestry cache stores branch ids plus parent versionstamp caps; read txs still resolve cap versionstamps to txids before PIDX/SHARD lookup.
+- Branch ancestry reads must ignore PIDX owners newer than that source branch's fork cap, then fall through to the latest SHARD version at or below the cap.
+- Do not add APTR/NSPTR `last_swapped_at_ms` cache validation; the v4 spec makes branches immutable and treats the US-026 invalidation contract as obsolete.
+- Fresh fork actor branches keep `/META/head_at_fork` until their first local commit; commits treat it as the previous `DBHead`, then write `/META/head` and clear the snapshot in the same tx.
+- Namespace catalog (`NSCAT`) markers store database branch ids with 16-byte versionstamped values; list walks namespace parents, caps inherited entries by `parent_versionstamp`, and applies database tombstones before inherited entries.
+- Namespace database tombstones store 16-byte versionstamped values; list walks apply the namespace parent cap so tombstones written after a fork do not hide databases in that older fork.
+- Hot compaction enforces `MAX_SHARD_VERSIONS_PER_SHARD` inside the write tx before folding; missing VTX for a non-empty pin is treated conservatively as pinned.
+- Hot compactor branch passes update `BR/{branch_id}/META/compact` and `BR/{branch_id}/META/manifest/last_hot_pass_txid` together; a nil namespace `ActorDb` exercises branch-scoped compaction through public `compact_default_batch`.
+- Hot retention sweeps clear `COMMITS` and matching `VTX` rows together inside the hot compactor write tx, with quota accounting adjusted for both keys.
+- ActorDb access-touch writes `last_access_ts_ms`, `last_access_bucket`, and `CTR/eviction_index` through the shared `touch_access_if_bucket_advanced` helper; per-connection cache suppresses same-bucket writes.
+- Cold-tier implementations live under `sqlite_storage::cold_tier`; use relative object keys, `FilesystemColdTier` for local tests, and `FaultyColdTier` for injected latency/failures.
+- Cold compactor service code lives under `sqlite_storage::compactor::cold`; it uses `SqliteColdCompactSubject`, queue group `cold_compactor`, and branch-scoped `BR/{branch_id}/META/cold_lease`.
+- Cold compactor tests that expect object writes should inject `FilesystemColdTier`; the default service tier is `DisabledColdTier` until runtime config selects a backend.
+- Cold Phase B rewrites the pending marker with the complete object-key set before uploading image, delta, pin, manifest, and pointer snapshot objects.
+- Cold Phase C is the FDB-only finalizer: regular-read fence `cold_drained_txid`, then advance cold state + manifest cursor, clear `in_flight_uuid`, and mark uploaded pins `Ready`.
+- Cold Phase B pin upload failures mark pending bookmarks `Failed`; Phase C OCC failures leave pins `Pending` for retry.
+- Cold follow-up sweeps compute the branch GC pin from refcount/root_versionstamp, desc_pin, and bk_pin, then rewrite manifest metadata before deleting cold objects.
+- Cold sweeps treat zero layer versionstamps as unknown and not deletable; only concrete versionstamps below the computed GC pin are reclaimed.
+- ActorDb cold-tier reads use `new_with_cold_tier` plus a bounded per-connection manifest cache; the default constructor keeps no read cold tier for compatibility.
+- Fork warmup should copy parent image layer bytes into the child branch prefix and write child-prefixed manifest entries, not point child manifests at parent-owned objects.
+- Eviction compactor service code lives under `sqlite_storage::compactor::eviction`; use the global `CMPC/lease_global/{kind=eviction}` lease and scan `CTR/eviction_index` by oldest access bucket with an explicit batch cap.
+- For prefix range scans in `sqlite-storage`, build `RangeOption` from `universaldb::tuple::Subspace::from_bytes(prefix)` so RocksDB/FDB drivers see the same prefix bounds.
+- Eviction predicate planning is SHARD-version scoped: require a newer FDB SHARD version, hot-cache age, cold-drain coverage, hot-pass margin, and no descendant/bookmark pin resolved through VTX before clearing.
+- Eviction clear work is plan-then-fence: carry expected SHARD/PIDX values from the plan, regular-read `last_hot_pass_txid` in the clear tx, then use `COMPARE_AND_CLEAR`.
+- Fully evicted branches clear `CTR/eviction_index` only when the branch's current SHARD rows are all covered by the planned compare-and-clear set; keep the index while any SHARD remains.
+- Branch GC pin computation lives in `sqlite_storage::gc`; reuse it for cold sweeps, hot-history cleanup, and debug estimates so refcount/root/desc/bookmark pin math stays consistent.
+- Burst-mode hot quota checks go through `sqlite_storage::burst_mode`, which derives the signal from branch `head_txid - cold_drained_txid` in FDB and applies no tier or pod-health state.
+- Debug historical reads cannot trust PIDX because PIDX is the current owner map; scan DELTA history up to the target txid before falling through to SHARD/cold layers.
+- Fork integration tests can share setup through `tests/fork_common`; to test bk_pin OCC races, stage a derive in one transaction, advance the pin in a nested transaction, then let the retry observe `ForkOutOfRetention`.
+- Cold compactor retries reuse `ColdCompactState.in_flight_uuid`; manifest index writes should replace the chunk ref for that pass UUID so Phase B crashes stay idempotent.
+- Access-touch throttle regressions can use `actor_db::test_hooks::touch_access_if_bucket_advanced_for_test` to exercise eviction-index re-keying without thousands of full commits.
+- Eviction clear transactions must re-check branch descendant/bookmark pins because forks can land after the sweep plan and before compare-and-clear execution.
+- When recomputing a branch bookmark pin after deleting the last pinned bookmark, store zero for "unpinned"; `0xff..ff` remains the advanced-retention fence for fork checks.
+- `engine/packages/sqlite-storage/AGENTS.md` is a symlink to `CLAUDE.md`; update `CLAUDE.md` for sqlite-storage agent guidance.
+- Inside `sqlite-storage`, use database terminology (`Db`, `DatabaseBranchId`, DBPTR); keep actor terminology only at pegboard/envoy boundaries where actor ids are translated 1:1 to database ids.
+
+# Ralph Progress Log
+Started: Wed Apr 29 03:29:23 PM PDT 2026
+---
+## 2026-04-29 23:49 PDT - US-065
+- Renamed sqlite-storage's storage-facing actor API surface to database terminology: `ActorDb` became `Db`, `ActorBranch*` became `DatabaseBranch*`, `ActorPointer` became `DatabasePointer`, `fork_actor` became `fork_database`, and APTR key-builder names became DBPTR while preserving the `0x10` partition byte.
+- Updated pegboard, pegboard-envoy, and rivetkit-sqlite callers to translate actor ids at the boundary and use the renamed `Db` storage handle.
+- Updated sqlite internal docs, sqlite-storage/engine CLAUDE guidance, error artifacts, the v4 rough PITR spec, and tests to use database terminology.
+- Verified with `cargo check -p sqlite-storage`, `cargo check -p rivetkit-sqlite`, `cargo check -p pegboard`, `cargo check -p pegboard-envoy`, `cargo check -p rivet-engine`, `cargo test -p sqlite-storage --no-run`, and `cargo test -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/src/**`
+  - `engine/packages/sqlite-storage/tests/**`
+  - `engine/packages/pegboard*/**`
+  - `engine/packages/engine/tests/actor_v2_2_1_migration.rs`
+  - `rivetkit-rust/packages/rivetkit-sqlite/src/vfs.rs`
+  - `docs-internal/engine/sqlite/*.md`
+  - `.agent/specs/sqlite-rough-pitr.md`
+  - `engine/CLAUDE.md`
+  - `engine/packages/sqlite-storage/CLAUDE.md`
+  - `engine/artifacts/errors/sqlite_storage.*.json`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - The sqlite-storage crate now treats `database_id` as the storage-layer identity; pegboard/envoy may still talk about actor ids, but they pass those values into sqlite-storage as 1:1 database ids.
+  - The DBPTR partition keeps APTR's existing byte (`0x10`) for key continuity; the rename is API/key-builder terminology, not a keyspace migration.
+  - Test helpers named `db` collide badly with local `Db` handles; use `make_db` for constructors and `database_db` for storage handles in sqlite-storage tests.
+---
+## 2026-04-29 23:34 PDT - US-063
+- Created the required `docs-internal/engine/sqlite/` folder with five internal docs covering storage structure, components, VFS interaction, design constraints, and comparisons to prior systems.
+- Kept the docs aligned to the current v4 model: immutable namespace/database branch ids, NSCAT catalog inheritance, versioned SHARDs, split manifest keys, cold Phase A/B/C, and global eviction.
+- Verified with `cargo check -p sqlite-storage`.
+- Files changed:
+  - `docs-internal/engine/sqlite/storage-structure.md`
+  - `docs-internal/engine/sqlite/components.md`
+  - `docs-internal/engine/sqlite/vfs-brief.md`
+  - `docs-internal/engine/sqlite/constraints-and-design-decisions.md`
+  - `docs-internal/engine/sqlite/comparison-to-other-systems.md`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - The new sqlite docs should describe the v4 immutable id model: `NamespaceId` and `DatabaseId` are branch ids, with no APTR/NSPTR pointer layer.
+  - US-064 owns the AGENTS/CLAUDE reference wiring for these docs, so US-063 should stay scoped to creating the five doc files.
+  - `cargo check -p sqlite-storage` is sufficient typecheck coverage for docs-only sqlite-storage story validation.
+---
+## 2026-04-29 23:12 PDT - US-060
+- Added eviction compactor integration coverage for 1ms-cadence access-touch throttling across a full `ACCESS_TOUCH_THROTTLE_MS` bucket.
+- Exposed a debug-assertions-only `actor_db` test hook for the shared access-touch helper and tightened malformed access-bucket decode context.
+- Verified with `cargo test -p sqlite-storage --test compactor_eviction -- --nocapture`, `cargo check -p sqlite-storage`, and `cargo test -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/src/pump/actor_db.rs`
+  - `engine/packages/sqlite-storage/tests/compactor_eviction.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Access-touch throttling can be tested directly through the shared helper so the full 60-second, 1ms cadence path stays deterministic and fast.
+  - The eviction index should keep the old bucket key until `ACCESS_TOUCH_THROTTLE_MS` advances, then clear the old bucket and write the new one in the same touch.
+  - Adding byte-length context around persisted scalar decodes makes intermittent fixture corruption much faster to diagnose.
+---
+## 2026-04-29 23:27 PDT - US-062
+- Added the seven critical fault-injection integration test files from spec section 21, plus a shared `tests/fault_common` helper for focused RocksDB/FDB and filesystem cold-tier setup.
+- Added cold-tier failure metric coverage, Phase A latency coverage, Phase B/Phase C retry coverage, active-read eviction protection, fork-vs-eviction pin protection, bookmark-delete GC race coverage, and S3-only DR replay scaffolding coverage.
+- Fixed two race/sentinel issues surfaced by the tests: eviction clear now re-checks branch pins inside the clear tx, and deleting the last pinned bookmark recomputes `bk_pin` to zero instead of the fork-retention fence.
+- Verified with `cargo test -p sqlite-storage --test cold_compactor_5xx_phase_b --test cold_compactor_phase_a_pending_put_5s --test cold_compactor_lease_loss_b_to_c --test eviction_during_active_read --test concurrent_fork_during_eviction --test gc_pin_recompute_under_bookmark_delete_race --test dr_replay_from_s3_alone -- --nocapture`, `cargo check -p sqlite-storage`, and `cargo test -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/CLAUDE.md` (`AGENTS.md` symlink)
+  - `engine/packages/sqlite-storage/src/cold_tier/mod.rs`
+  - `engine/packages/sqlite-storage/src/compactor/eviction/mod.rs`
+  - `engine/packages/sqlite-storage/src/compactor/metrics.rs`
+  - `engine/packages/sqlite-storage/src/pump/bookmark.rs`
+  - `engine/packages/sqlite-storage/tests/cold_compactor_5xx_phase_b.rs`
+  - `engine/packages/sqlite-storage/tests/cold_compactor_lease_loss_b_to_c.rs`
+  - `engine/packages/sqlite-storage/tests/cold_compactor_phase_a_pending_put_5s.rs`
+  - `engine/packages/sqlite-storage/tests/compactor_metrics.rs`
+  - `engine/packages/sqlite-storage/tests/concurrent_fork_during_eviction.rs`
+  - `engine/packages/sqlite-storage/tests/dr_replay_from_s3_alone.rs`
+  - `engine/packages/sqlite-storage/tests/eviction_during_active_read.rs`
+  - `engine/packages/sqlite-storage/tests/fault_common/mod.rs`
+  - `engine/packages/sqlite-storage/tests/gc_pin_recompute_under_bookmark_delete_race.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Fault-injection tests can share deterministic cold branch setup through `tests/fault_common` while still using real RocksDB-backed UDB and `FilesystemColdTier`.
+  - `FaultyColdTier` is the right place to increment `sqlite_s3_request_failures_total{node_id, op}` because it centralizes injected S3-style failures.
+  - Fork/eviction races need a clear-phase pin re-check; plan-time pin checks alone are stale as soon as `derive_branch_at` can write `desc_pin`.
+---
+## 2026-04-29 23:08 PDT - US-059
+- Added `tests/cold_compactor.rs` covering Phase A handoff-before-marker behavior, Phase B upload-time FDB independence, Phase C cold-drain OCC aborts, and retry after a Phase B crash.
+- Made cold Phase A reuse an existing `in_flight_uuid` on retry and made Phase B manifest index writes replace the chunk ref for the same pass UUID instead of duplicating it.
+- Verified with `cargo test -p sqlite-storage --test cold_compactor -- --nocapture`, `cargo check -p sqlite-storage`, and `cargo test -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/CLAUDE.md`
+  - `engine/packages/sqlite-storage/src/compactor/cold/phase_a.rs`
+  - `engine/packages/sqlite-storage/src/compactor/cold/phase_b.rs`
+  - `engine/packages/sqlite-storage/tests/cold_compactor.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Cold compactor crash-retry determinism depends on reusing `ColdCompactState.in_flight_uuid`; new pass UUIDs create duplicate manifest chunks and stale markers.
+  - Phase B integration tests can wrap `FilesystemColdTier` to inject FDB writes or post-upload crashes without mocking the storage backend.
+  - Manifest index retries should replace same-object chunk refs before pushing so re-running a completed Phase B upload is idempotent.
+---
+## 2026-04-29 22:49 PDT - US-055
+- Added the PITR/forking Prometheus metric surface across `pump::metrics` and `compactor::metrics`, with `node_id` labels and documented op/outcome/status labels.
+- Instrumented bookmark create/resolve, cold compactor phase/lease/upload counters, eviction pass counters, eviction OCC aborts, and SHARD-version histograms.
+- Added scrape-based metric coverage and updated the sqlite-storage AGENTS/CLAUDE metrics convention.
+- Verified with `cargo test -p sqlite-storage --test compactor_metrics`, `cargo test -p sqlite-storage --test compactor_eviction`, `cargo check -p sqlite-storage`, and `cargo test -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/CLAUDE.md`
+  - `engine/packages/sqlite-storage/src/compactor/cold/phase_b.rs`
+  - `engine/packages/sqlite-storage/src/compactor/cold/worker.rs`
+  - `engine/packages/sqlite-storage/src/compactor/compact.rs`
+  - `engine/packages/sqlite-storage/src/compactor/eviction/mod.rs`
+  - `engine/packages/sqlite-storage/src/compactor/metrics.rs`
+  - `engine/packages/sqlite-storage/src/pump/bookmark.rs`
+  - `engine/packages/sqlite-storage/src/pump/metrics.rs`
+  - `engine/packages/sqlite-storage/tests/compactor_eviction.rs`
+  - `engine/packages/sqlite-storage/tests/compactor_metrics.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Keep sqlite-storage Prometheus definitions in the owning module instead of creating a central PITR metrics file.
+  - Metric vectors should include `node_id` even when the domain-specific labels already identify the operation or outcome.
+  - `compactor_metrics` can use the global `REGISTRY` + `TextEncoder` scrape path to verify newly registered metrics emit real Prometheus text.
+---
+## 2026-04-29 22:24 PDT - US-051
+- Implemented burst-mode hot quota cap calculation from branch FDB lag between `/META/head.head_txid` and `/META/manifest/cold_drained_txid`.
+- Wired commit quota checks to use the burst-adjusted cap, doubling the 10 GiB base cap while cold lag exceeds the configured threshold and reverting after cold catch-up.
+- Added focused burst-mode and commit quota regression tests.
+- Verified with `cargo test -p sqlite-storage --test burst_mode`, `cargo test -p sqlite-storage --test pump_commit commit_uses_burst_adjusted_quota_cap -- --nocapture`, `cargo check -p sqlite-storage`, and `cargo test -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/AGENTS.md`
+  - `engine/packages/sqlite-storage/src/burst_mode.rs`
+  - `engine/packages/sqlite-storage/src/lib.rs`
+  - `engine/packages/sqlite-storage/src/pump/commit.rs`
+  - `engine/packages/sqlite-storage/src/pump/constants.rs`
+  - `engine/packages/sqlite-storage/src/pump/quota.rs`
+  - `engine/packages/sqlite-storage/tests/burst_mode.rs`
+  - `engine/packages/sqlite-storage/tests/pump_commit.rs`
+  - `engine/packages/sqlite-storage/tests/pump_constants.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Burst mode is a soft hot-quota overflow guard driven only by persisted branch lag, not by cold-pod failure counters.
+  - The commit path should pass the about-to-be-written head txid into `burst_mode::read_branch_signal_for_head` so the cap reflects the new commit's lag.
+  - Keep burst quota logic tier-free; cold and eviction remain universal.
+---
+## 2026-04-29 22:19 PDT - US-047
+- Implemented shared branch GC pin computation in `sqlite_storage::gc`, using refcount/root_versionstamp plus descendant and bookmark pins with no persisted ratchet.
+- Added hot-history GC that translates the computed versionstamp pin through `VTX` and clears eligible branch `COMMITS`, `VTX`, and `DELTA` rows.
+- Wired the cold compactor follow-up path to run the shared hot-history sweep after S3 manifest/layer cleanup.
+- Verified with `cargo test -p sqlite-storage --test gc`, `cargo check -p sqlite-storage`, and `cargo test -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/CLAUDE.md`
+  - `engine/packages/sqlite-storage/src/compactor/cold/phase_d.rs`
+  - `engine/packages/sqlite-storage/src/compactor/cold/worker.rs`
+  - `engine/packages/sqlite-storage/src/gc/mod.rs`
+  - `engine/packages/sqlite-storage/src/lib.rs`
+  - `engine/packages/sqlite-storage/tests/gc.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Branch GC pin math should go through `sqlite_storage::gc` so cold object sweeps, hot FDB cleanup, and future debug APIs agree on refcount/root/desc/bookmark pin semantics.
+  - For txid-keyed rows, GC uses `VTX[gc_pin] -> txid_floor` and deletes only rows below that floor; missing VTX is treated conservatively as no hot-history deletion.
+  - Descendant/bookmark pins are recomputed from current counters each pass, not ratcheted, so deleting a descendant or bookmark can immediately advance the GC floor.
+---
+## 2026-04-29 22:14 PDT - US-046
+- Implemented eviction-index cleanup for fully evicted branches by carrying the candidate access bucket into each planned SHARD eviction and clearing `CTR/eviction_index` when no current SHARD row will survive the fenced clear tx.
+- Added regression coverage that preserves the index while a newer SHARD remains and removes it when the last SHARD is cleared.
+- Verified with `cargo test -p sqlite-storage --test compactor_eviction`, `cargo check -p sqlite-storage`, and `cargo test -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/CLAUDE.md`
+  - `engine/packages/sqlite-storage/src/compactor/eviction/mod.rs`
+  - `engine/packages/sqlite-storage/tests/compactor_eviction.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - The eviction clear tx should decide full eviction from the current SHARD rows after the `last_hot_pass_txid` fence, not from the initial snapshot plan alone.
+  - `EvictableShardVersion` now carries `last_access_bucket` so the clear phase can remove the exact eviction-index key without scanning the global index.
+---
+## 2026-04-29 22:10 PDT - US-045
+- Implemented eviction clear execution for planned SHARD versions with a regular-read OCC fence on `BR/{branch_id}/META/manifest/last_hot_pass_txid`.
+- Added compare-and-clear clearing for planned SHARD values and eligible branch PIDX rows, plus the `sqlite_eviction_occ_abort_total{reason="hot_pass_advanced"}` metric.
+- Added regression coverage for successful compare-and-clear eviction and the hot-pass-advanced abort path.
+- Verified with `cargo test -p sqlite-storage --test compactor_eviction`, `cargo test -p sqlite-storage --test compactor_metrics`, `cargo check -p sqlite-storage`, and `cargo test -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/CLAUDE.md`
+  - `engine/packages/sqlite-storage/src/compactor/eviction/mod.rs`
+  - `engine/packages/sqlite-storage/src/compactor/metrics.rs`
+  - `engine/packages/sqlite-storage/tests/compactor_eviction.rs`
+  - `engine/packages/sqlite-storage/tests/compactor_metrics.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Eviction holds the global lease across both predicate planning and clear execution; releasing before clear would let another sweeper race the planned work.
+  - `last_hot_pass_txid` mismatch is a clean no-op result for the clear phase, not a hard sweep failure; it increments the hot-pass OCC abort metric and returns no cleared versions.
+  - PIDX rows planned for eviction should keep their exact expected values so `COMPARE_AND_CLEAR` cannot clobber a newer owner.
+---
+## 2026-04-29 21:23 PDT - US-037
+- Implemented cold compactor Phase A: a short FDB handoff tx records `ColdCompactState.in_flight_uuid`, then the pending marker is written through the cold tier, then a bounded snapshot read builds the branch upload plan from SHARD, DELTA, COMMITS, VTX, and branch-record rows.
+- Added vbare encode/decode helpers for cold compact state and pending markers, plus an explicit `DisabledColdTier` default so unconfigured services fail clearly instead of pretending local temp storage is durable.
+- Verified marker ordering with a cold-tier test double that can observe the committed FDB handoff during `put_object`.
+- Verified with `cargo check -p sqlite-storage`, `cargo test -p sqlite-storage --test cold_tier`, `cargo test -p sqlite-storage --test compactor_cold`, and `cargo test -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/CLAUDE.md`
+  - `engine/packages/sqlite-storage/src/cold_tier/mod.rs`
+  - `engine/packages/sqlite-storage/src/compactor/cold/mod.rs`
+  - `engine/packages/sqlite-storage/src/compactor/cold/phase_a.rs`
+  - `engine/packages/sqlite-storage/src/compactor/cold/worker.rs`
+  - `engine/packages/sqlite-storage/tests/cold_tier.rs`
+  - `engine/packages/sqlite-storage/tests/compactor_cold.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Cold Phase A is split deliberately: record `in_flight_uuid` in FDB first, perform the S3 marker PUT outside any UDB tx, then run the snapshot scan under a 5s timeout.
+  - Pending markers are vbare-encoded S3 objects with a `schema_version` and `planned_object_keys`; future Phase B/C work should extend the same marker rather than introducing a parallel marker format.
+  - The cold compactor service has no real cold-tier config yet, so tests inject `FilesystemColdTier` and the default worker tier is fail-by-default.
+---
+## 2026-04-29 21:44 PDT - US-040
+- Wired pinned-bookmark create payloads through the cold worker so Phase B pin upload failures transition matching pending bookmarks to `Failed`, while successful filesystem cold-tier passes still transition them to `Ready` in Phase C.
+- Added end-to-end coverage from `ActorDb::create_pinned_bookmark` through the UPS payload and cold worker with `FilesystemColdTier`, plus a focused injected pin upload failure test.
+- Verified with `cargo test -p sqlite-storage --test compactor_cold`, `cargo check -p sqlite-storage`, and `cargo test -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/CLAUDE.md`
+  - `engine/packages/sqlite-storage/src/compactor/cold/phase_c.rs`
+  - `engine/packages/sqlite-storage/src/compactor/cold/worker.rs`
+  - `engine/packages/sqlite-storage/tests/compactor_cold.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Cold pin-create success and failure deliberately split by phase: Phase C marks uploaded pins `Ready`; Phase B upload failures mark still-pending pins `Failed`; Phase C OCC failures preserve `Pending` for retry.
+  - Full pin-create cold-worker tests can use the UPS memory driver to capture the published payload, then pass it through `worker::test_hooks::handle_payload_once_with_cold_tier`.
+  - A branch with a manually seeded `META/compact` cursor and versioned SHARD row is enough to exercise filesystem pin upload without running a hot compactor pass first.
+## 2026-04-29 21:11 PDT - US-036
+- Implemented the cold compactor scaffold with a `compactor/cold/` module, branch-scoped cold lease helpers, a UPS subscriber loop on `SqliteColdCompactSubject`, local deadline + renewal tasks, and a standalone `sqlite_cold_compactor` service registration.
+- Added cold compactor tests for subject/payload encoding, cold lease acquire/renew/release behavior, and handler behavior for acquired and already-held leases.
+- Verified with `cargo check -p sqlite-storage` and `cargo test -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/engine/src/run_config.rs`
+  - `engine/packages/sqlite-storage/CLAUDE.md`
+  - `engine/packages/sqlite-storage/src/compactor/cold/mod.rs`
+  - `engine/packages/sqlite-storage/src/compactor/cold/lease.rs`
+  - `engine/packages/sqlite-storage/src/compactor/cold/worker.rs`
+  - `engine/packages/sqlite-storage/src/compactor/mod.rs`
+  - `engine/packages/sqlite-storage/tests/compactor_cold.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Cold compactor service code should stay under `compactor/cold/` rather than mixing cold pass orchestration into the hot compactor worker.
+  - The cold lease mirrors the hot lease lifecycle but is keyed by `ActorBranchId` through `branch_meta_cold_lease_key`.
+  - The existing `SqliteColdCompactPayload` variants currently carry bookmark pin work; future threshold-driven cold passes should extend the same subject/payload surface instead of adding a second cold queue.
+---
+## 2026-04-29 16:36 PDT - US-001
+- Implemented the foundational PITR/fork identifier, branch record, pointer, tier, and branch state types in `pump/types.rs`.
+- Moved `uuid` into normal `sqlite-storage` dependencies so the new persisted ID newtypes compile outside tests.
+- Files changed:
+  - `engine/packages/sqlite-storage/src/pump/types.rs`
+  - `engine/packages/sqlite-storage/Cargo.toml`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - `sqlite-storage` currently uses `serde` derives plus `serde_bare` and `OwnedVersionedData` wrappers for vbare-compatible payloads.
+  - New UUID-backed persisted types need `uuid.workspace = true` under normal dependencies, not only dev-dependencies.
+  - `BookmarkRef` is needed by branch records before the bookmark story fully shapes `BookmarkStr`.
+---
+## 2026-04-29 16:43 PDT - US-002
+- Added the namespace tier state, resolved versionstamp, branch manifest, pin status, and validated bookmark string types in `pump/types.rs`.
+- Updated `BookmarkRef` to carry `BookmarkStr` instead of a raw string.
+- Verified with `cargo check -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/CLAUDE.md` (via `AGENTS.md` symlink)
+  - `engine/packages/sqlite-storage/src/pump/types.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - `BookmarkStr` should be the shared type for persisted bookmark references; it validates the 33-byte ASCII wire shape on construction and serde decode.
+  - `BranchManifest` is modeled as one joined struct in code even though its fields are stored in separate FDB sub-keys by owner.
+  - `cargo check -p sqlite-storage` currently passes with an unrelated runner-protocol warning when `node_modules/@bare-ts/tools` is missing.
+---
+## 2026-04-29 16:52 PDT - US-003
+- Added the cold manifest, layer, bookmark index, pointer snapshot, bookmark record, pinned bookmark record, extended `CommitRow`, and extended `DBHead` types in `pump/types.rs`.
+- Added `schema_version` fields to S3-persisted cold-tier records and kept FDB bookmark records schema-version-free per the spec split.
+- Updated existing `DBHead` construction sites to carry `post_apply_checksum` and the temporary nil branch id until root branch allocation lands.
+- Verified with `cargo check -p sqlite-storage` and `cargo test -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/src/pump/types.rs`
+  - `engine/packages/sqlite-storage/src/pump/commit.rs`
+  - `engine/packages/sqlite-storage/src/takeover.rs`
+  - `engine/packages/sqlite-storage/tests/compactor_compact.rs`
+  - `engine/packages/sqlite-storage/tests/compactor_dispatch.rs`
+  - `engine/packages/sqlite-storage/tests/pump_commit.rs`
+  - `engine/packages/sqlite-storage/tests/pump_read.rs`
+  - `engine/packages/sqlite-storage/tests/takeover.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - S3-bound cold-tier structs in `pump/types.rs` carry `schema_version: u32`; FDB-resident records rely on embedded vbare versions instead of an explicit schema field.
+  - `DBHead.branch_id` is present now, but real branch identity is not wired until a later story; existing actor-scoped paths preserve behavior with `ActorBranchId::nil()`.
+  - `BookmarkIndexEntry` uses `BookmarkStr`, not raw `String`, to preserve the bookmark validation invariant in cold-tier indexes.
+---
+## 2026-04-29 17:00 PDT - US-004
+- Added PITR/FDB key-builder partitions in `pump/keys.rs` for APTR, NSPTR, BRANCHES, NSBRANCH, BR, CTR, BOOKMARK, and CMPC.
+- Added branch-scoped BR builders for META, manifest, COMMITS, VTX, PIDX, DELTA, and versioned SHARD paths, while leaving the current legacy actor-scoped hot-path helpers intact for later migration stories.
+- Added `pump_keys` coverage for partition bytes, pointer history keys, record counter/pin subkeys, branch data paths, bookmark keys, and compactor queue kind bytes.
+- Verified with `cargo test -p sqlite-storage --test pump_keys` and `cargo check -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/CLAUDE.md` (via `AGENTS.md` symlink)
+  - `engine/packages/sqlite-storage/src/pump/keys.rs`
+  - `engine/packages/sqlite-storage/tests/pump_keys.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - New PITR builders are branch-ID based and live under top-level partition bytes; existing actor-ID helpers should not be removed until the commit/read path is migrated.
+  - `CompactorQueueKind` encodes cold as `0x00` and eviction as `0x01` for CMPC enqueue and lease keys.
+  - `cargo check -p sqlite-storage` still emits the unrelated runner-protocol SDK-generation warning when `node_modules/@bare-ts/tools` is missing.
+---
+## 2026-04-29 17:06 PDT - US-005
+- Added a dedicated PITR constants module with fork-depth, namespace-depth, pin-count, shard-version, retention-window, access-touch, stale-marker, and burst-mode defaults.
+- Re-exported the constants from the `sqlite_storage` crate root and added focused coverage for the defaults.
+- Verified with `cargo test -p sqlite-storage --test pump_constants` and `cargo check -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/CLAUDE.md` (via `AGENTS.md` symlink)
+  - `engine/packages/sqlite-storage/src/lib.rs`
+  - `engine/packages/sqlite-storage/src/pump/constants.rs`
+  - `engine/packages/sqlite-storage/src/pump/mod.rs`
+  - `engine/packages/sqlite-storage/tests/pump_constants.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Shared PITR limits and windows should come from `pump/constants.rs`; avoid duplicating literals in operation, compactor, and test code.
+  - `STALE_MARKER_AGE_MS` uses the earlier PITR spec's documented 10-minute HWM cleanup default.
+  - `FROZEN_BRANCH_RETENTION_MS` follows the 30-day PITR retention window because the rough spec leaves it namespace-configurable but does not assign a narrower default.
+---
+## 2026-04-29 17:13 PDT - US-006
+- Added PITR/fork `SqliteStorageError` variants for fork-depth, retention, bookmark resolution, shard-version, pin-count, and actor lookup failures.
+- Converted `SqliteStorageError` to the repo `RivetError` derive pattern while preserving typed downcasts with manual `Display`/`Error` impls, and checked in the generated sqlite-storage error artifacts.
+- Verified with `cargo check -p sqlite-storage`, `cargo test -p sqlite-storage --test pump_error`, and `cargo test -p sqlite-storage`.
+- Files changed:
+  - `Cargo.lock`
+  - `engine/artifacts/errors/sqlite_storage.*.json`
+  - `engine/packages/sqlite-storage/Cargo.toml`
+  - `engine/packages/sqlite-storage/src/pump/error.rs`
+  - `engine/packages/sqlite-storage/tests/pump_error.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - `RivetError` derives generate checked-in JSON schemas under `engine/artifacts/errors/`; include those artifacts with the code change.
+  - The derive macro needs `serde::Serialize` in scope and `serde_json` available to the crate when variants carry metadata fields.
+  - Keep `SqliteStorageError` downcastable because envoy, VFS, and existing tests inspect typed variants directly.
+---
+## 2026-04-29 17:22 PDT - US-007
+- Migrated hot compaction to write versioned legacy SHARD keys at `/SHARD/{shard_id}/{max_folded_txid}` and to record `last_hot_pass_txid` through the current `DBHead.branch_id` bridge.
+- Updated page reads to choose the latest SHARD version not newer than `head_txid`, with fallback for old unversioned SHARD blobs; truncate and takeover decoding now accept both key shapes.
+- Verified with `cargo test -p sqlite-storage` and `cargo check -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/CLAUDE.md` (via `AGENTS.md` symlink)
+  - `engine/packages/sqlite-storage/src/compactor/compact.rs`
+  - `engine/packages/sqlite-storage/src/compactor/shard.rs`
+  - `engine/packages/sqlite-storage/src/pump/commit.rs`
+  - `engine/packages/sqlite-storage/src/pump/keys.rs`
+  - `engine/packages/sqlite-storage/src/pump/read.rs`
+  - `engine/packages/sqlite-storage/src/takeover.rs`
+  - `engine/packages/sqlite-storage/tests/compactor_compact.rs`
+  - `engine/packages/sqlite-storage/tests/pump_keys.rs`
+  - `engine/packages/sqlite-storage/tests/pump_read.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Versioned legacy SHARD keys coexist with old unversioned SHARD blobs until root branch allocation moves storage under `BR/{branch_id}`.
+  - `fold_shard` now returns the net bytes added for its versioned SHARD write so hot compaction quota accounting stays balanced.
+  - The RocksDB-backed test driver did not produce the expected newest row from the reverse range shape here; the bounded scan keeps the newest matching SHARD version and is acceptable with the 32-version cap.
+---
+## 2026-04-29 17:32 PDT - US-008
+- Implemented commit-row and VTX index writes on every SQLite commit using `SetVersionstampedValue` for `COMMITS/{txid}` and `SetVersionstampedKey` for `VTX/{versionstamp}`.
+- Added raw versionstamp-offset substitution support to the RocksDB and Postgres `universaldb` drivers so local tests exercise the same atomic-op shape.
+- Added coverage that decodes `CommitRow.versionstamp` and verifies `VTX[versionstamp] -> txid` for two commits.
+- Files changed:
+  - `engine/packages/sqlite-storage/CLAUDE.md` (via `AGENTS.md` symlink)
+  - `engine/packages/sqlite-storage/src/pump/commit.rs`
+  - `engine/packages/sqlite-storage/src/pump/keys.rs`
+  - `engine/packages/sqlite-storage/src/pump/types.rs`
+  - `engine/packages/sqlite-storage/tests/pump_commit.rs`
+  - `engine/packages/sqlite-storage/tests/pump_keys.rs`
+  - `engine/packages/universaldb/src/driver/postgres/transaction_task.rs`
+  - `engine/packages/universaldb/src/driver/rocksdb/transaction_task.rs`
+  - `engine/packages/universaldb/src/versionstamp.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - `CommitRow` now has concrete vbare encode/decode helpers and is written in the commit tx, not just defined as a future type.
+  - Until US-009 moves storage under `BR/{branch_id}`, commit history and VTX use legacy actor-scoped key helpers.
+  - Local UDB drivers need raw offset substitution for `SetVersionstampedKey` and `SetVersionstampedValue`; tuple-style versionstamp helpers are not enough for FDB atomic-op payloads.
+---
+## 2026-04-29 17:44 PDT - US-009
+- Allocated a root `ActorBranchId` on first actor commit and wrote the root `ActorBranchRecord`, APTR pointer, and refcount metadata.
+- Migrated new ActorDb hot-path writes and reads for META, quota, COMMITS, VTX, PIDX, DELTA, and SHARD data under `BR/{branch_id}` while keeping legacy fallback reads for old seeded state.
+- Updated hot compaction to resolve APTR and compact branch-scoped data, with branch-aware quota accounting and shard folding.
+- Verified with `cargo check -p sqlite-storage` and `cargo test -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/CLAUDE.md` (via `AGENTS.md` symlink)
+  - `engine/packages/sqlite-storage/src/compactor/compact.rs`
+  - `engine/packages/sqlite-storage/src/compactor/mod.rs`
+  - `engine/packages/sqlite-storage/src/compactor/shard.rs`
+  - `engine/packages/sqlite-storage/src/pump/actor_db.rs`
+  - `engine/packages/sqlite-storage/src/pump/branch.rs`
+  - `engine/packages/sqlite-storage/src/pump/commit.rs`
+  - `engine/packages/sqlite-storage/src/pump/keys.rs`
+  - `engine/packages/sqlite-storage/src/pump/mod.rs`
+  - `engine/packages/sqlite-storage/src/pump/quota.rs`
+  - `engine/packages/sqlite-storage/src/pump/read.rs`
+  - `engine/packages/sqlite-storage/src/pump/types.rs`
+  - `engine/packages/sqlite-storage/tests/pump_commit.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - APTR resolution currently uses the nil namespace branch bridge until US-010 wires real namespace branches.
+  - `ActorDb.branch_id` is only a perf cache; commit/read/compactor code must still resolve APTR when the cache is cold.
+  - New hot-path data should use branch key builders; legacy actor-scoped paths are now compatibility fallbacks rather than the primary layout.
+---
+## 2026-04-29 18:01 PDT - US-010
+- Added lazy root namespace branch initialization for SQLite storage: NSPTR, NSBRANCH, namespace refcount, and T0 tier state are written with the first actor branch in a namespace.
+- Made `ActorDb` namespace-scoped, propagated namespace ids through pegboard-envoy, migration, compactor payloads, reads, commits, and quota validation, and recorded the namespace branch on root actor branches.
+- Updated migration/readback helpers and tests to resolve branch-scoped heads through NSPTR/APTR with legacy actor-scoped fallback.
+- Files changed:
+  - `engine/packages/sqlite-storage/CLAUDE.md`
+  - `engine/packages/sqlite-storage/src/compactor/compact.rs`
+  - `engine/packages/sqlite-storage/src/compactor/worker.rs`
+  - `engine/packages/sqlite-storage/src/pump/actor_db.rs`
+  - `engine/packages/sqlite-storage/src/pump/branch.rs`
+  - `engine/packages/sqlite-storage/src/pump/commit.rs`
+  - `engine/packages/sqlite-storage/src/pump/quota.rs`
+  - `engine/packages/sqlite-storage/src/pump/read.rs`
+  - `engine/packages/sqlite-storage/src/pump/types.rs`
+  - `engine/packages/sqlite-storage/src/pump/udb.rs`
+  - `engine/packages/sqlite-storage/tests/pump_commit.rs`
+  - `engine/packages/sqlite-storage/tests/pump_read.rs`
+  - `engine/packages/pegboard/src/actor_sqlite.rs`
+  - `engine/packages/pegboard/tests/actor_sqlite_migration.rs`
+  - `engine/packages/pegboard-envoy/src/ws_to_tunnel_task.rs`
+  - `engine/packages/pegboard-envoy/tests/actor_lifecycle.rs`
+  - `engine/packages/engine/tests/actor_v2_2_1_migration.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Root namespace metadata is created lazily inside the first SQLite commit for a namespace because sqlite-storage does not own the engine namespace creation workflow.
+  - Tests that assert namespace-scoped storage need deterministic `gas::Id` namespace values; `Id::new_v1` creates a fresh random UUID each call.
+  - Migration helpers must resolve through NSPTR/APTR first, then fall back to legacy actor-scoped `/META/head` for old seeded v2 state.
+---
+## 2026-04-29 18:10 PDT - US-011
+- Implemented the shared `derive_branch_at` primitive for actor branches, including source branch reads, fork-depth enforcement, bookmark-pin OCC fencing, VTX-to-COMMITS synthetic head reconstruction, new branch metadata, refcount atomics, and descendant pin writes.
+- Added branch-primitive tests that seed commits through `ActorDb`, verify `/META/head_at_fork`, branch records, refcounts, desc_pin behavior, out-of-retention rejection, and max-depth rejection.
+- Verified with `cargo check -p sqlite-storage`, `cargo test -p sqlite-storage --test pump_branch`, and `cargo test -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/CLAUDE.md`
+  - `engine/packages/sqlite-storage/src/pump/branch.rs`
+  - `engine/packages/sqlite-storage/tests/pump_branch.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Actor branch derivation should rebuild fork heads from `VTX/{versionstamp} -> txid` plus `COMMITS/{txid}` instead of copying the mutable `/META/head`.
+  - Branch `bk_pin` and `desc_pin` values are lexicographic versionstamp bytes; use `MutationType::ByteMin`.
+  - `derive_branch_at` currently leaves namespace tier promotion for the dedicated `ensure_tier_at_least` story.
+---
+## 2026-04-29 18:15 PDT - US-012
+- Implemented `derive_namespace_branch_at` for namespace branches with source record lookup, MAX_NAMESPACE_DEPTH enforcement, bookmark-pin OCC fencing, child branch metadata, refcount atomics, and descendant pin writes.
+- Added branch tests for namespace metadata/refcounts, lazy tier-state inheritance, out-of-retention rejection, and max-depth rejection.
+- Verified with `cargo test -p sqlite-storage --test pump_branch`, `cargo check -p sqlite-storage`, and `cargo test -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/CLAUDE.md`
+  - `engine/packages/sqlite-storage/src/pump/branch.rs`
+  - `engine/packages/sqlite-storage/tests/pump_branch.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Namespace branch derivation is metadata-only and does not write APTR catalog rows or child `tier_state`.
+  - Namespace branch `bk_pin` and `desc_pin` values use the same lexicographic versionstamp `ByteMin` pattern as actor branches.
+  - `NamespaceBranchRecord.fork_depth` is the local depth source for enforcing `MAX_NAMESPACE_DEPTH`.
+---
+## 2026-04-29 18:23 PDT - US-013
+- Implemented `ensure_tier_at_least` for namespace branch tier promotion and wired fork-derived actor and namespace branches to promote their source namespace branch to Tier 1.
+- Added focused tests for one-time T0→T1 promotion, concurrent promotion convergence, actor fork-triggered promotion, and namespace fork-triggered promotion without writing child `tier_state`.
+- Verified with `cargo test -p sqlite-storage --test pump_branch`, `cargo check -p sqlite-storage`, and `cargo test -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/src/pump/branch.rs`
+  - `engine/packages/sqlite-storage/tests/pump_branch.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - `ensure_tier_at_least` uses a serializable read on `tier_state` plus a write/atomic versionstamped write so UDB/FDB conflicts turn concurrent promoters into retry-and-reread behavior.
+  - Missing child `tier_state` reads through the namespace parent chain and can materialize the inherited state locally without rewriting actor branch records.
+  - Fork primitives now perform Tier 1 engagement before writing derived branch metadata, but still leave the new namespace branch's own `tier_state` absent for lazy inheritance.
+---
+## 2026-04-29 18:34 PDT - US-014
+- Implemented `fork_actor` as a metadata-only operation that resolves source and target namespace branches, derives a fresh actor branch, and writes the target APTR for a fresh actor id.
+- Extended actor branch reads to use `/META/head_at_fork` and walk parent branch sources so fresh forks can read inherited pages through root, depth-1, and deeper source chains.
+- Verified with `cargo test -p sqlite-storage --test pump_branch`, `cargo check -p sqlite-storage`, and `cargo test -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/CLAUDE.md`
+  - `engine/packages/sqlite-storage/src/pump/branch.rs`
+  - `engine/packages/sqlite-storage/src/pump/read.rs`
+  - `engine/packages/sqlite-storage/tests/pump_branch.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - `fork_actor` requires both source and target namespaces to have NSPTR roots; tests can seed the target namespace with a normal `ActorDb` commit.
+  - Fresh fork reads use `/META/head_at_fork` for EOF and then resolve page sources through branch ancestry.
+  - The current PIDX cache stores only `pgno -> txid`, so fork ancestry reads can only use it when exactly one source branch is involved.
+---
+## 2026-04-29 18:41 PDT - US-015
+- Implemented `fork_namespace` as a metadata-only namespace fork that allocates a new namespace and namespace branch, derives branch metadata, and writes the child `NSPTR`.
+- Added coverage for child pointer/record creation, source desc-pin and refcount updates, no eager child `APTR` rows, and max namespace depth enforcement.
+- Verified with `cargo test -p sqlite-storage --test pump_branch fork_namespace -- --nocapture`, `cargo check -p sqlite-storage`, and `cargo test -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/src/pump/branch.rs`
+  - `engine/packages/sqlite-storage/tests/pump_branch.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - `fork_namespace` should delegate branch metadata/refcount/pin/depth behavior to `derive_namespace_branch_at` and only add the new namespace pointer.
+  - Child namespace branches intentionally start with an empty APTR space; actor lookup inheritance belongs to the namespace parent-walk resolver.
+  - Repeated namespace forks can reuse the same resolved commit versionstamp for depth-cap tests because namespace derivation only needs a versionstamp boundary.
+---
+## 2026-04-29 18:47 PDT - US-066
+- Flattened the SQLite PITR tier model by removing `Tier`, `NamespaceTierState`, `ensure_tier_at_least`, the `tier_state` key builder, and all fork/root allocation tier writes.
+- Renamed `COMMITS_TIER0_RETENTION_MS` to `HOT_RETENTION_FLOOR_MS` and pruned tier-promotion assertions/tests while keeping non-tier branch primitive coverage.
+- Verified with `cargo check -p sqlite-storage` and `cargo test -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/CLAUDE.md`
+  - `engine/packages/sqlite-storage/src/pump/branch.rs`
+  - `engine/packages/sqlite-storage/src/pump/constants.rs`
+  - `engine/packages/sqlite-storage/src/pump/keys.rs`
+  - `engine/packages/sqlite-storage/src/pump/types.rs`
+  - `engine/packages/sqlite-storage/tests/pump_branch.rs`
+  - `engine/packages/sqlite-storage/tests/pump_commit.rs`
+  - `engine/packages/sqlite-storage/tests/pump_constants.rs`
+  - `engine/packages/sqlite-storage/tests/pump_keys.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - PITR storage now has a uniform hot/cold/eviction flow; do not add per-namespace tier state or promotion hooks.
+  - Root namespace initialization writes only NSPTR, NSBRANCH, and refcount metadata.
+  - Branch derivation should remain metadata-only with refcount/pin updates and no cold-tier gating.
+---
+## 2026-04-29 18:54 PDT - US-016
+- Implemented `resolve_actor_pointer` as the shared APTR resolver and kept `resolve_actor_branch_in_namespace` as a branch-id wrapper.
+- Made namespace-branch tombstones return `ActorNotFound` so deleted actors do not fall through to parent APTR rows or legacy actor-scoped storage.
+- Added coverage for lazy actor pointer inheritance after `fork_namespace` and tombstone-blocked inheritance.
+- Verified with `cargo test -p sqlite-storage --test pump_branch resolve_actor_pointer -- --nocapture`, `cargo check -p sqlite-storage`, and `cargo test -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/CLAUDE.md`
+  - `engine/packages/sqlite-storage/src/pump/branch.rs`
+  - `engine/packages/sqlite-storage/tests/pump_branch.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Use `branch::resolve_actor_pointer` when pointer metadata matters; `resolve_actor_branch_in_namespace` is only a convenience wrapper for the current branch id.
+  - A tombstone in a child namespace branch is a hard `ActorNotFound`, not a cache miss.
+  - Forked namespace tests can reconstruct an `Id` from `NamespaceId::as_uuid()` with `Id::v1(..., 1)` because sqlite-storage derives namespace identity from the UUID bytes.
+---
+## 2026-04-29 19:03 PDT - US-017
+- Implemented `rollback_actor` with branch derivation, old-branch freezing, APTR history, refcount decrement, and APTR current-pointer swap.
+- Made ActorDb resolve APTR before trusting branch-local caches so a same-object commit after rollback writes to the new branch.
+- Verified with `cargo check -p sqlite-storage`, `cargo test -p sqlite-storage --test pump_branch`, and `cargo test -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/CLAUDE.md` (via `AGENTS.md` symlink)
+  - `engine/packages/sqlite-storage/src/pump/branch.rs`
+  - `engine/packages/sqlite-storage/src/pump/commit.rs`
+  - `engine/packages/sqlite-storage/src/pump/keys.rs`
+  - `engine/packages/sqlite-storage/src/pump/page_index.rs`
+  - `engine/packages/sqlite-storage/src/pump/read.rs`
+  - `engine/packages/sqlite-storage/tests/pump_branch.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Rollback pointer swaps can stale `ActorDb` branch id, quota, and PIDX caches; resolve APTR first and clear branch-local caches when the branch changes.
+  - Existing parent-branch PIDX rows are latest-only, so exact historical page reads before the next write need later versioned/as-of read work rather than rollback-specific hacks.
+  - `APTR/history` tests can scan a new `actor_pointer_history_prefix(...)` helper and decode `ActorPointer` values directly.
+---
+## 2026-04-29 19:08 PDT - US-018
+- Implemented `rollback_namespace` with namespace branch derivation, old namespace branch freezing, NSPTR history, old-branch refcount decrement, and NSPTR current-pointer swap.
+- Added a `namespace_pointer_history_prefix(...)` key helper and coverage verifying the history row, branch state/refcount updates, and inherited actor visibility after the namespace pointer moves.
+- Verified with `cargo test -p sqlite-storage --test pump_branch rollback_namespace -- --nocapture`, `cargo check -p sqlite-storage`, and `cargo test -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/src/pump/branch.rs`
+  - `engine/packages/sqlite-storage/src/pump/keys.rs`
+  - `engine/packages/sqlite-storage/tests/pump_branch.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Namespace rollback should use `derive_namespace_branch_at` for the branch metadata/refcount/pin behavior, then only handle pointer history and pointer swap locally.
+  - The old namespace branch remains refcounted by the new child branch after rollback even though its direct pointer refcount is decremented.
+  - `NSPTR/history` tests can scan `namespace_pointer_history_prefix(...)` and decode `NamespacePointer` values directly.
+---
+## 2026-04-29 19:14 PDT - US-019
+- Implemented strict `BookmarkStr` wire-format validation plus `format(ts_ms, txid)` and `parse()` helpers for 33-character PITR bookmark strings.
+- Added bookmark tests covering fixed-width formatting, malformed inputs, negative timestamp rejection, representative round-trips, and lexicographic chronological ordering.
+- Verified with `cargo test -p sqlite-storage --test pump_bookmark`, `cargo check -p sqlite-storage`, and `cargo test -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/CLAUDE.md` (via `AGENTS.md` symlink)
+  - `engine/packages/sqlite-storage/src/pump/types.rs`
+  - `engine/packages/sqlite-storage/tests/pump_bookmark.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - `BookmarkStr::new` now validates the full wire shape, not just length, so deserializing bookmark-bearing pump records rejects malformed bookmark bytes early.
+  - Generated bookmarks use lowercase fixed-width hex through `BookmarkStr::format`; use `parse()` instead of slicing bookmark strings at call sites.
+  - The bookmark tests are pure integration tests and do not need a UDB fixture.
+---
+## 2026-04-29 19:21 PDT - US-020
+- Implemented ephemeral bookmark creation and pinned bookmark status reads through a new `pump::bookmark` module, with `ActorDb` convenience methods.
+- Added vbare encode/decode helpers for `BookmarkRecord` and `PinnedBookmarkRecord`, plus tests for read-only ephemeral creation and absent/ready pinned status lookup.
+- Verified with `cargo test -p sqlite-storage --test pump_bookmark`, `cargo check -p sqlite-storage`, and `cargo test -p sqlite-storage`; reran `cargo test -p sqlite-storage --test pump_bookmark` after the final test cleanup.
+- Files changed:
+  - `engine/packages/sqlite-storage/CLAUDE.md`
+  - `engine/packages/sqlite-storage/src/pump/bookmark.rs`
+  - `engine/packages/sqlite-storage/src/pump/mod.rs`
+  - `engine/packages/sqlite-storage/src/pump/types.rs`
+  - `engine/packages/sqlite-storage/tests/pump_bookmark.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - `create_bookmark` is read-only and formats the caller timestamp with the current branch head txid.
+  - `bookmark_status` returns `Option<PinStatus>`; `None` means the pinned bookmark record is absent.
+  - Tests that seed pinned bookmark records should use the new `encode_pinned_bookmark_record` helper instead of raw `serde_bare`.
+---
+## 2026-04-29 19:31 PDT - US-021
+- Implemented `resolve_bookmark` for the current pointer-era sqlite-storage layout, bridging namespace parent walks and actor branch ancestry with versionstamp caps.
+- Added coverage for ephemeral VTX-backed resolution, missing VTX expiry, pinned bookmark precedence, actor parent-chain resolution, and namespace fork cap rejection.
+- Verified with `cargo test -p sqlite-storage --test pump_bookmark -- --nocapture`, `cargo check -p sqlite-storage`, and `cargo test -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/AGENTS.md`
+  - `engine/packages/sqlite-storage/src/pump/bookmark.rs`
+  - `engine/packages/sqlite-storage/tests/pump_bookmark.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - The checked-in crate still uses APTR/NSPTR despite the v4 PRD text; bookmark resolution was implemented against the actual current layout and noted in the PRD.
+  - Namespace bookmark resolution must direct-walk namespace parents so inherited APTR rows carry the child namespace's `parent_versionstamp` cap.
+  - Ephemeral resolution verifies the branch VTX entry for the resolved commit row before returning the commit's versionstamp.
+---
+## 2026-04-29 19:39 PDT - US-022
+- Implemented `create_pinned_bookmark` for `ActorDb` and the free bookmark API, writing `PinnedBookmarkRecord { status: Pending }`, branch `bk_pin`, and the namespace pin counter in the request transaction.
+- Added cold-compactor UPS subject and versioned `SqliteColdCompactPayload::CreatePinnedBookmark` encoding so pinned bookmark creation can wake the future cold compactor with actor branch, bookmark, and versionstamp details.
+- Added bookmark tests for pending record creation, `bk_pin` atomic-min, namespace pin count, cold trigger payload, and `MAX_PINS_PER_NAMESPACE` rejection.
+- Verified with `cargo test -p sqlite-storage --test pump_bookmark`, `cargo check -p sqlite-storage`, and `cargo test -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/CLAUDE.md` (via `AGENTS.md` symlink)
+  - `engine/packages/sqlite-storage/src/compactor/mod.rs`
+  - `engine/packages/sqlite-storage/src/compactor/publish.rs`
+  - `engine/packages/sqlite-storage/src/compactor/subjects.rs`
+  - `engine/packages/sqlite-storage/src/pump/bookmark.rs`
+  - `engine/packages/sqlite-storage/src/pump/keys.rs`
+  - `engine/packages/sqlite-storage/tests/pump_bookmark.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Pinned bookmark creation should keep S3 work out of the request path; the only synchronous work is the FDB retention pin and Pending record.
+  - The namespace pin cap currently lives on `NSBRANCH/list/{namespace_branch}/pin_count` as a raw i64 little-endian atomic counter.
+  - Cold compactor message handling has a payload type now, but the actual subscriber/service remains for US-036/US-040.
+---
+## 2026-04-29 19:46 PDT - US-023
+- Implemented `delete_pinned_bookmark` for `ActorDb` and the free bookmark API: existing pinned records are decoded, both bookmark keys are cleared, namespace `pin_count` is decremented, and branch `bk_pin` is recomputed from remaining pinned records.
+- Added `SqliteColdCompactPayload::DeletePinnedBookmark` so the cold compactor can clean up deleted pin objects during its follow-up sweep.
+- Added bookmark coverage for deleting the current floor pin, preserving the next pinned bookmark, advancing `bk_pin`, decrementing `pin_count`, and publishing the cold cleanup payload.
+- Verified with `cargo check -p sqlite-storage` and `cargo test -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/CLAUDE.md`
+  - `engine/packages/sqlite-storage/src/compactor/publish.rs`
+  - `engine/packages/sqlite-storage/src/pump/bookmark.rs`
+  - `engine/packages/sqlite-storage/tests/pump_bookmark.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Use the existing UDB `Subspace` prefix scan pattern for actor bookmark ranges; raw prefix/end ranges can miss rows in the RocksDB test driver path.
+  - `delete_pinned_bookmark` is idempotent for absent pinned records and only publishes a cold cleanup payload when a record was actually removed.
+  - Branch `bk_pin` recompute is bounded by `MAX_PINS_PER_NAMESPACE`, so scanning the actor bookmark subspace is acceptable for this delete path.
+---
+## 2026-04-29 19:52 PDT - US-024
+- Implemented `restore_to_bookmark` for `ActorDb` and the free bookmark API: resolve target bookmark, capture the current head as an undo bookmark, call `rollback_actor`, then write a Pending pinned bookmark for the undo point.
+- Added coverage that verifies rollback creates a new `head_at_fork`, the undo bookmark is valid, the old branch is pinned, namespace pin count increments, and the cold compactor create-pin payload is published.
+- Verified with `cargo test -p sqlite-storage --test pump_bookmark restore_to_bookmark -- --nocapture`, `cargo check -p sqlite-storage`, and `cargo test -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/src/pump/bookmark.rs`
+  - `engine/packages/sqlite-storage/tests/pump_bookmark.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - The PRD says rollback is obsolete after US-067, but the current code still exposes pointer-era rollback APIs, so US-024 was implemented against the actual code layout.
+  - Restore-to-bookmark should pin the pre-rollback branch/versionstamp after the rollback instead of calling the normal current-branch `create_pinned_bookmark`.
+  - Parent PIDX reads are not versionstamp-capped yet; tests for rollback/restore should assert the new branch `head_at_fork` until US-027 fixes ancestry page reads.
+---
+## 2026-04-29 19:59 PDT - US-025
+- Implemented a per-ActorDb flattened branch ancestry cache and wired get_pages to reuse it for immutable branch parent chains.
+- Seeded the cache after commit so root branches have an ancestry plan before the first read, and kept read planning responsible for resolving versionstamp caps to txids inside each transaction.
+- Added a regression test that warms a fork descendant's ancestry cache, removes branch records, and verifies the same connection still reads inherited pages.
+- Files changed:
+  - `engine/packages/sqlite-storage/CLAUDE.md`
+  - `engine/packages/sqlite-storage/src/pump/actor_db.rs`
+  - `engine/packages/sqlite-storage/src/pump/commit.rs`
+  - `engine/packages/sqlite-storage/src/pump/read.rs`
+  - `engine/packages/sqlite-storage/tests/pump_branch.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - `ActorDb.ancestors` is a perf cache of immutable branch ids and parent versionstamp caps; it must not store txid lookups because hot retention can change VTX availability.
+  - Fresh forks still read `/META/head_at_fork`; the ancestry cache only avoids rereading branch records.
+  - The current code still supports pointer-era rollback, so the cache is replaced when APTR resolves to a different branch even though the v4 model removes that invalidation path.
+---
+## 2026-04-29 20:02 PDT - US-026
+- Closed US-026 as obsolete under the v4 rollback-removal spec instead of adding APTR/NSPTR `last_swapped_at_ms` validation that the PRD notes explicitly reject.
+- Left commit/get_pages behavior unchanged; the current ancestry cache remains branch-id based and is not guarded by pointer timestamp reads.
+- Files changed:
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - The v4 spec removes the storage-layer cache invalidation contract; do not read APTR/NSPTR `last_swapped_at_ms` in commit or get_pages for US-026.
+  - US-067 is marked complete in the PRD even though pointer-era code remains in the current tree, so story notes must be checked before implementing older acceptance criteria.
+---
+## 2026-04-29 20:08 PDT - US-027
+- Implemented ancestry-capped PIDX reads in `get_pages`, so parent rows newer than a fork cap are ignored and reads fall through to the capped SHARD version instead.
+- Added a regression where a parent writes after a fork; the forked actor still reads the parent shard as of the fork point.
+- Verified with `cargo test -p sqlite-storage --test pump_branch`, `cargo check -p sqlite-storage`, and `cargo test -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/src/pump/read.rs`
+  - `engine/packages/sqlite-storage/tests/pump_branch.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - `ReadSource::max_txid` is the per-source read cap; apply it to PIDX rows before considering DELTA ownership.
+  - Parent branches can keep writing after a fork, so a child read must treat newer parent PIDX entries as invisible and rely on versioned SHARD fallback.
+  - The existing runner-protocol warning about missing `node_modules/@bare-ts/tools` is unrelated to `sqlite-storage` checks.
+---
+## 2026-04-29 20:14 PDT - US-028
+- Implemented fresh-fork head handling in `ActorDb::commit`: it now reads `/META/head_at_fork` when `/META/head` is absent, advances from that snapshot, writes the real head, and clears the snapshot in the same transaction.
+- Added branch regression coverage for reading a freshly forked actor before its first commit and then committing local pages with the expected `head_txid`.
+- Verified with `cargo test -p sqlite-storage --test pump_branch fresh_fork_uses_head_at_fork_until_first_commit -- --nocapture`, `cargo test -p sqlite-storage --test pump_branch`, `cargo check -p sqlite-storage`, and `cargo test -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/AGENTS.md`
+  - `engine/packages/sqlite-storage/src/pump/commit.rs`
+  - `engine/packages/sqlite-storage/tests/pump_branch.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Fresh fork commits continue from the fork snapshot's `head_txid`; tests should read the branch head before looking up that branch's latest `CommitRow`.
+  - `/META/head_at_fork` is temporary fork metadata and is removed when the child branch writes its first `/META/head`.
+  - The existing runner-protocol warning about missing `node_modules/@bare-ts/tools` is unrelated to `sqlite-storage` checks.
+---
+## 2026-04-29 20:22 PDT - US-029
+- Implemented namespace database enumeration with NSCAT range scans, per-ancestor versionstamp caps, and database tombstones.
+- Added NSCAT marker writes for root actor branch creation and `fork_actor`, plus `delete_database` tombstone/refcount handling.
+- Verified with `cargo test -p sqlite-storage --test list_databases -- --nocapture`, `cargo check -p sqlite-storage`, and `cargo test -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/AGENTS.md`
+  - `engine/packages/sqlite-storage/src/pump/branch.rs`
+  - `engine/packages/sqlite-storage/src/pump/commit.rs`
+  - `engine/packages/sqlite-storage/src/pump/keys.rs`
+  - `engine/packages/sqlite-storage/src/pump/udb.rs`
+  - `engine/packages/sqlite-storage/tests/list_databases.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Current code still uses pointer-era `ActorBranchId`, so `list_databases` returns database branch ids while the later database rename remains pending.
+  - NSCAT markers should be written with `SetVersionstampedValue`; that stored 16-byte value is the create-time cap checked by namespace parent walks.
+  - Database tombstones are scanned before NSCAT entries for each namespace branch so a tombstone masks both local and inherited catalog visibility.
+---
+## 2026-04-29 20:31 PDT - US-031
+- Implemented hot-compactor shard-version cap enforcement before each shard fold: count existing versions, record `sqlite_shard_versions_per_shard`, evict the oldest unpinned version at the cap, and return `ShardVersionCapExhausted` when every slot is pinned.
+- Added compactor coverage for inline force-eviction and all-pinned cap exhaustion.
+- Verified with `cargo test -p sqlite-storage --test compactor_compact compact_ -- --nocapture`, `cargo check -p sqlite-storage`, and `cargo test -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/CLAUDE.md` (via `AGENTS.md` symlink)
+  - `engine/packages/sqlite-storage/src/compactor/compact.rs`
+  - `engine/packages/sqlite-storage/src/compactor/metrics.rs`
+  - `engine/packages/sqlite-storage/tests/compactor_compact.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Shard-version cap enforcement belongs in the hot compactor write transaction so the eviction decision and new SHARD write share the same OCC surface.
+  - Pinned shard-version checks use branch `desc_pin`/`bk_pin` converted through VTX; if a non-empty pin no longer has a VTX row, treat it as pinned rather than clearing history.
+  - Legacy actor-scoped compaction still uses `DBHead.branch_id` for branch pin keys while branch-scoped storage continues through `BR/{branch_id}` helpers.
+---
+## 2026-04-29 20:37 PDT - US-032
+- Added regression coverage proving hot compactor passes write and advance `BR/{branch_id}/META/manifest/last_hot_pass_txid` on the real branch-scoped manifest sub-key.
+- Confirmed the existing hot compactor write updates the split manifest sub-key together with branch `/META/compact`.
+- Verified with `cargo test -p sqlite-storage --test compactor_compact compact_updates_branch_manifest_last_hot_pass_txid_each_pass -- --nocapture`, `cargo check -p sqlite-storage`, and `cargo test -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/CLAUDE.md` (via `AGENTS.md` symlink)
+  - `engine/packages/sqlite-storage/tests/compactor_compact.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Use a nil namespace `ActorDb` when an integration test needs to exercise branch-scoped compaction through the public `compact_default_batch` helper.
+  - The hot compactor stores `last_hot_pass_txid` as a big-endian u64 manifest sub-key, independent from `cold_drained_txid` and access-touch manifest fields.
+  - A branch-scoped pass should keep `BR/{branch_id}/META/compact.materialized_txid` and `BR/{branch_id}/META/manifest/last_hot_pass_txid` in lockstep.
+---
+## 2026-04-29 20:44 PDT - US-033
+- Implemented the universal hot-tier retention sweep in the hot compactor write transaction.
+- Old `CommitRow` entries are selected by `wall_clock_ms < now - HOT_RETENTION_FLOOR_MS`; each swept row clears both `COMMITS/{txid}` and the matching `VTX/{versionstamp}` and adjusts branch/legacy quota accounting.
+- Added compactor coverage for old-row expiry, recent-row preservation, bookmark expiry with no cold layer, no-selected-delta passes, and equivalent behavior across nil and non-nil namespaces.
+- Verified with `cargo test -p sqlite-storage --test compactor_compact -- --nocapture`, `cargo check -p sqlite-storage`, and `cargo test -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/AGENTS.md`
+  - `engine/packages/sqlite-storage/src/compactor/compact.rs`
+  - `engine/packages/sqlite-storage/src/pump/keys.rs`
+  - `engine/packages/sqlite-storage/tests/compactor_compact.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Hot retention should live in the hot compactor write tx so `META/compact`, SHARD folding, `COMMITS`, `VTX`, and quota accounting advance atomically for the pass.
+  - Use branch/legacy scoped key helpers for retention scans; branch storage is primary, but legacy helpers still protect compatibility tests and seeded state.
+  - Namespace-specific compaction in integration tests can use `worker::test_hooks::handle_payload_once` with a `SqliteCompactPayload` carrying `namespace_id`.
+---
+## 2026-04-29 20:52 PDT - US-034
+- Implemented throttled ActorDb access-touch for commit and read activity.
+- Added a per-connection cached access bucket and a shared helper that updates `BR/{branch_id}/META/manifest/last_access_ts_ms`, `last_access_bucket`, and `CTR/eviction_index/{bucket}/{branch_id}` only when the bucket advances.
+- Added tests for repeated 1ms commits staying in one access bucket and for read activity touching a fresh connection's access bucket.
+- Verified with `cargo test -p sqlite-storage --test pump_commit access -- --nocapture`, `cargo check -p sqlite-storage`, and `cargo test -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/src/pump/actor_db.rs`
+  - `engine/packages/sqlite-storage/src/pump/commit.rs`
+  - `engine/packages/sqlite-storage/src/pump/read.rs`
+  - `engine/packages/sqlite-storage/tests/pump_commit.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Access-touch should stay branch-scoped and should not affect branch quota accounting.
+  - Use a serializable read of `last_access_bucket` before re-keying the global eviction index so concurrent touches do not leave stale bucket entries behind.
+  - Read-side access-touch uses wall-clock time inside `get_pages`; commit-side touch uses the commit's caller-provided `now_ms`.
+---
+## 2026-04-29 21:01 PDT - US-035
+- Added the `ColdTier` async trait with `put_object`, `get_object`, `delete_objects`, and `list_prefix` operations.
+- Implemented filesystem, S3, and fault-injection cold-tier backends; the S3 backend uses `aws-sdk-s3` with env/default credential loading and optional endpoint override.
+- Added focused cold-tier tests and verified the full `sqlite-storage` test suite.
+- Files changed:
+  - `Cargo.lock`
+  - `engine/packages/sqlite-storage/CLAUDE.md`
+  - `engine/packages/sqlite-storage/Cargo.toml`
+  - `engine/packages/sqlite-storage/src/cold_tier/mod.rs`
+  - `engine/packages/sqlite-storage/src/lib.rs`
+  - `engine/packages/sqlite-storage/tests/cold_tier.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Cold-tier object keys are S3-style relative keys; reject empty keys, absolute paths, and parent-directory traversal.
+  - `FilesystemColdTier` is the local stand-in for S3 tests, while `FaultyColdTier` wraps any `ColdTier` implementation to inject latency or failures.
+  - Adding the AWS SDK stack is dependency-heavy; if disk is full, clearing stale `target/debug/incremental` artifacts can unblock checks without touching source.
+---
+## 2026-04-29 21:33 PDT - US-038
+- Implemented cold compactor Phase B uploads for branch image layers, consolidated delta layers, pending pin layers, branch records, manifest chunks/indexes, and pointer snapshots.
+- Rewrote each pending marker with the complete object-key set before Phase B uploads, then cleaned stale pending markers and their listed objects after the pass.
+- Added vbare encode/decode helpers for cold manifest indexes, manifest chunks, and pointer snapshots.
+- Verified with `cargo test -p sqlite-storage --test compactor_cold`, `cargo check -p sqlite-storage`, and `cargo test -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/CLAUDE.md`
+  - `engine/packages/sqlite-storage/src/compactor/cold/mod.rs`
+  - `engine/packages/sqlite-storage/src/compactor/cold/phase_a.rs`
+  - `engine/packages/sqlite-storage/src/compactor/cold/phase_b.rs`
+  - `engine/packages/sqlite-storage/src/compactor/cold/worker.rs`
+  - `engine/packages/sqlite-storage/src/pump/types.rs`
+  - `engine/packages/sqlite-storage/tests/compactor_cold.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Phase B should stay S3-only and consume the snapshot data collected by Phase A; Phase C is the next FDB write boundary.
+  - The pending marker starts as the Phase A handoff marker and is overwritten with the final object list once SHARD, DELTA, and pin work is known.
+  - Cold manifest index/chunk and pointer snapshot objects use the same `OwnedVersionedData` wrapper pattern as other persisted pump records.
+---
+## 2026-04-29 21:39 PDT - US-039
+- Implemented cold compactor Phase C as a single FDB write transaction with a regular-read fence on the Phase A `cold_drained_txid`, manifest cursor update, and `in_flight_uuid` clearing.
+- Threaded uploaded pin object keys from Phase B into Phase C so pending pinned-bookmark records can transition to `PinStatus::Ready` with their cold object key.
+- Added cold compactor coverage for Phase C final state, pinned bookmark readiness, and a failure-injection OCC abort when the drain cursor changes before Phase C commits.
+- Verified with `cargo check -p sqlite-storage`, `cargo test -p sqlite-storage --test compactor_cold -- --nocapture`, and `cargo test -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/CLAUDE.md`
+  - `engine/packages/sqlite-storage/src/compactor/cold/mod.rs`
+  - `engine/packages/sqlite-storage/src/compactor/cold/phase_b.rs`
+  - `engine/packages/sqlite-storage/src/compactor/cold/phase_c.rs`
+  - `engine/packages/sqlite-storage/src/compactor/cold/worker.rs`
+  - `engine/packages/sqlite-storage/tests/compactor_cold.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Phase B should remain S3-only; pass any FDB finalization inputs forward in `ColdPhaseBOutput` instead of reading FDB during uploads.
+  - Phase C should leave the pending marker object intact for stale-marker cleanup. The FDB `in_flight_uuid` is the active-pass marker.
+  - Integration tests can inject a `ColdTier` wrapper to mutate FDB between Phase B and Phase C for deterministic OCC-fence coverage.
+---
+## 2026-04-29 21:49 PDT - US-041
+- Implemented the cold compactor follow-up sweep after Phase C. It computes the branch GC pin from refcount/root versionstamp, descendant pin, and bookmark pin, removes obsolete manifest chunk references before deleting layer objects, and skips deletion if the pin moves backward before S3 mutation.
+- Added coverage for create pinned bookmark -> cold pin upload -> delete pinned bookmark -> cleanup pass, verifying the old manifest chunk and layer objects disappear after the pin is recomputed away.
+- Verified with `cargo check -p sqlite-storage`, `cargo test -p sqlite-storage --test compactor_cold`, and `cargo test -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/CLAUDE.md`
+  - `engine/packages/sqlite-storage/src/compactor/cold/mod.rs`
+  - `engine/packages/sqlite-storage/src/compactor/cold/phase_d.rs`
+  - `engine/packages/sqlite-storage/src/compactor/cold/worker.rs`
+  - `engine/packages/sqlite-storage/tests/compactor_cold.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Cold follow-up sweeps should only delete layers with concrete nonzero versionstamps; zero is an unknown placeholder from incomplete test fixtures or missing VTX coverage.
+  - Manifest chunk rewrites and index rewrites must happen before cold-tier deletes so a manifest reference never outlives its layer object.
+  - Tests for GC cleanup can simulate engine-owned database orphaning by setting the branch refcount to zero before deleting the last pinned bookmark.
+---
+## 2026-04-29 21:55 PDT - US-042
+- Implemented cold-tier read fall-through for branch reads: hot DELTA/SHARD misses now collect cold layer candidates, load the branch cold manifest through `ColdTier`, pick covering layers by txid/shard, decode LTX, and return page bytes.
+- Added a bounded per-connection cold manifest cache on `ActorDb` and a `new_with_cold_tier` constructor for callers/tests that have a concrete cold backend.
+- Verified with `cargo test -p sqlite-storage --test pump_read`, `cargo check -p sqlite-storage`, and `cargo test -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/CLAUDE.md`
+  - `engine/packages/sqlite-storage/src/pump/actor_db.rs`
+  - `engine/packages/sqlite-storage/src/pump/read.rs`
+  - `engine/packages/sqlite-storage/tests/pump_read.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Keep S3/filesystem GETs outside the UDB read transaction; the read tx should only decide hot misses and cold candidates.
+  - Cold read tests can seed `ColdManifestIndex` + `ColdManifestChunk` directly in a `FilesystemColdTier`, then clear branch hot DELTA/PIDX keys to simulate eviction.
+  - Default `ActorDb::new` intentionally has no cold-tier read backend so legacy and focused hot-path tests keep their old zero-fill behavior on complete hot misses.
+---
+## 2026-04-29 22:01 PDT - US-043
+- Implemented the eviction compactor scaffold: a standalone sweep loop, global eviction CMPC lease, bounded `CTR/eviction_index` range scan, and `sqlite_eviction_compactor` service registration.
+- Added key helpers for eviction-index prefix/range/decode and focused tests for lease skip, oldest-bucket scan order, and batch limiting.
+- Verified with `cargo test -p sqlite-storage --test compactor_eviction`, `cargo test -p sqlite-storage --test pump_keys`, `cargo check -p sqlite-storage`, and `cargo test -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/engine/src/run_config.rs`
+  - `engine/packages/sqlite-storage/AGENTS.md`
+  - `engine/packages/sqlite-storage/src/compactor/eviction/mod.rs`
+  - `engine/packages/sqlite-storage/src/compactor/mod.rs`
+  - `engine/packages/sqlite-storage/src/pump/keys.rs`
+  - `engine/packages/sqlite-storage/tests/compactor_eviction.rs`
+  - `engine/packages/sqlite-storage/tests/pump_keys.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Eviction coordinator work is global, not per-branch: take `CMPC/lease_global/{kind=eviction}` before scanning candidates.
+  - `CTR/eviction_index` scans should use `Subspace::from_bytes(prefix)` to get true prefix bounds; `end_of_key_range` is for single-key conflict ranges.
+  - US-043 intentionally does not clear hot data. Predicate gates and OCC-fenced deletion are left to US-044 through US-046.
+---
+## 2026-04-29 22:05 PDT - US-044
+- Implemented eviction predicate planning inside the eviction compactor sweep. The sweep now reports evictable SHARD versions after checking hot-cache age, cold-drain coverage, newer SHARD existence, hot-pass retention margin, and descendant/bookmark pins resolved through VTX.
+- Added focused eviction compactor tests for the all-gates-pass case plus hot window, cold drain, descendant pin, bookmark pin, newer-version, and hot-pass-margin blockers.
+- Verified with `cargo test -p sqlite-storage --test compactor_eviction`, `cargo check -p sqlite-storage`, and `cargo test -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/CLAUDE.md`
+  - `engine/packages/sqlite-storage/src/compactor/eviction/mod.rs`
+  - `engine/packages/sqlite-storage/tests/compactor_eviction.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Eviction planning can stay side-effect free for US-044; later US-045/US-046 work should consume the planned `EvictableShardVersion` rows for OCC fencing and clearing.
+  - Branch pins remain versionstamp-valued, so eviction resolves `desc_pin` and `bk_pin` through branch-local VTX before comparing against a SHARD version's `as_of_txid`.
+  - A missing VTX entry for a non-empty pin should be treated conservatively as pinned, matching the hot compactor cap-enforcement behavior.
+---
+## 2026-04-29 22:31 PDT - US-053
+- Implemented cold-compactor fork warmup payloads for actor and namespace forks.
+- `fork_actor` and `fork_namespace` now publish cold warmup UPS events after the metadata transaction commits.
+- Added a cold warmup phase that copies reachable parent image layer bytes into the child branch cold prefix and writes a child manifest chunk/index.
+- Adjusted fresh fork reads so a child branch can consult its own warmed cold manifest before falling through to parent ancestry.
+- Verified with `cargo test -p sqlite-storage --test compactor_cold fork_warmup_copies_parent_image_layers_into_child_manifest -- --nocapture`, focused `pump_branch` fork tests, `cargo test -p sqlite-storage --test pump_branch`, `cargo test -p sqlite-storage --test compactor_cold`, and `cargo check -p sqlite-storage && cargo test -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/AGENTS.md`
+  - `engine/packages/sqlite-storage/src/compactor/cold/mod.rs`
+  - `engine/packages/sqlite-storage/src/compactor/cold/phase_a.rs`
+  - `engine/packages/sqlite-storage/src/compactor/cold/phase_warmup.rs`
+  - `engine/packages/sqlite-storage/src/compactor/cold/worker.rs`
+  - `engine/packages/sqlite-storage/src/compactor/publish.rs`
+  - `engine/packages/sqlite-storage/src/pump/branch.rs`
+  - `engine/packages/sqlite-storage/src/pump/read.rs`
+  - `engine/packages/sqlite-storage/tests/compactor_cold.rs`
+  - `engine/packages/sqlite-storage/tests/list_databases.rs`
+  - `engine/packages/sqlite-storage/tests/pump_bookmark.rs`
+  - `engine/packages/sqlite-storage/tests/pump_branch.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Fork warmup is actor-branch scoped; namespace fork warmup is a notification hook because namespace forks are metadata-only and do not create child database branches.
+  - Child manifests should own child-prefixed copied layer objects so child cold sweeps never delete parent-owned layer files.
+  - Fresh fork reads can include the child branch as a cold-layer candidate even before the first local commit; without warmup it falls through to the parent manifest.
+---
+## 2026-04-29 22:40 PDT - US-054
+- Implemented debug-only PITR helpers under `sqlite_storage::debug` for actor ancestry, branch pins, bookmark listing, cold manifest dumping, GC pin estimation, and versionstamp page-state reads.
+- Added focused debug tests for bookmark/pin/GC diagnostics, `read_at` reconstruction, and filesystem cold-manifest diagnostics.
+- Updated US-054 to passing in `prd.json`.
+- Verified with `cargo test -p sqlite-storage --test debug`, `cargo check -p sqlite-storage`, and `cargo test -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/CLAUDE.md`
+  - `engine/packages/sqlite-storage/src/lib.rs`
+  - `engine/packages/sqlite-storage/src/pump/debug.rs`
+  - `engine/packages/sqlite-storage/src/pump/mod.rs`
+  - `engine/packages/sqlite-storage/tests/debug.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Debug APIs are gated with `#[cfg(debug_assertions)]` and re-exported at `sqlite_storage::debug`.
+  - `debug::read_at` must scan branch DELTA history up to the target txid; PIDX is the current owner map and can point past historical versionstamps.
+  - `debug::estimate_gc_pin` should call `sqlite_storage::gc` instead of duplicating refcount/root/desc/bookmark pin math.
+---
+## 2026-04-29 22:59 PDT - US-056
+- Added dedicated `fork_actor` and `fork_namespace` integration test binaries covering root, depth-1, and deeper source branches.
+- Covered cross-namespace actor fork reads, MAX_FORK_DEPTH/MAX_NAMESPACE_DEPTH boundary behavior, and concurrent bk_pin advancement resolving to `ForkOutOfRetention`.
+- Verified with `cargo test -p sqlite-storage --test fork_actor`, `cargo test -p sqlite-storage --test fork_namespace`, `cargo check -p sqlite-storage`, and `cargo test -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/tests/fork_actor.rs`
+  - `engine/packages/sqlite-storage/tests/fork_common/mod.rs`
+  - `engine/packages/sqlite-storage/tests/fork_namespace.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Dedicated integration test binaries can reuse helper setup from a sibling `tests/<name>/mod.rs` module without becoming their own test target.
+  - Fork depth limits are best tested through the public `fork_actor`/`fork_namespace` APIs: depth 16 succeeds, and the next derivation returns the typed depth error.
+  - A retry-driven bk_pin race exercises the same OCC fence path as concurrent GC without adding production-only test hooks.
+---
+## 2026-04-29 23:03 PDT - US-058
+- Added the dedicated `tests/bookmarks.rs` integration test binary for ephemeral bookmark resolution, filesystem cold-tier pin readiness, namespace parent fall-through, hot-retention expiry, and unreachable actor cases.
+- Verified pinned bookmarks transition `Pending -> Ready` by consuming the real UPS payload and driving the cold worker against `FilesystemColdTier`.
+- Verified old ephemeral bookmarks return `BookmarkExpired` after the hot compactor retention sweep clears the matching `COMMITS` and `VTX` rows.
+- Verified with `cargo test -p sqlite-storage --test bookmarks -- --nocapture`, `cargo check -p sqlite-storage`, and `cargo test -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/tests/bookmarks.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Bookmark integration tests can combine public `ActorDb` APIs with direct branch metadata seeding when the scenario needs a cold pass without first running a hot compaction pass.
+  - Namespace-fork bookmark coverage should include both sides of the cap: a pre-fork bookmark resolves through the parent namespace, while a post-fork source bookmark returns `BranchNotReachable`.
+---
+## 2026-04-29 23:17 PDT - US-061
+- Added GC coverage for dependency-graph branch deletion when a branch has refcount zero and no descendant/bookmark pins.
+- Added deep namespace list coverage for versionstamp-capped database tombstones, including forks taken before and after a parent deletion.
+- Fixed `delete_database` to write versionstamped tombstones and made `list_databases` cap tombstones by namespace fork versionstamp.
+- Verified with `cargo test -p sqlite-storage --test gc -- --nocapture`, `cargo test -p sqlite-storage --test list_databases -- --nocapture`, `cargo check -p sqlite-storage`, and `cargo test -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/CLAUDE.md`
+  - `engine/packages/sqlite-storage/src/gc/mod.rs`
+  - `engine/packages/sqlite-storage/src/pump/branch.rs`
+  - `engine/packages/sqlite-storage/tests/gc.rs`
+  - `engine/packages/sqlite-storage/tests/list_databases.rs`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Versionstamp-cap filtering applies to namespace tombstones as well as NSCAT rows.
+  - Empty legacy tombstone values decode as versionstamp zero so old tombstones remain conservative and inherited.
+  - For RocksDB-backed UDB tests, GC branch deletion should clear scanned prefix keys explicitly instead of relying on range clear behavior.
+---
+## 2026-04-29 23:36 PDT - US-064
+- Added the sqlite-storage Reference Docs section with entries for the five new `docs-internal/engine/sqlite/` docs.
+- Added the maintenance rule for keeping storage structure, component, and design-decision docs in sync with key layout, branch metadata, and compactor responsibility changes.
+- Pointed `engine/CLAUDE.md` SQLite guidance at the new sqlite docs folder.
+- Verified with `cargo check -p sqlite-storage`.
+- Files changed:
+  - `engine/packages/sqlite-storage/CLAUDE.md`
+  - `engine/CLAUDE.md`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - `engine/packages/sqlite-storage/AGENTS.md` is a symlink to `CLAUDE.md`, so sqlite-storage agent guidance should be edited in `CLAUDE.md`.
+  - Docs-only sqlite-storage stories still use `cargo check -p sqlite-storage` as the lightweight validation gate.
+---

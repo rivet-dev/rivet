@@ -1,6 +1,7 @@
 //! Key builders for depot blobs and indexes.
 
 use anyhow::{Context, Result, ensure};
+use gas::prelude::Id;
 use universaldb::utils::end_of_key_range;
 
 use super::types::{DatabaseBranchId, NamespaceBranchId, NamespaceId};
@@ -15,6 +16,12 @@ pub const BR_PARTITION: u8 = 0x30;
 pub const CTR_PARTITION: u8 = 0x40;
 pub const BOOKMARK_PARTITION: u8 = 0x50;
 pub const CMPC_PARTITION: u8 = 0x60;
+pub const DB_PIN_PARTITION: u8 = 0x70;
+pub const NS_FORK_PIN_PARTITION: u8 = 0x71;
+pub const NS_CHILD_PARTITION: u8 = 0x72;
+pub const NSCAT_BY_DB_PARTITION: u8 = 0x73;
+pub const NS_PROOF_EPOCH_PARTITION: u8 = 0x74;
+pub const SQLITE_CMP_DIRTY_PARTITION: u8 = 0x75;
 pub const PAGE_SIZE: u32 = 4096;
 pub const SHARD_SIZE: u32 = 64;
 
@@ -25,6 +32,11 @@ const META_COLD_COMPACT_PATH: &[u8] = b"/META/cold_compact";
 const META_QUOTA_PATH: &[u8] = b"/META/quota";
 const META_COMPACTOR_LEASE_PATH: &[u8] = b"/META/compactor_lease";
 const META_COLD_LEASE_PATH: &[u8] = b"/META/cold_lease";
+const CMP_ROOT_PATH: &[u8] = b"/CMP/root";
+const CMP_COLD_SHARD_PATH: &[u8] = b"/CMP/cold_shard/";
+const CMP_RETIRED_COLD_OBJECT_PATH: &[u8] = b"/CMP/retired_cold_object/";
+const CMP_STAGE_PATH: &[u8] = b"/CMP/stage/";
+const CMP_STAGE_HOT_SHARD_PATH: &[u8] = b"/hot_shard/";
 const SHARD_PATH: &[u8] = b"/SHARD/";
 const DELTA_PATH: &[u8] = b"/DELTA/";
 const PIDX_DELTA_PATH: &[u8] = b"/PIDX/delta/";
@@ -48,6 +60,12 @@ const CTR_EVICTION_INDEX_PATH: &[u8] = b"/eviction_index/";
 const BOOKMARK_PATH: &[u8] = b"/";
 const CMPC_ENQUEUE_PATH: &[u8] = b"/enqueue/";
 const CMPC_LEASE_GLOBAL_PATH: &[u8] = b"/lease_global/";
+const DB_PIN_PATH: &[u8] = b"/";
+const NS_FORK_PIN_PATH: &[u8] = b"/";
+const NS_CHILD_PATH: &[u8] = b"/";
+const NSCAT_BY_DB_PATH: &[u8] = b"/";
+const NS_PROOF_EPOCH_PATH: &[u8] = b"/";
+const SQLITE_CMP_DIRTY_PATH: &[u8] = b"/";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CompactorQueueKind {
@@ -79,6 +97,10 @@ fn append_uuid(key: &mut Vec<u8>, uuid: uuid::Uuid) {
 fn append_ts_nonce(key: &mut Vec<u8>, ts_ms: i64, nonce: u32) {
 	key.extend_from_slice(&ts_ms.to_be_bytes());
 	key.extend_from_slice(&nonce.to_be_bytes());
+}
+
+fn append_id(key: &mut Vec<u8>, id: Id) {
+	key.extend_from_slice(&id.as_bytes());
 }
 
 fn append_database_id(key: &mut Vec<u8>, database_id: &str) {
@@ -353,6 +375,78 @@ pub fn branch_manifest_last_access_bucket_key(branch_id: DatabaseBranchId) -> Ve
 	with_suffix(database_branch_base(branch_id), MANIFEST_LAST_ACCESS_BUCKET_PATH)
 }
 
+pub fn branch_compaction_root_key(branch_id: DatabaseBranchId) -> Vec<u8> {
+	with_suffix(database_branch_base(branch_id), CMP_ROOT_PATH)
+}
+
+pub fn branch_compaction_cold_shard_prefix(branch_id: DatabaseBranchId) -> Vec<u8> {
+	with_suffix(database_branch_base(branch_id), CMP_COLD_SHARD_PATH)
+}
+
+pub fn branch_compaction_cold_shard_version_prefix(
+	branch_id: DatabaseBranchId,
+	shard_id: u32,
+) -> Vec<u8> {
+	let mut key = branch_compaction_cold_shard_prefix(branch_id);
+	key.extend_from_slice(&shard_id.to_be_bytes());
+	key.push(b'/');
+	key
+}
+
+pub fn branch_compaction_cold_shard_key(
+	branch_id: DatabaseBranchId,
+	shard_id: u32,
+	as_of_txid: u64,
+) -> Vec<u8> {
+	let mut key = branch_compaction_cold_shard_version_prefix(branch_id, shard_id);
+	key.extend_from_slice(&as_of_txid.to_be_bytes());
+	key
+}
+
+pub fn branch_compaction_retired_cold_object_key(
+	branch_id: DatabaseBranchId,
+	object_key_hash: [u8; 32],
+) -> Vec<u8> {
+	let mut key = with_suffix(database_branch_base(branch_id), CMP_RETIRED_COLD_OBJECT_PATH);
+	key.extend_from_slice(&object_key_hash);
+	key
+}
+
+pub fn branch_compaction_stage_hot_shard_prefix(
+	branch_id: DatabaseBranchId,
+	job_id: Id,
+) -> Vec<u8> {
+	let mut key = with_suffix(database_branch_base(branch_id), CMP_STAGE_PATH);
+	append_id(&mut key, job_id);
+	key.extend_from_slice(CMP_STAGE_HOT_SHARD_PATH);
+	key
+}
+
+pub fn branch_compaction_stage_hot_shard_version_prefix(
+	branch_id: DatabaseBranchId,
+	job_id: Id,
+	shard_id: u32,
+) -> Vec<u8> {
+	let mut key = branch_compaction_stage_hot_shard_prefix(branch_id, job_id);
+	key.extend_from_slice(&shard_id.to_be_bytes());
+	key.push(b'/');
+	key
+}
+
+pub fn branch_compaction_stage_hot_shard_key(
+	branch_id: DatabaseBranchId,
+	job_id: Id,
+	shard_id: u32,
+	as_of_txid: u64,
+	chunk_idx: u32,
+) -> Vec<u8> {
+	let mut key = branch_compaction_stage_hot_shard_version_prefix(branch_id, job_id, shard_id);
+	key.extend_from_slice(&as_of_txid.to_be_bytes());
+	key.push(b'/');
+	key.extend_from_slice(&chunk_idx.to_be_bytes());
+	key
+}
+
 pub fn branch_commit_key(branch_id: DatabaseBranchId, txid: u64) -> Vec<u8> {
 	let mut key = branch_commit_prefix(branch_id);
 	key.extend_from_slice(&txid.to_be_bytes());
@@ -536,6 +630,88 @@ pub fn compactor_enqueue_key(ts_ms: i64, database_id: &str, kind: CompactorQueue
 pub fn compactor_global_lease_key(kind: CompactorQueueKind) -> Vec<u8> {
 	let mut key = with_suffix(partition_prefix(CMPC_PARTITION), CMPC_LEASE_GLOBAL_PATH);
 	key.push(kind.as_byte());
+	key
+}
+
+pub fn db_pin_key(branch_id: DatabaseBranchId, pin_id: &[u8]) -> Vec<u8> {
+	let mut key = db_pin_prefix(branch_id);
+	key.extend_from_slice(pin_id);
+	key
+}
+
+pub fn db_pin_prefix(branch_id: DatabaseBranchId) -> Vec<u8> {
+	let mut key = with_suffix(partition_prefix(DB_PIN_PARTITION), DB_PIN_PATH);
+	append_uuid(&mut key, branch_id.as_uuid());
+	key.push(b'/');
+	key
+}
+
+pub fn ns_fork_pin_key(
+	source_namespace_branch_id: NamespaceBranchId,
+	fork_versionstamp: [u8; 16],
+	target_namespace_branch_id: NamespaceBranchId,
+) -> Vec<u8> {
+	let mut key = ns_fork_pin_prefix(source_namespace_branch_id);
+	key.extend_from_slice(&fork_versionstamp);
+	key.push(b'/');
+	append_uuid(&mut key, target_namespace_branch_id.as_uuid());
+	key
+}
+
+pub fn ns_fork_pin_prefix(source_namespace_branch_id: NamespaceBranchId) -> Vec<u8> {
+	let mut key = with_suffix(partition_prefix(NS_FORK_PIN_PARTITION), NS_FORK_PIN_PATH);
+	append_uuid(&mut key, source_namespace_branch_id.as_uuid());
+	key.push(b'/');
+	key
+}
+
+pub fn ns_child_key(
+	source_namespace_branch_id: NamespaceBranchId,
+	fork_versionstamp: [u8; 16],
+	target_namespace_branch_id: NamespaceBranchId,
+) -> Vec<u8> {
+	let mut key = ns_child_prefix(source_namespace_branch_id);
+	key.extend_from_slice(&fork_versionstamp);
+	key.push(b'/');
+	append_uuid(&mut key, target_namespace_branch_id.as_uuid());
+	key
+}
+
+pub fn ns_child_prefix(source_namespace_branch_id: NamespaceBranchId) -> Vec<u8> {
+	let mut key = with_suffix(partition_prefix(NS_CHILD_PARTITION), NS_CHILD_PATH);
+	append_uuid(&mut key, source_namespace_branch_id.as_uuid());
+	key.push(b'/');
+	key
+}
+
+pub fn nscat_by_db_key(
+	database_branch_id: DatabaseBranchId,
+	namespace_branch_id: NamespaceBranchId,
+) -> Vec<u8> {
+	let mut key = nscat_by_db_prefix(database_branch_id);
+	append_uuid(&mut key, namespace_branch_id.as_uuid());
+	key
+}
+
+pub fn nscat_by_db_prefix(database_branch_id: DatabaseBranchId) -> Vec<u8> {
+	let mut key = with_suffix(partition_prefix(NSCAT_BY_DB_PARTITION), NSCAT_BY_DB_PATH);
+	append_uuid(&mut key, database_branch_id.as_uuid());
+	key.push(b'/');
+	key
+}
+
+pub fn ns_proof_epoch_key(root_namespace_branch_id: NamespaceBranchId) -> Vec<u8> {
+	let mut key = with_suffix(partition_prefix(NS_PROOF_EPOCH_PARTITION), NS_PROOF_EPOCH_PATH);
+	append_uuid(&mut key, root_namespace_branch_id.as_uuid());
+	key
+}
+
+pub fn sqlite_cmp_dirty_key(branch_id: DatabaseBranchId) -> Vec<u8> {
+	let mut key = with_suffix(
+		partition_prefix(SQLITE_CMP_DIRTY_PARTITION),
+		SQLITE_CMP_DIRTY_PATH,
+	);
+	append_uuid(&mut key, branch_id.as_uuid());
 	key
 }
 

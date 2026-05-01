@@ -1,25 +1,34 @@
 use depot::conveyer::keys::{
 	DBPTR_PARTITION, BOOKMARK_PARTITION, BR_PARTITION, BRANCHES_PARTITION, CMPC_PARTITION,
-	CTR_PARTITION, CompactorQueueKind, NSPTR_PARTITION, NSBRANCH_PARTITION, PAGE_SIZE,
-	SHARD_SIZE, SQLITE_SUBSPACE_PREFIX, database_pointer_cur_key, database_pointer_history_key,
-	database_prefix, database_range, bookmark_key, bookmark_pinned_key, branch_commit_key,
-	branch_delta_chunk_key, branch_manifest_cold_drained_txid_key,
+	CTR_PARTITION, DB_PIN_PARTITION, CompactorQueueKind, NS_CHILD_PARTITION,
+	NS_FORK_PIN_PARTITION, NS_PROOF_EPOCH_PARTITION, NSPTR_PARTITION, NSBRANCH_PARTITION,
+	NSCAT_BY_DB_PARTITION, PAGE_SIZE, SHARD_SIZE, SQLITE_CMP_DIRTY_PARTITION,
+	SQLITE_SUBSPACE_PREFIX, bookmark_key, bookmark_pinned_key,
+	branch_commit_key, branch_compaction_cold_shard_key,
+	branch_compaction_cold_shard_version_prefix, branch_compaction_retired_cold_object_key,
+	branch_compaction_root_key, branch_compaction_stage_hot_shard_key,
+	branch_compaction_stage_hot_shard_version_prefix, branch_delta_chunk_key,
+	branch_manifest_cold_drained_txid_key,
 	branch_manifest_last_access_bucket_key, branch_manifest_last_access_ts_ms_key,
-		branch_manifest_last_hot_pass_txid_key, branch_meta_cold_compact_key,
-		branch_meta_cold_lease_key, branch_meta_compact_key, branch_meta_compactor_lease_key,
-		branch_meta_head_at_fork_key, branch_meta_head_key, branch_meta_quota_key, branch_pidx_key,
-		branch_prefix, branch_range, branch_shard_key, branch_shard_version_prefix, branch_vtx_key,
-		branches_bk_pin_key, branches_desc_pin_key, branches_list_key, branches_refcount_key,
-		commit_key, compactor_enqueue_key, compactor_global_lease_key,
-		ctr_eviction_index_key, ctr_eviction_index_range, decode_ctr_eviction_index_key,
-		ctr_quota_global_key, delta_chunk_key, delta_chunk_prefix, delta_prefix, meta_compact_key,
-		meta_compactor_lease_key, meta_head_key, meta_quota_key,
-		namespace_branches_database_name_tombstone_key, namespace_branches_bk_pin_key,
-		namespace_branches_desc_pin_key, namespace_branches_list_key, namespace_branches_refcount_key,
-		namespace_pointer_cur_key, namespace_pointer_history_key, pidx_delta_key, pidx_delta_prefix,
-		shard_key, shard_prefix, shard_version_key, shard_version_prefix, vtx_key,
-	};
+	branch_manifest_last_hot_pass_txid_key, branch_meta_cold_compact_key,
+	branch_meta_cold_lease_key, branch_meta_compact_key, branch_meta_compactor_lease_key,
+	branch_meta_head_at_fork_key, branch_meta_head_key, branch_meta_quota_key, branch_pidx_key,
+	branch_prefix, branch_range, branch_shard_key, branch_shard_version_prefix, branch_vtx_key,
+	branches_bk_pin_key, branches_desc_pin_key, branches_list_key, branches_refcount_key,
+	commit_key, compactor_enqueue_key, compactor_global_lease_key, ctr_eviction_index_key,
+	ctr_eviction_index_range, ctr_quota_global_key, database_pointer_cur_key,
+	database_pointer_history_key, database_prefix, database_range, db_pin_key, db_pin_prefix,
+	decode_ctr_eviction_index_key, delta_chunk_key, delta_chunk_prefix, delta_prefix,
+	meta_compact_key, meta_compactor_lease_key, meta_head_key, meta_quota_key, ns_child_key,
+	ns_child_prefix, ns_fork_pin_key, ns_fork_pin_prefix, ns_proof_epoch_key, nscat_by_db_key,
+	nscat_by_db_prefix, namespace_branches_bk_pin_key,
+	namespace_branches_database_name_tombstone_key, namespace_branches_desc_pin_key,
+	namespace_branches_list_key, namespace_branches_refcount_key, namespace_pointer_cur_key,
+	namespace_pointer_history_key, pidx_delta_key, pidx_delta_prefix, shard_key, shard_prefix,
+	shard_version_key, shard_version_prefix, sqlite_cmp_dirty_key, vtx_key,
+};
 use depot::conveyer::types::{DatabaseBranchId, NamespaceBranchId, NamespaceId};
+use gas::prelude::Id;
 use uuid::Uuid;
 
 const TEST_DATABASE: &str = "test-database";
@@ -35,6 +44,10 @@ fn namespace_branch_id() -> NamespaceBranchId {
 
 fn namespace_id() -> NamespaceId {
 	NamespaceId::from_uuid(Uuid::from_u128(0x1020_3040_5060_7080_90a0_b0c0_d0e0_f000))
+}
+
+fn compaction_job_id() -> Id {
+	Id::v1(Uuid::from_u128(0x1234_5678_9abc_def0_1122_3344_5566_7788), 42)
 }
 
 fn uuid_bytes(uuid: Uuid) -> Vec<u8> {
@@ -260,6 +273,10 @@ fn database_branch_data_keys_live_under_br_partition() {
 		branch_manifest_last_hot_pass_txid_key(branch),
 		branch_manifest_last_access_ts_ms_key(branch),
 		branch_manifest_last_access_bucket_key(branch),
+		branch_compaction_root_key(branch),
+		branch_compaction_cold_shard_key(branch, 4, 7),
+		branch_compaction_retired_cold_object_key(branch, [1; 32]),
+		branch_compaction_stage_hot_shard_key(branch, compaction_job_id(), 4, 7, 2),
 		branch_commit_key(branch, 7),
 		branch_vtx_key(branch, [3; 16]),
 		branch_pidx_key(branch, 9),
@@ -273,7 +290,23 @@ fn database_branch_data_keys_live_under_br_partition() {
 		&branch_meta_head_at_fork_key(branch)[branch_prefix(branch).len()..],
 		b"/META/head_at_fork"
 	);
+	assert_eq!(
+		&branch_compaction_root_key(branch)[branch_prefix(branch).len()..],
+		b"/CMP/root"
+	);
 	assert!(branch_shard_key(branch, 4, 7).starts_with(&branch_shard_version_prefix(branch, 4)));
+	assert!(
+		branch_compaction_cold_shard_key(branch, 4, 7)
+			.starts_with(&branch_compaction_cold_shard_version_prefix(branch, 4))
+	);
+	assert!(
+		branch_compaction_stage_hot_shard_key(branch, compaction_job_id(), 4, 7, 2)
+			.starts_with(&branch_compaction_stage_hot_shard_version_prefix(
+				branch,
+				compaction_job_id(),
+				4
+			))
+	);
 	assert!(branch_commit_key(branch, 8) > branch_commit_key(branch, 7));
 }
 
@@ -308,5 +341,134 @@ fn global_bookmark_and_compactor_keys_match_expected_suffixes() {
 			.last()
 			.expect("kind byte"),
 		0x01
+	);
+}
+
+#[test]
+fn workflow_compaction_key_partitions_are_reserved() {
+	let branch = database_branch_id();
+	let namespace_branch = namespace_branch_id();
+
+	assert_eq!(
+		&db_pin_key(branch, b"bookmark/test")[..2],
+		&[SQLITE_SUBSPACE_PREFIX, DB_PIN_PARTITION]
+	);
+	assert_eq!(
+		&ns_fork_pin_key(namespace_branch, [1; 16], namespace_branch)[..2],
+		&[SQLITE_SUBSPACE_PREFIX, NS_FORK_PIN_PARTITION]
+	);
+	assert_eq!(
+		&ns_child_key(namespace_branch, [1; 16], namespace_branch)[..2],
+		&[SQLITE_SUBSPACE_PREFIX, NS_CHILD_PARTITION]
+	);
+	assert_eq!(
+		&nscat_by_db_key(branch, namespace_branch)[..2],
+		&[SQLITE_SUBSPACE_PREFIX, NSCAT_BY_DB_PARTITION]
+	);
+	assert_eq!(
+		&ns_proof_epoch_key(namespace_branch)[..2],
+		&[SQLITE_SUBSPACE_PREFIX, NS_PROOF_EPOCH_PARTITION]
+	);
+	assert_eq!(
+		&sqlite_cmp_dirty_key(branch)[..2],
+		&[SQLITE_SUBSPACE_PREFIX, SQLITE_CMP_DIRTY_PARTITION]
+	);
+}
+
+#[test]
+fn workflow_compaction_branch_keys_sort_by_big_endian_components() {
+	let branch = database_branch_id();
+	let job = compaction_job_id();
+
+	let mut cold_shards = vec![
+		branch_compaction_cold_shard_key(branch, 2, 10),
+		branch_compaction_cold_shard_key(branch, 1, 50),
+		branch_compaction_cold_shard_key(branch, 1, 7),
+		branch_compaction_cold_shard_key(branch, 2, 1),
+	];
+	cold_shards.sort();
+	assert_eq!(
+		cold_shards,
+		vec![
+			branch_compaction_cold_shard_key(branch, 1, 7),
+			branch_compaction_cold_shard_key(branch, 1, 50),
+			branch_compaction_cold_shard_key(branch, 2, 1),
+			branch_compaction_cold_shard_key(branch, 2, 10),
+		]
+	);
+
+	let mut staged_hot_shards = vec![
+		branch_compaction_stage_hot_shard_key(branch, job, 2, 10, 1),
+		branch_compaction_stage_hot_shard_key(branch, job, 1, 50, 1),
+		branch_compaction_stage_hot_shard_key(branch, job, 1, 7, 2),
+		branch_compaction_stage_hot_shard_key(branch, job, 1, 7, 1),
+	];
+	staged_hot_shards.sort();
+	assert_eq!(
+		staged_hot_shards,
+		vec![
+			branch_compaction_stage_hot_shard_key(branch, job, 1, 7, 1),
+			branch_compaction_stage_hot_shard_key(branch, job, 1, 7, 2),
+			branch_compaction_stage_hot_shard_key(branch, job, 1, 50, 1),
+			branch_compaction_stage_hot_shard_key(branch, job, 2, 10, 1),
+		]
+	);
+}
+
+#[test]
+fn workflow_compaction_global_keys_sort_by_big_endian_components() {
+	let branch = database_branch_id();
+	let source_namespace = namespace_branch_id();
+	let target_a = NamespaceBranchId::from_uuid(Uuid::from_u128(0x0000_0000_0000_0000_0000_0000_0000_0001));
+	let target_b = NamespaceBranchId::from_uuid(Uuid::from_u128(0x0000_0000_0000_0000_0000_0000_0000_0002));
+
+	assert!(db_pin_key(branch, b"bookmark/a").starts_with(&db_pin_prefix(branch)));
+	assert!(nscat_by_db_key(branch, source_namespace).starts_with(&nscat_by_db_prefix(branch)));
+	assert!(ns_fork_pin_key(source_namespace, [1; 16], target_a).starts_with(&ns_fork_pin_prefix(source_namespace)));
+	assert!(ns_child_key(source_namespace, [1; 16], target_a).starts_with(&ns_child_prefix(source_namespace)));
+
+	let mut fork_pins = vec![
+		ns_fork_pin_key(source_namespace, [2; 16], target_a),
+		ns_fork_pin_key(source_namespace, [1; 16], target_b),
+		ns_fork_pin_key(source_namespace, [1; 16], target_a),
+	];
+	fork_pins.sort();
+	assert_eq!(
+		fork_pins,
+		vec![
+			ns_fork_pin_key(source_namespace, [1; 16], target_a),
+			ns_fork_pin_key(source_namespace, [1; 16], target_b),
+			ns_fork_pin_key(source_namespace, [2; 16], target_a),
+		]
+	);
+
+	let mut child_edges = vec![
+		ns_child_key(source_namespace, [2; 16], target_a),
+		ns_child_key(source_namespace, [1; 16], target_b),
+		ns_child_key(source_namespace, [1; 16], target_a),
+	];
+	child_edges.sort();
+	assert_eq!(
+		child_edges,
+		vec![
+			ns_child_key(source_namespace, [1; 16], target_a),
+			ns_child_key(source_namespace, [1; 16], target_b),
+			ns_child_key(source_namespace, [2; 16], target_a),
+		]
+	);
+
+	let mut retired_objects = vec![
+		branch_compaction_retired_cold_object_key(branch, [0x80; 32]),
+		branch_compaction_retired_cold_object_key(branch, [0x01; 32]),
+		branch_compaction_retired_cold_object_key(branch, [0xff; 32]),
+	];
+	retired_objects.sort();
+	assert_eq!(
+		retired_objects,
+		vec![
+			branch_compaction_retired_cold_object_key(branch, [0x01; 32]),
+			branch_compaction_retired_cold_object_key(branch, [0x80; 32]),
+			branch_compaction_retired_cold_object_key(branch, [0xff; 32]),
+		]
 	);
 }
