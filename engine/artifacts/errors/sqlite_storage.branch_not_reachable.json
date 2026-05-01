@@ -1,5 +1,0 @@
-{
-  "code": "branch_not_reachable",
-  "group": "sqlite_storage",
-  "message": "Bookmark branch is not reachable from this database branch chain."
-}

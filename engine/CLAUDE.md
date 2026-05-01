@@ -48,24 +48,24 @@ Use `test-snapshot-gen` to generate and load RocksDB snapshots of the full UDB K
 
 - If a full engine test sweep fails during workflow-worker startup with `ActiveWorkerIdxKey` and `bad code, found 2`, treat it as a sporadic harness issue and retry the affected test once.
 
-## SQLite storage tests
+## Depot tests
 
-- For SQLite storage key layout, component responsibilities, VFS interaction, design constraints, and prior-art comparisons, read `docs-internal/engine/sqlite/`.
-- `sqlite-storage` tests live in `engine/packages/sqlite-storage/tests/`; do not add inline module test blocks.
-- Run `sqlite-storage` tests against temp RocksDB-backed UniversalDB via `test_db()`, `checkpoint_test_db(...)`, and `reopen_test_db(...)` instead of mocked storage paths.
-- `sqlite-storage` PIDX entries are stored as the PIDX key prefix plus a big-endian `u32` page number, with the value encoded as a raw big-endian `u64` txid.
-- `sqlite-storage` `/META/quota` is a fixed-width little-endian `i64` atomic counter; do not vbare-encode it.
-- `sqlite-storage` `/META/compactor_lease` is held with a local timer, cancellation token, and periodic renewal task; compaction work transactions must not revalidate the lease in-tx.
-- `sqlite-storage` compaction PIDX deletes use `COMPARE_AND_CLEAR` so stale entries no-op when commits race compaction.
-- `sqlite-storage` LTX V3 files end the page section with a zeroed 6-byte page-header sentinel before the varint page index, and the index offsets/sizes refer to the full on-wire page frame.
-- `sqlite-storage` LTX decoders should validate the varint page index against the actual page-frame layout instead of trusting footer offsets alone.
-- `sqlite-storage` `get_pages(...)` should keep `/META/head`, cold PIDX loads, and DELTA/SHARD blob fetches inside one UDB transaction, then decode each unique blob once and evict stale cached PIDX rows that now need SHARD fallback.
-- `sqlite-storage` fast-path commits should update an already-cached PIDX in memory after the store write, but must not load PIDX from store just to mutate it or the one-RTT path is gone.
-- `sqlite-storage` shrink writes must delete above-EOF PIDX rows and fully-above-EOF SHARD blobs inside the same commit/takeover transaction; compaction only cleans partial shards by filtering pages at or below `head.db_size_pages`.
-- `sqlite-storage` compaction should choose shard passes from the live PIDX scan, then delete DELTA blobs by comparing all existing delta keys against the remaining global PIDX references so multi-shard and overwritten deltas only disappear when every page ref is gone.
-- `sqlite-storage` metrics should record compaction pass duration and totals in `compactor/worker.rs`, while shard outcome metrics such as folded pages, deleted deltas, delta gauge updates, and lag stay in `compactor/shard.rs` to avoid double counting.
-- `sqlite-storage` quota accounting should treat only `/META/head`, SHARD, DELTA, and PIDX keys as billable; `/META/quota` tracks the sum with signed atomic-add deltas.
-- `sqlite-storage` latency tests that depend on `UDB_SIMULATED_LATENCY_MS` should live in a dedicated integration test binary, because UniversalDB caches that env var once per process with `OnceLock`.
+- For Depot key layout, component responsibilities, VFS interaction, design constraints, and prior-art comparisons, read `docs-internal/engine/sqlite/`.
+- `depot` tests live in `engine/packages/depot/tests/`; do not add inline module test blocks.
+- Run `depot` tests against temp RocksDB-backed UniversalDB via `test_db()`, `checkpoint_test_db(...)`, and `reopen_test_db(...)` instead of mocked storage paths.
+- `depot` PIDX entries are stored as the PIDX key prefix plus a big-endian `u32` page number, with the value encoded as a raw big-endian `u64` txid.
+- `depot` `/META/quota` is a fixed-width little-endian `i64` atomic counter; do not vbare-encode it.
+- `depot` `/META/compactor_lease` is held with a local timer, cancellation token, and periodic renewal task; compaction work transactions must not revalidate the lease in-tx.
+- `depot` compaction PIDX deletes use `COMPARE_AND_CLEAR` so stale entries no-op when commits race compaction.
+- `depot` LTX V3 files end the page section with a zeroed 6-byte page-header sentinel before the varint page index, and the index offsets/sizes refer to the full on-wire page frame.
+- `depot` LTX decoders should validate the varint page index against the actual page-frame layout instead of trusting footer offsets alone.
+- `depot` `get_pages(...)` should keep `/META/head`, cold PIDX loads, and DELTA/SHARD blob fetches inside one UDB transaction, then decode each unique blob once and evict stale cached PIDX rows that now need SHARD fallback.
+- `depot` fast-path commits should update an already-cached PIDX in memory after the store write, but must not load PIDX from store just to mutate it or the one-RTT path is gone.
+- `depot` shrink writes must delete above-EOF PIDX rows and fully-above-EOF SHARD blobs inside the same commit/takeover transaction; compaction only cleans partial shards by filtering pages at or below `head.db_size_pages`.
+- `depot` compaction should choose shard passes from the live PIDX scan, then delete DELTA blobs by comparing all existing delta keys against the remaining global PIDX references so multi-shard and overwritten deltas only disappear when every page ref is gone.
+- `depot` metrics should record compaction pass duration and totals in `compactor/worker.rs`, while shard outcome metrics such as folded pages, deleted deltas, delta gauge updates, and lag stay in `compactor/shard.rs` to avoid double counting.
+- `depot` quota accounting should treat only `/META/head`, SHARD, DELTA, and PIDX keys as billable; `/META/quota` tracks the sum with signed atomic-add deltas.
+- `depot` latency tests that depend on `UDB_SIMULATED_LATENCY_MS` should live in a dedicated integration test binary, because UniversalDB caches that env var once per process with `OnceLock`.
 
 ## Pegboard Envoy
 

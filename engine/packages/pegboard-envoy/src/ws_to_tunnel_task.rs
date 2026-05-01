@@ -10,7 +10,7 @@ use rivet_data::converted::{ActorNameKeyData, MetadataKeyData};
 use rivet_envoy_protocol::{self as protocol, PROTOCOL_VERSION, versioned};
 use rivet_guard_core::websocket_handle::WebSocketReceiver;
 use scc::HashMap;
-use sqlite_storage::{error::SqliteStorageError, pump::Db};
+use depot::{error::SqliteStorageError, conveyer::Db};
 use std::{
 	collections::BTreeSet,
 	sync::{Arc, atomic::Ordering},
@@ -633,13 +633,13 @@ async fn handle_sqlite_get_pages(
 }
 
 async fn sqlite_get_pages_ok(
-	pages: Vec<sqlite_storage::types::FetchedPage>,
+	pages: Vec<depot::types::FetchedPage>,
 ) -> Result<protocol::SqliteGetPagesResponse> {
 	Ok(protocol::SqliteGetPagesResponse::SqliteGetPagesOk(
 		protocol::SqliteGetPagesOk {
 			pages: pages
 				.into_iter()
-				.map(sqlite_runtime::protocol_sqlite_pump_fetched_page)
+				.map(sqlite_runtime::protocol_sqlite_conveyer_fetched_page)
 				.collect(),
 		},
 	))
@@ -673,7 +673,7 @@ async fn handle_sqlite_commit(
 	let response_build_start = Instant::now();
 	let response = match engine_result {
 		Ok(()) => Ok(protocol::SqliteCommitResponse::SqliteCommitOk),
-		Err(err) => match sqlite_storage_error(&err) {
+		Err(err) => match depot_error(&err) {
 			Some(SqliteStorageError::CommitTooLarge {
 				actual_size_bytes,
 				max_size_bytes,
@@ -706,8 +706,8 @@ async fn validate_sqlite_actor(ctx: &StandaloneCtx, conn: &Conn, actor_id: &str)
 	Ok(())
 }
 
-fn pump_dirty_page(page: protocol::SqliteDirtyPage) -> sqlite_storage::types::DirtyPage {
-	sqlite_storage::types::DirtyPage {
+fn pump_dirty_page(page: protocol::SqliteDirtyPage) -> depot::types::DirtyPage {
+	depot::types::DirtyPage {
 		pgno: page.pgno,
 		bytes: page.bytes,
 	}
@@ -746,11 +746,11 @@ fn validate_sqlite_dirty_pages(
 	for page in dirty_pages {
 		ensure!(page.pgno > 0, "{request_name} does not accept page 0");
 		ensure!(
-			page.bytes.len() == sqlite_storage::types::SQLITE_PAGE_SIZE as usize,
+			page.bytes.len() == depot::types::SQLITE_PAGE_SIZE as usize,
 			"{request_name} page {} had {} bytes, expected {}",
 			page.pgno,
 			page.bytes.len(),
-			sqlite_storage::types::SQLITE_PAGE_SIZE
+			depot::types::SQLITE_PAGE_SIZE
 		);
 		ensure!(
 			seen.insert(page.pgno),
@@ -762,7 +762,7 @@ fn validate_sqlite_dirty_pages(
 	Ok(())
 }
 
-fn sqlite_storage_error(err: &anyhow::Error) -> Option<&SqliteStorageError> {
+fn depot_error(err: &anyhow::Error) -> Option<&SqliteStorageError> {
 	err.downcast_ref::<SqliteStorageError>()
 }
 

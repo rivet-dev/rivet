@@ -1,0 +1,5 @@
+{
+  "code": "quota_exceeded",
+  "group": "depot",
+  "message": "Not enough space left in Depot."
+}

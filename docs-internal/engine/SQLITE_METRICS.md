@@ -6,8 +6,8 @@
 - `sqlite_commit_dirty_page_count{path}`: Histogram of dirty page counts per commit path.
 - `sqlite_commit_dirty_bytes{path}`: Histogram of raw dirty-page bytes per commit path.
 - `sqlite_udb_ops_per_commit{path}`: Histogram of UniversalDB operations per commit path.
-- `sqlite_commit_envoy_dispatch_duration_seconds`: Pegboard-envoy histogram for websocket frame arrival to `sqlite-storage` dispatch.
-- `sqlite_commit_envoy_response_duration_seconds`: Pegboard-envoy histogram for `sqlite-storage` return to websocket response send.
+- `sqlite_commit_envoy_dispatch_duration_seconds`: Pegboard-envoy histogram for websocket frame arrival to `depot` dispatch.
+- `sqlite_commit_envoy_response_duration_seconds`: Pegboard-envoy histogram for `depot` return to websocket response send.
 - `sqlite_commit_phases`: Actor inspector labeled timing metric exposed from `/inspector/metrics`. Values are `request_build`, `serialize`, `transport`, and `state_update`.
 
 ## Scrape Points
@@ -17,8 +17,8 @@
 
 ## Tracing
 
-- Set `RUST_LOG=sqlite_storage=debug,pegboard_envoy=debug,sqlite_v2_vfs=debug` to emit per-commit phase spans and VFS phase logs.
-- `sqlite-storage` commit handlers use debug spans for the high-level request and sub-phase work.
+- Set `RUST_LOG=depot=debug,pegboard_envoy=debug,sqlite_v2_vfs=debug` to emit per-commit phase spans and VFS phase logs.
+- `depot` commit handlers use debug spans for the high-level request and sub-phase work.
 - The VFS logs request-build, serialize, transport, and state-update timings after each successful commit.
 
 ## Diagnosis

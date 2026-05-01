@@ -1,5 +1,0 @@
-{
-  "code": "database_not_found",
-  "group": "sqlite_storage",
-  "message": "Database was not found in this namespace branch."
-}

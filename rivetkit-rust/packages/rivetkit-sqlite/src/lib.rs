@@ -20,5 +20,5 @@ pub mod database;
 /// SQLite query execution helpers.
 pub mod query;
 
-/// Custom SQLite VFS for actor-side sqlite-storage transport.
+/// Custom SQLite VFS for actor-side depot transport.
 pub mod vfs;

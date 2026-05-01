@@ -7,9 +7,9 @@ use rivet_envoy_protocol as protocol;
 use rivet_pools::NodeId;
 use rusqlite::Connection;
 use serde::Deserialize;
-use sqlite_storage::{
+use depot::{
 	keys::{branch_meta_head_key, meta_head_key},
-	pump::{branch as sqlite_storage_branch, Db},
+	conveyer::{branch as depot_branch, Db},
 	types::{NamespaceId, SQLITE_PAGE_SIZE, decode_db_head},
 };
 use test_snapshot::SnapshotTestCtx;
@@ -234,7 +234,7 @@ async fn load_v2_sqlite_bytes(
 			let actor_id = actor_id_for_tx.clone();
 			let namespace_id = NamespaceId::from_gas_id(namespace_id);
 			async move {
-				let key = if let Some(branch_id) = sqlite_storage_branch::resolve_database_branch(
+				let key = if let Some(branch_id) = depot_branch::resolve_database_branch(
 					&tx,
 					namespace_id,
 					&actor_id,

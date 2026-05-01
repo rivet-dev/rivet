@@ -1,10 +1,10 @@
 # SQLite Storage Structure
 
-This is the key-format reference for the branchable SQLite storage layer. Update it whenever FDB or S3 layout changes.
+This is the key-format reference for the branchable Depot layer. Update it whenever FDB or S3 layout changes.
 
 ## Identity Model
 
-SQLite storage has two external ids:
+Depot has two external ids:
 
 - `NamespaceId`: the namespace branch id. There is no separate namespace pointer id.
 - `DatabaseId`: the database branch id. There is no separate database pointer id.
@@ -15,14 +15,14 @@ Namespace database membership is stored in `NSCAT`. Namespace forks do not copy 
 
 ## FDB Prefixes
 
-All SQLite storage keys live under the crate-owned `[0x02]` prefix. The next byte is the partition.
+All Depot keys live under the crate-owned `[0x02]` prefix. The next byte is the partition.
 
 | Partition | Prefix | Owner | Purpose |
 |---|---|---|---|
 | `NSCAT` | `[0x02][0x10]` | create/fork/delete database paths | Namespace catalog membership markers. |
 | `BRANCHES` | `[0x02][0x20]` | branch operations, GC | Immutable database branch records plus mutable counters. |
 | `NSBRANCH` | `[0x02][0x21]` | namespace operations, GC | Immutable namespace branch records plus mutable counters and tombstones. |
-| `BR` | `[0x02][0x30]` | pump and compactors | Per-database hot data, metadata, and leases. |
+| `BR` | `[0x02][0x30]` | conveyer and compactors | Per-database hot data, metadata, and leases. |
 | `CTR` | `[0x02][0x40]` | quota, eviction access touch | Global counters and eviction index. |
 | `BOOKMARK` | `[0x02][0x50]` | bookmark APIs, cold compactor | Bookmark records and pinned bookmark state. |
 | `CMPC` | `[0x02][0x60]` | compactor dispatch | Cold/eviction work queue and global leases. |

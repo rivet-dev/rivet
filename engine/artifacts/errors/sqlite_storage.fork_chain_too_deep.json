@@ -1,5 +1,0 @@
-{
-  "code": "fork_chain_too_deep",
-  "group": "sqlite_storage",
-  "message": "Database branch fork chain is too deep."
-}

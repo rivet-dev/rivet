@@ -1,0 +1,5 @@
+{
+  "code": "fork_out_of_retention",
+  "group": "depot",
+  "message": "Cannot fork from a point that has fallen out of retention."
+}

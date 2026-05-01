@@ -1,5 +1,0 @@
-{
-  "code": "namespace_fork_chain_too_deep",
-  "group": "sqlite_storage",
-  "message": "Namespace branch fork chain is too deep."
-}

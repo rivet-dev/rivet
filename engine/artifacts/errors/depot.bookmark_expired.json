@@ -1,0 +1,5 @@
+{
+  "code": "bookmark_expired",
+  "group": "depot",
+  "message": "Bookmark history is no longer retained."
+}

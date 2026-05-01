@@ -31,10 +31,10 @@ pub fn config(_rivet_config: rivet_config::Config) -> Result<RunConfigData> {
 			"sqlite_compactor",
 			ServiceKind::Standalone,
 			|config, pools| {
-				Box::pin(sqlite_storage::compactor::start(
+				Box::pin(depot::compactor::start(
 					config,
 					pools,
-					sqlite_storage::compactor::CompactorConfig::default(),
+					depot::compactor::CompactorConfig::default(),
 				))
 			},
 			true,
@@ -43,10 +43,10 @@ pub fn config(_rivet_config: rivet_config::Config) -> Result<RunConfigData> {
 			"sqlite_cold_compactor",
 			ServiceKind::Standalone,
 			|config, pools| {
-				Box::pin(sqlite_storage::compactor::cold::start(
+				Box::pin(depot::compactor::cold::start(
 					config,
 					pools,
-					sqlite_storage::compactor::cold::ColdCompactorConfig::default(),
+					depot::compactor::cold::ColdCompactorConfig::default(),
 				))
 			},
 			true,
@@ -55,10 +55,10 @@ pub fn config(_rivet_config: rivet_config::Config) -> Result<RunConfigData> {
 			"sqlite_eviction_compactor",
 			ServiceKind::Standalone,
 			|config, pools| {
-				Box::pin(sqlite_storage::compactor::eviction::start(
+				Box::pin(depot::compactor::eviction::start(
 					config,
 					pools,
-					sqlite_storage::compactor::eviction::EvictionCompactorConfig::default(),
+					depot::compactor::eviction::EvictionCompactorConfig::default(),
 				))
 			},
 			true,

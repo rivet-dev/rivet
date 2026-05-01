@@ -1,10 +1,10 @@
 # SQLite Storage Components
 
-SQLite storage is split into the pump hot path plus three compactors. Each component owns a narrow write surface and lease model.
+Depot is split into the conveyer hot path plus three compactors. Each component owns a narrow write surface and lease model.
 
-## Pump
+## Conveyer
 
-The pump is the request path used by the SQLite VFS.
+The conveyer is the request path used by the SQLite VFS.
 
 Responsibilities:
 
@@ -16,7 +16,7 @@ Responsibilities:
 - Create namespaces, create databases, fork namespaces, fork databases, and write branch records/catalog markers.
 - Create and resolve bookmarks. Pinned bookmarks publish cold-compactor work and start as `PinStatus::Pending`.
 
-Lease ownership: none. Correctness relies on Pegboard single-writer exclusivity for a live database plus FDB transaction fences. The pump must not take compactor leases.
+Lease ownership: none. Correctness relies on Pegboard single-writer exclusivity for a live database plus FDB transaction fences. The conveyer must not take compactor leases.
 
 ## Hot Compactor
 
@@ -102,7 +102,7 @@ Lease ownership: global `CMPC/lease_global/{kind=eviction}`. Sweeps are batch-li
 
 | Component | Main writes | Lease |
 |---|---|---|
-| Pump | `META/head`, `COMMITS`, `VTX`, `PIDX`, `DELTA`, branch records, bookmarks | None |
+| Conveyer | `META/head`, `COMMITS`, `VTX`, `PIDX`, `DELTA`, branch records, bookmarks | None |
 | Hot compactor | `SHARD`, `META/compact`, `META/manifest/last_hot_pass_txid` | `META/compactor_lease` |
 | Cold compactor | S3 objects, `META/cold_compact`, `META/manifest/cold_drained_txid`, pin status | `META/cold_lease` |
 | Eviction compactor | Clears FDB SHARD/PIDX/DELTA rows, eviction index | `CMPC/lease_global/{kind=eviction}` |

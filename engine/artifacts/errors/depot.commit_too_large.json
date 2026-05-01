@@ -1,0 +1,5 @@
+{
+  "code": "commit_too_large",
+  "group": "depot",
+  "message": "SQLite commit payload is too large."
+}

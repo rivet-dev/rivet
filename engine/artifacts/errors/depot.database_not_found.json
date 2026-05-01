@@ -1,0 +1,5 @@
+{
+  "code": "database_not_found",
+  "group": "depot",
+  "message": "Database was not found in this namespace branch."
+}

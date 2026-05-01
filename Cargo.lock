@@ -1782,6 +1782,41 @@ dependencies = [
 ]
 
 [[package]]
+name = "depot"
+version = "2.3.0-rc.4"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "aws-config",
+ "aws-sdk-s3",
+ "futures-util",
+ "gasoline",
+ "lazy_static",
+ "lz4_flex",
+ "namespace",
+ "parking_lot",
+ "rivet-cache",
+ "rivet-config",
+ "rivet-error",
+ "rivet-metrics",
+ "rivet-pools",
+ "rivet-runtime",
+ "rivet-util",
+ "scc",
+ "serde",
+ "serde_bare",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "universaldb",
+ "universalpubsub",
+ "uuid",
+ "vbare",
+]
+
+[[package]]
 name = "der"
 version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4084,6 +4119,7 @@ dependencies = [
  "base64 0.22.1",
  "bytes",
  "datacenter",
+ "depot",
  "epoxy",
  "epoxy-protocol",
  "foundationdb-tuple",
@@ -4115,7 +4151,6 @@ dependencies = [
  "serde",
  "serde_bare",
  "serde_json",
- "sqlite-storage",
  "strum",
  "tempfile",
  "test-snapshot-gen",
@@ -4137,6 +4172,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "bytes",
+ "depot",
  "futures-util",
  "gasoline",
  "http-body 1.0.1",
@@ -4162,7 +4198,6 @@ dependencies = [
  "serde",
  "serde_bare",
  "serde_json",
- "sqlite-storage",
  "tempfile",
  "tokio",
  "tokio-tungstenite",
@@ -5304,6 +5339,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "rivet-depot-protocol"
+version = "2.3.0-rc.4"
+dependencies = [
+ "anyhow",
+ "serde",
+ "serde_bare",
+ "vbare",
+ "vbare-compiler",
+]
+
+[[package]]
 name = "rivet-engine"
 version = "2.3.0-rc.4"
 dependencies = [
@@ -5314,6 +5360,7 @@ dependencies = [
  "chrono",
  "clap",
  "colored_json",
+ "depot",
  "epoxy",
  "futures-util",
  "gasoline",
@@ -5361,7 +5408,6 @@ dependencies = [
  "serde_html_form",
  "serde_json",
  "serde_yaml",
- "sqlite-storage",
  "strum",
  "tabled",
  "tempfile",
@@ -5686,17 +5732,6 @@ dependencies = [
  "tokio",
  "tokio-cron-scheduler",
  "tracing",
-]
-
-[[package]]
-name = "rivet-sqlite-storage-protocol"
-version = "2.3.0-rc.4"
-dependencies = [
- "anyhow",
- "serde",
- "serde_bare",
- "vbare",
- "vbare-compiler",
 ]
 
 [[package]]
@@ -6045,6 +6080,7 @@ name = "rivetkit-sqlite"
 version = "2.3.0-rc.4"
 dependencies = [
  "anyhow",
+ "depot",
  "getrandom 0.2.16",
  "libsqlite3-sys",
  "moka",
@@ -6053,7 +6089,6 @@ dependencies = [
  "rivet-envoy-protocol",
  "rivet-pools",
  "scc",
- "sqlite-storage",
  "tempfile",
  "tokio",
  "tokio-util",
@@ -6999,41 +7034,6 @@ checksum = "d91ed6c858b01f942cd56b37a94b3e0a1798290327d1236e4d9cf4eaca44d29d"
 dependencies = [
  "base64ct",
  "der 0.7.10",
-]
-
-[[package]]
-name = "sqlite-storage"
-version = "2.3.0-rc.4"
-dependencies = [
- "anyhow",
- "async-trait",
- "aws-config",
- "aws-sdk-s3",
- "futures-util",
- "gasoline",
- "lazy_static",
- "lz4_flex",
- "namespace",
- "parking_lot",
- "rivet-cache",
- "rivet-config",
- "rivet-error",
- "rivet-metrics",
- "rivet-pools",
- "rivet-runtime",
- "rivet-util",
- "scc",
- "serde",
- "serde_bare",
- "serde_json",
- "tempfile",
- "tokio",
- "tokio-util",
- "tracing",
- "universaldb",
- "universalpubsub",
- "uuid",
- "vbare",
 ]
 
 [[package]]

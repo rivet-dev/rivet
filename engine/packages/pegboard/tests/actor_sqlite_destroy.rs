@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use anyhow::{Result, anyhow};
 use gas::prelude::Id;
-use sqlite_storage::keys::{
+use depot::keys::{
 	delta_chunk_key, meta_compact_key, meta_compactor_lease_key, meta_head_key, meta_quota_key,
 	pidx_delta_key, shard_key,
 };

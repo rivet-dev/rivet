@@ -1,5 +1,0 @@
-{
-  "code": "too_many_pins",
-  "group": "sqlite_storage",
-  "message": "Namespace has too many pinned bookmarks."
-}

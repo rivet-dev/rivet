@@ -1,0 +1,907 @@
+{
+  "project": "sqlite-pitr-fork",
+  "branchName": "04-29-feat_sqlite_pitr_forking",
+  "description": "Add continuous point-in-time recovery (PITR) and first-class forking to the SQLite v2 storage layer. Branches become the unit of identity; bookmarks (33-char lex-sortable strings) name commits; `fork()` and `restore_to_bookmark()` are metadata-only at the storage layer (copy-on-write at the layer level). FoundationDB stays the hot tier. S3 (or filesystem in dev) is the cold tier holding LTX V3 layer files for history. A new cold compactor service drains DELTAs into immutable layers, maintains a sparse BookmarkIndex, and runs dependency-graph GC against a 30-day retention window. Both compactors are UPS-driven (no cron). The spec lives at `.agent/specs/sqlite-pitr-fork.md`. Read it first.\n\n===== KEY INVARIANTS =====\n\n- Branches are the unit of identity. An actor's storage = the chain of branches reachable from its head by parent pointers. New keys: `[BRANCHES]/head`, `[BRANCHES]/list/{id}`, `[BR][branch_id]/...` for per-branch storage.\n- Bookmarks are 33 chars: `{timestamp_ms_hex_be:016}-{txid_hex_be:016}`. Branch identity is NOT in the wire format; bookmarks are interpreted relative to a branch context. Lex order = chronological within a single branch's parent chain only; siblings break global lex order.\n- Fork is metadata-only: regular-read parent's `retention_pin_txid` (OCC fence), depth check (cap MAX_FORK_DEPTH=16), allocate Uuid, write Branch, atomic-min `oldest_descendant_parent_txid`, atomic-add refcount. No data copy. `restore_to_bookmark` is the same primitive; pegboard decides whether to swap head.\n- FoundationDB is hot tier. S3 is cold tier (`ColdTier::Disabled` for local dev, `ColdTier::Filesystem` for tests, `ColdTier::S3` for prod, `ColdTier::Faulty` wrapper for fault injection).\n- Rolling checksum lives on `/META/head` as `post_apply_checksum: u64` (CRC-ISO-64 XOR fold). Hot-path commit RTT count is unchanged from stateless spec (1).\n- `COMMITS/{T}` value is just `i64 LE wall_clock_ms` (no checksum); checksum is on `/META/head` (rolling) and per-layer LTX trailers (cold).\n- Cold compactor is UPS-driven (NO periodic cron). Drain trigger fires when hot compactor's pass advances `materialized_txid` past `cold_compact_delta_threshold` (1024 deltas) beyond `cold_drained_txid`. Fork warmup is its own UPS payload. GC self-publishes at end of drain pass.\n- Cold pass is Phase A (FDB read tx, <2s) → Phase B (S3-only, no FDB tx) → Phase C (FDB write tx, <3s with OCC fence on `cold_drained_txid`). Phase B uses HWM `pending/{uuid}.marker` files for orphan reconciliation.\n- Layer filenames `delta/{min_txid}-{max_txid}.ltx` OMIT checksum so re-uploads are idempotent at the S3 key level.\n- GC runs as Phase C-2 holding the cold lease. Pin = min(time_floor_txid, oldest_descendant_parent_txid). NO monotonic ratchet. Frozen branches use creation-relative wall-clock retention, not head-relative.\n- Branch deletion cascade: refcount=0 check → state=Tombstoned → clear hot prefix synchronously → cold compactor's next pass walks S3 prefix → state=Deleted. Actor-destroy uses a gasoline workflow for batch DeleteObjects.\n- Read path on a fork descendant uses flattened ancestry (ancestors[] vec, capped at MAX_FORK_DEPTH=16, with lazy PIDX cache per ancestor). Worst case 16 ancestors × 2 in-tx gets per pgno on cold cache; mitigated by lazy cache + fork warmup that pre-stages parent image layers in the descendant.\n- Burst mode: when cold-pod 5xx ratio exceeds threshold over 3 passes, hot quota cap raises from 10 GiB to 20 GiB (HOT_BURST_MULTIPLIER=2). Reverts when cold tier recovers.\n- Billable cold bytes per branch = sum of layer files OWNED by this branch (created by its own cold passes, including fork-warmup-copied layers). Fork descendants start at 0 billable cold bytes.\n- All cross-pod-persisted S3 objects (`ColdManifest`, `BranchColdState`, `BookmarkIndex`) carry `schema_version: u32` via vbare. The cold compactor reads old version + writes new version on every pass; reader retains prior-version code paths for one full retention window past any version bump.\n- Breaking changes are unconditionally acceptable. The system has not shipped to production. Wire shape, on-disk key layout, and existing schemas are all free to change.\n\n===== ARCHITECTURAL CONTEXT =====\n\n- All work is in `engine/packages/sqlite-storage/`. Spec is `.agent/specs/sqlite-pitr-fork.md`.\n- New top-level modules: `pump/branches.rs`, `pump/bookmark.rs`, `pump/checksum.rs`, `pump/ancestry.rs`, `cold_compactor/`, `cold_tier/`, `burst_mode.rs`.\n- Cold compactor is a new `ServiceKind::Standalone` service registered in `engine/packages/engine/src/run_config.rs` next to the hot compactor.\n- Stateless spec (`sqlite-storage-stateless.md`) is the prerequisite; this work extends it. Hot compactor, ActorDb, META split, lease pattern, UPS triggers, atomic-add quota — all already exist and stay in place.\n- All tests live under `tests/` (no inline `#[cfg(test)] mod tests` in `src/`).\n- Use `vbare::OwnedVersionedData` + versioned `*.bare` schema for all persisted/wire formats. Raw `serde_bare` only for ephemeral in-memory encodings.\n- Use `scc::HashMap` / `moka::Cache` / `DashMap` for concurrent maps; never `Mutex<HashMap>`. Use `tokio::sync::Mutex` / `RwLock` in async code; `parking_lot` only in forced-sync contexts.\n- Errors: `anyhow` from failable functions, `RivetError` derive for typed errors, no glob imports from anyhow, prefer `.context()` over `anyhow!`.\n- Logs: `tracing::info!(?x, \"foo\")` with structured fields; lowercase messages; no `println!`/`eprintln!`.\n\n===== RUN COMMANDS =====\n\nFrom repo root:\n\n- Compile-check a crate: `cargo check -p <package-name>` (preferred for verification).\n- Build a crate: `cargo build -p <package-name>`.\n- Run all tests for a crate: `cargo test -p <package-name>`.\n- Run a single test file: `cargo test -p sqlite-storage --test <file_stem>`.\n- Run a single test: `cargo test -p <package-name> <test_name> -- --nocapture`.\n- Never run `cargo fmt` or `./scripts/cargo/fix.sh` — the team formats at merge time.\n\n===== READ BEFORE STARTING =====\n\n- `.agent/specs/sqlite-pitr-fork.md` — the full v2 spec this PRD implements.\n- `.agent/specs/sqlite-storage-stateless.md` — the prerequisite stateless spec.\n- `.agent/research/review-architecture.md`, `review-performance.md`, `review-operations.md` — adversarial reviews that shaped v2.\n- `engine/CLAUDE.md` — VBARE migration rules, Epoxy keys, SQLite storage tests.\n- `CLAUDE.md` at repo root — layer constraints, fail-by-default rules, async lock rules, error handling.\n- `docs-internal/engine/sqlite-storage.md` — current SQLite storage crash course.\n- `docs-internal/engine/sqlite-vfs.md` — VFS parity rules.\n- `engine/packages/sqlite-storage/src/` — current crate (already stateless).\n- `engine/packages/sqlite-storage/src/compactor/` — reference pattern for the cold compactor (lease, UPS subscriber, pass orchestration).",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Add Branch, BranchParent, BranchState, BranchManifest types with vbare schemas",
+      "description": "As the foundation for branch identity, add the core branch types in the v2 vbare schema and Rust types in `pump/types.rs`. No wiring yet — just the types and round-trip serde tests.",
+      "acceptanceCriteria": [
+        "Add `Branch`, `BranchParent`, `BranchState` (Live | Frozen | Tombstoned { tombstoned_at_ms } | Deleted { deleted_at_ms }), and `BranchManifest` to `engine/packages/sqlite-storage/src/pump/types.rs`.",
+        "`BranchManifest` includes: branch_id, parent: Option<BranchParent>, created_at_ms, state, depth: u32, retention_pin_txid: u64, oldest_descendant_parent_txid: Option<u64>.",
+        "`BranchParent` includes: parent_branch_id: Uuid, parent_txid: u64, parent_checksum: u64.",
+        "Add or extend a versioned `*.bare` schema file (e.g. `pump/schema/sqlite_v2_branches.bare`) with these types, register a vbare version, wire `OwnedVersionedData` impls.",
+        "Add `MAX_FORK_DEPTH: u32 = 16` and `MAX_BRANCHES_PER_ACTOR: u32 = 1024` constants.",
+        "Add round-trip serde tests in `tests/branch_types.rs` covering all `BranchState` variants and parent-Some/None.",
+        "`cargo check -p sqlite-storage` passes.",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-002",
+      "title": "Add [BRANCHES] and [BR] FDB subspace prefixes and key builders",
+      "description": "As the next foundation step, introduce the two new subspace prefix bytes and add key builders that take `branch_id` for all per-branch keys. Builders only — no callers migrated yet.",
+      "acceptanceCriteria": [
+        "Define new subspace prefix bytes `BRANCHES = 0x10` and `BR = 0x11` in `pump/keys.rs` (or wherever subspace bytes already live).",
+        "Add key builders for `[BRANCHES]/head`, `[BRANCHES]/list/{branch_id}`, `[BRANCHES]/list/{branch_id}/refcount`, `[BRANCHES]/list/count`, `[BRANCHES]/tombstone`.",
+        "Add per-branch key builders: `[BR][branch_id]/META/head`, `/META/compact`, `/META/cold_compact`, `/META/quota`, `/META/manifest`, `/META/compactor_lease`, `/META/cold_lease`, `/COMMITS/{txid_be:8}`, `/DELTA/{txid_be:8}/{chunk_idx_be:4}`, `/PIDX/delta/{pgno_be:4}`, `/SHARD/{shard_id_be:4}`.",
+        "Builders take `branch_id: Uuid` as a parameter and produce keys under the per-actor prefix `[0x02][actor_id][...]`.",
+        "Add unit tests in `tests/branch_keys.rs` round-tripping byte layouts and confirming prefix ordering.",
+        "`cargo check -p sqlite-storage` passes.",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-003",
+      "title": "Migrate hot-path key callers to use branch-id-prefixed keys",
+      "description": "As the wiring step that makes the new prefixes live, update every existing hot-path key caller (read.rs, commit.rs, quota.rs, the hot compactor) to use the new branch-id-prefixed builders. Plumb `branch_id: Uuid` through `ActorDb` (hardcode a single deterministic per-actor branch id sourced from `[BRANCHES]/head` for now; resolution logic is added in US-005).",
+      "acceptanceCriteria": [
+        "Every hot-path key construction site goes through the branch-aware builders from US-002.",
+        "`ActorDb` carries a `branch_id: Uuid` field; all per-branch key builds use it.",
+        "Hot compactor reads/writes via the branch-aware builders.",
+        "No legacy non-branched key prefixes remain in the hot path or the compactor.",
+        "`cargo check -p sqlite-storage` passes.",
+        "`cargo test -p sqlite-storage` passes (existing stateless tests still green).",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-004",
+      "title": "Move rolling checksum onto /META/head and trim COMMITS value",
+      "description": "Refactor the commit path so the rolling `post_apply_checksum: u64` lives on `/META/head` (read once, folded via CRC-ISO-64 XOR, written back). Reduce `/COMMITS/{T}` value to a single `i64 LE` (wall_clock_ms only). Hot-path RTT count must remain 1.",
+      "acceptanceCriteria": [
+        "`DBHead` (the value at `/META/head`) gains `post_apply_checksum: u64`.",
+        "Add `pump/checksum.rs` with a CRC-ISO-64 XOR fold over `(pgno, page_bytes)` updates.",
+        "`commit()` reads `/META/head` once, folds this commit's dirty pages into the prior checksum, writes the new (head_txid, db_size_pages, post_apply_checksum) back to `/META/head` in the same UDB tx.",
+        "`/COMMITS/{T}` value is exactly 8 bytes LE (wall_clock_ms). No checksum field.",
+        "Confirm via tracing or test that commit still issues only one FDB read RTT in steady state.",
+        "Add `tests/checksum.rs` covering empty commit, single-page commit, multi-page commit, and order-independence (XOR commutativity).",
+        "`cargo check -p sqlite-storage` and `cargo test -p sqlite-storage` pass.",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-005",
+      "title": "Wire ActorDb::new to resolve [BRANCHES]/head with lazy initialization",
+      "description": "Make `ActorDb::new` resolve the actor's current head branch from `[BRANCHES]/head` on first access. If absent (new actor), initialize a single Live root branch with a fresh Uuid, write its `BranchManifest` (depth=0, parent=None, retention_pin_txid=0), and set `[BRANCHES]/head` to it. Bump `[BRANCHES]/list/count` atomically.",
+      "acceptanceCriteria": [
+        "`ActorDb::new` does an FDB read of `[BRANCHES]/head`. If present, decode and use it. If absent, allocate a fresh Uuid, write a Live root `BranchManifest` to `[BRANCHES]/list/{id}`, set `[BRANCHES]/head = id`, atomic-add `[BRANCHES]/list/count` by +1, all in one tx.",
+        "`ActorDb` exposes `branch_id() -> Uuid` returning the resolved head.",
+        "Lazy init is idempotent against concurrent first-access from two pods; FDB OCC ensures only one root branch exists.",
+        "Add `tests/branch_init.rs` covering: fresh actor (creates branch), existing actor (reads branch), concurrent first-access (only one branch created).",
+        "`cargo check -p sqlite-storage` and `cargo test -p sqlite-storage` pass.",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-006",
+      "title": "Add atomic-min/atomic-add helpers for branch refcount and oldest_descendant_parent_txid",
+      "description": "Provide FDB helper functions for the branch counters that fork() and delete_branch() will use: refcount (atomic-add), and `oldest_descendant_parent_txid` (atomic-min via a custom mutate). FDB doesn't have a native atomic-min, so implement it as a regular-read + conditional-write inside the same tx with OCC.",
+      "acceptanceCriteria": [
+        "Add helpers in `pump/branches.rs`: `incr_refcount(tx, branch_id, delta: i64)`, `read_refcount(tx, branch_id)`, `atomic_min_oldest_descendant(tx, branch_id, candidate_txid: u64)`, `recompute_oldest_descendant(tx, branch_id)`.",
+        "`atomic_min_oldest_descendant` reads current value (regular read), writes `min(current, candidate)` only if candidate is smaller; OCC handles concurrent writes.",
+        "`recompute_oldest_descendant` scans live direct children, takes the min of their parent_txid, writes back. Used by delete_branch.",
+        "Add `tests/branch_counters.rs` covering: fresh branch (None → Some), strictly decreasing candidate (updates), strictly increasing candidate (no-op), recompute after deleting all children (back to None).",
+        "`cargo check -p sqlite-storage` and `cargo test -p sqlite-storage` pass.",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-007",
+      "title": "Add COMMITS/{T} write to commit path and basic range-scan helper",
+      "description": "Wire the commit path to write `[BR][branch_id]/COMMITS/{T}` = wall_clock_ms_i64_le on every commit (piggybacks on the same UDB tx as the META update — no extra RTT). Add a range-scan helper `range_commits(branch_id, t_start, t_end)` for bookmark resolution.",
+      "acceptanceCriteria": [
+        "`commit()` writes `[BR][branch_id]/COMMITS/{txid_be:8}` = `now_ms.to_le_bytes()` in the same tx as the META update.",
+        "Hot-path RTT count remains 1 (verified via tracing or test instrumentation).",
+        "Add `pump/branches.rs::scan_commits(tx, branch_id, txid_range)` returning `Vec<(u64, i64)>` (txid, wall_clock_ms).",
+        "Add `pump/branches.rs::find_commit_at_or_before_time(tx, branch_id, t_ms)` that binary-searches via `getRange` with end-key clamp.",
+        "Add `tests/branch_commit.rs` covering: commit writes COMMITS, multiple commits round-trip, range scan returns correct entries.",
+        "`cargo check -p sqlite-storage` and `cargo test -p sqlite-storage` pass.",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-008",
+      "title": "Implement Bookmark type with 33-char parse/format/round-trip",
+      "description": "Add the `Bookmark` newtype that wraps a 33-char string `{timestamp_ms_hex_be:016}-{txid_hex_be:016}`. Provide constructors from `(timestamp_ms, txid)`, parse from string, Display, lex-compare, and serde via vbare.",
+      "acceptanceCriteria": [
+        "Add `pump/bookmark.rs` with `pub struct Bookmark(String)` (or fixed-size array; whichever is cheaper).",
+        "Constructors: `Bookmark::new(timestamp_ms: i64, txid: u64) -> Bookmark`, `Bookmark::parse(s: &str) -> Result<Bookmark, BookmarkParseError>`.",
+        "Accessors: `Bookmark::timestamp_ms() -> i64`, `Bookmark::txid() -> u64`.",
+        "Lex-comparable (`PartialOrd` + `Ord`).",
+        "vbare-serializable.",
+        "Add `tests/bookmark_format.rs` covering: round-trip, lex order matches chronological order within a single chain, parse rejects malformed input, Display matches construction.",
+        "`cargo check -p sqlite-storage` and `cargo test -p sqlite-storage` pass.",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-009",
+      "title": "Implement get_current_bookmark and resolve_bookmark on ActorDb",
+      "description": "Add `ActorDb::get_current_bookmark()` that returns a Bookmark on the actor's head branch by reading `/META/head` (head_txid) and the latest COMMITS entry. Add `ActorDb::resolve_bookmark(b: &Bookmark) -> Result<Position>` that interprets the bookmark relative to the head branch and walks the parent chain if needed.",
+      "acceptanceCriteria": [
+        "`ActorDb::get_current_bookmark()` reads `/META/head` to get `head_txid` and `[COMMITS]/{head_txid}` to get wall_clock_ms; returns `Bookmark::new(wall_clock_ms, head_txid)`.",
+        "`Position` struct with branch_id, txid, post_apply_checksum.",
+        "`ActorDb::resolve_bookmark(b)` looks up `[COMMITS]/{txid}` on head branch first; if txid <= head_txid, resolves on head; else walks parent chain via BranchManifest and resolves on the appropriate ancestor.",
+        "Returns `BranchNotReachable` for txids outside the resolvable chain. Returns `BookmarkExpired` for txids below the chain's retention pin.",
+        "Add `tests/bookmark_resolve.rs` covering: current bookmark on fresh actor, resolve on same branch, resolve walking one fork boundary, expired bookmark.",
+        "`cargo check -p sqlite-storage` and `cargo test -p sqlite-storage` pass.",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-010",
+      "title": "Implement get_bookmark_for_time with hot COMMITS scan",
+      "description": "Add `ActorDb::get_bookmark_for_time(t_ms: i64) -> Result<Bookmark>` that walks the actor's head branch and parent chain, finding the commit closest to (and at or before) `t_ms`. Hot path only — uses `[COMMITS]/*` range scans. Cold BookmarkIndex fallback comes later (US-031, US-040).",
+      "acceptanceCriteria": [
+        "Walk algorithm: start at head branch; binary-search COMMITS for the largest txid with wall_clock_ms <= t_ms; if t_ms predates this branch's earliest COMMITS, walk to parent at parent_txid and continue.",
+        "Returns the resolved Bookmark or `BookmarkExpired` if t_ms predates the entire reachable chain (and no cold fallback is available — that path is added in US-031/US-040).",
+        "Add `resolve_bookmark_in_branch(b, branch_id)` which accepts an explicit branch context (default behavior of `resolve_bookmark` resolves on head; this one resolves on an arbitrary owned branch).",
+        "Add `tests/bookmark_for_time.rs` covering: timestamp on head, timestamp before head's earliest commit (falls through to parent), timestamp older than chain (BookmarkExpired).",
+        "`cargo check -p sqlite-storage` and `cargo test -p sqlite-storage` pass.",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 10,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-011",
+      "title": "Implement fork() with retention OCC fence and depth check",
+      "description": "Add `ActorDb::fork(fork_point: ForkPoint) -> Result<Uuid>` per spec. Single FDB tx: regular-read parent's `META/manifest.retention_pin_txid` (OCC fence — concurrent GC pin advancement aborts via OCC, no vibes margin), depth check (cap MAX_FORK_DEPTH=16), allocate new branch_id, write Branch, atomic-min parent's `oldest_descendant_parent_txid`, atomic-add parent's refcount by +1, atomic-add `[BRANCHES]/list/count` by +1.",
+      "acceptanceCriteria": [
+        "`ForkPoint { branch_id, txid, checksum }` struct (alias for Position when convenient).",
+        "Single FDB tx implementing all 8 steps from the spec's `Forking` section.",
+        "GC_FORK_MARGIN_TXIDS constant (default ~1024) enforces the safety margin between requested fork point and retention pin.",
+        "Errors: `ForkOutOfRetention` (txid < pin + margin), `ForkChainTooDeep` (depth > MAX_FORK_DEPTH), `BranchNotReachable` (parent doesn't exist or is not Live), `MaxBranchesPerActorExceeded` (count >= MAX_BRANCHES_PER_ACTOR).",
+        "Add `tests/fork_basic.rs` covering: fork at head, fork at older bookmark, fork at GC'd point (out of retention), depth cap enforcement, branch-cap enforcement.",
+        "`cargo check -p sqlite-storage` and `cargo test -p sqlite-storage` pass.",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 11,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-012",
+      "title": "Add flattened parent ancestry resolver with lazy PIDX cache",
+      "description": "Add `pump/ancestry.rs` defining `FlattenedAncestry { ancestors: Vec<AncestorView> }` and `AncestorView { branch_id, as_of_txid, pidx_cache }`. Resolver walks `[BRANCHES]/list/{branch_id}.parent` up to MAX_FORK_DEPTH, caps each ancestor at its child's parent_txid (oldest first; self last with no cap). Cache is per-`ActorDb` and lazy-filled per ancestor on first access.",
+      "acceptanceCriteria": [
+        "`pump/ancestry.rs` exports `FlattenedAncestry` and `AncestorView`.",
+        "Resolver function: `resolve_ancestry(tx, branch_id) -> Result<FlattenedAncestry>` that walks parent chain in one tx (snapshot reads acceptable).",
+        "`AncestorView::pidx_cache` is `parking_lot::Mutex<DeltaPageIndex>` populated lazily on first prefix scan.",
+        "`ActorDb` carries a cached `Arc<FlattenedAncestry>` (built on first request, reused for the WS conn lifetime, invalidated only on head-swap).",
+        "Add `tests/ancestry.rs` covering: root branch (1 entry), single fork (2 entries with correct as_of_txid clamps), max-depth chain, cache hit on second access.",
+        "`cargo check -p sqlite-storage` and `cargo test -p sqlite-storage` pass.",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 12,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-013",
+      "title": "Wire parent fall-through into get_pages on hot tier",
+      "description": "Update `pump/read.rs::get_pages` to walk the flattened ancestry on PIDX miss. For each ancestor from N-1 (self) to 0 (root), check `[BR][ancestor.branch_id]/PIDX/delta/{pgno}` (must satisfy `txid <= as_of_txid`); else check `[BR][ancestor.branch_id]/SHARD/{pgno/64}`. Cold-tier fall-through is added in US-029.",
+      "acceptanceCriteria": [
+        "Walk implements the read algorithm from the `get_pages with parent fall-through` section of the spec.",
+        "Each ancestor's PIDX prefix is scanned once and cached on the AncestorView.",
+        "`as_of_txid` clamp is enforced (must not return a page modified in the parent after the fork point).",
+        "Returns `PageNotFound` on chain miss (cold-tier fall-through is added later).",
+        "Add `tests/read_ancestry.rs` covering: head-only branch (no fall-through), 1-fork descendant reading parent page, 2-fork descendant reading grandparent page, fall-through respects as_of_txid clamp.",
+        "`cargo check -p sqlite-storage` and `cargo test -p sqlite-storage` pass.",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 13,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-014",
+      "title": "Implement restore_to_bookmark, swap_head, and list_branches APIs",
+      "description": "Add `ActorDb::restore_to_bookmark(b)` that resolves the bookmark and calls fork(Position) — the same primitive. Add `ActorDb::swap_head(new_head: Uuid)` that updates `[BRANCHES]/head` to point at a different branch (validates branch_id is Live and within this actor). Add paginated `list_branches(cursor, limit)` and `count_branches()`.",
+      "acceptanceCriteria": [
+        "`restore_to_bookmark(b)` returns the new branch's Uuid; does NOT touch `[BRANCHES]/head`. Pegboard owns head-swap semantics.",
+        "`swap_head(new_head)` validates state == Live, updates head atomically, returns Result.",
+        "`list_branches(cursor, limit)` paginates via `[BRANCHES]/list/*` range scan, returns `(Vec<Branch>, Option<Cursor>)`.",
+        "`count_branches()` reads `[BRANCHES]/list/count` (single atomic counter, not a scan).",
+        "Add `tests/restore_and_swap.rs` covering: restore creates sibling, original head unchanged, swap_head updates head, swap to non-Live branch fails, list/count round-trip.",
+        "`cargo check -p sqlite-storage` and `cargo test -p sqlite-storage` pass.",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 14,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-015",
+      "title": "Implement delete_branch with cascade state transitions",
+      "description": "Add `ActorDb::delete_branch(branch_id)` per spec. Validates refcount = 0 (returns `BranchPinned` otherwise), transitions state to Tombstoned, decrements parent's refcount (atomic), recomputes parent's `oldest_descendant_parent_txid` if the deleted branch was the min, clears hot-tier prefix synchronously. Cold delete is scheduled for the next cold compactor pass (handled in US-035).",
+      "acceptanceCriteria": [
+        "Refcount check: `BranchPinned` if refcount > 0.",
+        "State transition Live → Tombstoned with `tombstoned_at_ms = now`.",
+        "Parent refcount decremented atomically; parent's `oldest_descendant_parent_txid` recomputed via scan of remaining children.",
+        "Hot-tier prefix `[BR][branch_id]/*` cleared synchronously in the same tx (bounded by branch hot-tier size).",
+        "Concurrent fork(C) + delete_branch(C): FDB OCC serializes; loser fails with `BranchNotReachable` (regular-read of state in both txs).",
+        "Add `tests/delete_branch.rs` covering: delete leaf (succeeds), delete branch with children (BranchPinned), concurrent fork+delete race, parent oldest_descendant recompute correctness.",
+        "`cargo check -p sqlite-storage` and `cargo test -p sqlite-storage` pass.",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 15,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-016",
+      "title": "Define ColdTierClient trait and ColdTier::Disabled variant",
+      "description": "Add `cold_tier/mod.rs` with the `ColdTierClient` trait per spec, plus the `ColdTier` enum with the `Disabled` variant first. `Disabled` is the default for `pnpm start` local dev: no S3, no minio, no filesystem; PITR returns `BookmarkExpired` for any txid older than what hot can serve.",
+      "acceptanceCriteria": [
+        "`cold_tier/mod.rs` defines `pub trait ColdTierClient: Send + Sync` with put, put_multipart, get (with optional Range), head, list, delete, delete_batch.",
+        "`HeadInfo`, `ListEntry`, `RangeInclusive<u64>` types defined.",
+        "`pub enum ColdTier { Disabled, Filesystem(PathBuf), S3(S3Config), Faulty(Box<dyn ColdTierClient>, FaultInjectionPolicy) }`.",
+        "`ColdTier::Disabled` returns errors / no-ops in a way the cold compactor service can detect at start (skip registration or no-op pass).",
+        "Add `tests/cold_tier_disabled.rs` covering: disabled tier behavior at the trait level.",
+        "`cargo check -p sqlite-storage` and `cargo test -p sqlite-storage` pass.",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 16,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-017",
+      "title": "Implement ColdTier::Filesystem cold-tier client",
+      "description": "Implement the filesystem-backed `ColdTierClient` (200-ish LoC over `tokio::fs`). Used by integration tests in place of S3. No multipart semantics required — `put_multipart` can buffer and write in one go.",
+      "acceptanceCriteria": [
+        "`cold_tier/filesystem.rs` implements all `ColdTierClient` methods over `tokio::fs`.",
+        "Keys map to relative paths under a base `PathBuf`. Range reads use `tokio::fs::File` + `seek` + `take`.",
+        "`delete_batch` deletes all listed keys (best-effort).",
+        "Add `tests/cold_tier_filesystem.rs` covering all trait operations: put + get round-trip, list with prefix, range read, delete, delete_batch, head returns size + last_modified.",
+        "`cargo check -p sqlite-storage` and `cargo test -p sqlite-storage` pass.",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 17,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-018",
+      "title": "Implement ColdTier::S3 cold-tier client via aws-sdk-s3",
+      "description": "Implement the production S3-backed `ColdTierClient` using `aws-sdk-s3`. Multipart upload threshold = 16 MiB. `delete_batch` uses `DeleteObjects` (1k keys per request).",
+      "acceptanceCriteria": [
+        "`cold_tier/s3.rs` implements `ColdTierClient` via `aws-sdk-s3`.",
+        "`S3Config { bucket, region, endpoint_override, credentials }` plumbed through.",
+        "`put`: single PUT for <= 16 MiB; `put_multipart`: multipart for larger.",
+        "`get` with optional Range maps to `Range: bytes=...` header.",
+        "`delete_batch` chunks into 1k-key groups and uses `DeleteObjects`.",
+        "Add `tests/cold_tier_s3.rs` gated behind a feature flag or env-var (so CI can skip without S3 creds). Optionally use a localstack/minio container in test scaffolding.",
+        "`cargo check -p sqlite-storage` passes.",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 18,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-019",
+      "title": "Implement ColdTier::Faulty fault-injection wrapper",
+      "description": "Implement `cold_tier/faulty.rs` — a wrapper around any `ColdTierClient` that injects timeouts, 5xx errors, partial writes, slow responses, per a `FaultInjectionPolicy`. Used in cold compactor tests for failure-mode coverage.",
+      "acceptanceCriteria": [
+        "`cold_tier/faulty.rs` defines `FaultInjectionPolicy` (probability of 5xx per op, response delay distribution, partial-write rate, etc.) and `Faulty(Box<dyn ColdTierClient>, FaultInjectionPolicy)`.",
+        "All trait methods consult the policy, optionally inject a fault, otherwise delegate.",
+        "Policies are programmatic (not config-file-driven) — instantiated by tests directly.",
+        "Add `tests/cold_tier_faulty.rs` covering: 5xx injection rate matches expectation over N ops, slow response delays, partial-write produces a recoverable error.",
+        "`cargo check -p sqlite-storage` and `cargo test -p sqlite-storage` pass.",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 19,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-020",
+      "title": "Scaffold cold_compactor module and register Standalone service",
+      "description": "Create the empty cold_compactor module shape and register it as `ServiceKind::Standalone` next to the hot compactor. Service entry-point is a no-op loop for now (UPS subscriber added in US-024). When `ColdTier::Disabled`, the service starts but immediately drops into a long-sleep loop.",
+      "acceptanceCriteria": [
+        "Create `engine/packages/sqlite-storage/src/cold_compactor/{mod.rs, worker.rs, layer.rs, manifest.rs, bookmark_index.rs, state.rs, pending.rs, gc.rs, warmup.rs}` with empty stubs.",
+        "Define `ColdCompactorConfig` (defaults: cold_compact_delta_threshold=1024, DRAIN_BATCH_LIMIT_TXIDS=1024, DRAIN_BATCH_LIMIT_BYTES=64MB, STALE_MARKER_AGE_MS=600s).",
+        "Add `pub async fn start(config, pools, ColdCompactorConfig) -> Result<()>` entry function.",
+        "Register service in `engine/packages/engine/src/run_config.rs` per the snippet in the spec's `Cold compactor` section.",
+        "When `ColdTier::Disabled`, the service logs a warning and idles indefinitely (no panics, no busy-loop).",
+        "`cargo check -p sqlite-storage` and `cargo check -p engine` pass.",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 20,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-021",
+      "title": "Implement cold compactor lease + renewal lifecycle",
+      "description": "Implement the cold compactor lease at `[BR][branch_id]/META/cold_lease`, mirroring the hot compactor's lease pattern (lease.rs in the existing compactor module). TTL, periodic renewal task with cancellation token, takeover semantics on TTL expiry.",
+      "acceptanceCriteria": [
+        "`cold_compactor/lease.rs` (or extension of an existing lease module) implements `acquire_or_steal`, `renew`, `release` for the `cold_lease` key.",
+        "Lease value is a vbare struct with `holder_node_id: NodeId`, `acquired_at_ms`, `expires_at_ms`.",
+        "Renewal task ticks every 10s; cancellation token aborts cleanly.",
+        "Takeover: if expired, the new pod stamps the lease with its own NodeId.",
+        "Lease is independent of hot lease (different key, different TTL).",
+        "Add `tests/cold_lease.rs` covering: acquire on empty, fail when held by other pod, steal on expiry, renew before expiry, release clears the key.",
+        "`cargo check -p sqlite-storage` and `cargo test -p sqlite-storage` pass.",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 21,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-022",
+      "title": "Implement LTX V3 layer file builder for the cold compactor",
+      "description": "Implement `cold_compactor/layer.rs` — encodes a drain window (vec of DELTA chunks across N txids) into one or more LTX V3 layer files. Splits when `DRAIN_BATCH_LIMIT_BYTES` (64 MB) is exceeded. Each layer has the LTX V3 trailer with `pre_apply_checksum`, `post_apply_checksum`. Lift logic from the existing `pump/ltx.rs`.",
+      "acceptanceCriteria": [
+        "`cold_compactor/layer.rs::build_delta_layers(drain_window: Vec<DeltaCommit>, prior_checksum: u64) -> Vec<BuiltLayer>` returns one or more `BuiltLayer { min_txid, max_txid, bytes, pre_apply_checksum, post_apply_checksum, size_bytes }`.",
+        "Splits at `DRAIN_BATCH_LIMIT_BYTES`. The split point is at a commit boundary (never mid-commit).",
+        "LTX V3 trailer fields are populated correctly (matches existing pump/ltx.rs encoder).",
+        "Image-layer builder: `build_image_layer(shard_range, snapshot_pages, as_of_txid)` for materialized image layers.",
+        "Add `tests/layer_build.rs` covering: single small drain (one layer), large drain split into N layers (no commit straddles a split), image layer build round-trip, checksum chain across split boundaries is correct.",
+        "`cargo check -p sqlite-storage` and `cargo test -p sqlite-storage` pass.",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 22,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-023",
+      "title": "Implement ColdManifest, BranchColdState, and BookmarkIndex IO",
+      "description": "Implement read/write for the three cold-tier S3 objects: `manifest.v1.vbare` (ColdManifest), `state.v1.vbare` (BranchColdState), `bookmarks.v1.vbare` (BookmarkIndex). All carry `schema_version: u32 = 1`. Pure IO + vbare encode/decode — no wiring into pass orchestration yet.",
+      "acceptanceCriteria": [
+        "`cold_compactor/manifest.rs` defines `ColdManifest { schema_version, branch_id, layers: Vec<LayerEntry>, last_modified_ms }` and `LayerEntry { kind, min_txid, max_txid, size_bytes, pre_apply_checksum, post_apply_checksum, s3_key, created_at_ms, shard_range }`.",
+        "`cold_compactor/state.rs` defines `BranchColdState { schema_version, cold_drained_txid, cold_bytes, last_image_pass_at_ms }`.",
+        "`cold_compactor/bookmark_index.rs` defines `BookmarkIndex { schema_version, branch_id, entries: Vec<BookmarkIndexEntry { wall_clock_ms, txid, post_apply_checksum }> }`.",
+        "Each module exports `read(client, branch_root) -> Option<T>` and `write(client, branch_root, value)` async functions.",
+        "Versioned bare schema files added (matches engine/CLAUDE.md conventions).",
+        "Add `tests/cold_io.rs` covering: round-trip via ColdTier::Filesystem for each of the three types, missing object returns None, schema_version=1 written correctly.",
+        "`cargo check -p sqlite-storage` and `cargo test -p sqlite-storage` pass.",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 23,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-024",
+      "title": "Implement pending HWM marker helpers",
+      "description": "Implement `cold_compactor/pending.rs` — write/list/delete `pending/{uuid}.marker` files used as HWM markers for in-flight uploads. Includes `reconcile_orphans(client, branch_root, stale_age_ms)` that lists pending markers, finds those older than the stale threshold, and deletes both the marker and the matching `layers/delta/{min_txid}-{max_txid}.ltx` if present.",
+      "acceptanceCriteria": [
+        "`PendingMarker { branch_id, min_txid, max_txid, started_at_ms, lease_holder: NodeId }` vbare-encoded.",
+        "`pending::write(client, branch_root, marker) -> uuid`, `pending::delete(client, branch_root, uuid)`, `pending::list(client, branch_root) -> Vec<(Uuid, PendingMarker)>`.",
+        "`reconcile_orphans(client, branch_root, stale_age_ms)` lists, filters by age, deletes both `.marker` and matching `layers/delta/...ltx` for stale entries; returns a count of orphans cleaned.",
+        "Add `tests/pending_markers.rs` covering: write + list + delete round-trip, reconcile_orphans cleans stale markers + matching layer files, reconcile_orphans leaves fresh markers alone.",
+        "`cargo check -p sqlite-storage` and `cargo test -p sqlite-storage` pass.",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 24,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-025",
+      "title": "Implement cold compactor Phase A (FDB read tx)",
+      "description": "Implement the read-only Phase A of a cold pass per spec. Acquires the lease, calls `pending::reconcile_orphans`, snapshot-reads `META/head.head_txid`, `META/compact.materialized_txid`, `META/cold_compact.cold_drained_txid`. Computes the drain window bounded by `DRAIN_BATCH_LIMIT_TXIDS` and `DRAIN_BATCH_LIMIT_BYTES`. Snapshot-reads all DELTA chunks in the window into memory. Returns a `PhaseAResult`.",
+      "acceptanceCriteria": [
+        "`cold_compactor/worker.rs::phase_a(branch_id, ...) -> Result<PhaseAResult>` runs an FDB read tx.",
+        "`PhaseAResult { drain_window: RangeInclusive<u64>, deltas_in_memory: Vec<DeltaCommit>, materialized_txid_seen: u64, cold_drained_txid_seen: u64 }`.",
+        "Drain window bounded by both txid count and byte sum (operative bound depending on commit sizes).",
+        "Tx lifetime stays well under FDB's 5s tx-age cap (target <2s).",
+        "Add `tests/cold_phase_a.rs` covering: empty drain window (head == cold_drained_txid → empty result), small drain window (single layer), large drain window split by byte cap, all-empty path returns no work to do.",
+        "`cargo check -p sqlite-storage` and `cargo test -p sqlite-storage` pass.",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 25,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-026",
+      "title": "Implement cold compactor Phase B (S3-only, no FDB tx)",
+      "description": "Implement Phase B per spec. No FDB tx held during this phase — only S3 operations. For each layer: write pending marker, PUT layer file, HEAD-verify, optionally rebuild image layers per the 'log >= db size' rule, update BookmarkIndex (rewrite), update BranchColdState (rewrite), PUT new ColdManifest. Manifest PUT is the commit point.",
+      "acceptanceCriteria": [
+        "`phase_b(phase_a_result, ...) -> Result<PhaseBResult>` orchestrates all S3 work.",
+        "Per-layer flow: write marker → PUT layer (single or multipart) → HEAD verify (ETag/size match).",
+        "Image-layer rule: when `log_bytes_since_last_image >= db_size_bytes`, schedule image-layer rebuild for affected shards (snapshot reads from FDB outside any tx — quick out-of-tx reads are fine).",
+        "BookmarkIndex update: append new entries every N=64 commits or M=10s elapsed (whichever first).",
+        "BranchColdState update: refresh `cold_drained_txid` mirror, `cold_bytes`, `last_image_pass_at_ms`.",
+        "ColdManifest PUT is the LAST step (commit point).",
+        "Add `tests/cold_phase_b.rs` covering: small drain (one layer + manifest update), large drain (multiple layers + manifest update), image-layer trigger fires when log >= db size, BookmarkIndex appends correctly.",
+        "`cargo check -p sqlite-storage` and `cargo test -p sqlite-storage` pass.",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 26,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-027",
+      "title": "Implement cold compactor Phase C (FDB write tx with OCC fence)",
+      "description": "Implement Phase C per spec. Single FDB write tx (or split into multiple if needed). Regular-read prior `cold_drained_txid` (asserts equal to Phase A's seen value, or aborts via OCC). Writes new `cold_drained_txid = max_txid` (regular write). Clears `DELTA/{T}/*` for T in drain_window. Clears `COMMITS/{T}` for T < retention_pin_txid. After tx commit, deletes pending marker objects in S3. Then runs GC (Phase C-2, US-035).",
+      "acceptanceCriteria": [
+        "`phase_c(phase_b_result, ...) -> Result<PhaseCResult>` runs the FDB write tx.",
+        "Regular-read of `cold_drained_txid` is the OCC fence: if a different pod stole the lease and ran Phase A→C between this pod's Phase A and Phase C, the regular-read fails OCC and this pod's pass aborts cleanly.",
+        "Debug assertion `new > prior` panics in tests, logs `sqlite_cold_drained_txid_regressed_total` and skips pass in release.",
+        "DELTA + COMMITS clears batched in groups of 256 if the tx would exceed 5s tx-age (the OCC fence makes split-tx safe — partial Phase C still advances the cursor only at the end).",
+        "Pending markers deleted post-commit (out of tx).",
+        "Add `tests/cold_phase_c.rs` covering: clean phase C (tx commits, cursor advances), concurrent lease theft (Phase A from pod A → Phase A+B+C from pod B → Phase C from pod A aborts via OCC), regression detection (debug assertion).",
+        "`cargo check -p sqlite-storage` and `cargo test -p sqlite-storage` pass.",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 27,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-028",
+      "title": "Wire cold compactor UPS subscriber and drain trigger",
+      "description": "Wire the UPS subscriber in `cold_compactor/worker.rs` for `SqliteColdCompactSubject { actor_id, branch_id }`. Hot compactor publishes this when its pass advances `materialized_txid` past the cold threshold. Cold compactor's worker handles it by acquiring the lease, running Phase A→B→C, and self-publishing a GC trigger at the end.",
+      "acceptanceCriteria": [
+        "`SqliteColdCompactSubject { actor_id, branch_id }` UPS subject defined and registered.",
+        "Hot compactor's commit loop publishes this subject when `(materialized_txid - cold_drained_txid) >= cold_compact_delta_threshold`.",
+        "Cold compactor's UPS subscriber is queue-group-balanced (`\"sqlite_cold_compactor\"`).",
+        "Per-actor throttle: 60s window with 2-hour safety net.",
+        "End-of-pass: self-publish `SqliteColdGcSubject { branch_id }` (handled in US-035).",
+        "Add `tests/cold_trigger.rs` covering: hot pass crosses threshold → fires UPS, throttle drops second trigger within window, safety net fires after 2h, end-of-drain self-publishes GC.",
+        "`cargo check -p sqlite-storage` and `cargo test -p sqlite-storage` pass.",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 28,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-029",
+      "title": "Wire cold-tier layer fetch into get_pages for historical reads",
+      "description": "Extend `pump/read.rs::get_pages` to fall through to cold tier when a page miss in the entire ancestry chain occurs. Reads ColdManifest, finds layer covering the requested (branch, txid) range, fetches via `client.get(key, Range)` (HTTP Range read for image layers; full object for delta layers).",
+      "acceptanceCriteria": [
+        "Cold-tier fall-through triggers only after ancestry walk fails to find the page in any ancestor's hot tier.",
+        "Manifest is read once and cached (per ActorDb? or per cold-pass-version?). Cache invalidation on cold pass commit.",
+        "Image layer read: HTTP Range read for the byte slice covering the requested pgno.",
+        "Delta layer read: full object fetch (delta layers are commit-batched, typically <16 MiB).",
+        "Returns `BookmarkExpired` if no layer covers the requested point.",
+        "Add `tests/cold_read.rs` covering: hot miss + cold image hit, hot miss + cold delta hit, hot miss + cold miss (BookmarkExpired), manifest cache invalidation after a cold-pass advance.",
+        "`cargo check -p sqlite-storage` and `cargo test -p sqlite-storage` pass.",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 29,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-030",
+      "title": "Implement bookmark gap fallback via layer trailer GET",
+      "description": "Extend `get_bookmark_for_time(t_ms)` to handle the offline-actor gap: when neither hot COMMITS nor BookmarkIndex covers `t_ms`, binary-search layer file names for the wall-clock range, GET the LTX trailer of the candidate layer (HTTP Range), extract the exact (txid, wall_clock_ms) pair, return the bookmark. Bounded to +1 S3 GET per lookup.",
+      "acceptanceCriteria": [
+        "Lookup order: hot COMMITS → BookmarkIndex → layer-trailer fallback.",
+        "Layer-trailer fallback: read ColdManifest, binary-search by `LayerEntry.created_at_ms`, GET `Range: bytes=...` for the trailer bytes of the candidate layer, parse trailer, return Bookmark.",
+        "Returns `BookmarkExpired` if t_ms predates the oldest layer.",
+        "Bounded S3 cost: at most 1 manifest read + 1 trailer GET per call.",
+        "Add `tests/bookmark_gap.rs` covering: timestamp in offline-period gap (resolves via trailer), timestamp older than oldest layer (BookmarkExpired), trailer parsing recovers correct (txid, wall_clock_ms).",
+        "`cargo check -p sqlite-storage` and `cargo test -p sqlite-storage` pass.",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 30,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-031",
+      "title": "Implement compaction levels L0/L1/L2/L3 in cold compactor",
+      "description": "Extend Phase B with multi-level compaction per Litestream: L0 raw drain (32-1024 commits or up to 64 MB), L1 30s buckets, L2 5min buckets, L3 1hr buckets. After every Nth L0 (or M seconds), the same pass extends Phase B to merge recent contiguous L0s into L1; same for L2/L3 at lower frequencies. Each level merge is a self-contained read-N-layers / write-1-layer / update-manifest sequence.",
+      "acceptanceCriteria": [
+        "Define level thresholds as constants: L1_BUCKET_MS=30_000, L2_BUCKET_MS=300_000, L3_BUCKET_MS=3_600_000, plus per-level merge cadence.",
+        "Phase B's level-merge logic: after writing the L0 layer, check whether L1 is due (every 30s wall-clock by trailing layer time); if so, list contiguous L0s in the window, merge into one L1 layer, replace in manifest. Same for L2/L3.",
+        "Merges are commit-aligned (no commit straddles a layer boundary).",
+        "Add `tests/compaction_levels.rs` covering: L0 → L1 merge after 30s window, L1 → L2 merge after 5min, L2 → L3 merge after 1h, manifest reflects level transitions, no data loss across merges (read-after-merge returns same pages).",
+        "`cargo check -p sqlite-storage` and `cargo test -p sqlite-storage` pass.",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 31,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-032",
+      "title": "Implement retention_pin_txid computation with frozen-branch carve-out",
+      "description": "Implement `cold_compactor/gc.rs::compute_retention_pin(branch_id) -> Result<u64>` per spec. For Live branches: time_floor_txid via BookmarkIndex (or layer trailer fallback) + descendant_floor_txid (read `oldest_descendant_parent_txid` once). For Frozen branches: clamped at `created_at_ms - PITR_WINDOW_MS` lookup, with the special rule that Frozen + no live descendants + age > PITR_WINDOW means u64::MAX (delete everything).",
+      "acceptanceCriteria": [
+        "`PITR_WINDOW_MS: i64 = 30 * 86_400_000` constant.",
+        "Pin computation matches the spec's `Garbage collection` section: `pin = min(time_floor_txid, descendant_floor_txid.unwrap_or(u64::MAX))`.",
+        "NO monotonic ratchet: pin recomputes fully each pass, can decrease as descendants delete.",
+        "Frozen-branch logic per `frozen_pin` spec snippet.",
+        "Updates `META/manifest.retention_pin_txid` in the same write tx.",
+        "Add `tests/gc_pin.rs` covering: fresh Live branch (pin = 0 for new actor), Live branch with descendant pinning older txids, descendant deletion releases pin (no ratchet), Frozen branch with live descendants (descendant pin only), Frozen branch aged out (pin = u64::MAX).",
+        "`cargo check -p sqlite-storage` and `cargo test -p sqlite-storage` pass.",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 32,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-033",
+      "title": "Implement S3 layer GC via DeleteObjects batches and manifest rewrite",
+      "description": "Implement `cold_compactor/gc.rs::gc_eligible_layers(branch_id, pin)` that walks ColdManifest, finds layers with `max_txid < pin`, batch-deletes them via `client.delete_batch` (1k per request), rewrites the manifest without those entries, updates `BranchColdState.cold_bytes`.",
+      "acceptanceCriteria": [
+        "`gc_eligible_layers(...)` returns count of layers GC'd + total bytes freed.",
+        "Manifest rewrite is atomic from the reader's POV (single PUT replaces the prior manifest).",
+        "`cold_bytes` updated to reflect the new total.",
+        "Add `tests/gc_layers.rs` covering: GC of all layers below pin, no GC when nothing eligible, GC across L0+L1+L2+L3 mixed levels, cold_bytes matches actual remaining size.",
+        "`cargo check -p sqlite-storage` and `cargo test -p sqlite-storage` pass.",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 33,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-034",
+      "title": "Implement hot COMMITS GC for txids below retention pin",
+      "description": "Add hot-tier COMMITS GC as part of Phase C / Phase C-2: walk and clear `[BR][branch_id]/COMMITS/{T}` for T < retention_pin_txid. Bounded by tx-age — split into 256-key batches if the clear loop would blow the budget.",
+      "acceptanceCriteria": [
+        "Implementation lives in `cold_compactor/gc.rs::gc_hot_commits(tx, branch_id, pin)`.",
+        "Clears `[BR][branch_id]/COMMITS/{T}` for T < pin via `getRange` + per-key clear or single `clearRange`.",
+        "Splits across multiple write txs if the clear set is large (re-reading pin in each tx is fine; pin only decreases when descendants delete, which is rare).",
+        "Add `tests/gc_hot_commits.rs` covering: GC clears expected range, GC leaves COMMITS at-or-above pin intact, large pre-pin range splits across batches.",
+        "`cargo check -p sqlite-storage` and `cargo test -p sqlite-storage` pass.",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 34,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-035",
+      "title": "Wire GC into Phase C-2 and self-publish trigger",
+      "description": "Wire `gc_eligible_layers` + `gc_hot_commits` into Phase C-2, holding the cold lease. End-of-drain self-publishes `SqliteColdGcSubject { branch_id }` from US-028. The cold compactor's UPS subscriber routes both subjects to the same worker (subject-pattern dispatch).",
+      "acceptanceCriteria": [
+        "After Phase C commits cleanly, run Phase C-2 (GC) under the same lease without releasing it.",
+        "Phase C-2 = compute pin → write `META/manifest.retention_pin_txid` → walk + delete layers → walk + clear hot COMMITS.",
+        "End-of-pass: release lease.",
+        "`SqliteColdGcSubject` handler runs only the GC sub-pass (no drain) — useful when drain didn't fire but pin needs recomputation (e.g. branch deletion cascade).",
+        "Add `tests/cold_pass_full.rs` end-to-end covering: trigger → Phase A → B → C → C-2 → lease release; pass-with-no-drain still runs C-2 if GC subject fires.",
+        "`cargo check -p sqlite-storage` and `cargo test -p sqlite-storage` pass.",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 35,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-036",
+      "title": "Wire branch deletion cascade into cold compactor",
+      "description": "Connect `delete_branch` (US-015) to the cold compactor's prefix-delete pass. When the cold compactor's pass for a parent picks up a Tombstoned descendant, walk the descendant's S3 prefix and delete layers in batches via `client.delete_batch`. After cold prefix is cleared, transition descendant state Tombstoned → Deleted.",
+      "acceptanceCriteria": [
+        "Cold compactor's worker scans `[BRANCHES]/list/*` for Tombstoned children of the actor each pass.",
+        "For each Tombstoned: list `branches/{descendant_id}/layers/*`, batch-delete in 1k chunks, list + delete `branches/{descendant_id}/manifest.v1.vbare`, `state.v1.vbare`, `bookmarks.v1.vbare`, `pending/*`.",
+        "After successful S3 prefix clear, single FDB tx transitions state Tombstoned → Deleted with `deleted_at_ms = now`.",
+        "Add `tests/branch_cascade.rs` covering: delete leaf branch → cold pass clears S3 prefix → state becomes Deleted, branches survive an interrupted cold pass and resume on next pass, branches with no cold tier (never drained) skip the S3 walk and immediately transition to Deleted.",
+        "`cargo check -p sqlite-storage` and `cargo test -p sqlite-storage` pass.",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 36,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-037",
+      "title": "Implement actor-destroy tombstone with gasoline workflow for batch delete",
+      "description": "Add the `[BRANCHES]/tombstone` per-actor marker. Pegboard's actor-destroy writes this marker. The cold compactor's next pass for any branch in this actor sees the marker, recursively tombstones every branch, and schedules cold prefix delete via a gasoline workflow (so the bulk DeleteObjects survives pod restarts and bounded S3 retries).",
+      "acceptanceCriteria": [
+        "Add `[BRANCHES]/tombstone` key. Pegboard's actor-destroy writes it (or a stub call site exists for pegboard to call later — out of scope for storage; just expose `ActorDb::mark_actor_tombstoned()`).",
+        "Cold compactor: on lease acquire, if `[BRANCHES]/tombstone` present, read all branches, mark all Live → Tombstoned, mark `tombstoned_at_ms`.",
+        "Schedule a gasoline workflow `actor_cold_prefix_delete { actor_id }` that lists `actors/{actor_id}/branches/*`, batch-deletes in 1k chunks, retries on 5xx with backoff.",
+        "After workflow completes, all branches go Tombstoned → Deleted.",
+        "Add `tests/actor_destroy.rs` covering: mark + cascade triggers workflow, workflow handles 70k+ object delete (in test, the filesystem cold tier with synthetic many-objects setup), workflow resumable after simulated pod restart.",
+        "`cargo check -p sqlite-storage` and `cargo test -p sqlite-storage` pass.",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 37,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-038",
+      "title": "Implement fork warmup UPS publish and handler",
+      "description": "When `fork()` runs, enqueue a `WarmupRequest { actor_id, new_branch_id, parent, parent_txid }` to the cold compactor. The cold compactor's pass for this actor copies parent image-layer byte ranges (covering txids <= parent_txid) into the new branch's cold tier under fresh image-layer keys, all at `as_of_txid = parent_txid`. Background; new branch is usable immediately. Pre-stages parent state in the descendant so reads don't fall through.",
+      "acceptanceCriteria": [
+        "`fork()` (from US-011) publishes `SqliteForkWarmupSubject { actor_id, new_branch_id, parent_branch_id, parent_txid }` after its FDB commit succeeds.",
+        "Cold compactor handles warmup as part of Phase B (before encoding new layers) or as a dedicated parallel branch within the worker.",
+        "Warmup loops through parent's ColdManifest image layers covering txids <= parent_txid and copies each into the new branch's cold prefix under fresh image-layer keys at `as_of_txid = parent_txid` (key + manifest entry).",
+        "Warmup bytes are accounted to the descendant's `cold_bytes` (US-042 billing).",
+        "SLA target documented: warmup completes within `cold_pass_interval_secs / 2`.",
+        "Add `tests/fork_warmup.rs` covering: warmup copies parent image layers, new branch reads pages from its own cold tier without falling through to parent, warmup is idempotent (re-running doesn't duplicate).",
+        "`cargo check -p sqlite-storage` and `cargo test -p sqlite-storage` pass.",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 38,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-039",
+      "title": "Implement burst mode coordination (gauge + dynamic quota cap)",
+      "description": "Add `burst_mode.rs` per spec. Cold compactor tracks per-pod S3 5xx ratio over the last 3 passes (`COLD_DEGRADED_WINDOW_PASSES=3`); when ratio exceeds `COLD_DEGRADED_THRESHOLD_5XX_RATIO=0.5`, sets a per-pod gauge `sqlite_cold_tier_degraded_pods`. Hot-tier quota check observes the gauge (UPS broadcast or polling). When set, cap is raised to `SQLITE_HOT_MAX_BYTES * HOT_BURST_MULTIPLIER (=2)`.",
+      "acceptanceCriteria": [
+        "`burst_mode.rs` exposes `is_degraded() -> bool` and `effective_max_bytes() -> i64` consumed by `pump/quota.rs`.",
+        "Cold compactor maintains a 3-pass-window 5xx ratio (per-pod, in-memory).",
+        "When ratio > 0.5 over 3 passes: flip `sqlite_cold_tier_degraded_pods` gauge to 1.",
+        "When ratio <= 0.5 for 1 full pass: flip gauge back to 0.",
+        "Hot quota uses `effective_max_bytes()` (= 10 GiB normally, 20 GiB in burst). Commits beyond burst cap still error with `SqliteStorageQuotaExceeded`.",
+        "Add `tests/burst_mode.rs` covering: 5xx storm flips gauge, recovery flips back, quota cap raises during burst, commits beyond burst cap still rejected.",
+        "`cargo check -p sqlite-storage` and `cargo test -p sqlite-storage` pass.",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 39,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-040",
+      "title": "Add cold compactor metrics (pass duration, lease, drain lag, layer counts)",
+      "description": "Add the cold compactor metrics from the spec's Observability section: pass_duration_seconds, pass_failures_total, lease_take_total, lease_held_seconds, lease_renewal_total, lease_steals_total, drain_lag_txids, drain_lag_seconds, layers_uploaded_total, layer_bytes_uploaded_total, layer_orphan_count, cold_tier_degraded_pods, cold_bytes_reconciliation_drift. All include `node_id` label per stateless spec.",
+      "acceptanceCriteria": [
+        "All metrics defined as `lazy_static!` globals in `cold_compactor/metrics.rs`.",
+        "Each metric labeled with `node_id` (sourced from `pools.node_id()`).",
+        "Histograms have appropriate buckets (e.g. pass_duration: 0.1, 0.5, 1, 2, 5, 10, 30, 60s).",
+        "Wired into Phase A/B/C, lease lifecycle, and orphan reconciliation.",
+        "Add `tests/cold_metrics.rs` covering: pass records duration, lease_take increments on acquire, drain_lag updates after pass.",
+        "`cargo check -p sqlite-storage` and `cargo test -p sqlite-storage` pass.",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 40,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-041",
+      "title": "Add S3 client metrics, branch metrics, and PITR resolution metrics",
+      "description": "Add the remaining metric families from the spec: S3 (request_duration_seconds, inflight_multipart_uploads, 5xx_ratio derived rolling), branches (count_per_actor histogram, count_total{state} gauge, gc_eligible_count{state}, fork_total{outcome}), PITR resolution (resolve_duration_seconds{path}, bookmark_resolve_failures_total{reason}). Plus the debug-only refcount_drift_total and cold_drained_txid_regressed_total.",
+      "acceptanceCriteria": [
+        "`pump/metrics.rs` and `cold_tier/metrics.rs` get the new families.",
+        "S3 metrics wrap every cold_tier client call (record duration + outcome).",
+        "Branch metrics increment on fork/delete/state-transition.",
+        "PITR metrics record duration of resolve_bookmark/get_bookmark_for_time and label by path (hot/cold/gap_fallback).",
+        "Debug metrics gated with `#[cfg(debug_assertions)]` where the metric only fires from a debug-only assertion.",
+        "Add `tests/cold_metrics.rs` (extension) covering: S3 metric records on each call, branch metric increments on fork, PITR resolve metric labels path correctly.",
+        "`cargo check -p sqlite-storage` and `cargo test -p sqlite-storage` pass.",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 41,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-042",
+      "title": "Implement billing accounting per Neon model and add MetricKey entries",
+      "description": "Implement billable cold bytes per branch as the sum of layer files OWNED by this branch (created by its own cold passes, including fork-warmup-copied layers). Fork descendants start at 0 billable cold bytes. Add `MetricKey::SqliteColdBytes { actor_name, branch_id }` and `MetricKey::SqliteBranchCount { actor_name }` to pegboard's `namespace/keys/metric.rs`.",
+      "acceptanceCriteria": [
+        "`BranchColdState` (or a new field) tracks `owned_cold_bytes` separately from any aggregate.",
+        "Each Phase B layer write attributes its bytes to the branch that owns the layer.",
+        "Fork warmup attributes copied bytes to the descendant (the new branch \"owns\" them).",
+        "Add `MetricKey::SqliteColdBytes { actor_name, branch_id }` and `MetricKey::SqliteBranchCount { actor_name }` to `engine/packages/pegboard/src/namespace/keys/metric.rs`.",
+        "Cold compactor publishes these MetricKeys at end of each pass.",
+        "Add `tests/billing.rs` covering: fresh branch (0 billable), fork descendant (0 billable until first pass), warmup copy attributed to descendant, parent's bytes don't double-count after fork.",
+        "`cargo check -p sqlite-storage` and `cargo check -p pegboard` pass.",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 42,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-043",
+      "title": "Add debug_describe_bookmark API and BookmarkResolutionTrail",
+      "description": "Add the operator-only `debug_describe_bookmark(b)` method on ActorDb gated behind `#[cfg(any(debug_assertions, feature = \"operator\"))]`. Returns a `BookmarkResolutionTrail` with the resolved Position, the chain of branches walked, the source layer keys involved, and computed vs stored checksums. Useful for incident debugging.",
+      "acceptanceCriteria": [
+        "`BookmarkResolutionTrail { bookmark, resolved_position, branch_chain_walked: Vec<Uuid>, source_layer_keys: Vec<String>, computed_checksum: u64, stored_checksum: u64 }` defined.",
+        "`ActorDb::debug_describe_bookmark` gated correctly; not present in release-non-operator builds.",
+        "Method walks the resolution path same as `resolve_bookmark` but records intermediate state.",
+        "Computed checksum: re-fold via CRC-ISO-64 over the materialized state. Stored: read from `/META/head` or layer trailer.",
+        "Add `tests/debug_bookmark.rs` (gated to debug_assertions) covering: resolved trail has correct branch chain, computed checksum matches stored on consistent state.",
+        "`cargo check -p sqlite-storage` (debug + release) and `cargo test -p sqlite-storage` pass.",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 43,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-044",
+      "title": "Add daily cold_bytes reconciliation job",
+      "description": "Add a periodic reconciliation job (gasoline workflow scheduled daily) that lists `branches/{branch_id}/layers/`, sums actual `Content-Length`, overwrites `BranchColdState.cold_bytes` with ground truth. Emits `sqlite_cold_bytes_reconciliation_drift` for ops visibility when measured ≠ stored.",
+      "acceptanceCriteria": [
+        "Workflow `sqlite_cold_bytes_reconcile` registered and scheduled daily.",
+        "For each Live/Frozen/Tombstoned branch: list layers, sum sizes, compare to stored `cold_bytes`, overwrite if drift detected.",
+        "Emits drift metric with absolute and relative drift values.",
+        "Bounded by branch fan-out — uses pagination across actors.",
+        "Add `tests/reconciliation.rs` covering: drift detected and corrected, no drift produces no metric increment, workflow handles many branches without OOM.",
+        "`cargo check -p sqlite-storage` and `cargo test -p sqlite-storage` pass.",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 44,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-045",
+      "title": "End-to-end integration test: commit + fork + restore",
+      "description": "Add a full integration test that: opens an ActorDb on a fresh actor, commits N rows, calls `get_current_bookmark`, commits M more rows, calls `fork(at_bookmark)`, switches the ActorDb to the new branch via `swap_head`, commits divergent data on the fork, calls `restore_to_bookmark` to a third branch, validates that each branch has the expected state.",
+      "acceptanceCriteria": [
+        "Test in `tests/integration_pitr_fork.rs` runs over `ColdTier::Filesystem` (or Disabled where cold isn't yet exercised).",
+        "Validates: branch chain depth, COMMITS sequence per branch, rolling checksum continuity within each branch, cross-branch lex-order is NOT relied on.",
+        "Test runs end-to-end without `tokio::time::pause` (real time, but bounded duration).",
+        "Validates fork warmup pre-stages parent state (where applicable).",
+        "`cargo test -p sqlite-storage --test integration_pitr_fork` passes.",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 45,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-046",
+      "title": "Integration test: S3 outage triggers burst mode, commits keep flowing",
+      "description": "Integration test using `ColdTier::Faulty` simulating S3 down for 1 hour (synthetic clock advance). Validate: burst mode flips on after 3 cold passes with high 5xx ratio, hot quota cap raises to 20 GiB, commits keep flowing, cold compactor backs off but doesn't crash, when 5xx storm clears the burst flips off and quota reverts.",
+      "acceptanceCriteria": [
+        "Test in `tests/burst_mode_outage.rs`.",
+        "Uses `tokio::time::pause` + `Faulty` policy with 90% 5xx for 1h, then 0% recovery.",
+        "Asserts gauge transitions and quota cap transitions at the right moments.",
+        "Asserts at least one commit succeeds in burst mode (above the normal 10 GiB cap, below the 20 GiB cap).",
+        "Asserts `sqlite_cold_compactor_pass_failures_total{stage=upload}` increments during the storm.",
+        "`cargo test -p sqlite-storage --test burst_mode_outage` passes.",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 46,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-047",
+      "title": "Integration test: lease lost mid-pass and orphan reconciliation",
+      "description": "Integration test: pod A starts a cold pass, gets through Phase B (uploads layer + manifest commit), then loses its lease before Phase C completes. Pod B takes over and runs a fresh pass. Validates: stale `pending/*` markers + matching layer files are reconciled at start of pod B's pass; pod A's orphaned upload is cleaned cleanly; no double-billing.",
+      "acceptanceCriteria": [
+        "Test in `tests/lease_loss.rs`.",
+        "Simulates lease theft via the lease module's stamping (different `holder_node_id`).",
+        "Asserts: `cold_layer_orphan_count` increments before reconciliation, decrements after; pod B's pass succeeds; final cold state is consistent with what pod A actually committed.",
+        "`cargo test -p sqlite-storage --test lease_loss` passes.",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 47,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-048",
+      "title": "Integration test: 30-day rollover with synthetic clock",
+      "description": "Integration test that advances synthetic clock past PITR_WINDOW_MS and validates that GC removes layers older than the window, hot COMMITS below pin are cleared, BookmarkIndex entries below pin are pruned. Validates that bookmarks at retention edge resolve correctly and bookmarks past retention return BookmarkExpired.",
+      "acceptanceCriteria": [
+        "Test in `tests/retention_rollover.rs`.",
+        "Uses `tokio::time::pause` to advance clock 31 days while running periodic cold passes.",
+        "Asserts: layers with max_txid below `pin` are gone, COMMITS below pin are gone, BookmarkIndex entries below pin are pruned (or sparse-window-bounded), pre-rollover bookmarks return BookmarkExpired, retention-edge bookmark resolves correctly.",
+        "`cargo test -p sqlite-storage --test retention_rollover` passes.",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 48,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-049",
+      "title": "Update engine/CLAUDE.md with cold-tier schema migration rule",
+      "description": "Add the cold-tier schema migration rule to `engine/CLAUDE.md` per spec: when bumping `ColdManifest`/`BranchColdState`/`BookmarkIndex` schema version, the cold compactor reads old + writes new on every pass, the reader keeps prior-version code paths in tree for at least one full retention window past the new version's rollout. Document the new keyspace ([BRANCHES] and [BR]) succinctly.",
+      "acceptanceCriteria": [
+        "Append the cold-tier schema migration rule (one-line bullet) to `engine/CLAUDE.md`.",
+        "Append the [BRANCHES] / [BR] keyspace and that branches are the unit of identity (one-line bullet).",
+        "Append that fork() is metadata-only and PITR is built on the same primitive (one-line bullet).",
+        "Each addition follows the CLAUDE.md style rules from repo-root CLAUDE.md (concise, single-bullet, no paragraphs).",
+        "`cargo check --workspace` still passes (sanity).",
+        "Typecheck passes"
+      ],
+      "priority": 49,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-050",
+      "title": "Final integration test: full lifecycle and verification pass",
+      "description": "Capstone integration test exercising the complete lifecycle: create actor, commit, fork, commit on child, restore to bookmark, delete a leaf branch, advance clock past retention, validate GC, validate that surviving bookmarks still resolve, validate that deleted-branch state transitions all the way to Deleted, validate metrics emitted match expectations. Also runs `debug_describe_bookmark` to spot-check the resolution trail.",
+      "acceptanceCriteria": [
+        "Test in `tests/integration_full_lifecycle.rs`.",
+        "Uses `ColdTier::Filesystem` end to end.",
+        "Asserts: every state transition (Live → Frozen, Live → Tombstoned → Deleted), every API surface (commit, get_pages, get_current_bookmark, get_bookmark_for_time, resolve_bookmark, fork, restore_to_bookmark, swap_head, list_branches, count_branches, delete_branch).",
+        "Asserts metrics emitted match expectations (drain_lag, fork_total, branch_count_total, pitr_resolve_duration).",
+        "Asserts `debug_describe_bookmark` returns coherent trails for every resolved bookmark.",
+        "`cargo test -p sqlite-storage --test integration_full_lifecycle` passes.",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 50,
+      "passes": false,
+      "notes": ""
+    }
+  ]
+}

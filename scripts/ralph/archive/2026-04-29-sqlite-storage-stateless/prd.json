@@ -1,0 +1,522 @@
+{
+  "project": "sqlite-storage-stateless",
+  "branchName": "04-29-chore_sqlite_stateless_storage_refactor",
+  "description": "Rewrite the SQLite v2 storage engine to be stateless on the actor side (pegboard-envoy) and move compaction to a separate, stateful HPA-scaled service. Hot-path ops collapse to two RPCs (`get_pages`, `commit`) with no `open`/`close` lifecycle, no fence inputs on the wire, and pegboard exclusivity as the only writer fence. Compaction triggers go through UPS (queue-group balanced) and use a UDB-backed `/META/compactor_lease` to prevent concurrent compactions. META splits into four sub-keys (`/META/head`, `/META/compact`, `/META/quota`, `/META/compactor_lease`) so commit and compaction never conflict on the same key. Quota is an FDB atomic-add counter at `/META/quota`; the cap (10 GiB) is a Rust constant, enforced via an in-memory cache loaded lazily on the first UDB tx. Spec lives at `.agent/specs/sqlite-storage-stateless.md`. Read the spec first.\n\n===== KEY INVARIANTS =====\n\n- Actor-side (pegboard-envoy) is stateless. No `open`/`close`, no per-conn `active_actors` HashMap, no presence tracking. Only per-conn state is a perf-only `scc::HashMap<actor_id, Arc<ActorDb>>` populated lazily by SQLite request handlers.\n- The crate exports a single per-actor type `ActorDb`. No `Pump` struct, no process-wide registry, no per-conn wrapper inside sqlite-storage.\n- Pegboard exclusivity is the only writer fence in release. Defensive in-tx checks for 'two writers detected' are `#[cfg(debug_assertions)]` only.\n- No takeover work in release. Pegboard's reassignment transaction does not touch sqlite-storage. Lazy first-commit META init seeds `/META/head` if absent. Debug builds run `takeover::reconcile` for invariant verification only (no cleanup).\n- META sub-keys: `/META/head` (commit-owned, vbare), `/META/compact` (compaction-owned, vbare), `/META/quota` (raw i64 LE atomic counter), `/META/compactor_lease` (vbare).\n- `/META/quota` is fixed-width i64 LE. FDB atomic-add is exact integer addition (no drift). Mismatch = bug at the call site.\n- Quota cap is a Rust constant: `SQLITE_MAX_STORAGE_BYTES = 10 * 1024 * 1024 * 1024` in `pump::quota`. No `/META/static` key; remove it entirely.\n- Compactor service is `ServiceKind::Standalone` registered in `engine/packages/engine/src/run_config.rs`, same pattern as `pegboard_outbound`. UPS queue-group `\"compactor\"` balances work across pods.\n- Lease lifecycle uses a local timer + cancellation token + periodic renewal task. No `/META/compactor_lease` reads inside compaction work transactions.\n- PIDX deletes use FDB `COMPARE_AND_CLEAR` to resolve commit-vs-compaction races without taking conflict ranges.\n- Per-actor compaction trigger throttle (500ms window, 30s safety net). First trigger fires immediately; subsequent ones in the window are dropped. This is throttle, not debounce.\n- Breaking changes are unconditionally acceptable. The system has not shipped to production. Wire shape, on-disk key layout, and `DBHead`/META schema are all free to change.\n\n===== ARCHITECTURAL CONTEXT =====\n\n- Single crate `engine/packages/sqlite-storage/` with two top-level modules (`pump/` and `compactor/`) plus a top-level `takeover.rs`.\n- `pump/` is the hot path. Used by pegboard-envoy. Exports `ActorDb`.\n- `compactor/` is the background service. Registered as a Standalone service.\n- `takeover.rs` is debug-only invariant verification. Not compiled in release.\n- The legacy crate gets renamed to `sqlite-storage-legacy` for reference during the rewrite, then deleted in the final stage.\n- All tests live under `tests/` (no inline `#[cfg(test)] mod tests` in `src/`).\n- Metrics use `lazy_static!` global statics. All metrics include a `node_id` label sourced from `pools.node_id()` (see US-001).\n\n===== RUN COMMANDS =====\n\nFrom repo root:\n\n- Compile-check a crate: `cargo check -p <package-name>` (preferred for verification).\n- Build a crate: `cargo build -p <package-name>`.\n- Run all tests for a crate: `cargo test -p <package-name>`.\n- Run a single test file: `cargo test -p sqlite-storage --test <file_stem>`.\n- Run a single test: `cargo test -p <package-name> <test_name> -- --nocapture`.\n- Never run `cargo fmt` or `./scripts/cargo/fix.sh` — the team formats at merge time.\n\n===== READ BEFORE STARTING =====\n\n- `.agent/specs/sqlite-storage-stateless.md` — the full spec this PRD implements.\n- `engine/CLAUDE.md` — VBARE migration rules, Epoxy keys, SQLite storage tests, Pegboard Envoy notes.\n- `CLAUDE.md` at repo root — layer constraints, fail-by-default rules, async lock rules, error handling.\n- `docs-internal/engine/sqlite-storage.md` — current SQLite storage crash course (META/PIDX/DELTA/SHARD layout, read/write/compaction paths).\n- `docs-internal/engine/sqlite-vfs.md` — VFS parity rules.\n- `engine/packages/sqlite-storage/src/` — legacy code to lift from (after Stage 1 rename, this will be `sqlite-storage-legacy`).\n- `engine/packages/pegboard-outbound/src/lib.rs` — reference pattern for Standalone service registration.\n- `engine/packages/pegboard/src/actor_kv/` — reference for namespace-level metering pipeline (MetricKey, KV_BILLABLE_CHUNK).",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Add NodeId type and accessor to rivet_pools::Pools",
+      "description": "As the compactor lease and metrics, I need a stable per-process NodeId so leases can identify holders and metrics can label by node. Add a `NodeId` type (UUID v4) generated at engine startup, accessed via `pools.node_id() -> NodeId`. Random, NOT derived from HOSTNAME or any deployment-shaped identifier.",
+      "acceptanceCriteria": [
+        "Add `NodeId` type in `engine/packages/pools/src/` (alias or newtype wrapping `Uuid`).",
+        "`Pools::new(...)` generates a `NodeId` via `Uuid::new_v4()` at construction time and stores it.",
+        "Add `pub fn node_id(&self) -> NodeId` accessor on `Pools`.",
+        "All consumers of `Pools` can call `pools.node_id()` without errors.",
+        "`cargo check -p rivet-pools` passes.",
+        "`cargo check --workspace` passes (no other crate breaks).",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-002",
+      "title": "Rename sqlite-storage crate to sqlite-storage-legacy",
+      "description": "As the rewrite kickoff, rename the existing crate so the old code stays compilable and importable for reference while the greenfield crate is built next to it. Use `git mv` to preserve history.",
+      "acceptanceCriteria": [
+        "Run `git mv engine/packages/sqlite-storage engine/packages/sqlite-storage-legacy`.",
+        "Update `engine/packages/sqlite-storage-legacy/Cargo.toml` `[package].name` to `sqlite-storage-legacy`.",
+        "Update root `Cargo.toml` workspace member from `engine/packages/sqlite-storage` to `engine/packages/sqlite-storage-legacy`.",
+        "Update every workspace-level dependency that references `sqlite-storage` to `sqlite-storage-legacy` (search with `rg 'sqlite-storage' --type toml`).",
+        "Update every Rust import that names `sqlite_storage` (now consumes `sqlite_storage_legacy`) so the legacy crate keeps compiling at its consumers.",
+        "`cargo check --workspace` passes.",
+        "`cargo build -p sqlite-storage-legacy` passes.",
+        "Typecheck passes"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-003",
+      "title": "Scaffold new sqlite-storage crate with pump/compactor module skeleton",
+      "description": "As the start of greenfield work, create a fresh `engine/packages/sqlite-storage/` crate with the `pump/`, `compactor/`, `takeover.rs`, and `tests/` directory layout described in spec Stage 2. Lift battle-tested unchanged files (`ltx.rs`, `page_index.rs`, `error.rs`, `test_utils/`) from the legacy crate. Empty stubs for new modules so the crate compiles.",
+      "acceptanceCriteria": [
+        "Create `engine/packages/sqlite-storage/` with `Cargo.toml` (package name `sqlite-storage`) and `src/lib.rs` re-exporting `pub mod pump;`, `pub mod compactor;`, and a debug-gated `pub mod takeover;`.",
+        "Create `src/pump/mod.rs`, `src/compactor/mod.rs`, and `src/takeover.rs` (the latter with `#[cfg(debug_assertions)]` gating).",
+        "Lift `ltx.rs` from `sqlite-storage-legacy/src/ltx.rs` to `src/pump/ltx.rs` unchanged.",
+        "Lift `page_index.rs` from `sqlite-storage-legacy/src/page_index.rs` to `src/pump/page_index.rs` unchanged.",
+        "Lift `error.rs` from `sqlite-storage-legacy/src/error.rs` to `src/pump/error.rs`; prune variants that no longer apply (multi-chunk staging variants delete entirely; `FenceMismatch` becomes `#[cfg(debug_assertions)]`-gated).",
+        "Lift `test_utils/` (with `test_db()`, `checkpoint_test_db()`, `reopen_test_db()`) from legacy to `src/test_utils/` unchanged.",
+        "Add `tests/` directory with empty placeholder files for `pump_read.rs`, `pump_commit.rs`, `pump_keys.rs`, `compactor_lease.rs`, `compactor_compact.rs`, `compactor_dispatch.rs`, `takeover.rs` (each with a single trivial `#[test] fn placeholder() {}`).",
+        "Add the new crate to root `Cargo.toml` workspace members.",
+        "`cargo check -p sqlite-storage` passes.",
+        "`cargo build -p sqlite-storage` passes.",
+        "Typecheck passes"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-004",
+      "title": "Add pump/keys.rs with new META sub-key layout",
+      "description": "Implement the new key builders for the four-way META split (`/META/head`, `/META/compact`, `/META/quota`, `/META/compactor_lease`) plus the existing PIDX/DELTA/SHARD prefixes (lifted unchanged). Owns `PAGE_SIZE: u32 = 4096` and `SHARD_SIZE: u32 = 64` constants. No `/META/static` key.",
+      "acceptanceCriteria": [
+        "Add `engine/packages/sqlite-storage/src/pump/keys.rs` exporting key builders: `meta_head_key`, `meta_compact_key`, `meta_quota_key`, `meta_compactor_lease_key`.",
+        "Lift PIDX/DELTA/SHARD key builders from legacy `keys.rs` (`pidx_delta_key`, `pidx_delta_prefix`, `delta_chunk_key`, `delta_chunk_prefix`, `delta_prefix`, `shard_key`, `shard_prefix`, `actor_prefix`, `actor_range`).",
+        "Owns `pub const PAGE_SIZE: u32 = 4096;` and `pub const SHARD_SIZE: u32 = 64;`.",
+        "No `/META/static` key, no `meta_static_key` builder.",
+        "Inline tests under `tests/pump_keys.rs` cover: META sub-key prefix shapes; PIDX big-endian sort order; cross-actor key isolation.",
+        "`cargo check -p sqlite-storage` passes.",
+        "`cargo test -p sqlite-storage --test pump_keys` passes.",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-005",
+      "title": "Add pump/types.rs (DBHead minus next_txid) and pump/udb.rs (COMPARE_AND_CLEAR wrapper)",
+      "description": "Define the `DBHead` schema for `/META/head` (no `next_txid`, optional `generation` field gated `#[cfg(debug_assertions)]`) and the `MetaCompact` schema for `/META/compact` (`materialized_txid`). Add a UDB wrapper exposing `COMPARE_AND_CLEAR` if `universaldb` doesn't already provide it.",
+      "acceptanceCriteria": [
+        "Add `src/pump/types.rs` with `DBHead { head_txid: u64, db_size_pages: u32 }` (and `generation: u64` field gated `#[cfg(debug_assertions)]`).",
+        "Add `MetaCompact { materialized_txid: u64 }` to `types.rs`.",
+        "Both types serialize via vbare. No `next_txid` field anywhere. No `SqliteOrigin` enum.",
+        "Add `src/pump/udb.rs` with a `compare_and_clear(tx, key, expected_value)` wrapper that maps to `MutationType::COMPARE_AND_CLEAR`. If `universaldb` already exposes this, just re-export.",
+        "Add the wrapper to `engine/packages/universaldb/src/` if not already present.",
+        "`cargo check -p sqlite-storage` passes.",
+        "`cargo check -p universaldb` passes.",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-006",
+      "title": "Add pump/quota.rs with atomic-counter wrapper and SQLITE_MAX_STORAGE_BYTES",
+      "description": "Implement the `/META/quota` atomic counter helpers: `atomic_add(tx, actor_id, delta_bytes: i64)`, `read(tx, actor_id) -> i64`. Owns `pub const SQLITE_MAX_STORAGE_BYTES: i64 = 10 * 1024 * 1024 * 1024;`. The value at `/META/quota` is exactly 8 bytes (`i64::to_le_bytes()` for FDB atomic-add). Owns the throttle constants `trigger_throttle_ms` and `trigger_max_silence_ms`.",
+      "acceptanceCriteria": [
+        "Add `src/pump/quota.rs` with `pub const SQLITE_MAX_STORAGE_BYTES: i64 = 10 * 1024 * 1024 * 1024;`.",
+        "`atomic_add(tx, actor_id, delta_bytes: i64)` writes `delta_bytes.to_le_bytes()` via FDB atomic-add (`MutationType::ADD`).",
+        "`read(tx, actor_id) -> Result<i64>` reads `/META/quota` and decodes via `i64::from_le_bytes`. Returns 0 if key absent.",
+        "Add `pub const TRIGGER_THROTTLE_MS: u64 = 500;` and `pub const TRIGGER_MAX_SILENCE_MS: u64 = 30_000;`.",
+        "Provide `cap_check(would_be: i64) -> Result<()>`: returns `SqliteStorageQuotaExceeded { remaining_bytes, payload_size }` if `would_be > SQLITE_MAX_STORAGE_BYTES`.",
+        "Add `SqliteStorageQuotaExceeded` variant to `pump::error::SqliteStorageError`. Mirror actor KV's `errors::Actor::KvStorageQuotaExceeded` shape.",
+        "`cargo check -p sqlite-storage` passes.",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-007",
+      "title": "Add pump/actor_db.rs with ActorDb struct and constructor",
+      "description": "Define the `ActorDb` struct (the single per-actor handle exported from `pump`) with all cache fields (`cache: Mutex<DeltaPageIndex>`, `storage_used: Mutex<Option<i64>>`, `commit_bytes_since_rollup: Mutex<u64>`, `read_bytes_since_rollup: Mutex<u64>`, `last_trigger_at: Mutex<Option<Instant>>`). Add `new(udb, actor_id) -> Self` constructor. Method bodies for `get_pages` and `commit` come in later stories — leave them as `todo!()` stubs with the right signatures.",
+      "acceptanceCriteria": [
+        "Add `src/pump/actor_db.rs` with `ActorDb` struct exactly as defined in the spec (line ~117 of `.agent/specs/sqlite-storage-stateless.md`).",
+        "All cache fields use `parking_lot::Mutex` (forced-sync context per CLAUDE.md async-lock rules).",
+        "`pub fn new(udb: Arc<universaldb::Database>, actor_id: String) -> Self`.",
+        "`pub async fn get_pages(&self, pgnos: Vec<u32>) -> Result<Vec<FetchedPage>>` — body is `todo!()`.",
+        "`pub async fn commit(&self, dirty_pages: Vec<DirtyPage>, db_size_pages: u32, now_ms: i64) -> Result<()>` — body is `todo!()`.",
+        "Re-export `ActorDb` from `pump/mod.rs`.",
+        "Under `#[cfg(debug_assertions)]`, `ActorDb::new` calls `takeover::reconcile(...)` (which is currently a stub from US-003; full impl in US-019).",
+        "`cargo check -p sqlite-storage` passes.",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-008",
+      "title": "Implement pump/read.rs (get_pages) with PIDX cache",
+      "description": "Implement `ActorDb::get_pages` per spec: read `/META/head` for `db_size_pages`, look up each pgno via the in-memory PIDX cache (cold cache → in-tx PIDX prefix scan, populate cache, increment `sqlite_pump_pidx_cold_scan_total`), fetch DELTA or SHARD blob, decode LTX, extract page bytes. Stale-PIDX → SHARD fallback (lift logic from legacy `read.rs:144-150`).",
+      "acceptanceCriteria": [
+        "Add `src/pump/read.rs` with `impl ActorDb { pub async fn get_pages(...) }` body filled in.",
+        "Read path: `/META/head` (single key, no `try_join!` needed) + PIDX cache lookup + DELTA/SHARD blob fetch.",
+        "Cold cache: PIDX prefix scan in-tx, populate cache, increment `sqlite_pump_pidx_cold_scan_total`.",
+        "Stale-PIDX fallback: if PIDX says DELTA T but DELTA T missing, fall back to SHARD `pgno / SHARD_SIZE`, evict stale cache row.",
+        "If pgno > db_size_pages, return missing (above EOF).",
+        "Increment `read_bytes_since_rollup` counter for billable bytes returned.",
+        "Add `tests/pump_read.rs` covering: warm cache hit, cold cache miss with PIDX scan, stale-PIDX → SHARD fallback, above-EOF read.",
+        "Tests use `test_db()` (real RocksDB-backed UDB), no mocks per CLAUDE.md testing rules.",
+        "`cargo test -p sqlite-storage --test pump_read` passes.",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-009",
+      "title": "Implement pump/commit.rs (single-shot commit with quota cap and lazy first-commit init)",
+      "description": "Implement `ActorDb::commit` per spec: read `/META/head` (steady-state), compute would-be quota, cap-check against in-memory cache, write DELTA chunks + PIDX upserts + new `/META/head` + `atomic_add(/META/quota, +bytes)`. On first commit (cold quota cache OR `/META/head` absent): use `tokio::try_join!` to read `/META/head` + `/META/quota` concurrently; if `/META/head` is absent, seed it with `head_txid=0`, `db_size_pages=1`. No `next_txid`, no STAGE keys, no multi-chunk staging.",
+      "acceptanceCriteria": [
+        "Add `src/pump/commit.rs` with `impl ActorDb { pub async fn commit(...) }` body filled in.",
+        "Steady-state path reads `/META/head` only (one key, no `try_join!`).",
+        "First-commit path uses `tokio::try_join!(tx.get(/META/head), tx.get(/META/quota))` for parallel get.",
+        "Lazy META init: if `/META/head` is absent, seed with `head_txid=0`, `db_size_pages=db_size_pages_arg`; do not write `/META/quota` yet (atomic-add will set it on first non-zero delta).",
+        "Compute `delta_bytes` (sum of new DELTA chunk sizes + new PIDX bytes + new `/META/head` bytes) before any UDB mutation.",
+        "Quota cap: if `cached_storage_used + delta_bytes > SQLITE_MAX_STORAGE_BYTES`, reject with `SqliteStorageQuotaExceeded`.",
+        "Otherwise: write DELTA chunks (`delta_chunk_key(actor_id, T, chunk_idx)`), PIDX upserts (`pidx_delta_key(actor_id, pgno) = T as u64 BE`), new `/META/head` (with `head_txid = old + 1`), `atomic_add(/META/quota, +delta_bytes as i64)`.",
+        "Increment `commit_bytes_since_rollup` counter by `delta_bytes`.",
+        "Update local `storage_used` cache after a successful commit.",
+        "Shrink writes (commit that lowers `db_size_pages`) delete above-EOF PIDX rows AND above-EOF SHARD blobs in the same tx.",
+        "Add `tests/pump_commit.rs` covering: first-commit lazy META init, steady-state commit, quota cap rejection, shrink commit deletes above-EOF rows.",
+        "`cargo test -p sqlite-storage --test pump_commit` passes.",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-010",
+      "title": "Add pump/metrics.rs with sqlite_pump_* Prometheus metrics",
+      "description": "Add `lazy_static!` global Prometheus metrics for the hot path. All metrics include a `node_id` label sourced from `pools.node_id()` (US-001).",
+      "acceptanceCriteria": [
+        "Add `src/pump/metrics.rs` with `lazy_static!` definitions for: `sqlite_pump_commit_duration_seconds` (histogram), `sqlite_pump_get_pages_duration_seconds` (histogram), `sqlite_pump_commit_dirty_page_count` (histogram), `sqlite_pump_get_pages_pgno_count` (histogram), `sqlite_pump_pidx_cold_scan_total` (counter).",
+        "All metrics include a `node_id` label.",
+        "`commit.rs` and `read.rs` increment/observe metrics at the right points (start/end of op, dirty page count, pgno count, cold-scan triggered).",
+        "Mirror the metric registration pattern of `engine/packages/sqlite-storage-legacy/src/metrics.rs` (lazy_static globals).",
+        "`cargo check -p sqlite-storage` passes.",
+        "`cargo test -p sqlite-storage` passes (existing tests still pass).",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 10,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-011",
+      "title": "Add compactor/subjects.rs and compactor/publish.rs",
+      "description": "Define the typed `SqliteCompactSubject` UPS subject and the fire-and-forget `publish_compact_trigger(ups, actor_id)` helper. The helper internally `tokio::spawn`s the publish so callers can't accidentally await it before sending the WS commit response.",
+      "acceptanceCriteria": [
+        "Add `src/compactor/subjects.rs` with `SqliteCompactSubject` typed struct implementing `Display`. Convention from `engine/packages/pegboard/src/pubsub_subjects.rs::ServerlessOutboundSubject`.",
+        "Subject string format: `\"sqlite.compact\"` (constant; configurable via `CompactorConfig::ups_subject` later).",
+        "Add `src/compactor/publish.rs` with `pub fn publish_compact_trigger(ups: &Ups, actor_id: &str)`.",
+        "Helper internally `tokio::spawn`s the publish; does NOT return a `Future` callers might await.",
+        "Add `SqliteCompactPayload` struct (vbare) carrying `actor_id`, `commit_bytes_since_rollup: u64`, `read_bytes_since_rollup: u64` (the snapshot-and-zero counters from US-016 metering). Stub these as 0 for now; US-016 wires the real snapshot-and-zero.",
+        "`cargo check -p sqlite-storage` passes.",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 11,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-012",
+      "title": "Add compactor/lease.rs with /META/compactor_lease take/check/release",
+      "description": "Implement the UDB-backed compaction lease helpers. Take is a regular (non-snapshot) read of `/META/compactor_lease` followed by a write — concurrent pods racing the take get FDB OCC abort on the loser. TTL > FDB tx age (default 30s).",
+      "acceptanceCriteria": [
+        "Add `src/compactor/lease.rs` with: `take(tx, actor_id, holder_id, ttl_ms, now_ms) -> Result<TakeOutcome>`, `release(tx, actor_id, holder_id) -> Result<()>`, `renew(tx, actor_id, holder_id, ttl_ms, now_ms) -> Result<RenewOutcome>`.",
+        "Take procedure: REGULAR read (NOT snapshot) of `/META/compactor_lease`. If exists, holder != me, expires_at_ms > now → return `TakeOutcome::Skip`. Else → write new lease, return `TakeOutcome::Acquired`.",
+        "Lease value is a vbare blob `{ holder_id: NodeId, expires_at_ms: i64 }`.",
+        "Renew: regular-read, assert `holder == me && expires_at_ms > now`, write new `expires_at_ms`. Returns `Stolen` / `Expired` / `Renewed`.",
+        "Release: clear the lease key (regardless of value) — caller must hold lease before releasing.",
+        "Add `tests/compactor_lease.rs` covering: acquire on empty key, skip when another pod holds, race two pods (one wins, one aborts via OCC), renew success, renew detects steal, release clears.",
+        "Use `tokio::time::pause()` + `advance()` for deterministic expiry tests.",
+        "`cargo test -p sqlite-storage --test compactor_lease` passes.",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 12,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-013",
+      "title": "Add compactor/shard.rs with per-shard fold logic (lifted math)",
+      "description": "Lift the per-shard fold + merge math from legacy `compaction/shard.rs` (the fold algorithm itself is unchanged). Rewrite the orchestration to use new key layout and snapshot reads.",
+      "acceptanceCriteria": [
+        "Add `src/compactor/shard.rs`.",
+        "Lift fold math (page-level merge of newer page versions into existing SHARD blob) from `engine/packages/sqlite-storage-legacy/src/compaction/shard.rs` unchanged.",
+        "Function signature: `pub async fn fold_shard(tx, actor_id, shard_id, page_updates: Vec<(pgno, bytes)>) -> Result<()>`.",
+        "Reads existing SHARD blob via snapshot read (no conflict range), merges, writes new SHARD blob.",
+        "Records shard outcome metrics (folded pages, deleted deltas) via metrics added in US-018.",
+        "`cargo check -p sqlite-storage` passes.",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 13,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-014",
+      "title": "Add compactor/compact.rs with compact_default_batch and COMPARE_AND_CLEAR PIDX deletes",
+      "description": "Implement the per-actor compaction algorithm. Plan phase uses snapshot reads only (no conflict ranges). Write phase reads `/META/head.db_size_pages` via REGULAR read (so a concurrent shrink commit conflicts and aborts the compaction, fixing the leaked-SHARD race). PIDX deletes use `COMPARE_AND_CLEAR(key, expected_txid_be_bytes)` to no-op on stale entries.",
+      "acceptanceCriteria": [
+        "Add `src/compactor/compact.rs` with `pub async fn compact_default_batch(udb, actor_id, batch_size_deltas: u32, cancel_token) -> Result<CompactionOutcome>`.",
+        "Plan phase: snapshot-read `/META/head.head_txid` (upper bound), snapshot-read `/META/compact.materialized_txid` (lower bound), snapshot-scan PIDX, snapshot-read the K oldest unmaterialized DELTA blobs (K = batch_size_deltas). Group pages by `shard_id = pgno / SHARD_SIZE`.",
+        "Write phase opens a fresh tx. REGULAR-read `/META/head.db_size_pages` (so concurrent shrink commits conflict and abort us). Write SHARD blobs via `fold_shard` from US-013. For each (pgno, expected_txid) in fold plan: `COMPARE_AND_CLEAR(pidx_delta_key(actor_id, pgno), (expected_txid as u64).to_be_bytes())`.",
+        "Clear each folded DELTA's chunks via `clear_range(delta_chunk_prefix(actor_id, T)..end_of_key_range)`.",
+        "Update `/META/compact = { materialized_txid: highest_folded_txid }` via plain `set` (compaction-owned, no contention with commit).",
+        "`atomic_add(/META/quota, -bytes_freed as i64)`.",
+        "All compaction work runs under a `CancellationToken` passed in by `worker.rs` (US-015). Check the token before each FDB tx; abort if tripped.",
+        "Increment `sqlite_compactor_pages_folded_total`, `sqlite_compactor_deltas_freed_total`, `sqlite_compactor_compare_and_clear_noop_total` metrics.",
+        "Add `tests/compactor_compact.rs` covering: basic fold (no race), `COMPARE_AND_CLEAR` no-op on stale PIDX (commit writes `PIDX[pgno] = T_new` between plan and commit), shrink-during-compaction conflict abort.",
+        "`cargo test -p sqlite-storage --test compactor_compact` passes.",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 14,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-015",
+      "title": "Add compactor/worker.rs with start() UPS subscriber loop and lease lifecycle",
+      "description": "Implement the standalone compactor service entrypoint: UPS queue-subscribe loop, per-trigger handler that takes the lease, runs `compact_default_batch`, releases the lease. Lease lifecycle uses local timer + cancellation token + periodic renewal task (no `/META/compactor_lease` reads inside compaction work transactions).",
+      "acceptanceCriteria": [
+        "Add `src/compactor/worker.rs` with `pub async fn start(config: rivet_config::Config, pools: rivet_pools::Pools, compactor_config: CompactorConfig) -> Result<()>` and `pub(crate) async fn run(udb: Arc<Database>, ups: Ups, term_signal: TermSignal, compactor_config: CompactorConfig) -> Result<()>`.",
+        "`run` queue-subscribes `SqliteCompactSubject` with group `\"compactor\"`. Select loop with `TermSignal::get()` for graceful shutdown.",
+        "Per-trigger handler: `tokio::spawn`d task. Take lease for actor_id (skip if `TakeOutcome::Skip`). On acquired: arm `tokio::time::sleep_until(deadline)` where `deadline = lease_acquired_at + TTL - margin`. Spawn a renewal task that runs every `lease_renew_interval_ms`, opens a small tx, calls `lease::renew`, on success replaces the local `sleep_until` deadline, on failure (stolen/expired/UDB error) trips the `CancellationToken`.",
+        "Run `compact_default_batch` under the cancellation token. On exit (success or token tripped), release the lease before exiting.",
+        "On graceful shutdown (`TermSignal::get()` resolves): release any held leases before exiting.",
+        "On `NextOutput::Unsubscribed`: bail out and let the supervisor restart the service. Same as `pegboard_outbound`.",
+        "Add `CompactorConfig` struct exactly as defined in spec line ~285 (with `lease_ttl_ms`, `lease_renew_interval_ms`, `lease_margin_ms`, `compaction_delta_threshold`, `batch_size_deltas`, `max_concurrent_workers`, `ups_subject`, debug-only `quota_validate_every`).",
+        "`max_concurrent_workers` enforced via a per-pod tokio semaphore on triggers.",
+        "Add `tests/compactor_dispatch.rs` covering: UPS trigger arrives → handler spawns → compaction runs (using UPS memory driver). Lease-renewal mid-flight extends the deadline. Lease-renewal failure trips the cancellation token and aborts work.",
+        "`cargo test -p sqlite-storage --test compactor_dispatch` passes.",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 15,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-016",
+      "title": "Wire metering rollup in compactor (UPS trigger payload + MetricKey emit)",
+      "description": "Add the namespace-level metering atomic-adds from the compactor on every successful pass. UPS trigger payload carries `commit_bytes_since_rollup` / `read_bytes_since_rollup` snapshots from `ActorDb`; the envoy zeroes locally as it builds the message; the compactor reads those values out and emits `MetricKey::SqliteCommitBytes` / `MetricKey::SqliteReadBytes` (rounded to 10 KB chunks). Compactor reads `/META/quota` (already in flight for the pass) and emits `MetricKey::SqliteStorageUsed`.",
+      "acceptanceCriteria": [
+        "Add `MetricKey::SqliteStorageUsed { actor_name }`, `MetricKey::SqliteCommitBytes { actor_name }`, `MetricKey::SqliteReadBytes { actor_name }` variants in `engine/packages/pegboard/src/namespace/keys/metric.rs`.",
+        "In `compactor/worker.rs`, after a successful `compact_default_batch`: read `/META/quota`, extract `commit_bytes_since_rollup` / `read_bytes_since_rollup` from the UPS trigger payload, round commit/read bytes down to 10 KB chunks (matching `KV_BILLABLE_CHUNK` from `engine/packages/pegboard/src/actor_kv/mod.rs:164-166`), emit three `atomic_add` ops against the `MetricKey` keys.",
+        "In `pegboard-envoy` side (this story prepares the wire): publishing a trigger from `ActorDb` snapshots-and-zeroes `commit_bytes_since_rollup` / `read_bytes_since_rollup` into the `SqliteCompactPayload`. The actual envoy wiring lands in US-021; here, just ensure `ActorDb` exposes a `take_metering_snapshot() -> (u64, u64)` helper that resets the counters.",
+        "Update `SqliteCompactPayload` in `compactor/subjects.rs` (US-011) to actually carry the counter snapshots (was stubbed to 0).",
+        "Add a test: trigger compaction with seeded counters → verify all three `MetricKey` `atomic_add` calls happen with the right values.",
+        "`cargo check -p sqlite-storage` passes.",
+        "`cargo test -p sqlite-storage --test compactor_compact` passes (verifies metering emit).",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 16,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-017",
+      "title": "Add debug-only quota validation pass to compactor",
+      "description": "Under `#[cfg(debug_assertions)]`, every Nth compaction pass per actor (default `quota_validate_every = 16`), the compactor runs a separate read-only UDB tx that scans PIDX/DELTA/SHARD prefixes, totals billable bytes manually, reads `/META/quota`, asserts `manual_total == counter`. On mismatch → structured error log + panic in tests. This is invariant verification, NOT correction.",
+      "acceptanceCriteria": [
+        "Add a `validate_quota(udb, actor_id) -> Result<()>` function gated `#[cfg(debug_assertions)]` in `compactor/compact.rs` (or a new `compactor/validate.rs`).",
+        "Function reads PIDX + DELTA + SHARD prefixes in a separate read-only tx, totals billable bytes, reads `/META/quota`, asserts equality.",
+        "Track per-actor pass count in a `scc::HashMap<actor_id, u32>` on the compactor worker. Every Nth pass, call `validate_quota`.",
+        "On mismatch: log structured error with `actor_id`, `manual_total`, `counter_value`, increment `sqlite_quota_validate_mismatch_total` metric, `panic!` in tests.",
+        "Release builds skip this entirely. The whole helper, the per-actor counter map, and the call sites are all `#[cfg(debug_assertions)]` only.",
+        "Add `tests/compactor_compact.rs` covering: `validate_quota` correct on a clean post-compaction state.",
+        "`cargo test -p sqlite-storage` passes (debug build).",
+        "`cargo build -p sqlite-storage --release` passes (release build skips the helper).",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 17,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-018",
+      "title": "Add compactor/metrics.rs and register sqlite_compactor in run_config.rs",
+      "description": "Add `lazy_static!` global Prometheus metrics for the compactor. Register the compactor as a Standalone service in `engine/packages/engine/src/run_config.rs` with `restart=true`.",
+      "acceptanceCriteria": [
+        "Add `src/compactor/metrics.rs` with `lazy_static!` definitions for: `sqlite_compactor_lag_seconds` (histogram), `sqlite_compactor_lease_take_total` (counter, label `outcome=acquired|skipped|conflict`), `sqlite_compactor_lease_held_seconds` (histogram), `sqlite_compactor_lease_renewal_total` (counter, label `outcome=ok|stolen|err`), `sqlite_compactor_pass_duration_seconds` (histogram), `sqlite_compactor_pages_folded_total` (counter), `sqlite_compactor_deltas_freed_total` (counter), `sqlite_compactor_compare_and_clear_noop_total` (counter), `sqlite_compactor_ups_publish_total` (counter, label `outcome=ok|err`).",
+        "Under `#[cfg(debug_assertions)]`: `sqlite_quota_validate_mismatch_total` (counter), `sqlite_takeover_invariant_violation_total` (counter, label `kind=above_eof|above_head_txid|dangling_pidx_ref`), `sqlite_fence_mismatch_total` (counter).",
+        "Add a `sqlite_storage_used_bytes` gauge (per actor, sampled).",
+        "All metrics include a `node_id` label sourced from `pools.node_id()`.",
+        "Wire metric increments at the right call sites in `lease.rs`, `compact.rs`, `worker.rs`, `validate.rs`.",
+        "Register the compactor in `engine/packages/engine/src/run_config.rs` as `Service::new(\"sqlite_compactor\", ServiceKind::Standalone, |config, pools| Box::pin(sqlite_storage::compactor::start(config, pools, CompactorConfig::default())), true)`.",
+        "`cargo check --workspace` passes.",
+        "`cargo build --workspace` passes.",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 18,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-019",
+      "title": "Implement takeover.rs debug-only invariant scanner",
+      "description": "Implement `takeover::reconcile(udb, actor_id) -> Result<()>` gated `#[cfg(debug_assertions)]`. Scans PIDX/DELTA/SHARD prefixes, classifies any rows as orphans (above EOF, above `head_txid`, dangling DELTA refs, etc.). On any orphan found → structured error log + panic in tests. Does NOT delete anything; this is verification, not cleanup.",
+      "acceptanceCriteria": [
+        "Add `src/takeover.rs` with `#[cfg(debug_assertions)] pub async fn reconcile(udb: &Database, actor_id: &str) -> Result<()>`.",
+        "Whole module gated `#[cfg(debug_assertions)]` — not compiled in release.",
+        "Lift orphan classification logic from `engine/packages/sqlite-storage-legacy/src/open.rs::build_recovery_plan` (lines 352-437). Drop the mutation-builder code; this function only asserts.",
+        "Classification kinds: `above_eof` (page > db_size_pages), `above_head_txid` (DELTA T > head_txid), `dangling_pidx_ref` (PIDX points to non-existent DELTA).",
+        "On any orphan: log structured error with `actor_id`, kind, key snippet; increment `sqlite_takeover_invariant_violation_total{kind}`; `panic!` in tests; return error.",
+        "`ActorDb::new` (US-007) calls `takeover::reconcile` under `#[cfg(debug_assertions)]`.",
+        "Add `tests/takeover.rs` covering: clean state passes, orphan above EOF panics, orphan above head_txid panics, dangling PIDX ref panics.",
+        "`cargo test -p sqlite-storage --test takeover` passes (debug).",
+        "`cargo build -p sqlite-storage --release` passes (release skips entirely).",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 19,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-020",
+      "title": "Wire publish_compact_trigger and throttle in ActorDb commit path",
+      "description": "On `commit` that crosses the compaction-delta-threshold (head_txid - materialized_txid >= threshold), call `compactor::publish_compact_trigger(ups, actor_id)` with the throttle described in spec (500ms window, 30s safety net). First trigger fires immediately; subsequent ones in the window are dropped. This is throttle, not debounce.",
+      "acceptanceCriteria": [
+        "After a successful commit in `pump/commit.rs`, check whether `head_txid - materialized_txid >= COMPACTION_DELTA_THRESHOLD` (constant `pub const COMPACTION_DELTA_THRESHOLD: u64 = 32;` in `pump::quota` or `pump::trigger`).",
+        "If at-or-above threshold, check `last_trigger_at`: if `now - last_trigger_at >= TRIGGER_THROTTLE_MS`, OR `now - last_trigger_at > TRIGGER_MAX_SILENCE_MS`, publish via `compactor::publish_compact_trigger(ups, actor_id)` and update `last_trigger_at`. Otherwise skip.",
+        "`ActorDb` needs an `Arc<Ups>` ref to publish. Add it as a field on `ActorDb` and a `Pub` argument to `ActorDb::new` (or store it via a setter — caller's choice, but the field must be set before commit can be called).",
+        "Reading `/META/compact.materialized_txid` for the threshold check piggybacks on the commit's existing reads if convenient; otherwise use a separate snapshot read at end-of-commit (one extra get is fine since it's off the hot read path).",
+        "Trigger publish is fire-and-forget per US-011. Must NOT be awaited before sending the WS commit response.",
+        "Add a test in `tests/pump_commit.rs` (or `tests/compactor_dispatch.rs`) that drives a hot actor at threshold and verifies: first commit fires a trigger, subsequent commits within 500ms are throttled, after the 30s silence cap fires regardless.",
+        "Use `tokio::time::pause()` + `advance()` for deterministic throttle tests.",
+        "`cargo test -p sqlite-storage` passes.",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 20,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-021",
+      "title": "Add actor_dbs HashMap to pegboard-envoy WS conn and wire SQLite request handlers",
+      "description": "Add a per-WS-conn `scc::HashMap<String, Arc<sqlite_storage::pump::ActorDb>>` field on the conn struct in `engine/packages/pegboard-envoy/src/conn.rs`. Wire SQLite request handlers (`get_pages`, `commit`) in `ws_to_tunnel_task.rs` to lazily upsert into this map (`entry_async(...).or_insert_with(...)`) and call `actor_db.get_pages(...)` / `actor_db.commit(...)` directly. Hold UDB ref + UPS handle on the conn (replaces `CompactionCoordinator`).",
+      "acceptanceCriteria": [
+        "Add `actor_dbs: scc::HashMap<String, Arc<sqlite_storage::pump::ActorDb>>` field on the WS conn struct.",
+        "Add `udb: Arc<universaldb::Database>` and `ups: Arc<Ups>` fields on the conn struct (cloned from `Pools` at conn construction).",
+        "In `ws_to_tunnel_task.rs`, the `get_pages` handler: `let actor_db = conn.actor_dbs.entry_async(actor_id).await.or_insert_with(|| Arc::new(ActorDb::new(conn.udb.clone(), conn.ups.clone(), actor_id))).get().clone();` then `actor_db.get_pages(pgnos).await?`.",
+        "Same pattern for `commit` handler.",
+        "Drop `CompactionCoordinator` spawn in `sqlite_runtime.rs` — the conn now holds a UDB ref and UPS handle directly.",
+        "Add a comment on the `actor_dbs` field explaining it is a perf-only cache (not authoritative) and that envoys can reconnect to different worker nodes mid-flight, so per-conn presence tracking is intentionally absent. See spec section \"Why no active-actor tracking on the WS conn\".",
+        "`cargo check -p pegboard-envoy` passes.",
+        "`cargo build -p pegboard-envoy` passes.",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 21,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-022",
+      "title": "Delete start_actor handler, active_actors HashMap, open/close/force_close call sites in pegboard-envoy",
+      "description": "Per spec Stage 5: delete `start_actor` entirely from `actor_lifecycle.rs`, delete the `active_actors` HashMap field from `conn.rs`, drop the `CommandStartActor` branch in conn command dispatch. Delete the `open()` / `close()` / `force_close()` call sites at lines 189-201, 237-250 in `actor_lifecycle.rs`. The conn becomes stateless w.r.t. actor identity.",
+      "acceptanceCriteria": [
+        "Delete `start_actor` handler from `engine/packages/pegboard-envoy/src/actor_lifecycle.rs`.",
+        "Delete the `active_actors` HashMap field from `engine/packages/pegboard-envoy/src/conn.rs`.",
+        "Drop the `CommandStartActor` branch from conn command dispatch.",
+        "Delete the `open()` / `close()` / `force_close()` call sites at lines 189-201 and 237-250 in `actor_lifecycle.rs`.",
+        "Add a comment near the deleted `active_actors` field explaining why per-conn presence tracking is intentionally absent (envoy reconnect-to-different-worker mid-flight, see spec \"Why no active-actor tracking on the WS conn\").",
+        "`cargo check -p pegboard-envoy` passes.",
+        "`cargo check --workspace` passes.",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 22,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-023",
+      "title": "Reduce stop_actor handler to actor_db cache eviction, clear /META/compactor_lease in pegboard actor-destroy",
+      "description": "Reduce `stop_actor` to its sole responsibility: `conn.actor_dbs.remove_async(&actor_id).await` (drop the cached `ActorDb`). No `close()` call, no `active_actors` mutation, no generation tracking. Separately, in pegboard's actor-destroy lifecycle (the teardown that clears `/META`, `/SHARD`, `/DELTA`, `/PIDX`), also clear `/META/compactor_lease` for that actor in the same teardown transaction.",
+      "acceptanceCriteria": [
+        "`stop_actor` handler in `engine/packages/pegboard-envoy/src/actor_lifecycle.rs` becomes a one-liner: `conn.actor_dbs.remove_async(&actor_id).await;`.",
+        "No `close()` call; no `active_actors` mutation; no generation tracking.",
+        "In `engine/packages/pegboard/src/...` (find via `rg 'clear_range.*sqlite' --type rust` or by searching for `actor_destroy`/teardown ops), the actor-destroy transaction also clears `/META/compactor_lease` for the actor.",
+        "Add a comment on the teardown explaining: otherwise dead lease keys accumulate in UDB indefinitely.",
+        "`cargo check --workspace` passes.",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 23,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-024",
+      "title": "Write new envoy-protocol vN.bare schema and bump PROTOCOL_VERSION constants",
+      "description": "Per spec Stage 6: write a fresh envoy-protocol schema (next version after the current `v2.bare` — confirm with `engine/CLAUDE.md` VBARE migration rules). The new protocol has only `get_pages(actor_id, pgnos)` and `commit(actor_id, dirty_pages, db_size_pages, now_ms) -> Ok` for SQLite. No `open`/`close`/`commit_stage_*`. Optional debug-only `expected_generation` and `expected_head_txid` fields on requests. Breaking change is unconditionally acceptable since the system has not shipped.",
+      "acceptanceCriteria": [
+        "Write a fresh schema at `engine/sdks/schemas/envoy-protocol/vN.bare` (where N is the next version after `v2.bare`).",
+        "Schema includes: `get_pages(actor_id, pgnos)` request and response (with FetchedPage), `commit(actor_id, dirty_pages, db_size_pages, now_ms)` request and Ok/Err response.",
+        "Schema does NOT include: `open`, `close`, `commit_stage_begin`, `commit_stage`, `commit_finalize`, `force_close`.",
+        "Optional `expected_generation: optional<u64>` and `expected_head_txid: optional<u64>` fields on `get_pages` and `commit` requests (debug-mode sentinels; ignored in release).",
+        "Update `versioned.rs` per `engine/CLAUDE.md` VBARE migration rules. Since this is a fresh protocol with no production users, write the new variant directly; no field-by-field converter from v2 needed.",
+        "Update `PROTOCOL_VERSION` constants in matched envoy-protocol crates: `engine/packages/envoy-protocol/src/lib.rs` and any sibling `latest` re-exports.",
+        "Update the Rust latest re-export in `engine/packages/envoy-protocol/src/lib.rs` to the new generated module.",
+        "`cargo check -p envoy-protocol` passes.",
+        "`cargo check --workspace` passes.",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 24,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-025",
+      "title": "Delete sqlite-storage-legacy crate",
+      "description": "Once the new crate is functional and all tests pass, delete the legacy crate entirely.",
+      "acceptanceCriteria": [
+        "Run `rm -rf engine/packages/sqlite-storage-legacy`.",
+        "Drop the workspace entry in root `Cargo.toml`.",
+        "Update any remaining imports — `rg 'sqlite_storage_legacy' --type rust` should return no hits.",
+        "`cargo check --workspace` passes.",
+        "`cargo build --workspace` passes.",
+        "`cargo test --workspace` passes.",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 25,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-026",
+      "title": "Update engine/CLAUDE.md to match new design",
+      "description": "Per spec Stage 8: update the `## SQLite storage tests` and `## Pegboard Envoy` sections in `engine/CLAUDE.md` to remove obsolete bullets and add the new design's invariants.",
+      "acceptanceCriteria": [
+        "Remove the bullet about \"compaction must re-read META inside its write transaction and fence on `generation` plus `head_txid`\" (obsoleted by META key split — compaction now writes `/META/compact`, commits write `/META/head`, no shared write target).",
+        "Remove the takeover \"in one atomic_write\" bullet entirely (no takeover work in release; pegboard's reassignment transaction does not touch sqlite-storage).",
+        "Update any \"process-wide `OnceCell` SqliteEngine\" reference to \"per-actor `ActorDb` instances cached on the WS conn.\"",
+        "Remove `CompactionCoordinator` references (replaced by the standalone compactor service).",
+        "Remove STAGE-related notes (multi-chunk staging is gone; the STAGE/ key prefix does not exist in the new design).",
+        "Update test-convention bullet to note: tests live in `engine/packages/sqlite-storage/tests/`, not inline. This overrides any older \"keep coverage inline\" bullet.",
+        "Verify (do not remove): \"shrink writes must delete above-EOF PIDX rows and SHARD blobs in same commit/takeover transaction\" — this rule is preserved.",
+        "Verify (do not remove): \"PIDX value encoding (raw big-endian `u64`)\" — unchanged.",
+        "Add a one-line bullet noting `/META/quota` is a fixed-width LE i64 atomic counter (not vbare).",
+        "Add a one-line bullet noting `/META/compactor_lease` is held via local timer + cancellation token + periodic renewal task; no in-tx lease re-validation.",
+        "Add a one-line bullet noting compaction PIDX deletes use `COMPARE_AND_CLEAR` to no-op on stale entries.",
+        "Verify the file still parses cleanly (no broken markdown).",
+        "Typecheck passes"
+      ],
+      "priority": 26,
+      "passes": false,
+      "notes": ""
+    }
+  ]
+}

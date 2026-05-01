@@ -26,6 +26,28 @@
 - Cross-actor branch references. A branch's parent must be in the same actor.
 - Resurrecting deleted-but-still-cold branches. v1: `delete_branch` is the trim point.
 
+## Inherited constraints
+
+This spec sits on top of the constraints in `r2-prior-art/.agent/research/sqlite/requirements.md` (the binding floor for any SQLite storage spec):
+
+1. **Single writer per database.** Pegboard exclusivity holds. There is no concurrent writer across actors, connections, or processes. We do not implement MVCC, page-versioned read-set tracking, optimistic conflict detection at commit, or content-addressed dedup. mvSQLite's PLCC/DLCC/MPC machinery is explicitly skipped — see [Prior-art divergences](#prior-art-divergences) below.
+2. **No local SQLite files. Ever.** Not on disk, not on tmpfs, not as a hydrated cache file. The authoritative store is FoundationDB (hot) and S3 (cold); the VFS speaks to them directly. Forks do not materialize local files.
+3. **Lazy read only.** No bulk pre-load at actor open. Pages are fetched on demand from the hot tier (FDB), with the per-actor PIDX cache + (post-fork) flattened ancestry cache amortizing the per-fetch cost. Fork warmup is a *background* cold→hot copy, not a synchronous bulk hydrate.
+
+These constraints rule out any design built around a local SQLite file (LiteFS-shape, libSQL embedded replicas, Turso embedded replicas) and any "hydrate the whole DB at resume" path. They are why our cold tier is consulted only on miss — there is no "warm the cache before first SQL statement" phase.
+
+## Dependency on Option F
+
+Hot-path read latency in this spec inherits whatever the underlying read path delivers. The "Option F" track (`r2-prior-art/.agent/specs/sqlite-vfs-single-writer-plan.md`, US-020/021/025/026/027) is the *steady-state* hot-path read optimization track:
+
+- US-020 / US-021: enable `read_cache` by default + bump `PRAGMA cache_size`.
+- US-026: add `sqlite_read_many(actor_id, file_tag, ranges)` envoy op so one round-trip carries many pages.
+- US-027: VFS-level stride prefetch predictor for sequential scans.
+
+Option F is **orthogonal but complementary** to PITR/fork. It does not depend on this spec, and this spec does not depend on it for correctness, but the two together are what makes fork-descendant reads tolerable: Option F gets one-page misses down to a few ms; this spec then gets parent fall-through down to (depth × few ms) instead of (depth × tens of ms). Without Option F, the latency table below is optimistic.
+
+If Option F is not shipping, the parent-fall-through path in this spec will be slow regardless of fork warmup. State this dependency in the implementation plan.
+
 ## Prior art
 
 This design is a hybrid of:
@@ -36,7 +58,31 @@ This design is a hybrid of:
 - **LiteFS** — `<minTXID>-<maxTXID>.ltx` filename convention, `(TXID, PostApplyChecksum)` tuple as the position invariant, CRC-ISO-64 rolling checksum, HWM (high-water-mark) pattern for in-flight pending markers.
 - **Turso bottomless** — generation `.dep` chain (parent-pointer chain), max 100-hop chain depth (we cap at 16; see [Fork chain bounds](#fork-chain-bounds) below), batched (~15s) granularity.
 
-Detailed research reports under `.agent/research/{cf-durable-objects-sqlite,neon-postgres,litestream,litefs,turso-libsql}.md`.
+Detailed research reports under `.agent/research/{cf-durable-objects-sqlite,neon-postgres,litestream,litefs,turso-libsql}.md`. Companion analysis of the broader SQLite-on-remote-storage prior-art landscape (LiteFS, libSQL/Turso, mvSQLite, dqlite, Litestream VFS, sql.js-httpvfs, absurd-sql) is in `r2-prior-art/.agent/research/sqlite/prior-art.md`.
+
+### Prior-art divergences
+
+We explicitly **do not** import the following from prior art:
+
+| Prior art | Mechanism we skip | Reason |
+|---|---|---|
+| mvSQLite PLCC (page-level OCC) | `PLCC_READ_SET_SIZE_THRESHOLD = 2000` page-version check at commit | Single-writer; no concurrent writer to conflict with |
+| mvSQLite DLCC | Distributed lock-based concurrency control | Single-writer |
+| mvSQLite MPC (multi-phase commit) | `COMMIT_MULTI_PHASE_THRESHOLD = 1000` 5-step commit ceremony | Single-writer; our commit is single-shot under FDB tx (stateless spec) |
+| mvSQLite versionstamps | 80-bit FDB monotonic versionstamps as page version keys | We use per-branch `txid: u64` BE; pegboard exclusivity makes it monotonic |
+| mvSQLite content-addressed dedup | `(page_number, version) -> page_hash` + `page_hash -> page_content` | Storage-cost concern only; defer until billing data shows it matters |
+| LiteFS / libSQL local SQLite file | Real on-disk SQLite file behind FUSE / pluggable WAL | Hard constraint #2 ("no local files") |
+| LiteFS multi-replica WAL stream | HTTP/2 stream + Heartbeat / Handoff frames | We rely on FDB durability; no peer replica protocol |
+| CF DO 5-follower sync replication | 3-of-5 quorum-ack on every commit before app sees success | We rely on FDB; commit blocks on FDB write only |
+| Turso `.dep` chain depth 100 | Generation-level COW via parent UUID chain | We cap at 16 (see [Fork chain bounds](#fork-chain-bounds)); deeper than 16 indicates misuse |
+
+What we DO import (as a recap):
+
+- mvSQLite's "read_many for batched page fetch" — but as Option F's `sqlite_read_many` on the hot path, not in this spec.
+- Neon's layer model (delta + image), branch-as-LSN-pointer, dependency-graph GC.
+- Litestream's `Pos{TXID, checksum}` flat positioning + 4-tier compaction ladder.
+- LiteFS's `(TXID, PostApplyChecksum)` rolling-checksum invariant + HWM pending markers.
+- CF DO's bookmark-as-time-token concept (with our own wire format).
 
 ## Conceptual model
 

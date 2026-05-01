@@ -5,7 +5,7 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 workspace = "../../../"
-description = "Native SQLite VFS for RivetKit backed by sqlite-storage"
+description = "Native SQLite VFS for RivetKit backed by depot"
 
 [lib]
 crate-type = ["lib"]
@@ -24,7 +24,7 @@ parking_lot.workspace = true
 [dev-dependencies]
 rivet-pools.workspace = true
 scc.workspace = true
-sqlite-storage.workspace = true
+depot.workspace = true
 tempfile.workspace = true
 tokio-util.workspace = true
 universaldb.workspace = true

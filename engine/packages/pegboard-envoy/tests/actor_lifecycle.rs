@@ -5,12 +5,12 @@ use gas::prelude::Id;
 use rivet_envoy_protocol as protocol;
 use rivet_pools::NodeId;
 use scc::HashMap;
-use sqlite_storage::{
+use depot::{
 	keys::{
 		delta_chunk_key, meta_compact_key, meta_compactor_lease_key, meta_head_key, meta_quota_key,
 		pidx_delta_key, shard_key,
 	},
-	pump::Db,
+	conveyer::Db,
 };
 use tempfile::Builder;
 use universaldb::utils::IsolationLevel::Snapshot;
@@ -20,7 +20,7 @@ mod conn {
 	use std::sync::Arc;
 
 	use scc::HashMap;
-	use sqlite_storage::pump::Db;
+	use depot::conveyer::Db;
 
 	pub struct Conn {
 		pub actor_dbs: HashMap<String, Arc<Db>>,

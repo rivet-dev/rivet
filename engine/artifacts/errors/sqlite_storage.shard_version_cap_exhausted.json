@@ -1,5 +1,0 @@
-{
-  "code": "shard_version_cap_exhausted",
-  "group": "sqlite_storage",
-  "message": "SQLite shard version cap is exhausted."
-}

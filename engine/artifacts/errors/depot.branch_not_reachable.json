@@ -1,0 +1,5 @@
+{
+  "code": "branch_not_reachable",
+  "group": "depot",
+  "message": "Bookmark branch is not reachable from this database branch chain."
+}

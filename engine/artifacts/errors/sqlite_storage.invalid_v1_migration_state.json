@@ -1,5 +1,0 @@
-{
-  "code": "invalid_v1_migration_state",
-  "group": "sqlite_storage",
-  "message": "Invalid SQLite v1 migration state."
-}

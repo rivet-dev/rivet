@@ -19,7 +19,7 @@ use rivet_envoy_protocol as protocol;
 #[cfg(test)]
 use rivet_pools::NodeId;
 #[cfg(test)]
-use sqlite_storage::{error::SqliteStorageError, pump::Db};
+use depot::{error::SqliteStorageError, conveyer::Db};
 use tokio::runtime::Handle;
 #[cfg(test)]
 use universalpubsub::{PubSub, driver::memory::MemoryDriver};
@@ -246,13 +246,13 @@ impl DirectStorage {
 		&self,
 		actor_id: &str,
 		pgnos: &[u32],
-	) -> anyhow::Result<Vec<sqlite_storage::types::FetchedPage>> {
+	) -> anyhow::Result<Vec<depot::types::FetchedPage>> {
 		let actor_db = self.actor_db(actor_id.to_string()).await;
 		match actor_db.get_pages(pgnos.to_vec()).await {
 			Ok(pages) => Ok(self.fill_from_mirror(actor_id, pgnos, pages).await),
 			Err(err) => {
 				if matches!(
-					sqlite_storage_error(&err),
+					depot_error(&err),
 					Some(SqliteStorageError::MetaMissing { operation })
 						if *operation == "get_pages"
 				) {
@@ -268,8 +268,8 @@ impl DirectStorage {
 		&self,
 		actor_id: &str,
 		pgnos: &[u32],
-		pages: Vec<sqlite_storage::types::FetchedPage>,
-	) -> Vec<sqlite_storage::types::FetchedPage> {
+		pages: Vec<depot::types::FetchedPage>,
+	) -> Vec<depot::types::FetchedPage> {
 		let mut by_pgno = pages
 			.into_iter()
 			.map(|page| (page.pgno, page))
@@ -285,7 +285,7 @@ impl DirectStorage {
 		pgnos
 			.iter()
 			.map(|pgno| {
-				by_pgno.remove(pgno).unwrap_or(sqlite_storage::types::FetchedPage {
+				by_pgno.remove(pgno).unwrap_or(depot::types::FetchedPage {
 					pgno: *pgno,
 					bytes: None,
 				})
@@ -297,12 +297,12 @@ impl DirectStorage {
 		&self,
 		actor_id: &str,
 		pgnos: &[u32],
-	) -> Vec<sqlite_storage::types::FetchedPage> {
+	) -> Vec<depot::types::FetchedPage> {
 		let mirror = self.page_mirror(actor_id.to_string()).await;
 		let mirror = mirror.lock();
 		pgnos
 			.iter()
-			.map(|pgno| sqlite_storage::types::FetchedPage {
+			.map(|pgno| depot::types::FetchedPage {
 				pgno: *pgno,
 				bytes: if *pgno <= mirror.db_size_pages {
 					mirror.pages.get(pgno).cloned()
@@ -316,7 +316,7 @@ impl DirectStorage {
 	async fn apply_commit(
 		&self,
 		actor_id: &str,
-		dirty_pages: Vec<sqlite_storage::types::DirtyPage>,
+		dirty_pages: Vec<depot::types::DirtyPage>,
 		db_size_pages: u32,
 	) {
 		let mirror = self.page_mirror(actor_id.to_string()).await;
@@ -336,8 +336,8 @@ impl DirectStorage {
 		&self,
 		actor_id: &str,
 		batch_size_deltas: u32,
-	) -> anyhow::Result<sqlite_storage::compactor::CompactionOutcome> {
-		sqlite_storage::compactor::compact_default_batch(
+	) -> anyhow::Result<depot::compactor::CompactionOutcome> {
+		depot::compactor::compact_default_batch(
 			Arc::clone(&self.db),
 			actor_id.to_string(),
 			batch_size_deltas,
@@ -365,7 +365,7 @@ impl DirectTransportHooks {
 }
 
 #[cfg(test)]
-fn protocol_fetched_page(page: sqlite_storage::types::FetchedPage) -> protocol::SqliteFetchedPage {
+fn protocol_fetched_page(page: depot::types::FetchedPage) -> protocol::SqliteFetchedPage {
 	protocol::SqliteFetchedPage {
 		pgno: page.pgno,
 		bytes: page.bytes,
@@ -373,15 +373,15 @@ fn protocol_fetched_page(page: sqlite_storage::types::FetchedPage) -> protocol::
 }
 
 #[cfg(test)]
-fn storage_dirty_page(page: protocol::SqliteDirtyPage) -> sqlite_storage::types::DirtyPage {
-	sqlite_storage::types::DirtyPage {
+fn storage_dirty_page(page: protocol::SqliteDirtyPage) -> depot::types::DirtyPage {
+	depot::types::DirtyPage {
 		pgno: page.pgno,
 		bytes: page.bytes,
 	}
 }
 
 #[cfg(test)]
-fn sqlite_storage_error(err: &anyhow::Error) -> Option<&SqliteStorageError> {
+fn depot_error(err: &anyhow::Error) -> Option<&SqliteStorageError> {
 	err.downcast_ref::<SqliteStorageError>()
 }
 

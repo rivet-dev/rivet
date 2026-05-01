@@ -1,5 +1,0 @@
-{
-  "code": "quota_exceeded",
-  "group": "sqlite_storage",
-  "message": "Not enough space left in SQLite storage."
-}

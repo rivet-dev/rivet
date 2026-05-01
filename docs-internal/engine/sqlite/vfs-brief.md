@@ -1,10 +1,10 @@
 # SQLite VFS Brief
 
-This page is intentionally brief. Full VFS rules live in [../sqlite-vfs.md](../sqlite-vfs.md), and the storage backend crash course lives in [../sqlite-storage.md](../sqlite-storage.md).
+This page is intentionally brief. Full VFS rules live in [../sqlite-vfs.md](../sqlite-vfs.md), and the storage backend crash course lives in [../depot.md](../depot.md).
 
 ## Boundary
 
-The VFS presents SQLite page reads and commits to the storage pump. It does not own PITR, fork metadata, cold-tier upload, or eviction. Those are storage-layer responsibilities under `engine/packages/sqlite-storage/`.
+The VFS presents SQLite page reads and commits to the storage conveyer. It does not own PITR, fork metadata, cold-tier upload, or eviction. Those are storage-layer responsibilities under `engine/packages/depot/`.
 
 ## Read Shape
 
@@ -29,6 +29,6 @@ The VFS does not write local SQLite database files. Local files would break the 
 Keep VFS behavior aligned across native Rust and WASM implementations:
 
 - [SQLite VFS parity](../sqlite-vfs.md)
-- [SQLite storage crash course](../sqlite-storage.md)
+- [Depot crash course](../depot.md)
 - Native Rust VFS: `rivetkit-rust/packages/rivetkit-sqlite/src/`
 - WASM VFS: `rivetkit-typescript/packages/sqlite-wasm/src/`

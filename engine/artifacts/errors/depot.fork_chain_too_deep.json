@@ -1,0 +1,5 @@
+{
+  "code": "fork_chain_too_deep",
+  "group": "depot",
+  "message": "Database branch fork chain is too deep."
+}
