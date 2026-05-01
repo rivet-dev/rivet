@@ -15,6 +15,7 @@
 - Workflow cold compaction uploads through `ColdTier`, publishes `CMP/cold_shard` refs from the DB manager, and should schedule before reclaim so reclaim cannot delete the exact hot inputs cold publish revalidates.
 - Workflow cold-object reclaim retires exact manager-provided `ColdShardRef` refs before S3 deletion, waits the grace window, marks `DeleteIssued`, deletes the exact object key, and leaves a completed retired record to block republish.
 - Workflow branch lifecycle is fenced by `DatabaseBranchRecord.lifecycle_generation`; planned workflow jobs carry the base generation and reject stage, publish, or reclaim work after branch deletion or recreation.
+- Workflow repair cleanup is reclaimer-owned: unmatched hot completions clear exact staged FDB rows, unmatched cold completions delete unreferenced S3 objects, and live cold refs with missing S3 or `DeleteIssued` retired records are logged and retained.
 
 # Ralph Progress Log
 Started: Thu Apr 30 09:07:22 PM PDT 2026
@@ -296,4 +297,21 @@ Started: Thu Apr 30 09:07:22 PM PDT 2026
   - `OwnedVersionedData` needs converter functions before a bumped embedded version is considered the latest version.
   - Workflow destroy should target the stored companion workflow ids directly, then complete the manager so stable-tag recreation can observe non-live branch state.
   - New `SqliteStorageError` variants generate checked-in artifacts under `engine/artifacts/errors/`.
+---
+## 2026-04-30 23:39:52 PDT - US-016
+- Implemented repair logging and orphan cleanup paths for workflow compaction.
+- Routed unmatched hot and cold job completions into reclaimer-owned repair work, with staged FDB cleanup and orphan S3 deletion guarded by exact refs.
+- Added cold-ref validation so missing S3 objects or live refs to `DeleteIssued` retired records log structured corruption fields and retain the live FDB ref.
+- Verified with `cargo test -p depot --test workflow_compaction_payloads --test workflow_compaction_skeletons`, `cargo check -p depot`, `git diff --check`, and `cargo test -p depot`.
+- Files changed:
+  - `engine/packages/depot/src/workflows/compaction.rs`
+  - `engine/packages/depot/tests/workflow_compaction_payloads.rs`
+  - `engine/packages/depot/tests/workflow_compaction_skeletons.rs`
+  - `engine/packages/depot/AGENTS.md`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Stale workflow output cleanup should stay manager-detected but reclaimer-executed so publish/delete authority remains centralized.
+  - Cold-object corruption checks need both FDB retired-object state and S3 object existence before any live ref is removed.
+  - Tests for corruption paths should wait for `ReclaimJobFinished` rather than idle manager state because retained corruption can be replanned by the manager.
 ---

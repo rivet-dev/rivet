@@ -12,27 +12,29 @@ use depot::{
 	keys::{
 		PAGE_SIZE, branch_commit_key, branch_compaction_cold_shard_key,
 		branch_compaction_retired_cold_object_key, branch_compaction_root_key,
-		branch_compaction_stage_hot_shard_prefix, branch_delta_chunk_key, branch_meta_head_key,
-		branch_pidx_key, branch_shard_key, branch_shard_prefix, branch_vtx_key, branches_list_key,
-		db_pin_key, ns_child_key, ns_fork_pin_key, nscat_by_db_key, sqlite_cmp_dirty_key,
+		branch_compaction_stage_hot_shard_key, branch_compaction_stage_hot_shard_prefix,
+		branch_delta_chunk_key, branch_meta_head_key, branch_pidx_key, branch_shard_key,
+		branch_shard_prefix, branch_vtx_key, branches_list_key, db_pin_key, ns_child_key,
+		ns_fork_pin_key, nscat_by_db_key, sqlite_cmp_dirty_key,
 	},
 	ltx::{LtxHeader, decode_ltx_v3, encode_ltx_v3},
 	types::{
 		BookmarkStr, BranchState, ColdShardRef, CommitRow, CompactionRoot, DBHead,
 		DatabaseBranchId, DatabaseBranchRecord, DbHistoryPinKind, DirtyPage, FetchedPage,
 		NamespaceBranchId, NamespaceCatalogDbFact, NamespaceForkFact,
-		RetiredColdObjectDeleteState, SqliteCmpDirty, decode_cold_shard_ref,
+		RetiredColdObject, RetiredColdObjectDeleteState, SqliteCmpDirty, decode_cold_shard_ref,
 		decode_commit_row, decode_compaction_root, decode_db_head, decode_db_history_pin,
 		decode_retired_cold_object, encode_cold_shard_ref, encode_commit_row,
 		encode_compaction_root, encode_database_branch_record, encode_db_head,
-		encode_namespace_catalog_db_fact,
+		encode_namespace_catalog_db_fact, encode_retired_cold_object,
 		encode_namespace_fork_fact, encode_sqlite_cmp_dirty,
 	},
 	workflows::compaction::{
 		CompactionJobKind, CompactionJobStatus, DATABASE_BRANCH_ID_TAG, DbColdCompacterWorkflow,
 		DbHotCompacterWorkflow, DbManagerInput, DbManagerState, DbManagerWorkflow,
-		DbReclaimerWorkflow, DeltasAvailable, DestroyDatabaseBranch, HotJobInputRange,
-		RunColdJob, RunHotJob, RunReclaimJob, TxidRange, database_branch_tag_value,
+		DbReclaimerWorkflow, DeltasAvailable, DestroyDatabaseBranch, HotJobFinished,
+		HotJobInputRange, HotShardOutputRef, ColdJobFinished, RunColdJob, RunHotJob,
+		ReclaimJobFinished, RunReclaimJob, TxidRange, database_branch_tag_value,
 		set_workflow_test_cold_tier_for_test,
 	},
 };
@@ -183,6 +185,60 @@ async fn wait_for_run_cold_job(test_ctx: &TestCtx, cold_workflow_id: Id) -> Resu
 
 		if started_at.elapsed() > Duration::from_secs(5) {
 			bail!("timed out waiting for RunColdJob signal");
+		}
+
+		tokio::time::sleep(Duration::from_millis(25)).await;
+	}
+}
+
+async fn wait_for_run_reclaim_job(
+	test_ctx: &TestCtx,
+	reclaimer_workflow_id: Id,
+) -> Result<RunReclaimJob> {
+	let started_at = Instant::now();
+
+	loop {
+		let signals = DatabaseDebug::find_signals(
+			test_ctx.debug_db(),
+			&[],
+			Some(reclaimer_workflow_id),
+			Some(<RunReclaimJob as SignalTrait>::NAME),
+			None,
+		)
+		.await?;
+		if let Some(signal) = signals.into_iter().next() {
+			return Ok(serde_json::from_value(signal.body)?);
+		}
+
+		if started_at.elapsed() > Duration::from_secs(5) {
+			bail!("timed out waiting for RunReclaimJob signal");
+		}
+
+		tokio::time::sleep(Duration::from_millis(25)).await;
+	}
+}
+
+async fn wait_for_reclaim_job_finished_signal(
+	test_ctx: &TestCtx,
+	manager_workflow_id: Id,
+) -> Result<()> {
+	let started_at = Instant::now();
+
+	loop {
+		let signals = DatabaseDebug::find_signals(
+			test_ctx.debug_db(),
+			&[],
+			Some(manager_workflow_id),
+			Some(<ReclaimJobFinished as SignalTrait>::NAME),
+			None,
+		)
+		.await?;
+		if !signals.is_empty() {
+			return Ok(());
+		}
+
+		if started_at.elapsed() > Duration::from_secs(5) {
+			bail!("timed out waiting for ReclaimJobFinished signal");
 		}
 
 		tokio::time::sleep(Duration::from_millis(25)).await;
@@ -460,6 +516,31 @@ async fn wait_for_cold_object_deleted(tier: &dyn ColdTier, object_key: &str) -> 
 
 		if started_at.elapsed() > Duration::from_secs(5) {
 			bail!("timed out waiting for cold object delete");
+		}
+
+		tokio::time::sleep(Duration::from_millis(25)).await;
+	}
+}
+
+async fn wait_for_stage_row_cleared(
+	test_ctx: &TestCtx,
+	database_branch_id: DatabaseBranchId,
+	job_id: Id,
+) -> Result<()> {
+	let started_at = Instant::now();
+
+	loop {
+		let rows = read_prefix_values(
+			test_ctx,
+			branch_compaction_stage_hot_shard_prefix(database_branch_id, job_id),
+		)
+		.await?;
+		if rows.is_empty() {
+			return Ok(());
+		}
+
+		if started_at.elapsed() > Duration::from_secs(5) {
+			bail!("timed out waiting for staged hot shard cleanup");
 		}
 
 		tokio::time::sleep(Duration::from_millis(25)).await;
@@ -1381,6 +1462,197 @@ async fn hot_compacter_rejects_stale_lifecycle_generation_without_staging() -> R
 }
 
 #[tokio::test]
+async fn manager_schedules_cleanup_for_stale_hot_output() -> Result<()> {
+	let database_branch_id = database_branch_id(0x5052_2233_4455_6677_8899_aabb_ccdd_eeff);
+	let tag_value = database_branch_tag_value(database_branch_id);
+	let mut test_ctx = TestCtx::new(build_registry()).await?;
+	seed_manager_branch(
+		&test_ctx,
+		database_branch_id,
+		0,
+		Some(CompactionRoot {
+			schema_version: 1,
+			manifest_generation: 1,
+			hot_watermark_txid: 0,
+			cold_watermark_txid: 0,
+			cold_watermark_versionstamp: [0; 16],
+		}),
+		None,
+	)
+	.await?;
+
+	let manager_workflow_id = test_ctx
+		.workflow(DbManagerInput { database_branch_id })
+		.tag(DATABASE_BRANCH_ID_TAG, &tag_value)
+		.unique()
+		.dispatch()
+		.await?;
+	let reclaimer_workflow_id =
+		wait_for_workflow::<DbReclaimerWorkflow>(&test_ctx, database_branch_id).await?;
+	let stale_job_id = Id::new_v1(52);
+	let staged_blob = encode_ltx_v3(
+		LtxHeader::delta(1, 1, 1_001),
+		&[DirtyPage {
+			pgno: 1,
+			bytes: page(9),
+		}],
+	)?;
+	let output_ref = HotShardOutputRef {
+		shard_id: 0,
+		as_of_txid: 1,
+		min_txid: 1,
+		max_txid: 1,
+		size_bytes: u64::try_from(staged_blob.len()).unwrap_or(u64::MAX),
+		content_hash: sha256(&staged_blob),
+	};
+	test_ctx
+		.pools()
+		.udb()?
+		.run({
+			let staged_blob = staged_blob.clone();
+			move |tx| {
+				let staged_blob = staged_blob.clone();
+				async move {
+					tx.informal().set(
+						&branch_compaction_stage_hot_shard_key(
+							database_branch_id,
+							stale_job_id,
+							0,
+							1,
+							0,
+						),
+						&staged_blob,
+					);
+					Ok(())
+				}
+			}
+		})
+		.await?;
+
+	let signal_id = test_ctx
+		.signal(HotJobFinished {
+			database_branch_id,
+			job_id: stale_job_id,
+			job_kind: CompactionJobKind::Hot,
+			base_manifest_generation: 1,
+			input_fingerprint: [5; 32],
+			status: CompactionJobStatus::Succeeded,
+			output_refs: vec![output_ref],
+		})
+		.to_workflow_id(manager_workflow_id)
+		.send()
+		.await?
+		.expect("signal should target manager workflow");
+	wait_for_signal_ack(&test_ctx, signal_id).await?;
+	let repair_job = wait_for_run_reclaim_job(&test_ctx, reclaimer_workflow_id).await?;
+	assert_eq!(repair_job.input_range.staged_hot_shards.len(), 1);
+
+	wait_for_stage_row_cleared(&test_ctx, database_branch_id, stale_job_id).await?;
+	let manager_state =
+		wait_for_manager_state(&test_ctx, manager_workflow_id, |state| {
+			state.active_reclaim_job.is_none()
+		})
+		.await?;
+	assert!(manager_state.active_reclaim_job.is_none());
+
+	test_ctx.shutdown().await?;
+	Ok(())
+}
+
+#[tokio::test]
+async fn manager_schedules_cleanup_for_stale_cold_output() -> Result<()> {
+	let _cold_test_lock = WORKFLOW_COLD_TEST_LOCK.lock().await;
+	let cold_root = Builder::new()
+		.prefix("depot-workflow-cold-orphan-")
+		.tempdir()?;
+	let tier = Arc::new(FilesystemColdTier::new(cold_root.path()));
+	set_workflow_test_cold_tier_for_test(Some(tier.clone()));
+	let _cold_tier_guard = WorkflowColdTierTestGuard;
+
+	let database_branch_id = database_branch_id(0x5053_2233_4455_6677_8899_aabb_ccdd_eeff);
+	let tag_value = database_branch_tag_value(database_branch_id);
+	let mut test_ctx = TestCtx::new(build_registry()).await?;
+	seed_manager_branch(
+		&test_ctx,
+		database_branch_id,
+		0,
+		Some(CompactionRoot {
+			schema_version: 1,
+			manifest_generation: 1,
+			hot_watermark_txid: 0,
+			cold_watermark_txid: 0,
+			cold_watermark_versionstamp: [0; 16],
+		}),
+		None,
+	)
+	.await?;
+
+	let manager_workflow_id = test_ctx
+		.workflow(DbManagerInput { database_branch_id })
+		.tag(DATABASE_BRANCH_ID_TAG, &tag_value)
+		.unique()
+		.dispatch()
+		.await?;
+	let reclaimer_workflow_id =
+		wait_for_workflow::<DbReclaimerWorkflow>(&test_ctx, database_branch_id).await?;
+	let stale_job_id = Id::new_v1(53);
+	let object_key = format!(
+		"db/{}/shard/00000000/0000000000000001-orphan.ltx",
+		database_branch_id.as_uuid().simple()
+	);
+	let object_bytes = encode_ltx_v3(
+		LtxHeader::delta(1, 1, 1_001),
+		&[DirtyPage {
+			pgno: 1,
+			bytes: page(10),
+		}],
+	)?;
+	tier.put_object(&object_key, &object_bytes).await?;
+	let cold_ref = ColdShardRef {
+		object_key: object_key.clone(),
+		object_generation_id: stale_job_id,
+		shard_id: 0,
+		as_of_txid: 1,
+		min_txid: 1,
+		max_txid: 1,
+		min_versionstamp: [1; 16],
+		max_versionstamp: [1; 16],
+		size_bytes: u64::try_from(object_bytes.len()).unwrap_or(u64::MAX),
+		content_hash: sha256(&object_bytes),
+		publish_generation: 2,
+	};
+
+	let signal_id = test_ctx
+		.signal(ColdJobFinished {
+			database_branch_id,
+			job_id: stale_job_id,
+			job_kind: CompactionJobKind::Cold,
+			base_manifest_generation: 1,
+			input_fingerprint: [6; 32],
+			status: CompactionJobStatus::Succeeded,
+			output_refs: vec![cold_ref],
+		})
+		.to_workflow_id(manager_workflow_id)
+		.send()
+		.await?
+		.expect("signal should target manager workflow");
+	wait_for_signal_ack(&test_ctx, signal_id).await?;
+	let repair_job = wait_for_run_reclaim_job(&test_ctx, reclaimer_workflow_id).await?;
+	assert_eq!(repair_job.input_range.orphan_cold_objects.len(), 1);
+
+	wait_for_cold_object_deleted(tier.as_ref(), &object_key).await?;
+	let manager_state =
+		wait_for_manager_state(&test_ctx, manager_workflow_id, |state| {
+			state.active_reclaim_job.is_none()
+		})
+		.await?;
+	assert!(manager_state.active_reclaim_job.is_none());
+
+	test_ctx.shutdown().await?;
+	Ok(())
+}
+
+#[tokio::test]
 async fn manager_publishes_hot_output_and_reads_through_shard_after_pidx_clear() -> Result<()> {
 	let mut test_ctx = TestCtx::new(build_registry()).await?;
 	let udb_pool = test_ctx.pools().udb()?;
@@ -1671,6 +1943,212 @@ async fn reclaimer_retires_cold_object_before_grace_delete_and_cleanup() -> Resu
 }
 
 #[tokio::test]
+async fn reclaimer_logs_and_retains_live_cold_ref_when_s3_object_is_missing() -> Result<()> {
+	let _cold_test_lock = WORKFLOW_COLD_TEST_LOCK.lock().await;
+	let cold_root = Builder::new()
+		.prefix("depot-workflow-cold-missing-")
+		.tempdir()?;
+	let tier = Arc::new(FilesystemColdTier::new(cold_root.path()));
+	set_workflow_test_cold_tier_for_test(Some(tier.clone()));
+	let _cold_tier_guard = WorkflowColdTierTestGuard;
+
+	let database_branch_id = database_branch_id(0xd1d2_2233_4455_6677_8899_aabb_ccdd_eeff);
+	let tag_value = database_branch_tag_value(database_branch_id);
+	let mut test_ctx = TestCtx::new(build_registry()).await?;
+	seed_manager_branch(
+		&test_ctx,
+		database_branch_id,
+		2,
+		Some(CompactionRoot {
+			schema_version: 1,
+			manifest_generation: 2,
+			hot_watermark_txid: 2,
+			cold_watermark_txid: 2,
+			cold_watermark_versionstamp: {
+				let mut versionstamp = [0; 16];
+				versionstamp[8..16].copy_from_slice(&2_u64.to_be_bytes());
+				versionstamp
+			},
+		}),
+		None,
+	)
+	.await?;
+
+	let missing_key = format!(
+		"db/{}/shard/00000000/0000000000000001-missing.ltx",
+		database_branch_id.as_uuid().simple()
+	);
+	let missing_bytes = encode_ltx_v3(
+		LtxHeader::delta(1, 1, 1_001),
+		&[DirtyPage {
+			pgno: 1,
+			bytes: page(1),
+		}],
+	)?;
+	let missing_ref = seed_workflow_cold_ref(
+		&test_ctx,
+		database_branch_id,
+		0,
+		1,
+		1,
+		missing_key.clone(),
+		missing_bytes,
+	)
+	.await?;
+
+	let manager_workflow_id = test_ctx
+		.workflow(DbManagerInput { database_branch_id })
+		.tag(DATABASE_BRANCH_ID_TAG, &tag_value)
+		.unique()
+		.dispatch()
+		.await?;
+	let reclaimer_workflow_id =
+		wait_for_workflow::<DbReclaimerWorkflow>(&test_ctx, database_branch_id).await?;
+	let _run_reclaim_job = wait_for_run_reclaim_job(&test_ctx, reclaimer_workflow_id).await?;
+	wait_for_reclaim_job_finished_signal(&test_ctx, manager_workflow_id).await?;
+
+	assert!(
+		read_value(
+			&test_ctx,
+			branch_compaction_cold_shard_key(database_branch_id, 0, 1),
+		)
+		.await?
+		.is_some()
+	);
+	assert!(
+		read_value(
+			&test_ctx,
+			branch_compaction_retired_cold_object_key(
+				database_branch_id,
+				object_key_hash(&missing_ref.object_key),
+			),
+		)
+		.await?
+		.is_none()
+	);
+	assert!(tier.get_object(&missing_key).await?.is_none());
+
+	test_ctx.shutdown().await?;
+	Ok(())
+}
+
+#[tokio::test]
+async fn reclaimer_logs_and_retains_live_cold_ref_for_delete_issued_object() -> Result<()> {
+	let _cold_test_lock = WORKFLOW_COLD_TEST_LOCK.lock().await;
+	let cold_root = Builder::new()
+		.prefix("depot-workflow-cold-delete-issued-")
+		.tempdir()?;
+	let tier = Arc::new(FilesystemColdTier::new(cold_root.path()));
+	set_workflow_test_cold_tier_for_test(Some(tier.clone()));
+	let _cold_tier_guard = WorkflowColdTierTestGuard;
+
+	let database_branch_id = database_branch_id(0xd1d3_2233_4455_6677_8899_aabb_ccdd_eeff);
+	let tag_value = database_branch_tag_value(database_branch_id);
+	let mut test_ctx = TestCtx::new(build_registry()).await?;
+	seed_manager_branch(
+		&test_ctx,
+		database_branch_id,
+		2,
+		Some(CompactionRoot {
+			schema_version: 1,
+			manifest_generation: 2,
+			hot_watermark_txid: 2,
+			cold_watermark_txid: 2,
+			cold_watermark_versionstamp: {
+				let mut versionstamp = [0; 16];
+				versionstamp[8..16].copy_from_slice(&2_u64.to_be_bytes());
+				versionstamp
+			},
+		}),
+		None,
+	)
+	.await?;
+
+	let object_key = format!(
+		"db/{}/shard/00000000/0000000000000001-delete-issued.ltx",
+		database_branch_id.as_uuid().simple()
+	);
+	let object_bytes = encode_ltx_v3(
+		LtxHeader::delta(1, 1, 1_001),
+		&[DirtyPage {
+			pgno: 1,
+			bytes: page(1),
+		}],
+	)?;
+	tier.put_object(&object_key, &object_bytes).await?;
+	let cold_ref = seed_workflow_cold_ref(
+		&test_ctx,
+		database_branch_id,
+		0,
+		1,
+		1,
+		object_key.clone(),
+		object_bytes,
+	)
+	.await?;
+	test_ctx
+		.pools()
+		.udb()?
+		.run({
+			let object_key = object_key.clone();
+			move |tx| {
+				let object_key = object_key.clone();
+				async move {
+					tx.informal().set(
+						&branch_compaction_retired_cold_object_key(
+							database_branch_id,
+							object_key_hash(&object_key),
+						),
+						&encode_retired_cold_object(RetiredColdObject {
+							object_key,
+							object_generation_id: cold_ref.object_generation_id,
+							content_hash: cold_ref.content_hash,
+							retired_manifest_generation: 3,
+							retired_at_ms: 1_001,
+							delete_after_ms: 1_002,
+							delete_state: RetiredColdObjectDeleteState::DeleteIssued,
+						})?,
+					);
+					Ok(())
+				}
+			}
+		})
+		.await?;
+
+	let manager_workflow_id = test_ctx
+		.workflow(DbManagerInput { database_branch_id })
+		.tag(DATABASE_BRANCH_ID_TAG, &tag_value)
+		.unique()
+		.dispatch()
+		.await?;
+	let reclaimer_workflow_id =
+		wait_for_workflow::<DbReclaimerWorkflow>(&test_ctx, database_branch_id).await?;
+	let _run_reclaim_job = wait_for_run_reclaim_job(&test_ctx, reclaimer_workflow_id).await?;
+	wait_for_reclaim_job_finished_signal(&test_ctx, manager_workflow_id).await?;
+
+	assert!(
+		read_value(
+			&test_ctx,
+			branch_compaction_cold_shard_key(database_branch_id, 0, 1),
+		)
+		.await?
+		.is_some()
+	);
+	let retired = wait_for_retired_cold_object_state(
+		&test_ctx,
+		database_branch_id,
+		&object_key,
+		RetiredColdObjectDeleteState::DeleteIssued,
+	)
+	.await?;
+	assert_eq!(retired.object_key, object_key);
+	assert!(tier.get_object(&retired.object_key).await?.is_some());
+
+	test_ctx.shutdown().await?;
+	Ok(())
+}
+
+#[tokio::test]
 async fn cold_compacter_rejects_stale_base_generation_without_publish() -> Result<()> {
 	let _cold_test_lock = WORKFLOW_COLD_TEST_LOCK.lock().await;
 	let cold_root = Builder::new()
@@ -1950,6 +2428,8 @@ async fn reclaimer_rejects_stale_manifest_generation() -> Result<()> {
 					versionstamp,
 				}],
 				cold_objects: Vec::new(),
+				staged_hot_shards: Vec::new(),
+				orphan_cold_objects: Vec::new(),
 				max_keys: 500,
 				max_bytes: 2 * 1024 * 1024,
 			},

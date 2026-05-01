@@ -115,6 +115,8 @@ pub struct ReclaimJobInputRange {
 	pub txids: TxidRange,
 	pub txid_refs: Vec<ReclaimTxidRef>,
 	pub cold_objects: Vec<ReclaimColdObjectRef>,
+	pub staged_hot_shards: Vec<StagedHotShardCleanupRef>,
+	pub orphan_cold_objects: Vec<ColdShardRef>,
 	pub max_keys: u32,
 	pub max_bytes: u64,
 }
@@ -133,6 +135,12 @@ pub struct ReclaimColdObjectRef {
 	pub expected_publish_generation: u64,
 	pub shard_id: u32,
 	pub as_of_txid: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct StagedHotShardCleanupRef {
+	pub job_id: Id,
+	pub output_ref: HotShardOutputRef,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -564,6 +572,29 @@ pub struct CleanupRetiredColdObjectsOutput {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Hash)]
+pub struct DeleteOrphanColdObjectsInput {
+	pub database_branch_id: DatabaseBranchId,
+	pub orphan_cold_objects: Vec<ColdShardRef>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DeleteOrphanColdObjectsOutput {
+	pub status: CompactionJobStatus,
+	pub deleted_object_keys: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Hash)]
+pub struct ValidateReclaimColdObjectsInput {
+	pub database_branch_id: DatabaseBranchId,
+	pub cold_objects: Vec<ReclaimColdObjectRef>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ValidateReclaimColdObjectsOutput {
+	pub status: CompactionJobStatus,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Hash)]
 pub struct RefreshManagerInput {
 	pub database_branch_id: DatabaseBranchId,
 }
@@ -687,93 +718,99 @@ pub async fn db_manager(ctx: &mut WorkflowCtx, input: &DbManagerInput) -> Result
 						}
 						DbManagerSignal::HotJobFinished(signal) => {
 							if signal.database_branch_id == input.database_branch_id {
-								if let Some(active_job) = state.active_hot_job.as_ref() {
-									if hot_job_finished_matches_active(&signal, active_job) {
-										match &signal.status {
-											CompactionJobStatus::Requested => {}
-											CompactionJobStatus::Succeeded => {
-												let input_range = match active_job.input_range.clone() {
-													PlannedInputRange::Hot(input_range) => input_range,
-													PlannedInputRange::Cold(_)
-													| PlannedInputRange::Reclaim(_) => {
-														bail!("active hot job carried non-hot input range")
-													}
-												};
-												let install = ctx
-													.activity(InstallHotJobInput {
-														database_branch_id: signal.database_branch_id,
-														job_id: signal.job_id,
-														job_kind: signal.job_kind,
-														base_lifecycle_generation: active_job
-															.base_lifecycle_generation,
-														base_manifest_generation: signal
-															.base_manifest_generation,
-														input_fingerprint: signal.input_fingerprint,
-														input_range,
-														output_refs: signal.output_refs.clone(),
-													})
-													.await?;
-												match install.status {
-													CompactionJobStatus::Requested => {}
-													CompactionJobStatus::Succeeded
-													| CompactionJobStatus::Rejected { .. }
-													| CompactionJobStatus::Failed { .. } => {
-														state.active_hot_job = None
-													}
+								let active_job = state.active_hot_job.clone();
+								if let Some(active_job) = active_job.as_ref()
+									&& hot_job_finished_matches_active(&signal, active_job)
+								{
+									match &signal.status {
+										CompactionJobStatus::Requested => {}
+										CompactionJobStatus::Succeeded => {
+											let input_range = match active_job.input_range.clone() {
+												PlannedInputRange::Hot(input_range) => input_range,
+												PlannedInputRange::Cold(_)
+												| PlannedInputRange::Reclaim(_) => {
+													bail!("active hot job carried non-hot input range")
+												}
+											};
+											let install = ctx
+												.activity(InstallHotJobInput {
+													database_branch_id: signal.database_branch_id,
+													job_id: signal.job_id,
+													job_kind: signal.job_kind,
+													base_lifecycle_generation: active_job
+														.base_lifecycle_generation,
+													base_manifest_generation: signal
+														.base_manifest_generation,
+													input_fingerprint: signal.input_fingerprint,
+													input_range,
+													output_refs: signal.output_refs.clone(),
+												})
+												.await?;
+											match install.status {
+												CompactionJobStatus::Requested => {}
+												CompactionJobStatus::Succeeded
+												| CompactionJobStatus::Rejected { .. }
+												| CompactionJobStatus::Failed { .. } => {
+													state.active_hot_job = None
 												}
 											}
-											CompactionJobStatus::Rejected { .. }
-											| CompactionJobStatus::Failed { .. } => {
-												state.active_hot_job = None
-											}
+										}
+										CompactionJobStatus::Rejected { .. }
+										| CompactionJobStatus::Failed { .. } => {
+											state.active_hot_job = None
 										}
 									}
+								} else {
+									schedule_stale_hot_output_cleanup(ctx, state, &signal).await?;
 								}
 							}
 						}
 						DbManagerSignal::ColdJobFinished(signal) => {
 							if signal.database_branch_id == input.database_branch_id {
-								if let Some(active_job) = state.active_cold_job.as_ref() {
-									if cold_job_finished_matches_active(&signal, active_job) {
-										match &signal.status {
-											CompactionJobStatus::Requested => {}
-											CompactionJobStatus::Succeeded => {
-												let input_range = match active_job.input_range.clone() {
-													PlannedInputRange::Cold(input_range) => input_range,
-													PlannedInputRange::Hot(_)
-													| PlannedInputRange::Reclaim(_) => {
-														bail!("active cold job carried non-cold input range")
-													}
-												};
-												let publish = ctx
-													.activity(PublishColdJobInput {
-														database_branch_id: signal.database_branch_id,
-														job_id: signal.job_id,
-														job_kind: signal.job_kind,
-														base_lifecycle_generation: active_job
-															.base_lifecycle_generation,
-														base_manifest_generation: signal
-															.base_manifest_generation,
-														input_fingerprint: signal.input_fingerprint,
-														input_range,
-														output_refs: signal.output_refs.clone(),
-													})
-													.await?;
-												match publish.status {
-													CompactionJobStatus::Requested => {}
-													CompactionJobStatus::Succeeded
-													| CompactionJobStatus::Rejected { .. }
-													| CompactionJobStatus::Failed { .. } => {
-														state.active_cold_job = None
-													}
+								let active_job = state.active_cold_job.clone();
+								if let Some(active_job) = active_job.as_ref()
+									&& cold_job_finished_matches_active(&signal, active_job)
+								{
+									match &signal.status {
+										CompactionJobStatus::Requested => {}
+										CompactionJobStatus::Succeeded => {
+											let input_range = match active_job.input_range.clone() {
+												PlannedInputRange::Cold(input_range) => input_range,
+												PlannedInputRange::Hot(_)
+												| PlannedInputRange::Reclaim(_) => {
+													bail!("active cold job carried non-cold input range")
+												}
+											};
+											let publish = ctx
+												.activity(PublishColdJobInput {
+													database_branch_id: signal.database_branch_id,
+													job_id: signal.job_id,
+													job_kind: signal.job_kind,
+													base_lifecycle_generation: active_job
+														.base_lifecycle_generation,
+													base_manifest_generation: signal
+														.base_manifest_generation,
+													input_fingerprint: signal.input_fingerprint,
+													input_range,
+													output_refs: signal.output_refs.clone(),
+												})
+												.await?;
+											match publish.status {
+												CompactionJobStatus::Requested => {}
+												CompactionJobStatus::Succeeded
+												| CompactionJobStatus::Rejected { .. }
+												| CompactionJobStatus::Failed { .. } => {
+													state.active_cold_job = None
 												}
 											}
-											CompactionJobStatus::Rejected { .. }
-											| CompactionJobStatus::Failed { .. } => {
-												state.active_cold_job = None
-											}
+										}
+										CompactionJobStatus::Rejected { .. }
+										| CompactionJobStatus::Failed { .. } => {
+											state.active_cold_job = None
 										}
 									}
+								} else {
+									schedule_stale_cold_output_cleanup(ctx, state, &signal).await?;
 								}
 							}
 						}
@@ -1181,6 +1218,161 @@ fn reclaim_job_finished_matches_active(
 		&& signal.job_kind == active_job.job_kind
 		&& signal.base_manifest_generation == active_job.base_manifest_generation
 		&& signal.input_fingerprint == active_job.input_fingerprint
+}
+
+async fn schedule_stale_hot_output_cleanup(
+	ctx: &mut WorkflowCtx,
+	state: &mut DbManagerState,
+	signal: &HotJobFinished,
+) -> Result<()> {
+	if !matches!(signal.status, CompactionJobStatus::Succeeded) || signal.output_refs.is_empty() {
+		return Ok(());
+	}
+
+	let staged_hot_shards = signal
+		.output_refs
+		.iter()
+		.cloned()
+		.map(|output_ref| StagedHotShardCleanupRef {
+			job_id: signal.job_id,
+			output_ref,
+		})
+		.collect::<Vec<_>>();
+	let input_range = repair_reclaim_input_range(
+		staged_hot_shards,
+		Vec::new(),
+		signal.output_refs.iter().map(|output_ref| output_ref.as_of_txid),
+	);
+
+	schedule_repair_reclaim_job(
+		ctx,
+		state,
+		signal.database_branch_id,
+		signal.base_manifest_generation,
+		input_range,
+		signal.job_id,
+		"cleanup_stale_hot_output",
+	)
+	.await
+}
+
+async fn schedule_stale_cold_output_cleanup(
+	ctx: &mut WorkflowCtx,
+	state: &mut DbManagerState,
+	signal: &ColdJobFinished,
+) -> Result<()> {
+	if !matches!(signal.status, CompactionJobStatus::Succeeded) || signal.output_refs.is_empty() {
+		return Ok(());
+	}
+
+	let input_range = repair_reclaim_input_range(
+		Vec::new(),
+		signal.output_refs.clone(),
+		signal.output_refs.iter().map(|output_ref| output_ref.as_of_txid),
+	);
+	schedule_repair_reclaim_job(
+		ctx,
+		state,
+		signal.database_branch_id,
+		signal.base_manifest_generation,
+		input_range,
+		signal.job_id,
+		"delete_stale_cold_output",
+	)
+	.await
+}
+
+fn repair_reclaim_input_range(
+	staged_hot_shards: Vec<StagedHotShardCleanupRef>,
+	orphan_cold_objects: Vec<ColdShardRef>,
+	txids: impl Iterator<Item = u64>,
+) -> ReclaimJobInputRange {
+	let mut min_txid = u64::MAX;
+	let mut max_txid = 0_u64;
+	for txid in txids {
+		min_txid = min_txid.min(txid);
+		max_txid = max_txid.max(txid);
+	}
+	if min_txid == u64::MAX {
+		min_txid = 0;
+	}
+
+	ReclaimJobInputRange {
+		txids: TxidRange { min_txid, max_txid },
+		txid_refs: Vec::new(),
+		cold_objects: Vec::new(),
+		staged_hot_shards,
+		orphan_cold_objects,
+		max_keys: CMP_FDB_BATCH_MAX_KEYS as u32,
+		max_bytes: CMP_FDB_BATCH_MAX_VALUE_BYTES as u64,
+	}
+}
+
+async fn schedule_repair_reclaim_job(
+	ctx: &mut WorkflowCtx,
+	state: &mut DbManagerState,
+	database_branch_id: DatabaseBranchId,
+	base_manifest_generation: u64,
+	input_range: ReclaimJobInputRange,
+	source_job_id: Id,
+	repair_action: &'static str,
+) -> Result<()> {
+	if state.active_reclaim_job.is_some() {
+		tracing::warn!(
+			?database_branch_id,
+			manifest_generation = base_manifest_generation,
+			?source_job_id,
+			repair_action,
+			"stale compaction output cleanup deferred because reclaimer is busy"
+		);
+		return Ok(());
+	}
+
+	let reclaimer_workflow_id = state
+		.companion_workflow_ids
+		.reclaimer_workflow_id
+		.context("reclaimer workflow id missing from manager state")?;
+	let cleanup_job_id = Id::new_v1(ctx.config().dc_label());
+	let input_fingerprint =
+		fingerprint_repair_reclaim_range(database_branch_id, &input_range);
+	tracing::warn!(
+		?database_branch_id,
+		manifest_generation = base_manifest_generation,
+		?source_job_id,
+		?cleanup_job_id,
+		repair_action,
+		staged_hot_shard_count = input_range.staged_hot_shards.len(),
+		orphan_cold_object_count = input_range.orphan_cold_objects.len(),
+		"scheduled stale compaction output cleanup"
+	);
+
+	ctx.signal(RunReclaimJob {
+		database_branch_id,
+		job_id: cleanup_job_id,
+		job_kind: CompactionJobKind::Reclaim,
+		base_lifecycle_generation: 0,
+		base_manifest_generation,
+		input_fingerprint,
+		status: CompactionJobStatus::Requested,
+		input_range: input_range.clone(),
+	})
+	.to_workflow_id(reclaimer_workflow_id)
+	.send()
+	.await?;
+
+	state.active_reclaim_job = Some(ActiveCompactionJob {
+		database_branch_id,
+		job_id: cleanup_job_id,
+		job_kind: CompactionJobKind::Reclaim,
+		base_lifecycle_generation: 0,
+		base_manifest_generation,
+		input_fingerprint,
+		input_range: PlannedInputRange::Reclaim(input_range),
+		planned_at_ms: ctx.create_ts(),
+		attempt: 0,
+	});
+
+	Ok(())
 }
 
 fn branch_record_is_live_at_generation(
@@ -1844,6 +2036,13 @@ async fn reclaim_fdb_job_tx(
 	if input.job_kind != CompactionJobKind::Reclaim {
 		return Ok(rejected_reclaim_job("reclaimer received a non-reclaim job"));
 	}
+	if input.input_range.txid_refs.is_empty()
+		&& input.input_range.cold_objects.is_empty()
+		&& (!input.input_range.staged_hot_shards.is_empty()
+			|| !input.input_range.orphan_cold_objects.is_empty())
+	{
+		return cleanup_repair_fdb_outputs_tx(tx, input).await;
+	}
 
 	let branch_record = tx_get_value(
 		tx,
@@ -1948,6 +2147,84 @@ async fn reclaim_fdb_job_tx(
 		udb::compare_and_clear(tx, key, value);
 		key_count = key_count.saturating_add(1);
 		byte_count = byte_count.saturating_add(u64::try_from(value.len()).unwrap_or(u64::MAX));
+	}
+
+	Ok(ReclaimFdbJobOutput {
+		status: CompactionJobStatus::Succeeded,
+		output_refs: vec![ReclaimOutputRef {
+			key_count,
+			byte_count,
+			min_txid: input.input_range.txids.min_txid,
+			max_txid: input.input_range.txids.max_txid,
+		}],
+	})
+}
+
+async fn cleanup_repair_fdb_outputs_tx(
+	tx: &universaldb::Transaction,
+	input: &ReclaimFdbJobInput,
+) -> Result<ReclaimFdbJobOutput> {
+	let input_fingerprint =
+		fingerprint_repair_reclaim_range(input.database_branch_id, &input.input_range);
+	if input_fingerprint != input.input_fingerprint {
+		return Ok(rejected_reclaim_job("repair cleanup input fingerprint changed"));
+	}
+
+	let root = tx_get_value(
+		tx,
+		&keys::branch_compaction_root_key(input.database_branch_id),
+		Snapshot,
+	)
+	.await?
+	.as_deref()
+	.map(decode_compaction_root)
+	.transpose()
+	.context("decode sqlite compaction root for repair cleanup")?;
+	let manifest_generation = root
+		.as_ref()
+		.map(|root| root.manifest_generation)
+		.unwrap_or(input.base_manifest_generation);
+
+	let mut key_count = 0_u32;
+	let mut byte_count = 0_u64;
+	for staged in &input.input_range.staged_hot_shards {
+		let stage_key = keys::branch_compaction_stage_hot_shard_key(
+			input.database_branch_id,
+			staged.job_id,
+			staged.output_ref.shard_id,
+			staged.output_ref.as_of_txid,
+			0,
+		);
+		let Some(stage_value) = tx_get_value(tx, &stage_key, Serializable).await? else {
+			continue;
+		};
+		if staged.output_ref.size_bytes != u64::try_from(stage_value.len()).unwrap_or(u64::MAX)
+			|| staged.output_ref.content_hash != content_hash(&stage_value)
+		{
+			tracing::error!(
+				?input.database_branch_id,
+				manifest_generation,
+				?staged.job_id,
+				shard_id = staged.output_ref.shard_id,
+				as_of_txid = staged.output_ref.as_of_txid,
+				repair_action = "retain_staged_hot_output",
+				"staged hot shard cleanup found mismatched bytes"
+			);
+			return Ok(rejected_reclaim_job("staged hot shard cleanup bytes changed"));
+		}
+
+		tracing::warn!(
+			?input.database_branch_id,
+			manifest_generation,
+			?staged.job_id,
+			shard_id = staged.output_ref.shard_id,
+			as_of_txid = staged.output_ref.as_of_txid,
+			repair_action = "clear_staged_hot_output",
+			"clearing orphan staged hot shard output"
+		);
+		udb::compare_and_clear(tx, &stage_key, &stage_value);
+		key_count = key_count.saturating_add(1);
+		byte_count = byte_count.saturating_add(u64::try_from(stage_value.len()).unwrap_or(u64::MAX));
 	}
 
 	Ok(ReclaimFdbJobOutput {
@@ -2289,6 +2566,273 @@ fn rejected_cold_object_cleanup(reason: impl Into<String>) -> CleanupRetiredCold
 		},
 		cleaned_object_keys: Vec::new(),
 	}
+}
+
+#[activity(ValidateReclaimColdObjects)]
+pub async fn validate_reclaim_cold_objects(
+	ctx: &ActivityCtx,
+	input: &ValidateReclaimColdObjectsInput,
+) -> Result<ValidateReclaimColdObjectsOutput> {
+	let input = input.clone();
+	if input.cold_objects.is_empty() {
+		return Ok(ValidateReclaimColdObjectsOutput {
+			status: CompactionJobStatus::Succeeded,
+		});
+	}
+
+	let validated = ctx
+		.udb()?
+		.run({
+			let input = input.clone();
+			move |tx| {
+				let input = input.clone();
+				async move { validate_reclaim_cold_objects_tx(&tx, &input).await }
+			}
+		})
+		.await?;
+	if !matches!(validated.status, CompactionJobStatus::Succeeded) {
+		return Ok(validated);
+	}
+
+	let cold_tier = workflow_cold_tier().await?;
+	for cold_object in &input.cold_objects {
+		if cold_tier
+			.get_object(&cold_object.object_key)
+			.await
+			.with_context(|| format!("get sqlite workflow cold object {}", cold_object.object_key))?
+			.is_none()
+		{
+			tracing::error!(
+				?input.database_branch_id,
+				manifest_generation = cold_object.expected_publish_generation,
+				object_key = %cold_object.object_key,
+				?cold_object.object_generation_id,
+				shard_id = cold_object.shard_id,
+				as_of_txid = cold_object.as_of_txid,
+				repair_action = "retain_live_cold_ref",
+				"live cold ref points at missing S3 object"
+			);
+			return Ok(rejected_validate_reclaim_cold_objects(
+				"live cold ref points at missing S3 object",
+			));
+		}
+	}
+
+	Ok(ValidateReclaimColdObjectsOutput {
+		status: CompactionJobStatus::Succeeded,
+	})
+}
+
+async fn validate_reclaim_cold_objects_tx(
+	tx: &universaldb::Transaction,
+	input: &ValidateReclaimColdObjectsInput,
+) -> Result<ValidateReclaimColdObjectsOutput> {
+	for cold_object in &input.cold_objects {
+		let live_key = keys::branch_compaction_cold_shard_key(
+			input.database_branch_id,
+			cold_object.shard_id,
+			cold_object.as_of_txid,
+		);
+		let Some(live_value) = tx_get_value(tx, &live_key, Serializable).await? else {
+			return Ok(rejected_validate_reclaim_cold_objects(
+				"cold shard ref is missing before validation",
+			));
+		};
+		let live_ref = decode_cold_shard_ref(&live_value)
+			.context("decode sqlite cold shard ref for validation")?;
+		if reclaim_cold_object_ref(&live_ref) != *cold_object {
+			return Ok(rejected_validate_reclaim_cold_objects(
+				"cold shard ref changed before validation",
+			));
+		}
+
+		if let Some(retired) =
+			read_retired_cold_object_by_object_key(tx, input.database_branch_id, &cold_object.object_key)
+				.await?
+			&& retired.delete_state == RetiredColdObjectDeleteState::DeleteIssued
+		{
+			tracing::error!(
+				?input.database_branch_id,
+				manifest_generation = cold_object.expected_publish_generation,
+				object_key = %cold_object.object_key,
+				?cold_object.object_generation_id,
+				shard_id = cold_object.shard_id,
+				as_of_txid = cold_object.as_of_txid,
+				repair_action = "retain_live_cold_ref",
+				"live cold ref points at delete-issued retired object"
+			);
+			return Ok(rejected_validate_reclaim_cold_objects(
+				"live cold ref points at delete-issued retired object",
+			));
+		}
+	}
+
+	Ok(ValidateReclaimColdObjectsOutput {
+		status: CompactionJobStatus::Succeeded,
+	})
+}
+
+fn rejected_validate_reclaim_cold_objects(
+	reason: impl Into<String>,
+) -> ValidateReclaimColdObjectsOutput {
+	ValidateReclaimColdObjectsOutput {
+		status: CompactionJobStatus::Rejected {
+			reason: reason.into(),
+		},
+	}
+}
+
+#[activity(DeleteOrphanColdObjects)]
+pub async fn delete_orphan_cold_objects(
+	ctx: &ActivityCtx,
+	input: &DeleteOrphanColdObjectsInput,
+) -> Result<DeleteOrphanColdObjectsOutput> {
+	let input = input.clone();
+	if input.orphan_cold_objects.is_empty() {
+		return Ok(DeleteOrphanColdObjectsOutput {
+			status: CompactionJobStatus::Succeeded,
+			deleted_object_keys: Vec::new(),
+		});
+	}
+
+	let planned = ctx
+		.udb()?
+		.run({
+			let input = input.clone();
+			move |tx| {
+				let input = input.clone();
+				async move { plan_orphan_cold_object_deletes_tx(&tx, &input).await }
+			}
+		})
+		.await?;
+	if !matches!(planned.status, CompactionJobStatus::Succeeded)
+		|| planned.deleted_object_keys.is_empty()
+	{
+		return Ok(planned);
+	}
+
+	let cold_tier = workflow_cold_tier().await?;
+	cold_tier
+		.delete_objects(&planned.deleted_object_keys)
+		.await
+		.context("delete orphan sqlite workflow cold objects")?;
+
+	Ok(planned)
+}
+
+async fn plan_orphan_cold_object_deletes_tx(
+	tx: &universaldb::Transaction,
+	input: &DeleteOrphanColdObjectsInput,
+) -> Result<DeleteOrphanColdObjectsOutput> {
+	let live_refs = tx_scan_prefix_values(
+		tx,
+		&keys::branch_compaction_cold_shard_prefix(input.database_branch_id),
+		Serializable,
+	)
+	.await?
+	.into_iter()
+	.map(|(_, value)| decode_cold_shard_ref(&value))
+	.collect::<Result<Vec<_>>>()
+	.context("decode sqlite cold shard refs for orphan cleanup")?;
+	let root = tx_get_value(
+		tx,
+		&keys::branch_compaction_root_key(input.database_branch_id),
+		Snapshot,
+	)
+	.await?
+	.as_deref()
+	.map(decode_compaction_root)
+	.transpose()
+	.context("decode sqlite compaction root for orphan cleanup")?;
+	let manifest_generation = root
+		.as_ref()
+		.map(|root| root.manifest_generation)
+		.unwrap_or_default();
+	let mut delete_keys = Vec::new();
+
+	for orphan in &input.orphan_cold_objects {
+		let retired =
+			read_retired_cold_object_by_object_key(tx, input.database_branch_id, &orphan.object_key)
+				.await?;
+		let live_ref = live_refs
+			.iter()
+			.find(|live_ref| live_ref.object_key == orphan.object_key);
+		if let Some(live_ref) = live_ref {
+			if retired
+				.as_ref()
+				.is_some_and(|retired| retired.delete_state == RetiredColdObjectDeleteState::DeleteIssued)
+			{
+				tracing::error!(
+					?input.database_branch_id,
+					manifest_generation,
+					object_key = %orphan.object_key,
+					?orphan.object_generation_id,
+					shard_id = live_ref.shard_id,
+					as_of_txid = live_ref.as_of_txid,
+					repair_action = "retain_live_cold_ref",
+					"live cold ref points at delete-issued retired object"
+				);
+				return Ok(rejected_orphan_cold_object_delete(
+					"live cold ref points at delete-issued retired object",
+				));
+			}
+			continue;
+		}
+		if retired.is_some() {
+			continue;
+		}
+
+		tracing::warn!(
+			?input.database_branch_id,
+			manifest_generation,
+			object_key = %orphan.object_key,
+			?orphan.object_generation_id,
+			shard_id = orphan.shard_id,
+			as_of_txid = orphan.as_of_txid,
+			repair_action = "delete_orphan_cold_object",
+			"deleting orphan cold object"
+		);
+		delete_keys.push(orphan.object_key.clone());
+		if delete_keys.len() >= CMP_S3_DELETE_MAX_OBJECTS {
+			break;
+		}
+	}
+
+	Ok(DeleteOrphanColdObjectsOutput {
+		status: CompactionJobStatus::Succeeded,
+		deleted_object_keys: delete_keys,
+	})
+}
+
+fn rejected_orphan_cold_object_delete(
+	reason: impl Into<String>,
+) -> DeleteOrphanColdObjectsOutput {
+	DeleteOrphanColdObjectsOutput {
+		status: CompactionJobStatus::Rejected {
+			reason: reason.into(),
+		},
+		deleted_object_keys: Vec::new(),
+	}
+}
+
+async fn read_retired_cold_object_by_object_key(
+	tx: &universaldb::Transaction,
+	database_branch_id: DatabaseBranchId,
+	object_key: &str,
+) -> Result<Option<RetiredColdObject>> {
+	tx_get_value(
+		tx,
+		&keys::branch_compaction_retired_cold_object_key(
+			database_branch_id,
+			content_hash(object_key.as_bytes()),
+		),
+		Serializable,
+	)
+	.await?
+	.as_deref()
+	.map(decode_retired_cold_object)
+	.transpose()
+	.context("decode sqlite retired cold object for repair")
 }
 
 async fn read_manager_fdb_snapshot(
@@ -3058,6 +3602,8 @@ fn plan_reclaim_job(
 			Vec::new()
 		},
 		cold_objects: snapshot.reclaim_inputs.cold_object_refs.clone(),
+		staged_hot_shards: Vec::new(),
+		orphan_cold_objects: Vec::new(),
 		max_keys: CMP_FDB_BATCH_MAX_KEYS as u32,
 		max_bytes: CMP_FDB_BATCH_MAX_VALUE_BYTES as u64,
 	};
@@ -3148,6 +3694,32 @@ fn fingerprint_reclaim_inputs(
 	for (key, value) in &reclaim_inputs.coverage_shards {
 		mix_fingerprint(&mut fingerprint, key);
 		mix_fingerprint(&mut fingerprint, value);
+	}
+	fingerprint
+}
+
+fn fingerprint_repair_reclaim_range(
+	database_branch_id: DatabaseBranchId,
+	input_range: &ReclaimJobInputRange,
+) -> CompactionInputFingerprint {
+	let mut fingerprint = [0_u8; 32];
+	mix_fingerprint(&mut fingerprint, database_branch_id.as_uuid().as_bytes());
+	mix_fingerprint(&mut fingerprint, &input_range.txids.min_txid.to_be_bytes());
+	mix_fingerprint(&mut fingerprint, &input_range.txids.max_txid.to_be_bytes());
+	for staged in &input_range.staged_hot_shards {
+		mix_fingerprint(&mut fingerprint, &staged.job_id.as_bytes());
+		mix_fingerprint(&mut fingerprint, &staged.output_ref.shard_id.to_be_bytes());
+		mix_fingerprint(&mut fingerprint, &staged.output_ref.as_of_txid.to_be_bytes());
+		mix_fingerprint(&mut fingerprint, &staged.output_ref.size_bytes.to_be_bytes());
+		mix_fingerprint(&mut fingerprint, &staged.output_ref.content_hash);
+	}
+	for cold_ref in &input_range.orphan_cold_objects {
+		mix_fingerprint(&mut fingerprint, cold_ref.object_key.as_bytes());
+		mix_fingerprint(&mut fingerprint, &cold_ref.object_generation_id.as_bytes());
+		mix_fingerprint(&mut fingerprint, &cold_ref.content_hash);
+		mix_fingerprint(&mut fingerprint, &cold_ref.publish_generation.to_be_bytes());
+		mix_fingerprint(&mut fingerprint, &cold_ref.shard_id.to_be_bytes());
+		mix_fingerprint(&mut fingerprint, &cold_ref.as_of_txid.to_be_bytes());
 	}
 	fingerprint
 }
@@ -3829,6 +4401,18 @@ async fn run_reclaim_job(
 	if matches!(status, CompactionJobStatus::Succeeded)
 		&& !signal.input_range.cold_objects.is_empty()
 	{
+		let validated = ctx
+			.activity(ValidateReclaimColdObjectsInput {
+				database_branch_id,
+				cold_objects: signal.input_range.cold_objects.clone(),
+			})
+			.await?;
+		status = validated.status;
+	}
+
+	if matches!(status, CompactionJobStatus::Succeeded)
+		&& !signal.input_range.cold_objects.is_empty()
+	{
 		let retired = ctx
 			.activity(RetireColdObjectsInput {
 				database_branch_id,
@@ -3870,6 +4454,18 @@ async fn run_reclaim_job(
 				status = cleaned.status;
 			}
 		}
+	}
+
+	if matches!(status, CompactionJobStatus::Succeeded)
+		&& !signal.input_range.orphan_cold_objects.is_empty()
+	{
+		let deleted = ctx
+			.activity(DeleteOrphanColdObjectsInput {
+				database_branch_id,
+				orphan_cold_objects: signal.input_range.orphan_cold_objects.clone(),
+			})
+			.await?;
+		status = deleted.status;
 	}
 
 	let tag_value = database_branch_tag_value(database_branch_id);

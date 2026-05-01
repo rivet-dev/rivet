@@ -64,6 +64,11 @@ fn reclaim_input() -> ReclaimJobInputRange {
 			shard_id: 7,
 			as_of_txid: 20,
 		}],
+		staged_hot_shards: vec![StagedHotShardCleanupRef {
+			job_id: gas_id(0x1111_2222_3333_4444_5555_6666_7777_9999, 9),
+			output_ref: hot_output(),
+		}],
+		orphan_cold_objects: vec![cold_output()],
 		max_keys: 500,
 		max_bytes: 2 * 1024 * 1024,
 	}
