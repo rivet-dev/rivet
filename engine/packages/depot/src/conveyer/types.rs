@@ -337,6 +337,7 @@ pub struct ColdShardRef {
 pub enum RetiredColdObjectDeleteState {
 	Retired,
 	DeleteIssued,
+	Deleted,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

@@ -13,6 +13,7 @@
 - Workflow FDB reclaim is planned by the DB manager from current manifest, DB pins, PIDX, and SHARD coverage, then revalidated and deleted by the reclaimer with `COMPARE_AND_CLEAR`.
 - Namespace fork proof facts are written from namespace/catalog mutation paths; workflow reclaim must resolve `NS_CHILD`/`NS_FORK_PIN` into exact `DB_PIN(kind=NamespaceFork)` records or retain history.
 - Workflow cold compaction uploads through `ColdTier`, publishes `CMP/cold_shard` refs from the DB manager, and should schedule before reclaim so reclaim cannot delete the exact hot inputs cold publish revalidates.
+- Workflow cold-object reclaim retires exact manager-provided `ColdShardRef` refs before S3 deletion, waits the grace window, marks `DeleteIssued`, deletes the exact object key, and leaves a completed retired record to block republish.
 
 # Ralph Progress Log
 Started: Thu Apr 30 09:07:22 PM PDT 2026
@@ -246,4 +247,23 @@ Started: Thu Apr 30 09:07:22 PM PDT 2026
   - Cold workflow tests that inject a process-global cold tier must serialize with an async test lock and reset the hook with a drop guard.
   - Cold publish must re-read the same hot `SHARD`/`COMMITS` inputs used by upload so a stale job cannot publish refs after manifest or input drift.
   - Reclaim scheduling should wait while a cold job is active because cold publish validates hot rows that reclaim may otherwise delete.
+---
+## 2026-04-30 23:12:50 PDT - US-014
+- Implemented retired cold-object grace deletion in the workflow reclaimer.
+- Added exact cold-object refs to reclaim jobs, FDB retire records, grace-window sleep, `DeleteIssued` marking before S3 deletion, and completed retired records to block same-key republish.
+- Added workflow coverage proving the old cold ref is unpublished while the S3 object remains during grace, then the exact object key is deleted and the current cold ref remains live.
+- Verified with `cargo test -p depot --test workflow_compaction_payloads --test conveyer_compaction_payloads --test workflow_compaction_skeletons`, `cargo check -p depot`, and `cargo test -p depot`.
+- Files changed:
+  - `engine/packages/depot/src/conveyer/constants.rs`
+  - `engine/packages/depot/src/conveyer/types.rs`
+  - `engine/packages/depot/src/workflows/compaction.rs`
+  - `engine/packages/depot/tests/workflow_compaction_payloads.rs`
+  - `engine/packages/depot/tests/workflow_compaction_skeletons.rs`
+  - `engine/packages/depot/AGENTS.md`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Cold-object reclaim should keep a terminal retired record instead of clearing it so `PublishColdJob` can keep rejecting reused object keys.
+  - Use the activity run timestamp for retirement grace windows; workflow `create_ts()` can be older than the actual retire activity.
+  - Reclaim jobs may carry cold-object work without hot-row deletes, but the FDB activity should still revalidate manifest generation and exact cold-object refs before the S3 lane runs.
 ---

@@ -11,17 +11,19 @@ use depot::{
 	conveyer::{Db, branch, history_pin},
 	keys::{
 		PAGE_SIZE, branch_commit_key, branch_compaction_cold_shard_key,
-		branch_compaction_root_key,
+		branch_compaction_retired_cold_object_key, branch_compaction_root_key,
 		branch_compaction_stage_hot_shard_prefix, branch_delta_chunk_key, branch_meta_head_key,
 		branch_pidx_key, branch_shard_key, branch_shard_prefix, branch_vtx_key, branches_list_key,
 		db_pin_key, ns_child_key, ns_fork_pin_key, nscat_by_db_key, sqlite_cmp_dirty_key,
 	},
 	ltx::{LtxHeader, decode_ltx_v3, encode_ltx_v3},
 	types::{
-		BookmarkStr, BranchState, CommitRow, CompactionRoot, DBHead, DatabaseBranchId, DatabaseBranchRecord,
-		DbHistoryPinKind, DirtyPage, FetchedPage, NamespaceBranchId, NamespaceCatalogDbFact,
-		NamespaceForkFact, SqliteCmpDirty, decode_commit_row, decode_compaction_root,
-		decode_cold_shard_ref, decode_db_head, decode_db_history_pin, encode_commit_row,
+		BookmarkStr, BranchState, ColdShardRef, CommitRow, CompactionRoot, DBHead,
+		DatabaseBranchId, DatabaseBranchRecord, DbHistoryPinKind, DirtyPage, FetchedPage,
+		NamespaceBranchId, NamespaceCatalogDbFact, NamespaceForkFact,
+		RetiredColdObjectDeleteState, SqliteCmpDirty, decode_cold_shard_ref,
+		decode_commit_row, decode_compaction_root, decode_db_head, decode_db_history_pin,
+		decode_retired_cold_object, encode_cold_shard_ref, encode_commit_row,
 		encode_compaction_root, encode_database_branch_record, encode_db_head,
 		encode_namespace_catalog_db_fact,
 		encode_namespace_fork_fact, encode_sqlite_cmp_dirty,
@@ -35,6 +37,7 @@ use depot::{
 };
 use gas::db::debug::DatabaseDebug;
 use gas::prelude::{Id, Registry, SignalTrait, TestCtx, WorkflowTrait};
+use sha2::{Digest, Sha256};
 use tempfile::Builder;
 use universaldb::utils::IsolationLevel::Snapshot;
 use universalpubsub::{PubSub, driver::memory::MemoryDriver};
@@ -390,6 +393,63 @@ async fn wait_for_cold_publish(
 	}
 }
 
+async fn wait_for_retired_cold_object_state(
+	test_ctx: &TestCtx,
+	database_branch_id: DatabaseBranchId,
+	object_key: &str,
+	state: RetiredColdObjectDeleteState,
+) -> Result<depot::types::RetiredColdObject> {
+	let started_at = Instant::now();
+	let retired_key =
+		branch_compaction_retired_cold_object_key(database_branch_id, object_key_hash(object_key));
+
+	loop {
+		let retired = read_value(test_ctx, retired_key.clone())
+			.await?
+			.as_deref()
+			.map(decode_retired_cold_object)
+			.transpose()?;
+		if let Some(retired) = retired {
+			if retired.delete_state == state {
+				return Ok(retired);
+			}
+		}
+
+		if started_at.elapsed() > Duration::from_secs(5) {
+			bail!("timed out waiting for retired cold object state {state:?}");
+		}
+
+		tokio::time::sleep(Duration::from_millis(25)).await;
+	}
+}
+
+async fn wait_for_cold_object_deleted(tier: &dyn ColdTier, object_key: &str) -> Result<()> {
+	let started_at = Instant::now();
+
+	loop {
+		if tier.get_object(object_key).await?.is_none() {
+			return Ok(());
+		}
+
+		if started_at.elapsed() > Duration::from_secs(5) {
+			bail!("timed out waiting for cold object delete");
+		}
+
+		tokio::time::sleep(Duration::from_millis(25)).await;
+	}
+}
+
+fn object_key_hash(object_key: &str) -> [u8; 32] {
+	sha256(object_key.as_bytes())
+}
+
+fn sha256(bytes: &[u8]) -> [u8; 32] {
+	let digest = Sha256::digest(bytes);
+	let mut hash = [0_u8; 32];
+	hash.copy_from_slice(&digest);
+	hash
+}
+
 async fn read_value(test_ctx: &TestCtx, key: Vec<u8>) -> Result<Option<Vec<u8>>> {
 	let db = test_ctx.pools().udb()?;
 	db.run(move |tx| {
@@ -621,6 +681,54 @@ async fn clear_hot_rows_for_cold_read(
 		Ok(())
 	})
 	.await
+}
+
+async fn seed_workflow_cold_ref(
+	test_ctx: &TestCtx,
+	database_branch_id: DatabaseBranchId,
+	shard_id: u32,
+	as_of_txid: u64,
+	publish_generation: u64,
+	object_key: String,
+	bytes: Vec<u8>,
+) -> Result<ColdShardRef> {
+	let content_hash = sha256(&bytes);
+	let mut versionstamp = [0; 16];
+	versionstamp[8..16].copy_from_slice(&as_of_txid.to_be_bytes());
+	let cold_ref = ColdShardRef {
+		object_key,
+		object_generation_id: Id::new_v1(u16::try_from(as_of_txid).unwrap_or(u16::MAX)),
+		shard_id,
+		as_of_txid,
+		min_txid: as_of_txid,
+		max_txid: as_of_txid,
+		min_versionstamp: versionstamp,
+		max_versionstamp: versionstamp,
+		size_bytes: u64::try_from(bytes.len()).unwrap_or(u64::MAX),
+		content_hash,
+		publish_generation,
+	};
+
+	let db = test_ctx.pools().udb()?;
+	db.run({
+		let cold_ref = cold_ref.clone();
+		move |tx| {
+			let cold_ref = cold_ref.clone();
+			let bytes = bytes.clone();
+			async move {
+				tx.informal().set(
+					&branch_compaction_cold_shard_key(database_branch_id, shard_id, as_of_txid),
+					&encode_cold_shard_ref(cold_ref)?,
+				);
+				tx.informal()
+					.set(&branch_shard_key(database_branch_id, shard_id, as_of_txid), &bytes);
+				Ok(())
+			}
+		}
+	})
+	.await?;
+
+	Ok(cold_ref)
 }
 
 async fn seed_namespace_fork_proof(
@@ -1173,6 +1281,144 @@ async fn manager_publishes_cold_output_and_reads_through_cold_ref() -> Result<()
 }
 
 #[tokio::test]
+async fn reclaimer_retires_cold_object_before_grace_delete_and_cleanup() -> Result<()> {
+	let _cold_test_lock = WORKFLOW_COLD_TEST_LOCK.lock().await;
+	let cold_root = Builder::new()
+		.prefix("depot-workflow-cold-retire-")
+		.tempdir()?;
+	let tier = Arc::new(FilesystemColdTier::new(cold_root.path()));
+	set_workflow_test_cold_tier_for_test(Some(tier.clone()));
+	let _cold_tier_guard = WorkflowColdTierTestGuard;
+
+	let database_branch_id = database_branch_id(0xd1d1_2233_4455_6677_8899_aabb_ccdd_eeff);
+	let tag_value = database_branch_tag_value(database_branch_id);
+	let mut test_ctx = TestCtx::new(build_registry()).await?;
+	seed_manager_branch(
+		&test_ctx,
+		database_branch_id,
+		2,
+		Some(CompactionRoot {
+			schema_version: 1,
+			manifest_generation: 2,
+			hot_watermark_txid: 2,
+			cold_watermark_txid: 2,
+			cold_watermark_versionstamp: {
+				let mut versionstamp = [0; 16];
+				versionstamp[8..16].copy_from_slice(&2_u64.to_be_bytes());
+				versionstamp
+			},
+		}),
+		None,
+	)
+	.await?;
+
+	let old_key = format!(
+		"db/{}/shard/00000000/0000000000000001-old.ltx",
+		database_branch_id.as_uuid().simple()
+	);
+	let current_key = format!(
+		"db/{}/shard/00000000/0000000000000002-current.ltx",
+		database_branch_id.as_uuid().simple()
+	);
+	let old_bytes = encode_ltx_v3(
+		LtxHeader::delta(1, 1, 1_001),
+		&[DirtyPage {
+			pgno: 1,
+			bytes: page(1),
+		}],
+	)?;
+	let current_bytes = encode_ltx_v3(
+		LtxHeader::delta(2, 1, 1_002),
+		&[DirtyPage {
+			pgno: 1,
+			bytes: page(2),
+		}],
+	)?;
+	tier.put_object(&old_key, &old_bytes).await?;
+	tier.put_object(&current_key, &current_bytes).await?;
+	let old_ref = seed_workflow_cold_ref(
+		&test_ctx,
+		database_branch_id,
+		0,
+		1,
+		1,
+		old_key.clone(),
+		old_bytes,
+	)
+	.await?;
+	seed_workflow_cold_ref(
+		&test_ctx,
+		database_branch_id,
+		0,
+		2,
+		2,
+		current_key.clone(),
+		current_bytes,
+	)
+	.await?;
+
+	let manager_workflow_id = test_ctx
+		.workflow(DbManagerInput { database_branch_id })
+		.tag(DATABASE_BRANCH_ID_TAG, &tag_value)
+		.unique()
+		.dispatch()
+		.await?;
+
+	let retired = wait_for_retired_cold_object_state(
+		&test_ctx,
+		database_branch_id,
+		&old_ref.object_key,
+		RetiredColdObjectDeleteState::Retired,
+	)
+	.await?;
+	assert_eq!(retired.object_key, old_ref.object_key);
+	assert!(tier.get_object(&old_ref.object_key).await?.is_some());
+	assert!(
+		read_value(
+			&test_ctx,
+			branch_compaction_cold_shard_key(database_branch_id, 0, 1),
+		)
+		.await?
+		.is_none()
+	);
+	assert!(
+		read_value(
+			&test_ctx,
+			branch_compaction_cold_shard_key(database_branch_id, 0, 2),
+		)
+		.await?
+		.is_some()
+	);
+	let retired_root = read_value(&test_ctx, branch_compaction_root_key(database_branch_id))
+		.await?
+		.as_deref()
+		.map(decode_compaction_root)
+		.transpose()?
+		.expect("retired compaction root should exist");
+	assert_eq!(retired_root.manifest_generation, 3);
+
+	wait_for_cold_object_deleted(tier.as_ref(), &old_ref.object_key).await?;
+	let deleted = wait_for_retired_cold_object_state(
+		&test_ctx,
+		database_branch_id,
+		&old_ref.object_key,
+		RetiredColdObjectDeleteState::Deleted,
+	)
+	.await?;
+	assert_eq!(deleted.object_key, old_ref.object_key);
+	assert!(tier.get_object(&current_key).await?.is_some());
+	let manager_state =
+		wait_for_manager_state(&test_ctx, manager_workflow_id, |state| {
+			state.active_reclaim_job.is_none()
+		})
+		.await?;
+	assert!(manager_state.active_reclaim_job.is_none());
+
+	test_ctx.shutdown().await?;
+	Ok(())
+}
+
+#[tokio::test]
 async fn cold_compacter_rejects_stale_base_generation_without_publish() -> Result<()> {
 	let _cold_test_lock = WORKFLOW_COLD_TEST_LOCK.lock().await;
 	let cold_root = Builder::new()
@@ -1449,6 +1695,7 @@ async fn reclaimer_rejects_stale_manifest_generation() -> Result<()> {
 					txid: 1,
 					versionstamp,
 				}],
+				cold_objects: Vec::new(),
 				max_keys: 500,
 				max_bytes: 2 * 1024 * 1024,
 			},

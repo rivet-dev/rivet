@@ -55,5 +55,8 @@ pub const CMP_S3_UPLOAD_LIMIT_BYTES: usize = 64 * 1024 * 1024;
 /// Workflow compaction caps S3 delete activity batches.
 pub const CMP_S3_DELETE_MAX_OBJECTS: usize = 100;
 
+/// Workflow compaction waits this long after unpublishing a cold object before deleting it.
+pub const CMP_COLD_OBJECT_DELETE_GRACE_MS: i64 = 500;
+
 /// Workflow compaction splits planned activities expected to exceed this wall time.
 pub const CMP_ACTIVITY_TARGET_MS: i64 = 30 * 1000;

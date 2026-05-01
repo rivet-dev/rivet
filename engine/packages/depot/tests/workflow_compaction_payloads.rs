@@ -56,6 +56,14 @@ fn reclaim_input() -> ReclaimJobInputRange {
 			txid: 10,
 			versionstamp: [9; 16],
 		}],
+		cold_objects: vec![ReclaimColdObjectRef {
+			object_key: "db/branch/shard/00000007/0000000000000014-job-hash.ltx".into(),
+			object_generation_id: gas_id(0x1111_2222_3333_4444_5555_6666_7777_8888, 9),
+			content_hash: [4; 32],
+			expected_publish_generation: 42,
+			shard_id: 7,
+			as_of_txid: 20,
+		}],
 		max_keys: 500,
 		max_bytes: 2 * 1024 * 1024,
 	}

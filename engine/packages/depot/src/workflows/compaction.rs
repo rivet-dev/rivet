@@ -20,8 +20,9 @@ use universaldb::{
 use vbare::OwnedVersionedData;
 
 use crate::{
-	CMP_FDB_BATCH_MAX_KEYS, CMP_FDB_BATCH_MAX_VALUE_BYTES, CMP_S3_UPLOAD_LIMIT_BYTES,
-	CMP_S3_UPLOAD_MAX_OBJECTS, MAX_NAMESPACE_DEPTH,
+	CMP_COLD_OBJECT_DELETE_GRACE_MS, CMP_FDB_BATCH_MAX_KEYS, CMP_FDB_BATCH_MAX_VALUE_BYTES,
+	CMP_S3_DELETE_MAX_OBJECTS, CMP_S3_UPLOAD_LIMIT_BYTES, CMP_S3_UPLOAD_MAX_OBJECTS,
+	MAX_NAMESPACE_DEPTH,
 	HOT_BURST_COLD_LAG_THRESHOLD_TXIDS,
 	conveyer::{
 		history_pin, keys, quota,
@@ -29,10 +30,12 @@ use crate::{
 		types::{
 			BranchState, ColdShardRef, CommitRow, CompactionRoot, DBHead, DatabaseBranchId,
 			DatabaseBranchRecord, DbHistoryPin, DirtyPage, NamespaceCatalogDbFact,
-			NamespaceForkFact, SqliteCmpDirty, decode_commit_row,
+			NamespaceForkFact, RetiredColdObject, RetiredColdObjectDeleteState, SqliteCmpDirty,
+			decode_cold_shard_ref, decode_commit_row,
 			decode_compaction_root, decode_database_branch_record, decode_db_head,
-			decode_namespace_catalog_db_fact, decode_namespace_fork_fact, decode_sqlite_cmp_dirty,
-			encode_cold_shard_ref, encode_compaction_root,
+			decode_namespace_catalog_db_fact, decode_namespace_fork_fact,
+			decode_retired_cold_object, decode_sqlite_cmp_dirty, encode_cold_shard_ref,
+			encode_compaction_root, encode_retired_cold_object,
 		},
 		udb,
 	},
@@ -111,6 +114,7 @@ pub struct ColdJobInputRange {
 pub struct ReclaimJobInputRange {
 	pub txids: TxidRange,
 	pub txid_refs: Vec<ReclaimTxidRef>,
+	pub cold_objects: Vec<ReclaimColdObjectRef>,
 	pub max_keys: u32,
 	pub max_bytes: u64,
 }
@@ -119,6 +123,16 @@ pub struct ReclaimJobInputRange {
 pub struct ReclaimTxidRef {
 	pub txid: u64,
 	pub versionstamp: [u8; 16],
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct ReclaimColdObjectRef {
+	pub object_key: String,
+	pub object_generation_id: Id,
+	pub content_hash: [u8; 32],
+	pub expected_publish_generation: u64,
+	pub shard_id: u32,
+	pub as_of_txid: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -486,6 +500,49 @@ pub struct ReclaimFdbJobOutput {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Hash)]
+pub struct RetireColdObjectsInput {
+	pub database_branch_id: DatabaseBranchId,
+	pub job_id: Id,
+	pub job_kind: CompactionJobKind,
+	pub base_manifest_generation: u64,
+	pub input_fingerprint: CompactionInputFingerprint,
+	pub cold_objects: Vec<ReclaimColdObjectRef>,
+	pub retired_at_ms: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RetireColdObjectsOutput {
+	pub status: CompactionJobStatus,
+	pub retired_objects: Vec<RetiredColdObject>,
+	pub delete_after_ms: Option<i64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Hash)]
+pub struct DeleteRetiredColdObjectsInput {
+	pub database_branch_id: DatabaseBranchId,
+	pub cold_objects: Vec<ReclaimColdObjectRef>,
+	pub now_ms: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DeleteRetiredColdObjectsOutput {
+	pub status: CompactionJobStatus,
+	pub deleted_object_keys: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Hash)]
+pub struct CleanupRetiredColdObjectsInput {
+	pub database_branch_id: DatabaseBranchId,
+	pub cold_objects: Vec<ReclaimColdObjectRef>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CleanupRetiredColdObjectsOutput {
+	pub status: CompactionJobStatus,
+	pub cleaned_object_keys: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Hash)]
 pub struct RefreshManagerInput {
 	pub database_branch_id: DatabaseBranchId,
 }
@@ -544,6 +601,7 @@ struct ColdShardBlob {
 #[derive(Debug, Default)]
 struct ReclaimInputSnapshot {
 	txid_refs: Vec<ReclaimTxidRef>,
+	cold_object_refs: Vec<ReclaimColdObjectRef>,
 	commits: Vec<(u64, Vec<u8>, Vec<u8>, CommitRow)>,
 	delta_chunks: Vec<(Vec<u8>, Vec<u8>)>,
 	pidx_entries: Vec<(Vec<u8>, Vec<u8>)>,
@@ -1701,14 +1759,19 @@ async fn reclaim_fdb_job_tx(
 	let snapshot =
 		read_reclaim_input_snapshot(tx, input.database_branch_id, &root, &db_pins, Serializable)
 			.await?;
-	if snapshot.txid_refs != input.input_range.txid_refs {
+	if !input.input_range.txid_refs.is_empty() && snapshot.txid_refs != input.input_range.txid_refs {
 		return Ok(rejected_reclaim_job("reclaim txid set changed"));
 	}
-	if !snapshot.pidx_entries.is_empty() {
-		return Ok(rejected_reclaim_job("PIDX still references reclaim txids"));
+	if snapshot.cold_object_refs != input.input_range.cold_objects {
+		return Ok(rejected_reclaim_job("cold object reclaim set changed"));
 	}
-	if !reclaim_coverage_is_complete(&snapshot) {
-		return Ok(rejected_reclaim_job("replacement SHARD coverage is missing"));
+	if !input.input_range.txid_refs.is_empty() {
+		if !snapshot.pidx_entries.is_empty() {
+			return Ok(rejected_reclaim_job("PIDX still references reclaim txids"));
+		}
+		if !reclaim_coverage_is_complete(&snapshot) {
+			return Ok(rejected_reclaim_job("replacement SHARD coverage is missing"));
+		}
 	}
 
 	let input_fingerprint =
@@ -1717,9 +1780,18 @@ async fn reclaim_fdb_job_tx(
 		return Ok(rejected_reclaim_job("reclaim input fingerprint changed"));
 	}
 
+	let selected_reclaim_txids = input
+		.input_range
+		.txid_refs
+		.iter()
+		.map(|txid_ref| txid_ref.txid)
+		.collect::<BTreeSet<_>>();
 	let mut key_count = 0_u32;
 	let mut byte_count = 0_u64;
 	for (txid, key, value, commit) in &snapshot.commits {
+		if !selected_reclaim_txids.contains(txid) {
+			continue;
+		}
 		udb::compare_and_clear(tx, key, value);
 		key_count = key_count.saturating_add(1);
 		byte_count = byte_count.saturating_add(u64::try_from(value.len()).unwrap_or(u64::MAX));
@@ -1737,6 +1809,10 @@ async fn reclaim_fdb_job_tx(
 		}
 	}
 	for (key, value) in &snapshot.delta_chunks {
+		let txid = keys::decode_branch_delta_chunk_txid(input.database_branch_id, key)?;
+		if !selected_reclaim_txids.contains(&txid) {
+			continue;
+		}
 		udb::compare_and_clear(tx, key, value);
 		key_count = key_count.saturating_add(1);
 		byte_count = byte_count.saturating_add(u64::try_from(value.len()).unwrap_or(u64::MAX));
@@ -1759,6 +1835,327 @@ fn rejected_reclaim_job(reason: impl Into<String>) -> ReclaimFdbJobOutput {
 			reason: reason.into(),
 		},
 		output_refs: Vec::new(),
+	}
+}
+
+#[activity(RetireColdObjects)]
+pub async fn retire_cold_objects(
+	ctx: &ActivityCtx,
+	input: &RetireColdObjectsInput,
+) -> Result<RetireColdObjectsOutput> {
+	let mut input = input.clone();
+	input.retired_at_ms = ctx.ts();
+
+	ctx.udb()?
+		.run(move |tx| {
+			let input = input.clone();
+			async move { retire_cold_objects_tx(&tx, &input).await }
+		})
+		.await
+}
+
+async fn retire_cold_objects_tx(
+	tx: &universaldb::Transaction,
+	input: &RetireColdObjectsInput,
+) -> Result<RetireColdObjectsOutput> {
+	if input.job_kind != CompactionJobKind::Reclaim {
+		return Ok(rejected_cold_object_retire("reclaimer received a non-reclaim job"));
+	}
+	if input.cold_objects.is_empty() {
+		return Ok(RetireColdObjectsOutput {
+			status: CompactionJobStatus::Succeeded,
+			retired_objects: Vec::new(),
+			delete_after_ms: None,
+		});
+	}
+
+	let branch_record = tx_get_value(
+		tx,
+		&keys::branches_list_key(input.database_branch_id),
+		Serializable,
+	)
+	.await?
+	.as_deref()
+	.map(decode_database_branch_record)
+	.transpose()
+	.context("decode sqlite database branch record for cold retire")?;
+	if !branch_record
+		.as_ref()
+		.is_some_and(|record| record.state == BranchState::Live)
+	{
+		return Ok(rejected_cold_object_retire("database branch is not live"));
+	}
+
+	let root = tx_get_value(
+		tx,
+		&keys::branch_compaction_root_key(input.database_branch_id),
+		Serializable,
+	)
+	.await?
+	.as_deref()
+	.map(decode_compaction_root)
+	.transpose()
+	.context("decode sqlite compaction root for cold retire")?
+	.unwrap_or(CompactionRoot {
+		schema_version: 1,
+		manifest_generation: 0,
+		hot_watermark_txid: 0,
+		cold_watermark_txid: 0,
+		cold_watermark_versionstamp: [0; 16],
+	});
+	if root.manifest_generation != input.base_manifest_generation {
+		return Ok(rejected_cold_object_retire("base manifest generation changed"));
+	}
+
+	let delete_after_ms = input
+		.retired_at_ms
+		.saturating_add(CMP_COLD_OBJECT_DELETE_GRACE_MS);
+	let retired_manifest_generation = root.manifest_generation.saturating_add(1);
+	let mut retired_objects = Vec::with_capacity(input.cold_objects.len());
+
+	for cold_object in &input.cold_objects {
+		let live_key = keys::branch_compaction_cold_shard_key(
+			input.database_branch_id,
+			cold_object.shard_id,
+			cold_object.as_of_txid,
+		);
+		let Some(live_value) = tx_get_value(tx, &live_key, Serializable).await? else {
+			return Ok(rejected_cold_object_retire("cold shard ref is already absent"));
+		};
+		let live_ref = decode_cold_shard_ref(&live_value)
+			.context("decode sqlite cold shard ref for cold retire")?;
+		if reclaim_cold_object_ref(&live_ref) != *cold_object {
+			return Ok(rejected_cold_object_retire("cold shard ref changed"));
+		}
+
+		let retired_key = keys::branch_compaction_retired_cold_object_key(
+			input.database_branch_id,
+			content_hash(cold_object.object_key.as_bytes()),
+		);
+		if tx_get_value(tx, &retired_key, Serializable).await?.is_some() {
+			return Ok(rejected_cold_object_retire("cold object is already retired"));
+		}
+
+		udb::compare_and_clear(tx, &live_key, &live_value);
+		let retired = RetiredColdObject {
+			object_key: cold_object.object_key.clone(),
+			object_generation_id: cold_object.object_generation_id,
+			content_hash: cold_object.content_hash,
+			retired_manifest_generation,
+			retired_at_ms: input.retired_at_ms,
+			delete_after_ms,
+			delete_state: RetiredColdObjectDeleteState::Retired,
+		};
+		tx.informal().set(
+			&retired_key,
+			&encode_retired_cold_object(retired.clone())
+				.context("encode sqlite retired cold object")?,
+		);
+		retired_objects.push(retired);
+	}
+
+	let next_root = CompactionRoot {
+		schema_version: root.schema_version,
+		manifest_generation: retired_manifest_generation,
+		hot_watermark_txid: root.hot_watermark_txid,
+		cold_watermark_txid: root.cold_watermark_txid,
+		cold_watermark_versionstamp: root.cold_watermark_versionstamp,
+	};
+	tx.informal().set(
+		&keys::branch_compaction_root_key(input.database_branch_id),
+		&encode_compaction_root(next_root).context("encode sqlite compaction root for cold retire")?,
+	);
+
+	Ok(RetireColdObjectsOutput {
+		status: CompactionJobStatus::Succeeded,
+		retired_objects,
+		delete_after_ms: Some(delete_after_ms),
+	})
+}
+
+fn rejected_cold_object_retire(reason: impl Into<String>) -> RetireColdObjectsOutput {
+	RetireColdObjectsOutput {
+		status: CompactionJobStatus::Rejected {
+			reason: reason.into(),
+		},
+		retired_objects: Vec::new(),
+		delete_after_ms: None,
+	}
+}
+
+#[activity(DeleteRetiredColdObjects)]
+pub async fn delete_retired_cold_objects(
+	ctx: &ActivityCtx,
+	input: &DeleteRetiredColdObjectsInput,
+) -> Result<DeleteRetiredColdObjectsOutput> {
+	let input = input.clone();
+	let cold_tier = workflow_cold_tier().await?;
+
+	let marked = ctx
+		.udb()?
+		.run({
+			let input = input.clone();
+			move |tx| {
+				let input = input.clone();
+				async move { mark_retired_cold_objects_delete_issued_tx(&tx, &input).await }
+			}
+		})
+		.await?;
+	if !matches!(marked.status, CompactionJobStatus::Succeeded) {
+		return Ok(marked);
+	}
+
+	cold_tier
+		.delete_objects(&marked.deleted_object_keys)
+		.await
+		.context("delete retired sqlite cold objects")?;
+
+	Ok(marked)
+}
+
+async fn mark_retired_cold_objects_delete_issued_tx(
+	tx: &universaldb::Transaction,
+	input: &DeleteRetiredColdObjectsInput,
+) -> Result<DeleteRetiredColdObjectsOutput> {
+	let mut object_keys = Vec::with_capacity(input.cold_objects.len());
+
+	for cold_object in &input.cold_objects {
+		let retired_key = keys::branch_compaction_retired_cold_object_key(
+			input.database_branch_id,
+			content_hash(cold_object.object_key.as_bytes()),
+		);
+		let Some(retired_value) = tx_get_value(tx, &retired_key, Serializable).await? else {
+			return Ok(rejected_cold_object_delete("retired cold object is missing"));
+		};
+		let mut retired = decode_retired_cold_object(&retired_value)
+			.context("decode sqlite retired cold object for S3 delete")?;
+		if !retired_matches_cold_object(&retired, cold_object) {
+			return Ok(rejected_cold_object_delete("retired cold object changed"));
+		}
+		if retired.delete_after_ms > input.now_ms {
+			return Ok(rejected_cold_object_delete("retired cold object is still in grace window"));
+		}
+
+		let live_key = keys::branch_compaction_cold_shard_key(
+			input.database_branch_id,
+			cold_object.shard_id,
+			cold_object.as_of_txid,
+		);
+		if tx_get_value(tx, &live_key, Serializable).await?.is_some() {
+			tracing::error!(
+				?input.database_branch_id,
+				object_key = %cold_object.object_key,
+				publish_generation = cold_object.expected_publish_generation,
+				"live cold ref exists for retired object before S3 delete"
+			);
+			return Ok(rejected_cold_object_delete("live cold ref exists for retired object"));
+		}
+
+		if retired.delete_state == RetiredColdObjectDeleteState::Retired {
+			retired.delete_state = RetiredColdObjectDeleteState::DeleteIssued;
+			tx.informal().set(
+				&retired_key,
+				&encode_retired_cold_object(retired)
+					.context("encode sqlite retired cold object delete state")?,
+			);
+		}
+		object_keys.push(cold_object.object_key.clone());
+	}
+
+	Ok(DeleteRetiredColdObjectsOutput {
+		status: CompactionJobStatus::Succeeded,
+		deleted_object_keys: object_keys,
+	})
+}
+
+fn rejected_cold_object_delete(reason: impl Into<String>) -> DeleteRetiredColdObjectsOutput {
+	DeleteRetiredColdObjectsOutput {
+		status: CompactionJobStatus::Rejected {
+			reason: reason.into(),
+		},
+		deleted_object_keys: Vec::new(),
+	}
+}
+
+#[activity(CleanupRetiredColdObjects)]
+pub async fn cleanup_retired_cold_objects(
+	ctx: &ActivityCtx,
+	input: &CleanupRetiredColdObjectsInput,
+) -> Result<CleanupRetiredColdObjectsOutput> {
+	let input = input.clone();
+
+	ctx.udb()?
+		.run(move |tx| {
+			let input = input.clone();
+			async move { cleanup_retired_cold_objects_tx(&tx, &input).await }
+		})
+		.await
+}
+
+async fn cleanup_retired_cold_objects_tx(
+	tx: &universaldb::Transaction,
+	input: &CleanupRetiredColdObjectsInput,
+) -> Result<CleanupRetiredColdObjectsOutput> {
+	let mut cleaned = Vec::with_capacity(input.cold_objects.len());
+
+	for cold_object in &input.cold_objects {
+		let live_key = keys::branch_compaction_cold_shard_key(
+			input.database_branch_id,
+			cold_object.shard_id,
+			cold_object.as_of_txid,
+		);
+		if tx_get_value(tx, &live_key, Serializable).await?.is_some() {
+			tracing::error!(
+				?input.database_branch_id,
+				object_key = %cold_object.object_key,
+				publish_generation = cold_object.expected_publish_generation,
+				"live cold ref exists for delete-issued retired object"
+			);
+			return Ok(rejected_cold_object_cleanup(
+				"live cold ref exists for delete-issued retired object",
+			));
+		}
+
+		let retired_key = keys::branch_compaction_retired_cold_object_key(
+			input.database_branch_id,
+			content_hash(cold_object.object_key.as_bytes()),
+		);
+		let Some(retired_value) = tx_get_value(tx, &retired_key, Serializable).await? else {
+			continue;
+		};
+		let retired = decode_retired_cold_object(&retired_value)
+			.context("decode sqlite retired cold object for cleanup")?;
+		if !retired_matches_cold_object(&retired, cold_object) {
+			return Ok(rejected_cold_object_cleanup("retired cold object changed"));
+		}
+		if retired.delete_state != RetiredColdObjectDeleteState::DeleteIssued {
+			return Ok(rejected_cold_object_cleanup("retired cold object delete was not issued"));
+		}
+
+		let completed = RetiredColdObject {
+			delete_state: RetiredColdObjectDeleteState::Deleted,
+			..retired
+		};
+		tx.informal().set(
+			&retired_key,
+			&encode_retired_cold_object(completed)
+				.context("encode completed sqlite retired cold object")?,
+		);
+		cleaned.push(cold_object.object_key.clone());
+	}
+
+	Ok(CleanupRetiredColdObjectsOutput {
+		status: CompactionJobStatus::Succeeded,
+		cleaned_object_keys: cleaned,
+	})
+}
+
+fn rejected_cold_object_cleanup(reason: impl Into<String>) -> CleanupRetiredColdObjectsOutput {
+	CleanupRetiredColdObjectsOutput {
+		status: CompactionJobStatus::Rejected {
+			reason: reason.into(),
+		},
+		cleaned_object_keys: Vec::new(),
 	}
 }
 
@@ -2169,11 +2566,18 @@ async fn read_reclaim_input_snapshot(
 	db_pins: &[DbHistoryPin],
 	isolation_level: universaldb::utils::IsolationLevel,
 ) -> Result<ReclaimInputSnapshot> {
+	let cold_object_refs = read_reclaim_cold_object_refs(tx, branch_id, root, isolation_level).await?;
 	let Some(max_reclaim_txid) = reclaim_delete_upper_bound(root, db_pins) else {
-		return Ok(ReclaimInputSnapshot::default());
+		return Ok(ReclaimInputSnapshot {
+			cold_object_refs,
+			..ReclaimInputSnapshot::default()
+		});
 	};
 
-	let mut snapshot = ReclaimInputSnapshot::default();
+	let mut snapshot = ReclaimInputSnapshot {
+		cold_object_refs,
+		..ReclaimInputSnapshot::default()
+	};
 	for (key, value) in
 		tx_scan_prefix_values(tx, &keys::branch_commit_prefix(branch_id), isolation_level).await?
 	{
@@ -2239,6 +2643,32 @@ async fn read_reclaim_input_snapshot(
 	}
 
 	Ok(snapshot)
+}
+
+async fn read_reclaim_cold_object_refs(
+	tx: &universaldb::Transaction,
+	branch_id: DatabaseBranchId,
+	root: &CompactionRoot,
+	isolation_level: universaldb::utils::IsolationLevel,
+) -> Result<Vec<ReclaimColdObjectRef>> {
+	let mut refs = Vec::new();
+
+	for (_, value) in
+		tx_scan_prefix_values(tx, &keys::branch_compaction_cold_shard_prefix(branch_id), isolation_level)
+			.await?
+	{
+		let cold_ref =
+			decode_cold_shard_ref(&value).context("decode sqlite cold shard ref for reclaim")?;
+		if cold_ref.as_of_txid >= root.cold_watermark_txid {
+			continue;
+		}
+		refs.push(reclaim_cold_object_ref(&cold_ref));
+		if refs.len() >= CMP_S3_DELETE_MAX_OBJECTS {
+			break;
+		}
+	}
+
+	Ok(refs)
 }
 
 async fn read_cold_input_snapshot(
@@ -2463,18 +2893,34 @@ fn plan_reclaim_job(
 	if snapshot.namespace_proof_blocked_reclaim {
 		return None;
 	}
-	if snapshot.reclaim_inputs.txid_refs.is_empty()
-		|| !snapshot.reclaim_inputs.pidx_entries.is_empty()
-		|| !reclaim_coverage_is_complete(&snapshot.reclaim_inputs)
-	{
+	let has_hot_reclaim = !snapshot.reclaim_inputs.txid_refs.is_empty()
+		&& snapshot.reclaim_inputs.pidx_entries.is_empty()
+		&& reclaim_coverage_is_complete(&snapshot.reclaim_inputs);
+	let has_cold_reclaim = !snapshot.reclaim_inputs.cold_object_refs.is_empty();
+	if !has_hot_reclaim && !has_cold_reclaim {
 		return None;
 	}
 
-	let min_txid = snapshot.reclaim_inputs.txid_refs.first()?.txid;
-	let max_txid = snapshot.reclaim_inputs.txid_refs.last()?.txid;
+	let min_txid = snapshot
+		.reclaim_inputs
+		.txid_refs
+		.first()
+		.map(|txid_ref| txid_ref.txid)
+		.unwrap_or(snapshot.root.cold_watermark_txid);
+	let max_txid = snapshot
+		.reclaim_inputs
+		.txid_refs
+		.last()
+		.map(|txid_ref| txid_ref.txid)
+		.unwrap_or(snapshot.root.cold_watermark_txid);
 	let input_range = ReclaimJobInputRange {
 		txids: TxidRange { min_txid, max_txid },
-		txid_refs: snapshot.reclaim_inputs.txid_refs.clone(),
+		txid_refs: if has_hot_reclaim {
+			snapshot.reclaim_inputs.txid_refs.clone()
+		} else {
+			Vec::new()
+		},
+		cold_objects: snapshot.reclaim_inputs.cold_object_refs.clone(),
 		max_keys: CMP_FDB_BATCH_MAX_KEYS as u32,
 		max_bytes: CMP_FDB_BATCH_MAX_VALUE_BYTES as u64,
 	};
@@ -2538,6 +2984,14 @@ fn fingerprint_reclaim_inputs(
 	for txid_ref in &reclaim_inputs.txid_refs {
 		mix_fingerprint(&mut fingerprint, &txid_ref.txid.to_be_bytes());
 		mix_fingerprint(&mut fingerprint, &txid_ref.versionstamp);
+	}
+	for cold_object in &reclaim_inputs.cold_object_refs {
+		mix_fingerprint(&mut fingerprint, cold_object.object_key.as_bytes());
+		mix_fingerprint(&mut fingerprint, &cold_object.object_generation_id.as_bytes());
+		mix_fingerprint(&mut fingerprint, &cold_object.content_hash);
+		mix_fingerprint(&mut fingerprint, &cold_object.expected_publish_generation.to_be_bytes());
+		mix_fingerprint(&mut fingerprint, &cold_object.shard_id.to_be_bytes());
+		mix_fingerprint(&mut fingerprint, &cold_object.as_of_txid.to_be_bytes());
 	}
 	for (txid, key, value, commit) in &reclaim_inputs.commits {
 		mix_fingerprint(&mut fingerprint, &txid.to_be_bytes());
@@ -2829,6 +3283,26 @@ fn expected_cold_output_refs(
 			}
 		})
 		.collect()
+}
+
+fn reclaim_cold_object_ref(cold_ref: &ColdShardRef) -> ReclaimColdObjectRef {
+	ReclaimColdObjectRef {
+		object_key: cold_ref.object_key.clone(),
+		object_generation_id: cold_ref.object_generation_id,
+		content_hash: cold_ref.content_hash,
+		expected_publish_generation: cold_ref.publish_generation,
+		shard_id: cold_ref.shard_id,
+		as_of_txid: cold_ref.as_of_txid,
+	}
+}
+
+fn retired_matches_cold_object(
+	retired: &RetiredColdObject,
+	cold_object: &ReclaimColdObjectRef,
+) -> bool {
+	retired.object_key == cold_object.object_key
+		&& retired.object_generation_id == cold_object.object_generation_id
+		&& retired.content_hash == cold_object.content_hash
 }
 
 fn cold_shard_object_key(
@@ -3189,9 +3663,57 @@ async fn run_reclaim_job(
 			job_kind: signal.job_kind,
 			base_manifest_generation: signal.base_manifest_generation,
 			input_fingerprint: signal.input_fingerprint,
-			input_range: signal.input_range,
+			input_range: signal.input_range.clone(),
 		})
 		.await?;
+
+	let mut status = output.status;
+	let output_refs = output.output_refs;
+
+	if matches!(status, CompactionJobStatus::Succeeded)
+		&& !signal.input_range.cold_objects.is_empty()
+	{
+		let retired = ctx
+			.activity(RetireColdObjectsInput {
+				database_branch_id,
+				job_id: signal.job_id,
+				job_kind: signal.job_kind,
+				base_manifest_generation: signal.base_manifest_generation,
+				input_fingerprint: signal.input_fingerprint,
+				cold_objects: signal.input_range.cold_objects.clone(),
+				retired_at_ms: ctx.create_ts(),
+			})
+			.await?;
+		status = retired.status;
+
+		if matches!(status, CompactionJobStatus::Succeeded) {
+			let delete_now_ms = if let Some(delete_after_ms) = retired.delete_after_ms {
+				ctx.sleep_until(delete_after_ms).await?;
+				delete_after_ms
+			} else {
+				ctx.create_ts()
+			};
+
+			let deleted = ctx
+				.activity(DeleteRetiredColdObjectsInput {
+					database_branch_id,
+					cold_objects: signal.input_range.cold_objects.clone(),
+					now_ms: delete_now_ms,
+				})
+				.await?;
+			status = deleted.status;
+
+			if matches!(status, CompactionJobStatus::Succeeded) {
+				let cleaned = ctx
+					.activity(CleanupRetiredColdObjectsInput {
+						database_branch_id,
+						cold_objects: signal.input_range.cold_objects.clone(),
+					})
+					.await?;
+				status = cleaned.status;
+			}
+		}
+	}
 
 	let tag_value = database_branch_tag_value(database_branch_id);
 	ctx.signal(ReclaimJobFinished {
@@ -3200,8 +3722,8 @@ async fn run_reclaim_job(
 		job_kind: CompactionJobKind::Reclaim,
 		base_manifest_generation: signal.base_manifest_generation,
 		input_fingerprint: signal.input_fingerprint,
-		status: output.status,
-		output_refs: output.output_refs,
+		status,
+		output_refs,
 	})
 	.to_workflow::<DbManagerWorkflow>()
 	.tag(DATABASE_BRANCH_ID_TAG, &tag_value)
