@@ -296,6 +296,45 @@
     },
     {
       "id": "US-017",
+      "title": "Add force-compaction and wait-idle workflow test hook",
+      "description": "As a test author, I need a deterministic way to drive the manager planner and wait for requested compaction work to settle without manipulating clocks or relying on threshold timing.",
+      "acceptanceCriteria": [
+        "Add a test/internal manager signal or helper named `ForceCompaction` or equivalent with request id and requested work flags for hot, cold, reclaim, and final-settle planning",
+        "Force compaction bypasses normal lag thresholds and planner deadlines, but does not bypass FDB refresh, branch lifecycle checks, manifest generation checks, pin checks, namespace proof checks, or install/reclaim revalidation",
+        "The manager records or emits a request-scoped completion result that tests can wait on, including request id, attempted job kinds, completed job ids when any, skipped/no-op reasons, and terminal error if any",
+        "Add a depot test helper such as `force_compaction_and_wait_idle(branch, request)` that returns only after no requested job is active and no immediately runnable requested work remains after a fresh FDB refresh",
+        "The wait-idle helper must not use arbitrary sleeps as its primary synchronization mechanism; it should observe workflow state, signal ack/completion state, or another deterministic completion marker",
+        "Tests cover a no-op force request, a force hot request that publishes already-planned hot work, and a force reclaim request that waits until the reclaim job has either completed or reported a skipped safety gate",
+        "If this story uncovers an implementation issue too large to fix in the same iteration, append a new user story to `scripts/ralph/prd.json` whose acceptance criteria include the failing test name and the expected fix",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 17,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-018",
+      "title": "Add depot workflow end-to-end tests using force compaction",
+      "description": "As a depot maintainer, I need end-to-end tests that exercise the actual depot workflow compaction system through commits, reads, compaction, and reclaim without depending on timing thresholds.",
+      "acceptanceCriteria": [
+        "Add depot-level tests that use real conveyer/depot APIs where practical instead of manually seeding every FDB row",
+        "Test commit -> force hot compaction -> read, proving published SHARD coverage preserves page bytes after PIDX is cleared",
+        "Test commit -> force hot compaction -> force reclaim -> read, proving reclaimed DELTA/COMMITS/VTX rows are gone while the database remains readable",
+        "Test bookmark or database-fork pin -> force compaction -> force reclaim, proving exact pinned txid coverage is created or reclaim is blocked until it exists",
+        "Test namespace-fork fact -> force reclaim, proving the manager materializes a namespace-derived DB pin or retains history when the proof is ambiguous",
+        "Test cold publish -> hot row removal -> read through cold ref, proving the depot read path can recover data through manager-published cold coverage",
+        "Each new test should assert both externally visible read correctness and the relevant storage-side invariant, such as manifest generation, deleted rows, retained pin rows, or cold ref state",
+        "If any new end-to-end test exposes an implementation issue too large to fix in this iteration, append a new user story to `scripts/ralph/prd.json` whose acceptance criteria name the failing test and describe the required behavior",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 18,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-019",
       "title": "Remove legacy compactor coordination mechanisms",
       "description": "As a maintainer, I need the workflow system to be the only compaction writer because this code has not shipped and legacy coexistence is out of scope.",
       "acceptanceCriteria": [
@@ -309,12 +348,12 @@
         "Typecheck passes",
         "Tests pass"
       ],
-      "priority": 17,
+      "priority": 19,
       "passes": false,
       "notes": ""
     },
     {
-      "id": "US-018",
+      "id": "US-020",
       "title": "Add end-to-end workflow compaction coverage",
       "description": "As a release owner, I need integrated tests that exercise the new architecture across commits, forks, compaction, reclaim, cold storage, and branch deletion.",
       "acceptanceCriteria": [
@@ -327,7 +366,7 @@
         "Typecheck passes",
         "Tests pass"
       ],
-      "priority": 18,
+      "priority": 20,
       "passes": false,
       "notes": ""
     }

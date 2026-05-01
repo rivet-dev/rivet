@@ -16,6 +16,7 @@
 - Workflow cold-object reclaim retires exact manager-provided `ColdShardRef` refs before S3 deletion, waits the grace window, marks `DeleteIssued`, deletes the exact object key, and leaves a completed retired record to block republish.
 - Workflow branch lifecycle is fenced by `DatabaseBranchRecord.lifecycle_generation`; planned workflow jobs carry the base generation and reject stage, publish, or reclaim work after branch deletion or recreation.
 - Workflow repair cleanup is reclaimer-owned: unmatched hot completions clear exact staged FDB rows, unmatched cold completions delete unreferenced S3 objects, and live cold refs with missing S3 or `DeleteIssued` retired records are logged and retained.
+- Workflow force-compaction is manager-owned: send `ForceCompaction`, bypass only lag thresholds in `RefreshManager`, and wait on durable `force_compaction_results`.
 
 # Ralph Progress Log
 Started: Thu Apr 30 09:07:22 PM PDT 2026
@@ -314,4 +315,22 @@ Started: Thu Apr 30 09:07:22 PM PDT 2026
   - Stale workflow output cleanup should stay manager-detected but reclaimer-executed so publish/delete authority remains centralized.
   - Cold-object corruption checks need both FDB retired-object state and S3 object existence before any live ref is removed.
   - Tests for corruption paths should wait for `ReclaimJobFinished` rather than idle manager state because retained corruption can be replanned by the manager.
+---
+## 2026-04-30 23:47:34 PDT - US-017
+- Implemented the `ForceCompaction` manager signal with hot, cold, reclaim, and final-settle work flags.
+- Added durable pending force requests and request-scoped completion results with attempted kinds, completed job ids, no-op reasons, and terminal errors.
+- Wired forced refresh planning so it bypasses normal lag thresholds but still goes through FDB refresh, lifecycle checks, fingerprints, install, publish, and reclaim revalidation.
+- Added a deterministic depot test helper that sends `ForceCompaction` and waits on durable manager results, plus no-op, forced hot, and forced reclaim coverage.
+- Verified with `cargo test -p depot --test workflow_compaction_payloads --test workflow_compaction_skeletons`, `cargo check -p depot`, and `cargo test -p depot`.
+- Files changed:
+  - `engine/packages/depot/src/workflows/compaction.rs`
+  - `engine/packages/depot/tests/workflow_compaction_payloads.rs`
+  - `engine/packages/depot/tests/workflow_compaction_skeletons.rs`
+  - `engine/packages/depot/CLAUDE.md`
+  - `scripts/ralph/prd.json`
+  - `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Force compaction should stay as a manager-side test/internal control plane so companion workflows still run the normal stage/upload/reclaim activities.
+  - When adding fields to vbare-backed workflow state, add a legacy version wrapper and bump only that payload's embedded version.
+  - Test wait-idle helpers can observe durable manager `Loop` state and request-scoped results instead of manipulating planner deadlines.
 ---

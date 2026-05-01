@@ -51,6 +51,7 @@ These come from `r2-prior-art/.agent/research/sqlite/requirements.md` and supers
 - **Workflow compaction branch workflows use `DATABASE_BRANCH_ID_TAG` as their only stable unique tag.** The manager stores companion workflow ids before entering its durable loop.
 - **Workflow compaction jobs carry the database branch lifecycle generation.** Stage, publish, and reclaim activities must reject stale work when the branch record is missing, deleted, or generation-changed.
 - **Workflow compaction manager planning runs through `RefreshManager` activities.** Recompute branch lag from FDB, record one active job in durable state, then signal the persistent companion workflow.
+- **Workflow force-compaction tests use the manager `ForceCompaction` signal.** Wait on durable `force_compaction_results`, not planner deadlines or arbitrary timing thresholds.
 - **Workflow hot compaction writes only staged LTX blobs under `CMP/stage/{job_id}/hot_shard`.** Successful staged results stay as the manager's active hot job until the manager install path publishes or rejects them.
 - **Workflow hot install runs in the DB manager.** It accepts only the active job fingerprint, copies staged hot shards to reader-visible `SHARD`, advances `CMP/root`, and clears matching PIDX rows with `COMPARE_AND_CLEAR`.
 - **Workflow hot planning treats `DB_PIN` records as exact coverage targets.** Preserve pinned txids in `HotJobInputRange.coverage_txids`; do not round them up to the latest head.

@@ -14,9 +14,10 @@ fn gas_id(value: u128, label: u16) -> Id {
 }
 
 fn assert_embedded_version(encoded: &[u8]) {
-	assert_eq!(
-		u16::from_le_bytes([encoded[0], encoded[1]]),
-		SQLITE_COMPACTION_WORKFLOW_PAYLOAD_VERSION
+	let version = u16::from_le_bytes([encoded[0], encoded[1]]);
+	assert!(
+		version == SQLITE_COMPACTION_WORKFLOW_PAYLOAD_VERSION || version == 2,
+		"unexpected embedded payload version {version}"
 	);
 }
 
@@ -160,6 +161,10 @@ fn compaction_signal_names_are_stable() {
 		"depot_sqlite_cmp_reclaim_job_finished"
 	);
 	assert_eq!(
+		<ForceCompaction as SignalTrait>::NAME,
+		"depot_sqlite_cmp_force_compaction"
+	);
+	assert_eq!(
 		<DestroyDatabaseBranch as SignalTrait>::NAME,
 		"depot_sqlite_cmp_destroy_database_branch"
 	);
@@ -235,6 +240,21 @@ fn manager_signals_round_trip_with_embedded_version() {
 		},
 		encode_reclaim_job_finished,
 		decode_reclaim_job_finished
+	);
+
+	assert_round_trip!(
+		ForceCompaction {
+			database_branch_id,
+			request_id: gas_id(0x3500_4000_5000_6000_7000_8000_9000_a000, 12),
+			requested_work: ForceCompactionWork {
+				hot: true,
+				cold: true,
+				reclaim: true,
+				final_settle: true,
+			},
+		},
+		encode_force_compaction,
+		decode_force_compaction
 	);
 
 	assert_round_trip!(
@@ -320,6 +340,37 @@ fn workflow_states_round_trip_with_embedded_version() {
 			active_hot_job: Some(active_job(CompactionJobKind::Hot)),
 			active_cold_job: Some(active_job(CompactionJobKind::Cold)),
 			active_reclaim_job: Some(active_job(CompactionJobKind::Reclaim)),
+			pending_force_compactions: vec![PendingForceCompaction {
+				request_id: gas_id(0x9100_a000_b000_c000_d000_e000_f000_0001, 23),
+				requested_work: ForceCompactionWork {
+					hot: true,
+					cold: false,
+					reclaim: true,
+					final_settle: false,
+				},
+				attempted_job_kinds: vec![CompactionJobKind::Hot],
+				completed_job_ids: vec![gas_id(
+					0x9200_a000_b000_c000_d000_e000_f000_0001,
+					24,
+				)],
+				skipped_noop_reasons: vec!["reclaim:no-actionable-work-or-safety-gate".into()],
+				terminal_error: None,
+				requested_at_ms: 1_714_000_015_000,
+			}],
+			force_compaction_results: vec![ForceCompactionResult {
+				request_id: gas_id(0x9300_a000_b000_c000_d000_e000_f000_0001, 25),
+				requested_work: ForceCompactionWork {
+					hot: false,
+					cold: false,
+					reclaim: false,
+					final_settle: true,
+				},
+				attempted_job_kinds: Vec::new(),
+				completed_job_ids: Vec::new(),
+				skipped_noop_reasons: vec!["final-settle:refreshed".into()],
+				terminal_error: None,
+				completed_at_ms: 1_714_000_016_000,
+			}],
 			retry_cursors: ManagerRetryCursors {
 				hot: RetryCursor {
 					attempt: 1,

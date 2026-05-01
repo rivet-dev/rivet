@@ -213,6 +213,14 @@ pub struct ReclaimJobFinished {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[signal("depot_sqlite_cmp_force_compaction")]
+pub struct ForceCompaction {
+	pub database_branch_id: DatabaseBranchId,
+	pub request_id: Id,
+	pub requested_work: ForceCompactionWork,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 #[signal("depot_sqlite_cmp_destroy_database_branch")]
 pub struct DestroyDatabaseBranch {
 	pub database_branch_id: DatabaseBranchId,
@@ -266,6 +274,8 @@ pub struct DbManagerState {
 	pub active_hot_job: Option<ActiveCompactionJob>,
 	pub active_cold_job: Option<ActiveCompactionJob>,
 	pub active_reclaim_job: Option<ActiveCompactionJob>,
+	pub pending_force_compactions: Vec<PendingForceCompaction>,
+	pub force_compaction_results: Vec<ForceCompactionResult>,
 	pub retry_cursors: ManagerRetryCursors,
 	pub planning_deadlines: ManagerPlanningDeadlines,
 	pub branch_stop_state: BranchStopState,
@@ -279,6 +289,8 @@ impl DbManagerState {
 			active_hot_job: None,
 			active_cold_job: None,
 			active_reclaim_job: None,
+			pending_force_compactions: Vec::new(),
+			force_compaction_results: Vec::new(),
 			retry_cursors: ManagerRetryCursors::default(),
 			planning_deadlines: ManagerPlanningDeadlines::default(),
 			branch_stop_state: BranchStopState::Running,
@@ -294,6 +306,59 @@ impl DbManagerState {
 		state.planning_deadlines = ManagerPlanningDeadlines::after_refresh(now_ms);
 		state
 	}
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+pub struct ForceCompactionWork {
+	pub hot: bool,
+	pub cold: bool,
+	pub reclaim: bool,
+	pub final_settle: bool,
+}
+
+impl ForceCompactionWork {
+	fn is_empty(self) -> bool {
+		!self.hot && !self.cold && !self.reclaim && !self.final_settle
+	}
+
+	fn includes(self, job_kind: CompactionJobKind) -> bool {
+		match job_kind {
+			CompactionJobKind::Hot => self.hot,
+			CompactionJobKind::Cold => self.cold,
+			CompactionJobKind::Reclaim => self.reclaim,
+		}
+	}
+
+	fn union(self, other: Self) -> Self {
+		ForceCompactionWork {
+			hot: self.hot || other.hot,
+			cold: self.cold || other.cold,
+			reclaim: self.reclaim || other.reclaim,
+			final_settle: self.final_settle || other.final_settle,
+		}
+	}
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PendingForceCompaction {
+	pub request_id: Id,
+	pub requested_work: ForceCompactionWork,
+	pub attempted_job_kinds: Vec<CompactionJobKind>,
+	pub completed_job_ids: Vec<Id>,
+	pub skipped_noop_reasons: Vec<String>,
+	pub terminal_error: Option<String>,
+	pub requested_at_ms: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ForceCompactionResult {
+	pub request_id: Id,
+	pub requested_work: ForceCompactionWork,
+	pub attempted_job_kinds: Vec<CompactionJobKind>,
+	pub completed_job_ids: Vec<Id>,
+	pub skipped_noop_reasons: Vec<String>,
+	pub terminal_error: Option<String>,
+	pub completed_at_ms: i64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -597,6 +662,7 @@ pub struct ValidateReclaimColdObjectsOutput {
 #[derive(Debug, Clone, Serialize, Deserialize, Hash)]
 pub struct RefreshManagerInput {
 	pub database_branch_id: DatabaseBranchId,
+	pub force: ForceCompactionWork,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -668,6 +734,7 @@ gas::prelude::join_signal!(pub DbManagerSignal {
 	HotJobFinished,
 	ColdJobFinished,
 	ReclaimJobFinished,
+	ForceCompaction,
 	DestroyDatabaseBranch,
 });
 
@@ -716,6 +783,11 @@ pub async fn db_manager(ctx: &mut WorkflowCtx, input: &DbManagerInput) -> Result
 								});
 							}
 						}
+						DbManagerSignal::ForceCompaction(signal) => {
+							if signal.database_branch_id == input.database_branch_id {
+								record_force_compaction_request(ctx, state, signal);
+							}
+						}
 						DbManagerSignal::HotJobFinished(signal) => {
 							if signal.database_branch_id == input.database_branch_id {
 								let active_job = state.active_hot_job.clone();
@@ -751,12 +823,24 @@ pub async fn db_manager(ctx: &mut WorkflowCtx, input: &DbManagerInput) -> Result
 												CompactionJobStatus::Succeeded
 												| CompactionJobStatus::Rejected { .. }
 												| CompactionJobStatus::Failed { .. } => {
+													record_force_job_finished(
+														state,
+														CompactionJobKind::Hot,
+														signal.job_id,
+														&install.status,
+													);
 													state.active_hot_job = None
 												}
 											}
 										}
 										CompactionJobStatus::Rejected { .. }
 										| CompactionJobStatus::Failed { .. } => {
+											record_force_job_finished(
+												state,
+												CompactionJobKind::Hot,
+												signal.job_id,
+												&signal.status,
+											);
 											state.active_hot_job = None
 										}
 									}
@@ -800,12 +884,24 @@ pub async fn db_manager(ctx: &mut WorkflowCtx, input: &DbManagerInput) -> Result
 												CompactionJobStatus::Succeeded
 												| CompactionJobStatus::Rejected { .. }
 												| CompactionJobStatus::Failed { .. } => {
+													record_force_job_finished(
+														state,
+														CompactionJobKind::Cold,
+														signal.job_id,
+														&publish.status,
+													);
 													state.active_cold_job = None
 												}
 											}
 										}
 										CompactionJobStatus::Rejected { .. }
 										| CompactionJobStatus::Failed { .. } => {
+											record_force_job_finished(
+												state,
+												CompactionJobKind::Cold,
+												signal.job_id,
+												&signal.status,
+											);
 											state.active_cold_job = None
 										}
 									}
@@ -823,6 +919,12 @@ pub async fn db_manager(ctx: &mut WorkflowCtx, input: &DbManagerInput) -> Result
 											CompactionJobStatus::Succeeded
 											| CompactionJobStatus::Rejected { .. }
 											| CompactionJobStatus::Failed { .. } => {
+												record_force_job_finished(
+													state,
+													CompactionJobKind::Reclaim,
+													signal.job_id,
+													&signal.status,
+												);
 												state.active_reclaim_job = None
 											}
 										}
@@ -866,14 +968,16 @@ pub async fn db_manager(ctx: &mut WorkflowCtx, input: &DbManagerInput) -> Result
 					return Ok(Loop::Break(()));
 				}
 
+				let forced_work = pending_force_work(state);
 				let refresh = ctx
 					.activity(RefreshManagerInput {
 						database_branch_id: input.database_branch_id,
+						force: forced_work,
 					})
 					.await?;
-				state.planning_deadlines = refresh.planning_deadlines;
+				state.planning_deadlines = refresh.planning_deadlines.clone();
 				if state.last_dirty_cursor.is_none()
-					&& let Some(dirty) = refresh.observed_dirty
+					&& let Some(dirty) = refresh.observed_dirty.as_ref()
 				{
 					state.last_dirty_cursor = Some(DirtyCursor {
 						observed_head_txid: dirty.observed_head_txid,
@@ -906,7 +1010,7 @@ pub async fn db_manager(ctx: &mut WorkflowCtx, input: &DbManagerInput) -> Result
 				if state.active_hot_job.is_none()
 					&& matches!(state.branch_stop_state, BranchStopState::Running)
 				{
-					if let Some(active_job) = refresh.planned_hot_job {
+					if let Some(active_job) = refresh.planned_hot_job.clone() {
 						let hot_compacter_workflow_id = state
 							.companion_workflow_ids
 							.hot_compacter_workflow_id
@@ -932,6 +1036,7 @@ pub async fn db_manager(ctx: &mut WorkflowCtx, input: &DbManagerInput) -> Result
 						.send()
 						.await?;
 
+						record_force_job_attempted(state, CompactionJobKind::Hot, active_job.job_id);
 						state.active_hot_job = Some(active_job);
 					}
 				}
@@ -939,7 +1044,7 @@ pub async fn db_manager(ctx: &mut WorkflowCtx, input: &DbManagerInput) -> Result
 				if state.active_cold_job.is_none()
 					&& matches!(state.branch_stop_state, BranchStopState::Running)
 				{
-					if let Some(active_job) = refresh.planned_cold_job {
+					if let Some(active_job) = refresh.planned_cold_job.clone() {
 						let cold_compacter_workflow_id = state
 							.companion_workflow_ids
 							.cold_compacter_workflow_id
@@ -965,6 +1070,7 @@ pub async fn db_manager(ctx: &mut WorkflowCtx, input: &DbManagerInput) -> Result
 						.send()
 						.await?;
 
+						record_force_job_attempted(state, CompactionJobKind::Cold, active_job.job_id);
 						state.active_cold_job = Some(active_job);
 					}
 				}
@@ -973,7 +1079,7 @@ pub async fn db_manager(ctx: &mut WorkflowCtx, input: &DbManagerInput) -> Result
 					&& state.active_cold_job.is_none()
 					&& matches!(state.branch_stop_state, BranchStopState::Running)
 				{
-					if let Some(active_job) = refresh.planned_reclaim_job {
+					if let Some(active_job) = refresh.planned_reclaim_job.clone() {
 						let reclaimer_workflow_id = state
 							.companion_workflow_ids
 							.reclaimer_workflow_id
@@ -999,9 +1105,16 @@ pub async fn db_manager(ctx: &mut WorkflowCtx, input: &DbManagerInput) -> Result
 						.send()
 						.await?;
 
+						record_force_job_attempted(
+							state,
+							CompactionJobKind::Reclaim,
+							active_job.job_id,
+						);
 						state.active_reclaim_job = Some(active_job);
 					}
 				}
+
+				complete_ready_force_compactions(ctx, state, &refresh);
 
 				Ok(Loop::Continue)
 			}
@@ -1148,6 +1261,7 @@ pub async fn refresh_manager(
 			&snapshot,
 			Id::new_v1(ctx.config().dc_label()),
 			now_ms,
+			input.force.hot,
 		)
 	} else {
 		None
@@ -1158,6 +1272,7 @@ pub async fn refresh_manager(
 			&snapshot,
 			Id::new_v1(ctx.config().dc_label()),
 			now_ms,
+			input.force.cold,
 		)
 	} else {
 		None
@@ -1168,6 +1283,7 @@ pub async fn refresh_manager(
 			&snapshot,
 			Id::new_v1(ctx.config().dc_label()),
 			now_ms,
+			input.force.reclaim,
 		)
 	} else {
 		None
@@ -1218,6 +1334,189 @@ fn reclaim_job_finished_matches_active(
 		&& signal.job_kind == active_job.job_kind
 		&& signal.base_manifest_generation == active_job.base_manifest_generation
 		&& signal.input_fingerprint == active_job.input_fingerprint
+}
+
+fn record_force_compaction_request(
+	ctx: &WorkflowCtx,
+	state: &mut DbManagerState,
+	signal: ForceCompaction,
+) {
+	if signal.requested_work.is_empty()
+		|| state
+			.pending_force_compactions
+			.iter()
+			.any(|request| request.request_id == signal.request_id)
+		|| state
+			.force_compaction_results
+			.iter()
+			.any(|result| result.request_id == signal.request_id)
+	{
+		return;
+	}
+
+	let mut request = PendingForceCompaction {
+		request_id: signal.request_id,
+		requested_work: signal.requested_work,
+		attempted_job_kinds: Vec::new(),
+		completed_job_ids: Vec::new(),
+		skipped_noop_reasons: Vec::new(),
+		terminal_error: None,
+		requested_at_ms: ctx.create_ts(),
+	};
+	for active_job in [
+		state.active_hot_job.as_ref(),
+		state.active_cold_job.as_ref(),
+		state.active_reclaim_job.as_ref(),
+	]
+	.into_iter()
+	.flatten()
+	{
+		if signal.requested_work.includes(active_job.job_kind) {
+			push_unique_job_kind(&mut request.attempted_job_kinds, active_job.job_kind);
+		}
+	}
+	state.pending_force_compactions.push(request);
+}
+
+fn pending_force_work(state: &DbManagerState) -> ForceCompactionWork {
+	state
+		.pending_force_compactions
+		.iter()
+		.fold(ForceCompactionWork::default(), |acc, request| {
+			acc.union(request.requested_work)
+		})
+}
+
+fn record_force_job_attempted(
+	state: &mut DbManagerState,
+	job_kind: CompactionJobKind,
+	_job_id: Id,
+) {
+	for request in &mut state.pending_force_compactions {
+		if request.requested_work.includes(job_kind) {
+			push_unique_job_kind(&mut request.attempted_job_kinds, job_kind);
+		}
+	}
+}
+
+fn record_force_job_finished(
+	state: &mut DbManagerState,
+	job_kind: CompactionJobKind,
+	job_id: Id,
+	status: &CompactionJobStatus,
+) {
+	for request in &mut state.pending_force_compactions {
+		if request.requested_work.includes(job_kind) {
+			push_unique_job_kind(&mut request.attempted_job_kinds, job_kind);
+			push_unique_id(&mut request.completed_job_ids, job_id);
+			if let CompactionJobStatus::Failed { error } = status {
+				request.terminal_error = Some(error.clone());
+			}
+		}
+	}
+}
+
+fn complete_ready_force_compactions(
+	ctx: &WorkflowCtx,
+	state: &mut DbManagerState,
+	refresh: &RefreshManagerOutput,
+) {
+	let mut remaining_requests = Vec::new();
+	let pending_requests = std::mem::take(&mut state.pending_force_compactions);
+	for mut request in pending_requests {
+		if force_request_has_active_work(state, request.requested_work) {
+			remaining_requests.push(request);
+			continue;
+		}
+
+		if force_request_has_planned_work(refresh, request.requested_work) {
+			remaining_requests.push(request);
+			continue;
+		}
+
+		request
+			.skipped_noop_reasons
+			.extend(force_noop_reasons(&request, refresh));
+		state.force_compaction_results.push(ForceCompactionResult {
+			request_id: request.request_id,
+			requested_work: request.requested_work,
+			attempted_job_kinds: request.attempted_job_kinds,
+			completed_job_ids: request.completed_job_ids,
+			skipped_noop_reasons: request.skipped_noop_reasons,
+			terminal_error: request.terminal_error,
+			completed_at_ms: ctx.create_ts(),
+		});
+		if state.force_compaction_results.len() > 16 {
+			state.force_compaction_results.remove(0);
+		}
+	}
+	state.pending_force_compactions = remaining_requests;
+}
+
+fn force_request_has_active_work(
+	state: &DbManagerState,
+	requested_work: ForceCompactionWork,
+) -> bool {
+	(requested_work.hot && state.active_hot_job.is_some())
+		|| (requested_work.cold && state.active_cold_job.is_some())
+		|| (requested_work.reclaim && state.active_reclaim_job.is_some())
+}
+
+fn force_request_has_planned_work(
+	refresh: &RefreshManagerOutput,
+	requested_work: ForceCompactionWork,
+) -> bool {
+	(requested_work.hot && refresh.planned_hot_job.is_some())
+		|| (requested_work.cold && refresh.planned_cold_job.is_some())
+		|| (requested_work.reclaim && refresh.planned_reclaim_job.is_some())
+}
+
+fn force_noop_reasons(
+	request: &PendingForceCompaction,
+	refresh: &RefreshManagerOutput,
+) -> Vec<String> {
+	let mut reasons = Vec::new();
+	if !refresh.branch_is_live {
+		reasons.push("branch:not-live".to_string());
+		return reasons;
+	}
+	if request.requested_work.hot
+		&& !request
+			.attempted_job_kinds
+			.contains(&CompactionJobKind::Hot)
+	{
+		reasons.push("hot:no-actionable-lag".to_string());
+	}
+	if request.requested_work.cold
+		&& !request
+			.attempted_job_kinds
+			.contains(&CompactionJobKind::Cold)
+	{
+		reasons.push("cold:no-actionable-lag".to_string());
+	}
+	if request.requested_work.reclaim
+		&& !request
+			.attempted_job_kinds
+			.contains(&CompactionJobKind::Reclaim)
+	{
+		reasons.push("reclaim:no-actionable-work-or-safety-gate".to_string());
+	}
+	if request.requested_work.final_settle {
+		reasons.push("final-settle:refreshed".to_string());
+	}
+	reasons
+}
+
+fn push_unique_job_kind(job_kinds: &mut Vec<CompactionJobKind>, job_kind: CompactionJobKind) {
+	if !job_kinds.contains(&job_kind) {
+		job_kinds.push(job_kind);
+	}
+}
+
+fn push_unique_id(ids: &mut Vec<Id>, id: Id) {
+	if !ids.contains(&id) {
+		ids.push(id);
+	}
 }
 
 async fn schedule_stale_hot_output_cleanup(
@@ -3476,6 +3775,7 @@ fn plan_hot_job(
 	snapshot: &ManagerFdbSnapshot,
 	job_id: Id,
 	now_ms: i64,
+	force: bool,
 ) -> Option<ActiveCompactionJob> {
 	let branch_record = snapshot.branch_record.as_ref()?;
 	let head = snapshot.head.as_ref()?;
@@ -3487,7 +3787,7 @@ fn plan_hot_job(
 	let has_uncovered_pin = coverage_txids
 		.iter()
 		.any(|txid| *txid != head.head_txid && *txid > snapshot.root.hot_watermark_txid);
-	if hot_lag < quota::COMPACTION_DELTA_THRESHOLD && !has_uncovered_pin {
+	if hot_lag < quota::COMPACTION_DELTA_THRESHOLD && !has_uncovered_pin && !force {
 		return None;
 	}
 
@@ -3526,6 +3826,7 @@ fn plan_cold_job(
 	snapshot: &ManagerFdbSnapshot,
 	job_id: Id,
 	now_ms: i64,
+	force: bool,
 ) -> Option<ActiveCompactionJob> {
 	let branch_record = snapshot.branch_record.as_ref()?;
 	if snapshot.cold_inputs.shard_blobs.is_empty() {
@@ -3535,7 +3836,7 @@ fn plan_cold_job(
 		.root
 		.hot_watermark_txid
 		.saturating_sub(snapshot.root.cold_watermark_txid);
-	if cold_lag < HOT_BURST_COLD_LAG_THRESHOLD_TXIDS {
+	if cold_lag < HOT_BURST_COLD_LAG_THRESHOLD_TXIDS && !force {
 		return None;
 	}
 
@@ -3569,6 +3870,7 @@ fn plan_reclaim_job(
 	snapshot: &ManagerFdbSnapshot,
 	job_id: Id,
 	now_ms: i64,
+	_force: bool,
 ) -> Option<ActiveCompactionJob> {
 	let branch_record = snapshot.branch_record.as_ref()?;
 	if snapshot.namespace_proof_blocked_reclaim {
@@ -4546,6 +4848,10 @@ enum VersionedReclaimJobFinished {
 	V1(ReclaimJobFinished),
 }
 
+enum VersionedForceCompaction {
+	V1(ForceCompaction),
+}
+
 enum VersionedDestroyDatabaseBranch {
 	V1(DestroyDatabaseBranch),
 }
@@ -4562,8 +4868,38 @@ enum VersionedRunReclaimJob {
 	V1(RunReclaimJob),
 }
 
+#[derive(Deserialize)]
+struct DbManagerStateV1 {
+	companion_workflow_ids: CompanionWorkflowIds,
+	active_hot_job: Option<ActiveCompactionJob>,
+	active_cold_job: Option<ActiveCompactionJob>,
+	active_reclaim_job: Option<ActiveCompactionJob>,
+	retry_cursors: ManagerRetryCursors,
+	planning_deadlines: ManagerPlanningDeadlines,
+	branch_stop_state: BranchStopState,
+	last_dirty_cursor: Option<DirtyCursor>,
+}
+
+impl From<DbManagerStateV1> for DbManagerState {
+	fn from(value: DbManagerStateV1) -> Self {
+		DbManagerState {
+			companion_workflow_ids: value.companion_workflow_ids,
+			active_hot_job: value.active_hot_job,
+			active_cold_job: value.active_cold_job,
+			active_reclaim_job: value.active_reclaim_job,
+			pending_force_compactions: Vec::new(),
+			force_compaction_results: Vec::new(),
+			retry_cursors: value.retry_cursors,
+			planning_deadlines: value.planning_deadlines,
+			branch_stop_state: value.branch_stop_state,
+			last_dirty_cursor: value.last_dirty_cursor,
+		}
+	}
+}
+
 enum VersionedDbManagerState {
-	V1(DbManagerState),
+	V1(DbManagerStateV1),
+	V2(DbManagerState),
 }
 
 enum VersionedCompanionWorkflowState {
@@ -4641,6 +4977,13 @@ impl_workflow_compaction_versioned_data!(
 	decode_reclaim_job_finished
 );
 impl_workflow_compaction_versioned_data!(
+	VersionedForceCompaction,
+	ForceCompaction,
+	"ForceCompaction",
+	encode_force_compaction,
+	decode_force_compaction
+);
+impl_workflow_compaction_versioned_data!(
 	VersionedDestroyDatabaseBranch,
 	DestroyDatabaseBranch,
 	"DestroyDatabaseBranch",
@@ -4669,16 +5012,65 @@ impl_workflow_compaction_versioned_data!(
 	decode_run_reclaim_job
 );
 impl_workflow_compaction_versioned_data!(
-	VersionedDbManagerState,
-	DbManagerState,
-	"DbManagerState",
-	encode_db_manager_state,
-	decode_db_manager_state
-);
-impl_workflow_compaction_versioned_data!(
 	VersionedCompanionWorkflowState,
 	CompanionWorkflowState,
 	"CompanionWorkflowState",
 	encode_companion_workflow_state,
 	decode_companion_workflow_state
 );
+
+impl OwnedVersionedData for VersionedDbManagerState {
+	type Latest = DbManagerState;
+
+	fn wrap_latest(latest: Self::Latest) -> Self {
+		Self::V2(latest)
+	}
+
+	fn unwrap_latest(self) -> Result<Self::Latest> {
+		match self {
+			Self::V1(data) => Ok(data.into()),
+			Self::V2(data) => Ok(data),
+		}
+	}
+
+	fn deserialize_version(payload: &[u8], version: u16) -> Result<Self> {
+		match version {
+			1 => Ok(Self::V1(serde_bare::from_slice(payload)?)),
+			2 => Ok(Self::V2(serde_bare::from_slice(payload)?)),
+			_ => bail!("invalid depot workflow compaction DbManagerState version: {version}"),
+		}
+	}
+
+	fn deserialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
+		vec![|data| match data {
+			Self::V1(data) => Ok(Self::V2(data.into())),
+			Self::V2(data) => Ok(Self::V2(data)),
+		}]
+	}
+
+	fn serialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
+		vec![|data| match data {
+			Self::V2(_) => bail!("DbManagerState v2 cannot be downgraded to v1"),
+			Self::V1(_) => Ok(data),
+		}]
+	}
+
+	fn serialize_version(self, version: u16) -> Result<Vec<u8>> {
+		match (self, version) {
+			(Self::V2(data), 2) => serde_bare::to_vec(&data).map_err(Into::into),
+			(Self::V1(_), 1) => bail!("legacy DbManagerState cannot be re-encoded"),
+			(_, version) => bail!("invalid depot workflow compaction DbManagerState version: {version}"),
+		}
+	}
+}
+
+pub fn encode_db_manager_state(payload: DbManagerState) -> Result<Vec<u8>> {
+	VersionedDbManagerState::wrap_latest(payload)
+		.serialize_with_embedded_version(2)
+		.context("encode sqlite workflow compaction DbManagerState")
+}
+
+pub fn decode_db_manager_state(payload: &[u8]) -> Result<DbManagerState> {
+	VersionedDbManagerState::deserialize_with_embedded_version(payload)
+		.context("decode sqlite workflow compaction DbManagerState")
+}

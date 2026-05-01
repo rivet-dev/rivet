@@ -32,10 +32,10 @@ use depot::{
 	workflows::compaction::{
 		CompactionJobKind, CompactionJobStatus, DATABASE_BRANCH_ID_TAG, DbColdCompacterWorkflow,
 		DbHotCompacterWorkflow, DbManagerInput, DbManagerState, DbManagerWorkflow,
-		DbReclaimerWorkflow, DeltasAvailable, DestroyDatabaseBranch, HotJobFinished,
-		HotJobInputRange, HotShardOutputRef, ColdJobFinished, RunColdJob, RunHotJob,
-		ReclaimJobFinished, RunReclaimJob, TxidRange, database_branch_tag_value,
-		set_workflow_test_cold_tier_for_test,
+		DbReclaimerWorkflow, DeltasAvailable, DestroyDatabaseBranch, ForceCompaction,
+		ForceCompactionResult, ForceCompactionWork, HotJobFinished, HotJobInputRange,
+		HotShardOutputRef, ColdJobFinished, RunColdJob, RunHotJob, ReclaimJobFinished,
+		RunReclaimJob, TxidRange, database_branch_tag_value, set_workflow_test_cold_tier_for_test,
 	},
 };
 use gas::db::debug::DatabaseDebug;
@@ -305,6 +305,40 @@ async fn wait_for_manager_state(
 
 		tokio::time::sleep(Duration::from_millis(25)).await;
 	}
+}
+
+async fn force_compaction_and_wait_idle(
+	test_ctx: &TestCtx,
+	manager_workflow_id: Id,
+	database_branch_id: DatabaseBranchId,
+	request_id: Id,
+	requested_work: ForceCompactionWork,
+) -> Result<ForceCompactionResult> {
+	let signal_id = test_ctx
+		.signal(ForceCompaction {
+			database_branch_id,
+			request_id,
+			requested_work,
+		})
+		.to_workflow_id(manager_workflow_id)
+		.send()
+		.await?
+		.expect("signal should target manager workflow");
+	wait_for_signal_ack(test_ctx, signal_id).await?;
+
+	let manager_state = wait_for_manager_state(test_ctx, manager_workflow_id, |state| {
+		state
+			.force_compaction_results
+			.iter()
+			.any(|result| result.request_id == request_id)
+	})
+	.await?;
+
+	manager_state
+		.force_compaction_results
+		.into_iter()
+		.find(|result| result.request_id == request_id)
+		.ok_or_else(|| anyhow::anyhow!("force compaction result should be recorded"))
 }
 
 async fn wait_for_workflow_state(
@@ -1270,6 +1304,158 @@ async fn duplicate_deltas_available_does_not_create_duplicate_hot_job() -> Resul
 	assert_eq!(root.manifest_generation, 1);
 	assert_eq!(root.hot_watermark_txid, quota_threshold_head());
 	assert_eq!(shard_rows.len(), 1);
+
+	test_ctx.shutdown().await?;
+	Ok(())
+}
+
+#[tokio::test]
+async fn force_compaction_noop_records_completion_result() -> Result<()> {
+	let database_branch_id = database_branch_id(0x3131_2233_4455_6677_8899_aabb_ccdd_eeff);
+	let tag_value = database_branch_tag_value(database_branch_id);
+	let mut test_ctx = TestCtx::new(build_registry()).await?;
+	seed_manager_branch(&test_ctx, database_branch_id, 0, None, None).await?;
+
+	let manager_workflow_id = test_ctx
+		.workflow(DbManagerInput { database_branch_id })
+		.tag(DATABASE_BRANCH_ID_TAG, &tag_value)
+		.unique()
+		.dispatch()
+		.await?;
+	let request_id = Id::new_v1(42);
+	let result = force_compaction_and_wait_idle(
+		&test_ctx,
+		manager_workflow_id,
+		database_branch_id,
+		request_id,
+		ForceCompactionWork {
+			hot: true,
+			cold: true,
+			reclaim: true,
+			final_settle: true,
+		},
+	)
+	.await?;
+
+	assert_eq!(result.request_id, request_id);
+	assert!(result.attempted_job_kinds.is_empty());
+	assert!(result.completed_job_ids.is_empty());
+	assert!(
+		result
+			.skipped_noop_reasons
+			.contains(&"hot:no-actionable-lag".to_string())
+	);
+	assert!(
+		result
+			.skipped_noop_reasons
+			.contains(&"final-settle:refreshed".to_string())
+	);
+
+	test_ctx.shutdown().await?;
+	Ok(())
+}
+
+#[tokio::test]
+async fn force_hot_compaction_publishes_planned_work_below_threshold() -> Result<()> {
+	let database_branch_id = database_branch_id(0x3232_2233_4455_6677_8899_aabb_ccdd_eeff);
+	let tag_value = database_branch_tag_value(database_branch_id);
+	let mut test_ctx = TestCtx::new(build_registry()).await?;
+	seed_manager_branch(&test_ctx, database_branch_id, 1, None, None).await?;
+
+	let manager_workflow_id = test_ctx
+		.workflow(DbManagerInput { database_branch_id })
+		.tag(DATABASE_BRANCH_ID_TAG, &tag_value)
+		.unique()
+		.dispatch()
+		.await?;
+	let request_id = Id::new_v1(43);
+	let result = force_compaction_and_wait_idle(
+		&test_ctx,
+		manager_workflow_id,
+		database_branch_id,
+		request_id,
+		ForceCompactionWork {
+			hot: true,
+			cold: false,
+			reclaim: false,
+			final_settle: false,
+		},
+	)
+	.await?;
+
+	assert_eq!(result.attempted_job_kinds, vec![CompactionJobKind::Hot]);
+	assert_eq!(result.completed_job_ids.len(), 1);
+	assert!(result.skipped_noop_reasons.is_empty());
+	assert!(result.terminal_error.is_none());
+	let root = read_value(&test_ctx, branch_compaction_root_key(database_branch_id))
+		.await?
+		.as_deref()
+		.map(decode_compaction_root)
+		.transpose()?
+		.expect("force hot compaction should publish root");
+	assert_eq!(root.hot_watermark_txid, 1);
+	assert!(read_value(&test_ctx, branch_shard_key(database_branch_id, 0, 1)).await?.is_some());
+	assert!(read_value(&test_ctx, branch_pidx_key(database_branch_id, 1)).await?.is_none());
+
+	test_ctx.shutdown().await?;
+	Ok(())
+}
+
+#[tokio::test]
+async fn force_reclaim_waits_for_reclaim_completion() -> Result<()> {
+	let database_branch_id = database_branch_id(0x3333_2233_4455_6677_8899_aabb_ccdd_eeff);
+	let tag_value = database_branch_tag_value(database_branch_id);
+	let mut test_ctx = TestCtx::new(build_registry()).await?;
+	seed_manager_branch(
+		&test_ctx,
+		database_branch_id,
+		1,
+		Some(CompactionRoot {
+			schema_version: 1,
+			manifest_generation: 1,
+			hot_watermark_txid: 1,
+			cold_watermark_txid: 0,
+			cold_watermark_versionstamp: [0; 16],
+		}),
+		None,
+	)
+	.await?;
+	publish_test_shard_and_clear_pidx(&test_ctx, database_branch_id, 1).await?;
+
+	let manager_workflow_id = test_ctx
+		.workflow(DbManagerInput { database_branch_id })
+		.tag(DATABASE_BRANCH_ID_TAG, &tag_value)
+		.unique()
+		.dispatch()
+		.await?;
+	let request_id = Id::new_v1(44);
+	let result = force_compaction_and_wait_idle(
+		&test_ctx,
+		manager_workflow_id,
+		database_branch_id,
+		request_id,
+		ForceCompactionWork {
+			hot: false,
+			cold: false,
+			reclaim: true,
+			final_settle: false,
+		},
+	)
+	.await?;
+
+	assert_eq!(result.attempted_job_kinds, vec![CompactionJobKind::Reclaim]);
+	assert_eq!(result.completed_job_ids.len(), 1);
+	assert!(result.terminal_error.is_none());
+	assert!(
+		read_value(&test_ctx, branch_delta_chunk_key(database_branch_id, 1, 0))
+			.await?
+			.is_none()
+	);
+	assert!(
+		read_value(&test_ctx, branch_commit_key(database_branch_id, 1))
+			.await?
+			.is_none()
+	);
 
 	test_ctx.shutdown().await?;
 	Ok(())
