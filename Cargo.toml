@@ -571,11 +571,19 @@ overflow-checks = false
 debug = "line-tables-only"
 lto = "off"
 
-  [profile.dev.build-override]
-  opt-level = 3
+[profile.dev.build-override]
+opt-level = 3
 
 [profile.release]
 debug = false
 lto = "fat"
 codegen-units = 1
 opt-level = 3
+
+[profile.quick]
+inherits = "dev"
+debug = false          # no debug info → faster link, smaller binary
+strip = "symbols"      # strip what's left
+opt-level = 1          # cheap optimizations, still fast to compile
+panic = "abort"        # drops unwinding tables
+codegen-units = 256    # max parallelism

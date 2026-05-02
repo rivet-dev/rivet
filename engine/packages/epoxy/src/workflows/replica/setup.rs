@@ -103,6 +103,12 @@ async fn catch_up_replica(
 	ctx: &ActivityCtx,
 	input: &CatchUpReplicaInput,
 ) -> Result<CatchUpReplicaOutput> {
+	// TODO: No-op for now
+	return Ok(CatchUpReplicaOutput {
+		last_versionstamp: None,
+		applied_entries: 0,
+	});
+
 	let replica_id = ctx.config().epoxy_replica_id();
 	let config: protocol::ClusterConfig = input.config.clone().into();
 	let api_ctx = ApiCtx::new_from_activity(ctx)?;
@@ -151,7 +157,9 @@ async fn catch_up_replica(
 		ctx.udb()?
 			.run(|tx| {
 				let entry = entry.clone();
-				async move { crate::replica::changelog::apply_entry(&*tx, replica_id, entry).await }
+				async move {
+					crate::replica::changelog::apply_entry(&*tx, replica_id, entry, true).await
+				}
 			})
 			.custom_instrument(tracing::info_span!("apply_changelog_entry_tx"))
 			.await?;
