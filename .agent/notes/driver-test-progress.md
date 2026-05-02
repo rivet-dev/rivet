@@ -89,3 +89,11 @@ Config: registry (static), client type (http), encoding (bare)
 - 2026-04-26T14:12:59-07:00 actor-onstatechange: PASS (bare file filter)
 
 - 2026-04-26T14:17:33-07:00 actor-db: FAIL (exit 1, bare file filter)
+
+- 2026-05-02T00:19:36-07:00 actor-conn-state: FAIL - new onConnect send regression timed out before sender wiring fix.
+
+- 2026-05-02T00:24:56-07:00 actor-conn-state: PASS (static/bare file filter, 9 tests).
+
+- 2026-05-02T02:26:38-07:00 actor-conn-state: PASS (static/bare file filter with c.conns onConnect send, 9 tests).
+
+- 2026-05-02T02:55:45-07:00 actor-conn-state: PASS (static/bare file filter with explicit pre-await onConnect subscription regression, 9 tests).

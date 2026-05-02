@@ -160,14 +160,23 @@ impl RegistryDispatcher {
 					.collect(),
 			});
 
+			let prepare_sender = sender.clone();
 			match timeout(
 				connect_timeout,
-				instance.ctx.connect_conn(
+				instance.ctx.connect_conn_with_prepare(
 					conn_params,
 					is_hibernatable,
 					hibernation,
 					Some(connect_request),
 					async { Ok(Vec::new()) },
+					move |conn| {
+						configure_actor_connect_connection(
+							conn,
+							prepare_sender,
+							encoding,
+							max_outgoing_message_size,
+						)
+					},
 				),
 			)
 			.await
@@ -221,42 +230,14 @@ impl RegistryDispatcher {
 			}
 		};
 
-		let managed_disconnect = conn
-			.managed_disconnect_handler()
-			.context("get actor websocket disconnect handler")?;
-		let transport_closed = Arc::new(AtomicBool::new(false));
-		let transport_disconnect_sender = sender.clone();
-		conn.configure_transport_disconnect_handler(Some(Arc::new(move |reason| {
-			let transport_closed = transport_closed.clone();
-			let transport_disconnect_sender = transport_disconnect_sender.clone();
-			Box::pin(async move {
-				if !transport_closed.swap(true, Ordering::SeqCst) {
-					transport_disconnect_sender.close(Some(1000), reason);
-				}
-				Ok(())
-			})
-		})));
-		conn.configure_disconnect_handler(Some(managed_disconnect));
-
-		let event_sender = sender.clone();
-		conn.configure_event_sender(Some(Arc::new(
-			move |event| match send_actor_connect_message(
-				&event_sender,
+		if is_restoring_hibernatable {
+			configure_actor_connect_connection(
+				&conn,
+				sender.clone(),
 				encoding,
-				&ActorConnectToClient::Event(ActorConnectEvent {
-					name: event.name,
-					args: ByteBuf::from(event.args),
-				}),
 				max_outgoing_message_size,
-			) {
-				Ok(()) => Ok(()),
-				Err(ActorConnectSendError::OutgoingTooLong) => {
-					event_sender.close(Some(1011), Some("message.outgoing_too_long".to_owned()));
-					Ok(())
-				}
-				Err(ActorConnectSendError::Encode(error)) => Err(error),
-			},
-		)));
+			)?;
+		}
 
 		let init_actor_id = instance.ctx.actor_id().to_owned();
 		let init_conn_id = conn.id().to_owned();
@@ -701,6 +682,51 @@ impl RegistryDispatcher {
 			})),
 		})
 	}
+}
+
+fn configure_actor_connect_connection(
+	conn: &ConnHandle,
+	sender: WebSocketSender,
+	encoding: ActorConnectEncoding,
+	max_outgoing_message_size: usize,
+) -> Result<()> {
+	let managed_disconnect = conn
+		.managed_disconnect_handler()
+		.context("get actor websocket disconnect handler")?;
+	let transport_closed = Arc::new(AtomicBool::new(false));
+	let transport_disconnect_sender = sender.clone();
+	conn.configure_transport_disconnect_handler(Some(Arc::new(move |reason| {
+		let transport_closed = transport_closed.clone();
+		let transport_disconnect_sender = transport_disconnect_sender.clone();
+		Box::pin(async move {
+			if !transport_closed.swap(true, Ordering::SeqCst) {
+				transport_disconnect_sender.close(Some(1000), reason);
+			}
+			Ok(())
+		})
+	})));
+	conn.configure_disconnect_handler(Some(managed_disconnect));
+
+	let event_sender = sender.clone();
+	conn.configure_event_sender(Some(Arc::new(
+		move |event| match send_actor_connect_message(
+			&event_sender,
+			encoding,
+			&ActorConnectToClient::Event(ActorConnectEvent {
+				name: event.name,
+				args: ByteBuf::from(event.args),
+			}),
+			max_outgoing_message_size,
+		) {
+			Ok(()) => Ok(()),
+			Err(ActorConnectSendError::OutgoingTooLong) => {
+				event_sender.close(Some(1011), Some("message.outgoing_too_long".to_owned()));
+				Ok(())
+			}
+			Err(ActorConnectSendError::Encode(error)) => Err(error),
+		},
+	)));
+	Ok(())
 }
 
 pub(super) async fn persist_and_ack_hibernatable_actor_message(

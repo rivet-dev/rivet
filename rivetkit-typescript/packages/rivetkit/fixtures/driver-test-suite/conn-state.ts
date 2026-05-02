@@ -28,6 +28,20 @@ export const connStateActor = actor({
 	},
 	// Lifecycle hook when a connection is established
 	onConnect: (c, conn) => {
+		conn.send("connectedFromOnConnect", {
+			id: conn.id,
+			username: conn.state.username,
+		});
+
+		const connFromConns = c.conns.get(conn.id);
+		if (!connFromConns) {
+			throw new Error("connection missing from c.conns in onConnect");
+		}
+		connFromConns.send("connectedFromOnConnectConns", {
+			id: connFromConns.id,
+			username: connFromConns.state.username,
+		});
+
 		// Broadcast event about the new connection
 		c.broadcast("userConnected", {
 			id: conn.id,

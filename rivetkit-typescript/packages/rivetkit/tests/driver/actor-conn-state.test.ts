@@ -149,6 +149,62 @@ describeDriverMatrix("Actor Conn State", (driverTestConfig) => {
 		});
 
 		describe("Connection Lifecycle", () => {
+			test("should deliver onConnect events to listeners registered before the first await", async (c) => {
+				const { client } = await setupDriverTest(c, driverTestConfig);
+
+				const conn = client.connStateActor
+					.getOrCreate([], {
+						params: { username: "connect-event-user" },
+					})
+					.connect();
+				let connectEvent:
+					| {
+							id: string;
+							username: string;
+					  }
+					| undefined;
+				let connectConnsEvent:
+					| {
+							id: string;
+							username: string;
+					  }
+					| undefined;
+				// Register these before any await. The client does not replay events that arrive before subscription.
+				const unsubscribe = conn.on(
+					"connectedFromOnConnect",
+					(event) => {
+						connectEvent = event;
+						unsubscribe();
+					},
+				);
+				const unsubscribeConns = conn.on(
+					"connectedFromOnConnectConns",
+					(event) => {
+						connectConnsEvent = event;
+						unsubscribeConns();
+					},
+				);
+
+				const connState = await conn.getConnectionState();
+
+				// Poll until the onConnect event arrives because connection event delivery crosses the websocket task boundary.
+				await vi.waitFor(
+					() => {
+						expect(connectEvent).toEqual({
+							id: connState.id,
+							username: "connect-event-user",
+						});
+						expect(connectConnsEvent).toEqual({
+							id: connState.id,
+							username: "connect-event-user",
+						});
+					},
+					{ timeout: 10_000, interval: 100 },
+				);
+
+				await conn.dispose();
+			});
+
 			test("should track connection and disconnection events", async (c) => {
 				const { client } = await setupDriverTest(c, driverTestConfig);
 

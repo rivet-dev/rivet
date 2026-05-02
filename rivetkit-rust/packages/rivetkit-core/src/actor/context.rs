@@ -816,6 +816,34 @@ impl ActorContext {
 		Ok(conn)
 	}
 
+	pub(crate) async fn connect_conn_with_prepare<F, P>(
+		&self,
+		params: Vec<u8>,
+		is_hibernatable: bool,
+		hibernation: Option<HibernatableConnectionMetadata>,
+		request: Option<Request>,
+		create_state: F,
+		prepare_connection: P,
+	) -> Result<ConnHandle>
+	where
+		F: Future<Output = Result<Vec<u8>>> + Send,
+		P: FnOnce(&ConnHandle) -> Result<()>,
+	{
+		let conn = self
+			.connect_with_state_and_prepare(
+				params,
+				is_hibernatable,
+				hibernation,
+				request,
+				create_state,
+				prepare_connection,
+			)
+			.await?;
+		self.record_connections_updated();
+		self.reset_sleep_timer();
+		Ok(conn)
+	}
+
 	pub async fn connect_conn_with_request<F>(
 		&self,
 		params: Vec<u8>,

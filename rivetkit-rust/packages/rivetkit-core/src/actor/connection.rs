@@ -659,6 +659,30 @@ impl ActorContext {
 	where
 		F: std::future::Future<Output = Result<Vec<u8>>> + Send,
 	{
+		self.connect_with_state_and_prepare(
+			params,
+			is_hibernatable,
+			hibernation,
+			request,
+			create_state,
+			|_| Ok(()),
+		)
+		.await
+	}
+
+	pub(crate) async fn connect_with_state_and_prepare<F, P>(
+		&self,
+		params: Vec<u8>,
+		is_hibernatable: bool,
+		hibernation: Option<HibernatableConnectionMetadata>,
+		request: Option<Request>,
+		create_state: F,
+		prepare_connection: P,
+	) -> Result<ConnHandle>
+	where
+		F: std::future::Future<Output = Result<Vec<u8>>> + Send,
+		P: FnOnce(&ConnHandle) -> Result<()>,
+	{
 		let config = self.connection_config();
 
 		let state = timeout(config.create_conn_state_timeout, create_state)
@@ -676,6 +700,11 @@ impl ActorContext {
 		conn.configure_hibernation(hibernation);
 		self.prepare_managed_conn(&conn);
 		self.insert_existing(conn.clone());
+
+		if let Err(error) = prepare_connection(&conn) {
+			self.remove_existing(conn.id());
+			return Err(error);
+		}
 
 		if let Err(error) = self.emit_connection_open(&conn, params, request).await {
 			self.remove_existing(conn.id());
