@@ -483,8 +483,15 @@ fn route_path(base_path: &str, url: &str) -> Result<String> {
 }
 
 fn parse_start_headers(headers: &HashMap<String, String>) -> Result<StartHeaders> {
-	let pool_name = required_header(headers, "x-rivet-pool-name")
-		.or_else(|_| required_header(headers, "x-rivet-runner-name"))?;
+	let pool_name = match optional_header(headers, "x-rivet-pool-name") {
+		Some(pool_name) => pool_name,
+		None => optional_header(headers, "x-rivet-runner-name").ok_or_else(|| {
+			InvalidRequest {
+				reason: "x-rivet-pool-name header is required".to_string(),
+			}
+			.build()
+		})?,
+	};
 
 	Ok(StartHeaders {
 		endpoint: required_header(headers, "x-rivet-endpoint")?,

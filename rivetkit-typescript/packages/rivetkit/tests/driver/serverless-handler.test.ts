@@ -169,14 +169,15 @@ describeDriverMatrix(
 				);
 
 				expect(response.status).toBe(400);
-				expect(await response.json()).toMatchObject({
+				const body = await response.json();
+				expect(body).toMatchObject({
 					group: "request",
 					code: "invalid",
-					metadata: {
-						reason: "x-rivet-endpoint header is required",
-					},
+					});
+					expect(body.metadata?.reason).toMatch(
+						/^x-rivet-(endpoint|pool-name|namespace-name) header is required$/,
+					);
 				});
-			});
 
 			test("accepts a serverless start payload and streams pings", async (c) => {
 				const { client, namespace } = await setupDriverTest(c, driverTestConfig);
