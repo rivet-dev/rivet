@@ -63,11 +63,7 @@ fn sqlite_header_page_size(page: &[u8]) -> Option<usize> {
 	}
 
 	let raw = u16::from_be_bytes([page[16], page[17]]);
-	let page_size = if raw == 1 {
-		65_536
-	} else {
-		usize::from(raw)
-	};
+	let page_size = if raw == 1 { 65_536 } else { usize::from(raw) };
 
 	if (512..=65_536).contains(&page_size) && page_size.is_power_of_two() {
 		Some(page_size)
@@ -108,12 +104,13 @@ macro_rules! vfs_catch_unwind {
 }
 
 #[derive(Clone)]
-struct SqliteTransport {
+pub(crate) struct SqliteTransport {
 	inner: Arc<SqliteTransportInner>,
 }
 
 enum SqliteTransportInner {
 	Envoy(EnvoyHandle),
+	Conveyer(Arc<depot::conveyer::Db>),
 	#[cfg(test)]
 	Direct(Arc<tests::DirectStorage>),
 }
@@ -122,6 +119,12 @@ impl SqliteTransport {
 	fn from_envoy(handle: EnvoyHandle) -> Self {
 		Self {
 			inner: Arc::new(SqliteTransportInner::Envoy(handle)),
+		}
+	}
+
+	pub(crate) fn from_conveyer(db: Arc<depot::conveyer::Db>) -> Self {
+		Self {
+			inner: Arc::new(SqliteTransportInner::Conveyer(db)),
 		}
 	}
 
@@ -137,6 +140,7 @@ impl SqliteTransport {
 		match &*self.inner {
 			SqliteTransportInner::Direct(storage) => Some(Arc::clone(&storage.hooks)),
 			SqliteTransportInner::Envoy(_) => None,
+			SqliteTransportInner::Conveyer(_) => None,
 		}
 	}
 
@@ -146,13 +150,34 @@ impl SqliteTransport {
 	) -> Result<protocol::SqliteGetPagesResponse> {
 		match &*self.inner {
 			SqliteTransportInner::Envoy(handle) => handle.sqlite_get_pages(req).await,
+			SqliteTransportInner::Conveyer(db) => match db.get_pages(req.pgnos).await {
+				Ok(pages) => Ok(protocol::SqliteGetPagesResponse::SqliteGetPagesOk(
+					protocol::SqliteGetPagesOk {
+						pages: pages
+							.into_iter()
+							.map(|page| protocol::SqliteFetchedPage {
+								pgno: page.pgno,
+								bytes: page.bytes,
+							})
+							.collect(),
+					},
+				)),
+				Err(err) => Ok(protocol::SqliteGetPagesResponse::SqliteErrorResponse(
+					protocol::SqliteErrorResponse {
+						message: sqlite_error_reason(&err),
+					},
+				)),
+			},
 			#[cfg(test)]
 			SqliteTransportInner::Direct(storage) => {
 				let pgnos = req.pgnos.clone();
 				match storage.get_pages(&req.actor_id, &pgnos).await {
 					Ok(pages) => Ok(protocol::SqliteGetPagesResponse::SqliteGetPagesOk(
 						protocol::SqliteGetPagesOk {
-							pages: pages.into_iter().map(tests::protocol_fetched_page).collect(),
+							pages: pages
+								.into_iter()
+								.map(tests::protocol_fetched_page)
+								.collect(),
 						},
 					)),
 					Err(err) => Ok(protocol::SqliteGetPagesResponse::SqliteErrorResponse(
@@ -169,6 +194,27 @@ impl SqliteTransport {
 	) -> Result<protocol::SqliteCommitResponse> {
 		match &*self.inner {
 			SqliteTransportInner::Envoy(handle) => handle.sqlite_commit(req).await,
+			SqliteTransportInner::Conveyer(db) => match db
+				.commit(
+					req.dirty_pages
+						.into_iter()
+						.map(|page| depot::types::DirtyPage {
+							pgno: page.pgno,
+							bytes: page.bytes,
+						})
+						.collect(),
+					req.db_size_pages,
+					req.now_ms,
+				)
+				.await
+			{
+				Ok(()) => Ok(protocol::SqliteCommitResponse::SqliteCommitOk),
+				Err(err) => Ok(protocol::SqliteCommitResponse::SqliteErrorResponse(
+					protocol::SqliteErrorResponse {
+						message: sqlite_error_reason(&err),
+					},
+				)),
+			},
 			#[cfg(test)]
 			SqliteTransportInner::Direct(storage) => {
 				storage.hooks.record_commit_request(req.clone());
@@ -188,11 +234,7 @@ impl SqliteTransport {
 					.collect::<Vec<_>>();
 				let actor_db = storage.actor_db(actor_id.clone()).await;
 				match actor_db
-					.commit(
-						dirty_pages.clone(),
-						req.db_size_pages,
-						req.now_ms,
-					)
+					.commit(dirty_pages.clone(), req.db_size_pages, req.now_ms)
 					.await
 				{
 					Ok(_) => {
@@ -208,15 +250,20 @@ impl SqliteTransport {
 						}
 						Ok(protocol::SqliteCommitResponse::SqliteCommitOk)
 					}
-					Err(err) => {
-						Ok(protocol::SqliteCommitResponse::SqliteErrorResponse(
-							tests::sqlite_error_response(&err),
-						))
-					}
+					Err(err) => Ok(protocol::SqliteCommitResponse::SqliteErrorResponse(
+						tests::sqlite_error_response(&err),
+					)),
 				}
 			}
 		}
 	}
+}
+
+fn sqlite_error_reason(err: &anyhow::Error) -> String {
+	err.chain()
+		.map(ToString::to_string)
+		.collect::<Vec<_>>()
+		.join(": ")
 }
 
 fn sqlite_now_ms() -> Result<i64> {
@@ -260,28 +307,28 @@ impl VfsConfig {
 			} else {
 				LEGACY_PREFETCH_DEPTH
 			},
-				adaptive_prefetch_depth: DEFAULT_ADAPTIVE_PREFETCH_DEPTH,
-				max_prefetch_bytes: DEFAULT_MAX_PREFETCH_BYTES,
-				adaptive_max_prefetch_bytes: DEFAULT_ADAPTIVE_MAX_PREFETCH_BYTES,
-				max_pages_per_stage: DEFAULT_MAX_PAGES_PER_STAGE,
-				recent_hint_page_budget: if flags.recent_page_hints {
-					DEFAULT_RECENT_HINT_PAGE_BUDGET
-				} else {
-					0
-				},
-				recent_hint_range_budget: if flags.recent_page_hints {
-					DEFAULT_RECENT_HINT_RANGE_BUDGET
-				} else {
-					0
-				},
-				cache_hit_predictor_training: flags.cache_hit_predictor_training,
-				recent_page_hints: flags.recent_page_hints,
-				adaptive_read_ahead: flags.adaptive_read_ahead,
-				#[cfg(test)]
-				assert_batch_atomic: true,
-			}
+			adaptive_prefetch_depth: DEFAULT_ADAPTIVE_PREFETCH_DEPTH,
+			max_prefetch_bytes: DEFAULT_MAX_PREFETCH_BYTES,
+			adaptive_max_prefetch_bytes: DEFAULT_ADAPTIVE_MAX_PREFETCH_BYTES,
+			max_pages_per_stage: DEFAULT_MAX_PAGES_PER_STAGE,
+			recent_hint_page_budget: if flags.recent_page_hints {
+				DEFAULT_RECENT_HINT_PAGE_BUDGET
+			} else {
+				0
+			},
+			recent_hint_range_budget: if flags.recent_page_hints {
+				DEFAULT_RECENT_HINT_RANGE_BUDGET
+			} else {
+				0
+			},
+			cache_hit_predictor_training: flags.cache_hit_predictor_training,
+			recent_page_hints: flags.recent_page_hints,
+			adaptive_read_ahead: flags.adaptive_read_ahead,
+			#[cfg(test)]
+			assert_batch_atomic: true,
 		}
 	}
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VfsPreloadHintRange {
@@ -1137,7 +1184,9 @@ impl VfsContext {
 			}
 			state.read_ahead.record_and_plan(target_pgnos, &self.config);
 			if self.config.recent_page_hints {
-				state.recent_pages.record_pages(target_pgnos.iter().copied());
+				state
+					.recent_pages
+					.record_pages(target_pgnos.iter().copied());
 			}
 			if let Some(metrics) = &self.metrics {
 				metrics.record_resolve_cache_hits(target_pgnos.len() as u64);
@@ -1167,7 +1216,9 @@ impl VfsContext {
 			}
 			let read_ahead_plan = state.read_ahead.record_and_plan(target_pgnos, &self.config);
 			if self.config.recent_page_hints {
-				state.recent_pages.record_pages(target_pgnos.iter().copied());
+				state
+					.recent_pages
+					.record_pages(target_pgnos.iter().copied());
 			}
 
 			let mut to_fetch = missing.clone();
@@ -1310,24 +1361,22 @@ impl VfsContext {
 		};
 		let request_build_ns = request_build_start.elapsed().as_nanos() as u64;
 
-		let (outcome, transport_metrics) = match self.block_on_buffered_commit(
-			request.clone(),
-			timeout,
-		) {
-			Ok(CommitWait::Completed(outcome)) => outcome,
-			Ok(CommitWait::TimedOut) => return Ok(CommitWait::TimedOut),
-			Err(err) => {
-				tracing::error!(
-					actor_id = %self.actor_id,
-					new_db_size_pages = request.new_db_size_pages,
-					dirty_pages = request.dirty_pages.len(),
-					?err,
-					"sqlite flush commit failed"
-				);
-				mark_dead_for_non_fence_commit_error(self, &err);
-				return Err(err);
-			}
-		};
+		let (outcome, transport_metrics) =
+			match self.block_on_buffered_commit(request.clone(), timeout) {
+				Ok(CommitWait::Completed(outcome)) => outcome,
+				Ok(CommitWait::TimedOut) => return Ok(CommitWait::TimedOut),
+				Err(err) => {
+					tracing::error!(
+						actor_id = %self.actor_id,
+						new_db_size_pages = request.new_db_size_pages,
+						dirty_pages = request.dirty_pages.len(),
+						?err,
+						"sqlite flush commit failed"
+					);
+					mark_dead_for_non_fence_commit_error(self, &err);
+					return Err(err);
+				}
+			};
 		self.commit_total
 			.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 		if let Some(metrics) = &self.metrics {
@@ -1407,24 +1456,22 @@ impl VfsContext {
 		};
 		let request_build_ns = request_build_start.elapsed().as_nanos() as u64;
 
-		let (outcome, transport_metrics) = match self.block_on_buffered_commit(
-			request.clone(),
-			timeout,
-		) {
-			Ok(CommitWait::Completed(outcome)) => outcome,
-			Ok(CommitWait::TimedOut) => return Ok(CommitWait::TimedOut),
-			Err(err) => {
-				tracing::error!(
-					actor_id = %self.actor_id,
-					new_db_size_pages = request.new_db_size_pages,
-					dirty_pages = request.dirty_pages.len(),
-					?err,
-					"sqlite atomic commit failed"
-				);
-				mark_dead_for_non_fence_commit_error(self, &err);
-				return Err(err);
-			}
-		};
+		let (outcome, transport_metrics) =
+			match self.block_on_buffered_commit(request.clone(), timeout) {
+				Ok(CommitWait::Completed(outcome)) => outcome,
+				Ok(CommitWait::TimedOut) => return Ok(CommitWait::TimedOut),
+				Err(err) => {
+					tracing::error!(
+						actor_id = %self.actor_id,
+						new_db_size_pages = request.new_db_size_pages,
+						dirty_pages = request.dirty_pages.len(),
+						?err,
+						"sqlite atomic commit failed"
+					);
+					mark_dead_for_non_fence_commit_error(self, &err);
+					return Err(err);
+				}
+			};
 		self.commit_total
 			.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 		if let Some(metrics) = &self.metrics {
@@ -1594,7 +1641,8 @@ fn fetch_initial_main_page(
 fn is_initial_main_page_missing(message: &str) -> bool {
 	message.contains("sqlite database was not found in this bucket branch")
 		|| message.contains("sqlite meta missing for get_pages")
-		|| message.contains("strict DirectStorage forbids mirror fallback for missing depot metadata")
+		|| message
+			.contains("strict DirectStorage forbids mirror fallback for missing depot metadata")
 }
 
 fn next_temp_aux_path() -> String {
@@ -1965,11 +2013,11 @@ unsafe extern "C" fn io_read(
 			state.db_size_pages as usize * state.page_size
 		};
 
-			let resolved = match ctx.resolve_pages(&requested_pages, true) {
-				Ok(pages) => pages,
-				Err(GetPagesError::Other(message)) => {
-					ctx.mark_dead(message);
-					return SQLITE_IOERR_READ;
+		let resolved = match ctx.resolve_pages(&requested_pages, true) {
+			Ok(pages) => pages,
+			Err(GetPagesError::Other(message)) => {
+				ctx.mark_dead(message);
+				return SQLITE_IOERR_READ;
 			}
 		};
 		ctx.clear_last_error();
@@ -2066,12 +2114,12 @@ unsafe extern "C" fn io_write(
 
 			let mut resolved = if pages_to_resolve.is_empty() {
 				HashMap::new()
-				} else {
-					match ctx.resolve_pages(&pages_to_resolve, false) {
-						Ok(pages) => pages,
-						Err(GetPagesError::Other(message)) => {
-							ctx.mark_dead(message);
-							return SQLITE_IOERR_WRITE;
+			} else {
+				match ctx.resolve_pages(&pages_to_resolve, false) {
+					Ok(pages) => pages,
+					Err(GetPagesError::Other(message)) => {
+						ctx.mark_dead(message);
+						return SQLITE_IOERR_WRITE;
 					}
 				}
 			};
@@ -2501,7 +2549,7 @@ impl SqliteVfs {
 		self.ctx.snapshot_preload_hints()
 	}
 
-	fn register_with_transport(
+	pub(crate) fn register_with_transport(
 		name: &str,
 		transport: SqliteTransport,
 		actor_id: String,
@@ -2667,12 +2715,16 @@ pub fn open_database(
 	vfs: SqliteVfs,
 	file_name: &str,
 ) -> std::result::Result<NativeDatabase, String> {
-	open_connection(Arc::new(vfs), file_name, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE)
-		.and_then(|connection| {
-			configure_connection_for_database(connection.as_ptr(), &connection._vfs, file_name)?;
-			verify_batch_atomic_writes(connection.as_ptr(), &connection._vfs, file_name)?;
-			Ok(connection)
-		})
+	open_connection(
+		Arc::new(vfs),
+		file_name,
+		SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE,
+	)
+	.and_then(|connection| {
+		configure_connection_for_database(connection.as_ptr(), &connection._vfs, file_name)?;
+		verify_batch_atomic_writes(connection.as_ptr(), &connection._vfs, file_name)?;
+		Ok(connection)
+	})
 }
 
 pub fn open_connection(
@@ -2683,14 +2735,7 @@ pub fn open_connection(
 	let c_name = CString::new(file_name).map_err(|err| err.to_string())?;
 	let mut db: *mut sqlite3 = ptr::null_mut();
 
-	let rc = unsafe {
-		sqlite3_open_v2(
-			c_name.as_ptr(),
-			&mut db,
-			flags,
-			vfs.name_ptr(),
-		)
-	};
+	let rc = unsafe { sqlite3_open_v2(c_name.as_ptr(), &mut db, flags, vfs.name_ptr()) };
 	if rc != SQLITE_OK {
 		let message = sqlite_error_message(db);
 		tracing::error!(
@@ -2708,10 +2753,7 @@ pub fn open_connection(
 		return Err(format!("sqlite3_open_v2 failed with code {rc}: {message}"));
 	}
 
-	Ok(NativeDatabase {
-		db,
-		_vfs: vfs,
-	})
+	Ok(NativeDatabase { db, _vfs: vfs })
 }
 
 pub fn configure_connection_for_database(

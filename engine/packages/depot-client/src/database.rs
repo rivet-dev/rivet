@@ -62,6 +62,36 @@ pub async fn open_database_from_envoy(
 	Ok(native_db)
 }
 
+pub async fn open_database_from_conveyer(
+	db: Arc<depot::conveyer::Db>,
+	actor_id: String,
+	generation: u64,
+	rt_handle: Handle,
+	metrics: Option<Arc<dyn SqliteVfsMetrics>>,
+) -> Result<NativeDatabaseHandle> {
+	let vfs_name = vfs_name_for_actor_database(&actor_id, generation);
+	let vfs = Arc::new(
+		SqliteVfs::register_with_transport(
+			&vfs_name,
+			crate::vfs::SqliteTransport::from_conveyer(db),
+			actor_id.clone(),
+			rt_handle,
+			VfsConfig::default(),
+			metrics.clone(),
+		)
+		.map_err(|e| anyhow!("failed to register sqlite VFS: {e}"))?,
+	);
+
+	let native_db = NativeDatabaseHandle::new_with_metrics(
+		vfs,
+		actor_id,
+		NativeConnectionManagerConfig::from_optimization_flags(*sqlite_optimization_flags()),
+		metrics,
+	);
+	native_db.initialize().await?;
+	Ok(native_db)
+}
+
 impl NativeDatabaseHandle {
 	pub fn new(
 		vfs: NativeVfsHandle,

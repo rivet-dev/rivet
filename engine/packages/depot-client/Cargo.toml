@@ -19,18 +19,19 @@ tracing.workspace = true
 getrandom = "0.2"
 rivet-envoy-protocol.workspace = true
 depot-client-types.workspace = true
+depot.workspace = true
 moka = { version = "0.12", default-features = false, features = ["sync"] }
 parking_lot.workspace = true
 
 [dev-dependencies]
 async-trait.workspace = true
+depot = { workspace = true, features = ["test-faults"] }
 futures-util.workspace = true
 gas.workspace = true
 rivet-config.workspace = true
 rivet-pools.workspace = true
 rivet-test-deps.workspace = true
 scc.workspace = true
-depot = { workspace = true, features = ["test-faults"] }
 sha2.workspace = true
 tempfile.workspace = true
 universaldb.workspace = true
