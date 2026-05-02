@@ -197,8 +197,8 @@ impl Actor for LargeValueActor {
 		tracing::info!(actor_id = ?config.actor_id, generation = config.generation, "large value actor starting");
 
 		let result = async {
-				let key = make_key("large-value-key");
-				let value: Vec<u8> = (0..128 * 1024).map(|i| (i % 256) as u8).collect();
+			let key = make_key("large-value-key");
+			let value: Vec<u8> = (0..128 * 1024).map(|i| (i % 256) as u8).collect();
 
 			tracing::info!(value_size = value.len(), "putting large value");
 
@@ -513,38 +513,38 @@ impl Actor for ManyKeysActor {
 		tracing::info!(actor_id = ?config.actor_id, generation = config.generation, "many keys actor starting");
 
 		let result = async {
-				let mut keys = Vec::new();
-				let mut values = Vec::new();
-				for i in 0..128 {
-					keys.push(make_key(&format!("many-key-{:04}", i)));
-					values.push(make_value(&format!("many-value-{}", i)));
-				}
+			let mut keys = Vec::new();
+			let mut values = Vec::new();
+			for i in 0..128 {
+				keys.push(make_key(&format!("many-key-{:04}", i)));
+				values.push(make_value(&format!("many-value-{}", i)));
+			}
 
-				config
-					.send_kv_put(keys.clone(), values.clone())
-					.await
-					.context("failed to put 128 keys")?;
+			config
+				.send_kv_put(keys.clone(), values.clone())
+				.await
+				.context("failed to put 128 keys")?;
 
-				tracing::info!("put 128 keys");
+			tracing::info!("put 128 keys");
 
 			// Call listAll
 			let response = config
-					.send_kv_list(rp::KvListQuery::KvListAllQuery, None, None)
-					.await
-					.context("failed to list all 128 keys")?;
+				.send_kv_list(rp::KvListQuery::KvListAllQuery, None, None)
+				.await
+				.context("failed to list all 128 keys")?;
 
-				if response.keys.len() != 128 {
-					bail!("expected 128 keys, got {}", response.keys.len());
-				}
+			if response.keys.len() != 128 {
+				bail!("expected 128 keys, got {}", response.keys.len());
+			}
 
-				if response.values.len() != 128 {
-					bail!("expected 128 values, got {}", response.values.len());
-				}
+			if response.values.len() != 128 {
+				bail!("expected 128 values, got {}", response.values.len());
+			}
 
-				tracing::info!("verified 128 keys present in list");
+			tracing::info!("verified 128 keys present in list");
 
 			// Get random sample of keys to verify values
-				for i in &[0, 32, 64, 96, 127] {
+			for i in &[0, 32, 64, 96, 127] {
 				let key = make_key(&format!("many-key-{:04}", i));
 				let expected_value = make_value(&format!("many-value-{}", i));
 
@@ -595,275 +595,296 @@ impl Actor for ManyKeysActor {
 // Elapsed(())`.
 #[test]
 fn kv_binary_keys_and_values() {
-	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
-		let (namespace, _) = common::setup_test_namespace(ctx.leader_dc()).await;
+	common::run(
+		common::TestOpts::new(1).with_timeout(30),
+		|ctx| async move {
+			let (namespace, _) = common::setup_test_namespace(ctx.leader_dc()).await;
 
-		let (notify_tx, notify_rx) = tokio::sync::oneshot::channel();
-		let notify_tx = Arc::new(Mutex::new(Some(notify_tx)));
+			let (notify_tx, notify_rx) = tokio::sync::oneshot::channel();
+			let notify_tx = Arc::new(Mutex::new(Some(notify_tx)));
 
-		let runner = common::setup_envoy(ctx.leader_dc(), &namespace, |builder| {
-			builder.with_actor_behavior("kv-binary", move |_| {
-				Box::new(BinaryDataActor::new(notify_tx.clone()))
+			let runner = common::setup_envoy(ctx.leader_dc(), &namespace, |builder| {
+				builder.with_actor_behavior("kv-binary", move |_| {
+					Box::new(BinaryDataActor::new(notify_tx.clone()))
+				})
 			})
-		})
-		.await;
+			.await;
 
-		let res = common::create_actor(
-			ctx.leader_dc().guard_port(),
-			&namespace,
-			"kv-binary",
-			runner.pool_name(),
-			rivet_types::actors::CrashPolicy::Destroy,
-		)
-		.await;
+			let res = common::create_actor(
+				ctx.leader_dc().guard_port(),
+				&namespace,
+				"kv-binary",
+				runner.pool_name(),
+				rivet_types::actors::CrashPolicy::Destroy,
+			)
+			.await;
 
-		let actor_id = res.actor.actor_id.to_string();
+			let actor_id = res.actor.actor_id.to_string();
 
-		let result = notify_rx.await.expect("actor should send test result");
+			let result = notify_rx.await.expect("actor should send test result");
 
-		match result {
-			KvTestResult::Success => {
-				tracing::info!(?actor_id, "binary data test succeeded");
+			match result {
+				KvTestResult::Success => {
+					tracing::info!(?actor_id, "binary data test succeeded");
+				}
+				KvTestResult::Failure(msg) => {
+					panic!("binary data test failed: {}", msg);
+				}
 			}
-			KvTestResult::Failure(msg) => {
-				panic!("binary data test failed: {}", msg);
-			}
-		}
-	});
+		},
+	);
 }
 
 #[test]
 fn kv_empty_value() {
-	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
-		let (namespace, _) = common::setup_test_namespace(ctx.leader_dc()).await;
+	common::run(
+		common::TestOpts::new(1).with_timeout(30),
+		|ctx| async move {
+			let (namespace, _) = common::setup_test_namespace(ctx.leader_dc()).await;
 
-		let (notify_tx, notify_rx) = tokio::sync::oneshot::channel();
-		let notify_tx = Arc::new(Mutex::new(Some(notify_tx)));
+			let (notify_tx, notify_rx) = tokio::sync::oneshot::channel();
+			let notify_tx = Arc::new(Mutex::new(Some(notify_tx)));
 
-		let runner = common::setup_envoy(ctx.leader_dc(), &namespace, |builder| {
-			builder.with_actor_behavior("kv-empty-value", move |_| {
-				Box::new(EmptyValueActor::new(notify_tx.clone()))
+			let runner = common::setup_envoy(ctx.leader_dc(), &namespace, |builder| {
+				builder.with_actor_behavior("kv-empty-value", move |_| {
+					Box::new(EmptyValueActor::new(notify_tx.clone()))
+				})
 			})
-		})
-		.await;
+			.await;
 
-		let res = common::create_actor(
-			ctx.leader_dc().guard_port(),
-			&namespace,
-			"kv-empty-value",
-			runner.pool_name(),
-			rivet_types::actors::CrashPolicy::Destroy,
-		)
-		.await;
+			let res = common::create_actor(
+				ctx.leader_dc().guard_port(),
+				&namespace,
+				"kv-empty-value",
+				runner.pool_name(),
+				rivet_types::actors::CrashPolicy::Destroy,
+			)
+			.await;
 
-		let actor_id = res.actor.actor_id.to_string();
+			let actor_id = res.actor.actor_id.to_string();
 
-		let result = notify_rx.await.expect("actor should send test result");
+			let result = notify_rx.await.expect("actor should send test result");
 
-		match result {
-			KvTestResult::Success => {
-				tracing::info!(?actor_id, "empty value test succeeded");
+			match result {
+				KvTestResult::Success => {
+					tracing::info!(?actor_id, "empty value test succeeded");
+				}
+				KvTestResult::Failure(msg) => {
+					panic!("empty value test failed: {}", msg);
+				}
 			}
-			KvTestResult::Failure(msg) => {
-				panic!("empty value test failed: {}", msg);
-			}
-		}
-	});
+		},
+	);
 }
 
 #[test]
 fn kv_large_value() {
-	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
-		let (namespace, _) = common::setup_test_namespace(ctx.leader_dc()).await;
+	common::run(
+		common::TestOpts::new(1).with_timeout(30),
+		|ctx| async move {
+			let (namespace, _) = common::setup_test_namespace(ctx.leader_dc()).await;
 
-		let (notify_tx, notify_rx) = tokio::sync::oneshot::channel();
-		let notify_tx = Arc::new(Mutex::new(Some(notify_tx)));
+			let (notify_tx, notify_rx) = tokio::sync::oneshot::channel();
+			let notify_tx = Arc::new(Mutex::new(Some(notify_tx)));
 
-		let runner = common::setup_envoy(ctx.leader_dc(), &namespace, |builder| {
-			builder.with_actor_behavior("kv-large-value", move |_| {
-				Box::new(LargeValueActor::new(notify_tx.clone()))
+			let runner = common::setup_envoy(ctx.leader_dc(), &namespace, |builder| {
+				builder.with_actor_behavior("kv-large-value", move |_| {
+					Box::new(LargeValueActor::new(notify_tx.clone()))
+				})
 			})
-		})
-		.await;
+			.await;
 
-		let res = common::create_actor(
-			ctx.leader_dc().guard_port(),
-			&namespace,
-			"kv-large-value",
-			runner.pool_name(),
-			rivet_types::actors::CrashPolicy::Destroy,
-		)
-		.await;
+			let res = common::create_actor(
+				ctx.leader_dc().guard_port(),
+				&namespace,
+				"kv-large-value",
+				runner.pool_name(),
+				rivet_types::actors::CrashPolicy::Destroy,
+			)
+			.await;
 
-		let actor_id = res.actor.actor_id.to_string();
+			let actor_id = res.actor.actor_id.to_string();
 
-		let result = notify_rx.await.expect("actor should send test result");
+			let result = notify_rx.await.expect("actor should send test result");
 
-		match result {
-			KvTestResult::Success => {
-				tracing::info!(?actor_id, "large value test succeeded");
+			match result {
+				KvTestResult::Success => {
+					tracing::info!(?actor_id, "large value test succeeded");
+				}
+				KvTestResult::Failure(msg) => {
+					panic!("large value test failed: {}", msg);
+				}
 			}
-			KvTestResult::Failure(msg) => {
-				panic!("large value test failed: {}", msg);
-			}
-		}
-	});
+		},
+	);
 }
 
 #[test]
 fn kv_get_with_empty_keys_array() {
-	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
-		let (namespace, _) = common::setup_test_namespace(ctx.leader_dc()).await;
+	common::run(
+		common::TestOpts::new(1).with_timeout(30),
+		|ctx| async move {
+			let (namespace, _) = common::setup_test_namespace(ctx.leader_dc()).await;
 
-		let (notify_tx, notify_rx) = tokio::sync::oneshot::channel();
-		let notify_tx = Arc::new(Mutex::new(Some(notify_tx)));
+			let (notify_tx, notify_rx) = tokio::sync::oneshot::channel();
+			let notify_tx = Arc::new(Mutex::new(Some(notify_tx)));
 
-		let runner = common::setup_envoy(ctx.leader_dc(), &namespace, |builder| {
-			builder.with_actor_behavior("kv-get-empty", move |_| {
-				Box::new(GetEmptyKeysActor::new(notify_tx.clone()))
+			let runner = common::setup_envoy(ctx.leader_dc(), &namespace, |builder| {
+				builder.with_actor_behavior("kv-get-empty", move |_| {
+					Box::new(GetEmptyKeysActor::new(notify_tx.clone()))
+				})
 			})
-		})
-		.await;
+			.await;
 
-		let res = common::create_actor(
-			ctx.leader_dc().guard_port(),
-			&namespace,
-			"kv-get-empty",
-			runner.pool_name(),
-			rivet_types::actors::CrashPolicy::Destroy,
-		)
-		.await;
+			let res = common::create_actor(
+				ctx.leader_dc().guard_port(),
+				&namespace,
+				"kv-get-empty",
+				runner.pool_name(),
+				rivet_types::actors::CrashPolicy::Destroy,
+			)
+			.await;
 
-		let actor_id = res.actor.actor_id.to_string();
+			let actor_id = res.actor.actor_id.to_string();
 
-		let result = notify_rx.await.expect("actor should send test result");
+			let result = notify_rx.await.expect("actor should send test result");
 
-		match result {
-			KvTestResult::Success => {
-				tracing::info!(?actor_id, "get empty keys test succeeded");
+			match result {
+				KvTestResult::Success => {
+					tracing::info!(?actor_id, "get empty keys test succeeded");
+				}
+				KvTestResult::Failure(msg) => {
+					panic!("get empty keys test failed: {}", msg);
+				}
 			}
-			KvTestResult::Failure(msg) => {
-				panic!("get empty keys test failed: {}", msg);
-			}
-		}
-	});
+		},
+	);
 }
 
 #[test]
 fn kv_list_with_limit_zero() {
-	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
-		let (namespace, _) = common::setup_test_namespace(ctx.leader_dc()).await;
+	common::run(
+		common::TestOpts::new(1).with_timeout(30),
+		|ctx| async move {
+			let (namespace, _) = common::setup_test_namespace(ctx.leader_dc()).await;
 
-		let (notify_tx, notify_rx) = tokio::sync::oneshot::channel();
-		let notify_tx = Arc::new(Mutex::new(Some(notify_tx)));
+			let (notify_tx, notify_rx) = tokio::sync::oneshot::channel();
+			let notify_tx = Arc::new(Mutex::new(Some(notify_tx)));
 
-		let runner = common::setup_envoy(ctx.leader_dc(), &namespace, |builder| {
-			builder.with_actor_behavior("kv-list-limit-zero", move |_| {
-				Box::new(ListLimitZeroActor::new(notify_tx.clone()))
+			let runner = common::setup_envoy(ctx.leader_dc(), &namespace, |builder| {
+				builder.with_actor_behavior("kv-list-limit-zero", move |_| {
+					Box::new(ListLimitZeroActor::new(notify_tx.clone()))
+				})
 			})
-		})
-		.await;
+			.await;
 
-		let res = common::create_actor(
-			ctx.leader_dc().guard_port(),
-			&namespace,
-			"kv-list-limit-zero",
-			runner.pool_name(),
-			rivet_types::actors::CrashPolicy::Destroy,
-		)
-		.await;
+			let res = common::create_actor(
+				ctx.leader_dc().guard_port(),
+				&namespace,
+				"kv-list-limit-zero",
+				runner.pool_name(),
+				rivet_types::actors::CrashPolicy::Destroy,
+			)
+			.await;
 
-		let actor_id = res.actor.actor_id.to_string();
+			let actor_id = res.actor.actor_id.to_string();
 
-		let result = notify_rx.await.expect("actor should send test result");
+			let result = notify_rx.await.expect("actor should send test result");
 
-		match result {
-			KvTestResult::Success => {
-				tracing::info!(?actor_id, "list limit zero test succeeded");
+			match result {
+				KvTestResult::Success => {
+					tracing::info!(?actor_id, "list limit zero test succeeded");
+				}
+				KvTestResult::Failure(msg) => {
+					panic!("list limit zero test failed: {}", msg);
+				}
 			}
-			KvTestResult::Failure(msg) => {
-				panic!("list limit zero test failed: {}", msg);
-			}
-		}
-	});
+		},
+	);
 }
 
 #[test]
 // Broken legacy Pegboard Runner test: full engine sweep timed out in
 // `kv_key_ordering_lexicographic`.
 fn kv_key_ordering_lexicographic() {
-	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
-		let (namespace, _) = common::setup_test_namespace(ctx.leader_dc()).await;
+	common::run(
+		common::TestOpts::new(1).with_timeout(30),
+		|ctx| async move {
+			let (namespace, _) = common::setup_test_namespace(ctx.leader_dc()).await;
 
-		let (notify_tx, notify_rx) = tokio::sync::oneshot::channel();
-		let notify_tx = Arc::new(Mutex::new(Some(notify_tx)));
+			let (notify_tx, notify_rx) = tokio::sync::oneshot::channel();
+			let notify_tx = Arc::new(Mutex::new(Some(notify_tx)));
 
-		let runner = common::setup_envoy(ctx.leader_dc(), &namespace, |builder| {
-			builder.with_actor_behavior("kv-key-ordering", move |_| {
-				Box::new(KeyOrderingActor::new(notify_tx.clone()))
+			let runner = common::setup_envoy(ctx.leader_dc(), &namespace, |builder| {
+				builder.with_actor_behavior("kv-key-ordering", move |_| {
+					Box::new(KeyOrderingActor::new(notify_tx.clone()))
+				})
 			})
-		})
-		.await;
+			.await;
 
-		let res = common::create_actor(
-			ctx.leader_dc().guard_port(),
-			&namespace,
-			"kv-key-ordering",
-			runner.pool_name(),
-			rivet_types::actors::CrashPolicy::Destroy,
-		)
-		.await;
+			let res = common::create_actor(
+				ctx.leader_dc().guard_port(),
+				&namespace,
+				"kv-key-ordering",
+				runner.pool_name(),
+				rivet_types::actors::CrashPolicy::Destroy,
+			)
+			.await;
 
-		let actor_id = res.actor.actor_id.to_string();
+			let actor_id = res.actor.actor_id.to_string();
 
-		let result = notify_rx.await.expect("actor should send test result");
+			let result = notify_rx.await.expect("actor should send test result");
 
-		match result {
-			KvTestResult::Success => {
-				tracing::info!(?actor_id, "key ordering test succeeded");
+			match result {
+				KvTestResult::Success => {
+					tracing::info!(?actor_id, "key ordering test succeeded");
+				}
+				KvTestResult::Failure(msg) => {
+					panic!("key ordering test failed: {}", msg);
+				}
 			}
-			KvTestResult::Failure(msg) => {
-				panic!("key ordering test failed: {}", msg);
-			}
-		}
-	});
+		},
+	);
 }
 
 #[test]
 fn kv_many_keys_storage() {
-	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
-		let (namespace, _) = common::setup_test_namespace(ctx.leader_dc()).await;
+	common::run(
+		common::TestOpts::new(1).with_timeout(30),
+		|ctx| async move {
+			let (namespace, _) = common::setup_test_namespace(ctx.leader_dc()).await;
 
-		let (notify_tx, notify_rx) = tokio::sync::oneshot::channel();
-		let notify_tx = Arc::new(Mutex::new(Some(notify_tx)));
+			let (notify_tx, notify_rx) = tokio::sync::oneshot::channel();
+			let notify_tx = Arc::new(Mutex::new(Some(notify_tx)));
 
-		let runner = common::setup_envoy(ctx.leader_dc(), &namespace, |builder| {
-			builder.with_actor_behavior("kv-many-keys", move |_| {
-				Box::new(ManyKeysActor::new(notify_tx.clone()))
+			let runner = common::setup_envoy(ctx.leader_dc(), &namespace, |builder| {
+				builder.with_actor_behavior("kv-many-keys", move |_| {
+					Box::new(ManyKeysActor::new(notify_tx.clone()))
+				})
 			})
-		})
-		.await;
+			.await;
 
-		let res = common::create_actor(
-			ctx.leader_dc().guard_port(),
-			&namespace,
-			"kv-many-keys",
-			runner.pool_name(),
-			rivet_types::actors::CrashPolicy::Destroy,
-		)
-		.await;
+			let res = common::create_actor(
+				ctx.leader_dc().guard_port(),
+				&namespace,
+				"kv-many-keys",
+				runner.pool_name(),
+				rivet_types::actors::CrashPolicy::Destroy,
+			)
+			.await;
 
-		let actor_id = res.actor.actor_id.to_string();
+			let actor_id = res.actor.actor_id.to_string();
 
-		let result = notify_rx.await.expect("actor should send test result");
+			let result = notify_rx.await.expect("actor should send test result");
 
-		match result {
-			KvTestResult::Success => {
-				tracing::info!(?actor_id, "many keys storage test succeeded");
+			match result {
+				KvTestResult::Success => {
+					tracing::info!(?actor_id, "many keys storage test succeeded");
+				}
+				KvTestResult::Failure(msg) => {
+					panic!("many keys storage test failed: {}", msg);
+				}
 			}
-			KvTestResult::Failure(msg) => {
-				panic!("many keys storage test failed: {}", msg);
-			}
-		}
-	});
+		},
+	);
 }

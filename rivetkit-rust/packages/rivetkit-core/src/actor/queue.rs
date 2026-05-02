@@ -7,6 +7,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result};
 use rivet_error::RivetError;
+use rivetkit_actor_persist::{generated::v4 as persist_v4, versioned as persist_versioned};
 use serde::{Deserialize, Serialize};
 use tokio::runtime::{Builder, Handle};
 use tokio::sync::oneshot;
@@ -14,16 +15,15 @@ use tokio_util::sync::CancellationToken;
 
 use crate::actor::config::ActorConfig;
 use crate::actor::context::ActorContext;
-use crate::actor::persist::{decode_with_embedded_version, encode_with_embedded_version};
+use crate::actor::keys::{
+	QUEUE_MESSAGES_PREFIX, QUEUE_METADATA_KEY, decode_queue_message_key, make_queue_message_key,
+};
+use crate::actor::persist::{
+	decode_latest_with_embedded_version, encode_latest_with_embedded_version,
+};
 use crate::actor::preload::PreloadedKv;
 use crate::actor::task_types::UserTaskKind;
 use crate::types::ListOpts;
-
-const QUEUE_STORAGE_VERSION: u8 = 1;
-const QUEUE_METADATA_KEY: [u8; 3] = [5, QUEUE_STORAGE_VERSION, 1];
-const QUEUE_MESSAGES_PREFIX: [u8; 3] = [5, QUEUE_STORAGE_VERSION, 2];
-const QUEUE_PAYLOAD_VERSION: u16 = 4;
-const QUEUE_PAYLOAD_COMPATIBLE_VERSIONS: &[u16] = &[4];
 
 #[derive(Clone, Debug, Default)]
 pub struct QueueNextOpts {
@@ -120,37 +120,39 @@ struct CompletionHandleInner {
 	completed: std::sync::atomic::AtomicBool,
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub(super) struct QueueMetadata {
-	next_id: u64,
-	size: u32,
-}
-
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-struct PersistedQueueMessage {
-	name: String,
-	body: Vec<u8>,
-	created_at: i64,
-	failure_count: Option<u32>,
-	available_at: Option<i64>,
-	in_flight: Option<bool>,
-	in_flight_at: Option<i64>,
-}
+pub(super) type QueueMetadata = persist_v4::QueueMetadata;
+type PersistedQueueMessage = persist_v4::QueueMessage;
 
 fn encode_queue_metadata(metadata: &QueueMetadata) -> Result<Vec<u8>> {
-	encode_with_embedded_version(metadata, QUEUE_PAYLOAD_VERSION, "queue metadata")
+	encode_latest_with_embedded_version::<persist_versioned::QueueMetadata>(
+		metadata.clone(),
+		rivetkit_actor_persist::CURRENT_VERSION,
+		"queue metadata",
+	)
 }
 
 fn decode_queue_metadata(payload: &[u8]) -> Result<QueueMetadata> {
-	decode_with_embedded_version(payload, QUEUE_PAYLOAD_COMPATIBLE_VERSIONS, "queue metadata")
+	let metadata = decode_latest_with_embedded_version::<persist_versioned::QueueMetadata>(
+		payload,
+		"queue metadata",
+	)?;
+	Ok(metadata)
 }
 
 fn encode_queue_message(message: &PersistedQueueMessage) -> Result<Vec<u8>> {
-	encode_with_embedded_version(message, QUEUE_PAYLOAD_VERSION, "queue message")
+	encode_latest_with_embedded_version::<persist_versioned::QueueMessage>(
+		message.clone(),
+		rivetkit_actor_persist::CURRENT_VERSION,
+		"queue message",
+	)
 }
 
 fn decode_queue_message(payload: &[u8]) -> Result<PersistedQueueMessage> {
-	decode_with_embedded_version(payload, QUEUE_PAYLOAD_COMPATIBLE_VERSIONS, "queue message")
+	let message = decode_latest_with_embedded_version::<persist_versioned::QueueMessage>(
+		payload,
+		"queue message",
+	)?;
+	Ok(message)
 }
 
 #[derive(RivetError, Serialize, Deserialize)]
@@ -224,17 +226,6 @@ struct QueueCompletionWaiterConflict {
 	"Queue completion waiter dropped before response"
 )]
 struct QueueCompletionWaiterDropped;
-
-#[derive(RivetError, Serialize, Deserialize)]
-#[error(
-	"queue",
-	"invalid_message_key",
-	"Queue message key is invalid",
-	"Queue message key is invalid: {reason}"
-)]
-struct QueueInvalidMessageKey {
-	reason: String,
-}
 
 impl ActorContext {
 	pub async fn send(&self, name: &str, body: &[u8]) -> Result<QueueMessage> {
@@ -1093,34 +1084,6 @@ fn normalize_names(names: Option<Vec<String>>) -> Option<BTreeSet<String>> {
 			Some(normalized)
 		}
 	})
-}
-
-fn make_queue_message_key(id: u64) -> Vec<u8> {
-	let mut key = Vec::with_capacity(QUEUE_MESSAGES_PREFIX.len() + 8);
-	key.extend_from_slice(&QUEUE_MESSAGES_PREFIX);
-	key.extend_from_slice(&id.to_be_bytes());
-	key
-}
-
-fn decode_queue_message_key(key: &[u8]) -> Result<u64> {
-	if key.len() != QUEUE_MESSAGES_PREFIX.len() + 8 {
-		return Err(invalid_queue_key("invalid length"));
-	}
-	if !key.starts_with(&QUEUE_MESSAGES_PREFIX) {
-		return Err(invalid_queue_key("invalid prefix"));
-	}
-
-	let bytes: [u8; 8] = key[QUEUE_MESSAGES_PREFIX.len()..]
-		.try_into()
-		.map_err(|_| invalid_queue_key("invalid id bytes"))?;
-	Ok(u64::from_be_bytes(bytes))
-}
-
-fn invalid_queue_key(reason: &str) -> anyhow::Error {
-	QueueInvalidMessageKey {
-		reason: reason.to_owned(),
-	}
-	.build()
 }
 
 fn decode_queue_message_entries(entries: Vec<(Vec<u8>, Vec<u8>)>) -> Vec<QueueMessage> {

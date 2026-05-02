@@ -9,7 +9,8 @@ use anyhow::{Context, Result};
 use futures::future::BoxFuture;
 use parking_lot::{RwLock, RwLockReadGuard};
 use rivet_error::RivetError;
-use serde::{Deserialize, Serialize};
+use rivetkit_actor_persist::{generated::v4 as persist_v4, versioned as persist_versioned};
+use serde::Serialize;
 use tokio::time::timeout;
 use uuid::Uuid;
 
@@ -17,9 +18,12 @@ use tokio::sync::oneshot;
 
 use crate::actor::config::ActorConfig;
 use crate::actor::context::ActorContext;
+use crate::actor::keys::CONN_PREFIX;
 use crate::actor::lifecycle_hooks::Reply;
 use crate::actor::messages::{ActorEvent, Request};
-use crate::actor::persist::{decode_with_embedded_version, encode_with_embedded_version};
+use crate::actor::persist::{
+	decode_latest_with_embedded_version, encode_latest_with_embedded_version,
+};
 use crate::actor::preload::PreloadedKv;
 use crate::actor::state::RequestSaveOpts;
 use crate::error::ActorRuntime;
@@ -30,10 +34,6 @@ pub(crate) type EventSendCallback = Arc<dyn Fn(OutgoingEvent) -> Result<()> + Se
 pub(crate) type DisconnectCallback =
 	Arc<dyn Fn(Option<String>) -> BoxFuture<'static, Result<()>> + Send + Sync>;
 type StateChangeCallback = Arc<dyn Fn(&ConnHandle) + Send + Sync>;
-
-const CONNECTION_KEY_PREFIX: &[u8] = &[2];
-const CONNECTION_PERSIST_VERSION: u16 = 4;
-const CONNECTION_PERSIST_COMPATIBLE_VERSIONS: &[u16] = &[3, 4];
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct OutgoingEvent {
@@ -51,24 +51,8 @@ pub(crate) struct HibernatableConnectionMetadata {
 	pub request_headers: BTreeMap<String, String>,
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub(crate) struct PersistedSubscription {
-	pub event_name: String,
-}
-
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub(crate) struct PersistedConnection {
-	pub id: String,
-	pub parameters: Vec<u8>,
-	pub state: Vec<u8>,
-	pub subscriptions: Vec<PersistedSubscription>,
-	pub gateway_id: [u8; 4],
-	pub request_id: [u8; 4],
-	pub server_message_index: u16,
-	pub client_message_index: u16,
-	pub request_path: String,
-	pub request_headers: BTreeMap<String, String>,
-}
+pub(crate) type PersistedSubscription = persist_v4::Subscription;
+pub(crate) type PersistedConnection = persist_v4::Conn;
 
 #[derive(RivetError, Serialize)]
 #[error(
@@ -146,19 +130,19 @@ pub(crate) fn hibernatable_id_from_slice(field: &'static str, bytes: &[u8]) -> R
 }
 
 pub(crate) fn encode_persisted_connection(connection: &PersistedConnection) -> Result<Vec<u8>> {
-	encode_with_embedded_version(
-		connection,
-		CONNECTION_PERSIST_VERSION,
+	encode_latest_with_embedded_version::<persist_versioned::Conn>(
+		connection.clone(),
+		rivetkit_actor_persist::CURRENT_VERSION,
 		"persisted connection",
 	)
 }
 
 pub(crate) fn decode_persisted_connection(payload: &[u8]) -> Result<PersistedConnection> {
-	decode_with_embedded_version(
+	let connection = decode_latest_with_embedded_version::<persist_versioned::Conn>(
 		payload,
-		CONNECTION_PERSIST_COMPATIBLE_VERSIONS,
 		"persisted connection",
-	)
+	)?;
+	Ok(connection)
 }
 
 #[derive(Clone)]
@@ -348,7 +332,7 @@ impl ConnHandle {
 			server_message_index: hibernation.server_message_index,
 			client_message_index: hibernation.client_message_index,
 			request_path: hibernation.request_path,
-			request_headers: hibernation.request_headers,
+			request_headers: hibernation.request_headers.into_iter().collect(),
 		})
 	}
 
@@ -365,7 +349,7 @@ impl ConnHandle {
 			server_message_index: persisted.server_message_index,
 			client_message_index: persisted.client_message_index,
 			request_path: persisted.request_path,
-			request_headers: persisted.request_headers,
+			request_headers: persisted.request_headers.into_iter().collect(),
 		}));
 		for subscription in persisted.subscriptions {
 			conn.subscribe(subscription.event_name);
@@ -712,22 +696,21 @@ impl ActorContext {
 		&self,
 		preloaded_kv: Option<&PreloadedKv>,
 	) -> Result<Vec<ConnHandle>> {
-		let entries = if let Some(entries) =
-			preloaded_kv.and_then(|kv| kv.prefix_entries(CONNECTION_KEY_PREFIX))
-		{
-			entries
-		} else {
-			self.0
-				.kv
-				.list_prefix(
-					CONNECTION_KEY_PREFIX,
-					ListOpts {
-						reverse: false,
-						limit: None,
-					},
-				)
-				.await?
-		};
+		let entries =
+			if let Some(entries) = preloaded_kv.and_then(|kv| kv.prefix_entries(&CONN_PREFIX)) {
+				entries
+			} else {
+				self.0
+					.kv
+					.list_prefix(
+						&CONN_PREFIX,
+						ListOpts {
+							reverse: false,
+							limit: None,
+						},
+					)
+					.await?
+			};
 		let mut restored = Vec::new();
 
 		for (_key, value) in entries {
@@ -973,13 +956,6 @@ fn disconnect_message(conn_id: &str, reason: Option<&str>) -> String {
 		Some(reason) => format!("disconnect connection `{conn_id}` with reason `{reason}`"),
 		None => format!("disconnect connection `{conn_id}`"),
 	}
-}
-
-pub(crate) fn make_connection_key(conn_id: &str) -> Vec<u8> {
-	let mut key = Vec::with_capacity(CONNECTION_KEY_PREFIX.len() + conn_id.len());
-	key.extend_from_slice(CONNECTION_KEY_PREFIX);
-	key.extend_from_slice(conn_id.as_bytes());
-	key
 }
 
 // Test shim keeps moved tests in crate-root tests/ with private-module access.

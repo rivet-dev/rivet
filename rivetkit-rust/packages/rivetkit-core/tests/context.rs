@@ -690,9 +690,9 @@ mod moved_tests {
 		ctx.load_persisted_actor(PersistedActor {
 			scheduled_events: vec![PersistedScheduleEvent {
 				event_id: "evt-future".to_owned(),
-				timestamp_ms: now_timestamp_ms() + 20,
+				timestamp: now_timestamp_ms() + 20,
 				action: "tick".to_owned(),
-				args: vec![1],
+				args: Some(vec![1]),
 			}],
 			..PersistedActor::default()
 		});
@@ -723,9 +723,9 @@ mod moved_tests {
 		ctx.load_persisted_actor(PersistedActor {
 			scheduled_events: vec![PersistedScheduleEvent {
 				event_id: "evt-overdue".to_owned(),
-				timestamp_ms: now_timestamp_ms() - 1_000,
+				timestamp: now_timestamp_ms() - 1_000,
 				action: "tick".to_owned(),
-				args: vec![1, 2, 3],
+				args: Some(vec![1, 2, 3]),
 			}],
 			..PersistedActor::default()
 		});

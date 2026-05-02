@@ -909,55 +909,58 @@ fn alarm_in_the_past() {
 
 #[test]
 fn alarm_with_null_timestamp() {
-	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
-		let (namespace, _) = common::setup_test_namespace(ctx.leader_dc()).await;
+	common::run(
+		common::TestOpts::new(1).with_timeout(30),
+		|ctx| async move {
+			let (namespace, _) = common::setup_test_namespace(ctx.leader_dc()).await;
 
-		let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
-		let ready_tx = Arc::new(Mutex::new(Some(ready_tx)));
+			let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
+			let ready_tx = Arc::new(Mutex::new(Some(ready_tx)));
 
-		let runner = common::setup_envoy(ctx.leader_dc(), &namespace, |builder| {
-			builder.with_actor_behavior("alarm-actor", move |_| {
-				let ready_tx = ready_tx.clone();
-				Box::new(SetClearAlarmAndSleepActor::new(ready_tx))
+			let runner = common::setup_envoy(ctx.leader_dc(), &namespace, |builder| {
+				builder.with_actor_behavior("alarm-actor", move |_| {
+					let ready_tx = ready_tx.clone();
+					Box::new(SetClearAlarmAndSleepActor::new(ready_tx))
+				})
 			})
-		})
-		.await;
+			.await;
 
-		let res = common::create_actor(
-			ctx.leader_dc().guard_port(),
-			&namespace,
-			"alarm-actor",
-			runner.pool_name(),
-			rivet_types::actors::CrashPolicy::Destroy,
-		)
-		.await;
+			let res = common::create_actor(
+				ctx.leader_dc().guard_port(),
+				&namespace,
+				"alarm-actor",
+				runner.pool_name(),
+				rivet_types::actors::CrashPolicy::Destroy,
+			)
+			.await;
 
-		let actor_id = res.actor.actor_id.to_string();
+			let actor_id = res.actor.actor_id.to_string();
 
-		// Wait for actor to be ready
-		ready_rx.await.expect("actor should send ready signal");
+			// Wait for actor to be ready
+			ready_rx.await.expect("actor should send ready signal");
 
-		// Verify actor is sleeping
-		wait_for_actor_sleep(ctx.leader_dc().guard_port(), &actor_id, &namespace, 5)
-			.await
-			.expect("actor is not sleeping");
+			// Verify actor is sleeping
+			wait_for_actor_sleep(ctx.leader_dc().guard_port(), &actor_id, &namespace, 5)
+				.await
+				.expect("actor is not sleeping");
 
-		// Wait past alarm time
-		tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
+			// Wait past alarm time
+			tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
 
-		// Verify actor is still sleeping
-		let actor = common::try_get_actor(ctx.leader_dc().guard_port(), &actor_id, &namespace)
-			.await
-			.expect("failed to get actor")
-			.expect("actor should exist");
+			// Verify actor is still sleeping
+			let actor = common::try_get_actor(ctx.leader_dc().guard_port(), &actor_id, &namespace)
+				.await
+				.expect("failed to get actor")
+				.expect("actor should exist");
 
-		assert!(
-			actor.sleep_ts.is_some(),
-			"actor should still be sleeping after alarm was cleared with null"
-		);
+			assert!(
+				actor.sleep_ts.is_some(),
+				"actor should still be sleeping after alarm was cleared with null"
+			);
 
-		tracing::info!(?actor_id, "null alarm_ts successfully cleared alarm");
-	});
+			tracing::info!(?actor_id, "null alarm_ts successfully cleared alarm");
+		},
+	);
 }
 
 // MARK: Edge Cases
@@ -1401,105 +1404,108 @@ fn multiple_actors_with_different_alarm_times() {
 // actors to wake in the combined Envoy+Runner full engine sweep.
 #[ignore = "broken legacy Pegboard Runner test: times out in full engine sweep"]
 fn many_actors_same_alarm_time() {
-	common::run(common::TestOpts::new(1).with_timeout(45), |ctx| async move {
-		let (namespace, _) = common::setup_test_namespace(ctx.leader_dc()).await;
+	common::run(
+		common::TestOpts::new(1).with_timeout(45),
+		|ctx| async move {
+			let (namespace, _) = common::setup_test_namespace(ctx.leader_dc()).await;
 
-		let num_actors = 10;
-		let alarm_offset = 2000; // All wake at same time
-		let mut actor_ids = Vec::new();
+			let num_actors = 10;
+			let alarm_offset = 2000; // All wake at same time
+			let mut actor_ids = Vec::new();
 
-		let runner = common::setup_envoy(ctx.leader_dc(), &namespace, |builder| {
-			builder.with_actor_behavior("alarm-actor", move |_| {
-				let (ready_tx, _) = tokio::sync::oneshot::channel();
-				let ready_tx = Arc::new(Mutex::new(Some(ready_tx)));
-				Box::new(AlarmAndSleepActor::new(alarm_offset, ready_tx))
+			let runner = common::setup_envoy(ctx.leader_dc(), &namespace, |builder| {
+				builder.with_actor_behavior("alarm-actor", move |_| {
+					let (ready_tx, _) = tokio::sync::oneshot::channel();
+					let ready_tx = Arc::new(Mutex::new(Some(ready_tx)));
+					Box::new(AlarmAndSleepActor::new(alarm_offset, ready_tx))
+				})
 			})
-		})
-		.await;
-
-		let mut lifecycle_rx = runner.subscribe_lifecycle_events();
-
-		// Create actors
-		for _idx in 0..num_actors {
-			let res = common::create_actor(
-				ctx.leader_dc().guard_port(),
-				&namespace,
-				"alarm-actor",
-				runner.pool_name(),
-				rivet_types::actors::CrashPolicy::Destroy,
-			)
 			.await;
-			actor_ids.push(res.actor.actor_id.to_string());
-		}
 
-		tracing::info!(num_actors, "created actors with same alarm time (+2s)");
+			let mut lifecycle_rx = runner.subscribe_lifecycle_events();
 
-		let actor_id_set: HashSet<String> = actor_ids.iter().cloned().collect();
+			// Create actors
+			for _idx in 0..num_actors {
+				let res = common::create_actor(
+					ctx.leader_dc().guard_port(),
+					&namespace,
+					"alarm-actor",
+					runner.pool_name(),
+					rivet_types::actors::CrashPolicy::Destroy,
+				)
+				.await;
+				actor_ids.push(res.actor.actor_id.to_string());
+			}
 
-		// Same-time alarms can wake early actors before a sequential API poll reaches
-		// later ones, so use the Envoy lifecycle stream to prove every actor stopped
-		// for sleep at generation 1.
-		let sleep_deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
-		let mut slept_actor_ids = HashSet::new();
-		while slept_actor_ids.len() < num_actors {
-			let remaining = sleep_deadline.saturating_duration_since(std::time::Instant::now());
-			let event = tokio::time::timeout(remaining, lifecycle_rx.recv())
-				.await
-				.expect("timed out waiting for actors to sleep")
-				.expect("lifecycle stream closed");
+			tracing::info!(num_actors, "created actors with same alarm time (+2s)");
 
-			if let ActorLifecycleEvent::Stopped {
-				actor_id,
-				generation,
-			} = event
-			{
-				if generation == 1 && actor_id_set.contains(&actor_id) {
-					slept_actor_ids.insert(actor_id);
+			let actor_id_set: HashSet<String> = actor_ids.iter().cloned().collect();
+
+			// Same-time alarms can wake early actors before a sequential API poll reaches
+			// later ones, so use the Envoy lifecycle stream to prove every actor stopped
+			// for sleep at generation 1.
+			let sleep_deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+			let mut slept_actor_ids = HashSet::new();
+			while slept_actor_ids.len() < num_actors {
+				let remaining = sleep_deadline.saturating_duration_since(std::time::Instant::now());
+				let event = tokio::time::timeout(remaining, lifecycle_rx.recv())
+					.await
+					.expect("timed out waiting for actors to sleep")
+					.expect("lifecycle stream closed");
+
+				if let ActorLifecycleEvent::Stopped {
+					actor_id,
+					generation,
+				} = event
+				{
+					if generation == 1 && actor_id_set.contains(&actor_id) {
+						slept_actor_ids.insert(actor_id);
+					}
 				}
 			}
-		}
 
-		tracing::info!("all actors sleeping");
+			tracing::info!("all actors sleeping");
 
-		let alarm_start = std::time::Instant::now();
+			let alarm_start = std::time::Instant::now();
 
-		// Verify all actors wake within a reasonable time window.
-		let wake_deadline = std::time::Instant::now() + std::time::Duration::from_secs(4);
-		let mut woke_actor_ids = HashSet::new();
-		while woke_actor_ids.len() < num_actors {
-			let remaining = wake_deadline.saturating_duration_since(std::time::Instant::now());
-			let event = tokio::time::timeout(remaining, lifecycle_rx.recv())
-				.await
-				.expect("timed out waiting for actors to wake")
-				.expect("lifecycle stream closed");
+			// Verify all actors wake within a reasonable time window.
+			let wake_deadline = std::time::Instant::now() + std::time::Duration::from_secs(4);
+			let mut woke_actor_ids = HashSet::new();
+			while woke_actor_ids.len() < num_actors {
+				let remaining = wake_deadline.saturating_duration_since(std::time::Instant::now());
+				let event = tokio::time::timeout(remaining, lifecycle_rx.recv())
+					.await
+					.expect("timed out waiting for actors to wake")
+					.expect("lifecycle stream closed");
 
-			if let ActorLifecycleEvent::Started {
-				actor_id,
-				generation,
-			} = event
-			{
-				if generation == 2 && actor_id_set.contains(&actor_id) {
-					tracing::info!(actor_id, "actor woke");
-					woke_actor_ids.insert(actor_id);
+				if let ActorLifecycleEvent::Started {
+					actor_id,
+					generation,
+				} = event
+				{
+					if generation == 2 && actor_id_set.contains(&actor_id) {
+						tracing::info!(actor_id, "actor woke");
+						woke_actor_ids.insert(actor_id);
+					}
 				}
 			}
-		}
 
-		let total_duration = alarm_start.elapsed();
+			let total_duration = alarm_start.elapsed();
 
-		// All 10 actors should wake within a 500ms window around the alarm time
-		assert!(
-			total_duration <= std::time::Duration::from_millis(3000),
-			"all actors should wake within 3s, actual: {:?}",
-			total_duration
-		);
+			// All 10 actors should wake within a 500ms window around the alarm time
+			assert!(
+				total_duration <= std::time::Duration::from_millis(3000),
+				"all actors should wake within 3s, actual: {:?}",
+				total_duration
+			);
 
-		tracing::info!(
-			num_actors,
-			?total_duration,
-			"all actors woke concurrently at same alarm time"
-		);
-	});
+			tracing::info!(
+				num_actors,
+				?total_duration,
+				"all actors woke concurrently at same alarm time"
+			);
+		},
+	);
 }
 
 /// Regression test for the alarm-during-sleep-transition race.
@@ -1519,7 +1525,7 @@ fn many_actors_same_alarm_time() {
 #[test]
 fn alarm_overdue_during_sleep_transition_fires_via_reallocation() {
 	common::run(
-			common::TestOpts::new(1).with_timeout(30),
+		common::TestOpts::new(1).with_timeout(30),
 		|ctx| async move {
 			let (namespace, _) = common::setup_test_namespace(ctx.leader_dc()).await;
 

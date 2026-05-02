@@ -24,10 +24,13 @@ pub(crate) fn end_sleep_test_wait(queue: &Queue) {
 
 mod moved_tests {
 	use super::{
-		CompletableQueueMessage, QueueMessage, QueueMetadata, decode_queue_message_key,
-		decode_queue_metadata, encode_queue_metadata, make_queue_message_key,
+		CompletableQueueMessage, QueueMessage, QueueMetadata, decode_queue_metadata,
+		encode_queue_metadata,
 	};
 	use crate::actor::context::tests::new_with_kv;
+	use crate::actor::keys::{
+		QUEUE_METADATA_KEY, decode_queue_message_key, make_queue_message_key,
+	};
 	use crate::actor::queue::{EnqueueAndWaitOpts, QueueNextOpts, QueueWaitOpts};
 	use tokio::time::{Duration, sleep};
 	use tokio_util::sync::CancellationToken;
@@ -45,7 +48,7 @@ mod moved_tests {
 		let second = make_queue_message_key(2);
 
 		assert!(first < second);
-		assert_eq!(super::QUEUE_METADATA_KEY, [5, 1, 1]);
+		assert_eq!(QUEUE_METADATA_KEY, [5, 1, 1]);
 		assert_eq!(first, vec![5, 1, 2, 0, 0, 0, 0, 0, 0, 0, 1],);
 		assert_eq!(decode_queue_message_key(&first).expect("decode first"), 1);
 		assert_eq!(decode_queue_message_key(&second).expect("decode second"), 2);

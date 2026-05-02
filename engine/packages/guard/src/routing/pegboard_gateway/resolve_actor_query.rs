@@ -270,10 +270,7 @@ mod tests {
 
 	#[test]
 	fn serializes_multiple_parts_separated_by_slash() {
-		assert_eq!(
-			serialize_actor_key(&s(&["a", "b", "c"])).unwrap(),
-			"a/b/c"
-		);
+		assert_eq!(serialize_actor_key(&s(&["a", "b", "c"])).unwrap(), "a/b/c");
 	}
 
 	#[test]
@@ -283,10 +280,7 @@ mod tests {
 
 	#[test]
 	fn escapes_slash_in_part_with_neighbors() {
-		assert_eq!(
-			serialize_actor_key(&s(&["a/b", "c"])).unwrap(),
-			"a\\/b/c"
-		);
+		assert_eq!(serialize_actor_key(&s(&["a/b", "c"])).unwrap(), "a\\/b/c");
 	}
 
 	#[test]
@@ -301,15 +295,15 @@ mod tests {
 
 	#[test]
 	fn empty_string_marker_is_distinct_from_empty_key_sentinel() {
-		assert_ne!(serialize_actor_key(&[]).unwrap(), serialize_actor_key(&s(&[""])).unwrap());
+		assert_ne!(
+			serialize_actor_key(&[]).unwrap(),
+			serialize_actor_key(&s(&[""])).unwrap()
+		);
 	}
 
 	#[test]
 	fn escapes_backslash_before_separator() {
-		assert_eq!(
-			serialize_actor_key(&s(&["a\\b"])).unwrap(),
-			"a\\\\b"
-		);
+		assert_eq!(serialize_actor_key(&s(&["a\\b"])).unwrap(), "a\\\\b");
 	}
 
 	#[test]

@@ -6,25 +6,30 @@ mod moved_tests {
 
 	use tokio::sync::mpsc;
 
+	use rivetkit_actor_persist::{
+		generated::{v1 as persist_v1, v4 as persist_v4},
+		versioned as persist_versioned,
+	};
+	use vbare::OwnedVersionedData;
+
 	use crate::actor::config::ActorConfig;
 	use crate::actor::connection::{
 		ConnHandle, HibernatableConnectionMetadata, decode_persisted_connection,
-		make_connection_key,
 	};
 	use crate::actor::context::tests::new_with_kv;
+	use crate::actor::keys::{LAST_PUSHED_ALARM_KEY, PERSIST_DATA_KEY, make_connection_key};
 	use crate::actor::messages::StateDelta;
 	use crate::actor::task::LifecycleEvent;
 	use crate::kv::tests::new_in_memory;
 	use crate::{ActorContext, RequestSaveOpts};
 
 	use super::{
-		LAST_PUSHED_ALARM_KEY, PERSIST_DATA_KEY, PersistedActor, PersistedScheduleEvent,
-		decode_last_pushed_alarm, decode_persisted_actor, encode_last_pushed_alarm,
-		encode_persisted_actor, throttled_save_delay,
+		PersistedActor, PersistedScheduleEvent, decode_last_pushed_alarm, decode_persisted_actor,
+		encode_last_pushed_alarm, encode_persisted_actor, throttled_save_delay,
 	};
 
 	const PERSISTED_ACTOR_HEX: &str =
-		"04000103010203010304050601076576656e742d312a000000000000000470696e67020708";
+		"04000103010203010304050601076576656e742d312a000000000000000470696e6701020708";
 
 	fn hex(bytes: &[u8]) -> String {
 		bytes.iter().map(|byte| format!("{byte:02x}")).collect()
@@ -38,9 +43,9 @@ mod moved_tests {
 			state: vec![4, 5, 6],
 			scheduled_events: vec![PersistedScheduleEvent {
 				event_id: "event-1".into(),
-				timestamp_ms: 42,
+				timestamp: 42,
 				action: "ping".into(),
-				args: vec![7, 8],
+				args: Some(vec![7, 8]),
 			}],
 		};
 
@@ -52,8 +57,98 @@ mod moved_tests {
 	}
 
 	#[test]
+	fn persisted_actor_decodes_old_typescript_v4_optional_schedule_args() {
+		let encoded = persist_versioned::Actor::wrap_latest(persist_v4::Actor {
+			input: None,
+			has_initialized: true,
+			state: vec![1],
+			scheduled_events: vec![persist_v4::ScheduleEvent {
+				event_id: "event-1".to_owned(),
+				timestamp: 42,
+				action: "ping".to_owned(),
+				args: None,
+			}],
+		})
+		.serialize_with_embedded_version(4)
+		.expect("old TypeScript actor should encode");
+
+		let decoded = decode_persisted_actor(&encoded).expect("old TypeScript actor should decode");
+		assert_eq!(
+			decoded,
+			PersistedActor {
+				input: None,
+				has_initialized: true,
+				state: vec![1],
+				scheduled_events: vec![PersistedScheduleEvent {
+					event_id: "event-1".to_owned(),
+					timestamp: 42,
+					action: "ping".to_owned(),
+					args: None,
+				}],
+			}
+		);
+	}
+
+	#[test]
+	fn scheduled_empty_args_encode_as_typescript_none() {
+		let actor = ActorContext::new_for_schedule_tests("actor-empty-schedule-args");
+		actor.after(Duration::from_secs(1), "ping", b"");
+
+		let encoded =
+			encode_persisted_actor(&actor.persisted_actor()).expect("actor should encode");
+		let bare =
+			<persist_versioned::Actor as OwnedVersionedData>::deserialize_with_embedded_version(
+				&encoded,
+			)
+			.expect("actor should decode as protocol");
+
+		assert_eq!(bare.scheduled_events[0].args, None);
+	}
+
+	#[test]
+	fn persisted_actor_decodes_old_typescript_v1_layout() {
+		let payload = persist_versioned::Actor::V1(persist_v1::PersistedActor {
+			input: Some(vec![1, 2]),
+			has_initialized: true,
+			state: vec![3, 4],
+			connections: Vec::new(),
+			scheduled_events: vec![persist_v1::PersistedScheduleEvent {
+				event_id: "event-1".to_owned(),
+				timestamp: 42,
+				kind: persist_v1::PersistedScheduleEventKind::GenericPersistedScheduleEvent(
+					persist_v1::GenericPersistedScheduleEvent {
+						action: "ping".to_owned(),
+						args: Some(vec![5, 6]),
+					},
+				),
+			}],
+		})
+		.serialize_version(1)
+		.expect("old TypeScript v1 actor should encode");
+		let mut encoded = 1u16.to_le_bytes().to_vec();
+		encoded.extend_from_slice(&payload);
+
+		let decoded =
+			decode_persisted_actor(&encoded).expect("old TypeScript v1 actor should decode");
+		assert_eq!(
+			decoded,
+			PersistedActor {
+				input: Some(vec![1, 2]),
+				has_initialized: true,
+				state: vec![3, 4],
+				scheduled_events: vec![PersistedScheduleEvent {
+					event_id: "event-1".to_owned(),
+					timestamp: 42,
+					action: "ping".to_owned(),
+					args: Some(vec![5, 6]),
+				}],
+			}
+		);
+	}
+
+	#[test]
 	fn persist_data_key_matches_typescript_layout() {
-		assert_eq!(super::PERSIST_DATA_KEY, &[1]);
+		assert_eq!(PERSIST_DATA_KEY, &[1]);
 	}
 
 	#[test]

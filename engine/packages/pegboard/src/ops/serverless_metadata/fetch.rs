@@ -70,9 +70,7 @@ impl From<ServerlessMetadataError> for ServerlessMetadataErrorEnvelope {
 				metadata: serde_json::json!({ "kind": "request_timed_out" }),
 			},
 			ServerlessMetadataError::NonSuccessStatus { status_code, body } => Self {
-				message: format!(
-					"serverless metadata request returned status {status_code}"
-				),
+				message: format!("serverless metadata request returned status {status_code}"),
 				details: None,
 				metadata: serde_json::json!({
 					"kind": "non_success_status",
@@ -90,9 +88,7 @@ impl From<ServerlessMetadataError> for ServerlessMetadataErrorEnvelope {
 				}),
 			},
 			ServerlessMetadataError::InvalidResponseSchema { runtime, version } => Self {
-				message: format!(
-					"serverless runtime {runtime} version {version} is unsupported"
-				),
+				message: format!("serverless runtime {runtime} version {version} is unsupported"),
 				details: None,
 				metadata: serde_json::json!({
 					"kind": "invalid_response_schema",
@@ -237,6 +233,7 @@ pub async fn pegboard_serverless_metadata_fetch(
 		actor_names,
 		envoy,
 		runner,
+		..
 	} = payload;
 
 	let runner_version = runner.and_then(|r| r.version);

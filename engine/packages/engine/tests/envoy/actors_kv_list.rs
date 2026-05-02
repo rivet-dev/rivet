@@ -867,119 +867,128 @@ fn kv_list_all_with_limit() {
 
 #[test]
 fn kv_list_all_reverse() {
-	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
-		let (namespace, _) = common::setup_test_namespace(ctx.leader_dc()).await;
+	common::run(
+		common::TestOpts::new(1).with_timeout(30),
+		|ctx| async move {
+			let (namespace, _) = common::setup_test_namespace(ctx.leader_dc()).await;
 
-		let (notify_tx, notify_rx) = tokio::sync::oneshot::channel();
-		let notify_tx = Arc::new(Mutex::new(Some(notify_tx)));
+			let (notify_tx, notify_rx) = tokio::sync::oneshot::channel();
+			let notify_tx = Arc::new(Mutex::new(Some(notify_tx)));
 
-		let runner = common::setup_envoy(ctx.leader_dc(), &namespace, |builder| {
-			builder.with_actor_behavior("kv-list-reverse", move |_| {
-				Box::new(ListAllReverseActor::new(notify_tx.clone()))
+			let runner = common::setup_envoy(ctx.leader_dc(), &namespace, |builder| {
+				builder.with_actor_behavior("kv-list-reverse", move |_| {
+					Box::new(ListAllReverseActor::new(notify_tx.clone()))
+				})
 			})
-		})
-		.await;
+			.await;
 
-		let res = common::create_actor(
-			ctx.leader_dc().guard_port(),
-			&namespace,
-			"kv-list-reverse",
-			runner.pool_name(),
-			rivet_types::actors::CrashPolicy::Destroy,
-		)
-		.await;
+			let res = common::create_actor(
+				ctx.leader_dc().guard_port(),
+				&namespace,
+				"kv-list-reverse",
+				runner.pool_name(),
+				rivet_types::actors::CrashPolicy::Destroy,
+			)
+			.await;
 
-		let actor_id = res.actor.actor_id.to_string();
+			let actor_id = res.actor.actor_id.to_string();
 
-		let result = notify_rx.await.expect("actor should send test result");
+			let result = notify_rx.await.expect("actor should send test result");
 
-		match result {
-			KvTestResult::Success => {
-				tracing::info!(?actor_id, "list all reverse test succeeded");
+			match result {
+				KvTestResult::Success => {
+					tracing::info!(?actor_id, "list all reverse test succeeded");
+				}
+				KvTestResult::Failure(msg) => {
+					panic!("list all reverse test failed: {}", msg);
+				}
 			}
-			KvTestResult::Failure(msg) => {
-				panic!("list all reverse test failed: {}", msg);
-			}
-		}
-	});
+		},
+	);
 }
 
 #[test]
 fn kv_list_range_inclusive() {
-	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
-		let (namespace, _) = common::setup_test_namespace(ctx.leader_dc()).await;
+	common::run(
+		common::TestOpts::new(1).with_timeout(30),
+		|ctx| async move {
+			let (namespace, _) = common::setup_test_namespace(ctx.leader_dc()).await;
 
-		let (notify_tx, notify_rx) = tokio::sync::oneshot::channel();
-		let notify_tx = Arc::new(Mutex::new(Some(notify_tx)));
+			let (notify_tx, notify_rx) = tokio::sync::oneshot::channel();
+			let notify_tx = Arc::new(Mutex::new(Some(notify_tx)));
 
-		let runner = common::setup_envoy(ctx.leader_dc(), &namespace, |builder| {
-			builder.with_actor_behavior("kv-range-inclusive", move |_| {
-				Box::new(ListRangeInclusiveActor::new(notify_tx.clone()))
+			let runner = common::setup_envoy(ctx.leader_dc(), &namespace, |builder| {
+				builder.with_actor_behavior("kv-range-inclusive", move |_| {
+					Box::new(ListRangeInclusiveActor::new(notify_tx.clone()))
+				})
 			})
-		})
-		.await;
+			.await;
 
-		let res = common::create_actor(
-			ctx.leader_dc().guard_port(),
-			&namespace,
-			"kv-range-inclusive",
-			runner.pool_name(),
-			rivet_types::actors::CrashPolicy::Destroy,
-		)
-		.await;
+			let res = common::create_actor(
+				ctx.leader_dc().guard_port(),
+				&namespace,
+				"kv-range-inclusive",
+				runner.pool_name(),
+				rivet_types::actors::CrashPolicy::Destroy,
+			)
+			.await;
 
-		let actor_id = res.actor.actor_id.to_string();
+			let actor_id = res.actor.actor_id.to_string();
 
-		let result = notify_rx.await.expect("actor should send test result");
+			let result = notify_rx.await.expect("actor should send test result");
 
-		match result {
-			KvTestResult::Success => {
-				tracing::info!(?actor_id, "list range inclusive test succeeded");
+			match result {
+				KvTestResult::Success => {
+					tracing::info!(?actor_id, "list range inclusive test succeeded");
+				}
+				KvTestResult::Failure(msg) => {
+					panic!("list range inclusive test failed: {}", msg);
+				}
 			}
-			KvTestResult::Failure(msg) => {
-				panic!("list range inclusive test failed: {}", msg);
-			}
-		}
-	});
+		},
+	);
 }
 
 #[test]
 fn kv_list_range_exclusive() {
-	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
-		let (namespace, _) = common::setup_test_namespace(ctx.leader_dc()).await;
+	common::run(
+		common::TestOpts::new(1).with_timeout(30),
+		|ctx| async move {
+			let (namespace, _) = common::setup_test_namespace(ctx.leader_dc()).await;
 
-		let (notify_tx, notify_rx) = tokio::sync::oneshot::channel();
-		let notify_tx = Arc::new(Mutex::new(Some(notify_tx)));
+			let (notify_tx, notify_rx) = tokio::sync::oneshot::channel();
+			let notify_tx = Arc::new(Mutex::new(Some(notify_tx)));
 
-		let runner = common::setup_envoy(ctx.leader_dc(), &namespace, |builder| {
-			builder.with_actor_behavior("kv-range-exclusive", move |_| {
-				Box::new(ListRangeExclusiveActor::new(notify_tx.clone()))
+			let runner = common::setup_envoy(ctx.leader_dc(), &namespace, |builder| {
+				builder.with_actor_behavior("kv-range-exclusive", move |_| {
+					Box::new(ListRangeExclusiveActor::new(notify_tx.clone()))
+				})
 			})
-		})
-		.await;
+			.await;
 
-		let res = common::create_actor(
-			ctx.leader_dc().guard_port(),
-			&namespace,
-			"kv-range-exclusive",
-			runner.pool_name(),
-			rivet_types::actors::CrashPolicy::Destroy,
-		)
-		.await;
+			let res = common::create_actor(
+				ctx.leader_dc().guard_port(),
+				&namespace,
+				"kv-range-exclusive",
+				runner.pool_name(),
+				rivet_types::actors::CrashPolicy::Destroy,
+			)
+			.await;
 
-		let actor_id = res.actor.actor_id.to_string();
+			let actor_id = res.actor.actor_id.to_string();
 
-		let result = notify_rx.await.expect("actor should send test result");
+			let result = notify_rx.await.expect("actor should send test result");
 
-		match result {
-			KvTestResult::Success => {
-				tracing::info!(?actor_id, "list range exclusive test succeeded");
+			match result {
+				KvTestResult::Success => {
+					tracing::info!(?actor_id, "list range exclusive test succeeded");
+				}
+				KvTestResult::Failure(msg) => {
+					panic!("list range exclusive test failed: {}", msg);
+				}
 			}
-			KvTestResult::Failure(msg) => {
-				panic!("list range exclusive test failed: {}", msg);
-			}
-		}
-	});
+		},
+	);
 }
 
 #[test]
@@ -1023,39 +1032,42 @@ fn kv_list_prefix_match() {
 
 #[test]
 fn kv_list_prefix_no_matches() {
-	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
-		let (namespace, _) = common::setup_test_namespace(ctx.leader_dc()).await;
+	common::run(
+		common::TestOpts::new(1).with_timeout(30),
+		|ctx| async move {
+			let (namespace, _) = common::setup_test_namespace(ctx.leader_dc()).await;
 
-		let (notify_tx, notify_rx) = tokio::sync::oneshot::channel();
-		let notify_tx = Arc::new(Mutex::new(Some(notify_tx)));
+			let (notify_tx, notify_rx) = tokio::sync::oneshot::channel();
+			let notify_tx = Arc::new(Mutex::new(Some(notify_tx)));
 
-		let runner = common::setup_envoy(ctx.leader_dc(), &namespace, |builder| {
-			builder.with_actor_behavior("kv-prefix-no-match", move |_| {
-				Box::new(ListPrefixNoMatchActor::new(notify_tx.clone()))
+			let runner = common::setup_envoy(ctx.leader_dc(), &namespace, |builder| {
+				builder.with_actor_behavior("kv-prefix-no-match", move |_| {
+					Box::new(ListPrefixNoMatchActor::new(notify_tx.clone()))
+				})
 			})
-		})
-		.await;
+			.await;
 
-		let res = common::create_actor(
-			ctx.leader_dc().guard_port(),
-			&namespace,
-			"kv-prefix-no-match",
-			runner.pool_name(),
-			rivet_types::actors::CrashPolicy::Destroy,
-		)
-		.await;
+			let res = common::create_actor(
+				ctx.leader_dc().guard_port(),
+				&namespace,
+				"kv-prefix-no-match",
+				runner.pool_name(),
+				rivet_types::actors::CrashPolicy::Destroy,
+			)
+			.await;
 
-		let actor_id = res.actor.actor_id.to_string();
+			let actor_id = res.actor.actor_id.to_string();
 
-		let result = notify_rx.await.expect("actor should send test result");
+			let result = notify_rx.await.expect("actor should send test result");
 
-		match result {
-			KvTestResult::Success => {
-				tracing::info!(?actor_id, "list prefix no matches test succeeded");
+			match result {
+				KvTestResult::Success => {
+					tracing::info!(?actor_id, "list prefix no matches test succeeded");
+				}
+				KvTestResult::Failure(msg) => {
+					panic!("list prefix no matches test failed: {}", msg);
+				}
 			}
-			KvTestResult::Failure(msg) => {
-				panic!("list prefix no matches test failed: {}", msg);
-			}
-		}
-	});
+		},
+	);
 }

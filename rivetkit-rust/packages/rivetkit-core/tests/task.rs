@@ -29,15 +29,14 @@ mod moved_tests {
 
 	use crate::actor::connection::{
 		ConnHandle, HibernatableConnectionMetadata, decode_persisted_connection,
-		make_connection_key,
 	};
 	use crate::actor::context::tests::new_with_kv;
+	use crate::actor::keys::{LAST_PUSHED_ALARM_KEY, PERSIST_DATA_KEY, make_connection_key};
 	use crate::actor::messages::{ActorEvent, SerializeStateReason, StateDelta};
 	use crate::actor::preload::PreloadedPersistedActor;
 	use crate::actor::state::{
-		LAST_PUSHED_ALARM_KEY, PERSIST_DATA_KEY, PersistedActor, PersistedScheduleEvent,
-		RequestSaveOpts, decode_last_pushed_alarm, decode_persisted_actor,
-		encode_last_pushed_alarm, encode_persisted_actor,
+		PersistedActor, PersistedScheduleEvent, RequestSaveOpts, decode_last_pushed_alarm,
+		decode_persisted_actor, encode_last_pushed_alarm, encode_persisted_actor,
 	};
 	use crate::actor::task::{
 		ActorTask, DispatchCommand, LONG_SHUTDOWN_DRAIN_WARNING_THRESHOLD, LifecycleCommand,
@@ -943,7 +942,7 @@ mod moved_tests {
 	}
 
 	#[tokio::test]
-	async fn save_tick_cancels_pending_inspector_deadline_and_broadcasts_overlay() {
+	async fn save_tick_cancels_pending_inspector_deadline_and_persists_state() {
 		let ctx = new_with_kv(
 			"actor-save-overlay",
 			"task-save-overlay",
@@ -991,14 +990,11 @@ mod moved_tests {
 		task.on_state_save_tick().await;
 
 		assert!(task.inspector_serialize_state_deadline.is_none());
-		let overlay = inspector_rx
-			.recv()
-			.await
-			.expect("save tick should broadcast inspector overlay");
-		let deltas: Vec<StateDelta> =
-			ciborium::from_reader(overlay.as_slice()).expect("overlay payload should decode");
-		assert_eq!(deltas, vec![StateDelta::ActorState(vec![1])]);
 		wait_for_state(&ctx, &[1]).await;
+		assert!(matches!(
+			inspector_rx.try_recv(),
+			Err(tokio::sync::broadcast::error::TryRecvError::Empty)
+		));
 
 		task.handle_stop(ShutdownKind::Destroy)
 			.await
@@ -1492,9 +1488,9 @@ mod moved_tests {
 		let mut persisted = task.ctx.persisted_actor();
 		persisted.scheduled_events.push(PersistedScheduleEvent {
 			event_id: "event-1".to_owned(),
-			timestamp_ms: 0,
+			timestamp: 0,
 			action: "alarm-action".to_owned(),
-			args: Vec::new(),
+			args: None,
 		});
 		task.ctx.load_persisted_actor(PersistedActor {
 			scheduled_events: persisted.scheduled_events,
@@ -1905,7 +1901,7 @@ mod moved_tests {
 			decode_persisted_actor(&actor_bytes).expect("persisted actor should decode");
 		assert_eq!(persisted.scheduled_events.len(), 1);
 		assert_eq!(persisted.scheduled_events[0].action, "after-destroy");
-		assert_eq!(persisted.scheduled_events[0].args, vec![1, 2, 3]);
+		assert_eq!(persisted.scheduled_events[0].args, Some(vec![1, 2, 3]));
 	}
 
 	#[tokio::test]
@@ -1933,7 +1929,7 @@ mod moved_tests {
 			.expect("start reply should send")
 			.expect("start should succeed");
 
-		// Startup still probes the inspector token key at [3], but it should not
+		// Startup still probes the inspector token key, but it should not
 		// batch-get the persisted actor/alarm startup bundle when the registry
 		// already told us the persisted bundle exists and is empty.
 		assert_eq!(kv.test_batch_get_call_count(), 1);
@@ -1948,9 +1944,9 @@ mod moved_tests {
 			has_initialized: true,
 			scheduled_events: vec![PersistedScheduleEvent {
 				event_id: "evt-future".to_owned(),
-				timestamp_ms: future_ts,
+				timestamp: future_ts,
 				action: "tick".to_owned(),
-				args: Vec::new(),
+				args: None,
 			}],
 			..PersistedActor::default()
 		};
@@ -1997,9 +1993,9 @@ mod moved_tests {
 			has_initialized: true,
 			scheduled_events: vec![PersistedScheduleEvent {
 				event_id: "evt-future".to_owned(),
-				timestamp_ms: future_ts,
+				timestamp: future_ts,
 				action: "tick".to_owned(),
-				args: Vec::new(),
+				args: None,
 			}],
 			..PersistedActor::default()
 		};
@@ -2066,9 +2062,9 @@ mod moved_tests {
 		ctx.load_persisted_actor(PersistedActor {
 			scheduled_events: vec![PersistedScheduleEvent {
 				event_id: "evt-overdue".to_owned(),
-				timestamp_ms: 0,
+				timestamp: 0,
 				action: "tick".to_owned(),
-				args: vec![1, 2, 3],
+				args: Some(vec![1, 2, 3]),
 			}],
 			..PersistedActor::default()
 		});

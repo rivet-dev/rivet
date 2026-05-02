@@ -163,19 +163,19 @@ impl ActorContext {
 
 		self.all_events()
 			.into_iter()
-			.filter(|event| event.timestamp_ms <= now_ms)
+			.filter(|event| event.timestamp <= now_ms)
 			.collect()
 	}
 
 	fn schedule_event(&self, timestamp_ms: i64, action_name: &str, args: &[u8]) -> Result<()> {
 		let event = PersistedScheduleEvent {
 			event_id: Uuid::new_v4().to_string(),
-			timestamp_ms,
+			timestamp: timestamp_ms,
 			action: action_name.to_owned(),
-			args: args.to_vec(),
+			args: (!args.is_empty()).then(|| args.to_vec()),
 		};
 		let event_id = event.event_id.clone();
-		let args_len = event.args.len();
+		let args_len = event.args.as_ref().map_or(0, Vec::len);
 
 		self.insert_event_sorted(event);
 		tracing::debug!(
@@ -196,8 +196,8 @@ impl ActorContext {
 			let position = events
 				.binary_search_by(|existing| {
 					existing
-						.timestamp_ms
-						.cmp(&event.timestamp_ms)
+						.timestamp
+						.cmp(&event.timestamp)
 						.then_with(|| existing.event_id.cmp(&event.event_id))
 				})
 				.unwrap_or_else(|index| index);
@@ -220,7 +220,7 @@ impl ActorContext {
 			.0
 			.schedule_dirty_since_push
 			.swap(false, Ordering::SeqCst);
-		let next_alarm = self.next_event().map(|event| event.timestamp_ms);
+		let next_alarm = self.next_event().map(|event| event.timestamp);
 		self.arm_local_alarm(next_alarm);
 		if !should_push {
 			return Ok(());
@@ -256,7 +256,7 @@ impl ActorContext {
 		let now_ms = now_timestamp_ms();
 		let next_alarm = self
 			.next_event()
-			.and_then(|event| (event.timestamp_ms > now_ms).then_some(event.timestamp_ms));
+			.and_then(|event| (event.timestamp > now_ms).then_some(event.timestamp));
 		self.arm_local_alarm(next_alarm);
 		if !should_push {
 			return Ok(());

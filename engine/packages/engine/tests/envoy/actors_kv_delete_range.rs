@@ -96,31 +96,34 @@ impl TestActor for DeleteRangeActor {
 
 #[test]
 fn kv_delete_range_removes_half_open_range() {
-	common::run(common::TestOpts::new(1).with_timeout(30), |ctx| async move {
-		let (namespace, _) = common::setup_test_namespace(ctx.leader_dc()).await;
+	common::run(
+		common::TestOpts::new(1).with_timeout(30),
+		|ctx| async move {
+			let (namespace, _) = common::setup_test_namespace(ctx.leader_dc()).await;
 
-		let (notify_tx, notify_rx) = tokio::sync::oneshot::channel();
-		let notify_tx = Arc::new(Mutex::new(Some(notify_tx)));
+			let (notify_tx, notify_rx) = tokio::sync::oneshot::channel();
+			let notify_tx = Arc::new(Mutex::new(Some(notify_tx)));
 
-		let runner = common::setup_envoy(ctx.leader_dc(), &namespace, |builder| {
-			builder.with_actor_behavior("kv-delete-range", move |_| {
-				Box::new(DeleteRangeActor::new(notify_tx.clone()))
+			let runner = common::setup_envoy(ctx.leader_dc(), &namespace, |builder| {
+				builder.with_actor_behavior("kv-delete-range", move |_| {
+					Box::new(DeleteRangeActor::new(notify_tx.clone()))
+				})
 			})
-		})
-		.await;
+			.await;
 
-		common::create_actor(
-			ctx.leader_dc().guard_port(),
-			&namespace,
-			"kv-delete-range",
-			runner.pool_name(),
-			rivet_types::actors::CrashPolicy::Destroy,
-		)
-		.await;
+			common::create_actor(
+				ctx.leader_dc().guard_port(),
+				&namespace,
+				"kv-delete-range",
+				runner.pool_name(),
+				rivet_types::actors::CrashPolicy::Destroy,
+			)
+			.await;
 
-		match notify_rx.await.expect("actor should send test result") {
-			KvTestResult::Success => {}
-			KvTestResult::Failure(msg) => panic!("kv delete range test failed: {}", msg),
-		}
-	});
+			match notify_rx.await.expect("actor should send test result") {
+				KvTestResult::Success => {}
+				KvTestResult::Failure(msg) => panic!("kv delete range test failed: {}", msg),
+			}
+		},
+	);
 }

@@ -97,9 +97,7 @@ impl ActorConfig {
 
 	pub async fn send_kv_get(&self, keys: Vec<Vec<u8>>) -> Result<mk2::KvGetResponse> {
 		match self
-			.send_kv(mk2::KvRequestData::KvGetRequest(mk2::KvGetRequest {
-				keys,
-			}))
+			.send_kv(mk2::KvRequestData::KvGetRequest(mk2::KvGetRequest { keys }))
 			.await?
 		{
 			mk2::KvResponseData::KvGetResponse(res) => Ok(res),
@@ -144,9 +142,9 @@ impl ActorConfig {
 
 	pub async fn send_kv_delete(&self, keys: Vec<Vec<u8>>) -> Result<()> {
 		match self
-			.send_kv(mk2::KvRequestData::KvDeleteRequest(
-				mk2::KvDeleteRequest { keys },
-			))
+			.send_kv(mk2::KvRequestData::KvDeleteRequest(mk2::KvDeleteRequest {
+				keys,
+			}))
 			.await?
 		{
 			mk2::KvResponseData::KvDeleteResponse => Ok(()),
@@ -305,7 +303,9 @@ impl RunnerConfigBuilder {
 			endpoint: self.endpoint.context("endpoint is required")?,
 			token: self.token.unwrap_or_else(|| "dev".to_string()),
 			namespace: self.namespace.context("namespace is required")?,
-			runner_name: self.runner_name.unwrap_or_else(|| "test-runner".to_string()),
+			runner_name: self
+				.runner_name
+				.unwrap_or_else(|| "test-runner".to_string()),
 			runner_key: self
 				.runner_key
 				.unwrap_or_else(|| format!("key-{:012x}", rand::random::<u64>())),
@@ -428,7 +428,9 @@ impl Runner {
 			.context("failed to connect to runner WebSocket")?;
 
 		ws_stream
-			.send(Message::Binary(self.encode_to_server(self.build_init())?.into()))
+			.send(Message::Binary(
+				self.encode_to_server(self.build_init())?.into(),
+			))
 			.await
 			.context("failed to send runner init")?;
 
@@ -632,10 +634,10 @@ impl Runner {
 			actor_id: actor_id.clone(),
 			generation,
 		});
-		self.actors.lock().await.insert(
-			actor_id.clone(),
-			ActorState { generation, actor },
-		);
+		self.actors
+			.lock()
+			.await
+			.insert(actor_id.clone(), ActorState { generation, actor });
 
 		match start_result {
 			ActorStartResult::Running => {
@@ -699,9 +701,12 @@ impl Runner {
 					});
 				});
 			}
-			ActorStopResult::Crash { code, message } => {
-				self.send_state_stopped(checkpoint.actor_id, checkpoint.generation, code, Some(message))
-			}
+			ActorStopResult::Crash { code, message } => self.send_state_stopped(
+				checkpoint.actor_id,
+				checkpoint.generation,
+				code,
+				Some(message),
+			),
 		}
 
 		Ok(())
@@ -731,7 +736,11 @@ impl Runner {
 		});
 	}
 
-	async fn send_actor_event(&self, ws_stream: &mut WsStream, actor_event: ActorEvent) -> Result<()> {
+	async fn send_actor_event(
+		&self,
+		ws_stream: &mut WsStream,
+		actor_event: ActorEvent,
+	) -> Result<()> {
 		let mut indices = self.event_indices.lock().await;
 		let index = indices
 			.entry((actor_event.actor_id.clone(), actor_event.generation))
@@ -1081,7 +1090,10 @@ impl CrashOnStartActor {
 		}
 	}
 
-	pub fn new_with_notify(exit_code: i32, notify_tx: Arc<Mutex<Option<oneshot::Sender<()>>>>) -> Self {
+	pub fn new_with_notify(
+		exit_code: i32,
+		notify_tx: Arc<Mutex<Option<oneshot::Sender<()>>>>,
+	) -> Self {
 		Self {
 			exit_code,
 			notify_tx: Some(notify_tx),
@@ -1273,13 +1285,29 @@ impl TestActor for StopImmediatelyActor {
 }
 
 pub struct CustomActor {
-	on_start_fn: Box<dyn Fn(ActorConfig) -> Pin<Box<dyn Future<Output = Result<ActorStartResult>> + Send>> + Send + Sync>,
-	on_stop_fn: Box<dyn Fn() -> Pin<Box<dyn Future<Output = Result<ActorStopResult>> + Send>> + Send + Sync>,
+	on_start_fn: Box<
+		dyn Fn(ActorConfig) -> Pin<Box<dyn Future<Output = Result<ActorStartResult>> + Send>>
+			+ Send
+			+ Sync,
+	>,
+	on_stop_fn: Box<
+		dyn Fn() -> Pin<Box<dyn Future<Output = Result<ActorStopResult>> + Send>> + Send + Sync,
+	>,
 }
 
 pub struct CustomActorBuilder {
-	on_start_fn: Option<Box<dyn Fn(ActorConfig) -> Pin<Box<dyn Future<Output = Result<ActorStartResult>> + Send>> + Send + Sync>>,
-	on_stop_fn: Option<Box<dyn Fn() -> Pin<Box<dyn Future<Output = Result<ActorStopResult>> + Send>> + Send + Sync>>,
+	on_start_fn: Option<
+		Box<
+			dyn Fn(ActorConfig) -> Pin<Box<dyn Future<Output = Result<ActorStartResult>> + Send>>
+				+ Send
+				+ Sync,
+		>,
+	>,
+	on_stop_fn: Option<
+		Box<
+			dyn Fn() -> Pin<Box<dyn Future<Output = Result<ActorStopResult>> + Send>> + Send + Sync,
+		>,
+	>,
 }
 
 impl CustomActorBuilder {
@@ -1314,12 +1342,12 @@ impl CustomActorBuilder {
 
 	pub fn build(self) -> CustomActor {
 		CustomActor {
-			on_start_fn: self.on_start_fn.unwrap_or_else(|| {
-				Box::new(|_| Box::pin(async { Ok(ActorStartResult::Running) }))
-			}),
-			on_stop_fn: self.on_stop_fn.unwrap_or_else(|| {
-				Box::new(|| Box::pin(async { Ok(ActorStopResult::Success) }))
-			}),
+			on_start_fn: self
+				.on_start_fn
+				.unwrap_or_else(|| Box::new(|_| Box::pin(async { Ok(ActorStartResult::Running) }))),
+			on_stop_fn: self
+				.on_stop_fn
+				.unwrap_or_else(|| Box::new(|| Box::pin(async { Ok(ActorStopResult::Success) }))),
 		}
 	}
 }

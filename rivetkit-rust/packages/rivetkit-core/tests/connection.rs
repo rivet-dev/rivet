@@ -11,9 +11,10 @@ mod moved_tests {
 
 	use super::{
 		HibernatableConnectionMetadata, PersistedConnection, decode_persisted_connection,
-		encode_persisted_connection, hibernatable_id_from_slice, make_connection_key,
+		encode_persisted_connection, hibernatable_id_from_slice,
 	};
 	use crate::actor::context::ActorContext;
+	use crate::actor::keys::make_connection_key;
 	use crate::actor::messages::ActorEvent;
 	use crate::actor::preload::PreloadedKv;
 	use crate::actor::task::LifecycleEvent;
@@ -23,6 +24,11 @@ mod moved_tests {
 		rx: &mut mpsc::Receiver<LifecycleEvent>,
 	) -> Option<LifecycleEvent> {
 		rx.try_recv().ok()
+	}
+
+	#[test]
+	fn make_connection_key_matches_typescript_layout() {
+		assert_eq!(make_connection_key("conn-1"), b"\x02conn-1".to_vec());
 	}
 
 	#[tokio::test]

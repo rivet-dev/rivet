@@ -46,22 +46,21 @@ use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio::task::{JoinError, JoinHandle};
 use tokio::time::{Duration, Instant, sleep_until, timeout};
 use tracing::Instrument;
+use tracing::instrument::WithSubscriber;
 
 use crate::actor::action::ActionDispatchError;
 use crate::actor::connection::ConnHandle;
 use crate::actor::context::ActorContext;
 use crate::actor::diagnostics::record_actor_warning;
 use crate::actor::factory::ActorFactory;
+use crate::actor::keys::{LAST_PUSHED_ALARM_KEY, PERSIST_DATA_KEY};
 use crate::actor::lifecycle_hooks::{ActorEvents, ActorStart, Reply};
 use crate::actor::messages::{
 	ActorEvent, QueueSendResult, Request, Response, SerializeStateReason, StateDelta,
 };
 use crate::actor::metrics::ActorMetrics;
 use crate::actor::preload::{PreloadedKv, PreloadedPersistedActor};
-use crate::actor::state::{
-	LAST_PUSHED_ALARM_KEY, PERSIST_DATA_KEY, PersistedActor, decode_last_pushed_alarm,
-	decode_persisted_actor,
-};
+use crate::actor::state::{PersistedActor, decode_last_pushed_alarm, decode_persisted_actor};
 use crate::actor::task_types::ShutdownKind;
 use crate::error::{ActorLifecycle as ActorLifecycleError, ActorRuntime};
 use crate::types::{SaveStateOpts, format_actor_key};
@@ -881,7 +880,8 @@ impl ActorTask {
 				}
 				ctx.mark_core_dispatched_hook_completed();
 			}
-			.in_current_span(),
+			.in_current_span()
+			.with_current_subscriber(),
 		);
 		tx.into()
 	}
@@ -1320,7 +1320,8 @@ impl ActorTask {
 					.build()),
 				}
 			}
-			.in_current_span(),
+			.in_current_span()
+			.with_current_subscriber(),
 		));
 		if let Some(startup_ready_rx) = startup_ready_rx {
 			startup_ready_rx

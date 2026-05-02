@@ -1,7 +1,8 @@
 mod moved_tests {
+	use crate::actor::keys::PERSIST_DATA_KEY;
 	use crate::actor::state::{PersistedActor, encode_persisted_actor};
 	use crate::registry::envoy_callbacks::{
-		PERSIST_DATA_KEY, PreloadedPersistedActor, decode_preloaded_persisted_actor,
+		PreloadedPersistedActor, decode_preloaded_persisted_actor,
 	};
 	use rivet_envoy_client::protocol;
 

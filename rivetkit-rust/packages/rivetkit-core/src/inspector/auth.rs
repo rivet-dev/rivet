@@ -8,10 +8,10 @@ use std::sync::{Mutex, OnceLock};
 use subtle::ConstantTimeEq;
 
 use crate::ActorContext;
+use crate::actor::keys::INSPECTOR_TOKEN_KEY;
 
-const INSPECTOR_TOKEN_KEY: [u8; 1] = [3];
 /// Test-only override. Not a public/production auth mechanism; production
-/// inspector auth goes through the per-actor KV token at key [3].
+/// inspector auth goes through the per-actor KV token.
 const INSPECTOR_TOKEN_ENV: &str = "_RIVET_TEST_INSPECTOR_TOKEN";
 const INSPECTOR_TOKEN_BYTES: usize = 32;
 
@@ -61,7 +61,7 @@ impl InspectorAuth {
 	}
 }
 
-/// Ensures the actor has an inspector token persisted in KV at `[3]` so the
+/// Ensures the actor has an inspector token persisted in KV so the
 /// engine-facing KV API can serve the token to the dashboard inspector.
 /// Skips the write when the token already exists. No-ops when the
 /// `_RIVET_TEST_INSPECTOR_TOKEN` env override is set, since that takes

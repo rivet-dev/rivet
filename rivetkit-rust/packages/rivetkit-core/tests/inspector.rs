@@ -5,14 +5,13 @@ mod moved_tests {
 	use crate::QueueNextOpts;
 	use crate::actor::connection::{
 		ConnHandle, PersistedConnection, PersistedSubscription, encode_persisted_connection,
-		make_connection_key,
 	};
 	use crate::actor::context::tests::new_with_kv;
+	use crate::actor::keys::{INSPECTOR_TOKEN_KEY, make_connection_key};
 	use crate::actor::messages::StateDelta;
 	use crate::inspector::InspectorAuth;
 	use crate::inspector::auth::test_inspector_env_lock;
 	use rivet_error::RivetError;
-	use std::collections::BTreeMap;
 	use std::sync::Arc;
 	use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -88,7 +87,7 @@ mod moved_tests {
 			server_message_index: 3,
 			client_message_index: 4,
 			request_path: "/socket".into(),
-			request_headers: BTreeMap::new(),
+			request_headers: Default::default(),
 		};
 		kv.put(
 			&make_connection_key(&restored.id),
@@ -260,7 +259,7 @@ mod moved_tests {
 			"local",
 			kv.clone(),
 		);
-		kv.put(&[3], b"kv-token")
+		kv.put(&INSPECTOR_TOKEN_KEY, b"kv-token")
 			.await
 			.expect("kv token should persist");
 
@@ -297,7 +296,7 @@ mod moved_tests {
 			"local",
 			kv.clone(),
 		);
-		kv.put(&[3], b"kv-token")
+		kv.put(&INSPECTOR_TOKEN_KEY, b"kv-token")
 			.await
 			.expect("kv token should persist");
 

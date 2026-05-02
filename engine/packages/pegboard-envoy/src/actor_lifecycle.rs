@@ -186,10 +186,7 @@ pub async fn actor_stopped(conn: &Conn, checkpoint: &protocol::ActorCheckpoint) 
 	let sqlite_generation = active
 		.sqlite_generation
 		.context("actor stopped before sqlite finished opening")?;
-	let close_res = conn
-		.sqlite_engine
-		.close(&actor_id, sqlite_generation)
-		.await;
+	let close_res = conn.sqlite_engine.close(&actor_id, sqlite_generation).await;
 	if let Err(err) = &close_res {
 		tracing::warn!(
 			%actor_id,

@@ -60,7 +60,10 @@ members = [
   "engine/sdks/rust/sqlite-storage-protocol",
   "engine/sdks/rust/test-envoy",
   "engine/sdks/rust/ups-protocol",
-  "rivetkit-rust/packages/shared-types"
+  "rivetkit-rust/packages/actor-persist",
+  "rivetkit-rust/packages/rivetkit-core",
+  "rivetkit-rust/packages/shared-types",
+  "rivetkit-typescript/packages/rivetkit-napi"
 ]
 
   [workspace.package]
@@ -544,6 +547,9 @@ members = [
 
     [workspace.dependencies.rivetkit-client-protocol]
     path = "rivetkit-rust/packages/client-protocol"
+
+    [workspace.dependencies.rivetkit-actor-persist]
+    path = "rivetkit-rust/packages/actor-persist"
 
     [workspace.dependencies.rivetkit-inspector-protocol]
     path = "rivetkit-rust/packages/inspector-protocol"

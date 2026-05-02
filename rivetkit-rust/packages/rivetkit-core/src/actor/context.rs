@@ -647,8 +647,12 @@ impl ActorContext {
 	/// so overdue scheduled work enters the normal actor event loop.
 	pub async fn drain_overdue_scheduled_events(&self) -> Result<()> {
 		for event in self.due_scheduled_events(now_timestamp_ms()) {
-			self.dispatch_scheduled_action(&event.event_id, event.action, event.args)
-				.await;
+			self.dispatch_scheduled_action(
+				&event.event_id,
+				event.action,
+				event.args.unwrap_or_default(),
+			)
+			.await;
 		}
 
 		self.sync_alarm_logged();

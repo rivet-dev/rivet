@@ -2,12 +2,14 @@ use super::*;
 
 mod moved_tests {
 	use super::{
-		PersistedQueueMessage, QUEUE_MESSAGES_PREFIX, QUEUE_METADATA_KEY, QueueMetadata,
-		QueueNextOpts, QueueWaitOpts, encode_queue_message, encode_queue_metadata,
-		make_queue_message_key,
+		PersistedQueueMessage, QueueMetadata, QueueNextOpts, QueueWaitOpts, encode_queue_message,
+		encode_queue_metadata,
 	};
 
 	use crate::actor::context::ActorContext;
+	use crate::actor::keys::{
+		QUEUE_MESSAGES_PREFIX, QUEUE_METADATA_KEY, decode_queue_message_key, make_queue_message_key,
+	};
 	use crate::actor::preload::PreloadedKv;
 	use crate::kv::Kv;
 	use std::time::Duration;
@@ -28,6 +30,18 @@ mod moved_tests {
 		let error = rivet_error::RivetError::extract(&error);
 		assert_eq!(error.group(), "actor");
 		assert_eq!(error.code(), "aborted");
+	}
+
+	#[test]
+	fn queue_message_keys_are_big_endian() {
+		let first = make_queue_message_key(1);
+		let second = make_queue_message_key(2);
+
+		assert!(first < second);
+		assert_eq!(QUEUE_METADATA_KEY, [5, 1, 1]);
+		assert_eq!(first, vec![5, 1, 2, 0, 0, 0, 0, 0, 0, 0, 1]);
+		assert_eq!(decode_queue_message_key(&first).expect("decode first"), 1);
+		assert_eq!(decode_queue_message_key(&second).expect("decode second"), 2);
 	}
 
 	#[tokio::test]

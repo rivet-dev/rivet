@@ -180,9 +180,9 @@ mod moved_tests {
 		let future_ts = now_timestamp_ms() + 60_000;
 		schedule.set_scheduled_events(vec![PersistedScheduleEvent {
 			event_id: "event-1".to_owned(),
-			timestamp_ms: future_ts,
+			timestamp: future_ts,
 			action: "tick".to_owned(),
-			args: vec![1, 2, 3],
+			args: Some(vec![1, 2, 3]),
 		}]);
 
 		schedule.sync_future_alarm_logged();

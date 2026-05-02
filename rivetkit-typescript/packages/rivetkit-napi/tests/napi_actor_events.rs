@@ -6,9 +6,11 @@ mod moved_tests {
 	use std::time::Duration;
 
 	use rivet_error::RivetError as RivetTransportError;
+	use rivetkit_actor_persist::versioned as persist_versioned;
 	use rivetkit_core::Kv;
-	use rivetkit_core::actor::state::{PERSIST_DATA_KEY, PersistedActor};
+	use rivetkit_core::actor::state::PERSIST_DATA_KEY;
 	use tokio::sync::oneshot;
+	use vbare::OwnedVersionedData;
 
 	use super::*;
 
@@ -459,8 +461,11 @@ mod moved_tests {
 			.expect("persisted actor bytes should exist");
 		let embedded_version = u16::from_le_bytes([persisted_bytes[0], persisted_bytes[1]]);
 		assert!(matches!(embedded_version, 3 | 4));
-		let persisted: PersistedActor =
-			serde_bare::from_slice(&persisted_bytes[2..]).expect("persisted actor should decode");
+		let persisted =
+			<persist_versioned::Actor as OwnedVersionedData>::deserialize_with_embedded_version(
+				&persisted_bytes,
+			)
+			.expect("persisted actor should decode");
 		assert!(persisted.has_initialized);
 
 		let second_core_ctx = rivetkit_core::ActorContext::new_with_kv(

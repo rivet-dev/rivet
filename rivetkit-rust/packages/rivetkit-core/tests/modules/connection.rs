@@ -13,11 +13,12 @@ mod moved_tests {
 	use super::{
 		ConnHandle, ConnectionManager, EventSendCallback, HibernatableConnectionMetadata,
 		OutgoingEvent, PersistedConnection, decode_persisted_connection,
-		encode_persisted_connection, make_connection_key,
+		encode_persisted_connection,
 	};
 	use crate::actor::callbacks::ActorInstanceCallbacks;
 	use crate::actor::config::ActorConfig;
 	use crate::actor::context::ActorContext;
+	use crate::actor::keys::make_connection_key;
 	use crate::actor::context::tests::new_with_kv;
 
 	const PERSISTED_CONNECTION_HEX: &str = "040006636f6e6e2d310201020203040107757064617465640401020304040506070809000a00032f77730106782d746573740131";

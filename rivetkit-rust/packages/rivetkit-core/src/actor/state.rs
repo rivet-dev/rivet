@@ -3,7 +3,7 @@ use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant as StdInstant};
 
 use anyhow::{Context, Result};
-use serde::{Deserialize, Serialize};
+use rivetkit_actor_persist::{generated::v4 as persist_v4, versioned as persist_versioned};
 use tokio::runtime::Handle;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
@@ -11,10 +11,12 @@ use tokio::task::JoinHandle;
 use tokio::time::timeout;
 use tracing::Instrument;
 
-use crate::actor::connection::make_connection_key;
 use crate::actor::context::ActorContext;
+use crate::actor::keys::{LAST_PUSHED_ALARM_KEY, PERSIST_DATA_KEY, make_connection_key};
 use crate::actor::messages::StateDelta;
-use crate::actor::persist::{decode_with_embedded_version, encode_with_embedded_version};
+use crate::actor::persist::{
+	decode_latest_with_embedded_version, encode_latest_with_embedded_version,
+};
 use crate::actor::task::{
 	LIFECYCLE_EVENT_INBOX_CHANNEL, LifecycleEvent, actor_channel_overloaded_error,
 };
@@ -22,49 +24,38 @@ use crate::actor::task_types::StateMutationReason;
 use crate::error::ActorRuntime;
 use crate::types::SaveStateOpts;
 
-pub const PERSIST_DATA_KEY: &[u8] = &[1];
-pub const LAST_PUSHED_ALARM_KEY: &[u8] = &[6];
-const ACTOR_PERSIST_VERSION: u16 = 4;
-const ACTOR_PERSIST_COMPATIBLE_VERSIONS: &[u16] = &[3, 4];
 const LAST_PUSHED_ALARM_VERSION: u16 = 1;
-const LAST_PUSHED_ALARM_COMPATIBLE_VERSIONS: &[u16] = &[1];
 
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct PersistedScheduleEvent {
-	pub event_id: String,
-	pub timestamp_ms: i64,
-	pub action: String,
-	pub args: Vec<u8>,
-}
-
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct PersistedActor {
-	pub input: Option<Vec<u8>>,
-	pub has_initialized: bool,
-	pub state: Vec<u8>,
-	pub scheduled_events: Vec<PersistedScheduleEvent>,
-}
+pub type PersistedScheduleEvent = persist_v4::ScheduleEvent;
+pub type PersistedActor = persist_v4::Actor;
 
 pub(crate) fn encode_persisted_actor(actor: &PersistedActor) -> Result<Vec<u8>> {
-	encode_with_embedded_version(actor, ACTOR_PERSIST_VERSION, "persisted actor")
-}
-
-pub(crate) fn decode_persisted_actor(payload: &[u8]) -> Result<PersistedActor> {
-	decode_with_embedded_version(
-		payload,
-		ACTOR_PERSIST_COMPATIBLE_VERSIONS,
+	encode_latest_with_embedded_version::<persist_versioned::Actor>(
+		actor.clone(),
+		rivetkit_actor_persist::CURRENT_VERSION,
 		"persisted actor",
 	)
 }
 
+pub(crate) fn decode_persisted_actor(payload: &[u8]) -> Result<PersistedActor> {
+	let actor = decode_latest_with_embedded_version::<persist_versioned::Actor>(
+		payload,
+		"persisted actor",
+	)?;
+	Ok(actor)
+}
+
 pub(crate) fn encode_last_pushed_alarm(alarm_ts: Option<i64>) -> Result<Vec<u8>> {
-	encode_with_embedded_version(&alarm_ts, LAST_PUSHED_ALARM_VERSION, "last pushed alarm")
+	encode_latest_with_embedded_version::<persist_versioned::LastPushedAlarm>(
+		alarm_ts,
+		LAST_PUSHED_ALARM_VERSION,
+		"last pushed alarm",
+	)
 }
 
 pub(crate) fn decode_last_pushed_alarm(payload: &[u8]) -> Result<Option<i64>> {
-	decode_with_embedded_version(
+	decode_latest_with_embedded_version::<persist_versioned::LastPushedAlarm>(
 		payload,
-		LAST_PUSHED_ALARM_COMPATIBLE_VERSIONS,
 		"last pushed alarm",
 	)
 }

@@ -50,8 +50,8 @@ mod moved_tests {
 
 		let event = schedule.next_event().expect("scheduled event should exist");
 		assert_eq!(event.action, "ping");
-		assert_eq!(event.args, b"abc");
-		assert!(event.timestamp_ms >= super::now_timestamp_ms());
+		assert_eq!(event.args.as_deref(), Some(b"abc".as_slice()));
+		assert!(event.timestamp >= super::now_timestamp_ms());
 	}
 
 	#[tokio::test]

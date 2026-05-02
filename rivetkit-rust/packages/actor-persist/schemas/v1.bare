@@ -1,0 +1,63 @@
+# MARK: Connection
+# Represents an event subscription.
+type PersistedSubscription struct {
+	# Event name
+	eventName: str
+}
+
+# Represents a persisted connection to an actor.
+type PersistedConnection struct {
+	# Connection ID
+	id: str
+	# Connection token
+	token: str
+	# Connection parameters
+	parameters: data
+	# Connection state
+	state: data
+	# Active subscriptions
+	subscriptions: list<PersistedSubscription>
+	# Last seen timestamp
+	lastSeen: u64
+}
+
+# MARK: Schedule Event
+# Represents a generic scheduled event.
+type GenericPersistedScheduleEvent struct {
+	# Action name
+	action: str
+	# Arguments for the action
+	#
+	# CBOR array
+	args: optional<data>
+}
+
+# Event kind union
+type PersistedScheduleEventKind union {
+	GenericPersistedScheduleEvent
+}
+
+# Scheduled event with metadata
+type PersistedScheduleEvent struct {
+	# Event ID
+	eventId: str
+	# Timestamp when the event should fire
+	timestamp: u64
+	# Event kind
+	kind: PersistedScheduleEventKind
+}
+
+# MARK: Actor
+# Represents the persisted state of an actor.
+type PersistedActor struct {
+	# Input data passed to the actor on initialization
+	input: optional<data>
+	# Whether the actor has been initialized
+	hasInitialized: bool
+	# Actor's state
+	state: data
+	# Active connections
+	connections: list<PersistedConnection>
+	# Scheduled events
+	scheduledEvents: list<PersistedScheduleEvent>
+}

@@ -1349,7 +1349,9 @@ async fn send_fetch_error_response(
 	gateway_id: protocol::GatewayId,
 	request_id: protocol::RequestId,
 ) {
-	let body = br#"{"group":"envoy","code":"fetch_failed","message":"actor fetch failed","metadata":{}}"#.to_vec();
+	let body =
+		br#"{"group":"envoy","code":"fetch_failed","message":"actor fetch failed","metadata":{}}"#
+			.to_vec();
 	let mut headers = HashableMap::new();
 	headers.insert("content-type".to_string(), "application/json".to_string());
 	headers.insert("content-length".to_string(), body.len().to_string());

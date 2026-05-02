@@ -117,9 +117,8 @@ mod moved_tests {
 			.expect("start reply should send")
 			.expect("start should succeed");
 
-		let (input, snapshot, state, has_initialized, no_initial_event) = observed_rx
-			.await
-			.expect("startup observation should send");
+		let (input, snapshot, state, has_initialized, no_initial_event) =
+			observed_rx.await.expect("startup observation should send");
 		assert_eq!(input, Some(vec![1, 2, 3]));
 		assert_eq!(snapshot, None);
 		assert_eq!(state, vec![9, 8, 7]);

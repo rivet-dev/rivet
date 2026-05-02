@@ -4,6 +4,7 @@ pub mod connection;
 pub mod context;
 pub(crate) mod diagnostics;
 pub mod factory;
+pub(crate) mod keys;
 pub mod kv;
 pub mod lifecycle_hooks;
 pub mod messages;

@@ -397,21 +397,20 @@ impl rivet_test_envoy::EnvoyCallbacks for TestEnvoyCallbacks {
 	}
 }
 
-fn spawn_event_bridge(
-	handle: EnvoyHandle,
-	mut event_rx: mpsc::UnboundedReceiver<ActorEvent>,
-) {
+fn spawn_event_bridge(handle: EnvoyHandle, mut event_rx: mpsc::UnboundedReceiver<ActorEvent>) {
 	tokio::spawn(async move {
 		while let Some(event) = event_rx.recv().await {
 			match event.event {
-				rivet_runner_protocol::mk2::Event::EventActorIntent(intent) => match intent.intent {
-					rivet_runner_protocol::mk2::ActorIntent::ActorIntentSleep => {
-						handle.sleep_actor(event.actor_id, Some(event.generation));
+				rivet_runner_protocol::mk2::Event::EventActorIntent(intent) => {
+					match intent.intent {
+						rivet_runner_protocol::mk2::ActorIntent::ActorIntentSleep => {
+							handle.sleep_actor(event.actor_id, Some(event.generation));
+						}
+						rivet_runner_protocol::mk2::ActorIntent::ActorIntentStop => {
+							handle.stop_actor(event.actor_id, Some(event.generation), None);
+						}
 					}
-					rivet_runner_protocol::mk2::ActorIntent::ActorIntentStop => {
-						handle.stop_actor(event.actor_id, Some(event.generation), None);
-					}
-				},
+				}
 				rivet_runner_protocol::mk2::Event::EventActorSetAlarm(alarm) => {
 					handle.set_alarm(event.actor_id, alarm.alarm_ts, Some(event.generation));
 				}
@@ -482,7 +481,10 @@ fn spawn_kv_bridge(handle: EnvoyHandle, mut kv_rx: mpsc::UnboundedReceiver<KvReq
 					})
 				}
 				rivet_runner_protocol::mk2::KvRequestData::KvPutRequest(body) => handle
-					.kv_put(req.actor_id, body.keys.into_iter().zip(body.values).collect())
+					.kv_put(
+						req.actor_id,
+						body.keys.into_iter().zip(body.values).collect(),
+					)
 					.await
 					.map(|_| rivet_runner_protocol::mk2::KvResponseData::KvPutResponse),
 				rivet_runner_protocol::mk2::KvRequestData::KvDeleteRequest(body) => handle

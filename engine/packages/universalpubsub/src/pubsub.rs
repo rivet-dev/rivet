@@ -10,7 +10,7 @@ use uuid::Uuid;
 
 use rivet_util::backoff::Backoff;
 
-use crate::chunking::{encode_chunk, split_payload_into_chunks, ChunkTracker};
+use crate::chunking::{ChunkTracker, encode_chunk, split_payload_into_chunks};
 use crate::driver::{PubSubDriverHandle, PublishOpts, SubscriberDriverHandle};
 use crate::metrics;
 use crate::subject::Subject;

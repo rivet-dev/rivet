@@ -14,7 +14,8 @@ use crate::keys::{
 use crate::ltx::decode_ltx_v3;
 use crate::quota::{encode_db_head_with_usage, tracked_storage_entry_size};
 use crate::types::{
-	DBHead, FetchedPage, SQLITE_MAX_DELTA_BYTES, SqliteMeta, SqliteOrigin, decode_db_head, encode_db_head, new_db_head,
+	DBHead, FetchedPage, SQLITE_MAX_DELTA_BYTES, SqliteMeta, SqliteOrigin, decode_db_head,
+	encode_db_head, new_db_head,
 };
 use crate::udb::{self, WriteOp};
 
@@ -113,7 +114,10 @@ impl SqliteEngine {
 					udb::tx_get_value_serializable(&tx, &subspace, &meta_storage_key).await?
 				{
 					let existing_head = decode_db_head(&existing_meta)?;
-					if !matches!(existing_head.origin, SqliteOrigin::MigrationFromV1InProgress) {
+					if !matches!(
+						existing_head.origin,
+						SqliteOrigin::MigrationFromV1InProgress
+					) {
 						// Actor has already moved past v1 migration (CreatedOnV2 or
 						// MigratedFromV1). For invalidate_v1_migration this is a
 						// no-op — there is nothing stale to clean up. For
@@ -812,7 +816,10 @@ mod tests {
 		);
 
 		let prepared = engine.prepare_v1_migration(TEST_ACTOR, 4_242).await?;
-		assert_eq!(prepared.meta.origin, SqliteOrigin::MigrationFromV1InProgress);
+		assert_eq!(
+			prepared.meta.origin,
+			SqliteOrigin::MigrationFromV1InProgress
+		);
 
 		assert!(read_value(&engine, orphan_key.clone()).await?.is_none());
 		assert!(
@@ -1218,10 +1225,7 @@ mod tests {
 			&engine.db,
 			&engine.subspace,
 			engine.op_counter.as_ref(),
-			vec![WriteOp::put(
-				meta_key(TEST_ACTOR),
-				encode_db_head(&head)?,
-			)],
+			vec![WriteOp::put(meta_key(TEST_ACTOR), encode_db_head(&head)?)],
 		)
 		.await?;
 		engine.open(TEST_ACTOR, OpenConfig::new(0)).await?;
@@ -1294,10 +1298,7 @@ mod tests {
 		head.next_txid = 33;
 		head.db_size_pages = 32;
 		let (engine, mut compaction_rx) = SqliteEngine::new(db, subspace);
-		let mut mutations = vec![WriteOp::put(
-			meta_key(TEST_ACTOR),
-			encode_db_head(&head)?,
-		)];
+		let mut mutations = vec![WriteOp::put(meta_key(TEST_ACTOR), encode_db_head(&head)?)];
 		for txid in 1..=32_u64 {
 			mutations.push(WriteOp::put(
 				delta_blob_key(TEST_ACTOR, txid),
