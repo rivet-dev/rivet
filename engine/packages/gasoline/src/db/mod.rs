@@ -68,6 +68,7 @@ pub trait Database: Send {
 	async fn update_worker_ping(
 		&self,
 		worker_id: Id,
+		worker_version: i64,
 		update_active_idx: bool,
 	) -> WorkflowResult<()>;
 
@@ -116,6 +117,7 @@ pub trait Database: Send {
 	async fn pull_workflows(
 		&self,
 		worker_id: Id,
+		worker_version: i64,
 		filter: &[&str],
 	) -> WorkflowResult<Vec<PulledWorkflowData>>;
 
