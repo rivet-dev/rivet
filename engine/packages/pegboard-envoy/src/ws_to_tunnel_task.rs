@@ -1,5 +1,9 @@
 use anyhow::{Context, bail};
 use bytes::Bytes;
+use depot_client::{
+	database::{NativeDatabaseHandle, open_database_from_conveyer},
+	types::{BindParam, ColumnValue, ExecuteResult, ExecuteRoute, QueryResult},
+};
 use futures_util::{FutureExt, TryStreamExt};
 use gas::prelude::Id;
 use gas::prelude::*;
@@ -30,8 +34,12 @@ use universalpubsub::PublishOpts;
 use vbare::OwnedVersionedData;
 
 use crate::{
-	LifecycleResult, actor_event_demuxer::ActorEventDemuxer, conn::Conn, errors, sqlite_runtime,
+	LifecycleResult, actor_event_demuxer::ActorEventDemuxer,
+	conn::{Conn, RemoteSqliteExecutors},
+	errors, sqlite_runtime,
 };
+
+const MAX_REMOTE_SQL_BIND_BYTES: usize = 128 * 1024;
 
 #[tracing::instrument(name="ws_to_tunnel_task", skip_all, fields(ray_id=?ctx.ray_id(), req_id=?ctx.req_id(), envoy_key=%conn.envoy_key, protocol_version=%conn.protocol_version))]
 pub async fn task(
@@ -401,36 +409,29 @@ async fn handle_message(
 				.observe(timed_response.commit_completed_at.elapsed().as_secs_f64());
 		}
 		protocol::ToRivet::ToRivetSqliteExecRequest(req) => {
+			let response = handle_remote_sqlite_exec_response(ctx, &conn, req.data).await;
 			send_sqlite_exec_response(
 				&conn,
 				req.request_id,
-				protocol::SqliteExecResponse::SqliteErrorResponse(protocol::SqliteErrorResponse {
-					message: "remote sqlite exec handling is not wired".to_string(),
-				}),
+				response,
 			)
 			.await?;
 		}
 		protocol::ToRivet::ToRivetSqliteExecuteRequest(req) => {
+			let response = handle_remote_sqlite_execute_response(ctx, &conn, req.data).await;
 			send_sqlite_execute_response(
 				&conn,
 				req.request_id,
-				protocol::SqliteExecuteResponse::SqliteErrorResponse(
-					protocol::SqliteErrorResponse {
-						message: "remote sqlite execute handling is not wired".to_string(),
-					},
-				),
+				response,
 			)
 			.await?;
 		}
 		protocol::ToRivet::ToRivetSqliteExecuteWriteRequest(req) => {
+			let response = handle_remote_sqlite_execute_write_response(ctx, &conn, req.data).await;
 			send_sqlite_execute_write_response(
 				&conn,
 				req.request_id,
-				protocol::SqliteExecuteWriteResponse::SqliteErrorResponse(
-					protocol::SqliteErrorResponse {
-						message: "remote sqlite execute_write handling is not wired".to_string(),
-					},
-				),
+				response,
 			)
 			.await?;
 		}
@@ -509,6 +510,61 @@ async fn handle_sqlite_commit_response(
 	TimedSqliteCommitResponse {
 		response,
 		commit_completed_at: Instant::now(),
+	}
+}
+
+async fn handle_remote_sqlite_exec_response(
+	ctx: &StandaloneCtx,
+	conn: &Conn,
+	request: protocol::SqliteExecRequest,
+) -> protocol::SqliteExecResponse {
+	let actor_id = request.actor_id.clone();
+	match handle_remote_sqlite_exec(ctx, conn, request).await {
+		Ok(result) => protocol::SqliteExecResponse::SqliteExecOk(protocol::SqliteExecOk {
+			result: protocol_query_result(result),
+		}),
+		Err(err) => {
+			tracing::error!(actor_id = %actor_id, ?err, "remote sqlite exec request failed");
+			protocol::SqliteExecResponse::SqliteErrorResponse(sqlite_error_response(&err))
+		}
+	}
+}
+
+async fn handle_remote_sqlite_execute_response(
+	ctx: &StandaloneCtx,
+	conn: &Conn,
+	request: protocol::SqliteExecuteRequest,
+) -> protocol::SqliteExecuteResponse {
+	let actor_id = request.actor_id.clone();
+	match handle_remote_sqlite_execute(ctx, conn, request).await {
+		Ok(result) => protocol::SqliteExecuteResponse::SqliteExecuteOk(
+			protocol::SqliteExecuteOk {
+				result: protocol_execute_result(result),
+			},
+		),
+		Err(err) => {
+			tracing::error!(actor_id = %actor_id, ?err, "remote sqlite execute request failed");
+			protocol::SqliteExecuteResponse::SqliteErrorResponse(sqlite_error_response(&err))
+		}
+	}
+}
+
+async fn handle_remote_sqlite_execute_write_response(
+	ctx: &StandaloneCtx,
+	conn: &Conn,
+	request: protocol::SqliteExecuteWriteRequest,
+) -> protocol::SqliteExecuteWriteResponse {
+	let actor_id = request.actor_id.clone();
+	match handle_remote_sqlite_execute_write(ctx, conn, request).await {
+		Ok(result) => protocol::SqliteExecuteWriteResponse::SqliteExecuteWriteOk(
+			protocol::SqliteExecuteWriteOk {
+				result: protocol_execute_result(result),
+			},
+		),
+		Err(err) => {
+			tracing::error!(actor_id = %actor_id, ?err, "remote sqlite execute_write request failed");
+			protocol::SqliteExecuteWriteResponse::SqliteErrorResponse(sqlite_error_response(&err))
+		}
 	}
 }
 
@@ -728,6 +784,101 @@ async fn handle_sqlite_commit(
 	Ok(response)
 }
 
+async fn handle_remote_sqlite_exec(
+	ctx: &StandaloneCtx,
+	conn: &Conn,
+	request: protocol::SqliteExecRequest,
+) -> Result<QueryResult> {
+	validate_remote_sqlite_actor(
+		ctx,
+		conn,
+		&request.namespace_id,
+		&request.actor_id,
+		request.generation,
+	)
+	.await?;
+	let actor_db = actor_db(ctx, conn, request.actor_id.clone()).await?;
+	let database = remote_sqlite_executor_from_parts(
+		&conn.remote_sqlite_executors,
+		actor_db,
+		&request.actor_id,
+		request.generation,
+	)
+	.await?;
+	database.exec(request.sql).await
+}
+
+async fn handle_remote_sqlite_execute(
+	ctx: &StandaloneCtx,
+	conn: &Conn,
+	request: protocol::SqliteExecuteRequest,
+) -> Result<ExecuteResult> {
+	validate_remote_sqlite_actor(
+		ctx,
+		conn,
+		&request.namespace_id,
+		&request.actor_id,
+		request.generation,
+	)
+	.await?;
+	validate_remote_sqlite_params(request.params.as_ref())?;
+	let params = request
+		.params
+		.map(|params| params.into_iter().map(bind_param_from_protocol).collect());
+	let actor_db = actor_db(ctx, conn, request.actor_id.clone()).await?;
+	let database = remote_sqlite_executor_from_parts(
+		&conn.remote_sqlite_executors,
+		actor_db,
+		&request.actor_id,
+		request.generation,
+	)
+	.await?;
+	database.execute(request.sql, params).await
+}
+
+async fn handle_remote_sqlite_execute_write(
+	ctx: &StandaloneCtx,
+	conn: &Conn,
+	request: protocol::SqliteExecuteWriteRequest,
+) -> Result<ExecuteResult> {
+	validate_remote_sqlite_actor(
+		ctx,
+		conn,
+		&request.namespace_id,
+		&request.actor_id,
+		request.generation,
+	)
+	.await?;
+	validate_remote_sqlite_params(request.params.as_ref())?;
+	let params = request
+		.params
+		.map(|params| params.into_iter().map(bind_param_from_protocol).collect());
+	let actor_db = actor_db(ctx, conn, request.actor_id.clone()).await?;
+	let database = remote_sqlite_executor_from_parts(
+		&conn.remote_sqlite_executors,
+		actor_db,
+		&request.actor_id,
+		request.generation,
+	)
+	.await?;
+	database.execute_write(request.sql, params).await
+}
+
+async fn validate_remote_sqlite_actor(
+	ctx: &StandaloneCtx,
+	conn: &Conn,
+	namespace_id: &str,
+	actor_id: &str,
+	generation: u64,
+) -> Result<()> {
+	let namespace_id = Id::parse(namespace_id).context("invalid sqlite namespace id")?;
+	if namespace_id != conn.namespace_id {
+		bail!("actor does not exist");
+	}
+	validate_sqlite_actor(ctx, conn, actor_id).await?;
+	validate_remote_sqlite_generation(ctx, conn, actor_id, generation).await
+}
+
 async fn validate_sqlite_actor(ctx: &StandaloneCtx, conn: &Conn, actor_id: &str) -> Result<()> {
 	let actor_id = Id::parse(actor_id).context("invalid sqlite actor id")?;
 	let actor = ctx
@@ -742,10 +893,185 @@ async fn validate_sqlite_actor(ctx: &StandaloneCtx, conn: &Conn, actor_id: &str)
 	Ok(())
 }
 
+async fn validate_remote_sqlite_generation(
+	ctx: &StandaloneCtx,
+	conn: &Conn,
+	actor_id: &str,
+	generation: u64,
+) -> Result<()> {
+	let actor_id = Id::parse(actor_id).context("invalid sqlite actor id")?;
+	let generation = u32::try_from(generation).context("invalid sqlite actor generation")?;
+	let namespace_id = conn.namespace_id;
+	let envoy_key = conn.envoy_key.clone();
+	let active_generation = ctx
+		.udb()?
+		.run(|tx| {
+			let envoy_key = envoy_key.clone();
+			async move {
+				let tx = tx.with_subspace(pegboard::keys::subspace());
+				tx.read_opt(
+					&pegboard::keys::envoy::ActorKey::new(namespace_id, envoy_key, actor_id),
+					Serializable,
+				)
+				.await
+			}
+		})
+		.await?;
+
+	if active_generation != Some(generation) {
+		bail!("actor does not exist");
+	}
+
+	Ok(())
+}
+
+async fn remote_sqlite_executor_cell(
+	executors: &RemoteSqliteExecutors,
+	actor_id: &str,
+	generation: u64,
+) -> Arc<tokio::sync::OnceCell<NativeDatabaseHandle>> {
+	let key = (actor_id.to_string(), generation);
+	executors
+		.entry_async(key)
+		.await
+		.or_insert_with(|| Arc::new(tokio::sync::OnceCell::new()))
+		.get()
+		.clone()
+}
+
+async fn remote_sqlite_executor_from_parts(
+	executors: &RemoteSqliteExecutors,
+	actor_db: Arc<Db>,
+	actor_id: &str,
+	generation: u64,
+) -> Result<NativeDatabaseHandle> {
+	let cell = remote_sqlite_executor_cell(executors, actor_id, generation).await;
+	let actor_id = actor_id.to_string();
+	let database = cell
+		.get_or_try_init(|| async move {
+			open_database_from_conveyer(
+				actor_db,
+				actor_id,
+				generation,
+				tokio::runtime::Handle::current(),
+				None,
+			)
+			.await
+		})
+		.await?;
+	Ok(database.clone())
+}
+
+#[cfg(test)]
+async fn remove_remote_sqlite_executor_generation(
+	executors: &RemoteSqliteExecutors,
+	actor_id: &str,
+	generation: u64,
+) {
+	let _ = executors.remove_async(&(actor_id.to_string(), generation)).await;
+}
+
+#[cfg(test)]
+fn remove_remote_sqlite_executors_for_actor(executors: &RemoteSqliteExecutors, actor_id: &str) {
+	executors.retain_sync(|(entry_actor_id, _), _| entry_actor_id != actor_id);
+}
+
+#[cfg(test)]
+fn clear_remote_sqlite_executors(executors: &RemoteSqliteExecutors) {
+	executors.clear_sync();
+}
+
+fn validate_remote_sqlite_params(params: Option<&Vec<protocol::SqliteBindParam>>) -> Result<()> {
+	let Some(params) = params else {
+		return Ok(());
+	};
+	let total = params
+		.iter()
+		.map(|param| match param {
+			protocol::SqliteBindParam::SqliteValueNull => 0,
+			protocol::SqliteBindParam::SqliteValueInteger(_) => std::mem::size_of::<i64>(),
+			protocol::SqliteBindParam::SqliteValueFloat(_) => std::mem::size_of::<u64>(),
+			protocol::SqliteBindParam::SqliteValueText(value) => value.value.len(),
+			protocol::SqliteBindParam::SqliteValueBlob(value) => value.value.len(),
+		})
+		.sum::<usize>();
+	if total > MAX_REMOTE_SQL_BIND_BYTES {
+		bail!(
+			"remote sqlite bind params had {total} bytes, exceeding limit {MAX_REMOTE_SQL_BIND_BYTES}"
+		);
+	}
+	Ok(())
+}
+
 fn pump_dirty_page(page: protocol::SqliteDirtyPage) -> depot::types::DirtyPage {
 	depot::types::DirtyPage {
 		pgno: page.pgno,
 		bytes: page.bytes,
+	}
+}
+
+fn bind_param_from_protocol(param: protocol::SqliteBindParam) -> BindParam {
+	match param {
+		protocol::SqliteBindParam::SqliteValueNull => BindParam::Null,
+		protocol::SqliteBindParam::SqliteValueInteger(value) => BindParam::Integer(value.value),
+		protocol::SqliteBindParam::SqliteValueFloat(value) => {
+			BindParam::Float(f64::from_bits(u64::from_be_bytes(value.value)))
+		}
+		protocol::SqliteBindParam::SqliteValueText(value) => BindParam::Text(value.value),
+		protocol::SqliteBindParam::SqliteValueBlob(value) => BindParam::Blob(value.value),
+	}
+}
+
+fn protocol_query_result(result: QueryResult) -> protocol::SqliteQueryResult {
+	protocol::SqliteQueryResult {
+		columns: result.columns,
+		rows: result
+			.rows
+			.into_iter()
+			.map(|row| row.into_iter().map(protocol_column_value).collect())
+			.collect(),
+	}
+}
+
+fn protocol_execute_result(result: ExecuteResult) -> protocol::SqliteExecuteResult {
+	protocol::SqliteExecuteResult {
+		columns: result.columns,
+		rows: result
+			.rows
+			.into_iter()
+			.map(|row| row.into_iter().map(protocol_column_value).collect())
+			.collect(),
+		changes: result.changes,
+		last_insert_row_id: result.last_insert_row_id,
+		route: protocol_execute_route(result.route),
+	}
+}
+
+fn protocol_column_value(value: ColumnValue) -> protocol::SqliteColumnValue {
+	match value {
+		ColumnValue::Null => protocol::SqliteColumnValue::SqliteValueNull,
+		ColumnValue::Integer(value) => {
+			protocol::SqliteColumnValue::SqliteValueInteger(protocol::SqliteValueInteger { value })
+		}
+		ColumnValue::Float(value) => {
+			protocol::SqliteColumnValue::SqliteValueFloat(protocol::SqliteValueFloat {
+				value: value.to_bits().to_be_bytes(),
+			})
+		}
+		ColumnValue::Text(value) => {
+			protocol::SqliteColumnValue::SqliteValueText(protocol::SqliteValueText { value })
+		}
+		ColumnValue::Blob(value) => {
+			protocol::SqliteColumnValue::SqliteValueBlob(protocol::SqliteValueBlob { value })
+		}
+	}
+}
+
+fn protocol_execute_route(route: ExecuteRoute) -> protocol::SqliteExecuteRoute {
+	match route {
+		ExecuteRoute::Read => protocol::SqliteExecuteRoute::Read,
+		ExecuteRoute::Write => protocol::SqliteExecuteRoute::Write,
+		ExecuteRoute::WriteFallback => protocol::SqliteExecuteRoute::WriteFallback,
 	}
 }
 

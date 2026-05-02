@@ -7,6 +7,8 @@ use std::{
 };
 
 use anyhow::Context;
+use depot::{cold_tier::ColdTier, conveyer::Db};
+use depot_client::database::NativeDatabaseHandle;
 use futures_util::StreamExt;
 use futures_util::TryStreamExt;
 use gas::prelude::*;
@@ -16,11 +18,13 @@ use rivet_guard_core::WebSocketHandle;
 use rivet_pools::NodeId;
 use rivet_types::runner_configs::RunnerConfigKind;
 use scc::HashMap;
-use depot::{cold_tier::ColdTier, conveyer::Db};
 use universaldb::prelude::*;
 use vbare::OwnedVersionedData;
 
 use crate::{actor_lifecycle, errors, metrics, utils::UrlData};
+
+pub type RemoteSqliteExecutors =
+	HashMap<(String, u64), Arc<tokio::sync::OnceCell<NativeDatabaseHandle>>>;
 
 pub struct Conn {
 	pub namespace_id: Id,
@@ -37,6 +41,7 @@ pub struct Conn {
 	/// Envoys can reconnect to different worker nodes mid-flight, so request handlers
 	/// lazily populate it and lifecycle commands only evict stale cache entries.
 	pub actor_dbs: HashMap<String, Arc<Db>>,
+	pub remote_sqlite_executors: RemoteSqliteExecutors,
 	pub is_serverless: bool,
 	pub last_rtt: AtomicU32,
 	/// Timestamp (epoch ms) of the last pong received from the envoy.
@@ -318,6 +323,7 @@ pub async fn init_conn(
 		node_id,
 		sqlite_cold_tier,
 		actor_dbs: HashMap::new(),
+		remote_sqlite_executors: HashMap::new(),
 		is_serverless,
 		last_rtt: AtomicU32::new(0),
 		last_ping_ts: AtomicI64::new(util::timestamp::now()),

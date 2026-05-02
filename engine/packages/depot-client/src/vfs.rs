@@ -108,12 +108,13 @@ macro_rules! vfs_catch_unwind {
 }
 
 #[derive(Clone)]
-struct SqliteTransport {
+pub(crate) struct SqliteTransport {
 	inner: Arc<SqliteTransportInner>,
 }
 
 enum SqliteTransportInner {
 	Envoy(EnvoyHandle),
+	Conveyer(Arc<depot::conveyer::Db>),
 	#[cfg(test)]
 	Direct(Arc<tests::DirectStorage>),
 }
@@ -122,6 +123,12 @@ impl SqliteTransport {
 	fn from_envoy(handle: EnvoyHandle) -> Self {
 		Self {
 			inner: Arc::new(SqliteTransportInner::Envoy(handle)),
+		}
+	}
+
+	pub(crate) fn from_conveyer(db: Arc<depot::conveyer::Db>) -> Self {
+		Self {
+			inner: Arc::new(SqliteTransportInner::Conveyer(db)),
 		}
 	}
 
@@ -137,6 +144,7 @@ impl SqliteTransport {
 		match &*self.inner {
 			SqliteTransportInner::Direct(storage) => Some(Arc::clone(&storage.hooks)),
 			SqliteTransportInner::Envoy(_) => None,
+			SqliteTransportInner::Conveyer(_) => None,
 		}
 	}
 
@@ -146,6 +154,24 @@ impl SqliteTransport {
 	) -> Result<protocol::SqliteGetPagesResponse> {
 		match &*self.inner {
 			SqliteTransportInner::Envoy(handle) => handle.sqlite_get_pages(req).await,
+			SqliteTransportInner::Conveyer(db) => match db.get_pages(req.pgnos).await {
+				Ok(pages) => Ok(protocol::SqliteGetPagesResponse::SqliteGetPagesOk(
+					protocol::SqliteGetPagesOk {
+						pages: pages
+							.into_iter()
+							.map(|page| protocol::SqliteFetchedPage {
+								pgno: page.pgno,
+								bytes: page.bytes,
+							})
+							.collect(),
+					},
+				)),
+				Err(err) => Ok(protocol::SqliteGetPagesResponse::SqliteErrorResponse(
+					protocol::SqliteErrorResponse {
+						message: err.to_string(),
+					},
+				)),
+			},
 			#[cfg(test)]
 			SqliteTransportInner::Direct(storage) => {
 				let pgnos = req.pgnos.clone();
@@ -169,6 +195,27 @@ impl SqliteTransport {
 	) -> Result<protocol::SqliteCommitResponse> {
 		match &*self.inner {
 			SqliteTransportInner::Envoy(handle) => handle.sqlite_commit(req).await,
+			SqliteTransportInner::Conveyer(db) => match db
+				.commit(
+					req.dirty_pages
+						.into_iter()
+						.map(|page| depot::types::DirtyPage {
+							pgno: page.pgno,
+							bytes: page.bytes,
+						})
+						.collect(),
+					req.db_size_pages,
+					req.now_ms,
+				)
+				.await
+			{
+				Ok(()) => Ok(protocol::SqliteCommitResponse::SqliteCommitOk),
+				Err(err) => Ok(protocol::SqliteCommitResponse::SqliteErrorResponse(
+					protocol::SqliteErrorResponse {
+						message: err.to_string(),
+					},
+				)),
+			},
 			#[cfg(test)]
 			SqliteTransportInner::Direct(storage) => {
 				storage.hooks.record_commit_request(req.clone());
@@ -2501,7 +2548,7 @@ impl SqliteVfs {
 		self.ctx.snapshot_preload_hints()
 	}
 
-	fn register_with_transport(
+	pub(crate) fn register_with_transport(
 		name: &str,
 		transport: SqliteTransport,
 		actor_id: String,
