@@ -48,15 +48,107 @@ impl<'de> TupleUnpack<'de> for LastPingTsKey {
 }
 
 #[derive(Debug)]
+pub struct LastActivePingTsKey {
+	worker_id: Id,
+}
+
+impl LastActivePingTsKey {
+	pub fn new(worker_id: Id) -> Self {
+		LastActivePingTsKey { worker_id }
+	}
+}
+
+impl FormalKey for LastActivePingTsKey {
+	// Timestamp.
+	type Value = i64;
+
+	fn deserialize(&self, raw: &[u8]) -> Result<Self::Value> {
+		Ok(i64::from_be_bytes(raw.try_into()?))
+	}
+
+	fn serialize(&self, value: Self::Value) -> Result<Vec<u8>> {
+		Ok(value.to_be_bytes().to_vec())
+	}
+}
+
+impl TuplePack for LastActivePingTsKey {
+	fn pack<W: std::io::Write>(
+		&self,
+		w: &mut W,
+		tuple_depth: TupleDepth,
+	) -> std::io::Result<VersionstampOffset> {
+		let t = (WORKER, DATA, self.worker_id, LAST_ACTIVE_PING_TS);
+		t.pack(w, tuple_depth)
+	}
+}
+
+impl<'de> TupleUnpack<'de> for LastActivePingTsKey {
+	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
+		let (input, (_, _, worker_id, _)) =
+			<(usize, usize, Id, usize)>::unpack(input, tuple_depth)?;
+		let v = LastActivePingTsKey { worker_id };
+
+		Ok((input, v))
+	}
+}
+
+#[derive(Debug)]
+pub struct VersionKey {
+	worker_id: Id,
+}
+
+impl VersionKey {
+	pub fn new(worker_id: Id) -> Self {
+		VersionKey { worker_id }
+	}
+}
+
+impl FormalKey for VersionKey {
+	// Version.
+	type Value = i64;
+
+	fn deserialize(&self, raw: &[u8]) -> Result<Self::Value> {
+		Ok(i64::from_be_bytes(raw.try_into()?))
+	}
+
+	fn serialize(&self, value: Self::Value) -> Result<Vec<u8>> {
+		Ok(value.to_be_bytes().to_vec())
+	}
+}
+
+impl TuplePack for VersionKey {
+	fn pack<W: std::io::Write>(
+		&self,
+		w: &mut W,
+		tuple_depth: TupleDepth,
+	) -> std::io::Result<VersionstampOffset> {
+		let t = (WORKER, DATA, self.worker_id, VERSION);
+		t.pack(w, tuple_depth)
+	}
+}
+
+impl<'de> TupleUnpack<'de> for VersionKey {
+	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
+		let (input, (_, _, worker_id, _)) =
+			<(usize, usize, Id, usize)>::unpack(input, tuple_depth)?;
+		let v = VersionKey { worker_id };
+
+		Ok((input, v))
+	}
+}
+
+#[derive(Debug)]
 pub struct ActiveWorkerIdxKey {
 	last_ping_ts: i64,
+	pub version: i64,
 	pub worker_id: Id,
 }
 
 impl ActiveWorkerIdxKey {
-	pub fn new(last_ping_ts: i64, worker_id: Id) -> Self {
+	pub fn new(last_ping_ts: i64, version: i64, worker_id: Id) -> Self {
 		ActiveWorkerIdxKey {
 			last_ping_ts,
+			version,
 			worker_id,
 		}
 	}
@@ -88,17 +180,25 @@ impl TuplePack for ActiveWorkerIdxKey {
 		w: &mut W,
 		tuple_depth: TupleDepth,
 	) -> std::io::Result<VersionstampOffset> {
-		let t = (WORKER, ACTIVE, self.last_ping_ts, self.worker_id);
+		let t = (
+			WORKER,
+			ACTIVE2,
+			self.last_ping_ts,
+			// Stored in reverse order (higher versions are first)
+			-self.version,
+			self.worker_id,
+		);
 		t.pack(w, tuple_depth)
 	}
 }
 
 impl<'de> TupleUnpack<'de> for ActiveWorkerIdxKey {
 	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
-		let (input, (_, _, last_ping_ts, worker_id)) =
-			<(usize, usize, i64, Id)>::unpack(input, tuple_depth)?;
+		let (input, (_, _, last_ping_ts, version, worker_id)) =
+			<(usize, usize, i64, i64, Id)>::unpack(input, tuple_depth)?;
 		let v = ActiveWorkerIdxKey {
 			last_ping_ts,
+			version: -version,
 			worker_id,
 		};
 
@@ -131,7 +231,7 @@ impl TuplePack for ActiveWorkerIdxSubspaceKey {
 	) -> std::io::Result<VersionstampOffset> {
 		let mut offset = VersionstampOffset::None { size: 0 };
 
-		let t = (WORKER, ACTIVE);
+		let t = (WORKER, ACTIVE2);
 		offset += t.pack(w, tuple_depth)?;
 
 		if let Some(last_ping_ts) = self.last_ping_ts {

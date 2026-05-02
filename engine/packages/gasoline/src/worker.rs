@@ -33,6 +33,7 @@ const SHUTDOWN_PROGRESS_INTERVAL: Duration = Duration::from_secs(7);
 /// the database.
 pub struct Worker {
 	worker_id: Id,
+	version: i64,
 
 	registry: RegistryHandle,
 	db: DatabaseHandle,
@@ -52,6 +53,9 @@ impl Worker {
 	) -> Self {
 		Worker {
 			worker_id: Id::new_v1(config.dc_label()),
+			version: chrono::DateTime::parse_from_rfc3339(rivet_util::build_meta::BUILD_TIMESTAMP)
+				.map(|x| x.timestamp_millis())
+				.unwrap_or_default(),
 
 			registry,
 			db,
@@ -88,7 +92,7 @@ impl Worker {
 
 		// Update ping at least once before doing anything else
 		self.db
-			.update_worker_ping(self.worker_id, true)
+			.update_worker_ping(self.worker_id, self.version, true)
 			.await
 			.context("failed updating worker ping")?;
 
@@ -171,7 +175,8 @@ impl Worker {
 		// Query awake workflows
 		let workflows = tokio::time::timeout(
 			PULL_WORKFLOWS_TIMEOUT,
-			self.db.pull_workflows(self.worker_id, &filter),
+			self.db
+				.pull_workflows(self.worker_id, self.version, &filter),
 		)
 		.await
 		.context("took too long pulling workflows, worker cannot continue")??;
@@ -240,6 +245,7 @@ impl Worker {
 	fn gc(&self) -> JoinHandle<()> {
 		let db = self.db.clone();
 		let worker_id = self.worker_id;
+		let version = self.version;
 
 		tokio::spawn(
 			async move {
@@ -249,7 +255,7 @@ impl Worker {
 				loop {
 					ping_interval.tick().await;
 
-					if let Err(err) = db.update_worker_ping(worker_id, true).await {
+					if let Err(err) = db.update_worker_ping(worker_id, version, true).await {
 						tracing::error!(?err, "unhandled update ping error");
 					}
 
@@ -286,6 +292,7 @@ impl Worker {
 	fn shutdown_ping(&self) -> JoinHandle<()> {
 		let db = self.db.clone();
 		let worker_id = self.worker_id;
+		let version = self.version;
 
 		tokio::spawn(
 			async move {
@@ -295,7 +302,7 @@ impl Worker {
 				loop {
 					ping_interval.tick().await;
 
-					if let Err(err) = db.update_worker_ping(worker_id, false).await {
+					if let Err(err) = db.update_worker_ping(worker_id, version, false).await {
 						tracing::error!(?err, "unhandled update ping error");
 					}
 				}

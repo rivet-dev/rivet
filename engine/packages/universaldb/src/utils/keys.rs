@@ -153,4 +153,6 @@ define_keys! {
 	(125, GLOBAL, "global"),
 	(126, DATACENTER, "datacenter"),
 	(127, ACCEPTED2, "accepted2"),
+	(128, ACTIVE2, "active2"),
+	(129, LAST_ACTIVE_PING_TS, "last_active_ping_ts"),
 }

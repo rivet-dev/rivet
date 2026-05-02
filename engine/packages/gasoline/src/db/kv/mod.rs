@@ -785,6 +785,7 @@ impl Database for DatabaseKv {
 	async fn update_worker_ping(
 		&self,
 		worker_id: Id,
+		worker_version: i64,
 		update_active_idx: bool,
 	) -> WorkflowResult<()> {
 		metrics::WORKER_LAST_PING
@@ -797,24 +798,34 @@ impl Database for DatabaseKv {
 			.run(|tx| async move {
 				let tx = tx.with_subspace(self.subspace.clone());
 
-				let last_ping_ts = rivet_util::timestamp::now();
+				let ping_ts = rivet_util::timestamp::now();
 				let last_ping_ts_key = keys::worker::LastPingTsKey::new(worker_id);
-
-				tx.write(&last_ping_ts_key, last_ping_ts)?;
+				let last_active_ping_ts_key = keys::worker::LastActivePingTsKey::new(worker_id);
+				let version_key = keys::worker::VersionKey::new(worker_id);
 
 				if update_active_idx {
-					if let Some(last_last_ping_ts) =
-						tx.read_opt(&last_ping_ts_key, Serializable).await?
+					// Delete old entry
+					if let Some(last_active_ping_ts) =
+						tx.read_opt(&last_active_ping_ts_key, Serializable).await?
 					{
-						let active_worker_idx_key =
-							keys::worker::ActiveWorkerIdxKey::new(last_last_ping_ts, worker_id);
-						tx.delete(&active_worker_idx_key);
+						let old_active_worker_idx_key = keys::worker::ActiveWorkerIdxKey::new(
+							last_active_ping_ts,
+							worker_version,
+							worker_id,
+						);
+						tx.delete(&old_active_worker_idx_key);
 					}
 
+					// Write new entry
 					let active_worker_idx_key =
-						keys::worker::ActiveWorkerIdxKey::new(last_ping_ts, worker_id);
+						keys::worker::ActiveWorkerIdxKey::new(ping_ts, worker_version, worker_id);
 					tx.write(&active_worker_idx_key, ())?;
+
+					tx.write(&last_active_ping_ts_key, ping_ts)?;
 				}
+
+				tx.write(&last_ping_ts_key, ping_ts)?;
+				tx.write(&version_key, worker_version)?;
 
 				Ok(())
 			})
@@ -832,13 +843,18 @@ impl Database for DatabaseKv {
 			.udb()
 			.map_err(WorkflowError::PoolsGeneric)?
 			.run(|tx| async move {
-				let last_ping_ts_key = keys::worker::LastPingTsKey::new(worker_id);
+				let last_active_ping_ts_key = keys::worker::LastActivePingTsKey::new(worker_id);
+				let version_key = keys::worker::VersionKey::new(worker_id);
 
-				if let Some(last_last_ping_ts) =
-					tx.read_opt(&last_ping_ts_key, Serializable).await?
-				{
-					let active_worker_idx_key =
-						keys::worker::ActiveWorkerIdxKey::new(last_last_ping_ts, worker_id);
+				if let (Some(last_active_ping_ts), Some(version)) = tokio::try_join!(
+					tx.read_opt(&last_active_ping_ts_key, Serializable),
+					tx.read_opt(&version_key, Serializable),
+				)? {
+					let active_worker_idx_key = keys::worker::ActiveWorkerIdxKey::new(
+						last_active_ping_ts,
+						version,
+						worker_id,
+					);
 					tx.delete(&active_worker_idx_key);
 				}
 
@@ -1053,6 +1069,7 @@ impl Database for DatabaseKv {
 	async fn pull_workflows(
 		&self,
 		worker_id: Id,
+		worker_version: i64,
 		filter: &[&str],
 	) -> WorkflowResult<Vec<PulledWorkflowData>> {
 		let start_instant = Instant::now();
@@ -1105,8 +1122,7 @@ impl Database for DatabaseKv {
 						.1;
 
 					// Pull all available wake conditions from all registered wf names
-					let (mut active_worker_ids, wake_keys) = tokio::try_join!(
-						// Check
+					let (mut active_workers, wake_keys) = tokio::try_join!(
 						tx.get_ranges_keyvalues(
 							universaldb::RangeOption {
 								mode: StreamingMode::WantAll,
@@ -1115,10 +1131,7 @@ impl Database for DatabaseKv {
 							// This is Snapshot to reduce contention and exact timestamps are not important
 							Snapshot,
 						)
-						.map(|res| {
-							let key = tx.unpack::<keys::worker::ActiveWorkerIdxKey>(res?.key())?;
-							Ok(key.worker_id)
-						})
+						.map(|res| tx.unpack::<keys::worker::ActiveWorkerIdxKey>(res?.key()))
 						.try_collect::<Vec<_>>(),
 						async {
 							let start = Instant::now();
@@ -1169,26 +1182,41 @@ impl Database for DatabaseKv {
 						.custom_instrument(tracing::debug_span!("read_wake_conditions"))
 					)?;
 
+					let highest_worker_version = active_workers
+						.iter()
+						.reduce(|acc, e| if acc.version > e.version { acc } else { e })
+						.map(|e| e.version)
+						.unwrap_or_default();
+
+					// Do not pull if this worker is outdated. This ensures old workers do not pick up
+					// workflows that may have already been run on a new worker
+					if worker_version < highest_worker_version {
+						tracing::info!("worker version is outdated, not pulling workflows");
+						return Ok(Vec::new());
+					}
+
+					// Keep only highest version workers
+					active_workers.retain(|w| w.version == highest_worker_version);
+
 					// Sort for consistency across all workers
-					active_worker_ids.sort();
+					active_workers.sort_by_key(|w| w.worker_id);
 
 					// Get a globally unique idx for the current worker relative to all active workers
-					let current_worker_idx = if let Some(current_worker_idx) = active_worker_ids
+					let current_worker_idx = if let Some(current_worker_idx) = active_workers
 						.iter()
 						.enumerate()
-						.find_map(|(i, other_worker_id)| {
-							(&worker_id == other_worker_id).then_some(i)
-						}) {
+						.find_map(|(i, worker)| (worker_id == worker.worker_id).then_some(i))
+					{
 						current_worker_idx as u64
 					} else {
 						tracing::error!(
 							?worker_id,
-							"current worker should have valid ping, defaulting to worker index 0"
+							"current worker should exist in active worker idx, defaulting to worker index 0"
 						);
 
 						0
 					};
-					let active_worker_count = active_worker_ids.len().max(1) as u64;
+					let active_worker_count = active_workers.len().max(1) as u64;
 
 					// Collect name and deadline ts for each wf id
 					let mut dedup_workflows = HashMap::<Id, MinimalPulledWorkflow>::new();

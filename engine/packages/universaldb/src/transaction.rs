@@ -49,9 +49,13 @@ impl Transaction {
 
 	/// Unpacks a key based on the subspace of this transaction.
 	pub fn unpack<'de, T: TupleUnpack<'de>>(&self, key: &'de [u8]) -> Result<T> {
-		self.subspace
-			.unpack(key)
-			.with_context(|| format!("failed unpacking key of {}", std::any::type_name::<T>()))
+		self.subspace.unpack(key).with_context(|| {
+			format!(
+				"failed unpacking key {} as {}",
+				hex::encode(key),
+				std::any::type_name::<T>(),
+			)
+		})
 	}
 
 	pub fn write<T: FormalKey + TuplePack>(&self, key: &T, value: T::Value) -> Result<()> {
