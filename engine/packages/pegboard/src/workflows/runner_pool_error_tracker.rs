@@ -115,7 +115,7 @@ pub async fn process_signals(ctx: &ActivityCtx, input: &ProcessSignalsInput) -> 
 		match signal {
 			MainInner::ReportError(report) => {
 				let was_clean = state.active_error.is_none();
-				tracing::warn!(
+				tracing::debug!(
 					workflow_id = %ctx.workflow_id(),
 					error = ?report.error,
 					was_clean,
@@ -137,7 +137,7 @@ pub async fn process_signals(ctx: &ActivityCtx, input: &ProcessSignalsInput) -> 
 					.runner_pool_error_consecutive_successes_to_clear();
 				if state.consecutive_successes >= threshold {
 					if state.active_error.is_some() {
-						tracing::info!(
+						tracing::debug!(
 							workflow_id = %ctx.workflow_id(),
 							consecutive_successes = state.consecutive_successes,
 							"runner pool error tracker cleared active error"

@@ -23,7 +23,6 @@ pub struct Output {
 // returned here.
 #[operation]
 pub async fn list_runner_config_enabled_dcs(ctx: &OperationCtx, input: &Input) -> Result<Output> {
-	let start = std::time::Instant::now();
 	let dc_labels = ctx
 		.cache()
 		.clone()

@@ -199,7 +199,7 @@ impl OutboundHandler {
 		let handle = tokio::spawn(
 			async move {
 				if let Err(err) = handle(&ctx, packet).await {
-					tracing::error!(?err, "outbound handler failed");
+					tracing::warn!(?err, "outbound handler failed");
 				}
 			}
 			.instrument(tracing::info_span!("outbound_handle_task")),
@@ -279,6 +279,9 @@ async fn handle(ctx: &StandaloneCtx, packet: protocol::ToOutbound) -> Result<()>
 		);
 		return Ok(());
 	};
+
+	tracing::Span::current().record("url", &url);
+
 	let protocol_version = pool.protocol_version.unwrap_or(PROTOCOL_VERSION);
 	let sqlite_engine = shared_sqlite_engine(ctx).await?;
 	let sqlite_open = sqlite_engine
