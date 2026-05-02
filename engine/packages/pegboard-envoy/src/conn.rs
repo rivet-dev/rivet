@@ -16,7 +16,6 @@ use rivet_guard_core::WebSocketHandle;
 use rivet_types::runner_configs::RunnerConfigKind;
 use scc::HashMap;
 use sqlite_storage::engine::SqliteEngine;
-use universaldb::options::ConflictRangeType;
 use universaldb::prelude::*;
 use vbare::OwnedVersionedData;
 
@@ -35,16 +34,6 @@ pub struct Conn {
 	pub last_rtt: AtomicU32,
 	/// Timestamp (epoch ms) of the last pong received from the envoy.
 	pub last_ping_ts: AtomicI64,
-}
-
-#[derive(Clone)]
-struct Registration {
-	namespace_id: Id,
-	envoy_key: String,
-	pool_name: String,
-	version: u32,
-	create_ts: i64,
-	last_ping_ts: i64,
 }
 
 #[tracing::instrument(skip_all)]
@@ -97,23 +86,28 @@ pub async fn init_conn(
 		.with_label_values(&[namespace.namespace_id.to_string().as_str(), &pool_name])
 		.observe(start.elapsed().as_secs_f64());
 
-	let pb = ctx.config().pegboard();
-	let init_msg =
-		versioned::ToEnvoy::wrap_latest(protocol::ToEnvoy::ToEnvoyInit(protocol::ToEnvoyInit {
-			metadata: protocol::ProtocolMetadata {
-				envoy_lost_threshold: pb.envoy_lost_threshold(),
-				actor_stop_threshold: pb.actor_stop_threshold(),
-				max_response_payload_size: pb.envoy_max_response_payload_size() as u64,
-			},
-		}));
-	let init_msg_serialized = init_msg.serialize(protocol_version)?;
-	ws_handle
-		.send(Message::Binary(init_msg_serialized.into()))
-		.await?;
-
 	let udb = ctx.udb()?;
-	let (registration, mut missed_commands, runner_config_protocol_changed) = udb
-		.run(|tx| {
+	let (_, (mut missed_commands, runner_config_protocol_changed)) = tokio::try_join!(
+		// Send init packet as soon as possible
+		async {
+			let pb = ctx.config().pegboard();
+
+			// Send init packet
+			let init_msg = versioned::ToEnvoy::wrap_latest(protocol::ToEnvoy::ToEnvoyInit(
+				protocol::ToEnvoyInit {
+					metadata: protocol::ProtocolMetadata {
+						envoy_lost_threshold: pb.envoy_lost_threshold(),
+						actor_stop_threshold: pb.actor_stop_threshold(),
+						max_response_payload_size: pb.envoy_max_response_payload_size() as u64,
+					},
+				},
+			));
+			let init_msg_serialized = init_msg.serialize(protocol_version)?;
+			ws_handle
+				.send(Message::Binary(init_msg_serialized.into()))
+				.await
+		},
+		udb.run(|tx| {
 			let namespace_id = namespace.namespace_id;
 			let envoy_key = &envoy_key;
 			let pool_name = &pool_name;
@@ -288,36 +282,19 @@ pub async fn init_conn(
 					ns_tx.write(&runner_config_protocol_version_key, protocol_version)?;
 				}
 
-				let registration = Registration {
-					namespace_id,
-					envoy_key: envoy_key.to_string(),
-					pool_name: pool_name.to_string(),
-					version,
-					create_ts,
-					last_ping_ts,
-				};
-
-				Ok((
-					registration,
-					missed_commands,
-					runner_config_protocol_changed,
-				))
+				Ok((missed_commands, runner_config_protocol_changed))
 			}
 		})
-		.custom_instrument(tracing::info_span!("envoy_init_tx"))
-		.await?;
+		.custom_instrument(tracing::info_span!("envoy_init_tx")),
+	)?;
 
 	if runner_config_protocol_changed {
-		if let Err(err) = pegboard::utils::purge_runner_config_caches(
+		pegboard::utils::purge_runner_config_caches(
 			ctx.cache(),
 			namespace.namespace_id,
 			&pool_name,
 		)
-		.await
-		{
-			cleanup_registration(ctx, &registration, "failed to purge runner config caches").await;
-			return Err(err);
-		}
+		.await?;
 	}
 
 	let conn = Arc::new(Conn {
@@ -354,28 +331,18 @@ pub async fn init_conn(
 		.await;
 		if let Err(err) = replay_result {
 			actor_lifecycle::shutdown_conn_actors(&conn).await;
-			cleanup_registration(ctx, &registration, "failed to replay missed commands").await;
 			return Err(err);
 		}
 
 		let msg =
 			versioned::ToEnvoy::wrap_latest(protocol::ToEnvoy::ToEnvoyCommands(missed_commands));
-		let msg_serialized = match msg.serialize(protocol_version) {
-			Ok(msg_serialized) => msg_serialized,
-			Err(err) => {
-				actor_lifecycle::shutdown_conn_actors(&conn).await;
-				cleanup_registration(ctx, &registration, "failed to serialize missed commands")
-					.await;
-				return Err(err);
-			}
-		};
+		let msg_serialized = msg.serialize(protocol_version)?;
 		if let Err(err) = conn
 			.ws_handle
 			.send(Message::Binary(msg_serialized.into()))
 			.await
 		{
 			actor_lifecycle::shutdown_conn_actors(&conn).await;
-			cleanup_registration(ctx, &registration, "failed to send missed commands").await;
 			return Err(err.into());
 		}
 	}
@@ -385,119 +352,6 @@ pub async fn init_conn(
 	}
 
 	Ok(conn)
-}
-
-async fn cleanup_registration(
-	ctx: &StandaloneCtx,
-	registration: &Registration,
-	reason: &'static str,
-) {
-	let res = cleanup_registration_inner(ctx, registration).await;
-	match res {
-		Ok(true) => {
-			tracing::warn!(
-				namespace_id=?registration.namespace_id,
-				envoy_key=%registration.envoy_key,
-				reason,
-				"expired partially initialized envoy"
-			);
-		}
-		Ok(false) => {
-			tracing::debug!(
-				namespace_id=?registration.namespace_id,
-				envoy_key=%registration.envoy_key,
-				reason,
-				"skipped partially initialized envoy cleanup"
-			);
-		}
-		Err(err) => {
-			tracing::error!(
-				namespace_id=?registration.namespace_id,
-				envoy_key=%registration.envoy_key,
-				reason,
-				?err,
-				"failed to clean up partially initialized envoy"
-			);
-		}
-	}
-}
-
-async fn cleanup_registration_inner(
-	ctx: &StandaloneCtx,
-	registration: &Registration,
-) -> Result<bool> {
-	ctx.udb()?
-		.run(|tx| {
-			let registration = registration.clone();
-			async move {
-				let tx = tx.with_subspace(pegboard::keys::subspace());
-
-				let pool_name_key = pegboard::keys::envoy::PoolNameKey::new(
-					registration.namespace_id,
-					registration.envoy_key.clone(),
-				);
-				let version_key = pegboard::keys::envoy::VersionKey::new(
-					registration.namespace_id,
-					registration.envoy_key.clone(),
-				);
-				let create_ts_key = pegboard::keys::envoy::CreateTsKey::new(
-					registration.namespace_id,
-					registration.envoy_key.clone(),
-				);
-				let last_ping_ts_key = pegboard::keys::envoy::LastPingTsKey::new(
-					registration.namespace_id,
-					registration.envoy_key.clone(),
-				);
-				let expired_ts_key = pegboard::keys::envoy::ExpiredTsKey::new(
-					registration.namespace_id,
-					registration.envoy_key.clone(),
-				);
-
-				let (pool_name, version, create_ts, last_ping_ts, expired) = tokio::try_join!(
-					tx.read_opt(&pool_name_key, Serializable),
-					tx.read_opt(&version_key, Serializable),
-					tx.read_opt(&create_ts_key, Serializable),
-					tx.read_opt(&last_ping_ts_key, Serializable),
-					tx.exists(&expired_ts_key, Serializable),
-				)?;
-
-				if expired
-					|| pool_name.as_deref() != Some(registration.pool_name.as_str())
-					|| version != Some(registration.version)
-					|| create_ts != Some(registration.create_ts)
-					|| last_ping_ts != Some(registration.last_ping_ts)
-				{
-					return Ok(false);
-				}
-
-				let lb_key = pegboard::keys::ns::EnvoyLoadBalancerIdxKey::new(
-					registration.namespace_id,
-					registration.pool_name.clone(),
-					registration.version,
-					registration.last_ping_ts,
-					registration.envoy_key.clone(),
-				);
-				tx.add_conflict_key(&lb_key, ConflictRangeType::Read)?;
-				tx.delete(&lb_key);
-
-				tx.write(&expired_ts_key, util::timestamp::now())?;
-				tx.delete(&pegboard::keys::ns::ActiveEnvoyKey::new(
-					registration.namespace_id,
-					registration.create_ts,
-					registration.envoy_key.clone(),
-				));
-				tx.delete(&pegboard::keys::ns::ActiveEnvoyByNameKey::new(
-					registration.namespace_id,
-					registration.pool_name.clone(),
-					registration.create_ts,
-					registration.envoy_key.clone(),
-				));
-
-				Ok(true)
-			}
-		})
-		.custom_instrument(tracing::info_span!("envoy_cleanup_registration_tx"))
-		.await
 }
 
 /// Report success to the error tracker workflow.

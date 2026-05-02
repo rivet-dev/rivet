@@ -4,7 +4,6 @@ use bytes::Bytes;
 use gas::prelude::*;
 use http_body_util::Full;
 use hyper::{Response, StatusCode};
-use rivet_envoy_protocol::PROTOCOL_VERSION;
 use rivet_guard_core::{
 	ResponseBody, WebSocketHandle, custom_serve::CustomServeTrait, request_context::RequestContext,
 };
@@ -77,14 +76,7 @@ impl CustomServeTrait for PegboardEnvoyWs {
 		// Parse URL to extract parameters
 		let url = url::Url::parse(&format!("ws://placeholder/{}", req_ctx.path()))
 			.context("failed to parse WebSocket URL")?;
-		let url_data = utils::UrlData::parse_url(url)
-			.map_err(|err| errors::WsError::InvalidUrl(err.to_string()).build())?;
-		if url_data.protocol_version < 2 || url_data.protocol_version > PROTOCOL_VERSION {
-			return Err(errors::WsError::InvalidRequest(
-				"unsupported `protocol_version` query parameter",
-			)
-			.build());
-		}
+		let url_data = utils::UrlData::parse_url(url)?;
 
 		tracing::debug!(path=%req_ctx.path(), "tunnel ws connection established");
 

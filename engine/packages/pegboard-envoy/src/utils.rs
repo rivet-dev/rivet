@@ -1,4 +1,5 @@
 use gas::prelude::*;
+use rivet_envoy_protocol::PROTOCOL_VERSION;
 
 use crate::errors::WsError;
 
@@ -24,6 +25,11 @@ impl UrlData {
 			.context(
 				WsError::InvalidRequest("invalid `protocol_version` query parameter").build(),
 			)?;
+		if protocol_version < 2 || protocol_version > PROTOCOL_VERSION {
+			return Err(
+				WsError::InvalidRequest("unsupported `protocol_version` query parameter").build(),
+			);
+		}
 
 		// Read namespace from query parameters
 		let namespace = url
