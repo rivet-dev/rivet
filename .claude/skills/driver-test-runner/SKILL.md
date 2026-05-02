@@ -35,7 +35,7 @@ Env overrides recognized by the test harness:
 - `RIVETKIT_DRIVER_TEST_SQLITE` — comma-separated subset of `local,remote`.
 - `RIVETKIT_DRIVER_TEST_ENCODING` — comma-separated subset of `bare,cbor,json`.
 
-When **any** of these env vars is set, the inner describe block name changes from `encoding (<encoding>)` to `runtime (<runtime>) / sqlite (<backend>) / encoding (<encoding>)`. The skill always sets the env vars, so the longer form is always what `-t` must match.
+When **any** of these env vars is set, the inner describe block name changes from `encoding (<encoding>)` to `runtime (<runtime>) / sqlite (<backend>) / encoding (<encoding>)`. The skill always sets the env vars, so expect the longer form in test output.
 
 ## How It Works
 
@@ -173,13 +173,15 @@ For each unchecked row in order, run the runtimes selected by the `runtime` arg 
 | native  | local          |
 | wasm    | remote         |
 
-**b) Build the filter command:**
+**b) Build the scoped file command:**
 
 Each suite lives in its own file under `rivetkit-typescript/packages/rivetkit/tests/driver/<file>.test.ts`. With env overrides set, the describe block nesting is:
 
 ```
 <Outer Suite> > static registry > runtime (<runtime>) / sqlite (<backend>) / encoding (<encoding>) > <Suite Description>
 ```
+
+Do not use Vitest `-t` for driver matrix cells. The env vars already constrain the file to one runtime/backend/encoding cell, and the `-t` path can break `describe.sequential` ordering in this suite.
 
 Base command (native):
 
@@ -189,7 +191,6 @@ cd rivetkit-typescript/packages/rivetkit && \
   RIVETKIT_DRIVER_TEST_SQLITE=local \
   RIVETKIT_DRIVER_TEST_ENCODING=bare \
   pnpm test tests/driver/<FILE>.test.ts \
-    -t "static registry.*runtime \\(native\\) / sqlite \\(local\\) / encoding \\(bare\\).*<SUITE_DESCRIPTION>" \
     > /tmp/driver-test-current.log 2>&1
 echo "EXIT: $?"
 ```
@@ -202,14 +203,11 @@ cd rivetkit-typescript/packages/rivetkit && \
   RIVETKIT_DRIVER_TEST_SQLITE=remote \
   RIVETKIT_DRIVER_TEST_ENCODING=bare \
   pnpm test tests/driver/<FILE>.test.ts \
-    -t "static registry.*runtime \\(wasm\\) / sqlite \\(remote\\) / encoding \\(bare\\).*<SUITE_DESCRIPTION>" \
     > /tmp/driver-test-current.log 2>&1
 echo "EXIT: $?"
 ```
 
-Replace `<FILE>` with the file name stem (part before the `|` in the progress file) and `<SUITE_DESCRIPTION>` with the suite description (part after the `|`). Escape parentheses in the description if present. Forward slashes inside the describe path do not need to be escaped.
-
-**Important:** The suite description in the `-t` filter must match the inner `describe(...)` text in the test file exactly. Some mappings:
+Replace `<FILE>` with the file name stem (part before the `|` in the progress file). Keep the suite description in the progress file for human-readable tracking only. Some mappings:
 
 | File | Suite Description Text |
 |------|----------------------|
@@ -275,7 +273,7 @@ If both runtime boxes are now checked, the file is fully done; advance to the ne
 **e) If tests fail:**
 
 1. Do NOT move to the next runtime or file.
-2. Narrow down to the first failing test using a more specific `-t` filter (keep the same env vars).
+2. Inspect the failing output and isolate with a temporary `.only` only when single-test debugging is necessary.
 3. Read the error output to understand the failure.
 4. Append to the log:
 
@@ -292,7 +290,7 @@ If both runtime boxes are now checked, the file is fully done; advance to the ne
 
 ### 5. Narrowing scope on failure
 
-If a file group fails, narrow to individual tests while keeping the same runtime env vars:
+If a file group fails, keep the same runtime env vars and rerun the file after adding a temporary `.only` to the failing test:
 
 ```bash
 cd rivetkit-typescript/packages/rivetkit && \
@@ -300,9 +298,10 @@ cd rivetkit-typescript/packages/rivetkit && \
   RIVETKIT_DRIVER_TEST_SQLITE=<backend> \
   RIVETKIT_DRIVER_TEST_ENCODING=bare \
   pnpm test tests/driver/<FILE>.test.ts \
-    -t "static registry.*runtime \\(<runtime>\\) / sqlite \\(<backend>\\) / encoding \\(bare\\).*<SUITE>.*<PARTIAL_TEST_NAME>" \
     > /tmp/driver-test-narrow.log 2>&1
 ```
+
+Remove the temporary `.only` before committing. Do not use `-t` as a flake workaround.
 
 If the bug only appears on one runtime, that's a strong signal — focus the diff hunt on the corresponding runtime adapter (`napi-runtime.ts` / `wasm-runtime.ts`) and any wasm-feature-gated code in `rivetkit-core` and `rivetkit-typescript/packages/rivetkit-wasm`.
 
