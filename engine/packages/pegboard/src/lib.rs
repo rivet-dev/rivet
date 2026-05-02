@@ -18,6 +18,7 @@ pub fn registry() -> WorkflowResult<Registry> {
 	registry.register_workflow::<actor::metrics::Workflow>()?;
 	registry.register_workflow::<actor2::Workflow>()?;
 	registry.register_workflow::<actor2::metrics::Workflow>()?;
+	registry.register_workflow::<actor_migration_fix_backfill::Workflow>()?;
 	registry.register_workflow::<runner::Workflow>()?;
 	registry.register_workflow::<runner2::Workflow>()?;
 	registry.register_workflow::<runner_pool::Workflow>()?;

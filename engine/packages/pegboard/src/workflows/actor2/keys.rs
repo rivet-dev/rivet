@@ -10,6 +10,7 @@ use rivet_data::converted::ActorByKeyKeyData;
 use universaldb::options::StreamingMode;
 use universaldb::prelude::*;
 
+use super::State;
 use crate::keys;
 
 #[derive(Serialize, Deserialize)]
@@ -73,7 +74,6 @@ pub async fn reserve_key(
 							name: name.to_string(),
 							key: key.to_string(),
 							actor_id,
-							create_ts: ctx.create_ts(),
 						})
 						.await?;
 					match output {
@@ -128,7 +128,6 @@ async fn handle_existing_reservation(
 				name: name.to_string(),
 				key: key.to_string(),
 				actor_id,
-				create_ts: ctx.create_ts(),
 			})
 			.await?;
 		match output {
@@ -246,7 +245,6 @@ pub struct ReserveActorKeyInput {
 	name: String,
 	key: String,
 	actor_id: Id,
-	create_ts: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Hash)]
@@ -260,6 +258,9 @@ pub async fn reserve_actor_key(
 	ctx: &ActivityCtx,
 	input: &ReserveActorKeyInput,
 ) -> Result<ReserveActorKeyOutput> {
+	let state = ctx.state::<State>()?;
+
+	let create_ts = state.create_ts;
 	let res = ctx
 		.udb()?
 		.run(|tx| async move {
@@ -295,7 +296,7 @@ pub async fn reserve_actor_key(
 					input.namespace_id,
 					input.name.clone(),
 					input.key.clone(),
-					input.create_ts,
+					create_ts,
 					input.actor_id,
 				),
 				ActorByKeyKeyData {
@@ -310,4 +311,46 @@ pub async fn reserve_actor_key(
 		.await?;
 
 	Ok(res)
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Hash)]
+pub struct UpdateKeyIndexInput {}
+
+/// When actors migrate from v1 to v2, we have to update the `ActorByKeyKey` data with the new workflow id.
+#[activity(UpdateKeyIndex)]
+pub async fn update_key_index(ctx: &ActivityCtx, _input: &UpdateKeyIndexInput) -> Result<()> {
+	let state = ctx.state::<State>()?;
+
+	let actor_id = state.actor_id;
+	let namespace_id = state.namespace_id;
+	let name = &state.name;
+	let create_ts = state.create_ts;
+
+	if let Some(key) = &state.key {
+		ctx.udb()?
+			.run(|tx| async move {
+				let tx = tx.with_subspace(keys::subspace());
+
+				// Update key
+				tx.write(
+					&keys::ns::ActorByKeyKey::new(
+						namespace_id,
+						name.clone(),
+						key.clone(),
+						create_ts,
+						actor_id,
+					),
+					ActorByKeyKeyData {
+						workflow_id: ctx.workflow_id(),
+						is_destroyed: false,
+					},
+				)?;
+
+				Ok(())
+			})
+			.custom_instrument(tracing::info_span!("actor_update_key_index_tx"))
+			.await?
+	}
+
+	Ok(())
 }

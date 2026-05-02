@@ -63,6 +63,19 @@ pub async fn run(ctx: &StandaloneCtx) -> Result<()> {
 			.await?;
 	}
 
+	// Actor migration fix backfill
+	if !is_complete(
+		ctx,
+		pegboard::workflows::actor_migration_fix_backfill::BACKFILL_NAME,
+	)
+	.await?
+	{
+		ctx.workflow(pegboard::workflows::actor_migration_fix_backfill::Input {})
+			.unique()
+			.dispatch()
+			.await?;
+	}
+
 	Ok(())
 }
 

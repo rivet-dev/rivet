@@ -123,9 +123,9 @@ pub async fn pegboard_actor2(ctx: &mut WorkflowCtx, input: &Input) -> Result<()>
 	})
 	.await?;
 
-	// When this workflow is dispatched from the v1 actor workflow's migrate-to-v2 path, run the
-	// sqlite v1->v2 migration exactly once before any allocation. Skipped for fresh v2 actors.
 	if input.from_v1 {
+		// When this workflow is dispatched from the v1 actor workflow's migrate-to-v2 path, run the
+		// sqlite v1->v2 migration exactly once before any allocation. Skipped for fresh v2 actors.
 		ctx.v(2)
 			.activity(sqlite::MigrateSqliteV1ToV2Input {
 				actor_id: input.actor_id,
@@ -133,9 +133,9 @@ pub async fn pegboard_actor2(ctx: &mut WorkflowCtx, input: &Input) -> Result<()>
 				name: input.name.clone(),
 			})
 			.await?;
-	}
-
-	if !input.from_v1 {
+		ctx.v(2).activity(keys::UpdateKeyIndexInput {}).await?;
+		ctx.v(2).activity(PopulateIndexesInput {}).await?;
+	} else {
 		if let Some(key) = &input.key {
 			match keys::reserve_key(
 				ctx,
@@ -255,25 +255,25 @@ pub struct InitStateAndUdbInput {
 pub async fn insert_state_and_db(ctx: &ActivityCtx, input: &InitStateAndUdbInput) -> Result<()> {
 	let mut state = ctx.state::<Option<State>>()?;
 
-	*state = Some(State::new(
-		input.actor_id,
-		input.name.clone(),
-		input.pool_name.clone(),
-		input.key.clone(),
-		input.namespace_id,
-		input.create_ts,
-	));
-
-	ctx.udb()?
+	let create_ts = ctx
+		.udb()?
 		.run(|tx| async move {
 			let tx = tx.with_subspace(crate::keys::subspace());
 
-			if !input.from_v1 {
+			let create_ts = if input.from_v1 {
+				tx.read(
+					&crate::keys::actor::CreateTsKey::new(input.actor_id),
+					Serializable,
+				)
+				.await?
+			} else {
 				tx.write(
 					&crate::keys::actor::CreateTsKey::new(input.actor_id),
 					input.create_ts,
 				)?;
-			}
+
+				input.create_ts
+			};
 			tx.write(
 				&crate::keys::actor::WorkflowIdKey::new(input.actor_id),
 				ctx.workflow_id(),
@@ -309,10 +309,19 @@ pub async fn insert_state_and_db(ctx: &ActivityCtx, input: &InitStateAndUdbInput
 				);
 			}
 
-			Ok(())
+			Ok(create_ts)
 		})
 		.custom_instrument(tracing::info_span!("actor_insert_tx"))
 		.await?;
+
+	*state = Some(State::new(
+		input.actor_id,
+		input.name.clone(),
+		input.pool_name.clone(),
+		input.key.clone(),
+		input.namespace_id,
+		create_ts,
+	));
 
 	Ok(())
 }

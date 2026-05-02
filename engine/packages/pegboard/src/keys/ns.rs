@@ -329,8 +329,14 @@ impl TuplePack for ActiveActorKey {
 
 impl<'de> TupleUnpack<'de> for ActiveActorKey {
 	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
-		let (input, (_, namespace_id, _, _, _, name, create_ts, actor_id)) =
+		let (input, (_, namespace_id, _, data, variant, name, create_ts, actor_id)) =
 			<(usize, Id, usize, usize, usize, String, i64, Id)>::unpack(input, tuple_depth)?;
+		if data != BY_NAME {
+			return Err(PackError::Message("expected BY_NAME data".into()));
+		}
+		if variant != ACTIVE {
+			return Err(PackError::Message("expected ACTIVE variant".into()));
+		}
 		let v = ActiveActorKey {
 			namespace_id,
 			name,
@@ -458,8 +464,14 @@ impl TuplePack for AllActorKey {
 
 impl<'de> TupleUnpack<'de> for AllActorKey {
 	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
-		let (input, (_, namespace_id, _, _, _, name, create_ts, actor_id)) =
+		let (input, (_, namespace_id, _, data, variant, name, create_ts, actor_id)) =
 			<(usize, Id, usize, usize, usize, String, i64, Id)>::unpack(input, tuple_depth)?;
+		if data != BY_NAME {
+			return Err(PackError::Message("expected BY_NAME data".into()));
+		}
+		if variant != ALL {
+			return Err(PackError::Message("expected ALL variant".into()));
+		}
 		let v = AllActorKey {
 			namespace_id,
 			name,
@@ -612,8 +624,11 @@ impl TuplePack for ActorByKeyKey {
 
 impl<'de> TupleUnpack<'de> for ActorByKeyKey {
 	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
-		let (input, (_, namespace_id, _, _, name, k, create_ts, actor_id)) =
+		let (input, (_, namespace_id, _, data, name, k, create_ts, actor_id)) =
 			<(usize, Id, usize, usize, String, String, i64, Id)>::unpack(input, tuple_depth)?;
+		if data != BY_NAME_AND_KEY {
+			return Err(PackError::Message("expected BY_NAME_AND_KEY data".into()));
+		}
 		let v = ActorByKeyKey {
 			namespace_id,
 			name,
