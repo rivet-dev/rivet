@@ -66,10 +66,10 @@ pnpm --filter @rivetkit/rivetkit-napi run build:force
 
 After Rust changes, always use `build:force` (per `rivetkit-typescript/CLAUDE.md`); the non-`:force` variant can skip the rebuild and leave the suite running against a stale `.node`.
 
-**Wasm (`@rivetkit/rivetkit-wasm`)** — produces `packages/rivetkit-wasm/pkg/rivetkit_wasm.{js,wasm,d.ts}`:
+**Wasm (`@rivetkit/rivetkit-wasm`)** — produces `packages/rivetkit-wasm/pkg/rivetkit_wasm.{js,d.ts}` plus `rivetkit_wasm_bg.wasm`:
 
 ```bash
-ls rivetkit-typescript/packages/rivetkit-wasm/pkg/rivetkit_wasm.wasm 2>/dev/null
+ls rivetkit-typescript/packages/rivetkit-wasm/pkg/rivetkit_wasm_bg.wasm 2>/dev/null
 # missing? rebuild (uses the package-pinned wasm-pack, do not use npx):
 pnpm --filter @rivetkit/rivetkit-wasm run build
 ```
