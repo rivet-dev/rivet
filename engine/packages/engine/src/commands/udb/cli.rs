@@ -642,6 +642,22 @@ impl SubCommand {
 						use tokio::sync::{Mutex, mpsc};
 
 						const EARLY_TXN_TIMEOUT: Duration = Duration::from_millis(2500);
+						// FDB hard limit on txn size is 10 MiB. Cap our writer below that
+						// with headroom for per-key/value framing the estimator can't see.
+						const TXN_SIZE_CAP: usize = 1 * 1024 * 1024;
+
+						// Conservative per-entry size estimate. apply_entry writes value_key
+						// once and clears up to four sibling keys, so charge the entry key
+						// length five times plus the value payload and a flat overhead for
+						// subspace prefixes / BARE framing.
+						fn entry_txn_bytes(entry: &protocol::ChangelogEntry) -> usize {
+							entry
+								.key
+								.len()
+								.saturating_mul(5)
+								.saturating_add(entry.value.as_ref().map_or(0, |v| v.len()))
+								.saturating_add(500)
+						}
 
 						let (tx_entries, rx_entries) =
 							mpsc::channel::<protocol::ChangelogEntry>(10_000);
@@ -667,9 +683,13 @@ impl SubCommand {
 											let start = Instant::now();
 											let mut applied = 0;
 											let mut closed = false;
+											let mut txn_bytes = 0usize;
 
 											loop {
 												if start.elapsed() > EARLY_TXN_TIMEOUT {
+													break;
+												}
+												if txn_bytes >= TXN_SIZE_CAP {
 													break;
 												}
 
@@ -677,7 +697,7 @@ impl SubCommand {
 													let n = rx
 														.lock()
 														.await
-														.recv_many(&mut buf, 512)
+														.recv_many(&mut buf, 64)
 														.await;
 													if n == 0 {
 														closed = true;
@@ -685,22 +705,49 @@ impl SubCommand {
 													}
 												}
 
-												let batch = std::mem::take(&mut buf);
+												// Take only as many entries as fit under the cap.
+												// Always take at least one so a single oversized
+												// entry can't deadlock the loop.
+												let remaining_cap =
+													TXN_SIZE_CAP.saturating_sub(txn_bytes);
+												let mut take_count = 0usize;
+												let mut take_bytes = 0usize;
+												for entry in buf.iter() {
+													let eb = entry_txn_bytes(entry);
+													if take_count > 0
+														&& take_bytes + eb > remaining_cap
+													{
+														break;
+													}
+													take_bytes += eb;
+													take_count += 1;
+												}
+												let batch: Vec<_> =
+													buf.drain(..take_count).collect();
 												let n = batch.len();
+												tracing::info!(
+													n,
+													take_bytes,
+													txn_bytes_before = txn_bytes,
+													remaining_cap,
+													"writer batch drained",
+												);
 												stream::iter(batch)
 													.map(|entry| {
 														let tx = tx.clone();
 														async move {
 															epoxy::replica::changelog::apply_entry(
 																&*tx, replica_id, entry, false,
+																true, true,
 															)
 															.await
 														}
 													})
-													.buffer_unordered(512)
+													.buffer_unordered(64)
 													.try_collect::<Vec<_>>()
 													.await?;
 												applied += n;
+												txn_bytes += take_bytes;
 											}
 
 											Ok((buf, applied, closed))
@@ -716,6 +763,12 @@ impl SubCommand {
 										total_applied,
 										"applied changelog batch",
 									);
+								} else {
+									tracing::warn!(
+										remaining_in_buf = pending.len(),
+										closed,
+										"writer txn produced zero applied entries",
+									);
 								}
 
 								if closed && pending.is_empty() {
@@ -725,6 +778,84 @@ impl SubCommand {
 
 							anyhow::Ok(total_applied)
 						});
+
+						// One-shot read of first/last changelog versionstamps for progress.
+						// FDB versionstamp = 12 bytes: [commit_version_be: u64][batch: u16][user: u16].
+						// commit_version maps to wall-clock via the FDB time keeper
+						// (\xff\x02/timeKeeper/map/<commit_version_be>).
+						fn commit_version(vs: &[u8]) -> Option<u64> {
+							vs.get(0..8)
+								.and_then(|b| <[u8; 8]>::try_from(b).ok())
+								.map(u64::from_be_bytes)
+						}
+
+						let range_lookup = pool
+							.run(|tx| async move {
+								let replica_subspace = epoxy::keys::subspace(replica_id);
+								let changelog_subspace = replica_subspace.subspace(&(CHANGELOG,));
+								let (range_start, range_end) = changelog_subspace.range();
+
+								let read_one =
+									async |reverse: bool| -> anyhow::Result<Option<Vec<u8>>> {
+										let mut s = tx.get_ranges_keyvalues(
+											RangeOption {
+												mode: StreamingMode::Iterator,
+												limit: Some(1),
+												reverse,
+												..(
+													KeySelector::first_greater_or_equal(
+														range_start.clone(),
+													),
+													KeySelector::first_greater_or_equal(
+														range_end.clone(),
+													),
+												)
+													.into()
+											},
+											Snapshot,
+										);
+										Ok(s.try_next()
+											.await?
+											.and_then(|e| {
+												changelog_subspace
+													.unpack::<epoxy::keys::ChangelogKey>(e.key())
+													.ok()
+											})
+											.map(|k| k.versionstamp().as_bytes().to_vec()))
+									};
+
+								let first = read_one(false).await?;
+								let last = read_one(true).await?;
+								anyhow::Ok((first, last))
+							})
+							.await;
+
+						let (first_versionstamp, last_versionstamp) = match range_lookup {
+							Ok(pair) => pair,
+							Err(err) => {
+								println!("range lookup failed: {err:#}");
+								(None, None)
+							}
+						};
+
+						let first_cv = first_versionstamp.as_deref().and_then(commit_version);
+						let last_cv = last_versionstamp.as_deref().and_then(commit_version);
+
+						tracing::info!(
+							first = first_versionstamp
+								.as_deref()
+								.map(hex::encode)
+								.as_deref()
+								.unwrap_or("none"),
+							last = last_versionstamp
+								.as_deref()
+								.map(hex::encode)
+								.as_deref()
+								.unwrap_or("none"),
+							first_commit_version = first_cv,
+							last_commit_version = last_cv,
+							"changelog range",
+						);
 
 						// Reader loop: scans the changelog in chunks and sends detected v2
 						// entries to the writer task.
@@ -761,6 +892,7 @@ impl SubCommand {
 									);
 
 									let mut new_last_key: Option<Vec<u8>> = None;
+									let mut current_versionstamp: Option<Vec<u8>> = None;
 									let mut scanned = 0usize;
 									let mut v2_count = 0usize;
 									let mut v3_count = 0usize;
@@ -779,6 +911,12 @@ impl SubCommand {
 										};
 
 										new_last_key = Some(entry.key().to_vec());
+										if let Ok(ck) = changelog_subspace
+											.unpack::<epoxy::keys::ChangelogKey>(entry.key())
+										{
+											current_versionstamp =
+												Some(ck.versionstamp().as_bytes().to_vec());
+										}
 										scanned += 1;
 
 										// A v2 entry roundtrips byte-identically through the v2
@@ -839,6 +977,7 @@ impl SubCommand {
 
 									Ok((
 										new_last_key,
+										current_versionstamp,
 										scanned,
 										v2_count,
 										v3_count,
@@ -848,7 +987,15 @@ impl SubCommand {
 								}
 							});
 
-							let (new_last_key, scanned, v2_count, v3_count, timed_out, exhausted) =
+							let (
+								new_last_key,
+								current_versionstamp,
+								scanned,
+								v2_count,
+								v3_count,
+								timed_out,
+								exhausted,
+							) =
 								match tokio::time::timeout(Duration::from_secs(5), chunk_fut).await
 								{
 									Ok(Ok(res)) => res,
@@ -866,12 +1013,27 @@ impl SubCommand {
 							total_v2 += v2_count;
 							total_v3 += v3_count;
 
+							let cur_cv = current_versionstamp.as_deref().and_then(commit_version);
+							let progress_pct = match (first_cv, last_cv, cur_cv) {
+								(Some(f), Some(l), Some(c)) if l > f => {
+									Some((c.saturating_sub(f) as f64 / (l - f) as f64) * 100.0)
+								}
+								_ => None,
+							};
+
 							tracing::info!(
 								scanned,
 								v2_count,
 								v3_count,
 								timed_out,
 								exhausted,
+								versionstamp = current_versionstamp
+									.as_deref()
+									.map(hex::encode)
+									.as_deref()
+									.unwrap_or("none"),
+								commit_version = cur_cv,
+								progress_pct = progress_pct.map(|p| format!("{:.3}", p)),
 								"processed changelog chunk",
 							);
 
