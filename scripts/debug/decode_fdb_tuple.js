@@ -43,6 +43,7 @@ const CODE = {
 	FLOAT: 0x20,
 	DOUBLE: 0x21,
 	UUID: 0x30,
+	VERSIONSTAMP: 0x33,
 	ID: 0x40,
 };
 
@@ -183,6 +184,13 @@ function decodeOne(input, offset, depth) {
 			return decodeFloatLike(input, offset, 8);
 		case CODE.UUID:
 			return decodeUuid(input, offset);
+		case CODE.VERSIONSTAMP: {
+			// 96-bit versionstamp: 8-byte db version, 2-byte batch version, 2-byte user ordering.
+			const dbVersion = input.readBigUInt64BE(offset);
+			const batchVersion = input.readUInt16BE(offset + 8);
+			const userVersion = input.readUInt16BE(offset + 10);
+			return { value: { type: "versionstamp", dbVersion, batchVersion, userVersion }, next: offset + 12 };
+		}
 		case CODE.ID:
 			return decodeId(input, offset);
 		default:
@@ -221,6 +229,7 @@ function formatSegment(v) {
 	if (typeof v === "string") return v;
 	if (Array.isArray(v)) return `[${v.map(formatSegment).join(", ")}]`;
 	if (v && typeof v === "object" && v.type === "bytes") return `bytes:${v.hex}`;
+	if (v && typeof v === "object" && v.type === "versionstamp") return `vs(${v.dbVersion}:${v.batchVersion}:${v.userVersion})`;
 	return String(v);
 }
 

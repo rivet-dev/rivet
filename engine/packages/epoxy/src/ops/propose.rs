@@ -580,7 +580,7 @@ async fn run_prepare_phase(
 				else {
 					tracing::warn!(
 						%replica_id,
-						key = ?key,
+						key=hex::encode(&key),
 						retry_count,
 						"prepare phase exceeded retry limit"
 					);
@@ -590,7 +590,7 @@ async fn run_prepare_phase(
 				metrics::record_prepare_retry();
 				tracing::info!(
 					%replica_id,
-					key = ?key,
+					key=hex::encode(&key),
 					retry_count,
 					retry_delay_ms = retry_delay.as_millis() as u64,
 					next_ballot_counter = next_ballot.counter,

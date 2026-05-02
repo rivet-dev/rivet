@@ -3,8 +3,9 @@ use std::{
 	time::Duration,
 };
 
+use anyhow::Context;
 use clap::{Parser, ValueEnum};
-use futures_util::TryStreamExt;
+use futures_util::{StreamExt, TryStreamExt};
 use rivet_pools::UdbPool;
 use rivet_term::console::style;
 use universaldb::prelude::*;
@@ -51,6 +52,14 @@ pub enum SubCommand {
 		/// Print style
 		#[arg(short = 's', long, default_value = "tree")]
 		style: ListStyle,
+
+		/// Max entries to return.
+		#[arg(short = 'l', long)]
+		limit: Option<usize>,
+
+		/// Lists all entries after the current key, not just under it.
+		#[arg(short = 'o', long)]
+		open: bool,
 	},
 
 	/// Calculates or estimates the size of all data under the current key.
@@ -123,6 +132,19 @@ pub enum OneoffSubCommand {
 		#[arg(long)]
 		dry_run: bool,
 	},
+	/// Re-apply epoxy v2 changelog entries that were left mixed with v3 entries due
+	/// to a missing version gate. Iterates the per-replica changelog subspace in
+	/// chunks, attempts to deserialize each entry as the v2 schema with a
+	/// byte-identical re-serialize roundtrip, and applies any entry that succeeds
+	/// via the standard catchup path inside the same transaction. Entries that
+	/// fail the roundtrip are assumed to be v3 and ignored.
+	#[command(name = "repair-epoxy-changelog")]
+	RepairEpoxyChangelog {
+		/// Replica id whose changelog subspace will be scanned.
+		replica_id: u64,
+		#[arg(long)]
+		dry_run: bool,
+	},
 }
 
 impl SubCommand {
@@ -186,6 +208,8 @@ impl SubCommand {
 				max_depth,
 				hide_subspaces,
 				style: list_style,
+				limit,
+				open,
 			} => {
 				let mut current_tuple = current_tuple.clone();
 				if update_current_tuple(&mut current_tuple, key) {
@@ -193,140 +217,76 @@ impl SubCommand {
 				}
 
 				let subspace = universaldb::tuple::Subspace::all().subspace(&current_tuple);
+				let range = subspace.range();
+				let start = range.0;
+
+				let (subspace, end) = if open {
+					let mut parent_tuple = current_tuple.clone();
+					parent_tuple.segments.pop();
+					let subspace = universaldb::tuple::Subspace::all().subspace(&parent_tuple);
+
+					let end = subspace.range().1;
+
+					(subspace, end)
+				} else {
+					(subspace, range.1)
+				};
 
 				let fut = pool.run(|tx| {
-					let subspace = subspace.clone();
+					let subspace = &subspace;
+					let start = start.as_slice();
+					let end = end.as_slice();
 					async move {
-						let entries = tx
-							.get_ranges_keyvalues(
-								universaldb::RangeOption {
-									mode: StreamingMode::WantAll,
-									..(&subspace).into()
-								},
-								Snapshot,
-							)
-							.try_collect::<Vec<_>>()
-							.await?;
+						let mut ctx = ListRenderContext {
+							entry_count: 0,
+							subspace_count: 0,
+							current_hidden_subspace: None,
+							hidden_count: 0,
+							last_key: SimpleTuple::new(),
+						};
 
-						Ok(entries)
-					}
-				});
+						let mut stream = tx.get_ranges_keyvalues(
+							universaldb::RangeOption {
+								mode: StreamingMode::WantAll,
+								limit,
+								..(start, end).into()
+							},
+							Snapshot,
+						);
+						let signal = tokio::signal::ctrl_c();
+						tokio::pin!(signal);
 
-				match tokio::time::timeout(Duration::from_secs(5), fut).await {
-					Ok(Ok(entries)) => {
-						let mut entry_count = 0;
-						let mut subspace_count = 0;
-						let mut current_hidden_subspace: Option<SimpleTuple> = None;
-						let mut hidden_count = 0;
-						let mut last_key = SimpleTuple::new();
+						loop {
+							tokio::select! {
+								res = stream.try_next() => {
+									let Some(entry) = res? else {
+										break;
+									};
 
-						for entry in &entries {
-							match subspace.unpack::<SimpleTuple>(entry.key()) {
-								Ok(key) => {
-									if key.segments.len() <= max_depth {
-										if entry.value().is_empty() {
-											key.print(&list_style, &last_key);
-											println!();
-										} else {
-											match SimpleTupleValue::deserialize(None, entry.value())
-											{
-												Ok(value) => {
-													let mut s = String::new();
-													value.write(&mut s, false).unwrap();
-
-													key.print(&list_style, &last_key);
-
-													let indent = match list_style {
-														ListStyle::List => "  ".to_string(),
-														ListStyle::Tree => format!(
-															"  {}",
-															"| ".repeat(key.segments.len()),
-														),
-													};
-													println!(
-														" = {}",
-														indent_string(
-															&s,
-															style(indent).dim().to_string(),
-															true
-														)
-													);
-												}
-												Err(err) => {
-													key.print(&list_style, &last_key);
-													println!(" error: {err:#}");
-												}
-											}
-										}
-
-										last_key = key;
-
-										if let Some(curr) = &current_hidden_subspace {
-											curr.print(&list_style, &last_key);
-											println!(
-												"/ {}",
-												style(format!(
-													"{hidden_count} {}",
-													if hidden_count == 1 {
-														"entry"
-													} else {
-														"entries"
-													}
-												))
-												.dim()
-											);
-
-											last_key = curr.clone();
-											current_hidden_subspace = None;
-											hidden_count = 0;
-										}
-
-										entry_count += 1;
-									} else if !hide_subspaces {
-										let sliced = key.slice(max_depth);
-
-										if let Some(curr) = &current_hidden_subspace {
-											if &sliced == curr {
-												hidden_count += 1;
-											} else {
-												curr.print(&list_style, &last_key);
-												println!(
-													"/ {}",
-													style(format!(
-														"{hidden_count} {}",
-														if hidden_count == 1 {
-															"entry"
-														} else {
-															"entries"
-														}
-													))
-													.dim()
-												);
-
-												last_key = curr.clone();
-												current_hidden_subspace = Some(sliced);
-												hidden_count = 1;
-												subspace_count += 1;
-											}
-										} else {
-											current_hidden_subspace = Some(sliced);
-											hidden_count = 1;
-											subspace_count += 1;
-										}
-									}
+									render_list_entry(
+										max_depth,
+										hide_subspaces,
+										list_style,
+										subspace,
+										&mut ctx,
+										entry,
+									);
 								}
-								Err(err) => println!("error parsing key: {err:#}"),
+								_ = &mut signal => {
+									break;
+								}
 							}
 						}
 
 						if !hide_subspaces {
-							if let Some(curr) = current_hidden_subspace {
-								curr.print(&list_style, &last_key);
+							if let Some(curr) = ctx.current_hidden_subspace {
+								curr.print(&list_style, &ctx.last_key);
 								println!(
 									"/ {}",
 									style(format!(
-										"{hidden_count} {}",
-										if hidden_count == 1 {
+										"{} {}",
+										ctx.hidden_count,
+										if ctx.hidden_count == 1 {
 											"entry"
 										} else {
 											"entries"
@@ -337,31 +297,41 @@ impl SubCommand {
 							}
 						}
 
-						if !entries.is_empty() {
+						if ctx.entry_count != 0 {
 							println!();
 						}
 
 						print!(
 							"{} {}",
-							entry_count,
-							if entry_count == 1 { "entry" } else { "entries" }
+							ctx.entry_count,
+							if ctx.entry_count == 1 {
+								"entry"
+							} else {
+								"entries"
+							}
 						);
 
-						if subspace_count != 0 {
+						if ctx.subspace_count != 0 {
 							print!(
 								", {} {} ({} total entries)",
-								subspace_count,
-								if subspace_count == 1 {
+								ctx.subspace_count,
+								if ctx.subspace_count == 1 {
 									"subspace"
 								} else {
 									"subspaces"
 								},
-								entries.len()
+								ctx.entry_count
 							);
 						}
 
 						println!();
+
+						Ok(())
 					}
+				});
+
+				match tokio::time::timeout(Duration::from_secs(5), fut).await {
+					Ok(Ok(())) => {}
 					Ok(Err(err)) => println!("txn error: {err:#}"),
 					Err(_) => println!("txn timed out"),
 				}
@@ -660,6 +630,281 @@ impl SubCommand {
 							Err(_) => println!("txn timed out"),
 						}
 					}
+					OneoffSubCommand::RepairEpoxyChangelog {
+						replica_id,
+						dry_run,
+					} => {
+						use std::sync::Arc;
+						use std::time::Instant;
+
+						use epoxy_protocol::{generated::v2 as proto_v2, protocol};
+						use futures_util::stream;
+						use tokio::sync::{Mutex, mpsc};
+
+						const EARLY_TXN_TIMEOUT: Duration = Duration::from_millis(2500);
+
+						let (tx_entries, rx_entries) =
+							mpsc::channel::<protocol::ChangelogEntry>(10_000);
+
+						// Writer task: re-applies v2 entries in txn-bounded batches.
+						// recv_many is called inside each txn iteration when the local buffer
+						// runs dry; entries not applied before EARLY_TXN_TIMEOUT carry
+						// forward into the next txn iteration via `pending`.
+						let pool_writer = pool.clone();
+						let rx_entries = Arc::new(Mutex::new(rx_entries));
+						let writer_task = tokio::spawn(async move {
+							let mut pending = Vec::<protocol::ChangelogEntry>::new();
+							let mut total_applied = 0;
+
+							loop {
+								let to_process = std::mem::take(&mut pending);
+
+								let (remaining, applied, closed) = pool_writer
+									.run(|tx| {
+										let rx = rx_entries.clone();
+										let mut buf = to_process.clone();
+										async move {
+											let start = Instant::now();
+											let mut applied = 0;
+											let mut closed = false;
+
+											loop {
+												if start.elapsed() > EARLY_TXN_TIMEOUT {
+													break;
+												}
+
+												if buf.is_empty() {
+													let n = rx
+														.lock()
+														.await
+														.recv_many(&mut buf, 512)
+														.await;
+													if n == 0 {
+														closed = true;
+														break;
+													}
+												}
+
+												let batch = std::mem::take(&mut buf);
+												let n = batch.len();
+												stream::iter(batch)
+													.map(|entry| {
+														let tx = tx.clone();
+														async move {
+															epoxy::replica::changelog::apply_entry(
+																&*tx, replica_id, entry, false,
+															)
+															.await
+														}
+													})
+													.buffer_unordered(512)
+													.try_collect::<Vec<_>>()
+													.await?;
+												applied += n;
+											}
+
+											Ok((buf, applied, closed))
+										}
+									})
+									.await?;
+
+								pending = remaining;
+								total_applied += applied;
+								if applied > 0 {
+									tracing::info!(
+										applied,
+										total_applied,
+										"applied changelog batch",
+									);
+								}
+
+								if closed && pending.is_empty() {
+									break;
+								}
+							}
+
+							anyhow::Ok(total_applied)
+						});
+
+						// Reader loop: scans the changelog in chunks and sends detected v2
+						// entries to the writer task.
+						let mut last_key: Option<Vec<u8>> = None;
+						let mut total_scanned = 0usize;
+						let mut total_v2 = 0usize;
+						let mut total_v3 = 0usize;
+
+						'reader: loop {
+							let last_key_for_chunk = last_key.clone();
+							let chunk_fut = pool.run(|tx| {
+								let last_key = last_key_for_chunk.clone();
+								let tx_entries = tx_entries.clone();
+								async move {
+									let start = Instant::now();
+									let replica_subspace = epoxy::keys::subspace(replica_id);
+									let changelog_subspace =
+										replica_subspace.subspace(&(CHANGELOG,));
+									let (range_start, range_end) = changelog_subspace.range();
+
+									let begin = if let Some(lk) = last_key {
+										KeySelector::first_greater_than(lk)
+									} else {
+										KeySelector::first_greater_or_equal(range_start)
+									};
+									let end = KeySelector::first_greater_or_equal(range_end);
+
+									let mut stream = tx.get_ranges_keyvalues(
+										RangeOption {
+											mode: StreamingMode::WantAll,
+											..(begin, end).into()
+										},
+										Snapshot,
+									);
+
+									let mut new_last_key: Option<Vec<u8>> = None;
+									let mut scanned = 0usize;
+									let mut v2_count = 0usize;
+									let mut v3_count = 0usize;
+									let mut timed_out = false;
+									let mut exhausted = false;
+
+									loop {
+										if start.elapsed() > EARLY_TXN_TIMEOUT {
+											timed_out = true;
+											break;
+										}
+
+										let Some(entry) = stream.try_next().await? else {
+											exhausted = true;
+											break;
+										};
+
+										new_last_key = Some(entry.key().to_vec());
+										scanned += 1;
+
+										// A v2 entry roundtrips byte-identically through the v2
+										// schema. v3 entries either fail to deserialize as v2 or
+										// re-serialize to different bytes, so they are ignored.
+										let v2_entry: proto_v2::ChangelogEntry =
+											match serde_bare::from_slice(entry.value()) {
+												Ok(v) => v,
+												Err(_) => {
+													v3_count += 1;
+													continue;
+												}
+											};
+										let reserialized = match serde_bare::to_vec(&v2_entry) {
+											Ok(b) => b,
+											Err(_) => {
+												v3_count += 1;
+												continue;
+											}
+										};
+										if reserialized != entry.value() {
+											v3_count += 1;
+											continue;
+										}
+										// A v3 `None` (deletion) encodes as [0x00], which the
+										// v2 deserializer reads as empty `data` and roundtrips
+										// identically. Reject empty-value entries: we cannot
+										// distinguish a real v2 empty-value write from a v3
+										// deletion, and applying either as `Some([])` would be
+										// wrong for the deletion case.
+										if v2_entry.value.is_empty() {
+											v3_count += 1;
+											continue;
+										}
+
+										v2_count += 1;
+										tracing::debug!(
+											replica_id,
+											version = v2_entry.version,
+											mutable = v2_entry.mutable,
+											"found v2 changelog entry",
+										);
+
+										if !dry_run {
+											let v3_entry = protocol::ChangelogEntry {
+												key: v2_entry.key,
+												value: Some(v2_entry.value),
+												version: v2_entry.version,
+												mutable: v2_entry.mutable,
+											};
+
+											tx_entries
+												.send(v3_entry)
+												.await
+												.context("writer task closed")?;
+										}
+									}
+
+									Ok((
+										new_last_key,
+										scanned,
+										v2_count,
+										v3_count,
+										timed_out,
+										exhausted,
+									))
+								}
+							});
+
+							let (new_last_key, scanned, v2_count, v3_count, timed_out, exhausted) =
+								match tokio::time::timeout(Duration::from_secs(5), chunk_fut).await
+								{
+									Ok(Ok(res)) => res,
+									Ok(Err(err)) => {
+										println!("chunk txn error: {err:#}");
+										break 'reader;
+									}
+									Err(_) => {
+										println!("chunk txn timed out");
+										break 'reader;
+									}
+								};
+
+							total_scanned += scanned;
+							total_v2 += v2_count;
+							total_v3 += v3_count;
+
+							tracing::info!(
+								scanned,
+								v2_count,
+								v3_count,
+								timed_out,
+								exhausted,
+								"processed changelog chunk",
+							);
+
+							if exhausted {
+								break;
+							}
+							if new_last_key.is_none() {
+								// Nothing scanned this chunk (early timeout before first
+								// entry); retry the same cursor.
+								continue;
+							}
+							last_key = new_last_key;
+						}
+
+						// Signal the writer that the reader is done and wait for it to flush.
+						drop(tx_entries);
+						let total_applied = match writer_task.await {
+							Ok(Ok(n)) => n,
+							Ok(Err(err)) => {
+								println!("writer task error: {err:#}");
+								0
+							}
+							Err(err) => {
+								println!("writer task panicked: {err}");
+								0
+							}
+						};
+
+						println!("scanned: {total_scanned}");
+						println!("v2 entries: {total_v2}");
+						println!("v3 entries (skipped): {total_v3}");
+						println!("applied: {total_applied}");
+					}
 				}
 			}
 		}
@@ -702,5 +947,115 @@ fn update_current_tuple(current_tuple: &mut SimpleTuple, key: Option<String>) ->
 
 			true
 		}
+	}
+}
+
+struct ListRenderContext {
+	entry_count: usize,
+	subspace_count: usize,
+	current_hidden_subspace: Option<SimpleTuple>,
+	hidden_count: usize,
+	last_key: SimpleTuple,
+}
+
+fn render_list_entry(
+	max_depth: usize,
+	hide_subspaces: bool,
+	list_style: ListStyle,
+	subspace: &universaldb::tuple::Subspace,
+	ctx: &mut ListRenderContext,
+	entry: universaldb::value::Value,
+) {
+	match subspace.unpack::<SimpleTuple>(entry.key()) {
+		Ok(key) => {
+			if key.segments.len() <= max_depth {
+				if entry.value().is_empty() {
+					key.print(&list_style, &ctx.last_key);
+					println!();
+				} else {
+					match SimpleTupleValue::deserialize(None, entry.value()) {
+						Ok(value) => {
+							let mut s = String::new();
+							value.write(&mut s, false).unwrap();
+
+							key.print(&list_style, &ctx.last_key);
+
+							let indent = match list_style {
+								ListStyle::List => "  ".to_string(),
+								ListStyle::Tree => {
+									format!("  {}", "| ".repeat(key.segments.len()))
+								}
+							};
+							println!(
+								" = {}",
+								indent_string(&s, style(indent).dim().to_string(), true)
+							);
+						}
+						Err(err) => {
+							key.print(&list_style, &ctx.last_key);
+							println!(" error: {err:#}");
+						}
+					}
+				}
+
+				ctx.last_key = key;
+
+				if let Some(curr) = &ctx.current_hidden_subspace {
+					curr.print(&list_style, &ctx.last_key);
+					println!(
+						"/ {}",
+						style(format!(
+							"{} {}",
+							ctx.hidden_count,
+							if ctx.hidden_count == 1 {
+								"entry"
+							} else {
+								"entries"
+							}
+						))
+						.dim()
+					);
+
+					ctx.last_key = curr.clone();
+					ctx.current_hidden_subspace = None;
+					ctx.hidden_count = 0;
+				}
+
+				ctx.entry_count += 1;
+			} else if !hide_subspaces {
+				let sliced = key.slice(max_depth);
+
+				if let Some(curr) = &ctx.current_hidden_subspace {
+					if &sliced == curr {
+						ctx.hidden_count += 1;
+					} else {
+						curr.print(&list_style, &ctx.last_key);
+						println!(
+							"/ {}",
+							style(format!(
+								"{} {}",
+								ctx.hidden_count,
+								if ctx.hidden_count == 1 {
+									"entry"
+								} else {
+									"entries"
+								}
+							))
+							.dim()
+						);
+
+						ctx.last_key = curr.clone();
+						ctx.current_hidden_subspace = Some(sliced);
+						ctx.hidden_count = 1;
+						ctx.subspace_count += 1;
+					}
+				} else {
+					ctx.current_hidden_subspace = Some(sliced);
+					ctx.hidden_count = 1;
+					ctx.subspace_count += 1;
+				}
+			}
+		}
+		Err(err) => println!("error parsing key: {err:#}"),
 	}
 }
