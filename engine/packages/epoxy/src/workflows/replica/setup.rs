@@ -158,7 +158,10 @@ async fn catch_up_replica(
 			.run(|tx| {
 				let entry = entry.clone();
 				async move {
-					crate::replica::changelog::apply_entry(&*tx, replica_id, entry, true).await
+					crate::replica::changelog::apply_entry(
+						&*tx, replica_id, entry, true, false, false,
+					)
+					.await
 				}
 			})
 			.custom_instrument(tracing::info_span!("apply_changelog_entry_tx"))

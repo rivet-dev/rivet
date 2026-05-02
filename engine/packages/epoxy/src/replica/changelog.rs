@@ -90,6 +90,8 @@ pub async fn apply_entry(
 	replica_id: protocol::ReplicaId,
 	entry: protocol::ChangelogEntry,
 	append_new_entry: bool,
+	ignore_version: bool,
+	ignore_immutable: bool,
 ) -> Result<()> {
 	let tx = tx.with_subspace(keys::subspace(replica_id));
 	let value_key = KvValueKey::new(entry.key.clone());
@@ -99,18 +101,20 @@ pub async fn apply_entry(
 	let cache_key = KvOptimisticCacheKey::new(entry.key.clone());
 
 	if let Some(existing_value) = tx.read_opt(&value_key, Serializable).await? {
-		if !existing_value.mutable && existing_value.value == entry.value {
+		if !ignore_immutable && !existing_value.mutable && existing_value.value == entry.value {
 			return Ok(());
 		}
 
 		if !existing_value.mutable && existing_value.value != entry.value {
 			tracing::warn!(
 				key = hex::encode(value_key.key()),
+				existing_version = existing_value.version,
+				entry_version = entry.version,
 				"changelog catch-up saw conflicting committed value for immutable key",
 			);
 		}
 
-		if entry.version <= existing_value.version {
+		if !ignore_version && entry.version <= existing_value.version {
 			return Ok(());
 		}
 	}
