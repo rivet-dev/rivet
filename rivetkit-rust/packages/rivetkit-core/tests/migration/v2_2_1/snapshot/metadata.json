@@ -1,0 +1,11 @@
+{
+	"commit": "d639bb940",
+	"branch": "05-01-fix_rivetkit_fix_v1_-_v2_kv_schemas",
+	"generated_at": "1777701920",
+	"method": "published-rivetkit-npm",
+	"rivetkit_version": "2.2.1",
+	"engine_binary": "/tmp/rivet-v221-engine-target/debug/rivet-engine",
+	"engine_version": "Rivet 2.2.1\nGit SHA: 3beb449f604a717efaa2c92492feda3d5059ef5b\nBuild Timestamp: 2026-05-02T06:03:02.030516737Z\nRustc Version: 1.94.0\nRustc Host: x86_64-unknown-linux-gnu\nCargo Target: x86_64-unknown-linux-gnu\nCargo Profile: debug",
+	"engine_label": "v2.2.1",
+	"fixture": "tests/migration/v2_2_1/scripts/baseline.ts"
+}

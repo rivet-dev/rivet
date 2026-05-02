@@ -44,4 +44,10 @@ uuid.workspace = true
 vbare.workspace = true
 
 [dev-dependencies]
+portpicker.workspace = true
+tempfile.workspace = true
 tracing-subscriber.workspace = true
+
+[[test]]
+name = "integration"
+path = "tests/integration.rs"
