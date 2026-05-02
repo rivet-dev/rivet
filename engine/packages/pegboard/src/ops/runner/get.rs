@@ -123,7 +123,7 @@ pub(crate) async fn get_inner(
 		Some(metadata_key.combine(metadata_chunks)?.metadata)
 	};
 
-	std::result::Result::Ok(Some(Runner {
+	Ok(Some(Runner {
 		runner_id,
 		namespace_id,
 		datacenter: dc_name.to_string(),

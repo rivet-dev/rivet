@@ -181,7 +181,10 @@ impl CustomServeTrait for PegboardEnvoyWs {
 				res
 			},
 			async {
-				let res = ws_to_tunnel.await?;
+				let res = match ws_to_tunnel.await {
+					Err(err) if err.is_cancelled() => Ok(LifecycleResult::Aborted),
+					res => res?,
+				};
 
 				// Abort others if not aborted
 				if !matches!(res, Ok(LifecycleResult::Aborted)) {
@@ -210,7 +213,7 @@ impl CustomServeTrait for PegboardEnvoyWs {
 
 				// Any error of the ping task must result in a hard abort of ws_to_tunnel. This stops all in
 				// flight kv requests from being completed immediately. This guarantees the invariant that an
-				// actor's KV is only being from one place at a time.
+				// actor's KV is only being accessed from one place at a time.
 				if res.is_err() {
 					tracing::warn!(?res, "ping task failed, aborting ws_to_tunnel");
 					hard_abort_ws_to_tunnel.abort();
