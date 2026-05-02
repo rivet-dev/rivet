@@ -2220,7 +2220,7 @@ impl Database for DatabaseKv {
 		Ok(())
 	}
 
-	#[tracing::instrument(skip_all)]
+	#[tracing::instrument(skip_all, fields(?workflow_id, %location))]
 	async fn pull_next_signals(
 		&self,
 		workflow_id: Id,

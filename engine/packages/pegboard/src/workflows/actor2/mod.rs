@@ -207,7 +207,7 @@ pub async fn pegboard_actor2(ctx: &mut WorkflowCtx, input: &Input) -> Result<()>
 	runtime::reschedule_actor(ctx, input, &mut lifecycle_state, metrics_workflow_id).await?;
 
 	ctx.lupe()
-		.commit_interval(5)
+		.commit_interval(10)
 		.with_state(lifecycle_state)
 		.run(|ctx, state| {
 			let input = input.clone();

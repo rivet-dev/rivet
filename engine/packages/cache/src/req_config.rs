@@ -1,4 +1,8 @@
-use std::{fmt::Debug, future::Future, time::Duration};
+use std::{
+	fmt::{Debug, Display},
+	future::Future,
+	time::Duration,
+};
 
 use anyhow::Result;
 use futures_util::StreamExt;
@@ -47,10 +51,10 @@ impl RequestConfig {
 
 // MARK: Fetch
 impl RequestConfig {
-	#[tracing::instrument(err, skip_all, fields(?base_key))]
+	#[tracing::instrument(err, skip_all, fields(%base_key))]
 	async fn fetch_all_convert<Key, Value, Getter, Fut, Encoder, Decoder>(
 		self,
-		base_key: impl ToString + Debug,
+		base_key: impl Display + Debug,
 		keys: impl IntoIterator<Item = Key>,
 		getter: Getter,
 		encoder: Encoder,
@@ -329,10 +333,10 @@ impl RequestConfig {
 		}
 	}
 
-	#[tracing::instrument(err, skip_all, fields(?base_key))]
+	#[tracing::instrument(err, skip_all, fields(%base_key))]
 	pub async fn purge<Key>(
 		self,
-		base_key: impl AsRef<str> + Debug,
+		base_key: impl Display + Debug,
 		keys: impl IntoIterator<Item = Key>,
 	) -> Result<()>
 	where
@@ -344,10 +348,10 @@ impl RequestConfig {
 		};
 
 		// Build keys
-		let base_key = base_key.as_ref();
+		let base_key = base_key.to_string();
 		let cache_keys = keys
 			.into_iter()
-			.map(|key| driver.process_key(base_key, &key))
+			.map(|key| driver.process_key(&base_key, &key))
 			.collect::<Vec<_>>();
 
 		if cache_keys.is_empty() {
@@ -357,7 +361,7 @@ impl RequestConfig {
 		// Publish cache purge message to all services via UPS
 		if let Some(ups) = &self.cache.ups {
 			let message = CachePurgeMessage {
-				base_key: base_key.to_string(),
+				base_key: base_key.clone(),
 				keys: cache_keys.clone(),
 			};
 
@@ -382,15 +386,15 @@ impl RequestConfig {
 		}
 
 		// Delete keys locally
-		self.purge_local(base_key, cache_keys).await
+		self.purge_local(&base_key, cache_keys).await
 	}
 
 	/// Purges keys from the local cache without publishing to NATS.
 	/// This is used by the cache-purge service to avoid recursive publishing.
-	#[tracing::instrument(err, skip_all, fields(?base_key))]
+	#[tracing::instrument(err, skip_all, fields(%base_key))]
 	pub async fn purge_local(
 		self,
-		base_key: impl AsRef<str> + Debug,
+		base_key: impl Display + Debug,
 		keys: Vec<RawCacheKey>,
 	) -> Result<()> {
 		// Cache disabled
@@ -398,21 +402,21 @@ impl RequestConfig {
 			return Ok(());
 		};
 
-		let base_key = base_key.as_ref();
+		let base_key = base_key.to_string();
 
 		if keys.is_empty() {
 			return Ok(());
 		}
 
 		metrics::CACHE_PURGE_REQUEST_TOTAL
-			.with_label_values(&[base_key])
+			.with_label_values(&[&base_key])
 			.inc();
 		metrics::CACHE_PURGE_VALUE_TOTAL
-			.with_label_values(&[base_key])
+			.with_label_values(&[&base_key])
 			.inc_by(keys.len() as u64);
 
 		// Delete keys locally
-		match driver.delete(base_key, keys).await {
+		match driver.delete(&base_key, keys).await {
 			Ok(_) => {
 				tracing::trace!("successfully deleted keys");
 			}
@@ -429,7 +433,7 @@ impl RequestConfig {
 impl RequestConfig {
 	pub async fn fetch_one_json<Key, Value, Getter, Fut>(
 		self,
-		base_key: impl ToString + Debug,
+		base_key: impl Display + Debug,
 		key: Key,
 		getter: Getter,
 	) -> Result<Option<Value>>
@@ -458,7 +462,7 @@ impl RequestConfig {
 
 	pub async fn fetch_all_json<Key, Value, Getter, Fut>(
 		self,
-		base_key: impl ToString + Debug,
+		base_key: impl Display + Debug,
 		keys: impl IntoIterator<Item = Key>,
 		getter: Getter,
 	) -> Result<Vec<Value>>
@@ -476,7 +480,7 @@ impl RequestConfig {
 
 	pub async fn fetch_all_json_with_keys<Key, Value, Getter, Fut>(
 		self,
-		base_key: impl ToString + Debug,
+		base_key: impl Display + Debug,
 		keys: impl IntoIterator<Item = Key>,
 		getter: Getter,
 	) -> Result<Vec<(Key, Value)>>
