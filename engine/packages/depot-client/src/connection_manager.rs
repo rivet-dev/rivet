@@ -100,6 +100,12 @@ pub struct NativeWriteConnectionLease {
 	newly_opened: bool,
 }
 
+enum ReadAcquireAction {
+	Wait,
+	Open(NativeVfsHandle),
+	UseIdle(NativeConnection),
+}
+
 impl NativeConnectionManager {
 	pub fn new(
 		vfs: NativeVfsHandle,
@@ -156,50 +162,65 @@ impl NativeConnectionManager {
 		let wait_started_at = Instant::now();
 		loop {
 			let notified = self.inner.changed.notified();
-			let open_result = {
+			let (action, expired_read_connections) = {
 				let mut state = self.inner.state.lock().await;
-				let closed_readers = state.prune_expired_readers(self.inner.config.idle_ttl);
-				self.record_reader_closes(closed_readers);
-				self.record_reader_gauges(&state);
 				if state.vfs.is_none() {
 					return Err(anyhow!("sqlite connection manager is closed"));
 				}
 				if matches!(state.mode, NativeConnectionManagerMode::Closing) {
 					return Err(anyhow!("sqlite connection manager is closing"));
 				}
+				let expired_read_connections: Vec<NativeConnection> = state
+					.prune_expired_readers(self.inner.config.idle_ttl)
+					.into_iter()
+					.map(|reader| reader.connection)
+					.collect();
+				self.record_reader_closes(expired_read_connections.len());
+				self.record_reader_gauges(&state);
 				if state.pending_writers > 0
 					|| matches!(state.mode, NativeConnectionManagerMode::WriteMode)
 					|| state.active_writer
 				{
-					None
+					(ReadAcquireAction::Wait, expired_read_connections)
 				} else if let Some(connection) = state.idle_readers.pop() {
 					state.active_readers += 1;
 					self.record_mode_transition(state.refresh_mode());
 					self.record_reader_gauges(&state);
 					self.observe_read_wait(wait_started_at.elapsed());
-					return Ok(NativeReadConnectionLease {
-						manager: self.clone(),
-						connection: Some(connection.connection),
-						newly_opened: false,
-					});
+					(
+						ReadAcquireAction::UseIdle(connection.connection),
+						expired_read_connections,
+					)
 				} else if state.open_readers < self.inner.config.max_readers {
 					state.active_readers += 1;
 					state.open_readers += 1;
 					self.record_mode_transition(state.set_mode(NativeConnectionManagerMode::ReadMode));
 					self.record_reader_gauges(&state);
-					Some(
-						state
-							.vfs
-							.as_ref()
-							.expect("vfs checked above")
-							.clone(),
+					(
+						ReadAcquireAction::Open(
+							state
+								.vfs
+								.as_ref()
+								.expect("vfs checked above")
+								.clone(),
+						),
+						expired_read_connections,
 					)
 				} else {
-					None
+					(ReadAcquireAction::Wait, expired_read_connections)
 				}
 			};
+			drop_native_connections_blocking(expired_read_connections).await;
 
-			if let Some(vfs) = open_result {
+			if let ReadAcquireAction::UseIdle(connection) = action {
+				return Ok(NativeReadConnectionLease {
+					manager: self.clone(),
+					connection: Some(connection),
+					newly_opened: false,
+				});
+			}
+
+			if let ReadAcquireAction::Open(vfs) = action {
 				let file_name = self.inner.file_name.clone();
 				match tokio::task::spawn_blocking(move || {
 					open_connection(vfs, &file_name, SQLITE_OPEN_READONLY)
@@ -283,9 +304,13 @@ impl NativeConnectionManager {
 			};
 
 			if let Some((vfs, idle_readers)) = open_result {
-				drop(idle_readers);
+				let idle_read_connections = idle_readers
+					.into_iter()
+					.map(|reader| reader.connection)
+					.collect::<Vec<_>>();
 				let file_name = self.inner.file_name.clone();
 				match tokio::task::spawn_blocking(move || {
+					drop(idle_read_connections);
 					open_connection(
 						vfs,
 						&file_name,
@@ -391,7 +416,7 @@ impl NativeConnectionManager {
 	}
 
 	pub async fn close(&self) -> Result<()> {
-		let idle_readers = {
+		let idle_connections = {
 			let mut state = self.inner.state.lock().await;
 			if state.vfs.is_none() {
 				return Ok(());
@@ -399,12 +424,17 @@ impl NativeConnectionManager {
 			state.mode = NativeConnectionManagerMode::Closing;
 			state.open_readers = state.open_readers.saturating_sub(state.idle_readers.len());
 			self.inner.changed.notify_waiters();
-			state.idle_writer.take();
+			let idle_writer = state.idle_writer.take();
 			self.record_reader_closes(state.idle_readers.len());
 			self.record_reader_gauges(&state);
-			std::mem::take(&mut state.idle_readers)
+			let mut connections = std::mem::take(&mut state.idle_readers)
+				.into_iter()
+				.map(|reader| reader.connection)
+				.collect::<Vec<_>>();
+			connections.extend(idle_writer);
+			connections
 		};
-		drop(idle_readers);
+		drop_native_connections_blocking(idle_connections).await;
 
 		loop {
 			let notified = self.inner.changed.notified();
@@ -419,7 +449,7 @@ impl NativeConnectionManager {
 			};
 
 			if let Some(vfs) = vfs {
-				drop(vfs);
+				drop_vfs_blocking(vfs).await;
 				self.inner.changed.notify_waiters();
 				return Ok(());
 			}
@@ -537,7 +567,7 @@ impl NativeReadConnectionLease {
 		if idle_connection.is_some() {
 			self.manager.record_reader_closes(1);
 		}
-		drop(idle_connection);
+		drop_native_connections_blocking(idle_connection.into_iter().collect()).await;
 		self.manager.inner.changed.notify_waiters();
 	}
 }
@@ -599,7 +629,7 @@ impl NativeWriteConnectionLease {
 				connection
 			}
 		};
-		drop(close_connection);
+		drop_native_connections_blocking(close_connection.into_iter().collect()).await;
 		self.manager.inner.changed.notify_waiters();
 	}
 }
@@ -649,17 +679,39 @@ impl NativeConnectionManagerState {
 		}
 	}
 
-	fn prune_expired_readers(&mut self, idle_ttl: Duration) -> usize {
+	fn prune_expired_readers(&mut self, idle_ttl: Duration) -> Vec<IdleReadConnection> {
 		let now = Instant::now();
-		let before = self.idle_readers.len();
-		self.idle_readers
-			.retain(|reader| now.duration_since(reader.idle_since) < idle_ttl);
-		let closed = before - self.idle_readers.len();
+		let mut expired = Vec::new();
+		let mut retained = Vec::with_capacity(self.idle_readers.len());
+		for reader in self.idle_readers.drain(..) {
+			if now.duration_since(reader.idle_since) < idle_ttl {
+				retained.push(reader);
+			} else {
+				expired.push(reader);
+			}
+		}
+		self.idle_readers = retained;
+		let closed = expired.len();
 		self.open_readers = self.open_readers.saturating_sub(closed);
 		if closed > 0 {
 			self.refresh_mode();
 		}
-		closed
+		expired
+	}
+}
+
+async fn drop_native_connections_blocking(connections: Vec<NativeConnection>) {
+	if connections.is_empty() {
+		return;
+	}
+	if let Err(err) = tokio::task::spawn_blocking(move || drop(connections)).await {
+		tracing::warn!(?err, "failed to join sqlite connection close task");
+	}
+}
+
+async fn drop_vfs_blocking(vfs: NativeVfsHandle) {
+	if let Err(err) = tokio::task::spawn_blocking(move || drop(vfs)).await {
+		tracing::warn!(?err, "failed to join sqlite vfs close task");
 	}
 }
 
