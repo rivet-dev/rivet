@@ -1,6 +1,7 @@
 use super::super::common;
 
 use futures_util::StreamExt;
+use rivet_envoy_protocol as protocol;
 use tokio_tungstenite::{
 	connect_async,
 	tungstenite::{
@@ -27,15 +28,25 @@ fn envoy_connect_rejects_bad_token() {
 			.with_auth_admin_token("good-token")
 			.with_timeout(20),
 		|ctx| async move {
+			let namespace = format!("test-{}", rand::random::<u16>());
+			common::api::peer::namespaces_create(
+				ctx.leader_dc().api_peer_port(),
+				rivet_api_peer::namespaces::CreateRequest {
+					name: namespace.clone(),
+					display_name: "Test Namespace".to_string(),
+				},
+			)
+			.await
+			.expect("failed to create namespace");
 			let mut request =
-				envoy_connect_url(ctx.leader_dc().guard_port(), "auth-namespace", "bad-token-envoy")
+				envoy_connect_url(ctx.leader_dc().guard_port(), &namespace, "bad-token-envoy")
 					.into_client_request()
 					.expect("failed to create envoy connect request");
 			request
 				.headers_mut()
 				.insert("Sec-WebSocket-Protocol", "rivet, rivet_token.bad-token".parse().unwrap());
 
-			assert_envoy_rejection(request, "forbidden").await;
+			assert_envoy_rejection(request, "token_not_found").await;
 		},
 	);
 }
@@ -71,6 +82,54 @@ fn envoy_connect_rejects_invalid_envoy_key() {
 
 		assert_envoy_rejection(request, "invalid_url").await;
 	});
+}
+
+#[test]
+fn envoy_connect_rejects_protocol_version_1() {
+	common::run(
+		common::TestOpts::new(1).with_timeout(20),
+		|ctx| async move {
+			let (namespace, _) = common::setup_test_namespace(ctx.leader_dc()).await;
+			let url = format!(
+				"ws://127.0.0.1:{}/envoys/connect?protocol_version=1&namespace={}&envoy_key=v1-protocol-envoy&version=1&pool_name=test-envoy",
+				ctx.leader_dc().guard_port(),
+				namespace,
+			);
+			let mut request = url
+				.into_client_request()
+				.expect("failed to create envoy connect request");
+			request
+				.headers_mut()
+				.insert("Sec-WebSocket-Protocol", "rivet".parse().unwrap());
+
+			assert_envoy_rejection(request, "invalid_request").await;
+		},
+	);
+}
+
+#[test]
+fn envoy_connect_rejects_unsupported_protocol_version() {
+	common::run(
+		common::TestOpts::new(1).with_timeout(20),
+		|ctx| async move {
+			let (namespace, _) = common::setup_test_namespace(ctx.leader_dc()).await;
+			let unsupported_protocol_version = protocol::PROTOCOL_VERSION + 1;
+			let url = format!(
+				"ws://127.0.0.1:{}/envoys/connect?protocol_version={}&namespace={}&envoy_key=unsupported-protocol-envoy&version=1&pool_name=test-envoy",
+				ctx.leader_dc().guard_port(),
+				unsupported_protocol_version,
+				namespace,
+			);
+			let mut request = url
+				.into_client_request()
+				.expect("failed to create envoy connect request");
+			request
+				.headers_mut()
+				.insert("Sec-WebSocket-Protocol", "rivet".parse().unwrap());
+
+			assert_envoy_rejection(request, "invalid_request").await;
+		},
+	);
 }
 
 async fn assert_envoy_rejection(
