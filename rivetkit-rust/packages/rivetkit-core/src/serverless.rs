@@ -6,7 +6,7 @@ use std::time::Duration;
 use anyhow::{Context, Result};
 use http::StatusCode;
 use reqwest::Url;
-use rivet_envoy_client::config::EnvoyConfig;
+use rivet_envoy_client::config::{ActorName as EnvoyActorName, EnvoyConfig};
 use rivet_envoy_client::envoy::start_envoy;
 use rivet_envoy_client::handle::EnvoyHandle;
 use rivet_envoy_client::protocol;
@@ -306,48 +306,13 @@ impl CoreServerlessRuntime {
 	fn metadata_response(&self) -> ServerlessResponse {
 		let actor_names = self
 			.dispatcher
-			.factories
-			.iter()
-			.map(|(actor_name, factory): (&String, &Arc<ActorFactory>)| {
-				let config = factory.config();
-				let mut metadata = serde_json::Map::new();
-				if let Some(icon) = &config.icon {
-					metadata.insert("icon".to_owned(), json!(icon));
-				}
-				if let Some(name) = &config.name {
-					metadata.insert("name".to_owned(), json!(name));
-				}
-				metadata.insert(
-					"preload".to_owned(),
-					json!({
-						"keys": [
-							[1],
-							[3],
-							[5, 1, 1],
-						],
-						"prefixes": [
-							{
-								"prefix": [6, 1],
-								"maxBytes": config.preload_max_workflow_bytes.unwrap_or(131_072),
-								"partial": false,
-							},
-							{
-								"prefix": [2],
-								"maxBytes": config.preload_max_connections_bytes.unwrap_or(65_536),
-								"partial": false,
-							},
-							{
-								"prefix": [5, 1, 2],
-								"maxBytes": 65_536,
-								"partial": false,
-							},
-						],
-					}),
-				);
+			.build_actor_metadata_map()
+			.into_iter()
+			.map(|(name, metadata)| {
 				(
-					actor_name.clone(),
+					name,
 					ActorName {
-						metadata: Some(serde_json::Value::Object(metadata)),
+						metadata: Some(metadata),
 					},
 				)
 			})
@@ -440,19 +405,23 @@ impl CoreServerlessRuntime {
 		let callbacks = Arc::new(RegistryCallbacks {
 			dispatcher: self.dispatcher.clone(),
 		});
-		// not_global: true to avoid caching the handle in the process-wide
-		// `GLOBAL_ENVOY` OnceLock. Without this, a shutdown-during-build race
-		// (spec §3 step 7) leaves a dead handle cached for the life of the
-		// process and any subsequent consumer gets it back.
+		let prepopulate_actor_names = self
+			.dispatcher
+			.build_actor_metadata_map()
+			.into_iter()
+			.map(|(name, metadata)| (name, EnvoyActorName { metadata }))
+			.collect();
 		let handle = start_envoy(EnvoyConfig {
 			version: self.settings.version,
 			endpoint: headers.endpoint.clone(),
 			token: Some(headers.token.clone()),
 			namespace: headers.namespace.clone(),
 			pool_name: headers.pool_name.clone(),
-			prepopulate_actor_names: HashMap::new(),
-			metadata: None,
-			not_global: true,
+			prepopulate_actor_names,
+			metadata: Some(json!({
+				"rivetkit": { "version": self.settings.package_version },
+			})),
+			not_global: false,
 			debug_latency_ms: None,
 			callbacks,
 		})

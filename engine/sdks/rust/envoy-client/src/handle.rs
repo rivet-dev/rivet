@@ -36,6 +36,12 @@ impl EnvoyHandle {
 		}
 	}
 
+	/// True once the envoy loop has finished its cleanup block. Latched: stays
+	/// true forever after the loop exits.
+	pub fn is_stopped(&self) -> bool {
+		*self.shared.stopped_tx.borrow()
+	}
+
 	/// Resolves when the envoy loop has finished its cleanup block.
 	///
 	/// Returning does NOT imply successful delivery of pending KV/SQLite/tunnel

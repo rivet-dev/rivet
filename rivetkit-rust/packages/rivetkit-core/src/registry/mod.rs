@@ -438,14 +438,26 @@ impl CoreRegistry {
 			dispatcher: dispatcher.clone(),
 		});
 
+		let prepopulate_actor_names = dispatcher
+			.build_actor_metadata_map()
+			.into_iter()
+			.map(|(name, metadata)| {
+				(
+					name,
+					rivet_envoy_client::config::ActorName { metadata },
+				)
+			})
+			.collect();
 		let handle = start_envoy(rivet_envoy_client::config::EnvoyConfig {
 			version: config.version,
 			endpoint: config.endpoint,
 			token: config.token,
 			namespace: config.namespace,
 			pool_name: config.pool_name,
-			prepopulate_actor_names: HashMap::new(),
-			metadata: None,
+			prepopulate_actor_names,
+			metadata: Some(json!({
+				"rivetkit": { "version": config.serverless_package_version },
+			})),
 			not_global: false,
 			debug_latency_ms: None,
 			callbacks,
@@ -505,6 +517,50 @@ impl RegistryDispatcher {
 				.filter(|token| !token.is_empty()),
 			handle_inspector_http_in_runtime,
 		}
+	}
+
+	pub(crate) fn build_actor_metadata_map(&self) -> HashMap<String, JsonValue> {
+		self.factories
+			.iter()
+			.map(|(actor_name, factory)| {
+				let config = factory.config();
+				let mut metadata = serde_json::Map::new();
+				if let Some(icon) = &config.icon {
+					metadata.insert("icon".to_owned(), json!(icon));
+				}
+				if let Some(name) = &config.name {
+					metadata.insert("name".to_owned(), json!(name));
+				}
+				metadata.insert(
+					"preload".to_owned(),
+					json!({
+						"keys": [
+							[1],
+							[3],
+							[5, 1, 1],
+						],
+						"prefixes": [
+							{
+								"prefix": [6, 1],
+								"maxBytes": config.preload_max_workflow_bytes.unwrap_or(131_072),
+								"partial": false,
+							},
+							{
+								"prefix": [2],
+								"maxBytes": config.preload_max_connections_bytes.unwrap_or(65_536),
+								"partial": false,
+							},
+							{
+								"prefix": [5, 1, 2],
+								"maxBytes": 65_536,
+								"partial": false,
+							},
+						],
+					}),
+				);
+				(actor_name.clone(), JsonValue::Object(metadata))
+			})
+			.collect()
 	}
 }
 

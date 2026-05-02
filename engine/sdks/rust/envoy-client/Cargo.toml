@@ -8,6 +8,7 @@ edition.workspace = true
 [dependencies]
 anyhow.workspace = true
 futures-util.workspace = true
+parking_lot.workspace = true
 hex.workspace = true
 rand.workspace = true
 rivet-envoy-protocol.workspace = true

@@ -4608,6 +4608,7 @@ dependencies = [
  "anyhow",
  "futures-util",
  "hex",
+ "parking_lot",
  "rand 0.8.5",
  "rivet-envoy-protocol",
  "rivet-util",

@@ -3,6 +3,8 @@ use std::sync::Arc;
 use std::sync::OnceLock;
 use std::sync::atomic::Ordering;
 
+use parking_lot::Mutex;
+
 use rivet_envoy_protocol as protocol;
 use rivet_util::async_counter::AsyncCounter;
 use tokio::sync::mpsc;
@@ -30,7 +32,10 @@ use crate::tunnel::{
 };
 use crate::utils::{BufferMap, EnvoyShutdownError};
 
-static GLOBAL_ENVOY: OnceLock<EnvoyHandle> = OnceLock::new();
+/// Process-wide envoy slot. Holds the handle inside a mutex so a stopped
+/// handle (e.g. from a shutdown-during-build race in serverless mode) can be
+/// replaced on the next `start_envoy_sync` call.
+static GLOBAL_ENVOY: OnceLock<Mutex<Option<EnvoyHandle>>> = OnceLock::new();
 
 pub struct EnvoyContext {
 	pub shared: Arc<SharedContext>,
@@ -246,12 +251,19 @@ pub async fn start_envoy(config: EnvoyConfig) -> EnvoyHandle {
 
 pub fn start_envoy_sync(config: EnvoyConfig) -> EnvoyHandle {
 	if config.not_global {
-		start_envoy_sync_inner(config)
-	} else {
-		GLOBAL_ENVOY
-			.get_or_init(|| start_envoy_sync_inner(config))
-			.clone()
+		return start_envoy_sync_inner(config);
 	}
+
+	let slot = GLOBAL_ENVOY.get_or_init(|| Mutex::new(None));
+	let mut guard = slot.lock();
+	if let Some(handle) = guard.as_ref() {
+		if !handle.is_stopped() {
+			return handle.clone();
+		}
+	}
+	let handle = start_envoy_sync_inner(config);
+	*guard = Some(handle.clone());
+	handle
 }
 
 fn start_envoy_sync_inner(config: EnvoyConfig) -> EnvoyHandle {
