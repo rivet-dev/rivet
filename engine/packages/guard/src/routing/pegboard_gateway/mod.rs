@@ -40,6 +40,25 @@ pub async fn route_request_path_based(
 	shared_state: &SharedState,
 	req_ctx: &mut RequestContext,
 ) -> Result<Option<RoutingOutput>> {
+	let res = route_request_path_based_inner(ctx, shared_state, req_ctx).await;
+
+	match &res {
+		Ok(Some(_)) | Err(_) => {
+			// Attach CORS headers to the actual (non-OPTIONS) response so both the
+			// actor response and any early error are readable by the browser.
+			set_non_preflight_cors(req_ctx);
+		}
+		_ => {}
+	}
+
+	res
+}
+
+pub async fn route_request_path_based_inner(
+	ctx: &StandaloneCtx,
+	shared_state: &SharedState,
+	req_ctx: &mut RequestContext,
+) -> Result<Option<RoutingOutput>> {
 	let Some(actor_path) = parse_actor_path(req_ctx.path())? else {
 		return Ok(None);
 	};
@@ -118,6 +137,10 @@ pub async fn route_request(
 	if req_ctx.method() == hyper::Method::OPTIONS {
 		return Ok(Some(RoutingOutput::CustomServe(Arc::new(CorsPreflight))));
 	}
+
+	// Attach CORS headers to the actual (non-OPTIONS) response so both the
+	// actor response and any early error are readable by the browser.
+	set_non_preflight_cors(req_ctx);
 
 	// Extract actor ID and token from WebSocket protocol or HTTP headers
 	let (actor_id_str, token, bypass_connectable) = if req_ctx.is_websocket() {
@@ -213,11 +236,6 @@ async fn route_request_inner(
 	_token: Option<&str>,
 	bypass_connectable: bool,
 ) -> Result<RoutingOutput> {
-	// Attach CORS headers to the actual (non-OPTIONS) response so both the
-	// actor response and any early error (e.g. EE auth failure) are readable
-	// by the browser.
-	set_non_preflight_cors(req_ctx);
-
 	// NOTE: Token validation implemented in EE
 
 	// Route to peer dc where the actor lives

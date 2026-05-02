@@ -33,6 +33,4 @@ pub enum WsError {
 		"Invalid packet: {0}"
 	)]
 	InvalidPacket(String),
-	#[error("invalid_url", "The connection URL is invalid.", "Invalid url: {0}")]
-	InvalidUrl(String),
 }
