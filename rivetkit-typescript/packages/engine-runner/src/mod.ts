@@ -560,9 +560,18 @@ export class Runner {
 		this.#kvRequests.clear();
 
 		// Close WebSocket
-		const pegboardWebSocket = this.getPegboardWebSocketIfReady();
-		if (pegboardWebSocket) {
-			if (immediate) {
+		//
+		// A CONNECTING socket cannot send graceful stopping messages, so
+		// it is always closed directly. Without this, a shutdown that
+		// races with a reconnect leaves the in-flight WebSocket alive
+		// while the rest of the runner state (tunnel, intervals) has been
+		// torn down.
+		const pegboardWebSocket = this.#pegboardWebSocket;
+		const readyState = pegboardWebSocket?.readyState;
+		const isOpen = readyState === 1;
+		const isConnecting = readyState === 0;
+		if (pegboardWebSocket && (isOpen || isConnecting)) {
+			if (immediate || isConnecting) {
 				// Stop immediately
 				pegboardWebSocket.close(1000, "pegboard.runner_shutdown");
 			} else {
@@ -873,6 +882,10 @@ export class Runner {
 
 				if (this.runnerId !== init.runnerId) {
 					this.runnerId = init.runnerId;
+
+					// Invalidate cached child logger so subsequent log
+					// lines pick up the new runnerId.
+					this.#logCached = undefined;
 
 					// Clear actors if runner id changed
 					this.#stopAllActors();
