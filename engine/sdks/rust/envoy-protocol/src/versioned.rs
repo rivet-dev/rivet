@@ -513,7 +513,6 @@ mod tests {
 				sqlite_startup_data: Some(v2::SqliteStartupData {
 					generation: 11,
 					meta: v2::SqliteMeta {
-						schema_version: 2,
 						generation: 11,
 						head_txid: 5,
 						materialized_txid: 5,
