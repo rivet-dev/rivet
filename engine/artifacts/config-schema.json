@@ -389,6 +389,23 @@
     "Guard": {
       "type": "object",
       "properties": {
+        "actor_force_wake_pending_timeout_ms": {
+          "description": "Timeout sent with actor force-wake requests in milliseconds.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int64"
+        },
+        "actor_ready_timeout_ms": {
+          "description": "Timeout for waiting for an actor to become ready in milliseconds.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
         "enable_websocket_health_route": {
           "description": "Enables the internal websocket health route for debug and latency testing. This is intended for websocket ping/pong verification and should remain disabled in normal deployments.",
           "type": [
@@ -431,6 +448,24 @@
             "null"
           ],
           "format": "uint16",
+          "minimum": 0.0
+        },
+        "route_cache_ttl_ms": {
+          "description": "TTL for cached route lookups in milliseconds.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "route_timeout_ms": {
+          "description": "Timeout for route resolution in milliseconds.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
           "minimum": 0.0
         },
         "tcp_nodelay": {

@@ -54,6 +54,11 @@ interface Args {
 	postChurnWaitMs: number;
 	postCleanupWaitMs: number;
 	requestLifespanSeconds: number;
+	engineRouteTimeoutSeconds: number;
+	engineActorReadyTimeoutSeconds: number;
+	engineActorLifecycleTimeoutMs: number;
+	engineEnvoyPingTimeoutMs: number;
+	engineEnvoyLostThresholdMs: number;
 	serverlessMaxStartPayloadBytes: number;
 	outputDir: string;
 	metricsToken: string;
@@ -146,6 +151,16 @@ Options:
   --post-cleanup-wait-ms <n>   Final sample window after cleanup. Default: 5000.
   --request-lifespan-seconds <n>
                                Serverless request lifespan. Default: scheduled work plus startup and slow-tail margin.
+  --engine-route-timeout-seconds <n>
+                               Local engine route-resolution timeout. Default: 300.
+  --engine-actor-ready-timeout-seconds <n>
+                               Local engine actor-ready timeout. Default: 300.
+  --engine-actor-lifecycle-timeout-ms <n>
+                               Local engine actor allocation/start/stop timeout. Default: 300000.
+  --engine-envoy-ping-timeout-ms <n>
+                               Local engine envoy ping timeout. Default: 300000.
+  --engine-envoy-lost-threshold-ms <n>
+                               Local engine envoy lost threshold. Default: 300000.
   --serverless-max-start-payload-bytes <n>
                                Local /api/rivet/start body limit. Default: 8388608.
   --output-dir <path>          Output directory. Default: ${DEFAULT_OUTPUT_DIR}.
@@ -348,6 +363,36 @@ function parseArgs(argv: string[]): Args {
 			5000,
 		),
 		requestLifespanSeconds: 0,
+		engineRouteTimeoutSeconds: readNumber(
+			argv,
+			"--engine-route-timeout-seconds",
+			"SQLITE_MEMORY_SOAK_ENGINE_ROUTE_TIMEOUT_SECONDS",
+			300,
+		),
+		engineActorReadyTimeoutSeconds: readNumber(
+			argv,
+			"--engine-actor-ready-timeout-seconds",
+			"SQLITE_MEMORY_SOAK_ENGINE_ACTOR_READY_TIMEOUT_SECONDS",
+			300,
+		),
+		engineActorLifecycleTimeoutMs: readNumber(
+			argv,
+			"--engine-actor-lifecycle-timeout-ms",
+			"SQLITE_MEMORY_SOAK_ENGINE_ACTOR_LIFECYCLE_TIMEOUT_MS",
+			300_000,
+		),
+		engineEnvoyPingTimeoutMs: readNumber(
+			argv,
+			"--engine-envoy-ping-timeout-ms",
+			"SQLITE_MEMORY_SOAK_ENGINE_ENVOY_PING_TIMEOUT_MS",
+			300_000,
+		),
+		engineEnvoyLostThresholdMs: readNumber(
+			argv,
+			"--engine-envoy-lost-threshold-ms",
+			"SQLITE_MEMORY_SOAK_ENGINE_ENVOY_LOST_THRESHOLD_MS",
+			300_000,
+		),
 		serverlessMaxStartPayloadBytes: readNumber(
 			argv,
 			"--serverless-max-start-payload-bytes",
@@ -401,6 +446,20 @@ function parseArgs(argv: string[]): Args {
 			["--scan-rows", args.scanRows],
 		["--sample-interval-ms", args.sampleIntervalMs],
 		["--request-lifespan-seconds", args.requestLifespanSeconds],
+		["--engine-route-timeout-seconds", args.engineRouteTimeoutSeconds],
+		[
+			"--engine-actor-ready-timeout-seconds",
+			args.engineActorReadyTimeoutSeconds,
+		],
+		[
+			"--engine-actor-lifecycle-timeout-ms",
+			args.engineActorLifecycleTimeoutMs,
+		],
+		["--engine-envoy-ping-timeout-ms", args.engineEnvoyPingTimeoutMs],
+		[
+			"--engine-envoy-lost-threshold-ms",
+			args.engineEnvoyLostThresholdMs,
+		],
 		["--sleep-log-timeout-ms", args.sleepLogTimeoutMs],
 		[
 			"--serverless-max-start-payload-bytes",
@@ -546,6 +605,18 @@ async function startEngine(args: Args, runDir: string): Promise<LocalEngine> {
 						},
 					},
 				},
+				guard: {
+					route_timeout_ms: args.engineRouteTimeoutSeconds * 1000,
+					actor_ready_timeout_ms:
+						args.engineActorReadyTimeoutSeconds * 1000,
+				},
+				pegboard: {
+					actor_allocation_threshold: args.engineActorLifecycleTimeoutMs,
+					actor_start_threshold: args.engineActorLifecycleTimeoutMs,
+					actor_stop_threshold: args.engineActorLifecycleTimeoutMs,
+					envoy_ping_timeout: args.engineEnvoyPingTimeoutMs,
+					envoy_lost_threshold: args.engineEnvoyLostThresholdMs,
+				},
 			},
 			null,
 			2,
@@ -561,6 +632,10 @@ async function startEngine(args: Args, runDir: string): Promise<LocalEngine> {
 		RIVET__METRICS__PORT: (guardPort + 10).toString(),
 		RIVET__FILE_SYSTEM__PATH: join(dbRoot, "db"),
 		_RIVET_METRICS_TOKEN: args.metricsToken,
+		RIVET__PEGBOARD__ENVOY_PING_TIMEOUT:
+			args.engineEnvoyPingTimeoutMs.toString(),
+		RIVET__PEGBOARD__ENVOY_LOST_THRESHOLD:
+			args.engineEnvoyLostThresholdMs.toString(),
 		MALLOC_ARENA_MAX: process.env.MALLOC_ARENA_MAX ?? "2",
 		MALLOC_TRIM_THRESHOLD_: process.env.MALLOC_TRIM_THRESHOLD_ ?? "131072",
 	};
@@ -944,6 +1019,10 @@ function writeEvent(jsonlPath: string, event: unknown) {
 	appendFileSync(jsonlPath, `${JSON.stringify(event)}\n`);
 }
 
+function stringifyError(err: unknown): string {
+	return err instanceof Error ? err.message : String(err);
+}
+
 function logOffset(logPath: string): number {
 	try {
 		return statSync(logPath).size;
@@ -1257,7 +1336,25 @@ async function runChurnActorDriver(
 	const actorId = await handle.resolve();
 	const logStart = logOffset(server.logPath);
 	const sleepStartedAt = performance.now();
-	const response = await forceActorSleepViaApi(args, actorId);
+	let response: unknown;
+	try {
+		response = await forceActorSleepViaApi(args, actorId);
+	} catch (err) {
+		const error = stringifyError(err);
+		writeEvent(jsonlPath, {
+			kind: "actor_api_sleep_failed",
+			actorIndex,
+			key,
+			actorId,
+			durationMs: performance.now() - sleepStartedAt,
+			error,
+			timestamp: new Date().toISOString(),
+		});
+		console.warn(
+			`actor sleep api failed actor=${actorIndex} actor_id=${actorId} error=${error}`,
+		);
+		return;
+	}
 	writeEvent(jsonlPath, {
 		kind: "actor_api_sleep",
 		actorIndex,
@@ -1267,21 +1364,38 @@ async function runChurnActorDriver(
 		response,
 		timestamp: new Date().toISOString(),
 	});
-	const verified = await waitForActorSleepLog(
-		server,
-		actorId,
-		logStart,
-		args.sleepLogTimeoutMs,
-	);
-	writeEvent(jsonlPath, {
-		kind: "actor_sleep_verified",
-		actorIndex,
-		key,
-		actorId,
-		log: verified.matched,
-		timestamp: new Date().toISOString(),
-	});
-	console.log(`actor sleep verified actor=${actorIndex} actor_id=${actorId}`);
+
+	try {
+		const verified = await waitForActorSleepLog(
+			server,
+			actorId,
+			logStart,
+			args.sleepLogTimeoutMs,
+		);
+		writeEvent(jsonlPath, {
+			kind: "actor_sleep_verified",
+			actorIndex,
+			key,
+			actorId,
+			log: verified.matched,
+			timestamp: new Date().toISOString(),
+		});
+		console.log(`actor sleep verified actor=${actorIndex} actor_id=${actorId}`);
+	} catch (err) {
+		const error = stringifyError(err);
+		writeEvent(jsonlPath, {
+			kind: "actor_sleep_unverified",
+			actorIndex,
+			key,
+			actorId,
+			timeoutMs: args.sleepLogTimeoutMs,
+			error,
+			timestamp: new Date().toISOString(),
+		});
+		console.warn(
+			`actor sleep unverified actor=${actorIndex} actor_id=${actorId} error=${error}`,
+		);
+	}
 }
 
 async function resetActorOnSchedule(
@@ -1654,15 +1768,22 @@ function summarizeCycleVfs(jsonlPath: string): string | undefined {
 
 function summarizeActorSleeps(jsonlPath: string): string | undefined {
 	let requested = 0;
+	let apiFailed = 0;
 	let verified = 0;
+	let unverified = 0;
 	for (const line of readFileSync(jsonlPath, "utf8").split("\n")) {
 		if (!line) continue;
 		const event = JSON.parse(line) as { kind?: string };
 		if (event.kind === "actor_api_sleep") requested++;
+		if (event.kind === "actor_api_sleep_failed") {
+			requested++;
+			apiFailed++;
+		}
 		if (event.kind === "actor_sleep_verified") verified++;
+		if (event.kind === "actor_sleep_unverified") unverified++;
 	}
-	if (requested === 0 && verified === 0) return undefined;
-	return `actor sleeps: api_requested=${requested} log_verified=${verified}`;
+	if (requested === 0 && verified === 0 && unverified === 0) return undefined;
+	return `actor sleeps: api_requested=${requested} api_failed=${apiFailed} log_verified=${verified} log_unverified=${unverified}`;
 }
 
 async function main(): Promise<void> {

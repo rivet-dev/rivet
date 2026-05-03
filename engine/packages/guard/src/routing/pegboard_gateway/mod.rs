@@ -23,9 +23,6 @@ use crate::{
 use cors::{CorsPreflight, set_non_preflight_cors};
 use resolve_actor_query::resolve_query;
 
-const ACTOR_FORCE_WAKE_PENDING_TIMEOUT: i64 = util::duration::seconds(60);
-const ACTOR_READY_TIMEOUT: Duration = Duration::from_secs(10);
-
 /// Time to wait before starting pool error checks
 const RUNNER_POOL_ERROR_CHECK_DELAY: Duration = Duration::from_secs(1);
 /// Interval between pool error checks
@@ -436,7 +433,7 @@ async fn handle_actor_v2(
 					}
 				}
 				// Ready timeout
-				_ = tokio::time::sleep(ACTOR_READY_TIMEOUT) => {
+				_ = tokio::time::sleep(ctx.config().guard().actor_ready_timeout()) => {
 					return Err(errors::ActorReadyTimeout { actor_id }.build());
 				}
 			}
@@ -480,7 +477,7 @@ async fn handle_actor_v1(
 
 		ctx.signal(pegboard::workflows::actor::Wake {
 			allocation_override: pegboard::workflows::actor::AllocationOverride::DontSleep {
-				pending_timeout: Some(ACTOR_FORCE_WAKE_PENDING_TIMEOUT),
+				pending_timeout: Some(ctx.config().guard().actor_force_wake_pending_timeout()),
 			},
 		})
 		.to_workflow_id(actor.workflow_id)
@@ -516,7 +513,9 @@ async fn handle_actor_v1(
 
 						let res = ctx.signal(pegboard::workflows::actor::Wake {
 							allocation_override: pegboard::workflows::actor::AllocationOverride::DontSleep {
-								pending_timeout: Some(ACTOR_FORCE_WAKE_PENDING_TIMEOUT),
+								pending_timeout: Some(
+									ctx.config().guard().actor_force_wake_pending_timeout(),
+								),
 							},
 						})
 						.to_workflow_id(actor.workflow_id)
@@ -565,7 +564,7 @@ async fn handle_actor_v1(
 					}
 				}
 				// Ready timeout
-				_ = tokio::time::sleep(ACTOR_READY_TIMEOUT) => {
+				_ = tokio::time::sleep(ctx.config().guard().actor_ready_timeout()) => {
 					return Err(errors::ActorReadyTimeout { actor_id }.build());
 				}
 			}

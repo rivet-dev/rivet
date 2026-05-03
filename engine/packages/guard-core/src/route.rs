@@ -7,9 +7,6 @@ use crate::custom_serve::CustomServeTrait;
 use crate::metrics;
 use crate::request_context::RequestContext;
 
-const ROUTE_CACHE_TTL: Duration = Duration::from_secs(60 * 10); // 10 minutes
-pub(crate) const DEFAULT_ROUTE_TIMEOUT: Duration = Duration::from_secs(15);
-
 // Routing types
 #[derive(Clone, Debug)]
 pub struct RouteTarget {
@@ -51,11 +48,11 @@ pub(crate) struct RouteCache {
 }
 
 impl RouteCache {
-	pub(crate) fn new() -> Self {
+	pub(crate) fn new(ttl: Duration) -> Self {
 		Self {
 			cache: Cache::builder()
 				.max_capacity(10_000)
-				.time_to_live(ROUTE_CACHE_TTL)
+				.time_to_live(ttl)
 				.build(),
 		}
 	}

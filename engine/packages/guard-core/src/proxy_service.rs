@@ -31,7 +31,7 @@ use crate::RouteTarget;
 use crate::request_context::RequestContext;
 use crate::response_body::ResponseBody;
 use crate::route::{
-	CacheKeyFn, DEFAULT_ROUTE_TIMEOUT, ResolveRouteOutput, RouteCache, RoutingFn, RoutingOutput,
+	CacheKeyFn, ResolveRouteOutput, RouteCache, RoutingFn, RoutingOutput,
 };
 use crate::utils::{InFlightCounter, RateLimiter};
 use crate::{
@@ -89,13 +89,14 @@ impl ProxyState {
 		let client = Client::builder(TokioExecutor::new())
 			.pool_idle_timeout(Duration::from_secs(30))
 			.build(https_connector);
+		let route_cache_ttl = config.guard().route_cache_ttl();
 
 		Self {
 			config,
 			routing_fn,
 			cache_key_fn,
 			client,
-			route_cache: RouteCache::new(),
+			route_cache: RouteCache::new(route_cache_ttl),
 			rate_limiters: Cache::builder()
 				.max_capacity(10_000)
 				.time_to_live(PROXY_STATE_CACHE_TTL)
@@ -134,21 +135,22 @@ impl ProxyState {
 		let res = if let Some(res) = cache_res {
 			res
 		} else {
-			// Not in cache, call routing function with a default timeout
-			// Default 15 seconds, routing functions should have their own internal timeouts that are shorter
+			// Not in cache, call routing function with a configured timeout.
+			// Routing functions should have their own internal timeouts that are shorter.
+			let route_timeout = self.config.guard().route_timeout();
 			tracing::debug!(
 				hostname = %req_ctx.hostname,
 				path = %req_ctx.path,
 				cache_hit = false,
-				timeout_seconds = DEFAULT_ROUTE_TIMEOUT.as_secs(),
+				timeout_seconds = route_timeout.as_secs(),
 				"Cache miss, calling routing function"
 			);
 
-			let routing_res = timeout(DEFAULT_ROUTE_TIMEOUT, (self.routing_fn)(req_ctx))
+			let routing_res = timeout(route_timeout, (self.routing_fn)(req_ctx))
 				.await
 				.map_err(|_| {
 					errors::RequestTimeout {
-						timeout_seconds: DEFAULT_ROUTE_TIMEOUT.as_secs(),
+						timeout_seconds: route_timeout.as_secs(),
 					}
 					.build()
 				})??;
