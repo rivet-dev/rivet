@@ -6,6 +6,7 @@ import {
 import { db } from "rivetkit/db";
 
 const DEFAULT_SLEEP_GRACE_PERIOD_MS = 120_000;
+const DEFAULT_ON_SLEEP_DELAY_MS = 15_000;
 
 type EntryRow = {
 	request_id: string;
@@ -15,6 +16,11 @@ type EntryRow = {
 
 type CountRow = {
 	count: number;
+};
+
+type ExpectedRequest = {
+	requestId: string;
+	seconds: number;
 };
 
 function sleep(ms: number): Promise<void> {
@@ -41,9 +47,92 @@ function typedRows<T>(rows: unknown[]): T[] {
 	return rows as T[];
 }
 
+function numberFromEnv(name: string, fallback: number): number {
+	const value = process.env[name];
+	if (value === undefined || value === "") return fallback;
+
+	const parsed = Number(value);
+	if (!Number.isFinite(parsed) || parsed < 0) {
+		throw new Error(`${name} must be a finite non-negative number`);
+	}
+
+	return parsed;
+}
+
 function send(websocket: UniversalWebSocket, payload: unknown) {
 	if (websocket.readyState !== 1) return;
 	websocket.send(JSON.stringify(payload));
+}
+
+function verifyEntryRows(rows: EntryRow[], expectedSeconds: number) {
+	const seen = new Set<number>();
+	const indexes = rows.map((row) => row.idx).sort((a, b) => a - b);
+	for (const idx of indexes) seen.add(idx);
+
+	const missing: number[] = [];
+	for (let idx = 1; idx <= expectedSeconds; idx += 1) {
+		if (!seen.has(idx)) missing.push(idx);
+	}
+
+	const contiguous =
+		rows.length === expectedSeconds &&
+		missing.length === 0 &&
+		indexes.every((idx, offset) => idx === offset + 1);
+
+	return {
+		expectedSeconds,
+		count: rows.length,
+		contiguous,
+		missing,
+		indexes,
+		ok: contiguous,
+	};
+}
+
+function verifyAllRows(rows: EntryRow[], expectedRequests: ExpectedRequest[]) {
+	const expectedByRequest = new Map(
+		expectedRequests.map((request) => [request.requestId, request.seconds]),
+	);
+	const rowsByRequest = new Map<string, EntryRow[]>();
+
+	for (const row of rows) {
+		const requestRows = rowsByRequest.get(row.request_id) ?? [];
+		requestRows.push(row);
+		rowsByRequest.set(row.request_id, requestRows);
+	}
+
+	const requests = expectedRequests.map((request) => {
+		const result = verifyEntryRows(
+			rowsByRequest.get(request.requestId) ?? [],
+			request.seconds,
+		);
+		return {
+			requestId: request.requestId,
+			...result,
+		};
+	});
+
+	const unexpectedRequestIds = [...rowsByRequest.keys()]
+		.filter((requestId) => !expectedByRequest.has(requestId))
+		.sort();
+	const expectedTotalRows = expectedRequests.reduce(
+		(total, request) => total + request.seconds,
+		0,
+	);
+	const ok =
+		unexpectedRequestIds.length === 0 &&
+		rows.length === expectedTotalRows &&
+		requests.every((request) => request.ok);
+
+	return {
+		type: "verifiedAll",
+		expectedRequests: expectedRequests.length,
+		expectedTotalRows,
+		totalRows: rows.length,
+		unexpectedRequestIds,
+		requests,
+		ok,
+	};
 }
 
 export const mockAgenticLoop = actor({
@@ -66,6 +155,17 @@ export const mockAgenticLoop = actor({
 			);
 		},
 	}),
+	async onSleep(c) {
+		const delayMs = numberFromEnv(
+			"MOCK_AGENTIC_ON_SLEEP_DELAY_MS",
+			DEFAULT_ON_SLEEP_DELAY_MS,
+		);
+		c.log.info({
+			msg: "mock agentic loop onSleep delay",
+			delayMs,
+		});
+		await sleep(delayMs);
+	},
 	onWebSocket(c, websocket: UniversalWebSocket) {
 		const connectionId = crypto.randomUUID();
 		let activeInference: Promise<void> | undefined;
@@ -83,29 +183,10 @@ export const mockAgenticLoop = actor({
 					requestId,
 				),
 			);
-			const seen = new Set<number>();
-			const indexes = rows.map((row) => row.idx);
-			for (const idx of indexes) seen.add(idx);
-
-			const missing: number[] = [];
-			for (let idx = 1; idx <= expectedSeconds; idx += 1) {
-				if (!seen.has(idx)) missing.push(idx);
-			}
-
-			const contiguous =
-				rows.length === expectedSeconds &&
-				missing.length === 0 &&
-				indexes.every((idx, offset) => idx === offset + 1);
-
 			return {
 				type: "verified",
 				requestId,
-				expectedSeconds,
-				count: rows.length,
-				contiguous,
-				missing,
-				indexes,
-				ok: contiguous,
+				...verifyEntryRows(rows, expectedSeconds),
 			};
 		};
 
@@ -183,6 +264,15 @@ export const mockAgenticLoop = actor({
 						return;
 					}
 
+					if (type === "ping") {
+						send(websocket, {
+							type: "pong",
+							probeId: stringValue(message.probeId, "probeId"),
+							timestamp: Date.now(),
+						});
+						return;
+					}
+
 					if (type === "verify") {
 						const requestId = stringValue(
 							message.requestId,
@@ -251,6 +341,23 @@ export const mockAgenticLoop = actor({
 				count: rows.length,
 				indexes: rows.map((row) => row.idx),
 			};
+		},
+		verifyAll: async (c, expectedRequests: ExpectedRequest[]) => {
+			if (!Array.isArray(expectedRequests)) {
+				throw new Error("expectedRequests must be an array");
+			}
+
+			for (const request of expectedRequests) {
+				stringValue(request.requestId, "requestId");
+				positiveInteger(request.seconds, "seconds");
+			}
+
+			const rows = typedRows<EntryRow>(
+				await c.db.execute(
+					"SELECT request_id, idx, created_at FROM mock_agentic_entries ORDER BY request_id ASC, idx ASC",
+				),
+			);
+			return verifyAllRows(rows, expectedRequests);
 		},
 	},
 });
