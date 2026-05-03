@@ -270,6 +270,10 @@ export class WasmCoreRuntime implements CoreRuntime {
 		await callWasm(() => asWasmRegistry(registry).shutdown());
 	}
 
+	async registryDiagnostics(): Promise<{ mode: string; envoyActiveActorCount: null }> {
+		return { mode: "wasm", envoyActiveActorCount: null };
+	}
+
 	async handleServerlessRequest(
 		registry: RegistryHandle,
 		req: RuntimeServerlessRequest,
@@ -517,6 +521,13 @@ export class WasmCoreRuntime implements CoreRuntime {
 		return callHandle(asWasmActorContext(ctx), "runtimeState");
 	}
 
+	actorClearRuntimeState(ctx: ActorContextHandle): void {
+		const runtimeState = this.actorRuntimeState(ctx);
+		for (const key of Object.keys(runtimeState)) {
+			delete (runtimeState as Record<string, unknown>)[key];
+		}
+	}
+
 	actorRestartRunHandler(ctx: ActorContextHandle): void {
 		callHandle(asWasmActorContext(ctx), "restartRunHandler");
 	}
@@ -656,6 +667,10 @@ export class WasmCoreRuntime implements CoreRuntime {
 		params?: RuntimeSqlBindParams,
 	): Promise<RuntimeSqlRunResult> {
 		return await callWasm(() => this.#actorSql(ctx).run(sql, params));
+	}
+
+	actorSqlMetrics(ctx: ActorContextHandle) {
+		return this.#actorSql(ctx).metrics?.() ?? null;
 	}
 
 	actorSqlTakeLastKvError(ctx: ActorContextHandle): string | null {

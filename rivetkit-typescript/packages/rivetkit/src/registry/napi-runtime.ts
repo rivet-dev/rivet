@@ -24,6 +24,7 @@ import type {
 	RuntimeQueueTryNextBatchOptions,
 	RuntimeQueueWaitOptions,
 	RuntimeRequestSaveOpts,
+	RuntimeRegistryDiagnostics,
 	RuntimeServeConfig,
 	RuntimeServerlessRequest,
 	RuntimeServerlessResponseHead,
@@ -199,6 +200,16 @@ export class NapiCoreRuntime implements CoreRuntime {
 
 	async shutdownRegistry(registry: RegistryHandle): Promise<void> {
 		await asNativeRegistry(registry).shutdown();
+	}
+
+	async registryDiagnostics(
+		registry: RegistryHandle,
+	): Promise<RuntimeRegistryDiagnostics> {
+		const diagnostics = await asNativeRegistry(registry).diagnostics();
+		return {
+			mode: diagnostics.mode,
+			envoyActiveActorCount: diagnostics.envoyActiveActorCount,
+		};
 	}
 
 	async handleServerlessRequest(
@@ -421,6 +432,10 @@ export class NapiCoreRuntime implements CoreRuntime {
 		return asNativeActorContext(ctx).runtimeState();
 	}
 
+	actorClearRuntimeState(ctx: ActorContextHandle): void {
+		asNativeActorContext(ctx).clearRuntimeState();
+	}
+
 	actorRestartRunHandler(ctx: ActorContextHandle): void {
 		asNativeActorContext(ctx).restartRunHandler();
 	}
@@ -551,6 +566,10 @@ export class NapiCoreRuntime implements CoreRuntime {
 		params?: RuntimeSqlBindParams,
 	): Promise<RuntimeSqlRunResult> {
 		return await this.#actorSql(ctx).run(sql, toNapiSqlBindParams(params));
+	}
+
+	actorSqlMetrics(ctx: ActorContextHandle) {
+		return this.#actorSql(ctx).metrics?.() ?? null;
 	}
 
 	actorSqlTakeLastKvError(ctx: ActorContextHandle): string | null {

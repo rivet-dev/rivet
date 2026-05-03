@@ -22,6 +22,11 @@ export interface ServerlessHandler {
 	fetch: FetchHandler;
 }
 
+export interface RegistryDiagnostics {
+	mode: string;
+	envoyActiveActorCount?: number | null;
+}
+
 export class Registry<A extends RegistryActors> {
 	#config: RegistryConfigInput<A>;
 
@@ -34,6 +39,7 @@ export class Registry<A extends RegistryActors> {
 	}
 
 	#runtimeServePromise?: Promise<void>;
+	#runtimeServeConfiguredPromise?: ReturnType<typeof buildConfiguredRegistry>;
 	#runtimeServerlessPromise?: ReturnType<typeof buildConfiguredRegistry>;
 	#configureServerlessPoolPromise?: Promise<void>;
 	#welcomePrinted = false;
@@ -216,12 +222,30 @@ export class Registry<A extends RegistryActors> {
 		};
 	}
 
+	public async diagnostics(): Promise<RegistryDiagnostics> {
+		const candidates = [
+			this.#runtimeServerlessPromise,
+			this.#runtimeServeConfiguredPromise,
+		].filter((candidate): candidate is ReturnType<typeof buildConfiguredRegistry> =>
+			candidate !== undefined
+		);
+
+		for (const candidate of candidates) {
+			const { runtime, registry } = await candidate;
+			const diagnostics = await runtime.registryDiagnostics?.(registry);
+			if (diagnostics) return diagnostics;
+		}
+
+		return { mode: "not_started", envoyActiveActorCount: null };
+	}
+
 	/**
 	 * Starts an actor envoy for standalone server deployments.
 	 */
 	#startEnvoy(config: RegistryConfig, printWelcome: boolean) {
 		if (!this.#runtimeServePromise) {
 			const configuredRegistryPromise = buildConfiguredRegistry(config);
+			this.#runtimeServeConfiguredPromise = configuredRegistryPromise;
 			this.#runtimeServePromise = configuredRegistryPromise
 				.then(async ({ runtime, registry, serveConfig }) => {
 					await runtime.serveRegistry(registry, serveConfig);

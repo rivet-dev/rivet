@@ -50,6 +50,12 @@ pub struct JsServerlessResponseHead {
 }
 
 #[napi(object)]
+pub struct JsRegistryDiagnostics {
+	pub mode: String,
+	pub envoy_active_actor_count: Option<u32>,
+}
+
+#[napi(object)]
 #[derive(Clone)]
 pub struct JsServerlessStreamError {
 	pub group: String,
@@ -233,6 +239,41 @@ impl CoreRegistry {
 		// builder is draining need to see `ShuttingDown` and error promptly.
 		self.build_complete.notify_waiters();
 		Ok(())
+	}
+
+	#[napi]
+	pub async fn diagnostics(&self) -> napi::Result<JsRegistryDiagnostics> {
+		let guard = self.state.lock().await;
+		let diagnostics = match &*guard {
+			RegistryState::Registering(_) => JsRegistryDiagnostics {
+				mode: "registering".to_owned(),
+				envoy_active_actor_count: None,
+			},
+			RegistryState::BuildingServerless => JsRegistryDiagnostics {
+				mode: "building_serverless".to_owned(),
+				envoy_active_actor_count: None,
+			},
+			RegistryState::Serving => JsRegistryDiagnostics {
+				mode: "serving".to_owned(),
+				envoy_active_actor_count: None,
+			},
+			RegistryState::Serverless(runtime) => JsRegistryDiagnostics {
+				mode: "serverless".to_owned(),
+				envoy_active_actor_count: runtime
+					.active_envoy_actor_count()
+					.await
+					.map(|count| count as u32),
+			},
+			RegistryState::ShuttingDown => JsRegistryDiagnostics {
+				mode: "shutting_down".to_owned(),
+				envoy_active_actor_count: None,
+			},
+			RegistryState::ShutDown => JsRegistryDiagnostics {
+				mode: "shut_down".to_owned(),
+				envoy_active_actor_count: None,
+			},
+		};
+		Ok(diagnostics)
 	}
 
 	#[napi(ts_return_type = "Promise<JsServerlessResponseHead>")]

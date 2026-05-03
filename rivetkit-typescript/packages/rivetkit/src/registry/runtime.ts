@@ -1,3 +1,4 @@
+import type { SqliteNativeMetrics } from "@/common/database/config";
 import type { RegistryConfig } from "./config";
 
 declare const handleBrand: unique symbol;
@@ -188,6 +189,7 @@ export interface RuntimeSqlDatabase {
 		sql: string,
 		params?: RuntimeSqlBindParams,
 	): Promise<RuntimeSqlRunResult>;
+	metrics?(): SqliteNativeMetrics | null;
 	takeLastKvError?(): string | null;
 	close(): Promise<void>;
 }
@@ -255,6 +257,11 @@ export interface RuntimeServerlessResponseHead {
 	headers: Record<string, string>;
 }
 
+export interface RuntimeRegistryDiagnostics {
+	mode: string;
+	envoyActiveActorCount?: number | null;
+}
+
 export type RuntimeServerlessStreamEvent =
 	| {
 			kind: "chunk";
@@ -309,6 +316,9 @@ export interface CoreRuntime {
 		cancelToken: CancellationTokenHandle,
 		config: RuntimeServeConfig,
 	): Promise<RuntimeServerlessResponseHead>;
+	registryDiagnostics?(
+		registry: RegistryHandle,
+	): Promise<RuntimeRegistryDiagnostics>;
 	createActorFactory(
 		callbacks: object,
 		config?: RuntimeActorConfig | undefined | null,
@@ -384,6 +394,7 @@ export interface CoreRuntime {
 	): Promise<unknown>;
 	actorRegisterTask(ctx: ActorContextHandle, promise: Promise<unknown>): void;
 	actorRuntimeState(ctx: ActorContextHandle): object;
+	actorClearRuntimeState(ctx: ActorContextHandle): void;
 	actorRestartRunHandler(ctx: ActorContextHandle): void;
 	actorBeginWebsocketCallback(ctx: ActorContextHandle): number;
 	actorEndWebsocketCallback(ctx: ActorContextHandle, regionId: number): void;
@@ -446,6 +457,7 @@ export interface CoreRuntime {
 		sql: string,
 		params?: RuntimeSqlBindParams,
 	): Promise<RuntimeSqlRunResult>;
+	actorSqlMetrics(ctx: ActorContextHandle): SqliteNativeMetrics | null;
 	actorSqlTakeLastKvError(ctx: ActorContextHandle): string | null;
 	actorSqlClose(ctx: ActorContextHandle): Promise<void>;
 

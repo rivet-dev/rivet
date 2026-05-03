@@ -970,7 +970,13 @@ impl ActorTask {
 						);
 						self.log_dispatch_command_handled(command_kind, "enqueued");
 						let actor_id = self.ctx.actor_id().to_owned();
+						let action_keep_awake = self
+							.ctx
+							.internal_keep_awake_region()
+							.with_log_fields("dispatch_action", Some(actor_id.clone()));
+						self.ctx.reset_sleep_timer();
 						self.ctx.wait_until(async move {
+							let _action_keep_awake = action_keep_awake;
 							match tracked_reply_rx.await {
 								Ok(result) => {
 									tracing::info!(
@@ -1791,6 +1797,7 @@ impl ActorTask {
 			.cleanup()
 			.await
 			.with_context(|| format!("cleanup sqlite during {reason_label} shutdown"))?;
+		trim_native_allocator_after_shutdown(&actor_id, reason_label);
 		tracing::debug!(
 			actor_id = %actor_id,
 			reason = reason_label,
@@ -2163,6 +2170,24 @@ fn shutdown_reason_label(reason: ShutdownKind) -> &'static str {
 		ShutdownKind::Destroy => "destroy",
 	}
 }
+
+#[cfg(all(unix, target_env = "gnu"))]
+fn trim_native_allocator_after_shutdown(actor_id: &str, reason: &str) {
+	unsafe extern "C" {
+		fn malloc_trim(pad: usize) -> i32;
+	}
+
+	let rc = unsafe { malloc_trim(0) };
+	tracing::debug!(
+		actor_id,
+		reason,
+		rc,
+		"trimmed native allocator after actor shutdown"
+	);
+}
+
+#[cfg(not(all(unix, target_env = "gnu")))]
+fn trim_native_allocator_after_shutdown(_actor_id: &str, _reason: &str) {}
 
 fn clone_shutdown_result(result: &Result<()>) -> Result<()> {
 	match result {

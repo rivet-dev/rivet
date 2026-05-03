@@ -27,6 +27,8 @@ use crate::time::{sleep, timeout};
 
 const DEFAULT_BASE_PATH: &str = "/api/rivet";
 const SSE_PING_INTERVAL: Duration = Duration::from_secs(1);
+const SSE_PING_FRAME: &[u8] = b"event: ping\ndata:\n\n";
+const SSE_STOPPING_FRAME: &[u8] = b"event: stopping\ndata:\n\n";
 /// Bound on `handle.shutdown_and_wait` inside teardown paths. If envoy cannot
 /// reach the engine (reconnect loop stuck), we fall back to immediate `Stop`
 /// rather than hanging indefinitely. Must stay below the outer TS grace ceiling.
@@ -216,6 +218,14 @@ impl CoreServerlessRuntime {
 		}
 	}
 
+	pub async fn active_envoy_actor_count(&self) -> Option<usize> {
+		self.envoy
+			.lock()
+			.await
+			.as_ref()
+			.map(EnvoyHandle::active_actor_count)
+	}
+
 	pub async fn handle_request(&self, req: ServerlessRequest) -> ServerlessResponse {
 		let cors = cors_headers(&req);
 		match self.handle_request_inner(req).await {
@@ -275,10 +285,11 @@ impl CoreServerlessRuntime {
 
 		let handle = self.ensure_envoy(&headers).await?;
 		let payload = req.body;
+		let actor_start = handle.decode_serverless_actor_start(&payload)?;
 		let cancel_token = req.cancel_token;
 		let cache_envoy = self.settings.cache_envoy;
 		let (tx, rx) = mpsc::channel(16);
-		let _ = tx.try_send(Ok(b"event: ping\ndata:\n\n".to_vec()));
+		let _ = tx.try_send(Ok(SSE_PING_FRAME.to_vec()));
 
 		RuntimeSpawner::spawn(async move {
 			let shutdown_handle = handle.clone();
@@ -305,8 +316,12 @@ impl CoreServerlessRuntime {
 					_ = cancel_token.cancelled() => {
 						break;
 					}
+					_ = handle.wait_actor_registered_then_stopped(&actor_start.actor_id, actor_start.generation) => {
+						let _ = tx.send(Ok(SSE_STOPPING_FRAME.to_vec())).await;
+						break;
+					}
 					_ = sleep(SSE_PING_INTERVAL) => {
-						if tx.send(Ok(b"event: ping\ndata:\n\n".to_vec())).await.is_err() {
+						if tx.send(Ok(SSE_PING_FRAME.to_vec())).await.is_err() {
 							break;
 						}
 					}

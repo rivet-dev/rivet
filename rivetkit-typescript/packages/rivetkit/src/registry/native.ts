@@ -410,6 +410,10 @@ function resolveNativeDestroy(runtime: CoreRuntime, ctx: ActorContextHandle) {
 	gate.destroyCompletion = undefined;
 }
 
+function clearNativeRuntimeState(runtime: CoreRuntime, ctx: ActorContextHandle) {
+	callNativeSync(() => runtime.actorClearRuntimeState(ctx));
+}
+
 function closeNativeSqlDatabase(
 	runtime: CoreRuntime,
 	ctx: ActorContextHandle,
@@ -461,6 +465,7 @@ function getOrCreateNativeSqlDatabase(
 		execute: (sql, params) => runtime.actorSqlExecute(ctx, sql, params),
 		query: (sql, params) => runtime.actorSqlQuery(ctx, sql, params),
 		run: (sql, params) => runtime.actorSqlRun(ctx, sql, params),
+		metrics: () => runtime.actorSqlMetrics(ctx),
 		takeLastKvError: () => runtime.actorSqlTakeLastKvError(ctx),
 		close: () => runtime.actorSqlClose(ctx),
 	});
@@ -3939,52 +3944,47 @@ export function buildNativeFactory(
 						},
 					)
 				: undefined,
-		onSleep: onSleep
-			? wrapNativeCallback(
-					async (
-						error: unknown,
-						payload: { ctx: ActorContextHandle },
-					) => {
-						const { ctx } = unwrapTsfnPayload(error, payload);
-						const actorCtx = makeActorCtx(ctx);
-						try {
-							await onSleep(actorCtx);
-							if (runtime.kind === "wasm") {
-								await runtime.actorSaveState(
-									ctx,
-									actorCtx.serializeForTick("save"),
-								);
-							} else {
-								await actorCtx.saveState({ immediate: true });
-							}
-						} finally {
-							await actorCtx.dispose();
+		onSleep: wrapNativeCallback(
+			async (error: unknown, payload: { ctx: ActorContextHandle }) => {
+				const { ctx } = unwrapTsfnPayload(error, payload);
+				const actorCtx = makeActorCtx(ctx);
+				try {
+					if (onSleep) {
+						await onSleep(actorCtx);
+						if (runtime.kind === "wasm") {
+							// Wasm cannot use the native context save helper here because
+							// the runtime owns the serialized state handoff.
+							await runtime.actorSaveState(
+								ctx,
+								actorCtx.serializeForTick("save"),
+							);
+						} else {
+							await actorCtx.saveState({ immediate: true });
 						}
-					},
-				)
-			: undefined,
-		onDestroy:
-			typeof config.onDestroy === "function" ||
-			databaseProvider !== undefined
-				? wrapNativeCallback(
-						async (
-							error: unknown,
-							payload: { ctx: ActorContextHandle },
-						) => {
-							const { ctx } = unwrapTsfnPayload(error, payload);
-							const actorCtx = makeActorCtx(ctx);
-							try {
-								if (typeof config.onDestroy === "function") {
-									await config.onDestroy(actorCtx);
-								}
-							} finally {
-								resolveNativeDestroy(runtime, ctx);
-								await actorCtx.closeDatabase();
-								await actorCtx.dispose();
-							}
-						},
-					)
-				: undefined,
+					}
+				} finally {
+					await actorCtx.closeDatabase();
+					clearNativeRuntimeState(runtime, ctx);
+					await actorCtx.dispose();
+				}
+			},
+		),
+		onDestroy: wrapNativeCallback(
+			async (error: unknown, payload: { ctx: ActorContextHandle }) => {
+				const { ctx } = unwrapTsfnPayload(error, payload);
+				const actorCtx = makeActorCtx(ctx);
+				try {
+					if (typeof config.onDestroy === "function") {
+						await config.onDestroy(actorCtx);
+					}
+				} finally {
+					resolveNativeDestroy(runtime, ctx);
+					await actorCtx.closeDatabase();
+					clearNativeRuntimeState(runtime, ctx);
+					await actorCtx.dispose();
+				}
+			},
+		),
 		onBeforeConnect:
 			typeof config.onBeforeConnect === "function"
 				? wrapNativeCallback(

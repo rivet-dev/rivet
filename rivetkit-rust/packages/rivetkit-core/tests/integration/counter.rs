@@ -97,6 +97,7 @@ fn counter_factory() -> ActorFactory {
 					}
 					ActorEvent::WebSocketOpen {
 						ws: _,
+						conn: _,
 						request: _,
 						reply,
 					} => {
