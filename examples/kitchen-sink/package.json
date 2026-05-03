@@ -6,6 +6,7 @@
 	"packageManager": "pnpm@10.13.1",
 	"scripts": {
 		"dev": "concurrently -n server,vite \"node --import @rivetkit/sql-loader --import tsx src/server.ts\" \"vite\"",
+		"dev:serverless": "MALLOC_ARENA_MAX=2 MALLOC_TRIM_THRESHOLD_=131072 RIVET_RUN_ENGINE=1 concurrently -n server,vite \"node --import @rivetkit/sql-loader --import tsx src/server.ts\" \"vite\"",
 		"check-types": "echo 'skipped - workflow history types broken'",
 		"build": "vite build",
 		"test": "node --import tsx --test tests/*.test.ts",

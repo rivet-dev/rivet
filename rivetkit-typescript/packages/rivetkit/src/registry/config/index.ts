@@ -25,7 +25,11 @@ import {
 	isDev,
 } from "@/utils/env-vars";
 import { EnvoyConfigSchema } from "./envoy";
-import { ConfigurePoolSchema, ServerlessConfigSchema } from "./serverless";
+import {
+	ConfigurePoolSchema,
+	DEFAULT_SERVERLESS_MAX_START_PAYLOAD_BYTES,
+	ServerlessConfigSchema,
+} from "./serverless";
 
 export const ActorsSchema = z.record(
 	z.string(),
@@ -505,7 +509,7 @@ export const DocServerlessConfigSchema = z
 			.number()
 			.optional()
 			.describe(
-				"Maximum POST /start body size in bytes. Default: 1048576",
+				`Maximum POST /start body size in bytes. Default: ${DEFAULT_SERVERLESS_MAX_START_PAYLOAD_BYTES}`,
 			),
 		publicEndpoint: z
 			.string()
