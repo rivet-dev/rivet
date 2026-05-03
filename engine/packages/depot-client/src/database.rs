@@ -13,7 +13,8 @@ use crate::{
 	},
 	vfs::{
 		NativeVfsHandle, SqliteVfs, SqliteVfsMetrics, VfsConfig, VfsPreloadHintSnapshot,
-		configure_connection_for_database, verify_batch_atomic_writes,
+		configure_connection_for_database, fetch_initial_main_page_from_envoy,
+		verify_batch_atomic_writes,
 	},
 };
 
@@ -42,12 +43,17 @@ pub async fn open_database_from_envoy(
 	metrics: Option<Arc<dyn SqliteVfsMetrics>>,
 ) -> Result<NativeDatabaseHandle> {
 	let vfs_name = vfs_name_for_actor_database(&actor_id, generation);
+	let initial_main_page = fetch_initial_main_page_from_envoy(&handle, &actor_id)
+		.await
+		.map_err(|e| anyhow!("failed to fetch sqlite initial main page: {e}"))?;
+	let mut vfs_config = VfsConfig::default();
+	vfs_config.initial_main_page = initial_main_page;
 	let vfs = Arc::new(SqliteVfs::register(
 		&vfs_name,
 		handle,
 		actor_id.clone(),
 		rt_handle,
-		VfsConfig::default(),
+		vfs_config,
 		metrics.clone(),
 	)
 	.map_err(|e| anyhow!("failed to register sqlite VFS: {e}"))?);
@@ -160,6 +166,10 @@ impl NativeDatabaseHandle {
 
 	pub fn take_last_kv_error(&self) -> Option<String> {
 		self.vfs.take_last_error()
+	}
+
+	pub fn sqlite_vfs_metrics(&self) -> crate::vfs::SqliteVfsMetricsSnapshot {
+		self.vfs.sqlite_vfs_metrics()
 	}
 
 	pub fn snapshot_preload_hints(&self) -> VfsPreloadHintSnapshot {

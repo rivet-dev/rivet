@@ -18,9 +18,10 @@ use rivet_envoy_client::handle::EnvoyHandle;
 use rivet_envoy_protocol as protocol;
 use tokio::runtime::Handle;
 
-use crate::optimization_flags::{SqliteOptimizationFlags, sqlite_optimization_flags};
+use crate::optimization_flags::{
+	SqliteOptimizationFlags, SqliteVfsPageCacheMode, sqlite_optimization_flags,
+};
 
-const DEFAULT_CACHE_CAPACITY_PAGES: u64 = 50_000;
 const DEFAULT_PREFETCH_DEPTH: usize = 64;
 const LEGACY_PREFETCH_DEPTH: usize = 16;
 const DEFAULT_MAX_PREFETCH_BYTES: usize = 256 * 1024;
@@ -230,7 +231,9 @@ fn sqlite_now_ms() -> Result<i64> {
 
 #[derive(Debug, Clone)]
 pub struct VfsConfig {
+	pub page_cache_mode: SqliteVfsPageCacheMode,
 	pub cache_capacity_pages: u64,
+	pub initial_main_page: Option<Vec<u8>>,
 	pub prefetch_depth: usize,
 	pub adaptive_prefetch_depth: usize,
 	pub max_prefetch_bytes: usize,
@@ -254,34 +257,49 @@ impl Default for VfsConfig {
 impl VfsConfig {
 	pub fn from_optimization_flags(flags: SqliteOptimizationFlags) -> Self {
 		Self {
-			cache_capacity_pages: DEFAULT_CACHE_CAPACITY_PAGES,
+			page_cache_mode: flags.vfs_page_cache_mode,
+			cache_capacity_pages: flags.vfs_page_cache_capacity_pages,
+			initial_main_page: None,
 			prefetch_depth: if flags.read_ahead {
 				DEFAULT_PREFETCH_DEPTH
 			} else {
 				LEGACY_PREFETCH_DEPTH
 			},
-				adaptive_prefetch_depth: DEFAULT_ADAPTIVE_PREFETCH_DEPTH,
-				max_prefetch_bytes: DEFAULT_MAX_PREFETCH_BYTES,
-				adaptive_max_prefetch_bytes: DEFAULT_ADAPTIVE_MAX_PREFETCH_BYTES,
-				max_pages_per_stage: DEFAULT_MAX_PAGES_PER_STAGE,
-				recent_hint_page_budget: if flags.recent_page_hints {
-					DEFAULT_RECENT_HINT_PAGE_BUDGET
-				} else {
-					0
-				},
-				recent_hint_range_budget: if flags.recent_page_hints {
-					DEFAULT_RECENT_HINT_RANGE_BUDGET
-				} else {
-					0
-				},
-				cache_hit_predictor_training: flags.cache_hit_predictor_training,
-				recent_page_hints: flags.recent_page_hints,
-				adaptive_read_ahead: flags.adaptive_read_ahead,
-				#[cfg(test)]
-				assert_batch_atomic: true,
-			}
+			adaptive_prefetch_depth: DEFAULT_ADAPTIVE_PREFETCH_DEPTH,
+			max_prefetch_bytes: DEFAULT_MAX_PREFETCH_BYTES,
+			adaptive_max_prefetch_bytes: DEFAULT_ADAPTIVE_MAX_PREFETCH_BYTES,
+			max_pages_per_stage: DEFAULT_MAX_PAGES_PER_STAGE,
+			recent_hint_page_budget: if flags.recent_page_hints {
+				DEFAULT_RECENT_HINT_PAGE_BUDGET
+			} else {
+				0
+			},
+			recent_hint_range_budget: if flags.recent_page_hints {
+				DEFAULT_RECENT_HINT_RANGE_BUDGET
+			} else {
+				0
+			},
+			cache_hit_predictor_training: flags.cache_hit_predictor_training,
+			recent_page_hints: flags.recent_page_hints,
+			adaptive_read_ahead: flags.adaptive_read_ahead,
+			#[cfg(test)]
+			assert_batch_atomic: true,
 		}
 	}
+
+	fn caches_target_pages(&self) -> bool {
+		self.page_cache_mode.caches_target_pages() && self.cache_capacity_pages > 0
+	}
+
+	fn caches_prefetched_pages(&self) -> bool {
+		self.page_cache_mode.caches_prefetched_pages() && self.cache_capacity_pages > 0
+	}
+
+	#[cfg(test)]
+	fn caches_startup_preloaded_pages(&self) -> bool {
+		self.page_cache_mode.caches_startup_preloaded_pages() && self.cache_capacity_pages > 0
+	}
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VfsPreloadHintRange {
@@ -329,6 +347,11 @@ pub struct SqliteVfsMetricsSnapshot {
 	pub state_update_ns: u64,
 	pub total_ns: u64,
 	pub commit_count: u64,
+	pub page_cache_entries: u64,
+	pub page_cache_weighted_size: u64,
+	pub page_cache_capacity_pages: u64,
+	pub write_buffer_dirty_pages: u64,
+	pub db_size_pages: u64,
 }
 
 pub trait SqliteVfsMetrics: Send + Sync {
@@ -861,7 +884,7 @@ fn push_coalesced_range(ranges: &mut VecDeque<VfsPreloadHintRange>, range: VfsPr
 impl VfsState {
 	fn new(config: &VfsConfig) -> Self {
 		let page_cache = Cache::builder()
-			.max_capacity(config.cache_capacity_pages)
+			.max_capacity(config.cache_capacity_pages.max(1))
 			.build();
 		page_cache.insert(1, empty_db_page());
 
@@ -889,6 +912,22 @@ impl VfsState {
 		}
 		self.page_cache.insert(1, page);
 	}
+
+	fn evict_pages_after_eof(&mut self) {
+		let db_size_pages = self.db_size_pages;
+		let stale_pgnos = self
+			.page_cache
+			.iter()
+			.filter_map(|entry| {
+				let pgno = *entry.0;
+				(pgno > db_size_pages).then_some(pgno)
+			})
+			.collect::<Vec<_>>();
+		for pgno in stale_pgnos {
+			self.page_cache.invalidate(&pgno);
+		}
+		self.page_cache.run_pending_tasks();
+	}
 }
 
 impl VfsContext {
@@ -901,10 +940,15 @@ impl VfsContext {
 		metrics: Option<Arc<dyn SqliteVfsMetrics>>,
 	) -> std::result::Result<Self, String> {
 		let mut state = VfsState::new(&config);
+		if let Some(page) = config.initial_main_page.clone() {
+			state.seed_main_page(page);
+		}
 		#[cfg(test)]
 		if let SqliteTransportInner::Direct(storage) = &*transport.inner {
 			if storage.is_strict_mode() {
-				if let Some(page) = fetch_initial_main_page(&transport, &runtime, &actor_id)? {
+				if config.initial_main_page.is_none()
+					&& let Some(page) = fetch_initial_main_page(&transport, &runtime, &actor_id)?
+				{
 					state.seed_main_page(page);
 				}
 			} else {
@@ -913,14 +957,12 @@ impl VfsContext {
 					state.db_size_pages = snapshot.db_size_pages;
 					state.page_cache.invalidate_all();
 					for (pgno, bytes) in snapshot.pages {
-						state.page_cache.insert(pgno, bytes);
+						if pgno == 1 || config.caches_startup_preloaded_pages() {
+							state.page_cache.insert(pgno, bytes);
+						}
 					}
 				}
 			}
-		}
-		#[cfg(not(test))]
-		if let Some(page) = fetch_initial_main_page(&transport, &runtime, &actor_id)? {
-			state.seed_main_page(page);
 		}
 
 		Ok(Self {
@@ -997,6 +1039,7 @@ impl VfsContext {
 	}
 
 	fn sqlite_vfs_metrics(&self) -> SqliteVfsMetricsSnapshot {
+		let state = self.state.read();
 		SqliteVfsMetricsSnapshot {
 			request_build_ns: self.commit_request_build_ns.load(Ordering::Relaxed),
 			serialize_ns: self.commit_serialize_ns.load(Ordering::Relaxed),
@@ -1004,6 +1047,11 @@ impl VfsContext {
 			state_update_ns: self.commit_state_update_ns.load(Ordering::Relaxed),
 			total_ns: self.commit_duration_ns_total.load(Ordering::Relaxed),
 			commit_count: self.commit_total.load(Ordering::Relaxed),
+			page_cache_entries: state.page_cache.entry_count(),
+			page_cache_weighted_size: state.page_cache.weighted_size(),
+			page_cache_capacity_pages: self.config.cache_capacity_pages,
+			write_buffer_dirty_pages: state.write_buffer.dirty.len() as u64,
+			db_size_pages: state.db_size_pages as u64,
 		}
 	}
 
@@ -1248,10 +1296,18 @@ impl VfsContext {
 
 		match response {
 			protocol::SqliteGetPagesResponse::SqliteGetPagesOk(ok) => {
+				let target_missing = missing.iter().copied().collect::<HashSet<_>>();
 				let page_cache = { self.state.read().page_cache.clone() };
 				for fetched in ok.pages {
 					if let Some(bytes) = &fetched.bytes {
-						page_cache.insert(fetched.pgno, bytes.clone());
+						let should_cache = if target_missing.contains(&fetched.pgno) {
+							self.config.caches_target_pages()
+						} else {
+							self.config.caches_prefetched_pages()
+						};
+						if should_cache {
+							page_cache.insert(fetched.pgno, bytes.clone());
+						}
 					}
 					resolved.insert(fetched.pgno, fetched.bytes);
 				}
@@ -1346,10 +1402,15 @@ impl VfsContext {
 		let mut state = self.state.write();
 		state.db_size_pages = request.new_db_size_pages;
 		for dirty_page in &request.dirty_pages {
-			state
-				.page_cache
-				.insert(dirty_page.pgno, dirty_page.bytes.clone());
+			if self.config.caches_target_pages() {
+				state
+					.page_cache
+					.insert(dirty_page.pgno, dirty_page.bytes.clone());
+			} else {
+				state.page_cache.invalidate(&dirty_page.pgno);
+			}
 		}
+		state.evict_pages_after_eof();
 		state.write_buffer.dirty.clear();
 		let state_update_ns = state_update_start.elapsed().as_nanos() as u64;
 		self.add_commit_phase_metrics(
@@ -1445,10 +1506,15 @@ impl VfsContext {
 		let mut state = self.state.write();
 		state.db_size_pages = request.new_db_size_pages;
 		for dirty_page in &request.dirty_pages {
-			state
-				.page_cache
-				.insert(dirty_page.pgno, dirty_page.bytes.clone());
+			if self.config.caches_target_pages() {
+				state
+					.page_cache
+					.insert(dirty_page.pgno, dirty_page.bytes.clone());
+			} else {
+				state.page_cache.invalidate(&dirty_page.pgno);
+			}
 		}
+		state.evict_pages_after_eof();
 		state.write_buffer.dirty.clear();
 		state.write_buffer.in_atomic_write = false;
 		let state_update_ns = state_update_start.elapsed().as_nanos() as u64;
@@ -1471,6 +1537,7 @@ impl VfsContext {
 			.dirty
 			.retain(|pgno, _| *pgno <= truncated_pages);
 		state.page_cache.invalidate_all();
+		state.page_cache.run_pending_tasks();
 	}
 }
 
@@ -1544,6 +1611,7 @@ fn mark_dead_from_fence_commit_error(ctx: &VfsContext, err: &CommitBufferError) 
 	}
 }
 
+#[cfg(test)]
 fn fetch_initial_main_page(
 	transport: &SqliteTransport,
 	runtime: &Handle,
@@ -1556,6 +1624,28 @@ fn fetch_initial_main_page(
 		expected_head_txid: None,
 	}));
 
+	initial_main_page_from_response(actor_id, response)
+}
+
+pub async fn fetch_initial_main_page_from_envoy(
+	handle: &EnvoyHandle,
+	actor_id: &str,
+) -> std::result::Result<Option<Vec<u8>>, String> {
+	let response = handle
+		.sqlite_get_pages(protocol::SqliteGetPagesRequest {
+			actor_id: actor_id.to_string(),
+			pgnos: vec![1],
+			expected_generation: None,
+			expected_head_txid: None,
+		})
+		.await;
+	initial_main_page_from_response(actor_id, response)
+}
+
+fn initial_main_page_from_response(
+	actor_id: &str,
+	response: anyhow::Result<protocol::SqliteGetPagesResponse>,
+) -> std::result::Result<Option<Vec<u8>>, String> {
 	match response {
 		Ok(protocol::SqliteGetPagesResponse::SqliteGetPagesOk(ok)) => Ok(ok
 			.pages
@@ -2488,6 +2578,10 @@ impl SqliteVfs {
 
 	pub(crate) fn snapshot_preload_hints(&self) -> VfsPreloadHintSnapshot {
 		self.ctx.snapshot_preload_hints()
+	}
+
+	pub(crate) fn sqlite_vfs_metrics(&self) -> SqliteVfsMetricsSnapshot {
+		self.ctx.sqlite_vfs_metrics()
 	}
 
 	fn register_with_transport(

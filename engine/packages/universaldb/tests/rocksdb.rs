@@ -15,7 +15,11 @@ use rocksdb::{OptimisticTransactionDB, Options, WriteOptions};
 use universaldb::{
 	Database,
 	prelude::*,
-	utils::{calculate_tx_retry_backoff, end_of_key_range},
+	tuple::{Element, Versionstamp, pack_with_versionstamp},
+	utils::{
+		Subspace, calculate_tx_retry_backoff, end_of_key_range,
+		keys::{ACTIVE2, GASOLINE, KV, METRIC, RIVET, WORKER},
+	},
 };
 use uuid::Uuid;
 
@@ -271,4 +275,169 @@ async fn rocksdb_udb() {
 			println!("{start:?}-{end:?}: {count}");
 		}
 	}
+}
+
+#[tokio::test]
+async fn rocksdb_normal_set_preserves_versionstamp_like_bytes() {
+	let _ = tracing_subscriber::fmt()
+		.with_env_filter("debug")
+		.with_test_writer()
+		.try_init();
+
+	let test_id = Uuid::new_v4();
+	let (db_config, _docker_config) = TestDatabase::FileSystem.config(test_id, 1).await.unwrap();
+
+	let rivet_config::config::Database::FileSystem(fs_config) = db_config else {
+		unreachable!()
+	};
+
+	let driver = universaldb::driver::RocksDbDatabaseDriver::new(fs_config.path)
+		.await
+		.unwrap();
+	let db = Database::new(Arc::new(driver));
+
+	let key = b"versionstamp-like-binary".to_vec();
+	let value = pack_with_versionstamp(&vec![
+		Element::Bytes(b"prefix".to_vec().into()),
+		Element::Versionstamp(Versionstamp::incomplete(0)),
+		Element::Bytes(b"suffix".to_vec().into()),
+	]);
+
+	db.run(|tx| {
+		let key = key.clone();
+		let value = value.clone();
+
+		async move {
+			tx.set(&key, &value);
+			Ok(())
+		}
+	})
+	.await
+	.unwrap();
+
+	let stored = db
+		.run(|tx| {
+			let key = key.clone();
+
+			async move { Ok(tx.get(&key, Serializable).await?) }
+		})
+		.await
+		.unwrap()
+		.unwrap();
+
+	assert_eq!(Vec::<u8>::from(stored), value);
+}
+
+#[tokio::test]
+async fn rocksdb_empty_range_before_next_keyspace_returns_empty() {
+	let _ = tracing_subscriber::fmt()
+		.with_env_filter("debug")
+		.with_test_writer()
+		.try_init();
+
+	let test_id = Uuid::new_v4();
+	let (db_config, _docker_config) = TestDatabase::FileSystem.config(test_id, 1).await.unwrap();
+
+	let rivet_config::config::Database::FileSystem(fs_config) = db_config else {
+		unreachable!()
+	};
+
+	let driver = universaldb::driver::RocksDbDatabaseDriver::new(fs_config.path)
+		.await
+		.unwrap();
+	let db = Database::new(Arc::new(driver));
+
+	let next_keyspace_key = b"b/metric".to_vec();
+	db.run(|tx| {
+		let next_keyspace_key = next_keyspace_key.clone();
+
+		async move {
+			tx.set(&next_keyspace_key, b"value");
+			Ok(())
+		}
+	})
+	.await
+	.unwrap();
+
+	let entries = db
+		.run(|tx| async move {
+			tx.get_ranges_keyvalues(
+				RangeOption {
+					begin: KeySelector::first_greater_or_equal(b"a/worker/active/after".to_vec()),
+					end: KeySelector::first_greater_or_equal(b"a/worker/active/\xff".to_vec()),
+					mode: StreamingMode::WantAll,
+					..RangeOption::default()
+				},
+				Serializable,
+			)
+			.try_collect::<Vec<_>>()
+			.await
+		})
+		.await
+		.unwrap();
+
+	assert!(entries.is_empty(), "range leaked entries: {entries:?}");
+}
+
+#[tokio::test]
+async fn rocksdb_empty_tuple_subspace_range_before_metric_key_returns_empty() {
+	let _ = tracing_subscriber::fmt()
+		.with_env_filter("debug")
+		.with_test_writer()
+		.try_init();
+
+	let test_id = Uuid::new_v4();
+	let (db_config, _docker_config) = TestDatabase::FileSystem.config(test_id, 1).await.unwrap();
+
+	let rivet_config::config::Database::FileSystem(fs_config) = db_config else {
+		unreachable!()
+	};
+
+	let driver = universaldb::driver::RocksDbDatabaseDriver::new(fs_config.path)
+		.await
+		.unwrap();
+	let db = Database::new(Arc::new(driver));
+
+	let gasoline_subspace = Subspace::new(&(RIVET, GASOLINE, KV));
+	let metric_key = gasoline_subspace.pack(&(METRIC, 1_i64, "epoxy_replica_v2"));
+	db.run(|tx| {
+		let metric_key = metric_key.clone();
+
+		async move {
+			tx.set(&metric_key, b"value");
+			Ok(())
+		}
+	})
+	.await
+	.unwrap();
+
+	let active_worker_start = gasoline_subspace.pack(&(WORKER, ACTIVE2, 1_762_049_020_000_i64));
+	let active_worker_end = gasoline_subspace
+		.subspace(&(WORKER, ACTIVE2))
+		.range()
+		.1;
+
+	let entries = db
+		.run(|tx| {
+			let active_worker_start = active_worker_start.clone();
+			let active_worker_end = active_worker_end.clone();
+
+			async move {
+				tx.get_ranges_keyvalues(
+					RangeOption {
+						begin: KeySelector::first_greater_or_equal(active_worker_start),
+						end: KeySelector::first_greater_or_equal(active_worker_end),
+						mode: StreamingMode::WantAll,
+						..RangeOption::default()
+					},
+					Serializable,
+				)
+				.try_collect::<Vec<_>>()
+				.await
+			}
+		})
+		.await
+		.unwrap();
+
+	assert!(entries.is_empty(), "range leaked entries: {entries:?}");
 }

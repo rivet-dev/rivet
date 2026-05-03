@@ -22,6 +22,11 @@ use super::{
 	transaction::RocksDbTransactionDriver, transaction_conflict_tracker::TransactionConflictTracker,
 };
 
+const ROCKSDB_WRITE_BUFFER_SIZE_BYTES: usize = 4 * 1024 * 1024;
+const ROCKSDB_DB_WRITE_BUFFER_SIZE_BYTES: usize = 16 * 1024 * 1024;
+const ROCKSDB_MAX_WRITE_BUFFER_NUMBER: i32 = 2;
+const ROCKSDB_MIN_WRITE_BUFFER_NUMBER_TO_MERGE: i32 = 1;
+
 pub struct RocksDbDatabaseDriver {
 	db: Arc<OptimisticTransactionDB>,
 	max_retries: AtomicI32,
@@ -41,7 +46,11 @@ impl RocksDbDatabaseDriver {
 		opts.set_max_open_files(10000);
 		opts.set_keep_log_file_num(10);
 		opts.set_max_total_wal_size(64 * 1024 * 1024); // 64MiB
-		opts.set_write_buffer_size(256 * 1024 * 1024); // 256MiB for conflict detection
+		opts.set_write_buffer_size(ROCKSDB_WRITE_BUFFER_SIZE_BYTES);
+		opts.set_db_write_buffer_size(ROCKSDB_DB_WRITE_BUFFER_SIZE_BYTES);
+		opts.set_max_write_buffer_number(ROCKSDB_MAX_WRITE_BUFFER_NUMBER);
+		opts.set_min_write_buffer_number_to_merge(ROCKSDB_MIN_WRITE_BUFFER_NUMBER_TO_MERGE);
+		opts.set_max_write_buffer_size_to_maintain(0);
 
 		// Open the OptimisticTransactionDB
 		tracing::debug!(path=%db_path.display(), "opening rocksdb");

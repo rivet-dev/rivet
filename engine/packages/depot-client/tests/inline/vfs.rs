@@ -253,6 +253,61 @@
 	}
 
 	#[test]
+	fn vfs_config_honors_page_cache_optimization_flags() {
+		let disabled = VfsConfig::from_optimization_flags(SqliteOptimizationFlags {
+			vfs_page_cache_mode: SqliteVfsPageCacheMode::Off,
+			vfs_page_cache_capacity_pages: 0,
+			..SqliteOptimizationFlags::default()
+		});
+
+		assert_eq!(disabled.page_cache_mode, SqliteVfsPageCacheMode::Off);
+		assert_eq!(disabled.cache_capacity_pages, 0);
+		assert!(!disabled.caches_target_pages());
+		assert!(!disabled.caches_prefetched_pages());
+		assert!(!disabled.caches_startup_preloaded_pages());
+
+		let prefetch = VfsConfig::from_optimization_flags(SqliteOptimizationFlags {
+			vfs_page_cache_mode: SqliteVfsPageCacheMode::Prefetch,
+			vfs_page_cache_capacity_pages: 123,
+			..SqliteOptimizationFlags::default()
+		});
+
+		assert_eq!(prefetch.cache_capacity_pages, 123);
+		assert!(prefetch.caches_target_pages());
+		assert!(prefetch.caches_prefetched_pages());
+		assert!(!prefetch.caches_startup_preloaded_pages());
+	}
+
+	#[test]
+	fn direct_engine_opens_empty_database_with_page_cache_disabled() {
+		let runtime = direct_runtime();
+		let harness = DirectEngineHarness::new();
+		let mut config = VfsConfig::default();
+		config.page_cache_mode = SqliteVfsPageCacheMode::Off;
+		config.cache_capacity_pages = 0;
+
+		let engine = runtime.block_on(harness.open_engine());
+		let db = harness.open_db_on_engine(&runtime, engine, &harness.actor_id, config);
+
+		sqlite_exec(
+			db.as_ptr(),
+			"CREATE TABLE items (id INTEGER PRIMARY KEY, value TEXT NOT NULL);",
+		)
+		.expect("create table should succeed with page cache disabled");
+		sqlite_step_statement(
+			db.as_ptr(),
+			"INSERT INTO items (id, value) VALUES (1, 'alpha');",
+		)
+		.expect("insert should succeed with page cache disabled");
+		assert_eq!(
+			sqlite_query_text(db.as_ptr(), "SELECT value FROM items WHERE id = 1;")
+				.expect("select should succeed with page cache disabled"),
+			"alpha"
+		);
+		assert_eq!(db.sqlite_vfs_metrics().page_cache_capacity_pages, 0);
+	}
+
+	#[test]
 	fn direct_engine_supports_create_insert_select_and_user_version() {
 		let runtime = direct_runtime();
 		let harness = DirectEngineHarness::new();
@@ -613,6 +668,21 @@
 		let shrunk_pages = sqlite_query_i64(db.as_ptr(), "PRAGMA page_count;")
 			.expect("shrunk page_count should succeed");
 		assert!(shrunk_pages < grown_pages);
+		let ctx = direct_vfs_ctx(&db);
+		let state = ctx.state.read();
+		assert_eq!(state.db_size_pages, shrunk_pages as u32);
+		assert!(
+			state
+				.page_cache
+				.iter()
+				.all(|entry| *entry.0 <= state.db_size_pages),
+			"VFS cache should not retain pages beyond the vacuumed EOF"
+		);
+		assert!(
+			state.page_cache.entry_count() <= state.db_size_pages as u64,
+			"VFS cache should drain invalidated pages after vacuum"
+		);
+		drop(state);
 
 		for _ in 0..8 {
 			sqlite_step_statement(
