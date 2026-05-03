@@ -3951,7 +3951,14 @@ export function buildNativeFactory(
 						const actorCtx = makeActorCtx(ctx);
 						try {
 							await onSleep(actorCtx);
-							await actorCtx.saveState({ immediate: true });
+							if (runtime.kind === "wasm") {
+								await runtime.actorSaveState(
+									ctx,
+									actorCtx.serializeForTick("save"),
+								);
+							} else {
+								await actorCtx.saveState({ immediate: true });
+							}
 						} finally {
 							await actorCtx.dispose();
 						}

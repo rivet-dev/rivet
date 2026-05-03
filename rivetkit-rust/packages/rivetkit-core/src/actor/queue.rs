@@ -818,25 +818,17 @@ impl ActorContext {
 		timeout: Option<Duration>,
 		signal: Option<&CancellationToken>,
 	) -> WaitOutcome {
+		let actor_abort_signal = self.0.queue_abort_signal.lock().clone();
 		if signal.is_some_and(CancellationToken::is_cancelled) {
 			return WaitOutcome::Aborted;
 		}
-		if self
-			.0
-			.queue_abort_signal
-			.as_ref()
-			.is_some_and(CancellationToken::is_cancelled)
-		{
+		if actor_abort_signal.is_cancelled() {
 			return WaitOutcome::Aborted;
 		}
 
 		let notified = self.0.queue_notify.notified();
 		let actor_aborted = async {
-			if let Some(signal) = &self.0.queue_abort_signal {
-				signal.cancelled().await;
-			} else {
-				pending::<()>().await;
-			}
+			actor_abort_signal.cancelled().await;
 		};
 		let external_aborted = async {
 			if let Some(signal) = signal {
