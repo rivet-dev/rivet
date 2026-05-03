@@ -59,17 +59,13 @@ export class Registry<A extends RegistryActors> {
 		const config = this.parseConfig();
 		this.#printWelcome(config, "serverless");
 
-		if (config.configurePool && !this.#configureServerlessPoolPromise) {
-			this.#configureServerlessPoolPromise =
-				configureServerlessPool(config);
-		}
-
 		if (!this.#runtimeServerlessPromise) {
 			this.#runtimeServerlessPromise = buildConfiguredRegistry(config);
 		}
 
 		const { runtime, registry, serveConfig } =
 			await this.#runtimeServerlessPromise;
+
 		const cancelToken = runtime.createCancellationToken();
 		const abort = () => runtime.cancelCancellationToken(cancelToken);
 		if (request.signal.aborted) {
@@ -195,6 +191,12 @@ export class Registry<A extends RegistryActors> {
 			runtime.cancelCancellationToken(cancelToken);
 			throw err;
 		}
+
+		if (config.configurePool && !this.#configureServerlessPoolPromise) {
+			this.#configureServerlessPoolPromise =
+				configureServerlessPool(config);
+		}
+		await this.#configureServerlessPoolPromise;
 
 		return new Response(stream, {
 			status: head.status,
