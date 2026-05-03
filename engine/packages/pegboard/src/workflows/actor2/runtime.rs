@@ -358,6 +358,17 @@ pub async fn send_outbound(ctx: &ActivityCtx, input: &SendOutboundInput) -> Resu
 				.await?;
 		}
 		Allocation::Serverful { envoy_key } => {
+			let hibernating_requests = ctx
+				.op(crate::ops::actor::hibernating_request::list::Input {
+					actor_id: state.actor_id,
+				})
+				.await?
+				.into_iter()
+				.map(|request| protocol::HibernatingRequest {
+					gateway_id: request.gateway_id,
+					request_id: request.request_id,
+				})
+				.collect();
 			let command = protocol::Command::CommandStartActor(protocol::CommandStartActor {
 				config: protocol::ActorConfig {
 					name: state.name.clone(),
@@ -368,9 +379,7 @@ pub async fn send_outbound(ctx: &ActivityCtx, input: &SendOutboundInput) -> Resu
 						.as_ref()
 						.and_then(|x| BASE64_STANDARD.decode(x).ok()),
 				},
-				// Empty because request ids are ephemeral. This is intercepted by guard and
-				// populated before it reaches the runner
-				hibernating_requests: Vec::new(),
+				hibernating_requests,
 				preloaded_kv: None,
 			});
 
