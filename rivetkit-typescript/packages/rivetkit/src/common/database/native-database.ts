@@ -3,6 +3,7 @@ import type {
 	SqliteBindings,
 	SqliteDatabase,
 	SqliteExecuteResult,
+	SqliteNativeMetrics,
 } from "./config";
 
 type NativeBindNoValues = {
@@ -78,6 +79,7 @@ export interface JsNativeDatabaseLike {
 		sql: string,
 		params?: NativeBindParam[] | null,
 	): Promise<NativeRunResult>;
+	metrics?(): SqliteNativeMetrics | null;
 	takeLastKvError?(): string | null;
 	close(): Promise<void>;
 }
@@ -201,6 +203,45 @@ function toNativeBindings(
 	});
 }
 
+function normalizeExecuteRoute(route: string): SqliteExecuteResult["route"] {
+	if (route === "read" || route === "write" || route === "writeFallback") {
+		return route;
+	}
+	throw new Error(`unsupported sqlite execute route: ${route}`);
+}
+
+function normalizeNativeMetrics(
+	metrics: SqliteNativeMetrics | null | undefined,
+): SqliteNativeMetrics | null {
+	if (!metrics) return null;
+	const raw = metrics as unknown as Record<string, unknown>;
+	const numberField = (camel: string, snake: string) =>
+		Number(raw[camel] ?? raw[snake] ?? 0);
+
+	return {
+		requestBuildNs: numberField("requestBuildNs", "request_build_ns"),
+		serializeNs: numberField("serializeNs", "serialize_ns"),
+		transportNs: numberField("transportNs", "transport_ns"),
+		stateUpdateNs: numberField("stateUpdateNs", "state_update_ns"),
+		totalNs: numberField("totalNs", "total_ns"),
+		commitCount: numberField("commitCount", "commit_count"),
+		pageCacheEntries: numberField("pageCacheEntries", "page_cache_entries"),
+		pageCacheWeightedSize: numberField(
+			"pageCacheWeightedSize",
+			"page_cache_weighted_size",
+		),
+		pageCacheCapacityPages: numberField(
+			"pageCacheCapacityPages",
+			"page_cache_capacity_pages",
+		),
+		writeBufferDirtyPages: numberField(
+			"writeBufferDirtyPages",
+			"write_buffer_dirty_pages",
+		),
+		dbSizePages: numberField("dbSizePages", "db_size_pages"),
+	};
+}
+
 class NativeCloseGate {
 	#active = 0;
 	#closed = false;
@@ -314,6 +355,9 @@ export function wrapJsNativeDatabase(
 		},
 		async writeMode<T>(callback: () => Promise<T>): Promise<T> {
 			return await callback();
+		},
+		nativeMetrics(): SqliteNativeMetrics | null {
+			return normalizeNativeMetrics(database.metrics?.());
 		},
 		async close(): Promise<void> {
 			closePromise ??= gate.close(() => database.close());

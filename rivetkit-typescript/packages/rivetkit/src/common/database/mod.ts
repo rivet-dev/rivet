@@ -102,6 +102,7 @@ export function db({
 						await db.close();
 					}
 				},
+				nativeMetrics: () => db.nativeMetrics?.() ?? null,
 				__rivetWriteMode: async <T>(
 					callback: () => Promise<T> | T,
 				): Promise<T> => {

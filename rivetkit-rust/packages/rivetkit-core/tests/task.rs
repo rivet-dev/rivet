@@ -34,6 +34,7 @@ mod moved_tests {
 	use crate::actor::keys::{LAST_PUSHED_ALARM_KEY, PERSIST_DATA_KEY, make_connection_key};
 	use crate::actor::messages::{ActorEvent, SerializeStateReason, StateDelta};
 	use crate::actor::preload::PreloadedPersistedActor;
+	use crate::actor::sleep::CanSleep;
 	use crate::actor::state::{
 		PersistedActor, PersistedScheduleEvent, RequestSaveOpts, decode_last_pushed_alarm,
 		decode_persisted_actor, encode_last_pushed_alarm, encode_persisted_actor,
@@ -1510,6 +1511,107 @@ mod moved_tests {
 			seen_conns.lock().expect("action log lock poisoned").clone(),
 			vec![Some("conn-client".to_owned()), None],
 		);
+
+		task.handle_stop(ShutdownKind::Destroy)
+			.await
+			.expect("destroy stop should succeed");
+	}
+
+	#[tokio::test]
+	async fn action_dispatch_blocks_idle_sleep_until_reply() {
+		let ctx = new_with_kv(
+			"actor-action-keep-awake",
+			"task-action-keep-awake",
+			Vec::new(),
+			"local",
+			new_in_memory(),
+		);
+		let (action_started_tx, action_started_rx) = oneshot::channel();
+		let action_started_tx = Arc::new(Mutex::new(Some(action_started_tx)));
+		let (release_action_tx, release_action_rx) = oneshot::channel();
+		let release_action_rx = Arc::new(Mutex::new(Some(release_action_rx)));
+		let factory = Arc::new(ActorFactory::new(Default::default(), {
+			let action_started_tx = action_started_tx.clone();
+			let release_action_rx = release_action_rx.clone();
+			move |start| {
+				let action_started_tx = action_started_tx.clone();
+				let release_action_rx = release_action_rx.clone();
+				Box::pin(async move {
+					let mut events = start.events;
+					while let Some(event) = events.recv().await {
+						match event {
+							ActorEvent::Action { reply, .. } => {
+								if let Some(tx) = action_started_tx
+									.lock()
+									.expect("action started sender lock poisoned")
+									.take()
+								{
+									let _ = tx.send(());
+								}
+								let release_rx = release_action_rx
+									.lock()
+									.expect("release action receiver lock poisoned")
+									.take()
+									.expect("release action receiver should exist");
+								let _ = release_rx.await;
+								reply.send(Ok(vec![9]));
+							}
+							ActorEvent::BeginSleep => {}
+							ActorEvent::FinalizeSleep { reply } | ActorEvent::Destroy { reply } => {
+								reply.send(Ok(()));
+								break;
+							}
+							_ => {}
+						}
+					}
+					Ok(())
+				})
+			}
+		}));
+
+		let mut task = new_task_with_factory(ctx.clone(), factory);
+		let (start_tx, start_rx) = oneshot::channel();
+		task.handle_lifecycle(LifecycleCommand::Start { reply: start_tx })
+			.await;
+		start_rx
+			.await
+			.expect("start reply should send")
+			.expect("start should succeed");
+
+		let client_conn = ConnHandle::new("conn-keep-awake", Vec::new(), Vec::new(), false);
+		let (reply_tx, reply_rx) = oneshot::channel();
+		task.handle_dispatch(DispatchCommand::Action {
+			name: "slow-action".to_owned(),
+			args: Vec::new(),
+			conn: client_conn,
+			reply: reply_tx,
+		})
+		.await;
+		action_started_rx
+			.await
+			.expect("action should start before sleep assertion");
+
+		assert_eq!(ctx.internal_keep_awake_count(), 1);
+		assert_eq!(ctx.can_sleep().await, CanSleep::ActiveInternalKeepAwake);
+		release_action_tx
+			.send(())
+			.expect("action should still be waiting");
+
+		assert_eq!(
+			reply_rx
+				.await
+				.expect("action reply should send")
+				.expect("action should succeed"),
+			vec![9]
+		);
+		for _ in 0..10 {
+			if ctx.internal_keep_awake_count() == 0 {
+				break;
+			}
+			yield_now().await;
+		}
+		assert_eq!(ctx.internal_keep_awake_count(), 0);
+		assert_eq!(ctx.can_sleep().await, CanSleep::Yes);
 
 		task.handle_stop(ShutdownKind::Destroy)
 			.await

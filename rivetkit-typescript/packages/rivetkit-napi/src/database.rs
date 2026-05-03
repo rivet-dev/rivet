@@ -62,11 +62,43 @@ pub struct NativeExecuteResult {
 	pub last_insert_row_id: Option<i64>,
 }
 
+#[napi(object)]
+pub struct JsSqliteVfsMetrics {
+	pub request_build_ns: f64,
+	pub serialize_ns: f64,
+	pub transport_ns: f64,
+	pub state_update_ns: f64,
+	pub total_ns: f64,
+	pub commit_count: f64,
+	pub page_cache_entries: f64,
+	pub page_cache_weighted_size: f64,
+	pub page_cache_capacity_pages: f64,
+	pub write_buffer_dirty_pages: f64,
+	pub db_size_pages: f64,
+}
+
 #[napi]
 impl JsNativeDatabase {
 	#[napi]
 	pub fn take_last_kv_error(&self) -> Option<String> {
 		self.db.take_last_kv_error()
+	}
+
+	#[napi]
+	pub fn metrics(&self) -> Option<JsSqliteVfsMetrics> {
+		self.db.metrics().map(|metrics| JsSqliteVfsMetrics {
+			request_build_ns: metrics.request_build_ns as f64,
+			serialize_ns: metrics.serialize_ns as f64,
+			transport_ns: metrics.transport_ns as f64,
+			state_update_ns: metrics.state_update_ns as f64,
+			total_ns: metrics.total_ns as f64,
+			commit_count: metrics.commit_count as f64,
+			page_cache_entries: metrics.page_cache_entries as f64,
+			page_cache_weighted_size: metrics.page_cache_weighted_size as f64,
+			page_cache_capacity_pages: metrics.page_cache_capacity_pages as f64,
+			write_buffer_dirty_pages: metrics.write_buffer_dirty_pages as f64,
+			db_size_pages: metrics.db_size_pages as f64,
+		})
 	}
 
 	#[napi]

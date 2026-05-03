@@ -7,5 +7,6 @@ export type {
 	RawDatabaseClient,
 	SqliteBindings,
 	SqliteDatabase,
+	SqliteNativeMetrics,
 	SqliteQueryResult,
 } from "@/common/database/config";

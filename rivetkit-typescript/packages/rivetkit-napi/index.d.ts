@@ -99,6 +99,19 @@ export interface NativeExecuteResult {
   changes: number
   lastInsertRowId?: number
 }
+export interface JsSqliteVfsMetrics {
+  requestBuildNs: number
+  serializeNs: number
+  transportNs: number
+  stateUpdateNs: number
+  totalNs: number
+  commitCount: number
+  pageCacheEntries: number
+  pageCacheWeightedSize: number
+  pageCacheCapacityPages: number
+  writeBufferDirtyPages: number
+  dbSizePages: number
+}
 export interface JsQueueNextOptions {
   names?: Array<string>
   timeoutMs?: number
@@ -160,6 +173,10 @@ export interface JsServerlessRequest {
 export interface JsServerlessResponseHead {
   status: number
   headers: Record<string, string>
+}
+export interface JsRegistryDiagnostics {
+  mode: string
+  envoyActiveActorCount?: number
 }
 export interface JsServerlessStreamError {
   group: string
@@ -245,6 +262,7 @@ export declare class ConnHandle {
 }
 export declare class JsNativeDatabase {
   takeLastKvError(): string | null
+  metrics(): JsSqliteVfsMetrics | null
   run(sql: string, params?: Array<JsBindParam> | undefined | null): Promise<ExecuteResult>
   query(sql: string, params?: Array<JsBindParam> | undefined | null): Promise<QueryResult>
   execute(sql: string, params?: Array<JsBindParam> | undefined | null): Promise<NativeExecuteResult>
@@ -294,6 +312,7 @@ export declare class CoreRegistry {
    * separately to avoid re-entrancy.
    */
   shutdown(): Promise<void>
+  diagnostics(): Promise<JsRegistryDiagnostics>
   handleServerlessRequest(req: JsServerlessRequest, onStreamEvent: (...args: any[]) => any, cancelToken: CancellationToken, config: JsServeConfig): Promise<JsServerlessResponseHead>
 }
 export declare class Schedule {

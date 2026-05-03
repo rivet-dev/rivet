@@ -183,6 +183,8 @@ impl EnvoyContext {
 				},
 			);
 
+		self.shared.actors_notify.notify_waiters();
+
 		if let Some(messages) = self.buffered_actor_messages.remove(&buffered_actor_id) {
 			for message in messages {
 				match message {
@@ -216,6 +218,7 @@ impl EnvoyContext {
 				shared.remove(actor_id);
 			}
 		}
+		self.shared.actors_notify.notify_waiters();
 	}
 
 	pub fn get_actor(&self, actor_id: &str, generation: Option<u32>) -> Option<&ActorEntry> {
@@ -297,6 +300,7 @@ fn start_envoy_sync_inner(config: EnvoyConfig) -> EnvoyHandle {
 		envoy_key,
 		envoy_tx: envoy_tx.clone(),
 		actors: Arc::new(std::sync::Mutex::new(HashMap::new())),
+		actors_notify: Arc::new(tokio::sync::Notify::new()),
 		live_tunnel_requests: Arc::new(std::sync::Mutex::new(HashMap::new())),
 		pending_hibernation_restores: Arc::new(std::sync::Mutex::new(HashMap::new())),
 		ws_tx: Arc::new(tokio::sync::Mutex::new(None)),

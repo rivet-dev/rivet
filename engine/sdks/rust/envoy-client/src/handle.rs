@@ -17,6 +17,12 @@ pub struct EnvoyHandle {
 	pub(crate) started_rx: tokio::sync::watch::Receiver<()>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ServerlessActorStart {
+	pub actor_id: String,
+	pub generation: u32,
+}
+
 impl EnvoyHandle {
 	#[doc(hidden)]
 	pub fn from_shared(shared: Arc<SharedContext>) -> Self {
@@ -85,6 +91,23 @@ impl EnvoyHandle {
 		&self.shared.config.namespace
 	}
 
+	pub fn active_actor_count(&self) -> usize {
+		let guard = self
+			.shared
+			.actors
+			.lock()
+			.expect("shared actor registry poisoned");
+		guard
+			.values()
+			.map(|generations| {
+				generations
+					.values()
+					.filter(|actor| !actor.handle.is_closed())
+					.count()
+			})
+			.sum()
+	}
+
 	pub fn pool_name(&self) -> &str {
 		&self.shared.config.pool_name
 	}
@@ -136,6 +159,40 @@ impl EnvoyHandle {
 			})
 			.ok()?;
 		rx.await.ok().flatten()
+	}
+
+	pub async fn wait_actor_registered_then_stopped(&self, actor_id: &str, generation: u32) {
+		let mut registered = false;
+		loop {
+			let notified = self.shared.actors_notify.notified();
+			if self.is_stopped() {
+				return;
+			}
+
+			let actor_is_registered = {
+				let guard = self
+					.shared
+					.actors
+					.lock()
+					.expect("shared actor registry poisoned");
+				guard
+					.get(actor_id)
+					.and_then(|generations| generations.get(&generation))
+					.is_some()
+			};
+
+			if registered && !actor_is_registered {
+				return;
+			}
+			if actor_is_registered {
+				registered = true;
+			}
+
+			tokio::select! {
+				_ = notified => {}
+				_ = self.wait_stopped() => return,
+			}
+		}
 	}
 
 	pub fn http_request_counter(
@@ -484,6 +541,35 @@ impl EnvoyHandle {
 	/// Inject a serverless start payload into the envoy.
 	/// The payload is a u16 LE protocol version followed by a serialized ToEnvoy message.
 	pub async fn start_serverless_actor(&self, payload: &[u8]) -> anyhow::Result<()> {
+		let (message, _) = decode_serverless_actor_start_payload(payload)?;
+
+		// Wait for envoy to be started before injecting
+		self.started().await?;
+
+		tracing::debug!(
+			data = crate::stringify::stringify_to_envoy(&message),
+			"received serverless start"
+		);
+		self.shared
+			.envoy_tx
+			.send(ToEnvoyMessage::ConnMessage { message })
+			.map_err(|_| anyhow::anyhow!("envoy channel closed"))?;
+
+		Ok(())
+	}
+
+	pub fn decode_serverless_actor_start(
+		&self,
+		payload: &[u8],
+	) -> anyhow::Result<ServerlessActorStart> {
+		let (_, actor_start) = decode_serverless_actor_start_payload(payload)?;
+		Ok(actor_start)
+	}
+}
+
+fn decode_serverless_actor_start_payload(
+	payload: &[u8],
+) -> anyhow::Result<(protocol::ToEnvoy, ServerlessActorStart)> {
 		use vbare::OwnedVersionedData;
 
 		if payload.len() < 2 {
@@ -524,21 +610,15 @@ impl EnvoyHandle {
 			anyhow::bail!("invalid serverless payload: expected CommandStartActor");
 		}
 
-		// Wait for envoy to be started before injecting
-		self.started().await?;
+		let actor_start = ServerlessActorStart {
+			actor_id: commands[0].checkpoint.actor_id.clone(),
+			generation: commands[0].checkpoint.generation,
+		};
 
-		tracing::debug!(
-			data = crate::stringify::stringify_to_envoy(&message),
-			"received serverless start"
-		);
-		self.shared
-			.envoy_tx
-			.send(ToEnvoyMessage::ConnMessage { message })
-			.map_err(|_| anyhow::anyhow!("envoy channel closed"))?;
-
-		Ok(())
+		Ok((message, actor_start))
 	}
 
+impl EnvoyHandle {
 	async fn send_kv_request(
 		&self,
 		actor_id: String,

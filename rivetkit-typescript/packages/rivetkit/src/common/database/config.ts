@@ -23,6 +23,20 @@ export interface SqliteExecuteResult extends SqliteQueryResult {
 	lastInsertRowId?: number | null;
 }
 
+export interface SqliteNativeMetrics {
+	requestBuildNs: number;
+	serializeNs: number;
+	transportNs: number;
+	stateUpdateNs: number;
+	totalNs: number;
+	commitCount: number;
+	pageCacheEntries: number;
+	pageCacheWeightedSize: number;
+	pageCacheCapacityPages: number;
+	writeBufferDirtyPages: number;
+	dbSizePages: number;
+}
+
 export interface SqliteDatabase {
 	exec(
 		sql: string,
@@ -35,6 +49,10 @@ export interface SqliteDatabase {
 	run(sql: string, params?: SqliteBindings): Promise<void>;
 	query(sql: string, params?: SqliteBindings): Promise<SqliteQueryResult>;
 	writeMode<T>(callback: () => Promise<T>): Promise<T>;
+	nativeMetrics?():
+		| SqliteNativeMetrics
+		| Promise<SqliteNativeMetrics | null>
+		| null;
 	close(): Promise<void>;
 }
 
@@ -132,6 +150,13 @@ export type RawAccess = {
 	 * Executes a raw SQL query.
 	 */
 	execute: ExecuteFunction;
+	/**
+	 * Returns native SQLite metrics when the active runtime supports them.
+	 */
+	nativeMetrics?: () =>
+		| SqliteNativeMetrics
+		| Promise<SqliteNativeMetrics | null>
+		| null;
 	/**
 	 * Closes the database connection and releases resources.
 	 */
