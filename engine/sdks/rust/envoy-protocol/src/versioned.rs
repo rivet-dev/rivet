@@ -2,7 +2,7 @@ use anyhow::{Result, bail};
 use std::{error::Error, fmt};
 use vbare::OwnedVersionedData;
 
-use crate::generated::{v1, v2, v3, v4};
+use crate::generated::{v1, v2, v3, v4, v5};
 
 fn convert_same_bytes<T, U>(message: T) -> Result<U>
 where
@@ -25,6 +25,7 @@ pub enum ProtocolCompatibilityFeature {
 	SqliteStartupData,
 	SqlitePageIo,
 	SqlitePageRange,
+	SqlitePreloadHints,
 	RemoteSqliteExecution,
 }
 
@@ -39,6 +40,10 @@ impl ProtocolCompatibilityFeature {
 			ProtocolCompatibilityFeature::SqlitePageRange => match direction {
 				ProtocolCompatibilityDirection::ToEnvoy => "sqlite range responses",
 				ProtocolCompatibilityDirection::ToRivet => "sqlite range requests",
+			},
+			ProtocolCompatibilityFeature::SqlitePreloadHints => match direction {
+				ProtocolCompatibilityDirection::ToEnvoy => "sqlite preload hint responses",
+				ProtocolCompatibilityDirection::ToRivet => "sqlite preload hint requests",
 			},
 			ProtocolCompatibilityFeature::RemoteSqliteExecution => match direction {
 				ProtocolCompatibilityDirection::ToEnvoy => "remote sqlite responses",
@@ -68,6 +73,7 @@ impl fmt::Display for ProtocolCompatibilityError {
 			ProtocolCompatibilityFeature::SqliteStartupData => "requires",
 			ProtocolCompatibilityFeature::SqlitePageIo
 			| ProtocolCompatibilityFeature::SqlitePageRange
+			| ProtocolCompatibilityFeature::SqlitePreloadHints
 			| ProtocolCompatibilityFeature::RemoteSqliteExecution => "require",
 		};
 
@@ -101,130 +107,151 @@ fn incompatible(
 
 
 pub enum ToEnvoy {
-	V4(v4::ToEnvoy),
+	V5(v5::ToEnvoy),
 }
 
 impl OwnedVersionedData for ToEnvoy {
-	type Latest = v4::ToEnvoy;
+	type Latest = v5::ToEnvoy;
 
 	fn wrap_latest(latest: Self::Latest) -> Self {
-		Self::V4(latest)
+		Self::V5(latest)
 	}
 
 	fn unwrap_latest(self) -> Result<Self::Latest> {
 		match self {
-			Self::V4(data) => Ok(data),
+			Self::V5(data) => Ok(data),
 		}
 	}
 
 	fn deserialize_version(payload: &[u8], version: u16) -> Result<Self> {
-		Ok(Self::V4(match version {
-			1 => convert_to_envoy_v3_to_v4(convert_to_envoy_v2_to_v3(convert_to_envoy_v1_to_v2(
-				serde_bare::from_slice(payload)?,
-			)?)?)?,
-			2 => convert_to_envoy_v3_to_v4(convert_to_envoy_v2_to_v3(serde_bare::from_slice(
+		Ok(Self::V5(match version {
+			1 => convert_to_envoy_v4_to_v5(convert_to_envoy_v3_to_v4(
+				convert_to_envoy_v2_to_v3(convert_to_envoy_v1_to_v2(serde_bare::from_slice(
+					payload,
+				)?)?)?,
+			)?)?,
+			2 => convert_to_envoy_v4_to_v5(convert_to_envoy_v3_to_v4(
+				convert_to_envoy_v2_to_v3(serde_bare::from_slice(payload)?)?,
+			)?)?,
+			3 => convert_to_envoy_v4_to_v5(convert_to_envoy_v3_to_v4(serde_bare::from_slice(
 				payload,
 			)?)?)?,
-			3 => convert_to_envoy_v3_to_v4(serde_bare::from_slice(payload)?)?,
-			4 => serde_bare::from_slice(payload)?,
+			4 => convert_to_envoy_v4_to_v5(serde_bare::from_slice(payload)?)?,
+			5 => serde_bare::from_slice(payload)?,
 			_ => bail!("invalid version: {version}"),
 		}))
 	}
 
 	fn serialize_version(self, version: u16) -> Result<Vec<u8>> {
-		let Self::V4(data) = self;
+		let Self::V5(data) = self;
 		match version {
 			1 => serde_bare::to_vec(&convert_to_envoy_v2_to_v1(convert_to_envoy_v3_to_v2(
-				convert_to_envoy_v4_to_v3(data, 1)?,
+				convert_to_envoy_v4_to_v3(convert_to_envoy_v5_to_v4(data, 1)?, 1)?,
 			)?)?)
 			.map_err(Into::into),
-			2 => serde_bare::to_vec(&convert_to_envoy_v3_to_v2(convert_to_envoy_v4_to_v3(data, 2)?)?)
-				.map_err(Into::into),
-			3 => serde_bare::to_vec(&convert_to_envoy_v4_to_v3(data, 3)?).map_err(Into::into),
-			4 => serde_bare::to_vec(&data).map_err(Into::into),
+			2 => serde_bare::to_vec(&convert_to_envoy_v3_to_v2(convert_to_envoy_v4_to_v3(
+				convert_to_envoy_v5_to_v4(data, 2)?,
+				2,
+			)?)?)
+			.map_err(Into::into),
+			3 => serde_bare::to_vec(&convert_to_envoy_v4_to_v3(
+				convert_to_envoy_v5_to_v4(data, 3)?,
+				3,
+			)?)
+			.map_err(Into::into),
+			4 => serde_bare::to_vec(&convert_to_envoy_v5_to_v4(data, 4)?).map_err(Into::into),
+			5 => serde_bare::to_vec(&data).map_err(Into::into),
 			_ => bail!("invalid version: {version}"),
 		}
 	}
 
 	fn deserialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
-		vec![Ok, Ok, Ok]
+		vec![Ok, Ok, Ok, Ok]
 	}
 
 	fn serialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
-		vec![Ok, Ok, Ok]
+		vec![Ok, Ok, Ok, Ok]
 	}
 }
 
 pub enum ToRivet {
-	V4(v4::ToRivet),
+	V5(v5::ToRivet),
 }
 
 impl OwnedVersionedData for ToRivet {
-	type Latest = v4::ToRivet;
+	type Latest = v5::ToRivet;
 
 	fn wrap_latest(latest: Self::Latest) -> Self {
-		Self::V4(latest)
+		Self::V5(latest)
 	}
 
 	fn unwrap_latest(self) -> Result<Self::Latest> {
 		match self {
-			Self::V4(data) => Ok(data),
+			Self::V5(data) => Ok(data),
 		}
 	}
 
 	fn deserialize_version(payload: &[u8], version: u16) -> Result<Self> {
-		Ok(Self::V4(match version {
-			1 | 2 => convert_to_rivet_v3_to_v4(convert_to_rivet_v2_to_v3(
+		Ok(Self::V5(match version {
+			1 | 2 => convert_to_rivet_v4_to_v5(convert_to_rivet_v3_to_v4(
+				convert_to_rivet_v2_to_v3(serde_bare::from_slice(payload)?)?,
+			)?)?,
+			3 => convert_to_rivet_v4_to_v5(convert_to_rivet_v3_to_v4(
 				serde_bare::from_slice(payload)?,
 			)?)?,
-			3 => convert_to_rivet_v3_to_v4(serde_bare::from_slice(payload)?)?,
-			4 => serde_bare::from_slice(payload)?,
+			4 => convert_to_rivet_v4_to_v5(serde_bare::from_slice(payload)?)?,
+			5 => serde_bare::from_slice(payload)?,
 			_ => bail!("invalid version: {version}"),
 		}))
 	}
 
 	fn serialize_version(self, version: u16) -> Result<Vec<u8>> {
-		let Self::V4(data) = self;
+		let Self::V5(data) = self;
 		match version {
 			1 | 2 => serde_bare::to_vec(&convert_to_rivet_v3_to_v2(convert_to_rivet_v4_to_v3(
-				data,
+				convert_to_rivet_v5_to_v4(data, version)?,
 				version,
 			)?)?)
 			.map_err(Into::into),
-			3 => serde_bare::to_vec(&convert_to_rivet_v4_to_v3(data, 3)?).map_err(Into::into),
-			4 => serde_bare::to_vec(&data).map_err(Into::into),
+			3 => serde_bare::to_vec(&convert_to_rivet_v4_to_v3(
+				convert_to_rivet_v5_to_v4(data, 3)?,
+				3,
+			)?)
+			.map_err(Into::into),
+			4 => serde_bare::to_vec(&convert_to_rivet_v5_to_v4(data, 4)?).map_err(Into::into),
+			5 => serde_bare::to_vec(&data).map_err(Into::into),
 			_ => bail!("invalid version: {version}"),
 		}
 	}
 
 	fn deserialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
-		vec![Ok, Ok, Ok]
+		vec![Ok, Ok, Ok, Ok]
 	}
 
 	fn serialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
-		vec![Ok, Ok, Ok]
+		vec![Ok, Ok, Ok, Ok]
 	}
 }
 
 pub enum ToEnvoyConn {
-	V4(v4::ToEnvoyConn),
+	V5(v5::ToEnvoyConn),
 }
 
 impl OwnedVersionedData for ToEnvoyConn {
-	type Latest = v4::ToEnvoyConn;
+	type Latest = v5::ToEnvoyConn;
 
 	fn wrap_latest(latest: Self::Latest) -> Self {
-		Self::V4(latest)
+		Self::V5(latest)
 	}
 
 	fn unwrap_latest(self) -> Result<Self::Latest> {
 		match self {
-			Self::V4(data) => Ok(data),
+			Self::V5(data) => Ok(data),
 		}
 	}
 
 	fn deserialize_version(payload: &[u8], version: u16) -> Result<Self> {
-		Ok(Self::V4(match version {
+		Ok(Self::V5(match version {
 			1 => convert_same_bytes(convert_to_envoy_conn_v1_to_v3(serde_bare::from_slice(
 				payload,
 			)?)?)?,
@@ -232,13 +259,14 @@ impl OwnedVersionedData for ToEnvoyConn {
 				payload,
 			)?)?)?,
 			3 => convert_same_bytes(serde_bare::from_slice::<v3::ToEnvoyConn>(payload)?)?,
-			4 => serde_bare::from_slice(payload)?,
+			4 => convert_same_bytes(serde_bare::from_slice::<v4::ToEnvoyConn>(payload)?)?,
+			5 => serde_bare::from_slice(payload)?,
 			_ => bail!("invalid version: {version}"),
 		}))
 	}
 
 	fn serialize_version(self, version: u16) -> Result<Vec<u8>> {
-		let Self::V4(data) = self;
+		let Self::V5(data) = self;
 		let data_v3 = || convert_same_bytes_ref::<_, v3::ToEnvoyConn>(&data);
 		match version {
 			1 => {
@@ -250,87 +278,92 @@ impl OwnedVersionedData for ToEnvoyConn {
 					.map_err(Into::into)
 			}
 			3 => serde_bare::to_vec(&data_v3()?).map_err(Into::into),
-			4 => serde_bare::to_vec(&data).map_err(Into::into),
+			4 => serde_bare::to_vec(&convert_same_bytes_ref::<_, v4::ToEnvoyConn>(&data)?)
+				.map_err(Into::into),
+			5 => serde_bare::to_vec(&data).map_err(Into::into),
 			_ => bail!("invalid version: {version}"),
 		}
 	}
 
 	fn deserialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
-		vec![Ok, Ok, Ok]
+		vec![Ok, Ok, Ok, Ok]
 	}
 
 	fn serialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
-		vec![Ok, Ok, Ok]
+		vec![Ok, Ok, Ok, Ok]
 	}
 }
 
 pub enum ToGateway {
-	V4(v4::ToGateway),
+	V5(v5::ToGateway),
 }
 
 impl OwnedVersionedData for ToGateway {
-	type Latest = v4::ToGateway;
+	type Latest = v5::ToGateway;
 
 	fn wrap_latest(latest: Self::Latest) -> Self {
-		Self::V4(latest)
+		Self::V5(latest)
 	}
 
 	fn unwrap_latest(self) -> Result<Self::Latest> {
 		match self {
-			Self::V4(data) => Ok(data),
+			Self::V5(data) => Ok(data),
 		}
 	}
 
 	fn deserialize_version(payload: &[u8], version: u16) -> Result<Self> {
-		Ok(Self::V4(match version {
+		Ok(Self::V5(match version {
 			1 => convert_same_bytes(convert_to_gateway_v1_to_v3(serde_bare::from_slice(payload)?))?,
 			2 => convert_same_bytes(convert_to_gateway_v2_to_v3(serde_bare::from_slice(payload)?))?,
 			3 => convert_same_bytes(serde_bare::from_slice::<v3::ToGateway>(payload)?)?,
-			4 => serde_bare::from_slice(payload)?,
+			4 => convert_same_bytes(serde_bare::from_slice::<v4::ToGateway>(payload)?)?,
+			5 => serde_bare::from_slice(payload)?,
 			_ => bail!("invalid version: {version}"),
 		}))
 	}
 
 	fn serialize_version(self, version: u16) -> Result<Vec<u8>> {
-		let Self::V4(data) = self;
+		let Self::V5(data) = self;
 		let data_v3 = || convert_same_bytes_ref::<_, v3::ToGateway>(&data);
 		match version {
 			1 => serde_bare::to_vec(&convert_to_gateway_v3_to_v1(data_v3()?)).map_err(Into::into),
 			2 => serde_bare::to_vec(&convert_to_gateway_v3_to_v2(data_v3()?)).map_err(Into::into),
 			3 => serde_bare::to_vec(&data_v3()?).map_err(Into::into),
-			4 => serde_bare::to_vec(&data).map_err(Into::into),
+			4 => serde_bare::to_vec(&convert_same_bytes_ref::<_, v4::ToGateway>(&data)?)
+				.map_err(Into::into),
+			5 => serde_bare::to_vec(&data).map_err(Into::into),
 			_ => bail!("invalid version: {version}"),
 		}
 	}
 
 	fn deserialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
-		vec![Ok, Ok, Ok]
+		vec![Ok, Ok, Ok, Ok]
 	}
 
 	fn serialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
-		vec![Ok, Ok, Ok]
+		vec![Ok, Ok, Ok, Ok]
 	}
 }
 
 pub enum ToOutbound {
-	V4(v4::ToOutbound),
+	V5(v5::ToOutbound),
 }
 
 impl OwnedVersionedData for ToOutbound {
-	type Latest = v4::ToOutbound;
+	type Latest = v5::ToOutbound;
 
 	fn wrap_latest(latest: Self::Latest) -> Self {
-		Self::V4(latest)
+		Self::V5(latest)
 	}
 
 	fn unwrap_latest(self) -> Result<Self::Latest> {
 		match self {
-			Self::V4(data) => Ok(data),
+			Self::V5(data) => Ok(data),
 		}
 	}
 
 	fn deserialize_version(payload: &[u8], version: u16) -> Result<Self> {
-		Ok(Self::V4(match version {
+		Ok(Self::V5(match version {
 			1 => convert_same_bytes(convert_to_outbound_v1_to_v3(serde_bare::from_slice(
 				payload,
 			)?))?,
@@ -338,51 +371,54 @@ impl OwnedVersionedData for ToOutbound {
 				payload,
 			)?))?,
 			3 => convert_same_bytes(serde_bare::from_slice::<v3::ToOutbound>(payload)?)?,
-			4 => serde_bare::from_slice(payload)?,
+			4 => convert_same_bytes(serde_bare::from_slice::<v4::ToOutbound>(payload)?)?,
+			5 => serde_bare::from_slice(payload)?,
 			_ => bail!("invalid version: {version}"),
 		}))
 	}
 
 	fn serialize_version(self, version: u16) -> Result<Vec<u8>> {
-		let Self::V4(data) = self;
+		let Self::V5(data) = self;
 		let data_v3 = || convert_same_bytes_ref::<_, v3::ToOutbound>(&data);
 		match version {
 			1 => serde_bare::to_vec(&convert_to_outbound_v3_to_v1(data_v3()?)).map_err(Into::into),
 			2 => serde_bare::to_vec(&convert_to_outbound_v3_to_v2(data_v3()?)).map_err(Into::into),
 			3 => serde_bare::to_vec(&data_v3()?).map_err(Into::into),
-			4 => serde_bare::to_vec(&data).map_err(Into::into),
+			4 => serde_bare::to_vec(&convert_same_bytes_ref::<_, v4::ToOutbound>(&data)?)
+				.map_err(Into::into),
+			5 => serde_bare::to_vec(&data).map_err(Into::into),
 			_ => bail!("invalid version: {version}"),
 		}
 	}
 
 	fn deserialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
-		vec![Ok, Ok, Ok]
+		vec![Ok, Ok, Ok, Ok]
 	}
 
 	fn serialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
-		vec![Ok, Ok, Ok]
+		vec![Ok, Ok, Ok, Ok]
 	}
 }
 
 pub enum ActorCommandKeyData {
-	V4(v4::ActorCommandKeyData),
+	V5(v5::ActorCommandKeyData),
 }
 
 impl OwnedVersionedData for ActorCommandKeyData {
-	type Latest = v4::ActorCommandKeyData;
+	type Latest = v5::ActorCommandKeyData;
 
 	fn wrap_latest(latest: Self::Latest) -> Self {
-		Self::V4(latest)
+		Self::V5(latest)
 	}
 
 	fn unwrap_latest(self) -> Result<Self::Latest> {
 		match self {
-			Self::V4(data) => Ok(data),
+			Self::V5(data) => Ok(data),
 		}
 	}
 
 	fn deserialize_version(payload: &[u8], version: u16) -> Result<Self> {
-		Ok(Self::V4(match version {
+		Ok(Self::V5(match version {
 			1 => convert_same_bytes(convert_actor_command_key_data_v1_to_v3(
 				serde_bare::from_slice(payload)?,
 			))?,
@@ -390,13 +426,14 @@ impl OwnedVersionedData for ActorCommandKeyData {
 				serde_bare::from_slice(payload)?,
 			))?,
 			3 => convert_same_bytes(serde_bare::from_slice::<v3::ActorCommandKeyData>(payload)?)?,
-			4 => serde_bare::from_slice(payload)?,
+			4 => convert_same_bytes(serde_bare::from_slice::<v4::ActorCommandKeyData>(payload)?)?,
+			5 => serde_bare::from_slice(payload)?,
 			_ => bail!("invalid version: {version}"),
 		}))
 	}
 
 	fn serialize_version(self, version: u16) -> Result<Vec<u8>> {
-		let Self::V4(data) = self;
+		let Self::V5(data) = self;
 		let data_v3 = || convert_same_bytes_ref::<_, v3::ActorCommandKeyData>(&data);
 		match version {
 			1 => {
@@ -408,21 +445,53 @@ impl OwnedVersionedData for ActorCommandKeyData {
 					.map_err(Into::into)
 			}
 			3 => serde_bare::to_vec(&data_v3()?).map_err(Into::into),
-			4 => serde_bare::to_vec(&data).map_err(Into::into),
+			4 => serde_bare::to_vec(&convert_same_bytes_ref::<_, v4::ActorCommandKeyData>(&data)?)
+				.map_err(Into::into),
+			5 => serde_bare::to_vec(&data).map_err(Into::into),
 			_ => bail!("invalid version: {version}"),
 		}
 	}
 
 	fn deserialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
-		vec![Ok, Ok, Ok]
+		vec![Ok, Ok, Ok, Ok]
 	}
 
 	fn serialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
-		vec![Ok, Ok, Ok]
+		vec![Ok, Ok, Ok, Ok]
 	}
 }
 
 fn convert_to_envoy_v3_to_v4(message: v3::ToEnvoy) -> Result<v4::ToEnvoy> {
+	convert_same_bytes(message)
+}
+
+fn convert_to_envoy_v4_to_v5(message: v4::ToEnvoy) -> Result<v5::ToEnvoy> {
+	convert_same_bytes(message)
+}
+
+fn convert_to_envoy_v5_to_v4(message: v5::ToEnvoy, target_version: u16) -> Result<v4::ToEnvoy> {
+	match &message {
+		v5::ToEnvoy::ToEnvoySqlitePersistPreloadHintsResponse(_) => {
+			return Err(incompatible(
+				ProtocolCompatibilityFeature::SqlitePreloadHints,
+				ProtocolCompatibilityDirection::ToEnvoy,
+				5,
+				target_version,
+			));
+		}
+		v5::ToEnvoy::ToEnvoyInit(_)
+		| v5::ToEnvoy::ToEnvoyCommands(_)
+		| v5::ToEnvoy::ToEnvoyAckEvents(_)
+		| v5::ToEnvoy::ToEnvoyKvResponse(_)
+		| v5::ToEnvoy::ToEnvoyTunnelMessage(_)
+		| v5::ToEnvoy::ToEnvoyPing(_)
+		| v5::ToEnvoy::ToEnvoySqliteGetPagesResponse(_)
+		| v5::ToEnvoy::ToEnvoySqliteCommitResponse(_)
+		| v5::ToEnvoy::ToEnvoySqliteExecResponse(_)
+		| v5::ToEnvoy::ToEnvoySqliteExecuteResponse(_)
+		| v5::ToEnvoy::ToEnvoySqliteExecuteWriteResponse(_) => {}
+	}
+
 	convert_same_bytes(message)
 }
 
@@ -466,6 +535,37 @@ fn convert_to_envoy_v4_to_v3(message: v4::ToEnvoy, target_version: u16) -> Resul
 }
 
 fn convert_to_rivet_v3_to_v4(message: v3::ToRivet) -> Result<v4::ToRivet> {
+	convert_same_bytes(message)
+}
+
+fn convert_to_rivet_v4_to_v5(message: v4::ToRivet) -> Result<v5::ToRivet> {
+	convert_same_bytes(message)
+}
+
+fn convert_to_rivet_v5_to_v4(message: v5::ToRivet, target_version: u16) -> Result<v4::ToRivet> {
+	match &message {
+		v5::ToRivet::ToRivetSqlitePersistPreloadHintsRequest(_) => {
+			return Err(incompatible(
+				ProtocolCompatibilityFeature::SqlitePreloadHints,
+				ProtocolCompatibilityDirection::ToRivet,
+				5,
+				target_version,
+			));
+		}
+		v5::ToRivet::ToRivetMetadata(_)
+		| v5::ToRivet::ToRivetEvents(_)
+		| v5::ToRivet::ToRivetAckCommands(_)
+		| v5::ToRivet::ToRivetStopping
+		| v5::ToRivet::ToRivetPong(_)
+		| v5::ToRivet::ToRivetKvRequest(_)
+		| v5::ToRivet::ToRivetTunnelMessage(_)
+		| v5::ToRivet::ToRivetSqliteGetPagesRequest(_)
+		| v5::ToRivet::ToRivetSqliteCommitRequest(_)
+		| v5::ToRivet::ToRivetSqliteExecRequest(_)
+		| v5::ToRivet::ToRivetSqliteExecuteRequest(_)
+		| v5::ToRivet::ToRivetSqliteExecuteWriteRequest(_) => {}
+	}
+
 	convert_same_bytes(message)
 }
 
@@ -1323,12 +1423,12 @@ mod tests {
 	use super::{ActorCommandKeyData, ToEnvoy};
 	use crate::{
 		PROTOCOL_VERSION,
-		generated::{v1, v2, v4},
+		generated::{v1, v2, v5},
 	};
 
 	#[test]
 	fn protocol_version_constant_matches_schema_version() {
-		assert_eq!(PROTOCOL_VERSION, 4);
+		assert_eq!(PROTOCOL_VERSION, 5);
 	}
 
 	#[test]
@@ -1353,10 +1453,10 @@ mod tests {
 			}]))?;
 
 		let decoded = ToEnvoy::deserialize_version(&payload, 1)?.unwrap_latest()?;
-		let v4::ToEnvoy::ToEnvoyCommands(commands) = decoded else {
+		let v5::ToEnvoy::ToEnvoyCommands(commands) = decoded else {
 			panic!("expected commands");
 		};
-		let v4::Command::CommandStartActor(start) = &commands[0].inner else {
+		let v5::Command::CommandStartActor(start) = &commands[0].inner else {
 			panic!("expected start actor");
 		};
 
@@ -1384,8 +1484,8 @@ mod tests {
 	#[test]
 	fn actor_command_key_data_round_trips_to_v1() -> Result<()> {
 		let encoded = ActorCommandKeyData::wrap_latest(
-			v4::ActorCommandKeyData::CommandStartActor(v4::CommandStartActor {
-				config: v4::ActorConfig {
+			v5::ActorCommandKeyData::CommandStartActor(v5::CommandStartActor {
+				config: v5::ActorConfig {
 					name: "demo".into(),
 					key: None,
 					create_ts: 7,
@@ -1398,7 +1498,7 @@ mod tests {
 		.serialize_version(1)?;
 
 		let decoded = ActorCommandKeyData::deserialize_version(&encoded, 1)?.unwrap_latest()?;
-		let v4::ActorCommandKeyData::CommandStartActor(start) = decoded else {
+		let v5::ActorCommandKeyData::CommandStartActor(start) = decoded else {
 			panic!("expected start actor");
 		};
 		assert_eq!(start.config.name, "demo");
