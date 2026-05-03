@@ -400,6 +400,10 @@ async fn handle_message(
 			crate::metrics::SQLITE_COMMIT_ENVOY_RESPONSE_DURATION
 				.observe(timed_response.commit_completed_at.elapsed().as_secs_f64());
 		}
+		protocol::ToRivet::ToRivetSqlitePersistPreloadHintsRequest(req) => {
+			let response = handle_sqlite_persist_preload_hints_response(ctx, &conn, req.data).await;
+			send_sqlite_persist_preload_hints_response(&conn, req.request_id, response).await?;
+		}
 		protocol::ToRivet::ToRivetSqliteExecRequest(req) => {
 			send_sqlite_exec_response(
 				&conn,
@@ -509,6 +513,27 @@ async fn handle_sqlite_commit_response(
 	TimedSqliteCommitResponse {
 		response,
 		commit_completed_at: Instant::now(),
+	}
+}
+
+async fn handle_sqlite_persist_preload_hints_response(
+	ctx: &StandaloneCtx,
+	conn: &Conn,
+	request: protocol::SqlitePersistPreloadHintsRequest,
+) -> protocol::SqlitePersistPreloadHintsResponse {
+	let actor_id = request.actor_id.clone();
+	match handle_sqlite_persist_preload_hints(ctx, conn, request).await {
+		Ok(response) => response,
+		Err(err) => {
+			tracing::error!(
+				actor_id = %actor_id,
+				?err,
+				"sqlite persist preload hints request failed"
+			);
+			protocol::SqlitePersistPreloadHintsResponse::SqliteErrorResponse(
+				sqlite_error_response(&err),
+			)
+		}
 	}
 }
 
@@ -728,6 +753,15 @@ async fn handle_sqlite_commit(
 	Ok(response)
 }
 
+async fn handle_sqlite_persist_preload_hints(
+	ctx: &StandaloneCtx,
+	conn: &Conn,
+	request: protocol::SqlitePersistPreloadHintsRequest,
+) -> Result<protocol::SqlitePersistPreloadHintsResponse> {
+	validate_sqlite_actor(ctx, conn, &request.actor_id).await?;
+	Ok(protocol::SqlitePersistPreloadHintsResponse::SqlitePersistPreloadHintsOk)
+}
+
 async fn validate_sqlite_actor(ctx: &StandaloneCtx, conn: &Conn, actor_id: &str) -> Result<()> {
 	let actor_id = Id::parse(actor_id).context("invalid sqlite actor id")?;
 	let actor = ctx
@@ -880,6 +914,21 @@ async fn send_sqlite_commit_response(
 			data,
 		}),
 		"sqlite commit response",
+	)
+	.await
+}
+
+async fn send_sqlite_persist_preload_hints_response(
+	conn: &Conn,
+	request_id: u32,
+	data: protocol::SqlitePersistPreloadHintsResponse,
+) -> Result<()> {
+	send_to_envoy(
+		conn,
+		protocol::ToEnvoy::ToEnvoySqlitePersistPreloadHintsResponse(
+			protocol::ToEnvoySqlitePersistPreloadHintsResponse { request_id, data },
+		),
+		"sqlite persist preload hints response",
 	)
 	.await
 }

@@ -419,6 +419,34 @@ impl EnvoyHandle {
 		}
 	}
 
+	pub async fn sqlite_persist_preload_hints(
+		&self,
+		request: protocol::SqlitePersistPreloadHintsRequest,
+	) -> anyhow::Result<protocol::SqlitePersistPreloadHintsResponse> {
+		match self
+			.send_sqlite_request(SqliteRequest::PersistPreloadHints(request))
+			.await?
+		{
+			SqliteResponse::PersistPreloadHints(response) => Ok(response),
+			_ => anyhow::bail!("unexpected sqlite persist preload hints response type"),
+		}
+	}
+
+	pub fn sqlite_persist_preload_hints_fire_and_forget(
+		&self,
+		request: protocol::SqlitePersistPreloadHintsRequest,
+	) -> anyhow::Result<()> {
+		let (tx, _rx) = tokio::sync::oneshot::channel();
+		self.shared
+			.envoy_tx
+			.send(ToEnvoyMessage::SqliteRequest {
+				request: SqliteRequest::PersistPreloadHints(request),
+				response_tx: tx,
+			})
+			.map_err(|_| anyhow::anyhow!("envoy channel closed"))?;
+		Ok(())
+	}
+
 	pub async fn remote_sqlite_exec(
 		&self,
 		request: protocol::SqliteExecRequest,
