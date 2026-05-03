@@ -24,18 +24,12 @@ The skill accepts optional arguments:
 
 The driver suite runs over a runtime × SQLite-backend × encoding matrix defined in `rivetkit-typescript/packages/rivetkit/tests/driver/shared-matrix.ts`. The runtime dimension has two values:
 
-- **`native`** — NAPI bindings (`@rivetkit/rivetkit-napi`). Pairs with `sqlite=local` (the in-process SQLite VFS). This is the default when no env override is set.
-- **`wasm`** — WebAssembly bindings (`@rivetkit/rivetkit-wasm`). Wasm **cannot** use local SQLite; it must pair with `sqlite=remote` (executes SQL through the engine over the wire). Setting `RIVETKIT_DRIVER_TEST_RUNTIME=wasm` with `RIVETKIT_DRIVER_TEST_SQLITE=local` fails fast.
+- **`native`** — NAPI bindings (`@rivetkit/rivetkit-napi`). Pairs with `sqlite=local` for the primary native driver pass.
+- **`wasm`** — WebAssembly bindings (`@rivetkit/rivetkit-wasm`). Wasm **cannot** use local SQLite; it must pair with `sqlite=remote` (executes SQL through the engine over the wire).
 
 The skill defaults to running each test file twice: once on `native/local` and once on `wasm/remote`, each at `encoding=bare`. A file is checked off only when both runtimes pass.
 
-Env overrides recognized by the test harness:
-
-- `RIVETKIT_DRIVER_TEST_RUNTIME` — comma-separated subset of `native,wasm`.
-- `RIVETKIT_DRIVER_TEST_SQLITE` — comma-separated subset of `local,remote`.
-- `RIVETKIT_DRIVER_TEST_ENCODING` — comma-separated subset of `bare,cbor,json`.
-
-When **any** of these env vars is set, the inner describe block name changes from `encoding (<encoding>)` to `runtime (<runtime>) / sqlite (<backend>) / encoding (<encoding>)`. The skill always sets the env vars, so the longer form is always what `-t` must match.
+The test harness does not read environment variables for matrix selection. Always select matrix cells with Vitest `-t` using the full inner describe name: `runtime (<runtime>) / sqlite (<backend>) / encoding (<encoding>)`.
 
 ## How It Works
 
@@ -175,21 +169,20 @@ For each unchecked row in order, run the runtimes selected by the `runtime` arg 
 
 **b) Build the filter command:**
 
-Each suite lives in its own file under `rivetkit-typescript/packages/rivetkit/tests/driver/<file>.test.ts`. With env overrides set, the describe block nesting is:
+Each suite lives in its own file under `rivetkit-typescript/packages/rivetkit/tests/driver/<file>.test.ts`. The describe block nesting is:
 
 ```
 <Outer Suite> > static registry > runtime (<runtime>) / sqlite (<backend>) / encoding (<encoding>) > <Suite Description>
 ```
 
+Always use Vitest `-t` for driver matrix cells. Include runtime, SQLite backend, and encoding in the pattern so a partial match does not accidentally select another matrix cell.
+
 Base command (native):
 
 ```bash
 cd rivetkit-typescript/packages/rivetkit && \
-  RIVETKIT_DRIVER_TEST_RUNTIME=native \
-  RIVETKIT_DRIVER_TEST_SQLITE=local \
-  RIVETKIT_DRIVER_TEST_ENCODING=bare \
   pnpm test tests/driver/<FILE>.test.ts \
-    -t "static registry.*runtime \\(native\\) / sqlite \\(local\\) / encoding \\(bare\\).*<SUITE_DESCRIPTION>" \
+    -t "runtime \(native\) / sqlite \(local\) / encoding \(bare\)" \
     > /tmp/driver-test-current.log 2>&1
 echo "EXIT: $?"
 ```
@@ -198,11 +191,8 @@ Base command (wasm):
 
 ```bash
 cd rivetkit-typescript/packages/rivetkit && \
-  RIVETKIT_DRIVER_TEST_RUNTIME=wasm \
-  RIVETKIT_DRIVER_TEST_SQLITE=remote \
-  RIVETKIT_DRIVER_TEST_ENCODING=bare \
   pnpm test tests/driver/<FILE>.test.ts \
-    -t "static registry.*runtime \\(wasm\\) / sqlite \\(remote\\) / encoding \\(bare\\).*<SUITE_DESCRIPTION>" \
+    -t "runtime \(wasm\) / sqlite \(remote\) / encoding \(bare\)" \
     > /tmp/driver-test-current.log 2>&1
 echo "EXIT: $?"
 ```
@@ -275,7 +265,7 @@ If both runtime boxes are now checked, the file is fully done; advance to the ne
 **e) If tests fail:**
 
 1. Do NOT move to the next runtime or file.
-2. Narrow down to the first failing test using a more specific `-t` filter (keep the same env vars).
+2. Narrow down to the first failing test by adding enough test-name text to the same `-t` pattern.
 3. Read the error output to understand the failure.
 4. Append to the log:
 
@@ -292,18 +282,16 @@ If both runtime boxes are now checked, the file is fully done; advance to the ne
 
 ### 5. Narrowing scope on failure
 
-If a file group fails, narrow to individual tests while keeping the same runtime env vars:
+If a file group fails, keep the full matrix selector and append enough test-name text to isolate the failing test:
 
 ```bash
 cd rivetkit-typescript/packages/rivetkit && \
-  RIVETKIT_DRIVER_TEST_RUNTIME=<runtime> \
-  RIVETKIT_DRIVER_TEST_SQLITE=<backend> \
-  RIVETKIT_DRIVER_TEST_ENCODING=bare \
   pnpm test tests/driver/<FILE>.test.ts \
-    -t "static registry.*runtime \\(<runtime>\\) / sqlite \\(<backend>\\) / encoding \\(bare\\).*<SUITE>.*<PARTIAL_TEST_NAME>" \
+    -t "runtime \(<runtime>\) / sqlite \(<backend>\) / encoding \(bare\).*<test name>" \
     > /tmp/driver-test-narrow.log 2>&1
 ```
 
+Do not use `-t` as a flake workaround. It is only for selecting the intended matrix cell and, when needed, a specific failing test.
 If the bug only appears on one runtime, that's a strong signal — focus the diff hunt on the corresponding runtime adapter (`napi-runtime.ts` / `wasm-runtime.ts`) and any wasm-feature-gated code in `rivetkit-core` and `rivetkit-typescript/packages/rivetkit-wasm`.
 
 ### 6. Completion
@@ -327,6 +315,6 @@ Report summary:
 3. **Fix before advancing.** Do not skip a failing runtime/file to test the next one (unless the user says to skip).
 4. **Always pipe to file.** Never rely on inline terminal output for test results. Always write to `/tmp/driver-test-current.log` and grep afterward.
 5. **Track everything.** Every run gets logged in the progress file with its runtime tag.
-6. **Always set the env vars.** Even when running a single runtime, set `RIVETKIT_DRIVER_TEST_RUNTIME`, `RIVETKIT_DRIVER_TEST_SQLITE`, and `RIVETKIT_DRIVER_TEST_ENCODING`. The describe path depends on having any of them set.
+6. **Always use `-t` for matrix selection.** Include runtime, SQLite backend, and encoding in the selector. Do not scope the driver matrix with env vars.
 7. **Never pair `wasm` with `local` SQLite.** The harness throws on this combination. If a wasm run somehow needs local SQLite to repro a bug, that's a bug in the matrix, not a workaround to apply.
 8. **Respect timeouts.** Set a 600-second timeout for slow tests (sleep, lifecycle, stress). Use 120 seconds for fast tests. Wasm runs may be slower than native — extend timeouts proportionally if you see consistent timeouts on wasm only.

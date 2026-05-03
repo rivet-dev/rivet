@@ -42,65 +42,13 @@ export interface DriverMatrixCell {
 	skipReason?: string;
 }
 
-function envList<T extends string>(
-	name: string,
-	allowed: readonly T[],
-): T[] | undefined {
-	const value = process.env[name];
-	if (!value) {
-		return undefined;
-	}
-
-	const values = value
-		.split(",")
-		.map((part) => part.trim())
-		.filter(Boolean);
-	for (const item of values) {
-		if (!allowed.includes(item as T)) {
-			throw new Error(
-				`invalid ${name} value '${item}', expected one of ${allowed.join(", ")}`,
-			);
-		}
-	}
-	return values as T[];
-}
-
-function hasEnvMatrixOverride() {
-	return (
-		process.env.RIVETKIT_DRIVER_TEST_RUNTIME !== undefined ||
-		process.env.RIVETKIT_DRIVER_TEST_SQLITE !== undefined ||
-		process.env.RIVETKIT_DRIVER_TEST_ENCODING !== undefined
-	);
-}
-
 export function getDriverMatrixCells(
 	options: DriverMatrixOptions = {},
 ): DriverMatrixCell[] {
-	const envEncodings = envList("RIVETKIT_DRIVER_TEST_ENCODING", [
-		"bare",
-		"cbor",
-		"json",
-	] as const);
-	const envRuntimes = envList("RIVETKIT_DRIVER_TEST_RUNTIME", [
-		"native",
-		"wasm",
-	] as const);
-	const envSqliteBackends = envList("RIVETKIT_DRIVER_TEST_SQLITE", [
-		"local",
-		"remote",
-	] as const);
-	const encodings = envEncodings ??
-		options.encodings ?? ["bare", "cbor", "json"];
-	const runtimes = envRuntimes ?? options.runtimes ?? ["native"];
-	const sqliteBackends = envSqliteBackends ??
-		options.sqliteBackends ?? ["local"];
+	const encodings = options.encodings ?? ["bare", "cbor", "json"];
+	const runtimes = options.runtimes ?? ["native", "wasm"];
+	const sqliteBackends = options.sqliteBackends ?? ["local", "remote"];
 	const cells: DriverMatrixCell[] = [];
-
-	if (envRuntimes?.includes("wasm") && envSqliteBackends?.includes("local")) {
-		throw new Error(
-			"invalid driver test matrix: WebAssembly runtime cannot use local SQLite. Set RIVETKIT_DRIVER_TEST_SQLITE=remote for wasm driver tests.",
-		);
-	}
 
 	for (const runtime of runtimes) {
 		for (const sqliteBackend of sqliteBackends) {
@@ -133,10 +81,6 @@ export function describeDriverMatrix(
 			registryVariantNames.has(variant.name),
 	);
 	const cells = getDriverMatrixCells(options);
-	const includeSqliteDimensions =
-		hasEnvMatrixOverride() ||
-		options.runtimes !== undefined ||
-		options.sqliteBackends !== undefined;
 
 	describeDriverSuite(suiteName, () => {
 		for (const variant of variants) {
@@ -151,9 +95,7 @@ export function describeDriverMatrix(
 				});
 
 				for (const cell of cells) {
-					const suite = includeSqliteDimensions
-						? `runtime (${cell.runtime}) / sqlite (${cell.sqliteBackend}) / encoding (${cell.encoding})`
-						: `encoding (${cell.encoding})`;
+					const suite = `runtime (${cell.runtime}) / sqlite (${cell.sqliteBackend}) / encoding (${cell.encoding})`;
 
 					if (cell.skipReason) {
 						describe.skip(`${suite}: ${cell.skipReason}`, () => {});
