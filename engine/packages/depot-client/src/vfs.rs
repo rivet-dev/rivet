@@ -16,7 +16,7 @@ use moka::sync::Cache;
 use parking_lot::{Mutex, RwLock};
 use rivet_envoy_client::handle::EnvoyHandle;
 use rivet_envoy_protocol as protocol;
-use tokio::runtime::Handle;
+use tokio::runtime::{Handle, RuntimeFlavor};
 
 use crate::optimization_flags::{SqliteOptimizationFlags, sqlite_optimization_flags};
 
@@ -1549,12 +1549,23 @@ fn fetch_initial_main_page(
 	runtime: &Handle,
 	actor_id: &str,
 ) -> std::result::Result<Option<Vec<u8>>, String> {
-	let response = runtime.block_on(transport.get_pages(protocol::SqliteGetPagesRequest {
-		actor_id: actor_id.to_string(),
-		pgnos: vec![1],
-		expected_generation: None,
-		expected_head_txid: None,
-	}));
+	if matches!(runtime.runtime_flavor(), RuntimeFlavor::CurrentThread) {
+		return Err(
+			"sqlite VFS registration cannot synchronously fetch the initial page on a current-thread Tokio runtime"
+				.to_string(),
+		);
+	}
+	// `register` is invoked from inside an async context (e.g. `open_database_from_envoy`),
+	// so plain `Handle::block_on` panics. Drop into `block_in_place` to bridge sync VFS
+	// registration into the async transport call.
+	let response = tokio::task::block_in_place(|| {
+		runtime.block_on(transport.get_pages(protocol::SqliteGetPagesRequest {
+			actor_id: actor_id.to_string(),
+			pgnos: vec![1],
+			expected_generation: None,
+			expected_head_txid: None,
+		}))
+	});
 
 	match response {
 		Ok(protocol::SqliteGetPagesResponse::SqliteGetPagesOk(ok)) => Ok(ok
