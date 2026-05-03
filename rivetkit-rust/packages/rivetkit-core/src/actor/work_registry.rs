@@ -1,6 +1,10 @@
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
+#[cfg(feature = "wasm-runtime")]
+use futures::channel::oneshot as futures_oneshot;
+#[cfg(feature = "wasm-runtime")]
+use futures::future::AbortHandle;
 use parking_lot::Mutex;
 use rivet_envoy_client::async_counter::AsyncCounter;
 use tokio::sync::Notify;
@@ -15,6 +19,8 @@ pub(crate) struct WorkRegistry {
 	// Forced-sync: shutdown tasks are inserted from sync paths and moved out
 	// before awaiting shutdown.
 	pub(crate) shutdown_tasks: Mutex<JoinSet<()>>,
+	#[cfg(feature = "wasm-runtime")]
+	pub(crate) local_shutdown_tasks: Mutex<Vec<LocalShutdownTask>>,
 	pub(crate) idle_notify: Arc<Notify>,
 	/// Woken on every transition of a sleep-affecting counter that is not
 	/// otherwise guarded by `KeepAwakeGuard` / `WebSocketCallbackGuard` /
@@ -23,6 +29,13 @@ pub(crate) struct WorkRegistry {
 	/// outside rivetkit-core.
 	pub(crate) activity_notify: Arc<Notify>,
 	pub(crate) teardown_started: AtomicBool,
+	pub(crate) shutdown_deadline_reached: AtomicBool,
+}
+
+#[cfg(feature = "wasm-runtime")]
+pub(crate) struct LocalShutdownTask {
+	pub(crate) abort_handle: AbortHandle,
+	pub(crate) complete_rx: futures_oneshot::Receiver<()>,
 }
 
 impl WorkRegistry {
@@ -42,9 +55,12 @@ impl WorkRegistry {
 			shutdown_counter: Arc::new(AsyncCounter::new()),
 			core_dispatched_hooks: Arc::new(AsyncCounter::new()),
 			shutdown_tasks: Mutex::new(JoinSet::new()),
+			#[cfg(feature = "wasm-runtime")]
+			local_shutdown_tasks: Mutex::new(Vec::new()),
 			idle_notify,
 			activity_notify: Arc::new(Notify::new()),
 			teardown_started: AtomicBool::new(false),
+			shutdown_deadline_reached: AtomicBool::new(false),
 		}
 	}
 

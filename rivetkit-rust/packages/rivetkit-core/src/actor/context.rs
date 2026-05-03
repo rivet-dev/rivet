@@ -32,12 +32,10 @@ use crate::actor::queue::{QueueInspectorUpdateCallback, QueueMetadata, QueueWait
 use crate::actor::schedule::{InternalKeepAwakeCallback, LocalAlarmCallback};
 use crate::actor::sleep::{CanSleep, SleepState};
 use crate::actor::state::{PendingSave, PersistedActor, RequestSaveOpts};
+use crate::actor::task::LifecycleEvent;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::actor::task::{LIFECYCLE_EVENT_INBOX_CHANNEL, actor_channel_overloaded_error};
-use crate::actor::task::LifecycleEvent;
 use crate::actor::task_types::UserTaskKind;
-#[cfg(feature = "wasm-runtime")]
-use crate::actor::work_registry::CountGuard;
 use crate::actor::work_registry::RegionGuard;
 use crate::error::{ActorLifecycle as ActorLifecycleError, ActorRuntime};
 use crate::inspector::{Inspector, InspectorSnapshot};
@@ -107,7 +105,7 @@ pub(crate) struct ActorContextInner {
 	// Forced-sync: queue config is read from sync public methods before blocking
 	// on async queue work.
 	pub(super) queue_config: Mutex<ActorConfig>,
-	pub(super) queue_abort_signal: Option<CancellationToken>,
+	pub(super) queue_abort_signal: Mutex<CancellationToken>,
 	pub(super) queue_initialize: OnceCell<()>,
 	// Forced-sync: startup installs preload before any queue method awaits init.
 	pub(super) queue_preloaded_kv: Mutex<Option<PreloadedKv>>,
@@ -135,7 +133,7 @@ pub(crate) struct ActorContextInner {
 	destroy_requested: AtomicBool,
 	destroy_completed: AtomicBool,
 	destroy_completion_notify: Notify,
-	abort_signal: CancellationToken,
+	abort_signal: Mutex<CancellationToken>,
 	shutdown_deadline: CancellationToken,
 	// Forced-sync: runtime wiring slots are configured through synchronous
 	// lifecycle setup and cloned before sending events.
@@ -280,7 +278,7 @@ impl ActorContext {
 			#[cfg(test)]
 			schedule_driver_alarm_cancel_count: AtomicUsize::new(0),
 			queue_config: Mutex::new(config.clone()),
-			queue_abort_signal: Some(abort_signal.clone()),
+			queue_abort_signal: Mutex::new(abort_signal.clone()),
 			queue_initialize: OnceCell::new(),
 			queue_preloaded_kv: Mutex::new(None),
 			queue_preloaded_message_entries: Mutex::new(None),
@@ -303,7 +301,7 @@ impl ActorContext {
 			destroy_requested: AtomicBool::new(false),
 			destroy_completed: AtomicBool::new(false),
 			destroy_completion_notify: Notify::new(),
-			abort_signal,
+			abort_signal: Mutex::new(abort_signal),
 			shutdown_deadline,
 			inspector: RwLock::new(None),
 			inspector_attach_count: RwLock::new(None),
@@ -481,7 +479,7 @@ impl ActorContext {
 		self.flush_on_shutdown();
 		self.0.destroy_requested.store(true, Ordering::SeqCst);
 		self.0.destroy_completed.store(false, Ordering::SeqCst);
-		self.0.abort_signal.cancel();
+		self.0.abort_signal.lock().cancel();
 	}
 
 	#[cfg(feature = "wasm-runtime")]
@@ -489,22 +487,33 @@ impl ActorContext {
 		self.cancel_sleep_timer();
 		self.0.destroy_requested.store(true, Ordering::SeqCst);
 		self.0.destroy_completed.store(false, Ordering::SeqCst);
-		self.0.abort_signal.cancel();
+		self.0.abort_signal.lock().cancel();
 	}
 
 	#[doc(hidden)]
 	pub fn cancel_abort_signal_for_sleep(&self) {
-		self.0.abort_signal.cancel();
+		self.0.abort_signal.lock().cancel();
+	}
+
+	pub(crate) fn reset_abort_signal_for_start(&self) {
+		let mut abort_signal = self.0.abort_signal.lock();
+		if !abort_signal.is_cancelled() {
+			return;
+		}
+
+		let next_signal = CancellationToken::new();
+		*abort_signal = next_signal.clone();
+		*self.0.queue_abort_signal.lock() = next_signal;
 	}
 
 	#[doc(hidden)]
 	pub fn actor_abort_signal(&self) -> CancellationToken {
-		self.0.abort_signal.clone()
+		self.0.abort_signal.lock().clone()
 	}
 
 	#[doc(hidden)]
 	pub fn actor_aborted(&self) -> bool {
-		self.0.abort_signal.is_cancelled()
+		self.0.abort_signal.lock().is_cancelled()
 	}
 
 	/// Fires when the shutdown grace deadline has elapsed and core is forcing
@@ -562,12 +571,8 @@ impl ActorContext {
 
 	#[cfg(feature = "wasm-runtime")]
 	pub fn wait_until(&self, future: impl Future<Output = ()> + 'static) {
-		let counter = self.0.sleep.work.shutdown_counter.clone();
-		counter.increment();
-		let guard = CountGuard::from_incremented(counter);
 		let ctx = self.clone();
-		wasm_bindgen_futures::spawn_local(async move {
-			let _guard = guard;
+		self.track_shutdown_task(async move {
 			ctx.record_user_task_started(UserTaskKind::WaitUntil);
 			let started_at = Instant::now();
 			future.await;
@@ -1314,6 +1319,10 @@ impl ActorContext {
 		self.0.sleep_requested.load(Ordering::SeqCst)
 	}
 
+	pub(crate) fn clear_sleep_requested(&self) {
+		self.0.sleep_requested.store(false, Ordering::SeqCst);
+	}
+
 	fn keep_awake_guard(&self) -> KeepAwakeGuard {
 		let region = self
 			.keep_awake_region()
@@ -1484,15 +1493,15 @@ impl ActorContext {
 		};
 
 		match sender.try_reserve() {
-				Ok(permit) => {
-					permit.send(event);
-				}
-				#[cfg(target_arch = "wasm32")]
-				Err(_) => {}
-				#[cfg(not(target_arch = "wasm32"))]
-				Err(_) => {
-					let _ = actor_channel_overloaded_error(
-						LIFECYCLE_EVENT_INBOX_CHANNEL,
+			Ok(permit) => {
+				permit.send(event);
+			}
+			#[cfg(target_arch = "wasm32")]
+			Err(_) => {}
+			#[cfg(not(target_arch = "wasm32"))]
+			Err(_) => {
+				let _ = actor_channel_overloaded_error(
+					LIFECYCLE_EVENT_INBOX_CHANNEL,
 					self.0.lifecycle_event_inbox_capacity,
 					operation,
 					Some(&self.0.metrics),

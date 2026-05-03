@@ -777,12 +777,12 @@ impl ActorTask {
 		reply: oneshot::Sender<Result<()>>,
 	) -> Option<LiveExit> {
 		match self.lifecycle {
-			LifecycleState::Started => {
-				self.register_shutdown_reply(command, command_reason, reply);
-				self.drain_accepted_dispatch().await;
-				self.begin_grace(reason).await;
-				self.try_finish_grace()
-			}
+				LifecycleState::Started => {
+					self.register_shutdown_reply(command, command_reason, reply);
+					self.drain_accepted_dispatch().await;
+					self.begin_grace(reason).await;
+					self.try_finish_grace()
+				}
 			LifecycleState::SleepGrace | LifecycleState::DestroyGrace => {
 				let current_reason = self.sleep_grace.as_ref().map(|grace| grace.reason);
 				if current_reason == Some(reason) {
@@ -1229,6 +1229,12 @@ impl ActorTask {
 
 		self.transition_to(LifecycleState::Started);
 		self.spawn_run_handle(is_new).await?;
+		if is_new {
+			self.ctx
+				.persist_state(SaveStateOpts { immediate: true })
+				.await
+				.context("persist actor startup state")?;
+		}
 		self.reset_sleep_deadline().await;
 		self.ctx.drain_overdue_scheduled_events().await?;
 		tracing::debug!(
@@ -1518,7 +1524,7 @@ impl ActorTask {
 		let Some(grace) = self.sleep_grace.as_ref() else {
 			return None;
 		};
-		if self.ctx.can_finalize_sleep() {
+		if self.ctx.can_finalize_shutdown(grace.reason) {
 			let reason = grace.reason;
 			self.sleep_grace = None;
 			return Some(LiveExit::Shutdown { reason });
@@ -1534,6 +1540,7 @@ impl ActorTask {
 			run_handle.abort();
 		}
 		self.ctx.cancel_shutdown_deadline();
+		self.ctx.mark_shutdown_deadline_reached();
 		self.ctx.record_shutdown_timeout(grace.reason);
 		tracing::warn!(
 			actor_id = %self.ctx.actor_id(),
@@ -2141,6 +2148,10 @@ impl ActorTask {
 			"actor lifecycle transition"
 		);
 		self.lifecycle = lifecycle;
+		if matches!(lifecycle, LifecycleState::Started) {
+			self.ctx.reset_abort_signal_for_start();
+			self.ctx.clear_sleep_requested();
+		}
 		self.ctx
 			.set_started(matches!(lifecycle, LifecycleState::Started));
 	}
