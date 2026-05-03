@@ -121,6 +121,7 @@ import { sqliteColdStartBench } from "./actors/testing/sqlite-cold-start-bench.t
 import { sqliteRealworldBench } from "./actors/testing/sqlite-realworld-bench.ts";
 import { rawSqliteFuzzer } from "./actors/testing/raw-sqlite-fuzzer.ts";
 import { sqliteMemoryPressure } from "./actors/testing/sqlite-memory-pressure.ts";
+import { mockAgenticLoop } from "./actors/testing/mock-agentic-loop.ts";
 // AI
 import { aiAgent } from "./actors/ai/ai-agent.ts";
 
@@ -149,8 +150,14 @@ function serverlessPoolConfig() {
 	return {
 		name: process.env.RIVET_POOL,
 		url,
-		requestLifespan: numberFromEnv("RIVET_SERVERLESS_REQUEST_LIFESPAN", 30),
-		drainGracePeriod: numberFromEnv("RIVET_SERVERLESS_DRAIN_GRACE_PERIOD", 5),
+		requestLifespan: numberFromEnv(
+			"RIVET_SERVERLESS_REQUEST_LIFESPAN",
+			15 * 60,
+		),
+		drainGracePeriod: numberFromEnv(
+			"RIVET_SERVERLESS_DRAIN_GRACE_PERIOD",
+			15 * 60,
+		),
 		metadataPollInterval: numberFromEnv(
 			"RIVET_SERVERLESS_METADATA_POLL_INTERVAL_MS",
 			1000,
@@ -267,6 +274,7 @@ export const registry = setup({
 		sqliteRealworldBench,
 		rawSqliteFuzzer,
 		sqliteMemoryPressure,
+		mockAgenticLoop,
 		// AI
 		aiAgent,
 	},

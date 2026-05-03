@@ -14,6 +14,7 @@
 		"memory-soak": "tsx scripts/sqlite-memory-soak.ts",
 		"proc-metrics": "tsx scripts/proc-metrics-report.ts",
 		"smoke:raw-websocket-serverless": "tsx scripts/raw-websocket-serverless-smoke.ts",
+		"mock-agentic-loop": "tsx scripts/mock-agentic-loop.ts",
 		"benchmark": "tsx scripts/benchmark.ts",
 		"db:generate": "find src/actors -name drizzle.config.ts -exec drizzle-kit generate --config {} \\;"
 	},
