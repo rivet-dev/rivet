@@ -9,7 +9,7 @@ use universalpubsub as ups;
 use universalpubsub::{NextOutput, PublishOpts, Subscriber};
 use vbare::OwnedVersionedData;
 
-use crate::{LifecycleResult, actor_lifecycle, conn::Conn, metrics};
+use crate::{LifecycleResult, actor_lifecycle, conn::Conn, hibernating_requests, metrics};
 
 #[tracing::instrument(name="tunnel_to_ws_task", skip_all, fields(ray_id=?ctx.ray_id(), req_id=?ctx.req_id(), envoy_key=%conn.envoy_key, protocol_version=%conn.protocol_version))]
 pub async fn task(
@@ -126,6 +126,7 @@ async fn handle_message(
 		protocol::ToEnvoyConn::ToEnvoyCommands(mut command_wrappers) => {
 			// TODO: Parallelize
 			for command_wrapper in &mut command_wrappers {
+				hibernating_requests::refresh_command_wrapper(ctx, command_wrapper).await?;
 				if let protocol::Command::CommandStopActor(_) = &command_wrapper.inner {
 					actor_lifecycle::stop_actor(conn, &command_wrapper.checkpoint).await?;
 				}

@@ -21,7 +21,7 @@ use scc::HashMap;
 use universaldb::prelude::*;
 use vbare::OwnedVersionedData;
 
-use crate::{actor_lifecycle, errors, metrics, utils::UrlData};
+use crate::{actor_lifecycle, errors, hibernating_requests, metrics, utils::UrlData};
 
 pub type RemoteSqliteExecutors =
 	HashMap<(String, u64), Arc<tokio::sync::OnceCell<NativeDatabaseHandle>>>;
@@ -333,6 +333,7 @@ pub async fn init_conn(
 	if !missed_commands.is_empty() {
 		let replay_result: Result<()> = async {
 			for cmd_wrapper in &mut missed_commands {
+				hibernating_requests::refresh_command_wrapper(ctx, cmd_wrapper).await?;
 				if let protocol::Command::CommandStopActor(_) = cmd_wrapper.inner {
 					actor_lifecycle::stop_actor(&conn, &cmd_wrapper.checkpoint).await?;
 				}

@@ -15,6 +15,7 @@ mod actor_event_demuxer;
 mod actor_lifecycle;
 mod conn;
 mod errors;
+mod hibernating_requests;
 mod metrics;
 mod ping_task;
 pub mod sqlite_runtime;
