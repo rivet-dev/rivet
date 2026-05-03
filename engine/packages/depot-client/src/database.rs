@@ -12,8 +12,8 @@ use crate::{
 		exec_statements, execute_single_statement, install_reader_authorizer,
 	},
 	vfs::{
-		NativeVfsHandle, SqliteVfs, SqliteVfsMetrics, VfsConfig, VfsPreloadHintSnapshot,
-		configure_connection_for_database, verify_batch_atomic_writes,
+		NativeVfsHandle, SqliteVfs, SqliteVfsMetrics, SqliteVfsMetricsSnapshot, VfsConfig,
+		VfsPreloadHintSnapshot, configure_connection_for_database, verify_batch_atomic_writes,
 	},
 };
 
@@ -164,6 +164,10 @@ impl NativeDatabaseHandle {
 
 	pub fn snapshot_preload_hints(&self) -> VfsPreloadHintSnapshot {
 		self.vfs.snapshot_preload_hints()
+	}
+
+	pub fn sqlite_vfs_metrics(&self) -> SqliteVfsMetricsSnapshot {
+		self.vfs.sqlite_vfs_metrics()
 	}
 
 	#[cfg(test)]
