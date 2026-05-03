@@ -1,4 +1,4 @@
-use crate::compaction::{*, shared::*};
+use crate::compaction::{shared::*, *};
 
 #[cfg(feature = "test-faults")]
 use crate::compaction::test_hooks;
@@ -7,7 +7,8 @@ use crate::fault::ReclaimFaultPoint;
 
 #[workflow(DbManagerWorkflow)]
 pub async fn db_manager(ctx: &mut WorkflowCtx, input: &DbManagerInput) -> Result<()> {
-	let companion_workflow_ids = dispatch_companion_workflows(ctx, input.database_branch_id).await?;
+	let companion_workflow_ids =
+		dispatch_companion_workflows(ctx, input.database_branch_id).await?;
 	let initial_deadline_ms = ctx.create_ts();
 	let initial_state = if manager_planning_timers_disabled(input) {
 		DbManagerState::new(companion_workflow_ids)
@@ -20,10 +21,7 @@ pub async fn db_manager(ctx: &mut WorkflowCtx, input: &DbManagerInput) -> Result
 		.with_state(initial_state)
 		.run(|ctx, state| {
 			let input = input.clone();
-			async move {
-				run_manager_iteration(ctx, state, &input).await
-			}
-			.boxed()
+			async move { run_manager_iteration(ctx, state, &input).await }.boxed()
 		})
 		.await
 }
@@ -255,15 +253,9 @@ async fn execute_manager_refresh(
 	input: &DbManagerInput,
 	force: ForceCompactionWork,
 ) -> Result<RefreshManagerOutput> {
-	let executions = execute_manager_effects(
-		ctx,
-		state,
-		input,
-		vec![ManagerEffect::Refresh { force }],
-	)
-	.await?;
-	let [ManagerExecution::Refresh(refresh)] = executions.as_slice()
-	else {
+	let executions =
+		execute_manager_effects(ctx, state, input, vec![ManagerEffect::Refresh { force }]).await?;
+	let [ManagerExecution::Refresh(refresh)] = executions.as_slice() else {
 		bail!("refresh effect did not return refresh output");
 	};
 
@@ -295,26 +287,31 @@ async fn execute_manager_effects(
 				execute_publish_cold_output_effect(ctx, state, input, signal, active_job).await?;
 			}
 			ManagerEffect::FinishHotJob { job_id, status } => {
-				state
-					.force_compactions
-					.record_job_finished(CompactionJobKind::Hot, job_id, &status);
+				state.force_compactions.record_job_finished(
+					CompactionJobKind::Hot,
+					job_id,
+					&status,
+				);
 				state.active_jobs.hot = None;
 			}
 			ManagerEffect::FinishColdJob { job_id, status } => {
-				state
-					.force_compactions
-					.record_job_finished(CompactionJobKind::Cold, job_id, &status);
+				state.force_compactions.record_job_finished(
+					CompactionJobKind::Cold,
+					job_id,
+					&status,
+				);
 				state.active_jobs.cold = None;
 			}
 			ManagerEffect::FinishReclaimJob { job_id, status } => {
-				state
-					.force_compactions
-					.record_job_finished(CompactionJobKind::Reclaim, job_id, &status);
+				state.force_compactions.record_job_finished(
+					CompactionJobKind::Reclaim,
+					job_id,
+					&status,
+				);
 				state.active_jobs.reclaim = None;
 			}
 			ManagerEffect::ScheduleStaleHotOutputCleanup { signal, actor_id } => {
-				schedule_stale_hot_output_cleanup(ctx, state, &signal, actor_id.as_deref())
-					.await?;
+				schedule_stale_hot_output_cleanup(ctx, state, &signal, actor_id.as_deref()).await?;
 			}
 			ManagerEffect::ScheduleUploadedColdOutputCleanup {
 				signal,
@@ -342,12 +339,7 @@ async fn execute_manager_effects(
 				execute_run_reclaim_job_effect(ctx, state, active_job).await?;
 			}
 			ManagerEffect::StopCompanions { request } => {
-				signal_companions_destroy(
-					ctx,
-					&state.companion_workflow_ids,
-					&request,
-				)
-				.await?;
+				signal_companions_destroy(ctx, &state.companion_workflow_ids, &request).await?;
 				state.active_jobs.clear();
 				state.branch_stop_state = BranchStopState::Stopped {
 					stopped_at_ms: ctx.create_ts(),
@@ -882,7 +874,10 @@ async fn schedule_stale_hot_output_cleanup(
 	let input_range = repair_reclaim_input_range(
 		staged_hot_shards,
 		Vec::new(),
-		signal.output_refs.iter().map(|output_ref| output_ref.as_of_txid),
+		signal
+			.output_refs
+			.iter()
+			.map(|output_ref| output_ref.as_of_txid),
 	);
 
 	schedule_repair_reclaim_job(
@@ -925,7 +920,10 @@ async fn schedule_uploaded_cold_output_cleanup(
 	let input_range = repair_reclaim_input_range(
 		Vec::new(),
 		signal.output_refs.clone(),
-		signal.output_refs.iter().map(|output_ref| output_ref.as_of_txid),
+		signal
+			.output_refs
+			.iter()
+			.map(|output_ref| output_ref.as_of_txid),
 	);
 	schedule_repair_reclaim_job(
 		ctx,
@@ -956,14 +954,14 @@ pub(super) fn repair_reclaim_input_range(
 		min_txid = 0;
 	}
 
-		ReclaimJobInputRange {
-			txids: TxidRange { min_txid, max_txid },
-			txid_refs: Vec::new(),
-			cold_objects: Vec::new(),
-			shard_cache_evictions: Vec::new(),
-			staged_hot_shards,
-			orphan_cold_objects,
-			max_keys: CMP_FDB_BATCH_MAX_KEYS as u32,
+	ReclaimJobInputRange {
+		txids: TxidRange { min_txid, max_txid },
+		txid_refs: Vec::new(),
+		cold_objects: Vec::new(),
+		shard_cache_evictions: Vec::new(),
+		staged_hot_shards,
+		orphan_cold_objects,
+		max_keys: CMP_FDB_BATCH_MAX_KEYS as u32,
 		max_bytes: CMP_FDB_BATCH_MAX_VALUE_BYTES as u64,
 	}
 }
@@ -992,8 +990,7 @@ async fn schedule_repair_reclaim_job(
 	}
 
 	let cleanup_job_id = Id::new_v1(ctx.config().dc_label());
-	let input_fingerprint =
-		fingerprint_repair_reclaim_range(database_branch_id, &input_range);
+	let input_fingerprint = fingerprint_repair_reclaim_range(database_branch_id, &input_range);
 	tracing::warn!(
 		actor_id = log_actor_id(actor_id),
 		?database_branch_id,

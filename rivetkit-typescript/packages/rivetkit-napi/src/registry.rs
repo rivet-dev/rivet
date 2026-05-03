@@ -175,14 +175,14 @@ impl CoreRegistry {
 					serverless_package_version: config.serverless_package_version,
 					serverless_client_endpoint: config.serverless_client_endpoint,
 					serverless_client_namespace: config.serverless_client_namespace,
-						serverless_client_token: config.serverless_client_token,
-						serverless_validate_endpoint: config.serverless_validate_endpoint,
-						serverless_max_start_payload_bytes: config.serverless_max_start_payload_bytes
-							as usize,
-						serverless_cache_envoy: true,
-					},
-					self.shutdown_token.clone(),
-				)
+					serverless_client_token: config.serverless_client_token,
+					serverless_validate_endpoint: config.serverless_validate_endpoint,
+					serverless_max_start_payload_bytes: config.serverless_max_start_payload_bytes
+						as usize,
+					serverless_cache_envoy: true,
+				},
+				self.shutdown_token.clone(),
+			)
 			.await
 			.map_err(napi_anyhow_error)
 	}
@@ -375,13 +375,13 @@ impl CoreRegistry {
 				serverless_package_version: config.serverless_package_version,
 				serverless_client_endpoint: config.serverless_client_endpoint,
 				serverless_client_namespace: config.serverless_client_namespace,
-					serverless_client_token: config.serverless_client_token,
-					serverless_validate_endpoint: config.serverless_validate_endpoint,
-					serverless_max_start_payload_bytes: config.serverless_max_start_payload_bytes
-						as usize,
-					serverless_cache_envoy: true,
-				})
-				.await;
+				serverless_client_token: config.serverless_client_token,
+				serverless_validate_endpoint: config.serverless_validate_endpoint,
+				serverless_max_start_payload_bytes: config.serverless_max_start_payload_bytes
+					as usize,
+				serverless_cache_envoy: true,
+			})
+			.await;
 
 		// Re-acquire the lock and re-check state. Shutdown may have run during
 		// the build. If so, tear down the freshly-built runtime rather than

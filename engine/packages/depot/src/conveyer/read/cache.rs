@@ -5,10 +5,7 @@ use std::{
 
 use anyhow::{Context, Result};
 
-use crate::conveyer::{
-	page_index::DeltaPageIndex,
-	types::DatabaseBranchId,
-};
+use crate::conveyer::{page_index::DeltaPageIndex, types::DatabaseBranchId};
 
 use super::plan::{ReadSource, StorageScope};
 
@@ -53,10 +50,7 @@ pub(super) fn store_loaded_pidx_rows(
 	}
 }
 
-pub(super) fn clear_stale_pidx_rows(
-	cache: &DeltaPageIndex,
-	stale_pidx_pgnos: BTreeSet<u32>,
-) {
+pub(super) fn clear_stale_pidx_rows(cache: &DeltaPageIndex, stale_pidx_pgnos: BTreeSet<u32>) {
 	for pgno in stale_pidx_pgnos {
 		cache.remove(pgno);
 	}

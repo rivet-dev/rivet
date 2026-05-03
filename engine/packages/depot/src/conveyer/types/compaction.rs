@@ -3,7 +3,7 @@ use gas::prelude::Id;
 use serde::{Deserialize, Serialize};
 use vbare::OwnedVersionedData;
 
-use super::ids::{DatabaseBranchId, BucketBranchId};
+use super::ids::{BucketBranchId, DatabaseBranchId};
 use super::serialization::SQLITE_STORAGE_META_VERSION;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -150,11 +150,7 @@ impl_compaction_versioned_data!(
 	PitrIntervalCoverage,
 	"PitrIntervalCoverage"
 );
-impl_compaction_versioned_data!(
-	VersionedBucketForkFact,
-	BucketForkFact,
-	"BucketForkFact"
-);
+impl_compaction_versioned_data!(VersionedBucketForkFact, BucketForkFact, "BucketForkFact");
 impl_compaction_versioned_data!(
 	VersionedBucketCatalogDbFact,
 	BucketCatalogDbFact,

@@ -4,9 +4,11 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{Context, Result};
+#[cfg(feature = "sqlite-local")]
+use prometheus::Histogram;
 use prometheus::{
-	CounterVec, Encoder, Gauge, Histogram, HistogramOpts, HistogramVec, IntCounter, IntGauge,
-	IntGaugeVec, Opts, Registry, TextEncoder,
+	CounterVec, Encoder, Gauge, HistogramOpts, HistogramVec, IntCounter, IntGauge, IntGaugeVec,
+	Opts, Registry, TextEncoder,
 };
 
 use crate::actor::task_types::{ShutdownKind, StateMutationReason, UserTaskKind};
@@ -65,27 +67,21 @@ struct ActorMetricsInner {
 	#[cfg(feature = "sqlite-local")]
 	sqlite_vfs_commit_duration_seconds_total: CounterVec,
 	#[cfg(feature = "sqlite-local")]
-	sqlite_read_pool_active_readers: IntGauge,
+	sqlite_worker_queue_depth: IntGauge,
 	#[cfg(feature = "sqlite-local")]
-	sqlite_read_pool_idle_readers: IntGauge,
+	sqlite_worker_queue_overload_total: IntCounter,
 	#[cfg(feature = "sqlite-local")]
-	sqlite_read_pool_read_wait_duration_seconds: Histogram,
+	sqlite_worker_command_duration_seconds: HistogramVec,
 	#[cfg(feature = "sqlite-local")]
-	sqlite_read_pool_write_wait_duration_seconds: Histogram,
+	sqlite_worker_command_error_total: CounterVec,
 	#[cfg(feature = "sqlite-local")]
-	sqlite_read_pool_routed_read_queries_total: IntCounter,
+	sqlite_worker_close_duration_seconds: Histogram,
 	#[cfg(feature = "sqlite-local")]
-	sqlite_read_pool_write_fallback_queries_total: IntCounter,
+	sqlite_worker_close_timeout_total: IntCounter,
 	#[cfg(feature = "sqlite-local")]
-	sqlite_read_pool_manual_transaction_duration_seconds: Histogram,
+	sqlite_worker_crash_total: IntCounter,
 	#[cfg(feature = "sqlite-local")]
-	sqlite_read_pool_reader_opens_total: IntCounter,
-	#[cfg(feature = "sqlite-local")]
-	sqlite_read_pool_reader_closes_total: IntCounter,
-	#[cfg(feature = "sqlite-local")]
-	sqlite_read_pool_rejected_reader_mutations_total: IntCounter,
-	#[cfg(feature = "sqlite-local")]
-	sqlite_read_pool_mode_transitions_total: CounterVec,
+	sqlite_worker_unclean_close_total: IntCounter,
 }
 
 impl ActorMetrics {
@@ -324,84 +320,63 @@ impl ActorMetrics {
 		)
 		.context("create sqlite_vfs_commit_duration_seconds_total counter")?;
 		#[cfg(feature = "sqlite-local")]
-		let sqlite_read_pool_active_readers = IntGauge::with_opts(Opts::new(
-			"sqlite_read_pool_active_readers",
-			"current active SQLite read-pool readers",
+		let sqlite_worker_queue_depth = IntGauge::with_opts(Opts::new(
+			"sqlite_worker_queue_depth",
+			"current native SQLite worker SQL command queue depth",
 		))
-		.context("create sqlite_read_pool_active_readers gauge")?;
+		.context("create sqlite_worker_queue_depth gauge")?;
 		#[cfg(feature = "sqlite-local")]
-		let sqlite_read_pool_idle_readers = IntGauge::with_opts(Opts::new(
-			"sqlite_read_pool_idle_readers",
-			"current idle SQLite read-pool readers",
+		let sqlite_worker_queue_overload_total = IntCounter::with_opts(Opts::new(
+			"sqlite_worker_queue_overload_total",
+			"total native SQLite worker SQL command queue overloads",
 		))
-		.context("create sqlite_read_pool_idle_readers gauge")?;
+		.context("create sqlite_worker_queue_overload_total counter")?;
 		#[cfg(feature = "sqlite-local")]
-		let sqlite_read_pool_read_wait_duration_seconds = Histogram::with_opts(
+		let sqlite_worker_command_duration_seconds = HistogramVec::new(
 			HistogramOpts::new(
-				"sqlite_read_pool_read_wait_duration_seconds",
-				"SQLite read-pool read admission wait duration in seconds",
+				"sqlite_worker_command_duration_seconds",
+				"native SQLite worker SQL command duration in seconds",
 			)
-			.buckets(sqlite_pool_wait_buckets()),
+			.buckets(sqlite_worker_duration_buckets()),
+			&["operation"],
 		)
-		.context("create sqlite_read_pool_read_wait_duration_seconds histogram")?;
+		.context("create sqlite_worker_command_duration_seconds histogram")?;
 		#[cfg(feature = "sqlite-local")]
-		let sqlite_read_pool_write_wait_duration_seconds = Histogram::with_opts(
-			HistogramOpts::new(
-				"sqlite_read_pool_write_wait_duration_seconds",
-				"SQLite read-pool write-mode admission wait duration in seconds",
-			)
-			.buckets(sqlite_pool_wait_buckets()),
-		)
-		.context("create sqlite_read_pool_write_wait_duration_seconds histogram")?;
-		#[cfg(feature = "sqlite-local")]
-		let sqlite_read_pool_routed_read_queries_total = IntCounter::with_opts(Opts::new(
-			"sqlite_read_pool_routed_read_queries_total",
-			"total SQLite statements routed to read-pool readers",
-		))
-		.context("create sqlite_read_pool_routed_read_queries_total counter")?;
-		#[cfg(feature = "sqlite-local")]
-		let sqlite_read_pool_write_fallback_queries_total = IntCounter::with_opts(Opts::new(
-			"sqlite_read_pool_write_fallback_queries_total",
-			"total SQLite statements routed to write mode as read-pool fallbacks",
-		))
-		.context("create sqlite_read_pool_write_fallback_queries_total counter")?;
-		#[cfg(feature = "sqlite-local")]
-		let sqlite_read_pool_manual_transaction_duration_seconds = Histogram::with_opts(
-			HistogramOpts::new(
-				"sqlite_read_pool_manual_transaction_duration_seconds",
-				"SQLite read-pool manual transaction write-mode duration in seconds",
-			)
-			.buckets(sqlite_pool_wait_buckets()),
-		)
-		.context("create sqlite_read_pool_manual_transaction_duration_seconds histogram")?;
-		#[cfg(feature = "sqlite-local")]
-		let sqlite_read_pool_reader_opens_total = IntCounter::with_opts(Opts::new(
-			"sqlite_read_pool_reader_opens_total",
-			"total SQLite read-pool reader connection opens",
-		))
-		.context("create sqlite_read_pool_reader_opens_total counter")?;
-		#[cfg(feature = "sqlite-local")]
-		let sqlite_read_pool_reader_closes_total = IntCounter::with_opts(Opts::new(
-			"sqlite_read_pool_reader_closes_total",
-			"total SQLite read-pool reader connection closes",
-		))
-		.context("create sqlite_read_pool_reader_closes_total counter")?;
-		#[cfg(feature = "sqlite-local")]
-		let sqlite_read_pool_rejected_reader_mutations_total = IntCounter::with_opts(Opts::new(
-			"sqlite_read_pool_rejected_reader_mutations_total",
-			"total SQLite reader mutation attempts rejected by read-pool safeguards",
-		))
-		.context("create sqlite_read_pool_rejected_reader_mutations_total counter")?;
-		#[cfg(feature = "sqlite-local")]
-		let sqlite_read_pool_mode_transitions_total = CounterVec::new(
+		let sqlite_worker_command_error_total = CounterVec::new(
 			Opts::new(
-				"sqlite_read_pool_mode_transitions_total",
-				"total SQLite read-pool mode transitions",
+				"sqlite_worker_command_error_total",
+				"total native SQLite worker SQL command errors",
 			),
-			&["from", "to"],
+			&["operation", "code"],
 		)
-		.context("create sqlite_read_pool_mode_transitions_total counter")?;
-
+		.context("create sqlite_worker_command_error_total counter")?;
+		#[cfg(feature = "sqlite-local")]
+		let sqlite_worker_close_duration_seconds = Histogram::with_opts(
+			HistogramOpts::new(
+				"sqlite_worker_close_duration_seconds",
+				"native SQLite worker close duration in seconds",
+			)
+			.buckets(sqlite_worker_duration_buckets()),
+		)
+		.context("create sqlite_worker_close_duration_seconds histogram")?;
+		#[cfg(feature = "sqlite-local")]
+		let sqlite_worker_close_timeout_total = IntCounter::with_opts(Opts::new(
+			"sqlite_worker_close_timeout_total",
+			"total native SQLite worker close timeouts",
+		))
+		.context("create sqlite_worker_close_timeout_total counter")?;
+		#[cfg(feature = "sqlite-local")]
+		let sqlite_worker_crash_total = IntCounter::with_opts(Opts::new(
+			"sqlite_worker_crash_total",
+			"total native SQLite worker crashes",
+		))
+		.context("create sqlite_worker_crash_total counter")?;
+		#[cfg(feature = "sqlite-local")]
+		let sqlite_worker_unclean_close_total = IntCounter::with_opts(Opts::new(
+			"sqlite_worker_unclean_close_total",
+			"total native SQLite worker channel drops without clean close",
+		))
+		.context("create sqlite_worker_unclean_close_total counter")?;
 		register_metric(&registry, create_state_ms.clone());
 		register_metric(&registry, create_vars_ms.clone());
 		register_metric(&registry, queue_depth.clone());
@@ -426,7 +401,10 @@ impl ActorMetrics {
 			register_metric(&registry, sqlite_vfs_resolve_pages_total.clone());
 			register_metric(&registry, sqlite_vfs_resolve_pages_requested_total.clone());
 			register_metric(&registry, sqlite_vfs_resolve_pages_cache_hits_total.clone());
-			register_metric(&registry, sqlite_vfs_resolve_pages_cache_misses_total.clone());
+			register_metric(
+				&registry,
+				sqlite_vfs_resolve_pages_cache_misses_total.clone(),
+			);
 			register_metric(&registry, sqlite_vfs_get_pages_total.clone());
 			register_metric(&registry, sqlite_vfs_pages_fetched_total.clone());
 			register_metric(&registry, sqlite_vfs_prefetch_pages_total.clone());
@@ -439,29 +417,14 @@ impl ActorMetrics {
 				sqlite_vfs_commit_phase_duration_seconds_total.clone(),
 			);
 			register_metric(&registry, sqlite_vfs_commit_duration_seconds_total.clone());
-			register_metric(&registry, sqlite_read_pool_active_readers.clone());
-			register_metric(&registry, sqlite_read_pool_idle_readers.clone());
-			register_metric(
-				&registry,
-				sqlite_read_pool_read_wait_duration_seconds.clone(),
-			);
-			register_metric(
-				&registry,
-				sqlite_read_pool_write_wait_duration_seconds.clone(),
-			);
-			register_metric(&registry, sqlite_read_pool_routed_read_queries_total.clone());
-			register_metric(&registry, sqlite_read_pool_write_fallback_queries_total.clone());
-			register_metric(
-				&registry,
-				sqlite_read_pool_manual_transaction_duration_seconds.clone(),
-			);
-			register_metric(&registry, sqlite_read_pool_reader_opens_total.clone());
-			register_metric(&registry, sqlite_read_pool_reader_closes_total.clone());
-			register_metric(
-				&registry,
-				sqlite_read_pool_rejected_reader_mutations_total.clone(),
-			);
-			register_metric(&registry, sqlite_read_pool_mode_transitions_total.clone());
+			register_metric(&registry, sqlite_worker_queue_depth.clone());
+			register_metric(&registry, sqlite_worker_queue_overload_total.clone());
+			register_metric(&registry, sqlite_worker_command_duration_seconds.clone());
+			register_metric(&registry, sqlite_worker_command_error_total.clone());
+			register_metric(&registry, sqlite_worker_close_duration_seconds.clone());
+			register_metric(&registry, sqlite_worker_close_timeout_total.clone());
+			register_metric(&registry, sqlite_worker_crash_total.clone());
+			register_metric(&registry, sqlite_worker_unclean_close_total.clone());
 		}
 
 		for kind in UserTaskKind::ALL {
@@ -483,16 +446,11 @@ impl ActorMetrics {
 				sqlite_vfs_commit_phase_duration_seconds_total.with_label_values(&[phase]);
 			}
 			sqlite_vfs_commit_duration_seconds_total.with_label_values(&["total"]);
-			for (from, to) in [
-				("closed", "read"),
-				("closed", "write"),
-				("read", "write"),
-				("write", "read"),
-				("read", "closing"),
-				("write", "closing"),
-				("closing", "closed"),
-			] {
-				sqlite_read_pool_mode_transitions_total.with_label_values(&[from, to]);
+			for operation in ["exec", "execute"] {
+				sqlite_worker_command_duration_seconds.with_label_values(&[operation]);
+				for code in ["sqlite", "closing", "dead", "overloaded", "close_timeout"] {
+					sqlite_worker_command_error_total.with_label_values(&[operation, code]);
+				}
 			}
 		}
 
@@ -544,27 +502,21 @@ impl ActorMetrics {
 			#[cfg(feature = "sqlite-local")]
 			sqlite_vfs_commit_duration_seconds_total,
 			#[cfg(feature = "sqlite-local")]
-			sqlite_read_pool_active_readers,
+			sqlite_worker_queue_depth,
 			#[cfg(feature = "sqlite-local")]
-			sqlite_read_pool_idle_readers,
+			sqlite_worker_queue_overload_total,
 			#[cfg(feature = "sqlite-local")]
-			sqlite_read_pool_read_wait_duration_seconds,
+			sqlite_worker_command_duration_seconds,
 			#[cfg(feature = "sqlite-local")]
-			sqlite_read_pool_write_wait_duration_seconds,
+			sqlite_worker_command_error_total,
 			#[cfg(feature = "sqlite-local")]
-			sqlite_read_pool_routed_read_queries_total,
+			sqlite_worker_close_duration_seconds,
 			#[cfg(feature = "sqlite-local")]
-			sqlite_read_pool_write_fallback_queries_total,
+			sqlite_worker_close_timeout_total,
 			#[cfg(feature = "sqlite-local")]
-			sqlite_read_pool_manual_transaction_duration_seconds,
+			sqlite_worker_crash_total,
 			#[cfg(feature = "sqlite-local")]
-			sqlite_read_pool_reader_opens_total,
-			#[cfg(feature = "sqlite-local")]
-			sqlite_read_pool_reader_closes_total,
-			#[cfg(feature = "sqlite-local")]
-			sqlite_read_pool_rejected_reader_mutations_total,
-			#[cfg(feature = "sqlite-local")]
-			sqlite_read_pool_mode_transitions_total,
+			sqlite_worker_unclean_close_total,
 		})
 	}
 
@@ -757,7 +709,7 @@ impl ActorMetrics {
 		inner
 			.direct_subsystem_shutdown_warning_total
 			.with_label_values(&[subsystem, operation])
-				.inc();
+			.inc();
 	}
 }
 
@@ -777,7 +729,9 @@ impl depot_client::vfs::SqliteVfsMetrics for ActorMetrics {
 		let Some(inner) = self.inner.as_ref().as_ref() else {
 			return;
 		};
-		inner.sqlite_vfs_resolve_pages_cache_hits_total.inc_by(pages);
+		inner
+			.sqlite_vfs_resolve_pages_cache_hits_total
+			.inc_by(pages);
 	}
 
 	fn record_resolve_cache_misses(&self, pages: u64) {
@@ -795,9 +749,7 @@ impl depot_client::vfs::SqliteVfsMetrics for ActorMetrics {
 		};
 		inner.sqlite_vfs_get_pages_total.inc();
 		inner.sqlite_vfs_pages_fetched_total.inc_by(pages);
-		inner
-			.sqlite_vfs_prefetch_pages_total
-			.inc_by(prefetch_pages);
+		inner.sqlite_vfs_prefetch_pages_total.inc_by(prefetch_pages);
 		inner
 			.sqlite_vfs_bytes_fetched_total
 			.inc_by(pages.saturating_mul(page_size));
@@ -850,94 +802,68 @@ impl depot_client::vfs::SqliteVfsMetrics for ActorMetrics {
 			.inc_by(ns_to_seconds(total_ns));
 	}
 
-	fn set_read_pool_active_readers(&self, readers: u64) {
+	fn set_worker_queue_depth(&self, depth: u64) {
+		let Some(inner) = self.inner.as_ref().as_ref() else {
+			return;
+		};
+		inner.sqlite_worker_queue_depth.set(depth as i64);
+	}
+
+	fn record_worker_queue_overload(&self) {
+		let Some(inner) = self.inner.as_ref().as_ref() else {
+			return;
+		};
+		inner.sqlite_worker_queue_overload_total.inc();
+	}
+
+	fn observe_worker_command_duration(&self, operation: &'static str, duration_ns: u64) {
 		let Some(inner) = self.inner.as_ref().as_ref() else {
 			return;
 		};
 		inner
-			.sqlite_read_pool_active_readers
-			.set(readers.try_into().unwrap_or(i64::MAX));
+			.sqlite_worker_command_duration_seconds
+			.with_label_values(&[operation])
+			.observe(ns_to_seconds(duration_ns));
 	}
 
-	fn set_read_pool_idle_readers(&self, readers: u64) {
+	fn record_worker_command_error(&self, operation: &'static str, code: &'static str) {
 		let Some(inner) = self.inner.as_ref().as_ref() else {
 			return;
 		};
 		inner
-			.sqlite_read_pool_idle_readers
-			.set(readers.try_into().unwrap_or(i64::MAX));
-	}
-
-	fn observe_read_pool_read_wait(&self, duration: Duration) {
-		let Some(inner) = self.inner.as_ref().as_ref() else {
-			return;
-		};
-		inner
-			.sqlite_read_pool_read_wait_duration_seconds
-			.observe(duration.as_secs_f64());
-	}
-
-	fn observe_read_pool_write_wait(&self, duration: Duration) {
-		let Some(inner) = self.inner.as_ref().as_ref() else {
-			return;
-		};
-		inner
-			.sqlite_read_pool_write_wait_duration_seconds
-			.observe(duration.as_secs_f64());
-	}
-
-	fn record_read_pool_routed_read_query(&self) {
-		let Some(inner) = self.inner.as_ref().as_ref() else {
-			return;
-		};
-		inner.sqlite_read_pool_routed_read_queries_total.inc();
-	}
-
-	fn record_read_pool_write_fallback_query(&self) {
-		let Some(inner) = self.inner.as_ref().as_ref() else {
-			return;
-		};
-		inner.sqlite_read_pool_write_fallback_queries_total.inc();
-	}
-
-	fn observe_read_pool_manual_transaction(&self, duration: Duration) {
-		let Some(inner) = self.inner.as_ref().as_ref() else {
-			return;
-		};
-		inner
-			.sqlite_read_pool_manual_transaction_duration_seconds
-			.observe(duration.as_secs_f64());
-	}
-
-	fn record_read_pool_reader_open(&self) {
-		let Some(inner) = self.inner.as_ref().as_ref() else {
-			return;
-		};
-		inner.sqlite_read_pool_reader_opens_total.inc();
-	}
-
-	fn record_read_pool_reader_close(&self, count: u64) {
-		let Some(inner) = self.inner.as_ref().as_ref() else {
-			return;
-		};
-		inner.sqlite_read_pool_reader_closes_total.inc_by(count);
-	}
-
-	fn record_read_pool_rejected_reader_mutation(&self) {
-		let Some(inner) = self.inner.as_ref().as_ref() else {
-			return;
-		};
-		inner.sqlite_read_pool_rejected_reader_mutations_total.inc();
-	}
-
-	fn record_read_pool_mode_transition(&self, from: &str, to: &str) {
-		let Some(inner) = self.inner.as_ref().as_ref() else {
-			return;
-		};
-		inner
-			.sqlite_read_pool_mode_transitions_total
-			.with_label_values(&[from, to])
+			.sqlite_worker_command_error_total
+			.with_label_values(&[operation, code])
 			.inc();
+	}
+
+	fn observe_worker_close_duration(&self, duration_ns: u64) {
+		let Some(inner) = self.inner.as_ref().as_ref() else {
+			return;
+		};
+		inner
+			.sqlite_worker_close_duration_seconds
+			.observe(ns_to_seconds(duration_ns));
+	}
+
+	fn record_worker_close_timeout(&self) {
+		let Some(inner) = self.inner.as_ref().as_ref() else {
+			return;
+		};
+		inner.sqlite_worker_close_timeout_total.inc();
+	}
+
+	fn record_worker_crash(&self) {
+		let Some(inner) = self.inner.as_ref().as_ref() else {
+			return;
+		};
+		inner.sqlite_worker_crash_total.inc();
+	}
+
+	fn record_worker_unclean_close(&self) {
+		let Some(inner) = self.inner.as_ref().as_ref() else {
+			return;
+		};
+		inner.sqlite_worker_unclean_close_total.inc();
 	}
 }
 
@@ -963,10 +889,9 @@ fn ns_to_seconds(duration_ns: u64) -> f64 {
 }
 
 #[cfg(feature = "sqlite-local")]
-fn sqlite_pool_wait_buckets() -> Vec<f64> {
+fn sqlite_worker_duration_buckets() -> Vec<f64> {
 	vec![
-		0.000_1, 0.000_5, 0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5,
-		5.0,
+		0.000_1, 0.000_5, 0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0,
 	]
 }
 

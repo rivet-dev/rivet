@@ -5,8 +5,8 @@ use super::{
 	error::SqliteStorageError,
 	keys,
 	types::{
-		BucketId, PitrPolicy, ShardCachePolicy, decode_pitr_policy,
-		decode_shard_cache_policy, encode_pitr_policy, encode_shard_cache_policy,
+		BucketId, PitrPolicy, ShardCachePolicy, decode_pitr_policy, decode_shard_cache_policy,
+		encode_pitr_policy, encode_shard_cache_policy,
 	},
 };
 
@@ -113,7 +113,11 @@ pub async fn get_database_shard_cache_policy_override(
 	bucket_id: BucketId,
 	database_id: &str,
 ) -> Result<Option<ShardCachePolicy>> {
-	read_shard_cache_policy(udb, keys::database_shard_cache_policy_key(bucket_id, database_id)).await
+	read_shard_cache_policy(
+		udb,
+		keys::database_shard_cache_policy_key(bucket_id, database_id),
+	)
+	.await
 }
 
 pub async fn clear_database_shard_cache_policy_override(
@@ -121,7 +125,11 @@ pub async fn clear_database_shard_cache_policy_override(
 	bucket_id: BucketId,
 	database_id: &str,
 ) -> Result<()> {
-	clear_policy_value(udb, keys::database_shard_cache_policy_key(bucket_id, database_id)).await
+	clear_policy_value(
+		udb,
+		keys::database_shard_cache_policy_key(bucket_id, database_id),
+	)
+	.await
 }
 
 pub async fn get_effective_shard_cache_policy(
@@ -189,10 +197,7 @@ async fn clear_policy_value(udb: &universaldb::Database, key: Vec<u8>) -> Result
 	.await
 }
 
-async fn read_pitr_policy(
-	udb: &universaldb::Database,
-	key: Vec<u8>,
-) -> Result<Option<PitrPolicy>> {
+async fn read_pitr_policy(udb: &universaldb::Database, key: Vec<u8>) -> Result<Option<PitrPolicy>> {
 	udb.run(move |tx| {
 		let key = key.clone();
 

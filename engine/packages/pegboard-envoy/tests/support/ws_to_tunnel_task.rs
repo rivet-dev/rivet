@@ -103,10 +103,8 @@ use super::{
 		ActiveActor, ActiveActorState, clear_remote_sqlite_executors,
 		remove_remote_sqlite_executor_generation, remove_remote_sqlite_executors_for_actor,
 	},
-	cached_active_sqlite_actor,
-	cached_serverless_sqlite_generation,
-	remote_sqlite_executor_cell, remote_sqlite_executor_from_parts,
-	spawn_tracked_remote_sqlite_task,
+	cached_active_sqlite_actor, cached_serverless_sqlite_generation, remote_sqlite_executor_cell,
+	remote_sqlite_executor_from_parts, spawn_tracked_remote_sqlite_task,
 	validate_remote_sqlite_params, validate_sqlite_get_page_range_request,
 };
 use crate::conn::{
@@ -390,13 +388,13 @@ async fn remote_sqlite_executor_reopens_fresh_cell_with_persisted_contents() -> 
 	.await?;
 	assert_eq!(executors.len(), 1);
 	handle
-		.execute_write(
+		.execute(
 			"CREATE TABLE items(id INTEGER PRIMARY KEY, label TEXT);".to_string(),
 			None,
 		)
 		.await?;
 	handle
-		.execute_write(
+		.execute(
 			"INSERT INTO items(label) VALUES (?);".to_string(),
 			Some(vec![BindParam::Text("alpha".to_string())]),
 		)

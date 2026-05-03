@@ -5,9 +5,9 @@ mod moved_tests {
 	use crate::actor::context::ActorContext;
 	use parking_lot::Mutex as DropMutex;
 	use rivet_envoy_client::async_counter::AsyncCounter;
+	use std::time::{Duration, Instant};
 	use tokio::sync::oneshot;
 	use tokio::task::yield_now;
-	use std::time::{Duration, Instant};
 
 	use tokio::time::advance;
 	use tracing::field::{Field, Visit};
@@ -84,8 +84,7 @@ mod moved_tests {
 
 			let mut visitor = MessageVisitor::default();
 			event.record(&mut visitor);
-			if visitor.message.as_deref()
-				== Some("registered task cancelled by shutdown deadline")
+			if visitor.message.as_deref() == Some("registered task cancelled by shutdown deadline")
 				&& visitor.actor_id.as_deref() == Some("actor-register-task-deadline")
 				&& visitor.reason.as_deref() == Some("shutdown_deadline_elapsed")
 			{

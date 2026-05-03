@@ -3,7 +3,6 @@ import {
 	normalizeRuntimeSqlExecuteResult,
 	type RuntimeSqlBindParam,
 	type RuntimeSqlBindParams,
-	type RuntimeSqlExecuteResult,
 } from "./runtime";
 
 describe("runtime SQL boundary", () => {
@@ -38,7 +37,7 @@ describe("runtime SQL boundary", () => {
 		expect(invalidIntParam.kind).toBe("int");
 	});
 
-	test("normalizes exact execute result routes", () => {
+	test("normalizes execute result metadata", () => {
 		const base = {
 			columns: ["value"],
 			rows: [[1]],
@@ -46,34 +45,6 @@ describe("runtime SQL boundary", () => {
 			lastInsertRowId: null,
 		};
 
-		expect(
-			normalizeRuntimeSqlExecuteResult({ ...base, route: "read" }).route,
-		).toBe("read");
-		expect(
-			normalizeRuntimeSqlExecuteResult({ ...base, route: "write" }).route,
-		).toBe("write");
-		expect(
-			normalizeRuntimeSqlExecuteResult({
-				...base,
-				route: "writeFallback",
-			}).route,
-		).toBe("writeFallback");
-		expect(() =>
-			normalizeRuntimeSqlExecuteResult({ ...base, route: "custom" }),
-		).toThrow("unsupported runtime sqlite execute route: custom");
-	});
-
-	test("rejects custom execute result routes at typecheck time", () => {
-		const invalidRouteResultCandidate = {
-			columns: [],
-			rows: [],
-			changes: 0,
-			route: "custom",
-		} as const;
-		// @ts-expect-error Runtime SQL execute routes are exact.
-		const invalidRouteResult: RuntimeSqlExecuteResult =
-			invalidRouteResultCandidate;
-
-		expect(invalidRouteResult.route).toBe("custom");
+		expect(normalizeRuntimeSqlExecuteResult(base)).toEqual(base);
 	});
 });

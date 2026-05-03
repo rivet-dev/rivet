@@ -6,7 +6,7 @@ use crate::conveyer::{
 	db::{BranchAncestry, load_branch_ancestry},
 	error::SqliteStorageError,
 	keys::{self, SHARD_SIZE},
-	types::{DBHead, DatabaseBranchId, BucketId, decode_db_head},
+	types::{BucketId, DBHead, DatabaseBranchId, decode_db_head},
 };
 
 #[derive(Debug, Clone)]
@@ -27,10 +27,7 @@ impl StorageScope {
 		}
 	}
 
-	pub(super) fn cold_layer_candidates(
-		&self,
-		pgno: u32,
-	) -> Vec<super::cold::ColdLayerCandidate> {
+	pub(super) fn cold_layer_candidates(&self, pgno: u32) -> Vec<super::cold::ColdLayerCandidate> {
 		match self {
 			Self::Branch(plan) => plan
 				.sources

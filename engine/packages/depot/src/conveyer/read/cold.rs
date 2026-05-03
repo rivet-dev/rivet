@@ -1,10 +1,8 @@
 use std::collections::BTreeMap;
 
-use anyhow::{Context, Result};
 #[cfg(feature = "test-faults")]
-use crate::fault::{
-	DepotFaultAction, DepotFaultFired, ReadFaultPoint,
-};
+use crate::fault::{DepotFaultAction, DepotFaultFired, ReadFaultPoint};
+use anyhow::{Context, Result};
 use futures_util::TryStreamExt;
 use universaldb::{
 	RangeOption,
@@ -279,10 +277,7 @@ impl Db {
 			.await
 	}
 
-	async fn find_cold_layers(
-		&self,
-		candidate: ColdLayerCandidate,
-	) -> Result<Vec<LayerEntry>> {
+	async fn find_cold_layers(&self, candidate: ColdLayerCandidate) -> Result<Vec<LayerEntry>> {
 		let manifest = self.load_cold_manifest(candidate.branch_id).await?;
 		let mut layers = Vec::new();
 
@@ -305,13 +300,8 @@ impl Db {
 		Ok(layers)
 	}
 
-	async fn load_cold_manifest(
-		&self,
-		branch_id: DatabaseBranchId,
-	) -> Result<CachedColdManifest> {
-		let cached_manifest = {
-			self.cold_manifest_cache.write().await.get(branch_id)
-		};
+	async fn load_cold_manifest(&self, branch_id: DatabaseBranchId) -> Result<CachedColdManifest> {
+		let cached_manifest = { self.cold_manifest_cache.write().await.get(branch_id) };
 		if let Some(manifest) = cached_manifest {
 			return Ok(manifest);
 		}
@@ -341,11 +331,9 @@ impl Db {
 			else {
 				continue;
 			};
-			chunks.push(
-				decode_cold_manifest_chunk(&chunk_bytes).with_context(|| {
-					format!("decode sqlite cold manifest chunk {}", chunk_ref.object_key)
-				})?,
-			);
+			chunks.push(decode_cold_manifest_chunk(&chunk_bytes).with_context(|| {
+				format!("decode sqlite cold manifest chunk {}", chunk_ref.object_key)
+			})?);
 		}
 
 		let manifest = CachedColdManifest { chunks };
@@ -374,7 +362,8 @@ pub(super) async fn tx_load_latest_compaction_cold_ref(
 		};
 		let as_of_txid = source.max_txid;
 		let prefix = keys::branch_compaction_cold_shard_version_prefix(source.branch_id, shard_id);
-		let end_key = keys::branch_compaction_cold_shard_key(source.branch_id, shard_id, as_of_txid);
+		let end_key =
+			keys::branch_compaction_cold_shard_key(source.branch_id, shard_id, as_of_txid);
 		let end = end_of_key_range(&end_key);
 		let informal = tx.informal();
 		let mut stream = informal.get_ranges_keyvalues(
@@ -450,5 +439,8 @@ fn cold_source_key(object_key: &str) -> Vec<u8> {
 }
 
 fn cold_manifest_index_object_key(branch_id: DatabaseBranchId) -> String {
-	format!("db/{}/cold_manifest/index.bare", branch_id.as_uuid().simple())
+	format!(
+		"db/{}/cold_manifest/index.bare",
+		branch_id.as_uuid().simple()
+	)
 }

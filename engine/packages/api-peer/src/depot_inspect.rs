@@ -98,13 +98,7 @@ pub async fn page_trace(
 ) -> Result<inspect::InspectResponse> {
 	let branch_id = parse_database_branch_id(&path.branch_id)?;
 	let udb = ctx.pools().udb()?;
-	inspect::page_trace(
-		&udb,
-		ctx.pools().node_id(),
-		branch_id,
-		path.pgno,
-	)
-	.await
+	inspect::page_trace(&udb, ctx.pools().node_id(), branch_id, path.pgno).await
 }
 
 pub async fn branch_rows(
@@ -115,14 +109,7 @@ pub async fn branch_rows(
 	let branch_id = parse_database_branch_id(&path.branch_id)?;
 	let family = inspect::RowFamily::parse(&path.family)?;
 	let udb = ctx.pools().udb()?;
-	inspect::branch_rows(
-		&udb,
-		ctx.pools().node_id(),
-		branch_id,
-		family,
-		query,
-	)
-	.await
+	inspect::branch_rows(&udb, ctx.pools().node_id(), branch_id, family, query).await
 }
 
 pub async fn raw_key(

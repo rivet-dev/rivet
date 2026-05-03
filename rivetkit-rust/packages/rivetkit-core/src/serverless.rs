@@ -181,11 +181,11 @@ impl CoreServerlessRuntime {
 				package_version: config.serverless_package_version,
 				client_endpoint: config.serverless_client_endpoint,
 				client_namespace: config.serverless_client_namespace,
-					client_token: config.serverless_client_token,
-					validate_endpoint: config.serverless_validate_endpoint,
-					max_start_payload_bytes: config.serverless_max_start_payload_bytes,
-					cache_envoy: config.serverless_cache_envoy,
-				}),
+				client_token: config.serverless_client_token,
+				validate_endpoint: config.serverless_validate_endpoint,
+				max_start_payload_bytes: config.serverless_max_start_payload_bytes,
+				cache_envoy: config.serverless_cache_envoy,
+			}),
 			dispatcher,
 			envoy: Arc::new(TokioMutex::new(None)),
 			#[cfg(feature = "native-runtime")]
@@ -422,9 +422,7 @@ impl CoreServerlessRuntime {
 		// installing it into the cache.
 		if self.shutting_down.load(Ordering::Acquire) {
 			drop(guard);
-			match timeout(SHUTDOWN_DRAIN_TIMEOUT, handle.shutdown_and_wait(false))
-				.await
-			{
+			match timeout(SHUTDOWN_DRAIN_TIMEOUT, handle.shutdown_and_wait(false)).await {
 				Ok(()) => {}
 				Err(_) => {
 					handle.shutdown(true);
@@ -662,22 +660,18 @@ fn normalized_endpoint_candidates(value: &str) -> Vec<String> {
 		.split(',')
 		.map(str::trim)
 		.filter(|candidate| !candidate.is_empty())
-		.map(|candidate| {
-			normalize_endpoint_url(candidate).unwrap_or_else(|| candidate.to_owned())
-		})
+		.map(|candidate| normalize_endpoint_url(candidate).unwrap_or_else(|| candidate.to_owned()))
 		.collect()
 }
 
 pub fn endpoints_match(a: &str, b: &str) -> bool {
 	let a_candidates = normalized_endpoint_candidates(a);
 	let b_candidates = normalized_endpoint_candidates(b);
-	a_candidates
-		.iter()
-		.any(|a_candidate| {
-			b_candidates
-				.iter()
-				.any(|b_candidate| a_candidate == b_candidate)
-		})
+	a_candidates.iter().any(|a_candidate| {
+		b_candidates
+			.iter()
+			.any(|b_candidate| a_candidate == b_candidate)
+	})
 }
 
 fn normalize_regional_hostname(hostname: &str) -> String {

@@ -1,30 +1,29 @@
 mod common;
 
 use anyhow::Result;
-use futures_util::TryStreamExt;
-use gas::prelude::Id;
 use depot::{
+	conveyer::{branch, history_pin},
 	keys::{
-		database_pointer_cur_key, database_pointer_history_prefix, branch_commit_key,
-		branch_meta_head_at_fork_key, branch_meta_head_key, branches_restore_point_pin_key,
-		branches_desc_pin_key, branches_list_key, branches_refcount_key,
-		branch_shard_key, branch_vtx_key, db_pin_key,
-		bucket_branches_database_name_tombstone_key, bucket_branches_restore_point_pin_key,
-		bucket_branches_desc_pin_key, bucket_branches_list_key,
-		bucket_branches_refcount_key, bucket_pointer_cur_key,
-		bucket_pointer_history_prefix,
+		branch_commit_key, branch_meta_head_at_fork_key, branch_meta_head_key, branch_shard_key,
+		branch_vtx_key, branches_desc_pin_key, branches_list_key, branches_refcount_key,
+		branches_restore_point_pin_key, bucket_branches_database_name_tombstone_key,
+		bucket_branches_desc_pin_key, bucket_branches_list_key, bucket_branches_refcount_key,
+		bucket_branches_restore_point_pin_key, bucket_pointer_cur_key,
+		bucket_pointer_history_prefix, database_pointer_cur_key, database_pointer_history_prefix,
+		db_pin_key,
 	},
 	ltx::{LtxHeader, encode_ltx_v3},
-	conveyer::{branch, history_pin},
 	types::{
-		DatabaseBranchId, DatabaseBranchRecord, BranchState, CommitRow, DBHead, DbHistoryPinKind, DirtyPage,
-		BucketBranchId, BucketBranchRecord, BucketId, ResolvedVersionstamp,
-		decode_database_branch_record, decode_database_pointer, decode_commit_row, decode_db_head,
-		decode_db_history_pin,
-		decode_bucket_branch_record, decode_bucket_pointer, encode_commit_row,
-		encode_database_branch_record, encode_bucket_branch_record,
+		BranchState, BucketBranchId, BucketBranchRecord, BucketId, CommitRow, DBHead,
+		DatabaseBranchId, DatabaseBranchRecord, DbHistoryPinKind, DirtyPage, ResolvedVersionstamp,
+		decode_bucket_branch_record, decode_bucket_pointer, decode_commit_row,
+		decode_database_branch_record, decode_database_pointer, decode_db_head,
+		decode_db_history_pin, encode_bucket_branch_record, encode_commit_row,
+		encode_database_branch_record,
 	},
 };
+use futures_util::TryStreamExt;
+use gas::prelude::Id;
 use universaldb::{
 	RangeOption,
 	options::{MutationType, StreamingMode},
@@ -81,16 +80,12 @@ async fn clear_value(db: &universaldb::Database, key: Vec<u8>) -> Result<()> {
 	.await
 }
 
-async fn read_prefix_values(
-	db: &universaldb::Database,
-	prefix: Vec<u8>,
-) -> Result<Vec<Vec<u8>>> {
+async fn read_prefix_values(db: &universaldb::Database, prefix: Vec<u8>) -> Result<Vec<Vec<u8>>> {
 	db.run(move |tx| {
 		let prefix = prefix.clone();
 		async move {
-			let prefix_subspace = universaldb::Subspace::from(
-				universaldb::tuple::Subspace::from_bytes(prefix),
-			);
+			let prefix_subspace =
+				universaldb::Subspace::from(universaldb::tuple::Subspace::from_bytes(prefix));
 			let informal = tx.informal();
 			let mut stream = informal.get_ranges_keyvalues(
 				RangeOption {
@@ -210,21 +205,25 @@ async fn read_bucket_pin(
 
 macro_rules! branch_matrix {
 	($prefix:expr, |$ctx:ident, $db:ident, $database_db:ident| $body:block) => {
-		common::test_matrix($prefix, |_tier, $ctx| Box::pin(async move {
-			let $db = $ctx.udb.clone();
-			let $database_db = $ctx.make_db(test_bucket(), TEST_DATABASE);
-			$body
-		}))
+		common::test_matrix($prefix, |_tier, $ctx| {
+			Box::pin(async move {
+				let $db = $ctx.udb.clone();
+				let $database_db = $ctx.make_db(test_bucket(), TEST_DATABASE);
+				$body
+			})
+		})
 		.await
 	};
 }
 
 macro_rules! udb_matrix {
 	($prefix:expr, |$ctx:ident, $db:ident| $body:block) => {
-		common::test_matrix($prefix, |_tier, $ctx| Box::pin(async move {
-			let $db = $ctx.udb.clone();
-			$body
-		}))
+		common::test_matrix($prefix, |_tier, $ctx| {
+			Box::pin(async move {
+				let $db = $ctx.udb.clone();
+				$body
+			})
+		})
 		.await
 	};
 }
@@ -387,8 +386,10 @@ async fn derive_branch_at_rejects_versionstamp_below_parent_gc_floor() -> Result
 				&branches_refcount_key(source_branch_id),
 				&1_i64.to_le_bytes(),
 			);
-			tx.informal()
-				.set(&branch_vtx_key(source_branch_id, old_versionstamp), &1_u64.to_be_bytes());
+			tx.informal().set(
+				&branch_vtx_key(source_branch_id, old_versionstamp),
+				&1_u64.to_be_bytes(),
+			);
 			tx.informal().set(
 				&branch_commit_key(source_branch_id, 1),
 				&encode_commit_row(CommitRow {
@@ -581,12 +582,8 @@ async fn derive_bucket_branch_at_enforces_max_bucket_depth() -> Result<()> {
 		let source_branch_id = BucketBranchId::from_uuid(uuid::Uuid::from_u128(0xbbbb));
 		let new_branch_id = BucketBranchId::from_uuid(uuid::Uuid::from_u128(0xcccc));
 
-		seed_bucket_branch_record(
-			&db,
-			source_branch_id,
-			depot::constants::MAX_BUCKET_DEPTH,
-		)
-		.await?;
+		seed_bucket_branch_record(&db, source_branch_id, depot::constants::MAX_BUCKET_DEPTH)
+			.await?;
 
 		let err = db
 			.run(move |tx| async move {
@@ -631,7 +628,8 @@ async fn fork_bucket_writes_pointer_and_metadata_without_eager_aptr() -> Result<
 			ResolvedVersionstamp {
 				versionstamp: source_commit.versionstamp,
 				restore_point: None,
-			})
+			},
+		)
 		.await?;
 
 		assert_ne!(forked_bucket_id, source_bucket_id);
@@ -710,43 +708,52 @@ async fn fork_bucket_enforces_max_bucket_depth() -> Result<()> {
 
 #[tokio::test]
 async fn resolve_database_pointer_walks_bucket_parent_chain_after_fork() -> Result<()> {
-	branch_matrix!("depot-branch-resolve-bucket-parent", |ctx, db, database_db| {
-		database_db.commit(vec![page(1, 0x11)], 2, 1_000).await?;
-		let source_database_branch = read_branch_id(&db).await?;
-		let source_commit_bytes = read_value(&db, branch_commit_key(source_database_branch, 1))
-			.await?
-			.expect("source commit row should exist");
-		let source_commit = decode_commit_row(&source_commit_bytes)?;
+	branch_matrix!(
+		"depot-branch-resolve-bucket-parent",
+		|ctx, db, database_db| {
+			database_db.commit(vec![page(1, 0x11)], 2, 1_000).await?;
+			let source_database_branch = read_branch_id(&db).await?;
+			let source_commit_bytes = read_value(&db, branch_commit_key(source_database_branch, 1))
+				.await?
+				.expect("source commit row should exist");
+			let source_commit = decode_commit_row(&source_commit_bytes)?;
 
-		let forked_bucket_id = branch::fork_bucket(
-			&db,
-			BucketId::from_gas_id(test_bucket()),
-			ResolvedVersionstamp {
-				versionstamp: source_commit.versionstamp,
-				restore_point: None,
-			})
-		.await?;
-		let pointer_bytes = read_value(&db, bucket_pointer_cur_key(forked_bucket_id))
-			.await?
-			.expect("forked bucket pointer should exist");
-		let forked_pointer = decode_bucket_pointer(&pointer_bytes)?;
+			let forked_bucket_id = branch::fork_bucket(
+				&db,
+				BucketId::from_gas_id(test_bucket()),
+				ResolvedVersionstamp {
+					versionstamp: source_commit.versionstamp,
+					restore_point: None,
+				},
+			)
+			.await?;
+			let pointer_bytes = read_value(&db, bucket_pointer_cur_key(forked_bucket_id))
+				.await?
+				.expect("forked bucket pointer should exist");
+			let forked_pointer = decode_bucket_pointer(&pointer_bytes)?;
 
-		let resolved_pointer = db
-			.run(move |tx| async move {
-				branch::resolve_database_pointer(&tx, forked_pointer.current_branch, TEST_DATABASE, Snapshot)
+			let resolved_pointer = db
+				.run(move |tx| async move {
+					branch::resolve_database_pointer(
+						&tx,
+						forked_pointer.current_branch,
+						TEST_DATABASE,
+						Snapshot,
+					)
 					.await
-			})
-			.await?
-			.expect("database pointer should be inherited from parent bucket branch");
-		assert_eq!(resolved_pointer.current_branch, source_database_branch);
+				})
+				.await?
+				.expect("database pointer should be inherited from parent bucket branch");
+			assert_eq!(resolved_pointer.current_branch, source_database_branch);
 
-		let forked_database_db =
-			ctx.make_db(Id::v1(forked_bucket_id.as_uuid(), 1), TEST_DATABASE);
-		let pages = forked_database_db.get_pages(vec![1]).await?;
-		assert_eq!(pages[0].bytes, Some(page_bytes(0x11)));
+			let forked_database_db =
+				ctx.make_db(Id::v1(forked_bucket_id.as_uuid(), 1), TEST_DATABASE);
+			let pages = forked_database_db.get_pages(vec![1]).await?;
+			assert_eq!(pages[0].bytes, Some(page_bytes(0x11)));
 
-		Ok(())
-	})
+			Ok(())
+		}
+	)
 }
 
 #[tokio::test]
@@ -765,7 +772,8 @@ async fn resolve_database_pointer_honors_bucket_branch_tombstones() -> Result<()
 			ResolvedVersionstamp {
 				versionstamp: source_commit.versionstamp,
 				restore_point: None,
-			})
+			},
+		)
 		.await?;
 		let pointer_bytes = read_value(&db, bucket_pointer_cur_key(forked_bucket_id))
 			.await?
@@ -784,7 +792,8 @@ async fn resolve_database_pointer_honors_bucket_branch_tombstones() -> Result<()
 
 		let err = db
 			.run(move |tx| async move {
-				branch::resolve_database_pointer(&tx, forked_bucket_branch, TEST_DATABASE, Snapshot).await
+				branch::resolve_database_pointer(&tx, forked_bucket_branch, TEST_DATABASE, Snapshot)
+					.await
 			})
 			.await
 			.expect_err("tombstone should block inherited database pointer");
@@ -796,8 +805,7 @@ async fn resolve_database_pointer_honors_bucket_branch_tombstones() -> Result<()
 				))
 		);
 
-		let forked_database_db =
-			ctx.make_db(Id::v1(forked_bucket_id.as_uuid(), 1), TEST_DATABASE);
+		let forked_database_db = ctx.make_db(Id::v1(forked_bucket_id.as_uuid(), 1), TEST_DATABASE);
 		let err = forked_database_db
 			.get_pages(vec![1])
 			.await
@@ -816,273 +824,313 @@ async fn resolve_database_pointer_honors_bucket_branch_tombstones() -> Result<()
 
 #[tokio::test]
 async fn fork_database_writes_target_pointer_and_reads_source_data() -> Result<()> {
-	branch_matrix!("depot-branch-fork-database", |ctx, db, source_database_db| {
-		source_database_db.commit(vec![page(1, 0x11)], 2, 1_000).await?;
-		let source_branch_id = read_branch_id(&db).await?;
-		let source_commit_bytes = read_value(&db, branch_commit_key(source_branch_id, 1))
-			.await?
-			.expect("source commit row should exist");
-		let source_commit = decode_commit_row(&source_commit_bytes)?;
+	branch_matrix!(
+		"depot-branch-fork-database",
+		|ctx, db, source_database_db| {
+			source_database_db
+				.commit(vec![page(1, 0x11)], 2, 1_000)
+				.await?;
+			let source_branch_id = read_branch_id(&db).await?;
+			let source_commit_bytes = read_value(&db, branch_commit_key(source_branch_id, 1))
+				.await?
+				.expect("source commit row should exist");
+			let source_commit = decode_commit_row(&source_commit_bytes)?;
 
-		let target_seed = ctx.make_db(target_bucket(), "target-seed");
-		target_seed.commit(vec![page(1, 0xaa)], 1, 1_100).await?;
-		let target_bucket_branch = read_bucket_branch_id_for(&db, target_bucket()).await?;
+			let target_seed = ctx.make_db(target_bucket(), "target-seed");
+			target_seed.commit(vec![page(1, 0xaa)], 1, 1_100).await?;
+			let target_bucket_branch = read_bucket_branch_id_for(&db, target_bucket()).await?;
 
-		let forked_database_id = branch::fork_database(
-			&db,
-			BucketId::from_gas_id(test_bucket()),
-			TEST_DATABASE.to_string(),
-			ResolvedVersionstamp {
-				versionstamp: source_commit.versionstamp,
-				restore_point: None,
-			},
-			BucketId::from_gas_id(target_bucket()))
-		.await?;
+			let forked_database_id = branch::fork_database(
+				&db,
+				BucketId::from_gas_id(test_bucket()),
+				TEST_DATABASE.to_string(),
+				ResolvedVersionstamp {
+					versionstamp: source_commit.versionstamp,
+					restore_point: None,
+				},
+				BucketId::from_gas_id(target_bucket()),
+			)
+			.await?;
 
-		assert_ne!(forked_database_id, TEST_DATABASE);
-		let forked_branch_id = read_database_branch_id(&db, target_bucket(), &forked_database_id).await?;
-		let forked_record_bytes = read_value(&db, branches_list_key(forked_branch_id))
-			.await?
-			.expect("forked database branch record should exist");
-		let forked_record = decode_database_branch_record(&forked_record_bytes)?;
-		assert_eq!(forked_record.bucket_branch, target_bucket_branch);
-		assert_eq!(forked_record.parent, Some(source_branch_id));
-		assert_eq!(
-			forked_record.parent_versionstamp,
-			Some(source_commit.versionstamp)
-		);
-		assert_eq!(read_refcount(&db, source_branch_id).await?, 2);
-		assert_eq!(read_refcount(&db, forked_branch_id).await?, 1);
+			assert_ne!(forked_database_id, TEST_DATABASE);
+			let forked_branch_id =
+				read_database_branch_id(&db, target_bucket(), &forked_database_id).await?;
+			let forked_record_bytes = read_value(&db, branches_list_key(forked_branch_id))
+				.await?
+				.expect("forked database branch record should exist");
+			let forked_record = decode_database_branch_record(&forked_record_bytes)?;
+			assert_eq!(forked_record.bucket_branch, target_bucket_branch);
+			assert_eq!(forked_record.parent, Some(source_branch_id));
+			assert_eq!(
+				forked_record.parent_versionstamp,
+				Some(source_commit.versionstamp)
+			);
+			assert_eq!(read_refcount(&db, source_branch_id).await?, 2);
+			assert_eq!(read_refcount(&db, forked_branch_id).await?, 1);
 
-		let forked_database_db = ctx.make_db(target_bucket(), forked_database_id);
-		let pages = forked_database_db.get_pages(vec![1]).await?;
-		assert_eq!(pages[0].bytes, Some(page_bytes(0x11)));
+			let forked_database_db = ctx.make_db(target_bucket(), forked_database_id);
+			let pages = forked_database_db.get_pages(vec![1]).await?;
+			assert_eq!(pages[0].bytes, Some(page_bytes(0x11)));
 
-		Ok(())
-	})
+			Ok(())
+		}
+	)
 }
 
 #[tokio::test]
 async fn fresh_fork_uses_head_at_fork_until_first_commit() -> Result<()> {
-	branch_matrix!("depot-branch-fresh-fork-head", |ctx, db, source_database_db| {
-		source_database_db.commit(vec![page(1, 0x11)], 2, 1_000).await?;
-		let source_branch_id = read_branch_id(&db).await?;
-		let source_commit = decode_commit_row(
-			&read_value(&db, branch_commit_key(source_branch_id, 1))
-				.await?
-				.expect("source commit row should exist"),
-		)?;
+	branch_matrix!(
+		"depot-branch-fresh-fork-head",
+		|ctx, db, source_database_db| {
+			source_database_db
+				.commit(vec![page(1, 0x11)], 2, 1_000)
+				.await?;
+			let source_branch_id = read_branch_id(&db).await?;
+			let source_commit = decode_commit_row(
+				&read_value(&db, branch_commit_key(source_branch_id, 1))
+					.await?
+					.expect("source commit row should exist"),
+			)?;
 
-		let forked_database_id = branch::fork_database(
-			&db,
-			BucketId::from_gas_id(test_bucket()),
-			TEST_DATABASE.to_string(),
-			ResolvedVersionstamp {
-				versionstamp: source_commit.versionstamp,
-				restore_point: None,
-			},
-			BucketId::from_gas_id(test_bucket()))
-		.await?;
-		let forked_branch_id =
-			read_database_branch_id(&db, test_bucket(), &forked_database_id).await?;
-		assert!(
-			read_value(&db, branch_meta_head_key(forked_branch_id))
-				.await?
-				.is_none()
-		);
-		let head_at_fork = decode_db_head(
-			&read_value(&db, branch_meta_head_at_fork_key(forked_branch_id))
-				.await?
-				.expect("forked branch head_at_fork should exist"),
-		)?;
-		assert_eq!(head_at_fork.head_txid, 1);
-		assert_eq!(head_at_fork.db_size_pages, 2);
-
-		let forked_database_db = ctx.make_db(test_bucket(), forked_database_id);
-		let pages = forked_database_db.get_pages(vec![1]).await?;
-		assert_eq!(pages[0].bytes, Some(page_bytes(0x11)));
-
-		forked_database_db
-			.commit(vec![page(2, 0x22)], 3, 2_000)
+			let forked_database_id = branch::fork_database(
+				&db,
+				BucketId::from_gas_id(test_bucket()),
+				TEST_DATABASE.to_string(),
+				ResolvedVersionstamp {
+					versionstamp: source_commit.versionstamp,
+					restore_point: None,
+				},
+				BucketId::from_gas_id(test_bucket()),
+			)
 			.await?;
-		assert!(
-			read_value(&db, branch_meta_head_at_fork_key(forked_branch_id))
-				.await?
-				.is_none()
-		);
-		let forked_head = read_branch_head(&db, forked_branch_id).await?;
-		assert_eq!(forked_head.head_txid, 2);
-		assert_eq!(forked_head.db_size_pages, 3);
-		assert!(
-			read_value(&db, branch_commit_key(forked_branch_id, 2))
-				.await?
-				.is_some()
-		);
+			let forked_branch_id =
+				read_database_branch_id(&db, test_bucket(), &forked_database_id).await?;
+			assert!(
+				read_value(&db, branch_meta_head_key(forked_branch_id))
+					.await?
+					.is_none()
+			);
+			let head_at_fork = decode_db_head(
+				&read_value(&db, branch_meta_head_at_fork_key(forked_branch_id))
+					.await?
+					.expect("forked branch head_at_fork should exist"),
+			)?;
+			assert_eq!(head_at_fork.head_txid, 1);
+			assert_eq!(head_at_fork.db_size_pages, 2);
 
-		let pages = forked_database_db.get_pages(vec![1, 2]).await?;
-		assert_eq!(pages[0].bytes, Some(page_bytes(0x11)));
-		assert_eq!(pages[1].bytes, Some(page_bytes(0x22)));
+			let forked_database_db = ctx.make_db(test_bucket(), forked_database_id);
+			let pages = forked_database_db.get_pages(vec![1]).await?;
+			assert_eq!(pages[0].bytes, Some(page_bytes(0x11)));
 
-		Ok(())
-	})
+			forked_database_db
+				.commit(vec![page(2, 0x22)], 3, 2_000)
+				.await?;
+			assert!(
+				read_value(&db, branch_meta_head_at_fork_key(forked_branch_id))
+					.await?
+					.is_none()
+			);
+			let forked_head = read_branch_head(&db, forked_branch_id).await?;
+			assert_eq!(forked_head.head_txid, 2);
+			assert_eq!(forked_head.db_size_pages, 3);
+			assert!(
+				read_value(&db, branch_commit_key(forked_branch_id, 2))
+					.await?
+					.is_some()
+			);
+
+			let pages = forked_database_db.get_pages(vec![1, 2]).await?;
+			assert_eq!(pages[0].bytes, Some(page_bytes(0x11)));
+			assert_eq!(pages[1].bytes, Some(page_bytes(0x22)));
+
+			Ok(())
+		}
+	)
 }
 
 #[tokio::test]
 async fn fork_database_reads_parent_shard_when_parent_pidx_is_newer_than_fork() -> Result<()> {
-	branch_matrix!("depot-branch-parent-shard-newer-pidx", |ctx, db, source_database_db| {
-		source_database_db.commit(vec![page(1, 0x11)], 2, 1_000).await?;
-		let source_branch_id = read_branch_id(&db).await?;
-		let source_commit_bytes = read_value(&db, branch_commit_key(source_branch_id, 1))
-			.await?
-			.expect("source commit row should exist");
-		let source_commit = decode_commit_row(&source_commit_bytes)?;
+	branch_matrix!(
+		"depot-branch-parent-shard-newer-pidx",
+		|ctx, db, source_database_db| {
+			source_database_db
+				.commit(vec![page(1, 0x11)], 2, 1_000)
+				.await?;
+			let source_branch_id = read_branch_id(&db).await?;
+			let source_commit_bytes = read_value(&db, branch_commit_key(source_branch_id, 1))
+				.await?
+				.expect("source commit row should exist");
+			let source_commit = decode_commit_row(&source_commit_bytes)?;
 
-		db.run(move |tx| async move {
-			tx.informal().set(
-				&branch_shard_key(source_branch_id, 0, 1),
-				&encoded_blob(1, vec![page(1, 0x11)])?,
-			);
+			db.run(move |tx| async move {
+				tx.informal().set(
+					&branch_shard_key(source_branch_id, 0, 1),
+					&encoded_blob(1, vec![page(1, 0x11)])?,
+				);
+				Ok(())
+			})
+			.await?;
+
+			let forked_database_id = branch::fork_database(
+				&db,
+				BucketId::from_gas_id(test_bucket()),
+				TEST_DATABASE.to_string(),
+				ResolvedVersionstamp {
+					versionstamp: source_commit.versionstamp,
+					restore_point: None,
+				},
+				BucketId::from_gas_id(test_bucket()),
+			)
+			.await?;
+
+			source_database_db
+				.commit(vec![page(1, 0x22)], 2, 2_000)
+				.await?;
+
+			let forked_database_db = ctx.make_db(test_bucket(), forked_database_id);
+			let pages = forked_database_db.get_pages(vec![1]).await?;
+			assert_eq!(pages[0].bytes, Some(page_bytes(0x11)));
+
 			Ok(())
-		})
-		.await?;
-
-		let forked_database_id = branch::fork_database(
-			&db,
-			BucketId::from_gas_id(test_bucket()),
-			TEST_DATABASE.to_string(),
-			ResolvedVersionstamp {
-				versionstamp: source_commit.versionstamp,
-				restore_point: None,
-			},
-			BucketId::from_gas_id(test_bucket()))
-		.await?;
-
-		source_database_db.commit(vec![page(1, 0x22)], 2, 2_000).await?;
-
-		let forked_database_db = ctx.make_db(test_bucket(), forked_database_id);
-		let pages = forked_database_db.get_pages(vec![1]).await?;
-		assert_eq!(pages[0].bytes, Some(page_bytes(0x11)));
-
-		Ok(())
-	})
+		}
+	)
 }
 
 #[tokio::test]
 async fn fork_database_can_use_depth_one_source_branch() -> Result<()> {
-	branch_matrix!("depot-branch-depth-one-source", |ctx, db, root_database_db| {
-		root_database_db.commit(vec![page(1, 0x11)], 2, 1_000).await?;
-		let root_branch_id = read_branch_id(&db).await?;
-		let root_commit_bytes = read_value(&db, branch_commit_key(root_branch_id, 1))
-			.await?
-			.expect("root commit row should exist");
-		let root_commit = decode_commit_row(&root_commit_bytes)?;
+	branch_matrix!(
+		"depot-branch-depth-one-source",
+		|ctx, db, root_database_db| {
+			root_database_db
+				.commit(vec![page(1, 0x11)], 2, 1_000)
+				.await?;
+			let root_branch_id = read_branch_id(&db).await?;
+			let root_commit_bytes = read_value(&db, branch_commit_key(root_branch_id, 1))
+				.await?
+				.expect("root commit row should exist");
+			let root_commit = decode_commit_row(&root_commit_bytes)?;
 
-		let depth_one_database_id = branch::fork_database(
-			&db,
-			BucketId::from_gas_id(test_bucket()),
-			TEST_DATABASE.to_string(),
-			ResolvedVersionstamp {
-				versionstamp: root_commit.versionstamp,
-				restore_point: None,
-			},
-			BucketId::from_gas_id(test_bucket()))
-		.await?;
-		let depth_one_database_db = ctx.make_db(test_bucket(), depth_one_database_id.clone());
-		depth_one_database_db
-			.commit(vec![page(2, 0x22)], 3, 2_000)
+			let depth_one_database_id = branch::fork_database(
+				&db,
+				BucketId::from_gas_id(test_bucket()),
+				TEST_DATABASE.to_string(),
+				ResolvedVersionstamp {
+					versionstamp: root_commit.versionstamp,
+					restore_point: None,
+				},
+				BucketId::from_gas_id(test_bucket()),
+			)
 			.await?;
-		let depth_one_branch_id =
-			read_database_branch_id(&db, test_bucket(), &depth_one_database_id).await?;
-		let depth_one_commit = read_head_commit(&db, depth_one_branch_id).await?;
+			let depth_one_database_db = ctx.make_db(test_bucket(), depth_one_database_id.clone());
+			depth_one_database_db
+				.commit(vec![page(2, 0x22)], 3, 2_000)
+				.await?;
+			let depth_one_branch_id =
+				read_database_branch_id(&db, test_bucket(), &depth_one_database_id).await?;
+			let depth_one_commit = read_head_commit(&db, depth_one_branch_id).await?;
 
-		let depth_two_database_id = branch::fork_database(
-			&db,
-			BucketId::from_gas_id(test_bucket()),
-			depth_one_database_id,
-			ResolvedVersionstamp {
-				versionstamp: depth_one_commit.versionstamp,
-				restore_point: None,
-			},
-			BucketId::from_gas_id(test_bucket()))
-		.await?;
-		let depth_two_branch_id =
-			read_database_branch_id(&db, test_bucket(), &depth_two_database_id).await?;
-		let depth_two_record_bytes = read_value(&db, branches_list_key(depth_two_branch_id))
-			.await?
-			.expect("depth-two branch record should exist");
-		let depth_two_record = decode_database_branch_record(&depth_two_record_bytes)?;
-		assert_eq!(depth_two_record.parent, Some(depth_one_branch_id));
-		assert_eq!(depth_two_record.fork_depth, 2);
+			let depth_two_database_id = branch::fork_database(
+				&db,
+				BucketId::from_gas_id(test_bucket()),
+				depth_one_database_id,
+				ResolvedVersionstamp {
+					versionstamp: depth_one_commit.versionstamp,
+					restore_point: None,
+				},
+				BucketId::from_gas_id(test_bucket()),
+			)
+			.await?;
+			let depth_two_branch_id =
+				read_database_branch_id(&db, test_bucket(), &depth_two_database_id).await?;
+			let depth_two_record_bytes = read_value(&db, branches_list_key(depth_two_branch_id))
+				.await?
+				.expect("depth-two branch record should exist");
+			let depth_two_record = decode_database_branch_record(&depth_two_record_bytes)?;
+			assert_eq!(depth_two_record.parent, Some(depth_one_branch_id));
+			assert_eq!(depth_two_record.fork_depth, 2);
 
-		let depth_two_database_db = ctx.make_db(test_bucket(), depth_two_database_id);
-		let pages = depth_two_database_db.get_pages(vec![1, 2]).await?;
-		assert_eq!(pages[0].bytes, Some(page_bytes(0x11)));
-		assert_eq!(pages[1].bytes, Some(page_bytes(0x22)));
+			let depth_two_database_db = ctx.make_db(test_bucket(), depth_two_database_id);
+			let pages = depth_two_database_db.get_pages(vec![1, 2]).await?;
+			assert_eq!(pages[0].bytes, Some(page_bytes(0x11)));
+			assert_eq!(pages[1].bytes, Some(page_bytes(0x22)));
 
-		Ok(())
-	})
+			Ok(())
+		}
+	)
 }
 
 #[tokio::test]
 async fn database_db_reuses_cached_branch_ancestry_for_reads() -> Result<()> {
-	branch_matrix!("depot-branch-cached-ancestry", |ctx, db, root_database_db| {
-		root_database_db.commit(vec![page(1, 0x11)], 2, 1_000).await?;
-		let root_branch_id = read_branch_id(&db).await?;
-		let root_commit = decode_commit_row(
-			&read_value(&db, branch_commit_key(root_branch_id, 1))
-				.await?
-				.expect("root commit row should exist"),
-		)?;
+	branch_matrix!(
+		"depot-branch-cached-ancestry",
+		|ctx, db, root_database_db| {
+			root_database_db
+				.commit(vec![page(1, 0x11)], 2, 1_000)
+				.await?;
+			let root_branch_id = read_branch_id(&db).await?;
+			let root_commit = decode_commit_row(
+				&read_value(&db, branch_commit_key(root_branch_id, 1))
+					.await?
+					.expect("root commit row should exist"),
+			)?;
 
-		let child_database_id = branch::fork_database(
-			&db,
-			BucketId::from_gas_id(test_bucket()),
-			TEST_DATABASE.to_string(),
-			ResolvedVersionstamp {
-				versionstamp: root_commit.versionstamp,
-				restore_point: None,
-			},
-			BucketId::from_gas_id(test_bucket()))
-		.await?;
-		let child_database_db = ctx.make_db(test_bucket(), child_database_id.clone());
-		child_database_db.commit(vec![page(2, 0x22)], 3, 2_000).await?;
-		let child_branch_id = read_database_branch_id(&db, test_bucket(), &child_database_id).await?;
-		let child_commit = read_head_commit(&db, child_branch_id).await?;
+			let child_database_id = branch::fork_database(
+				&db,
+				BucketId::from_gas_id(test_bucket()),
+				TEST_DATABASE.to_string(),
+				ResolvedVersionstamp {
+					versionstamp: root_commit.versionstamp,
+					restore_point: None,
+				},
+				BucketId::from_gas_id(test_bucket()),
+			)
+			.await?;
+			let child_database_db = ctx.make_db(test_bucket(), child_database_id.clone());
+			child_database_db
+				.commit(vec![page(2, 0x22)], 3, 2_000)
+				.await?;
+			let child_branch_id =
+				read_database_branch_id(&db, test_bucket(), &child_database_id).await?;
+			let child_commit = read_head_commit(&db, child_branch_id).await?;
 
-		let grandchild_database_id = branch::fork_database(
-			&db,
-			BucketId::from_gas_id(test_bucket()),
-			child_database_id,
-			ResolvedVersionstamp {
-				versionstamp: child_commit.versionstamp,
-				restore_point: None,
-			},
-			BucketId::from_gas_id(test_bucket()))
-		.await?;
-		let grandchild_branch_id =
-			read_database_branch_id(&db, test_bucket(), &grandchild_database_id).await?;
-		let grandchild_database_db = ctx.make_db(test_bucket(), grandchild_database_id);
+			let grandchild_database_id = branch::fork_database(
+				&db,
+				BucketId::from_gas_id(test_bucket()),
+				child_database_id,
+				ResolvedVersionstamp {
+					versionstamp: child_commit.versionstamp,
+					restore_point: None,
+				},
+				BucketId::from_gas_id(test_bucket()),
+			)
+			.await?;
+			let grandchild_branch_id =
+				read_database_branch_id(&db, test_bucket(), &grandchild_database_id).await?;
+			let grandchild_database_db = ctx.make_db(test_bucket(), grandchild_database_id);
 
-		let pages = grandchild_database_db.get_pages(vec![1, 2]).await?;
-		assert_eq!(pages[0].bytes, Some(page_bytes(0x11)));
-		assert_eq!(pages[1].bytes, Some(page_bytes(0x22)));
+			let pages = grandchild_database_db.get_pages(vec![1, 2]).await?;
+			assert_eq!(pages[0].bytes, Some(page_bytes(0x11)));
+			assert_eq!(pages[1].bytes, Some(page_bytes(0x22)));
 
-		clear_value(&db, branches_list_key(grandchild_branch_id)).await?;
-		clear_value(&db, branches_list_key(child_branch_id)).await?;
-		clear_value(&db, branches_list_key(root_branch_id)).await?;
+			clear_value(&db, branches_list_key(grandchild_branch_id)).await?;
+			clear_value(&db, branches_list_key(child_branch_id)).await?;
+			clear_value(&db, branches_list_key(root_branch_id)).await?;
 
-		let pages = grandchild_database_db.get_pages(vec![1, 2]).await?;
-		assert_eq!(pages[0].bytes, Some(page_bytes(0x11)));
-		assert_eq!(pages[1].bytes, Some(page_bytes(0x22)));
+			let pages = grandchild_database_db.get_pages(vec![1, 2]).await?;
+			assert_eq!(pages[0].bytes, Some(page_bytes(0x11)));
+			assert_eq!(pages[1].bytes, Some(page_bytes(0x22)));
 
-		Ok(())
-	})
+			Ok(())
+		}
+	)
 }
 
 #[tokio::test]
 async fn fork_database_can_use_deep_source_branch() -> Result<()> {
 	branch_matrix!("depot-branch-deep-source", |ctx, db, root_database_db| {
-		root_database_db.commit(vec![page(1, 0x11)], 2, 1_000).await?;
+		root_database_db
+			.commit(vec![page(1, 0x11)], 2, 1_000)
+			.await?;
 		let mut source_database_id = TEST_DATABASE.to_string();
 		let mut source_branch_id = read_branch_id(&db).await?;
 		let mut source_commit = decode_commit_row(
@@ -1100,14 +1148,20 @@ async fn fork_database_can_use_deep_source_branch() -> Result<()> {
 					versionstamp: source_commit.versionstamp,
 					restore_point: None,
 				},
-				BucketId::from_gas_id(test_bucket()))
+				BucketId::from_gas_id(test_bucket()),
+			)
 			.await?;
 			let forked_database_db = ctx.make_db(test_bucket(), forked_database_id.clone());
 			forked_database_db
-				.commit(vec![page(depth + 1, 0x20 + depth as u8)], depth + 2, 2_000 + depth as i64)
+				.commit(
+					vec![page(depth + 1, 0x20 + depth as u8)],
+					depth + 2,
+					2_000 + depth as i64,
+				)
 				.await?;
 			source_database_id = forked_database_id;
-			source_branch_id = read_database_branch_id(&db, test_bucket(), &source_database_id).await?;
+			source_branch_id =
+				read_database_branch_id(&db, test_bucket(), &source_database_id).await?;
 			source_commit = read_head_commit(&db, source_branch_id).await?;
 		}
 
@@ -1119,9 +1173,11 @@ async fn fork_database_can_use_deep_source_branch() -> Result<()> {
 				versionstamp: source_commit.versionstamp,
 				restore_point: None,
 			},
-			BucketId::from_gas_id(test_bucket()))
+			BucketId::from_gas_id(test_bucket()),
+		)
 		.await?;
-		let final_branch_id = read_database_branch_id(&db, test_bucket(), &final_database_id).await?;
+		let final_branch_id =
+			read_database_branch_id(&db, test_bucket(), &final_database_id).await?;
 		let final_record_bytes = read_value(&db, branches_list_key(final_branch_id))
 			.await?
 			.expect("final branch record should exist");
@@ -1247,14 +1303,12 @@ async fn rollback_bucket_freezes_old_branch_and_swaps_pointer() -> Result<()> {
 		let old_record = decode_bucket_branch_record(&old_record_bytes)?;
 		assert_eq!(old_record.state, BranchState::Frozen);
 		assert_eq!(read_bucket_refcount(&db, old_bucket_branch_id).await?, 1);
-		assert_eq!(
-			read_bucket_refcount(&db, rolled_bucket_branch_id).await?,
-			1
-		);
+		assert_eq!(read_bucket_refcount(&db, rolled_bucket_branch_id).await?, 1);
 
-		let rolled_record_bytes = read_value(&db, bucket_branches_list_key(rolled_bucket_branch_id))
-			.await?
-			.expect("rolled bucket branch record should exist");
+		let rolled_record_bytes =
+			read_value(&db, bucket_branches_list_key(rolled_bucket_branch_id))
+				.await?
+				.expect("rolled bucket branch record should exist");
 		let rolled_record = decode_bucket_branch_record(&rolled_record_bytes)?;
 		assert_eq!(rolled_record.parent, Some(old_bucket_branch_id));
 		assert_eq!(

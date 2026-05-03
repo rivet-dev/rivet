@@ -5,6 +5,33 @@ import {
 } from "./shared-matrix";
 
 describe("driver matrix cells", () => {
+	function withEnv<T>(
+		values: Record<string, string | undefined>,
+		callback: () => T,
+	): T {
+		const previous = new Map<string, string | undefined>();
+		for (const key of Object.keys(values)) {
+			previous.set(key, process.env[key]);
+			const value = values[key];
+			if (value === undefined) {
+				delete process.env[key];
+			} else {
+				process.env[key] = value;
+			}
+		}
+		try {
+			return callback();
+		} finally {
+			for (const [key, value] of previous) {
+				if (value === undefined) {
+					delete process.env[key];
+				} else {
+					process.env[key] = value;
+				}
+			}
+		}
+	}
+
 	test("excludes wasm with local SQLite from the normal matrix", () => {
 		const cells = getDriverMatrixCells(SQLITE_DRIVER_MATRIX_OPTIONS);
 
@@ -58,5 +85,52 @@ describe("driver matrix cells", () => {
 			"native/remote/bare",
 			"wasm/remote/bare",
 		]);
+	});
+
+	test("honors driver matrix env filters", () => {
+		const cells = withEnv(
+			{
+				RIVETKIT_DRIVER_TEST_RUNTIME: "native",
+				RIVETKIT_DRIVER_TEST_SQLITE: "local",
+				RIVETKIT_DRIVER_TEST_ENCODING: "bare",
+			},
+			() => getDriverMatrixCells(),
+		);
+
+		expect(
+			cells.map(
+				(cell) =>
+					`${cell.runtime}/${cell.sqliteBackend}/${cell.encoding}`,
+			),
+		).toEqual(["native/local/bare"]);
+	});
+
+	test("applies driver matrix env filters to explicit suite options", () => {
+		const cells = withEnv(
+			{
+				RIVETKIT_DRIVER_TEST_RUNTIME: "native",
+				RIVETKIT_DRIVER_TEST_SQLITE: "local",
+				RIVETKIT_DRIVER_TEST_ENCODING: "bare",
+			},
+			() => getDriverMatrixCells(SQLITE_DRIVER_MATRIX_OPTIONS),
+		);
+
+		expect(
+			cells.map(
+				(cell) =>
+					`${cell.runtime}/${cell.sqliteBackend}/${cell.encoding}`,
+			),
+		).toEqual(["native/local/bare"]);
+	});
+
+	test("rejects invalid driver matrix env filters", () => {
+		expect(() =>
+			withEnv(
+				{
+					RIVETKIT_DRIVER_TEST_RUNTIME: "native,browser",
+				},
+				() => getDriverMatrixCells(),
+			),
+		).toThrow(/invalid RIVETKIT_DRIVER_TEST_RUNTIME value/);
 	});
 });

@@ -245,10 +245,10 @@ impl rivet_test_envoy::EnvoyCallbacks for TestEnvoyCallbacks {
 		&self,
 		handle: EnvoyHandle,
 		actor_id: String,
-			generation: u32,
-			config: ep::ActorConfig,
-			_preloaded_kv: Option<ep::PreloadedKv>,
-		) -> BoxFuture<Result<()>> {
+		generation: u32,
+		config: ep::ActorConfig,
+		_preloaded_kv: Option<ep::PreloadedKv>,
+	) -> BoxFuture<Result<()>> {
 		let inner = self.inner.clone();
 		Box::pin(async move {
 			let factory = inner

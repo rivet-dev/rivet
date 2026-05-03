@@ -3,16 +3,19 @@ mod common;
 use std::collections::BTreeSet;
 
 use anyhow::Result;
-use gas::prelude::Id;
 use depot::{
-	keys::{database_pointer_cur_key, branch_commit_key, branch_meta_head_key, branches_refcount_key, bucket_pointer_cur_key},
 	conveyer::branch,
+	keys::{
+		branch_commit_key, branch_meta_head_key, branches_refcount_key, bucket_pointer_cur_key,
+		database_pointer_cur_key,
+	},
 	types::{
-		DatabaseBranchId, CommitRow, DBHead, DirtyPage, BucketBranchId, BucketId,
-		ResolvedVersionstamp, decode_database_pointer, decode_commit_row, decode_db_head,
-		decode_bucket_pointer,
+		BucketBranchId, BucketId, CommitRow, DBHead, DatabaseBranchId, DirtyPage,
+		ResolvedVersionstamp, decode_bucket_pointer, decode_commit_row, decode_database_pointer,
+		decode_db_head,
 	},
 };
+use gas::prelude::Id;
 use universaldb::utils::IsolationLevel::Snapshot;
 
 fn test_bucket() -> Id {
@@ -93,140 +96,164 @@ async fn read_refcount(db: &universaldb::Database, branch_id: DatabaseBranchId) 
 
 #[tokio::test]
 async fn delete_database_in_forked_bucket_hides_in_child_only() -> Result<()> {
-	common::test_matrix("depot-list-delete-forked", |_tier, ctx| Box::pin(async move {
-		let db = ctx.udb.clone();
-		let bucket = BucketId::from_gas_id(test_bucket());
-		let first_database_name = format!("{}-first", ctx.database_id);
-		let database_db = ctx.make_db(test_bucket(), first_database_name.clone());
-		database_db.commit(vec![page(1, 0x11)], 1, 1_000).await?;
-		let database_id = read_database_branch_id(&db, bucket, &first_database_name).await?;
-		let commit = read_head_commit(&db, database_id).await?;
-		let forked_bucket = branch::fork_bucket(
-			&db,
-			bucket,
-			ResolvedVersionstamp {
-				versionstamp: commit.versionstamp,
-				restore_point: None,
-			})
-		.await?;
+	common::test_matrix("depot-list-delete-forked", |_tier, ctx| {
+		Box::pin(async move {
+			let db = ctx.udb.clone();
+			let bucket = BucketId::from_gas_id(test_bucket());
+			let first_database_name = format!("{}-first", ctx.database_id);
+			let database_db = ctx.make_db(test_bucket(), first_database_name.clone());
+			database_db.commit(vec![page(1, 0x11)], 1, 1_000).await?;
+			let database_id = read_database_branch_id(&db, bucket, &first_database_name).await?;
+			let commit = read_head_commit(&db, database_id).await?;
+			let forked_bucket = branch::fork_bucket(
+				&db,
+				bucket,
+				ResolvedVersionstamp {
+					versionstamp: commit.versionstamp,
+					restore_point: None,
+				},
+			)
+			.await?;
 
-		let parent_databases = branch::list_databases(&db, bucket).await?;
-		let child_databases = branch::list_databases(&db, forked_bucket).await?;
-		assert_eq!(parent_databases, vec![database_id]);
-		assert_eq!(child_databases, vec![database_id]);
+			let parent_databases = branch::list_databases(&db, bucket).await?;
+			let child_databases = branch::list_databases(&db, forked_bucket).await?;
+			assert_eq!(parent_databases, vec![database_id]);
+			assert_eq!(child_databases, vec![database_id]);
 
-		branch::delete_database(&db, forked_bucket, database_id).await?;
+			branch::delete_database(&db, forked_bucket, database_id).await?;
 
-		assert_eq!(branch::list_databases(&db, forked_bucket).await?, Vec::new());
-		assert_eq!(branch::list_databases(&db, bucket).await?, vec![database_id]);
-		assert_eq!(read_refcount(&db, database_id).await?, 0);
+			assert_eq!(
+				branch::list_databases(&db, forked_bucket).await?,
+				Vec::new()
+			);
+			assert_eq!(
+				branch::list_databases(&db, bucket).await?,
+				vec![database_id]
+			);
+			assert_eq!(read_refcount(&db, database_id).await?, 0);
 
-		Ok(())
-	}))
+			Ok(())
+		})
+	})
 	.await
 }
 
 #[tokio::test]
 async fn fork_bucket_filters_source_databases_created_after_fork() -> Result<()> {
-	common::test_matrix("depot-list-fork-filters", |_tier, ctx| Box::pin(async move {
-		let db = ctx.udb.clone();
-		let bucket = BucketId::from_gas_id(test_bucket());
-		let first_database_name = format!("{}-first", ctx.database_id);
-		let second_database_name = format!("{}-second", ctx.database_id);
-		let first_db = ctx.make_db(test_bucket(), first_database_name.clone());
-		first_db.commit(vec![page(1, 0x11)], 1, 1_000).await?;
-		let first_database_id = read_database_branch_id(&db, bucket, &first_database_name).await?;
-		let first_commit = read_head_commit(&db, first_database_id).await?;
-		let forked_bucket = branch::fork_bucket(
-			&db,
-			bucket,
-			ResolvedVersionstamp {
-				versionstamp: first_commit.versionstamp,
-				restore_point: None,
-			})
-		.await?;
+	common::test_matrix("depot-list-fork-filters", |_tier, ctx| {
+		Box::pin(async move {
+			let db = ctx.udb.clone();
+			let bucket = BucketId::from_gas_id(test_bucket());
+			let first_database_name = format!("{}-first", ctx.database_id);
+			let second_database_name = format!("{}-second", ctx.database_id);
+			let first_db = ctx.make_db(test_bucket(), first_database_name.clone());
+			first_db.commit(vec![page(1, 0x11)], 1, 1_000).await?;
+			let first_database_id =
+				read_database_branch_id(&db, bucket, &first_database_name).await?;
+			let first_commit = read_head_commit(&db, first_database_id).await?;
+			let forked_bucket = branch::fork_bucket(
+				&db,
+				bucket,
+				ResolvedVersionstamp {
+					versionstamp: first_commit.versionstamp,
+					restore_point: None,
+				},
+			)
+			.await?;
 
-		let second_db = ctx.make_db(test_bucket(), second_database_name.clone());
-		second_db.commit(vec![page(1, 0x22)], 1, 2_000).await?;
-		let second_database_id = read_database_branch_id(&db, bucket, &second_database_name).await?;
+			let second_db = ctx.make_db(test_bucket(), second_database_name.clone());
+			second_db.commit(vec![page(1, 0x22)], 1, 2_000).await?;
+			let second_database_id =
+				read_database_branch_id(&db, bucket, &second_database_name).await?;
 
-		assert_eq!(
-			branch::list_databases(&db, bucket)
-				.await?
-				.into_iter()
-				.collect::<BTreeSet<_>>(),
-			BTreeSet::from([first_database_id, second_database_id])
-		);
-		assert_eq!(
-			branch::list_databases(&db, forked_bucket).await?,
-			vec![first_database_id]
-		);
+			assert_eq!(
+				branch::list_databases(&db, bucket)
+					.await?
+					.into_iter()
+					.collect::<BTreeSet<_>>(),
+				BTreeSet::from([first_database_id, second_database_id])
+			);
+			assert_eq!(
+				branch::list_databases(&db, forked_bucket).await?,
+				vec![first_database_id]
+			);
 
-		Ok(())
-	}))
+			Ok(())
+		})
+	})
 	.await
 }
 
 #[tokio::test]
 async fn parent_tombstone_visibility_is_capped_across_deep_bucket_chain() -> Result<()> {
-	common::test_matrix("depot-list-parent-tombstone", |_tier, ctx| Box::pin(async move {
-		let db = ctx.udb.clone();
-		let bucket = BucketId::from_gas_id(test_bucket());
-		let first_database_name = format!("{}-first", ctx.database_id);
-		let second_database_name = format!("{}-second", ctx.database_id);
-		let first_db = ctx.make_db(test_bucket(), first_database_name.clone());
-		first_db.commit(vec![page(1, 0x11)], 1, 1_000).await?;
-		let first_database_id = read_database_branch_id(&db, bucket, &first_database_name).await?;
-		let first_commit = read_head_commit(&db, first_database_id).await?;
+	common::test_matrix("depot-list-parent-tombstone", |_tier, ctx| {
+		Box::pin(async move {
+			let db = ctx.udb.clone();
+			let bucket = BucketId::from_gas_id(test_bucket());
+			let first_database_name = format!("{}-first", ctx.database_id);
+			let second_database_name = format!("{}-second", ctx.database_id);
+			let first_db = ctx.make_db(test_bucket(), first_database_name.clone());
+			first_db.commit(vec![page(1, 0x11)], 1, 1_000).await?;
+			let first_database_id =
+				read_database_branch_id(&db, bucket, &first_database_name).await?;
+			let first_commit = read_head_commit(&db, first_database_id).await?;
 
-		let before_delete_bucket = branch::fork_bucket(
-			&db,
-			bucket,
-			ResolvedVersionstamp {
-				versionstamp: first_commit.versionstamp,
-				restore_point: None,
-			})
-		.await?;
+			let before_delete_bucket = branch::fork_bucket(
+				&db,
+				bucket,
+				ResolvedVersionstamp {
+					versionstamp: first_commit.versionstamp,
+					restore_point: None,
+				},
+			)
+			.await?;
 
-		branch::delete_database(&db, bucket, first_database_id).await?;
+			branch::delete_database(&db, bucket, first_database_id).await?;
 
-		let second_db = ctx.make_db(test_bucket(), second_database_name.clone());
-		second_db.commit(vec![page(1, 0x22)], 1, 2_000).await?;
-		let second_database_id = read_database_branch_id(&db, bucket, &second_database_name).await?;
-		let second_commit = read_head_commit(&db, second_database_id).await?;
+			let second_db = ctx.make_db(test_bucket(), second_database_name.clone());
+			second_db.commit(vec![page(1, 0x22)], 1, 2_000).await?;
+			let second_database_id =
+				read_database_branch_id(&db, bucket, &second_database_name).await?;
+			let second_commit = read_head_commit(&db, second_database_id).await?;
 
-		let after_delete_bucket = branch::fork_bucket(
-			&db,
-			bucket,
-			ResolvedVersionstamp {
-				versionstamp: second_commit.versionstamp,
-				restore_point: None,
-			})
-		.await?;
-		let deep_after_delete_bucket = branch::fork_bucket(
-			&db,
-			after_delete_bucket,
-			ResolvedVersionstamp {
-				versionstamp: second_commit.versionstamp,
-				restore_point: None,
-			})
-		.await?;
+			let after_delete_bucket = branch::fork_bucket(
+				&db,
+				bucket,
+				ResolvedVersionstamp {
+					versionstamp: second_commit.versionstamp,
+					restore_point: None,
+				},
+			)
+			.await?;
+			let deep_after_delete_bucket = branch::fork_bucket(
+				&db,
+				after_delete_bucket,
+				ResolvedVersionstamp {
+					versionstamp: second_commit.versionstamp,
+					restore_point: None,
+				},
+			)
+			.await?;
 
-		assert_eq!(
-			branch::list_databases(&db, before_delete_bucket).await?,
-			vec![first_database_id]
-		);
-		assert_eq!(branch::list_databases(&db, bucket).await?, vec![second_database_id]);
-		assert_eq!(
-			branch::list_databases(&db, after_delete_bucket).await?,
-			vec![second_database_id]
-		);
-		assert_eq!(
-			branch::list_databases(&db, deep_after_delete_bucket).await?,
-			vec![second_database_id]
-		);
+			assert_eq!(
+				branch::list_databases(&db, before_delete_bucket).await?,
+				vec![first_database_id]
+			);
+			assert_eq!(
+				branch::list_databases(&db, bucket).await?,
+				vec![second_database_id]
+			);
+			assert_eq!(
+				branch::list_databases(&db, after_delete_bucket).await?,
+				vec![second_database_id]
+			);
+			assert_eq!(
+				branch::list_databases(&db, deep_after_delete_bucket).await?,
+				vec![second_database_id]
+			);
 
-		Ok(())
-	}))
+			Ok(())
+		})
+	})
 	.await
 }

@@ -54,9 +54,7 @@ fn fault_scenario_runs_setup_workload_reload_and_verify() -> Result<()> {
 			ctx.verify_sqlite_integrity().await?;
 			ctx.verify_against_native_oracle().await?;
 			ctx.verify_depot_invariants().await?;
-			let rows = ctx
-				.query("SELECT k, hex(v) FROM kv ORDER BY k;")
-				.await?;
+			let rows = ctx.query("SELECT k, hex(v) FROM kv ORDER BY k;").await?;
 			assert_eq!(
 				rows,
 				vec![
@@ -324,7 +322,11 @@ fn simple_failed_cold_publish_preserves_vfs_state() -> Result<()> {
 					final_settle: false,
 				})
 				.await?;
-			assert!(result.attempted_job_kinds.contains(&CompactionJobKind::Cold));
+			assert!(
+				result
+					.attempted_job_kinds
+					.contains(&CompactionJobKind::Cold)
+			);
 			assert!(
 				result
 					.terminal_error
@@ -381,7 +383,11 @@ fn simple_workflow_cold_upload_uses_fault_controller_cold_tier() -> Result<()> {
 					final_settle: false,
 				})
 				.await?;
-			assert!(result.attempted_job_kinds.contains(&CompactionJobKind::Cold));
+			assert!(
+				result
+					.attempted_job_kinds
+					.contains(&CompactionJobKind::Cold)
+			);
 			ctx.fault_controller().assert_expected_fired()?;
 			assert_fault_points(
 				&ctx.fault_controller().replay_log(),
@@ -442,7 +448,7 @@ fn simple_workflow_cold_object_missing_after_reclaim_recovers_on_reload() -> Res
 					reclaim: true,
 					final_settle: true,
 				})
-			.await?;
+				.await?;
 			assert_eq!(result.requested_work.reclaim, true);
 			assert!(result.terminal_error.is_none());
 			ctx.checkpoint("after-cold-reclaim").await?;
@@ -484,16 +490,22 @@ fn simple_workflow_cold_object_missing_after_reclaim_recovers_on_reload() -> Res
 				&ctx,
 				1_205,
 				&["after-cold-reclaim"],
-				&[(
-					DepotFaultPoint::ColdCompaction(ColdCompactionFaultPoint::UploadAfterPutObject),
-					FaultBoundary::WorkflowOnly,
-				), (
-					DepotFaultPoint::Read(ReadFaultPoint::AfterShardBlobLoad),
-					FaultBoundary::ReadOnly,
-				), (
-					DepotFaultPoint::ColdTier(ColdTierFaultPoint::GetObject),
-					FaultBoundary::ReadOnly,
-				)],
+				&[
+					(
+						DepotFaultPoint::ColdCompaction(
+							ColdCompactionFaultPoint::UploadAfterPutObject,
+						),
+						FaultBoundary::WorkflowOnly,
+					),
+					(
+						DepotFaultPoint::Read(ReadFaultPoint::AfterShardBlobLoad),
+						FaultBoundary::ReadOnly,
+					),
+					(
+						DepotFaultPoint::ColdTier(ColdTierFaultPoint::GetObject),
+						FaultBoundary::ReadOnly,
+					),
+				],
 			)
 			.await
 		})
@@ -552,7 +564,11 @@ fn simple_forced_compaction_noops_report_all_requested_work() -> Result<()> {
 				.await?;
 			assert!(settle.terminal_error.is_none());
 			assert!(settle.attempted_job_kinds.contains(&CompactionJobKind::Hot));
-			assert!(settle.attempted_job_kinds.contains(&CompactionJobKind::Cold));
+			assert!(
+				settle
+					.attempted_job_kinds
+					.contains(&CompactionJobKind::Cold)
+			);
 			let noop = ctx
 				.force_compaction(ForceCompactionWork {
 					hot: true,
@@ -571,7 +587,8 @@ fn simple_forced_compaction_noops_report_all_requested_work() -> Result<()> {
 					.contains(&"cold:no-actionable-lag".to_string())
 			);
 			assert!(
-				noop.attempted_job_kinds.contains(&CompactionJobKind::Reclaim)
+				noop.attempted_job_kinds
+					.contains(&CompactionJobKind::Reclaim)
 					|| noop
 						.skipped_noop_reasons
 						.iter()
@@ -822,9 +839,7 @@ fn high_risk_fault_matrix_cases() -> Vec<HighRiskFaultMatrixCase> {
 		HighRiskFaultMatrixCase {
 			name: "cold_upload_after_put_object",
 			seed: 1_237,
-			point: DepotFaultPoint::ColdCompaction(
-				ColdCompactionFaultPoint::UploadAfterPutObject,
-			),
+			point: DepotFaultPoint::ColdCompaction(ColdCompactionFaultPoint::UploadAfterPutObject),
 			boundary: FaultBoundary::WorkflowOnly,
 			workload: ColdCompaction,
 			value: &[0xc0],
@@ -933,10 +948,7 @@ fn run_high_risk_fault_matrix_case(case: HighRiskFaultMatrixCase) -> Result<()> 
 		.profile(FaultProfile::Simple)
 		.setup(create_kv_table)
 		.faults(move |faults| {
-			faults
-				.at(fault_point)
-				.once()
-				.fail(fault_message)?;
+			faults.at(fault_point).once().fail(fault_message)?;
 			Ok(())
 		})
 		.workload(move |ctx| {
@@ -998,7 +1010,11 @@ fn run_high_risk_fault_matrix_case(case: HighRiskFaultMatrixCase) -> Result<()> 
 								final_settle: false,
 							})
 							.await?;
-						assert!(result.attempted_job_kinds.contains(&CompactionJobKind::Cold));
+						assert!(
+							result
+								.attempted_job_kinds
+								.contains(&CompactionJobKind::Cold)
+						);
 						assert!(
 							result.terminal_error.is_some(),
 							"{} should report a terminal cold compaction error: {result:?}",
@@ -1037,7 +1053,11 @@ fn run_high_risk_fault_matrix_case(case: HighRiskFaultMatrixCase) -> Result<()> 
 								final_settle: false,
 							})
 							.await?;
-						assert!(result.attempted_job_kinds.contains(&CompactionJobKind::Reclaim));
+						assert!(
+							result
+								.attempted_job_kinds
+								.contains(&CompactionJobKind::Reclaim)
+						);
 					}
 				}
 
@@ -1063,7 +1083,8 @@ fn run_high_risk_fault_matrix_case(case: HighRiskFaultMatrixCase) -> Result<()> 
 				| HighRiskFaultMatrixWorkload::HotCompaction
 				| HighRiskFaultMatrixWorkload::ColdCompaction
 				| HighRiskFaultMatrixWorkload::Reclaim => {
-					assert_kv_rows(&ctx, vec![(verify_case.name, verify_case.expected_hex)]).await?;
+					assert_kv_rows(&ctx, vec![(verify_case.name, verify_case.expected_hex)])
+						.await?;
 					verify_simple_replay(
 						&ctx,
 						verify_case.seed,
@@ -1099,9 +1120,7 @@ fn configure_heavy_page_size(
 	}
 }
 
-async fn assert_shard_boundary_page_count(
-	ctx: &super::scenario::FaultScenarioCtx,
-) -> Result<u32> {
+async fn assert_shard_boundary_page_count(ctx: &super::scenario::FaultScenarioCtx) -> Result<u32> {
 	let pages = page_count(ctx).await?;
 	let target = depot::keys::SHARD_SIZE * 2 + 2;
 	assert!(
@@ -1142,7 +1161,10 @@ async fn assert_kv_rows(
 		.into_iter()
 		.map(|(key, value)| vec![key.to_string(), value.to_string()])
 		.collect::<Vec<_>>();
-	assert_eq!(ctx.query("SELECT k, hex(v) FROM kv ORDER BY k;").await?, expected);
+	assert_eq!(
+		ctx.query("SELECT k, hex(v) FROM kv ORDER BY k;").await?,
+		expected
+	);
 	Ok(())
 }
 

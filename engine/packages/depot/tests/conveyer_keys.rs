@@ -1,36 +1,34 @@
 use depot::conveyer::keys::{
-	DBPTR_PARTITION, RESTORE_POINT_PARTITION, BR_PARTITION, BRANCHES_PARTITION, CMPC_PARTITION,
-	CTR_PARTITION, DB_PIN_PARTITION, CompactorQueueKind, BUCKET_CHILD_PARTITION,
-	BUCKET_FORK_PIN_PARTITION, BUCKET_PROOF_EPOCH_PARTITION, BUCKET_PTR_PARTITION, BUCKET_BRANCH_PARTITION,
-	BUCKET_CATALOG_BY_DB_PARTITION, PAGE_SIZE, SHARD_SIZE, SQLITE_CMP_DIRTY_PARTITION,
-	SQLITE_SUBSPACE_PREFIX, restore_point_prefix, restore_point_key,
-	branch_commit_key, branch_compaction_cold_shard_key,
+	BR_PARTITION, BRANCHES_PARTITION, BUCKET_BRANCH_PARTITION, BUCKET_CATALOG_BY_DB_PARTITION,
+	BUCKET_CHILD_PARTITION, BUCKET_FORK_PIN_PARTITION, BUCKET_PROOF_EPOCH_PARTITION,
+	BUCKET_PTR_PARTITION, CMPC_PARTITION, CTR_PARTITION, CompactorQueueKind, DB_PIN_PARTITION,
+	DBPTR_PARTITION, PAGE_SIZE, RESTORE_POINT_PARTITION, SHARD_SIZE, SQLITE_CMP_DIRTY_PARTITION,
+	SQLITE_SUBSPACE_PREFIX, branch_commit_key, branch_compaction_cold_shard_key,
 	branch_compaction_cold_shard_version_prefix, branch_compaction_retired_cold_object_key,
 	branch_compaction_root_key, branch_compaction_stage_hot_shard_key,
 	branch_compaction_stage_hot_shard_version_prefix, branch_delta_chunk_key,
-	branch_manifest_cold_drained_txid_key,
-	branch_manifest_last_access_bucket_key, branch_manifest_last_access_ts_ms_key,
-	branch_manifest_last_hot_pass_txid_key, branch_meta_cold_compact_key,
-	branch_meta_cold_lease_key, branch_meta_compact_key, branch_meta_compactor_lease_key,
-	branch_meta_head_at_fork_key, branch_meta_head_key, branch_meta_quota_key, branch_pidx_key,
-	branch_pitr_interval_key, branch_pitr_interval_prefix, branch_prefix, branch_range,
-	branch_shard_key, branch_shard_version_prefix, branch_vtx_key,
-	branches_restore_point_pin_key, branches_desc_pin_key, branches_list_key, branches_refcount_key,
-	bucket_policy_pitr_key, bucket_policy_shard_cache_key, commit_key, compactor_enqueue_key,
-	compactor_global_lease_key, ctr_eviction_index_key, ctr_eviction_index_range, ctr_quota_global_key,
-	database_pitr_policy_key, database_pointer_cur_key,
-	database_pointer_history_key, database_prefix, database_range, db_pin_key, db_pin_prefix,
-	database_shard_cache_policy_key, decode_ctr_eviction_index_key, delta_chunk_key,
-	delta_chunk_prefix, delta_prefix, meta_compact_key, meta_compactor_lease_key, meta_head_key,
-	meta_quota_key, bucket_child_key,
-	bucket_child_prefix, bucket_fork_pin_key, bucket_fork_pin_prefix, bucket_proof_epoch_key, bucket_catalog_by_db_key,
-	bucket_catalog_by_db_prefix, bucket_branches_restore_point_pin_key,
-	bucket_branches_database_name_tombstone_key, bucket_branches_desc_pin_key,
-	bucket_branches_list_key, bucket_branches_refcount_key, bucket_pointer_cur_key,
-	bucket_pointer_history_key, pidx_delta_key, pidx_delta_prefix, shard_key, shard_prefix,
-	shard_version_key, shard_version_prefix, sqlite_cmp_dirty_key, vtx_key,
+	branch_manifest_cold_drained_txid_key, branch_manifest_last_access_bucket_key,
+	branch_manifest_last_access_ts_ms_key, branch_manifest_last_hot_pass_txid_key,
+	branch_meta_cold_compact_key, branch_meta_cold_lease_key, branch_meta_compact_key,
+	branch_meta_compactor_lease_key, branch_meta_head_at_fork_key, branch_meta_head_key,
+	branch_meta_quota_key, branch_pidx_key, branch_pitr_interval_key, branch_pitr_interval_prefix,
+	branch_prefix, branch_range, branch_shard_key, branch_shard_version_prefix, branch_vtx_key,
+	branches_desc_pin_key, branches_list_key, branches_refcount_key,
+	branches_restore_point_pin_key, bucket_branches_database_name_tombstone_key,
+	bucket_branches_desc_pin_key, bucket_branches_list_key, bucket_branches_refcount_key,
+	bucket_branches_restore_point_pin_key, bucket_catalog_by_db_key, bucket_catalog_by_db_prefix,
+	bucket_child_key, bucket_child_prefix, bucket_fork_pin_key, bucket_fork_pin_prefix,
+	bucket_pointer_cur_key, bucket_pointer_history_key, bucket_policy_pitr_key,
+	bucket_policy_shard_cache_key, bucket_proof_epoch_key, commit_key, compactor_enqueue_key,
+	compactor_global_lease_key, ctr_eviction_index_key, ctr_eviction_index_range,
+	ctr_quota_global_key, database_pitr_policy_key, database_pointer_cur_key,
+	database_pointer_history_key, database_prefix, database_range, database_shard_cache_policy_key,
+	db_pin_key, db_pin_prefix, decode_ctr_eviction_index_key, delta_chunk_key, delta_chunk_prefix,
+	delta_prefix, meta_compact_key, meta_compactor_lease_key, meta_head_key, meta_quota_key,
+	pidx_delta_key, pidx_delta_prefix, restore_point_key, restore_point_prefix, shard_key,
+	shard_prefix, shard_version_key, shard_version_prefix, sqlite_cmp_dirty_key, vtx_key,
 };
-use depot::conveyer::types::{DatabaseBranchId, BucketBranchId, BucketId};
+use depot::conveyer::types::{BucketBranchId, BucketId, DatabaseBranchId};
 use gas::prelude::Id;
 use uuid::Uuid;
 
@@ -50,7 +48,10 @@ fn bucket_id() -> BucketId {
 }
 
 fn compaction_job_id() -> Id {
-	Id::v1(Uuid::from_u128(0x1234_5678_9abc_def0_1122_3344_5566_7788), 42)
+	Id::v1(
+		Uuid::from_u128(0x1234_5678_9abc_def0_1122_3344_5566_7788),
+		42,
+	)
 }
 
 fn uuid_bytes(uuid: Uuid) -> Vec<u8> {
@@ -144,7 +145,9 @@ fn data_prefixes_match_full_keys() {
 			.starts_with(&delta_chunk_prefix(TEST_DATABASE, 0x0102_0304_0506_0708))
 	);
 	assert!(shard_key(TEST_DATABASE, 3).starts_with(&shard_prefix(TEST_DATABASE)));
-	assert!(shard_version_key(TEST_DATABASE, 3, 7).starts_with(&shard_version_prefix(TEST_DATABASE, 3)));
+	assert!(
+		shard_version_key(TEST_DATABASE, 3, 7).starts_with(&shard_version_prefix(TEST_DATABASE, 3))
+	);
 	assert!(shard_version_key(TEST_DATABASE, 3, 8) > shard_version_key(TEST_DATABASE, 3, 7));
 	assert!(commit_key(TEST_DATABASE, 8) > commit_key(TEST_DATABASE, 7));
 }
@@ -196,7 +199,10 @@ fn pointer_keys_include_current_and_history_paths() {
 	let mut expected_database = vec![SQLITE_SUBSPACE_PREFIX, DBPTR_PARTITION, b'/'];
 	expected_database.extend_from_slice(&uuid_bytes(bucket_branch.as_uuid()));
 	expected_database.extend_from_slice(b"/test-database/cur");
-	assert_eq!(database_pointer_cur_key(bucket_branch, TEST_DATABASE), expected_database);
+	assert_eq!(
+		database_pointer_cur_key(bucket_branch, TEST_DATABASE),
+		expected_database
+	);
 
 	let mut expected_database_history = vec![SQLITE_SUBSPACE_PREFIX, DBPTR_PARTITION, b'/'];
 	expected_database_history.extend_from_slice(&uuid_bytes(bucket_branch.as_uuid()));
@@ -236,7 +242,11 @@ fn bucket_policy_keys_use_bucket_scope_and_database_overrides() {
 	);
 	assert_eq!(
 		database_shard_cache_policy_key(bucket, TEST_DATABASE),
-		[bucket_base.as_slice(), b"/DB_POLICY/test-database/SHARD_CACHE"].concat()
+		[
+			bucket_base.as_slice(),
+			b"/DB_POLICY/test-database/SHARD_CACHE"
+		]
+		.concat()
 	);
 }
 
@@ -249,9 +259,18 @@ fn branch_record_keys_include_counter_and_pin_subkeys() {
 	database_base.extend_from_slice(b"/list/");
 	database_base.extend_from_slice(&uuid_bytes(database_branch.as_uuid()));
 	assert_eq!(branches_list_key(database_branch), database_base);
-	assert_eq!(branches_refcount_key(database_branch), [database_base.as_slice(), b"/refcount"].concat());
-	assert_eq!(branches_desc_pin_key(database_branch), [database_base.as_slice(), b"/desc_pin"].concat());
-	assert_eq!(branches_restore_point_pin_key(database_branch), [database_base.as_slice(), b"/restore_point_pin"].concat());
+	assert_eq!(
+		branches_refcount_key(database_branch),
+		[database_base.as_slice(), b"/refcount"].concat()
+	);
+	assert_eq!(
+		branches_desc_pin_key(database_branch),
+		[database_base.as_slice(), b"/desc_pin"].concat()
+	);
+	assert_eq!(
+		branches_restore_point_pin_key(database_branch),
+		[database_base.as_slice(), b"/restore_point_pin"].concat()
+	);
 
 	let mut bucket_base = vec![SQLITE_SUBSPACE_PREFIX, BUCKET_BRANCH_PARTITION];
 	bucket_base.extend_from_slice(b"/list/");
@@ -271,7 +290,11 @@ fn branch_record_keys_include_counter_and_pin_subkeys() {
 	);
 	assert_eq!(
 		bucket_branches_database_name_tombstone_key(bucket_branch, TEST_DATABASE),
-		[bucket_base.as_slice(), b"/database_tombstones/test-database"].concat()
+		[
+			bucket_base.as_slice(),
+			b"/database_tombstones/test-database"
+		]
+		.concat()
 	);
 }
 
@@ -328,14 +351,14 @@ fn database_branch_data_keys_live_under_br_partition() {
 			.starts_with(&branch_compaction_cold_shard_version_prefix(branch, 4))
 	);
 	assert!(
-		branch_compaction_stage_hot_shard_key(branch, compaction_job_id(), 4, 7, 2)
-			.starts_with(&branch_compaction_stage_hot_shard_version_prefix(
-				branch,
-				compaction_job_id(),
-				4
-			))
+		branch_compaction_stage_hot_shard_key(branch, compaction_job_id(), 4, 7, 2).starts_with(
+			&branch_compaction_stage_hot_shard_version_prefix(branch, compaction_job_id(), 4)
+		)
 	);
-	assert!(branch_pitr_interval_key(branch, 1_700_000_000_000).starts_with(&branch_pitr_interval_prefix(branch)));
+	assert!(
+		branch_pitr_interval_key(branch, 1_700_000_000_000)
+			.starts_with(&branch_pitr_interval_prefix(branch))
+	);
 	assert!(branch_commit_key(branch, 8) > branch_commit_key(branch, 7));
 }
 
@@ -346,7 +369,10 @@ fn global_restore_point_and_compactor_keys_match_expected_suffixes() {
 	let eviction = ctr_eviction_index_key(42, branch);
 	assert!(eviction.starts_with(&[SQLITE_SUBSPACE_PREFIX, CTR_PARTITION]));
 	assert!(eviction.ends_with(database_branch_id().as_uuid().as_bytes()));
-	assert_eq!(decode_ctr_eviction_index_key(&eviction).unwrap(), (42, branch));
+	assert_eq!(
+		decode_ctr_eviction_index_key(&eviction).unwrap(),
+		(42, branch)
+	);
 	let (eviction_start, eviction_end) = ctr_eviction_index_range();
 	assert!(eviction >= eviction_start);
 	assert!(eviction < eviction_end);
@@ -448,13 +474,24 @@ fn workflow_compaction_branch_keys_sort_by_big_endian_components() {
 fn workflow_compaction_global_keys_sort_by_big_endian_components() {
 	let branch = database_branch_id();
 	let source_bucket = bucket_branch_id();
-	let target_a = BucketBranchId::from_uuid(Uuid::from_u128(0x0000_0000_0000_0000_0000_0000_0000_0001));
-	let target_b = BucketBranchId::from_uuid(Uuid::from_u128(0x0000_0000_0000_0000_0000_0000_0000_0002));
+	let target_a =
+		BucketBranchId::from_uuid(Uuid::from_u128(0x0000_0000_0000_0000_0000_0000_0000_0001));
+	let target_b =
+		BucketBranchId::from_uuid(Uuid::from_u128(0x0000_0000_0000_0000_0000_0000_0000_0002));
 
 	assert!(db_pin_key(branch, b"restore_point/a").starts_with(&db_pin_prefix(branch)));
-	assert!(bucket_catalog_by_db_key(branch, source_bucket).starts_with(&bucket_catalog_by_db_prefix(branch)));
-	assert!(bucket_fork_pin_key(source_bucket, [1; 16], target_a).starts_with(&bucket_fork_pin_prefix(source_bucket)));
-	assert!(bucket_child_key(source_bucket, [1; 16], target_a).starts_with(&bucket_child_prefix(source_bucket)));
+	assert!(
+		bucket_catalog_by_db_key(branch, source_bucket)
+			.starts_with(&bucket_catalog_by_db_prefix(branch))
+	);
+	assert!(
+		bucket_fork_pin_key(source_bucket, [1; 16], target_a)
+			.starts_with(&bucket_fork_pin_prefix(source_bucket))
+	);
+	assert!(
+		bucket_child_key(source_bucket, [1; 16], target_a)
+			.starts_with(&bucket_child_prefix(source_bucket))
+	);
 
 	let mut fork_pins = vec![
 		bucket_fork_pin_key(source_bucket, [2; 16], target_a),

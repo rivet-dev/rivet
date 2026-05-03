@@ -10,8 +10,8 @@ use depot::workflows::compaction::ForceCompactionWork;
 use futures_util::future;
 
 use super::{
-	scenario::{FaultScenarioCtx, FaultScenarioReplayRecord},
 	FaultProfile, FaultReplayPhase, FaultScenario, LogicalOp,
+	scenario::{FaultScenarioCtx, FaultScenarioReplayRecord},
 };
 
 #[test]
@@ -47,7 +47,9 @@ fn run_chaos_seed(seed: u64, profile: ChaosRunProfile) -> Result<()> {
 		})
 		.faults(move |faults| {
 			faults
-				.at(DepotFaultPoint::Commit(fault_plan.commit_pause_point.clone()))
+				.at(DepotFaultPoint::Commit(
+					fault_plan.commit_pause_point.clone(),
+				))
 				.once()
 				.pause(commit_pause_checkpoint(seed))?;
 			faults
@@ -55,15 +57,21 @@ fn run_chaos_seed(seed: u64, profile: ChaosRunProfile) -> Result<()> {
 				.once()
 				.delay(Duration::from_millis(fault_plan.read_delay_ms))?;
 			faults
-				.at(DepotFaultPoint::HotCompaction(fault_plan.hot_delay_point.clone()))
+				.at(DepotFaultPoint::HotCompaction(
+					fault_plan.hot_delay_point.clone(),
+				))
 				.once()
 				.delay(Duration::from_millis(fault_plan.hot_delay_ms))?;
 			faults
-				.at(DepotFaultPoint::ColdCompaction(fault_plan.cold_delay_point.clone()))
+				.at(DepotFaultPoint::ColdCompaction(
+					fault_plan.cold_delay_point.clone(),
+				))
 				.once()
 				.delay(Duration::from_millis(fault_plan.cold_delay_ms))?;
 			faults
-				.at(DepotFaultPoint::Reclaim(fault_plan.reclaim_delay_point.clone()))
+				.at(DepotFaultPoint::Reclaim(
+					fault_plan.reclaim_delay_point.clone(),
+				))
 				.once()
 				.delay(Duration::from_millis(fault_plan.reclaim_delay_ms))?;
 			faults
@@ -82,14 +90,16 @@ fn run_chaos_seed(seed: u64, profile: ChaosRunProfile) -> Result<()> {
 				value: vec![0xaa, (seed & 0xff) as u8],
 			})
 			.await?;
-			ctx.checkpoint(format!("commit-pause-released-{seed:016x}")).await?;
+			ctx.checkpoint(format!("commit-pause-released-{seed:016x}"))
+				.await?;
 
 			let mut rng = ChaosRng::new(seed ^ 0x9e37_79b9_7f4a_7c15);
 			for index in 0..profile.pre_cold_ops {
 				ctx.exec(random_logical_op(&mut rng, index)).await?;
 				if index % profile.reload_every == 1 {
 					ctx.reload_database().await?;
-					ctx.checkpoint(format!("reload-{index}-{seed:016x}")).await?;
+					ctx.checkpoint(format!("reload-{index}-{seed:016x}"))
+						.await?;
 				}
 			}
 
@@ -99,7 +109,8 @@ fn run_chaos_seed(seed: u64, profile: ChaosRunProfile) -> Result<()> {
 				ctx.exec(random_logical_op(&mut rng, index)).await?;
 				if index % profile.reload_every == profile.reload_every - 1 {
 					ctx.reload_database().await?;
-					ctx.checkpoint(format!("late-reload-{index}-{seed:016x}")).await?;
+					ctx.checkpoint(format!("late-reload-{index}-{seed:016x}"))
+						.await?;
 				}
 			}
 			let restore_point = ctx.create_restore_point().await?;
@@ -132,7 +143,8 @@ fn run_chaos_seed(seed: u64, profile: ChaosRunProfile) -> Result<()> {
 			ctx.checkpoint(format!(
 				"after-cold-read-{seed:016x}-elapsed-{}ms",
 				cold_read_elapsed.as_millis()
-			)).await?;
+			))
+			.await?;
 
 			ctx.delete_restore_point(restore_point).await?;
 			ctx.exec(LogicalOp::Put {
@@ -286,10 +298,7 @@ impl ChaosRunProfile {
 	}
 }
 
-async fn run_overlapping_hot_compaction(
-	ctx: &FaultScenarioCtx,
-	seed: u64,
-) -> Result<()> {
+async fn run_overlapping_hot_compaction(ctx: &FaultScenarioCtx, seed: u64) -> Result<()> {
 	let checkpoint = format!("chaos-hot-overlap-{seed:016x}");
 	let pause = ctx.fault_controller().pause_handle(checkpoint.clone());
 	ctx.fault_controller()
@@ -327,7 +336,8 @@ async fn run_overlapping_hot_compaction(
 		elapsed >= Duration::from_millis(1),
 		"seed {seed:016x} hot-overlap completed without measurable paused overlap: elapsed={elapsed:?}",
 	);
-	ctx.checkpoint(format!("after-hot-overlap-{seed:016x}")).await
+	ctx.checkpoint(format!("after-hot-overlap-{seed:016x}"))
+		.await
 }
 
 fn assert_delay_elapsed(
@@ -434,7 +444,7 @@ fn choose_commit_point(rng: &mut ChaosRng) -> CommitFaultPoint {
 		CommitFaultPoint::BeforeDeltaWrites,
 		CommitFaultPoint::BeforeHeadWrite,
 	][rng.index(3)]
-		.clone()
+	.clone()
 }
 
 fn choose_read_point(rng: &mut ChaosRng) -> ReadFaultPoint {
@@ -443,7 +453,7 @@ fn choose_read_point(rng: &mut ChaosRng) -> ReadFaultPoint {
 		ReadFaultPoint::ColdRefSelected,
 		ReadFaultPoint::BeforeReturnPages,
 	][rng.index(3)]
-		.clone()
+	.clone()
 }
 
 fn choose_hot_point(rng: &mut ChaosRng) -> HotCompactionFaultPoint {
@@ -452,7 +462,7 @@ fn choose_hot_point(rng: &mut ChaosRng) -> HotCompactionFaultPoint {
 		HotCompactionFaultPoint::InstallAfterStagedRead,
 		HotCompactionFaultPoint::InstallBeforeRootUpdate,
 	][rng.index(3)]
-		.clone()
+	.clone()
 }
 
 fn choose_cold_point(rng: &mut ChaosRng) -> ColdCompactionFaultPoint {
@@ -461,7 +471,7 @@ fn choose_cold_point(rng: &mut ChaosRng) -> ColdCompactionFaultPoint {
 		ColdCompactionFaultPoint::PublishBeforeColdRefWrite,
 		ColdCompactionFaultPoint::PublishAfterRootUpdate,
 	][rng.index(3)]
-		.clone()
+	.clone()
 }
 
 fn choose_reclaim_point(rng: &mut ChaosRng) -> ReclaimFaultPoint {
@@ -470,7 +480,7 @@ fn choose_reclaim_point(rng: &mut ChaosRng) -> ReclaimFaultPoint {
 		ReclaimFaultPoint::PlanAfterSnapshot,
 		ReclaimFaultPoint::BeforeCleanupRows,
 	][rng.index(3)]
-		.clone()
+	.clone()
 }
 
 fn commit_pause_checkpoint(seed: u64) -> String {

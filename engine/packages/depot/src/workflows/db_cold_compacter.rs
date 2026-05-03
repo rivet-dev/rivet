@@ -1,7 +1,7 @@
 use crate::compaction::{
-	*,
 	companion::{CompanionKind, run_companion_loop},
 	shared::*,
+	*,
 };
 use crate::workflows::db_manager::branch_record_is_live_at_generation;
 
@@ -60,7 +60,10 @@ pub async fn upload_cold_job(
 		{
 			return Ok(output);
 		}
-		if let Err(err) = cold_tier.put_object(&object.object_key, &object.bytes).await {
+		if let Err(err) = cold_tier
+			.put_object(&object.object_key, &object.bytes)
+			.await
+		{
 			tracing::warn!(
 				?input.database_branch_id,
 				?input.job_id,
@@ -110,7 +113,9 @@ async fn prepare_cold_upload_tx(
 	input: &UploadColdJobInput,
 ) -> Result<PreparedColdUpload> {
 	if input.job_kind != CompactionJobKind::Cold {
-		return Ok(rejected_cold_upload("cold compacter received a non-cold job"));
+		return Ok(rejected_cold_upload(
+			"cold compacter received a non-cold job",
+		));
 	}
 	#[cfg(feature = "test-faults")]
 	if let Some(output) = cold_prepare_upload_fault_output(
@@ -132,10 +137,8 @@ async fn prepare_cold_upload_tx(
 	.map(decode_database_branch_record)
 	.transpose()
 	.context("decode sqlite database branch record for cold upload")?;
-	if !branch_record_is_live_at_generation(
-		branch_record.as_ref(),
-		input.base_lifecycle_generation,
-	) {
+	if !branch_record_is_live_at_generation(branch_record.as_ref(), input.base_lifecycle_generation)
+	{
 		return Ok(rejected_cold_upload("database branch lifecycle changed"));
 	}
 
@@ -168,12 +171,15 @@ async fn prepare_cold_upload_tx(
 	if cold_inputs.min_versionstamp != input.input_range.min_versionstamp
 		|| cold_inputs.max_versionstamp != input.input_range.max_versionstamp
 	{
-		return Ok(rejected_cold_upload("cold compaction versionstamp bounds changed"));
+		return Ok(rejected_cold_upload(
+			"cold compaction versionstamp bounds changed",
+		));
 	}
-	let input_fingerprint =
-		fingerprint_cold_inputs(input.database_branch_id, &root, &cold_inputs);
+	let input_fingerprint = fingerprint_cold_inputs(input.database_branch_id, &root, &cold_inputs);
 	if input_fingerprint != input.input_fingerprint {
-		return Ok(rejected_cold_upload("cold compaction input fingerprint changed"));
+		return Ok(rejected_cold_upload(
+			"cold compaction input fingerprint changed",
+		));
 	}
 	#[cfg(feature = "test-faults")]
 	if let Some(output) = cold_prepare_upload_fault_output(
@@ -190,7 +196,9 @@ async fn prepare_cold_upload_tx(
 	let publish_generation = root.manifest_generation.saturating_add(1);
 	for blob in cold_inputs.shard_blobs {
 		if blob.as_of_txid != input.input_range.txids.max_txid {
-			return Ok(rejected_cold_upload("cold shard txid does not match planned range"));
+			return Ok(rejected_cold_upload(
+				"cold shard txid does not match planned range",
+			));
 		}
 		let content_hash = content_hash(&blob.bytes);
 		let object_key = cold_shard_object_key(
@@ -316,10 +324,8 @@ async fn publish_cold_job_tx(
 	.map(decode_database_branch_record)
 	.transpose()
 	.context("decode sqlite database branch record for cold publish")?;
-	if !branch_record_is_live_at_generation(
-		branch_record.as_ref(),
-		input.base_lifecycle_generation,
-	) {
+	if !branch_record_is_live_at_generation(branch_record.as_ref(), input.base_lifecycle_generation)
+	{
 		return Ok(rejected_cold_publish("database branch lifecycle changed"));
 	}
 
@@ -358,18 +364,23 @@ async fn publish_cold_job_tx(
 	if cold_inputs.min_versionstamp != input.input_range.min_versionstamp
 		|| cold_inputs.max_versionstamp != input.input_range.max_versionstamp
 	{
-		return Ok(rejected_cold_publish("cold compaction versionstamp bounds changed"));
+		return Ok(rejected_cold_publish(
+			"cold compaction versionstamp bounds changed",
+		));
 	}
-	let input_fingerprint =
-		fingerprint_cold_inputs(input.database_branch_id, &root, &cold_inputs);
+	let input_fingerprint = fingerprint_cold_inputs(input.database_branch_id, &root, &cold_inputs);
 	if input_fingerprint != input.input_fingerprint {
-		return Ok(rejected_cold_publish("cold compaction input fingerprint changed"));
+		return Ok(rejected_cold_publish(
+			"cold compaction input fingerprint changed",
+		));
 	}
 
 	let publish_generation = root.manifest_generation.saturating_add(1);
 	let expected_outputs = expected_cold_output_refs(input, &cold_inputs, publish_generation);
 	if expected_outputs != input.output_refs {
-		return Ok(rejected_cold_publish("cold output refs do not match planned inputs"));
+		return Ok(rejected_cold_publish(
+			"cold output refs do not match planned inputs",
+		));
 	}
 	#[cfg(feature = "test-faults")]
 	if let Some(output) = cold_publish_fault_output(

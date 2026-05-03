@@ -13,12 +13,15 @@ mod test_hooks;
 use anyhow::Result;
 
 use super::{
-	Db, metrics,
+	Db,
 	error::SqliteStorageError,
-	types::{RestorePointId, PinStatus, ResolvedRestoreTarget, ResolvedVersionstamp, SnapshotSelector},
+	metrics,
+	types::{
+		PinStatus, ResolvedRestoreTarget, ResolvedVersionstamp, RestorePointId, SnapshotSelector,
+	},
 };
 
-pub use pinned::{restore_point_status, create_restore_point, delete_restore_point};
+pub use pinned::{create_restore_point, delete_restore_point, restore_point_status};
 pub use resolve::{resolve_restore_point, resolve_restore_target};
 pub use restore::restore_database;
 
@@ -33,12 +36,18 @@ impl Db {
 		)
 		.await;
 		metrics::SQLITE_RESTORE_POINT_CREATE_TOTAL
-			.with_label_values(&[node_id.as_str(), restore_point_create_outcome(result.as_ref().err())])
+			.with_label_values(&[
+				node_id.as_str(),
+				restore_point_create_outcome(result.as_ref().err()),
+			])
 			.inc();
 		result
 	}
 
-	pub async fn restore_point_status(&self, restore_point: RestorePointId) -> Result<Option<PinStatus>> {
+	pub async fn restore_point_status(
+		&self,
+		restore_point: RestorePointId,
+	) -> Result<Option<PinStatus>> {
 		restore_point_status(
 			&self.udb,
 			self.sqlite_bucket_id(),
@@ -58,7 +67,10 @@ impl Db {
 		.await
 	}
 
-	pub async fn resolve_restore_point(&self, restore_point: RestorePointId) -> Result<ResolvedVersionstamp> {
+	pub async fn resolve_restore_point(
+		&self,
+		restore_point: RestorePointId,
+	) -> Result<ResolvedVersionstamp> {
 		let node_id = self.node_id.to_string();
 		let _timer = metrics::SQLITE_RESTORE_POINT_RESOLVE_DURATION
 			.with_label_values(&[node_id.as_str()])
@@ -71,7 +83,10 @@ impl Db {
 		)
 		.await;
 		metrics::SQLITE_RESTORE_POINT_RESOLVE_TOTAL
-			.with_label_values(&[node_id.as_str(), restore_point_resolve_outcome(result.as_ref().err())])
+			.with_label_values(&[
+				node_id.as_str(),
+				restore_point_resolve_outcome(result.as_ref().err()),
+			])
 			.inc();
 		result
 	}
@@ -92,7 +107,10 @@ impl Db {
 		)
 		.await;
 		metrics::SQLITE_RESTORE_POINT_RESOLVE_TOTAL
-			.with_label_values(&[node_id.as_str(), restore_point_resolve_outcome(result.as_ref().err())])
+			.with_label_values(&[
+				node_id.as_str(),
+				restore_point_resolve_outcome(result.as_ref().err()),
+			])
 			.inc();
 		result
 	}
@@ -109,11 +127,7 @@ impl Db {
 }
 
 fn restore_point_create_outcome(err: Option<&anyhow::Error>) -> &'static str {
-	if err.is_none() {
-		"ok"
-	} else {
-		"err"
-	}
+	if err.is_none() { "ok" } else { "err" }
 }
 
 fn restore_point_resolve_outcome(err: Option<&anyhow::Error>) -> &'static str {

@@ -642,17 +642,6 @@ export class WasmCoreRuntime implements CoreRuntime {
 		return normalizeRuntimeSqlExecuteResult(result);
 	}
 
-	async actorSqlExecuteWrite(
-		ctx: ActorContextHandle,
-		sql: string,
-		params?: RuntimeSqlBindParams,
-	): Promise<RuntimeSqlExecuteResult> {
-		const result = await callWasm(() =>
-			this.#actorSql(ctx).executeWrite(sql, params),
-		);
-		return normalizeRuntimeSqlExecuteResult(result);
-	}
-
 	async actorSqlQuery(
 		ctx: ActorContextHandle,
 		sql: string,

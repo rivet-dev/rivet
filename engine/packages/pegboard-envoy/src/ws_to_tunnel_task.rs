@@ -9,7 +9,7 @@ use depot::{
 };
 use depot_client::{
 	database::{NativeDatabaseHandle, open_database_from_conveyer},
-	types::{BindParam, ColumnValue, ExecuteResult, ExecuteRoute, QueryResult},
+	types::{BindParam, ColumnValue, ExecuteResult, QueryResult},
 };
 use futures_util::{FutureExt, TryStreamExt};
 use gas::prelude::Id;
@@ -417,10 +417,6 @@ async fn handle_message(
 			let response = handle_remote_sqlite_execute_response(ctx, &conn, req.data).await;
 			send_sqlite_execute_response(&conn, req.request_id, response).await?;
 		}
-		protocol::ToRivet::ToRivetSqliteExecuteWriteRequest(req) => {
-			let response = handle_remote_sqlite_execute_write_response(ctx, &conn, req.data).await;
-			send_sqlite_execute_write_response(&conn, req.request_id, response).await?;
-		}
 		protocol::ToRivet::ToRivetTunnelMessage(tunnel_msg) => {
 			handle_tunnel_message(ctx, &conn.authorized_tunnel_routes, tunnel_msg)
 				.await
@@ -529,25 +525,6 @@ async fn handle_remote_sqlite_execute_response(
 		Err(err) => {
 			tracing::error!(actor_id = %actor_id, ?err, "remote sqlite execute request failed");
 			protocol::SqliteExecuteResponse::SqliteErrorResponse(sqlite_error_response(&err))
-		}
-	}
-}
-
-async fn handle_remote_sqlite_execute_write_response(
-	ctx: &StandaloneCtx,
-	conn: &Conn,
-	request: protocol::SqliteExecuteWriteRequest,
-) -> protocol::SqliteExecuteWriteResponse {
-	let actor_id = request.actor_id.clone();
-	match handle_remote_sqlite_execute_write(ctx, conn, request).await {
-		Ok(result) => protocol::SqliteExecuteWriteResponse::SqliteExecuteWriteOk(
-			protocol::SqliteExecuteWriteOk {
-				result: protocol_execute_result(result),
-			},
-		),
-		Err(err) => {
-			tracing::error!(actor_id = %actor_id, ?err, "remote sqlite execute_write request failed");
-			protocol::SqliteExecuteWriteResponse::SqliteErrorResponse(sqlite_error_response(&err))
 		}
 	}
 }
@@ -820,34 +797,6 @@ async fn handle_remote_sqlite_execute(
 	database.execute(request.sql, params).await
 }
 
-async fn handle_remote_sqlite_execute_write(
-	ctx: &StandaloneCtx,
-	conn: &Conn,
-	request: protocol::SqliteExecuteWriteRequest,
-) -> Result<ExecuteResult> {
-	validate_remote_sqlite_actor(
-		ctx,
-		conn,
-		&request.namespace_id,
-		&request.actor_id,
-		request.generation,
-	)
-	.await?;
-	validate_remote_sqlite_params(request.params.as_ref())?;
-	let params = request
-		.params
-		.map(|params| params.into_iter().map(bind_param_from_protocol).collect());
-	let actor_db = actor_db(ctx, conn, request.actor_id.clone()).await?;
-	let database = remote_sqlite_executor_from_parts(
-		&conn.remote_sqlite_executors,
-		actor_db,
-		&request.actor_id,
-		request.generation,
-	)
-	.await?;
-	database.execute_write(request.sql, params).await
-}
-
 async fn validate_remote_sqlite_actor(
 	ctx: &StandaloneCtx,
 	conn: &Conn,
@@ -1063,7 +1012,6 @@ fn protocol_execute_result(result: ExecuteResult) -> protocol::SqliteExecuteResu
 			.collect(),
 		changes: result.changes,
 		last_insert_row_id: result.last_insert_row_id,
-		route: protocol_execute_route(result.route),
 	}
 }
 
@@ -1084,14 +1032,6 @@ fn protocol_column_value(value: ColumnValue) -> protocol::SqliteColumnValue {
 		ColumnValue::Blob(value) => {
 			protocol::SqliteColumnValue::SqliteValueBlob(protocol::SqliteValueBlob { value })
 		}
-	}
-}
-
-fn protocol_execute_route(route: ExecuteRoute) -> protocol::SqliteExecuteRoute {
-	match route {
-		ExecuteRoute::Read => protocol::SqliteExecuteRoute::Read,
-		ExecuteRoute::Write => protocol::SqliteExecuteRoute::Write,
-		ExecuteRoute::WriteFallback => protocol::SqliteExecuteRoute::WriteFallback,
 	}
 }
 
@@ -1259,21 +1199,6 @@ async fn send_sqlite_execute_response(
 			data,
 		}),
 		"sqlite execute response",
-	)
-	.await
-}
-
-async fn send_sqlite_execute_write_response(
-	conn: &Conn,
-	request_id: u32,
-	data: protocol::SqliteExecuteWriteResponse,
-) -> Result<()> {
-	send_to_envoy(
-		conn,
-		protocol::ToEnvoy::ToEnvoySqliteExecuteWriteResponse(
-			protocol::ToEnvoySqliteExecuteWriteResponse { request_id, data },
-		),
-		"sqlite execute_write response",
 	)
 	.await
 }

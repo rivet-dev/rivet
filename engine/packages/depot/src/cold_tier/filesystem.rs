@@ -50,7 +50,8 @@ impl FilesystemColdTier {
 				Ok(entries) => entries,
 				Err(err) if err.kind() == std::io::ErrorKind::NotFound => continue,
 				Err(err) => {
-					return Err(err).with_context(|| format!("list cold-tier dir {}", dir.display()));
+					return Err(err)
+						.with_context(|| format!("list cold-tier dir {}", dir.display()));
 				}
 			};
 
@@ -59,10 +60,9 @@ impl FilesystemColdTier {
 				.await
 				.with_context(|| format!("list cold-tier dir {}", dir.display()))?
 			{
-				let metadata = entry
-					.metadata()
-					.await
-					.with_context(|| format!("read cold-tier metadata {}", entry.path().display()))?;
+				let metadata = entry.metadata().await.with_context(|| {
+					format!("read cold-tier metadata {}", entry.path().display())
+				})?;
 
 				if metadata.is_dir() {
 					pending.push(entry.path());
@@ -120,7 +120,9 @@ impl ColdTier for FilesystemColdTier {
 		match tokio::fs::read(&path).await {
 			Ok(bytes) => Ok(Some(bytes)),
 			Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(None),
-			Err(err) => Err(err).with_context(|| format!("read cold-tier object {}", path.display())),
+			Err(err) => {
+				Err(err).with_context(|| format!("read cold-tier object {}", path.display()))
+			}
 		}
 	}
 

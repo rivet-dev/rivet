@@ -2,11 +2,9 @@ use anyhow::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
 use vbare::OwnedVersionedData;
 
+use super::ids::{BucketBranchId, BucketIdUuid, DatabaseBranchId, DatabaseIdStr};
 use super::restore_points::RestorePointRef;
-use super::ids::{DatabaseBranchId, DatabaseIdStr, BucketBranchId, BucketIdUuid};
-use super::serialization::{
-	SQLITE_DATABASE_BRANCH_RECORD_VERSION, SQLITE_STORAGE_META_VERSION,
-};
+use super::serialization::{SQLITE_DATABASE_BRANCH_RECORD_VERSION, SQLITE_STORAGE_META_VERSION};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum BranchState {

@@ -38,19 +38,23 @@ pub(crate) async fn read_manager_fdb_snapshot(
 		.map(decode_db_head)
 		.transpose()
 		.context("decode sqlite head for compaction manager")?;
-	let root = tx_get_value(tx, &keys::branch_compaction_root_key(branch_id), Serializable)
-		.await?
-		.as_deref()
-		.map(decode_compaction_root)
-		.transpose()
-		.context("decode sqlite compaction root for manager refresh")?
-		.unwrap_or(CompactionRoot {
-			schema_version: 1,
-			manifest_generation: 0,
-			hot_watermark_txid: 0,
-			cold_watermark_txid: 0,
-			cold_watermark_versionstamp: [0; 16],
-		});
+	let root = tx_get_value(
+		tx,
+		&keys::branch_compaction_root_key(branch_id),
+		Serializable,
+	)
+	.await?
+	.as_deref()
+	.map(decode_compaction_root)
+	.transpose()
+	.context("decode sqlite compaction root for manager refresh")?
+	.unwrap_or(CompactionRoot {
+		schema_version: 1,
+		manifest_generation: 0,
+		hot_watermark_txid: 0,
+		cold_watermark_txid: 0,
+		cold_watermark_versionstamp: [0; 16],
+	});
 	let dirty_key = keys::sqlite_cmp_dirty_key(branch_id);
 	let dirty_bytes = tx_get_value(tx, &dirty_key, Serializable).await?;
 	let dirty = dirty_bytes
@@ -64,9 +68,16 @@ pub(crate) async fn read_manager_fdb_snapshot(
 	let pitr_policy = read_effective_pitr_policy_for_branch(tx, branch_record.as_ref()).await?;
 	let shard_cache_policy =
 		read_effective_shard_cache_policy_for_branch(tx, branch_record.as_ref()).await?;
-	let hot_inputs =
-		read_hot_input_snapshot(tx, branch_id, head.as_ref(), &root, Snapshot, pitr_policy, now_ms)
-			.await?;
+	let hot_inputs = read_hot_input_snapshot(
+		tx,
+		branch_id,
+		head.as_ref(),
+		&root,
+		Snapshot,
+		pitr_policy,
+		now_ms,
+	)
+	.await?;
 	let cold_inputs = if cold_storage_enabled {
 		read_cold_input_snapshot(tx, branch_id, &root, Snapshot).await?
 	} else {
@@ -84,12 +95,12 @@ pub(crate) async fn read_manager_fdb_snapshot(
 		now_ms,
 	)
 	.await?;
-	let hot_lag = head
-		.as_ref()
-		.map_or(0, |head| head.head_txid.saturating_sub(root.hot_watermark_txid));
-	let cold_lag = head
-		.as_ref()
-		.map_or(0, |head| head.head_txid.saturating_sub(root.cold_watermark_txid));
+	let hot_lag = head.as_ref().map_or(0, |head| {
+		head.head_txid.saturating_sub(root.hot_watermark_txid)
+	});
+	let cold_lag = head.as_ref().map_or(0, |head| {
+		head.head_txid.saturating_sub(root.cold_watermark_txid)
+	});
 	let has_actionable_lag = hot_lag >= quota::COMPACTION_DELTA_THRESHOLD
 		|| (cold_lag >= HOT_BURST_COLD_LAG_THRESHOLD_TXIDS && !cold_inputs.shard_blobs.is_empty())
 		|| reclaim_coverage_is_complete(&reclaim_inputs);
@@ -123,8 +134,12 @@ pub(crate) async fn resolve_bucket_fork_pins(
 	branch_id: DatabaseBranchId,
 	db_pins: &mut Vec<DbHistoryPin>,
 ) -> Result<bool> {
-	let catalog_rows =
-		tx_scan_prefix_values(tx, &keys::bucket_catalog_by_db_prefix(branch_id), Serializable).await?;
+	let catalog_rows = tx_scan_prefix_values(
+		tx,
+		&keys::bucket_catalog_by_db_prefix(branch_id),
+		Serializable,
+	)
+	.await?;
 	if catalog_rows.len() >= CMP_FDB_BATCH_MAX_KEYS {
 		tracing::warn!(
 			?branch_id,
@@ -171,9 +186,12 @@ pub(crate) async fn resolve_bucket_catalog_forks(
 			continue;
 		}
 
-		let child_rows =
-			tx_scan_prefix_values(tx, &keys::bucket_child_prefix(source_bucket_branch_id), Serializable)
-				.await?;
+		let child_rows = tx_scan_prefix_values(
+			tx,
+			&keys::bucket_child_prefix(source_bucket_branch_id),
+			Serializable,
+		)
+		.await?;
 		inspected_rows = inspected_rows.saturating_add(child_rows.len());
 		if inspected_rows >= CMP_FDB_BATCH_MAX_KEYS {
 			tracing::warn!(
@@ -285,8 +303,7 @@ pub(crate) async fn materialize_bucket_fork_pin(
 		at_txid,
 		commit.wall_clock_ms,
 	)?;
-	db_pins
-		.retain(|pin| pin.owner_bucket_branch_id != Some(fork_fact.target_bucket_branch_id));
+	db_pins.retain(|pin| pin.owner_bucket_branch_id != Some(fork_fact.target_bucket_branch_id));
 	db_pins.push(DbHistoryPin {
 		at_versionstamp,
 		at_txid,
@@ -363,13 +380,17 @@ pub(crate) async fn read_effective_shard_cache_policy_for_branch(
 		return Ok(policy);
 	}
 
-	tx_get_value(tx, &keys::bucket_policy_shard_cache_key(bucket_id), Serializable)
-		.await?
-		.as_deref()
-		.map(decode_shard_cache_policy)
-		.transpose()
-		.context("decode sqlite bucket shard cache policy for compaction manager")
-		.map(|policy| policy.unwrap_or_default())
+	tx_get_value(
+		tx,
+		&keys::bucket_policy_shard_cache_key(bucket_id),
+		Serializable,
+	)
+	.await?
+	.as_deref()
+	.map(decode_shard_cache_policy)
+	.transpose()
+	.context("decode sqlite bucket shard cache policy for compaction manager")
+	.map(|policy| policy.unwrap_or_default())
 }
 
 pub(crate) async fn resolve_policy_scope_for_branch(
@@ -379,11 +400,12 @@ pub(crate) async fn resolve_policy_scope_for_branch(
 	for (key, value) in
 		tx_scan_prefix_values(tx, &keys::database_pointer_cur_prefix(), Serializable).await?
 	{
-		let Ok((bucket_branch_id, database_id)) = keys::decode_database_pointer_cur_key(&key) else {
+		let Ok((bucket_branch_id, database_id)) = keys::decode_database_pointer_cur_key(&key)
+		else {
 			continue;
 		};
-		let pointer =
-			decode_database_pointer(&value).context("decode sqlite database pointer for PITR policy")?;
+		let pointer = decode_database_pointer(&value)
+			.context("decode sqlite database pointer for PITR policy")?;
 		if pointer.current_branch != branch_id {
 			continue;
 		}
@@ -434,8 +456,8 @@ pub(crate) async fn resolve_bucket_id_for_root_branch(
 		let Ok(bucket_id) = keys::decode_bucket_pointer_cur_bucket_id(&key) else {
 			continue;
 		};
-		let pointer =
-			decode_bucket_pointer(&value).context("decode sqlite bucket pointer for PITR policy")?;
+		let pointer = decode_bucket_pointer(&value)
+			.context("decode sqlite bucket pointer for PITR policy")?;
 		if pointer.current_branch == root_bucket_branch_id {
 			return Ok(Some(bucket_id));
 		}
@@ -475,7 +497,8 @@ pub(crate) async fn latest_commit_at_or_before_versionstamp(
 	let Some((txid, versionstamp)) = selected else {
 		return Ok(None);
 	};
-	let Some(commit_bytes) = tx_get_value(tx, &keys::branch_commit_key(branch_id, txid), Serializable).await?
+	let Some(commit_bytes) =
+		tx_get_value(tx, &keys::branch_commit_key(branch_id, txid), Serializable).await?
 	else {
 		return Ok(None);
 	};
@@ -602,8 +625,14 @@ pub(crate) fn select_pitr_interval_coverage(
 	commits: &[(u64, CommitRow)],
 	now_ms: i64,
 ) -> Result<Vec<PitrIntervalSelection>> {
-	ensure!(policy.interval_ms > 0, "sqlite PITR interval policy must be positive");
-	ensure!(policy.retention_ms > 0, "sqlite PITR retention policy must be positive");
+	ensure!(
+		policy.interval_ms > 0,
+		"sqlite PITR interval policy must be positive"
+	);
+	ensure!(
+		policy.retention_ms > 0,
+		"sqlite PITR retention policy must be positive"
+	);
 
 	let retention_floor_ms = now_ms.saturating_sub(policy.retention_ms);
 	let mut selected_by_bucket = BTreeMap::<i64, PitrIntervalSelection>::new();
@@ -611,7 +640,8 @@ pub(crate) fn select_pitr_interval_coverage(
 		if commit.wall_clock_ms < retention_floor_ms || commit.wall_clock_ms > now_ms {
 			continue;
 		}
-		let bucket_start_ms = commit.wall_clock_ms.div_euclid(policy.interval_ms) * policy.interval_ms;
+		let bucket_start_ms =
+			commit.wall_clock_ms.div_euclid(policy.interval_ms) * policy.interval_ms;
 		let coverage = PitrIntervalCoverage {
 			txid: *txid,
 			versionstamp: commit.versionstamp,
@@ -761,8 +791,10 @@ pub(crate) async fn read_reclaim_input_snapshot(
 	Ok(snapshot)
 }
 
-type PitrIntervalReclaimRows =
-	(Vec<PitrIntervalSelection>, Vec<(i64, Vec<u8>, Vec<u8>, PitrIntervalCoverage)>);
+type PitrIntervalReclaimRows = (
+	Vec<PitrIntervalSelection>,
+	Vec<(i64, Vec<u8>, Vec<u8>, PitrIntervalCoverage)>,
+);
 
 pub(crate) async fn read_pitr_interval_reclaim_rows(
 	tx: &universaldb::Transaction,
@@ -773,9 +805,12 @@ pub(crate) async fn read_pitr_interval_reclaim_rows(
 	let mut retained = Vec::new();
 	let mut expired = Vec::new();
 
-	for (key, value) in
-		tx_scan_prefix_values(tx, &keys::branch_pitr_interval_prefix(branch_id), isolation_level)
-			.await?
+	for (key, value) in tx_scan_prefix_values(
+		tx,
+		&keys::branch_pitr_interval_prefix(branch_id),
+		isolation_level,
+	)
+	.await?
 	{
 		let bucket_start_ms = keys::decode_branch_pitr_interval_bucket(branch_id, &key)?;
 		let coverage = decode_pitr_interval_coverage(&value)
@@ -801,9 +836,12 @@ pub(crate) async fn read_reclaim_cold_object_refs(
 ) -> Result<Vec<ReclaimColdObjectRef>> {
 	let mut refs = Vec::new();
 
-	for (_, value) in
-		tx_scan_prefix_values(tx, &keys::branch_compaction_cold_shard_prefix(branch_id), isolation_level)
-			.await?
+	for (_, value) in tx_scan_prefix_values(
+		tx,
+		&keys::branch_compaction_cold_shard_prefix(branch_id),
+		isolation_level,
+	)
+	.await?
 	{
 		let cold_ref =
 			decode_cold_shard_ref(&value).context("decode sqlite cold shard ref for reclaim")?;
@@ -945,7 +983,8 @@ pub(crate) async fn read_cold_input_snapshot(
 		if txid < min_txid || txid > max_txid {
 			continue;
 		}
-		let commit = decode_commit_row(&value).context("decode sqlite commit row for cold planning")?;
+		let commit =
+			decode_commit_row(&value).context("decode sqlite commit row for cold planning")?;
 		if snapshot.commits.is_empty() {
 			snapshot.min_versionstamp = commit.versionstamp;
 			snapshot.max_versionstamp = commit.versionstamp;
@@ -1074,7 +1113,9 @@ pub(crate) fn plan_hot_job(
 	if head.head_txid <= snapshot.root.hot_watermark_txid {
 		return None;
 	}
-	let hot_lag = head.head_txid.saturating_sub(snapshot.root.hot_watermark_txid);
+	let hot_lag = head
+		.head_txid
+		.saturating_sub(snapshot.root.hot_watermark_txid);
 	let coverage_txids = selected_hot_coverage_txids(
 		&snapshot.root,
 		head,
@@ -1175,9 +1216,11 @@ pub(crate) fn plan_reclaim_job(
 		&& reclaim_coverage_is_complete(&snapshot.reclaim_inputs);
 	let has_cold_reclaim = !snapshot.reclaim_inputs.cold_object_refs.is_empty();
 	let has_shard_cache_eviction = !snapshot.reclaim_inputs.shard_cache_evictions.is_empty();
-	let has_interval_cleanup = !snapshot.reclaim_inputs.expired_pitr_interval_rows.is_empty();
-	if !has_hot_reclaim && !has_cold_reclaim && !has_shard_cache_eviction && !has_interval_cleanup
-	{
+	let has_interval_cleanup = !snapshot
+		.reclaim_inputs
+		.expired_pitr_interval_rows
+		.is_empty();
+	if !has_hot_reclaim && !has_cold_reclaim && !has_shard_cache_eviction && !has_interval_cleanup {
 		return None;
 	}
 
@@ -1236,7 +1279,11 @@ pub(crate) fn reclaim_noop_reason(snapshot: &ManagerFdbSnapshot) -> &'static str
 	let has_cold_inputs = !snapshot.reclaim_inputs.cold_object_refs.is_empty();
 	let has_cache_evictions = !snapshot.reclaim_inputs.shard_cache_evictions.is_empty();
 	if !has_hot_inputs && !has_cold_inputs && !has_cache_evictions {
-		if snapshot.reclaim_inputs.expired_pitr_interval_rows.is_empty() {
+		if snapshot
+			.reclaim_inputs
+			.expired_pitr_interval_rows
+			.is_empty()
+		{
 			return "reclaim:no-actionable-work";
 		}
 		return "reclaim:expired-pitr-intervals";
@@ -1272,8 +1319,14 @@ pub(crate) fn fingerprint_hot_inputs(
 		update_fingerprint(&mut fingerprint, &selection.bucket_start_ms.to_be_bytes());
 		update_fingerprint(&mut fingerprint, &selection.coverage.txid.to_be_bytes());
 		update_fingerprint(&mut fingerprint, &selection.coverage.versionstamp);
-		update_fingerprint(&mut fingerprint, &selection.coverage.wall_clock_ms.to_be_bytes());
-		update_fingerprint(&mut fingerprint, &selection.coverage.expires_at_ms.to_be_bytes());
+		update_fingerprint(
+			&mut fingerprint,
+			&selection.coverage.wall_clock_ms.to_be_bytes(),
+		);
+		update_fingerprint(
+			&mut fingerprint,
+			&selection.coverage.expires_at_ms.to_be_bytes(),
+		);
 	}
 	for (txid, commit) in &hot_inputs.commits {
 		update_fingerprint(&mut fingerprint, &txid.to_be_bytes());
@@ -1308,7 +1361,10 @@ pub(crate) fn fingerprint_reclaim_inputs(
 	}
 	for cold_object in &reclaim_inputs.cold_object_refs {
 		update_fingerprint(&mut fingerprint, cold_object.object_key.as_bytes());
-		update_fingerprint(&mut fingerprint, &cold_object.object_generation_id.as_bytes());
+		update_fingerprint(
+			&mut fingerprint,
+			&cold_object.object_generation_id.as_bytes(),
+		);
 		update_fingerprint(&mut fingerprint, &cold_object.content_hash);
 		update_fingerprint(
 			&mut fingerprint,
@@ -1318,9 +1374,18 @@ pub(crate) fn fingerprint_reclaim_inputs(
 		update_fingerprint(&mut fingerprint, &cold_object.as_of_txid.to_be_bytes());
 	}
 	for candidate in &reclaim_inputs.shard_cache_evictions {
-		update_fingerprint(&mut fingerprint, &candidate.reference.shard_id.to_be_bytes());
-		update_fingerprint(&mut fingerprint, &candidate.reference.as_of_txid.to_be_bytes());
-		update_fingerprint(&mut fingerprint, &candidate.reference.size_bytes.to_be_bytes());
+		update_fingerprint(
+			&mut fingerprint,
+			&candidate.reference.shard_id.to_be_bytes(),
+		);
+		update_fingerprint(
+			&mut fingerprint,
+			&candidate.reference.as_of_txid.to_be_bytes(),
+		);
+		update_fingerprint(
+			&mut fingerprint,
+			&candidate.reference.size_bytes.to_be_bytes(),
+		);
 		update_fingerprint(&mut fingerprint, &candidate.reference.content_hash);
 		update_fingerprint(&mut fingerprint, &candidate.shard_key);
 		update_fingerprint(&mut fingerprint, &candidate.shard_bytes);
@@ -1368,8 +1433,14 @@ pub(crate) fn fingerprint_repair_reclaim_range(
 	for staged in &input_range.staged_hot_shards {
 		update_fingerprint(&mut fingerprint, &staged.job_id.as_bytes());
 		update_fingerprint(&mut fingerprint, &staged.output_ref.shard_id.to_be_bytes());
-		update_fingerprint(&mut fingerprint, &staged.output_ref.as_of_txid.to_be_bytes());
-		update_fingerprint(&mut fingerprint, &staged.output_ref.size_bytes.to_be_bytes());
+		update_fingerprint(
+			&mut fingerprint,
+			&staged.output_ref.as_of_txid.to_be_bytes(),
+		);
+		update_fingerprint(
+			&mut fingerprint,
+			&staged.output_ref.size_bytes.to_be_bytes(),
+		);
 		update_fingerprint(&mut fingerprint, &staged.output_ref.content_hash);
 	}
 	for cold_ref in &input_range.orphan_cold_objects {
@@ -1486,10 +1557,7 @@ pub(crate) fn decode_hot_delta_chunks(
 	chunks_by_txid
 		.into_iter()
 		.map(|(txid, chunks)| {
-			let bytes = chunks
-				.into_values()
-				.flatten()
-				.collect::<Vec<_>>();
+			let bytes = chunks.into_values().flatten().collect::<Vec<_>>();
 			let decoded =
 				decode_ltx_v3(&bytes).with_context(|| format!("decode hot delta {txid}"))?;
 
@@ -1518,7 +1586,10 @@ pub(crate) fn collect_hot_pages_by_shard(
 
 	let mut pages_by_shard = BTreeMap::<u32, Vec<(u32, Vec<u8>)>>::new();
 	for (pgno, bytes) in pages_by_number {
-		pages_by_shard.entry(pgno / keys::SHARD_SIZE).or_default().push((pgno, bytes));
+		pages_by_shard
+			.entry(pgno / keys::SHARD_SIZE)
+			.or_default()
+			.push((pgno, bytes));
 	}
 	Ok(pages_by_shard)
 }

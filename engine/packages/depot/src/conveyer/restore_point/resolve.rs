@@ -4,13 +4,14 @@ use anyhow::{Context, Result};
 use universaldb::utils::IsolationLevel::Snapshot;
 
 use crate::conveyer::{
-	branch, keys, pitr_interval,
+	branch,
 	error::SqliteStorageError,
+	keys, pitr_interval,
 	types::{
-		RestorePointRef, RestorePointId, DatabaseBranchId, BucketBranchId, BucketId,
-		ResolvedVersionstamp, decode_database_pointer, decode_bucket_branch_record,
-		decode_restore_point_record, SnapshotSelector, ResolvedRestoreTarget, SnapshotKind,
-		PinStatus, decode_commit_row, decode_db_head,
+		BucketBranchId, BucketId, DatabaseBranchId, PinStatus, ResolvedRestoreTarget,
+		ResolvedVersionstamp, RestorePointId, RestorePointRef, SnapshotKind, SnapshotSelector,
+		decode_bucket_branch_record, decode_commit_row, decode_database_pointer, decode_db_head,
+		decode_restore_point_record,
 	},
 };
 
@@ -28,8 +29,16 @@ pub async fn resolve_restore_point(
 
 		async move {
 			let (branch_id, bucket_cap) =
-				resolve_visible_database_branch_for_restore_point(&tx, bucket_id, &database_id).await?;
-			resolve_restore_point_in_branch_chain(&tx, &database_id, branch_id, bucket_cap, restore_point).await
+				resolve_visible_database_branch_for_restore_point(&tx, bucket_id, &database_id)
+					.await?;
+			resolve_restore_point_in_branch_chain(
+				&tx,
+				&database_id,
+				branch_id,
+				bucket_cap,
+				restore_point,
+			)
+			.await
 		}
 	})
 	.await
@@ -48,7 +57,8 @@ pub async fn resolve_restore_target(
 
 		async move {
 			let (branch_id, bucket_cap) =
-				resolve_visible_database_branch_for_restore_point(&tx, bucket_id, &database_id).await?;
+				resolve_visible_database_branch_for_restore_point(&tx, bucket_id, &database_id)
+					.await?;
 			match selector {
 				SnapshotSelector::Latest => {
 					resolve_latest_in_branch_chain(&tx, branch_id, bucket_cap).await
@@ -84,11 +94,11 @@ async fn resolve_visible_database_branch_for_restore_point(
 	bucket_id: BucketId,
 	database_id: &str,
 ) -> Result<(DatabaseBranchId, [u8; 16])> {
-	let Some(mut bucket_branch_id) =
-		branch::resolve_bucket_branch(tx, bucket_id, Snapshot).await?
+	let Some(mut bucket_branch_id) = branch::resolve_bucket_branch(tx, bucket_id, Snapshot).await?
 	else {
 		if let Some(pointer) =
-			branch::resolve_database_pointer(tx, BucketBranchId::nil(), database_id, Snapshot).await?
+			branch::resolve_database_pointer(tx, BucketBranchId::nil(), database_id, Snapshot)
+				.await?
 		{
 			return Ok((pointer.current_branch, VERSIONSTAMP_INFINITY));
 		}
@@ -152,9 +162,7 @@ async fn resolve_latest_in_branch_chain(
 	let mut current_branch_id = branch_id;
 	let mut cap = bucket_cap;
 	for _ in 0..=crate::constants::MAX_FORK_DEPTH {
-		if let Some(target) =
-			read_latest_target_in_branch(tx, current_branch_id, cap).await?
-		{
+		if let Some(target) = read_latest_target_in_branch(tx, current_branch_id, cap).await? {
 			return Ok(target);
 		}
 
@@ -256,10 +264,8 @@ async fn read_timestamp_target_in_branch(
 	now_ms: i64,
 ) -> Result<Option<ResolvedRestoreTarget>> {
 	let rows = pitr_interval::scan_pitr_interval_coverage(tx, branch_id, Snapshot).await?;
-	let Some((_bucket_start_ms, coverage)) = rows
-		.into_iter()
-		.rev()
-		.find(|(bucket_start_ms, coverage)| {
+	let Some((_bucket_start_ms, coverage)) =
+		rows.into_iter().rev().find(|(bucket_start_ms, coverage)| {
 			*bucket_start_ms <= timestamp_ms
 				&& coverage.wall_clock_ms <= timestamp_ms
 				&& coverage.expires_at_ms > now_ms
@@ -303,7 +309,9 @@ async fn resolve_restore_point_in_branch_chain(
 	let mut current_branch_id = branch_id;
 	let mut cap = bucket_cap;
 	for _ in 0..=crate::constants::MAX_FORK_DEPTH {
-		if pinned_record.database_branch_id == current_branch_id && pinned_record.versionstamp <= cap {
+		if pinned_record.database_branch_id == current_branch_id
+			&& pinned_record.versionstamp <= cap
+		{
 			return Ok(ResolvedVersionstamp {
 				versionstamp: pinned_record.versionstamp,
 				restore_point: Some(RestorePointRef {
@@ -355,7 +363,9 @@ async fn resolve_restore_point_target_in_branch_chain(
 	let mut current_branch_id = branch_id;
 	let mut cap = bucket_cap;
 	for _ in 0..=crate::constants::MAX_FORK_DEPTH {
-		if pinned_record.database_branch_id == current_branch_id && pinned_record.versionstamp <= cap {
+		if pinned_record.database_branch_id == current_branch_id
+			&& pinned_record.versionstamp <= cap
+		{
 			let commit = read_commit_row(tx, current_branch_id, txid).await?;
 			return Ok(ResolvedRestoreTarget {
 				database_branch_id: current_branch_id,

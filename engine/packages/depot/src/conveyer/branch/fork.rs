@@ -3,23 +3,24 @@ use universaldb::{options::MutationType, utils::IsolationLevel::Serializable};
 
 use super::{
 	catalog::{write_bucket_catalog_marker, write_bucket_fork_facts},
-	resolve::{resolve_database_branch_in_bucket, resolve_bucket_branch},
+	resolve::{resolve_bucket_branch, resolve_database_branch_in_bucket},
 	shared::{
-		lookup_txid_at_versionstamp, now_ms, read_commit_row, read_database_branch_record,
-		read_bucket_branch_record, read_versionstamp_pin,
+		lookup_txid_at_versionstamp, now_ms, read_bucket_branch_record, read_commit_row,
+		read_database_branch_record, read_versionstamp_pin,
 	},
 };
 use crate::conveyer::{
-	constants::{MAX_FORK_DEPTH, MAX_BUCKET_DEPTH},
+	constants::{MAX_BUCKET_DEPTH, MAX_FORK_DEPTH},
 	error::SqliteStorageError,
-	history_pin, keys, restore_point, udb,
+	history_pin, keys, restore_point,
 	types::{
-		RestorePointRef, BranchState, DBHead, DatabaseBranchId, DatabasePointer, BucketBranchId,
-		DatabaseBranchRecord, BucketBranchRecord, BucketId, BucketPointer,
-		ResolvedRestoreTarget, ResolvedVersionstamp, SnapshotSelector,
-		encode_database_branch_record, encode_database_pointer, encode_db_head,
-		encode_bucket_branch_record, encode_bucket_pointer,
+		BranchState, BucketBranchId, BucketBranchRecord, BucketId, BucketPointer, DBHead,
+		DatabaseBranchId, DatabaseBranchRecord, DatabasePointer, ResolvedRestoreTarget,
+		ResolvedVersionstamp, RestorePointRef, SnapshotSelector, encode_bucket_branch_record,
+		encode_bucket_pointer, encode_database_branch_record, encode_database_pointer,
+		encode_db_head,
 	},
+	udb,
 };
 use crate::gc;
 
@@ -56,8 +57,13 @@ where
 	let target = match target.into() {
 		DatabaseForkTarget::Resolved(at) => ResolvedForkTarget::CurrentSourceBranch(at),
 		DatabaseForkTarget::Selector(selector) => {
-			let target =
-				restore_point::resolve_restore_target(udb, source_bucket, source_database_id.clone(), selector).await?;
+			let target = restore_point::resolve_restore_target(
+				udb,
+				source_bucket,
+				source_database_id.clone(),
+				selector,
+			)
+			.await?;
 			ResolvedForkTarget::ResolvedTarget(target)
 		}
 	};
@@ -71,14 +77,12 @@ where
 			let target = target_for_tx.clone();
 
 			async move {
-				let source_bucket_branch =
-					resolve_bucket_branch(&tx, source_bucket, Serializable)
-						.await?
-						.ok_or(SqliteStorageError::DatabaseNotFound)?;
-				let target_bucket_branch =
-					resolve_bucket_branch(&tx, target_bucket, Serializable)
-						.await?
-						.ok_or(SqliteStorageError::DatabaseNotFound)?;
+				let source_bucket_branch = resolve_bucket_branch(&tx, source_bucket, Serializable)
+					.await?
+					.ok_or(SqliteStorageError::DatabaseNotFound)?;
+				let target_bucket_branch = resolve_bucket_branch(&tx, target_bucket, Serializable)
+					.await?
+					.ok_or(SqliteStorageError::DatabaseNotFound)?;
 				let (source_database_branch, at_versionstamp, restore_point) = match target {
 					ResolvedForkTarget::CurrentSourceBranch(at) => {
 						let source_database_branch = resolve_database_branch_in_bucket(
@@ -91,9 +95,11 @@ where
 						.ok_or(SqliteStorageError::DatabaseNotFound)?;
 						(source_database_branch, at.versionstamp, at.restore_point)
 					}
-					ResolvedForkTarget::ResolvedTarget(target) => {
-						(target.database_branch_id, target.versionstamp, target.restore_point)
-					}
+					ResolvedForkTarget::ResolvedTarget(target) => (
+						target.database_branch_id,
+						target.versionstamp,
+						target.restore_point,
+					),
 				};
 
 				derive_branch_at(
@@ -110,8 +116,8 @@ where
 					current_branch: new_database_branch_id,
 					last_swapped_at_ms: now_ms()?,
 				};
-				let encoded_pointer =
-					encode_database_pointer(pointer).context("encode sqlite fork database pointer")?;
+				let encoded_pointer = encode_database_pointer(pointer)
+					.context("encode sqlite fork database pointer")?;
 				tx.informal().set(
 					&keys::database_pointer_cur_key(target_bucket_branch, &new_database_id),
 					&encoded_pointer,
@@ -153,10 +159,9 @@ pub async fn fork_bucket(
 			let at = at_for_tx.clone();
 
 			async move {
-				let source_bucket_branch =
-					resolve_bucket_branch(&tx, source_bucket, Serializable)
-						.await?
-						.ok_or(SqliteStorageError::DatabaseNotFound)?;
+				let source_bucket_branch = resolve_bucket_branch(&tx, source_bucket, Serializable)
+					.await?
+					.ok_or(SqliteStorageError::DatabaseNotFound)?;
 
 				derive_bucket_branch_at(
 					&tx,
@@ -173,8 +178,10 @@ pub async fn fork_bucket(
 				};
 				let encoded_pointer =
 					encode_bucket_pointer(pointer).context("encode sqlite fork bucket pointer")?;
-				tx.informal()
-					.set(&keys::bucket_pointer_cur_key(new_bucket_id), &encoded_pointer);
+				tx.informal().set(
+					&keys::bucket_pointer_cur_key(new_bucket_id),
+					&encoded_pointer,
+				);
 
 				Ok(())
 			}
@@ -198,7 +205,8 @@ pub async fn derive_branch_at(
 		return Err(SqliteStorageError::ForkChainTooDeep.into());
 	}
 
-	let restore_point_pin = read_versionstamp_pin(tx, &keys::branches_restore_point_pin_key(source_branch_id)).await?;
+	let restore_point_pin =
+		read_versionstamp_pin(tx, &keys::branches_restore_point_pin_key(source_branch_id)).await?;
 	if restore_point_pin > at_versionstamp {
 		return Err(SqliteStorageError::ForkOutOfRetention.into());
 	}
@@ -254,8 +262,8 @@ pub async fn derive_branch_at(
 		state: BranchState::Live,
 		lifecycle_generation: 0,
 	};
-	let encoded_record =
-		encode_database_branch_record(new_record).context("encode sqlite derived database branch record")?;
+	let encoded_record = encode_database_branch_record(new_record)
+		.context("encode sqlite derived database branch record")?;
 	tx.informal()
 		.set(&keys::branches_list_key(new_branch_id), &encoded_record);
 	tx.informal().atomic_op(
@@ -297,8 +305,11 @@ pub async fn derive_bucket_branch_at(
 		return Err(SqliteStorageError::BucketForkChainTooDeep.into());
 	}
 
-	let restore_point_pin =
-		read_versionstamp_pin(tx, &keys::bucket_branches_restore_point_pin_key(source_branch_id)).await?;
+	let restore_point_pin = read_versionstamp_pin(
+		tx,
+		&keys::bucket_branches_restore_point_pin_key(source_branch_id),
+	)
+	.await?;
 	if restore_point_pin > at_versionstamp {
 		return Err(SqliteStorageError::ForkOutOfRetention.into());
 	}
@@ -315,8 +326,10 @@ pub async fn derive_bucket_branch_at(
 	};
 	let encoded_record = encode_bucket_branch_record(new_record)
 		.context("encode sqlite derived bucket branch record")?;
-	tx.informal()
-		.set(&keys::bucket_branches_list_key(new_branch_id), &encoded_record);
+	tx.informal().set(
+		&keys::bucket_branches_list_key(new_branch_id),
+		&encoded_record,
+	);
 	tx.informal().atomic_op(
 		&keys::bucket_branches_refcount_key(source_branch_id),
 		&1_i64.to_le_bytes(),

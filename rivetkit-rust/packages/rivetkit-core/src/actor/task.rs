@@ -777,12 +777,12 @@ impl ActorTask {
 		reply: oneshot::Sender<Result<()>>,
 	) -> Option<LiveExit> {
 		match self.lifecycle {
-				LifecycleState::Started => {
-					self.register_shutdown_reply(command, command_reason, reply);
-					self.drain_accepted_dispatch().await;
-					self.begin_grace(reason).await;
-					self.try_finish_grace()
-				}
+			LifecycleState::Started => {
+				self.register_shutdown_reply(command, command_reason, reply);
+				self.drain_accepted_dispatch().await;
+				self.begin_grace(reason).await;
+				self.try_finish_grace()
+			}
 			LifecycleState::SleepGrace | LifecycleState::DestroyGrace => {
 				let current_reason = self.sleep_grace.as_ref().map(|grace| grace.reason);
 				if current_reason == Some(reason) {

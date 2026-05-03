@@ -45,9 +45,28 @@ export interface DriverMatrixCell {
 export function getDriverMatrixCells(
 	options: DriverMatrixOptions = {},
 ): DriverMatrixCell[] {
-	const encodings = options.encodings ?? ["bare", "cbor", "json"];
-	const runtimes = options.runtimes ?? ["native", "wasm"];
-	const sqliteBackends = options.sqliteBackends ?? ["local", "remote"];
+	const encodings = applyDriverMatrixEnv(
+		"RIVETKIT_DRIVER_TEST_ENCODING",
+		options.encodings ?? ["bare", "cbor", "json"],
+		[
+			"bare",
+			"cbor",
+			"json",
+		],
+	);
+	const runtimes = applyDriverMatrixEnv(
+		"RIVETKIT_DRIVER_TEST_RUNTIME",
+		options.runtimes ?? ["native", "wasm"],
+		["native", "wasm"],
+	);
+	const sqliteBackends = applyDriverMatrixEnv(
+		"RIVETKIT_DRIVER_TEST_SQLITE",
+		options.sqliteBackends ?? ["local", "remote"],
+		[
+			"local",
+			"remote",
+		],
+	);
 	const cells: DriverMatrixCell[] = [];
 
 	for (const runtime of runtimes) {
@@ -67,6 +86,33 @@ export function getDriverMatrixCells(
 	}
 
 	return cells;
+}
+
+function applyDriverMatrixEnv<const T extends string>(
+	key: string,
+	base: readonly T[],
+	allowed: readonly T[],
+): T[] {
+	const value = process.env[key];
+	if (!value) {
+		return [...base];
+	}
+
+	const allowedSet = new Set<string>(allowed);
+	const parsed = value
+		.split(",")
+		.map((part) => part.trim())
+		.filter((part) => part.length > 0);
+	for (const entry of parsed) {
+		if (!allowedSet.has(entry)) {
+			throw new Error(
+				`invalid ${key} value ${JSON.stringify(entry)}. Expected one of: ${allowed.join(", ")}`,
+			);
+		}
+	}
+
+	const requested = new Set(parsed);
+	return base.filter((entry) => requested.has(entry));
 }
 
 export function describeDriverMatrix(

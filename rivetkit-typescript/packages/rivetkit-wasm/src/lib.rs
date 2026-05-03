@@ -7,20 +7,17 @@ use std::time::Duration;
 
 use anyhow::{Result, anyhow};
 use js_sys::{Array, Function, Object, Promise, Reflect, Uint8Array};
-use rivet_error::{
-	MacroMarker, RivetError as RivetTransportError, RivetErrorSchema,
-};
-use rivetkit_core::{
-	ActorConfig, ActorConfigInput, ActorEvent, ActorFactory as CoreActorFactory,
-	ActorStart, BindParam, ColumnValue, CoreRegistry as NativeCoreRegistry, EnqueueAndWaitOpts,
-	CoreServerlessRuntime,
-	ExecuteRoute, ListOpts, QueueMessage, QueueNextBatchOpts, QueueSendResult, QueueSendStatus,
-	QueueTryNextBatchOpts, QueueWaitOpts, Request, RequestSaveOpts, Response, RuntimeSpawner,
-	SerializeStateReason, ServeConfig, ServerlessRequest, StateDelta, WebSocket,
-	WebSocketCallbackRegion, WsMessage,
-};
+use rivet_error::{MacroMarker, RivetError as RivetTransportError, RivetErrorSchema};
 use rivetkit_core::error::public_error_status_code;
 use rivetkit_core::inspector::InspectorAuth;
+use rivetkit_core::{
+	ActorConfig, ActorConfigInput, ActorEvent, ActorFactory as CoreActorFactory, ActorStart,
+	BindParam, ColumnValue, CoreRegistry as NativeCoreRegistry, CoreServerlessRuntime,
+	EnqueueAndWaitOpts, ListOpts, QueueMessage, QueueNextBatchOpts, QueueSendResult,
+	QueueSendStatus, QueueTryNextBatchOpts, QueueWaitOpts, Request, RequestSaveOpts, Response,
+	RuntimeSpawner, SerializeStateReason, ServeConfig, ServerlessRequest, StateDelta, WebSocket,
+	WebSocketCallbackRegion, WsMessage,
+};
 use scc::HashMap as SccHashMap;
 use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken as CoreCancellationToken;
@@ -318,9 +315,7 @@ impl WasmCoreRegistry {
 			let mut state = self.state.borrow_mut();
 			match &mut *state {
 				RegistryState::Registering(registry) => {
-					let registry = registry
-						.take()
-						.ok_or_else(registry_not_registering_error)?;
+					let registry = registry.take().ok_or_else(registry_not_registering_error)?;
 					*state = RegistryState::Serving;
 					registry
 				}
@@ -336,10 +331,7 @@ impl WasmCoreRegistry {
 
 		let local = tokio::task::LocalSet::new();
 		local
-			.run_until(registry.serve_with_config(
-				config.into(),
-				self.shutdown_token.clone(),
-			))
+			.run_until(registry.serve_with_config(config.into(), self.shutdown_token.clone()))
 			.await
 			.map_err(anyhow_to_js_error)
 	}
@@ -377,12 +369,12 @@ impl WasmCoreRegistry {
 		on_stream_event: Function,
 		cancel_token: &WasmCancellationToken,
 		config: JsValue,
-		) -> Result<JsValue, JsValue> {
-			let serverless = self.serverless_runtime(config).await?;
-			let req = serverless_request_from_js(req, cancel_token.inner.clone())
-				.map_err(anyhow_to_js_error)?;
-			start_wasm_serverless_request(serverless.runtime, req, on_stream_event).await
-		}
+	) -> Result<JsValue, JsValue> {
+		let serverless = self.serverless_runtime(config).await?;
+		let req = serverless_request_from_js(req, cancel_token.inner.clone())
+			.map_err(anyhow_to_js_error)?;
+		start_wasm_serverless_request(serverless.runtime, req, on_stream_event).await
+	}
 
 	async fn serverless_runtime(&self, config: JsValue) -> Result<WasmServerlessRuntime, JsValue> {
 		let config: WasmServeConfig = serde_wasm_bindgen::from_value(config)?;
@@ -395,9 +387,8 @@ impl WasmCoreRegistry {
 				let mut state = self.state.borrow_mut();
 				match &mut *state {
 					RegistryState::Registering(registry) => {
-						let registry = registry
-							.take()
-							.ok_or_else(registry_not_registering_error)?;
+						let registry =
+							registry.take().ok_or_else(registry_not_registering_error)?;
 						*state = RegistryState::BuildingServerless;
 						Some(registry)
 					}
@@ -564,9 +555,12 @@ async fn run_actor_adapter(callbacks: WasmCallbacks, start: ActorStart) -> Resul
 	let ctx = WasmActorContext::from_core(core_ctx.clone(), callbacks.clone());
 	let preamble = run_preamble(&callbacks, &ctx, input, snapshot).await;
 	if let Some(reply) = startup_ready {
-		let _ = reply.send(preamble.as_ref().map(|_| ()).map_err(|error| {
-			anyhow!(RivetTransportError::extract(error))
-		}));
+		let _ = reply.send(
+			preamble
+				.as_ref()
+				.map(|_| ())
+				.map_err(|error| anyhow!(RivetTransportError::extract(error))),
+		);
 	}
 	preamble?;
 	start_run_handler(&callbacks, &ctx);
@@ -858,11 +852,7 @@ async fn dispatch_event(callbacks: &WasmCallbacks, ctx: &WasmActorContext, event
 					"conn",
 					JsValue::from(WasmConnHandle::from_core(conn)),
 				)?;
-				set_anyhow(
-					&payload,
-					"ws",
-					JsValue::from(WasmWebSocket::from_core(ws)),
-				)?;
+				set_anyhow(&payload, "ws", JsValue::from(WasmWebSocket::from_core(ws)))?;
 				if let Some(request) = request {
 					set_anyhow(&payload, "request", request_to_js(request)?)?;
 				}
@@ -940,13 +930,19 @@ async fn dispatch_event(callbacks: &WasmCallbacks, ctx: &WasmActorContext, event
 				let result = async {
 					let payload = object();
 					set_anyhow(&payload, "ctx", JsValue::from(ctx.clone()))?;
-					set_anyhow(&payload, "conn", JsValue::from(WasmConnHandle::from_core(conn)))?;
+					set_anyhow(
+						&payload,
+						"conn",
+						JsValue::from(WasmConnHandle::from_core(conn)),
+					)?;
 					call_callback(callback, &payload.into()).await?;
 					Ok::<_, anyhow::Error>(())
 				}
 				.await;
 				if let Err(error) = result {
-					console_error(&format!("wasm connection closed callback failed: {error:#}"));
+					console_error(&format!(
+						"wasm connection closed callback failed: {error:#}"
+					));
 				}
 			}
 		}
@@ -1249,7 +1245,11 @@ impl WasmActorContext {
 			"activeConnections",
 			JsValue::from_f64(snapshot.active_connections as f64),
 		)?;
-		set(&object, "queueSize", JsValue::from_f64(snapshot.queue_size as f64))?;
+		set(
+			&object,
+			"queueSize",
+			JsValue::from_f64(snapshot.queue_size as f64),
+		)?;
 		set(
 			&object,
 			"connectedClients",
@@ -1304,7 +1304,9 @@ impl WasmActorContext {
 		let timestamp_ms = timestamp_ms
 			.filter(|value| value.is_finite())
 			.map(|value| value.trunc() as i64);
-		self.inner.set_alarm(timestamp_ms).map_err(anyhow_to_js_error)
+		self.inner
+			.set_alarm(timestamp_ms)
+			.map_err(anyhow_to_js_error)
 	}
 
 	#[wasm_bindgen]
@@ -1398,7 +1400,9 @@ impl WasmActorContext {
 		if region_id == 0 {
 			return;
 		}
-		self.websocket_callback_regions.borrow_mut().remove(&region_id);
+		self.websocket_callback_regions
+			.borrow_mut()
+			.remove(&region_id);
 	}
 
 	#[wasm_bindgen]
@@ -1506,17 +1510,18 @@ impl WasmWebSocket {
 	pub fn set_event_callback(&self, callback: Function) {
 		let callback = Arc::new(WasmFunction(callback));
 		let message_callback = callback.clone();
-		self.inner
-			.configure_message_event_callback(Some(Arc::new(move |message, message_index| {
+		self.inner.configure_message_event_callback(Some(Arc::new(
+			move |message, message_index| {
 				let event = websocket_message_event_to_js(message, message_index)
 					.map_err(js_value_to_anyhow)?;
 				message_callback.call1(&event)?;
 				Ok(())
-			})));
+			},
+		)));
 
 		let callback = callback.clone();
-		self.inner
-			.configure_close_event_callback(Some(Arc::new(move |code, reason, was_clean| {
+		self.inner.configure_close_event_callback(Some(Arc::new(
+			move |code, reason, was_clean| {
 				let callback = callback.clone();
 				let result = (|| {
 					let event = websocket_close_event_to_js(code, reason, was_clean)
@@ -1524,7 +1529,8 @@ impl WasmWebSocket {
 					callback.call1(&event).map(|_| ())
 				})();
 				Box::pin(async move { result })
-			})));
+			},
+		)));
 	}
 }
 
@@ -1718,8 +1724,7 @@ impl WasmQueue {
 		options: JsValue,
 	) -> Result<(), JsValue> {
 		let names: Vec<String> = serde_wasm_bindgen::from_value(names)?;
-		self
-			.inner
+		self.inner
 			.wait_for_names_available(names, queue_wait_options(options)?)
 			.await
 			.map_err(anyhow_to_js_error)?;
@@ -1821,10 +1826,7 @@ impl WasmQueueMessage {
 
 	#[wasm_bindgen(js_name = isCompletable)]
 	pub fn is_completable(&self) -> bool {
-		self.inner()
-			.clone()
-			.into_completable()
-			.is_ok()
+		self.inner().clone().into_completable().is_ok()
 	}
 
 	#[wasm_bindgen]
@@ -1862,15 +1864,6 @@ impl WasmSqliteDb {
 	pub async fn execute(&self, sql: String, params: JsValue) -> Result<JsValue, JsValue> {
 		self.inner
 			.execute(sql, bind_params_from_js(params)?)
-			.await
-			.map(execute_result_to_js)
-			.map_err(anyhow_to_js_error)
-	}
-
-	#[wasm_bindgen(js_name = executeWrite)]
-	pub async fn execute_write(&self, sql: String, params: JsValue) -> Result<JsValue, JsValue> {
-		self.inner
-			.execute_write(sql, bind_params_from_js(params)?)
 			.await
 			.map(execute_result_to_js)
 			.map_err(anyhow_to_js_error)
@@ -2263,8 +2256,7 @@ fn js_string_map_property(target: &JsValue, name: &str) -> Result<HashMap<String
 }
 
 fn required_js_string_property(target: &JsValue, name: &str) -> Result<String> {
-	js_string_property(target, name)?
-		.ok_or_else(|| anyhow!("property `{name}` must be a string"))
+	js_string_property(target, name)?.ok_or_else(|| anyhow!("property `{name}` must be a string"))
 }
 
 fn serverless_request_from_js(
@@ -2284,7 +2276,10 @@ fn serverless_request_from_js(
 	})
 }
 
-fn serverless_response_head_to_js(status: u16, headers: HashMap<String, String>) -> Result<JsValue> {
+fn serverless_response_head_to_js(
+	status: u16,
+	headers: HashMap<String, String>,
+) -> Result<JsValue> {
 	let head = object();
 	set_anyhow(&head, "status", JsValue::from_f64(status as f64))?;
 	let header_object = object();
@@ -2317,10 +2312,7 @@ fn serverless_stream_end_event(
 	Ok(event.into())
 }
 
-async fn call_serverless_stream_callback(
-	callback: &Function,
-	event: JsValue,
-) -> Result<()> {
+async fn call_serverless_stream_callback(callback: &Function, event: JsValue) -> Result<()> {
 	let value = callback
 		.call2(&JsValue::UNDEFINED, &JsValue::NULL, &event)
 		.map_err(js_value_to_anyhow)?;
@@ -2371,12 +2363,16 @@ async fn start_wasm_serverless_request(
 					if let Err(error) =
 						call_serverless_stream_callback(&on_stream_event, event).await
 					{
-						console_error(&format!("wasm serverless stream callback failed: {error:#}"));
+						console_error(&format!(
+							"wasm serverless stream callback failed: {error:#}"
+						));
 						break;
 					}
 				}
 				Err(error) => {
-					console_error(&format!("wasm serverless stream event encode failed: {error:#}"));
+					console_error(&format!(
+						"wasm serverless stream event encode failed: {error:#}"
+					));
 					break;
 				}
 			}
@@ -2407,9 +2403,11 @@ async fn start_wasm_serverless_request(
 		let _ = done_tx.send(());
 	});
 	spawn_local(async move {
-		local.run_until(async {
-			let _ = done_rx.await;
-		}).await;
+		local
+			.run_until(async {
+				let _ = done_rx.await;
+			})
+			.await;
 	});
 
 	match head_rx.await {
@@ -2521,7 +2519,9 @@ fn bind_params_from_js(value: JsValue) -> Result<Option<Vec<BindParam>>, JsValue
 			"float" => Ok(BindParam::Float(param.float_value.unwrap_or(0.0))),
 			"text" => Ok(BindParam::Text(param.text_value.unwrap_or_default())),
 			"blob" => Ok(BindParam::Blob(param.blob_value.unwrap_or_default())),
-			kind => Err(js_error(&format!("unsupported bind parameter kind: {kind}"))),
+			kind => Err(js_error(&format!(
+				"unsupported bind parameter kind: {kind}"
+			))),
 		})
 		.collect::<Result<Vec<_>, _>>()
 		.map(Some)
@@ -2529,14 +2529,24 @@ fn bind_params_from_js(value: JsValue) -> Result<Option<Vec<BindParam>>, JsValue
 
 fn query_result_to_js(result: rivetkit_core::QueryResult) -> JsValue {
 	let object = object();
-	set(&object, "columns", strings_to_js_array(result.columns).into()).unwrap_throw();
+	set(
+		&object,
+		"columns",
+		strings_to_js_array(result.columns).into(),
+	)
+	.unwrap_throw();
 	set(&object, "rows", rows_to_js_array(result.rows).into()).unwrap_throw();
 	object.into()
 }
 
 fn execute_result_to_js(result: rivetkit_core::ExecuteResult) -> JsValue {
 	let object = object();
-	set(&object, "columns", strings_to_js_array(result.columns).into()).unwrap_throw();
+	set(
+		&object,
+		"columns",
+		strings_to_js_array(result.columns).into(),
+	)
+	.unwrap_throw();
 	set(&object, "rows", rows_to_js_array(result.rows).into()).unwrap_throw();
 	set(&object, "changes", JsValue::from_f64(result.changes as f64)).unwrap_throw();
 	if let Some(last_insert_row_id) = result.last_insert_row_id {
@@ -2547,16 +2557,6 @@ fn execute_result_to_js(result: rivetkit_core::ExecuteResult) -> JsValue {
 		)
 		.unwrap_throw();
 	}
-	set(
-		&object,
-		"route",
-		JsValue::from_str(match result.route {
-			ExecuteRoute::Read => "read",
-			ExecuteRoute::Write => "write",
-			ExecuteRoute::WriteFallback => "writeFallback",
-		}),
-	)
-	.unwrap_throw();
 	object.into()
 }
 
@@ -2730,7 +2730,7 @@ fn anyhow_to_bridge_rivet_error_payload(error: anyhow::Error) -> serde_json::Val
 			context.public_ != Some(true)
 				|| context.status_code.is_none()
 				|| context.status_code == Some(500)
-		},
+		}
 		None => true,
 	});
 	let status_code = if should_promote {
@@ -2862,15 +2862,17 @@ mod tests {
 
 	#[test]
 	fn wasm_bridge_payload_promotes_known_core_error_status() {
-		let payload = anyhow_to_bridge_rivet_error_payload(anyhow::Error::new(
-			RivetTransportError {
+		let payload =
+			anyhow_to_bridge_rivet_error_payload(anyhow::Error::new(RivetTransportError {
 				schema: &AUTH_FORBIDDEN_SCHEMA,
 				meta: None,
 				message: None,
-			},
-		));
+			}));
 
-		assert_eq!(payload.get("group").and_then(|value| value.as_str()), Some("auth"));
+		assert_eq!(
+			payload.get("group").and_then(|value| value.as_str()),
+			Some("auth")
+		);
 		assert_eq!(
 			payload.get("code").and_then(|value| value.as_str()),
 			Some("forbidden")
@@ -2925,9 +2927,7 @@ mod tests {
 		);
 
 		let first_id = context.begin_websocket_callback();
-		context
-			.next_websocket_callback_region_id
-			.set(u32::MAX - 1);
+		context.next_websocket_callback_region_id.set(u32::MAX - 1);
 		let max_id = context.begin_websocket_callback();
 		let wrapped_id = context.begin_websocket_callback();
 

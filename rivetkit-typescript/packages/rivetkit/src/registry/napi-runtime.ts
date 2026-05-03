@@ -534,18 +534,6 @@ export class NapiCoreRuntime implements CoreRuntime {
 		return normalizeRuntimeSqlExecuteResult(result);
 	}
 
-	async actorSqlExecuteWrite(
-		ctx: ActorContextHandle,
-		sql: string,
-		params?: RuntimeSqlBindParams,
-	): Promise<RuntimeSqlExecuteResult> {
-		const result = await this.#actorSql(ctx).executeWrite(
-			sql,
-			toNapiSqlBindParams(params),
-		);
-		return normalizeRuntimeSqlExecuteResult(result);
-	}
-
 	async actorSqlQuery(
 		ctx: ActorContextHandle,
 		sql: string,

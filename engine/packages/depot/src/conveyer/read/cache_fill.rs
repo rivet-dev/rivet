@@ -1,8 +1,6 @@
-use std::{
-	sync::{
-		Arc,
-		atomic::{AtomicUsize, Ordering},
-	},
+use std::sync::{
+	Arc,
+	atomic::{AtomicUsize, Ordering},
 };
 
 use anyhow::{Context, Result};
@@ -17,8 +15,7 @@ use universaldb::{Database, utils::IsolationLevel::Serializable};
 
 use crate::conveyer::{
 	error::SqliteStorageError,
-	keys,
-	metrics,
+	keys, metrics,
 	types::{ColdShardRef, DatabaseBranchId, encode_cold_shard_ref},
 };
 
@@ -230,7 +227,9 @@ impl ShardCacheFillQueue {
 			return;
 		}
 		let Ok(handle) = tokio::runtime::Handle::try_current() else {
-			tracing::warn!("sqlite shard cache fill workers could not start without a tokio runtime");
+			tracing::warn!(
+				"sqlite shard cache fill workers could not start without a tokio runtime"
+			);
 			return;
 		};
 

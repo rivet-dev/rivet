@@ -67,7 +67,11 @@ async fn faulty_tier_injects_operation_failures() -> Result<()> {
 		.get();
 
 	tier.fail_operation(ColdTierOperation::Put, true);
-	assert!(tier.put_object("db/a/image/0001.ltx", b"image").await.is_err());
+	assert!(
+		tier.put_object("db/a/image/0001.ltx", b"image")
+			.await
+			.is_err()
+	);
 	assert_eq!(
 		metrics::SQLITE_S3_REQUEST_FAILURES_TOTAL
 			.with_label_values(&[node_id, "put"])
@@ -121,7 +125,11 @@ async fn faulty_tier_controller_supports_operation_faults() -> Result<()> {
 		controller.clone(),
 	);
 
-	assert!(tier.put_object("db/a/image/0001.ltx", b"image").await.is_err());
+	assert!(
+		tier.put_object("db/a/image/0001.ltx", b"image")
+			.await
+			.is_err()
+	);
 	tier.put_object("db/a/image/0001.ltx", b"image").await?;
 	assert_eq!(None, tier.get_object("db/a/image/0001.ltx").await?);
 	assert_eq!(
@@ -130,10 +138,11 @@ async fn faulty_tier_controller_supports_operation_faults() -> Result<()> {
 	);
 	let listed = tier.list_prefix("db/a").await?;
 	assert_eq!(listed.len(), 1);
-	assert!(tier
-		.delete_objects(&["db/a/image/0001.ltx".to_string()])
-		.await
-		.is_err());
+	assert!(
+		tier.delete_objects(&["db/a/image/0001.ltx".to_string()])
+			.await
+			.is_err()
+	);
 	controller.assert_expected_fired()?;
 
 	Ok(())
@@ -154,7 +163,11 @@ async fn faulty_tier_put_drop_artifact_writes_before_error() -> Result<()> {
 		controller.clone(),
 	);
 
-	assert!(tier.put_object("db/a/image/0001.ltx", b"image").await.is_err());
+	assert!(
+		tier.put_object("db/a/image/0001.ltx", b"image")
+			.await
+			.is_err()
+	);
 	assert_eq!(
 		Some(b"image".to_vec()),
 		tier.get_object("db/a/image/0001.ltx").await?
@@ -168,7 +181,11 @@ async fn faulty_tier_put_drop_artifact_writes_before_error() -> Result<()> {
 async fn disabled_tier_fails_explicitly() -> Result<()> {
 	let tier = DisabledColdTier;
 
-	assert!(tier.put_object("db/a/image/0001.ltx", b"image").await.is_err());
+	assert!(
+		tier.put_object("db/a/image/0001.ltx", b"image")
+			.await
+			.is_err()
+	);
 	assert!(tier.get_object("db/a/image/0001.ltx").await.is_err());
 	assert!(tier.list_prefix("db/a").await.is_err());
 

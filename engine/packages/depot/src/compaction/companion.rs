@@ -34,8 +34,7 @@ async fn run_hot_companion_loop(
 						continue;
 					}
 
-					handle_hot_companion_signal(ctx, state, database_branch_id, signal)
-						.await?;
+					handle_hot_companion_signal(ctx, state, database_branch_id, signal).await?;
 				}
 
 				Ok(companion_loop_after_signals(state))
@@ -59,8 +58,7 @@ async fn run_cold_companion_loop(
 						continue;
 					}
 
-					handle_cold_companion_signal(ctx, state, database_branch_id, signal)
-						.await?;
+					handle_cold_companion_signal(ctx, state, database_branch_id, signal).await?;
 				}
 
 				Ok(companion_loop_after_signals(state))
@@ -84,8 +82,7 @@ async fn run_reclaim_companion_loop(
 						continue;
 					}
 
-					handle_reclaim_companion_signal(ctx, state, database_branch_id, signal)
-						.await?;
+					handle_reclaim_companion_signal(ctx, state, database_branch_id, signal).await?;
 				}
 
 				Ok(companion_loop_after_signals(state))
@@ -422,10 +419,7 @@ fn record_companion_job(
 	});
 }
 
-fn record_companion_stop_signal(
-	state: &mut CompanionWorkflowState,
-	signal: DestroyDatabaseBranch,
-) {
+fn record_companion_stop_signal(state: &mut CompanionWorkflowState, signal: DestroyDatabaseBranch) {
 	record_companion_stop(
 		state,
 		signal.lifecycle_generation,

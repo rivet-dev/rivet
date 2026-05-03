@@ -8,9 +8,9 @@ use depot::{
 	keys::PAGE_SIZE,
 	types::{BucketId, DatabaseBranchId, DirtyPage},
 	workflows::compaction::{
-		CompactionJobKind, DATABASE_BRANCH_ID_TAG, DbColdCompacterWorkflow,
-		DbHotCompacterWorkflow, DbManagerState, DbManagerWorkflow, DbReclaimerWorkflow,
-		DepotCompactionTestDriver, ForceCompactionWork,
+		CompactionJobKind, DATABASE_BRANCH_ID_TAG, DbColdCompacterWorkflow, DbHotCompacterWorkflow,
+		DbManagerState, DbManagerWorkflow, DbReclaimerWorkflow, DepotCompactionTestDriver,
+		ForceCompactionWork,
 	},
 };
 use gas::{
@@ -29,7 +29,9 @@ fn test_bucket() -> Id {
 fn build_registry() -> Registry {
 	let mut registry = Registry::new();
 	registry.register_workflow::<DbManagerWorkflow>().unwrap();
-	registry.register_workflow::<DbHotCompacterWorkflow>().unwrap();
+	registry
+		.register_workflow::<DbHotCompacterWorkflow>()
+		.unwrap();
 	registry
 		.register_workflow::<DbColdCompacterWorkflow>()
 		.unwrap();
@@ -76,10 +78,7 @@ async fn read_database_branch_id(
 	.await
 }
 
-async fn latest_manager_state(
-	test_ctx: &TestCtx,
-	workflow_id: Id,
-) -> Result<DbManagerState> {
+async fn latest_manager_state(test_ctx: &TestCtx, workflow_id: Id) -> Result<DbManagerState> {
 	let history = DatabaseDebug::get_workflow_history(test_ctx.debug_db(), workflow_id, true)
 		.await?
 		.context("manager workflow history not found")?;
@@ -100,9 +99,7 @@ async fn test_driver_forces_noop_without_planning_timers() -> Result<()> {
 	db.commit(vec![dirty_page(1, 0x11)], 2, 1_000).await?;
 	let database_branch_id = read_database_branch_id(&test_ctx, TEST_DATABASE).await?;
 	let driver = DepotCompactionTestDriver::new(&test_ctx);
-	let manager_workflow_id = driver
-		.start_manager(database_branch_id, None, true)
-		.await?;
+	let manager_workflow_id = driver.start_manager(database_branch_id, None, true).await?;
 
 	let requested_work = ForceCompactionWork {
 		hot: false,

@@ -8,28 +8,26 @@ use universaldb::utils::IsolationLevel::Snapshot;
 use uuid::Uuid;
 
 use super::{
-	cleanup_repair_fdb_outputs_tx, fingerprint_repair_reclaim_range, plan_cold_job, plan_hot_job,
-	plan_orphan_cold_object_deletes_tx, read_reclaim_input_snapshot, repair_reclaim_input_range,
-	ActiveColdCompactionJob, ActiveHotCompactionJob, ActiveReclaimCompactionJob,
-	BranchStopState, ColdInputSnapshot, ColdJobFinished, ColdJobInputRange, ColdShardBlob,
-	ColdShardRef, CompanionWorkflowIds, CompactionJobKind, CompactionJobStatus, CompactionRoot,
-	DatabaseBranchId, DatabaseBranchRecord, DbManagerInput, DbManagerState, ForceCompaction,
-	ForceCompactionTracker, ForceCompactionWork, HotInputSnapshot, HotJobFinished,
-	HotJobInputRange, HotShardOutputRef, ManagerActiveJobs, ManagerEffect, ManagerFdbSnapshot,
-	ManagerPlanningDeadlines, ManagerStopReason, PlannedColdCompactionJob, PlannedHotCompactionJob,
-	PlannedReclaimCompactionJob, ReclaimFdbJobInput, ReclaimInputSnapshot,
-	ReclaimJobFinished, ReclaimJobInputRange, RefreshManagerOutput, ShardCachePolicy,
-	StagedHotShardCleanupRef, TxidRange, manager_effect_for_requested_stop, manager_effects_after_refresh,
+	ActiveColdCompactionJob, ActiveHotCompactionJob, ActiveReclaimCompactionJob, BranchStopState,
+	ColdInputSnapshot, ColdJobFinished, ColdJobInputRange, ColdShardBlob, ColdShardRef,
+	CompactionJobKind, CompactionJobStatus, CompactionRoot, CompanionWorkflowIds, DatabaseBranchId,
+	DatabaseBranchRecord, DbManagerInput, DbManagerState, ForceCompaction, ForceCompactionTracker,
+	ForceCompactionWork, HotInputSnapshot, HotJobFinished, HotJobInputRange, HotShardOutputRef,
+	ManagerActiveJobs, ManagerEffect, ManagerFdbSnapshot, ManagerPlanningDeadlines,
+	ManagerStopReason, PlannedColdCompactionJob, PlannedHotCompactionJob,
+	PlannedReclaimCompactionJob, ReclaimFdbJobInput, ReclaimInputSnapshot, ReclaimJobFinished,
+	ReclaimJobInputRange, RefreshManagerOutput, ShardCachePolicy, StagedHotShardCleanupRef,
+	TxidRange, cleanup_repair_fdb_outputs_tx, fingerprint_repair_reclaim_range,
+	manager_effect_for_requested_stop, manager_effects_after_refresh,
 	manager_effects_for_cold_job_finished, manager_effects_for_hot_job_finished,
-	manager_effects_for_reclaim_job_finished,
+	manager_effects_for_reclaim_job_finished, plan_cold_job, plan_hot_job,
+	plan_orphan_cold_object_deletes_tx, read_reclaim_input_snapshot, repair_reclaim_input_range,
 };
-use crate::{
-	conveyer::{
-		keys,
-		types::{
-			BranchState, CommitRow, DBHead, BucketBranchId, encode_compaction_root,
-			encode_commit_row, encode_database_branch_record,
-		},
+use crate::conveyer::{
+	keys,
+	types::{
+		BranchState, BucketBranchId, CommitRow, DBHead, encode_commit_row, encode_compaction_root,
+		encode_database_branch_record,
 	},
 };
 
@@ -286,7 +284,11 @@ fn force_compaction_tracker_adopts_active_jobs_and_records_success() {
 	tracker.complete_ready_requests(&active_jobs, &refresh_without_planned_work(), 101);
 	assert_eq!(tracker.pending_requests.len(), 1);
 
-	tracker.record_job_finished(CompactionJobKind::Hot, job_id, &CompactionJobStatus::Succeeded);
+	tracker.record_job_finished(
+		CompactionJobKind::Hot,
+		job_id,
+		&CompactionJobStatus::Succeeded,
+	);
 	tracker.complete_ready_requests(
 		&ManagerActiveJobs::default(),
 		&refresh_without_planned_work(),
@@ -334,7 +336,10 @@ fn force_compaction_tracker_records_attempted_failed_jobs() {
 	let result = &tracker.recent_results[0];
 	assert_eq!(result.attempted_job_kinds, vec![CompactionJobKind::Cold]);
 	assert_eq!(result.completed_job_ids, vec![job_id]);
-	assert_eq!(result.terminal_error, Some("cold upload failed".to_string()));
+	assert_eq!(
+		result.terminal_error,
+		Some("cold upload failed".to_string())
+	);
 }
 
 #[test]
@@ -452,11 +457,13 @@ fn manager_effects_cover_stale_cold_cleanup_and_branch_stop() {
 			output_refs: Vec::new(),
 		},
 	);
-	let [ManagerEffect::ScheduleUploadedColdOutputCleanup {
-		base_lifecycle_generation,
-		repair_action,
-		..
-	}] = cleanup_effects.as_slice()
+	let [
+		ManagerEffect::ScheduleUploadedColdOutputCleanup {
+			base_lifecycle_generation,
+			repair_action,
+			..
+		},
+	] = cleanup_effects.as_slice()
 	else {
 		panic!("expected stale cold cleanup effect");
 	};
@@ -521,18 +528,21 @@ fn manager_refresh_effects_keep_cold_and_reclaim_mutually_exclusive() {
 	};
 
 	let effects = manager_effects_after_refresh(&state, &input, &refresh, 1_500);
-	assert!(effects.iter().any(|effect| matches!(
-		effect,
-		ManagerEffect::RunColdJob { .. }
-	)));
-	assert!(!effects.iter().any(|effect| matches!(
-		effect,
-		ManagerEffect::RunReclaimJob { .. }
-	)));
-	assert!(effects.iter().any(|effect| matches!(
-		effect,
-		ManagerEffect::CompleteReadyForceCompactions { .. }
-	)));
+	assert!(
+		effects
+			.iter()
+			.any(|effect| matches!(effect, ManagerEffect::RunColdJob { .. }))
+	);
+	assert!(
+		!effects
+			.iter()
+			.any(|effect| matches!(effect, ManagerEffect::RunReclaimJob { .. }))
+	);
+	assert!(
+		effects
+			.iter()
+			.any(|effect| matches!(effect, ManagerEffect::CompleteReadyForceCompactions { .. }))
+	);
 }
 
 #[test]
@@ -590,26 +600,18 @@ fn manager_active_jobs_store_typed_lanes_independently() {
 	};
 
 	let mut active_jobs = ManagerActiveJobs {
-		hot: Some(ActiveHotCompactionJob::from_planned(
-			planned_hot_job(
-				database_branch_id,
-				Id::new_v1(3300),
-				hot_range.clone(),
-			),
-		)),
-		cold: Some(ActiveColdCompactionJob::from_planned(
-			planned_cold_job(
-				database_branch_id,
-				Id::new_v1(3301),
-				cold_range.clone(),
-			),
-		)),
+		hot: Some(ActiveHotCompactionJob::from_planned(planned_hot_job(
+			database_branch_id,
+			Id::new_v1(3300),
+			hot_range.clone(),
+		))),
+		cold: Some(ActiveColdCompactionJob::from_planned(planned_cold_job(
+			database_branch_id,
+			Id::new_v1(3301),
+			cold_range.clone(),
+		))),
 		reclaim: Some(ActiveReclaimCompactionJob::from_planned(
-			planned_reclaim_job(
-				database_branch_id,
-				Id::new_v1(3302),
-				reclaim_range.clone(),
-			),
+			planned_reclaim_job(database_branch_id, Id::new_v1(3302), reclaim_range.clone()),
 		)),
 	};
 
@@ -618,10 +620,18 @@ fn manager_active_jobs_store_typed_lanes_independently() {
 		vec![5, 10]
 	);
 	assert_eq!(
-		active_jobs.cold.as_ref().unwrap().input_range.min_versionstamp,
+		active_jobs
+			.cold
+			.as_ref()
+			.unwrap()
+			.input_range
+			.min_versionstamp,
 		[1; 16]
 	);
-	assert_eq!(active_jobs.reclaim.as_ref().unwrap().input_range.max_keys, 10);
+	assert_eq!(
+		active_jobs.reclaim.as_ref().unwrap().input_range.max_keys,
+		10
+	);
 
 	active_jobs.hot = None;
 	assert!(active_jobs.hot.is_none());
@@ -685,7 +695,10 @@ fn hot_planning_uses_sha256_fingerprint_and_changes_with_inputs() {
 		update_expected_fingerprint(&mut expected, key);
 		update_expected_fingerprint(&mut expected, value);
 	}
-	assert_eq!(first_job.input_fingerprint, finish_expected_fingerprint(expected));
+	assert_eq!(
+		first_job.input_fingerprint,
+		finish_expected_fingerprint(expected)
+	);
 
 	hot_inputs = snapshot.hot_inputs;
 	hot_inputs.delta_chunks[0].1[0] ^= 0xff;
@@ -751,7 +764,10 @@ fn cold_planning_uses_sha256_fingerprint_and_changes_with_inputs() {
 		update_expected_fingerprint(&mut expected, &blob.key);
 		update_expected_fingerprint(&mut expected, &blob.bytes);
 	}
-	assert_eq!(first_job.input_fingerprint, finish_expected_fingerprint(expected));
+	assert_eq!(
+		first_job.input_fingerprint,
+		finish_expected_fingerprint(expected)
+	);
 
 	cold_inputs = snapshot.cold_inputs;
 	cold_inputs.shard_blobs[0].bytes[0] ^= 0xff;
@@ -830,7 +846,13 @@ async fn repair_fdb_cleanup_lifecycle_generation_rejects_recreated_branch() -> R
 	let stage_after = db
 		.run(move |tx| {
 			let stage_key = stage_key.clone();
-			async move { Ok(tx.informal().get(&stage_key, Snapshot).await?.map(Vec::from)) }
+			async move {
+				Ok(tx
+					.informal()
+					.get(&stage_key, Snapshot)
+					.await?
+					.map(Vec::from))
+			}
 		})
 		.await?;
 	assert_eq!(stage_after, Some(staged_blob));
@@ -914,7 +936,8 @@ async fn reclaim_input_snapshot_bounds_commit_scan_by_reclaim_ceiling() -> Resul
 					);
 					let mut malformed_high_key = keys::branch_commit_key(database_branch_id, 11);
 					malformed_high_key.push(b'/');
-					tx.informal().set(&malformed_high_key, b"must-not-be-scanned");
+					tx.informal()
+						.set(&malformed_high_key, b"must-not-be-scanned");
 
 					read_reclaim_input_snapshot(
 						&tx,

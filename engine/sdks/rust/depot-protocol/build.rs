@@ -8,10 +8,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 		.and_then(|p| p.parent())
 		.ok_or("Failed to find workspace root")?;
 
-	let schema_dir = workspace_root
-		.join("sdks")
-		.join("schemas")
-		.join("depot");
+	let schema_dir = workspace_root.join("sdks").join("schemas").join("depot");
 
 	let cfg = vbare_compiler::Config::default();
 	vbare_compiler::process_schemas_with_config(&schema_dir, &cfg)?;

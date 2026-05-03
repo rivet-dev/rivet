@@ -249,40 +249,40 @@ impl RegistryDispatcher {
 
 		let on_open: Option<Box<dyn FnOnce(WebSocketSender) -> EnvoyBoxFuture<()> + Send>> =
 			if is_restoring_hibernatable {
-			None
-		} else {
-			Some(Box::new(move |sender| {
-				let actor_id = init_actor_id.clone();
-				let conn_id = init_conn_id.clone();
-				Box::pin(async move {
-					if let Err(error) = send_actor_connect_message(
-						&sender,
-						encoding,
-						&ActorConnectToClient::Init(ActorConnectInit {
-							actor_id,
-							connection_id: conn_id,
-						}),
-						max_outgoing_message_size,
-					) {
-						match error {
-							ActorConnectSendError::OutgoingTooLong => {
-								sender.close(
-									Some(1011),
-									Some("message.outgoing_too_long".to_owned()),
-								);
-							}
-							ActorConnectSendError::Encode(error) => {
-								tracing::error!(
-									?error,
-									"failed to send actor websocket init message"
-								);
-								sender.close(Some(1011), Some("actor.init_error".to_owned()));
+				None
+			} else {
+				Some(Box::new(move |sender| {
+					let actor_id = init_actor_id.clone();
+					let conn_id = init_conn_id.clone();
+					Box::pin(async move {
+						if let Err(error) = send_actor_connect_message(
+							&sender,
+							encoding,
+							&ActorConnectToClient::Init(ActorConnectInit {
+								actor_id,
+								connection_id: conn_id,
+							}),
+							max_outgoing_message_size,
+						) {
+							match error {
+								ActorConnectSendError::OutgoingTooLong => {
+									sender.close(
+										Some(1011),
+										Some("message.outgoing_too_long".to_owned()),
+									);
+								}
+								ActorConnectSendError::Encode(error) => {
+									tracing::error!(
+										?error,
+										"failed to send actor websocket init message"
+									);
+									sender.close(Some(1011), Some("actor.init_error".to_owned()));
+								}
 							}
 						}
-					}
-				})
-			}))
-		};
+					})
+				}))
+			};
 
 		Ok(WebSocketHandler {
 			on_message: Box::new(move |message: WebSocketMessage| {
@@ -355,8 +355,8 @@ impl RegistryDispatcher {
 							let conn = conn.clone();
 							let message_index = message.message_index;
 							let actor_id = ctx.actor_id().to_owned();
-								RuntimeSpawner::spawn(
-									async move {
+							RuntimeSpawner::spawn(
+								async move {
 									let response = match dispatch_action_through_task(
 										&dispatch,
 										on_message_dispatch_capacity,

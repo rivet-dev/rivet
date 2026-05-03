@@ -1,8 +1,5 @@
 use anyhow::{Context, Result};
-use universaldb::{
-	error::DatabaseError,
-	utils::IsolationLevel::Serializable,
-};
+use universaldb::{error::DatabaseError, utils::IsolationLevel::Serializable};
 
 use crate::conveyer::{
 	keys::{self, SHARD_SIZE},
@@ -79,8 +76,7 @@ pub(super) async fn fence_truncate_cleanup_row(
 	tx: &universaldb::Transaction,
 	row: &ObservedCleanupRow,
 ) -> Result<()> {
-	let current = tx_get_value(tx, &row.key, Serializable)
-		.await?;
+	let current = tx_get_value(tx, &row.key, Serializable).await?;
 	if current.as_deref() != Some(row.value.as_slice()) {
 		return Err(DatabaseError::NotCommitted.into());
 	}

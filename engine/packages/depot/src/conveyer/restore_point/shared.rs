@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 
-use crate::conveyer::types::{RestorePointId, DatabaseBranchId};
+use crate::conveyer::types::{DatabaseBranchId, RestorePointId};
 
 pub(super) struct RestorePointCreateResult {
 	pub(super) restore_point: RestorePointId,

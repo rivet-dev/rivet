@@ -1,17 +1,17 @@
 use std::{collections::HashMap, sync::Arc};
 
 use anyhow::{Context, Result, ensure};
+use depot::{
+	conveyer::{Db, branch as depot_branch},
+	keys::{branch_meta_head_key, meta_head_key},
+	types::{BucketId, SQLITE_PAGE_SIZE, decode_db_head},
+};
 use gas::prelude::*;
 use pegboard::actor_kv::Recipient;
 use rivet_envoy_protocol as protocol;
 use rivet_pools::NodeId;
 use rusqlite::Connection;
 use serde::Deserialize;
-use depot::{
-	keys::{branch_meta_head_key, meta_head_key},
-	conveyer::{branch as depot_branch, Db},
-	types::{BucketId, SQLITE_PAGE_SIZE, decode_db_head},
-};
 use test_snapshot::SnapshotTestCtx;
 
 const SNAPSHOT_NAME: &str = "actor-v2-2-1-baseline";
@@ -81,7 +81,9 @@ async fn actor_v2_2_1_baseline_migrates_to_current_layout() -> Result<()> {
 	.await?;
 
 	assert_eq!(
-		query_sqlite_notes(&load_v2_sqlite_bytes(&db, namespace.namespace_id, actor.actor_id).await?)?,
+		query_sqlite_notes(
+			&load_v2_sqlite_bytes(&db, namespace.namespace_id, actor.actor_id).await?
+		)?,
 		vec!["sqlite-from-v2.2.1"]
 	);
 

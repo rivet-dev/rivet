@@ -459,8 +459,6 @@ function getOrCreateNativeSqlDatabase(
 	const database = wrapJsNativeDatabase({
 		exec: (sql) => runtime.actorSqlExec(ctx, sql),
 		execute: (sql, params) => runtime.actorSqlExecute(ctx, sql, params),
-		executeWrite: (sql, params) =>
-			runtime.actorSqlExecuteWrite(ctx, sql, params),
 		query: (sql, params) => runtime.actorSqlQuery(ctx, sql, params),
 		run: (sql, params) => runtime.actorSqlRun(ctx, sql, params),
 		takeLastKvError: () => runtime.actorSqlTakeLastKvError(ctx),

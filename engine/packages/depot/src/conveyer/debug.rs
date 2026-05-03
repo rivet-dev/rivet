@@ -11,17 +11,19 @@ use universaldb::{
 };
 
 use crate::{
-	gc,
 	conveyer::{
-		Db, db::load_branch_ancestry, branch, keys,
+		Db, branch,
+		db::load_branch_ancestry,
+		keys,
 		ltx::{DecodedLtx, decode_ltx_v3},
 		types::{
-			DatabaseBranchId, RestorePointIndexEntry, ColdManifestChunk, ColdManifestIndex,
-			CommitRow, FetchedPage, LayerEntry, LayerKind, SQLITE_STORAGE_COLD_SCHEMA_VERSION,
+			ColdManifestChunk, ColdManifestIndex, CommitRow, DatabaseBranchId, FetchedPage,
+			LayerEntry, LayerKind, RestorePointIndexEntry, SQLITE_STORAGE_COLD_SCHEMA_VERSION,
 			decode_cold_manifest_chunk, decode_cold_manifest_index, decode_commit_row,
 			decode_restore_point_record,
 		},
 	},
+	gc,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -54,9 +56,7 @@ struct DebugReadSource {
 	max_txid: u64,
 }
 
-pub async fn dump_database_ancestry(
-	db: &Db,
-) -> Result<Vec<(DatabaseBranchId, Option<[u8; 16]>)>> {
+pub async fn dump_database_ancestry(db: &Db) -> Result<Vec<(DatabaseBranchId, Option<[u8; 16]>)>> {
 	let branch_id = resolve_current_branch(db).await?;
 	let ancestry = db
 		.udb
@@ -87,14 +87,15 @@ pub async fn dump_branch_pins(db: &Db) -> Result<BranchPins> {
 pub async fn list_restore_points(db: &Db) -> Result<Vec<RestorePointIndexEntry>> {
 	let database_id = db.database_id.clone();
 
-	db
-		.udb
+	db.udb
 		.run(move |tx| {
 			let database_id = database_id.clone();
 
 			async move {
 				let mut entries = Vec::new();
-				for (_key, value) in scan_prefix(&tx, &keys::restore_point_prefix(&database_id)).await? {
+				for (_key, value) in
+					scan_prefix(&tx, &keys::restore_point_prefix(&database_id)).await?
+				{
 					let record = decode_restore_point_record(&value)
 						.context("decode sqlite restore point record for debug listing")?;
 					entries.push(RestorePointIndexEntry {
@@ -105,10 +106,7 @@ pub async fn list_restore_points(db: &Db) -> Result<Vec<RestorePointIndexEntry>>
 						created_at_ms: record.created_at_ms,
 					});
 				}
-				entries.sort_by(|a, b| {
-					a.restore_point_id
-						.cmp(&b.restore_point_id)
-				});
+				entries.sort_by(|a, b| a.restore_point_id.cmp(&b.restore_point_id));
 
 				Ok(entries)
 			}
@@ -145,17 +143,13 @@ pub async fn dump_cold_manifest(db: &Db) -> Result<ColdManifest> {
 		let Some(chunk_bytes) = cold_tier
 			.get_object(&chunk_ref.object_key)
 			.await
-			.with_context(|| {
-				format!("get sqlite cold manifest chunk {}", chunk_ref.object_key)
-			})?
+			.with_context(|| format!("get sqlite cold manifest chunk {}", chunk_ref.object_key))?
 		else {
 			continue;
 		};
-		chunks.push(
-			decode_cold_manifest_chunk(&chunk_bytes).with_context(|| {
-				format!("decode sqlite cold manifest chunk {}", chunk_ref.object_key)
-			})?,
-		);
+		chunks.push(decode_cold_manifest_chunk(&chunk_bytes).with_context(|| {
+			format!("decode sqlite cold manifest chunk {}", chunk_ref.object_key)
+		})?);
 	}
 
 	Ok(ColdManifest {
@@ -189,7 +183,8 @@ pub async fn read_at(db: &Db, versionstamp: [u8; 16]) -> Result<PageState> {
 				{
 					continue;
 				}
-				let Some(txid) = lookup_vtx_txid(&tx, ancestor.branch_id, versionstamp).await? else {
+				let Some(txid) = lookup_vtx_txid(&tx, ancestor.branch_id, versionstamp).await?
+				else {
 					continue;
 				};
 				target = Some((idx, *ancestor, txid));
@@ -261,8 +256,7 @@ struct DebugReadPlan {
 async fn resolve_current_branch(db: &Db) -> Result<DatabaseBranchId> {
 	let bucket_id = db.sqlite_bucket_id();
 	let database_id = db.database_id.clone();
-	db
-		.udb
+	db.udb
 		.run(move |tx| {
 			let database_id = database_id.clone();
 
@@ -286,8 +280,12 @@ async fn load_pages_from_hot_tier(
 
 	for source in sources {
 		for (_txid, blob) in tx_load_delta_blobs(tx, *source).await? {
-			let decoded = decode_ltx_v3(&blob)
-				.with_context(|| format!("decode sqlite debug delta for branch {:?}", source.branch_id))?;
+			let decoded = decode_ltx_v3(&blob).with_context(|| {
+				format!(
+					"decode sqlite debug delta for branch {:?}",
+					source.branch_id
+				)
+			})?;
 			for pgno in 1..=db_size_pages {
 				if pages.get(&pgno).is_some_and(Option::is_some) {
 					continue;
@@ -373,8 +371,9 @@ async fn fill_cold_pages(
 						.context("sqlite debug cold layer should be loaded before decode")?;
 					decoded_objects.insert(
 						object_key.clone(),
-						decode_ltx_v3(bytes)
-							.with_context(|| format!("decode sqlite debug cold layer {object_key}"))?,
+						decode_ltx_v3(bytes).with_context(|| {
+							format!("decode sqlite debug cold layer {object_key}")
+						})?,
 					);
 				}
 				if let Some(bytes) = decoded_objects
@@ -459,7 +458,8 @@ async fn lookup_vtx_txid(
 	branch_id: DatabaseBranchId,
 	versionstamp: [u8; 16],
 ) -> Result<Option<u64>> {
-	let Some(bytes) = tx_get_value(tx, &keys::branch_vtx_key(branch_id, versionstamp)).await? else {
+	let Some(bytes) = tx_get_value(tx, &keys::branch_vtx_key(branch_id, versionstamp)).await?
+	else {
 		return Ok(None);
 	};
 	let bytes: [u8; std::mem::size_of::<u64>()] = bytes
@@ -470,15 +470,8 @@ async fn lookup_vtx_txid(
 	Ok(Some(u64::from_be_bytes(bytes)))
 }
 
-async fn tx_get_value(
-	tx: &universaldb::Transaction,
-	key: &[u8],
-) -> Result<Option<Vec<u8>>> {
-	Ok(tx
-		.informal()
-		.get(key, Snapshot)
-		.await?
-		.map(Vec::<u8>::from))
+async fn tx_get_value(tx: &universaldb::Transaction, key: &[u8]) -> Result<Option<Vec<u8>>> {
+	Ok(tx.informal().get(key, Snapshot).await?.map(Vec::<u8>::from))
 }
 
 async fn scan_prefix(
@@ -566,7 +559,10 @@ async fn tx_load_latest_shard_blob(
 }
 
 fn cold_manifest_index_object_key(branch_id: DatabaseBranchId) -> String {
-	format!("db/{}/cold_manifest/index.bare", branch_id.as_uuid().simple())
+	format!(
+		"db/{}/cold_manifest/index.bare",
+		branch_id.as_uuid().simple()
+	)
 }
 
 fn layer_kind_rank(kind: LayerKind) -> u8 {

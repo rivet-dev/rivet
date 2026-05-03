@@ -13,9 +13,9 @@ use rivet_pools::NodeId;
 use tokio::sync::RwLock;
 use universaldb::Database;
 
-use crate::{cold_tier::ColdTier, workflows::compaction::DeltasAvailable};
 #[cfg(feature = "test-faults")]
 use crate::fault::DepotFaultController;
+use crate::{cold_tier::ColdTier, workflows::compaction::DeltasAvailable};
 
 use super::{
 	branch,
@@ -23,7 +23,7 @@ use super::{
 	error::SqliteStorageError,
 	keys,
 	read::cache_fill::{ShardCacheFillOptions, ShardCacheFillQueue},
-	types::{DatabaseBranchId, ColdManifestChunk, BucketId},
+	types::{BucketId, ColdManifestChunk, DatabaseBranchId},
 };
 
 const COLD_MANIFEST_CACHE_BRANCHES: usize = 16;
@@ -49,11 +49,7 @@ impl ColdManifestCache {
 		Some(manifest)
 	}
 
-	pub(super) fn insert(
-		&mut self,
-		branch_id: DatabaseBranchId,
-		manifest: CachedColdManifest,
-	) {
+	pub(super) fn insert(&mut self, branch_id: DatabaseBranchId, manifest: CachedColdManifest) {
 		self.entries.insert(branch_id, manifest);
 		self.touch(branch_id);
 
@@ -129,12 +125,7 @@ pub struct Db {
 }
 
 impl Db {
-	pub fn new(
-		udb: Arc<Database>,
-		bucket_id: Id,
-		database_id: String,
-		node_id: NodeId,
-	) -> Self {
+	pub fn new(udb: Arc<Database>, bucket_id: Id, database_id: String, node_id: NodeId) -> Self {
 		Self::new_inner(
 			udb,
 			bucket_id,
@@ -354,7 +345,12 @@ impl Db {
 	#[cfg(debug_assertions)]
 	pub async fn branch_cache_snapshot_for_test(
 		&self,
-	) -> Option<(DatabaseBranchId, DatabaseBranchId, Option<i64>, Vec<(u32, u64)>)> {
+	) -> Option<(
+		DatabaseBranchId,
+		DatabaseBranchId,
+		Option<i64>,
+		Vec<(u32, u64)>,
+	)> {
 		let snapshot = self.cache_snapshot.read().await.clone()?;
 		Some((
 			snapshot.branch_id,
@@ -395,7 +391,10 @@ pub(super) async fn touch_access_if_bucket_advanced(
 	let bucket_key = keys::branch_manifest_last_access_bucket_key(branch_id);
 	let stored_bucket = tx
 		.informal()
-		.get(&bucket_key, universaldb::utils::IsolationLevel::Serializable)
+		.get(
+			&bucket_key,
+			universaldb::utils::IsolationLevel::Serializable,
+		)
 		.await?
 		.map(|bytes| decode_i64_le(&bytes))
 		.transpose()
@@ -404,8 +403,10 @@ pub(super) async fn touch_access_if_bucket_advanced(
 		return Ok(Some(bucket));
 	}
 
-	tx.informal()
-		.set(&keys::branch_manifest_last_access_ts_ms_key(branch_id), &now_ms.to_le_bytes());
+	tx.informal().set(
+		&keys::branch_manifest_last_access_ts_ms_key(branch_id),
+		&now_ms.to_le_bytes(),
+	);
 	tx.informal().set(&bucket_key, &bucket.to_le_bytes());
 
 	Ok(Some(bucket))

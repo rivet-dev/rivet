@@ -1,11 +1,11 @@
 use std::sync::Arc;
 
 use anyhow::{Result, anyhow};
-use gas::prelude::Id;
 use depot::keys::{
 	delta_chunk_key, meta_compact_key, meta_compactor_lease_key, meta_head_key, meta_quota_key,
 	pidx_delta_key, shard_key,
 };
+use gas::prelude::Id;
 use tempfile::Builder;
 use universaldb::utils::IsolationLevel::Snapshot;
 
@@ -85,13 +85,12 @@ async fn actor_destroy_in_one_tx() -> Result<()> {
 	let keys = sqlite_keys(actor_id);
 	seed(&db, &keys).await?;
 
-	db
-		.run(move |tx| async move {
-			pegboard::actor_sqlite::clear_v2_storage_for_destroy(&tx, actor_id);
-			Err::<(), anyhow::Error>(anyhow!("rollback sqlite destroy"))
-		})
-		.await
-		.expect_err("failed transaction should roll back sqlite clears");
+	db.run(move |tx| async move {
+		pegboard::actor_sqlite::clear_v2_storage_for_destroy(&tx, actor_id);
+		Err::<(), anyhow::Error>(anyhow!("rollback sqlite destroy"))
+	})
+	.await
+	.expect_err("failed transaction should roll back sqlite clears");
 
 	for key in keys {
 		assert!(value_exists(&db, key).await?);

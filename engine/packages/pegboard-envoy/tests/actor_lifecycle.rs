@@ -1,25 +1,25 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use gas::prelude::Id;
-use rivet_envoy_protocol as protocol;
-use rivet_pools::NodeId;
-use scc::HashMap;
 use depot::{
+	conveyer::Db,
 	keys::{
 		delta_chunk_key, meta_compact_key, meta_compactor_lease_key, meta_head_key, meta_quota_key,
 		pidx_delta_key, shard_key,
 	},
-	conveyer::Db,
 };
+use gas::prelude::Id;
+use rivet_envoy_protocol as protocol;
+use rivet_pools::NodeId;
+use scc::HashMap;
 use tempfile::Builder;
 use universaldb::utils::IsolationLevel::Snapshot;
 
 mod conn {
 	use std::sync::Arc;
 
-	use scc::HashMap;
 	use depot::conveyer::Db;
+	use scc::HashMap;
 
 	pub struct Conn {
 		pub actor_dbs: HashMap<String, Arc<Db>>,
@@ -89,11 +89,7 @@ fn sqlite_keys(actor_id: &str) -> Vec<Vec<u8>> {
 	]
 }
 
-fn new_actor_db(
-	db: Arc<universaldb::Database>,
-	namespace_label: u16,
-	actor_id: &str,
-) -> Arc<Db> {
+fn new_actor_db(db: Arc<universaldb::Database>, namespace_label: u16, actor_id: &str) -> Arc<Db> {
 	Arc::new(Db::new(
 		db,
 		Id::new_v1(namespace_label),
@@ -110,11 +106,12 @@ async fn stop_actor_evicts_cached_actor_db() -> Result<()> {
 		actor_dbs: HashMap::new(),
 	};
 
-	assert!(conn
-		.actor_dbs
-		.insert_async(TEST_ACTOR.to_string(), actor_db)
-		.await
-		.is_ok());
+	assert!(
+		conn.actor_dbs
+			.insert_async(TEST_ACTOR.to_string(), actor_db)
+			.await
+			.is_ok()
+	);
 
 	actor_lifecycle::stop_actor(&conn, &checkpoint(TEST_ACTOR)).await?;
 
@@ -129,11 +126,12 @@ async fn stop_actor_does_not_touch_udb() -> Result<()> {
 	let conn = conn::Conn {
 		actor_dbs: HashMap::new(),
 	};
-	assert!(conn
-		.actor_dbs
-		.insert_async(TEST_ACTOR.to_string(), actor_db)
-		.await
-		.is_ok());
+	assert!(
+		conn.actor_dbs
+			.insert_async(TEST_ACTOR.to_string(), actor_db)
+			.await
+			.is_ok()
+	);
 
 	let keys = sqlite_keys(TEST_ACTOR);
 	seed(&db, &keys).await?;
@@ -166,17 +164,17 @@ async fn shutdown_conn_actors_evicts_all_cached_actor_dbs() -> Result<()> {
 		actor_dbs: HashMap::new(),
 	};
 
-	for (idx, actor_id) in ["shutdown-actor-a", "shutdown-actor-b"].into_iter().enumerate() {
-		let actor_db = new_actor_db(
-			Arc::clone(&db),
-			TEST_NAMESPACE_LABEL + idx as u16,
-			actor_id,
+	for (idx, actor_id) in ["shutdown-actor-a", "shutdown-actor-b"]
+		.into_iter()
+		.enumerate()
+	{
+		let actor_db = new_actor_db(Arc::clone(&db), TEST_NAMESPACE_LABEL + idx as u16, actor_id);
+		assert!(
+			conn.actor_dbs
+				.insert_async(actor_id.to_string(), actor_db)
+				.await
+				.is_ok()
 		);
-		assert!(conn
-			.actor_dbs
-			.insert_async(actor_id.to_string(), actor_db)
-			.await
-			.is_ok());
 	}
 
 	actor_lifecycle::shutdown_conn_actors(&conn).await;

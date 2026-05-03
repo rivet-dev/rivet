@@ -6,8 +6,8 @@ mod moved_tests {
 	use std::time::Duration;
 
 	use rivet_error::RivetError as RivetTransportError;
-	use rivetkit_actor_persist::versioned as persist_versioned;
 	use rivet_error::{RivetError as RivetTransportError, RivetErrorSchema};
+	use rivetkit_actor_persist::versioned as persist_versioned;
 	use rivetkit_core::Kv;
 	use rivetkit_core::actor::state::PERSIST_DATA_KEY;
 	use tokio::sync::oneshot;
@@ -396,7 +396,8 @@ mod moved_tests {
 		let first = structured_timeout_schema("test", "slow_callback", "first message");
 
 		for i in 0..100 {
-			let schema = structured_timeout_schema("test", "slow_callback", &format!("message {i}"));
+			let schema =
+				structured_timeout_schema("test", "slow_callback", &format!("message {i}"));
 			assert!(std::ptr::eq(schema, first));
 		}
 	}

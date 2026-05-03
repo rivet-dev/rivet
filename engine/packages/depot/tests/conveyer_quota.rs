@@ -8,54 +8,58 @@ use depot::quota::{
 
 #[tokio::test]
 async fn quota_defaults_to_zero() -> Result<()> {
-	common::test_matrix("depot-quota-defaults", |_tier, ctx| Box::pin(async move {
-		let db = ctx.udb.clone();
-		let database_id = ctx.database_id.clone();
+	common::test_matrix("depot-quota-defaults", |_tier, ctx| {
+		Box::pin(async move {
+			let db = ctx.udb.clone();
+			let database_id = ctx.database_id.clone();
 
-		let storage_used = db
-			.run(move |tx| {
-				let database_id = database_id.clone();
-				async move { read(&tx, &database_id).await }
-			})
-			.await?;
+			let storage_used = db
+				.run(move |tx| {
+					let database_id = database_id.clone();
+					async move { read(&tx, &database_id).await }
+				})
+				.await?;
 
-		assert_eq!(storage_used, 0);
+			assert_eq!(storage_used, 0);
 
-		Ok(())
-	}))
+			Ok(())
+		})
+	})
 	.await
 }
 
 #[tokio::test]
 async fn atomic_add_uses_signed_little_endian_counter() -> Result<()> {
-	common::test_matrix("depot-quota-atomic-add", |_tier, ctx| Box::pin(async move {
-		let db = ctx.udb.clone();
-		let database_id = ctx.database_id.clone();
+	common::test_matrix("depot-quota-atomic-add", |_tier, ctx| {
+		Box::pin(async move {
+			let db = ctx.udb.clone();
+			let database_id = ctx.database_id.clone();
 
-		db.run({
-			let database_id = database_id.clone();
-			move |tx| {
+			db.run({
 				let database_id = database_id.clone();
-				async move {
-					atomic_add(&tx, &database_id, 128);
-					atomic_add(&tx, &database_id, -8);
-					Ok(())
+				move |tx| {
+					let database_id = database_id.clone();
+					async move {
+						atomic_add(&tx, &database_id, 128);
+						atomic_add(&tx, &database_id, -8);
+						Ok(())
+					}
 				}
-			}
-		})
-		.await?;
-
-		let storage_used = db
-			.run(move |tx| {
-				let database_id = database_id.clone();
-				async move { read(&tx, &database_id).await }
 			})
 			.await?;
 
-		assert_eq!(storage_used, 120);
+			let storage_used = db
+				.run(move |tx| {
+					let database_id = database_id.clone();
+					async move { read(&tx, &database_id).await }
+				})
+				.await?;
 
-		Ok(())
-	}))
+			assert_eq!(storage_used, 120);
+
+			Ok(())
+		})
+	})
 	.await
 }
 

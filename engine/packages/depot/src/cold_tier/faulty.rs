@@ -6,8 +6,7 @@ use std::time::Duration;
 
 #[cfg(feature = "test-faults")]
 use crate::fault::{
-	ColdTierFaultPoint, DepotFaultAction, DepotFaultContext, DepotFaultController,
-	DepotFaultPoint,
+	ColdTierFaultPoint, DepotFaultAction, DepotFaultContext, DepotFaultController, DepotFaultPoint,
 };
 use crate::metrics;
 
@@ -127,10 +126,7 @@ impl<T> FaultyColdTier<T> {
 			return Ok(None);
 		};
 		let Some(fired) = controller
-			.maybe_fire(
-				DepotFaultPoint::ColdTier(point),
-				DepotFaultContext::new(),
-			)
+			.maybe_fire(DepotFaultPoint::ColdTier(point), DepotFaultContext::new())
 			.await?
 		else {
 			return Ok(None);
@@ -179,15 +175,14 @@ where
 				.await?,
 			Some(DepotFaultAction::DropArtifact)
 		);
-		self.inner.put_object(key, bytes).await
-			.and_then(|()| {
-				#[cfg(feature = "test-faults")]
-				if drop_ack {
-					anyhow::bail!("injected cold-tier put acknowledgement drop for {key}");
-				}
+		self.inner.put_object(key, bytes).await.and_then(|()| {
+			#[cfg(feature = "test-faults")]
+			if drop_ack {
+				anyhow::bail!("injected cold-tier put acknowledgement drop for {key}");
+			}
 
-				Ok(())
-			})
+			Ok(())
+		})
 	}
 
 	async fn get_object(&self, key: &str) -> Result<Option<Vec<u8>>> {

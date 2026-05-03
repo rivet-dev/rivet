@@ -4,9 +4,8 @@ use std::time::Duration;
 
 use anyhow::Result;
 use depot::fault::{
-	ColdTierFaultPoint, CommitFaultPoint, DepotFaultContext, DepotFaultController,
-	DepotFaultPoint, DepotFaultReplayEventKind, FaultBoundary, HotCompactionFaultPoint,
-	ReadFaultPoint,
+	ColdTierFaultPoint, CommitFaultPoint, DepotFaultContext, DepotFaultController, DepotFaultPoint,
+	DepotFaultReplayEventKind, FaultBoundary, HotCompactionFaultPoint, ReadFaultPoint,
 };
 use depot::types::DatabaseBranchId;
 
@@ -32,14 +31,24 @@ async fn fault_controller_matches_scope_and_invocation() -> Result<()> {
 		seed: Some(7),
 		..DepotFaultContext::default()
 	};
-	assert!(controller.maybe_fire(point.clone(), wrong_scope).await?.is_none());
+	assert!(
+		controller
+			.maybe_fire(point.clone(), wrong_scope)
+			.await?
+			.is_none()
+	);
 
 	let matching_scope = DepotFaultContext::new()
 		.database_id("db-a")
 		.database_branch_id(branch_id)
 		.checkpoint("after-write")
 		.seed(7);
-	assert!(controller.maybe_fire(point.clone(), matching_scope.clone()).await?.is_none());
+	assert!(
+		controller
+			.maybe_fire(point.clone(), matching_scope.clone())
+			.await?
+			.is_none()
+	);
 	let fired = controller
 		.maybe_fire(point.clone(), matching_scope.clone())
 		.await?
@@ -88,7 +97,10 @@ async fn fail_action_returns_error_and_records_replay() -> Result<()> {
 		.expect_err("fail actions should return an error");
 
 	assert!(err.to_string().contains("cold object disappeared"));
-	assert_eq!(controller.replay_log()[0].kind, DepotFaultReplayEventKind::Fired);
+	assert_eq!(
+		controller.replay_log()[0].kind,
+		DepotFaultReplayEventKind::Fired
+	);
 	assert_eq!(controller.replay_log()[0].boundary, FaultBoundary::ReadOnly);
 
 	Ok(())
@@ -97,7 +109,8 @@ async fn fail_action_returns_error_and_records_replay() -> Result<()> {
 #[tokio::test]
 async fn pause_action_waits_for_release() -> Result<()> {
 	let controller = DepotFaultController::new();
-	let point = DepotFaultPoint::HotCompaction(HotCompactionFaultPoint::AfterStageBeforeFinishSignal);
+	let point =
+		DepotFaultPoint::HotCompaction(HotCompactionFaultPoint::AfterStageBeforeFinishSignal);
 	let pause = controller.pause_handle("hot-staged");
 
 	controller.at(point.clone()).once().pause("hot-staged")?;
@@ -154,12 +167,21 @@ fn unfired_expected_faults_are_reported_in_replay() -> Result<()> {
 	let err = controller
 		.assert_expected_fired()
 		.expect_err("unfired expected rule should fail the test");
-	assert!(err.to_string().contains("expected depot faults did not fire"));
+	assert!(
+		err.to_string()
+			.contains("expected depot faults did not fire")
+	);
 
 	let replay = controller.replay_log_with_unfired();
 	assert_eq!(replay.len(), 1);
-	assert_eq!(replay[0].kind, DepotFaultReplayEventKind::ExpectedButUnfired);
-	assert_eq!(replay[0].boundary, FaultBoundary::AmbiguousAfterDurableCommit);
+	assert_eq!(
+		replay[0].kind,
+		DepotFaultReplayEventKind::ExpectedButUnfired
+	);
+	assert_eq!(
+		replay[0].boundary,
+		FaultBoundary::AmbiguousAfterDurableCommit
+	);
 
 	Ok(())
 }

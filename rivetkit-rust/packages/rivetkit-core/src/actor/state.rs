@@ -21,9 +21,9 @@ use crate::actor::messages::StateDelta;
 use crate::actor::persist::{
 	decode_latest_with_embedded_version, encode_latest_with_embedded_version,
 };
+use crate::actor::task::LifecycleEvent;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::actor::task::{LIFECYCLE_EVENT_INBOX_CHANNEL, actor_channel_overloaded_error};
-use crate::actor::task::LifecycleEvent;
 use crate::actor::task_types::StateMutationReason;
 use crate::error::ActorRuntime;
 #[cfg(feature = "wasm-runtime")]
@@ -149,7 +149,8 @@ impl ActorContext {
 	#[cfg(target_arch = "wasm32")]
 	fn request_save_best_effort(&self, opts: RequestSaveOpts) {
 		let immediate = opts.immediate;
-		let _save_request_revision = self.0.save_request_revision.fetch_add(1, Ordering::SeqCst) + 1;
+		let _save_request_revision =
+			self.0.save_request_revision.fetch_add(1, Ordering::SeqCst) + 1;
 		self.notify_request_save_hooks(opts);
 		let already_requested = self.0.save_requested.swap(true, Ordering::SeqCst);
 		let immediate_already_requested = if immediate {

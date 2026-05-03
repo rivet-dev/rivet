@@ -44,11 +44,9 @@ fn decode_delta_chunk_idx(delta_prefix: &[u8], key: &[u8]) -> Result<u32> {
 		std::mem::size_of::<u32>()
 	);
 
-	Ok(u32::from_be_bytes(
-		suffix
-			.try_into()
-			.context("sqlite delta chunk suffix should decode as u32")?,
-	))
+	Ok(u32::from_be_bytes(suffix.try_into().context(
+		"sqlite delta chunk suffix should decode as u32",
+	)?))
 }
 
 pub(super) async fn tx_load_latest_shard_blob(

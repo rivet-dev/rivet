@@ -135,8 +135,9 @@ impl CommitFaultPoint {
 			| CommitFaultPoint::BeforeCommitRows
 			| CommitFaultPoint::BeforeQuotaMutation => FaultBoundary::PreDurableCommit,
 			CommitFaultPoint::AfterUdbCommit => FaultBoundary::AmbiguousAfterDurableCommit,
-			CommitFaultPoint::BeforeCompactionSignal
-			| CommitFaultPoint::AfterCompactionSignal => FaultBoundary::PostDurableNonData,
+			CommitFaultPoint::BeforeCompactionSignal | CommitFaultPoint::AfterCompactionSignal => {
+				FaultBoundary::PostDurableNonData
+			}
 		}
 	}
 }

@@ -4,11 +4,12 @@ use universaldb::utils::IsolationLevel::Serializable;
 use crate::{
 	HOT_BURST_COLD_LAG_THRESHOLD_TXIDS,
 	conveyer::{
-		keys, quota, udb,
+		keys, quota,
 		types::{
 			CompactionRoot, DatabaseBranchId, SqliteCmpDirty, decode_compaction_root,
 			decode_db_head, decode_sqlite_cmp_dirty, encode_sqlite_cmp_dirty,
 		},
+		udb,
 	},
 	workflows::compaction::DeltasAvailable,
 };
@@ -65,13 +66,13 @@ fn has_actionable_lag(
 	fallback_cold_watermark_txid: u64,
 ) -> bool {
 	let hot_watermark_txid = compaction_root.map_or(0, |root| root.hot_watermark_txid);
-	let cold_watermark_txid =
-		compaction_root.map_or(fallback_cold_watermark_txid, |root| root.cold_watermark_txid);
+	let cold_watermark_txid = compaction_root.map_or(fallback_cold_watermark_txid, |root| {
+		root.cold_watermark_txid
+	});
 	let hot_lag = head_txid.saturating_sub(hot_watermark_txid);
 	let cold_lag = head_txid.saturating_sub(cold_watermark_txid);
 
-	hot_lag >= quota::COMPACTION_DELTA_THRESHOLD
-		|| cold_lag >= HOT_BURST_COLD_LAG_THRESHOLD_TXIDS
+	hot_lag >= quota::COMPACTION_DELTA_THRESHOLD || cold_lag >= HOT_BURST_COLD_LAG_THRESHOLD_TXIDS
 }
 
 pub async fn clear_sqlite_cmp_dirty_if_observed_idle(
@@ -113,15 +114,19 @@ async fn branch_has_actionable_lag(
 		.transpose()
 		.context("decode sqlite db head for dirty clear")?
 		.map_or(0, |head| head.head_txid);
-	let compaction_root = tx_get_value(tx, &keys::branch_compaction_root_key(branch_id), Serializable)
-		.await?
-		.as_deref()
-		.map(decode_compaction_root)
-		.transpose()
-		.context("decode sqlite compaction root for dirty clear")?
-		.context(
-			"sqlite compaction root missing for dirty clear; \
+	let compaction_root = tx_get_value(
+		tx,
+		&keys::branch_compaction_root_key(branch_id),
+		Serializable,
+	)
+	.await?
+	.as_deref()
+	.map(decode_compaction_root)
+	.transpose()
+	.context("decode sqlite compaction root for dirty clear")?
+	.context(
+		"sqlite compaction root missing for dirty clear; \
 			workflow manager must publish CMP/root before clearing dirty marker",
-		)?;
+	)?;
 	Ok(has_actionable_lag(head_txid, Some(&compaction_root), 0))
 }

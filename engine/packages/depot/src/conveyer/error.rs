@@ -43,16 +43,10 @@ pub enum SqliteStorageError {
 	#[error("invalid_v1_migration_state", "Invalid SQLite v1 migration state.")]
 	InvalidV1MigrationState,
 
-	#[error(
-		"fork_chain_too_deep",
-		"Database branch fork chain is too deep."
-	)]
+	#[error("fork_chain_too_deep", "Database branch fork chain is too deep.")]
 	ForkChainTooDeep,
 
-	#[error(
-		"bucket_fork_chain_too_deep",
-		"Bucket branch fork chain is too deep."
-	)]
+	#[error("bucket_fork_chain_too_deep", "Bucket branch fork chain is too deep.")]
 	BucketForkChainTooDeep,
 
 	#[error(
@@ -67,10 +61,7 @@ pub enum SqliteStorageError {
 	)]
 	RestoreTargetExpired,
 
-	#[error(
-		"restore_point_not_found",
-		"Restore point was not found."
-	)]
+	#[error("restore_point_not_found", "Restore point was not found.")]
 	RestorePointNotFound,
 
 	#[error(
@@ -106,16 +97,10 @@ pub enum SqliteStorageError {
 	)]
 	ShardCacheCorrupt { shard_id: u32, as_of_txid: u64 },
 
-	#[error(
-		"too_many_pins",
-		"Bucket has too many restore_points."
-	)]
+	#[error("too_many_pins", "Bucket has too many restore_points.")]
 	TooManyPins,
 
-	#[error(
-		"too_many_restore_points",
-		"Bucket has too many restore points."
-	)]
+	#[error("too_many_restore_points", "Bucket has too many restore points.")]
 	TooManyRestorePoints,
 
 	#[error(
@@ -167,7 +152,10 @@ impl fmt::Display for SqliteStorageError {
 				write!(f, "sqlite bucket branch fork chain is too deep")
 			}
 			SqliteStorageError::ForkOutOfRetention => {
-				write!(f, "cannot fork from a point that has fallen out of retention")
+				write!(
+					f,
+					"cannot fork from a point that has fallen out of retention"
+				)
 			}
 			SqliteStorageError::RestoreTargetExpired => {
 				write!(f, "sqlite restore point history is no longer retained")
@@ -176,7 +164,10 @@ impl fmt::Display for SqliteStorageError {
 				write!(f, "sqlite restore point was not found")
 			}
 			SqliteStorageError::BranchNotReachable => {
-				write!(f, "sqlite restore point branch is not reachable from this database branch chain")
+				write!(
+					f,
+					"sqlite restore point branch is not reachable from this database branch chain"
+				)
 			}
 			SqliteStorageError::BranchNotWritable => {
 				write!(f, "sqlite database branch is not writable")
@@ -207,7 +198,10 @@ impl fmt::Display for SqliteStorageError {
 				field,
 				value,
 			} => {
-				write!(f, "sqlite policy value is invalid for {policy}.{field}: {value}")
+				write!(
+					f,
+					"sqlite policy value is invalid for {policy}.{field}: {value}"
+				)
 			}
 			SqliteStorageError::DatabaseNotFound => {
 				write!(f, "sqlite database was not found in this bucket branch")

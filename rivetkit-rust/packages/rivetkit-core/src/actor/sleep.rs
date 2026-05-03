@@ -15,9 +15,9 @@ use tracing::Instrument;
 use crate::actor::config::ActorConfig;
 use crate::actor::context::ActorContext;
 use crate::actor::task_types::ShutdownKind;
-use crate::actor::work_registry::{CountGuard, RegionGuard, WorkRegistry};
 #[cfg(feature = "wasm-runtime")]
 use crate::actor::work_registry::LocalShutdownTask;
+use crate::actor::work_registry::{CountGuard, RegionGuard, WorkRegistry};
 #[cfg(feature = "wasm-runtime")]
 use crate::runtime::RuntimeSpawner;
 #[cfg(test)]

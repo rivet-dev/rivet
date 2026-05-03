@@ -1,20 +1,12 @@
 use anyhow::Result;
 use futures_util::TryStreamExt;
-use universaldb::{
-	RangeOption,
-	options::StreamingMode,
-	utils::IsolationLevel::Snapshot,
-};
+use universaldb::{RangeOption, options::StreamingMode, utils::IsolationLevel::Snapshot};
 
 pub(super) async fn tx_get_value(
 	tx: &universaldb::Transaction,
 	key: &[u8],
 ) -> Result<Option<Vec<u8>>> {
-	Ok(tx
-		.informal()
-		.get(key, Snapshot)
-		.await?
-		.map(Vec::<u8>::from))
+	Ok(tx.informal().get(key, Snapshot).await?.map(Vec::<u8>::from))
 }
 
 pub(super) async fn tx_scan_prefix_values(

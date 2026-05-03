@@ -21,7 +21,6 @@ export interface SqliteQueryResult {
 export interface SqliteExecuteResult extends SqliteQueryResult {
 	changes: number;
 	lastInsertRowId?: number | null;
-	route: "read" | "write" | "writeFallback";
 }
 
 export interface SqliteDatabase {

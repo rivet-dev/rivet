@@ -14,9 +14,6 @@
 //! - Delete and truncate behavior
 //! - Journal and BATCH_ATOMIC behavior
 
-/// Native SQLite read-mode/write-mode connection manager.
-pub mod connection_manager;
-
 /// Unified native database handles and open helpers.
 pub mod database;
 
@@ -30,3 +27,6 @@ pub use depot_client_types as types;
 
 /// Custom SQLite VFS for actor-side depot transport.
 pub mod vfs;
+
+/// Single-threaded native SQLite command worker.
+pub mod worker;

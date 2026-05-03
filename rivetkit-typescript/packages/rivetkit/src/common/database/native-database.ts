@@ -62,16 +62,11 @@ interface NativeExecuteResult {
 	rows: unknown[][];
 	changes: number;
 	lastInsertRowId?: number | null;
-	route: string;
 }
 
 export interface JsNativeDatabaseLike {
 	exec(sql: string): Promise<NativeExecResult>;
 	execute(
-		sql: string,
-		params?: NativeBindParam[] | null,
-	): Promise<NativeExecuteResult>;
-	executeWrite(
 		sql: string,
 		params?: NativeBindParam[] | null,
 	): Promise<NativeExecuteResult>;
@@ -206,13 +201,6 @@ function toNativeBindings(
 	});
 }
 
-function normalizeExecuteRoute(route: string): SqliteExecuteResult["route"] {
-	if (route === "read" || route === "write" || route === "writeFallback") {
-		return route;
-	}
-	throw new Error(`unsupported sqlite execute route: ${route}`);
-}
-
 class NativeCloseGate {
 	#active = 0;
 	#closed = false;
@@ -259,7 +247,6 @@ export function wrapJsNativeDatabase(
 ): SqliteDatabase {
 	const gate = new NativeCloseGate();
 	let closePromise: Promise<void> | undefined;
-	let writeModeDepth = 0;
 	let lastInsertRowId: number | null = null;
 
 	const executeNative = async (
@@ -273,24 +260,17 @@ export function wrapJsNativeDatabase(
 				rows: [[lastInsertRowId ?? 0]],
 				changes: 0,
 				lastInsertRowId,
-				route: "writeFallback",
 			};
 		}
 
 		const release = gate.enter();
 		try {
 			const nativeParams = toNativeBindings(sql, params);
-			const result =
-				writeModeDepth > 0
-					? await database.executeWrite(sql, nativeParams)
-					: await database.execute(sql, nativeParams);
+			const result = await database.execute(sql, nativeParams);
 			if (result.lastInsertRowId !== undefined) {
 				lastInsertRowId = result.lastInsertRowId;
 			}
-			return {
-				...result,
-				route: normalizeExecuteRoute(result.route),
-			};
+			return result;
 		} catch (error) {
 			enrichNativeDatabaseError(database, error);
 		} finally {
@@ -333,12 +313,7 @@ export function wrapJsNativeDatabase(
 			return { columns, rows };
 		},
 		async writeMode<T>(callback: () => Promise<T>): Promise<T> {
-			writeModeDepth++;
-			try {
-				return await callback();
-			} finally {
-				writeModeDepth--;
-			}
+			return await callback();
 		},
 		async close(): Promise<void> {
 			closePromise ??= gate.close(() => database.close());

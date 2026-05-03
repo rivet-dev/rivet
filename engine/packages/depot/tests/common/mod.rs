@@ -19,12 +19,9 @@ pub async fn test_db(prefix: &str) -> Result<universaldb::Database> {
 	Ok(universaldb::Database::new(Arc::new(driver)))
 }
 
-pub async fn test_db_with_dir(
-	prefix: &str,
-) -> Result<(Arc<universaldb::Database>, TempDir)> {
+pub async fn test_db_with_dir(prefix: &str) -> Result<(Arc<universaldb::Database>, TempDir)> {
 	let dir = Builder::new().prefix(prefix).tempdir()?;
-	let driver =
-		universaldb::driver::RocksDbDatabaseDriver::new(dir.path().to_path_buf()).await?;
+	let driver = universaldb::driver::RocksDbDatabaseDriver::new(dir.path().to_path_buf()).await?;
 
 	Ok((Arc::new(universaldb::Database::new(Arc::new(driver))), dir))
 }
@@ -67,11 +64,7 @@ pub struct TestDb {
 }
 
 impl TestDb {
-	pub fn make_db(
-		&self,
-		bucket_id: Id,
-		database_id: impl Into<String>,
-	) -> Db {
+	pub fn make_db(&self, bucket_id: Id, database_id: impl Into<String>) -> Db {
 		let database_id = database_id.into();
 		match &self.cold_tier {
 			Some(cold_tier) => Db::new_with_cold_tier(
@@ -138,10 +131,7 @@ where
 	Ok(())
 }
 
-pub async fn read_value(
-	db: &universaldb::Database,
-	key: Vec<u8>,
-) -> Result<Option<Vec<u8>>> {
+pub async fn read_value(db: &universaldb::Database, key: Vec<u8>) -> Result<Option<Vec<u8>>> {
 	db.run(move |tx| {
 		let key = key.clone();
 		async move {

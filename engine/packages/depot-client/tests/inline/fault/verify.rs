@@ -109,7 +109,8 @@ impl<'a> InvariantScan<'a> {
 			return Ok(());
 		};
 		let rows = self.check_branch_rows(branch_id, head.head_txid).await?;
-		self.check_pidx(branch_id, head.db_size_pages, &rows).await?;
+		self.check_pidx(branch_id, head.db_size_pages, &rows)
+			.await?;
 		self.check_compaction_metadata(branch_id, head.head_txid, &rows)
 			.await?;
 		self.check_restore_points(branch_id).await?;
@@ -131,8 +132,12 @@ impl<'a> InvariantScan<'a> {
 					}
 				}
 				(Ok(_), Ok(_)) => {}
-				(Err(err), _) => self.violate(format!("database pointer key failed to decode: {err:#}")),
-				(_, Err(err)) => self.violate(format!("database pointer value failed to decode: {err:#}")),
+				(Err(err), _) => {
+					self.violate(format!("database pointer key failed to decode: {err:#}"))
+				}
+				(_, Err(err)) => {
+					self.violate(format!("database pointer value failed to decode: {err:#}"))
+				}
 			}
 		}
 
@@ -165,14 +170,19 @@ impl<'a> InvariantScan<'a> {
 						}
 					}
 				}
-				Err(err) => self.violate(format!("database branch record failed to decode: {err:#}")),
+				Err(err) => {
+					self.violate(format!("database branch record failed to decode: {err:#}"))
+				}
 			},
 			None => self.violate("database branch record was missing"),
 		}
 		Ok(())
 	}
 
-	async fn check_live_head(&mut self, branch_id: DatabaseBranchId) -> Result<Option<depot::types::DBHead>> {
+	async fn check_live_head(
+		&mut self,
+		branch_id: DatabaseBranchId,
+	) -> Result<Option<depot::types::DBHead>> {
 		let Some(value) = get_value(self.tx, &keys::branch_meta_head_key(branch_id)).await? else {
 			self.violate("live branch head row was missing");
 			return Ok(None);
@@ -223,7 +233,10 @@ impl<'a> InvariantScan<'a> {
 	) -> Result<BTreeMap<u64, CommitRow>> {
 		let mut commits = BTreeMap::new();
 		for (key, value) in scan_prefix(self.tx, keys::branch_commit_prefix(branch_id)).await? {
-			match (decode_branch_commit_txid(branch_id, &key), decode_commit_row(&value)) {
+			match (
+				decode_branch_commit_txid(branch_id, &key),
+				decode_commit_row(&value),
+			) {
 				(Ok(txid), Ok(row)) => {
 					commits.insert(txid, row);
 				}
@@ -235,7 +248,9 @@ impl<'a> InvariantScan<'a> {
 		let compacted_through = self.compacted_commit_floor(branch_id, head_txid).await?;
 		for txid in compacted_through.saturating_add(1)..=head_txid {
 			if !commits.contains_key(&txid) {
-				self.violate(format!("commit rows were not contiguous. Missing txid {txid}"));
+				self.violate(format!(
+					"commit rows were not contiguous. Missing txid {txid}"
+				));
 			}
 		}
 		for txid in commits.keys().copied() {
@@ -251,7 +266,8 @@ impl<'a> InvariantScan<'a> {
 		branch_id: DatabaseBranchId,
 		head_txid: u64,
 	) -> Result<u64> {
-		let Some(value) = get_value(self.tx, &keys::branch_compaction_root_key(branch_id)).await? else {
+		let Some(value) = get_value(self.tx, &keys::branch_compaction_root_key(branch_id)).await?
+		else {
 			return Ok(0);
 		};
 		let root = match decode_compaction_root(&value) {
@@ -279,7 +295,9 @@ impl<'a> InvariantScan<'a> {
 				Ok(chunk_idx) => {
 					chunks.entry(txid).or_default().insert(chunk_idx, value);
 				}
-				Err(err) => self.violate(format!("delta chunk key failed to decode index: {err:#}")),
+				Err(err) => {
+					self.violate(format!("delta chunk key failed to decode index: {err:#}"))
+				}
 			}
 		}
 
@@ -287,7 +305,9 @@ impl<'a> InvariantScan<'a> {
 		for (txid, chunk_map) in chunks {
 			for expected_idx in 0..u32::try_from(chunk_map.len()).unwrap_or(u32::MAX) {
 				if !chunk_map.contains_key(&expected_idx) {
-					self.violate(format!("delta txid {txid} was missing chunk {expected_idx}"));
+					self.violate(format!(
+						"delta txid {txid} was missing chunk {expected_idx}"
+					));
 				}
 			}
 
@@ -315,7 +335,8 @@ impl<'a> InvariantScan<'a> {
 		let mut shards = BTreeMap::new();
 		let compacted_through = self.compacted_commit_floor(branch_id, head_txid).await?;
 		for (key, value) in scan_prefix(self.tx, keys::branch_shard_prefix(branch_id)).await? {
-			let Some((shard_id, as_of_txid)) = decode_branch_shard_version_key(branch_id, &key)? else {
+			let Some((shard_id, as_of_txid)) = decode_branch_shard_version_key(branch_id, &key)?
+			else {
 				continue;
 			};
 			match decode_ltx_v3(&value) {
@@ -346,7 +367,12 @@ impl<'a> InvariantScan<'a> {
 	) -> Result<Vec<ColdRefCoverage>> {
 		let mut refs = Vec::new();
 		let mut seen = BTreeSet::new();
-		for (key, value) in scan_prefix(self.tx, keys::branch_compaction_cold_shard_prefix(branch_id)).await? {
+		for (key, value) in scan_prefix(
+			self.tx,
+			keys::branch_compaction_cold_shard_prefix(branch_id),
+		)
+		.await?
+		{
 			let key_parts = match decode_cold_shard_key(branch_id, &key) {
 				Ok(parts) => parts,
 				Err(err) => {
@@ -368,7 +394,9 @@ impl<'a> InvariantScan<'a> {
 				self.violate("duplicate cold shard ref was present");
 			}
 			if let Some(commit) = commits.get(&reference.as_of_txid) {
-				if reference.as_of_txid > reference.max_txid || reference.min_txid > reference.max_txid {
+				if reference.as_of_txid > reference.max_txid
+					|| reference.min_txid > reference.max_txid
+				{
 					self.violate("cold shard ref txid range was invalid");
 				}
 				if reference.shard_id > commit.db_size_pages / keys::SHARD_SIZE {
@@ -381,10 +409,7 @@ impl<'a> InvariantScan<'a> {
 				));
 			}
 			let pages = self.check_cold_object(&reference, commits).await?;
-			refs.push(ColdRefCoverage {
-				reference,
-				pages,
-			});
+			refs.push(ColdRefCoverage { reference, pages });
 		}
 		Ok(refs)
 	}
@@ -410,7 +435,12 @@ impl<'a> InvariantScan<'a> {
 		let pages = match decode_ltx_v3(&bytes) {
 			Ok(blob) => {
 				self.check_ltx_pages("cold shard", reference.as_of_txid, &blob, commits);
-				self.check_ltx_shard_pages("cold shard", reference.shard_id, reference.as_of_txid, &blob);
+				self.check_ltx_shard_pages(
+					"cold shard",
+					reference.shard_id,
+					reference.as_of_txid,
+					&blob,
+				);
 				Some(blob.pages.iter().map(|page| page.pgno).collect())
 			}
 			Err(err) => {
@@ -443,10 +473,14 @@ impl<'a> InvariantScan<'a> {
 				}
 			};
 			if pgno == 0 || pgno > db_size_pages {
-				self.violate(format!("PIDX page {pgno} was outside database size {db_size_pages}"));
+				self.violate(format!(
+					"PIDX page {pgno} was outside database size {db_size_pages}"
+				));
 			}
 			if !self.page_has_backing(pgno, owner_txid, rows) {
-				self.violate(format!("PIDX page {pgno} pointed at missing backing txid {owner_txid}"));
+				self.violate(format!(
+					"PIDX page {pgno} pointed at missing backing txid {owner_txid}"
+				));
 			}
 		}
 		Ok(())
@@ -458,7 +492,9 @@ impl<'a> InvariantScan<'a> {
 		head_txid: u64,
 		rows: &BranchRows,
 	) -> Result<()> {
-		if let Some(value) = get_value(self.tx, &keys::branch_compaction_root_key(branch_id)).await? {
+		if let Some(value) =
+			get_value(self.tx, &keys::branch_compaction_root_key(branch_id)).await?
+		{
 			match decode_compaction_root(&value) {
 				Ok(root) => {
 					if root.schema_version == 0 {
@@ -483,7 +519,12 @@ impl<'a> InvariantScan<'a> {
 			}
 		}
 
-		for (key, value) in scan_prefix(self.tx, keys::branch_compaction_retired_cold_object_prefix(branch_id)).await? {
+		for (key, value) in scan_prefix(
+			self.tx,
+			keys::branch_compaction_retired_cold_object_prefix(branch_id),
+		)
+		.await?
+		{
 			match decode_retired_cold_object(&value) {
 				Ok(retired) => {
 					let expected_key = keys::branch_compaction_retired_cold_object_key(
@@ -501,7 +542,9 @@ impl<'a> InvariantScan<'a> {
 			}
 		}
 
-		for (key, value) in scan_prefix(self.tx, keys::branch_pitr_interval_prefix(branch_id)).await? {
+		for (key, value) in
+			scan_prefix(self.tx, keys::branch_pitr_interval_prefix(branch_id)).await?
+		{
 			if let Err(err) = keys::decode_branch_pitr_interval_bucket(branch_id, &key) {
 				self.violate(format!("PITR interval key failed to decode: {err:#}"));
 				continue;
@@ -522,13 +565,19 @@ impl<'a> InvariantScan<'a> {
 	}
 
 	async fn check_restore_points(&mut self, branch_id: DatabaseBranchId) -> Result<()> {
-		for (_key, value) in scan_prefix(self.tx, keys::restore_point_prefix(&self.database_id)).await? {
+		for (_key, value) in
+			scan_prefix(self.tx, keys::restore_point_prefix(&self.database_id)).await?
+		{
 			match depot::types::decode_restore_point_record(&value) {
 				Ok(record) => {
 					if record.database_branch_id != branch_id {
 						self.violate("restore point referenced a different database branch");
 					}
-					let vtx_value = get_value(self.tx, &keys::branch_vtx_key(branch_id, record.versionstamp)).await?;
+					let vtx_value = get_value(
+						self.tx,
+						&keys::branch_vtx_key(branch_id, record.versionstamp),
+					)
+					.await?;
 					if vtx_value.is_none() {
 						self.violate("restore point versionstamp had no VTX row");
 					}
@@ -550,9 +599,12 @@ impl<'a> InvariantScan<'a> {
 					if pin.at_txid > head_txid {
 						self.violate("history pin referenced a txid above branch head");
 					}
-					if get_value(self.tx, &keys::branch_vtx_key(branch_id, pin.at_versionstamp))
-						.await?
-						.is_none()
+					if get_value(
+						self.tx,
+						&keys::branch_vtx_key(branch_id, pin.at_versionstamp),
+					)
+					.await?
+					.is_none()
 					{
 						self.violate("history pin versionstamp had no VTX row");
 					}
@@ -575,7 +627,10 @@ impl<'a> InvariantScan<'a> {
 		for page in &ltx.pages {
 			if let Some(db_size_pages) = db_size_pages {
 				if page.pgno > db_size_pages {
-					self.violate(format!("{kind} txid {txid} page {} exceeded database size", page.pgno));
+					self.violate(format!(
+						"{kind} txid {txid} page {} exceeded database size",
+						page.pgno
+					));
 				}
 			} else {
 				self.violate(format!("{kind} txid {txid} had no matching commit row"));
@@ -588,14 +643,19 @@ impl<'a> InvariantScan<'a> {
 			self.violate(format!("{kind} txid {txid} had unexpected page size"));
 		}
 		if ltx.header.min_txid > txid || ltx.header.max_txid < txid {
-			self.violate(format!("{kind} txid {txid} header did not cover its key txid"));
+			self.violate(format!(
+				"{kind} txid {txid} header did not cover its key txid"
+			));
 		}
 		for page in &ltx.pages {
 			if page.pgno == 0 {
 				self.violate(format!("{kind} txid {txid} contained page 0"));
 			}
 			if page.bytes.len() != keys::PAGE_SIZE as usize {
-				self.violate(format!("{kind} txid {txid} page {} had invalid size", page.pgno));
+				self.violate(format!(
+					"{kind} txid {txid} page {} had invalid size",
+					page.pgno
+				));
 			}
 		}
 	}
@@ -633,8 +693,7 @@ impl<'a> InvariantScan<'a> {
 				candidate_shard == shard_id
 					&& as_of_txid >= owner_txid
 					&& shard.get_page(pgno).is_some()
-			})
-		{
+			}) {
 			return true;
 		}
 		rows.cold_refs.iter().any(|reference| {
@@ -878,7 +937,8 @@ fn depot_invariant_scanner_detects_cold_ref_missing_referenced_page() -> Result<
 				.await
 				.expect_err("scanner should reject cold refs missing the PIDX page");
 			assert!(
-				err.to_string().contains("PIDX page 1 pointed at missing backing"),
+				err.to_string()
+					.contains("PIDX page 1 pointed at missing backing"),
 				"unexpected error: {err:#}"
 			);
 			Ok(())

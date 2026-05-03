@@ -60,7 +60,7 @@ fn anyhow_to_bridge_rivet_error_payload(error: anyhow::Error) -> serde_json::Val
 			context.public_ != Some(true)
 				|| context.status_code.is_none()
 				|| context.status_code == Some(500)
-		},
+		}
 		None => true,
 	});
 	let status_code = if should_promote {

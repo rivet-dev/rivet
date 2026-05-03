@@ -1,8 +1,8 @@
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
-use rivet_envoy_protocol as protocol;
 use crate::async_counter::AsyncCounter;
+use rivet_envoy_protocol as protocol;
 use tokio::sync::oneshot;
 
 use crate::context::SharedContext;
@@ -442,19 +442,6 @@ impl EnvoyHandle {
 		{
 			RemoteSqliteResponse::Execute(response) => Ok(response),
 			_ => anyhow::bail!("unexpected remote sqlite execute response type"),
-		}
-	}
-
-	pub async fn remote_sqlite_execute_write(
-		&self,
-		request: protocol::SqliteExecuteWriteRequest,
-	) -> anyhow::Result<protocol::SqliteExecuteWriteResponse> {
-		match self
-			.send_remote_sqlite_request(RemoteSqliteRequest::ExecuteWrite(request))
-			.await?
-		{
-			RemoteSqliteResponse::ExecuteWrite(response) => Ok(response),
-			_ => anyhow::bail!("unexpected remote sqlite execute_write response type"),
 		}
 	}
 

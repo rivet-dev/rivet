@@ -4,24 +4,23 @@ use std::{sync::Arc, time::Duration};
 
 use anyhow::Result;
 use async_trait::async_trait;
-use futures_util::TryStreamExt;
 use depot::{
 	ACCESS_TOUCH_THROTTLE_MS,
 	cold_tier::{ColdTier, ColdTierObjectMetadata, FilesystemColdTier},
 	conveyer::{Db, branch, metrics},
 	error::SqliteStorageError,
 	keys::{
-		branch_compaction_cold_shard_key, branch_compaction_root_key, branch_delta_chunk_key,
-		branch_delta_chunk_prefix,
-		branch_manifest_last_access_bucket_key, branch_manifest_last_access_ts_ms_key,
-		branch_commit_key, branch_meta_head_key, branch_pidx_key, branch_shard_key, PAGE_SIZE,
+		PAGE_SIZE, branch_commit_key, branch_compaction_cold_shard_key, branch_compaction_root_key,
+		branch_delta_chunk_key, branch_delta_chunk_prefix, branch_manifest_last_access_bucket_key,
+		branch_manifest_last_access_ts_ms_key, branch_meta_head_key, branch_pidx_key,
+		branch_shard_key,
 	},
 	ltx::{LtxHeader, encode_ltx_v3},
 	types::{
 		ColdManifestChunk, ColdManifestChunkRef, ColdManifestIndex, ColdShardRef, CompactionRoot,
 		DBHead, DatabaseBranchId, DirtyPage, FetchedPage, LayerEntry, LayerKind,
 		ResolvedVersionstamp, SQLITE_STORAGE_COLD_SCHEMA_VERSION, decode_commit_row,
-		encode_cold_manifest_chunk, decode_compaction_root, encode_cold_manifest_index,
+		decode_compaction_root, encode_cold_manifest_chunk, encode_cold_manifest_index,
 		encode_cold_shard_ref, encode_compaction_root, encode_db_head,
 	},
 };
@@ -30,6 +29,7 @@ use depot::{
 	cold_tier::FaultyColdTier,
 	fault::{DepotFaultController, DepotFaultPoint, ReadFaultPoint},
 };
+use futures_util::TryStreamExt;
 use gas::prelude::Id;
 use rivet_pools::NodeId;
 use sha2::{Digest, Sha256};
@@ -191,9 +191,8 @@ async fn read_prefix_keys(db: &universaldb::Database, prefix: Vec<u8>) -> Result
 	db.run(move |tx| {
 		let prefix = prefix.clone();
 		async move {
-			let prefix_subspace = universaldb::Subspace::from(
-				universaldb::tuple::Subspace::from_bytes(prefix),
-			);
+			let prefix_subspace =
+				universaldb::Subspace::from(universaldb::tuple::Subspace::from_bytes(prefix));
 			let informal = tx.informal();
 			let mut stream = informal.get_ranges_keyvalues(
 				universaldb::RangeOption {
@@ -278,12 +277,14 @@ async fn assert_shard_coverage_missing(database_db: &Db, pgno: u32) -> Result<()
 
 macro_rules! read_matrix {
 	($prefix:expr, |$ctx:ident, $db:ident, $database_db:ident| $body:block) => {
-		common::test_matrix($prefix, |_tier, $ctx| Box::pin(async move {
-			#[allow(unused_variables)]
-			let $db = $ctx.udb.clone();
-			let $database_db = $ctx.make_db(test_bucket(), TEST_DATABASE);
-			$body
-		}))
+		common::test_matrix($prefix, |_tier, $ctx| {
+			Box::pin(async move {
+				#[allow(unused_variables)]
+				let $db = $ctx.udb.clone();
+				let $database_db = $ctx.make_db(test_bucket(), TEST_DATABASE);
+				$body
+			})
+		})
 		.await
 	};
 }
@@ -303,27 +304,32 @@ async fn get_pages_rejects_page_zero() -> Result<()> {
 
 #[tokio::test]
 async fn missing_delta_without_fallback_errors_instead_of_zero_fill() -> Result<()> {
-	read_matrix!("depot-read-missing-delta-no-fallback", |ctx, db, database_db| {
-		database_db.commit(vec![dirty_page(1, 0x11)], 1, 1_000).await?;
-		let branch_id = read_database_branch_id(&db).await?;
-		seed(
-			&db,
-			Vec::new(),
-			vec![branch_delta_chunk_key(branch_id, 1, 0)],
-		)
-		.await?;
+	read_matrix!(
+		"depot-read-missing-delta-no-fallback",
+		|ctx, db, database_db| {
+			database_db
+				.commit(vec![dirty_page(1, 0x11)], 1, 1_000)
+				.await?;
+			let branch_id = read_database_branch_id(&db).await?;
+			seed(
+				&db,
+				Vec::new(),
+				vec![branch_delta_chunk_key(branch_id, 1, 0)],
+			)
+			.await?;
 
-		let err = database_db
-			.get_pages(vec![1])
-			.await
-			.expect_err("missing delta without fallback should fail loudly");
-		assert!(matches!(
-			err.downcast_ref::<SqliteStorageError>(),
-			Some(SqliteStorageError::ShardCoverageMissing { pgno: 1 })
-		));
+			let err = database_db
+				.get_pages(vec![1])
+				.await
+				.expect_err("missing delta without fallback should fail loudly");
+			assert!(matches!(
+				err.downcast_ref::<SqliteStorageError>(),
+				Some(SqliteStorageError::ShardCoverageMissing { pgno: 1 })
+			));
 
-		Ok(())
-	})
+			Ok(())
+		}
+	)
 }
 
 #[tokio::test]
@@ -341,9 +347,7 @@ async fn missing_delta_chunks_fail_loudly() -> Result<()> {
 		seed(&db, Vec::new(), existing_chunk_keys).await?;
 		let blob = encoded_blob(
 			1,
-			&(1..=20)
-				.map(|pgno| (pgno, pgno as u8))
-				.collect::<Vec<_>>(),
+			&(1..=20).map(|pgno| (pgno, pgno as u8)).collect::<Vec<_>>(),
 		)?;
 		let chunk_writes = blob
 			.chunks(10)
@@ -420,10 +424,11 @@ async fn read_fault_before_return_pages_fails_with_page_scope() -> Result<()> {
 async fn cold_ref_retired_during_cold_object_fetch_errors_instead_of_zero_fill() -> Result<()> {
 	let (db, _db_dir) = common::test_db_with_dir("depot-read-cold-ref-retire-race").await?;
 	let cold_dir = tempfile::tempdir()?;
-	let filesystem_tier: Arc<dyn ColdTier> =
-		Arc::new(FilesystemColdTier::new(cold_dir.path()));
+	let filesystem_tier: Arc<dyn ColdTier> = Arc::new(FilesystemColdTier::new(cold_dir.path()));
 	let writer_db = common::make_db(db.clone(), test_bucket(), TEST_DATABASE.to_string());
-	writer_db.commit(vec![dirty_page(1, 0x11)], 1, 1_000).await?;
+	writer_db
+		.commit(vec![dirty_page(1, 0x11)], 1, 1_000)
+		.await?;
 	let branch_id = read_database_branch_id(&db).await?;
 	let object_key = format!(
 		"db/{}/shard/00000000/0000000000000001-retire-race.ltx",
@@ -431,7 +436,9 @@ async fn cold_ref_retired_during_cold_object_fetch_errors_instead_of_zero_fill()
 	);
 	let object_bytes = encoded_blob(1, &[(1, 0x99)])?;
 	let cold_ref = cold_shard_ref(object_key.clone(), 0, 1, 2, &object_bytes);
-	filesystem_tier.put_object(&object_key, &object_bytes).await?;
+	filesystem_tier
+		.put_object(&object_key, &object_bytes)
+		.await?;
 	seed(
 		&db,
 		vec![
@@ -496,7 +503,9 @@ async fn cold_ref_retired_during_cold_object_fetch_errors_instead_of_zero_fill()
 #[tokio::test]
 async fn get_pages_reads_with_cold_pidx_scan() -> Result<()> {
 	read_matrix!("depot-read-pidx-scan", |ctx, db, database_db| {
-		database_db.commit(vec![dirty_page(2, 0x22)], 3, 1_000).await?;
+		database_db
+			.commit(vec![dirty_page(2, 0x22)], 3, 1_000)
+			.await?;
 
 		assert_eq!(
 			database_db.get_pages(vec![2]).await?,
@@ -512,99 +521,108 @@ async fn get_pages_reads_with_cold_pidx_scan() -> Result<()> {
 
 #[tokio::test]
 async fn branch_cache_snapshot_is_atomic_across_dbptr_move() -> Result<()> {
-	read_matrix!("depot-read-cache-snapshot-atomic", |ctx, db, database_db| {
-		let database_db = Arc::new(database_db);
-		database_db.commit(vec![dirty_page(1, 0x11)], 2, 1_000).await?;
-		database_db.commit(vec![dirty_page(1, 0x22)], 2, 2_000).await?;
-		let old_branch_id = read_database_branch_id(&db).await?;
-		let first_commit = decode_commit_row(
-			&read_value(&db, branch_commit_key(old_branch_id, 1))
-				.await?
-				.expect("first commit row should exist"),
-		)?;
+	read_matrix!(
+		"depot-read-cache-snapshot-atomic",
+		|ctx, db, database_db| {
+			let database_db = Arc::new(database_db);
+			database_db
+				.commit(vec![dirty_page(1, 0x11)], 2, 1_000)
+				.await?;
+			database_db
+				.commit(vec![dirty_page(1, 0x22)], 2, 2_000)
+				.await?;
+			let old_branch_id = read_database_branch_id(&db).await?;
+			let first_commit = decode_commit_row(
+				&read_value(&db, branch_commit_key(old_branch_id, 1))
+					.await?
+					.expect("first commit row should exist"),
+			)?;
 
-		assert_eq!(
-			database_db.get_pages(vec![1]).await?,
-			vec![FetchedPage {
-				pgno: 1,
-				bytes: Some(page(0x22)),
-			}]
-		);
-		let (cached_branch_id, cached_root_branch_id, _, _) = database_db
-			.branch_cache_snapshot_for_test()
-			.await
-			.expect("branch cache should be warm");
-		assert_eq!(cached_branch_id, old_branch_id);
-		assert_eq!(cached_root_branch_id, old_branch_id);
-
-		let new_branch_id = branch::rollback_database(
-			&db,
-			depot::types::BucketId::from_gas_id(test_bucket()),
-			TEST_DATABASE.to_string(),
-			ResolvedVersionstamp {
-				versionstamp: first_commit.versionstamp,
-				restore_point: None,
-			},
-		)
-		.await?;
-		assert_ne!(new_branch_id, old_branch_id);
-
-		let start = Arc::new(Barrier::new(4));
-		let mut readers = Vec::new();
-		for _ in 0..2 {
-			let reader_db = Arc::clone(&database_db);
-			let reader_start = Arc::clone(&start);
-			readers.push(tokio::spawn(async move {
-				reader_start.wait().await;
-				reader_db.get_pages(vec![1]).await
-			}));
-		}
-
-		let observer_db = Arc::clone(&database_db);
-		let observer_start = Arc::clone(&start);
-		let observer = tokio::spawn(async move {
-			observer_start.wait().await;
-			for _ in 0..8 {
-				if let Some((branch_id, root_branch_id, _, _)) =
-					observer_db.branch_cache_snapshot_for_test().await
-				{
-					assert!(
-						branch_id != new_branch_id || root_branch_id == new_branch_id,
-						"branch cache exposed new branch id with stale ancestry"
-					);
-				}
-				tokio::task::yield_now().await;
-			}
-		});
-
-		start.wait().await;
-		for reader in readers {
-			let pages = reader.await??;
 			assert_eq!(
-				pages,
+				database_db.get_pages(vec![1]).await?,
 				vec![FetchedPage {
 					pgno: 1,
-					bytes: Some(page(0x11)),
+					bytes: Some(page(0x22)),
 				}]
 			);
+			let (cached_branch_id, cached_root_branch_id, _, _) = database_db
+				.branch_cache_snapshot_for_test()
+				.await
+				.expect("branch cache should be warm");
+			assert_eq!(cached_branch_id, old_branch_id);
+			assert_eq!(cached_root_branch_id, old_branch_id);
+
+			let new_branch_id = branch::rollback_database(
+				&db,
+				depot::types::BucketId::from_gas_id(test_bucket()),
+				TEST_DATABASE.to_string(),
+				ResolvedVersionstamp {
+					versionstamp: first_commit.versionstamp,
+					restore_point: None,
+				},
+			)
+			.await?;
+			assert_ne!(new_branch_id, old_branch_id);
+
+			let start = Arc::new(Barrier::new(4));
+			let mut readers = Vec::new();
+			for _ in 0..2 {
+				let reader_db = Arc::clone(&database_db);
+				let reader_start = Arc::clone(&start);
+				readers.push(tokio::spawn(async move {
+					reader_start.wait().await;
+					reader_db.get_pages(vec![1]).await
+				}));
+			}
+
+			let observer_db = Arc::clone(&database_db);
+			let observer_start = Arc::clone(&start);
+			let observer = tokio::spawn(async move {
+				observer_start.wait().await;
+				for _ in 0..8 {
+					if let Some((branch_id, root_branch_id, _, _)) =
+						observer_db.branch_cache_snapshot_for_test().await
+					{
+						assert!(
+							branch_id != new_branch_id || root_branch_id == new_branch_id,
+							"branch cache exposed new branch id with stale ancestry"
+						);
+					}
+					tokio::task::yield_now().await;
+				}
+			});
+
+			start.wait().await;
+			for reader in readers {
+				let pages = reader.await??;
+				assert_eq!(
+					pages,
+					vec![FetchedPage {
+						pgno: 1,
+						bytes: Some(page(0x11)),
+					}]
+				);
+			}
+			observer.await?;
+
+			let (cached_branch_id, cached_root_branch_id, _, _) = database_db
+				.branch_cache_snapshot_for_test()
+				.await
+				.expect("branch cache should stay warm");
+			assert_eq!(cached_branch_id, new_branch_id);
+			assert_eq!(cached_root_branch_id, new_branch_id);
+
+			Ok(())
 		}
-		observer.await?;
-
-		let (cached_branch_id, cached_root_branch_id, _, _) = database_db
-			.branch_cache_snapshot_for_test()
-			.await
-			.expect("branch cache should stay warm");
-		assert_eq!(cached_branch_id, new_branch_id);
-		assert_eq!(cached_root_branch_id, new_branch_id);
-
-		Ok(())
-	})
+	)
 }
 
 #[tokio::test]
 async fn get_pages_uses_warm_cache_without_pidx_row() -> Result<()> {
 	read_matrix!("depot-read-warm-cache", |ctx, db, database_db| {
-		database_db.commit(vec![dirty_page(2, 0x22)], 3, 1_000).await?;
+		database_db
+			.commit(vec![dirty_page(2, 0x22)], 3, 1_000)
+			.await?;
 		let branch_id = read_database_branch_id(&db).await?;
 		assert_eq!(
 			database_db.get_pages(vec![2]).await?,
@@ -631,7 +649,9 @@ async fn get_pages_uses_warm_cache_without_pidx_row() -> Result<()> {
 #[tokio::test]
 async fn get_pages_falls_back_to_shard_when_cached_pidx_is_stale() -> Result<()> {
 	read_matrix!("depot-read-stale-pidx", |ctx, db, database_db| {
-		database_db.commit(vec![dirty_page(2, 0x22)], 3, 1_000).await?;
+		database_db
+			.commit(vec![dirty_page(2, 0x22)], 3, 1_000)
+			.await?;
 		let branch_id = read_database_branch_id(&db).await?;
 		assert_eq!(
 			database_db.get_pages(vec![2]).await?,
@@ -643,7 +663,10 @@ async fn get_pages_falls_back_to_shard_when_cached_pidx_is_stale() -> Result<()>
 
 		seed(
 			&db,
-			vec![(branch_shard_key(branch_id, 0, 1), encoded_blob(1, &[(2, 0x44)])?)],
+			vec![(
+				branch_shard_key(branch_id, 0, 1),
+				encoded_blob(1, &[(2, 0x44)])?,
+			)],
 			vec![
 				branch_delta_chunk_key(branch_id, 1, 0),
 				branch_pidx_key(branch_id, 2),
@@ -666,15 +689,29 @@ async fn get_pages_falls_back_to_shard_when_cached_pidx_is_stale() -> Result<()>
 #[tokio::test]
 async fn get_pages_reads_latest_shard_version_not_past_head() -> Result<()> {
 	read_matrix!("depot-read-shard-version", |ctx, db, database_db| {
-		database_db.commit(vec![dirty_page(1, 0x11)], 3, 1_000).await?;
+		database_db
+			.commit(vec![dirty_page(1, 0x11)], 3, 1_000)
+			.await?;
 		let branch_id = read_database_branch_id(&db).await?;
 		seed(
 			&db,
 			vec![
-				(branch_meta_head_key(branch_id), encode_db_head(head_at(4, 3))?),
-				(branch_shard_key(branch_id, 0, 2), encoded_blob(2, &[(2, 0x22)])?),
-				(branch_shard_key(branch_id, 0, 4), encoded_blob(4, &[(2, 0x44)])?),
-				(branch_shard_key(branch_id, 0, 5), encoded_blob(5, &[(2, 0x55)])?),
+				(
+					branch_meta_head_key(branch_id),
+					encode_db_head(head_at(4, 3))?,
+				),
+				(
+					branch_shard_key(branch_id, 0, 2),
+					encoded_blob(2, &[(2, 0x22)])?,
+				),
+				(
+					branch_shard_key(branch_id, 0, 4),
+					encoded_blob(4, &[(2, 0x44)])?,
+				),
+				(
+					branch_shard_key(branch_id, 0, 5),
+					encoded_blob(5, &[(2, 0x55)])?,
+				),
 			],
 			Vec::new(),
 		)
@@ -695,14 +732,22 @@ async fn get_pages_reads_latest_shard_version_not_past_head() -> Result<()> {
 #[tokio::test]
 async fn get_pages_reads_delta_before_published_branch_shard() -> Result<()> {
 	read_matrix!("depot-read-delta-before-shard", |ctx, db, database_db| {
-		database_db.commit(vec![dirty_page(1, 0x11)], 1, 1_000).await?;
+		database_db
+			.commit(vec![dirty_page(1, 0x11)], 1, 1_000)
+			.await?;
 		let branch_id = read_database_branch_id(&db).await?;
 
 		seed(
 			&db,
 			vec![
-				(branch_compaction_root_key(branch_id), encode_compaction_root(compaction_root(1))?),
-				(branch_shard_key(branch_id, 0, 1), encoded_blob(1, &[(1, 0x44)])?),
+				(
+					branch_compaction_root_key(branch_id),
+					encode_compaction_root(compaction_root(1))?,
+				),
+				(
+					branch_shard_key(branch_id, 0, 1),
+					encoded_blob(1, &[(1, 0x44)])?,
+				),
 			],
 			Vec::new(),
 		)
@@ -726,14 +771,22 @@ async fn get_pages_falls_back_to_published_branch_shard_when_delta_is_missing() 
 		let fdb_hit = metrics::SQLITE_SHARD_CACHE_READ_TOTAL
 			.with_label_values(&[metrics::SHARD_CACHE_READ_FDB_HIT]);
 		let fdb_hit_before = fdb_hit.get();
-		database_db.commit(vec![dirty_page(1, 0x11)], 1, 1_000).await?;
+		database_db
+			.commit(vec![dirty_page(1, 0x11)], 1, 1_000)
+			.await?;
 		let branch_id = read_database_branch_id(&db).await?;
 
 		seed(
 			&db,
 			vec![
-				(branch_compaction_root_key(branch_id), encode_compaction_root(compaction_root(1))?),
-				(branch_shard_key(branch_id, 0, 1), encoded_blob(1, &[(1, 0x44)])?),
+				(
+					branch_compaction_root_key(branch_id),
+					encode_compaction_root(compaction_root(1))?,
+				),
+				(
+					branch_shard_key(branch_id, 0, 1),
+					encoded_blob(1, &[(1, 0x44)])?,
+				),
 			],
 			vec![branch_delta_chunk_key(branch_id, 1, 0)],
 		)
@@ -754,42 +807,48 @@ async fn get_pages_falls_back_to_published_branch_shard_when_delta_is_missing() 
 
 #[tokio::test]
 async fn get_pages_records_shard_cache_miss_when_no_shard_or_cold_ref_covers_page() -> Result<()> {
-	common::test_matrix("depot-read-cache-miss", |_tier, ctx| Box::pin(async move {
-		let db = ctx.udb.clone();
-		let database_db = ctx.make_db(test_bucket(), TEST_DATABASE);
-		let miss = metrics::SQLITE_SHARD_CACHE_READ_TOTAL
-			.with_label_values(&[metrics::SHARD_CACHE_READ_MISS]);
-		let miss_before = miss.get();
-		database_db.commit(vec![dirty_page(1, 0x11)], 1, 1_000).await?;
-		let branch_id = read_database_branch_id(&db).await?;
-		seed(
-			&db,
-			Vec::new(),
-			vec![
-				branch_delta_chunk_key(branch_id, 1, 0),
-				branch_pidx_key(branch_id, 1),
-			],
-		)
-		.await?;
+	common::test_matrix("depot-read-cache-miss", |_tier, ctx| {
+		Box::pin(async move {
+			let db = ctx.udb.clone();
+			let database_db = ctx.make_db(test_bucket(), TEST_DATABASE);
+			let miss = metrics::SQLITE_SHARD_CACHE_READ_TOTAL
+				.with_label_values(&[metrics::SHARD_CACHE_READ_MISS]);
+			let miss_before = miss.get();
+			database_db
+				.commit(vec![dirty_page(1, 0x11)], 1, 1_000)
+				.await?;
+			let branch_id = read_database_branch_id(&db).await?;
+			seed(
+				&db,
+				Vec::new(),
+				vec![
+					branch_delta_chunk_key(branch_id, 1, 0),
+					branch_pidx_key(branch_id, 1),
+				],
+			)
+			.await?;
 
-		assert_eq!(
-			database_db.get_pages(vec![1]).await?,
-			vec![FetchedPage {
-				pgno: 1,
-				bytes: Some(page(0)),
-			}]
-		);
-		assert!(miss.get() >= miss_before + 1);
+			assert_eq!(
+				database_db.get_pages(vec![1]).await?,
+				vec![FetchedPage {
+					pgno: 1,
+					bytes: Some(page(0)),
+				}]
+			);
+			assert!(miss.get() >= miss_before + 1);
 
-		Ok(())
-	}))
+			Ok(())
+		})
+	})
 	.await
 }
 
 #[tokio::test]
 async fn get_pages_zero_fills_sparse_page_without_any_source() -> Result<()> {
 	read_matrix!("depot-read-sparse-zero", |ctx, db, database_db| {
-		database_db.commit(vec![dirty_page(1, 0x11)], 3, 1_000).await?;
+		database_db
+			.commit(vec![dirty_page(1, 0x11)], 3, 1_000)
+			.await?;
 
 		assert_eq!(
 			database_db.get_pages(vec![2]).await?,
@@ -806,11 +865,16 @@ async fn get_pages_zero_fills_sparse_page_without_any_source() -> Result<()> {
 #[tokio::test]
 async fn get_pages_errors_for_corrupted_delta_source() -> Result<()> {
 	read_matrix!("depot-read-corrupt-delta", |ctx, db, database_db| {
-		database_db.commit(vec![dirty_page(1, 0x11)], 1, 1_000).await?;
+		database_db
+			.commit(vec![dirty_page(1, 0x11)], 1, 1_000)
+			.await?;
 		let branch_id = read_database_branch_id(&db).await?;
 		seed(
 			&db,
-			vec![(branch_delta_chunk_key(branch_id, 1, 0), b"not an ltx blob".to_vec())],
+			vec![(
+				branch_delta_chunk_key(branch_id, 1, 0),
+				b"not an ltx blob".to_vec(),
+			)],
 			Vec::new(),
 		)
 		.await?;
@@ -819,9 +883,10 @@ async fn get_pages_errors_for_corrupted_delta_source() -> Result<()> {
 			.get_pages(vec![1])
 			.await
 			.expect_err("corrupted delta source should error instead of zero-filling");
-		assert!(err
-			.chain()
-			.any(|cause| cause.to_string().contains("decode source blob for page 1")));
+		assert!(
+			err.chain()
+				.any(|cause| cause.to_string().contains("decode source blob for page 1"))
+		);
 
 		Ok(())
 	})
@@ -830,7 +895,9 @@ async fn get_pages_errors_for_corrupted_delta_source() -> Result<()> {
 #[tokio::test]
 async fn get_pages_returns_zero_for_hot_only_missing_in_range_page() -> Result<()> {
 	read_matrix!("depot-read-hot-missing-zero", |ctx, db, database_db| {
-		database_db.commit(vec![dirty_page(1, 0x11)], 3, 1_000).await?;
+		database_db
+			.commit(vec![dirty_page(1, 0x11)], 3, 1_000)
+			.await?;
 
 		assert_eq!(
 			database_db.get_pages(vec![2]).await?,
@@ -847,12 +914,17 @@ async fn get_pages_returns_zero_for_hot_only_missing_in_range_page() -> Result<(
 #[tokio::test]
 async fn get_pages_throttles_access_touch_for_same_bucket_shard_reads() -> Result<()> {
 	read_matrix!("depot-read-access-touch", |ctx, db, database_db| {
-		database_db.commit(vec![dirty_page(1, 0x11)], 1, 1_000).await?;
+		database_db
+			.commit(vec![dirty_page(1, 0x11)], 1, 1_000)
+			.await?;
 		let branch_id = read_database_branch_id(&db).await?;
 
 		seed(
 			&db,
-			vec![(branch_shard_key(branch_id, 0, 1), encoded_blob(1, &[(1, 0x44)])?)],
+			vec![(
+				branch_shard_key(branch_id, 0, 1),
+				encoded_blob(1, &[(1, 0x44)])?,
+			)],
 			vec![
 				branch_delta_chunk_key(branch_id, 1, 0),
 				branch_pidx_key(branch_id, 1),
@@ -873,7 +945,10 @@ async fn get_pages_throttles_access_touch_for_same_bucket_shard_reads() -> Resul
 		let first_bucket = read_i64_le(&db, branch_manifest_last_access_bucket_key(branch_id))
 			.await?
 			.expect("shard read should touch access bucket");
-		assert_eq!(first_bucket, first_touch.div_euclid(ACCESS_TOUCH_THROTTLE_MS));
+		assert_eq!(
+			first_bucket,
+			first_touch.div_euclid(ACCESS_TOUCH_THROTTLE_MS)
+		);
 
 		assert_eq!(
 			database_db.get_pages(vec![1]).await?,
@@ -898,12 +973,17 @@ async fn get_pages_throttles_access_touch_for_same_bucket_shard_reads() -> Resul
 #[tokio::test]
 async fn get_pages_keeps_branch_shard_fallback_without_compaction_root() -> Result<()> {
 	read_matrix!("depot-read-shard-no-root", |ctx, db, database_db| {
-		database_db.commit(vec![dirty_page(1, 0x11)], 1, 1_000).await?;
+		database_db
+			.commit(vec![dirty_page(1, 0x11)], 1, 1_000)
+			.await?;
 		let branch_id = read_database_branch_id(&db).await?;
 
 		seed(
 			&db,
-			vec![(branch_shard_key(branch_id, 0, 1), encoded_blob(1, &[(1, 0x44)])?)],
+			vec![(
+				branch_shard_key(branch_id, 0, 1),
+				encoded_blob(1, &[(1, 0x44)])?,
+			)],
 			vec![branch_delta_chunk_key(branch_id, 1, 0)],
 		)
 		.await?;
@@ -922,76 +1002,79 @@ async fn get_pages_keeps_branch_shard_fallback_without_compaction_root() -> Resu
 
 #[tokio::test]
 async fn get_pages_falls_back_to_compaction_cold_shard_ref() -> Result<()> {
-	common::test_matrix("depot-read-compaction-cold-ref", |tier_mode, ctx| Box::pin(async move {
-		let db = ctx.udb.clone();
-		let database_db = ctx.make_db(test_bucket(), TEST_DATABASE);
-		database_db.commit(vec![dirty_page(1, 0x11)], 1, 1_000).await?;
-		let branch_id = read_database_branch_id(&db).await?;
-		let object_key = format!(
-			"db/{}/shard/00000000/0000000000000001-{}-workflow.ltx",
-			branch_id.as_uuid().simple(),
-			Id::v1(uuid::Uuid::from_u128(0x1234), 7)
-		);
-		let object_bytes = encoded_blob(1, &[(1, 0x66)])?;
+	common::test_matrix("depot-read-compaction-cold-ref", |tier_mode, ctx| {
+		Box::pin(async move {
+			let db = ctx.udb.clone();
+			let database_db = ctx.make_db(test_bucket(), TEST_DATABASE);
+			database_db
+				.commit(vec![dirty_page(1, 0x11)], 1, 1_000)
+				.await?;
+			let branch_id = read_database_branch_id(&db).await?;
+			let object_key = format!(
+				"db/{}/shard/00000000/0000000000000001-{}-workflow.ltx",
+				branch_id.as_uuid().simple(),
+				Id::v1(uuid::Uuid::from_u128(0x1234), 7)
+			);
+			let object_bytes = encoded_blob(1, &[(1, 0x66)])?;
 
-		if let Some(tier) = &ctx.cold_tier {
-			tier.put_object(&object_key, &object_bytes).await?;
-		}
-		seed(
-			&db,
-			vec![
-				(branch_compaction_root_key(branch_id), encode_compaction_root(compaction_root(2))?),
-				(
-					branch_compaction_cold_shard_key(branch_id, 0, 1),
-					encode_cold_shard_ref(cold_shard_ref(
-						object_key,
-						0,
-						1,
-						2,
-						&object_bytes,
-					))?,
-				),
-			],
-			vec![
-				branch_delta_chunk_key(branch_id, 1, 0),
-				branch_pidx_key(branch_id, 1),
-			],
-		)
-		.await?;
+			if let Some(tier) = &ctx.cold_tier {
+				tier.put_object(&object_key, &object_bytes).await?;
+			}
+			seed(
+				&db,
+				vec![
+					(
+						branch_compaction_root_key(branch_id),
+						encode_compaction_root(compaction_root(2))?,
+					),
+					(
+						branch_compaction_cold_shard_key(branch_id, 0, 1),
+						encode_cold_shard_ref(cold_shard_ref(object_key, 0, 1, 2, &object_bytes))?,
+					),
+				],
+				vec![
+					branch_delta_chunk_key(branch_id, 1, 0),
+					branch_pidx_key(branch_id, 1),
+				],
+			)
+			.await?;
 
-		if tier_mode == common::TierMode::Disabled {
-			let err = database_db
-				.get_pages(vec![1])
-				.await
-				.expect_err("cold-disabled reads should fail on cold-only coverage");
-			assert!(matches!(
-				err.downcast_ref::<SqliteStorageError>(),
-				Some(SqliteStorageError::ShardCoverageMissing { pgno: 1 })
-			));
-			return Ok(());
-		}
+			if tier_mode == common::TierMode::Disabled {
+				let err = database_db
+					.get_pages(vec![1])
+					.await
+					.expect_err("cold-disabled reads should fail on cold-only coverage");
+				assert!(matches!(
+					err.downcast_ref::<SqliteStorageError>(),
+					Some(SqliteStorageError::ShardCoverageMissing { pgno: 1 })
+				));
+				return Ok(());
+			}
 
-		assert_eq!(
-			database_db.get_pages(vec![1]).await?,
-			vec![FetchedPage {
-				pgno: 1,
-				bytes: Some(page(0x66)),
-			}]
-		);
-		let last_access_ts_ms = read_i64_le(&db, branch_manifest_last_access_ts_ms_key(branch_id))
-			.await?
-			.expect("cold-backed read should touch access timestamp");
-		let last_access_bucket = read_i64_le(&db, branch_manifest_last_access_bucket_key(branch_id))
-			.await?
-			.expect("cold-backed read should touch access bucket");
-		assert!(last_access_ts_ms > 1_000);
-		assert_eq!(
-			last_access_bucket,
-			last_access_ts_ms.div_euclid(ACCESS_TOUCH_THROTTLE_MS)
-		);
+			assert_eq!(
+				database_db.get_pages(vec![1]).await?,
+				vec![FetchedPage {
+					pgno: 1,
+					bytes: Some(page(0x66)),
+				}]
+			);
+			let last_access_ts_ms =
+				read_i64_le(&db, branch_manifest_last_access_ts_ms_key(branch_id))
+					.await?
+					.expect("cold-backed read should touch access timestamp");
+			let last_access_bucket =
+				read_i64_le(&db, branch_manifest_last_access_bucket_key(branch_id))
+					.await?
+					.expect("cold-backed read should touch access bucket");
+			assert!(last_access_ts_ms > 1_000);
+			assert_eq!(
+				last_access_bucket,
+				last_access_ts_ms.div_euclid(ACCESS_TOUCH_THROTTLE_MS)
+			);
 
-		Ok(())
-	}))
+			Ok(())
+		})
+	})
 	.await
 }
 
@@ -1009,19 +1092,22 @@ async fn cold_tier_drop_artifact_fault_errors_instead_of_zero_fill() -> Result<(
 		branch_id.as_uuid().simple(),
 	);
 	let object_bytes = encoded_blob(1, &[(1, 0x66)])?;
-	filesystem_tier.put_object(&object_key, &object_bytes).await?;
+	filesystem_tier
+		.put_object(&object_key, &object_bytes)
+		.await?;
 	let controller = DepotFaultController::new();
 	controller
-		.at(DepotFaultPoint::ColdTier(depot::fault::ColdTierFaultPoint::GetObject))
+		.at(DepotFaultPoint::ColdTier(
+			depot::fault::ColdTierFaultPoint::GetObject,
+		))
 		.once()
 		.drop_artifact()?;
-	let faulty_tier: Arc<dyn ColdTier> = Arc::new(
-		FaultyColdTier::new_with_fault_controller_for_test(
+	let faulty_tier: Arc<dyn ColdTier> =
+		Arc::new(FaultyColdTier::new_with_fault_controller_for_test(
 			filesystem_tier,
 			"cold-drop-artifact-node",
 			controller.clone(),
-		),
-	);
+		));
 	let reader = Db::new_with_cold_tier_and_fault_controller_for_test(
 		db.clone(),
 		test_bucket(),
@@ -1033,16 +1119,13 @@ async fn cold_tier_drop_artifact_fault_errors_instead_of_zero_fill() -> Result<(
 	seed(
 		&db,
 		vec![
-			(branch_compaction_root_key(branch_id), encode_compaction_root(compaction_root(2))?),
+			(
+				branch_compaction_root_key(branch_id),
+				encode_compaction_root(compaction_root(2))?,
+			),
 			(
 				branch_compaction_cold_shard_key(branch_id, 0, 1),
-				encode_cold_shard_ref(cold_shard_ref(
-					object_key,
-					0,
-					1,
-					2,
-					&object_bytes,
-				))?,
+				encode_cold_shard_ref(cold_shard_ref(object_key, 0, 1, 2, &object_bytes))?,
 			),
 		],
 		vec![
@@ -1107,7 +1190,10 @@ async fn cold_shard_reads_cover_shard_boundaries() -> Result<()> {
 	seed(
 		&db,
 		vec![
-			(branch_compaction_root_key(branch_id), encode_compaction_root(compaction_root(2))?),
+			(
+				branch_compaction_root_key(branch_id),
+				encode_compaction_root(compaction_root(2))?,
+			),
 			(
 				branch_compaction_cold_shard_key(branch_id, 0, 1),
 				encode_cold_shard_ref(cold_shard_ref(shard_0_key, 0, 1, 2, &shard_0_bytes))?,
@@ -1128,12 +1214,30 @@ async fn cold_shard_reads_cover_shard_boundaries() -> Result<()> {
 	assert_eq!(
 		database_db.get_pages(pgnos.to_vec()).await?,
 		vec![
-			FetchedPage { pgno: 63, bytes: Some(page(0x63)) },
-			FetchedPage { pgno: 64, bytes: Some(page(0x64)) },
-			FetchedPage { pgno: 65, bytes: Some(page(0x65)) },
-			FetchedPage { pgno: 127, bytes: Some(page(0x7f)) },
-			FetchedPage { pgno: 128, bytes: Some(page(0x80)) },
-			FetchedPage { pgno: 129, bytes: Some(page(0x81)) },
+			FetchedPage {
+				pgno: 63,
+				bytes: Some(page(0x63))
+			},
+			FetchedPage {
+				pgno: 64,
+				bytes: Some(page(0x64))
+			},
+			FetchedPage {
+				pgno: 65,
+				bytes: Some(page(0x65))
+			},
+			FetchedPage {
+				pgno: 127,
+				bytes: Some(page(0x7f))
+			},
+			FetchedPage {
+				pgno: 128,
+				bytes: Some(page(0x80))
+			},
+			FetchedPage {
+				pgno: 129,
+				bytes: Some(page(0x81))
+			},
 		]
 	);
 
@@ -1142,68 +1246,75 @@ async fn cold_shard_reads_cover_shard_boundaries() -> Result<()> {
 
 #[tokio::test]
 async fn cold_shard_read_returns_before_background_cache_fill() -> Result<()> {
-	common::test_matrix("depot-read-fill-before", |tier_mode, ctx| Box::pin(async move {
-		let db = ctx.udb.clone();
-		let database_db = match ctx.cold_tier.clone() {
-			Some(tier) => Db::new_with_cold_tier_and_shard_cache_fill_limits_for_test(
-				db.clone(),
-				test_bucket(),
-				TEST_DATABASE.to_string(),
-				NodeId::new(),
-				tier,
-				1,
-				0,
-			),
-			None => ctx.make_db(test_bucket(), TEST_DATABASE),
-		};
-		database_db.commit(vec![dirty_page(1, 0x11)], 1, 1_000).await?;
-		let branch_id = read_database_branch_id(&db).await?;
-		let object_key = format!(
-			"db/{}/shard/00000000/0000000000000001-read-before-fill.ltx",
-			branch_id.as_uuid().simple(),
-		);
-		let object_bytes = encoded_blob(1, &[(1, 0x77)])?;
-		let cold_ref = cold_shard_ref(object_key.clone(), 0, 1, 2, &object_bytes);
-
-		if let Some(tier) = &ctx.cold_tier {
-			tier.put_object(&object_key, &object_bytes).await?;
-		}
-		seed(
-			&db,
-			vec![
-				(branch_compaction_root_key(branch_id), encode_compaction_root(compaction_root(2))?),
-				(
-					branch_compaction_cold_shard_key(branch_id, 0, 1),
-					encode_cold_shard_ref(cold_ref)?,
+	common::test_matrix("depot-read-fill-before", |tier_mode, ctx| {
+		Box::pin(async move {
+			let db = ctx.udb.clone();
+			let database_db = match ctx.cold_tier.clone() {
+				Some(tier) => Db::new_with_cold_tier_and_shard_cache_fill_limits_for_test(
+					db.clone(),
+					test_bucket(),
+					TEST_DATABASE.to_string(),
+					NodeId::new(),
+					tier,
+					1,
+					0,
 				),
-			],
-			vec![
-				branch_delta_chunk_key(branch_id, 1, 0),
-				branch_pidx_key(branch_id, 1),
-			],
-		)
-		.await?;
+				None => ctx.make_db(test_bucket(), TEST_DATABASE),
+			};
+			database_db
+				.commit(vec![dirty_page(1, 0x11)], 1, 1_000)
+				.await?;
+			let branch_id = read_database_branch_id(&db).await?;
+			let object_key = format!(
+				"db/{}/shard/00000000/0000000000000001-read-before-fill.ltx",
+				branch_id.as_uuid().simple(),
+			);
+			let object_bytes = encoded_blob(1, &[(1, 0x77)])?;
+			let cold_ref = cold_shard_ref(object_key.clone(), 0, 1, 2, &object_bytes);
 
-		if tier_mode == common::TierMode::Disabled {
-			assert_shard_coverage_missing(&database_db, 1).await?;
-			return Ok(());
-		}
+			if let Some(tier) = &ctx.cold_tier {
+				tier.put_object(&object_key, &object_bytes).await?;
+			}
+			seed(
+				&db,
+				vec![
+					(
+						branch_compaction_root_key(branch_id),
+						encode_compaction_root(compaction_root(2))?,
+					),
+					(
+						branch_compaction_cold_shard_key(branch_id, 0, 1),
+						encode_cold_shard_ref(cold_ref)?,
+					),
+				],
+				vec![
+					branch_delta_chunk_key(branch_id, 1, 0),
+					branch_pidx_key(branch_id, 1),
+				],
+			)
+			.await?;
 
-		assert_eq!(
-			database_db.get_pages(vec![1]).await?,
-			vec![FetchedPage {
-				pgno: 1,
-				bytes: Some(page(0x77)),
-			}]
-		);
-		assert_eq!(
-			read_value(&db, branch_shard_key(branch_id, 0, 1)).await?,
-			None
-		);
-		assert_eq!(database_db.shard_cache_fill_outstanding_for_test(), 1);
+			if tier_mode == common::TierMode::Disabled {
+				assert_shard_coverage_missing(&database_db, 1).await?;
+				return Ok(());
+			}
 
-		Ok(())
-	}))
+			assert_eq!(
+				database_db.get_pages(vec![1]).await?,
+				vec![FetchedPage {
+					pgno: 1,
+					bytes: Some(page(0x77)),
+				}]
+			);
+			assert_eq!(
+				read_value(&db, branch_shard_key(branch_id, 0, 1)).await?,
+				None
+			);
+			assert_eq!(database_db.shard_cache_fill_outstanding_for_test(), 1);
+
+			Ok(())
+		})
+	})
 	.await
 }
 
@@ -1232,7 +1343,10 @@ async fn shard_cache_fill_enqueue_drop_artifact_skips_background_fill() -> Resul
 	seed(
 		&db,
 		vec![
-			(branch_compaction_root_key(branch_id), encode_compaction_root(compaction_root(2))?),
+			(
+				branch_compaction_root_key(branch_id),
+				encode_compaction_root(compaction_root(2))?,
+			),
 			(
 				branch_compaction_cold_shard_key(branch_id, 0, 1),
 				encode_cold_shard_ref(cold_ref)?,
@@ -1267,7 +1381,10 @@ async fn shard_cache_fill_enqueue_drop_artifact_skips_background_fill() -> Resul
 		}]
 	);
 	reader.wait_for_shard_cache_fill_idle_for_test().await;
-	assert_eq!(read_value(&db, branch_shard_key(branch_id, 0, 1)).await?, None);
+	assert_eq!(
+		read_value(&db, branch_shard_key(branch_id, 0, 1)).await?,
+		None
+	);
 	controller.assert_expected_fired()?;
 
 	Ok(())
@@ -1275,91 +1392,98 @@ async fn shard_cache_fill_enqueue_drop_artifact_skips_background_fill() -> Resul
 
 #[tokio::test]
 async fn cold_shard_read_background_fills_shard_without_changing_watermarks() -> Result<()> {
-	common::test_matrix("depot-read-fill-success", |tier_mode, ctx| Box::pin(async move {
-		let db = ctx.udb.clone();
-		let database_db = ctx.make_db(test_bucket(), TEST_DATABASE);
-		let cold_hit = metrics::SQLITE_SHARD_CACHE_READ_TOTAL
-			.with_label_values(&[metrics::SHARD_CACHE_READ_COLD_HIT]);
-		let fill_scheduled = metrics::SQLITE_SHARD_CACHE_FILL_TOTAL
-			.with_label_values(&[metrics::SHARD_CACHE_FILL_SCHEDULED]);
-		let fill_succeeded = metrics::SQLITE_SHARD_CACHE_FILL_TOTAL
-			.with_label_values(&[metrics::SHARD_CACHE_FILL_SUCCEEDED]);
-		let cold_hit_before = cold_hit.get();
-		let fill_scheduled_before = fill_scheduled.get();
-		let fill_succeeded_before = fill_succeeded.get();
-		let fill_bytes_before = metrics::SQLITE_SHARD_CACHE_FILL_BYTES_TOTAL.get();
-		database_db.commit(vec![dirty_page(1, 0x11)], 1, 1_000).await?;
-		let branch_id = read_database_branch_id(&db).await?;
-		let object_key = format!(
-			"db/{}/shard/00000000/0000000000000001-fill-success.ltx",
-			branch_id.as_uuid().simple(),
-		);
-		let object_bytes = encoded_blob(1, &[(1, 0x88)])?;
-		let cold_ref = cold_shard_ref(object_key.clone(), 0, 1, 2, &object_bytes);
-		let root = CompactionRoot {
-			hot_watermark_txid: 1,
-			cold_watermark_txid: 1,
-			cold_watermark_versionstamp: [8; 16],
-			..compaction_root(2)
-		};
+	common::test_matrix("depot-read-fill-success", |tier_mode, ctx| {
+		Box::pin(async move {
+			let db = ctx.udb.clone();
+			let database_db = ctx.make_db(test_bucket(), TEST_DATABASE);
+			let cold_hit = metrics::SQLITE_SHARD_CACHE_READ_TOTAL
+				.with_label_values(&[metrics::SHARD_CACHE_READ_COLD_HIT]);
+			let fill_scheduled = metrics::SQLITE_SHARD_CACHE_FILL_TOTAL
+				.with_label_values(&[metrics::SHARD_CACHE_FILL_SCHEDULED]);
+			let fill_succeeded = metrics::SQLITE_SHARD_CACHE_FILL_TOTAL
+				.with_label_values(&[metrics::SHARD_CACHE_FILL_SUCCEEDED]);
+			let cold_hit_before = cold_hit.get();
+			let fill_scheduled_before = fill_scheduled.get();
+			let fill_succeeded_before = fill_succeeded.get();
+			let fill_bytes_before = metrics::SQLITE_SHARD_CACHE_FILL_BYTES_TOTAL.get();
+			database_db
+				.commit(vec![dirty_page(1, 0x11)], 1, 1_000)
+				.await?;
+			let branch_id = read_database_branch_id(&db).await?;
+			let object_key = format!(
+				"db/{}/shard/00000000/0000000000000001-fill-success.ltx",
+				branch_id.as_uuid().simple(),
+			);
+			let object_bytes = encoded_blob(1, &[(1, 0x88)])?;
+			let cold_ref = cold_shard_ref(object_key.clone(), 0, 1, 2, &object_bytes);
+			let root = CompactionRoot {
+				hot_watermark_txid: 1,
+				cold_watermark_txid: 1,
+				cold_watermark_versionstamp: [8; 16],
+				..compaction_root(2)
+			};
 
-		if let Some(tier) = &ctx.cold_tier {
-			tier.put_object(&object_key, &object_bytes).await?;
-		}
-		seed(
-			&db,
-			vec![
-				(branch_compaction_root_key(branch_id), encode_compaction_root(root.clone())?),
-				(
-					branch_compaction_cold_shard_key(branch_id, 0, 1),
-					encode_cold_shard_ref(cold_ref)?,
-				),
-			],
-			vec![
-				branch_delta_chunk_key(branch_id, 1, 0),
-				branch_pidx_key(branch_id, 1),
-			],
-		)
-		.await?;
+			if let Some(tier) = &ctx.cold_tier {
+				tier.put_object(&object_key, &object_bytes).await?;
+			}
+			seed(
+				&db,
+				vec![
+					(
+						branch_compaction_root_key(branch_id),
+						encode_compaction_root(root.clone())?,
+					),
+					(
+						branch_compaction_cold_shard_key(branch_id, 0, 1),
+						encode_cold_shard_ref(cold_ref)?,
+					),
+				],
+				vec![
+					branch_delta_chunk_key(branch_id, 1, 0),
+					branch_pidx_key(branch_id, 1),
+				],
+			)
+			.await?;
 
-		if tier_mode == common::TierMode::Disabled {
-			assert_shard_coverage_missing(&database_db, 1).await?;
-			return Ok(());
-		}
+			if tier_mode == common::TierMode::Disabled {
+				assert_shard_coverage_missing(&database_db, 1).await?;
+				return Ok(());
+			}
 
-		assert_eq!(
-			database_db.get_pages(vec![1]).await?,
-			vec![FetchedPage {
-				pgno: 1,
-				bytes: Some(page(0x88)),
-			}]
-		);
-		database_db.wait_for_shard_cache_fill_idle_for_test().await;
+			assert_eq!(
+				database_db.get_pages(vec![1]).await?,
+				vec![FetchedPage {
+					pgno: 1,
+					bytes: Some(page(0x88)),
+				}]
+			);
+			database_db.wait_for_shard_cache_fill_idle_for_test().await;
 
-		assert!(cold_hit.get() >= cold_hit_before + 1);
-		assert!(fill_scheduled.get() >= fill_scheduled_before + 1);
-		assert!(fill_succeeded.get() >= fill_succeeded_before + 1);
-		assert!(
-			metrics::SQLITE_SHARD_CACHE_FILL_BYTES_TOTAL.get()
-				>= fill_bytes_before + u64::try_from(object_bytes.len()).unwrap_or(u64::MAX)
-		);
-		assert_eq!(
-			read_value(&db, branch_shard_key(branch_id, 0, 1)).await?,
-			Some(object_bytes)
-		);
-		let root_after = read_value(&db, branch_compaction_root_key(branch_id))
-			.await?
-			.expect("compaction root should remain present");
-		let decoded = decode_compaction_root(&root_after)?;
-		assert_eq!(decoded.hot_watermark_txid, root.hot_watermark_txid);
-		assert_eq!(decoded.cold_watermark_txid, root.cold_watermark_txid);
-		assert_eq!(
-			decoded.cold_watermark_versionstamp,
-			root.cold_watermark_versionstamp
-		);
+			assert!(cold_hit.get() >= cold_hit_before + 1);
+			assert!(fill_scheduled.get() >= fill_scheduled_before + 1);
+			assert!(fill_succeeded.get() >= fill_succeeded_before + 1);
+			assert!(
+				metrics::SQLITE_SHARD_CACHE_FILL_BYTES_TOTAL.get()
+					>= fill_bytes_before + u64::try_from(object_bytes.len()).unwrap_or(u64::MAX)
+			);
+			assert_eq!(
+				read_value(&db, branch_shard_key(branch_id, 0, 1)).await?,
+				Some(object_bytes)
+			);
+			let root_after = read_value(&db, branch_compaction_root_key(branch_id))
+				.await?
+				.expect("compaction root should remain present");
+			let decoded = decode_compaction_root(&root_after)?;
+			assert_eq!(decoded.hot_watermark_txid, root.hot_watermark_txid);
+			assert_eq!(decoded.cold_watermark_txid, root.cold_watermark_txid);
+			assert_eq!(
+				decoded.cold_watermark_versionstamp,
+				root.cold_watermark_versionstamp
+			);
 
-		Ok(())
-	}))
+			Ok(())
+		})
+	})
 	.await
 }
 
@@ -1395,104 +1519,109 @@ async fn shard_cache_fill_wait_idle_prearms_before_rechecking_outstanding() -> R
 
 #[tokio::test]
 async fn cold_shard_cache_fill_coalesces_duplicates_and_skips_when_queue_full() -> Result<()> {
-	common::test_matrix("depot-read-fill-full", |tier_mode, ctx| Box::pin(async move {
-		let db = ctx.udb.clone();
-		let node_id = NodeId::new();
-		let node_label = node_id.to_string();
-		let database_db = match ctx.cold_tier.clone() {
-			Some(tier) => Db::new_with_cold_tier_and_shard_cache_fill_limits_for_test(
-				db.clone(),
-				test_bucket(),
-				TEST_DATABASE.to_string(),
-				node_id,
-				tier,
-				1,
-				0,
-			),
-			None => ctx.make_db(test_bucket(), TEST_DATABASE),
-		};
-		database_db
-			.commit(vec![dirty_page(1, 0x11), dirty_page(65, 0x22)], 65, 1_000)
+	common::test_matrix("depot-read-fill-full", |tier_mode, ctx| {
+		Box::pin(async move {
+			let db = ctx.udb.clone();
+			let node_id = NodeId::new();
+			let node_label = node_id.to_string();
+			let database_db = match ctx.cold_tier.clone() {
+				Some(tier) => Db::new_with_cold_tier_and_shard_cache_fill_limits_for_test(
+					db.clone(),
+					test_bucket(),
+					TEST_DATABASE.to_string(),
+					node_id,
+					tier,
+					1,
+					0,
+				),
+				None => ctx.make_db(test_bucket(), TEST_DATABASE),
+			};
+			database_db
+				.commit(vec![dirty_page(1, 0x11), dirty_page(65, 0x22)], 65, 1_000)
+				.await?;
+			let branch_id = read_database_branch_id(&db).await?;
+			let object_0_key = format!(
+				"db/{}/shard/00000000/0000000000000001-full-0.ltx",
+				branch_id.as_uuid().simple(),
+			);
+			let object_1_key = format!(
+				"db/{}/shard/00000001/0000000000000001-full-1.ltx",
+				branch_id.as_uuid().simple(),
+			);
+			let object_0_bytes = encoded_blob(1, &[(1, 0x91)])?;
+			let object_1_bytes = encoded_blob(1, &[(65, 0x92)])?;
+			if let Some(tier) = &ctx.cold_tier {
+				tier.put_object(&object_0_key, &object_0_bytes).await?;
+				tier.put_object(&object_1_key, &object_1_bytes).await?;
+			}
+			seed(
+				&db,
+				vec![
+					(
+						branch_compaction_root_key(branch_id),
+						encode_compaction_root(compaction_root(2))?,
+					),
+					(
+						branch_compaction_cold_shard_key(branch_id, 0, 1),
+						encode_cold_shard_ref(cold_shard_ref(
+							object_0_key,
+							0,
+							1,
+							2,
+							&object_0_bytes,
+						))?,
+					),
+					(
+						branch_compaction_cold_shard_key(branch_id, 1, 1),
+						encode_cold_shard_ref(cold_shard_ref(
+							object_1_key,
+							1,
+							1,
+							2,
+							&object_1_bytes,
+						))?,
+					),
+				],
+				vec![
+					branch_delta_chunk_key(branch_id, 1, 0),
+					branch_pidx_key(branch_id, 1),
+					branch_pidx_key(branch_id, 65),
+				],
+			)
 			.await?;
-		let branch_id = read_database_branch_id(&db).await?;
-		let object_0_key = format!(
-			"db/{}/shard/00000000/0000000000000001-full-0.ltx",
-			branch_id.as_uuid().simple(),
-		);
-		let object_1_key = format!(
-			"db/{}/shard/00000001/0000000000000001-full-1.ltx",
-			branch_id.as_uuid().simple(),
-		);
-		let object_0_bytes = encoded_blob(1, &[(1, 0x91)])?;
-		let object_1_bytes = encoded_blob(1, &[(65, 0x92)])?;
-		if let Some(tier) = &ctx.cold_tier {
-			tier.put_object(&object_0_key, &object_0_bytes).await?;
-			tier.put_object(&object_1_key, &object_1_bytes).await?;
-		}
-		seed(
-			&db,
-			vec![
-				(branch_compaction_root_key(branch_id), encode_compaction_root(compaction_root(2))?),
-				(
-					branch_compaction_cold_shard_key(branch_id, 0, 1),
-					encode_cold_shard_ref(cold_shard_ref(
-						object_0_key,
-						0,
-						1,
-						2,
-						&object_0_bytes,
-					))?,
-				),
-				(
-					branch_compaction_cold_shard_key(branch_id, 1, 1),
-					encode_cold_shard_ref(cold_shard_ref(
-						object_1_key,
-						1,
-						1,
-						2,
-						&object_1_bytes,
-					))?,
-				),
-			],
-			vec![
-				branch_delta_chunk_key(branch_id, 1, 0),
-				branch_pidx_key(branch_id, 1),
-				branch_pidx_key(branch_id, 65),
-			],
-		)
-		.await?;
 
-		if tier_mode == common::TierMode::Disabled {
-			assert_shard_coverage_missing(&database_db, 1).await?;
-			return Ok(());
-		}
+			if tier_mode == common::TierMode::Disabled {
+				assert_shard_coverage_missing(&database_db, 1).await?;
+				return Ok(());
+			}
 
-		let skipped = metrics::SQLITE_SHARD_CACHE_FILL_SKIPPED_QUEUE_FULL_TOTAL
-			.with_label_values(&[node_label.as_str()]);
-		let fill_scheduled = metrics::SQLITE_SHARD_CACHE_FILL_TOTAL
-			.with_label_values(&[metrics::SHARD_CACHE_FILL_SCHEDULED]);
-		let fill_duplicate = metrics::SQLITE_SHARD_CACHE_FILL_TOTAL
-			.with_label_values(&[metrics::SHARD_CACHE_FILL_SKIPPED_DUPLICATE]);
-		let fill_queue_full = metrics::SQLITE_SHARD_CACHE_FILL_TOTAL
-			.with_label_values(&[metrics::SHARD_CACHE_FILL_SKIPPED_QUEUE_FULL]);
-		let skipped_before = skipped.get();
-		let fill_scheduled_before = fill_scheduled.get();
-		let fill_duplicate_before = fill_duplicate.get();
-		let fill_queue_full_before = fill_queue_full.get();
-		database_db.get_pages(vec![1]).await?;
-		assert_eq!(database_db.shard_cache_fill_outstanding_for_test(), 1);
-		assert!(fill_scheduled.get() >= fill_scheduled_before + 1);
-		database_db.get_pages(vec![1]).await?;
-		assert_eq!(database_db.shard_cache_fill_outstanding_for_test(), 1);
-		assert_eq!(skipped.get(), skipped_before);
-		assert!(fill_duplicate.get() >= fill_duplicate_before + 1);
-		database_db.get_pages(vec![65]).await?;
-		assert_eq!(database_db.shard_cache_fill_outstanding_for_test(), 1);
-		assert_eq!(skipped.get(), skipped_before + 1);
-		assert!(fill_queue_full.get() >= fill_queue_full_before + 1);
+			let skipped = metrics::SQLITE_SHARD_CACHE_FILL_SKIPPED_QUEUE_FULL_TOTAL
+				.with_label_values(&[node_label.as_str()]);
+			let fill_scheduled = metrics::SQLITE_SHARD_CACHE_FILL_TOTAL
+				.with_label_values(&[metrics::SHARD_CACHE_FILL_SCHEDULED]);
+			let fill_duplicate = metrics::SQLITE_SHARD_CACHE_FILL_TOTAL
+				.with_label_values(&[metrics::SHARD_CACHE_FILL_SKIPPED_DUPLICATE]);
+			let fill_queue_full = metrics::SQLITE_SHARD_CACHE_FILL_TOTAL
+				.with_label_values(&[metrics::SHARD_CACHE_FILL_SKIPPED_QUEUE_FULL]);
+			let skipped_before = skipped.get();
+			let fill_scheduled_before = fill_scheduled.get();
+			let fill_duplicate_before = fill_duplicate.get();
+			let fill_queue_full_before = fill_queue_full.get();
+			database_db.get_pages(vec![1]).await?;
+			assert_eq!(database_db.shard_cache_fill_outstanding_for_test(), 1);
+			assert!(fill_scheduled.get() >= fill_scheduled_before + 1);
+			database_db.get_pages(vec![1]).await?;
+			assert_eq!(database_db.shard_cache_fill_outstanding_for_test(), 1);
+			assert_eq!(skipped.get(), skipped_before);
+			assert!(fill_duplicate.get() >= fill_duplicate_before + 1);
+			database_db.get_pages(vec![65]).await?;
+			assert_eq!(database_db.shard_cache_fill_outstanding_for_test(), 1);
+			assert_eq!(skipped.get(), skipped_before + 1);
+			assert!(fill_queue_full.get() >= fill_queue_full_before + 1);
 
-		Ok(())
-	}))
+			Ok(())
+		})
+	})
 	.await
 }
 
@@ -1502,7 +1631,9 @@ async fn direct_shard_cache_fill_skips_when_cold_ref_changes() -> Result<()> {
 		let skipped_no_cold_ref = metrics::SQLITE_SHARD_CACHE_FILL_TOTAL
 			.with_label_values(&[metrics::SHARD_CACHE_FILL_SKIPPED_NO_COLD_REF]);
 		let skipped_no_cold_ref_before = skipped_no_cold_ref.get();
-		database_db.commit(vec![dirty_page(1, 0x11)], 1, 1_000).await?;
+		database_db
+			.commit(vec![dirty_page(1, 0x11)], 1, 1_000)
+			.await?;
 		let branch_id = read_database_branch_id(&db).await?;
 		let object_bytes = encoded_blob(1, &[(1, 0xaa)])?;
 		let old_ref = cold_shard_ref("old-object.ltx".to_string(), 0, 1, 2, &object_bytes);
@@ -1533,7 +1664,9 @@ async fn direct_shard_cache_fill_skips_when_cold_ref_changes() -> Result<()> {
 #[tokio::test]
 async fn direct_shard_cache_fill_is_idempotent_for_matching_shard_bytes() -> Result<()> {
 	read_matrix!("depot-read-fill-idem", |ctx, db, database_db| {
-		database_db.commit(vec![dirty_page(1, 0x11)], 1, 1_000).await?;
+		database_db
+			.commit(vec![dirty_page(1, 0x11)], 1, 1_000)
+			.await?;
 		let branch_id = read_database_branch_id(&db).await?;
 		let object_bytes = encoded_blob(1, &[(1, 0xbb)])?;
 		let cold_ref = cold_shard_ref("idem-object.ltx".to_string(), 0, 1, 2, &object_bytes);
@@ -1568,7 +1701,9 @@ async fn direct_shard_cache_fill_reports_corruption_for_conflicting_shard_bytes(
 		let failed = metrics::SQLITE_SHARD_CACHE_FILL_TOTAL
 			.with_label_values(&[metrics::SHARD_CACHE_FILL_FAILED]);
 		let failed_before = failed.get();
-		database_db.commit(vec![dirty_page(1, 0x11)], 1, 1_000).await?;
+		database_db
+			.commit(vec![dirty_page(1, 0x11)], 1, 1_000)
+			.await?;
 		let branch_id = read_database_branch_id(&db).await?;
 		let object_bytes = encoded_blob(1, &[(1, 0xcc)])?;
 		let existing_bytes = encoded_blob(1, &[(1, 0xdd)])?;
@@ -1609,95 +1744,104 @@ async fn direct_shard_cache_fill_reports_corruption_for_conflicting_shard_bytes(
 
 #[tokio::test]
 async fn get_pages_falls_through_to_cold_tier_when_hot_branch_data_is_evicted() -> Result<()> {
-	common::test_matrix("depot-read-cold-manifest-fallback", |tier_mode, ctx| Box::pin(async move {
-		let db = ctx.udb.clone();
-		let database_db = ctx.make_db(test_bucket(), TEST_DATABASE);
-		database_db.commit(vec![dirty_page(1, 0x66)], 1, 1_000).await?;
-		let branch_id = read_database_branch_id(&db).await?;
-		let layer_key = format!(
-			"db/{}/image/00000000/00000000-0000000000000001.ltx",
-			branch_id.as_uuid().simple()
-		);
-		let chunk_key = format!(
-			"db/{}/cold_manifest/chunks/read-cold.bare",
-			branch_id.as_uuid().simple()
-		);
-		let index_key = format!("db/{}/cold_manifest/index.bare", branch_id.as_uuid().simple());
-		let layer_bytes = encoded_blob(1, &[(1, 0x66)])?;
+	common::test_matrix("depot-read-cold-manifest-fallback", |tier_mode, ctx| {
+		Box::pin(async move {
+			let db = ctx.udb.clone();
+			let database_db = ctx.make_db(test_bucket(), TEST_DATABASE);
+			database_db
+				.commit(vec![dirty_page(1, 0x66)], 1, 1_000)
+				.await?;
+			let branch_id = read_database_branch_id(&db).await?;
+			let layer_key = format!(
+				"db/{}/image/00000000/00000000-0000000000000001.ltx",
+				branch_id.as_uuid().simple()
+			);
+			let chunk_key = format!(
+				"db/{}/cold_manifest/chunks/read-cold.bare",
+				branch_id.as_uuid().simple()
+			);
+			let index_key = format!(
+				"db/{}/cold_manifest/index.bare",
+				branch_id.as_uuid().simple()
+			);
+			let layer_bytes = encoded_blob(1, &[(1, 0x66)])?;
 
-		if let Some(tier) = &ctx.cold_tier {
-			tier.put_object(&layer_key, &layer_bytes).await?;
-			tier.put_object(
-				&chunk_key,
-				&encode_cold_manifest_chunk(ColdManifestChunk {
-					schema_version: SQLITE_STORAGE_COLD_SCHEMA_VERSION,
-					branch_id,
-					pass_versionstamp: [1; 16],
-					layers: vec![LayerEntry {
-						kind: LayerKind::Image,
-						shard_id: Some(0),
-						min_txid: 1,
-						max_txid: 1,
-						min_versionstamp: [1; 16],
-						max_versionstamp: [1; 16],
-						byte_size: layer_bytes.len() as u64,
-						checksum: 0,
-						object_key: layer_key,
-					}],
-					restore_points: Vec::new(),
-				})?,
-			)
-			.await?;
-			tier.put_object(
-				&index_key,
-				&encode_cold_manifest_index(ColdManifestIndex {
-					schema_version: SQLITE_STORAGE_COLD_SCHEMA_VERSION,
-					branch_id,
-					chunks: vec![ColdManifestChunkRef {
-						object_key: chunk_key,
+			if let Some(tier) = &ctx.cold_tier {
+				tier.put_object(&layer_key, &layer_bytes).await?;
+				tier.put_object(
+					&chunk_key,
+					&encode_cold_manifest_chunk(ColdManifestChunk {
+						schema_version: SQLITE_STORAGE_COLD_SCHEMA_VERSION,
+						branch_id,
 						pass_versionstamp: [1; 16],
-						min_versionstamp: [1; 16],
-						max_versionstamp: [1; 16],
-						byte_size: 1,
-					}],
-					last_pass_at_ms: 1_000,
-					last_pass_versionstamp: [1; 16],
-				})?,
+						layers: vec![LayerEntry {
+							kind: LayerKind::Image,
+							shard_id: Some(0),
+							min_txid: 1,
+							max_txid: 1,
+							min_versionstamp: [1; 16],
+							max_versionstamp: [1; 16],
+							byte_size: layer_bytes.len() as u64,
+							checksum: 0,
+							object_key: layer_key,
+						}],
+						restore_points: Vec::new(),
+					})?,
+				)
+				.await?;
+				tier.put_object(
+					&index_key,
+					&encode_cold_manifest_index(ColdManifestIndex {
+						schema_version: SQLITE_STORAGE_COLD_SCHEMA_VERSION,
+						branch_id,
+						chunks: vec![ColdManifestChunkRef {
+							object_key: chunk_key,
+							pass_versionstamp: [1; 16],
+							min_versionstamp: [1; 16],
+							max_versionstamp: [1; 16],
+							byte_size: 1,
+						}],
+						last_pass_at_ms: 1_000,
+						last_pass_versionstamp: [1; 16],
+					})?,
+				)
+				.await?;
+			}
+
+			seed(
+				&db,
+				Vec::new(),
+				vec![
+					branch_delta_chunk_key(branch_id, 1, 0),
+					branch_pidx_key(branch_id, 1),
+				],
 			)
 			.await?;
-		}
 
-		seed(
-			&db,
-			Vec::new(),
-			vec![
-				branch_delta_chunk_key(branch_id, 1, 0),
-				branch_pidx_key(branch_id, 1),
-			],
-		)
-		.await?;
+			assert_eq!(
+				database_db.get_pages(vec![1]).await?,
+				vec![FetchedPage {
+					pgno: 1,
+					bytes: Some(if tier_mode == common::TierMode::Disabled {
+						page(0)
+					} else {
+						page(0x66)
+					}),
+				}]
+			);
 
-		assert_eq!(
-			database_db.get_pages(vec![1]).await?,
-			vec![FetchedPage {
-				pgno: 1,
-				bytes: Some(if tier_mode == common::TierMode::Disabled {
-					page(0)
-				} else {
-					page(0x66)
-				}),
-			}]
-		);
-
-		Ok(())
-	}))
+			Ok(())
+		})
+	})
 	.await
 }
 
 #[tokio::test]
 async fn get_pages_returns_none_above_eof() -> Result<()> {
 	read_matrix!("depot-read-above-eof", |ctx, db, database_db| {
-		database_db.commit(vec![dirty_page(1, 0x11)], 3, 1_000).await?;
+		database_db
+			.commit(vec![dirty_page(1, 0x11)], 3, 1_000)
+			.await?;
 
 		assert_eq!(
 			database_db.get_pages(vec![4]).await?,

@@ -156,34 +156,18 @@ export interface RuntimeSqlQueryResult {
 
 export type RuntimeSqlExecResult = RuntimeSqlQueryResult;
 
-export type RuntimeSqlExecuteRoute = "read" | "write" | "writeFallback";
-
 export interface RuntimeSqlExecuteResult extends RuntimeSqlQueryResult {
 	changes: number;
 	lastInsertRowId?: number | null;
-	route: RuntimeSqlExecuteRoute;
-}
-
-export function normalizeRuntimeSqlExecuteRoute(
-	route: string,
-): RuntimeSqlExecuteRoute {
-	if (route === "read" || route === "write" || route === "writeFallback") {
-		return route;
-	}
-	throw new Error(`unsupported runtime sqlite execute route: ${route}`);
 }
 
 export function normalizeRuntimeSqlExecuteResult(
 	result: RuntimeSqlQueryResult & {
 		changes: number;
 		lastInsertRowId?: number | null;
-		route: string;
 	},
 ): RuntimeSqlExecuteResult {
-	return {
-		...result,
-		route: normalizeRuntimeSqlExecuteRoute(result.route),
-	};
+	return result;
 }
 
 export interface RuntimeSqlRunResult {
@@ -193,10 +177,6 @@ export interface RuntimeSqlRunResult {
 export interface RuntimeSqlDatabase {
 	exec(sql: string): Promise<RuntimeSqlExecResult>;
 	execute(
-		sql: string,
-		params?: RuntimeSqlBindParams,
-	): Promise<RuntimeSqlExecuteResult>;
-	executeWrite(
 		sql: string,
 		params?: RuntimeSqlBindParams,
 	): Promise<RuntimeSqlExecuteResult>;
@@ -452,11 +432,6 @@ export interface CoreRuntime {
 		sql: string,
 	): Promise<RuntimeSqlExecResult>;
 	actorSqlExecute(
-		ctx: ActorContextHandle,
-		sql: string,
-		params?: RuntimeSqlBindParams,
-	): Promise<RuntimeSqlExecuteResult>;
-	actorSqlExecuteWrite(
 		ctx: ActorContextHandle,
 		sql: string,
 		params?: RuntimeSqlBindParams,

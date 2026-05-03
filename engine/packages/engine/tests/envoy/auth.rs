@@ -38,9 +38,10 @@ fn envoy_connect_rejects_bad_token() {
 				envoy_connect_url(ctx.leader_dc().guard_port(), &namespace, "bad-token-envoy")
 					.into_client_request()
 					.expect("failed to create envoy connect request");
-			request
-				.headers_mut()
-				.insert("Sec-WebSocket-Protocol", "rivet, rivet_token.bad-token".parse().unwrap());
+			request.headers_mut().insert(
+				"Sec-WebSocket-Protocol",
+				"rivet, rivet_token.bad-token".parse().unwrap(),
+			);
 
 			assert_envoy_rejection(request, "token_not_found").await;
 		},

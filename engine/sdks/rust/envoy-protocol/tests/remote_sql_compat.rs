@@ -2,8 +2,8 @@ use anyhow::Result;
 use rivet_envoy_protocol::{
 	generated::v4,
 	versioned::{
-		ProtocolCompatibilityDirection, ProtocolCompatibilityError,
-		ProtocolCompatibilityFeature, ToEnvoy, ToRivet,
+		ProtocolCompatibilityDirection, ProtocolCompatibilityError, ProtocolCompatibilityFeature,
+		ToEnvoy, ToRivet,
 	},
 };
 use vbare::OwnedVersionedData;
@@ -35,23 +35,6 @@ fn remote_sql_request_execute() -> v4::ToRivet {
 	})
 }
 
-fn remote_sql_request_execute_write() -> v4::ToRivet {
-	v4::ToRivet::ToRivetSqliteExecuteWriteRequest(v4::ToRivetSqliteExecuteWriteRequest {
-		request_id: 3,
-		data: v4::SqliteExecuteWriteRequest {
-			namespace_id: "namespace".into(),
-			actor_id: "actor".into(),
-			generation: 7,
-			sql: "insert into t values (?)".into(),
-			params: Some(vec![v4::SqliteBindParam::SqliteValueText(
-				v4::SqliteValueText {
-					value: "value".into(),
-				},
-			)]),
-		},
-	})
-}
-
 fn remote_sql_response_exec() -> v4::ToEnvoy {
 	v4::ToEnvoy::ToEnvoySqliteExecResponse(v4::ToEnvoySqliteExecResponse {
 		request_id: 1,
@@ -70,15 +53,6 @@ fn remote_sql_response_execute() -> v4::ToEnvoy {
 	})
 }
 
-fn remote_sql_response_execute_write() -> v4::ToEnvoy {
-	v4::ToEnvoy::ToEnvoySqliteExecuteWriteResponse(v4::ToEnvoySqliteExecuteWriteResponse {
-		request_id: 3,
-		data: v4::SqliteExecuteWriteResponse::SqliteErrorResponse(v4::SqliteErrorResponse {
-			message: "remote sql execution is unavailable".into(),
-		}),
-	})
-}
-
 fn assert_compatibility_error(
 	err: anyhow::Error,
 	direction: ProtocolCompatibilityDirection,
@@ -88,7 +62,10 @@ fn assert_compatibility_error(
 		.downcast_ref::<ProtocolCompatibilityError>()
 		.expect("expected structured protocol compatibility error");
 
-	assert_eq!(err.feature, ProtocolCompatibilityFeature::RemoteSqliteExecution);
+	assert_eq!(
+		err.feature,
+		ProtocolCompatibilityFeature::RemoteSqliteExecution
+	);
 	assert_eq!(err.direction, direction);
 	assert_eq!(err.required_version, 4);
 	assert_eq!(err.target_version, target_version);
@@ -156,16 +133,12 @@ fn v4_remote_sql_payloads_do_not_decode_as_v3() -> Result<()> {
 #[test]
 fn all_remote_sql_request_variants_require_v4() {
 	for version in 1..4 {
-		for request in [
-			remote_sql_request_exec(),
-			remote_sql_request_execute(),
-			remote_sql_request_execute_write(),
-		] {
+		for request in [remote_sql_request_exec(), remote_sql_request_execute()] {
 			let err = ToRivet::wrap_latest(request)
 				.serialize(version)
 				.expect_err("remote SQL request variant must not serialize below v4");
 
-			assert_compatibility_error(err, ProtocolCompatibilityDirection::ToRivet, 3);
+			assert_compatibility_error(err, ProtocolCompatibilityDirection::ToRivet, version);
 		}
 	}
 }
@@ -173,16 +146,12 @@ fn all_remote_sql_request_variants_require_v4() {
 #[test]
 fn all_remote_sql_response_variants_require_v4() {
 	for version in 1..4 {
-		for response in [
-			remote_sql_response_exec(),
-			remote_sql_response_execute(),
-			remote_sql_response_execute_write(),
-		] {
+		for response in [remote_sql_response_exec(), remote_sql_response_execute()] {
 			let err = ToEnvoy::wrap_latest(response)
 				.serialize(version)
 				.expect_err("remote SQL response variant must not serialize below v4");
 
-			assert_compatibility_error(err, ProtocolCompatibilityDirection::ToEnvoy, 3);
+			assert_compatibility_error(err, ProtocolCompatibilityDirection::ToEnvoy, version);
 		}
 	}
 }

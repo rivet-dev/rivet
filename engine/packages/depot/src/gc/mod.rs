@@ -7,8 +7,7 @@ use universaldb::{
 };
 
 use crate::conveyer::{
-	history_pin,
-	keys,
+	history_pin, keys,
 	types::{
 		DatabaseBranchId, DatabaseBranchRecord, DbHistoryPinKind, decode_database_branch_record,
 		decode_db_history_pin,
@@ -79,9 +78,11 @@ pub(crate) async fn read_branch_gc_pin_tx(
 	else {
 		return Ok(None);
 	};
-	let record =
-		decode_database_branch_record(&record_bytes).context("decode sqlite branch record for GC")?;
-	read_branch_gc_pin_from_record_tx(tx, &record).await.map(Some)
+	let record = decode_database_branch_record(&record_bytes)
+		.context("decode sqlite branch record for GC")?;
+	read_branch_gc_pin_from_record_tx(tx, &record)
+		.await
+		.map(Some)
 }
 
 pub(crate) async fn sweep_branch_hot_history_tx(
@@ -206,7 +207,8 @@ async fn read_branch_gc_pin_from_record_tx(
 		VERSIONSTAMP_INFINITY
 	};
 	let desc_pin = read_versionstamp_pin(tx, &keys::branches_desc_pin_key(branch_id)).await?;
-	let restore_point_pin = read_versionstamp_pin(tx, &keys::branches_restore_point_pin_key(branch_id)).await?;
+	let restore_point_pin =
+		read_versionstamp_pin(tx, &keys::branches_restore_point_pin_key(branch_id)).await?;
 	let gc_pin = root_pin.min(desc_pin).min(restore_point_pin);
 
 	Ok(BranchGcPin {
@@ -243,7 +245,8 @@ async fn recompute_parent_desc_pin(
 	let deleted_pin_key = keys::db_pin_key(parent_branch_id, deleted_pin_id);
 	let mut desc_pin = VERSIONSTAMP_INFINITY;
 
-	for (key, value) in scan_prefix(tx, &keys::db_pin_prefix(parent_branch_id), Serializable).await?
+	for (key, value) in
+		scan_prefix(tx, &keys::db_pin_prefix(parent_branch_id), Serializable).await?
 	{
 		if key == deleted_pin_key {
 			continue;
@@ -292,10 +295,7 @@ async fn read_i64_le(tx: &universaldb::Transaction, key: &[u8]) -> Result<i64> {
 	Ok(i64::from_le_bytes(bytes))
 }
 
-async fn read_versionstamp_pin(
-	tx: &universaldb::Transaction,
-	key: &[u8],
-) -> Result<[u8; 16]> {
+async fn read_versionstamp_pin(tx: &universaldb::Transaction, key: &[u8]) -> Result<[u8; 16]> {
 	let Some(bytes) = tx.informal().get(key, Serializable).await? else {
 		return Ok(VERSIONSTAMP_INFINITY);
 	};

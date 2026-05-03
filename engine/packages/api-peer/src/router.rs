@@ -63,10 +63,7 @@ pub async fn router(
 				"/depot/inspect/branches/{branch_id}/rows/{family}",
 				get(depot_inspect::branch_rows),
 			)
-			.route(
-				"/depot/inspect/raw/key/{key}",
-				get(depot_inspect::raw_key),
-			)
+			.route("/depot/inspect/raw/key/{key}", get(depot_inspect::raw_key))
 			.route("/depot/inspect/raw/scan", get(depot_inspect::raw_scan))
 			.route(
 				"/depot/inspect/raw/decode-key/{key}",

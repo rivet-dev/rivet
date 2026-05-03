@@ -1,9 +1,6 @@
 use anyhow::{Context, Result, ensure};
 
-use crate::conveyer::{
-	keys,
-	types::DatabaseBranchId,
-};
+use crate::conveyer::{keys, types::DatabaseBranchId};
 
 const PIDX_PGNO_BYTES: usize = std::mem::size_of::<u32>();
 const PIDX_TXID_BYTES: usize = std::mem::size_of::<u64>();
@@ -14,10 +11,7 @@ pub(super) struct PageRef {
 	pub(super) txid: u64,
 }
 
-pub(super) fn decode_branch_pidx_pgno(
-	branch_id: DatabaseBranchId,
-	key: &[u8],
-) -> Result<u32> {
+pub(super) fn decode_branch_pidx_pgno(branch_id: DatabaseBranchId, key: &[u8]) -> Result<u32> {
 	let prefix = keys::branch_pidx_prefix(branch_id);
 	ensure!(
 		key.starts_with(&prefix),

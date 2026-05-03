@@ -10,12 +10,12 @@ mod tx;
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use anyhow::{Context, Result, ensure};
 #[cfg(feature = "test-faults")]
 use crate::fault::{
-	DepotFaultAction, DepotFaultContext, DepotFaultController, DepotFaultFired,
-	DepotFaultPoint, ReadFaultPoint,
+	DepotFaultAction, DepotFaultContext, DepotFaultController, DepotFaultFired, DepotFaultPoint,
+	ReadFaultPoint,
 };
+use anyhow::{Context, Result, ensure};
 
 use crate::conveyer::{
 	Db,
@@ -59,8 +59,7 @@ impl Db {
 		let cached_ancestry = cached_snapshot
 			.as_ref()
 			.map(|snapshot| snapshot.ancestors.clone());
-		let cached_access_bucket =
-			cached_snapshot.and_then(|snapshot| snapshot.last_access_bucket);
+		let cached_access_bucket = cached_snapshot.and_then(|snapshot| snapshot.last_access_bucket);
 
 		let database_id = self.database_id.clone();
 		let bucket_id = self.sqlite_bucket_id();
@@ -143,8 +142,7 @@ impl Db {
 						(cache_source, cached_pidx.as_ref())
 					{
 						for (pgno, txid) in cached_pidx {
-							if let Some(txid) =
-								txid.filter(|txid| *txid <= cache_source.max_txid())
+							if let Some(txid) = txid.filter(|txid| *txid <= cache_source.max_txid())
 							{
 								pidx_by_pgno.insert(
 									*pgno,
@@ -158,7 +156,9 @@ impl Db {
 					} else {
 						let StorageScope::Branch(plan) = &scope;
 						for source in &plan.sources {
-							let rows = tx_scan_prefix_values(&tx, &source.pidx_prefix(&database_id)).await?;
+							let rows =
+								tx_scan_prefix_values(&tx, &source.pidx_prefix(&database_id))
+									.await?;
 							let mut decoded_rows = Vec::new();
 							for (key, value) in rows {
 								let pgno = source.decode_pidx_pgno(&database_id, &key)?;
@@ -213,16 +213,15 @@ impl Db {
 
 					for pgno in &pgnos_in_range {
 						let mut cold_candidates = Vec::new();
-						let preferred_delta = pidx_by_pgno
-							.get(pgno)
-							.copied()
-							.map(|page_ref| {
-								(
-									page_ref.source.delta_chunk_prefix(&database_id, page_ref.txid),
-									page_ref.source,
-									page_ref.txid,
-								)
-							});
+						let preferred_delta = pidx_by_pgno.get(pgno).copied().map(|page_ref| {
+							(
+								page_ref
+									.source
+									.delta_chunk_prefix(&database_id, page_ref.txid),
+								page_ref.source,
+								page_ref.txid,
+							)
+						});
 
 						if preferred_delta
 							.as_ref()
@@ -267,12 +266,14 @@ impl Db {
 									missing_delta_prefixes.insert(delta_prefix.clone());
 									stale_pidx_pgnos.insert(*pgno);
 									let ReadSource::Branch(source) = *delta_source;
-									cold_candidates.push(ColdLayerCandidate {
-										branch_id: source.branch_id,
-										owner_txid: *delta_txid,
-										shard_id: pgno / SHARD_SIZE,
-									}
-									.into());
+									cold_candidates.push(
+										ColdLayerCandidate {
+											branch_id: source.branch_id,
+											owner_txid: *delta_txid,
+											shard_id: pgno / SHARD_SIZE,
+										}
+										.into(),
+									);
 								}
 							}
 
@@ -310,26 +311,18 @@ impl Db {
 							shard_sources.insert(shard_id, source);
 						}
 
-						if let Some((source_key, blob)) = shard_sources
-							.get(&shard_id)
-							.cloned()
-							.flatten()
+						if let Some((source_key, blob)) =
+							shard_sources.get(&shard_id).cloned().flatten()
 						{
 							if !source_blobs.contains_key(&source_key) {
 								source_blobs.insert(source_key.clone(), blob);
 							}
 							page_sources.insert(*pgno, source_key);
-							shard_cache_read_outcomes
-								.insert(*pgno, ShardCacheReadOutcome::FdbHit);
+							shard_cache_read_outcomes.insert(*pgno, ShardCacheReadOutcome::FdbHit);
 							touched_cache_backed_page = true;
 						} else {
 							if let Some(reference) =
-								tx_load_latest_compaction_cold_ref(
-									&tx,
-									&scope,
-									shard_id,
-								)
-								.await?
+								tx_load_latest_compaction_cold_ref(&tx, &scope, shard_id).await?
 							{
 								#[cfg(feature = "test-faults")]
 								let drop_ref = matches!(
@@ -446,10 +439,14 @@ impl Db {
 					.get(source_key)
 					.and_then(|decoded: &DecodedLtx| decoded.get_page(pgno))
 					.map(ToOwned::to_owned);
-				if bytes.is_none() && source_key.starts_with(&keys::branch_delta_prefix(tx_result.branch_id)) {
+				if bytes.is_none()
+					&& source_key.starts_with(&keys::branch_delta_prefix(tx_result.branch_id))
+				{
 					stale_pidx_pgnos.insert(pgno);
 				}
-				bytes.get_or_insert_with(|| vec![0; PAGE_SIZE as usize]).clone()
+				bytes
+					.get_or_insert_with(|| vec![0; PAGE_SIZE as usize])
+					.clone()
 			} else {
 				if stale_pidx_pgnos.contains(&pgno) {
 					return Err(SqliteStorageError::ShardCoverageMissing { pgno }.into());

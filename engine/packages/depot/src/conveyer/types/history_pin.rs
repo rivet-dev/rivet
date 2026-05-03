@@ -2,8 +2,8 @@ use anyhow::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
 use vbare::OwnedVersionedData;
 
+use super::ids::{BucketBranchId, DatabaseBranchId};
 use super::restore_points::RestorePointId;
-use super::ids::{DatabaseBranchId, BucketBranchId};
 use super::serialization::SQLITE_STORAGE_META_VERSION;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

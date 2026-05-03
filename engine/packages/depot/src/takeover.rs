@@ -17,8 +17,11 @@ pub struct PauseGuard {
 pub fn pause_reconcile_for_test(database_id: &str) -> (PauseGuard, Arc<Notify>, Arc<Notify>) {
 	let reached = Arc::new(Notify::new());
 	let release = Arc::new(Notify::new());
-	*PAUSE_RECONCILE.lock() =
-		Some((database_id.to_string(), Arc::clone(&reached), Arc::clone(&release)));
+	*PAUSE_RECONCILE.lock() = Some((
+		database_id.to_string(),
+		Arc::clone(&reached),
+		Arc::clone(&release),
+	));
 
 	(
 		PauseGuard {

@@ -1,16 +1,14 @@
 use std::ffi::{CStr, CString};
 use std::future::Future;
+use std::path::Path;
 use std::pin::Pin;
 use std::ptr;
-use std::path::Path;
 use std::sync::Arc;
 
 use anyhow::{Context, Result, bail, ensure};
 use depot::{
 	cold_tier::{ColdTier, FaultyColdTier, FilesystemColdTier},
-	fault::{
-		DepotFaultCheckpoint, DepotFaultController, DepotFaultReplayEvent,
-	},
+	fault::{DepotFaultCheckpoint, DepotFaultController, DepotFaultReplayEvent},
 	keys,
 	ltx::{decode_ltx_v3, encode_ltx_v3},
 	types::{
@@ -23,8 +21,8 @@ use depot::{
 		test_hooks::{self, WorkflowColdTierGuard, WorkflowFaultControllerGuard},
 	},
 };
-use gas::prelude::{Registry, TestCtx};
 use futures_util::TryStreamExt;
+use gas::prelude::{Registry, TestCtx};
 use libsqlite3_sys::{
 	SQLITE_BLOB, SQLITE_FLOAT, SQLITE_INTEGER, SQLITE_NULL, SQLITE_OK, SQLITE_ROW, SQLITE_TEXT,
 	sqlite3, sqlite3_column_blob, sqlite3_column_bytes, sqlite3_column_count,
@@ -43,15 +41,15 @@ use universaldb::{
 	utils::IsolationLevel::{Serializable, Snapshot},
 };
 
+use super::super::{
+	DirectStorage, DirectStorageStats, NativeDatabase, SqliteTransport, SqliteVfs, VfsConfig,
+	open_database,
+};
 use super::oracle::{
 	AmbiguousOracleOutcome, NativeSqliteOracle, OracleCommitSemantics, OracleVerification,
 };
 use super::verify::DepotInvariantScanner;
 use super::workload::LogicalOp;
-use super::super::{
-	DirectStorage, DirectStorageStats, NativeDatabase, SqliteTransport, SqliteVfs, VfsConfig,
-	open_database,
-};
 
 type StageFuture = Pin<Box<dyn Future<Output = Result<()>>>>;
 type Stage = Box<dyn FnOnce(FaultScenarioCtx) -> StageFuture>;
@@ -348,10 +346,7 @@ impl FaultScenarioCtx {
 		}
 
 		self.inner.workload.lock().push(op.clone());
-		self.inner
-			.oracle
-			.lock()
-			.apply_logical_op(op, semantics)
+		self.inner.oracle.lock().apply_logical_op(op, semantics)
 	}
 
 	pub(crate) async fn checkpoint(&self, name: impl Into<String>) -> Result<()> {
@@ -480,9 +475,8 @@ impl FaultScenarioCtx {
 	}
 
 	pub(crate) async fn verify_against_native_oracle(&self) -> Result<()> {
-		let result = self.with_database_blocking(|db| {
-			self.inner.oracle.lock().verify_matches(db.as_ptr())
-		});
+		let result =
+			self.with_database_blocking(|db| self.inner.oracle.lock().verify_matches(db.as_ptr()));
 		let mut ambiguous_outcome = self.inner.ambiguous_oracle_outcome.lock();
 		*ambiguous_outcome = match &result {
 			Ok(OracleVerification::Ambiguous(outcome)) => Some(*outcome),
@@ -498,8 +492,7 @@ impl FaultScenarioCtx {
 			}
 			Err(err) => format!("{err:#}"),
 		});
-		result
-			.map(|_| ())
+		result.map(|_| ())
 	}
 
 	pub(crate) async fn verify_depot_invariants(&self) -> Result<()> {
@@ -508,8 +501,8 @@ impl FaultScenarioCtx {
 			Some(Arc::clone(&self.inner.verification_cold_tier)),
 			self.inner.actor_id.clone(),
 		)
-			.verify()
-			.await
+		.verify()
+		.await
 	}
 
 	pub(crate) async fn replay_record(&self) -> FaultScenarioReplayRecord {
@@ -616,10 +609,7 @@ impl FaultScenarioCtx {
 			.await
 	}
 
-	pub(crate) async fn delete_restore_point(
-		&self,
-		restore_point: RestorePointId,
-	) -> Result<()> {
+	pub(crate) async fn delete_restore_point(&self, restore_point: RestorePointId) -> Result<()> {
 		self.inner
 			.storage
 			.actor_db(self.inner.actor_id.clone())
@@ -644,18 +634,14 @@ impl FaultScenarioCtx {
 			let state = db._vfs.ctx().state.read();
 			(1..=state.db_size_pages)
 				.filter(|candidate_pgno| {
-					*candidate_pgno / depot::keys::SHARD_SIZE
-						== pgno / depot::keys::SHARD_SIZE
+					*candidate_pgno / depot::keys::SHARD_SIZE == pgno / depot::keys::SHARD_SIZE
 				})
 				.map(|candidate_pgno| {
-					let bytes = state
-						.page_cache
-						.get(&candidate_pgno)
-						.with_context(|| {
-							format!(
-								"page {candidate_pgno} should be present in strict VFS cache before cold-ref seed"
-							)
-						})?;
+					let bytes = state.page_cache.get(&candidate_pgno).with_context(|| {
+						format!(
+							"page {candidate_pgno} should be present in strict VFS cache before cold-ref seed"
+						)
+					})?;
 					Ok(DirtyPage {
 						pgno: candidate_pgno,
 						bytes,
@@ -740,8 +726,10 @@ impl FaultScenarioCtx {
 						&keys::branch_compaction_cold_shard_key(branch_id, shard_id, head_txid),
 						&encode_cold_shard_ref(reference)?,
 					);
-					tx.informal()
-						.set(&keys::branch_pidx_key(branch_id, pgno), &head_txid.to_be_bytes());
+					tx.informal().set(
+						&keys::branch_pidx_key(branch_id, pgno),
+						&head_txid.to_be_bytes(),
+					);
 					Ok(())
 				}
 			})
@@ -794,7 +782,11 @@ impl FaultScenarioCtx {
 	}
 
 	async fn capture_branch_head_before_faults(&self) -> Result<()> {
-		let (_, head_txid) = self.inner.storage.read_branch_head(&self.inner.actor_id).await?;
+		let (_, head_txid) = self
+			.inner
+			.storage
+			.read_branch_head(&self.inner.actor_id)
+			.await?;
 		*self.inner.branch_head_before_faults.lock() = Some(head_txid);
 		Ok(())
 	}
@@ -820,11 +812,9 @@ impl FaultScenarioCtx {
 				.storage
 				.cold_tier()
 				.context("fault scenario cold tier should be configured")?;
-			*self.inner.workflow_cold_tier_guard.lock() =
-				Some(test_hooks::install_workflow_cold_tier_for_test(
-					database_branch_id,
-					cold_tier,
-				));
+			*self.inner.workflow_cold_tier_guard.lock() = Some(
+				test_hooks::install_workflow_cold_tier_for_test(database_branch_id, cold_tier),
+			);
 		}
 		let manager_workflow_id = DepotCompactionTestDriver::new(&test_ctx)
 			.start_manager(database_branch_id, Some(self.inner.actor_id.clone()), true)
@@ -833,10 +823,7 @@ impl FaultScenarioCtx {
 		Ok(manager_workflow_id)
 	}
 
-	fn with_database_blocking<T>(
-		&self,
-		f: impl FnOnce(&NativeDatabase) -> Result<T>,
-	) -> Result<T> {
+	fn with_database_blocking<T>(&self, f: impl FnOnce(&NativeDatabase) -> Result<T>) -> Result<T> {
 		tokio::task::block_in_place(|| self.with_database(f))
 	}
 
@@ -856,7 +843,9 @@ impl FaultScenarioCtx {
 fn build_registry() -> Registry {
 	let mut registry = Registry::new();
 	registry.register_workflow::<DbManagerWorkflow>().unwrap();
-	registry.register_workflow::<DbHotCompacterWorkflow>().unwrap();
+	registry
+		.register_workflow::<DbHotCompacterWorkflow>()
+		.unwrap();
 	registry
 		.register_workflow::<DbColdCompacterWorkflow>()
 		.unwrap();
@@ -868,13 +857,11 @@ async fn test_ctx_with_cold_tier(root: &Path) -> Result<TestCtx> {
 	let mut test_deps = TestDeps::new().await?;
 	let mut config_root = (**test_deps.config()).clone();
 	config_root.sqlite = Some(rivet_config::config::Sqlite {
-		workflow_cold_storage: Some(
-			rivet_config::config::SqliteWorkflowColdStorage::FileSystem(
-				rivet_config::config::SqliteWorkflowColdStorageFileSystem {
-					root: root.display().to_string(),
-				},
-			),
-		),
+		workflow_cold_storage: Some(rivet_config::config::SqliteWorkflowColdStorage::FileSystem(
+			rivet_config::config::SqliteWorkflowColdStorageFileSystem {
+				root: root.display().to_string(),
+			},
+		)),
 	});
 	test_deps.config = rivet_config::Config::from_root(config_root);
 	TestCtx::new_with_deps(build_registry(), test_deps).await
@@ -905,7 +892,10 @@ fn query_rows(db: *mut sqlite3, sql: &str) -> Result<Vec<Vec<String>>> {
 	let mut stmt = ptr::null_mut();
 	let rc = unsafe { sqlite3_prepare_v2(db, c_sql.as_ptr(), -1, &mut stmt, ptr::null_mut()) };
 	if rc != SQLITE_OK {
-		bail!("{sql} prepare failed with code {rc}: {}", sqlite_error_message(db));
+		bail!(
+			"{sql} prepare failed with code {rc}: {}",
+			sqlite_error_message(db)
+		);
 	}
 
 	let mut rows = Vec::new();
@@ -917,7 +907,10 @@ fn query_rows(db: *mut sqlite3, sql: &str) -> Result<Vec<Vec<String>>> {
 				unsafe {
 					sqlite3_finalize(stmt);
 				}
-				bail!("{sql} step failed with code {step_rc}: {}", sqlite_error_message(db));
+				bail!(
+					"{sql} step failed with code {step_rc}: {}",
+					sqlite_error_message(db)
+				);
 			}
 		}
 	}
@@ -950,9 +943,8 @@ fn read_row(stmt: *mut libsqlite3_sys::sqlite3_stmt) -> Vec<String> {
 				if blob.is_null() || len == 0 {
 					String::new()
 				} else {
-					let bytes = unsafe {
-						std::slice::from_raw_parts(blob.cast::<u8>(), len as usize)
-					};
+					let bytes =
+						unsafe { std::slice::from_raw_parts(blob.cast::<u8>(), len as usize) };
 					hex_upper(bytes)
 				}
 			}

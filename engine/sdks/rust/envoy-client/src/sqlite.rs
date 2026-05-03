@@ -21,14 +21,12 @@ pub enum SqliteResponse {
 pub enum RemoteSqliteRequest {
 	Exec(protocol::SqliteExecRequest),
 	Execute(protocol::SqliteExecuteRequest),
-	ExecuteWrite(protocol::SqliteExecuteWriteRequest),
 }
 
 #[derive(Debug)]
 pub enum RemoteSqliteResponse {
 	Exec(protocol::SqliteExecResponse),
 	Execute(protocol::SqliteExecuteResponse),
-	ExecuteWrite(protocol::SqliteExecuteWriteResponse),
 }
 
 impl RemoteSqliteRequest {
@@ -36,7 +34,6 @@ impl RemoteSqliteRequest {
 		match self {
 			RemoteSqliteRequest::Exec(_) => "exec",
 			RemoteSqliteRequest::Execute(_) => "execute",
-			RemoteSqliteRequest::ExecuteWrite(_) => "execute_write",
 		}
 	}
 }
@@ -157,18 +154,6 @@ pub async fn handle_remote_sqlite_execute_response(
 	);
 }
 
-pub async fn handle_remote_sqlite_execute_write_response(
-	ctx: &mut EnvoyContext,
-	response: protocol::ToEnvoySqliteExecuteWriteResponse,
-) {
-	handle_remote_sqlite_response(
-		ctx,
-		response.request_id,
-		RemoteSqliteResponse::ExecuteWrite(response.data),
-		"remote_sqlite_execute_write",
-	);
-}
-
 fn handle_sqlite_response(
 	ctx: &mut EnvoyContext,
 	request_id: u32,
@@ -266,11 +251,6 @@ pub fn remote_sqlite_request_to_message(
 				data,
 			})
 		}
-		RemoteSqliteRequest::ExecuteWrite(data) => {
-			protocol::ToRivet::ToRivetSqliteExecuteWriteRequest(
-				protocol::ToRivetSqliteExecuteWriteRequest { request_id, data },
-			)
-		}
 	}
 }
 
@@ -358,13 +338,17 @@ pub fn cleanup_old_remote_sqlite_requests(ctx: &mut EnvoyContext) {
 
 pub fn fail_sqlite_requests_with_shutdown(ctx: &mut EnvoyContext) {
 	for (_id, request) in ctx.sqlite_requests.drain() {
-		let _ = request.response_tx.send(Err(anyhow::anyhow!(EnvoyShutdownError)));
+		let _ = request
+			.response_tx
+			.send(Err(anyhow::anyhow!(EnvoyShutdownError)));
 	}
 }
 
 pub fn fail_remote_sqlite_requests_with_shutdown(ctx: &mut EnvoyContext) {
 	for (_id, request) in ctx.remote_sqlite_requests.drain() {
-		let _ = request.response_tx.send(Err(anyhow::anyhow!(EnvoyShutdownError)));
+		let _ = request
+			.response_tx
+			.send(Err(anyhow::anyhow!(EnvoyShutdownError)));
 	}
 }
 
@@ -384,11 +368,9 @@ pub fn fail_sent_remote_sqlite_requests_with_indeterminate_result(ctx: &mut Envo
 				operation,
 				"remote sqlite response lost after websocket disconnect"
 			);
-			let _ = request
-				.response_tx
-				.send(Err(anyhow::anyhow!(RemoteSqliteIndeterminateResultError {
-					operation,
-				})));
+			let _ = request.response_tx.send(Err(anyhow::anyhow!(
+				RemoteSqliteIndeterminateResultError { operation }
+			)));
 		}
 	}
 }
@@ -419,7 +401,6 @@ mod tests {
 			_generation: u32,
 			_config: protocol::ActorConfig,
 			_preloaded_kv: Option<protocol::PreloadedKv>,
-			_sqlite_startup_data: Option<protocol::SqliteStartupData>,
 		) -> BoxFuture<anyhow::Result<()>> {
 			Box::pin(async { Ok(()) })
 		}
@@ -530,20 +511,6 @@ mod tests {
 		}
 	}
 
-	fn execute_write_request() -> protocol::SqliteExecuteWriteRequest {
-		protocol::SqliteExecuteWriteRequest {
-			namespace_id: "ns".to_string(),
-			actor_id: "actor".to_string(),
-			generation: 1,
-			sql: "insert into test values (?)".to_string(),
-			params: Some(vec![protocol::SqliteBindParam::SqliteValueText(
-				protocol::SqliteValueText {
-					value: "value".to_string(),
-				},
-			)]),
-		}
-	}
-
 	#[tokio::test]
 	async fn remote_sqlite_exec_response_matches_pending_request() {
 		let mut ctx = new_envoy_context();
@@ -587,7 +554,6 @@ mod tests {
 		let requests = vec![
 			RemoteSqliteRequest::Exec(exec_request()),
 			RemoteSqliteRequest::Execute(execute_request()),
-			RemoteSqliteRequest::ExecuteWrite(execute_write_request()),
 		];
 
 		for request in requests {
@@ -612,8 +578,12 @@ mod tests {
 		let mut ctx = new_envoy_context();
 		let (tx, rx) = oneshot::channel();
 
-		handle_remote_sqlite_request(&mut ctx, RemoteSqliteRequest::Execute(execute_request()), tx)
-			.await;
+		handle_remote_sqlite_request(
+			&mut ctx,
+			RemoteSqliteRequest::Execute(execute_request()),
+			tx,
+		)
+		.await;
 		fail_remote_sqlite_requests_with_shutdown(&mut ctx);
 
 		let err = rx
@@ -633,7 +603,7 @@ mod tests {
 
 		handle_remote_sqlite_request(
 			&mut ctx,
-			RemoteSqliteRequest::ExecuteWrite(execute_write_request()),
+			RemoteSqliteRequest::Execute(execute_request()),
 			tx,
 		)
 		.await;
@@ -654,7 +624,7 @@ mod tests {
 		let indeterminate = err
 			.downcast_ref::<RemoteSqliteIndeterminateResultError>()
 			.expect("error should describe indeterminate remote sqlite result");
-		assert_eq!(indeterminate.operation, "execute_write");
+		assert_eq!(indeterminate.operation, "execute");
 		assert!(ctx.remote_sqlite_requests.is_empty());
 	}
 
@@ -663,8 +633,12 @@ mod tests {
 		let mut ctx = new_envoy_context();
 		let (tx, mut rx) = oneshot::channel();
 
-		handle_remote_sqlite_request(&mut ctx, RemoteSqliteRequest::Execute(execute_request()), tx)
-			.await;
+		handle_remote_sqlite_request(
+			&mut ctx,
+			RemoteSqliteRequest::Execute(execute_request()),
+			tx,
+		)
+		.await;
 		assert!(
 			!ctx.remote_sqlite_requests
 				.get(&0)

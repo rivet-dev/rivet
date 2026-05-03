@@ -172,17 +172,18 @@ mod imp {
 				super::super::send_initial_metadata(&shared).await;
 
 				while let Some(msg) = ws_rx.recv().await {
-						match msg {
-							WsTxMessage::Send(data) => {
-								let data = Uint8Array::from(data.as_slice());
-								if let Err(error) = ws.send_with_array_buffer(&data.buffer()) {
-									tracing::error!(error = %js_error(error), "failed to send ws message");
-									let _ = event_tx.send(ConnectionEvent::WriteFailed);
-									break;
-								}
+					match msg {
+						WsTxMessage::Send(data) => {
+							let data = Uint8Array::from(data.as_slice());
+							if let Err(error) = ws.send_with_array_buffer(&data.buffer()) {
+								tracing::error!(error = %js_error(error), "failed to send ws message");
+								let _ = event_tx.send(ConnectionEvent::WriteFailed);
+								break;
+							}
 						}
 						WsTxMessage::Close => {
-							let _ = ws.close_with_code_and_reason(NORMAL_CLOSE_CODE, "envoy.shutdown");
+							let _ =
+								ws.close_with_code_and_reason(NORMAL_CLOSE_CODE, "envoy.shutdown");
 							break;
 						}
 					}
@@ -295,7 +296,11 @@ mod imp {
 	fn js_error(error: JsValue) -> String {
 		error
 			.as_string()
-			.or_else(|| js_sys::JSON::stringify(&error).ok().and_then(|s| s.as_string()))
+			.or_else(|| {
+				js_sys::JSON::stringify(&error)
+					.ok()
+					.and_then(|s| s.as_string())
+			})
 			.unwrap_or_else(|| "unknown JavaScript error".to_string())
 	}
 }
@@ -308,7 +313,9 @@ mod imp {
 	use crate::envoy::ToEnvoyMessage;
 
 	pub fn start_connection(shared: Arc<SharedContext>) {
-		let _ = shared.envoy_tx.send(ToEnvoyMessage::ConnClose { evict: false });
+		let _ = shared
+			.envoy_tx
+			.send(ToEnvoyMessage::ConnClose { evict: false });
 		tracing::error!("wasm envoy transport requires the wasm32 target");
 	}
 }

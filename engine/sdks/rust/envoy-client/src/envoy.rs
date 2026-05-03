@@ -7,8 +7,8 @@ use std::sync::atomic::Ordering;
 #[cfg(not(target_arch = "wasm32"))]
 use parking_lot::Mutex;
 
-use rivet_envoy_protocol as protocol;
 use crate::async_counter::AsyncCounter;
+use rivet_envoy_protocol as protocol;
 use tokio::sync::mpsc;
 use tokio::sync::oneshot;
 
@@ -29,9 +29,8 @@ use crate::sqlite::{
 	cleanup_old_sqlite_requests, fail_remote_sqlite_requests_with_shutdown,
 	fail_sent_remote_sqlite_requests_with_indeterminate_result, fail_sqlite_requests_with_shutdown,
 	handle_remote_sqlite_exec_response, handle_remote_sqlite_execute_response,
-	handle_remote_sqlite_execute_write_response, handle_remote_sqlite_request,
-	handle_sqlite_commit_response, handle_sqlite_get_pages_response, handle_sqlite_request,
-	process_unsent_remote_sqlite_requests, process_unsent_sqlite_requests,
+	handle_remote_sqlite_request, handle_sqlite_commit_response, handle_sqlite_get_pages_response,
+	handle_sqlite_request, process_unsent_remote_sqlite_requests, process_unsent_sqlite_requests,
 };
 use crate::tunnel::{
 	handle_tunnel_message, resend_buffered_tunnel_messages, send_hibernatable_ws_message_ack,
@@ -342,8 +341,7 @@ async fn envoy_loop(
 	start_tx: tokio::sync::watch::Sender<()>,
 ) {
 	let mut ack_tick = boxed_sleep(std::time::Duration::from_millis(ACK_COMMANDS_INTERVAL_MS));
-	let mut kv_cleanup_tick =
-		boxed_sleep(std::time::Duration::from_millis(KV_CLEANUP_INTERVAL_MS));
+	let mut kv_cleanup_tick = boxed_sleep(std::time::Duration::from_millis(KV_CLEANUP_INTERVAL_MS));
 
 	let mut lost_timeout: Option<SleepFuture> = None;
 
@@ -548,9 +546,6 @@ async fn handle_conn_message(
 		protocol::ToEnvoy::ToEnvoySqliteExecuteResponse(response) => {
 			handle_remote_sqlite_execute_response(ctx, response).await;
 		}
-		protocol::ToEnvoy::ToEnvoySqliteExecuteWriteResponse(response) => {
-			handle_remote_sqlite_execute_write_response(ctx, response).await;
-		}
 		protocol::ToEnvoy::ToEnvoyTunnelMessage(tunnel_msg) => {
 			handle_tunnel_message(ctx, tunnel_msg).await;
 		}
@@ -562,10 +557,7 @@ async fn handle_conn_message(
 	lost_timeout
 }
 
-fn handle_conn_close(
-	ctx: &EnvoyContext,
-	lost_timeout: Option<SleepFuture>,
-) -> Option<SleepFuture> {
+fn handle_conn_close(ctx: &EnvoyContext, lost_timeout: Option<SleepFuture>) -> Option<SleepFuture> {
 	if lost_timeout.is_some() {
 		return lost_timeout;
 	}
@@ -580,7 +572,9 @@ fn handle_conn_close(
 
 	tracing::debug!(ms = lost_threshold, "starting envoy lost timeout");
 
-	Some(boxed_sleep(std::time::Duration::from_millis(lost_threshold)))
+	Some(boxed_sleep(std::time::Duration::from_millis(
+		lost_threshold,
+	)))
 }
 
 async fn handle_shutdown(ctx: &mut EnvoyContext) {

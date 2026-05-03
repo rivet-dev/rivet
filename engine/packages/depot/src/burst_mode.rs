@@ -49,7 +49,10 @@ pub async fn read_branch_signal(
 		.transpose()
 		.context("decode sqlite burst-mode compaction root")?;
 
-	Ok(read_branch_signal_for_head(head_txid, compaction_root.as_ref()))
+	Ok(read_branch_signal_for_head(
+		head_txid,
+		compaction_root.as_ref(),
+	))
 }
 
 pub fn read_branch_signal_for_head(

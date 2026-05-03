@@ -455,12 +455,7 @@ impl CoreRegistry {
 		let prepopulate_actor_names = dispatcher
 			.build_actor_metadata_map()
 			.into_iter()
-			.map(|(name, metadata)| {
-				(
-					name,
-					rivet_envoy_client::config::ActorName { metadata },
-				)
-			})
+			.map(|(name, metadata)| (name, rivet_envoy_client::config::ActorName { metadata }))
 			.collect();
 		let handle = start_envoy(rivet_envoy_client::config::EnvoyConfig {
 			version: config.version,

@@ -7,8 +7,7 @@ use parking_lot::Mutex;
 use tokio::sync::Notify;
 
 #[cfg(debug_assertions)]
-static PAUSE_AFTER_RESOLVE: Mutex<Option<(String, Arc<Notify>, Arc<Notify>)>> =
-	Mutex::new(None);
+static PAUSE_AFTER_RESOLVE: Mutex<Option<(String, Arc<Notify>, Arc<Notify>)>> = Mutex::new(None);
 #[cfg(debug_assertions)]
 static FAIL_AFTER_RESTORE_ROLLBACK: Mutex<Option<String>> = Mutex::new(None);
 
@@ -26,8 +25,11 @@ pub struct FailureGuard {
 pub fn pause_after_resolve(database_id: &str) -> (PauseGuard, Arc<Notify>, Arc<Notify>) {
 	let reached = Arc::new(Notify::new());
 	let release = Arc::new(Notify::new());
-	*PAUSE_AFTER_RESOLVE.lock() =
-		Some((database_id.to_string(), Arc::clone(&reached), Arc::clone(&release)));
+	*PAUSE_AFTER_RESOLVE.lock() = Some((
+		database_id.to_string(),
+		Arc::clone(&reached),
+		Arc::clone(&release),
+	));
 
 	(
 		PauseGuard {
@@ -55,8 +57,7 @@ pub(super) async fn maybe_pause_after_resolve(database_id: &str) {
 			.as_ref()
 			.is_some_and(|(hook_database_id, _, _)| hook_database_id == database_id)
 		{
-			slot.take()
-				.map(|(_, reached, release)| (reached, release))
+			slot.take().map(|(_, reached, release)| (reached, release))
 		} else {
 			None
 		}

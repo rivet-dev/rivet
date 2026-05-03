@@ -1,14 +1,14 @@
 use std::{sync::Arc, time::Instant};
 
 use anyhow::{Context, Result, ensure};
+use depot::{
+	conveyer::{Db, branch as depot_branch},
+	keys as depot_keys,
+	types::{BucketId, DBHead, DirtyPage, SQLITE_PAGE_SIZE, decode_db_head},
+};
 use gas::prelude::{Id, util::timestamp};
 use rivet_envoy_protocol as protocol;
 use rivet_pools::NodeId;
-use depot::{
-	keys as depot_keys,
-	conveyer::{branch as depot_branch, Db},
-	types::{DBHead, DirtyPage, BucketId, SQLITE_PAGE_SIZE, decode_db_head},
-};
 
 use crate::{actor_kv::Recipient, metrics};
 
@@ -29,12 +29,10 @@ const SQLITE_MAGIC: &[u8; 16] = b"SQLite format 3\0";
 pub fn clear_v2_storage_for_destroy(tx: &universaldb::Transaction, actor_id: Id) {
 	let actor_id = actor_id.to_string();
 
-	tx.informal()
-		.clear(&depot_keys::meta_head_key(&actor_id));
+	tx.informal().clear(&depot_keys::meta_head_key(&actor_id));
 	tx.informal()
 		.clear(&depot_keys::meta_compact_key(&actor_id));
-	tx.informal()
-		.clear(&depot_keys::meta_quota_key(&actor_id));
+	tx.informal().clear(&depot_keys::meta_quota_key(&actor_id));
 	// Clear the lease with the rest of Depot.
 	// Otherwise dead lease keys accumulate in UDB indefinitely.
 	tx.informal()
@@ -81,10 +79,7 @@ pub async fn migrate_v1_to_v2(
 	Ok(MigrateV1ToV2Output { migrated })
 }
 
-async fn maybe_migrate_v1_to_v2(
-	db: &universaldb::Database,
-	recipient: &Recipient,
-) -> Result<bool> {
+async fn maybe_migrate_v1_to_v2(db: &universaldb::Database, recipient: &Recipient) -> Result<bool> {
 	if !crate::actor_kv::sqlite_v1_data_exists(db, recipient.actor_id).await? {
 		return Ok(false);
 	}

@@ -1,7 +1,7 @@
 use crate::compaction::{
-	*,
 	companion::{CompanionKind, run_companion_loop},
 	shared::*,
+	*,
 };
 use crate::workflows::db_manager::branch_record_is_live_at_generation;
 
@@ -40,9 +40,11 @@ async fn stage_hot_job_tx(
 		return Ok(rejected_hot_job("hot compacter received a non-hot job"));
 	}
 	#[cfg(feature = "test-faults")]
-	if let Some(output) =
-		hot_stage_fault_output(input.database_branch_id, HotCompactionFaultPoint::StageBeforeInputRead)
-			.await?
+	if let Some(output) = hot_stage_fault_output(
+		input.database_branch_id,
+		HotCompactionFaultPoint::StageBeforeInputRead,
+	)
+	.await?
 	{
 		return Ok(output);
 	}
@@ -57,10 +59,8 @@ async fn stage_hot_job_tx(
 	.map(decode_database_branch_record)
 	.transpose()
 	.context("decode sqlite database branch record for hot compaction")?;
-	if !branch_record_is_live_at_generation(
-		branch_record.as_ref(),
-		input.base_lifecycle_generation,
-	) {
+	if !branch_record_is_live_at_generation(branch_record.as_ref(), input.base_lifecycle_generation)
+	{
 		return Ok(rejected_hot_job("database branch lifecycle changed"));
 	}
 
@@ -99,27 +99,20 @@ async fn stage_hot_job_tx(
 		return Ok(rejected_hot_job("database branch head is missing"));
 	};
 
-	let db_pins =
-		history_pin::read_db_history_pins(tx, input.database_branch_id, Snapshot).await?;
-	let pitr_policy =
-		read_effective_pitr_policy_for_branch(tx, branch_record.as_ref()).await?;
-	let hot_inputs =
-		read_hot_input_snapshot(
-			tx,
-			input.database_branch_id,
-			Some(&head),
-			&root,
-			Snapshot,
-			pitr_policy,
-			now_ms,
-		)
-		.await?;
-	let coverage_txids = selected_hot_coverage_txids(
+	let db_pins = history_pin::read_db_history_pins(tx, input.database_branch_id, Snapshot).await?;
+	let pitr_policy = read_effective_pitr_policy_for_branch(tx, branch_record.as_ref()).await?;
+	let hot_inputs = read_hot_input_snapshot(
+		tx,
+		input.database_branch_id,
+		Some(&head),
 		&root,
-		&head,
-		&db_pins,
-		&hot_inputs.pitr_interval_coverage,
-	);
+		Snapshot,
+		pitr_policy,
+		now_ms,
+	)
+	.await?;
+	let coverage_txids =
+		selected_hot_coverage_txids(&root, &head, &db_pins, &hot_inputs.pitr_interval_coverage);
 	if coverage_txids != input.input_range.coverage_txids {
 		return Ok(rejected_hot_job("hot compaction coverage targets changed"));
 	}
@@ -134,18 +127,18 @@ async fn stage_hot_job_tx(
 		return Ok(rejected_hot_job("hot compaction input fingerprint changed"));
 	}
 	#[cfg(feature = "test-faults")]
-	if let Some(output) =
-		hot_stage_fault_output(input.database_branch_id, HotCompactionFaultPoint::StageAfterInputRead)
-			.await?
+	if let Some(output) = hot_stage_fault_output(
+		input.database_branch_id,
+		HotCompactionFaultPoint::StageAfterInputRead,
+	)
+	.await?
 	{
 		return Ok(output);
 	}
 
 	let output_refs = write_staged_hot_shards(tx, input, &head, &hot_inputs).await?;
 	#[cfg(feature = "test-faults")]
-	if let Some(output) =
-		hot_stage_after_shard_write_fault_output(tx, input, &output_refs).await?
-	{
+	if let Some(output) = hot_stage_after_shard_write_fault_output(tx, input, &output_refs).await? {
 		return Ok(output);
 	}
 
@@ -189,13 +182,14 @@ async fn hot_stage_after_shard_write_fault_output(
 	{
 		Ok(Some(fired)) if fired.action == DepotFaultAction::DropArtifact => {
 			for output_ref in output_refs {
-				tx.informal().clear(&keys::branch_compaction_stage_hot_shard_key(
-					input.database_branch_id,
-					input.job_id,
-					output_ref.shard_id,
-					output_ref.as_of_txid,
-					0,
-				));
+				tx.informal()
+					.clear(&keys::branch_compaction_stage_hot_shard_key(
+						input.database_branch_id,
+						input.job_id,
+						output_ref.shard_id,
+						output_ref.as_of_txid,
+						0,
+					));
 			}
 			Ok(Some(StageHotJobOutput {
 				status: CompactionJobStatus::Succeeded,
@@ -252,10 +246,8 @@ async fn install_hot_job_tx(
 	.map(decode_database_branch_record)
 	.transpose()
 	.context("decode sqlite database branch record for hot install")?;
-	if !branch_record_is_live_at_generation(
-		branch_record.as_ref(),
-		input.base_lifecycle_generation,
-	) {
+	if !branch_record_is_live_at_generation(branch_record.as_ref(), input.base_lifecycle_generation)
+	{
 		return Ok(rejected_hot_install("database branch lifecycle changed"));
 	}
 
@@ -299,8 +291,7 @@ async fn install_hot_job_tx(
 	if resolve_bucket_fork_pins(tx, input.database_branch_id, &mut db_pins).await? {
 		return Ok(rejected_hot_install("bucket fork proof is ambiguous"));
 	}
-	let pitr_policy =
-		read_effective_pitr_policy_for_branch(tx, branch_record.as_ref()).await?;
+	let pitr_policy = read_effective_pitr_policy_for_branch(tx, branch_record.as_ref()).await?;
 	let hot_inputs = read_hot_input_snapshot(
 		tx,
 		input.database_branch_id,
@@ -311,14 +302,12 @@ async fn install_hot_job_tx(
 		now_ms,
 	)
 	.await?;
-	let coverage_txids = selected_hot_coverage_txids(
-		&root,
-		&head,
-		&db_pins,
-		&hot_inputs.pitr_interval_coverage,
-	);
+	let coverage_txids =
+		selected_hot_coverage_txids(&root, &head, &db_pins, &hot_inputs.pitr_interval_coverage);
 	if coverage_txids != input.input_range.coverage_txids {
-		return Ok(rejected_hot_install("hot compaction coverage targets changed"));
+		return Ok(rejected_hot_install(
+			"hot compaction coverage targets changed",
+		));
 	}
 	let input_fingerprint = fingerprint_hot_inputs(
 		input.database_branch_id,
@@ -328,7 +317,9 @@ async fn install_hot_job_tx(
 		&hot_inputs,
 	);
 	if input_fingerprint != input.input_fingerprint {
-		return Ok(rejected_hot_install("hot compaction input fingerprint changed"));
+		return Ok(rejected_hot_install(
+			"hot compaction input fingerprint changed",
+		));
 	}
 
 	let mut staged_blobs = Vec::with_capacity(input.output_refs.len());
@@ -349,15 +340,21 @@ async fn install_hot_job_tx(
 			|| output_ref.min_txid != input.input_range.txids.min_txid
 			|| output_ref.max_txid != output_ref.as_of_txid
 		{
-			return Ok(rejected_hot_install("hot output ref does not match planned txid range"));
+			return Ok(rejected_hot_install(
+				"hot output ref does not match planned txid range",
+			));
 		}
 		if !staged_outputs.insert((output_ref.shard_id, output_ref.as_of_txid)) {
-			return Ok(rejected_hot_install("duplicate staged hot shard output ref"));
+			return Ok(rejected_hot_install(
+				"duplicate staged hot shard output ref",
+			));
 		}
 		if output_ref.as_of_txid == input.input_range.txids.max_txid
 			&& !latest_staged_shards.insert(output_ref.shard_id)
 		{
-			return Ok(rejected_hot_install("duplicate latest hot shard output ref"));
+			return Ok(rejected_hot_install(
+				"duplicate latest hot shard output ref",
+			));
 		}
 
 		let stage_key = keys::branch_compaction_stage_hot_shard_key(
@@ -420,7 +417,9 @@ async fn install_hot_job_tx(
 		let pgno = decode_branch_pidx_pgno(input.database_branch_id, key)?;
 		let shard_id = pgno / keys::SHARD_SIZE;
 		if !latest_staged_shards.contains(&shard_id) {
-			return Ok(rejected_hot_install("missing staged hot shard for PIDX row"));
+			return Ok(rejected_hot_install(
+				"missing staged hot shard for PIDX row",
+			));
 		}
 		decode_pidx_txid(value)?;
 	}
@@ -431,10 +430,7 @@ async fn install_hot_job_tx(
 
 	for selection in &hot_inputs.pitr_interval_coverage {
 		tx.informal().set(
-			&keys::branch_pitr_interval_key(
-				input.database_branch_id,
-				selection.bucket_start_ms,
-			),
+			&keys::branch_pitr_interval_key(input.database_branch_id, selection.bucket_start_ms),
 			&encode_pitr_interval_coverage(selection.coverage.clone())
 				.context("encode sqlite PITR interval coverage for hot install")?,
 		);
@@ -452,13 +448,16 @@ async fn install_hot_job_tx(
 	let next_root = CompactionRoot {
 		schema_version: root.schema_version,
 		manifest_generation: root.manifest_generation.saturating_add(1),
-		hot_watermark_txid: root.hot_watermark_txid.max(input.input_range.txids.max_txid),
+		hot_watermark_txid: root
+			.hot_watermark_txid
+			.max(input.input_range.txids.max_txid),
 		cold_watermark_txid: root.cold_watermark_txid,
 		cold_watermark_versionstamp: root.cold_watermark_versionstamp,
 	};
 	tx.informal().set(
 		&keys::branch_compaction_root_key(input.database_branch_id),
-		&encode_compaction_root(next_root).context("encode sqlite compaction root for hot install")?,
+		&encode_compaction_root(next_root)
+			.context("encode sqlite compaction root for hot install")?,
 	);
 	#[cfg(feature = "test-faults")]
 	if let Some(output) = hot_install_fault_output(
@@ -498,13 +497,14 @@ async fn hot_install_before_staged_read_fault_output(
 	{
 		Ok(Some(fired)) if fired.action == DepotFaultAction::DropArtifact => {
 			for output_ref in &input.output_refs {
-				tx.informal().clear(&keys::branch_compaction_stage_hot_shard_key(
-					input.database_branch_id,
-					input.job_id,
-					output_ref.shard_id,
-					output_ref.as_of_txid,
-					0,
-				));
+				tx.informal()
+					.clear(&keys::branch_compaction_stage_hot_shard_key(
+						input.database_branch_id,
+						input.job_id,
+						output_ref.shard_id,
+						output_ref.as_of_txid,
+						0,
+					));
 			}
 			Ok(None)
 		}

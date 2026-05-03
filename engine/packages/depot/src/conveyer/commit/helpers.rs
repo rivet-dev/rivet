@@ -1,10 +1,6 @@
 use anyhow::{Context, Error, Result};
 use futures_util::TryStreamExt;
-use universaldb::{
-	RangeOption,
-	options::StreamingMode,
-	utils::IsolationLevel::Snapshot,
-};
+use universaldb::{RangeOption, options::StreamingMode, utils::IsolationLevel::Snapshot};
 
 use crate::conveyer::{keys, types::DatabaseBranchId};
 

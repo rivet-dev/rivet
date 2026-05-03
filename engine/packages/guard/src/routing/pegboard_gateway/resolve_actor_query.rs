@@ -192,11 +192,12 @@ async fn resolve_query_target_dc_label(
 	region: Option<&str>,
 ) -> Result<u16> {
 	let requested_dc_label = if let Some(region) = region {
-		Some(ctx
-			.config()
-			.dc_for_name(region)
-			.ok_or_else(|| rivet_api_util::errors::Datacenter::NotFound.build())?
-			.datacenter_label)
+		Some(
+			ctx.config()
+				.dc_for_name(region)
+				.ok_or_else(|| rivet_api_util::errors::Datacenter::NotFound.build())?
+				.datacenter_label,
+		)
 	} else {
 		None
 	};

@@ -422,10 +422,7 @@ impl TransactionTask {
 							.map_err(anyhow::Error::msg)
 							.context("failed substituting versionstamped key")?;
 						let query = "INSERT INTO kv (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2";
-						let stmt = tx
-							.prepare_cached(query)
-							.await
-							.map_err(map_postgres_error)?;
+						let stmt = tx.prepare_cached(query).await.map_err(map_postgres_error)?;
 
 						tx.execute(&stmt, &[&key, &param])
 							.await
@@ -438,10 +435,7 @@ impl TransactionTask {
 							.map_err(anyhow::Error::msg)
 							.context("failed substituting versionstamped value")?;
 						let query = "INSERT INTO kv (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2";
-						let stmt = tx
-							.prepare_cached(query)
-							.await
-							.map_err(map_postgres_error)?;
+						let stmt = tx.prepare_cached(query).await.map_err(map_postgres_error)?;
 
 						tx.execute(&stmt, &[&key, &value])
 							.await

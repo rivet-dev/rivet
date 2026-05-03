@@ -1,10 +1,6 @@
 use anyhow::{Context, Result};
 use futures_util::TryStreamExt;
-use universaldb::{
-	RangeOption,
-	options::StreamingMode,
-	utils::IsolationLevel,
-};
+use universaldb::{RangeOption, options::StreamingMode, utils::IsolationLevel};
 
 use super::{
 	keys,
@@ -22,8 +18,10 @@ pub fn write_pitr_interval_coverage(
 ) -> Result<()> {
 	let encoded =
 		encode_pitr_interval_coverage(coverage).context("encode sqlite PITR interval coverage")?;
-	tx.informal()
-		.set(&keys::branch_pitr_interval_key(branch_id, bucket_start_ms), &encoded);
+	tx.informal().set(
+		&keys::branch_pitr_interval_key(branch_id, bucket_start_ms),
+		&encoded,
+	);
 
 	Ok(())
 }
@@ -49,8 +47,12 @@ pub async fn scan_pitr_interval_coverage(
 	branch_id: DatabaseBranchId,
 	isolation_level: IsolationLevel,
 ) -> Result<Vec<(i64, PitrIntervalCoverage)>> {
-	let rows = read_prefix_values(tx, &keys::branch_pitr_interval_prefix(branch_id), isolation_level)
-		.await?;
+	let rows = read_prefix_values(
+		tx,
+		&keys::branch_pitr_interval_prefix(branch_id),
+		isolation_level,
+	)
+	.await?;
 
 	rows.into_iter()
 		.map(|(key, value)| {
@@ -70,12 +72,9 @@ pub async fn read_latest_pitr_interval_coverage_at_or_before(
 ) -> Result<Option<(i64, PitrIntervalCoverage)>> {
 	let rows = scan_pitr_interval_coverage(tx, branch_id, isolation_level).await?;
 
-	Ok(rows
-		.into_iter()
-		.rev()
-		.find(|(bucket_start_ms, coverage)| {
-			*bucket_start_ms <= timestamp_ms && coverage.wall_clock_ms <= timestamp_ms
-		}))
+	Ok(rows.into_iter().rev().find(|(bucket_start_ms, coverage)| {
+		*bucket_start_ms <= timestamp_ms && coverage.wall_clock_ms <= timestamp_ms
+	}))
 }
 
 async fn read_prefix_values(

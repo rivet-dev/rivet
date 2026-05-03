@@ -82,7 +82,8 @@ impl<'a> DepotCompactionTestDriver<'a> {
 			.context("force compaction signal should target manager workflow")?;
 
 		self.wait_for_signal_ack(signal_id).await?;
-		self.wait_for_force_result(manager_workflow_id, request_id).await
+		self.wait_for_force_result(manager_workflow_id, request_id)
+			.await
 	}
 
 	async fn wait_for_signal_ack(&self, signal_id: Id) -> Result<()> {

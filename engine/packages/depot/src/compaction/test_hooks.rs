@@ -31,8 +31,11 @@ pub fn pause_after_hot_stage(
 ) -> (PauseGuard, Arc<Notify>, Arc<Notify>) {
 	let reached = Arc::new(Notify::new());
 	let release = Arc::new(Notify::new());
-	*PAUSE_AFTER_HOT_STAGE.lock() =
-		Some((database_branch_id, Arc::clone(&reached), Arc::clone(&release)));
+	*PAUSE_AFTER_HOT_STAGE.lock() = Some((
+		database_branch_id,
+		Arc::clone(&reached),
+		Arc::clone(&release),
+	));
 
 	(
 		PauseGuard {
@@ -211,9 +214,7 @@ impl Drop for WorkflowFaultControllerGuard {
 #[cfg(feature = "test-faults")]
 impl Drop for WorkflowColdTierGuard {
 	fn drop(&mut self) {
-		crate::compaction::shared::clear_workflow_test_cold_tier_for_test(
-			self.database_branch_id,
-		);
+		crate::compaction::shared::clear_workflow_test_cold_tier_for_test(self.database_branch_id);
 	}
 }
 

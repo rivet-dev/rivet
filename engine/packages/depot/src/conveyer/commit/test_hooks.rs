@@ -19,8 +19,11 @@ pub struct PauseGuard {
 pub fn pause_after_truncate_cleanup(database_id: &str) -> (PauseGuard, Arc<Notify>, Arc<Notify>) {
 	let reached = Arc::new(Notify::new());
 	let release = Arc::new(Notify::new());
-	*PAUSE_AFTER_TRUNCATE_CLEANUP.lock() =
-		Some((database_id.to_string(), Arc::clone(&reached), Arc::clone(&release)));
+	*PAUSE_AFTER_TRUNCATE_CLEANUP.lock() = Some((
+		database_id.to_string(),
+		Arc::clone(&reached),
+		Arc::clone(&release),
+	));
 
 	(
 		PauseGuard {

@@ -1071,46 +1071,6 @@ export function writeSqliteQueryResult(bc: bare.ByteCursor, x: SqliteQueryResult
     write11(bc, x.rows)
 }
 
-export enum SqliteExecuteRoute {
-    Read = "Read",
-    Write = "Write",
-    WriteFallback = "WriteFallback",
-}
-
-export function readSqliteExecuteRoute(bc: bare.ByteCursor): SqliteExecuteRoute {
-    const offset = bc.offset
-    const tag = bare.readU8(bc)
-    switch (tag) {
-        case 0:
-            return SqliteExecuteRoute.Read
-        case 1:
-            return SqliteExecuteRoute.Write
-        case 2:
-            return SqliteExecuteRoute.WriteFallback
-        default: {
-            bc.offset = offset
-            throw new bare.BareError(offset, "invalid tag")
-        }
-    }
-}
-
-export function writeSqliteExecuteRoute(bc: bare.ByteCursor, x: SqliteExecuteRoute): void {
-    switch (x) {
-        case SqliteExecuteRoute.Read: {
-            bare.writeU8(bc, 0)
-            break
-        }
-        case SqliteExecuteRoute.Write: {
-            bare.writeU8(bc, 1)
-            break
-        }
-        case SqliteExecuteRoute.WriteFallback: {
-            bare.writeU8(bc, 2)
-            break
-        }
-    }
-}
-
 function read12(bc: bare.ByteCursor): i64 | null {
     return bare.readBool(bc) ? bare.readI64(bc) : null
 }
@@ -1127,7 +1087,6 @@ export type SqliteExecuteResult = {
     readonly rows: readonly (readonly SqliteColumnValue[])[]
     readonly changes: i64
     readonly lastInsertRowId: i64 | null
-    readonly route: SqliteExecuteRoute
 }
 
 export function readSqliteExecuteResult(bc: bare.ByteCursor): SqliteExecuteResult {
@@ -1136,7 +1095,6 @@ export function readSqliteExecuteResult(bc: bare.ByteCursor): SqliteExecuteResul
         rows: read11(bc),
         changes: bare.readI64(bc),
         lastInsertRowId: read12(bc),
-        route: readSqliteExecuteRoute(bc),
     }
 }
 
@@ -1145,7 +1103,6 @@ export function writeSqliteExecuteResult(bc: bare.ByteCursor, x: SqliteExecuteRe
     write11(bc, x.rows)
     bare.writeI64(bc, x.changes)
     write12(bc, x.lastInsertRowId)
-    writeSqliteExecuteRoute(bc, x.route)
 }
 
 export type SqliteExecRequest = {
@@ -1227,32 +1184,6 @@ export function writeSqliteExecuteRequest(bc: bare.ByteCursor, x: SqliteExecuteR
     write14(bc, x.params)
 }
 
-export type SqliteExecuteWriteRequest = {
-    readonly namespaceId: Id
-    readonly actorId: Id
-    readonly generation: SqliteGeneration
-    readonly sql: string
-    readonly params: readonly SqliteBindParam[] | null
-}
-
-export function readSqliteExecuteWriteRequest(bc: bare.ByteCursor): SqliteExecuteWriteRequest {
-    return {
-        namespaceId: readId(bc),
-        actorId: readId(bc),
-        generation: readSqliteGeneration(bc),
-        sql: bare.readString(bc),
-        params: read14(bc),
-    }
-}
-
-export function writeSqliteExecuteWriteRequest(bc: bare.ByteCursor, x: SqliteExecuteWriteRequest): void {
-    writeId(bc, x.namespaceId)
-    writeId(bc, x.actorId)
-    writeSqliteGeneration(bc, x.generation)
-    bare.writeString(bc, x.sql)
-    write14(bc, x.params)
-}
-
 export type SqliteExecOk = {
     readonly result: SqliteQueryResult
 }
@@ -1278,20 +1209,6 @@ export function readSqliteExecuteOk(bc: bare.ByteCursor): SqliteExecuteOk {
 }
 
 export function writeSqliteExecuteOk(bc: bare.ByteCursor, x: SqliteExecuteOk): void {
-    writeSqliteExecuteResult(bc, x.result)
-}
-
-export type SqliteExecuteWriteOk = {
-    readonly result: SqliteExecuteResult
-}
-
-export function readSqliteExecuteWriteOk(bc: bare.ByteCursor): SqliteExecuteWriteOk {
-    return {
-        result: readSqliteExecuteResult(bc),
-    }
-}
-
-export function writeSqliteExecuteWriteOk(bc: bare.ByteCursor, x: SqliteExecuteWriteOk): void {
     writeSqliteExecuteResult(bc, x.result)
 }
 
@@ -1353,40 +1270,6 @@ export function writeSqliteExecuteResponse(bc: bare.ByteCursor, x: SqliteExecute
         case "SqliteExecuteOk": {
             bare.writeU8(bc, 0)
             writeSqliteExecuteOk(bc, x.val)
-            break
-        }
-        case "SqliteErrorResponse": {
-            bare.writeU8(bc, 1)
-            writeSqliteErrorResponse(bc, x.val)
-            break
-        }
-    }
-}
-
-export type SqliteExecuteWriteResponse =
-    | { readonly tag: "SqliteExecuteWriteOk"; readonly val: SqliteExecuteWriteOk }
-    | { readonly tag: "SqliteErrorResponse"; readonly val: SqliteErrorResponse }
-
-export function readSqliteExecuteWriteResponse(bc: bare.ByteCursor): SqliteExecuteWriteResponse {
-    const offset = bc.offset
-    const tag = bare.readU8(bc)
-    switch (tag) {
-        case 0:
-            return { tag: "SqliteExecuteWriteOk", val: readSqliteExecuteWriteOk(bc) }
-        case 1:
-            return { tag: "SqliteErrorResponse", val: readSqliteErrorResponse(bc) }
-        default: {
-            bc.offset = offset
-            throw new bare.BareError(offset, "invalid tag")
-        }
-    }
-}
-
-export function writeSqliteExecuteWriteResponse(bc: bare.ByteCursor, x: SqliteExecuteWriteResponse): void {
-    switch (x.tag) {
-        case "SqliteExecuteWriteOk": {
-            bare.writeU8(bc, 0)
-            writeSqliteExecuteWriteOk(bc, x.val)
             break
         }
         case "SqliteErrorResponse": {
@@ -2716,23 +2599,6 @@ export function writeToRivetSqliteExecuteRequest(bc: bare.ByteCursor, x: ToRivet
     writeSqliteExecuteRequest(bc, x.data)
 }
 
-export type ToRivetSqliteExecuteWriteRequest = {
-    readonly requestId: u32
-    readonly data: SqliteExecuteWriteRequest
-}
-
-export function readToRivetSqliteExecuteWriteRequest(bc: bare.ByteCursor): ToRivetSqliteExecuteWriteRequest {
-    return {
-        requestId: bare.readU32(bc),
-        data: readSqliteExecuteWriteRequest(bc),
-    }
-}
-
-export function writeToRivetSqliteExecuteWriteRequest(bc: bare.ByteCursor, x: ToRivetSqliteExecuteWriteRequest): void {
-    bare.writeU32(bc, x.requestId)
-    writeSqliteExecuteWriteRequest(bc, x.data)
-}
-
 export type ToRivet =
     | { readonly tag: "ToRivetMetadata"; readonly val: ToRivetMetadata }
     | { readonly tag: "ToRivetEvents"; readonly val: ToRivetEvents }
@@ -2745,7 +2611,6 @@ export type ToRivet =
     | { readonly tag: "ToRivetSqliteCommitRequest"; readonly val: ToRivetSqliteCommitRequest }
     | { readonly tag: "ToRivetSqliteExecRequest"; readonly val: ToRivetSqliteExecRequest }
     | { readonly tag: "ToRivetSqliteExecuteRequest"; readonly val: ToRivetSqliteExecuteRequest }
-    | { readonly tag: "ToRivetSqliteExecuteWriteRequest"; readonly val: ToRivetSqliteExecuteWriteRequest }
 
 export function readToRivet(bc: bare.ByteCursor): ToRivet {
     const offset = bc.offset
@@ -2773,8 +2638,6 @@ export function readToRivet(bc: bare.ByteCursor): ToRivet {
             return { tag: "ToRivetSqliteExecRequest", val: readToRivetSqliteExecRequest(bc) }
         case 10:
             return { tag: "ToRivetSqliteExecuteRequest", val: readToRivetSqliteExecuteRequest(bc) }
-        case 11:
-            return { tag: "ToRivetSqliteExecuteWriteRequest", val: readToRivetSqliteExecuteWriteRequest(bc) }
         default: {
             bc.offset = offset
             throw new bare.BareError(offset, "invalid tag")
@@ -2836,11 +2699,6 @@ export function writeToRivet(bc: bare.ByteCursor, x: ToRivet): void {
         case "ToRivetSqliteExecuteRequest": {
             bare.writeU8(bc, 10)
             writeToRivetSqliteExecuteRequest(bc, x.val)
-            break
-        }
-        case "ToRivetSqliteExecuteWriteRequest": {
-            bare.writeU8(bc, 11)
-            writeToRivetSqliteExecuteWriteRequest(bc, x.val)
             break
         }
     }
@@ -3022,23 +2880,6 @@ export function writeToEnvoySqliteExecuteResponse(bc: bare.ByteCursor, x: ToEnvo
     writeSqliteExecuteResponse(bc, x.data)
 }
 
-export type ToEnvoySqliteExecuteWriteResponse = {
-    readonly requestId: u32
-    readonly data: SqliteExecuteWriteResponse
-}
-
-export function readToEnvoySqliteExecuteWriteResponse(bc: bare.ByteCursor): ToEnvoySqliteExecuteWriteResponse {
-    return {
-        requestId: bare.readU32(bc),
-        data: readSqliteExecuteWriteResponse(bc),
-    }
-}
-
-export function writeToEnvoySqliteExecuteWriteResponse(bc: bare.ByteCursor, x: ToEnvoySqliteExecuteWriteResponse): void {
-    bare.writeU32(bc, x.requestId)
-    writeSqliteExecuteWriteResponse(bc, x.data)
-}
-
 export type ToEnvoy =
     | { readonly tag: "ToEnvoyInit"; readonly val: ToEnvoyInit }
     | { readonly tag: "ToEnvoyCommands"; readonly val: ToEnvoyCommands }
@@ -3050,7 +2891,6 @@ export type ToEnvoy =
     | { readonly tag: "ToEnvoySqliteCommitResponse"; readonly val: ToEnvoySqliteCommitResponse }
     | { readonly tag: "ToEnvoySqliteExecResponse"; readonly val: ToEnvoySqliteExecResponse }
     | { readonly tag: "ToEnvoySqliteExecuteResponse"; readonly val: ToEnvoySqliteExecuteResponse }
-    | { readonly tag: "ToEnvoySqliteExecuteWriteResponse"; readonly val: ToEnvoySqliteExecuteWriteResponse }
 
 export function readToEnvoy(bc: bare.ByteCursor): ToEnvoy {
     const offset = bc.offset
@@ -3076,8 +2916,6 @@ export function readToEnvoy(bc: bare.ByteCursor): ToEnvoy {
             return { tag: "ToEnvoySqliteExecResponse", val: readToEnvoySqliteExecResponse(bc) }
         case 9:
             return { tag: "ToEnvoySqliteExecuteResponse", val: readToEnvoySqliteExecuteResponse(bc) }
-        case 10:
-            return { tag: "ToEnvoySqliteExecuteWriteResponse", val: readToEnvoySqliteExecuteWriteResponse(bc) }
         default: {
             bc.offset = offset
             throw new bare.BareError(offset, "invalid tag")
@@ -3135,11 +2973,6 @@ export function writeToEnvoy(bc: bare.ByteCursor, x: ToEnvoy): void {
         case "ToEnvoySqliteExecuteResponse": {
             bare.writeU8(bc, 9)
             writeToEnvoySqliteExecuteResponse(bc, x.val)
-            break
-        }
-        case "ToEnvoySqliteExecuteWriteResponse": {
-            bare.writeU8(bc, 10)
-            writeToEnvoySqliteExecuteWriteResponse(bc, x.val)
             break
         }
     }

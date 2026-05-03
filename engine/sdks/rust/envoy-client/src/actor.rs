@@ -2,8 +2,8 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use rivet_envoy_protocol as protocol;
 use crate::async_counter::AsyncCounter;
+use rivet_envoy_protocol as protocol;
 use rivet_util_serde::HashableMap;
 use tokio::sync::mpsc;
 use tokio::sync::oneshot;
@@ -190,10 +190,10 @@ async fn actor_inner(
 		.on_actor_start(
 			handle.clone(),
 			actor_id.clone(),
-				generation,
-				config,
-				preloaded_kv,
-			)
+			generation,
+			config,
+			preloaded_kv,
+		)
 		.await;
 
 	if let Err(error) = start_result {
@@ -1389,12 +1389,11 @@ mod tests {
 	use std::future::pending;
 	use std::sync::Mutex;
 	use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-	use std::time::Duration;
+	use std::time::{Duration, Instant};
 
 	use tokio::sync::Notify;
 	use tokio::sync::oneshot;
 	use tokio::task::yield_now;
-	use tokio::time::Instant;
 
 	use super::*;
 	use crate::config::{BoxFuture, EnvoyCallbacks, WebSocketHandler, WebSocketSender};
@@ -1459,10 +1458,10 @@ mod tests {
 			&self,
 			_handle: EnvoyHandle,
 			_actor_id: String,
-				_generation: u32,
-				_config: protocol::ActorConfig,
-				_preloaded_kv: Option<protocol::PreloadedKv>,
-			) -> BoxFuture<anyhow::Result<()>> {
+			_generation: u32,
+			_config: protocol::ActorConfig,
+			_preloaded_kv: Option<protocol::PreloadedKv>,
+		) -> BoxFuture<anyhow::Result<()>> {
 			Box::pin(async { Ok(()) })
 		}
 
@@ -1559,10 +1558,10 @@ mod tests {
 			&self,
 			_handle: EnvoyHandle,
 			_actor_id: String,
-				_generation: u32,
-				_config: protocol::ActorConfig,
-				_preloaded_kv: Option<protocol::PreloadedKv>,
-			) -> BoxFuture<anyhow::Result<()>> {
+			_generation: u32,
+			_config: protocol::ActorConfig,
+			_preloaded_kv: Option<protocol::PreloadedKv>,
+		) -> BoxFuture<anyhow::Result<()>> {
 			Box::pin(async { Ok(()) })
 		}
 

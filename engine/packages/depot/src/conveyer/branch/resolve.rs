@@ -1,18 +1,16 @@
 use anyhow::{Context, Result};
-use universaldb::{
-	options::MutationType,
-	utils::IsolationLevel,
-};
+use universaldb::{options::MutationType, utils::IsolationLevel};
 
 use crate::conveyer::{
 	constants::MAX_BUCKET_DEPTH,
 	error::SqliteStorageError,
-	keys, udb,
+	keys,
 	types::{
-		BranchState, DatabaseBranchId, DatabasePointer, BucketBranchId, BucketBranchRecord,
-		BucketId, BucketPointer, decode_database_pointer, decode_bucket_branch_record,
-		decode_bucket_pointer, encode_bucket_branch_record, encode_bucket_pointer,
+		BranchState, BucketBranchId, BucketBranchRecord, BucketId, BucketPointer, DatabaseBranchId,
+		DatabasePointer, decode_bucket_branch_record, decode_bucket_pointer,
+		decode_database_pointer, encode_bucket_branch_record, encode_bucket_pointer,
 	},
+	udb,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -93,8 +91,7 @@ pub fn write_root_bucket_metadata(
 		current_branch: branch_id,
 		last_swapped_at_ms: now_ms,
 	};
-	let encoded_pointer =
-		encode_bucket_pointer(pointer).context("encode sqlite bucket pointer")?;
+	let encoded_pointer = encode_bucket_pointer(pointer).context("encode sqlite bucket pointer")?;
 	tx.informal()
 		.set(&keys::bucket_pointer_cur_key(bucket_id), &encoded_pointer);
 
@@ -107,8 +104,7 @@ pub async fn resolve_database_branch(
 	database_id: &str,
 	isolation_level: IsolationLevel,
 ) -> Result<Option<DatabaseBranchId>> {
-	let Some(bucket_branch_id) =
-		resolve_bucket_branch(tx, bucket_id, isolation_level).await?
+	let Some(bucket_branch_id) = resolve_bucket_branch(tx, bucket_id, isolation_level).await?
 	else {
 		return resolve_database_branch_in_bucket(
 			tx,
@@ -120,7 +116,8 @@ pub async fn resolve_database_branch(
 	};
 
 	if let Some(branch_id) =
-		resolve_database_branch_in_bucket(tx, bucket_branch_id, database_id, isolation_level).await?
+		resolve_database_branch_in_bucket(tx, bucket_branch_id, database_id, isolation_level)
+			.await?
 	{
 		return Ok(Some(branch_id));
 	}
@@ -134,9 +131,11 @@ pub async fn resolve_database_branch_in_bucket(
 	database_id: &str,
 	isolation_level: IsolationLevel,
 ) -> Result<Option<DatabaseBranchId>> {
-	Ok(resolve_database_pointer(tx, bucket_branch_id, database_id, isolation_level)
-		.await?
-		.map(|pointer| pointer.current_branch))
+	Ok(
+		resolve_database_pointer(tx, bucket_branch_id, database_id, isolation_level)
+			.await?
+			.map(|pointer| pointer.current_branch),
+	)
 }
 
 pub async fn resolve_database_pointer(
@@ -156,7 +155,8 @@ pub async fn resolve_database_pointer(
 			)
 			.await?
 		{
-			let pointer = decode_database_pointer(&pointer_bytes).context("decode sqlite database pointer")?;
+			let pointer = decode_database_pointer(&pointer_bytes)
+				.context("decode sqlite database pointer")?;
 			return Ok(Some(pointer));
 		}
 
@@ -178,7 +178,10 @@ pub async fn resolve_database_pointer(
 
 		let Some(record_bytes) = tx
 			.informal()
-			.get(&keys::bucket_branches_list_key(current_branch_id), isolation_level)
+			.get(
+				&keys::bucket_branches_list_key(current_branch_id),
+				isolation_level,
+			)
 			.await?
 		else {
 			return Ok(None);

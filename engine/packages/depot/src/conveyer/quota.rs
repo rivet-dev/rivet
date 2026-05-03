@@ -5,7 +5,7 @@ use crate::conveyer::{
 	branch,
 	error::SqliteStorageError,
 	keys,
-	types::{DatabaseBranchId, BucketId},
+	types::{BucketId, DatabaseBranchId},
 };
 
 pub const SQLITE_MAX_STORAGE_BYTES: i64 = 10 * 1024 * 1024 * 1024;
@@ -21,7 +21,11 @@ pub fn atomic_add(tx: &universaldb::Transaction, database_id: &str, delta_bytes:
 	);
 }
 
-pub fn atomic_add_branch(tx: &universaldb::Transaction, branch_id: DatabaseBranchId, delta_bytes: i64) {
+pub fn atomic_add_branch(
+	tx: &universaldb::Transaction,
+	branch_id: DatabaseBranchId,
+	delta_bytes: i64,
+) {
 	tx.informal().atomic_op(
 		&keys::branch_meta_quota_key(branch_id),
 		&delta_bytes.to_le_bytes(),
@@ -38,10 +42,9 @@ pub async fn read_in_bucket(
 	bucket_id: BucketId,
 	database_id: &str,
 ) -> Result<i64> {
-	if let Some(branch_id) =
-		branch::resolve_database_branch(tx, bucket_id, database_id, Snapshot)
-			.await
-			.context("resolve sqlite database branch for quota read")?
+	if let Some(branch_id) = branch::resolve_database_branch(tx, bucket_id, database_id, Snapshot)
+		.await
+		.context("resolve sqlite database branch for quota read")?
 	{
 		return read_branch(tx, branch_id).await;
 	}
@@ -54,9 +57,8 @@ pub async fn read_in_bucket(
 		return Ok(0);
 	};
 
-	let bytes: [u8; std::mem::size_of::<i64>()] = Vec::from(value)
-		.try_into()
-		.map_err(|value: Vec<u8>| {
+	let bytes: [u8; std::mem::size_of::<i64>()] =
+		Vec::from(value).try_into().map_err(|value: Vec<u8>| {
 			Error::msg(format!(
 				"sqlite quota counter had {} bytes, expected {}",
 				value.len(),
@@ -67,7 +69,10 @@ pub async fn read_in_bucket(
 	Ok(i64::from_le_bytes(bytes))
 }
 
-pub async fn read_branch(tx: &universaldb::Transaction, branch_id: DatabaseBranchId) -> Result<i64> {
+pub async fn read_branch(
+	tx: &universaldb::Transaction,
+	branch_id: DatabaseBranchId,
+) -> Result<i64> {
 	let Some(value) = tx
 		.informal()
 		.get(&keys::branch_meta_quota_key(branch_id), Snapshot)
@@ -76,9 +81,8 @@ pub async fn read_branch(tx: &universaldb::Transaction, branch_id: DatabaseBranc
 		return Ok(0);
 	};
 
-	let bytes: [u8; std::mem::size_of::<i64>()] = Vec::from(value)
-		.try_into()
-		.map_err(|value: Vec<u8>| {
+	let bytes: [u8; std::mem::size_of::<i64>()] =
+		Vec::from(value).try_into().map_err(|value: Vec<u8>| {
 			Error::msg(format!(
 				"sqlite branch quota counter had {} bytes, expected {}",
 				value.len(),

@@ -1,8 +1,8 @@
 use anyhow::{Context, Result};
 use futures_util::TryStreamExt;
+use universaldb::RangeOption;
 use universaldb::options::StreamingMode;
 use universaldb::utils::IsolationLevel::Serializable;
-use universaldb::RangeOption;
 
 use crate::conveyer::{
 	keys,
@@ -37,8 +37,7 @@ pub(super) async fn recompute_database_branch_restore_point_pin(
 			.context("decode sqlite restore point record during pin recompute")?;
 		if record.database_branch_id == branch_id {
 			pin = Some(
-				pin
-					.map(|current: [u8; 16]| current.min(record.versionstamp))
+				pin.map(|current: [u8; 16]| current.min(record.versionstamp))
 					.unwrap_or(record.versionstamp),
 			);
 		}

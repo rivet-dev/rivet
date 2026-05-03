@@ -3,41 +3,38 @@ mod common;
 use std::sync::Arc;
 
 use anyhow::Result;
-use futures_util::FutureExt;
-use gas::prelude::Id;
-use parking_lot::Mutex;
-use rivet_pools::NodeId;
+#[cfg(feature = "test-faults")]
+use depot::fault::{CommitFaultPoint, DepotFaultController, DepotFaultPoint, FaultBoundary};
 use depot::{
 	ACCESS_TOUCH_THROTTLE_MS,
+	conveyer::Db,
 	conveyer::{
 		commit::{clear_sqlite_cmp_dirty_if_observed_idle, test_hooks},
 		db::CompactionSignaler,
 	},
-		keys::{
-			PAGE_SIZE, database_pointer_cur_key, branch_commit_key, branch_delta_chunk_key,
-			branch_compaction_root_key,
-			branch_manifest_last_access_bucket_key, branch_manifest_last_access_ts_ms_key,
-			branch_meta_compact_key, branch_meta_head_key, branch_pidx_key, branch_shard_key,
-			branch_vtx_key, branches_list_key, ctr_eviction_index_key, bucket_branches_list_key,
-			bucket_branches_refcount_key, bucket_pointer_cur_key, sqlite_cmp_dirty_key,
-		},
+	keys::{
+		PAGE_SIZE, branch_commit_key, branch_compaction_root_key, branch_delta_chunk_key,
+		branch_manifest_last_access_bucket_key, branch_manifest_last_access_ts_ms_key,
+		branch_meta_compact_key, branch_meta_head_key, branch_pidx_key, branch_shard_key,
+		branch_vtx_key, branches_list_key, bucket_branches_list_key, bucket_branches_refcount_key,
+		bucket_pointer_cur_key, ctr_eviction_index_key, database_pointer_cur_key,
+		sqlite_cmp_dirty_key,
+	},
 	ltx::{LtxHeader, encode_ltx_v3},
-	conveyer::Db,
 	quota::{self, SQLITE_MAX_STORAGE_BYTES},
 	types::{
-		CompactionRoot, DatabaseBranchId, DBHead, DirtyPage, FetchedPage, MetaCompact, BucketId,
-		SqliteCmpDirty,
-		decode_sqlite_cmp_dirty, encode_compaction_root,
-		decode_database_branch_record, decode_database_pointer, decode_commit_row, decode_db_head,
-		decode_bucket_branch_record, decode_bucket_pointer, encode_db_head, encode_meta_compact,
+		BucketId, CompactionRoot, DBHead, DatabaseBranchId, DirtyPage, FetchedPage, MetaCompact,
+		SqliteCmpDirty, decode_bucket_branch_record, decode_bucket_pointer, decode_commit_row,
+		decode_database_branch_record, decode_database_pointer, decode_db_head,
+		decode_sqlite_cmp_dirty, encode_compaction_root, encode_db_head, encode_meta_compact,
 		encode_sqlite_cmp_dirty,
 	},
 	workflows::compaction::DeltasAvailable,
 };
-#[cfg(feature = "test-faults")]
-use depot::fault::{
-	CommitFaultPoint, DepotFaultController, DepotFaultPoint, FaultBoundary,
-};
+use futures_util::FutureExt;
+use gas::prelude::Id;
+use parking_lot::Mutex;
+use rivet_pools::NodeId;
 use universaldb::utils::IsolationLevel::Snapshot;
 
 const TEST_DATABASE: &str = "test-database";
@@ -46,9 +43,7 @@ fn test_bucket() -> Id {
 	Id::v1(uuid::Uuid::from_u128(0x1234), 1)
 }
 
-fn recording_compaction_signaler(
-	signals: Arc<Mutex<Vec<DeltasAvailable>>>,
-) -> CompactionSignaler {
+fn recording_compaction_signaler(signals: Arc<Mutex<Vec<DeltasAvailable>>>) -> CompactionSignaler {
 	Arc::new(move |signal| {
 		let signals = Arc::clone(&signals);
 		async move {
@@ -61,11 +56,13 @@ fn recording_compaction_signaler(
 
 macro_rules! commit_matrix {
 	($prefix:expr, |$ctx:ident, $db:ident, $database_db:ident| $body:block) => {
-		common::test_matrix($prefix, |_tier, $ctx| Box::pin(async move {
-			let $db = $ctx.udb.clone();
-			let $database_db = $ctx.make_db(test_bucket(), TEST_DATABASE);
-			$body
-		}))
+		common::test_matrix($prefix, |_tier, $ctx| {
+			Box::pin(async move {
+				let $db = $ctx.udb.clone();
+				let $database_db = $ctx.make_db(test_bucket(), TEST_DATABASE);
+				$body
+			})
+		})
 		.await
 	};
 }
@@ -146,14 +143,17 @@ async fn read_value(db: &universaldb::Database, key: Vec<u8>) -> Result<Option<V
 }
 
 async fn read_i64_le(db: &universaldb::Database, key: Vec<u8>) -> Result<Option<i64>> {
-	read_value(db, key).await?.map(|value| {
-		Ok(i64::from_le_bytes(
-			value
-				.as_slice()
-				.try_into()
-				.expect("test value should be i64"),
-		))
-	}).transpose()
+	read_value(db, key)
+		.await?
+		.map(|value| {
+			Ok(i64::from_le_bytes(
+				value
+					.as_slice()
+					.try_into()
+					.expect("test value should be i64"),
+			))
+		})
+		.transpose()
 }
 
 async fn read_head(db: &universaldb::Database) -> Result<DBHead> {
@@ -180,12 +180,9 @@ async fn read_branch_id(db: &universaldb::Database) -> Result<DatabaseBranchId> 
 		.await?
 		.expect("bucket pointer should exist");
 	let bucket_branch = decode_bucket_pointer(&bucket_pointer_bytes)?.current_branch;
-	let bytes = read_value(
-		db,
-		database_pointer_cur_key(bucket_branch, TEST_DATABASE),
-	)
-	.await?
-	.expect("database pointer should exist");
+	let bytes = read_value(db, database_pointer_cur_key(bucket_branch, TEST_DATABASE))
+		.await?
+		.expect("database pointer should exist");
 
 	Ok(decode_database_pointer(&bytes)?.current_branch)
 }
@@ -194,7 +191,7 @@ async fn read_quota(db: &universaldb::Database) -> Result<i64> {
 	db.run(|tx| async move {
 		quota::read_in_bucket(&tx, BucketId::from_gas_id(test_bucket()), TEST_DATABASE).await
 	})
-		.await
+	.await
 }
 
 async fn assert_commit_rejected(
@@ -221,10 +218,7 @@ fn error_chain_contains(err: &anyhow::Error, expected: &str) -> bool {
 }
 
 #[cfg(feature = "test-faults")]
-fn faulting_db(
-	db: Arc<universaldb::Database>,
-	controller: DepotFaultController,
-) -> Db {
+fn faulting_db(db: Arc<universaldb::Database>, controller: DepotFaultController) -> Db {
 	Db::new_with_fault_controller_for_test(
 		db,
 		test_bucket(),
@@ -304,7 +298,11 @@ async fn commit_rejects_invalid_dirty_pages_before_storage_writes() -> Result<()
 		)
 		.await?;
 		assert_eq!(
-			read_value(&db, bucket_pointer_cur_key(BucketId::from_gas_id(test_bucket()))).await?,
+			read_value(
+				&db,
+				bucket_pointer_cur_key(BucketId::from_gas_id(test_bucket()))
+			)
+			.await?,
 			None
 		);
 
@@ -336,14 +334,21 @@ async fn commit_pre_durable_fault_leaves_old_state() -> Result<()> {
 			"expected injected fault error, got {err:?}"
 		);
 		controller.assert_expected_fired()?;
-		assert_eq!(controller.replay_log()[0].boundary, FaultBoundary::PreDurableCommit);
+		assert_eq!(
+			controller.replay_log()[0].boundary,
+			FaultBoundary::PreDurableCommit
+		);
 		assert_eq!(read_head(&db).await?, head_with_branch(branch_id, 1, 2));
 		assert!(
 			read_value(&db, branch_delta_chunk_key(branch_id, 2, 0))
 				.await?
 				.is_none()
 		);
-		assert!(read_value(&db, branch_pidx_key(branch_id, 2)).await?.is_none());
+		assert!(
+			read_value(&db, branch_pidx_key(branch_id, 2))
+				.await?
+				.is_none()
+		);
 
 		Ok(())
 	})
@@ -473,7 +478,11 @@ async fn commit_throttles_access_touch_by_bucket() -> Result<()> {
 			read_i64_le(&db, branch_manifest_last_access_bucket_key(branch_id)).await?,
 			Some(0)
 		);
-		assert!(read_value(&db, ctr_eviction_index_key(0, branch_id)).await?.is_none());
+		assert!(
+			read_value(&db, ctr_eviction_index_key(0, branch_id))
+				.await?
+				.is_none()
+		);
 
 		for now_ms in 2..=120 {
 			database_db
@@ -488,7 +497,11 @@ async fn commit_throttles_access_touch_by_bucket() -> Result<()> {
 			read_i64_le(&db, branch_manifest_last_access_bucket_key(branch_id)).await?,
 			Some(0)
 		);
-		assert!(read_value(&db, ctr_eviction_index_key(0, branch_id)).await?.is_none());
+		assert!(
+			read_value(&db, ctr_eviction_index_key(0, branch_id))
+				.await?
+				.is_none()
+		);
 
 		database_db
 			.commit(vec![page(1, 0xfe)], 1, ACCESS_TOUCH_THROTTLE_MS)
@@ -501,8 +514,16 @@ async fn commit_throttles_access_touch_by_bucket() -> Result<()> {
 			read_i64_le(&db, branch_manifest_last_access_bucket_key(branch_id)).await?,
 			Some(1)
 		);
-		assert!(read_value(&db, ctr_eviction_index_key(0, branch_id)).await?.is_none());
-		assert!(read_value(&db, ctr_eviction_index_key(1, branch_id)).await?.is_none());
+		assert!(
+			read_value(&db, ctr_eviction_index_key(0, branch_id))
+				.await?
+				.is_none()
+		);
+		assert!(
+			read_value(&db, ctr_eviction_index_key(1, branch_id))
+				.await?
+				.is_none()
+		);
 
 		Ok(())
 	})
@@ -520,11 +541,17 @@ async fn get_pages_does_not_touch_access_bucket_on_delta_read() -> Result<()> {
 			vec![fetched_page(1, 0x11)]
 		);
 
-		let last_access_ts_ms = read_i64_le(&db, branch_manifest_last_access_ts_ms_key(branch_id)).await?;
-		let last_access_bucket = read_i64_le(&db, branch_manifest_last_access_bucket_key(branch_id)).await?;
+		let last_access_ts_ms =
+			read_i64_le(&db, branch_manifest_last_access_ts_ms_key(branch_id)).await?;
+		let last_access_bucket =
+			read_i64_le(&db, branch_manifest_last_access_bucket_key(branch_id)).await?;
 		assert_eq!(last_access_ts_ms, Some(1));
 		assert_eq!(last_access_bucket, Some(0));
-		assert!(read_value(&db, ctr_eviction_index_key(0, branch_id)).await?.is_none());
+		assert!(
+			read_value(&db, ctr_eviction_index_key(0, branch_id))
+				.await?
+				.is_none()
+		);
 
 		Ok(())
 	})
@@ -741,9 +768,18 @@ async fn shrink_commit_deletes_above_eof_pidx_and_shards() -> Result<()> {
 					encoded_blob(7, &[(64, 0x64), (129, 0x81)])?,
 				),
 				(branch_pidx_key(branch_id, 64), 7_u64.to_be_bytes().to_vec()),
-				(branch_pidx_key(branch_id, 129), 7_u64.to_be_bytes().to_vec()),
-				(branch_shard_key(branch_id, 1, 7), encoded_blob(7, &[(64, 0x64)])?),
-				(branch_shard_key(branch_id, 2, 7), encoded_blob(7, &[(129, 0x81)])?),
+				(
+					branch_pidx_key(branch_id, 129),
+					7_u64.to_be_bytes().to_vec(),
+				),
+				(
+					branch_shard_key(branch_id, 1, 7),
+					encoded_blob(7, &[(64, 0x64)])?,
+				),
+				(
+					branch_shard_key(branch_id, 2, 7),
+					encoded_blob(7, &[(129, 0x81)])?,
+				),
 			],
 		)
 		.await?;
@@ -757,14 +793,26 @@ async fn shrink_commit_deletes_above_eof_pidx_and_shards() -> Result<()> {
 		database_db.commit(vec![page(1, 0x11)], 63, 4_000).await?;
 
 		assert_eq!(read_head(&db).await?, head_with_branch(branch_id, 8, 63));
-		assert!(read_value(&db, branch_pidx_key(branch_id, 64)).await?.is_none());
+		assert!(
+			read_value(&db, branch_pidx_key(branch_id, 64))
+				.await?
+				.is_none()
+		);
 		assert!(
 			read_value(&db, branch_pidx_key(branch_id, 129))
 				.await?
 				.is_none()
 		);
-		assert!(read_value(&db, branch_shard_key(branch_id, 1, 7)).await?.is_none());
-		assert!(read_value(&db, branch_shard_key(branch_id, 2, 7)).await?.is_none());
+		assert!(
+			read_value(&db, branch_shard_key(branch_id, 1, 7))
+				.await?
+				.is_none()
+		);
+		assert!(
+			read_value(&db, branch_shard_key(branch_id, 2, 7))
+				.await?
+				.is_none()
+		);
 		assert_eq!(
 			read_value(&db, branch_pidx_key(branch_id, 1)).await?,
 			Some(8_u64.to_be_bytes().to_vec())
@@ -776,243 +824,255 @@ async fn shrink_commit_deletes_above_eof_pidx_and_shards() -> Result<()> {
 
 #[tokio::test]
 async fn commit_writes_dirty_marker_and_sends_first_deltas_available() -> Result<()> {
-	common::test_matrix("depot-commit-dirty-first", |_tier, ctx| Box::pin(async move {
-		let db = ctx.udb.clone();
-		let signals = Arc::new(Mutex::new(Vec::new()));
-		let database_db = Db::new_with_compaction_signaler(
-			db.clone(),
-			test_bucket(),
-			TEST_DATABASE.to_string(),
-			NodeId::new(),
-			ctx.cold_tier.clone(),
-			recording_compaction_signaler(Arc::clone(&signals)));
-		database_db.commit(vec![page(1, 0x01)], 1, 1_000).await?;
-		let branch_id = read_branch_id(&db).await?;
-		seed(
-			&db,
-			vec![
-				(
-					branch_meta_head_key(branch_id),
-					encode_db_head(head_with_branch(branch_id, 31, 1))?,
-				),
-				(
-					branch_meta_compact_key(branch_id),
-					encode_meta_compact(MetaCompact {
-						materialized_txid: 0,
-					})?,
-				),
-			],
-		)
-		.await?;
-		db.run(|tx| async move {
-			quota::atomic_add_branch(&tx, branch_id, 1_000);
+	common::test_matrix("depot-commit-dirty-first", |_tier, ctx| {
+		Box::pin(async move {
+			let db = ctx.udb.clone();
+			let signals = Arc::new(Mutex::new(Vec::new()));
+			let database_db = Db::new_with_compaction_signaler(
+				db.clone(),
+				test_bucket(),
+				TEST_DATABASE.to_string(),
+				NodeId::new(),
+				ctx.cold_tier.clone(),
+				recording_compaction_signaler(Arc::clone(&signals)),
+			);
+			database_db.commit(vec![page(1, 0x01)], 1, 1_000).await?;
+			let branch_id = read_branch_id(&db).await?;
+			seed(
+				&db,
+				vec![
+					(
+						branch_meta_head_key(branch_id),
+						encode_db_head(head_with_branch(branch_id, 31, 1))?,
+					),
+					(
+						branch_meta_compact_key(branch_id),
+						encode_meta_compact(MetaCompact {
+							materialized_txid: 0,
+						})?,
+					),
+				],
+			)
+			.await?;
+			db.run(|tx| async move {
+				quota::atomic_add_branch(&tx, branch_id, 1_000);
+				Ok(())
+			})
+			.await?;
+
+			database_db.commit(vec![page(1, 0x11)], 1, 5_000).await?;
+
+			let dirty = read_dirty_marker(&db, branch_id)
+				.await?
+				.expect("dirty marker should exist");
+			assert_eq!(dirty.observed_head_txid, 32);
+			assert_eq!(dirty.updated_at_ms, 5_000);
+			let signals = signals.lock().clone();
+			assert_eq!(
+				signals,
+				vec![DeltasAvailable {
+					database_branch_id: branch_id,
+					observed_head_txid: 32,
+					dirty_updated_at_ms: 5_000,
+				}]
+			);
+
 			Ok(())
 		})
-		.await?;
-
-		database_db.commit(vec![page(1, 0x11)], 1, 5_000).await?;
-
-		let dirty = read_dirty_marker(&db, branch_id)
-			.await?
-			.expect("dirty marker should exist");
-		assert_eq!(dirty.observed_head_txid, 32);
-		assert_eq!(dirty.updated_at_ms, 5_000);
-		let signals = signals.lock().clone();
-		assert_eq!(
-			signals,
-			vec![DeltasAvailable {
-				database_branch_id: branch_id,
-				observed_head_txid: 32,
-				dirty_updated_at_ms: 5_000,
-			}]
-		);
-
-		Ok(())
-	}))
+	})
 	.await
 }
 
 #[tokio::test]
 async fn commit_refreshes_dirty_marker_and_throttles_deltas_available() -> Result<()> {
-	common::test_matrix("depot-commit-dirty-refresh", |_tier, ctx| Box::pin(async move {
-		let db = ctx.udb.clone();
-		let signals = Arc::new(Mutex::new(Vec::new()));
-		let database_db = Db::new_with_compaction_signaler(
-			db.clone(),
-			test_bucket(),
-			TEST_DATABASE.to_string(),
-			NodeId::new(),
-			ctx.cold_tier.clone(),
-			recording_compaction_signaler(Arc::clone(&signals)));
-		database_db.commit(vec![page(1, 0x01)], 1, 1_000).await?;
-		let branch_id = read_branch_id(&db).await?;
-		seed(
-			&db,
-			vec![
-				(
-					branch_meta_head_key(branch_id),
-					encode_db_head(head_with_branch(branch_id, 31, 1))?,
-				),
-				(
-					branch_meta_compact_key(branch_id),
-					encode_meta_compact(MetaCompact {
-						materialized_txid: 0,
-					})?,
-				),
-			],
-		)
-		.await?;
-		db.run(|tx| async move {
-			quota::atomic_add_branch(&tx, branch_id, 1_000);
+	common::test_matrix("depot-commit-dirty-refresh", |_tier, ctx| {
+		Box::pin(async move {
+			let db = ctx.udb.clone();
+			let signals = Arc::new(Mutex::new(Vec::new()));
+			let database_db = Db::new_with_compaction_signaler(
+				db.clone(),
+				test_bucket(),
+				TEST_DATABASE.to_string(),
+				NodeId::new(),
+				ctx.cold_tier.clone(),
+				recording_compaction_signaler(Arc::clone(&signals)),
+			);
+			database_db.commit(vec![page(1, 0x01)], 1, 1_000).await?;
+			let branch_id = read_branch_id(&db).await?;
+			seed(
+				&db,
+				vec![
+					(
+						branch_meta_head_key(branch_id),
+						encode_db_head(head_with_branch(branch_id, 31, 1))?,
+					),
+					(
+						branch_meta_compact_key(branch_id),
+						encode_meta_compact(MetaCompact {
+							materialized_txid: 0,
+						})?,
+					),
+				],
+			)
+			.await?;
+			db.run(|tx| async move {
+				quota::atomic_add_branch(&tx, branch_id, 1_000);
+				Ok(())
+			})
+			.await?;
+
+			database_db.commit(vec![page(1, 0x11)], 1, 5_000).await?;
+			database_db.commit(vec![page(1, 0x22)], 1, 5_100).await?;
+			let dirty = read_dirty_marker(&db, branch_id)
+				.await?
+				.expect("dirty marker should refresh");
+			assert_eq!(dirty.observed_head_txid, 33);
+			assert_eq!(dirty.updated_at_ms, 5_100);
+			assert_eq!(signals.lock().len(), 1);
+
+			database_db.commit(vec![page(1, 0x33)], 1, 5_500).await?;
+			let dirty = read_dirty_marker(&db, branch_id)
+				.await?
+				.expect("dirty marker should refresh again");
+			assert_eq!(dirty.observed_head_txid, 34);
+			assert_eq!(dirty.updated_at_ms, 5_500);
+			let signals = signals.lock().clone();
+			assert_eq!(signals.len(), 2);
+			assert_eq!(signals[1].observed_head_txid, 34);
+			assert_eq!(signals[1].dirty_updated_at_ms, 5_500);
+
 			Ok(())
 		})
-		.await?;
-
-		database_db.commit(vec![page(1, 0x11)], 1, 5_000).await?;
-		database_db.commit(vec![page(1, 0x22)], 1, 5_100).await?;
-		let dirty = read_dirty_marker(&db, branch_id)
-			.await?
-			.expect("dirty marker should refresh");
-		assert_eq!(dirty.observed_head_txid, 33);
-		assert_eq!(dirty.updated_at_ms, 5_100);
-		assert_eq!(signals.lock().len(), 1);
-
-		database_db.commit(vec![page(1, 0x33)], 1, 5_500).await?;
-		let dirty = read_dirty_marker(&db, branch_id)
-			.await?
-			.expect("dirty marker should refresh again");
-		assert_eq!(dirty.observed_head_txid, 34);
-		assert_eq!(dirty.updated_at_ms, 5_500);
-		let signals = signals.lock().clone();
-		assert_eq!(signals.len(), 2);
-		assert_eq!(signals[1].observed_head_txid, 34);
-		assert_eq!(signals[1].dirty_updated_at_ms, 5_500);
-
-		Ok(())
-	}))
+	})
 	.await
 }
 
 #[tokio::test]
 async fn dirty_marker_clear_rejects_stale_observed_value() -> Result<()> {
-	common::test_matrix("depot-commit-dirty-stale-clear", |_tier, ctx| Box::pin(async move {
-		let db = ctx.udb.clone();
-		let branch_id = DatabaseBranchId::new_v4();
-		let old_dirty = SqliteCmpDirty {
-			observed_head_txid: 40,
-			updated_at_ms: 1_000,
-		};
-		let new_dirty = SqliteCmpDirty {
-			observed_head_txid: 41,
-			updated_at_ms: 1_100,
-		};
-		seed(
-			&db,
-			vec![(
-				sqlite_cmp_dirty_key(branch_id),
-				encode_sqlite_cmp_dirty(new_dirty.clone())?,
-			)],
-		)
-		.await?;
+	common::test_matrix("depot-commit-dirty-stale-clear", |_tier, ctx| {
+		Box::pin(async move {
+			let db = ctx.udb.clone();
+			let branch_id = DatabaseBranchId::new_v4();
+			let old_dirty = SqliteCmpDirty {
+				observed_head_txid: 40,
+				updated_at_ms: 1_000,
+			};
+			let new_dirty = SqliteCmpDirty {
+				observed_head_txid: 41,
+				updated_at_ms: 1_100,
+			};
+			seed(
+				&db,
+				vec![(
+					sqlite_cmp_dirty_key(branch_id),
+					encode_sqlite_cmp_dirty(new_dirty.clone())?,
+				)],
+			)
+			.await?;
 
-		assert!(
-			!clear_sqlite_cmp_dirty_if_observed_idle(&db, branch_id, old_dirty).await?,
-			"stale dirty marker should not clear"
-		);
-		assert_eq!(read_dirty_marker(&db, branch_id).await?, Some(new_dirty));
+			assert!(
+				!clear_sqlite_cmp_dirty_if_observed_idle(&db, branch_id, old_dirty).await?,
+				"stale dirty marker should not clear"
+			);
+			assert_eq!(read_dirty_marker(&db, branch_id).await?, Some(new_dirty));
 
-		Ok(())
-	}))
+			Ok(())
+		})
+	})
 	.await
 }
 
 #[tokio::test]
 async fn dirty_marker_clear_requires_workflow_compaction_root() -> Result<()> {
-	common::test_matrix("depot-commit-dirty-root-required", |_tier, ctx| Box::pin(async move {
-		let db = ctx.udb.clone();
-		let branch_id = DatabaseBranchId::new_v4();
-		let dirty = SqliteCmpDirty {
-			observed_head_txid: 40,
-			updated_at_ms: 1_000,
-		};
-		seed(
-			&db,
-			vec![
-				(
-					branch_meta_head_key(branch_id),
-					encode_db_head(head_with_branch(branch_id, 40, 1))?,
-				),
-				(
-					branch_meta_compact_key(branch_id),
-					encode_meta_compact(MetaCompact {
-						materialized_txid: 40,
-					})?,
-				),
-				(
-					sqlite_cmp_dirty_key(branch_id),
-					encode_sqlite_cmp_dirty(dirty.clone())?,
-				),
-			],
-		)
-		.await?;
+	common::test_matrix("depot-commit-dirty-root-required", |_tier, ctx| {
+		Box::pin(async move {
+			let db = ctx.udb.clone();
+			let branch_id = DatabaseBranchId::new_v4();
+			let dirty = SqliteCmpDirty {
+				observed_head_txid: 40,
+				updated_at_ms: 1_000,
+			};
+			seed(
+				&db,
+				vec![
+					(
+						branch_meta_head_key(branch_id),
+						encode_db_head(head_with_branch(branch_id, 40, 1))?,
+					),
+					(
+						branch_meta_compact_key(branch_id),
+						encode_meta_compact(MetaCompact {
+							materialized_txid: 40,
+						})?,
+					),
+					(
+						sqlite_cmp_dirty_key(branch_id),
+						encode_sqlite_cmp_dirty(dirty.clone())?,
+					),
+				],
+			)
+			.await?;
 
-		let err = clear_sqlite_cmp_dirty_if_observed_idle(&db, branch_id, dirty)
-			.await
-			.expect_err("dirty clear without workflow compaction root should fail");
-		assert!(
-			err.chain().any(|cause| cause
-				.to_string()
-				.contains("sqlite compaction root missing for dirty clear")),
-			"unexpected error: {err:?}"
-		);
-		assert!(read_dirty_marker(&db, branch_id).await?.is_some());
+			let err = clear_sqlite_cmp_dirty_if_observed_idle(&db, branch_id, dirty)
+				.await
+				.expect_err("dirty clear without workflow compaction root should fail");
+			assert!(
+				err.chain().any(|cause| cause
+					.to_string()
+					.contains("sqlite compaction root missing for dirty clear")),
+				"unexpected error: {err:?}"
+			);
+			assert!(read_dirty_marker(&db, branch_id).await?.is_some());
 
-		Ok(())
-	}))
+			Ok(())
+		})
+	})
 	.await
 }
 
 #[tokio::test]
 async fn dirty_marker_clear_removes_exact_idle_marker() -> Result<()> {
-	common::test_matrix("depot-commit-dirty-clear", |_tier, ctx| Box::pin(async move {
-		let db = ctx.udb.clone();
-		let branch_id = DatabaseBranchId::new_v4();
-		let dirty = SqliteCmpDirty {
-			observed_head_txid: 40,
-			updated_at_ms: 1_000,
-		};
-		seed(
-			&db,
-			vec![
-				(
-					branch_meta_head_key(branch_id),
-					encode_db_head(head_with_branch(branch_id, 40, 1))?,
-				),
-				(
-					sqlite_cmp_dirty_key(branch_id),
-					encode_sqlite_cmp_dirty(dirty.clone())?,
-				),
-				(
-					branch_compaction_root_key(branch_id),
-					encode_compaction_root(CompactionRoot {
-						schema_version: 1,
-						manifest_generation: 7,
-						hot_watermark_txid: 40,
-						cold_watermark_txid: 40,
-						cold_watermark_versionstamp: [0x22; 16],
-					})?,
-				),
-			],
-		)
-		.await?;
+	common::test_matrix("depot-commit-dirty-clear", |_tier, ctx| {
+		Box::pin(async move {
+			let db = ctx.udb.clone();
+			let branch_id = DatabaseBranchId::new_v4();
+			let dirty = SqliteCmpDirty {
+				observed_head_txid: 40,
+				updated_at_ms: 1_000,
+			};
+			seed(
+				&db,
+				vec![
+					(
+						branch_meta_head_key(branch_id),
+						encode_db_head(head_with_branch(branch_id, 40, 1))?,
+					),
+					(
+						sqlite_cmp_dirty_key(branch_id),
+						encode_sqlite_cmp_dirty(dirty.clone())?,
+					),
+					(
+						branch_compaction_root_key(branch_id),
+						encode_compaction_root(CompactionRoot {
+							schema_version: 1,
+							manifest_generation: 7,
+							hot_watermark_txid: 40,
+							cold_watermark_txid: 40,
+							cold_watermark_versionstamp: [0x22; 16],
+						})?,
+					),
+				],
+			)
+			.await?;
 
-		assert!(
-			clear_sqlite_cmp_dirty_if_observed_idle(&db, branch_id, dirty).await?,
-			"idle exact marker should clear"
-		);
-		assert!(read_dirty_marker(&db, branch_id).await?.is_none());
+			assert!(
+				clear_sqlite_cmp_dirty_if_observed_idle(&db, branch_id, dirty).await?,
+				"idle exact marker should clear"
+			);
+			assert!(read_dirty_marker(&db, branch_id).await?.is_none());
 
-		Ok(())
-	}))
+			Ok(())
+		})
+	})
 	.await
 }

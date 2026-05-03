@@ -5,19 +5,17 @@ use universaldb::{options::MutationType, utils::IsolationLevel::Serializable};
 
 use super::{
 	resolve::resolve_bucket_branch,
-	shared::{
-		decode_versionstamp_value, read_bucket_branch_record, tx_scan_prefix_values,
-	},
+	shared::{decode_versionstamp_value, read_bucket_branch_record, tx_scan_prefix_values},
 };
 use crate::conveyer::{
 	constants::MAX_BUCKET_DEPTH,
 	error::SqliteStorageError,
-	keys, udb,
+	keys,
 	types::{
-		DatabaseBranchId, BucketBranchId, BucketCatalogDbFact, BucketForkFact,
-		BucketId, decode_bucket_catalog_db_fact, encode_bucket_catalog_db_fact,
-		encode_bucket_fork_fact,
+		BucketBranchId, BucketCatalogDbFact, BucketForkFact, BucketId, DatabaseBranchId,
+		decode_bucket_catalog_db_fact, encode_bucket_catalog_db_fact, encode_bucket_fork_fact,
 	},
+	udb,
 };
 
 pub async fn list_databases(
@@ -25,9 +23,7 @@ pub async fn list_databases(
 	bucket: BucketId,
 ) -> Result<Vec<DatabaseBranchId>> {
 	udb.run(move |tx| async move {
-		let Some(bucket_branch_id) =
-			resolve_bucket_branch(&tx, bucket, Serializable).await?
-		else {
+		let Some(bucket_branch_id) = resolve_bucket_branch(&tx, bucket, Serializable).await? else {
 			return Ok(Vec::new());
 		};
 
@@ -125,8 +121,8 @@ pub(crate) fn write_bucket_catalog_marker_with_root(
 		catalog_versionstamp: *catalog_versionstamp,
 		tombstone_versionstamp: None,
 	};
-	let encoded_fact = encode_bucket_catalog_db_fact(fact)
-		.context("encode sqlite bucket catalog proof fact")?;
+	let encoded_fact =
+		encode_bucket_catalog_db_fact(fact).context("encode sqlite bucket catalog proof fact")?;
 	tx.informal().atomic_op(
 		&keys::bucket_catalog_by_db_key(database_id, bucket_branch_id),
 		&udb::append_versionstamp_offset(encoded_fact, catalog_versionstamp)
@@ -146,7 +142,10 @@ pub(super) async fn write_bucket_catalog_tombstone_marker(
 	let root_bucket_branch_id = read_bucket_root_branch_id(tx, bucket_branch_id).await?;
 	let existing_fact = tx
 		.informal()
-		.get(&keys::bucket_catalog_by_db_key(database_id, bucket_branch_id), Serializable)
+		.get(
+			&keys::bucket_catalog_by_db_key(database_id, bucket_branch_id),
+			Serializable,
+		)
 		.await?
 		.as_deref()
 		.map(|bytes| decode_bucket_catalog_db_fact(bytes))
@@ -179,8 +178,7 @@ pub(super) async fn write_bucket_fork_facts(
 	target_bucket_branch_id: BucketBranchId,
 	fork_versionstamp: [u8; 16],
 ) -> Result<()> {
-	let root_bucket_branch_id =
-		read_bucket_root_branch_id(tx, source_bucket_branch_id).await?;
+	let root_bucket_branch_id = read_bucket_root_branch_id(tx, source_bucket_branch_id).await?;
 	let fact = BucketForkFact {
 		source_bucket_branch_id,
 		target_bucket_branch_id,
@@ -230,10 +228,7 @@ async fn read_bucket_root_branch_id(
 	Err(SqliteStorageError::BucketForkChainTooDeep.into())
 }
 
-fn bump_bucket_proof_epoch(
-	tx: &universaldb::Transaction,
-	root_bucket_branch_id: BucketBranchId,
-) {
+fn bump_bucket_proof_epoch(tx: &universaldb::Transaction, root_bucket_branch_id: BucketBranchId) {
 	tx.informal().atomic_op(
 		&keys::bucket_proof_epoch_key(root_bucket_branch_id),
 		&1_i64.to_le_bytes(),

@@ -31,7 +31,6 @@ class FakeSqliteDatabase implements SqliteDatabase {
 			rows: [],
 			changes: 0,
 			lastInsertRowId: null,
-			route: this.writeModeDepth > 0 ? "write" : "read",
 		};
 	}
 

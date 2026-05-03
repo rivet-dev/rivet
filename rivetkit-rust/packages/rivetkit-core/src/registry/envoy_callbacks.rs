@@ -164,13 +164,13 @@ impl ServeSettings {
 			serverless_base_path: None,
 			serverless_package_version: env!("CARGO_PKG_VERSION").to_owned(),
 			serverless_client_endpoint: None,
-				serverless_client_namespace: None,
-				serverless_client_token: None,
-				serverless_validate_endpoint: true,
-				serverless_max_start_payload_bytes: 1_048_576,
-			}
+			serverless_client_namespace: None,
+			serverless_client_token: None,
+			serverless_validate_endpoint: true,
+			serverless_max_start_payload_bytes: 1_048_576,
 		}
 	}
+}
 
 impl Default for ServeConfig {
 	fn default() -> Self {
@@ -192,14 +192,14 @@ impl ServeConfig {
 			serverless_base_path: settings.serverless_base_path,
 			serverless_package_version: settings.serverless_package_version,
 			serverless_client_endpoint: settings.serverless_client_endpoint,
-				serverless_client_namespace: settings.serverless_client_namespace,
-				serverless_client_token: settings.serverless_client_token,
-				serverless_validate_endpoint: settings.serverless_validate_endpoint,
-				serverless_max_start_payload_bytes: settings.serverless_max_start_payload_bytes,
-				serverless_cache_envoy: true,
-			}
+			serverless_client_namespace: settings.serverless_client_namespace,
+			serverless_client_token: settings.serverless_client_token,
+			serverless_validate_endpoint: settings.serverless_validate_endpoint,
+			serverless_max_start_payload_bytes: settings.serverless_max_start_payload_bytes,
+			serverless_cache_envoy: true,
 		}
 	}
+}
 
 fn actor_key_from_protocol(key: Option<String>) -> ActorKey {
 	key.as_deref()

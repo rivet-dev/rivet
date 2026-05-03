@@ -4,7 +4,9 @@ use anyhow::{Context, Result};
 use depot::{
 	inspect::{self, RowsQuery},
 	keys::{PAGE_SIZE, bucket_pointer_cur_key, database_pointer_cur_key},
-	types::{BucketId, DatabaseBranchId, DirtyPage, decode_bucket_pointer, decode_database_pointer},
+	types::{
+		BucketId, DatabaseBranchId, DirtyPage, decode_bucket_pointer, decode_database_pointer,
+	},
 };
 use rivet_pools::NodeId;
 

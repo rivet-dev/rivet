@@ -195,18 +195,11 @@ type SqliteQueryResult struct {
 	rows: list<list<SqliteColumnValue>>
 }
 
-type SqliteExecuteRoute enum {
-	READ
-	WRITE
-	WRITE_FALLBACK
-}
-
 type SqliteExecuteResult struct {
 	columns: list<str>
 	rows: list<list<SqliteColumnValue>>
 	changes: i64
 	lastInsertRowId: optional<i64>
-	route: SqliteExecuteRoute
 }
 
 type SqliteExecRequest struct {
@@ -224,23 +217,11 @@ type SqliteExecuteRequest struct {
 	params: optional<list<SqliteBindParam>>
 }
 
-type SqliteExecuteWriteRequest struct {
-	namespaceId: Id
-	actorId: Id
-	generation: SqliteGeneration
-	sql: str
-	params: optional<list<SqliteBindParam>>
-}
-
 type SqliteExecOk struct {
 	result: SqliteQueryResult
 }
 
 type SqliteExecuteOk struct {
-	result: SqliteExecuteResult
-}
-
-type SqliteExecuteWriteOk struct {
 	result: SqliteExecuteResult
 }
 
@@ -251,11 +232,6 @@ type SqliteExecResponse union {
 
 type SqliteExecuteResponse union {
 	SqliteExecuteOk |
-	SqliteErrorResponse
-}
-
-type SqliteExecuteWriteResponse union {
-	SqliteExecuteWriteOk |
 	SqliteErrorResponse
 }
 
@@ -551,11 +527,6 @@ type ToRivetSqliteExecuteRequest struct {
 	data: SqliteExecuteRequest
 }
 
-type ToRivetSqliteExecuteWriteRequest struct {
-	requestId: u32
-	data: SqliteExecuteWriteRequest
-}
-
 type ToRivet union {
 	ToRivetMetadata |
 	ToRivetEvents |
@@ -567,8 +538,7 @@ type ToRivet union {
 	ToRivetSqliteGetPagesRequest |
 	ToRivetSqliteCommitRequest |
 	ToRivetSqliteExecRequest |
-	ToRivetSqliteExecuteRequest |
-	ToRivetSqliteExecuteWriteRequest
+	ToRivetSqliteExecuteRequest
 }
 
 # MARK: To Envoy
@@ -613,11 +583,6 @@ type ToEnvoySqliteExecuteResponse struct {
 	data: SqliteExecuteResponse
 }
 
-type ToEnvoySqliteExecuteWriteResponse struct {
-	requestId: u32
-	data: SqliteExecuteWriteResponse
-}
-
 type ToEnvoy union {
 	ToEnvoyInit |
 	ToEnvoyCommands |
@@ -628,8 +593,7 @@ type ToEnvoy union {
 	ToEnvoySqliteGetPagesResponse |
 	ToEnvoySqliteCommitResponse |
 	ToEnvoySqliteExecResponse |
-	ToEnvoySqliteExecuteResponse |
-	ToEnvoySqliteExecuteWriteResponse
+	ToEnvoySqliteExecuteResponse
 }
 
 # MARK: To Envoy Conn

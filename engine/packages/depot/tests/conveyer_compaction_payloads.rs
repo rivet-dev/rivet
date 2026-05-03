@@ -1,13 +1,12 @@
 use depot::types::{
-	RestorePointId, ColdShardRef, CompactionRoot, DatabaseBranchId, DbHistoryPin, DbHistoryPinKind,
-	BucketBranchId, BucketCatalogDbFact, BucketForkFact, RetiredColdObject,
-	PitrIntervalCoverage, RetiredColdObjectDeleteState, SQLITE_STORAGE_META_VERSION, SqliteCmpDirty,
-	decode_cold_shard_ref, decode_compaction_root, decode_db_history_pin,
-	decode_bucket_catalog_db_fact, decode_bucket_fork_fact, decode_retired_cold_object,
-	decode_pitr_interval_coverage, decode_sqlite_cmp_dirty, encode_cold_shard_ref,
-	encode_compaction_root, encode_db_history_pin, encode_bucket_catalog_db_fact,
-	encode_bucket_fork_fact, encode_pitr_interval_coverage, encode_retired_cold_object,
-	encode_sqlite_cmp_dirty,
+	BucketBranchId, BucketCatalogDbFact, BucketForkFact, ColdShardRef, CompactionRoot,
+	DatabaseBranchId, DbHistoryPin, DbHistoryPinKind, PitrIntervalCoverage, RestorePointId,
+	RetiredColdObject, RetiredColdObjectDeleteState, SQLITE_STORAGE_META_VERSION, SqliteCmpDirty,
+	decode_bucket_catalog_db_fact, decode_bucket_fork_fact, decode_cold_shard_ref,
+	decode_compaction_root, decode_db_history_pin, decode_pitr_interval_coverage,
+	decode_retired_cold_object, decode_sqlite_cmp_dirty, encode_bucket_catalog_db_fact,
+	encode_bucket_fork_fact, encode_cold_shard_ref, encode_compaction_root, encode_db_history_pin,
+	encode_pitr_interval_coverage, encode_retired_cold_object, encode_sqlite_cmp_dirty,
 };
 use gas::prelude::Id;
 use uuid::Uuid;
@@ -117,8 +116,8 @@ fn pitr_interval_coverage_round_trips_with_embedded_version() {
 		.expect("PITR interval coverage should encode");
 	assert_embedded_version(&encoded);
 
-	let decoded = decode_pitr_interval_coverage(&encoded)
-		.expect("PITR interval coverage should decode");
+	let decoded =
+		decode_pitr_interval_coverage(&encoded).expect("PITR interval coverage should decode");
 	assert_eq!(decoded, coverage);
 }
 
@@ -172,10 +171,8 @@ fn db_history_pin_round_trips_each_kind_with_embedded_version() {
 
 #[test]
 fn bucket_proof_facts_round_trip_with_embedded_version() {
-	let source_bucket_branch_id =
-		bucket_branch_id(0x1111_2222_3333_4444_5555_6666_7777_8888);
-	let target_bucket_branch_id =
-		bucket_branch_id(0x9999_aaaa_bbbb_cccc_dddd_eeee_ffff_0000);
+	let source_bucket_branch_id = bucket_branch_id(0x1111_2222_3333_4444_5555_6666_7777_8888);
+	let target_bucket_branch_id = bucket_branch_id(0x9999_aaaa_bbbb_cccc_dddd_eeee_ffff_0000);
 	let fork_fact = BucketForkFact {
 		source_bucket_branch_id,
 		target_bucket_branch_id,
@@ -201,8 +198,7 @@ fn bucket_proof_facts_round_trip_with_embedded_version() {
 		.expect("bucket catalog fact should encode");
 	assert_embedded_version(&encoded_catalog);
 	assert_eq!(
-		decode_bucket_catalog_db_fact(&encoded_catalog)
-			.expect("bucket catalog fact should decode"),
+		decode_bucket_catalog_db_fact(&encoded_catalog).expect("bucket catalog fact should decode"),
 		catalog_fact
 	);
 }

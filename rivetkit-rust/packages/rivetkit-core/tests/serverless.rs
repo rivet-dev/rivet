@@ -167,8 +167,8 @@ mod moved_tests {
 
 	async fn test_runtime() -> CoreServerlessRuntime {
 		CoreServerlessRuntime::new(HashMap::new(), test_config())
-		.await
-		.expect("runtime should build")
+			.await
+			.expect("runtime should build")
 	}
 
 	fn test_config() -> ServeConfig {

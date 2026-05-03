@@ -8,9 +8,14 @@ use std::ptr;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum LogicalOp {
-	Put { key: String, value: Vec<u8> },
+	Put {
+		key: String,
+		value: Vec<u8>,
+	},
 	#[allow(dead_code)]
-	Delete { key: String },
+	Delete {
+		key: String,
+	},
 	CreateHeavySchema,
 	InsertHeavyBlob {
 		id: i64,
@@ -54,8 +59,9 @@ impl LogicalOp {
 			LogicalOp::ExplicitRollbackInsert { id, payload_len } => {
 				explicit_rollback_insert(db, *id, *payload_len)
 			}
-			LogicalOp::Vacuum => super::super::sqlite_exec(db, "VACUUM;")
-				.map_err(anyhow::Error::msg),
+			LogicalOp::Vacuum => {
+				super::super::sqlite_exec(db, "VACUUM;").map_err(anyhow::Error::msg)
+			}
 			LogicalOp::Sql(sql) => super::super::sqlite_exec(db, sql).map_err(anyhow::Error::msg),
 		}
 	}
@@ -150,7 +156,10 @@ fn prepare(db: *mut sqlite3, sql: &str) -> Result<*mut sqlite3_stmt> {
 	let mut stmt = ptr::null_mut();
 	let rc = unsafe { sqlite3_prepare_v2(db, c_sql.as_ptr(), -1, &mut stmt, ptr::null_mut()) };
 	if rc != SQLITE_OK {
-		bail!("{sql} prepare failed with code {rc}: {}", sqlite_error_message(db));
+		bail!(
+			"{sql} prepare failed with code {rc}: {}",
+			sqlite_error_message(db)
+		);
 	}
 	Ok(stmt)
 }
@@ -201,7 +210,10 @@ fn step_done(db: *mut sqlite3, stmt: *mut sqlite3_stmt) -> Result<()> {
 		sqlite3_finalize(stmt);
 	}
 	if rc != libsqlite3_sys::SQLITE_DONE {
-		bail!("sqlite step failed with code {rc}: {}", sqlite_error_message(db));
+		bail!(
+			"sqlite step failed with code {rc}: {}",
+			sqlite_error_message(db)
+		);
 	}
 	Ok(())
 }

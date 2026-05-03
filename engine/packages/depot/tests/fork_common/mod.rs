@@ -4,18 +4,18 @@
 mod common;
 
 use anyhow::Result;
-use gas::prelude::Id;
 use depot::{
 	keys::{
-		database_pointer_cur_key, branch_commit_key, branch_meta_head_key, branches_list_key,
-		bucket_branches_list_key, bucket_pointer_cur_key,
+		branch_commit_key, branch_meta_head_key, branches_list_key, bucket_branches_list_key,
+		bucket_pointer_cur_key, database_pointer_cur_key,
 	},
 	types::{
-		DatabaseBranchId, DatabaseBranchRecord, CommitRow, DirtyPage, BucketBranchId,
-		BucketBranchRecord, BucketId, decode_database_branch_record, decode_database_pointer,
-		decode_commit_row, decode_db_head, decode_bucket_branch_record, decode_bucket_pointer,
+		BucketBranchId, BucketBranchRecord, BucketId, CommitRow, DatabaseBranchId,
+		DatabaseBranchRecord, DirtyPage, decode_bucket_branch_record, decode_bucket_pointer,
+		decode_commit_row, decode_database_branch_record, decode_database_pointer, decode_db_head,
 	},
 };
+use gas::prelude::Id;
 
 pub use common::read_value;
 
@@ -114,10 +114,7 @@ pub async fn read_commit(
 	decode_commit_row(&bytes)
 }
 
-pub fn assert_storage_error(
-	err: &anyhow::Error,
-	expected: depot::error::SqliteStorageError,
-) {
+pub fn assert_storage_error(err: &anyhow::Error, expected: depot::error::SqliteStorageError) {
 	assert!(
 		err.chain().any(|cause| {
 			cause

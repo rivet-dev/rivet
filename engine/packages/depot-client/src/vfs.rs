@@ -4,6 +4,8 @@
 
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use std::ffi::{CStr, CString, c_char, c_int, c_void};
+#[cfg(test)]
+use std::future::Future;
 use std::ptr;
 use std::slice;
 use std::sync::Arc;
@@ -17,6 +19,8 @@ use parking_lot::{Mutex, RwLock};
 use rivet_envoy_client::handle::EnvoyHandle;
 use rivet_envoy_protocol as protocol;
 use tokio::runtime::Handle;
+#[cfg(test)]
+use tokio::runtime::RuntimeFlavor;
 
 use crate::optimization_flags::{SqliteOptimizationFlags, sqlite_optimization_flags};
 
@@ -91,6 +95,40 @@ fn panic_message(payload: &Box<dyn std::any::Any + Send>) -> String {
 	}
 }
 
+#[cfg(test)]
+fn block_on_runtime<F, T>(runtime: &Handle, future: F) -> std::result::Result<T, String>
+where
+	F: Future<Output = T> + Send + 'static,
+	T: Send + 'static,
+{
+	if Handle::try_current().is_err() {
+		return Ok(runtime.block_on(future));
+	}
+
+	if runtime.runtime_flavor() == RuntimeFlavor::CurrentThread {
+		return Err(
+			"sqlite VFS registration cannot block on a current-thread Tokio runtime".to_string(),
+		);
+	}
+
+	let runtime = runtime.clone();
+	// VFS registration is synchronous because SQLite VFS callbacks are synchronous, but native
+	// actor startup often opens SQLite while already running on a Tokio worker. Blocking the
+	// current worker with `Handle::block_on` would panic, so only the open-time metadata fetch is
+	// bridged through a short standalone thread. SQL execution itself stays on the SQLite worker.
+	std::thread::Builder::new()
+		.name("sqlite-vfs-runtime-bridge".to_string())
+		.spawn(move || runtime.block_on(future))
+		.map_err(|err| format!("spawn sqlite VFS runtime bridge: {err}"))?
+		.join()
+		.map_err(|panic| {
+			format!(
+				"sqlite VFS runtime bridge panicked: {}",
+				panic_message(&panic)
+			)
+		})
+}
+
 macro_rules! vfs_catch_unwind {
 	($err_val:expr, $body:expr) => {
 		match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| $body)) {
@@ -116,7 +154,7 @@ enum SqliteTransportInner {
 }
 
 impl SqliteTransport {
-	fn from_envoy(handle: EnvoyHandle) -> Self {
+	pub(crate) fn from_envoy(handle: EnvoyHandle) -> Self {
 		Self {
 			inner: Arc::new(SqliteTransportInner::Envoy(handle)),
 		}
@@ -376,6 +414,11 @@ pub struct SqliteVfsMetricsSnapshot {
 	pub state_update_ns: u64,
 	pub total_ns: u64,
 	pub commit_count: u64,
+	pub page_cache_entries: u64,
+	pub page_cache_weighted_size: u64,
+	pub page_cache_capacity_pages: u64,
+	pub write_buffer_dirty_pages: u64,
+	pub db_size_pages: u64,
 }
 
 pub trait SqliteVfsMetrics: Send + Sync {
@@ -401,27 +444,21 @@ pub trait SqliteVfsMetrics: Send + Sync {
 	) {
 	}
 
-	fn set_read_pool_active_readers(&self, _readers: u64) {}
+	fn set_worker_queue_depth(&self, _depth: u64) {}
 
-	fn set_read_pool_idle_readers(&self, _readers: u64) {}
+	fn record_worker_queue_overload(&self) {}
 
-	fn observe_read_pool_read_wait(&self, _duration: Duration) {}
+	fn observe_worker_command_duration(&self, _operation: &'static str, _duration_ns: u64) {}
 
-	fn observe_read_pool_write_wait(&self, _duration: Duration) {}
+	fn record_worker_command_error(&self, _operation: &'static str, _code: &'static str) {}
 
-	fn record_read_pool_routed_read_query(&self) {}
+	fn observe_worker_close_duration(&self, _duration_ns: u64) {}
 
-	fn record_read_pool_write_fallback_query(&self) {}
+	fn record_worker_close_timeout(&self) {}
 
-	fn observe_read_pool_manual_transaction(&self, _duration: Duration) {}
+	fn record_worker_crash(&self) {}
 
-	fn record_read_pool_reader_open(&self) {}
-
-	fn record_read_pool_reader_close(&self, _count: u64) {}
-
-	fn record_read_pool_rejected_reader_mutation(&self) {}
-
-	fn record_read_pool_mode_transition(&self, _from: &str, _to: &str) {}
+	fn record_worker_unclean_close(&self) {}
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -945,17 +982,29 @@ impl VfsContext {
 		transport: SqliteTransport,
 		config: VfsConfig,
 		io_methods: sqlite3_io_methods,
+		initial_main_page: Option<Vec<u8>>,
 		metrics: Option<Arc<dyn SqliteVfsMetrics>>,
 	) -> std::result::Result<Self, String> {
 		let mut state = VfsState::new(&config);
+		if let Some(page) = initial_main_page {
+			state.seed_main_page(page);
+		}
 		#[cfg(test)]
 		if let SqliteTransportInner::Direct(storage) = &*transport.inner {
 			if storage.is_strict_mode() {
-				if let Some(page) = fetch_initial_main_page(&transport, &runtime, &actor_id)? {
+				if let Some(page) =
+					fetch_initial_main_page_for_test(&transport, &runtime, &actor_id)?
+				{
 					state.seed_main_page(page);
 				}
 			} else {
-				let snapshot = runtime.block_on(storage.snapshot_pages(&actor_id));
+				let storage = Arc::clone(storage);
+				let actor_id = actor_id.clone();
+				let snapshot =
+					block_on_runtime(
+						&runtime,
+						async move { storage.snapshot_pages(&actor_id).await },
+					)?;
 				if snapshot.db_size_pages > 0 {
 					state.db_size_pages = snapshot.db_size_pages;
 					state.page_cache.invalidate_all();
@@ -964,10 +1013,6 @@ impl VfsContext {
 					}
 				}
 			}
-		}
-		#[cfg(not(test))]
-		if let Some(page) = fetch_initial_main_page(&transport, &runtime, &actor_id)? {
-			state.seed_main_page(page);
 		}
 
 		Ok(Self {
@@ -1044,6 +1089,8 @@ impl VfsContext {
 	}
 
 	fn sqlite_vfs_metrics(&self) -> SqliteVfsMetricsSnapshot {
+		let state = self.state.read();
+
 		SqliteVfsMetricsSnapshot {
 			request_build_ns: self.commit_request_build_ns.load(Ordering::Relaxed),
 			serialize_ns: self.commit_serialize_ns.load(Ordering::Relaxed),
@@ -1051,6 +1098,11 @@ impl VfsContext {
 			state_update_ns: self.commit_state_update_ns.load(Ordering::Relaxed),
 			total_ns: self.commit_duration_ns_total.load(Ordering::Relaxed),
 			commit_count: self.commit_total.load(Ordering::Relaxed),
+			page_cache_entries: state.page_cache.entry_count(),
+			page_cache_weighted_size: state.page_cache.weighted_size(),
+			page_cache_capacity_pages: self.config.cache_capacity_pages,
+			write_buffer_dirty_pages: state.write_buffer.dirty.len() as u64,
+			db_size_pages: state.db_size_pages as u64,
 		}
 	}
 
@@ -1284,6 +1336,9 @@ impl VfsContext {
 		}
 
 		let get_pages_start = Instant::now();
+		// Transport rejection, including envoy shutdown while a VFS callback is
+		// active, becomes GetPagesError here. The SQLite callback maps that to
+		// SQLITE_IOERR_* because VFS has no richer async transport error channel.
 		let response = self
 			.runtime
 			.block_on(self.transport.get_pages(protocol::SqliteGetPagesRequest {
@@ -1362,6 +1417,9 @@ impl VfsContext {
 		let request_build_ns = request_build_start.elapsed().as_nanos() as u64;
 
 		let (outcome, transport_metrics) =
+			// Transport rejection, including envoy shutdown while a VFS callback is
+			// active, becomes CommitBufferError here. xSync and xClose then surface
+			// it to SQLite as SQLITE_IOERR_*.
 			match self.block_on_buffered_commit(request.clone(), timeout) {
 				Ok(CommitWait::Completed(outcome)) => outcome,
 				Ok(CommitWait::TimedOut) => return Ok(CommitWait::TimedOut),
@@ -1591,17 +1649,26 @@ fn mark_dead_from_fence_commit_error(ctx: &VfsContext, err: &CommitBufferError) 
 	}
 }
 
-fn fetch_initial_main_page(
+pub(crate) async fn fetch_initial_main_page_for_registration(
 	transport: &SqliteTransport,
-	runtime: &Handle,
 	actor_id: &str,
 ) -> std::result::Result<Option<Vec<u8>>, String> {
-	let response = runtime.block_on(transport.get_pages(protocol::SqliteGetPagesRequest {
-		actor_id: actor_id.to_string(),
-		pgnos: vec![1],
-		expected_generation: None,
-		expected_head_txid: None,
-	}));
+	fetch_initial_main_page(transport.clone(), actor_id.to_string()).await
+}
+
+async fn fetch_initial_main_page(
+	transport: SqliteTransport,
+	actor_id: String,
+) -> std::result::Result<Option<Vec<u8>>, String> {
+	let request_actor_id = actor_id.clone();
+	let response = transport
+		.get_pages(protocol::SqliteGetPagesRequest {
+			actor_id: request_actor_id,
+			pgnos: vec![1],
+			expected_generation: None,
+			expected_head_txid: None,
+		})
+		.await;
 
 	match response {
 		Ok(protocol::SqliteGetPagesResponse::SqliteGetPagesOk(ok)) => Ok(ok
@@ -1625,6 +1692,19 @@ fn fetch_initial_main_page(
 		}
 		Err(err) => Err(format!("sqlite initial page fetch failed: {err}")),
 	}
+}
+
+#[cfg(test)]
+fn fetch_initial_main_page_for_test(
+	transport: &SqliteTransport,
+	runtime: &Handle,
+	actor_id: &str,
+) -> std::result::Result<Option<Vec<u8>>, String> {
+	let transport = transport.clone();
+	let actor_id = actor_id.to_string();
+	block_on_runtime(runtime, async move {
+		fetch_initial_main_page(transport, actor_id).await
+	})?
 }
 
 fn is_initial_main_page_missing(message: &str) -> bool {
@@ -2538,12 +2618,30 @@ impl SqliteVfs {
 		self.ctx.snapshot_preload_hints()
 	}
 
+	pub(crate) fn sqlite_vfs_metrics(&self) -> SqliteVfsMetricsSnapshot {
+		self.ctx.sqlite_vfs_metrics()
+	}
+
 	pub(crate) fn register_with_transport(
 		name: &str,
 		transport: SqliteTransport,
 		actor_id: String,
 		runtime: Handle,
 		config: VfsConfig,
+		metrics: Option<Arc<dyn SqliteVfsMetrics>>,
+	) -> std::result::Result<Self, String> {
+		Self::register_with_transport_and_initial_page(
+			name, transport, actor_id, runtime, config, None, metrics,
+		)
+	}
+
+	pub(crate) fn register_with_transport_and_initial_page(
+		name: &str,
+		transport: SqliteTransport,
+		actor_id: String,
+		runtime: Handle,
+		config: VfsConfig,
+		initial_main_page: Option<Vec<u8>>,
 		metrics: Option<Arc<dyn SqliteVfsMetrics>>,
 	) -> std::result::Result<Self, String> {
 		let mut io_methods: sqlite3_io_methods = unsafe { std::mem::zeroed() };
@@ -2562,7 +2660,13 @@ impl SqliteVfs {
 		io_methods.xDeviceCharacteristics = Some(io_device_characteristics);
 
 		let mut ctx = Box::new(VfsContext::new(
-			actor_id, runtime, transport, config, io_methods, metrics,
+			actor_id,
+			runtime,
+			transport,
+			config,
+			io_methods,
+			initial_main_page,
+			metrics,
 		)?);
 		let ctx_ptr = (&mut *ctx) as *mut VfsContext;
 		let name_cstring = CString::new(name).map_err(|err| err.to_string())?;

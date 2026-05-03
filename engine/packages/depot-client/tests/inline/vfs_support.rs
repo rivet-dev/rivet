@@ -1,7 +1,8 @@
 use std::collections::BTreeMap;
 use std::sync::{
-	Arc, mpsc,
+	Arc,
 	atomic::{AtomicBool, AtomicU64, Ordering},
+	mpsc,
 };
 
 use anyhow::{Context, Result, bail};
@@ -9,11 +10,11 @@ use async_trait::async_trait;
 use depot::{
 	cold_tier::{ColdTier, ColdTierObjectMetadata},
 	conveyer::{Db, db::CompactionSignaler},
-	fault::DepotFaultController,
 	error::SqliteStorageError,
+	fault::DepotFaultController,
 	keys::{
-		SHARD_SIZE, branch_compaction_cold_shard_key, branch_delta_chunk_key,
-		branch_compaction_root_key, branch_meta_head_key, branch_pidx_key, branch_shard_key,
+		SHARD_SIZE, branch_compaction_cold_shard_key, branch_compaction_root_key,
+		branch_delta_chunk_key, branch_meta_head_key, branch_pidx_key, branch_shard_key,
 	},
 	ltx::{LtxHeader, encode_ltx_v3},
 	types::{
@@ -108,26 +109,28 @@ impl DirectStorage {
 						Ok(())
 					})
 				});
-				Arc::new(if let Some(fault_controller) = self.fault_controller.clone() {
-					Db::new_with_compaction_signaler_and_fault_controller_for_test(
-						Arc::clone(&self.db),
-						Id::nil(),
-						actor_id,
-						self.node_id,
-						cold_tier,
-						compaction_signaler,
-						fault_controller,
-					)
-				} else {
-					Db::new_with_compaction_signaler(
-						Arc::clone(&self.db),
-						Id::nil(),
-						actor_id,
-						self.node_id,
-						cold_tier,
-						compaction_signaler,
-					)
-				})
+				Arc::new(
+					if let Some(fault_controller) = self.fault_controller.clone() {
+						Db::new_with_compaction_signaler_and_fault_controller_for_test(
+							Arc::clone(&self.db),
+							Id::nil(),
+							actor_id,
+							self.node_id,
+							cold_tier,
+							compaction_signaler,
+							fault_controller,
+						)
+					} else {
+						Db::new_with_compaction_signaler(
+							Arc::clone(&self.db),
+							Id::nil(),
+							actor_id,
+							self.node_id,
+							cold_tier,
+							compaction_signaler,
+						)
+					},
+				)
 			})
 			.get()
 			.clone()
@@ -195,7 +198,8 @@ impl DirectStorage {
 		if dirty_pages.is_empty() {
 			dirty_pages.push(DirtyPage { pgno, bytes });
 		}
-		self.seed_pages_as_cold_ref(actor_id, pgno, dirty_pages).await
+		self.seed_pages_as_cold_ref(actor_id, pgno, dirty_pages)
+			.await
 	}
 
 	pub(crate) async fn seed_pages_as_cold_ref(
@@ -216,10 +220,7 @@ impl DirectStorage {
 		if dirty_pages.is_empty() {
 			bail!("cold-ref seed requires at least one page");
 		}
-		let object_bytes = encode_ltx_v3(
-			LtxHeader::delta(head_txid, 1, 1_000),
-			&dirty_pages,
-		)?;
+		let object_bytes = encode_ltx_v3(LtxHeader::delta(head_txid, 1, 1_000), &dirty_pages)?;
 		let digest = Sha256::digest(&object_bytes);
 		let mut content_hash = [0_u8; 32];
 		content_hash.copy_from_slice(&digest);
@@ -357,7 +358,9 @@ impl DirectStorage {
 		let mirror_pages = self.read_mirror(actor_id, pgnos).await;
 		for page in mirror_pages {
 			if page.bytes.is_some()
-				|| by_pgno.get(&page.pgno).is_none_or(|existing| existing.bytes.is_none())
+				|| by_pgno
+					.get(&page.pgno)
+					.is_none_or(|existing| existing.bytes.is_none())
 			{
 				by_pgno.insert(page.pgno, page);
 			}
@@ -373,11 +376,7 @@ impl DirectStorage {
 			.collect())
 	}
 
-	async fn read_mirror(
-		&self,
-		actor_id: &str,
-		pgnos: &[u32],
-	) -> Vec<depot::types::FetchedPage> {
+	async fn read_mirror(&self, actor_id: &str, pgnos: &[u32]) -> Vec<depot::types::FetchedPage> {
 		self.counters.mirror_reads.fetch_add(1, Ordering::SeqCst);
 		let mirror = self.page_mirror(actor_id.to_string()).await;
 		let mirror = mirror.lock();
@@ -545,9 +544,7 @@ pub(crate) struct DirectCommitPause {
 
 impl DirectCommitPause {
 	pub(crate) fn wait_until_reached(&self) {
-		self.reached
-			.recv()
-			.expect("commit pause should be reached");
+		self.reached.recv().expect("commit pause should be reached");
 	}
 
 	pub(crate) fn resume(self) {
@@ -560,7 +557,9 @@ struct DirectCommitGate {
 	resume: mpsc::Receiver<()>,
 }
 
-pub(crate) fn protocol_fetched_page(page: depot::types::FetchedPage) -> protocol::SqliteFetchedPage {
+pub(crate) fn protocol_fetched_page(
+	page: depot::types::FetchedPage,
+) -> protocol::SqliteFetchedPage {
 	protocol::SqliteFetchedPage {
 		pgno: page.pgno,
 		bytes: page.bytes,

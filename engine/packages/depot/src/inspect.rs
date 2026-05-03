@@ -9,15 +9,10 @@ use rivet_pools::NodeId;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
-use universaldb::{
-	RangeOption,
-	options::StreamingMode,
-	utils::IsolationLevel::Snapshot,
-};
+use universaldb::{RangeOption, options::StreamingMode, utils::IsolationLevel::Snapshot};
 use uuid::Uuid;
 
 use crate::{
-	gc,
 	conveyer::{
 		keys,
 		types::{
@@ -28,6 +23,7 @@ use crate::{
 			decode_sqlite_cmp_dirty,
 		},
 	},
+	gc,
 };
 
 pub const DEFAULT_LIMIT: usize = 100;
@@ -201,9 +197,13 @@ pub async fn catalog(
 			let database_filter = database_filter.clone();
 			async move {
 				let bucket_pointer = if let Some(bucket_id) = bucket_filter {
-					tx_get_decoded(&tx, keys::bucket_pointer_cur_key(bucket_id), decode_bucket_pointer)
-						.await?
-						.map(|pointer| (bucket_id, pointer))
+					tx_get_decoded(
+						&tx,
+						keys::bucket_pointer_cur_key(bucket_id),
+						decode_bucket_pointer,
+					)
+					.await?
+					.map(|pointer| (bucket_id, pointer))
 				} else {
 					None
 				};
@@ -253,7 +253,8 @@ pub async fn catalog(
 					})]
 				} else {
 					let bucket_rows =
-						scan_prefix_page(&tx, keys::bucket_pointer_cur_prefix(), None, limit).await?;
+						scan_prefix_page(&tx, keys::bucket_pointer_cur_prefix(), None, limit)
+							.await?;
 					let mut buckets = Vec::new();
 					for row in bucket_rows.rows {
 						let bucket_id = keys::decode_bucket_pointer_cur_bucket_id(&row.key)?;
@@ -293,18 +294,29 @@ pub async fn bucket(
 	let include_history = query.include_history.unwrap_or(false);
 	let data = db
 		.run(move |tx| async move {
-			let pointer = tx_get_decoded(&tx, keys::bucket_pointer_cur_key(bucket_id), decode_bucket_pointer).await?;
+			let pointer = tx_get_decoded(
+				&tx,
+				keys::bucket_pointer_cur_key(bucket_id),
+				decode_bucket_pointer,
+			)
+			.await?;
 			let current_branch = match &pointer {
 				Some(pointer) => Some(pointer.current_branch),
 				None => None,
 			};
 			let branch_record = if let Some(branch_id) = current_branch {
-				tx_get_decoded(&tx, keys::bucket_branches_list_key(branch_id), decode_bucket_branch_record).await?
+				tx_get_decoded(
+					&tx,
+					keys::bucket_branches_list_key(branch_id),
+					decode_bucket_branch_record,
+				)
+				.await?
 			} else {
 				None
 			};
 			let catalog = if let Some(branch_id) = current_branch {
-				summary_for_prefix(&tx, keys::bucket_catalog_prefix(branch_id), sample_limit).await?
+				summary_for_prefix(&tx, keys::bucket_catalog_prefix(branch_id), sample_limit)
+					.await?
 			} else {
 				empty_summary()
 			};
@@ -319,7 +331,12 @@ pub async fn bucket(
 				empty_summary()
 			};
 			let history = if include_history {
-				summary_for_prefix(&tx, keys::bucket_pointer_history_prefix(bucket_id), sample_limit).await?
+				summary_for_prefix(
+					&tx,
+					keys::bucket_pointer_history_prefix(bucket_id),
+					sample_limit,
+				)
+				.await?
 			} else {
 				empty_summary()
 			};
@@ -340,7 +357,11 @@ pub async fn bucket(
 		})
 		.await?;
 
-	response(node_id, json!({ "kind": "bucket", "bucket_id": bucket_id }), data)
+	response(
+		node_id,
+		json!({ "kind": "bucket", "bucket_id": bucket_id }),
+		data,
+	)
 }
 
 pub async fn database(
@@ -356,10 +377,16 @@ pub async fn database(
 		.run(move |tx| {
 			let database_id = database_id.clone();
 			async move {
-				let bucket_pointer =
-					tx_get_decoded(&tx, keys::bucket_pointer_cur_key(bucket_id), decode_bucket_pointer).await?;
+				let bucket_pointer = tx_get_decoded(
+					&tx,
+					keys::bucket_pointer_cur_key(bucket_id),
+					decode_bucket_pointer,
+				)
+				.await?;
 				let Some(bucket_pointer) = bucket_pointer else {
-					return Ok(json!({ "bucket_id": bucket_id, "database_id": database_id, "pointer": null }));
+					return Ok(
+						json!({ "bucket_id": bucket_id, "database_id": database_id, "pointer": null }),
+					);
 				};
 				let pointer = tx_get_decoded(
 					&tx,
@@ -429,7 +456,13 @@ pub async fn branch_rows(
 		.await?;
 	let mut rows = Vec::new();
 	for row in scan.rows {
-		rows.push(decode_row_value(branch_id, family, &row.key, &row.value, include_bytes));
+		rows.push(decode_row_value(
+			branch_id,
+			family,
+			&row.key,
+			&row.value,
+			include_bytes,
+		));
 	}
 
 	Ok(PaginatedRowsResponse {
@@ -539,10 +572,7 @@ pub async fn page_trace(
 			tx_get_decoded(&tx, keys::branch_meta_head_key(branch_id), decode_db_head).await
 		})
 		.await?;
-	let outcome = if head
-		.as_ref()
-		.is_some_and(|head| pgno <= head.db_size_pages)
-	{
+	let outcome = if head.as_ref().is_some_and(|head| pgno <= head.db_size_pages) {
 		"found"
 	} else {
 		"above_eof"
@@ -578,7 +608,10 @@ fn response(node_id: NodeId, scope: Value, data: Value) -> Result<InspectRespons
 
 fn page_limit(limit: Option<usize>) -> Result<usize> {
 	let limit = limit.unwrap_or(DEFAULT_LIMIT);
-	ensure!(limit <= MAX_LIMIT, "Depot inspect limit exceeds hard cap of {MAX_LIMIT}");
+	ensure!(
+		limit <= MAX_LIMIT,
+		"Depot inspect limit exceeds hard cap of {MAX_LIMIT}"
+	);
 	Ok(limit)
 }
 
@@ -745,13 +778,31 @@ async fn branch_blob_in_tx(
 	branch_id: DatabaseBranchId,
 	sample_limit: usize,
 ) -> Result<Value> {
-	let record = tx_get_decoded(tx, keys::branches_list_key(branch_id), decode_database_branch_record).await?;
+	let record = tx_get_decoded(
+		tx,
+		keys::branches_list_key(branch_id),
+		decode_database_branch_record,
+	)
+	.await?;
 	let head = tx_get_decoded(tx, keys::branch_meta_head_key(branch_id), decode_db_head).await?;
-	let head_at_fork =
-		tx_get_decoded(tx, keys::branch_meta_head_at_fork_key(branch_id), decode_db_head).await?;
-	let compaction_root =
-		tx_get_decoded(tx, keys::branch_compaction_root_key(branch_id), decode_compaction_root).await?;
-	let dirty = tx_get_decoded(tx, keys::sqlite_cmp_dirty_key(branch_id), decode_sqlite_cmp_dirty).await?;
+	let head_at_fork = tx_get_decoded(
+		tx,
+		keys::branch_meta_head_at_fork_key(branch_id),
+		decode_db_head,
+	)
+	.await?;
+	let compaction_root = tx_get_decoded(
+		tx,
+		keys::branch_compaction_root_key(branch_id),
+		decode_compaction_root,
+	)
+	.await?;
+	let dirty = tx_get_decoded(
+		tx,
+		keys::sqlite_cmp_dirty_key(branch_id),
+		decode_sqlite_cmp_dirty,
+	)
+	.await?;
 	let gc_pin = gc::read_branch_gc_pin_tx(tx, branch_id).await?;
 	let mut row_families = serde_json::Map::new();
 	for family in [
@@ -847,9 +898,15 @@ fn decode_value_by_key(key: &[u8], value: &[u8]) -> Value {
 		match key[1] {
 			keys::DBPTR_PARTITION => return value_or_error(decode_database_pointer(value)),
 			keys::BUCKET_PTR_PARTITION => return value_or_error(decode_bucket_pointer(value)),
-			keys::BRANCHES_PARTITION => return value_or_error(decode_database_branch_record(value)),
-			keys::BUCKET_BRANCH_PARTITION => return value_or_error(decode_bucket_branch_record(value)),
-			keys::SQLITE_CMP_DIRTY_PARTITION => return value_or_error(decode_sqlite_cmp_dirty(value)),
+			keys::BRANCHES_PARTITION => {
+				return value_or_error(decode_database_branch_record(value));
+			}
+			keys::BUCKET_BRANCH_PARTITION => {
+				return value_or_error(decode_bucket_branch_record(value));
+			}
+			keys::SQLITE_CMP_DIRTY_PARTITION => {
+				return value_or_error(decode_sqlite_cmp_dirty(value));
+			}
 			keys::DB_PIN_PARTITION => return value_or_error(decode_db_history_pin(value)),
 			_ => {}
 		}
@@ -922,9 +979,9 @@ fn value_or_error<T: Serialize>(result: Result<T>) -> Value {
 
 fn result_to_value<T: Serialize>(result: Result<T>) -> Value {
 	match result {
-		Ok(value) => serde_json::to_value(value).unwrap_or_else(|err| {
-			json!({ "decode_error": format!("failed to encode decoded value as JSON: {err}") })
-		}),
+		Ok(value) => serde_json::to_value(value).unwrap_or_else(
+			|err| json!({ "decode_error": format!("failed to encode decoded value as JSON: {err}") }),
+		),
 		Err(err) => json!({ "decode_error": err.to_string() }),
 	}
 }

@@ -18,18 +18,17 @@ fn roundtrip_to_envoy(message: protocol::ToEnvoy) -> anyhow::Result<protocol::To
 #[test]
 fn get_pages_request_roundtrip() -> anyhow::Result<()> {
 	for pgnos in [Vec::new(), vec![7], (1..=1000).collect::<Vec<_>>()] {
-		let decoded =
-			roundtrip_to_rivet(protocol::ToRivet::ToRivetSqliteGetPagesRequest(
-				protocol::ToRivetSqliteGetPagesRequest {
-					request_id: 42,
-					data: protocol::SqliteGetPagesRequest {
-						actor_id: "actor-a".into(),
-						pgnos: pgnos.clone(),
-						expected_generation: None,
-						expected_head_txid: None,
-					},
+		let decoded = roundtrip_to_rivet(protocol::ToRivet::ToRivetSqliteGetPagesRequest(
+			protocol::ToRivetSqliteGetPagesRequest {
+				request_id: 42,
+				data: protocol::SqliteGetPagesRequest {
+					actor_id: "actor-a".into(),
+					pgnos: pgnos.clone(),
+					expected_generation: None,
+					expected_head_txid: None,
 				},
-			))?;
+			},
+		))?;
 
 		let protocol::ToRivet::ToRivetSqliteGetPagesRequest(decoded) = decoded else {
 			panic!("expected get_pages request");
@@ -49,7 +48,11 @@ fn commit_request_roundtrip() -> anyhow::Result<()> {
 	for (dirty_pages, db_size_pages, now_ms) in [
 		(Vec::new(), 1, 0),
 		(vec![dirty_page(1, 1)], 5, 1234),
-		((1..=1000).map(|pgno| dirty_page(pgno, 9)).collect(), 1000, i64::MAX - 7),
+		(
+			(1..=1000).map(|pgno| dirty_page(pgno, 9)).collect(),
+			1000,
+			i64::MAX - 7,
+		),
 	] {
 		let decoded = roundtrip_to_rivet(protocol::ToRivet::ToRivetSqliteCommitRequest(
 			protocol::ToRivetSqliteCommitRequest {
@@ -119,18 +122,17 @@ fn commit_response_ok_and_err_roundtrip() -> anyhow::Result<()> {
 #[test]
 fn expected_generation_optional_present_and_absent() -> anyhow::Result<()> {
 	for (expected_generation, expected_head_txid) in [(None, None), (Some(7), Some(11))] {
-		let decoded =
-			roundtrip_to_rivet(protocol::ToRivet::ToRivetSqliteGetPagesRequest(
-				protocol::ToRivetSqliteGetPagesRequest {
-					request_id: 3,
-					data: protocol::SqliteGetPagesRequest {
-						actor_id: "actor-c".into(),
-						pgnos: vec![1],
-						expected_generation,
-						expected_head_txid,
-					},
+		let decoded = roundtrip_to_rivet(protocol::ToRivet::ToRivetSqliteGetPagesRequest(
+			protocol::ToRivetSqliteGetPagesRequest {
+				request_id: 3,
+				data: protocol::SqliteGetPagesRequest {
+					actor_id: "actor-c".into(),
+					pgnos: vec![1],
+					expected_generation,
+					expected_head_txid,
 				},
-			))?;
+			},
+		))?;
 		let protocol::ToRivet::ToRivetSqliteGetPagesRequest(decoded) = decoded else {
 			panic!("expected get_pages request");
 		};
@@ -184,7 +186,10 @@ fn removed_op_types_not_in_module_namespace() {
 		"CommitFinalize",
 		"ForceCloseRequest",
 	] {
-		assert!(!schema.contains(removed), "{removed} still exists in v3 schema");
+		assert!(
+			!schema.contains(removed),
+			"{removed} still exists in v3 schema"
+		);
 	}
 }
 

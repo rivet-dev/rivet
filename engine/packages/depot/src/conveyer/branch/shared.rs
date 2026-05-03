@@ -2,19 +2,14 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result};
 use futures_util::TryStreamExt;
-use universaldb::{
-	RangeOption,
-	options::StreamingMode,
-	utils::IsolationLevel::Serializable,
-};
+use universaldb::{RangeOption, options::StreamingMode, utils::IsolationLevel::Serializable};
 
 use crate::conveyer::{
 	error::SqliteStorageError,
 	keys,
 	types::{
-		CommitRow, DatabaseBranchId, DatabaseBranchRecord, BucketBranchId,
-		BucketBranchRecord, decode_commit_row, decode_database_branch_record,
-		decode_bucket_branch_record,
+		BucketBranchId, BucketBranchRecord, CommitRow, DatabaseBranchId, DatabaseBranchRecord,
+		decode_bucket_branch_record, decode_commit_row, decode_database_branch_record,
 	},
 };
 

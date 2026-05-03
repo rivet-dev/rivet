@@ -3,18 +3,19 @@ use universaldb::options::MutationType;
 use universaldb::utils::IsolationLevel::{Serializable, Snapshot};
 
 use crate::conveyer::{
-	branch, history_pin, keys,
-	restore_point::{
-		resolve,
-		recompute::recompute_database_branch_restore_point_pin,
-		shared::{RestorePointCreateResult, ResolvedRestorePointPin, decode_i64_counter},
-		test_hooks,
-	},
+	branch,
 	constants::MAX_RESTORE_POINTS_PER_BUCKET,
 	error::SqliteStorageError,
+	history_pin, keys,
+	restore_point::{
+		recompute::recompute_database_branch_restore_point_pin,
+		resolve,
+		shared::{ResolvedRestorePointPin, RestorePointCreateResult, decode_i64_counter},
+		test_hooks,
+	},
 	types::{
-		RestorePointId, BucketBranchId, BucketId, PinStatus, RestorePointRecord,
-		SnapshotSelector, decode_restore_point_record, encode_restore_point_record,
+		BucketBranchId, BucketId, PinStatus, RestorePointId, RestorePointRecord, SnapshotSelector,
+		decode_restore_point_record, encode_restore_point_record,
 	},
 };
 
@@ -50,50 +51,45 @@ pub async fn delete_restore_point(
 	database_id: String,
 	restore_point: RestorePointId,
 ) -> Result<()> {
-	udb
-		.run(move |tx| {
-			let database_id = database_id.clone();
-			let restore_point = restore_point.clone();
+	udb.run(move |tx| {
+		let database_id = database_id.clone();
+		let restore_point = restore_point.clone();
 
-			async move {
-				let pinned_key = keys::restore_point_key(&database_id, restore_point.as_str());
-				let Some(pinned_bytes) = tx.informal().get(&pinned_key, Serializable).await? else {
-					return Ok(());
-				};
-				let pinned = decode_restore_point_record(&pinned_bytes)
-					.context("decode sqlite restore point record")?;
-				let bucket_branch_id =
-					branch::resolve_bucket_branch(&tx, bucket_id, Serializable)
-						.await?
-						.unwrap_or_else(BucketBranchId::nil);
-				let pin_count_key = keys::bucket_branches_pin_count_key(bucket_branch_id);
+		async move {
+			let pinned_key = keys::restore_point_key(&database_id, restore_point.as_str());
+			let Some(pinned_bytes) = tx.informal().get(&pinned_key, Serializable).await? else {
+				return Ok(());
+			};
+			let pinned = decode_restore_point_record(&pinned_bytes)
+				.context("decode sqlite restore point record")?;
+			let bucket_branch_id = branch::resolve_bucket_branch(&tx, bucket_id, Serializable)
+				.await?
+				.unwrap_or_else(BucketBranchId::nil);
+			let pin_count_key = keys::bucket_branches_pin_count_key(bucket_branch_id);
 
-				tx.informal().clear(&pinned_key);
-				history_pin::delete_restore_point_pin(&tx, pinned.database_branch_id, &restore_point);
-				tx.informal().atomic_op(
-					&pin_count_key,
-					&(-1_i64).to_le_bytes(),
-					MutationType::Add,
-				);
+			tx.informal().clear(&pinned_key);
+			history_pin::delete_restore_point_pin(&tx, pinned.database_branch_id, &restore_point);
+			tx.informal()
+				.atomic_op(&pin_count_key, &(-1_i64).to_le_bytes(), MutationType::Add);
 
-				let recomputed_pin = recompute_database_branch_restore_point_pin(
-					&tx,
-					&database_id,
-					pinned.database_branch_id,
-					&pinned_key,
-				)
-				.await?;
-				let branch_pin_key = keys::branches_restore_point_pin_key(pinned.database_branch_id);
-				if let Some(recomputed_pin) = recomputed_pin {
-					tx.informal().set(&branch_pin_key, &recomputed_pin);
-				} else {
-					tx.informal().clear(&branch_pin_key);
-				}
-
-				Ok(())
+			let recomputed_pin = recompute_database_branch_restore_point_pin(
+				&tx,
+				&database_id,
+				pinned.database_branch_id,
+				&pinned_key,
+			)
+			.await?;
+			let branch_pin_key = keys::branches_restore_point_pin_key(pinned.database_branch_id);
+			if let Some(recomputed_pin) = recomputed_pin {
+				tx.informal().set(&branch_pin_key, &recomputed_pin);
+			} else {
+				tx.informal().clear(&branch_pin_key);
 			}
-		})
-		.await?;
+
+			Ok(())
+		}
+	})
+	.await?;
 
 	Ok(())
 }
@@ -138,9 +134,7 @@ pub(super) async fn create_restore_point_for_resolved(
 		let database_id = database_id.clone();
 		let pin = pin.clone();
 
-		async move {
-			create_restore_point_for_resolved_tx(&tx, bucket_id, &database_id, &pin).await
-		}
+		async move { create_restore_point_for_resolved_tx(&tx, bucket_id, &database_id, &pin).await }
 	})
 	.await
 }
@@ -167,7 +161,12 @@ pub(super) async fn create_restore_point_for_resolved_tx(
 		.await?
 		.ok_or(SqliteStorageError::RestoreTargetExpired)?;
 
-	if tx.informal().get(&pinned_key, Serializable).await?.is_none() {
+	if tx
+		.informal()
+		.get(&pinned_key, Serializable)
+		.await?
+		.is_none()
+	{
 		let pin_count_key = keys::bucket_branches_pin_count_key(bucket_branch_id);
 		let pin_count = tx
 			.informal()
@@ -200,11 +199,8 @@ pub(super) async fn create_restore_point_for_resolved_tx(
 			restore_point_txid,
 			pin.created_at_ms,
 		)?;
-		tx.informal().atomic_op(
-			&pin_count_key,
-			&1_i64.to_le_bytes(),
-			MutationType::Add,
-		);
+		tx.informal()
+			.atomic_op(&pin_count_key, &1_i64.to_le_bytes(), MutationType::Add);
 	}
 	tx.informal().atomic_op(
 		&keys::branches_restore_point_pin_key(pin.database_branch_id),

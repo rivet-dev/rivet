@@ -1,16 +1,13 @@
 use anyhow::{Context, Result};
-use universaldb::{
-	options::MutationType,
-	utils::IsolationLevel::Serializable,
-};
+use universaldb::{options::MutationType, utils::IsolationLevel::Serializable};
 
 use crate::conveyer::{
-	branch,
-	keys, udb,
+	branch, keys,
 	types::{
-		BranchState, DatabaseBranchId, DatabaseBranchRecord, DatabasePointer, BucketBranchId,
-		BucketId, encode_database_branch_record, encode_database_pointer,
+		BranchState, BucketBranchId, BucketId, DatabaseBranchId, DatabaseBranchRecord,
+		DatabasePointer, encode_database_branch_record, encode_database_pointer,
 	},
+	udb,
 };
 
 pub(super) struct BranchResolution {
@@ -68,8 +65,8 @@ pub(super) async fn write_root_branch_metadata(
 		state: BranchState::Live,
 		lifecycle_generation: 0,
 	};
-	let encoded_record =
-		encode_database_branch_record(record).context("encode sqlite root database branch record")?;
+	let encoded_record = encode_database_branch_record(record)
+		.context("encode sqlite root database branch record")?;
 	let versionstamped_record = udb::append_versionstamp_offset(encoded_record, root_versionstamp)
 		.context("prepare versionstamped sqlite root database branch record")?;
 	tx.informal().atomic_op(
@@ -99,7 +96,8 @@ pub(super) async fn write_root_branch_metadata(
 		current_branch: branch_id,
 		last_swapped_at_ms: now_ms,
 	};
-	let encoded_pointer = encode_database_pointer(pointer).context("encode sqlite database pointer")?;
+	let encoded_pointer =
+		encode_database_pointer(pointer).context("encode sqlite database pointer")?;
 	tx.informal().set(
 		&keys::database_pointer_cur_key(bucket_branch, database_id),
 		&encoded_pointer,

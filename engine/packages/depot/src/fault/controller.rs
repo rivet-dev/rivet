@@ -199,7 +199,11 @@ impl DepotFaultController {
 	pub fn replay_log_with_unfired(&self) -> Vec<DepotFaultReplayEvent> {
 		let inner = self.inner.lock();
 		let mut replay = inner.replay.clone();
-		for rule in inner.rules.iter().filter(|rule| rule.expected && rule.fired_count == 0) {
+		for rule in inner
+			.rules
+			.iter()
+			.filter(|rule| rule.expected && rule.fired_count == 0)
+		{
 			if replay.iter().any(|event| {
 				event.rule_id == rule.id
 					&& event.kind == DepotFaultReplayEventKind::ExpectedButUnfired
@@ -348,7 +352,11 @@ impl DepotFaultControllerInner {
 	}
 
 	fn pause_state(&mut self, checkpoint: &str) -> Arc<DepotFaultPauseState> {
-		if let Some(entry) = self.pauses.iter().find(|entry| entry.checkpoint == checkpoint) {
+		if let Some(entry) = self
+			.pauses
+			.iter()
+			.find(|entry| entry.checkpoint == checkpoint)
+		{
 			return Arc::clone(&entry.state);
 		}
 
@@ -486,10 +494,13 @@ impl<'a> DepotFaultRuleBuilder<'a> {
 	}
 
 	fn insert(self, action: DepotFaultAction) -> Result<DepotFaultRuleId> {
-		self.controller
-			.inner
-			.lock()
-			.insert_rule(self.point, self.scope, self.invocation, action, self.expected)
+		self.controller.inner.lock().insert_rule(
+			self.point,
+			self.scope,
+			self.invocation,
+			action,
+			self.expected,
+		)
 	}
 }
 

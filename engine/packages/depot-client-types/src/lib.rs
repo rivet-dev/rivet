@@ -20,20 +20,12 @@ pub struct QueryResult {
 	pub rows: Vec<Vec<ColumnValue>>,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ExecuteRoute {
-	Read,
-	Write,
-	WriteFallback,
-}
-
 #[derive(Clone, Debug, PartialEq)]
 pub struct ExecuteResult {
 	pub columns: Vec<String>,
 	pub rows: Vec<Vec<ColumnValue>>,
 	pub changes: i64,
 	pub last_insert_row_id: Option<i64>,
-	pub route: ExecuteRoute,
 }
 
 impl ExecuteResult {
@@ -62,7 +54,7 @@ pub enum ColumnValue {
 
 #[cfg(test)]
 mod tests {
-	use super::{ColumnValue, ExecuteResult, ExecuteRoute};
+	use super::{ColumnValue, ExecuteResult};
 
 	#[test]
 	fn execute_result_preserves_result_and_route_metadata() {
@@ -74,7 +66,6 @@ mod tests {
 			]],
 			changes: 3,
 			last_insert_row_id: Some(42),
-			route: ExecuteRoute::WriteFallback,
 		};
 
 		assert_eq!(result.columns, vec!["id", "name"]);
@@ -87,7 +78,6 @@ mod tests {
 		);
 		assert_eq!(result.changes, 3);
 		assert_eq!(result.last_insert_row_id, Some(42));
-		assert_eq!(result.route, ExecuteRoute::WriteFallback);
 	}
 
 	#[test]
@@ -97,7 +87,6 @@ mod tests {
 			rows: vec![vec![ColumnValue::Integer(9)]],
 			changes: 2,
 			last_insert_row_id: Some(10),
-			route: ExecuteRoute::Write,
 		};
 
 		let query_result = result.clone().into_query_result();

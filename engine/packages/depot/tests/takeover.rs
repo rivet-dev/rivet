@@ -7,7 +7,7 @@ use depot::{
 	conveyer::Db,
 	keys::{delta_chunk_key, meta_head_key, pidx_delta_key, shard_key},
 	takeover,
-	types::{DatabaseBranchId, DBHead, encode_db_head},
+	types::{DBHead, DatabaseBranchId, encode_db_head},
 };
 use gas::prelude::Id;
 use rivet_pools::NodeId;
@@ -38,24 +38,29 @@ async fn seed(db: &universaldb::Database, writes: Vec<(Vec<u8>, Vec<u8>)>) -> Re
 
 #[tokio::test]
 async fn legacy_database_scoped_rows_are_ignored() -> Result<()> {
-	common::test_matrix("depot-takeover-legacy-ignored", |_tier, ctx| Box::pin(async move {
-		let db = ctx.udb.clone();
-		let database_id = ctx.database_id.clone();
-		seed(
-			&db,
-			vec![
-				(meta_head_key(&database_id), encode_db_head(head(1, 1))?),
-				(delta_chunk_key(&database_id, 99, 0), b"delta".to_vec()),
-				(pidx_delta_key(&database_id, 99), 99_u64.to_be_bytes().to_vec()),
-				(shard_key(&database_id, 99), b"shard".to_vec()),
-			],
-		)
-		.await?;
+	common::test_matrix("depot-takeover-legacy-ignored", |_tier, ctx| {
+		Box::pin(async move {
+			let db = ctx.udb.clone();
+			let database_id = ctx.database_id.clone();
+			seed(
+				&db,
+				vec![
+					(meta_head_key(&database_id), encode_db_head(head(1, 1))?),
+					(delta_chunk_key(&database_id, 99, 0), b"delta".to_vec()),
+					(
+						pidx_delta_key(&database_id, 99),
+						99_u64.to_be_bytes().to_vec(),
+					),
+					(shard_key(&database_id, 99), b"shard".to_vec()),
+				],
+			)
+			.await?;
 
-		takeover::reconcile(&db, &database_id).await?;
+			takeover::reconcile(&db, &database_id).await?;
 
-		Ok(())
-	}))
+			Ok(())
+		})
+	})
 	.await
 }
 

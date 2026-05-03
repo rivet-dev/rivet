@@ -50,7 +50,8 @@ async fn send_initial_metadata(shared: &SharedContext) {
 		prepopulate_map.insert(
 			name.clone(),
 			protocol::ActorName {
-				metadata: serde_json::to_string(&actor.metadata).unwrap_or_else(|_| "{}".to_string()),
+				metadata: serde_json::to_string(&actor.metadata)
+					.unwrap_or_else(|_| "{}".to_string()),
 			},
 		);
 	}

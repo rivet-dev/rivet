@@ -4,7 +4,7 @@ use anyhow::{Context, Result, bail, ensure};
 use gas::prelude::Id;
 use universaldb::utils::end_of_key_range;
 
-use super::types::{DatabaseBranchId, BucketBranchId, BucketId};
+use super::types::{BucketBranchId, BucketId, DatabaseBranchId};
 
 pub const SQLITE_SUBSPACE_PREFIX: u8 = 0x02;
 pub const DBPTR_PARTITION: u8 = 0x10;
@@ -179,7 +179,10 @@ pub fn database_range(database_id: &str) -> (Vec<u8>, Vec<u8>) {
 }
 
 pub fn database_pointer_cur_key(bucket_branch_id: BucketBranchId, database_id: &str) -> Vec<u8> {
-	with_suffix(database_pointer_base(bucket_branch_id, database_id), CUR_PATH)
+	with_suffix(
+		database_pointer_base(bucket_branch_id, database_id),
+		CUR_PATH,
+	)
 }
 
 pub fn database_pointer_cur_prefix() -> Vec<u8> {
@@ -228,7 +231,10 @@ pub fn database_pointer_history_prefix(
 	bucket_branch_id: BucketBranchId,
 	database_id: &str,
 ) -> Vec<u8> {
-	with_suffix(database_pointer_base(bucket_branch_id, database_id), HISTORY_PATH)
+	with_suffix(
+		database_pointer_base(bucket_branch_id, database_id),
+		HISTORY_PATH,
+	)
 }
 
 pub fn bucket_pointer_cur_key(bucket_id: BucketId) -> Vec<u8> {
@@ -260,11 +266,7 @@ pub fn decode_bucket_pointer_cur_bucket_id(key: &[u8]) -> Result<BucketId> {
 	Ok(BucketId::from_uuid(uuid))
 }
 
-pub fn bucket_pointer_history_key(
-	bucket_id: BucketId,
-	ts_ms: i64,
-	nonce: u32,
-) -> Vec<u8> {
+pub fn bucket_pointer_history_key(bucket_id: BucketId, ts_ms: i64, nonce: u32) -> Vec<u8> {
 	let mut key = bucket_pointer_history_prefix(bucket_id);
 	append_ts_nonce(&mut key, ts_ms, nonce);
 	key
@@ -336,7 +338,10 @@ pub fn bucket_branches_database_name_tombstone_key(
 	branch_id: BucketBranchId,
 	database_id: &str,
 ) -> Vec<u8> {
-	let mut key = with_suffix(bucket_branch_record_base(branch_id), DATABASE_TOMBSTONES_PATH);
+	let mut key = with_suffix(
+		bucket_branch_record_base(branch_id),
+		DATABASE_TOMBSTONES_PATH,
+	);
 	append_database_id(&mut key, database_id);
 	key
 }
@@ -345,13 +350,19 @@ pub fn bucket_branches_database_tombstone_key(
 	branch_id: BucketBranchId,
 	database_id: DatabaseBranchId,
 ) -> Vec<u8> {
-	let mut key = with_suffix(bucket_branch_record_base(branch_id), DATABASE_TOMBSTONES_PATH);
+	let mut key = with_suffix(
+		bucket_branch_record_base(branch_id),
+		DATABASE_TOMBSTONES_PATH,
+	);
 	append_uuid(&mut key, database_id.as_uuid());
 	key
 }
 
 pub fn bucket_branches_database_tombstone_prefix(branch_id: BucketBranchId) -> Vec<u8> {
-	with_suffix(bucket_branch_record_base(branch_id), DATABASE_TOMBSTONES_PATH)
+	with_suffix(
+		bucket_branch_record_base(branch_id),
+		DATABASE_TOMBSTONES_PATH,
+	)
 }
 
 pub fn decode_bucket_branches_database_tombstone_id(
@@ -444,19 +455,31 @@ pub fn branch_meta_cold_lease_key(branch_id: DatabaseBranchId) -> Vec<u8> {
 }
 
 pub fn branch_manifest_cold_drained_txid_key(branch_id: DatabaseBranchId) -> Vec<u8> {
-	with_suffix(database_branch_base(branch_id), MANIFEST_COLD_DRAINED_TXID_PATH)
+	with_suffix(
+		database_branch_base(branch_id),
+		MANIFEST_COLD_DRAINED_TXID_PATH,
+	)
 }
 
 pub fn branch_manifest_last_hot_pass_txid_key(branch_id: DatabaseBranchId) -> Vec<u8> {
-	with_suffix(database_branch_base(branch_id), MANIFEST_LAST_HOT_PASS_TXID_PATH)
+	with_suffix(
+		database_branch_base(branch_id),
+		MANIFEST_LAST_HOT_PASS_TXID_PATH,
+	)
 }
 
 pub fn branch_manifest_last_access_ts_ms_key(branch_id: DatabaseBranchId) -> Vec<u8> {
-	with_suffix(database_branch_base(branch_id), MANIFEST_LAST_ACCESS_TS_MS_PATH)
+	with_suffix(
+		database_branch_base(branch_id),
+		MANIFEST_LAST_ACCESS_TS_MS_PATH,
+	)
 }
 
 pub fn branch_manifest_last_access_bucket_key(branch_id: DatabaseBranchId) -> Vec<u8> {
-	with_suffix(database_branch_base(branch_id), MANIFEST_LAST_ACCESS_BUCKET_PATH)
+	with_suffix(
+		database_branch_base(branch_id),
+		MANIFEST_LAST_ACCESS_BUCKET_PATH,
+	)
 }
 
 pub fn branch_compaction_root_key(branch_id: DatabaseBranchId) -> Vec<u8> {
@@ -468,7 +491,10 @@ pub fn branch_compaction_cold_shard_prefix(branch_id: DatabaseBranchId) -> Vec<u
 }
 
 pub fn branch_compaction_retired_cold_object_prefix(branch_id: DatabaseBranchId) -> Vec<u8> {
-	with_suffix(database_branch_base(branch_id), CMP_RETIRED_COLD_OBJECT_PATH)
+	with_suffix(
+		database_branch_base(branch_id),
+		CMP_RETIRED_COLD_OBJECT_PATH,
+	)
 }
 
 pub fn branch_compaction_stage_prefix(branch_id: DatabaseBranchId) -> Vec<u8> {
@@ -499,7 +525,10 @@ pub fn branch_compaction_retired_cold_object_key(
 	branch_id: DatabaseBranchId,
 	object_key_hash: [u8; 32],
 ) -> Vec<u8> {
-	let mut key = with_suffix(database_branch_base(branch_id), CMP_RETIRED_COLD_OBJECT_PATH);
+	let mut key = with_suffix(
+		database_branch_base(branch_id),
+		CMP_RETIRED_COLD_OBJECT_PATH,
+	);
 	key.extend_from_slice(&object_key_hash);
 	key
 }
@@ -569,10 +598,7 @@ pub fn branch_pitr_interval_prefix(branch_id: DatabaseBranchId) -> Vec<u8> {
 	with_suffix(database_branch_base(branch_id), PITR_INTERVAL_PATH)
 }
 
-pub fn decode_branch_pitr_interval_bucket(
-	branch_id: DatabaseBranchId,
-	key: &[u8],
-) -> Result<i64> {
+pub fn decode_branch_pitr_interval_bucket(branch_id: DatabaseBranchId, key: &[u8]) -> Result<i64> {
 	let prefix = branch_pitr_interval_prefix(branch_id);
 	let suffix = key
 		.strip_prefix(prefix.as_slice())
@@ -584,11 +610,9 @@ pub fn decode_branch_pitr_interval_bucket(
 		std::mem::size_of::<i64>()
 	);
 
-	Ok(i64::from_be_bytes(
-		suffix
-			.try_into()
-			.context("branch PITR interval suffix should decode as i64")?,
-	))
+	Ok(i64::from_be_bytes(suffix.try_into().context(
+		"branch PITR interval suffix should decode as i64",
+	)?))
 }
 
 pub fn branch_pidx_key(branch_id: DatabaseBranchId, pgno: u32) -> Vec<u8> {
@@ -661,11 +685,9 @@ pub fn decode_branch_delta_chunk_idx(
 		std::mem::size_of::<u32>()
 	);
 
-	Ok(u32::from_be_bytes(
-		suffix
-			.try_into()
-			.context("branch delta chunk suffix should decode as u32")?,
-	))
+	Ok(u32::from_be_bytes(suffix.try_into().context(
+		"branch delta chunk suffix should decode as u32",
+	)?))
 }
 
 pub fn branch_shard_prefix(branch_id: DatabaseBranchId) -> Vec<u8> {
@@ -720,15 +742,24 @@ pub fn decode_ctr_eviction_index_key(key: &[u8]) -> Result<(i64, DatabaseBranchI
 	let bucket_bytes: [u8; std::mem::size_of::<i64>()] = suffix[..8]
 		.try_into()
 		.context("decode eviction index bucket")?;
-	ensure!(suffix[8] == b'/', "eviction index key missing branch separator");
+	ensure!(
+		suffix[8] == b'/',
+		"eviction index key missing branch separator"
+	);
 	let branch_id =
 		uuid::Uuid::from_slice(&suffix[9..]).context("decode eviction index branch id")?;
 
-	Ok((i64::from_be_bytes(bucket_bytes), DatabaseBranchId::from_uuid(branch_id)))
+	Ok((
+		i64::from_be_bytes(bucket_bytes),
+		DatabaseBranchId::from_uuid(branch_id),
+	))
 }
 
 pub fn restore_point_prefix(database_id: &str) -> Vec<u8> {
-	let mut key = with_suffix(partition_prefix(RESTORE_POINT_PARTITION), RESTORE_POINT_PATH);
+	let mut key = with_suffix(
+		partition_prefix(RESTORE_POINT_PARTITION),
+		RESTORE_POINT_PATH,
+	);
 	append_database_id(&mut key, database_id);
 	key.push(b'/');
 	key
@@ -782,7 +813,10 @@ pub fn bucket_fork_pin_key(
 }
 
 pub fn bucket_fork_pin_prefix(source_bucket_branch_id: BucketBranchId) -> Vec<u8> {
-	let mut key = with_suffix(partition_prefix(BUCKET_FORK_PIN_PARTITION), BUCKET_FORK_PIN_PATH);
+	let mut key = with_suffix(
+		partition_prefix(BUCKET_FORK_PIN_PARTITION),
+		BUCKET_FORK_PIN_PATH,
+	);
 	append_uuid(&mut key, source_bucket_branch_id.as_uuid());
 	key.push(b'/');
 	key
@@ -817,14 +851,20 @@ pub fn bucket_catalog_by_db_key(
 }
 
 pub fn bucket_catalog_by_db_prefix(database_branch_id: DatabaseBranchId) -> Vec<u8> {
-	let mut key = with_suffix(partition_prefix(BUCKET_CATALOG_BY_DB_PARTITION), BUCKET_CATALOG_BY_DB_PATH);
+	let mut key = with_suffix(
+		partition_prefix(BUCKET_CATALOG_BY_DB_PARTITION),
+		BUCKET_CATALOG_BY_DB_PATH,
+	);
 	append_uuid(&mut key, database_branch_id.as_uuid());
 	key.push(b'/');
 	key
 }
 
 pub fn bucket_proof_epoch_key(root_bucket_branch_id: BucketBranchId) -> Vec<u8> {
-	let mut key = with_suffix(partition_prefix(BUCKET_PROOF_EPOCH_PARTITION), BUCKET_PROOF_EPOCH_PATH);
+	let mut key = with_suffix(
+		partition_prefix(BUCKET_PROOF_EPOCH_PARTITION),
+		BUCKET_PROOF_EPOCH_PATH,
+	);
 	append_uuid(&mut key, root_bucket_branch_id.as_uuid());
 	key
 }

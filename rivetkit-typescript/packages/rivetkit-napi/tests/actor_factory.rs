@@ -78,15 +78,16 @@ mod moved_tests {
 
 	#[test]
 	fn napi_bridge_payload_promotes_known_core_error_status() {
-		let payload = crate::anyhow_to_bridge_rivet_error_payload(anyhow::Error::new(
-			RivetError {
-				schema: &AUTH_FORBIDDEN_SCHEMA,
-				meta: None,
-				message: None,
-			},
-		));
+		let payload = crate::anyhow_to_bridge_rivet_error_payload(anyhow::Error::new(RivetError {
+			schema: &AUTH_FORBIDDEN_SCHEMA,
+			meta: None,
+			message: None,
+		}));
 
-		assert_eq!(payload.get("group").and_then(|value| value.as_str()), Some("auth"));
+		assert_eq!(
+			payload.get("group").and_then(|value| value.as_str()),
+			Some("auth")
+		);
 		assert_eq!(
 			payload.get("code").and_then(|value| value.as_str()),
 			Some("forbidden")

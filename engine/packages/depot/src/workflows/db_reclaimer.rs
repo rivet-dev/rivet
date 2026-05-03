@@ -1,9 +1,8 @@
 use crate::{
 	compaction::{
-		*,
 		companion::{CompanionKind, run_companion_loop},
 		shared::*,
-		test_hooks,
+		test_hooks, *,
 	},
 	conveyer::metrics,
 	workflows::db_manager::branch_record_is_live_at_generation,
@@ -24,10 +23,12 @@ pub async fn reclaim_fdb_job(
 ) -> Result<ReclaimFdbJobOutput> {
 	let input = input.clone();
 	let input_for_tx = input.clone();
-	let cold_storage_enabled = workflow_cold_storage_enabled(ctx.config(), input.database_branch_id);
+	let cold_storage_enabled =
+		workflow_cold_storage_enabled(ctx.config(), input.database_branch_id);
 	let now_ms = ctx.ts();
 
-	let output = ctx.udb()?
+	let output = ctx
+		.udb()?
 		.run(move |tx| {
 			let input = input_for_tx.clone();
 			async move { reclaim_fdb_job_tx(&tx, &input, cold_storage_enabled, now_ms).await }
@@ -71,9 +72,11 @@ async fn reclaim_fdb_job_tx(
 		return Ok(rejected_reclaim_job("reclaimer received a non-reclaim job"));
 	}
 	#[cfg(feature = "test-faults")]
-	if let Some(output) =
-		reclaim_fdb_fault_output(input.database_branch_id, ReclaimFaultPoint::PlanBeforeSnapshot)
-			.await?
+	if let Some(output) = reclaim_fdb_fault_output(
+		input.database_branch_id,
+		ReclaimFaultPoint::PlanBeforeSnapshot,
+	)
+	.await?
 	{
 		return Ok(output);
 	}
@@ -96,10 +99,8 @@ async fn reclaim_fdb_job_tx(
 	.map(decode_database_branch_record)
 	.transpose()
 	.context("decode sqlite database branch record for FDB reclaim")?;
-	if !branch_record_is_live_at_generation(
-		branch_record.as_ref(),
-		input.base_lifecycle_generation,
-	) {
+	if !branch_record_is_live_at_generation(branch_record.as_ref(), input.base_lifecycle_generation)
+	{
 		return Ok(rejected_reclaim_job("database branch lifecycle changed"));
 	}
 
@@ -141,7 +142,8 @@ async fn reclaim_fdb_job_tx(
 		now_ms,
 	)
 	.await?;
-	if !input.input_range.txid_refs.is_empty() && snapshot.txid_refs != input.input_range.txid_refs {
+	if !input.input_range.txid_refs.is_empty() && snapshot.txid_refs != input.input_range.txid_refs
+	{
 		return Ok(rejected_reclaim_job("reclaim txid set changed"));
 	}
 	if snapshot.cold_object_refs != input.input_range.cold_objects {
@@ -161,19 +163,22 @@ async fn reclaim_fdb_job_tx(
 			return Ok(rejected_reclaim_job("PIDX still references reclaim txids"));
 		}
 		if !reclaim_coverage_is_complete(&snapshot) {
-			return Ok(rejected_reclaim_job("replacement SHARD coverage is missing"));
+			return Ok(rejected_reclaim_job(
+				"replacement SHARD coverage is missing",
+			));
 		}
 	}
 
-	let input_fingerprint =
-		fingerprint_reclaim_inputs(input.database_branch_id, &root, &snapshot);
+	let input_fingerprint = fingerprint_reclaim_inputs(input.database_branch_id, &root, &snapshot);
 	if input_fingerprint != input.input_fingerprint {
 		return Ok(rejected_reclaim_job("reclaim input fingerprint changed"));
 	}
 	#[cfg(feature = "test-faults")]
-	if let Some(output) =
-		reclaim_fdb_fault_output(input.database_branch_id, ReclaimFaultPoint::PlanAfterSnapshot)
-			.await?
+	if let Some(output) = reclaim_fdb_fault_output(
+		input.database_branch_id,
+		ReclaimFaultPoint::PlanAfterSnapshot,
+	)
+	.await?
 	{
 		return Ok(output);
 	}
@@ -266,7 +271,9 @@ pub(super) async fn cleanup_repair_fdb_outputs_tx(
 	let input_fingerprint =
 		fingerprint_repair_reclaim_range(input.database_branch_id, &input.input_range);
 	if input_fingerprint != input.input_fingerprint {
-		return Ok(rejected_reclaim_job("repair cleanup input fingerprint changed"));
+		return Ok(rejected_reclaim_job(
+			"repair cleanup input fingerprint changed",
+		));
 	}
 
 	let branch_record = tx_get_value(
@@ -279,10 +286,8 @@ pub(super) async fn cleanup_repair_fdb_outputs_tx(
 	.map(decode_database_branch_record)
 	.transpose()
 	.context("decode sqlite database branch record for repair cleanup")?;
-	if !branch_record_is_live_at_generation(
-		branch_record.as_ref(),
-		input.base_lifecycle_generation,
-	) {
+	if !branch_record_is_live_at_generation(branch_record.as_ref(), input.base_lifecycle_generation)
+	{
 		return Ok(rejected_reclaim_job("database branch lifecycle changed"));
 	}
 
@@ -326,7 +331,9 @@ pub(super) async fn cleanup_repair_fdb_outputs_tx(
 				repair_action = "retain_staged_hot_output",
 				"staged hot shard cleanup found mismatched bytes"
 			);
-			return Ok(rejected_reclaim_job("staged hot shard cleanup bytes changed"));
+			return Ok(rejected_reclaim_job(
+				"staged hot shard cleanup bytes changed",
+			));
 		}
 
 		tracing::warn!(
@@ -340,7 +347,8 @@ pub(super) async fn cleanup_repair_fdb_outputs_tx(
 		);
 		udb::compare_and_clear(tx, &stage_key, &stage_value);
 		key_count = key_count.saturating_add(1);
-		byte_count = byte_count.saturating_add(u64::try_from(stage_value.len()).unwrap_or(u64::MAX));
+		byte_count =
+			byte_count.saturating_add(u64::try_from(stage_value.len()).unwrap_or(u64::MAX));
 	}
 
 	Ok(ReclaimFdbJobOutput {
@@ -400,7 +408,9 @@ async fn retire_cold_objects_tx(
 	input: &RetireColdObjectsInput,
 ) -> Result<RetireColdObjectsOutput> {
 	if input.job_kind != CompactionJobKind::Reclaim {
-		return Ok(rejected_cold_object_retire("reclaimer received a non-reclaim job"));
+		return Ok(rejected_cold_object_retire(
+			"reclaimer received a non-reclaim job",
+		));
 	}
 	if input.cold_objects.is_empty() {
 		return Ok(RetireColdObjectsOutput {
@@ -410,9 +420,11 @@ async fn retire_cold_objects_tx(
 		});
 	}
 	#[cfg(feature = "test-faults")]
-	if let Some(output) =
-		retire_cold_fault_output(input.database_branch_id, ReclaimFaultPoint::BeforeColdRetire)
-			.await?
+	if let Some(output) = retire_cold_fault_output(
+		input.database_branch_id,
+		ReclaimFaultPoint::BeforeColdRetire,
+	)
+	.await?
 	{
 		return Ok(output);
 	}
@@ -427,11 +439,11 @@ async fn retire_cold_objects_tx(
 	.map(decode_database_branch_record)
 	.transpose()
 	.context("decode sqlite database branch record for cold retire")?;
-	if !branch_record_is_live_at_generation(
-		branch_record.as_ref(),
-		input.base_lifecycle_generation,
-	) {
-		return Ok(rejected_cold_object_retire("database branch lifecycle changed"));
+	if !branch_record_is_live_at_generation(branch_record.as_ref(), input.base_lifecycle_generation)
+	{
+		return Ok(rejected_cold_object_retire(
+			"database branch lifecycle changed",
+		));
 	}
 
 	let root = tx_get_value(
@@ -452,12 +464,17 @@ async fn retire_cold_objects_tx(
 		cold_watermark_versionstamp: [0; 16],
 	});
 	if root.manifest_generation != input.base_manifest_generation {
-		return Ok(rejected_cold_object_retire("base manifest generation changed"));
+		return Ok(rejected_cold_object_retire(
+			"base manifest generation changed",
+		));
 	}
 
-	let delete_after_ms = input
-		.retired_at_ms
-		.saturating_add(test_hooks::cold_object_delete_grace_ms(input.database_branch_id));
+	let delete_after_ms =
+		input
+			.retired_at_ms
+			.saturating_add(test_hooks::cold_object_delete_grace_ms(
+				input.database_branch_id,
+			));
 	let retired_manifest_generation = root.manifest_generation.saturating_add(1);
 	let mut retired_objects = Vec::with_capacity(input.cold_objects.len());
 
@@ -468,7 +485,9 @@ async fn retire_cold_objects_tx(
 			cold_object.as_of_txid,
 		);
 		let Some(live_value) = tx_get_value(tx, &live_key, Serializable).await? else {
-			return Ok(rejected_cold_object_retire("cold shard ref is already absent"));
+			return Ok(rejected_cold_object_retire(
+				"cold shard ref is already absent",
+			));
 		};
 		let live_ref = decode_cold_shard_ref(&live_value)
 			.context("decode sqlite cold shard ref for cold retire")?;
@@ -480,8 +499,13 @@ async fn retire_cold_objects_tx(
 			input.database_branch_id,
 			content_hash(cold_object.object_key.as_bytes()),
 		);
-		if tx_get_value(tx, &retired_key, Serializable).await?.is_some() {
-			return Ok(rejected_cold_object_retire("cold object is already retired"));
+		if tx_get_value(tx, &retired_key, Serializable)
+			.await?
+			.is_some()
+		{
+			return Ok(rejected_cold_object_retire(
+				"cold object is already retired",
+			));
 		}
 
 		udb::compare_and_clear(tx, &live_key, &live_value);
@@ -511,7 +535,8 @@ async fn retire_cold_objects_tx(
 	};
 	tx.informal().set(
 		&keys::branch_compaction_root_key(input.database_branch_id),
-		&encode_compaction_root(next_root).context("encode sqlite compaction root for cold retire")?,
+		&encode_compaction_root(next_root)
+			.context("encode sqlite compaction root for cold retire")?,
 	);
 	#[cfg(feature = "test-faults")]
 	if let Some(output) =
@@ -619,7 +644,9 @@ async fn mark_retired_cold_objects_delete_issued_tx(
 			content_hash(cold_object.object_key.as_bytes()),
 		);
 		let Some(retired_value) = tx_get_value(tx, &retired_key, Serializable).await? else {
-			return Ok(rejected_cold_object_delete("retired cold object is missing"));
+			return Ok(rejected_cold_object_delete(
+				"retired cold object is missing",
+			));
 		};
 		let mut retired = decode_retired_cold_object(&retired_value)
 			.context("decode sqlite retired cold object for S3 delete")?;
@@ -627,7 +654,9 @@ async fn mark_retired_cold_objects_delete_issued_tx(
 			return Ok(rejected_cold_object_delete("retired cold object changed"));
 		}
 		if retired.delete_after_ms > input.now_ms {
-			return Ok(rejected_cold_object_delete("retired cold object is still in grace window"));
+			return Ok(rejected_cold_object_delete(
+				"retired cold object is still in grace window",
+			));
 		}
 
 		let live_key = keys::branch_compaction_cold_shard_key(
@@ -642,7 +671,9 @@ async fn mark_retired_cold_objects_delete_issued_tx(
 				publish_generation = cold_object.expected_publish_generation,
 				"live cold ref exists for retired object before S3 delete"
 			);
-			return Ok(rejected_cold_object_delete("live cold ref exists for retired object"));
+			return Ok(rejected_cold_object_delete(
+				"live cold ref exists for retired object",
+			));
 		}
 
 		if retired.delete_state == RetiredColdObjectDeleteState::Retired {
@@ -709,9 +740,11 @@ async fn cleanup_retired_cold_objects_tx(
 ) -> Result<CleanupRetiredColdObjectsOutput> {
 	let mut cleaned = Vec::with_capacity(input.cold_objects.len());
 	#[cfg(feature = "test-faults")]
-	if let Some(output) =
-		cleanup_cold_fault_output(input.database_branch_id, ReclaimFaultPoint::BeforeCleanupRows)
-			.await?
+	if let Some(output) = cleanup_cold_fault_output(
+		input.database_branch_id,
+		ReclaimFaultPoint::BeforeCleanupRows,
+	)
+	.await?
 	{
 		return Ok(output);
 	}
@@ -747,7 +780,9 @@ async fn cleanup_retired_cold_objects_tx(
 			return Ok(rejected_cold_object_cleanup("retired cold object changed"));
 		}
 		if retired.delete_state != RetiredColdObjectDeleteState::DeleteIssued {
-			return Ok(rejected_cold_object_cleanup("retired cold object delete was not issued"));
+			return Ok(rejected_cold_object_cleanup(
+				"retired cold object delete was not issued",
+			));
 		}
 
 		let completed = RetiredColdObject {
@@ -875,10 +910,12 @@ async fn validate_reclaim_cold_objects_tx(
 			));
 		}
 
-		if let Some(retired) =
-			read_retired_cold_object_by_object_key(tx, input.database_branch_id, &cold_object.object_key)
-				.await?
-			&& retired.delete_state == RetiredColdObjectDeleteState::DeleteIssued
+		if let Some(retired) = read_retired_cold_object_by_object_key(
+			tx,
+			input.database_branch_id,
+			&cold_object.object_key,
+		)
+		.await? && retired.delete_state == RetiredColdObjectDeleteState::DeleteIssued
 		{
 			tracing::error!(
 				?input.database_branch_id,
@@ -941,7 +978,9 @@ pub async fn delete_orphan_cold_objects(
 	}
 
 	let Some(cold_tier) = workflow_cold_tier(ctx.config(), input.database_branch_id).await? else {
-		return Ok(rejected_orphan_cold_object_delete("cold storage is disabled"));
+		return Ok(rejected_orphan_cold_object_delete(
+			"cold storage is disabled",
+		));
 	};
 	#[cfg(feature = "test-faults")]
 	if let Some(output) = delete_orphan_cold_fault_output(
@@ -985,10 +1024,8 @@ pub(super) async fn plan_orphan_cold_object_deletes_tx(
 	.map(decode_database_branch_record)
 	.transpose()
 	.context("decode sqlite database branch record for orphan cleanup")?;
-	if !branch_record_is_live_at_generation(
-		branch_record.as_ref(),
-		input.base_lifecycle_generation,
-	) {
+	if !branch_record_is_live_at_generation(branch_record.as_ref(), input.base_lifecycle_generation)
+	{
 		return Ok(rejected_orphan_cold_object_delete(
 			"database branch lifecycle changed",
 		));
@@ -1021,17 +1058,19 @@ pub(super) async fn plan_orphan_cold_object_deletes_tx(
 	let mut delete_keys = Vec::new();
 
 	for orphan in &input.orphan_cold_objects {
-		let retired =
-			read_retired_cold_object_by_object_key(tx, input.database_branch_id, &orphan.object_key)
-				.await?;
+		let retired = read_retired_cold_object_by_object_key(
+			tx,
+			input.database_branch_id,
+			&orphan.object_key,
+		)
+		.await?;
 		let live_ref = live_refs
 			.iter()
 			.find(|live_ref| live_ref.object_key == orphan.object_key);
 		if let Some(live_ref) = live_ref {
-			if retired
-				.as_ref()
-				.is_some_and(|retired| retired.delete_state == RetiredColdObjectDeleteState::DeleteIssued)
-			{
+			if retired.as_ref().is_some_and(|retired| {
+				retired.delete_state == RetiredColdObjectDeleteState::DeleteIssued
+			}) {
 				tracing::error!(
 					?input.database_branch_id,
 					manifest_generation,
@@ -1074,9 +1113,7 @@ pub(super) async fn plan_orphan_cold_object_deletes_tx(
 	})
 }
 
-fn rejected_orphan_cold_object_delete(
-	reason: impl Into<String>,
-) -> DeleteOrphanColdObjectsOutput {
+fn rejected_orphan_cold_object_delete(reason: impl Into<String>) -> DeleteOrphanColdObjectsOutput {
 	DeleteOrphanColdObjectsOutput {
 		status: CompactionJobStatus::Rejected {
 			reason: reason.into(),

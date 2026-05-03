@@ -4,10 +4,10 @@ use std::ptr;
 use anyhow::{Context, Result, bail};
 use libsqlite3_sys::{
 	SQLITE_BLOB, SQLITE_FLOAT, SQLITE_INTEGER, SQLITE_NULL, SQLITE_OK, SQLITE_ROW, SQLITE_TEXT,
-	sqlite3, sqlite3_close, sqlite3_column_blob, sqlite3_column_bytes, sqlite3_column_count,
-	sqlite3_column_double, sqlite3_column_int64, sqlite3_column_text, sqlite3_column_type,
-	sqlite3_errmsg, sqlite3_exec, sqlite3_finalize, sqlite3_open, sqlite3_prepare_v2, sqlite3_step,
-	sqlite3_backup_finish, sqlite3_backup_init, sqlite3_backup_step,
+	sqlite3, sqlite3_backup_finish, sqlite3_backup_init, sqlite3_backup_step, sqlite3_close,
+	sqlite3_column_blob, sqlite3_column_bytes, sqlite3_column_count, sqlite3_column_double,
+	sqlite3_column_int64, sqlite3_column_text, sqlite3_column_type, sqlite3_errmsg, sqlite3_exec,
+	sqlite3_finalize, sqlite3_open, sqlite3_prepare_v2, sqlite3_step,
 };
 
 use super::workload::LogicalOp;
@@ -276,9 +276,7 @@ fn clone_database(source: *mut sqlite3) -> Result<*mut sqlite3> {
 		bail!("native sqlite oracle clone open failed with code {rc}: {message}");
 	}
 
-	let backup = unsafe {
-		sqlite3_backup_init(clone, main.as_ptr(), source, main.as_ptr())
-	};
+	let backup = unsafe { sqlite3_backup_init(clone, main.as_ptr(), source, main.as_ptr()) };
 	if backup.is_null() {
 		let message = sqlite_error_message(clone);
 		unsafe {
@@ -327,7 +325,10 @@ fn query_rows(db: *mut sqlite3, sql: &str) -> Result<Vec<Vec<CanonicalValue>>> {
 	let mut stmt = ptr::null_mut();
 	let rc = unsafe { sqlite3_prepare_v2(db, c_sql.as_ptr(), -1, &mut stmt, ptr::null_mut()) };
 	if rc != SQLITE_OK {
-		bail!("{sql} prepare failed with code {rc}: {}", sqlite_error_message(db));
+		bail!(
+			"{sql} prepare failed with code {rc}: {}",
+			sqlite_error_message(db)
+		);
 	}
 	if stmt.is_null() {
 		return Ok(Vec::new());
@@ -340,7 +341,10 @@ fn query_rows(db: *mut sqlite3, sql: &str) -> Result<Vec<Vec<CanonicalValue>>> {
 				SQLITE_ROW => rows.push(read_row(stmt)),
 				libsqlite3_sys::SQLITE_DONE => break,
 				step_rc => {
-					bail!("{sql} step failed with code {step_rc}: {}", sqlite_error_message(db));
+					bail!(
+						"{sql} step failed with code {step_rc}: {}",
+						sqlite_error_message(db)
+					);
 				}
 			}
 		}
@@ -356,7 +360,9 @@ fn query_rows(db: *mut sqlite3, sql: &str) -> Result<Vec<Vec<CanonicalValue>>> {
 
 fn read_row(stmt: *mut libsqlite3_sys::sqlite3_stmt) -> Vec<CanonicalValue> {
 	let column_count = unsafe { sqlite3_column_count(stmt) };
-	(0..column_count).map(|index| read_value(stmt, index)).collect()
+	(0..column_count)
+		.map(|index| read_value(stmt, index))
+		.collect()
 }
 
 fn read_value(stmt: *mut libsqlite3_sys::sqlite3_stmt, index: i32) -> CanonicalValue {
@@ -389,10 +395,7 @@ fn read_value(stmt: *mut libsqlite3_sys::sqlite3_stmt, index: i32) -> CanonicalV
 }
 
 fn render_row(row: &[CanonicalValue]) -> String {
-	row.iter()
-		.map(render_value)
-		.collect::<Vec<_>>()
-		.join("|")
+	row.iter().map(render_value).collect::<Vec<_>>().join("|")
 }
 
 fn render_value(value: &CanonicalValue) -> String {
@@ -521,7 +524,7 @@ mod tests {
 			key: "ambiguous".to_string(),
 			value: vec![3, 4],
 		})
-			.apply(actual)?;
+		.apply(actual)?;
 		assert_eq!(
 			new_oracle.verify_matches(actual)?,
 			OracleVerification::Ambiguous(AmbiguousOracleOutcome::New)
@@ -546,8 +549,12 @@ mod tests {
 		)?;
 
 		let dump = canonical_dump(oracle.db)?.render();
-		let row_a_one = dump.find("row|a|integer:1|text:one").context("missing a row one")?;
-		let row_a_two = dump.find("row|a|integer:2|text:two").context("missing a row two")?;
+		let row_a_one = dump
+			.find("row|a|integer:1|text:one")
+			.context("missing a row one")?;
+		let row_a_two = dump
+			.find("row|a|integer:2|text:two")
+			.context("missing a row two")?;
 		let row_b_a = dump
 			.find("row|b|text:a|null|integer:-1|float:4000000000000000|null")
 			.context("missing b row a")?;

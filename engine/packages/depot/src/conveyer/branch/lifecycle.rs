@@ -7,17 +7,17 @@ use super::{
 		write_bucket_catalog_tombstone_marker,
 	},
 	fork::{derive_branch_at, derive_bucket_branch_at},
-	resolve::{resolve_database_pointer, resolve_bucket_branch},
-	shared::{now_ms, read_database_branch_record, read_bucket_branch_record},
+	resolve::{resolve_bucket_branch, resolve_database_pointer},
+	shared::{now_ms, read_bucket_branch_record, read_database_branch_record},
 };
 use crate::conveyer::{
 	error::SqliteStorageError,
 	keys,
 	types::{
-		BranchState, DatabaseBranchId, DatabasePointer, DatabaseBranchRecord, BucketBranchId,
-		BucketBranchRecord, BucketId, BucketPointer, ResolvedRestoreTarget, ResolvedVersionstamp,
-		decode_bucket_pointer, encode_database_branch_record, encode_database_pointer,
-		encode_bucket_branch_record, encode_bucket_pointer,
+		BranchState, BucketBranchId, BucketBranchRecord, BucketId, BucketPointer, DatabaseBranchId,
+		DatabaseBranchRecord, DatabasePointer, ResolvedRestoreTarget, ResolvedVersionstamp,
+		decode_bucket_pointer, encode_bucket_branch_record, encode_bucket_pointer,
+		encode_database_branch_record, encode_database_pointer,
 	},
 };
 
@@ -106,8 +106,8 @@ pub async fn rollback_bucket(
 					current_branch: rolled_branch_id,
 					last_swapped_at_ms: now_ms,
 				};
-				let encoded_pointer =
-					encode_bucket_pointer(new_ptr).context("encode sqlite rollback bucket pointer")?;
+				let encoded_pointer = encode_bucket_pointer(new_ptr)
+					.context("encode sqlite rollback bucket pointer")?;
 				tx.informal()
 					.set(&keys::bucket_pointer_cur_key(bucket), &encoded_pointer);
 
@@ -137,18 +137,13 @@ pub async fn rollback_database(
 			let at = at.clone();
 
 			async move {
-				let bucket_branch =
-					resolve_bucket_branch(&tx, bucket, Serializable)
+				let bucket_branch = resolve_bucket_branch(&tx, bucket, Serializable)
+					.await?
+					.ok_or(SqliteStorageError::DatabaseNotFound)?;
+				let cur_ptr =
+					resolve_database_pointer(&tx, bucket_branch, &database_id, Serializable)
 						.await?
 						.ok_or(SqliteStorageError::DatabaseNotFound)?;
-				let cur_ptr = resolve_database_pointer(
-					&tx,
-					bucket_branch,
-					&database_id,
-					Serializable,
-				)
-				.await?
-				.ok_or(SqliteStorageError::DatabaseNotFound)?;
 				let cur_record = read_database_branch_record(&tx, cur_ptr.current_branch).await?;
 
 				derive_branch_at(
@@ -180,8 +175,8 @@ pub async fn rollback_database(
 					current_branch: rolled_branch_id,
 					last_swapped_at_ms: now_ms,
 				};
-				let encoded_pointer =
-					encode_database_pointer(new_ptr).context("encode sqlite rollback database pointer")?;
+				let encoded_pointer = encode_database_pointer(new_ptr)
+					.context("encode sqlite rollback database pointer")?;
 				tx.informal().set(
 					&keys::database_pointer_cur_key(bucket_branch, &database_id),
 					&encoded_pointer,
@@ -256,8 +251,8 @@ async fn freeze_database_branch(
 ) -> Result<()> {
 	record.state = BranchState::Frozen;
 	let branch_id = record.branch_id;
-	let encoded_record =
-		encode_database_branch_record(record).context("encode frozen sqlite database branch record")?;
+	let encoded_record = encode_database_branch_record(record)
+		.context("encode frozen sqlite database branch record")?;
 	tx.informal()
 		.set(&keys::branches_list_key(branch_id), &encoded_record);
 

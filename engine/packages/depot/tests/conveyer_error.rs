@@ -13,10 +13,7 @@ fn pitr_errors_are_typed_and_downcastable() {
 #[test]
 fn pitr_errors_have_rivet_error_codes() {
 	let cases = [
-		(
-			SqliteStorageError::ForkChainTooDeep,
-			"fork_chain_too_deep",
-		),
+		(SqliteStorageError::ForkChainTooDeep, "fork_chain_too_deep"),
 		(
 			SqliteStorageError::BucketForkChainTooDeep,
 			"bucket_fork_chain_too_deep",
@@ -25,7 +22,10 @@ fn pitr_errors_have_rivet_error_codes() {
 			SqliteStorageError::ForkOutOfRetention,
 			"fork_out_of_retention",
 		),
-		(SqliteStorageError::RestoreTargetExpired, "restore_point_expired"),
+		(
+			SqliteStorageError::RestoreTargetExpired,
+			"restore_point_expired",
+		),
 		(
 			SqliteStorageError::BranchNotReachable,
 			"branch_not_reachable",

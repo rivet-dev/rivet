@@ -131,8 +131,7 @@ pub use actor::queue::{
 	QueueTryNextBatchOpts, QueueTryNextOpts, QueueWaitOpts,
 };
 pub use actor::sqlite::{
-	BindParam, ColumnValue, ExecResult, ExecuteResult, ExecuteRoute, QueryResult, SqliteBackend,
-	SqliteDb,
+	BindParam, ColumnValue, ExecResult, ExecuteResult, QueryResult, SqliteBackend, SqliteDb,
 };
 pub use actor::state::RequestSaveOpts;
 pub use actor::task::{

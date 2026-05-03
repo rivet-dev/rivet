@@ -12,11 +12,7 @@ pub const INCOMPLETE_VERSIONSTAMP: [u8; 16] = [
 	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0, 0, 0, 0, 0, 0,
 ];
 
-pub fn compare_and_clear(
-	tx: &universaldb::Transaction,
-	key: &[u8],
-	expected_value: &[u8],
-) {
+pub fn compare_and_clear(tx: &universaldb::Transaction, key: &[u8], expected_value: &[u8]) {
 	tx.informal()
 		.atomic_op(key, expected_value, MutationType::CompareAndClear);
 }
@@ -45,7 +41,8 @@ pub async fn scan_prefix_values(
 		async move {
 			let subspace_prefix = subspace.bytes().to_vec();
 			let full_prefix = [subspace_prefix.as_slice(), prefix.as_slice()].concat();
-			let prefix_subspace = Subspace::from(universaldb::tuple::Subspace::from_bytes(full_prefix));
+			let prefix_subspace =
+				Subspace::from(universaldb::tuple::Subspace::from_bytes(full_prefix));
 			let informal = tx.informal();
 			let mut stream = informal.get_ranges_keyvalues(
 				RangeOption {

@@ -99,7 +99,6 @@ fn incompatible(
 	.into()
 }
 
-
 pub enum ToEnvoy {
 	V4(v4::ToEnvoy),
 }
@@ -138,8 +137,10 @@ impl OwnedVersionedData for ToEnvoy {
 				convert_to_envoy_v4_to_v3(data, 1)?,
 			)?)?)
 			.map_err(Into::into),
-			2 => serde_bare::to_vec(&convert_to_envoy_v3_to_v2(convert_to_envoy_v4_to_v3(data, 2)?)?)
-				.map_err(Into::into),
+			2 => serde_bare::to_vec(&convert_to_envoy_v3_to_v2(convert_to_envoy_v4_to_v3(
+				data, 2,
+			)?)?)
+			.map_err(Into::into),
 			3 => serde_bare::to_vec(&convert_to_envoy_v4_to_v3(data, 3)?).map_err(Into::into),
 			4 => serde_bare::to_vec(&data).map_err(Into::into),
 			_ => bail!("invalid version: {version}"),
@@ -187,8 +188,7 @@ impl OwnedVersionedData for ToRivet {
 		let Self::V4(data) = self;
 		match version {
 			1 | 2 => serde_bare::to_vec(&convert_to_rivet_v3_to_v2(convert_to_rivet_v4_to_v3(
-				data,
-				version,
+				data, version,
 			)?)?)
 			.map_err(Into::into),
 			3 => serde_bare::to_vec(&convert_to_rivet_v4_to_v3(data, 3)?).map_err(Into::into),
@@ -242,12 +242,10 @@ impl OwnedVersionedData for ToEnvoyConn {
 		let data_v3 = || convert_same_bytes_ref::<_, v3::ToEnvoyConn>(&data);
 		match version {
 			1 => {
-				serde_bare::to_vec(&convert_to_envoy_conn_v3_to_v1(data_v3()?)?)
-					.map_err(Into::into)
+				serde_bare::to_vec(&convert_to_envoy_conn_v3_to_v1(data_v3()?)?).map_err(Into::into)
 			}
 			2 => {
-				serde_bare::to_vec(&convert_to_envoy_conn_v3_to_v2(data_v3()?)?)
-					.map_err(Into::into)
+				serde_bare::to_vec(&convert_to_envoy_conn_v3_to_v2(data_v3()?)?).map_err(Into::into)
 			}
 			3 => serde_bare::to_vec(&data_v3()?).map_err(Into::into),
 			4 => serde_bare::to_vec(&data).map_err(Into::into),
@@ -283,8 +281,12 @@ impl OwnedVersionedData for ToGateway {
 
 	fn deserialize_version(payload: &[u8], version: u16) -> Result<Self> {
 		Ok(Self::V4(match version {
-			1 => convert_same_bytes(convert_to_gateway_v1_to_v3(serde_bare::from_slice(payload)?))?,
-			2 => convert_same_bytes(convert_to_gateway_v2_to_v3(serde_bare::from_slice(payload)?))?,
+			1 => convert_same_bytes(convert_to_gateway_v1_to_v3(serde_bare::from_slice(
+				payload,
+			)?))?,
+			2 => convert_same_bytes(convert_to_gateway_v2_to_v3(serde_bare::from_slice(
+				payload,
+			)?))?,
 			3 => convert_same_bytes(serde_bare::from_slice::<v3::ToGateway>(payload)?)?,
 			4 => serde_bare::from_slice(payload)?,
 			_ => bail!("invalid version: {version}"),
@@ -399,14 +401,10 @@ impl OwnedVersionedData for ActorCommandKeyData {
 		let Self::V4(data) = self;
 		let data_v3 = || convert_same_bytes_ref::<_, v3::ActorCommandKeyData>(&data);
 		match version {
-			1 => {
-				serde_bare::to_vec(&convert_actor_command_key_data_v3_to_v1(data_v3()?))
-					.map_err(Into::into)
-			}
-			2 => {
-				serde_bare::to_vec(&convert_actor_command_key_data_v3_to_v2(data_v3()?))
-					.map_err(Into::into)
-			}
+			1 => serde_bare::to_vec(&convert_actor_command_key_data_v3_to_v1(data_v3()?))
+				.map_err(Into::into),
+			2 => serde_bare::to_vec(&convert_actor_command_key_data_v3_to_v2(data_v3()?))
+				.map_err(Into::into),
 			3 => serde_bare::to_vec(&data_v3()?).map_err(Into::into),
 			4 => serde_bare::to_vec(&data).map_err(Into::into),
 			_ => bail!("invalid version: {version}"),
@@ -437,14 +435,6 @@ fn convert_to_envoy_v4_to_v3(message: v4::ToEnvoy, target_version: u16) -> Resul
 			));
 		}
 		v4::ToEnvoy::ToEnvoySqliteExecuteResponse(_) => {
-			return Err(incompatible(
-				ProtocolCompatibilityFeature::RemoteSqliteExecution,
-				ProtocolCompatibilityDirection::ToEnvoy,
-				4,
-				target_version,
-			));
-		}
-		v4::ToEnvoy::ToEnvoySqliteExecuteWriteResponse(_) => {
 			return Err(incompatible(
 				ProtocolCompatibilityFeature::RemoteSqliteExecution,
 				ProtocolCompatibilityDirection::ToEnvoy,
@@ -487,14 +477,6 @@ fn convert_to_rivet_v4_to_v3(message: v4::ToRivet, target_version: u16) -> Resul
 				target_version,
 			));
 		}
-		v4::ToRivet::ToRivetSqliteExecuteWriteRequest(_) => {
-			return Err(incompatible(
-				ProtocolCompatibilityFeature::RemoteSqliteExecution,
-				ProtocolCompatibilityDirection::ToRivet,
-				4,
-				target_version,
-			));
-		}
 		v4::ToRivet::ToRivetMetadata(_)
 		| v4::ToRivet::ToRivetEvents(_)
 		| v4::ToRivet::ToRivetAckCommands(_)
@@ -529,9 +511,7 @@ fn convert_to_envoy_v2_to_v3(message: v2::ToEnvoy) -> Result<v3::ToEnvoy> {
 		v2::ToEnvoy::ToEnvoyTunnelMessage(message) => {
 			v3::ToEnvoy::ToEnvoyTunnelMessage(convert_to_envoy_tunnel_message_v2_to_v3(message))
 		}
-		v2::ToEnvoy::ToEnvoyPing(ping) => {
-			v3::ToEnvoy::ToEnvoyPing(v3::ToEnvoyPing { ts: ping.ts })
-		}
+		v2::ToEnvoy::ToEnvoyPing(ping) => v3::ToEnvoy::ToEnvoyPing(v3::ToEnvoyPing { ts: ping.ts }),
 		v2::ToEnvoy::ToEnvoySqliteGetPagesResponse(_)
 		| v2::ToEnvoy::ToEnvoySqliteCommitResponse(_)
 		| v2::ToEnvoy::ToEnvoySqliteCommitStageBeginResponse(_)
@@ -562,9 +542,7 @@ fn convert_to_envoy_v3_to_v2(message: v3::ToEnvoy) -> Result<v2::ToEnvoy> {
 		v3::ToEnvoy::ToEnvoyTunnelMessage(message) => {
 			v2::ToEnvoy::ToEnvoyTunnelMessage(convert_to_envoy_tunnel_message_v3_to_v2(message))
 		}
-		v3::ToEnvoy::ToEnvoyPing(ping) => {
-			v2::ToEnvoy::ToEnvoyPing(v2::ToEnvoyPing { ts: ping.ts })
-		}
+		v3::ToEnvoy::ToEnvoyPing(ping) => v2::ToEnvoy::ToEnvoyPing(v2::ToEnvoyPing { ts: ping.ts }),
 		v3::ToEnvoy::ToEnvoySqliteGetPagesResponse(_)
 		| v3::ToEnvoy::ToEnvoySqliteCommitResponse(_) => {
 			bail!("stateless sqlite responses require envoy-protocol v3")
@@ -578,7 +556,10 @@ fn convert_to_rivet_v2_to_v3(message: v2::ToRivet) -> Result<v3::ToRivet> {
 			v3::ToRivet::ToRivetMetadata(convert_to_rivet_metadata_v2_to_v3(metadata))
 		}
 		v2::ToRivet::ToRivetEvents(events) => v3::ToRivet::ToRivetEvents(
-			events.into_iter().map(convert_event_wrapper_v2_to_v3).collect(),
+			events
+				.into_iter()
+				.map(convert_event_wrapper_v2_to_v3)
+				.collect(),
 		),
 		v2::ToRivet::ToRivetAckCommands(ack) => {
 			v3::ToRivet::ToRivetAckCommands(convert_to_rivet_ack_commands_v2_to_v3(ack))
@@ -607,7 +588,10 @@ fn convert_to_rivet_v3_to_v2(message: v3::ToRivet) -> Result<v2::ToRivet> {
 			v2::ToRivet::ToRivetMetadata(convert_to_rivet_metadata_v3_to_v2(metadata))
 		}
 		v3::ToRivet::ToRivetEvents(events) => v2::ToRivet::ToRivetEvents(
-			events.into_iter().map(convert_event_wrapper_v3_to_v2).collect(),
+			events
+				.into_iter()
+				.map(convert_event_wrapper_v3_to_v2)
+				.collect(),
 		),
 		v3::ToRivet::ToRivetAckCommands(ack) => {
 			v2::ToRivet::ToRivetAckCommands(convert_to_rivet_ack_commands_v3_to_v2(ack))
@@ -847,9 +831,7 @@ fn convert_to_envoy_v1_to_v2(message: v1::ToEnvoy) -> Result<v2::ToEnvoy> {
 		v1::ToEnvoy::ToEnvoyTunnelMessage(message) => {
 			v2::ToEnvoy::ToEnvoyTunnelMessage(convert_to_envoy_tunnel_message_v1_to_v2(message))
 		}
-		v1::ToEnvoy::ToEnvoyPing(ping) => {
-			v2::ToEnvoy::ToEnvoyPing(v2::ToEnvoyPing { ts: ping.ts })
-		}
+		v1::ToEnvoy::ToEnvoyPing(ping) => v2::ToEnvoy::ToEnvoyPing(v2::ToEnvoyPing { ts: ping.ts }),
 	})
 }
 
@@ -873,9 +855,7 @@ fn convert_to_envoy_v2_to_v1(message: v2::ToEnvoy) -> Result<v1::ToEnvoy> {
 		v2::ToEnvoy::ToEnvoyTunnelMessage(message) => {
 			v1::ToEnvoy::ToEnvoyTunnelMessage(convert_to_envoy_tunnel_message_v2_to_v1(message))
 		}
-		v2::ToEnvoy::ToEnvoyPing(ping) => {
-			v1::ToEnvoy::ToEnvoyPing(v1::ToEnvoyPing { ts: ping.ts })
-		}
+		v2::ToEnvoy::ToEnvoyPing(ping) => v1::ToEnvoy::ToEnvoyPing(v1::ToEnvoyPing { ts: ping.ts }),
 		v2::ToEnvoy::ToEnvoySqliteGetPagesResponse(_)
 		| v2::ToEnvoy::ToEnvoySqliteCommitResponse(_)
 		| v2::ToEnvoy::ToEnvoySqliteCommitStageBeginResponse(_)
@@ -1091,7 +1071,9 @@ fn convert_command_start_actor_v3_to_v2(start: v3::CommandStartActor) -> v2::Com
 	}
 }
 
-fn convert_actor_command_key_data_v1_to_v3(data: v1::ActorCommandKeyData) -> v3::ActorCommandKeyData {
+fn convert_actor_command_key_data_v1_to_v3(
+	data: v1::ActorCommandKeyData,
+) -> v3::ActorCommandKeyData {
 	match data {
 		v1::ActorCommandKeyData::CommandStartActor(start) => {
 			v3::ActorCommandKeyData::CommandStartActor(convert_command_start_actor_v1_to_v3(start))
@@ -1104,7 +1086,9 @@ fn convert_actor_command_key_data_v1_to_v3(data: v1::ActorCommandKeyData) -> v3:
 	}
 }
 
-fn convert_actor_command_key_data_v2_to_v3(data: v2::ActorCommandKeyData) -> v3::ActorCommandKeyData {
+fn convert_actor_command_key_data_v2_to_v3(
+	data: v2::ActorCommandKeyData,
+) -> v3::ActorCommandKeyData {
 	match data {
 		v2::ActorCommandKeyData::CommandStartActor(start) => {
 			v3::ActorCommandKeyData::CommandStartActor(convert_command_start_actor_v2_to_v3(start))
@@ -1117,7 +1101,9 @@ fn convert_actor_command_key_data_v2_to_v3(data: v2::ActorCommandKeyData) -> v3:
 	}
 }
 
-fn convert_actor_command_key_data_v3_to_v1(data: v3::ActorCommandKeyData) -> v1::ActorCommandKeyData {
+fn convert_actor_command_key_data_v3_to_v1(
+	data: v3::ActorCommandKeyData,
+) -> v1::ActorCommandKeyData {
 	match data {
 		v3::ActorCommandKeyData::CommandStartActor(start) => {
 			v1::ActorCommandKeyData::CommandStartActor(convert_command_start_actor_v3_to_v1(start))
@@ -1130,7 +1116,9 @@ fn convert_actor_command_key_data_v3_to_v1(data: v3::ActorCommandKeyData) -> v1:
 	}
 }
 
-fn convert_actor_command_key_data_v3_to_v2(data: v3::ActorCommandKeyData) -> v2::ActorCommandKeyData {
+fn convert_actor_command_key_data_v3_to_v2(
+	data: v3::ActorCommandKeyData,
+) -> v2::ActorCommandKeyData {
 	match data {
 		v3::ActorCommandKeyData::CommandStartActor(start) => {
 			v2::ActorCommandKeyData::CommandStartActor(convert_command_start_actor_v3_to_v2(start))
@@ -1176,141 +1164,279 @@ fn convert_protocol_metadata_v3_to_v2(value: v3::ProtocolMetadata) -> v2::Protoc
 }
 
 fn convert_actor_config_v1_to_v2(value: v1::ActorConfig) -> v2::ActorConfig {
-	v2::ActorConfig { name: value.name, key: value.key, create_ts: value.create_ts, input: value.input }
+	v2::ActorConfig {
+		name: value.name,
+		key: value.key,
+		create_ts: value.create_ts,
+		input: value.input,
+	}
 }
 fn convert_actor_config_v2_to_v1(value: v2::ActorConfig) -> v1::ActorConfig {
-	v1::ActorConfig { name: value.name, key: value.key, create_ts: value.create_ts, input: value.input }
+	v1::ActorConfig {
+		name: value.name,
+		key: value.key,
+		create_ts: value.create_ts,
+		input: value.input,
+	}
 }
 fn convert_actor_config_v1_to_v3(value: v1::ActorConfig) -> v3::ActorConfig {
-	v3::ActorConfig { name: value.name, key: value.key, create_ts: value.create_ts, input: value.input }
+	v3::ActorConfig {
+		name: value.name,
+		key: value.key,
+		create_ts: value.create_ts,
+		input: value.input,
+	}
 }
 fn convert_actor_config_v2_to_v3(value: v2::ActorConfig) -> v3::ActorConfig {
-	v3::ActorConfig { name: value.name, key: value.key, create_ts: value.create_ts, input: value.input }
+	v3::ActorConfig {
+		name: value.name,
+		key: value.key,
+		create_ts: value.create_ts,
+		input: value.input,
+	}
 }
 fn convert_actor_config_v3_to_v1(value: v3::ActorConfig) -> v1::ActorConfig {
-	v1::ActorConfig { name: value.name, key: value.key, create_ts: value.create_ts, input: value.input }
+	v1::ActorConfig {
+		name: value.name,
+		key: value.key,
+		create_ts: value.create_ts,
+		input: value.input,
+	}
 }
 fn convert_actor_config_v3_to_v2(value: v3::ActorConfig) -> v2::ActorConfig {
-	v2::ActorConfig { name: value.name, key: value.key, create_ts: value.create_ts, input: value.input }
+	v2::ActorConfig {
+		name: value.name,
+		key: value.key,
+		create_ts: value.create_ts,
+		input: value.input,
+	}
 }
 
 fn convert_actor_checkpoint_v1_to_v2(value: v1::ActorCheckpoint) -> v2::ActorCheckpoint {
-	v2::ActorCheckpoint { actor_id: value.actor_id, generation: value.generation, index: value.index }
+	v2::ActorCheckpoint {
+		actor_id: value.actor_id,
+		generation: value.generation,
+		index: value.index,
+	}
 }
 fn convert_actor_checkpoint_v2_to_v1(value: v2::ActorCheckpoint) -> v1::ActorCheckpoint {
-	v1::ActorCheckpoint { actor_id: value.actor_id, generation: value.generation, index: value.index }
+	v1::ActorCheckpoint {
+		actor_id: value.actor_id,
+		generation: value.generation,
+		index: value.index,
+	}
 }
 fn convert_actor_checkpoint_v1_to_v3(value: v1::ActorCheckpoint) -> v3::ActorCheckpoint {
-	v3::ActorCheckpoint { actor_id: value.actor_id, generation: value.generation, index: value.index }
+	v3::ActorCheckpoint {
+		actor_id: value.actor_id,
+		generation: value.generation,
+		index: value.index,
+	}
 }
 fn convert_actor_checkpoint_v2_to_v3(value: v2::ActorCheckpoint) -> v3::ActorCheckpoint {
-	v3::ActorCheckpoint { actor_id: value.actor_id, generation: value.generation, index: value.index }
+	v3::ActorCheckpoint {
+		actor_id: value.actor_id,
+		generation: value.generation,
+		index: value.index,
+	}
 }
 fn convert_actor_checkpoint_v3_to_v1(value: v3::ActorCheckpoint) -> v1::ActorCheckpoint {
-	v1::ActorCheckpoint { actor_id: value.actor_id, generation: value.generation, index: value.index }
+	v1::ActorCheckpoint {
+		actor_id: value.actor_id,
+		generation: value.generation,
+		index: value.index,
+	}
 }
 fn convert_actor_checkpoint_v3_to_v2(value: v3::ActorCheckpoint) -> v2::ActorCheckpoint {
-	v2::ActorCheckpoint { actor_id: value.actor_id, generation: value.generation, index: value.index }
+	v2::ActorCheckpoint {
+		actor_id: value.actor_id,
+		generation: value.generation,
+		index: value.index,
+	}
 }
 
 fn convert_hibernating_request_v1_to_v2(value: v1::HibernatingRequest) -> v2::HibernatingRequest {
-	v2::HibernatingRequest { gateway_id: value.gateway_id, request_id: value.request_id }
+	v2::HibernatingRequest {
+		gateway_id: value.gateway_id,
+		request_id: value.request_id,
+	}
 }
 fn convert_hibernating_request_v2_to_v1(value: v2::HibernatingRequest) -> v1::HibernatingRequest {
-	v1::HibernatingRequest { gateway_id: value.gateway_id, request_id: value.request_id }
+	v1::HibernatingRequest {
+		gateway_id: value.gateway_id,
+		request_id: value.request_id,
+	}
 }
 fn convert_hibernating_request_v1_to_v3(value: v1::HibernatingRequest) -> v3::HibernatingRequest {
-	v3::HibernatingRequest { gateway_id: value.gateway_id, request_id: value.request_id }
+	v3::HibernatingRequest {
+		gateway_id: value.gateway_id,
+		request_id: value.request_id,
+	}
 }
 fn convert_hibernating_request_v2_to_v3(value: v2::HibernatingRequest) -> v3::HibernatingRequest {
-	v3::HibernatingRequest { gateway_id: value.gateway_id, request_id: value.request_id }
+	v3::HibernatingRequest {
+		gateway_id: value.gateway_id,
+		request_id: value.request_id,
+	}
 }
 fn convert_hibernating_request_v3_to_v1(value: v3::HibernatingRequest) -> v1::HibernatingRequest {
-	v1::HibernatingRequest { gateway_id: value.gateway_id, request_id: value.request_id }
+	v1::HibernatingRequest {
+		gateway_id: value.gateway_id,
+		request_id: value.request_id,
+	}
 }
 fn convert_hibernating_request_v3_to_v2(value: v3::HibernatingRequest) -> v2::HibernatingRequest {
-	v2::HibernatingRequest { gateway_id: value.gateway_id, request_id: value.request_id }
+	v2::HibernatingRequest {
+		gateway_id: value.gateway_id,
+		request_id: value.request_id,
+	}
 }
 
 fn convert_preloaded_kv_v1_to_v2(preloaded: v1::PreloadedKv) -> v2::PreloadedKv {
 	v2::PreloadedKv {
-		entries: preloaded.entries.into_iter().map(convert_preloaded_kv_entry_v1_to_v2).collect(),
+		entries: preloaded
+			.entries
+			.into_iter()
+			.map(convert_preloaded_kv_entry_v1_to_v2)
+			.collect(),
 		requested_get_keys: preloaded.requested_get_keys,
 		requested_prefixes: preloaded.requested_prefixes,
 	}
 }
 fn convert_preloaded_kv_v2_to_v1(preloaded: v2::PreloadedKv) -> v1::PreloadedKv {
 	v1::PreloadedKv {
-		entries: preloaded.entries.into_iter().map(convert_preloaded_kv_entry_v2_to_v1).collect(),
+		entries: preloaded
+			.entries
+			.into_iter()
+			.map(convert_preloaded_kv_entry_v2_to_v1)
+			.collect(),
 		requested_get_keys: preloaded.requested_get_keys,
 		requested_prefixes: preloaded.requested_prefixes,
 	}
 }
 fn convert_preloaded_kv_v1_to_v3(preloaded: v1::PreloadedKv) -> v3::PreloadedKv {
 	v3::PreloadedKv {
-		entries: preloaded.entries.into_iter().map(convert_preloaded_kv_entry_v1_to_v3).collect(),
+		entries: preloaded
+			.entries
+			.into_iter()
+			.map(convert_preloaded_kv_entry_v1_to_v3)
+			.collect(),
 		requested_get_keys: preloaded.requested_get_keys,
 		requested_prefixes: preloaded.requested_prefixes,
 	}
 }
 fn convert_preloaded_kv_v2_to_v3(preloaded: v2::PreloadedKv) -> v3::PreloadedKv {
 	v3::PreloadedKv {
-		entries: preloaded.entries.into_iter().map(convert_preloaded_kv_entry_v2_to_v3).collect(),
+		entries: preloaded
+			.entries
+			.into_iter()
+			.map(convert_preloaded_kv_entry_v2_to_v3)
+			.collect(),
 		requested_get_keys: preloaded.requested_get_keys,
 		requested_prefixes: preloaded.requested_prefixes,
 	}
 }
 fn convert_preloaded_kv_v3_to_v1(preloaded: v3::PreloadedKv) -> v1::PreloadedKv {
 	v1::PreloadedKv {
-		entries: preloaded.entries.into_iter().map(convert_preloaded_kv_entry_v3_to_v1).collect(),
+		entries: preloaded
+			.entries
+			.into_iter()
+			.map(convert_preloaded_kv_entry_v3_to_v1)
+			.collect(),
 		requested_get_keys: preloaded.requested_get_keys,
 		requested_prefixes: preloaded.requested_prefixes,
 	}
 }
 fn convert_preloaded_kv_v3_to_v2(preloaded: v3::PreloadedKv) -> v2::PreloadedKv {
 	v2::PreloadedKv {
-		entries: preloaded.entries.into_iter().map(convert_preloaded_kv_entry_v3_to_v2).collect(),
+		entries: preloaded
+			.entries
+			.into_iter()
+			.map(convert_preloaded_kv_entry_v3_to_v2)
+			.collect(),
 		requested_get_keys: preloaded.requested_get_keys,
 		requested_prefixes: preloaded.requested_prefixes,
 	}
 }
 
 fn convert_preloaded_kv_entry_v1_to_v2(entry: v1::PreloadedKvEntry) -> v2::PreloadedKvEntry {
-	v2::PreloadedKvEntry { key: entry.key, value: entry.value, metadata: convert_kv_metadata_v1_to_v2(entry.metadata) }
+	v2::PreloadedKvEntry {
+		key: entry.key,
+		value: entry.value,
+		metadata: convert_kv_metadata_v1_to_v2(entry.metadata),
+	}
 }
 fn convert_preloaded_kv_entry_v2_to_v1(entry: v2::PreloadedKvEntry) -> v1::PreloadedKvEntry {
-	v1::PreloadedKvEntry { key: entry.key, value: entry.value, metadata: convert_kv_metadata_v2_to_v1(entry.metadata) }
+	v1::PreloadedKvEntry {
+		key: entry.key,
+		value: entry.value,
+		metadata: convert_kv_metadata_v2_to_v1(entry.metadata),
+	}
 }
 fn convert_preloaded_kv_entry_v1_to_v3(entry: v1::PreloadedKvEntry) -> v3::PreloadedKvEntry {
-	v3::PreloadedKvEntry { key: entry.key, value: entry.value, metadata: convert_kv_metadata_v1_to_v3(entry.metadata) }
+	v3::PreloadedKvEntry {
+		key: entry.key,
+		value: entry.value,
+		metadata: convert_kv_metadata_v1_to_v3(entry.metadata),
+	}
 }
 fn convert_preloaded_kv_entry_v2_to_v3(entry: v2::PreloadedKvEntry) -> v3::PreloadedKvEntry {
-	v3::PreloadedKvEntry { key: entry.key, value: entry.value, metadata: convert_kv_metadata_v2_to_v3(entry.metadata) }
+	v3::PreloadedKvEntry {
+		key: entry.key,
+		value: entry.value,
+		metadata: convert_kv_metadata_v2_to_v3(entry.metadata),
+	}
 }
 fn convert_preloaded_kv_entry_v3_to_v1(entry: v3::PreloadedKvEntry) -> v1::PreloadedKvEntry {
-	v1::PreloadedKvEntry { key: entry.key, value: entry.value, metadata: convert_kv_metadata_v3_to_v1(entry.metadata) }
+	v1::PreloadedKvEntry {
+		key: entry.key,
+		value: entry.value,
+		metadata: convert_kv_metadata_v3_to_v1(entry.metadata),
+	}
 }
 fn convert_preloaded_kv_entry_v3_to_v2(entry: v3::PreloadedKvEntry) -> v2::PreloadedKvEntry {
-	v2::PreloadedKvEntry { key: entry.key, value: entry.value, metadata: convert_kv_metadata_v3_to_v2(entry.metadata) }
+	v2::PreloadedKvEntry {
+		key: entry.key,
+		value: entry.value,
+		metadata: convert_kv_metadata_v3_to_v2(entry.metadata),
+	}
 }
 
 fn convert_kv_metadata_v1_to_v2(value: v1::KvMetadata) -> v2::KvMetadata {
-	v2::KvMetadata { version: value.version, update_ts: value.update_ts }
+	v2::KvMetadata {
+		version: value.version,
+		update_ts: value.update_ts,
+	}
 }
 fn convert_kv_metadata_v2_to_v1(value: v2::KvMetadata) -> v1::KvMetadata {
-	v1::KvMetadata { version: value.version, update_ts: value.update_ts }
+	v1::KvMetadata {
+		version: value.version,
+		update_ts: value.update_ts,
+	}
 }
 fn convert_kv_metadata_v1_to_v3(value: v1::KvMetadata) -> v3::KvMetadata {
-	v3::KvMetadata { version: value.version, update_ts: value.update_ts }
+	v3::KvMetadata {
+		version: value.version,
+		update_ts: value.update_ts,
+	}
 }
 fn convert_kv_metadata_v2_to_v3(value: v2::KvMetadata) -> v3::KvMetadata {
-	v3::KvMetadata { version: value.version, update_ts: value.update_ts }
+	v3::KvMetadata {
+		version: value.version,
+		update_ts: value.update_ts,
+	}
 }
 fn convert_kv_metadata_v3_to_v1(value: v3::KvMetadata) -> v1::KvMetadata {
-	v1::KvMetadata { version: value.version, update_ts: value.update_ts }
+	v1::KvMetadata {
+		version: value.version,
+		update_ts: value.update_ts,
+	}
 }
 fn convert_kv_metadata_v3_to_v2(value: v3::KvMetadata) -> v2::KvMetadata {
-	v2::KvMetadata { version: value.version, update_ts: value.update_ts }
+	v2::KvMetadata {
+		version: value.version,
+		update_ts: value.update_ts,
+	}
 }
 
 include!("versioned_conversions.in");
@@ -1383,8 +1509,8 @@ mod tests {
 
 	#[test]
 	fn actor_command_key_data_round_trips_to_v1() -> Result<()> {
-		let encoded = ActorCommandKeyData::wrap_latest(
-			v4::ActorCommandKeyData::CommandStartActor(v4::CommandStartActor {
+		let encoded = ActorCommandKeyData::wrap_latest(v4::ActorCommandKeyData::CommandStartActor(
+			v4::CommandStartActor {
 				config: v4::ActorConfig {
 					name: "demo".into(),
 					key: None,
@@ -1393,8 +1519,8 @@ mod tests {
 				},
 				hibernating_requests: Vec::new(),
 				preloaded_kv: None,
-			}),
-		)
+			},
+		))
 		.serialize_version(1)?;
 
 		let decoded = ActorCommandKeyData::deserialize_version(&encoded, 1)?.unwrap_latest()?;

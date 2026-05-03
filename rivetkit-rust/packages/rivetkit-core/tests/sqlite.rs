@@ -2,18 +2,33 @@ use super::*;
 
 #[test]
 fn remote_backend_requires_declared_database_and_capability() {
-	assert_eq!(select_sqlite_backend(true, true), SqliteBackend::RemoteEnvoy);
+	assert_eq!(
+		select_sqlite_backend(true, true),
+		SqliteBackend::RemoteEnvoy
+	);
 
 	#[cfg(feature = "sqlite-local")]
 	{
-		assert_eq!(select_sqlite_backend(true, false), SqliteBackend::LocalNative);
-		assert_eq!(select_sqlite_backend(false, true), SqliteBackend::LocalNative);
+		assert_eq!(
+			select_sqlite_backend(true, false),
+			SqliteBackend::LocalNative
+		);
+		assert_eq!(
+			select_sqlite_backend(false, true),
+			SqliteBackend::LocalNative
+		);
 	}
 
 	#[cfg(not(feature = "sqlite-local"))]
 	{
-		assert_eq!(select_sqlite_backend(true, false), SqliteBackend::Unavailable);
-		assert_eq!(select_sqlite_backend(false, true), SqliteBackend::Unavailable);
+		assert_eq!(
+			select_sqlite_backend(true, false),
+			SqliteBackend::Unavailable
+		);
+		assert_eq!(
+			select_sqlite_backend(false, true),
+			SqliteBackend::Unavailable
+		);
 	}
 }
 
@@ -63,7 +78,6 @@ fn protocol_conversion_preserves_bind_and_result_values() {
 		]],
 		changes: 3,
 		last_insert_row_id: Some(11),
-		route: protocol::SqliteExecuteRoute::WriteFallback,
 	});
 
 	assert_eq!(result.columns, vec!["id", "score"]);
@@ -73,7 +87,6 @@ fn protocol_conversion_preserves_bind_and_result_values() {
 	);
 	assert_eq!(result.changes, 3);
 	assert_eq!(result.last_insert_row_id, Some(11));
-	assert_eq!(result.route, ExecuteRoute::WriteFallback);
 }
 
 #[test]
@@ -95,7 +108,7 @@ fn remote_protocol_compatibility_errors_become_remote_unavailable() {
 fn remote_lost_response_errors_become_indeterminate_result() {
 	let err = anyhow::anyhow!(
 		rivet_envoy_client::utils::RemoteSqliteIndeterminateResultError {
-			operation: "execute_write",
+			operation: "execute",
 		}
 	);
 

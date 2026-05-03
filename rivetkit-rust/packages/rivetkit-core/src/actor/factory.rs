@@ -2,9 +2,9 @@ use std::fmt;
 
 use anyhow::Result;
 
-use crate::runtime::RuntimeBoxFuture;
 use crate::ActorConfig;
 use crate::actor::lifecycle_hooks::ActorStart;
+use crate::runtime::RuntimeBoxFuture;
 
 #[cfg(feature = "wasm-runtime")]
 pub type ActorEntryFn = dyn Fn(ActorStart) -> RuntimeBoxFuture<Result<()>>;

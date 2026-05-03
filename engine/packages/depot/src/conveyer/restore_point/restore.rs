@@ -2,16 +2,17 @@ use anyhow::{Context, Result};
 use universaldb::utils::IsolationLevel::Serializable;
 
 use crate::conveyer::{
-	branch, keys,
+	branch,
+	error::SqliteStorageError,
+	keys,
 	restore_point::{
 		pinned::create_restore_point_for_resolved_tx,
 		resolve::resolve_restore_target,
 		shared::{ResolvedRestorePointPin, RestorePointCreateResult},
 		test_hooks,
 	},
-	error::SqliteStorageError,
 	types::{
-		RestorePointId, BucketId, DatabaseBranchId, SnapshotSelector, decode_commit_row,
+		BucketId, DatabaseBranchId, RestorePointId, SnapshotSelector, decode_commit_row,
 		decode_db_head,
 	},
 };
@@ -22,9 +23,9 @@ pub async fn restore_database(
 	database_id: String,
 	selector: SnapshotSelector,
 ) -> Result<RestorePointId> {
-	let target =
-		resolve_restore_target(udb, bucket_id, database_id.clone(), selector).await?;
-	let undo = capture_current_restore_point_for_restore(udb, bucket_id, database_id.clone()).await?;
+	let target = resolve_restore_target(udb, bucket_id, database_id.clone(), selector).await?;
+	let undo =
+		capture_current_restore_point_for_restore(udb, bucket_id, database_id.clone()).await?;
 
 	let result =
 		restore_database_to_target_and_pin_undo(udb, bucket_id, database_id, target, undo).await?;
@@ -71,9 +72,10 @@ async fn capture_current_restore_point_for_restore(
 		let database_id = database_id.clone();
 
 		async move {
-			let branch_id = branch::resolve_database_branch(&tx, bucket_id, &database_id, Serializable)
-				.await?
-				.ok_or(SqliteStorageError::DatabaseNotFound)?;
+			let branch_id =
+				branch::resolve_database_branch(&tx, bucket_id, &database_id, Serializable)
+					.await?
+					.ok_or(SqliteStorageError::DatabaseNotFound)?;
 			let head_bytes = tx
 				.informal()
 				.get(&keys::branch_meta_head_key(branch_id), Serializable)
@@ -82,11 +84,14 @@ async fn capture_current_restore_point_for_restore(
 			let head = decode_db_head(&head_bytes).context("decode sqlite database branch head")?;
 			let commit_bytes = tx
 				.informal()
-				.get(&keys::branch_commit_key(branch_id, head.head_txid), Serializable)
+				.get(
+					&keys::branch_commit_key(branch_id, head.head_txid),
+					Serializable,
+				)
 				.await?
 				.context("sqlite database branch head commit row is missing")?;
-			let commit =
-				decode_commit_row(&commit_bytes).context("decode sqlite database branch commit row")?;
+			let commit = decode_commit_row(&commit_bytes)
+				.context("decode sqlite database branch commit row")?;
 
 			Ok(ResolvedRestorePointPin {
 				restore_point: RestorePointId::format(commit.wall_clock_ms, head.head_txid)?,

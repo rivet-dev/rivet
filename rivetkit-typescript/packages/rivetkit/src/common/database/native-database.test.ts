@@ -32,10 +32,6 @@ class FakeNativeDatabase implements JsNativeDatabaseLike {
 		return await this.#startExecute(sql, params, false);
 	}
 
-	async executeWrite(sql: string, params?: NativeParams) {
-		return await this.#startExecute(sql, params, true);
-	}
-
 	async query(sql: string, params?: NativeParams) {
 		const { columns, rows } = await this.execute(sql, params);
 		return { columns, rows };
@@ -64,7 +60,6 @@ class FakeNativeDatabase implements JsNativeDatabaseLike {
 			rows: [],
 			changes: 0,
 			lastInsertRowId: null,
-			route: "read",
 			...result,
 		});
 	}
@@ -109,19 +104,18 @@ describe("wrapJsNativeDatabase", () => {
 		});
 	});
 
-	test("routes migration-mode calls through native write execution", async () => {
+	test("keeps write mode on the normal native execute lane", async () => {
 		const native = new FakeNativeDatabase();
 		const db = wrapJsNativeDatabase(native);
 
 		const query = db.writeMode(async () => {
 			const promise = db.query("SELECT 1");
 			expect(native.executeCalls).toMatchObject([
-				{ sql: "SELECT 1", write: true },
+				{ sql: "SELECT 1", write: false },
 			]);
 			native.resolveNext({
 				columns: ["value"],
 				rows: [[1]],
-				route: "write",
 			});
 			return await promise;
 		});
@@ -165,28 +159,21 @@ describe("wrapJsNativeDatabase", () => {
 		});
 	});
 
-	test("normalizes native execute routes and rejects unsupported routes", async () => {
+	test("returns native execute metadata", async () => {
 		const native = new FakeNativeDatabase();
 		const db = wrapJsNativeDatabase(native);
 
-		const read = db.execute("SELECT 1");
-		native.resolveNext({ route: "read" });
-		await expect(read).resolves.toMatchObject({ route: "read" });
-
 		const write = db.execute("INSERT INTO test VALUES (1)");
-		native.resolveNext({ route: "write" });
-		await expect(write).resolves.toMatchObject({ route: "write" });
+		native.resolveNext({ changes: 1, lastInsertRowId: 7 });
+		await expect(write).resolves.toMatchObject({
+			changes: 1,
+			lastInsertRowId: 7,
+		});
 
 		const fallback = db.execute("SELECT last_insert_rowid()");
 		await expect(fallback).resolves.toMatchObject({
-			route: "writeFallback",
+			rows: [[7]],
 		});
-
-		const unsupported = db.execute("SELECT 2");
-		native.resolveNext({ route: "custom" });
-		await expect(unsupported).rejects.toThrow(
-			"unsupported sqlite execute route: custom",
-		);
 	});
 
 	test("close waits for admitted native calls and rejects new work", async () => {

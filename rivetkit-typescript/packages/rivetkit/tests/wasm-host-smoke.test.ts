@@ -128,23 +128,6 @@ class SmokeSql {
 			rows: [["ok"]],
 			changes: 1,
 			lastInsertRowId: 1,
-			route: "write",
-		};
-	}
-
-	async executeWrite(sql: string, params?: unknown) {
-		this.host.sql.push({
-			method: "executeWrite",
-			sql,
-			params,
-			reconnects: [...this.host.reconnects],
-		});
-		return {
-			columns: ["value"],
-			rows: [["ok"]],
-			changes: 1,
-			lastInsertRowId: 1,
-			route: "write",
 		};
 	}
 
@@ -570,7 +553,7 @@ describe("wasm edge host smoke coverage", () => {
 		]);
 		expect(host.sql.map((entry) => entry.method)).toEqual([
 			"execute",
-			"executeWrite",
+			"execute",
 			"execute",
 		]);
 		expect(host.sql[1].reconnects).toContain("during-remote-write-sql");

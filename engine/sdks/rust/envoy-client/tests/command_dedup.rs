@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use rivet_envoy_client::actor::ToActor;
+use rivet_envoy_client::async_counter::AsyncCounter;
 use rivet_envoy_client::commands::handle_commands;
 use rivet_envoy_client::config::{
 	BoxFuture, EnvoyCallbacks, EnvoyConfig, HttpRequest, HttpResponse, WebSocketHandler,
@@ -16,7 +17,6 @@ use rivet_envoy_client::sqlite::{
 };
 use rivet_envoy_client::utils::{BufferMap, RemoteSqliteIndeterminateResultError};
 use rivet_envoy_protocol as protocol;
-use rivet_envoy_client::async_counter::AsyncCounter;
 use tokio::sync::mpsc;
 
 struct IdleCallbacks;
@@ -130,8 +130,8 @@ fn stop_command(actor_id: &str, generation: u32, index: i64) -> protocol::Comman
 	}
 }
 
-fn execute_write_request() -> protocol::SqliteExecuteWriteRequest {
-	protocol::SqliteExecuteWriteRequest {
+fn execute_request() -> protocol::SqliteExecuteRequest {
+	protocol::SqliteExecuteRequest {
 		namespace_id: "test".to_string(),
 		actor_id: "actor-replay".to_string(),
 		generation: 1,
@@ -240,7 +240,7 @@ async fn replayed_command_is_dropped_after_remote_sql_lost_response() {
 	let (sql_tx, sql_rx) = tokio::sync::oneshot::channel();
 	handle_remote_sqlite_request(
 		&mut ctx,
-		RemoteSqliteRequest::ExecuteWrite(execute_write_request()),
+		RemoteSqliteRequest::Execute(execute_request()),
 		sql_tx,
 	)
 	.await;

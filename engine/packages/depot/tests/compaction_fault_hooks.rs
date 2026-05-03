@@ -10,10 +10,10 @@ use depot::{
 		ColdCompactionFaultPoint, DepotFaultController, DepotFaultPoint, HotCompactionFaultPoint,
 		ReclaimFaultPoint,
 	},
-		keys::{
-			PAGE_SIZE, branch_compaction_cold_shard_key,
-			branch_compaction_retired_cold_object_key, branch_shard_key,
-		},
+	keys::{
+		PAGE_SIZE, branch_compaction_cold_shard_key, branch_compaction_retired_cold_object_key,
+		branch_shard_key,
+	},
 	types::{
 		BucketId, DatabaseBranchId, DirtyPage, RetiredColdObjectDeleteState, SnapshotSelector,
 		decode_retired_cold_object,
@@ -34,7 +34,9 @@ use uuid::Uuid;
 fn build_registry() -> Registry {
 	let mut registry = Registry::new();
 	registry.register_workflow::<DbManagerWorkflow>().unwrap();
-	registry.register_workflow::<DbHotCompacterWorkflow>().unwrap();
+	registry
+		.register_workflow::<DbHotCompacterWorkflow>()
+		.unwrap();
 	registry
 		.register_workflow::<DbColdCompacterWorkflow>()
 		.unwrap();
@@ -89,13 +91,11 @@ async fn test_ctx_with_cold_tier(root: &Path) -> Result<TestCtx> {
 	let mut test_deps = TestDeps::new().await?;
 	let mut config_root = (**test_deps.config()).clone();
 	config_root.sqlite = Some(rivet_config::config::Sqlite {
-		workflow_cold_storage: Some(
-			rivet_config::config::SqliteWorkflowColdStorage::FileSystem(
-				rivet_config::config::SqliteWorkflowColdStorageFileSystem {
-					root: root.display().to_string(),
-				},
-			),
-		),
+		workflow_cold_storage: Some(rivet_config::config::SqliteWorkflowColdStorage::FileSystem(
+			rivet_config::config::SqliteWorkflowColdStorageFileSystem {
+				root: root.display().to_string(),
+			},
+		)),
 	});
 	test_deps.config = rivet_config::Config::from_root(config_root);
 	TestCtx::new_with_deps(build_registry(), test_deps).await
@@ -145,7 +145,11 @@ async fn start_timer_disabled_manager(
 	database_branch_id: DatabaseBranchId,
 ) -> Result<Id> {
 	DepotCompactionTestDriver::new(test_ctx)
-		.start_manager(database_branch_id, Some("compaction-fault-test".to_string()), true)
+		.start_manager(
+			database_branch_id,
+			Some("compaction-fault-test".to_string()),
+			true,
+		)
 		.await
 }
 
@@ -281,7 +285,11 @@ async fn cold_upload_succeeds_before_publish_fault() -> Result<()> {
 		)
 		.await?;
 
-	assert!(result.attempted_job_kinds.contains(&CompactionJobKind::Cold));
+	assert!(
+		result
+			.attempted_job_kinds
+			.contains(&CompactionJobKind::Cold)
+	);
 	assert!(!result.completed_job_ids.is_empty());
 	assert!(
 		result
@@ -290,9 +298,12 @@ async fn cold_upload_succeeds_before_publish_fault() -> Result<()> {
 			.is_some_and(|err| err.contains("cold publish failed after upload"))
 	);
 	assert!(
-		read_value(&test_ctx, branch_compaction_cold_shard_key(database_branch_id, 0, 1))
-			.await?
-			.is_some()
+		read_value(
+			&test_ctx,
+			branch_compaction_cold_shard_key(database_branch_id, 0, 1)
+		)
+		.await?
+		.is_some()
 	);
 	controller.assert_expected_fired()?;
 	db.delete_restore_point(restore_point).await?;
@@ -315,7 +326,8 @@ async fn forced_reclaim_deletes_retired_cold_object_with_short_grace() -> Result
 	let database_branch_id = read_database_branch_id(&test_ctx, database_id).await?;
 	let manager_workflow_id = start_timer_disabled_manager(&test_ctx, database_branch_id).await?;
 	let driver = DepotCompactionTestDriver::new(&test_ctx);
-	let _grace_guard = test_hooks::override_cold_object_delete_grace_for_test(database_branch_id, 0);
+	let _grace_guard =
+		test_hooks::override_cold_object_delete_grace_for_test(database_branch_id, 0);
 
 	driver
 		.force_compaction(
@@ -341,12 +353,15 @@ async fn forced_reclaim_deletes_retired_cold_object_with_short_grace() -> Result
 			},
 		)
 		.await?;
-	let old_ref = read_value(&test_ctx, branch_compaction_cold_shard_key(database_branch_id, 0, 1))
-		.await?
-		.as_deref()
-		.map(depot::types::decode_cold_shard_ref)
-		.transpose()?
-		.context("old cold ref should exist")?;
+	let old_ref = read_value(
+		&test_ctx,
+		branch_compaction_cold_shard_key(database_branch_id, 0, 1),
+	)
+	.await?
+	.as_deref()
+	.map(depot::types::decode_cold_shard_ref)
+	.transpose()?
+	.context("old cold ref should exist")?;
 	db.delete_restore_point(old_restore_point).await?;
 
 	db.commit(vec![dirty_page(1, 0x52)], 2, 1_002).await?;
@@ -372,8 +387,16 @@ async fn forced_reclaim_deletes_retired_cold_object_with_short_grace() -> Result
 		)
 		.await?;
 
-	assert!(result.attempted_job_kinds.contains(&CompactionJobKind::Cold));
-	assert!(result.attempted_job_kinds.contains(&CompactionJobKind::Reclaim));
+	assert!(
+		result
+			.attempted_job_kinds
+			.contains(&CompactionJobKind::Cold)
+	);
+	assert!(
+		result
+			.attempted_job_kinds
+			.contains(&CompactionJobKind::Reclaim)
+	);
 	assert!(result.terminal_error.is_none());
 	assert!(tier.get_object(&old_ref.object_key).await?.is_none());
 	let retired = read_value(

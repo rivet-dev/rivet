@@ -201,7 +201,7 @@ impl RegistryDispatcher {
 								let instance = listener_instance.clone();
 								let sender = listener_sender.clone();
 								let actor_id = instance.ctx.actor_id().to_owned();
-									RuntimeSpawner::spawn(
+								RuntimeSpawner::spawn(
 									async move {
 										match dispatcher
 											.inspector_push_message_for_signal(&instance, signal)
@@ -318,17 +318,17 @@ impl RegistryDispatcher {
 		message: inspector_protocol::ClientMessage,
 	) -> Result<Option<InspectorServerMessage>> {
 		match message {
-				inspector_protocol::ClientMessage::PatchStateRequest(request) => {
-					let state = request.state;
-					instance
-						.ctx
-						.save_state(vec![StateDelta::ActorState(state.clone())])
-						.await
-						.context("save inspector websocket state patch")?;
-					Ok(Some(InspectorServerMessage::StateUpdated(
-						inspector_protocol::StateUpdated { state },
-					)))
-				}
+			inspector_protocol::ClientMessage::PatchStateRequest(request) => {
+				let state = request.state;
+				instance
+					.ctx
+					.save_state(vec![StateDelta::ActorState(state.clone())])
+					.await
+					.context("save inspector websocket state patch")?;
+				Ok(Some(InspectorServerMessage::StateUpdated(
+					inspector_protocol::StateUpdated { state },
+				)))
+			}
 			inspector_protocol::ClientMessage::StateRequest(request) => {
 				Ok(Some(InspectorServerMessage::StateResponse(
 					self.inspector_state_response(instance, request.id),

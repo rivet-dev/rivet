@@ -78,8 +78,8 @@ mod tests {
 	use std::collections::HashMap;
 	use std::sync::Arc;
 
-	use rivet_envoy_protocol as protocol;
 	use crate::async_counter::AsyncCounter;
+	use rivet_envoy_protocol as protocol;
 	use tokio::sync::mpsc;
 
 	use super::handle_send_events;
@@ -99,10 +99,10 @@ mod tests {
 			&self,
 			_handle: EnvoyHandle,
 			_actor_id: String,
-				_generation: u32,
-				_config: protocol::ActorConfig,
-				_preloaded_kv: Option<protocol::PreloadedKv>,
-			) -> BoxFuture<anyhow::Result<()>> {
+			_generation: u32,
+			_config: protocol::ActorConfig,
+			_preloaded_kv: Option<protocol::PreloadedKv>,
+		) -> BoxFuture<anyhow::Result<()>> {
 			Box::pin(async { Ok(()) })
 		}
 

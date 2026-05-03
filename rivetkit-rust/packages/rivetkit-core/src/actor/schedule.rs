@@ -368,22 +368,21 @@ impl ActorContext {
 		// Intentionally detached but abortable: the handle is stored in
 		// `local_alarm_task` and cancelled when alarms are resynced or stopped.
 		let task = async move {
-				sleep(Duration::from_millis(delay_ms)).await;
-				if schedule.0.schedule_local_alarm_epoch.load(Ordering::SeqCst) != local_alarm_epoch
-				{
-					return;
-				}
-				tracing::debug!(
-					timestamp_ms = next_alarm,
-					local_alarm_epoch,
-					"local actor alarm fired"
-				);
-				let Some(callback) = schedule.0.schedule_local_alarm_callback.lock().clone() else {
-					return;
-				};
-				callback().await;
+			sleep(Duration::from_millis(delay_ms)).await;
+			if schedule.0.schedule_local_alarm_epoch.load(Ordering::SeqCst) != local_alarm_epoch {
+				return;
 			}
-			.in_current_span();
+			tracing::debug!(
+				timestamp_ms = next_alarm,
+				local_alarm_epoch,
+				"local actor alarm fired"
+			);
+			let Some(callback) = schedule.0.schedule_local_alarm_callback.lock().clone() else {
+				return;
+			};
+			callback().await;
+		}
+		.in_current_span();
 
 		#[cfg(not(feature = "wasm-runtime"))]
 		let handle = tokio_handle.spawn(task);

@@ -98,7 +98,6 @@ export interface NativeExecuteResult {
   rows: Array<Array<any>>
   changes: number
   lastInsertRowId?: number
-  route: string
 }
 export interface JsQueueNextOptions {
   names?: Array<string>
@@ -249,7 +248,6 @@ export declare class JsNativeDatabase {
   run(sql: string, params?: Array<JsBindParam> | undefined | null): Promise<ExecuteResult>
   query(sql: string, params?: Array<JsBindParam> | undefined | null): Promise<QueryResult>
   execute(sql: string, params?: Array<JsBindParam> | undefined | null): Promise<NativeExecuteResult>
-  executeWrite(sql: string, params?: Array<JsBindParam> | undefined | null): Promise<NativeExecuteResult>
   exec(sql: string): Promise<QueryResult>
   close(): Promise<void>
 }

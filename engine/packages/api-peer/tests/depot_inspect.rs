@@ -1,5 +1,5 @@
-use axum_test::TestServer;
 use anyhow::Result;
+use axum_test::TestServer;
 use base64::{Engine, prelude::BASE64_URL_SAFE_NO_PAD};
 use rivet_config::config::{Database, Root, db::FileSystem};
 

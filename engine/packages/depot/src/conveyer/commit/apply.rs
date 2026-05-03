@@ -6,28 +6,28 @@ use universaldb::{
 	utils::IsolationLevel::{Serializable, Snapshot},
 };
 
+#[cfg(feature = "test-faults")]
+use crate::fault::{CommitFaultPoint, DepotFaultContext, DepotFaultController, DepotFaultPoint};
 use crate::{
 	burst_mode,
 	conveyer::{
-		Db,
-		branch,
-		db::{BranchAncestry, CacheSnapshot, load_branch_ancestry, touch_access_if_bucket_advanced},
+		Db, branch,
+		db::{
+			BranchAncestry, CacheSnapshot, load_branch_ancestry, touch_access_if_bucket_advanced,
+		},
 		error::SqliteStorageError,
 		keys,
 		ltx::{LtxHeader, encode_ltx_v3},
-		metrics, quota, udb,
+		metrics,
 		page_index::DeltaPageIndex,
+		quota,
 		types::{
-			BranchState, CommitRow, DBHead, DatabaseBranchId, DirtyPage,
-			decode_compaction_root, decode_database_branch_record, decode_db_head,
-			encode_commit_row, encode_db_head,
+			BranchState, CommitRow, DBHead, DatabaseBranchId, DirtyPage, decode_compaction_root,
+			decode_database_branch_record, decode_db_head, encode_commit_row, encode_db_head,
 		},
+		udb,
 	},
 	workflows::compaction::DeltasAvailable,
-};
-#[cfg(feature = "test-faults")]
-use crate::fault::{
-	CommitFaultPoint, DepotFaultContext, DepotFaultController, DepotFaultPoint,
 };
 
 use super::{
@@ -72,8 +72,9 @@ impl Db {
 		let cached_ancestry = cached_snapshot
 			.as_ref()
 			.map(|snapshot| snapshot.ancestors.clone());
-		let cached_access_bucket =
-			cached_snapshot.as_ref().and_then(|snapshot| snapshot.last_access_bucket);
+		let cached_access_bucket = cached_snapshot
+			.as_ref()
+			.and_then(|snapshot| snapshot.last_access_bucket);
 		let last_deltas_available_at_ms = *self.last_deltas_available_at_ms.read().await;
 		let cache_was_warm = cached_snapshot
 			.as_ref()
@@ -109,16 +110,13 @@ impl Db {
 					)
 					.await?;
 					if !branch_resolution.database_initialized {
-						let branch_record = tx_get_value(
-							&tx,
-							&keys::branches_list_key(branch_id),
-							Serializable,
-						)
-						.await?
-						.as_deref()
-						.map(decode_database_branch_record)
-						.transpose()
-						.context("decode sqlite database branch record for commit")?;
+						let branch_record =
+							tx_get_value(&tx, &keys::branches_list_key(branch_id), Serializable)
+								.await?
+								.as_deref()
+								.map(decode_database_branch_record)
+								.transpose()
+								.context("decode sqlite database branch record for commit")?;
 						if !branch_record
 							.as_ref()
 							.is_some_and(|record| record.state == BranchState::Live)
@@ -139,7 +137,9 @@ impl Db {
 					let head_at_fork_key = keys::branch_meta_head_at_fork_key(branch_id);
 					let branch_cache_matches = cached_branch_id == Some(branch_id);
 					let (head_bytes, head_at_fork_bytes, storage_used) =
-						if let (true, Some(storage_used)) = (branch_cache_matches, cached_storage_used) {
+						if let (true, Some(storage_used)) =
+							(branch_cache_matches, cached_storage_used)
+						{
 							(
 								tx_get_value(&tx, &head_key, Serializable).await?,
 								tx_get_value(&tx, &head_at_fork_key, Serializable).await?,
@@ -148,7 +148,8 @@ impl Db {
 						} else {
 							let quota_fut = quota::read_branch(&tx, branch_id);
 							let head_fut = tx_get_value(&tx, &head_key, Serializable);
-							let head_at_fork_fut = tx_get_value(&tx, &head_at_fork_key, Serializable);
+							let head_at_fork_fut =
+								tx_get_value(&tx, &head_at_fork_key, Serializable);
 							let (head_bytes, head_at_fork_bytes, storage_used) =
 								tokio::try_join!(head_fut, head_at_fork_fut, quota_fut)?;
 							(head_bytes, head_at_fork_bytes, storage_used)
@@ -167,18 +168,16 @@ impl Db {
 						Some(branch_id),
 					)
 					.await?;
-					let compaction_root = tx_get_value(
-						&tx,
-						&keys::branch_compaction_root_key(branch_id),
-						Snapshot,
-					)
-					.await?
-					.as_deref()
-					.map(decode_compaction_root)
-					.transpose()
-					.context("decode sqlite compaction root for dirty admission")?;
-					let previous_db_size_pages =
-						previous_head.as_ref().map_or(db_size_pages, |head| head.db_size_pages);
+					let compaction_root =
+						tx_get_value(&tx, &keys::branch_compaction_root_key(branch_id), Snapshot)
+							.await?
+							.as_deref()
+							.map(decode_compaction_root)
+							.transpose()
+							.context("decode sqlite compaction root for dirty admission")?;
+					let previous_db_size_pages = previous_head
+						.as_ref()
+						.map_or(db_size_pages, |head| head.db_size_pages);
 					let txid = match previous_head.as_ref() {
 						Some(head) => head
 							.head_txid
@@ -187,9 +186,13 @@ impl Db {
 						None => 1,
 					};
 
-					let truncate_cleanup =
-						collect_truncate_cleanup(&tx, branch_id, previous_db_size_pages, db_size_pages)
-							.await?;
+					let truncate_cleanup = collect_truncate_cleanup(
+						&tx,
+						branch_id,
+						previous_db_size_pages,
+						db_size_pages,
+					)
+					.await?;
 					test_hooks::maybe_pause_after_truncate_cleanup(&database_id).await;
 					#[cfg(feature = "test-faults")]
 					maybe_fire_commit_fault(
@@ -200,11 +203,9 @@ impl Db {
 					)
 					.await?;
 
-					let encoded_delta = encode_ltx_v3(
-						LtxHeader::delta(txid, db_size_pages, now_ms),
-						&dirty_pages,
-					)
-					.context("encode commit delta")?;
+					let encoded_delta =
+						encode_ltx_v3(LtxHeader::delta(txid, db_size_pages, now_ms), &dirty_pages)
+							.context("encode commit delta")?;
 					let delta_chunks = encoded_delta
 						.chunks(DELTA_CHUNK_BYTES)
 						.enumerate()
@@ -276,7 +277,10 @@ impl Db {
 						+ dirty_pgnos
 							.iter()
 							.map(|pgno| {
-								tracked_entry_size(&keys::branch_pidx_key(branch_id, *pgno), &txid_bytes)
+								tracked_entry_size(
+									&keys::branch_pidx_key(branch_id, *pgno),
+									&txid_bytes,
+								)
 							})
 							.sum::<Result<i64>>()?;
 					let removed_bytes = head_bytes
@@ -437,7 +441,8 @@ impl Db {
 
 		*self.storage_used.write().await = Some(result.storage_used);
 		self.commit_bytes_since_rollup.fetch_add(
-			u64::try_from(result.added_bytes).context("commit added bytes should be non-negative")?,
+			u64::try_from(result.added_bytes)
+				.context("commit added bytes should be non-negative")?,
 			std::sync::atomic::Ordering::Relaxed,
 		);
 

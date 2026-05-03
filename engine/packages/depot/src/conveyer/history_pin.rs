@@ -5,7 +5,7 @@ use universaldb::{RangeOption, options::StreamingMode, utils::IsolationLevel};
 use super::{
 	keys,
 	types::{
-		RestorePointId, DatabaseBranchId, DbHistoryPin, DbHistoryPinKind, BucketBranchId,
+		BucketBranchId, DatabaseBranchId, DbHistoryPin, DbHistoryPinKind, RestorePointId,
 		decode_db_history_pin, encode_db_history_pin,
 	},
 };
@@ -107,7 +107,8 @@ pub fn write_db_history_pin(
 	pin: DbHistoryPin,
 ) -> Result<()> {
 	let encoded = encode_db_history_pin(pin).context("encode sqlite db history pin")?;
-	tx.informal().set(&keys::db_pin_key(branch_id, pin_id), &encoded);
+	tx.informal()
+		.set(&keys::db_pin_key(branch_id, pin_id), &encoded);
 
 	Ok(())
 }

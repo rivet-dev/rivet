@@ -18,30 +18,28 @@ pub(crate) use universaldb::{
 };
 
 pub(crate) use crate::{
-	CMP_COLD_OBJECT_DELETE_GRACE_MS, CMP_FDB_BATCH_MAX_KEYS, CMP_FDB_BATCH_MAX_VALUE_BYTES,
-	CMP_S3_DELETE_MAX_OBJECTS, CMP_S3_UPLOAD_LIMIT_BYTES, CMP_S3_UPLOAD_MAX_OBJECTS,
-	MAX_BUCKET_DEPTH,
-	ACCESS_TOUCH_THROTTLE_MS,
-	HOT_BURST_COLD_LAG_THRESHOLD_TXIDS,
+	ACCESS_TOUCH_THROTTLE_MS, CMP_COLD_OBJECT_DELETE_GRACE_MS, CMP_FDB_BATCH_MAX_KEYS,
+	CMP_FDB_BATCH_MAX_VALUE_BYTES, CMP_S3_DELETE_MAX_OBJECTS, CMP_S3_UPLOAD_LIMIT_BYTES,
+	CMP_S3_UPLOAD_MAX_OBJECTS, HOT_BURST_COLD_LAG_THRESHOLD_TXIDS, MAX_BUCKET_DEPTH,
+	cold_tier::{ColdTier, cold_tier_from_config},
 	conveyer::{
-		history_pin, keys, quota,
+		history_pin, keys,
 		ltx::{DecodedLtx, LtxHeader, decode_ltx_v3, encode_ltx_v3},
+		quota,
 		types::{
-			BranchState, BucketCatalogDbFact, BucketForkFact, BucketId, ColdShardRef,
-			CommitRow, CompactionRoot, DBHead, DatabaseBranchId, DatabaseBranchRecord,
-			DbHistoryPin, DirtyPage, PitrIntervalCoverage, PitrPolicy, RetiredColdObject,
-			RetiredColdObjectDeleteState, SqliteCmpDirty, decode_bucket_catalog_db_fact,
-			decode_bucket_fork_fact, decode_bucket_pointer, decode_cold_shard_ref,
-			decode_commit_row, decode_compaction_root, decode_database_branch_record,
-			decode_database_pointer, decode_db_head, decode_pitr_policy,
-			decode_shard_cache_policy,
-			decode_pitr_interval_coverage, decode_retired_cold_object, decode_sqlite_cmp_dirty,
-			encode_cold_shard_ref, encode_compaction_root, encode_pitr_interval_coverage,
-			encode_retired_cold_object, ShardCachePolicy,
+			BranchState, BucketCatalogDbFact, BucketForkFact, BucketId, ColdShardRef, CommitRow,
+			CompactionRoot, DBHead, DatabaseBranchId, DatabaseBranchRecord, DbHistoryPin,
+			DirtyPage, PitrIntervalCoverage, PitrPolicy, RetiredColdObject,
+			RetiredColdObjectDeleteState, ShardCachePolicy, SqliteCmpDirty,
+			decode_bucket_catalog_db_fact, decode_bucket_fork_fact, decode_bucket_pointer,
+			decode_cold_shard_ref, decode_commit_row, decode_compaction_root,
+			decode_database_branch_record, decode_database_pointer, decode_db_head,
+			decode_pitr_interval_coverage, decode_pitr_policy, decode_retired_cold_object,
+			decode_shard_cache_policy, decode_sqlite_cmp_dirty, encode_cold_shard_ref,
+			encode_compaction_root, encode_pitr_interval_coverage, encode_retired_cold_object,
 		},
 		udb,
 	},
-	cold_tier::{ColdTier, cold_tier_from_config},
 };
 
 pub const DATABASE_BRANCH_ID_TAG: &str = "database_branch_id";
@@ -629,7 +627,9 @@ pub enum BranchStopState {
 		requested_at_ms: i64,
 		reason: ManagerStopReason,
 	},
-	Stopped { stopped_at_ms: i64 },
+	Stopped {
+		stopped_at_ms: i64,
+	},
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
