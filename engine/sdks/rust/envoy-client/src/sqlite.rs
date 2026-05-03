@@ -10,11 +10,13 @@ use crate::utils::{EnvoyShutdownError, RemoteSqliteIndeterminateResultError};
 pub enum SqliteRequest {
 	GetPages(protocol::SqliteGetPagesRequest),
 	Commit(protocol::SqliteCommitRequest),
+	PersistPreloadHints(protocol::SqlitePersistPreloadHintsRequest),
 }
 
 pub enum SqliteResponse {
 	GetPages(protocol::SqliteGetPagesResponse),
 	Commit(protocol::SqliteCommitResponse),
+	PersistPreloadHints(protocol::SqlitePersistPreloadHintsResponse),
 }
 
 #[derive(Clone, Debug)]
@@ -133,6 +135,18 @@ pub async fn handle_sqlite_commit_response(
 	);
 }
 
+pub async fn handle_sqlite_persist_preload_hints_response(
+	ctx: &mut EnvoyContext,
+	response: protocol::ToEnvoySqlitePersistPreloadHintsResponse,
+) {
+	handle_sqlite_response(
+		ctx,
+		response.request_id,
+		SqliteResponse::PersistPreloadHints(response.data),
+		"sqlite_persist_preload_hints",
+	);
+}
+
 pub async fn handle_remote_sqlite_exec_response(
 	ctx: &mut EnvoyContext,
 	response: protocol::ToEnvoySqliteExecResponse,
@@ -222,6 +236,11 @@ pub async fn send_single_sqlite_request(ctx: &mut EnvoyContext, request_id: u32)
 			SqliteRequest::Commit(data) => protocol::ToRivet::ToRivetSqliteCommitRequest(
 				protocol::ToRivetSqliteCommitRequest { request_id, data },
 			),
+			SqliteRequest::PersistPreloadHints(data) => {
+				protocol::ToRivet::ToRivetSqlitePersistPreloadHintsRequest(
+					protocol::ToRivetSqlitePersistPreloadHintsRequest { request_id, data },
+				)
+			}
 		};
 
 	ws_send(&ctx.shared, message).await;
