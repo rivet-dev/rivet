@@ -1,6 +1,5 @@
 use std::collections::HashSet;
 use std::io::Cursor;
-#[cfg(feature = "sqlite-local")]
 use std::sync::{
 	Arc,
 	atomic::{AtomicBool, Ordering},
@@ -76,6 +75,11 @@ pub struct SqliteDb {
 	/// always sets up sqlite storage under the hood, so handle/actor_id are
 	/// not a reliable signal for whether the user opted in; this flag is.
 	enabled: bool,
+	/// Core owns the logical actor-generation DB lifetime. Depot-client can
+	/// mark one native worker closed, but stale cloned `c.db` handles could
+	/// otherwise reopen a new local worker or keep sending remote SQL after
+	/// actor cleanup.
+	closed: Arc<AtomicBool>,
 	#[cfg(feature = "sqlite-local")]
 	// Forced-sync: native SQLite handles are used inside spawn_blocking and
 	// synchronous diagnostic accessors.
@@ -108,6 +112,7 @@ impl SqliteDb {
 			generation,
 			backend: select_sqlite_backend(enabled, remote_sqlite),
 			enabled,
+			closed: Default::default(),
 			#[cfg(feature = "sqlite-local")]
 			db: Default::default(),
 			#[cfg(feature = "sqlite-local")]
@@ -149,11 +154,13 @@ impl SqliteDb {
 	}
 
 	pub async fn open(&self) -> Result<()> {
+		self.ensure_open()?;
 		match self.backend {
 			SqliteBackend::LocalNative => {
 				#[cfg(feature = "sqlite-local")]
 				{
 					let _open_guard = self.open_lock.lock().await;
+					self.ensure_open()?;
 					if self.db.lock().is_some() {
 						return Ok(());
 					}
@@ -305,6 +312,9 @@ impl SqliteDb {
 	}
 
 	pub async fn close(&self) -> Result<()> {
+		if self.closed.swap(true, Ordering::AcqRel) {
+			return Ok(());
+		}
 		match self.backend {
 			SqliteBackend::LocalNative => {
 				#[cfg(feature = "sqlite-local")]
@@ -346,6 +356,7 @@ impl SqliteDb {
 
 	#[cfg(feature = "sqlite-local")]
 	fn native_db_handle(&self) -> Result<NativeDatabaseHandle> {
+		self.ensure_open()?;
 		self.db
 			.lock()
 			.as_ref()
@@ -432,6 +443,7 @@ impl SqliteDb {
 	}
 
 	fn remote_config(&self) -> Result<RemoteSqliteConfig> {
+		self.ensure_open()?;
 		let config = self.runtime_config()?;
 		let generation = config
 			.generation
@@ -442,6 +454,13 @@ impl SqliteDb {
 			actor_id: config.actor_id,
 			generation,
 		})
+	}
+
+	fn ensure_open(&self) -> Result<()> {
+		if self.closed.load(Ordering::Acquire) {
+			return Err(SqliteRuntimeError::Closed.build());
+		}
+		Ok(())
 	}
 
 	async fn remote_exec(&self, sql: String) -> Result<QueryResult> {

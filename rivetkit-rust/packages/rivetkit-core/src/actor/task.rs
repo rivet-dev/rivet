@@ -1704,15 +1704,119 @@ impl ActorTask {
 			ShutdownKind::Sleep => LifecycleState::SleepFinalize,
 			ShutdownKind::Destroy => LifecycleState::Destroying,
 		});
+		let reason_label = shutdown_reason_label(reason);
+		let actor_id = self.ctx.actor_id().to_owned();
+		// Grace is over once final shutdown starts. Close SQLite before final
+		// serialization so any late callback from this generation fails closed.
+		self.ctx.sql().cleanup().await.with_context(|| {
+			format!("cleanup sqlite before {reason_label} finalization")
+		})?;
+		trim_native_allocator_after_shutdown(&actor_id, reason_label);
+		tracing::debug!(
+			actor_id = %actor_id,
+			reason = reason_label,
+			step = "cleanup_sqlite",
+			"actor shutdown cleanup step completed"
+		);
 		self.save_final_state().await?;
 		self.close_actor_event_channel();
 		self.join_aborted_run_handle().await;
-		Self::finish_shutdown_cleanup_with_ctx(self.ctx.clone(), reason).await?;
+		let ctx = self.ctx.clone();
+		tokio::join!(
+			Self::run_shutdown_task_teardown_sleep_state(
+				ctx.clone(),
+				reason_label,
+				actor_id.clone()
+			),
+			Self::run_shutdown_task_wait_for_state_writes(
+				ctx.clone(),
+				reason_label,
+				actor_id.clone()
+			),
+			Self::run_shutdown_task_cleanup_alarm(ctx, reason, reason_label, actor_id),
+		);
+
 		if matches!(reason, ShutdownKind::Destroy) {
 			self.ctx.mark_destroy_completed();
 		}
 		self.ctx.record_shutdown_wait(reason, started_at.elapsed());
 		Ok(())
+	}
+
+	async fn run_shutdown_task_teardown_sleep_state(
+		ctx: ActorContext,
+		reason_label: &'static str,
+		actor_id: String,
+	) {
+		ctx.teardown_sleep_state().await;
+		tracing::debug!(
+			actor_id = %actor_id,
+			reason = reason_label,
+			step = "teardown_sleep_state",
+			"actor shutdown cleanup step completed"
+		);
+
+		#[cfg(test)]
+		run_shutdown_cleanup_hook(&ctx, reason_label);
+	}
+
+	async fn run_shutdown_task_wait_for_state_writes(
+		ctx: ActorContext,
+		reason_label: &'static str,
+		actor_id: String,
+	) {
+		ctx.wait_for_pending_state_writes().await;
+		tracing::debug!(
+			actor_id = %actor_id,
+			reason = reason_label,
+			step = "wait_for_pending_state_writes",
+			"actor shutdown cleanup step completed"
+		);
+	}
+
+	async fn run_shutdown_task_cleanup_alarm(
+		ctx: ActorContext,
+		reason: ShutdownKind,
+		reason_label: &'static str,
+		actor_id: String,
+	) {
+		match reason {
+			ShutdownKind::Sleep => {
+				ctx.sync_alarm_logged();
+				tracing::debug!(
+					actor_id = %actor_id,
+					reason = reason_label,
+					step = "sync_alarm",
+					"actor shutdown cleanup step completed"
+				);
+				// Keep the persisted engine alarm armed across sleep, but abort the
+				// local Tokio timer owned by this actor generation.
+				ctx.cancel_local_alarm_timeouts();
+				tracing::debug!(
+					actor_id = %actor_id,
+					reason = reason_label,
+					step = "cancel_local_alarm_timeouts",
+					"actor shutdown cleanup step completed"
+				);
+			}
+			ShutdownKind::Destroy => {
+				ctx.cancel_driver_alarm_logged();
+				tracing::debug!(
+					actor_id = %actor_id,
+					reason = reason_label,
+					step = "cancel_driver_alarm",
+					"actor shutdown cleanup step completed"
+				);
+			}
+		}
+
+		ctx.wait_for_pending_alarm_writes().await;
+		tracing::debug!(
+			actor_id = %actor_id,
+			reason = reason_label,
+			step = "wait_for_pending_alarm_writes",
+			"actor shutdown cleanup step completed"
+		);
 	}
 
 	async fn save_final_state(&mut self) -> Result<()> {
@@ -1755,79 +1859,6 @@ impl ActorTask {
 		};
 
 		self.ctx.save_state(deltas).await
-	}
-
-	async fn finish_shutdown_cleanup_with_ctx(
-		ctx: ActorContext,
-		reason: ShutdownKind,
-	) -> Result<()> {
-		let reason_label = shutdown_reason_label(reason);
-		let actor_id = ctx.actor_id().to_owned();
-		ctx.teardown_sleep_state().await;
-		tracing::debug!(
-			actor_id = %actor_id,
-			reason = reason_label,
-			step = "teardown_sleep_state",
-			"actor shutdown cleanup step completed"
-		);
-		#[cfg(test)]
-		run_shutdown_cleanup_hook(&ctx, reason_label);
-		ctx.wait_for_pending_state_writes().await;
-		tracing::debug!(
-			actor_id = %actor_id,
-			reason = reason_label,
-			step = "wait_for_pending_state_writes",
-			"actor shutdown cleanup step completed"
-		);
-		ctx.sync_alarm_logged();
-		tracing::debug!(
-			actor_id = %actor_id,
-			reason = reason_label,
-			step = "sync_alarm",
-			"actor shutdown cleanup step completed"
-		);
-		ctx.wait_for_pending_alarm_writes().await;
-		tracing::debug!(
-			actor_id = %actor_id,
-			reason = reason_label,
-			step = "wait_for_pending_alarm_writes",
-			"actor shutdown cleanup step completed"
-		);
-		ctx.sql()
-			.cleanup()
-			.await
-			.with_context(|| format!("cleanup sqlite during {reason_label} shutdown"))?;
-		trim_native_allocator_after_shutdown(&actor_id, reason_label);
-		tracing::debug!(
-			actor_id = %actor_id,
-			reason = reason_label,
-			step = "cleanup_sqlite",
-			"actor shutdown cleanup step completed"
-		);
-		match reason {
-			// Match the reference TS runtime: keep the persisted engine alarm armed
-			// across sleep so the next instance still has a wake trigger, but abort
-			// the local Tokio timer owned by the shutting-down instance.
-			ShutdownKind::Sleep => {
-				ctx.cancel_local_alarm_timeouts();
-				tracing::debug!(
-					actor_id = %actor_id,
-					reason = reason_label,
-					step = "cancel_local_alarm_timeouts",
-					"actor shutdown cleanup step completed"
-				);
-			}
-			ShutdownKind::Destroy => {
-				ctx.cancel_driver_alarm_logged();
-				tracing::debug!(
-					actor_id = %actor_id,
-					reason = reason_label,
-					step = "cancel_driver_alarm",
-					"actor shutdown cleanup step completed"
-				);
-			}
-		}
-		Ok(())
 	}
 
 	fn record_inbox_depths(&self) {
