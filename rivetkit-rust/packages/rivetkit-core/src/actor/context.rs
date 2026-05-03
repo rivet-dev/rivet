@@ -1314,6 +1314,10 @@ impl ActorContext {
 		self.0.sleep_requested.load(Ordering::SeqCst)
 	}
 
+	pub(crate) fn clear_sleep_requested(&self) {
+		self.0.sleep_requested.store(false, Ordering::SeqCst);
+	}
+
 	fn keep_awake_guard(&self) -> KeepAwakeGuard {
 		let region = self
 			.keep_awake_region()

@@ -2141,6 +2141,9 @@ impl ActorTask {
 			"actor lifecycle transition"
 		);
 		self.lifecycle = lifecycle;
+		if matches!(lifecycle, LifecycleState::Started) {
+			self.ctx.clear_sleep_requested();
+		}
 		self.ctx
 			.set_started(matches!(lifecycle, LifecycleState::Started));
 	}
