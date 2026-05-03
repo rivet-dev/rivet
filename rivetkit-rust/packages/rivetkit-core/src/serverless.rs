@@ -283,6 +283,7 @@ impl CoreServerlessRuntime {
 		RuntimeSpawner::spawn(async move {
 			let shutdown_handle = handle.clone();
 			let result = tokio::select! {
+				biased;
 				_ = cancel_token.cancelled() => {
 					if !cache_envoy {
 						shutdown_handle.shutdown_and_wait(false).await;
@@ -292,6 +293,7 @@ impl CoreServerlessRuntime {
 				result = handle.start_serverless_actor(&payload) => result,
 			};
 			if let Err(error) = result {
+				tracing::error!(?error, "serverless start failed");
 				let error = stream_error(error);
 				let _ = tx.send(Err(error)).await;
 				if !cache_envoy {
