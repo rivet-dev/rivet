@@ -120,6 +120,7 @@ import { testSqliteBench } from "./actors/testing/test-sqlite-bench.ts";
 import { sqliteColdStartBench } from "./actors/testing/sqlite-cold-start-bench.ts";
 import { sqliteRealworldBench } from "./actors/testing/sqlite-realworld-bench.ts";
 import { rawSqliteFuzzer } from "./actors/testing/raw-sqlite-fuzzer.ts";
+import { sqliteMemoryPressure } from "./actors/testing/sqlite-memory-pressure.ts";
 // AI
 import { aiAgent } from "./actors/ai/ai-agent.ts";
 
@@ -259,6 +260,7 @@ export const registry = setup({
 		sqliteColdStartBench,
 		sqliteRealworldBench,
 		rawSqliteFuzzer,
+		sqliteMemoryPressure,
 		// AI
 		aiAgent,
 	},

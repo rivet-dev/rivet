@@ -10,6 +10,8 @@
 		"build": "vite build",
 		"test": "node --import tsx --test tests/*.test.ts",
 		"start": "node --import @rivetkit/sql-loader --import tsx src/server.ts",
+		"memory-soak": "tsx scripts/sqlite-memory-soak.ts",
+		"proc-metrics": "tsx scripts/proc-metrics-report.ts",
 		"smoke:raw-websocket-serverless": "tsx scripts/raw-websocket-serverless-smoke.ts",
 		"benchmark": "tsx scripts/benchmark.ts",
 		"db:generate": "find src/actors -name drizzle.config.ts -exec drizzle-kit generate --config {} \\;"

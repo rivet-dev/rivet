@@ -174,6 +174,15 @@ export const parallelismTest = actor({
 		},
 	},
 });`,
+	sqliteMemoryPressure: `const actor = client.sqliteMemoryPressure.getOrCreate(["memory"]);
+await actor.runCycle({
+	seed: "local",
+	cycle: 0,
+	insertRows: 128,
+	rowBytes: 16384,
+	deleteRows: 64,
+	retainRows: 1024,
+});`,
 };
 
 export const ACTION_TEMPLATES: Record<string, ActionTemplate[]> = {
@@ -370,6 +379,24 @@ export const ACTION_TEMPLATES: Record<string, ActionTemplate[]> = {
 		{ label: "Get State Count", action: "getStateCount", args: [] },
 		{ label: "Increment SQLite", action: "incrementSqlite", args: [] },
 		{ label: "Get SQLite Count", action: "getSqliteCount", args: [] },
+	],
+	sqliteMemoryPressure: [
+		{
+			label: "Run Cycle",
+			action: "runCycle",
+			args: [
+				{
+					seed: "ui",
+					cycle: 0,
+					insertRows: 64,
+					rowBytes: 8192,
+					deleteRows: 32,
+					retainRows: 512,
+				},
+			],
+		},
+		{ label: "Stats", action: "stats", args: [] },
+		{ label: "Reset", action: "reset", args: [] },
 	],
 };
 
@@ -1254,6 +1281,15 @@ export const PAGE_GROUPS: PageGroup[] = [
     R -->|spawn| A[Actor Instance]
     T -->|action| A
     A -->|result| T`,
+			},
+			{
+				id: "sqlite-memory-pressure",
+				title: "SQLite Memory Pressure",
+				description:
+					"Drive bounded SQLite write, scan, update, and delete churn for local memory-soak runs.",
+				docs: [],
+				actors: ["sqliteMemoryPressure"],
+				snippet: SNIPPETS.sqliteMemoryPressure,
 			},
 		],
 	},
