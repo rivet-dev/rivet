@@ -93,7 +93,7 @@ These limits apply to the [SQLite database](/docs/actors/state#sqlite-database) 
 
 ### KV Preloading
 
-When an actor starts, the engine can pre-fetch KV data declared in the actor name metadata and deliver it alongside the start command. This removes round-trips to storage during actor startup. RivetKit emits the preload manifest from its own key layout and exposes per-actor overrides via `options`. Operators can still enforce a global cap in the [engine config](/docs/self-hosting/configuration) with `pegboard.preload_max_total_bytes`.
+When an actor starts, the engine can pre-fetch KV data declared in the actor name metadata and deliver it alongside the start command. This removes round-trips to storage during actor startup. RivetKit emits the preload manifest from its own key layout and exposes per-actor overrides via `options`. Operators can still enforce a global cap in the [engine config](/docs/self-hosting/configuration) with `pegboard.preload_max_total_bytes`. In serverless mode, this data is serialized into the `/api/rivet/start` request body along with actor config and protocol metadata, so the accepted body size must be larger than the preload budget. RivetKit defaults `serverless.maxStartPayloadBytes` to 16 MiB to leave margin for the default 1 MiB preload budget and larger SQLite startup page preloads.
 
 | Name | Soft Limit | Hard Limit | Description |
 |------|------------|------------|-------------|

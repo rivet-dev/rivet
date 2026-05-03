@@ -12,6 +12,8 @@ use crate::error::EngineProcessError;
 
 const ENGINE_RUNTIME: &str = "engine";
 const RIVETKIT_RUNTIME: &str = "rivetkit";
+const DEFAULT_MALLOC_ARENA_MAX: &str = "2";
+const DEFAULT_MALLOC_TRIM_THRESHOLD: &str = "131072";
 
 #[derive(Debug, Deserialize)]
 struct EngineHealthResponse {
@@ -110,6 +112,7 @@ impl EngineProcessManager {
 			.stdin(Stdio::null())
 			.stdout(Stdio::from(stdout_file))
 			.stderr(Stdio::from(stderr_file));
+		set_default_allocator_env(&mut command);
 
 		// Put the engine in its own process group so terminal signals
 		// (Ctrl+C, Ctrl+Z, SIGHUP on terminal close) targeting our foreground
@@ -173,6 +176,15 @@ impl EngineProcessManager {
 		Ok(Self {
 			watcher: Some(spawn_engine_watcher(child, pid)),
 		})
+	}
+}
+
+fn set_default_allocator_env(command: &mut Command) {
+	if std::env::var_os("MALLOC_ARENA_MAX").is_none() {
+		command.env("MALLOC_ARENA_MAX", DEFAULT_MALLOC_ARENA_MAX);
+	}
+	if std::env::var_os("MALLOC_TRIM_THRESHOLD_").is_none() {
+		command.env("MALLOC_TRIM_THRESHOLD_", DEFAULT_MALLOC_TRIM_THRESHOLD);
 	}
 }
 
