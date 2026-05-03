@@ -166,6 +166,22 @@ export const mockAgenticLoop = actor({
 		});
 		await sleep(delayMs);
 	},
+	onRequest(_c, request) {
+		const url = new URL(request.url);
+		if (url.pathname === "/bypass" || url.pathname === "/request/bypass") {
+			return new Response(JSON.stringify({
+				type: "bypass",
+				transport: "http",
+				timestamp: Date.now(),
+			}), {
+				headers: {
+					"content-type": "application/json",
+				},
+			});
+		}
+
+		return new Response("not found", { status: 404 });
+	},
 	onWebSocket(c, websocket: UniversalWebSocket) {
 		const connectionId = crypto.randomUUID();
 		let activeInference: Promise<void> | undefined;
