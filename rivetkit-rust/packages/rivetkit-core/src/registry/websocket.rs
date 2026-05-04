@@ -2,6 +2,7 @@ use super::actor_connect::*;
 use super::dispatch::*;
 use super::inspector::encode_json_as_cbor;
 use super::*;
+use crate::actor::task_types::FinalizeKind;
 use crate::error::ProtocolError;
 use crate::time::timeout;
 use tracing::Instrument;
@@ -504,11 +505,12 @@ impl RegistryDispatcher {
 		is_restoring_hibernatable: bool,
 		_sender: WebSocketSender,
 	) -> Result<WebSocketHandler> {
-		if !is_hibernatable && (!instance.ctx.started() || instance.ctx.sleep_requested()) {
-			return Ok(closing_websocket_handler(1011, "actor.stopping"));
-		}
-		if instance.ctx.destroy_requested() {
-			return Ok(closing_websocket_handler(1011, "actor.destroying"));
+		if let Some(kind) = instance.ctx.finalize_kind() {
+			let reason = match kind {
+				FinalizeKind::Sleep => "actor.stopping",
+				FinalizeKind::Destroy => "actor.destroying",
+			};
+			return Ok(closing_websocket_handler(1011, reason));
 		}
 
 		let conn_params = websocket_conn_params(headers)?;
@@ -555,7 +557,6 @@ impl RegistryDispatcher {
 		let conn_for_open = conn.clone();
 		let ctx_for_message = ctx.clone();
 		let ctx_for_close = ctx.clone();
-		let ctx_for_open = ctx.clone();
 		let ws = WebSocket::new();
 		let ctx_for_close_event_region = ctx.clone();
 		ws.configure_close_event_callback_region(Some(Arc::new(move || {
@@ -583,14 +584,6 @@ impl RegistryDispatcher {
 				Box::pin(async move {
 					let callback_ctx = ctx.clone();
 					ctx.with_websocket_callback(|| async move {
-						if !is_hibernatable
-							&& (!callback_ctx.started() || callback_ctx.sleep_requested())
-						{
-							ws.close(Some(1011), Some("actor.stopping".to_owned()))
-								.await;
-							return;
-						}
-
 						if is_hibernatable
 							&& maybe_respond_to_raw_hibernatable_ack_state_probe(
 								&ws,
@@ -677,18 +670,9 @@ impl RegistryDispatcher {
 				let ws = ws_for_open.clone();
 				let actor_id = actor_id_for_open.clone();
 				let dispatch = dispatch.clone();
-				let ctx = ctx_for_open.clone();
 				Box::pin(async move {
 					let close_sender = sender.clone();
 					ws.configure_sender(sender);
-					if !is_hibernatable && (!ctx.started() || ctx.sleep_requested()) {
-						close_sender.close(Some(1011), Some("actor.stopping".to_owned()));
-						return;
-					}
-					if ctx.destroy_requested() {
-						close_sender.close(Some(1011), Some("actor.destroying".to_owned()));
-						return;
-					}
 					let result = dispatch_websocket_open_through_task(
 						&dispatch,
 						dispatch_capacity,

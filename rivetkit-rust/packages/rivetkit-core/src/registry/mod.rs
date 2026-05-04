@@ -49,7 +49,7 @@ use crate::actor::task::{
 	try_send_dispatch_command,
 	try_send_lifecycle_command,
 };
-use crate::actor::task_types::ShutdownKind;
+use crate::actor::task_types::{FinalizeKind, LifecycleState, ShutdownKind};
 #[cfg(feature = "native-runtime")]
 use crate::engine_process::EngineProcessManager;
 use crate::error::{ActorLifecycle as ActorLifecycleError, ActorRuntime};
@@ -795,38 +795,41 @@ impl RegistryDispatcher {
 			match instance.get() {
 				ActorInstanceState::Active(instance) => {
 					let instance = instance.clone();
-					if instance.ctx.started() {
-						if instance.ctx.destroy_requested() || instance.ctx.sleep_requested() {
+					match instance.ctx.lifecycle() {
+						LifecycleState::Started
+						| LifecycleState::SleepGrace
+						| LifecycleState::DestroyGrace => {
+							return Ok(instance);
+						}
+						LifecycleState::Loading => {
 							instance
 								.ctx
 								.warn_work_sent_to_stopping_instance("active_actor");
-							return Err(if instance.ctx.destroy_requested() {
-								ActorLifecycleError::Destroying.build()
-							} else {
-								ActorLifecycleError::Stopping.build()
+							return Err(ActorLifecycleError::Starting.build());
+						}
+						LifecycleState::SleepFinalize
+						| LifecycleState::Destroying
+						| LifecycleState::Terminated => {
+							instance
+								.ctx
+								.warn_work_sent_to_stopping_instance("active_actor");
+							return Err(match instance.ctx.finalize_kind() {
+								Some(FinalizeKind::Destroy) => {
+									ActorLifecycleError::Destroying.build()
+								}
+								_ => ActorLifecycleError::Stopping.build(),
 							});
 						}
-						return Ok(instance);
 					}
-
-					instance
-						.ctx
-						.warn_work_sent_to_stopping_instance("active_actor");
-					return Err(if instance.ctx.destroy_requested() {
-						ActorLifecycleError::Destroying.build()
-					} else {
-						ActorLifecycleError::Starting.build()
-					});
 				}
 				ActorInstanceState::Stopping(instance) => {
 					let instance = instance.clone();
 					instance
 						.ctx
 						.warn_work_sent_to_stopping_instance("active_actor");
-					return Err(if instance.ctx.destroy_requested() {
-						ActorLifecycleError::Destroying.build()
-					} else {
-						ActorLifecycleError::Stopping.build()
+					return Err(match instance.ctx.finalize_kind() {
+						Some(FinalizeKind::Destroy) => ActorLifecycleError::Destroying.build(),
+						_ => ActorLifecycleError::Stopping.build(),
 					});
 				}
 			}

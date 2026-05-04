@@ -5,6 +5,7 @@ import { scheduleActorSleep } from "./schedule-sleep";
 export const SLEEP_TIMEOUT = 1000;
 export const RAW_WS_HANDLER_SLEEP_TIMEOUT = 100;
 export const RAW_WS_HANDLER_DELAY = 250;
+export const SLOW_ON_SLEEP_DELAY = 750;
 
 type AsyncRawWebSocketState = {
 	startCount: number;
@@ -518,5 +519,41 @@ export const sleepWithNoSleepOption = actor({
 	options: {
 		sleepTimeout: SLEEP_TIMEOUT,
 		noSleep: true,
+	},
+});
+
+// Holds the actor in `SleepGrace` for ~SLOW_ON_SLEEP_DELAY ms by stalling
+// `onSleep`. Used to verify that work submitted while a user-supplied onSleep
+// hook is still running is allowed through, instead of being rejected as if
+// the actor had already entered shutdown finalize.
+export const sleepWithSlowOnSleep = actor({
+	state: {
+		startCount: 0,
+		sleepCount: 0,
+		actionsDuringGrace: 0,
+	},
+	onWake: (c) => {
+		c.state.startCount += 1;
+	},
+	onSleep: async (c) => {
+		c.state.sleepCount += 1;
+		await delay(SLOW_ON_SLEEP_DELAY);
+	},
+	actions: {
+		triggerSleep: (c) => {
+			c.sleep();
+		},
+		incrementDuringGrace: (c) => {
+			c.state.actionsDuringGrace += 1;
+			return c.state.actionsDuringGrace;
+		},
+		getCounts: (c) => ({
+			startCount: c.state.startCount,
+			sleepCount: c.state.sleepCount,
+			actionsDuringGrace: c.state.actionsDuringGrace,
+		}),
+	},
+	options: {
+		sleepTimeout: SLEEP_TIMEOUT,
 	},
 });

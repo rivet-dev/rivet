@@ -50,13 +50,6 @@ enum LifecycleResult {
 	Aborted,
 }
 
-fn actor_stopping_close_frame() -> CloseFrame {
-	CloseFrame {
-		code: CloseCode::Error,
-		reason: "actor.stopping".into(),
-	}
-}
-
 #[derive(Debug)]
 enum HibernationLifecycleResult {
 	Continue,
@@ -302,14 +295,11 @@ impl PegboardGateway2 {
 							if let Some(msg) = res {
 								match msg {
 									protocol::ToRivetTunnelMessageKind::ToRivetWebSocketOpen(msg) => {
-										return anyhow::Ok(Ok(msg));
+										return anyhow::Ok(msg);
 									}
 									protocol::ToRivetTunnelMessageKind::ToRivetWebSocketClose(close) => {
 										tracing::warn!(?close, "websocket closed before opening");
-										return anyhow::Ok(Err(CloseFrame {
-											code: close.code.map_or(CloseCode::Normal, Into::into),
-											reason: close.reason.unwrap_or_default().into(),
-										}));
+										return Err(WebSocketServiceUnavailable.build());
 									}
 									_ => {
 										tracing::warn!(
@@ -327,11 +317,11 @@ impl PegboardGateway2 {
 						}
 						_ = stopped_sub.next() => {
 							tracing::debug!("actor stopped while waiting for websocket open");
-							return anyhow::Ok(Err(actor_stopping_close_frame()));
+							return Err(WebSocketServiceUnavailable.build());
 						}
 						_ = drop_rx.changed() => {
 							tracing::warn!(reason=?drop_rx.borrow(), "websocket open timeout");
-							return anyhow::Ok(Err(actor_stopping_close_frame()));
+							return Err(WebSocketServiceUnavailable.build());
 						}
 					}
 				}
@@ -345,17 +335,13 @@ impl PegboardGateway2 {
 					.pegboard()
 					.gateway_websocket_open_timeout_ms(),
 			);
-			let open_result = tokio::time::timeout(websocket_open_timeout, fut)
+			let open_msg = tokio::time::timeout(websocket_open_timeout, fut)
 				.await
 				.map_err(|_| {
 					tracing::warn!("timed out waiting for websocket open from envoy");
 
 					WebSocketServiceUnavailable.build()
 				})??;
-			let open_msg = match open_result {
-				Ok(open_msg) => open_msg,
-				Err(close_frame) => return Ok(Some(close_frame)),
-			};
 
 			in_flight_req
 				.toggle_hibernatable(open_msg.can_hibernate)

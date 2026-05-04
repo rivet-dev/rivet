@@ -1160,26 +1160,21 @@ impl ActorTask {
 	}
 
 	fn dispatch_lifecycle_error(&self) -> Option<anyhow::Error> {
-		if self.ctx.destroy_requested() {
-			self.ctx.warn_work_sent_to_stopping_instance("dispatch");
-			return Some(ActorLifecycleError::Destroying.build());
-		}
-		if self.ctx.sleep_requested() {
-			self.ctx.warn_work_sent_to_stopping_instance("dispatch");
-			return Some(ActorLifecycleError::Stopping.build());
-		}
-
 		match self.lifecycle {
-			LifecycleState::Started => None,
-			LifecycleState::SleepGrace
-			| LifecycleState::SleepFinalize
-			| LifecycleState::DestroyGrace => {
+			LifecycleState::Started | LifecycleState::SleepGrace | LifecycleState::DestroyGrace => {
+				None
+			}
+			LifecycleState::SleepFinalize => {
 				self.ctx.warn_work_sent_to_stopping_instance("dispatch");
 				Some(ActorLifecycleError::Stopping.build())
 			}
 			LifecycleState::Destroying | LifecycleState::Terminated => {
 				self.ctx.warn_work_sent_to_stopping_instance("dispatch");
-				Some(ActorLifecycleError::Destroying.build())
+				Some(if self.ctx.destroy_requested() {
+					ActorLifecycleError::Destroying.build()
+				} else {
+					ActorLifecycleError::Stopping.build()
+				})
 			}
 			LifecycleState::Loading => {
 				self.ctx.warn_self_call_risk("dispatch");
@@ -2161,6 +2156,7 @@ impl ActorTask {
 		}
 		self.ctx
 			.set_started(matches!(lifecycle, LifecycleState::Started));
+		self.ctx.set_lifecycle(lifecycle);
 	}
 }
 

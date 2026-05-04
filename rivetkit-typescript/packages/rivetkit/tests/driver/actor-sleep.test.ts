@@ -5,6 +5,7 @@ import {
 	RAW_WS_HANDLER_DELAY,
 	RAW_WS_HANDLER_SLEEP_TIMEOUT,
 	SLEEP_TIMEOUT,
+	SLOW_ON_SLEEP_DELAY,
 } from "../../fixtures/driver-test-suite/sleep";
 import { describeDriverMatrix } from "./shared-matrix";
 import { setupDriverTest, waitFor } from "./shared-utils";
@@ -112,6 +113,45 @@ describeDriverMatrix("Actor Sleep", (driverTestConfig) => {
 		: describe.sequential;
 
 	describeSleepTests("Actor Sleep Tests", () => {
+		test("actions during slow onSleep are accepted, not rejected as stopping", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+
+			const slowSleepActor = client.sleepWithSlowOnSleep.getOrCreate();
+
+			// Sanity: actor is freshly started.
+			{
+				const { startCount, sleepCount, actionsDuringGrace } =
+					await slowSleepActor.getCounts();
+				expect(startCount).toBe(1);
+				expect(sleepCount).toBe(0);
+				expect(actionsDuringGrace).toBe(0);
+			}
+
+			// Kick off sleep. `onSleep` blocks for SLOW_ON_SLEEP_DELAY ms,
+			// keeping the actor in `SleepGrace` long enough for a follow-up
+			// action to land while the user hook is still running.
+			await slowSleepActor.triggerSleep();
+
+			// Call an action mid-grace. Pre-fix this would reject with an
+			// `actor.stopping` lifecycle error because `sleep_requested` was
+			// already true. After the fix, grace phases stay open for work.
+			const counter = await slowSleepActor.incrementDuringGrace();
+			expect(counter).toBe(1);
+
+			// Wait long enough for the actor to finish onSleep, finalize, and
+			// then wake again from the next call.
+			await waitFor(driverTestConfig, SLOW_ON_SLEEP_DELAY + 500);
+
+			// After the wake the increment we sent during grace must have
+			// persisted. If the gate had rejected the call, actionsDuringGrace
+			// would still be zero.
+			const { startCount, sleepCount, actionsDuringGrace } =
+				await slowSleepActor.getCounts();
+			expect(actionsDuringGrace).toBe(1);
+			expect(sleepCount).toBeGreaterThanOrEqual(1);
+			expect(startCount).toBeGreaterThanOrEqual(2);
+		});
+
 		test("actor sleep persists state", async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);
 

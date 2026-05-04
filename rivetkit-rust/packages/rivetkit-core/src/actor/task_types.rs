@@ -3,19 +3,41 @@ use std::{any::Any, fmt};
 use anyhow::Result;
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
 pub enum LifecycleState {
 	#[default]
-	Loading,
-	Started,
-	SleepGrace,
-	SleepFinalize,
-	DestroyGrace,
-	Destroying,
-	Terminated,
+	Loading = 0,
+	Started = 1,
+	SleepGrace = 2,
+	SleepFinalize = 3,
+	DestroyGrace = 4,
+	Destroying = 5,
+	Terminated = 6,
+}
+
+impl LifecycleState {
+	pub(crate) fn from_u8(value: u8) -> Self {
+		match value {
+			0 => Self::Loading,
+			1 => Self::Started,
+			2 => Self::SleepGrace,
+			3 => Self::SleepFinalize,
+			4 => Self::DestroyGrace,
+			5 => Self::Destroying,
+			6 => Self::Terminated,
+			_ => unreachable!("invalid LifecycleState discriminant {value}"),
+		}
+	}
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ShutdownKind {
+	Sleep,
+	Destroy,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FinalizeKind {
 	Sleep,
 	Destroy,
 }

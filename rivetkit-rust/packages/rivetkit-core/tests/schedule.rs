@@ -88,6 +88,7 @@ mod moved_tests {
 			envoy_key: "test-envoy".to_string(),
 			envoy_tx,
 			actors: Arc::new(EnvoySharedMutex::new(HashMap::new())),
+			actors_notify: Arc::new(tokio::sync::Notify::new()),
 			live_tunnel_requests: Arc::new(EnvoySharedMutex::new(HashMap::new())),
 			pending_hibernation_restores: Arc::new(EnvoySharedMutex::new(HashMap::new())),
 			ws_tx: Arc::new(tokio::sync::Mutex::new(

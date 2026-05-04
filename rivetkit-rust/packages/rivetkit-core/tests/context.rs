@@ -312,6 +312,7 @@ mod moved_tests {
 			envoy_key: "test-envoy".to_string(),
 			envoy_tx,
 			actors: Arc::new(std::sync::Mutex::new(HashMap::new())),
+			actors_notify: Arc::new(tokio::sync::Notify::new()),
 			live_tunnel_requests,
 			pending_hibernation_restores: Arc::new(std::sync::Mutex::new(HashMap::from([(
 				actor_id.to_owned(),
@@ -360,6 +361,7 @@ mod moved_tests {
 			envoy_key: "test-envoy".to_string(),
 			envoy_tx,
 			actors: Arc::new(std::sync::Mutex::new(HashMap::new())),
+			actors_notify: Arc::new(tokio::sync::Notify::new()),
 			live_tunnel_requests: Arc::new(std::sync::Mutex::new(HashMap::new())),
 			pending_hibernation_restores: Arc::new(std::sync::Mutex::new(HashMap::new())),
 			ws_tx: Arc::new(tokio::sync::Mutex::new(
@@ -818,4 +820,41 @@ mod moved_tests {
 
 		assert_eq!(ctx.sleep_request_count(), 1);
 	}
+}
+
+#[test]
+fn finalize_kind_only_fires_after_grace_phases() {
+	use crate::actor::task_types::{FinalizeKind, LifecycleState};
+
+	let ctx = new_with_kv(
+		"finalize-kind",
+		"actor",
+		Vec::new(),
+		"local",
+		crate::kv::Kv::new_in_memory(),
+	);
+
+	// Loading / Started / SleepGrace / DestroyGrace must not be flagged as
+	// finalize. New work is still expected to flow during the grace phases so
+	// user-supplied onSleep / onDestroy hooks can drive it to completion.
+	for state in [
+		LifecycleState::Loading,
+		LifecycleState::Started,
+		LifecycleState::SleepGrace,
+		LifecycleState::DestroyGrace,
+	] {
+		ctx.set_lifecycle(state);
+		assert_eq!(ctx.finalize_kind(), None, "lifecycle={state:?}");
+	}
+
+	ctx.set_lifecycle(LifecycleState::SleepFinalize);
+	assert_eq!(ctx.finalize_kind(), Some(FinalizeKind::Sleep));
+
+	ctx.set_lifecycle(LifecycleState::Destroying);
+	assert_eq!(ctx.finalize_kind(), Some(FinalizeKind::Destroy));
+
+	// Terminated disambiguates by destroy_requested. Without a destroy request
+	// the actor terminated via the sleep path, so report Sleep.
+	ctx.set_lifecycle(LifecycleState::Terminated);
+	assert_eq!(ctx.finalize_kind(), Some(FinalizeKind::Sleep));
 }

@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::future::Future;
 use std::sync::Weak;
-use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU32, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
@@ -35,7 +35,7 @@ use crate::actor::state::{PendingSave, PersistedActor, RequestSaveOpts};
 use crate::actor::task::LifecycleEvent;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::actor::task::{LIFECYCLE_EVENT_INBOX_CHANNEL, actor_channel_overloaded_error};
-use crate::actor::task_types::UserTaskKind;
+use crate::actor::task_types::{FinalizeKind, LifecycleState, UserTaskKind};
 use crate::actor::work_registry::RegionGuard;
 use crate::error::{ActorLifecycle as ActorLifecycleError, ActorRuntime};
 use crate::inspector::{Inspector, InspectorSnapshot};
@@ -129,6 +129,7 @@ pub(crate) struct ActorContextInner {
 	pub(super) sleep: SleepState,
 	activity: ActivityState,
 	pending_disconnect_count: AtomicUsize,
+	lifecycle: AtomicU8,
 	sleep_requested: AtomicBool,
 	destroy_requested: AtomicBool,
 	destroy_completed: AtomicBool,
@@ -297,6 +298,7 @@ impl ActorContext {
 			sleep,
 			activity: ActivityState::default(),
 			pending_disconnect_count: AtomicUsize::new(0),
+			lifecycle: AtomicU8::new(LifecycleState::Loading as u8),
 			sleep_requested: AtomicBool::new(false),
 			destroy_requested: AtomicBool::new(false),
 			destroy_completed: AtomicBool::new(false),
@@ -1205,6 +1207,35 @@ impl ActorContext {
 	#[doc(hidden)]
 	pub fn started(&self) -> bool {
 		self.lifecycle_started()
+	}
+
+	pub(crate) fn set_lifecycle(&self, state: LifecycleState) {
+		self.0.lifecycle.store(state as u8, Ordering::SeqCst);
+	}
+
+	pub(crate) fn lifecycle(&self) -> LifecycleState {
+		LifecycleState::from_u8(self.0.lifecycle.load(Ordering::SeqCst))
+	}
+
+	/// Returns `Some` once the actor has entered shutdown finalize. New work
+	/// (websocket upgrades, HTTP requests) cannot be served after this point;
+	/// callers should reject with an explicit close frame or error response.
+	/// Returns `None` during `Started` and the grace phases (`SleepGrace` /
+	/// `DestroyGrace`) where user `onSleep` / `onDestroy` is still running.
+	pub(crate) fn finalize_kind(&self) -> Option<FinalizeKind> {
+		match self.lifecycle() {
+			LifecycleState::SleepFinalize => Some(FinalizeKind::Sleep),
+			LifecycleState::Destroying => Some(FinalizeKind::Destroy),
+			LifecycleState::Terminated => Some(if self.destroy_requested() {
+				FinalizeKind::Destroy
+			} else {
+				FinalizeKind::Sleep
+			}),
+			LifecycleState::Loading
+			| LifecycleState::Started
+			| LifecycleState::SleepGrace
+			| LifecycleState::DestroyGrace => None,
+		}
 	}
 
 	pub(crate) fn destroy_requested(&self) -> bool {
