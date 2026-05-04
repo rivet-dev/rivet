@@ -3950,16 +3950,19 @@ export function buildNativeFactory(
 				const actorCtx = makeActorCtx(ctx);
 				try {
 					if (onSleep) {
-						await onSleep(actorCtx);
-						if (runtime.kind === "wasm") {
-							// Wasm cannot use the native context save helper here because
-							// the runtime owns the serialized state handoff.
-							await runtime.actorSaveState(
-								ctx,
-								actorCtx.serializeForTick("save"),
-							);
-						} else {
-							await actorCtx.saveState({ immediate: true });
+						try {
+							await onSleep(actorCtx);
+						} finally {
+							if (runtime.kind === "wasm") {
+								// Wasm cannot use the native context save helper here because
+								// the runtime owns the serialized state handoff.
+								await runtime.actorSaveState(
+									ctx,
+									actorCtx.serializeForTick("save"),
+								);
+							} else {
+								await actorCtx.saveState({ immediate: true });
+							}
 						}
 					}
 				} finally {
