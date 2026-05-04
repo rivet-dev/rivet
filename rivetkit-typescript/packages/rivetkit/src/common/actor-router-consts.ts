@@ -46,6 +46,7 @@ export const WS_TEST_PROTOCOL_PATH = "test_path.";
  * Used for CORS.
  **/
 export const ALLOWED_PUBLIC_HEADERS = [
+	"Authorization",
 	"Content-Type",
 	"User-Agent",
 	HEADER_ACTOR_QUERY,
