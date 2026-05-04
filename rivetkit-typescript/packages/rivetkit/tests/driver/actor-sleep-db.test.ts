@@ -1014,8 +1014,7 @@ describeDriverMatrix("Actor Sleep Db", (driverTestConfig) => {
 			{ timeout: 15_000 },
 		);
 
-		// TODO(#4705): Root-cause task-model shutdown ordering for concurrent WebSocket DB handlers and re-enable this coverage.
-		test.skip(
+		test(
 			"concurrent ws handlers with cached db ref get errors when grace period exceeded",
 			async (c) => {
 				const { client } = await setupDriverTest(c, driverTestConfig);

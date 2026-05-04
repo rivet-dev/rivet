@@ -1273,6 +1273,10 @@ export const sleepWsConcurrentDbExceedsGrace = actor({
 			// After the delay, the VFS may be destroyed.
 			const dbRef = c.db;
 
+			await dbRef.execute(
+				`INSERT INTO sleep_log (event, created_at) VALUES ('handler-${index}-start', ${Date.now()})`,
+			);
+
 			ws.send(JSON.stringify({ type: "started", index }));
 
 			// Stagger the delay slightly per index so handlers resume at
