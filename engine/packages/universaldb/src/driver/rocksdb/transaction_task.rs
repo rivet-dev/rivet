@@ -12,7 +12,7 @@ use crate::{
 	error::DatabaseError,
 	key_selector::KeySelector,
 	options::{ConflictRangeType, MutationType},
-	tx_ops::Operation,
+	tx_ops::{Operation, range_begin_contains, range_end_contains},
 	value::{KeyValue, Slice, Values},
 	versionstamp::{
 		generate_versionstamp, substitute_raw_versionstamp, substitute_versionstamp_if_incomplete,
@@ -438,17 +438,8 @@ impl TransactionTask {
 		let txn = self.create_transaction();
 		let read_opts = ReadOptions::default();
 
-		// Resolve the begin selector
-		let resolved_begin =
-			self.resolve_key_selector_for_range(&txn, &begin, begin_or_equal, begin_offset)?;
-
-		// Resolve the end selector
-		let resolved_end =
-			self.resolve_key_selector_for_range(&txn, &end, end_or_equal, end_offset)?;
-
-		// Now execute the range query with resolved keys
 		let iter = txn.iterator_opt(
-			rocksdb::IteratorMode::From(&resolved_begin, rocksdb::Direction::Forward),
+			rocksdb::IteratorMode::From(&begin, rocksdb::Direction::Forward),
 			read_opts,
 		);
 
@@ -457,8 +448,12 @@ impl TransactionTask {
 
 		for item in iter {
 			let (k, v) = item.context("failed to iterate rocksdb for get range")?;
-			// Check if we've reached the end key
-			if k.as_ref() >= resolved_end.as_slice() {
+
+			if !range_begin_contains(k.as_ref(), &begin, begin_or_equal, begin_offset) {
+				continue;
+			}
+
+			if !range_end_contains(k.as_ref(), &end, end_or_equal, end_offset) {
 				break;
 			}
 
@@ -475,64 +470,6 @@ impl TransactionTask {
 		}
 
 		Ok(Values::new(results))
-	}
-
-	fn resolve_key_selector_for_range(
-		&self,
-		txn: &RocksDbTransaction<OptimisticTransactionDB>,
-		key: &[u8],
-		or_equal: bool,
-		offset: i32,
-	) -> Result<Vec<u8>> {
-		// Based on PostgreSQL's interpretation:
-		// (false, 1) => first_greater_or_equal
-		// (true, 1) => first_greater_than
-		// (false, 0) => last_less_than
-		// (true, 0) => last_less_or_equal
-
-		let read_opts = ReadOptions::default();
-
-		match (or_equal, offset) {
-			(false, 1) => {
-				// first_greater_or_equal: find first key >= search_key
-				let iter = txn.iterator_opt(
-					rocksdb::IteratorMode::From(key, rocksdb::Direction::Forward),
-					read_opts,
-				);
-				for item in iter {
-					let (k, _v) = item.context(
-						"failed to iterate rocksdb for range selector first_greater_or_equal",
-					)?;
-					return Ok(k.to_vec());
-				}
-				// If no key found, return a key that will make the range empty
-				Ok(vec![0xff; 255])
-			}
-			(true, 1) => {
-				// first_greater_than: find first key > search_key
-				let iter = txn.iterator_opt(
-					rocksdb::IteratorMode::From(key, rocksdb::Direction::Forward),
-					read_opts,
-				);
-				for item in iter {
-					let (k, _v) = item.context(
-						"failed to iterate rocksdb for range selector first_greater_than",
-					)?;
-					// Skip if it's the exact key
-					if k.as_ref() == key {
-						continue;
-					}
-					return Ok(k.to_vec());
-				}
-				// If no key found, return a key that will make the range empty
-				Ok(vec![0xff; 255])
-			}
-			_ => {
-				// For other cases, just use the key as-is for now
-				// This is a simplification - full implementation would handle all cases
-				Ok(key.to_vec())
-			}
-		}
 	}
 
 	async fn handle_get_estimated_range_size(&mut self, begin: &[u8], end: &[u8]) -> Result<i64> {

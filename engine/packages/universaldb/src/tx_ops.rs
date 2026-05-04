@@ -342,9 +342,6 @@ impl TransactionOperations {
 			return Ok(db_values);
 		}
 
-		let begin = opt.begin.key();
-		let end = opt.end.key();
-
 		// Start with database results in a map
 		let mut result_map = BTreeMap::new();
 		for kv in db_values.into_iter() {
@@ -357,7 +354,7 @@ impl TransactionOperations {
 		for op in &*self.operations() {
 			match op {
 				Operation::Set { key, value } => {
-					if key.as_slice() >= begin && key.as_slice() < end {
+					if range_contains(key.as_slice(), opt) {
 						result_map.insert(key.clone(), value.clone());
 					}
 				}
@@ -382,7 +379,7 @@ impl TransactionOperations {
 					param,
 					op_type,
 				} => {
-					if key.as_slice() >= begin && key.as_slice() < end {
+					if range_contains(key.as_slice(), opt) {
 						// Get current value for this key (from result_map or empty if not exists)
 						let current_value = result_map.get(key);
 						let current_slice = current_value.map(|v| &**v);
@@ -421,5 +418,34 @@ impl TransactionOperations {
 			.lock()
 			.unwrap()
 			.push((begin.to_vec(), end.to_vec(), conflict_type));
+	}
+}
+
+fn range_contains(key: &[u8], opt: &RangeOption<'_>) -> bool {
+	range_begin_contains(
+		key,
+		opt.begin.key(),
+		opt.begin.or_equal(),
+		opt.begin.offset(),
+	) && range_end_contains(key, opt.end.key(), opt.end.or_equal(), opt.end.offset())
+}
+
+pub(crate) fn range_begin_contains(key: &[u8], begin: &[u8], or_equal: bool, offset: i32) -> bool {
+	match (or_equal, offset) {
+		(false, 1) => key >= begin,
+		(true, 1) => key > begin,
+		(false, 0) => key > begin,
+		(true, 0) => key >= begin,
+		_ => key >= begin,
+	}
+}
+
+pub(crate) fn range_end_contains(key: &[u8], end: &[u8], or_equal: bool, offset: i32) -> bool {
+	match (or_equal, offset) {
+		(false, 1) => key < end,
+		(true, 1) => key <= end,
+		(false, 0) => key < end,
+		(true, 0) => key <= end,
+		_ => key < end,
 	}
 }
