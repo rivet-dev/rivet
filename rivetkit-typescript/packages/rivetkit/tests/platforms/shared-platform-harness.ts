@@ -112,7 +112,6 @@ ${wasmModuleSource}
 interface SqliteDatabase {
 \trun(sql: string, params?: unknown[]): Promise<void>;
 \tquery(sql: string, params?: unknown[]): Promise<{ rows: unknown[][] }>;
-\twriteMode<T>(callback: () => Promise<T>): Promise<T>;
 }
 
 interface RegistryConfig {
@@ -137,29 +136,23 @@ const rawSqlDatabaseProvider = {
 };
 
 async function ensureCounterTable(db: SqliteDatabase) {
-\tawait db.writeMode(async () => {
-\t\tawait db.run(
-\t\t\t"CREATE TABLE IF NOT EXISTS platform_counter (id INTEGER PRIMARY KEY CHECK (id = 1), count INTEGER NOT NULL)",
-\t\t);
-\t});
+\tawait db.run(
+\t\t"CREATE TABLE IF NOT EXISTS platform_counter (id INTEGER PRIMARY KEY CHECK (id = 1), count INTEGER NOT NULL)",
+\t);
 }
 
 async function ensureLifecycleTable(db: SqliteDatabase) {
-\tawait db.writeMode(async () => {
-\t\tawait db.run(
-\t\t\t"CREATE TABLE IF NOT EXISTS platform_counter_lifecycle (event TEXT PRIMARY KEY, count INTEGER NOT NULL)",
-\t\t);
-\t});
+\tawait db.run(
+\t\t"CREATE TABLE IF NOT EXISTS platform_counter_lifecycle (event TEXT PRIMARY KEY, count INTEGER NOT NULL)",
+\t);
 }
 
 async function recordLifecycleEvent(db: SqliteDatabase, event: string) {
 \tawait ensureLifecycleTable(db);
-\tawait db.writeMode(async () => {
-\t\tawait db.run(
-\t\t\t"INSERT INTO platform_counter_lifecycle (event, count) VALUES (?, 1) ON CONFLICT(event) DO UPDATE SET count = count + 1",
-\t\t\t[event],
-\t\t);
-\t});
+\tawait db.run(
+\t\t"INSERT INTO platform_counter_lifecycle (event, count) VALUES (?, 1) ON CONFLICT(event) DO UPDATE SET count = count + 1",
+\t\t[event],
+\t);
 }
 
 async function readCounter(db: SqliteDatabase): Promise<number> {
@@ -201,12 +194,10 @@ const sqliteCounter = actor({
 \t\tincrement: async (ctx, amount = 1) => {
 \t\t\tconst db = ctx.sql as SqliteDatabase;
 \t\t\tawait ensureCounterTable(db);
-\t\t\tawait db.writeMode(async () => {
-\t\t\t\tawait db.run(
-\t\t\t\t\t"INSERT INTO platform_counter (id, count) VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET count = count + excluded.count",
-\t\t\t\t\t[COUNTER_ID, amount],
-\t\t\t\t);
-\t\t\t});
+\t\t\tawait db.run(
+\t\t\t\t"INSERT INTO platform_counter (id, count) VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET count = count + excluded.count",
+\t\t\t\t[COUNTER_ID, amount],
+\t\t\t);
 
 \t\t\treturn await readCounter(db);
 \t\t},

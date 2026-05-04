@@ -467,12 +467,10 @@ async function runHostSmoke(kind: HostKind): Promise<SmokeHost> {
 				scenario.remoteWriteReconnect.markStarted();
 				await scenario.remoteWriteReconnect.released;
 
-				await c.sql.writeMode(async () => {
-					await c.sql.execute(
-						"UPDATE smoke_events SET host = ? WHERE id = ?",
-						[label, 1],
-					);
-				});
+				await c.sql.execute(
+					"UPDATE smoke_events SET host = ? WHERE id = ?",
+					[label, 1],
+				);
 				const rows = await c.sql.query(
 					"SELECT host FROM smoke_events WHERE host = ?",
 					[label],

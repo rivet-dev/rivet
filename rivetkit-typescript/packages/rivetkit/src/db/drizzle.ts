@@ -163,19 +163,14 @@ export function db<TSchema extends DrizzleSchema = Record<string, never>>({
 					await nativeDb.close();
 				}
 			};
-			(
-				drizzleDb as DrizzleDatabase<TSchema> & {
-					__rivetWriteMode: <T>(
-						callback: () => Promise<T> | T,
-					) => Promise<T>;
-				}
-			).__rivetWriteMode = async (callback) =>
-				await nativeDb.writeMode(async () => await callback());
 
 			return drizzleDb;
 		},
 		onMigrate: async (client) => {
-			await dbWriteMode(client, async () => {
+			if (!migrations && !onMigrate) {
+				return;
+			}
+			await withMigrationSavepoint(client, async () => {
 				if (migrations) {
 					await runMigrations(client, migrations);
 				}
@@ -187,19 +182,23 @@ export function db<TSchema extends DrizzleSchema = Record<string, never>>({
 	};
 }
 
-async function dbWriteMode<T>(
+async function withMigrationSavepoint<T>(
 	client: RawAccess,
 	callback: () => Promise<T> | T,
 ): Promise<T> {
-	const maybeClient = client as RawAccess & {
-		__rivetWriteMode?: <TInner>(
-			callback: () => Promise<TInner> | TInner,
-		) => Promise<TInner>;
-	};
-	if (maybeClient.__rivetWriteMode) {
-		return await maybeClient.__rivetWriteMode(callback);
+	await client.execute("SAVEPOINT __rivet_on_migrate");
+	try {
+		const result = await callback();
+		await client.execute("RELEASE SAVEPOINT __rivet_on_migrate");
+		return result;
+	} catch (error) {
+		try {
+			await client.execute("ROLLBACK TO SAVEPOINT __rivet_on_migrate");
+		} finally {
+			await client.execute("RELEASE SAVEPOINT __rivet_on_migrate");
+		}
+		throw error;
 	}
-	return await callback();
 }
 
 async function runMigrations<TSchema extends DrizzleSchema>(

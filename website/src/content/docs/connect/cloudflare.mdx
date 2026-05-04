@@ -64,7 +64,6 @@ interface Env {
 interface SqliteDatabase {
   run(sql: string, params?: unknown[]): Promise<void>;
   query(sql: string, params?: unknown[]): Promise<{ rows: unknown[][] }>;
-  writeMode<T>(callback: () => Promise<T>): Promise<T>;
 }
 
 const rawSqlDatabaseProvider = {
@@ -80,15 +79,13 @@ const counter = actor({
   actions: {
     increment: async (ctx, amount = 1) => {
       const db = ctx.sql as SqliteDatabase;
-      await db.writeMode(async () => {
-        await db.run(
-          "CREATE TABLE IF NOT EXISTS counters (id INTEGER PRIMARY KEY, count INTEGER NOT NULL)",
-        );
-        await db.run(
-          "INSERT INTO counters (id, count) VALUES (1, ?) ON CONFLICT(id) DO UPDATE SET count = count + excluded.count",
-          [amount],
-        );
-      });
+      await db.run(
+        "CREATE TABLE IF NOT EXISTS counters (id INTEGER PRIMARY KEY, count INTEGER NOT NULL)",
+      );
+      await db.run(
+        "INSERT INTO counters (id, count) VALUES (1, ?) ON CONFLICT(id) DO UPDATE SET count = count + excluded.count",
+        [amount],
+      );
 
       const result = await db.query("SELECT count FROM counters WHERE id = 1");
       return Number(result.rows[0]?.[0] ?? 0);

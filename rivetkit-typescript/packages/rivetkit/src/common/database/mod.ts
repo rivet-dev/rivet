@@ -7,10 +7,6 @@ interface DatabaseFactoryConfig {
 	onMigrate?: (db: RawAccess) => Promise<void> | void;
 }
 
-type RawAccessWithWriteMode = RawAccess & {
-	__rivetWriteMode: <T>(callback: () => Promise<T> | T) => Promise<T>;
-};
-
 function hasMultipleStatements(query: string): boolean {
 	const trimmed = query.trim().replace(/;+$/, "").trimEnd();
 	return trimmed.includes(";");
@@ -38,7 +34,7 @@ export function db({
 				}
 			};
 
-			const client: RawAccessWithWriteMode = {
+			const client: RawAccess = {
 				execute: async <
 					TRow extends Record<string, unknown> = Record<
 						string,
@@ -103,17 +99,12 @@ export function db({
 					}
 				},
 				nativeMetrics: () => db.nativeMetrics?.() ?? null,
-				__rivetWriteMode: async <T>(
-					callback: () => Promise<T> | T,
-				): Promise<T> => {
-					return await db.writeMode(async () => await callback());
-				},
 			};
 			return client;
 		},
 		onMigrate: async (client) => {
 			if (onMigrate) {
-				await dbWriteMode(client, () => onMigrate(client));
+				await withMigrationSavepoint(client, () => onMigrate(client));
 			}
 		},
 	};
@@ -145,17 +136,21 @@ async function execMultiStatement<TRow extends Record<string, unknown>>(
 	return results as TRow[];
 }
 
-async function dbWriteMode<T>(
+async function withMigrationSavepoint<T>(
 	client: RawAccess,
 	callback: () => Promise<T> | T,
 ): Promise<T> {
-	const maybeClient = client as RawAccess & {
-		__rivetWriteMode?: <TInner>(
-			callback: () => Promise<TInner> | TInner,
-		) => Promise<TInner>;
-	};
-	if (maybeClient.__rivetWriteMode) {
-		return await maybeClient.__rivetWriteMode(callback);
+	await client.execute("SAVEPOINT __rivet_on_migrate");
+	try {
+		const result = await callback();
+		await client.execute("RELEASE SAVEPOINT __rivet_on_migrate");
+		return result;
+	} catch (error) {
+		try {
+			await client.execute("ROLLBACK TO SAVEPOINT __rivet_on_migrate");
+		} finally {
+			await client.execute("RELEASE SAVEPOINT __rivet_on_migrate");
+		}
+		throw error;
 	}
-	return await callback();
 }

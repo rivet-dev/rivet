@@ -8,11 +8,9 @@ import type {
 import { db } from "./mod";
 
 class FakeSqliteDatabase implements SqliteDatabase {
-	writeModeDepth = 0;
 	executeCalls: {
 		sql: string;
 		params?: SqliteBindings;
-		writeMode: boolean;
 	}[] = [];
 
 	async exec(): Promise<void> {}
@@ -24,7 +22,6 @@ class FakeSqliteDatabase implements SqliteDatabase {
 		this.executeCalls.push({
 			sql,
 			params,
-			writeMode: this.writeModeDepth > 0,
 		});
 		return {
 			columns: [],
@@ -41,15 +38,6 @@ class FakeSqliteDatabase implements SqliteDatabase {
 	async query(sql: string, params?: SqliteBindings) {
 		const { columns, rows } = await this.execute(sql, params);
 		return { columns, rows };
-	}
-
-	async writeMode<T>(callback: () => Promise<T>): Promise<T> {
-		this.writeModeDepth++;
-		try {
-			return await callback();
-		} finally {
-			this.writeModeDepth--;
-		}
 	}
 
 	async close(): Promise<void> {}
@@ -73,7 +61,7 @@ function testProviderContext(
 }
 
 describe("db", () => {
-	test("runs onMigrate through sqlite write mode", async () => {
+	test("runs onMigrate inside a sqlite savepoint", async () => {
 		const nativeDb = new FakeSqliteDatabase();
 		const provider = db({
 			onMigrate: async (client) => {
@@ -91,14 +79,58 @@ describe("db", () => {
 
 		expect(nativeDb.executeCalls).toEqual([
 			{
+				sql: "SAVEPOINT __rivet_on_migrate",
+				params: undefined,
+			},
+			{
 				sql: "CREATE TABLE items(id INTEGER PRIMARY KEY, value TEXT)",
 				params: undefined,
-				writeMode: true,
 			},
 			{
 				sql: "SELECT COUNT(*) AS count FROM items",
 				params: undefined,
-				writeMode: true,
+			},
+			{
+				sql: "RELEASE SAVEPOINT __rivet_on_migrate",
+				params: undefined,
+			},
+		]);
+	});
+
+	test("rolls back the migration savepoint when onMigrate fails", async () => {
+		const nativeDb = new FakeSqliteDatabase();
+		const provider = db({
+			onMigrate: async (client) => {
+				await client.execute(
+					"CREATE TABLE items(id INTEGER PRIMARY KEY, value TEXT)",
+				);
+				throw new Error("migration failed");
+			},
+		});
+		const client = await provider.createClient(
+			testProviderContext(nativeDb),
+		);
+
+		await expect(provider.onMigrate(client)).rejects.toThrow(
+			"migration failed",
+		);
+
+		expect(nativeDb.executeCalls).toEqual([
+			{
+				sql: "SAVEPOINT __rivet_on_migrate",
+				params: undefined,
+			},
+			{
+				sql: "CREATE TABLE items(id INTEGER PRIMARY KEY, value TEXT)",
+				params: undefined,
+			},
+			{
+				sql: "ROLLBACK TO SAVEPOINT __rivet_on_migrate",
+				params: undefined,
+			},
+			{
+				sql: "RELEASE SAVEPOINT __rivet_on_migrate",
+				params: undefined,
 			},
 		]);
 	});

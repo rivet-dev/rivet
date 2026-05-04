@@ -346,9 +346,6 @@ export function wrapJsNativeDatabase(
 			const { columns, rows } = await executeNative(sql, params);
 			return { columns, rows };
 		},
-		async writeMode<T>(callback: () => Promise<T>): Promise<T> {
-			return await callback();
-		},
 		nativeMetrics(): SqliteNativeMetrics | null {
 			return normalizeNativeMetrics(database.metrics?.());
 		},

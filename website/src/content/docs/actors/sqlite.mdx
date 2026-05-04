@@ -45,6 +45,8 @@ For Drizzle setup, see [SQLite + Drizzle](/docs/actors/sqlite-drizzle).
 
 Define `db: db({ onMigrate })` on your actor, create your schema in `onMigrate`, and execute SQL with `c.db.execute(...)`.
 
+RivetKit wraps `onMigrate` in a SQLite savepoint, so migration steps are atomic. If `onMigrate` throws, all SQL run by that hook is rolled back before the actor starts.
+
 <CodeGroup workspace>
 ```ts index.ts
 import { actor, setup } from "rivetkit";
@@ -253,7 +255,7 @@ console.log(todos);
 
 ## Recommendations
 
-- Keep schema creation and migration steps in `onMigrate`.
+- Keep schema creation and migration steps in `onMigrate`; RivetKit runs them atomically inside a SQLite savepoint.
 - Use `?` placeholders for dynamic values.
 - Prefer queue-driven writes for ordered or background work.
 - Use transactions for related multi-step mutations when atomicity matters.

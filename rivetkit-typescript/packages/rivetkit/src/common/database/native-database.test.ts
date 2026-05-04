@@ -104,28 +104,6 @@ describe("wrapJsNativeDatabase", () => {
 		});
 	});
 
-	test("keeps write mode on the normal native execute lane", async () => {
-		const native = new FakeNativeDatabase();
-		const db = wrapJsNativeDatabase(native);
-
-		const query = db.writeMode(async () => {
-			const promise = db.query("SELECT 1");
-			expect(native.executeCalls).toMatchObject([
-				{ sql: "SELECT 1", write: false },
-			]);
-			native.resolveNext({
-				columns: ["value"],
-				rows: [[1]],
-			});
-			return await promise;
-		});
-
-		await expect(query).resolves.toEqual({
-			columns: ["value"],
-			rows: [[1]],
-		});
-	});
-
 	test("normalizes supported sqlite bind values", async () => {
 		const native = new FakeNativeDatabase();
 		const db = wrapJsNativeDatabase(native);

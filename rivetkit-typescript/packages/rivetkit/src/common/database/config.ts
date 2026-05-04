@@ -48,7 +48,6 @@ export interface SqliteDatabase {
 	): Promise<SqliteExecuteResult>;
 	run(sql: string, params?: SqliteBindings): Promise<void>;
 	query(sql: string, params?: SqliteBindings): Promise<SqliteQueryResult>;
-	writeMode<T>(callback: () => Promise<T>): Promise<T>;
 	nativeMetrics?():
 		| SqliteNativeMetrics
 		| Promise<SqliteNativeMetrics | null>

@@ -229,7 +229,7 @@ Use [Drizzle](/docs/actors/sqlite-drizzle) for typed schemas with generated migr
 
 **Raw SQL**
 
-For actors using [raw SQLite](/docs/actors/sqlite), migrations run automatically via the `onMigrate` hook on every actor start. Use SQLite's `user_version` pragma to track which migrations have run:
+For actors using [raw SQLite](/docs/actors/sqlite), migrations run automatically via the `onMigrate` hook on every actor start. RivetKit wraps the hook in a SQLite savepoint, so the migration is fully atomic. Use SQLite's `user_version` pragma to track which migrations have run:
 
 ```ts
 import { actor, setup } from "rivetkit";
