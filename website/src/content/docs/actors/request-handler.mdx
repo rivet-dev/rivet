@@ -249,6 +249,12 @@ The `onRequest` handler is WinterTC compliant and will work with existing librar
 - Does not support streaming responses & server-sent events at the moment. See the [tracking issue](https://github.com/rivet-dev/rivet/issues/3529).
 - `OPTIONS` requests currently are handled by Rivet and are not passed to `onRequest`
 
+## Advanced
+
+### Skip Ready Wait
+
+Requests are normally held at the gateway until the actor is ready. Pass `gateway.skipReadyWait: true` on `handle.fetch()` to deliver immediately, including while the actor is still starting or in the [sleep grace period](/docs/actors/lifecycle#shutdown-sequence). See [Skip Ready Wait](/docs/clients/javascript#skip-ready-wait) for details.
+
 ## API Reference
 
 - [`RequestContext`](/typedoc/interfaces/rivetkit.mod.RequestContext.html) - Context for HTTP request handlers

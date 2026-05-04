@@ -8,6 +8,13 @@ export type GatewayTarget = { directId: string } | ActorQuery;
 
 export interface GatewayRequestOptions {
 	bypassConnectable?: boolean;
+	skipReadyWait?: boolean;
+}
+
+export function shouldBypassConnectable(
+	options: GatewayRequestOptions = {},
+): boolean {
+	return options.bypassConnectable === true || options.skipReadyWait === true;
 }
 
 export interface EngineControlClient {

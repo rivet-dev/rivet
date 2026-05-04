@@ -9,6 +9,7 @@ import {
 } from "@/common/actor-router-consts";
 import { noopNext } from "@/common/utils";
 import type { Actor as ApiActor } from "@/engine-api/actors";
+import { shouldBypassConnectable } from "@/engine-client/driver";
 import type {
 	ActorOutput,
 	CreateInput,
@@ -264,7 +265,7 @@ export class RemoteEngineControlClient implements EngineControlClient {
 		);
 		const httpOptions = {
 			...options,
-			directActorId: options.bypassConnectable
+			directActorId: shouldBypassConnectable(options)
 				? directActorIdFromTarget(target)
 				: undefined,
 		};
@@ -299,7 +300,7 @@ export class RemoteEngineControlClient implements EngineControlClient {
 			params,
 			{
 				...options,
-				directActorId: options.bypassConnectable
+				directActorId: shouldBypassConnectable(options)
 					? directActorIdFromTarget(target)
 					: undefined,
 			},
@@ -424,7 +425,7 @@ export class RemoteEngineControlClient implements EngineControlClient {
 		const endpoint = getEndpoint(this.#config);
 
 		if (
-			options.bypassConnectable &&
+			shouldBypassConnectable(options) &&
 			directActorIdFromTarget(target) &&
 			canUseDirectBypassPath(path)
 		) {

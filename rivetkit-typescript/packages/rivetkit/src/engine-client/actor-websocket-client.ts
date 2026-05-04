@@ -18,7 +18,10 @@ import type { ActorGatewayQuery, CrashPolicy } from "@/client/query";
 import type { Encoding, UniversalWebSocket } from "@/mod";
 import { encodeCborCompat, uint8ArrayToBase64 } from "@/serde";
 import { combineUrlPath } from "@/utils";
-import type { GatewayRequestOptions } from "./driver";
+import {
+	shouldBypassConnectable,
+	type GatewayRequestOptions,
+} from "./driver";
 import { logger } from "./log";
 
 class BufferedRemoteWebSocket implements UniversalWebSocket {
@@ -269,7 +272,7 @@ export function buildActorQueryGatewayUrl(
 	if (token !== undefined) {
 		params.append("rvt-token", token);
 	}
-	if (options.bypassConnectable) {
+	if (shouldBypassConnectable(options)) {
 		params.append("rvt-bypass_connectable", "true");
 	}
 
@@ -392,7 +395,7 @@ export function buildWebSocketProtocols(
 		protocols.push(`${WS_PROTOCOL_TARGET}${target.target}`);
 		protocols.push(`${WS_PROTOCOL_ACTOR}${target.actorId}`);
 	}
-	if (options.bypassConnectable) {
+	if (shouldBypassConnectable(options)) {
 		protocols.push(WS_PROTOCOL_BYPASS_CONNECTABLE);
 	}
 	if (params) {

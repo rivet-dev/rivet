@@ -7,6 +7,7 @@ import {
 import {
 	buildActorGatewayUrl,
 	buildActorQueryGatewayUrl,
+	buildWebSocketProtocols,
 } from "@/engine-client/actor-websocket-client";
 import { toBase64Url } from "./test-utils";
 
@@ -56,7 +57,30 @@ describe("gateway URL builders", () => {
 		expect(url).not.toContain("@");
 	});
 
-	test("serializes gateway bypass for query routing", () => {
+	test("serializes skipReadyWait for query routing", () => {
+		const url = buildActorQueryGatewayUrl(
+			"https://api.rivet.dev/manager",
+			"prod",
+			{
+				getForKey: {
+					name: "room",
+					key: ["alpha"],
+				},
+			},
+			undefined,
+			"/status",
+			undefined,
+			undefined,
+			undefined,
+			{ skipReadyWait: true },
+		);
+
+		expect(new URL(url).searchParams.get("rvt-bypass_connectable")).toBe(
+			"true",
+		);
+	});
+
+	test("serializes bypassConnectable for query routing", () => {
 		const url = buildActorQueryGatewayUrl(
 			"https://api.rivet.dev/manager",
 			"prod",
@@ -77,6 +101,19 @@ describe("gateway URL builders", () => {
 		expect(new URL(url).searchParams.get("rvt-bypass_connectable")).toBe(
 			"true",
 		);
+	});
+
+	test("serializes bypassConnectable for websocket protocols", () => {
+		const protocols = buildWebSocketProtocols(
+			ClientConfigSchema.parse({ endpoint: "https://api.rivet.dev" }),
+			"json",
+			undefined,
+			undefined,
+			{ target: "actor", actorId: "actor-1" },
+			{ bypassConnectable: true },
+		);
+
+		expect(protocols).toContain("rivet_bypass_connectable");
 	});
 
 	test("serializes getOrCreate queries with rvt-* params", () => {

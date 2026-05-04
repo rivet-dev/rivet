@@ -761,6 +761,12 @@ curl -X POST \
 
 `/sleep` asks the actor to enter the normal sleep shutdown sequence. `/reschedule` asks the platform to allocate the actor again, which is useful after crashes or when you need to force a fresh placement. Both endpoints require the actor ID and namespace.
 
+### Skip Ready Wait
+
+The gateway normally holds requests until the actor is ready. The actor is not ready during startup (before `onWake` finishes) or during the sleep grace period (while `onSleep` and `waitUntil` are running). Probes and readiness checks can opt out with `gateway.skipReadyWait` to reach the actor's `onRequest` or `onWebSocket` handler in either window.
+
+See [Skip Ready Wait](/docs/clients/javascript#skip-ready-wait) on the JavaScript client page for usage.
+
 ### Keeping the Actor Awake
 
 RivetKit gives you two primitives for holding the actor awake across background work. Both take a `Promise` and differ in how they interact with idle sleep and the grace period.

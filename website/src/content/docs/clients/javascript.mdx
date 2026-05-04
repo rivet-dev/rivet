@@ -253,6 +253,31 @@ https://namespace:token@api.rivet.dev
 
 You can also pass the endpoint without auth and provide `RIVET_NAMESPACE` and `RIVET_TOKEN` separately. For serverless deployments, use your app's `/api/rivet` URL. See [Endpoints](/docs/general/endpoints#url-auth-syntax) for details.
 
+## Advanced
+
+### Skip Ready Wait
+
+Requests are normally held at the gateway until the actor is ready to accept traffic. An actor is not ready while it's still starting (before `onWake` finishes) or while it's in the [sleep grace period](/docs/actors/lifecycle#shutdown-sequence) (running `onSleep`, `waitUntil`, and pending disconnects).
+
+Pass `gateway.skipReadyWait: true` on the [low-level HTTP and WebSocket APIs](#low-level-http--websocket) to deliver immediately and reach the actor's `onRequest` / `onWebSocket` handler in either window:
+
+```ts @nocheck
+import { createClient } from "rivetkit/client";
+
+const client = createClient();
+const handle = client.chatRoom.getOrCreate(["general"]);
+
+const response = await handle.fetch("/healthz", {
+  gateway: { skipReadyWait: true },
+});
+
+const ws = await handle.webSocket("probe", undefined, {
+  gateway: { skipReadyWait: true },
+});
+```
+
+Requests still return a transient `actor.stopping` lifecycle error (`{"group":"actor","code":"stopping","message":"Actor is stopping."}`) if the actor has fully stopped, i.e. the sleep grace period has ended but it has not yet restarted. Retry once the actor is available again.
+
 ## API Reference
 
 **Package:** [rivetkit](https://www.npmjs.com/package/rivetkit)

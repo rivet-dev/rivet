@@ -33,6 +33,7 @@ export type ActorActionFunction<
 
 export interface ActorGatewayOptions {
 	bypassConnectable?: boolean;
+	skipReadyWait?: boolean;
 }
 
 export type ResolvedActorGatewayOptions = Required<ActorGatewayOptions>;
@@ -41,9 +42,16 @@ export function resolveActorGatewayOptions(
 	defaults: ActorGatewayOptions = {},
 	overrides?: ActorGatewayOptions,
 ): ResolvedActorGatewayOptions {
+	const bypassConnectable =
+		overrides?.bypassConnectable ??
+		overrides?.skipReadyWait ??
+		defaults.bypassConnectable ??
+		defaults.skipReadyWait ??
+		false;
+
 	return {
-		bypassConnectable:
-			overrides?.bypassConnectable ?? defaults.bypassConnectable ?? false,
+		bypassConnectable,
+		skipReadyWait: bypassConnectable,
 	};
 }
 
