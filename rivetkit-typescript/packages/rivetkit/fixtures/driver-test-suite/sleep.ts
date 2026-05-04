@@ -499,6 +499,104 @@ export const counterWaitUntilProbe = actor({
 	},
 });
 
+type AbortVarsObservation =
+	| "unset"
+	| "object"
+	| "undefined"
+	| `error:${string}`;
+
+export const sleepAbortListenerVarsActor = actor({
+	state: {
+		startCount: 0,
+		sleepCount: 0,
+		// Per-wake observations keyed by `startCount` (1-indexed). Each
+		// wake registers its own abort listener that records what
+		// `c.vars` looked like when the listener fired. The user-reported
+		// crash typically lands on a *later* wake/sleep cycle once the
+		// runtime has been bounced through reset/cleanup at least once.
+		abortVarsSeenPerWake: [] as AbortVarsObservation[],
+	},
+	createVars: () => ({
+		isStopping: false,
+	}),
+	onWake: (c) => {
+		c.state.startCount += 1;
+		const wakeIndex = c.state.startCount;
+		c.vars.isStopping = c.aborted;
+
+		// Reserve a slot for this wake's observation.
+		const observations = [...c.state.abortVarsSeenPerWake];
+		observations[wakeIndex - 1] = "unset";
+		c.state.abortVarsSeenPerWake = observations;
+
+		if (c.aborted) {
+			return;
+		}
+
+		c.abortSignal.addEventListener(
+			"abort",
+			() => {
+				let observation: AbortVarsObservation;
+				try {
+					const vars = c.vars as
+						| { isStopping: boolean }
+						| undefined;
+					if (vars === undefined || vars === null) {
+						observation = "undefined";
+					} else {
+						vars.isStopping = true;
+						observation = "object";
+					}
+				} catch (error) {
+					observation = `error:${
+						error instanceof Error
+							? error.message
+							: String(error)
+					}`;
+				}
+				try {
+					const next = [...c.state.abortVarsSeenPerWake];
+					next[wakeIndex - 1] = observation;
+					c.state.abortVarsSeenPerWake = next;
+				} catch {
+					// State write may itself fail if the bag was cleared.
+					// Swallow so the test still reads `getStatus` cleanly.
+				}
+			},
+			{ once: true },
+		);
+	},
+	onSleep: async (c) => {
+		c.state.sleepCount += 1;
+		// Drain a few macrotasks so the cleanup that runs in this handler's
+		// `finally` (cleanupNativeSleepRuntimeState) has the best chance of
+		// landing before any other shutdown TSF (notably the abort signal)
+		// is processed on the JS side. This makes the abort-listener race
+		// observable in the test.
+		for (let i = 0; i < 5; i += 1) {
+			await new Promise<void>((resolve) => setTimeout(resolve, 0));
+		}
+	},
+	onWebSocket: (c, websocket) => {
+		websocket.send(JSON.stringify({ type: "connected" }));
+	},
+	actions: {
+		triggerSleep: (c) => {
+			c.sleep();
+		},
+		getStatus: (c) => {
+			return {
+				startCount: c.state.startCount,
+				sleepCount: c.state.sleepCount,
+				abortVarsSeenPerWake: c.state.abortVarsSeenPerWake,
+			};
+		},
+	},
+	options: {
+		sleepTimeout: SLEEP_TIMEOUT,
+	},
+});
+
 export const sleepWithNoSleepOption = actor({
 	state: { startCount: 0, sleepCount: 0 },
 	onWake: (c) => {

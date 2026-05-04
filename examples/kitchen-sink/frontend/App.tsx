@@ -929,6 +929,7 @@ type AgenticHandle = {
 		expectedRequests: number;
 		expectedTotalRows: number;
 		totalRows: number;
+		rows: AgenticEntry[];
 		unexpectedRequestIds: string[];
 		requests: AgenticVerification[];
 		ok: boolean;
@@ -1133,14 +1134,15 @@ function MockAgenticLoopPanel({ page }: { page: PageConfig }) {
 		seconds: number;
 		received: number[];
 	} | null>(null);
+	const [queuedRequests, setQueuedRequests] = useState<AgenticRequest[]>([]);
 	const [expectedRequests, setExpectedRequests] = useState<AgenticRequest[]>([]);
 	const [lastVerification, setLastVerification] = useState("No requests yet.");
 	const [lastHistory, setLastHistory] = useState("No history loaded yet.");
 	const [lastBypass, setLastBypass] = useState("No bypass requests yet.");
 	const [lastHealth, setLastHealth] = useState("No health checks yet.");
 	const [isConnecting, setIsConnecting] = useState(false);
-	const [isRunningInference, setIsRunningInference] = useState(false);
 	const [isCheckingHealth, setIsCheckingHealth] = useState(false);
+	const [isVerifying, setIsVerifying] = useState(false);
 	const [stats, setStats] = useState({
 		requests: 0,
 		expectedRows: 0,
@@ -1164,6 +1166,7 @@ function MockAgenticLoopPanel({ page }: { page: PageConfig }) {
 	const handleRef = useRef<AgenticHandle | null>(null);
 	const socketRef = useRef<WebSocket | null>(null);
 	const expectedRequestsRef = useRef<AgenticRequest[]>([]);
+	const pendingRequestsRef = useRef<AgenticRequest[]>([]);
 	const activeRequestRef = useRef<ActiveAgenticRequest | null>(null);
 	const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const progressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1242,17 +1245,19 @@ function MockAgenticLoopPanel({ page }: { page: PageConfig }) {
 		socketRef.current = null;
 		handleRef.current = null;
 		expectedRequestsRef.current = [];
+		pendingRequestsRef.current = [];
 		activeRequestRef.current = null;
 		setKey(randomAgenticKey());
 		setActorId("");
 		setConnectionStatus("idle");
 		setCurrentRequest(null);
+		setQueuedRequests([]);
 		setExpectedRequests([]);
-		setIsRunningInference(false);
 		setLastVerification("No requests yet.");
 		setLastHistory("No history loaded yet.");
 		setLastBypass("No bypass requests yet.");
 		setLastHealth("No health checks yet.");
+		setIsVerifying(false);
 		setStats({
 			requests: 0,
 			expectedRows: 0,
@@ -1312,21 +1317,41 @@ function MockAgenticLoopPanel({ page }: { page: PageConfig }) {
 	const verifyAll = useCallback(async () => {
 		const handle = handleRef.current;
 		if (!handle) return;
-		const result = await handle.verifyAll(expectedRequestsRef.current);
-		if (!result.ok) {
-			markValidationError(`aggregate verification failed: ${formatJson(result)}`);
-			return;
+		setIsVerifying(true);
+		try {
+			const expectedState = {
+				completed: expectedRequestsRef.current,
+				active: activeRequestRef.current
+					? {
+							requestId: activeRequestRef.current.requestId,
+							seconds: activeRequestRef.current.seconds,
+							received: activeRequestRef.current.received,
+						}
+					: null,
+				queued: pendingRequestsRef.current,
+			};
+			const result = await handle.verifyAll(expectedRequestsRef.current);
+			setStats((prev) => ({
+				...prev,
+				actualRows: result.totalRows,
+				expectedRows: result.expectedTotalRows,
+				validationErrors: result.ok
+					? prev.validationErrors
+					: prev.validationErrors + 1,
+			}));
+			setLastVerification(formatJson({ expectedState, actorRows: result }));
+			addLog(
+				result.ok ? "ok" : "error",
+				`manual verify ${result.ok ? "ok" : "failed"} expectedRows=${result.expectedTotalRows} actorRows=${result.totalRows} unexpected=${result.unexpectedRequestIds.length}`,
+			);
+			requestHistory();
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+			markValidationError(`manual verification failed: ${message}`);
+		} finally {
+			setIsVerifying(false);
 		}
-		setStats((prev) => ({
-			...prev,
-			actualRows: result.totalRows,
-			expectedRows: result.expectedTotalRows,
-		}));
-		addLog(
-			"ok",
-			`verified all requests=${result.expectedRequests} rows=${result.totalRows}`,
-		);
-	}, [addLog, markValidationError]);
+	}, [addLog, markValidationError, requestHistory]);
 
 	const handleHistory = useCallback((message: AgenticHistory) => {
 		const validation = validateAgenticRows(
@@ -1353,6 +1378,44 @@ function MockAgenticLoopPanel({ page }: { page: PageConfig }) {
 			addLog("error", text);
 		}
 	}, [addLog]);
+
+	const handleStarted = useCallback(
+		(message: Extract<AgenticServerMessage, { type: "started" }>) => {
+			const [nextRequest, ...remainingRequests] = pendingRequestsRef.current;
+			if (!nextRequest || nextRequest.requestId !== message.requestId) {
+				markValidationError(
+					`unexpected start for ${message.requestId.slice(0, 8)}`,
+				);
+			}
+			if (activeRequestRef.current) {
+				markValidationError(
+					`started ${message.requestId.slice(0, 8)} while another inference is active`,
+				);
+			}
+
+			pendingRequestsRef.current = remainingRequests;
+			setQueuedRequests(remainingRequests);
+			activeRequestRef.current = {
+				requestId: message.requestId,
+				seconds: message.seconds,
+				expectedIdx: 1,
+				received: [],
+				lastProgressAt: performance.now(),
+				startedAt: performance.now(),
+			};
+			setCurrentRequest({
+				requestId: message.requestId,
+				seconds: message.seconds,
+				received: [],
+			});
+			addLog(
+				"ok",
+				`started ${message.requestId.slice(0, 8)} seconds=${message.seconds}`,
+			);
+			scheduleProgressTimeout();
+		},
+		[addLog, markValidationError, scheduleProgressTimeout],
+	);
 
 	const handleProgress = useCallback((message: Extract<AgenticServerMessage, { type: "progress" }>) => {
 		const active = activeRequestRef.current;
@@ -1385,7 +1448,6 @@ function MockAgenticLoopPanel({ page }: { page: PageConfig }) {
 	const handleDone = useCallback(async (message: Extract<AgenticServerMessage, { type: "done" }>) => {
 		const active = activeRequestRef.current;
 		clearProgressTimer();
-		setIsRunningInference(false);
 		activeRequestRef.current = null;
 
 		if (!active || active.requestId !== message.requestId) {
@@ -1401,20 +1463,6 @@ function MockAgenticLoopPanel({ page }: { page: PageConfig }) {
 				`done verification failed: stream=[${active.received.join(", ")}], actor=${formatJson(message.verification)}`,
 			);
 			return;
-		}
-
-		const handle = handleRef.current;
-		if (handle) {
-			const explicit = await handle.verify(active.requestId, active.seconds);
-			const explicitOk =
-				explicit.count === active.seconds &&
-				explicit.indexes.every((idx, offset) => idx === offset + 1);
-			if (!explicitOk) {
-				markValidationError(
-					`action verification failed: ${formatJson(explicit)}`,
-				);
-				return;
-			}
 		}
 
 		const completed = {
@@ -1435,9 +1483,8 @@ function MockAgenticLoopPanel({ page }: { page: PageConfig }) {
 			"ok",
 			`done ${active.requestId.slice(0, 8)} rows=${active.seconds}`,
 		);
-		await verifyAll();
 		requestHistory();
-	}, [addLog, clearProgressTimer, markValidationError, requestHistory, verifyAll]);
+	}, [addLog, clearProgressTimer, markValidationError, requestHistory]);
 
 	const onSocketMessage = useCallback((event: MessageEvent) => {
 		if (typeof event.data !== "string") return;
@@ -1459,7 +1506,7 @@ function MockAgenticLoopPanel({ page }: { page: PageConfig }) {
 			return;
 		}
 		if (message.type === "started") {
-			addLog("ok", `started ${message.requestId.slice(0, 8)} seconds=${message.seconds}`);
+			handleStarted(message);
 			return;
 		}
 		if (message.type === "progress") {
@@ -1473,7 +1520,7 @@ function MockAgenticLoopPanel({ page }: { page: PageConfig }) {
 		if (message.type === "error") {
 			markValidationError(`actor error: ${message.message}`);
 		}
-	}, [addLog, handleDone, handleHistory, handleProgress, markValidationError]);
+	}, [addLog, handleDone, handleHistory, handleProgress, handleStarted, markValidationError]);
 
 	const connect = useCallback(async (countReconnect = false) => {
 		if (isConnecting) return;
@@ -1570,26 +1617,17 @@ function MockAgenticLoopPanel({ page }: { page: PageConfig }) {
 			addLog("error", "main websocket is not connected");
 			return;
 		}
-		if (activeRequestRef.current) {
-			addLog("warn", "inference already active");
-			return;
-		}
 		const safeSeconds = Math.max(1, Math.floor(seconds));
 		const requestId = crypto.randomUUID();
-		activeRequestRef.current = {
-			requestId,
-			seconds: safeSeconds,
-			expectedIdx: 1,
-			received: [],
-			lastProgressAt: performance.now(),
-			startedAt: performance.now(),
-		};
-		setCurrentRequest({ requestId, seconds: safeSeconds, received: [] });
-		setIsRunningInference(true);
+		const queuedRequest = { requestId, seconds: safeSeconds };
+		pendingRequestsRef.current = [...pendingRequestsRef.current, queuedRequest];
+		setQueuedRequests(pendingRequestsRef.current);
 		socket.send(JSON.stringify({ type: "infer", requestId, seconds: safeSeconds }));
-		addLog("info", `infer ${requestId.slice(0, 8)} seconds=${safeSeconds}`);
-		scheduleProgressTimeout();
-	}, [addLog, scheduleProgressTimeout, seconds]);
+		addLog(
+			"info",
+			`queued infer ${requestId.slice(0, 8)} seconds=${safeSeconds} queue=${pendingRequestsRef.current.length}`,
+		);
+	}, [addLog, seconds]);
 
 	const forceSleep = useCallback(async () => {
 		if (!actorId) {
@@ -1892,6 +1930,20 @@ function MockAgenticLoopPanel({ page }: { page: PageConfig }) {
 	}, [clearProgressTimer]);
 
 	const currentIndexes = currentRequest?.received ?? [];
+	const expectedStateText = formatJson({
+		completed: expectedRequests.map((request) => ({
+			requestId: request.requestId,
+			seconds: request.seconds,
+		})),
+		active: currentRequest
+			? {
+					requestId: currentRequest.requestId,
+					seconds: currentRequest.seconds,
+					received: currentRequest.received,
+				}
+			: null,
+		queued: queuedRequests,
+	});
 	const invariantStatus =
 		stats.validationErrors === 0 ? "pass" : "fail";
 
@@ -1996,13 +2048,21 @@ function MockAgenticLoopPanel({ page }: { page: PageConfig }) {
 					<button
 						className="primary"
 						onClick={runInference}
-						disabled={isRunningInference || connectionStatus !== "connected"}
+						disabled={connectionStatus !== "connected"}
 						type="button"
 					>
-						Run Inference
+						Run Inference{queuedRequests.length > 0 ? ` (${queuedRequests.length})` : ""}
 					</button>
 					<button className="secondary" onClick={requestHistory} disabled={connectionStatus !== "connected"} type="button">
 						Request History
+					</button>
+					<button
+						className="secondary"
+						disabled={!handleRef.current || isVerifying}
+						onClick={() => void verifyAll()}
+						type="button"
+					>
+						{isVerifying ? "Verifying..." : "Verify"}
 					</button>
 				</div>
 				<div className="agentic-stream">
@@ -2029,6 +2089,11 @@ function MockAgenticLoopPanel({ page }: { page: PageConfig }) {
 						</>
 					) : (
 						<div className="agentic-empty">No active inference.</div>
+					)}
+					{queuedRequests.length > 0 && (
+						<div className="agentic-empty">
+							Queued: {queuedRequests.map((request) => request.requestId.slice(0, 8)).join(", ")}
+						</div>
 					)}
 				</div>
 			</section>
@@ -2115,6 +2180,7 @@ function MockAgenticLoopPanel({ page }: { page: PageConfig }) {
 					<AgenticStat label="WS Proof" value={stats.sleepProofWs} />
 					<AgenticStat label="Validation Errors" value={stats.validationErrors} />
 				</div>
+				<div className="agentic-result">{expectedStateText}</div>
 				<div className="agentic-result">{lastVerification}</div>
 				<div className="agentic-result">{lastHistory}</div>
 			</section>

@@ -253,6 +253,7 @@ function verifyAllRows(rows: EntryRow[], expectedRequests: ExpectedRequest[]) {
 		expectedRequests: expectedRequests.length,
 		expectedTotalRows,
 		totalRows: rows.length,
+		rows,
 		unexpectedRequestIds,
 		requests,
 		ok,
@@ -505,10 +506,6 @@ export const mockAgenticLoop = actor({
 				}
 
 				if (type === "infer") {
-					if (activeInference !== undefined) {
-						throw new Error("inference already active");
-					}
-
 					const requestId = stringValue(message.requestId, "requestId");
 					const seconds = positiveInteger(message.seconds, "seconds");
 					await recordDebugEvent(c, {
@@ -519,11 +516,16 @@ export const mockAgenticLoop = actor({
 							seconds,
 						},
 					});
-					const inference = runInference(requestId, seconds).finally(() => {
-						activeInference = undefined;
-					});
+					const previousInference = activeInference;
+					const inference = (async () => {
+						await previousInference?.catch(() => undefined);
+						await runInference(requestId, seconds);
+					})();
 					activeInference = inference;
 					await c.keepAwake(inference);
+					if (activeInference === inference) {
+						activeInference = undefined;
+					}
 					return;
 				}
 
