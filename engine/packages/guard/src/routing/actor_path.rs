@@ -229,10 +229,13 @@ fn extract_rvt_params(rvt_params: &[(String, String)]) -> Result<RvtParams> {
 			}
 			.build());
 		}
-		map.insert(
-			stripped.to_string(),
-			serde_json::Value::String(value.clone()),
-		);
+		let value = match stripped {
+			"bypass_connectable" => parse_query_bool(value)
+				.map(serde_json::Value::Bool)
+				.unwrap_or_else(|| serde_json::Value::String(value.clone())),
+			_ => serde_json::Value::String(value.clone()),
+		};
+		map.insert(stripped.to_string(), value);
 	}
 
 	serde_json::from_value(serde_json::Value::Object(map)).map_err(|e| {
@@ -241,6 +244,14 @@ fn extract_rvt_params(rvt_params: &[(String, String)]) -> Result<RvtParams> {
 		}
 		.build()
 	})
+}
+
+fn parse_query_bool(value: &str) -> Option<bool> {
+	match value {
+		"true" | "1" => Some(true),
+		"false" | "0" => Some(false),
+		_ => None,
+	}
 }
 
 /// Split a comma-separated key string into components.
