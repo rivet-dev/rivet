@@ -705,6 +705,41 @@ async fn test_range_options(db: &Database) {
 	assert_eq!(results[2].key(), test_subspace.pack(&("range_e",)));
 	assert_eq!(results[2].value(), b"val_e");
 
+	// Test 5: local writes outside the range should not be merged into the result
+	let results = db
+		.run(|tx| async move {
+			let test_subspace = Subspace::from("test");
+			let key_b = test_subspace.pack(&("range_b",));
+			let key_d = test_subspace.pack(&("range_d",));
+			let key_z = test_subspace.pack(&("range_z",));
+
+			tx.set(&key_z, b"val_z");
+
+			let range = RangeOption {
+				begin: KeySelector::first_greater_or_equal(Cow::Owned(key_b)),
+				end: KeySelector::first_greater_or_equal(Cow::Owned(key_d)),
+				limit: None,
+				reverse: false,
+				mode: StreamingMode::WantAll,
+				target_bytes: 0,
+				..RangeOption::default()
+			};
+
+			let vals = tx.get_range(&range, 1, Serializable).await?;
+			Ok(vals.into_vec())
+		})
+		.await
+		.unwrap();
+
+	assert_eq!(
+		results.len(),
+		2,
+		"Expected local key outside [b, d) to be excluded"
+	);
+	assert!(!results
+		.iter()
+		.any(|r| r.key() == test_subspace.pack(&("range_z",))));
+
 	// Clear test data
 	db.run(|tx| async move {
 		let test_subspace = Subspace::from("test");
