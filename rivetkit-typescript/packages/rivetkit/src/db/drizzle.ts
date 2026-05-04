@@ -10,7 +10,7 @@ import type {
 	SqliteDatabase,
 } from "@/common/database/config";
 import { toSqliteBindings } from "@/common/database/shared";
-import { getNodeCrypto } from "@/utils/node";
+import { getNodeCrypto, importNodeDependencies } from "@/utils/node";
 
 export type { SQLiteTable } from "drizzle-orm/sqlite-core";
 export {
@@ -72,6 +72,7 @@ export function db<TSchema extends DrizzleSchema = Record<string, never>>({
 }: DrizzleDatabaseFactoryConfig<TSchema> = {}): DatabaseProvider<
 	DrizzleDatabase<TSchema>
 > {
+	importNodeDependencies();
 	return {
 		createClient: async (ctx) => {
 			const override = ctx.overrideDrizzleDatabaseClient
