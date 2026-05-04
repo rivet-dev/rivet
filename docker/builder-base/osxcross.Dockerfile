@@ -3,7 +3,7 @@
 #
 # Build & push: scripts/docker-builder-base/build-push.sh osxcross
 # syntax=docker/dockerfile:1.10.0
-FROM rust:1.89.0-bookworm
+FROM rust:1.91.1-bookworm
 
 RUN apt-get update && apt-get install -y \
     git-lfs \

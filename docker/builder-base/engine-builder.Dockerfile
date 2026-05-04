@@ -24,8 +24,8 @@ RUN apt-get update -y && \
     openssl \
     pkg-config \
     wget && \
-    rustup toolchain install 1.91.0 && \
-    rustup default 1.91.0 && \
+    rustup toolchain install 1.91.1 && \
+    rustup default 1.91.1 && \
     curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
     apt-get install -y --no-install-recommends nodejs && \
     corepack enable && \

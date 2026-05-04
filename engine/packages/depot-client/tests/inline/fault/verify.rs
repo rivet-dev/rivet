@@ -151,7 +151,10 @@ impl<'a> InvariantScan<'a> {
 		}
 
 		let Some(current) = resolved else {
-			self.violate(format!("database pointer for {} is missing", self.database_id));
+			self.violate(format!(
+				"database pointer for {} is missing",
+				self.database_id
+			));
 			return Ok(None);
 		};
 		if let Some(scanned_current) = scanned_current

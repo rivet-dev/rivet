@@ -10,6 +10,7 @@ ARG BUILD_MODE=release
 ARG BUILD_FRONTEND=false
 ARG VITE_APP_API_URL=__SAME__
 ARG VITE_FEATURE_FLAGS=
+ARG RUST_TOOLCHAIN=1.91.1
 
 ENV RUSTFLAGS="--cfg tokio_unstable"
 ENV RUSTC_WRAPPER=sccache \
@@ -18,6 +19,10 @@ ENV RUSTC_WRAPPER=sccache \
 
 WORKDIR /build
 COPY . .
+
+RUN rustup toolchain install "${RUST_TOOLCHAIN}" --profile minimal && \
+    rustup default "${RUST_TOOLCHAIN}" && \
+    rustup target add aarch64-unknown-linux-gnu
 
 RUN if [ "$BUILD_TARGET" = "engine" ] && [ "$BUILD_FRONTEND" = "true" ]; then \
         export NODE_OPTIONS="--max-old-space-size=8192" && \

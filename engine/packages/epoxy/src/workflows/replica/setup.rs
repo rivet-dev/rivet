@@ -1,5 +1,5 @@
-use anyhow::{Context, Result};
-use epoxy_protocol::protocol::{self, ReplicaId};
+use anyhow::Result;
+use epoxy_protocol::protocol;
 use futures_util::FutureExt;
 use gas::prelude::*;
 use rivet_api_builder::ApiCtx;
@@ -100,84 +100,12 @@ struct CatchUpReplicaOutput {
 
 #[activity(CatchUpReplica)]
 async fn catch_up_replica(
-	ctx: &ActivityCtx,
-	input: &CatchUpReplicaInput,
+	_ctx: &ActivityCtx,
+	_input: &CatchUpReplicaInput,
 ) -> Result<CatchUpReplicaOutput> {
-	// TODO: No-op for now
-	return Ok(CatchUpReplicaOutput {
+	Ok(CatchUpReplicaOutput {
 		last_versionstamp: None,
 		applied_entries: 0,
-	});
-
-	let replica_id = ctx.config().epoxy_replica_id();
-	let config: protocol::ClusterConfig = input.config.clone().into();
-	let api_ctx = ApiCtx::new_from_activity(ctx)?;
-	let source_replica_id = config
-		.replicas
-		.iter()
-		.find(|replica| {
-			replica.replica_id != replica_id
-				&& matches!(replica.status, protocol::ReplicaStatus::Active)
-		})
-		.map(|replica| replica.replica_id);
-
-	if source_replica_id.is_none() {
-		tracing::info!(
-			%replica_id,
-			"skipping changelog catch-up because the cluster has no active source replica yet"
-		);
-		return Ok(CatchUpReplicaOutput {
-			last_versionstamp: None,
-			applied_entries: 0,
-		});
-	}
-	let source_replica_id = source_replica_id.unwrap();
-
-	// Pre-cutover committed values are readable via local dual-read fallback immediately. They only
-	// become available to future learners after the background backfill populates the v2 changelog.
-	let response = read_changelog_page(
-		&api_ctx,
-		&config,
-		replica_id,
-		source_replica_id,
-		input.after_versionstamp.clone(),
-	)
-	.await?;
-
-	if response.entries.is_empty() {
-		return Ok(CatchUpReplicaOutput {
-			last_versionstamp: None,
-			applied_entries: 0,
-		});
-	}
-
-	let applied_entries = response.entries.len();
-	let last_versionstamp = response.last_versionstamp.clone();
-	for entry in response.entries {
-		ctx.udb()?
-			.run(|tx| {
-				let entry = entry.clone();
-				async move {
-					crate::replica::changelog::apply_entry(
-						&*tx, replica_id, entry, true, false, false,
-					)
-					.await
-				}
-			})
-			.custom_instrument(tracing::info_span!("apply_changelog_entry_tx"))
-			.await?;
-	}
-
-	tracing::info!(
-		%replica_id,
-		%source_replica_id,
-		applied_entries,
-		"applied changelog catch-up page"
-	);
-
-	Ok(CatchUpReplicaOutput {
-		last_versionstamp: Some(last_versionstamp),
-		applied_entries,
 	})
 }
 
@@ -212,24 +140,4 @@ async fn notify_coordinator_replica_status(
 	.await?;
 
 	Ok(())
-}
-
-#[tracing::instrument(skip_all, fields(%from_replica_id, %source_replica_id))]
-async fn read_changelog_page(
-	api_ctx: &ApiCtx,
-	config: &protocol::ClusterConfig,
-	from_replica_id: ReplicaId,
-	source_replica_id: ReplicaId,
-	after_versionstamp: Option<Vec<u8>>,
-) -> Result<protocol::ChangelogReadResponse> {
-	crate::http_client::read_changelog(
-		api_ctx,
-		config,
-		from_replica_id,
-		source_replica_id,
-		after_versionstamp,
-		crate::consts::CHANGELOG_READ_COUNT,
-	)
-	.await
-	.with_context(|| format!("failed reading changelog page from replica {source_replica_id}"))
 }

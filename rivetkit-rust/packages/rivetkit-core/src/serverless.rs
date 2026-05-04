@@ -48,7 +48,6 @@ pub struct CoreServerlessRuntime {
 struct ServerlessSettings {
 	version: u32,
 	configured_endpoint: String,
-	configured_token: Option<String>,
 	configured_namespace: String,
 	base_path: String,
 	package_version: String,
@@ -177,7 +176,6 @@ impl CoreServerlessRuntime {
 			settings: Arc::new(ServerlessSettings {
 				version: config.version,
 				configured_endpoint: config.endpoint,
-				configured_token: config.token,
 				configured_namespace: config.namespace,
 				base_path,
 				package_version: config.serverless_package_version,

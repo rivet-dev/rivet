@@ -7,7 +7,7 @@
 # and the aarch64 cross-compiler.
 #
 # Build & push: scripts/docker-builder-base/build-push.sh linux-gnu
-FROM rust:1.89.0-bullseye
+FROM rust:1.91.1-bullseye
 
 # Install base packages. Bullseye ships clang 11; we pull clang 14 from the
 # official LLVM apt repo (https://apt.llvm.org) for modern bindgen support

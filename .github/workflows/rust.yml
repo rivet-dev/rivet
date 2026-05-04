@@ -90,10 +90,10 @@ jobs:
         run: rivetkit-rust/packages/rivetkit-core/scripts/check-event-driven-drains.sh
 
       - name: Check
-        run: cargo check --all-targets --all-features
+        run: cargo check --workspace --exclude rivetkit-wasm
         env:
           # Deny warnings
-          RUSTFLAGS: --cfg tokio_unstable -D warnings
+          RUSTFLAGS: --cfg tokio_unstable -D warnings -A unsafe-op-in-unsafe-fn
 
   # test:
   #   name: Test

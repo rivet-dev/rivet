@@ -260,6 +260,7 @@ pub struct SqliteVfsMetricsSnapshot {
 	pub total_ns: u64,
 	pub commit_count: u64,
 	pub page_cache_entries: u64,
+	pub page_cache_weighted_size: u64,
 	pub page_cache_capacity_pages: u64,
 	pub write_buffer_dirty_pages: u64,
 	pub db_size_pages: u64,
@@ -844,8 +845,7 @@ impl VfsState {
 		if !can_read_cached_page(config, pgno) {
 			return None;
 		}
-		self
-			.protected_page_cache
+		self.protected_page_cache
 			.read_sync(&pgno, |_, bytes| bytes.clone())
 			.or_else(|| self.page_cache.get(&pgno))
 	}
@@ -857,7 +857,13 @@ impl VfsState {
 		}
 	}
 
-	fn seed_page(&mut self, config: &VfsConfig, kind: PageCacheInsertKind, pgno: u32, page: Vec<u8>) {
+	fn seed_page(
+		&mut self,
+		config: &VfsConfig,
+		kind: PageCacheInsertKind,
+		pgno: u32,
+		page: Vec<u8>,
+	) {
 		if pgno == 1 {
 			self.seed_main_page(config, kind, page);
 		} else {
@@ -1019,6 +1025,10 @@ impl VfsContext {
 				.page_cache
 				.entry_count()
 				.saturating_add(state.protected_page_cache.len() as u64),
+			page_cache_weighted_size: state
+				.page_cache
+				.weighted_size()
+				.saturating_add(state.protected_page_cache.len() as u64),
 			page_cache_capacity_pages: self.config.cache_capacity_pages,
 			write_buffer_dirty_pages: state.write_buffer.dirty.len() as u64,
 			db_size_pages: state.db_size_pages as u64,
@@ -1111,10 +1121,7 @@ impl VfsContext {
 				.startup_preload_first_page_count
 				.min(state.db_size_pages);
 			for pgno in 1..=early_page_count {
-				if !snapshot
-					.ranges
-					.iter()
-					.any(|range| range.contains(pgno))
+				if !snapshot.ranges.iter().any(|range| range.contains(pgno))
 					&& existing_pgnos.insert(pgno)
 				{
 					snapshot.pgnos.push(pgno);
@@ -1719,7 +1726,12 @@ async fn fetch_initial_main_page(
 ) -> std::result::Result<Option<Vec<u8>>, String> {
 	fetch_initial_pages(transport, actor_id, 1)
 		.await
-		.map(|pages| pages.into_iter().find(|(pgno, _)| *pgno == 1).map(|(_, bytes)| bytes))
+		.map(|pages| {
+			pages
+				.into_iter()
+				.find(|(pgno, _)| *pgno == 1)
+				.map(|(_, bytes)| bytes)
+		})
 }
 
 async fn fetch_initial_pages(

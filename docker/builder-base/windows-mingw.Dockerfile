@@ -4,7 +4,7 @@
 # Pre-bakes MinGW-w64, Rust target, Node.js 22, napi-rs CLI.
 #
 # Build & push: scripts/docker-builder-base/build-push.sh windows-mingw
-FROM rust:1.89.0-bookworm
+FROM rust:1.91.1-bookworm
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     llvm-14-dev \

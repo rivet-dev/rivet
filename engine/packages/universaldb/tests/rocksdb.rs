@@ -159,13 +159,11 @@ async fn rocksdb_udb() {
 						let mut chunk = Vec::with_capacity(100);
 
 						loop {
-							let empty = if chunk.len() >= 100 {
-								false
-							} else if let Some(entry) = stream.try_next().await? {
-								chunk.push(entry);
-								continue;
-							} else {
-								true
+							if chunk.len() < 100 {
+								if let Some(entry) = stream.try_next().await? {
+									chunk.push(entry);
+									continue;
+								}
 							};
 
 							let entry = match chunk.choose_weighted(&mut rand::thread_rng(), |_| 1)
@@ -184,12 +182,6 @@ async fn rocksdb_udb() {
 							tx.clear(entry.key());
 
 							return Ok(Some(entry.key().to_vec()));
-
-							if empty {
-								break;
-							} else {
-								chunk.clear();
-							}
 						}
 
 						Ok(None)

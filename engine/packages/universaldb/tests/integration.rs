@@ -736,9 +736,11 @@ async fn test_range_options(db: &Database) {
 		2,
 		"Expected local key outside [b, d) to be excluded"
 	);
-	assert!(!results
-		.iter()
-		.any(|r| r.key() == test_subspace.pack(&("range_z",))));
+	assert!(
+		!results
+			.iter()
+			.any(|r| r.key() == test_subspace.pack(&("range_z",)))
+	);
 
 	// Clear test data
 	db.run(|tx| async move {

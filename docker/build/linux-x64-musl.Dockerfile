@@ -10,6 +10,7 @@ ARG BUILD_MODE=release
 ARG BUILD_FRONTEND=false
 ARG VITE_APP_API_URL=__SAME__
 ARG VITE_FEATURE_FLAGS=
+ARG RUST_TOOLCHAIN=1.91.1
 
 ENV OPENSSL_DIR=/musl-x86_64 \
     OPENSSL_INCLUDE_DIR=/musl-x86_64/include \
@@ -23,6 +24,10 @@ ENV RUSTC_WRAPPER=sccache \
 
 WORKDIR /build
 COPY . .
+
+RUN rustup toolchain install "${RUST_TOOLCHAIN}" --profile minimal && \
+    rustup default "${RUST_TOOLCHAIN}" && \
+    rustup target add x86_64-unknown-linux-musl
 
 RUN if [ "$BUILD_TARGET" = "engine" ] && [ "$BUILD_FRONTEND" = "true" ]; then \
         export NODE_OPTIONS="--max-old-space-size=8192" && \
