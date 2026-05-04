@@ -10,7 +10,13 @@ export type ActionTemplate = {
 	description?: string;
 };
 
-export type DemoType = "actions" | "config" | "diagram" | "raw-http" | "raw-websocket";
+export type DemoType =
+	| "actions"
+	| "config"
+	| "diagram"
+	| "mock-agentic-loop"
+	| "raw-http"
+	| "raw-websocket";
 
 export type PageConfig = {
 	id: string;
@@ -182,6 +188,19 @@ await actor.runCycle({
 	rowBytes: 16384,
 	deleteRows: 64,
 	retainRows: 1024,
+});`,
+	mockAgenticLoop: `const client = createClient<typeof registry>({ endpoint, encoding: "json" });
+const actor = client.mockAgenticLoop.getOrCreate([key]);
+const ws = await actor.webSocket();
+
+ws.send(JSON.stringify({ type: "infer", requestId, seconds }));
+
+await actor.fetch("/bypass", {
+	gateway: { bypassConnectable: true },
+});
+
+await actor.webSocket("/bypass", undefined, {
+	gateway: { bypassConnectable: true },
 });`,
 };
 
@@ -1281,6 +1300,16 @@ export const PAGE_GROUPS: PageGroup[] = [
     R -->|spawn| A[Actor Instance]
     T -->|action| A
     A -->|result| T`,
+			},
+			{
+				id: "mock-agentic-loop",
+				title: "Mock Agentic Loop",
+				description:
+					"Manually test streaming, SQLite durability, forced sleep, reconnects, and gateway bypass against one actor.",
+				docs: [],
+				actors: ["mockAgenticLoop"],
+				snippet: SNIPPETS.mockAgenticLoop,
+				demo: "mock-agentic-loop",
 			},
 			{
 				id: "sqlite-memory-pressure",

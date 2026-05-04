@@ -172,6 +172,8 @@ function serverlessPoolConfig() {
 export const registry = setup({
 	configurePool: serverlessPoolConfig(),
 	serverless: {
+		publicToken:
+			process.env.RIVET_PUBLIC_TOKEN ?? process.env.RIVET_TOKEN ?? "dev",
 		maxStartPayloadBytes: numberFromEnv(
 			"RIVET_SERVERLESS_MAX_START_PAYLOAD_BYTES",
 			16 * 1024 * 1024,

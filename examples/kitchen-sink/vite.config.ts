@@ -16,4 +16,13 @@ function sqlRawPlugin(): Plugin {
 
 export default defineConfig({
 	plugins: [react(), sqlRawPlugin()],
+	server: {
+		proxy: {
+			"/api/rivet": {
+				target: "http://127.0.0.1:3000",
+				changeOrigin: true,
+				ws: true,
+			},
+		},
+	},
 });

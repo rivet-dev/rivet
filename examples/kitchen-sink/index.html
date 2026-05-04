@@ -712,6 +712,214 @@
 				color: var(--muted);
 			}
 
+			/* ── Mock Agentic Loop Lab ───────────── */
+
+			.agentic-lab {
+				display: grid;
+				grid-template-columns: repeat(2, minmax(0, 1fr));
+				gap: 16px;
+			}
+
+			.agentic-lab .demo-code-bottom {
+				grid-column: 1 / -1;
+				border: 1px solid var(--border-strong);
+				border-radius: var(--radius);
+				overflow: hidden;
+				background: var(--panel);
+			}
+
+			.agentic-panel {
+				background: var(--panel);
+				border: 1px solid var(--border-strong);
+				border-radius: var(--radius);
+				padding: 16px;
+				display: flex;
+				flex-direction: column;
+				gap: 14px;
+				min-width: 0;
+			}
+
+			.agentic-panel-header {
+				display: flex;
+				align-items: flex-start;
+				justify-content: space-between;
+				gap: 12px;
+			}
+
+			.agentic-grid {
+				display: grid;
+				grid-template-columns: repeat(3, minmax(0, 1fr));
+				gap: 10px;
+			}
+
+			.agentic-grid.compact {
+				grid-template-columns: repeat(2, minmax(0, 1fr));
+			}
+
+			.agentic-session-row {
+				display: grid;
+				grid-template-columns: 1fr 1fr;
+				gap: 12px;
+				padding: 12px;
+				background: var(--panel-3);
+				border: 1px solid var(--border);
+				border-radius: 8px;
+				min-width: 0;
+			}
+
+			.agentic-kicker {
+				font-size: 10px;
+				text-transform: uppercase;
+				letter-spacing: 0.08em;
+				color: var(--muted-2);
+				margin-bottom: 4px;
+			}
+
+			.agentic-mono,
+			.agentic-result,
+			.agentic-empty {
+				font-family: ui-monospace, SFMono-Regular, "SF Mono", Consolas, monospace;
+				font-size: 12px;
+				line-height: 1.5;
+				overflow-wrap: anywhere;
+			}
+
+			.agentic-result,
+			.agentic-empty {
+				background: var(--panel-3);
+				border: 1px solid var(--border);
+				border-radius: 8px;
+				padding: 10px 12px;
+				color: var(--muted);
+			}
+
+			.agentic-status {
+				flex-shrink: 0;
+				border: 1px solid var(--border-strong);
+				border-radius: 999px;
+				padding: 4px 10px;
+				font-size: 12px;
+				color: var(--muted);
+				background: var(--panel-3);
+			}
+
+			.agentic-status.connected,
+			.agentic-status.pass {
+				color: var(--success);
+				border-color: rgba(48, 209, 88, 0.45);
+			}
+
+			.agentic-status.connecting {
+				color: var(--warning);
+				border-color: rgba(255, 159, 10, 0.5);
+			}
+
+			.agentic-status.error,
+			.agentic-status.fail {
+				color: var(--danger);
+				border-color: rgba(255, 59, 48, 0.5);
+			}
+
+			.agentic-stream {
+				min-height: 112px;
+				background: var(--panel-3);
+				border: 1px solid var(--border);
+				border-radius: 8px;
+				padding: 12px;
+			}
+
+			.agentic-indexes {
+				display: grid;
+				grid-template-columns: repeat(auto-fill, minmax(34px, 1fr));
+				gap: 6px;
+				margin-top: 10px;
+			}
+
+			.agentic-index {
+				height: 28px;
+				display: inline-flex;
+				align-items: center;
+				justify-content: center;
+				border: 1px solid var(--border-strong);
+				border-radius: 6px;
+				color: var(--muted);
+				font-size: 12px;
+				font-family: ui-monospace, SFMono-Regular, "SF Mono", Consolas, monospace;
+			}
+
+			.agentic-index.received {
+				color: var(--success);
+				border-color: rgba(48, 209, 88, 0.45);
+				background: rgba(48, 209, 88, 0.1);
+			}
+
+			.agentic-stat-grid {
+				display: grid;
+				grid-template-columns: repeat(4, minmax(0, 1fr));
+				gap: 8px;
+			}
+
+			.agentic-stat {
+				background: var(--panel-3);
+				border: 1px solid var(--border);
+				border-radius: 8px;
+				padding: 10px;
+				min-height: 66px;
+				display: flex;
+				flex-direction: column;
+				justify-content: space-between;
+				gap: 8px;
+			}
+
+			.agentic-stat span {
+				color: var(--muted-2);
+				font-size: 11px;
+			}
+
+			.agentic-stat strong {
+				font-size: 16px;
+				font-family: ui-monospace, SFMono-Regular, "SF Mono", Consolas, monospace;
+				overflow-wrap: anywhere;
+			}
+
+			.agentic-log {
+				background: var(--panel-3);
+				border: 1px solid var(--border);
+				border-radius: 8px;
+				max-height: 360px;
+				overflow-y: auto;
+				font-family: ui-monospace, SFMono-Regular, "SF Mono", Consolas, monospace;
+				font-size: 12px;
+			}
+
+			.agentic-log-row {
+				display: grid;
+				grid-template-columns: 88px 1fr;
+				gap: 8px;
+				padding: 8px 10px;
+				border-bottom: 1px solid var(--border);
+			}
+
+			.agentic-log-row:last-child {
+				border-bottom: none;
+			}
+
+			.agentic-log-row span:first-child {
+				color: var(--muted-2);
+			}
+
+			.agentic-log-row.ok span:last-child {
+				color: var(--success);
+			}
+
+			.agentic-log-row.warn span:last-child {
+				color: var(--warning);
+			}
+
+			.agentic-log-row.error span:last-child {
+				color: var(--danger);
+			}
+
 			/* ── Mermaid ──────────────────────────── */
 
 			.mermaid-diagram {
@@ -732,6 +940,15 @@
 
 			@media (max-width: 1100px) {
 				.actor-columns {
+					grid-template-columns: 1fr;
+				}
+				.agentic-lab {
+					grid-template-columns: 1fr;
+				}
+				.agentic-grid,
+				.agentic-grid.compact,
+				.agentic-session-row,
+				.agentic-stat-grid {
 					grid-template-columns: 1fr;
 				}
 				.actor-controls {

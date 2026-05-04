@@ -61,9 +61,14 @@ const MAX_RECONNECT_MS = numberFromEnv(
 	"MOCK_AGENTIC_MAX_RECONNECT_MS",
 	30_000,
 );
+const DEFAULT_ON_SLEEP_DELAY_MS = 15_000;
+const ON_SLEEP_DELAY_MS = numberFromEnv(
+	"MOCK_AGENTIC_ON_SLEEP_DELAY_MS",
+	DEFAULT_ON_SLEEP_DELAY_MS,
+);
 const SLEEP_CLOSE_TIMEOUT_MS = numberFromEnv(
 	"MOCK_AGENTIC_SLEEP_CLOSE_TIMEOUT_MS",
-	20_000,
+	ON_SLEEP_DELAY_MS + 30_000,
 );
 const PROBE_INTERVAL_MS = numberFromEnv(
 	"MOCK_AGENTIC_PROBE_INTERVAL_MS",
@@ -97,7 +102,13 @@ type ServerMessage =
 			entries: HistoryEntry[];
 			timestamp: number;
 	  }
-	| { type: "pong"; probeId: string; timestamp: number }
+	| {
+			type: "pong";
+			probeId: string;
+			sleepStarted: boolean;
+			sleepStartedAt: number | null;
+			timestamp: number;
+	  }
 	| { type: "started"; requestId: string; seconds: number; timestamp: number }
 	| {
 			type: "progress";
@@ -207,9 +218,13 @@ type BypassStats = {
 	httpSuccesses: number;
 	beforeSleepHttpSuccesses: number;
 	afterSleepHttpSuccesses: number;
+	beforeSleepHttpUnexpectedSleepStarted: number;
+	afterSleepHttpSleepStarted: number;
 	webSocketSuccesses: number;
 	beforeSleepWebSocketSuccesses: number;
 	afterSleepWebSocketSuccesses: number;
+	beforeSleepWebSocketUnexpectedSleepStarted: number;
+	afterSleepWebSocketSleepStarted: number;
 	timeouts: BypassObservation[];
 	errors: BypassObservation[];
 };
@@ -219,7 +234,7 @@ type BypassHandle = {
 		input: string,
 		init?: RequestInit & {
 			gateway?: {
-				bypassConnectable?: boolean;
+				skipReadyWait?: boolean;
 			};
 		},
 	) => Promise<Response>;
@@ -228,7 +243,7 @@ type BypassHandle = {
 		protocols?: string | string[],
 		options?: {
 			gateway?: {
-				bypassConnectable?: boolean;
+				skipReadyWait?: boolean;
 			};
 		},
 	) => Promise<WebSocket>;
@@ -520,6 +535,8 @@ async function startLocalKitchenSinkServer() {
 				RIVET_RUN_ENGINE: "1",
 				RIVET_ENGINE_BINARY: resolveEngineBinary(),
 				RIVETKIT_RUNTIME: process.env.RIVETKIT_RUNTIME ?? "native",
+				RIVETKIT_STORAGE_PATH:
+					process.env.RIVETKIT_STORAGE_PATH ?? dbRoot,
 				RIVET_SERVERLESS_URL: SERVERLESS_URL,
 				RIVET__FILE_SYSTEM__PATH:
 					process.env.RIVET__FILE_SYSTEM__PATH ?? join(dbRoot, "db"),
@@ -1155,6 +1172,30 @@ async function runProbeLoop(webSocketUrl: string, stopAt: number) {
 	return stats;
 }
 
+function validateBypassSleepStatus(
+	source: string,
+	value: {
+		sleepStarted?: unknown;
+		sleepStartedAt?: unknown;
+	},
+) {
+	if (typeof value.sleepStarted !== "boolean") {
+		throw new Error(`${source} missing boolean sleepStarted`);
+	}
+	if (value.sleepStarted) {
+		if (typeof value.sleepStartedAt !== "number") {
+			throw new Error(`${source} missing numeric sleepStartedAt`);
+		}
+	} else if (value.sleepStartedAt !== null) {
+		throw new Error(`${source} expected null sleepStartedAt before sleep`);
+	}
+
+	return {
+		sleepStarted: value.sleepStarted,
+		sleepStartedAt: value.sleepStartedAt,
+	};
+}
+
 async function runBypassAttempt(
 	handle: BypassHandle,
 	stats: BypassStats,
@@ -1180,7 +1221,7 @@ async function runBypassAttempt(
 					method: "GET",
 					signal: controller.signal,
 					gateway: {
-						bypassConnectable: true,
+						skipReadyWait: true,
 					},
 				}),
 				"bypass http",
@@ -1194,15 +1235,24 @@ async function runBypassAttempt(
 			const body = (await response.json()) as {
 				type?: string;
 				transport?: string;
+				sleepStarted?: unknown;
+				sleepStartedAt?: unknown;
 			};
 			if (body.type !== "bypass" || body.transport !== "http") {
 				throw new Error(`unexpected bypass http body ${JSON.stringify(body)}`);
 			}
+			const sleepStatus = validateBypassSleepStatus("bypass http", body);
 			stats.httpSuccesses += 1;
 			if (phase === "beforeSleep") {
 				stats.beforeSleepHttpSuccesses += 1;
+				if (sleepStatus.sleepStarted) {
+					stats.beforeSleepHttpUnexpectedSleepStarted += 1;
+				}
 			} else {
 				stats.afterSleepHttpSuccesses += 1;
+				if (sleepStatus.sleepStarted) {
+					stats.afterSleepHttpSleepStarted += 1;
+				}
 			}
 		} finally {
 			clearTimeout(abortTimeout);
@@ -1211,7 +1261,7 @@ async function runBypassAttempt(
 		const ws = await withTimeout(
 			handle.webSocket("/bypass", undefined, {
 				gateway: {
-					bypassConnectable: true,
+					skipReadyWait: true,
 				},
 			}),
 			"bypass websocket create",
@@ -1223,6 +1273,7 @@ async function runBypassAttempt(
 				"bypass websocket open",
 				BYPASS_TIMEOUT_MS,
 			);
+			let webSocketSleepStarted = false;
 			const pong = new Promise<void>((resolve, reject) => {
 				const timeoutHandle = setTimeout(() => {
 					cleanup();
@@ -1240,6 +1291,10 @@ async function runBypassAttempt(
 					if (message.type !== "pong" || message.probeId !== probeId) {
 						return;
 					}
+					webSocketSleepStarted = validateBypassSleepStatus(
+						"bypass websocket",
+						message,
+					).sleepStarted;
 					cleanup();
 					resolve();
 				};
@@ -1264,8 +1319,14 @@ async function runBypassAttempt(
 			stats.webSocketSuccesses += 1;
 			if (phase === "beforeSleep") {
 				stats.beforeSleepWebSocketSuccesses += 1;
+				if (webSocketSleepStarted) {
+					stats.beforeSleepWebSocketUnexpectedSleepStarted += 1;
+				}
 			} else {
 				stats.afterSleepWebSocketSuccesses += 1;
+				if (webSocketSleepStarted) {
+					stats.afterSleepWebSocketSleepStarted += 1;
+				}
 			}
 		} finally {
 			if (
@@ -1300,9 +1361,13 @@ async function runBypassLoop(
 		httpSuccesses: 0,
 		beforeSleepHttpSuccesses: 0,
 		afterSleepHttpSuccesses: 0,
+		beforeSleepHttpUnexpectedSleepStarted: 0,
+		afterSleepHttpSleepStarted: 0,
 		webSocketSuccesses: 0,
 		beforeSleepWebSocketSuccesses: 0,
 		afterSleepWebSocketSuccesses: 0,
+		beforeSleepWebSocketUnexpectedSleepStarted: 0,
+		afterSleepWebSocketSleepStarted: 0,
 		timeouts: [],
 		errors: [],
 	};
@@ -1430,7 +1495,7 @@ async function runWorkload() {
 	};
 
 	console.log(
-		`[start] endpoint=${ENDPOINT} namespace=${NAMESPACE} pool=${POOL_NAME} actorId=${actorId} ${label} durationMs=${DURATION_MS} sleepIntervalMs=${SLEEP_INTERVAL_MS} inferenceSeconds=${INFERENCE_MIN_SECONDS}-${INFERENCE_MAX_SECONDS} jitterMs=${JITTER_MIN_MS}-${JITTER_MAX_MS} probeIntervalMs=${PROBE_INTERVAL_MS} bypassIntervalMs=${BYPASS_INTERVAL_MS}`,
+		`[start] endpoint=${ENDPOINT} namespace=${NAMESPACE} pool=${POOL_NAME} actorId=${actorId} ${label} durationMs=${DURATION_MS} sleepIntervalMs=${SLEEP_INTERVAL_MS} onSleepDelayMs=${ON_SLEEP_DELAY_MS} sleepCloseTimeoutMs=${SLEEP_CLOSE_TIMEOUT_MS} inferenceSeconds=${INFERENCE_MIN_SECONDS}-${INFERENCE_MAX_SECONDS} jitterMs=${JITTER_MIN_MS}-${JITTER_MAX_MS} probeIntervalMs=${PROBE_INTERVAL_MS} bypassIntervalMs=${BYPASS_INTERVAL_MS}`,
 	);
 
 	const session = new RawSession(webSocketUrl, label);
@@ -1557,7 +1622,7 @@ async function runWorkload() {
 	await verifyAll(verifier, expectedRequests);
 
 	console.log(
-		`[done] actorId=${actorId} key=${key} requests=${requestCount} sleepPosts=${sleepResult.posts} sleepErrors=${sleepResult.errors} reconnects=${reconnectCount} maxReconnectMs=${maxReconnectMs} probeAttempts=${probeResult.attempts} probeSuccesses=${probeResult.successes} probeExpectedCloses=${probeResult.expectedCloses} bypassAttempts=${bypassResult.attempts} bypassBeforeSleepAttempts=${bypassResult.beforeSleepAttempts} bypassAfterSleepAttempts=${bypassResult.afterSleepAttempts} bypassHttpSuccesses=${bypassResult.httpSuccesses} bypassWebSocketSuccesses=${bypassResult.webSocketSuccesses} bypassBeforeSleepHttpSuccesses=${bypassResult.beforeSleepHttpSuccesses} bypassBeforeSleepWebSocketSuccesses=${bypassResult.beforeSleepWebSocketSuccesses} bypassAfterSleepHttpSuccesses=${bypassResult.afterSleepHttpSuccesses} bypassAfterSleepWebSocketSuccesses=${bypassResult.afterSleepWebSocketSuccesses} bypassTimeouts=${bypassResult.timeouts.length} bypassErrors=${bypassResult.errors.length}`,
+		`[done] actorId=${actorId} key=${key} requests=${requestCount} sleepPosts=${sleepResult.posts} sleepErrors=${sleepResult.errors} reconnects=${reconnectCount} maxReconnectMs=${maxReconnectMs} probeAttempts=${probeResult.attempts} probeSuccesses=${probeResult.successes} probeExpectedCloses=${probeResult.expectedCloses} bypassAttempts=${bypassResult.attempts} bypassBeforeSleepAttempts=${bypassResult.beforeSleepAttempts} bypassAfterSleepAttempts=${bypassResult.afterSleepAttempts} bypassHttpSuccesses=${bypassResult.httpSuccesses} bypassWebSocketSuccesses=${bypassResult.webSocketSuccesses} bypassBeforeSleepHttpSuccesses=${bypassResult.beforeSleepHttpSuccesses} bypassBeforeSleepWebSocketSuccesses=${bypassResult.beforeSleepWebSocketSuccesses} bypassAfterSleepHttpSuccesses=${bypassResult.afterSleepHttpSuccesses} bypassAfterSleepWebSocketSuccesses=${bypassResult.afterSleepWebSocketSuccesses} bypassAfterSleepHttpSleepStarted=${bypassResult.afterSleepHttpSleepStarted} bypassAfterSleepWebSocketSleepStarted=${bypassResult.afterSleepWebSocketSleepStarted} bypassTimeouts=${bypassResult.timeouts.length} bypassErrors=${bypassResult.errors.length}`,
 	);
 
 	if (DURATION_MS >= SLEEP_INTERVAL_MS && sleepResult.posts === 0) {
@@ -1616,8 +1681,35 @@ async function runWorkload() {
 			`bypass loop had pre-sleep failures: ${JSON.stringify(bypassResult)}`,
 		);
 	}
+	if (
+		bypassResult.beforeSleepHttpUnexpectedSleepStarted > 0 ||
+		bypassResult.beforeSleepWebSocketUnexpectedSleepStarted > 0
+	) {
+		throw new Error(
+			`bypass saw sleepStarted before sleep: ${JSON.stringify(bypassResult)}`,
+		);
+	}
 	if (sleepResult.posts > 0 && bypassResult.afterSleepAttempts === 0) {
 		throw new Error("bypass loop did not continue after sleep request");
+	}
+	if (sleepResult.posts > 0 && bypassResult.afterSleepHttpSuccesses === 0) {
+		throw new Error("bypass http had no successful after-sleep actor responses");
+	}
+	if (sleepResult.posts > 0 && bypassResult.afterSleepWebSocketSuccesses === 0) {
+		throw new Error("bypass websocket had no successful after-sleep actor responses");
+	}
+	if (sleepResult.posts > 0 && bypassResult.afterSleepHttpSleepStarted === 0) {
+		throw new Error(
+			`bypass http never returned actor sleepStarted proof: ${JSON.stringify(bypassResult)}`,
+		);
+	}
+	if (
+		sleepResult.posts > 0 &&
+		bypassResult.afterSleepWebSocketSleepStarted === 0
+	) {
+		throw new Error(
+			`bypass websocket never returned actor sleepStarted proof: ${JSON.stringify(bypassResult)}`,
+		);
 	}
 }
 

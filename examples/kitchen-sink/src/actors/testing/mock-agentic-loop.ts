@@ -18,10 +18,44 @@ type CountRow = {
 	count: number;
 };
 
+type SleepStateRow = {
+	sleep_started_at: number;
+};
+
+type DebugEventRow = {
+	event_id: string;
+	name: string;
+	actor_id: string;
+	connection_id: string | null;
+	request_id: string | null;
+	details_json: string;
+	created_at: number;
+};
+
 type ExpectedRequest = {
 	requestId: string;
 	seconds: number;
 };
+
+type DebugEventInput = {
+	name: string;
+	connectionId?: string;
+	requestId?: string;
+	details?: Record<string, unknown>;
+	createdAt?: number;
+};
+
+type DebugContext = {
+	actorId: string;
+	db: {
+		execute: (query: string, ...params: unknown[]) => Promise<unknown[]>;
+	};
+	log: {
+		warn: (payload: unknown) => void;
+	};
+};
+
+const debugSocketsByActorId = new Map<string, Set<UniversalWebSocket>>();
 
 function sleep(ms: number): Promise<void> {
 	return new Promise((resolve) => setTimeout(resolve, ms));
@@ -62,6 +96,96 @@ function numberFromEnv(name: string, fallback: number): number {
 function send(websocket: UniversalWebSocket, payload: unknown) {
 	if (websocket.readyState !== 1) return;
 	websocket.send(JSON.stringify(payload));
+}
+
+function debugPayload(row: DebugEventRow, replayed: boolean) {
+	return {
+		type: "debugEvent",
+		eventId: row.event_id,
+		name: row.name,
+		actorId: row.actor_id,
+		connectionId: row.connection_id,
+		requestId: row.request_id,
+		details: JSON.parse(row.details_json) as Record<string, unknown>,
+		createdAt: row.created_at,
+		replayed,
+	};
+}
+
+function publishDebugEvent(row: DebugEventRow) {
+	const sockets = debugSocketsByActorId.get(row.actor_id);
+	if (!sockets) return;
+
+	for (const socket of sockets) {
+		send(socket, debugPayload(row, false));
+	}
+}
+
+function addDebugSocket(actorId: string, websocket: UniversalWebSocket) {
+	const sockets = debugSocketsByActorId.get(actorId) ?? new Set();
+	sockets.add(websocket);
+	debugSocketsByActorId.set(actorId, sockets);
+
+	return () => {
+		sockets.delete(websocket);
+		if (sockets.size === 0) {
+			debugSocketsByActorId.delete(actorId);
+		}
+	};
+}
+
+async function recordDebugEvent(c: DebugContext, input: DebugEventInput) {
+	const row: DebugEventRow = {
+		event_id: crypto.randomUUID(),
+		name: input.name,
+		actor_id: c.actorId,
+		connection_id: input.connectionId ?? null,
+		request_id: input.requestId ?? null,
+		details_json: JSON.stringify(input.details ?? {}),
+		created_at: input.createdAt ?? Date.now(),
+	};
+
+	try {
+		await c.db.execute(
+			"INSERT INTO mock_agentic_debug_events (event_id, name, actor_id, connection_id, request_id, details_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+			row.event_id,
+			row.name,
+			row.actor_id,
+			row.connection_id,
+			row.request_id,
+			row.details_json,
+			row.created_at,
+		);
+		publishDebugEvent(row);
+	} catch (error) {
+		c.log.warn({
+			msg: "mock agentic debug event failed",
+			name: input.name,
+			err: error instanceof Error ? error.message : String(error),
+		});
+	}
+}
+
+async function replayDebugEvents(
+	database: DebugContext["db"],
+	websocket: UniversalWebSocket,
+) {
+	const rows = typedRows<DebugEventRow>(
+		await database.execute(`
+			SELECT event_id, name, actor_id, connection_id, request_id, details_json, created_at
+			FROM (
+				SELECT event_id, name, actor_id, connection_id, request_id, details_json, created_at
+				FROM mock_agentic_debug_events
+				ORDER BY created_at DESC
+				LIMIT 200
+			)
+			ORDER BY created_at ASC
+		`),
+	);
+
+	for (const row of rows) {
+		send(websocket, debugPayload(row, true));
+	}
 }
 
 function verifyEntryRows(rows: EntryRow[], expectedSeconds: number) {
@@ -153,25 +277,82 @@ export const mockAgenticLoop = actor({
 			await database.execute(
 				"CREATE INDEX IF NOT EXISTS idx_mock_agentic_entries_created_at ON mock_agentic_entries(created_at)",
 			);
+			await database.execute(`
+				CREATE TABLE IF NOT EXISTS mock_agentic_sleep_state (
+					id INTEGER PRIMARY KEY CHECK (id = 1),
+					sleep_started_at INTEGER NOT NULL
+				)
+			`);
+			await database.execute(`
+				CREATE TABLE IF NOT EXISTS mock_agentic_debug_events (
+					event_id TEXT PRIMARY KEY,
+					name TEXT NOT NULL,
+					actor_id TEXT NOT NULL,
+					connection_id TEXT,
+					request_id TEXT,
+					details_json TEXT NOT NULL,
+					created_at INTEGER NOT NULL
+				)
+			`);
+			await database.execute(
+				"CREATE INDEX IF NOT EXISTS idx_mock_agentic_debug_events_created_at ON mock_agentic_debug_events(created_at)",
+			);
 		},
 	}),
+	async onWake(c) {
+		await recordDebugEvent(c, {
+			name: "onWake",
+			details: {
+				key: c.key,
+				name: c.name,
+			},
+		});
+	},
 	async onSleep(c) {
 		const delayMs = numberFromEnv(
 			"MOCK_AGENTIC_ON_SLEEP_DELAY_MS",
 			DEFAULT_ON_SLEEP_DELAY_MS,
 		);
+		const sleepStartedAt = Date.now();
+		await recordDebugEvent(c, {
+			name: "onSleepStart",
+			createdAt: sleepStartedAt,
+			details: {
+				delayMs,
+			},
+		});
+		await c.db.execute(
+			"INSERT OR REPLACE INTO mock_agentic_sleep_state (id, sleep_started_at) VALUES (1, ?)",
+			sleepStartedAt,
+		);
 		c.log.info({
 			msg: "mock agentic loop onSleep delay",
 			delayMs,
+			sleepStartedAt,
 		});
 		await sleep(delayMs);
+		await recordDebugEvent(c, {
+			name: "onSleepEnd",
+			details: {
+				delayMs,
+				sleepStartedAt,
+				elapsedMs: Date.now() - sleepStartedAt,
+			},
+		});
 	},
-	onRequest(_c, request) {
+	async onRequest(c, request) {
 		const url = new URL(request.url);
 		if (url.pathname === "/bypass" || url.pathname === "/request/bypass") {
+			const [sleepState] = typedRows<SleepStateRow>(
+				await c.db.execute(
+					"SELECT sleep_started_at FROM mock_agentic_sleep_state WHERE id = 1",
+				),
+			);
 			return new Response(JSON.stringify({
 				type: "bypass",
 				transport: "http",
+				sleepStarted: sleepState !== undefined,
+				sleepStartedAt: sleepState?.sleep_started_at ?? null,
 				timestamp: Date.now(),
 			}), {
 				headers: {
@@ -185,12 +366,27 @@ export const mockAgenticLoop = actor({
 	onWebSocket(c, websocket: UniversalWebSocket) {
 		const connectionId = crypto.randomUUID();
 		let activeInference: Promise<void> | undefined;
+		const removeDebugSocket = addDebugSocket(c.actorId, websocket);
 
 		send(websocket, {
 			type: "hello",
 			connectionId,
 			timestamp: Date.now(),
 		});
+		void (async () => {
+			try {
+				await replayDebugEvents(c.db, websocket);
+			} catch (error) {
+				c.log.warn({
+					msg: "mock agentic debug replay failed",
+					err: error instanceof Error ? error.message : String(error),
+				});
+			}
+			await recordDebugEvent(c, {
+				name: "webSocketOpen",
+				connectionId,
+			});
+		})();
 
 		const verify = async (requestId: string, expectedSeconds: number) => {
 			const rows = typedRows<EntryRow>(
@@ -203,6 +399,18 @@ export const mockAgenticLoop = actor({
 				type: "verified",
 				requestId,
 				...verifyEntryRows(rows, expectedSeconds),
+			};
+		};
+
+		const sleepStatus = async () => {
+			const [sleepState] = typedRows<SleepStateRow>(
+				await c.db.execute(
+					"SELECT sleep_started_at FROM mock_agentic_sleep_state WHERE id = 1",
+				),
+			);
+			return {
+				sleepStarted: sleepState !== undefined,
+				sleepStartedAt: sleepState?.sleep_started_at ?? null,
 			};
 		};
 
@@ -284,6 +492,7 @@ export const mockAgenticLoop = actor({
 						send(websocket, {
 							type: "pong",
 							probeId: stringValue(message.probeId, "probeId"),
+							...(await sleepStatus()),
 							timestamp: Date.now(),
 						});
 						return;
@@ -318,6 +527,14 @@ export const mockAgenticLoop = actor({
 							message.seconds,
 							"seconds",
 						);
+						await recordDebugEvent(c, {
+							name: "inferenceRequested",
+							connectionId,
+							requestId,
+							details: {
+								seconds,
+							},
+						});
 						const inference = runInference(
 							requestId,
 							seconds,
@@ -341,6 +558,14 @@ export const mockAgenticLoop = actor({
 					});
 				}
 			})();
+		});
+
+		websocket.addEventListener("close", () => {
+			removeDebugSocket();
+			void recordDebugEvent(c, {
+				name: "webSocketClose",
+				connectionId,
+			});
 		});
 	},
 	actions: {

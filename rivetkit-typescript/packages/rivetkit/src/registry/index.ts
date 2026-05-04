@@ -51,6 +51,22 @@ export class Registry<A extends RegistryActors> {
 		this.#config = config;
 	}
 
+	#ensureServerlessPoolConfigured(config: RegistryConfig): Promise<void> | undefined {
+		if (!config.configurePool) return undefined;
+
+		if (!this.#configureServerlessPoolPromise) {
+			this.#configureServerlessPoolPromise = configureServerlessPool(config).catch(
+				(error) => {
+					this.#configureServerlessPoolPromise = undefined;
+					throw error;
+				},
+			);
+			this.#configureServerlessPoolPromise.catch(() => {});
+		}
+
+		return this.#configureServerlessPoolPromise;
+	}
+
 	/**
 	 * Handle an incoming HTTP request for serverless deployments.
 	 *
@@ -65,17 +81,42 @@ export class Registry<A extends RegistryActors> {
 		const config = this.parseConfig();
 		this.#printWelcome(config, "serverless");
 
-		if (config.configurePool && !this.#configureServerlessPoolPromise) {
-			this.#configureServerlessPoolPromise =
-				configureServerlessPool(config);
-		}
-
 		if (!this.#runtimeServerlessPromise) {
 			this.#runtimeServerlessPromise = buildConfiguredRegistry(config);
 		}
 
 		const { runtime, registry, serveConfig } =
 			await this.#runtimeServerlessPromise;
+		const isStartRequest = isServerlessStartRequest(
+			request,
+			serveConfig.serverlessBasePath ?? "/api/rivet",
+		);
+		const isMetadataRequest = isServerlessMetadataRequest(
+			request,
+			serveConfig.serverlessBasePath ?? "/api/rivet",
+		);
+		const isEngineMetadataRequest =
+			request.headers.get("user-agent")?.startsWith("RivetEngine/") ?? false;
+
+		if (isStartRequest) {
+			try {
+				await this.#ensureServerlessPoolConfigured(config);
+			} catch (error) {
+				return new Response(
+					JSON.stringify({
+						group: "guard",
+						code: "service_unavailable",
+						message: "Serverless pool is not configured.",
+						metadata: null,
+					}),
+					{
+						status: 503,
+						headers: { "content-type": "application/json" },
+					},
+				);
+			}
+		}
+
 		const cancelToken = runtime.createCancellationToken();
 		const abort = () => runtime.cancelCancellationToken(cancelToken);
 		if (request.signal.aborted) {
@@ -86,10 +127,7 @@ export class Registry<A extends RegistryActors> {
 
 		const requestBody = await request.arrayBuffer();
 		if (
-			isServerlessStartRequest(
-				request,
-				serveConfig.serverlessBasePath ?? "/api/rivet",
-			) &&
+			isStartRequest &&
 			requestBody.byteLength > serveConfig.serverlessMaxStartPayloadBytes
 		) {
 			request.signal.removeEventListener("abort", abort);
@@ -200,6 +238,25 @@ export class Registry<A extends RegistryActors> {
 			request.signal.removeEventListener("abort", abort);
 			runtime.cancelCancellationToken(cancelToken);
 			throw err;
+		}
+
+		if (isMetadataRequest && !isEngineMetadataRequest) {
+			try {
+				await this.#ensureServerlessPoolConfigured(config);
+			} catch (error) {
+				return new Response(
+					JSON.stringify({
+						group: "guard",
+						code: "service_unavailable",
+						message: "Serverless pool is not configured.",
+						metadata: null,
+					}),
+					{
+						status: 503,
+						headers: { "content-type": "application/json" },
+					},
+				);
+			}
 		}
 
 		return new Response(stream, {
@@ -457,6 +514,14 @@ function isServerlessStartRequest(request: Request, basePath: string): boolean {
 	const normalizedBase =
 		basePath === "/" ? "" : `/${basePath.replace(/^\/+|\/+$/g, "")}`;
 	return parsed.pathname === `${normalizedBase}/start`;
+}
+
+function isServerlessMetadataRequest(request: Request, basePath: string): boolean {
+	if (request.method !== "GET") return false;
+	const parsed = new URL(request.url);
+	const normalizedBase =
+		basePath === "/" ? "" : `/${basePath.replace(/^\/+|\/+$/g, "")}`;
+	return parsed.pathname === `${normalizedBase}/metadata`;
 }
 
 export function setup<A extends RegistryActors>(

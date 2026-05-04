@@ -1,4 +1,5 @@
 import { createRivetKit } from "@rivetkit/react";
+import { createClient } from "rivetkit/client";
 import mermaid from "mermaid";
 import { Highlight, themes } from "prism-react-renderer";
 import {
@@ -79,7 +80,8 @@ function MermaidDiagram({ chart }: { chart: string }) {
 }
 
 const rivetEndpoint =
-	import.meta.env.VITE_RIVET_ENDPOINT ?? "http://localhost:6420";
+	import.meta.env.VITE_RIVET_ENDPOINT ??
+	`${globalThis.location.origin}/api/rivet`;
 
 const { useActor } = createRivetKit<typeof registry>(rivetEndpoint);
 
@@ -241,6 +243,9 @@ export function App() {
 function DemoPanel({ page }: { page: PageConfig }) {
 	if (page.demo === "diagram") {
 		return <DiagramPanel page={page} />;
+	}
+	if (page.demo === "mock-agentic-loop") {
+		return <MockAgenticLoopPanel page={page} />;
 	}
 	if (page.actors.length === 0) {
 		return <ConfigPlayground />;
@@ -762,6 +767,1106 @@ function ActionRunner({
 				{error && <div className="notice">{error}</div>}
 				{result && <pre className="action-result">{result}</pre>}
 			</div>
+		</div>
+	);
+}
+
+type AgenticEntry = {
+	request_id: string;
+	idx: number;
+	created_at: number;
+};
+
+type AgenticVerification = {
+	requestId: string;
+	expectedSeconds: number;
+	count: number;
+	contiguous?: boolean;
+	missing?: number[];
+	indexes: number[];
+	ok?: boolean;
+};
+
+type AgenticHistory = {
+	type: "history";
+	totalRows: number;
+	entries: AgenticEntry[];
+	timestamp: number;
+};
+
+type AgenticDebugEvent = {
+	type: "debugEvent";
+	eventId: string;
+	name: string;
+	actorId: string;
+	connectionId: string | null;
+	requestId: string | null;
+	details: Record<string, unknown>;
+	createdAt: number;
+	replayed: boolean;
+};
+
+type AgenticServerMessage =
+	| { type: "hello"; connectionId: string; timestamp: number }
+	| AgenticHistory
+	| AgenticDebugEvent
+	| {
+			type: "pong";
+			probeId: string;
+			sleepStarted: boolean;
+			sleepStartedAt: number | null;
+			timestamp: number;
+	  }
+	| { type: "started"; requestId: string; seconds: number; timestamp: number }
+	| {
+			type: "progress";
+			requestId: string;
+			idx: number;
+			seconds: number;
+			createdAt: number;
+	  }
+	| {
+			type: "done";
+			requestId: string;
+			seconds: number;
+			timestamp: number;
+			verification: AgenticVerification;
+	  }
+	| (AgenticVerification & { type: "verified" })
+	| { type: "error"; message: string; timestamp: number };
+
+type AgenticRequest = {
+	requestId: string;
+	seconds: number;
+};
+
+type AgenticHandle = {
+	resolve: () => Promise<string>;
+	webSocket: (
+		path?: string,
+		protocols?: string | string[],
+		options?: {
+			gateway?: { bypassConnectable?: boolean };
+		},
+	) => Promise<WebSocket>;
+	fetch: (
+		input: string,
+		init?: RequestInit & {
+			gateway?: { bypassConnectable?: boolean };
+		},
+	) => Promise<Response>;
+	verify: (
+		requestId: string,
+		expectedSeconds: number,
+	) => Promise<AgenticVerification>;
+	verifyAll: (expectedRequests: AgenticRequest[]) => Promise<{
+		type: "verifiedAll";
+		expectedRequests: number;
+		expectedTotalRows: number;
+		totalRows: number;
+		unexpectedRequestIds: string[];
+		requests: AgenticVerification[];
+		ok: boolean;
+	}>;
+};
+
+type ActiveAgenticRequest = {
+	requestId: string;
+	seconds: number;
+	expectedIdx: number;
+	received: number[];
+	lastProgressAt: number;
+	startedAt: number;
+};
+
+type AgenticLogEntry = {
+	id: string;
+	level: "ok" | "warn" | "error" | "info";
+	message: string;
+	time: string;
+};
+
+function randomAgenticKey() {
+	return `manual-agentic-${new Date().toISOString()}-${crypto.randomUUID()}`;
+}
+
+function nowTime() {
+	return new Date().toLocaleTimeString();
+}
+
+function appendEndpointPath(endpoint: string, path: string): URL {
+	const url = new URL(endpoint);
+	const prefix = url.pathname.replace(/\/$/, "");
+	url.pathname = `${prefix}${path}`;
+	url.search = "";
+	url.hash = "";
+	return url;
+}
+
+function waitForSocketOpen(socket: WebSocket, timeoutMs = 10_000) {
+	if (socket.readyState === WebSocket.OPEN) return Promise.resolve();
+
+	return new Promise<void>((resolve, reject) => {
+		const timeout = setTimeout(() => {
+			cleanup();
+			reject(new Error(`websocket open timed out after ${timeoutMs}ms`));
+		}, timeoutMs);
+		const cleanup = () => {
+			clearTimeout(timeout);
+			socket.removeEventListener("open", onOpen);
+			socket.removeEventListener("close", onClose);
+			socket.removeEventListener("error", onError);
+		};
+		const onOpen = () => {
+			cleanup();
+			resolve();
+		};
+		const onClose = (event: CloseEvent) => {
+			cleanup();
+			reject(
+				new Error(
+					`websocket closed before open code=${event.code} reason=${event.reason}`,
+				),
+			);
+		};
+		const onError = () => {
+			cleanup();
+			reject(new Error("websocket open error"));
+		};
+		socket.addEventListener("open", onOpen, { once: true });
+		socket.addEventListener("close", onClose, { once: true });
+		socket.addEventListener("error", onError, { once: true });
+	});
+}
+
+function validateAgenticRows(
+	entries: AgenticEntry[],
+	expectedRequests: AgenticRequest[],
+	activeRequest?: ActiveAgenticRequest | null,
+) {
+	const expectedByRequest = new Map(
+		expectedRequests.map((request) => [request.requestId, request.seconds]),
+	);
+	const rowsByRequest = new Map<string, AgenticEntry[]>();
+
+	for (const entry of entries) {
+		const rows = rowsByRequest.get(entry.request_id) ?? [];
+		rows.push(entry);
+		rowsByRequest.set(entry.request_id, rows);
+	}
+
+	const problems: string[] = [];
+	for (const request of expectedRequests) {
+		const rows = rowsByRequest.get(request.requestId) ?? [];
+		const indexes = rows.map((row) => row.idx);
+		const contiguous =
+			rows.length === request.seconds &&
+			indexes.every((idx, offset) => idx === offset + 1);
+		if (!contiguous) {
+			problems.push(
+				`${request.requestId.slice(0, 8)} expected ${request.seconds}, got [${indexes.join(", ")}]`,
+			);
+		}
+	}
+
+	if (activeRequest) {
+		const rows = rowsByRequest.get(activeRequest.requestId) ?? [];
+		const indexes = rows.map((row) => row.idx);
+		const contiguousPrefix = indexes.every(
+			(idx, offset) => idx === offset + 1,
+		);
+		if (rows.length > activeRequest.seconds || !contiguousPrefix) {
+			problems.push(
+				`${activeRequest.requestId.slice(0, 8)} active request expected partial 1-${activeRequest.seconds}, got [${indexes.join(", ")}]`,
+			);
+		}
+	}
+
+	for (const requestId of rowsByRequest.keys()) {
+		if (
+			!expectedByRequest.has(requestId) &&
+			requestId !== activeRequest?.requestId
+		) {
+			problems.push(`${requestId.slice(0, 8)} was not expected`);
+		}
+	}
+
+	return {
+		ok: problems.length === 0,
+		problems,
+			expectedRows: expectedRequests.reduce(
+				(total, request) => total + request.seconds,
+				0,
+			) + (activeRequest?.received.length ?? 0),
+		};
+	}
+
+function sleepStatusFromPayload(
+	source: string,
+	payload: { sleepStarted?: unknown; sleepStartedAt?: unknown },
+) {
+	if (typeof payload.sleepStarted !== "boolean") {
+		throw new Error(`${source} missing boolean sleepStarted`);
+	}
+	if (payload.sleepStarted && typeof payload.sleepStartedAt !== "number") {
+		throw new Error(`${source} missing numeric sleepStartedAt`);
+	}
+	if (!payload.sleepStarted && payload.sleepStartedAt !== null) {
+		throw new Error(`${source} expected null sleepStartedAt before sleep`);
+	}
+	return {
+		sleepStarted: payload.sleepStarted,
+		sleepStartedAt: payload.sleepStartedAt,
+	};
+}
+
+function formatDebugDetails(details: Record<string, unknown>) {
+	const entries = Object.entries(details).filter(
+		([, value]) => value !== undefined && value !== null,
+	);
+	if (entries.length === 0) return "";
+
+	return ` ${entries
+		.map(([key, value]) => `${key}=${String(value)}`)
+		.join(" ")}`;
+}
+
+function formatAgenticDebugEvent(event: AgenticDebugEvent) {
+	const actorTime = new Date(event.createdAt).toLocaleTimeString();
+	const lagMs = Date.now() - event.createdAt;
+	const connection = event.connectionId
+		? ` conn=${event.connectionId.slice(0, 8)}`
+		: "";
+	const request = event.requestId
+		? ` req=${event.requestId.slice(0, 8)}`
+		: "";
+	const replay = event.replayed ? " replay" : "";
+
+	return `actor${replay} ${event.name} at ${actorTime} lagMs=${lagMs}${connection}${request}${formatDebugDetails(event.details)}`;
+}
+
+function MockAgenticLoopPanel({ page }: { page: PageConfig }) {
+	const [endpoint, setEndpoint] = usePersistedState(
+		"kitchen-sink:mock-agentic-loop:endpoint",
+		rivetEndpoint,
+	);
+	const [namespace, setNamespace] = usePersistedState(
+		"kitchen-sink:mock-agentic-loop:namespace",
+		"default",
+	);
+	const [token, setToken] = usePersistedState(
+		"kitchen-sink:mock-agentic-loop:token",
+		"dev",
+	);
+	const [key, setKey] = useState(randomAgenticKey);
+	const [actorId, setActorId] = useState("");
+	const [connectionStatus, setConnectionStatus] = useState("idle");
+	const [seconds, setSeconds] = useState(16);
+	const [progressMarginMs, setProgressMarginMs] = useState(8_000);
+	const [currentRequest, setCurrentRequest] = useState<{
+		requestId: string;
+		seconds: number;
+		received: number[];
+	} | null>(null);
+	const [expectedRequests, setExpectedRequests] = useState<AgenticRequest[]>([]);
+	const [lastVerification, setLastVerification] = useState("No requests yet.");
+	const [lastHistory, setLastHistory] = useState("No history loaded yet.");
+	const [lastBypass, setLastBypass] = useState("No bypass requests yet.");
+	const [isConnecting, setIsConnecting] = useState(false);
+	const [isRunningInference, setIsRunningInference] = useState(false);
+	const [stats, setStats] = useState({
+		requests: 0,
+		expectedRows: 0,
+		actualRows: 0,
+		reconnects: 0,
+		maxReconnectMs: 0,
+		sleepPosts: 0,
+		sleepErrors: 0,
+		bypassHttpOk: 0,
+		bypassWsOk: 0,
+		actorStopping: 0,
+		sleepProofHttp: 0,
+		sleepProofWs: 0,
+		validationErrors: 0,
+	});
+	const [logs, setLogs] = useState<AgenticLogEntry[]>([]);
+
+	const handleRef = useRef<AgenticHandle | null>(null);
+	const socketRef = useRef<WebSocket | null>(null);
+	const expectedRequestsRef = useRef<AgenticRequest[]>([]);
+	const activeRequestRef = useRef<ActiveAgenticRequest | null>(null);
+	const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+	const progressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+	const reconnectStartedAtRef = useRef<number | null>(null);
+	const mainSocketCleanupRef = useRef<(() => void) | null>(null);
+	const closedByUserRef = useRef(false);
+
+	const addLog = useCallback(
+		(level: AgenticLogEntry["level"], message: string) => {
+			setLogs((prev) => [
+				{
+					id: crypto.randomUUID(),
+					level,
+					message,
+					time: nowTime(),
+				},
+				...prev.slice(0, 159),
+			]);
+		},
+		[],
+	);
+
+	const clearProgressTimer = useCallback(() => {
+		if (progressTimerRef.current) {
+			clearTimeout(progressTimerRef.current);
+			progressTimerRef.current = null;
+		}
+	}, []);
+
+	const markValidationError = useCallback((message: string) => {
+		setStats((prev) => ({
+			...prev,
+			validationErrors: prev.validationErrors + 1,
+		}));
+		setLastVerification(message);
+		addLog("error", message);
+	}, [addLog]);
+
+	const scheduleProgressTimeout = useCallback(() => {
+		clearProgressTimer();
+		const active = activeRequestRef.current;
+		if (!active) return;
+		const timeoutMs = 1_000 + progressMarginMs;
+		progressTimerRef.current = setTimeout(() => {
+			const latest = activeRequestRef.current;
+			if (!latest) return;
+			markValidationError(
+				`progress timeout for ${latest.requestId.slice(0, 8)} at idx=${latest.expectedIdx}`,
+			);
+		}, timeoutMs);
+	}, [clearProgressTimer, markValidationError, progressMarginMs]);
+
+	const resetSession = useCallback(() => {
+		closedByUserRef.current = true;
+		if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
+		clearProgressTimer();
+		mainSocketCleanupRef.current?.();
+		mainSocketCleanupRef.current = null;
+		socketRef.current?.close(1000, "new actor");
+		socketRef.current = null;
+		handleRef.current = null;
+		expectedRequestsRef.current = [];
+		activeRequestRef.current = null;
+		setKey(randomAgenticKey());
+		setActorId("");
+		setConnectionStatus("idle");
+		setCurrentRequest(null);
+		setExpectedRequests([]);
+		setIsRunningInference(false);
+		setLastVerification("No requests yet.");
+		setLastHistory("No history loaded yet.");
+		setLastBypass("No bypass requests yet.");
+		setStats({
+			requests: 0,
+			expectedRows: 0,
+			actualRows: 0,
+			reconnects: 0,
+			maxReconnectMs: 0,
+			sleepPosts: 0,
+			sleepErrors: 0,
+			bypassHttpOk: 0,
+			bypassWsOk: 0,
+			actorStopping: 0,
+			sleepProofHttp: 0,
+			sleepProofWs: 0,
+			validationErrors: 0,
+		});
+		setLogs([]);
+	}, [clearProgressTimer]);
+
+	const requestHistory = useCallback(() => {
+		if (socketRef.current?.readyState !== WebSocket.OPEN) return;
+		socketRef.current.send(JSON.stringify({ type: "history" }));
+		addLog("info", "history requested");
+	}, [addLog]);
+
+	const verifyAll = useCallback(async () => {
+		const handle = handleRef.current;
+		if (!handle) return;
+		const result = await handle.verifyAll(expectedRequestsRef.current);
+		if (!result.ok) {
+			markValidationError(`aggregate verification failed: ${formatJson(result)}`);
+			return;
+		}
+		setStats((prev) => ({
+			...prev,
+			actualRows: result.totalRows,
+			expectedRows: result.expectedTotalRows,
+		}));
+		addLog(
+			"ok",
+			`verified all requests=${result.expectedRequests} rows=${result.totalRows}`,
+		);
+	}, [addLog, markValidationError]);
+
+	const handleHistory = useCallback((message: AgenticHistory) => {
+		const validation = validateAgenticRows(
+			message.entries,
+			expectedRequestsRef.current,
+			activeRequestRef.current,
+		);
+		setStats((prev) => ({
+			...prev,
+			actualRows: message.totalRows,
+			expectedRows: validation.expectedRows,
+			validationErrors: validation.ok
+				? prev.validationErrors
+				: prev.validationErrors + 1,
+		}));
+		if (validation.ok) {
+			setLastHistory(
+				`history ok: rows=${message.totalRows}, expected=${validation.expectedRows}`,
+			);
+			addLog("ok", `history rows=${message.totalRows}`);
+		} else {
+			const text = `history mismatch: ${validation.problems.join("; ")}`;
+			setLastHistory(text);
+			addLog("error", text);
+		}
+	}, [addLog]);
+
+	const handleProgress = useCallback((message: Extract<AgenticServerMessage, { type: "progress" }>) => {
+		const active = activeRequestRef.current;
+		if (!active || active.requestId !== message.requestId) {
+			markValidationError(`unexpected progress for ${message.requestId.slice(0, 8)}`);
+			return;
+		}
+		const now = performance.now();
+		const gapMs = now - active.lastProgressAt;
+		if (message.idx !== active.expectedIdx) {
+			markValidationError(
+				`expected idx=${active.expectedIdx}, got idx=${message.idx}`,
+			);
+		}
+		active.received.push(message.idx);
+		active.expectedIdx += 1;
+		active.lastProgressAt = now;
+		setCurrentRequest({
+			requestId: active.requestId,
+			seconds: active.seconds,
+			received: [...active.received],
+		});
+		addLog(
+			"info",
+			`progress ${message.idx}/${message.seconds} gapMs=${gapMs.toFixed(0)}`,
+		);
+		scheduleProgressTimeout();
+	}, [addLog, markValidationError, scheduleProgressTimeout]);
+
+	const handleDone = useCallback(async (message: Extract<AgenticServerMessage, { type: "done" }>) => {
+		const active = activeRequestRef.current;
+		clearProgressTimer();
+		setIsRunningInference(false);
+		activeRequestRef.current = null;
+
+		if (!active || active.requestId !== message.requestId) {
+			markValidationError(`unexpected done for ${message.requestId.slice(0, 8)}`);
+			return;
+		}
+
+		const contiguous =
+			active.received.length === active.seconds &&
+			active.received.every((idx, offset) => idx === offset + 1);
+		if (!contiguous || !message.verification.ok) {
+			markValidationError(
+				`done verification failed: stream=[${active.received.join(", ")}], actor=${formatJson(message.verification)}`,
+			);
+			return;
+		}
+
+		const handle = handleRef.current;
+		if (handle) {
+			const explicit = await handle.verify(active.requestId, active.seconds);
+			const explicitOk =
+				explicit.count === active.seconds &&
+				explicit.indexes.every((idx, offset) => idx === offset + 1);
+			if (!explicitOk) {
+				markValidationError(
+					`action verification failed: ${formatJson(explicit)}`,
+				);
+				return;
+			}
+		}
+
+		const completed = {
+			requestId: active.requestId,
+			seconds: active.seconds,
+		};
+		expectedRequestsRef.current = [...expectedRequestsRef.current, completed];
+		setExpectedRequests(expectedRequestsRef.current);
+		setStats((prev) => ({
+			...prev,
+			requests: prev.requests + 1,
+			expectedRows: prev.expectedRows + active.seconds,
+		}));
+		setLastVerification(
+			`request ${active.requestId.slice(0, 8)} ok: ${active.seconds}/${active.seconds} rows`,
+		);
+		addLog(
+			"ok",
+			`done ${active.requestId.slice(0, 8)} rows=${active.seconds}`,
+		);
+		await verifyAll();
+		requestHistory();
+	}, [addLog, clearProgressTimer, markValidationError, requestHistory, verifyAll]);
+
+	const onSocketMessage = useCallback((event: MessageEvent) => {
+		if (typeof event.data !== "string") return;
+		const message = JSON.parse(event.data) as AgenticServerMessage;
+		if (message.type === "hello") {
+			addLog("ok", `main ws hello ${message.connectionId.slice(0, 8)}`);
+			return;
+		}
+		if (message.type === "history") {
+			handleHistory(message);
+			return;
+		}
+		if (message.type === "debugEvent") {
+			const level =
+				message.name === "onSleepStart" || message.name === "webSocketClose"
+					? "warn"
+					: "info";
+			addLog(level, formatAgenticDebugEvent(message));
+			return;
+		}
+		if (message.type === "started") {
+			addLog("ok", `started ${message.requestId.slice(0, 8)} seconds=${message.seconds}`);
+			return;
+		}
+		if (message.type === "progress") {
+			handleProgress(message);
+			return;
+		}
+		if (message.type === "done") {
+			void handleDone(message);
+			return;
+		}
+		if (message.type === "error") {
+			markValidationError(`actor error: ${message.message}`);
+		}
+	}, [addLog, handleDone, handleHistory, handleProgress, markValidationError]);
+
+	const connect = useCallback(async (countReconnect = false) => {
+		if (isConnecting) return;
+		setIsConnecting(true);
+		setConnectionStatus("connecting");
+		closedByUserRef.current = false;
+		const startedAt = performance.now();
+
+		try {
+			const client = createClient<typeof registry>({
+				endpoint,
+				namespace,
+				token,
+				encoding: "json",
+			});
+			const handle = client.mockAgenticLoop.getOrCreate([key]) as AgenticHandle;
+			handleRef.current = handle;
+			const resolvedActorId = await handle.resolve();
+			setActorId(resolvedActorId);
+
+			const socket = await handle.webSocket();
+			await waitForSocketOpen(socket);
+			socketRef.current = socket;
+			const onClose = (event: CloseEvent) => {
+				if (socketRef.current === socket) socketRef.current = null;
+				setConnectionStatus("closed");
+				const closedLocally = closedByUserRef.current;
+				addLog(
+					closedLocally ? "info" : "warn",
+					`${closedLocally ? "local" : "remote"} main ws close code=${event.code} reason=${event.reason}`,
+				);
+				if (!closedLocally) {
+					reconnectStartedAtRef.current = performance.now();
+					reconnectTimerRef.current = setTimeout(() => {
+						void connect(true);
+					}, 500);
+				}
+			};
+			const onError = () => {
+				addLog("error", "main ws error");
+			};
+			socket.addEventListener("message", onSocketMessage);
+			socket.addEventListener("close", onClose);
+			socket.addEventListener("error", onError);
+			mainSocketCleanupRef.current = () => {
+				socket.removeEventListener("message", onSocketMessage);
+				socket.removeEventListener("close", onClose);
+				socket.removeEventListener("error", onError);
+			};
+
+			const elapsedMs = performance.now() - startedAt;
+			setConnectionStatus("connected");
+			if (countReconnect || reconnectStartedAtRef.current !== null) {
+				const reconnectMs = reconnectStartedAtRef.current === null
+					? elapsedMs
+					: performance.now() - reconnectStartedAtRef.current;
+				reconnectStartedAtRef.current = null;
+				setStats((prev) => ({
+					...prev,
+					reconnects: prev.reconnects + 1,
+					maxReconnectMs: Math.max(prev.maxReconnectMs, reconnectMs),
+				}));
+				addLog("ok", `reconnected in ${reconnectMs.toFixed(0)}ms`);
+			} else {
+				addLog("ok", `connected actor=${resolvedActorId}`);
+			}
+			requestHistory();
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+			setConnectionStatus("error");
+			addLog("error", `connect failed: ${message}`);
+		} finally {
+			setIsConnecting(false);
+		}
+	}, [addLog, endpoint, isConnecting, key, namespace, onSocketMessage, requestHistory, token]);
+
+	const disconnect = useCallback(() => {
+		closedByUserRef.current = true;
+		if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
+		clearProgressTimer();
+		mainSocketCleanupRef.current?.();
+		mainSocketCleanupRef.current = null;
+		socketRef.current?.close(1000, "manual disconnect");
+		socketRef.current = null;
+		setConnectionStatus("closed");
+		addLog("warn", "main ws disconnected by client");
+	}, [addLog, clearProgressTimer]);
+
+	const runInference = useCallback(() => {
+		const socket = socketRef.current;
+		if (!socket || socket.readyState !== WebSocket.OPEN) {
+			addLog("error", "main websocket is not connected");
+			return;
+		}
+		if (activeRequestRef.current) {
+			addLog("warn", "inference already active");
+			return;
+		}
+		const safeSeconds = Math.max(1, Math.floor(seconds));
+		const requestId = crypto.randomUUID();
+		activeRequestRef.current = {
+			requestId,
+			seconds: safeSeconds,
+			expectedIdx: 1,
+			received: [],
+			lastProgressAt: performance.now(),
+			startedAt: performance.now(),
+		};
+		setCurrentRequest({ requestId, seconds: safeSeconds, received: [] });
+		setIsRunningInference(true);
+		socket.send(JSON.stringify({ type: "infer", requestId, seconds: safeSeconds }));
+		addLog("info", `infer ${requestId.slice(0, 8)} seconds=${safeSeconds}`);
+		scheduleProgressTimeout();
+	}, [addLog, scheduleProgressTimeout, seconds]);
+
+	const forceSleep = useCallback(async () => {
+		if (!actorId) {
+			addLog("error", "resolve an actor before forcing sleep");
+			return;
+		}
+		const url = appendEndpointPath(
+			endpoint,
+			`/actors/${encodeURIComponent(actorId)}/sleep`,
+		);
+		url.searchParams.set("namespace", namespace);
+		setStats((prev) => ({ ...prev, sleepPosts: prev.sleepPosts + 1 }));
+		addLog("warn", "sleep post sent");
+		try {
+			const response = await fetch(url, {
+				method: "POST",
+				headers: {
+					Authorization: token ? `Bearer ${token}` : "",
+					"content-type": "application/json",
+				},
+				body: "{}",
+			});
+			const text = await response.text();
+			if (!response.ok) {
+				setStats((prev) => ({ ...prev, sleepErrors: prev.sleepErrors + 1 }));
+				addLog("error", `sleep ${response.status}: ${text}`);
+				return;
+			}
+			addLog("ok", `sleep ${response.status}`);
+		} catch (error) {
+			setStats((prev) => ({ ...prev, sleepErrors: prev.sleepErrors + 1 }));
+			addLog("error", `sleep failed: ${error instanceof Error ? error.message : String(error)}`);
+		}
+	}, [actorId, addLog, endpoint, namespace, token]);
+
+	const noteActorStopping = useCallback((label: string, status: number, text: string) => {
+		setStats((prev) => ({ ...prev, actorStopping: prev.actorStopping + 1 }));
+		setLastBypass(`${label}: actor.stopping (${status})`);
+		addLog("warn", `${label} actor.stopping ${text}`);
+	}, [addLog]);
+
+	const testHttpBypass = useCallback(async () => {
+		const handle = handleRef.current;
+		if (!handle) {
+			addLog("error", "connect before testing bypass");
+			return;
+		}
+		try {
+			const response = await handle.fetch("/bypass", {
+				gateway: { bypassConnectable: true },
+			});
+			const text = await response.text();
+			if (!response.ok) {
+				if (text.includes('"code":"stopping"')) {
+					noteActorStopping("http bypass", response.status, text);
+					return;
+				}
+				setLastBypass(`http bypass failed ${response.status}: ${text}`);
+				addLog("error", `http bypass ${response.status}: ${text}`);
+				return;
+			}
+			const payload = JSON.parse(text) as {
+				type?: string;
+				transport?: string;
+				sleepStarted?: unknown;
+				sleepStartedAt?: unknown;
+			};
+			const sleepStatus = sleepStatusFromPayload("http bypass", payload);
+			if (payload.type !== "bypass" || payload.transport !== "http") {
+				throw new Error(`unexpected body ${text}`);
+			}
+			setStats((prev) => ({
+				...prev,
+				bypassHttpOk: prev.bypassHttpOk + 1,
+				sleepProofHttp:
+					prev.sleepProofHttp + (sleepStatus.sleepStarted ? 1 : 0),
+			}));
+			setLastBypass(
+				`http bypass ok: sleepStarted=${sleepStatus.sleepStarted}`,
+			);
+			addLog("ok", `http bypass sleepStarted=${sleepStatus.sleepStarted}`);
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+			setLastBypass(`http bypass error: ${message}`);
+			addLog("error", `http bypass error: ${message}`);
+		}
+	}, [addLog, noteActorStopping]);
+
+	const testWebSocketBypass = useCallback(async () => {
+		const handle = handleRef.current;
+		if (!handle) {
+			addLog("error", "connect before testing bypass");
+			return;
+		}
+		const probeId = crypto.randomUUID();
+		let socket: WebSocket | null = null;
+		try {
+			socket = await handle.webSocket("/bypass", undefined, {
+				gateway: { bypassConnectable: true },
+			});
+			await waitForSocketOpen(socket);
+			const result = await new Promise<Extract<AgenticServerMessage, { type: "pong" }>>(
+				(resolve, reject) => {
+					const timeout = setTimeout(() => {
+						cleanup();
+						reject(new Error("timed out waiting for bypass pong"));
+					}, 10_000);
+					const cleanup = () => {
+						clearTimeout(timeout);
+						socket?.removeEventListener("message", onMessage);
+						socket?.removeEventListener("close", onClose);
+						socket?.removeEventListener("error", onError);
+					};
+					const onMessage = (event: MessageEvent) => {
+						if (typeof event.data !== "string") return;
+						const message = JSON.parse(event.data) as AgenticServerMessage;
+						if (message.type !== "pong" || message.probeId !== probeId) return;
+						cleanup();
+						resolve(message);
+					};
+					const onClose = (event: CloseEvent) => {
+						cleanup();
+						reject(
+							new Error(`closed code=${event.code} reason=${event.reason}`),
+						);
+					};
+					const onError = () => {
+						cleanup();
+						reject(new Error("websocket error"));
+					};
+					socket?.addEventListener("message", onMessage);
+					socket?.addEventListener("close", onClose, { once: true });
+					socket?.addEventListener("error", onError, { once: true });
+					socket?.send(JSON.stringify({ type: "ping", probeId }));
+				},
+			);
+			const sleepStatus = sleepStatusFromPayload("ws bypass", result);
+			setStats((prev) => ({
+				...prev,
+				bypassWsOk: prev.bypassWsOk + 1,
+				sleepProofWs: prev.sleepProofWs + (sleepStatus.sleepStarted ? 1 : 0),
+			}));
+			setLastBypass(`ws bypass ok: sleepStarted=${sleepStatus.sleepStarted}`);
+			addLog("ok", `ws bypass sleepStarted=${sleepStatus.sleepStarted}`);
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+			if (message.includes("actor.stopping") || message.includes("Server Error")) {
+				setStats((prev) => ({ ...prev, actorStopping: prev.actorStopping + 1 }));
+				setLastBypass(`ws bypass transient close: ${message}`);
+				addLog("warn", `ws bypass transient close: ${message}`);
+			} else {
+				setLastBypass(`ws bypass error: ${message}`);
+				addLog("error", `ws bypass error: ${message}`);
+			}
+		} finally {
+			if (
+				socket &&
+				(socket.readyState === WebSocket.OPEN ||
+					socket.readyState === WebSocket.CONNECTING)
+			) {
+				socket.close(1000, "bypass probe complete");
+			}
+		}
+	}, [addLog]);
+
+	useEffect(() => {
+		return () => {
+			if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
+			clearProgressTimer();
+			mainSocketCleanupRef.current?.();
+			mainSocketCleanupRef.current = null;
+		};
+	}, [clearProgressTimer]);
+
+	const currentIndexes = currentRequest?.received ?? [];
+	const invariantStatus =
+		stats.validationErrors === 0 ? "pass" : "fail";
+
+	return (
+		<div className="agentic-lab">
+			<section className="agentic-panel">
+				<div className="agentic-panel-header">
+					<div>
+						<h3 className="card-title">Mock Agentic Loop</h3>
+						<p className="card-subtitle">
+							Use one raw WebSocket stream, explicit actions, manual sleep, and
+							gateway bypass calls against the same actor.
+						</p>
+					</div>
+					<div className={`agentic-status ${connectionStatus}`}>
+						{connectionStatus}
+					</div>
+				</div>
+
+				<div className="agentic-grid">
+					<div className="form-row">
+						<label htmlFor="agentic-endpoint">Endpoint</label>
+						<input
+							id="agentic-endpoint"
+							value={endpoint}
+							onChange={(event) => setEndpoint(event.target.value)}
+						/>
+					</div>
+					<div className="form-row">
+						<label htmlFor="agentic-namespace">Namespace</label>
+						<input
+							id="agentic-namespace"
+							value={namespace}
+							onChange={(event) => setNamespace(event.target.value)}
+						/>
+					</div>
+					<div className="form-row">
+						<label htmlFor="agentic-token">Token</label>
+						<input
+							id="agentic-token"
+							value={token}
+							onChange={(event) => setToken(event.target.value)}
+						/>
+					</div>
+				</div>
+
+				<div className="agentic-session-row">
+					<div>
+						<div className="agentic-kicker">Key</div>
+						<div className="agentic-mono">{key}</div>
+					</div>
+					<div>
+						<div className="agentic-kicker">Actor ID</div>
+						<div className="agentic-mono">{actorId || "not resolved"}</div>
+					</div>
+				</div>
+
+				<div className="button-row">
+					<button className="primary" onClick={() => void connect()} disabled={isConnecting} type="button">
+						{isConnecting ? "Connecting..." : "Connect"}
+					</button>
+					<button className="secondary" onClick={disconnect} type="button">
+						Disconnect
+					</button>
+					<button className="ghost" onClick={resetSession} type="button">
+						New Actor
+					</button>
+				</div>
+			</section>
+
+			<section className="agentic-panel">
+				<div className="agentic-panel-header">
+					<h3 className="card-title">Inference</h3>
+					<div className={`agentic-status ${invariantStatus}`}>
+						{stats.validationErrors === 0 ? "valid" : "invalid"}
+					</div>
+				</div>
+				<div className="agentic-grid compact">
+					<div className="form-row">
+						<label htmlFor="agentic-seconds">Seconds</label>
+						<input
+							id="agentic-seconds"
+							type="number"
+							min={1}
+							max={120}
+							value={seconds}
+							onChange={(event) => setSeconds(Number(event.target.value))}
+						/>
+					</div>
+					<div className="form-row">
+						<label htmlFor="agentic-margin">Progress Margin Ms</label>
+						<input
+							id="agentic-margin"
+							type="number"
+							min={0}
+							value={progressMarginMs}
+							onChange={(event) => setProgressMarginMs(Number(event.target.value))}
+						/>
+					</div>
+				</div>
+				<div className="button-row">
+					<button
+						className="primary"
+						onClick={runInference}
+						disabled={isRunningInference || connectionStatus !== "connected"}
+						type="button"
+					>
+						Run Inference
+					</button>
+					<button className="secondary" onClick={requestHistory} disabled={connectionStatus !== "connected"} type="button">
+						Request History
+					</button>
+				</div>
+				<div className="agentic-stream">
+					{currentRequest ? (
+						<>
+							<div className="agentic-mono">
+								{currentRequest.requestId.slice(0, 8)} received{" "}
+								{currentIndexes.length}/{currentRequest.seconds}
+							</div>
+							<div className="agentic-indexes">
+								{Array.from({ length: currentRequest.seconds }, (_, index) => {
+									const idx = index + 1;
+									const received = currentIndexes.includes(idx);
+									return (
+										<span
+											key={idx}
+											className={`agentic-index ${received ? "received" : ""}`}
+										>
+											{idx}
+										</span>
+									);
+								})}
+							</div>
+						</>
+					) : (
+						<div className="agentic-empty">No active inference.</div>
+					)}
+				</div>
+			</section>
+
+			<section className="agentic-panel">
+				<div className="agentic-panel-header">
+					<h3 className="card-title">Sleep and Bypass</h3>
+				</div>
+				<div className="button-row">
+					<button className="primary" onClick={() => void forceSleep()} disabled={!actorId} type="button">
+						Force Sleep
+					</button>
+					<button className="secondary" onClick={() => void testHttpBypass()} disabled={!handleRef.current} type="button">
+						Test HTTP Bypass
+					</button>
+					<button className="secondary" onClick={() => void testWebSocketBypass()} disabled={!handleRef.current} type="button">
+						Test WS Bypass
+					</button>
+				</div>
+				<div className="agentic-result">{lastBypass}</div>
+			</section>
+
+			<section className="agentic-panel">
+				<div className="agentic-panel-header">
+					<h3 className="card-title">Event Log</h3>
+					<button className="ghost" onClick={() => setLogs([])} type="button">
+						Clear
+					</button>
+				</div>
+				<div className="agentic-log">
+					{logs.length === 0 ? (
+						<div className="agentic-empty">No activity yet.</div>
+					) : (
+						logs.map((entry) => (
+							<div className={`agentic-log-row ${entry.level}`} key={entry.id}>
+								<span>{entry.time}</span>
+								<span>{entry.message}</span>
+							</div>
+						))
+					)}
+				</div>
+			</section>
+
+			<section className="agentic-panel">
+				<div className="agentic-panel-header">
+					<h3 className="card-title">Validation</h3>
+				</div>
+				<div className="agentic-stat-grid">
+					<AgenticStat label="Requests" value={stats.requests} />
+					<AgenticStat label="Rows" value={`${stats.actualRows}/${stats.expectedRows}`} />
+					<AgenticStat label="Reconnects" value={stats.reconnects} />
+					<AgenticStat label="Max Reconnect" value={`${stats.maxReconnectMs.toFixed(0)}ms`} />
+					<AgenticStat label="Sleep Posts" value={stats.sleepPosts} />
+					<AgenticStat label="Sleep Errors" value={stats.sleepErrors} />
+					<AgenticStat label="HTTP Bypass" value={stats.bypassHttpOk} />
+					<AgenticStat label="WS Bypass" value={stats.bypassWsOk} />
+					<AgenticStat label="Stopping" value={stats.actorStopping} />
+					<AgenticStat label="HTTP Proof" value={stats.sleepProofHttp} />
+					<AgenticStat label="WS Proof" value={stats.sleepProofWs} />
+					<AgenticStat label="Validation Errors" value={stats.validationErrors} />
+				</div>
+				<div className="agentic-result">{lastVerification}</div>
+				<div className="agentic-result">{lastHistory}</div>
+			</section>
+
+			<div className="demo-code-bottom">
+				<div className="demo-code-label">
+					<span className="section-label">Source</span>
+				</div>
+				<CodeBlock code={page.snippet} />
+			</div>
+		</div>
+	);
+}
+
+function AgenticStat({
+	label,
+	value,
+}: {
+	label: string;
+	value: string | number;
+}) {
+	return (
+		<div className="agentic-stat">
+			<span>{label}</span>
+			<strong>{value}</strong>
 		</div>
 	);
 }
