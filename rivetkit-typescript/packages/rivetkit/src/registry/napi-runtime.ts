@@ -414,11 +414,16 @@ export class NapiCoreRuntime implements CoreRuntime {
 		asNativeActorContext(ctx).waitUntil(promise);
 	}
 
-	async actorKeepAwake(
-		ctx: ActorContextHandle,
-		promise: Promise<unknown>,
-	): Promise<unknown> {
-		return await asNativeActorContext(ctx).keepAwake(promise);
+	actorKeepAwake(ctx: ActorContextHandle, promise: Promise<unknown>): void {
+		asNativeActorContext(ctx).keepAwake(promise);
+	}
+
+	actorBeginKeepAwake(ctx: ActorContextHandle): number {
+		return asNativeActorContext(ctx).beginKeepAwake();
+	}
+
+	actorEndKeepAwake(ctx: ActorContextHandle, regionId: number): void {
+		asNativeActorContext(ctx).endKeepAwake(regionId);
 	}
 
 	actorRegisterTask(

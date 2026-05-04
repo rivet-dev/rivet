@@ -5,6 +5,10 @@ import { RAW_WS_HANDLER_DELAY, RAW_WS_HANDLER_SLEEP_TIMEOUT } from "./sleep";
 
 export const SLEEP_DB_TIMEOUT = 1000;
 export const SLEEP_SCHEDULE_AFTER_ON_SLEEP_DELAY_MS = 3000;
+export const KEEP_AWAKE_GRACE_PERIOD = 2_000;
+export const KEEP_AWAKE_SINGLE_WORK_MS = 300;
+export const KEEP_AWAKE_NESTED_FIRST_MS = 100;
+export const KEEP_AWAKE_NESTED_SECOND_MS = 350;
 
 export const sleepWithDb = actor({
 	state: {
@@ -142,6 +146,105 @@ export const sleepWithSlowScheduledDb = actor({
 	},
 	options: {
 		sleepTimeout: SLEEP_DB_TIMEOUT,
+	},
+});
+
+function sleep(ms: number): Promise<void> {
+	return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+export const sleepKeepAwakeUntilIdle = actor({
+	state: {
+		startCount: 0,
+		sleepCount: 0,
+		singleFinished: 0,
+		nestedFirstFinished: 0,
+		nestedSecondFinished: 0,
+	},
+	db: db({
+		onMigrate: async (database) => {
+			await database.execute(`
+				CREATE TABLE IF NOT EXISTS sleep_log (
+					id INTEGER PRIMARY KEY AUTOINCREMENT,
+					event TEXT NOT NULL,
+					created_at INTEGER NOT NULL
+				)
+			`);
+		},
+	}),
+	onWake: async (c) => {
+		c.state.startCount += 1;
+		await c.db.execute(
+			`INSERT INTO sleep_log (event, created_at) VALUES ('wake-${c.state.startCount}', ${Date.now()})`,
+		);
+	},
+	onSleep: async (c) => {
+		c.state.sleepCount += 1;
+		await c.db.execute(
+			`INSERT INTO sleep_log (event, created_at) VALUES ('sleep-${c.state.sleepCount}', ${Date.now()})`,
+		);
+	},
+	actions: {
+		startSingleKeepAwake: (c) => {
+			c.keepAwake(
+				(async () => {
+					await c.db.execute(
+						`INSERT INTO sleep_log (event, created_at) VALUES ('single-start', ${Date.now()})`,
+					);
+					await sleep(KEEP_AWAKE_SINGLE_WORK_MS);
+					await c.db.execute(
+						`INSERT INTO sleep_log (event, created_at) VALUES ('single-finish', ${Date.now()})`,
+					);
+					c.state.singleFinished += 1;
+				})(),
+			);
+		},
+		startNestedKeepAwake: (c) => {
+			c.keepAwake(
+				(async () => {
+					await c.db.execute(
+						`INSERT INTO sleep_log (event, created_at) VALUES ('nested-first-start', ${Date.now()})`,
+					);
+					await sleep(KEEP_AWAKE_NESTED_FIRST_MS);
+					const second = (async () => {
+						await c.db.execute(
+							`INSERT INTO sleep_log (event, created_at) VALUES ('nested-second-start', ${Date.now()})`,
+						);
+						await sleep(KEEP_AWAKE_NESTED_SECOND_MS);
+						await c.db.execute(
+							`INSERT INTO sleep_log (event, created_at) VALUES ('nested-second-finish', ${Date.now()})`,
+						);
+						c.state.nestedSecondFinished += 1;
+					})();
+					c.keepAwake(second);
+					await c.db.execute(
+						`INSERT INTO sleep_log (event, created_at) VALUES ('nested-first-finish', ${Date.now()})`,
+					);
+					c.state.nestedFirstFinished += 1;
+				})(),
+			);
+		},
+		triggerSleep: (c) => {
+			c.sleep();
+		},
+		getStatus: (c) => ({
+			startCount: c.state.startCount,
+			sleepCount: c.state.sleepCount,
+			singleFinished: c.state.singleFinished,
+			nestedFirstFinished: c.state.nestedFirstFinished,
+			nestedSecondFinished: c.state.nestedSecondFinished,
+		}),
+		getLogEntries: async (c) => {
+			return await c.db.execute<{
+				id: number;
+				event: string;
+				created_at: number;
+			}>(`SELECT * FROM sleep_log ORDER BY id`);
+		},
+	},
+	options: {
+		sleepTimeout: SLEEP_DB_TIMEOUT,
+		sleepGracePeriod: KEEP_AWAKE_GRACE_PERIOD,
 	},
 });
 

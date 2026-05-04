@@ -126,6 +126,7 @@ import {
 	sleepWaitUntilState,
 	sleepWithRawWs,
 	sleepWsActiveDbExceedsGrace,
+	sleepKeepAwakeUntilIdle,
 } from "./sleep-db";
 import { saveStateActor, saveStateObserver } from "./save-state";
 import { lifecycleObserver, startStopRaceActor } from "./start-stop-race";
@@ -221,6 +222,7 @@ export const registry = setup({
 		sleepWsMessageExceedsGrace,
 		sleepWsConcurrentDbExceedsGrace,
 		sleepWsActiveDbExceedsGrace,
+		sleepKeepAwakeUntilIdle,
 		saveStateActor,
 		saveStateObserver,
 		// From error-handling.ts

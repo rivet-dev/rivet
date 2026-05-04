@@ -499,15 +499,23 @@ export class WasmCoreRuntime implements CoreRuntime {
 		callHandle(asWasmActorContext(ctx), "waitUntil", promise);
 	}
 
-	async actorKeepAwake(
-		ctx: ActorContextHandle,
-		promise: Promise<unknown>,
-	): Promise<unknown> {
-		return await callHandleAsync(
-			asWasmActorContext(ctx),
-			"keepAwake",
-			promise,
-		);
+	actorKeepAwake(ctx: ActorContextHandle, promise: Promise<unknown>): void {
+		const wasmCtx = asWasmActorContext(ctx);
+		const regionId = callHandle<number>(wasmCtx, "beginKeepAwake");
+		const trackedPromise = Promise.resolve(promise)
+			.finally(() => {
+				callHandle(wasmCtx, "endKeepAwake", regionId);
+			})
+			.then(() => null);
+		callHandle(wasmCtx, "registerTask", trackedPromise);
+	}
+
+	actorBeginKeepAwake(ctx: ActorContextHandle): number {
+		return callHandle<number>(asWasmActorContext(ctx), "beginKeepAwake");
+	}
+
+	actorEndKeepAwake(ctx: ActorContextHandle, regionId: number): void {
+		callHandle(asWasmActorContext(ctx), "endKeepAwake", regionId);
 	}
 
 	actorRegisterTask(

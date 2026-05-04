@@ -19,7 +19,7 @@ use parking_lot::Mutex;
 use rivetkit_core::types::ActorKeySegment;
 use rivetkit_core::{
 	ActorContext as CoreActorContext, ConnHandle as CoreConnHandle, Request as CoreRequest,
-	RequestSaveOpts, StateDelta, WebSocketCallbackRegion,
+	KeepAwakeRegion, RequestSaveOpts, StateDelta, WebSocketCallbackRegion,
 };
 use scc::HashMap as SccHashMap;
 use tokio::sync::mpsc::UnboundedSender;
@@ -59,7 +59,9 @@ struct ActorContextShared {
 	task_sender: Mutex<Option<UnboundedSender<RegisteredTask>>>,
 	runtime_state: Mutex<Option<Ref<()>>>,
 	end_reason: Mutex<Option<EndReason>>,
+	keep_awake_regions: Mutex<BTreeMap<u32, KeepAwakeRegion>>,
 	websocket_callback_regions: Mutex<BTreeMap<u32, WebSocketCallbackRegion>>,
+	next_keep_awake_region_id: AtomicU32,
 	next_websocket_callback_region_id: AtomicU32,
 }
 
@@ -465,6 +467,28 @@ impl ActorContext {
 	}
 
 	#[napi]
+	pub fn begin_keep_awake(&self) -> u32 {
+		self.shared.begin_keep_awake(self.inner.keep_awake_region())
+	}
+
+	#[napi]
+	pub fn end_keep_awake(&self, region_id: u32) {
+		self.shared.end_keep_awake(region_id);
+	}
+
+	#[napi]
+	pub fn keep_awake(&self, promise: Promise<serde_json::Value>) -> napi::Result<()> {
+		let region = self.inner.keep_awake_region();
+		self.inner.wait_until(async move {
+			let _region = region;
+			if let Err(error) = promise.await {
+				tracing::warn!(?error, "actor keep_awake promise rejected");
+			}
+		});
+		Ok(())
+	}
+
+	#[napi]
 	pub fn begin_websocket_callback(&self) -> u32 {
 		self.shared
 			.begin_websocket_callback(self.inner.websocket_callback_region())
@@ -584,14 +608,6 @@ impl ActorContext {
 	}
 
 	#[napi]
-	pub async fn keep_awake(
-		&self,
-		promise: Promise<serde_json::Value>,
-	) -> napi::Result<serde_json::Value> {
-		self.inner.keep_awake(promise).await
-	}
-
-	#[napi]
 	pub fn register_task(&self, promise: Promise<serde_json::Value>) -> napi::Result<()> {
 		self.shared
 			.register_task(Box::pin(async move {
@@ -708,6 +724,19 @@ impl ActorContextShared {
 		id
 	}
 
+	fn begin_keep_awake(&self, region: KeepAwakeRegion) -> u32 {
+		let id = self
+			.next_keep_awake_region_id
+			.fetch_add(1, Ordering::SeqCst)
+			.wrapping_add(1);
+		self.keep_awake_regions.lock().insert(id, region);
+		id
+	}
+
+	fn end_keep_awake(&self, region_id: u32) {
+		self.keep_awake_regions.lock().remove(&region_id);
+	}
+
 	fn end_websocket_callback(&self, region_id: u32) {
 		self.websocket_callback_regions.lock().remove(&region_id);
 	}
@@ -734,7 +763,9 @@ impl ActorContextShared {
 			std::mem::forget(old);
 		}
 		*self.end_reason.lock() = None;
+		*self.keep_awake_regions.lock() = BTreeMap::new();
 		*self.websocket_callback_regions.lock() = BTreeMap::new();
+		self.next_keep_awake_region_id.store(0, Ordering::SeqCst);
 		self.next_websocket_callback_region_id
 			.store(0, Ordering::SeqCst);
 	}

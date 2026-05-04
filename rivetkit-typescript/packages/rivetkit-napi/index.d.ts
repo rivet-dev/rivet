@@ -228,6 +228,9 @@ export declare class ActorContext {
   aborted(): boolean
   runHandlerActive(): boolean
   restartRunHandler(): void
+  beginKeepAwake(): number
+  endKeepAwake(regionId: number): void
+  keepAwake(promise: Promise<any>): void
   beginWebsocketCallback(): number
   endWebsocketCallback(regionId: number): void
   abortSignal(): AbortSignal
@@ -237,7 +240,6 @@ export declare class ActorContext {
   disconnectConns(predicate: (...args: any[]) => any): Promise<void>
   broadcast(name: string, args: Buffer): void
   waitUntil(promise: Promise<any>): void
-  keepAwake(promise: Promise<any>): Promise<any>
   registerTask(promise: Promise<any>): void
   runtimeState(): object
   clearRuntimeState(): void

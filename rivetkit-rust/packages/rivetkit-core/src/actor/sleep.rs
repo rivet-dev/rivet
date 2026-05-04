@@ -433,7 +433,7 @@ impl ActorContext {
 		}
 	}
 
-	pub(crate) fn keep_awake_region(&self) -> RegionGuard {
+	pub(crate) fn keep_awake_region_state(&self) -> RegionGuard {
 		self.0.sleep.work.keep_awake_guard()
 	}
 

@@ -16,7 +16,7 @@ use rivetkit_core::{
 	EnqueueAndWaitOpts, ListOpts, QueueMessage, QueueNextBatchOpts, QueueSendResult,
 	QueueSendStatus, QueueTryNextBatchOpts, QueueWaitOpts, Request, RequestSaveOpts, Response,
 	RuntimeSpawner, SerializeStateReason, ServeConfig, ServerlessRequest, StateDelta, WebSocket,
-	WebSocketCallbackRegion, WsMessage,
+	KeepAwakeRegion, WebSocketCallbackRegion, WsMessage,
 };
 use scc::HashMap as SccHashMap;
 use tokio::sync::oneshot;
@@ -1058,7 +1058,9 @@ pub struct WasmActorContext {
 	inner: rivetkit_core::ActorContext,
 	callbacks: WasmCallbacks,
 	runtime_state: JsValue,
+	keep_awake_regions: Rc<RefCell<HashMap<u32, KeepAwakeRegion>>>,
 	websocket_callback_regions: Rc<RefCell<HashMap<u32, WebSocketCallbackRegion>>>,
+	next_keep_awake_region_id: Rc<Cell<u32>>,
 	next_websocket_callback_region_id: Rc<Cell<u32>>,
 }
 
@@ -1068,7 +1070,9 @@ impl WasmActorContext {
 			inner,
 			callbacks,
 			runtime_state: Object::new().into(),
+			keep_awake_regions: Rc::new(RefCell::new(HashMap::new())),
 			websocket_callback_regions: Rc::new(RefCell::new(HashMap::new())),
+			next_keep_awake_region_id: Rc::new(Cell::new(0)),
 			next_websocket_callback_region_id: Rc::new(Cell::new(0)),
 		}
 	}
@@ -1119,6 +1123,20 @@ impl WasmActorContext {
 		WasmSqliteDb {
 			inner: self.inner.sql().clone(),
 		}
+	}
+
+	fn allocate_keep_awake_region_id(
+		&self,
+		regions: &HashMap<u32, KeepAwakeRegion>,
+	) -> Option<u32> {
+		for _ in 0..=u32::MAX {
+			let next = self.next_keep_awake_region_id.get().wrapping_add(1);
+			self.next_keep_awake_region_id.set(next);
+			if next != 0 && !regions.contains_key(&next) {
+				return Some(next);
+			}
+		}
+		None
 	}
 
 	#[wasm_bindgen]
@@ -1359,11 +1377,8 @@ impl WasmActorContext {
 	}
 
 	#[wasm_bindgen(js_name = keepAwake)]
-	pub async fn keep_awake(&self, promise: Promise) -> Result<JsValue, JsValue> {
-		self.inner
-			.keep_awake(JsFuture::from(promise))
-			.await
-			.map_err(|error| error)
+	pub fn keep_awake(&self, _promise: Promise) {
+		console_error("keepAwake binding is deprecated; use beginKeepAwake/endKeepAwake");
 	}
 
 	#[wasm_bindgen(js_name = registerTask)]
@@ -1382,6 +1397,25 @@ impl WasmActorContext {
 	#[wasm_bindgen(js_name = restartRunHandler)]
 	pub fn restart_run_handler(&self) {
 		start_run_handler(&self.callbacks, self);
+	}
+
+	#[wasm_bindgen(js_name = beginKeepAwake)]
+	pub fn begin_keep_awake(&self) -> u32 {
+		let mut regions = self.keep_awake_regions.borrow_mut();
+		let Some(region_id) = self.allocate_keep_awake_region_id(&regions) else {
+			console_error("failed to begin keep-awake region: no region ids available");
+			return 0;
+		};
+		regions.insert(region_id, self.inner.keep_awake_region());
+		region_id
+	}
+
+	#[wasm_bindgen(js_name = endKeepAwake)]
+	pub fn end_keep_awake(&self, region_id: u32) {
+		if region_id == 0 {
+			return;
+		}
+		self.keep_awake_regions.borrow_mut().remove(&region_id);
 	}
 
 	#[wasm_bindgen(js_name = beginWebsocketCallback)]

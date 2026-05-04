@@ -2,6 +2,9 @@ import { describe, expect, test, vi } from "vitest";
 import {
 	EXCEEDS_GRACE_HANDLER_DELAY,
 	EXCEEDS_GRACE_SLEEP_TIMEOUT,
+	KEEP_AWAKE_NESTED_FIRST_MS,
+	KEEP_AWAKE_NESTED_SECOND_MS,
+	KEEP_AWAKE_SINGLE_WORK_MS,
 	SLEEP_DB_TIMEOUT,
 	SLEEP_SCHEDULE_AFTER_ON_SLEEP_DELAY_MS,
 } from "../../fixtures/driver-test-suite/sleep-db";
@@ -553,6 +556,70 @@ describeDriverMatrix("Actor Sleep Db", (driverTestConfig) => {
 			const finalCounts = await actor.getCounts();
 			expect(finalCounts.startCount).toBe(2);
 			expect(finalCounts.scheduledActionCount).toBe(1);
+		});
+
+		test("keepAwake delays automatic sleep until it finishes", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+
+			const actor = client.sleepKeepAwakeUntilIdle.getOrCreate([
+				`single-${crypto.randomUUID()}`,
+			]);
+
+			await actor.startSingleKeepAwake();
+
+			await waitFor(
+				driverTestConfig,
+				KEEP_AWAKE_SINGLE_WORK_MS + SLEEP_DB_TIMEOUT + 1_000,
+			);
+
+			const entries = await actor.getLogEntries();
+			const events = entries.map((entry: LogEntry) => entry.event);
+			expect(events).toContain("single-start");
+			expect(events).toContain("single-finish");
+			expect(events).toContain("sleep-1");
+			expect(events).toContain("wake-2");
+			expect(events.indexOf("single-finish")).toBeLessThan(
+				events.indexOf("sleep-1"),
+			);
+			expect(events.indexOf("sleep-1")).toBeLessThan(
+				events.indexOf("wake-2"),
+			);
+		});
+
+		test("nested keepAwake delays automatic sleep until the second keepAwake finishes", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+
+			const actor = client.sleepKeepAwakeUntilIdle.getOrCreate([
+				`nested-${crypto.randomUUID()}`,
+			]);
+
+			await actor.startNestedKeepAwake();
+
+			await waitFor(
+				driverTestConfig,
+				SLEEP_DB_TIMEOUT +
+					KEEP_AWAKE_NESTED_FIRST_MS +
+					KEEP_AWAKE_NESTED_SECOND_MS +
+					1_000,
+			);
+
+			const entries = await actor.getLogEntries();
+			const events = entries.map((entry: LogEntry) => entry.event);
+			expect(events).toContain("nested-first-start");
+			expect(events).toContain("nested-first-finish");
+			expect(events).toContain("nested-second-start");
+			expect(events).toContain("nested-second-finish");
+			expect(events).toContain("sleep-1");
+			expect(events).toContain("wake-2");
+			expect(events.indexOf("nested-first-finish")).toBeLessThan(
+				events.indexOf("nested-second-finish"),
+			);
+			expect(events.indexOf("nested-second-finish")).toBeLessThan(
+				events.indexOf("sleep-1"),
+			);
+			expect(events.indexOf("sleep-1")).toBeLessThan(
+				events.indexOf("wake-2"),
+			);
 		});
 
 		// TODO(#4705): Root-cause connection action dispatch ordering during sleep shutdown and re-enable this coverage.

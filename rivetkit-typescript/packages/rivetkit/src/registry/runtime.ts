@@ -388,10 +388,9 @@ export interface CoreRuntime {
 		args: RuntimeBytes,
 	): void;
 	actorWaitUntil(ctx: ActorContextHandle, promise: Promise<unknown>): void;
-	actorKeepAwake(
-		ctx: ActorContextHandle,
-		promise: Promise<unknown>,
-	): Promise<unknown>;
+	actorKeepAwake(ctx: ActorContextHandle, promise: Promise<unknown>): void;
+	actorBeginKeepAwake(ctx: ActorContextHandle): number;
+	actorEndKeepAwake(ctx: ActorContextHandle, regionId: number): void;
 	actorRegisterTask(ctx: ActorContextHandle, promise: Promise<unknown>): void;
 	actorRuntimeState(ctx: ActorContextHandle): object;
 	actorClearRuntimeState(ctx: ActorContextHandle): void;
