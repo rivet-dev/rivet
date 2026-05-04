@@ -4,9 +4,16 @@ mod resolve_actor_query;
 use std::{sync::Arc, time::Duration};
 
 use anyhow::Result;
+use async_trait::async_trait;
+use bytes::Bytes;
 use gas::{ctx::message::SubscriptionHandle, prelude::*};
-use hyper::header::HeaderName;
-use rivet_guard_core::{RouteConfig, RouteTarget, RoutingOutput, request_context::RequestContext};
+use http_body_util::Full;
+use hyper::{Request, Response, StatusCode, header::HeaderName};
+use rivet_guard_core::{
+	CustomServeTrait, ResponseBody, RouteConfig, RouteTarget, RoutingOutput, WebSocketHandle,
+	request_context::RequestContext,
+};
+use tokio_tungstenite::tungstenite::protocol::frame::{CloseFrame, coding::CloseCode};
 
 use super::{
 	SEC_WEBSOCKET_PROTOCOL, WS_PROTOCOL_ACTOR, WS_PROTOCOL_BYPASS_CONNECTABLE, WS_PROTOCOL_TOKEN,
@@ -32,6 +39,35 @@ const RUNNER_POOL_ERROR_CHECK_DELAY: Duration = Duration::from_secs(1);
 const RUNNER_POOL_ERROR_CHECK_INTERVAL: Duration = Duration::from_secs(2);
 
 pub const X_RIVET_ACTOR: HeaderName = HeaderName::from_static("x-rivet-actor");
+
+struct StoppingWebSocket;
+
+#[async_trait]
+impl CustomServeTrait for StoppingWebSocket {
+	async fn handle_request(
+		&self,
+		_req: Request<Full<Bytes>>,
+		_req_ctx: &mut RequestContext,
+	) -> Result<Response<ResponseBody>> {
+		Ok(Response::builder()
+			.status(StatusCode::SERVICE_UNAVAILABLE)
+			.body(ResponseBody::Full(Full::new(Bytes::from_static(
+				b"Actor is stopping.",
+			))))?)
+	}
+
+	async fn handle_websocket(
+		&self,
+		_req_ctx: &mut RequestContext,
+		_websocket: WebSocketHandle,
+		_after_hibernation: bool,
+	) -> Result<Option<CloseFrame>> {
+		Ok(Some(CloseFrame {
+			code: CloseCode::Error,
+			reason: "actor.stopping".into(),
+		}))
+	}
+}
 
 /// Route requests to actor services using path-based routing
 #[tracing::instrument(skip_all)]
@@ -323,6 +359,7 @@ async fn route_request_inner(
 				actor,
 				stripped_path,
 				bypass_connectable,
+				req_ctx.is_websocket(),
 				ready_sub2,
 				stopped_sub2,
 				fail_sub2,
@@ -338,6 +375,7 @@ async fn route_request_inner(
 				actor,
 				stripped_path,
 				bypass_connectable,
+				req_ctx.is_websocket(),
 				ready_sub,
 				stopped_sub,
 				fail_sub,
@@ -361,6 +399,7 @@ async fn handle_actor_v2(
 	actor: pegboard::ops::actor::get_for_gateway::Output,
 	stripped_path: &str,
 	bypass_connectable: bool,
+	is_websocket: bool,
 	mut ready_sub: SubscriptionHandle<pegboard::workflows::actor2::Ready>,
 	mut stopped_sub: SubscriptionHandle<pegboard::workflows::actor2::Stopped>,
 	mut fail_sub: SubscriptionHandle<pegboard::workflows::actor2::Failed>,
@@ -437,6 +476,10 @@ async fn handle_actor_v2(
 				}
 				// Ready timeout
 				_ = tokio::time::sleep(ACTOR_READY_TIMEOUT) => {
+					if is_websocket && !bypass_connectable && actor.sleeping {
+						tracing::debug!(?actor_id, "sleeping actor did not become ready before websocket wait timeout");
+						return Ok(RoutingOutput::CustomServe(Arc::new(StoppingWebSocket)));
+					}
 					return Err(errors::ActorReadyTimeout { actor_id }.build());
 				}
 			}
@@ -464,6 +507,7 @@ async fn handle_actor_v1(
 	actor: pegboard::ops::actor::get_for_gateway::Output,
 	stripped_path: &str,
 	bypass_connectable: bool,
+	is_websocket: bool,
 	mut ready_sub: SubscriptionHandle<pegboard::workflows::actor::Ready>,
 	mut stopped_sub: SubscriptionHandle<pegboard::workflows::actor::Stopped>,
 	mut fail_sub: SubscriptionHandle<pegboard::workflows::actor::Failed>,
@@ -553,6 +597,7 @@ async fn handle_actor_v1(
 						actor,
 						stripped_path,
 						bypass_connectable,
+						is_websocket,
 						ready_sub2,
 						stopped_sub2,
 						fail_sub2,
@@ -566,6 +611,10 @@ async fn handle_actor_v1(
 				}
 				// Ready timeout
 				_ = tokio::time::sleep(ACTOR_READY_TIMEOUT) => {
+					if is_websocket && !bypass_connectable && actor.sleeping {
+						tracing::debug!(?actor_id, "sleeping actor did not become ready before websocket wait timeout");
+						return Ok(RoutingOutput::CustomServe(Arc::new(StoppingWebSocket)));
+					}
 					return Err(errors::ActorReadyTimeout { actor_id }.build());
 				}
 			}
