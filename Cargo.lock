@@ -6073,6 +6073,8 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tracing",
+ "tracing-logfmt",
+ "tracing-stackdriver",
  "tracing-subscriber",
  "vbare",
 ]

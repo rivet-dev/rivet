@@ -1,4 +1,5 @@
 import {
+	type DestinationStream,
 	type LevelWithSilent,
 	type Logger,
 	pino,
@@ -69,19 +70,22 @@ export function configureDefaultLogger(logLevel?: LogLevel) {
 		configuredLogLevel = logLevel;
 	}
 
-	baseLogger = pino({
-		level: getPinoLevel(logLevel),
-		messageKey: "msg",
-		// Do not include pid/hostname in output
-		base: {},
-		// Keep a string level in the output
-		formatters: {
-			level(_label: string, number: number) {
-				return { level: number };
+	baseLogger = pino(
+		{
+			level: getPinoLevel(logLevel),
+			messageKey: "msg",
+			// Do not include pid/hostname in output
+			base: {},
+			// Keep the numeric level so the logfmt sink can match Pino's levels.
+			formatters: {
+				level(_label: string, number: number) {
+					return { level: number };
+				},
 			},
+			timestamp: getLogTimestamp() ? stdTimeFunctions.epochTime : false,
 		},
-		timestamp: getLogTimestamp() ? stdTimeFunctions.epochTime : false,
-	});
+		createLogfmtDestination(),
+	);
 
 	loggerCache.clear();
 }
@@ -116,4 +120,96 @@ export function getLogger(name = "default"): Logger {
 	loggerCache.set(name, child);
 
 	return child;
+}
+
+const PINO_LEVEL_LABELS: Record<number, string> = {
+	10: "trace",
+	20: "debug",
+	30: "info",
+	40: "warn",
+	50: "error",
+	60: "fatal",
+};
+
+function createLogfmtDestination(): DestinationStream {
+	return {
+		write(msg: string): void {
+			const line = formatLogfmtLine(msg);
+			if (typeof process !== "undefined" && process.stdout?.write) {
+				process.stdout.write(`${line}\n`);
+			} else {
+				console.log(line);
+			}
+		},
+	};
+}
+
+function formatLogfmtLine(raw: string): string {
+	let data: Record<string, unknown>;
+	try {
+		data = JSON.parse(raw);
+	} catch {
+		return raw.trimEnd();
+	}
+
+	const parts: string[] = [];
+	appendLogfmtEntry(parts, "level", formatPinoLevel(data.level));
+
+	if (data.time !== undefined) {
+		appendLogfmtEntry(parts, "ts", data.time);
+	}
+
+	for (const [key, value] of Object.entries(data)) {
+		if (key === "level" || key === "time") {
+			continue;
+		}
+		appendLogfmtEntry(parts, key, value);
+	}
+
+	return parts.join(" ");
+}
+
+function formatPinoLevel(level: unknown): string {
+	if (typeof level === "number") {
+		return PINO_LEVEL_LABELS[level] ?? level.toString();
+	}
+
+	if (typeof level === "string") {
+		return level.toLowerCase();
+	}
+
+	return "info";
+}
+
+function appendLogfmtEntry(parts: string[], key: string, value: unknown): void {
+	const safeKey = key.replace(/[\s="]/g, "");
+	if (safeKey.length === 0) {
+		return;
+	}
+
+	parts.push(`${safeKey}=${formatLogfmtValue(value)}`);
+}
+
+function formatLogfmtValue(value: unknown): string {
+	if (typeof value === "number" || typeof value === "boolean") {
+		return String(value);
+	}
+
+	if (value === null || value === undefined) {
+		return "null";
+	}
+
+	if (typeof value === "string") {
+		return quoteLogfmtString(value);
+	}
+
+	return quoteLogfmtString(JSON.stringify(value));
+}
+
+function quoteLogfmtString(value: string): string {
+	if (!/[\s="]/.test(value)) {
+		return value;
+	}
+
+	return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n")}"`;
 }
