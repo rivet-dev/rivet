@@ -3,6 +3,7 @@ import { deconstructError } from "@/common/utils";
 import {
 	type GatewayTarget,
 	type EngineControlClient,
+	type GatewayRequestOptions,
 } from "@/engine-client/driver";
 import { HEADER_CONN_PARAMS } from "@/common/actor-router-consts";
 import { ActorError } from "./errors";
@@ -17,6 +18,7 @@ export async function rawHttpFetch(
 	params: unknown,
 	input: string | URL | Request,
 	init?: RequestInit,
+	options: GatewayRequestOptions = {},
 ): Promise<Response> {
 	// Extract path and merge init options
 	let path: string;
@@ -91,7 +93,7 @@ export async function rawHttpFetch(
 			headers: proxyRequestHeaders,
 		});
 
-		return driver.sendRequest(target, proxyRequest);
+		return driver.sendRequest(target, proxyRequest, options);
 	} catch (err) {
 		// Standardize to ClientActorError instead of the native backend error
 		const { group, code, message, metadata } = deconstructError(
@@ -114,6 +116,7 @@ export async function rawWebSocket(
 	path?: string,
 	// TODO: Supportp rotocols
 	_protocols?: string | string[],
+	options: GatewayRequestOptions = {},
 ): Promise<any> {
 	// TODO: Do we need encoding in rawWebSocket?
 	const encoding = "bare";
@@ -145,7 +148,13 @@ export async function rawWebSocket(
 	});
 
 	// Open WebSocket
-	const ws = await driver.openWebSocket(fullPath, target, encoding, params);
+	const ws = await driver.openWebSocket(
+		fullPath,
+		target,
+		encoding,
+		params,
+		options,
+	);
 
 	// Node & browser WebSocket types are incompatible
 	return ws as any;

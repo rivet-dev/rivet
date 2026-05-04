@@ -26,7 +26,9 @@ import { decodeCborCompat, deserializeWithEncoding, encodeCborCompat } from "@/s
 import { bufferToArrayBuffer } from "@/utils";
 import type {
 	ActorDefinitionActions,
+	ActorFetchInit,
 	ActorDefinitionQueueSend,
+	ActorWebSocketOptions,
 } from "./actor-common";
 import { type ActorConn, ActorConnRaw } from "./actor-conn";
 import {
@@ -575,16 +577,17 @@ export class ActorHandleRaw {
 	 * Fetches a resource from this actor via the /request endpoint. This is a
 	 * convenience wrapper around the raw HTTP API.
 	 */
-	fetch(input: string | URL | Request, init?: RequestInit) {
+	fetch(input: string | URL | Request, init?: ActorFetchInit) {
 		return this.#fetchWithResolvedActor(input, init);
 	}
 
 	async #fetchWithResolvedActor(
 		input: string | URL | Request,
-		init?: RequestInit,
+		init?: ActorFetchInit,
 	) {
 		const maxAttempts = this.#getDynamicQueryMaxAttempts();
 		let useQueryTarget = false;
+		const { gateway, ...requestInit } = init ?? {};
 
 		for (let attempt = 0; attempt < maxAttempts; attempt++) {
 			let actorId: string | undefined;
@@ -596,7 +599,8 @@ export class ActorHandleRaw {
 					target,
 					this.#params,
 					input,
-					init,
+					requestInit,
+					gateway,
 				);
 				const retry = await this.#shouldRetryRawFetchResponse(
 					response,
@@ -783,14 +787,22 @@ export class ActorHandleRaw {
 	/**
 	 * Opens a raw WebSocket connection to this actor.
 	 */
-	async webSocket(path?: string, protocols?: string | string[]) {
+	async webSocket(
+		path?: string,
+		protocols?: string | string[],
+		options: ActorWebSocketOptions = {},
+	) {
 		const params = await this.#resolveConnectionParams();
+		const target = options.gateway?.bypassConnectable
+			? await this.#resolveActionTarget(false)
+			: getGatewayTarget(this.#actorResolutionState);
 		return await rawWebSocket(
 			this.#driver,
-			getGatewayTarget(this.#actorResolutionState),
+			target,
 			params,
 			path,
 			protocols,
+			options.gateway,
 		);
 	}
 

@@ -6,6 +6,10 @@ import type { ActorQuery, CrashPolicy } from "@/client/query";
 
 export type GatewayTarget = { directId: string } | ActorQuery;
 
+export interface GatewayRequestOptions {
+	bypassConnectable?: boolean;
+}
+
 export interface EngineControlClient {
 	getForId(input: GetForIdInput): Promise<ActorOutput | undefined>;
 	getWithKey(input: GetWithKeyInput): Promise<ActorOutput | undefined>;
@@ -16,12 +20,14 @@ export interface EngineControlClient {
 	sendRequest(
 		target: GatewayTarget,
 		actorRequest: Request,
+		options?: GatewayRequestOptions,
 	): Promise<Response>;
 	openWebSocket(
 		path: string,
 		target: GatewayTarget,
 		encoding: Encoding,
 		params: unknown,
+		options?: GatewayRequestOptions,
 	): Promise<UniversalWebSocket>;
 	proxyRequest(
 		c: HonoContext,
@@ -35,7 +41,10 @@ export interface EngineControlClient {
 		encoding: Encoding,
 		params: unknown,
 	): Promise<Response>;
-	buildGatewayUrl(target: GatewayTarget): Promise<string>;
+	buildGatewayUrl(
+		target: GatewayTarget,
+		options?: GatewayRequestOptions,
+	): Promise<string>;
 	displayInformation(): RuntimeDisplayInformation;
 	extraStartupLog?: () => Record<string, unknown>;
 	modifyRuntimeRouter?: (config: RegistryConfig, router: Hono) => void;

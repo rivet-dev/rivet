@@ -31,6 +31,18 @@ export type ActorActionFunction<
 	...args: Args extends [unknown, ...infer Rest] ? Rest : Args
 ) => Promise<Response>;
 
+export interface ActorGatewayOptions {
+	bypassConnectable?: boolean;
+}
+
+export interface ActorFetchInit extends RequestInit {
+	gateway?: ActorGatewayOptions;
+}
+
+export interface ActorWebSocketOptions {
+	gateway?: ActorGatewayOptions;
+}
+
 /**
  * Maps action methods from actor definition to typed function signatures.
  */

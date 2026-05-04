@@ -7,6 +7,7 @@ import {
 	type ActorOutput,
 	type CreateInput,
 	type GatewayTarget,
+	type GatewayRequestOptions,
 	type GetForIdInput,
 	type GetOrCreateWithKeyInput,
 	type GetWithKeyInput,
@@ -246,15 +247,25 @@ export class RemoteEngineControlClient implements EngineControlClient {
 	async sendRequest(
 		target: GatewayTarget,
 		actorRequest: Request,
+		options: GatewayRequestOptions = {},
 	): Promise<Response> {
 		await this.#metadataPromise;
 
-		const gatewayUrl = this.#buildGatewayUrlForTarget(
-			target,
-			requestPath(actorRequest),
-		);
+		const path = requestPath(actorRequest);
+		const gatewayUrl = this.#buildGatewayUrlForTarget(target, path, options);
+		const httpOptions = {
+			...options,
+			directActorId: options.bypassConnectable
+				? directActorIdFromTarget(target)
+				: undefined,
+		};
 
-		return sendHttpRequestToGateway(this.#config, gatewayUrl, actorRequest);
+		return sendHttpRequestToGateway(
+			this.#config,
+			gatewayUrl,
+			actorRequest,
+			httpOptions,
+		);
 	}
 
 	async openWebSocket(
@@ -262,22 +273,32 @@ export class RemoteEngineControlClient implements EngineControlClient {
 		target: GatewayTarget,
 		encoding: Encoding,
 		params: unknown,
+		options: GatewayRequestOptions = {},
 	): Promise<UniversalWebSocket> {
 		await this.#metadataPromise;
 
-		const gatewayUrl = this.#buildGatewayUrlForTarget(target, path);
+		const gatewayUrl = this.#buildGatewayUrlForTarget(target, path, options);
 
 		return openWebSocketToGateway(
 			this.#config,
 			gatewayUrl,
 			encoding,
 			params,
+			{
+				...options,
+				directActorId: options.bypassConnectable
+					? directActorIdFromTarget(target)
+					: undefined,
+			},
 		);
 	}
 
-	async buildGatewayUrl(target: GatewayTarget): Promise<string> {
+	async buildGatewayUrl(
+		target: GatewayTarget,
+		options: GatewayRequestOptions = {},
+	): Promise<string> {
 		await this.#metadataPromise;
-		return this.#buildGatewayUrlForTarget(target, "");
+		return this.#buildGatewayUrlForTarget(target, "", options);
 	}
 
 	async proxyRequest(
@@ -382,8 +403,16 @@ export class RemoteEngineControlClient implements EngineControlClient {
 		this.#config.getUpgradeWebSocket = getUpgradeWebSocket;
 	}
 
-	#buildGatewayUrlForTarget(target: GatewayTarget, path: string): string {
+	#buildGatewayUrlForTarget(
+		target: GatewayTarget,
+		path: string,
+		options: GatewayRequestOptions = {},
+	): string {
 		const endpoint = getEndpoint(this.#config);
+
+		if (options.bypassConnectable && directActorIdFromTarget(target)) {
+			return combineUrlPath(endpoint, path);
+		}
 
 		if ("directId" in target) {
 			return buildActorGatewayUrl(
@@ -415,6 +444,7 @@ export class RemoteEngineControlClient implements EngineControlClient {
 				"getOrCreateForKey" in target
 					? this.#config.poolName
 					: undefined,
+				options,
 			);
 		}
 
@@ -426,6 +456,16 @@ export class RemoteEngineControlClient implements EngineControlClient {
 
 		throw new Error("unreachable: unknown gateway target type");
 	}
+}
+
+function directActorIdFromTarget(target: GatewayTarget): string | undefined {
+	if ("directId" in target) {
+		return target.directId;
+	}
+	if ("getForId" in target) {
+		return target.getForId.actorId;
+	}
+	return undefined;
 }
 
 function requestPath(req: Request): string {

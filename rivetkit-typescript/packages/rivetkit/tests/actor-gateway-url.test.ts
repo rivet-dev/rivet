@@ -56,6 +56,29 @@ describe("gateway URL builders", () => {
 		expect(url).not.toContain("@");
 	});
 
+	test("serializes gateway bypass for query routing", () => {
+		const url = buildActorQueryGatewayUrl(
+			"https://api.rivet.dev/manager",
+			"prod",
+			{
+				getForKey: {
+					name: "room",
+					key: ["alpha"],
+				},
+			},
+			undefined,
+			"/status",
+			undefined,
+			undefined,
+			undefined,
+			{ bypassConnectable: true },
+		);
+
+		expect(new URL(url).searchParams.get("rvt-bypass_connectable")).toBe(
+			"true",
+		);
+	});
+
 	test("serializes getOrCreate queries with rvt-* params", () => {
 		const input = { hello: "world" };
 		const url = buildActorQueryGatewayUrl(

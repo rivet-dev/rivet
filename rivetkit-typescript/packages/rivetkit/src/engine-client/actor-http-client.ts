@@ -1,14 +1,25 @@
 import type { ClientConfig } from "@/client/config";
-import { HEADER_RIVET_TOKEN } from "@/common/actor-router-consts";
+import {
+	HEADER_RIVET_ACTOR,
+	HEADER_RIVET_BYPASS_CONNECTABLE,
+	HEADER_RIVET_TARGET,
+	HEADER_RIVET_TOKEN,
+} from "@/common/actor-router-consts";
+import type { GatewayRequestOptions } from "./driver";
+
+export interface HttpGatewayRequestOptions extends GatewayRequestOptions {
+	directActorId?: string;
+}
 
 export async function sendHttpRequestToGateway(
 	runConfig: ClientConfig,
 	gatewayUrl: string,
 	actorRequest: Request,
+	options: HttpGatewayRequestOptions = {},
 ): Promise<Response> {
 	// Handle body properly based on method and presence
 	let bodyToSend: ArrayBuffer | null = null;
-	const guardHeaders = buildGuardHeaders(runConfig, actorRequest);
+	const guardHeaders = buildGuardHeaders(runConfig, actorRequest, options);
 
 	if (actorRequest.method !== "GET" && actorRequest.method !== "HEAD") {
 		if (actorRequest.bodyUsed) {
@@ -49,6 +60,7 @@ function mutableResponse(fetchRes: Response): Response {
 function buildGuardHeaders(
 	runConfig: ClientConfig,
 	actorRequest: Request,
+	options: HttpGatewayRequestOptions,
 ): Headers {
 	const headers = new Headers();
 	// Copy all headers from the original request
@@ -62,6 +74,13 @@ function buildGuardHeaders(
 	// Add guard-specific headers
 	if (runConfig.token) {
 		headers.set(HEADER_RIVET_TOKEN, runConfig.token);
+	}
+	if (options.directActorId !== undefined) {
+		headers.set(HEADER_RIVET_TARGET, "actor");
+		headers.set(HEADER_RIVET_ACTOR, options.directActorId);
+	}
+	if (options.bypassConnectable) {
+		headers.set(HEADER_RIVET_BYPASS_CONNECTABLE, "1");
 	}
 	return headers;
 }
