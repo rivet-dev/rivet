@@ -71,17 +71,17 @@ struct BridgeRivetErrorPayload {
 
 #[derive(Debug)]
 struct BridgeRivetErrorContext {
+	message: Option<String>,
 	public_: Option<bool>,
 	status_code: Option<u16>,
 }
 
 impl std::fmt::Display for BridgeRivetErrorContext {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(
-			f,
-			"bridge rivet error context public={:?} status_code={:?}",
-			self.public_, self.status_code
-		)
+		match &self.message {
+			Some(message) => f.write_str(message),
+			None => f.write_str("bridged RivetError"),
+		}
 	}
 }
 
@@ -2700,12 +2700,14 @@ fn parse_bridge_rivet_error(reason: &str) -> Option<anyhow::Error> {
 		.metadata
 		.as_ref()
 		.and_then(|metadata| serde_json::value::to_raw_value(metadata).ok());
+	let message = payload.message;
 	let error = anyhow::Error::new(RivetTransportError {
 		schema,
 		meta,
-		message: Some(payload.message),
+		message: Some(message.clone()),
 	});
 	Some(error.context(BridgeRivetErrorContext {
+		message: Some(message),
 		public_: payload.public_,
 		status_code: payload.status_code,
 	}))
@@ -2871,6 +2873,8 @@ mod tests {
 		);
 		let first = parse_bridge_rivet_error(&reason).expect("bridge error should decode");
 		let first_schema = transport_schema(&first) as *const RivetErrorSchema;
+
+		assert_eq!(first.to_string(), "same payload message");
 
 		for _ in 0..100 {
 			let error = parse_bridge_rivet_error(&reason).expect("bridge error should decode");

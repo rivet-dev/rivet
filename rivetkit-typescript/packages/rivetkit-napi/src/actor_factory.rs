@@ -257,6 +257,7 @@ struct BridgeRivetErrorPayload {
 
 #[derive(Debug)]
 pub(crate) struct BridgeRivetErrorContext {
+	pub message: Option<String>,
 	pub public_: Option<bool>,
 	pub status_code: Option<u16>,
 }
@@ -267,11 +268,10 @@ static BRIDGE_RIVET_ERROR_SCHEMAS: LazyLock<
 
 impl std::fmt::Display for BridgeRivetErrorContext {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(
-			f,
-			"bridge rivet error context public={:?} status_code={:?}",
-			self.public_, self.status_code
-		)
+		match &self.message {
+			Some(message) => f.write_str(message),
+			None => f.write_str("bridged RivetError"),
+		}
 	}
 }
 
@@ -994,12 +994,14 @@ fn parse_bridge_rivet_error(reason: &str) -> Option<anyhow::Error> {
 		.metadata
 		.as_ref()
 		.and_then(|metadata| serde_json::value::to_raw_value(metadata).ok());
+	let message = payload.message;
 	let error = anyhow::Error::new(rivet_error::RivetError {
 		schema,
 		meta,
-		message: Some(payload.message),
+		message: Some(message.clone()),
 	});
 	Some(error.context(BridgeRivetErrorContext {
+		message: Some(message),
 		public_: payload.public_,
 		status_code: payload.status_code,
 	}))

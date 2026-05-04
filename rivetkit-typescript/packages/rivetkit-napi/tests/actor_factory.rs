@@ -73,6 +73,7 @@ mod moved_tests {
 		let first = parse_bridge_rivet_error(&reason).expect("first parse should succeed");
 		let second = parse_bridge_rivet_error(&reason).expect("second parse should succeed");
 
+		assert_eq!(first.to_string(), "same message");
 		assert_eq!(schema_ptr(&first), schema_ptr(&second));
 	}
 

@@ -341,7 +341,9 @@ impl ActorContext {
 			.verify(&self.inner, bearer_token.as_deref())
 			.await
 			.map_err(|error| {
+				let message = error.to_string();
 				napi_anyhow_error(error.context(BridgeRivetErrorContext {
+					message: Some(message),
 					public_: Some(true),
 					status_code: Some(401),
 				}))
