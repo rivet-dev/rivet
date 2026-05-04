@@ -776,8 +776,7 @@ describeDriverMatrix("Actor Sleep Db", (driverTestConfig) => {
 			expect(events).toContain("waituntil-after-reject");
 		});
 
-		// TODO(#4705): Root-cause duplicate sleep-call semantics and re-enable this coverage.
-		test.skip("double sleep call is a no-op", async (c) => {
+		test("double sleep call is a no-op", async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);
 
 			// Use a connection to send the sleep trigger, because
@@ -790,15 +789,10 @@ describeDriverMatrix("Actor Sleep Db", (driverTestConfig) => {
 
 			await waitForConnectionReady(connection);
 
-			// Trigger sleep twice rapidly via the connection.
-			// The second call should be a no-op because
-			// #sleepCalled is already true.
-			await connection.triggerSleep();
-			try {
-				await connection.triggerSleep();
-			} catch {
-				// May throw if actor already stopping
-			}
+			// Trigger sleep twice from the same action invocation. The second
+			// call should be a no-op because the first call already requested
+			// sleep for this actor generation.
+			await connection.triggerSleepTwice();
 
 			// Wait for sleep to complete
 			await waitFor(driverTestConfig, 1500);
