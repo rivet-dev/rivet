@@ -8,6 +8,7 @@ import {
 	WS_PROTOCOL_STANDARD as WS_PROTOCOL_RIVETKIT,
 	WS_PROTOCOL_TARGET,
 	WS_PROTOCOL_ACTOR,
+	WS_PROTOCOL_BYPASS_CONNECTABLE,
 	WS_PROTOCOL_TEST_ACK_HOOK,
 	WS_PROTOCOL_TOKEN,
 } from "@/common/actor-router-consts";
@@ -17,6 +18,7 @@ import type { ActorGatewayQuery, CrashPolicy } from "@/client/query";
 import type { Encoding, UniversalWebSocket } from "@/mod";
 import { encodeCborCompat, uint8ArrayToBase64 } from "@/serde";
 import { combineUrlPath } from "@/utils";
+import type { GatewayRequestOptions } from "./driver";
 import { logger } from "./log";
 
 class BufferedRemoteWebSocket implements UniversalWebSocket {
@@ -211,6 +213,7 @@ export function buildActorQueryGatewayUrl(
 	maxInputSize = DEFAULT_MAX_QUERY_INPUT_SIZE,
 	crashPolicy: CrashPolicy | undefined = undefined,
 	runnerName?: string,
+	options: GatewayRequestOptions = {},
 ): string {
 	if (namespace.length === 0) {
 		throw new Error("actor query namespace must not be empty");
@@ -266,6 +269,9 @@ export function buildActorQueryGatewayUrl(
 	if (token !== undefined) {
 		params.append("rvt-token", token);
 	}
+	if (options.bypassConnectable) {
+		params.append("rvt-bypass_connectable", "true");
+	}
 
 	const queryString = params.toString();
 	let separator: string;
@@ -318,6 +324,7 @@ export async function openWebSocketToGateway(
 	gatewayUrl: string,
 	encoding: Encoding,
 	params: unknown,
+	options: GatewayRequestOptions & { directActorId?: string } = {},
 ): Promise<UniversalWebSocket> {
 	const WebSocket = await importWebSocket();
 
@@ -334,7 +341,19 @@ export async function openWebSocketToGateway(
 	// Create WebSocket connection
 	const ws = new WebSocket(
 		gatewayUrl,
-		buildWebSocketProtocols(runConfig, encoding, params, ackHookToken),
+		buildWebSocketProtocols(
+			runConfig,
+			encoding,
+			params,
+			ackHookToken,
+			options.directActorId
+				? {
+						target: "actor",
+						actorId: options.directActorId,
+					}
+				: undefined,
+			options,
+		),
 	);
 
 	// The WebSocket is returned before the connection is open. This follows
@@ -364,6 +383,7 @@ export function buildWebSocketProtocols(
 		target: "actor";
 		actorId: string;
 	},
+	options: GatewayRequestOptions = {},
 ): string[] {
 	const protocols: string[] = [];
 	protocols.push(WS_PROTOCOL_RIVETKIT);
@@ -371,6 +391,9 @@ export function buildWebSocketProtocols(
 	if (target) {
 		protocols.push(`${WS_PROTOCOL_TARGET}${target.target}`);
 		protocols.push(`${WS_PROTOCOL_ACTOR}${target.actorId}`);
+	}
+	if (options.bypassConnectable) {
+		protocols.push(WS_PROTOCOL_BYPASS_CONNECTABLE);
 	}
 	if (params) {
 		protocols.push(
