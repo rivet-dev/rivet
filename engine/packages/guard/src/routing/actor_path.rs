@@ -63,6 +63,20 @@ pub enum ParsedActorPath {
 	Query(QueryActorPathInfo),
 }
 
+pub fn is_actor_gateway_path(path: &str) -> bool {
+	let (base_path, _) = split_path_and_query(path);
+
+	if base_path.contains("//") {
+		return false;
+	}
+
+	base_path
+		.split('/')
+		.filter(|segment| !segment.is_empty())
+		.next()
+		== Some("gateway")
+}
+
 /// Parsed rvt-* query parameters.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]

@@ -15,7 +15,7 @@ use super::{
 use crate::{
 	errors,
 	routing::{
-		actor_path::parse_actor_path,
+		actor_path::{is_actor_gateway_path, parse_actor_path},
 		pegboard_gateway::resolve_actor_query::ResolveQueryActorResult,
 	},
 	shared_state::SharedState,
@@ -56,13 +56,17 @@ pub async fn route_request_path_based_inner(
 	shared_state: &SharedState,
 	req_ctx: &mut RequestContext,
 ) -> Result<Option<RoutingOutput>> {
+	if req_ctx.method() == hyper::Method::OPTIONS {
+		if is_actor_gateway_path(req_ctx.path()) {
+			return Ok(Some(RoutingOutput::CustomServe(Arc::new(CorsPreflight))));
+		}
+
+		return Ok(None);
+	}
+
 	let Some(actor_path) = parse_actor_path(req_ctx.path())? else {
 		return Ok(None);
 	};
-
-	if req_ctx.method() == hyper::Method::OPTIONS {
-		return Ok(Some(RoutingOutput::CustomServe(Arc::new(CorsPreflight))));
-	}
 
 	tracing::debug!(?actor_path, "routing using path-based actor routing");
 
