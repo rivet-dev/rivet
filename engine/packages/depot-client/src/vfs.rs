@@ -134,6 +134,7 @@ pub struct VfsConfig {
 	pub cache_capacity_pages: u64,
 	pub protected_cache_pages: usize,
 	pub page_cache_mode: SqliteVfsPageCacheMode,
+	pub staging_cache_ttl_ms: u64,
 	pub prefetch_depth: usize,
 	pub adaptive_prefetch_depth: usize,
 	pub max_prefetch_bytes: usize,
@@ -169,11 +170,16 @@ impl VfsConfig {
 				0
 			},
 			protected_cache_pages: if caches_pages {
-				flags.vfs_protected_cache_pages
+				usize::from(flags.vfs_protected_cache_pages > 0)
 			} else {
 				0
 			},
 			page_cache_mode: flags.vfs_page_cache_mode,
+			staging_cache_ttl_ms: if caches_pages {
+				flags.vfs_staging_cache_ttl_ms
+			} else {
+				0
+			},
 			prefetch_depth: if flags.read_ahead {
 				DEFAULT_PREFETCH_DEPTH
 			} else {
@@ -790,9 +796,12 @@ fn push_coalesced_range(ranges: &mut VecDeque<VfsPreloadHintRange>, range: VfsPr
 
 impl VfsState {
 	fn new(config: &VfsConfig) -> Self {
-		let page_cache = Cache::builder()
-			.max_capacity(config.cache_capacity_pages)
-			.build();
+		let mut page_cache_builder = Cache::builder().max_capacity(config.cache_capacity_pages);
+		if config.staging_cache_ttl_ms > 0 {
+			page_cache_builder =
+				page_cache_builder.time_to_live(Duration::from_millis(config.staging_cache_ttl_ms));
+		}
+		let page_cache = page_cache_builder.build();
 		let mut state = Self {
 			db_size_pages: 1,
 			page_size: DEFAULT_PAGE_SIZE,
@@ -841,6 +850,13 @@ impl VfsState {
 			.or_else(|| self.page_cache.get(&pgno))
 	}
 
+	fn evict_target_read_pages(&self, pgnos: &[u32]) {
+		for pgno in pgnos.iter().copied().filter(|pgno| *pgno != 1) {
+			self.page_cache.invalidate(&pgno);
+			self.protected_page_cache.remove_sync(&pgno);
+		}
+	}
+
 	fn seed_page(&mut self, config: &VfsConfig, kind: PageCacheInsertKind, pgno: u32, page: Vec<u8>) {
 		if pgno == 1 {
 			self.seed_main_page(config, kind, page);
@@ -876,7 +892,7 @@ fn cache_page(
 	if !should_cache_page(config, kind, pgno) {
 		return;
 	}
-	if pgno <= config.protected_cache_pages as u32 {
+	if pgno == 1 && config.protected_cache_pages > 0 {
 		let _ = protected_page_cache.upsert_sync(pgno, bytes);
 	} else {
 		page_cache.insert(pgno, bytes);
@@ -887,8 +903,11 @@ fn should_cache_page(config: &VfsConfig, kind: PageCacheInsertKind, pgno: u32) -
 	if pgno == 1 {
 		return true;
 	}
+	if config.staging_cache_ttl_ms == 0 {
+		return false;
+	}
 	match kind {
-		PageCacheInsertKind::Target => config.page_cache_mode.caches_target_pages(),
+		PageCacheInsertKind::Target => false,
 		PageCacheInsertKind::Prefetch => config.page_cache_mode.caches_prefetched_pages(),
 		PageCacheInsertKind::Startup => config.page_cache_mode.caches_startup_preloaded_pages(),
 	}
@@ -2151,7 +2170,7 @@ unsafe extern "C" fn io_read(
 		}
 
 		buf.fill(0);
-		for pgno in requested_pages {
+		for pgno in requested_pages.iter().copied() {
 			let Some(Some(bytes)) = resolved.get(&pgno) else {
 				continue;
 			};
@@ -2167,6 +2186,7 @@ unsafe extern "C" fn io_read(
 			buf[dest_offset..dest_offset + copy_len]
 				.copy_from_slice(&bytes[page_offset..page_offset + copy_len]);
 		}
+		ctx.state.read().evict_target_read_pages(&requested_pages);
 
 		if i_offset as usize + i_amt as usize > file_size {
 			return SQLITE_IOERR_SHORT_READ;

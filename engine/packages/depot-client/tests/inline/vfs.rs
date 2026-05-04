@@ -21,8 +21,8 @@ use tokio::sync::OnceCell;
 
 use crate::optimization_flags::{
 	DEFAULT_STARTUP_PRELOAD_MAX_BYTES, DEFAULT_VFS_PAGE_CACHE_CAPACITY_PAGES,
-	DEFAULT_VFS_PROTECTED_CACHE_PAGES, SqliteOptimizationFlags, SqliteReadAheadMode,
-	SqliteVfsPageCacheMode,
+	DEFAULT_VFS_PROTECTED_CACHE_PAGES, DEFAULT_VFS_STAGING_CACHE_TTL_MS,
+	SqliteOptimizationFlags, SqliteReadAheadMode, SqliteVfsPageCacheMode,
 };
 use crate::query::{BindParam, ColumnValue};
 use crate::vfs::SqliteVfsMetrics;
@@ -55,6 +55,7 @@ fn vfs_config_wires_optimization_flags() {
 		vfs_page_cache_mode: SqliteVfsPageCacheMode::Startup,
 		vfs_page_cache_capacity_pages: DEFAULT_VFS_PAGE_CACHE_CAPACITY_PAGES / 2,
 		vfs_protected_cache_pages: DEFAULT_VFS_PROTECTED_CACHE_PAGES / 2,
+		vfs_staging_cache_ttl_ms: DEFAULT_VFS_STAGING_CACHE_TTL_MS / 2,
 	};
 
 	let config = VfsConfig::from_optimization_flags(flags);
@@ -65,7 +66,11 @@ fn vfs_config_wires_optimization_flags() {
 	);
 	assert_eq!(
 		config.protected_cache_pages,
-		DEFAULT_VFS_PROTECTED_CACHE_PAGES / 2
+		1
+	);
+	assert_eq!(
+		config.staging_cache_ttl_ms,
+		DEFAULT_VFS_STAGING_CACHE_TTL_MS / 2
 	);
 	assert_eq!(config.prefetch_depth, 16);
 	assert!(!config.adaptive_read_ahead);
@@ -139,6 +144,46 @@ fn startup_initial_pages_do_not_require_preload_hints_on_open() {
 	let loaded_pgnos = pages.iter().map(|(pgno, _)| *pgno).collect::<Vec<_>>();
 	assert_eq!(*transport.requested_pgnos.lock(), vec![1, 2, 3, 4]);
 	assert_eq!(loaded_pgnos, vec![1, 2, 3, 4]);
+}
+
+#[test]
+fn vfs_staging_cache_retains_only_speculative_pages() {
+	let config = VfsConfig {
+		page_cache_mode: SqliteVfsPageCacheMode::All,
+		staging_cache_ttl_ms: DEFAULT_VFS_STAGING_CACHE_TTL_MS,
+		..VfsConfig::default()
+	};
+	let mut state = VfsState::new(&config);
+
+	state.cache_page(&config, PageCacheInsertKind::Target, 2, vec![2; DEFAULT_PAGE_SIZE]);
+	assert!(state.cached_page(&config, 2).is_none());
+
+	state.cache_page(&config, PageCacheInsertKind::Prefetch, 3, vec![3; DEFAULT_PAGE_SIZE]);
+	state.cache_page(&config, PageCacheInsertKind::Startup, 4, vec![4; DEFAULT_PAGE_SIZE]);
+	assert!(state.cached_page(&config, 3).is_some());
+	assert!(state.cached_page(&config, 4).is_some());
+	assert!(state.protected_page_cache.read_sync(&3, |_, _| ()).is_none());
+
+	state.evict_target_read_pages(&[1, 3, 4]);
+	assert!(state.cached_page(&config, 1).is_some());
+	assert!(state.cached_page(&config, 3).is_none());
+	assert!(state.cached_page(&config, 4).is_none());
+}
+
+#[test]
+fn vfs_staging_cache_ttl_zero_disables_speculative_retention() {
+	let config = VfsConfig {
+		page_cache_mode: SqliteVfsPageCacheMode::All,
+		staging_cache_ttl_ms: 0,
+		..VfsConfig::default()
+	};
+	let mut state = VfsState::new(&config);
+
+	state.cache_page(&config, PageCacheInsertKind::Prefetch, 2, vec![2; DEFAULT_PAGE_SIZE]);
+	state.cache_page(&config, PageCacheInsertKind::Startup, 3, vec![3; DEFAULT_PAGE_SIZE]);
+	assert!(state.cached_page(&config, 1).is_some());
+	assert!(state.cached_page(&config, 2).is_none());
+	assert!(state.cached_page(&config, 3).is_none());
 }
 
 fn next_test_name(prefix: &str) -> String {

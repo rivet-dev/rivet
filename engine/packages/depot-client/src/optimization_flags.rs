@@ -22,6 +22,7 @@ pub const VFS_PAGE_CACHE_MODE_ENV: &str = "RIVETKIT_SQLITE_OPT_VFS_PAGE_CACHE_MO
 pub const VFS_PAGE_CACHE_CAPACITY_PAGES_ENV: &str =
 	"RIVETKIT_SQLITE_OPT_VFS_PAGE_CACHE_CAPACITY_PAGES";
 pub const VFS_PROTECTED_CACHE_PAGES_ENV: &str = "RIVETKIT_SQLITE_OPT_VFS_PROTECTED_CACHE_PAGES";
+pub const VFS_STAGING_CACHE_TTL_MS_ENV: &str = "RIVETKIT_SQLITE_OPT_VFS_STAGING_CACHE_TTL_MS";
 
 pub const DEFAULT_STARTUP_PRELOAD_MAX_BYTES: usize = 1024 * 1024;
 pub const MAX_STARTUP_PRELOAD_MAX_BYTES: usize = 8 * 1024 * 1024;
@@ -31,6 +32,8 @@ pub const DEFAULT_VFS_PAGE_CACHE_CAPACITY_PAGES: u64 = 50_000;
 pub const MAX_VFS_PAGE_CACHE_CAPACITY_PAGES: u64 = 500_000;
 pub const DEFAULT_VFS_PROTECTED_CACHE_PAGES: usize = 512;
 pub const MAX_VFS_PROTECTED_CACHE_PAGES: usize = 8_192;
+pub const DEFAULT_VFS_STAGING_CACHE_TTL_MS: u64 = 30_000;
+pub const MAX_VFS_STAGING_CACHE_TTL_MS: u64 = 300_000;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SqliteReadAheadMode {
@@ -102,6 +105,7 @@ pub struct SqliteOptimizationFlags {
 	pub vfs_page_cache_mode: SqliteVfsPageCacheMode,
 	pub vfs_page_cache_capacity_pages: u64,
 	pub vfs_protected_cache_pages: usize,
+	pub vfs_staging_cache_ttl_ms: u64,
 }
 
 impl Default for SqliteOptimizationFlags {
@@ -128,6 +132,7 @@ impl Default for SqliteOptimizationFlags {
 			vfs_page_cache_mode: SqliteVfsPageCacheMode::All,
 			vfs_page_cache_capacity_pages: DEFAULT_VFS_PAGE_CACHE_CAPACITY_PAGES,
 			vfs_protected_cache_pages: DEFAULT_VFS_PROTECTED_CACHE_PAGES,
+			vfs_staging_cache_ttl_ms: DEFAULT_VFS_STAGING_CACHE_TTL_MS,
 		}
 	}
 }
@@ -195,6 +200,11 @@ impl SqliteOptimizationFlags {
 				read_env(VFS_PROTECTED_CACHE_PAGES_ENV).as_deref(),
 				DEFAULT_VFS_PROTECTED_CACHE_PAGES,
 				MAX_VFS_PROTECTED_CACHE_PAGES,
+			),
+			vfs_staging_cache_ttl_ms: u64_bounded_by_default(
+				read_env(VFS_STAGING_CACHE_TTL_MS_ENV).as_deref(),
+				DEFAULT_VFS_STAGING_CACHE_TTL_MS,
+				MAX_VFS_STAGING_CACHE_TTL_MS,
 			),
 		}
 	}
@@ -307,6 +317,7 @@ mod tests {
 			VFS_PAGE_CACHE_MODE_ENV => Some("off".to_string()),
 			VFS_PAGE_CACHE_CAPACITY_PAGES_ENV => Some("0".to_string()),
 			VFS_PROTECTED_CACHE_PAGES_ENV => Some("0".to_string()),
+			VFS_STAGING_CACHE_TTL_MS_ENV => Some("0".to_string()),
 			_ => None,
 		});
 
@@ -327,6 +338,7 @@ mod tests {
 		assert_eq!(flags.vfs_page_cache_mode, SqliteVfsPageCacheMode::Off);
 		assert_eq!(flags.vfs_page_cache_capacity_pages, 0);
 		assert_eq!(flags.vfs_protected_cache_pages, 0);
+		assert_eq!(flags.vfs_staging_cache_ttl_ms, 0);
 	}
 
 	#[test]
@@ -336,6 +348,7 @@ mod tests {
 			STARTUP_PRELOAD_FIRST_PAGE_COUNT_ENV => Some("nope".to_string()),
 			VFS_PAGE_CACHE_CAPACITY_PAGES_ENV => Some("invalid".to_string()),
 			VFS_PROTECTED_CACHE_PAGES_ENV => Some("invalid".to_string()),
+			VFS_STAGING_CACHE_TTL_MS_ENV => Some("invalid".to_string()),
 			_ => None,
 		});
 		assert_eq!(
@@ -354,6 +367,10 @@ mod tests {
 			invalid.vfs_protected_cache_pages,
 			DEFAULT_VFS_PROTECTED_CACHE_PAGES
 		);
+		assert_eq!(
+			invalid.vfs_staging_cache_ttl_ms,
+			DEFAULT_VFS_STAGING_CACHE_TTL_MS
+		);
 
 		let clamped = SqliteOptimizationFlags::from_env_reader(|key| match key {
 			STARTUP_PRELOAD_MAX_BYTES_ENV => Some((MAX_STARTUP_PRELOAD_MAX_BYTES + 1).to_string()),
@@ -364,6 +381,7 @@ mod tests {
 				Some((MAX_VFS_PAGE_CACHE_CAPACITY_PAGES + 1).to_string())
 			}
 			VFS_PROTECTED_CACHE_PAGES_ENV => Some((MAX_VFS_PROTECTED_CACHE_PAGES + 1).to_string()),
+			VFS_STAGING_CACHE_TTL_MS_ENV => Some((MAX_VFS_STAGING_CACHE_TTL_MS + 1).to_string()),
 			_ => None,
 		});
 		assert_eq!(
@@ -381,6 +399,10 @@ mod tests {
 		assert_eq!(
 			clamped.vfs_protected_cache_pages,
 			MAX_VFS_PROTECTED_CACHE_PAGES
+		);
+		assert_eq!(
+			clamped.vfs_staging_cache_ttl_ms,
+			MAX_VFS_STAGING_CACHE_TTL_MS
 		);
 	}
 }

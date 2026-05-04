@@ -11,7 +11,8 @@ Range page-read protocol details live in `.agent/specs/sqlite-range-page-read-pr
 ## Existing Optimizations
 
 - Actor startup can preload SQLite VFS pages through `OpenConfig.preload_pgnos`, `OpenConfig.preload_ranges`, and persisted `/PRELOAD_HINTS`; first pages, hint mechanisms, and the preload byte budget are configured through central SQLite optimization flags.
-- The VFS keeps an in-memory page cache seeded from `sqlite_startup_data.preloaded_pages`; cache behavior is selected with `RIVETKIT_SQLITE_OPT_VFS_PAGE_CACHE_MODE=off|target|startup|prefetch|all`, with capacity and protected-cache budget configured separately.
+- The VFS keeps a short-lived staging cache for speculative startup preload and read-ahead pages. Direct target pages fetched for `xRead` are not retained after SQLite receives them; speculative entries are invalidated on first target read and also expire through `RIVETKIT_SQLITE_OPT_VFS_STAGING_CACHE_TTL_MS`.
+- VFS staging cache behavior is selected with `RIVETKIT_SQLITE_OPT_VFS_PAGE_CACHE_MODE=off|target|startup|prefetch|all`, with capacity and page-1 protected-cache behavior configured separately.
 - The VFS has speculative read-ahead selected with `RIVETKIT_SQLITE_OPT_READ_AHEAD_MODE=off|bounded|adaptive`; the default bounded budget is 64 pages, which reduced the cold-read benchmark from 1,249 to 368 VFS `get_pages` calls.
 - The VFS tracks bounded recent page hints as hot pages plus coalesced scan ranges; `NativeDatabase::snapshot_preload_hints()` exposes the in-memory plan for future flush wiring.
 - Actor Prometheus metrics expose VFS read counters, fetched bytes, cache hits/misses, and `get_pages` duration at `/gateway/<actor_id>/metrics`.
