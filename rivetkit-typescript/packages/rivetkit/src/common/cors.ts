@@ -1,4 +1,7 @@
 import type { MiddlewareHandler } from "hono";
+import { ALLOWED_PUBLIC_HEADERS } from "@/common/actor-router-consts";
+
+const DEFAULT_ALLOWED_HEADERS = ALLOWED_PUBLIC_HEADERS.join(", ");
 
 /**
  * Simple CORS middleware that matches the gateway behavior.
@@ -18,7 +21,8 @@ export const cors = (): MiddlewareHandler => {
 		// Handle preflight OPTIONS request
 		if (c.req.method === "OPTIONS") {
 			const requestHeaders =
-				c.req.header("access-control-request-headers") || "*";
+				c.req.header("access-control-request-headers") ??
+				DEFAULT_ALLOWED_HEADERS;
 
 			c.header("access-control-allow-origin", origin);
 			c.header("access-control-allow-credentials", "true");
