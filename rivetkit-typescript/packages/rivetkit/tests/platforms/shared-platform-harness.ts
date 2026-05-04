@@ -497,7 +497,7 @@ export async function createPlatformServerlessRunner({
 				serverless: {
 					url: serverlessUrl,
 					headers: headers ?? {},
-					request_lifespan: requestLifespan ?? 15 * 60,
+					request_lifespan: requestLifespan ?? 60 * 60,
 					drain_grace_period: drainGracePeriod,
 					metadata_poll_interval: metadataPollInterval ?? 1_000,
 					max_runners: maxRunners ?? 100_000,

@@ -62,7 +62,7 @@ export async function configureServerlessPool(
 				serverless: {
 					url: customConfig.url,
 					headers,
-					request_lifespan: customConfig.requestLifespan ?? 15 * 60,
+					request_lifespan: customConfig.requestLifespan ?? 60 * 60,
 					drain_grace_period: customConfig.drainGracePeriod,
 					metadata_poll_interval:
 						customConfig.metadataPollInterval ?? 1000,

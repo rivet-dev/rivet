@@ -138,7 +138,7 @@ These timeouts control how actors are shut down when a serverless request reache
 
 | Name | Soft Limit | Hard Limit | Description |
 |------|------------|------------|-------------|
-| Request lifespan | 900 seconds (15 min) | — | Total lifespan of a serverless request before drain begins. Configurable via `requestLifespan` in [`configurePool`](/docs/connect/registry-configuration). |
+| Request lifespan | 3600 seconds (60 min) | — | Total lifespan of a serverless request before drain begins. Configurable via `requestLifespan` in [`configurePool`](/docs/connect/registry-configuration). |
 | Serverless drain grace period | — | 10 seconds | Time reserved at the end of a request for actors to stop gracefully. Configurable via [engine config](/docs/self-hosting/configuration) (`pegboard.serverless_drain_grace_period`). |
 
 ### Actor Lifecycle
@@ -146,7 +146,7 @@ These timeouts control how actors are shut down when a serverless request reache
 | Name | Soft Limit | Hard Limit | Description |
 |------|------------|------------|-------------|
 | Actor start threshold | — | 30 seconds | Maximum time for an actor to start before it is considered lost and rescheduled. |
-| Actor stop threshold | — | 30 seconds | Maximum time for an actor to stop before it is considered lost. |
+| Actor stop threshold | — | 30 minutes | Maximum time for an actor to stop before it is considered lost. |
 
 ## Increasing Limits
 

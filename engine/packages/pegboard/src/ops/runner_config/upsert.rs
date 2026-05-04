@@ -29,6 +29,7 @@ pub async fn pegboard_runner_config_upsert(ctx: &OperationCtx, input: &Input) ->
 		RunnerConfigKind::Serverless {
 			url,
 			headers,
+			drain_grace_period,
 			slots_per_runner,
 			..
 		} => {
@@ -76,6 +77,17 @@ pub async fn pegboard_runner_config_upsert(ctx: &OperationCtx, input: &Input) ->
 			if *slots_per_runner == 0 {
 				return Err(errors::RunnerConfig::Invalid {
 					reason: "`slots_per_runner` cannot be 0".to_string(),
+				}
+				.build());
+			}
+
+			let actor_stop_threshold_ms = ctx.config().pegboard().actor_stop_threshold();
+			let drain_grace_period_ms = i64::from(*drain_grace_period) * 1000;
+			if drain_grace_period_ms > actor_stop_threshold_ms {
+				return Err(errors::RunnerConfig::Invalid {
+					reason: format!(
+						"`drain_grace_period` cannot be greater than `actor_stop_threshold` ({drain_grace_period_ms}ms > {actor_stop_threshold_ms}ms)"
+					),
 				}
 				.build());
 			}
