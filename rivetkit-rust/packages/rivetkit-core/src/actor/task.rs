@@ -2159,11 +2159,14 @@ impl ActorTask {
 			// only meant to stop the previous generation.
 			self.ctx.reset_abort_signal_for_start();
 			self.ctx.clear_sleep_requested();
+			}
+			self.ctx
+				.set_started(matches!(
+					lifecycle,
+					LifecycleState::Started | LifecycleState::SleepGrace
+				));
 		}
-		self.ctx
-			.set_started(matches!(lifecycle, LifecycleState::Started));
 	}
-}
 
 fn shutdown_reason_label(reason: ShutdownKind) -> &'static str {
 	match reason {

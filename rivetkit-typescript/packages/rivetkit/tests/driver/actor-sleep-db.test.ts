@@ -428,8 +428,7 @@ describeDriverMatrix("Actor Sleep Db", (driverTestConfig) => {
 			expect(events).toContain("sleep-end");
 		});
 
-		// TODO(#4705): Root-cause handle action dispatch ordering during sleep shutdown and re-enable this coverage.
-		test.skip("action via handle during sleep shutdown is not queued", async (c) => {
+		test("action via handle during sleep shutdown is not queued", async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);
 
 			const handle = client.sleepWithDbAction.getOrCreate([
@@ -647,8 +646,7 @@ describeDriverMatrix("Actor Sleep Db", (driverTestConfig) => {
 			);
 		});
 
-		// TODO(#4705): Root-cause connection action dispatch ordering during sleep shutdown and re-enable this coverage.
-		test.skip("action via WebSocket connection during sleep shutdown is not queued", async (c) => {
+		test("action via WebSocket connection during sleep shutdown is not queued", async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);
 
 			const handle = client.sleepWithDbAction.getOrCreate([
@@ -698,8 +696,7 @@ describeDriverMatrix("Actor Sleep Db", (driverTestConfig) => {
 				expect(events).not.toContain("ws-during-sleep");
 			}
 		});
-		// TODO(#4705): Root-cause new connection behavior during sleep shutdown and re-enable this coverage.
-		test.skip("new connections rejected during sleep shutdown", async (c) => {
+		test("new connections rejected during sleep shutdown", async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);
 
 			// The sleepWithDbAction actor has a 500ms delay in
@@ -744,8 +741,7 @@ describeDriverMatrix("Actor Sleep Db", (driverTestConfig) => {
 			await secondConn.dispose();
 		});
 
-		// TODO(#4705): Root-cause raw WebSocket admission during sleep shutdown and re-enable this coverage.
-		test.skip("new raw WebSocket during sleep shutdown is rejected or queued", async (c) => {
+		test("new raw WebSocket during sleep shutdown is rejected or queued", async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);
 
 			// The sleepWithRawWs actor has a 500ms delay in onSleep.
