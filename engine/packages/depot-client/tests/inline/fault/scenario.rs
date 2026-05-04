@@ -42,8 +42,8 @@ use universaldb::{
 };
 
 use super::super::{
-	DirectStorage, DirectStorageStats, NativeDatabase, SqliteTransport, SqliteVfs, VfsConfig,
-	open_database,
+	DirectDepotTransport, DirectStorage, DirectStorageStats, NativeDatabase, SqliteVfs, VfsConfig,
+	fetch_initial_main_page_for_registration, open_database,
 };
 use super::oracle::{
 	AmbiguousOracleOutcome, NativeSqliteOracle, OracleCommitSemantics, OracleVerification,
@@ -359,7 +359,6 @@ impl FaultScenarioCtx {
 
 	pub(crate) async fn reload_database(&self) -> Result<()> {
 		self.close_database();
-		self.inner.storage.enable_strict_mode();
 		self.inner
 			.storage
 			.evict_actor_db(&self.inner.actor_id)
@@ -384,13 +383,6 @@ impl FaultScenarioCtx {
 				"strict workload used mirror reads: before={}, after={}",
 				before.stats.mirror_reads,
 				after.stats.mirror_reads
-			);
-		}
-		if after.stats.mirror_fills != before.stats.mirror_fills {
-			bail!(
-				"strict workload used mirror fills: before={}, after={}",
-				before.stats.mirror_fills,
-				after.stats.mirror_fills
 			);
 		}
 		if after.stats.mirror_seeds != before.stats.mirror_seeds {
@@ -571,7 +563,6 @@ impl FaultScenarioCtx {
 
 	async fn enter_strict_workload_mode(&self) -> Result<()> {
 		self.close_database();
-		self.inner.storage.enable_strict_mode();
 		self.inner
 			.storage
 			.evict_actor_db(&self.inner.actor_id)
@@ -737,7 +728,6 @@ impl FaultScenarioCtx {
 	}
 
 	pub(crate) async fn read_page_from_depot(&self, pgno: u32) -> Result<()> {
-		self.inner.storage.enable_strict_mode();
 		self.inner
 			.storage
 			.evict_actor_db(&self.inner.actor_id)
@@ -874,12 +864,20 @@ fn open_fault_database(
 ) -> Result<NativeDatabase> {
 	let mut config = VfsConfig::default();
 	config.assert_batch_atomic = false;
-	let vfs = SqliteVfs::register_with_transport(
+	let transport = Arc::new(DirectDepotTransport::new(storage));
+	let initial_main_page = handle
+		.block_on(fetch_initial_main_page_for_registration(
+			transport.clone(),
+			actor_id,
+		))
+		.map_err(anyhow::Error::msg)?;
+	let vfs = SqliteVfs::register_with_transport_and_initial_page(
 		&super::super::next_test_name("sqlite-fault-vfs"),
-		SqliteTransport::from_direct(storage),
+		transport,
 		actor_id.to_string(),
 		handle.clone(),
 		config,
+		initial_main_page,
 		None,
 	)
 	.map_err(anyhow::Error::msg)?;

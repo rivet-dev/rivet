@@ -8,7 +8,7 @@ use depot::{
 	},
 };
 use depot_client::{
-	database::{NativeDatabaseHandle, open_database_from_conveyer},
+	database::{NativeDatabaseHandle, open_database_from_embedded_depot},
 	types::{BindParam, ColumnValue, ExecuteResult, QueryResult},
 };
 use futures_util::{FutureExt, TryStreamExt};
@@ -467,10 +467,20 @@ async fn handle_sqlite_get_pages_response(
 	request: protocol::SqliteGetPagesRequest,
 ) -> protocol::SqliteGetPagesResponse {
 	let actor_id = request.actor_id.clone();
+	let pgnos = request.pgnos.clone();
+	let expected_generation = request.expected_generation;
+	let expected_head_txid = request.expected_head_txid;
 	match handle_sqlite_get_pages(ctx, conn, request).await {
 		Ok(response) => response,
 		Err(err) => {
-			tracing::error!(actor_id = %actor_id, ?err, "sqlite get_pages request failed");
+			tracing::error!(
+				actor_id = %actor_id,
+				?pgnos,
+				?expected_generation,
+				?expected_head_txid,
+				?err,
+				"sqlite get_pages request failed"
+			);
 			protocol::SqliteGetPagesResponse::SqliteErrorResponse(sqlite_error_response(&err))
 		}
 	}
@@ -916,7 +926,7 @@ async fn remote_sqlite_executor_from_parts(
 	let actor_id = actor_id.to_string();
 	let database = cell
 		.get_or_try_init(|| async move {
-			open_database_from_conveyer(
+			open_database_from_embedded_depot(
 				actor_db,
 				actor_id,
 				generation,

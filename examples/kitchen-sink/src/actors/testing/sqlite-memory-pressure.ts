@@ -223,8 +223,54 @@ export const sqliteMemoryPressure = actor({
 			const scanRows = Math.max(1, finiteInt(input.scanRows, DEFAULT_SCAN_ROWS));
 			const now = Date.now();
 			let insertedRows = 0;
+			const logStage = (
+				stage: string,
+				phase: "start" | "end" | "error",
+				fields: Record<string, unknown> = {},
+			) => {
+				console.log(
+					JSON.stringify({
+						kind: "sqlite_memory_pressure_run_cycle_stage",
+						actorId: c.actorId,
+						seed: input.seed,
+						cycle: input.cycle,
+						stage,
+						phase,
+						elapsedMs: performance.now() - startedAt,
+						timestamp: new Date().toISOString(),
+						...fields,
+					}),
+				);
+			};
+			const executeTimed = async (
+				stage: string,
+				sql: string,
+				...args: unknown[]
+			) => {
+				const stageStartedAt = performance.now();
+				logStage(stage, "start", { argCount: args.length });
+				try {
+					const rows = await c.db.execute(sql, ...args);
+					logStage(stage, "end", {
+						durationMs: performance.now() - stageStartedAt,
+						rowCount: rows.length,
+					});
+					return rows;
+				} catch (err) {
+					logStage(stage, "error", {
+						durationMs: performance.now() - stageStartedAt,
+						error: err instanceof Error ? err.message : String(err),
+					});
+					throw err;
+				}
+			};
+			logStage("run_cycle", "start", {
+				insertRows,
+				rowBytes,
+				scanRows,
+			});
 
-			await c.db.execute("BEGIN");
+			await executeTimed("begin", "BEGIN");
 			try {
 				while (insertedRows < insertRows) {
 					const batchRows = Math.min(
@@ -246,28 +292,36 @@ export const sqliteMemoryPressure = actor({
 						);
 					}
 
-					await c.db.execute(
+					await executeTimed(
+						"insert_batch",
 						`INSERT INTO pressure_rows (seed, cycle, bucket, payload, touched_count, created_at) VALUES ${placeholders.join(", ")}`,
 						...args,
 					);
 					insertedRows += batchRows;
+					logStage("insert_batch_progress", "end", {
+						insertedRows,
+						batchRows,
+					});
 				}
-				await c.db.execute("COMMIT");
+				await executeTimed("commit", "COMMIT");
 			} catch (err) {
-				await c.db.execute("ROLLBACK").catch(() => undefined);
+				await executeTimed("rollback", "ROLLBACK").catch(() => undefined);
 				throw err;
 			}
 
-			const scan = await c.db.execute(
+			const scan = await executeTimed(
+				"scan_recent",
 				"SELECT id, length(payload) AS payload_bytes FROM pressure_rows ORDER BY id DESC LIMIT ?",
 				scanRows,
 			);
-			const bucketAgg = await c.db.execute(
+			const bucketAgg = await executeTimed(
+				"bucket_agg",
 				"SELECT bucket, COUNT(*) AS rows, SUM(length(payload)) AS bytes FROM pressure_rows WHERE bucket BETWEEN ? AND ? GROUP BY bucket ORDER BY bucket",
 				input.cycle % 16,
 				(input.cycle % 16) + 15,
 			);
-			await c.db.execute(
+			await executeTimed(
+				"touch_recent",
 				"UPDATE pressure_rows SET touched_count = touched_count + 1 WHERE id IN (SELECT id FROM pressure_rows ORDER BY id DESC LIMIT ?)",
 				Math.min(scanRows, insertRows),
 			);
@@ -291,20 +345,31 @@ export const sqliteMemoryPressure = actor({
 			// 	deletedRows = afterDelete.count;
 			// }
 
-			const rowStats = await queryOne<{
-				active_rows: number;
-				active_bytes: number | null;
-			}>(
-				c.db,
+			const rowStatsRows = await executeTimed(
+				"row_stats",
 				"SELECT COUNT(*) AS active_rows, COALESCE(SUM(length(payload)), 0) AS active_bytes FROM pressure_rows",
 			);
-			const integrity = await queryOne<{ integrity_check: string }>(
-				c.db,
+			const rowStats = rowStatsRows[0] as
+				| {
+						active_rows: number;
+						active_bytes: number | null;
+				  }
+				| undefined;
+			if (!rowStats) throw new Error("query returned no rows: row_stats");
+			const integrityRows = await executeTimed(
+				"integrity_check",
 				"PRAGMA integrity_check",
 			);
+			const integrity = integrityRows[0] as
+				| { integrity_check: string }
+				| undefined;
+			if (!integrity) {
+				throw new Error("query returned no rows: integrity_check");
+			}
 			const durationMs = performance.now() - startedAt;
 
-			await c.db.execute(
+			await executeTimed(
+				"record_cycle",
 				"INSERT OR REPLACE INTO pressure_cycles (cycle, seed, inserted_rows, deleted_rows, active_rows, active_bytes, duration_ms, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
 				input.cycle,
 				input.seed,
@@ -316,6 +381,22 @@ export const sqliteMemoryPressure = actor({
 				now,
 			);
 
+			const storageStartedAt = performance.now();
+			logStage("storage_stats", "start");
+			const storage = await storageStats(c.db);
+			logStage("storage_stats", "end", {
+				durationMs: performance.now() - storageStartedAt,
+				pageCount: storage.page_count,
+				dbSizePages: storage.vfs?.dbSizePages ?? null,
+				pageCacheEntries: storage.vfs?.pageCacheEntries ?? null,
+			});
+			logStage("run_cycle", "end", {
+				durationMs,
+				activeRows: rowStats.active_rows,
+				activeBytes: rowStats.active_bytes ?? 0,
+				pageCount: storage.page_count,
+			});
+
 			return {
 				seed: input.seed,
 				cycle: input.cycle,
@@ -326,7 +407,7 @@ export const sqliteMemoryPressure = actor({
 				scannedRows: scan.length,
 				bucketsRead: bucketAgg.length,
 				integrityCheck: integrity.integrity_check,
-				storage: await storageStats(c.db),
+				storage,
 				durationMs,
 			};
 		},

@@ -54,9 +54,16 @@ async function memoryBreakdown(forceGc: boolean) {
 	const heap = v8.getHeapStatistics();
 	const spaces = v8.getHeapSpaceStatistics();
 	const nativeNonV8Estimate = Math.max(0, memory.rss - heap.total_heap_size);
-	const registryDiagnostics = await registry.diagnostics().catch((error: unknown) => ({
-		error: error instanceof Error ? error.message : String(error),
-	}));
+	const diagnostics =
+		"diagnostics" in registry &&
+		typeof registry.diagnostics === "function"
+			? registry.diagnostics.bind(registry)
+			: undefined;
+	const registryDiagnostics = diagnostics
+		? await diagnostics().catch((error: unknown) => ({
+				error: error instanceof Error ? error.message : String(error),
+			}))
+		: { error: "registry diagnostics unavailable" };
 
 	return {
 		pid: process.pid,

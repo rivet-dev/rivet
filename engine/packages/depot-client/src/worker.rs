@@ -269,8 +269,8 @@ impl SqliteWorkerHandle {
 			join.join()
 				.map_err(|panic| anyhow!("sqlite worker panicked: {}", panic_message(&panic)))
 		})
-			.await
-			.context("join sqlite worker join task")?
+		.await
+		.context("join sqlite worker join task")?
 	}
 
 	fn join_worker_in_background(&self, start: Instant) {

@@ -20,6 +20,9 @@ use tokio::sync::Mutex as AsyncMutex;
 use tokio::task::JoinHandle;
 
 #[cfg(feature = "sqlite-local")]
+mod envoy_sqlite_transport;
+
+#[cfg(feature = "sqlite-local")]
 use crate::error::ActorLifecycle;
 use crate::error::SqliteRuntimeError;
 #[cfg(feature = "sqlite-local")]
@@ -27,13 +30,15 @@ use crate::runtime::RuntimeSpawner;
 
 #[cfg(feature = "sqlite-local")]
 use depot_client::{
-	database::{NativeDatabaseHandle, open_database_from_envoy},
+	database::{NativeDatabaseHandle, open_database_from_transport},
 	vfs::{SqliteVfsMetrics, SqliteVfsMetricsSnapshot},
 	worker::{
 		SQLITE_WORKER_QUEUE_CAPACITY, SqliteWorkerCloseTimeoutError, SqliteWorkerClosingError,
 		SqliteWorkerDeadError, SqliteWorkerOverloadedError,
 	},
 };
+#[cfg(feature = "sqlite-local")]
+use envoy_sqlite_transport::EnvoySqliteTransport;
 
 #[cfg(not(feature = "sqlite-local"))]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -163,8 +168,8 @@ impl SqliteDb {
 					let rt_handle = tokio::runtime::Handle::try_current()
 						.context("open sqlite database requires a tokio runtime")?;
 
-					let native_db = open_database_from_envoy(
-						config.handle.clone(),
+					let native_db = open_database_from_transport(
+						Arc::new(EnvoySqliteTransport::new(config.handle.clone())),
 						config.actor_id.clone(),
 						config
 							.generation

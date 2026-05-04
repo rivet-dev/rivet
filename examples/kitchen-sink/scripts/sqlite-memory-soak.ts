@@ -1206,13 +1206,40 @@ async function runActorDriver(
 
 		const lateMs = Math.max(0, Date.now() - scheduledAt);
 		const startedAt = performance.now();
-		const result = await handle.runCycle({
+		const input = {
 			seed: `${args.seed}:${actorIndex}`,
 			cycle,
 			insertRows: args.insertRows,
 			rowBytes: args.rowBytes,
 			scanRows: args.scanRows,
+		};
+		writeEvent(jsonlPath, {
+			kind: "cycle_start",
+			actorIndex,
+			key,
+			cycle,
+			scheduledAt: new Date(scheduledAt).toISOString(),
+			lateMs,
+			input,
+			timestamp: new Date().toISOString(),
 		});
+		let result: Awaited<ReturnType<typeof handle.runCycle>>;
+		try {
+			result = await handle.runCycle(input);
+		} catch (err) {
+			writeEvent(jsonlPath, {
+				kind: "cycle_error",
+				actorIndex,
+				key,
+				cycle,
+				scheduledAt: new Date(scheduledAt).toISOString(),
+				lateMs,
+				durationMs: performance.now() - startedAt,
+				error: stringifyError(err),
+				timestamp: new Date().toISOString(),
+			});
+			throw err;
+		}
 		assertCycle(result);
 		const durationMs = performance.now() - startedAt;
 		if (!wroteActorWake) {
@@ -1305,13 +1332,40 @@ async function runChurnActorDriver(
 
 		const lateMs = Math.max(0, Date.now() - scheduledAt);
 		const startedAt = performance.now();
-		const result = await handle.runCycle({
+		const input = {
 			seed: `${args.seed}:${actorIndex}`,
 			cycle,
 			insertRows: args.insertRows,
 			rowBytes: args.rowBytes,
 			scanRows: args.scanRows,
+		};
+		writeEvent(jsonlPath, {
+			kind: "cycle_start",
+			actorIndex,
+			key,
+			cycle,
+			scheduledAt: new Date(scheduledAt).toISOString(),
+			lateMs,
+			input,
+			timestamp: new Date().toISOString(),
 		});
+		let result: Awaited<ReturnType<typeof handle.runCycle>>;
+		try {
+			result = await handle.runCycle(input);
+		} catch (err) {
+			writeEvent(jsonlPath, {
+				kind: "cycle_error",
+				actorIndex,
+				key,
+				cycle,
+				scheduledAt: new Date(scheduledAt).toISOString(),
+				lateMs,
+				durationMs: performance.now() - startedAt,
+				error: stringifyError(err),
+				timestamp: new Date().toISOString(),
+			});
+			throw err;
+		}
 		assertCycle(result);
 		const durationMs = performance.now() - startedAt;
 		writeEvent(jsonlPath, {

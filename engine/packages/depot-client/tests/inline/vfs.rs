@@ -2,8 +2,8 @@ mod fault;
 mod vfs_support;
 
 pub(super) use vfs_support::{
-	DirectStorage, DirectStorageStats, DirectTransportHooks, protocol_fetched_page,
-	sqlite_error_response, storage_dirty_page,
+	DirectDepotTransport, DirectMirrorTransport, DirectStorage, DirectStorageStats,
+	storage_dirty_page,
 };
 
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -87,12 +87,20 @@ impl DirectEngineHarness {
 		actor_id: &str,
 		config: VfsConfig,
 	) -> NativeDatabase {
-		let vfs = SqliteVfs::register_with_transport(
+		let transport = Arc::new(DirectDepotTransport::new(engine));
+		let initial_main_page = runtime
+			.block_on(fetch_initial_main_page_for_registration(
+				transport.clone(),
+				actor_id,
+			))
+			.expect("initial main page preload should succeed");
+		let vfs = SqliteVfs::register_with_transport_and_initial_page(
 			&next_test_name("sqlite-direct-vfs"),
-			SqliteTransport::from_direct(engine),
+			transport,
 			actor_id.to_string(),
 			runtime.handle().clone(),
 			config,
+			initial_main_page,
 			None,
 		)
 		.expect("v2 vfs should register");
@@ -110,7 +118,7 @@ impl DirectEngineHarness {
 		VfsContext::new(
 			self.actor_id.clone(),
 			runtime.handle().clone(),
-			SqliteTransport::from_direct(engine),
+			Arc::new(DirectDepotTransport::new(engine)),
 			VfsConfig::default(),
 			unsafe { std::mem::zeroed() },
 			None,
@@ -137,13 +145,21 @@ fn open_worker_handle_with_metrics(
 	metrics: Option<Arc<dyn SqliteVfsMetrics>>,
 ) -> crate::database::NativeDatabaseHandle {
 	let engine = runtime.block_on(harness.open_engine());
+	let transport = Arc::new(DirectDepotTransport::new(engine));
+	let initial_main_page = runtime
+		.block_on(fetch_initial_main_page_for_registration(
+			transport.clone(),
+			&harness.actor_id,
+		))
+		.expect("initial main page preload should succeed");
 	let vfs = Arc::new(
-		SqliteVfs::register_with_transport(
+		SqliteVfs::register_with_transport_and_initial_page(
 			&next_test_name("sqlite-worker-vfs"),
-			SqliteTransport::from_direct(engine),
+			transport,
 			harness.actor_id.clone(),
 			runtime.handle().clone(),
 			VfsConfig::default(),
+			initial_main_page,
 			None,
 		)
 		.expect("worker vfs should register"),
@@ -638,29 +654,27 @@ fn direct_engine_open_engine_is_concurrency_safe() {
 }
 
 #[test]
-fn vfs_register_inside_runtime_worker_does_not_block_on_current_thread() {
+fn initial_page_fetch_inside_block_in_place_can_use_runtime_handle() {
 	let runtime = direct_runtime();
 	runtime.block_on(async {
 		let harness = Arc::new(DirectEngineHarness::new());
 		let engine = harness.open_engine().await;
-		engine.enable_strict_mode();
 		let actor_id = harness.actor_id.clone();
-		let runtime = tokio::runtime::Handle::current();
+		let handle = tokio::runtime::Handle::current();
 
-		tokio::task::spawn(async move {
-			let vfs = SqliteVfs::register_with_transport(
-				&next_test_name("sqlite-runtime-worker-vfs"),
-				SqliteTransport::from_direct(engine),
-				actor_id,
-				runtime,
-				VfsConfig::default(),
-				None,
-			)
-			.expect("vfs should register from a runtime worker");
-			drop(vfs);
+		let initial_main_page = tokio::task::spawn(async move {
+			tokio::task::block_in_place(|| {
+				handle.block_on(fetch_initial_main_page_for_registration(
+					Arc::new(DirectDepotTransport::new(engine)),
+					&actor_id,
+				))
+			})
 		})
 		.await
-		.expect("runtime worker task should finish");
+		.expect("runtime worker task should finish")
+		.expect("initial main page preload should succeed");
+
+		assert!(initial_main_page.is_none());
 	});
 }
 
@@ -805,7 +819,6 @@ fn strict_direct_reopen_ignores_poisoned_mirror_and_reads_depot() {
 
 	let engine = runtime.block_on(harness.open_engine());
 	runtime.block_on(engine.poison_mirror_page(&harness.actor_id, 1, vec![0xdb; 4096], page_count));
-	engine.enable_strict_mode();
 	runtime.block_on(engine.evict_actor_db(&harness.actor_id));
 
 	let before = engine.stats();
@@ -818,12 +831,11 @@ fn strict_direct_reopen_ignores_poisoned_mirror_and_reads_depot() {
 	let after = engine.stats();
 	assert!(after.depot_get_pages > before.depot_get_pages);
 	assert_eq!(after.mirror_reads, before.mirror_reads);
-	assert_eq!(after.mirror_fills, before.mirror_fills);
 	assert_eq!(after.mirror_seeds, before.mirror_seeds);
 }
 
 #[test]
-fn strict_direct_mode_rejects_mirror_fallback_and_seed_paths() {
+fn direct_depot_transport_rejects_mirror_fallback() {
 	let runtime = direct_runtime();
 	let harness = DirectEngineHarness::new();
 	let engine = runtime.block_on(harness.open_engine());
@@ -839,31 +851,69 @@ fn strict_direct_mode_rejects_mirror_fallback_and_seed_paths() {
 		))
 		.expect("non-strict mirror seed should succeed");
 
-	engine.enable_strict_mode();
 	runtime.block_on(engine.evict_actor_db(&harness.actor_id));
 	let before = engine.stats();
 	let err = runtime
 		.block_on(engine.get_pages(&harness.actor_id, &[1]))
-		.expect_err("strict mode should not read from the mirror");
+		.expect_err("depot transport should not read from the mirror");
 	assert!(!err.to_string().is_empty());
 	let after = engine.stats();
 	assert_eq!(after.mirror_reads, before.mirror_reads);
-	assert_eq!(after.mirror_fills, before.mirror_fills);
+}
 
-	let err = runtime
-		.block_on(engine.apply_commit(
+#[test]
+fn direct_mirror_transport_reopens_from_mirror_pages() {
+	let runtime = direct_runtime();
+	let harness = DirectEngineHarness::new();
+	let engine = runtime.block_on(harness.open_engine());
+	let transport = Arc::new(DirectMirrorTransport::new(engine.clone()));
+	let hooks = transport.direct_hooks();
+
+	{
+		let vfs = SqliteVfs::register_with_transport(
+			&next_test_name("sqlite-mirror-vfs"),
+			transport.clone(),
+			harness.actor_id.clone(),
+			runtime.handle().clone(),
+			VfsConfig::default(),
+			None,
+		)
+		.expect("mirror vfs should register");
+		let db = open_database(vfs, &harness.actor_id).expect("sqlite database should open");
+		sqlite_exec(db.as_ptr(), "PRAGMA user_version = 314;")
+			.expect("user_version write should succeed");
+	}
+
+	let initial_main_page = runtime
+		.block_on(fetch_initial_main_page_for_registration(
+			transport.clone(),
 			&harness.actor_id,
-			vec![storage_dirty_page(protocol::SqliteDirtyPage {
-				pgno: 1,
-				bytes: empty_db_page(),
-			})],
-			1,
 		))
-		.expect_err("strict mode should reject mirror seed");
-	assert!(
-		err.to_string()
-			.contains("forbids mirror-backed cache seeding")
+		.expect("mirror preload should succeed");
+	let vfs = SqliteVfs::register_with_transport_and_initial_page(
+		&next_test_name("sqlite-mirror-vfs"),
+		transport,
+		harness.actor_id.clone(),
+		runtime.handle().clone(),
+		VfsConfig::default(),
+		initial_main_page,
+		None,
+	)
+	.expect("mirror vfs should register");
+	let reopened = open_database(vfs, &harness.actor_id).expect("sqlite database should reopen");
+	assert_eq!(
+		sqlite_query_i64(reopened.as_ptr(), "PRAGMA user_version;")
+			.expect("mirror user_version read should succeed"),
+		314
 	);
+	assert!(
+		!hooks.commit_requests().is_empty(),
+		"mirror transport should record commit requests",
+	);
+	let stats = engine.stats();
+	assert_eq!(stats.depot_get_pages, 0);
+	assert!(stats.mirror_reads > 0);
+	assert!(stats.mirror_seeds > 0);
 }
 
 #[test]
@@ -882,17 +932,17 @@ fn strict_direct_reopen_counts_cold_tier_get_for_cold_covered_page() {
 
 	let engine = runtime.block_on(harness.open_engine());
 	let page = runtime
-		.block_on(engine.snapshot_pages(&harness.actor_id))
-		.pages
-		.get(&1)
-		.cloned()
+		.block_on(engine.get_pages(&harness.actor_id, &[1]))
+		.expect("page 1 should be fetched from depot")
+		.into_iter()
+		.find(|page| page.pgno == 1)
+		.and_then(|page| page.bytes)
 		.expect("page 1 should be present");
 	assert_eq!(&page[..16], b"SQLite format 3\0");
 	runtime
 		.block_on(engine.seed_page_as_cold_ref(&harness.actor_id, 1, page))
 		.expect("cold ref should seed");
 	runtime.block_on(engine.poison_mirror_page(&harness.actor_id, 1, vec![0xcd; 4096], page_count));
-	engine.enable_strict_mode();
 	runtime.block_on(engine.evict_actor_db(&harness.actor_id));
 
 	let before = engine.stats();
@@ -906,7 +956,6 @@ fn strict_direct_reopen_counts_cold_tier_get_for_cold_covered_page() {
 	assert!(after.depot_get_pages > before.depot_get_pages);
 	assert!(after.cold_gets > before.cold_gets);
 	assert_eq!(after.mirror_reads, before.mirror_reads);
-	assert_eq!(after.mirror_fills, before.mirror_fills);
 	assert_eq!(after.mirror_seeds, before.mirror_seeds);
 }
 
@@ -926,17 +975,17 @@ fn strict_direct_warmed_shard_cache_does_not_count_as_cold_tier_evidence() {
 
 	let engine = runtime.block_on(harness.open_engine());
 	let page = runtime
-		.block_on(engine.snapshot_pages(&harness.actor_id))
-		.pages
-		.get(&1)
-		.cloned()
+		.block_on(engine.get_pages(&harness.actor_id, &[1]))
+		.expect("page 1 should be fetched from depot")
+		.into_iter()
+		.find(|page| page.pgno == 1)
+		.and_then(|page| page.bytes)
 		.expect("page 1 should be present");
 	assert_eq!(&page[..16], b"SQLite format 3\0");
 	runtime
 		.block_on(engine.seed_page_as_cold_ref(&harness.actor_id, 1, page))
 		.expect("cold ref should seed");
 	runtime.block_on(engine.poison_mirror_page(&harness.actor_id, 1, vec![0xcd; 4096], page_count));
-	engine.enable_strict_mode();
 	runtime.block_on(engine.evict_actor_db(&harness.actor_id));
 
 	let before_warm = engine.stats();
@@ -966,7 +1015,6 @@ fn strict_direct_warmed_shard_cache_does_not_count_as_cold_tier_evidence() {
 	assert!(after.depot_get_pages > before.depot_get_pages);
 	assert_eq!(after.cold_gets, before.cold_gets);
 	assert_eq!(after.mirror_reads, before.mirror_reads);
-	assert_eq!(after.mirror_fills, before.mirror_fills);
 	assert_eq!(after.mirror_seeds, before.mirror_seeds);
 }
 
@@ -2073,10 +2121,8 @@ fn direct_engine_marks_vfs_dead_after_transport_errors() {
 	let runtime = direct_runtime();
 	let harness = DirectEngineHarness::new();
 	let engine = runtime.block_on(harness.open_engine());
-	let transport = SqliteTransport::from_direct(engine);
-	let hooks = transport
-		.direct_hooks()
-		.expect("direct transport should expose test hooks");
+	let transport = Arc::new(DirectDepotTransport::new(engine));
+	let hooks = transport.direct_hooks();
 	let vfs = SqliteVfs::register_with_transport(
 		&next_test_name("sqlite-direct-vfs"),
 		transport,
@@ -2117,10 +2163,8 @@ fn flush_dirty_pages_marks_vfs_dead_after_transport_error() {
 	let runtime = direct_runtime();
 	let harness = DirectEngineHarness::new();
 	let engine = runtime.block_on(harness.open_engine());
-	let transport = SqliteTransport::from_direct(engine);
-	let hooks = transport
-		.direct_hooks()
-		.expect("direct transport should expose test hooks");
+	let transport = Arc::new(DirectDepotTransport::new(engine));
+	let hooks = transport.direct_hooks();
 	let vfs = SqliteVfs::register_with_transport(
 		&next_test_name("sqlite-direct-vfs"),
 		transport,
@@ -2163,10 +2207,8 @@ fn commit_atomic_write_marks_vfs_dead_after_transport_error() {
 	let runtime = direct_runtime();
 	let harness = DirectEngineHarness::new();
 	let engine = runtime.block_on(harness.open_engine());
-	let transport = SqliteTransport::from_direct(engine);
-	let hooks = transport
-		.direct_hooks()
-		.expect("direct transport should expose test hooks");
+	let transport = Arc::new(DirectDepotTransport::new(engine));
+	let hooks = transport.direct_hooks();
 	let vfs = SqliteVfs::register_with_transport(
 		&next_test_name("sqlite-direct-vfs"),
 		transport,
@@ -2211,7 +2253,7 @@ fn commit_atomic_write_clears_last_error_on_success() {
 	let runtime = direct_runtime();
 	let harness = DirectEngineHarness::new();
 	let engine = runtime.block_on(harness.open_engine());
-	let transport = SqliteTransport::from_direct(engine);
+	let transport = Arc::new(DirectDepotTransport::new(engine));
 	let vfs = SqliteVfs::register_with_transport(
 		&next_test_name("sqlite-direct-vfs"),
 		transport,
@@ -2252,10 +2294,8 @@ fn concurrent_reader_during_commit_atomic_observes_consistent_snapshot() {
 	let runtime = direct_runtime();
 	let harness = DirectEngineHarness::new();
 	let engine = runtime.block_on(harness.open_engine());
-	let transport = SqliteTransport::from_direct(engine);
-	let hooks = transport
-		.direct_hooks()
-		.expect("direct transport should expose test hooks");
+	let transport = Arc::new(DirectDepotTransport::new(engine));
+	let hooks = transport.direct_hooks();
 	let ctx = VfsContext::new(
 		harness.actor_id.clone(),
 		runtime.handle().clone(),
@@ -2366,7 +2406,7 @@ fn vfs_delete_main_db_resets_in_memory_state() {
 	let harness = DirectEngineHarness::new();
 	let vfs_name = next_test_name("sqlite-direct-vfs");
 	let engine = runtime.block_on(harness.open_engine());
-	let transport = SqliteTransport::from_direct(engine);
+	let transport = Arc::new(DirectDepotTransport::new(engine));
 	let vfs = SqliteVfs::register_with_transport(
 		&vfs_name,
 		transport,
@@ -2697,10 +2737,8 @@ fn direct_engine_fresh_reopen_recovers_after_poisoned_handle() {
 	let runtime = direct_runtime();
 	let harness = DirectEngineHarness::new();
 	let engine = runtime.block_on(harness.open_engine());
-	let transport = SqliteTransport::from_direct(engine.clone());
-	let hooks = transport
-		.direct_hooks()
-		.expect("direct transport should expose test hooks");
+	let transport = Arc::new(DirectDepotTransport::new(engine.clone()));
+	let hooks = transport.direct_hooks();
 	let vfs = SqliteVfs::register_with_transport(
 		&next_test_name("sqlite-direct-vfs"),
 		transport,
@@ -2785,10 +2823,8 @@ fn direct_engine_crash_with_dirty_buffer_recovers_last_commit() {
 	let runtime = direct_runtime();
 	let harness = DirectEngineHarness::new();
 	let engine = runtime.block_on(harness.open_engine());
-	let transport = SqliteTransport::from_direct(engine.clone());
-	let hooks = transport
-		.direct_hooks()
-		.expect("direct transport should expose test hooks");
+	let transport = Arc::new(DirectDepotTransport::new(engine.clone()));
+	let hooks = transport.direct_hooks();
 	let vfs = SqliteVfs::register_with_transport(
 		&next_test_name("sqlite-direct-vfs"),
 		transport,
@@ -2951,10 +2987,8 @@ fn native_database_drop_times_out_pending_commit() {
 	let runtime = direct_runtime();
 	let harness = DirectEngineHarness::new();
 	let engine = runtime.block_on(harness.open_engine());
-	let transport = SqliteTransport::from_direct(engine);
-	let hooks = transport
-		.direct_hooks()
-		.expect("direct transport should expose test hooks");
+	let transport = Arc::new(DirectDepotTransport::new(engine));
+	let hooks = transport.direct_hooks();
 	let vfs = SqliteVfs::register_with_transport(
 		&next_test_name("sqlite-direct-vfs"),
 		transport,
@@ -3190,11 +3224,20 @@ fn truncate_main_file_discards_pages_beyond_eof() {
 fn resolve_pages_surfaces_read_path_error_response() {
 	let runtime = direct_runtime();
 	let harness = DirectEngineHarness::new();
-	let ctx = harness.open_context(&runtime);
-	ctx.transport
-		.direct_hooks()
-		.expect("direct transport should expose test hooks")
-		.fail_next_get_pages("InjectedGetPagesError: read path dropped");
+	let engine = runtime.block_on(harness.open_engine());
+	let transport = Arc::new(DirectDepotTransport::new(engine));
+	let hooks = transport.direct_hooks();
+	let ctx = VfsContext::new(
+		harness.actor_id.clone(),
+		runtime.handle().clone(),
+		transport,
+		VfsConfig::default(),
+		unsafe { std::mem::zeroed() },
+		None,
+		None,
+	)
+	.expect("vfs context should build");
+	hooks.fail_next_get_pages("InjectedGetPagesError: read path dropped");
 
 	let err = ctx
 		.resolve_pages(&[2], false)
@@ -3211,14 +3254,12 @@ fn commit_buffered_pages_uses_fast_path() {
 	let runtime = direct_runtime();
 	let harness = DirectEngineHarness::new();
 	let engine = runtime.block_on(harness.open_engine());
-	let transport = SqliteTransport::from_direct(engine);
-	let hooks = transport
-		.direct_hooks()
-		.expect("direct transport should expose test hooks");
+	let transport = Arc::new(DirectDepotTransport::new(engine));
+	let hooks = transport.direct_hooks();
 
 	let outcome = runtime
 		.block_on(commit_buffered_pages(
-			&transport,
+			&*transport,
 			BufferedCommitRequest {
 				actor_id: harness.actor_id.clone(),
 				new_db_size_pages: 1,

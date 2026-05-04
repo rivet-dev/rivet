@@ -570,53 +570,52 @@ impl EnvoyHandle {
 fn decode_serverless_actor_start_payload(
 	payload: &[u8],
 ) -> anyhow::Result<(protocol::ToEnvoy, ServerlessActorStart)> {
-		use vbare::OwnedVersionedData;
+	use vbare::OwnedVersionedData;
 
-		if payload.len() < 2 {
-			anyhow::bail!("serverless start payload too short");
-		}
-
-		let version = u16::from_le_bytes([payload[0], payload[1]]);
-		if version != protocol::PROTOCOL_VERSION {
-			anyhow::bail!(
-				"serverless start payload does not match protocol version: {version} vs {}",
-				protocol::PROTOCOL_VERSION
-			);
-		}
-
-		let message = match crate::protocol::versioned::ToEnvoy::deserialize(&payload[2..], version)
-		{
-			Ok(message) => message,
-			Err(err) if version == protocol::PROTOCOL_VERSION => {
-				tracing::debug!(
-					?err,
-					"serverless start payload failed current-version decode, retrying as v1-compatible body"
-				);
-				crate::protocol::versioned::ToEnvoy::deserialize(
-					&payload[2..],
-					protocol::PROTOCOL_VERSION - 1,
-				)?
-			}
-			Err(err) => return Err(err),
-		};
-
-		let protocol::ToEnvoy::ToEnvoyCommands(ref commands) = message else {
-			anyhow::bail!("invalid serverless payload: expected ToEnvoyCommands");
-		};
-		if commands.len() != 1 {
-			anyhow::bail!("invalid serverless payload: expected exactly 1 command");
-		}
-		if !matches!(commands[0].inner, protocol::Command::CommandStartActor(_)) {
-			anyhow::bail!("invalid serverless payload: expected CommandStartActor");
-		}
-
-		let actor_start = ServerlessActorStart {
-			actor_id: commands[0].checkpoint.actor_id.clone(),
-			generation: commands[0].checkpoint.generation,
-		};
-
-		Ok((message, actor_start))
+	if payload.len() < 2 {
+		anyhow::bail!("serverless start payload too short");
 	}
+
+	let version = u16::from_le_bytes([payload[0], payload[1]]);
+	if version != protocol::PROTOCOL_VERSION {
+		anyhow::bail!(
+			"serverless start payload does not match protocol version: {version} vs {}",
+			protocol::PROTOCOL_VERSION
+		);
+	}
+
+	let message = match crate::protocol::versioned::ToEnvoy::deserialize(&payload[2..], version) {
+		Ok(message) => message,
+		Err(err) if version == protocol::PROTOCOL_VERSION => {
+			tracing::debug!(
+				?err,
+				"serverless start payload failed current-version decode, retrying as v1-compatible body"
+			);
+			crate::protocol::versioned::ToEnvoy::deserialize(
+				&payload[2..],
+				protocol::PROTOCOL_VERSION - 1,
+			)?
+		}
+		Err(err) => return Err(err),
+	};
+
+	let protocol::ToEnvoy::ToEnvoyCommands(ref commands) = message else {
+		anyhow::bail!("invalid serverless payload: expected ToEnvoyCommands");
+	};
+	if commands.len() != 1 {
+		anyhow::bail!("invalid serverless payload: expected exactly 1 command");
+	}
+	if !matches!(commands[0].inner, protocol::Command::CommandStartActor(_)) {
+		anyhow::bail!("invalid serverless payload: expected CommandStartActor");
+	}
+
+	let actor_start = ServerlessActorStart {
+		actor_id: commands[0].checkpoint.actor_id.clone(),
+		generation: commands[0].checkpoint.generation,
+	};
+
+	Ok((message, actor_start))
+}
 
 impl EnvoyHandle {
 	async fn send_kv_request(

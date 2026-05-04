@@ -5,9 +5,9 @@ use std::sync::atomic::AtomicBool;
 
 use crate::async_counter::AsyncCounter;
 use rivet_envoy_protocol as protocol;
-use tokio::sync::mpsc;
 use tokio::sync::Mutex;
 use tokio::sync::Notify;
+use tokio::sync::mpsc;
 use tokio::sync::watch;
 
 use crate::actor::ToActor;

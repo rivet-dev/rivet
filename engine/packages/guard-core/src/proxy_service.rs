@@ -30,9 +30,7 @@ use url::Url;
 use crate::RouteTarget;
 use crate::request_context::RequestContext;
 use crate::response_body::ResponseBody;
-use crate::route::{
-	CacheKeyFn, ResolveRouteOutput, RouteCache, RoutingFn, RoutingOutput,
-};
+use crate::route::{CacheKeyFn, ResolveRouteOutput, RouteCache, RoutingFn, RoutingOutput};
 use crate::utils::{InFlightCounter, RateLimiter};
 use crate::{
 	WebSocketHandle, custom_serve::HibernationResult, errors, metrics, task_group::TaskGroup, utils,

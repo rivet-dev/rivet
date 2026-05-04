@@ -1855,7 +1855,6 @@ dependencies = [
  "moka",
  "parking_lot",
  "rivet-config",
- "rivet-envoy-client",
  "rivet-envoy-protocol",
  "rivet-pools",
  "rivet-test-deps",
@@ -6000,6 +5999,7 @@ name = "rivetkit-core"
 version = "2.3.0-rc.4"
 dependencies = [
  "anyhow",
+ "async-trait",
  "base64 0.22.1",
  "ciborium",
  "depot-client",

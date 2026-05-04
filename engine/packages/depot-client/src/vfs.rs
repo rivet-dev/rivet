@@ -4,8 +4,6 @@
 
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use std::ffi::{CStr, CString, c_char, c_int, c_void};
-#[cfg(test)]
-use std::future::Future;
 use std::ptr;
 use std::slice;
 use std::sync::Arc;
@@ -13,14 +11,12 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
 use anyhow::Result;
+use async_trait::async_trait;
 use libsqlite3_sys::*;
 use moka::sync::Cache;
 use parking_lot::{Mutex, RwLock};
-use rivet_envoy_client::handle::EnvoyHandle;
 use rivet_envoy_protocol as protocol;
 use tokio::runtime::Handle;
-#[cfg(test)]
-use tokio::runtime::RuntimeFlavor;
 
 use crate::optimization_flags::{SqliteOptimizationFlags, sqlite_optimization_flags};
 
@@ -95,40 +91,6 @@ fn panic_message(payload: &Box<dyn std::any::Any + Send>) -> String {
 	}
 }
 
-#[cfg(test)]
-fn block_on_runtime<F, T>(runtime: &Handle, future: F) -> std::result::Result<T, String>
-where
-	F: Future<Output = T> + Send + 'static,
-	T: Send + 'static,
-{
-	if Handle::try_current().is_err() {
-		return Ok(runtime.block_on(future));
-	}
-
-	if runtime.runtime_flavor() == RuntimeFlavor::CurrentThread {
-		return Err(
-			"sqlite VFS registration cannot block on a current-thread Tokio runtime".to_string(),
-		);
-	}
-
-	let runtime = runtime.clone();
-	// VFS registration is synchronous because SQLite VFS callbacks are synchronous, but native
-	// actor startup often opens SQLite while already running on a Tokio worker. Blocking the
-	// current worker with `Handle::block_on` would panic, so only the open-time metadata fetch is
-	// bridged through a short standalone thread. SQL execution itself stays on the SQLite worker.
-	std::thread::Builder::new()
-		.name("sqlite-vfs-runtime-bridge".to_string())
-		.spawn(move || runtime.block_on(future))
-		.map_err(|err| format!("spawn sqlite VFS runtime bridge: {err}"))?
-		.join()
-		.map_err(|panic| {
-			format!(
-				"sqlite VFS runtime bridge panicked: {}",
-				panic_message(&panic)
-			)
-		})
-}
-
 macro_rules! vfs_catch_unwind {
 	($err_val:expr, $body:expr) => {
 		match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| $body)) {
@@ -141,168 +103,20 @@ macro_rules! vfs_catch_unwind {
 	};
 }
 
-#[derive(Clone)]
-pub(crate) struct SqliteTransport {
-	inner: Arc<SqliteTransportInner>,
-}
-
-enum SqliteTransportInner {
-	Envoy(EnvoyHandle),
-	Conveyer(Arc<depot::conveyer::Db>),
-	#[cfg(test)]
-	Direct(Arc<tests::DirectStorage>),
-}
-
-impl SqliteTransport {
-	pub(crate) fn from_envoy(handle: EnvoyHandle) -> Self {
-		Self {
-			inner: Arc::new(SqliteTransportInner::Envoy(handle)),
-		}
-	}
-
-	pub(crate) fn from_conveyer(db: Arc<depot::conveyer::Db>) -> Self {
-		Self {
-			inner: Arc::new(SqliteTransportInner::Conveyer(db)),
-		}
-	}
-
-	#[cfg(test)]
-	fn from_direct(storage: Arc<tests::DirectStorage>) -> Self {
-		Self {
-			inner: Arc::new(SqliteTransportInner::Direct(storage)),
-		}
-	}
-
-	#[cfg(test)]
-	fn direct_hooks(&self) -> Option<Arc<tests::DirectTransportHooks>> {
-		match &*self.inner {
-			SqliteTransportInner::Direct(storage) => Some(Arc::clone(&storage.hooks)),
-			SqliteTransportInner::Envoy(_) => None,
-			SqliteTransportInner::Conveyer(_) => None,
-		}
-	}
-
+#[async_trait]
+pub trait SqliteTransport: Send + Sync {
 	async fn get_pages(
 		&self,
-		req: protocol::SqliteGetPagesRequest,
-	) -> Result<protocol::SqliteGetPagesResponse> {
-		match &*self.inner {
-			SqliteTransportInner::Envoy(handle) => handle.sqlite_get_pages(req).await,
-			SqliteTransportInner::Conveyer(db) => match db.get_pages(req.pgnos).await {
-				Ok(pages) => Ok(protocol::SqliteGetPagesResponse::SqliteGetPagesOk(
-					protocol::SqliteGetPagesOk {
-						pages: pages
-							.into_iter()
-							.map(|page| protocol::SqliteFetchedPage {
-								pgno: page.pgno,
-								bytes: page.bytes,
-							})
-							.collect(),
-					},
-				)),
-				Err(err) => Ok(protocol::SqliteGetPagesResponse::SqliteErrorResponse(
-					protocol::SqliteErrorResponse {
-						message: sqlite_error_reason(&err),
-					},
-				)),
-			},
-			#[cfg(test)]
-			SqliteTransportInner::Direct(storage) => {
-				let pgnos = req.pgnos.clone();
-				match storage.get_pages(&req.actor_id, &pgnos).await {
-					Ok(pages) => Ok(protocol::SqliteGetPagesResponse::SqliteGetPagesOk(
-						protocol::SqliteGetPagesOk {
-							pages: pages
-								.into_iter()
-								.map(tests::protocol_fetched_page)
-								.collect(),
-						},
-					)),
-					Err(err) => Ok(protocol::SqliteGetPagesResponse::SqliteErrorResponse(
-						tests::sqlite_error_response(&err),
-					)),
-				}
-			}
-		}
-	}
+		request: protocol::SqliteGetPagesRequest,
+	) -> Result<protocol::SqliteGetPagesResponse>;
 
 	async fn commit(
 		&self,
-		req: protocol::SqliteCommitRequest,
-	) -> Result<protocol::SqliteCommitResponse> {
-		match &*self.inner {
-			SqliteTransportInner::Envoy(handle) => handle.sqlite_commit(req).await,
-			SqliteTransportInner::Conveyer(db) => match db
-				.commit(
-					req.dirty_pages
-						.into_iter()
-						.map(|page| depot::types::DirtyPage {
-							pgno: page.pgno,
-							bytes: page.bytes,
-						})
-						.collect(),
-					req.db_size_pages,
-					req.now_ms,
-				)
-				.await
-			{
-				Ok(()) => Ok(protocol::SqliteCommitResponse::SqliteCommitOk),
-				Err(err) => Ok(protocol::SqliteCommitResponse::SqliteErrorResponse(
-					protocol::SqliteErrorResponse {
-						message: sqlite_error_reason(&err),
-					},
-				)),
-			},
-			#[cfg(test)]
-			SqliteTransportInner::Direct(storage) => {
-				storage.hooks.record_commit_request(req.clone());
-				if storage.hooks.take_commit_hang() {
-					std::future::pending().await
-				}
-				if let Some(message) = storage.hooks.take_commit_error() {
-					return Err(anyhow::anyhow!(message));
-				}
-				storage.hooks.pause_commit_if_requested();
-
-				let actor_id = req.actor_id.clone();
-				let dirty_pages = req
-					.dirty_pages
-					.into_iter()
-					.map(tests::storage_dirty_page)
-					.collect::<Vec<_>>();
-				let actor_db = storage.actor_db(actor_id.clone()).await;
-				match actor_db
-					.commit(dirty_pages.clone(), req.db_size_pages, req.now_ms)
-					.await
-				{
-					Ok(_) => {
-						if !storage.is_strict_mode() {
-							if let Err(err) = storage
-								.apply_commit(&actor_id, dirty_pages, req.db_size_pages)
-								.await
-							{
-								return Ok(protocol::SqliteCommitResponse::SqliteErrorResponse(
-									tests::sqlite_error_response(&err),
-								));
-							}
-						}
-						Ok(protocol::SqliteCommitResponse::SqliteCommitOk)
-					}
-					Err(err) => Ok(protocol::SqliteCommitResponse::SqliteErrorResponse(
-						tests::sqlite_error_response(&err),
-					)),
-				}
-			}
-		}
-	}
+		request: protocol::SqliteCommitRequest,
+	) -> Result<protocol::SqliteCommitResponse>;
 }
 
-fn sqlite_error_reason(err: &anyhow::Error) -> String {
-	err.chain()
-		.map(ToString::to_string)
-		.collect::<Vec<_>>()
-		.join(": ")
-}
+pub type SqliteTransportHandle = Arc<dyn SqliteTransport>;
 
 fn sqlite_now_ms() -> Result<i64> {
 	use std::time::{SystemTime, UNIX_EPOCH};
@@ -475,7 +289,7 @@ enum CommitWait<T> {
 pub struct VfsContext {
 	actor_id: String,
 	runtime: Handle,
-	transport: SqliteTransport,
+	transport: SqliteTransportHandle,
 	config: VfsConfig,
 	state: RwLock<VfsState>,
 	aux_files: RwLock<BTreeMap<String, Arc<AuxFileState>>>,
@@ -979,7 +793,7 @@ impl VfsContext {
 	fn new(
 		actor_id: String,
 		runtime: Handle,
-		transport: SqliteTransport,
+		transport: SqliteTransportHandle,
 		config: VfsConfig,
 		io_methods: sqlite3_io_methods,
 		initial_main_page: Option<Vec<u8>>,
@@ -988,31 +802,6 @@ impl VfsContext {
 		let mut state = VfsState::new(&config);
 		if let Some(page) = initial_main_page {
 			state.seed_main_page(page);
-		}
-		#[cfg(test)]
-		if let SqliteTransportInner::Direct(storage) = &*transport.inner {
-			if storage.is_strict_mode() {
-				if let Some(page) =
-					fetch_initial_main_page_for_test(&transport, &runtime, &actor_id)?
-				{
-					state.seed_main_page(page);
-				}
-			} else {
-				let storage = Arc::clone(storage);
-				let actor_id = actor_id.clone();
-				let snapshot =
-					block_on_runtime(
-						&runtime,
-						async move { storage.snapshot_pages(&actor_id).await },
-					)?;
-				if snapshot.db_size_pages > 0 {
-					state.db_size_pages = snapshot.db_size_pages;
-					state.page_cache.invalidate_all();
-					for (pgno, bytes) in snapshot.pages {
-						state.page_cache.insert(pgno, bytes);
-					}
-				}
-			}
 		}
 
 		Ok(Self {
@@ -1114,7 +903,7 @@ impl VfsContext {
 		CommitWait<(BufferedCommitOutcome, CommitTransportMetrics)>,
 		CommitBufferError,
 	> {
-		let commit = commit_buffered_pages(&self.transport, request);
+		let commit = commit_buffered_pages(&*self.transport, request);
 		let result = if let Some(timeout) = timeout {
 			match self
 				.runtime
@@ -1261,6 +1050,7 @@ impl VfsContext {
 			seed_pgno,
 			prediction_budget,
 			predicted_pgnos,
+			db_size_pages,
 		) = {
 			let mut state = self.state.write();
 			for pgno in target_pgnos.iter().copied() {
@@ -1302,6 +1092,7 @@ impl VfsContext {
 				seed_pgno,
 				prediction_budget,
 				predicted_pgnos,
+				state.db_size_pages,
 			)
 		};
 
@@ -1355,11 +1146,56 @@ impl VfsContext {
 		match response {
 			protocol::SqliteGetPagesResponse::SqliteGetPagesOk(ok) => {
 				let page_cache = { self.state.read().page_cache.clone() };
+				#[cfg(debug_assertions)]
+				let mut returned_pgnos = HashSet::new();
+				#[cfg(debug_assertions)]
+				let mut returned_missing_pages = Vec::new();
+				#[cfg(debug_assertions)]
+				let mut returned_missing_in_range_pages = Vec::new();
 				for fetched in ok.pages {
+					#[cfg(debug_assertions)]
+					{
+						returned_pgnos.insert(fetched.pgno);
+						if fetched.bytes.is_none() {
+							returned_missing_pages.push(fetched.pgno);
+							if fetched.pgno <= db_size_pages {
+								returned_missing_in_range_pages.push(fetched.pgno);
+							}
+						}
+					}
 					if let Some(bytes) = &fetched.bytes {
 						page_cache.insert(fetched.pgno, bytes.clone());
 					}
 					resolved.insert(fetched.pgno, fetched.bytes);
+				}
+				#[cfg(debug_assertions)]
+				{
+					let absent_response_pages = to_fetch
+						.iter()
+						.copied()
+						.filter(|pgno| !returned_pgnos.contains(pgno))
+						.collect::<Vec<_>>();
+					let absent_in_range_pages = absent_response_pages
+						.iter()
+						.copied()
+						.filter(|pgno| *pgno <= db_size_pages)
+						.collect::<Vec<_>>();
+					if !returned_missing_in_range_pages.is_empty()
+						|| !absent_in_range_pages.is_empty()
+					{
+						tracing::warn!(
+							actor_id = %self.actor_id,
+							requested_pages = ?target_pgnos,
+							missing_pages = ?missing,
+							fetch_pages = ?to_fetch,
+							db_size_pages,
+							returned_missing_pages = ?returned_missing_pages,
+							returned_missing_in_range_pages = ?returned_missing_in_range_pages,
+							absent_response_pages = ?absent_response_pages,
+							absent_in_range_pages = ?absent_in_range_pages,
+							"sqlite get_pages returned missing pages within declared db size"
+						);
+					}
 				}
 				for pgno in missing {
 					resolved.entry(pgno).or_insert(None);
@@ -1443,12 +1279,26 @@ impl VfsContext {
 		tracing::debug!(
 			dirty_pages = request.dirty_pages.len(),
 			path = ?outcome.path,
+			requested_db_size_pages = request.new_db_size_pages,
 			db_size_pages = outcome.db_size_pages,
 			request_build_ns,
 			serialize_ns = transport_metrics.serialize_ns,
 			transport_ns = transport_metrics.transport_ns,
 			"vfs commit complete (flush)"
 		);
+		#[cfg(debug_assertions)]
+		{
+			if outcome.db_size_pages != request.new_db_size_pages {
+				tracing::warn!(
+					actor_id = %self.actor_id,
+					dirty_pages = request.dirty_pages.len(),
+					path = ?outcome.path,
+					requested_db_size_pages = request.new_db_size_pages,
+					outcome_db_size_pages = outcome.db_size_pages,
+					"sqlite flush commit returned db size different from request"
+				);
+			}
+		}
 		let state_update_start = Instant::now();
 		let mut state = self.state.write();
 		state.db_size_pages = request.new_db_size_pages;
@@ -1545,6 +1395,19 @@ impl VfsContext {
 			transport_ns = transport_metrics.transport_ns,
 			"vfs commit complete (atomic)"
 		);
+		#[cfg(debug_assertions)]
+		{
+			if outcome.db_size_pages != request.new_db_size_pages {
+				tracing::warn!(
+					actor_id = %self.actor_id,
+					dirty_pages = request.dirty_pages.len(),
+					path = ?outcome.path,
+					requested_db_size_pages = request.new_db_size_pages,
+					outcome_db_size_pages = outcome.db_size_pages,
+					"sqlite atomic commit returned db size different from request"
+				);
+			}
+		}
 		self.clear_last_error();
 		let state_update_start = Instant::now();
 		let mut state = self.state.write();
@@ -1650,14 +1513,14 @@ fn mark_dead_from_fence_commit_error(ctx: &VfsContext, err: &CommitBufferError) 
 }
 
 pub(crate) async fn fetch_initial_main_page_for_registration(
-	transport: &SqliteTransport,
+	transport: SqliteTransportHandle,
 	actor_id: &str,
 ) -> std::result::Result<Option<Vec<u8>>, String> {
-	fetch_initial_main_page(transport.clone(), actor_id.to_string()).await
+	fetch_initial_main_page(transport, actor_id.to_string()).await
 }
 
 async fn fetch_initial_main_page(
-	transport: SqliteTransport,
+	transport: SqliteTransportHandle,
 	actor_id: String,
 ) -> std::result::Result<Option<Vec<u8>>, String> {
 	let request_actor_id = actor_id.clone();
@@ -1694,24 +1557,9 @@ async fn fetch_initial_main_page(
 	}
 }
 
-#[cfg(test)]
-fn fetch_initial_main_page_for_test(
-	transport: &SqliteTransport,
-	runtime: &Handle,
-	actor_id: &str,
-) -> std::result::Result<Option<Vec<u8>>, String> {
-	let transport = transport.clone();
-	let actor_id = actor_id.to_string();
-	block_on_runtime(runtime, async move {
-		fetch_initial_main_page(transport, actor_id).await
-	})?
-}
-
 fn is_initial_main_page_missing(message: &str) -> bool {
 	message.contains("sqlite database was not found in this bucket branch")
 		|| message.contains("sqlite meta missing for get_pages")
-		|| message
-			.contains("strict DirectStorage forbids mirror fallback for missing depot metadata")
 }
 
 fn next_temp_aux_path() -> String {
@@ -1726,7 +1574,7 @@ unsafe fn get_aux_state(file: &VfsFile) -> Option<&AuxFileHandle> {
 }
 
 async fn commit_buffered_pages(
-	transport: &SqliteTransport,
+	transport: &dyn SqliteTransport,
 	request: BufferedCommitRequest,
 ) -> std::result::Result<(BufferedCommitOutcome, CommitTransportMetrics), CommitBufferError> {
 	let mut metrics = CommitTransportMetrics::default();
@@ -2077,9 +1925,12 @@ unsafe extern "C" fn io_read(
 			Err(_) => return SQLITE_IOERR_READ,
 		};
 		let page_size = ctx.page_size();
-		let file_size = {
+		let (file_size, db_size_pages) = {
 			let state = ctx.state.read();
-			state.db_size_pages as usize * state.page_size
+			(
+				state.db_size_pages as usize * state.page_size,
+				state.db_size_pages,
+			)
 		};
 
 		let resolved = match ctx.resolve_pages(&requested_pages, true) {
@@ -2090,6 +1941,29 @@ unsafe extern "C" fn io_read(
 			}
 		};
 		ctx.clear_last_error();
+
+		#[cfg(debug_assertions)]
+		{
+			let missing_in_range_pages = requested_pages
+				.iter()
+				.copied()
+				.filter(|pgno| *pgno <= db_size_pages)
+				.filter(|pgno| !matches!(resolved.get(pgno), Some(Some(_))))
+				.collect::<Vec<_>>();
+			if !missing_in_range_pages.is_empty() {
+				tracing::warn!(
+					actor_id = %ctx.actor_id,
+					offset = i_offset,
+					amount = i_amt,
+					page_size,
+					db_size_pages,
+					file_size,
+					requested_pages = ?requested_pages,
+					missing_in_range_pages = ?missing_in_range_pages,
+					"sqlite xRead would zero-fill pages within declared db size"
+				);
+			}
+		}
 
 		buf.fill(0);
 		for pgno in requested_pages {
@@ -2165,8 +2039,8 @@ unsafe extern "C" fn io_write(
 		let amt = i_amt as usize;
 		let is_aligned_full_page = offset % page_size == 0 && amt % page_size == 0;
 
-		let resolved = if is_aligned_full_page {
-			HashMap::new()
+		let (resolved, existing_db_size_pages) = if is_aligned_full_page {
+			(HashMap::new(), None)
 		} else {
 			let (db_size_pages, pages_to_resolve): (u32, Vec<u32>) = {
 				let state = ctx.state.read();
@@ -2197,8 +2071,31 @@ unsafe extern "C" fn io_write(
 					resolved.entry(*pgno).or_insert(None);
 				}
 			}
-			resolved
+			(resolved, Some(db_size_pages))
 		};
+		#[cfg(debug_assertions)]
+		{
+			if let Some(db_size_pages) = existing_db_size_pages {
+				let missing_existing_pages = target_pages
+					.iter()
+					.copied()
+					.filter(|pgno| *pgno <= db_size_pages)
+					.filter(|pgno| !matches!(resolved.get(pgno), Some(Some(_))))
+					.collect::<Vec<_>>();
+				if !missing_existing_pages.is_empty() {
+					tracing::warn!(
+						actor_id = %ctx.actor_id,
+						offset = i_offset,
+						amount = i_amt,
+						page_size,
+						db_size_pages,
+						target_pages = ?target_pages,
+						missing_existing_pages = ?missing_existing_pages,
+						"sqlite xWrite partial update would synthesize existing pages from zeros"
+					);
+				}
+			}
+		}
 
 		let mut dirty_pages = BTreeMap::new();
 		for pgno in target_pages {
@@ -2588,24 +2485,6 @@ unsafe extern "C" fn vfs_get_last_error(
 }
 
 impl SqliteVfs {
-	pub fn register(
-		name: &str,
-		handle: EnvoyHandle,
-		actor_id: String,
-		runtime: Handle,
-		config: VfsConfig,
-		metrics: Option<Arc<dyn SqliteVfsMetrics>>,
-	) -> std::result::Result<Self, String> {
-		Self::register_with_transport(
-			name,
-			SqliteTransport::from_envoy(handle),
-			actor_id,
-			runtime,
-			config,
-			metrics,
-		)
-	}
-
 	pub(crate) fn take_last_error(&self) -> Option<String> {
 		self.ctx.take_last_error()
 	}
@@ -2622,9 +2501,10 @@ impl SqliteVfs {
 		self.ctx.sqlite_vfs_metrics()
 	}
 
+	#[cfg(test)]
 	pub(crate) fn register_with_transport(
 		name: &str,
-		transport: SqliteTransport,
+		transport: SqliteTransportHandle,
 		actor_id: String,
 		runtime: Handle,
 		config: VfsConfig,
@@ -2637,7 +2517,7 @@ impl SqliteVfs {
 
 	pub(crate) fn register_with_transport_and_initial_page(
 		name: &str,
-		transport: SqliteTransport,
+		transport: SqliteTransportHandle,
 		actor_id: String,
 		runtime: Handle,
 		config: VfsConfig,

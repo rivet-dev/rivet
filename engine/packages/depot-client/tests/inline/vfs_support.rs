@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use std::sync::{
 	Arc,
-	atomic::{AtomicBool, AtomicU64, Ordering},
+	atomic::{AtomicU64, Ordering},
 	mpsc,
 };
 
@@ -10,7 +10,6 @@ use async_trait::async_trait;
 use depot::{
 	cold_tier::{ColdTier, ColdTierObjectMetadata},
 	conveyer::{Db, db::CompactionSignaler},
-	error::SqliteStorageError,
 	fault::DepotFaultController,
 	keys::{
 		SHARD_SIZE, branch_compaction_cold_shard_key, branch_compaction_root_key,
@@ -18,7 +17,7 @@ use depot::{
 	},
 	ltx::{LtxHeader, encode_ltx_v3},
 	types::{
-		ColdShardRef, CompactionRoot, DatabaseBranchId, DirtyPage, decode_db_head,
+		ColdShardRef, CompactionRoot, DBHead, DatabaseBranchId, DirtyPage, decode_db_head,
 		encode_cold_shard_ref, encode_compaction_root,
 	},
 	workflows::compaction::DeltasAvailable,
@@ -29,6 +28,8 @@ use rivet_pools::{__rivet_util::Id, NodeId};
 use sha2::{Digest, Sha256};
 use universaldb::utils::IsolationLevel::Serializable;
 
+use super::super::SqliteTransport;
+
 pub(crate) struct DirectStorage {
 	db: Arc<universaldb::Database>,
 	node_id: NodeId,
@@ -36,7 +37,6 @@ pub(crate) struct DirectStorage {
 	actor_dbs: scc::HashMap<String, Arc<Db>>,
 	page_mirrors: scc::HashMap<String, Arc<Mutex<DirectActorPages>>>,
 	compaction_signals: Arc<Mutex<Vec<DeltasAvailable>>>,
-	strict: AtomicBool,
 	counters: Arc<DirectStorageCounters>,
 	fault_controller: Option<DepotFaultController>,
 	pub(crate) hooks: Arc<DirectTransportHooks>,
@@ -88,7 +88,6 @@ impl DirectStorage {
 			actor_dbs: scc::HashMap::new(),
 			page_mirrors: scc::HashMap::new(),
 			compaction_signals: Arc::new(Mutex::new(Vec::new())),
-			strict: AtomicBool::new(false),
 			counters,
 			fault_controller,
 			hooks: Arc::new(DirectTransportHooks::default()),
@@ -140,19 +139,10 @@ impl DirectStorage {
 		let _ = self.actor_dbs.remove_async(&actor_id.to_string()).await;
 	}
 
-	pub(crate) fn enable_strict_mode(&self) {
-		self.strict.store(true, Ordering::SeqCst);
-	}
-
-	pub(crate) fn is_strict_mode(&self) -> bool {
-		self.strict.load(Ordering::SeqCst)
-	}
-
 	pub(crate) fn stats(&self) -> DirectStorageStats {
 		DirectStorageStats {
 			depot_get_pages: self.counters.depot_get_pages.load(Ordering::SeqCst),
 			mirror_reads: self.counters.mirror_reads.load(Ordering::SeqCst),
-			mirror_fills: self.counters.mirror_fills.load(Ordering::SeqCst),
 			mirror_seeds: self.counters.mirror_seeds.load(Ordering::SeqCst),
 			cold_gets: self.counters.cold_gets.load(Ordering::SeqCst),
 		}
@@ -185,18 +175,47 @@ impl DirectStorage {
 		pgno: u32,
 		bytes: Vec<u8>,
 	) -> Result<()> {
+		let head = self.read_head(actor_id).await?;
+		let shard_id = pgno / SHARD_SIZE;
 		let snapshot = self.snapshot_pages(actor_id).await;
-		let mut dirty_pages = snapshot
-			.pages
+		let shard_pgnos = (1..=head.db_size_pages)
+			.filter(|candidate_pgno| *candidate_pgno / SHARD_SIZE == shard_id)
+			.collect::<Vec<_>>();
+		let missing_pgnos = shard_pgnos
 			.iter()
-			.filter(|(candidate_pgno, _)| **candidate_pgno / SHARD_SIZE == pgno / SHARD_SIZE)
-			.map(|(pgno, bytes)| DirtyPage {
-				pgno: *pgno,
-				bytes: bytes.clone(),
+			.filter(|candidate_pgno| !snapshot.pages.contains_key(candidate_pgno))
+			.copied()
+			.collect::<Vec<_>>();
+		let fetched_pages = if missing_pgnos.is_empty() {
+			Vec::new()
+		} else {
+			self.actor_db(actor_id.to_string())
+				.await
+				.get_pages(missing_pgnos)
+				.await?
+		};
+		let mut fetched_by_pgno = fetched_pages
+			.into_iter()
+			.filter_map(|page| page.bytes.map(|bytes| (page.pgno, bytes)))
+			.collect::<BTreeMap<_, _>>();
+		fetched_by_pgno.entry(pgno).or_insert(bytes);
+
+		let dirty_pages = shard_pgnos
+			.into_iter()
+			.filter_map(|candidate_pgno| {
+				snapshot
+					.pages
+					.get(&candidate_pgno)
+					.cloned()
+					.or_else(|| fetched_by_pgno.remove(&candidate_pgno))
+					.map(|bytes| DirtyPage {
+						pgno: candidate_pgno,
+						bytes,
+					})
 			})
 			.collect::<Vec<_>>();
 		if dirty_pages.is_empty() {
-			dirty_pages.push(DirtyPage { pgno, bytes });
+			bail!("cold-ref seed could not load pages for shard {shard_id}");
 		}
 		self.seed_pages_as_cold_ref(actor_id, pgno, dirty_pages)
 			.await
@@ -272,6 +291,11 @@ impl DirectStorage {
 	}
 
 	pub(crate) async fn read_branch_head(&self, actor_id: &str) -> Result<(DatabaseBranchId, u64)> {
+		let head = self.read_head(actor_id).await?;
+		Ok((head.branch_id, head.head_txid))
+	}
+
+	async fn read_head(&self, actor_id: &str) -> Result<DBHead> {
 		let actor_id = actor_id.to_string();
 		self.db
 			.run(move |tx| {
@@ -290,7 +314,7 @@ impl DirectStorage {
 						.get(&branch_meta_head_key(branch_id), Serializable)
 						.await?
 						.context("database head should exist")?;
-					Ok((branch_id, decode_db_head(&head)?.head_txid))
+					decode_db_head(&head)
 				}
 			})
 			.await
@@ -316,67 +340,14 @@ impl DirectStorage {
 
 		let actor_db = self.actor_db(actor_id.to_string()).await;
 		self.counters.depot_get_pages.fetch_add(1, Ordering::SeqCst);
-		match actor_db.get_pages(pgnos.to_vec()).await {
-			Ok(pages) if self.strict.load(Ordering::SeqCst) => Ok(pages),
-			Ok(pages) => self.fill_from_mirror(actor_id, pgnos, pages).await,
-			Err(err) => {
-				if matches!(
-					depot_error(&err),
-					Some(SqliteStorageError::MetaMissing { operation })
-						if *operation == "get_pages"
-				) {
-					if self.strict.load(Ordering::SeqCst) {
-						return Err(anyhow::anyhow!(
-							"strict DirectStorage forbids mirror fallback for missing depot metadata"
-						));
-					}
-					Ok(self.read_mirror(actor_id, pgnos).await)
-				} else {
-					Err(err)
-				}
-			}
-		}
+		actor_db.get_pages(pgnos.to_vec()).await
 	}
 
-	async fn fill_from_mirror(
+	pub(crate) async fn read_mirror(
 		&self,
 		actor_id: &str,
 		pgnos: &[u32],
-		pages: Vec<depot::types::FetchedPage>,
-	) -> anyhow::Result<Vec<depot::types::FetchedPage>> {
-		self.counters.mirror_fills.fetch_add(1, Ordering::SeqCst);
-		if self.strict.load(Ordering::SeqCst) {
-			return Err(anyhow::anyhow!(
-				"strict DirectStorage forbids mirror-backed cache seeding"
-			));
-		}
-
-		let mut by_pgno = pages
-			.into_iter()
-			.map(|page| (page.pgno, page))
-			.collect::<BTreeMap<_, _>>();
-		let mirror_pages = self.read_mirror(actor_id, pgnos).await;
-		for page in mirror_pages {
-			if page.bytes.is_some()
-				|| by_pgno
-					.get(&page.pgno)
-					.is_none_or(|existing| existing.bytes.is_none())
-			{
-				by_pgno.insert(page.pgno, page);
-			}
-		}
-		Ok(pgnos
-			.iter()
-			.map(|pgno| {
-				by_pgno.remove(pgno).unwrap_or(depot::types::FetchedPage {
-					pgno: *pgno,
-					bytes: None,
-				})
-			})
-			.collect())
-	}
-
-	async fn read_mirror(&self, actor_id: &str, pgnos: &[u32]) -> Vec<depot::types::FetchedPage> {
+	) -> Vec<depot::types::FetchedPage> {
 		self.counters.mirror_reads.fetch_add(1, Ordering::SeqCst);
 		let mirror = self.page_mirror(actor_id.to_string()).await;
 		let mirror = mirror.lock();
@@ -400,11 +371,6 @@ impl DirectStorage {
 		db_size_pages: u32,
 	) -> anyhow::Result<()> {
 		self.counters.mirror_seeds.fetch_add(1, Ordering::SeqCst);
-		if self.strict.load(Ordering::SeqCst) {
-			return Err(anyhow::anyhow!(
-				"strict DirectStorage forbids mirror-backed cache seeding"
-			));
-		}
 
 		let mirror = self.page_mirror(actor_id.to_string()).await;
 		let mut mirror = mirror.lock();
@@ -425,11 +391,134 @@ impl DirectStorage {
 	}
 }
 
+pub(crate) struct DirectDepotTransport {
+	storage: Arc<DirectStorage>,
+}
+
+impl DirectDepotTransport {
+	pub(crate) fn new(storage: Arc<DirectStorage>) -> Self {
+		Self { storage }
+	}
+
+	pub(crate) fn direct_hooks(&self) -> Arc<DirectTransportHooks> {
+		Arc::clone(&self.storage.hooks)
+	}
+}
+
+#[async_trait]
+impl SqliteTransport for DirectDepotTransport {
+	async fn get_pages(
+		&self,
+		request: protocol::SqliteGetPagesRequest,
+	) -> Result<protocol::SqliteGetPagesResponse> {
+		let pgnos = request.pgnos.clone();
+		match self.storage.get_pages(&request.actor_id, &pgnos).await {
+			Ok(pages) => Ok(protocol::SqliteGetPagesResponse::SqliteGetPagesOk(
+				protocol::SqliteGetPagesOk {
+					pages: pages.into_iter().map(protocol_fetched_page).collect(),
+				},
+			)),
+			Err(err) => Ok(protocol::SqliteGetPagesResponse::SqliteErrorResponse(
+				sqlite_error_response(&err),
+			)),
+		}
+	}
+
+	async fn commit(
+		&self,
+		request: protocol::SqliteCommitRequest,
+	) -> Result<protocol::SqliteCommitResponse> {
+		self.storage
+			.hooks
+			.apply_commit_hooks(request.clone())
+			.await?;
+
+		let actor_id = request.actor_id.clone();
+		let dirty_pages = request
+			.dirty_pages
+			.into_iter()
+			.map(storage_dirty_page)
+			.collect::<Vec<_>>();
+		let actor_db = self.storage.actor_db(actor_id).await;
+		match actor_db
+			.commit(dirty_pages, request.db_size_pages, request.now_ms)
+			.await
+		{
+			Ok(_) => Ok(protocol::SqliteCommitResponse::SqliteCommitOk),
+			Err(err) => Ok(protocol::SqliteCommitResponse::SqliteErrorResponse(
+				sqlite_error_response(&err),
+			)),
+		}
+	}
+}
+
+pub(crate) struct DirectMirrorTransport {
+	storage: Arc<DirectStorage>,
+}
+
+impl DirectMirrorTransport {
+	pub(crate) fn new(storage: Arc<DirectStorage>) -> Self {
+		Self { storage }
+	}
+
+	pub(crate) fn direct_hooks(&self) -> Arc<DirectTransportHooks> {
+		Arc::clone(&self.storage.hooks)
+	}
+}
+
+#[async_trait]
+impl SqliteTransport for DirectMirrorTransport {
+	async fn get_pages(
+		&self,
+		request: protocol::SqliteGetPagesRequest,
+	) -> Result<protocol::SqliteGetPagesResponse> {
+		if let Some(message) = self.storage.hooks.take_get_pages_error() {
+			return Err(anyhow::anyhow!(message));
+		}
+
+		let pages = self
+			.storage
+			.read_mirror(&request.actor_id, &request.pgnos)
+			.await;
+		Ok(protocol::SqliteGetPagesResponse::SqliteGetPagesOk(
+			protocol::SqliteGetPagesOk {
+				pages: pages.into_iter().map(protocol_fetched_page).collect(),
+			},
+		))
+	}
+
+	async fn commit(
+		&self,
+		request: protocol::SqliteCommitRequest,
+	) -> Result<protocol::SqliteCommitResponse> {
+		self.storage
+			.hooks
+			.apply_commit_hooks(request.clone())
+			.await?;
+
+		let actor_id = request.actor_id.clone();
+		let dirty_pages = request
+			.dirty_pages
+			.into_iter()
+			.map(storage_dirty_page)
+			.collect::<Vec<_>>();
+		match self
+			.storage
+			.apply_commit(&actor_id, dirty_pages, request.db_size_pages)
+			.await
+		{
+			Ok(()) => Ok(protocol::SqliteCommitResponse::SqliteCommitOk),
+			Err(err) => Ok(protocol::SqliteCommitResponse::SqliteErrorResponse(
+				sqlite_error_response(&err),
+			)),
+		}
+	}
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct DirectStorageStats {
 	pub(crate) depot_get_pages: u64,
 	pub(crate) mirror_reads: u64,
-	pub(crate) mirror_fills: u64,
 	pub(crate) mirror_seeds: u64,
 	pub(crate) cold_gets: u64,
 }
@@ -438,7 +527,6 @@ pub(crate) struct DirectStorageStats {
 struct DirectStorageCounters {
 	depot_get_pages: AtomicU64,
 	mirror_reads: AtomicU64,
-	mirror_fills: AtomicU64,
 	mirror_seeds: AtomicU64,
 	cold_gets: AtomicU64,
 }
@@ -535,6 +623,21 @@ impl DirectTransportHooks {
 		let _ = gate.reached.send(());
 		let _ = gate.resume.recv();
 	}
+
+	pub(crate) async fn apply_commit_hooks(
+		&self,
+		req: protocol::SqliteCommitRequest,
+	) -> Result<()> {
+		self.record_commit_request(req);
+		if self.take_commit_hang() {
+			std::future::pending().await
+		}
+		if let Some(message) = self.take_commit_error() {
+			return Err(anyhow::anyhow!(message));
+		}
+		self.pause_commit_if_requested();
+		Ok(())
+	}
 }
 
 pub(crate) struct DirectCommitPause {
@@ -571,10 +674,6 @@ pub(crate) fn storage_dirty_page(page: protocol::SqliteDirtyPage) -> depot::type
 		pgno: page.pgno,
 		bytes: page.bytes,
 	}
-}
-
-fn depot_error(err: &anyhow::Error) -> Option<&SqliteStorageError> {
-	err.downcast_ref::<SqliteStorageError>()
 }
 
 fn sqlite_error_reason(err: &anyhow::Error) -> String {

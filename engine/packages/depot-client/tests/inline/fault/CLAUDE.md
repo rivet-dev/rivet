@@ -1,8 +1,8 @@
 # CLAUDE.md
 
-- Fault-injection tests must exercise the real SQLite VFS through DirectStorage into depot.
+- Fault-injection tests must exercise the real SQLite VFS through the explicit DirectDepotTransport.
 - Do not add mock, envoy, or alternate transport variants to this fault suite.
-- Strict DirectStorage mode must fail if reads are served from mirrors or seeded VFS cache state.
+- DirectDepotTransport must fail if reads require mirror fallback or seeded VFS cache state.
 - Faults must be depot semantic faults: fail, pause, delay, or drop depot-owned artifacts.
 - Do not add arbitrary byte corruption, UDB driver faults, Gasoline correctness tests, or global Rivet fault injection here.
 - Tests must validate with native SQLite oracle comparison and depot invariant scanning.

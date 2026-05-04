@@ -12,9 +12,9 @@ crate-type = ["lib"]
 
 [dependencies]
 anyhow.workspace = true
+async-trait.workspace = true
 crossbeam-channel = "0.5"
 libsqlite3-sys = { version = "0.30", features = ["bundled"] }
-rivet-envoy-client = { workspace = true, features = ["native-transport"] }
 tokio.workspace = true
 tracing.workspace = true
 getrandom = "0.2"
@@ -25,7 +25,6 @@ moka = { version = "0.12", default-features = false, features = ["sync"] }
 parking_lot.workspace = true
 
 [dev-dependencies]
-async-trait.workspace = true
 depot = { workspace = true, features = ["test-faults"] }
 futures-util.workspace = true
 gas.workspace = true

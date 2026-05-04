@@ -1,14 +1,15 @@
 use std::sync::Arc;
 
 use anyhow::{Result, anyhow};
-use rivet_envoy_client::handle::EnvoyHandle;
 use tokio::runtime::Handle;
 
 use crate::{
 	query::{BindParam, ExecResult, ExecuteResult, QueryResult},
+	transport::EmbeddedDepotSqliteTransport,
 	vfs::{
-		NativeVfsHandle, SqliteTransport, SqliteVfs, SqliteVfsMetrics, SqliteVfsMetricsSnapshot,
-		VfsConfig, VfsPreloadHintSnapshot, fetch_initial_main_page_for_registration,
+		NativeVfsHandle, SqliteTransportHandle, SqliteVfs, SqliteVfsMetrics,
+		SqliteVfsMetricsSnapshot, VfsConfig, VfsPreloadHintSnapshot,
+		fetch_initial_main_page_for_registration,
 	},
 	worker::SqliteWorkerHandle,
 };
@@ -23,16 +24,15 @@ pub fn vfs_name_for_actor_database(actor_id: &str, generation: u64) -> String {
 	format!("envoy-sqlite-{actor_id}-g{generation}")
 }
 
-pub async fn open_database_from_envoy(
-	handle: EnvoyHandle,
+pub async fn open_database_from_transport(
+	transport: SqliteTransportHandle,
 	actor_id: String,
 	generation: u64,
 	rt_handle: Handle,
 	metrics: Option<Arc<dyn SqliteVfsMetrics>>,
 ) -> Result<NativeDatabaseHandle> {
 	let vfs_name = vfs_name_for_actor_database(&actor_id, generation);
-	let transport = SqliteTransport::from_envoy(handle);
-	let initial_main_page = fetch_initial_main_page_for_registration(&transport, &actor_id)
+	let initial_main_page = fetch_initial_main_page_for_registration(transport.clone(), &actor_id)
 		.await
 		.map_err(|e| anyhow!("failed to preload sqlite main page: {e}"))?;
 	let vfs = Arc::new(
@@ -53,34 +53,21 @@ pub async fn open_database_from_envoy(
 	Ok(native_db)
 }
 
-pub async fn open_database_from_conveyer(
+pub async fn open_database_from_embedded_depot(
 	db: Arc<depot::conveyer::Db>,
 	actor_id: String,
 	generation: u64,
 	rt_handle: Handle,
 	metrics: Option<Arc<dyn SqliteVfsMetrics>>,
 ) -> Result<NativeDatabaseHandle> {
-	let vfs_name = vfs_name_for_actor_database(&actor_id, generation);
-	let transport = SqliteTransport::from_conveyer(db);
-	let initial_main_page = fetch_initial_main_page_for_registration(&transport, &actor_id)
-		.await
-		.map_err(|e| anyhow!("failed to preload sqlite main page: {e}"))?;
-	let vfs = Arc::new(
-		SqliteVfs::register_with_transport_and_initial_page(
-			&vfs_name,
-			transport,
-			actor_id.clone(),
-			rt_handle,
-			VfsConfig::default(),
-			initial_main_page,
-			metrics.clone(),
-		)
-		.map_err(|e| anyhow!("failed to register sqlite VFS: {e}"))?,
-	);
-
-	let native_db = NativeDatabaseHandle::new_with_metrics(vfs, actor_id, metrics)?;
-	native_db.initialize().await?;
-	Ok(native_db)
+	open_database_from_transport(
+		Arc::new(EmbeddedDepotSqliteTransport::new(db)),
+		actor_id,
+		generation,
+		rt_handle,
+		metrics,
+	)
+	.await
 }
 
 impl NativeDatabaseHandle {
