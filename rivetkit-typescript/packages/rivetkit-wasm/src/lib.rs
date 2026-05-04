@@ -865,13 +865,26 @@ async fn dispatch_event(callbacks: &WasmCallbacks, ctx: &WasmActorContext, event
 			}
 			reply.send(result);
 		}
-		ActorEvent::ConnectionOpen {
+		ActorEvent::ConnectionPreflight {
 			conn,
 			params,
 			request,
 			reply,
 		} => {
-			let result = run_connection_open(callbacks, ctx, conn, params, request).await;
+			let result = run_connection_preflight(callbacks, ctx, conn, params, request).await;
+			if let Err(error) = &result {
+				console_error(&format!(
+					"wasm connection preflight callback failed: {error:#}"
+				));
+			}
+			reply.send(result);
+		}
+		ActorEvent::ConnectionOpen {
+			conn,
+			request,
+			reply,
+		} => {
+			let result = run_connection_open(callbacks, ctx, conn, request).await;
 			if let Err(error) = &result {
 				console_error(&format!("wasm connection open callback failed: {error:#}"));
 			}
@@ -949,7 +962,7 @@ async fn dispatch_event(callbacks: &WasmCallbacks, ctx: &WasmActorContext, event
 	}
 }
 
-async fn run_connection_open(
+async fn run_connection_preflight(
 	callbacks: &WasmCallbacks,
 	ctx: &WasmActorContext,
 	conn: rivetkit_core::ConnHandle,
@@ -966,11 +979,14 @@ async fn run_connection_open(
 		call_callback(callback, &payload.into()).await?;
 	}
 
-	let wasm_conn = WasmConnHandle::from_core(conn.clone());
 	if let Some(callback) = &callbacks.create_conn_state {
 		let payload = object();
 		set_anyhow(&payload, "ctx", JsValue::from(ctx.clone()))?;
-		set_anyhow(&payload, "conn", JsValue::from(wasm_conn.clone()))?;
+		set_anyhow(
+			&payload,
+			"conn",
+			JsValue::from(WasmConnHandle::from_core(conn.clone())),
+		)?;
 		set_anyhow(&payload, "params", bytes_to_js(&params))?;
 		if let Some(request) = request.as_ref() {
 			set_anyhow(&payload, "request", request_to_js(request.clone())?)?;
@@ -979,16 +995,29 @@ async fn run_connection_open(
 		conn.set_state_initial(state);
 	}
 
-	if let Some(callback) = &callbacks.on_connect {
-		let payload = object();
-		set_anyhow(&payload, "ctx", JsValue::from(ctx.clone()))?;
-		set_anyhow(&payload, "conn", JsValue::from(wasm_conn))?;
-		if let Some(request) = request {
-			set_anyhow(&payload, "request", request_to_js(request)?)?;
-		}
-		call_callback(callback, &payload.into()).await?;
-	}
+	Ok(())
+}
 
+async fn run_connection_open(
+	callbacks: &WasmCallbacks,
+	ctx: &WasmActorContext,
+	conn: rivetkit_core::ConnHandle,
+	request: Option<Request>,
+) -> Result<()> {
+	let Some(callback) = &callbacks.on_connect else {
+		return Ok(());
+	};
+	let payload = object();
+	set_anyhow(&payload, "ctx", JsValue::from(ctx.clone()))?;
+	set_anyhow(
+		&payload,
+		"conn",
+		JsValue::from(WasmConnHandle::from_core(conn)),
+	)?;
+	if let Some(request) = request {
+		set_anyhow(&payload, "request", request_to_js(request)?)?;
+	}
+	call_callback(callback, &payload.into()).await?;
 	Ok(())
 }
 

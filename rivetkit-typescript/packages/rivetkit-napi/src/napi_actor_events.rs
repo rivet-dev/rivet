@@ -502,7 +502,7 @@ pub(crate) async fn dispatch_event(
 				call_on_websocket(&callback, &ctx, conn, ws, request).await
 			});
 		}
-		ActorEvent::ConnectionOpen {
+		ActorEvent::ConnectionPreflight {
 			conn,
 			params,
 			request,
@@ -510,9 +510,7 @@ pub(crate) async fn dispatch_event(
 		} => {
 			let on_before_connect = bindings.on_before_connect.clone();
 			let create_conn_state = bindings.create_conn_state.clone();
-			let on_connect = bindings.on_connect.clone();
 			let timeout = config.on_before_connect_timeout;
-			let connect_timeout = config.on_connect_timeout;
 			let create_conn_state_timeout = config.create_conn_state_timeout;
 			let ctx = ctx.clone();
 
@@ -542,6 +540,19 @@ pub(crate) async fn dispatch_event(
 					ctx.set_conn_state_initial(&conn, state)?;
 				}
 
+				Ok(())
+			});
+		}
+		ActorEvent::ConnectionOpen {
+			conn,
+			request,
+			reply,
+		} => {
+			let on_connect = bindings.on_connect.clone();
+			let connect_timeout = config.on_connect_timeout;
+			let ctx = ctx.clone();
+
+			spawn_reply(tasks, abort.clone(), reply, async move {
 				if let Some(callback) = on_connect {
 					with_timeout(
 						"onConnect",

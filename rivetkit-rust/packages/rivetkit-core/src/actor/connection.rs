@@ -683,14 +683,17 @@ impl ActorContext {
 		);
 		conn.configure_hibernation(hibernation);
 		self.prepare_managed_conn(&conn);
-		self.insert_existing(conn.clone());
 
 		if let Err(error) = prepare_connection(&conn) {
-			self.remove_existing(conn.id());
 			return Err(error);
 		}
 
-		if let Err(error) = self.emit_connection_open(&conn, params, request).await {
+		self
+			.emit_connection_preflight(&conn, params.clone(), request.clone())
+			.await?;
+		self.insert_existing(conn.clone());
+
+		if let Err(error) = self.emit_connection_open(&conn, request).await {
 			self.remove_existing(conn.id());
 			return Err(error);
 		}
@@ -868,7 +871,6 @@ impl ActorContext {
 	async fn emit_connection_open(
 		&self,
 		conn: &ConnHandle,
-		params: Vec<u8>,
 		request: Option<Request>,
 	) -> Result<()> {
 		let config = self.connection_config();
@@ -876,7 +878,6 @@ impl ActorContext {
 		self.try_send_actor_event(
 			ActorEvent::ConnectionOpen {
 				conn: conn.clone(),
-				params,
 				request,
 				reply: Reply::from(reply_tx),
 			},
@@ -886,6 +887,33 @@ impl ActorContext {
 			.await
 			.with_context(|| timeout_message("connection_open", config.on_connect_timeout))?
 			.context("receive connection_open reply")??;
+		Ok(())
+	}
+
+	async fn emit_connection_preflight(
+		&self,
+		conn: &ConnHandle,
+		params: Vec<u8>,
+		request: Option<Request>,
+	) -> Result<()> {
+		let config = self.connection_config();
+		let timeout_duration = config
+			.on_before_connect_timeout
+			.saturating_add(config.create_conn_state_timeout);
+		let (reply_tx, reply_rx) = oneshot::channel();
+		self.try_send_actor_event(
+			ActorEvent::ConnectionPreflight {
+				conn: conn.clone(),
+				params,
+				request,
+				reply: Reply::from(reply_tx),
+			},
+			"connection_preflight",
+		)?;
+		timeout(timeout_duration, reply_rx)
+			.await
+			.with_context(|| timeout_message("connection_preflight", timeout_duration))?
+			.context("receive connection_preflight reply")??;
 		Ok(())
 	}
 

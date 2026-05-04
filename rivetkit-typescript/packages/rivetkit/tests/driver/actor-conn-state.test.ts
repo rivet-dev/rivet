@@ -149,6 +149,94 @@ describeDriverMatrix("Actor Conn State", (driverTestConfig) => {
 		});
 
 		describe("Connection Lifecycle", () => {
+			test("should hide connections from c.conns until createConnState completes", async (c) => {
+				const { client } = await setupDriverTest(c, driverTestConfig);
+				const handle = client.connPreflightVisibilityActor.getOrCreate([
+					"create-state-visibility",
+					crypto.randomUUID(),
+				]);
+				const primary = handle.connect({ label: "primary" });
+				await primary.snapshot();
+
+				const pending = handle.connect({
+					label: "pending",
+					createDelayMs: 300,
+				});
+
+				const pendingSnapshot = await pending.snapshot();
+				expect([...pendingSnapshot.visibleLabels].sort()).toEqual([
+					"pending",
+					"primary",
+				]);
+				expect(pendingSnapshot.createVisibleLabels).toEqual([
+					[],
+					["primary"],
+				]);
+				expect(
+					pendingSnapshot.connectSnapshots.find(
+						(snapshot) => snapshot.label === "pending",
+					),
+				).toMatchObject({
+					ownVisible: true,
+				});
+				expect(
+					[
+						...pendingSnapshot.connectSnapshots.find(
+							(snapshot) => snapshot.label === "pending",
+						).visibleLabels,
+					].sort(),
+				).toEqual(["pending", "primary"]);
+
+				await pending.dispose();
+				await primary.dispose();
+			});
+
+			test("should hide connections from c.conns until onBeforeConnect completes", async (c) => {
+				const { client } = await setupDriverTest(c, driverTestConfig);
+				const handle = client.connPreflightVisibilityActor.getOrCreate([
+					"before-connect-visibility",
+					crypto.randomUUID(),
+				]);
+				const primary = handle.connect({ label: "primary" });
+				await primary.snapshot();
+
+				const pending = handle.connect({
+					label: "pending",
+					beforeDelayMs: 300,
+				});
+
+				const pendingSnapshot = await pending.snapshot();
+				expect([...pendingSnapshot.visibleLabels].sort()).toEqual([
+					"pending",
+					"primary",
+				]);
+				expect(pendingSnapshot.beforeVisibleLabels).toEqual([
+					[],
+					["primary"],
+				]);
+				expect(pendingSnapshot.createVisibleLabels).toEqual([
+					[],
+					["primary"],
+				]);
+				expect(
+					pendingSnapshot.connectSnapshots.find(
+						(snapshot) => snapshot.label === "pending",
+					),
+				).toMatchObject({
+					ownVisible: true,
+				});
+				expect(
+					[
+						...pendingSnapshot.connectSnapshots.find(
+							(snapshot) => snapshot.label === "pending",
+						).visibleLabels,
+					].sort(),
+				).toEqual(["pending", "primary"]);
+
+				await pending.dispose();
+				await primary.dispose();
+			});
+
 			test("should deliver onConnect events to listeners registered before the first await", async (c) => {
 				const { client } = await setupDriverTest(c, driverTestConfig);
 

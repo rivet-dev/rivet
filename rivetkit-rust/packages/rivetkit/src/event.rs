@@ -81,7 +81,7 @@ impl<A: Actor> Event<A> {
 				reply: Some(reply),
 				_p: PhantomData,
 			}),
-			ActorEvent::ConnectionOpen {
+			ActorEvent::ConnectionPreflight {
 				conn,
 				params,
 				request,
@@ -92,6 +92,9 @@ impl<A: Actor> Event<A> {
 				request,
 				reply: Some(reply),
 			}),
+			ActorEvent::ConnectionOpen { .. } => {
+				unreachable!("ConnectionOpen is handled by Events")
+			}
 			ActorEvent::ConnectionClosed { conn } => Self::ConnClosed(ConnClosed {
 				conn: ConnCtx::from(conn),
 			}),

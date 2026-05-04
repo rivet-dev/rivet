@@ -127,6 +127,10 @@ impl<A: Actor> Events<A> {
 
 	async fn handle_runtime_event(&self, event: ActorEvent) -> Option<ActorEvent> {
 		match event {
+			ActorEvent::ConnectionOpen { reply, .. } => {
+				reply.send(Ok(()));
+				None
+			}
 			ActorEvent::DisconnectConn { conn_id, reply } => {
 				reply.send(self.ctx.disconnect_conn(&conn_id).await);
 				None
@@ -137,6 +141,10 @@ impl<A: Actor> Events<A> {
 
 	fn handle_runtime_event_sync(&self, event: ActorEvent) -> Option<ActorEvent> {
 		match event {
+			ActorEvent::ConnectionOpen { reply, .. } => {
+				reply.send(Ok(()));
+				None
+			}
 			ActorEvent::DisconnectConn { conn_id, reply } => {
 				let ctx = self.ctx.clone();
 				tokio::spawn(async move {

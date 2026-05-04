@@ -4,6 +4,7 @@ mod moved_tests {
 	use std::collections::BTreeSet;
 	use std::sync::Arc;
 	use std::sync::atomic::{AtomicUsize, Ordering};
+	use std::time::Duration;
 
 	use parking_lot::Mutex;
 	use tokio::sync::{Barrier, mpsc};
@@ -70,6 +71,101 @@ mod moved_tests {
 		assert!(ctx.connection("conn-preloaded").is_some());
 	}
 
+	#[tokio::test]
+	async fn pending_connection_is_invisible_until_preflight_succeeds() {
+		let ctx = ActorContext::new_with_kv(
+			"actor-preflight-visibility",
+			"actor",
+			Vec::new(),
+			"local",
+			Kv::new_in_memory(),
+		);
+		ctx.configure_connection_runtime(crate::actor::config::ActorConfig::default());
+		let (events_tx, mut events_rx) = mpsc::unbounded_channel();
+		ctx.configure_actor_events(Some(events_tx));
+
+		let events_ctx = ctx.clone();
+		let event_task = tokio::spawn(async move {
+			let preflight_conn_id = match events_rx.recv().await.expect("preflight event") {
+				ActorEvent::ConnectionPreflight { conn, reply, .. } => {
+					assert!(events_ctx.connection(conn.id()).is_none());
+					conn.set_state_initial(vec![7]);
+					let conn_id = conn.id().to_owned();
+					reply.send(Ok(()));
+					conn_id
+				}
+				other => panic!("unexpected event: {other:?}"),
+			};
+
+			match events_rx.recv().await.expect("open event") {
+				ActorEvent::ConnectionOpen { conn, reply, .. } => {
+					assert_eq!(conn.id(), preflight_conn_id);
+					let visible = events_ctx
+						.connection(conn.id())
+						.expect("connection should be visible for onConnect");
+					assert_eq!(visible.state(), vec![7]);
+					reply.send(Ok(()));
+				}
+				other => panic!("unexpected event: {other:?}"),
+			}
+		});
+
+		let conn = ctx
+			.connect_with_state(vec![1], false, None, None, async { Ok(vec![2]) })
+			.await
+			.expect("connection should succeed");
+
+		assert_eq!(conn.state(), vec![7]);
+		assert!(ctx.connection(conn.id()).is_some());
+		event_task.await.expect("event task should complete");
+	}
+
+	#[tokio::test]
+	async fn failed_preflight_never_exposes_connection() {
+		let ctx = ActorContext::new_with_kv(
+			"actor-preflight-failure",
+			"actor",
+			Vec::new(),
+			"local",
+			Kv::new_in_memory(),
+		);
+		ctx.configure_connection_runtime(crate::actor::config::ActorConfig::default());
+		let (events_tx, mut events_rx) = mpsc::unbounded_channel();
+		ctx.configure_actor_events(Some(events_tx));
+		let failed_conn_id = Arc::new(Mutex::new(None::<String>));
+
+		let events_ctx = ctx.clone();
+		let event_failed_conn_id = failed_conn_id.clone();
+		let event_task = tokio::spawn(async move {
+			match events_rx.recv().await.expect("preflight event") {
+				ActorEvent::ConnectionPreflight { conn, reply, .. } => {
+					assert!(events_ctx.connection(conn.id()).is_none());
+					*event_failed_conn_id.lock() = Some(conn.id().to_owned());
+					reply.send(Err(anyhow::anyhow!("reject preflight")));
+				}
+				other => panic!("unexpected event: {other:?}"),
+			}
+			assert!(
+				tokio::time::timeout(Duration::from_millis(20), events_rx.recv())
+					.await
+					.is_err()
+			);
+		});
+
+		let error = ctx
+			.connect_with_state(vec![1], false, None, None, async { Ok(vec![2]) })
+			.await
+			.expect_err("connection should fail");
+
+		assert!(format!("{error:#}").contains("reject preflight"));
+		let conn_id = failed_conn_id
+			.lock()
+			.clone()
+			.expect("failed connection id should be recorded");
+		assert!(ctx.connection(&conn_id).is_none());
+		event_task.await.expect("event task should complete");
+	}
+
 	#[test]
 	fn persisted_connection_uses_ts_v4_fixed_id_wire_format() {
 		let persisted = PersistedConnection {
@@ -132,6 +228,7 @@ mod moved_tests {
 			async move {
 				while let Some(event) = events_rx.recv().await {
 					match event {
+						ActorEvent::ConnectionPreflight { reply, .. } => reply.send(Ok(())),
 						ActorEvent::ConnectionOpen { reply, .. } => reply.send(Ok(())),
 						ActorEvent::ConnectionClosed { conn } => {
 							*observed_conn_id.lock() = Some(conn.id().to_owned());
@@ -218,12 +315,13 @@ mod moved_tests {
 		ctx.configure_lifecycle_events(Some(lifecycle_events_tx));
 
 		let open_replies = tokio::spawn(async move {
-			for _ in 0..2 {
+			for _ in 0..4 {
 				match actor_events_rx
 					.recv()
 					.await
 					.expect("open event should arrive")
 				{
+					ActorEvent::ConnectionPreflight { reply, .. } => reply.send(Ok(())),
 					ActorEvent::ConnectionOpen { reply, .. } => reply.send(Ok(())),
 					other => panic!("unexpected actor event: {other:?}"),
 				}

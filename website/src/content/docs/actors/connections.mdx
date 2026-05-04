@@ -183,6 +183,8 @@ Each client connection goes through a series of lifecycle hooks that allow you t
 - `createConnState`
 - `onConnect`
 
+Pending connections are not visible in `c.conns` while `onBeforeConnect` or `createConnState` is running. RivetKit adds the connection to `c.conns` after those hooks succeed and before `onConnect` runs.
+
 **On Disconnect** (per client)
 
 - `onDisconnect`
@@ -195,6 +197,8 @@ There are two ways to define the initial state for connections:
 1. `connState`: Define a constant object that will be used as the initial state for all connections
 2. `createConnState`: A function that dynamically creates initial connection state based on connection parameters. Can be async.
 
+Connections are not visible in `c.conns` until `createConnState` completes successfully.
+
 ### `onBeforeConnect`
 
 [API Reference](/typedoc/interfaces/rivetkit.mod.BeforeConnectContext.html)
@@ -202,6 +206,8 @@ There are two ways to define the initial state for connections:
 The `onBeforeConnect` hook is called whenever a new client connects to the actor. Can be async. Clients can pass parameters when connecting, accessible via `params`. This hook is used for connection validation and can throw errors to reject connections.
 
 The `onBeforeConnect` hook does NOT return connection state - it's used solely for validation.
+
+Connections are not visible in `c.conns` while `onBeforeConnect` is running.
 
 ```typescript
 import { actor } from "rivetkit";
@@ -262,6 +268,8 @@ Connections cannot interact with the actor until this method completes successfu
 [API Reference](/typedoc/interfaces/rivetkit.mod.ConnectContext.html)
 
 Executed after the client has successfully connected. Can be async. Receives the connection object as a second parameter.
+
+By the time `onConnect` runs, the connection is visible in `c.conns`.
 
 ```typescript
 import { actor } from "rivetkit";

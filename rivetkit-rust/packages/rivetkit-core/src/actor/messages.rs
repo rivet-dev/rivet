@@ -290,9 +290,14 @@ pub enum ActorEvent {
 		request: Option<Request>,
 		reply: Reply<()>,
 	},
-	ConnectionOpen {
+	ConnectionPreflight {
 		conn: ConnHandle,
 		params: Vec<u8>,
+		request: Option<Request>,
+		reply: Reply<()>,
+	},
+	ConnectionOpen {
+		conn: ConnHandle,
 		request: Option<Request>,
 		reply: Reply<()>,
 	},
@@ -342,6 +347,7 @@ impl ActorEvent {
 			Self::HttpRequest { .. } => "http_request",
 			Self::QueueSend { .. } => "queue_send",
 			Self::WebSocketOpen { .. } => "websocket_open",
+			Self::ConnectionPreflight { .. } => "connection_preflight",
 			Self::ConnectionOpen { .. } => "connection_open",
 			Self::ConnectionClosed { .. } => "connection_closed",
 			Self::SubscribeRequest { .. } => "subscribe_request",

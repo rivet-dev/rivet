@@ -241,7 +241,7 @@ mod moved_tests {
 		let conn = rivetkit_core::ConnHandle::new("conn-open", vec![1, 2, 3], Vec::new(), false);
 
 		dispatch_event(
-			ActorEvent::ConnectionOpen {
+			ActorEvent::ConnectionPreflight {
 				conn: conn.clone(),
 				params: vec![4, 5, 6],
 				request: None,

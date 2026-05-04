@@ -103,12 +103,15 @@ fn counter_factory() -> ActorFactory {
 					} => {
 						reply.send(Err(anyhow::anyhow!("websockets are not handled")));
 					}
-					ActorEvent::ConnectionOpen {
+					ActorEvent::ConnectionPreflight {
 						conn: _,
 						params: _,
 						request: _,
 						reply,
 					} => {
+						reply.send(Ok(()));
+					}
+					ActorEvent::ConnectionOpen { reply, .. } => {
 						reply.send(Ok(()));
 					}
 					ActorEvent::ConnectionClosed { conn: _ } => {}

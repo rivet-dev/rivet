@@ -22,6 +22,7 @@ import {
 import { dbActorRaw, dbRemoteLifecycleProbe } from "./actor-db-raw";
 import { onStateChangeActor } from "./actor-onstatechange";
 import { connErrorSerializationActor } from "./conn-error-serialization";
+import { connPreflightVisibilityActor } from "./conn-preflight-visibility";
 import {
 	dbInitOrderCreateStateActor,
 	dbInitOrderCreateVarsActor,
@@ -254,6 +255,8 @@ export const registry = setup({
 		counterWithParams,
 		// From conn-state.ts
 		connStateActor,
+		// From conn-preflight-visibility.ts
+		connPreflightVisibilityActor,
 		// From metadata.ts
 		metadataActor,
 		// From vars.ts

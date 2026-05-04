@@ -1001,6 +1001,7 @@ type CreateState<
 // This must have only one or the other or else TState will not be able to be inferred
 //
 // Data returned from this handler will be available on `c.conn.state`.
+// The pending connection is not visible in `c.conns` until this succeeds.
 type CreateConnState<
 	TState,
 	TConnParams,
@@ -1292,10 +1293,11 @@ interface BaseActorConfig<
 	 * Called before a client connects to the actor.
 	 *
 	 * Use this hook to determine if a connection should be accepted
-	 * and to initialize connection-specific state.
+	 * and to validate client-provided parameters. The pending connection
+	 * is not visible in `c.conns` while this hook runs.
 	 *
 	 * @param opts Connection parameters including client-provided data
-	 * @returns The initial connection state or a Promise that resolves to it
+	 * @returns Void or a Promise.
 	 * @throws Throw an error to reject the connection
 	 */
 	onBeforeConnect?: (
@@ -1314,7 +1316,8 @@ interface BaseActorConfig<
 	 * Called when a client successfully connects to the actor.
 	 *
 	 * Use this hook to perform actions when a connection is established,
-	 * such as sending initial data or updating the actor's state.
+	 * such as sending initial data or updating the actor's state. The
+	 * connection is visible in `c.conns` before this hook runs.
 	 *
 	 * @param conn The connection object
 	 * @returns Void or a Promise that resolves when connection handling is complete
@@ -1875,7 +1878,7 @@ export const DocActorConfigSchema = z
 			.unknown()
 			.optional()
 			.describe(
-				"Function to create connection state. Receives context and connection params. Cannot be used with connState.",
+				"Function to create connection state. Receives context and connection params. The pending connection is not visible in c.conns until this succeeds. Cannot be used with connState.",
 			),
 		vars: z
 			.unknown()
@@ -1937,12 +1940,14 @@ export const DocActorConfigSchema = z
 			.unknown()
 			.optional()
 			.describe(
-				"Called before a client connects. Throw an error to reject the connection.",
+				"Called before a client connects. Throw an error to reject the connection. The pending connection is not visible in c.conns while this runs.",
 			),
 		onConnect: z
 			.unknown()
 			.optional()
-			.describe("Called when a client successfully connects."),
+			.describe(
+				"Called when a client successfully connects. The connection is visible in c.conns before this runs.",
+			),
 		onDisconnect: z
 			.unknown()
 			.optional()

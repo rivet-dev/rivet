@@ -1745,7 +1745,8 @@ mod moved_tests {
 							reply.send(Ok(()));
 							break;
 						}
-						ActorEvent::ConnectionOpen { .. } => {
+						ActorEvent::ConnectionPreflight { .. }
+						| ActorEvent::ConnectionOpen { .. } => {
 							panic!("hibernated connection should not refire ConnectionOpen");
 						}
 						_ => {}
@@ -3982,7 +3983,8 @@ mod moved_tests {
 							reply.send(Ok(()));
 							break;
 						}
-						ActorEvent::ConnectionOpen { .. } => {
+						ActorEvent::ConnectionPreflight { .. }
+						| ActorEvent::ConnectionOpen { .. } => {
 							panic!("hibernated connection should not refire ConnectionOpen");
 						}
 						_ => {}
@@ -4107,7 +4109,8 @@ mod moved_tests {
 							reply.send(Ok(()));
 							break;
 						}
-						ActorEvent::ConnectionOpen { .. } => {
+						ActorEvent::ConnectionPreflight { .. }
+						| ActorEvent::ConnectionOpen { .. } => {
 							panic!("dead hibernated connection should not refire ConnectionOpen");
 						}
 						_ => {}
