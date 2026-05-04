@@ -1164,16 +1164,10 @@ impl ActorTask {
 			self.ctx.warn_work_sent_to_stopping_instance("dispatch");
 			return Some(ActorLifecycleError::Destroying.build());
 		}
-		if self.ctx.sleep_requested() {
-			self.ctx.warn_work_sent_to_stopping_instance("dispatch");
-			return Some(ActorLifecycleError::Stopping.build());
-		}
 
 		match self.lifecycle {
-			LifecycleState::Started => None,
-			LifecycleState::SleepGrace
-			| LifecycleState::SleepFinalize
-			| LifecycleState::DestroyGrace => {
+			LifecycleState::Started | LifecycleState::SleepGrace => None,
+			LifecycleState::SleepFinalize | LifecycleState::DestroyGrace => {
 				self.ctx.warn_work_sent_to_stopping_instance("dispatch");
 				Some(ActorLifecycleError::Stopping.build())
 			}

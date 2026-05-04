@@ -312,6 +312,7 @@ mod moved_tests {
 			envoy_key: "test-envoy".to_string(),
 			envoy_tx,
 			actors: Arc::new(std::sync::Mutex::new(HashMap::new())),
+			actors_notify: Arc::new(tokio::sync::Notify::new()),
 			live_tunnel_requests,
 			pending_hibernation_restores: Arc::new(std::sync::Mutex::new(HashMap::from([(
 				actor_id.to_owned(),
@@ -360,6 +361,7 @@ mod moved_tests {
 			envoy_key: "test-envoy".to_string(),
 			envoy_tx,
 			actors: Arc::new(std::sync::Mutex::new(HashMap::new())),
+			actors_notify: Arc::new(tokio::sync::Notify::new()),
 			live_tunnel_requests: Arc::new(std::sync::Mutex::new(HashMap::new())),
 			pending_hibernation_restores: Arc::new(std::sync::Mutex::new(HashMap::new())),
 			ws_tx: Arc::new(tokio::sync::Mutex::new(

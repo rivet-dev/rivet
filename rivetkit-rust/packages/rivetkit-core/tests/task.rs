@@ -242,6 +242,7 @@ mod moved_tests {
 			envoy_key: "test-envoy".to_string(),
 			envoy_tx,
 			actors: Arc::new(Mutex::new(HashMap::new())),
+			actors_notify: Arc::new(tokio::sync::Notify::new()),
 			live_tunnel_requests: Arc::new(Mutex::new(HashMap::new())),
 			pending_hibernation_restores: Arc::new(Mutex::new(HashMap::new())),
 			ws_tx: Arc::new(tokio::sync::Mutex::new(
@@ -2812,11 +2813,14 @@ mod moved_tests {
 			})
 			.await
 			.expect("action should send during sleep grace");
-		let _error = action_rx
-			.await
-			.expect("action reply should send")
-			.expect_err("sleep grace should reject new dispatch");
-		assert_eq!(action_count.load(Ordering::SeqCst), 0);
+		assert_eq!(
+			action_rx
+				.await
+				.expect("action reply should send")
+				.expect("sleep grace should accept new dispatch"),
+			vec![7, 7, 7]
+		);
+		assert_eq!(action_count.load(Ordering::SeqCst), 1);
 		assert_eq!(destroy_count.load(Ordering::SeqCst), 0);
 
 		release_tx.send(()).expect("keep-awake release should send");
@@ -2831,6 +2835,37 @@ mod moved_tests {
 		run.await
 			.expect("task run should finish")
 			.expect("task run should succeed");
+	}
+
+	#[tokio::test]
+	async fn sleep_finalize_rejects_new_dispatch() {
+		let ctx = new_with_kv(
+			"actor-sleep-finalize-dispatch",
+			"task-sleep-finalize-dispatch",
+			Vec::new(),
+			"local",
+			new_in_memory(),
+		);
+		let mut task = new_task(ctx);
+		task.lifecycle = LifecycleState::SleepFinalize;
+
+		let (reply_tx, reply_rx) = oneshot::channel();
+		task.handle_dispatch(DispatchCommand::Action {
+			name: "ping".to_owned(),
+			args: Vec::new(),
+			conn: ConnHandle::new("conn-finalize", Vec::new(), Vec::new(), false),
+			reply: reply_tx,
+		})
+		.await;
+
+		let error = reply_rx
+			.await
+			.expect("action reply should send")
+			.expect_err("sleep finalize should reject new dispatch");
+		assert!(
+			error.to_string().contains("Actor is stopping"),
+			"expected actor stopping error, got {error:#}"
+		);
 	}
 
 	#[cfg(not(debug_assertions))]
