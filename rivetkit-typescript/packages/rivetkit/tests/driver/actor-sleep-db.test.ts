@@ -9,6 +9,10 @@ import {
 	SLEEP_SCHEDULE_AFTER_ON_SLEEP_DELAY_MS,
 } from "../../fixtures/driver-test-suite/sleep-db";
 import {
+	RAW_WS_HANDLER_DELAY,
+	RAW_WS_HANDLER_SLEEP_TIMEOUT,
+} from "../../fixtures/driver-test-suite/sleep";
+import {
 	describeDriverMatrix,
 	SQLITE_DRIVER_MATRIX_OPTIONS,
 } from "./shared-matrix";
@@ -252,8 +256,7 @@ describeDriverMatrix("Actor Sleep Db", (driverTestConfig) => {
 			);
 		});
 
-		// TODO(#4705): Root-cause sleep-shutdown disconnect ordering and re-enable this coverage.
-		test.skip("onDisconnect can write to c.db during sleep shutdown", async (c) => {
+		test("onDisconnect can write to c.db during sleep shutdown", async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);
 
 			// Create actor with a connection
@@ -294,12 +297,11 @@ describeDriverMatrix("Actor Sleep Db", (driverTestConfig) => {
 			expect(events).toContain("disconnect");
 		});
 
-		// TODO(#4705): Root-cause raw WebSocket close-handler DB access during sleep shutdown and re-enable this coverage.
-		test.skip("async websocket close handler can use c.db before sleep completes", async (c) => {
+		test("async websocket close handler can use c.db before sleep completes", async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);
 
 			const actor = client.sleepWithRawWsCloseDb.getOrCreate([
-				"raw-ws-close-db",
+				`raw-ws-close-db-${crypto.randomUUID()}`,
 			]);
 			const ws = await connectRawWebSocket(actor);
 
@@ -313,22 +315,33 @@ describeDriverMatrix("Actor Sleep Db", (driverTestConfig) => {
 				ws.close();
 			});
 
-			await waitForAction(actor.getStatus, (status) => {
-				expect(status.sleepCount).toBe(1);
-				expect(status.startCount).toBe(2);
-			});
+			await waitFor(
+				driverTestConfig,
+				RAW_WS_HANDLER_DELAY + RAW_WS_HANDLER_SLEEP_TIMEOUT + 1_000,
+			);
 
 			const entries = await actor.getLogEntries();
 			const events = entries.map((entry: LogEntry) => entry.event);
+			expect(events).toContain("close-start");
+			expect(events).toContain("close-finish");
 			expect(events).toContain("sleep");
+			expect(events).toContain("wake");
+			expect(events.indexOf("close-start")).toBeLessThan(
+				events.indexOf("close-finish"),
+			);
+			expect(events.indexOf("close-finish")).toBeLessThan(
+				events.indexOf("sleep"),
+			);
+			expect(events.indexOf("sleep")).toBeLessThan(
+				events.lastIndexOf("wake"),
+			);
 		}, 30_000);
 
-		// TODO(#4705): Root-cause addEventListener close-handler DB access during sleep shutdown and re-enable this coverage.
-		test.skip("async websocket addEventListener close handler can use c.db before sleep completes", async (c) => {
+		test("async websocket addEventListener close handler can use c.db before sleep completes", async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);
 
 			const actor = client.sleepWithRawWsCloseDbListener.getOrCreate([
-				"raw-ws-close-db-listener",
+				`raw-ws-close-db-listener-${crypto.randomUUID()}`,
 			]);
 			const ws = await connectRawWebSocket(actor);
 
@@ -342,14 +355,26 @@ describeDriverMatrix("Actor Sleep Db", (driverTestConfig) => {
 				ws.close();
 			});
 
-			await waitForAction(actor.getStatus, (status) => {
-				expect(status.sleepCount).toBe(1);
-				expect(status.startCount).toBe(2);
-			});
+			await waitFor(
+				driverTestConfig,
+				RAW_WS_HANDLER_DELAY + RAW_WS_HANDLER_SLEEP_TIMEOUT + 1_000,
+			);
 
 			const entries = await actor.getLogEntries();
 			const events = entries.map((entry: LogEntry) => entry.event);
+			expect(events).toContain("close-start");
+			expect(events).toContain("close-finish");
 			expect(events).toContain("sleep");
+			expect(events).toContain("wake");
+			expect(events.indexOf("close-start")).toBeLessThan(
+				events.indexOf("close-finish"),
+			);
+			expect(events.indexOf("close-finish")).toBeLessThan(
+				events.indexOf("sleep"),
+			);
+			expect(events.indexOf("sleep")).toBeLessThan(
+				events.lastIndexOf("wake"),
+			);
 		}, 30_000);
 
 		test("broadcast works in onSleep", async (c) => {
