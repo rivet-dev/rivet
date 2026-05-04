@@ -5,6 +5,7 @@ import { Highlight, themes } from "prism-react-renderer";
 import {
 	Code,
 	Compass,
+	Clipboard,
 	Database,
 	FlaskConical,
 	GitBranch,
@@ -1095,6 +1096,7 @@ function MockAgenticLoopPanel({ page }: { page: PageConfig }) {
 		validationErrors: 0,
 	});
 	const [logs, setLogs] = useState<AgenticLogEntry[]>([]);
+	const [eventLogCopied, setEventLogCopied] = useState(false);
 
 	const handleRef = useRef<AgenticHandle | null>(null);
 	const socketRef = useRef<WebSocket | null>(null);
@@ -1102,6 +1104,7 @@ function MockAgenticLoopPanel({ page }: { page: PageConfig }) {
 	const activeRequestRef = useRef<ActiveAgenticRequest | null>(null);
 	const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const progressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+	const copyResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const reconnectStartedAtRef = useRef<number | null>(null);
 	const mainSocketCleanupRef = useRef<(() => void) | null>(null);
 	const closedByUserRef = useRef(false);
@@ -1120,6 +1123,21 @@ function MockAgenticLoopPanel({ page }: { page: PageConfig }) {
 		},
 		[],
 	);
+
+	const copyEventLog = useCallback(async () => {
+		if (logs.length === 0) return;
+
+		const text = logs
+			.map((entry) => `${entry.time}\t${entry.level}\t${entry.message}`)
+			.join("\n");
+		await navigator.clipboard.writeText(text);
+		setEventLogCopied(true);
+		if (copyResetTimerRef.current) clearTimeout(copyResetTimerRef.current);
+		copyResetTimerRef.current = setTimeout(() => {
+			setEventLogCopied(false);
+			copyResetTimerRef.current = null;
+		}, 1500);
+	}, [logs]);
 
 	const clearProgressTimer = useCallback(() => {
 		if (progressTimerRef.current) {
@@ -1642,6 +1660,7 @@ function MockAgenticLoopPanel({ page }: { page: PageConfig }) {
 	useEffect(() => {
 		return () => {
 			if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
+			if (copyResetTimerRef.current) clearTimeout(copyResetTimerRef.current);
 			clearProgressTimer();
 			mainSocketCleanupRef.current?.();
 			mainSocketCleanupRef.current = null;
@@ -1811,9 +1830,22 @@ function MockAgenticLoopPanel({ page }: { page: PageConfig }) {
 			<section className="agentic-panel">
 				<div className="agentic-panel-header">
 					<h3 className="card-title">Event Log</h3>
-					<button className="ghost" onClick={() => setLogs([])} type="button">
-						Clear
-					</button>
+					<div className="agentic-header-actions">
+						<button
+							aria-label="Copy event log"
+							className="ghost icon-button"
+							disabled={logs.length === 0}
+							onClick={copyEventLog}
+							title="Copy event log"
+							type="button"
+						>
+							<Clipboard size={15} />
+							<span>{eventLogCopied ? "Copied" : "Copy"}</span>
+						</button>
+						<button className="ghost" onClick={() => setLogs([])} type="button">
+							Clear
+						</button>
+					</div>
 				</div>
 				<div className="agentic-log">
 					{logs.length === 0 ? (
