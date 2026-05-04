@@ -323,8 +323,7 @@ describeDriverMatrix("Actor Lifecycle", (driverTestConfig) => {
 			expect(elapsedMs).toBeLessThan(1_500);
 		}, 10_000);
 
-		// TODO(#4706): Root-cause destroy-during-start lifecycle ordering and re-enable this coverage.
-		test.skip("onDestroy is called even when actor is destroyed during start", async (c) => {
+		test("onDestroy is called even when actor is destroyed during start", async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);
 
 			const actorKey = `test-ondestroy-during-start-${Date.now()}`;
@@ -336,9 +335,19 @@ describeDriverMatrix("Actor Lifecycle", (driverTestConfig) => {
 			const statePromise = actor.getState();
 			await actor.destroy();
 
-			// Verify onDestroy was called (requires actor to be started)
 			const state = await statePromise;
-			expect(state.destroyCalled).toBe(true);
+			expect(state.startCompleted).toBe(true);
+
+			const observer = client.lifecycleObserver.getOrCreate([
+				"observer",
+			]);
+			const events = await observer.getEvents();
+			expect(events).toContainEqual(
+				expect.objectContaining({
+					actorKey,
+					event: "destroy",
+				}),
+			);
 		});
 	});
 });

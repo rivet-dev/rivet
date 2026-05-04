@@ -443,8 +443,7 @@ describeDriverMatrix("Actor Workflow", (driverTestConfig) => {
 			});
 		});
 
-		// TODO(#4708): Root-cause failed-step sleep-vs-run-error behavior and re-enable this coverage.
-		test.skip("failed workflow steps sleep instead of surfacing as run errors", async (c) => {
+		test("failed workflow steps sleep instead of surfacing as run errors", async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);
 			const actor = client.workflowFailedStepActor.getOrCreate([
 				"workflow-failed-step",

@@ -157,8 +157,7 @@ describeDriverMatrix("Actor Sleep", (driverTestConfig) => {
 			);
 		});
 
-		// TODO(#4707): Root-cause persistent connection sleep-state behavior and re-enable this coverage.
-		test.skip("actor sleep persists state with connect", async (c) => {
+		test("actor sleep persists state with connect", async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);
 
 			// Create actor with persistent connection
