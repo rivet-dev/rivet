@@ -9,7 +9,7 @@ use crate::{
 	vfs::{
 		NativeVfsHandle, SqliteTransportHandle, SqliteVfs, SqliteVfsMetrics,
 		SqliteVfsMetricsSnapshot, VfsConfig, VfsPreloadHintSnapshot,
-		fetch_initial_main_page_for_registration,
+		fetch_initial_pages_for_registration,
 	},
 	worker::SqliteWorkerHandle,
 };
@@ -32,17 +32,18 @@ pub async fn open_database_from_transport(
 	metrics: Option<Arc<dyn SqliteVfsMetrics>>,
 ) -> Result<NativeDatabaseHandle> {
 	let vfs_name = vfs_name_for_actor_database(&actor_id, generation);
-	let initial_main_page = fetch_initial_main_page_for_registration(transport.clone(), &actor_id)
+	let config = VfsConfig::default();
+	let initial_pages = fetch_initial_pages_for_registration(transport.clone(), &actor_id, &config)
 		.await
-		.map_err(|e| anyhow!("failed to preload sqlite main page: {e}"))?;
+		.map_err(|e| anyhow!("failed to preload sqlite pages: {e}"))?;
 	let vfs = Arc::new(
-		SqliteVfs::register_with_transport_and_initial_page(
+		SqliteVfs::register_with_transport_and_initial_pages(
 			&vfs_name,
 			transport,
 			actor_id.clone(),
 			rt_handle,
-			VfsConfig::default(),
-			initial_main_page,
+			config,
+			initial_pages,
 			metrics.clone(),
 		)
 		.map_err(|e| anyhow!("failed to register sqlite VFS: {e}"))?,

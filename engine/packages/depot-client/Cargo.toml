@@ -23,6 +23,7 @@ depot-client-types.workspace = true
 depot.workspace = true
 moka = { version = "0.12", default-features = false, features = ["sync"] }
 parking_lot.workspace = true
+scc.workspace = true
 
 [dev-dependencies]
 depot = { workspace = true, features = ["test-faults"] }
@@ -31,7 +32,6 @@ gas.workspace = true
 rivet-config.workspace = true
 rivet-pools.workspace = true
 rivet-test-deps.workspace = true
-scc.workspace = true
 sha2.workspace = true
 tempfile.workspace = true
 universaldb.workspace = true

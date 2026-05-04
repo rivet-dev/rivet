@@ -11,18 +11,135 @@ use std::sync::{Arc, Barrier, mpsc};
 use std::thread;
 use std::time::Duration;
 
+use async_trait::async_trait;
 use depot::cold_tier::FilesystemColdTier;
 use parking_lot::Mutex as SyncMutex;
+use rivet_envoy_protocol as protocol;
 use tempfile::TempDir;
 use tokio::runtime::Builder;
 use tokio::sync::OnceCell;
 
+use crate::optimization_flags::{
+	DEFAULT_STARTUP_PRELOAD_MAX_BYTES, DEFAULT_VFS_PAGE_CACHE_CAPACITY_PAGES,
+	DEFAULT_VFS_PROTECTED_CACHE_PAGES, SqliteOptimizationFlags, SqliteReadAheadMode,
+	SqliteVfsPageCacheMode,
+};
 use crate::query::{BindParam, ColumnValue};
 use crate::vfs::SqliteVfsMetrics;
 
 use super::*;
 
 static TEST_ID: AtomicU64 = AtomicU64::new(1);
+
+#[test]
+fn vfs_config_wires_optimization_flags() {
+	let flags = SqliteOptimizationFlags {
+		read_ahead_mode: SqliteReadAheadMode::Off,
+		read_ahead: false,
+		adaptive_read_ahead: false,
+		recent_page_hints: true,
+		cache_hit_predictor_training: true,
+		preload_hint_flush: true,
+		startup_preload_max_bytes: DEFAULT_STARTUP_PRELOAD_MAX_BYTES / 2,
+		startup_preload_first_pages: false,
+		startup_preload_first_page_count: 7,
+		preload_hints_on_open: false,
+		preload_hint_hot_pages: false,
+		preload_hint_early_pages: false,
+		preload_hint_scan_ranges: true,
+		dedup_get_pages_meta: true,
+		cache_get_pages_validation: true,
+		range_reads: true,
+		batch_chunk_reads: true,
+		decoded_ltx_cache: true,
+		vfs_page_cache_mode: SqliteVfsPageCacheMode::Startup,
+		vfs_page_cache_capacity_pages: DEFAULT_VFS_PAGE_CACHE_CAPACITY_PAGES / 2,
+		vfs_protected_cache_pages: DEFAULT_VFS_PROTECTED_CACHE_PAGES / 2,
+	};
+
+	let config = VfsConfig::from_optimization_flags(flags);
+	assert_eq!(config.page_cache_mode, SqliteVfsPageCacheMode::Startup);
+	assert_eq!(
+		config.cache_capacity_pages,
+		DEFAULT_VFS_PAGE_CACHE_CAPACITY_PAGES / 2
+	);
+	assert_eq!(
+		config.protected_cache_pages,
+		DEFAULT_VFS_PROTECTED_CACHE_PAGES / 2
+	);
+	assert_eq!(config.prefetch_depth, 16);
+	assert!(!config.adaptive_read_ahead);
+	assert_eq!(
+		config.startup_preload_max_bytes,
+		DEFAULT_STARTUP_PRELOAD_MAX_BYTES / 2
+	);
+	assert!(!config.startup_preload_first_pages);
+	assert_eq!(config.startup_preload_first_page_count, 7);
+	assert!(!config.preload_hints_on_open);
+	assert!(!config.preload_hint_early_pages);
+	assert_eq!(config.recent_hint_page_budget, 0);
+	assert!(config.recent_hint_range_budget > 0);
+}
+
+#[derive(Default)]
+struct RecordingInitialPagesTransport {
+	requested_pgnos: SyncMutex<Vec<u32>>,
+}
+
+#[async_trait]
+impl SqliteTransport for RecordingInitialPagesTransport {
+	async fn get_pages(
+		&self,
+		request: protocol::SqliteGetPagesRequest,
+	) -> anyhow::Result<protocol::SqliteGetPagesResponse> {
+		*self.requested_pgnos.lock() = request.pgnos.clone();
+		Ok(protocol::SqliteGetPagesResponse::SqliteGetPagesOk(
+			protocol::SqliteGetPagesOk {
+				pages: request
+					.pgnos
+					.into_iter()
+					.map(|pgno| protocol::SqliteFetchedPage {
+						pgno,
+						bytes: Some(vec![pgno as u8; DEFAULT_PAGE_SIZE]),
+					})
+					.collect(),
+			},
+		))
+	}
+
+	async fn commit(
+		&self,
+		_request: protocol::SqliteCommitRequest,
+	) -> anyhow::Result<protocol::SqliteCommitResponse> {
+		anyhow::bail!("initial-page preload test does not commit")
+	}
+}
+
+#[test]
+fn startup_initial_pages_do_not_require_preload_hints_on_open() {
+	let runtime = direct_runtime();
+	let transport = Arc::new(RecordingInitialPagesTransport::default());
+	let config = VfsConfig {
+		startup_preload_first_pages: true,
+		startup_preload_first_page_count: 4,
+		startup_preload_max_bytes: DEFAULT_PAGE_SIZE * 4,
+		preload_hints_on_open: false,
+		page_cache_mode: SqliteVfsPageCacheMode::Startup,
+		..VfsConfig::default()
+	};
+
+	let pages = runtime
+		.block_on(fetch_initial_pages_for_registration(
+			transport.clone(),
+			"startup-preload-actor",
+			&config,
+		))
+		.expect("initial pages should load");
+
+	let loaded_pgnos = pages.iter().map(|(pgno, _)| *pgno).collect::<Vec<_>>();
+	assert_eq!(*transport.requested_pgnos.lock(), vec![1, 2, 3, 4]);
+	assert_eq!(loaded_pgnos, vec![1, 2, 3, 4]);
+}
 
 fn next_test_name(prefix: &str) -> String {
 	let id = TEST_ID.fetch_add(1, Ordering::Relaxed);
@@ -121,7 +238,7 @@ impl DirectEngineHarness {
 			Arc::new(DirectDepotTransport::new(engine)),
 			VfsConfig::default(),
 			unsafe { std::mem::zeroed() },
-			None,
+			Vec::new(),
 			None,
 		)
 		.expect("vfs context should build")
@@ -2302,7 +2419,7 @@ fn concurrent_reader_during_commit_atomic_observes_consistent_snapshot() {
 		transport,
 		VfsConfig::default(),
 		unsafe { std::mem::zeroed() },
-		None,
+		Vec::new(),
 		None,
 	)
 	.expect("vfs context should build");
@@ -3233,7 +3350,7 @@ fn resolve_pages_surfaces_read_path_error_response() {
 		transport,
 		VfsConfig::default(),
 		unsafe { std::mem::zeroed() },
-		None,
+		Vec::new(),
 		None,
 	)
 	.expect("vfs context should build");

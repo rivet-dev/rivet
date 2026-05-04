@@ -16,11 +16,13 @@ use libsqlite3_sys::*;
 use moka::sync::Cache;
 use parking_lot::{Mutex, RwLock};
 use rivet_envoy_protocol as protocol;
+use scc::HashMap as SccHashMap;
 use tokio::runtime::Handle;
 
-use crate::optimization_flags::{SqliteOptimizationFlags, sqlite_optimization_flags};
+use crate::optimization_flags::{
+	SqliteOptimizationFlags, SqliteVfsPageCacheMode, sqlite_optimization_flags,
+};
 
-const DEFAULT_CACHE_CAPACITY_PAGES: u64 = 50_000;
 const DEFAULT_PREFETCH_DEPTH: usize = 64;
 const LEGACY_PREFETCH_DEPTH: usize = 16;
 const DEFAULT_MAX_PREFETCH_BYTES: usize = 256 * 1024;
@@ -130,11 +132,18 @@ fn sqlite_now_ms() -> Result<i64> {
 #[derive(Debug, Clone)]
 pub struct VfsConfig {
 	pub cache_capacity_pages: u64,
+	pub protected_cache_pages: usize,
+	pub page_cache_mode: SqliteVfsPageCacheMode,
 	pub prefetch_depth: usize,
 	pub adaptive_prefetch_depth: usize,
 	pub max_prefetch_bytes: usize,
 	pub adaptive_max_prefetch_bytes: usize,
 	pub max_pages_per_stage: usize,
+	pub startup_preload_max_bytes: usize,
+	pub startup_preload_first_pages: bool,
+	pub startup_preload_first_page_count: u32,
+	pub preload_hints_on_open: bool,
+	pub preload_hint_early_pages: bool,
 	pub recent_hint_page_budget: usize,
 	pub recent_hint_range_budget: usize,
 	pub cache_hit_predictor_training: bool,
@@ -152,8 +161,19 @@ impl Default for VfsConfig {
 
 impl VfsConfig {
 	pub fn from_optimization_flags(flags: SqliteOptimizationFlags) -> Self {
+		let caches_pages = flags.vfs_page_cache_mode.caches_any_pages();
 		Self {
-			cache_capacity_pages: DEFAULT_CACHE_CAPACITY_PAGES,
+			cache_capacity_pages: if caches_pages {
+				flags.vfs_page_cache_capacity_pages
+			} else {
+				0
+			},
+			protected_cache_pages: if caches_pages {
+				flags.vfs_protected_cache_pages
+			} else {
+				0
+			},
+			page_cache_mode: flags.vfs_page_cache_mode,
 			prefetch_depth: if flags.read_ahead {
 				DEFAULT_PREFETCH_DEPTH
 			} else {
@@ -163,12 +183,17 @@ impl VfsConfig {
 			max_prefetch_bytes: DEFAULT_MAX_PREFETCH_BYTES,
 			adaptive_max_prefetch_bytes: DEFAULT_ADAPTIVE_MAX_PREFETCH_BYTES,
 			max_pages_per_stage: DEFAULT_MAX_PAGES_PER_STAGE,
-			recent_hint_page_budget: if flags.recent_page_hints {
+			startup_preload_max_bytes: flags.startup_preload_max_bytes,
+			startup_preload_first_pages: flags.startup_preload_first_pages,
+			startup_preload_first_page_count: flags.startup_preload_first_page_count,
+			preload_hints_on_open: flags.preload_hints_on_open,
+			preload_hint_early_pages: flags.preload_hint_early_pages,
+			recent_hint_page_budget: if flags.recent_page_hints && flags.preload_hint_hot_pages {
 				DEFAULT_RECENT_HINT_PAGE_BUDGET
 			} else {
 				0
 			},
-			recent_hint_range_budget: if flags.recent_page_hints {
+			recent_hint_range_budget: if flags.recent_page_hints && flags.preload_hint_scan_ranges {
 				DEFAULT_RECENT_HINT_RANGE_BUDGET
 			} else {
 				0
@@ -229,7 +254,6 @@ pub struct SqliteVfsMetricsSnapshot {
 	pub total_ns: u64,
 	pub commit_count: u64,
 	pub page_cache_entries: u64,
-	pub page_cache_weighted_size: u64,
 	pub page_cache_capacity_pages: u64,
 	pub write_buffer_dirty_pages: u64,
 	pub db_size_pages: u64,
@@ -320,6 +344,7 @@ struct VfsState {
 	db_size_pages: u32,
 	page_size: usize,
 	page_cache: Cache<u32, Vec<u8>>,
+	protected_page_cache: Arc<SccHashMap<u32, Vec<u8>>>,
 	write_buffer: WriteBuffer,
 	predictor: PrefetchPredictor,
 	read_ahead: AdaptiveReadAhead,
@@ -403,6 +428,13 @@ struct AuxFileHandle {
 	path: String,
 	state: Arc<AuxFileState>,
 	delete_on_close: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PageCacheInsertKind {
+	Target,
+	Prefetch,
+	Startup,
 }
 
 unsafe impl Send for VfsContext {}
@@ -761,12 +793,11 @@ impl VfsState {
 		let page_cache = Cache::builder()
 			.max_capacity(config.cache_capacity_pages)
 			.build();
-		page_cache.insert(1, empty_db_page());
-
-		Self {
+		let mut state = Self {
 			db_size_pages: 1,
 			page_size: DEFAULT_PAGE_SIZE,
 			page_cache,
+			protected_page_cache: Arc::new(SccHashMap::new()),
 			write_buffer: WriteBuffer::default(),
 			predictor: PrefetchPredictor::default(),
 			read_ahead: AdaptiveReadAhead::default(),
@@ -775,18 +806,96 @@ impl VfsState {
 				config.recent_hint_range_budget,
 			),
 			dead: false,
+		};
+		state.cache_page(config, PageCacheInsertKind::Target, 1, empty_db_page());
+		state
+	}
+
+	fn cache_page(
+		&mut self,
+		config: &VfsConfig,
+		kind: PageCacheInsertKind,
+		pgno: u32,
+		bytes: Vec<u8>,
+	) {
+		if !should_cache_page(config, kind, pgno) {
+			return;
+		}
+		cache_page(
+			config,
+			&self.page_cache,
+			&self.protected_page_cache,
+			kind,
+			pgno,
+			bytes,
+		);
+	}
+
+	fn cached_page(&self, config: &VfsConfig, pgno: u32) -> Option<Vec<u8>> {
+		if !can_read_cached_page(config, pgno) {
+			return None;
+		}
+		self
+			.protected_page_cache
+			.read_sync(&pgno, |_, bytes| bytes.clone())
+			.or_else(|| self.page_cache.get(&pgno))
+	}
+
+	fn seed_page(&mut self, config: &VfsConfig, kind: PageCacheInsertKind, pgno: u32, page: Vec<u8>) {
+		if pgno == 1 {
+			self.seed_main_page(config, kind, page);
+		} else {
+			self.cache_page(config, kind, pgno, page);
 		}
 	}
 
-	fn seed_main_page(&mut self, page: Vec<u8>) {
+	fn seed_main_page(&mut self, config: &VfsConfig, kind: PageCacheInsertKind, page: Vec<u8>) {
 		if let Some(page_size) = sqlite_header_page_size(&page) {
 			self.page_size = page_size;
 		}
 		if let Some(db_size_pages) = sqlite_header_db_size_pages(&page) {
 			self.db_size_pages = db_size_pages;
 		}
-		self.page_cache.insert(1, page);
+		self.cache_page(config, kind, 1, page);
 	}
+
+	fn invalidate_page_cache(&mut self) {
+		self.page_cache.invalidate_all();
+		self.protected_page_cache.clear_sync();
+	}
+}
+
+fn cache_page(
+	config: &VfsConfig,
+	page_cache: &Cache<u32, Vec<u8>>,
+	protected_page_cache: &SccHashMap<u32, Vec<u8>>,
+	kind: PageCacheInsertKind,
+	pgno: u32,
+	bytes: Vec<u8>,
+) {
+	if !should_cache_page(config, kind, pgno) {
+		return;
+	}
+	if pgno <= config.protected_cache_pages as u32 {
+		let _ = protected_page_cache.upsert_sync(pgno, bytes);
+	} else {
+		page_cache.insert(pgno, bytes);
+	}
+}
+
+fn should_cache_page(config: &VfsConfig, kind: PageCacheInsertKind, pgno: u32) -> bool {
+	if pgno == 1 {
+		return true;
+	}
+	match kind {
+		PageCacheInsertKind::Target => config.page_cache_mode.caches_target_pages(),
+		PageCacheInsertKind::Prefetch => config.page_cache_mode.caches_prefetched_pages(),
+		PageCacheInsertKind::Startup => config.page_cache_mode.caches_startup_preloaded_pages(),
+	}
+}
+
+fn can_read_cached_page(config: &VfsConfig, pgno: u32) -> bool {
+	pgno == 1 || config.page_cache_mode.caches_any_pages()
 }
 
 impl VfsContext {
@@ -796,12 +905,12 @@ impl VfsContext {
 		transport: SqliteTransportHandle,
 		config: VfsConfig,
 		io_methods: sqlite3_io_methods,
-		initial_main_page: Option<Vec<u8>>,
+		initial_pages: Vec<(u32, Vec<u8>)>,
 		metrics: Option<Arc<dyn SqliteVfsMetrics>>,
 	) -> std::result::Result<Self, String> {
 		let mut state = VfsState::new(&config);
-		if let Some(page) = initial_main_page {
-			state.seed_main_page(page);
+		for (pgno, page) in initial_pages {
+			state.seed_page(&config, PageCacheInsertKind::Startup, pgno, page);
 		}
 
 		Ok(Self {
@@ -887,8 +996,10 @@ impl VfsContext {
 			state_update_ns: self.commit_state_update_ns.load(Ordering::Relaxed),
 			total_ns: self.commit_duration_ns_total.load(Ordering::Relaxed),
 			commit_count: self.commit_total.load(Ordering::Relaxed),
-			page_cache_entries: state.page_cache.entry_count(),
-			page_cache_weighted_size: state.page_cache.weighted_size(),
+			page_cache_entries: state
+				.page_cache
+				.entry_count()
+				.saturating_add(state.protected_page_cache.len() as u64),
 			page_cache_capacity_pages: self.config.cache_capacity_pages,
 			write_buffer_dirty_pages: state.write_buffer.dirty.len() as u64,
 			db_size_pages: state.db_size_pages as u64,
@@ -972,7 +1083,27 @@ impl VfsContext {
 		if !self.config.recent_page_hints {
 			return VfsPreloadHintSnapshot::default();
 		}
-		self.state.read().recent_pages.snapshot()
+		let state = self.state.read();
+		let mut snapshot = state.recent_pages.snapshot();
+		if self.config.preload_hint_early_pages {
+			let mut existing_pgnos = snapshot.pgnos.iter().copied().collect::<HashSet<_>>();
+			let early_page_count = self
+				.config
+				.startup_preload_first_page_count
+				.min(state.db_size_pages);
+			for pgno in 1..=early_page_count {
+				if !snapshot
+					.ranges
+					.iter()
+					.any(|range| range.contains(pgno))
+					&& existing_pgnos.insert(pgno)
+				{
+					snapshot.pgnos.push(pgno);
+				}
+			}
+			snapshot.pgnos.sort_unstable();
+		}
+		snapshot
 	}
 
 	fn resolve_pages(
@@ -1006,7 +1137,7 @@ impl VfsContext {
 					resolved.insert(pgno, Some(bytes.clone()));
 					continue;
 				}
-				if let Some(bytes) = state.page_cache.get(&pgno) {
+				if let Some(bytes) = state.cached_page(&self.config, pgno) {
 					resolved.insert(pgno, Some(bytes));
 					continue;
 				}
@@ -1145,7 +1276,11 @@ impl VfsContext {
 
 		match response {
 			protocol::SqliteGetPagesResponse::SqliteGetPagesOk(ok) => {
-				let page_cache = { self.state.read().page_cache.clone() };
+				let missing_pages = missing.iter().copied().collect::<HashSet<_>>();
+				let (page_cache, protected_page_cache) = {
+					let state = self.state.read();
+					(state.page_cache.clone(), state.protected_page_cache.clone())
+				};
 				#[cfg(debug_assertions)]
 				let mut returned_pgnos = HashSet::new();
 				#[cfg(debug_assertions)]
@@ -1164,7 +1299,19 @@ impl VfsContext {
 						}
 					}
 					if let Some(bytes) = &fetched.bytes {
-						page_cache.insert(fetched.pgno, bytes.clone());
+						let kind = if missing_pages.contains(&fetched.pgno) {
+							PageCacheInsertKind::Target
+						} else {
+							PageCacheInsertKind::Prefetch
+						};
+						cache_page(
+							&self.config,
+							&page_cache,
+							&protected_page_cache,
+							kind,
+							fetched.pgno,
+							bytes.clone(),
+						);
 					}
 					resolved.insert(fetched.pgno, fetched.bytes);
 				}
@@ -1303,9 +1450,12 @@ impl VfsContext {
 		let mut state = self.state.write();
 		state.db_size_pages = request.new_db_size_pages;
 		for dirty_page in &request.dirty_pages {
-			state
-				.page_cache
-				.insert(dirty_page.pgno, dirty_page.bytes.clone());
+			state.cache_page(
+				&self.config,
+				PageCacheInsertKind::Target,
+				dirty_page.pgno,
+				dirty_page.bytes.clone(),
+			);
 		}
 		state.write_buffer.dirty.clear();
 		let state_update_ns = state_update_start.elapsed().as_nanos() as u64;
@@ -1413,9 +1563,12 @@ impl VfsContext {
 		let mut state = self.state.write();
 		state.db_size_pages = request.new_db_size_pages;
 		for dirty_page in &request.dirty_pages {
-			state
-				.page_cache
-				.insert(dirty_page.pgno, dirty_page.bytes.clone());
+			state.cache_page(
+				&self.config,
+				PageCacheInsertKind::Target,
+				dirty_page.pgno,
+				dirty_page.bytes.clone(),
+			);
 		}
 		state.write_buffer.dirty.clear();
 		state.write_buffer.in_atomic_write = false;
@@ -1438,7 +1591,7 @@ impl VfsContext {
 			.write_buffer
 			.dirty
 			.retain(|pgno, _| *pgno <= truncated_pages);
-		state.page_cache.invalidate_all();
+		state.invalidate_page_cache();
 	}
 }
 
@@ -1519,15 +1672,47 @@ pub(crate) async fn fetch_initial_main_page_for_registration(
 	fetch_initial_main_page(transport, actor_id.to_string()).await
 }
 
+pub(crate) async fn fetch_initial_pages_for_registration(
+	transport: SqliteTransportHandle,
+	actor_id: &str,
+	config: &VfsConfig,
+) -> std::result::Result<Vec<(u32, Vec<u8>)>, String> {
+	if !config.startup_preload_first_pages
+		|| !config.page_cache_mode.caches_startup_preloaded_pages()
+		|| config.startup_preload_max_bytes < DEFAULT_PAGE_SIZE
+	{
+		return fetch_initial_main_page_for_registration(transport, actor_id)
+			.await
+			.map(|page| page.into_iter().map(|page| (1, page)).collect());
+	}
+
+	let page_count_from_bytes = config.startup_preload_max_bytes / DEFAULT_PAGE_SIZE;
+	let page_count = config
+		.startup_preload_first_page_count
+		.min(page_count_from_bytes as u32)
+		.max(1);
+	fetch_initial_pages(transport, actor_id.to_string(), page_count).await
+}
+
 async fn fetch_initial_main_page(
 	transport: SqliteTransportHandle,
 	actor_id: String,
 ) -> std::result::Result<Option<Vec<u8>>, String> {
+	fetch_initial_pages(transport, actor_id, 1)
+		.await
+		.map(|pages| pages.into_iter().find(|(pgno, _)| *pgno == 1).map(|(_, bytes)| bytes))
+}
+
+async fn fetch_initial_pages(
+	transport: SqliteTransportHandle,
+	actor_id: String,
+	page_count: u32,
+) -> std::result::Result<Vec<(u32, Vec<u8>)>, String> {
 	let request_actor_id = actor_id.clone();
 	let response = transport
 		.get_pages(protocol::SqliteGetPagesRequest {
 			actor_id: request_actor_id,
-			pgnos: vec![1],
+			pgnos: (1..=page_count).collect(),
 			expected_generation: None,
 			expected_head_txid: None,
 		})
@@ -1537,8 +1722,8 @@ async fn fetch_initial_main_page(
 		Ok(protocol::SqliteGetPagesResponse::SqliteGetPagesOk(ok)) => Ok(ok
 			.pages
 			.into_iter()
-			.find(|page| page.pgno == 1)
-			.and_then(|page| page.bytes)),
+			.filter_map(|page| page.bytes.map(|bytes| (page.pgno, bytes)))
+			.collect()),
 		Ok(protocol::SqliteGetPagesResponse::SqliteErrorResponse(error)) => {
 			if !is_initial_main_page_missing(&error.message) {
 				return Err(format!(
@@ -1551,7 +1736,7 @@ async fn fetch_initial_main_page(
 				error = %error.message,
 				"sqlite initial page fetch did not find persisted data"
 			);
-			Ok(None)
+			Ok(Vec::new())
 		}
 		Err(err) => Err(format!("sqlite initial page fetch failed: {err}")),
 	}
@@ -2510,11 +2695,18 @@ impl SqliteVfs {
 		config: VfsConfig,
 		metrics: Option<Arc<dyn SqliteVfsMetrics>>,
 	) -> std::result::Result<Self, String> {
-		Self::register_with_transport_and_initial_page(
-			name, transport, actor_id, runtime, config, None, metrics,
+		Self::register_with_transport_and_initial_pages(
+			name,
+			transport,
+			actor_id,
+			runtime,
+			config,
+			Vec::new(),
+			metrics,
 		)
 	}
 
+	#[cfg(test)]
 	pub(crate) fn register_with_transport_and_initial_page(
 		name: &str,
 		transport: SqliteTransportHandle,
@@ -2522,6 +2714,30 @@ impl SqliteVfs {
 		runtime: Handle,
 		config: VfsConfig,
 		initial_main_page: Option<Vec<u8>>,
+		metrics: Option<Arc<dyn SqliteVfsMetrics>>,
+	) -> std::result::Result<Self, String> {
+		let initial_pages = initial_main_page
+			.into_iter()
+			.map(|page| (1, page))
+			.collect();
+		Self::register_with_transport_and_initial_pages(
+			name,
+			transport,
+			actor_id,
+			runtime,
+			config,
+			initial_pages,
+			metrics,
+		)
+	}
+
+	pub(crate) fn register_with_transport_and_initial_pages(
+		name: &str,
+		transport: SqliteTransportHandle,
+		actor_id: String,
+		runtime: Handle,
+		config: VfsConfig,
+		initial_pages: Vec<(u32, Vec<u8>)>,
 		metrics: Option<Arc<dyn SqliteVfsMetrics>>,
 	) -> std::result::Result<Self, String> {
 		let mut io_methods: sqlite3_io_methods = unsafe { std::mem::zeroed() };
@@ -2545,7 +2761,7 @@ impl SqliteVfs {
 			transport,
 			config,
 			io_methods,
-			initial_main_page,
+			initial_pages,
 			metrics,
 		)?);
 		let ctx_ptr = (&mut *ctx) as *mut VfsContext;

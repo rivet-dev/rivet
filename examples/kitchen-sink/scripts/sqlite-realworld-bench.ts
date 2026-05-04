@@ -25,8 +25,6 @@ const DEFAULT_STARTUP_PRELOAD_MAX_BYTES = 1024 * 1024;
 const DEFAULT_STARTUP_PRELOAD_FIRST_PAGE_COUNT = 1;
 const DEFAULT_VFS_PAGE_CACHE_CAPACITY_PAGES = 50_000;
 const DEFAULT_VFS_PROTECTED_CACHE_PAGES = 512;
-const DEFAULT_READ_POOL_MAX_READERS = 4;
-const DEFAULT_READ_POOL_IDLE_TTL_MS = 60_000;
 const DEFAULT_BENCH_VFS_ROUND_TRIP_LATENCY_MS = 10;
 const BENCH_VFS_ROUND_TRIP_LATENCY_MS_ENV =
 	"RIVETKIT_SQLITE_BENCH_VFS_ROUND_TRIP_LATENCY_MS";
@@ -47,19 +45,12 @@ const SQLITE_OPT_BOOLEAN_ENVS = [
 	"RIVETKIT_SQLITE_OPT_PRELOAD_HINT_HOT_PAGES",
 	"RIVETKIT_SQLITE_OPT_PRELOAD_HINT_EARLY_PAGES",
 	"RIVETKIT_SQLITE_OPT_PRELOAD_HINT_SCAN_RANGES",
-	"RIVETKIT_SQLITE_OPT_CACHE_GET_PAGES_VALIDATION",
-	"RIVETKIT_SQLITE_OPT_RANGE_READS",
-	"RIVETKIT_SQLITE_OPT_BATCH_CHUNK_READS",
-	"RIVETKIT_SQLITE_OPT_DECODED_LTX_CACHE",
-	"RIVETKIT_SQLITE_OPT_READ_POOL_ENABLED",
 ] as const;
 const SQLITE_OPT_NUMERIC_ENVS = [
 	"RIVETKIT_SQLITE_OPT_STARTUP_PRELOAD_MAX_BYTES",
 	"RIVETKIT_SQLITE_OPT_STARTUP_PRELOAD_FIRST_PAGE_COUNT",
 	"RIVETKIT_SQLITE_OPT_VFS_PAGE_CACHE_CAPACITY_PAGES",
 	"RIVETKIT_SQLITE_OPT_VFS_PROTECTED_CACHE_PAGES",
-	"RIVETKIT_SQLITE_OPT_READ_POOL_MAX_READERS",
-	"RIVETKIT_SQLITE_OPT_READ_POOL_IDLE_TTL_MS",
 ] as const;
 
 const WORKLOADS = [
@@ -187,9 +178,6 @@ interface MatrixScenarioReport {
 		fetchedPages: number;
 		cacheHits: number;
 		cacheMisses: number;
-		routedReads: number;
-		writeFallbacks: number;
-		modeTransitions: number;
 	}>;
 }
 
@@ -204,7 +192,6 @@ interface BenchmarkResult {
 	setup: SetupResult | null;
 	main: MainResult;
 	vfsMetrics: VfsMetricSnapshot;
-	readPoolMetrics: ReadPoolMetricSnapshot;
 }
 
 interface VfsMetricSnapshot {
@@ -219,23 +206,6 @@ interface VfsMetricSnapshot {
 	prefetchBytesTotal: number;
 	getPagesDurationSecondsSum: number;
 	getPagesDurationSecondsCount: number;
-}
-
-interface ReadPoolMetricSnapshot {
-	activeReaders: number;
-	idleReaders: number;
-	readWaitDurationSecondsSum: number;
-	readWaitDurationSecondsCount: number;
-	writeWaitDurationSecondsSum: number;
-	writeWaitDurationSecondsCount: number;
-	routedReadQueriesTotal: number;
-	writeFallbackQueriesTotal: number;
-	manualTransactionDurationSecondsSum: number;
-	manualTransactionDurationSecondsCount: number;
-	readerOpensTotal: number;
-	readerClosesTotal: number;
-	rejectedReaderMutationsTotal: number;
-	modeTransitionsTotal: number;
 }
 
 const WORKLOAD_SPECS: WorkloadSpec[] = [
@@ -320,16 +290,14 @@ const WORKLOAD_SPECS: WorkloadSpec[] = [
 		description: "Selective tenant/time-range aggregate over events joined to orders.",
 	},
 	{
-		// Included to measure future read-mode parallelism where several read-only SQLite connections overlap VFS misses.
-		// Today this captures the serialized baseline; after the connection manager lands, independent aggregate reads should overlap.
+		// Included to measure concurrent read-only aggregate pressure over the same VFS and transport.
 		name: "parallel-read-aggregates",
 		category: "read",
 		sizeClass: "large",
 		description: "Concurrent read-only aggregates over one actor-local SQLite database.",
 	},
 	{
-		// Included to measure the read-mode to write-mode transition.
-		// Future write mode must wait for active readers, close them, run exactly one writable connection, then allow fresh readers.
+		// Included to measure read pressure queued alongside a write update.
 		name: "parallel-read-write-transition",
 		category: "write",
 		sizeClass: "medium",
@@ -417,7 +385,6 @@ const WORKLOAD_SPECS: WorkloadSpec[] = [
 	},
 	{
 		// Included to model tool-like fan-out where an agent asks for recent rows, indexed rows, and aggregates concurrently.
-		// Parallel read pool routing should make these independent read-only statements overlap once TS serialization is gone.
 		name: "chat-tool-read-fanout",
 		category: "read",
 		sizeClass: "large",
@@ -525,11 +492,6 @@ function defaultSqliteOptimizationEnv(): Record<string, string> {
 		RIVETKIT_SQLITE_OPT_PRELOAD_HINT_HOT_PAGES: "true",
 		RIVETKIT_SQLITE_OPT_PRELOAD_HINT_EARLY_PAGES: "true",
 		RIVETKIT_SQLITE_OPT_PRELOAD_HINT_SCAN_RANGES: "true",
-		RIVETKIT_SQLITE_OPT_CACHE_GET_PAGES_VALIDATION: "true",
-		RIVETKIT_SQLITE_OPT_RANGE_READS: "true",
-		RIVETKIT_SQLITE_OPT_BATCH_CHUNK_READS: "true",
-		RIVETKIT_SQLITE_OPT_DECODED_LTX_CACHE: "true",
-		RIVETKIT_SQLITE_OPT_READ_POOL_ENABLED: "true",
 		RIVETKIT_SQLITE_OPT_STARTUP_PRELOAD_MAX_BYTES:
 			DEFAULT_STARTUP_PRELOAD_MAX_BYTES.toString(),
 		RIVETKIT_SQLITE_OPT_STARTUP_PRELOAD_FIRST_PAGE_COUNT:
@@ -538,10 +500,6 @@ function defaultSqliteOptimizationEnv(): Record<string, string> {
 			DEFAULT_VFS_PAGE_CACHE_CAPACITY_PAGES.toString(),
 		RIVETKIT_SQLITE_OPT_VFS_PROTECTED_CACHE_PAGES:
 			DEFAULT_VFS_PROTECTED_CACHE_PAGES.toString(),
-		RIVETKIT_SQLITE_OPT_READ_POOL_MAX_READERS:
-			DEFAULT_READ_POOL_MAX_READERS.toString(),
-		RIVETKIT_SQLITE_OPT_READ_POOL_IDLE_TTL_MS:
-			DEFAULT_READ_POOL_IDLE_TTL_MS.toString(),
 	};
 }
 
@@ -589,32 +547,13 @@ const SQLITE_OPTIMIZATION_MATRIX_SCENARIOS: MatrixScenario[] = [
 		includeInImpact: true,
 	},
 	{
-		id: "transport-batching-only",
-		label: "Transport batching only",
-		description:
-			"Range reads, chunk batching, and decoded LTX cache enabled with VFS cache, preload, read-ahead, and read pool disabled.",
-		env: scenarioEnv({
-			...preloadDisabledEnv(),
-			RIVETKIT_SQLITE_OPT_READ_AHEAD_MODE: "off",
-			RIVETKIT_SQLITE_OPT_VFS_PAGE_CACHE_MODE: "off",
-			RIVETKIT_SQLITE_OPT_VFS_PAGE_CACHE_CAPACITY_PAGES: "0",
-			RIVETKIT_SQLITE_OPT_VFS_PROTECTED_CACHE_PAGES: "0",
-			RIVETKIT_SQLITE_OPT_READ_POOL_ENABLED: "false",
-		}),
-		includeInImpact: true,
-	},
-	{
 		id: "vfs-cache-only",
 		label: "VFS cache only",
 		description:
-			"VFS page cache enabled without read-ahead, preload hints, range reads, storage decode cache, or read pool.",
+			"VFS page cache enabled without read-ahead or preload hints.",
 		env: scenarioEnv({
 			...preloadDisabledEnv(),
 			RIVETKIT_SQLITE_OPT_READ_AHEAD_MODE: "off",
-			RIVETKIT_SQLITE_OPT_RANGE_READS: "false",
-			RIVETKIT_SQLITE_OPT_BATCH_CHUNK_READS: "false",
-			RIVETKIT_SQLITE_OPT_DECODED_LTX_CACHE: "false",
-			RIVETKIT_SQLITE_OPT_READ_POOL_ENABLED: "false",
 		}),
 		includeInImpact: true,
 	},
@@ -622,13 +561,12 @@ const SQLITE_OPTIMIZATION_MATRIX_SCENARIOS: MatrixScenario[] = [
 		id: "read-ahead-no-cache",
 		label: "Read-ahead without VFS cache",
 		description:
-			"Adaptive read-ahead and range reads enabled while prefetched pages are not retained in the VFS cache.",
+			"Adaptive read-ahead enabled while prefetched pages are not retained in the VFS cache.",
 		env: scenarioEnv({
 			...preloadDisabledEnv(),
 			RIVETKIT_SQLITE_OPT_VFS_PAGE_CACHE_MODE: "off",
 			RIVETKIT_SQLITE_OPT_VFS_PAGE_CACHE_CAPACITY_PAGES: "0",
 			RIVETKIT_SQLITE_OPT_VFS_PROTECTED_CACHE_PAGES: "0",
-			RIVETKIT_SQLITE_OPT_READ_POOL_ENABLED: "false",
 		}),
 		includeInImpact: true,
 	},
@@ -695,37 +633,6 @@ const SQLITE_OPTIMIZATION_MATRIX_SCENARIOS: MatrixScenario[] = [
 		description:
 			"Current defaults with recent page hints, preload hint flush, and preload-on-open disabled while keeping the first startup page.",
 		env: scenarioEnv(preloadDisabledEnv()),
-		includeInImpact: true,
-	},
-	{
-		id: "no-range-reads",
-		label: "Default minus range reads",
-		description: "Current defaults with contiguous range page reads disabled.",
-		env: scenarioEnv({
-			RIVETKIT_SQLITE_OPT_RANGE_READS: "false",
-		}),
-		includeInImpact: true,
-	},
-	{
-		id: "no-storage-read-cache",
-		label: "Default minus storage read cache",
-		description:
-			"Current defaults with chunk batching and decoded LTX cache disabled.",
-		env: scenarioEnv({
-			RIVETKIT_SQLITE_OPT_BATCH_CHUNK_READS: "false",
-			RIVETKIT_SQLITE_OPT_DECODED_LTX_CACHE: "false",
-		}),
-		includeInImpact: true,
-	},
-	{
-		id: "no-read-pool",
-		label: "Default minus read pool",
-		description: "Current defaults with the SQLite read connection pool disabled.",
-		env: scenarioEnv({
-			RIVETKIT_SQLITE_OPT_READ_POOL_ENABLED: "false",
-			RIVETKIT_SQLITE_OPT_READ_POOL_MAX_READERS: "0",
-			RIVETKIT_SQLITE_OPT_READ_POOL_IDLE_TTL_MS: "0",
-		}),
 		includeInImpact: true,
 	},
 ];
@@ -1293,55 +1200,6 @@ function scrapeVfsMetrics(text: string): VfsMetricSnapshot {
 	};
 }
 
-function scrapeReadPoolMetrics(text: string): ReadPoolMetricSnapshot {
-	return {
-		activeReaders: metricValue(text, "sqlite_read_pool_active_readers"),
-		idleReaders: metricValue(text, "sqlite_read_pool_idle_readers"),
-		readWaitDurationSecondsSum: metricValue(
-			text,
-			"sqlite_read_pool_read_wait_duration_seconds_sum",
-		),
-		readWaitDurationSecondsCount: metricValue(
-			text,
-			"sqlite_read_pool_read_wait_duration_seconds_count",
-		),
-		writeWaitDurationSecondsSum: metricValue(
-			text,
-			"sqlite_read_pool_write_wait_duration_seconds_sum",
-		),
-		writeWaitDurationSecondsCount: metricValue(
-			text,
-			"sqlite_read_pool_write_wait_duration_seconds_count",
-		),
-		routedReadQueriesTotal: metricValue(
-			text,
-			"sqlite_read_pool_routed_read_queries_total",
-		),
-		writeFallbackQueriesTotal: metricValue(
-			text,
-			"sqlite_read_pool_write_fallback_queries_total",
-		),
-		manualTransactionDurationSecondsSum: metricValue(
-			text,
-			"sqlite_read_pool_manual_transaction_duration_seconds_sum",
-		),
-		manualTransactionDurationSecondsCount: metricValue(
-			text,
-			"sqlite_read_pool_manual_transaction_duration_seconds_count",
-		),
-		readerOpensTotal: metricValue(text, "sqlite_read_pool_reader_opens_total"),
-		readerClosesTotal: metricValue(text, "sqlite_read_pool_reader_closes_total"),
-		rejectedReaderMutationsTotal: metricValue(
-			text,
-			"sqlite_read_pool_rejected_reader_mutations_total",
-		),
-		modeTransitionsTotal: metricValue(
-			text,
-			"sqlite_read_pool_mode_transitions_total",
-		),
-	};
-}
-
 function diffMetrics<T extends object>(after: T, before: T): T {
 	return Object.fromEntries(
 		Object.keys(after).map((key) => [
@@ -1367,25 +1225,6 @@ function emptyVfsMetrics(): VfsMetricSnapshot {
 	};
 }
 
-function emptyReadPoolMetrics(): ReadPoolMetricSnapshot {
-	return {
-		activeReaders: 0,
-		idleReaders: 0,
-		readWaitDurationSecondsSum: 0,
-		readWaitDurationSecondsCount: 0,
-		writeWaitDurationSecondsSum: 0,
-		writeWaitDurationSecondsCount: 0,
-		routedReadQueriesTotal: 0,
-		writeFallbackQueriesTotal: 0,
-		manualTransactionDurationSecondsSum: 0,
-		manualTransactionDurationSecondsCount: 0,
-		readerOpensTotal: 0,
-		readerClosesTotal: 0,
-		rejectedReaderMutationsTotal: 0,
-		modeTransitionsTotal: 0,
-	};
-}
-
 function writeResults(outputDir: string, document: unknown): void {
 	mkdirSync(outputDir, { recursive: true });
 	writeFileSync(
@@ -1400,8 +1239,8 @@ function writeSummary(outputDir: string, results: BenchmarkResult[]): void {
 		"",
 		"Server SQLite time only. Setup time, sleep delay, wake/cold-start time, and client RTT are not included.",
 		"",
-		"| workload | category | size | server_ms | routed_reads | write_fallbacks | mode_transitions | reader_opens | reader_closes | get_pages | fetched_pages | cache_hits | cache_misses | rows/ops | pages |",
-		"| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+		"| workload | category | size | server_ms | get_pages | fetched_pages | cache_hits | cache_misses | rows/ops | pages |",
+		"| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
 	];
 	for (const result of results) {
 		const rowsOrOps =
@@ -1411,7 +1250,7 @@ function writeSummary(outputDir: string, results: BenchmarkResult[]): void {
 					? result.main.ops
 					: "";
 		lines.push(
-			`| ${result.workload} | ${result.category} | ${fmtBytes(result.targetBytes)} | ${result.main.ms.toFixed(1)} | ${result.readPoolMetrics.routedReadQueriesTotal} | ${result.readPoolMetrics.writeFallbackQueriesTotal} | ${result.readPoolMetrics.modeTransitionsTotal} | ${result.readPoolMetrics.readerOpensTotal} | ${result.readPoolMetrics.readerClosesTotal} | ${result.vfsMetrics.getPagesTotal} | ${result.vfsMetrics.pagesFetchedTotal} | ${result.vfsMetrics.resolvePagesCacheHitsTotal} | ${result.vfsMetrics.resolvePagesCacheMissesTotal} | ${rowsOrOps} | ${result.main.pageCount} |`,
+			`| ${result.workload} | ${result.category} | ${fmtBytes(result.targetBytes)} | ${result.main.ms.toFixed(1)} | ${result.vfsMetrics.getPagesTotal} | ${result.vfsMetrics.pagesFetchedTotal} | ${result.vfsMetrics.resolvePagesCacheHitsTotal} | ${result.vfsMetrics.resolvePagesCacheMissesTotal} | ${rowsOrOps} | ${result.main.pageCount} |`,
 		);
 	}
 	writeFileSync(join(outputDir, "summary.md"), `${lines.join("\n")}\n`);
@@ -1517,9 +1356,6 @@ function readScenarioDocument(args: Args, scenario: MatrixScenario): MatrixScena
 			fetchedPages: result.vfsMetrics.pagesFetchedTotal,
 			cacheHits: result.vfsMetrics.resolvePagesCacheHitsTotal,
 			cacheMisses: result.vfsMetrics.resolvePagesCacheMissesTotal,
-			routedReads: result.readPoolMetrics.routedReadQueriesTotal,
-			writeFallbacks: result.readPoolMetrics.writeFallbackQueriesTotal,
-			modeTransitions: result.readPoolMetrics.modeTransitionsTotal,
 		})),
 	};
 }
@@ -1551,8 +1387,8 @@ function writeMatrixSummary(outputDir: string, scenarios: MatrixScenarioReport[]
 		"",
 		"Each scenario runs in a fresh process so process-wide SQLite optimization flags are read once per configuration.",
 		"",
-		"| scenario | workload | server_ms | delta_vs_defaults | get_pages | fetched_pages | cache_hits | cache_misses | routed_reads | write_fallbacks |",
-		"| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+		"| scenario | workload | server_ms | delta_vs_defaults | get_pages | fetched_pages | cache_hits | cache_misses |",
+		"| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |",
 	];
 
 	for (const scenario of scenarios) {
@@ -1564,7 +1400,7 @@ function writeMatrixSummary(outputDir: string, scenarios: MatrixScenarioReport[]
 					? `${(((result.serverMs - base.serverMs) / base.serverMs) * 100).toFixed(1)}%`
 					: "";
 			lines.push(
-				`| ${scenario.id} | ${result.workload} | ${result.serverMs.toFixed(1)} | ${delta} | ${result.getPages} | ${result.fetchedPages} | ${result.cacheHits} | ${result.cacheMisses} | ${result.routedReads} | ${result.writeFallbacks} |`,
+				`| ${scenario.id} | ${result.workload} | ${result.serverMs.toFixed(1)} | ${delta} | ${result.getPages} | ${result.fetchedPages} | ${result.cacheHits} | ${result.cacheMisses} |`,
 			);
 		}
 	}
@@ -1798,12 +1634,8 @@ async function main(): Promise<void> {
 				scrapeVfsMetrics(afterMainMetricsText),
 				emptyVfsMetrics(),
 			);
-			const readPoolMetrics = diffMetrics(
-				scrapeReadPoolMetrics(afterMainMetricsText),
-				emptyReadPoolMetrics(),
-			);
 			console.log(
-				`  server=${fmtMs(mainResult.ms)} pages=${mainResult.pageCount} routed_reads=${readPoolMetrics.routedReadQueriesTotal} write_fallbacks=${readPoolMetrics.writeFallbackQueriesTotal} mode_transitions=${readPoolMetrics.modeTransitionsTotal} get_pages=${vfsMetrics.getPagesTotal} fetched_pages=${vfsMetrics.pagesFetchedTotal}`,
+				`  server=${fmtMs(mainResult.ms)} pages=${mainResult.pageCount} get_pages=${vfsMetrics.getPagesTotal} fetched_pages=${vfsMetrics.pagesFetchedTotal}`,
 			);
 
 			results.push({
@@ -1817,7 +1649,6 @@ async function main(): Promise<void> {
 				setup,
 				main: mainResult,
 				vfsMetrics,
-				readPoolMetrics,
 			});
 			writeResults(outputDir, resultDocument);
 			writeSummary(outputDir, results);
@@ -1830,7 +1661,7 @@ async function main(): Promise<void> {
 		console.log("\nResults");
 		for (const result of results) {
 			console.log(
-				`  ${result.workload}: server=${fmtMs(result.main.ms)} size=${fmtBytes(result.targetBytes)} routed_reads=${result.readPoolMetrics.routedReadQueriesTotal} write_fallbacks=${result.readPoolMetrics.writeFallbackQueriesTotal} mode_transitions=${result.readPoolMetrics.modeTransitionsTotal} get_pages=${result.vfsMetrics.getPagesTotal} fetched_pages=${result.vfsMetrics.pagesFetchedTotal}`,
+				`  ${result.workload}: server=${fmtMs(result.main.ms)} size=${fmtBytes(result.targetBytes)} get_pages=${result.vfsMetrics.getPagesTotal} fetched_pages=${result.vfsMetrics.pagesFetchedTotal}`,
 			);
 		}
 		console.log(`\nwrote ${join(outputDir, "results.json")}`);
