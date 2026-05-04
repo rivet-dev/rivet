@@ -39,7 +39,7 @@ Removing `preventSleep` deleted both predicate branches. Any future sleep-affect
 
 - `start_grace(reason)` fires at the start of `SleepGrace` / `DestroyGrace`. It cancels the sleep idle timer, cancels the actor abort signal (`actor_abort_signal`), installs a `SleepGraceState` with the effective grace deadline, and resets the sleep timer to arm the grace tick.
 - The actor abort signal is a soft signal: "shutdown has started, please wrap up." User code observes it via `c.abortSignal`. It does not force-stop work.
-- For destroy, the abort signal may fire earlier than grace entry because `ctx.destroy()` cancels the abort token immediately via `mark_destroy_requested(...)`.
+- Destroy requests also use the normal grace path. The actor abort signal fires when destroy grace starts.
 
 ## Grace deadline enforcement
 

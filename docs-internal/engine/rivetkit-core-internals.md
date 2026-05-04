@@ -85,7 +85,7 @@ Two-phase:
 - `SleepGrace` fires `onSleep` immediately and keeps dispatch/save timers live.
 - `SleepFinalize` gates dispatch, suspends alarms, and runs teardown.
 
-Sleep grace must fire the actor abort signal on entry and wait for the run handler to exit before finalize. Destroy abort firing remains unchanged.
+Sleep grace fires the actor abort signal on entry and waits for the run handler to exit before finalize.
 
 Finalize:
 

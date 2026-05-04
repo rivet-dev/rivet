@@ -325,7 +325,7 @@ Actions have a single return value. To stream realtime data in response to an ac
 
 ## Canceling Long-Running Actions
 
-For operations that should be cancelable on-demand, create your own `AbortController` and chain it with `c.abortSignal` for automatic cleanup on actor shutdown.
+For operations that should be cancelable on-demand, create your own `AbortController`. Chain it with `c.abortSignal` so actor shutdown also cancels the operation.
 
 ```typescript
 import { actor } from "rivetkit";

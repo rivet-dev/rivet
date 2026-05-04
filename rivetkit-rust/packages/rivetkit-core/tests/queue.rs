@@ -162,7 +162,7 @@ mod moved_tests {
 		});
 
 		yield_now().await;
-		queue.mark_destroy_requested();
+		queue.cancel_actor_abort_signal();
 
 		let error = wait
 			.await

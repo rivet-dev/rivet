@@ -957,14 +957,7 @@ export class ActorInstance<
 			// Scheduled events are persisted and will be re-initialized
 			// on wake via initializeAlarms().
 			this.driver.cancelAlarm?.(this.#actorId);
-
-			// Abort listeners in the canonical stop path.
-			// This must run for all stop modes, including sleep and remote stop.
-			// Destroy may have already triggered an early abort, but repeating abort
-			// is intentional and safe.
-			try {
-				this.#abortController.abort();
-			} catch {}
+			this.#abortActorSignal();
 
 			// The run-handler join, lifecycle hooks, and remaining shutdown
 			// tasks all share the single sleepGracePeriod budget.
@@ -1030,11 +1023,8 @@ export class ActorInstance<
 			}
 
 			this.driver.cancelAlarm?.(this.#actorId);
+			this.#abortActorSignal();
 			this.stateManager.clearPendingSaveTimeout();
-
-			try {
-				this.#abortController.abort();
-			} catch {}
 		} finally {
 			this.#shutdownComplete = true;
 			await this.#cleanupDatabase();
@@ -1086,14 +1076,7 @@ export class ActorInstance<
 			return;
 		}
 		this.#destroyCalled = true;
-
-		// Abort immediately so in flight waits can exit before the driver stop
-		// handshake completes.
-		// The onStop path will call abort again as a safety net for all stop
-		// modes.
-		try {
-			this.#abortController.abort();
-		} catch {}
+		this.#abortActorSignal();
 
 		const destroy = this.driver.startDestroy.bind(
 			this.driver,
@@ -1106,6 +1089,15 @@ export class ActorInstance<
 		setImmediate(() => {
 			destroy();
 		});
+	}
+
+	#abortActorSignal() {
+		if (this.#abortController.signal.aborted) {
+			return;
+		}
+		try {
+			this.#abortController.abort();
+		} catch {}
 	}
 
 	// MARK: - HTTP Request Tracking
@@ -2070,7 +2062,7 @@ export class ActorInstance<
 
 		if (timeoutMs <= 0) {
 			this.#rLog.warn({
-				msg: "run handler did not complete in time, it may have leaked - ensure you use c.aborted (or the abort signal c.abortSignal) to exit gracefully",
+				msg: "run handler did not complete in time, it may have leaked - ensure long-running work settles before shutdown finalizes",
 				timeoutMs,
 			});
 			return;
@@ -2085,7 +2077,7 @@ export class ActorInstance<
 
 		if (timedOut) {
 			this.#rLog.warn({
-				msg: "run handler did not complete in time, it may have leaked - ensure you use c.aborted (or the abort signal c.abortSignal) to exit gracefully",
+				msg: "run handler did not complete in time, it may have leaked - ensure long-running work settles before shutdown finalizes",
 				timeoutMs,
 			});
 		} else {

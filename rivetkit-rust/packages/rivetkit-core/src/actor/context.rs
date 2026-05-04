@@ -478,7 +478,6 @@ impl ActorContext {
 		self.flush_on_shutdown();
 		self.0.destroy_requested.store(true, Ordering::SeqCst);
 		self.0.destroy_completed.store(false, Ordering::SeqCst);
-		self.0.abort_signal.lock().cancel();
 	}
 
 	#[cfg(feature = "wasm-runtime")]
@@ -486,11 +485,10 @@ impl ActorContext {
 		self.cancel_sleep_timer();
 		self.0.destroy_requested.store(true, Ordering::SeqCst);
 		self.0.destroy_completed.store(false, Ordering::SeqCst);
-		self.0.abort_signal.lock().cancel();
 	}
 
 	#[doc(hidden)]
-	pub fn cancel_abort_signal_for_sleep(&self) {
+	pub fn cancel_actor_abort_signal(&self) {
 		self.0.abort_signal.lock().cancel();
 	}
 
@@ -500,9 +498,9 @@ impl ActorContext {
 			return;
 		}
 
-		// Sleep cancels the generation abort signal to break queue waits and the
-		// run loop out of blocking calls. A restarted actor needs a fresh signal
-		// so the next generation can wait normally.
+		// Sleep or destroy cancels the generation abort signal to break actor
+		// scoped waits. A restarted actor needs a fresh signal so the next
+		// generation can wait normally.
 		let next_signal = CancellationToken::new();
 		*abort_signal = next_signal.clone();
 		*self.0.queue_abort_signal.lock() = next_signal;

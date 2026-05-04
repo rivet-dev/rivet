@@ -466,7 +466,7 @@ const userAccount = actor({
 
 ### Lifecycle Hooks
 
-Actors support hooks for initialization, background processing, connections, networking, and state changes. Use `run` for long-lived background loops, and exit cleanly on shutdown with `c.aborted` or `c.abortSignal`.
+Actors support hooks for initialization, background processing, connections, networking, and state changes. Use `run` for long-lived background loops, and use `c.aborted` or `c.abortSignal` for graceful shutdown.
 
 ```ts
 import { actor, event, queue } from "rivetkit";

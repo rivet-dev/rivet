@@ -1528,9 +1528,7 @@ impl ActorTask {
 		let grace_period = self.factory.config().effective_sleep_grace_period();
 		self.sleep_deadline = None;
 		self.ctx.cancel_sleep_timer();
-		// Entering grace cancels the actor abort signal so user code blocked on
-		// queues or other actor scoped waits can unwind and let sleep finalize.
-		self.ctx.cancel_abort_signal_for_sleep();
+		self.ctx.cancel_actor_abort_signal();
 		self.sleep_grace = Some(SleepGraceState {
 			deadline: Instant::now() + grace_period,
 			reason,
@@ -1745,15 +1743,18 @@ impl ActorTask {
 			ShutdownKind::Sleep => LifecycleState::SleepFinalize,
 			ShutdownKind::Destroy => LifecycleState::Destroying,
 		});
-		self.save_final_state().await?;
-		self.close_actor_event_channel();
-		self.join_aborted_run_handle().await;
-		Self::finish_shutdown_cleanup_with_ctx(self.ctx.clone(), reason).await?;
-		if matches!(reason, ShutdownKind::Destroy) {
+		let result: Result<()> = async {
+			self.save_final_state().await?;
+			self.close_actor_event_channel();
+			self.join_aborted_run_handle().await;
+			Self::finish_shutdown_cleanup_with_ctx(self.ctx.clone(), reason).await
+		}
+		.await;
+		if result.is_ok() && matches!(reason, ShutdownKind::Destroy) {
 			self.ctx.mark_destroy_completed();
 		}
 		self.ctx.record_shutdown_wait(reason, started_at.elapsed());
-		Ok(())
+		result
 	}
 
 	async fn save_final_state(&mut self) -> Result<()> {

@@ -1227,7 +1227,7 @@ interface BaseActorConfig<
 	 * shutdown window (`sleepGracePeriod`) cover deferred work.
 	 *
 	 * The handler receives an abort signal via `c.abortSignal` and a
-	 * `c.aborted` alias for loop checks. Use these to gracefully exit.
+	 * `c.aborted` alias. Use these to gracefully exit when shutdown starts.
 	 *
 	 * If this handler exits, the actor will follow the normal idle sleep timeout
 	 * once it becomes idle.
@@ -1770,7 +1770,7 @@ export const DocActorOptionsSchema = z
 			.number()
 			.optional()
 			.describe(
-				`Max time in ms for the graceful shutdown window. Covers lifecycle hooks (onSleep, onDestroy), the run handler abort wait, async raw WebSocket handlers, disconnect callbacks, and final state serialization. Default: ${DEFAULT_SLEEP_GRACE_PERIOD}.`,
+				`Max time in ms for the graceful shutdown window. Covers lifecycle hooks (onSleep, onDestroy), the run handler wait, async raw WebSocket handlers, disconnect callbacks, and final state serialization. Default: ${DEFAULT_SLEEP_GRACE_PERIOD}.`,
 			),
 		onDestroyTimeout: z
 			.number()
