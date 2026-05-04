@@ -79,9 +79,14 @@ function MermaidDiagram({ chart }: { chart: string }) {
 	);
 }
 
+const viteRivetEndpoint = import.meta.env.VITE_RIVET_ENDPOINT as
+	| string
+	| undefined;
 const rivetEndpoint =
-	import.meta.env.VITE_RIVET_ENDPOINT ??
-	`${globalThis.location.origin}/api/rivet`;
+	viteRivetEndpoint ?? `${globalThis.location.origin}/api/rivet`;
+const mockAgenticLoopEndpoint =
+	viteRivetEndpoint ?? "http://127.0.0.1:6420";
+const mockAgenticLoopEndpointStorageKey = `kitchen-sink:mock-agentic-loop:endpoint:${mockAgenticLoopEndpoint}`;
 
 const { useActor } = createRivetKit<typeof registry>(rivetEndpoint);
 
@@ -1047,8 +1052,8 @@ function formatAgenticDebugEvent(event: AgenticDebugEvent) {
 
 function MockAgenticLoopPanel({ page }: { page: PageConfig }) {
 	const [endpoint, setEndpoint] = usePersistedState(
-		"kitchen-sink:mock-agentic-loop:endpoint",
-		rivetEndpoint,
+		mockAgenticLoopEndpointStorageKey,
+		mockAgenticLoopEndpoint,
 	);
 	const [namespace, setNamespace] = usePersistedState(
 		"kitchen-sink:mock-agentic-loop:namespace",

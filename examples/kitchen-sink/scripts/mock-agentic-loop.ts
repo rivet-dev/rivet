@@ -14,7 +14,10 @@ import { fileURLToPath } from "node:url";
 import { createClient } from "rivetkit/client";
 import type { registry } from "../src/index.ts";
 
-const ENDPOINT = process.env.RIVET_ENDPOINT ?? "http://127.0.0.1:6420";
+const ENDPOINT =
+	process.env.RIVET_ENDPOINT ??
+	process.env.VITE_RIVET_ENDPOINT ??
+	"http://127.0.0.1:6420";
 const START_SERVER =
 	process.env.MOCK_AGENTIC_START_SERVER === "1" ||
 	(process.env.MOCK_AGENTIC_START_SERVER !== "0" &&
@@ -61,7 +64,7 @@ const MAX_RECONNECT_MS = numberFromEnv(
 	"MOCK_AGENTIC_MAX_RECONNECT_MS",
 	30_000,
 );
-const DEFAULT_ON_SLEEP_DELAY_MS = 15_000;
+const DEFAULT_ON_SLEEP_DELAY_MS = 0;
 const ON_SLEEP_DELAY_MS = numberFromEnv(
 	"MOCK_AGENTIC_ON_SLEEP_DELAY_MS",
 	DEFAULT_ON_SLEEP_DELAY_MS,
