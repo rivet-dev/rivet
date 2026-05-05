@@ -101,7 +101,7 @@ export function interval(ms: number): () => Promise<void> {
 
 export const VERSION = pkgJson.version;
 
-let _userAgent: string | undefined;
+let _userAgent: string | null | undefined;
 
 function logger() {
 	return getLogger("utils");
@@ -110,12 +110,19 @@ function logger() {
 /**
  * Builds the HTTP user agent used by this library.
  *
+ * Returns undefined in browser environments. iOS Safari does not drop a
+ * manually-set User-Agent header, so setting one would override the
+ * browser-provided value.
+ *
  * @experimental
  */
-export function httpUserAgent(): string {
+export function httpUserAgent(): string | undefined {
 	// Return cached value if already initialized
-	if (_userAgent !== undefined) {
-		return _userAgent;
+	if (_userAgent !== undefined) return _userAgent ?? undefined;
+
+	if (typeof document !== "undefined") {
+		_userAgent = null;
+		return undefined;
 	}
 
 	// Library
