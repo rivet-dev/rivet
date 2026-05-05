@@ -9,6 +9,8 @@ export const KEYS = {
 	KV: Uint8Array.from([4]),
 	QUEUE_PREFIX: Uint8Array.from([5]),
 	LAST_PUSHED_ALARM: Uint8Array.from([6]),
+	// LAST_PUSHED_ALARM intentionally shares byte [6] with WORKFLOW_PREFIX.
+	// The exact [6] key stores the alarm timestamp, while workflow data uses [6, 1, ...].
 	WORKFLOW_PREFIX: Uint8Array.from([6]),
 	TRACES_PREFIX: Uint8Array.from([7]),
 };
