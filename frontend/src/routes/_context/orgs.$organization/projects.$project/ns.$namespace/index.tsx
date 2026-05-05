@@ -22,7 +22,7 @@ export const Route = createFileRoute(
 	},
 	async loader({ context, deps, location }) {
 		const dataProvider = context.dataProvider;
-		const { actorId, actorKey } = location.search as Record<string, string> || {};
+		const { actorId } = (location.search as Record<string, string>) || {};
 
 		// Prefetch runner configs so EmptyState doesn't flash "No Providers Connected"
 		// while the queries are loading.
@@ -35,7 +35,7 @@ export const Route = createFileRoute(
 			),
 		]);
 
-		if (deps.n && (actorId || actorKey)) {
+		if (deps.n && actorId) {
 			await runnerPrefetch;
 			return;
 		}
@@ -62,7 +62,7 @@ export const Route = createFileRoute(
 			),
 			runnerPrefetch,
 		]);
-		const firstActorId = actors.pages[0]?.actors?.[0]?.key;
+		const firstActorId = actors.pages[0]?.actors?.[0]?.actorId;
 
 		if (!firstActorId) return;
 
@@ -71,7 +71,7 @@ export const Route = createFileRoute(
 			search: (old) => ({
 				...old,
 				n,
-				actorKey: firstActorId,
+				actorId: firstActorId,
 			}),
 			replace: true,
 		});
@@ -80,13 +80,13 @@ export const Route = createFileRoute(
 });
 
 export function RouteComponent() {
-	const { actorId, actorKey } = Route.useSearch();
+	const { actorId } = Route.useSearch();
 
-	return <Actors actorId={actorKey ?? actorId} />;
+	return <Actors actorId={actorId} />;
 }
 
 function PendingComponent() {
-	const { actorId, actorKey } = Route.useSearch();
+	const { actorId } = Route.useSearch();
 
-	return <Actors actorId={actorKey ?? actorId} />;
+	return <Actors actorId={actorId} />;
 }

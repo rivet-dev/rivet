@@ -2,6 +2,7 @@ import { faMagnifyingGlass, Icon } from "@rivet-gg/icons";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
+import { toast } from "sonner";
 import { Button, type ButtonProps } from "@/components";
 import { Input } from "@/components/ui/input";
 import { useActorsView } from "./actors-view-context-provider";
@@ -25,18 +26,47 @@ export function GoToActorButton(props: ButtonProps) {
 
 		setIsPending(true);
 		try {
-			await queryClient.fetchQuery(
-				dataProvider.actorQueryOptions(trimmed),
+			try {
+				await queryClient.fetchQuery(
+					dataProvider.actorQueryOptions(trimmed),
+				);
+				void navigate({
+					to: ".",
+					search: (prev) => ({ ...prev, actorId: trimmed }),
+				});
+				return;
+			} catch {}
+
+			const builds = await queryClient.fetchInfiniteQuery(
+				dataProvider.buildsQueryOptions(),
 			);
-			void navigate({
-				to: ".",
-				search: (prev) => ({ ...prev, actorId: trimmed }),
-			});
-		} catch {
-			void navigate({
-				to: ".",
-				search: (prev) => ({ ...prev, actorKey: trimmed }),
-			});
+			const buildNames = builds.pages.flatMap((page) =>
+				Object.keys(page.names ?? {}),
+			);
+
+			const resolved = await Promise.any(
+				buildNames.map((name) =>
+					queryClient.fetchQuery(
+						dataProvider.actorQueryOptions({
+							key: trimmed,
+							name,
+						}),
+					),
+				),
+			).catch(() => null);
+
+			if (resolved) {
+				void navigate({
+					to: ".",
+					search: (prev) => ({
+						...prev,
+						actorId: resolved.actorId,
+					}),
+				});
+				return;
+			}
+
+			toast.error(`No actor found with id or key "${trimmed}"`);
 		} finally {
 			setValue("");
 			setOpen(false);

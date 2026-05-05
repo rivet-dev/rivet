@@ -25,12 +25,11 @@ import type { ActorId } from "./queries";
 interface ActorsListRowProps {
 	className?: string;
 	actorId: ActorId;
-	actorKey?: string;
 	isCurrent?: boolean;
 }
 
 export const ActorsListRow = memo(
-	({ className, actorId, actorKey, isCurrent }: ActorsListRowProps) => {
+	({ className, actorId, isCurrent }: ActorsListRowProps) => {
 		return (
 			<Button
 				className={cn(
@@ -44,7 +43,7 @@ export const ActorsListRow = memo(
 					to="."
 					search={(search: Record<string, unknown>) => ({
 						...search,
-						...(actorKey ? { actorKey } : { actorId }),
+						actorId,
 					})}
 					className="flex items-center gap-2 w-full min-w-0"
 				>

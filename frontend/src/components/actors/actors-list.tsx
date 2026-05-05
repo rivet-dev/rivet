@@ -141,7 +141,7 @@ function List({
 	viewportRef,
 }: { viewportRef: RefObject<HTMLDivElement | null> }) {
 	const filters = useFiltersValue({ onlyStatic: true });
-	const { actorId, actorKey, n } = useSearch({
+	const { actorId, n } = useSearch({
 		from: "/_context",
 	});
 	const { data: actors = [] } = useInfiniteQuery(
@@ -173,12 +173,8 @@ function List({
 						}}
 					>
 						<ActorsListRow
-							actorKey={actor.key}
 							actorId={actor.actorId}
-							isCurrent={
-								actorId === actor.actorId ||
-								actorKey === actor.key
-							}
+							isCurrent={actorId === actor.actorId}
 						/>
 					</div>
 				);

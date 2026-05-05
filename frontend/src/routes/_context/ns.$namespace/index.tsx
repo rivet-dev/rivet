@@ -19,7 +19,7 @@ export const Route = createFileRoute("/_context/ns/$namespace/")({
 	},
 	async loader({ context, deps, location }) {
 		const dataProvider = context.dataProvider;
-		const { actorId, actorKey } = location.search as Record<string, string | undefined>;
+		const { actorId } = location.search as Record<string, string | undefined>;
 
 		// Prefetch runner configs so EmptyState doesn't flash "No Providers Connected"
 		// while the queries are loading.
@@ -32,7 +32,7 @@ export const Route = createFileRoute("/_context/ns/$namespace/")({
 			),
 		]);
 
-		if (deps.n && (actorId || actorKey)) {
+		if (deps.n && actorId) {
 			await runnerPrefetch;
 			return;
 		}
@@ -55,7 +55,7 @@ export const Route = createFileRoute("/_context/ns/$namespace/")({
 			),
 			runnerPrefetch,
 		]);
-		const firstActorId = actors.pages[0]?.actors?.[0]?.key;
+		const firstActorId = actors.pages[0]?.actors?.[0]?.actorId;
 
 		if (!firstActorId) return;
 
@@ -64,7 +64,7 @@ export const Route = createFileRoute("/_context/ns/$namespace/")({
 			search: (old) => ({
 				...old,
 				n,
-				actorKey: firstActorId,
+				actorId: firstActorId,
 			}),
 			replace: true,
 		});
@@ -72,13 +72,11 @@ export const Route = createFileRoute("/_context/ns/$namespace/")({
 });
 
 export function RouteComponent() {
-	const { actorKey, actorId } = Route.useSearch();
+	const { actorId } = Route.useSearch();
 
 	return (
-		<CatchBoundary
-			getResetKey={() => actorKey ?? actorId ?? "no-actor-key"}
-		>
-			<Actors actorId={actorKey ?? actorId} />
+		<CatchBoundary getResetKey={() => actorId ?? "no-actor-id"}>
+			<Actors actorId={actorId} />
 		</CatchBoundary>
 	);
 }

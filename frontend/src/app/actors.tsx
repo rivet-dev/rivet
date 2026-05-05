@@ -19,21 +19,14 @@ export function Actors({ actorId }: { actorId: string | undefined }) {
 
 function Actor() {
 	const navigate = useNavigate();
-	const { tab, actorId, n, actorKey } = useSearch({ from: "/_context" });
+	const { tab, actorId } = useSearch({ from: "/_context" });
 
-	const id =
-		actorKey && n ? { key: actorKey ?? "", name: n?.[0] ?? "" } : actorId;
-
-	const { data, isError } = useQuery(useDataProvider().actorQueryOptions(id));
+	const { data, isError } = useQuery(
+		useDataProvider().actorQueryOptions(actorId),
+	);
 
 	if (!data || isError) {
-		return (
-			<ActorNotFound
-				actorId={actorId as ActorId}
-				name={n?.[0]}
-				actorKey={actorKey}
-			/>
-		);
+		return <ActorNotFound actorId={actorId as ActorId} />;
 	}
 
 	return (
