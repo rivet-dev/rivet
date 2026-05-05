@@ -39,7 +39,8 @@ pub async fn pegboard_runner_pool2(ctx: &mut WorkflowCtx, input: &Input) -> Resu
 		return Ok(());
 	}
 
-	ctx.v(2)
+	let error_tracker_wf_id = ctx
+		.v(2)
 		.workflow(runner_pool_error_tracker::Input {
 			namespace_id: input.namespace_id,
 			runner_name: input.runner_name.clone(),
@@ -178,6 +179,12 @@ pub async fn pegboard_runner_pool2(ctx: &mut WorkflowCtx, input: &Input) -> Resu
 			}
 			.boxed()
 		})
+		.await?;
+
+	ctx.v(2)
+		.signal(crate::workflows::runner_pool_error_tracker::Shutdown {})
+		.to_workflow_id(error_tracker_wf_id)
+		.send()
 		.await?;
 
 	Ok(())

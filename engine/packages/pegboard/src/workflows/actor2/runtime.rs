@@ -305,6 +305,7 @@ pub async fn allocate(ctx: &ActivityCtx, input: &AllocateInput) -> Result<Alloca
 
 	if allocation.is_some() {
 		state.sleep_ts = None;
+		state.reschedule_ts = None;
 	}
 
 	let dt = start.elapsed().as_secs_f64();

@@ -1505,6 +1505,8 @@ impl Database for DatabaseKv {
 								let input_key = keys::workflow::InputKey::new(wf.workflow_id);
 								let state_key = keys::workflow::StateKey::new(wf.workflow_id);
 								let output_key = keys::workflow::OutputKey::new(wf.workflow_id);
+								let silence_ts_key =
+									keys::workflow::SilenceTsKey::new(wf.workflow_id);
 								let input_subspace = self.subspace.subspace(&input_key);
 								let state_subspace = self.subspace.subspace(&state_key);
 								let output_subspace = self.subspace.subspace(&output_key);
@@ -1521,6 +1523,7 @@ impl Database for DatabaseKv {
 									input_chunks,
 									state_chunks,
 									has_output,
+									silence_ts_entry,
 									events,
 								) = tokio::try_join!(
 									tx.get(&self.subspace.pack(&create_ts_key), Serializable),
@@ -1554,6 +1557,7 @@ impl Database for DatabaseKv {
 										.await
 										.map(|entry| entry.is_some())
 									},
+									tx.get(&self.subspace.pack(&silence_ts_key), Serializable),
 									async {
 										let mut events_by_location: HashMap<Location, Vec<Event>> =
 											HashMap::new();
@@ -1787,10 +1791,15 @@ impl Database for DatabaseKv {
 										Ok(Some(events_by_location))
 									}
 								)?;
+								let is_silenced = silence_ts_entry.is_some();
 
 								if has_output {
 									tracing::warn!(workflow_id=?wf.workflow_id, "workflow already completed, ignoring");
+								} else if is_silenced {
+									tracing::warn!(workflow_id=?wf.workflow_id, "workflow silenced, ignoring");
+								}
 
+								if has_output || is_silenced {
 									// Clear lease
 									let lease_key = keys::workflow::LeaseKey::new(wf.workflow_id);
 									tx.clear(&self.subspace.pack(&lease_key));
