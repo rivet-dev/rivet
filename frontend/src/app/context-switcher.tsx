@@ -10,7 +10,12 @@ import {
 	usePrefetchInfiniteQuery,
 	useQuery,
 } from "@tanstack/react-query";
-import { useMatchRoute, useNavigate, useParams } from "@tanstack/react-router";
+import {
+	useMatches,
+	useMatchRoute,
+	useNavigate,
+	useParams,
+} from "@tanstack/react-router";
 import { useState } from "react";
 import {
 	RECENT_NAMESPACES_KEY,
@@ -516,6 +521,17 @@ function NamespaceList({
 			return params.namespace;
 		},
 	});
+	const leafFullPath = useMatches({
+		select: (matches) => matches[matches.length - 1]?.fullPath,
+	});
+	const namespaceBase =
+		"/orgs/$organization/projects/$project/ns/$namespace";
+	const namespaceTo = (
+		typeof leafFullPath === "string" &&
+		leafFullPath.startsWith(namespaceBase)
+			? leafFullPath
+			: namespaceBase
+	) as "/orgs/$organization/projects/$project/ns/$namespace";
 
 	return (
 		<div className="border-l w-48">
@@ -572,7 +588,7 @@ function NamespaceList({
 												organizationSlug: organization,
 											});
 											return navigate({
-												to: "/orgs/$organization/projects/$project/ns/$namespace",
+												to: namespaceTo,
 												params: {
 													organization: organization,
 													project: project,

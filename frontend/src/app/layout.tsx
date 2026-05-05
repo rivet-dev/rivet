@@ -16,6 +16,7 @@ import { useSuspenseQuery } from "@tanstack/react-query";
 import {
 	Link,
 	useMatch,
+	useMatches,
 	useMatchRoute,
 	useNavigate,
 } from "@tanstack/react-router";
@@ -474,6 +475,16 @@ const NamespaceBreadcrumbs = ({
 	namespaceNameId: string;
 }) => {
 	const navigate = useNavigate();
+	const leafFullPath = useMatches({
+		select: (matches) => matches[matches.length - 1]?.fullPath,
+	});
+	const namespaceBase = "/ns/$namespace";
+	const namespaceTo = (
+		typeof leafFullPath === "string" &&
+		leafFullPath.startsWith(namespaceBase)
+			? leafFullPath
+			: namespaceBase
+	) as "/ns/$namespace";
 
 	return (
 		<div className="flex items-center gap-2">
@@ -483,7 +494,7 @@ const NamespaceBreadcrumbs = ({
 				value={namespaceNameId}
 				onValueChange={(value) =>
 					navigate({
-						to: "/ns/$namespace",
+						to: namespaceTo,
 						params: {
 							namespace: value,
 						},
