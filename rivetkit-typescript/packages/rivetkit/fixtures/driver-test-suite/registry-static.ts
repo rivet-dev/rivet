@@ -113,6 +113,7 @@ import {
 	sleepRawWsDelayedSendOnSleep,
 	sleepWithWaitUntilInOnWake,
 	sleepAbortListenerVarsActor,
+	sleepRawWsVarsExceedsGrace,
 } from "./sleep";
 import {
 	sleepWithDb,
@@ -210,6 +211,7 @@ export const registry = setup({
 		sleepRawWsDelayedSendOnSleep,
 		sleepWithWaitUntilInOnWake,
 		sleepAbortListenerVarsActor,
+		sleepRawWsVarsExceedsGrace,
 		counterWaitUntilProbe,
 		// From sleep-db.ts
 		sleepWithDb,

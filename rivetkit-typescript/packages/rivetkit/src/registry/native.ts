@@ -2335,7 +2335,7 @@ class TrackedWebSocketHandleAdapter implements UniversalWebSocket {
 				return;
 			}
 			const callbackRegionId = this.#ctx.beginWebSocketCallback();
-			this.#ctx.waitUntil(
+			this.#ctx.keepAwake(
 				Promise.resolve(result)
 					.catch((error) => {
 						logger().error({
