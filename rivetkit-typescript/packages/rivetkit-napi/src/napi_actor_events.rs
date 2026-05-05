@@ -209,6 +209,12 @@ async fn run_preamble(
 	snapshot: Option<Vec<u8>>,
 	hibernated: Vec<(rivetkit_core::ConnHandle, Vec<u8>)>,
 ) -> Result<RunHandlerSlot> {
+	// Recover from actors persisted with `has_initialized=true` but an empty
+	// state snapshot, which can happen if an earlier process crashed between
+	// the core's startup persist and the JS preamble populating state. Treat
+	// an empty snapshot as a new actor so createState reruns instead of
+	// leaving `c.state` as undefined for downstream user code.
+	let snapshot = snapshot.filter(|bytes| !bytes.is_empty());
 	let is_new = snapshot.is_none();
 
 	// Run database migrations before any user lifecycle hook so `c.db` is
@@ -645,7 +651,9 @@ pub(crate) async fn dispatch_event(
 					let conn = { ctx.inner().conns().find(|conn| conn.id() == conn_id) };
 					if let Some(conn) = conn {
 						if let Some(callback) = callback {
-							call_on_disconnect_final(&callback, &ctx, conn.clone()).await?;
+							if conn.state_initialized() {
+								call_on_disconnect_final(&callback, &ctx, conn.clone()).await?;
+							}
 						}
 						ctx.inner().disconnect_conn(conn_id).await?;
 					}

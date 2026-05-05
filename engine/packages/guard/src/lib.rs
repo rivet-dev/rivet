@@ -21,12 +21,6 @@ pub async fn start(config: rivet_config::Config, pools: rivet_pools::Pools) -> R
 		Id::new_v1(config.dc_label()),
 	)?;
 
-	// Initialize with a default CryptoProvider for rustls
-	let provider = rustls::crypto::ring::default_provider();
-	if provider.install_default().is_err() {
-		tracing::debug!("crypto provider already installed in this process");
-	}
-
 	// Share shared context
 	let shared_state = shared_state::SharedState::new(&config, ctx.ups()?);
 	shared_state.start().await?;

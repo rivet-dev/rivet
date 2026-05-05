@@ -156,6 +156,7 @@ struct ConnHandleInner {
 	state: RwLock<Vec<u8>>,
 	is_hibernatable: bool,
 	dirty: AtomicBool,
+	state_initialized: AtomicBool,
 	subscriptions: RwLock<BTreeSet<String>>,
 	hibernation: RwLock<Option<HibernatableConnectionMetadata>>,
 	state_change_handler: RwLock<Option<StateChangeCallback>>,
@@ -177,6 +178,7 @@ impl ConnHandle {
 			state: RwLock::new(state),
 			is_hibernatable,
 			dirty: AtomicBool::new(false),
+			state_initialized: AtomicBool::new(false),
 			subscriptions: RwLock::new(BTreeSet::new()),
 			hibernation: RwLock::new(None),
 			state_change_handler: RwLock::new(None),
@@ -209,9 +211,14 @@ impl ConnHandle {
 
 	fn set_state_inner(&self, state: Vec<u8>, mark_dirty: bool) {
 		*self.0.state.write() = state;
+		self.0.state_initialized.store(true, Ordering::SeqCst);
 		if mark_dirty {
 			self.mark_hibernation_dirty();
 		}
+	}
+
+	pub fn state_initialized(&self) -> bool {
+		self.0.state_initialized.load(Ordering::SeqCst)
 	}
 
 	fn mark_hibernation_dirty(&self) {
@@ -343,6 +350,7 @@ impl ConnHandle {
 			persisted.state,
 			true,
 		);
+		conn.0.state_initialized.store(true, Ordering::SeqCst);
 		conn.configure_hibernation(Some(HibernatableConnectionMetadata {
 			gateway_id: persisted.gateway_id,
 			request_id: persisted.request_id,
@@ -851,8 +859,22 @@ impl ActorContext {
 		};
 		conn.clear_subscriptions();
 
-		self.try_send_actor_event(ActorEvent::ConnectionClosed { conn }, "connection_closed")
-			.with_context(|| disconnect_message(conn_id, reason.as_deref()))?;
+		// Skip the user `onDisconnect` event for connections that never had
+		// their state populated (i.e. the transport disconnected before
+		// `createConnState` ran). The user-visible `conn.state` would be
+		// empty bytes, surfacing as `undefined` in foreign runtimes and
+		// breaking user code that assumes a fully-initialized connection.
+		if !conn.state_initialized() {
+			tracing::debug!(
+				actor_id = %self.actor_id(),
+				conn_id,
+				reason = ?reason.as_deref(),
+				"connection_closed event skipped because state was never initialized"
+			);
+		} else {
+			self.try_send_actor_event(ActorEvent::ConnectionClosed { conn }, "connection_closed")
+				.with_context(|| disconnect_message(conn_id, reason.as_deref()))?;
+		}
 
 		self.record_connections_updated();
 		self.reset_sleep_timer();

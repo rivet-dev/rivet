@@ -18,6 +18,7 @@ reqwest.workspace = true
 rivet-config.workspace = true
 rivet-metrics.workspace = true
 rivet-util.workspace = true
+rustls.workspace = true
 serde.workspace = true
 tempfile.workspace = true
 thiserror.workspace = true

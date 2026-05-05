@@ -1205,11 +1205,20 @@ impl ActorTask {
 		let is_new = !persisted.actor.has_initialized;
 		self.ctx.load_persisted_actor(persisted.actor);
 		self.ctx.load_last_pushed_alarm(persisted.last_pushed_alarm);
-		self.ctx.set_has_initialized(true);
-		self.ctx
-			.persist_state(SaveStateOpts { immediate: true })
-			.await
-			.context("persist actor initialization")?;
+		// Do not set has_initialized=true here for new actors. Flipping the
+		// flag and persisting before the runtime preamble has populated state
+		// (via createState or equivalent) leaves a window where a crash
+		// produces a persisted record with has_initialized=true and an empty
+		// state, after which the next wake skips state initialization and
+		// users observe `c.state === undefined` in createVars/onWake. The
+		// flag is now flipped after spawn_run_handle completes (see below).
+		if !is_new {
+			self.ctx.set_has_initialized(true);
+			self.ctx
+				.persist_state(SaveStateOpts { immediate: true })
+				.await
+				.context("persist actor initialization")?;
+		}
 		let init_inspector_token_started_at = Instant::now();
 		crate::inspector::auth::init_inspector_token_with_preload(
 			&self.ctx,
@@ -1234,6 +1243,14 @@ impl ActorTask {
 		self.transition_to(LifecycleState::Started);
 		self.spawn_run_handle(is_new).await?;
 		if is_new {
+			// Flag the actor as initialized only after the runtime preamble
+			// has populated state. For NAPI this is no-op because the JS
+			// preamble already calls set_has_initialized via
+			// mark_has_initialized_and_flush, but for runtimes whose run
+			// handle does not signal manual startup_ready, this is the
+			// authoritative point at which a fresh actor becomes "started"
+			// in KV.
+			self.ctx.set_has_initialized(true);
 			self.ctx
 				.persist_state(SaveStateOpts { immediate: true })
 				.await

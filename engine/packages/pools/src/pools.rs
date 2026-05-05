@@ -26,6 +26,12 @@ impl Pools {
 		let token = CancellationToken::new();
 		let node_id = NodeId::new();
 
+		// Initialize with a default CryptoProvider for rustls
+		let provider = rustls::crypto::ring::default_provider();
+		if provider.install_default().is_err() {
+			tracing::debug!("crypto provider already installed in this process");
+		}
+
 		let (ups, udb) = tokio::try_join!(
 			crate::db::ups::setup(&config, client_name),
 			crate::db::udb::setup(&config),

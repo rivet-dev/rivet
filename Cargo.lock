@@ -5690,6 +5690,7 @@ dependencies = [
  "rivet-config",
  "rivet-metrics",
  "rivet-util",
+ "rustls 0.23.29",
  "serde",
  "tempfile",
  "thiserror 1.0.69",
