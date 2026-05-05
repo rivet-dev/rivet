@@ -27,6 +27,7 @@ rivet-metrics.workspace = true
 rivet-pools.workspace = true
 rivet-envoy-protocol.workspace = true
 depot-client.workspace = true
+depot-client-embedded.workspace = true
 rivet-runtime.workspace = true
 rivet-types.workspace = true
 scc.workspace = true

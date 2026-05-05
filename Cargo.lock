@@ -1868,6 +1868,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "depot-client-embedded"
+version = "2.3.0-rc.4"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "depot",
+ "depot-client",
+ "rivet-envoy-protocol",
+ "tokio",
+]
+
+[[package]]
 name = "depot-client-types"
 version = "2.3.0-rc.4"
 
@@ -4225,6 +4237,7 @@ dependencies = [
  "bytes",
  "depot",
  "depot-client",
+ "depot-client-embedded",
  "futures-util",
  "gasoline",
  "http-body 1.0.1",
@@ -6016,7 +6029,6 @@ dependencies = [
  "reqwest",
  "rivet-envoy-client",
  "rivet-error",
- "rivet-pools",
  "rivetkit-actor-persist",
  "rivetkit-client-protocol",
  "rivetkit-inspector-protocol",

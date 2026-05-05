@@ -22,8 +22,8 @@ pub(super) async fn ensure_local_normal_runner_config(config: &ServeConfig) -> R
 		return Ok(());
 	}
 
-	let client = rivet_pools::reqwest::client()
-		.await
+	let client = Client::builder()
+		.build()
 		.context("build reqwest client for runner config")?;
 	let datacenters = get_datacenters(&client, config).await?;
 	let mut runner_datacenters = JsonMap::new();

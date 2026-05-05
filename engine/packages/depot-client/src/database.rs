@@ -5,7 +5,6 @@ use tokio::runtime::Handle;
 
 use crate::{
 	query::{BindParam, ExecResult, ExecuteResult, QueryResult},
-	transport::EmbeddedDepotSqliteTransport,
 	vfs::{
 		NativeVfsHandle, SqliteTransportHandle, SqliteVfs, SqliteVfsMetrics,
 		SqliteVfsMetricsSnapshot, VfsConfig, VfsPreloadHintSnapshot,
@@ -52,23 +51,6 @@ pub async fn open_database_from_transport(
 	let native_db = NativeDatabaseHandle::new_with_metrics(vfs, actor_id, metrics)?;
 	native_db.initialize().await?;
 	Ok(native_db)
-}
-
-pub async fn open_database_from_embedded_depot(
-	db: Arc<depot::conveyer::Db>,
-	actor_id: String,
-	generation: u64,
-	rt_handle: Handle,
-	metrics: Option<Arc<dyn SqliteVfsMetrics>>,
-) -> Result<NativeDatabaseHandle> {
-	open_database_from_transport(
-		Arc::new(EmbeddedDepotSqliteTransport::new(db)),
-		actor_id,
-		generation,
-		rt_handle,
-		metrics,
-	)
-	.await
 }
 
 impl NativeDatabaseHandle {

@@ -20,7 +20,6 @@ tracing.workspace = true
 getrandom = "0.2"
 rivet-envoy-protocol.workspace = true
 depot-client-types.workspace = true
-depot.workspace = true
 moka = { version = "0.12", default-features = false, features = ["sync"] }
 parking_lot.workspace = true
 scc.workspace = true

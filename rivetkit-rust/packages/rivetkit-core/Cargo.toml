@@ -12,7 +12,6 @@ default = ["native-runtime"]
 native-runtime = [
 	"dep:nix",
 	"dep:reqwest",
-	"dep:rivet-pools",
 	"rivet-envoy-client/native-transport",
 ]
 wasm-runtime = ["rivet-envoy-client/wasm-transport"]
@@ -32,7 +31,6 @@ parking_lot.workspace = true
 prometheus.workspace = true
 rand.workspace = true
 reqwest = { workspace = true, optional = true }
-rivet-pools = { workspace = true, optional = true }
 rivet-error.workspace = true
 rivet-envoy-client = { workspace = true, default-features = false }
 rivetkit-shared-types.workspace = true

@@ -3,7 +3,7 @@ use std::process::Stdio;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
-use reqwest::Url;
+use reqwest::{Client, Url};
 use serde::Deserialize;
 use tokio::process::{Child, Command};
 use tokio::task::JoinHandle;
@@ -233,8 +233,8 @@ fn spawn_engine_watcher(mut child: Child, pid: u32) -> JoinHandle<()> {
 /// (for example a stale rivetkit) which would conflict with a fresh spawn.
 async fn probe_existing_engine(endpoint: &str) -> Result<Option<EngineHealthResponse>> {
 	let health_url = engine_health_url(endpoint);
-	let client = rivet_pools::reqwest::client()
-		.await
+	let client = Client::builder()
+		.build()
 		.context("build reqwest client for engine probe")?;
 
 	let response = match client
@@ -316,8 +316,8 @@ async fn wait_for_engine_health(health_url: &str) -> Result<EngineHealthResponse
 	const HEALTH_INITIAL_BACKOFF: Duration = Duration::from_millis(100);
 	const HEALTH_MAX_BACKOFF: Duration = Duration::from_secs(1);
 
-	let client = rivet_pools::reqwest::client()
-		.await
+	let client = Client::builder()
+		.build()
 		.context("build reqwest client for engine health check")?;
 	let deadline = Instant::now() + HEALTH_MAX_WAIT;
 	let mut attempt = 0u32;

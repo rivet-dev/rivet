@@ -23,9 +23,6 @@ pub mod optimization_flags;
 /// SQLite query execution helpers.
 pub mod query;
 
-/// SQLite transport adapters for same-process Depot usage.
-pub mod transport;
-
 pub use depot_client_types as types;
 
 /// Custom SQLite VFS for actor-side depot transport.

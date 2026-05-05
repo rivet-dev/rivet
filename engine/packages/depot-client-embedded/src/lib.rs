@@ -1,16 +1,19 @@
-//! SQLite transport adapters.
+//! Embedded Depot transport for depot-client.
 //!
-//! `EmbeddedDepotSqliteTransport` is for deployments where the SQLite VFS runs in the
-//! same process or server as the Depot backend. It calls `depot::conveyer::Db`
-//! directly instead of routing page operations through an actor Envoy transport.
+//! This crate is for deployments where the SQLite VFS runs in the same process
+//! as the Depot backend. It keeps engine storage dependencies out of the base
+//! `depot-client` crate used by NAPI.
 
 use std::sync::Arc;
 
 use anyhow::Result;
 use async_trait::async_trait;
+use depot_client::{
+	database::{NativeDatabaseHandle, open_database_from_transport},
+	vfs::{SqliteTransport, SqliteVfsMetrics},
+};
 use rivet_envoy_protocol as protocol;
-
-use crate::vfs::SqliteTransport;
+use tokio::runtime::Handle;
 
 pub struct EmbeddedDepotSqliteTransport {
 	db: Arc<depot::conveyer::Db>,
@@ -20,6 +23,23 @@ impl EmbeddedDepotSqliteTransport {
 	pub fn new(db: Arc<depot::conveyer::Db>) -> Self {
 		Self { db }
 	}
+}
+
+pub async fn open_database_from_embedded_depot(
+	db: Arc<depot::conveyer::Db>,
+	actor_id: String,
+	generation: u64,
+	rt_handle: Handle,
+	metrics: Option<Arc<dyn SqliteVfsMetrics>>,
+) -> Result<NativeDatabaseHandle> {
+	open_database_from_transport(
+		Arc::new(EmbeddedDepotSqliteTransport::new(db)),
+		actor_id,
+		generation,
+		rt_handle,
+		metrics,
+	)
+	.await
 }
 
 #[async_trait]

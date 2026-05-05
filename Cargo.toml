@@ -14,6 +14,9 @@ members = [
   "engine/packages/config",
   "engine/packages/config-schema-gen",
   "engine/packages/datacenter",
+  "engine/packages/depot-client",
+  "engine/packages/depot-client-embedded",
+  "engine/packages/depot-client-types",
   "engine/packages/engine",
   "engine/packages/env",
   "engine/packages/epoxy",
@@ -63,8 +66,6 @@ members = [
   "rivetkit-rust/packages/actor-persist",
   "rivetkit-rust/packages/rivetkit-core",
   "rivetkit-rust/packages/shared-types",
-  "engine/packages/depot-client",
-  "engine/packages/depot-client-types",
   "rivetkit-typescript/packages/rivetkit-napi",
   "rivetkit-typescript/packages/rivetkit-wasm"
 ]
@@ -560,6 +561,9 @@ members = [
 
     [workspace.dependencies.depot-client]
     path = "engine/packages/depot-client"
+
+    [workspace.dependencies.depot-client-embedded]
+    path = "engine/packages/depot-client-embedded"
 
     [workspace.dependencies.depot-client-types]
     path = "engine/packages/depot-client-types"

@@ -1,0 +1,19 @@
+[package]
+name = "depot-client-embedded"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+workspace = "../../../"
+description = "Embedded Depot transport for depot-client SQLite VFS"
+
+[lib]
+crate-type = ["lib"]
+
+[dependencies]
+anyhow.workspace = true
+async-trait.workspace = true
+depot.workspace = true
+depot-client.workspace = true
+rivet-envoy-protocol.workspace = true
+tokio.workspace = true

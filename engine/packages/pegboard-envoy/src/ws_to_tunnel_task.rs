@@ -8,9 +8,10 @@ use depot::{
 	},
 };
 use depot_client::{
-	database::{NativeDatabaseHandle, open_database_from_embedded_depot},
+	database::NativeDatabaseHandle,
 	types::{BindParam, ColumnValue, ExecuteResult, QueryResult},
 };
+use depot_client_embedded::open_database_from_embedded_depot;
 use futures_util::{FutureExt, TryStreamExt};
 use gas::prelude::Id;
 use gas::prelude::*;
