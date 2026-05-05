@@ -273,7 +273,7 @@ export const RedesignedHero = ({ latestChangelogTitle, thinkingImages }: Redesig
               className='mb-4 text-4xl font-normal leading-[1.1] tracking-tight text-white md:text-6xl'
             >
               Infrastructure for <br />
-              software that thinks.
+              the agentic era.
             </motion.h1>
 
             <motion.p
@@ -282,7 +282,7 @@ export const RedesignedHero = ({ latestChangelogTitle, thinkingImages }: Redesig
               transition={{ duration: 0.5, delay: 0.05 }}
               className='mb-6 text-lg text-zinc-400 md:text-xl'
             >
-              Composable stateful compute for AI agents,<br/>collaborative apps, and durable execution.
+              Actors are the primitive for AI agents, real-time apps,<br/>and durable workflows. They burst when traffic spikes,<br/>sleep when idle, run for hours, and hold state across regions.
             </motion.p>
 
             <motion.div
