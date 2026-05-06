@@ -8,7 +8,7 @@ export const Route = createFileRoute(
 	"/_context/orgs/$organization/projects/$project/",
 )({
 	beforeLoad: async ({ context, params }) => {
-		if (!features.multitenancy) {
+		if (!features.platform) {
 			throw notFound();
 		}
 

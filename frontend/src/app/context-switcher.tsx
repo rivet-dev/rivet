@@ -73,7 +73,7 @@ function ContextSwitcherInner({
 }) {
 	const [isOpen, setIsOpen] = useState(false);
 
-	if (features.multitenancy) {
+	if (features.platform) {
 		// biome-ignore lint/correctness/useHookAtTopLevel: guaranteed by build condition
 		usePrefetchInfiniteQuery({
 			// biome-ignore lint/correctness/useHookAtTopLevel: guaranteed by build condition

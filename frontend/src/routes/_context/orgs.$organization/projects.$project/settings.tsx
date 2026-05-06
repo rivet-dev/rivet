@@ -13,7 +13,7 @@ export const Route = createFileRoute(
 	"/_context/orgs/$organization/projects/$project/settings",
 )({
 	beforeLoad: () => {
-		if(!features.multitenancy) {
+		if(!features.platform) {
 			throw notFound();
 		}
 	

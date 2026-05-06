@@ -1,3 +1,4 @@
+import { faKey, Icon } from "@rivet-gg/icons";
 import { useId } from "react";
 import { Button, CopyTrigger, DiscreteInput, getConfig } from "@/components";
 import { useEngineCompatDataProvider } from "@/components/actors";
@@ -5,6 +6,8 @@ import { Label } from "@/components/ui/label";
 import { cloudEnv } from "@/lib/env";
 import { features } from "@/lib/features";
 import { useAdminToken, usePublishableToken } from "@/queries/accessors";
+
+const needsManualPublishableToken = features.acl && !features.platform;
 
 export function EnvVariables({
 	id: _id,
@@ -24,7 +27,10 @@ export function EnvVariables({
 	const rId = useId();
 	const id = _id || rId;
 	return (
-		<div>
+		<div className="space-y-3">
+			{showEndpoint && needsManualPublishableToken ? (
+				<PublishableTokenNotice />
+			) : null}
 			<div
 				className="gap-1 items-center grid grid-cols-2"
 				data-env-variables={id}
@@ -98,7 +104,7 @@ export const useRivetDsn = ({
 	endpoint?: string;
 	kind: "publishable" | "secret";
 }) => {
-	const globalEndpoint = features.multitenancy
+	const globalEndpoint = features.platform
 		? cloudEnv().VITE_APP_API_URL
 		: getConfig().apiUrl;
 
@@ -115,9 +121,9 @@ export const useRivetDsn = ({
 	const auth =
 		kind === "secret"
 			? `${namespace}:${adminToken}`
-			: !features.multitenancy
+			: !features.acl
 				? namespace
-				: `${namespace}:${publishableToken}`;
+				: `${namespace}:${publishableToken ?? "<PUBLISHABLE_TOKEN>"}`;
 
 	const dsn = `https://${auth}@${apiEndpoint
 		.replace("https://", "")
@@ -147,6 +153,28 @@ export function RivetPublicEndpointEnv({
 				show
 			/>
 		</>
+	);
+}
+
+export function PublishableTokenNotice() {
+	return (
+		<div className="flex gap-3 rounded-md border border-border bg-muted/30 p-3 text-sm">
+			<Icon
+				icon={faKey}
+				className="mt-0.5 shrink-0 text-muted-foreground"
+			/>
+			<div className="space-y-1">
+				<p className="font-medium">Publishable token required</p>
+				<p className="text-muted-foreground text-xs">
+					Replace{" "}
+					<code className="rounded bg-muted px-1 py-0.5 text-foreground">
+						{"<PUBLISHABLE_TOKEN>"}
+					</code>{" "}
+					in <code>RIVET_PUBLIC_ENDPOINT</code> with a token issued
+					through your Rivet Enterprise RBAC configuration.
+				</p>
+			</div>
+		</div>
 	);
 }
 

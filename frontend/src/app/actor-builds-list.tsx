@@ -139,7 +139,7 @@ export function ActorBuildsList() {
 							onClick={() => {
 								// eslint-disable-next-line @typescript-eslint/no-explicit-any
 								return (navigate as any)({
-									to: features.multitenancy
+									to: features.platform
 										? "/orgs/$organization/projects/$project/ns/$namespace"
 										: "/ns/$namespace",
 									search: (old: Record<string, unknown>) => ({

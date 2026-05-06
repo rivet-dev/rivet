@@ -9,6 +9,9 @@ import {
 	FormMessage,
 	Input,
 } from "@/components";
+import { features } from "@/lib/features";
+
+const isEnterprise = features.acl && !features.platform;
 
 export const formSchema = z.object({
 	token: z.string().nonempty("Token is required"),
@@ -31,10 +34,16 @@ export const Token = ({ className }: { className?: string }) => {
 			name="token"
 			render={({ field }) => (
 				<FormItem className={className}>
-					<FormLabel className="col-span-1">Token</FormLabel>
+					<FormLabel className="col-span-1">
+						{isEnterprise ? "Dashboard token" : "Admin token"}
+					</FormLabel>
 					<FormControl className="row-start-2">
 						<Input
-							placeholder="Enter a token..."
+							placeholder={
+								isEnterprise
+									? "Paste your dashboard token..."
+									: "Enter a token..."
+							}
 							type="password"
 							{...field}
 						/>

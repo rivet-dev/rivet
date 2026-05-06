@@ -479,19 +479,26 @@ const replayWorkflowFromStepHttp = async ({
 	entryId,
 }: {
 	actorId: ActorId;
-	credentials: { url: string; inspectorToken: string };
+	credentials: { url: string; inspectorToken: string; token: string };
 	entryId?: string;
 }) => {
+	const headers: Record<string, string> = {
+		Authorization: `Bearer ${credentials.inspectorToken}`,
+		"Content-Type": "application/json",
+		"X-Rivet-Target": "actor",
+		"X-Rivet-Actor": actorId,
+	};
+	if (credentials.token) {
+		headers["x-rivet-token"] = credentials.token;
+	}
+
 	const response = await fetch(
 		new URL(
 			`${computeActorUrl({ url: credentials.url, actorId })}/inspector/workflow/replay`,
 		).href,
 		{
 			method: "POST",
-			headers: {
-				Authorization: `Bearer ${credentials.inspectorToken}`,
-				"Content-Type": "application/json",
-			},
+			headers,
 			signal: AbortSignal.timeout(10_000),
 			body: JSON.stringify(entryId ? { entryId } : {}),
 		},
@@ -888,6 +895,7 @@ export const ActorInspectorProvider = ({
 					credentials: {
 						url: credentials.url,
 						inspectorToken: credentials.inspectorToken,
+						token: credentials.token,
 					},
 					entryId,
 				});

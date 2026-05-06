@@ -291,7 +291,7 @@ function RunnersModeInfo() {
 		() => regions[0]?.name,
 	);
 
-	const endpoint = features.multitenancy
+	const endpoint = features.platform
 		? regions.find((r) => r.name === selectedDatacenter)?.url || cloudEnv().VITE_APP_API_URL
 		: getConfig().apiUrl;
 

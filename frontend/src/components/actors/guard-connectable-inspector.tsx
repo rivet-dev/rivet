@@ -23,13 +23,11 @@ import {
 	useMemo,
 } from "react";
 import { match, P } from "ts-pattern";
-import { useLocalStorage } from "usehooks-ts";
 import { HelpDropdown } from "@/app/help-dropdown";
 import { isRivetApiError } from "@/lib/errors";
 import { features } from "@/lib/features";
 import { DiscreteCopyButton } from "../copy-area";
-import { getConfig, useConfig } from "../lib/config";
-import { ls } from "../lib/utils";
+import { useConfig } from "../lib/config";
 import { ShimmerLine } from "../shimmer-line";
 import { Button } from "../ui/button";
 import { useFiltersValue } from "./actor-filters-context";
@@ -524,20 +522,18 @@ function useActorRunner({ actorId }: { actorId: ActorId }) {
 }
 
 function useEngineToken() {
-	if (features.multitenancy) {
+	if (features.platform) {
 		const { data } = useQuery(
 			useRouteContext({
 				from: "/_context/orgs/$organization/projects/$project/ns/$namespace",
 			}).dataProvider.publishableTokenQueryOptions(),
 		);
-		return data;
+		return data || "";
 	}
-	const [data] = useLocalStorage(
-		ls.engineCredentials.key(getConfig().apiUrl),
-		"",
-		{ serializer: JSON.stringify, deserializer: JSON.parse },
+	const { data } = useQuery(
+		useEngineCompatDataProvider().engineAdminTokenQueryOptions(),
 	);
-	return data?.token || "";
+	return data || "";
 }
 
 function useEngineUrl() {

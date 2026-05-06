@@ -43,7 +43,7 @@ export const Route = createFileRoute(
 
 	pendingComponent: DataLoadingPlaceholder,
 	beforeLoad: async () => {
-		if (!features.multitenancy) {
+		if (!features.platform) {
 			throw notFound();
 		}
 	},

@@ -8,9 +8,12 @@ import {
 	ls,
 	toast,
 } from "@/components";
+import { features } from "@/lib/features";
 import { queryClient } from "@/queries/global";
 import { TEST_IDS } from "@/utils/test-ids";
 import { createClient } from "../data-providers/engine-data-provider";
+
+const isEnterprise = features.acl && !features.platform;
 
 interface ProvideEngineCredentialsDialogContentProps
 	extends DialogContentProps {}
@@ -64,11 +67,15 @@ export default function ProvideEngineCredentialsDialogContent({
 			}}
 		>
 			<Frame.Header>
-				<Frame.Title>Missing Rivet Engine credentials</Frame.Title>
+				<Frame.Title>
+					{isEnterprise
+						? "Sign in to Rivet Engine"
+						: "Missing Rivet Engine credentials"}
+				</Frame.Title>
 				<Frame.Description>
-					It looks like the instance of Rivet Engine that you're
-					connected to requires additional credentials, please provide
-					them below.
+					{isEnterprise
+						? "Paste the dashboard token issued to you by your Rivet administrator. See the Rivet Enterprise RBAC documentation for how dashboard tokens are minted."
+						: "It looks like the instance of Rivet Engine that you're connected to requires additional credentials, please provide them below."}
 				</Frame.Description>
 			</Frame.Header>
 			<Frame.Content>

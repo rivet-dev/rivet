@@ -57,10 +57,9 @@ import type { HeaderLinkProps } from "@/components/header/header-link";
 import { authClient } from "@/lib/auth";
 import { features } from "@/lib/features";
 import { ensureTrailingSlash } from "@/lib/utils";
-import { TEST_IDS } from "@/utils/test-ids";
 import type { RivetActorError } from "@/queries/types";
+import { TEST_IDS } from "@/utils/test-ids";
 import { ActorBuildsList } from "./actor-builds-list";
-import { RunnerPoolErrorPopover } from "./runner-pool-error-popover";
 import { BillingLimitAlert } from "./billing/billing-limit-alert";
 import { BillingPlanBadge } from "./billing/billing-plan-badge";
 import { BillingUsageGauge } from "./billing/billing-usage-gauge";
@@ -68,6 +67,7 @@ import { Changelog } from "./changelog";
 import { ContextSwitcher } from "./context-switcher";
 import { HelpDropdown } from "./help-dropdown";
 import { NamespaceSelect } from "./namespace-select";
+import { RunnerPoolErrorPopover } from "./runner-pool-error-popover";
 import { UserDropdown } from "./user-dropdown";
 
 interface RootProps {
@@ -203,24 +203,25 @@ const Sidebar = ({
 				>
 					<Logo />
 					<div className="flex flex-1 flex-col gap-2 px-2 min-h-0">
-						{features.multitenancy
-							? <CloudSidebar />
-							: (
-								<>
-									<Breadcrumbs />
-									<ScrollArea>
-										<EngineSubnav />
-									</ScrollArea>
-								</>
-							)}
+						{features.platform ? (
+							<CloudSidebar />
+						) : (
+							<>
+								<Breadcrumbs />
+								<ScrollArea>
+									<EngineSubnav />
+								</ScrollArea>
+							</>
+						)}
 					</div>
 					<div>
 						<div className="border-t my-0.5 mx-2.5" />
 
-						{features.multitenancy ? (
+						{features.platform ? (
 							<>
 								<div className="flex gap-0.5 my-2 px-2.5 flex-col">
-									{features.billing && matchRoute({
+									{features.billing &&
+									matchRoute({
 										to: "/orgs/$organization/projects/$project/ns/$namespace",
 										fuzzy: true,
 										pending: false,
@@ -244,10 +245,11 @@ const Sidebar = ({
 												</div>
 											</Link>
 										</HeaderButton>
-									) : features.billing && matchRoute({
+									) : features.billing &&
+										matchRoute({
 											to: "/orgs/$organization/projects/$project",
-												fuzzy: true,
-												pending: false,
+											fuzzy: true,
+											pending: false,
 										}) ? (
 										<HeaderButton asChild>
 											<Link
@@ -317,118 +319,118 @@ const Sidebar = ({
 							</>
 						) : (
 							<div className="flex gap-0.5 my-2 px-2.5 flex-col">
-									{features.branding ? (
-										<Changelog>
-											<HeaderButton
-												startIcon={
-													<Icon
-														icon={faGift}
-														className="size-5 opacity-80 group-hover:opacity-100 transition-opacity"
-													/>
-												}
+								{features.branding ? (
+									<Changelog>
+										<HeaderButton
+											startIcon={
+												<Icon
+													icon={faGift}
+													className="size-5 opacity-80 group-hover:opacity-100 transition-opacity"
+												/>
+											}
+										>
+											<a
+												href="https://www.rivet.dev/changelog"
+												target="_blank"
+												rel="noopener"
 											>
-												<a
-													href="https://www.rivet.dev/changelog"
-													target="_blank"
-													rel="noopener"
-												>
-													What's new?
-													<Ping
-														className="relative -right-1"
-														data-changelog-ping
-													/>
-												</a>
-											</HeaderButton>
-										</Changelog>
-									) : null}
-									<HeaderButton
-										asChild
-										startIcon={
-											<Icon
-												icon={faMessageSmile}
-												className="size-5 opacity-80 group-hover:opacity-100 transition-opacity"
-											/>
-										}
+												What's new?
+												<Ping
+													className="relative -right-1"
+													data-changelog-ping
+												/>
+											</a>
+										</HeaderButton>
+									</Changelog>
+								) : null}
+								<HeaderButton
+									asChild
+									startIcon={
+										<Icon
+											icon={faMessageSmile}
+											className="size-5 opacity-80 group-hover:opacity-100 transition-opacity"
+										/>
+									}
+								>
+									<Link
+										to="."
+										search={(old) => ({
+											...old,
+											modal: "feedback",
+										})}
 									>
-										<Link
-											to="."
-											search={(old) => ({
-												...old,
-												modal: "feedback",
-											})}
-										>
-											Feedback
-										</Link>
-									</HeaderButton>
-									<HeaderButton
-										asChild
-										startIcon={
-											<Icon
-												icon={faBook}
-												className="size-5 opacity-80 group-hover:opacity-100 transition-opacity"
-											/>
-										}
-										endIcon={
-											<Icon
-												icon={faArrowUpRight}
-												className="ms-1"
-											/>
-										}
+										Feedback
+									</Link>
+								</HeaderButton>
+								<HeaderButton
+									asChild
+									startIcon={
+										<Icon
+											icon={faBook}
+											className="size-5 opacity-80 group-hover:opacity-100 transition-opacity"
+										/>
+									}
+									endIcon={
+										<Icon
+											icon={faArrowUpRight}
+											className="ms-1"
+										/>
+									}
+								>
+									<a
+										href="https://www.rivet.dev/docs"
+										target="_blank"
+										rel="noopener noreferrer"
 									>
-										<a
-											href="https://www.rivet.dev/docs"
-											target="_blank"
-											rel="noopener noreferrer"
-										>
-											Documentation
-										</a>
-									</HeaderButton>
-									<HeaderButton
-										asChild
-										startIcon={
-											<Icon
-												icon={faDiscord}
-												className="size-5 opacity-80 group-hover:opacity-100 transition-opacity"
-											/>
-										}
-										endIcon={
-											<Icon
-												icon={faArrowUpRight}
-												className="ms-1"
-											/>
-										}
+										Documentation
+									</a>
+								</HeaderButton>
+								<HeaderButton
+									asChild
+									startIcon={
+										<Icon
+											icon={faDiscord}
+											className="size-5 opacity-80 group-hover:opacity-100 transition-opacity"
+										/>
+									}
+									endIcon={
+										<Icon
+											icon={faArrowUpRight}
+											className="ms-1"
+										/>
+									}
+								>
+									<a
+										href="http://www.rivet.dev/discord"
+										target="_blank"
+										rel="noopener noreferrer"
 									>
-										<a
-											href="http://www.rivet.dev/discord"
-											target="_blank"
-											rel="noopener noreferrer"
-										>
-											Discord
-										</a>
-									</HeaderButton>
-									<HeaderButton
-										asChild
-										startIcon={
-											<Icon
-												icon={faGithub}
-												className="size-5 opacity-80 group-hover:opacity-100 transition-opacity"
-											/>
-										}
-										endIcon={
-											<Icon
-												icon={faArrowUpRight}
-												className="ms-1"
-											/>
-										}
+										Discord
+									</a>
+								</HeaderButton>
+								<HeaderButton
+									asChild
+									startIcon={
+										<Icon
+											icon={faGithub}
+											className="size-5 opacity-80 group-hover:opacity-100 transition-opacity"
+										/>
+									}
+									endIcon={
+										<Icon
+											icon={faArrowUpRight}
+											className="ms-1"
+										/>
+									}
+								>
+									<a
+										href="http://github.com/rivet-dev/rivet"
+										target="_blank"
+										rel="noopener noreferrer"
 									>
-										<a
-											href="http://github.com/rivet-dev/rivet"
-											target="_blank"
-											rel="noopener noreferrer"
-										>
-											GitHub
-										</a>
-									</HeaderButton>
+										GitHub
+									</a>
+								</HeaderButton>
 							</div>
 						)}
 					</div>
@@ -667,16 +669,14 @@ function CloudSidebarContentInner() {
 							to: "/orgs/$organization/projects/$project/ns/$namespace",
 							fuzzy: true,
 						}) ? (
-							<div className="flex items-center gap-1">
-								<HeaderLink
-									to="/orgs/$organization/projects/$project/ns/$namespace/settings"
-									className="flex-1 font-normal"
-									icon={faCog}
-								>
-									Settings
-								</HeaderLink>
+							<HeaderLink
+								to="/orgs/$organization/projects/$project/ns/$namespace/settings"
+								className="flex-1 font-normal items-center gap-1"
+								icon={faCog}
+							>
+								<span className="flex-1">Settings</span>
 								<RunnerConfigErrorIndicator />
-							</div>
+							</HeaderLink>
 						) : matchRoute({
 								to: "/orgs/$organization/projects/$project",
 								fuzzy: true,

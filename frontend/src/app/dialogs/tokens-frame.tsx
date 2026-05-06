@@ -77,7 +77,7 @@ function SecretToken() {
 
 	const namespace = dataProvider.engineNamespace;
 
-	const endpoint = features.multitenancy
+	const endpoint = features.platform
 		? regions.find((r) => r.name === selectedDatacenter)?.url || cloudEnv().VITE_APP_API_URL
 		: getConfig().apiUrl;
 
@@ -134,7 +134,7 @@ function PublishableToken() {
 
 	const namespace = dataProvider.engineNamespace;
 
-	const endpoint = features.multitenancy
+	const endpoint = features.platform
 		? cloudEnv().VITE_APP_API_URL
 		: getConfig().apiUrl;
 

@@ -29,7 +29,7 @@ export function NoProvidersAlert({
 			<div className="flex flex-col items-center justify-center gap-2">
 				{variant === "default" ? (
 					<>
-						{features.multitenancy ? (
+						{features.platform ? (
 							<Button size="sm" asChild className="w-full">
 								<Link
 									to="/orgs/$organization/projects/$project/ns/$namespace/settings"
@@ -39,7 +39,7 @@ export function NoProvidersAlert({
 								</Link>
 							</Button>
 						) : null}
-						{!features.multitenancy ? (
+						{!features.platform ? (
 							<Button asChild size="sm" className="w-full">
 								<Link
 									to="/ns/$namespace"

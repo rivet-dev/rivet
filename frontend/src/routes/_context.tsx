@@ -43,7 +43,7 @@ export const Route = createFileRoute("/_context")({
 	component: RouteComponent,
 	validateSearch: zodValidator(searchSchema),
 	context: ({ context }) => {
-		if (features.multitenancy) {
+		if (features.platform) {
 			return {
 				dataProvider: context.getOrCreateCloudContext(),
 				__type: "cloud" as const,
@@ -57,7 +57,7 @@ export const Route = createFileRoute("/_context")({
 		};
 	},
 	beforeLoad: async (route) => {
-		if (features.multitenancy) {
+		if (features.platform) {
 			const justVerifiedEmail =
 				(route.location.search as { emailVerified?: string })
 					?.emailVerified === "1";
@@ -107,8 +107,8 @@ function RouteComponent() {
 			<Outlet />
 			<ModalRenderer />
 			<Modals />
-			{!features.multitenancy && <EngineModals />}
-			{features.multitenancy && <CloudModals />}
+			{!features.platform && <EngineModals />}
+			{features.platform && <CloudModals />}
 		</>
 	);
 }

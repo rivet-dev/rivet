@@ -8,7 +8,7 @@ import { authClient } from "@/lib/auth";
 import { features } from "@/lib/features";
 
 const useDefaultOrg = () => {
-	if (features.multitenancy) {
+	if (features.platform) {
 		// biome-ignore lint/correctness/useHookAtTopLevel: guarded by build constant
 		const org = authClient.useActiveOrganization();
 		return org.data?.id;
