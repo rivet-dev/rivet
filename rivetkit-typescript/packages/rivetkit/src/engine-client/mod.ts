@@ -23,6 +23,7 @@ import type {
 	RuntimeDisplayInformation,
 } from "@/engine-client/driver";
 import type { Encoding, UniversalWebSocket } from "@/mod";
+import type { CborSerializable } from "@/common/encoding";
 import { encodeCborCompat, uint8ArrayToBase64 } from "@/serde";
 import { combineUrlPath, type GetUpgradeWebSocket } from "@/utils";
 import { getNextPhase } from "@/utils/env-vars";
@@ -181,7 +182,7 @@ export class RemoteEngineControlClient implements EngineControlClient {
 			key: serializeActorKey(key),
 			runner_name_selector: this.#config.poolName,
 			input: actorInput
-				? uint8ArrayToBase64(encodeCborCompat(actorInput))
+				? uint8ArrayToBase64(encodeCborCompat(actorInput as CborSerializable))
 				: undefined,
 			crash_policy: crashPolicy ?? "sleep",
 		});
@@ -215,7 +216,7 @@ export class RemoteEngineControlClient implements EngineControlClient {
 			runner_name_selector: this.#config.poolName,
 			key: serializeActorKey(key),
 			input: input
-				? uint8ArrayToBase64(encodeCborCompat(input))
+				? uint8ArrayToBase64(encodeCborCompat(input as CborSerializable))
 				: undefined,
 			crash_policy: crashPolicy ?? "sleep",
 		});

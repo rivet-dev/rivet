@@ -23,6 +23,7 @@ import {
 } from "@/common/client-protocol-zod";
 import { deconstructError } from "@/common/utils";
 import type { EngineControlClient } from "@/engine-client/driver";
+import type { CborSerializable } from "@/common/encoding";
 import { decodeCborCompat, deserializeWithEncoding, encodeCborCompat } from "@/serde";
 import { bufferToArrayBuffer } from "@/utils";
 import type {
@@ -332,7 +333,7 @@ export class ActorHandleRaw {
 						args,
 					}),
 					requestToBare: (args): protocol.HttpActionRequest => ({
-						args: bufferToArrayBuffer(encodeCborCompat(args)),
+						args: bufferToArrayBuffer(encodeCborCompat(args as CborSerializable)),
 					}),
 					responseFromJson: (json): Response => json.output as Response,
 					responseFromBare: (bare): Response =>

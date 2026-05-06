@@ -22,6 +22,7 @@ import {
 import { assertUnreachable, stringifyError } from "@/common/utils";
 import type { UniversalWebSocket } from "@/common/websocket-interface";
 import type { EngineControlClient } from "@/engine-client/driver";
+import type { CborSerializable } from "@/common/encoding";
 import {
 	decodeCborCompat,
 	deserializeWithEncoding,
@@ -1269,7 +1270,7 @@ export class ActorConnRaw {
 											name: msg.body.val.name,
 											args: bufferToArrayBuffer(
 												encodeCborCompat(
-													msg.body.val.args,
+													msg.body.val.args as CborSerializable,
 												),
 											),
 										},

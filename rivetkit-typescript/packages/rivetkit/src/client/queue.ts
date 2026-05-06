@@ -12,6 +12,7 @@ import {
 	type HttpQueueSendResponse as HttpQueueSendResponseJson,
 	HttpQueueSendResponseSchema,
 } from "@/common/client-protocol-zod";
+import type { CborSerializable } from "@/common/encoding";
 import { decodeCborCompat, encodeCborCompat } from "@/serde";
 import { bufferToArrayBuffer } from "@/utils";
 import { sendHttpRequest } from "./utils";
@@ -111,7 +112,7 @@ export function createQueueSender(
 			}),
 			requestToBare: (value): protocol.HttpQueueSendRequest => ({
 				name: value.name ?? name,
-				body: bufferToArrayBuffer(encodeCborCompat(value.body)),
+				body: bufferToArrayBuffer(encodeCborCompat(value.body as CborSerializable)),
 				wait: value.wait ?? false,
 				timeout:
 					value.timeout !== undefined ? BigInt(value.timeout) : null,
