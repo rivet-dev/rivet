@@ -7,7 +7,7 @@ use crate::time::sleep;
 
 use anyhow::{Context, Result};
 use rivetkit_actor_persist::{generated::v4 as persist_v4, versioned as persist_versioned};
-#[cfg(not(feature = "wasm-runtime"))]
+#[cfg(not(rivetkit_wasm_runtime))]
 use tokio::runtime::Handle;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
@@ -26,7 +26,7 @@ use crate::actor::task::LifecycleEvent;
 use crate::actor::task::{LIFECYCLE_EVENT_INBOX_CHANNEL, actor_channel_overloaded_error};
 use crate::actor::task_types::StateMutationReason;
 use crate::error::ActorRuntime;
-#[cfg(feature = "wasm-runtime")]
+#[cfg(rivetkit_wasm_runtime)]
 use crate::runtime::RuntimeSpawner;
 use crate::types::SaveStateOpts;
 
@@ -635,7 +635,7 @@ impl ActorContext {
 		}
 		.in_current_span();
 
-		#[cfg(not(feature = "wasm-runtime"))]
+		#[cfg(not(rivetkit_wasm_runtime))]
 		let handle = {
 			let Ok(tokio_handle) = Handle::try_current() else {
 				return;
@@ -643,7 +643,7 @@ impl ActorContext {
 			tokio_handle.spawn(task)
 		};
 
-		#[cfg(feature = "wasm-runtime")]
+		#[cfg(rivetkit_wasm_runtime)]
 		let handle = RuntimeSpawner::spawn(task);
 
 		*pending_save = Some(PendingSave {
@@ -675,7 +675,7 @@ impl ActorContext {
 		}
 		.in_current_span();
 
-		#[cfg(not(feature = "wasm-runtime"))]
+		#[cfg(not(rivetkit_wasm_runtime))]
 		let handle = {
 			let Ok(tokio_handle) = Handle::try_current() else {
 				tracing::warn!(
@@ -687,7 +687,7 @@ impl ActorContext {
 			tokio_handle.spawn(task)
 		};
 
-		#[cfg(feature = "wasm-runtime")]
+		#[cfg(rivetkit_wasm_runtime)]
 		let handle = RuntimeSpawner::spawn(task);
 
 		*tracked_persist = Some(handle);

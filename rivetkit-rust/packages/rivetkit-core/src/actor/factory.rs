@@ -6,10 +6,10 @@ use crate::ActorConfig;
 use crate::actor::lifecycle_hooks::ActorStart;
 use crate::runtime::RuntimeBoxFuture;
 
-#[cfg(feature = "wasm-runtime")]
+#[cfg(rivetkit_wasm_runtime)]
 pub type ActorEntryFn = dyn Fn(ActorStart) -> RuntimeBoxFuture<Result<()>>;
 
-#[cfg(not(feature = "wasm-runtime"))]
+#[cfg(not(rivetkit_wasm_runtime))]
 pub type ActorEntryFn = dyn Fn(ActorStart) -> RuntimeBoxFuture<Result<()>> + Send + Sync;
 
 /// Runtime extension point for building actor receive loops.
@@ -19,10 +19,10 @@ pub struct ActorFactory {
 	manual_startup_ready: bool,
 }
 
-#[cfg(feature = "wasm-runtime")]
+#[cfg(rivetkit_wasm_runtime)]
 unsafe impl Send for ActorFactory {}
 
-#[cfg(feature = "wasm-runtime")]
+#[cfg(rivetkit_wasm_runtime)]
 unsafe impl Sync for ActorFactory {}
 
 impl ActorFactory {
@@ -63,19 +63,19 @@ impl ActorFactory {
 	}
 }
 
-#[cfg(feature = "wasm-runtime")]
+#[cfg(rivetkit_wasm_runtime)]
 pub trait ActorEntry: Fn(ActorStart) -> RuntimeBoxFuture<Result<()>> + 'static {}
 
-#[cfg(feature = "wasm-runtime")]
+#[cfg(rivetkit_wasm_runtime)]
 impl<F> ActorEntry for F where F: Fn(ActorStart) -> RuntimeBoxFuture<Result<()>> + 'static {}
 
-#[cfg(not(feature = "wasm-runtime"))]
+#[cfg(not(rivetkit_wasm_runtime))]
 pub trait ActorEntry:
 	Fn(ActorStart) -> RuntimeBoxFuture<Result<()>> + Send + Sync + 'static
 {
 }
 
-#[cfg(not(feature = "wasm-runtime"))]
+#[cfg(not(rivetkit_wasm_runtime))]
 impl<F> ActorEntry for F where
 	F: Fn(ActorStart) -> RuntimeBoxFuture<Result<()>> + Send + Sync + 'static
 {

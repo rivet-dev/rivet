@@ -69,6 +69,17 @@ members = [
   "rivetkit-typescript/packages/rivetkit-napi",
   "rivetkit-typescript/packages/rivetkit-wasm"
 ]
+# Keep default root checks on the native workspace graph. `rivetkit-wasm`
+# enables wasm runtime features that conflict with NAPI's native runtime
+# features when Cargo unifies the full workspace feature graph.
+default-members = [
+  "engine/packages/*",
+  "engine/sdks/rust/*",
+  "rivetkit-rust/packages/actor-persist",
+  "rivetkit-rust/packages/rivetkit-core",
+  "rivetkit-rust/packages/shared-types",
+  "rivetkit-typescript/packages/rivetkit-napi"
+]
 
   [workspace.package]
   version = "2.3.0-rc.5"

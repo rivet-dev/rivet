@@ -14,7 +14,7 @@ native-runtime = [
 	"dep:reqwest",
 	"rivet-envoy-client/native-transport",
 ]
-wasm-runtime = ["rivet-envoy-client/wasm-transport"]
+wasm-runtime = ["dep:wasm-bindgen-futures", "rivet-envoy-client/wasm-transport"]
 sqlite = ["sqlite-local"]
 sqlite-local = ["native-runtime", "dep:async-trait", "dep:depot-client"]
 sqlite-remote = []
@@ -49,6 +49,7 @@ tokio-util.workspace = true
 tracing.workspace = true
 url.workspace = true
 vbare.workspace = true
+wasm-bindgen-futures = { version = "0.4", optional = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tokio.workspace = true
@@ -60,7 +61,6 @@ js-sys = "0.3"
 tokio = { version = "1.44.0", default-features = false, features = ["macros", "rt", "sync", "time"] }
 uuid = { version = "1.11.0", features = ["v4", "serde", "js"] }
 wasm-bindgen = "0.2"
-wasm-bindgen-futures = "0.4"
 web-time = "1.1"
 
 [dev-dependencies]

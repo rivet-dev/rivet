@@ -1,9 +1,16 @@
-#[cfg(all(feature = "native-runtime", feature = "wasm-runtime"))]
+#[cfg(all(
+	target_arch = "wasm32",
+	feature = "native-runtime",
+	feature = "wasm-runtime"
+))]
 compile_error!(
 	"`native-runtime` and `wasm-runtime` are mutually exclusive. Enable exactly one rivetkit-core runtime."
 );
 
-#[cfg(all(feature = "wasm-runtime", feature = "sqlite-local"))]
+#[cfg(all(
+	rivetkit_wasm_runtime,
+	feature = "sqlite-local"
+))]
 compile_error!("`sqlite-local` is native-only. Use `sqlite-remote` for wasm runtime builds.");
 
 pub mod actor;

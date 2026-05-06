@@ -1,9 +1,9 @@
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
-#[cfg(feature = "wasm-runtime")]
+#[cfg(rivetkit_wasm_runtime)]
 use futures::channel::oneshot as futures_oneshot;
-#[cfg(feature = "wasm-runtime")]
+#[cfg(rivetkit_wasm_runtime)]
 use futures::future::AbortHandle;
 use parking_lot::Mutex;
 use rivet_envoy_client::async_counter::AsyncCounter;
@@ -19,7 +19,7 @@ pub(crate) struct WorkRegistry {
 	// Forced-sync: shutdown tasks are inserted from sync paths and moved out
 	// before awaiting shutdown.
 	pub(crate) shutdown_tasks: Mutex<JoinSet<()>>,
-	#[cfg(feature = "wasm-runtime")]
+	#[cfg(rivetkit_wasm_runtime)]
 	pub(crate) local_shutdown_tasks: Mutex<Vec<LocalShutdownTask>>,
 	pub(crate) idle_notify: Arc<Notify>,
 	/// Woken on every transition of a sleep-affecting counter that is not
@@ -32,7 +32,7 @@ pub(crate) struct WorkRegistry {
 	pub(crate) shutdown_deadline_reached: AtomicBool,
 }
 
-#[cfg(feature = "wasm-runtime")]
+#[cfg(rivetkit_wasm_runtime)]
 pub(crate) struct LocalShutdownTask {
 	pub(crate) abort_handle: AbortHandle,
 	pub(crate) complete_rx: futures_oneshot::Receiver<()>,
@@ -55,7 +55,7 @@ impl WorkRegistry {
 			shutdown_counter: Arc::new(AsyncCounter::new()),
 			core_dispatched_hooks: Arc::new(AsyncCounter::new()),
 			shutdown_tasks: Mutex::new(JoinSet::new()),
-			#[cfg(feature = "wasm-runtime")]
+			#[cfg(rivetkit_wasm_runtime)]
 			local_shutdown_tasks: Mutex::new(Vec::new()),
 			idle_notify,
 			activity_notify: Arc::new(Notify::new()),

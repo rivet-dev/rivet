@@ -451,9 +451,9 @@ impl ActorContext {
 		// so future changes to `mark_destroy_requested` cannot drift.
 		// `destroy_requested` is already true from the swap above. The redundant
 		// `store(true)` inside is harmless.
-		#[cfg(not(feature = "wasm-runtime"))]
+		#[cfg(not(rivetkit_wasm_runtime))]
 		self.mark_destroy_requested();
-		#[cfg(feature = "wasm-runtime")]
+		#[cfg(rivetkit_wasm_runtime)]
 		self.mark_destroy_requested_without_spawn();
 
 		let ctx = self.clone();
@@ -480,7 +480,7 @@ impl ActorContext {
 		self.0.destroy_completed.store(false, Ordering::SeqCst);
 	}
 
-	#[cfg(feature = "wasm-runtime")]
+	#[cfg(rivetkit_wasm_runtime)]
 	fn mark_destroy_requested_without_spawn(&self) {
 		self.cancel_sleep_timer();
 		self.0.destroy_requested.store(true, Ordering::SeqCst);
@@ -530,7 +530,7 @@ impl ActorContext {
 		self.0.shutdown_deadline.cancel();
 	}
 
-	#[cfg(not(feature = "wasm-runtime"))]
+	#[cfg(not(rivetkit_wasm_runtime))]
 	pub fn wait_until(&self, future: impl Future<Output = ()> + Send + 'static) {
 		if Handle::try_current().is_err() {
 			tracing::warn!("skipping wait_until without a tokio runtime");
@@ -550,7 +550,7 @@ impl ActorContext {
 		});
 	}
 
-	#[cfg(not(feature = "wasm-runtime"))]
+	#[cfg(not(rivetkit_wasm_runtime))]
 	pub fn register_task(&self, future: impl Future<Output = ()> + Send + 'static) {
 		let ctx = self.clone();
 		self.track_shutdown_task(async move {
@@ -558,7 +558,7 @@ impl ActorContext {
 		});
 	}
 
-	#[cfg(feature = "wasm-runtime")]
+	#[cfg(rivetkit_wasm_runtime)]
 	pub fn wait_until(&self, future: impl Future<Output = ()> + 'static) {
 		let ctx = self.clone();
 		self.track_shutdown_task(async move {
@@ -570,7 +570,7 @@ impl ActorContext {
 		});
 	}
 
-	#[cfg(feature = "wasm-runtime")]
+	#[cfg(rivetkit_wasm_runtime)]
 	pub fn register_task(&self, future: impl Future<Output = ()> + 'static) {
 		let ctx = self.clone();
 		self.track_shutdown_task(async move {
@@ -1286,10 +1286,10 @@ impl ActorContext {
 			return;
 		}
 
-		#[cfg(feature = "wasm-runtime")]
+		#[cfg(rivetkit_wasm_runtime)]
 		return;
 
-		#[cfg(not(feature = "wasm-runtime"))]
+		#[cfg(not(rivetkit_wasm_runtime))]
 		self.reset_sleep_timer_state();
 	}
 

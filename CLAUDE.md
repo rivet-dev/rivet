@@ -95,6 +95,7 @@ docker-compose up -d
 - `rivet-envoy-client` transport features are mutually exclusive; native builds use the default `native-transport`, while wasm builds must set `default-features = false` and enable `wasm-transport`.
 - `rivet-envoy-client` wasm WebSocket code lives behind `target_arch = "wasm32"` with a native-host `wasm-transport` stub so feature checks do not compile browser APIs on developer machines.
 - `rivetkit-core` wasm builds use `--no-default-features --features wasm-runtime,sqlite-remote`; keep native process and runner-config HTTP code behind `native-runtime`.
+- Do not treat wasm feature flags alone as browser builds; pair wasm runtime/transport behavior with the `wasm32-unknown-unknown` target, and keep host feature checks native-safe.
 - Core-owned lifecycle tasks in `rivetkit-core` should spawn through `RuntimeSpawner` so native builds use Send-capable tasks and wasm builds use local tasks.
 - `rivet-envoy-client::async_counter::AsyncCounter` is the shared HTTP request counter type consumed by core sleep logic; do not pull `rivet-util` into core for that counter.
 - For `wasm32-unknown-unknown` Rust checks, use target-specific minimal Tokio plus `getrandom/js` and `uuid/js`; scan production dependencies with `cargo tree -e normal` so dev-dependencies do not create false native-dependency hits.
