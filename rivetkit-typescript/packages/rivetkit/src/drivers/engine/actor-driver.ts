@@ -284,7 +284,7 @@ export class EngineActorDriver implements ActorDriver {
 				logger().debug({
 					msg: "actor crash cleanup errored",
 					actorId,
-					err: stringifyError(err),
+					error: stringifyError(err),
 				});
 			}
 		}
@@ -1346,7 +1346,7 @@ export class EngineActorDriver implements ActorDriver {
 				logger().warn({
 					msg: "failed to rebind dynamic hibernatable runner websocket",
 					actorId,
-					err: stringifyError(result.reason),
+					error: stringifyError(result.reason),
 				});
 			}
 		}
@@ -1369,7 +1369,7 @@ export class EngineActorDriver implements ActorDriver {
 				logger().warn({
 					msg: "failed to rebind hibernatable connect socket",
 					actorId,
-					err: stringifyError(result.reason),
+					error: stringifyError(result.reason),
 				});
 			}
 		}
@@ -1629,7 +1629,7 @@ export class EngineActorDriver implements ActorDriver {
 					logger().warn({
 						msg: "failed to restore dynamic hibernating requests after actor start",
 						actorId,
-						err: stringifyError(error),
+						error: stringifyError(error),
 					});
 				}
 			} else if (isStaticActorDefinition(definition)) {
@@ -1696,7 +1696,7 @@ export class EngineActorDriver implements ActorDriver {
 					logger().debug({
 						msg: "failed to dispose dynamic runtime after actor start failure",
 						actorId,
-						err: stringifyError(disposeError),
+						error: stringifyError(disposeError),
 					});
 				}
 				this.#dynamicRuntimes.delete(actorId);
@@ -1719,7 +1719,7 @@ export class EngineActorDriver implements ActorDriver {
 				actorId,
 				name,
 				key,
-				err: stringifyError(error),
+				error: stringifyError(error),
 			});
 
 			try {
@@ -1728,7 +1728,7 @@ export class EngineActorDriver implements ActorDriver {
 				logger().debug({
 					msg: "failed to stop actor after start failure",
 					actorId,
-					err: stringifyError(stopError),
+					error: stringifyError(stopError),
 				});
 			}
 		}
@@ -1775,7 +1775,7 @@ export class EngineActorDriver implements ActorDriver {
 				logger().debug({
 					msg: "actor start failed during stop, cleaning up handler",
 					actorId,
-					err: stringifyError(err),
+					error: stringifyError(err),
 				});
 			}
 		}
@@ -1793,7 +1793,7 @@ export class EngineActorDriver implements ActorDriver {
 			} catch (err) {
 				logger().error({
 					msg: "error in onStop, proceeding with removing actor",
-					err: stringifyError(err),
+					error: stringifyError(err),
 				});
 			}
 		}
@@ -1978,8 +1978,8 @@ export class EngineActorDriver implements ActorDriver {
 				isHibernatable,
 				isRestoringHibernatable,
 			);
-		} catch (err) {
-			logger().error({ msg: "building websocket handlers errored", err });
+		} catch (error) {
+			logger().error({ msg: "building websocket handlers errored", error });
 			websocketRaw.close(1011, "ws.route_error");
 			return;
 		}
