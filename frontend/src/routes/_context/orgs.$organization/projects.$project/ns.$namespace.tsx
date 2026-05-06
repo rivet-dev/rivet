@@ -8,11 +8,11 @@ import {
 import { GettingStarted } from "@/app/getting-started";
 import { SidebarlessHeader } from "@/app/layout";
 import { NotFoundCard } from "@/app/not-found-card";
+import { RouteError } from "@/app/route-error";
 import { RouteLayout } from "@/app/route-layout";
 import { useDialog } from "@/app/use-dialog";
 import { FullscreenLoading, ls } from "@/components";
 import { deriveProviderFromMetadata } from "@/lib/data";
-import { isRivetApiError } from "@/lib/errors";
 import { posthog } from "@/lib/posthog";
 import {
 	RECENT_NAMESPACES_KEY,
@@ -38,7 +38,24 @@ export const Route = createFileRoute(
 				}),
 			);
 		} catch (error) {
-			if (isRivetApiError(error) && error.statusCode === 404) {
+			// Treat both true 404s and the engine's 400 + body
+			// { group: "namespace", code: "not_found" } as "namespace gone" so
+			// stale URLs (e.g. recently-visited entries pointing at a deleted
+			// namespace) bounce back to the project picker instead of rendering
+			// the error UI.
+			const e = error as
+				| {
+						statusCode?: number;
+						body?: { group?: unknown; code?: unknown };
+				  }
+				| null
+				| undefined;
+			const isNotFound =
+				e?.statusCode === 404 ||
+				(e?.statusCode === 400 &&
+					e.body?.group === "namespace" &&
+					e.body?.code === "not_found");
+			if (isNotFound) {
 				throw redirect({
 					to: "/orgs/$organization/projects/$project",
 					params,
@@ -132,6 +149,7 @@ export const Route = createFileRoute(
 		};
 	},
 	notFoundComponent: () => <NotFoundCard />,
+	errorComponent: RouteError,
 	pendingMinMs: 0,
 	pendingMs: 0,
 	pendingComponent: FullscreenLoading,
