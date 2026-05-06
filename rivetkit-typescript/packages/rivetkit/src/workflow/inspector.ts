@@ -13,6 +13,7 @@ import type {
 import { encodeWorkflowHistoryTransport } from "@/common/inspector-transport";
 import type * as inspectorSchema from "@/common/bare/generated/inspector/v4";
 import * as transport from "@/common/bare/transport/v1";
+import type { JsonCompatValue } from "@/common/encoding";
 import { encodeCborCompat } from "@/serde";
 import { assertUnreachable, bufferToArrayBuffer } from "@/utils";
 
@@ -91,7 +92,7 @@ export function createWorkflowInspectorAdapter(): {
 }
 
 function encodeCbor(value: unknown): ArrayBuffer {
-	return bufferToArrayBuffer(encodeCborCompat(value));
+	return bufferToArrayBuffer(encodeCborCompat(value as JsonCompatValue));
 }
 
 function encodeOptionalCbor(value: unknown): ArrayBuffer | null {

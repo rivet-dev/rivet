@@ -16,6 +16,7 @@ import { importWebSocket } from "@/common/websocket";
 import { setRemoteHibernatableWebSocketAckTestHooks } from "@/common/websocket-test-hooks";
 import type { ActorGatewayQuery, CrashPolicy } from "@/client/query";
 import type { Encoding, UniversalWebSocket } from "@/mod";
+import type { JsonCompatValue } from "@/common/encoding";
 import { encodeCborCompat, uint8ArrayToBase64 } from "@/serde";
 import { combineUrlPath } from "@/utils";
 import { shouldSkipReadyWait, type GatewayRequestOptions } from "./driver";
@@ -302,7 +303,7 @@ function pushInputQueryParam(
 		return;
 	}
 
-	const encodedInput = encodeCborCompat(input);
+	const encodedInput = encodeCborCompat(input as JsonCompatValue);
 	if (encodedInput.byteLength > maxInputSize) {
 		throw new Error(
 			`Actor query input exceeds maxInputSize (${encodedInput.byteLength} > ${maxInputSize} bytes). Increase client maxInputSize to allow larger query payloads.`,

@@ -33,6 +33,10 @@ import { HEADER_CONN_PARAMS } from "@/common/actor-router-consts";
 import type { AnyDatabaseProvider } from "@/common/database/config";
 import { wrapJsNativeDatabase } from "@/common/database/native-database";
 import { decodeWorkflowHistoryTransport } from "@/common/inspector-transport";
+import {
+	assertJsonCompatValue,
+	type JsonCompatValue,
+} from "@/common/encoding";
 import { deconstructError, stringifyError } from "@/common/utils";
 import type {
 	RivetCloseEvent,
@@ -54,6 +58,7 @@ import {
 } from "@/serde";
 import { getEnvUniversal, VERSION } from "@/utils";
 import { logger } from "./log";
+import { createWriteThroughProxy } from "./write-through-proxy";
 import { loadNapiRuntime } from "./napi-runtime";
 import {
 	type NativeValidationConfig,
@@ -592,7 +597,7 @@ function decodeValue<T>(value?: RuntimeBytes | null): T {
 }
 
 function encodeValue(value: unknown): RuntimeBytes {
-	return encodeCborCompat(value);
+	return encodeCborCompat(value as JsonCompatValue);
 }
 
 function unwrapTsfnPayload<T>(error: unknown, payload: T): T {
@@ -1067,54 +1072,6 @@ function decodeArgs(value?: RuntimeBytes | null): unknown[] {
 			: [decoded];
 }
 
-function createWriteThroughProxy<T>(
-	value: T,
-	commit: (next: T) => void,
-	beforeChange?: () => void,
-): T {
-	if (!value || typeof value !== "object") {
-		return value;
-	}
-
-	const proxies = new WeakMap<object, object>();
-	const wrap = (target: object): object => {
-		const cached = proxies.get(target);
-		if (cached) {
-			return cached;
-		}
-
-		const proxy = new Proxy(target, {
-			get(innerTarget, property, receiver) {
-				const result = Reflect.get(innerTarget, property, receiver);
-				return result && typeof result === "object"
-					? wrap(result as object)
-					: result;
-			},
-			set(innerTarget, property, nextValue, receiver) {
-				beforeChange?.();
-				const updated = Reflect.set(
-					innerTarget,
-					property,
-					nextValue,
-					receiver,
-				);
-				commit(value);
-				return updated;
-			},
-			deleteProperty(innerTarget, property) {
-				beforeChange?.();
-				const updated = Reflect.deleteProperty(innerTarget, property);
-				commit(value);
-				return updated;
-			},
-		});
-
-		proxies.set(target, proxy);
-		return proxy;
-	};
-
-	return wrap(value as object) as T;
-}
 
 function buildRequest(init: {
 	method: string;
@@ -1209,10 +1166,13 @@ class NativeConnAdapter {
 		const nextState = this.#readState();
 		return createWriteThroughProxy(nextState, (nextValue) => {
 			this.#writeState(nextValue, { writeNative: true });
+		}, (newValue) => {
+			assertJsonCompatValue(newValue);
 		});
 	}
 
 	set state(value: unknown) {
+		assertJsonCompatValue(value);
 		this.#writeState(value, { writeNative: true });
 	}
 
@@ -2505,8 +2465,9 @@ export class ActorContextHandleAdapter {
 			(nextValue) => {
 				this.#writeState(nextValue, { scheduleSave: true });
 			},
-			() => {
+			(newValue) => {
 				this.#assertCanMutateState();
+				assertJsonCompatValue(newValue);
 			},
 		);
 	}
@@ -2516,6 +2477,7 @@ export class ActorContextHandleAdapter {
 			throw stateNotEnabledError();
 		}
 		this.#assertCanMutateState();
+		assertJsonCompatValue(value);
 		this.#writeState(value, { scheduleSave: true });
 	}
 
