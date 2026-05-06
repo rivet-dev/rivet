@@ -13,18 +13,18 @@ import { useController, useWatch } from "react-hook-form";
 import { match, P } from "ts-pattern";
 import { useDebounceValue } from "usehooks-ts";
 import z from "zod";
-import * as z4 from "zod/v4";
 import { cn, Uptime } from "@/components";
 import { useEngineCompatDataProvider } from "@/components/actors";
 
 const IPV4_REGEX = /^(\d{1,3}\.){3}\d{1,3}$/;
 const IPV6_REGEX = /^\[[\da-fA-F:]+\]$/;
+const DOMAIN_REGEX = /^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)*[a-zA-Z]{2,}$/;
 
 function isValidHost(hostname: string): boolean {
 	if (hostname === "localhost") return true;
 	if (IPV4_REGEX.test(hostname)) return true;
 	if (IPV6_REGEX.test(hostname)) return true;
-	return z4.regexes.domain.test(hostname);
+	return DOMAIN_REGEX.test(hostname);
 }
 
 export const endpointSchema = z

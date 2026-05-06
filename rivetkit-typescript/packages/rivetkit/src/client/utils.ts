@@ -142,6 +142,7 @@ export async function sendHttpRequest<
 	}
 
 	// Send request
+	const userAgent = httpUserAgent();
 	let response: globalThis.Response;
 	try {
 		// Make the HTTP request
@@ -155,7 +156,7 @@ export async function sendHttpRequest<
 								"Content-Type": contentType,
 							}
 						: {}),
-					"User-Agent": httpUserAgent(),
+					...(userAgent ? { "User-Agent": userAgent } : {}),
 				},
 				body: bodyData,
 				credentials: "include",
