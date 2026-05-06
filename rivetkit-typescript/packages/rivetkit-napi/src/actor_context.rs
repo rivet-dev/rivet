@@ -438,18 +438,6 @@ impl ActorContext {
 	}
 
 	#[napi]
-	#[allow(deprecated)]
-	pub fn set_prevent_sleep(&self, prevent_sleep: bool) {
-		self.inner.set_prevent_sleep(prevent_sleep);
-	}
-
-	#[napi]
-	#[allow(deprecated)]
-	pub fn prevent_sleep(&self) -> bool {
-		self.inner.prevent_sleep()
-	}
-
-	#[napi]
 	pub fn aborted(&self) -> bool {
 		self.inner.actor_aborted()
 			|| self

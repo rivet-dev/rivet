@@ -388,8 +388,7 @@ impl<A: Actor> Ctx<A> {
     // Lifecycle signaling (envoy-visible)
     pub fn sleep(&self);
     pub fn destroy(&self);
-    pub fn set_prevent_sleep(&self, enabled: bool);
-    pub fn prevent_sleep(&self) -> bool;
+    pub     pub fn keep_awake(&self) -> bool;
     pub fn wait_until(&self, future: impl Future<Output = ()> + Send + 'static);
 
     // Typed broadcast + connection enumeration

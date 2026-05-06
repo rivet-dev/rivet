@@ -436,7 +436,7 @@
       "commit": "880e45207",
       "verdict": "PASS",
       "medCritIssues": [],
-      "notes": "Main payoff story. AsyncCounter gained register_zero_notify fan-out (Weak<Notify> observer pattern). idle_notify is pinged by keep_awake + internal_keep_awake + http_request_counter via register_zero_notify in WorkRegistry::new + lookup_http_request_counter. wait_for_shutdown_tasks composes shutdown_counter + websocket_callback + prevent_sleep_notify via tokio::select!. set_prevent_sleep calls notify_prevent_sleep_changed only on flip. Old AtomicUsize shims removed; can_sleep reads from WorkRegistry. Two deterministic tests use tokio::test(start_paused=true). Grep confirms zero Duration::from_millis(10) remain in sleep.rs. Minor: lookup_http_request_counter re-registers on every miss (bounded by envoy reconfigures, Weak refs prevent leak)."
+      "notes": "Main payoff story. AsyncCounter gained register_zero_notify fan-out (Weak<Notify> observer pattern). idle_notify is pinged by keep_awake + internal_keep_awake + http_request_counter via register_zero_notify in WorkRegistry::new + lookup_http_request_counter. wait_for_shutdown_tasks composes shutdown_counter + websocket_callback + idle notification via tokio::select!. keep_awake regions notify when their counters change. Old AtomicUsize shims removed; can_sleep reads from WorkRegistry. Two deterministic tests use tokio::test(start_paused=true). Grep confirms zero Duration::from_millis(10) remain in sleep.rs. Minor: lookup_http_request_counter re-registers on every miss (bounded by envoy reconfigures, Weak refs prevent leak)."
     },
     "US-007": {
       "commit": "13d606e31",

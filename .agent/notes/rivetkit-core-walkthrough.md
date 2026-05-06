@@ -122,7 +122,7 @@ When an inspector attaches, `inspector_attach_count` increments. Every 50ms, if 
 
 ## Chapter 8 — Sleep (Two Phases)
 
-Sleep is triggered by the idle timer. When `sleep_deadline` fires, `SleepController::can_sleep` checks: not-ready, `prevent_sleep`, `no_sleep` config, active HTTP, keep-awake regions, non-hibernatable connections, or outstanding WebSocket callbacks all block it.
+Sleep is triggered by the idle timer. When `sleep_deadline` fires, `SleepController::can_sleep` checks: not-ready, `keep_awake`, `no_sleep` config, active HTTP, keep-awake regions, non-hibernatable connections, or outstanding WebSocket callbacks all block it.
 
 ### Phase 1: SleepGrace
 

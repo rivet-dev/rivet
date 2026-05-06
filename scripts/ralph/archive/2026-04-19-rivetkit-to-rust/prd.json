@@ -32,7 +32,7 @@
         "State methods: `state() -> Vec<u8>`, `set_state(Vec<u8>)`, `save_state(SaveStateOpts) -> Result<()>` (async)",
         "Vars methods: `vars() -> Vec<u8>`, `set_vars(Vec<u8>)`",
         "Accessor methods: `kv() -> &Kv`, `sql() -> &SqliteDb`, `schedule() -> &Schedule`, `queue() -> &Queue`",
-        "Sleep control: `sleep()`, `destroy()`, `set_prevent_sleep(bool)`, `prevent_sleep() -> bool`",
+        "Sleep control: `sleep()`, `destroy()`, `keep_awake(future)`",
         "Background work: `wait_until(impl Future<Output = ()> + Send + 'static)`",
         "Actor info: `actor_id() -> &str`, `name() -> &str`, `key() -> &ActorKey`, `region() -> &str`",
         "Shutdown: `abort_signal() -> &CancellationToken`, `aborted() -> bool`",
@@ -43,7 +43,7 @@
       ],
       "priority": 2,
       "passes": true,
-      "notes": "See spec 'ActorContext' section. Internal ActorContextInner should hold: state bytes, vars bytes, Arc references to Kv/SqliteDb/Schedule/Queue, CancellationToken for abort, AtomicBool for prevent_sleep, actor metadata (id, name, key, region). Reference envoy-client context at engine/sdks/rust/envoy-client/src/context.rs."
+      "notes": "See spec 'ActorContext' section. Internal ActorContextInner should hold: state bytes, vars bytes, Arc references to Kv/SqliteDb/Schedule/Queue, CancellationToken for abort, AtomicBool for keep_awake, actor metadata (id, name, key, region). Reference envoy-client context at engine/sdks/rust/envoy-client/src/context.rs."
     },
     {
       "id": "US-003",
@@ -247,9 +247,9 @@
       "title": "rivetkit-core: Sleep readiness and auto-sleep timer",
       "description": "As a developer, I need the can_sleep() check and auto-sleep timer that puts actors to sleep when idle.",
       "acceptanceCriteria": [
-        "Implement can_sleep() in `src/actor/sleep.rs` checking ALL conditions: ready AND started, prevent_sleep is false, no_sleep config is false, no active HTTP requests (from envoy-client counter), no active keep_awake/internal_keep_awake regions, run handler not active (exception: allowed if only blocked on queue wait via active_queue_wait_count), no active connections, no pending disconnect callbacks, no active WebSocket callbacks",
+        "Implement can_sleep() in `src/actor/sleep.rs` checking ALL conditions: ready AND started, keep_awake is false, no_sleep config is false, no active HTTP requests (from envoy-client counter), no active keep_awake/internal_keep_awake regions, run handler not active (exception: allowed if only blocked on queue wait via active_queue_wait_count), no active connections, no pending disconnect callbacks, no active WebSocket callbacks",
         "Implement auto-sleep timer: reset on activity, fires sleep when can_sleep() returns true for sleep_timeout duration (default 30s from ActorConfig)",
-        "prevent_sleep flag with set_prevent_sleep(bool) / prevent_sleep() -> bool",
+        "keep_awake future-scoped region",
         "keep_awake and internal_keep_awake region tracking via atomic increment/decrement counters",
         "wait_until future tracking: store spawned JoinHandles for shutdown task management",
         "`cargo check -p rivetkit-core` passes"
@@ -311,7 +311,7 @@
         "Step 5: Calculate shutdown_deadline from effective sleep_grace_period",
         "Step 6: Wait for idle sleep window with deadline. Idle means: no active HTTP requests, no active keep_awake/internal_keep_awake, no pending disconnect callbacks, no active WebSocket callbacks",
         "Step 7: Call on_sleep callback (with remaining deadline budget). On error: log, continue shutdown",
-        "Step 8: Wait for shutdown tasks (wait_until futures, WebSocket callback futures, prevent_sleep to clear)",
+        "Step 8: Wait for shutdown tasks (wait_until futures, WebSocket callback futures, keep_awake regions to finish)",
         "Step 9: Disconnect all non-hibernatable connections. Persist hibernatable connections to KV",
         "Step 10: Wait for shutdown tasks again",
         "Step 11: Save state immediately. Wait for all pending KV/SQLite writes to complete",
@@ -396,7 +396,7 @@
         "Ctx<A>.state() -> Arc<A::State>: returns cached deserialized state. Cache populated on first access by deserializing CBOR bytes from inner.state(). Cache invalidated by set_state",
         "Ctx<A>.set_state(&A::State): serializes state to CBOR via ciborium, calls inner.set_state(bytes), invalidates cache",
         "Ctx<A>.vars() -> &A::Vars: returns reference to typed vars",
-        "Delegate methods to inner ActorContext: kv, sql, schedule, queue, actor_id, name, key, region, abort_signal, aborted, sleep, destroy, set_prevent_sleep, prevent_sleep, wait_until",
+        "Delegate methods to inner ActorContext: kv, sql, schedule, queue, actor_id, name, key, region, abort_signal, aborted, sleep, destroy, wait_until",
         "Typed broadcast: fn broadcast<E: Serialize>(&self, name: &str, event: &E) serializes E to CBOR then calls inner.broadcast",
         "Typed connections: fn conns(&self) -> Vec<ConnCtx<A>> wrapping each inner ConnHandle",
         "Implement ConnCtx<A> wrapping ConnHandle with PhantomData<A>: id() -> &str, params() -> A::ConnParams (CBOR deserialize), state() -> A::ConnState (CBOR deserialize), set_state(&A::ConnState) (CBOR serialize), is_hibernatable() -> bool, send<E: Serialize>(name, event), disconnect(reason) -> Result<()>",
@@ -553,7 +553,7 @@
         "Update all imports and references across the codebase (package.json, tsconfig, CLAUDE.md, etc.)",
         "Expose ActorContext as a #[napi] class with methods: state() -> Buffer, set_state(Buffer), save_state(immediate: bool)",
         "Expose actor info methods: actor_id() -> String, name() -> String, region() -> String",
-        "Expose sleep control: sleep(), destroy(), set_prevent_sleep(bool), prevent_sleep() -> bool, aborted() -> bool",
+        "Expose sleep control: sleep(), destroy(), keep_awake(future), aborted() -> bool",
         "Expose wait_until that accepts a JS Promise and converts to Rust Future",
         "pnpm build succeeds for rivetkit-napi package",
         "`cargo check` passes"

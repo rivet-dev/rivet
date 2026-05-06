@@ -62,7 +62,7 @@ All wake sources must route through `reset_sleep_timer`. The existing `AsyncCoun
 
 ### 2. Two readiness functions
 
-`can_sleep_state` (`sleep.rs:264-300`) today mixes concerns: readiness flags (`ready`, `started`), activity flags (`prevent_sleep`, `no_sleep`), run state (`run_handler_active_count`), drain counters, conn state. Split into two:
+`can_sleep_state` (`sleep.rs:264-300`) today mixes concerns: readiness flags (`ready`, `started`), activity flags (`keep_awake`, `no_sleep`), run state (`run_handler_active_count`), drain counters, conn state. Split into two:
 
 **`can_arm_sleep_timer() -> CanSleep`** (async, for `Started` only). Preserves existing `can_sleep_state` semantics. Used to decide whether `sleep_deadline` is armed.
 
@@ -74,7 +74,7 @@ All wake sources must route through `reset_sleep_timer`. The existing `AsyncCoun
 - `active_http_request_count == 0`
 - `websocket_callback_count == 0`
 - `pending_disconnect_count == 0`
-- `!prevent_sleep` (honors `lifecycle.mdx:818,746` promise)
+- `!keep_awake` (honors `lifecycle.mdx:818,746` promise)
 
 Explicitly **not** checked in `can_finalize_sleep`:
 - `ready` / `started` — flipped to `false` at grace entry (§4); not relevant to drain.
@@ -343,7 +343,7 @@ Every site that mutates an input of `can_arm_sleep_timer` or `can_finalize_sleep
 
 - All four drain counters' increment/decrement sites. Ensure each decrement-to-zero calls `reset_sleep_timer`. Today `AsyncCounter::register_change_notify(&activity_notify)` (`sleep.rs:615`) covers counter changes via `notify_waiters`; that wiring is replaced per §1 with a callback that invokes `reset_sleep_timer`.
 - `set_ready`, `set_started` — add `reset_sleep_timer` calls (they currently don't). `transition_to` in `task.rs:2147-2167` will invoke them.
-- `notify_prevent_sleep_changed` (`sleep.rs:569`) — add `reset_sleep_timer`.
+- Sleep-affecting activity changes call `reset_sleep_timer`.
 - `conn` add/remove — already call `reset_sleep_timer` (`context.rs:748, :755`).
 - `handle_run_handle_outcome` — add `reset_sleep_timer` after `self.run_handle = None` (`task.rs:1322`).
 - `ActorContext::on_state_change` callback completion — new; see 11.2.
@@ -377,7 +377,7 @@ Before committing §10's unbounded-channel change, enumerate everything that cur
   >
   > The entire window is bounded by `sleepGracePeriod` on sleep or `onDestroyTimeout` on destroy (defaults: 15 seconds each). If it is exceeded, the actor force-aborts any remaining work and proceeds to state save anyway.
 
-- Update options table default for `sleepGracePeriod`: "Default 15000ms. Total graceful shutdown window for hooks, waitUntil, async raw WebSocket handlers, disconnects, and waiting for `preventSleep` to clear."
+- Update options table default for `sleepGracePeriod`: "Default 15000ms. Total graceful shutdown window for hooks, waitUntil, async raw WebSocket handlers, disconnects, and waiting for `keepAwake` to clear."
 
 ## Invariants (post-change)
 
@@ -397,7 +397,7 @@ Before committing §10's unbounded-channel change, enumerate everything that cur
 
 Each step is independently shippable and revertable. Tests must pass before the next step starts.
 
-**Step 1 — Unify signal primitive.** Rewrite `reset_sleep_timer` / `notify_activity_dirty` as notify-only (§1). Delete `LifecycleEvent::ActivityDirty` variant, handler, `drain_activity_dirty`, parallel arm. Add `reset_sleep_timer` calls at `set_ready`/`set_started`/`notify_prevent_sleep_changed`/`handle_run_handle_outcome` (§11.1). Replace `AsyncCounter::register_change_notify` consumer with a callback that calls `reset_sleep_timer`. Existing tests for sleep timer + activity dedup must still pass.
+**Step 1 — Unify signal primitive.** Rewrite `reset_sleep_timer` / `notify_activity_dirty` as notify-only (§1). Delete `LifecycleEvent::ActivityDirty` variant, handler, `drain_activity_dirty`, parallel arm. Add `reset_sleep_timer` calls at `set_ready`/`set_started`/`handle_run_handle_outcome` (§11.1). Replace `AsyncCounter::register_change_notify` consumer with a callback that calls `reset_sleep_timer`. Existing tests for sleep timer + activity dedup must still pass.
 
 **Step 2 — Split readiness.** Introduce `can_arm_sleep_timer` (rename of `can_sleep_state`) and new `can_finalize_sleep`. Update existing `Started`-state callers. No grace callers yet. Tests unchanged.
 
@@ -429,7 +429,7 @@ Each step is independently shippable and revertable. Tests must pass before the 
 - `core_counter_decrements_on_hook_completion`: verify that the completion callback decrements `core_dispatched_hooks` exactly once per event, and that grace exits via drain path only when counter reaches zero.
 - `hibernatable_conn_preserved_on_sleep`: hibernatable conn's state is flushed via `pending_hibernation_updates`, `onDisconnect` NOT called.
 - `hibernatable_conn_fires_ondisconnect_on_destroy`: same conn on destroy fires `onDisconnect`.
-- `preventSleep_during_grace_delays_finalize`: `setPreventSleep(true)` in `onSleep` → grace waits until `setPreventSleep(false)` or deadline.
+- `keepAwake_during_grace_delays_finalize`: `keepAwake(true)` in `onSleep` → grace waits until `keepAwake(false)` or deadline.
 - `alarm_does_not_fire_during_grace`: scheduled alarm due during grace does not invoke user alarm handler.
 - `dispatch_drained_on_grace_entry`: dispatch in inbox at Stop arrival completes as tracked work, not dropped.
 - `activity_signal_dedup`: 1000 rapid `reset_sleep_timer` calls produce ≤ a few main-loop re-evaluations.

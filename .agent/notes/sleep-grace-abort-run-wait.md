@@ -28,7 +28,7 @@ Located in `rivetkit-rust/packages/rivetkit-core/src/actor/task.rs`:
   `mark_destroy_requested` at `actor/context.rs:466` (the destroy path).
 - `wait_for_sleep_idle_window` polls `ActorContext::can_sleep_state`
   (`actor/sleep.rs::229-260`). `can_sleep_state` checks ready/started,
-  `prevent_sleep`, `no_sleep`, `active_http_request_count`,
+  `keep_awake`, `no_sleep`, `active_http_request_count`,
   `sleep_keep_awake_count`, `sleep_internal_keep_awake_count`,
   `pending_disconnect_count`, non-empty conns, and
   `websocket_callback_count`. **It does NOT check whether the `run_handle`

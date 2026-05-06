@@ -223,8 +223,6 @@ export declare class ActorContext {
   destroy(): void
   destroyRequested(): boolean
   waitForDestroyCompletion(): Promise<void>
-  setPreventSleep(preventSleep: boolean): void
-  preventSleep(): boolean
   aborted(): boolean
   runHandlerActive(): boolean
   restartRunHandler(): void
