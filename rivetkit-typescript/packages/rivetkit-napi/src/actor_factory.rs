@@ -979,7 +979,7 @@ fn parse_bridge_rivet_error(reason: &str) -> Option<anyhow::Error> {
 			return None;
 		}
 	};
-	tracing::warn!(
+	tracing::debug!(
 		group = %payload.group.as_str(),
 		code = %payload.code.as_str(),
 		message = %payload.message.as_str(),

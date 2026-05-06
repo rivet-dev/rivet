@@ -118,11 +118,16 @@ export class Registry<A extends RegistryActors> {
 		}
 
 		const cancelToken = runtime.createCancellationToken();
+		// Metadata polls are synchronous GETs that complete immediately.
+		// Skip abort listener wiring to avoid per-poll event listener churn.
+		const needsAbortListener = !isMetadataRequest || isEngineMetadataRequest;
 		const abort = () => runtime.cancelCancellationToken(cancelToken);
-		if (request.signal.aborted) {
-			abort();
-		} else {
-			request.signal.addEventListener("abort", abort, { once: true });
+		if (needsAbortListener) {
+			if (request.signal.aborted) {
+				abort();
+			} else {
+				request.signal.addEventListener("abort", abort, { once: true });
+			}
 		}
 
 		const requestBody = await request.arrayBuffer();
