@@ -20,6 +20,7 @@ pub fn public_error_status_code(group: &str, code: &str) -> Option<u16> {
 			| "complete_not_configured"
 			| "timed_out",
 		) => Some(400),
+		("sqlite", "query_failed") => Some(400),
 		_ => None,
 	}
 }
@@ -192,6 +193,9 @@ pub(crate) enum SqliteRuntimeError {
 		"Remote SQLite generation is stale: {reason}"
 	)]
 	RemoteFenceMismatch { reason: String },
+
+	#[error("query_failed", "SQL query failed.", "SQL query failed: {message}")]
+	QueryFailed { message: String },
 }
 
 #[derive(RivetError, Debug, Clone, Deserialize, Serialize)]

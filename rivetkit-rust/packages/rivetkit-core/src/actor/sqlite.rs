@@ -633,7 +633,11 @@ fn map_local_worker_error(error: anyhow::Error) -> anyhow::Error {
 		return SqliteRuntimeError::Closed.build();
 	}
 
-	error
+	// User SQL errors (syntax, constraints, etc.)
+	SqliteRuntimeError::QueryFailed {
+		message: format!("{error}"),
+	}
+	.build()
 }
 
 fn protocol_bind_params(params: Vec<BindParam>) -> Vec<protocol::SqliteBindParam> {

@@ -1,14 +1,7 @@
 use crate::INTERNAL_ERROR;
 use crate::schema::RivetErrorSchema;
 use serde::Serialize;
-use std::{fmt, sync::OnceLock};
-
-static EXPOSE_INTERNAL_ERRORS: OnceLock<bool> = OnceLock::new();
-
-fn expose_internal_errors() -> bool {
-	*EXPOSE_INTERNAL_ERRORS
-		.get_or_init(|| matches!(std::env::var("RIVET_EXPOSE_ERRORS").as_deref(), Ok("1")))
-}
+use std::fmt;
 
 #[derive(Debug, Clone)]
 pub struct RivetError {
@@ -36,7 +29,7 @@ impl RivetError {
 		Self {
 			schema: &INTERNAL_ERROR,
 			meta,
-			message: expose_internal_errors().then(|| format!("Internal error: {}", error)),
+			message: Some(format!("{}", error)),
 		}
 	}
 
