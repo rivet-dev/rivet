@@ -465,7 +465,7 @@ export const MaxConcurrentActors = <
 						/>
 					</FormControl>
 					<FormDescription className="col-span-1">
-						Maximum actors allowed to run concurrently per runner.
+						Maximum actors allowed to run concurrently in total.
 						Leave blank for unlimited.
 					</FormDescription>
 					<FormMessage className="col-span-1" />

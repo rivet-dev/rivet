@@ -12,7 +12,7 @@ import {
 	faWallet,
 	Icon,
 } from "@rivet-gg/icons";
-import { useSuspenseQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useSuspenseQuery } from "@tanstack/react-query";
 import {
 	Link,
 	useMatch,
@@ -46,9 +46,11 @@ import {
 	Skeleton,
 } from "@/components";
 import {
+	ActorRegion,
 	useCloudNamespaceDataProvider,
 	useDataProvider,
 	useDataProviderCheck,
+	useEngineCompatDataProvider,
 } from "@/components/actors";
 import { useRootLayoutOptional } from "@/components/actors/root-layout-context";
 import type { HeaderLinkProps } from "@/components/header/header-link";
@@ -56,7 +58,9 @@ import { authClient } from "@/lib/auth";
 import { features } from "@/lib/features";
 import { ensureTrailingSlash } from "@/lib/utils";
 import { TEST_IDS } from "@/utils/test-ids";
+import type { RivetActorError } from "@/queries/types";
 import { ActorBuildsList } from "./actor-builds-list";
+import { RunnerPoolErrorPopover } from "./runner-pool-error-popover";
 import { BillingLimitAlert } from "./billing/billing-limit-alert";
 import { BillingPlanBadge } from "./billing/billing-plan-badge";
 import { BillingUsageGauge } from "./billing/billing-usage-gauge";
@@ -554,8 +558,11 @@ function HeaderLink({ icon, children, className, ...props }: HeaderLinkProps) {
 		<HeaderButton
 			asChild
 			variant="ghost"
-			className="font-medium px-1 text-muted-foreground data-active:text-foreground data-active:bg-accent"
 			{...props}
+			className={cn(
+				"font-medium px-1 text-muted-foreground data-active:text-foreground data-active:bg-accent",
+				className,
+			)}
 			startIcon={
 				icon ? (
 					<Icon
@@ -571,6 +578,40 @@ function HeaderLink({ icon, children, className, ...props }: HeaderLinkProps) {
 				{children}
 			</Link>
 		</HeaderButton>
+	);
+}
+
+function RunnerConfigErrorIndicator() {
+	const dataProvider = useEngineCompatDataProvider();
+	const { data: errors } = useInfiniteQuery({
+		...dataProvider.runnerConfigsQueryOptions(),
+		select(data) {
+			const map: Record<string, RivetActorError | undefined> = {};
+			for (const page of data.pages) {
+				for (const config of Object.values(page.runnerConfigs)) {
+					for (const [dc, dcConfig] of Object.entries(
+						config.datacenters,
+					)) {
+						if (dcConfig.runnerPoolError && !map[dc]) {
+							map[dc] = dcConfig.runnerPoolError;
+						}
+					}
+				}
+			}
+			return Object.keys(map).length > 0 ? map : null;
+		},
+	});
+
+	if (!errors) return null;
+
+	return (
+		<RunnerPoolErrorPopover
+			iconOnly
+			errors={errors}
+			renderRegion={(regionId) => (
+				<ActorRegion regionId={regionId} showLabel="abbreviated" />
+			)}
+		/>
 	);
 }
 
@@ -626,15 +667,16 @@ function CloudSidebarContentInner() {
 							to: "/orgs/$organization/projects/$project/ns/$namespace",
 							fuzzy: true,
 						}) ? (
-							<>
+							<div className="flex items-center gap-1">
 								<HeaderLink
 									to="/orgs/$organization/projects/$project/ns/$namespace/settings"
-									className="font-normal"
+									className="flex-1 font-normal"
 									icon={faCog}
 								>
 									Settings
 								</HeaderLink>
-							</>
+								<RunnerConfigErrorIndicator />
+							</div>
 						) : matchRoute({
 								to: "/orgs/$organization/projects/$project",
 								fuzzy: true,

@@ -56,7 +56,7 @@ export function RunnersTable({
 					<TableHead className="pl-8">ID</TableHead>
 					<TableHead className="pl-8">Name</TableHead>
 					<TableHead>Datacenter</TableHead>
-					<TableHead>Slots</TableHead>
+					<TableHead>Actors</TableHead>
 					<TableHead>Version</TableHead>
 					<TableHead>Created</TableHead>
 				</TableRow>

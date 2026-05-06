@@ -8,7 +8,6 @@ import {
 	faRailway,
 	faRivet,
 	faTrash,
-	faTriangleExclamation,
 	faVercel,
 	Icon,
 } from "@rivet-gg/icons";
@@ -37,12 +36,12 @@ import {
 } from "@/components";
 import {
 	ActorRegion,
-	RunnerPoolError,
 	useEngineCompatDataProvider,
 } from "@/components/actors";
 import { REGION_LABEL } from "@/components/matchmaker/lobby-region";
 import { deriveProviderFromMetadata } from "@/lib/data";
 import type { RivetActorError } from "@/queries/types";
+import { RunnerPoolErrorPopover } from "./runner-pool-error-popover";
 
 interface RunnerConfigsTableProps {
 	isLoading?: boolean;
@@ -248,43 +247,13 @@ function StatusCell({
 	}
 
 	return (
-		<TableCell className="w-8 text-center">
-			<WithTooltip
-				delayDuration={0}
-				content={
-					<>
-						<p>Some providers are experiencing errors:</p>
-						<ul className="max-w-xs whitespace-pre-wrap text-left my-0 space-y-1">
-							{typeof errors !== "string"
-								? Object.entries(errors).map(([dc, error]) => {
-										if (!error) return null;
-										return (
-											<li
-												key={dc}
-												className="border-t pt-2 pb-2"
-											>
-												<ActorRegion
-													className="w-full justify-start items-center mr-2 mt-3 mb-2"
-													regionId={dc}
-													showLabel
-												/>
-												<div className="text-xs">
-													<RunnerPoolError
-														error={error}
-													/>
-												</div>
-											</li>
-										);
-									})
-								: errors}
-						</ul>
-					</>
-				}
-				trigger={
-					<span className="inline-flex items-center justify-center text-destructive ml-2.5">
-						<Icon icon={faTriangleExclamation} />
-					</span>
-				}
+		<TableCell className="w-8">
+			<RunnerPoolErrorPopover
+				iconOnly
+				errors={errors}
+				renderRegion={(regionId) => (
+					<ActorRegion regionId={regionId} showLabel="abbreviated" />
+				)}
 			/>
 		</TableCell>
 	);
