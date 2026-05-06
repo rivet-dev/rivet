@@ -413,9 +413,6 @@ mod moved_tests {
 		reason: Option<String>,
 		command: Option<String>,
 		event: Option<String>,
-		outcome: Option<String>,
-		old: Option<String>,
-		new: Option<String>,
 	}
 
 	impl Visit for MessageVisitor {
@@ -427,9 +424,6 @@ mod moved_tests {
 				"reason" => self.reason = Some(value.to_owned()),
 				"command" => self.command = Some(value.to_owned()),
 				"event" => self.event = Some(value.to_owned()),
-				"outcome" => self.outcome = Some(value.to_owned()),
-				"old" => self.old = Some(value.to_owned()),
-				"new" => self.new = Some(value.to_owned()),
 				_ => {}
 			}
 		}
@@ -454,15 +448,6 @@ mod moved_tests {
 				"event" => {
 					self.event = Some(format!("{value:?}").trim_matches('"').to_owned());
 				}
-				"outcome" => {
-					self.outcome = Some(format!("{value:?}").trim_matches('"').to_owned());
-				}
-				"old" => {
-					self.old = Some(format!("{value:?}").trim_matches('"').to_owned());
-				}
-				"new" => {
-					self.new = Some(format!("{value:?}").trim_matches('"').to_owned());
-				}
 				_ => {}
 			}
 		}
@@ -475,9 +460,6 @@ mod moved_tests {
 		message: Option<String>,
 		command: Option<String>,
 		event: Option<String>,
-		outcome: Option<String>,
-		old: Option<String>,
-		new: Option<String>,
 	}
 
 	#[derive(Clone, Debug, PartialEq, Eq)]
@@ -618,9 +600,6 @@ mod moved_tests {
 					message: visitor.message,
 					command: visitor.command,
 					event: visitor.event,
-					outcome: visitor.outcome,
-					old: visitor.old,
-					new: visitor.new,
 				});
 		}
 	}

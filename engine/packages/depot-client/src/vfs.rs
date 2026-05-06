@@ -1864,7 +1864,7 @@ fn next_temp_aux_path() -> String {
 }
 
 unsafe fn get_aux_state(file: &VfsFile) -> Option<&AuxFileHandle> {
-	(!file.aux.is_null()).then(|| &*file.aux)
+	unsafe { (!file.aux.is_null()).then(|| &*file.aux) }
 }
 
 async fn commit_buffered_pages(
@@ -1914,11 +1914,11 @@ fn is_head_fence_mismatch_response(error: &protocol::SqliteErrorResponse) -> boo
 }
 
 unsafe fn get_file(p: *mut sqlite3_file) -> &'static mut VfsFile {
-	&mut *(p as *mut VfsFile)
+	unsafe { &mut *(p as *mut VfsFile) }
 }
 
 unsafe fn get_vfs_ctx(p: *mut sqlite3_vfs) -> &'static VfsContext {
-	&*((*p).pAppData as *const VfsContext)
+	unsafe { &*((*p).pAppData as *const VfsContext) }
 }
 
 fn sqlite_error_message(db: *mut sqlite3) -> String {
@@ -2140,7 +2140,7 @@ fn page_span(offset: i64, length: usize, page_size: usize) -> std::result::Resul
 }
 
 unsafe extern "C" fn io_close(p_file: *mut sqlite3_file) -> c_int {
-	vfs_catch_unwind!(SQLITE_IOERR, {
+	vfs_catch_unwind!(SQLITE_IOERR, unsafe {
 		if p_file.is_null() {
 			return SQLITE_OK;
 		}
@@ -2187,7 +2187,7 @@ unsafe extern "C" fn io_read(
 	i_amt: c_int,
 	i_offset: sqlite3_int64,
 ) -> c_int {
-	vfs_catch_unwind!(SQLITE_IOERR_READ, {
+	vfs_catch_unwind!(SQLITE_IOERR_READ, unsafe {
 		if i_amt <= 0 {
 			return SQLITE_OK;
 		}
@@ -2317,7 +2317,7 @@ unsafe extern "C" fn io_write(
 	i_amt: c_int,
 	i_offset: sqlite3_int64,
 ) -> c_int {
-	vfs_catch_unwind!(SQLITE_IOERR_WRITE, {
+	vfs_catch_unwind!(SQLITE_IOERR_WRITE, unsafe {
 		if i_amt <= 0 {
 			return SQLITE_OK;
 		}
@@ -2464,7 +2464,7 @@ unsafe extern "C" fn io_write(
 }
 
 unsafe extern "C" fn io_truncate(p_file: *mut sqlite3_file, size: sqlite3_int64) -> c_int {
-	vfs_catch_unwind!(SQLITE_IOERR_TRUNCATE, {
+	vfs_catch_unwind!(SQLITE_IOERR_TRUNCATE, unsafe {
 		if size < 0 {
 			return SQLITE_IOERR_TRUNCATE;
 		}
@@ -2483,7 +2483,7 @@ unsafe extern "C" fn io_truncate(p_file: *mut sqlite3_file, size: sqlite3_int64)
 /// bytes is delegated to depot's `sqlite_commit` reply. If pegboard-envoy ever
 /// pre-acks before the FDB tx commit, xSync's durability contract is broken.
 unsafe extern "C" fn io_sync(p_file: *mut sqlite3_file, _flags: c_int) -> c_int {
-	vfs_catch_unwind!(SQLITE_IOERR_FSYNC, {
+	vfs_catch_unwind!(SQLITE_IOERR_FSYNC, unsafe {
 		let file = get_file(p_file);
 		if get_aux_state(file).is_some() {
 			return SQLITE_OK;
@@ -2506,7 +2506,7 @@ unsafe extern "C" fn io_sync(p_file: *mut sqlite3_file, _flags: c_int) -> c_int 
 }
 
 unsafe extern "C" fn io_file_size(p_file: *mut sqlite3_file, p_size: *mut sqlite3_int64) -> c_int {
-	vfs_catch_unwind!(SQLITE_IOERR_FSTAT, {
+	vfs_catch_unwind!(SQLITE_IOERR_FSTAT, unsafe {
 		let file = get_file(p_file);
 		if let Some(aux) = get_aux_state(file) {
 			*p_size = aux.state.bytes.lock().len() as sqlite3_int64;
@@ -2537,7 +2537,7 @@ unsafe extern "C" fn io_check_reserved_lock(
 	_p_file: *mut sqlite3_file,
 	p_res_out: *mut c_int,
 ) -> c_int {
-	vfs_catch_unwind!(SQLITE_IOERR, {
+	vfs_catch_unwind!(SQLITE_IOERR, unsafe {
 		*p_res_out = 0;
 		SQLITE_OK
 	})
@@ -2548,7 +2548,7 @@ unsafe extern "C" fn io_file_control(
 	op: c_int,
 	_p_arg: *mut c_void,
 ) -> c_int {
-	vfs_catch_unwind!(SQLITE_IOERR, {
+	vfs_catch_unwind!(SQLITE_IOERR, unsafe {
 		let file = get_file(p_file);
 		if get_aux_state(file).is_some() {
 			return SQLITE_NOTFOUND;
@@ -2596,7 +2596,7 @@ unsafe extern "C" fn io_sector_size(_p_file: *mut sqlite3_file) -> c_int {
 }
 
 unsafe extern "C" fn io_device_characteristics(p_file: *mut sqlite3_file) -> c_int {
-	vfs_catch_unwind!(0, {
+	vfs_catch_unwind!(0, unsafe {
 		let file = get_file(p_file);
 		if get_aux_state(file).is_some() {
 			0
@@ -2613,7 +2613,7 @@ unsafe extern "C" fn vfs_open(
 	flags: c_int,
 	p_out_flags: *mut c_int,
 ) -> c_int {
-	vfs_catch_unwind!(SQLITE_CANTOPEN, {
+	vfs_catch_unwind!(SQLITE_CANTOPEN, unsafe {
 		let ctx = get_vfs_ctx(p_vfs);
 		let delete_on_close = (flags & SQLITE_OPEN_DELETEONCLOSE) != 0;
 		let path = if z_name.is_null() {
@@ -2673,7 +2673,7 @@ unsafe extern "C" fn vfs_delete(
 	z_name: *const c_char,
 	_sync_dir: c_int,
 ) -> c_int {
-	vfs_catch_unwind!(SQLITE_IOERR_DELETE, {
+	vfs_catch_unwind!(SQLITE_IOERR_DELETE, unsafe {
 		if z_name.is_null() {
 			return SQLITE_OK;
 		}
@@ -2705,7 +2705,7 @@ unsafe extern "C" fn vfs_access(
 	_flags: c_int,
 	p_res_out: *mut c_int,
 ) -> c_int {
-	vfs_catch_unwind!(SQLITE_IOERR_ACCESS, {
+	vfs_catch_unwind!(SQLITE_IOERR_ACCESS, unsafe {
 		if z_name.is_null() {
 			*p_res_out = 0;
 			return SQLITE_OK;
@@ -2735,7 +2735,7 @@ unsafe extern "C" fn vfs_full_pathname(
 	n_out: c_int,
 	z_out: *mut c_char,
 ) -> c_int {
-	vfs_catch_unwind!(SQLITE_IOERR, {
+	vfs_catch_unwind!(SQLITE_IOERR, unsafe {
 		if z_name.is_null() || z_out.is_null() || n_out <= 0 {
 			return SQLITE_IOERR;
 		}
@@ -2756,7 +2756,7 @@ unsafe extern "C" fn vfs_randomness(
 	n_byte: c_int,
 	z_out: *mut c_char,
 ) -> c_int {
-	vfs_catch_unwind!(0, {
+	vfs_catch_unwind!(0, unsafe {
 		let buf = slice::from_raw_parts_mut(z_out.cast::<u8>(), n_byte as usize);
 		match getrandom::getrandom(buf) {
 			Ok(()) => n_byte,
@@ -2773,7 +2773,7 @@ unsafe extern "C" fn vfs_sleep(_p_vfs: *mut sqlite3_vfs, microseconds: c_int) ->
 }
 
 unsafe extern "C" fn vfs_current_time(_p_vfs: *mut sqlite3_vfs, p_time_out: *mut f64) -> c_int {
-	vfs_catch_unwind!(SQLITE_IOERR, {
+	vfs_catch_unwind!(SQLITE_IOERR, unsafe {
 		let now = std::time::SystemTime::now()
 			.duration_since(std::time::UNIX_EPOCH)
 			.unwrap_or_default();
@@ -2787,7 +2787,7 @@ unsafe extern "C" fn vfs_get_last_error(
 	n_byte: c_int,
 	z_err_msg: *mut c_char,
 ) -> c_int {
-	vfs_catch_unwind!(SQLITE_IOERR, {
+	vfs_catch_unwind!(SQLITE_IOERR, unsafe {
 		if n_byte <= 0 || z_err_msg.is_null() {
 			return 0;
 		}

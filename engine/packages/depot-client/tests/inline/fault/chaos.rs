@@ -360,8 +360,8 @@ fn chaos_failure_context(
 	replay: &FaultScenarioReplayRecord,
 ) -> String {
 	format!(
-		"seed {seed:016x} checkpoint={checkpoint} {reason}; workload={:?}; replay={:?}",
-		replay.workload, replay.fault_events
+		"scenario={} seed {seed:016x} checkpoint={checkpoint} {reason}; workload={:?}; replay={:?}",
+		replay.scenario, replay.workload, replay.fault_events
 	)
 }
 
