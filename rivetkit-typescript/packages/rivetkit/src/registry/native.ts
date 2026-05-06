@@ -337,6 +337,15 @@ function databaseNotConfiguredError(): RivetError {
 	);
 }
 
+function databaseClientNotReadyError(): RivetError {
+	return new RivetError(
+		"actor",
+		"database_client_not_ready",
+		"actor database client was not initialized before user code ran. this is an internal lifecycle error; the migration callback should have pre-warmed the client. file an issue if you can reproduce.",
+		{ public: true },
+	);
+}
+
 function stateNotEnabledError(): RivetError {
 	return new RivetError(
 		"actor",
@@ -2325,7 +2334,6 @@ export class ActorContextHandleAdapter {
 	#clientFactory?: () => AnyClient;
 	#databaseProvider?: Exclude<AnyDatabaseProvider, undefined>;
 	#db?: unknown;
-	#dbProxy?: unknown;
 	#dispatchCancelToken?: CancellationTokenHandle;
 	#kv?: NativeKvAdapter;
 	#queue?: NativeQueueAdapter;
@@ -2388,32 +2396,18 @@ export class ActorContextHandleAdapter {
 			throw databaseNotConfiguredError();
 		}
 
-		if (!this.#dbProxy) {
-			this.#dbProxy = new Proxy(
-				{},
-				{
-					get: (_target, property) => {
-						if (property === "then") {
-							return undefined;
-						}
-
-						return async (...args: Array<unknown>) => {
-							const client = await this.ensureDatabaseClient();
-							const value = Reflect.get(
-								client as object,
-								property,
-							);
-							if (typeof value !== "function") {
-								return value;
-							}
-							return await value.apply(client, args);
-						};
-					},
-				},
-			);
+		if (this.#db) {
+			return this.#db;
 		}
 
-		return this.#dbProxy;
+		const runtimeState = getNativeRuntimeState(this.#runtime, this.#ctx);
+		const cachedClient = runtimeState.databaseClient;
+		if (cachedClient) {
+			this.#db = cachedClient.client;
+			return this.#db;
+		}
+
+		throw databaseClientNotReadyError();
 	}
 
 	get state(): unknown {
