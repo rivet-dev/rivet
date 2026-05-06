@@ -1,7 +1,7 @@
 use rivet_envoy_protocol as protocol;
 #[cfg(any(
-	feature = "native-transport",
-	all(feature = "wasm-transport", target_arch = "wasm32")
+	rivet_envoy_native_transport,
+	all(rivet_envoy_wasm_transport, target_arch = "wasm32")
 ))]
 use rivet_util_serde::HashableMap;
 use vbare::OwnedVersionedData;
@@ -9,40 +9,28 @@ use vbare::OwnedVersionedData;
 use crate::context::SharedContext;
 use crate::context::WsTxMessage;
 #[cfg(any(
-	feature = "native-transport",
-	all(feature = "wasm-transport", target_arch = "wasm32")
+	rivet_envoy_native_transport,
+	all(rivet_envoy_wasm_transport, target_arch = "wasm32")
 ))]
 use crate::envoy::ToEnvoyMessage;
 #[cfg(any(
-	feature = "native-transport",
-	all(feature = "wasm-transport", target_arch = "wasm32")
+	rivet_envoy_native_transport,
+	all(rivet_envoy_wasm_transport, target_arch = "wasm32")
 ))]
 use crate::stringify::stringify_to_envoy;
 use crate::stringify::stringify_to_rivet;
 
-#[cfg(all(feature = "native-transport", feature = "wasm-transport"))]
-compile_error!(
-	"`native-transport` and `wasm-transport` are mutually exclusive. Enable exactly one envoy-client transport."
-);
-
-#[cfg(not(any(feature = "native-transport", feature = "wasm-transport")))]
-compile_error!(
-	"rivet-envoy-client requires a WebSocket transport. Enable `native-transport` or `wasm-transport`."
-);
-
-#[cfg(feature = "native-transport")]
+#[cfg(rivet_envoy_native_transport)]
 mod native;
-#[cfg(feature = "wasm-transport")]
+mod transport;
+#[cfg(rivet_envoy_wasm_transport)]
 mod wasm;
 
-#[cfg(feature = "native-transport")]
-pub use native::start_connection;
-#[cfg(feature = "wasm-transport")]
-pub use wasm::start_connection;
+pub use transport::start_connection;
 
 #[cfg(any(
-	feature = "native-transport",
-	all(feature = "wasm-transport", target_arch = "wasm32")
+	rivet_envoy_native_transport,
+	all(rivet_envoy_wasm_transport, target_arch = "wasm32")
 ))]
 async fn send_initial_metadata(shared: &SharedContext) {
 	let mut prepopulate_map = HashableMap::new();
@@ -73,8 +61,8 @@ async fn send_initial_metadata(shared: &SharedContext) {
 }
 
 #[cfg(any(
-	feature = "native-transport",
-	all(feature = "wasm-transport", target_arch = "wasm32")
+	rivet_envoy_native_transport,
+	all(rivet_envoy_wasm_transport, target_arch = "wasm32")
 ))]
 async fn forward_to_envoy(shared: &SharedContext, message: protocol::ToEnvoy) {
 	if tracing::enabled!(tracing::Level::DEBUG) {

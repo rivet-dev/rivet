@@ -15,7 +15,7 @@ use uuid::Uuid;
 use crate::actor::context::ActorContext;
 use crate::actor::state::PersistedScheduleEvent;
 use crate::error::ActorRuntime;
-#[cfg(feature = "wasm-runtime")]
+#[cfg(rivetkit_wasm_runtime)]
 use crate::runtime::RuntimeSpawner;
 
 pub(super) type InternalKeepAwakeCallback =
@@ -349,7 +349,7 @@ impl ActorContext {
 			return;
 		}
 
-		#[cfg(not(feature = "wasm-runtime"))]
+		#[cfg(not(rivetkit_wasm_runtime))]
 		let tokio_handle = match Handle::try_current() {
 			Ok(handle) => handle,
 			Err(_) => return,
@@ -384,10 +384,10 @@ impl ActorContext {
 		}
 		.in_current_span();
 
-		#[cfg(not(feature = "wasm-runtime"))]
+		#[cfg(not(rivetkit_wasm_runtime))]
 		let handle = tokio_handle.spawn(task);
 
-		#[cfg(feature = "wasm-runtime")]
+		#[cfg(rivetkit_wasm_runtime)]
 		let handle = RuntimeSpawner::spawn(task);
 
 		*self.0.schedule_local_alarm_task.lock() = Some(handle);

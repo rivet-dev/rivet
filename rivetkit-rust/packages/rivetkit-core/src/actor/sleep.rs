@@ -6,7 +6,7 @@ use std::sync::Arc;
 #[cfg(test)]
 use std::sync::atomic::AtomicUsize as TestAtomicUsize;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-#[cfg(not(feature = "wasm-runtime"))]
+#[cfg(not(rivetkit_wasm_runtime))]
 use tokio::runtime::Handle;
 use tokio::sync::Notify;
 use tokio::task::JoinHandle;
@@ -15,19 +15,19 @@ use tracing::Instrument;
 use crate::actor::config::ActorConfig;
 use crate::actor::context::ActorContext;
 use crate::actor::task_types::ShutdownKind;
-#[cfg(feature = "wasm-runtime")]
+#[cfg(rivetkit_wasm_runtime)]
 use crate::actor::work_registry::LocalShutdownTask;
 use crate::actor::work_registry::{CountGuard, RegionGuard, WorkRegistry};
-#[cfg(feature = "wasm-runtime")]
+#[cfg(rivetkit_wasm_runtime)]
 use crate::runtime::RuntimeSpawner;
 #[cfg(test)]
 use crate::time::sleep_until;
 use crate::time::{Instant, sleep};
 #[cfg(test)]
 use crate::types::ActorKey;
-#[cfg(feature = "wasm-runtime")]
+#[cfg(rivetkit_wasm_runtime)]
 use futures::channel::oneshot as futures_oneshot;
-#[cfg(feature = "wasm-runtime")]
+#[cfg(rivetkit_wasm_runtime)]
 use futures::future::{AbortHandle, Abortable};
 
 /// Per-actor sleep state.
@@ -280,7 +280,7 @@ impl ActorContext {
 	pub(crate) fn reset_sleep_timer_state(&self) {
 		self.cancel_sleep_timer();
 
-		#[cfg(not(feature = "wasm-runtime"))]
+		#[cfg(not(rivetkit_wasm_runtime))]
 		let Ok(runtime) = Handle::try_current() else {
 			tracing::debug!(
 				actor_id = %self.actor_id(),
@@ -333,10 +333,10 @@ impl ActorContext {
 			}
 		};
 
-		#[cfg(not(feature = "wasm-runtime"))]
+		#[cfg(not(rivetkit_wasm_runtime))]
 		let task = runtime.spawn(task_body);
 
-		#[cfg(feature = "wasm-runtime")]
+		#[cfg(rivetkit_wasm_runtime)]
 		let task = RuntimeSpawner::spawn(task_body);
 
 		*self.0.sleep.sleep_timer.lock() = Some(task);
@@ -461,7 +461,7 @@ impl ActorContext {
 		self.0.sleep.work.websocket_callback.load()
 	}
 
-	#[cfg(not(feature = "wasm-runtime"))]
+	#[cfg(not(rivetkit_wasm_runtime))]
 	pub(crate) fn track_shutdown_task<F>(&self, fut: F) -> bool
 	where
 		F: Future<Output = ()> + Send + 'static,
@@ -497,7 +497,7 @@ impl ActorContext {
 		true
 	}
 
-	#[cfg(feature = "wasm-runtime")]
+	#[cfg(rivetkit_wasm_runtime)]
 	pub(crate) fn track_shutdown_task<F>(&self, fut: F) -> bool
 	where
 		F: Future<Output = ()> + 'static,
@@ -586,7 +586,7 @@ impl ActorContext {
 				.store(true, Ordering::Release);
 		}
 
-		#[cfg(feature = "wasm-runtime")]
+		#[cfg(rivetkit_wasm_runtime)]
 		{
 			loop {
 				let local_shutdown_tasks = {
@@ -626,7 +626,7 @@ impl ActorContext {
 			}
 		}
 
-		#[cfg(not(feature = "wasm-runtime"))]
+		#[cfg(not(rivetkit_wasm_runtime))]
 		loop {
 			let mut shutdown_tasks = {
 				let mut guard = self.0.sleep.work.shutdown_tasks.lock();
