@@ -76,6 +76,7 @@ export function configureDefaultLogger(logLevel?: LogLevel) {
 			messageKey: "msg",
 			// Do not include pid/hostname in output
 			base: {},
+			errorKey: "error",
 			// Keep the numeric level so the logfmt sink can match Pino's levels.
 			formatters: {
 				level(_label: string, number: number) {

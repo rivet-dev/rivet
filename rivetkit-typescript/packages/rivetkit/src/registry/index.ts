@@ -307,12 +307,12 @@ export class Registry<A extends RegistryActors> {
 				.then(async ({ runtime, registry, serveConfig }) => {
 					await runtime.serveRegistry(registry, serveConfig);
 				})
-				.catch((err) => {
+				.catch((error) => {
 					// Always-attached catch so the stored promise never leaves a
 					// rejection unhandled. Downstream awaits (e.g. #runShutdown's
 					// Promise.race) attach their own catches and still observe
 					// resolution via the race.
-					logger().warn({ err }, "runtime registry serve errored");
+					logger().warn({ error }, "runtime registry serve errored");
 				});
 			// Install signal handlers once an envoy lifecycle has begun. Only
 			// Mode A ever reaches here. Mode B (handler(request)) intentionally
@@ -374,8 +374,8 @@ export class Registry<A extends RegistryActors> {
 			signal,
 			config,
 			configuredRegistryPromise,
-		).catch((err) => {
-			logger().warn({ err }, "shutdown error");
+		).catch((error) => {
+			logger().warn({ error }, "shutdown error");
 		});
 	}
 
@@ -400,9 +400,9 @@ export class Registry<A extends RegistryActors> {
 						const { runtime, registry } =
 							await configuredRegistryPromise;
 						await runtime.shutdownRegistry(registry);
-					} catch (err) {
+					} catch (error) {
 						logger().warn(
-							{ err },
+							{ error },
 							"runtime registry shutdown errored (mode A)",
 						);
 					}
@@ -418,7 +418,7 @@ export class Registry<A extends RegistryActors> {
 							await runtime.shutdownRegistry(registry);
 						} catch (err) {
 							logger().warn(
-								{ err },
+								{ error: err },
 								"runtime registry shutdown errored (mode B)",
 							);
 						}

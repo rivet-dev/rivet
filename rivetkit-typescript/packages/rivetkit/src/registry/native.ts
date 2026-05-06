@@ -3496,6 +3496,10 @@ export function buildNativeFactory(
 							getNativeWorkflowInspector(ctx) !== undefined,
 					});
 				} catch (error) {
+					logger().error({
+						msg: "error replaying workflow history",
+						error,
+					});
 					return errorResponse(error);
 				}
 			}
@@ -3675,6 +3679,10 @@ export function buildNativeFactory(
 					);
 					return jsonResponse({ output });
 				} catch (error) {
+					logger().error({
+						msg: "Error handling inspector action request",
+						error,
+					});
 					return errorResponse(error);
 				}
 			}
@@ -3689,6 +3697,10 @@ export function buildNativeFactory(
 				{ status: 404 },
 			);
 		} catch (error) {
+			logger().error({
+				msg: "Error handling inspector request",
+				error,
+			});
 			return errorResponse(error);
 		} finally {
 			await actorCtx.dispose();

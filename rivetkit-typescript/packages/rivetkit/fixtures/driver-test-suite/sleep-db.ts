@@ -279,7 +279,7 @@ export const sleepWithDbConn = actor({
 		} catch (error) {
 			c.log.warn({
 				msg: "onDisconnect db write failed",
-				error: error instanceof Error ? error.message : String(error),
+				error,
 			});
 		}
 	},
@@ -292,7 +292,7 @@ export const sleepWithDbConn = actor({
 		} catch (error) {
 			c.log.warn({
 				msg: "onSleep db write failed",
-				error: error instanceof Error ? error.message : String(error),
+				error,
 			});
 		}
 	},
@@ -369,7 +369,7 @@ export const sleepWithDbAction = actor({
 		} catch (error) {
 			c.log.warn({
 				msg: "onSleep error",
-				error: error instanceof Error ? error.message : String(error),
+				error,
 			});
 		}
 	},

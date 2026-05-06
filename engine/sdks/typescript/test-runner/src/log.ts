@@ -85,6 +85,7 @@ export async function configureDefaultLogger(): Promise<void> {
 	baseLogger = pino({
 		level: getPinoLevel(),
 		messageKey: "msg",
+		errorKey: "error",
 		// Do not include pid/hostname in output
 		base: {},
 		// Keep a string level in the output
