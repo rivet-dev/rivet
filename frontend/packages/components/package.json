@@ -1,7 +1,7 @@
 {
 	"name": "@rivet-gg/components",
 	"private": true,
-	"version": "2.2.1",
+	"version": "2.2.2-rc.1",
 	"type": "module",
 	"files": [
 		"dist",
@@ -95,7 +95,7 @@
 		"tailwind-merge": "^2.6.0",
 		"tailwindcss-animate": "^1.0.7",
 		"usehooks-ts": "^3.1.1",
-		"zod": "^3.25.76"
+		"zod": "3.24.4"
 	},
 	"peerDependencies": {
 		"lodash": "^4.0.0",
