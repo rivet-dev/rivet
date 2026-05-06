@@ -2814,10 +2814,24 @@ export class ActorContextHandleAdapter {
 		let registered = false;
 		const trackedPromise = Promise.resolve(promise)
 			.catch((error) => {
-				logger().warn({
-					msg: "keepAwake promise rejected",
-					error: stringifyError(error),
-				});
+				// Queue timeouts and actor aborts are expected during graceful
+				// shutdown or normal polling loops. Only warn on unexpected errors.
+				const isBenign =
+					isRivetErrorLike(error) &&
+					((error.group === "queue" && error.code === "timed_out") ||
+						(error.group === "actor" && error.code === "aborted"));
+				if (isBenign) {
+					logger().debug({
+						msg: "keepAwake promise rejected (benign)",
+						group: error.group,
+						code: error.code,
+					});
+				} else {
+					logger().warn({
+						msg: "keepAwake promise rejected",
+						error: stringifyError(error),
+					});
+				}
 			})
 			.finally(async () => {
 				if (!registered) {
