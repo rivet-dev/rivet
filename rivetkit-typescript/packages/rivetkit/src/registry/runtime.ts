@@ -214,7 +214,6 @@ export interface RuntimeActorConfig {
 	actionTimeoutMs?: number;
 	onRequestTimeoutMs?: number;
 	sleepTimeoutMs?: number;
-	noSleep?: boolean;
 	sleepGracePeriodMs?: number;
 	connectionLivenessTimeoutMs?: number;
 	connectionLivenessIntervalMs?: number;

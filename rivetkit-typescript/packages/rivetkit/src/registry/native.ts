@@ -3336,7 +3336,6 @@ function buildActorConfig(
 		onMigrateTimeoutMs: options.onMigrateTimeout as number | undefined,
 		actionTimeoutMs: options.actionTimeout as number | undefined,
 		sleepTimeoutMs: options.sleepTimeout as number | undefined,
-		noSleep: options.noSleep as boolean | undefined,
 		sleepGracePeriodMs: options.sleepGracePeriod as number | undefined,
 		connectionLivenessTimeoutMs: options.connectionLivenessTimeout as
 			| number

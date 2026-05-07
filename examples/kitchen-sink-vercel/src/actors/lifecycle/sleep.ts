@@ -175,25 +175,3 @@ export const sleepWithRawWebSocket = actor({
 		sleepTimeout: SLEEP_TIMEOUT,
 	},
 });
-
-export const sleepWithNoSleepOption = actor({
-	state: { startCount: 0, sleepCount: 0 },
-	onWake: (c) => {
-		c.state.startCount += 1;
-	},
-	onSleep: (c) => {
-		c.state.sleepCount += 1;
-	},
-	actions: {
-		getCounts: (c) => {
-			return {
-				startCount: c.state.startCount,
-				sleepCount: c.state.sleepCount,
-			};
-		},
-	},
-	options: {
-		sleepTimeout: SLEEP_TIMEOUT,
-		noSleep: true,
-	},
-});

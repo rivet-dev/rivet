@@ -83,4 +83,19 @@ describe("Registry constructor", () => {
 			/registry\.listen\(\) cannot be used after registry\.fetchHandler\(\)/,
 		);
 	});
+
+	test.each(["noSleep", "onDestroyTimeout", "waitUntilTimeout"])(
+		"rejects removed actor option %s",
+		(option) => {
+			expect(() =>
+				actor({
+					state: {},
+					actions: {},
+					options: {
+						[option]: option === "noSleep" ? true : 1_000,
+					},
+				} as never),
+			).toThrow(/unrecognized key/i);
+		},
+	);
 });

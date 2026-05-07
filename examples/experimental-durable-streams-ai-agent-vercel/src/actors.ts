@@ -23,7 +23,7 @@ export const aiAgent = actor({
 	},
 
 	onWake: (c) => {
-		consumeStream(c);
+		c.keepAwake(consumeStream(c));
 	},
 
 	actions: {
@@ -31,12 +31,6 @@ export const aiAgent = actor({
 		getPromptStreamOffset: (c) => c.state.promptStreamOffset,
 	},
 
-	options: {
-		// IMPORTANT: Keep actor alive to continuously consume prompts
-		//
-		// Future versions will enable sleep/wake for durable streams
-		noSleep: true,
-	},
 });
 
 async function consumeStream(c: ActorContextOf<typeof aiAgent>) {
