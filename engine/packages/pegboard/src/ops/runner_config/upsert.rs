@@ -29,6 +29,7 @@ pub async fn pegboard_runner_config_upsert(ctx: &OperationCtx, input: &Input) ->
 		RunnerConfigKind::Serverless {
 			url,
 			headers,
+			request_lifespan,
 			drain_grace_period,
 			slots_per_runner,
 			..
@@ -77,6 +78,15 @@ pub async fn pegboard_runner_config_upsert(ctx: &OperationCtx, input: &Input) ->
 			if *slots_per_runner == 0 {
 				return Err(errors::RunnerConfig::Invalid {
 					reason: "`slots_per_runner` cannot be 0".to_string(),
+				}
+				.build());
+			}
+
+			if *drain_grace_period >= *request_lifespan {
+				return Err(errors::RunnerConfig::Invalid {
+					reason: format!(
+						"`drain_grace_period` must be less than `request_lifespan` ({drain_grace_period}s >= {request_lifespan}s)"
+					),
 				}
 				.build());
 			}
