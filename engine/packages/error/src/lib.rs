@@ -1,7 +1,7 @@
 mod error;
 mod schema;
 
-pub use error::RivetError;
+pub use error::{ActorSpecifier, RivetError, RivetErrorKind};
 pub use schema::{MacroMarker, RivetErrorSchema, RivetErrorSchemaWithMeta};
 
 pub use rivet_error_macros::RivetError;

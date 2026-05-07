@@ -92,9 +92,10 @@ fn derive_struct_error(input: DeriveInput, data_struct: &syn::DataStruct) -> Tok
 								.and_then(|v| ::serde_json::value::to_raw_value(&v).ok());
 
 							let error = RivetError {
-								schema: &SCHEMA,
+								kind: rivet_error::RivetErrorKind::Static(&SCHEMA),
 								meta: meta_json,
 								message: None,
+								actor: None,
 							};
 							::anyhow::Error::new(error)
 						}
@@ -193,9 +194,10 @@ fn derive_struct_error(input: DeriveInput, data_struct: &syn::DataStruct) -> Tok
 							let meta_json = ::serde_json::value::to_raw_value(&meta_value).ok();
 
 							let error = RivetError {
-								schema: &SCHEMA,
+								kind: rivet_error::RivetErrorKind::Static(&SCHEMA),
 								meta: meta_json,
 								message: None,
+								actor: None,
 							};
 							::anyhow::Error::new(error)
 						}
@@ -365,9 +367,10 @@ fn derive_enum_error(input: DeriveInput, data_enum: &syn::DataEnum) -> TokenStre
 							let meta_json = ::serde_json::value::to_raw_value(&meta_value).ok();
 
 							let error = RivetError {
-								schema: &SCHEMA,
+								kind: rivet_error::RivetErrorKind::Static(&SCHEMA),
 								meta: meta_json,
 								message: None,
+								actor: None,
 							};
 							::anyhow::Error::new(error)
 						}
@@ -454,9 +457,10 @@ fn derive_enum_error(input: DeriveInput, data_enum: &syn::DataEnum) -> TokenStre
 							let meta_json = ::serde_json::value::to_raw_value(&meta_value).ok();
 
 							let error = RivetError {
-								schema: &SCHEMA,
+								kind: rivet_error::RivetErrorKind::Static(&SCHEMA),
 								meta: meta_json,
 								message: None,
+								actor: None,
 							};
 							::anyhow::Error::new(error)
 						}

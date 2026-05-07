@@ -754,7 +754,7 @@ export class ActorConnRaw {
 			this.#handleOnOpen();
 		} else if (response.body.tag === "Error") {
 			// Connection error
-			const { group, code, message, metadata, actionId } =
+			const { group, code, message, metadata, actionId, actor } =
 				response.body.val;
 
 			if (actionId !== null) {
@@ -769,10 +769,16 @@ export class ActorConnRaw {
 					code,
 					message,
 					metadata,
+					actorId: actor?.actorId,
+					generation: actor?.generation,
+					actorKey: actor?.key,
 				});
 
 				inFlight.reject(
-					new errors.ActorError(group, code, message, metadata),
+					new errors.ActorError(group, code, message, {
+						metadata,
+						actor,
+					}),
 				);
 			} else {
 				logger().warn({
@@ -781,12 +787,18 @@ export class ActorConnRaw {
 					code,
 					message,
 					metadata,
+					actorId: actor?.actorId,
+					generation: actor?.generation,
+					actorKey: actor?.key,
 				});
 
 				if (this.#shouldReconnectForStaleActor(group, code)) {
 					this.#clearResolvedActorIdentity();
 					this.#onOpenPromise?.reject(
-						new errors.ActorError(group, code, message, metadata),
+						new errors.ActorError(group, code, message, {
+							metadata,
+							actor,
+						}),
 					);
 					return;
 				}
@@ -796,7 +808,7 @@ export class ActorConnRaw {
 					group,
 					code,
 					message,
-					metadata,
+					{ metadata, actor },
 				);
 				if (errors.isSchedulingError(group, code) && this.#actorId) {
 					const schedulingError = await checkForSchedulingError(
@@ -1368,6 +1380,7 @@ export class ActorConnRaw {
 						message: string;
 						metadata: unknown;
 						actionId: bigint | null;
+						actor?: errors.ActorSpecifier;
 					};
 			  }
 			| { tag: "ActionResponse"; val: { id: bigint; output: unknown } }
@@ -1382,8 +1395,26 @@ export class ActorConnRaw {
 			buffer,
 			CLIENT_PROTOCOL_TO_CLIENT,
 			ToClientSchema,
-			// JSON: values are already the correct type
-			(msg): ToClientJson => msg as ToClientJson,
+			// JSON/CBOR: normalize actor generation to the public number shape.
+			(msg): any => {
+				if (msg.body.tag !== "Error" || !msg.body.val.actor) {
+					return msg as ToClientJson;
+				}
+				return {
+					body: {
+						tag: "Error",
+						val: {
+							...msg.body.val,
+							actor: {
+								...msg.body.val.actor,
+								generation: Number(
+									msg.body.val.actor.generation,
+								),
+							},
+						},
+					},
+				};
+			},
 			// BARE: need to decode ArrayBuffer fields back to unknown
 			(msg): any => {
 				if (msg.body.tag === "Error") {
@@ -1402,6 +1433,17 @@ export class ActorConnRaw {
 										)
 									: null,
 								actionId: msg.body.val.actionId,
+								actor: msg.body.val.actor
+									? {
+											actorId: msg.body.val.actor.actorId,
+											generation: Number(
+												msg.body.val.actor.generation,
+											),
+											key:
+												msg.body.val.actor.key ??
+												undefined,
+										}
+									: undefined,
 							},
 						},
 					};

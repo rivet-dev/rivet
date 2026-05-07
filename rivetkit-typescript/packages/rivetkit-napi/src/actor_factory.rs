@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::sync::LazyLock;
 use std::time::Duration;
 
 use anyhow::Result;
@@ -8,13 +7,12 @@ use napi::bindgen_prelude::{Buffer, Promise};
 use napi::threadsafe_function::{ErrorStrategy, ThreadSafeCallContext, ThreadsafeFunction};
 use napi::{Env, JsFunction, JsObject};
 use napi_derive::napi;
-use rivet_error::{MacroMarker, RivetError, RivetErrorSchema};
+use rivet_error::{ActorSpecifier, RivetError, RivetErrorKind};
 use rivetkit_core::{
 	ActionDefinition, ActorConfig, ActorConfigInput, ActorContext as CoreActorContext,
 	ActorFactory as CoreActorFactory, ConnHandle as CoreConnHandle, Request, Response,
 	WebSocket as CoreWebSocket,
 };
-use scc::HashMap as SccHashMap;
 
 use crate::actor_context::{ActorContext, StateDeltaPayload};
 use crate::cancellation_token::CancellationToken;
@@ -253,6 +251,7 @@ struct BridgeRivetErrorPayload {
 	public_: Option<bool>,
 	#[serde(rename = "statusCode")]
 	status_code: Option<u16>,
+	actor: Option<ActorSpecifier>,
 }
 
 #[derive(Debug)]
@@ -261,10 +260,6 @@ pub(crate) struct BridgeRivetErrorContext {
 	pub public_: Option<bool>,
 	pub status_code: Option<u16>,
 }
-
-static BRIDGE_RIVET_ERROR_SCHEMAS: LazyLock<
-	SccHashMap<(String, String), &'static RivetErrorSchema>,
-> = LazyLock::new(SccHashMap::new);
 
 impl std::fmt::Display for BridgeRivetErrorContext {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -946,29 +941,6 @@ fn build_request_object(env: &Env, request: Request) -> napi::Result<JsObject> {
 	Ok(request_object)
 }
 
-fn leak_str(value: String) -> &'static str {
-	Box::leak(value.into_boxed_str())
-}
-
-fn intern_bridge_rivet_error_schema(
-	payload: &BridgeRivetErrorPayload,
-) -> &'static RivetErrorSchema {
-	match BRIDGE_RIVET_ERROR_SCHEMAS.entry_sync((payload.group.clone(), payload.code.clone())) {
-		scc::hash_map::Entry::Occupied(entry) => *entry.get(),
-		scc::hash_map::Entry::Vacant(entry) => {
-			let schema = Box::leak(Box::new(RivetErrorSchema {
-				group: leak_str(payload.group.clone()),
-				code: leak_str(payload.code.clone()),
-				default_message: leak_str(payload.message.clone()),
-				meta_type: None,
-				_macro_marker: MacroMarker { _private: () },
-			}));
-			entry.insert_entry(schema);
-			schema
-		}
-	}
-}
-
 fn parse_bridge_rivet_error(reason: &str) -> Option<anyhow::Error> {
 	let prefix_index = reason.find(BRIDGE_RIVET_ERROR_PREFIX)?;
 	let payload = &reason[prefix_index + BRIDGE_RIVET_ERROR_PREFIX.len()..];
@@ -979,26 +951,20 @@ fn parse_bridge_rivet_error(reason: &str) -> Option<anyhow::Error> {
 			return None;
 		}
 	};
-	tracing::warn!(
-		group = %payload.group.as_str(),
-		code = %payload.code.as_str(),
-		message = %payload.message.as_str(),
-		metadata = ?payload.metadata,
-		has_metadata = payload.metadata.is_some(),
-		public_ = ?payload.public_,
-		status_code = ?payload.status_code,
-		"decoded structured bridge error"
-	);
-	let schema = intern_bridge_rivet_error_schema(&payload);
 	let meta = payload
 		.metadata
 		.as_ref()
 		.and_then(|metadata| serde_json::value::to_raw_value(metadata).ok());
 	let message = payload.message;
 	let error = anyhow::Error::new(rivet_error::RivetError {
-		schema,
+		kind: RivetErrorKind::Dynamic {
+			group: payload.group,
+			code: payload.code,
+			default_message: message.clone(),
+		},
 		meta,
 		message: Some(message.clone()),
+		actor: payload.actor,
 	});
 	Some(error.context(BridgeRivetErrorContext {
 		message: Some(message),
@@ -1008,24 +974,11 @@ fn parse_bridge_rivet_error(reason: &str) -> Option<anyhow::Error> {
 }
 
 pub(crate) fn callback_error(callback_name: &str, error: napi::Error) -> anyhow::Error {
-	let status = error.status;
 	let reason = error.reason;
 	if let Some(error) = parse_bridge_rivet_error(&reason) {
-		let error_chain = error.chain().map(ToString::to_string).collect::<Vec<_>>();
-		tracing::warn!(
-			callback = callback_name,
-			status = ?status,
-			error_chain = ?error_chain,
-			"napi callback failed with structured bridge error"
-		);
 		return error;
 	}
 	if error.status == napi::Status::Closing {
-		tracing::debug!(
-			callback = callback_name,
-			status = ?error.status,
-			"napi callback closed without structured bridge error prefix"
-		);
 		return JsCallbackUnavailable {
 			callback: callback_name.to_owned(),
 			reason,
@@ -1033,16 +986,7 @@ pub(crate) fn callback_error(callback_name: &str, error: napi::Error) -> anyhow:
 		.build();
 	}
 
-	tracing::debug!(
-		callback = callback_name,
-		status = ?error.status,
-		"napi callback failed without structured bridge error prefix"
-	);
-	JsCallbackUnavailable {
-		callback: callback_name.to_owned(),
-		reason,
-	}
-	.build()
+	anyhow::anyhow!(reason)
 }
 
 impl From<JsActorConfig> for ActorConfigInput {

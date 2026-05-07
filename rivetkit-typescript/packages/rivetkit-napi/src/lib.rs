@@ -69,7 +69,6 @@ pub(crate) fn napi_anyhow_error(error: anyhow::Error) -> napi::Error {
 }
 
 fn anyhow_to_bridge_rivet_error_payload(error: anyhow::Error) -> serde_json::Value {
-	let error_chain = error.chain().map(ToString::to_string).collect::<Vec<_>>();
 	let bridge_context = error
 		.chain()
 		.find_map(|cause| cause.downcast_ref::<crate::actor_factory::BridgeRivetErrorContext>());
@@ -93,26 +92,15 @@ fn anyhow_to_bridge_rivet_error_payload(error: anyhow::Error) -> serde_json::Val
 	} else {
 		bridge_context.and_then(|context| context.public_)
 	};
-	let payload = serde_json::json!({
+	serde_json::json!({
 		"group": error.group(),
 		"code": error.code(),
 		"message": error.message(),
 		"metadata": error.metadata(),
 		"public": public_,
 		"statusCode": status_code,
-	});
-	tracing::error!(
-		group = error.group(),
-		code = error.code(),
-		message = %error.message(),
-		metadata = ?error.metadata(),
-		error_chain = ?error_chain,
-		has_metadata = error.metadata().is_some(),
-		?public_,
-		?status_code,
-		"encoded structured bridge error"
-	);
-	payload
+		"actor": error.actor(),
+	})
 }
 
 pub(crate) fn init_tracing(log_level: Option<&str>) {

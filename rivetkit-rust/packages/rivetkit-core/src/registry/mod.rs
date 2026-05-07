@@ -18,7 +18,7 @@ use rivet_envoy_client::config::{
 use rivet_envoy_client::envoy::start_envoy;
 use rivet_envoy_client::handle::EnvoyHandle;
 use rivet_envoy_client::protocol;
-use rivet_error::RivetError;
+use rivet_error::{ActorSpecifier, RivetError};
 use rivetkit_client_protocol as client_protocol;
 use scc::{HashMap as SccHashMap, hash_map::Entry as SccEntry};
 use serde::{Deserialize, Serialize};
@@ -55,7 +55,7 @@ use crate::inspector::{Inspector, InspectorAuth, InspectorSignal, InspectorSubsc
 use crate::kv::Kv;
 use crate::runtime::RuntimeSpawner;
 use crate::sqlite::SqliteDb;
-use crate::types::{ActorKey, ActorKeySegment, WsMessage};
+use crate::types::{ActorKey, ActorKeySegment, WsMessage, format_actor_key};
 use crate::websocket::WebSocket;
 
 mod actor_connect;
@@ -331,6 +331,7 @@ struct ActorConnectError {
 	message: String,
 	metadata: Option<ByteBuf>,
 	action_id: Option<u64>,
+	actor: Option<ActorSpecifier>,
 }
 
 #[derive(Debug)]
@@ -1012,6 +1013,7 @@ impl RegistryDispatcher {
 		key: ActorKey,
 		factory: &ActorFactory,
 	) -> ActorContext {
+		let formatted_key = format_actor_key(&key);
 		let ctx = ActorContext::build(
 			actor_id.to_owned(),
 			actor_name.to_owned(),
@@ -1024,6 +1026,7 @@ impl RegistryDispatcher {
 			SqliteDb::new_with_remote_sqlite(
 				handle.clone(),
 				actor_id.to_owned(),
+				Some(formatted_key),
 				Some(generation as u64),
 				factory.config().has_database,
 				factory.config().remote_sqlite,

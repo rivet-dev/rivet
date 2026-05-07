@@ -880,6 +880,7 @@ impl ActorTask {
 						);
 						self.log_dispatch_command_handled(command_kind, "enqueued");
 						let actor_id = self.ctx.actor_id().to_owned();
+						let ctx = self.ctx.clone();
 						let action_keep_awake = self
 							.ctx
 							.internal_keep_awake_region()
@@ -889,6 +890,7 @@ impl ActorTask {
 							let _action_keep_awake = action_keep_awake;
 							match tracked_reply_rx.await {
 								Ok(result) => {
+									let result = result.map_err(|error| ctx.attach_actor_to_error(error));
 									tracing::info!(
 										actor_id = %actor_id,
 										action_name = %action_name_for_log,
@@ -903,8 +905,10 @@ impl ActorTask {
 										action_name = %action_name_for_log,
 										"actor task: tracked reply dropped before completion"
 									);
-									let _ =
-										reply.send(Err(ActorLifecycleError::DroppedReply.build()));
+									let error = ctx.attach_actor_to_error(
+										ActorLifecycleError::DroppedReply.build(),
+									);
+									let _ = reply.send(Err(error));
 								}
 							}
 						});
@@ -916,7 +920,7 @@ impl ActorTask {
 							?error,
 							"actor task: failed to enqueue ActorEvent::Action"
 						);
-						let _ = reply.send(Err(error));
+						let _ = reply.send(Err(self.attach_actor_to_error(error)));
 						self.log_dispatch_command_handled(command_kind, "enqueue_failed");
 					}
 				}
@@ -1047,6 +1051,7 @@ impl ActorTask {
 	}
 
 	fn reply_dispatch_error(&self, command: DispatchCommand, error: anyhow::Error) {
+		let error = self.ctx.attach_actor_to_error(error);
 		match command {
 			DispatchCommand::Action { reply, .. } => {
 				let _ = reply.send(Err(error));
@@ -1067,6 +1072,10 @@ impl ActorTask {
 				let _ = reply.send(Err(error));
 			}
 		}
+	}
+
+	fn attach_actor_to_error(&self, error: anyhow::Error) -> anyhow::Error {
+		self.ctx.attach_actor_to_error(error)
 	}
 
 	fn dispatch_lifecycle_error(&self) -> Option<anyhow::Error> {
@@ -1599,6 +1608,7 @@ impl ActorTask {
 		reply: oneshot::Sender<Result<()>>,
 		result: Result<()>,
 	) {
+		let result = result.map_err(|error| self.attach_actor_to_error(error));
 		let outcome = result_outcome(&result);
 		let delivered = reply.send(result).is_ok();
 		tracing::debug!(

@@ -3,6 +3,11 @@ import { z } from "zod/v4";
 // Helper schemas
 const UintSchema = z.bigint();
 const OptionalUintSchema = UintSchema.nullable();
+const ActorSpecifierSchema = z.object({
+	actorId: z.string(),
+	generation: z.union([z.number(), z.bigint()]),
+	key: z.string().optional(),
+});
 
 // MARK: Message To Client
 export const InitSchema = z.object({
@@ -17,6 +22,7 @@ export const ErrorSchema = z.object({
 	message: z.string(),
 	metadata: z.unknown().optional(),
 	actionId: OptionalUintSchema,
+	actor: ActorSpecifierSchema.optional(),
 });
 export type Error = z.infer<typeof ErrorSchema>;
 
@@ -105,6 +111,7 @@ export const HttpResponseErrorSchema = z.object({
 	code: z.string(),
 	message: z.string(),
 	metadata: z.unknown().optional(),
+	actor: ActorSpecifierSchema.optional(),
 });
 export type HttpResponseError = z.infer<typeof HttpResponseErrorSchema>;
 

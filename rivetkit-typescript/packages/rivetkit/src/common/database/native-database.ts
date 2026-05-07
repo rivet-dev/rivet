@@ -92,12 +92,16 @@ function enrichNativeDatabaseError(
 	database: JsNativeDatabaseLike,
 	error: unknown,
 ): never {
-	const bridged =
+	const bridgeReason =
 		typeof error === "string"
-			? decodeBridgeRivetError(error)
+			? error
 			: error instanceof Error
-				? decodeBridgeRivetError(error.message)
-				: undefined;
+				? error.message
+			: undefined;
+	const bridged =
+		bridgeReason === undefined
+			? undefined
+			: decodeBridgeRivetError(bridgeReason);
 	if (bridged) {
 		throw bridged;
 	}

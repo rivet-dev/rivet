@@ -50,16 +50,15 @@ mod moved_tests {
 		}
 	}
 
-	fn schema_ptr(error: &anyhow::Error) -> *const RivetErrorSchema {
+	fn transport_error(error: &anyhow::Error) -> &RivetError {
 		error
 			.chain()
 			.find_map(|cause| cause.downcast_ref::<RivetError>())
-			.map(|error| error.schema as *const RivetErrorSchema)
 			.expect("expected bridged rivet error")
 	}
 
 	#[test]
-	fn parse_bridge_rivet_error_reuses_interned_schema() {
+	fn parse_bridge_rivet_error_uses_dynamic_error_kind() {
 		let reason = format!(
 			"{BRIDGE_RIVET_ERROR_PREFIX}{}",
 			serde_json::json!({
@@ -74,15 +73,18 @@ mod moved_tests {
 		let second = parse_bridge_rivet_error(&reason).expect("second parse should succeed");
 
 		assert_eq!(first.to_string(), "same message");
-		assert_eq!(schema_ptr(&first), schema_ptr(&second));
+		assert!(transport_error(&first).schema().is_none());
+		assert_eq!(transport_error(&second).group(), "actor");
+		assert_eq!(transport_error(&second).code(), "same_code");
 	}
 
 	#[test]
 	fn napi_bridge_payload_promotes_known_core_error_status() {
 		let payload = crate::anyhow_to_bridge_rivet_error_payload(anyhow::Error::new(RivetError {
-			schema: &AUTH_FORBIDDEN_SCHEMA,
+			kind: rivet_error::RivetErrorKind::Static(&AUTH_FORBIDDEN_SCHEMA),
 			meta: None,
 			message: None,
+			actor: None,
 		}));
 
 		assert_eq!(

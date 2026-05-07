@@ -186,8 +186,16 @@ export async function sendHttpRequest<
 				new Uint8Array(bufferResponse),
 				HTTP_RESPONSE_ERROR_VERSIONED,
 				HttpResponseErrorSchema,
-				// JSON: metadata is already unknown
-				(json): HttpResponseErrorJson => json as HttpResponseErrorJson,
+				// JSON/CBOR: normalize actor generation to the public number shape.
+				(json): any => ({
+					...json,
+					actor: json.actor
+						? {
+								...json.actor,
+								generation: Number(json.actor.generation),
+							}
+						: undefined,
+				}),
 				// BARE: decode ArrayBuffer metadata to unknown
 				(bare): any => ({
 					group: bare.group,
@@ -196,14 +204,35 @@ export async function sendHttpRequest<
 					metadata: bare.metadata
 						? decodeCborCompat(new Uint8Array(bare.metadata))
 						: undefined,
+					actor: bare.actor
+						? {
+								actorId: bare.actor.actorId,
+								generation: Number(bare.actor.generation),
+								key: bare.actor.key ?? undefined,
+							}
+						: undefined,
 				}),
 			);
+
+			logger().warn({
+				msg: "http error response",
+				group: responseData.group,
+				code: responseData.code,
+				message: responseData.message,
+				metadata: responseData.metadata,
+				actorId: responseData.actor?.actorId,
+				generation: responseData.actor?.generation,
+				actorKey: responseData.actor?.key,
+			});
 
 			throw new ActorError(
 				responseData.group,
 				responseData.code,
 				responseData.message,
-				responseData.metadata,
+				{
+					metadata: responseData.metadata,
+					actor: responseData.actor,
+				},
 			);
 		} catch (error) {
 			// If it's already an ActorError, re-throw it

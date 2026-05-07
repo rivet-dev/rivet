@@ -1,7 +1,7 @@
 use super::dispatch::*;
 use super::http::*;
 use super::*;
-use crate::error::ProtocolError;
+use crate::error::{client_error_message, ProtocolError};
 use ::http;
 
 #[derive(rivet_error::RivetError, serde::Serialize)]
@@ -652,13 +652,18 @@ pub(super) fn action_error_response(error: ActionDispatchError) -> HttpResponse 
 	} else {
 		StatusCode::INTERNAL_SERVER_ERROR
 	};
-	inspector_error_response(status, &error.group, &error.code, &error.message)
+	inspector_error_response(status, &error.group, &error.code, error.client_message())
 }
 
 pub(super) fn inspector_anyhow_response(error: anyhow::Error) -> HttpResponse {
 	let error = RivetError::extract(&error);
 	let status = inspector_error_status(error.group(), error.code());
-	inspector_error_response(status, error.group(), error.code(), error.message())
+	inspector_error_response(
+		status,
+		error.group(),
+		error.code(),
+		client_error_message(error.group(), error.code(), error.message()),
+	)
 }
 
 pub(super) fn inspector_error_response(

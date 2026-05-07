@@ -1,9 +1,7 @@
 import type { Next } from "hono";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import * as errors from "@/actor/errors";
-import { EXTRA_ERROR_LOG } from "@/utils";
 import { getLogErrorStack } from "@/utils/env-vars";
-import type { Logger } from "./log";
 
 export function assertUnreachable(x: never): never {
 	throw new Error(`Unreachable case: ${x}`);
@@ -195,6 +193,7 @@ export interface DeconstructedError {
 	code: string;
 	message: string;
 	metadata?: unknown;
+	actor?: errors.ActorSpecifier;
 }
 
 function isCanonicalStructuredRivetError(
@@ -221,19 +220,16 @@ function isCanonicalStructuredRivetError(
  */
 export function deconstructError(
 	error: unknown,
-	logger: Logger,
-	extraLog: Record<string, unknown>,
 	exposeInternalError = false,
 ): DeconstructedError {
 	// Build response error information. Only return errors if flagged as public in order to prevent leaking internal behavior.
-	//
-	// We log the error here instead of after generating the code & message because we need to log the original error, not the masked internal error.
 	let statusCode: ContentfulStatusCode;
 	let public_: boolean;
 	let group: string;
 	let code: string;
 	let message: string;
 	let metadata: unknown;
+	let actor: errors.ActorSpecifier | undefined;
 	// Structured errors from core or from pre-built `RivetError` instances are canonical.
 	// Only unstructured errors go through the classifier below.
 	if (isCanonicalStructuredRivetError(error)) {
@@ -249,15 +245,7 @@ export function deconstructError(
 		code = error.code;
 		message = error.message;
 		metadata = error.metadata;
-
-		logger.info({
-			msg: "structured error passthrough",
-			group,
-			code,
-			message,
-			...EXTRA_ERROR_LOG,
-			...extraLog,
-		});
+		actor = error.actor;
 	} else if (errors.ActorError.isActorError(error) && error.public) {
 		// Check if error has statusCode (could be ActorError instance or DeconstructedError)
 		statusCode = (
@@ -268,15 +256,7 @@ export function deconstructError(
 		code = error.code;
 		message = getErrorMessage(error);
 		metadata = error.metadata;
-
-		logger.info({
-			msg: "public error",
-			group,
-			code,
-			message,
-			...EXTRA_ERROR_LOG,
-			...extraLog,
-		});
+		actor = error.actor;
 	} else if (exposeInternalError) {
 		if (errors.ActorError.isActorError(error)) {
 			statusCode = 500;
@@ -285,32 +265,13 @@ export function deconstructError(
 			code = error.code;
 			message = getErrorMessage(error);
 			metadata = error.metadata;
-
-			logger.info({
-				msg: "internal error",
-				group,
-				code,
-				message,
-				stack: (error as Error)?.stack,
-				...EXTRA_ERROR_LOG,
-				...extraLog,
-			});
+			actor = error.actor;
 		} else {
 			statusCode = 500;
 			public_ = false;
 			group = "rivetkit";
 			code = errors.INTERNAL_ERROR_CODE;
 			message = getErrorMessage(error);
-
-			logger.info({
-				msg: "internal error",
-				group,
-				code,
-				message,
-				stack: (error as Error)?.stack,
-				...EXTRA_ERROR_LOG,
-				...extraLog,
-			});
 		}
 	} else {
 		statusCode = 500;
@@ -318,17 +279,12 @@ export function deconstructError(
 		group = "rivetkit";
 		code = errors.INTERNAL_ERROR_CODE;
 		message = errors.INTERNAL_ERROR_DESCRIPTION;
+		if (errors.ActorError.isActorError(error)) {
+			actor = error.actor;
+		}
 		metadata = {
 			//url: `https://hub.rivet.dev/projects/${actorMetadata.project.slug}/environments/${actorMetadata.environment.slug}/actors?actorId=${actorMetadata.actor.id}`,
 		} satisfies errors.InternalErrorMetadata;
-
-		logger.warn({
-			msg: "internal error",
-			error: getErrorMessage(error),
-			stack: (error as Error)?.stack,
-			...EXTRA_ERROR_LOG,
-			...extraLog,
-		});
 	}
 
 	return {
@@ -339,6 +295,7 @@ export function deconstructError(
 		code,
 		message,
 		metadata,
+		actor,
 	};
 }
 

@@ -1,5 +1,6 @@
 use rivet_error::*;
 use serde::{Deserialize, Serialize};
+use serde_json::Value as JsonValue;
 
 pub fn public_error_status_code(group: &str, code: &str) -> Option<u16> {
 	match (group, code) {
@@ -21,6 +22,38 @@ pub fn public_error_status_code(group: &str, code: &str) -> Option<u16> {
 			| "timed_out",
 		) => Some(400),
 		_ => None,
+	}
+}
+
+pub(crate) fn is_internal_error(group: &str, code: &str) -> bool {
+	(group == "core" || group == "rivetkit") && code == "internal_error"
+}
+
+pub(crate) fn is_client_error_public(group: &str, code: &str) -> bool {
+	public_error_status_code(group, code).is_some()
+}
+
+/// Masks private error messages before serializing them to clients because they
+/// may contain private implementation details or user data.
+pub(crate) fn client_error_message<'a>(group: &str, code: &str, message: &'a str) -> &'a str {
+	if is_client_error_public(group, code) {
+		message
+	} else {
+		INTERNAL_ERROR.default_message
+	}
+}
+
+/// Drops private error metadata before serializing it to clients because it may
+/// contain private implementation details or user data.
+pub(crate) fn client_error_metadata<'a>(
+	group: &str,
+	code: &str,
+	metadata: Option<&'a JsonValue>,
+) -> Option<&'a JsonValue> {
+	if is_client_error_public(group, code) {
+		metadata
+	} else {
+		None
 	}
 }
 

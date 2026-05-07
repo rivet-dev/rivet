@@ -1,5 +1,11 @@
 import type { Context as HonoContext, Next } from "hono";
 import * as envoyProtocol from "@rivetkit/engine-envoy-protocol";
+import type { ActorSpecifier } from "@/actor/errors";
+import {
+	HEADER_ACTOR_GENERATION,
+	HEADER_ACTOR_ID,
+	HEADER_ACTOR_KEY,
+} from "@/common/actor-router-consts";
 import type { Encoding } from "@/common/encoding";
 import {
 	getRequestEncoding,
@@ -61,15 +67,21 @@ export function handleRouteNotFound(c: HonoContext) {
 export function handleRouteError(error: unknown, c: HonoContext) {
 	const exposeInternalError = getRequestExposeInternalError(c.req.raw);
 
-	const { statusCode, group, code, message, metadata } = deconstructError(
+	const { statusCode, group, code, message, metadata, actor } = deconstructError(
 		error,
-		logger(),
-		{
-			method: c.req.method,
-			path: c.req.path,
-		},
 		exposeInternalError,
 	);
+
+	if (actor) {
+		logger().warn({
+			msg: "actor http error response",
+			actorId: actor.actorId,
+			generation: actor.generation,
+			actorKey: actor.key,
+			group,
+			code,
+		});
+	}
 
 	let encoding: Encoding;
 	try {
@@ -78,7 +90,7 @@ export function handleRouteError(error: unknown, c: HonoContext) {
 		encoding = "json";
 	}
 
-	const errorData = { group, code, message, metadata };
+	const errorData = { group, code, message, metadata, actor };
 	const output = serializeWithEncoding(
 		encoding,
 		errorData,
@@ -91,6 +103,7 @@ export function handleRouteError(error: unknown, c: HonoContext) {
 			code: value.code,
 			message: value.message,
 			metadata: value.metadata,
+			actor: value.actor,
 		}),
 		// BARE/CBOR: metadata needs to be CBOR-encoded to ArrayBuffer
 		(value): protocol.HttpResponseError => ({
@@ -100,11 +113,28 @@ export function handleRouteError(error: unknown, c: HonoContext) {
 			metadata: value.metadata
 				? bufferToArrayBuffer(encodeCborCompat(value.metadata))
 				: null,
+			actor: value.actor
+				? {
+						actorId: value.actor.actorId,
+						generation: BigInt(value.actor.generation),
+						key: value.actor.key ?? null,
+					}
+				: null,
 		}),
 	);
 
+	const headers = actor ? actorResponseHeaders(actor) : undefined;
+
 	// TODO: Remove any
-	return c.body(output as any, { status: statusCode });
+	return c.body(output as any, { status: statusCode, headers });
+}
+
+function actorResponseHeaders(actor: ActorSpecifier): Record<string, string> {
+	return {
+		[HEADER_ACTOR_ID]: actor.actorId,
+		[HEADER_ACTOR_GENERATION]: String(actor.generation),
+		...(actor.key ? { [HEADER_ACTOR_KEY]: actor.key } : {}),
+	};
 }
 
 export type MetadataEnvoyKind =

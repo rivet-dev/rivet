@@ -1092,6 +1092,7 @@ async fn connection_lifecycle(mut socket: WebSocket, state: ConnectionTestState)
 			message: "server-side lifecycle error".to_owned(),
 			metadata: None,
 			action_id: None,
+			actor: None,
 		})))
 		.await
 		.unwrap();

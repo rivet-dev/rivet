@@ -10,6 +10,7 @@ use crate::time::{Instant, SystemTime, UNIX_EPOCH};
 use anyhow::{Context as AnyhowContext, Result};
 use futures::future::BoxFuture;
 use parking_lot::{Mutex, RwLock};
+use rivet_error::ActorSpecifier;
 use rivet_envoy_client::handle::EnvoyHandle;
 use rivet_envoy_client::tunnel::HibernatingWebSocketMetadata;
 use scc::HashMap as SccHashMap;
@@ -636,6 +637,20 @@ impl ActorContext {
 
 	pub fn key(&self) -> &ActorKey {
 		&self.0.key
+	}
+
+	pub(crate) fn actor_specifier(&self) -> Option<ActorSpecifier> {
+		Some(
+			ActorSpecifier::new(self.actor_id().to_owned(), self.sleep_generation()? as u64)
+				.with_key(format_actor_key(self.key())),
+		)
+	}
+
+	pub(crate) fn attach_actor_to_error(&self, error: anyhow::Error) -> anyhow::Error {
+		match self.actor_specifier() {
+			Some(actor) => error.context(actor),
+			None => error,
+		}
 	}
 
 	pub fn region(&self) -> &str {

@@ -201,9 +201,10 @@ pub(crate) fn err_into_response(err: anyhow::Error) -> Result<Response<ResponseB
 			(
 				StatusCode::INTERNAL_SERVER_ERROR,
 				ErrorResponse::from(&RivetError {
-					schema: &rivet_error::INTERNAL_ERROR,
+					kind: rivet_error::RivetErrorKind::Static(&rivet_error::INTERNAL_ERROR),
 					meta: None,
 					message: None,
+					actor: None,
 				}),
 			)
 		};

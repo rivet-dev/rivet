@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
+use std::sync::Mutex as StdMutex;
 
 use super::*;
 use depot_client_types::{HEAD_FENCE_MISMATCH_CODE, HEAD_FENCE_MISMATCH_GROUP};
@@ -12,6 +13,87 @@ use rivet_envoy_client::context::{SharedContext, WsTxMessage};
 use rivet_envoy_client::envoy::ToEnvoyMessage;
 use rivet_envoy_client::handle::EnvoyHandle;
 use tokio::sync::{Mutex as AsyncMutex, mpsc};
+use tracing::field::{Field, Visit};
+use tracing::{Event, Subscriber};
+use tracing_subscriber::layer::{Context as LayerContext, Layer};
+use tracing_subscriber::prelude::*;
+use tracing_subscriber::registry::Registry;
+
+#[derive(Clone, Debug, Default)]
+struct SqliteOperationLog {
+	level: Option<tracing::Level>,
+	message: Option<String>,
+	actor_id: Option<String>,
+	generation: Option<String>,
+	backend: Option<String>,
+	operation: Option<String>,
+	sql: Option<String>,
+	binding_count: Option<u64>,
+	group: Option<String>,
+	code: Option<String>,
+	error_message: Option<String>,
+}
+
+#[derive(Clone)]
+struct SqliteOperationLogLayer {
+	records: Arc<StdMutex<Vec<SqliteOperationLog>>>,
+}
+
+#[derive(Default)]
+struct SqliteOperationLogVisitor {
+	record: SqliteOperationLog,
+}
+
+impl Visit for SqliteOperationLogVisitor {
+	fn record_str(&mut self, field: &Field, value: &str) {
+		match field.name() {
+			"message" => self.record.message = Some(value.to_owned()),
+			"actor_id" => self.record.actor_id = Some(value.to_owned()),
+			"backend" => self.record.backend = Some(value.to_owned()),
+			"operation" => self.record.operation = Some(value.to_owned()),
+			"sql" => self.record.sql = Some(value.to_owned()),
+			"group" => self.record.group = Some(value.to_owned()),
+			"code" => self.record.code = Some(value.to_owned()),
+			"error_message" => self.record.error_message = Some(value.to_owned()),
+			_ => {}
+		}
+	}
+
+	fn record_u64(&mut self, field: &Field, value: u64) {
+		if field.name() == "binding_count" {
+			self.record.binding_count = Some(value);
+		}
+	}
+
+	fn record_debug(&mut self, field: &Field, value: &dyn std::fmt::Debug) {
+		match field.name() {
+			"message" => {
+				self.record.message = Some(format!("{value:?}").trim_matches('"').to_owned());
+			}
+			"generation" => self.record.generation = Some(format!("{value:?}")),
+			"backend" => self.record.backend = Some(format!("{value:?}")),
+			"error_message" => {
+				self.record.error_message = Some(format!("{value:?}").trim_matches('"').to_owned());
+			}
+			_ => {}
+		}
+	}
+}
+
+impl<S> Layer<S> for SqliteOperationLogLayer
+where
+	S: Subscriber,
+{
+	fn on_event(&self, event: &Event<'_>, _ctx: LayerContext<'_, S>) {
+		let mut visitor = SqliteOperationLogVisitor::default();
+		event.record(&mut visitor);
+		visitor.record.level = Some(*event.metadata().level());
+		self.records
+			.lock()
+			.expect("sqlite operation log lock poisoned")
+			.push(visitor.record);
+	}
+}
 
 struct IdleEnvoyCallbacks;
 
@@ -215,10 +297,65 @@ fn remote_lost_response_errors_become_indeterminate_result() {
 	assert_eq!(structured.code(), "remote_indeterminate_result");
 }
 
+#[tokio::test]
+async fn remote_execute_logs_operation_context_at_source() {
+	let (handle, envoy_rx) = test_envoy_handle();
+	drop(envoy_rx);
+	let db = SqliteDb::new_with_remote_sqlite(
+		handle,
+		"actor-sqlite-log",
+		Some("user/1".to_owned()),
+		Some(7),
+		true,
+		true,
+	);
+	let records = Arc::new(StdMutex::new(Vec::new()));
+	let subscriber = Registry::default().with(SqliteOperationLogLayer {
+		records: records.clone(),
+	});
+	let _guard = tracing::subscriber::set_default(subscriber);
+
+	let result = db
+		.execute(
+			"SELECT ?",
+			Some(vec![BindParam::Integer(1), BindParam::Text("two".to_owned())]),
+		)
+		.await;
+
+	assert!(result.is_err());
+	let actor_specifier = rivet_error::RivetError::extract(&result.err().unwrap())
+		.actor()
+		.cloned();
+	assert_eq!(
+		actor_specifier,
+		Some(rivet_error::ActorSpecifier::new("actor-sqlite-log", 7).with_key("user/1"))
+	);
+	let logs = records
+		.lock()
+		.expect("sqlite operation log lock poisoned")
+		.clone();
+	assert!(
+		logs.iter().any(|log| {
+			log.level == Some(tracing::Level::ERROR)
+				&& log.message.as_deref() == Some("sqlite operation failed")
+				&& log.actor_id.as_deref() == Some("actor-sqlite-log")
+				&& log.generation.as_deref() == Some("Some(7)")
+				&& log.backend.as_deref() == Some("RemoteEnvoy")
+				&& log.operation.as_deref() == Some("execute")
+				&& log.sql.as_deref() == Some("SELECT ?")
+				&& log.binding_count == Some(2)
+				&& log.group.as_deref() == Some("core")
+				&& log.code.as_deref() == Some("internal_error")
+				&& log.error_message.as_deref() == Some("An internal error occurred")
+		}),
+		"expected source sqlite operation log with actor id and generation; logs={logs:?}"
+	);
+}
+
 #[test]
 fn remote_head_fence_mismatch_stops_actor_once() {
 	let (handle, mut envoy_rx) = test_envoy_handle();
-	let db = SqliteDb::new_with_remote_sqlite(handle, "actor-a", Some(7), true, true);
+	let db = SqliteDb::new_with_remote_sqlite(handle, "actor-a", None, Some(7), true, true);
 
 	let mapped = db.remote_sqlite_error_response(protocol::SqliteErrorResponse {
 		group: HEAD_FENCE_MISMATCH_GROUP.to_string(),

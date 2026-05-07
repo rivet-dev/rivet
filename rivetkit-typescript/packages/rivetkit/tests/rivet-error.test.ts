@@ -1,4 +1,4 @@
-import { describe, expect, test, vi } from "vitest";
+import { describe, expect, test } from "vitest";
 import {
 	RivetError,
 	decodeBridgeRivetError,
@@ -7,18 +7,16 @@ import {
 } from "../src/actor/errors";
 import { deconstructError } from "../src/common/utils";
 
-function createLogger() {
-	return {
-		info: vi.fn(),
-		warn: vi.fn(),
-	} as any;
-}
-
 describe("RivetError bridge helpers", () => {
 	test("round trips structured bridge payloads", () => {
 		const error = new RivetError("user", "boom", "typed failure", {
 			metadata: { source: "native" },
 			public: true,
+			actor: {
+				actorId: "actor-123",
+				generation: 7,
+				key: "chat/1",
+			},
 		});
 
 		const decoded = decodeBridgeRivetError(encodeBridgeRivetError(error));
@@ -29,6 +27,11 @@ describe("RivetError bridge helpers", () => {
 			code: "boom",
 			message: "typed failure",
 			metadata: { source: "native" },
+			actor: {
+				actorId: "actor-123",
+				generation: 7,
+				key: "chat/1",
+			},
 		});
 	});
 
@@ -46,7 +49,6 @@ describe("RivetError bridge helpers", () => {
 	});
 
 	test("passes through canonical RivetError instances", () => {
-		const logger = createLogger();
 		const error = new RivetError(
 			"actor",
 			"action_timed_out",
@@ -58,7 +60,7 @@ describe("RivetError bridge helpers", () => {
 			},
 		);
 
-		const result = deconstructError(error, logger, {});
+		const result = deconstructError(error);
 
 		expect(result).toMatchObject({
 			statusCode: 408,
@@ -68,22 +70,11 @@ describe("RivetError bridge helpers", () => {
 			message: "Action timed out",
 			metadata: { source: "core" },
 		});
-		expect(logger.info).toHaveBeenCalledWith(
-			expect.objectContaining({
-				msg: "structured error passthrough",
-				group: "actor",
-				code: "action_timed_out",
-			}),
-		);
 	});
 
 	test("does not treat plain objects as structured errors", () => {
-		const logger = createLogger();
-
 		const result = deconstructError(
 			{ group: "foo", code: "bar", message: "baz" },
-			logger,
-			{},
 		);
 
 		expect(result).toMatchObject({
@@ -93,20 +84,11 @@ describe("RivetError bridge helpers", () => {
 			code: "internal_error",
 			message: "An internal error occurred",
 		});
-		expect(logger.info).not.toHaveBeenCalledWith(
-			expect.objectContaining({
-				msg: "structured error passthrough",
-			}),
-		);
 	});
 
 	test("classifies malformed tagged RivetError payloads", () => {
-		const logger = createLogger();
-
 		const result = deconstructError(
 			{ __type: "RivetError", code: "bar", message: "baz" },
-			logger,
-			{},
 			true,
 		);
 
@@ -117,10 +99,5 @@ describe("RivetError bridge helpers", () => {
 			code: "internal_error",
 			message: "baz",
 		});
-		expect(logger.info).not.toHaveBeenCalledWith(
-			expect.objectContaining({
-				msg: "structured error passthrough",
-			}),
-		);
 	});
 });

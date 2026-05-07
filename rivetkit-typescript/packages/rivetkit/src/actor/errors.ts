@@ -14,6 +14,15 @@ export interface RivetErrorOptions extends ErrorOptions {
 	metadata?: unknown;
 	/** Explicit HTTP status override for router responses. */
 	statusCode?: number;
+	/** Actor context associated with this error. */
+	actor?: ActorSpecifier;
+}
+
+/** Identifies the actor that was handling work when an error was produced. */
+export interface ActorSpecifier {
+	actorId: string;
+	generation: number;
+	key?: string;
 }
 
 export interface RivetErrorLike {
@@ -24,7 +33,10 @@ export interface RivetErrorLike {
 	metadata?: unknown;
 	public?: boolean;
 	statusCode?: number;
+	actor?: ActorSpecifier;
 }
+
+export interface BridgeRivetErrorPayload extends RivetErrorLike {}
 
 export interface UserErrorOptions extends ErrorOptions {
 	/**
@@ -48,6 +60,7 @@ function looksLikeRivetErrorOptions(
 		("public" in value ||
 			"metadata" in value ||
 			"statusCode" in value ||
+			"actor" in value ||
 			"cause" in value)
 	);
 }
@@ -85,12 +98,25 @@ export function isRivetErrorLike(
 	);
 }
 
+function isActorSpecifier(value: unknown): value is ActorSpecifier {
+	return (
+		typeof value === "object" &&
+		value !== null &&
+		"actorId" in value &&
+		typeof value.actorId === "string" &&
+		"generation" in value &&
+		typeof value.generation === "number" &&
+		(!("key" in value) || value.key === undefined || typeof value.key === "string")
+	);
+}
+
 export class RivetError extends Error {
 	__type = "RivetError" as const;
 
 	public public: boolean;
 	public metadata?: unknown;
 	public statusCode: number;
+	public actor?: ActorSpecifier;
 	public readonly group: string;
 	public readonly code: string;
 
@@ -123,6 +149,7 @@ export class RivetError extends Error {
 		this.public = normalized.public ?? false;
 		this.metadata = normalized.metadata;
 		this.statusCode = normalized.statusCode ?? (this.public ? 400 : 500);
+		this.actor = normalized.actor;
 	}
 
 	toString() {
@@ -165,6 +192,7 @@ export function toRivetError(
 			public: error.public,
 			statusCode: error.statusCode,
 			metadata: error.metadata,
+			actor: error.actor,
 			cause: error instanceof Error ? error.cause : undefined,
 		});
 	}
@@ -177,6 +205,7 @@ export function toRivetError(
 			public: fallback?.public,
 			statusCode: fallback?.statusCode,
 			metadata: fallback?.metadata,
+			actor: fallback?.actor,
 			cause: error instanceof Error ? error : undefined,
 		},
 	);
@@ -190,10 +219,13 @@ export function encodeBridgeRivetError(error: RivetErrorLike): string {
 		metadata: error.metadata,
 		public: error.public,
 		statusCode: error.statusCode,
+		actor: error.actor,
 	})}`;
 }
 
-export function decodeBridgeRivetError(value: string): RivetError | undefined {
+export function decodeBridgeRivetErrorPayload(
+	value: string,
+): BridgeRivetErrorPayload | undefined {
 	if (!value.startsWith(BRIDGE_RIVET_ERROR_PREFIX)) {
 		return undefined;
 	}
@@ -201,19 +233,32 @@ export function decodeBridgeRivetError(value: string): RivetError | undefined {
 	try {
 		const payload = JSON.parse(
 			value.slice(BRIDGE_RIVET_ERROR_PREFIX.length),
-		) as RivetErrorLike;
+		) as BridgeRivetErrorPayload;
 		if (!isRivetErrorLike(payload)) {
 			return undefined;
 		}
+		if (payload.actor !== undefined && !isActorSpecifier(payload.actor)) {
+			return undefined;
+		}
 
-		return new RivetError(payload.group, payload.code, payload.message, {
-			metadata: payload.metadata,
-			public: payload.public,
-			statusCode: payload.statusCode,
-		});
+		return payload;
 	} catch {
 		return undefined;
 	}
+}
+
+export function decodeBridgeRivetError(value: string): RivetError | undefined {
+	const payload = decodeBridgeRivetErrorPayload(value);
+	if (!payload) {
+		return undefined;
+	}
+
+	return new RivetError(payload.group, payload.code, payload.message, {
+		metadata: payload.metadata,
+		public: payload.public,
+		statusCode: payload.statusCode,
+		actor: payload.actor,
+	});
 }
 
 export function isRivetErrorCode(
@@ -241,6 +286,7 @@ export function internalError(
 			public: options?.public,
 			statusCode: options?.statusCode,
 			metadata: options?.metadata,
+			actor: options?.actor,
 			cause: options?.cause,
 		},
 	);

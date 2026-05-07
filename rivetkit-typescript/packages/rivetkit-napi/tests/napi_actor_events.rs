@@ -82,7 +82,8 @@ mod moved_tests {
 		error
 			.chain()
 			.find_map(|cause| cause.downcast_ref::<RivetTransportError>())
-			.map(|error| error.schema as *const RivetErrorSchema)
+			.and_then(|error| error.schema())
+			.map(|schema| schema as *const RivetErrorSchema)
 			.expect("expected rivet error")
 	}
 
@@ -406,13 +407,18 @@ mod moved_tests {
 	}
 
 	#[test]
-	fn unknown_structured_timeout_schema_is_interned_by_group_and_code() {
-		let first = structured_timeout_schema("test", "slow_callback", "first message");
+	fn unknown_structured_timeout_uses_dynamic_error_kind() {
+		let first = structured_timeout_kind("test", "slow_callback", "first message");
+		assert_eq!(first.group(), "test");
+		assert_eq!(first.code(), "slow_callback");
+		assert_eq!(first.default_message(), "first message");
+		assert!(first.schema().is_none());
 
 		for i in 0..100 {
-			let schema =
-				structured_timeout_schema("test", "slow_callback", &format!("message {i}"));
-			assert!(std::ptr::eq(schema, first));
+			let kind = structured_timeout_kind("test", "slow_callback", &format!("message {i}"));
+			assert_eq!(kind.group(), "test");
+			assert_eq!(kind.code(), "slow_callback");
+			assert!(kind.schema().is_none());
 		}
 	}
 

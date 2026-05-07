@@ -2190,12 +2190,7 @@ export class EngineActorDriver implements ActorDriver {
 					isRestoringHibernatable,
 				);
 			} catch (error) {
-				const { group, code } = deconstructError(
-					error,
-					logger(),
-					{},
-					false,
-				);
+				const { group, code } = deconstructError(error, false);
 				logger().error({
 					msg: "failed to bind dynamic hibernatable websocket",
 					actorId,
@@ -2233,12 +2228,7 @@ export class EngineActorDriver implements ActorDriver {
 				},
 			);
 		} catch (error) {
-			const { group, code } = deconstructError(
-				error,
-				logger(),
-				{},
-				false,
-			);
+			const { group, code } = deconstructError(error, false);
 			logger().error({
 				msg: "failed to open dynamic websocket",
 				actorId,

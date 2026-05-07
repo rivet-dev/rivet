@@ -96,13 +96,11 @@ export async function rawHttpFetch(
 		return driver.sendRequest(target, proxyRequest, options);
 	} catch (err) {
 		// Standardize to ClientActorError instead of the native backend error
-		const { group, code, message, metadata } = deconstructError(
+		const { group, code, message, metadata, actor } = deconstructError(
 			err,
-			logger(),
-			{},
 			true,
 		);
-		throw new ActorError(group, code, message, metadata);
+		throw new ActorError(group, code, message, { metadata, actor });
 	}
 }
 

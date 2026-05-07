@@ -14,6 +14,8 @@ export const HEADER_ENCODING = "x-rivet-encoding";
 export const HEADER_CONN_PARAMS = "x-rivet-conn-params";
 
 export const HEADER_ACTOR_ID = "x-rivet-actor";
+export const HEADER_ACTOR_GENERATION = "x-rivet-actor-generation";
+export const HEADER_ACTOR_KEY = "x-rivet-actor-key";
 
 export const HEADER_RIVET_TOKEN = "x-rivet-token";
 
@@ -49,6 +51,8 @@ export const ALLOWED_PUBLIC_HEADERS = [
 	HEADER_ENCODING,
 	HEADER_CONN_PARAMS,
 	HEADER_ACTOR_ID,
+	HEADER_ACTOR_GENERATION,
+	HEADER_ACTOR_KEY,
 	HEADER_RIVET_TARGET,
 	HEADER_RIVET_ACTOR,
 	HEADER_RIVET_NAMESPACE,

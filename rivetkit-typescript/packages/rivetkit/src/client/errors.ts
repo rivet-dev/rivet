@@ -1,6 +1,7 @@
 import {
 	INTERNAL_ERROR_CODE,
 	RivetError,
+	type ActorSpecifier,
 	type RivetErrorLike,
 	UserError,
 } from "@/actor/errors";
@@ -21,7 +22,7 @@ export class MalformedResponseMessage extends ActorClientError {
 
 export { RivetError, RivetError as ActorError, UserError };
 export type ActorSchedulingError = RivetError;
-export type { RivetErrorLike };
+export type { ActorSpecifier, RivetErrorLike };
 
 export class HttpRequestError extends ActorClientError {
 	constructor(message: string, opts?: { cause?: unknown }) {

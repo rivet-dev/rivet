@@ -119,6 +119,8 @@ mod moved_tests {
 				group: "actor".to_owned(),
 				code: "action_not_found".to_owned(),
 				message: "action `missing` was not found".to_owned(),
+				metadata: None,
+				actor: None,
 			}
 		);
 	}
@@ -155,11 +157,11 @@ mod moved_tests {
 	}
 
 	#[tokio::test]
-	async fn dispatch_extracts_group_code_and_message_from_anyhow_errors() {
+	async fn dispatch_preserves_internal_anyhow_message_until_client_boundary() {
 		let mut callbacks = ActorInstanceCallbacks::default();
 		callbacks.actions.insert(
 			"explode".to_owned(),
-			action_handler(|_| Box::pin(async move { Err(INTERNAL_ERROR.build()) })),
+			action_handler(|_| Box::pin(async move { Err(anyhow::anyhow!("plain failure")) })),
 		);
 
 		let invoker = ActionInvoker::new(ActorConfig::default(), callbacks);
@@ -170,7 +172,8 @@ mod moved_tests {
 
 		assert_eq!(error.group, "core");
 		assert_eq!(error.code, "internal_error");
-		assert_eq!(error.message, "An internal error occurred");
+		assert_eq!(error.message, "plain failure");
+		assert_eq!(error.client_message(), "An internal error occurred");
 	}
 
 }

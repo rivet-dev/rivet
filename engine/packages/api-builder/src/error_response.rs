@@ -39,9 +39,10 @@ impl IntoResponse for ApiError {
 				(
 					StatusCode::INTERNAL_SERVER_ERROR,
 					ErrorResponse::from(&RivetError {
-						schema: &rivet_error::INTERNAL_ERROR,
+						kind: rivet_error::RivetErrorKind::Static(&rivet_error::INTERNAL_ERROR),
 						meta: None,
 						message: None,
+						actor: None,
 					}),
 				)
 			};
@@ -84,8 +85,8 @@ pub struct ErrorResponse {
 impl From<&RivetError> for ErrorResponse {
 	fn from(value: &RivetError) -> Self {
 		ErrorResponse {
-			group: value.group().into(),
-			code: value.code().into(),
+			group: value.group().to_owned().into(),
+			code: value.code().to_owned().into(),
 			message: value.message().into(),
 			metadata: value.metadata(),
 		}

@@ -202,6 +202,7 @@ impl RegistryDispatcher {
 							message: rivet_error.message().to_owned(),
 							metadata,
 							action_id: None,
+							actor: rivet_error.actor().cloned(),
 						},
 						max_outgoing_message_size,
 					));
@@ -223,6 +224,7 @@ impl RegistryDispatcher {
 							),
 							metadata: None,
 							action_id: None,
+							actor: None,
 						},
 						max_outgoing_message_size,
 					));
@@ -421,6 +423,7 @@ impl RegistryDispatcher {
 													message: "Outgoing message too long".to_owned(),
 													metadata: None,
 													action_id: Some(request.id),
+													actor: None,
 												});
 											if let Err(error) = send_actor_connect_message(
 												&sender,

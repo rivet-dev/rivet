@@ -10,6 +10,7 @@ use depot_client_types::is_head_fence_mismatch;
 pub use depot_client_types::{BindParam, ColumnValue, ExecResult, ExecuteResult, QueryResult};
 #[cfg(feature = "sqlite-local")]
 use parking_lot::Mutex;
+use rivet_error::{ActorSpecifier, RivetError};
 use rivet_envoy_client::protocol;
 use rivet_envoy_client::{handle::EnvoyHandle, utils::RemoteSqliteIndeterminateResultError};
 use serde::Serialize;
@@ -75,6 +76,7 @@ impl Default for SqliteBackend {
 pub struct SqliteDb {
 	handle: Option<EnvoyHandle>,
 	actor_id: Option<String>,
+	actor_key: Option<String>,
 	generation: Option<u64>,
 	backend: SqliteBackend,
 	/// Mirrors the user's actor-config `db({...})` declaration. The envoy
@@ -96,12 +98,13 @@ pub struct SqliteDb {
 
 impl SqliteDb {
 	pub fn new(handle: EnvoyHandle, actor_id: impl Into<String>, enabled: bool) -> Self {
-		Self::new_with_remote_sqlite(handle, actor_id, None, enabled, false)
+		Self::new_with_remote_sqlite(handle, actor_id, None, None, enabled, false)
 	}
 
 	pub fn new_with_remote_sqlite(
 		handle: EnvoyHandle,
 		actor_id: impl Into<String>,
+		actor_key: Option<String>,
 		generation: Option<u64>,
 		enabled: bool,
 		remote_sqlite: bool,
@@ -109,6 +112,7 @@ impl SqliteDb {
 		Self {
 			handle: Some(handle),
 			actor_id: Some(actor_id.into()),
+			actor_key,
 			generation,
 			backend: select_sqlite_backend(enabled, remote_sqlite),
 			enabled,
@@ -259,10 +263,19 @@ impl SqliteDb {
 
 	pub async fn exec(&self, sql: impl Into<String>) -> Result<QueryResult> {
 		let sql = sql.into();
-		match self.backend {
+		let sql_for_log = sql.clone();
+		let result = match self.backend {
 			SqliteBackend::LocalNative => self.local_exec(sql).await,
 			SqliteBackend::RemoteEnvoy => self.remote_exec(sql).await,
 			SqliteBackend::Unavailable => Err(SqliteRuntimeError::Unavailable.build()),
+		};
+		match result {
+			Ok(result) => Ok(result),
+			Err(error) => {
+				let error = self.attach_actor(error);
+				self.log_operation_error("exec", &sql_for_log, 0, &error);
+				Err(error)
+			}
 		}
 	}
 
@@ -272,12 +285,23 @@ impl SqliteDb {
 		params: Option<Vec<BindParam>>,
 	) -> Result<QueryResult> {
 		let sql = sql.into();
-		match self.backend {
+		let sql_for_log = sql.clone();
+		let binding_count = bind_param_count(&params);
+		let result = match self.backend {
 			SqliteBackend::LocalNative => self.local_query(sql, params).await,
-			SqliteBackend::RemoteEnvoy => {
-				Ok(self.remote_execute(sql, params).await?.into_query_result())
-			}
+			SqliteBackend::RemoteEnvoy => self
+				.remote_execute(sql, params)
+				.await
+				.map(ExecuteResult::into_query_result),
 			SqliteBackend::Unavailable => Err(SqliteRuntimeError::Unavailable.build()),
+		};
+		match result {
+			Ok(result) => Ok(result),
+			Err(error) => {
+				let error = self.attach_actor(error);
+				self.log_operation_error("query", &sql_for_log, binding_count, &error);
+				Err(error)
+			}
 		}
 	}
 
@@ -287,12 +311,23 @@ impl SqliteDb {
 		params: Option<Vec<BindParam>>,
 	) -> Result<ExecResult> {
 		let sql = sql.into();
-		match self.backend {
+		let sql_for_log = sql.clone();
+		let binding_count = bind_param_count(&params);
+		let result = match self.backend {
 			SqliteBackend::LocalNative => self.local_run(sql, params).await,
-			SqliteBackend::RemoteEnvoy => {
-				Ok(self.remote_execute(sql, params).await?.into_exec_result())
-			}
+			SqliteBackend::RemoteEnvoy => self
+				.remote_execute(sql, params)
+				.await
+				.map(ExecuteResult::into_exec_result),
 			SqliteBackend::Unavailable => Err(SqliteRuntimeError::Unavailable.build()),
+		};
+		match result {
+			Ok(result) => Ok(result),
+			Err(error) => {
+				let error = self.attach_actor(error);
+				self.log_operation_error("run", &sql_for_log, binding_count, &error);
+				Err(error)
+			}
 		}
 	}
 
@@ -302,10 +337,20 @@ impl SqliteDb {
 		params: Option<Vec<BindParam>>,
 	) -> Result<ExecuteResult> {
 		let sql = sql.into();
-		match self.backend {
+		let sql_for_log = sql.clone();
+		let binding_count = bind_param_count(&params);
+		let result = match self.backend {
 			SqliteBackend::LocalNative => self.local_execute(sql, params).await,
 			SqliteBackend::RemoteEnvoy => self.remote_execute(sql, params).await,
 			SqliteBackend::Unavailable => Err(SqliteRuntimeError::Unavailable.build()),
+		};
+		match result {
+			Ok(result) => Ok(result),
+			Err(error) => {
+				let error = self.attach_actor(error);
+				self.log_operation_error("execute", &sql_for_log, binding_count, &error);
+				Err(error)
+			}
 		}
 	}
 
@@ -434,6 +479,47 @@ impl SqliteDb {
 				.ok_or_else(|| sqlite_not_configured("actor id"))?,
 			generation: self.generation,
 		})
+	}
+
+	fn log_operation_error(
+		&self,
+		operation: &'static str,
+		sql: &str,
+		binding_count: usize,
+		error: &anyhow::Error,
+	) {
+		let structured = RivetError::extract(error);
+		let error_chain = error.chain().map(ToString::to_string).collect::<Vec<_>>();
+		tracing::error!(
+			actor_id = self.actor_id.as_deref().unwrap_or("<unknown>"),
+			generation = ?self.generation,
+			backend = ?self.backend,
+			operation,
+			sql,
+			binding_count,
+			group = structured.group(),
+			code = structured.code(),
+			error_message = %structured.message(),
+			metadata = ?structured.metadata(),
+			error_chain = ?error_chain,
+			"sqlite operation failed"
+		);
+	}
+
+	fn actor_specifier(&self) -> Option<ActorSpecifier> {
+		let mut specifier =
+			ActorSpecifier::new(self.actor_id.as_ref()?.clone(), self.generation?);
+		if let Some(key) = self.actor_key.as_ref() {
+			specifier = specifier.with_key(key.clone());
+		}
+		Some(specifier)
+	}
+
+	fn attach_actor(&self, error: anyhow::Error) -> anyhow::Error {
+		match self.actor_specifier() {
+			Some(actor) => error.context(actor),
+			None => error,
+		}
 	}
 
 	fn remote_config(&self) -> Result<RemoteSqliteConfig> {
@@ -592,6 +678,10 @@ fn select_sqlite_backend(enabled: bool, remote_sqlite: bool) -> SqliteBackend {
 	{
 		SqliteBackend::Unavailable
 	}
+}
+
+fn bind_param_count(params: &Option<Vec<BindParam>>) -> usize {
+	params.as_ref().map_or(0, Vec::len)
 }
 
 #[cfg(feature = "sqlite-local")]

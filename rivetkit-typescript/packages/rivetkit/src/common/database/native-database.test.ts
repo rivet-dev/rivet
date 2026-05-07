@@ -1,4 +1,5 @@
 import { describe, expect, test } from "vitest";
+import { BRIDGE_RIVET_ERROR_PREFIX } from "@/actor/errors";
 import {
 	type JsNativeDatabaseLike,
 	wrapJsNativeDatabase,
@@ -62,6 +63,14 @@ class FakeNativeDatabase implements JsNativeDatabaseLike {
 			lastInsertRowId: null,
 			...result,
 		});
+	}
+
+	rejectNext(error: unknown) {
+		const pending = this.#pending.shift();
+		if (!pending) {
+			throw new Error("no pending native execute call");
+		}
+		pending.reject(error);
 	}
 
 	async #startExecute(
@@ -172,5 +181,31 @@ describe("wrapJsNativeDatabase", () => {
 		await expect(db.query("SELECT 2")).rejects.toThrow(
 			"Database is closed",
 		);
+	});
+
+	test("decodes sanitized native bridge errors without logging", async () => {
+		const native = new FakeNativeDatabase();
+		const db = wrapJsNativeDatabase(native);
+		const query = db.execute("SELECT broken", [1, "two"]);
+		const bridgeReason = `${BRIDGE_RIVET_ERROR_PREFIX}${JSON.stringify({
+			group: "rivetkit",
+			code: "internal_error",
+			message: "An internal error occurred",
+			statusCode: 500,
+		})}`;
+
+		native.rejectNext(new Error(bridgeReason));
+
+		await expect(query).rejects.toMatchObject({
+			name: "RivetError",
+			group: "rivetkit",
+			code: "internal_error",
+			message: "An internal error occurred",
+		});
+
+		await query.catch((error) => {
+			expect(error.stack).toContain("decodeBridgeRivetError");
+			expect(error.stack).toContain("enrichNativeDatabaseError");
+		});
 	});
 });

@@ -64,6 +64,13 @@ pub(super) fn encode_actor_connect_message(message: &ActorConnectToClient) -> Re
 					.as_ref()
 					.map(|metadata| metadata.as_ref().to_vec()),
 				action_id: payload.action_id.map(serde_bare::Uint),
+				actor: payload.actor.as_ref().map(|actor| {
+					client_protocol::ActorSpecifier {
+						actor_id: actor.actor_id.clone(),
+						generation: serde_bare::Uint(actor.generation),
+						key: actor.key.clone(),
+					}
+				}),
 			})
 		}
 		ActorConnectToClient::ActionResponse(payload) => {
@@ -115,6 +122,16 @@ pub(super) fn actor_connect_message_json_value(
 			]);
 			if let Some(metadata) = payload.metadata.as_ref() {
 				value.insert("metadata".to_owned(), decode_cbor_json(metadata.as_ref())?);
+			}
+			if let Some(actor) = payload.actor.as_ref() {
+				value.insert(
+					"actor".to_owned(),
+					json!({
+						"actorId": actor.actor_id.clone(),
+						"generation": actor.generation,
+						"key": actor.key.clone(),
+					}),
+				);
 			}
 			value.insert(
 				"actionId".to_owned(),
@@ -310,6 +327,9 @@ pub(super) fn encode_actor_connect_message_cbor_manual(
 			if payload.metadata.is_some() {
 				field_count += 1;
 			}
+			if payload.actor.is_some() {
+				field_count += 1;
+			}
 			field_count += 1;
 			cbor_write_map_len(&mut encoded, field_count);
 			cbor_write_string(&mut encoded, "group");
@@ -321,6 +341,18 @@ pub(super) fn encode_actor_connect_message_cbor_manual(
 			if let Some(metadata) = payload.metadata.as_ref() {
 				cbor_write_string(&mut encoded, "metadata");
 				encoded.extend_from_slice(metadata.as_ref());
+			}
+			if let Some(actor) = payload.actor.as_ref() {
+				cbor_write_string(&mut encoded, "actor");
+				cbor_write_map_len(&mut encoded, if actor.key.is_some() { 3 } else { 2 });
+				cbor_write_string(&mut encoded, "actorId");
+				cbor_write_string(&mut encoded, &actor.actor_id);
+				cbor_write_string(&mut encoded, "generation");
+				cbor_write_u64_force_64(&mut encoded, actor.generation);
+				if let Some(key) = actor.key.as_ref() {
+					cbor_write_string(&mut encoded, "key");
+					cbor_write_string(&mut encoded, key);
+				}
 			}
 			if let Some(action_id) = payload.action_id {
 				cbor_write_string(&mut encoded, "actionId");
@@ -426,14 +458,25 @@ pub(super) fn action_dispatch_error_response(
 	action_id: u64,
 ) -> ActorConnectError {
 	let metadata = error
-		.metadata
-		.as_ref()
+		.client_metadata()
 		.and_then(|metadata| encode_json_as_cbor(metadata).ok().map(ByteBuf::from));
+	let message = error.client_message().to_owned();
+	if let Some(actor) = error.actor.as_ref() {
+		tracing::warn!(
+			actor_id = %actor.actor_id,
+			generation = actor.generation,
+			actor_key = ?actor.key,
+			group = %error.group,
+			code = %error.code,
+			"actor action dispatch error"
+		);
+	}
 	ActorConnectError {
 		group: error.group,
 		code: error.code,
-		message: error.message,
+		message,
 		metadata,
 		action_id: Some(action_id),
+		actor: error.actor,
 	}
 }

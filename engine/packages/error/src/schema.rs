@@ -1,4 +1,4 @@
-use crate::error::RivetError;
+use crate::error::{RivetError, RivetErrorKind};
 use serde::Serialize;
 use std::marker::PhantomData;
 
@@ -48,9 +48,10 @@ impl RivetErrorSchema {
 	/// Builds an anyhow::Error from this schema
 	pub fn build(&'static self) -> anyhow::Error {
 		let error = RivetError {
-			schema: self,
+			kind: RivetErrorKind::Static(self),
 			meta: None,
 			message: None,
+			actor: None,
 		};
 		anyhow::Error::new(error)
 	}
@@ -67,9 +68,10 @@ impl<T: Serialize> RivetErrorSchemaWithMeta<T> {
 		let meta_json = serde_json::value::to_raw_value(&meta).ok();
 
 		let error = RivetError {
-			schema: &self.schema,
+			kind: RivetErrorKind::Static(&self.schema),
 			meta: meta_json,
 			message: Some(message),
+			actor: None,
 		};
 		anyhow::Error::new(error)
 	}
@@ -78,9 +80,10 @@ impl<T: Serialize> RivetErrorSchemaWithMeta<T> {
 impl From<&'static RivetErrorSchema> for RivetError {
 	fn from(value: &'static RivetErrorSchema) -> Self {
 		RivetError {
-			schema: value,
+			kind: RivetErrorKind::Static(value),
 			meta: None,
 			message: None,
+			actor: None,
 		}
 	}
 }

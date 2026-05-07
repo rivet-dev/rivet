@@ -1,15 +1,16 @@
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, LazyLock};
+use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Result;
 use parking_lot::Mutex;
-use rivet_error::{MacroMarker, RivetError as RivetTransportError, RivetErrorSchema};
+use rivet_error::{
+	MacroMarker, RivetError as RivetTransportError, RivetErrorKind, RivetErrorSchema,
+};
 use rivetkit_core::{
 	ActorContext as CoreActorContext, ActorEvent, ActorEvents, ActorLifecycle, ActorStart,
 	QueueSendResult, QueueSendStatus, Reply, SerializeStateReason, StateDelta,
 };
-use scc::HashMap as SccHashMap;
 use tokio::sync::mpsc::{UnboundedReceiver, unbounded_channel};
 use tokio::task::JoinHandle;
 use tokio::task::JoinSet;
@@ -94,10 +95,6 @@ static ACTION_NOT_FOUND_SCHEMA: RivetErrorSchema = RivetErrorSchema {
 	meta_type: None,
 	_macro_marker: MacroMarker { _private: () },
 };
-
-static STRUCTURED_TIMEOUT_SCHEMAS: LazyLock<
-	SccHashMap<(&'static str, &'static str), &'static RivetErrorSchema>,
-> = LazyLock::new(SccHashMap::new);
 
 pub(crate) async fn run_adapter_loop(
 	bindings: Arc<CallbackBindings>,
@@ -881,46 +878,38 @@ where
 	F: std::future::Future<Output = Result<T>>,
 {
 	let message = message.into();
-	let schema = structured_timeout_schema(group, code, &message);
+	let kind = structured_timeout_kind(group, code, &message);
 	tokio::time::timeout(duration, future)
 		.await
-		.map_err(|_| structured_timeout_error(schema, message, meta))?
+		.map_err(|_| structured_timeout_error(kind, message, meta))?
 }
 
-fn structured_timeout_schema(
+fn structured_timeout_kind(
 	group: &'static str,
 	code: &'static str,
 	message: &str,
-) -> &'static RivetErrorSchema {
+) -> RivetErrorKind {
 	match (group, code) {
-		("actor", "action_timed_out") => &ACTION_TIMED_OUT_SCHEMA,
-		("actor", "callback_timed_out") => &CALLBACK_TIMED_OUT_SCHEMA,
-		_ => match STRUCTURED_TIMEOUT_SCHEMAS.entry_sync((group, code)) {
-			scc::hash_map::Entry::Occupied(entry) => *entry.get(),
-			scc::hash_map::Entry::Vacant(entry) => {
-				let schema = Box::leak(Box::new(RivetErrorSchema {
-					group,
-					code,
-					default_message: Box::leak(message.to_owned().into_boxed_str()),
-					meta_type: None,
-					_macro_marker: MacroMarker { _private: () },
-				}));
-				entry.insert_entry(schema);
-				schema
-			}
+		("actor", "action_timed_out") => RivetErrorKind::Static(&ACTION_TIMED_OUT_SCHEMA),
+		("actor", "callback_timed_out") => RivetErrorKind::Static(&CALLBACK_TIMED_OUT_SCHEMA),
+		_ => RivetErrorKind::Dynamic {
+			group: group.to_owned(),
+			code: code.to_owned(),
+			default_message: message.to_owned(),
 		},
 	}
 }
 
 fn structured_timeout_error(
-	schema: &'static RivetErrorSchema,
+	kind: RivetErrorKind,
 	message: impl Into<String>,
 	meta: Option<Box<serde_json::value::RawValue>>,
 ) -> anyhow::Error {
 	anyhow::Error::new(RivetTransportError {
-		schema,
+		kind,
 		meta,
 		message: Some(message.into()),
+		actor: None,
 	})
 }
 
@@ -1311,9 +1300,10 @@ async fn call_on_disconnect_final(
 
 fn action_not_found(name: String) -> anyhow::Error {
 	anyhow::Error::new(RivetTransportError {
-		schema: &ACTION_NOT_FOUND_SCHEMA,
+		kind: RivetErrorKind::Static(&ACTION_NOT_FOUND_SCHEMA),
 		meta: None,
 		message: Some(format!("Action `{name}` was not found.")),
+		actor: None,
 	})
 }
 

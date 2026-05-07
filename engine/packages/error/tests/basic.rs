@@ -69,6 +69,32 @@ fn test_internal_error_extraction() {
 }
 
 #[test]
+fn test_internal_error_preserves_actor_specifier() {
+	let regular_error =
+		anyhow::anyhow!("Some random error").context(ActorSpecifier::new("actor-2", 8));
+	let rivet_error = RivetError::extract(&regular_error);
+
+	assert_eq!(rivet_error.group(), "core");
+	assert_eq!(
+		rivet_error.actor(),
+		Some(&ActorSpecifier::new("actor-2", 8))
+	);
+}
+
+#[test]
+fn test_actor_specifier_extracted_from_middle_of_chain() {
+	let error = anyhow::anyhow!("Some random error")
+		.context(ActorSpecifier::new("actor-3", 9))
+		.context("dispatching action");
+	let rivet_error = RivetError::extract(&error);
+
+	assert_eq!(
+		rivet_error.actor(),
+		Some(&ActorSpecifier::new("actor-3", 9))
+	);
+}
+
+#[test]
 fn test_error_serialization() {
 	init_test();
 	let error = TestError.build();
@@ -81,6 +107,26 @@ fn test_error_serialization() {
 	assert_eq!(value["code"], "simple_error");
 	assert_eq!(value["message"], "This is a simple test error");
 	assert!(value.get("meta").is_none());
+}
+
+#[test]
+fn test_actor_specifier_serialization() {
+	init_test();
+	let error = TestError
+		.build()
+		.context(ActorSpecifier::new("actor-1", 7).with_key("user:1"));
+	let rivet_error = RivetError::extract(&error);
+
+	assert_eq!(
+		rivet_error.actor(),
+		Some(&ActorSpecifier::new("actor-1", 7).with_key("user:1"))
+	);
+
+	let value: serde_json::Value =
+		serde_json::from_str(&serde_json::to_string(&rivet_error).unwrap()).unwrap();
+	assert_eq!(value["actor"]["actorId"], "actor-1");
+	assert_eq!(value["actor"]["generation"], 7);
+	assert_eq!(value["actor"]["key"], "user:1");
 }
 
 #[test]
