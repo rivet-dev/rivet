@@ -118,7 +118,7 @@ pub use actor::config::{
 	ActionDefinition, ActorConfig, ActorConfigInput, ActorConfigOverrides, CanHibernateWebSocket,
 };
 pub use actor::connection::ConnHandle;
-pub use actor::context::{ActorContext, KeepAwakeRegion, WebSocketCallbackRegion};
+pub use actor::context::{ActorContext, ActorWorkRegion, KeepAwakeRegion, WebSocketCallbackRegion};
 pub use actor::factory::{ActorEntryFn, ActorFactory};
 pub use actor::kv::Kv;
 pub use actor::lifecycle_hooks::{ActorEvents, ActorStart, Reply};
@@ -139,6 +139,7 @@ pub use actor::task::{
 	LifecycleEvent, LifecycleState,
 };
 pub use actor::task_types::ShutdownKind;
+pub use actor::work_registry::{ActorWorkKind, ActorWorkPolicy};
 pub use error::ActorLifecycle;
 pub use inspector::{Inspector, InspectorSnapshot};
 pub use registry::{CoreRegistry, ServeConfig};

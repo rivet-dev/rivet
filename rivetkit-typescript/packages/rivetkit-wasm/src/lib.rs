@@ -12,6 +12,7 @@ use rivetkit_core::error::public_error_status_code;
 use rivetkit_core::inspector::InspectorAuth;
 use rivetkit_core::{
 	ActorConfig, ActorConfigInput, ActorEvent, ActorFactory as CoreActorFactory, ActorStart,
+	ActorWorkKind,
 	BindParam, ColumnValue, CoreRegistry as NativeCoreRegistry, CoreServerlessRuntime,
 	EnqueueAndWaitOpts, KeepAwakeRegion, ListOpts, QueueMessage, QueueNextBatchOpts,
 	QueueSendResult, QueueSendStatus, QueueTryNextBatchOpts, QueueWaitOpts, Request,
@@ -1405,13 +1406,16 @@ impl WasmActorContext {
 		});
 	}
 
+	#[wasm_bindgen(js_name = waitForTrackedShutdownWork)]
+	pub async fn wait_for_tracked_shutdown_work(&self) -> bool {
+		self.inner.wait_for_tracked_shutdown_work().await
+	}
+
 	#[wasm_bindgen(js_name = keepAwake)]
 	pub fn keep_awake(&self, promise: Promise) {
 		console_error("keepAwake binding is deprecated; use beginKeepAwake/endKeepAwake");
-		let region = self.inner.keep_awake_region();
 		let actor_id = self.inner.actor_id().to_owned();
-		self.inner.register_task(async move {
-			let _region = region;
+		self.inner.spawn_work(ActorWorkKind::KeepAwake, async move {
 			if let Err(error) = JsFuture::from(promise).await {
 				console_error(&format!(
 					"actor keepAwake promise rejected for actor {actor_id}: {}",

@@ -57,3 +57,14 @@ Scope: DB driver tests only
 - 2026-05-03 18:28 PDT actor-db-stress rerun [native]: PASS (5 passed, 40 skipped, 25.2s).
 - 2026-05-03 18:29 PDT actor-db-init-order rerun [native]: PASS (6 passed, 48 skipped, 6.6s).
 - 2026-05-03 18:29 PDT DB TESTS RERUN COMPLETE [native only] - 6/6 DB file groups passed.
+- 2026-05-06 21:19 PDT actor-sleep [native/local/bare]: PASS (25 passed, 200 skipped, 53.4s). Relevant PR validation for sleep/work-registry changes.
+- 2026-05-06 21:19 PDT actor-sleep [wasm/remote/bare]: FAIL (23 passed, 2 failed, 200 skipped, 49.1s). Failing tests: `waitUntil can broadcast before sleep disconnect` expected waitUntilMessageCount 1 but got 0; `waitUntil in onSleep keeps c.vars available during grace` logged `Cannot set properties of undefined`.
+- 2026-05-06 21:19 PDT actor-sleep [wasm/remote/bare] narrowed: FAIL `waitUntil can broadcast before sleep disconnect` expected waitUntilMessageCount 1 but got 0.
+- 2026-05-06 21:19 PDT actor-sleep [wasm/remote/bare] narrowed: FAIL `waitUntil in onSleep keeps c.vars available during grace` logged `actor wait_until promise rejected ... Cannot set properties of undefined (setting 'dirty')`.
+- 2026-05-06 21:29 PDT actor-sleep rerun after wasm-safe shutdown-work wait [wasm/remote/bare]: FAIL (24 passed, 1 failed, 200 skipped, 49.5s). Fixed `waitUntil in onSleep keeps c.vars available during grace`; remaining failure is `waitUntil can broadcast before sleep disconnect` expected waitUntilMessageCount 1 but got 0.
+- 2026-05-06 21:29 PDT actor-sleep rerun after NAPI rebuild [native/local/bare]: FAIL (24 passed, 1 failed, 200 skipped, 51.0s). Same remaining `waitUntil can broadcast before sleep disconnect` failure reproduced standalone on native.
+- 2026-05-08 16:52 PDT NAPI-focused rerun after removing tracked-shutdown synthetic timeout. Wasm issue intentionally ignored per request.
+- 2026-05-08 16:52 PDT actor-sleep [native/local/bare]: PASS (25 passed, 55.2s). Covers waitUntil shutdown grace, raw websocket callback tracking, and `c.vars` after grace deadline.
+- 2026-05-08 16:52 PDT raw-websocket [native/local/bare]: PASS (16 passed, 14.0s). Covers raw websocket callback tracking.
+- 2026-05-08 16:52 PDT actor-conn-state [native/local/bare]: PASS (11 passed, 10.9s). Covers connection lifecycle and disconnect accounting through the work registry.
+- 2026-05-08 16:52 PDT actor-sleep-db [native/local/bare]: PASS (26 passed, 70.9s). Covers DB close timing during sleep shutdown and waitUntil state persistence.

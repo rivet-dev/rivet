@@ -269,9 +269,6 @@ type NativeDatabaseClientState = {
 type NativeActorRuntimeState = {
 	sql?: ReturnType<typeof wrapJsNativeDatabase>;
 	databaseClient?: NativeDatabaseClientState;
-	keepAwakeCount?: number;
-	deferSleepCleanupUntilKeepAwakeIdle?: boolean;
-	deferredSleepCleanupActorCtx?: ActorContextHandleAdapter;
 	varsInitialized?: boolean;
 	vars?: unknown;
 	destroyGate?: NativeDestroyGate;
@@ -424,24 +421,10 @@ async function cleanupNativeSleepRuntimeState(
 	runtime: CoreRuntime,
 	ctx: ActorContextHandle,
 ): Promise<void> {
+	await runtime.actorWaitForTrackedShutdownWork(ctx);
 	await closeNativeDatabaseClient(runtime, ctx);
 	await closeNativeSqlDatabase(runtime, ctx);
 	clearNativeRuntimeState(runtime, ctx);
-}
-
-async function cleanupDeferredNativeSleepRuntimeState(
-	runtime: CoreRuntime,
-	ctx: ActorContextHandle,
-	runtimeState: NativeActorRuntimeState,
-): Promise<void> {
-	runtimeState.deferSleepCleanupUntilKeepAwakeIdle = false;
-	const actorCtx = runtimeState.deferredSleepCleanupActorCtx;
-	runtimeState.deferredSleepCleanupActorCtx = undefined;
-	try {
-		await cleanupNativeSleepRuntimeState(runtime, ctx);
-	} finally {
-		await actorCtx?.dispose();
-	}
 }
 
 function closeNativeSqlDatabase(
@@ -2807,11 +2790,6 @@ export class ActorContextHandleAdapter {
 	}
 
 	keepAwake<T>(promise: Promise<T>): Promise<T> {
-		const runtimeState = getNativeRuntimeState(this.#runtime, this.#ctx);
-		// Increment before native registration so sleep cleanup observes JS work
-		// even if the promise settles immediately.
-		runtimeState.keepAwakeCount = (runtimeState.keepAwakeCount ?? 0) + 1;
-		let registered = false;
 		const trackedPromise = Promise.resolve(promise)
 			.catch((error) => {
 				logger().warn({
@@ -2819,36 +2797,12 @@ export class ActorContextHandleAdapter {
 					error: stringifyError(error),
 				});
 			})
-			.finally(async () => {
-				if (!registered) {
-					return;
-				}
-				runtimeState.keepAwakeCount = Math.max(
-					(runtimeState.keepAwakeCount ?? 1) - 1,
-					0,
-				);
-				if (
-					runtimeState.keepAwakeCount === 0 &&
-					runtimeState.deferSleepCleanupUntilKeepAwakeIdle
-				) {
-					await cleanupDeferredNativeSleepRuntimeState(
-						this.#runtime,
-						this.#ctx,
-						runtimeState,
-					);
-				}
-			})
 			.then(() => null);
 		try {
 			callNativeSync(() =>
 				this.#runtime.actorKeepAwake(this.#ctx, trackedPromise),
 			);
-			registered = true;
 		} catch (error) {
-			runtimeState.keepAwakeCount = Math.max(
-				(runtimeState.keepAwakeCount ?? 1) - 1,
-				0,
-			);
 			if (!isClosedTaskRegistrationError(error)) {
 				throw error;
 			}
@@ -4013,12 +3967,9 @@ export function buildNativeFactory(
 						}
 					}
 				} finally {
-					const runtimeState = getNativeRuntimeState(runtime, ctx);
-					if ((runtimeState.keepAwakeCount ?? 0) > 0) {
-						runtimeState.deferSleepCleanupUntilKeepAwakeIdle = true;
-						runtimeState.deferredSleepCleanupActorCtx = actorCtx;
-					} else {
+					try {
 						await cleanupNativeSleepRuntimeState(runtime, ctx);
+					} finally {
 						await actorCtx.dispose();
 					}
 				}

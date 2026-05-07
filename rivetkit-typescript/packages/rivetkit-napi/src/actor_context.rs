@@ -18,7 +18,7 @@ use napi_derive::napi;
 use parking_lot::Mutex;
 use rivetkit_core::types::ActorKeySegment;
 use rivetkit_core::{
-	ActorContext as CoreActorContext, ConnHandle as CoreConnHandle, KeepAwakeRegion,
+	ActorContext as CoreActorContext, ActorWorkKind, ConnHandle as CoreConnHandle, KeepAwakeRegion,
 	Request as CoreRequest, RequestSaveOpts, StateDelta, WebSocketCallbackRegion,
 };
 use scc::HashMap as SccHashMap;
@@ -480,9 +480,7 @@ impl ActorContext {
 
 	#[napi]
 	pub fn keep_awake(&self, promise: Promise<serde_json::Value>) -> napi::Result<()> {
-		let region = self.inner.keep_awake_region();
-		self.inner.wait_until(async move {
-			let _region = region;
+		self.inner.spawn_work(ActorWorkKind::KeepAwake, async move {
 			if let Err(error) = promise.await {
 				tracing::warn!(?error, "actor keep_awake promise rejected");
 			}
@@ -607,6 +605,11 @@ impl ActorContext {
 			}
 		});
 		Ok(())
+	}
+
+	#[napi]
+	pub async fn wait_for_tracked_shutdown_work(&self) -> bool {
+		self.inner.wait_for_tracked_shutdown_work().await
 	}
 
 	#[napi]

@@ -36,7 +36,7 @@ use crate::actor::task::LifecycleEvent;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::actor::task::{LIFECYCLE_EVENT_INBOX_CHANNEL, actor_channel_overloaded_error};
 use crate::actor::task_types::UserTaskKind;
-use crate::actor::work_registry::RegionGuard;
+use crate::actor::work_registry::{ActorWorkKind, CountGuard, RegionGuard};
 use crate::error::{ActorLifecycle as ActorLifecycleError, ActorRuntime};
 use crate::inspector::{Inspector, InspectorSnapshot};
 use crate::kv::Kv;
@@ -128,7 +128,6 @@ pub(crate) struct ActorContextInner {
 	pub(super) connection_disconnect_state: Mutex<()>,
 	pub(super) sleep: SleepState,
 	activity: ActivityState,
-	pending_disconnect_count: AtomicUsize,
 	sleep_requested: AtomicBool,
 	destroy_requested: AtomicBool,
 	destroy_completed: AtomicBool,
@@ -296,7 +295,6 @@ impl ActorContext {
 			connection_disconnect_state: Mutex::new(()),
 			sleep,
 			activity: ActivityState::default(),
-			pending_disconnect_count: AtomicUsize::new(0),
 			sleep_requested: AtomicBool::new(false),
 			destroy_requested: AtomicBool::new(false),
 			destroy_completed: AtomicBool::new(false),
@@ -543,83 +541,34 @@ impl ActorContext {
 
 	#[cfg(not(feature = "wasm-runtime"))]
 	pub fn wait_until(&self, future: impl Future<Output = ()> + Send + 'static) {
-		if Handle::try_current().is_err() {
-			tracing::warn!("skipping wait_until without a tokio runtime");
-			return;
-		}
-
-		let ctx = self.clone();
-		// Intentionally detached but tracked by the actor sleep state: waitUntil work
-		// is a public side task that shutdown drains/aborts through
-		// `shutdown_tasks`, not an ActorTask dispatch child.
-		self.track_shutdown_task(async move {
-			ctx.record_user_task_started(UserTaskKind::WaitUntil);
-			let started_at = Instant::now();
-			future.await;
-			ctx.record_user_task_finished(UserTaskKind::WaitUntil, started_at.elapsed());
-			ctx.reset_sleep_timer();
-		});
+		self.spawn_work(ActorWorkKind::WaitUntil, future);
 	}
 
 	#[cfg(not(feature = "wasm-runtime"))]
 	pub fn register_task(&self, future: impl Future<Output = ()> + Send + 'static) {
-		let ctx = self.clone();
-		self.track_shutdown_task(async move {
-			Self::run_registered_task(ctx, future).await;
-		});
+		self.spawn_work(ActorWorkKind::RegisteredTask, future);
 	}
 
 	#[cfg(feature = "wasm-runtime")]
 	pub fn wait_until(&self, future: impl Future<Output = ()> + 'static) {
-		let ctx = self.clone();
-		self.track_shutdown_task(async move {
-			ctx.record_user_task_started(UserTaskKind::WaitUntil);
-			let started_at = Instant::now();
-			future.await;
-			ctx.record_user_task_finished(UserTaskKind::WaitUntil, started_at.elapsed());
-			ctx.reset_sleep_timer();
-		});
+		self.spawn_work(ActorWorkKind::WaitUntil, future);
 	}
 
 	#[cfg(feature = "wasm-runtime")]
 	pub fn register_task(&self, future: impl Future<Output = ()> + 'static) {
-		let ctx = self.clone();
-		self.track_shutdown_task(async move {
-			Self::run_registered_task(ctx, future).await;
-		});
-	}
-
-	async fn run_registered_task<F>(ctx: ActorContext, future: F)
-	where
-		F: Future<Output = ()>,
-	{
-		let shutdown_deadline = ctx.shutdown_deadline_token();
-		ctx.record_user_task_started(UserTaskKind::RegisteredTask);
-		let started_at = Instant::now();
-		tokio::select! {
-			_ = future => {}
-			_ = shutdown_deadline.cancelled() => {
-				tracing::warn!(
-					actor_id = %ctx.actor_id(),
-					reason = "shutdown_deadline_elapsed",
-					"registered task cancelled by shutdown deadline"
-				);
-			}
-		}
-		ctx.record_user_task_finished(UserTaskKind::RegisteredTask, started_at.elapsed());
+		self.spawn_work(ActorWorkKind::RegisteredTask, future);
 	}
 
 	pub async fn keep_awake<F>(&self, future: F) -> F::Output
 	where
 		F: Future,
 	{
-		let _guard = self.keep_awake_guard();
-		future.await
+		self.track_work(ActorWorkKind::KeepAwake, future).await
 	}
 
 	pub fn keep_awake_region(&self) -> KeepAwakeRegion {
 		KeepAwakeRegion {
-			guard: Some(self.keep_awake_guard()),
+			region: Some(self.begin_work_region(ActorWorkKind::KeepAwake)),
 		}
 	}
 
@@ -627,8 +576,8 @@ impl ActorContext {
 	where
 		F: Future,
 	{
-		let _guard = self.internal_keep_awake_guard();
-		future.await
+		self.track_work(ActorWorkKind::InternalKeepAwake, future)
+			.await
 	}
 
 	pub fn keep_awake_count(&self) -> usize {
@@ -637,6 +586,36 @@ impl ActorContext {
 
 	pub fn internal_keep_awake_count(&self) -> usize {
 		self.sleep_internal_keep_awake_count()
+	}
+
+	pub async fn track_work<F>(&self, kind: ActorWorkKind, future: F) -> F::Output
+	where
+		F: Future,
+	{
+		let _region = self.begin_work_region(kind);
+		future.await
+	}
+
+	#[cfg(not(feature = "wasm-runtime"))]
+	pub fn spawn_work<F>(&self, kind: ActorWorkKind, future: F)
+	where
+		F: Future<Output = ()> + Send + 'static,
+	{
+		self.spawn_work_inner(kind, future);
+	}
+
+	#[cfg(feature = "wasm-runtime")]
+	pub fn spawn_work<F>(&self, kind: ActorWorkKind, future: F)
+	where
+		F: Future<Output = ()> + 'static,
+	{
+		self.spawn_work_inner(kind, future);
+	}
+
+	pub fn begin_work_region(&self, kind: ActorWorkKind) -> ActorWorkRegion {
+		ActorWorkRegion {
+			guard: Some(ActorWorkGuard::new(self.clone(), kind)),
+		}
 	}
 
 	pub fn actor_id(&self) -> &str {
@@ -1252,7 +1231,7 @@ impl ActorContext {
 	}
 
 	pub(crate) fn pending_disconnect_count(&self) -> usize {
-		self.0.pending_disconnect_count.load(Ordering::SeqCst)
+		self.0.sleep.work.disconnect_callback.load()
 	}
 
 	pub async fn with_disconnect_callback<F, Fut, T>(&self, run: F) -> T
@@ -1260,8 +1239,8 @@ impl ActorContext {
 		F: FnOnce() -> Fut,
 		Fut: Future<Output = T>,
 	{
-		let _guard = DisconnectCallbackGuard::new(self.clone());
-		run().await
+		self.track_work(ActorWorkKind::DisconnectCallback, run())
+			.await
 	}
 
 	pub(crate) fn configure_lifecycle_events(&self, sender: Option<mpsc::Sender<LifecycleEvent>>) {
@@ -1329,24 +1308,6 @@ impl ActorContext {
 		self.0.sleep_requested.store(false, Ordering::SeqCst);
 	}
 
-	fn keep_awake_guard(&self) -> KeepAwakeGuard {
-		let region = self
-			.keep_awake_region_state()
-			.with_log_fields("keep_awake", Some(self.actor_id().to_owned()));
-		let guard = KeepAwakeGuard::new(self.clone(), region);
-		self.reset_sleep_timer();
-		guard
-	}
-
-	fn internal_keep_awake_guard(&self) -> KeepAwakeGuard {
-		let region = self
-			.internal_keep_awake_region()
-			.with_log_fields("internal_keep_awake", Some(self.actor_id().to_owned()));
-		let guard = KeepAwakeGuard::new(self.clone(), region);
-		self.reset_sleep_timer();
-		guard
-	}
-
 	pub(crate) async fn internal_keep_awake_task(
 		&self,
 		future: BoxFuture<'static, Result<()>>,
@@ -1356,7 +1317,7 @@ impl ActorContext {
 
 	pub fn websocket_callback_region(&self) -> WebSocketCallbackRegion {
 		WebSocketCallbackRegion {
-			guard: Some(self.websocket_callback_guard(UserTaskKind::WebSocketCallback)),
+			region: Some(self.begin_work_region(ActorWorkKind::WebSocketCallback)),
 		}
 	}
 
@@ -1369,11 +1330,25 @@ impl ActorContext {
 		run().await
 	}
 
-	fn websocket_callback_guard(&self, kind: UserTaskKind) -> WebSocketCallbackGuard {
-		let region = self.websocket_callback_region_state();
-		self.record_user_task_started(kind);
-		self.reset_sleep_timer();
-		WebSocketCallbackGuard::new(self.clone(), kind, region)
+	fn idle_work_region(&self, kind: ActorWorkKind) -> Option<RegionGuard> {
+		if !kind.policy().blocks_idle_sleep {
+			return None;
+		}
+		let region = match kind {
+			ActorWorkKind::KeepAwake => self.keep_awake_region_state(),
+			ActorWorkKind::InternalKeepAwake => self.internal_keep_awake_region(),
+			ActorWorkKind::WaitUntil => return None,
+			ActorWorkKind::RegisteredTask => return None,
+			ActorWorkKind::WebSocketCallback => self.websocket_callback_region_state(),
+			ActorWorkKind::DisconnectCallback => self.disconnect_callback_region_state(),
+		};
+		Some(region.with_log_fields(kind.label(), Some(self.actor_id().to_owned())))
+	}
+
+	fn shutdown_work_region(&self) -> CountGuard {
+		let counter = self.0.sleep.work.shutdown_counter.clone();
+		counter.increment();
+		CountGuard::from_incremented(counter)
 	}
 
 	fn configure_sleep_hooks(&self) {
@@ -1435,10 +1410,10 @@ impl ActorContext {
 		self.cancel_scheduled_event(event_id);
 		let ctx = self.clone();
 		let event_id = event_id.to_owned();
-		let keep_awake_guard = self.internal_keep_awake_guard();
+		let internal_keep_awake_region = self.begin_work_region(ActorWorkKind::InternalKeepAwake);
 
 		self.track_shutdown_task(async move {
-			let _keep_awake_guard = keep_awake_guard;
+			let _internal_keep_awake_region = internal_keep_awake_region;
 			ctx.record_user_task_started(UserTaskKind::ScheduledAction);
 			let started_at = Instant::now();
 			let action_name = action.clone();
@@ -1524,46 +1499,62 @@ fn now_timestamp_ms() -> i64 {
 	i64::try_from(duration.as_millis()).unwrap_or(i64::MAX)
 }
 
-struct KeepAwakeGuard {
+struct ActorWorkGuard {
 	ctx: ActorContext,
-	region: Option<RegionGuard>,
+	kind: ActorWorkKind,
+	started_at: Option<Instant>,
+	idle_region: Option<RegionGuard>,
+	shutdown_region: Option<CountGuard>,
 }
 
 #[must_use]
-struct DisconnectCallbackGuard {
-	ctx: ActorContext,
-	started_at: Instant,
+pub struct ActorWorkRegion {
+	guard: Option<ActorWorkGuard>,
 }
 
-impl DisconnectCallbackGuard {
-	fn new(ctx: ActorContext) -> Self {
-		ctx.0
-			.pending_disconnect_count
-			.fetch_add(1, Ordering::SeqCst);
-		ctx.record_user_task_started(UserTaskKind::DisconnectCallback);
+impl ActorWorkGuard {
+	fn new(ctx: ActorContext, kind: ActorWorkKind) -> Self {
+		let policy = kind.policy();
+		let idle_region = ctx.idle_work_region(kind);
+		let shutdown_region = if policy.drains_shutdown_grace {
+			Some(ctx.shutdown_work_region())
+		} else {
+			None
+		};
+		let started_at = if let Some(user_task_kind) = policy.user_task_kind {
+			ctx.record_user_task_started(user_task_kind);
+			Some(Instant::now())
+		} else {
+			None
+		};
 		ctx.reset_sleep_timer();
 		Self {
 			ctx,
-			started_at: Instant::now(),
+			kind,
+			started_at,
+			idle_region,
+			shutdown_region,
 		}
 	}
 }
 
-impl Drop for DisconnectCallbackGuard {
+impl Drop for ActorWorkGuard {
 	fn drop(&mut self) {
-		let Ok(previous) = self.ctx.0.pending_disconnect_count.fetch_update(
-			Ordering::SeqCst,
-			Ordering::SeqCst,
-			|current| current.checked_sub(1),
-		) else {
-			return;
-		};
-		if previous == 0 {
-			return;
+		if let Some(started_at) = self.started_at.take()
+			&& let Some(user_task_kind) = self.kind.policy().user_task_kind
+		{
+			self.ctx
+				.record_user_task_finished(user_task_kind, started_at.elapsed());
 		}
-		self.ctx
-			.record_user_task_finished(UserTaskKind::DisconnectCallback, self.started_at.elapsed());
+		self.idle_region.take();
+		self.shutdown_region.take();
 		self.ctx.reset_sleep_timer();
+	}
+}
+
+impl Drop for ActorWorkRegion {
+	fn drop(&mut self) {
+		self.guard.take();
 	}
 }
 
@@ -1616,67 +1607,24 @@ impl Drop for InspectorAttachGuard {
 	}
 }
 
-impl KeepAwakeGuard {
-	fn new(ctx: ActorContext, region: RegionGuard) -> Self {
-		Self {
-			ctx,
-			region: Some(region),
-		}
-	}
-}
-
-impl Drop for KeepAwakeGuard {
-	fn drop(&mut self) {
-		self.region.take();
-		self.ctx.reset_sleep_timer();
-	}
-}
-
-struct WebSocketCallbackGuard {
-	ctx: ActorContext,
-	kind: UserTaskKind,
-	started_at: Instant,
-	region: Option<RegionGuard>,
-}
-
 pub struct WebSocketCallbackRegion {
-	guard: Option<WebSocketCallbackGuard>,
+	region: Option<ActorWorkRegion>,
 }
 
 pub struct KeepAwakeRegion {
-	guard: Option<KeepAwakeGuard>,
-}
-
-impl WebSocketCallbackGuard {
-	fn new(ctx: ActorContext, kind: UserTaskKind, region: RegionGuard) -> Self {
-		Self {
-			ctx,
-			kind,
-			started_at: Instant::now(),
-			region: Some(region),
-		}
-	}
-}
-
-impl Drop for WebSocketCallbackGuard {
-	fn drop(&mut self) {
-		self.ctx
-			.record_user_task_finished(self.kind, self.started_at.elapsed());
-		self.region.take();
-		self.ctx.reset_sleep_timer();
-	}
+	region: Option<ActorWorkRegion>,
 }
 
 impl Drop for WebSocketCallbackRegion {
 	fn drop(&mut self) {
-		self.guard.take();
+		self.region.take();
 	}
 }
 
 impl Drop for KeepAwakeRegion {
 	fn drop(&mut self) {
-		// Take the guard explicitly to mirror WebSocketCallbackRegion.
-		self.guard.take();
+		// Take the region explicitly to mirror WebSocketCallbackRegion.
+		self.region.take();
 	}
 }
 

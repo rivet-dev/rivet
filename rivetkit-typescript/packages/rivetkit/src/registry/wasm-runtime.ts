@@ -499,6 +499,15 @@ export class WasmCoreRuntime implements CoreRuntime {
 		callHandle(asWasmActorContext(ctx), "waitUntil", promise);
 	}
 
+	async actorWaitForTrackedShutdownWork(
+		ctx: ActorContextHandle,
+	): Promise<boolean> {
+		return await callHandle<Promise<boolean>>(
+			asWasmActorContext(ctx),
+			"waitForTrackedShutdownWork",
+		);
+	}
+
 	actorKeepAwake(ctx: ActorContextHandle, promise: Promise<unknown>): void {
 		const wasmCtx = asWasmActorContext(ctx);
 		const regionId = callHandle<number>(wasmCtx, "beginKeepAwake");

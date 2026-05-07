@@ -618,3 +618,115 @@ export const sleepWithNoSleepOption = actor({
 		noSleep: true,
 	},
 });
+
+export const WAIT_UNTIL_GRACE_DELAY = 150;
+export const WAIT_UNTIL_GRACE_PERIOD = 1000;
+export const WAIT_UNTIL_GRACE_SLEEP_TIMEOUT = 100;
+
+export const sleepWaitUntilVarsDuringGrace = actor({
+	state: {
+		startCount: 0,
+		sleepCount: 0,
+		waitUntilStarted: 0,
+	},
+	createVars: () => ({
+		dirty: false,
+	}),
+	onWake: (c) => {
+		c.state.startCount += 1;
+	},
+	onSleep: (c) => {
+		c.state.sleepCount += 1;
+		c.waitUntil(
+			(async () => {
+				c.state.waitUntilStarted += 1;
+				await new Promise((resolve) =>
+					setTimeout(resolve, WAIT_UNTIL_GRACE_DELAY),
+				);
+				c.vars.dirty = true;
+			})(),
+		);
+	},
+	actions: {
+		triggerSleep: (c) => {
+			c.sleep();
+		},
+		getStatus: (c) => ({
+			startCount: c.state.startCount,
+			sleepCount: c.state.sleepCount,
+			waitUntilStarted: c.state.waitUntilStarted,
+		}),
+	},
+	options: {
+		sleepTimeout: WAIT_UNTIL_GRACE_SLEEP_TIMEOUT,
+		sleepGracePeriod: WAIT_UNTIL_GRACE_PERIOD,
+	},
+});
+
+// Reproduces a production crash where c.vars becomes undefined after the
+// grace deadline expires and clearNativeRuntimeState unrefs the NAPI
+// runtime state object. An async message handler accesses c.vars after an
+// await that outlasts the grace period.
+//
+// The close-handler variant cannot reproduce the bug because the tracked
+// websocket callback region blocks can_arm_sleep_timer. Instead we use a
+// message handler that starts slow async work, then the actor is told to
+// sleep programmatically while the handler is still running.
+export const VARS_EXCEEDS_GRACE_DELAY = 2000;
+export const VARS_EXCEEDS_GRACE_PERIOD = 200;
+export const VARS_EXCEEDS_GRACE_SLEEP_TIMEOUT = 100;
+
+export const sleepRawWsVarsExceedsGrace = actor({
+	state: {
+		startCount: 0,
+		sleepCount: 0,
+		handlerStarted: 0,
+		handlerFinished: 0,
+	},
+	createVars: () => ({
+		dirty: false,
+	}),
+	onWake: (c) => {
+		c.state.startCount += 1;
+	},
+	onSleep: (c) => {
+		c.state.sleepCount += 1;
+	},
+	onWebSocket: (c, websocket: UniversalWebSocket) => {
+		websocket.addEventListener("message", async (event: any) => {
+			if (event.data !== "slow-vars-work") return;
+
+			c.state.handlerStarted += 1;
+			websocket.send(JSON.stringify({ type: "started" }));
+
+			// Wait longer than the grace period so the runtime state
+			// gets cleared while this handler is still running.
+			await new Promise((resolve) =>
+				setTimeout(resolve, VARS_EXCEEDS_GRACE_DELAY),
+			);
+			// This c.vars access crashes with TypeError in prod because
+			// the NAPI runtime state reference has been unreffed.
+			// Do NOT wrap in try/catch: c.state also breaks after cleanup,
+			// so the error needs to propagate to the process level.
+			c.vars.dirty = true;
+			c.state.handlerFinished += 1;
+		});
+
+		websocket.send(JSON.stringify({ type: "connected" }));
+	},
+	actions: {
+		triggerSleep: (c) => {
+			c.sleep();
+		},
+		getStatus: (c) => ({
+			startCount: c.state.startCount,
+			sleepCount: c.state.sleepCount,
+			handlerStarted: c.state.handlerStarted,
+			handlerFinished: c.state.handlerFinished,
+		}),
+	},
+	options: {
+		sleepTimeout: VARS_EXCEEDS_GRACE_SLEEP_TIMEOUT,
+		sleepGracePeriod: VARS_EXCEEDS_GRACE_PERIOD,
+	},
+});

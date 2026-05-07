@@ -5,6 +5,10 @@ import {
 	RAW_WS_HANDLER_DELAY,
 	RAW_WS_HANDLER_SLEEP_TIMEOUT,
 	SLEEP_TIMEOUT,
+	VARS_EXCEEDS_GRACE_DELAY,
+	VARS_EXCEEDS_GRACE_SLEEP_TIMEOUT,
+	WAIT_UNTIL_GRACE_DELAY,
+	WAIT_UNTIL_GRACE_SLEEP_TIMEOUT,
 } from "../../fixtures/driver-test-suite/sleep";
 import { describeDriverMatrix } from "./shared-matrix";
 import { setupDriverTest, waitFor } from "./shared-utils";
@@ -962,5 +966,104 @@ describeDriverMatrix("Actor Sleep", (driverTestConfig) => {
 				expect(startCount).toBe(2);
 			}
 		});
+
+		test(
+			"waitUntil in onSleep keeps c.vars available during grace",
+			async (c) => {
+				const { client, getRuntimeOutput } = await setupDriverTest(
+					c,
+					driverTestConfig,
+				);
+
+				const actor =
+					client.sleepWaitUntilVarsDuringGrace.getOrCreate([
+						"waituntil-vars-during-grace",
+					]);
+
+				await actor.triggerSleep();
+				await waitFor(
+					driverTestConfig,
+					WAIT_UNTIL_GRACE_DELAY +
+						WAIT_UNTIL_GRACE_SLEEP_TIMEOUT +
+						500,
+				);
+
+				const status = await actor.getStatus();
+				expect(status.sleepCount).toBe(1);
+				expect(status.waitUntilStarted).toBe(1);
+				const output = getRuntimeOutput();
+				expect(output).not.toContain(
+					"Cannot set properties of undefined",
+				);
+				expect(output).not.toContain(
+					"Cannot read properties of undefined",
+				);
+			},
+			{ timeout: 10_000 },
+		);
+
+		test(
+			"c.vars access in ws handler should not crash after grace deadline",
+			async (c) => {
+				const { client, getRuntimeOutput } = await setupDriverTest(
+					c,
+					driverTestConfig,
+				);
+
+				const actor =
+					client.sleepRawWsVarsExceedsGrace.getOrCreate([
+						"ws-vars-exceeds-grace",
+					]);
+				const ws = await connectRawWebSocket(actor);
+
+				// Send a message that starts slow async work (2000ms delay
+				// before accessing c.vars).
+				ws.send("slow-vars-work");
+
+				// Wait for the handler to confirm it started.
+				await new Promise<void>((resolve) => {
+					const onMessage = (event: MessageEvent) => {
+						const data = JSON.parse(String(event.data));
+						if (data.type === "started") {
+							ws.removeEventListener("message", onMessage);
+							resolve();
+						}
+					};
+					ws.addEventListener("message", onMessage);
+				});
+
+				// Trigger sleep while the handler is still doing slow work.
+				// The grace period (200ms) is much shorter than the handler
+				// delay (2000ms), so onSleep will clear the runtime state
+				// while the handler is still running.
+				await actor.triggerSleep();
+
+				// Wait for the handler to finish and the actor to complete
+				// its sleep cycle.
+				await waitFor(
+					driverTestConfig,
+					VARS_EXCEEDS_GRACE_DELAY +
+						VARS_EXCEEDS_GRACE_SLEEP_TIMEOUT +
+						500,
+				);
+
+				// Wake the actor and check what happened.
+				const status = await actor.getStatus();
+				expect(status.sleepCount).toBeGreaterThanOrEqual(1);
+				expect(status.handlerStarted).toBe(1);
+				// The runtime must not crash with TypeError when the
+				// handler accesses c.vars after the grace deadline.
+				// Core-tracked shutdown work keeps the runtime state alive
+				// until the websocket callback work drains.
+				const output = getRuntimeOutput();
+				expect(output).not.toContain(
+					"Cannot set properties of undefined",
+				);
+				expect(output).not.toContain(
+					"Cannot read properties of undefined",
+				);
+			},
+			{ timeout: 15_000 },
+		);
 	});
 });

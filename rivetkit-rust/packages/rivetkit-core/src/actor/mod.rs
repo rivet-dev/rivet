@@ -23,7 +23,7 @@ pub(crate) mod work_registry;
 pub use action::ActionDispatchError;
 pub use config::{ActionDefinition, ActorConfig, ActorConfigOverrides, CanHibernateWebSocket};
 pub use connection::ConnHandle;
-pub use context::{ActorContext, KeepAwakeRegion, WebSocketCallbackRegion};
+pub use context::{ActorContext, ActorWorkRegion, KeepAwakeRegion, WebSocketCallbackRegion};
 pub use factory::{ActorEntryFn, ActorFactory};
 pub use kv::Kv;
 pub use lifecycle_hooks::{ActorEvents, ActorStart, Reply};
@@ -41,3 +41,4 @@ pub use task::{
 	LifecycleEvent, LifecycleState,
 };
 pub use task_types::{ActorChildOutcome, ShutdownKind, StateMutationReason, UserTaskKind};
+pub use work_registry::{ActorWorkKind, ActorWorkPolicy};
