@@ -6,7 +6,7 @@ use crate::envoy::EnvoyContext;
 use crate::kv::KV_EXPIRE_MS;
 use crate::utils::{EnvoyShutdownError, RemoteSqliteIndeterminateResultError};
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum SqliteRequest {
 	GetPages(protocol::SqliteGetPagesRequest),
 	Commit(protocol::SqliteCommitRequest),

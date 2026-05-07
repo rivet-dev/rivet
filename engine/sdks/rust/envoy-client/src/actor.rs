@@ -20,6 +20,75 @@ use crate::utils::{
 	BufferMap, id_to_str, spawn_detached, wrapping_add_u16, wrapping_lte_u16, wrapping_sub_u16,
 };
 
+impl std::fmt::Debug for ToActor {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		match self {
+			ToActor::Intent { intent, error } => f
+				.debug_struct("Intent")
+				.field("intent", intent)
+				.field("error", error)
+				.finish(),
+			ToActor::Stop {
+				command_idx,
+				reason,
+			} => f
+				.debug_struct("Stop")
+				.field("command_idx", command_idx)
+				.field("reason", reason)
+				.finish(),
+			ToActor::Lost => write!(f, "Lost"),
+			ToActor::SetAlarm { alarm_ts, .. } => f
+				.debug_struct("SetAlarm")
+				.field("alarm_ts", alarm_ts)
+				.finish_non_exhaustive(),
+			ToActor::ReqStart { message_id, req } => f
+				.debug_struct("ReqStart")
+				.field("message_id", message_id)
+				.field("req", req)
+				.finish(),
+			ToActor::ReqChunk { message_id, chunk } => f
+				.debug_struct("ReqChunk")
+				.field("message_id", message_id)
+				.field("chunk", chunk)
+				.finish(),
+			ToActor::ReqAbort { message_id } => f
+				.debug_struct("ReqAbort")
+				.field("message_id", message_id)
+				.finish(),
+			ToActor::WsOpen {
+				message_id,
+				path,
+				headers,
+			} => f
+				.debug_struct("WsOpen")
+				.field("message_id", message_id)
+				.field("path", path)
+				.field("headers", headers)
+				.finish(),
+			ToActor::WsMsg { message_id, msg } => f
+				.debug_struct("WsMsg")
+				.field("message_id", message_id)
+				.field("msg", msg)
+				.finish(),
+			ToActor::WsClose { message_id, close } => f
+				.debug_struct("WsClose")
+				.field("message_id", message_id)
+				.field("close", close)
+				.finish(),
+			ToActor::HwsAck {
+				gateway_id,
+				request_id,
+				envoy_message_index,
+			} => f
+				.debug_struct("HwsAck")
+				.field("gateway_id", gateway_id)
+				.field("request_id", request_id)
+				.field("envoy_message_index", envoy_message_index)
+				.finish(),
+		}
+	}
+}
+
 pub enum ToActor {
 	Intent {
 		intent: protocol::ActorIntent,
@@ -262,6 +331,8 @@ async fn actor_inner(
 					}
 					break;
 				};
+
+				tracing::trace!(?msg, "received to actor message from engine");
 
 				match msg {
 					ToActor::Intent { intent, error } => {

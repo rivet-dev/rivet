@@ -83,6 +83,84 @@ pub enum BufferedActorMessage {
 	},
 }
 
+impl std::fmt::Debug for ToEnvoyMessage {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		match self {
+			ToEnvoyMessage::ConnMessage { message } => f
+				.debug_struct("ConnMessage")
+				.field("message", message)
+				.finish(),
+			ToEnvoyMessage::ConnClose { evict } => {
+				f.debug_struct("ConnClose").field("evict", evict).finish()
+			}
+			ToEnvoyMessage::SendEvents { events } => f
+				.debug_struct("SendEvents")
+				.field("events", events)
+				.finish(),
+			ToEnvoyMessage::KvRequest { actor_id, data, .. } => f
+				.debug_struct("KvRequest")
+				.field("actor_id", actor_id)
+				.field("data", data)
+				.finish_non_exhaustive(),
+			ToEnvoyMessage::SqliteRequest { request, .. } => f
+				.debug_struct("SqliteRequest")
+				.field("request", request)
+				.finish_non_exhaustive(),
+			ToEnvoyMessage::RemoteSqliteRequest { request, .. } => f
+				.debug_struct("RemoteSqliteRequest")
+				.field("request", request)
+				.finish_non_exhaustive(),
+			ToEnvoyMessage::BufferTunnelMsg { msg } => {
+				f.debug_struct("BufferTunnelMsg").field("msg", msg).finish()
+			}
+			ToEnvoyMessage::ActorIntent {
+				actor_id,
+				generation,
+				intent,
+				error,
+			} => f
+				.debug_struct("ActorIntent")
+				.field("actor_id", actor_id)
+				.field("generation", generation)
+				.field("intent", intent)
+				.field("error", error)
+				.finish(),
+			ToEnvoyMessage::SetAlarm {
+				actor_id,
+				generation,
+				alarm_ts,
+				..
+			} => f
+				.debug_struct("SetAlarm")
+				.field("actor_id", actor_id)
+				.field("generation", generation)
+				.field("alarm_ts", alarm_ts)
+				.finish_non_exhaustive(),
+			ToEnvoyMessage::HwsAck {
+				gateway_id,
+				request_id,
+				envoy_message_index,
+			} => f
+				.debug_struct("HwsAck")
+				.field("gateway_id", gateway_id)
+				.field("request_id", request_id)
+				.field("envoy_message_index", envoy_message_index)
+				.finish(),
+			ToEnvoyMessage::GetActor {
+				actor_id,
+				generation,
+				..
+			} => f
+				.debug_struct("GetActor")
+				.field("actor_id", actor_id)
+				.field("generation", generation)
+				.finish_non_exhaustive(),
+			ToEnvoyMessage::Shutdown => write!(f, "Shutdown"),
+			ToEnvoyMessage::Stop => write!(f, "Stop"),
+		}
+	}
+}
+
 pub enum ToEnvoyMessage {
 	ConnMessage {
 		message: protocol::ToEnvoy,
@@ -354,6 +432,8 @@ async fn envoy_loop(
 			msg = rx.recv() => {
 				let Some(msg) = msg else { break };
 
+				tracing::trace!(?msg, "received to envoy message");
+
 				match msg {
 					ToEnvoyMessage::ConnMessage { message } => {
 						lost_timeout = handle_conn_message(&mut ctx, &start_tx, lost_timeout, message).await;
@@ -364,9 +444,11 @@ async fn envoy_loop(
 						if evict { break; }
 					}
 					ToEnvoyMessage::SendEvents { events } => {
+						tracing::trace!(?events, "handling send events");
 						handle_send_events(&mut ctx, events).await;
 					}
 					ToEnvoyMessage::KvRequest { actor_id, data, response_tx } => {
+						tracing::trace!(?actor_id, ?data, "handling kv request");
 						handle_kv_request(&mut ctx, actor_id, data, response_tx).await;
 					}
 					ToEnvoyMessage::SqliteRequest { request, response_tx } => {

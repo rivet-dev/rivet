@@ -100,6 +100,12 @@ impl PegboardGateway2 {
 		// Use the actor ID from the gateway instance
 		let actor_id = self.actor_id.to_string();
 		let request_id = req_ctx.in_flight_request_id()?;
+		tracing::warn!(
+			request_id=%protocol::util::id_to_string(&request_id),
+			actor_id=%self.actor_id,
+			path=%self.path,
+			"DEBUG-TRACE: handle_request_inner entered",
+		);
 
 		// Extract request parts
 		let headers = req
@@ -124,6 +130,10 @@ impl PegboardGateway2 {
 		let mut stopped_sub = ctx
 			.subscribe::<pegboard::workflows::actor2::Stopped>(("actor_id", self.actor_id))
 			.await?;
+		tracing::warn!(
+			request_id=%protocol::util::id_to_string(&request_id),
+			"DEBUG-TRACE: subscribed to actor2::Stopped",
+		);
 
 		// Build subject to publish to
 		let tunnel_subject = pegboard::pubsub_subjects::EnvoyReceiverSubject::new(
@@ -133,6 +143,11 @@ impl PegboardGateway2 {
 		.to_string();
 
 		// Start listening for request responses
+		tracing::warn!(
+			request_id=%protocol::util::id_to_string(&request_id),
+			%tunnel_subject,
+			"DEBUG-TRACE: calling create_or_wake_in_flight_request",
+		);
 		let InFlightRequestCtx {
 			mut msg_rx,
 			mut drop_rx,
@@ -140,7 +155,12 @@ impl PegboardGateway2 {
 		} = self
 			.shared_state
 			.create_or_wake_in_flight_request(tunnel_subject, request_id, false)
-			.await?;
+			.await
+			.inspect_err(|e| tracing::warn!(?e, request_id=%protocol::util::id_to_string(&request_id), "DEBUG-TRACE: create_or_wake_in_flight_request returned Err"))?;
+		tracing::warn!(
+			request_id=%protocol::util::id_to_string(&request_id),
+			"DEBUG-TRACE: create_or_wake_in_flight_request returned Ok",
+		);
 
 		// Start request
 		let message = protocol::ToEnvoyTunnelMessageKind::ToEnvoyRequestStart(
@@ -157,10 +177,24 @@ impl PegboardGateway2 {
 				stream: false,
 			},
 		);
-		in_flight_req.send_message(message).await?;
+		tracing::warn!(
+			request_id=%protocol::util::id_to_string(&request_id),
+			"DEBUG-TRACE: about to send_message(ReqStart)",
+		);
+		in_flight_req
+			.send_message(message)
+			.await
+			.inspect_err(|e| tracing::warn!(?e, request_id=%protocol::util::id_to_string(&request_id), "DEBUG-TRACE: send_message(ReqStart) returned Err"))?;
+		tracing::warn!(
+			request_id=%protocol::util::id_to_string(&request_id),
+			"DEBUG-TRACE: send_message(ReqStart) returned Ok",
+		);
 
 		// Wait for response
-		tracing::debug!("gateway waiting for response from tunnel");
+		tracing::warn!(
+			request_id=%protocol::util::id_to_string(&request_id),
+			"DEBUG-TRACE: gateway waiting for response from tunnel",
+		);
 		let fut = async {
 			loop {
 				tokio::select! {
@@ -170,30 +204,51 @@ impl PegboardGateway2 {
 								protocol::ToRivetTunnelMessageKind::ToRivetResponseStart(
 									response_start,
 								) => {
+									tracing::warn!(
+										request_id=%protocol::util::id_to_string(&request_id),
+										status=response_start.status,
+										"DEBUG-TRACE: wait_for_tunnel_response got ResponseStart",
+									);
 									return anyhow::Ok(response_start);
 								}
 								protocol::ToRivetTunnelMessageKind::ToRivetResponseAbort => {
-									tracing::warn!("request aborted");
+									tracing::warn!(
+										request_id=%protocol::util::id_to_string(&request_id),
+										"DEBUG-TRACE: wait_for_tunnel_response got ResponseAbort",
+									);
 									return Err(TunnelRequestAborted.build());
 								}
-								_ => {
-									tracing::warn!("received non-response message from pubsub");
+								other => {
+									tracing::warn!(
+										request_id=%protocol::util::id_to_string(&request_id),
+										variant=?std::mem::discriminant(&other),
+										"DEBUG-TRACE: wait_for_tunnel_response got non-response message from pubsub",
+									);
 								}
 							}
 						} else {
 							tracing::warn!(
 								request_id=%protocol::util::id_to_string(&request_id),
-								"received no message response during request init",
+								"DEBUG-TRACE: wait_for_tunnel_response msg_rx closed (TunnelResponseClosed)",
 							);
 							return Err(TunnelResponseClosed.build());
 						}
 					}
-					_ = stopped_sub.next() => {
-						tracing::debug!("actor stopped while waiting for request response");
+					stopped = stopped_sub.next() => {
+						tracing::warn!(
+							request_id=%protocol::util::id_to_string(&request_id),
+							?stopped,
+							"DEBUG-TRACE: wait_for_tunnel_response stopped_sub fired (ActorStoppedWhileWaiting)",
+						);
 						return Err(ActorStoppedWhileWaiting.build());
 					}
-					_ = drop_rx.changed() => {
-						tracing::warn!(reason=?drop_rx.borrow(), "tunnel message timeout");
+					changed = drop_rx.changed() => {
+						tracing::warn!(
+							request_id=%protocol::util::id_to_string(&request_id),
+							?changed,
+							reason=?drop_rx.borrow(),
+							"DEBUG-TRACE: wait_for_tunnel_response drop_rx fired (TunnelMessageTimeout)",
+						);
 						return Err(TunnelMessageTimeout.build());
 					}
 				}
@@ -209,11 +264,17 @@ impl PegboardGateway2 {
 		let response_start = tokio::time::timeout(response_start_timeout, fut)
 			.await
 			.map_err(|_| {
-				tracing::warn!("timed out waiting for response start from envoy");
+				tracing::warn!(
+					request_id=%protocol::util::id_to_string(&request_id),
+					"DEBUG-TRACE: outer tokio::time::timeout fired (GatewayResponseStartTimeout)",
+				);
 
 				GatewayResponseStartTimeout.build()
 			})??;
-		tracing::debug!("response handler task ended");
+		tracing::warn!(
+			request_id=%protocol::util::id_to_string(&request_id),
+			"DEBUG-TRACE: response handler task ended",
+		);
 
 		// Build HTTP response
 		let mut response_builder =
@@ -228,7 +289,15 @@ impl PegboardGateway2 {
 		let body = response_start.body.unwrap_or_default();
 		let response = response_builder.body(ResponseBody::Full(Full::new(Bytes::from(body))))?;
 
+		tracing::warn!(
+			request_id=%protocol::util::id_to_string(&request_id),
+			"DEBUG-TRACE: about to call stop() on success path",
+		);
 		in_flight_req.stop().await;
+		tracing::warn!(
+			request_id=%protocol::util::id_to_string(&request_id),
+			"DEBUG-TRACE: stop() returned, returning Ok response",
+		);
 
 		Ok(response)
 	}
@@ -585,6 +654,16 @@ impl CustomServeTrait for PegboardGateway2 {
 		let ctx = self.ctx.with_ray(req_ctx.ray_id(), req_ctx.req_id())?;
 		let req_body_size_hint = req.body().size_hint();
 
+		let in_flight_request_id_str = req_ctx
+			.in_flight_request_id()
+			.ok()
+			.map(|id| protocol::util::id_to_string(&id));
+		tracing::warn!(
+			?in_flight_request_id_str,
+			actor_id=%self.actor_id,
+			req_id=%req_ctx.req_id(),
+			"DEBUG-TRACE: handle_request invoked (CustomServeTrait entry point)",
+		);
 		let (res, metrics_res) = tokio::join!(
 			self.handle_request_inner(&ctx, req, req_ctx),
 			record_req_metrics(
@@ -598,6 +677,18 @@ impl CustomServeTrait for PegboardGateway2 {
 				),
 			),
 		);
+		match &res {
+			Ok(resp) => tracing::warn!(
+				?in_flight_request_id_str,
+				status=%resp.status(),
+				"DEBUG-TRACE: handle_request_inner returned Ok",
+			),
+			Err(err) => tracing::warn!(
+				?in_flight_request_id_str,
+				?err,
+				"DEBUG-TRACE: handle_request_inner returned Err (this is what guard sees for retry decision)",
+			),
+		}
 
 		let response_size = match &res {
 			Ok(res) => res.size_hint().upper().unwrap_or(res.size_hint().lower()),

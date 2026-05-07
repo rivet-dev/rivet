@@ -133,15 +133,53 @@ impl SharedState {
 					protocol::ToGateway::ToRivetTunnelMessage(msg) => msg.message_id.request_id,
 				};
 
+				let msg_kind = match &msg {
+					protocol::ToGateway::ToGatewayPong(_) => "ToGatewayPong",
+					protocol::ToGateway::ToRivetTunnelMessage(m) => match &m.message_kind {
+						protocol::ToRivetTunnelMessageKind::ToRivetResponseStart(_) => {
+							"ToRivetResponseStart"
+						}
+						protocol::ToRivetTunnelMessageKind::ToRivetResponseChunk(_) => {
+							"ToRivetResponseChunk"
+						}
+						protocol::ToRivetTunnelMessageKind::ToRivetResponseAbort => {
+							"ToRivetResponseAbort"
+						}
+						protocol::ToRivetTunnelMessageKind::ToRivetWebSocketOpen(_) => {
+							"ToRivetWebSocketOpen"
+						}
+						protocol::ToRivetTunnelMessageKind::ToRivetWebSocketMessage(_) => {
+							"ToRivetWebSocketMessage"
+						}
+						protocol::ToRivetTunnelMessageKind::ToRivetWebSocketMessageAck(_) => {
+							"ToRivetWebSocketMessageAck"
+						}
+						protocol::ToRivetTunnelMessageKind::ToRivetWebSocketClose(_) => {
+							"ToRivetWebSocketClose"
+						}
+					},
+				};
+				tracing::warn!(
+					request_id=%protocol::util::id_to_string(&request_id),
+					%msg_kind,
+					"DEBUG-TRACE: pubsub recv loop received message",
+				);
+
 				let Some(mut in_flight) = self.in_flight_requests.get_async(&request_id).await
 				else {
 					tracing::warn!(
 						request_id=%protocol::util::id_to_string(&request_id),
-						"in flight has already been disconnected, dropping message"
+						%msg_kind,
+						"DEBUG-TRACE: in flight has already been disconnected, dropping message",
 					);
 					continue;
 				};
 
+				tracing::warn!(
+					request_id=%protocol::util::id_to_string(&request_id),
+					%msg_kind,
+					"DEBUG-TRACE: dispatching to in_flight.recv_message",
+				);
 				in_flight.recv_message(msg).await;
 			}
 		}
@@ -159,6 +197,11 @@ impl SharedState {
 
 		let new = match self.in_flight_requests.entry_async(request_id).await {
 			Entry::Vacant(entry) => {
+				tracing::warn!(
+					request_id=%protocol::util::id_to_string(&request_id),
+					after_hibernation,
+					"DEBUG-TRACE: create_or_wake_in_flight_request creating NEW entry (Vacant)",
+				);
 				entry.insert_entry(InFlightRequest {
 					receiver_subject,
 					message_index: 0,
@@ -174,6 +217,12 @@ impl SharedState {
 			}
 			// If the entry already exists it means we transition from hibernating to active
 			Entry::Occupied(mut entry) => {
+				tracing::warn!(
+					request_id=%protocol::util::id_to_string(&request_id),
+					after_hibernation,
+					existing_message_index=entry.get().message_index,
+					"DEBUG-TRACE: create_or_wake_in_flight_request found EXISTING entry (Occupied), calling wake",
+				);
 				entry.wake(receiver_subject, msg_tx, drop_tx).await;
 
 				false
@@ -244,27 +293,27 @@ impl SharedState {
 				if let Some(reason) =
 					req.expired(&self.hws_message_ack_timeout, &now, &hibernation_timeout)
 				{
-					tracing::debug!(
+					tracing::warn!(
 						request_id=%protocol::util::id_to_string(&request_id),
 						?reason,
-						"gc removing in flight request"
+						"DEBUG-TRACE: gc removing in flight request",
 					);
 
 					match &req.state {
 						InFlightRequestState::Active { drop_tx, .. } => {
 							if drop_tx.send(Some(reason)).is_err() {
-								tracing::debug!(
+								tracing::warn!(
 									request_id=%protocol::util::id_to_string(&request_id),
-									"failed to send gc reason msg to gateway",
+									"DEBUG-TRACE: failed to send gc reason msg to gateway (Active)",
 								);
 							}
 						}
 						InFlightRequestState::PendingHibernation { .. } => {}
 						InFlightRequestState::Hibernating { drop_tx, .. } => {
 							if drop_tx.send(Some(reason)).is_err() {
-								tracing::debug!(
+								tracing::warn!(
 									request_id=%protocol::util::id_to_string(&request_id),
-									"failed to send gc reason msg to gateway",
+									"DEBUG-TRACE: failed to send gc reason msg to gateway (Hibernating)",
 								);
 							}
 						}
@@ -326,6 +375,14 @@ impl InFlightRequestHandle {
 		// Increment message index for next message
 		let current_message_index = req.message_index;
 		req.message_index = req.message_index.wrapping_add(1);
+
+		tracing::warn!(
+			request_id=%protocol::util::id_to_string(&self.request_id),
+			message_index=current_message_index,
+			next_message_index=req.message_index,
+			receiver_subject=%req.receiver_subject,
+			"DEBUG-TRACE: send_message preparing publish",
+		);
 
 		// Check if this is a WebSocket message for hibernation tracking
 		let is_ws_message = matches!(
@@ -590,10 +647,20 @@ impl InFlightRequestHandle {
 
 	#[tracing::instrument(skip_all)]
 	pub async fn stop(&self) {
-		self.shared_state
+		tracing::warn!(
+			request_id=%protocol::util::id_to_string(&self.request_id),
+			"DEBUG-TRACE: InFlightRequestHandle::stop removing entry",
+		);
+		let removed = self
+			.shared_state
 			.in_flight_requests
 			.remove_async(&self.request_id)
 			.await;
+		tracing::warn!(
+			request_id=%protocol::util::id_to_string(&self.request_id),
+			was_present=removed.is_some(),
+			"DEBUG-TRACE: InFlightRequestHandle::stop completed",
+		);
 	}
 }
 
@@ -687,18 +754,37 @@ impl InFlightRequest {
 		replace_with::replace_with_or_abort(&mut self.state, |state| match state {
 			// Already active
 			state @ InFlightRequestState::Active { .. } => {
-				tracing::warn!("should not be waking already active in flight req");
+				tracing::warn!(
+					"DEBUG-TRACE: wake called on Active state — keeping existing channels, dropping new ones (BUG: caller will deadlock)",
+				);
 
 				state
 			}
 			// Forward pending tunnel msgs if any
 			InFlightRequestState::PendingHibernation {
 				mut hibernation_state,
+			} => {
+				tracing::warn!(
+					pending_count = hibernation_state.pending_tunnel_msgs.len(),
+					"DEBUG-TRACE: wake transitioning PendingHibernation -> Active",
+				);
+				pending_tunnel_msgs = std::mem::take(&mut hibernation_state.pending_tunnel_msgs);
+
+				InFlightRequestState::Active {
+					msg_tx,
+					drop_tx,
+					last_pong: util::timestamp::now(),
+					hibernation_state: Some(hibernation_state),
+				}
 			}
-			| InFlightRequestState::Hibernating {
+			InFlightRequestState::Hibernating {
 				mut hibernation_state,
 				..
 			} => {
+				tracing::warn!(
+					pending_count = hibernation_state.pending_tunnel_msgs.len(),
+					"DEBUG-TRACE: wake transitioning Hibernating -> Active",
+				);
 				pending_tunnel_msgs = std::mem::take(&mut hibernation_state.pending_tunnel_msgs);
 
 				InFlightRequestState::Active {
@@ -861,25 +947,30 @@ async fn forward_tunnel_message(
 		protocol::ToRivetTunnelMessageKind::ToRivetWebSocketMessage(ws_msg) => ws_msg.data.len(),
 		_ => 0,
 	};
-	tracing::debug!(
+	tracing::warn!(
 		gateway_id=%protocol::util::id_to_string(&msg.message_id.gateway_id),
 		request_id=%protocol::util::id_to_string(&msg.message_id.request_id),
 		message_index=msg.message_id.message_index,
 		inner_size,
-		"forwarding message to request handler"
+		"DEBUG-TRACE: forwarding message to request handler",
 	);
 
 	if let Err(send_err) = msg_tx.send(msg.message_kind).await {
-		tracing::debug!(
+		tracing::warn!(
 			gateway_id=%protocol::util::id_to_string(&msg.message_id.gateway_id),
 			request_id=%protocol::util::id_to_string(&msg.message_id.request_id),
 			receiver_subject=%receiver_subject,
-			"message handler channel closed, saving to pending msgs",
+			"DEBUG-TRACE: message handler channel closed, saving to pending msgs",
 		);
 
 		msg.message_kind = send_err.0;
 		Some(msg)
 	} else {
+		tracing::warn!(
+			gateway_id=%protocol::util::id_to_string(&msg.message_id.gateway_id),
+			request_id=%protocol::util::id_to_string(&msg.message_id.request_id),
+			"DEBUG-TRACE: forwarded message OK to msg_tx",
+		);
 		None
 	}
 }

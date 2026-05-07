@@ -314,6 +314,37 @@ pub enum DispatchCommand {
 	},
 }
 
+impl std::fmt::Debug for DispatchCommand {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		match self {
+			Self::Action { name, .. } => f
+				.debug_struct("Action")
+				.field("name", name)
+				.finish_non_exhaustive(),
+			Self::QueueSend {
+				name,
+				wait,
+				timeout_ms,
+				..
+			} => f
+				.debug_struct("QueueSend")
+				.field("name", name)
+				.field("wait", wait)
+				.field("timeout_ms", timeout_ms)
+				.finish_non_exhaustive(),
+			Self::Http { .. } => f.debug_struct("Http").finish_non_exhaustive(),
+			Self::OpenWebSocket { .. } => f.debug_struct("OpenWebSocket").finish_non_exhaustive(),
+			Self::WorkflowHistory { .. } => {
+				f.debug_struct("WorkflowHistory").finish_non_exhaustive()
+			}
+			Self::WorkflowReplay { entry_id, .. } => f
+				.debug_struct("WorkflowReplay")
+				.field("entry_id", entry_id)
+				.finish_non_exhaustive(),
+		}
+	}
+}
+
 impl DispatchCommand {
 	fn kind(&self) -> &'static str {
 		match self {
@@ -566,6 +597,7 @@ impl ActorTask {
 				lifecycle_command = self.lifecycle_inbox.recv() => {
 					match lifecycle_command {
 						Some(command) => {
+							tracing::trace!(command_kind = command.kind(), reason = ?command.stop_reason(), "received lifecycle command");
 							if let Some(exit) = self.handle_lifecycle(command).await {
 								return exit;
 							}
@@ -581,7 +613,10 @@ impl ActorTask {
 				}
 				lifecycle_event = self.lifecycle_events.recv() => {
 					match lifecycle_event {
-						Some(event) => self.handle_event(event).await,
+						Some(event) => {
+							tracing::trace!(?event, "received lifecycle event");
+							self.handle_event(event).await
+						}
 						None => {
 							self.log_closed_channel(
 								"lifecycle_events",
@@ -604,7 +639,10 @@ impl ActorTask {
 				}
 				dispatch_command = self.dispatch_inbox.recv(), if self.accepting_dispatch() => {
 					match dispatch_command {
-						Some(command) => self.handle_dispatch(command).await,
+						Some(command) => {
+							tracing::trace!(?command, "received dispatch command");
+							self.handle_dispatch(command).await
+						}
 						None => {
 							self.log_closed_channel(
 								"dispatch_inbox",
@@ -615,17 +653,21 @@ impl ActorTask {
 					}
 				}
 				outcome = Self::wait_for_run_handle(self.run_handle.as_mut()), if self.run_handle.is_some() => {
+					tracing::trace!("checking user runtime run handle outcome");
 					if let Some(exit) = self.handle_run_handle_outcome(outcome) {
 						return exit;
 					}
 				}
 				_ = Self::state_save_tick(self.state_save_deadline), if self.state_save_timer_active() => {
+					tracing::trace!("state save tick");
 					self.on_state_save_tick().await;
 				}
 				_ = Self::inspector_serialize_state_tick(self.inspector_serialize_state_deadline), if self.inspector_serialize_timer_active() => {
+					tracing::trace!("serialize state save tick");
 					self.on_inspector_serialize_state_tick().await;
 				}
 				_ = Self::sleep_tick(self.sleep_deadline), if self.sleep_timer_active() => {
+					tracing::trace!("sleep tick");
 					self.on_sleep_tick().await;
 				}
 			}

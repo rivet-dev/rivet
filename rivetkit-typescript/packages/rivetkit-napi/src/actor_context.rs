@@ -484,7 +484,7 @@ impl ActorContext {
 		self.inner.wait_until(async move {
 			let _region = region;
 			if let Err(error) = promise.await {
-				tracing::warn!(?error, "actor keep_awake promise rejected");
+				tracing::debug!(?error, "actor keep_awake promise rejected");
 			}
 		});
 		Ok(())
@@ -614,7 +614,7 @@ impl ActorContext {
 		self.shared
 			.register_task(Box::pin(async move {
 				if let Err(error) = promise.await {
-					tracing::warn!(?error, "actor keep_awake promise rejected");
+					tracing::debug!(?error, "actor keep_awake promise rejected");
 				}
 			}))
 			.map_err(napi_anyhow_error)

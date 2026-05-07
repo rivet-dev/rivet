@@ -101,17 +101,26 @@ fn anyhow_to_bridge_rivet_error_payload(error: anyhow::Error) -> serde_json::Val
 		"public": public_,
 		"statusCode": status_code,
 	});
-	tracing::error!(
-		group = error.group(),
-		code = error.code(),
-		message = %error.message(),
-		metadata = ?error.metadata(),
-		error_chain = ?error_chain,
-		has_metadata = error.metadata().is_some(),
-		?public_,
-		?status_code,
-		"encoded structured bridge error"
-	);
+	if public_.unwrap_or(false) {
+		tracing::debug!(
+			group = error.group(),
+			code = error.code(),
+			message = %error.message(),
+			metadata = ?error.metadata(),
+			?status_code,
+			"user-facing bridge error"
+		);
+	} else {
+		tracing::error!(
+			group = error.group(),
+			code = error.code(),
+			message = %error.message(),
+			metadata = ?error.metadata(),
+			error_chain = ?error_chain,
+			?status_code,
+			"internal bridge error"
+		);
+	}
 	payload
 }
 
