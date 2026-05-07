@@ -45,5 +45,3 @@ function createCounterRouter(): Hono<any> {
 export const registry = setup({
 	use: { counter },
 });
-
-registry.start();

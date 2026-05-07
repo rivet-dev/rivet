@@ -6,7 +6,7 @@
 	"packageManager": "pnpm@10.13.1",
 	"scripts": {
 		"dev": "VITE_RIVET_ENDPOINT=http://127.0.0.1:6420 concurrently -n server,vite \"node --import @rivetkit/sql-loader --import tsx src/server.ts\" \"vite\"",
-		"dev:serverless": "RIVET_RUN_ENGINE=1 concurrently -n server,vite,configure \"node --import @rivetkit/sql-loader --import tsx src/server.ts\" \"vite\" \"pnpm dev:serverless:configure\"",
+		"dev:serverless": "NODE_ENV=development KITCHEN_SINK_SERVERLESS_URL=http://127.0.0.1:3000/api/rivet concurrently -n server,vite,configure \"node --import @rivetkit/sql-loader --import tsx src/server.ts\" \"vite\" \"pnpm dev:serverless:configure\"",
 		"dev:serverless:configure": "node -e \"void (async () => { const port = process.env.PORT ?? '3000'; const url = 'http://127.0.0.1:' + port + '/api/rivet/metadata'; const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)); for (let i = 0; i < 120; i++) { try { const res = await fetch(url); if (res.ok) { console.log('serverless pool configured'); return; } console.log('serverless configuration returned ' + res.status); } catch {} await sleep(1000); } throw new Error('timed out waiting for serverless configuration at ' + url); })();\"",
 		"check-types": "echo 'skipped - workflow history types broken'",
 		"build": "vite build",

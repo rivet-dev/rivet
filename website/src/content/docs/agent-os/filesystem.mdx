@@ -36,7 +36,7 @@ const vm = agentOs({
 });
 
 export const registry = setup({ use: { vm } });
-registry.start();
+registry.listen({ port: 3000, path: "/api/rivet" });
 ```
 
 ### Host directory
@@ -58,7 +58,7 @@ const vm = agentOs({
 });
 
 export const registry = setup({ use: { vm } });
-registry.start();
+registry.listen({ port: 3000, path: "/api/rivet" });
 ```
 
 ### S3
@@ -128,7 +128,7 @@ const vm = agentOs({
 });
 
 export const registry = setup({ use: { vm } });
-registry.start();
+registry.listen({ port: 3000, path: "/api/rivet" });
 ```
 
 ### Google Drive
@@ -161,7 +161,7 @@ const vm = agentOs({
 });
 
 export const registry = setup({ use: { vm } });
-registry.start();
+registry.listen({ port: 3000, path: "/api/rivet" });
 ```
 
 ## Filesystem operations

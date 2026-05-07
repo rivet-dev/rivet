@@ -51,7 +51,7 @@ No server was available to run your actor. The cause depends on your [runtime mo
 **Runners**:
 
 - You don't have enough runners online. Check your runner list in the dashboard to verify runners are visible and connected.
-- Your runners are full. Each runner has a limited number of actor slots (configured via `RIVET_TOTAL_SLOTS`, default: 100,000). Check the dashboard to see if your runners have available capacity and scale up if needed.
+- Your runners are full. Each runner has a limited number of actor slots (managed by Rivet Engine). Check the dashboard to see if your runners have available capacity and scale up if needed.
 
 ### `runner_no_response`
 
@@ -89,7 +89,7 @@ The connection to your serverless endpoint was terminated before the actor finis
 
 Rivet received an unexpected response from your serverless endpoint. This typically means something is intercepting or modifying the request before it reaches your RivetKit handler. Check that:
 
-- Your server routes requests to `registry.start()`, `registry.serve()`, or `registry.handler()` correctly.
+- Your server routes requests to `registry.fetchHandler({ path })` or `registry.listen({ port, path })` correctly.
 - No middleware is modifying the request or response body.
 
 ### `internal_error`

@@ -1,0 +1,89 @@
+---
+author: nicholas-kissel
+published: "2026-05-06"
+category: changelog
+keywords: ["rivetkit", "migration", "runtime-modes"]
+title: "Rivet 2.3.0"
+description: "Migration notes for the RivetKit registry entrypoint cleanup."
+unpublished: true
+---
+
+This draft only covers the RivetKit registry entrypoint migration for Rivet 2.3.0.
+
+## Environment Variables
+
+- Replace `RIVET_ENVOY_VERSION` with `RIVET_VERSION`.
+- Remove `RIVET_ENVOY_KIND`. Runtime mode is selected by the registry entrypoint method.
+- Replace `RIVET_POOL_NAME` with `RIVET_POOL`.
+- Remove `RIVET_RUN_ENGINE` and `RIVET_RUN_ENGINE_VERSION`. Use `dev.startEngine` on `registry.fetchHandler(...)` or `registry.listen(...)` for manual local engine control.
+- Remove `RIVET_TOTAL_SLOTS`.
+- Replace `RIVET_RUNNER` and `RIVET_RUNNER_*` with `RIVET_POOL` and `RIVET_VERSION`.
+
+RivetKit now throws if a value is set both in the environment and in `setup()`.
+
+## Setup Config
+
+- Replace `envoy.poolName` with top-level `pool`.
+- Replace `envoy.version` with top-level `version`.
+- Remove `envoy.envoyKey` and `RIVET_ENVOY_KEY`. Envoy keys are managed by RivetKit.
+- Move `configurePool` or `devServerless` behavior to `dev` on `registry.fetchHandler(...)` or `registry.listen(...)`.
+- Remove `mode`, `startEngine`, `staticDir`, `serverless`, and `envoy` from `setup(...)`.
+
+## Entrypoints
+
+- Replace `registry.startEnvoy()` and `registry.start()` envoy usage with `registry.start()`.
+- Replace `registry.handler(request)` with a reusable `const handler = registry.fetchHandler({ path }); handler(request)`.
+- Replace `registry.serve()` with `const handler = registry.fetchHandler({ path }); export default { fetch: handler }`.
+- Use `registry.listen({ port, path, static, dev })` when you want RivetKit to start the native HTTP server.
+- Only call one entrypoint per registry. Do not combine `registry.start()` with `registry.fetchHandler(...)` or `registry.listen(...)`; RivetKit now throws when it detects mixed entrypoints.
+
+## Before And After
+
+### Local Default
+
+```typescript
+const registry = setup({ use: { counter } });
+registry.start();
+```
+
+### Production Serverless
+
+```typescript
+const registry = setup({
+  use: { counter },
+});
+
+const handler = registry.fetchHandler({
+  path: "/api/rivet",
+});
+
+export default { fetch: handler };
+```
+
+### Explicit Envoy
+
+```bash
+RIVET_ENDPOINT=https://...
+RIVET_POOL=default
+RIVET_VERSION=123
+```
+
+```typescript
+const registry = setup({ use: { counter } });
+registry.start();
+```
+
+### Local Dev Serverless
+
+```typescript
+const registry = setup({
+  use: { counter },
+});
+
+const handler = registry.fetchHandler({
+  path: "/api/rivet",
+  dev: "http://127.0.0.1:3000/api/rivet",
+});
+
+export default { fetch: handler };
+```

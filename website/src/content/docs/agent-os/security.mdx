@@ -25,7 +25,7 @@ const vm = agentOs({
 });
 
 export const registry = setup({ use: { vm } });
-registry.start();
+registry.listen({ port: 3000, path: "/api/rivet" });
 ```
 
 ## Network control
@@ -45,7 +45,7 @@ const vm = agentOs({
 });
 
 export const registry = setup({ use: { vm } });
-registry.start();
+registry.listen({ port: 3000, path: "/api/rivet" });
 ```
 
 ## Custom authentication
@@ -69,7 +69,7 @@ const vm = agentOs({
 });
 
 export const registry = setup({ use: { vm } });
-registry.start();
+registry.listen({ port: 3000, path: "/api/rivet" });
 
 async function verifyToken(token: string): Promise<boolean> {
   // Your authentication logic

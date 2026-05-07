@@ -6,18 +6,18 @@ skill: true
 
 ## How Versions Work
 
-Each runner has a **version number**. When you deploy new code with a new version, Rivet handles the transition automatically:
+Each envoy has a **version number**. When you deploy new code with a new version, Rivet handles the transition automatically:
 
-- **New actors go to the newest version**: When allocating actors, Rivet always prefers runners with the highest version number
+- **New actors go to the newest version**: When allocating actors, Rivet always prefers envoys with the highest version number
 - **Multiple versions can coexist**: Old actors continue running on old versions while new actors are created on the new version
-- **Drain old actors**: When enabled, a runner connecting with a newer version number will gracefully stop old actors to be rescheduled to the new version
+- **Drain old actors**: When enabled, an envoy connecting with a newer version number will gracefully stop old actors to be rescheduled to the new version
 
 <Note>
-Versions are not configured by default. See [Registry Configuration](/docs/connect/registry-configuration) to learn how to configure the runner version.
+Versions are not configured by default. See [Registry Configuration](/docs/connect/registry-configuration) to learn how to configure the runtime version.
 </Note>
 
 <Note>
-`RIVET_ENVOY_VERSION` is only needed when self-hosting or using a custom runner. Rivet Compute handles versioning automatically.
+`RIVET_VERSION` is only needed when self-hosting or using a custom envoy. Rivet Compute handles versioning automatically.
 </Note>
 
 ### Example Scenario
@@ -26,12 +26,12 @@ Versions are not configured by default. See [Registry Configuration](/docs/conne
 
 <Tab title="Drain Enabled">
 
-When a new version is deployed, existing actors are immediately drained from the old runner and live migrated to the new version.
+When a new version is deployed, existing actors are immediately drained from the old envoy and live migrated to the new version.
 
 ```mermaid
 sequenceDiagram
-    participant R1 as Runner v1
-    participant R2 as Runner v2
+    participant R1 as Envoy v1
+    participant R2 as Envoy v2
 
     Note over R1: Currently running
     Note over R2: Deployed
@@ -48,8 +48,8 @@ When a new version is deployed, both versions coexist. New actors are created on
 
 ```mermaid
 sequenceDiagram
-    participant R1 as Runner v1
-    participant R2 as Runner v2
+    participant R1 as Envoy v1
+    participant R2 as Envoy v2
 
     Note over R1: Currently running
     Note over R2: Deployed
@@ -65,12 +65,12 @@ sequenceDiagram
 
 ### Setting the Version
 
-Configure the runner version using an environment variable or programmatically:
+Configure the runtime version using an environment variable or programmatically:
 
 <CodeGroup>
 
 ```bash {{"title": "Environment Variable"}}
-RIVET_ENVOY_VERSION=2
+RIVET_VERSION=2
 ```
 
 ```typescript {{"title": "Programmatic"}}
@@ -80,9 +80,7 @@ const myActor = actor({ state: {}, actions: {} });
 
 const registry = setup({
   use: { myActor },
-  envoy: {
-    version: 2,
-  },
+  version: 2,
 });
 ```
 
@@ -103,13 +101,13 @@ We recommend injecting a build-time value that increments with every deployment.
 Generate the version at build time and bake it into the image as an environment variable:
 
 ```bash @nocheck
-docker build --build-arg RIVET_ENVOY_VERSION=$(date +%s) .
+docker build --build-arg RIVET_VERSION=$(date +%s) .
 ```
 
 ```dockerfile @nocheck
 FROM node:20-slim
-ARG RIVET_ENVOY_VERSION
-ENV RIVET_ENVOY_VERSION=$RIVET_ENVOY_VERSION
+ARG RIVET_VERSION
+ENV RIVET_VERSION=$RIVET_VERSION
 WORKDIR /app
 COPY . .
 RUN npm install && npm run build
@@ -129,7 +127,7 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   env: {
-    RIVET_ENVOY_VERSION: String(Math.floor(Date.now() / 1000)),
+    RIVET_VERSION: String(Math.floor(Date.now() / 1000)),
   },
 };
 
@@ -147,7 +145,7 @@ import { defineConfig } from "vite";
 
 export default defineConfig({
   define: {
-    "process.env.RIVET_ENVOY_VERSION": JSON.stringify(
+    "process.env.RIVET_VERSION": JSON.stringify(
       String(Math.floor(Date.now() / 1000))
     ),
   },
@@ -163,17 +161,17 @@ Set the version from your CI pipeline:
 ```yaml @nocheck
 # GitHub Actions
 env:
-  RIVET_ENVOY_VERSION: ${{ github.run_number }}
+  RIVET_VERSION: ${{ github.run_number }}
 ```
 
 ```bash @nocheck
 # Railway / Render / generic CI
-export RIVET_ENVOY_VERSION=$(date +%s)
+export RIVET_VERSION=$(date +%s)
 ```
 
 ```bash @nocheck
 # Git commit count
-export RIVET_ENVOY_VERSION=$(git rev-list --count HEAD)
+export RIVET_VERSION=$(git rev-list --count HEAD)
 ```
 
 </Tab>
@@ -198,9 +196,7 @@ const myActor = actor({ state: {}, actions: {} });
 
 const registry = setup({
   use: { myActor },
-  envoy: {
-    version: BUILD_VERSION,
-  },
+  version: BUILD_VERSION,
 });
 ```
 
@@ -210,11 +206,11 @@ const registry = setup({
 
 ### Drain on Version Upgrade
 
-The `drainOnVersionUpgrade` option controls whether old actors are stopped when a new version is deployed. This is configured in the Rivet dashboard under your runner configuration.
+The `drainOnVersionUpgrade` option controls whether old actors are stopped when a new version is deployed. This is configured in the Rivet dashboard under your envoy configuration.
 
 | Value | Behavior |
 |-------|----------|
-| `false` (default in [runner mode](/docs/general/runtime-modes)) | Old actors continue running. New actors go to new version. Versions coexist. |
+| `false` (default in [envoy mode](/docs/general/runtime-modes)) | Old actors continue running. New actors go to new version. Versions coexist. |
 | `true` (default in [serverless mode](/docs/general/runtime-modes)) | Old actors receive stop signal and have 30m to finish gracefully. |
 
 ## Upgrading Actor State
@@ -268,7 +264,7 @@ const todoList = actor({
 });
 
 const registry = setup({ use: { todoList } });
-registry.start();
+registry.listen({ port: 3000, path: "/api/rivet" });
 ```
 
 ### In-memory state (`c.state`)
@@ -294,7 +290,7 @@ const myActor = actor({
 });
 
 const registry = setup({ use: { myActor } });
-registry.start();
+registry.listen({ port: 3000, path: "/api/rivet" });
 ```
 
 **Zod schema coercion**
@@ -323,7 +319,7 @@ const myActor = actor({
 });
 
 const registry2 = setup({ use: { myActor } });
-registry2.start();
+registry2.listen({ port: 3000, path: "/api/rivet" });
 ```
 
 For anything beyond simple defaults, consider moving to [SQLite](/docs/actors/sqlite) where you get proper migration tooling.
@@ -334,20 +330,20 @@ For anything beyond simple defaults, consider moving to [SQLite](/docs/actors/sq
 
 When `drainOnVersionUpgrade` is enabled, Rivet uses two mechanisms to detect version changes:
 
-- **New runner connection**: When a runner connects with a newer version number, the engine immediately drains all older runners with the same name. This is the primary mechanism for [runner mode](/docs/general/runtime-modes) deployments.
-- **Metadata polling** (serverless only): In [serverless mode](/docs/general/runtime-modes), runners periodically poll the engine to check for newer versions and self-drain if one is found. This ensures old runners drain even if no new requests trigger a runner connection.
+- **New envoy connection**: When an envoy connects with a newer version number, the engine immediately drains all older envoys with the same name. This is the primary mechanism for [envoy mode](/docs/general/runtime-modes) deployments.
+- **Metadata polling** (serverless only): In [serverless mode](/docs/general/runtime-modes), envoys periodically poll the engine to check for newer versions and self-drain if one is found. This ensures old envoys drain even if no new requests trigger an envoy connection.
 
 ### SIGTERM Handling
 
-When a runner process receives SIGTERM, it gracefully stops all actors before exiting:
+When a envoy process receives SIGTERM, it gracefully stops all actors before exiting:
 
 - Each actor's `onSleep` hook is called, giving it time to save state
-- Actors are rescheduled to other available runners
-- The runner waits up to **30 minutes** for all actors to finish stopping
+- Actors are rescheduled to other available envoys
+- The envoy waits up to **30 minutes** for all actors to finish stopping
 - If the process is force-killed before actors finish (e.g. SIGKILL), actors are rescheduled with a crash backoff penalty instead of a clean handoff
 
 <Note>
-Ensure your platform's shutdown grace period is at least **35 minutes** so actors have 30 minutes to stop cleanly plus buffer for runner shutdown overhead.
+Ensure your platform's shutdown grace period is at least **35 minutes** so actors have 30 minutes to stop cleanly plus buffer for envoy shutdown overhead.
 </Note>
 
 ### Shutdown Timeouts
@@ -358,11 +354,11 @@ Several timeouts control how long each part of the shutdown process can take:
 |---------|---------|-------------|---------------|
 | `actor_stop_threshold` | 30m | Engine-side limit on how long each actor has to stop before being marked lost | [Engine config](/docs/self-hosting/configuration) (`pegboard.actor_stop_threshold`) |
 | `sleepGracePeriod` | 15s | Total graceful sleep budget for `onSleep`, `waitUntil`, `keepAwake`, and async raw WebSocket handlers | [Actor options](/docs/actors/lifecycle#options) |
-| `runner_lost_threshold` | 15s | Fallback detection if the runner dies without graceful shutdown | [Engine config](/docs/self-hosting/configuration) (`pegboard.runner_lost_threshold`) |
+| `runner_lost_threshold` | 15s | Fallback detection if the envoy dies without graceful shutdown | [Engine config](/docs/self-hosting/configuration) (`pegboard.runner_lost_threshold`) |
 
 Rivet has a max shutdown grace period of 30 minutes that cannot be configured.
 
 ## Related
 
-- [Runtime Modes](/docs/general/runtime-modes): Serverless vs runner deployment modes
+- [Runtime Modes](/docs/general/runtime-modes): Serverless vs envoy deployment modes
 - [Lifecycle](/docs/actors/lifecycle): Actor lifecycle hooks including `onSleep`

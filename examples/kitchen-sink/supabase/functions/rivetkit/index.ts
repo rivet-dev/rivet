@@ -34,7 +34,6 @@ const registry = setup({
 		sqliteBackend: "remote",
 	},
 	noWelcome: true,
-	startEngine: false,
 	use: {
 		counter,
 		rawHttpActor,
@@ -42,6 +41,7 @@ const registry = setup({
 		testCounterSqlite,
 	},
 });
+const rivetHandler = registry.fetchHandler({ path: "/api/rivet" });
 
 function matchesRivetPath(pathname: string) {
 	return pathname === "/api/rivet" || pathname.includes("/api/rivet/");
@@ -64,7 +64,7 @@ async function handler(request: Request) {
 		return Response.json({ ok: true });
 	}
 	if (matchesRivetPath(url.pathname)) {
-		return registry.handler(normalizeRivetRequest(request));
+		return rivetHandler(normalizeRivetRequest(request));
 	}
 	return new Response("not found", { status: 404 });
 }

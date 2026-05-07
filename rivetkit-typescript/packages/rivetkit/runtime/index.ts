@@ -29,7 +29,7 @@ async function ensureLocalRunnerConfig(config: RegistryConfig): Promise<void> {
 	const clientConfig = convertRegistryConfigToClientConfig(config);
 	const dcsRes = await getDatacenters(clientConfig);
 
-	await updateRunnerConfig(clientConfig, config.envoy.poolName, {
+	await updateRunnerConfig(clientConfig, config.pool, {
 		datacenters: Object.fromEntries(
 			dcsRes.datacenters.map((dc) => [
 				dc.name,
@@ -83,7 +83,7 @@ export class Runtime<A extends RegistryActors> {
 
 		if (config.startEngine) {
 			throw new Error(
-				"Runtime.create() can no longer spawn the TypeScript engine process. Use Registry.startEnvoy() with the native rivetkit-core engine path instead.",
+				"Runtime.create() can no longer spawn the TypeScript engine process. Use Registry.start() with the native rivetkit-core engine path instead.",
 			);
 		}
 
@@ -106,7 +106,7 @@ export class Runtime<A extends RegistryActors> {
 
 	async ensureHttpServer(): Promise<void> {
 		throw new Error(
-			"Runtime.ensureHttpServer() relied on the removed TypeScript routing stack. Use Registry.startEnvoy() with the native rivetkit-core path instead.",
+			"Runtime.ensureHttpServer() relied on the removed TypeScript routing stack. Use Registry.start() with the native rivetkit-core path instead.",
 		);
 	}
 
@@ -116,7 +116,7 @@ export class Runtime<A extends RegistryActors> {
 		);
 	}
 
-	async startEnvoy(): Promise<void> {
+	async start(): Promise<void> {
 		if (this.#startKind === "serverful") return;
 		this.#startKind = "serverful";
 

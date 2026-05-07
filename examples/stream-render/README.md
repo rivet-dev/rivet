@@ -46,7 +46,7 @@ This stream processor uses a Top-K algorithm to efficiently maintain the top 3 v
 
 3. In the Rivet dashboard, point **Connect your backend** at your service's HTTPS URL.
 
-> **`RIVET_ENVOY_VERSION`** is automatically derived from Render's `RENDER_GIT_COMMIT` — no manual bump needed per deploy. Set it explicitly to override.
+> **`RIVET_VERSION`** is automatically derived from Render's `RENDER_GIT_COMMIT` — no manual bump needed per deploy. Set it explicitly to override.
 
 ## Resources
 

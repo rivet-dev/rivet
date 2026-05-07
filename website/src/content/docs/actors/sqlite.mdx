@@ -95,7 +95,7 @@ export const todoList = actor({
 });
 
 export const registry = setup({ use: { todoList } });
-registry.start();
+registry.listen({ port: 3000, path: "/api/rivet" });
 ```
 
 ```ts client.ts
@@ -225,7 +225,7 @@ export const todoList = actor({
 });
 
 export const registry = setup({ use: { todoList } });
-registry.start();
+registry.listen({ port: 3000, path: "/api/rivet" });
 ```
 
 ```ts client.ts

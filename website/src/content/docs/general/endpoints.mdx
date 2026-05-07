@@ -44,7 +44,9 @@ const myActor = actor({
 
 const registry = setup({
   use: { myActor },
-  endpoint: "https://my-namespace:sk_xxxxx@api.rivet.dev",
+  engine: {
+    endpoint: "https://my-namespace:sk_xxxxx@api.rivet.dev",
+  },
 });
 ```
 
@@ -58,7 +60,7 @@ The public endpoint tells clients where to connect to reach your actors.
 
 This endpoint and token will be exposed to the internet. Use a public token (`pk_`), not your secret token (`sk_`).
 
-The public endpoint is only required if using the [serverless runtime mode](/docs/general/runtime-modes#runners) and if you have a frontend using RivetKit.
+The public endpoint is only required if using the [serverless runtime mode](/docs/general/runtime-modes#serverless-mode) and if you have a frontend using RivetKit.
 
 <Tabs>
 
@@ -82,9 +84,11 @@ const myActor = actor({
 
 const registry = setup({
   use: { myActor },
-  serverless: {
-    publicEndpoint: "https://my-namespace:pk_xxxxx@api.rivet.dev",
-  },
+});
+
+const handler = registry.fetchHandler({
+  path: "/api/rivet",
+  publicEndpoint: "https://my-namespace:pk_xxxxx@api.rivet.dev",
 });
 ```
 
@@ -116,7 +120,7 @@ In serverless mode, the private endpoint is used to validate that requests to `G
 
 ### How Clients Connect
 
-This flow applies to [serverless runtime mode](/docs/general/runtime-modes#serverless). For [runner runtime mode](/docs/general/runtime-modes#runners) or [clients configured to connect directly to Rivet](/docs/clients/javascript), clients connect directly to Rivet and this metadata flow is not needed.
+This flow applies to [serverless runtime mode](/docs/general/runtime-modes#serverless-mode). For [envoy mode](/docs/general/runtime-modes#envoy-mode) or [clients configured to connect directly to Rivet](/docs/clients/javascript), clients connect directly to Rivet and this metadata flow is not needed.
 
 When a client connects to your serverless application, it follows this flow:
 
@@ -138,8 +142,8 @@ This indirection exists because Rivet acts as a gateway between clients and your
 
 | Environment Variable | Config Option | Description |
 |---------------------|---------------|-------------|
-| `RIVET_ENDPOINT` | `endpoint` | Rivet Engine URL for your backend |
+| `RIVET_ENDPOINT` | `engine.endpoint` | Rivet Engine URL for your backend |
 | `RIVET_NAMESPACE` | `namespace` | Namespace for actor isolation |
 | `RIVET_TOKEN` | `token` | Authentication token for engine connection |
-| `RIVET_PUBLIC_ENDPOINT` | `serverless.publicEndpoint` | Client-facing endpoint |
-| `RIVET_PUBLIC_TOKEN` | `serverless.publicToken` | Client-facing token |
+| `RIVET_PUBLIC_ENDPOINT` | `fetchHandler({ publicEndpoint })` | Client-facing endpoint |
+| `RIVET_PUBLIC_TOKEN` | `fetchHandler({ publicToken })` | Client-facing token |

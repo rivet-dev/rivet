@@ -6,10 +6,9 @@ import * as v8 from "node:v8";
 
 const app = new Hono();
 const port = Number.parseInt(process.env.PORT ?? "3000", 10);
-const serverlessMode =
-	process.env.RIVET_RUN_ENGINE === "1" ||
-	process.env.RIVET_SERVERLESS_URL !== undefined ||
-	process.env.KITCHEN_SINK_SERVERLESS_URL !== undefined;
+const serverlessUrl =
+	process.env.RIVET_SERVERLESS_URL ??
+	process.env.KITCHEN_SINK_SERVERLESS_URL;
 
 process.on("exit", (code) => {
 	console.log(JSON.stringify({ kind: "process_exit", code, pid: process.pid }));
@@ -155,23 +154,17 @@ app.use("*", async (c, next) => {
 	// );
 });
 
-if (serverlessMode) {
-	app.all("/api/rivet/*", (c) => registry.handler(c.req.raw));
-	app.all("/api/rivet", (c) => registry.handler(c.req.raw));
-} else {
-	registry.start();
-}
+const handler = registry.fetchHandler({
+	path: "/api/rivet",
+	dev: serverlessUrl ?? `http://127.0.0.1:${port}/api/rivet`,
+});
+app.all("/api/rivet/*", (c) => handler(c.req.raw));
+app.all("/api/rivet", (c) => handler(c.req.raw));
 
 const server = serve({ fetch: app.fetch, port }, () => {
-	if (serverlessMode) {
-		console.log(
-			`serverless RivetKit listening on http://127.0.0.1:${port}/api/rivet`,
-		);
-	} else {
-		console.log(
-			`kitchen sink diagnostics listening on http://127.0.0.1:${port}`,
-		);
-	}
+	console.log(
+		`kitchen sink listening on http://127.0.0.1:${port} with RivetKit at /api/rivet`,
+	);
 });
 const httpServer = server as unknown as HttpServer;
 httpServer.requestTimeout = 0;

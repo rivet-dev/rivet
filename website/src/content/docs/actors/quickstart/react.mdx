@@ -52,7 +52,7 @@ export const registry = setup({
 	use: { counter },
 });
 
-registry.start();
+registry.listen({ port: 3000, path: "/api/rivet" });
 ```
 
 </Step>
@@ -113,7 +113,7 @@ export const registry = setup({
 	use: { counter },
 });
 
-registry.start();
+registry.listen({ port: 3000, path: "/api/rivet" });
 ```
 </CodeGroup>
 

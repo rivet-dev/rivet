@@ -317,10 +317,10 @@ const registry = createRegistry({
 	namespace: "${namespace}",
 	token: "${token}",
 	runnerName: "${runnerName}",
-	serverless: {
-		basePath: SERVERLESS_BASE_PATH,
-		publicEndpoint: "${publicEndpoint}",
-	},
+});
+const handler = registry.fetchHandler({
+	path: SERVERLESS_BASE_PATH,
+	publicEndpoint: "${publicEndpoint}",
 });
 
 Deno.serve(async (request) => {
@@ -330,7 +330,7 @@ Deno.serve(async (request) => {
 		return new Response("ok");
 	}
 
-	return await registry.handler(request);
+	return await handler(request);
 });
 `,
 	);

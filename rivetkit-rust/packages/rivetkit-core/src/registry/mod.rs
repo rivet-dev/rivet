@@ -165,6 +165,10 @@ struct ServeSettings {
 	namespace: String,
 	pool_name: String,
 	engine_binary_path: Option<PathBuf>,
+	dev_serverless_url: Option<String>,
+	dev_serverless_manual: bool,
+	dev_serverless_drain_timeout: Option<u32>,
+	dev_serverless_request_timeout: Option<u32>,
 	handle_inspector_http_in_runtime: bool,
 	serverless_base_path: Option<String>,
 	serverless_package_version: String,
@@ -183,6 +187,10 @@ pub struct ServeConfig {
 	pub namespace: String,
 	pub pool_name: String,
 	pub engine_binary_path: Option<PathBuf>,
+	pub dev_serverless_url: Option<String>,
+	pub dev_serverless_manual: bool,
+	pub dev_serverless_drain_timeout: Option<u32>,
+	pub dev_serverless_request_timeout: Option<u32>,
 	pub handle_inspector_http_in_runtime: bool,
 	pub serverless_base_path: Option<String>,
 	pub serverless_package_version: String,
@@ -509,6 +517,9 @@ impl CoreRegistry {
 		self,
 		config: ServeConfig,
 	) -> Result<crate::serverless::CoreServerlessRuntime> {
+		#[cfg(feature = "native-runtime")]
+		runner_config::ensure_local_serverless_runner_config(&config).await?;
+
 		crate::serverless::CoreServerlessRuntime::new(self.factories, config).await
 	}
 }

@@ -82,21 +82,20 @@ const registry = setup({
     initInput: wasmModule,
   },
   use: { counter },
-  endpoint: Deno.env.get("RIVET_ENDPOINT"),
+  engine: {
+    endpoint: Deno.env.get("RIVET_ENDPOINT"),
+  },
   namespace: Deno.env.get("RIVET_NAMESPACE"),
   token: Deno.env.get("RIVET_TOKEN"),
-  envoy: {
-    poolName: Deno.env.get("RIVET_POOL") ?? "supabase-functions",
-  },
-  serverless: {
-    basePath: "/rivet/api/rivet",
-    publicEndpoint: Deno.env.get("RIVET_PUBLIC_ENDPOINT"),
-  },
+  pool: Deno.env.get("RIVET_POOL") ?? "supabase-functions",
 });
 
-Deno.serve(async (request) => {
-  return await registry.handler(request);
+const handler = registry.fetchHandler({
+  path: "/rivet/api/rivet",
+  publicEndpoint: Deno.env.get("RIVET_PUBLIC_ENDPOINT"),
 });
+
+Deno.serve(handler);
 ```
 </CodeGroup>
 

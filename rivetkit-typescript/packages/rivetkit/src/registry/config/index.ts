@@ -15,18 +15,17 @@ import { type Logger, LogLevelSchema } from "@/common/log";
 import { VERSION } from "@/utils";
 import { tryParseEndpoint } from "@/utils/endpoint-parser";
 import {
+	getNodeEnv,
 	getRivetEndpoint,
-	getRivetEngine,
 	getRivetkitRuntime,
 	getRivetNamespace,
-	getRivetRunEngine,
-	getRivetRunEngineVersion,
+	getRivetPool,
 	getRivetToken,
-	isDev,
+	getRivetVersion,
+	invalidRivetEnvironmentVariables,
 } from "@/utils/env-vars";
 import { EnvoyConfigSchema } from "./envoy";
 import {
-	ConfigurePoolSchema,
 	DEFAULT_SERVERLESS_MAX_START_PAYLOAD_BYTES,
 	ServerlessConfigSchema,
 } from "./serverless";
@@ -41,6 +40,9 @@ export type RegistryActors = z.infer<typeof ActorsSchema>;
 
 export const RuntimeKindSchema = z.enum(["auto", "native", "wasm"]);
 export type RuntimeKind = z.infer<typeof RuntimeKindSchema>;
+export const RuntimeModeSchema = z.enum(["envoy", "serverless"]);
+export type RuntimeMode = z.infer<typeof RuntimeModeSchema>;
+export type RuntimeModeSource = "entrypoint" | "default";
 export type WasmRuntimeBindings = typeof import("@rivetkit/rivetkit-wasm");
 export type WasmRuntimeInitInput = Parameters<
 	WasmRuntimeBindings["default"]
@@ -75,7 +77,78 @@ export const SqliteConfigSchema = z
 	});
 export type SqliteConfig = z.infer<typeof SqliteConfigSchema>;
 
-// TODO: Add sane defaults for NODE_ENV=development
+const EngineConfigSchema = z.object({
+	endpoint: z.string().optional(),
+});
+
+const DevServerlessConfigSchema = z.union([
+	z.literal("manual"),
+	z.object({
+		url: z.string().url(),
+		drainTimeout: z.number().int().positive().optional(),
+		requestTimeout: z.number().int().positive().optional(),
+	}),
+]);
+
+const EntrypointConfigSchema = z.discriminatedUnion("kind", [
+	z.object({
+		kind: z.literal("envoy"),
+		envoy: EnvoyConfigSchema.optional().default(() =>
+			EnvoyConfigSchema.parse({}),
+		),
+	}),
+	z.object({
+		kind: z.literal("serverless"),
+		startEngine: z.boolean().optional(),
+		devServerless: DevServerlessConfigSchema.optional(),
+		serverless: ServerlessConfigSchema.optional().default(() =>
+			ServerlessConfigSchema.parse({}),
+		),
+	}),
+	z.object({
+		kind: z.literal("listen"),
+		startEngine: z.boolean().optional(),
+		devServerless: DevServerlessConfigSchema.optional(),
+		serverless: ServerlessConfigSchema.optional().default(() =>
+			ServerlessConfigSchema.parse({}),
+		),
+		staticDir: z.string().optional(),
+		httpBasePath: z.string().optional().default("/api/rivet"),
+		httpPort: z.number().optional().default(6421),
+		httpHost: z.string().optional(),
+	}),
+]);
+export type EntrypointConfig = z.infer<typeof EntrypointConfigSchema>;
+export type EntrypointConfigInput = z.input<typeof EntrypointConfigSchema>;
+
+function addEnvConfigConflict(
+	ctx: z.RefinementCtx,
+	envName: string,
+	path: (string | number)[],
+): void {
+	ctx.addIssue({
+		code: "custom",
+		message: `${envName} and setup(${path.join(".")}) cannot both be set. Use either the environment variable or setup config, not both.`,
+		path,
+	});
+}
+
+function parseEnvNumber(
+	ctx: z.RefinementCtx,
+	envName: string,
+	value: number | undefined,
+): number | undefined {
+	if (value === undefined) return undefined;
+	if (!Number.isInteger(value) || value < 0) {
+		ctx.addIssue({
+			code: "custom",
+			message: `${envName} must be a non-negative integer.`,
+		});
+		return undefined;
+	}
+	return value;
+}
+
 export const RegistryConfigSchema = z
 	.object({
 		// MARK: Actors
@@ -161,7 +234,14 @@ export const RegistryConfigSchema = z
 		// // created or must be imported async using `await import(...)`
 		// getUpgradeWebSocket: z.custom<GetUpgradeWebSocket>().optional(),
 
-		// MARK: Runner Configuration
+		// MARK: Runtime Mode
+		entrypoint: EntrypointConfigSchema.optional(),
+		mode: z.unknown().optional(),
+		pool: z.string().optional(),
+		version: z.number().int().nonnegative().optional(),
+		devServerless: z.unknown().optional(),
+
+		// MARK: Engine Configuration
 		/**
 		 * Endpoint to connect to for Rivet Engine.
 		 *
@@ -171,18 +251,14 @@ export const RegistryConfigSchema = z
 		 *
 		 * Can also be set via RIVET_ENDPOINT environment variables.
 		 */
-		endpoint: z
-			.string()
-			.optional()
-			.transform((val) => val ?? getRivetEngine() ?? getRivetEndpoint()),
-		token: z
-			.string()
-			.optional()
-			.transform((val) => val ?? getRivetToken()),
-		namespace: z
-			.string()
-			.optional()
-			.transform((val) => val ?? getRivetNamespace()),
+		engine: EngineConfigSchema.optional(),
+		/**
+		 * @deprecated Use engine.endpoint or RIVET_ENDPOINT.
+		 * Kept as an internal escape hatch while framework fixtures migrate.
+		 */
+		endpoint: z.string().optional(),
+		token: z.string().optional(),
+		namespace: z.string().optional(),
 		headers: z.record(z.string(), z.string()).optional().default({}),
 
 		// MARK: Client
@@ -194,10 +270,10 @@ export const RegistryConfigSchema = z
 		 * Directory to serve static files from.
 		 *
 		 * When set, the local RivetKit server will serve static files from this
-		 * directory. This is used by `registry.start()` to serve a frontend
+		 * directory. This is used by `registry.listen({ static })` to serve a frontend
 		 * alongside the actor API.
 		 */
-		staticDir: z.string().optional(),
+		staticDir: z.unknown().optional(),
 		/**
 		 * @experimental
 		 *
@@ -205,19 +281,19 @@ export const RegistryConfigSchema = z
 		 * For example, if the base path is `/foo`, then the route `/actors`
 		 * will be available at `/foo/actors`.
 		 */
-		httpBasePath: z.string().optional().default("/"),
+		httpBasePath: z.unknown().optional(),
 		/**
 		 * @experimental
 		 *
 		 * What port to run the local HTTP server on.
 		 */
-		httpPort: z.number().optional().default(6421),
+		httpPort: z.unknown().optional(),
 		/**
 		 * @experimental
 		 *
 		 * What host to bind the local HTTP server to.
 		 */
-		httpHost: z.string().optional(),
+		httpHost: z.unknown().optional(),
 
 		// MARK: Engine
 		/**
@@ -225,26 +301,14 @@ export const RegistryConfigSchema = z
 		 *
 		 * Starts the full Rust engine process locally.
 		 */
-		startEngine: z.boolean().default(() => getRivetRunEngine()),
+		startEngine: z.unknown().optional(),
 		/** @experimental */
-		engineVersion: z
-			.string()
-			.optional()
-			.default(() => getRivetRunEngineVersion() ?? VERSION),
-		/**
-		 * @experimental
-		 *
-		 * Automatically configure serverless envoys in the engine.
-		 */
-		configurePool: ConfigurePoolSchema.optional(),
+		engineVersion: z.string().optional().default(() => VERSION),
+		configurePool: z.unknown().optional(),
 
 		// MARK: Runtime-specific
-		serverless: ServerlessConfigSchema.optional().default(() =>
-			ServerlessConfigSchema.parse({}),
-		),
-		envoy: EnvoyConfigSchema.optional().default(() =>
-			EnvoyConfigSchema.parse({}),
-		),
+		serverless: z.unknown().optional(),
+		envoy: z.unknown().optional(),
 
 		// MARK: Shutdown
 		/**
@@ -289,9 +353,48 @@ export const RegistryConfigSchema = z
 			})),
 	})
 	.transform((config, ctx) => {
-		const isDevEnv = isDev();
+		for (const invalid of invalidRivetEnvironmentVariables()) {
+			ctx.addIssue({
+				code: "custom",
+				message: invalid.message,
+			});
+		}
+		const removedSetupFields: Array<[string, string]> = [
+			["mode", "mode has been removed. Call registry.start() or registry.fetchHandler() instead."],
+			["startEngine", "startEngine has been removed from setup(). Use dev.startEngine on registry.listen() or registry.fetchHandler()."],
+			["staticDir", "staticDir has been removed from setup(). Use registry.listen({ static }) instead."],
+			["httpBasePath", "httpBasePath has been removed from setup(). Use the entrypoint path option instead."],
+			["httpPort", "httpPort has been removed from setup(). Use registry.listen({ port }) instead."],
+			["httpHost", "httpHost has been removed from setup(). Use registry.listen({ host }) instead."],
+			["devServerless", "devServerless has been removed from setup(). Use dev on registry.listen() or registry.fetchHandler()."],
+			["serverless", "serverless has been removed from setup(). Pass serverless options to registry.fetchHandler()."],
+			["envoy", "envoy has been removed from setup(). Call registry.start() for envoy mode."],
+			["configurePool", "configurePool has been removed. Use dev on registry.listen() or registry.fetchHandler()."],
+		];
+		for (const [field, message] of removedSetupFields) {
+			if ((config as Record<string, unknown>)[field] !== undefined) {
+				ctx.addIssue({
+					code: "custom",
+					message,
+					path: [field],
+				});
+			}
+		}
+		if (config.engine?.endpoint && config.endpoint) {
+			ctx.addIssue({
+				code: "custom",
+				message: "cannot specify both engine.endpoint and endpoint",
+				path: ["engine", "endpoint"],
+			});
+		}
+
+		const isProduction = getNodeEnv() === "production";
 		const sqliteBackend =
 			config.sqlite?.backend ?? config.test?.sqliteBackend;
+		const entrypoint = config.entrypoint ?? {
+			kind: "envoy" as const,
+			envoy: EnvoyConfigSchema.parse({}),
+		};
 
 		if (config.runtime === "wasm" && sqliteBackend === "local") {
 			ctx.addIssue({
@@ -310,52 +413,115 @@ export const RegistryConfigSchema = z
 				? { backend: "remote" as const }
 				: config.sqlite;
 
-		// Parse endpoint string (env var fallback is applied via transform above)
-		const parsedEndpoint = config.endpoint
-			? tryParseEndpoint(ctx, {
-					endpoint: config.endpoint,
-					path: ["endpoint"],
-					namespace: config.namespace,
-					token: config.token,
-				})
-			: undefined;
+		const modeSource: RuntimeModeSource =
+			config.entrypoint !== undefined ? "entrypoint" : "default";
+		const mode: RuntimeMode =
+			entrypoint.kind === "envoy" ? "envoy" : "serverless";
+
+		const envEndpoint = getRivetEndpoint();
+		const configEndpoint = config.engine?.endpoint ?? config.endpoint;
+		if (envEndpoint !== undefined && configEndpoint !== undefined) {
+			addEnvConfigConflict(
+				ctx,
+				"RIVET_ENDPOINT",
+				config.engine?.endpoint ? ["engine", "endpoint"] : ["endpoint"],
+			);
+		}
+		const rawEndpoint = configEndpoint ?? envEndpoint;
+		const envToken = getRivetToken();
+		if (envToken !== undefined && config.token !== undefined) {
+			addEnvConfigConflict(ctx, "RIVET_TOKEN", ["token"]);
+		}
+		const rawToken = config.token ?? envToken;
+		const envNamespace = getRivetNamespace();
+		if (envNamespace !== undefined && config.namespace !== undefined) {
+			addEnvConfigConflict(ctx, "RIVET_NAMESPACE", ["namespace"]);
+		}
+		const rawNamespace = config.namespace ?? envNamespace;
+		const envPool = getRivetPool();
+		if (envPool !== undefined && config.pool !== undefined) {
+			addEnvConfigConflict(ctx, "RIVET_POOL", ["pool"]);
+		}
+		const pool = config.pool ?? envPool ?? "default";
+		const envVersion = parseEnvNumber(ctx, "RIVET_VERSION", getRivetVersion());
+		if (envVersion !== undefined && config.version !== undefined) {
+			addEnvConfigConflict(ctx, "RIVET_VERSION", ["version"]);
+		}
+		const version = config.version ?? envVersion ?? (isProduction ? undefined : 1);
+		if (version === undefined) {
+			ctx.addIssue({
+				code: "custom",
+				message:
+					"version or RIVET_VERSION is required when NODE_ENV is production. See https://rivet.dev/docs/actors/versions",
+				path: ["version"],
+			});
+		}
+		const entrypointEnvoy =
+			entrypoint.kind === "envoy" ? entrypoint.envoy : EnvoyConfigSchema.parse({});
+		const envoy = entrypointEnvoy;
+
+		const shouldManageLocalEngine =
+			entrypoint.kind === "envoy"
+				? !isProduction && rawEndpoint === undefined
+				: !isProduction && entrypoint.startEngine === true;
+		const devServerless =
+			entrypoint.kind === "serverless" || entrypoint.kind === "listen"
+				? entrypoint.devServerless
+				: undefined;
+		const serverless =
+			entrypoint.kind === "serverless" || entrypoint.kind === "listen"
+				? entrypoint.serverless
+				: ServerlessConfigSchema.parse({});
+		const staticDir = entrypoint.kind === "listen" ? entrypoint.staticDir : undefined;
+		const httpBasePath =
+			entrypoint.kind === "listen" ? entrypoint.httpBasePath : "/";
+		const httpPort = entrypoint.kind === "listen" ? entrypoint.httpPort : 6421;
+		const httpHost = entrypoint.kind === "listen" ? entrypoint.httpHost : undefined;
 
 		// Can't start a local engine and connect to a remote endpoint.
-		if (config.startEngine && parsedEndpoint) {
+		if (shouldManageLocalEngine && rawEndpoint !== undefined) {
 			ctx.addIssue({
 				code: "custom",
 				message: "cannot specify both startEngine and endpoint",
 			});
 		}
 
-		// configurePool requires an engine (via endpoint or startEngine).
-		if (config.configurePool && !parsedEndpoint && !config.startEngine) {
+		if (mode === "envoy" && isProduction && rawEndpoint === undefined) {
 			ctx.addIssue({
 				code: "custom",
 				message:
-					"configurePool requires either endpoint or startEngine",
+					"mode: \"envoy\" requires RIVET_ENDPOINT or engine.endpoint outside local development.",
+				path: ["engine", "endpoint"],
 			});
 		}
 
-		// Flatten the endpoint and apply defaults for namespace/token
-		// If startEngine is enabled, set endpoint to the engine endpoint.
-		const endpoint = config.startEngine
+		// Parse endpoint string after env/config ambiguity checks.
+		const parsedEndpoint = rawEndpoint
+			? tryParseEndpoint(ctx, {
+					endpoint: rawEndpoint,
+					path: config.engine?.endpoint ? ["engine", "endpoint"] : ["endpoint"],
+					namespace: rawNamespace,
+					token: rawToken,
+				})
+			: undefined;
+
+		const endpoint = shouldManageLocalEngine
 			? ENGINE_ENDPOINT
 			: (parsedEndpoint?.endpoint ??
-				(isDevEnv ? ENGINE_ENDPOINT : undefined));
+				(mode === "serverless" ? ENGINE_ENDPOINT : undefined));
 		const validateServerlessEndpoint = Boolean(
-			config.startEngine || parsedEndpoint,
+			mode === "serverless" && (shouldManageLocalEngine || parsedEndpoint),
 		);
 		// Namespace priority: parsed from endpoint URL > config value (includes env var) > "default"
 		const namespace =
-			parsedEndpoint?.namespace ?? config.namespace ?? "default";
+			parsedEndpoint?.namespace ?? rawNamespace ?? "default";
 		// Token priority: parsed from endpoint URL > config value (includes env var)
-		const token = parsedEndpoint?.token ?? config.token;
+		const token = parsedEndpoint?.token ?? rawToken;
 
 		// Parse publicEndpoint string (env var fallback is applied via transform in serverless schema)
-		const parsedPublicEndpoint = config.serverless.publicEndpoint
+		const parsedPublicEndpoint = serverless.publicEndpoint
 			? tryParseEndpoint(ctx, {
-					endpoint: config.serverless.publicEndpoint,
+					endpoint: serverless.publicEndpoint,
 					path: ["serverless", "publicEndpoint"],
 				})
 			: undefined;
@@ -375,17 +541,24 @@ export const RegistryConfigSchema = z
 		// In dev mode, clients connect directly to the local Rivet Engine.
 		const publicEndpoint =
 			parsedPublicEndpoint?.endpoint ??
-			(isDevEnv && config.startEngine ? ENGINE_ENDPOINT : undefined);
+			(shouldManageLocalEngine ? ENGINE_ENDPOINT : undefined);
 		// We extract publicNamespace to validate that it matches the backend
 		// namespace (see validation above), not for functional use.
 		const publicNamespace = parsedPublicEndpoint?.namespace;
 		const publicToken =
-			parsedPublicEndpoint?.token ?? config.serverless.publicToken;
+			parsedPublicEndpoint?.token ?? serverless.publicToken;
 
 		// If endpoint is set or starting the engine, we'll use the engine driver.
 		return {
 			...config,
 			sqlite,
+			mode,
+			modeSource,
+			pool,
+			version: version ?? 1,
+			startEngine: shouldManageLocalEngine,
+			devServerless: isProduction ? undefined : devServerless,
+			envoy,
 			endpoint,
 			namespace,
 			token,
@@ -393,8 +566,12 @@ export const RegistryConfigSchema = z
 			publicNamespace,
 			publicToken,
 			validateServerlessEndpoint,
+			staticDir,
+			httpBasePath,
+			httpPort,
+			httpHost,
 			serverless: {
-				...config.serverless,
+				...serverless,
 				publicEndpoint,
 			},
 		};
@@ -403,7 +580,18 @@ export const RegistryConfigSchema = z
 export type RegistryConfig = z.infer<typeof RegistryConfigSchema>;
 export type RegistryConfigInput<A extends RegistryActors> = Omit<
 	z.input<typeof RegistryConfigSchema>,
-	"use"
+	| "use"
+	| "entrypoint"
+	| "mode"
+	| "startEngine"
+	| "staticDir"
+	| "httpBasePath"
+	| "httpPort"
+	| "httpHost"
+	| "devServerless"
+	| "serverless"
+	| "envoy"
+	| "configurePool"
 > & { use: A };
 
 export function buildActorNames(
@@ -455,48 +643,14 @@ export function buildActorNames(
 // These schemas are JSON-serializable versions used for documentation generation.
 // They exclude runtime-only fields (transforms, custom types, Logger instances).
 
-export const DocConfigurePoolSchema = z
-	.object({
-		name: z.string().optional().describe("Name of the runner pool."),
-		url: z
-			.string()
-			.describe("URL of the serverless platform to configure runners."),
-		headers: z
-			.record(z.string(), z.string())
-			.optional()
-			.describe(
-				"Headers to include in requests to the serverless platform.",
-			),
-		requestLifespan: z
-			.number()
-			.optional()
-			.describe("Maximum lifespan of a request in seconds."),
-		drainGracePeriod: z
-			.number()
-			.optional()
-			.describe(
-				"Grace period before the serverless request is forcibly closed, in seconds.",
-			),
-		metadata: z
-			.record(z.string(), z.unknown())
-			.optional()
-			.describe(
-				"Additional metadata to pass to the serverless platform.",
-			),
-		metadataPollInterval: z
-			.number()
-			.optional()
-			.describe(
-				"Interval in milliseconds between metadata polls from the engine. Defaults to 10000 milliseconds (10 seconds).",
-			),
-		drainOnVersionUpgrade: z
-			.boolean()
-			.optional()
-			.describe(
-				"Drain runners when a new version is deployed. Defaults to true.",
-			),
-	})
-	.optional();
+export const DocDevServerlessConfigSchema = z
+	.union([
+		z.literal("manual"),
+		z.object({
+			url: z.string().describe("Local serverless endpoint URL."),
+		}),
+	])
+	.describe("Local serverless development configuration.");
 
 export const DocServerlessConfigSchema = z
 	.object({
@@ -528,24 +682,7 @@ export const DocServerlessConfigSchema = z
 	.describe("Configuration for serverless deployment mode.");
 
 export const DocEnvoyConfigSchema = z
-	.object({
-		totalSlots: z
-			.number()
-			.optional()
-			.describe("Total number of actor slots available. Default: 100000"),
-		poolName: z
-			.string()
-			.optional()
-			.describe("Name of this envoy pool. Default: 'default'"),
-		envoyKey: z
-			.string()
-			.optional()
-			.describe("Deprecated. Authentication key for the envoy."),
-		version: z
-			.number()
-			.optional()
-			.describe("Version number of this envoy. Default: 1"),
-	})
+	.object({})
 	.describe("Configuration for envoy mode.");
 
 export const DocSqliteConfigSchema = z
@@ -580,6 +717,14 @@ export const DocRegistryConfigSchema = z
 			.boolean()
 			.optional()
 			.describe("Disable the welcome message on startup. Default: false"),
+		pool: z
+			.string()
+			.optional()
+			.describe("Pool name. Defaults to 'default'. Can also be set via RIVET_POOL."),
+		version: z
+			.number()
+			.optional()
+			.describe("Runtime version. Can also be set via RIVET_VERSION."),
 		sqlite: DocSqliteConfigSchema,
 		logging: z
 			.object({
@@ -593,8 +738,16 @@ export const DocRegistryConfigSchema = z
 			.string()
 			.optional()
 			.describe(
-				"Endpoint URL to connect to Rivet Engine. Supports URL auth syntax: https://namespace:token@api.rivet.dev. Can also be set via RIVET_ENDPOINT environment variable.",
+				"Deprecated. Use engine.endpoint or RIVET_ENDPOINT.",
 			),
+		engine: z
+			.object({
+				endpoint: z
+					.string()
+					.optional()
+					.describe("Advanced engine endpoint override. Prefer RIVET_ENDPOINT."),
+			})
+			.optional(),
 		token: z
 			.string()
 			.optional()
@@ -613,40 +766,11 @@ export const DocRegistryConfigSchema = z
 			.describe(
 				"Additional headers to include in requests to Rivet Engine.",
 			),
-		staticDir: z
-			.string()
-			.optional()
-			.describe(
-				"Directory to serve static files from. When set, registry.start() serves static files alongside the actor API.",
-			),
-		httpBasePath: z
-			.string()
-			.optional()
-			.describe("Base path for the local RivetKit API. Default: '/'"),
-		httpPort: z
-			.number()
-			.optional()
-			.describe("Port to run the local HTTP server on. Default: 6421"),
-		httpHost: z
-			.string()
-			.optional()
-			.describe("Host to bind the local HTTP server to."),
-		startEngine: z
-			.boolean()
-			.optional()
-			.describe(
-				"Starts the full Rust engine process locally. Default: false",
-			),
 		engineVersion: z
 			.string()
 			.optional()
 			.describe(
 				"Version of the local engine package to use. Defaults to the current RivetKit version.",
 			),
-		configurePool: DocConfigurePoolSchema.describe(
-			"Automatically configure serverless runners in the engine.",
-		),
-		serverless: DocServerlessConfigSchema.optional(),
-		envoy: DocEnvoyConfigSchema.optional(),
 	})
 	.describe("RivetKit registry configuration.");

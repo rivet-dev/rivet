@@ -45,9 +45,9 @@ const myActor = actor({ state: {}, actions: {} });
 
 const registry = setup({
   use: { myActor },
-  endpoint: "https://api.rivet.dev",
-  token: process.env.RIVET_TOKEN,
-  namespace: "production",
+  engine: {
+    endpoint: "https://api.rivet.dev",
+  },
 });
 ```
 
@@ -59,13 +59,13 @@ After configuring your registry, start it:
 
 <CodeGroup>
 
-```typescript registry.start()
+```typescript Native-server
 import { actor, setup } from "rivetkit";
 
 const myActor = actor({ state: {}, actions: {} });
 const registry = setup({ use: { myActor } });
 
-registry.start();
+registry.listen({ port: 3000, path: "/api/rivet" });
 ```
 
 ```typescript Serverless
@@ -73,8 +73,11 @@ import { actor, setup } from "rivetkit";
 
 const myActor = actor({ state: {}, actions: {} });
 const registry = setup({ use: { myActor } });
+const handler = registry.fetchHandler({
+  path: "/api/rivet",
+});
 
-export default registry.serve();
+export default { fetch: handler };
 ```
 
 ```typescript Serverless-with-Router
@@ -85,7 +88,8 @@ const myActor = actor({ state: {}, actions: {} });
 const registry = setup({ use: { myActor } });
 
 const app = new Hono();
-app.all("/api/rivet/*", (c) => registry.handler(c.req.raw));
+const handler = registry.fetchHandler({ path: "/api/rivet" });
+app.all("/api/rivet/*", (c) => handler(c.req.raw));
 
 export default app;
 ```
@@ -96,7 +100,7 @@ import { actor, setup } from "rivetkit";
 const myActor = actor({ state: {}, actions: {} });
 const registry = setup({ use: { myActor } });
 
-registry.startEnvoy();
+registry.start();
 ```
 
 </CodeGroup>

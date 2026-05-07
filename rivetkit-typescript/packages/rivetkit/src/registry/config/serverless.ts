@@ -3,18 +3,16 @@ import { getRivetPublicEndpoint, getRivetPublicToken } from "@/utils/env-vars";
 
 export const DEFAULT_SERVERLESS_MAX_START_PAYLOAD_BYTES = 16 * 1024 * 1024;
 
-export const ConfigurePoolSchema = z
-	.object({
-		name: z.string().optional(),
-		url: z.string(),
-		headers: z.record(z.string(), z.string()).optional(),
-		requestLifespan: z.number().optional(),
-		drainGracePeriod: z.number().optional(),
-		metadata: z.record(z.string(), z.unknown()).optional(),
-		metadataPollInterval: z.number().optional(),
-		drainOnVersionUpgrade: z.boolean().optional(),
-	})
-	.optional();
+export const DevServerlessConfigSchema = z.union([
+	z.literal("manual"),
+	z.object({
+		url: z.url(),
+	}),
+]);
+export type DevServerlessConfigInput = z.input<
+	typeof DevServerlessConfigSchema
+>;
+export type DevServerlessConfig = z.infer<typeof DevServerlessConfigSchema>;
 
 export const ServerlessConfigSchema = z.object({
 	// MARK: Routing

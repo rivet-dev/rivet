@@ -428,7 +428,6 @@ function smokeRegistryConfig(
 		token: serveConfig.token,
 		namespace: serveConfig.namespace,
 		noWelcome: true,
-		startEngine: false,
 		test: {
 			enabled: true,
 			sqliteBackend: "remote",

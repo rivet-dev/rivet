@@ -1,6 +1,6 @@
 import type { IncomingMessage } from "node:http";
 
-/** Build a WHATWG `Request` from an incoming Node request (for `registry.handler`). */
+/** Build a WHATWG `Request` from an incoming Node request. */
 export function incomingMessageToRequest(
 	req: IncomingMessage,
 	port: number,

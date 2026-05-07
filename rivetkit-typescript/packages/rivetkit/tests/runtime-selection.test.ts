@@ -19,7 +19,7 @@ const testActor = actor({
 function parseConfig(input: Record<string, unknown> = {}) {
 	return RegistryConfigSchema.parse({
 		use: { test: testActor },
-		startEngine: false,
+		endpoint: "http://127.0.0.1:6420",
 		...input,
 	});
 }

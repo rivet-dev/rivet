@@ -221,6 +221,19 @@ export function normalizeRuntimeConfigForKind(
 		return config;
 	}
 
+	if (config.startEngine) {
+		throw new RivetError(
+			"config",
+			"managed_engine_requires_native_runtime",
+			"Managed local engine startup requires the native runtime.",
+			{
+				public: true,
+				statusCode: 400,
+				metadata: { runtime: "wasm" },
+			},
+		);
+	}
+
 	if (sqliteBackendForConfig(config) === "local") {
 		throw new RivetError(
 			"config",
@@ -4655,11 +4668,25 @@ export async function buildServeConfig(
 	}
 
 	const serveConfig: RuntimeServeConfig = {
-		version: config.envoy.version,
+		mode: config.mode,
+		version: config.version,
 		endpoint: config.endpoint,
 		token: config.token,
 		namespace: config.namespace,
-		poolName: config.envoy.poolName,
+		poolName: config.pool,
+		devServerlessUrl:
+			typeof config.devServerless === "object"
+				? config.devServerless.url
+				: undefined,
+		devServerlessManual: config.devServerless === "manual",
+		devServerlessDrainTimeout:
+			typeof config.devServerless === "object"
+				? config.devServerless.drainTimeout
+				: undefined,
+		devServerlessRequestTimeout:
+			typeof config.devServerless === "object"
+				? config.devServerless.requestTimeout
+				: undefined,
 		handleInspectorHttpInRuntime: true,
 		serverlessBasePath: config.serverless.basePath,
 		serverlessPackageVersion: VERSION,

@@ -13,5 +13,3 @@ export const counter = actor({
 export const registry = setup({
 	use: { counter },
 });
-
-registry.start();

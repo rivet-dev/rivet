@@ -296,9 +296,12 @@ describe.sequential("native NAPI runtime integration", () => {
 
 			const handle = await waitForActorReady(
 				() =>
-					client.integrationActor.create([
-						`napi-runtime-${crypto.randomUUID()}`,
-					]),
+					client.integrationActor.create(
+						[`napi-runtime-${crypto.randomUUID()}`],
+						{
+							params: { userId: "integration-test" },
+						},
+					),
 				30_000,
 			);
 			const actorId = await handle.resolve();

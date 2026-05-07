@@ -228,12 +228,17 @@ export interface RuntimeActorConfig {
 }
 
 export interface RuntimeServeConfig {
+	mode: "envoy" | "serverless";
 	version: number;
 	endpoint: string;
 	token?: string;
 	namespace: string;
 	poolName: string;
 	engineBinaryPath?: string;
+	devServerlessUrl?: string;
+	devServerlessManual: boolean;
+	devServerlessDrainTimeout?: number;
+	devServerlessRequestTimeout?: number;
 	handleInspectorHttpInRuntime?: boolean;
 	inspectorTestToken?: string;
 	serverlessBasePath?: string;
@@ -551,11 +556,25 @@ export async function buildServeConfig(
 	}
 
 	const serveConfig: RuntimeServeConfig = {
-		version: config.envoy.version,
+		mode: config.mode,
+		version: config.version,
 		endpoint: config.endpoint,
 		token: config.token,
 		namespace: config.namespace,
-		poolName: config.envoy.poolName,
+		poolName: config.pool,
+		devServerlessUrl:
+			typeof config.devServerless === "object"
+				? config.devServerless.url
+				: undefined,
+		devServerlessManual: config.devServerless === "manual",
+		devServerlessDrainTimeout:
+			typeof config.devServerless === "object"
+				? config.devServerless.drainTimeout
+				: undefined,
+		devServerlessRequestTimeout:
+			typeof config.devServerless === "object"
+				? config.devServerless.requestTimeout
+				: undefined,
 		handleInspectorHttpInRuntime: true,
 		serverlessBasePath: config.serverless.basePath,
 		serverlessPackageVersion: version,

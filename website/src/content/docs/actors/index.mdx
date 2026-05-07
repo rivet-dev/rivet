@@ -48,11 +48,9 @@ import { faNodeJs, faReact, faNextjs } from "@rivet-gg/icons";
 
 ## Minimal Project
 
-### Backend
-
-**index.ts**
-
-```ts
+<Tabs>
+<Tab title="Envoy (Default)">
+```ts index.ts
 import { actor, event, setup } from "rivetkit";
 
 const counter = actor({
@@ -75,6 +73,33 @@ export const registry = setup({
 
 registry.start();
 ```
+</Tab>
+<Tab title="Serverless">
+```ts index.ts
+import { actor, event, setup } from "rivetkit";
+
+const counter = actor({
+	state: { count: 0 },
+	events: {
+		count: event<number>(),
+	},
+	actions: {
+		increment: (c, amount: number) => {
+			c.state.count += amount;
+			c.broadcast("count", c.state.count);
+			return c.state.count;
+		},
+	},
+});
+
+export const registry = setup({
+	use: { counter },
+});
+
+registry.listen({ port: 3000, path: "/api/rivet" });
+```
+</Tab>
+</Tabs>
 
 ### Client Docs
 

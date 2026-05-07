@@ -312,7 +312,6 @@ function registryConfig(definition: ReturnType<typeof actor>): RegistryConfig {
 		token: serveConfig.token,
 		namespace: serveConfig.namespace,
 		noWelcome: true,
-		startEngine: false,
 		test: {
 			enabled: true,
 			sqliteBackend: "remote",
@@ -412,6 +411,51 @@ async function invokePromotedStatus(
 	}
 }
 
+async function invokePlainInternalError(
+	runtimeCase: RuntimeCase,
+): Promise<RivetError> {
+	const { runtime, scenario } = runtimeCase;
+	const definition = actor({
+		state: {},
+		actions: {
+			explode: async () => {
+				throw new Error("plain bridge failure");
+			},
+		},
+	});
+	const factory = buildNativeFactory(
+		runtime,
+		registryConfig(definition),
+		definition,
+	) as unknown as FakeActorFactory;
+	const ctx = new FakeActorContext(scenario);
+	const stateBytes = await factory.callbacks.createState?.(null, {
+		ctx,
+		input: encodeValue(null),
+	});
+	ctx.stateBytes = Buffer.from(stateBytes ?? encodeValue({}));
+
+	try {
+		await factory.callbacks.actions.explode(null, {
+			ctx,
+			conn: null,
+			name: "explode",
+			args: encodeValue([]),
+			cancelToken: new FakeCancellationToken(),
+		});
+		throw new Error("expected explode action to fail");
+	} catch (error) {
+		if (!(error instanceof Error)) {
+			throw error;
+		}
+		const decoded = decodeBridgeRivetError(error.message);
+		if (!decoded) {
+			throw error;
+		}
+		return decoded;
+	}
+}
+
 describe("CoreRuntime NAPI and wasm parity", () => {
 	test.each([
 		"napi",
@@ -436,5 +480,20 @@ describe("CoreRuntime NAPI and wasm parity", () => {
 
 		expect(nativeError).toMatchObject(promoted);
 		expect(wasmError).toMatchObject(promoted);
+	});
+
+	test.each([
+		"napi",
+		"wasm",
+	] as const)("%s preserves plain internal callback errors across the bridge", async (kind) => {
+		const error = await invokePlainInternalError(createRuntimeCase(kind));
+
+		expect(error).toMatchObject({
+			group: "rivetkit",
+			code: "internal_error",
+			message: "plain bridge failure",
+			public: false,
+			statusCode: 500,
+		});
 	});
 });

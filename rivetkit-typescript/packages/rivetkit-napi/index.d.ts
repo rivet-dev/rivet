@@ -149,12 +149,17 @@ export interface JsQueueInspectMessage {
   createdAtMs: number
 }
 export interface JsServeConfig {
+  mode: string
   version: number
   endpoint: string
   token?: string
   namespace: string
   poolName: string
   engineBinaryPath?: string
+  devServerlessUrl?: string
+  devServerlessManual: boolean
+  devServerlessDrainTimeout?: number
+  devServerlessRequestTimeout?: number
   handleInspectorHttpInRuntime?: boolean
   serverlessBasePath?: string
   serverlessPackageVersion: string

@@ -22,6 +22,29 @@
       "description": "Disable the welcome message on startup. Default: false",
       "type": "boolean"
     },
+    "pool": {
+      "description": "Pool name. Defaults to 'default'. Can also be set via RIVET_POOL.",
+      "type": "string"
+    },
+    "version": {
+      "description": "Runtime version. Can also be set via RIVET_VERSION.",
+      "type": "number"
+    },
+    "sqlite": {
+      "description": "SQLite runtime configuration.",
+      "type": "object",
+      "properties": {
+        "backend": {
+          "description": "SQLite backend to use. Native defaults to local. Wasm defaults to remote and cannot use local.",
+          "type": "string",
+          "enum": [
+            "local",
+            "remote"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
     "logging": {
       "description": "Logging configuration.",
       "type": "object",
@@ -43,8 +66,18 @@
       "additionalProperties": false
     },
     "endpoint": {
-      "description": "Endpoint URL to connect to Rivet Engine. Supports URL auth syntax: https://namespace:token@api.rivet.dev. Can also be set via RIVET_ENDPOINT environment variable.",
+      "description": "Deprecated. Use engine.endpoint or RIVET_ENDPOINT.",
       "type": "string"
+    },
+    "engine": {
+      "type": "object",
+      "properties": {
+        "endpoint": {
+          "description": "Advanced engine endpoint override. Prefer RIVET_ENDPOINT.",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
     },
     "token": {
       "description": "Authentication token for Rivet Engine. Can also be set via RIVET_TOKEN environment variable.",
@@ -64,127 +97,9 @@
         "type": "string"
       }
     },
-    "staticDir": {
-      "description": "Directory to serve static files from. When set, registry.start() serves static files alongside the actor API.",
-      "type": "string"
-    },
-    "httpBasePath": {
-      "description": "Base path for the local RivetKit API. Default: '/'",
-      "type": "string"
-    },
-    "httpPort": {
-      "description": "Port to run the local HTTP server on. Default: 6421",
-      "type": "number"
-    },
-    "httpHost": {
-      "description": "Host to bind the local HTTP server to.",
-      "type": "string"
-    },
-    "startEngine": {
-      "description": "Starts the full Rust engine process locally. Default: false",
-      "type": "boolean"
-    },
     "engineVersion": {
       "description": "Version of the local engine package to use. Defaults to the current RivetKit version.",
       "type": "string"
-    },
-    "configurePool": {
-      "description": "Automatically configure serverless runners in the engine.",
-      "type": "object",
-      "properties": {
-        "name": {
-          "description": "Name of the runner pool.",
-          "type": "string"
-        },
-        "url": {
-          "description": "URL of the serverless platform to configure runners.",
-          "type": "string"
-        },
-        "headers": {
-          "description": "Headers to include in requests to the serverless platform.",
-          "type": "object",
-          "propertyNames": {
-            "type": "string"
-          },
-          "additionalProperties": {
-            "type": "string"
-          }
-        },
-        "requestLifespan": {
-          "description": "Maximum lifespan of a request in seconds.",
-          "type": "number"
-        },
-        "drainGracePeriod": {
-          "description": "Grace period before the serverless request is forcibly closed, in seconds.",
-          "type": "number"
-        },
-        "metadata": {
-          "description": "Additional metadata to pass to the serverless platform.",
-          "type": "object",
-          "propertyNames": {
-            "type": "string"
-          },
-          "additionalProperties": {}
-        },
-        "metadataPollInterval": {
-          "description": "Interval in milliseconds between metadata polls from the engine. Defaults to 10000 milliseconds (10 seconds).",
-          "type": "number"
-        },
-        "drainOnVersionUpgrade": {
-          "description": "Drain runners when a new version is deployed. Defaults to true.",
-          "type": "boolean"
-        }
-      },
-      "required": [
-        "url"
-      ],
-      "additionalProperties": false
-    },
-    "serverless": {
-      "description": "Configuration for serverless deployment mode.",
-      "type": "object",
-      "properties": {
-        "basePath": {
-          "description": "Base path for serverless API routes. Default: '/api/rivet'",
-          "type": "string"
-        },
-        "maxStartPayloadBytes": {
-          "description": "Maximum POST /start body size in bytes. Default: 1048576",
-          "type": "number"
-        },
-        "publicEndpoint": {
-          "description": "The endpoint that clients should connect to. Supports URL auth syntax: https://namespace:token@api.rivet.dev",
-          "type": "string"
-        },
-        "publicToken": {
-          "description": "Token that clients should use when connecting via the public endpoint.",
-          "type": "string"
-        }
-      },
-      "additionalProperties": false
-    },
-    "envoy": {
-      "description": "Configuration for envoy mode.",
-      "type": "object",
-      "properties": {
-        "totalSlots": {
-          "description": "Total number of actor slots available. Default: 100000",
-          "type": "number"
-        },
-        "poolName": {
-          "description": "Name of this envoy pool. Default: 'default'",
-          "type": "string"
-        },
-        "envoyKey": {
-          "description": "Deprecated. Authentication key for the envoy.",
-          "type": "string"
-        },
-        "version": {
-          "description": "Version number of this envoy. Default: 1",
-          "type": "number"
-        }
-      },
-      "additionalProperties": false
     }
   },
   "required": [

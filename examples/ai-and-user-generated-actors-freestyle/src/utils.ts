@@ -100,7 +100,6 @@ export async function deployToFreestyle(config: {
 		envVars: {
 			LOG_LEVEL: "debug",
 			FREESTYLE_ENDPOINT: `https://${config.domain}`,
-			RIVET_RUNNER_KIND: "serverless",
 			...config.envVars,
 		},
 		timeout: 60 * 5,

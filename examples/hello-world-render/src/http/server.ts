@@ -5,11 +5,12 @@ import { pipeWebResponseToNode } from "./pipe-response";
 import { createStaticAndProbeHandler } from "./serve-static";
 
 export function startProductionServer(options: {
-	registry: { handler: (req: Request) => Promise<Response> };
+	registry: { fetchHandler: (opts: { path: string }) => (req: Request) => Promise<Response> };
 	port: number;
 	publicDir: string;
 }): void {
 	const { registry, port, publicDir } = options;
+	const handler = registry.fetchHandler({ path: "/api/rivet" });
 	const handleStaticAndProbes = createStaticAndProbeHandler({
 		publicDir,
 		getServiceName: serviceName,
@@ -22,7 +23,7 @@ export function startProductionServer(options: {
 			if (url.pathname === "/api/rivet" || url.pathname.startsWith("/api/rivet/")) {
 				try {
 					const webReq = incomingMessageToRequest(req, port);
-					const webRes = await registry.handler(webReq);
+					const webRes = await handler(webReq);
 					await pipeWebResponseToNode(res, webRes);
 				} catch (err) {
 					console.error(err);

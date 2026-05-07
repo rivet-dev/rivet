@@ -62,7 +62,7 @@ export const chat = actor({
 });
 
 export const registry = setup({ use: { chat } });
-registry.start();
+registry.listen({ port: 3000, path: "/api/rivet" });
 ```
 
 ```typescript client.ts @nocheck
@@ -108,7 +108,7 @@ export const chat = actor({
 });
 
 export const registry = setup({ use: { chat } });
-registry.start();
+registry.listen({ port: 3000, path: "/api/rivet" });
 ```
 
 ```typescript client.ts @nocheck

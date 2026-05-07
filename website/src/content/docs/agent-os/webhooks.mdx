@@ -55,7 +55,7 @@ const vm = agentOs({
 });
 
 export const registry = setup({ use: { slackWorker, vm } });
-registry.start();
+registry.listen({ port: 3000, path: "/api/rivet" });
 
 // Hono server to receive Slack webhooks
 const app = new Hono();

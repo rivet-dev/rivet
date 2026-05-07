@@ -46,15 +46,16 @@ export const counter = actor({
 export const registry = setup({
   use: { counter },
 });
-registry.start();
 ```
 
 ```typescript server.ts @nocheck
 import { registry } from "./index";
 
+const handler = registry.fetchHandler({ path: "/api/rivet" });
+
 // Freestyle uses Deno under the hood for web deployments
 // @ts-ignore Deno is a Freestyle runtime global
-Deno.serve((request: Request) => registry.handler(request));
+Deno.serve(handler);
 ```
 </CodeGroup>
 
@@ -77,7 +78,6 @@ declare const buildDir: string;
 const res = await freestyle.deployWeb(buildDir, {
 	envVars: {
 		FREESTYLE_ENDPOINT: `https://${FREESTYLE_DOMAIN}`,
-		RIVET_RUNNER_KIND: "serverless",
 		// For self-hosted instances:
 		// RIVET_ENDPOINT: "http://127.0.0.1:6420",
 		RIVET_ENDPOINT: "api.rivet.dev",

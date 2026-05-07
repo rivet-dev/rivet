@@ -74,7 +74,7 @@ export async function deployWithRivetCloud(
 			VITE_RIVET_DATACENTER: datacenter,
 			RIVET_ENDPOINT: endpoint,
 			RIVET_NAMESPACE: namespace.access.engineNamespaceName,
-			RIVET_RUNNER_TOKEN: runnerToken,
+			RIVET_TOKEN: runnerToken,
 			RIVET_PUBLISHABLE_TOKEN: publishableToken,
 		},
 		log,

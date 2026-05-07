@@ -44,7 +44,7 @@ const vm = agentOs({
 });
 
 export const registry = setup({ use: { vm } });
-registry.start();
+registry.listen({ port: 3000, path: "/api/rivet" });
 ```
 
 The agent calls it as a CLI command:

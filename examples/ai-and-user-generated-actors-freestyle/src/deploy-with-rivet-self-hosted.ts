@@ -46,7 +46,7 @@ export async function deployWithRivetSelfHosted(
 			VITE_RIVET_DATACENTER: datacenter,
 			RIVET_ENDPOINT: endpoint,
 			RIVET_NAMESPACE: namespace.name,
-			RIVET_RUNNER_TOKEN: token,
+			RIVET_TOKEN: token,
 			RIVET_PUBLISHABLE_TOKEN: token,
 		},
 		log,
