@@ -131,6 +131,62 @@ async fn run_all_tests(db: universaldb::Database) {
 	// Test database options
 	test_database_options(&db).await;
 	clear_test_namespace(&db).await.unwrap();
+
+	// Test FoundationDB-style transaction limits.
+	test_transaction_limits(&db).await;
+	clear_test_namespace(&db).await.unwrap();
+}
+
+async fn test_transaction_limits(db: &Database) {
+	use universaldb::error::DatabaseError;
+
+	let err = db
+		.run(|tx| async move {
+			tx.set(&vec![b'k'; 10_001], b"value");
+			Ok(())
+		})
+		.await
+		.expect_err("oversized key should fail");
+	assert!(
+		err.chain().any(|source| matches!(
+			source.downcast_ref::<DatabaseError>(),
+			Some(DatabaseError::KeyTooLarge { .. })
+		)),
+		"unexpected oversized-key error: {err:#}"
+	);
+
+	let err = db
+		.run(|tx| async move {
+			tx.set(b"large-value", &vec![0; 100_001]);
+			Ok(())
+		})
+		.await
+		.expect_err("oversized value should fail");
+	assert!(
+		err.chain().any(|source| matches!(
+			source.downcast_ref::<DatabaseError>(),
+			Some(DatabaseError::ValueTooLarge { .. })
+		)),
+		"unexpected oversized-value error: {err:#}"
+	);
+
+	let err = db
+		.run(|tx| async move {
+			let value = vec![0; 100_000];
+			for i in 0..101 {
+				tx.set(format!("large-tx-{i:03}").as_bytes(), &value);
+			}
+			Ok(())
+		})
+		.await
+		.expect_err("oversized transaction should fail");
+	assert!(
+		err.chain().any(|source| matches!(
+			source.downcast_ref::<DatabaseError>(),
+			Some(DatabaseError::TransactionTooLarge { .. })
+		)),
+		"unexpected oversized-transaction error: {err:#}"
+	);
 }
 
 async fn test_database_options(db: &Database) {

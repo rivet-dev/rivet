@@ -6,7 +6,7 @@ pub(super) use vfs_support::{
 	storage_dirty_page,
 };
 
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Barrier, mpsc};
 use std::thread;
 use std::time::Duration;
@@ -373,6 +373,59 @@ impl DirectEngineHarness {
 			None,
 		)
 		.expect("vfs context should build")
+	}
+}
+
+struct CommitTooLargeTransport {
+	inner: Arc<DirectDepotTransport>,
+	min_dirty_pages: usize,
+	failed_dirty_pages: AtomicUsize,
+}
+
+impl CommitTooLargeTransport {
+	fn new(inner: Arc<DirectDepotTransport>, min_dirty_pages: usize) -> Self {
+		Self {
+			inner,
+			min_dirty_pages,
+			failed_dirty_pages: AtomicUsize::new(0),
+		}
+	}
+
+	fn failed_dirty_pages(&self) -> usize {
+		self.failed_dirty_pages.load(Ordering::SeqCst)
+	}
+}
+
+#[async_trait]
+impl SqliteTransport for CommitTooLargeTransport {
+	async fn get_pages(
+		&self,
+		request: protocol::SqliteGetPagesRequest,
+	) -> Result<protocol::SqliteGetPagesResponse> {
+		self.inner.get_pages(request).await
+	}
+
+	async fn commit(
+		&self,
+		request: protocol::SqliteCommitRequest,
+	) -> Result<protocol::SqliteCommitResponse> {
+		let dirty_pages = request.dirty_pages.len();
+		if dirty_pages >= self.min_dirty_pages {
+			self.failed_dirty_pages.store(dirty_pages, Ordering::SeqCst);
+			return Ok(protocol::SqliteCommitResponse::SqliteErrorResponse(
+				protocol::SqliteErrorResponse {
+					group: "depot".to_string(),
+					code: "commit_too_large".to_string(),
+					message: format!(
+						"sqlite commit too large: actual_size_bytes={}, max_size_bytes={}",
+						dirty_pages * 4096,
+						(self.min_dirty_pages - 1) * 4096
+					),
+				},
+			));
+		}
+
+		self.inner.commit(request).await
 	}
 }
 
@@ -2425,6 +2478,66 @@ fn direct_engine_marks_vfs_dead_after_transport_errors() {
 }
 
 #[test]
+fn depot_commit_too_large_response_reproduces_dead_vfs_chain() {
+	let runtime = direct_runtime();
+	let harness = DirectEngineHarness::new();
+	let engine = runtime.block_on(harness.open_engine());
+	let inner = Arc::new(DirectDepotTransport::new(engine));
+	let transport = Arc::new(CommitTooLargeTransport::new(inner, 16));
+	let vfs = SqliteVfs::register_with_transport(
+		&next_test_name("sqlite-direct-vfs"),
+		transport.clone(),
+		harness.actor_id.clone(),
+		runtime.handle().clone(),
+		VfsConfig::default(),
+		None,
+	)
+	.expect("v2 vfs should register");
+	let db = open_database(vfs, &harness.actor_id).expect("sqlite database should open");
+
+	sqlite_exec(
+		db.as_ptr(),
+		"CREATE TABLE too_large (id INTEGER PRIMARY KEY, payload BLOB NOT NULL);",
+	)
+	.expect("setup commit should stay below the injected commit limit");
+
+	sqlite_exec(db.as_ptr(), "BEGIN;").expect("begin should succeed");
+	for i in 0..64 {
+		sqlite_step_statement(
+			db.as_ptr(),
+			&format!("INSERT INTO too_large (id, payload) VALUES ({i}, randomblob(4096));"),
+		)
+		.expect("insert should buffer before commit");
+	}
+	let err = sqlite_exec(db.as_ptr(), "COMMIT;")
+		.expect_err("oversized commit should surface as a sqlite IO error");
+
+	assert!(
+		err.contains("I/O") || err.contains("disk I/O"),
+		"sqlite should surface commit_too_large as an IO error: {err}",
+	);
+	assert!(
+		transport.failed_dirty_pages() >= 16,
+		"large transaction should dirty enough pages to trigger the repro transport",
+	);
+	assert!(
+		direct_vfs_ctx(&db).is_dead(),
+		"commit_too_large should poison the VFS",
+	);
+	let kv_error = db
+		.take_last_kv_error()
+		.expect("commit_too_large should be stored as the last sqlite kv error");
+	assert!(
+		kv_error.contains("sqlite commit too large"),
+		"unexpected kv error: {kv_error}",
+	);
+	assert!(
+		sqlite_query_i64(db.as_ptr(), "SELECT COUNT(*) FROM too_large;").is_err(),
+		"later SQL on the same handle should fail once the VFS is dead",
+	);
+}
+
+#[test]
 fn flush_dirty_pages_marks_vfs_dead_after_transport_error() {
 	let runtime = direct_runtime();
 	let harness = DirectEngineHarness::new();
@@ -4230,20 +4343,18 @@ fn bench_large_tx_insert_500kb() {
 }
 
 #[test]
-fn bench_large_tx_insert_10mb() {
-	large_tx_insert(10 * 1024 * 1024);
+fn bench_large_tx_insert_10mb_rejects_transaction_too_large() {
+	large_tx_insert_rejects_transaction_too_large(10 * 1024 * 1024);
 }
 
 #[test]
-fn bench_large_tx_insert_50mb() {
-	// 50MB exercises the slow-path stage/finalize chunking that has
-	// historically hit decode errors under certain transports.
-	large_tx_insert(50 * 1024 * 1024);
+fn bench_large_tx_insert_50mb_rejects_transaction_too_large() {
+	large_tx_insert_rejects_transaction_too_large(50 * 1024 * 1024);
 }
 
 #[test]
-fn bench_large_tx_insert_100mb() {
-	large_tx_insert(100 * 1024 * 1024);
+fn bench_large_tx_insert_100mb_rejects_transaction_too_large() {
+	large_tx_insert_rejects_transaction_too_large(100 * 1024 * 1024);
 }
 
 fn large_tx_insert(target_bytes: usize) {
@@ -4278,6 +4389,41 @@ fn large_tx_insert(target_bytes: usize) {
 	assert_eq!(
 		sqlite_query_i64(db.as_ptr(), "SELECT COUNT(*) FROM large_tx;").unwrap(),
 		rows as i64
+	);
+}
+
+fn large_tx_insert_rejects_transaction_too_large(target_bytes: usize) {
+	let runtime = direct_runtime();
+	let db = open_bench_db(&runtime);
+	sqlite_exec(
+		db.as_ptr(),
+		"CREATE TABLE large_tx (id INTEGER PRIMARY KEY AUTOINCREMENT, payload BLOB NOT NULL);",
+	)
+	.unwrap();
+
+	let row_size = 4 * 1024;
+	let rows = (target_bytes + row_size - 1) / row_size;
+	sqlite_exec(db.as_ptr(), "BEGIN").unwrap();
+	for _ in 0..rows {
+		sqlite_exec(
+			db.as_ptr(),
+			&format!("INSERT INTO large_tx (payload) VALUES (randomblob({row_size}));"),
+		)
+		.unwrap();
+	}
+
+	let err = sqlite_exec(db.as_ptr(), "COMMIT")
+		.expect_err("large transaction should be rejected before local UDB commit");
+	assert!(
+		err.contains("I/O") || err.contains("disk I/O"),
+		"sqlite should surface transaction-too-large as an IO error: {err}",
+	);
+	let vfs_err = direct_vfs_ctx(&db)
+		.clone_last_error()
+		.expect("transaction-too-large should be recorded as the VFS last error");
+	assert!(
+		vfs_err.contains("CommitTooLarge") || vfs_err.contains("commit too large"),
+		"unexpected VFS error: {vfs_err}",
 	);
 }
 

@@ -1,4 +1,5 @@
 use crate::tuple::{PackError, PackResult};
+use crate::error::DatabaseError;
 
 mod cherry_pick;
 pub mod codes;
@@ -32,9 +33,13 @@ impl std::ops::Deref for MaybeCommitted {
 	}
 }
 
-pub fn error_is_transaction_too_large(_err: &anyhow::Error) -> bool {
-	// Only implemented with fdb
-	false
+pub fn error_is_transaction_too_large(err: &anyhow::Error) -> bool {
+	err.chain().any(|source| {
+		matches!(
+			source.downcast_ref::<DatabaseError>(),
+			Some(DatabaseError::TransactionTooLarge { .. })
+		)
+	})
 }
 
 /// Calculate exponential backoff based on attempt.

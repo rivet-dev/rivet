@@ -461,7 +461,8 @@ impl Db {
 					})
 				}
 			})
-			.await?;
+			.await
+			.map_err(map_udb_commit_error)?;
 		#[cfg(feature = "test-faults")]
 		maybe_fire_commit_fault(
 			&self.fault_controller,
@@ -561,6 +562,24 @@ impl Db {
 		*self.last_deltas_available_at_ms.write().await = Some(signal_at_ms);
 		Ok(())
 	}
+}
+
+fn map_udb_commit_error(err: anyhow::Error) -> anyhow::Error {
+	for source in err.chain() {
+		if let Some(universaldb::error::DatabaseError::TransactionTooLarge {
+			actual_size_bytes,
+			max_size_bytes,
+		}) = source.downcast_ref::<universaldb::error::DatabaseError>()
+		{
+			return SqliteStorageError::CommitTooLarge {
+				actual_size_bytes: *actual_size_bytes as u64,
+				max_size_bytes: *max_size_bytes as u64,
+			}
+			.into();
+		}
+	}
+
+	err
 }
 
 #[cfg(feature = "test-faults")]
