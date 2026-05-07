@@ -6,5 +6,6 @@ if (!process.env.ANTHROPIC_API_KEY) {
 }
 
 const app = new Hono();
-app.all("/api/rivet/*", (c) => registry.handler(c.req.raw));
+const handler = registry.fetchHandler({ path: "/api/rivet" });
+app.all("/api/rivet/*", (c) => handler(c.req.raw));
 export default app;

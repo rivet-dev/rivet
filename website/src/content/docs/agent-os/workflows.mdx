@@ -64,7 +64,7 @@ const vm = agentOs({
 });
 
 export const registry = setup({ use: { automator, vm } });
-registry.start();
+registry.listen({ port: 3000, path: "/api/rivet" });
 ```
 
 ```ts @nocheck client.ts
@@ -141,7 +141,7 @@ const vm = agentOs({
 });
 
 export const registry = setup({ use: { pipeline, vm } });
-registry.start();
+registry.listen({ port: 3000, path: "/api/rivet" });
 ```
 
 ```ts @nocheck client.ts

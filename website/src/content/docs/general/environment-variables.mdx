@@ -4,71 +4,76 @@ description: "This page documents all environment variables that configure Rivet
 skill: true
 ---
 
+## Runtime
+
+| Environment Variable | Description |
+| --- | --- |
+| `RIVET_POOL` | Pool name. Defaults to `"default"`. |
+| `RIVET_VERSION` | Runtime version for deploy drain behavior. Required when `NODE_ENV === "production"`. |
+
+Do not set the same value in both `setup()` and the environment. RivetKit throws instead of choosing precedence.
+
 ## Connection
 
 | Environment Variable | Description |
-|---------------------|-------------|
+| --- | --- |
 | `RIVET_ENDPOINT` | Endpoint URL to connect to Rivet Engine. Supports [URL auth syntax](/docs/general/endpoints#url-auth-syntax). |
-| `RIVET_TOKEN` | Authentication token for Rivet Engine |
-| `RIVET_NAMESPACE` | Namespace to use (default: "default") |
+| `RIVET_TOKEN` | Authentication token for Rivet Engine. |
+| `RIVET_NAMESPACE` | Namespace to use. Defaults to `"default"`. |
+
+Prefer `RIVET_ENDPOINT` over hardcoding `engine.endpoint` in source code.
 
 ## Public Endpoint
 
 These variables configure how clients connect to your actors.
 
 | Environment Variable | Description |
-|---------------------|-------------|
+| --- | --- |
 | `RIVET_PUBLIC_ENDPOINT` | Public endpoint for client connections. Supports [URL auth syntax](/docs/general/endpoints#url-auth-syntax). |
-| `RIVET_PUBLIC_TOKEN` | Public token for client authentication |
-
-## Runner Configuration
-
-| Environment Variable | Description |
-|---------------------|-------------|
-| `RIVET_RUNNER` | Runner name (default: "default") |
-| `RIVET_RUNNER_VERSION` | Version number for the runner. See [Versions & Upgrades](/docs/actors/versions). |
-| `RIVET_RUNNER_KIND` | Type of runner |
-| `RIVET_TOTAL_SLOTS` | Total actor slots available (default: 100000) |
+| `RIVET_PUBLIC_TOKEN` | Public token for client authentication. |
 
 ## Engine
 
 | Environment Variable | Description |
-|---------------------|-------------|
-| `RIVET_RUN_ENGINE` | Set to `1` to spawn the engine process |
-| `RIVET_RUN_ENGINE_VERSION` | Version of engine to download |
+| --- | --- |
+| `RIVET_ENGINE_BINARY_PATH` | Advanced native-runtime engine binary override. |
 
 ## Inspector
 
 | Environment Variable | Description |
-|---------------------|-------------|
-| `RIVET_INSPECTOR_DISABLE` | Set to `1` to disable the inspector |
+| --- | --- |
+| `RIVET_INSPECTOR_DISABLE` | Set to `1` to disable the inspector. |
 
 ## Metrics
 
 | Environment Variable | Description |
-|---------------------|-------------|
+| --- | --- |
 | `_RIVET_METRICS_TOKEN` | Bearer token that gates the per-actor Prometheus `/metrics` endpoint. When unset, `/metrics` is disabled. |
 
 ## Experimental
 
 | Environment Variable | Description |
-|---------------------|-------------|
-| `RIVET_EXPERIMENTAL_OTEL` | Set to `1` to enable experimental OTel tracing in Rivet Actors |
+| --- | --- |
+| `RIVET_EXPERIMENTAL_OTEL` | Set to `1` to enable experimental OTel tracing in Rivet Actors. |
 
 ## Storage
 
 | Environment Variable | Description |
-|---------------------|-------------|
+| --- | --- |
 | `RIVETKIT_RUNTIME` | Runtime binding to use for RivetKit core: `auto`, `native`, or `wasm`. Defaults to `auto`. |
 | `RIVETKIT_STORAGE_PATH` | Overrides the default file-system storage path used by RivetKit when using the default driver. |
 
 ## Logging
 
 | Environment Variable | Description |
-|---------------------|-------------|
-| `RIVET_LOG_LEVEL` | Log level: `trace`, `debug`, `info`, `warn`, `error`, `fatal`, `silent` |
-| `RIVET_LOG_TARGET` | Set to `1` to include log target |
-| `RIVET_LOG_TIMESTAMP` | Set to `1` to include timestamps |
-| `RIVET_LOG_MESSAGE` | Set to `1` to include message formatting |
-| `RIVET_LOG_ERROR_STACK` | Set to `1` to include error stack traces |
-| `RIVET_LOG_HEADERS` | Set to `1` to log request headers |
+| --- | --- |
+| `RIVET_LOG_LEVEL` | Log level: `trace`, `debug`, `info`, `warn`, `error`, `fatal`, `silent`. |
+| `RIVET_LOG_TARGET` | Set to `1` to include log target. |
+| `RIVET_LOG_TIMESTAMP` | Set to `1` to include timestamps. |
+| `RIVET_LOG_MESSAGE` | Set to `1` to include message formatting. |
+| `RIVET_LOG_ERROR_STACK` | Set to `1` to include error stack traces. |
+| `RIVET_LOG_HEADERS` | Set to `1` to log request headers. |
+
+## Removed Variables
+
+These variables now throw at startup: `RIVET_RUNNER`, `RIVET_RUNNER_*`, `RIVET_ENVOY_VERSION`, `RIVET_ENVOY_KIND`, `RIVET_POOL_NAME`, `RIVET_RUN_ENGINE`, `RIVET_RUN_ENGINE_VERSION`, and `RIVET_TOTAL_SLOTS`.

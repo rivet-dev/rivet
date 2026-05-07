@@ -147,11 +147,7 @@ const registry = setup({
 		integrationActor,
 	},
 	endpoint,
-	namespace: process.env.RIVET_NAMESPACE ?? "default",
-	token: process.env.RIVET_TOKEN ?? "dev",
-	envoy: {
-		poolName: process.env.RIVETKIT_TEST_POOL_NAME ?? "default",
-	},
+	pool: process.env.RIVETKIT_TEST_POOL_NAME ?? "default",
 });
 
 const { registry: nativeRegistry, serveConfig } = await buildNativeRegistry(

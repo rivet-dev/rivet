@@ -19,12 +19,17 @@ use crate::{NapiInvalidState, napi_anyhow_error};
 
 #[napi(object)]
 pub struct JsServeConfig {
+	pub mode: String,
 	pub version: u32,
 	pub endpoint: String,
 	pub token: Option<String>,
 	pub namespace: String,
 	pub pool_name: String,
 	pub engine_binary_path: Option<String>,
+	pub dev_serverless_url: Option<String>,
+	pub dev_serverless_manual: bool,
+	pub dev_serverless_drain_timeout: Option<u32>,
+	pub dev_serverless_request_timeout: Option<u32>,
 	pub handle_inspector_http_in_runtime: Option<bool>,
 	pub serverless_base_path: Option<String>,
 	pub serverless_package_version: String,
@@ -150,6 +155,7 @@ impl CoreRegistry {
 			endpoint = %config.endpoint,
 			namespace = %config.namespace,
 			pool_name = %config.pool_name,
+			mode = %config.mode,
 			starting_engine = config.engine_binary_path.is_some(),
 			"serving native registry"
 		);
@@ -174,6 +180,10 @@ impl CoreRegistry {
 					namespace: config.namespace,
 					pool_name: config.pool_name,
 					engine_binary_path: config.engine_binary_path.map(PathBuf::from),
+					dev_serverless_url: config.dev_serverless_url,
+					dev_serverless_manual: config.dev_serverless_manual,
+					dev_serverless_drain_timeout: config.dev_serverless_drain_timeout,
+					dev_serverless_request_timeout: config.dev_serverless_request_timeout,
 					handle_inspector_http_in_runtime: config
 						.handle_inspector_http_in_runtime
 						.unwrap_or(false),
@@ -409,6 +419,10 @@ impl CoreRegistry {
 				namespace: config.namespace,
 				pool_name: config.pool_name,
 				engine_binary_path: config.engine_binary_path.map(PathBuf::from),
+				dev_serverless_url: config.dev_serverless_url,
+				dev_serverless_manual: config.dev_serverless_manual,
+				dev_serverless_drain_timeout: config.dev_serverless_drain_timeout,
+				dev_serverless_request_timeout: config.dev_serverless_request_timeout,
 				handle_inspector_http_in_runtime: config
 					.handle_inspector_http_in_runtime
 					.unwrap_or(true),

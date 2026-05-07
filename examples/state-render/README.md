@@ -44,7 +44,7 @@ This example demonstrates state management in Rivet Actors:
 
 3. In the Rivet dashboard, point **Connect your backend** at your service's HTTPS URL.
 
-> **`RIVET_ENVOY_VERSION`** is automatically derived from Render's `RENDER_GIT_COMMIT` — no manual bump needed per deploy. Set it explicitly to override.
+> **`RIVET_VERSION`** is automatically derived from Render's `RENDER_GIT_COMMIT` — no manual bump needed per deploy. Set it explicitly to override.
 
 ## Resources
 

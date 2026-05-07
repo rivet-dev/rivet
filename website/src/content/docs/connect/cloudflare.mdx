@@ -94,10 +94,12 @@ const counter = actor({
 });
 
 const use = { counter };
-let registry: { handler(request: Request): Promise<Response> } | undefined;
+let handler: ((request: Request) => Promise<Response>) | undefined;
 
-function getRegistry(env: Env) {
-  registry ??= setup({
+function getHandler(env: Env) {
+  if (handler) return handler;
+
+  const registry = setup({
     runtime: "wasm",
     sqlite: "remote",
     wasm: {
@@ -105,23 +107,24 @@ function getRegistry(env: Env) {
       initInput: wasmModule,
     },
     use,
-    endpoint: env.RIVET_ENDPOINT,
+    engine: {
+      endpoint: env.RIVET_ENDPOINT,
+    },
     namespace: env.RIVET_NAMESPACE,
     token: env.RIVET_TOKEN,
-    envoy: {
-      poolName: env.RIVET_POOL,
-    },
-    serverless: {
-      publicEndpoint: env.RIVET_PUBLIC_ENDPOINT,
-    },
+    pool: env.RIVET_POOL,
   });
 
-  return registry;
+  handler = registry.fetchHandler({
+    path: "/api/rivet",
+    publicEndpoint: env.RIVET_PUBLIC_ENDPOINT,
+  });
+  return handler;
 }
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
-    return await getRegistry(env).handler(request);
+    return await getHandler(env)(request);
   },
 };
 ```

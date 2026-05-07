@@ -43,7 +43,7 @@ const vm = agentOs({
 });
 
 export const registry = setup({ use: { taskRunner, vm } });
-registry.start();
+registry.listen({ port: 3000, path: "/api/rivet" });
 ```
 
 ```ts @nocheck client.ts
@@ -103,7 +103,7 @@ const vm = agentOs({
 });
 
 export const registry = setup({ use: { reviewer, vm } });
-registry.start();
+registry.listen({ port: 3000, path: "/api/rivet" });
 ```
 
 ```ts @nocheck client.ts
@@ -168,7 +168,7 @@ const vm = agentOs({
 });
 
 export const registry = setup({ use: { issueWorker, vm } });
-registry.start();
+registry.listen({ port: 3000, path: "/api/rivet" });
 ```
 
 ```ts @nocheck client.ts

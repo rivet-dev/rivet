@@ -41,21 +41,15 @@ describe("Registry constructor", () => {
 			use: {
 				test: testActor,
 			},
-			startEngine: false,
 			endpoint: "http://127.0.0.1:6642",
 			token: "dev",
 			namespace: "before-build",
-			envoy: {
-				poolName: "before-build-pool",
-			},
+			pool: "before-build-pool",
 		});
 
 		registry.config.namespace = "after-build";
 		registry.config.endpoint = "http://127.0.0.1:7755";
-		registry.config.envoy = {
-			...registry.config.envoy,
-			poolName: "after-build-pool",
-		};
+		registry.config.pool = "after-build-pool";
 
 		const { serveConfig } = await buildNativeRegistry(registry.parseConfig());
 
@@ -63,5 +57,30 @@ describe("Registry constructor", () => {
 		expect(new URL(serveConfig.endpoint).origin).toBe("http://127.0.0.1:7755");
 		expect(serveConfig.namespace).toBe("after-build");
 		expect(serveConfig.poolName).toBe("after-build-pool");
+	});
+
+	test("rejects multiple runtime entrypoints on one registry", () => {
+		const registry = setup({
+			use: {
+				test: testActor,
+			},
+			endpoint: "http://127.0.0.1:6642",
+			token: "dev",
+			namespace: "entrypoint-guard",
+			pool: "entrypoint-guard",
+			version: 1,
+			noWelcome: true,
+		});
+
+		registry.fetchHandler({ path: "/api/rivet" });
+
+		expect(() => registry.start()).toThrow(
+			/registry\.start\(\) cannot be used after registry\.fetchHandler\(\)/,
+		);
+		expect(() =>
+			registry.listen({ port: 3000, path: "/api/rivet" }),
+		).toThrow(
+			/registry\.listen\(\) cannot be used after registry\.fetchHandler\(\)/,
+		);
 	});
 });

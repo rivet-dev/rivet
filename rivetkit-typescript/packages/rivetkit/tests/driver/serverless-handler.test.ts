@@ -124,13 +124,14 @@ describeDriverMatrix(
 					endpoint: "http://127.0.0.1:6420",
 					token: TOKEN,
 				});
+				const handler = registry.fetchHandler({ path: "/api/rivet" });
 
-				const root = await registry.handler(
+				const root = await handler(
 					new Request("http://runner.test/api/rivet/"),
 				);
 				expect(await expectText(root)).toContain("RivetKit server");
 
-				const health = await registry.handler(
+				const health = await handler(
 					new Request("http://runner.test/api/rivet/health"),
 				);
 				expect(health.status).toBe(200);
@@ -139,7 +140,7 @@ describeDriverMatrix(
 					runtime: "rivetkit",
 				});
 
-				const metadata = await registry.handler(
+				const metadata = await handler(
 					new Request("http://runner.test/api/rivet/metadata"),
 				);
 				expect(metadata.status).toBe(200);
@@ -160,8 +161,9 @@ describeDriverMatrix(
 					endpoint: "http://127.0.0.1:6420",
 					token: TOKEN,
 				});
+				const handler = registry.fetchHandler({ path: "/api/rivet" });
 
-				const response = await registry.handler(
+				const response = await handler(
 					new Request("http://runner.test/api/rivet/start", {
 						method: "POST",
 						body: new Uint8Array(),
@@ -199,11 +201,12 @@ describeDriverMatrix(
 					endpoint: engine.endpoint,
 					token: TOKEN,
 					namespace,
-					envoy: { poolName },
+					pool: poolName,
 				});
+				const handler = registry.fetchHandler({ path: "/api/rivet" });
 				const abort = new AbortController();
 
-				const response = await registry.handler(
+				const response = await handler(
 					new Request("http://runner.test/api/rivet/start", {
 						method: "POST",
 						headers: serverlessHeaders({

@@ -75,5 +75,3 @@ export const chatRoom = actor({
 export const registry = setup({
 	use: { chatRoom },
 });
-
-registry.start();

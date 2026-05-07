@@ -531,7 +531,7 @@ async function startLocalKitchenSinkServer() {
 			detached: true,
 			env: {
 				...process.env,
-				RIVET_RUN_ENGINE: "1",
+				NODE_ENV: "development",
 				RIVET_ENGINE_BINARY: resolveEngineBinary(),
 				RIVETKIT_RUNTIME: process.env.RIVETKIT_RUNTIME ?? "native",
 				RIVETKIT_STORAGE_PATH:

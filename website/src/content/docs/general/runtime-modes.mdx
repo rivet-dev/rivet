@@ -1,147 +1,210 @@
 ---
 title: "Runtime Modes"
-description: "RivetKit supports two runtime modes for running your actors:"
+description: "Choose between serverless and envoy runtime modes based on how you deploy."
 skill: true
 ---
 
-import imgServerless from "./runtime-modes/serverless.png";
-import imgRunners from "./runtime-modes/runners.png";
+Pick whichever runtime mode best matches your architecture. Actor code is identical between the two.
 
+| | **Serverless** | **Envoy** |
+| --- | --- | --- |
+| **Deploy to** | Vercel, Cloudflare Workers, AWS Lambda, Netlify | Kubernetes, Fly.io, Render, AWS ECS, Railway |
+| **Connection** | Rivet calls your app (`POST /api/rivet/start`) | Your app opens a WebSocket to Rivet |
+| **Public endpoint** | Required. Rivet must reach your HTTP endpoint. | Not required. Your app connects to Rivet. |
+| **Scaling** | Handled by your serverless platform. Scales to zero. | CPU/memory autoscaler (e.g. Kubernetes HPA). |
 
+## Serverless Mode
 
-- **Serverless**: Default mode. Responds to HTTP requests and scales automatically.
-- **Runners**: Background processes without HTTP endpoints. Only needed for advanced scenarios.
+In serverless mode, the Rivet engine calls your app whenever an actor needs to run. Your platform scales the function automatically.
 
-## Serverless
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Rivet as Rivet Engine
+    participant App as Your App
+    participant Actor as counter actor
 
-Serverless is the default and recommended mode. Rivet sends HTTP requests to your backend to run actor logic, allowing your infrastructure to scale automatically.
+    Client->>Rivet: create actor
+    Rivet->>App: POST /api/rivet/start
+    App->>Actor: spawn
+```
 
-### Benefits
-
-- **Platform support**: Works with serverless platforms (Vercel, Cloudflare Workers, etc.)
-- **Scale to zero**: No cost when idle
-- **Edge deployments**: Easier to deploy to edge locations
-- **Preview deployments**: Integrates with preview deployments on platforms like Vercel and Railway
-- **Efficient autoscaling**: Request-based autoscaling can be faster and more efficient than CPU-based autoscaling depending on the platform
-
-### Example
+### Setup
 
 <CodeGroup>
 
 ```typescript Direct
 import { actor, setup } from "rivetkit";
 
-const myActor = actor({ state: {}, actions: {} });
-const registry = setup({ use: { myActor } });
+const counter = actor({ state: {}, actions: {} });
+const registry = setup({ use: { counter } });
+const handler = registry.fetchHandler({
+  path: "/api/rivet",
+});
 
-export default registry.serve();
+export default { fetch: handler };
 ```
 
 ```typescript With-Router
 import { Hono } from "hono";
 import { actor, setup } from "rivetkit";
 
-const myActor = actor({ state: {}, actions: {} });
-const registry = setup({ use: { myActor } });
+const counter = actor({ state: {}, actions: {} });
+const registry = setup({ use: { counter } });
 
 const app = new Hono();
-app.all("/api/rivet/*", (c) => registry.handler(c.req.raw));
+const handler = registry.fetchHandler({
+  path: "/api/rivet",
+});
+app.all("/api/rivet/*", (c) => handler(c.req.raw));
 
 export default app;
 ```
 
 </CodeGroup>
 
-See [Server Setup](/docs/general/http-server/) for more configuration options.
+See [Server Setup](/docs/general/http-server/) for additional configuration options.
 
-### Architecture
+Do not call `registry.start()` on the same registry when using `registry.fetchHandler(...)`. `fetchHandler` is the serverless entrypoint, and RivetKit throws if a registry tries to use more than one entrypoint.
 
-When a client creates an actor, it sends a request to the Rivet Engine. The engine then calls `GET /api/rivet/start` on your serverless backend to run the actor.
+### Local Development
 
-<img src={imgServerless.src} alt="Serverless architecture diagram" />
+When running serverless mode locally, point RivetKit at your local serverless endpoint with `dev`. RivetKit starts (or reuses) a local Rivet engine and configures it to call that URL when `NODE_ENV=development`:
 
-### Advanced
+```typescript
+import { actor, setup } from "rivetkit";
 
-#### Endpoints
+const counter = actor({ state: {}, actions: {} });
 
-Rivet exposes the following endpoints:
+const registry = setup({ use: { counter } });
+const handler = registry.fetchHandler({
+  path: "/api/rivet",
+  dev: "http://127.0.0.1:3000/api/rivet",
+});
 
-- `GET /api/rivet/metadata`: Validates configuration
-- `GET /api/rivet/start`: Runs an actor
+export default { fetch: handler };
+```
 
-You should never call these endpoints yourself, this is included purely for comprehension of how Rivet works under the hood.
+Use `dev: { startEngine: false }` when something else (e.g. a separate engine instance) is already configured to call your endpoint:
 
-#### Timeouts
+```typescript
+import { actor, setup } from "rivetkit";
 
-Serverless platforms like Vercel have function timeouts. Rivet handles this automatically by migrating actors between function invocations, preserving state through `ctx.state`. Write your code as if it runs forever, Rivet handles the rest.
+const counter = actor({ state: {}, actions: {} });
+
+const registry = setup({ use: { counter } });
+const handler = registry.fetchHandler({
+  path: "/api/rivet",
+  dev: {
+    url: "http://127.0.0.1:3000/api/rivet",
+    startEngine: false,
+  },
+});
+```
+
+### Endpoints
+
+Rivet exposes the following endpoints on your serverless app:
+
+- `GET /api/rivet/metadata` — Validates configuration.
+- `POST /api/rivet/start` — Runs an actor.
+
+You should never call these endpoints yourself. They are documented purely so you understand how Rivet works under the hood.
+
+### Timeouts
+
+Serverless platforms like Vercel have function timeouts. Rivet handles this automatically by migrating actors between function invocations, preserving state through `ctx.state`. Write your code as if it runs forever; Rivet handles the rest.
 
 Read more about [how we handle timeouts](/blog/2025-10-20-how-we-built-websocket-servers-for-vercel-functions/#timeouts-and-failover).
 
-#### Shutdown Sequence
+### Shutdown Sequence
 
-Each serverless request has a configurable lifespan (`requestLifespan`, default: 60 minutes). Set this to match your platform's function timeout (e.g. `requestLifespan: 3600` for Vercel Pro).
+Each serverless request has a configurable lifespan (`requestLifespan`, default: 60 minutes). Set this to match your platform's function timeout (for example, `requestLifespan: 3600` for Vercel Pro).
 
-When the request nears its lifespan, the engine reserves a grace period (`serverless_drain_grace_period`, default: 10 seconds) at the end to gracefully stop actors. For example, with a 3600-second lifespan, actors begin stopping at 3590 seconds. After the full lifespan elapses, the connection is forcibly closed and any remaining actors are rescheduled.
+When the request nears its lifespan, the engine reserves a grace period (`serverless_drain_grace_period`, default: 10 seconds) at the end to gracefully stop actors. With a 3600-second lifespan, actors begin stopping at 3590 seconds. After the full lifespan elapses, the connection is forcibly closed and any remaining actors are rescheduled.
 
 See [Limits](/docs/actors/limits#serverless-shutdown) for configuration details.
 
-## Runners
+## Envoy Mode
 
-Runners run actors as long-running background processes without exposing an HTTP endpoint.
+In envoy mode, your app opens a persistent WebSocket out to the Rivet engine and stays connected. Rivet routes actor work over that socket. Run as many envoy replicas as you need behind an autoscaler (e.g. Kubernetes HPA); each replica registers itself on startup, so adding or removing replicas is transparent to clients.
 
-### When to Use Runners
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Rivet as Rivet Engine
+    participant App as Your App
+    participant Actor as counter actor
 
-- **No HTTP server**: Your app does not or cannot expose an HTTP server
-- **No load balancer**: You don't have a load balancer to distribute HTTP requests across your servers
-- **Custom scaling**: You have custom scaling requirements
+    Note over App: registry.start()
+    App->>Rivet: WebSocket connect
+    Note over App,Rivet: Persistent connection
 
-### Example
-
-```typescript runner.ts
-import { actor, setup } from "rivetkit";
-
-const myActor = actor({ state: {}, actions: {} });
-const registry = setup({ use: { myActor } });
-
-registry.startEnvoy();
+    Client->>Rivet: create actor
+    Rivet->>App: start actor (over WebSocket)
+    App->>Actor: spawn
 ```
 
-The runner runs in the background, ready to run actors.
+### Setup
 
-### Architecture
+```typescript
+import { actor, setup } from "rivetkit";
 
-On startup, your backend calls `registry.startEnvoy()` which opens a persistent connection to the Rivet Engine. When a client creates an actor, the engine sends a command through this connection to start the actor on your backend.
+const counter = actor({ state: {}, actions: {} });
 
-<img src={imgRunners.src} alt="Runners architecture diagram" />
+const registry = setup({
+  use: { counter },
+});
 
-### Configuration
+registry.start();
+```
 
-#### Runner Pool
-
-Use `RIVET_RUNNER` to assign runners to a pool. This lets you control which runners handle specific actors.
+Configure the engine endpoint in the environment:
 
 ```bash
-RIVET_RUNNER=gpu-workers
+RIVET_ENDPOINT=https://...
+RIVET_TOKEN=...
+RIVET_NAMESPACE=...
+RIVET_POOL=default
+RIVET_VERSION=123
+```
+
+### Pool Configuration
+
+Use `RIVET_POOL` (or the `pool` config field) to assign envoys to a pool. Pools let you route specific actors to specific envoy groups:
+
+```bash
+RIVET_POOL=workers
 ```
 
 ```typescript
 import { actor, setup } from "rivetkit";
 
-const myActor = actor({ state: {}, actions: {} });
+const counter = actor({ state: {}, actions: {} });
 
 const registry = setup({
-  use: { myActor },
-  envoy: {
-    poolName: "gpu-workers",
-  },
+  pool: "workers",
+  use: { counter },
 });
+
+registry.start();
 ```
 
-## Comparison
+## Defaults
 
-| Mode | Method | Use Case |
-|------|--------|----------|
-| Auto | `registry.start()` | Simplest setup. Starts server, serves static files, and runs actors. |
-| Serverless | `registry.serve()` | Fetch handler for serverless platforms |
-| Serverless | `registry.handler()` | Integrating with existing routers (Hono, Elysia, etc.) |
-| Runner | `registry.startEnvoy()` | Long-running processes without HTTP endpoints |
+`setup({})` only defines actors and registry-wide config. The method you call chooses how the app runs:
+
+- `registry.start()` starts a persistent outbound envoy.
+- `registry.fetchHandler({ path })` returns a serverless fetch function.
+- `registry.listen({ port, path })` starts the native HTTP server and serves `./public` by default.
+
+## Entrypoint Reference
+
+| Entrypoint | Mode | Purpose |
+| --- | --- | --- |
+| `registry.start()` | Envoy | Start a persistent outbound envoy. |
+| `registry.fetchHandler({ path })` | Serverless | Return a fetch function for Workers, Vercel, Hono, Deno, Bun, and similar runtimes. |
+| `registry.listen({ port, path })` | Native server | Start RivetKit's native HTTP server and static file server. |
+
+Only call one entrypoint per registry. The entrypoint method selects the mode.
+RivetKit throws if you call another entrypoint on the same registry, for example `registry.start()` after `registry.fetchHandler(...)`.

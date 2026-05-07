@@ -1,29 +1,24 @@
 import { RIVET_GLOBAL_API_HOSTNAME } from "./rivet-constants";
 
 /**
- * RivetKit uses `RIVET_ENVOY_VERSION` for runner versioning and deploy drains
+ * RivetKit uses `RIVET_VERSION` for runner versioning and deploy drains
  * ([docs](https://rivet.dev/docs/actors/versions)). On Render, `RENDER_GIT_COMMIT` is
  * injected at build and runtime ([Render default env](https://render.com/docs/environment-variables)),
  * so we derive a stable integer from the commit SHA—no manual bump per deploy.
  *
- * Override with `RIVET_ENVOY_VERSION` (or legacy `RIVET_RUNNER_VERSION`) when needed.
+ * Override with `RIVET_VERSION` when needed.
  */
 function ensureRivetEnvoyVersionFromEnvironment(): void {
 	if (
-		process.env.RIVET_ENVOY_VERSION !== undefined &&
-		process.env.RIVET_ENVOY_VERSION !== ""
+		process.env.RIVET_VERSION !== undefined &&
+		process.env.RIVET_VERSION !== ""
 	) {
-		return;
-	}
-	const legacy = process.env.RIVET_RUNNER_VERSION;
-	if (legacy !== undefined && legacy !== "") {
-		process.env.RIVET_ENVOY_VERSION = legacy;
 		return;
 	}
 	const sha = process.env.RENDER_GIT_COMMIT;
 	if (sha && /^[0-9a-f]{7,40}$/i.test(sha)) {
 		const n = Number.parseInt(sha.slice(0, 8), 16);
-		process.env.RIVET_ENVOY_VERSION = String(n > 0 ? n : 1);
+		process.env.RIVET_VERSION = String(n > 0 ? n : 1);
 	}
 }
 

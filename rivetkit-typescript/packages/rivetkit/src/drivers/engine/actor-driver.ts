@@ -217,11 +217,11 @@ export class EngineActorDriver implements ActorDriver {
 
 		// Create configuration
 		const envoyConfig: EnvoyConfig = {
-			version: config.envoy.version,
+			version: config.version,
 			endpoint: getEndpoint(config),
 			token: config.token,
 			namespace: config.namespace,
-			poolName: config.envoy.poolName,
+			poolName: config.pool,
 			notGlobal: true,
 			metadata: {
 				rivetkit: { version: VERSION },
@@ -262,7 +262,7 @@ export class EngineActorDriver implements ActorDriver {
 			msg: "envoy client started",
 			endpoint: config.endpoint,
 			namespace: config.namespace,
-			poolName: config.envoy.poolName,
+			poolName: config.pool,
 		});
 	}
 

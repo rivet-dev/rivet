@@ -46,7 +46,8 @@ app.get(
 		};
 	}),
 );
+const handler = registry.fetchHandler({ path: "/api/rivet" });
 
-app.all("/api/rivet/*", (c) => registry.handler(c.req.raw));
+app.all("/api/rivet/*", (c) => handler(c.req.raw));
 
 export default app;

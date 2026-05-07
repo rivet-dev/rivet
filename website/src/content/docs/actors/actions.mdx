@@ -65,7 +65,7 @@ console.log(result); // The value returned by the action
 Learn more about [communicating with actors from the frontend](/docs/actors/communicating-between-actors).
 
 </Tab>
-<Tab title="Backend (registry.handler)">
+<Tab title="Backend (fetch handler)">
 
 ```typescript server.ts
 import { actor, setup } from "rivetkit";
@@ -92,7 +92,8 @@ const client = createClient<typeof registry>("http://localhost:6420");
 const app = new Hono();
 
 // Mount Rivet handler
-app.all("/api/rivet/*", (c) => registry.handler(c.req.raw));
+const handler = registry.fetchHandler({ path: "/api/rivet" });
+app.all("/api/rivet/*", (c) => handler(c.req.raw));
 
 // Use the client to call actions on a request
 app.get("/foo", async (c) => {

@@ -150,7 +150,7 @@ impl EnvoyCallbacks for RegistryCallbacks {
 impl ServeSettings {
 	fn from_env() -> Self {
 		Self {
-			version: env::var("RIVET_ENVOY_VERSION")
+			version: env::var("RIVET_VERSION")
 				.ok()
 				.and_then(|value| value.parse().ok())
 				.unwrap_or(1),
@@ -158,8 +158,12 @@ impl ServeSettings {
 				.unwrap_or_else(|_| "http://127.0.0.1:6420".to_owned()),
 			token: Some(env::var("RIVET_TOKEN").unwrap_or_else(|_| "dev".to_owned())),
 			namespace: env::var("RIVET_NAMESPACE").unwrap_or_else(|_| "default".to_owned()),
-			pool_name: env::var("RIVET_POOL_NAME").unwrap_or_else(|_| "rivetkit-rust".to_owned()),
+			pool_name: env::var("RIVET_POOL").unwrap_or_else(|_| "rivetkit-rust".to_owned()),
 			engine_binary_path: env::var_os("RIVET_ENGINE_BINARY_PATH").map(PathBuf::from),
+			dev_serverless_url: None,
+			dev_serverless_manual: false,
+			dev_serverless_drain_timeout: None,
+			dev_serverless_request_timeout: None,
 			handle_inspector_http_in_runtime: false,
 			serverless_base_path: None,
 			serverless_package_version: env!("CARGO_PKG_VERSION").to_owned(),
@@ -188,6 +192,10 @@ impl ServeConfig {
 			namespace: settings.namespace,
 			pool_name: settings.pool_name,
 			engine_binary_path: settings.engine_binary_path,
+			dev_serverless_url: settings.dev_serverless_url,
+			dev_serverless_manual: settings.dev_serverless_manual,
+			dev_serverless_drain_timeout: settings.dev_serverless_drain_timeout,
+			dev_serverless_request_timeout: settings.dev_serverless_request_timeout,
 			handle_inspector_http_in_runtime: settings.handle_inspector_http_in_runtime,
 			serverless_base_path: settings.serverless_base_path,
 			serverless_package_version: settings.serverless_package_version,

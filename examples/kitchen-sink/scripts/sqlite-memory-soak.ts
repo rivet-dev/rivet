@@ -686,8 +686,6 @@ async function startKitchenSinkServer(
 		MALLOC_ARENA_MAX: process.env.MALLOC_ARENA_MAX ?? "2",
 		MALLOC_TRIM_THRESHOLD_: process.env.MALLOC_TRIM_THRESHOLD_ ?? "131072",
 	};
-	delete env.RIVET_RUN_ENGINE;
-
 	const nodeArgs = [
 		...(args.forceGcSamples ? ["--expose-gc"] : []),
 		"--import",

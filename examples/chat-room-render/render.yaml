@@ -6,7 +6,7 @@
 #
 # Monorepo: set Root Directory to `examples/chat-room-render`.
 #
-# RIVET_ENVOY_VERSION is derived automatically from RENDER_GIT_COMMIT.
+# RIVET_VERSION is derived automatically from RENDER_GIT_COMMIT.
 
 services:
   - type: web

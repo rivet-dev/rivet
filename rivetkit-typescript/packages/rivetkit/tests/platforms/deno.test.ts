@@ -73,6 +73,7 @@ const registry = createRegistry({
 	token: "${token}",
 	runnerName: "${runnerName}",
 });
+const handler = registry.fetchHandler({ path: "/api/rivet" });
 
 Deno.serve(
 	{
@@ -89,7 +90,7 @@ Deno.serve(
 			return new Response("ok");
 		}
 
-		return await registry.handler(request);
+		return await handler(request);
 	},
 );
 `,

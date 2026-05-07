@@ -152,7 +152,7 @@ export function convertRegistryConfigToClientConfig(
 		endpoint: config.endpoint,
 		token: config.token,
 		namespace: config.namespace,
-		poolName: config.envoy.poolName,
+		poolName: config.pool,
 		headers: config.headers,
 		gateway: { skipReadyWait: false },
 		encoding: "bare",

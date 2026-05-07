@@ -82,7 +82,7 @@ describe("native runtime config errors", () => {
 			use: {
 				test: testActor,
 			},
-			startEngine: false,
+			endpoint: "http://127.0.0.1:6420",
 		});
 		const config = registry.parseConfig();
 		config.endpoint = undefined as never;

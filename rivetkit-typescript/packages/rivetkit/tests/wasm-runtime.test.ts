@@ -272,12 +272,12 @@ describe("WasmCoreRuntime", () => {
 				echo: (_ctx, value: string) => ({ value }),
 			},
 		});
-		const config = RegistryConfigSchema.parse({
-			use: { portable: portableActor },
-			runtime: "wasm",
-			sqlite: "remote",
-			startEngine: false,
-		});
+			const config = RegistryConfigSchema.parse({
+				use: { portable: portableActor },
+				runtime: "wasm",
+				sqlite: "remote",
+				endpoint: "http://127.0.0.1:6420",
+			});
 		const runtime = new WasmCoreRuntime(fakeWasmBindings());
 		const factory = buildNativeFactory(
 			runtime,

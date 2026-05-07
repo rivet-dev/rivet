@@ -1,17 +1,65 @@
+import { Hono } from "hono";
+import { z } from "zod";
+import { toRivetError } from "@/actor/errors";
 import { ENGINE_ENDPOINT } from "@/common/engine";
-import { configureServerlessPool } from "@/serverless/configure";
 import { VERSION } from "@/utils";
+import {
+	crossPlatformServe,
+	loadRuntimeServeStatic,
+} from "@/utils/serve";
 import {
 	type RegistryActors,
 	type RegistryConfig,
+	type EntrypointConfigInput,
 	type RegistryConfigInput,
 	RegistryConfigSchema,
 } from "./config";
+import { EnvoyConfigSchema } from "./config/envoy";
 import { logger } from "./log";
 import { buildConfiguredRegistry } from "./native";
 import type { RuntimeServerlessResponseHead } from "./runtime";
 
 type ShutdownSignal = "SIGINT" | "SIGTERM";
+
+function metadataError(metadata: unknown): string | undefined {
+	if (
+		typeof metadata === "object" &&
+		metadata !== null &&
+		"error" in metadata &&
+		typeof metadata.error === "string"
+	) {
+		return metadata.error;
+	}
+
+	return undefined;
+}
+
+function isEngineReachabilityError(message: string): boolean {
+	return /cannot reach Rivet Engine|Connection refused|ECONNREFUSED|tcp connect error|error sending request/i.test(
+		message,
+	);
+}
+
+function logRegistryServeError(config: RegistryConfig, err: unknown): void {
+	const rivetError = toRivetError(err);
+	const detail = metadataError(rivetError.metadata) ?? rivetError.message;
+
+	if (config.endpoint && isEngineReachabilityError(detail)) {
+		logger().warn(
+			{
+				endpoint: config.endpoint,
+				namespace: config.namespace,
+				group: rivetError.group,
+				code: rivetError.code,
+				error: detail,
+			},
+			"cannot reach Rivet Engine",
+		);
+		return;
+	}
+
+	logger().warn({ err }, "runtime registry serve errored");
+}
 
 export type FetchHandler = (
 	request: Request,
@@ -25,6 +73,93 @@ export interface ServerlessHandler {
 export interface RegistryDiagnostics {
 	mode: string;
 	envoyActiveActorCount?: number | null;
+}
+
+const FetchHandlerDevConfigSchema = z.object({
+	url: z.string().url(),
+	startEngine: z.boolean().optional(),
+	drainTimeout: z.number().int().positive().optional(),
+	requestTimeout: z.number().int().positive().optional(),
+});
+export type FetchHandlerDevConfig = z.infer<
+	typeof FetchHandlerDevConfigSchema
+>;
+export type FetchHandlerDev = false | string | FetchHandlerDevConfig;
+
+const FetchHandlerOptsSchema = z.object({
+	path: z.string().min(1),
+	dev: z
+		.union([z.literal(false), z.string().url(), FetchHandlerDevConfigSchema])
+		.optional(),
+	publicEndpoint: z.string().optional(),
+	publicToken: z.string().optional(),
+	maxStartPayloadBytes: z.number().int().positive().optional(),
+});
+export type FetchHandlerOpts = z.input<typeof FetchHandlerOptsSchema>;
+
+const StaticConfigSchema = z.union([
+	z.boolean(),
+	z.string().min(1),
+	z.object({ dir: z.string().min(1) }),
+]);
+export type StaticConfig = z.input<typeof StaticConfigSchema>;
+
+const ListenDevConfigSchema = z.object({
+	url: z.string().url().optional(),
+	startEngine: z.boolean().optional(),
+	drainTimeout: z.number().int().positive().optional(),
+	requestTimeout: z.number().int().positive().optional(),
+});
+export type ListenDevConfig = z.infer<typeof ListenDevConfigSchema>;
+export type ListenDev = boolean | ListenDevConfig;
+
+const ListenOptsSchema = z
+	.object({
+		port: z.number().int().positive(),
+		host: z.string().optional(),
+		path: z.string().min(1),
+		static: StaticConfigSchema.optional(),
+		dev: z.union([z.boolean(), ListenDevConfigSchema]).optional(),
+	})
+	.strict();
+export type ListenOpts = z.input<typeof ListenOptsSchema>;
+
+const StartOptsSchema = z
+	.object({
+		envoy: EnvoyConfigSchema.optional().default(() =>
+			EnvoyConfigSchema.parse({}),
+		),
+	})
+	.strict()
+	.optional()
+	.default(() => ({ envoy: EnvoyConfigSchema.parse({}) }));
+export type StartOpts = z.input<typeof StartOptsSchema>;
+
+type EntrypointKind = "start" | "fetchHandler" | "listen";
+
+function isDevelopmentEnv(): boolean {
+	return (
+		typeof process !== "undefined" &&
+		process.env?.NODE_ENV === "development"
+	);
+}
+
+function normalizeBasePath(path: string): string {
+	const trimmed = path.trim();
+	if (trimmed === "" || trimmed === "/") return "/";
+	return `/${trimmed.replace(/^\/+|\/+$/g, "")}`;
+}
+
+function routeForBasePath(path: string): string {
+	const normalized = normalizeBasePath(path);
+	return normalized === "/" ? "/*" : `${normalized}/*`;
+}
+
+function staticDirFromConfig(config: StaticConfig | undefined): string | undefined {
+	if (config === false) return undefined;
+	if (config === true || config === undefined) return "public";
+	if (typeof config === "string") return config;
+	return config.dir;
 }
 
 export class Registry<A extends RegistryActors> {
@@ -41,7 +176,8 @@ export class Registry<A extends RegistryActors> {
 	#runtimeServePromise?: Promise<void>;
 	#runtimeServeConfiguredPromise?: ReturnType<typeof buildConfiguredRegistry>;
 	#runtimeServerlessPromise?: ReturnType<typeof buildConfiguredRegistry>;
-	#configureServerlessPoolPromise?: Promise<void>;
+	#runtimeHttpServerPromise?: Promise<{ closeServer?: () => void }>;
+	#activeEntrypoint?: EntrypointKind;
 	#welcomePrinted = false;
 	#shutdownInstalled = false;
 	#shutdownInFlight: Promise<void> | null = null;
@@ -51,72 +187,51 @@ export class Registry<A extends RegistryActors> {
 		this.#config = config;
 	}
 
-	#ensureServerlessPoolConfigured(config: RegistryConfig): Promise<void> | undefined {
-		if (!config.configurePool) return undefined;
-
-		if (!this.#configureServerlessPoolPromise) {
-			this.#configureServerlessPoolPromise = configureServerlessPool(config).catch(
-				(error) => {
-					this.#configureServerlessPoolPromise = undefined;
-					throw error;
-				},
+	#claimEntrypoint(kind: EntrypointKind): void {
+		if (this.#activeEntrypoint !== undefined) {
+			throw new Error(
+				`registry.${kind}() cannot be used after registry.${this.#activeEntrypoint}() has already selected the runtime entrypoint.`,
 			);
-			this.#configureServerlessPoolPromise.catch(() => {});
 		}
-
-		return this.#configureServerlessPoolPromise;
+		this.#activeEntrypoint = kind;
 	}
 
-	/**
-	 * Handle an incoming HTTP request for serverless deployments.
-	 *
-	 * @example
-	 * ```ts
-	 * const app = new Hono();
-	 * app.all("/api/rivet/*", (c) => registry.handler(c.req.raw));
-	 * export default app;
-	 * ```
-	 */
-	public async handler(request: Request): Promise<Response> {
-		const config = this.parseConfig();
-		this.#printWelcome(config, "serverless");
+	#parseConfigWithEntrypoint(
+		entrypoint: EntrypointConfigInput,
+	): RegistryConfig {
+		return RegistryConfigSchema.parse({
+			...this.#config,
+			entrypoint,
+		});
+	}
 
-		if (!this.#runtimeServerlessPromise) {
-			this.#runtimeServerlessPromise = buildConfiguredRegistry(config);
-		}
+	#createServerlessHandler(
+		config: RegistryConfig,
+		configuredRegistryPromise: ReturnType<typeof buildConfiguredRegistry>,
+		kind: "serverless" | "listen" = "serverless",
+	): FetchHandler {
+		this.#printWelcome(config, kind);
 
+		return async (request: Request): Promise<Response> => {
+			return await this.#handleServerlessRequest(
+				request,
+				config,
+				configuredRegistryPromise,
+			);
+		};
+	}
+
+	async #handleServerlessRequest(
+		request: Request,
+		config: RegistryConfig,
+		configuredRegistryPromise: ReturnType<typeof buildConfiguredRegistry>,
+	): Promise<Response> {
 		const { runtime, registry, serveConfig } =
-			await this.#runtimeServerlessPromise;
+			await configuredRegistryPromise;
 		const isStartRequest = isServerlessStartRequest(
 			request,
 			serveConfig.serverlessBasePath ?? "/api/rivet",
 		);
-		const isMetadataRequest = isServerlessMetadataRequest(
-			request,
-			serveConfig.serverlessBasePath ?? "/api/rivet",
-		);
-		const isEngineMetadataRequest =
-			request.headers.get("user-agent")?.startsWith("RivetEngine/") ?? false;
-
-		if (isStartRequest) {
-			try {
-				await this.#ensureServerlessPoolConfigured(config);
-			} catch (error) {
-				return new Response(
-					JSON.stringify({
-						group: "guard",
-						code: "service_unavailable",
-						message: "Serverless pool is not configured.",
-						metadata: null,
-					}),
-					{
-						status: 503,
-						headers: { "content-type": "application/json" },
-					},
-				);
-			}
-		}
-
 		const cancelToken = runtime.createCancellationToken();
 		const abort = () => runtime.cancelCancellationToken(cancelToken);
 		if (request.signal.aborted) {
@@ -240,25 +355,6 @@ export class Registry<A extends RegistryActors> {
 			throw err;
 		}
 
-		if (isMetadataRequest && !isEngineMetadataRequest) {
-			try {
-				await this.#ensureServerlessPoolConfigured(config);
-			} catch (error) {
-				return new Response(
-					JSON.stringify({
-						group: "guard",
-						code: "service_unavailable",
-						message: "Serverless pool is not configured.",
-						metadata: null,
-					}),
-					{
-						status: 503,
-						headers: { "content-type": "application/json" },
-					},
-				);
-			}
-		}
-
 		return new Response(stream, {
 			status: head.status,
 			headers: head.headers,
@@ -270,13 +366,37 @@ export class Registry<A extends RegistryActors> {
 	 *
 	 * @example
 	 * ```ts
-	 * export default registry.serve();
+	 * const fetch = registry.fetchHandler({ path: "/api/rivet" });
+	 * export default { fetch };
 	 * ```
 	 */
-	public serve(): ServerlessHandler {
-		return {
-			fetch: (request) => this.handler(request),
-		};
+	public fetchHandler(opts: FetchHandlerOpts): FetchHandler {
+		const parsed = FetchHandlerOptsSchema.parse(opts);
+		const dev = this.#resolveFetchHandlerDev(parsed.dev);
+		const config = this.#parseConfigWithEntrypoint({
+			kind: "serverless",
+			startEngine: dev?.startEngine,
+			devServerless: dev?.url
+				? {
+						url: dev.url,
+						drainTimeout: dev.drainTimeout,
+						requestTimeout: dev.requestTimeout,
+					}
+				: undefined,
+			serverless: {
+				basePath: normalizeBasePath(parsed.path),
+				publicEndpoint: parsed.publicEndpoint,
+				publicToken: parsed.publicToken,
+				maxStartPayloadBytes: parsed.maxStartPayloadBytes,
+			},
+		});
+
+		this.#claimEntrypoint("fetchHandler");
+		this.#runtimeServerlessPromise = buildConfiguredRegistry(config);
+		return this.#createServerlessHandler(
+			config,
+			this.#runtimeServerlessPromise,
+		);
 	}
 
 	public async diagnostics(): Promise<RegistryDiagnostics> {
@@ -299,7 +419,7 @@ export class Registry<A extends RegistryActors> {
 	/**
 	 * Starts an actor envoy for standalone server deployments.
 	 */
-	#startEnvoy(config: RegistryConfig, printWelcome: boolean) {
+	#startPersistentRuntime(config: RegistryConfig, printWelcome: boolean) {
 		if (!this.#runtimeServePromise) {
 			const configuredRegistryPromise = buildConfiguredRegistry(config);
 			this.#runtimeServeConfiguredPromise = configuredRegistryPromise;
@@ -312,7 +432,7 @@ export class Registry<A extends RegistryActors> {
 					// rejection unhandled. Downstream awaits (e.g. #runShutdown's
 					// Promise.race) attach their own catches and still observe
 					// resolution via the race.
-					logger().warn({ err }, "runtime registry serve errored");
+					logRegistryServeError(config, err);
 				});
 			// Install signal handlers once an envoy lifecycle has begun. Only
 			// Mode A ever reaches here. Mode B (handler(request)) intentionally
@@ -322,7 +442,7 @@ export class Registry<A extends RegistryActors> {
 			this.#installSignalHandlers(config, configuredRegistryPromise);
 		}
 		if (printWelcome) {
-			this.#printWelcome(config, "serverful");
+			this.#printWelcome(config, "envoy");
 		}
 	}
 
@@ -434,6 +554,15 @@ export class Registry<A extends RegistryActors> {
 				// already logged any serve-side error.
 				await runtimeServePromise.catch(() => undefined);
 			}
+			const runtimeHttpServerPromise = this.#runtimeHttpServerPromise;
+			if (runtimeHttpServerPromise !== undefined) {
+				try {
+					const server = await runtimeHttpServerPromise;
+					server.closeServer?.();
+				} catch (err) {
+					logger().warn({ err }, "runtime HTTP server shutdown errored");
+				}
+			}
 		};
 		await Promise.race([
 			drain(),
@@ -454,12 +583,8 @@ export class Registry<A extends RegistryActors> {
 		this.#signalHandlers = {};
 	}
 
-	public startEnvoy() {
-		this.#startEnvoy(this.parseConfig(), true);
-	}
-
 	/**
-	 * Starts the actor envoy for standalone server deployments.
+	 * Starts the actor envoy.
 	 *
 	 * @example
 	 * ```ts
@@ -467,14 +592,110 @@ export class Registry<A extends RegistryActors> {
 	 * registry.start();
 	 * ```
 	 */
-	public start() {
-		const config = this.parseConfig();
-		this.#startEnvoy(config, true);
+	public start(opts?: StartOpts): void {
+		const parsed = StartOptsSchema.parse(opts);
+		const config = this.#parseConfigWithEntrypoint({
+			kind: "envoy",
+			envoy: parsed.envoy,
+		});
+		this.#claimEntrypoint("start");
+		this.#startPersistentRuntime(config, true);
+	}
+
+	/**
+	 * Starts a local server for serverless deployments.
+	 */
+	public listen(opts: ListenOpts): void {
+		const parsed = ListenOptsSchema.parse(opts);
+		const dev = this.#resolveListenDev(parsed);
+		const basePath = normalizeBasePath(parsed.path);
+		const config = this.#parseConfigWithEntrypoint({
+			kind: "listen",
+			startEngine: dev?.startEngine,
+			devServerless: dev?.url
+				? {
+						url: dev.url,
+						drainTimeout: dev.drainTimeout,
+						requestTimeout: dev.requestTimeout,
+					}
+				: undefined,
+			serverless: {
+				basePath,
+			},
+			staticDir: staticDirFromConfig(parsed.static),
+			httpBasePath: basePath,
+			httpPort: parsed.port,
+			httpHost: parsed.host,
+		});
+
+		this.#claimEntrypoint("listen");
+		const configuredRegistryPromise = buildConfiguredRegistry(config);
+		this.#runtimeServerlessPromise = configuredRegistryPromise;
+		const handler = this.#createServerlessHandler(
+			config,
+			configuredRegistryPromise,
+			"listen",
+		);
+		this.#runtimeHttpServerPromise = this.#startHttpServer(config, handler);
+		this.#installSignalHandlers(config, configuredRegistryPromise);
+	}
+
+	async #startHttpServer(
+		config: RegistryConfig,
+		handler: FetchHandler,
+	): Promise<{ closeServer?: () => void }> {
+		const app = new Hono();
+		const route = routeForBasePath(config.httpBasePath ?? "/api/rivet");
+		app.all(route, (c) => handler(c.req.raw));
+		if (config.staticDir) {
+			const runtime =
+				"Deno" in globalThis
+					? "deno"
+					: "Bun" in globalThis
+						? "bun"
+						: "node";
+			const serveStatic = await loadRuntimeServeStatic(runtime);
+			app.use("/*", serveStatic({ root: config.staticDir }));
+			app.get("*", serveStatic({ root: config.staticDir, path: "/index.html" }));
+		}
+		return await crossPlatformServe(config, config.httpPort ?? 6421, app);
+	}
+
+	#resolveFetchHandlerDev(
+		dev: z.infer<typeof FetchHandlerOptsSchema>["dev"],
+	): (FetchHandlerDevConfig & { startEngine: boolean }) | undefined {
+		if (dev === undefined || dev === false || !isDevelopmentEnv()) {
+			return undefined;
+		}
+		if (typeof dev === "string") {
+			return { url: dev, startEngine: true };
+		}
+		return { url: dev.url, startEngine: dev.startEngine ?? true };
+	}
+
+	#resolveListenDev(
+		opts: z.infer<typeof ListenOptsSchema>,
+	): (ListenDevConfig & { url: string; startEngine: boolean }) | undefined {
+		if (opts.dev === false || !isDevelopmentEnv()) {
+			return undefined;
+		}
+		const inferred = opts.dev === undefined;
+		if (inferred) {
+			logger().info("RivetKit dev mode enabled via NODE_ENV=development");
+		}
+		const defaultUrl = `http://localhost:${opts.port}${normalizeBasePath(opts.path)}`;
+		if (opts.dev === undefined || opts.dev === true) {
+			return { url: defaultUrl, startEngine: true };
+		}
+		return {
+			url: opts.dev.url ?? defaultUrl,
+			startEngine: opts.dev.startEngine ?? true,
+		};
 	}
 
 	#printWelcome(
 		config: RegistryConfig,
-		kind: "serverless" | "serverful",
+		kind: "serverless" | "envoy" | "listen",
 	): void {
 		if (config.noWelcome || this.#welcomePrinted) return;
 		this.#welcomePrinted = true;
@@ -485,8 +706,12 @@ export class Registry<A extends RegistryActors> {
 		};
 
 		console.log();
-		console.log(
-			`  RivetKit ${VERSION} (Engine - ${kind === "serverless" ? "Serverless" : "Serverful"})`,
+		console.log(`  RivetKit ${VERSION} (${config.mode})`);
+		logLine("Entrypoint", kind);
+		logLine("Mode", config.mode);
+		logLine(
+			"Engine",
+			config.startEngine ? "managed local" : "external",
 		);
 
 		if (config.namespace !== "default") {
@@ -502,6 +727,11 @@ export class Registry<A extends RegistryActors> {
 		if (kind === "serverless" && config.publicEndpoint) {
 			logLine("Client", config.publicEndpoint);
 		}
+		if (kind === "listen") {
+			logLine("HTTP", `${config.httpHost ?? "0.0.0.0"}:${config.httpPort}`);
+			logLine("Path", config.httpBasePath ?? "/api/rivet");
+			logLine("Static", config.staticDir ?? "disabled");
+		}
 
 		logLine("Actors", Object.keys(config.use).length.toString());
 		console.log();
@@ -514,14 +744,6 @@ function isServerlessStartRequest(request: Request, basePath: string): boolean {
 	const normalizedBase =
 		basePath === "/" ? "" : `/${basePath.replace(/^\/+|\/+$/g, "")}`;
 	return parsed.pathname === `${normalizedBase}/start`;
-}
-
-function isServerlessMetadataRequest(request: Request, basePath: string): boolean {
-	if (request.method !== "GET") return false;
-	const parsed = new URL(request.url);
-	const normalizedBase =
-		basePath === "/" ? "" : `/${basePath.replace(/^\/+|\/+$/g, "")}`;
-	return parsed.pathname === `${normalizedBase}/metadata`;
 }
 
 export function setup<A extends RegistryActors>(

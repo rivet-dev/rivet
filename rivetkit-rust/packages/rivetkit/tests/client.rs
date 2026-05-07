@@ -145,6 +145,7 @@ fn test_envoy_handle(endpoint: String) -> EnvoyHandle {
 			token: Some("secret".to_string()),
 			namespace: "test-ns".to_string(),
 			pool_name: "test-pool".to_string(),
+			envoy_key: None,
 			prepopulate_actor_names: HashMap::new(),
 			metadata: None,
 			not_global: true,

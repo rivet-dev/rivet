@@ -108,7 +108,7 @@ export const userActor = actor({
 export const registry = setup({
   use: { userActor },
 });
-registry.start();
+registry.listen({ port: 3000, path: "/api/rivet" });
 ```
 
 ```typescript client.ts @nocheck
@@ -229,7 +229,7 @@ export const userActor = actor({
 export const registry = setup({
   use: { userActor },
 });
-registry.start();
+registry.listen({ port: 3000, path: "/api/rivet" });
 ```
 
 ```typescript client.ts @nocheck

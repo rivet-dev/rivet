@@ -64,7 +64,7 @@ const reviewer = agentOs({
 });
 
 export const registry = setup({ use: { writer, reviewer } });
-registry.start();
+registry.listen({ port: 3000, path: "/api/rivet" });
 ```
 
 ```ts @nocheck client.ts

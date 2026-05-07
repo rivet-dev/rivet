@@ -109,7 +109,7 @@ export const counter = actor({
 });
 
 export const registry = setup({ use: { counter } });
-registry.start();
+registry.listen({ port: 3000, path: "/api/rivet" });
 ```
 
 ```typescript client.ts
@@ -145,7 +145,7 @@ export const counter = actor({
 });
 
 export const registry = setup({ use: { counter } });
-registry.start();
+registry.listen({ port: 3000, path: "/api/rivet" });
 ```
 
 ```typescript client.ts

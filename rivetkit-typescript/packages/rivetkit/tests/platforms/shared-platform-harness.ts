@@ -231,10 +231,7 @@ export function createRegistry(config: RegistryConfig) {
 \t\tendpoint: config.endpoint,
 \t\tnamespace: config.namespace,
 \t\ttoken: config.token,
-\t\tenvoy: {
-\t\t\tpoolName: config.runnerName,
-\t\t},
-\t\t...(config.serverless ? { serverless: config.serverless } : {}),
+\t\tpool: config.runnerName,
 \t\tnoWelcome: true,
 \t});
 }

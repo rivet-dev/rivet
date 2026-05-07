@@ -10,7 +10,7 @@
 #
 # Rivet Cloud: RIVET_ENDPOINT (sk) and RIVET_PUBLIC_ENDPOINT (pk) for the browser bundle.
 #   Use Rivet’s regional api-*.rivet.dev host from the Rivet dashboard.
-#   RIVET_ENVOY_VERSION: optional override; if unset, the app derives a version from RENDER_GIT_COMMIT on Render.
+#   RIVET_VERSION: optional override; if unset, the app derives a version from RENDER_GIT_COMMIT on Render.
 
 services:
   - type: web
