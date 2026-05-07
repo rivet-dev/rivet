@@ -3,8 +3,10 @@ import ReactDOM from "react-dom/client";
 import "./index.css";
 import { initThirdPartyProviders } from "@/components";
 import { App, router } from "./app";
+import { maybeStartAgentMocks } from "./lib/agent-mocks";
 
 async function init() {
+	await maybeStartAgentMocks();
 	await initThirdPartyProviders(router, false);
 
 	// biome-ignore lint/style/noNonNullAssertion: it should always be present

@@ -23,6 +23,7 @@ import {
 	useMemo,
 } from "react";
 import { match, P } from "ts-pattern";
+import { z } from "zod";
 import { HelpDropdown } from "@/app/help-dropdown";
 import { isRivetApiError } from "@/lib/errors";
 import { features } from "@/lib/features";
@@ -263,140 +264,194 @@ interface InspectorTokenErrorContext {
 	error?: unknown;
 }
 
-function buildInspectorTokenErrorMessage(
+const EngineErrorBodySchema = z.object({
+	group: z.string(),
+	code: z.string(),
+	message: z.string(),
+	metadata: z.unknown().optional(),
+});
+
+type EngineErrorBody = z.infer<typeof EngineErrorBodySchema>;
+
+function extractEngineErrorBody(error: unknown): EngineErrorBody | undefined {
+	if (!isRivetApiError(error)) return undefined;
+	const parsed = EngineErrorBodySchema.safeParse(error.body);
+	return parsed.success ? parsed.data : undefined;
+}
+
+export function buildInspectorTokenErrorMessage(
 	context: InspectorTokenErrorContext,
 ): ReactNode {
 	const { statusCode, metadata, error } = context;
 
-	const isLocal = metadata?.type === "local";
+	const engineError = extractEngineErrorBody(error);
 
-	// 403: Inspector auth rejected (deployed only).
+	// Version check is orthogonal to the specific error. If RivetKit itself
+	// is below the minimum, surface that first regardless of which call
+	// failed.
+	if (
+		metadata?.version &&
+		isVersionOutdated(metadata.version, RIVET_KIT_MIN_VERSION)
+	) {
+		return (
+			<OutdatedRivetKit
+				currentVersion={metadata.version}
+				error={error}
+			/>
+		);
+	}
+
+	// The inspector token couldn't be retrieved. Two underlying causes:
+	// 1. Engine route is missing entirely (older engine without the KV
+	//    endpoint, returns 404 with no structured body).
+	// 2. Engine returned `actor.kv_key_not_found` for the inspector token
+	//    key.
+	const isKvKeyMissing =
+		engineError?.group === "actor" &&
+		engineError?.code === "kv_key_not_found";
+	const isEndpointMissing = statusCode === 404 && !engineError;
+
+	if (isKvKeyMissing || isEndpointMissing) {
+		return (
+			<MissingInspectorToken
+				currentVersion={metadata?.version}
+				error={error}
+			/>
+		);
+	}
+
+	// Inspector auth rejected. Deployed only: locally we expect to fall
+	// through to the verbose error so the user can debug.
+	const isLocal = metadata?.type === "local";
 	if (statusCode === 403 && !isLocal) {
 		return (
 			<Info>
-				<p>
-					Inspector authentication failed. The dashboard fetches the
-					per-actor inspector token from the engine KV API; this
-					typically indicates a permissions or configuration issue
-					with the request.
-				</p>
-				<p className="mt-2 text-sm text-gray-600">
-					See the{" "}
+				<Icon
+					icon={faExclamationTriangle}
+					className="text-4xl text-destructive"
+				/>
+				<p className="font-semibold">Inspector authentication failed.</p>
+				<p className="text-sm text-muted-foreground">
+					The dashboard fetches the per-actor inspector token from the
+					engine KV API. This typically indicates a permissions or
+					configuration issue with the request. See the{" "}
 					<a
 						href="https://rivet.dev/docs/actors/inspector"
-						className="text-blue-600 hover:underline"
+						className="underline hover:text-foreground"
 					>
 						Inspector documentation
 					</a>{" "}
 					for more details.
 				</p>
+				{engineError ? (
+					<EngineErrorBlock body={engineError} />
+				) : (
+					<ErrorDetails
+						error={isRivetApiError(error) ? error.body : error}
+					/>
+				)}
 			</Info>
 		);
 	}
 
-	// 404: Check version mismatch first
-	if (statusCode === 404) {
-		if (metadata?.version) {
-			const currentVersion = metadata.version;
-			const minVersion = RIVET_KIT_MIN_VERSION;
-			const versionIsOutdated =
-				currentVersion &&
-				minVersion &&
-				isVersionOutdated(currentVersion, minVersion);
-
-			if (versionIsOutdated) {
-				return (
-					<Info>
-						<p>RivetKit version is outdated.</p>
-						<p>
-							Your RivetKit version (
-							<span className="font-mono-console font-bold">
-								{currentVersion}
-							</span>
-							) is older than the required version (
-							<span className="font-mono-console font-bold">
-								{minVersion}
-							</span>
-							).
-						</p>
-						<p className="mt-2">
-							Please upgrade RivetKit to use the Inspector.
-						</p>
-					</Info>
-				);
-			}
-		}
-
-		// 404 in deployed environment but not a version issue
-		if (!isLocal) {
-			return (
-				<Info>
-					<p>
-						Inspector token endpoint returned a 404. Please check
-						your RivetKit version and contact support if the issue
-						persists.
-					</p>
-					<p className="mt-2 text-sm text-gray-600">
-						Current RivetKit version:{" "}
-						<span className="font-mono-console">
-							{metadata?.version || "unknown"}
-						</span>
-					</p>
-				</Info>
-			);
-		}
-
-		// 404 in local environment
+	// Surface the engine's structured error directly.
+	if (engineError) {
 		return (
 			<Info>
-				<p>
-					Inspector token endpoint returned a 404. This might indicate
-					an outdated version of RivetKit.
+				<Icon
+					icon={faExclamationTriangle}
+					className="text-4xl text-destructive"
+				/>
+				<p className="font-semibold">
+					Unable to connect to the Inspector.
 				</p>
-				<p className="mt-2 text-sm text-gray-600">
-					Current RivetKit version:{" "}
-					<span className="font-mono-console">
-						{metadata?.version || "unknown"}
-					</span>
-				</p>
-				<p className="mt-2">
-					Please ensure you're running the latest version of RivetKit.
-				</p>
-				<p className="mt-2 text-sm">
-					If the problem persists, please contact support.
-				</p>
+				<EngineErrorBlock body={engineError} />
 			</Info>
 		);
 	}
 
-	// Unknown error code in deployed environment
-	if (statusCode && statusCode !== 403 && statusCode !== 404 && !isLocal) {
-		return <UnexpectedInspectorError error={error} metadata={metadata} />;
-	}
+	return <UnexpectedInspectorError error={error} metadata={metadata} />;
+}
 
-	// Default/generic error
+function OutdatedRivetKit({
+	currentVersion,
+	error,
+}: {
+	currentVersion: string;
+	error?: unknown;
+}) {
 	return (
 		<Info>
-			<p>Unable to retrieve the Actor's Inspector token.</p>
-			<p>
-				Please ensure the Inspector is enabled for your Actor and that
-				you're using RivetKit version{" "}
-				<b className="font-mono-console">{RIVET_KIT_MIN_VERSION}</b> or
-				newer.
+			<Icon
+				icon={faExclamationTriangle}
+				className="text-4xl text-destructive"
+			/>
+			<p className="font-semibold">RivetKit version is outdated.</p>
+			<p className="text-sm text-muted-foreground">
+				Your RivetKit version (
+				<span className="font-mono-console">{currentVersion}</span>) is
+				older than the required version (
+				<span className="font-mono-console">
+					{RIVET_KIT_MIN_VERSION}
+				</span>
+				). Please upgrade RivetKit to use the Inspector.
 			</p>
-			<p>
+			{error ? (
+				<ErrorDetails
+					error={isRivetApiError(error) ? error.body : error}
+				/>
+			) : null}
+		</Info>
+	);
+}
+
+function MissingInspectorToken({
+	currentVersion,
+	error,
+}: {
+	currentVersion?: string;
+	error: unknown;
+}) {
+	return (
+		<Info>
+			<Icon
+				icon={faExclamationTriangle}
+				className="text-4xl text-destructive"
+			/>
+			<p className="font-semibold">Inspector token not found.</p>
+			<p className="text-sm text-muted-foreground">
+				Ensure the Inspector is enabled on your Actor and that you are
+				running RivetKit{" "}
+				<span className="font-mono-console">
+					{RIVET_KIT_MIN_VERSION}
+				</span>{" "}
+				or newer.
+			</p>
+			<p className="text-sm text-muted-foreground">
 				Current RivetKit version:{" "}
 				<DiscreteCopyButton
-					value={metadata?.version || "unknown"}
+					value={currentVersion || "unknown"}
 					className="inline-block p-0 h-auto px-0.5"
 				>
-					<span className="font-mono-console text-lg font-bold">
-						{metadata?.version || "unknown"}
+					<span className="font-mono-console">
+						{currentVersion || "unknown"}
 					</span>
 				</DiscreteCopyButton>
 			</p>
 			<ErrorDetails error={isRivetApiError(error) ? error.body : error} />
 		</Info>
+	);
+}
+
+function EngineErrorBlock({ body }: { body: EngineErrorBody }) {
+	return (
+		<div className="mt-2 flex flex-col items-center gap-2 w-full">
+			<span className="font-mono-console text-xs px-2 py-0.5 rounded bg-muted text-muted-foreground">
+				{body.group}.{body.code}
+			</span>
+			<p className="text-sm text-muted-foreground">{body.message}</p>
+			<ErrorDetails error={body} />
+		</div>
 	);
 }
 
@@ -424,12 +479,17 @@ function UnexpectedInspectorError({
 	}, []);
 	return (
 		<Info>
-			<p>
-				An unexpected error occurred while connecting to the Inspector.
+			<Icon
+				icon={faExclamationTriangle}
+				className="text-4xl text-destructive"
+			/>
+			<p className="font-semibold">
+				Unable to connect to the Inspector.
 			</p>
-			<p className="mt-2">
-				Our team has been notified. Please try again later or contact
-				support if the issue persists.
+			<p className="text-sm text-muted-foreground">
+				An unexpected error occurred. Our team has been notified.
+				Please try again later or contact support if the issue
+				persists.
 			</p>
 			<ErrorDetails error={error} />
 		</Info>
@@ -689,7 +749,9 @@ function InspectorGuard({
 	}
 
 	if (!data || error || !isInspectorAvailable) {
-		return <OutdatedInspector>{children}</OutdatedInspector>;
+		return (
+			<OutdatedInspector error={error}>{children}</OutdatedInspector>
+		);
 	}
 
 	if (connectionStatus === "error") {
@@ -719,18 +781,49 @@ function InspectorGuard({
 	);
 }
 
-function OutdatedInspector({ children }: { children: ReactNode }) {
+export function OutdatedInspector({
+	children,
+	error,
+}: {
+	children: ReactNode;
+	error?: unknown;
+}) {
+	const engineError = extractEngineErrorBody(error);
+
 	return (
 		<InspectorGuardContext.Provider
 			value={
 				<Info>
-					<p>
-						Please upgrade your Actor to RivetKit version{" "}
-						<b className="font-mono-console">
-							{RIVET_KIT_MIN_VERSION}
-						</b>{" "}
-						to use the Inspector.
+					<Icon
+						icon={faExclamationTriangle}
+						className="text-4xl text-destructive"
+					/>
+					<p className="font-semibold">
+						Unable to connect to the Inspector.
 					</p>
+					{engineError ? (
+						<EngineErrorBlock body={engineError} />
+					) : (
+						<>
+							<p className="text-sm text-muted-foreground">
+								Ensure the Inspector is enabled and that you are
+								running RivetKit{" "}
+								<span className="font-mono-console">
+									{RIVET_KIT_MIN_VERSION}
+								</span>{" "}
+								or newer.
+							</p>
+							{error ? (
+								<ErrorDetails
+									error={
+										isRivetApiError(error)
+											? error.body
+											: error
+									}
+								/>
+							) : null}
+						</>
+					)}
 				</Info>
 			}
 		>
