@@ -474,14 +474,25 @@ async fn handle_sqlite_get_pages_response(
 	match handle_sqlite_get_pages(ctx, conn, request).await {
 		Ok(response) => response,
 		Err(err) => {
-			tracing::error!(
-				actor_id = %actor_id,
-				?pgnos,
-				?expected_generation,
-				?expected_head_txid,
-				?err,
-				"sqlite get_pages request failed"
-			);
+			if is_initial_sqlite_database_missing(&pgnos, expected_head_txid, &err) {
+				tracing::debug!(
+					actor_id = %actor_id,
+					?pgnos,
+					?expected_generation,
+					?expected_head_txid,
+					?err,
+					"sqlite get_pages request found no persisted database during bootstrap"
+				);
+			} else {
+				tracing::error!(
+					actor_id = %actor_id,
+					?pgnos,
+					?expected_generation,
+					?expected_head_txid,
+					?err,
+					"sqlite get_pages request failed"
+				);
+			}
 			protocol::SqliteGetPagesResponse::SqliteErrorResponse(sqlite_error_response(&err))
 		}
 	}
@@ -1113,6 +1124,23 @@ async fn actor_db(ctx: &StandaloneCtx, conn: &Conn, actor_id: String) -> Result<
 fn depot_error(err: &anyhow::Error) -> Option<&SqliteStorageError> {
 	err.chain()
 		.find_map(|source| source.downcast_ref::<SqliteStorageError>())
+}
+
+fn is_initial_sqlite_database_missing(
+	pgnos: &[u32],
+	expected_head_txid: Option<u64>,
+	err: &anyhow::Error,
+) -> bool {
+	// SQLite page 1 is the database header. On a fresh actor DB, Depot has no
+	// database branch until the first commit creates it, so the local VFS treats
+	// exactly this missing page as empty-database bootstrap.
+	pgnos == [1]
+		&& expected_head_txid.is_none()
+		&& matches!(
+			depot_error(err),
+			Some(SqliteStorageError::DatabaseNotFound)
+				| Some(SqliteStorageError::MetaMissing { operation: "get_pages" })
+		)
 }
 
 fn sqlite_error_reason(err: &anyhow::Error) -> String {
