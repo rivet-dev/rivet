@@ -872,16 +872,10 @@ const InstanceActorOptionsBaseSchema = z
 			.number()
 			.positive()
 			.default(DEFAULT_SLEEP_GRACE_PERIOD),
-		/** @deprecated `onDestroyTimeout` is folded into `sleepGracePeriod`, which now bounds the entire graceful shutdown window for both sleep and destroy. Will be removed in 2.2.0. */
-		onDestroyTimeout: z.number().positive().optional(),
-		/** @deprecated `waitUntilTimeout` is folded into `sleepGracePeriod`, which now bounds the entire graceful shutdown window for both sleep and destroy. Will be removed in 2.2.0. */
-		waitUntilTimeout: z.number().positive().optional(),
 		stateSaveInterval: z.number().positive().default(1_000),
 		actionTimeout: z.number().positive().default(60_000),
 		connectionLivenessTimeout: z.number().positive().default(2500),
 		connectionLivenessInterval: z.number().positive().default(5000),
-		/** @deprecated Use `c.keepAwake(promise)` to scope keep-awake to a specific operation. Will be removed in 2.2.0. */
-		noSleep: z.boolean().default(false),
 		sleepTimeout: z.number().positive().default(30_000),
 		maxQueueSize: z.number().positive().default(1000),
 		maxQueueMessageSize: z
@@ -1771,18 +1765,6 @@ export const DocActorOptionsSchema = z
 			.describe(
 				`Max time in ms for the graceful shutdown window. Covers lifecycle hooks (onSleep, onDestroy), the run handler wait, async raw WebSocket handlers, disconnect callbacks, and final state serialization. Default: ${DEFAULT_SLEEP_GRACE_PERIOD}.`,
 			),
-		onDestroyTimeout: z
-			.number()
-			.optional()
-			.describe(
-				"Deprecated. Folded into sleepGracePeriod, which now bounds the entire graceful shutdown window for both sleep and destroy. Will be removed in 2.2.0.",
-			),
-		waitUntilTimeout: z
-			.number()
-			.optional()
-			.describe(
-				"Deprecated. Folded into sleepGracePeriod, which now bounds the entire graceful shutdown window for both sleep and destroy. Will be removed in 2.2.0.",
-			),
 		stateSaveInterval: z
 			.number()
 			.optional()
@@ -1804,12 +1786,6 @@ export const DocActorOptionsSchema = z
 			.optional()
 			.describe(
 				"Interval in ms between connection liveness checks. Default: 5000",
-			),
-		noSleep: z
-			.boolean()
-			.optional()
-			.describe(
-				"Deprecated. If true, the actor will never sleep. Use c.keepAwake(promise) to scope keep-awake to a specific operation instead. Default: false",
 			),
 		sleepTimeout: z
 			.number()

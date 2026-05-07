@@ -69,7 +69,6 @@ import {
 import {
 	sleep,
 	sleepWithLongRpc,
-	sleepWithNoSleepOption,
 	sleepWithRawHttp,
 	sleepWithRawWebSocket,
 } from "./actors/lifecycle/sleep.ts";
@@ -181,7 +180,6 @@ export const registry = setup({
 		runWithoutHandler,
 		sleep,
 		sleepWithLongRpc,
-		sleepWithNoSleepOption,
 		sleepWithRawHttp,
 		sleepWithRawWebSocket,
 		scheduled,

@@ -284,9 +284,6 @@ export const ACTION_TEMPLATES: Record<string, ActionTemplate[]> = {
 		{ label: "Trigger Sleep", action: "triggerSleep", args: [] },
 	],
 	sleepWithLongRpc: [{ label: "Get Counts", action: "getCounts", args: [] }],
-	sleepWithNoSleepOption: [
-		{ label: "Get Counts", action: "getCounts", args: [] },
-	],
 	scheduled: [
 		{ label: "Schedule +5s", action: "scheduleTaskAfter", args: [5000] },
 		{ label: "Last Run", action: "getLastRun", args: [] },
@@ -809,7 +806,7 @@ export const PAGE_GROUPS: PageGroup[] = [
 						href: "https://rivet.dev/docs/actors/lifecycle",
 					},
 				],
-				actors: ["sleep", "sleepWithLongRpc", "sleepWithNoSleepOption"],
+				actors: ["sleep", "sleepWithLongRpc"],
 				snippet: SNIPPETS.lifecycle,
 			},
 			{

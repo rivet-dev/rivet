@@ -74,7 +74,6 @@ pub struct ActorConfig {
 	pub on_migrate_timeout: Duration,
 	pub action_timeout: Duration,
 	pub sleep_timeout: Duration,
-	pub no_sleep: bool,
 	pub sleep_grace_period: Duration,
 	pub sleep_grace_period_overridden: bool,
 	pub connection_liveness_timeout: Duration,
@@ -109,7 +108,6 @@ pub struct ActorConfigInput {
 	pub on_migrate_timeout_ms: Option<u32>,
 	pub action_timeout_ms: Option<u32>,
 	pub sleep_timeout_ms: Option<u32>,
-	pub no_sleep: Option<bool>,
 	pub sleep_grace_period_ms: Option<u32>,
 	pub connection_liveness_timeout_ms: Option<u32>,
 	pub connection_liveness_interval_ms: Option<u32>,
@@ -159,9 +157,6 @@ impl ActorConfig {
 		}
 		if let Some(value) = config.sleep_timeout_ms {
 			actor_config.sleep_timeout = duration_ms(value);
-		}
-		if let Some(value) = config.no_sleep {
-			actor_config.no_sleep = value;
 		}
 		if let Some(value) = config.sleep_grace_period_ms {
 			actor_config.sleep_grace_period = duration_ms(value);
@@ -224,7 +219,6 @@ impl Default for ActorConfig {
 			on_migrate_timeout: DEFAULT_ON_MIGRATE_TIMEOUT,
 			action_timeout: DEFAULT_ACTION_TIMEOUT,
 			sleep_timeout: DEFAULT_SLEEP_TIMEOUT,
-			no_sleep: false,
 			sleep_grace_period: DEFAULT_SLEEP_GRACE_PERIOD,
 			sleep_grace_period_overridden: false,
 			connection_liveness_timeout: DEFAULT_CONNECTION_LIVENESS_TIMEOUT,

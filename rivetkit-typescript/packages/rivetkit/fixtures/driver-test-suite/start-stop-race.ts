@@ -83,6 +83,6 @@ export const lifecycleObserver = actor({
 		},
 	},
 	options: {
-		noSleep: true,
+		sleepTimeout: 60_000,
 	},
 });

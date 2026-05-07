@@ -45,7 +45,6 @@ mod moved_tests {
 		assert_eq!(config.on_migrate_timeout, default.on_migrate_timeout);
 		assert_eq!(config.action_timeout, default.action_timeout);
 		assert_eq!(config.sleep_timeout, default.sleep_timeout);
-		assert_eq!(config.no_sleep, default.no_sleep);
 		assert_eq!(config.sleep_grace_period, default.sleep_grace_period);
 		assert_eq!(
 			config.sleep_grace_period_overridden,

@@ -2336,7 +2336,7 @@ export class ActorInstance<
 	}
 
 	resetSleepTimer() {
-		if (this.#config.options.noSleep || !this.#sleepingSupported) return;
+		if (!this.#sleepingSupported) return;
 		if (this.#stopCalled) return;
 
 		const canSleep = this.#canSleep();

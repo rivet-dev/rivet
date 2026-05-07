@@ -26,7 +26,6 @@ fn build_applies_actor_config_to_owned_subsystems() {
 	config.create_conn_state_timeout = std::time::Duration::from_millis(123);
 	config.connection_liveness_timeout = std::time::Duration::from_millis(456);
 	config.sleep_timeout = std::time::Duration::from_millis(789);
-	config.no_sleep = true;
 
 	let ctx = ActorContext::build(
 		"configured-actor".to_owned(),
@@ -57,7 +56,6 @@ fn build_applies_actor_config_to_owned_subsystems() {
 
 	let sleep_config = ctx.sleep_config();
 	assert_eq!(sleep_config.sleep_timeout, config.sleep_timeout);
-	assert_eq!(sleep_config.no_sleep, config.no_sleep);
 }
 
 #[tokio::test]

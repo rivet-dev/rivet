@@ -689,40 +689,6 @@ describeDriverMatrix("Actor Sleep", (driverTestConfig) => {
 			}
 		});
 
-		test("noSleep option disables sleeping", async (c) => {
-			const { client } = await setupDriverTest(c, driverTestConfig);
-
-			// Create actor with noSleep option
-			const sleepActor = client.sleepWithNoSleepOption.getOrCreate();
-
-			// Verify initial state
-			{
-				const { startCount, sleepCount } = await sleepActor.getCounts();
-				expect(sleepCount).toBe(0);
-				expect(startCount).toBe(1);
-			}
-
-			// Wait longer than sleep timeout
-			await waitFor(driverTestConfig, SLEEP_TIMEOUT + 250);
-
-			// Actor should NOT have slept due to noSleep option
-			{
-				const { startCount, sleepCount } = await sleepActor.getCounts();
-				expect(sleepCount).toBe(0); // Never slept
-				expect(startCount).toBe(1); // Still the same instance
-			}
-
-			// Wait even longer to be sure
-			await waitFor(driverTestConfig, SLEEP_TIMEOUT + 250);
-
-			// Actor should still not have slept
-			{
-				const { startCount, sleepCount } = await sleepActor.getCounts();
-				expect(sleepCount).toBe(0); // Never slept
-				expect(startCount).toBe(1); // Still the same instance
-			}
-		});
-
 		test("async websocket addEventListener message handler delays sleep", async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);
 

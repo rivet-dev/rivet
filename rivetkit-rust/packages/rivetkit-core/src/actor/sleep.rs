@@ -58,7 +58,6 @@ pub(crate) struct SleepState {
 pub(crate) enum CanSleep {
 	Yes,
 	NotReady,
-	NoSleep,
 	ActiveHttpRequests,
 	ActiveKeepAwake,
 	ActiveInternalKeepAwake,
@@ -223,12 +222,8 @@ impl ActorContext {
 	}
 
 	pub(crate) async fn can_arm_sleep_timer(&self) -> CanSleep {
-		let config = self.sleep_state_config();
 		if !self.0.sleep.lifecycle_started.load(Ordering::SeqCst) {
 			return CanSleep::NotReady;
-		}
-		if config.no_sleep {
-			return CanSleep::NoSleep;
 		}
 		if self.active_http_request_count() > 0 {
 			return CanSleep::ActiveHttpRequests;
