@@ -32,7 +32,8 @@
 		"@babel/runtime": "^7.29.2",
 		"@iarna/toml": "^2.2.5",
 		"@sentry/vite-plugin": "^2.23.1",
-		"fast-glob": "^3.3.3"
+		"fast-glob": "^3.3.3",
+		"handlebars": "^4.7.9"
 	},
 	"resolutions": {
 		"rivetkit": "workspace:*",

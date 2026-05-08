@@ -153,13 +153,16 @@ fn v4_remote_sql_payloads_do_not_decode_as_v3() -> Result<()> {
 
 #[test]
 fn all_remote_sql_request_variants_require_v4() {
+	// The remote SQL feature drops at the v4 -> v3 boundary, so the chain
+	// reports target_version = 3 regardless of how much further down we are
+	// asking serialize() to walk.
 	for version in 1..4 {
 		for request in [remote_sql_request_exec(), remote_sql_request_execute()] {
 			let err = ToRivet::wrap_latest(request)
 				.serialize(version)
 				.expect_err("remote SQL request variant must not serialize below v4");
 
-			assert_compatibility_error(err, ProtocolCompatibilityDirection::ToRivet, version);
+			assert_compatibility_error(err, ProtocolCompatibilityDirection::ToRivet, 3);
 		}
 	}
 }
@@ -172,7 +175,7 @@ fn all_remote_sql_response_variants_require_v4() {
 				.serialize(version)
 				.expect_err("remote SQL response variant must not serialize below v4");
 
-			assert_compatibility_error(err, ProtocolCompatibilityDirection::ToEnvoy, version);
+			assert_compatibility_error(err, ProtocolCompatibilityDirection::ToEnvoy, 3);
 		}
 	}
 }
