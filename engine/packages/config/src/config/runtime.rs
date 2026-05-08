@@ -6,11 +6,11 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize, Default, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Runtime {
-	/// Adjusts worker curve around this value (in millicores, i.e. 1000 = 1 core). Is not a hard limit. When
+	/// Adjusts worker curve around this value (in millecores, i.e. 1000 = 1 core). Is not a hard limit. When
 	/// unset, uses /sys/fs/cgroup/cpu.max, and if that is unset uses total host cpu.
 	pub worker_cpu_max: Option<usize>,
 	/// Determine load shedding ratio based on linear mapping on cpu usage. We will gradually
-	/// pull less workflows as the cpu usage increases. Units are in (permilli overall cpu usage, permilli)
+	/// pull less workflows as the cpu usage increases. Units are in (permille overall cpu usage, permille)
 	/// Default:
 	///       |     .   .
 	///  100% | _____   .

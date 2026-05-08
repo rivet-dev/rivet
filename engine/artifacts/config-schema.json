@@ -1368,7 +1368,7 @@
           "minimum": 0.0
         },
         "worker_cpu_max": {
-          "description": "Adjusts worker curve around this value (in millicores, i.e. 1000 = 1 core). Is not a hard limit. When unset, uses /sys/fs/cgroup/cpu.max, and if that is unset uses total host cpu.",
+          "description": "Adjusts worker curve around this value (in millecores, i.e. 1000 = 1 core). Is not a hard limit. When unset, uses /sys/fs/cgroup/cpu.max, and if that is unset uses total host cpu.",
           "type": [
             "integer",
             "null"
@@ -1385,7 +1385,7 @@
           "format": "float"
         },
         "worker_load_shedding_curve": {
-          "description": "Determine load shedding ratio based on linear mapping on cpu usage. We will gradually pull less workflows as the cpu usage increases. Units are in (permilli overall cpu usage, permilli) Default: |     .   . 100% | _____   . |     .\\  . % wfs |     . \\ . |     .  \\. 5% |     .   \\_____ |_____.___.______ 0    70% 90% avg cpu usage",
+          "description": "Determine load shedding ratio based on linear mapping on cpu usage. We will gradually pull less workflows as the cpu usage increases. Units are in (permille overall cpu usage, permille) Default: |     .   . 100% | _____   . |     .\\  . % wfs |     . \\ . |     .  \\. 5% |     .   \\_____ |_____.___.______ 0    70% 90% avg cpu usage",
           "type": [
             "array",
             "null"
