@@ -260,7 +260,6 @@ pub struct BufferedCommitOutcome {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CommitBufferError {
 	FenceMismatch(String),
-	StageNotFound(u64),
 	Other(String),
 }
 
@@ -338,6 +337,7 @@ pub struct VfsContext {
 	state: RwLock<VfsState>,
 	aux_files: RwLock<BTreeMap<String, Arc<AuxFileState>>>,
 	last_error: Mutex<Option<String>>,
+	transient_commit_error: Mutex<Option<String>>,
 	fatal_error: RwLock<Option<String>>,
 	#[cfg(test)]
 	fail_next_aux_open: Mutex<Option<String>>,
@@ -432,7 +432,7 @@ struct RecentPageAccess {
 
 #[derive(Debug)]
 enum GetPagesError {
-	Fatal(String),
+	FenceMismatch(String),
 	Other(String),
 }
 
@@ -980,6 +980,7 @@ impl VfsContext {
 			state: RwLock::new(state),
 			aux_files: RwLock::new(BTreeMap::new()),
 			last_error: Mutex::new(None),
+			transient_commit_error: Mutex::new(None),
 			fatal_error: RwLock::new(None),
 			#[cfg(test)]
 			fail_next_aux_open: Mutex::new(None),
@@ -1016,6 +1017,14 @@ impl VfsContext {
 
 	fn clone_fatal_error(&self) -> Option<String> {
 		self.fatal_error.read().clone()
+	}
+
+	fn defer_transient_commit_error(&self, message: String) {
+		*self.transient_commit_error.lock() = Some(message);
+	}
+
+	fn take_transient_commit_error(&self) -> Option<String> {
+		self.transient_commit_error.lock().take()
 	}
 
 	pub(crate) fn take_last_error(&self) -> Option<String> {
@@ -1143,13 +1152,9 @@ impl VfsContext {
 		self.state.read().dead
 	}
 
-	fn mark_dead(&self, message: String) {
-		self.set_last_error(message);
-		self.state.write().dead = true;
-	}
-
 	fn mark_fatal(&self, message: String) {
-		self.mark_dead(message.clone());
+		self.set_last_error(message.clone());
+		self.state.write().dead = true;
 		let mut fatal_error = self.fatal_error.write();
 		if fatal_error.is_none() {
 			*fatal_error = Some(message);
@@ -1455,7 +1460,7 @@ impl VfsContext {
 					return Ok(resolved);
 				}
 				if is_head_fence_mismatch_response(&error) {
-					return Err(GetPagesError::Fatal(error.message));
+					return Err(GetPagesError::FenceMismatch(error.message));
 				}
 				Err(GetPagesError::Other(error.message))
 			}
@@ -1755,12 +1760,7 @@ fn assert_batch_atomic_probe(db: *mut sqlite3, vfs: &SqliteVfs) -> std::result::
 fn handle_non_finalize_commit_error(ctx: &VfsContext, err: &CommitBufferError) {
 	match err {
 		CommitBufferError::FenceMismatch(message) => ctx.mark_fatal(message.clone()),
-		CommitBufferError::StageNotFound(stage_id) => {
-			ctx.mark_dead(format!(
-				"sqlite stage {stage_id} missing during commit finalize"
-			));
-		}
-		CommitBufferError::Other(message) => ctx.mark_dead(message.clone()),
+		CommitBufferError::Other(message) => ctx.set_last_error(message.clone()),
 	}
 }
 
@@ -2238,7 +2238,7 @@ unsafe extern "C" fn io_read(
 
 		let resolved = match ctx.resolve_pages(&requested_pages, true) {
 			Ok(pages) => pages,
-			Err(GetPagesError::Fatal(message)) => {
+			Err(GetPagesError::FenceMismatch(message)) => {
 				tracing::error!(
 					actor_id = %ctx.actor_id,
 					requested_pages = ?requested_pages,
@@ -2255,7 +2255,7 @@ unsafe extern "C" fn io_read(
 					error = %message,
 					"sqlite xRead failed to resolve pages"
 				);
-				ctx.mark_dead(message);
+				ctx.set_last_error(message);
 				return SQLITE_IOERR_READ;
 			}
 		};
@@ -2380,12 +2380,12 @@ unsafe extern "C" fn io_write(
 			} else {
 				match ctx.resolve_pages(&pages_to_resolve, false) {
 					Ok(pages) => pages,
-					Err(GetPagesError::Fatal(message)) => {
+					Err(GetPagesError::FenceMismatch(message)) => {
 						ctx.mark_fatal(message);
 						return SQLITE_IOERR_WRITE;
 					}
 					Err(GetPagesError::Other(message)) => {
-						ctx.mark_dead(message);
+						ctx.set_last_error(message);
 						return SQLITE_IOERR_WRITE;
 					}
 				}
@@ -2489,6 +2489,10 @@ unsafe extern "C" fn io_sync(p_file: *mut sqlite3_file, _flags: c_int) -> c_int 
 			return SQLITE_OK;
 		}
 		let ctx = &*file.ctx;
+		if let Some(message) = ctx.take_transient_commit_error() {
+			ctx.set_last_error(message);
+			return SQLITE_IOERR_FSYNC;
+		}
 		match ctx.flush_dirty_pages() {
 			Ok(_) => SQLITE_OK,
 			Err(err) => {
@@ -2575,6 +2579,9 @@ unsafe extern "C" fn io_file_control(
 						?err,
 						"sqlite atomic write file control failed"
 					);
+					if let CommitBufferError::Other(message) = &err {
+						ctx.defer_transient_commit_error(message.clone());
+					}
 					handle_finalize_fence_error(ctx, &err);
 					SQLITE_IOERR
 				}
@@ -3029,6 +3036,8 @@ impl Drop for NativeDatabase {
 					Err(err) => {
 						handle_non_finalize_commit_error(ctx, &err);
 						tracing::warn!(?err, "failed to flush sqlite database before close");
+						self.db = ptr::null_mut();
+						return;
 					}
 				}
 			}

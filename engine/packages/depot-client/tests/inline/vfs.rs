@@ -2399,29 +2399,36 @@ fn direct_engine_marks_vfs_dead_after_transport_errors() {
 	)
 	.expect("v2 vfs should register");
 	let db = open_database(vfs, &harness.actor_id).expect("sqlite database should open");
+	let ctx = direct_vfs_ctx(&db);
+
+	{
+		let mut state = ctx.state.write();
+		state.write_buffer.dirty.insert(1, empty_db_page());
+		state.db_size_pages = 1;
+	}
 
 	hooks.fail_next_commit("InjectedTransportError: commit transport dropped");
-	let err = sqlite_exec(
-		db.as_ptr(),
-		"CREATE TABLE broken (id INTEGER PRIMARY KEY, value TEXT NOT NULL);",
-	)
-	.expect_err("failing transport commit should surface as an IO error");
+	let err = ctx
+		.flush_dirty_pages()
+		.expect_err("failing transport commit should surface as a VFS error");
 	assert!(
-		err.contains("I/O") || err.contains("disk I/O"),
-		"sqlite should surface transport failure as an IO error: {err}",
+		matches!(err, CommitBufferError::Other(ref message) if message.contains("InjectedTransportError")),
+		"VFS should surface transport failure as an IO error: {err:?}",
 	);
 	assert!(
-		direct_vfs_ctx(&db).is_dead(),
-		"transport error should kill the v2 VFS"
+		!ctx.is_dead(),
+		"transport error should not poison the v2 VFS"
+	);
+	assert!(
+		ctx.clone_fatal_error().is_none(),
+		"transport error should not be stored as fatal"
 	);
 	assert_eq!(
 		db.take_last_kv_error().as_deref(),
 		Some("InjectedTransportError: commit transport dropped"),
 	);
-	assert!(
-		sqlite_query_i64(db.as_ptr(), "PRAGMA page_count;").is_err(),
-		"subsequent reads should fail once the VFS is dead",
-	);
+	ctx.flush_dirty_pages()
+		.expect("retry after unapplied transport failure should succeed");
 }
 
 #[test]
@@ -2459,12 +2466,22 @@ fn flush_dirty_pages_marks_vfs_dead_after_transport_error() {
 		"flush failure should surface as a transport error: {err:?}",
 	);
 	assert!(
-		ctx.is_dead(),
-		"flush transport failure should poison the VFS"
+		!ctx.is_dead(),
+		"flush transport failure should not poison the VFS"
+	);
+	assert!(
+		ctx.clone_fatal_error().is_none(),
+		"flush transport failure should not be stored as fatal"
 	);
 	assert_eq!(
 		db.take_last_kv_error().as_deref(),
 		Some("InjectedTransportError: flush transport dropped"),
+	);
+	ctx.flush_dirty_pages()
+		.expect("retry after unapplied transport failure should succeed");
+	assert!(
+		ctx.state.read().write_buffer.dirty.is_empty(),
+		"successful retry should clear dirty pages",
 	);
 }
 
@@ -2505,13 +2522,120 @@ fn commit_atomic_write_marks_vfs_dead_after_transport_error() {
 		"atomic-write failure should surface as a transport error: {err:?}",
 	);
 	assert!(
-		ctx.is_dead(),
-		"commit_atomic_write transport failure should poison the VFS",
+		!ctx.is_dead(),
+		"commit_atomic_write transport failure should not poison the VFS",
+	);
+	assert!(
+		ctx.clone_fatal_error().is_none(),
+		"commit_atomic_write transport failure should not be stored as fatal",
 	);
 	assert_eq!(
 		db.take_last_kv_error().as_deref(),
 		Some("InjectedTransportError: atomic transport dropped"),
 	);
+	ctx.commit_atomic_write()
+		.expect("retry after unapplied atomic transport failure should succeed");
+	assert!(
+		!ctx.state.read().write_buffer.in_atomic_write,
+		"successful retry should leave atomic-write mode",
+	);
+}
+
+#[test]
+fn lost_commit_response_fails_later_on_head_fence_mismatch() {
+	let runtime = direct_runtime();
+	let harness = DirectEngineHarness::new();
+	let engine = runtime.block_on(harness.open_engine());
+	let transport = Arc::new(DirectDepotTransport::new(engine));
+	let hooks = transport.direct_hooks();
+	let vfs = SqliteVfs::register_with_transport(
+		&next_test_name("sqlite-direct-vfs"),
+		transport,
+		harness.actor_id.clone(),
+		runtime.handle().clone(),
+		VfsConfig::default(),
+		None,
+	)
+	.expect("v2 vfs should register");
+	let db = open_database(vfs, &harness.actor_id).expect("sqlite database should open");
+	let ctx = direct_vfs_ctx(&db);
+
+	{
+		let mut state = ctx.state.write();
+		state.write_buffer.dirty.insert(1, empty_db_page());
+		state.db_size_pages = 1;
+	}
+
+	hooks.fail_next_commit_after_apply("InjectedTransportError: commit response lost");
+	let err = ctx
+		.flush_dirty_pages()
+		.expect_err("lost commit response should surface as a transport error");
+	assert!(
+		matches!(err, CommitBufferError::Other(ref message) if message.contains("commit response lost")),
+		"lost response should be ambiguous before the next fence check: {err:?}",
+	);
+	assert!(
+		!ctx.is_dead(),
+		"ambiguous lost response should not immediately poison the VFS"
+	);
+	assert!(ctx.clone_fatal_error().is_none());
+
+	let err = ctx
+		.flush_dirty_pages()
+		.expect_err("retry after applied lost response should hit the stale head fence");
+	assert!(
+		matches!(err, CommitBufferError::FenceMismatch(ref message) if message.contains("head fence mismatch")),
+		"retry should confirm the stale fence: {err:?}",
+	);
+	assert!(ctx.is_dead());
+	assert!(
+		ctx.clone_fatal_error()
+			.is_some_and(|message| message.contains("head fence mismatch")),
+		"confirmed fence mismatch should be stored as fatal"
+	);
+}
+
+#[test]
+fn unapplied_commit_transport_failure_can_retry_from_same_head() {
+	let runtime = direct_runtime();
+	let harness = DirectEngineHarness::new();
+	let engine = runtime.block_on(harness.open_engine());
+	let transport = Arc::new(DirectDepotTransport::new(engine));
+	let hooks = transport.direct_hooks();
+	let vfs = SqliteVfs::register_with_transport(
+		&next_test_name("sqlite-direct-vfs"),
+		transport,
+		harness.actor_id.clone(),
+		runtime.handle().clone(),
+		VfsConfig::default(),
+		None,
+	)
+	.expect("v2 vfs should register");
+	let db = open_database(vfs, &harness.actor_id).expect("sqlite database should open");
+	let ctx = direct_vfs_ctx(&db);
+
+	{
+		let mut state = ctx.state.write();
+		state.write_buffer.dirty.insert(1, empty_db_page());
+		state.db_size_pages = 1;
+	}
+
+	hooks.fail_next_commit("InjectedTransportError: commit dropped before apply");
+	let err = ctx
+		.flush_dirty_pages()
+		.expect_err("pre-apply transport error should surface");
+	assert!(
+		matches!(err, CommitBufferError::Other(ref message) if message.contains("before apply")),
+		"pre-apply failure should be generic transport error: {err:?}",
+	);
+	assert!(!ctx.is_dead());
+	assert!(ctx.clone_fatal_error().is_none());
+
+	ctx.flush_dirty_pages()
+		.expect("retry from same head should succeed");
+	let state = ctx.state.read();
+	assert!(state.write_buffer.dirty.is_empty());
+	assert!(state.head_txid.is_some());
 }
 
 #[test]
@@ -3038,8 +3162,8 @@ fn direct_engine_fresh_reopen_recovers_after_poisoned_handle() {
 		"sqlite should surface transport failure as an IO error: {err}",
 	);
 	assert!(
-		direct_vfs_ctx(&db).is_dead(),
-		"transport error should kill the live VFS",
+		!direct_vfs_ctx(&db).is_dead(),
+		"transport error should not poison the live VFS",
 	);
 
 	drop(db);

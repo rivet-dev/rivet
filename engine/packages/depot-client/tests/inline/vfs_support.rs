@@ -480,11 +480,16 @@ impl SqliteTransport for DirectDepotTransport {
 			)
 			.await
 		{
-			Ok(result) => Ok(protocol::SqliteCommitResponse::SqliteCommitOk(
-				protocol::SqliteCommitOk {
-					head_txid: Some(result.head_txid),
-				},
-			)),
+			Ok(result) => {
+				if let Some(message) = self.storage.hooks.take_commit_after_apply_error() {
+					return Err(anyhow::anyhow!(message));
+				}
+				Ok(protocol::SqliteCommitResponse::SqliteCommitOk(
+					protocol::SqliteCommitOk {
+						head_txid: Some(result.head_txid),
+					},
+				))
+			}
 			Err(err) => Ok(protocol::SqliteCommitResponse::SqliteErrorResponse(
 				sqlite_error_response(&err),
 			)),
@@ -603,6 +608,7 @@ impl ColdTier for CountingColdTier {
 #[derive(Default)]
 pub(crate) struct DirectTransportHooks {
 	fail_next_commit: Mutex<Option<String>>,
+	fail_next_commit_after_apply: Mutex<Option<String>>,
 	fail_next_get_pages: Mutex<Option<String>>,
 	hang_next_commit: Mutex<bool>,
 	pause_next_commit: Mutex<Option<DirectCommitGate>>,
@@ -613,6 +619,10 @@ pub(crate) struct DirectTransportHooks {
 impl DirectTransportHooks {
 	pub(crate) fn fail_next_commit(&self, message: impl Into<String>) {
 		*self.fail_next_commit.lock() = Some(message.into());
+	}
+
+	pub(crate) fn fail_next_commit_after_apply(&self, message: impl Into<String>) {
+		*self.fail_next_commit_after_apply.lock() = Some(message.into());
 	}
 
 	pub(crate) fn fail_next_get_pages(&self, message: impl Into<String>) {
@@ -658,6 +668,10 @@ impl DirectTransportHooks {
 
 	pub(crate) fn take_commit_error(&self) -> Option<String> {
 		self.fail_next_commit.lock().take()
+	}
+
+	pub(crate) fn take_commit_after_apply_error(&self) -> Option<String> {
+		self.fail_next_commit_after_apply.lock().take()
 	}
 
 	pub(crate) fn take_get_pages_error(&self) -> Option<String> {
