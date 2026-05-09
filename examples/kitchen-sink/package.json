@@ -18,6 +18,7 @@
 		"fuzz:sleep-close": "tsx scripts/sleep-close-fuzz.ts",
 		"mock-agentic-loop": "tsx scripts/mock-agentic-loop.ts",
 		"benchmark": "tsx scripts/benchmark.ts",
+		"load-test": "tsx scripts/load-test.ts",
 		"db:generate": "find src/actors -name drizzle.config.ts -exec drizzle-kit generate --config {} \\;"
 	},
 	"devDependencies": {
