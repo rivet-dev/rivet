@@ -123,6 +123,7 @@ import { rawSqliteFuzzer } from "./actors/testing/raw-sqlite-fuzzer.ts";
 import { sqliteMemoryPressure } from "./actors/testing/sqlite-memory-pressure.ts";
 import { mockAgenticLoop } from "./actors/testing/mock-agentic-loop.ts";
 import { sleepCloseFuzz } from "./actors/testing/sleep-close-fuzz.ts";
+import { loadTestCounter } from "./actors/testing/load-test-counter.ts";
 // AI
 import { aiAgent } from "./actors/ai/ai-agent.ts";
 
@@ -155,9 +156,14 @@ function serverlessPoolConfig() {
 			"RIVET_SERVERLESS_REQUEST_LIFESPAN",
 			15 * 60,
 		),
+		// Must be strictly less than requestLifespan. The engine's
+		// pegboard-outbound computes sleep_until_drain as
+		// `request_lifespan - drain_grace_period` (saturating); when both are
+		// equal, drain fires the instant the outbound HTTP request opens and
+		// every fresh actor allocation immediately receives GoingAway.
 		drainGracePeriod: numberFromEnv(
 			"RIVET_SERVERLESS_DRAIN_GRACE_PERIOD",
-			15 * 60,
+			60,
 		),
 		metadataPollInterval: numberFromEnv(
 			"RIVET_SERVERLESS_METADATA_POLL_INTERVAL_MS",
@@ -279,6 +285,7 @@ export const registry = setup({
 		sqliteMemoryPressure,
 		mockAgenticLoop,
 		sleepCloseFuzz,
+		loadTestCounter,
 		// AI
 		aiAgent,
 	},
