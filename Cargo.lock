@@ -5674,17 +5674,24 @@ dependencies = [
 name = "rivet-metrics"
 version = "2.3.0-rc.5"
 dependencies = [
+ "lazy_static",
+ "prometheus",
+]
+
+[[package]]
+name = "rivet-metrics-server"
+version = "2.3.0-rc.5"
+dependencies = [
  "anyhow",
  "console-subscriber",
  "hyper 0.14.32",
- "lazy_static",
  "opentelemetry",
  "opentelemetry-otlp",
  "opentelemetry-semantic-conventions",
  "opentelemetry_sdk",
- "prometheus",
  "rivet-config",
  "rivet-env",
+ "rivet-metrics",
  "tokio",
  "tracing",
 ]
@@ -5764,6 +5771,7 @@ dependencies = [
  "reqwest",
  "rivet-env",
  "rivet-metrics",
+ "rivet-metrics-server",
  "sentry",
  "serde",
  "serde_json",
@@ -5786,7 +5794,7 @@ dependencies = [
  "futures-util",
  "include_dir",
  "rivet-config",
- "rivet-metrics",
+ "rivet-metrics-server",
  "rivet-pools",
  "rivet-runtime",
  "tokio",
@@ -5873,7 +5881,7 @@ dependencies = [
  "futures-util",
  "gasoline",
  "rivet-config",
- "rivet-metrics",
+ "rivet-metrics-server",
  "rivet-pools",
  "rivet-runtime",
  "serde",
@@ -6028,11 +6036,11 @@ dependencies = [
  "nix 0.30.1",
  "parking_lot",
  "portpicker",
- "prometheus",
  "rand 0.8.5",
  "reqwest",
  "rivet-envoy-client",
  "rivet-error",
+ "rivet-metrics",
  "rivetkit-actor-persist",
  "rivetkit-client-protocol",
  "rivetkit-inspector-protocol",

@@ -29,6 +29,7 @@ members = [
   "engine/packages/guard-core",
   "engine/packages/logs",
   "engine/packages/metrics",
+  "engine/packages/metrics-server",
   "engine/packages/namespace",
   "engine/packages/pegboard",
   "engine/packages/pegboard-envoy",
@@ -451,6 +452,9 @@ members = [
 
     [workspace.dependencies.rivet-metrics]
     path = "engine/packages/metrics"
+
+    [workspace.dependencies.rivet-metrics-server]
+    path = "engine/packages/metrics-server"
 
     [workspace.dependencies.namespace]
     path = "engine/packages/namespace"

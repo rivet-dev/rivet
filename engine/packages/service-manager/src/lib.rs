@@ -147,7 +147,7 @@ pub async fn start(
 	services.push(Service::new(
 		"metrics",
 		ServiceKind::Core,
-		|config, _pools| rivet_metrics::run_standalone(config),
+		|config, _pools| rivet_metrics_server::run_standalone(config),
 		false,
 	));
 

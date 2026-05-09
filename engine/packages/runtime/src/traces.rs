@@ -2,7 +2,7 @@
 
 use console_subscriber;
 use opentelemetry::trace::{TraceContextExt, TracerProvider};
-use rivet_metrics::OtelProviderGuard;
+use rivet_metrics_server::OtelProviderGuard;
 use std::sync::OnceLock;
 use tracing_opentelemetry::OpenTelemetryLayer;
 use tracing_subscriber::{EnvFilter, Layer, layer::SubscriberExt, reload, util::SubscriberInitExt};

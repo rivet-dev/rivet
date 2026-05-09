@@ -5,10 +5,10 @@ mod moved_tests {
 	use std::time::Duration;
 
 	use super::{
-		HttpRequest, HttpResponseEncoding, authorization_bearer_token,
-		authorization_bearer_token_map, framework_action_error_response, is_actor_request_path,
+		HttpResponseEncoding, authorization_bearer_token, authorization_bearer_token_map,
+		framework_action_error_response, is_actor_request_path,
 		message_boundary_error_response, normalize_actor_request_path, request_encoding,
-		request_has_bearer_token, workflow_dispatch_result,
+		workflow_dispatch_result,
 	};
 	use crate::actor::action::ActionDispatchError;
 	use crate::error::ActorLifecycle as ActorLifecycleError;
@@ -79,23 +79,6 @@ mod moved_tests {
 			"BEARER\ttest-token".to_owned(),
 		)]);
 		assert_eq!(authorization_bearer_token_map(&map), Some("test-token"));
-	}
-
-	#[test]
-	fn request_has_bearer_token_uses_same_authorization_parser() {
-		let request = HttpRequest {
-			method: "GET".to_owned(),
-			path: "/metrics".to_owned(),
-			headers: HashMap::from([(
-				http::header::AUTHORIZATION.as_str().to_owned(),
-				"Bearer   configured".to_owned(),
-			)]),
-			body: Some(Vec::new()),
-			body_stream: None,
-		};
-
-		assert!(request_has_bearer_token(&request, Some("configured")));
-		assert!(!request_has_bearer_token(&request, Some("other")));
 	}
 
 	#[tokio::test]

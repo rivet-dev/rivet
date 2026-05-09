@@ -53,13 +53,13 @@ pub async fn start(_config: rivet_config::Config, pools: rivet_pools::Pools) -> 
 				match update_msg.sampler_ratio {
 					Some(Some(ratio)) => {
 						// Set to specific value
-						if let Err(err) = rivet_metrics::set_sampler_ratio(ratio) {
+						if let Err(err) = rivet_metrics_server::set_sampler_ratio(ratio) {
 							tracing::error!(?err, "failed to reload sampler ratio");
 						}
 					}
 					Some(None) => {
 						// Reset to default (0.001)
-						if let Err(err) = rivet_metrics::set_sampler_ratio(0.001) {
+						if let Err(err) = rivet_metrics_server::set_sampler_ratio(0.001) {
 							tracing::error!(?err, "failed to reload sampler ratio to default");
 						}
 					}

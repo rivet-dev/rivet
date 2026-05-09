@@ -1,9 +1,15 @@
 use super::*;
 
+#[path = "metrics_helpers.rs"]
+mod metrics_helpers;
+
 mod moved_tests {
 	use std::panic::{AssertUnwindSafe, catch_unwind};
 
+	use rivet_metrics::prometheus::{IntGauge, Opts, Registry};
+
 	use super::*;
+	use super::metrics_helpers::{metric_line_for_actor, render_global_metrics};
 
 	#[test]
 	fn duplicate_metric_registration_uses_noop_fallback() {
@@ -37,22 +43,48 @@ mod moved_tests {
 
 	#[test]
 	fn actor_inbox_depth_metrics_render() {
-		let metrics = ActorMetrics::new("actor-inbox-depth", "metrics");
+		let metrics = ActorMetrics::new("actor-inbox-depth", Some(42), "counter/main", "envoy-1");
 
 		metrics.set_lifecycle_inbox_depth(1);
 		metrics.set_dispatch_inbox_depth(2);
 		metrics.set_lifecycle_event_inbox_depth(3);
 
-		let rendered = metrics.render().expect("metrics should render");
-		assert_metric_value(&rendered, "lifecycle_inbox_depth", "1");
-		assert_metric_value(&rendered, "dispatch_inbox_depth", "2");
-		assert_metric_value(&rendered, "lifecycle_event_inbox_depth", "3");
+		let rendered = render_global_metrics();
+		assert_metric_value(&rendered, "rivet_actor_lifecycle_inbox_depth", "1");
+		assert_metric_value(&rendered, "rivet_actor_dispatch_inbox_depth", "2");
+		assert_metric_value(&rendered, "rivet_actor_lifecycle_event_inbox_depth", "3");
+	}
+
+	#[test]
+	fn actor_active_metric_is_retained_after_drop() {
+		let metrics = ActorMetrics::new("actor-retention", Some(7), "counter/main", "envoy-1");
+
+		let rendered = render_global_metrics();
+		let line = rendered
+			.lines()
+			.find(|line| metric_line_for_actor(line, "rivet_actor_active", "actor-retention:7"))
+			.expect("active actor metric should render");
+		assert!(line.ends_with('1'), "actor should be active: {line}");
+
+		drop(metrics);
+
+		let rendered = render_global_metrics();
+		let line = rendered
+			.lines()
+			.find(|line| metric_line_for_actor(line, "rivet_actor_active", "actor-retention:7"))
+			.expect("inactive actor metric should remain during retention window");
+		assert!(line.ends_with('0'), "actor should be inactive: {line}");
 	}
 
 	fn assert_metric_value(metrics: &str, name: &str, value: &str) {
 		let line = metrics
 			.lines()
-			.find(|line| line.starts_with(name))
+			.find(|line| {
+				line.starts_with(name)
+					&& line.contains("actor_id_gen=\"actor-inbox-depth:42\"")
+					&& line.contains("actor_key=\"counter/main\"")
+					&& line.contains("envoy_key=\"envoy-1\"")
+			})
 			.unwrap_or_else(|| panic!("{name} should render"));
 		assert!(line.ends_with(value), "{name} should have value {value}: {line}");
 	}

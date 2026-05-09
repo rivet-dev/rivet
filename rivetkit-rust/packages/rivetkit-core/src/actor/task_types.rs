@@ -45,20 +45,6 @@ pub enum UserTaskKind {
 }
 
 impl UserTaskKind {
-	pub(crate) const ALL: [Self; 11] = [
-		Self::Action,
-		Self::Http,
-		Self::WebSocketLifetime,
-		Self::WebSocketCallback,
-		Self::QueueWait,
-		Self::ScheduledAction,
-		Self::DisconnectCallback,
-		Self::WaitUntil,
-		Self::RegisteredTask,
-		Self::SleepFinalize,
-		Self::DestroyRequest,
-	];
-
 	pub(crate) fn as_metric_label(self) -> &'static str {
 		match self {
 			Self::Action => "action",
@@ -85,13 +71,6 @@ pub enum StateMutationReason {
 }
 
 impl StateMutationReason {
-	pub(crate) const ALL: [Self; 4] = [
-		Self::InternalReplace,
-		Self::ScheduledEventsUpdate,
-		Self::InputSet,
-		Self::HasInitialized,
-	];
-
 	pub(crate) fn as_metric_label(self) -> &'static str {
 		match self {
 			Self::InternalReplace => "internal_replace",

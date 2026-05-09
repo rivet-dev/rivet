@@ -1,6 +1,3 @@
-// Based off of https://github.com/tokio-rs/tracing-opentelemetry/blob/v0.1.x/examples/opentelemetry-otlp.rs
-// Based off of https://github.com/tokio-rs/tracing-opentelemetry/blob/v0.1.x/examples/opentelemetry-otlp.rs
-
 use opentelemetry::KeyValue;
 use opentelemetry::trace::{SamplingResult, SpanKind};
 use opentelemetry_otlp::WithExportConfig;
@@ -11,7 +8,7 @@ use opentelemetry_sdk::{
 use opentelemetry_semantic_conventions::{SCHEMA_URL, attribute::SERVICE_VERSION};
 use std::sync::{Arc, OnceLock, RwLock};
 
-/// Dynamic sampler that can be updated at runtime
+/// Dynamic sampler that can be updated at runtime.
 #[derive(Clone, Debug)]
 struct DynamicSampler {
 	ratio: Arc<RwLock<f64>>,
@@ -43,7 +40,6 @@ impl opentelemetry_sdk::trace::ShouldSample for DynamicSampler {
 	) -> SamplingResult {
 		let ratio = self.ratio.read().ok().map(|r| *r).unwrap_or(0.001);
 
-		// Use TraceIdRatioBased sampling logic
 		let sampler = Sampler::TraceIdRatioBased(ratio);
 		sampler.should_sample(
 			parent_context,
@@ -58,7 +54,7 @@ impl opentelemetry_sdk::trace::ShouldSample for DynamicSampler {
 
 static SAMPLER: OnceLock<DynamicSampler> = OnceLock::new();
 
-/// Update the sampler ratio at runtime
+/// Update the sampler ratio at runtime.
 pub fn set_sampler_ratio(ratio: f64) -> anyhow::Result<()> {
 	let sampler = SAMPLER
 		.get()
@@ -94,7 +90,6 @@ fn init_tracer_provider() -> SdkTracerProvider {
 		.build()
 		.unwrap();
 
-	// Create dynamic sampler with initial ratio from env
 	let initial_ratio = std::env::var("RIVET_OTEL_SAMPLER_RATIO")
 		.ok()
 		.and_then(|s| s.parse::<f64>().ok())
@@ -102,13 +97,10 @@ fn init_tracer_provider() -> SdkTracerProvider {
 
 	let dynamic_sampler = DynamicSampler::new(initial_ratio);
 
-	// Store sampler globally for later updates
 	let _ = SAMPLER.set(dynamic_sampler.clone());
 
 	SdkTracerProvider::builder()
-		// Customize sampling strategy with parent-based sampling using our dynamic sampler
 		.with_sampler(Sampler::ParentBased(Box::new(dynamic_sampler)))
-		// If export trace to AWS X-Ray, you can use XrayIdGenerator
 		.with_id_generator(RandomIdGenerator::default())
 		.with_resource(resource())
 		.with_batch_exporter(exporter)
@@ -117,7 +109,6 @@ fn init_tracer_provider() -> SdkTracerProvider {
 
 /// Initialize OtelProviderGuard for opentelemetry-related termination processing.
 pub fn init_otel_providers() -> Option<OtelProviderGuard> {
-	// Check if otel is enabled
 	let enable_otel = std::env::var("RIVET_OTEL_ENABLED").map_or(false, |x| x == "1");
 
 	if enable_otel {
@@ -137,7 +128,7 @@ pub struct OtelProviderGuard {
 impl Drop for OtelProviderGuard {
 	fn drop(&mut self) {
 		if let Err(err) = self.tracer_provider.shutdown() {
-			eprintln!("{err:?}");
+			tracing::error!(?err, "failed to shut down otel tracer provider");
 		}
 	}
 }

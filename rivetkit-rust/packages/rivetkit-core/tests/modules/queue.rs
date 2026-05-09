@@ -1,5 +1,8 @@
 use super::*;
 
+#[path = "../metrics_helpers.rs"]
+mod metrics_helpers;
+
 pub(crate) fn begin_sleep_test_wait(queue: &Queue) {
 	queue
 		.0
@@ -34,6 +37,8 @@ mod moved_tests {
 	use crate::actor::queue::{EnqueueAndWaitOpts, QueueNextOpts, QueueWaitOpts};
 	use tokio::time::{Duration, sleep};
 	use tokio_util::sync::CancellationToken;
+
+	use super::metrics_helpers::{metric_line_for_actor, render_global_metrics};
 
 	const QUEUE_METADATA_HEX: &str = "04002a0000000000000007000000";
 	const QUEUE_MESSAGE_HEX: &str = "0400036a6f6205a16178182ac80100000000000000000000";
@@ -123,7 +128,7 @@ mod moved_tests {
 	#[tokio::test]
 	async fn queue_operations_update_prometheus_metrics() {
 		let ctx = new_with_kv(
-			"actor-1",
+			"queue-metrics-actor",
 			"queue-metrics",
 			Vec::new(),
 			"local",
@@ -142,18 +147,18 @@ mod moved_tests {
 			.expect("queue message should exist");
 		assert_eq!(message.body, b"payload".to_vec());
 
-		let metrics = ctx.render_metrics().expect("render metrics");
+		let metrics = render_global_metrics();
 		let sent_line = metrics
 			.lines()
-			.find(|line| line.starts_with("queue_messages_sent_total"))
+			.find(|line| metric_line_for_actor(line, "rivet_actor_queue_messages_sent_total", "queue-metrics-actor:"))
 			.expect("sent metric line");
 		let received_line = metrics
 			.lines()
-			.find(|line| line.starts_with("queue_messages_received_total"))
+			.find(|line| metric_line_for_actor(line, "rivet_actor_queue_messages_received_total", "queue-metrics-actor:"))
 			.expect("received metric line");
 		let depth_line = metrics
 			.lines()
-			.find(|line| line.starts_with("queue_depth"))
+			.find(|line| metric_line_for_actor(line, "rivet_actor_queue_depth", "queue-metrics-actor:"))
 			.expect("depth metric line");
 
 		assert!(sent_line.ends_with(" 1"));

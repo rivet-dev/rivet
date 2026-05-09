@@ -28,11 +28,11 @@ futures.workspace = true
 http.workspace = true
 nix = { workspace = true, optional = true }
 parking_lot.workspace = true
-prometheus.workspace = true
 rand.workspace = true
 reqwest = { workspace = true, optional = true }
 rivet-error.workspace = true
 rivet-envoy-client = { workspace = true, default-features = false }
+rivet-metrics.workspace = true
 rivetkit-shared-types.workspace = true
 rivetkit-actor-persist.workspace = true
 rivetkit-client-protocol.workspace = true

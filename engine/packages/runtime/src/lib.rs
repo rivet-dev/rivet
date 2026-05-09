@@ -1,6 +1,6 @@
 use std::{env, future::Future, sync::Arc, time::Duration};
 
-use rivet_metrics::init_otel_providers;
+use rivet_metrics_server::init_otel_providers;
 use tokio::sync::{Notify, OnceCell};
 mod metrics;
 mod traces;

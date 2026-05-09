@@ -6,9 +6,7 @@ use hyper::{
 	header::CONTENT_TYPE,
 	service::{make_service_fn, service_fn},
 };
-use prometheus::{Encoder, TextEncoder};
-
-// TODO: Record extra labels
+use rivet_metrics::prometheus::{Encoder, TextEncoder};
 
 #[tracing::instrument(skip_all)]
 pub async fn run_standalone(config: rivet_config::Config) -> Result<()> {
@@ -21,8 +19,7 @@ pub async fn run_standalone(config: rivet_config::Config) -> Result<()> {
 		Err(err) => {
 			tracing::error!(?host, ?port, ?err, "failed to bind metrics server");
 
-			// TODO: Find cleaner way of crashing entire program
-			// Hard crash program since a server failing to bind is critical
+			// Hard crash the program since a server failing to bind is critical.
 			std::process::exit(1);
 		}
 	};
@@ -41,7 +38,7 @@ pub async fn run_standalone(config: rivet_config::Config) -> Result<()> {
 async fn serve_req(_req: Request<Body>) -> Result<Response<Body>, hyper::Error> {
 	let encoder = TextEncoder::new();
 
-	let metric_families = crate::registry::REGISTRY.gather();
+	let metric_families = rivet_metrics::REGISTRY.gather();
 	let mut buffer = Vec::new();
 	encoder
 		.encode(&metric_families, &mut buffer)

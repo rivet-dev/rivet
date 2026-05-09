@@ -1,5 +1,8 @@
 use super::*;
 
+#[path = "../metrics_helpers.rs"]
+mod metrics_helpers;
+
 mod moved_tests {
 	use std::collections::BTreeMap;
 	use std::sync::Arc;
@@ -20,6 +23,8 @@ mod moved_tests {
 	use crate::actor::context::ActorContext;
 	use crate::actor::keys::make_connection_key;
 	use crate::actor::context::tests::new_with_kv;
+
+	use super::metrics_helpers::{metric_line_for_actor, render_global_metrics};
 
 	const PERSISTED_CONNECTION_HEX: &str = "040006636f6e6e2d310201020203040107757064617465640401020304040506070809000a00032f77730106782d746573740131";
 
@@ -248,7 +253,7 @@ mod moved_tests {
 	#[tokio::test]
 	async fn connection_lifecycle_updates_prometheus_metrics() -> Result<()> {
 		let ctx = new_with_kv(
-			"actor-1",
+			"conn-metrics-actor",
 			"conn-metrics",
 			Vec::new(),
 			"local",
@@ -260,14 +265,14 @@ mod moved_tests {
 			.await?;
 		conn.disconnect(None).await?;
 
-		let metrics = ctx.render_metrics().expect("render metrics");
+		let metrics = render_global_metrics();
 		let active_line = metrics
 			.lines()
-			.find(|line| line.starts_with("active_connections"))
+			.find(|line| metric_line_for_actor(line, "rivet_actor_active_connections", "conn-metrics-actor:"))
 			.expect("active connections metric line");
 		let total_line = metrics
 			.lines()
-			.find(|line| line.starts_with("connections_total"))
+			.find(|line| metric_line_for_actor(line, "rivet_actor_connections_total", "conn-metrics-actor:"))
 			.expect("connections total metric line");
 
 		assert!(active_line.ends_with(" 0"));

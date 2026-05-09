@@ -5,8 +5,8 @@ use super::{
 	FrameworkHttpRoute, HttpRequest, HttpResponseEncoding, RegistryHttpRoute,
 	authorization_bearer_token, authorization_bearer_token_map, framework_action_error_response,
 	inspector_error_status, message_boundary_error_response, normalize_actor_request_path,
-	request_encoding, request_has_bearer_token, with_action_dispatch_timeout,
-	with_framework_action_timeout, workflow_dispatch_result,
+	request_encoding, with_action_dispatch_timeout, with_framework_action_timeout,
+	workflow_dispatch_result,
 };
 use crate::actor::action::ActionDispatchError;
 use crate::error::ActorLifecycle as ActorLifecycleError;
@@ -120,23 +120,6 @@ fn authorization_bearer_token_accepts_case_insensitive_scheme_and_whitespace() {
 		"BEARER\ttest-token".to_owned(),
 	)]);
 	assert_eq!(authorization_bearer_token_map(&map), Some("test-token"));
-}
-
-#[test]
-fn request_has_bearer_token_uses_same_authorization_parser() {
-	let request = HttpRequest {
-		method: "GET".to_owned(),
-		path: "/metrics".to_owned(),
-		headers: HashMap::from([(
-			http::header::AUTHORIZATION.as_str().to_owned(),
-			"Bearer   configured".to_owned(),
-		)]),
-		body: Some(Vec::new()),
-		body_stream: None,
-	};
-
-	assert!(request_has_bearer_token(&request, Some("configured")));
-	assert!(!request_has_bearer_token(&request, Some("other")));
 }
 
 #[tokio::test]

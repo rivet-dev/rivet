@@ -10,11 +10,6 @@ impl RegistryDispatcher {
 		actor_id: &str,
 		request: HttpRequest,
 	) -> Result<HttpResponse> {
-		if request.path == "/metrics" {
-			let instance = self.active_actor(actor_id).await?;
-			return self.handle_metrics_fetch(&instance, &request);
-		}
-
 		let original_path = request.path.clone();
 		let request = build_http_request(request).await?;
 		let route = RegistryHttpRoute::from_paths(
@@ -350,34 +345,6 @@ impl RegistryDispatcher {
 		}
 	}
 
-	fn handle_metrics_fetch(
-		&self,
-		instance: &ActorTaskHandle,
-		request: &HttpRequest,
-	) -> Result<HttpResponse> {
-		if !request_has_bearer_token(request, self.metrics_token.as_deref()) {
-			return Ok(unauthorized_response());
-		}
-
-		let mut headers = HashMap::new();
-		headers.insert(
-			http::header::CONTENT_TYPE.to_string(),
-			instance.ctx.metrics_content_type().to_owned(),
-		);
-
-		Ok(HttpResponse {
-			status: http::StatusCode::OK.as_u16(),
-			headers,
-			body: Some(
-				instance
-					.ctx
-					.render_metrics()
-					.context("render actor prometheus metrics")?
-					.into_bytes(),
-			),
-			body_stream: None,
-		})
-	}
 }
 
 enum RegistryHttpRoute {
@@ -922,29 +889,6 @@ pub(super) fn framework_error_status(group: &str, code: &str) -> StatusCode {
 		("queue", _) => StatusCode::BAD_REQUEST,
 		_ => StatusCode::INTERNAL_SERVER_ERROR,
 	}
-}
-
-pub(super) fn unauthorized_response() -> HttpResponse {
-	HttpResponse {
-		status: http::StatusCode::UNAUTHORIZED.as_u16(),
-		headers: HashMap::new(),
-		body: Some(Vec::new()),
-		body_stream: None,
-	}
-}
-
-pub(super) fn request_has_bearer_token(
-	request: &HttpRequest,
-	configured_token: Option<&str>,
-) -> bool {
-	let Some(configured_token) = configured_token else {
-		return false;
-	};
-
-	request.headers.iter().any(|(name, value)| {
-		name.eq_ignore_ascii_case(http::header::AUTHORIZATION.as_str())
-			&& bearer_token_from_authorization(value) == Some(configured_token)
-	})
 }
 
 fn bearer_token_from_authorization(value: &str) -> Option<&str> {
