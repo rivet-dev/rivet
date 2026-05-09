@@ -213,7 +213,7 @@ dependencies = [
  "once_cell",
  "pin-project",
  "portable-atomic",
- "rand 0.8.5",
+ "rand 0.8.6",
  "regex",
  "ring",
  "rustls-native-certs 0.7.3",
@@ -352,23 +352,26 @@ dependencies = [
 
 [[package]]
 name = "aws-runtime"
-version = "1.5.10"
+version = "1.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c034a1bc1d70e16e7f4e4caf7e9f7693e4c9c24cd91cf17c2a0b21abaebc7c8b"
+checksum = "b0f92058d22a46adf53ec57a6a96f34447daf02bff52e8fb956c66bcd5c6ac12"
 dependencies = [
  "aws-credential-types",
  "aws-sigv4",
  "aws-smithy-async",
  "aws-smithy-eventstream",
- "aws-smithy-http 0.62.6",
+ "aws-smithy-http 0.63.4",
  "aws-smithy-runtime",
  "aws-smithy-runtime-api",
  "aws-smithy-types",
  "aws-types",
  "bytes",
+ "bytes-utils",
  "fastrand",
  "http 0.2.12",
+ "http 1.3.1",
  "http-body 0.4.6",
+ "http-body 1.0.1",
  "percent-encoding",
  "pin-project-lite",
  "tracing",
@@ -377,9 +380,9 @@ dependencies = [
 
 [[package]]
 name = "aws-sdk-s3"
-version = "1.103.0"
+version = "1.112.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "af040a86ae4378b7ed2f62c83b36be1848709bbbf5757ec850d0e08596a26be9"
+checksum = "eee73a27721035c46da0572b390a69fbdb333d0177c24f3d8f7ff952eeb96690"
 dependencies = [
  "aws-credential-types",
  "aws-runtime",
@@ -591,9 +594,9 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-http-client"
-version = "1.0.6"
+version = "1.1.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f108f1ca850f3feef3009bdcc977be201bca9a91058864d9de0684e64514bee0"
+checksum = "0709f0083aa19b704132684bc26d3c868e06bd428ccc4373b0b55c3e8748a58b"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-runtime-api",
@@ -610,10 +613,11 @@ dependencies = [
  "hyper-util",
  "pin-project-lite",
  "rustls 0.21.12",
- "rustls 0.23.29",
+ "rustls 0.23.40",
  "rustls-native-certs 0.8.3",
  "rustls-pki-types",
  "tokio",
+ "tokio-rustls 0.26.2",
  "tower 0.5.2",
  "tracing",
 ]
@@ -629,9 +633,9 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-observability"
-version = "0.1.5"
+version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "17f616c3f2260612fe44cede278bafa18e73e6479c4e393e2c4518cf2a9a228a"
+checksum = "4d3f39d5bb871aaf461d59144557f16d5927a5248a983a40654d9cf3b9ba183b"
 dependencies = [
  "aws-smithy-runtime-api",
 ]
@@ -648,12 +652,12 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-runtime"
-version = "1.8.6"
+version = "1.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9e107ce0783019dbff59b3a244aa0c114e4a8c9d93498af9162608cd5474e796"
+checksum = "8fd3dfc18c1ce097cf81fced7192731e63809829c6cbf933c1ec47452d08e1aa"
 dependencies = [
  "aws-smithy-async",
- "aws-smithy-http 0.62.6",
+ "aws-smithy-http 0.63.4",
  "aws-smithy-http-client",
  "aws-smithy-observability",
  "aws-smithy-runtime-api",
@@ -664,6 +668,7 @@ dependencies = [
  "http 1.3.1",
  "http-body 0.4.6",
  "http-body 1.0.1",
+ "http-body-util",
  "pin-project-lite",
  "pin-utils",
  "tokio",
@@ -1048,9 +1053,9 @@ dependencies = [
  "hyperlocal",
  "log",
  "pin-project-lite",
- "rustls 0.23.29",
+ "rustls 0.23.40",
  "rustls-native-certs 0.8.3",
- "rustls-pemfile 2.2.0",
+ "rustls-pemfile",
  "rustls-pki-types",
  "serde",
  "serde_derive",
@@ -1111,9 +1116,9 @@ checksum = "1fd0f2584146f6f2ef48085050886acf353beff7305ebd1ae69500e27c67f64b"
 
 [[package]]
 name = "bytes"
-version = "1.10.1"
+version = "1.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d71b6127be86fdcfddb610f7182ac57211d4b18a3e9c82eb2d17662f2227ad6a"
+checksum = "1e748733b7cbc798e1434b6ac524f0c1ff2ab456fe201501e6497c8417a4fc33"
 dependencies = [
  "serde",
 ]
@@ -1978,12 +1983,12 @@ dependencies = [
 
 [[package]]
 name = "deranged"
-version = "0.4.0"
+version = "0.5.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9c9e6a11ca8224451684bc0d7d5a7adbf8f2fd6887261a1cfc3c0432f9d4068e"
+checksum = "7cd812cc2bc1d69d4764bd80df88b4317eaef9e773c75226407d9bc0876b211c"
 dependencies = [
  "powerfmt",
- "serde",
+ "serde_core",
 ]
 
 [[package]]
@@ -2262,7 +2267,7 @@ dependencies = [
  "lazy_static",
  "libc",
  "portpicker",
- "rand 0.8.5",
+ "rand 0.9.2",
  "reqwest",
  "rivet-api-builder",
  "rivet-config",
@@ -2611,7 +2616,7 @@ dependencies = [
  "opentelemetry",
  "papaya",
  "portpicker",
- "rand 0.8.5",
+ "rand 0.9.2",
  "rivet-cache",
  "rivet-config",
  "rivet-env",
@@ -2742,7 +2747,7 @@ dependencies = [
  "parking_lot",
  "portable-atomic",
  "quanta",
- "rand 0.8.5",
+ "rand 0.8.6",
  "smallvec",
  "spinning_top",
 ]
@@ -3074,7 +3079,6 @@ dependencies = [
  "hyper 0.14.32",
  "log",
  "rustls 0.21.12",
- "rustls-native-certs 0.6.3",
  "tokio",
  "tokio-rustls 0.24.1",
 ]
@@ -3088,7 +3092,7 @@ dependencies = [
  "http 1.3.1",
  "hyper 1.6.0",
  "hyper-util",
- "rustls 0.23.29",
+ "rustls 0.23.40",
  "rustls-native-certs 0.8.3",
  "rustls-pki-types",
  "tokio",
@@ -3611,9 +3615,9 @@ dependencies = [
 
 [[package]]
 name = "lz4_flex"
-version = "0.11.5"
+version = "0.11.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "08ab2867e3eeeca90e844d1940eab391c9dc5228783db2ed999acbc0a9ed375a"
+checksum = "373f5eceeeab7925e0c1098212f2fbc4d416adec9d35051a6ab251e824c1854a"
 dependencies = [
  "twox-hash",
 ]
@@ -3768,7 +3772,7 @@ dependencies = [
  "num-complex",
  "num-rational",
  "num-traits",
- "rand 0.8.5",
+ "rand 0.8.6",
  "rand_distr",
  "simba",
  "typenum",
@@ -3907,7 +3911,7 @@ dependencies = [
  "ed25519-dalek",
  "getrandom 0.2.16",
  "log",
- "rand 0.8.5",
+ "rand 0.8.6",
  "signatory",
 ]
 
@@ -3957,7 +3961,7 @@ version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc895af95856f929163a0aa20c26a78d26bfdc839f51b9d5aa7a5b79e52b7e83"
 dependencies = [
- "rand 0.8.5",
+ "rand 0.8.6",
 ]
 
 [[package]]
@@ -3981,9 +3985,9 @@ dependencies = [
 
 [[package]]
 name = "num-conv"
-version = "0.1.0"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "51d515d32fb182ee37cda2ccdcb92950d6a3c2893aa280e540671c2cd0f3b1d9"
+checksum = "c6673768db2d862beb9b39a78fdcb1a69439615d5794a1be50caa9bc92c81967"
 
 [[package]]
 name = "num-derive"
@@ -4192,7 +4196,7 @@ dependencies = [
  "glob",
  "opentelemetry",
  "percent-encoding",
- "rand 0.8.5",
+ "rand 0.8.6",
  "serde_json",
  "thiserror 2.0.12",
  "tracing",
@@ -4340,7 +4344,7 @@ dependencies = [
  "namespace",
  "nix 0.30.1",
  "portpicker",
- "rand 0.8.5",
+ "rand 0.9.2",
  "reqwest",
  "reqwest-eventsource",
  "rivet-api-types",
@@ -4396,7 +4400,7 @@ dependencies = [
  "lazy_static",
  "namespace",
  "pegboard",
- "rand 0.8.5",
+ "rand 0.9.2",
  "rivet-config",
  "rivet-data",
  "rivet-envoy-protocol",
@@ -4437,7 +4441,7 @@ dependencies = [
  "lazy_static",
  "namespace",
  "pegboard",
- "rand 0.8.5",
+ "rand 0.9.2",
  "rivet-config",
  "rivet-error",
  "rivet-guard-core",
@@ -4471,7 +4475,7 @@ dependencies = [
  "lazy_static",
  "namespace",
  "pegboard",
- "rand 0.8.5",
+ "rand 0.9.2",
  "replace_with",
  "rivet-config",
  "rivet-envoy-protocol",
@@ -4532,7 +4536,7 @@ dependencies = [
  "lazy_static",
  "namespace",
  "pegboard",
- "rand 0.8.5",
+ "rand 0.9.2",
  "rivet-config",
  "rivet-data",
  "rivet-envoy-protocol",
@@ -4726,7 +4730,7 @@ version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "be97d76faf1bfab666e1375477b23fde79eccf0276e9b63b92a39d676a889ba9"
 dependencies = [
- "rand 0.8.5",
+ "rand 0.8.6",
 ]
 
 [[package]]
@@ -4937,7 +4941,7 @@ dependencies = [
  "quinn-proto",
  "quinn-udp",
  "rustc-hash",
- "rustls 0.23.29",
+ "rustls 0.23.40",
  "socket2 0.6.0",
  "thiserror 2.0.12",
  "tokio",
@@ -4947,9 +4951,9 @@ dependencies = [
 
 [[package]]
 name = "quinn-proto"
-version = "0.11.13"
+version = "0.11.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f1906b49b0c3bc04b5fe5d86a77925ae6524a19b816ae38ce1e426255f1d8a31"
+checksum = "434b42fec591c96ef50e21e886936e66d3cc3f737104fdb9b737c40ffb94c098"
 dependencies = [
  "bytes",
  "getrandom 0.3.3",
@@ -4957,7 +4961,7 @@ dependencies = [
  "rand 0.9.2",
  "ring",
  "rustc-hash",
- "rustls 0.23.29",
+ "rustls 0.23.40",
  "rustls-pki-types",
  "slab",
  "thiserror 2.0.12",
@@ -5007,9 +5011,9 @@ dependencies = [
 
 [[package]]
 name = "rand"
-version = "0.8.5"
+version = "0.8.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "34af8d1a0e25924bc5b7c43c079c942339d8f0a8b57c39049bef581b46327404"
+checksum = "5ca0ecfa931c29007047d1bc58e623ab12e5590e8c7cc53200d5202b69266d8a"
 dependencies = [
  "libc",
  "rand_chacha 0.3.1",
@@ -5071,7 +5075,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32cb0b9bc82b0a0876c2dd994a7e7a2683d3e7390ca40e6886785ef0c7e3ee31"
 dependencies = [
  "num-traits",
- "rand 0.8.5",
+ "rand 0.8.6",
 ]
 
 [[package]]
@@ -5202,7 +5206,7 @@ dependencies = [
  "percent-encoding",
  "pin-project-lite",
  "quinn",
- "rustls 0.23.29",
+ "rustls 0.23.40",
  "rustls-native-certs 0.8.3",
  "rustls-pki-types",
  "serde",
@@ -5462,7 +5466,7 @@ dependencies = [
  "itertools 0.14.0",
  "lazy_static",
  "moka",
- "rand 0.8.5",
+ "rand 0.9.2",
  "rivet-cache-result",
  "rivet-config",
  "rivet-env",
@@ -5583,7 +5587,7 @@ dependencies = [
  "pegboard-outbound",
  "pegboard-runner",
  "portpicker",
- "rand 0.8.5",
+ "rand 0.9.2",
  "reqwest",
  "rivet-api-peer",
  "rivet-api-public",
@@ -5650,10 +5654,10 @@ dependencies = [
  "hex",
  "js-sys",
  "parking_lot",
- "rand 0.8.5",
+ "rand 0.9.2",
  "rivet-envoy-protocol",
  "rivet-util-serde",
- "rustls 0.23.29",
+ "rustls 0.23.40",
  "scc",
  "serde",
  "serde_bare",
@@ -5676,7 +5680,7 @@ version = "2.3.0-rc.5"
 dependencies = [
  "anyhow",
  "hex",
- "rand 0.8.5",
+ "rand 0.9.2",
  "rivet-util-serde",
  "serde",
  "serde_bare",
@@ -5751,8 +5755,8 @@ dependencies = [
  "rivet-runner-protocol",
  "rivet-runtime",
  "rivet-types",
- "rustls 0.23.29",
- "rustls-pemfile 2.2.0",
+ "rustls 0.23.40",
+ "rustls-pemfile",
  "serde",
  "serde_json",
  "subtle",
@@ -5785,7 +5789,7 @@ dependencies = [
  "indoc",
  "lazy_static",
  "moka",
- "rand 0.8.5",
+ "rand 0.9.2",
  "regex",
  "reqwest",
  "rivet-api-builder",
@@ -5795,8 +5799,8 @@ dependencies = [
  "rivet-runner-protocol",
  "rivet-runtime",
  "rivet-util",
- "rustls 0.23.29",
- "rustls-pemfile 2.2.0",
+ "rustls 0.23.40",
+ "rustls-pemfile",
  "serde",
  "serde_json",
  "tokio",
@@ -5867,7 +5871,7 @@ dependencies = [
  "rivet-config",
  "rivet-metrics",
  "rivet-util",
- "rustls 0.23.29",
+ "rustls 0.23.40",
  "serde",
  "tempfile",
  "thiserror 1.0.69",
@@ -5887,8 +5891,8 @@ name = "rivet-postgres-util"
 version = "2.3.0-rc.5"
 dependencies = [
  "anyhow",
- "rustls 0.23.29",
- "rustls-pemfile 2.2.0",
+ "rustls 0.23.40",
+ "rustls-pemfile",
  "tracing",
  "webpki-roots 0.26.11",
 ]
@@ -5900,7 +5904,7 @@ dependencies = [
  "anyhow",
  "gasoline",
  "hex",
- "rand 0.8.5",
+ "rand 0.9.2",
  "rivet-util",
  "serde",
  "serde_bare",
@@ -6101,7 +6105,7 @@ dependencies = [
  "futures-util",
  "ipnet",
  "lazy_static",
- "rand 0.8.5",
+ "rand 0.9.2",
  "regex",
  "reqwest",
  "rivet-config",
@@ -6194,7 +6198,7 @@ dependencies = [
  "nix 0.30.1",
  "parking_lot",
  "portpicker",
- "rand 0.8.5",
+ "rand 0.9.2",
  "reqwest",
  "rivet-envoy-client",
  "rivet-error",
@@ -6375,30 +6379,18 @@ dependencies = [
 
 [[package]]
 name = "rustls"
-version = "0.23.29"
+version = "0.23.40"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2491382039b29b9b11ff08b76ff6c97cf287671dbb74f0be44bda389fffe9bd1"
+checksum = "ef86cd5876211988985292b91c96a8f2d298df24e75989a43a3c73f2d4d8168b"
 dependencies = [
  "aws-lc-rs",
  "log",
  "once_cell",
  "ring",
  "rustls-pki-types",
- "rustls-webpki 0.103.4",
+ "rustls-webpki 0.103.13",
  "subtle",
  "zeroize",
-]
-
-[[package]]
-name = "rustls-native-certs"
-version = "0.6.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a9aace74cb666635c918e9c12bc0d348266037aa8eb599b5cba565709a8dff00"
-dependencies = [
- "openssl-probe 0.1.6",
- "rustls-pemfile 1.0.4",
- "schannel",
- "security-framework 2.11.1",
 ]
 
 [[package]]
@@ -6408,7 +6400,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e5bfb394eeed242e909609f56089eecfe5fda225042e8b171791b9c95f5931e5"
 dependencies = [
  "openssl-probe 0.1.6",
- "rustls-pemfile 2.2.0",
+ "rustls-pemfile",
  "rustls-pki-types",
  "schannel",
  "security-framework 2.11.1",
@@ -6424,15 +6416,6 @@ dependencies = [
  "rustls-pki-types",
  "schannel",
  "security-framework 3.6.0",
-]
-
-[[package]]
-name = "rustls-pemfile"
-version = "1.0.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1c74cae0a4cf6ccbbf5f359f08efdf8ee7e1dc532573bf0db71968cb56b1448c"
-dependencies = [
- "base64 0.21.7",
 ]
 
 [[package]]
@@ -6476,9 +6459,9 @@ dependencies = [
 
 [[package]]
 name = "rustls-webpki"
-version = "0.103.4"
+version = "0.103.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0a17884ae0c1b773f1ccd2bd4a8c72f16da897310a98b0e84bf349ad5ead92fc"
+checksum = "61c429a8649f110dddef65e2a5ad240f747e85f7758a6bccc7e5777bd33f756e"
 dependencies = [
  "aws-lc-rs",
  "ring",
@@ -6710,7 +6693,7 @@ checksum = "48b85e25e8a1fc13928885e8bf13abe8a09e15c46993aed05d6405f7755d6e20"
 dependencies = [
  "httpdate",
  "reqwest",
- "rustls 0.23.29",
+ "rustls 0.23.40",
  "sentry-anyhow",
  "sentry-backtrace",
  "sentry-contexts",
@@ -7103,9 +7086,9 @@ checksum = "56199f7ddabf13fe5074ce809e7d3f42b42ae711800501b5b16ea82ad029c39d"
 
 [[package]]
 name = "slab"
-version = "0.4.10"
+version = "0.4.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "04dc19736151f35336d325007ac991178d504a119863a2fcb3758cdb5e52c50d"
+checksum = "0c790de23124f9ab44544d7ac05d60440adc586479ce501c1d6d7da3cd8c9cf5"
 
 [[package]]
 name = "slog"
@@ -7214,7 +7197,7 @@ dependencies = [
  "approx",
  "nalgebra",
  "num-traits",
- "rand 0.8.5",
+ "rand 0.8.6",
 ]
 
 [[package]]
@@ -7562,9 +7545,9 @@ dependencies = [
 
 [[package]]
 name = "time"
-version = "0.3.41"
+version = "0.3.47"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8a7619e19bc266e0f9c5e6686659d394bc57973859340060a69221e57dbc0c40"
+checksum = "743bd48c283afc0388f9b8827b976905fb217ad9e647fae3a379a9283c4def2c"
 dependencies = [
  "deranged",
  "itoa 1.0.15",
@@ -7572,22 +7555,22 @@ dependencies = [
  "num-conv",
  "num_threads",
  "powerfmt",
- "serde",
+ "serde_core",
  "time-core",
  "time-macros",
 ]
 
 [[package]]
 name = "time-core"
-version = "0.1.4"
+version = "0.1.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c9e9a38711f559d9e3ce1cdb06dd7c5b8ea546bc90052da6d06bb76da74bb07c"
+checksum = "7694e1cfe791f8d31026952abf09c69ca6f6fa4e1a1229e18988f06a04a12dca"
 
 [[package]]
 name = "time-macros"
-version = "0.2.22"
+version = "0.2.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3526739392ec93fd8b359c8e98514cb3e8e021beb4e5f597b00a0221f8ed8a49"
+checksum = "2e70e4c5a0e0a8a4823ad65dfe1a6930e4f4d756dcd9dd7939022b5e8c501215"
 dependencies = [
  "num-conv",
  "time-core",
@@ -7720,7 +7703,7 @@ checksum = "27d684bad428a0f2481f42241f821db42c54e2dc81d8c00db8536c506b0a0144"
 dependencies = [
  "const-oid",
  "ring",
- "rustls 0.23.29",
+ "rustls 0.23.40",
  "tokio",
  "tokio-postgres",
  "tokio-rustls 0.26.2",
@@ -7743,7 +7726,7 @@ version = "0.26.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8e727b36a1a0e8b74c376ac2211e40c2c8af09fb4013c60d910495810f008e9b"
 dependencies = [
- "rustls 0.23.29",
+ "rustls 0.23.40",
  "tokio",
 ]
 
@@ -7781,7 +7764,7 @@ checksum = "7a9daff607c6d2bf6c16fd681ccb7eecc83e4e2cdc1ca067ffaadfca5de7f084"
 dependencies = [
  "futures-util",
  "log",
- "rustls 0.23.29",
+ "rustls 0.23.40",
  "rustls-native-certs 0.8.3",
  "rustls-pki-types",
  "tokio",
@@ -7815,7 +7798,7 @@ dependencies = [
  "futures-sink",
  "http 1.3.1",
  "httparse",
- "rand 0.8.5",
+ "rand 0.8.6",
  "ring",
  "rustls-pki-types",
  "tokio",
@@ -7865,7 +7848,7 @@ dependencies = [
  "indexmap 1.9.3",
  "pin-project",
  "pin-project-lite",
- "rand 0.8.5",
+ "rand 0.8.6",
  "slab",
  "tokio",
  "tokio-util",
@@ -8081,7 +8064,7 @@ dependencies = [
  "httparse",
  "log",
  "rand 0.9.2",
- "rustls 0.23.29",
+ "rustls 0.23.40",
  "rustls-pki-types",
  "sha1",
  "thiserror 2.0.12",
@@ -8171,7 +8154,7 @@ dependencies = [
  "futures-util",
  "hex",
  "lazy_static",
- "rand 0.8.5",
+ "rand 0.9.2",
  "rivet-config",
  "rivet-env",
  "rivet-metrics",
@@ -8203,7 +8186,7 @@ dependencies = [
  "deadpool-postgres",
  "futures-util",
  "lazy_static",
- "rand 0.8.5",
+ "rand 0.9.2",
  "rivet-config",
  "rivet-env",
  "rivet-error",
@@ -8249,8 +8232,8 @@ dependencies = [
  "base64 0.22.1",
  "log",
  "percent-encoding",
- "rustls 0.23.29",
- "rustls-pemfile 2.2.0",
+ "rustls 0.23.40",
+ "rustls-pemfile",
  "rustls-pki-types",
  "ureq-proto",
  "utf-8",
