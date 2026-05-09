@@ -474,14 +474,22 @@ async fn handle_sqlite_get_pages_response(
 	match handle_sqlite_get_pages(ctx, conn, request).await {
 		Ok(response) => response,
 		Err(err) => {
-			tracing::error!(
-				actor_id = %actor_id,
-				?pgnos,
-				?expected_generation,
-				?expected_head_txid,
-				?err,
-				"sqlite get_pages request failed"
-			);
+			if is_startup_database_miss(&err, expected_generation, expected_head_txid) {
+				tracing::debug!(
+					actor_id = %actor_id,
+					?pgnos,
+					"sqlite get_pages did not find an existing actor database"
+				);
+			} else {
+				tracing::error!(
+					actor_id = %actor_id,
+					?pgnos,
+					?expected_generation,
+					?expected_head_txid,
+					?err,
+					"sqlite get_pages request failed"
+				);
+			}
 			protocol::SqliteGetPagesResponse::SqliteErrorResponse(sqlite_error_response(&err))
 		}
 	}
@@ -1113,6 +1121,16 @@ async fn actor_db(ctx: &StandaloneCtx, conn: &Conn, actor_id: String) -> Result<
 fn depot_error(err: &anyhow::Error) -> Option<&SqliteStorageError> {
 	err.chain()
 		.find_map(|source| source.downcast_ref::<SqliteStorageError>())
+}
+
+fn is_startup_database_miss(
+	err: &anyhow::Error,
+	expected_generation: Option<u64>,
+	expected_head_txid: Option<u64>,
+) -> bool {
+	expected_generation.is_none()
+		&& expected_head_txid.is_none()
+		&& matches!(depot_error(err), Some(SqliteStorageError::DatabaseNotFound))
 }
 
 fn sqlite_error_reason(err: &anyhow::Error) -> String {
