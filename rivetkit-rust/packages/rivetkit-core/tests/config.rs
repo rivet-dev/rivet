@@ -73,18 +73,6 @@ mod moved_tests {
 			default.max_outgoing_message_size,
 		);
 		assert_eq!(
-			config.lifecycle_command_inbox_capacity,
-			default.lifecycle_command_inbox_capacity,
-		);
-		assert_eq!(
-			config.dispatch_command_inbox_capacity,
-			default.dispatch_command_inbox_capacity,
-		);
-		assert_eq!(
-			config.lifecycle_event_inbox_capacity,
-			default.lifecycle_event_inbox_capacity,
-		);
-		assert_eq!(
 			config.preload_max_workflow_bytes,
 			default.preload_max_workflow_bytes,
 		);

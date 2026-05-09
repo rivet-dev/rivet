@@ -22,7 +22,7 @@ mod moved_tests {
 	use crate::kv::Kv;
 
 	fn next_non_activity_lifecycle_event(
-		rx: &mut mpsc::Receiver<LifecycleEvent>,
+		rx: &mut mpsc::UnboundedReceiver<LifecycleEvent>,
 	) -> Option<LifecycleEvent> {
 		rx.try_recv().ok()
 	}
@@ -353,7 +353,7 @@ mod moved_tests {
 			Kv::new_in_memory(),
 		);
 		let (actor_events_tx, mut actor_events_rx) = mpsc::unbounded_channel();
-		let (lifecycle_events_tx, mut lifecycle_events_rx) = mpsc::channel(4);
+		let (lifecycle_events_tx, mut lifecycle_events_rx) = mpsc::unbounded_channel();
 		ctx.configure_actor_events(Some(actor_events_tx));
 		ctx.configure_lifecycle_events(Some(lifecycle_events_tx));
 

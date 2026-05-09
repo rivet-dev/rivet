@@ -3,8 +3,7 @@ use crate::error::ActorLifecycle as ActorLifecycleError;
 use crate::time;
 
 pub(super) async fn dispatch_action_through_task(
-	dispatch: &mpsc::Sender<DispatchCommand>,
-	capacity: usize,
+	dispatch: &mpsc::UnboundedSender<DispatchCommand>,
 	conn: ConnHandle,
 	name: String,
 	args: Vec<u8>,
@@ -17,15 +16,12 @@ pub(super) async fn dispatch_action_through_task(
 	);
 	try_send_dispatch_command(
 		dispatch,
-		capacity,
-		"dispatch_action",
 		DispatchCommand::Action {
 			name: name.clone(),
 			args,
 			conn,
 			reply: reply_tx,
 		},
-		None,
 	)
 	.map_err(ActionDispatchError::from_anyhow)?;
 	tracing::info!(
@@ -80,8 +76,7 @@ where
 }
 
 pub(super) async fn dispatch_websocket_open_through_task(
-	dispatch: &mpsc::Sender<DispatchCommand>,
-	capacity: usize,
+	dispatch: &mpsc::UnboundedSender<DispatchCommand>,
 	conn: ConnHandle,
 	ws: WebSocket,
 	request: Option<Request>,
@@ -89,15 +84,12 @@ pub(super) async fn dispatch_websocket_open_through_task(
 	let (reply_tx, reply_rx) = oneshot::channel();
 	try_send_dispatch_command(
 		dispatch,
-		capacity,
-		"dispatch_websocket_open",
 		DispatchCommand::OpenWebSocket {
 			conn,
 			ws,
 			request,
 			reply: reply_tx,
 		},
-		None,
 	)
 	.context("actor task stopped before websocket dispatch command could be sent")?;
 
@@ -107,16 +99,12 @@ pub(super) async fn dispatch_websocket_open_through_task(
 }
 
 pub(super) async fn dispatch_workflow_history_through_task(
-	dispatch: &mpsc::Sender<DispatchCommand>,
-	capacity: usize,
+	dispatch: &mpsc::UnboundedSender<DispatchCommand>,
 ) -> Result<Option<Vec<u8>>> {
 	let (reply_tx, reply_rx) = oneshot::channel();
 	try_send_dispatch_command(
 		dispatch,
-		capacity,
-		"dispatch_workflow_history",
 		DispatchCommand::WorkflowHistory { reply: reply_tx },
-		None,
 	)
 	.context("actor task stopped before workflow history dispatch command could be sent")?;
 
@@ -126,20 +114,16 @@ pub(super) async fn dispatch_workflow_history_through_task(
 }
 
 pub(super) async fn dispatch_workflow_replay_request_through_task(
-	dispatch: &mpsc::Sender<DispatchCommand>,
-	capacity: usize,
+	dispatch: &mpsc::UnboundedSender<DispatchCommand>,
 	entry_id: Option<String>,
 ) -> Result<Option<Vec<u8>>> {
 	let (reply_tx, reply_rx) = oneshot::channel();
 	try_send_dispatch_command(
 		dispatch,
-		capacity,
-		"dispatch_workflow_replay",
 		DispatchCommand::WorkflowReplay {
 			entry_id,
 			reply: reply_tx,
 		},
-		None,
 	)
 	.context("actor task stopped before workflow replay dispatch command could be sent")?;
 

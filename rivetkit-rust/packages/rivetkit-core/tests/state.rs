@@ -180,12 +180,9 @@ mod moved_tests {
 	async fn request_save_coalesces_and_escalates_to_immediate() {
 		let state = ActorContext::new_for_state_tests(
 			new_in_memory(),
-			ActorConfig {
-				lifecycle_event_inbox_capacity: 4,
-				..ActorConfig::default()
-			},
+			ActorConfig::default(),
 		);
-		let (events_tx, mut events_rx) = mpsc::channel(4);
+		let (events_tx, mut events_rx) = mpsc::unbounded_channel();
 		state.configure_lifecycle_events(Some(events_tx));
 
 		state.request_save(RequestSaveOpts::default());
@@ -223,11 +220,10 @@ mod moved_tests {
 			new_in_memory(),
 			ActorConfig {
 				state_save_interval: Duration::from_secs(5),
-				lifecycle_event_inbox_capacity: 4,
 				..ActorConfig::default()
 			},
 		);
-		let (events_tx, mut events_rx) = mpsc::channel(4);
+		let (events_tx, mut events_rx) = mpsc::unbounded_channel();
 		state.configure_lifecycle_events(Some(events_tx));
 
 		let now = std::time::Instant::now();
@@ -573,7 +569,7 @@ mod moved_tests {
 			"local",
 			new_in_memory(),
 		);
-		let (events_tx, _events_rx) = mpsc::channel(4);
+		let (events_tx, _events_rx) = mpsc::unbounded_channel();
 		ctx.configure_lifecycle_events(Some(events_tx));
 
 		ctx.request_save(RequestSaveOpts {

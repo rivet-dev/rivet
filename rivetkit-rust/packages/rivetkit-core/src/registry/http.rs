@@ -62,13 +62,10 @@ impl RegistryDispatcher {
 		let (reply_tx, reply_rx) = oneshot::channel();
 		try_send_dispatch_command(
 			&instance.dispatch,
-			instance.factory.config().dispatch_command_inbox_capacity,
-			"dispatch_http",
 			DispatchCommand::Http {
 				request,
 				reply: reply_tx,
 			},
-			Some(instance.ctx.metrics()),
 		)
 		.context("send actor task HTTP dispatch command")?;
 
@@ -181,7 +178,6 @@ impl RegistryDispatcher {
 			config.action_timeout,
 			dispatch_action_through_task(
 				&instance.dispatch,
-				config.dispatch_command_inbox_capacity,
 				conn.clone(),
 				action_name.clone(),
 				args,
@@ -294,8 +290,6 @@ impl RegistryDispatcher {
 		let (reply_tx, reply_rx) = oneshot::channel();
 		let dispatch_result = try_send_dispatch_command(
 			&instance.dispatch,
-			config.dispatch_command_inbox_capacity,
-			"dispatch_queue_send",
 			DispatchCommand::QueueSend {
 				name: queue_name,
 				body: queue_request.body,
@@ -305,7 +299,6 @@ impl RegistryDispatcher {
 				timeout_ms: queue_request.timeout,
 				reply: reply_tx,
 			},
-			Some(instance.ctx.metrics()),
 		);
 
 		let queue_result = match dispatch_result {

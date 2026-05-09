@@ -132,13 +132,13 @@ mod moved_tests {
 		ctx: ActorContext,
 	) -> (
 		ActorTask,
-		mpsc::Sender<LifecycleCommand>,
-		mpsc::Sender<DispatchCommand>,
-		mpsc::Sender<LifecycleEvent>,
+		mpsc::UnboundedSender<LifecycleCommand>,
+		mpsc::UnboundedSender<DispatchCommand>,
+		mpsc::UnboundedSender<LifecycleEvent>,
 	) {
-		let (lifecycle_tx, lifecycle_rx) = mpsc::channel(4);
-		let (dispatch_tx, dispatch_rx) = mpsc::channel(4);
-		let (events_tx, events_rx) = mpsc::channel(4);
+		let (lifecycle_tx, lifecycle_rx) = mpsc::unbounded_channel();
+		let (dispatch_tx, dispatch_rx) = mpsc::unbounded_channel();
+		let (events_tx, events_rx) = mpsc::unbounded_channel();
 		(
 			ActorTask::new(
 				"actor-drain".into(),
@@ -158,9 +158,9 @@ mod moved_tests {
 	}
 
 	fn new_task_with_factory(ctx: ActorContext, factory: Arc<ActorFactory>) -> ActorTask {
-		let (_lifecycle_tx, lifecycle_rx) = mpsc::channel(4);
-		let (_dispatch_tx, dispatch_rx) = mpsc::channel(4);
-		let (_events_tx, events_rx) = mpsc::channel(4);
+		let (_lifecycle_tx, lifecycle_rx) = mpsc::unbounded_channel();
+		let (_dispatch_tx, dispatch_rx) = mpsc::unbounded_channel();
+		let (_events_tx, events_rx) = mpsc::unbounded_channel();
 		ActorTask::new(
 			"actor-drain".into(),
 			0,
@@ -735,9 +735,9 @@ mod moved_tests {
 	#[tokio::test]
 	async fn save_tick_respects_debounce_and_immediate_requests() {
 		let ctx = new_with_kv("actor-1", "task-save", Vec::new(), "local", new_in_memory());
-		let (_lifecycle_tx, lifecycle_rx) = mpsc::channel(4);
-		let (_dispatch_tx, dispatch_rx) = mpsc::channel(4);
-		let (events_tx, events_rx) = mpsc::channel(4);
+		let (_lifecycle_tx, lifecycle_rx) = mpsc::unbounded_channel();
+		let (_dispatch_tx, dispatch_rx) = mpsc::unbounded_channel();
+		let (events_tx, events_rx) = mpsc::unbounded_channel();
 		ctx.configure_lifecycle_events(Some(events_tx));
 
 		let save_ticks = Arc::new(AtomicUsize::new(0));
@@ -804,9 +804,9 @@ mod moved_tests {
 			"local",
 			new_in_memory(),
 		);
-		let (_lifecycle_tx, lifecycle_rx) = mpsc::channel(4);
-		let (_dispatch_tx, dispatch_rx) = mpsc::channel(4);
-		let (events_tx, events_rx) = mpsc::channel(4);
+		let (_lifecycle_tx, lifecycle_rx) = mpsc::unbounded_channel();
+		let (_dispatch_tx, dispatch_rx) = mpsc::unbounded_channel();
+		let (events_tx, events_rx) = mpsc::unbounded_channel();
 		ctx.configure_lifecycle_events(Some(events_tx));
 
 		let save_ticks = Arc::new(AtomicUsize::new(0));
@@ -862,9 +862,9 @@ mod moved_tests {
 			"local",
 			kv.clone(),
 		);
-		let (_lifecycle_tx, lifecycle_rx) = mpsc::channel(4);
-		let (_dispatch_tx, dispatch_rx) = mpsc::channel(4);
-		let (events_tx, events_rx) = mpsc::channel(4);
+		let (_lifecycle_tx, lifecycle_rx) = mpsc::unbounded_channel();
+		let (_dispatch_tx, dispatch_rx) = mpsc::unbounded_channel();
+		let (events_tx, events_rx) = mpsc::unbounded_channel();
 		ctx.configure_lifecycle_events(Some(events_tx));
 
 		let factory = Arc::new(ActorFactory::new(Default::default(), move |start| {
@@ -955,9 +955,9 @@ mod moved_tests {
 			"local",
 			new_in_memory(),
 		);
-		let (_lifecycle_tx, lifecycle_rx) = mpsc::channel(4);
-		let (_dispatch_tx, dispatch_rx) = mpsc::channel(4);
-		let (events_tx, events_rx) = mpsc::channel(4);
+		let (_lifecycle_tx, lifecycle_rx) = mpsc::unbounded_channel();
+		let (_dispatch_tx, dispatch_rx) = mpsc::unbounded_channel();
+		let (events_tx, events_rx) = mpsc::unbounded_channel();
 		ctx.configure_lifecycle_events(Some(events_tx));
 
 		let save_ticks = Arc::new(AtomicUsize::new(0));
@@ -1015,9 +1015,9 @@ mod moved_tests {
 			"local",
 			new_in_memory(),
 		);
-		let (_lifecycle_tx, lifecycle_rx) = mpsc::channel(4);
-		let (_dispatch_tx, dispatch_rx) = mpsc::channel(4);
-		let (events_tx, events_rx) = mpsc::channel(4);
+		let (_lifecycle_tx, lifecycle_rx) = mpsc::unbounded_channel();
+		let (_dispatch_tx, dispatch_rx) = mpsc::unbounded_channel();
+		let (events_tx, events_rx) = mpsc::unbounded_channel();
 		ctx.configure_lifecycle_events(Some(events_tx));
 
 		let save_ticks = Arc::new(AtomicUsize::new(0));
@@ -1100,9 +1100,9 @@ mod moved_tests {
 	async fn sleep_shutdown_persists_actor_and_hibernation_deltas() {
 		let kv = new_in_memory();
 		let ctx = new_with_kv("actor-sleep", "task-sleep", Vec::new(), "local", kv.clone());
-		let (_lifecycle_tx, lifecycle_rx) = mpsc::channel(4);
-		let (_dispatch_tx, dispatch_rx) = mpsc::channel(4);
-		let (events_tx, events_rx) = mpsc::channel(4);
+		let (_lifecycle_tx, lifecycle_rx) = mpsc::unbounded_channel();
+		let (_dispatch_tx, dispatch_rx) = mpsc::unbounded_channel();
+		let (events_tx, events_rx) = mpsc::unbounded_channel();
 		ctx.configure_lifecycle_events(Some(events_tx));
 
 		let disconnects = Arc::new(Mutex::new(Vec::<String>::new()));
@@ -1217,9 +1217,9 @@ mod moved_tests {
 	async fn wake_start_clears_previous_sleep_request() {
 		let kv = new_in_memory();
 		let ctx = new_with_kv("actor-wake", "task-wake", Vec::new(), "local", kv.clone());
-		let (_lifecycle_tx, lifecycle_rx) = mpsc::channel(4);
-		let (_dispatch_tx, dispatch_rx) = mpsc::channel(4);
-		let (events_tx, events_rx) = mpsc::channel(4);
+		let (_lifecycle_tx, lifecycle_rx) = mpsc::unbounded_channel();
+		let (_dispatch_tx, dispatch_rx) = mpsc::unbounded_channel();
+		let (events_tx, events_rx) = mpsc::unbounded_channel();
 		ctx.configure_lifecycle_events(Some(events_tx));
 
 		let factory = Arc::new(ActorFactory::new(
@@ -1295,9 +1295,9 @@ mod moved_tests {
 		);
 		ctx.set_state_initial(vec![1]);
 
-		let (_lifecycle_tx, lifecycle_rx) = mpsc::channel(4);
-		let (_dispatch_tx, dispatch_rx) = mpsc::channel(4);
-		let (events_tx, events_rx) = mpsc::channel(4);
+		let (_lifecycle_tx, lifecycle_rx) = mpsc::unbounded_channel();
+		let (_dispatch_tx, dispatch_rx) = mpsc::unbounded_channel();
+		let (events_tx, events_rx) = mpsc::unbounded_channel();
 		ctx.configure_lifecycle_events(Some(events_tx));
 
 		let factory = Arc::new(ActorFactory::new(
@@ -1378,9 +1378,9 @@ mod moved_tests {
 			"local",
 			kv.clone(),
 		);
-		let (_lifecycle_tx, lifecycle_rx) = mpsc::channel(4);
-		let (_dispatch_tx, dispatch_rx) = mpsc::channel(4);
-		let (events_tx, events_rx) = mpsc::channel(4);
+		let (_lifecycle_tx, lifecycle_rx) = mpsc::unbounded_channel();
+		let (_dispatch_tx, dispatch_rx) = mpsc::unbounded_channel();
+		let (events_tx, events_rx) = mpsc::unbounded_channel();
 		ctx.configure_lifecycle_events(Some(events_tx));
 
 		let disconnects = Arc::new(Mutex::new(Vec::<String>::new()));
@@ -1490,9 +1490,9 @@ mod moved_tests {
 			"local",
 			new_in_memory(),
 		);
-		let (_lifecycle_tx, lifecycle_rx) = mpsc::channel(4);
-		let (_dispatch_tx, dispatch_rx) = mpsc::channel(4);
-		let (events_tx, events_rx) = mpsc::channel(4);
+		let (_lifecycle_tx, lifecycle_rx) = mpsc::unbounded_channel();
+		let (_dispatch_tx, dispatch_rx) = mpsc::unbounded_channel();
+		let (events_tx, events_rx) = mpsc::unbounded_channel();
 		ctx.configure_lifecycle_events(Some(events_tx));
 
 		let seen_conns = Arc::new(Mutex::new(Vec::<Option<String>>::new()));
@@ -1716,9 +1716,9 @@ mod moved_tests {
 			.expect("seed hibernation should persist");
 
 		let ctx = new_with_kv("actor-wake", "task-wake", Vec::new(), "local", kv.clone());
-		let (_lifecycle_tx, lifecycle_rx) = mpsc::channel(4);
-		let (_dispatch_tx, dispatch_rx) = mpsc::channel(4);
-		let (events_tx, events_rx) = mpsc::channel(4);
+		let (_lifecycle_tx, lifecycle_rx) = mpsc::unbounded_channel();
+		let (_dispatch_tx, dispatch_rx) = mpsc::unbounded_channel();
+		let (events_tx, events_rx) = mpsc::unbounded_channel();
 		ctx.configure_lifecycle_events(Some(events_tx));
 		configure_live_hibernated_pairs(&ctx, [(b"gate".as_slice(), b"req1".as_slice())]);
 		let (started_tx, started_rx) = oneshot::channel();
@@ -1795,9 +1795,9 @@ mod moved_tests {
 			"local",
 			new_in_memory(),
 		);
-		let (_lifecycle_tx, lifecycle_rx) = mpsc::channel(4);
-		let (_dispatch_tx, dispatch_rx) = mpsc::channel(4);
-		let (events_tx, events_rx) = mpsc::channel(4);
+		let (_lifecycle_tx, lifecycle_rx) = mpsc::unbounded_channel();
+		let (_dispatch_tx, dispatch_rx) = mpsc::unbounded_channel();
+		let (events_tx, events_rx) = mpsc::unbounded_channel();
 		ctx.configure_lifecycle_events(Some(events_tx));
 
 		let (started_tx, started_rx) = oneshot::channel();
@@ -1913,9 +1913,9 @@ mod moved_tests {
 		let kv = new_in_memory();
 		let ctx = new_with_kv("actor-hws", "task-hws", Vec::new(), "local", kv.clone());
 
-		let (_lifecycle_tx, lifecycle_rx) = mpsc::channel(4);
-		let (_dispatch_tx, dispatch_rx) = mpsc::channel(4);
-		let (events_tx, events_rx) = mpsc::channel(4);
+		let (_lifecycle_tx, lifecycle_rx) = mpsc::unbounded_channel();
+		let (_dispatch_tx, dispatch_rx) = mpsc::unbounded_channel();
+		let (events_tx, events_rx) = mpsc::unbounded_channel();
 		ctx.configure_lifecycle_events(Some(events_tx));
 
 		let factory = Arc::new(ActorFactory::new(Default::default(), move |start| {
@@ -2021,9 +2021,9 @@ mod moved_tests {
 			kv.clone(),
 		);
 
-		let (_lifecycle_tx, lifecycle_rx) = mpsc::channel(4);
-		let (_dispatch_tx, dispatch_rx) = mpsc::channel(4);
-		let (events_tx, events_rx) = mpsc::channel(4);
+		let (_lifecycle_tx, lifecycle_rx) = mpsc::unbounded_channel();
+		let (_dispatch_tx, dispatch_rx) = mpsc::unbounded_channel();
+		let (events_tx, events_rx) = mpsc::unbounded_channel();
 		ctx.configure_lifecycle_events(Some(events_tx));
 
 		let factory = Arc::new(ActorFactory::new(Default::default(), move |start| {
@@ -2607,7 +2607,6 @@ mod moved_tests {
 		let (start_tx, start_rx) = oneshot::channel();
 		lifecycle_tx
 			.send(LifecycleCommand::Start { reply: start_tx })
-			.await
 			.expect("start command should send");
 		start_rx
 			.await
@@ -2622,7 +2621,6 @@ mod moved_tests {
 				reason: ShutdownKind::Sleep,
 				reply: stop_tx,
 			})
-			.await
 			.expect("sleep stop should send");
 		stop_rx
 			.await
@@ -2655,7 +2653,6 @@ mod moved_tests {
 		let (start_tx, start_rx) = oneshot::channel();
 		lifecycle_tx
 			.send(LifecycleCommand::Start { reply: start_tx })
-			.await
 			.expect("start command should send");
 		start_rx
 			.await
@@ -2670,7 +2667,6 @@ mod moved_tests {
 				reason: ShutdownKind::Destroy,
 				reply: stop_tx,
 			})
-			.await
 			.expect("destroy stop should send");
 		stop_rx
 			.await
@@ -2703,7 +2699,6 @@ mod moved_tests {
 		let (start_tx, start_rx) = oneshot::channel();
 		lifecycle_tx
 			.send(LifecycleCommand::Start { reply: start_tx })
-			.await
 			.expect("start command should send");
 		start_rx
 			.await
@@ -2716,7 +2711,6 @@ mod moved_tests {
 				reason: ShutdownKind::Sleep,
 				reply: stop_tx,
 			})
-			.await
 			.expect("sleep stop should send");
 		stop_rx
 			.await
@@ -2747,7 +2741,6 @@ mod moved_tests {
 		let (start_tx, start_rx) = oneshot::channel();
 		lifecycle_tx
 			.send(LifecycleCommand::Start { reply: start_tx })
-			.await
 			.expect("start command should send");
 		start_rx
 			.await
@@ -2773,7 +2766,6 @@ mod moved_tests {
 				reason: ShutdownKind::Sleep,
 				reply: stop_tx,
 			})
-			.await
 			.expect("sleep stop should send");
 		let stop = tokio::spawn(async move { stop_rx.await });
 		yield_now().await;
@@ -2906,7 +2898,6 @@ mod moved_tests {
 		let (start_tx, start_rx) = oneshot::channel();
 		lifecycle_tx
 			.send(LifecycleCommand::Start { reply: start_tx })
-			.await
 			.expect("start command should send");
 		start_rx
 			.await
@@ -2919,7 +2910,6 @@ mod moved_tests {
 				reason: ShutdownKind::Sleep,
 				reply: stop_tx,
 			})
-			.await
 			.expect("sleep stop command should send");
 		hook_rx.await.expect("sleep cleanup hook should fire");
 		assert_eq!(
@@ -3002,7 +2992,6 @@ mod moved_tests {
 		let (start_tx, start_rx) = oneshot::channel();
 		lifecycle_tx
 			.send(LifecycleCommand::Start { reply: start_tx })
-			.await
 			.expect("start command should send");
 		start_rx
 			.await
@@ -3029,7 +3018,6 @@ mod moved_tests {
 				reason: ShutdownKind::Destroy,
 				reply: stop_tx,
 			})
-			.await
 			.expect("destroy stop command should send");
 		hook_rx.await.expect("destroy cleanup hook should fire");
 		assert_eq!(
@@ -3084,7 +3072,6 @@ mod moved_tests {
 		let (start_tx, start_rx) = oneshot::channel();
 		lifecycle_tx
 			.send(LifecycleCommand::Start { reply: start_tx })
-			.await
 			.expect("start command should send");
 		start_rx
 			.await
@@ -3109,7 +3096,6 @@ mod moved_tests {
 				reason: ShutdownKind::Sleep,
 				reply: sleep_tx,
 			})
-			.await
 			.expect("sleep stop should send");
 		wait_for_count(&begin_sleep_count, 1).await;
 		assert!(ctx.actor_aborted());
@@ -3120,7 +3106,6 @@ mod moved_tests {
 				reason: ShutdownKind::Sleep,
 				reply: sleep_again_tx,
 			})
-			.await
 			.expect("second sleep stop should send");
 		sleep_again_rx
 			.await
@@ -3136,7 +3121,6 @@ mod moved_tests {
 				conn: ConnHandle::new("conn-grace", Vec::new(), Vec::new(), false),
 				reply: action_tx,
 			})
-			.await
 			.expect("action should send during sleep grace");
 		assert_eq!(
 			action_rx
@@ -3222,7 +3206,6 @@ mod moved_tests {
 		let (start_tx, start_rx) = oneshot::channel();
 		lifecycle_tx
 			.send(LifecycleCommand::Start { reply: start_tx })
-			.await
 			.expect("start command should send");
 		start_rx
 			.await
@@ -3247,7 +3230,6 @@ mod moved_tests {
 				reason: ShutdownKind::Sleep,
 				reply: sleep_tx,
 			})
-			.await
 			.expect("sleep stop should send");
 		wait_for_count(&begin_sleep_count, 1).await;
 
@@ -3257,7 +3239,6 @@ mod moved_tests {
 				reason: ShutdownKind::Destroy,
 				reply: destroy_tx,
 			})
-			.await
 			.expect("destroy stop should send");
 		destroy_rx
 			.await
@@ -3303,7 +3284,6 @@ mod moved_tests {
 		let (start_tx, start_rx) = oneshot::channel();
 		lifecycle_tx
 			.send(LifecycleCommand::Start { reply: start_tx })
-			.await
 			.expect("start command should send");
 		start_rx
 			.await
@@ -3316,7 +3296,6 @@ mod moved_tests {
 				reason: ShutdownKind::Destroy,
 				reply: stop_tx,
 			})
-			.await
 			.expect("destroy stop should send");
 		let error = stop_rx
 			.await
@@ -3373,7 +3352,6 @@ mod moved_tests {
 		let (start_tx, start_rx) = oneshot::channel();
 		lifecycle_tx
 			.send(LifecycleCommand::Start { reply: start_tx })
-			.await
 			.expect("start command should send");
 		start_rx
 			.await
@@ -3386,7 +3364,6 @@ mod moved_tests {
 				reason: ShutdownKind::Destroy,
 				reply: stop_tx,
 			})
-			.await
 			.expect("destroy stop should send");
 		stop_rx
 			.await
@@ -3532,7 +3509,6 @@ mod moved_tests {
 		let (start_tx, start_rx) = oneshot::channel();
 		lifecycle_tx
 			.send(LifecycleCommand::Start { reply: start_tx })
-			.await
 			.expect("start command should send");
 		start_rx
 			.await
@@ -3551,7 +3527,6 @@ mod moved_tests {
 				reason: ShutdownKind::Sleep,
 				reply: stop_tx,
 			})
-			.await
 			.expect("sleep stop should send");
 		stop_rx
 			.await
@@ -3599,7 +3574,6 @@ mod moved_tests {
 		let (start_tx, start_rx) = oneshot::channel();
 		lifecycle_tx
 			.send(LifecycleCommand::Start { reply: start_tx })
-			.await
 			.expect("start command should send");
 		start_rx
 			.await
@@ -3618,7 +3592,6 @@ mod moved_tests {
 				reason: ShutdownKind::Destroy,
 				reply: stop_tx,
 			})
-			.await
 			.expect("destroy stop should send");
 		stop_rx
 			.await
@@ -3793,9 +3766,9 @@ mod moved_tests {
 			"local",
 			new_in_memory(),
 		);
-		let (lifecycle_tx, lifecycle_rx) = mpsc::channel(4);
-		let (dispatch_tx, dispatch_rx) = mpsc::channel(4);
-		let (events_tx, events_rx) = mpsc::channel(4);
+		let (lifecycle_tx, lifecycle_rx) = mpsc::unbounded_channel();
+		let (dispatch_tx, dispatch_rx) = mpsc::unbounded_channel();
+		let (events_tx, events_rx) = mpsc::unbounded_channel();
 		ctx.configure_lifecycle_events(Some(events_tx));
 		let factory = Arc::new(ActorFactory::new(Default::default(), |start| {
 			Box::pin(async move {
@@ -3836,7 +3809,6 @@ mod moved_tests {
 		let (start_tx, start_rx) = oneshot::channel();
 		lifecycle_tx
 			.send(LifecycleCommand::Start { reply: start_tx })
-			.await
 			.expect("start command should send");
 		start_rx
 			.await
@@ -3851,7 +3823,6 @@ mod moved_tests {
 				conn: ConnHandle::new("conn-log-flow", Vec::new(), Vec::new(), false),
 				reply: action_tx,
 			})
-			.await
 			.expect("dispatch command should send");
 		assert_eq!(
 			action_rx
@@ -3867,7 +3838,6 @@ mod moved_tests {
 				reason: ShutdownKind::Destroy,
 				reply: stop_tx,
 			})
-			.await
 			.expect("stop command should send");
 		stop_rx
 			.await
@@ -4013,9 +3983,9 @@ mod moved_tests {
 			"local",
 			kv.clone(),
 		);
-		let (_lifecycle_tx, lifecycle_rx) = mpsc::channel(4);
-		let (_dispatch_tx, dispatch_rx) = mpsc::channel(4);
-		let (events_tx, events_rx) = mpsc::channel(4);
+		let (_lifecycle_tx, lifecycle_rx) = mpsc::unbounded_channel();
+		let (_dispatch_tx, dispatch_rx) = mpsc::unbounded_channel();
+		let (events_tx, events_rx) = mpsc::unbounded_channel();
 		ctx.configure_lifecycle_events(Some(events_tx));
 		configure_live_hibernated_pairs(&ctx, [(b"gliv".as_slice(), b"rliv".as_slice())]);
 
@@ -4138,9 +4108,9 @@ mod moved_tests {
 			"local",
 			kv.clone(),
 		);
-		let (_lifecycle_tx, lifecycle_rx) = mpsc::channel(4);
-		let (_dispatch_tx, dispatch_rx) = mpsc::channel(4);
-		let (events_tx, events_rx) = mpsc::channel(4);
+		let (_lifecycle_tx, lifecycle_rx) = mpsc::unbounded_channel();
+		let (_dispatch_tx, dispatch_rx) = mpsc::unbounded_channel();
+		let (events_tx, events_rx) = mpsc::unbounded_channel();
 		ctx.configure_lifecycle_events(Some(events_tx));
 		ctx.set_hibernated_connection_liveness_override(std::iter::empty());
 

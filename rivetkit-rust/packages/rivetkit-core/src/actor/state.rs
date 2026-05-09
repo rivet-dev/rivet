@@ -22,8 +22,6 @@ use crate::actor::persist::{
 	decode_latest_with_embedded_version, encode_latest_with_embedded_version,
 };
 use crate::actor::task::LifecycleEvent;
-#[cfg(not(target_arch = "wasm32"))]
-use crate::actor::task::{LIFECYCLE_EVENT_INBOX_CHANNEL, actor_channel_overloaded_error};
 use crate::actor::task_types::StateMutationReason;
 use crate::error::ActorRuntime;
 #[cfg(feature = "wasm-runtime")]
@@ -129,9 +127,9 @@ impl ActorContext {
 
 	/// Fire-and-forget save request helper.
 	///
-	/// If the lifecycle event inbox is overloaded or unavailable, this only logs
-	/// a warning and returns. That `warn!` is the sole failure signal for this
-	/// path; callers do not receive a `Result`. Call
+	/// If the lifecycle event inbox is unavailable, this only logs a warning and
+	/// returns. That `warn!` is the sole failure signal for this path; callers do
+	/// not receive a `Result`. Call
 	/// [`Self::request_save_and_wait`] when the caller must observe
 	/// save-request delivery failures.
 	pub fn request_save(&self, opts: RequestSaveOpts) {
@@ -179,9 +177,7 @@ impl ActorContext {
 			return;
 		}
 
-		if let Ok(permit) = sender.try_reserve() {
-			permit.send(LifecycleEvent::SaveRequested { immediate });
-		}
+		let _ = sender.send(LifecycleEvent::SaveRequested { immediate });
 	}
 
 	pub async fn request_save_and_wait(&self, opts: RequestSaveOpts) -> Result<()> {
@@ -230,21 +226,15 @@ impl ActorContext {
 			return Ok(save_request_revision);
 		}
 
-		match sender.try_reserve() {
-			Ok(permit) => {
-				permit.send(LifecycleEvent::SaveRequested { immediate });
-				Ok(save_request_revision)
-			}
-			#[cfg(target_arch = "wasm32")]
-			Err(_) => Ok(save_request_revision),
-			#[cfg(not(target_arch = "wasm32"))]
-			Err(_) => Err(actor_channel_overloaded_error(
-				LIFECYCLE_EVENT_INBOX_CHANNEL,
-				self.0.lifecycle_event_inbox_capacity,
-				"save_requested",
-				Some(&self.0.metrics),
-			)),
-		}
+		sender
+			.send(LifecycleEvent::SaveRequested { immediate })
+			.map(|()| save_request_revision)
+			.map_err(|_| {
+				ActorRuntime::NotConfigured {
+					component: "lifecycle events".to_owned(),
+				}
+				.build()
+			})
 	}
 
 	pub(crate) async fn wait_for_save_request(&self, save_request_revision: u64) {
@@ -585,7 +575,7 @@ impl ActorContext {
 		self.0.state_revision.fetch_add(1, Ordering::SeqCst);
 	}
 
-	fn lifecycle_event_sender(&self) -> Option<mpsc::Sender<LifecycleEvent>> {
+	fn lifecycle_event_sender(&self) -> Option<mpsc::UnboundedSender<LifecycleEvent>> {
 		self.0.lifecycle_events.read().clone()
 	}
 

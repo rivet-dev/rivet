@@ -11,7 +11,6 @@ const WARNING_LIMIT: usize = 3;
 
 // Forced-sync: warning windows are updated from synchronous diagnostics paths.
 static GLOBAL_WARNINGS: OnceLock<SccHashMap<String, Arc<Mutex<WarningWindow>>>> = OnceLock::new();
-static ACTOR_WARNINGS: OnceLock<SccHashMap<String, Arc<Mutex<WarningWindow>>>> = OnceLock::new();
 
 #[derive(Debug)]
 pub(crate) struct ActorDiagnostics {
@@ -40,25 +39,6 @@ impl ActorDiagnostics {
 		} else {
 			None
 		}
-	}
-}
-
-pub(crate) fn record_actor_warning(
-	actor_id: &str,
-	kind: &'static str,
-) -> Option<WarningSuppression> {
-	let actor_key = format!("{actor_id}:{kind}");
-	let per_actor = record_limited_warning(actor_warnings(), actor_key, Instant::now());
-	let global = record_limited_warning(global_warnings(), kind.to_owned(), Instant::now());
-
-	if per_actor.emit && global.emit {
-		Some(WarningSuppression {
-			actor_id: actor_id.to_owned(),
-			per_actor_suppressed: per_actor.suppressed,
-			global_suppressed: global.suppressed,
-		})
-	} else {
-		None
 	}
 }
 
@@ -137,8 +117,4 @@ fn record_limited_warning(
 
 fn global_warnings() -> &'static SccHashMap<String, Arc<Mutex<WarningWindow>>> {
 	GLOBAL_WARNINGS.get_or_init(SccHashMap::new)
-}
-
-fn actor_warnings() -> &'static SccHashMap<String, Arc<Mutex<WarningWindow>>> {
-	ACTOR_WARNINGS.get_or_init(SccHashMap::new)
 }

@@ -19,9 +19,6 @@ const DEFAULT_MAX_QUEUE_SIZE: u32 = 1000;
 const DEFAULT_MAX_QUEUE_MESSAGE_SIZE: u32 = 65_536;
 const DEFAULT_MAX_INCOMING_MESSAGE_SIZE: u32 = 65_536;
 const DEFAULT_MAX_OUTGOING_MESSAGE_SIZE: u32 = 1_048_576;
-const DEFAULT_LIFECYCLE_COMMAND_INBOX_CAPACITY: usize = 64;
-const DEFAULT_DISPATCH_COMMAND_INBOX_CAPACITY: usize = 1024;
-const DEFAULT_LIFECYCLE_EVENT_INBOX_CAPACITY: usize = 4096;
 
 #[derive(Clone)]
 pub enum CanHibernateWebSocket {
@@ -83,9 +80,6 @@ pub struct ActorConfig {
 	pub max_queue_message_size: u32,
 	pub max_incoming_message_size: u32,
 	pub max_outgoing_message_size: u32,
-	pub lifecycle_command_inbox_capacity: usize,
-	pub dispatch_command_inbox_capacity: usize,
-	pub lifecycle_event_inbox_capacity: usize,
 	pub preload_max_workflow_bytes: Option<u64>,
 	pub preload_max_connections_bytes: Option<u64>,
 	pub overrides: Option<ActorConfigOverrides>,
@@ -233,9 +227,6 @@ impl Default for ActorConfig {
 			max_queue_message_size: DEFAULT_MAX_QUEUE_MESSAGE_SIZE,
 			max_incoming_message_size: DEFAULT_MAX_INCOMING_MESSAGE_SIZE,
 			max_outgoing_message_size: DEFAULT_MAX_OUTGOING_MESSAGE_SIZE,
-			lifecycle_command_inbox_capacity: DEFAULT_LIFECYCLE_COMMAND_INBOX_CAPACITY,
-			dispatch_command_inbox_capacity: DEFAULT_DISPATCH_COMMAND_INBOX_CAPACITY,
-			lifecycle_event_inbox_capacity: DEFAULT_LIFECYCLE_EVENT_INBOX_CAPACITY,
 			preload_max_workflow_bytes: None,
 			preload_max_connections_bytes: None,
 			overrides: None,

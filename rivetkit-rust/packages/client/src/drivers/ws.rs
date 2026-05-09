@@ -37,8 +37,8 @@ pub(crate) async fn connect(args: DriverConnectArgs) -> Result<DriverConnection>
 		.await
 		.context("Failed to connect to WebSocket via gateway")?;
 
-	let (in_tx, in_rx) = mpsc::channel::<MessageToClient>(32);
-	let (out_tx, out_rx) = mpsc::channel::<MessageToServer>(32);
+	let (in_tx, in_rx) = mpsc::unbounded_channel::<MessageToClient>();
+	let (out_tx, out_rx) = mpsc::unbounded_channel::<MessageToServer>();
 
 	let task = tokio::spawn(start(ws, args.encoding_kind, in_tx, out_rx));
 	let handle = DriverHandle::new(out_tx, task.abort_handle());
@@ -51,8 +51,8 @@ async fn start(
 		tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
 	>,
 	encoding_kind: EncodingKind,
-	in_tx: mpsc::Sender<MessageToClient>,
-	mut out_rx: mpsc::Receiver<MessageToServer>,
+	in_tx: mpsc::UnboundedSender<MessageToClient>,
+	mut out_rx: mpsc::UnboundedReceiver<MessageToServer>,
 ) -> DriverStopReason {
 	let (mut ws_sink, mut ws_stream) = ws.split();
 
@@ -85,7 +85,7 @@ async fn start(
 			// Handle ws incoming
 			msg = ws_stream.next() => {
 				let Some(msg) = msg else {
-					println!("Receiver dropped");
+					debug!("Receiver dropped");
 					return DriverStopReason::ServerDisconnect;
 				};
 
@@ -97,7 +97,7 @@ async fn start(
 								continue;
 							};
 
-							if let Err(e) = in_tx.send(Arc::new(msg)).await {
+							if let Err(e) = in_tx.send(Arc::new(msg)) {
 								debug!("Failed to send text message: {}", e);
 								// failure to send means user dropped incoming receiver
 								return DriverStopReason::UserAborted;

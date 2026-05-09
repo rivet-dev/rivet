@@ -15,7 +15,6 @@ use crate::actor::task_types::{ShutdownKind, StateMutationReason, UserTaskKind};
 
 #[derive(Clone)]
 pub(crate) struct ActorMetrics {
-	actor_id: Arc<str>,
 	inner: Arc<Option<ActorMetricsInner>>,
 }
 
@@ -29,11 +28,8 @@ struct ActorMetricsInner {
 	active_connections: IntGauge,
 	connections_total: IntCounter,
 	lifecycle_inbox_depth: IntGauge,
-	lifecycle_inbox_overload_total: CounterVec,
 	dispatch_inbox_depth: IntGauge,
-	dispatch_inbox_overload_total: CounterVec,
 	lifecycle_event_inbox_depth: IntGauge,
-	lifecycle_event_overload_total: CounterVec,
 	user_tasks_active: IntGaugeVec,
 	user_task_duration_seconds: HistogramVec,
 	shutdown_wait_seconds: HistogramVec,
@@ -100,10 +96,7 @@ impl ActorMetrics {
 			}
 		};
 
-		Self {
-			actor_id: Arc::from(actor_id),
-			inner: Arc::new(inner),
-		}
+		Self { inner: Arc::new(inner) }
 	}
 
 	fn try_new_inner(actor_id: &str, actor_name: String) -> Result<ActorMetricsInner> {
@@ -154,40 +147,16 @@ impl ActorMetrics {
 			"current actor lifecycle command inbox depth",
 		))
 		.context("create lifecycle_inbox_depth gauge")?;
-		let lifecycle_inbox_overload_total = CounterVec::new(
-			Opts::new(
-				"lifecycle_inbox_overload_total",
-				"total actor lifecycle command inbox overloads",
-			),
-			&["command"],
-		)
-		.context("create lifecycle_inbox_overload_total counter")?;
 		let dispatch_inbox_depth = IntGauge::with_opts(Opts::new(
 			"dispatch_inbox_depth",
 			"current actor dispatch command inbox depth",
 		))
 		.context("create dispatch_inbox_depth gauge")?;
-		let dispatch_inbox_overload_total = CounterVec::new(
-			Opts::new(
-				"dispatch_inbox_overload_total",
-				"total actor dispatch command inbox overloads",
-			),
-			&["command"],
-		)
-		.context("create dispatch_inbox_overload_total counter")?;
 		let lifecycle_event_inbox_depth = IntGauge::with_opts(Opts::new(
 			"lifecycle_event_inbox_depth",
 			"current actor lifecycle event inbox depth",
 		))
 		.context("create lifecycle_event_inbox_depth gauge")?;
-		let lifecycle_event_overload_total = CounterVec::new(
-			Opts::new(
-				"lifecycle_event_overload_total",
-				"total actor lifecycle event inbox overloads",
-			),
-			&["event"],
-		)
-		.context("create lifecycle_event_overload_total counter")?;
 		let user_tasks_active = IntGaugeVec::new(
 			Opts::new("user_tasks_active", "current active actor user tasks"),
 			&["kind"],
@@ -385,11 +354,8 @@ impl ActorMetrics {
 		register_metric(&registry, active_connections.clone());
 		register_metric(&registry, connections_total.clone());
 		register_metric(&registry, lifecycle_inbox_depth.clone());
-		register_metric(&registry, lifecycle_inbox_overload_total.clone());
 		register_metric(&registry, dispatch_inbox_depth.clone());
-		register_metric(&registry, dispatch_inbox_overload_total.clone());
 		register_metric(&registry, lifecycle_event_inbox_depth.clone());
-		register_metric(&registry, lifecycle_event_overload_total.clone());
 		register_metric(&registry, user_tasks_active.clone());
 		register_metric(&registry, user_task_duration_seconds.clone());
 		register_metric(&registry, shutdown_wait_seconds.clone());
@@ -464,11 +430,8 @@ impl ActorMetrics {
 			active_connections,
 			connections_total,
 			lifecycle_inbox_depth,
-			lifecycle_inbox_overload_total,
 			dispatch_inbox_depth,
-			dispatch_inbox_overload_total,
 			lifecycle_event_inbox_depth,
-			lifecycle_event_overload_total,
 			user_tasks_active,
 			user_task_duration_seconds,
 			shutdown_wait_seconds,
@@ -518,10 +481,6 @@ impl ActorMetrics {
 			#[cfg(feature = "sqlite-local")]
 			sqlite_worker_unclean_close_total,
 		})
-	}
-
-	pub(crate) fn actor_id(&self) -> &str {
-		&self.actor_id
 	}
 
 	pub(crate) fn render(&self) -> Result<String> {
@@ -600,16 +559,6 @@ impl ActorMetrics {
 			.set(depth.try_into().unwrap_or(i64::MAX));
 	}
 
-	pub(crate) fn inc_lifecycle_inbox_overload(&self, command: &str) {
-		let Some(inner) = self.inner.as_ref().as_ref() else {
-			return;
-		};
-		inner
-			.lifecycle_inbox_overload_total
-			.with_label_values(&[command])
-			.inc();
-	}
-
 	pub(crate) fn set_dispatch_inbox_depth(&self, depth: usize) {
 		let Some(inner) = self.inner.as_ref().as_ref() else {
 			return;
@@ -619,16 +568,6 @@ impl ActorMetrics {
 			.set(depth.try_into().unwrap_or(i64::MAX));
 	}
 
-	pub(crate) fn inc_dispatch_inbox_overload(&self, command: &str) {
-		let Some(inner) = self.inner.as_ref().as_ref() else {
-			return;
-		};
-		inner
-			.dispatch_inbox_overload_total
-			.with_label_values(&[command])
-			.inc();
-	}
-
 	pub(crate) fn set_lifecycle_event_inbox_depth(&self, depth: usize) {
 		let Some(inner) = self.inner.as_ref().as_ref() else {
 			return;
@@ -636,16 +575,6 @@ impl ActorMetrics {
 		inner
 			.lifecycle_event_inbox_depth
 			.set(depth.try_into().unwrap_or(i64::MAX));
-	}
-
-	pub(crate) fn inc_lifecycle_event_overload(&self, event: &str) {
-		let Some(inner) = self.inner.as_ref().as_ref() else {
-			return;
-		};
-		inner
-			.lifecycle_event_overload_total
-			.with_label_values(&[event])
-			.inc();
 	}
 
 	pub(crate) fn begin_user_task(&self, kind: UserTaskKind) {

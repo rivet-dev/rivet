@@ -30,11 +30,11 @@ pub enum DriverStopReason {
 #[derive(Debug)]
 pub struct DriverHandle {
 	abort_handle: AbortHandle,
-	sender: mpsc::Sender<MessageToServer>,
+	sender: mpsc::UnboundedSender<MessageToServer>,
 }
 
 impl DriverHandle {
-	pub fn new(sender: mpsc::Sender<MessageToServer>, abort_handle: AbortHandle) -> Self {
+	pub fn new(sender: mpsc::UnboundedSender<MessageToServer>, abort_handle: AbortHandle) -> Self {
 		Self {
 			sender,
 			abort_handle,
@@ -42,7 +42,7 @@ impl DriverHandle {
 	}
 
 	pub async fn send(&self, msg: Arc<to_server::ToServer>) -> Result<()> {
-		self.sender.send(msg).await?;
+		self.sender.send(msg)?;
 
 		Ok(())
 	}
@@ -61,7 +61,7 @@ impl Drop for DriverHandle {
 
 pub type DriverConnection = (
 	DriverHandle,
-	mpsc::Receiver<MessageToClient>,
+	mpsc::UnboundedReceiver<MessageToClient>,
 	JoinHandle<DriverStopReason>,
 );
 

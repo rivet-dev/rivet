@@ -261,7 +261,6 @@ impl RegistryDispatcher {
 		);
 		let output = dispatch_action_through_task(
 			&instance.dispatch,
-			instance.factory.config().dispatch_command_inbox_capacity,
 			conn.clone(),
 			action_name.to_owned(),
 			args,
@@ -349,7 +348,6 @@ impl RegistryDispatcher {
 			.ctx
 			.internal_keep_awake(dispatch_workflow_history_through_task(
 				&instance.dispatch,
-				instance.factory.config().dispatch_command_inbox_capacity,
 			))
 			.await
 			.context("load inspector workflow history");
@@ -366,7 +364,6 @@ impl RegistryDispatcher {
 			.ctx
 			.internal_keep_awake(dispatch_workflow_replay_request_through_task(
 				&instance.dispatch,
-				instance.factory.config().dispatch_command_inbox_capacity,
 				entry_id,
 			))
 			.await

@@ -15,9 +15,9 @@ mod moved_tests {
 	use crate::{ActorConfig, ActorContext, ActorFactory};
 
 	fn new_task_with_factory(ctx: ActorContext, factory: Arc<ActorFactory>) -> ActorTask {
-		let (_lifecycle_tx, lifecycle_rx) = mpsc::channel(4);
-		let (_dispatch_tx, dispatch_rx) = mpsc::channel(4);
-		let (_events_tx, events_rx) = mpsc::channel(4);
+		let (_lifecycle_tx, lifecycle_rx) = mpsc::unbounded_channel();
+		let (_dispatch_tx, dispatch_rx) = mpsc::unbounded_channel();
+		let (_events_tx, events_rx) = mpsc::unbounded_channel();
 		ActorTask::new(
 			ctx.actor_id().to_owned(),
 			0,
@@ -94,9 +94,9 @@ mod moved_tests {
 		let mut task = ActorTask::new(
 			"actor-preloaded-startup".to_owned(),
 			0,
-			mpsc::channel(4).1,
-			mpsc::channel(4).1,
-			mpsc::channel(4).1,
+			mpsc::unbounded_channel().1,
+			mpsc::unbounded_channel().1,
+			mpsc::unbounded_channel().1,
 			factory,
 			ctx.clone(),
 			Some(vec![7, 7, 7]),

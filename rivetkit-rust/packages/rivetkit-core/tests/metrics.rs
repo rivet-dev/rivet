@@ -34,4 +34,26 @@ mod moved_tests {
 				.count()
 		);
 	}
+
+	#[test]
+	fn actor_inbox_depth_metrics_render() {
+		let metrics = ActorMetrics::new("actor-inbox-depth", "metrics");
+
+		metrics.set_lifecycle_inbox_depth(1);
+		metrics.set_dispatch_inbox_depth(2);
+		metrics.set_lifecycle_event_inbox_depth(3);
+
+		let rendered = metrics.render().expect("metrics should render");
+		assert_metric_value(&rendered, "lifecycle_inbox_depth", "1");
+		assert_metric_value(&rendered, "dispatch_inbox_depth", "2");
+		assert_metric_value(&rendered, "lifecycle_event_inbox_depth", "3");
+	}
+
+	fn assert_metric_value(metrics: &str, name: &str, value: &str) {
+		let line = metrics
+			.lines()
+			.find(|line| line.starts_with(name))
+			.unwrap_or_else(|| panic!("{name} should render"));
+		assert!(line.ends_with(value), "{name} should have value {value}: {line}");
+	}
 }

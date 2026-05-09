@@ -33,8 +33,6 @@ use crate::actor::schedule::{InternalKeepAwakeCallback, LocalAlarmCallback};
 use crate::actor::sleep::{CanSleep, SleepState};
 use crate::actor::state::{PendingSave, PersistedActor, RequestSaveOpts};
 use crate::actor::task::LifecycleEvent;
-#[cfg(not(target_arch = "wasm32"))]
-use crate::actor::task::{LIFECYCLE_EVENT_INBOX_CHANNEL, actor_channel_overloaded_error};
 use crate::actor::task_types::UserTaskKind;
 use crate::actor::work_registry::{ActorWorkKind, CountGuard, RegionGuard};
 use crate::error::{ActorLifecycle as ActorLifecycleError, ActorRuntime};
@@ -140,9 +138,8 @@ pub(crate) struct ActorContextInner {
 	inspector_attach_count: RwLock<Option<Arc<AtomicU32>>>,
 	inspector_overlay_tx: RwLock<Option<broadcast::Sender<Arc<Vec<u8>>>>>,
 	actor_events: RwLock<Option<mpsc::UnboundedSender<ActorEvent>>>,
-	pub(super) lifecycle_events: RwLock<Option<mpsc::Sender<LifecycleEvent>>>,
+	pub(super) lifecycle_events: RwLock<Option<mpsc::UnboundedSender<LifecycleEvent>>>,
 	hibernated_connection_liveness_override: RwLock<Option<BTreeSet<(Vec<u8>, Vec<u8>)>>>,
-	pub(super) lifecycle_event_inbox_capacity: usize,
 	pub(super) metrics: ActorMetrics,
 	diagnostics: ActorDiagnostics,
 	actor_id: String,
@@ -230,7 +227,6 @@ impl ActorContext {
 		#[cfg(feature = "sqlite-local")]
 		sql.set_vfs_metrics(Arc::new(metrics.clone()));
 		let diagnostics = ActorDiagnostics::new(actor_id.clone());
-		let lifecycle_event_inbox_capacity = config.lifecycle_event_inbox_capacity;
 		let state_save_interval = config.state_save_interval;
 		let abort_signal = CancellationToken::new();
 		let shutdown_deadline = CancellationToken::new();
@@ -307,7 +303,6 @@ impl ActorContext {
 			actor_events: RwLock::new(None),
 			lifecycle_events: RwLock::new(None),
 			hibernated_connection_liveness_override: RwLock::new(None),
-			lifecycle_event_inbox_capacity,
 			metrics,
 			diagnostics,
 			actor_id,
@@ -1243,7 +1238,10 @@ impl ActorContext {
 			.await
 	}
 
-	pub(crate) fn configure_lifecycle_events(&self, sender: Option<mpsc::Sender<LifecycleEvent>>) {
+	pub(crate) fn configure_lifecycle_events(
+		&self,
+		sender: Option<mpsc::UnboundedSender<LifecycleEvent>>,
+	) {
 		*self.0.lifecycle_events.write() = sender;
 	}
 
@@ -1466,28 +1464,12 @@ impl ActorContext {
 	}
 
 	fn try_send_lifecycle_event(&self, event: LifecycleEvent, operation: &'static str) {
-		#[cfg(target_arch = "wasm32")]
-		let _ = operation;
-
 		let Some(sender) = self.0.lifecycle_events.read().clone() else {
 			return;
 		};
 
-		match sender.try_reserve() {
-			Ok(permit) => {
-				permit.send(event);
-			}
-			#[cfg(target_arch = "wasm32")]
-			Err(_) => {}
-			#[cfg(not(target_arch = "wasm32"))]
-			Err(_) => {
-				let _ = actor_channel_overloaded_error(
-					LIFECYCLE_EVENT_INBOX_CHANNEL,
-					self.0.lifecycle_event_inbox_capacity,
-					operation,
-					Some(&self.0.metrics),
-				);
-			}
+		if sender.send(event).is_err() {
+			tracing::warn!(operation, "failed to enqueue actor lifecycle event");
 		}
 	}
 }
