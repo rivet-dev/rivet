@@ -45,6 +45,7 @@ export const TEST_ENGINE_TOKEN = "dev";
 
 export interface SharedTestEngine {
 	endpoint: string;
+	metricsEndpoint: string;
 	pid: number;
 	dbRoot: string;
 }
@@ -183,6 +184,15 @@ async function isEngineHealthy(endpoint: string): Promise<boolean> {
 	}
 }
 
+async function isMetricsEndpointHealthy(endpoint: string): Promise<boolean> {
+	try {
+		const response = await fetch(endpoint);
+		return response.ok;
+	} catch {
+		return false;
+	}
+}
+
 async function stopProcess(
 	child: ChildProcess,
 	signal: NodeJS.Signals,
@@ -248,6 +258,7 @@ async function spawnSharedEngine(): Promise<SharedTestEngine> {
 		exclude: [guardPort, apiPeerPort],
 	});
 	const endpoint = `http://${host}:${guardPort}`;
+	const metricsEndpoint = `http://${host}:${metricsPort}`;
 	const dbRoot = mkdtempSync(join(tmpdir(), "rivetkit-driver-engine-"));
 	const configPath = join(dbRoot, "config.json");
 	writeFileSync(
@@ -322,6 +333,7 @@ async function spawnSharedEngine(): Promise<SharedTestEngine> {
 
 	const sharedEngine = {
 		endpoint,
+		metricsEndpoint,
 		pid: engine.pid,
 		dbRoot,
 	};
@@ -340,8 +352,10 @@ export async function getOrStartSharedTestEngine(): Promise<SharedTestEngine> {
 			const existing = readSharedEngineState();
 			if (
 				existing &&
+				typeof existing.metricsEndpoint === "string" &&
 				isPidRunning(existing.pid) &&
-				(await isEngineHealthy(existing.endpoint))
+				(await isEngineHealthy(existing.endpoint)) &&
+				(await isMetricsEndpointHealthy(existing.metricsEndpoint))
 			) {
 				const state = { ...existing, refs: existing.refs + 1 };
 				writeSharedEngineState(state);
@@ -351,6 +365,7 @@ export async function getOrStartSharedTestEngine(): Promise<SharedTestEngine> {
 				});
 				return {
 					endpoint: existing.endpoint,
+					metricsEndpoint: existing.metricsEndpoint,
 					pid: existing.pid,
 					dbRoot: existing.dbRoot,
 				};
