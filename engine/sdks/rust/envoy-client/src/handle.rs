@@ -541,12 +541,19 @@ impl EnvoyHandle {
 	/// Inject a serverless start payload into the envoy.
 	/// The payload is a u16 LE protocol version followed by a serialized ToEnvoy message.
 	pub async fn start_serverless_actor(&self, payload: &[u8]) -> anyhow::Result<()> {
-		let (message, _) = decode_serverless_actor_start_payload(payload)?;
+		tracing::debug!(
+			envoy_key = %self.shared.envoy_key,
+			payload_len = payload.len(),
+			"received serverless start request"
+		);
+		let (message, _) =
+			decode_serverless_actor_start_payload(payload, &self.shared.envoy_key)?;
 
 		// Wait for envoy to be started before injecting
 		self.started().await?;
 
 		tracing::debug!(
+			envoy_key = %self.shared.envoy_key,
 			data = crate::stringify::stringify_to_envoy(&message),
 			"received serverless start"
 		);
@@ -562,13 +569,15 @@ impl EnvoyHandle {
 		&self,
 		payload: &[u8],
 	) -> anyhow::Result<ServerlessActorStart> {
-		let (_, actor_start) = decode_serverless_actor_start_payload(payload)?;
+		let (_, actor_start) =
+			decode_serverless_actor_start_payload(payload, &self.shared.envoy_key)?;
 		Ok(actor_start)
 	}
 }
 
 fn decode_serverless_actor_start_payload(
 	payload: &[u8],
+	envoy_key: &str,
 ) -> anyhow::Result<(protocol::ToEnvoy, ServerlessActorStart)> {
 	use vbare::OwnedVersionedData;
 
@@ -588,6 +597,7 @@ fn decode_serverless_actor_start_payload(
 		Ok(message) => message,
 		Err(err) if version == protocol::PROTOCOL_VERSION => {
 			tracing::debug!(
+				%envoy_key,
 				?err,
 				"serverless start payload failed current-version decode, retrying as v1-compatible body"
 			);

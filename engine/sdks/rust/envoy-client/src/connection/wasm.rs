@@ -7,6 +7,7 @@ mod imp {
 	use js_sys::{Array, Function, Promise, Reflect, Uint8Array};
 	use rivet_envoy_protocol as protocol;
 	use tokio::sync::mpsc;
+	use tracing::Instrument;
 	use vbare::OwnedVersionedData;
 	use wasm_bindgen::{JsCast, JsValue, closure::Closure};
 	use wasm_bindgen_futures::JsFuture;
@@ -28,7 +29,8 @@ mod imp {
 	}
 
 	pub fn start_connection(shared: Arc<SharedContext>) {
-		wasm_bindgen_futures::spawn_local(connection_loop(shared));
+		let span = tracing::debug_span!("envoy_connection", envoy_key = %shared.envoy_key);
+		wasm_bindgen_futures::spawn_local(connection_loop(shared).instrument(span));
 	}
 
 	async fn connection_loop(shared: Arc<SharedContext>) {
@@ -102,10 +104,11 @@ mod imp {
 
 		let onmessage = {
 			let event_tx = event_tx.clone();
+			let envoy_key = shared.envoy_key.clone();
 			Closure::<dyn FnMut(MessageEvent)>::wrap(Box::new(move |event| {
 				let data = event.data();
 				let Some(bytes) = decode_message_data(data) else {
-					tracing::warn!("received non-binary websocket message");
+					tracing::warn!(%envoy_key, "received non-binary websocket message");
 					return;
 				};
 				let _ = event_tx.send(ConnectionEvent::Message(bytes));
@@ -164,6 +167,7 @@ mod imp {
 			"websocket connected"
 		);
 
+		let write_span = tracing::debug_span!("envoy_ws_write", envoy_key = %shared.envoy_key);
 		wasm_bindgen_futures::spawn_local({
 			let shared = shared.clone();
 			let ws = ws.clone();
@@ -189,6 +193,7 @@ mod imp {
 					}
 				}
 			}
+			.instrument(write_span)
 		});
 
 		let mut result = None;

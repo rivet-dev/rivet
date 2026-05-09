@@ -11,6 +11,7 @@ use crate::async_counter::AsyncCounter;
 use rivet_envoy_protocol as protocol;
 use tokio::sync::mpsc;
 use tokio::sync::oneshot;
+use tracing::Instrument;
 
 use crate::actor::ToActor;
 use crate::commands::{ACK_COMMANDS_INTERVAL_MS, handle_commands, send_command_ack};
@@ -332,9 +333,13 @@ fn start_envoy_sync_inner(config: EnvoyConfig) -> EnvoyHandle {
 		processed_command_idx: HashMap::new(),
 	};
 
-	tracing::info!("starting envoy");
+	let span = tracing::info_span!("envoy_client", envoy_key = %shared.envoy_key);
+	{
+		let _guard = span.enter();
+		tracing::info!("starting envoy");
+	}
 
-	spawn_detached(envoy_loop(ctx, envoy_rx, start_tx));
+	spawn_detached(envoy_loop(ctx, envoy_rx, start_tx).instrument(span));
 
 	handle
 }
@@ -603,9 +608,12 @@ async fn handle_shutdown(ctx: &mut EnvoyContext) {
 		.collect();
 
 	let envoy_tx = ctx.shared.envoy_tx.clone();
-	spawn_detached(async move {
-		futures_util::future::join_all(actor_handles.iter().map(|h| h.closed())).await;
-		tracing::debug!("all actors stopped during graceful shutdown");
-		let _ = envoy_tx.send(ToEnvoyMessage::Stop);
-	});
+	spawn_detached(
+		async move {
+			futures_util::future::join_all(actor_handles.iter().map(|h| h.closed())).await;
+			tracing::debug!("all actors stopped during graceful shutdown");
+			let _ = envoy_tx.send(ToEnvoyMessage::Stop);
+		}
+		.instrument(tracing::Span::current()),
+	);
 }

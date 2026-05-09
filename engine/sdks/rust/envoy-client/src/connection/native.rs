@@ -5,6 +5,7 @@ use futures_util::{SinkExt, StreamExt};
 use rivet_envoy_protocol as protocol;
 use tokio::sync::mpsc;
 use tokio_tungstenite::tungstenite;
+use tracing::Instrument;
 use vbare::OwnedVersionedData;
 
 use crate::context::{SharedContext, WsTxMessage};
@@ -14,7 +15,8 @@ use crate::utils::{BackoffOptions, calculate_backoff, parse_ws_close_reason};
 const STABLE_CONNECTION_MS: u64 = 60_000;
 
 pub fn start_connection(shared: Arc<SharedContext>) {
-	tokio::spawn(connection_loop(shared));
+	let span = tracing::debug_span!("envoy_connection", envoy_key = %shared.envoy_key);
+	tokio::spawn(connection_loop(shared).instrument(span));
 }
 
 async fn connection_loop(shared: Arc<SharedContext>) {
@@ -118,31 +120,38 @@ async fn single_connection(
 
 	// Spawn write task
 	let shared2 = shared.clone();
-	let write_handle = tokio::spawn(async move {
-		super::send_initial_metadata(&shared2).await;
+	let write_span = tracing::debug_span!("envoy_ws_write", envoy_key = %shared2.envoy_key);
+	let write_handle = tokio::spawn(
+		async move {
+			super::send_initial_metadata(&shared2).await;
 
-		while let Some(msg) = ws_rx.recv().await {
-			match msg {
-				WsTxMessage::Send(data) => {
-					if let Err(e) = write.send(tungstenite::Message::Binary(data.into())).await {
-						tracing::error!(?e, "failed to send ws message");
+			while let Some(msg) = ws_rx.recv().await {
+				match msg {
+					WsTxMessage::Send(data) => {
+						let result = write
+							.send(tungstenite::Message::Binary(data.into()))
+							.await;
+						if let Err(e) = result {
+							tracing::error!(?e, "failed to send ws message");
+							break;
+						}
+					}
+					WsTxMessage::Close => {
+						let _ = write
+							.send(tungstenite::Message::Close(Some(
+								tungstenite::protocol::CloseFrame {
+									code: tungstenite::protocol::frame::coding::CloseCode::Normal,
+									reason: "envoy.shutdown".into(),
+								},
+							)))
+							.await;
 						break;
 					}
 				}
-				WsTxMessage::Close => {
-					let _ = write
-						.send(tungstenite::Message::Close(Some(
-							tungstenite::protocol::CloseFrame {
-								code: tungstenite::protocol::frame::coding::CloseCode::Normal,
-								reason: "envoy.shutdown".into(),
-							},
-						)))
-						.await;
-					break;
-				}
 			}
 		}
-	});
+		.instrument(write_span),
+	);
 
 	let mut result = None;
 

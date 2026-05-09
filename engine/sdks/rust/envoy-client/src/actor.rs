@@ -146,6 +146,7 @@ pub fn create_actor(
 #[tracing::instrument(
 	skip_all,
 	fields(
+		envoy_key = %shared.envoy_key,
 		actor_id = %actor_id,
 		generation = generation,
 		actor_key = %config.key.as_deref().unwrap_or(""),
