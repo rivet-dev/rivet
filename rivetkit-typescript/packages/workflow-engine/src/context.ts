@@ -825,10 +825,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 			const maxRetries = config.maxRetries ?? DEFAULT_MAX_RETRIES;
 
 			if (metadata.attempts > maxRetries) {
-				// Prefer step history error, but fall back to metadata since
-				// driver implementations may persist metadata without the history
-				// entry error (e.g. partial writes/crashes between attempts).
-				const lastError = stepData.error ?? metadata.error;
+				const lastError = metadata.error;
 				const exhaustedError = new StepExhaustedError(
 					config.name,
 					lastError,
@@ -941,15 +938,15 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 			});
 			return output;
 		} catch (error) {
+			if (entry.kind.type === "step") {
+				entry.kind.data.error = String(error);
+			}
+			entry.dirty = true;
+
 			// Timeout errors are treated as critical (no retry)
 			if (error instanceof StepTimeoutError) {
-				if (entry.kind.type === "step") {
-					entry.kind.data.error = String(error);
-				}
-				entry.dirty = true;
 				metadata.status = "exhausted";
 				metadata.error = String(error);
-				await this.flushStorage();
 				await this.notifyStepError(config, metadata.attempts, error, {
 					willRetry: false,
 				});
@@ -967,13 +964,8 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 				error instanceof CriticalError ||
 				error instanceof RollbackError
 			) {
-				if (entry.kind.type === "step") {
-					entry.kind.data.error = String(error);
-				}
-				entry.dirty = true;
 				metadata.status = "exhausted";
 				metadata.error = String(error);
-				await this.flushStorage();
 				await this.notifyStepError(config, metadata.attempts, error, {
 					willRetry: false,
 				});
@@ -990,15 +982,10 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 				);
 			}
 
-			if (entry.kind.type === "step") {
-				entry.kind.data.error = String(error);
-			}
-			entry.dirty = true;
 			const willRetry = metadata.attempts <= maxRetries;
 			metadata.status = willRetry ? "failed" : "exhausted";
 			metadata.error = String(error);
 
-			await this.flushStorage();
 			if (willRetry) {
 				const retryDelay = calculateBackoff(
 					metadata.attempts,

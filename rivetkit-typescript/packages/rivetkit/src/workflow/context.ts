@@ -1,5 +1,5 @@
 // @ts-nocheck
-import type { RunContext } from "@/actor/config";
+import { RAW_STATE_SYMBOL, type RunContext } from "@/actor/config";
 import type {
 	QueueFilterName,
 	QueueNextBatchOptions,
@@ -247,14 +247,14 @@ export class ActorWorkflowContext<
 			}
 			return await this.#wrapActive(() =>
 				this.#inner.step(nameOrConfig, () =>
-					this.#withActorAccess(run),
+					this.#withActorAccessAndStateRollback(run),
 				),
 			);
 		}
 		const stepConfig = nameOrConfig as StepConfig<T>;
 		const config: StepConfig<T> = {
 			...stepConfig,
-			run: () => this.#withActorAccess(stepConfig.run),
+			run: () => this.#withActorAccessAndStateRollback(stepConfig.run),
 		};
 		return await this.#wrapActive(() => this.#inner.step(config));
 	}
@@ -271,14 +271,14 @@ export class ActorWorkflowContext<
 			}
 			return await this.#wrapActive(() =>
 				this.#inner.tryStep(nameOrConfig, () =>
-					this.#withActorAccess(run),
+					this.#withActorAccessAndStateRollback(run),
 				),
 			);
 		}
 		const stepConfig = nameOrConfig as TryStepConfig<T>;
 		const config: TryStepConfig<T> = {
 			...stepConfig,
-			run: () => this.#withActorAccess(stepConfig.run),
+			run: () => this.#withActorAccessAndStateRollback(stepConfig.run),
 		};
 		return await this.#wrapActive(() => this.#inner.tryStep(config));
 	}
@@ -609,6 +609,20 @@ export class ActorWorkflowContext<
 			if (this.#actorAccessDepth === 0) {
 				this.#allowActorAccess = false;
 			}
+		}
+	}
+
+	async #withActorAccessAndStateRollback<T>(
+		run: () => Promise<T>,
+	): Promise<T> {
+		const stateSnapshot = structuredClone(this.#runCtx[RAW_STATE_SYMBOL]());
+		const varsSnapshot = structuredClone(this.#runCtx.vars);
+		try {
+			return await this.#withActorAccess(run);
+		} catch (error) {
+			this.#runCtx.state = stateSnapshot;
+			this.#runCtx.vars = varsSnapshot;
+			throw error;
 		}
 	}
 
