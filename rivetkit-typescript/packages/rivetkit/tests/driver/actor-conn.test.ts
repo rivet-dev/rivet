@@ -100,6 +100,20 @@ describeDriverMatrix("Actor Conn", (driverTestConfig) => {
 				await connection.dispose();
 			});
 
+			test("should expose actorId after connection init", async (c) => {
+				const { client } = await setupDriverTest(c, driverTestConfig);
+
+				const handle = client.counter.getOrCreate([
+					"test-conn-actor-id",
+				]);
+				const connection = handle.connect();
+
+				await connection.ready;
+				expect(connection.actorId).toBe(await handle.resolve());
+
+				await connection.dispose();
+			});
+
 			test("should connect using (await create()).connect()", async (c) => {
 				const { client } = await setupDriverTest(c, driverTestConfig);
 
