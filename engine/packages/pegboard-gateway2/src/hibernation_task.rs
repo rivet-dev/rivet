@@ -26,7 +26,7 @@ pub async fn task(
 	in_flight_req: InFlightRequestHandle,
 	ctx: StandaloneCtx,
 	actor_id: Id,
-	mut msg_rx: mpsc::Receiver<protocol::ToRivetTunnelMessageKind>,
+	mut msg_rx: mpsc::UnboundedReceiver<protocol::ToRivetTunnelMessageKind>,
 	mut drop_rx: watch::Receiver<Option<MsgGcReason>>,
 	egress_bytes: Arc<AtomicU64>,
 	mut hibernation_abort_rx: watch::Receiver<()>,

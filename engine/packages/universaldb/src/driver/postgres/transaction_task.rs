@@ -59,11 +59,11 @@ pub enum TransactionCommand {
 /// issues while maintaining a single serializable transaction for all operations.
 pub struct TransactionTask {
 	pool: Pool,
-	receiver: mpsc::Receiver<TransactionCommand>,
+	receiver: mpsc::UnboundedReceiver<TransactionCommand>,
 }
 
 impl TransactionTask {
-	pub fn new(pool: Pool, receiver: mpsc::Receiver<TransactionCommand>) -> Self {
+	pub fn new(pool: Pool, receiver: mpsc::UnboundedReceiver<TransactionCommand>) -> Self {
 		Self { pool, receiver }
 	}
 
