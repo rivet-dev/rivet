@@ -58,16 +58,6 @@ async function memoryBreakdown(forceGc: boolean) {
 	const heap = v8.getHeapStatistics();
 	const spaces = v8.getHeapSpaceStatistics();
 	const nativeNonV8Estimate = Math.max(0, memory.rss - heap.total_heap_size);
-	const diagnostics =
-		"diagnostics" in registry &&
-		typeof registry.diagnostics === "function"
-			? registry.diagnostics.bind(registry)
-			: undefined;
-	const registryDiagnostics = diagnostics
-		? await diagnostics().catch((error: unknown) => ({
-				error: error instanceof Error ? error.message : String(error),
-			}))
-		: { error: "registry diagnostics unavailable" };
 
 	return {
 		pid: process.pid,
@@ -103,7 +93,6 @@ async function memoryBreakdown(forceGc: boolean) {
 			v8ExternalBytes: memory.external,
 			nativeNonV8ResidentEstimateBytes: nativeNonV8Estimate,
 		},
-		registry: registryDiagnostics,
 		resourceUsage: process.resourceUsage(),
 	};
 }
@@ -125,6 +114,12 @@ app.get("/debug/memory", async (c) => {
 	const forceGc = c.req.query("gc") === "1";
 	return c.json(await memoryBreakdown(forceGc));
 });
+
+app.get("/health", () => registry.routes.health());
+
+app.get("/metadata", () => registry.routes.metadata());
+
+app.get("/metrics", (c) => registry.routes.prometheusMetrics(c.req.raw));
 
 app.post("/debug/heap-snapshot", (c) => {
 	if (process.env.SQLITE_MEMORY_SOAK_DIAGNOSTICS !== "1") {
