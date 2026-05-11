@@ -1364,6 +1364,44 @@ impl ActorContext {
 	}
 
 	fn configure_sleep_hooks(&self) {
+		let keep_awake_ctx = self.clone();
+		self.0
+			.sleep
+			.work
+			.keep_awake
+			.register_change_callback(Arc::new(move || {
+				keep_awake_ctx
+					.0
+					.metrics
+					.set_keep_awake_active(keep_awake_ctx.sleep_keep_awake_count());
+			}));
+
+		let internal_keep_awake_metric_ctx = self.clone();
+		self.0
+			.sleep
+			.work
+			.internal_keep_awake
+			.register_change_callback(Arc::new(move || {
+				internal_keep_awake_metric_ctx
+					.0
+					.metrics
+					.set_internal_keep_awake_active(
+						internal_keep_awake_metric_ctx.sleep_internal_keep_awake_count(),
+					);
+			}));
+
+		let shutdown_tasks_ctx = self.clone();
+		self.0
+			.sleep
+			.work
+			.shutdown_counter
+			.register_change_callback(Arc::new(move || {
+				shutdown_tasks_ctx
+					.0
+					.metrics
+					.set_shutdown_tasks_active(shutdown_tasks_ctx.shutdown_task_count());
+			}));
+
 		let internal_keep_awake_ctx = self.clone();
 		self.set_internal_keep_awake(Some(Arc::new(move |future| {
 			let ctx = internal_keep_awake_ctx.clone();
