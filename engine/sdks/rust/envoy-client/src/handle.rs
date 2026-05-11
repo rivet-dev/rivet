@@ -78,11 +78,15 @@ impl EnvoyHandle {
 	/// Threshold for `is_ping_healthy`.
 	pub const PING_HEALTHY_THRESHOLD_MS: i64 = 20_000;
 
-	/// True when the engine sent a ping within `PING_HEALTHY_THRESHOLD_MS`. Returns false once
-	/// the engine link has been silently dead long enough that an upstream health check should
-	/// treat this envoy as unhealthy and recycle it.
+	/// True after the engine has sent at least one ping and the most recent ping is within
+	/// `PING_HEALTHY_THRESHOLD_MS`. Returns false when the engine link has never completed
+	/// the ping handshake or has gone silently dead long enough that an upstream health check
+	/// should treat this envoy as unhealthy and recycle it.
 	pub fn is_ping_healthy(&self) -> bool {
 		let last = self.shared.last_ping_ts.load(Ordering::Acquire);
+		if last == 0 {
+			return false;
+		}
 		crate::time::now_millis() - last < Self::PING_HEALTHY_THRESHOLD_MS
 	}
 
