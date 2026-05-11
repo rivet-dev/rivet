@@ -23,7 +23,11 @@ overrides:
   '@codemirror/autocomplete': 6.18.7
   '@codemirror/commands': 6.8.1
   '@codemirror/lint': 6.8.5
-  wasm-pack: '=0.13.1'
+
+patchedDependencies:
+  wasm-pack@0.14.0:
+    hash: 3c7b8af86d6b541704193ec3130f1444612e1187cf4f53aff0ed0570b58d5e56
+    path: patches/wasm-pack@0.14.0.patch
 
 importers:
 
@@ -4389,8 +4393,8 @@ importers:
         specifier: ^5.9.2
         version: 5.9.3
       wasm-pack:
-        specifier: '=0.13.1'
-        version: 0.13.1
+        specifier: 0.14.0
+        version: 0.14.0(patch_hash=3c7b8af86d6b541704193ec3130f1444612e1187cf4f53aff0ed0570b58d5e56)
 
   rivetkit-typescript/packages/sql-loader:
     devDependencies:
@@ -18038,8 +18042,8 @@ packages:
   warn-once@0.1.1:
     resolution: {integrity: sha512-VkQZJbO8zVImzYFteBXvBOZEl1qL175WH8VmZcxF2fZAoudNhNDvHi+doCaAEdU2l2vtcIwa2zn0QK5+I1HQ3Q==}
 
-  wasm-pack@0.13.1:
-    resolution: {integrity: sha512-P9exD4YkjpDbw68xUhF3MDm/CC/3eTmmthyG5bHJ56kalxOTewOunxTke4SyF8MTXV6jUtNjXggPgrGmMtczGg==}
+  wasm-pack@0.14.0:
+    resolution: {integrity: sha512-7uKj+483b6ETTnuWHK3zKNB3Ca3M159tPZ5shyXxI4j7i9Lk82rL2ck/L6E9O5VMWk9JgowdtTBOSfWmGBRFtw==}
     hasBin: true
 
   watchpack@2.5.1:
@@ -21916,7 +21920,7 @@ snapshots:
       react-simple-code-editor: 0.14.1(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       serve-handler: 6.1.6
       tailwind-merge: 2.6.0
-      tailwindcss-animate: 1.0.7(tailwindcss@4.2.2)
+      tailwindcss-animate: 1.0.7(tailwindcss@3.4.18(tsx@4.21.0)(yaml@2.8.2))
       zod: 3.25.76
     transitivePeerDependencies:
       - '@cfworker/json-schema'
@@ -34961,7 +34965,7 @@ snapshots:
 
   warn-once@0.1.1: {}
 
-  wasm-pack@0.13.1:
+  wasm-pack@0.14.0(patch_hash=3c7b8af86d6b541704193ec3130f1444612e1187cf4f53aff0ed0570b58d5e56):
     dependencies:
       binary-install: 1.1.2
     transitivePeerDependencies:
