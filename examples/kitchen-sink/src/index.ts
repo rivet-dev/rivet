@@ -4,6 +4,7 @@ import { counter } from "./actors/counter/counter.ts";
 import { counterConn } from "./actors/counter/counter-conn.ts";
 import { counterWithParams } from "./actors/counter/conn-params.ts";
 import { counterWithLifecycle } from "./actors/counter/lifecycle.ts";
+import { pingPongCounter } from "./actors/counter/ping-pong-counter.ts";
 // Actions
 import { inputActor } from "./actors/actions/action-inputs.ts";
 import {
@@ -58,6 +59,7 @@ import {
 import { rawFetchCounter } from "./actors/http/raw-fetch-counter.ts";
 import { rawWebSocketChatRoom } from "./actors/http/raw-websocket-chat-room.ts";
 import { rawWebSocketServerlessSmoke } from "./actors/http/raw-websocket-serverless-smoke.ts";
+import { tunnelStress } from "./actors/http/tunnel-stress.ts";
 // Lifecycle
 import {
 	runWithTicks,
@@ -123,6 +125,7 @@ import { rawSqliteFuzzer } from "./actors/testing/raw-sqlite-fuzzer.ts";
 import { sqliteMemoryPressure } from "./actors/testing/sqlite-memory-pressure.ts";
 import { mockAgenticLoop } from "./actors/testing/mock-agentic-loop.ts";
 import { sleepCloseFuzz } from "./actors/testing/sleep-close-fuzz.ts";
+import { loadTestAgent } from "./actors/testing/load-test-agent.ts";
 // AI
 import { aiAgent } from "./actors/ai/ai-agent.ts";
 
@@ -186,6 +189,7 @@ export const registry = setup({
 		counterConn,
 		counterWithParams,
 		counterWithLifecycle,
+		pingPongCounter,
 		// Core API
 		inputActor,
 		syncActionActor,
@@ -226,6 +230,7 @@ export const registry = setup({
 		rawFetchCounter,
 		rawWebSocketChatRoom,
 		rawWebSocketServerlessSmoke,
+		tunnelStress,
 		// Lifecycle and scheduling
 		runWithTicks,
 		runWithQueueConsumer,
@@ -279,6 +284,7 @@ export const registry = setup({
 		sqliteMemoryPressure,
 		mockAgenticLoop,
 		sleepCloseFuzz,
+		loadTestAgent,
 		// AI
 		aiAgent,
 	},
