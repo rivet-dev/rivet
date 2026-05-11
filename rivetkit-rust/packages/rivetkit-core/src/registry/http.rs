@@ -466,6 +466,32 @@ fn handle_health_fetch(request: &Request, actor: Option<&ActorSpecifier>) -> Res
 	text_response(StatusCode::OK, "ok")
 }
 
+fn handle_metrics_fetch(
+	request: &Request,
+	envoy_status: Option<&CoreEnvoyStatus>,
+) -> Result<HttpResponse> {
+	if request.method() != http::Method::GET {
+		return method_not_allowed_response(request, None);
+	}
+
+	let bearer_token = crate::metrics_endpoint::authorization_bearer_token(request.headers());
+	match crate::metrics_endpoint::authorize_metrics_request(bearer_token) {
+		Ok(()) => {
+			let metrics = crate::metrics_endpoint::render_prometheus_metrics(envoy_status)?;
+			bytes_response(StatusCode::OK, &metrics.content_type, metrics.body)
+		}
+		Err(crate::metrics_endpoint::MetricsAccessError::NotEnabled) => {
+			text_response(StatusCode::FORBIDDEN, "metrics not enabled\n")
+		}
+		Err(crate::metrics_endpoint::MetricsAccessError::Unauthorized) => {
+			text_response(
+				StatusCode::UNAUTHORIZED,
+				"metrics request requires a valid bearer token\n",
+			)
+		}
+	}
+}
+
 fn handle_root_fetch(request: &Request, actor: Option<&ActorSpecifier>) -> Result<HttpResponse> {
 	if request.method() != http::Method::GET {
 		return method_not_allowed_response(request, actor);
@@ -494,15 +520,23 @@ fn handle_not_found_fetch(
 }
 
 fn text_response(status: StatusCode, body: &str) -> Result<HttpResponse> {
+	bytes_response(
+		status,
+		"text/plain; charset=utf-8",
+		body.as_bytes().to_vec(),
+	)
+}
+
+fn bytes_response(status: StatusCode, content_type: &str, body: Vec<u8>) -> Result<HttpResponse> {
 	let mut headers = HashMap::new();
 	headers.insert(
 		http::header::CONTENT_TYPE.to_string(),
-		"text/plain; charset=utf-8".to_owned(),
+		content_type.to_owned(),
 	);
 	Ok(HttpResponse {
 		status: status.as_u16(),
 		headers,
-		body: Some(body.as_bytes().to_vec()),
+		body: Some(body),
 		body_stream: None,
 	})
 }
