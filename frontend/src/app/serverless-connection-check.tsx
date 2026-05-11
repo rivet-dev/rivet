@@ -120,6 +120,8 @@ export function ServerlessConnectionCheck({
 							{match(provider)
 								.with("railway", () => "Railway")
 								.with("vercel", () => "Vercel")
+								.with("cloudflare-workers", () => "Cloudflare Workers")
+								.with("supabase-functions", () => "Supabase Functions")
 								.with("aws-ecs", () => "AWS ECS")
 								.with("gcp-cloud-run", () => "GCP Cloud Run")
 								.with("hetzner", () => "Hetzner")

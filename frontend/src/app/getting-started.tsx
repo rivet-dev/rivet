@@ -1065,7 +1065,7 @@ function useRivetAgentInstructionsCode() {
 
 	return buildRivetAgentInstructionsCode({
 		cloudToken,
-		publishableToken: publishableRawToken,
+		publishableToken: publishableRawToken ?? "<PUBLISHABLE_TOKEN>",
 		namespace,
 		project: dataProvider.project,
 		organization: dataProvider.organization,

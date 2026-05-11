@@ -18,7 +18,7 @@ import {
 } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
-import { Suspense, useCallback, useRef, type RefObject } from "react";
+import { Suspense, useCallback, useEffect, useRef, type RefObject } from "react";
 import { useLocalStorage } from "usehooks-ts";
 import { RECORDS_PER_PAGE } from "@/app/data-providers/default-data-provider";
 import {
@@ -154,6 +154,10 @@ function List({
 		estimateSize: () => 56,
 		overscan: 5,
 	});
+
+	useEffect(() => {
+		rowVirtualizer.measure();
+	}, [rowVirtualizer]);
 
 	return (
 		<div
