@@ -21,6 +21,7 @@ use url::Url;
 use crate::actor::factory::ActorFactory;
 #[cfg(feature = "native-runtime")]
 use crate::engine_process::EngineProcessManager;
+use crate::registry::{CoreEnvoyHandle, CoreEnvoyStatus};
 use crate::registry::{RegistryCallbacks, RegistryDispatcher, ServeConfig};
 use crate::runtime::RuntimeSpawner;
 use crate::time::{sleep, timeout};
@@ -217,11 +218,17 @@ impl CoreServerlessRuntime {
 	}
 
 	pub async fn active_envoy_actor_count(&self) -> Option<usize> {
+		self.active_envoy_status()
+			.await
+			.map(|status| status.active_actor_count)
+	}
+
+	pub async fn active_envoy_status(&self) -> Option<CoreEnvoyStatus> {
 		self.envoy
 			.lock()
 			.await
 			.as_ref()
-			.map(EnvoyHandle::active_actor_count)
+			.map(|handle| CoreEnvoyHandle::new(handle.clone()).status())
 	}
 
 	pub async fn handle_request(&self, req: ServerlessRequest) -> ServerlessResponse {

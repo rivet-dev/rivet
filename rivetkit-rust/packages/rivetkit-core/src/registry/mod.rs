@@ -20,6 +20,9 @@ use rivet_envoy_client::handle::EnvoyHandle;
 use rivet_envoy_client::protocol;
 use rivet_error::{ActorSpecifier, RivetError};
 use rivetkit_client_protocol as client_protocol;
+use rivetkit_shared_types::serverless_metadata::{
+	ActorName, ServerlessMetadataEnvoy, ServerlessMetadataEnvoyKind, ServerlessMetadataPayload,
+};
 use scc::{HashMap as SccHashMap, hash_map::Entry as SccEntry};
 use serde::{Deserialize, Serialize};
 use serde_bytes::ByteBuf;
@@ -79,6 +82,30 @@ const SHUTDOWN_DRAIN_TIMEOUT: Duration = Duration::from_secs(20);
 #[derive(Debug, Default)]
 pub struct CoreRegistry {
 	factories: HashMap<String, Arc<ActorFactory>>,
+}
+
+#[derive(Clone)]
+pub struct CoreEnvoyHandle {
+	handle: EnvoyHandle,
+}
+
+#[derive(Clone, Debug)]
+pub struct CoreEnvoyStatus {
+	pub active_actor_count: usize,
+	pub ping_healthy: bool,
+}
+
+impl CoreEnvoyHandle {
+	pub(crate) fn new(handle: EnvoyHandle) -> Self {
+		Self { handle }
+	}
+
+	pub fn status(&self) -> CoreEnvoyStatus {
+		CoreEnvoyStatus {
+			active_actor_count: self.handle.active_actor_count(),
+			ping_healthy: self.handle.is_ping_healthy(),
+		}
+	}
 }
 
 #[derive(Clone)]
@@ -419,6 +446,22 @@ impl CoreRegistry {
 		self.factories.insert(name.to_owned(), factory);
 	}
 
+	pub fn normal_metadata_payload(&self, config: &ServeConfig) -> ServerlessMetadataPayload {
+		serverless_metadata_payload(
+			build_actor_metadata_map_from_factories(&self.factories),
+			config,
+			ServerlessMetadataEnvoyKind::Normal {},
+		)
+	}
+
+	pub fn serverless_metadata_payload(&self, config: &ServeConfig) -> ServerlessMetadataPayload {
+		serverless_metadata_payload(
+			build_actor_metadata_map_from_factories(&self.factories),
+			config,
+			ServerlessMetadataEnvoyKind::Serverless {},
+		)
+	}
+
 	pub async fn serve(self, shutdown: CancellationToken) -> Result<()> {
 		self.serve_with_config(ServeConfig::from_env(), shutdown)
 			.await
@@ -428,6 +471,16 @@ impl CoreRegistry {
 		self,
 		config: ServeConfig,
 		shutdown: CancellationToken,
+	) -> Result<()> {
+		self.serve_with_config_and_handle_observer(config, shutdown, |_| {})
+			.await
+	}
+
+	pub async fn serve_with_config_and_handle_observer(
+		self,
+		config: ServeConfig,
+		shutdown: CancellationToken,
+		on_handle: impl FnOnce(CoreEnvoyHandle) + Send + 'static,
 	) -> Result<()> {
 		let dispatcher = self.into_dispatcher(&config);
 		#[cfg(feature = "native-runtime")]
@@ -468,6 +521,7 @@ impl CoreRegistry {
 			callbacks,
 		})
 		.await;
+		on_handle(CoreEnvoyHandle::new(handle.clone()));
 
 		// Do not install `tokio::signal::ctrl_c()` here. It calls
 		// `sigaction(SIGINT, ...)` at the POSIX level, which overrides the
@@ -522,49 +576,88 @@ impl RegistryDispatcher {
 	}
 
 	pub(crate) fn build_actor_metadata_map(&self) -> HashMap<String, JsonValue> {
-		self.factories
-			.iter()
-			.map(|(actor_name, factory)| {
-				let config = factory.config();
-				let mut metadata = serde_json::Map::new();
-				if let Some(icon) = &config.icon {
-					metadata.insert("icon".to_owned(), json!(icon));
-				}
-				if let Some(name) = &config.name {
-					metadata.insert("name".to_owned(), json!(name));
-				}
-				metadata.insert(
-					"preload".to_owned(),
-					json!({
-						"keys": [
-							[1],
-							[3],
-							[5, 1, 1],
-							[6],
-						],
-						"prefixes": [
-							{
-								"prefix": [6, 1],
-								"maxBytes": config.preload_max_workflow_bytes.unwrap_or(131_072),
-								"partial": false,
-							},
-							{
-								"prefix": [2],
-								"maxBytes": config.preload_max_connections_bytes.unwrap_or(65_536),
-								"partial": false,
-							},
-							{
-								"prefix": [5, 1, 2],
-								"maxBytes": 65_536,
-								"partial": false,
-							},
-						],
-					}),
-				);
-				(actor_name.clone(), JsonValue::Object(metadata))
-			})
-			.collect()
+		build_actor_metadata_map_from_factories(&self.factories)
 	}
+}
+
+pub(crate) fn serverless_metadata_payload(
+	actor_metadata: HashMap<String, JsonValue>,
+	config: &ServeConfig,
+	envoy_kind: ServerlessMetadataEnvoyKind,
+) -> ServerlessMetadataPayload {
+	let actor_names = actor_metadata
+		.into_iter()
+		.map(|(name, metadata)| {
+			(
+				name,
+				ActorName {
+					metadata: Some(metadata),
+				},
+			)
+		})
+		.collect::<HashMap<_, _>>();
+
+	ServerlessMetadataPayload {
+		runtime: "rivetkit".to_owned(),
+		version: config.serverless_package_version.clone(),
+		envoy_protocol_version: Some(protocol::PROTOCOL_VERSION),
+		actor_names,
+		envoy: Some(ServerlessMetadataEnvoy {
+			kind: Some(envoy_kind),
+			version: Some(config.version),
+		}),
+		runner: None,
+		client_endpoint: config.serverless_client_endpoint.clone(),
+		client_namespace: config.serverless_client_namespace.clone(),
+		client_token: config.serverless_client_token.clone(),
+	}
+}
+
+fn build_actor_metadata_map_from_factories(
+	factories: &HashMap<String, Arc<ActorFactory>>,
+) -> HashMap<String, JsonValue> {
+	factories
+		.iter()
+		.map(|(actor_name, factory)| {
+			let config = factory.config();
+			let mut metadata = serde_json::Map::new();
+			if let Some(icon) = &config.icon {
+				metadata.insert("icon".to_owned(), json!(icon));
+			}
+			if let Some(name) = &config.name {
+				metadata.insert("name".to_owned(), json!(name));
+			}
+			metadata.insert(
+				"preload".to_owned(),
+				json!({
+					"keys": [
+						[1],
+						[3],
+						[5, 1, 1],
+						[6],
+					],
+					"prefixes": [
+						{
+							"prefix": [6, 1],
+							"maxBytes": config.preload_max_workflow_bytes.unwrap_or(131_072),
+							"partial": false,
+						},
+						{
+							"prefix": [2],
+							"maxBytes": config.preload_max_connections_bytes.unwrap_or(65_536),
+							"partial": false,
+						},
+						{
+							"prefix": [5, 1, 2],
+							"maxBytes": 65_536,
+							"partial": false,
+						},
+					],
+				}),
+			);
+			(actor_name.clone(), JsonValue::Object(metadata))
+		})
+		.collect()
 }
 
 impl RegistryDispatcher {

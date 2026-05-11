@@ -7,17 +7,17 @@ use subtle::ConstantTimeEq;
 const METRICS_ENABLED_ENV: &str = "RIVETKIT_METRICS_ENABLED";
 const METRICS_TOKEN_ENV: &str = "RIVETKIT_METRICS_TOKEN";
 
-pub(crate) struct RenderedMetrics {
-	pub(crate) content_type: String,
-	pub(crate) body: Vec<u8>,
+pub struct RenderedMetrics {
+	pub content_type: String,
+	pub body: Vec<u8>,
 }
 
-pub(crate) enum MetricsAccessError {
+pub enum MetricsAccessError {
 	NotEnabled,
 	Unauthorized,
 }
 
-pub(crate) fn authorize_metrics_request(
+pub fn authorize_metrics_request(
 	bearer_token: Option<&str>,
 ) -> std::result::Result<(), MetricsAccessError> {
 	let Some(configured_token) = configured_metrics_token() else {
@@ -35,7 +35,7 @@ pub(crate) fn authorize_metrics_request(
 	}
 }
 
-pub(crate) fn render_prometheus_metrics() -> Result<RenderedMetrics> {
+pub fn render_prometheus_metrics() -> Result<RenderedMetrics> {
 	let encoder = TextEncoder::new();
 	let metric_families = rivet_metrics::REGISTRY.gather();
 	let mut body = Vec::new();
@@ -49,14 +49,14 @@ pub(crate) fn render_prometheus_metrics() -> Result<RenderedMetrics> {
 	})
 }
 
-pub(crate) fn authorization_bearer_token(headers: &http::HeaderMap) -> Option<&str> {
+pub fn authorization_bearer_token(headers: &http::HeaderMap) -> Option<&str> {
 	headers
 		.get(http::header::AUTHORIZATION)
 		.and_then(|value| value.to_str().ok())
 		.and_then(bearer_token_from_authorization)
 }
 
-pub(crate) fn authorization_bearer_token_map(headers: &HashMap<String, String>) -> Option<&str> {
+pub fn authorization_bearer_token_map(headers: &HashMap<String, String>) -> Option<&str> {
 	headers
 		.iter()
 		.find(|(name, _)| name.eq_ignore_ascii_case(http::header::AUTHORIZATION.as_str()))
