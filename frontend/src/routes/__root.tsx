@@ -29,6 +29,7 @@ function CloudRoute() {
 	return (
 		<>
 			<Outlet />
+			<DevToolbar />
 			{import.meta.env.DEV ? (
 				<TanStackRouterDevtools position="bottom-right" />
 			) : null}

@@ -25,6 +25,7 @@ import { useFormContext, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 import { match } from "ts-pattern";
 import z from "zod";
+import * as ConnectServerfullForm from "@/app/forms/connect-manual-serverfull-form";
 import * as ConnectServerlessForm from "@/app/forms/connect-manual-serverless-form";
 import {
 	AccordionItem,
@@ -42,11 +43,12 @@ import {
 import {
 	useCloudNamespaceDataProvider,
 	useDataProvider,
+	useEngineCompatDataProvider,
 } from "@/components/actors";
 import { defineStepper } from "@/components/ui/stepper";
 import { deriveProviderFromMetadata } from "@/lib/data";
 import { successfulBackendSetupEffect } from "@/lib/effects";
-import { cloudEnv } from "@/lib/env";
+import { cloudEnv, engineEnv } from "@/lib/env";
 import { features } from "@/lib/features";
 import { usePublishableToken } from "@/queries/accessors";
 import { queryClient } from "@/queries/global";
@@ -55,6 +57,7 @@ import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { TEST_IDS } from "../utils/test-ids";
 import { DeploymentCheck } from "./deployment-check";
+import { RunnerConfigToggleGroup } from "./runner-config-toggle-group";
 import { useEndpoint } from "./dialogs/connect-manual-serverfull-frame";
 import {
 	buildServerlessConfig,
@@ -101,7 +104,27 @@ const stepper = defineStepper(
 					success: z.boolean(),
 				});
 			}
+			if ((values.mode as string) === "serverfull") {
+				return z.object({
+					mode: z.literal("serverfull"),
+					runnerName: z
+						.string()
+						.min(1, "Runner name is required"),
+					datacenter: z
+						.string()
+						.min(1, "Please select a region"),
+					customName: z
+						.string()
+						.trim()
+						.max(32, "Name is too long")
+						.optional(),
+					customIcon: z.string().optional(),
+				});
+			}
 			return z.object({
+				mode: z
+					.union([z.literal("serverless"), z.literal("serverfull")])
+					.optional(),
 				...ConnectServerlessForm.configurationSchema.shape,
 				...ConnectServerlessForm.deploymentSchema.shape,
 			});
@@ -125,12 +148,20 @@ export function GettingStarted({
 	provider?: Provider;
 	displayFrontendOnboarding?: boolean;
 }) {
-	const dataProvider = useCloudNamespaceDataProvider();
+	const dataProvider = useEngineCompatDataProvider();
 	useSuspenseInfiniteQuery(dataProvider.datacentersQueryOptions());
 
-	const { mutateAsync: mutateAsyncManagedPool } = useMutation({
-		...dataProvider.upsertCurrentNamespaceManagedPoolMutationOptions(),
-	});
+	const { mutateAsync: mutateAsyncManagedPool } = useMutation(
+		"upsertCurrentNamespaceManagedPoolMutationOptions" in dataProvider
+			? dataProvider.upsertCurrentNamespaceManagedPoolMutationOptions()
+			: {
+					mutationFn: async () => {
+						throw new Error(
+							"Managed pools are only available in cloud",
+						);
+					},
+				},
+	);
 
 	const { data: initialRunnerConfig } = useSuspenseQuery({
 		...dataProvider.runnerConfigQueryOptions({
@@ -180,6 +211,8 @@ export function GettingStarted({
 		drainGracePeriod: 0,
 		provider: provider || "",
 		datacenters: {},
+		datacenter: "",
+		mode: "serverless" as "serverless" | "serverfull",
 		...(initialRunnerConfig || {}),
 	};
 
@@ -262,7 +295,9 @@ export function GettingStarted({
 									}
 
 									await Promise.all([
-										...(features.auth
+										...(features.auth &&
+										"publishableTokenQueryOptions" in
+											dataProvider
 											? [
 													queryClient.prefetchQuery(
 														dataProvider.publishableTokenQueryOptions(),
@@ -280,22 +315,70 @@ export function GettingStarted({
 									stepper.current.id === "backend" &&
 									values.provider !== "rivet"
 								) {
-									const config = await buildServerlessConfig(
-										dataProvider,
-										values as unknown as Parameters<
-											typeof buildServerlessConfig
-										>[1],
-										{ provider: values.provider as string },
-									);
+									const v = values as unknown as {
+										runnerName: string;
+										provider: string;
+										mode?: "serverless" | "serverfull";
+										datacenter?: string;
+										customName?: string;
+										customIcon?: string;
+									};
 
-									await mutateAsync({
-										name: (
-											values as unknown as {
-												runnerName: string;
-											}
-										).runnerName,
-										config,
-									});
+									if (v.mode === "serverfull") {
+										const existingConfig =
+											await queryClient.fetchQuery(
+												dataProvider.runnerConfigQueryOptions(
+													{
+														name: v.runnerName,
+														safe: true,
+													},
+												),
+											);
+										const existing =
+											existingConfig?.datacenters || {};
+										const isCustom =
+											v.provider === "custom" ||
+											v.provider === "custom-platform";
+										const customName = isCustom
+											? v.customName?.trim() || undefined
+											: undefined;
+										const customIcon = isCustom
+											? v.customIcon || undefined
+											: undefined;
+
+										await mutateAsync({
+											name: v.runnerName,
+											config: {
+												...existing,
+												[v.datacenter as string]: {
+													normal: {},
+													metadata: {
+														provider: v.provider,
+														...(customName
+															? { customName }
+															: {}),
+														...(customIcon
+															? { customIcon }
+															: {}),
+													},
+												},
+											},
+										});
+									} else {
+										const config =
+											await buildServerlessConfig(
+												dataProvider,
+												values as unknown as Parameters<
+													typeof buildServerlessConfig
+												>[1],
+												{ provider: v.provider },
+											);
+
+										await mutateAsync({
+											name: v.runnerName,
+											config,
+										});
+									}
 
 									await navigate({
 										to: ".",
@@ -339,6 +422,28 @@ function StepContent({
 
 function StepperFooter() {
 	const s = stepper.useStepper();
+	const navigate = useNavigate();
+
+	const skipOnboardingLink = !features.platform ? (
+		<Button
+			type="button"
+			variant="link"
+			size="xs"
+			className="text-muted-foreground"
+			onClick={() =>
+				navigate({
+					to: ".",
+					search: (search) => ({
+						...search,
+						skipOnboarding: true,
+					}),
+				})
+			}
+			endIcon={<Icon icon={faArrowRight} className="ms-1" />}
+		>
+			Skip onboarding
+		</Button>
+	) : null;
 
 	if (s.current.group === "local" && s.current.id !== "explore") {
 		return (
@@ -354,6 +459,15 @@ function StepperFooter() {
 				>
 					Already have a project working locally? Skip to deploy
 				</Button>
+				{skipOnboardingLink}
+			</div>
+		);
+	}
+
+	if (skipOnboardingLink) {
+		return (
+			<div className="flex flex-col items-center gap-4 mt-6">
+				{skipOnboardingLink}
 			</div>
 		);
 	}
@@ -1239,69 +1353,148 @@ function BackendSetupRivet() {
 
 function BackendSetup() {
 	const provider = useWatch({ name: "provider" });
+	const mode = useWatch({ name: "mode" }) as
+		| "serverless"
+		| "serverfull"
+		| undefined;
+	const { setValue } = useFormContext();
+
+	if (provider === "rivet") {
+		return <BackendSetupRivet />;
+	}
+
+	return (
+		<div className="flex flex-col gap-6">
+			<CopyAgentInstructionsButton provider={provider} />
+			<RunnerConfigToggleGroup
+				mode={mode ?? "serverless"}
+				onChange={(value) =>
+					setValue("mode", value, {
+						shouldDirty: true,
+						shouldTouch: true,
+						shouldValidate: true,
+					})
+				}
+			/>
+			{mode === "serverfull" ? (
+				<BackendSetupServerfull provider={provider} />
+			) : (
+				<BackendSetupServerless provider={provider} />
+			)}
+		</div>
+	);
+}
+
+function BackendSetupServerless({ provider }: { provider: Provider }) {
 	const endpoint = useWatch({ name: "endpoint" });
-
-	if (provider !== "rivet") {
-		return (
-			<div className="flex flex-col gap-6">
-				<CopyAgentInstructionsButton provider={provider} />
-
-				<div className="flex gap-3">
-					<StepNumber n={1} />
-					<div className="flex-1 min-w-0">
-						<p className="font-medium mb-2">
-							Set environment variables
-						</p>
-						<p className="text-sm text-muted-foreground mb-3">
-							Configure the following environment variables in
-							your deployment.
-						</p>
-						<div className="space-y-2">
-							<EnvVariables endpoint={endpoint} />
-						</div>
-					</div>
-				</div>
-				<div className="flex gap-3">
-					<StepNumber n={2} />
-					<div className="flex-1 min-w-0">
-						<p className="font-medium mb-4">
-							Paste your deployment endpoint
-						</p>
-						<div className="space-y-2">
-							<Configuration
-								runnerName={false}
-								datacenters
-								headers={false}
-								requestLifespan={false}
-								drainGracePeriod={false}
-							/>
-							<ConnectServerlessForm.Endpoint
-								placeholder={match(provider)
-									.with(
-										"vercel",
-										() =>
-											"https://your-vercel-deployment.vercel.app",
-									)
-									.with(
-										"railway",
-										() => "https://your-app.up.railway.app",
-									)
-									.otherwise(
-										() => "https://your-deployment.com",
-									)}
-							/>
-							<ConfigurationAccordion datacenters={false} />
-							<ConnectServerlessForm.ConnectionCheck
-								provider={provider}
-							/>
-						</div>
+	const isCustom = provider === "custom" || provider === "custom-platform";
+	return (
+		<>
+			<div className="flex gap-3">
+				<StepNumber n={1} />
+				<div className="flex-1 min-w-0">
+					<p className="font-medium mb-2">Set environment variables</p>
+					<p className="text-sm text-muted-foreground mb-3">
+						Configure the following environment variables in your
+						deployment.
+					</p>
+					<div className="space-y-2">
+						<EnvVariables endpoint={endpoint} />
 					</div>
 				</div>
 			</div>
-		);
-	}
+			<div className="flex gap-3">
+				<StepNumber n={2} />
+				<div className="flex-1 min-w-0">
+					<p className="font-medium mb-4">
+						Paste your deployment endpoint
+					</p>
+					<div className="space-y-2">
+						<Configuration
+							runnerName={false}
+							datacenters
+							headers={false}
+							requestLifespan={false}
+							drainGracePeriod={false}
+						/>
+						<ConnectServerlessForm.Endpoint
+							placeholder={match(provider)
+								.with(
+									"vercel",
+									() =>
+										"https://your-vercel-deployment.vercel.app",
+								)
+								.with(
+									"railway",
+									() => "https://your-app.up.railway.app",
+								)
+								.otherwise(() => "https://your-deployment.com")}
+						/>
+						<ConfigurationAccordion
+							datacenters={false}
+							prefixFields={
+								isCustom ? (
+									<ConnectServerlessForm.CustomBranding />
+								) : null
+							}
+						/>
+						<ConnectServerlessForm.ConnectionCheck
+							provider={provider}
+						/>
+					</div>
+				</div>
+			</div>
+		</>
+	);
+}
 
-	return <BackendSetupRivet />;
+function BackendSetupServerfull({ provider }: { provider: Provider }) {
+	const isCustom =
+		provider === "custom" || provider === "custom-platform";
+	const endpoint = useServerfullEndpoint();
+	const runnerName = useWatch({ name: "runnerName" });
+
+	return (
+		<>
+			<div className="flex gap-3">
+				<StepNumber n={1} />
+				<div className="flex-1 min-w-0">
+					<p className="font-medium mb-4">Configure your runner</p>
+					<div className="space-y-3">
+						<ConnectServerfullForm.RunnerName />
+						{isCustom ? <ConnectServerlessForm.CustomBranding /> : null}
+						<ConnectServerfullForm.Datacenter />
+					</div>
+				</div>
+			</div>
+			<div className="flex gap-3">
+				<StepNumber n={2} />
+				<div className="flex-1 min-w-0">
+					<p className="font-medium mb-2">Set environment variables</p>
+					<p className="text-sm text-muted-foreground mb-3">
+						Set the following environment variables on the machine
+						running your runner.
+					</p>
+					<div className="space-y-2">
+						<EnvVariables
+							endpoint={endpoint}
+							runnerName={runnerName}
+							showPublicEndpoint={false}
+						/>
+					</div>
+				</div>
+			</div>
+		</>
+	);
+}
+
+function useServerfullEndpoint() {
+	const datacenter = useWatch({ name: "datacenter" });
+	const dataProvider = useEngineCompatDataProvider();
+	const { data } = useQuery(
+		dataProvider.datacenterQueryOptions(datacenter || "auto"),
+	);
+	return data?.url || engineEnv().VITE_APP_API_URL;
 }
 
 function FrontendSetup() {

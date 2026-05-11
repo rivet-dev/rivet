@@ -69,6 +69,17 @@ export const ls = {
 				)}`,
 			);
 		},
+		skipWelcomeEngine: (ns: string) => {
+			ls.set(
+				`onboarding-skip-welcome-engine-${btoa(JSON.stringify({ ns }))}`,
+				true,
+			);
+		},
+		getSkipWelcomeEngine: (ns: string) => {
+			return ls.get(
+				`onboarding-skip-welcome-engine-${btoa(JSON.stringify({ ns }))}`,
+			);
+		},
 	},
 	actorsEphemeralFilters: {
 		key: "actors-ephemeral-filters",

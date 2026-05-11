@@ -13,6 +13,7 @@ import { authClient } from "@/lib/auth";
 import { features } from "@/lib/features";
 
 export const DevToolbar = () => {
+	console.log(ls.get("__I_SOLELY_SWORE_TO_ONLY_ENABLE_DEV_TOOLBAR_FOR_DEBUGGING_PURPOSES_AND_WILL_NOT_USE_IT_FOR_ANY_MALICIOUS_ACTIVITIES__"));
 	if (
 		ls.get(
 			"__I_SOLELY_SWORE_TO_ONLY_ENABLE_DEV_TOOLBAR_FOR_DEBUGGING_PURPOSES_AND_WILL_NOT_USE_IT_FOR_ANY_MALICIOUS_ACTIVITIES__",
@@ -92,8 +93,8 @@ const Content = () => {
 				<div>
 					<span>{user?.email || "Unknown"}</span>
 					<span>
-						{user?.id || "Unknown"}{" "}
-						{session?.activeOrganizationId || "Unknown"}
+						id: {user?.id || "Unknown"}{" "}
+						org: {session?.activeOrganizationId || "Unknown"}
 					</span>
 				</div>
 
