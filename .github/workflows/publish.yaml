@@ -217,7 +217,7 @@ jobs:
           if-no-files-found: error
 
   # ---------------------------------------------------------------------------
-  # build-wasm — wasm package artifact built in parallel with native artifacts
+  # build-wasm — disabled
   # ---------------------------------------------------------------------------
   build-wasm:
     needs: [context]
@@ -319,12 +319,11 @@ jobs:
   # publish — npm publish + R2 upload + Docker manifest + release tail
   # ---------------------------------------------------------------------------
   publish:
-    needs: [context, build, build-wasm, docker-images]
+    needs: [context, build, docker-images]
     name: "Publish"
     if: |
       !cancelled() &&
       needs.build.result == 'success' &&
-      needs.build-wasm.result == 'success' &&
       needs.docker-images.result == 'success'
     runs-on: depot-ubuntu-24.04-8
     permissions:
@@ -364,17 +363,6 @@ jobs:
           path: engine-artifacts
           pattern: engine-*
           merge-multiple: true
-      - name: Download wasm package artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: wasm-package
-          path: rivetkit-typescript/packages/rivetkit-wasm/pkg
-      - name: Validate wasm package artifact
-        run: |
-          test -f rivetkit-typescript/packages/rivetkit-wasm/pkg/rivetkit_wasm.js
-          test -f rivetkit-typescript/packages/rivetkit-wasm/pkg/rivetkit_wasm.d.ts
-          test -f rivetkit-typescript/packages/rivetkit-wasm/pkg/rivetkit_wasm_bg.wasm
-
       - name: Place native binaries in platform packages
         run: |
           NATIVE_DIR=rivetkit-typescript/packages/rivetkit-napi
