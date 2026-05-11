@@ -242,15 +242,14 @@ function describeSwitches(switches: ModeSwitch[]): string {
 }
 
 function labelForMode(mode: RuntimeMode): string {
-	return mode === "serverless" ? "Serverless" : "Runners";
+	return mode === "serverless" ? "Serverless" : "Runner";
 }
 
 function ServerfullModeNotice() {
 	return (
 		<div className="text-sm text-muted-foreground border rounded-md p-4">
-			This is a serverfull (Runners) configuration. Runners connect to
-			Rivet directly using the runner SDK. No additional configuration is
-			required here.{" "}
+			This is a Runner configuration. Runners connect to Rivet directly
+			using the runner SDK. No additional configuration is required here.{" "}
 			<a
 				href="https://www.rivet.dev/docs/general/runtime-modes/"
 				target="_blank"

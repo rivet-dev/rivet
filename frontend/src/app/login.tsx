@@ -5,6 +5,7 @@ import {
 	isRedirect,
 	Link,
 	useNavigate,
+	useSearch,
 } from "@tanstack/react-router";
 import { attemptAsync } from "es-toolkit";
 import { motion } from "framer-motion";
@@ -35,6 +36,7 @@ import { isAuthError } from "@/lib/utils";
 
 export function Login() {
 	const navigate = useNavigate();
+	const { from } = useSearch({ strict: false }) as { from?: string };
 	const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
 	const turnstileSiteKey = cloudEnv().VITE_APP_TURNSTILE_SITE_KEY;
 
@@ -68,7 +70,7 @@ export function Login() {
 		setTurnstileToken(null);
 
 		const [error] = await attemptAsync(
-			async () => await redirectToOrganization(),
+			async () => await redirectToOrganization({ from }),
 		);
 
 		if (error && isRedirect(error)) {
@@ -147,12 +149,15 @@ export function Login() {
 
 export function LoginWithGoogle() {
 	const form = useFormContext();
+	const { from } = useSearch({ strict: false }) as { from?: string };
 
 	const { isPending, mutate } = useMutation({
 		mutationFn: async () => {
+			const callbackPath =
+				from && from.startsWith("/") && !from.startsWith("//") ? from : "/";
 			return authClient.signIn.social({
 				provider: "google",
-				callbackURL: `${window.location.origin}/`,
+				callbackURL: `${window.location.origin}${callbackPath}`,
 			});
 		},
 		onSettled(response) {

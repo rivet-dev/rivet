@@ -41,7 +41,7 @@ export function RunnerConfigToggleGroup({
 					value="serverfull"
 					className="border-l rounded-none w-full"
 				>
-					Runners
+					Runner
 				</ToggleGroupItem>
 			</ToggleGroup>
 		</div>
