@@ -123,6 +123,33 @@
                               "type": "null"
                             }
                           ]
+                        },
+                        "actor": {
+                          "type": "object",
+                          "properties": {
+                            "actorId": {
+                              "type": "string"
+                            },
+                            "generation": {
+                              "anyOf": [
+                                {
+                                  "type": "number"
+                                },
+                                {
+                                  "type": "integer",
+                                  "format": "int64"
+                                }
+                              ]
+                            },
+                            "key": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "actorId",
+                            "generation"
+                          ],
+                          "additionalProperties": false
                         }
                       },
                       "required": [
@@ -421,6 +448,33 @@
                 "type": "null"
               }
             ]
+          },
+          "actor": {
+            "type": "object",
+            "properties": {
+              "actorId": {
+                "type": "string"
+              },
+              "generation": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "integer",
+                    "format": "int64"
+                  }
+                ]
+              },
+              "key": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "actorId",
+              "generation"
+            ],
+            "additionalProperties": false
           }
         },
         "required": [
