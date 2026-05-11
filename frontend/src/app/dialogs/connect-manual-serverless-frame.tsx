@@ -148,17 +148,14 @@ export const buildServerlessConfig = async (
 
 	const endpoint = status.url || values.endpoint;
 
-	let existing: Record<string, Rivet.RunnerConfig> = {};
-	try {
-		const runnerConfig = await queryClient.fetchQuery(
-			dataProvider.runnerConfigQueryOptions({
-				name: values.runnerName,
-			}),
-		);
-		existing = runnerConfig?.datacenters || {};
-	} catch {
-		existing = {};
-	}
+	const runnerConfig = await queryClient.fetchQuery(
+		dataProvider.runnerConfigQueryOptions({
+			name: values.runnerName,
+			safe: true,
+		}),
+	);
+	const existing: Record<string, Rivet.RunnerConfig> =
+		runnerConfig?.datacenters || {};
 
 	const selectedDatacenters = Object.entries(values.datacenters)
 		.filter(([, selected]) => selected)

@@ -163,17 +163,14 @@ function FormStepper({
 			{...stepper}
 			controls={footer}
 			onSubmit={async ({ values }) => {
-				let existing: Record<string, Rivet.RunnerConfig> = {};
-				try {
-					const runnerConfig = await queryClient.fetchQuery(
-						dataProvider.runnerConfigQueryOptions({
-							name: values.runnerName,
-						}),
-					);
-					existing = runnerConfig?.datacenters || {};
-				} catch {
-					existing = {};
-				}
+				const runnerConfig = await queryClient.fetchQuery(
+					dataProvider.runnerConfigQueryOptions({
+						name: values.runnerName,
+						safe: true,
+					}),
+				);
+				const existing: Record<string, Rivet.RunnerConfig> =
+					runnerConfig?.datacenters || {};
 
 				await mutateAsync({
 					name: values.runnerName,
