@@ -1,6 +1,8 @@
 use std::sync::Arc;
 
 use anyhow::{Result, anyhow};
+use async_trait::async_trait;
+use rivet_envoy_protocol as protocol;
 use tokio::runtime::Handle;
 
 use crate::{
@@ -23,6 +25,30 @@ pub fn vfs_name_for_actor_database(actor_id: &str, generation: u64) -> String {
 	format!("envoy-sqlite-{actor_id}-g{generation}")
 }
 
+struct GenerationFencedTransport {
+	inner: SqliteTransportHandle,
+	generation: u64,
+}
+
+#[async_trait]
+impl crate::vfs::SqliteTransport for GenerationFencedTransport {
+	async fn get_pages(
+		&self,
+		mut request: protocol::SqliteGetPagesRequest,
+	) -> Result<protocol::SqliteGetPagesResponse> {
+		request.expected_generation.get_or_insert(self.generation);
+		self.inner.get_pages(request).await
+	}
+
+	async fn commit(
+		&self,
+		mut request: protocol::SqliteCommitRequest,
+	) -> Result<protocol::SqliteCommitResponse> {
+		request.expected_generation.get_or_insert(self.generation);
+		self.inner.commit(request).await
+	}
+}
+
 pub async fn open_database_from_transport(
 	transport: SqliteTransportHandle,
 	actor_id: String,
@@ -32,6 +58,10 @@ pub async fn open_database_from_transport(
 ) -> Result<NativeDatabaseHandle> {
 	let vfs_name = vfs_name_for_actor_database(&actor_id, generation);
 	let config = VfsConfig::default();
+	let transport: SqliteTransportHandle = Arc::new(GenerationFencedTransport {
+		inner: transport,
+		generation,
+	});
 	let initial_pages = fetch_initial_pages_for_registration(transport.clone(), &actor_id, &config)
 		.await
 		.map_err(|e| anyhow!("failed to preload sqlite pages: {e}"))?;
