@@ -24,6 +24,7 @@ Design constraints, invariants, and reference commands for the Rivet monorepo. F
 
 - Avoid raw `f64` fields in vbare protocol schemas that use hashable maps; generated Rust derives `Eq`/`Hash`, so encode floats as fixed bytes or an ordered wrapper.
 - Version converters must manually map fields between versions; never use serialize-deserialize round trips such as `transcode_version` or `serde_bare::to_vec` plus `from_slice`.
+- RivetKit client/server protocol compatibility assumes the server/runtime is newer than the client; clients send their latest request protocol version, and servers handle older-client compatibility and negotiation.
 
 When talking about "Rivet Actors" make sure to capitalize "Rivet Actor" as a proper noun and lowercase "actor" as a generic noun.
 
