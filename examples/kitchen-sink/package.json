@@ -17,6 +17,7 @@
 		"smoke:raw-websocket-serverless": "tsx scripts/raw-websocket-serverless-smoke.ts",
 		"fuzz:sleep-close": "tsx scripts/sleep-close-fuzz.ts",
 		"mock-agentic-loop": "tsx scripts/mock-agentic-loop.ts",
+		"counter-latency": "tsx scripts/counter-latency.ts",
 		"benchmark": "tsx scripts/benchmark.ts",
 		"db:generate": "find src/actors -name drizzle.config.ts -exec drizzle-kit generate --config {} \\;"
 	},

@@ -4,29 +4,23 @@
 
 ### Cloud Run Deploys
 
-- Deploy the kitchen-sink to Cloud Run from an isolated temp build context that pins the published `rivetkit` preview version, so root workspace `resolutions` do not silently swap in local packages.
-- Copy `examples/kitchen-sink` to a temp directory and edit that temp copy instead of building from the monorepo root.
-- Pin the temp copy to the exact published preview packages you want to test, such as `rivetkit@0.0.0-pr.4667.33279e9` and `@rivetkit/react@0.0.0-pr.4667.33279e9`.
-- Build and push the image from that temp context, then update the target Cloud Run service to that image.
-- Do not build the repo workspace directly when validating a published preview package, because the root `package.json` `resolutions` will route the app back to local workspace packages.
+- Deploy local kitchen-sink builds with `scripts/docker/build-push-kitchen-sink-local.sh`; it builds RivetKit packages with Turbo on the host, packs workspace packages into tarballs, installs a portable app `node_modules`, copies the built NAPI `.node`, and Docker copies only the prepared app.
+- Use `PUSH=0` for local image smoke tests and default `PUSH=1` for staging deploy images.
+- After building and pushing, update Cloud Run service `kitchen-sink-staging` in project `dev-projects-491221`, region `us-east4`, to the pushed image tag.
+- Verify staging with `curl -fsS "$(gcloud run services describe kitchen-sink-staging --region us-east4 --project dev-projects-491221 --format='value(status.url)')/api/rivet/metadata"`.
+- Only use the old temp-copy preview-package flow when explicitly validating already-published npm preview packages instead of local workspace code.
 
 Example flow:
 
 ```bash
-# 1. Copy the kitchen-sink out of the workspace.
-cp -R examples/kitchen-sink /tmp/kitchen-sink-cloud-run
+# 1. Build and push a host-built local workspace image.
+./scripts/docker/build-push-kitchen-sink-local.sh
 
-# 2. Edit /tmp/kitchen-sink-cloud-run/package.json to pin the published preview packages.
-
-# 3. Build and push the image from the temp context.
-docker build -t us-east4-docker.pkg.dev/<project>/<repo>/<image>:<tag> /tmp/kitchen-sink-cloud-run
-docker push us-east4-docker.pkg.dev/<project>/<repo>/<image>:<tag>
-
-# 4. Point Cloud Run at that image.
-gcloud run services update <service> \
+# 2. Point Cloud Run at that image.
+gcloud run services update kitchen-sink-staging \
   --region us-east4 \
-  --project <project> \
-  --image us-east4-docker.pkg.dev/<project>/<repo>/<image>:<tag>
+  --project dev-projects-491221 \
+  --image "us-east4-docker.pkg.dev/dev-projects-491221/cloud-run-source-deploy/rivet-dev-rivet/rivet-kitchen-sink:$(git rev-parse HEAD)"
 ```
 
 The kitchen-sink is deployed on Railway via Rivet Cloud. To test actors and inspect their SQLite databases, use the Rivet gateway API.
