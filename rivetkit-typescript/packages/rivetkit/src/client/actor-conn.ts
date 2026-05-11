@@ -216,6 +216,9 @@ export class ActorConnRaw {
 		this.#encoding = encoding;
 		this.#actorResolutionState = actorResolutionState;
 		this.#gatewayOptions = resolveActorGatewayOptions(gatewayOptions);
+		if ("getForId" in actorResolutionState) {
+			this.#actorId = actorResolutionState.getForId.actorId;
+		}
 		this.#readyPromise = promiseWithResolvers((reason) =>
 			logger().warn({
 				msg: "unhandled ready promise rejection",
