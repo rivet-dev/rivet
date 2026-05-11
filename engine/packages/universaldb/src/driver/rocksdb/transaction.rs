@@ -30,7 +30,7 @@ pub struct RocksDbTransactionDriver {
 	db: Arc<OptimisticTransactionDB>,
 	operations: TransactionOperations,
 	committed: AtomicBool,
-	tx_sender: OnceCell<mpsc::Sender<TransactionCommand>>,
+	tx_sender: OnceCell<mpsc::UnboundedSender<TransactionCommand>>,
 	txn_conflict_tracker: TransactionConflictTracker,
 	start_version: u64,
 }
@@ -53,10 +53,10 @@ impl RocksDbTransactionDriver {
 	}
 
 	/// Get or create the transaction task for non-snapshot operations
-	async fn ensure_transaction(&self) -> Result<&mpsc::Sender<TransactionCommand>> {
+	async fn ensure_transaction(&self) -> Result<&mpsc::UnboundedSender<TransactionCommand>> {
 		self.tx_sender
 			.get_or_try_init(|| async {
-				let (sender, receiver) = mpsc::channel(100);
+				let (sender, receiver) = mpsc::unbounded_channel();
 
 				// Spawn the transaction task
 				let task = TransactionTask::new(
@@ -97,7 +97,6 @@ impl TransactionDriver for RocksDbTransactionDriver {
 							key: key.clone(),
 							response: response_tx,
 						})
-						.await
 						.context("failed to send rocksdb transaction command")?;
 
 					// Wait for response
@@ -134,7 +133,6 @@ impl TransactionDriver for RocksDbTransactionDriver {
 							offset,
 							response: response_tx,
 						})
-						.await
 						.context("failed to send rocksdb transaction command")?;
 
 					// Wait for response
@@ -185,7 +183,6 @@ impl TransactionDriver for RocksDbTransactionDriver {
 							reverse,
 							response: response_tx,
 						})
-						.await
 						.context("failed to send rocksdb transaction command")?;
 
 					// Wait for response
@@ -250,7 +247,6 @@ impl TransactionDriver for RocksDbTransactionDriver {
 					conflict_ranges,
 					response: response_tx,
 				})
-				.await
 				.context("failed to send rocksdb transaction command")?;
 
 			// Wait for commit response
@@ -307,7 +303,6 @@ impl TransactionDriver for RocksDbTransactionDriver {
 					end,
 					response: response_tx,
 				})
-				.await
 				.context("failed to send rocksdb command")?;
 
 			// Wait for response
@@ -340,7 +335,6 @@ impl TransactionDriver for RocksDbTransactionDriver {
 					conflict_ranges,
 					response: response_tx,
 				})
-				.await
 				.context("failed to send rocksdb transaction command")?;
 
 			// Wait for commit response

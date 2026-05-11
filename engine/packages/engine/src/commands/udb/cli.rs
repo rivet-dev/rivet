@@ -660,7 +660,7 @@ impl SubCommand {
 						}
 
 						let (tx_entries, rx_entries) =
-							mpsc::channel::<protocol::ChangelogEntry>(10_000);
+							mpsc::unbounded_channel::<protocol::ChangelogEntry>();
 
 						// Writer task: re-applies v2 entries in txn-bounded batches.
 						// recv_many is called inside each txn iteration when the local buffer
@@ -970,7 +970,6 @@ impl SubCommand {
 
 											tx_entries
 												.send(v3_entry)
-												.await
 												.context("writer task closed")?;
 										}
 									}
