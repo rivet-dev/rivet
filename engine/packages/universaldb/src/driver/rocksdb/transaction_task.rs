@@ -57,14 +57,14 @@ pub enum TransactionCommand {
 pub struct TransactionTask {
 	db: Arc<OptimisticTransactionDB>,
 	txn_conflict_tracker: TransactionConflictTracker,
-	receiver: mpsc::Receiver<TransactionCommand>,
+	receiver: mpsc::UnboundedReceiver<TransactionCommand>,
 }
 
 impl TransactionTask {
 	pub fn new(
 		db: Arc<OptimisticTransactionDB>,
 		txn_conflict_tracker: TransactionConflictTracker,
-		receiver: mpsc::Receiver<TransactionCommand>,
+		receiver: mpsc::UnboundedReceiver<TransactionCommand>,
 	) -> Self {
 		TransactionTask {
 			db,

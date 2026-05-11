@@ -21,7 +21,7 @@ pub async fn task(
 	in_flight_req: InFlightRequestHandle,
 	client_ws: WebSocketHandle,
 	mut stopped_sub: message::SubscriptionHandle<pegboard::workflows::actor2::Stopped>,
-	mut msg_rx: mpsc::Receiver<protocol::ToRivetTunnelMessageKind>,
+	mut msg_rx: mpsc::UnboundedReceiver<protocol::ToRivetTunnelMessageKind>,
 	mut drop_rx: watch::Receiver<Option<MsgGcReason>>,
 	can_hibernate: bool,
 	egress_bytes: Arc<AtomicU64>,
