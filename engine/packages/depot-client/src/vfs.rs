@@ -303,6 +303,8 @@ pub trait SqliteVfsMetrics: Send + Sync {
 
 	fn set_worker_queue_depth(&self, _depth: u64) {}
 
+	fn set_worker_active(&self, _active: bool) {}
+
 	fn record_worker_queue_overload(&self) {}
 
 	fn observe_worker_command_duration(&self, _operation: &'static str, _duration_ns: u64) {}
