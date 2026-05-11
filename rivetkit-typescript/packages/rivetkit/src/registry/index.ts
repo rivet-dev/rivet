@@ -24,13 +24,15 @@ export interface ServerlessHandler {
 	fetch: FetchHandler;
 }
 
-export interface RegistryDiagnostics {
-	mode: string;
-	envoyActiveActorCount?: number | null;
+export interface RegistryRoutes {
+	health(): Promise<Response>;
+	metadata(): Promise<Response>;
+	prometheusMetrics(request?: Request): Promise<Response>;
 }
 
 export class Registry<A extends RegistryActors> {
 	#config: RegistryConfigInput<A>;
+	public readonly routes: RegistryRoutes;
 
 	get config(): RegistryConfigInput<A> {
 		return this.#config;
@@ -51,6 +53,12 @@ export class Registry<A extends RegistryActors> {
 
 	constructor(config: RegistryConfigInput<A>) {
 		this.#config = config;
+		this.routes = {
+			health: () => this.#healthRoute(),
+			metadata: () => this.#metadataRoute(),
+			prometheusMetrics: (request?: Request) =>
+				this.#prometheusMetricsRoute(request),
+		};
 	}
 
 	#ensureServerlessPoolConfigured(config: RegistryConfig): Promise<void> | undefined {
@@ -311,7 +319,92 @@ export class Registry<A extends RegistryActors> {
 		await crossPlatformServe(config, port, app, runtime);
 	}
 
-	public async diagnostics(): Promise<RegistryDiagnostics> {
+	/**
+	 * Returns a health response suitable for mounting in a user-owned router.
+	 */
+	async #healthRoute(): Promise<Response> {
+		const configured = await this.#activeConfiguredRegistry();
+		if (!configured) {
+			return jsonRouteResponse(503, {
+				status: "not_started",
+				runtime: "rivetkit",
+				version: VERSION,
+			});
+		}
+
+		const { runtime, registry } = configured;
+		if (!runtime.registryHealth) {
+			return jsonRouteResponse(501, {
+				status: "unsupported",
+				runtime: "rivetkit",
+				version: VERSION,
+			});
+		}
+
+		const response = await runtime.registryHealth(registry);
+		return new Response(new Uint8Array(response.body), {
+			status: response.status,
+			headers: response.headers,
+		});
+	}
+
+	/**
+	 * Returns serverless metadata suitable for mounting in a user-owned router.
+	 */
+	async #metadataRoute(): Promise<Response> {
+		const configured = await this.#activeConfiguredRegistry();
+		if (!configured) {
+			return new Response("registry not started\n", {
+				status: 503,
+				headers: { "content-type": "text/plain; charset=utf-8" },
+			});
+		}
+
+		const { runtime, registry } = configured;
+		if (!runtime.registryMetadata) {
+			return new Response("metadata is not supported by this runtime\n", {
+				status: 501,
+				headers: { "content-type": "text/plain; charset=utf-8" },
+			});
+		}
+
+		const response = await runtime.registryMetadata(registry);
+		return new Response(new Uint8Array(response.body), {
+			status: response.status,
+			headers: response.headers,
+		});
+	}
+
+	/**
+	 * Returns a Prometheus metrics response suitable for mounting in a user-owned router.
+	 */
+	async #prometheusMetricsRoute(_request?: Request): Promise<Response> {
+		const configured = await this.#activeConfiguredRegistry();
+		if (!configured) {
+			return new Response("registry not started\n", {
+				status: 503,
+				headers: { "content-type": "text/plain; charset=utf-8" },
+			});
+		}
+
+		const { runtime, registry } = configured;
+		if (!runtime.registryMetrics) {
+			return new Response("metrics are not supported by this runtime\n", {
+				status: 501,
+				headers: { "content-type": "text/plain; charset=utf-8" },
+			});
+		}
+
+		const response = await runtime.registryMetrics(registry);
+		return new Response(new Uint8Array(response.body), {
+			status: response.status,
+			headers: response.headers,
+		});
+	}
+
+	async #activeConfiguredRegistry(): Promise<
+		Awaited<ReturnType<typeof buildConfiguredRegistry>> | undefined
+	> {
 		const candidates = [
 			this.#runtimeServerlessPromise,
 			this.#runtimeServeConfiguredPromise,
@@ -319,13 +412,8 @@ export class Registry<A extends RegistryActors> {
 			candidate !== undefined
 		);
 
-		for (const candidate of candidates) {
-			const { runtime, registry } = await candidate;
-			const diagnostics = await runtime.registryDiagnostics?.(registry);
-			if (diagnostics) return diagnostics;
-		}
-
-		return { mode: "not_started", envoyActiveActorCount: null };
+		if (candidates.length === 0) return undefined;
+		return await candidates[0]!;
 	}
 
 	/**
@@ -554,6 +642,13 @@ function isServerlessMetadataRequest(request: Request, basePath: string): boolea
 	const normalizedBase =
 		basePath === "/" ? "" : `/${basePath.replace(/^\/+|\/+$/g, "")}`;
 	return parsed.pathname === `${normalizedBase}/metadata`;
+}
+
+function jsonRouteResponse(status: number, body: unknown): Response {
+	return new Response(JSON.stringify(body), {
+		status,
+		headers: { "content-type": "application/json" },
+	});
 }
 
 export function setup<A extends RegistryActors>(

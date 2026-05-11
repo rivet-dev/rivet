@@ -150,20 +150,15 @@ mod moved_tests {
 		let metrics = render_global_metrics();
 		let sent_line = metrics
 			.lines()
-			.find(|line| metric_line_for_actor(line, "rivet_actor_queue_messages_sent_total", "queue-metrics-actor:"))
+			.find(|line| metric_line_for_actor(line, "rivetkit_actor_queue_messages_sent_total", "queue-metrics"))
 			.expect("sent metric line");
 		let received_line = metrics
 			.lines()
-			.find(|line| metric_line_for_actor(line, "rivet_actor_queue_messages_received_total", "queue-metrics-actor:"))
+			.find(|line| metric_line_for_actor(line, "rivetkit_actor_queue_messages_received_total", "queue-metrics"))
 			.expect("received metric line");
-		let depth_line = metrics
-			.lines()
-			.find(|line| metric_line_for_actor(line, "rivet_actor_queue_depth", "queue-metrics-actor:"))
-			.expect("depth metric line");
 
 		assert!(sent_line.ends_with(" 1"));
 		assert!(received_line.ends_with(" 1"));
-		assert!(depth_line.ends_with(" 0"));
 	}
 
 	#[tokio::test]

@@ -11,7 +11,7 @@ pub mod actor;
 pub mod engine_process;
 pub mod error;
 pub mod inspector;
-pub(crate) mod metrics_endpoint;
+pub mod metrics_endpoint;
 pub mod registry;
 pub mod runtime;
 pub mod serverless;

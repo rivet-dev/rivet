@@ -21,6 +21,7 @@ use url::Url;
 use crate::actor::factory::ActorFactory;
 #[cfg(feature = "native-runtime")]
 use crate::engine_process::EngineProcessManager;
+use crate::registry::{CoreEnvoyHandle, CoreEnvoyStatus};
 use crate::registry::{RegistryCallbacks, RegistryDispatcher, ServeConfig};
 use crate::runtime::RuntimeSpawner;
 use crate::time::{sleep, timeout};
@@ -217,11 +218,17 @@ impl CoreServerlessRuntime {
 	}
 
 	pub async fn active_envoy_actor_count(&self) -> Option<usize> {
+		self.active_envoy_status()
+			.await
+			.map(|status| status.active_actor_count)
+	}
+
+	pub async fn active_envoy_status(&self) -> Option<CoreEnvoyStatus> {
 		self.envoy
 			.lock()
 			.await
 			.as_ref()
-			.map(EnvoyHandle::active_actor_count)
+			.map(|handle| CoreEnvoyHandle::new(handle.clone()).status())
 	}
 
 	pub async fn handle_request(&self, req: ServerlessRequest) -> ServerlessResponse {
@@ -279,6 +286,7 @@ impl CoreServerlessRuntime {
 				}
 			}
 			("GET", "/metadata") => Ok(self.metadata_response()),
+			("GET", "/metrics") => Ok(metrics_response(&req.headers)),
 			("GET", "/start") | ("POST", "/start") => self.start_response(req).await,
 			("OPTIONS", _) => Ok(bytes_response(
 				StatusCode::NO_CONTENT,
@@ -623,6 +631,30 @@ fn json_response(status: StatusCode, body: serde_json::Value) -> ServerlessRespo
 		HashMap::from([("content-type".to_owned(), "application/json".to_owned())]),
 		serde_json::to_vec(&body).unwrap_or_else(|_| b"{}".to_vec()),
 	)
+}
+
+fn metrics_response(headers: &HashMap<String, String>) -> ServerlessResponse {
+	let bearer_token = crate::metrics_endpoint::authorization_bearer_token_map(headers);
+	match crate::metrics_endpoint::authorize_metrics_request(bearer_token) {
+		Ok(()) => match crate::metrics_endpoint::render_prometheus_metrics() {
+			Ok(metrics) => bytes_response(
+				StatusCode::OK,
+				HashMap::from([("content-type".to_owned(), metrics.content_type)]),
+				metrics.body,
+			),
+			Err(error) => error_response(error),
+		},
+		Err(crate::metrics_endpoint::MetricsAccessError::NotEnabled) => text_response(
+			StatusCode::FORBIDDEN,
+			"text/plain; charset=utf-8",
+			"metrics not enabled\n",
+		),
+		Err(crate::metrics_endpoint::MetricsAccessError::Unauthorized) => text_response(
+			StatusCode::UNAUTHORIZED,
+			"text/plain; charset=utf-8",
+			"metrics request requires a valid bearer token\n",
+		),
+	}
 }
 
 fn bytes_response(
