@@ -286,7 +286,7 @@ impl CoreRegistry {
 				if envoy.ping_healthy { "ok" } else { "engine_ping_stale" },
 				&version,
 			),
-			None => health_response(200, "ok", &version),
+			None => health_response(503, "engine_ping_stale", &version),
 		};
 		Ok(response)
 	}

@@ -255,30 +255,31 @@ impl CoreServerlessRuntime {
 				"This is a RivetKit server.\n\nLearn more at https://rivet.dev",
 			)),
 			("GET", "/health") => {
-				// Report unhealthy when an envoy is currently running but its link to the
-				// engine has gone silent. A 503 is the conventional "recycle me" signal for
-				// container hosts (Cloud Run, k8s, etc.) running behind an HTTP health probe.
-				let envoy_unhealthy = {
+				// Healthy if no envoy is connected yet or if the envoy has received a
+				// recent engine ping. Unhealthy only when an envoy exists but has not
+				// received a recent ping. 503 is the conventional "recycle me" signal
+				// for container hosts running behind an HTTP health probe.
+				let runtime_healthy = {
 					let guard = self.envoy.lock().await;
 					guard
 						.as_ref()
-						.map(|handle| !handle.is_ping_healthy())
-						.unwrap_or(false)
+						.map(|handle| handle.is_ping_healthy())
+						.unwrap_or(true)
 				};
-				if envoy_unhealthy {
+				if runtime_healthy {
 					Ok(json_response(
-						StatusCode::SERVICE_UNAVAILABLE,
+						StatusCode::OK,
 						json!({
-							"status": "engine_ping_stale",
+							"status": "ok",
 							"runtime": "rivetkit",
 							"version": self.settings.package_version,
 						}),
 					))
 				} else {
 					Ok(json_response(
-						StatusCode::OK,
+						StatusCode::SERVICE_UNAVAILABLE,
 						json!({
-							"status": "ok",
+							"status": "engine_ping_stale",
 							"runtime": "rivetkit",
 							"version": self.settings.package_version,
 						}),
