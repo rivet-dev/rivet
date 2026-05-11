@@ -15,6 +15,7 @@ export function EnvVariables({
 	endpoint,
 	showRunnerName = true,
 	showEndpoint = true,
+	showPublicEndpoint = true,
 	showCopyButton = true,
 }: {
 	id?: string;
@@ -22,6 +23,7 @@ export function EnvVariables({
 	endpoint: string;
 	showRunnerName?: boolean;
 	showEndpoint?: boolean;
+	showPublicEndpoint?: boolean;
 	showCopyButton?: boolean;
 }) {
 	const rId = useId();
@@ -41,7 +43,7 @@ export function EnvVariables({
 				<Label asChild className="text-muted-foreground text-xs mb-1">
 					<p>Value</p>
 				</Label>
-				{showEndpoint && <RivetPublicEndpointEnv endpoint={endpoint} />}
+				{showPublicEndpoint && showEndpoint && <RivetPublicEndpointEnv endpoint={endpoint} />}
 				{showEndpoint && <RivetRunnerEndpointEnv endpoint={endpoint} />}
 				{showRunnerName && <RivetRunnerEnv runnerName={runnerName} />}
 			</div>
@@ -85,7 +87,7 @@ function RivetRunnerEnv({
 		<>
 			<DiscreteInput
 				aria-label="environment variable key"
-				value={`${prefix ? `${prefix}_` : ""}RIVET_RUNNER`}
+				value={`${prefix ? `${prefix}_` : ""}RUNNER_POOL`}
 				show
 			/>
 			<DiscreteInput

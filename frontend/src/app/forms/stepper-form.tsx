@@ -1,5 +1,10 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { faArrowLeft, faArrowRight, Icon } from "@rivet-gg/icons";
+import {
+	faArrowLeft,
+	faArrowRight,
+	faTriangleExclamation,
+	Icon,
+} from "@rivet-gg/icons";
 import type * as Stepperize from "@stepperize/react";
 import { AnimatePresence, motion } from "framer-motion";
 import { posthog } from "@/lib/posthog";
@@ -9,6 +14,7 @@ import {
 	type ReactNode,
 	useContext,
 	useRef,
+	useState,
 } from "react";
 import {
 	FormProvider,
@@ -16,11 +22,16 @@ import {
 	type UseFormReturn,
 	useForm,
 	useFormContext,
+	useWatch,
 } from "react-hook-form";
 import type * as z from "zod";
 import { Button, cn } from "@/components";
 import type { defineStepper } from "@/components/ui/stepper";
 import { HelpDropdown } from "../help-dropdown";
+
+export type StepConfirm<TValues = Record<string, unknown>> = (
+	values: TValues,
+) => ReactNode | null | Promise<ReactNode | null>;
 
 type Step = Stepperize.Step & {
 	assist?: boolean;
@@ -31,6 +42,9 @@ type Step = Stepperize.Step & {
 	showPrevious?: boolean;
 	group?: string;
 	isVisible?: (values: Record<string, unknown>) => boolean;
+	// method-style declaration so consumers can supply a narrower values type
+	// (parameter contravariance would otherwise reject typed callbacks).
+	confirm?(values: Record<string, unknown>): ReactNode | null | Promise<ReactNode | null>;
 };
 
 type StepVisibilityContextType = {
@@ -487,6 +501,35 @@ function StepPanel<const Steps extends Step[]>({
 	controls?: ReactNode;
 }) {
 	const form = useFormContext();
+	const liveValues = useWatch({ control: form.control });
+	const mergedValues = {
+		...(valuesRef.current ?? {}),
+		...liveValues,
+	} as Record<string, unknown>;
+	const stepSchema =
+		typeof step.schema === "function"
+			? step.schema(mergedValues)
+			: step.schema;
+	const isStepValid = stepSchema
+		? stepSchema.safeParse(mergedValues).success
+		: true;
+
+	const [confirmNode, setConfirmNode] = useState<ReactNode | null>(null);
+	const hiddenSubmitRef = useRef<HTMLButtonElement>(null);
+	const stepConfirm = (step as Step).confirm;
+
+	const onNextClick = async (e: React.MouseEvent<HTMLButtonElement>) => {
+		if (!stepConfirm) return;
+		e.preventDefault();
+		const valid = await form.trigger();
+		if (!valid) return;
+		const result = await stepConfirm(mergedValues);
+		if (result == null) {
+			hiddenSubmitRef.current?.click();
+		} else {
+			setConfirmNode(result);
+		}
+	};
 
 	const goToPrev = () => {
 		const allLive = form.getValues() as Record<string, unknown>;
@@ -511,6 +554,15 @@ function StepPanel<const Steps extends Step[]>({
 	return (
 		<Stepper.Panel className="space-y-6">
 			{stepper.match(step.id, content)}
+			{confirmNode ? (
+				<p className="text-sm text-muted-foreground">
+					<Icon
+						icon={faTriangleExclamation}
+						className="text-destructive mr-1.5"
+					/>
+					{confirmNode}
+				</p>
+			) : null}
 			{showControls ? (
 				<Stepper.Controls
 					className={cn(
@@ -518,6 +570,13 @@ function StepPanel<const Steps extends Step[]>({
 						stepper.isLast && !showNext && "justify-start",
 					)}
 				>
+					<button
+						type="submit"
+						ref={hiddenSubmitRef}
+						className="hidden"
+						tabIndex={-1}
+						aria-hidden
+					/>
 					{controls}
 					{showPrevious ? (
 						<Button
@@ -538,14 +597,37 @@ function StepPanel<const Steps extends Step[]>({
 							)}
 						</Button>
 					) : null}
-					{showNext ? (
+					{showNext && confirmNode ? (
+						<>
+							<Button
+								type="button"
+								variant="secondary"
+								onClick={() => setConfirmNode(null)}
+								disabled={form.formState.isSubmitting}
+							>
+								Cancel
+							</Button>
+							<Button
+								type="submit"
+								variant="destructive"
+								isLoading={form.formState.isSubmitting}
+							>
+								{step.next ? `Confirm ${step.next}` : "Confirm"}
+							</Button>
+						</>
+					) : showNext ? (
 						<Button
-							type="submit"
-							size="icon"
-							disabled={!form.formState.isValid}
+							type={stepConfirm ? "button" : "submit"}
+							size={step.next ? undefined : "icon"}
+							onClick={stepConfirm ? onNextClick : undefined}
+							disabled={!isStepValid}
 							isLoading={form.formState.isSubmitting}
 						>
-							<Icon icon={faArrowRight} />
+							{step.next ? (
+								step.next
+							) : (
+								<Icon icon={faArrowRight} />
+							)}
 						</Button>
 					) : null}
 				</Stepper.Controls>

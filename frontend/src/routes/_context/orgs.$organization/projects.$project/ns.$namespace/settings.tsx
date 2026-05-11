@@ -284,11 +284,11 @@ function Advanced() {
 				<AccordionContent>
 					<Suspense
 						fallback={
-							<>
-								<Skeleton className="w-full h-20 rounded-md" />
-								<Skeleton className="w-full h-20 rounded-md" />
-								<Skeleton className="w-full h-20 rounded-md" />
-							</>
+							<div className="pb-4 pb-8 px-6 max-w-5xl mx-auto mb-8">
+								<Skeleton className="w-full h-36 rounded-md mb-4" />
+								<Skeleton className="w-full h-36 rounded-md mb-4" />
+								<Skeleton className="w-full h-36 rounded-md mb-4" />
+							</div>
 						}
 					>
 						<SecretToken />

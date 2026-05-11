@@ -6,48 +6,94 @@ import {
 	useQuery,
 	useSuspenseInfiniteQuery,
 } from "@tanstack/react-query";
+import { useMemo, useRef } from "react";
 import { useWatch } from "react-hook-form";
 import z from "zod";
-import * as ConnectRailwayForm from "@/app/forms/connect-manual-serverfull-form";
+import * as ConnectServerfullForm from "@/app/forms/connect-manual-serverfull-form";
 import type { DialogContentProps } from "@/components";
-import { useEngineCompatDataProvider } from "@/components/actors";
+import {
+	ActorRegion,
+	useEngineCompatDataProvider,
+} from "@/components/actors";
 import { defineStepper } from "@/components/ui/stepper";
 import { successfulBackendSetupEffect } from "@/lib/effects";
 import { engineEnv } from "@/lib/env";
 import { queryClient } from "@/queries/global";
 import { EnvVariables } from "../env-variables";
-import { StepperForm } from "../forms/stepper-form";
+import { type StepConfirm, StepperForm } from "../forms/stepper-form";
 
-const stepper = defineStepper(
-	{
-		id: "step-1",
-		title: "Configure",
-		assist: false,
-		next: "Next",
-		schema: z.object({
-			runnerName: z.string().min(1, "Runner name is required"),
-			datacenter: z.string().min(1, "Please select a region"),
-		}),
-	},
-	{
-		id: "step-2",
-		title: "Deploy",
-		assist: false,
-		schema: z.object({}),
-		next: "Add",
-	},
-	// {
-	// 	id: "step-3",
-	// 	title: "Wait for the Runner to connect",
-	// 	assist: true,
-	// 	schema: z.object({
-	// 		success: z.boolean().refine((v) => v === true, {
-	// 			message: "Runner must be connected to proceed",
-	// 		}),
-	// 	}),
-	// 	next: "Add",
-	// },
-);
+type FormValues = {
+	runnerName: string;
+	datacenter: string;
+};
+
+function useStepperConfig() {
+	const dataProvider = useEngineCompatDataProvider();
+	const dataProviderRef = useRef(dataProvider);
+	dataProviderRef.current = dataProvider;
+
+	return useMemo(() => {
+		const confirmStep2: StepConfirm<FormValues> = async ({
+			runnerName,
+			datacenter,
+		}) => {
+			if (!runnerName) return null;
+			const data = await queryClient.fetchQuery(
+				dataProviderRef.current.runnerConfigQueryOptions({
+					name: runnerName,
+					safe: true,
+				}),
+			);
+			const existingDatacenters = data
+				? Object.keys(data.datacenters || {})
+				: [];
+			if (existingDatacenters.length === 0) return null;
+			const willReplaceDatacenter =
+				!!datacenter && existingDatacenters.includes(datacenter);
+			return (
+				<>
+					A runner config named{" "}
+					<code className="rounded bg-muted px-1 py-0.5 text-foreground">
+						{runnerName}
+					</code>{" "}
+					already exists
+					{willReplaceDatacenter ? (
+						<>
+							. Submitting will overwrite its existing
+							configuration for{" "}
+							<DatacenterLabel regionId={datacenter} />.
+						</>
+					) : (
+						<>
+							. Submitting will add{" "}
+							<DatacenterLabel regionId={datacenter} /> to it.
+						</>
+					)}
+				</>
+			);
+		};
+
+		return defineStepper(
+			{
+				id: "step-1",
+				title: "Configure",
+				assist: false,
+				schema: z.object({
+					runnerName: z.string().min(1, "Runner name is required"),
+					datacenter: z.string().min(1, "Please select a region"),
+				}),
+			},
+			{
+				id: "step-2",
+				title: "Deploy",
+				assist: false,
+				schema: z.object({}),
+				next: "Add",
+				confirm: confirmStep2,
+			},
+		);
+	}, []);
+}
 
 interface ConnectManualServerlfullFrameContentProps extends DialogContentProps {
 	provider: Provider;
@@ -74,7 +120,8 @@ export default function ConnectManualServerlfullFrameContent({
 			?.name ||
 		data.find((region) => region.name.toLowerCase().includes("ore"))
 			?.name ||
-		"auto";
+		data[0]?.name ||
+		"";
 
 	return (
 		<FormStepper
@@ -98,6 +145,7 @@ function FormStepper({
 	footer?: React.ReactNode;
 }) {
 	const dataProvider = useEngineCompatDataProvider();
+	const stepper = useStepperConfig();
 
 	const { mutateAsync } = useMutation({
 		...dataProvider.upsertRunnerConfigMutationOptions(),
@@ -145,7 +193,6 @@ function FormStepper({
 			content={{
 				"step-1": () => <Step1 />,
 				"step-2": () => <Step2 provider={provider} />,
-				// "step-3": () => <Step3 />,
 			}}
 		/>
 	);
@@ -158,8 +205,8 @@ function Step1() {
 				We're going to help you deploy a RivetKit project to your cloud
 				provider of choice.
 			</div>
-			<ConnectRailwayForm.RunnerName />
-			<ConnectRailwayForm.Datacenter />
+			<ConnectServerfullForm.RunnerName />
+			<ConnectServerfullForm.Datacenter />
 		</>
 	);
 }
@@ -168,6 +215,8 @@ function Step2({ provider }: { provider: Provider }) {
 	const providerOptions = deployOptions.find(
 		(option) => option.name === provider,
 	);
+	const runnerName = useWatch({ name: "runnerName" });
+
 	return (
 		<>
 			<p>
@@ -184,9 +233,18 @@ function Step2({ provider }: { provider: Provider }) {
 
 			<EnvVariables
 				endpoint={useEndpoint()}
-				runnerName={useWatch({ name: "runnerName" })}
+				runnerName={runnerName}
+				showPublicEndpoint={false}
 			/>
 		</>
+	);
+}
+
+function DatacenterLabel({ regionId }: { regionId?: string }) {
+	return (
+		<span className="inline-flex items-center rounded bg-muted px-1.5 py-0.5 text-foreground align-middle">
+			<ActorRegion regionId={regionId} showLabel />
+		</span>
 	);
 }
 

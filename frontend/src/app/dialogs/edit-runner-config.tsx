@@ -1,4 +1,3 @@
-import { faTriangleExclamation, Icon } from "@rivet-gg/icons";
 import type { Rivet } from "@rivetkit/engine-api-full";
 import {
 	useMutation,
@@ -6,7 +5,8 @@ import {
 	useSuspenseQuery,
 } from "@tanstack/react-query";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
-import { useFormContext, useFormState, useWatch } from "react-hook-form";
+import { useFormContext, useWatch } from "react-hook-form";
+import { ConfirmableSubmitButton } from "@/app/forms/confirmable-submit-button";
 
 const SERVERLESS_FIELDS = [
 	"url",
@@ -32,13 +32,11 @@ import {
 	AccordionContent,
 	AccordionItem,
 	AccordionTrigger,
-	Button,
 	Combobox,
 	type DialogContentProps,
 	Frame,
 	ToggleGroup,
 	ToggleGroupItem,
-	WithTooltip,
 } from "@/components";
 import { ActorRegion, useEngineCompatDataProvider } from "@/components/actors";
 import { queryClient } from "@/queries/global";
@@ -719,94 +717,21 @@ function ConfirmableSaveButton({
 	blockedReason: string | null;
 	computeSwitches: () => ModeSwitch[];
 }) {
-	const form = useFormContext();
-	const { isSubmitting, isValidating } = useFormState();
-	const [pending, setPending] = useState<ModeSwitch[] | null>(null);
-	const hiddenSubmitRef = useRef<HTMLButtonElement>(null);
-
-	const allValues = useWatch();
-	useEffect(() => {
-		setPending(null);
-	}, [allValues]);
-
-	const onSaveClick = async (e: React.MouseEvent<HTMLButtonElement>) => {
-		e.preventDefault();
-		const valid = await form.trigger();
-		if (!valid) return;
+	const getConfirmation = () => {
 		const switches = computeSwitches();
-		if (switches.length === 0) {
-			hiddenSubmitRef.current?.click();
-		} else {
-			setPending(switches);
-		}
+		if (switches.length === 0) return null;
+		return (
+			<>Saving will overwrite the existing configuration: {describeSwitches(switches)}.</>
+		);
 	};
-
-	const onConfirmClick = (e: React.MouseEvent<HTMLButtonElement>) => {
-		e.preventDefault();
-		setPending(null);
-		hiddenSubmitRef.current?.click();
-	};
-
-	const onCancelClick = () => setPending(null);
-
-	const saveButton = (
-		<Button
-			type="button"
-			onClick={onSaveClick}
-			disabled={blocked}
-			isLoading={isSubmitting || isValidating}
-		>
-			Save
-		</Button>
-	);
 
 	return (
-		<>
-			<button
-				type="submit"
-				ref={hiddenSubmitRef}
-				className="hidden"
-				tabIndex={-1}
-				aria-hidden
-			/>
-			{pending ? (
-				<div className="flex flex-col gap-2 items-stretch w-full">
-					<p className="text-sm text-muted-foreground max-w-md self-end text-left">
-						<Icon
-							icon={faTriangleExclamation}
-							className="text-destructive mr-1.5"
-						/>
-						Saving will overwrite the existing configuration:{" "}
-						{describeSwitches(pending)}.
-					</p>
-					<div className="flex gap-2 self-end">
-						<Button
-							type="button"
-							variant="secondary"
-							onClick={onCancelClick}
-							disabled={isSubmitting}
-						>
-							Cancel
-						</Button>
-						<Button
-							type="button"
-							variant="destructive"
-							onClick={onConfirmClick}
-							isLoading={isSubmitting || isValidating}
-						>
-							Confirm Save
-						</Button>
-					</div>
-				</div>
-			) : blocked && blockedReason ? (
-				<WithTooltip
-					trigger={<span>{saveButton}</span>}
-					content={blockedReason}
-				/>
-			) : (
-				saveButton
-			)}
-		</>
+		<ConfirmableSubmitButton
+			label="Save"
+			blocked={blocked}
+			blockedReason={blockedReason}
+			getConfirmation={getConfirmation}
+		/>
 	);
 }
 

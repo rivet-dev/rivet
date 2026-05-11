@@ -980,7 +980,7 @@ function useOtherAgentInstructionsCode(provider?: Provider) {
   RIVET_ENDPOINT=${secretToken}${
 		runnerName !== "default"
 			? `
-  RIVET_RUNNER_NAME=${runnerName}`
+  RIVET_POOL=${runnerName}`
 			: ""
   }
 

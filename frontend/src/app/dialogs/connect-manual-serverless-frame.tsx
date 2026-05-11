@@ -29,7 +29,6 @@ const stepper = defineStepper(
 		id: "step-1",
 		title: "Configure",
 		assist: false,
-		next: "Next",
 		schema: ConnectServerlessForm.configurationSchema,
 	},
 	{
@@ -37,7 +36,6 @@ const stepper = defineStepper(
 		title: "Deploy",
 		assist: false,
 		schema: z.object({}),
-		next: "Next",
 	},
 	{
 		id: "step-3",

@@ -158,8 +158,8 @@ export function PublishableToken() {
 
 export function SecretToken() {
 	return (
-		<div className="pb-4 pb-8 px-6 max-w-5xl mx-auto my-8 border-b @6xl:border @6xl:rounded-lg">
-			<div className="flex gap-2 items-center mb-2 mt-6">
+		<div className="pb-4 pb-8 px-6 max-w-5xl mx-auto mb-8 border-b @6xl:border @6xl:rounded-lg">
+			<div className="flex gap-2 items-center mb-2 @6xl:mt-6">
 				<H3>Backend Configuration</H3>
 			</div>
 			<p className="mb-6 text-muted-foreground">
