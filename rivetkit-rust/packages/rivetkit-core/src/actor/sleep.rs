@@ -863,8 +863,14 @@ impl ActorContext {
 		// re-evaluated when a request starts or completes.
 		let ctx = self.clone();
 		counter.register_change_callback(Arc::new(move || {
+			ctx.0
+				.metrics
+				.set_http_requests_active(ctx.active_http_request_count());
 			ctx.reset_sleep_timer();
 		}));
+		self.0
+			.metrics
+			.set_http_requests_active(counter.load());
 		Some(counter)
 	}
 }
