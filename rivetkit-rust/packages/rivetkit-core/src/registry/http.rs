@@ -477,22 +477,8 @@ fn handle_metrics_fetch(request: &Request) -> Result<HttpResponse> {
 		return method_not_allowed_response(request, None);
 	}
 
-	let bearer_token = crate::metrics_endpoint::authorization_bearer_token(request.headers());
-	match crate::metrics_endpoint::authorize_metrics_request(bearer_token) {
-		Ok(()) => {
-			let metrics = crate::metrics_endpoint::render_prometheus_metrics()?;
-			bytes_response(StatusCode::OK, &metrics.content_type, metrics.body)
-		}
-		Err(crate::metrics_endpoint::MetricsAccessError::NotEnabled) => {
-			text_response(StatusCode::FORBIDDEN, "metrics not enabled\n")
-		}
-		Err(crate::metrics_endpoint::MetricsAccessError::Unauthorized) => {
-			text_response(
-				StatusCode::UNAUTHORIZED,
-				"metrics request requires a valid bearer token\n",
-			)
-		}
-	}
+	let metrics = crate::metrics_endpoint::render_prometheus_metrics()?;
+	bytes_response(StatusCode::OK, &metrics.content_type, metrics.body)
 }
 
 fn handle_root_fetch(request: &Request, actor: Option<&ActorSpecifier>) -> Result<HttpResponse> {

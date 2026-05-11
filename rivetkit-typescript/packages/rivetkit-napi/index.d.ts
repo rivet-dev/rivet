@@ -174,9 +174,10 @@ export interface JsServerlessResponseHead {
   status: number
   headers: Record<string, string>
 }
-export interface JsRegistryDiagnostics {
-  mode: string
-  envoyActiveActorCount?: number
+export interface JsRegistryRouteResponse {
+  status: number
+  headers: Record<string, string>
+  body: Buffer
 }
 export interface JsServerlessStreamError {
   group: string
@@ -313,9 +314,11 @@ export declare class CoreRegistry {
    * Idempotent. Safe to call when neither mode has been activated.
    * Does not block on the `serve()` future; TS awaits that promise
    * separately to avoid re-entrancy.
-   */
+  */
   shutdown(): Promise<void>
-  diagnostics(): Promise<JsRegistryDiagnostics>
+  health(): Promise<JsRegistryRouteResponse>
+  metadata(): JsRegistryRouteResponse
+  metrics(): JsRegistryRouteResponse
   handleServerlessRequest(req: JsServerlessRequest, onStreamEvent: (...args: any[]) => any, cancelToken: CancellationToken, config: JsServeConfig): Promise<JsServerlessResponseHead>
 }
 export declare class Schedule {

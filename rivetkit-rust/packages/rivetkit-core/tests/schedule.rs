@@ -96,6 +96,7 @@ mod moved_tests {
 			)),
 			protocol_metadata: Arc::new(tokio::sync::Mutex::new(None)),
 			shutting_down: AtomicBool::new(false),
+			last_ping_ts: std::sync::atomic::AtomicI64::new(i64::MAX),
 			stopped_tx: tokio::sync::watch::channel(true).0,
 		});
 
