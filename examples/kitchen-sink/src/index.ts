@@ -4,6 +4,7 @@ import { counter } from "./actors/counter/counter.ts";
 import { counterConn } from "./actors/counter/counter-conn.ts";
 import { counterWithParams } from "./actors/counter/conn-params.ts";
 import { counterWithLifecycle } from "./actors/counter/lifecycle.ts";
+import { pingPongCounter } from "./actors/counter/ping-pong-counter.ts";
 // Actions
 import { inputActor } from "./actors/actions/action-inputs.ts";
 import {
@@ -186,6 +187,7 @@ export const registry = setup({
 		counterConn,
 		counterWithParams,
 		counterWithLifecycle,
+		pingPongCounter,
 		// Core API
 		inputActor,
 		syncActionActor,
