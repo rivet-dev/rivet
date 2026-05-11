@@ -1,13 +1,32 @@
 import z from "zod";
 
+const providerMetadataSchema = z
+	.object({
+		provider: z.string().optional(),
+		customName: z.string().optional(),
+		customIcon: z.string().optional(),
+	})
+	.partial()
+	.optional();
+
 export function deriveProviderFromMetadata(
 	metadata: unknown,
 ): string | undefined {
-	return z
-		.object({ provider: z.string().optional() })
-		.partial()
-		.optional()
-		.parse(metadata)?.provider;
+	return providerMetadataSchema.safeParse(metadata).data?.provider;
+}
+
+export function deriveCustomNameFromMetadata(
+	metadata: unknown,
+): string | undefined {
+	const v = providerMetadataSchema.safeParse(metadata).data?.customName;
+	return v?.trim() ? v.trim() : undefined;
+}
+
+export function deriveCustomIconFromMetadata(
+	metadata: unknown,
+): string | undefined {
+	return providerMetadataSchema.safeParse(metadata).data?.customIcon ||
+		undefined;
 }
 
 const rivetkitSchema = z

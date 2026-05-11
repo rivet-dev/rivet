@@ -7,6 +7,7 @@ import {
 	faPencil,
 	faRailway,
 	faRivet,
+	faServer,
 	faTrash,
 	faVercel,
 	Icon,
@@ -32,7 +33,12 @@ import {
 	WithTooltip,
 } from "@/components";
 import { Badge } from "@/components/ui/badge";
-import { deriveProviderFromMetadata } from "@/lib/data";
+import { IconRenderer } from "@/components/ui/icon-picker";
+import {
+	deriveCustomIconFromMetadata,
+	deriveCustomNameFromMetadata,
+	deriveProviderFromMetadata,
+} from "@/lib/data";
 import type { RivetActorError } from "@/queries/types";
 import { RunnerPoolErrorPopover } from "./runner-pool-error-popover";
 
@@ -310,12 +316,23 @@ function ProviderSummary({
 	renderRegion: (regionId: string, opts: { abbreviated?: boolean }) => ReactNode;
 }) {
 	const breakdown = useMemo(() => {
-		const rows = datacenters.map(([dc, config]) => ({
-			dc,
-			provider: deriveProviderFromMetadata(config.metadata) || "unknown",
-			kind: getDatacenterKind(config),
-		}));
-		const providers = new Set(rows.map((r) => r.provider));
+		const rows = datacenters.map(([dc, config]) => {
+			const provider =
+				deriveProviderFromMetadata(config.metadata) || "unknown";
+			const customName = deriveCustomNameFromMetadata(config.metadata);
+			const customIcon = deriveCustomIconFromMetadata(config.metadata);
+			return {
+				dc,
+				provider,
+				customName,
+				customIcon,
+				kind: getDatacenterKind(config),
+				groupKey: isCustomProvider(provider)
+					? `${provider}:${customName ?? ""}:${customIcon ?? ""}`
+					: provider,
+			};
+		});
+		const providers = new Set(rows.map((r) => r.groupKey));
 		const kinds = new Set(rows.map((r) => r.kind));
 		return { rows, providers, kinds };
 	}, [datacenters]);
@@ -356,13 +373,17 @@ function ProviderSummary({
 		<WithTooltip
 			content={
 				<ul className="space-y-1">
-					{breakdown.rows.map(({ dc, provider, kind }) => (
+					{breakdown.rows.map(({ dc, provider, customName, customIcon, kind }) => (
 						<li key={dc} className="flex items-center gap-2">
 							{renderRegion(dc, { abbreviated: false })}
 							{showProviderInTooltip ? (
 								<>
 									<span className="text-muted-foreground">·</span>
-									<ProviderInline provider={provider} />
+									<ProviderInline
+										provider={provider}
+										customName={customName}
+										customIcon={customIcon}
+									/>
 								</>
 							) : null}
 							{showKindInTooltip ? (
@@ -468,7 +489,33 @@ const PROVIDER_ICONS: Record<string, typeof faVercel> = {
 	rivet: faRivet,
 };
 
-function ProviderInline({ provider }: { provider: string | undefined }) {
+function isCustomProvider(provider: string | undefined): boolean {
+	return provider === "custom" || provider === "custom-platform";
+}
+
+function ProviderInline({
+	provider,
+	customName,
+	customIcon,
+}: {
+	provider: string | undefined;
+	customName?: string;
+	customIcon?: string;
+}) {
+	if (isCustomProvider(provider)) {
+		const label = customName || getProviderLabel(provider);
+		return (
+			<span className="whitespace-nowrap inline-flex items-center gap-1.5">
+				{customIcon ? (
+					<IconRenderer name={customIcon} className="size-3.5" />
+				) : (
+					<Icon icon={faServer} className="size-3.5" />
+				)}
+				{label}
+			</span>
+		);
+	}
+
 	const icon = provider ? PROVIDER_ICONS[provider] : undefined;
 	const label = getProviderLabel(provider);
 
@@ -485,7 +532,13 @@ function ProviderInline({ provider }: { provider: string | undefined }) {
 }
 
 function Provider({ metadata }: { metadata: unknown }) {
-	return <ProviderInline provider={deriveProviderFromMetadata(metadata)} />;
+	return (
+		<ProviderInline
+			provider={deriveProviderFromMetadata(metadata)}
+			customName={deriveCustomNameFromMetadata(metadata)}
+			customIcon={deriveCustomIconFromMetadata(metadata)}
+		/>
+	);
 }
 
 function Regions({

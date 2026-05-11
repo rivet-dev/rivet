@@ -10,6 +10,7 @@ import { useMemo, useRef } from "react";
 import { useWatch } from "react-hook-form";
 import z from "zod";
 import * as ConnectServerfullForm from "@/app/forms/connect-manual-serverfull-form";
+import * as ConnectServerlessForm from "@/app/forms/connect-manual-serverless-form";
 import type { DialogContentProps } from "@/components";
 import {
 	ActorRegion,
@@ -25,6 +26,8 @@ import { type StepConfirm, StepperForm } from "../forms/stepper-form";
 type FormValues = {
 	runnerName: string;
 	datacenter: string;
+	customName?: string;
+	customIcon?: string;
 };
 
 function useStepperConfig() {
@@ -81,6 +84,12 @@ function useStepperConfig() {
 				schema: z.object({
 					runnerName: z.string().min(1, "Runner name is required"),
 					datacenter: z.string().min(1, "Please select a region"),
+					customName: z
+						.string()
+						.trim()
+						.max(32, "Name is too long")
+						.optional(),
+					customIcon: z.string().optional(),
 				}),
 			},
 			{
@@ -172,13 +181,25 @@ function FormStepper({
 				const existing: Record<string, Rivet.RunnerConfig> =
 					runnerConfig?.datacenters || {};
 
+				const isCustom =
+					provider === "custom" || provider === "custom-platform";
+				const customName = isCustom
+					? values.customName?.trim() || undefined
+					: undefined;
+				const customIcon = isCustom
+					? values.customIcon || undefined
+					: undefined;
 				await mutateAsync({
 					name: values.runnerName,
 					config: {
 						...existing,
 						[values.datacenter]: {
 							normal: {},
-							metadata: { provider },
+							metadata: {
+								provider,
+								...(customName ? { customName } : {}),
+								...(customIcon ? { customIcon } : {}),
+							},
 						},
 					},
 				});
@@ -188,14 +209,15 @@ function FormStepper({
 				datacenter: defaultDatacenter,
 			}}
 			content={{
-				"step-1": () => <Step1 />,
+				"step-1": () => <Step1 provider={provider} />,
 				"step-2": () => <Step2 provider={provider} />,
 			}}
 		/>
 	);
 }
 
-function Step1() {
+function Step1({ provider }: { provider: Provider }) {
+	const isCustom = provider === "custom" || provider === "custom-platform";
 	return (
 		<>
 			<div>
@@ -203,6 +225,7 @@ function Step1() {
 				provider of choice.
 			</div>
 			<ConnectServerfullForm.RunnerName />
+			{isCustom ? <ConnectServerlessForm.CustomBranding /> : null}
 			<ConnectServerfullForm.Datacenter />
 		</>
 	);
