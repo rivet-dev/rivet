@@ -68,3 +68,11 @@ Scope: DB driver tests only
 - 2026-05-08 16:52 PDT raw-websocket [native/local/bare]: PASS (16 passed, 14.0s). Covers raw websocket callback tracking.
 - 2026-05-08 16:52 PDT actor-conn-state [native/local/bare]: PASS (11 passed, 10.9s). Covers connection lifecycle and disconnect accounting through the work registry.
 - 2026-05-08 16:52 PDT actor-sleep-db [native/local/bare]: PASS (26 passed, 70.9s). Covers DB close timing during sleep shutdown and waitUntil state persistence.
+- 2026-05-09 04:48 PDT DB TESTS RERUN STARTED [native only] - validating async websocket close handler behavior.
+- 2026-05-09 04:48 PDT actor-db rerun [native]: PASS (13 passed, 104 skipped, 18.3s).
+- 2026-05-09 04:48 PDT actor-db-raw rerun [native]: PASS (5 passed, 40 skipped, 4.9s).
+- 2026-05-09 04:48 PDT actor-db-pragma-migration rerun [native]: PASS (4 passed, 32 skipped, 4.3s).
+- 2026-05-09 04:48 PDT actor-sleep-db rerun [native]: PASS (26 passed, 208 skipped, 63.8s). Includes `async websocket close handler can use c.db before sleep completes` and `async websocket addEventListener close handler can use c.db before sleep completes`.
+- 2026-05-09 04:48 PDT actor-db-stress rerun [native]: PASS (5 passed, 40 skipped, 31.3s).
+- 2026-05-09 04:48 PDT actor-db-init-order rerun [native]: PASS (6 passed, 48 skipped, 6.3s).
+- 2026-05-09 04:48 PDT DB TESTS RERUN COMPLETE [native only] - 6/6 DB file groups passed. Async close handler tests included.
