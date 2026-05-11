@@ -185,6 +185,9 @@ impl SqliteDb {
 					)?;
 					self.start_worker_failure_monitor(native_db.clone(), config);
 					*self.db.lock() = Some(native_db);
+					if let Some(metrics) = self.vfs_metrics.as_ref() {
+						metrics.set_worker_active(true);
+					}
 					Ok(())
 				}
 
@@ -363,6 +366,9 @@ impl SqliteDb {
 					if let Some(native_db) = native_db {
 						let result = self.map_local_worker_result(native_db.close().await);
 						self.abort_worker_failure_monitor();
+						if let Some(metrics) = self.vfs_metrics.as_ref() {
+							metrics.set_worker_active(false);
+						}
 						result?;
 					}
 				}
