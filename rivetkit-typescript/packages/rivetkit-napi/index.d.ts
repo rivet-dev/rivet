@@ -316,7 +316,7 @@ export declare class CoreRegistry {
    * separately to avoid re-entrancy.
    */
   shutdown(): Promise<void>
-  actorStopThresholdMs(): Promise<number | undefined | null>
+  actorStopThresholdMs(): Promise<number | null>
   health(): Promise<JsRegistryRouteResponse>
   metadata(): JsRegistryRouteResponse
   metrics(): JsRegistryRouteResponse
