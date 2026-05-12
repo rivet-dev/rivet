@@ -489,11 +489,13 @@ export class Registry<A extends RegistryActors> {
 		config: RegistryConfig,
 		configuredRegistryPromise: ReturnType<typeof buildConfiguredRegistry>,
 	): Promise<void> {
-		const gracePeriodMs = config.shutdown?.gracePeriodMs ?? 30_000;
+		const gracePeriodMs =
+			config.shutdown?.gracePeriodMs ??
+			(await this.#actorStopThresholdMs(configuredRegistryPromise)) ??
+			30 * 60 * 1000;
 		// Race the entire drain sequence (both modes + serve promise) against
-		// a single grace ceiling. Without this, each mode's Rust-side drain
-		// (20s) could stack sequentially and blow past gracePeriodMs before
-		// we re-raise the signal.
+		// a single grace ceiling. By default, this uses the engine-provided
+		// actor stop threshold, matching Pegboard's hard cutoff for actors.
 		const drain = async () => {
 			// Shut down every live `CoreRegistry` we know about. Mode A
 			// (`start()`) and Mode B (`handler()`) each build a separate
@@ -548,6 +550,29 @@ export class Registry<A extends RegistryActors> {
 		]);
 		this.#removeSignalHandlers();
 		finishShutdownSignal(signal);
+	}
+
+	async #actorStopThresholdMs(
+		configuredRegistryPromise: ReturnType<typeof buildConfiguredRegistry>,
+	): Promise<number | undefined> {
+		try {
+			const { runtime, registry } = await configuredRegistryPromise;
+			const thresholdMs =
+				await runtime.registryActorStopThresholdMs?.(registry);
+			if (
+				thresholdMs !== undefined &&
+				Number.isFinite(thresholdMs) &&
+				thresholdMs > 0
+			) {
+				return thresholdMs;
+			}
+		} catch (err) {
+			logger().warn(
+				{ err },
+				"failed to read actor stop threshold for shutdown grace",
+			);
+		}
+		return undefined;
 	}
 
 	#removeSignalHandlers(): void {

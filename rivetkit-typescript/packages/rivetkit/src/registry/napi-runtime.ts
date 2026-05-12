@@ -202,6 +202,15 @@ export class NapiCoreRuntime implements CoreRuntime {
 		await asNativeRegistry(registry).shutdown();
 	}
 
+	async registryActorStopThresholdMs(
+		registry: RegistryHandle,
+	): Promise<number | undefined> {
+		return (
+			(await asNativeRegistry(registry).actorStopThresholdMs()) ??
+			undefined
+		);
+	}
+
 	async registryHealth(
 		registry: RegistryHandle,
 	): Promise<RuntimeRegistryRouteResponse> {
