@@ -74,11 +74,6 @@ mod websocket;
 use inspector::build_actor_inspector;
 use websocket::is_actor_connect_path;
 
-/// Bound on `handle.shutdown_and_wait` inside `serve_with_config` teardown.
-/// Protects against indefinite hangs if the envoy reconnect loop is stuck;
-/// the TS/outer-host grace period is the ultimate backstop.
-const SHUTDOWN_DRAIN_TIMEOUT: Duration = Duration::from_secs(20);
-
 #[derive(Debug, Default)]
 pub struct CoreRegistry {
 	factories: HashMap<String, Arc<ActorFactory>>,
@@ -530,10 +525,22 @@ impl CoreRegistry {
 		// trip the `shutdown` token instead.
 		shutdown.cancelled().await;
 
+		// TODO: Move into envoy-client since timing out has to do with protocol compliance
+		// Read threshold from protocol metadata, fall back to 30 min
+		let stop_threshold = handle
+			.get_protocol_metadata
+			.await
+			.map(|x| x.actor_stop_threshold)
+			.unwrap_or(30 * 60 * 1000);
 		// Bounded drain. If envoy cannot reach the engine (reconnect loop stuck),
 		// we fall back to immediate `Stop` rather than hanging indefinitely.
 		// The outer host (TS signal handler / Rust binary) is the backstop.
-		match timeout(SHUTDOWN_DRAIN_TIMEOUT, handle.shutdown_and_wait(false)).await {
+		match timeout(
+			Duration::from_millis(SHUTDOWN_DRAIN_TIMEOUT as u64),
+			handle.shutdown_and_wait(false),
+		)
+		.await
+		{
 			Ok(()) => {}
 			Err(_) => {
 				tracing::warn!("envoy shutdown drain exceeded timeout; forcing immediate stop");
@@ -718,11 +725,8 @@ impl RegistryDispatcher {
 
 		let (start_tx, start_rx) = oneshot::channel();
 		let result: Result<Arc<ActorTaskHandle>> = async {
-			try_send_lifecycle_command(
-				&lifecycle_tx,
-				LifecycleCommand::Start { reply: start_tx },
-			)
-			.context("send actor task start command")?;
+			try_send_lifecycle_command(&lifecycle_tx, LifecycleCommand::Start { reply: start_tx })
+				.context("send actor task start command")?;
 			start_rx
 				.await
 				.context("receive actor task start reply")?

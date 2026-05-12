@@ -159,7 +159,7 @@ pub struct Pegboard {
 
 impl Pegboard {
 	pub fn base_retry_timeout(&self) -> usize {
-		self.base_retry_timeout.unwrap_or(2000)
+		self.base_retry_timeout.unwrap_or(2_000)
 	}
 
 	pub fn actor_allocation_threshold(&self) -> i64 {
@@ -177,7 +177,7 @@ impl Pegboard {
 	}
 
 	pub fn actor_retry_duration_threshold(&self) -> i64 {
-		self.actor_retry_duration_threshold.unwrap_or(300_000)
+		self.actor_retry_duration_threshold.unwrap_or(5 * 60 * 1000)
 	}
 
 	pub fn retry_reset_duration(&self) -> i64 {
@@ -202,7 +202,7 @@ impl Pegboard {
 	}
 
 	pub fn serverless_base_retry_timeout(&self) -> usize {
-		self.serverless_base_retry_timeout.unwrap_or(2000)
+		self.serverless_base_retry_timeout.unwrap_or(2_000)
 	}
 
 	pub fn serverless_retry_reset_duration(&self) -> i64 {
@@ -237,7 +237,7 @@ impl Pegboard {
 
 	pub fn gateway_response_start_timeout_ms(&self) -> u64 {
 		self.gateway_response_start_timeout_ms
-			.unwrap_or(5 * 60 * 1000) // 5 minutes
+			.unwrap_or(5 * 60 * 1000)
 	}
 
 	pub fn gateway_update_ping_interval_ms(&self) -> u64 {
