@@ -43,7 +43,7 @@ export GW="https://api.rivet.dev/gateway"
 curl -s -X PUT "https://api.rivet.dev/actors?namespace=${RIVET_NS}" \
   -H "Authorization: Bearer ${RIVET_TOKEN}" \
   -H 'Content-Type: application/json' \
-  -d '{"name":"<actorName>","key":"<key>","runner_name_selector":"default","crash_policy":"sleep"}'
+  -d '{"name":"<actorName>","key":"<key>","runner_name_selector":"k8s","crash_policy":"sleep"}'
 ```
 
 This returns `{"actor":{"actor_id":"<ACTOR_ID>", ...}, "created": true/false}`.
