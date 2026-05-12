@@ -314,7 +314,7 @@ export declare class CoreRegistry {
    * Idempotent. Safe to call when neither mode has been activated.
    * Does not block on the `serve()` future; TS awaits that promise
    * separately to avoid re-entrancy.
-  */
+   */
   shutdown(): Promise<void>
   health(): Promise<JsRegistryRouteResponse>
   metadata(): JsRegistryRouteResponse
