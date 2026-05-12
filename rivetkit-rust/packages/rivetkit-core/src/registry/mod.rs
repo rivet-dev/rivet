@@ -528,7 +528,7 @@ impl CoreRegistry {
 		// TODO: Move into envoy-client since timing out has to do with protocol compliance
 		// Read threshold from protocol metadata, fall back to 30 min
 		let stop_threshold = handle
-			.get_protocol_metadata
+			.get_protocol_metadata()
 			.await
 			.map(|x| x.actor_stop_threshold)
 			.unwrap_or(30 * 60 * 1000);
@@ -536,7 +536,7 @@ impl CoreRegistry {
 		// we fall back to immediate `Stop` rather than hanging indefinitely.
 		// The outer host (TS signal handler / Rust binary) is the backstop.
 		match timeout(
-			Duration::from_millis(SHUTDOWN_DRAIN_TIMEOUT as u64),
+			Duration::from_millis(stop_threshold as u64),
 			handle.shutdown_and_wait(false),
 		)
 		.await
