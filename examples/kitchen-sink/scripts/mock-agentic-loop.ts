@@ -38,7 +38,7 @@ const NAMESPACE =
 const TOKEN =
 	process.env.MOCK_AGENTIC_TOKEN ?? process.env.RIVET_TOKEN ?? "dev";
 const POOL_NAME =
-	process.env.MOCK_AGENTIC_POOL ?? process.env.RIVET_POOL ?? "default";
+	process.env.MOCK_AGENTIC_POOL ?? process.env.RIVET_POOL ?? "k8s";
 const KEY_PREFIX = process.env.MOCK_AGENTIC_KEY_PREFIX ?? "mock-agentic-loop";
 const DURATION_MS = numberFromEnv("MOCK_AGENTIC_DURATION_MS", 180_000);
 const INFERENCE_MIN_SECONDS = numberFromEnv(
