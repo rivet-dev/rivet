@@ -1,4 +1,5 @@
 import { setup } from "rivetkit";
+import { resolveMode } from "./mode.ts";
 // Counter
 import { counter } from "./actors/counter/counter.ts";
 import { counterConn } from "./actors/counter/counter-conn.ts";
@@ -142,14 +143,16 @@ function numberFromEnv(name: string, fallback: number): number {
 }
 
 function serverlessPoolConfig() {
+	// Only the local serverless mode self-registers its pool with the engine.
+	// In the deployed `serverless` mode the pool is configured externally on
+	// the engine cluster, and the `serverful` mode uses a long-lived runner
+	// connection rather than a serverless pool.
+	if (resolveMode() !== "serverless-local") return undefined;
+
 	const url =
 		process.env.RIVET_SERVERLESS_URL ??
 		process.env.KITCHEN_SINK_SERVERLESS_URL ??
-		(process.env.RIVET_RUN_ENGINE === "1"
-			? "http://127.0.0.1:3000/api/rivet"
-			: undefined);
-
-	if (!url) return undefined;
+		"http://127.0.0.1:3000/api/rivet";
 
 	return {
 		name: process.env.RIVET_POOL,
