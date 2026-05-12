@@ -13,6 +13,22 @@ import type { RuntimeServerlessResponseHead } from "./runtime";
 
 type ShutdownSignal = "SIGINT" | "SIGTERM";
 
+function signalExitCode(signal: ShutdownSignal): number {
+	switch (signal) {
+		case "SIGINT":
+			return 130;
+		case "SIGTERM":
+			return 143;
+	}
+}
+
+function finishShutdownSignal(signal: ShutdownSignal): void {
+	if (process.pid === 1) {
+		process.exit(signalExitCode(signal));
+	}
+	process.kill(process.pid, signal);
+}
+
 export type FetchHandler = (
 	request: Request,
 	...args: any
@@ -452,10 +468,11 @@ export class Registry<A extends RegistryActors> {
 	): void {
 		if (this.#shutdownInFlight !== null) {
 			// Second delivery of the same (or another) shutdown signal.
-			// Remove our handler only (preserving any user-installed listeners)
-			// and re-raise so Node proceeds with its default exit path.
+			// Remove our handler only, preserving any user-installed listeners.
+			// PID 1 must exit directly because re-raised default signals can be
+			// swallowed by the container signal path.
 			this.#removeSignalHandlers();
-			process.kill(process.pid, signal);
+			finishShutdownSignal(signal);
 			return;
 		}
 		this.#shutdownInFlight = this.#runShutdown(
@@ -530,7 +547,7 @@ export class Registry<A extends RegistryActors> {
 			),
 		]);
 		this.#removeSignalHandlers();
-		process.kill(process.pid, signal);
+		finishShutdownSignal(signal);
 	}
 
 	#removeSignalHandlers(): void {
