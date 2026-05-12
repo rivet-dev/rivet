@@ -82,6 +82,37 @@ pub struct CoreRegistry {
 }
 
 #[derive(Clone)]
+pub struct CoreEnvoyHandle {
+	handle: EnvoyHandle,
+}
+
+#[derive(Clone, Debug)]
+pub struct CoreEnvoyStatus {
+	pub active_actor_count: usize,
+	pub ping_healthy: bool,
+}
+
+impl CoreEnvoyHandle {
+	pub(crate) fn new(handle: EnvoyHandle) -> Self {
+		Self { handle }
+	}
+
+	pub fn status(&self) -> CoreEnvoyStatus {
+		CoreEnvoyStatus {
+			active_actor_count: self.handle.active_actor_count(),
+			ping_healthy: self.handle.is_ping_healthy(),
+		}
+	}
+
+	pub async fn actor_stop_threshold_ms(&self) -> Option<i64> {
+		self.handle
+			.get_protocol_metadata()
+			.await
+			.map(|metadata| metadata.actor_stop_threshold)
+	}
+}
+
+#[derive(Clone)]
 struct ActorTaskHandle {
 	actor_id: String,
 	actor_name: String,

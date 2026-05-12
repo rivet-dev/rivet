@@ -241,6 +241,30 @@ impl CoreRegistry {
 		Ok(())
 	}
 
+	#[napi(js_name = "actorStopThresholdMs")]
+	pub async fn actor_stop_threshold_ms(&self) -> napi::Result<Option<i64>> {
+		let (active_envoy, serverless_runtime) = {
+			let guard = self.state.lock().await;
+			match &*guard {
+				RegistryState::Serving => (self.serving_envoy.lock().clone(), None),
+				RegistryState::Serverless(runtime) => (None, Some(runtime.clone())),
+				RegistryState::Registering(_)
+				| RegistryState::BuildingServerless
+				| RegistryState::ShuttingDown
+				| RegistryState::ShutDown => (None, None),
+			}
+		};
+
+		if let Some(runtime) = serverless_runtime {
+			return Ok(runtime.active_envoy_actor_stop_threshold_ms().await);
+		}
+
+		match active_envoy {
+			Some(envoy) => Ok(envoy.actor_stop_threshold_ms().await),
+			None => Ok(None),
+		}
+	}
+
 	#[napi]
 	pub async fn diagnostics(&self) -> napi::Result<JsRegistryDiagnostics> {
 		let guard = self.state.lock().await;

@@ -316,6 +316,10 @@ export declare class CoreRegistry {
    */
   shutdown(): Promise<void>
   diagnostics(): Promise<JsRegistryDiagnostics>
+  actorStopThresholdMs(): Promise<number | undefined | null>
+  health(): Promise<JsRegistryRouteResponse>
+  metadata(): JsRegistryRouteResponse
+  metrics(): JsRegistryRouteResponse
   handleServerlessRequest(req: JsServerlessRequest, onStreamEvent: (...args: any[]) => any, cancelToken: CancellationToken, config: JsServeConfig): Promise<JsServerlessResponseHead>
 }
 export declare class Schedule {
