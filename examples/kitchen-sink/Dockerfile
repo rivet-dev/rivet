@@ -4,6 +4,7 @@ WORKDIR /app
 ENV NODE_OPTIONS=--max-old-space-size=7168
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json tsconfig.base.json tsup.base.ts ./
+COPY patches/ ./patches/
 COPY examples/kitchen-sink/ ./examples/kitchen-sink/
 COPY rivetkit-typescript/packages/ ./rivetkit-typescript/packages/
 COPY engine/sdks/typescript/ ./engine/sdks/typescript/
