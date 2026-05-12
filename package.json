@@ -54,7 +54,8 @@
 			"@codemirror/view": "6.38.2",
 			"@codemirror/autocomplete": "6.18.7",
 			"@codemirror/commands": "6.8.1",
-			"@codemirror/lint": "6.8.5"
+			"@codemirror/lint": "6.8.5",
+			"wasm-pack": "=0.13.1"
 		}
 	}
 }
