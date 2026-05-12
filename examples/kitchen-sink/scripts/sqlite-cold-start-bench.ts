@@ -452,7 +452,7 @@ async function configureLocalRunner(endpoint: string): Promise<void> {
 	const datacenter = datacentersBody.datacenters[0]?.name;
 	if (!datacenter) throw new Error("local engine returned no datacenters");
 
-	const response = await fetch(`${base}/runner-configs/default?namespace=default`, {
+	const response = await fetch(`${base}/runner-configs/k8s?namespace=default`, {
 		method: "PUT",
 		headers: {
 			Authorization: "Bearer dev",
@@ -468,7 +468,7 @@ async function configureLocalRunner(endpoint: string): Promise<void> {
 	});
 	if (!response.ok) {
 		throw new Error(
-			`failed to configure local default runner: ${response.status} ${await response.text()}`,
+			`failed to configure local k8s runner: ${response.status} ${await response.text()}`,
 		);
 	}
 }
@@ -478,7 +478,7 @@ async function waitForEnvoy(endpoint: string): Promise<void> {
 	const deadline = Date.now() + 15_000;
 
 	while (Date.now() < deadline) {
-		const response = await fetch(`${base}/envoys?namespace=default&name=default`, {
+		const response = await fetch(`${base}/envoys?namespace=default&name=k8s`, {
 			headers: { Authorization: "Bearer dev" },
 		});
 		if (response.ok) {
