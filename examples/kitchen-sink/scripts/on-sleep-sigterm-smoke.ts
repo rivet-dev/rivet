@@ -13,6 +13,7 @@
 //   --endpoint http://127.0.0.1:6420
 //   --namespace default
 //   --pool sigterm-sleep-test
+//   --reconnect-open-delay-ms 0
 
 import {
 	spawn,
@@ -100,12 +101,17 @@ const WS_MESSAGE_TIMEOUT_MS = numberFromConfig(
 const RECONNECT_MESSAGE_TIMEOUT_MS = numberFromConfig(
 	"reconnect-message-timeout-ms",
 	"SIGTERM_SLEEP_RECONNECT_MESSAGE_TIMEOUT_MS",
-	250,
+	5_000,
 );
 const RECONNECT_TIMEOUT_MS = numberFromConfig(
 	"reconnect-timeout-ms",
 	"SIGTERM_SLEEP_RECONNECT_TIMEOUT_MS",
 	5_000,
+);
+const RECONNECT_OPEN_DELAY_MS = numberFromConfig(
+	"reconnect-open-delay-ms",
+	"SIGTERM_SLEEP_RECONNECT_OPEN_DELAY_MS",
+	0,
 );
 const CLOSE_REASON = "actor stopped";
 const CLOSE_CODE = 1000;
@@ -343,13 +349,21 @@ function buildEnvoysUrl(): string {
 	return url.toString();
 }
 
-function buildWebSocketUrl(actorId: string): string {
-	const tokenSegment = TOKEN ? `@${encodeURIComponent(TOKEN)}` : "";
+function buildWebSocketUrl(_actorId: string): string {
 	const url = appendPath(
 		ENDPOINT,
-		`/gateway/${encodeURIComponent(actorId)}${tokenSegment}/websocket`,
+		`/gateway/sigtermSleepProbe/websocket`,
 	);
 	url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+	url.searchParams.set("rvt-namespace", NAMESPACE);
+	url.searchParams.set("rvt-method", "getOrCreate");
+	url.searchParams.set("rvt-runner", POOL_NAME);
+	url.searchParams.set("rvt-key", KEY);
+	url.searchParams.set("rvt-crash-policy", "sleep");
+	url.searchParams.set("rvt-skip-ready-wait", "true");
+	if (TOKEN) {
+		url.searchParams.set("rvt-token", TOKEN);
+	}
 	return url.toString();
 }
 
@@ -639,6 +653,10 @@ async function connectAndPingPong(
 			messageTimeoutMs,
 			`${label} pong`,
 		);
+		ws.addEventListener("message", (event) => {
+			const data = typeof event.data === "string" ? event.data : String(event.data);
+			console.log(`[ws:message] ${label} ${data}`);
+		});
 		console.log(`[ws] ${label} ping pong ok`);
 		return ws;
 	} catch (error) {
@@ -654,8 +672,12 @@ async function reconnectAndPingPong(
 	timeoutMs: number,
 ): Promise<WebSocket> {
 	console.log(
-		`[ws] reconnect strict timeoutMs=${timeoutMs} messageTimeoutMs=${RECONNECT_MESSAGE_TIMEOUT_MS}`,
+		`[ws] reconnect strict timeoutMs=${timeoutMs} messageTimeoutMs=${RECONNECT_MESSAGE_TIMEOUT_MS} openDelayMs=${RECONNECT_OPEN_DELAY_MS}`,
 	);
+	if (RECONNECT_OPEN_DELAY_MS > 0) {
+		console.log(`[ws] reconnect waiting before open delayMs=${RECONNECT_OPEN_DELAY_MS}`);
+		await sleep(RECONNECT_OPEN_DELAY_MS);
+	}
 	return await connectAndPingPong(
 		actorId,
 		"reconnect",
@@ -754,9 +776,12 @@ async function main(): Promise<void> {
 	if (ON_SLEEP_TICK_MS <= 0) {
 		throw new Error("SIGTERM_SLEEP_ON_SLEEP_TICK_MS must be positive");
 	}
+	if (RECONNECT_OPEN_DELAY_MS < 0) {
+		throw new Error("SIGTERM_SLEEP_RECONNECT_OPEN_DELAY_MS must be non-negative");
+	}
 
 	console.log(
-		`[test] endpoint=${ENDPOINT} namespace=${NAMESPACE} pool=${POOL_NAME} key=${KEY} durationMs=${ON_SLEEP_DURATION_MS} tickMs=${ON_SLEEP_TICK_MS}`,
+		`[test] endpoint=${ENDPOINT} namespace=${NAMESPACE} pool=${POOL_NAME} key=${KEY} durationMs=${ON_SLEEP_DURATION_MS} tickMs=${ON_SLEEP_TICK_MS} reconnectOpenDelayMs=${RECONNECT_OPEN_DELAY_MS}`,
 	);
 
 	let runner1: ChildProcessWithoutNullStreams | undefined;
