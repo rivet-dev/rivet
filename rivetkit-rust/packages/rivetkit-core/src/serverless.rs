@@ -231,6 +231,11 @@ impl CoreServerlessRuntime {
 		CoreEnvoyHandle::new(handle).actor_stop_threshold_ms().await
 	}
 
+	pub async fn active_envoy_status(&self) -> Option<CoreEnvoyStatus> {
+		let handle = self.envoy.lock().await.as_ref().cloned()?;
+		Some(CoreEnvoyHandle::new(handle).status())
+	}
+
 	pub async fn handle_request(&self, req: ServerlessRequest) -> ServerlessResponse {
 		let cors = cors_headers(&req);
 		match self.handle_request_inner(req).await {
