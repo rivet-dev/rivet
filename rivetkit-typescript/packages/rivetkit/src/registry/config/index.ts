@@ -267,7 +267,7 @@ export const RegistryConfigSchema = z
 				 * after calling `CoreRegistry::shutdown()`. Defaults to 30s,
 				 * matching Kubernetes `terminationGracePeriodSeconds`.
 				 *
-				 * Must be >= rivetkit-core's drain timeout (20s) + margin.
+				 * Must be long enough for rivetkit-core to drain the envoy.
 				 */
 				gracePeriodMs: z
 					.number()
