@@ -146,6 +146,19 @@ export const sigtermSleepProbe = actor({
 		});
 
 		try {
+			for (const websocket of c.vars.websockets) {
+				if (websocket.readyState !== 1) continue;
+				websocket.send(
+					JSON.stringify({
+						type: "onSleepStarted",
+						sleepCount,
+						onSleepDurationMs: c.state.onSleepDurationMs,
+						onSleepTickMs: c.state.onSleepTickMs,
+						timestamp: startedAt,
+					}),
+				);
+			}
+
 			await c.db.execute(
 				"INSERT INTO sigterm_sleep_log (event, sleep_count, detail, created_at) VALUES (?, ?, ?, ?)",
 				"on-sleep-start",
