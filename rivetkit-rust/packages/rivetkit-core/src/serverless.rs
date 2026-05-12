@@ -21,8 +21,9 @@ use url::Url;
 use crate::actor::factory::ActorFactory;
 #[cfg(feature = "native-runtime")]
 use crate::engine_process::EngineProcessManager;
-use crate::registry::{CoreEnvoyHandle, CoreEnvoyStatus};
-use crate::registry::{RegistryCallbacks, RegistryDispatcher, ServeConfig};
+use crate::registry::{
+	CoreEnvoyHandle, CoreEnvoyStatus, RegistryCallbacks, RegistryDispatcher, ServeConfig,
+};
 use crate::runtime::RuntimeSpawner;
 use crate::time::{sleep, timeout};
 
@@ -229,6 +230,11 @@ impl CoreServerlessRuntime {
 			.await
 			.as_ref()
 			.map(|handle| CoreEnvoyHandle::new(handle.clone()).status())
+	}
+
+	pub async fn active_envoy_actor_stop_threshold_ms(&self) -> Option<i64> {
+		let handle = self.envoy.lock().await.as_ref().cloned()?;
+		CoreEnvoyHandle::new(handle).actor_stop_threshold_ms().await
 	}
 
 	pub async fn handle_request(&self, req: ServerlessRequest) -> ServerlessResponse {

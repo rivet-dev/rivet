@@ -101,6 +101,13 @@ impl CoreEnvoyHandle {
 			ping_healthy: self.handle.is_ping_healthy(),
 		}
 	}
+
+	pub async fn actor_stop_threshold_ms(&self) -> Option<i64> {
+		self.handle
+			.get_protocol_metadata()
+			.await
+			.map(|metadata| metadata.actor_stop_threshold)
+	}
 }
 
 #[derive(Clone)]
