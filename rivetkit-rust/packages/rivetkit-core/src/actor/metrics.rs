@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 use std::fmt;
 use std::sync::{Arc, LazyLock};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use parking_lot::Mutex;
@@ -34,6 +35,7 @@ pub(crate) struct ActorMetrics {
 struct ActorMetricInner {
 	labels: ActorMetricLabels,
 	state: Mutex<ActorMetricState>,
+	active: AtomicBool,
 }
 
 #[derive(Debug)]
@@ -643,6 +645,7 @@ impl ActorMetrics {
 			inner: Arc::new(ActorMetricInner {
 				labels,
 				state: Mutex::new(ActorMetricState::default()),
+				active: AtomicBool::new(true),
 			}),
 		}
 	}
@@ -850,10 +853,24 @@ impl ActorMetrics {
 			.with_label_values(&[labels[0], subsystem, operation])
 			.inc();
 	}
+
+	pub(crate) fn record_actor_stopped(&self) {
+		self.inner.record_actor_stopped();
+	}
 }
 
 impl Drop for ActorMetricInner {
 	fn drop(&mut self) {
+		self.record_actor_stopped();
+	}
+}
+
+impl ActorMetricInner {
+	fn record_actor_stopped(&self) {
+		if !self.active.swap(false, Ordering::AcqRel) {
+			return;
+		}
+
 		self.clear_aggregated_gauges();
 		let metrics = &*METRICS;
 		metrics
@@ -865,9 +882,7 @@ impl Drop for ActorMetricInner {
 			.with_label_values(&self.labels.as_label_values())
 			.inc();
 	}
-}
 
-impl ActorMetricInner {
 	fn clear_aggregated_gauges(&self) {
 		let labels = self.labels.as_label_values();
 		let mut state = self.state.lock();
