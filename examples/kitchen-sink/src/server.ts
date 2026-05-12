@@ -1,4 +1,5 @@
 import { registry } from "./index.ts";
+import { resolveMode } from "./mode.ts";
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import type { Server as HttpServer } from "node:http";
@@ -6,10 +7,7 @@ import * as v8 from "node:v8";
 
 const app = new Hono();
 const port = Number.parseInt(process.env.PORT ?? "3000", 10);
-const serverlessMode =
-	process.env.RIVET_RUN_ENGINE === "1" ||
-	process.env.RIVET_SERVERLESS_URL !== undefined ||
-	process.env.KITCHEN_SINK_SERVERLESS_URL !== undefined;
+const mode = resolveMode();
 
 process.on("exit", (code) => {
 	console.log(JSON.stringify({ kind: "process_exit", code, pid: process.pid }));
@@ -150,21 +148,25 @@ app.use("*", async (c, next) => {
 	// );
 });
 
-if (serverlessMode) {
+// Only wire the serverless handler in serverless modes. In `serverful` mode
+// the runner connects via `registry.start()` and any stray hit on
+// `/api/rivet/start` would spin up a second envoy alongside the persistent
+// one.
+if (mode === "serverful") {
+	registry.start();
+} else {
 	app.all("/api/rivet/*", (c) => registry.handler(c.req.raw));
 	app.all("/api/rivet", (c) => registry.handler(c.req.raw));
-} else {
-	registry.start();
 }
 
 const server = serve({ fetch: app.fetch, port }, () => {
-	if (serverlessMode) {
+	if (mode === "serverful") {
 		console.log(
-			`serverless RivetKit listening on http://127.0.0.1:${port}/api/rivet`,
+			`kitchen sink (serverful) listening on http://127.0.0.1:${port}`,
 		);
 	} else {
 		console.log(
-			`kitchen sink diagnostics listening on http://127.0.0.1:${port}`,
+			`kitchen sink (${mode}) listening on http://127.0.0.1:${port}/api/rivet`,
 		);
 	}
 });
