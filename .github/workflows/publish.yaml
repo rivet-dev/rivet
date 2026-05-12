@@ -374,7 +374,6 @@ jobs:
           test -f rivetkit-typescript/packages/rivetkit-wasm/pkg/rivetkit_wasm.js
           test -f rivetkit-typescript/packages/rivetkit-wasm/pkg/rivetkit_wasm.d.ts
           test -f rivetkit-typescript/packages/rivetkit-wasm/pkg/rivetkit_wasm_bg.wasm
-
       - name: Place native binaries in platform packages
         run: |
           NATIVE_DIR=rivetkit-typescript/packages/rivetkit-napi
