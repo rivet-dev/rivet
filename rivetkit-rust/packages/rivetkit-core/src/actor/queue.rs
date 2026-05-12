@@ -274,6 +274,12 @@ impl ActorContext {
 		self.clear_preloaded_messages();
 
 		let config = self.config();
+		tracing::warn!(
+			name,
+			body_len = body.len(),
+			max_queue_size = config.max_queue_size,
+			"DEBUG_QUEUE enqueue_message: config"
+		);
 		if encoded_message.len() > config.max_queue_message_size as usize {
 			return Err(QueueMessageTooLarge {
 				size: encoded_message.len(),
@@ -283,6 +289,12 @@ impl ActorContext {
 		}
 
 		let mut metadata = self.0.queue_metadata.lock().await;
+		tracing::warn!(
+			metadata_size = metadata.size,
+			max_queue_size = config.max_queue_size,
+			will_reject = metadata.size >= config.max_queue_size,
+			"DEBUG_QUEUE enqueue_message: pre-enqueue check"
+		);
 		if metadata.size >= config.max_queue_size {
 			return Err(QueueFull {
 				limit: config.max_queue_size,
@@ -374,17 +386,30 @@ impl ActorContext {
 		let deadline = opts.timeout.map(|timeout| Instant::now() + timeout);
 		let names = normalize_names(opts.names);
 
+		tracing::warn!(
+			count,
+			timeout_ms = opts.timeout.map(|t| t.as_millis() as u64),
+			?names,
+			completable = opts.completable,
+			"DEBUG_QUEUE next_batch: enter"
+		);
+
 		loop {
 			let messages = self
 				.try_receive_batch(names.as_ref(), count, opts.completable)
 				.await?;
 			if !messages.is_empty() {
+				tracing::warn!(
+					received = messages.len(),
+					"DEBUG_QUEUE next_batch: returning messages"
+				);
 				return Ok(messages);
 			}
 
 			let remaining_timeout =
 				deadline.map(|deadline| deadline.saturating_duration_since(Instant::now()));
 			if matches!(remaining_timeout, Some(timeout) if timeout.is_zero()) {
+				tracing::warn!("DEBUG_QUEUE next_batch: returning empty, timeout zero");
 				return Ok(Vec::new());
 			}
 
@@ -560,6 +585,7 @@ impl ActorContext {
 			.queue_initialize
 			.get_or_try_init(|| async {
 				let preload = self.0.queue_preloaded_kv.lock().take();
+				let has_preload = preload.is_some();
 				let metadata = if let Some(preloaded) = preload.as_ref() {
 					self.configure_preloaded_messages(preloaded);
 					if let Some(metadata) = self.load_metadata_from_preload(preloaded).await? {
@@ -570,6 +596,12 @@ impl ActorContext {
 				} else {
 					self.load_or_create_metadata().await?
 				};
+				tracing::warn!(
+					has_preload,
+					size = metadata.size,
+					next_id = metadata.next_id,
+					"DEBUG_QUEUE ensure_initialized"
+				);
 				let mut state = self.0.queue_metadata.lock().await;
 				*state = metadata;
 				self.0.metrics.set_queue_depth(state.size);
@@ -667,6 +699,15 @@ impl ActorContext {
 		let _receive_guard = self.0.queue_receive_lock.lock().await;
 
 		let messages = self.list_messages().await?;
+		tracing::warn!(
+			kv_message_count = messages.len(),
+			?names,
+			count,
+			completable,
+			message_names = ?messages.iter().map(|m| &m.name).collect::<Vec<_>>(),
+			message_ids = ?messages.iter().map(|m| m.id).collect::<Vec<_>>(),
+			"DEBUG_QUEUE try_receive_batch: listed messages"
+		);
 		let mut selected = Vec::new();
 		for message in messages {
 			if let Some(names) = names
@@ -726,10 +767,15 @@ impl ActorContext {
 
 	async fn list_message_entries(&self) -> Result<Vec<(Vec<u8>, Vec<u8>)>> {
 		if let Some(entries) = self.0.queue_preloaded_message_entries.lock().take() {
+			tracing::warn!(
+				entry_count = entries.len(),
+				"DEBUG_QUEUE list_message_entries: using preloaded"
+			);
 			return Ok(entries);
 		}
 
-		self.0
+		let entries = self
+			.0
 			.kv
 			.list_prefix(
 				&QUEUE_MESSAGES_PREFIX,
@@ -739,7 +785,12 @@ impl ActorContext {
 				},
 			)
 			.await
-			.context("list queue messages")
+			.context("list queue messages")?;
+		tracing::warn!(
+			entry_count = entries.len(),
+			"DEBUG_QUEUE list_message_entries: read from kv"
+		);
+		Ok(entries)
 	}
 
 	fn clear_preloaded_messages(&self) {

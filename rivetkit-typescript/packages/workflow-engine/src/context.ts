@@ -1648,6 +1648,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 
 		if (existingCount && existingCount.kind.type === "message") {
 			const replayCount = existingCount.kind.data.data as number;
+			this.log("debug", { msg: "DEBUG_QUEUE executeQueueNextBatch: replaying from history", name, replayCount, completable });
 			return await this.readReplayQueueMessages<T>(
 				name,
 				replayCount,
@@ -1657,6 +1658,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 
 		const now = Date.now();
 		if (deadline !== undefined && now >= deadline) {
+			this.log("debug", { msg: "DEBUG_QUEUE executeQueueNextBatch: deadline already passed", name, deadline, now });
 			if (deadlineEntry && deadlineEntry.kind.type === "sleep") {
 				deadlineEntry.kind.data.state = "completed";
 				deadlineEntry.dirty = true;
@@ -1669,11 +1671,13 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 			return [];
 		}
 
+		this.log("debug", { msg: "DEBUG_QUEUE executeQueueNextBatch: calling receiveMessagesNow", name, messageNames, count, completable });
 		const received = await this.receiveMessagesNow(
 			messageNames,
 			count,
 			completable,
 		);
+		this.log("debug", { msg: "DEBUG_QUEUE executeQueueNextBatch: receiveMessagesNow returned", name, receivedCount: received.length, receivedNames: received.map(m => m.name) });
 		if (received.length > 0) {
 			const historyMessages = received.map((message) =>
 				this.toWorkflowQueueMessage<T>(message),
@@ -1701,8 +1705,10 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 		}
 
 		if (deadline === undefined) {
+			this.log("debug", { msg: "DEBUG_QUEUE executeQueueNextBatch: no messages and no deadline, throwing MessageWaitError", name, messageNames });
 			throw new MessageWaitError(messageNames);
 		}
+		this.log("debug", { msg: "DEBUG_QUEUE executeQueueNextBatch: no messages, throwing SleepError", name, messageNames, deadline });
 		throw new SleepError(deadline, messageNames);
 	}
 

@@ -3069,12 +3069,14 @@ class NativeWorkflowRuntimeAdapter {
 				_abortSignal,
 				completable,
 			) => {
+				logger().debug({ msg: "DEBUG_QUEUE native receive: calling nextBatch", names, count, timeout, completable, effectiveTimeout: timeout ?? 0 });
 				const messages = await this.#ctx.queue.nextBatch({
 					names,
 					count,
 					timeout: timeout ?? 0,
 					completable,
 				});
+				logger().debug({ msg: "DEBUG_QUEUE native receive: nextBatch returned", messageCount: messages.length });
 				return messages.map((message) =>
 					this.#wrapQueueMessage(message),
 				);
