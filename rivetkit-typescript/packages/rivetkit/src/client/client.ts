@@ -10,6 +10,7 @@ import {
 	CONNECT_SYMBOL,
 } from "./actor-conn";
 import { type ActorHandle, ActorHandleRaw } from "./actor-handle";
+import { DEFAULT_MAX_CONNECTION_REQUEST_SIZE } from "./config";
 import { logger } from "./log";
 import { resolveGatewayTarget } from "./resolve-gateway-target";
 
@@ -179,6 +180,7 @@ export class ClientRaw {
 	#driver: EngineControlClient;
 	#encodingKind: Encoding;
 	#gatewayOptions: ActorGatewayOptions;
+	#maxConnectionRequestSize: number;
 
 	/**
 	 * Creates an instance of Client.
@@ -187,11 +189,13 @@ export class ClientRaw {
 		driver: EngineControlClient,
 		encoding: Encoding | undefined,
 		gatewayOptions: ActorGatewayOptions = {},
+		maxConnectionRequestSize = DEFAULT_MAX_CONNECTION_REQUEST_SIZE,
 	) {
 		this.#driver = driver;
 
 		this.#encodingKind = encoding ?? "bare";
 		this.#gatewayOptions = gatewayOptions;
+		this.#maxConnectionRequestSize = maxConnectionRequestSize;
 	}
 
 	/**
@@ -386,6 +390,7 @@ export class ClientRaw {
 			this.#encodingKind,
 			actorQuery,
 			this.#gatewayOptions,
+			this.#maxConnectionRequestSize,
 		);
 	}
 
@@ -442,9 +447,18 @@ export type AnyClient = Client<Registry<any>>;
 
 export function createClientWithDriver<A extends Registry<any>>(
 	driver: EngineControlClient,
-	config: { encoding?: Encoding; gateway?: ActorGatewayOptions } = {},
+	config: {
+		encoding?: Encoding;
+		gateway?: ActorGatewayOptions;
+		maxConnectionRequestSize?: number;
+	} = {},
 ): Client<A> {
-	const client = new ClientRaw(driver, config.encoding, config.gateway);
+	const client = new ClientRaw(
+		driver,
+		config.encoding,
+		config.gateway,
+		config.maxConnectionRequestSize,
+	);
 
 	// Create proxy for accessing actors by name
 	return new Proxy(client, {

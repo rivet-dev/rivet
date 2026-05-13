@@ -46,6 +46,7 @@ import {
 	isStaleResolvedActorError,
 } from "./actor-query";
 import { ACTOR_CONNS_SYMBOL, type ClientRaw } from "./client";
+import { DEFAULT_MAX_CONNECTION_REQUEST_SIZE } from "./config";
 import * as errors from "./errors";
 import { isRetryableLifecycleReconnectSignal } from "./lifecycle-errors";
 import { logger } from "./log";
@@ -92,8 +93,6 @@ interface EventSubscriptions<Args extends Array<unknown>> {
 	callback: (...args: Args) => void;
 	once: boolean;
 }
-
-const DEFAULT_MAX_INCOMING_MESSAGE_SIZE = 65_536;
 
 /**
  * A function that unsubscribes from an event.
@@ -190,6 +189,7 @@ export class ActorConnRaw {
 	#encoding: Encoding;
 	#actorResolutionState: ActorResolutionState;
 	#gatewayOptions: ResolvedActorGatewayOptions;
+	#maxConnectionRequestSize: number;
 
 	// TODO: ws message queue
 
@@ -208,6 +208,7 @@ export class ActorConnRaw {
 		encoding: Encoding,
 		actorResolutionState: ActorResolutionState,
 		gatewayOptions: ActorGatewayOptions = {},
+		maxConnectionRequestSize = DEFAULT_MAX_CONNECTION_REQUEST_SIZE,
 	) {
 		this.#client = client;
 		this.#driver = driver;
@@ -216,6 +217,7 @@ export class ActorConnRaw {
 		this.#encoding = encoding;
 		this.#actorResolutionState = actorResolutionState;
 		this.#gatewayOptions = resolveActorGatewayOptions(gatewayOptions);
+		this.#maxConnectionRequestSize = maxConnectionRequestSize;
 		this.#readyPromise = promiseWithResolvers((reason) =>
 			logger().warn({
 				msg: "unhandled ready promise rejection",
@@ -1282,7 +1284,7 @@ export class ActorConnRaw {
 					);
 					const serializedLength = messageLength(messageSerialized);
 					if (
-						serializedLength > DEFAULT_MAX_INCOMING_MESSAGE_SIZE &&
+						serializedLength > this.#maxConnectionRequestSize &&
 						message.body.tag === "ActionRequest"
 					) {
 						const actionId = Number(message.body.val.id);
@@ -1292,7 +1294,7 @@ export class ActorConnRaw {
 							"incoming_too_long",
 							"Incoming message too long",
 							{
-								maxSize: DEFAULT_MAX_INCOMING_MESSAGE_SIZE,
+								maxSize: this.#maxConnectionRequestSize,
 								actualSize: serializedLength,
 							},
 						);
@@ -1301,7 +1303,7 @@ export class ActorConnRaw {
 							actionId,
 							actionName: inFlight.name,
 							actualSize: serializedLength,
-							maxSize: DEFAULT_MAX_INCOMING_MESSAGE_SIZE,
+							maxSize: this.#maxConnectionRequestSize,
 						});
 						inFlight.reject(error);
 						this.#dispatchActorError(error);

@@ -3268,7 +3268,10 @@ export function buildNativeFactory(
 			new RemoteEngineControlClient(
 				convertRegistryConfigToClientConfig(registryConfig),
 			),
-			{ encoding: "bare" },
+			{
+				encoding: "bare",
+				maxConnectionRequestSize: registryConfig.maxIncomingMessageSize,
+			},
 		);
 	const nativeRunHandlerActiveByActorId = new Map<string, boolean>();
 	const isNativeRunHandlerActive = (ctx: ActorContextHandle) =>

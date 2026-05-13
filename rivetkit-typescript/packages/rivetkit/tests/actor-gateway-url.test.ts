@@ -2,6 +2,7 @@ import * as cbor from "cbor-x";
 import { describe, expect, test } from "vitest";
 import {
 	ClientConfigSchema,
+	DEFAULT_MAX_CONNECTION_REQUEST_SIZE,
 	DEFAULT_MAX_QUERY_INPUT_SIZE,
 } from "@/client/config";
 import {
@@ -18,6 +19,25 @@ describe("gateway URL builders", () => {
 		});
 
 		expect(config.maxInputSize).toBe(DEFAULT_MAX_QUERY_INPUT_SIZE);
+	});
+
+	test("defaults maxConnectionRequestSize to 64 KiB", () => {
+		const config = ClientConfigSchema.parse({
+			endpoint: "https://api.rivet.dev",
+		});
+
+		expect(config.maxConnectionRequestSize).toBe(
+			DEFAULT_MAX_CONNECTION_REQUEST_SIZE,
+		);
+	});
+
+	test("allows larger connection action requests when maxConnectionRequestSize is increased", () => {
+		const config = ClientConfigSchema.parse({
+			endpoint: "https://api.rivet.dev",
+			maxConnectionRequestSize: 128 * 1024,
+		});
+
+		expect(config.maxConnectionRequestSize).toBe(128 * 1024);
 	});
 
 	test("preserves direct actor ID paths", () => {

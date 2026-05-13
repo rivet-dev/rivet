@@ -28,7 +28,7 @@ const rivet = setup({
 
 ### WebSocket
 
-These limits affect actions that use `.connect()` and [low-level WebSockets](/docs/actors/websocket-handler).
+These server-side limits affect actions that use `.connect()` and [low-level WebSockets](/docs/actors/websocket-handler).
 
 | Name | Soft Limit | Hard Limit | Description |
 |------|------------|------------|-------------|
@@ -36,6 +36,12 @@ These limits affect actions that use `.connect()` and [low-level WebSockets](/do
 | Max outgoing message size | 1 MiB | 32 MiB | Maximum size of outgoing WebSocket messages. Soft limit configurable via `maxOutgoingMessageSize`. |
 | WebSocket open timeout | — | 15 seconds | Time allowed for WebSocket connection to be established, including `onBeforeConnect` and `createConnState` hooks. Connection is closed if exceeded. |
 | Message ack timeout | — | 30 seconds | Time allowed for message acknowledgment before connection is closed. Only relevant in the case of a network issue and does not affect your application. |
+
+These client-side limits affect action requests sent through `.connect()`.
+
+| Name | Soft Limit | Hard Limit | Description |
+|------|------------|------------|-------------|
+| Max connection request size | 64 KiB | — | Maximum serialized action request size before the client sends it over a `.connect()` WebSocket. Configurable via `maxConnectionRequestSize` on `createClient`. |
 
 ### Hibernating WebSocket
 

@@ -13,6 +13,7 @@ import {
 
 const DEFAULT_ENDPOINT = "http://localhost:6420";
 export const DEFAULT_MAX_QUERY_INPUT_SIZE = 4 * 1024;
+export const DEFAULT_MAX_CONNECTION_REQUEST_SIZE = 65_536;
 
 let hasWarnedMissingEndpoint = false;
 
@@ -97,6 +98,19 @@ export const ClientConfigSchemaBase = z.object({
 		.positive()
 		.default(DEFAULT_MAX_QUERY_INPUT_SIZE),
 
+	/**
+	 * Maximum serialized connection action request size in bytes.
+	 *
+	 * This is enforced client-side before sending action requests over a
+	 * persistent connection created by `.connect()`. It does not apply to
+	 * stateless action calls or raw HTTP fetch requests.
+	 */
+	maxConnectionRequestSize: z
+		.number()
+		.int()
+		.positive()
+		.default(DEFAULT_MAX_CONNECTION_REQUEST_SIZE),
+
 	/** Whether to enable RivetKit Devtools integration. */
 	devtools: z
 		.boolean()
@@ -160,6 +174,7 @@ export function convertRegistryConfigToClientConfig(
 		// We don't need health checks for internal clients
 		disableMetadataLookup: true,
 		maxInputSize: DEFAULT_MAX_QUERY_INPUT_SIZE,
+		maxConnectionRequestSize: config.maxIncomingMessageSize,
 		devtools:
 			typeof window !== "undefined" &&
 			(window?.location?.hostname === "127.0.0.1" ||

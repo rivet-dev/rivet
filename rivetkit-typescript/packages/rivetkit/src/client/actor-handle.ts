@@ -36,6 +36,7 @@ import type {
 } from "./actor-common";
 import { resolveActorGatewayOptions } from "./actor-common";
 import { type ActorConn, ActorConnRaw } from "./actor-conn";
+import { DEFAULT_MAX_CONNECTION_REQUEST_SIZE } from "./config";
 import {
 	type ActorResolutionState,
 	checkForSchedulingError,
@@ -71,6 +72,7 @@ export class ActorHandleRaw {
 	#encoding: Encoding;
 	#actorResolutionState: ActorResolutionState;
 	#gatewayOptions: ActorGatewayOptions;
+	#maxConnectionRequestSize: number;
 	#params: unknown;
 	#getParams?: () => Promise<unknown>;
 	#resolvedActorId?: string;
@@ -92,12 +94,14 @@ export class ActorHandleRaw {
 		encoding: Encoding,
 		actorResolutionState: ActorResolutionState,
 		gatewayOptions: ActorGatewayOptions = {},
+		maxConnectionRequestSize = DEFAULT_MAX_CONNECTION_REQUEST_SIZE,
 	) {
 		this.#client = client;
 		this.#driver = driver;
 		this.#encoding = encoding;
 		this.#actorResolutionState = actorResolutionState;
 		this.#gatewayOptions = gatewayOptions;
+		this.#maxConnectionRequestSize = maxConnectionRequestSize;
 		this.#params = params;
 		this.#getParams = getParams;
 	}
@@ -602,6 +606,7 @@ export class ActorHandleRaw {
 			this.#encoding,
 			this.#actorResolutionState,
 			resolveActorGatewayOptions(this.#gatewayOptions, options),
+			this.#maxConnectionRequestSize,
 		);
 
 		return this.#client[CREATE_ACTOR_CONN_PROXY](
