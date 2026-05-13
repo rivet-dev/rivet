@@ -6,8 +6,8 @@
     "rivetkit": "workspace:*",
     "@rivetkit/react": "workspace:*",
     "@ai-sdk/openai": "^3.0.30",
-    "ai": "^6.0.92",
-    "hono": "^4.7.0",
+    "ai": "^5.0.52",
+    "hono": "^4.12.18",
     "zod": "^4.1.0",
     "elysia": "^1.2.25",
     "@hono/node-server": "^1.14.1",
@@ -20,6 +20,6 @@
     "@types/node": "^22.13.1",
     "@types/pg": "^8.11.14",
     "@types/react": "^19.1.6",
-    "drizzle-orm": "^0.38.0"
+    "drizzle-orm": "^0.45.2"
   }
 }
