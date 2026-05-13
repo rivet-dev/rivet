@@ -337,6 +337,15 @@ function databaseNotConfiguredError(): RivetError {
 	);
 }
 
+function databaseClientNotReadyError(): RivetError {
+	return new RivetError(
+		"actor",
+		"database_client_not_ready",
+		"actor database client was not initialized before user code ran. this is an internal lifecycle error; the migration callback should have pre-warmed the client. file an issue if you can reproduce.",
+		{ public: true },
+	);
+}
+
 function stateNotEnabledError(): RivetError {
 	return new RivetError(
 		"actor",
@@ -2315,6 +2324,90 @@ class TrackedWebSocketHandleAdapter implements UniversalWebSocket {
 	}
 }
 
+class NativeConnectionMap implements ReadonlyMap<string, NativeConnAdapter> {
+	#runtime: CoreRuntime;
+	#ctx: ActorContextHandle;
+	#schemas: NativeValidationConfig;
+
+	constructor(
+		runtime: CoreRuntime,
+		ctx: ActorContextHandle,
+		schemas: NativeValidationConfig,
+	) {
+		this.#runtime = runtime;
+		this.#ctx = ctx;
+		this.#schemas = schemas;
+	}
+
+	#connToAdapter(conn: ConnHandle): NativeConnAdapter {
+		return new NativeConnAdapter(
+			this.#runtime,
+			conn,
+			this.#schemas,
+			this.#ctx,
+			(connId) =>
+				callNativeSync(() =>
+					this.#runtime.actorQueueHibernationRemoval(
+						this.#ctx,
+						connId,
+					),
+				),
+		);
+	}
+
+	get size(): number {
+		return callNativeSync(() => this.#runtime.actorConns(this.#ctx)).length;
+	}
+
+	get(key: string): NativeConnAdapter | undefined {
+		const conns = callNativeSync(() => this.#runtime.actorConns(this.#ctx));
+		const conn = conns.find(
+			(c) => this.#runtime.connId(c) === key,
+		);
+		if (!conn) return undefined;
+		return this.#connToAdapter(conn);
+	}
+
+	has(key: string): boolean {
+		const conns = callNativeSync(() => this.#runtime.actorConns(this.#ctx));
+		return conns.some((c) => this.#runtime.connId(c) === key);
+	}
+
+	keys(): MapIterator<string> {
+		const conns = callNativeSync(() => this.#runtime.actorConns(this.#ctx));
+		return conns.map((c) => this.#runtime.connId(c))[Symbol.iterator]() satisfies MapIterator<string>;
+	}
+
+	values(): MapIterator<NativeConnAdapter> {
+		const conns = callNativeSync(() => this.#runtime.actorConns(this.#ctx));
+		return conns.map((c) => this.#connToAdapter(c))[Symbol.iterator]() satisfies MapIterator<NativeConnAdapter>;
+	}
+
+	entries(): MapIterator<[string, NativeConnAdapter]> {
+		const conns = callNativeSync(() => this.#runtime.actorConns(this.#ctx));
+		return conns.map(
+			(c) => [this.#runtime.connId(c), this.#connToAdapter(c)] as [string, NativeConnAdapter],
+		)[Symbol.iterator]() satisfies MapIterator<[string, NativeConnAdapter]>;
+	}
+
+	forEach(
+		callback: (value: NativeConnAdapter, key: string, map: ReadonlyMap<string, NativeConnAdapter>) => void,
+		thisArg?: unknown,
+	): void {
+		const conns = callNativeSync(() => this.#runtime.actorConns(this.#ctx));
+		for (const conn of conns) {
+			const id = this.#runtime.connId(conn);
+			callback.call(thisArg, this.#connToAdapter(conn), id, this);
+		}
+	}
+
+	[Symbol.iterator](): MapIterator<[string, NativeConnAdapter]> {
+		return this.entries();
+	}
+
+	readonly [Symbol.toStringTag] = "NativeConnectionMap";
+}
+
 export class ActorContextHandleAdapter {
 	#runtime: CoreRuntime;
 	#ctx: ActorContextHandle;
@@ -2323,9 +2416,9 @@ export class ActorContextHandleAdapter {
 	#abortSignalCleanup?: () => void;
 	#client?: AnyClient;
 	#clientFactory?: () => AnyClient;
+	#connMap?: NativeConnectionMap;
 	#databaseProvider?: Exclude<AnyDatabaseProvider, undefined>;
 	#db?: unknown;
-	#dbProxy?: unknown;
 	#dispatchCancelToken?: CancellationTokenHandle;
 	#kv?: NativeKvAdapter;
 	#queue?: NativeQueueAdapter;
@@ -2388,32 +2481,18 @@ export class ActorContextHandleAdapter {
 			throw databaseNotConfiguredError();
 		}
 
-		if (!this.#dbProxy) {
-			this.#dbProxy = new Proxy(
-				{},
-				{
-					get: (_target, property) => {
-						if (property === "then") {
-							return undefined;
-						}
-
-						return async (...args: Array<unknown>) => {
-							const client = await this.ensureDatabaseClient();
-							const value = Reflect.get(
-								client as object,
-								property,
-							);
-							if (typeof value !== "function") {
-								return value;
-							}
-							return await value.apply(client, args);
-						};
-					},
-				},
-			);
+		if (this.#db) {
+			return this.#db;
 		}
 
-		return this.#dbProxy;
+		const runtimeState = getNativeRuntimeState(this.#runtime, this.#ctx);
+		const cachedClient = runtimeState.databaseClient;
+		if (cachedClient) {
+			this.#db = cachedClient.client;
+			return this.#db;
+		}
+
+		throw databaseClientNotReadyError();
 	}
 
 	get state(): unknown {
@@ -2503,27 +2582,11 @@ export class ActorContextHandleAdapter {
 		return callNativeSync(() => this.#runtime.actorRegion(this.#ctx));
 	}
 
-	get conns(): Map<string, NativeConnAdapter> {
-		return new Map(
-			callNativeSync(() => this.#runtime.actorConns(this.#ctx)).map(
-				(conn) => [
-					this.#runtime.connId(conn),
-					new NativeConnAdapter(
-						this.#runtime,
-						conn,
-						this.#schemas,
-						this.#ctx,
-						(connId) =>
-							callNativeSync(() =>
-								this.#runtime.actorQueueHibernationRemoval(
-									this.#ctx,
-									connId,
-								),
-							),
-					),
-				],
-			),
-		);
+	get conns(): ReadonlyMap<string, NativeConnAdapter> {
+		if (!this.#connMap) {
+			this.#connMap = new NativeConnectionMap(this.#runtime, this.#ctx, this.#schemas);
+		}
+		return this.#connMap;
 	}
 
 	get log() {
@@ -3505,6 +3568,10 @@ export function buildNativeFactory(
 							getNativeWorkflowInspector(ctx) !== undefined,
 					});
 				} catch (error) {
+					logger().error({
+						msg: "error replaying workflow history",
+						error,
+					});
 					return errorResponse(error);
 				}
 			}
@@ -3684,6 +3751,10 @@ export function buildNativeFactory(
 					);
 					return jsonResponse({ output });
 				} catch (error) {
+					logger().error({
+						msg: "Error handling inspector action request",
+						error,
+					});
 					return errorResponse(error);
 				}
 			}
@@ -3698,6 +3769,10 @@ export function buildNativeFactory(
 				{ status: 404 },
 			);
 		} catch (error) {
+			logger().error({
+				msg: "Error handling inspector request",
+				error,
+			});
 			return errorResponse(error);
 		} finally {
 			await actorCtx.dispose();

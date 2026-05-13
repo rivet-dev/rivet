@@ -1214,14 +1214,14 @@ export class Runner {
 			await this.#config.onActorStart(actorId, generation, actorConfig);
 
 			instance.actorStartPromise.resolve();
-		} catch (err) {
+		} catch (error) {
 			this.log?.error({
 				msg: "error starting runner actor",
 				actorId,
-				err,
+				error,
 			});
 
-			instance.actorStartPromise.reject(err);
+			instance.actorStartPromise.reject(error);
 
 			// TODO: Mark as crashed
 			// Send stopped state update if start failed

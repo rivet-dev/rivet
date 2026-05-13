@@ -161,28 +161,28 @@ export class InlineWebSocketAdapter {
 		}
 	}
 
-	#handleError(err: unknown): void {
-		console.error("INLINE_WEBSOCKET_ADAPTER_ERROR", err);
+	#handleError(error: unknown): void {
+		console.error("INLINE_WEBSOCKET_ADAPTER_ERROR", error);
 		logger().error({
 			msg: "error in websocket",
-			error: err,
-			errorMessage: err instanceof Error ? err.message : String(err),
-			stack: err instanceof Error ? err.stack : undefined,
+			error,
+			errorMessage: error instanceof Error ? error.message : String(error),
+			stack: error instanceof Error ? error.stack : undefined,
 		});
 
 		// Call handler.onError
 		try {
-			this.#handler.onError(err, this.#wsContext);
-		} catch (handlerErr) {
+			this.#handler.onError(error, this.#wsContext);
+		} catch (error) {
 			logger().error({
 				msg: "error in onError handler",
-				error: handlerErr,
+				error,
 			});
 		}
 
 		// Fire error event to both sides
-		this.#clientWs.triggerError(err);
-		this.#actorWs.triggerError(err);
+		this.#clientWs.triggerError(error);
+		this.#actorWs.triggerError(error);
 	}
 
 	#close(code: number, reason: string): void {
@@ -199,8 +199,8 @@ export class InlineWebSocketAdapter {
 				{ code, reason, wasClean: true },
 				this.#wsContext,
 			);
-		} catch (err) {
-			logger().error({ msg: "error closing websocket", error: err });
+		} catch (error) {
+			logger().error({ msg: "error closing websocket", error });
 		} finally {
 			this.#readyState = 3; // CLOSED
 
