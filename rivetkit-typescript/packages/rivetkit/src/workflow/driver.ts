@@ -223,9 +223,11 @@ export class ActorWorkflowDriver implements EngineDriver {
 		messageNames: string[],
 		abortSignal: AbortSignal,
 	): Promise<void> {
-		return this.#actor.queueManager.waitForNames(
-			messageNames.length > 0 ? messageNames : undefined,
-			abortSignal,
+		return this.#runCtx.internalKeepAwake(
+			this.#actor.queueManager.waitForNames(
+				messageNames.length > 0 ? messageNames : undefined,
+				abortSignal,
+			),
 		);
 	}
 }
