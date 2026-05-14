@@ -15,7 +15,7 @@ mod imp {
 
 	use crate::context::{SharedContext, WsTxMessage};
 	use crate::envoy::ToEnvoyMessage;
-	use crate::utils::{BackoffOptions, calculate_backoff, parse_ws_close_reason};
+	use crate::utils::{BackoffOptions, calculate_backoff, display_id, parse_ws_close_reason};
 
 	const STABLE_CONNECTION_MS: u64 = 60_000;
 	const NORMAL_CLOSE_CODE: u16 = 1000;
@@ -180,12 +180,62 @@ mod imp {
 
 				while let Some(msg) = ws_rx.recv().await {
 					match msg {
-						WsTxMessage::Send(data) => {
+						WsTxMessage::Send {
+							data,
+							enqueue_ts,
+							is_pong,
+							message_kind,
+							gateway_id,
+							request_id,
+							message_index,
+							inner_data_len,
+						} => {
+							let depth_after_recv = shared.ws_tx_depth.fetch_sub(1, Ordering::AcqRel) - 1;
+							let payload_len = data.len();
+							let dequeue_ts = crate::time::now_millis();
+							let queue_wait_ms = dequeue_ts - enqueue_ts;
+							let write_start = crate::time::now_millis();
 							let data = Uint8Array::from(data.as_slice());
 							if let Err(error) = ws.send_with_array_buffer(&data.buffer()) {
 								tracing::error!(error = %js_error(error), "failed to send ws message");
 								let _ = event_tx.send(ConnectionEvent::WriteFailed);
 								break;
+							}
+							let now = crate::time::now_millis();
+							if is_pong {
+								shared
+									.last_pong_sent_ts
+									.store(now, Ordering::Release);
+							}
+							if let (Some(gateway_id), Some(request_id), Some(message_index)) =
+								(gateway_id.as_ref(), request_id.as_ref(), message_index)
+							{
+								tracing::trace!(
+									envoy_key = %shared.envoy_key,
+									message_kind,
+									gateway_id = %display_id(gateway_id),
+									request_id = %display_id(request_id),
+									message_index,
+									inner_data_len,
+									payload_len,
+									queue_wait_ms,
+									write_elapsed_ms = now - write_start,
+									total_latency_ms = now - enqueue_ts,
+									ws_tx_depth = depth_after_recv,
+									"wrote websocket message to engine"
+								);
+							} else {
+								tracing::trace!(
+									envoy_key = %shared.envoy_key,
+									message_kind,
+									inner_data_len,
+									payload_len,
+									queue_wait_ms,
+									write_elapsed_ms = now - write_start,
+									total_latency_ms = now - enqueue_ts,
+									ws_tx_depth = depth_after_recv,
+									"wrote websocket message to engine"
+								);
 							}
 						}
 						WsTxMessage::Close => {

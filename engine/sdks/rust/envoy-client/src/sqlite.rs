@@ -523,6 +523,9 @@ mod tests {
 			)),
 			protocol_metadata: Arc::new(tokio::sync::Mutex::new(None)),
 			shutting_down: std::sync::atomic::AtomicBool::new(false),
+			last_ping_ts: std::sync::atomic::AtomicI64::new(crate::time::now_millis()),
+			last_pong_sent_ts: std::sync::atomic::AtomicI64::new(crate::time::now_millis()),
+			ws_tx_depth: std::sync::atomic::AtomicI64::new(0),
 			stopped_tx: tokio::sync::watch::channel(true).0,
 		});
 
@@ -660,7 +663,7 @@ mod tests {
 			tx,
 		)
 		.await;
-		assert!(matches!(ws_rx.recv().await, Some(WsTxMessage::Send(_))));
+		assert!(matches!(ws_rx.recv().await, Some(WsTxMessage::Send { .. })));
 		assert!(
 			ctx.remote_sqlite_requests
 				.get(&0)
@@ -710,7 +713,7 @@ mod tests {
 		*ctx.shared.ws_tx.lock().await = Some(ws_tx);
 		process_unsent_remote_sqlite_requests(&mut ctx).await;
 
-		assert!(matches!(ws_rx.recv().await, Some(WsTxMessage::Send(_))));
+		assert!(matches!(ws_rx.recv().await, Some(WsTxMessage::Send { .. })));
 		assert!(
 			ctx.remote_sqlite_requests
 				.get(&0)

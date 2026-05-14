@@ -37,6 +37,12 @@ pub struct SharedContext {
 	/// Initialized to the construction time so a freshly created envoy reports healthy until
 	/// its first ping arrives or the threshold elapses without one.
 	pub last_ping_ts: AtomicI64,
+	/// Epoch ms timestamp of when the most recent pong was actually written onto the WS by the
+	/// write task. Used to detect ws_tx backpressure on close.
+	pub last_pong_sent_ts: AtomicI64,
+	/// Current depth of the ws_tx mpsc channel. Bumped on every `ws_send` enqueue and decremented
+	/// when the write task dequeues. Used to expose backpressure at the moment of WS close.
+	pub ws_tx_depth: AtomicI64,
 	// Latched signal fired by `envoy_loop` after its cleanup block completes.
 	// Waiters observing `true` are guaranteed that the loop has exited and
 	// every pending KV/SQLite request has been resolved (with `EnvoyShutdownError`
@@ -46,6 +52,19 @@ pub struct SharedContext {
 
 #[derive(Debug)]
 pub enum WsTxMessage {
-	Send(Vec<u8>),
+	Send {
+		data: Vec<u8>,
+		/// Epoch ms when this message was enqueued. Used by the write task to compute internal
+		/// queue + write latency for diagnostic logs.
+		enqueue_ts: i64,
+		/// True if this message is a `ToRivetPong`. Pong-specific latency drives the engine ping
+		/// timeout detection, so we log its end-to-end timing separately.
+		is_pong: bool,
+		message_kind: &'static str,
+		gateway_id: Option<protocol::GatewayId>,
+		request_id: Option<protocol::RequestId>,
+		message_index: Option<u16>,
+		inner_data_len: usize,
+	},
 	Close,
 }

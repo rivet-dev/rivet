@@ -22,6 +22,7 @@ use crate::envoy::ToEnvoyMessage;
 ))]
 use crate::stringify::stringify_to_envoy;
 use crate::stringify::stringify_to_rivet;
+use crate::utils::display_id;
 
 #[cfg(all(feature = "native-transport", feature = "wasm-transport"))]
 compile_error!(
@@ -126,8 +127,11 @@ pub async fn ws_send(shared: &SharedContext, message: protocol::ToRivet) -> bool
 		tracing::debug!(data = stringify_to_rivet(&message), "sending message");
 	}
 
-	let message_kind = to_rivet_kind(&message);
 	let wait_start = crate::time::Instant::now();
+	let is_pong = matches!(message, protocol::ToRivet::ToRivetPong(_));
+	let (message_kind, gateway_id, request_id, message_index, inner_data_len) =
+		to_rivet_message_meta(&message);
+
 	let guard = shared.ws_tx.lock().await;
 	let wait_elapsed = wait_start.elapsed();
 	METRICS
@@ -137,44 +141,145 @@ pub async fn ws_send(shared: &SharedContext, message: protocol::ToRivet) -> bool
 
 	let hold_start = crate::time::Instant::now();
 	let Some(tx) = guard.as_ref() else {
-		// Still observe hold duration on the early-return path.
 		METRICS
 			.ws_tx_lock_hold_duration_seconds
 			.with_label_values(&[message_kind])
 			.observe(hold_start.elapsed().as_secs_f64());
-		tracing::error!("websocket not available for sending");
+		if let (Some(gateway_id), Some(request_id), Some(message_index)) =
+			(gateway_id.as_ref(), request_id.as_ref(), message_index)
+		{
+			tracing::error!(
+				message_kind,
+				gateway_id = %display_id(gateway_id),
+				request_id = %display_id(request_id),
+				message_index,
+				inner_data_len,
+				"websocket not available for sending"
+			);
+		} else {
+			tracing::error!(
+				message_kind,
+				inner_data_len,
+				"websocket not available for sending"
+			);
+		}
 		return true;
 	};
 
 	let encoded = crate::protocol::versioned::ToRivet::wrap_latest(message)
 		.serialize(protocol::PROTOCOL_VERSION)
 		.expect("failed to encode message");
-	let _ = tx.send(WsTxMessage::Send(encoded));
+	let payload_len = encoded.len();
+	let _ = tx.send(WsTxMessage::Send {
+		data: encoded,
+		enqueue_ts: crate::time::now_millis(),
+		is_pong,
+		message_kind,
+		gateway_id,
+		request_id,
+		message_index,
+		inner_data_len,
+	});
+	shared.ws_tx_depth.fetch_add(1, Ordering::Release);
 	drop(guard);
 	METRICS
 		.ws_tx_lock_hold_duration_seconds
 		.with_label_values(&[message_kind])
 		.observe(hold_start.elapsed().as_secs_f64());
+	if let (Some(gateway_id), Some(request_id), Some(message_index)) =
+		(gateway_id.as_ref(), request_id.as_ref(), message_index)
+	{
+		tracing::trace!(
+			envoy_key = %shared.envoy_key,
+			message_kind,
+			gateway_id = %display_id(gateway_id),
+			request_id = %display_id(request_id),
+			message_index,
+			inner_data_len,
+			payload_len,
+			"queued websocket message to engine"
+		);
+	} else {
+		tracing::trace!(
+			envoy_key = %shared.envoy_key,
+			message_kind,
+			inner_data_len,
+			payload_len,
+			"queued websocket message to engine"
+		);
+	}
 	false
 }
 
-/// Bounded label set for `ws_tx` send paths.
-fn to_rivet_kind(message: &protocol::ToRivet) -> &'static str {
+fn to_rivet_message_meta(
+	message: &protocol::ToRivet,
+) -> (
+	&'static str,
+	Option<protocol::GatewayId>,
+	Option<protocol::RequestId>,
+	Option<u16>,
+	usize,
+) {
 	match message {
-		protocol::ToRivet::ToRivetMetadata(_) => "metadata",
-		protocol::ToRivet::ToRivetEvents(_) => "events",
-		protocol::ToRivet::ToRivetAckCommands(_) => "ack_commands",
-		protocol::ToRivet::ToRivetStopping => "stopping",
-		protocol::ToRivet::ToRivetPong(_) => "pong",
-		protocol::ToRivet::ToRivetKvRequest(_) => "kv_request",
-		protocol::ToRivet::ToRivetSqliteGetPagesRequest(_) => "sqlite_get_pages",
-		protocol::ToRivet::ToRivetSqliteCommitRequest(_) => "sqlite_commit",
-		protocol::ToRivet::ToRivetSqliteExecRequest(_) => "sqlite_exec",
-		protocol::ToRivet::ToRivetSqliteExecuteRequest(_) => "sqlite_execute",
-		protocol::ToRivet::ToRivetTunnelMessage(_) => "tunnel_message",
+		protocol::ToRivet::ToRivetMetadata(_) => ("ToRivetMetadata", None, None, None, 0),
+		protocol::ToRivet::ToRivetEvents(_) => ("ToRivetEvents", None, None, None, 0),
+		protocol::ToRivet::ToRivetAckCommands(_) => ("ToRivetAckCommands", None, None, None, 0),
+		protocol::ToRivet::ToRivetStopping => ("ToRivetStopping", None, None, None, 0),
+		protocol::ToRivet::ToRivetPong(_) => ("ToRivetPong", None, None, None, 0),
+		protocol::ToRivet::ToRivetKvRequest(_) => ("ToRivetKvRequest", None, None, None, 0),
+		protocol::ToRivet::ToRivetTunnelMessage(msg) => (
+			to_rivet_tunnel_message_kind_name(&msg.message_kind),
+			Some(msg.message_id.gateway_id),
+			Some(msg.message_id.request_id),
+			Some(msg.message_id.message_index),
+			to_rivet_tunnel_message_inner_data_len(&msg.message_kind),
+		),
+		protocol::ToRivet::ToRivetSqliteGetPagesRequest(_) => {
+			("ToRivetSqliteGetPagesRequest", None, None, None, 0)
+		}
+		protocol::ToRivet::ToRivetSqliteCommitRequest(_) => {
+			("ToRivetSqliteCommitRequest", None, None, None, 0)
+		}
+		protocol::ToRivet::ToRivetSqliteExecRequest(_) => {
+			("ToRivetSqliteExecRequest", None, None, None, 0)
+		}
+		protocol::ToRivet::ToRivetSqliteExecuteRequest(_) => {
+			("ToRivetSqliteExecuteRequest", None, None, None, 0)
+		}
 	}
 }
 
+fn to_rivet_tunnel_message_kind_name(
+	kind: &protocol::ToRivetTunnelMessageKind,
+) -> &'static str {
+	match kind {
+		protocol::ToRivetTunnelMessageKind::ToRivetResponseStart(_) => "ToRivetResponseStart",
+		protocol::ToRivetTunnelMessageKind::ToRivetResponseChunk(_) => "ToRivetResponseChunk",
+		protocol::ToRivetTunnelMessageKind::ToRivetResponseAbort => "ToRivetResponseAbort",
+		protocol::ToRivetTunnelMessageKind::ToRivetWebSocketOpen(_) => "ToRivetWebSocketOpen",
+		protocol::ToRivetTunnelMessageKind::ToRivetWebSocketMessage(_) => {
+			"ToRivetWebSocketMessage"
+		}
+		protocol::ToRivetTunnelMessageKind::ToRivetWebSocketMessageAck(_) => {
+			"ToRivetWebSocketMessageAck"
+		}
+		protocol::ToRivetTunnelMessageKind::ToRivetWebSocketClose(_) => "ToRivetWebSocketClose",
+	}
+}
+
+fn to_rivet_tunnel_message_inner_data_len(kind: &protocol::ToRivetTunnelMessageKind) -> usize {
+	match kind {
+		protocol::ToRivetTunnelMessageKind::ToRivetResponseStart(msg) => {
+			msg.body.as_ref().map_or(0, Vec::len)
+		}
+		protocol::ToRivetTunnelMessageKind::ToRivetResponseChunk(msg) => msg.body.len(),
+		protocol::ToRivetTunnelMessageKind::ToRivetWebSocketMessage(msg) => msg.data.len(),
+		protocol::ToRivetTunnelMessageKind::ToRivetResponseAbort
+		| protocol::ToRivetTunnelMessageKind::ToRivetWebSocketOpen(_)
+		| protocol::ToRivetTunnelMessageKind::ToRivetWebSocketMessageAck(_)
+		| protocol::ToRivetTunnelMessageKind::ToRivetWebSocketClose(_) => 0,
+	}
+}
 #[cfg(any(
 	feature = "native-transport",
 	all(feature = "wasm-transport", target_arch = "wasm32")

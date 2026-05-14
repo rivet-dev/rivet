@@ -308,6 +308,8 @@ fn start_envoy_sync_inner(config: EnvoyConfig) -> EnvoyHandle {
 		protocol_metadata: Arc::new(tokio::sync::Mutex::new(None)),
 		shutting_down: std::sync::atomic::AtomicBool::new(false),
 		last_ping_ts: std::sync::atomic::AtomicI64::new(crate::time::now_millis()),
+		last_pong_sent_ts: std::sync::atomic::AtomicI64::new(crate::time::now_millis()),
+		ws_tx_depth: std::sync::atomic::AtomicI64::new(0),
 		stopped_tx,
 	});
 
