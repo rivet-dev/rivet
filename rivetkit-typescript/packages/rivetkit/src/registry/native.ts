@@ -54,7 +54,6 @@ import type {
 } from "@/registry/config";
 import {
 	decodeCborCompat,
-	decodeCborJsonCompat,
 	encodeCborCompat,
 } from "@/serde";
 import { getEnvUniversal, VERSION } from "@/utils";
@@ -594,7 +593,7 @@ function decodeValue<T>(value?: RuntimeBytes | null): T {
 		return undefined as T;
 	}
 
-	return decodeCborJsonCompat(value);
+	return decodeCborCompat(value);
 }
 
 function encodeValue(value: unknown): RuntimeBytes {
@@ -931,6 +930,7 @@ function serializeWorkflowEntryKind(
 	}
 }
 
+// TODO: Switch inspector routes to CBOR encoding
 function serializeWorkflowHistoryForJson(data: ArrayBuffer | null): {
 	nameRegistry: string[];
 	entries: Array<{
@@ -964,7 +964,7 @@ function serializeWorkflowHistoryForJson(data: ArrayBuffer | null): {
 
 	const history = decodeWorkflowHistoryTransport(data);
 
-	return {
+	return jsonSafe({
 		nameRegistry: [...history.nameRegistry],
 		entries: history.entries.map((entry) => ({
 			id: entry.id,
@@ -994,7 +994,7 @@ function serializeWorkflowHistoryForJson(data: ArrayBuffer | null): {
 				],
 			),
 		),
-	};
+	});
 }
 
 function toHttpJsonCompatible<T>(value: T): T {

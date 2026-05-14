@@ -3294,6 +3294,21 @@ importers:
         specifier: ^5.5.2
         version: 5.9.3
 
+  ext/test:
+    dependencies:
+      '@hono/node-server':
+        specifier: ^1.14.1
+        version: 1.19.13(hono@4.11.9)
+      '@rivetkit/engine-cli':
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/engine-cli
+      '@rivetkit/rivetkit-napi':
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit-napi
+      rivetkit:
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit
+
   frontend:
     dependencies:
       '@codemirror/autocomplete':
