@@ -691,6 +691,10 @@ function CloudSidebarContentInner() {
 						) : null}
 					</div>
 
+					<Suspense>
+						<DeploymentsLink />
+					</Suspense>
+
 					<div className="border-t my-2" />
 					<span className="block text-muted-foreground text-xs px-2 py-1 transition-colors mb-0.5">
 						Actors

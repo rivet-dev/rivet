@@ -3,7 +3,6 @@ import type { VersionedDataHandler } from "vbare";
 import type { z } from "zod/v4";
 import type { Encoding } from "@/common/encoding";
 import { assertUnreachable } from "@/common/utils";
-import type { HttpResponseError } from "@/common/client-protocol";
 import { HTTP_RESPONSE_ERROR_VERSIONED } from "@/common/client-protocol-versioned";
 import {
 	type HttpResponseError as HttpResponseErrorJson,

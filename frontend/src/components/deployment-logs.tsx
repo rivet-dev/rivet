@@ -1,5 +1,5 @@
 import type { RivetSse } from "@rivet-gg/cloud";
-import { faTriangleExclamation, Icon } from "@rivet-gg/icons";
+import { faArrowDown, faTriangleExclamation, Icon } from "@rivet-gg/icons";
 import type { Virtualizer } from "@tanstack/react-virtual";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ErrorDetails } from "@/components/actors";
@@ -144,12 +144,30 @@ export function DeploymentLogs({
 	// Track the log count before a load-more so we can restore scroll position.
 	const prevLogCountRef = useRef(0);
 
+	// Freeze displayed logs when not following so appended entries don't shift scroll.
+	// Always update when following, and also when history is prepended (logs grew
+	// from the front, detectable because the previously-first entry moved).
+	const frozenLogsRef = useRef(logs);
+	const frozenFirstIdRef = useRef<string | undefined>(undefined);
+	if (follow) {
+		frozenLogsRef.current = logs;
+		frozenFirstIdRef.current = logs[0]?.data.insertId;
+	} else if (
+		logs.length > 0 &&
+		logs[0]?.data.insertId !== frozenFirstIdRef.current
+	) {
+		// First entry changed — history was prepended. Accept the update.
+		frozenLogsRef.current = logs;
+		frozenFirstIdRef.current = logs[0]?.data.insertId;
+	}
+	const displayedLogs = follow ? logs : frozenLogsRef.current;
+
 	// When hasMore, index 0 is the sentinel row; real logs start at index 1.
 	const sentinelOffset = hasMore ? 1 : 0;
-	const totalCount = logs.length + sentinelOffset;
+	const totalCount = displayedLogs.length + sentinelOffset;
 
 	useEffect(() => {
-		if (follow && !isLoading && virtualizerRef.current && logs.length > 0) {
+		if (follow && !isLoading && virtualizerRef.current && displayedLogs.length > 0) {
 			// https://github.com/TanStack/virtual/issues/537
 			const rafId = requestAnimationFrame(() => {
 				virtualizerRef.current?.scrollToIndex(totalCount - 1, {
@@ -158,7 +176,7 @@ export function DeploymentLogs({
 			});
 			return () => cancelAnimationFrame(rafId);
 		}
-	}, [totalCount, logs.length, follow, isLoading]);
+	}, [totalCount, displayedLogs.length, follow, isLoading]);
 
 	// After prepending older history, scroll to restore the previously-first row.
 	const wasLoadingMoreRef = useRef(false);
@@ -166,9 +184,9 @@ export function DeploymentLogs({
 		if (
 			wasLoadingMoreRef.current &&
 			!isLoadingMore &&
-			logs.length > prevLogCountRef.current
+			displayedLogs.length > prevLogCountRef.current
 		) {
-			const addedCount = logs.length - prevLogCountRef.current;
+			const addedCount = displayedLogs.length - prevLogCountRef.current;
 			const rafId = requestAnimationFrame(() => {
 				// +1 to skip sentinel row at index 0.
 				virtualizerRef.current?.scrollToIndex(
@@ -181,7 +199,7 @@ export function DeploymentLogs({
 			return () => cancelAnimationFrame(rafId);
 		}
 		wasLoadingMoreRef.current = isLoadingMore;
-	}, [isLoadingMore, logs.length, sentinelOffset]);
+	}, [isLoadingMore, displayedLogs.length, sentinelOffset]);
 
 	useEffect(() => {
 		if (logsRef) {
@@ -204,12 +222,12 @@ export function DeploymentLogs({
 					hasMore &&
 					!isLoadingMore
 				) {
-					prevLogCountRef.current = logs.length;
+					prevLogCountRef.current = displayedLogs.length;
 					loadMoreHistory();
 				}
 			}
 		},
-		[totalCount, logs.length, hasMore, isLoadingMore, loadMoreHistory],
+		[totalCount, displayedLogs.length, hasMore, isLoadingMore, loadMoreHistory],
 	);
 
 	if (isLoading) {
@@ -265,25 +283,42 @@ export function DeploymentLogs({
 					<span>Stream error: {streamError}</span>
 				</div>
 			) : null}
-			<VirtualScrollArea<LogRowData>
-				virtualizerRef={virtualizerRef}
-				viewportRef={viewportRef}
-				onChange={handleScrollChange}
-				count={totalCount}
-				estimateSize={() => 24}
-				className="w-full flex-1 min-h-0"
-				scrollerProps={{
-					className: "w-full",
-				}}
-				viewportProps={{}}
-				getRowData={(index) => {
-					if (hasMore && index === 0) {
-						return { isSentinel: true, isLoadingMore };
-					}
-					return { entry: logs[index - sentinelOffset] };
-				}}
-				row={LogRow}
-			/>
+			<div className="relative flex-1 min-h-0">
+				<VirtualScrollArea<LogRowData>
+					virtualizerRef={virtualizerRef}
+					viewportRef={viewportRef}
+					onChange={handleScrollChange}
+					count={totalCount}
+					estimateSize={() => 24}
+					className="w-full h-full"
+					scrollerProps={{
+						className: "w-full",
+					}}
+					viewportProps={{}}
+					getRowData={(index) => {
+						if (hasMore && index === 0) {
+							return { isSentinel: true, isLoadingMore };
+						}
+						return { entry: displayedLogs[index - sentinelOffset] };
+					}}
+					row={LogRow}
+				/>
+				{!follow ? (
+					<div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10">
+						<button
+							type="button"
+							className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary text-primary-foreground text-xs font-medium shadow-lg hover:bg-primary/90 transition-colors"
+							onClick={() => {
+								setFollow(true);
+								virtualizerRef.current?.scrollToIndex(totalCount - 1, { align: "end" });
+							}}
+						>
+							<Icon icon={faArrowDown} className="size-3" />
+							Back to newest
+						</button>
+					</div>
+				) : null}
+			</div>
 		</div>
 	);
 }

@@ -101,6 +101,7 @@ export function ProviderDropdown({ children }: { children: React.ReactNode }) {
 		<DropdownMenu>
 			<DropdownMenuTrigger asChild>{children}</DropdownMenuTrigger>
 			<DropdownMenuContent className="w-[--radix-popper-anchor-width]">
+				<RivetCloudDropdownMenuItem />
 				{externalClouds}
 			</DropdownMenuContent>
 		</DropdownMenu>

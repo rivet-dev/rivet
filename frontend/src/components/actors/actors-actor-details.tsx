@@ -45,6 +45,7 @@ import {
 	GuardConnectableInspector,
 	useInspectorGuard,
 } from "./guard-connectable-inspector";
+import { features } from "@/lib/features";
 import type { ActorId } from "./queries";
 import { ActorWorkerContextProvider } from "./worker/actor-worker-context";
 import { ActorWorkflowTab } from "./workflow/actor-workflow-tab";
@@ -114,16 +115,16 @@ const TAB_PRIORITY = [
 
 type TabId = (typeof TAB_PRIORITY)[number];
 
-// FIXME: once we have back rivet cloud
 function useManagedPool() {
-	// if (__APP_TYPE__ !== "cloud") return false;
-	// const provider = useCloudNamespaceDataProvider();
-	// const { data: hasManagedPool } = useSuspenseQuery(
-	// 	provider.currentNamespaceHasManagedPoolQueryOptions(),
-	// );
+	if (!features.platform) return false;
+	// biome-ignore lint/correctness/useHookAtTopLevel: guarded by build constant
+	const provider = useCloudNamespaceDataProvider();
+	// biome-ignore lint/correctness/useHookAtTopLevel: guarded by build constant
+	const { data: hasManagedPool } = useSuspenseQuery(
+		provider.currentNamespaceHasManagedPoolQueryOptions(),
+	);
 
-	// return hasManagedPool;
-	return false;
+	return hasManagedPool;
 }
 
 function useActorTabVisibility(actorId: ActorId) {

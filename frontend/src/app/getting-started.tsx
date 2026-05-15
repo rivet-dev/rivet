@@ -1103,8 +1103,7 @@ function useOtherAgentInstructionsCode(provider?: Provider) {
 }
 
 function CopyAgentInstructionsButton({ provider }: { provider?: Provider }) {
-	// FIXME: after we bring back rivet compute
-	if (/*provider === "rivet"*/ false) {
+	if (provider === "rivet") {
 		return <RivetCopyAgentInstructionsButton />;
 	}
 	return <OtherCopyAgentInstructionsButton provider={provider} />;
@@ -1277,7 +1276,7 @@ function BackendSetupRivet() {
 
 	return (
 		<div className="flex flex-col gap-6">
-			{/* <CopyAgentInstructionsButton provider="rivet" /> */}
+			<CopyAgentInstructionsButton provider="rivet" />
 			<div className="rounded-lg border bg-muted/30 p-8 overflow-hidden">
 				<AnimatePresence mode="wait">
 					<motion.div
