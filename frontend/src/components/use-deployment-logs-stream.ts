@@ -1,4 +1,5 @@
 import type { Rivet, RivetSse } from "@rivet-gg/cloud";
+import * as Sentry from "@sentry/react";
 import { startTransition, useCallback, useEffect, useRef, useState } from "react";
 import { cloudEnv } from "@/lib/env";
 
@@ -215,6 +216,11 @@ export function useDeploymentLogsStream({
 	const pausedRef = useRef(paused);
 	const logsRef = useRef(logs);
 	logsRef.current = logs;
+	// Dedupes entries that appear in both the initial history fetch and
+	// the live stream (and across "load more" page boundaries that share
+	// a timestamp). `insertId` is the only unique identifier the API
+	// exposes per log entry.
+	const seenInsertIdsRef = useRef<Set<string>>(new Set());
 
 	useEffect(() => {
 		pausedRef.current = paused;
@@ -225,11 +231,15 @@ export function useDeploymentLogsStream({
 		setIsLoading(true);
 		setError(null);
 		pendingRef.current = [];
+		seenInsertIdsRef.current = new Set();
 
 		const controller = new AbortController();
 
 		function onEntry(entry: RivetSse.LogStreamEvent.Log) {
 			setIsLoading(false);
+			const insertId = entry.data.insertId;
+			if (seenInsertIdsRef.current.has(insertId)) return;
+			seenInsertIdsRef.current.add(insertId);
 			pendingRef.current.push(entry);
 			if (!pausedRef.current) {
 				const toFlush = pendingRef.current;
@@ -255,14 +265,27 @@ export function useDeploymentLogsStream({
 					},
 				);
 				if (controller.signal.aborted) return;
+				if (initial.length < INITIAL_HISTORY_SIZE) {
+					setHasMore(false);
+				}
 				if (initial.length > 0) {
+					for (const item of initial) {
+						seenInsertIdsRef.current.add(item.insertId);
+					}
 					const converted = initial.map(historyToLogEvent);
 					startTransition(() => {
 						setLogs(converted);
 					});
 				}
-			} catch {
+			} catch (err) {
 				// Non-fatal. The stream will still start.
+				console.warn("Failed to fetch initial log history:", err);
+				Sentry.captureException(err, {
+					tags: { source: "deployment-logs-initial-history" },
+					contexts: {
+						logs: { project, namespace, pool, region, filter },
+					},
+				});
 			}
 
 			if (controller.signal.aborted) return;
@@ -322,6 +345,9 @@ export function useDeploymentLogsStream({
 		setIsLoadingMore(true);
 		try {
 			const currentLogs = logsRef.current;
+			// The history API only accepts a timestamp cursor. Multiple
+			// entries can share a timestamp, so `seenInsertIdsRef` below
+			// filters out any overlap at the page boundary.
 			const before = currentLogs.length > 0
 				? currentLogs[0].data.timestamp
 				: new Date().toISOString();
@@ -343,8 +369,15 @@ export function useDeploymentLogsStream({
 				setHasMore(false);
 			}
 
-			if (items.length > 0) {
-				const converted = items.map(historyToLogEvent);
+			const fresh = items.filter(
+				(item) => !seenInsertIdsRef.current.has(item.insertId),
+			);
+			for (const item of fresh) {
+				seenInsertIdsRef.current.add(item.insertId);
+			}
+
+			if (fresh.length > 0) {
+				const converted = fresh.map(historyToLogEvent);
 				startTransition(() => {
 					setLogs((prev) => [...converted, ...prev]);
 				});
