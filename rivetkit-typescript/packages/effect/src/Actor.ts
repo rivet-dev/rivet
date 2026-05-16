@@ -188,11 +188,7 @@ export interface Actor<
 	 * `yield* SomeActor.client` then dispatches through the same
 	 * transport.
 	 */
-	readonly client: Effect.Effect<
-		Accessor<Actions>,
-		never,
-		Client.Client | Action.ServicesClient<Actions>
-	>;
+	readonly client: Effect.Effect<Accessor<Actions>, never, Client.Client>;
 }
 
 export type Any = Actor<string, Action.AnyWithProps>;
