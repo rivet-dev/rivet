@@ -1,5 +1,6 @@
 import { Duration, Predicate, Schema, SchemaGetter } from "effect";
 import * as Rivetkit from "rivetkit";
+import * as RivetkitErrors from "rivetkit/errors";
 
 const ReasonTypeId = "~@rivetkit/effect/RivetError/Reason" as const;
 const TypeId = "~@rivetkit/effect/RivetError" as const;
@@ -456,89 +457,155 @@ export const isRivetError = (u: unknown): u is RivetError =>
 // `Pick`ing here anchors the codec against drift in the canonical wire
 // shape.
 
-type WirePayload = Pick<
-	Rivetkit.RivetErrorLike,
-	"group" | "code" | "message" | "metadata"
->;
-
-const Wire = Schema.Struct({
+const RivetErrorPayload = Schema.Struct({
 	group: Schema.String,
 	code: Schema.String,
 	message: Schema.String,
 	metadata: Schema.optionalKey(Schema.Unknown),
-});
+}) satisfies Schema.Codec<Rivetkit.RivetErrorLike>;
 
 const readMetaField = (metadata: unknown, key: string): unknown => {
 	if (typeof metadata !== "object" || metadata === null) return undefined;
 	return (metadata as Record<string, unknown>)[key];
 };
 
-// Classification table: `"group.code"` → factory producing the matching
-// reason from raw `(message, metadata)`. Reasons whose `code` is variable
-// (queue, guard, user) and the rivetkit-core internal-error aliases are
-// handled by the fallback below.
-const fixedFactories: Record<
-	string,
-	(message: string, metadata: unknown) => Reason
-> = {
-	"auth.forbidden": (message) => new Forbidden({ message }),
-	"actor.not_found": (message) => new ActorNotFound({ message }),
-	"actor.stopping": (message) => new ActorStopping({ message }),
-	"actor.restarting": (message, metadata) => {
-		const retryAfterMs = readMetaField(metadata, "retryAfterMs");
-		const phase = readMetaField(metadata, "phase");
-		const allowedPhases = new Set<string>([
-			"stopping",
-			"sleeping",
-			"waking",
-			"runner_shutdown",
-		]);
-		return new ActorRestarting({
-			message,
-			...(typeof retryAfterMs === "number"
-				? { retryAfter: Duration.millis(retryAfterMs) }
-				: {}),
-			...(typeof phase === "string" && allowedPhases.has(phase)
-				? { phase: phase as ActorRestarting["phase"] }
-				: {}),
-		});
-	},
-	"actor.action_not_found": (message) => new ActionNotFound({ message }),
-	"actor.action_timed_out": (message) => new ActionTimedOut({ message }),
-	"actor.aborted": (message) => new ActionAborted({ message }),
-	"actor.overloaded": (message, metadata) => {
-		const channel = readMetaField(metadata, "channel");
-		const capacity = readMetaField(metadata, "capacity");
-		const operation = readMetaField(metadata, "operation");
-		return new Overloaded({
-			message,
-			...(typeof channel === "string" ? { channel } : {}),
-			...(typeof capacity === "number" ? { capacity } : {}),
-			...(typeof operation === "string" ? { operation } : {}),
-		});
-	},
-	"message.incoming_too_long": (message) =>
-		new MessageTooLong({ message, code: "incoming_too_long" }),
-	"message.outgoing_too_long": (message) =>
-		new MessageTooLong({ message, code: "outgoing_too_long" }),
-	"encoding.invalid": (message) => new InvalidEncoding({ message }),
-	"request.invalid": (message) => new InvalidRequest({ message }),
-	"client.connection_open_failed": (message) =>
-		new ConnectionOpenFailed({ message }),
-	"client.get_params_failed": (message) => new GetParamsFailed({ message }),
-	"ws.going_away": (message) => new ConnectionLost({ message }),
-	"core.internal_error": (message) => new InternalError({ message }),
-	"rivetkit.internal_error": (message) => new InternalError({ message }),
+// Classification table: ordered list of `(group, code, factory)` entries.
+// We match through `isRivetErrorCode` from `rivetkit/errors` so a rename
+// on the canonical wire-shape side becomes a compile-time signal here.
+// Reasons whose `code` is variable (queue, guard, user) and any
+// rivetkit-core internal-error aliases are handled by the group-level
+// fallback below.
+type FixedFactory = {
+	group: string;
+	code: string;
+	build: (message: string, metadata: unknown) => Reason;
 };
 
-const reasonFromWire = ({
-	group,
-	code,
-	message,
-	metadata,
-}: WirePayload): Reason => {
-	const factory = fixedFactories[`${group}.${code}`];
-	if (factory !== undefined) return factory(message, metadata);
+const fixedFactories: ReadonlyArray<FixedFactory> = [
+	{
+		group: "auth",
+		code: "forbidden",
+		build: (message) => new Forbidden({ message }),
+	},
+	{
+		group: "actor",
+		code: "not_found",
+		build: (message) => new ActorNotFound({ message }),
+	},
+	{
+		group: "actor",
+		code: "stopping",
+		build: (message) => new ActorStopping({ message }),
+	},
+	{
+		group: "actor",
+		code: "restarting",
+		build: (message, metadata) => {
+			const retryAfterMs = readMetaField(metadata, "retryAfterMs");
+			const phase = readMetaField(metadata, "phase");
+			const allowedPhases = new Set<string>([
+				"stopping",
+				"sleeping",
+				"waking",
+				"runner_shutdown",
+			]);
+			return new ActorRestarting({
+				message,
+				...(typeof retryAfterMs === "number"
+					? { retryAfter: Duration.millis(retryAfterMs) }
+					: {}),
+				...(typeof phase === "string" && allowedPhases.has(phase)
+					? { phase: phase as ActorRestarting["phase"] }
+					: {}),
+			});
+		},
+	},
+	{
+		group: "actor",
+		code: "action_not_found",
+		build: (message) => new ActionNotFound({ message }),
+	},
+	{
+		group: "actor",
+		code: "action_timed_out",
+		build: (message) => new ActionTimedOut({ message }),
+	},
+	{
+		group: "actor",
+		code: "aborted",
+		build: (message) => new ActionAborted({ message }),
+	},
+	{
+		group: "actor",
+		code: "overloaded",
+		build: (message, metadata) => {
+			const channel = readMetaField(metadata, "channel");
+			const capacity = readMetaField(metadata, "capacity");
+			const operation = readMetaField(metadata, "operation");
+			return new Overloaded({
+				message,
+				...(typeof channel === "string" ? { channel } : {}),
+				...(typeof capacity === "number" ? { capacity } : {}),
+				...(typeof operation === "string" ? { operation } : {}),
+			});
+		},
+	},
+	{
+		group: "message",
+		code: "incoming_too_long",
+		build: (message) =>
+			new MessageTooLong({ message, code: "incoming_too_long" }),
+	},
+	{
+		group: "message",
+		code: "outgoing_too_long",
+		build: (message) =>
+			new MessageTooLong({ message, code: "outgoing_too_long" }),
+	},
+	{
+		group: "encoding",
+		code: "invalid",
+		build: (message) => new InvalidEncoding({ message }),
+	},
+	{
+		group: "request",
+		code: "invalid",
+		build: (message) => new InvalidRequest({ message }),
+	},
+	{
+		group: "client",
+		code: "connection_open_failed",
+		build: (message) => new ConnectionOpenFailed({ message }),
+	},
+	{
+		group: "client",
+		code: "get_params_failed",
+		build: (message) => new GetParamsFailed({ message }),
+	},
+	{
+		group: "ws",
+		code: "going_away",
+		build: (message) => new ConnectionLost({ message }),
+	},
+	{
+		group: "core",
+		code: "internal_error",
+		build: (message) => new InternalError({ message }),
+	},
+	{
+		group: "rivetkit",
+		code: "internal_error",
+		build: (message) => new InternalError({ message }),
+	},
+];
+
+const reasonFromWire = (wire: typeof RivetErrorPayload.Encoded): Reason => {
+	const { group, code, message, metadata } = wire;
+	for (const entry of fixedFactories) {
+		if (RivetkitErrors.isRivetErrorCode(wire, entry.group, entry.code)) {
+			return entry.build(message, metadata);
+		}
+	}
 	if (group === "queue") return new QueueError({ message, code });
 	if (group === "guard") return new GuardError({ message, code });
 	if (group === "user") {
@@ -572,7 +639,8 @@ const metadataFromReason = (reason: Reason): unknown | undefined => {
 		case "Overloaded": {
 			const metadata: Record<string, unknown> = {};
 			if (reason.channel !== undefined) metadata.channel = reason.channel;
-			if (reason.capacity !== undefined) metadata.capacity = reason.capacity;
+			if (reason.capacity !== undefined)
+				metadata.capacity = reason.capacity;
 			if (reason.operation !== undefined)
 				metadata.operation = reason.operation;
 			return Object.keys(metadata).length > 0 ? metadata : undefined;
@@ -585,7 +653,7 @@ const metadataFromReason = (reason: Reason): unknown | undefined => {
 	}
 };
 
-const reasonToWire = (reason: Reason): WirePayload => {
+const reasonToWire = (reason: Reason): typeof RivetErrorPayload.Encoded => {
 	const metadata = metadataFromReason(reason);
 	return {
 		group: reason.group,
@@ -601,7 +669,7 @@ const reasonToWire = (reason: Reason): WirePayload => {
  * `rivetkit-core`'s defect sanitizer into a `RivetError` carrying the
  * appropriate semantic `reason`.
  */
-export const RivetErrorFromWire = Wire.pipe(
+export const RivetErrorFromWire = RivetErrorPayload.pipe(
 	Schema.decodeTo(Schema.instanceOf(RivetError), {
 		decode: SchemaGetter.transform(
 			(wire) => new RivetError({ reason: reasonFromWire(wire) }),
