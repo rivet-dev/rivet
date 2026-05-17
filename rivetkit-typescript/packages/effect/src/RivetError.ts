@@ -751,15 +751,23 @@ export class RivetError extends Schema.TaggedErrorClass<RivetError>(
 )("RivetError", {
 	reason: RivetErrorReason,
 }) {
+	/** Marks this value as the top-level Rivet error wrapper for runtime guards. */
 	readonly [TypeId] = TypeId;
+
+	/** Exposes the structured Rivet error reason as the JavaScript error cause. */
 	override readonly cause = this.reason;
 
+	/** Uses the reason message when present, otherwise falls back to the reason tag. */
 	override get message() {
 		return this.reason.message || this.reason._tag;
 	}
+
+	/** Delegates to the underlying reason's `isRetryable` getter. */
 	get isRetryable(): boolean {
 		return this.reason.isRetryable;
 	}
+
+	/** Delegates to the underlying reason's `retryAfter` if present. */
 	get retryAfter(): Duration.Duration | undefined {
 		return "retryAfter" in this.reason ? this.reason.retryAfter : undefined;
 	}
