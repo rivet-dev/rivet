@@ -6,21 +6,22 @@ import {
 	identity,
 	Layer,
 	MutableHashMap,
+	Option,
 	Predicate,
 	Record,
 	Schema,
 	Scope,
 	Semaphore,
 	Struct,
-	Option,
 	Tracer,
 	UndefinedOr,
 } from "effect";
 import * as Rivetkit from "rivetkit";
 import type * as RivetkitDb from "rivetkit/db";
-import * as Action from "./Action";
+import type * as Action from "./Action";
 import type * as ActorState from "./ActorState";
 import * as Client from "./Client";
+import * as RivetRivetError from "./internal/RivetRivetError";
 import { readTraceMeta, rpcSystem } from "./internal/tracing";
 import * as Registry from "./Registry";
 import type * as RivetError from "./RivetError";
@@ -453,7 +454,8 @@ const makeRivetkitActor = Effect.fnUntraced(function* <
 											? encodedError._tag
 											: undefined,
 										metadata: {
-											_tag: Action.ActionErrorMetadataTag,
+											_tag: RivetRivetError.ActionErrorMetadataTag,
+											version: 1,
 											error: encodedError,
 										},
 									},

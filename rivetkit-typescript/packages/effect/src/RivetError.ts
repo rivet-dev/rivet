@@ -1,6 +1,6 @@
-import { Duration, Predicate, Schema, SchemaGetter } from "effect";
-import * as Rivetkit from "rivetkit";
+import { Duration, Predicate, Schema } from "effect";
 import * as RivetkitErrors from "rivetkit/errors";
+import type * as RivetRivetError from "./internal/RivetRivetError";
 
 const ReasonTypeId = "~@rivetkit/effect/RivetError/Reason" as const;
 const TypeId = "~@rivetkit/effect/RivetError" as const;
@@ -180,6 +180,7 @@ export class InvalidEncoding extends Schema.TaggedErrorClass<InvalidEncoding>(
 	group: Schema.tag("encoding"),
 	code: Schema.tag("invalid"),
 	message: Schema.String,
+	cause: Schema.optional(Schema.Defect),
 }) {
 	readonly [ReasonTypeId] = ReasonTypeId;
 	get isRetryable(): boolean {
@@ -306,16 +307,17 @@ export class InternalError extends Schema.TaggedErrorClass<InternalError>(
 
 /**
  * Forward-compatible catch-all for `(group, code)` pairs the SDK does
- * not recognize yet. Keeps the raw wire fields so newer engine errors
+ * not recognize yet. Keeps the raw rivetkit fields so newer engine errors
  * still surface usefully through older SDKs.
  */
 export class UnknownError extends Schema.TaggedErrorClass<UnknownError>(
 	`${ReasonTypeId}/UnknownError`,
 )("UnknownError", {
-	group: Schema.String,
-	code: Schema.String,
+	group: Schema.optional(Schema.String),
+	code: Schema.optional(Schema.String),
 	message: Schema.String,
 	metadata: Schema.optional(Schema.Unknown),
+	cause: Schema.optional(Schema.Defect),
 }) {
 	readonly [ReasonTypeId] = ReasonTypeId;
 	get isRetryable(): boolean {
@@ -448,21 +450,6 @@ export class RivetError extends Schema.TaggedErrorClass<RivetError>(
 
 export const isRivetError = (u: unknown): u is RivetError =>
 	Predicate.hasProperty(u, TypeId);
-
-// ============================================================================
-// Wire codec
-// ============================================================================
-//
-// On-the-wire envelope produced by `rivetkit-core`'s defect sanitizer.
-// `Pick`ing here anchors the codec against drift in the canonical wire
-// shape.
-
-const RivetErrorPayload = Schema.Struct({
-	group: Schema.String,
-	code: Schema.String,
-	message: Schema.String,
-	metadata: Schema.optionalKey(Schema.Unknown),
-}) satisfies Schema.Codec<Rivetkit.RivetErrorLike>;
 
 const readMetaField = (metadata: unknown, key: string): unknown => {
 	if (typeof metadata !== "object" || metadata === null) return undefined;
@@ -599,10 +586,18 @@ const fixedFactories: ReadonlyArray<FixedFactory> = [
 	},
 ];
 
-const reasonFromWire = (wire: typeof RivetErrorPayload.Encoded): Reason => {
-	const { group, code, message, metadata } = wire;
+const reasonFromRivetkitRivetError = (
+	rivetkitRivetError: RivetRivetError.RivetkitRivetError,
+): Reason => {
+	const { group, code, message, metadata } = rivetkitRivetError;
 	for (const entry of fixedFactories) {
-		if (RivetkitErrors.isRivetErrorCode(wire, entry.group, entry.code)) {
+		if (
+			RivetkitErrors.isRivetErrorCode(
+				rivetkitRivetError,
+				entry.group,
+				entry.code,
+			)
+		) {
 			return entry.build(message, metadata);
 		}
 	}
@@ -623,62 +618,6 @@ const reasonFromWire = (wire: typeof RivetErrorPayload.Encoded): Reason => {
 	});
 };
 
-// Per-reason metadata serialization. Reasons not listed have no
-// metadata. `group`, `code`, and `message` are read straight off the
-// instance, so this is the only mapping `reasonToWire` needs.
-const metadataFromReason = (reason: Reason): unknown | undefined => {
-	switch (reason._tag) {
-		case "ActorRestarting": {
-			const metadata: Record<string, unknown> = {};
-			if (reason.retryAfter !== undefined) {
-				metadata.retryAfterMs = Duration.toMillis(reason.retryAfter);
-			}
-			if (reason.phase !== undefined) metadata.phase = reason.phase;
-			return Object.keys(metadata).length > 0 ? metadata : undefined;
-		}
-		case "Overloaded": {
-			const metadata: Record<string, unknown> = {};
-			if (reason.channel !== undefined) metadata.channel = reason.channel;
-			if (reason.capacity !== undefined)
-				metadata.capacity = reason.capacity;
-			if (reason.operation !== undefined)
-				metadata.operation = reason.operation;
-			return Object.keys(metadata).length > 0 ? metadata : undefined;
-		}
-		case "UnknownUserError":
-		case "UnknownError":
-			return reason.metadata;
-		default:
-			return undefined;
-	}
-};
-
-const reasonToWire = (reason: Reason): typeof RivetErrorPayload.Encoded => {
-	const metadata = metadataFromReason(reason);
-	return {
-		group: reason.group,
-		code: reason.code,
-		message: reason.message,
-		...(metadata !== undefined ? { metadata } : {}),
-	};
-};
-
-/**
- * Wire codec used as the default `defectSchema` for actions. Decodes
- * the `(group, code, message, metadata)` envelope produced by
- * `rivetkit-core`'s defect sanitizer into a `RivetError` carrying the
- * appropriate semantic `reason`.
- */
-export const RivetErrorFromWire = RivetErrorPayload.pipe(
-	Schema.decodeTo(Schema.instanceOf(RivetError), {
-		decode: SchemaGetter.transform(
-			(wire) => new RivetError({ reason: reasonFromWire(wire) }),
-		),
-		encode: SchemaGetter.transform((e: RivetError) =>
-			reasonToWire(e.reason),
-		),
-	}),
-);
-
-export const decodeRivetErrorFromWire =
-	Schema.decodeUnknownEffect(RivetErrorFromWire);
+export const fromRivetkitRivetError = (
+	e: RivetRivetError.RivetkitRivetError,
+): RivetError => new RivetError({ reason: reasonFromRivetkitRivetError(e) });
