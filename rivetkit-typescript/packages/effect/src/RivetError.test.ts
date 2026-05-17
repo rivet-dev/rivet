@@ -38,4 +38,55 @@ describe("RivetError", () => {
 		assert.strictEqual(error.reason.code, cause.code);
 		assert.strictEqual(error.reason.message, cause.message);
 	});
+
+	it("classifies known guard errors into specific reasons", () => {
+		const serviceUnavailable = RivetError.fromUnknown(
+			new RivetkitErrors.RivetError(
+				"guard",
+				"service_unavailable",
+				"service unavailable",
+			),
+		);
+		const readyTimeout = RivetError.fromUnknown(
+			new RivetkitErrors.RivetError(
+				"guard",
+				"actor_ready_timeout",
+				"actor ready timeout",
+			),
+		);
+		const tunnelTimeout = RivetError.fromUnknown(
+			new RivetkitErrors.RivetError(
+				"guard",
+				"tunnel_message_timeout",
+				"tunnel message timeout",
+			),
+		);
+
+		assert.instanceOf(
+			serviceUnavailable.reason,
+			RivetError.GuardServiceUnavailable,
+		);
+		assert.instanceOf(
+			readyTimeout.reason,
+			RivetError.GuardActorReadyTimeout,
+		);
+		assert.instanceOf(
+			tunnelTimeout.reason,
+			RivetError.GuardTunnelMessageTimeout,
+		);
+		assert.strictEqual(serviceUnavailable.reason.code, "service_unavailable");
+	});
+
+	it("keeps unknown guard errors in UnknownError", () => {
+		const error = RivetError.fromUnknown(
+			new RivetkitErrors.RivetError(
+				"guard",
+				"new_guard_code",
+				"new guard code",
+			),
+		);
+
+		assert.instanceOf(error.reason, RivetError.UnknownError);
+		assert.strictEqual(error.reason.code, "new_guard_code");
+	});
 });

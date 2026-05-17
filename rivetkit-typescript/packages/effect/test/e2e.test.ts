@@ -425,9 +425,12 @@ layer(TestLayer)("end-to-end", (it) => {
 				assert.isTrue(exit._tag === "Success");
 				if (exit._tag === "Success") {
 					assert.instanceOf(exit.value, RivetError.RivetError);
-					assert.instanceOf(exit.value.reason, RivetError.GuardError);
+					assert.instanceOf(
+						exit.value.reason,
+						RivetError.GuardServiceUnavailable,
+					);
 					assert.strictEqual(
-						(exit.value.reason as RivetError.GuardError).code,
+						(exit.value.reason as RivetError.GuardServiceUnavailable).code,
 						"service_unavailable",
 					);
 				}

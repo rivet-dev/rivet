@@ -278,9 +278,170 @@ export class InvalidRequest extends Schema.TaggedErrorClass<InvalidRequest>(
 	}
 }
 
-export class GuardError extends Schema.TaggedErrorClass<GuardError>(
-	`${ReasonTypeId}/GuardError`,
-)("GuardError", {
+export class GuardActorReadyTimeout extends Schema.TaggedErrorClass<GuardActorReadyTimeout>(
+	`${ReasonTypeId}/GuardActorReadyTimeout`,
+)("GuardActorReadyTimeout", {
+	cause: Schema.instanceOf(RivetkitErrors.RivetError),
+}) {
+	readonly [ReasonTypeId] = ReasonTypeId;
+	override get message() {
+		return this.cause.message;
+	}
+	get group() {
+		return this.cause.group;
+	}
+	get code() {
+		return this.cause.code;
+	}
+	get metadata() {
+		return this.cause.metadata;
+	}
+	get actor() {
+		return this.cause.actor;
+	}
+}
+
+export class GuardActorRunnerFailed extends Schema.TaggedErrorClass<GuardActorRunnerFailed>(
+	`${ReasonTypeId}/GuardActorRunnerFailed`,
+)("GuardActorRunnerFailed", {
+	cause: Schema.instanceOf(RivetkitErrors.RivetError),
+}) {
+	readonly [ReasonTypeId] = ReasonTypeId;
+	override get message() {
+		return this.cause.message;
+	}
+	get group() {
+		return this.cause.group;
+	}
+	get code() {
+		return this.cause.code;
+	}
+	get metadata() {
+		return this.cause.metadata;
+	}
+	get actor() {
+		return this.cause.actor;
+	}
+}
+
+export class GuardServiceUnavailable extends Schema.TaggedErrorClass<GuardServiceUnavailable>(
+	`${ReasonTypeId}/GuardServiceUnavailable`,
+)("GuardServiceUnavailable", {
+	cause: Schema.instanceOf(RivetkitErrors.RivetError),
+}) {
+	readonly [ReasonTypeId] = ReasonTypeId;
+	override get message() {
+		return this.cause.message;
+	}
+	get group() {
+		return this.cause.group;
+	}
+	get code() {
+		return this.cause.code;
+	}
+	get metadata() {
+		return this.cause.metadata;
+	}
+	get actor() {
+		return this.cause.actor;
+	}
+}
+
+export class GuardActorStoppedWhileWaiting extends Schema.TaggedErrorClass<GuardActorStoppedWhileWaiting>(
+	`${ReasonTypeId}/GuardActorStoppedWhileWaiting`,
+)("GuardActorStoppedWhileWaiting", {
+	cause: Schema.instanceOf(RivetkitErrors.RivetError),
+}) {
+	readonly [ReasonTypeId] = ReasonTypeId;
+	override get message() {
+		return this.cause.message;
+	}
+	get group() {
+		return this.cause.group;
+	}
+	get code() {
+		return this.cause.code;
+	}
+	get metadata() {
+		return this.cause.metadata;
+	}
+	get actor() {
+		return this.cause.actor;
+	}
+}
+
+export class GuardTunnelRequestAborted extends Schema.TaggedErrorClass<GuardTunnelRequestAborted>(
+	`${ReasonTypeId}/GuardTunnelRequestAborted`,
+)("GuardTunnelRequestAborted", {
+	cause: Schema.instanceOf(RivetkitErrors.RivetError),
+}) {
+	readonly [ReasonTypeId] = ReasonTypeId;
+	override get message() {
+		return this.cause.message;
+	}
+	get group() {
+		return this.cause.group;
+	}
+	get code() {
+		return this.cause.code;
+	}
+	get metadata() {
+		return this.cause.metadata;
+	}
+	get actor() {
+		return this.cause.actor;
+	}
+}
+
+export class GuardTunnelMessageTimeout extends Schema.TaggedErrorClass<GuardTunnelMessageTimeout>(
+	`${ReasonTypeId}/GuardTunnelMessageTimeout`,
+)("GuardTunnelMessageTimeout", {
+	cause: Schema.instanceOf(RivetkitErrors.RivetError),
+}) {
+	readonly [ReasonTypeId] = ReasonTypeId;
+	override get message() {
+		return this.cause.message;
+	}
+	get group() {
+		return this.cause.group;
+	}
+	get code() {
+		return this.cause.code;
+	}
+	get metadata() {
+		return this.cause.metadata;
+	}
+	get actor() {
+		return this.cause.actor;
+	}
+}
+
+export class GuardTunnelResponseClosed extends Schema.TaggedErrorClass<GuardTunnelResponseClosed>(
+	`${ReasonTypeId}/GuardTunnelResponseClosed`,
+)("GuardTunnelResponseClosed", {
+	cause: Schema.instanceOf(RivetkitErrors.RivetError),
+}) {
+	readonly [ReasonTypeId] = ReasonTypeId;
+	override get message() {
+		return this.cause.message;
+	}
+	get group() {
+		return this.cause.group;
+	}
+	get code() {
+		return this.cause.code;
+	}
+	get metadata() {
+		return this.cause.metadata;
+	}
+	get actor() {
+		return this.cause.actor;
+	}
+}
+
+export class GuardGatewayResponseStartTimeout extends Schema.TaggedErrorClass<GuardGatewayResponseStartTimeout>(
+	`${ReasonTypeId}/GuardGatewayResponseStartTimeout`,
+)("GuardGatewayResponseStartTimeout", {
 	cause: Schema.instanceOf(RivetkitErrors.RivetError),
 }) {
 	readonly [ReasonTypeId] = ReasonTypeId;
@@ -402,7 +563,14 @@ export type Reason =
 	| OutgoingMessageTooLong
 	| InvalidEncoding
 	| InvalidRequest
-	| GuardError
+	| GuardActorReadyTimeout
+	| GuardActorRunnerFailed
+	| GuardServiceUnavailable
+	| GuardActorStoppedWhileWaiting
+	| GuardTunnelRequestAborted
+	| GuardTunnelMessageTimeout
+	| GuardTunnelResponseClosed
+	| GuardGatewayResponseStartTimeout
 	| InternalError
 	| UnknownUserError
 	| UnknownError;
@@ -421,7 +589,14 @@ export const Reason: Schema.Union<
 		typeof OutgoingMessageTooLong,
 		typeof InvalidEncoding,
 		typeof InvalidRequest,
-		typeof GuardError,
+		typeof GuardActorReadyTimeout,
+		typeof GuardActorRunnerFailed,
+		typeof GuardServiceUnavailable,
+		typeof GuardActorStoppedWhileWaiting,
+		typeof GuardTunnelRequestAborted,
+		typeof GuardTunnelMessageTimeout,
+		typeof GuardTunnelResponseClosed,
+		typeof GuardGatewayResponseStartTimeout,
 		typeof InternalError,
 		typeof UnknownUserError,
 		typeof UnknownError,
@@ -439,7 +614,14 @@ export const Reason: Schema.Union<
 	OutgoingMessageTooLong,
 	InvalidEncoding,
 	InvalidRequest,
-	GuardError,
+	GuardActorReadyTimeout,
+	GuardActorRunnerFailed,
+	GuardServiceUnavailable,
+	GuardActorStoppedWhileWaiting,
+	GuardTunnelRequestAborted,
+	GuardTunnelMessageTimeout,
+	GuardTunnelResponseClosed,
+	GuardGatewayResponseStartTimeout,
 	InternalError,
 	UnknownUserError,
 	UnknownError,
@@ -485,42 +667,53 @@ export class RivetError extends Schema.TaggedErrorClass<RivetError>(
 export const isRivetError = (u: unknown): u is RivetError =>
 	Predicate.hasProperty(u, TypeId);
 
+type MakeReason = (error: RivetkitErrors.RivetError) => Reason;
+
+const reasonByCode: Record<string, MakeReason | undefined> = {
+	"auth.forbidden": (error) => new Forbidden({ cause: error }),
+	"actor.not_found": (error) => new ActorNotFound({ cause: error }),
+	"actor.stopping": (error) => new ActorStopping({ cause: error }),
+	"actor.restarting": (error) => new ActorRestarting({ cause: error }),
+	"actor.action_not_found": (error) => new ActionNotFound({ cause: error }),
+	"actor.action_timed_out": (error) => new ActionTimedOut({ cause: error }),
+	"actor.aborted": (error) => new ActionAborted({ cause: error }),
+	"actor.overloaded": (error) => new ActorOverloaded({ cause: error }),
+	[`actor.${RivetkitErrors.INTERNAL_ERROR_CODE}`]: (error) =>
+		new InternalError({ cause: error }),
+	[`core.${RivetkitErrors.INTERNAL_ERROR_CODE}`]: (error) =>
+		new InternalError({ cause: error }),
+	[`rivetkit.${RivetkitErrors.INTERNAL_ERROR_CODE}`]: (error) =>
+		new InternalError({ cause: error }),
+	"message.incoming_too_long": (error) =>
+		new IncomingMessageTooLong({ cause: error }),
+	"message.outgoing_too_long": (error) =>
+		new OutgoingMessageTooLong({ cause: error }),
+	"encoding.invalid": (error) => new InvalidEncoding({ cause: error }),
+	"request.invalid": (error) => new InvalidRequest({ cause: error }),
+	"guard.actor_ready_timeout": (error) =>
+		new GuardActorReadyTimeout({ cause: error }),
+	"guard.actor_runner_failed": (error) =>
+		new GuardActorRunnerFailed({ cause: error }),
+	"guard.service_unavailable": (error) =>
+		new GuardServiceUnavailable({ cause: error }),
+	"guard.actor_stopped_while_waiting": (error) =>
+		new GuardActorStoppedWhileWaiting({ cause: error }),
+	"guard.tunnel_request_aborted": (error) =>
+		new GuardTunnelRequestAborted({ cause: error }),
+	"guard.tunnel_message_timeout": (error) =>
+		new GuardTunnelMessageTimeout({ cause: error }),
+	"guard.tunnel_response_closed": (error) =>
+		new GuardTunnelResponseClosed({ cause: error }),
+	"guard.gateway_response_start_timeout": (error) =>
+		new GuardGatewayResponseStartTimeout({ cause: error }),
+};
+
 const reasonFromRivetkitRivetError = (
 	error: RivetkitErrors.RivetError,
 ): Reason => {
-	switch (`${error.group}.${error.code}`) {
-		case `auth.${RivetkitErrors.forbiddenError().code}`:
-			return new Forbidden({ cause: error });
-		case `actor.${RivetkitErrors.actorNotFound().code}`:
-			return new ActorNotFound({ cause: error });
-		case `actor.${RivetkitErrors.actorStopping().code}`:
-			return new ActorStopping({ cause: error });
-		case `actor.${RivetkitErrors.actorRestarting().code}`:
-			return new ActorRestarting({ cause: error });
-		case `actor.action_not_found`:
-			return new ActionNotFound({ cause: error });
-		case `actor.action_timed_out`:
-			return new ActionTimedOut({ cause: error });
-		case `actor.aborted`:
-			return new ActionAborted({ cause: error });
-		case `actor.overloaded`:
-			return new ActorOverloaded({ cause: error });
-		case `actor.${RivetkitErrors.INTERNAL_ERROR_CODE}`:
-		case `core.${RivetkitErrors.INTERNAL_ERROR_CODE}`:
-		case `rivetkit.${RivetkitErrors.INTERNAL_ERROR_CODE}`:
-			return new InternalError({ cause: error });
-		case `message.incoming_too_long`:
-			return new IncomingMessageTooLong({ cause: error });
-		case `message.outgoing_too_long`:
-			return new OutgoingMessageTooLong({ cause: error });
-		case `encoding.${RivetkitErrors.invalidEncoding().code}`:
-			return new InvalidEncoding({ cause: error });
-		case `request.${RivetkitErrors.invalidRequest().code}`:
-			return new InvalidRequest({ cause: error });
-	}
+	const makeReason = reasonByCode[`${error.group}.${error.code}`];
+	if (makeReason) return makeReason(error);
 
-	// Group-wide fallbacks: any code under the group maps to a single reason.
-	if (error.group === "guard") return new GuardError({ cause: error });
 	if (error.group === "user") return new UnknownUserError({ cause: error });
 
 	return new UnknownError({
