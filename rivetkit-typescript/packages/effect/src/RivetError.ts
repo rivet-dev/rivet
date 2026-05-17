@@ -550,7 +550,7 @@ export class UnknownError extends Schema.TaggedErrorClass<UnknownError>(
 	}
 }
 
-export type Reason =
+export type RivetErrorReason =
 	| Forbidden
 	| ActorNotFound
 	| ActorStopping
@@ -575,7 +575,7 @@ export type Reason =
 	| UnknownUserError
 	| UnknownError;
 
-export const Reason: Schema.Union<
+export const RivetErrorReason: Schema.Union<
 	[
 		typeof Forbidden,
 		typeof ActorNotFound,
@@ -627,7 +627,7 @@ export const Reason: Schema.Union<
 	UnknownError,
 ]);
 
-export const isReason = (u: unknown): u is Reason =>
+export const isRivetErrorReason = (u: unknown): u is RivetErrorReason =>
 	Predicate.hasProperty(u, ReasonTypeId);
 
 /**
@@ -654,7 +654,7 @@ export const isReason = (u: unknown): u is Reason =>
 export class RivetError extends Schema.TaggedErrorClass<RivetError>(
 	"@rivetkit/effect/RivetError",
 )("RivetError", {
-	reason: Reason,
+	reason: RivetErrorReason,
 }) {
 	readonly [TypeId] = TypeId;
 	override readonly cause = this.reason;
@@ -667,9 +667,11 @@ export class RivetError extends Schema.TaggedErrorClass<RivetError>(
 export const isRivetError = (u: unknown): u is RivetError =>
 	Predicate.hasProperty(u, TypeId);
 
-type MakeReason = (error: RivetkitErrors.RivetError) => Reason;
+type MakeRivetErrorReason = (
+	error: RivetkitErrors.RivetError,
+) => RivetErrorReason;
 
-const reasonByCode: Record<string, MakeReason | undefined> = {
+const reasonByCode: Record<string, MakeRivetErrorReason | undefined> = {
 	"auth.forbidden": (error) => new Forbidden({ cause: error }),
 	"actor.not_found": (error) => new ActorNotFound({ cause: error }),
 	"actor.stopping": (error) => new ActorStopping({ cause: error }),
@@ -710,7 +712,7 @@ const reasonByCode: Record<string, MakeReason | undefined> = {
 
 const reasonFromRivetkitRivetError = (
 	error: RivetkitErrors.RivetError,
-): Reason => {
+): RivetErrorReason => {
 	const makeReason = reasonByCode[`${error.group}.${error.code}`];
 	if (makeReason) return makeReason(error);
 
@@ -723,8 +725,10 @@ const reasonFromRivetkitRivetError = (
 };
 
 export const fromRivetkitRivetError = (
-	e: RivetkitErrors.RivetError,
-): RivetError => new RivetError({ reason: reasonFromRivetkitRivetError(e) });
+	error: RivetkitErrors.RivetError,
+): RivetError => {
+	return new RivetError({ reason: reasonFromRivetkitRivetError(error) });
+};
 
 export const fromUnknown = (cause: unknown): RivetError => {
 	if (isRivetError(cause)) return cause;
