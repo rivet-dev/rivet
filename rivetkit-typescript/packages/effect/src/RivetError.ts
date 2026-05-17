@@ -95,9 +95,9 @@ export class ActionAborted extends Schema.TaggedErrorClass<ActionAborted>(
 	}
 }
 
-export class Overloaded extends Schema.TaggedErrorClass<Overloaded>(
-	`${ReasonTypeId}/Overloaded`,
-)("Overloaded", {
+export class ActorOverloaded extends Schema.TaggedErrorClass<ActorOverloaded>(
+	`${ReasonTypeId}/ActorOverloaded`,
+)("ActorOverloaded", {
 	channel: Schema.optional(Schema.String),
 	capacity: Schema.optional(Schema.Number),
 	operation: Schema.optional(Schema.String),
@@ -121,20 +121,6 @@ export class MessageTooLong extends Schema.TaggedErrorClass<MessageTooLong>(
 	}
 	get isRetryable(): boolean {
 		return false;
-	}
-}
-
-const queueRetryableCodes = new Set<string>(["full", "timed_out"]);
-
-export class QueueError extends Schema.TaggedErrorClass<QueueError>(
-	`${ReasonTypeId}/QueueError`,
-)("QueueError", { cause: RivetkitRivetError.RivetkitRivetError }) {
-	readonly [ReasonTypeId] = ReasonTypeId;
-	override get message(): string {
-		return this.cause.message;
-	}
-	get isRetryable(): boolean {
-		return queueRetryableCodes.has(this.cause.code);
 	}
 }
 
@@ -279,9 +265,8 @@ export type Reason =
 	| ActionNotFound
 	| ActionTimedOut
 	| ActionAborted
-	| Overloaded
+	| ActorOverloaded
 	| MessageTooLong
-	| QueueError
 	| InvalidEncoding
 	| InvalidRequest
 	| ConnectionOpenFailed
@@ -301,9 +286,8 @@ export const Reason: Schema.Union<
 		typeof ActionNotFound,
 		typeof ActionTimedOut,
 		typeof ActionAborted,
-		typeof Overloaded,
+		typeof ActorOverloaded,
 		typeof MessageTooLong,
-		typeof QueueError,
 		typeof InvalidEncoding,
 		typeof InvalidRequest,
 		typeof ConnectionOpenFailed,
@@ -322,9 +306,8 @@ export const Reason: Schema.Union<
 	ActionNotFound,
 	ActionTimedOut,
 	ActionAborted,
-	Overloaded,
+	ActorOverloaded,
 	MessageTooLong,
-	QueueError,
 	InvalidEncoding,
 	InvalidRequest,
 	ConnectionOpenFailed,
@@ -398,10 +381,6 @@ const readMetaField = (metadata: unknown, key: string): unknown => {
 	return (metadata as Record<string, unknown>)[key];
 };
 
-// Classification table: maps canonical `${group}.${code}` to the reason
-// class that should wrap the wire error. Reasons whose `code` is variable
-// (queue, guard, user) and reasons that need to decode metadata
-// (ActorRestarting, Overloaded) are handled inline below.
 const simpleReasonByCode: Record<
 	string,
 	new (props: {
@@ -414,6 +393,7 @@ const simpleReasonByCode: Record<
 	"actor.action_not_found": ActionNotFound,
 	"actor.action_timed_out": ActionTimedOut,
 	"actor.aborted": ActionAborted,
+	"actor.overloaded": ActorOverloaded,
 	"message.incoming_too_long": MessageTooLong,
 	"message.outgoing_too_long": MessageTooLong,
 	"encoding.invalid": InvalidEncoding,
@@ -466,18 +446,6 @@ const reasonFromRivetkitRivetError = (
 				: {}),
 		});
 	}
-	if (error.group === "actor" && error.code === "overloaded") {
-		const channel = readMetaField(error.metadata, "channel");
-		const capacity = readMetaField(error.metadata, "capacity");
-		const operation = readMetaField(error.metadata, "operation");
-		return new Overloaded({
-			cause: error,
-			...(typeof channel === "string" ? { channel } : {}),
-			...(typeof capacity === "number" ? { capacity } : {}),
-			...(typeof operation === "string" ? { operation } : {}),
-		});
-	}
-	if (error.group === "queue") return new QueueError({ cause: error });
 	if (error.group === "guard") return new GuardError({ cause: error });
 	if (error.group === "user") return new UnknownUserError({ cause: error });
 	return new UnknownError({
