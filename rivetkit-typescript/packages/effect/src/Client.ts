@@ -156,6 +156,15 @@ const decodeRejectedActionCall = <E extends Schema.Top>(
 		}
 		const rivetkitRivetError = RivetkitErrors.toRivetError(cause);
 
+		// Most structured Rivet errors are infrastructure or runtime failures.
+		// Only errors with the Effect action-error marker should enter the
+		// typed action-error decode path.
+		if (!ActionError.isActionErrorMetadata(rivetkitRivetError.metadata)) {
+			return yield* Effect.fail(
+				RivetError.fromRivetkitRivetError(rivetkitRivetError),
+			);
+		}
+
 		// Effect action errors are sent as UserError metadata. First decode
 		// that envelope so we can distinguish typed domain errors from
 		// ordinary unknown user errors.
