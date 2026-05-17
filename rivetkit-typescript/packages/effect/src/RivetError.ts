@@ -25,6 +25,12 @@ export class Forbidden extends Schema.TaggedErrorClass<Forbidden>(
 	get actor() {
 		return this.cause.actor;
 	}
+	get statusCode() {
+		return this.cause.statusCode;
+	}
+	get public() {
+		return this.cause.public;
+	}
 	get isRetryable(): boolean {
 		return false;
 	}
@@ -50,6 +56,12 @@ export class ActorNotFound extends Schema.TaggedErrorClass<ActorNotFound>(
 	}
 	get actor() {
 		return this.cause.actor;
+	}
+	get statusCode() {
+		return this.cause.statusCode;
+	}
+	get public() {
+		return this.cause.public;
 	}
 	get isRetryable(): boolean {
 		return false;
@@ -77,6 +89,12 @@ export class ActorStopping extends Schema.TaggedErrorClass<ActorStopping>(
 	get actor() {
 		return this.cause.actor;
 	}
+	get statusCode() {
+		return this.cause.statusCode;
+	}
+	get public() {
+		return this.cause.public;
+	}
 	get isRetryable(): boolean {
 		return true;
 	}
@@ -102,6 +120,12 @@ export class ActorRestarting extends Schema.TaggedErrorClass<ActorRestarting>(
 	}
 	get actor() {
 		return this.cause.actor;
+	}
+	get statusCode() {
+		return this.cause.statusCode;
+	}
+	get public() {
+		return this.cause.public;
 	}
 	get isRetryable(): boolean {
 		return true;
@@ -137,6 +161,12 @@ export class ActionNotFound extends Schema.TaggedErrorClass<ActionNotFound>(
 	get actor() {
 		return this.cause.actor;
 	}
+	get statusCode() {
+		return this.cause.statusCode;
+	}
+	get public() {
+		return this.cause.public;
+	}
 	get isRetryable(): boolean {
 		return false;
 	}
@@ -160,6 +190,12 @@ export class ActionTimedOut extends Schema.TaggedErrorClass<ActionTimedOut>(
 	}
 	get actor() {
 		return this.cause.actor;
+	}
+	get statusCode() {
+		return this.cause.statusCode;
+	}
+	get public() {
+		return this.cause.public;
 	}
 	get isRetryable(): boolean {
 		return true;
@@ -187,6 +223,12 @@ export class ActionAborted extends Schema.TaggedErrorClass<ActionAborted>(
 	get actor() {
 		return this.cause.actor;
 	}
+	get statusCode() {
+		return this.cause.statusCode;
+	}
+	get public() {
+		return this.cause.public;
+	}
 	get isRetryable(): boolean {
 		return false;
 	}
@@ -212,6 +254,12 @@ export class ActorOverloaded extends Schema.TaggedErrorClass<ActorOverloaded>(
 	}
 	get actor() {
 		return this.cause.actor;
+	}
+	get statusCode() {
+		return this.cause.statusCode;
+	}
+	get public() {
+		return this.cause.public;
 	}
 	get isRetryable(): boolean {
 		return true;
@@ -239,6 +287,12 @@ export class IncomingMessageTooLong extends Schema.TaggedErrorClass<IncomingMess
 	get actor() {
 		return this.cause.actor;
 	}
+	get statusCode() {
+		return this.cause.statusCode;
+	}
+	get public() {
+		return this.cause.public;
+	}
 	get isRetryable(): boolean {
 		return false;
 	}
@@ -264,6 +318,12 @@ export class OutgoingMessageTooLong extends Schema.TaggedErrorClass<OutgoingMess
 	}
 	get actor() {
 		return this.cause.actor;
+	}
+	get statusCode() {
+		return this.cause.statusCode;
+	}
+	get public() {
+		return this.cause.public;
 	}
 	get isRetryable(): boolean {
 		return false;
@@ -291,6 +351,12 @@ export class InvalidEncoding extends Schema.TaggedErrorClass<InvalidEncoding>(
 	get actor() {
 		return this.cause.actor;
 	}
+	get statusCode() {
+		return this.cause.statusCode;
+	}
+	get public() {
+		return this.cause.public;
+	}
 	get isRetryable(): boolean {
 		return false;
 	}
@@ -316,6 +382,12 @@ export class InvalidRequest extends Schema.TaggedErrorClass<InvalidRequest>(
 	}
 	get actor() {
 		return this.cause.actor;
+	}
+	get statusCode() {
+		return this.cause.statusCode;
+	}
+	get public() {
+		return this.cause.public;
 	}
 	get isRetryable(): boolean {
 		return false;
@@ -343,6 +415,12 @@ export class GuardActorReadyTimeout extends Schema.TaggedErrorClass<GuardActorRe
 	get actor() {
 		return this.cause.actor;
 	}
+	get statusCode() {
+		return this.cause.statusCode;
+	}
+	get public() {
+		return this.cause.public;
+	}
 	get isRetryable(): boolean {
 		return true;
 	}
@@ -368,6 +446,12 @@ export class GuardActorRunnerFailed extends Schema.TaggedErrorClass<GuardActorRu
 	}
 	get actor() {
 		return this.cause.actor;
+	}
+	get statusCode() {
+		return this.cause.statusCode;
+	}
+	get public() {
+		return this.cause.public;
 	}
 	get isRetryable(): boolean {
 		return false;
@@ -395,6 +479,12 @@ export class GuardServiceUnavailable extends Schema.TaggedErrorClass<GuardServic
 	get actor() {
 		return this.cause.actor;
 	}
+	get statusCode() {
+		return this.cause.statusCode;
+	}
+	get public() {
+		return this.cause.public;
+	}
 	get isRetryable(): boolean {
 		return true;
 	}
@@ -420,6 +510,12 @@ export class GuardActorStoppedWhileWaiting extends Schema.TaggedErrorClass<Guard
 	}
 	get actor() {
 		return this.cause.actor;
+	}
+	get statusCode() {
+		return this.cause.statusCode;
+	}
+	get public() {
+		return this.cause.public;
 	}
 	get isRetryable(): boolean {
 		return true;
@@ -447,6 +543,12 @@ export class GuardTunnelRequestAborted extends Schema.TaggedErrorClass<GuardTunn
 	get actor() {
 		return this.cause.actor;
 	}
+	get statusCode() {
+		return this.cause.statusCode;
+	}
+	get public() {
+		return this.cause.public;
+	}
 	get isRetryable(): boolean {
 		return true;
 	}
@@ -472,6 +574,12 @@ export class GuardTunnelMessageTimeout extends Schema.TaggedErrorClass<GuardTunn
 	}
 	get actor() {
 		return this.cause.actor;
+	}
+	get statusCode() {
+		return this.cause.statusCode;
+	}
+	get public() {
+		return this.cause.public;
 	}
 	get isRetryable(): boolean {
 		return true;
@@ -499,6 +607,12 @@ export class GuardTunnelResponseClosed extends Schema.TaggedErrorClass<GuardTunn
 	get actor() {
 		return this.cause.actor;
 	}
+	get statusCode() {
+		return this.cause.statusCode;
+	}
+	get public() {
+		return this.cause.public;
+	}
 	get isRetryable(): boolean {
 		return true;
 	}
@@ -524,6 +638,12 @@ export class GuardGatewayResponseStartTimeout extends Schema.TaggedErrorClass<Gu
 	}
 	get actor() {
 		return this.cause.actor;
+	}
+	get statusCode() {
+		return this.cause.statusCode;
+	}
+	get public() {
+		return this.cause.public;
 	}
 	get isRetryable(): boolean {
 		return true;
@@ -551,6 +671,12 @@ export class InternalError extends Schema.TaggedErrorClass<InternalError>(
 	get actor() {
 		return this.cause.actor;
 	}
+	get statusCode() {
+		return this.cause.statusCode;
+	}
+	get public() {
+		return this.cause.public;
+	}
 	get isRetryable(): boolean {
 		return false;
 	}
@@ -565,6 +691,24 @@ export class ActionErrorDecodeFailed extends Schema.TaggedErrorClass<ActionError
 	readonly [ReasonTypeId] = ReasonTypeId;
 	override get message() {
 		return `Failed to decode action error ${this.rivetError.group}.${this.rivetError.code}`;
+	}
+	get group() {
+		return this.rivetError.group;
+	}
+	get code() {
+		return this.rivetError.code;
+	}
+	get metadata() {
+		return this.rivetError.metadata;
+	}
+	get actor() {
+		return this.rivetError.actor;
+	}
+	get statusCode() {
+		return this.rivetError.statusCode;
+	}
+	get public() {
+		return this.rivetError.public;
 	}
 	get isRetryable(): boolean {
 		return false;
@@ -599,6 +743,12 @@ export class UnknownUserError extends Schema.TaggedErrorClass<UnknownUserError>(
 	}
 	get actor() {
 		return this.cause.actor;
+	}
+	get statusCode() {
+		return this.cause.statusCode;
+	}
+	get public() {
+		return this.cause.public;
 	}
 	get isRetryable(): boolean {
 		return false;
@@ -635,6 +785,16 @@ export class UnknownError extends Schema.TaggedErrorClass<UnknownError>(
 	get actor() {
 		return this.cause instanceof RivetkitErrors.RivetError
 			? this.cause.actor
+			: undefined;
+	}
+	get statusCode() {
+		return this.cause instanceof RivetkitErrors.RivetError
+			? this.cause.statusCode
+			: undefined;
+	}
+	get public() {
+		return this.cause instanceof RivetkitErrors.RivetError
+			? this.cause.public
 			: undefined;
 	}
 	get isRetryable(): boolean {
@@ -760,6 +920,36 @@ export class RivetError extends Schema.TaggedErrorClass<RivetError>(
 	/** Uses the reason message when present, otherwise falls back to the reason tag. */
 	override get message() {
 		return this.reason.message || this.reason._tag;
+	}
+
+	/** Delegates to the underlying reason's `group` if present. */
+	get group(): string | undefined {
+		return "group" in this.reason ? this.reason.group : undefined;
+	}
+
+	/** Delegates to the underlying reason's `code` if present. */
+	get code(): string | undefined {
+		return "code" in this.reason ? this.reason.code : undefined;
+	}
+
+	/** Delegates to the underlying reason's `metadata` if present. */
+	get metadata(): unknown {
+		return "metadata" in this.reason ? this.reason.metadata : undefined;
+	}
+
+	/** Delegates to the underlying reason's `actor` if present. */
+	get actor() {
+		return "actor" in this.reason ? this.reason.actor : undefined;
+	}
+
+	/** Delegates to the underlying reason's `statusCode` if present. */
+	get statusCode(): number | undefined {
+		return "statusCode" in this.reason ? this.reason.statusCode : undefined;
+	}
+
+	/** Delegates to the underlying reason's `public` if present. */
+	get public(): boolean | undefined {
+		return "public" in this.reason ? this.reason.public : undefined;
 	}
 
 	/** Delegates to the underlying reason's `isRetryable` getter. */
