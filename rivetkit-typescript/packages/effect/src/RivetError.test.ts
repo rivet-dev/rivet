@@ -1,4 +1,5 @@
 import { assert, describe, it } from "@effect/vitest";
+import { Effect, Schema } from "effect";
 import * as RivetkitErrors from "rivetkit/errors";
 import * as RivetError from "./RivetError";
 
@@ -74,7 +75,10 @@ describe("RivetError", () => {
 			tunnelTimeout.reason,
 			RivetError.GuardTunnelMessageTimeout,
 		);
-		assert.strictEqual(serviceUnavailable.reason.code, "service_unavailable");
+		assert.strictEqual(
+			serviceUnavailable.reason.code,
+			"service_unavailable",
+		);
 	});
 
 	it("keeps unknown guard errors in UnknownError", () => {
@@ -88,5 +92,31 @@ describe("RivetError", () => {
 
 		assert.instanceOf(error.reason, RivetError.UnknownError);
 		assert.strictEqual(error.reason.code, "new_guard_code");
+	});
+
+	it("exposes action error decode failures with decode context", () => {
+		const cause = new RivetkitErrors.RivetError(
+			"user",
+			"CounterOverflow",
+			"counter overflow",
+			{ metadata: { _tag: "EffectActionError", version: 1, error: {} } },
+		);
+		const schemaError = Effect.runSync(
+			Schema.decodeUnknownEffect(Schema.String)(123).pipe(Effect.flip),
+		);
+		const error = new RivetError.RivetError({
+			reason: new RivetError.ActionErrorDecodeFailed({
+				cause: schemaError,
+				rivetError: cause,
+			}),
+		});
+
+		assert.instanceOf(error.reason, RivetError.ActionErrorDecodeFailed);
+		assert.strictEqual(error.reason.cause, schemaError);
+		assert.strictEqual(error.reason.rivetError, cause);
+		assert.strictEqual(
+			error.reason.message,
+			"Failed to decode action error user.CounterOverflow",
+		);
 	});
 });

@@ -485,6 +485,18 @@ export class InternalError extends Schema.TaggedErrorClass<InternalError>(
 	}
 }
 
+export class ActionErrorDecodeFailed extends Schema.TaggedErrorClass<ActionErrorDecodeFailed>(
+	`${ReasonTypeId}/ActionErrorDecodeFailed`,
+)("ActionErrorDecodeFailed", {
+	cause: Schema.instanceOf(Schema.SchemaError),
+	rivetError: Schema.instanceOf(RivetkitErrors.RivetError),
+}) {
+	readonly [ReasonTypeId] = ReasonTypeId;
+	override get message() {
+		return `Failed to decode action error ${this.rivetError.group}.${this.rivetError.code}`;
+	}
+}
+
 /**
  * Open-ended user error reason. Used when the actor threw `UserError` but
  * the failing action did not declare a matching schema in its `error`
@@ -573,6 +585,7 @@ export type RivetErrorReason =
 	| GuardGatewayResponseStartTimeout
 	| InternalError
 	| UnknownUserError
+	| ActionErrorDecodeFailed
 	| UnknownError;
 
 export const RivetErrorReason: Schema.Union<
@@ -598,6 +611,7 @@ export const RivetErrorReason: Schema.Union<
 		typeof GuardTunnelResponseClosed,
 		typeof GuardGatewayResponseStartTimeout,
 		typeof InternalError,
+		typeof ActionErrorDecodeFailed,
 		typeof UnknownUserError,
 		typeof UnknownError,
 	]
@@ -623,6 +637,7 @@ export const RivetErrorReason: Schema.Union<
 	GuardTunnelResponseClosed,
 	GuardGatewayResponseStartTimeout,
 	InternalError,
+	ActionErrorDecodeFailed,
 	UnknownUserError,
 	UnknownError,
 ]);

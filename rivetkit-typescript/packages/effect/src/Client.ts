@@ -1,4 +1,4 @@
-import { Context, Effect, Exit, Layer, Record, Schema } from "effect";
+import { Context, Effect, Layer, Record, Schema } from "effect";
 import * as RivetkitClient from "rivetkit/client";
 import * as RivetkitErrors from "rivetkit/errors";
 import type * as Action from "./Action";
@@ -149,29 +149,49 @@ const decodeRejectedActionCall = <E extends Schema.Top>(
 	);
 
 	return Effect.fnUntraced(function* (cause: unknown) {
+		// Transport and runtime failures that are not structured Rivet errors
+		// cannot contain typed action-error metadata.
 		if (!RivetkitErrors.isRivetErrorLike(cause)) {
 			return yield* Effect.fail(RivetError.fromUnknown(cause));
 		}
 		const rivetkitRivetError = RivetkitErrors.toRivetError(cause);
 
-		const actionErrorMetadata = yield* Effect.exit(
-			decodeActionErrorMetadata(rivetkitRivetError.metadata),
-		);
-
-		if (Exit.isFailure(actionErrorMetadata)) {
-			return yield* Effect.fail(
-				RivetError.fromRivetkitRivetError(rivetkitRivetError),
-			);
-		}
-
-		const actionError = yield* decodeActionError(
-			actionErrorMetadata.value.error,
+		// Effect action errors are sent as UserError metadata. First decode
+		// that envelope so we can distinguish typed domain errors from
+		// ordinary unknown user errors.
+		const actionErrorMetadata = yield* decodeActionErrorMetadata(
+			rivetkitRivetError.metadata,
 		).pipe(
-			Effect.mapError(() =>
-				RivetError.fromRivetkitRivetError(rivetkitRivetError),
+			Effect.mapError(
+				(cause) =>
+					new RivetError.RivetError({
+						reason: new RivetError.ActionErrorDecodeFailed({
+							cause,
+							rivetError: rivetkitRivetError,
+						}),
+					}),
 			),
 		);
 
+		// Then decode the embedded payload against the action's declared error
+		// schema. A schema mismatch means this client cannot safely recover the
+		// typed domain error, so expose a RivetError with decode context.
+		const actionError = yield* decodeActionError(
+			actionErrorMetadata.error,
+		).pipe(
+			Effect.mapError(
+				(decodeError) =>
+					new RivetError.RivetError({
+						reason: new RivetError.ActionErrorDecodeFailed({
+							cause: decodeError,
+							rivetError: rivetkitRivetError,
+						}),
+					}),
+			),
+		);
+
+		// Successfully decoded into the action's declared error type;
+		// flow it through the typed error channel as `E["Type"]`.
 		return yield* Effect.fail(actionError as E["Type"]);
 	});
 };
