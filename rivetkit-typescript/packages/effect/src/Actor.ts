@@ -12,12 +12,13 @@ import {
 	Scope,
 	Semaphore,
 	Struct,
+	Option,
 	Tracer,
 	UndefinedOr,
 } from "effect";
 import * as Rivetkit from "rivetkit";
 import type * as RivetkitDb from "rivetkit/db";
-import type * as Action from "./Action";
+import * as Action from "./Action";
 import type * as ActorState from "./ActorState";
 import * as Client from "./Client";
 import { readTraceMeta, rpcSystem } from "./internal/tracing";
@@ -219,7 +220,7 @@ const Proto: Omit<Actor<any, any>, "name" | "actions"> = {
 			options,
 		}).pipe(
 			Effect.flatMap((rivetKitActor) =>
-				Registry.Registry.asEffect().pipe(
+				Registry.Registry.pipe(
 					Effect.flatMap((registry) =>
 						Effect.sync(() =>
 							registry.rivetkitActors.set(
@@ -234,7 +235,7 @@ const Proto: Omit<Actor<any, any>, "name" | "actions"> = {
 		);
 	},
 	get client() {
-		return Client.Client.asEffect().pipe(
+		return Client.Client.pipe(
 			Effect.map((client) => client.makeActorAccessor(this as Any)),
 		);
 	},
@@ -370,9 +371,16 @@ const makeRivetkitActor = Effect.fnUntraced(function* <
 	};
 
 	const actions = Record.fromIterableWith(actor.actions, (action) => {
-		const decodePayload = Schema.decodeUnknownEffect(action.payloadSchema);
-		const encodeSuccess = Schema.encodeUnknownEffect(action.successSchema);
-		const encodeError = Schema.encodeUnknownEffect(action.errorSchema);
+		const decodePayload = Schema.decodeUnknownEffect(
+			Schema.toCodecJson(action.payloadSchema),
+		);
+		const encodeSuccess = Schema.encodeEffect(
+			Schema.toCodecJson(action.successSchema),
+		);
+		const encodeError = Schema.encodeEffect(
+			Schema.toCodecJson(action.errorSchema),
+		);
+
 		return [
 			action._tag,
 			async (
@@ -404,42 +412,60 @@ const makeRivetkitActor = Effect.fnUntraced(function* <
 						] as (
 							envelope: ActionRequest<typeof action>,
 						) => Action.ResultFrom<typeof action, any>;
-						const decoded = yield* decodePayload(payload).pipe(
-							Effect.orDie,
-						);
+						const decodedPayload = yield* decodePayload(
+							payload,
+						).pipe(Effect.orDie);
 						// The payload was decoded with this action's schema,
 						// so this is the runtime boundary that restores the
 						// typed envelope expected by the user handler.
 						const actionRequest = {
 							_tag: action._tag,
 							action,
-							payload: decoded,
+							payload: decodedPayload,
 						} as ActionRequest<typeof action>;
-						const result = yield* actionHandler(actionRequest).pipe(
-							Effect.catch((expectedError) =>
-								Effect.gen(function* () {
-									const error = yield* encodeError(
-										expectedError,
-									).pipe(Effect.orDie);
-									return yield* Effect.die(
-										new Rivetkit.UserError(
-											hasStringProperty("message")(error)
-												? error.message
-												: `${action._tag} failed`,
-											{
-												code: hasStringProperty("_tag")(
-													error,
-												)
-													? error._tag
-													: undefined,
-												metadata: error,
-											},
-										),
-									);
-								}),
-							),
+
+						const resultExit = yield* Effect.exit(
+							actionHandler(actionRequest),
 						);
-						return yield* encodeSuccess(result).pipe(Effect.orDie);
+
+						if (Exit.isSuccess(resultExit)) {
+							return yield* encodeSuccess(resultExit.value).pipe(
+								Effect.orDie,
+							);
+						}
+
+						const expectedError = Exit.findErrorOption(resultExit);
+
+						if (Option.isSome(expectedError)) {
+							const encodedError = yield* encodeError(
+								expectedError.value,
+							).pipe(Effect.orDie);
+
+							return yield* Effect.fail(
+								new Rivetkit.UserError(
+									hasStringProperty("message")(encodedError)
+										? encodedError.message
+										: `${action._tag} failed`,
+									{
+										code: hasStringProperty("_tag")(
+											encodedError,
+										)
+											? encodedError._tag
+											: undefined,
+										metadata: {
+											_tag: Action.ActionErrorMetadataTag,
+											error: encodedError,
+										},
+									},
+								),
+							);
+						}
+
+						// Defect / interruption. Do not encode these as action errors.
+						// Let them escape, so Rivetkit maps them to its internal_error shape.
+						return yield* Effect.die(
+							Cause.squash(resultExit.cause),
+						);
 					}).pipe(
 						Effect.withSpan(rpcMethod, {
 							parent: traceMeta

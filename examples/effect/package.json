@@ -12,8 +12,8 @@
 	"dependencies": {
 		"rivetkit": "workspace:*",
 		"@rivetkit/effect": "workspace:*",
-		"effect": "4.0.0-beta.57",
-		"@effect/platform-node": "4.0.0-beta.57"
+		"effect": "4.0.0-beta.66",
+		"@effect/platform-node": "4.0.0-beta.66"
 	},
 	"devDependencies": {
 		"@types/node": "^22.13.9",

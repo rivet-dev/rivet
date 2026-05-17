@@ -34,13 +34,13 @@
 		"rivetkit": "workspace:*"
 	},
 	"peerDependencies": {
-		"effect": "^4.0.0-beta.57"
+		"effect": "^4.0.0-beta.66"
 	},
 	"devDependencies": {
 		"@effect/language-service": "^0.85.1",
-		"@effect/vitest": "^4.0.0-beta.57",
+		"@effect/vitest": "^4.0.0-beta.66",
 		"@types/node": "^22.18.1",
-		"effect": "^4.0.0-beta.57",
+		"effect": "^4.0.0-beta.66",
 		"tsup": "^8.4.0",
 		"typescript": "^5.9.2",
 		"vitest": "^4.1.5"

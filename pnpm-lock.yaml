@@ -1151,14 +1151,14 @@ importers:
   examples/effect:
     dependencies:
       '@effect/platform-node':
-        specifier: 4.0.0-beta.57
-        version: 4.0.0-beta.57(effect@4.0.0-beta.57)(ioredis@5.10.1)
+        specifier: 4.0.0-beta.66
+        version: 4.0.0-beta.66(effect@4.0.0-beta.66)(ioredis@5.10.1)
       '@rivetkit/effect':
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/effect
       effect:
-        specifier: 4.0.0-beta.57
-        version: 4.0.0-beta.57
+        specifier: 4.0.0-beta.66
+        version: 4.0.0-beta.66
       rivetkit:
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/rivetkit
@@ -4135,14 +4135,14 @@ importers:
         specifier: ^0.85.1
         version: 0.85.1
       '@effect/vitest':
-        specifier: ^4.0.0-beta.57
-        version: 4.0.0-beta.57(effect@4.0.0-beta.57)(vitest@4.1.5(@opentelemetry/api@1.9.0)(@types/node@22.19.15)(msw@2.14.4(@types/node@22.19.15)(typescript@5.9.3))(vite@7.3.1(@types/node@22.19.15)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.3)))
+        specifier: ^4.0.0-beta.66
+        version: 4.0.0-beta.66(effect@4.0.0-beta.66)(vitest@4.1.5(@opentelemetry/api@1.9.0)(@types/node@22.19.15)(msw@2.14.4(@types/node@22.19.15)(typescript@5.9.3))(vite@7.3.1(@types/node@22.19.15)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.3)))
       '@types/node':
         specifier: ^22.18.1
         version: 22.19.15
       effect:
-        specifier: ^4.0.0-beta.57
-        version: 4.0.0-beta.57
+        specifier: ^4.0.0-beta.66
+        version: 4.0.0-beta.66
       tsup:
         specifier: ^8.4.0
         version: 8.5.1(@microsoft/api-extractor@7.53.2(@types/node@22.19.15))(@swc/core@1.15.11(@swc/helpers@0.5.17))(jiti@2.6.1)(postcss@8.5.6)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.8.3)
@@ -6039,23 +6039,23 @@ packages:
     resolution: {integrity: sha512-EXnJjIy6zQ3nUO/MZ+ynWUb8B895KZPotd1++oTs9JjDkplwM7cb6zo8Zq2zU6piwq+KflO7amXbEfj1UMpHkw==}
     hasBin: true
 
-  '@effect/platform-node-shared@4.0.0-beta.57':
-    resolution: {integrity: sha512-C976X6f+qHUtLSqcqImuCrjhAHnJV17NC2RvvybsAuDfkyIWU4MyiO2XwgiBeijeNupyr1M/KPKnyjtkNxV9Hw==}
+  '@effect/platform-node-shared@4.0.0-beta.66':
+    resolution: {integrity: sha512-+ymrhBnESv/hmn5SKTe2//IY9Ox/hGPeoogEWhW47ZGyhFI5eMYFxdEUBa+3IAV05rrBzrxON9lynu68n0DM7w==}
     engines: {node: '>=18.0.0'}
     peerDependencies:
-      effect: ^4.0.0-beta.57
+      effect: ^4.0.0-beta.66
 
-  '@effect/platform-node@4.0.0-beta.57':
-    resolution: {integrity: sha512-la0xxPSAYOsY0d+uVxEBxok3jYB31iPQmIaZZRUj2SNWqcGGHJc6KorKtI8guqSLuv9FGZ255kBWXRbG6hMeeg==}
+  '@effect/platform-node@4.0.0-beta.66':
+    resolution: {integrity: sha512-s/0RgaQFuszzdorRnX1PwEQNnSOi+JgMJo3zEe9O2NR3sosMhTr0Uk+1AF6bUOI9uJ2CPT3KpTIIU7q5/TpOkg==}
     engines: {node: '>=18.0.0'}
     peerDependencies:
-      effect: ^4.0.0-beta.57
+      effect: ^4.0.0-beta.66
       ioredis: ^5.7.0
 
-  '@effect/vitest@4.0.0-beta.57':
-    resolution: {integrity: sha512-XyGYv1zisrdP/N8+r4qaegyHZK4WS/1xBGlLPWqEoggBhgW7rD48cGUXDLEP7TlHcIJQiIlHtJlQUIwgVx3zWg==}
+  '@effect/vitest@4.0.0-beta.66':
+    resolution: {integrity: sha512-UHPNtU0xXkKtNgyRQEh2c8jh4nIIm8Mzp3xc4j2ZdFU4nq5ZSySnpovjPMdoWbVClg1ki8UbpNGEZUfxEJo+6Q==}
     peerDependencies:
-      effect: ^4.0.0-beta.57
+      effect: ^4.0.0-beta.66
       vitest: ^3.0.0 || ^4.0.0
 
   '@emnapi/runtime@1.7.1':
@@ -12635,8 +12635,8 @@ packages:
   ee-first@1.1.1:
     resolution: {integrity: sha512-WMwm9LhRUo+WUaRN+vRuETqG89IgZphVSNkdFgeb6sS/E4OrDIN7t48CAewSHXc6C8lefD8KKfr5vY61brQlow==}
 
-  effect@4.0.0-beta.57:
-    resolution: {integrity: sha512-rg32VgXnLKaPRs9tbRDaZ5jxmzNY7ojXt85gSHGUTwdlbWH5Ik+OCUY2q14TXliygPGoHwCAvNWS4bQJOqf00g==}
+  effect@4.0.0-beta.66:
+    resolution: {integrity: sha512-4arEr62cziFa8BBVDUwJCJJmaVepXf/kRg7KtC0h8+bufngscrHbwWFhr9c+HonwOF+31U3iD3xUJmw9KzX7Dw==}
 
   electron-to-chromium@1.5.286:
     resolution: {integrity: sha512-9tfDXhJ4RKFNerfjdCcZfufu49vg620741MNs26a9+bhLThdB+plgMeou98CAaHu/WATj2iHOOHTp1hWtABj2A==}
@@ -20217,19 +20217,19 @@ snapshots:
 
   '@effect/language-service@0.85.1': {}
 
-  '@effect/platform-node-shared@4.0.0-beta.57(effect@4.0.0-beta.57)':
+  '@effect/platform-node-shared@4.0.0-beta.66(effect@4.0.0-beta.66)':
     dependencies:
       '@types/ws': 8.18.1
-      effect: 4.0.0-beta.57
+      effect: 4.0.0-beta.66
       ws: 8.20.0
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
 
-  '@effect/platform-node@4.0.0-beta.57(effect@4.0.0-beta.57)(ioredis@5.10.1)':
+  '@effect/platform-node@4.0.0-beta.66(effect@4.0.0-beta.66)(ioredis@5.10.1)':
     dependencies:
-      '@effect/platform-node-shared': 4.0.0-beta.57(effect@4.0.0-beta.57)
-      effect: 4.0.0-beta.57
+      '@effect/platform-node-shared': 4.0.0-beta.66(effect@4.0.0-beta.66)
+      effect: 4.0.0-beta.66
       ioredis: 5.10.1
       mime: 4.1.0
       undici: 8.1.0
@@ -20237,9 +20237,9 @@ snapshots:
       - bufferutil
       - utf-8-validate
 
-  '@effect/vitest@4.0.0-beta.57(effect@4.0.0-beta.57)(vitest@4.1.5(@opentelemetry/api@1.9.0)(@types/node@22.19.15)(msw@2.14.4(@types/node@22.19.15)(typescript@5.9.3))(vite@7.3.1(@types/node@22.19.15)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.3)))':
+  '@effect/vitest@4.0.0-beta.66(effect@4.0.0-beta.66)(vitest@4.1.5(@opentelemetry/api@1.9.0)(@types/node@22.19.15)(msw@2.14.4(@types/node@22.19.15)(typescript@5.9.3))(vite@7.3.1(@types/node@22.19.15)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.3)))':
     dependencies:
-      effect: 4.0.0-beta.57
+      effect: 4.0.0-beta.66
       vitest: 4.1.5(@opentelemetry/api@1.9.0)(@types/node@22.19.15)(msw@2.14.4(@types/node@22.19.15)(typescript@5.9.3))(vite@7.3.1(@types/node@22.19.15)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.3))
 
   '@emnapi/runtime@1.7.1':
@@ -28030,7 +28030,7 @@ snapshots:
 
   ee-first@1.1.1: {}
 
-  effect@4.0.0-beta.57:
+  effect@4.0.0-beta.66:
     dependencies:
       '@standard-schema/spec': 1.1.0
       fast-check: 4.7.0
