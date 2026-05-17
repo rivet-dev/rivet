@@ -26,7 +26,6 @@ import { readTraceMeta, rpcSystem } from "./internal/tracing";
 import * as Registry from "./Registry";
 import type * as RivetError from "./RivetError";
 import * as State from "./State";
-import { hasStringProperty } from "./utils";
 
 const TypeId = "~@rivetkit/effect/Actor";
 
@@ -443,22 +442,9 @@ const makeRivetkitActor = Effect.fnUntraced(function* <
 							).pipe(Effect.orDie);
 
 							return yield* Effect.fail(
-								new Rivetkit.UserError(
-									hasStringProperty("message")(encodedError)
-										? encodedError.message
-										: `${action._tag} failed`,
-									{
-										code: hasStringProperty("_tag")(
-											encodedError,
-										)
-											? encodedError._tag
-											: undefined,
-										metadata: {
-											_tag: RivetRivetError.ActionErrorMetadataTag,
-											version: 1,
-											error: encodedError,
-										},
-									},
+								RivetRivetError.makeActionError(
+									action._tag,
+									encodedError,
 								),
 							);
 						}

@@ -1,5 +1,6 @@
 import { Schema } from "effect";
-import type * as Rivetkit from "rivetkit";
+import * as Rivetkit from "rivetkit";
+import { hasStringProperty } from "./utils";
 
 export const ActionErrorMetadataTag = "EffectActionError" as const;
 
@@ -12,6 +13,28 @@ export const ActionErrorMetadata = Schema.Struct({
 });
 
 export type ActionErrorMetadata = typeof ActionErrorMetadata.Type;
+
+export const makeActionErrorMetadata = (error: unknown): ActionErrorMetadata => ({
+	_tag: ActionErrorMetadataTag,
+	version: ActionErrorSchemaVersion,
+	error,
+});
+
+export const makeActionError = (
+	actionTag: string,
+	encodedError: unknown,
+): Rivetkit.UserError =>
+	new Rivetkit.UserError(
+		hasStringProperty("message")(encodedError)
+			? encodedError.message
+			: `${actionTag} failed`,
+		{
+			code: hasStringProperty("_tag")(encodedError)
+				? encodedError._tag
+				: undefined,
+			metadata: makeActionErrorMetadata(encodedError),
+		},
+	);
 
 export const RivetkitRivetError = Schema.Struct({
 	message: Schema.String,
