@@ -10,8 +10,20 @@ export class Forbidden extends Schema.TaggedErrorClass<Forbidden>(
 	cause: Schema.instanceOf(RivetkitErrors.RivetError),
 }) {
 	readonly [ReasonTypeId] = ReasonTypeId;
-	override get message(): string {
+	override get message() {
 		return this.cause.message;
+	}
+	get group() {
+		return this.cause.group;
+	}
+	get code() {
+		return this.cause.code;
+	}
+	get metadata() {
+		return this.cause.metadata;
+	}
+	get actor() {
+		return this.cause.actor;
 	}
 }
 
@@ -21,8 +33,20 @@ export class ActorNotFound extends Schema.TaggedErrorClass<ActorNotFound>(
 	cause: Schema.instanceOf(RivetkitErrors.RivetError),
 }) {
 	readonly [ReasonTypeId] = ReasonTypeId;
-	override get message(): string {
+	override get message() {
 		return this.cause.message;
+	}
+	get group() {
+		return this.cause.group;
+	}
+	get code() {
+		return this.cause.code;
+	}
+	get metadata() {
+		return this.cause.metadata;
+	}
+	get actor() {
+		return this.cause.actor;
 	}
 }
 
@@ -32,8 +56,20 @@ export class ActorStopping extends Schema.TaggedErrorClass<ActorStopping>(
 	cause: Schema.instanceOf(RivetkitErrors.RivetError),
 }) {
 	readonly [ReasonTypeId] = ReasonTypeId;
-	override get message(): string {
+	override get message() {
 		return this.cause.message;
+	}
+	get group() {
+		return this.cause.group;
+	}
+	get code() {
+		return this.cause.code;
+	}
+	get metadata() {
+		return this.cause.metadata;
+	}
+	get actor() {
+		return this.cause.actor;
 	}
 }
 
@@ -43,8 +79,20 @@ export class ActorRestarting extends Schema.TaggedErrorClass<ActorRestarting>(
 	cause: Schema.instanceOf(RivetkitErrors.RivetError),
 }) {
 	readonly [ReasonTypeId] = ReasonTypeId;
-	override get message(): string {
+	override get message() {
 		return this.cause.message;
+	}
+	get group() {
+		return this.cause.group;
+	}
+	get code() {
+		return this.cause.code;
+	}
+	get metadata() {
+		return this.cause.metadata;
+	}
+	get actor() {
+		return this.cause.actor;
 	}
 }
 
@@ -54,8 +102,20 @@ export class ActionNotFound extends Schema.TaggedErrorClass<ActionNotFound>(
 	cause: Schema.instanceOf(RivetkitErrors.RivetError),
 }) {
 	readonly [ReasonTypeId] = ReasonTypeId;
-	override get message(): string {
+	override get message() {
 		return this.cause.message;
+	}
+	get group() {
+		return this.cause.group;
+	}
+	get code() {
+		return this.cause.code;
+	}
+	get metadata() {
+		return this.cause.metadata;
+	}
+	get actor() {
+		return this.cause.actor;
 	}
 }
 
@@ -63,8 +123,20 @@ export class ActionTimedOut extends Schema.TaggedErrorClass<ActionTimedOut>(
 	`${ReasonTypeId}/ActionTimedOut`,
 )("ActionTimedOut", { cause: Schema.instanceOf(RivetkitErrors.RivetError) }) {
 	readonly [ReasonTypeId] = ReasonTypeId;
-	override get message(): string {
+	override get message() {
 		return this.cause.message;
+	}
+	get group() {
+		return this.cause.group;
+	}
+	get code() {
+		return this.cause.code;
+	}
+	get metadata() {
+		return this.cause.metadata;
+	}
+	get actor() {
+		return this.cause.actor;
 	}
 }
 
@@ -74,8 +146,20 @@ export class ActionAborted extends Schema.TaggedErrorClass<ActionAborted>(
 	cause: Schema.instanceOf(RivetkitErrors.RivetError),
 }) {
 	readonly [ReasonTypeId] = ReasonTypeId;
-	override get message(): string {
+	override get message() {
 		return this.cause.message;
+	}
+	get group() {
+		return this.cause.group;
+	}
+	get code() {
+		return this.cause.code;
+	}
+	get metadata() {
+		return this.cause.metadata;
+	}
+	get actor() {
+		return this.cause.actor;
 	}
 }
 
@@ -85,8 +169,20 @@ export class ActorOverloaded extends Schema.TaggedErrorClass<ActorOverloaded>(
 	cause: Schema.instanceOf(RivetkitErrors.RivetError),
 }) {
 	readonly [ReasonTypeId] = ReasonTypeId;
-	override get message(): string {
+	override get message() {
 		return this.cause.message;
+	}
+	get group() {
+		return this.cause.group;
+	}
+	get code() {
+		return this.cause.code;
+	}
+	get metadata() {
+		return this.cause.metadata;
+	}
+	get actor() {
+		return this.cause.actor;
 	}
 }
 
@@ -96,8 +192,20 @@ export class IncomingMessageTooLong extends Schema.TaggedErrorClass<IncomingMess
 	cause: Schema.instanceOf(RivetkitErrors.RivetError),
 }) {
 	readonly [ReasonTypeId] = ReasonTypeId;
-	override get message(): string {
+	override get message() {
 		return this.cause.message;
+	}
+	get group() {
+		return this.cause.group;
+	}
+	get code() {
+		return this.cause.code;
+	}
+	get metadata() {
+		return this.cause.metadata;
+	}
+	get actor() {
+		return this.cause.actor;
 	}
 }
 
@@ -107,8 +215,20 @@ export class OutgoingMessageTooLong extends Schema.TaggedErrorClass<OutgoingMess
 	cause: Schema.instanceOf(RivetkitErrors.RivetError),
 }) {
 	readonly [ReasonTypeId] = ReasonTypeId;
-	override get message(): string {
+	override get message() {
 		return this.cause.message;
+	}
+	get group() {
+		return this.cause.group;
+	}
+	get code() {
+		return this.cause.code;
+	}
+	get metadata() {
+		return this.cause.metadata;
+	}
+	get actor() {
+		return this.cause.actor;
 	}
 }
 
@@ -118,8 +238,20 @@ export class InvalidEncoding extends Schema.TaggedErrorClass<InvalidEncoding>(
 	cause: Schema.instanceOf(RivetkitErrors.RivetError),
 }) {
 	readonly [ReasonTypeId] = ReasonTypeId;
-	override get message(): string {
+	override get message() {
 		return this.cause.message;
+	}
+	get group() {
+		return this.cause.group;
+	}
+	get code() {
+		return this.cause.code;
+	}
+	get metadata() {
+		return this.cause.metadata;
+	}
+	get actor() {
+		return this.cause.actor;
 	}
 }
 
@@ -129,8 +261,20 @@ export class InvalidRequest extends Schema.TaggedErrorClass<InvalidRequest>(
 	cause: Schema.instanceOf(RivetkitErrors.RivetError),
 }) {
 	readonly [ReasonTypeId] = ReasonTypeId;
-	override get message(): string {
+	override get message() {
 		return this.cause.message;
+	}
+	get group() {
+		return this.cause.group;
+	}
+	get code() {
+		return this.cause.code;
+	}
+	get metadata() {
+		return this.cause.metadata;
+	}
+	get actor() {
+		return this.cause.actor;
 	}
 }
 
@@ -140,8 +284,20 @@ export class GuardError extends Schema.TaggedErrorClass<GuardError>(
 	cause: Schema.instanceOf(RivetkitErrors.RivetError),
 }) {
 	readonly [ReasonTypeId] = ReasonTypeId;
-	override get message(): string {
+	override get message() {
 		return this.cause.message;
+	}
+	get group() {
+		return this.cause.group;
+	}
+	get code() {
+		return this.cause.code;
+	}
+	get metadata() {
+		return this.cause.metadata;
+	}
+	get actor() {
+		return this.cause.actor;
 	}
 }
 
@@ -151,8 +307,20 @@ export class InternalError extends Schema.TaggedErrorClass<InternalError>(
 	cause: Schema.instanceOf(RivetkitErrors.RivetError),
 }) {
 	readonly [ReasonTypeId] = ReasonTypeId;
-	override get message(): string {
+	override get message() {
 		return this.cause.message;
+	}
+	get group() {
+		return this.cause.group;
+	}
+	get code() {
+		return this.cause.code;
+	}
+	get metadata() {
+		return this.cause.metadata;
+	}
+	get actor() {
+		return this.cause.actor;
 	}
 }
 
@@ -170,8 +338,20 @@ export class UnknownUserError extends Schema.TaggedErrorClass<UnknownUserError>(
 	`${ReasonTypeId}/UnknownUserError`,
 )("UnknownUserError", { cause: Schema.instanceOf(RivetkitErrors.RivetError) }) {
 	readonly [ReasonTypeId] = ReasonTypeId;
-	override get message(): string {
+	override get message() {
 		return this.cause.message;
+	}
+	get group() {
+		return this.cause.group;
+	}
+	get code() {
+		return this.cause.code;
+	}
+	get metadata() {
+		return this.cause.metadata;
+	}
+	get actor() {
+		return this.cause.actor;
 	}
 }
 
@@ -190,6 +370,26 @@ export class UnknownError extends Schema.TaggedErrorClass<UnknownError>(
 	]),
 }) {
 	readonly [ReasonTypeId] = ReasonTypeId;
+	get group() {
+		return this.cause instanceof RivetkitErrors.RivetError
+			? this.cause.group
+			: undefined;
+	}
+	get code() {
+		return this.cause instanceof RivetkitErrors.RivetError
+			? this.cause.code
+			: undefined;
+	}
+	get metadata() {
+		return this.cause instanceof RivetkitErrors.RivetError
+			? this.cause.metadata
+			: undefined;
+	}
+	get actor() {
+		return this.cause instanceof RivetkitErrors.RivetError
+			? this.cause.actor
+			: undefined;
+	}
 }
 
 export type Reason =
@@ -280,7 +480,7 @@ export class RivetError extends Schema.TaggedErrorClass<RivetError>(
 	readonly [TypeId] = TypeId;
 	override readonly cause = this.reason;
 
-	override get message(): string {
+	override get message() {
 		return this.reason.message || this.reason._tag;
 	}
 }
