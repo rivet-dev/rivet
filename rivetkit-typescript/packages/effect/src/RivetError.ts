@@ -1,157 +1,124 @@
-import { Duration, Predicate, Schema } from "effect";
+import { Duration, Option, Predicate, Schema } from "effect";
 import * as RivetkitErrors from "rivetkit/errors";
-import type * as RivetRivetError from "./internal/RivetRivetError";
+import * as RivetkitRivetError from "./internal/RivetRivetError";
 
 const ReasonTypeId = "~@rivetkit/effect/RivetError/Reason" as const;
 const TypeId = "~@rivetkit/effect/RivetError" as const;
 
-// ============================================================================
-// Reason classes
-// ============================================================================
-//
-// One class per semantic infrastructure-failure category exposed by the
-// engine and client. Each reason carries its own wire `group` and `code`
-// (defaulted via `Schema.tag` so call sites don't pass them), plus an
-// `isRetryable` getter so callers can match on the reason `_tag` and
-// decide retry policy without hand-rolling group/code switches.
-//
-// User-defined errors thrown via `UserError` inside an actor action ride
-// through on the action's declared `errorSchema` and arrive in the typed
-// error channel directly. They only fall through to the generic
-// `UnknownUserError` reason below when the action did not declare a
-// matching schema.
-
-/** `auth.forbidden` — `onAuth` rejected the request. */
 export class Forbidden extends Schema.TaggedErrorClass<Forbidden>(
 	`${ReasonTypeId}/Forbidden`,
-)("Forbidden", {
-	group: Schema.tag("auth"),
-	code: Schema.tag("forbidden"),
-	message: Schema.String,
-}) {
+)("Forbidden", { cause: RivetkitRivetError.RivetkitRivetError }) {
 	readonly [ReasonTypeId] = ReasonTypeId;
+	override get message(): string {
+		return this.cause.message;
+	}
 	get isRetryable(): boolean {
 		return false;
 	}
 }
 
-/** `actor.not_found` — gateway target resolution returned no actor. */
 export class ActorNotFound extends Schema.TaggedErrorClass<ActorNotFound>(
 	`${ReasonTypeId}/ActorNotFound`,
-)("ActorNotFound", {
-	group: Schema.tag("actor"),
-	code: Schema.tag("not_found"),
-	message: Schema.String,
-}) {
+)("ActorNotFound", { cause: RivetkitRivetError.RivetkitRivetError }) {
 	readonly [ReasonTypeId] = ReasonTypeId;
+	override get message(): string {
+		return this.cause.message;
+	}
 	get isRetryable(): boolean {
 		return false;
 	}
 }
 
-/** `actor.stopping` — request arrived while actor is shutting down. */
 export class ActorStopping extends Schema.TaggedErrorClass<ActorStopping>(
 	`${ReasonTypeId}/ActorStopping`,
-)("ActorStopping", {
-	group: Schema.tag("actor"),
-	code: Schema.tag("stopping"),
-	message: Schema.String,
-}) {
+)("ActorStopping", { cause: RivetkitRivetError.RivetkitRivetError }) {
 	readonly [ReasonTypeId] = ReasonTypeId;
+	override get message(): string {
+		return this.cause.message;
+	}
 	get isRetryable(): boolean {
 		return false;
 	}
 }
 
-/** `actor.restarting` — actor mid-restart; retry after `retryAfter`. */
 export class ActorRestarting extends Schema.TaggedErrorClass<ActorRestarting>(
 	`${ReasonTypeId}/ActorRestarting`,
 )("ActorRestarting", {
-	group: Schema.tag("actor"),
-	code: Schema.tag("restarting"),
-	message: Schema.String,
 	retryAfter: Schema.optional(Schema.Duration),
 	phase: Schema.optional(
 		Schema.Literals(["stopping", "sleeping", "waking", "runner_shutdown"]),
 	),
+	cause: RivetkitRivetError.RivetkitRivetError,
 }) {
 	readonly [ReasonTypeId] = ReasonTypeId;
+	override get message(): string {
+		return this.cause.message;
+	}
 	get isRetryable(): boolean {
 		return true;
 	}
 }
 
-/** `actor.action_not_found` — no action by that name on the actor. */
 export class ActionNotFound extends Schema.TaggedErrorClass<ActionNotFound>(
 	`${ReasonTypeId}/ActionNotFound`,
-)("ActionNotFound", {
-	group: Schema.tag("actor"),
-	code: Schema.tag("action_not_found"),
-	message: Schema.String,
-}) {
+)("ActionNotFound", { cause: RivetkitRivetError.RivetkitRivetError }) {
 	readonly [ReasonTypeId] = ReasonTypeId;
+	override get message(): string {
+		return this.cause.message;
+	}
 	get isRetryable(): boolean {
 		return false;
 	}
 }
 
-/** `actor.action_timed_out` — server-side action timeout. */
 export class ActionTimedOut extends Schema.TaggedErrorClass<ActionTimedOut>(
 	`${ReasonTypeId}/ActionTimedOut`,
-)("ActionTimedOut", {
-	group: Schema.tag("actor"),
-	code: Schema.tag("action_timed_out"),
-	message: Schema.String,
-}) {
+)("ActionTimedOut", { cause: RivetkitRivetError.RivetkitRivetError }) {
 	readonly [ReasonTypeId] = ReasonTypeId;
+	override get message(): string {
+		return this.cause.message;
+	}
 	get isRetryable(): boolean {
 		return true;
 	}
 }
 
-/** `actor.aborted` — action explicitly aborted server-side. */
 export class ActionAborted extends Schema.TaggedErrorClass<ActionAborted>(
 	`${ReasonTypeId}/ActionAborted`,
-)("ActionAborted", {
-	group: Schema.tag("actor"),
-	code: Schema.tag("aborted"),
-	message: Schema.String,
-}) {
+)("ActionAborted", { cause: RivetkitRivetError.RivetkitRivetError }) {
 	readonly [ReasonTypeId] = ReasonTypeId;
+	override get message(): string {
+		return this.cause.message;
+	}
 	get isRetryable(): boolean {
 		return false;
 	}
 }
 
-/** `actor.overloaded` — actor channel at capacity. */
 export class Overloaded extends Schema.TaggedErrorClass<Overloaded>(
 	`${ReasonTypeId}/Overloaded`,
 )("Overloaded", {
-	group: Schema.tag("actor"),
-	code: Schema.tag("overloaded"),
-	message: Schema.String,
 	channel: Schema.optional(Schema.String),
 	capacity: Schema.optional(Schema.Number),
 	operation: Schema.optional(Schema.String),
+	cause: RivetkitRivetError.RivetkitRivetError,
 }) {
 	readonly [ReasonTypeId] = ReasonTypeId;
+	override get message(): string {
+		return this.cause.message;
+	}
 	get isRetryable(): boolean {
 		return true;
 	}
 }
 
-/**
- * `message.incoming_too_long` / `message.outgoing_too_long`. Match on
- * `code` to distinguish direction.
- */
 export class MessageTooLong extends Schema.TaggedErrorClass<MessageTooLong>(
 	`${ReasonTypeId}/MessageTooLong`,
-)("MessageTooLong", {
-	group: Schema.tag("message"),
-	code: Schema.Literals(["incoming_too_long", "outgoing_too_long"]),
-	message: Schema.String,
-}) {
+)("MessageTooLong", { cause: RivetkitRivetError.RivetkitRivetError }) {
 	readonly [ReasonTypeId] = ReasonTypeId;
+	override get message(): string {
+		return this.cause.message;
+	}
 	get isRetryable(): boolean {
 		return false;
 	}
@@ -159,86 +126,73 @@ export class MessageTooLong extends Schema.TaggedErrorClass<MessageTooLong>(
 
 const queueRetryableCodes = new Set<string>(["full", "timed_out"]);
 
-/** `queue.*` — queue-related server errors. `code` keeps the raw engine code. */
 export class QueueError extends Schema.TaggedErrorClass<QueueError>(
 	`${ReasonTypeId}/QueueError`,
-)("QueueError", {
-	group: Schema.tag("queue"),
-	code: Schema.String,
-	message: Schema.String,
-}) {
+)("QueueError", { cause: RivetkitRivetError.RivetkitRivetError }) {
 	readonly [ReasonTypeId] = ReasonTypeId;
+	override get message(): string {
+		return this.cause.message;
+	}
 	get isRetryable(): boolean {
-		return queueRetryableCodes.has(this.code);
+		return queueRetryableCodes.has(this.cause.code);
 	}
 }
 
-/** `encoding.invalid` — unsupported encoding negotiated. */
 export class InvalidEncoding extends Schema.TaggedErrorClass<InvalidEncoding>(
 	`${ReasonTypeId}/InvalidEncoding`,
-)("InvalidEncoding", {
-	group: Schema.tag("encoding"),
-	code: Schema.tag("invalid"),
-	message: Schema.String,
-	cause: Schema.optional(Schema.Defect),
-}) {
+)("InvalidEncoding", { cause: RivetkitRivetError.RivetkitRivetError }) {
 	readonly [ReasonTypeId] = ReasonTypeId;
+	override get message(): string {
+		return this.cause.message;
+	}
 	get isRetryable(): boolean {
 		return false;
 	}
 }
 
-/** `request.invalid` — malformed `ActorQuery` or request payload. */
 export class InvalidRequest extends Schema.TaggedErrorClass<InvalidRequest>(
 	`${ReasonTypeId}/InvalidRequest`,
-)("InvalidRequest", {
-	group: Schema.tag("request"),
-	code: Schema.tag("invalid"),
-	message: Schema.String,
-}) {
+)("InvalidRequest", { cause: RivetkitRivetError.RivetkitRivetError }) {
 	readonly [ReasonTypeId] = ReasonTypeId;
+	override get message(): string {
+		return this.cause.message;
+	}
 	get isRetryable(): boolean {
 		return false;
 	}
 }
 
-/** `client.connection_open_failed` — websocket open failed. */
 export class ConnectionOpenFailed extends Schema.TaggedErrorClass<ConnectionOpenFailed>(
 	`${ReasonTypeId}/ConnectionOpenFailed`,
-)("ConnectionOpenFailed", {
-	group: Schema.tag("client"),
-	code: Schema.tag("connection_open_failed"),
-	message: Schema.String,
-}) {
+)("ConnectionOpenFailed", { cause: RivetkitRivetError.RivetkitRivetError }) {
 	readonly [ReasonTypeId] = ReasonTypeId;
+	override get message(): string {
+		return this.cause.message;
+	}
 	get isRetryable(): boolean {
 		return true;
 	}
 }
 
-/** `client.get_params_failed` — user `getParams()` callback threw. */
 export class GetParamsFailed extends Schema.TaggedErrorClass<GetParamsFailed>(
 	`${ReasonTypeId}/GetParamsFailed`,
-)("GetParamsFailed", {
-	group: Schema.tag("client"),
-	code: Schema.tag("get_params_failed"),
-	message: Schema.String,
-}) {
+)("GetParamsFailed", { cause: RivetkitRivetError.RivetkitRivetError }) {
 	readonly [ReasonTypeId] = ReasonTypeId;
+	override get message(): string {
+		return this.cause.message;
+	}
 	get isRetryable(): boolean {
 		return false;
 	}
 }
 
-/** `ws.going_away` / generic transport drop — connection lost, retry. */
 export class ConnectionLost extends Schema.TaggedErrorClass<ConnectionLost>(
 	`${ReasonTypeId}/ConnectionLost`,
-)("ConnectionLost", {
-	group: Schema.tag("ws"),
-	code: Schema.tag("going_away"),
-	message: Schema.String,
-}) {
+)("ConnectionLost", { cause: RivetkitRivetError.RivetkitRivetError }) {
 	readonly [ReasonTypeId] = ReasonTypeId;
+	override get message(): string {
+		return this.cause.message;
+	}
 	get isRetryable(): boolean {
 		return true;
 	}
@@ -250,17 +204,27 @@ const guardRetryableCodes = new Set<string>([
 	"service_unavailable",
 ]);
 
-/** `guard.*` — engine guard/scheduler failures; `code` keeps the raw engine code. */
 export class GuardError extends Schema.TaggedErrorClass<GuardError>(
 	`${ReasonTypeId}/GuardError`,
-)("GuardError", {
-	group: Schema.tag("guard"),
-	code: Schema.String,
-	message: Schema.String,
-}) {
+)("GuardError", { cause: RivetkitRivetError.RivetkitRivetError }) {
 	readonly [ReasonTypeId] = ReasonTypeId;
+	override get message(): string {
+		return this.cause.message;
+	}
 	get isRetryable(): boolean {
-		return guardRetryableCodes.has(this.code);
+		return guardRetryableCodes.has(this.cause.code);
+	}
+}
+
+export class InternalError extends Schema.TaggedErrorClass<InternalError>(
+	`${ReasonTypeId}/InternalError`,
+)("InternalError", { cause: RivetkitRivetError.RivetkitRivetError }) {
+	readonly [ReasonTypeId] = ReasonTypeId;
+	override get message(): string {
+		return this.cause.message;
+	}
+	get isRetryable(): boolean {
+		return false;
 	}
 }
 
@@ -276,30 +240,11 @@ export class GuardError extends Schema.TaggedErrorClass<GuardError>(
  */
 export class UnknownUserError extends Schema.TaggedErrorClass<UnknownUserError>(
 	`${ReasonTypeId}/UnknownUserError`,
-)("UnknownUserError", {
-	group: Schema.tag("user"),
-	code: Schema.String,
-	message: Schema.String,
-	metadata: Schema.optional(Schema.Unknown),
-}) {
+)("UnknownUserError", { cause: RivetkitRivetError.RivetkitRivetError }) {
 	readonly [ReasonTypeId] = ReasonTypeId;
-	get isRetryable(): boolean {
-		return false;
+	override get message(): string {
+		return this.cause.message;
 	}
-}
-
-/**
- * Sanitized internal error from `rivetkit-core`. Original details live in
- * the server logs (or set `RIVET_EXPOSE_ERRORS=1` to inline them in dev).
- */
-export class InternalError extends Schema.TaggedErrorClass<InternalError>(
-	`${ReasonTypeId}/InternalError`,
-)("InternalError", {
-	group: Schema.tag("rivetkit"),
-	code: Schema.tag("internal_error"),
-	message: Schema.String,
-}) {
-	readonly [ReasonTypeId] = ReasonTypeId;
 	get isRetryable(): boolean {
 		return false;
 	}
@@ -307,17 +252,14 @@ export class InternalError extends Schema.TaggedErrorClass<InternalError>(
 
 /**
  * Forward-compatible catch-all for `(group, code)` pairs the SDK does
- * not recognize yet. Keeps the raw rivetkit fields so newer engine errors
- * still surface usefully through older SDKs.
+ * not recognize yet, and for malformed non-Rivet failures. Known wire
+ * fields are mirrored when present, while `cause` preserves the raw input.
  */
 export class UnknownError extends Schema.TaggedErrorClass<UnknownError>(
 	`${ReasonTypeId}/UnknownError`,
 )("UnknownError", {
-	group: Schema.optional(Schema.String),
-	code: Schema.optional(Schema.String),
 	message: Schema.String,
-	metadata: Schema.optional(Schema.Unknown),
-	cause: Schema.optional(Schema.Defect),
+	cause: Schema.Union([RivetkitRivetError.RivetkitRivetError, Schema.Defect]),
 }) {
 	readonly [ReasonTypeId] = ReasonTypeId;
 	get isRetryable(): boolean {
@@ -456,168 +398,112 @@ const readMetaField = (metadata: unknown, key: string): unknown => {
 	return (metadata as Record<string, unknown>)[key];
 };
 
-// Classification table: ordered list of `(group, code, factory)` entries.
-// We match through `isRivetErrorCode` from `rivetkit/errors` so a rename
-// on the canonical wire-shape side becomes a compile-time signal here.
-// Reasons whose `code` is variable (queue, guard, user) and any
-// rivetkit-core internal-error aliases are handled by the group-level
-// fallback below.
-type FixedFactory = {
-	group: string;
-	code: string;
-	build: (message: string, metadata: unknown) => Reason;
+// Classification table: maps canonical `${group}.${code}` to the reason
+// class that should wrap the wire error. Reasons whose `code` is variable
+// (queue, guard, user) and reasons that need to decode metadata
+// (ActorRestarting, Overloaded) are handled inline below.
+const simpleReasonByCode: Record<
+	string,
+	new (props: {
+		cause: RivetkitRivetError.RivetkitRivetError;
+	}) => Reason
+> = {
+	"auth.forbidden": Forbidden,
+	"actor.not_found": ActorNotFound,
+	"actor.stopping": ActorStopping,
+	"actor.action_not_found": ActionNotFound,
+	"actor.action_timed_out": ActionTimedOut,
+	"actor.aborted": ActionAborted,
+	"message.incoming_too_long": MessageTooLong,
+	"message.outgoing_too_long": MessageTooLong,
+	"encoding.invalid": InvalidEncoding,
+	"request.invalid": InvalidRequest,
+	"client.connection_open_failed": ConnectionOpenFailed,
+	"client.get_params_failed": GetParamsFailed,
+	"ws.going_away": ConnectionLost,
+	"core.internal_error": InternalError,
+	"rivetkit.internal_error": InternalError,
 };
 
-const fixedFactories: ReadonlyArray<FixedFactory> = [
-	{
-		group: "auth",
-		code: "forbidden",
-		build: (message) => new Forbidden({ message }),
-	},
-	{
-		group: "actor",
-		code: "not_found",
-		build: (message) => new ActorNotFound({ message }),
-	},
-	{
-		group: "actor",
-		code: "stopping",
-		build: (message) => new ActorStopping({ message }),
-	},
-	{
-		group: "actor",
-		code: "restarting",
-		build: (message, metadata) => {
-			const retryAfterMs = readMetaField(metadata, "retryAfterMs");
-			const phase = readMetaField(metadata, "phase");
-			const allowedPhases = new Set<string>([
-				"stopping",
-				"sleeping",
-				"waking",
-				"runner_shutdown",
-			]);
-			return new ActorRestarting({
-				message,
-				...(typeof retryAfterMs === "number"
-					? { retryAfter: Duration.millis(retryAfterMs) }
-					: {}),
-				...(typeof phase === "string" && allowedPhases.has(phase)
-					? { phase: phase as ActorRestarting["phase"] }
-					: {}),
-			});
-		},
-	},
-	{
-		group: "actor",
-		code: "action_not_found",
-		build: (message) => new ActionNotFound({ message }),
-	},
-	{
-		group: "actor",
-		code: "action_timed_out",
-		build: (message) => new ActionTimedOut({ message }),
-	},
-	{
-		group: "actor",
-		code: "aborted",
-		build: (message) => new ActionAborted({ message }),
-	},
-	{
-		group: "actor",
-		code: "overloaded",
-		build: (message, metadata) => {
-			const channel = readMetaField(metadata, "channel");
-			const capacity = readMetaField(metadata, "capacity");
-			const operation = readMetaField(metadata, "operation");
-			return new Overloaded({
-				message,
-				...(typeof channel === "string" ? { channel } : {}),
-				...(typeof capacity === "number" ? { capacity } : {}),
-				...(typeof operation === "string" ? { operation } : {}),
-			});
-		},
-	},
-	{
-		group: "message",
-		code: "incoming_too_long",
-		build: (message) =>
-			new MessageTooLong({ message, code: "incoming_too_long" }),
-	},
-	{
-		group: "message",
-		code: "outgoing_too_long",
-		build: (message) =>
-			new MessageTooLong({ message, code: "outgoing_too_long" }),
-	},
-	{
-		group: "encoding",
-		code: "invalid",
-		build: (message) => new InvalidEncoding({ message }),
-	},
-	{
-		group: "request",
-		code: "invalid",
-		build: (message) => new InvalidRequest({ message }),
-	},
-	{
-		group: "client",
-		code: "connection_open_failed",
-		build: (message) => new ConnectionOpenFailed({ message }),
-	},
-	{
-		group: "client",
-		code: "get_params_failed",
-		build: (message) => new GetParamsFailed({ message }),
-	},
-	{
-		group: "ws",
-		code: "going_away",
-		build: (message) => new ConnectionLost({ message }),
-	},
-	{
-		group: "core",
-		code: "internal_error",
-		build: (message) => new InternalError({ message }),
-	},
-	{
-		group: "rivetkit",
-		code: "internal_error",
-		build: (message) => new InternalError({ message }),
-	},
-];
+// Static check that every key above is a canonical (group, code) pair
+// recognized by `rivetkit/errors`. Renaming a wire code on the canonical
+// side surfaces here as a runtime failure during module init.
+for (const key of Object.keys(simpleReasonByCode)) {
+	const [group, code] = key.split(".") as [string, string];
+	if (
+		!RivetkitErrors.isRivetErrorCode(
+			{ group, code, message: "" },
+			group,
+			code,
+		)
+	) {
+		throw new Error(`unknown rivetkit error code: ${key}`);
+	}
+}
+
+const allowedRestartingPhases = new Set<string>([
+	"stopping",
+	"sleeping",
+	"waking",
+	"runner_shutdown",
+]);
 
 const reasonFromRivetkitRivetError = (
-	rivetkitRivetError: RivetRivetError.RivetkitRivetError,
+	error: RivetkitRivetError.RivetkitRivetError,
 ): Reason => {
-	const { group, code, message, metadata } = rivetkitRivetError;
-	for (const entry of fixedFactories) {
-		if (
-			RivetkitErrors.isRivetErrorCode(
-				rivetkitRivetError,
-				entry.group,
-				entry.code,
-			)
-		) {
-			return entry.build(message, metadata);
-		}
-	}
-	if (group === "queue") return new QueueError({ message, code });
-	if (group === "guard") return new GuardError({ message, code });
-	if (group === "user") {
-		return new UnknownUserError({
-			message,
-			code,
-			...(metadata !== undefined ? { metadata } : {}),
+	const Cls = simpleReasonByCode[`${error.group}.${error.code}`];
+	if (Cls) return new Cls({ cause: error });
+	if (error.group === "actor" && error.code === "restarting") {
+		const retryAfterMs = readMetaField(error.metadata, "retryAfterMs");
+		const phase = readMetaField(error.metadata, "phase");
+		return new ActorRestarting({
+			cause: error,
+			...(typeof retryAfterMs === "number"
+				? { retryAfter: Duration.millis(retryAfterMs) }
+				: {}),
+			...(typeof phase === "string" && allowedRestartingPhases.has(phase)
+				? { phase: phase as ActorRestarting["phase"] }
+				: {}),
 		});
 	}
+	if (error.group === "actor" && error.code === "overloaded") {
+		const channel = readMetaField(error.metadata, "channel");
+		const capacity = readMetaField(error.metadata, "capacity");
+		const operation = readMetaField(error.metadata, "operation");
+		return new Overloaded({
+			cause: error,
+			...(typeof channel === "string" ? { channel } : {}),
+			...(typeof capacity === "number" ? { capacity } : {}),
+			...(typeof operation === "string" ? { operation } : {}),
+		});
+	}
+	if (error.group === "queue") return new QueueError({ cause: error });
+	if (error.group === "guard") return new GuardError({ cause: error });
+	if (error.group === "user") return new UnknownUserError({ cause: error });
 	return new UnknownError({
-		group,
-		code,
-		message,
-		...(metadata !== undefined ? { metadata } : {}),
+		message: error.message,
+		cause: error,
 	});
 };
 
 export const fromRivetkitRivetError = (
-	e: RivetRivetError.RivetkitRivetError,
+	e: RivetkitRivetError.RivetkitRivetError,
 ): RivetError => new RivetError({ reason: reasonFromRivetkitRivetError(e) });
+
+const decodeRivetkitRivetErrorOption = Schema.decodeUnknownOption(
+	RivetkitRivetError.RivetkitRivetError,
+);
+
+export const fromUnknown = (cause: unknown): RivetError => {
+	if (isRivetError(cause)) return cause;
+
+	const decoded = decodeRivetkitRivetErrorOption(cause);
+	if (Option.isSome(decoded)) return fromRivetkitRivetError(decoded.value);
+
+	return new RivetError({
+		reason: new UnknownError({
+			message: "Unknown error",
+			cause,
+		}),
+	});
+};

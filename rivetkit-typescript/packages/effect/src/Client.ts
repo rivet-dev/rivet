@@ -63,6 +63,9 @@ export const make = Effect.fnUntraced(function* (options: Options = {}) {
 					const decodeSuccess = Schema.decodeUnknownEffect(
 						Schema.toCodecJson(action.successSchema),
 					);
+					const decodeError = decodeRejectedActionCall(
+						action.errorSchema,
+					);
 
 					const rpcMethod = `${actor.name}/${action._tag}`;
 
@@ -91,9 +94,13 @@ export const make = Effect.fnUntraced(function* (options: Options = {}) {
 										new RivetError.RivetError({
 											reason: new RivetError.InvalidEncoding(
 												{
-													message:
-														"Could not encode action payload",
-													cause,
+													cause: {
+														group: "encoding",
+														code: "invalid",
+														message:
+															"Could not encode action payload",
+														metadata: cause,
+													},
 												},
 											),
 										}),
@@ -109,9 +116,7 @@ export const make = Effect.fnUntraced(function* (options: Options = {}) {
 									}),
 							).pipe(
 								Effect.catch((unknownError) =>
-									decodeRejectedActionCall(
-										action.errorSchema,
-									)(unknownError.cause),
+									decodeError(unknownError.cause),
 								),
 							);
 
@@ -144,15 +149,7 @@ const decodeRejectedActionCall = <E extends Schema.Top>(
 
 	return Effect.fnUntraced(function* (cause: unknown) {
 		const rivetkitRivetError = yield* decodeRivetkitRivetError(cause).pipe(
-			Effect.mapError(
-				() =>
-					new RivetError.RivetError({
-						reason: new RivetError.UnknownError({
-							message: "Unknown error",
-							cause,
-						}),
-					}),
-			),
+			Effect.mapError(() => RivetError.fromUnknown(cause)),
 		);
 
 		const actionErrorMetadata = yield* Effect.exit(
