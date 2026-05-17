@@ -148,42 +148,6 @@ export class InvalidRequest extends Schema.TaggedErrorClass<InvalidRequest>(
 	}
 }
 
-export class ConnectionOpenFailed extends Schema.TaggedErrorClass<ConnectionOpenFailed>(
-	`${ReasonTypeId}/ConnectionOpenFailed`,
-)("ConnectionOpenFailed", { cause: RivetkitRivetError.RivetkitRivetError }) {
-	readonly [ReasonTypeId] = ReasonTypeId;
-	override get message(): string {
-		return this.cause.message;
-	}
-	get isRetryable(): boolean {
-		return true;
-	}
-}
-
-export class GetParamsFailed extends Schema.TaggedErrorClass<GetParamsFailed>(
-	`${ReasonTypeId}/GetParamsFailed`,
-)("GetParamsFailed", { cause: RivetkitRivetError.RivetkitRivetError }) {
-	readonly [ReasonTypeId] = ReasonTypeId;
-	override get message(): string {
-		return this.cause.message;
-	}
-	get isRetryable(): boolean {
-		return false;
-	}
-}
-
-export class ConnectionLost extends Schema.TaggedErrorClass<ConnectionLost>(
-	`${ReasonTypeId}/ConnectionLost`,
-)("ConnectionLost", { cause: RivetkitRivetError.RivetkitRivetError }) {
-	readonly [ReasonTypeId] = ReasonTypeId;
-	override get message(): string {
-		return this.cause.message;
-	}
-	get isRetryable(): boolean {
-		return true;
-	}
-}
-
 const guardRetryableCodes = new Set<string>([
 	"actor_runner_failed",
 	"actor_ready_timeout",
@@ -265,12 +229,9 @@ export type Reason =
 	| MessageTooLong
 	| InvalidEncoding
 	| InvalidRequest
-	| ConnectionOpenFailed
-	| GetParamsFailed
-	| ConnectionLost
 	| GuardError
-	| UnknownUserError
 	| InternalError
+	| UnknownUserError
 	| UnknownError;
 
 export const Reason: Schema.Union<
@@ -286,12 +247,9 @@ export const Reason: Schema.Union<
 		typeof MessageTooLong,
 		typeof InvalidEncoding,
 		typeof InvalidRequest,
-		typeof ConnectionOpenFailed,
-		typeof GetParamsFailed,
-		typeof ConnectionLost,
 		typeof GuardError,
-		typeof UnknownUserError,
 		typeof InternalError,
+		typeof UnknownUserError,
 		typeof UnknownError,
 	]
 > = Schema.Union([
@@ -306,12 +264,9 @@ export const Reason: Schema.Union<
 	MessageTooLong,
 	InvalidEncoding,
 	InvalidRequest,
-	ConnectionOpenFailed,
-	GetParamsFailed,
-	ConnectionLost,
 	GuardError,
-	UnknownUserError,
 	InternalError,
+	UnknownUserError,
 	UnknownError,
 ]);
 
@@ -390,9 +345,6 @@ const simpleReasonByCode: Record<
 	"message.outgoing_too_long": MessageTooLong,
 	"encoding.invalid": InvalidEncoding,
 	"request.invalid": InvalidRequest,
-	"client.connection_open_failed": ConnectionOpenFailed,
-	"client.get_params_failed": GetParamsFailed,
-	"ws.going_away": ConnectionLost,
 	"core.internal_error": InternalError,
 	"rivetkit.internal_error": InternalError,
 };
