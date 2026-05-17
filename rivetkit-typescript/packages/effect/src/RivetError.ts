@@ -253,10 +253,6 @@ export class UnknownError extends Schema.TaggedErrorClass<UnknownError>(
 	}
 }
 
-// ============================================================================
-// Reason union
-// ============================================================================
-
 export type Reason =
 	| Forbidden
 	| ActorNotFound
@@ -322,14 +318,10 @@ export const Reason: Schema.Union<
 export const isReason = (u: unknown): u is Reason =>
 	Predicate.hasProperty(u, ReasonTypeId);
 
-// ============================================================================
-// Top-level RivetError
-// ============================================================================
-
 /**
- * The infrastructure-failure error surfaced by `@rivetkit/effect` action
- * calls. Wraps a discriminated `reason` of all known engine and client
- * failure modes.
+ * The infrastructure-failure error surfaced by `@rivetkit/effect`
+ * calls. Wraps a discriminated `reason` of all known failure
+ * modes.
  *
  * Recover with `Effect.catchReason` / `Effect.catchReasons` /
  * `Effect.unwrapReason`:
