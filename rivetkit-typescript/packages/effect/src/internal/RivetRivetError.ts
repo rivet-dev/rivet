@@ -14,7 +14,9 @@ export const ActionErrorMetadata = Schema.Struct({
 
 export type ActionErrorMetadata = typeof ActionErrorMetadata.Type;
 
-export const makeActionErrorMetadata = (error: unknown): ActionErrorMetadata => ({
+export const makeActionErrorMetadata = (
+	error: unknown,
+): ActionErrorMetadata => ({
 	_tag: ActionErrorMetadataTag,
 	version: ActionErrorSchemaVersion,
 	error,
@@ -36,11 +38,20 @@ export const makeActionError = (
 		},
 	);
 
+const ActorSpecifier = Schema.Struct({
+	actorId: Schema.String,
+	generation: Schema.Number,
+	key: Schema.optional(Schema.String),
+}) satisfies Schema.Codec<NonNullable<Rivetkit.RivetErrorLike["actor"]>>;
+
 export const RivetkitRivetError = Schema.Struct({
-	message: Schema.String,
 	group: Schema.String,
 	code: Schema.String,
+	message: Schema.String,
 	metadata: Schema.optional(Schema.Unknown),
+	public: Schema.optional(Schema.Boolean),
+	statusCode: Schema.optional(Schema.Number),
+	actor: Schema.optional(ActorSpecifier),
 }) satisfies Schema.Codec<Rivetkit.RivetErrorLike>;
 
 export type RivetkitRivetError = typeof RivetkitRivetError.Type;
