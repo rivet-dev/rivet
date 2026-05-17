@@ -289,64 +289,40 @@ export const isRivetError = (u: unknown): u is RivetError =>
 const reasonFromRivetkitRivetError = (
 	error: RivetkitRivetError.RivetkitRivetError,
 ): Reason => {
-	const { group, code } = error;
-
-	switch (group) {
-		case "auth": {
-			if (code === "forbidden") return new Forbidden({ cause: error });
-			break;
-		}
-		case "actor": {
-			switch (code) {
-				case "not_found":
-					return new ActorNotFound({ cause: error });
-				case "stopping":
-					return new ActorStopping({ cause: error });
-				case "restarting":
-					return new ActorRestarting({ cause: error });
-				case "action_not_found":
-					return new ActionNotFound({ cause: error });
-				case "action_timed_out":
-					return new ActionTimedOut({ cause: error });
-				case "aborted":
-					return new ActionAborted({ cause: error });
-				case "overloaded":
-					return new ActorOverloaded({ cause: error });
-				case RivetkitErrors.INTERNAL_ERROR_CODE:
-					return new InternalError({ cause: error });
-			}
-			break;
-		}
-		case "message": {
-			if (code === "incoming_too_long") {
-				return new IncomingMessageTooLong({ cause: error });
-			}
-			if (code === "outgoing_too_long") {
-				return new OutgoingMessageTooLong({ cause: error });
-			}
-			break;
-		}
-		case "encoding": {
-			if (code === "invalid")
-				return new InvalidEncoding({ cause: error });
-			break;
-		}
-		case "request": {
-			if (code === "invalid") return new InvalidRequest({ cause: error });
-			break;
-		}
-		case "guard":
-			return new GuardError({ cause: error });
-		case "core":
-		case "rivetkit": {
-			if (code === RivetkitErrors.INTERNAL_ERROR_CODE) {
-				return new InternalError({ cause: error });
-			}
-			break;
-		}
-		case "user":
-			return new UnknownUserError({ cause: error });
+	switch (`${error.group}.${error.code}`) {
+		case `auth.${RivetkitErrors.forbiddenError().code}`:
+			return new Forbidden({ cause: error });
+		case `actor.${RivetkitErrors.actorNotFound().code}`:
+			return new ActorNotFound({ cause: error });
+		case `actor.${RivetkitErrors.actorStopping().code}`:
+			return new ActorStopping({ cause: error });
+		case `actor.${RivetkitErrors.actorRestarting().code}`:
+			return new ActorRestarting({ cause: error });
+		case `actor.action_not_found`:
+			return new ActionNotFound({ cause: error });
+		case `actor.action_timed_out`:
+			return new ActionTimedOut({ cause: error });
+		case `actor.aborted`:
+			return new ActionAborted({ cause: error });
+		case `actor.overloaded`:
+			return new ActorOverloaded({ cause: error });
+		case `actor.${RivetkitErrors.INTERNAL_ERROR_CODE}`:
+		case `core.${RivetkitErrors.INTERNAL_ERROR_CODE}`:
+		case `rivetkit.${RivetkitErrors.INTERNAL_ERROR_CODE}`:
+			return new InternalError({ cause: error });
+		case `message.incoming_too_long`:
+			return new IncomingMessageTooLong({ cause: error });
+		case `message.outgoing_too_long`:
+			return new OutgoingMessageTooLong({ cause: error });
+		case `encoding.${RivetkitErrors.invalidEncoding().code}`:
+			return new InvalidEncoding({ cause: error });
+		case `request.${RivetkitErrors.invalidRequest().code}`:
+			return new InvalidRequest({ cause: error });
 	}
+
+	// Group-wide fallbacks: any code under the group maps to a single reason.
+	if (error.group === "guard") return new GuardError({ cause: error });
+	if (error.group === "user") return new UnknownUserError({ cause: error });
 
 	return new UnknownError({
 		message: error.message,
@@ -365,12 +341,13 @@ const decodeRivetkitRivetErrorOption = Schema.decodeUnknownOption(
 export const fromUnknown = (cause: unknown): RivetError => {
 	if (isRivetError(cause)) return cause;
 
-	const decoded = decodeRivetkitRivetErrorOption(cause);
+	const normalized = RivetkitErrors.toRivetError(cause);
+	const decoded = decodeRivetkitRivetErrorOption(normalized);
 	if (Option.isSome(decoded)) return fromRivetkitRivetError(decoded.value);
 
 	return new RivetError({
 		reason: new UnknownError({
-			message: "Unknown error",
+			message: normalized.message,
 			cause,
 		}),
 	});
