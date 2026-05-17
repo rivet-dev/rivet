@@ -226,9 +226,6 @@ export const isReason = (u: unknown): u is Reason =>
  *
  * ```ts
  * program.pipe(
- *   Effect.catchReason("RivetError", "ActorRestarting", (r) =>
- *     Effect.sleep(r.retryAfter ?? "100 millis").pipe(Effect.andThen(retry)),
- *   ),
  *   Effect.catchReasons("RivetError", {
  *     Forbidden: () => Effect.fail(new MyAuthError()),
  *     ConnectionLost: () => Effect.logWarning("reconnecting"),
