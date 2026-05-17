@@ -364,10 +364,7 @@ export class UnknownError extends Schema.TaggedErrorClass<UnknownError>(
 	`${ReasonTypeId}/UnknownError`,
 )("UnknownError", {
 	message: Schema.String,
-	cause: Schema.Union([
-		Schema.instanceOf(RivetkitErrors.RivetError),
-		Schema.Defect,
-	]),
+	cause: Schema.Unknown,
 }) {
 	readonly [ReasonTypeId] = ReasonTypeId;
 	get group() {
@@ -538,5 +535,14 @@ export const fromRivetkitRivetError = (
 
 export const fromUnknown = (cause: unknown): RivetError => {
 	if (isRivetError(cause)) return cause;
-	return fromRivetkitRivetError(RivetkitErrors.toRivetError(cause));
+	if (RivetkitErrors.isRivetErrorLike(cause)) {
+		return fromRivetkitRivetError(RivetkitErrors.toRivetError(cause));
+	}
+
+	return new RivetError({
+		reason: new UnknownError({
+			message: cause instanceof Error ? cause.message : String(cause),
+			cause,
+		}),
+	});
 };
