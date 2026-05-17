@@ -1,8 +1,9 @@
 import { Context, Effect, Exit, Layer, Record, Schema } from "effect";
 import * as RivetkitClient from "rivetkit/client";
+import * as RivetkitErrors from "rivetkit/errors";
 import type * as Action from "./Action";
 import type * as Actor from "./Actor";
-import * as RivetRivetError from "./internal/RivetRivetError";
+import * as ActionError from "./internal/ActionError";
 import { rpcSystem, type TraceMeta } from "./internal/tracing";
 import * as RivetError from "./RivetError";
 
@@ -94,13 +95,15 @@ export const make = Effect.fnUntraced(function* (options: Options = {}) {
 										new RivetError.RivetError({
 											reason: new RivetError.InvalidEncoding(
 												{
-													cause: {
-														group: "encoding",
-														code: "invalid",
-														message:
-															"Could not encode action payload",
-														metadata: cause,
-													},
+													cause: new RivetkitErrors.RivetError(
+														"encoding",
+														"invalid",
+														"Could not encode action payload",
+														{
+															public: true,
+															metadata: cause,
+														},
+													),
 												},
 											),
 										}),
@@ -134,23 +137,22 @@ export const make = Effect.fnUntraced(function* (options: Options = {}) {
 export const layer = (options: Options = {}): Layer.Layer<Client> =>
 	Layer.effect(Client, make(options));
 
+const decodeActionErrorMetadata = Schema.decodeUnknownEffect(
+	ActionError.ActionErrorMetadata,
+);
+
 const decodeRejectedActionCall = <E extends Schema.Top>(
 	actionErrorSchema: E,
 ) => {
-	const decodeRivetkitRivetError = Schema.decodeUnknownEffect(
-		RivetRivetError.RivetkitRivetError,
-	);
-	const decodeActionErrorMetadata = Schema.decodeUnknownEffect(
-		RivetRivetError.ActionErrorMetadata,
-	);
 	const decodeActionError = Schema.decodeUnknownEffect(
 		Schema.toCodecJson(actionErrorSchema),
 	);
 
 	return Effect.fnUntraced(function* (cause: unknown) {
-		const rivetkitRivetError = yield* decodeRivetkitRivetError(cause).pipe(
-			Effect.mapError(() => RivetError.fromUnknown(cause)),
-		);
+		if (!RivetkitErrors.isRivetErrorLike(cause)) {
+			return yield* Effect.fail(RivetError.fromUnknown(cause));
+		}
+		const rivetkitRivetError = RivetkitErrors.toRivetError(cause);
 
 		const actionErrorMetadata = yield* Effect.exit(
 			decodeActionErrorMetadata(rivetkitRivetError.metadata),

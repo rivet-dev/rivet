@@ -21,7 +21,7 @@ import type * as RivetkitDb from "rivetkit/db";
 import type * as Action from "./Action";
 import type * as ActorState from "./ActorState";
 import * as Client from "./Client";
-import * as RivetRivetError from "./internal/RivetRivetError";
+import * as ActionError from "./internal/ActionError";
 import { readTraceMeta, rpcSystem } from "./internal/tracing";
 import * as Registry from "./Registry";
 import type * as RivetError from "./RivetError";
@@ -442,10 +442,7 @@ const makeRivetkitActor = Effect.fnUntraced(function* <
 							).pipe(Effect.orDie);
 
 							return yield* Effect.fail(
-								RivetRivetError.makeActionError(
-									action._tag,
-									encodedError,
-								),
+								ActionError.make(action._tag, encodedError),
 							);
 						}
 

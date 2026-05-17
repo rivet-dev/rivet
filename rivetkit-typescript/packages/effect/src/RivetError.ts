@@ -1,6 +1,5 @@
-import { Option, Predicate, Schema } from "effect";
+import { Predicate, Schema } from "effect";
 import * as RivetkitErrors from "rivetkit/errors";
-import * as RivetkitRivetError from "./internal/RivetRivetError";
 
 const ReasonTypeId = "~@rivetkit/effect/RivetError/Reason" as const;
 const TypeId = "~@rivetkit/effect/RivetError" as const;
@@ -8,7 +7,7 @@ const TypeId = "~@rivetkit/effect/RivetError" as const;
 export class Forbidden extends Schema.TaggedErrorClass<Forbidden>(
 	`${ReasonTypeId}/Forbidden`,
 )("Forbidden", {
-	cause: RivetkitRivetError.RivetkitRivetError,
+	cause: Schema.instanceOf(RivetkitErrors.RivetError),
 }) {
 	readonly [ReasonTypeId] = ReasonTypeId;
 	override get message(): string {
@@ -19,7 +18,7 @@ export class Forbidden extends Schema.TaggedErrorClass<Forbidden>(
 export class ActorNotFound extends Schema.TaggedErrorClass<ActorNotFound>(
 	`${ReasonTypeId}/ActorNotFound`,
 )("ActorNotFound", {
-	cause: RivetkitRivetError.RivetkitRivetError,
+	cause: Schema.instanceOf(RivetkitErrors.RivetError),
 }) {
 	readonly [ReasonTypeId] = ReasonTypeId;
 	override get message(): string {
@@ -30,7 +29,7 @@ export class ActorNotFound extends Schema.TaggedErrorClass<ActorNotFound>(
 export class ActorStopping extends Schema.TaggedErrorClass<ActorStopping>(
 	`${ReasonTypeId}/ActorStopping`,
 )("ActorStopping", {
-	cause: RivetkitRivetError.RivetkitRivetError,
+	cause: Schema.instanceOf(RivetkitErrors.RivetError),
 }) {
 	readonly [ReasonTypeId] = ReasonTypeId;
 	override get message(): string {
@@ -41,7 +40,7 @@ export class ActorStopping extends Schema.TaggedErrorClass<ActorStopping>(
 export class ActorRestarting extends Schema.TaggedErrorClass<ActorRestarting>(
 	`${ReasonTypeId}/ActorRestarting`,
 )("ActorRestarting", {
-	cause: RivetkitRivetError.RivetkitRivetError,
+	cause: Schema.instanceOf(RivetkitErrors.RivetError),
 }) {
 	readonly [ReasonTypeId] = ReasonTypeId;
 	override get message(): string {
@@ -52,7 +51,7 @@ export class ActorRestarting extends Schema.TaggedErrorClass<ActorRestarting>(
 export class ActionNotFound extends Schema.TaggedErrorClass<ActionNotFound>(
 	`${ReasonTypeId}/ActionNotFound`,
 )("ActionNotFound", {
-	cause: RivetkitRivetError.RivetkitRivetError,
+	cause: Schema.instanceOf(RivetkitErrors.RivetError),
 }) {
 	readonly [ReasonTypeId] = ReasonTypeId;
 	override get message(): string {
@@ -62,7 +61,7 @@ export class ActionNotFound extends Schema.TaggedErrorClass<ActionNotFound>(
 
 export class ActionTimedOut extends Schema.TaggedErrorClass<ActionTimedOut>(
 	`${ReasonTypeId}/ActionTimedOut`,
-)("ActionTimedOut", { cause: RivetkitRivetError.RivetkitRivetError }) {
+)("ActionTimedOut", { cause: Schema.instanceOf(RivetkitErrors.RivetError) }) {
 	readonly [ReasonTypeId] = ReasonTypeId;
 	override get message(): string {
 		return this.cause.message;
@@ -72,7 +71,7 @@ export class ActionTimedOut extends Schema.TaggedErrorClass<ActionTimedOut>(
 export class ActionAborted extends Schema.TaggedErrorClass<ActionAborted>(
 	`${ReasonTypeId}/ActionAborted`,
 )("ActionAborted", {
-	cause: RivetkitRivetError.RivetkitRivetError,
+	cause: Schema.instanceOf(RivetkitErrors.RivetError),
 }) {
 	readonly [ReasonTypeId] = ReasonTypeId;
 	override get message(): string {
@@ -83,7 +82,7 @@ export class ActionAborted extends Schema.TaggedErrorClass<ActionAborted>(
 export class ActorOverloaded extends Schema.TaggedErrorClass<ActorOverloaded>(
 	`${ReasonTypeId}/ActorOverloaded`,
 )("ActorOverloaded", {
-	cause: RivetkitRivetError.RivetkitRivetError,
+	cause: Schema.instanceOf(RivetkitErrors.RivetError),
 }) {
 	readonly [ReasonTypeId] = ReasonTypeId;
 	override get message(): string {
@@ -94,7 +93,7 @@ export class ActorOverloaded extends Schema.TaggedErrorClass<ActorOverloaded>(
 export class IncomingMessageTooLong extends Schema.TaggedErrorClass<IncomingMessageTooLong>(
 	`${ReasonTypeId}/IncomingMessageTooLong`,
 )("IncomingMessageTooLong", {
-	cause: RivetkitRivetError.RivetkitRivetError,
+	cause: Schema.instanceOf(RivetkitErrors.RivetError),
 }) {
 	readonly [ReasonTypeId] = ReasonTypeId;
 	override get message(): string {
@@ -105,7 +104,7 @@ export class IncomingMessageTooLong extends Schema.TaggedErrorClass<IncomingMess
 export class OutgoingMessageTooLong extends Schema.TaggedErrorClass<OutgoingMessageTooLong>(
 	`${ReasonTypeId}/OutgoingMessageTooLong`,
 )("OutgoingMessageTooLong", {
-	cause: RivetkitRivetError.RivetkitRivetError,
+	cause: Schema.instanceOf(RivetkitErrors.RivetError),
 }) {
 	readonly [ReasonTypeId] = ReasonTypeId;
 	override get message(): string {
@@ -116,7 +115,7 @@ export class OutgoingMessageTooLong extends Schema.TaggedErrorClass<OutgoingMess
 export class InvalidEncoding extends Schema.TaggedErrorClass<InvalidEncoding>(
 	`${ReasonTypeId}/InvalidEncoding`,
 )("InvalidEncoding", {
-	cause: RivetkitRivetError.RivetkitRivetError,
+	cause: Schema.instanceOf(RivetkitErrors.RivetError),
 }) {
 	readonly [ReasonTypeId] = ReasonTypeId;
 	override get message(): string {
@@ -127,7 +126,7 @@ export class InvalidEncoding extends Schema.TaggedErrorClass<InvalidEncoding>(
 export class InvalidRequest extends Schema.TaggedErrorClass<InvalidRequest>(
 	`${ReasonTypeId}/InvalidRequest`,
 )("InvalidRequest", {
-	cause: RivetkitRivetError.RivetkitRivetError,
+	cause: Schema.instanceOf(RivetkitErrors.RivetError),
 }) {
 	readonly [ReasonTypeId] = ReasonTypeId;
 	override get message(): string {
@@ -138,7 +137,7 @@ export class InvalidRequest extends Schema.TaggedErrorClass<InvalidRequest>(
 export class GuardError extends Schema.TaggedErrorClass<GuardError>(
 	`${ReasonTypeId}/GuardError`,
 )("GuardError", {
-	cause: RivetkitRivetError.RivetkitRivetError,
+	cause: Schema.instanceOf(RivetkitErrors.RivetError),
 }) {
 	readonly [ReasonTypeId] = ReasonTypeId;
 	override get message(): string {
@@ -149,7 +148,7 @@ export class GuardError extends Schema.TaggedErrorClass<GuardError>(
 export class InternalError extends Schema.TaggedErrorClass<InternalError>(
 	`${ReasonTypeId}/InternalError`,
 )("InternalError", {
-	cause: RivetkitRivetError.RivetkitRivetError,
+	cause: Schema.instanceOf(RivetkitErrors.RivetError),
 }) {
 	readonly [ReasonTypeId] = ReasonTypeId;
 	override get message(): string {
@@ -169,7 +168,7 @@ export class InternalError extends Schema.TaggedErrorClass<InternalError>(
  */
 export class UnknownUserError extends Schema.TaggedErrorClass<UnknownUserError>(
 	`${ReasonTypeId}/UnknownUserError`,
-)("UnknownUserError", { cause: RivetkitRivetError.RivetkitRivetError }) {
+)("UnknownUserError", { cause: Schema.instanceOf(RivetkitErrors.RivetError) }) {
 	readonly [ReasonTypeId] = ReasonTypeId;
 	override get message(): string {
 		return this.cause.message;
@@ -185,7 +184,10 @@ export class UnknownError extends Schema.TaggedErrorClass<UnknownError>(
 	`${ReasonTypeId}/UnknownError`,
 )("UnknownError", {
 	message: Schema.String,
-	cause: Schema.Union([RivetkitRivetError.RivetkitRivetError, Schema.Defect]),
+	cause: Schema.Union([
+		Schema.instanceOf(RivetkitErrors.RivetError),
+		Schema.Defect,
+	]),
 }) {
 	readonly [ReasonTypeId] = ReasonTypeId;
 }
@@ -287,7 +289,7 @@ export const isRivetError = (u: unknown): u is RivetError =>
 	Predicate.hasProperty(u, TypeId);
 
 const reasonFromRivetkitRivetError = (
-	error: RivetkitRivetError.RivetkitRivetError,
+	error: RivetkitErrors.RivetError,
 ): Reason => {
 	switch (`${error.group}.${error.code}`) {
 		case `auth.${RivetkitErrors.forbiddenError().code}`:
@@ -331,24 +333,10 @@ const reasonFromRivetkitRivetError = (
 };
 
 export const fromRivetkitRivetError = (
-	e: RivetkitRivetError.RivetkitRivetError,
+	e: RivetkitErrors.RivetError,
 ): RivetError => new RivetError({ reason: reasonFromRivetkitRivetError(e) });
-
-const decodeRivetkitRivetErrorOption = Schema.decodeUnknownOption(
-	RivetkitRivetError.RivetkitRivetError,
-);
 
 export const fromUnknown = (cause: unknown): RivetError => {
 	if (isRivetError(cause)) return cause;
-
-	const normalized = RivetkitErrors.toRivetError(cause);
-	const decoded = decodeRivetkitRivetErrorOption(normalized);
-	if (Option.isSome(decoded)) return fromRivetkitRivetError(decoded.value);
-
-	return new RivetError({
-		reason: new UnknownError({
-			message: normalized.message,
-			cause,
-		}),
-	});
+	return fromRivetkitRivetError(RivetkitErrors.toRivetError(cause));
 };
