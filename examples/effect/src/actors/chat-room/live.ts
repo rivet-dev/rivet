@@ -29,12 +29,10 @@ const ChatRoomState = ActorState.make("ChatRoomState", {
 });
 
 export const ChatRoomLive = ChatRoom.toLayer(
+	(wakeOptions) =>
 	Effect.gen(function* () {
 		const state = yield* ChatRoomState;
-		// RawRivetkitContext is the escape hatch for features that the
-		// Effect SDK has not modeled yet, including broadcasts, scheduling,
-		// destroy, SQLite access, and server-side actor clients.
-		const ctx = yield* Actor.RawRivetkitContext;
+		const ctx = wakeOptions.rawRivetkitContext;
 		const database = ctx.db as RawAccess;
 		const address = yield* Actor.CurrentAddress;
 		// The plain SDK example stores this in createVars. The Effect SDK

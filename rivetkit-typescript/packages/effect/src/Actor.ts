@@ -91,11 +91,6 @@ export class Sleep extends Context.Service<Sleep, Effect.Effect<void>>()(
 	"@rivetkit/effect/Actor/Sleep",
 ) {}
 
-export class RawRivetkitContext extends Context.Service<
-	RawRivetkitContext,
-	Rivetkit.RunContextOf<Rivetkit.AnyActorDefinition>
->()("@rivetkit/effect/Actor/RawRivetkitContext") {}
-
 export type ActionRequest<A extends Action.Any> =
 	A extends Action.Action<
 		infer Tag,
@@ -165,7 +160,7 @@ type ExcludeBuiltInWakeServices<
 > = UnknownToNever<
 	Exclude<
 		T,
-		Scope.Scope | CurrentAddress | Sleep | RawRivetkitContext | State
+		Scope.Scope | CurrentAddress | Sleep | State
 	>
 >;
 
@@ -433,7 +428,6 @@ const makeRivetkitActor = Effect.fnUntraced(function* <
 						Sleep,
 						Effect.sync(() => c.sleep()),
 					),
-					Context.make(RawRivetkitContext, c),
 					effectOptions.state
 						? Context.make(
 								effectOptions.state,
