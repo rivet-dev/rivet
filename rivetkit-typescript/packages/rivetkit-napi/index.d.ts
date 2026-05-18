@@ -319,7 +319,7 @@ export declare class CoreRegistry {
   actorStopThresholdMs(): Promise<number | undefined | null>
   health(): Promise<JsRegistryRouteResponse>
   metadata(): JsRegistryRouteResponse
-  metrics(): JsRegistryRouteResponse
+  metrics(): Promise<JsRegistryRouteResponse>
   handleServerlessRequest(req: JsServerlessRequest, onStreamEvent: (...args: any[]) => any, cancelToken: CancellationToken, config: JsServeConfig): Promise<JsServerlessResponseHead>
 }
 export declare class Schedule {

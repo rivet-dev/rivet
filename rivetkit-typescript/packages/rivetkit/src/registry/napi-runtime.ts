@@ -246,7 +246,7 @@ export class NapiCoreRuntime implements CoreRuntime {
 	async registryMetrics(
 		registry: RegistryHandle,
 	): Promise<RuntimeRegistryRouteResponse> {
-		const response = asNativeRegistry(registry).metrics();
+		const response = await asNativeRegistry(registry).metrics();
 		return {
 			status: response.status,
 			headers: response.headers,
