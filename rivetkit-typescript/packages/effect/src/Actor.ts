@@ -237,7 +237,7 @@ const Proto: Omit<Actor<any, any>, "name" | "actions"> = {
 			  >,
 		options: Options<State> = {},
 	) {
-		const resolveWake: (
+		const wakeHandler: (
 			wakeContext: Rivetkit.WakeContextOf<Rivetkit.AnyActorDefinition>,
 		) => Effect.Effect<ActionHandlers, never, R | RX> = Effect.isEffect(
 			wake,
@@ -267,7 +267,7 @@ const Proto: Omit<Actor<any, any>, "name" | "actions"> = {
 
 		return makeRivetkitActor({
 			actor: this,
-			resolveWake,
+			wakeHandler,
 			options,
 		}).pipe(
 			Effect.flatMap((rivetKitActor) =>
@@ -319,11 +319,11 @@ const makeRivetkitActor = Effect.fnUntraced(function* <
 	State extends ActorState.AnyWithProps = never,
 >({
 	actor,
-	resolveWake,
+	wakeHandler,
 	options,
 }: {
 	readonly actor: Actor<Name, Actions>;
-	readonly resolveWake: (
+	readonly wakeHandler: (
 		wakeContext: Rivetkit.WakeContextOf<Rivetkit.AnyActorDefinition>,
 	) => Effect.Effect<ActionHandlers, never, RX>;
 	readonly options: Options<State>;
@@ -408,7 +408,7 @@ const makeRivetkitActor = Effect.fnUntraced(function* <
 						: Context.empty(),
 				);
 
-				const actionHandlers = yield* resolveWake(c).pipe(
+				const actionHandlers = yield* wakeHandler(c).pipe(
 					Effect.provide(context),
 				);
 
