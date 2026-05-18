@@ -430,7 +430,10 @@ layer(TestLayer)("end-to-end", (it) => {
 						RivetError.GuardServiceUnavailable,
 					);
 					assert.strictEqual(
-						(exit.value.reason as RivetError.GuardServiceUnavailable).code,
+						(
+							exit.value
+								.reason as RivetError.GuardServiceUnavailable
+						).code,
 						"service_unavailable",
 					);
 				}
@@ -592,7 +595,7 @@ layer(TestLayer)("end-to-end", (it) => {
 		}),
 	);
 
-	it.effect("writes through the db captured from RawRivetkitContext", () =>
+	it.effect("writes through the db captured", () =>
 		Effect.gen(function* () {
 			const counter = (yield* Counter.client).getOrCreate(["t-db-write"]);
 			const afterFirst = yield* counter.LogEvent({ event: "alpha" });

@@ -223,156 +223,166 @@ const CounterState = ActorState.make("CounterState", {
 });
 
 export const CounterLive = Counter.toLayer(
-	Effect.gen(function* () {
-		const state = yield* CounterState;
-		const count = yield* Ref.make(0);
-		const flags = yield* Flags;
-		flags.set("on wake", true);
-		const greeter = yield* Greeter;
-		const wakeGreeting = greeter.greet("on wake");
+	(wakeOptions) =>
+		Effect.gen(function* () {
+			const state = yield* CounterState;
+			const count = yield* Ref.make(0);
+			const flags = yield* Flags;
+			flags.set("on wake", true);
+			const greeter = yield* Greeter;
+			const wakeGreeting = greeter.greet("on wake");
 
-		const sleep = yield* Actor.Sleep;
-		// `RawRivetkitContext`'s `db` widens to `any` against
-		// `RunContextOf<AnyActorDefinition>`. The provider configured on
-		// `Counter.toLayer` below is the `rivetkit/db` raw-access factory,
-		// so re-narrow to `RawAccess` for typed `execute` calls inside
-		// handler closures.
-		const ctx = yield* Actor.RawRivetkitContext;
-		const db = ctx.db as RawAccess;
-		// `Flags` is a process-wide Map shared across all tests in the
-		// suite, so the finalizer flag must be namespaced by actor key
-		// to keep cross-test wake/sleep cycles from leaking into each
-		// other's assertions.
-		const address = yield* Actor.CurrentAddress;
-		const finalizerFlag = `finalizer:${address.key.join("/")}`;
+			const sleep = yield* Actor.Sleep;
+			// `rawRivetkitContext`'s `db` widens to `any` against
+			// `RunContextOf<AnyActorDefinition>`. The provider configured on
+			// `Counter.toLayer` below is the `rivetkit/db` raw-access factory,
+			// so re-narrow to `RawAccess` for typed `execute` calls inside
+			// handler closures.
+			const ctx = wakeOptions.rawRivetkitContext;
+			const db = ctx.db as RawAccess;
+			// `Flags` is a process-wide Map shared across all tests in the
+			// suite, so the finalizer flag must be namespaced by actor key
+			// to keep cross-test wake/sleep cycles from leaking into each
+			// other's assertions.
+			const address = yield* Actor.CurrentAddress;
+			const finalizerFlag = `finalizer:${address.key.join("/")}`;
 
-		yield* Effect.addFinalizer(() =>
-			Effect.sync(() => {
-				flags.set(finalizerFlag, true);
-			}),
-		);
+			yield* Effect.addFinalizer(() =>
+				Effect.sync(() => {
+					flags.set(finalizerFlag, true);
+				}),
+			);
 
-		return Counter.of({
-			Increment: ({ payload }) =>
-				Effect.gen(function* () {
-					const next = yield* Ref.updateAndGet(
-						count,
-						(n) => n + payload.amount,
-					);
-					if (next > 20) {
-						return yield* new CounterOverflowError({
-							limit: 20,
-							message: `count ${next} would exceed limit 20`,
-						});
-					}
-					return next;
-				}),
-			GetCount: () => Ref.get(count),
-			Crash: () => Effect.die("kaboom"),
-			EchoDate: ({ payload }) => Effect.succeed(payload.when),
-			Tags: ({ payload }) => Effect.succeed(payload.tags.length),
-			// Per-handler yield of a non-built-in service. Resolved on
-			// every call against the snapshotted Runner context.
-			Greet: ({ payload }) =>
-				Effect.gen(function* () {
-					const g = yield* Greeter;
-					return g.greet(payload.name);
-				}),
-			WakeGreeting: () => Effect.succeed(wakeGreeting),
-			// User-defined sub-span. The SDK already wraps the handler
-			// in a server-side span; the inner `withSpan("step.double")`
-			// nests under it, demonstrating that hand-written spans
-			// inside a handler join the caller's trace transparently.
-			Compute: ({ payload }) =>
-				Effect.succeed(payload.n * 2).pipe(
-					Effect.withSpan("step.double"),
-				),
-			Scale: ({ payload }) =>
-				Effect.gen(function* () {
-					if (payload.amount > 30) {
-						return yield* new ScaledOverflowError({
-							limit: 30,
-							message: `amount ${payload.amount} would exceed limit 30`,
-						});
-					}
-					// +100 makes the round-trip non-tautological: the
-					// test asserts on a value the client never sent, so
-					// the success path can't pass without the success
-					// and payload codec sites firing on both sides.
-					return payload.amount + 100;
-				}),
-			PersistAndSleep: ({ payload }) =>
-				Effect.gen(function* () {
-					const { count } = yield* State.updateAndGet(state, (s) => ({
-						...s,
-						count: s.count + payload.amount,
-					}));
-					yield* sleep;
-					return count;
-				}),
-			PersistDateAndSleep: ({ payload }) =>
-				Effect.gen(function* () {
-					const { when } = yield* State.updateAndGet(state, (s) => ({
-						...s,
-						when: payload.when,
-					}));
-					yield* sleep;
-					return when;
-				}),
-			PersistTagsAndSleep: ({ payload }) =>
-				Effect.gen(function* () {
-					const { tags } = yield* State.updateAndGet(state, (s) => ({
-						...s,
-						tags: payload.tags,
-					}));
-					yield* sleep;
-					return tags;
-				}),
-			PersistScaledAndSleep: ({ payload }) =>
-				Effect.gen(function* () {
-					const { scaled } = yield* State.updateAndGet(
-						state,
-						(s) => ({
-							...s,
-							scaled: payload.amount,
-						}),
-					);
-					yield* sleep;
-					return scaled;
-				}),
-			GetPersistedState: () => State.get(state),
-			// Per-actor SQLite is provisioned via the `db:` option on
-			// `Counter.toLayer` below. The build effect destructures `db`
-			// from `Actor.RawRivetkitContext`, so handlers reach SQLite
-			// through the captured client without going through `c.db`.
-			LogEvent: ({ payload }) =>
-				Effect.tryPromise(async () => {
-					await db.execute(
-						"INSERT INTO events (event, created_at) VALUES (?, ?)",
-						payload.event,
-						Date.now(),
-					);
-					const rows = await db.execute<{ count: number }>(
-						"SELECT COUNT(*) as count FROM events",
-					);
-					return rows[0]?.count ?? 0;
-				}).pipe(Effect.orDie),
-			ListEvents: () =>
-				Effect.tryPromise(async () => {
-					const rows = await db.execute<{ event: string }>(
-						"SELECT event FROM events ORDER BY id ASC",
-					);
-					return rows.map((r) => r.event);
-				}).pipe(Effect.orDie),
-			CountEvents: () =>
-				Effect.tryPromise(async () => {
-					const rows = await db.execute<{ count: number }>(
-						"SELECT COUNT(*) as count FROM events",
-					);
-					return rows[0]?.count ?? 0;
-				}).pipe(Effect.orDie),
-		});
-	}),
+			return Counter.of({
+				Increment: ({ payload }) =>
+					Effect.gen(function* () {
+						const next = yield* Ref.updateAndGet(
+							count,
+							(n) => n + payload.amount,
+						);
+						if (next > 20) {
+							return yield* new CounterOverflowError({
+								limit: 20,
+								message: `count ${next} would exceed limit 20`,
+							});
+						}
+						return next;
+					}),
+				GetCount: () => Ref.get(count),
+				Crash: () => Effect.die("kaboom"),
+				EchoDate: ({ payload }) => Effect.succeed(payload.when),
+				Tags: ({ payload }) => Effect.succeed(payload.tags.length),
+				// Per-handler yield of a non-built-in service. Resolved on
+				// every call against the snapshotted Runner context.
+				Greet: ({ payload }) =>
+					Effect.gen(function* () {
+						const g = yield* Greeter;
+						return g.greet(payload.name);
+					}),
+				WakeGreeting: () => Effect.succeed(wakeGreeting),
+				// User-defined sub-span. The SDK already wraps the handler
+				// in a server-side span; the inner `withSpan("step.double")`
+				// nests under it, demonstrating that hand-written spans
+				// inside a handler join the caller's trace transparently.
+				Compute: ({ payload }) =>
+					Effect.succeed(payload.n * 2).pipe(
+						Effect.withSpan("step.double"),
+					),
+				Scale: ({ payload }) =>
+					Effect.gen(function* () {
+						if (payload.amount > 30) {
+							return yield* new ScaledOverflowError({
+								limit: 30,
+								message: `amount ${payload.amount} would exceed limit 30`,
+							});
+						}
+						// +100 makes the round-trip non-tautological: the
+						// test asserts on a value the client never sent, so
+						// the success path can't pass without the success
+						// and payload codec sites firing on both sides.
+						return payload.amount + 100;
+					}),
+				PersistAndSleep: ({ payload }) =>
+					Effect.gen(function* () {
+						const { count } = yield* State.updateAndGet(
+							state,
+							(s) => ({
+								...s,
+								count: s.count + payload.amount,
+							}),
+						);
+						yield* sleep;
+						return count;
+					}),
+				PersistDateAndSleep: ({ payload }) =>
+					Effect.gen(function* () {
+						const { when } = yield* State.updateAndGet(
+							state,
+							(s) => ({
+								...s,
+								when: payload.when,
+							}),
+						);
+						yield* sleep;
+						return when;
+					}),
+				PersistTagsAndSleep: ({ payload }) =>
+					Effect.gen(function* () {
+						const { tags } = yield* State.updateAndGet(
+							state,
+							(s) => ({
+								...s,
+								tags: payload.tags,
+							}),
+						);
+						yield* sleep;
+						return tags;
+					}),
+				PersistScaledAndSleep: ({ payload }) =>
+					Effect.gen(function* () {
+						const { scaled } = yield* State.updateAndGet(
+							state,
+							(s) => ({
+								...s,
+								scaled: payload.amount,
+							}),
+						);
+						yield* sleep;
+						return scaled;
+					}),
+				GetPersistedState: () => State.get(state),
+				// Per-actor SQLite is provisioned via the `db:` option on
+				// `Counter.toLayer` below. The build effect destructures `db`
+				// from `wakeOptions.rawRivetkitContext`, so handlers reach SQLite
+				// through the captured client without going through `c.db`.
+				LogEvent: ({ payload }) =>
+					Effect.tryPromise(async () => {
+						await db.execute(
+							"INSERT INTO events (event, created_at) VALUES (?, ?)",
+							payload.event,
+							Date.now(),
+						);
+						const rows = await db.execute<{ count: number }>(
+							"SELECT COUNT(*) as count FROM events",
+						);
+						return rows[0]?.count ?? 0;
+					}).pipe(Effect.orDie),
+				ListEvents: () =>
+					Effect.tryPromise(async () => {
+						const rows = await db.execute<{ event: string }>(
+							"SELECT event FROM events ORDER BY id ASC",
+						);
+						return rows.map((r) => r.event);
+					}).pipe(Effect.orDie),
+				CountEvents: () =>
+					Effect.tryPromise(async () => {
+						const rows = await db.execute<{ count: number }>(
+							"SELECT COUNT(*) as count FROM events",
+						);
+						return rows[0]?.count ?? 0;
+					}).pipe(Effect.orDie),
+			});
+		}),
 	{
 		state: CounterState,
 		// Migration runs once before the wake-scope build effect, so the
