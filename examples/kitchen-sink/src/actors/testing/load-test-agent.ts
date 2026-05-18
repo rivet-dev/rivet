@@ -82,6 +82,20 @@ export const loadTestAgent = actor({
 					typeof event.data === "string"
 						? JSON.parse(event.data)
 						: undefined;
+
+				// Fast-path ping: echo back without touching SQLite so the client can measure raw
+				// RTT without the per-message storage write. Used by the counter-latency client's
+				// first two probes after WS open.
+				if (message && message.type === "ping") {
+					send(websocket, {
+						type: "pong",
+						connectionId,
+						id: message.id,
+						timestamp: Date.now(),
+					});
+					return;
+				}
+
 				if (!message || message.type !== "inference") {
 					throw new Error("expected inference message");
 				}

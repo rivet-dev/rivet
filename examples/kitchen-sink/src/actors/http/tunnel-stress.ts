@@ -32,6 +32,36 @@ export const tunnelStress = actor({
 		sendHeartbeat();
 
 		websocket.addEventListener("message", async (event: RivetMessageEvent) => {
+			// Fast-path ping: echo back without touching KV so the client can measure raw RTT
+			// without the per-message storage write. Used by the counter-latency client's first
+			// two probes after WS open.
+			if (typeof event.data === "string") {
+				let parsed: unknown;
+				try {
+					parsed = JSON.parse(event.data);
+				} catch {
+					parsed = undefined;
+				}
+				if (
+					parsed &&
+					typeof parsed === "object" &&
+					(parsed as { type?: unknown }).type === "ping"
+				) {
+					const id = (parsed as { id?: unknown }).id;
+					if (websocket.readyState === 1) {
+						websocket.send(
+							JSON.stringify({
+								type: "pong",
+								connectionId,
+								id,
+								timestamp: Date.now(),
+							}),
+						);
+					}
+					return;
+				}
+			}
+
 			c.state.messageCount += 1;
 			await c.kv.put("counter", String(c.state.messageCount));
 			websocket.send(
