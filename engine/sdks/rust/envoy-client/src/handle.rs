@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 use std::sync::atomic::Ordering;
 
 use crate::async_counter::AsyncCounter;
@@ -16,6 +16,11 @@ use crate::tunnel::HibernatingWebSocketMetadata;
 pub struct EnvoyHandle {
 	pub(crate) shared: Arc<SharedContext>,
 	pub(crate) started_rx: tokio::sync::watch::Receiver<()>,
+}
+
+#[derive(Clone)]
+pub struct EnvoyStatusHandle {
+	shared: Weak<SharedContext>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -79,12 +84,27 @@ impl EnvoyHandle {
 	/// Threshold for `is_ping_healthy`.
 	pub const PING_HEALTHY_THRESHOLD_MS: i64 = 20_000;
 
-	/// True when the engine sent a ping within `PING_HEALTHY_THRESHOLD_MS`. Returns false once
-	/// the engine link has been silently dead long enough that an upstream health check should
-	/// treat this envoy as unhealthy and recycle it.
-	pub fn is_ping_healthy(&self) -> bool {
+	/// Epoch ms timestamp of the most recent engine ping.
+	pub fn last_ping_at_ms(&self) -> Option<i64> {
 		let last = self.shared.last_ping_ts.load(Ordering::Acquire);
-		crate::time::now_millis() - last < Self::PING_HEALTHY_THRESHOLD_MS
+		if last == 0 {
+			None
+		} else {
+			Some(last)
+		}
+	}
+
+	/// Milliseconds since the most recent engine ping.
+	pub fn last_ping_age_ms(&self) -> Option<i64> {
+		self.last_ping_at_ms()
+			.map(|last| crate::time::now_millis().saturating_sub(last))
+	}
+
+	/// True when the most recent engine ping timestamp is within `PING_HEALTHY_THRESHOLD_MS`.
+	/// Fresh envoys start healthy until the threshold elapses without a ping.
+	pub fn is_ping_healthy(&self) -> bool {
+		self.last_ping_age_ms()
+			.is_some_and(|age_ms| age_ms < Self::PING_HEALTHY_THRESHOLD_MS)
 	}
 
 	pub fn get_envoy_key(&self) -> &str {
@@ -104,20 +124,13 @@ impl EnvoyHandle {
 	}
 
 	pub fn active_actor_count(&self) -> usize {
-		let guard = self
-			.shared
-			.actors
-			.lock()
-			.expect("shared actor registry poisoned");
-		guard
-			.values()
-			.map(|generations| {
-				generations
-					.values()
-					.filter(|actor| !actor.handle.is_closed())
-					.count()
-			})
-			.sum()
+		active_actor_count(&self.shared)
+	}
+
+	pub fn status_handle(&self) -> EnvoyStatusHandle {
+		EnvoyStatusHandle {
+			shared: Arc::downgrade(&self.shared),
+		}
 	}
 
 	pub fn pool_name(&self) -> &str {
@@ -597,6 +610,51 @@ impl EnvoyHandle {
 		let (_, actor_start) = decode_serverless_actor_start_payload(payload)?;
 		Ok(actor_start)
 	}
+}
+
+impl EnvoyStatusHandle {
+	pub fn last_ping_at_ms(&self) -> Option<i64> {
+		self.shared.upgrade().and_then(|shared| {
+			let last = shared.last_ping_ts.load(Ordering::Acquire);
+			if last == 0 {
+				None
+			} else {
+				Some(last)
+			}
+		})
+	}
+
+	pub fn last_ping_age_ms(&self) -> Option<i64> {
+		self.last_ping_at_ms()
+			.map(|last| crate::time::now_millis().saturating_sub(last))
+	}
+
+	pub fn is_ping_healthy(&self) -> bool {
+		self.last_ping_age_ms()
+			.is_some_and(|age_ms| age_ms < EnvoyHandle::PING_HEALTHY_THRESHOLD_MS)
+	}
+
+	pub fn active_actor_count(&self) -> Option<usize> {
+		self.shared
+			.upgrade()
+			.map(|shared| active_actor_count(&shared))
+	}
+}
+
+fn active_actor_count(shared: &SharedContext) -> usize {
+	let guard = shared
+		.actors
+		.lock()
+		.expect("shared actor registry poisoned");
+	guard
+		.values()
+		.map(|generations| {
+			generations
+				.values()
+				.filter(|actor| !actor.handle.is_closed())
+				.count()
+		})
+		.sum()
 }
 
 fn decode_serverless_actor_start_payload(
