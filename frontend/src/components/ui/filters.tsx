@@ -1412,25 +1412,40 @@ export function FiltersDisplay({
 					Display
 				</Button>
 			</PopoverTrigger>
-			<PopoverContent>
-				<div className="flex flex-col gap-2">
-					{Object.entries(definitions).map(([key, def]) => (
-						<div
-							key={key}
-							className="flex items-center justify-between"
-						>
-							<Label className="text-sm">{def.label}</Label>
-							<FilterValue
-								id={key}
-								definition={def}
-								value={filters[key]?.value ?? []}
-								operator={
-									filters[key]?.operator || FilterOp.EQUAL
-								}
-								onChange={onChange}
-							/>
-						</div>
-					))}
+			<PopoverContent className="w-60 p-2">
+				<div className="flex flex-col">
+					{Object.entries(definitions).map(([key, def]) => {
+						const checked =
+							filters[key]?.value?.[0] === "true" ||
+							filters[key]?.value?.[0] === "1";
+						return (
+							<Label
+								key={key}
+								htmlFor={`display-${key}`}
+								className={cn(
+									"flex items-center gap-2.5 rounded-md px-2 py-1.5 text-sm font-normal cursor-pointer",
+									"hover:bg-foreground/[0.04]",
+								)}
+							>
+								<Checkbox
+									id={`display-${key}`}
+									checked={checked}
+									onCheckedChange={(next) => {
+										onChange((prev) => ({
+											...prev,
+											[key]: {
+												...prev[key],
+												value: [
+													String(Number(!!next)),
+												],
+											},
+										}));
+									}}
+								/>
+								<span>{def.label}</span>
+							</Label>
+						);
+					})}
 				</div>
 			</PopoverContent>
 		</Popover>

@@ -31,7 +31,7 @@ function RouteComponent() {
 			<div className="h-screen flex flex-col justify-safe-center">
 				<div className="flex-1 flex flex-col justify-safe-center overflow-auto">
 					<div className="flex mx-auto flex-1 w-full px-6 items-center justify-center">
-						<div className="max-w-md w-full">
+						<div className="max-w-2xl w-full">
 							<Card
 								className="max-w-2xl w-full"
 								data-testid={

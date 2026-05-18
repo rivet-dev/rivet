@@ -16,6 +16,144 @@
 	}
 }
 
+@layer components {
+	/* Agent loading wheel: a slow 14s rotation with a stepped 12-tick chase
+	   layered on top to create a deliberate "thinking" feel. */
+	@keyframes dash-rotate {
+		from {
+			transform: rotate(0deg);
+		}
+		to {
+			transform: rotate(360deg);
+		}
+	}
+	.animate-dash-rotate {
+		transform-origin: center;
+		animation: dash-rotate 14s linear infinite;
+	}
+
+	@keyframes dash-chase {
+		from {
+			transform: rotate(0deg);
+		}
+		to {
+			transform: rotate(360deg);
+		}
+	}
+	.animate-dash-chase {
+		transform-origin: center;
+		animation: dash-chase 3.6s steps(12) infinite;
+	}
+
+	/*
+	 * Sparkle twinkle: opacity-only pulse for one path at a time. Used by
+	 * `TwinklingSparkles`. Each star sets its own `animation-delay` so the
+	 * three stars fade in/out sequentially. No transform = no size change.
+	 */
+	@keyframes twinkle {
+		0%,
+		70%,
+		100% {
+			opacity: 0.3;
+		}
+		20%,
+		40% {
+			opacity: 1;
+		}
+	}
+	.animate-twinkle {
+		animation: twinkle 1.8s ease-in-out infinite;
+	}
+
+	/*
+	 * Conic gradient rotation used by the Create Organization page. Registering
+	 * `--gradient-angle` via `@property` lets the browser smoothly interpolate
+	 * an `<angle>` value — without this, animating a CSS custom property does
+	 * nothing visible.
+	 */
+	@property --gradient-angle {
+		syntax: "<angle>";
+		initial-value: 0deg;
+		inherits: false;
+	}
+	@keyframes conic-rotate {
+		to {
+			--gradient-angle: 360deg;
+		}
+	}
+	@keyframes conic-rotate-reverse {
+		from {
+			--gradient-angle: 360deg;
+		}
+		to {
+			--gradient-angle: 0deg;
+		}
+	}
+	.animate-conic-rotate {
+		animation: conic-rotate 8s linear infinite;
+	}
+	.animate-conic-rotate-reverse {
+		animation: conic-rotate-reverse 14s linear infinite;
+	}
+	@keyframes orb-breathe {
+		0%,
+		100% {
+			transform: scale(1);
+		}
+		50% {
+			transform: scale(1.04);
+		}
+	}
+	.animate-orb-breathe {
+		animation: orb-breathe 4s ease-in-out infinite;
+	}
+
+	/* Translucent surface with backdrop blur. Foundry's signature card style. */
+	.glass {
+		@apply bg-white/[0.02] backdrop-blur-md border border-white/10;
+	}
+
+	/* Stronger glass: opaque-ish surface for floating panels / popovers. */
+	.glass-strong {
+		@apply bg-card/95 backdrop-blur-lg border border-white/10;
+	}
+
+	/* Subtle orange shadow used on primary CTAs / focal cards. */
+	.glow-accent {
+		box-shadow: 0 0 24px hsl(var(--primary) / 0.3);
+	}
+
+	/* Top gradient highlight applied via ::after for a "shine" on the upper edge. */
+	.shine-top {
+		position: relative;
+	}
+	.shine-top::after {
+		content: "";
+		position: absolute;
+		inset: 0 0 auto 0;
+		height: 1px;
+		background: linear-gradient(
+			to right,
+			transparent,
+			rgba(255, 255, 255, 0.2),
+			transparent
+		);
+		pointer-events: none;
+	}
+
+	/* Orange-tinted text gradient for hero / accent type. */
+	.text-gradient-accent {
+		background: linear-gradient(
+			to right,
+			hsl(var(--primary)),
+			hsl(var(--primary) / 0.7)
+		);
+		-webkit-background-clip: text;
+		background-clip: text;
+		color: transparent;
+	}
+}
+
 @layer utilities {
 	.overflow-r-gradient {
 		mask-image: linear-gradient(-90deg, rgba(0, 0, 0, 0) 0%, #000 45px);
@@ -94,6 +232,21 @@
 
 .react-flow__edge-path {
 	stroke: hsl(var(--muted-foreground));
+}
+
+/*
+ * Shiki dual-theme: the highlighter emits `color: <light>` plus
+ * `--shiki-dark: <dark>` (and `--shiki-dark-bg`, etc.) on every token. In dark
+ * mode we swap the CSS variables in so the same HTML renders with the dark
+ * palette without re-running the highlighter.
+ */
+.dark .shiki,
+.dark .shiki span {
+	color: var(--shiki-dark) !important;
+	background-color: var(--shiki-dark-bg) !important;
+	font-style: var(--shiki-dark-font-style) !important;
+	font-weight: var(--shiki-dark-font-weight) !important;
+	text-decoration: var(--shiki-dark-text-decoration) !important;
 }
 
 :root {

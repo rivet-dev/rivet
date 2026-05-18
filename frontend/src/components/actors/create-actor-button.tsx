@@ -5,7 +5,11 @@ import { Button, type ButtonProps, WithTooltip } from "@/components";
 import { useActorsView } from "./actors-view-context-provider";
 import { useDataProvider } from "./data-provider";
 
-export function CreateActorButton(props: ButtonProps) {
+export function CreateActorButton({
+	label,
+	iconOnly,
+	...props
+}: ButtonProps & { label?: string; iconOnly?: boolean }) {
 	const navigate = useNavigate();
 
 	const provider = useDataProvider();
@@ -20,25 +24,40 @@ export function CreateActorButton(props: ButtonProps) {
 		return null;
 	}
 
-	const content = (
+	const onClick = () => {
+		navigate({
+			to: ".",
+			search: (prev) => ({
+				...prev,
+				modal: "create-actor",
+			}),
+		});
+	};
+
+	const content = iconOnly ? (
+		<div>
+			<Button
+				disabled={!canCreate}
+				size="icon-sm"
+				variant="ghost"
+				onClick={onClick}
+				aria-label={label ?? copy.createActor}
+				{...props}
+			>
+				<Icon icon={faPlus} />
+			</Button>
+		</div>
+	) : (
 		<div>
 			<Button
 				disabled={!canCreate}
 				size="sm"
 				variant="ghost"
-				onClick={() => {
-					navigate({
-						to: ".",
-						search: (prev) => ({
-							...prev,
-							modal: "create-actor",
-						}),
-					});
-				}}
+				onClick={onClick}
 				startIcon={<Icon icon={faPlus} />}
 				{...props}
 			>
-				{copy.createActor}
+				{label ?? copy.createActor}
 			</Button>
 		</div>
 	);

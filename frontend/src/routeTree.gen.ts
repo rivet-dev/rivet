@@ -19,6 +19,7 @@ import { Route as AcceptInvitationRouteImport } from './routes/accept-invitation
 import { Route as ContextRouteImport } from './routes/_context'
 import { Route as ContextIndexRouteImport } from './routes/_context/index'
 import { Route as ContextNewIndexRouteImport } from './routes/_context/new/index'
+import { Route as ContextNewOrgIndexRouteImport } from './routes/_context/new-org/index'
 import { Route as ContextOrgsOrganizationRouteImport } from './routes/_context/orgs.$organization'
 import { Route as ContextNsNamespaceRouteImport } from './routes/_context/ns.$namespace'
 import { Route as ContextOrgsOrganizationIndexRouteImport } from './routes/_context/orgs.$organization/index'
@@ -88,6 +89,11 @@ const ContextIndexRoute = ContextIndexRouteImport.update({
 const ContextNewIndexRoute = ContextNewIndexRouteImport.update({
   id: '/new/',
   path: '/new/',
+  getParentRoute: () => ContextRoute,
+} as any)
+const ContextNewOrgIndexRoute = ContextNewOrgIndexRouteImport.update({
+  id: '/new-org/',
+  path: '/new-org/',
   getParentRoute: () => ContextRoute,
 } as any)
 const ContextOrgsOrganizationRoute = ContextOrgsOrganizationRouteImport.update({
@@ -235,6 +241,7 @@ export interface FileRoutesByFullPath {
   '/verify-email-pending': typeof VerifyEmailPendingRoute
   '/ns/$namespace': typeof ContextNsNamespaceRouteWithChildren
   '/orgs/$organization': typeof ContextOrgsOrganizationRouteWithChildren
+  '/new-org/': typeof ContextNewOrgIndexRoute
   '/new/': typeof ContextNewIndexRoute
   '/ns/$namespace/settings': typeof ContextNsNamespaceSettingsRoute
   '/ns/$namespace/': typeof ContextNsNamespaceIndexRoute
@@ -265,6 +272,7 @@ export interface FileRoutesByTo {
   '/reset-password': typeof ResetPasswordRoute
   '/verify-email-pending': typeof VerifyEmailPendingRoute
   '/': typeof ContextIndexRoute
+  '/new-org': typeof ContextNewOrgIndexRoute
   '/new': typeof ContextNewIndexRoute
   '/ns/$namespace/settings': typeof ContextNsNamespaceSettingsRoute
   '/ns/$namespace': typeof ContextNsNamespaceIndexRoute
@@ -297,6 +305,7 @@ export interface FileRoutesById {
   '/_context/': typeof ContextIndexRoute
   '/_context/ns/$namespace': typeof ContextNsNamespaceRouteWithChildren
   '/_context/orgs/$organization': typeof ContextOrgsOrganizationRouteWithChildren
+  '/_context/new-org/': typeof ContextNewOrgIndexRoute
   '/_context/new/': typeof ContextNewIndexRoute
   '/_context/ns/$namespace/settings': typeof ContextNsNamespaceSettingsRoute
   '/_context/ns/$namespace/': typeof ContextNsNamespaceIndexRoute
@@ -331,6 +340,7 @@ export interface FileRouteTypes {
     | '/verify-email-pending'
     | '/ns/$namespace'
     | '/orgs/$organization'
+    | '/new-org/'
     | '/new/'
     | '/ns/$namespace/settings'
     | '/ns/$namespace/'
@@ -361,6 +371,7 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/verify-email-pending'
     | '/'
+    | '/new-org'
     | '/new'
     | '/ns/$namespace/settings'
     | '/ns/$namespace'
@@ -392,6 +403,7 @@ export interface FileRouteTypes {
     | '/_context/'
     | '/_context/ns/$namespace'
     | '/_context/orgs/$organization'
+    | '/_context/new-org/'
     | '/_context/new/'
     | '/_context/ns/$namespace/settings'
     | '/_context/ns/$namespace/'
@@ -495,6 +507,13 @@ declare module '@tanstack/react-router' {
       path: '/new'
       fullPath: '/new/'
       preLoaderRoute: typeof ContextNewIndexRouteImport
+      parentRoute: typeof ContextRoute
+    }
+    '/_context/new-org/': {
+      id: '/_context/new-org/'
+      path: '/new-org'
+      fullPath: '/new-org/'
+      preLoaderRoute: typeof ContextNewOrgIndexRouteImport
       parentRoute: typeof ContextRoute
     }
     '/_context/orgs/$organization': {
@@ -749,6 +768,7 @@ interface ContextRouteChildren {
   ContextIndexRoute: typeof ContextIndexRoute
   ContextNsNamespaceRoute: typeof ContextNsNamespaceRouteWithChildren
   ContextOrgsOrganizationRoute: typeof ContextOrgsOrganizationRouteWithChildren
+  ContextNewOrgIndexRoute: typeof ContextNewOrgIndexRoute
   ContextNewIndexRoute: typeof ContextNewIndexRoute
 }
 
@@ -756,6 +776,7 @@ const ContextRouteChildren: ContextRouteChildren = {
   ContextIndexRoute: ContextIndexRoute,
   ContextNsNamespaceRoute: ContextNsNamespaceRouteWithChildren,
   ContextOrgsOrganizationRoute: ContextOrgsOrganizationRouteWithChildren,
+  ContextNewOrgIndexRoute: ContextNewOrgIndexRoute,
   ContextNewIndexRoute: ContextNewIndexRoute,
 }
 

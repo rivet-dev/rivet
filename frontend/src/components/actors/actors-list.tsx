@@ -1,31 +1,24 @@
 import {
 	faActors,
-	faBook,
-	faExclamationTriangle,
 	faMagnifyingGlass,
-	faNextjs,
 	faQuestionSquare,
-	faReact,
-	faSidebar,
 	faSidebarFlip,
-	faTs,
 	Icon,
 } from "@rivet-gg/icons";
 import {
 	useInfiniteQuery,
 	useQuery,
+	useQueryClient,
 	useSuspenseInfiniteQuery,
 } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
-import { Suspense, useCallback, useRef, type RefObject } from "react";
+import { Suspense, useCallback, useRef, useState, type RefObject } from "react";
 import { useLocalStorage } from "usehooks-ts";
 import { RECORDS_PER_PAGE } from "@/app/data-providers/default-data-provider";
 import {
 	Button,
-	FilterCreator,
 	FiltersDisplay,
-	H4,
 	ls,
 	type OnFiltersChange,
 	ScrollArea,
@@ -33,8 +26,6 @@ import {
 	SmallText,
 	WithTooltip,
 } from "@/components";
-import { docsLinks } from "@/content/data";
-import { features } from "@/lib/features";
 import { VisibilitySensor } from "../visibility-sensor";
 import { useActorsFilters, useFiltersValue } from "./actor-filters-context";
 import { useActorsLayout } from "./actors-layout-context";
@@ -42,9 +33,7 @@ import { ActorsListRow, ActorsListRowSkeleton } from "./actors-list-row";
 import { useActorsView } from "./actors-view-context-provider";
 import { CreateActorButton } from "./create-actor-button";
 import { useDataProvider } from "./data-provider";
-import { GoToActorButton } from "./go-to-actor-button";
 import { NoProvidersAlert } from "./no-providers-alert";
-import { useRootLayout } from "./root-layout-context";
 
 export function ActorsList() {
 	const viewportRef = useRef<HTMLDivElement>(null);
@@ -64,6 +53,29 @@ export function ActorsList() {
 	);
 }
 
+function ActorNameLabel() {
+	const { n } = useSearch({ from: "/_context" });
+	const buildId = n?.[0];
+	const { data: builds = [] } = useInfiniteQuery(
+		useDataProvider().buildsQueryOptions(),
+	);
+
+	if (!buildId) return null;
+
+	const build = builds.find((b) => b.id === buildId);
+	const meta = build?.name?.metadata as
+		| Record<string, unknown>
+		| undefined;
+	const displayName =
+		typeof meta?.name === "string" ? meta.name : (buildId ?? "");
+
+	return (
+		<span className="text-sm font-medium text-foreground truncate min-w-0">
+			{displayName}
+		</span>
+	);
+}
+
 function Page1Poller() {
 	const { n } = useSearch({ from: "/_context" });
 	const filters = useFiltersValue({ onlyStatic: true });
@@ -72,51 +84,113 @@ function Page1Poller() {
 }
 
 function TopBar() {
-	const { isSidebarCollapsed, sidebarRef } = useRootLayout();
 	const { isDetailsColCollapsed, detailsRef } = useActorsLayout();
+	const { n } = useSearch({ from: "/_context" });
+	const filters = useFiltersValue({ onlyStatic: true });
+	const { data: actors = [], isLoading } = useInfiniteQuery(
+		useDataProvider().actorsListQueryOptions({ n, filters }),
+	);
+	const filtersCount = Object.values(filters).length;
+
+	// When there are no instances and the user hasn't applied any filter,
+	// suppress both the "+" button and the search/display row so the empty
+	// state below is the only call-to-action. Filters keep the row visible
+	// because the user still needs a way to clear them.
+	const showInstanceTools =
+		isLoading || actors.length > 0 || filtersCount > 0;
 
 	return (
-		<div className="col-span-full border-b flex px-2 py-2 gap-1 @lg/h-[45px] sticky top-0 bg-card z-[1]">
-			{isSidebarCollapsed ? (
-				<WithTooltip
-					trigger={
-						<Button
-							onClick={() => sidebarRef.current?.expand()}
-							variant="outline"
-							size="icon-sm"
-						>
-							<Icon icon={faSidebar} />
-						</Button>
-					}
-					content="Expand Actor Names column"
-				/>
-			) : null}
-			<div className="justify-between flex flex-1 flex-wrap gap-2 w-full">
-				{features.datacenter ? (
-					<Filters />
-				) : (
-					<div />
-				)}
-				<div className="flex gap-1">
-					<CreateActorButton />
+		<div className="col-span-full border-b sticky top-0 bg-card z-[1]">
+			<div className="flex items-center px-3 gap-2 h-[45px]">
+				<ActorNameLabel />
+				{showInstanceTools ? (
+					<div className="ml-auto flex items-center gap-1 shrink-0">
+						<CreateActorButton iconOnly label="Create Instance" />
+					</div>
+				) : null}
+				{isDetailsColCollapsed ? (
+					<WithTooltip
+						trigger={
+							<Button
+								onClick={() => detailsRef.current?.expand()}
+								variant="outline"
+								size="icon-sm"
+								className={showInstanceTools ? "" : "ml-auto"}
+							>
+								<Icon icon={faSidebarFlip} />
+							</Button>
+						}
+						content="Expand details column"
+					/>
+				) : null}
+			</div>
+			{showInstanceTools ? (
+				<div className="flex items-center pl-1.5 pr-2.5 gap-2 h-10 border-t">
+					<InstanceSearchInput />
 					<Display />
 				</div>
-			</div>
-			{isDetailsColCollapsed ? (
-				<WithTooltip
-					trigger={
-						<Button
-							onClick={() => detailsRef.current?.expand()}
-							variant="outline"
-							size="icon-sm"
-						>
-							<Icon icon={faSidebarFlip} />
-						</Button>
-					}
-					content="Expand details column"
-				/>
 			) : null}
 			<LoadingIndicator />
+		</div>
+	);
+}
+
+function InstanceSearchInput() {
+	const navigate = useNavigate();
+	const queryClient = useQueryClient();
+	const dataProvider = useDataProvider();
+	const { n } = useSearch({ from: "/_context" });
+	const filters = useFiltersValue({ onlyStatic: true });
+	const { data: actors = [] } = useInfiniteQuery(
+		dataProvider.actorsListQueryOptions({ n, filters }),
+	);
+
+	const [value, setValue] = useState("");
+	const [isPending, setIsPending] = useState(false);
+
+	const placeholder = `Search ${actors.length} instance${actors.length === 1 ? "" : "s"}…`;
+
+	const handleSubmit = async () => {
+		const trimmed = value.trim();
+		if (!trimmed) return;
+		setIsPending(true);
+		try {
+			await queryClient.fetchQuery(
+				dataProvider.actorQueryOptions(trimmed),
+			);
+			void navigate({
+				to: ".",
+				search: (prev) => ({ ...prev, actorId: trimmed }),
+			});
+		} catch {
+			void navigate({
+				to: ".",
+				search: (prev) => ({ ...prev, actorKey: trimmed }),
+			});
+		} finally {
+			setValue("");
+			setIsPending(false);
+		}
+	};
+
+	return (
+		<div className="relative flex-1 min-w-0">
+			<Icon
+				icon={faMagnifyingGlass}
+				className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground size-3.5 pointer-events-none"
+			/>
+			<input
+				type="text"
+				value={value}
+				placeholder={placeholder}
+				disabled={isPending}
+				onChange={(e) => setValue(e.target.value)}
+				onKeyDown={(e) => {
+					if (e.key === "Enter") void handleSubmit();
+					if (e.key === "Escape") setValue("");
+				}}
+				className="w-full h-7 rounded-md bg-foreground/[0.04] text-xs pl-8 pr-2 placeholder:text-muted-foreground focus:outline-none focus:bg-foreground/[0.06] transition-colors"
+			/>
 		</div>
 	);
 }
@@ -151,7 +225,7 @@ function List({
 	const rowVirtualizer = useVirtualizer({
 		count: actors.length,
 		getScrollElement: () => viewportRef.current,
-		estimateSize: () => 56,
+		estimateSize: () => 36,
 		overscan: 5,
 	});
 
@@ -294,67 +368,32 @@ function EmptyState({ count }: { count: number }) {
 							<NoProvidersAlert />
 						</div>
 					) : (
-						<div className="gap-2 flex flex-col items-center justify-center">
-							<Icon icon={faActors} className="text-4xl mt-8" />
-							<SmallText className="text-center my-0">
-								{copy.noActorsFound}
-							</SmallText>
-							<div className="mt-4 flex flex-col gap-2 items-center justify-center">
-								<CreateActorButton variant="secondary" />{" "}
-								<SmallText className="mt-4 mb-1">
-									Use one of the quick start guides to get
-									started.
-								</SmallText>
-								<div className="flex gap-2">
-									<Button
-										className="flex-1"
-										variant="outline"
-										startIcon={<Icon icon={faTs} />}
-										asChild
-									>
-										<a
-											href={docsLinks.gettingStarted.js}
-											target="_blank"
-											rel="noopener noreferrer"
-										>
-											JavaScript
-										</a>
-									</Button>
-									<Button
-										className="flex-1"
-										variant="outline"
-										startIcon={<Icon icon={faReact} />}
-										asChild
-									>
-										<a
-											href={
-												docsLinks.gettingStarted.react
-											}
-											target="_blank"
-											rel="noopener noreferrer"
-										>
-											React
-										</a>
-									</Button>
-
-									<Button
-										className="flex-1"
-										variant="outline"
-										startIcon={<Icon icon={faNextjs} />}
-										asChild
-									>
-										<a
-											href={
-												docsLinks.gettingStarted.nextjs
-											}
-											target="_blank"
-											rel="noopener noreferrer"
-										>
-											Next.js
-										</a>
-									</Button>
-								</div>
+						<div className="mt-12 mx-auto max-w-sm flex flex-col items-center gap-4 text-center">
+							<div className="flex h-12 w-12 items-center justify-center rounded-full bg-foreground/[0.04] border border-foreground/10">
+								<Icon
+									icon={faActors}
+									className="text-lg text-muted-foreground/80"
+								/>
 							</div>
+							<div className="flex flex-col gap-1">
+								<p className="text-sm font-medium text-foreground">
+									{names && names.length > 0
+										? "No instances yet"
+										: "No actors yet"}
+								</p>
+								<SmallText className="text-muted-foreground my-0 leading-relaxed">
+									{names && names.length > 0
+										? "Instances of this actor will appear here as your code calls them."
+										: copy.noActorsFound}
+								</SmallText>
+							</div>
+							<CreateActorButton
+								label={
+									names && names.length > 0
+										? "Create Instance"
+										: undefined
+								}
+							/>
 						</div>
 					)
 				) : (
@@ -430,10 +469,6 @@ function useFiltersChangeCallback(): OnFiltersChange {
 		},
 		[navigate, pick, remove, setLs, value],
 	);
-}
-
-function Filters() {
-	return <GoToActorButton />;
 }
 
 function Display() {

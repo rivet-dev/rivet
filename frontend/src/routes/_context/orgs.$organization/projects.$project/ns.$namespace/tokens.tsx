@@ -25,7 +25,6 @@ import { EnvVariables, useRivetDsn } from "@/app/env-variables";
 import { features } from "@/lib/features";
 import { HelpDropdown } from "@/app/help-dropdown";
 import { PublishableTokenCodeGroup } from "@/app/publishable-token-code-group";
-import { SidebarToggle } from "@/app/sidebar-toggle";
 import { useDialog } from "@/app/use-dialog";
 import {
 	Accordion,
@@ -94,7 +93,6 @@ function RouteComponent() {
 		>
 			<div className="max-w-5xl mx-auto">
 				<div className="mt-2 flex justify-between items-center px-10 py-4">
-					<SidebarToggle className="absolute left-4" />
 					<H1>Tokens</H1>
 					<HelpDropdown>
 						<Button
@@ -130,7 +128,7 @@ export function PublishableToken() {
 	const dsn = useRivetDsn({ kind: "publishable" });
 
 	return (
-		<div className="pb-4 pb-8 px-6 max-w-5xl mx-auto my-8 border-b @6xl:border @6xl:rounded-lg ">
+		<div className="pb-4 pb-8 px-6 max-w-5xl mx-auto my-8 border border-foreground/10 rounded-xl bg-card ">
 			<div className="flex gap-2 items-center mb-2 mt-6">
 				<H3>Manual Client Configuration</H3>
 			</div>
@@ -158,7 +156,7 @@ export function PublishableToken() {
 
 export function SecretToken() {
 	return (
-		<div className="pb-4 pb-8 px-6 max-w-5xl mx-auto my-8 border-b @6xl:border @6xl:rounded-lg">
+		<div className="pb-4 pb-8 px-6 max-w-5xl mx-auto my-8 border border-foreground/10 rounded-xl bg-card">
 			<div className="flex gap-2 items-center mb-2 mt-6">
 				<H3>Backend Configuration</H3>
 			</div>
@@ -380,7 +378,7 @@ export function CloudApiTokens() {
 	const cloudApiUrl = cloudEnv().VITE_APP_CLOUD_API_URL;
 
 	return (
-		<div className="pb-4 pb-8 px-6 max-w-5xl mx-auto my-8 border-b @6xl:border @6xl:rounded-lg">
+		<div className="pb-4 pb-8 px-6 max-w-5xl mx-auto my-8 border border-foreground/10 rounded-xl bg-card">
 			<div className="flex gap-2 items-center justify-between mb-2 mt-6">
 				<div className="flex gap-2 items-center">
 					<H3>Cloud API Tokens</H3>

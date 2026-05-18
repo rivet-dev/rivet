@@ -282,7 +282,7 @@ function buildInspectorTokenErrorMessage(
 					typically indicates a permissions or configuration issue
 					with the request.
 				</p>
-				<p className="mt-2 text-sm text-gray-600">
+				<p className="mt-2 text-sm text-muted-foreground">
 					See the{" "}
 					<a
 						href="https://rivet.dev/docs/actors/inspector"
@@ -338,7 +338,7 @@ function buildInspectorTokenErrorMessage(
 						your RivetKit version and contact support if the issue
 						persists.
 					</p>
-					<p className="mt-2 text-sm text-gray-600">
+					<p className="mt-2 text-sm text-muted-foreground">
 						Current RivetKit version:{" "}
 						<span className="font-mono-console">
 							{metadata?.version || "unknown"}
@@ -355,7 +355,7 @@ function buildInspectorTokenErrorMessage(
 					Inspector token endpoint returned a 404. This might indicate
 					an outdated version of RivetKit.
 				</p>
-				<p className="mt-2 text-sm text-gray-600">
+				<p className="mt-2 text-sm text-muted-foreground">
 					Current RivetKit version:{" "}
 					<span className="font-mono-console">
 						{metadata?.version || "unknown"}

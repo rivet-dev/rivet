@@ -33,12 +33,15 @@ export function ActorGeneral({ actorId }: ActorGeneralProps) {
 	} = useQuery(useDataProvider().actorGeneralQueryOptions(actorId));
 
 	return (
-		<div className="px-4 mt-4 mb-8 flex-1">
-			<h3 className="mb-2 font-semibold">General</h3>
+		<div className="w-full px-6 py-5 flex flex-col gap-6">
+			<section>
+				<h3 className="mb-1 text-sm font-semibold">General</h3>
+				<p className="mb-4 text-xs text-muted-foreground">
+					Identity, status, and lifecycle timestamps for this instance.
+				</p>
 			<Flex
-				gap="2"
 				direction="col"
-				className="text-xs [&_dt]:min-h-5 [&_dd]:min-h-5"
+				className="text-xs [&_dt]:py-2 [&_dd]:py-2 [&_dt]:border-b [&_dd]:border-b [&_dt]:border-foreground/[0.06] [&_dd]:border-foreground/[0.06] [&_dt:last-of-type]:border-0 [&_dd:last-of-type]:border-0 [&_dt]:text-muted-foreground [&_dt]:font-normal [&_dd]:text-foreground"
 			>
 				<Dl>
 					<Dt>Region</Dt>
@@ -168,12 +171,19 @@ export function ActorGeneral({ actorId }: ActorGeneralProps) {
 					) : null}
 					<Versions actorId={actorId} />
 				</Dl>
-				<div className="border-t mt-2 pt-4 flex gap-2">
+			</Flex>
+			</section>
+			<section className="border-t border-foreground/[0.06] pt-5">
+				<h3 className="mb-1 text-sm font-semibold">Actions</h3>
+				<p className="mb-3 text-xs text-muted-foreground">
+					Manage the lifecycle of this actor instance.
+				</p>
+				<div className="flex gap-2">
 					<ActorSleepButton actorId={actorId} />
 					<ActorRescheduleButton actorId={actorId} />
 					<ActorStopButton actorId={actorId} />
 				</div>
-			</Flex>
+			</section>
 		</div>
 	);
 }
@@ -192,7 +202,7 @@ function Versions({ actorId }: { actorId: ActorId }) {
 	if (data === "running" && inspector.isInspectorAvailable) {
 		return (
 			<>
-				<Dt>Runner version:</Dt>
+				<Dt>Runner version</Dt>
 				<Dd>{metadata?.version}</Dd>
 				<ActorVersions actorId={actorId} />
 			</>
@@ -201,9 +211,9 @@ function Versions({ actorId }: { actorId: ActorId }) {
 
 	return (
 		<>
-			<Dt>Runner version:</Dt>
+			<Dt>Runner version</Dt>
 			<Dd>{metadata?.version}</Dd>
-			<Dt>Actor version:</Dt>
+			<Dt>Actor version</Dt>
 			<Dd>
 				<span className="text-muted-foreground">n/a</span>
 			</Dd>
@@ -221,7 +231,7 @@ function ActorVersions({ actorId }: { actorId: ActorId }) {
 
 	return (
 		<>
-			<Dt>Actor version:</Dt>
+			<Dt>Actor version</Dt>
 			<Dd>
 				{actorMetadata?.version || (
 					<span className="text-muted-foreground">n/a</span>

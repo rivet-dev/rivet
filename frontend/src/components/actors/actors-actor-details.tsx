@@ -67,7 +67,7 @@ export const ActorsActorDetails = memo(
 			<Suspense fallback={
 				<div className="flex flex-col h-full flex-1">
 					<ActorTabs disabled className="relative">
-				 		<ShimmerLine className="top-0" /> 
+				 		<ShimmerLine className="top-0" />
 					</ActorTabs>
 				</div>
 			}>
@@ -236,8 +236,8 @@ function ActorTabsShell({
 			defaultValue={value}
 			className={cn(className, "flex-1 min-h-0 min-w-0 flex flex-col ")}
 		>
-			<div className="flex justify-between items-center border-b h-[45px]">
-				<div className="flex flex-1 items-center h-full w-full min-w-0">
+			<div className="flex items-stretch h-[45px] border-b">
+				<div className="flex flex-1 items-center h-full min-w-0">
 					<div
 						ref={tabListRef}
 						className="flex-1 min-w-0 overflow-hidden h-full"
@@ -250,7 +250,7 @@ function ActorTabsShell({
 									trigger={
 										<TabsTrigger
 											value="workflow"
-											className="text-xs px-2 py-1 pb-2 min-w-0 shrink gap-1"
+											className="text-xs px-2.5 py-1 pb-2 min-w-0 shrink gap-1 isolate before:absolute before:inset-x-0.5 before:top-1 before:bottom-2 before:-z-10 before:rounded-md before:transition-colors hover:before:bg-foreground/[0.06]"
 										>
 											<Icon
 												icon={faDiagramProject}
@@ -277,7 +277,7 @@ function ActorTabsShell({
 									trigger={
 										<TabsTrigger
 											value="database"
-											className="text-xs px-2 py-1 pb-2 min-w-0 shrink gap-1"
+											className="text-xs px-2.5 py-1 pb-2 min-w-0 shrink gap-1 isolate before:absolute before:inset-x-0.5 before:top-1 before:bottom-2 before:-z-10 before:rounded-md before:transition-colors hover:before:bg-foreground/[0.06]"
 										>
 											<Icon
 												icon={faDatabase}
@@ -304,7 +304,7 @@ function ActorTabsShell({
 									trigger={
 										<TabsTrigger
 											value="state"
-											className="text-xs px-2 py-1 pb-2 min-w-0 shrink gap-1"
+											className="text-xs px-2.5 py-1 pb-2 min-w-0 shrink gap-1 isolate before:absolute before:inset-x-0.5 before:top-1 before:bottom-2 before:-z-10 before:rounded-md before:transition-colors hover:before:bg-foreground/[0.06]"
 										>
 											<Icon
 												icon={faCubesStacked}
@@ -331,7 +331,7 @@ function ActorTabsShell({
 									trigger={
 										<TabsTrigger
 											value="queue"
-											className="text-xs px-2 py-1 pb-2 min-w-0 shrink gap-1"
+											className="text-xs px-2.5 py-1 pb-2 min-w-0 shrink gap-1 isolate before:absolute before:inset-x-0.5 before:top-1 before:bottom-2 before:-z-10 before:rounded-md before:transition-colors hover:before:bg-foreground/[0.06]"
 										>
 											<Icon
 												icon={faInbox}
@@ -357,7 +357,7 @@ function ActorTabsShell({
 								trigger={
 									<TabsTrigger
 										value="connections"
-										className="text-xs px-2 py-1 pb-2 min-w-0 shrink gap-1"
+										className="text-xs px-2.5 py-1 pb-2 min-w-0 shrink gap-1 isolate before:absolute before:inset-x-0.5 before:top-1 before:bottom-2 before:-z-10 before:rounded-md before:transition-colors hover:before:bg-foreground/[0.06]"
 									>
 										<Icon
 											icon={faPlug}
@@ -384,7 +384,7 @@ function ActorTabsShell({
 									trigger={
 										<TabsTrigger
 											value="deployment-logs"
-											className="text-xs px-2 py-1 pb-2 min-w-0 shrink gap-1"
+											className="text-xs px-2.5 py-1 pb-2 min-w-0 shrink gap-1 isolate before:absolute before:inset-x-0.5 before:top-1 before:bottom-2 before:-z-10 before:rounded-md before:transition-colors hover:before:bg-foreground/[0.06]"
 										>
 											<Icon
 												icon={faLogs}
@@ -411,7 +411,7 @@ function ActorTabsShell({
 									trigger={
 										<TabsTrigger
 											value="console"
-											className="text-xs px-2 py-1 pb-2 min-w-0 shrink gap-1"
+											className="text-xs px-2.5 py-1 pb-2 min-w-0 shrink gap-1 isolate before:absolute before:inset-x-0.5 before:top-1 before:bottom-2 before:-z-10 before:rounded-md before:transition-colors hover:before:bg-foreground/[0.06]"
 										>
 											<Icon
 												icon={faTerminal}
@@ -437,7 +437,7 @@ function ActorTabsShell({
 								trigger={
 									<TabsTrigger
 										value="metadata"
-										className="text-xs px-2 py-1 pb-2 min-w-0 shrink gap-1"
+										className="text-xs px-2.5 py-1 pb-2 min-w-0 shrink gap-1 isolate before:absolute before:inset-x-0.5 before:top-1 before:bottom-2 before:-z-10 before:rounded-md before:transition-colors hover:before:bg-foreground/[0.06]"
 									>
 										<Icon
 											icon={faTag}
@@ -639,7 +639,7 @@ export function ActorTabs({
 									<TabsTrigger
 										disabled={disabled}
 										value="workflow"
-										className="text-xs px-2 py-1 pb-2 min-w-0 shrink gap-1"
+										className="text-xs px-2.5 py-1 pb-2 min-w-0 shrink gap-1 isolate before:absolute before:inset-x-0.5 before:top-1 before:bottom-2 before:-z-10 before:rounded-md before:transition-colors hover:before:bg-foreground/[0.06]"
 									>
 										<Icon
 											icon={faDiagramProject}
@@ -665,7 +665,7 @@ export function ActorTabs({
 									<TabsTrigger
 										disabled={disabled}
 										value="database"
-										className="text-xs px-2 py-1 pb-2 min-w-0 shrink gap-1"
+										className="text-xs px-2.5 py-1 pb-2 min-w-0 shrink gap-1 isolate before:absolute before:inset-x-0.5 before:top-1 before:bottom-2 before:-z-10 before:rounded-md before:transition-colors hover:before:bg-foreground/[0.06]"
 									>
 										<Icon
 											icon={faDatabase}
@@ -691,7 +691,7 @@ export function ActorTabs({
 									<TabsTrigger
 										disabled={disabled}
 										value="state"
-										className="text-xs px-2 py-1 pb-2 min-w-0 shrink gap-1"
+										className="text-xs px-2.5 py-1 pb-2 min-w-0 shrink gap-1 isolate before:absolute before:inset-x-0.5 before:top-1 before:bottom-2 before:-z-10 before:rounded-md before:transition-colors hover:before:bg-foreground/[0.06]"
 									>
 										<Icon
 											icon={faCubesStacked}
@@ -717,7 +717,7 @@ export function ActorTabs({
 									<TabsTrigger
 										disabled={disabled}
 										value="queue"
-										className="text-xs px-2 py-1 pb-2 min-w-0 shrink gap-1"
+										className="text-xs px-2.5 py-1 pb-2 min-w-0 shrink gap-1 isolate before:absolute before:inset-x-0.5 before:top-1 before:bottom-2 before:-z-10 before:rounded-md before:transition-colors hover:before:bg-foreground/[0.06]"
 									>
 										<Icon
 											icon={faInbox}
@@ -743,7 +743,7 @@ export function ActorTabs({
 									<TabsTrigger
 										disabled={disabled}
 										value="connections"
-										className="text-xs px-2 py-1 pb-2 min-w-0 shrink gap-1"
+										className="text-xs px-2.5 py-1 pb-2 min-w-0 shrink gap-1 isolate before:absolute before:inset-x-0.5 before:top-1 before:bottom-2 before:-z-10 before:rounded-md before:transition-colors hover:before:bg-foreground/[0.06]"
 									>
 										<Icon
 											icon={faPlug}
@@ -769,7 +769,7 @@ export function ActorTabs({
 									<TabsTrigger
 										disabled={disabled}
 										value="metadata"
-										className="text-xs px-2 py-1 pb-2 min-w-0 shrink gap-1"
+										className="text-xs px-2.5 py-1 pb-2 min-w-0 shrink gap-1 isolate before:absolute before:inset-x-0.5 before:top-1 before:bottom-2 before:-z-10 before:rounded-md before:transition-colors hover:before:bg-foreground/[0.06]"
 									>
 										<Icon
 											icon={faTag}
