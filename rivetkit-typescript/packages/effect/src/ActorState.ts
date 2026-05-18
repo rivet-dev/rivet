@@ -5,7 +5,7 @@ const TypeId = "~@rivetkit/effect/ActorState";
 
 /**
  * A typed, persistent state slot for one Rivet Actor. Yielded inside
- * the wake-scope build effect to obtain a `State` whose committed
+ * the wake effect to obtain a `State` whose committed
  * changes are mirrored back to rivetkit's persisted state.
  *
  * State configuration (`schema` + `initial`) is server-only — it
@@ -55,7 +55,7 @@ export const isActorState = (u: unknown): u is Any =>
  *
  * `schema` is the persisted shape; `initialValue` produces the value used to
  * seed state on first wake. The returned value is itself a Context tag:
- * `yield* MyState` inside the wake-scope build effect resolves to a
+ * `yield* MyState` inside the wake effect resolves to a
  * `SubscriptionRef<S["Type"]>`.
  *
  * @example

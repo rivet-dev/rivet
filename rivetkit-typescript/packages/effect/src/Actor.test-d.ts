@@ -4,6 +4,10 @@ import * as Action from "./Action";
 import * as Actor from "./Actor";
 import type * as Client from "./Client";
 
+class SomeDep extends Context.Service<SomeDep, { readonly x: number }>()(
+	"SomeDep",
+) {}
+
 const TestActor = Actor.make("TestActor", {
 	actions: [Action.make("GetContext")],
 });
@@ -37,6 +41,12 @@ describe("Actor.make(...).toLayer", () => {
 		);
 	});
 
+	test("accepts a function returning a plain action handlers object", () => {
+		expectTypeOf(TestActor.toLayer).toBeCallableWith((_wakeOptions) => ({
+			GetContext: () => Effect.void,
+		}));
+	});
+
 	test("accepts a function returning an Effect of action handlers", () => {
 		expectTypeOf(TestActor.toLayer).toBeCallableWith((_wakeOptions) =>
 			Effect.gen(function* () {
@@ -47,9 +57,24 @@ describe("Actor.make(...).toLayer", () => {
 		);
 	});
 
+	test("accepts an Effect that resolves to a wake function", () => {
+		expectTypeOf(TestActor.toLayer).toBeCallableWith(
+			Effect.gen(function* () {
+				// Allow for initialization logic before the per-entity wake function is called
+
+				return (_wakeOptions: any) =>
+					Effect.gen(function* () {
+						return {
+							GetContext: () => Effect.void,
+						};
+					});
+			}),
+		);
+	});
+
 	test("accepts an Effect.fn returning action handlers", () => {
 		expectTypeOf(TestActor.toLayer).toBeCallableWith(
-			Effect.fn("build")(function* (_wakeOptions) {
+			Effect.fn("wake")(function* (_wakeOptions) {
 				return {
 					GetContext: () => Effect.void,
 				};
@@ -84,12 +109,7 @@ describe("Actor.make(...).toLayer", () => {
 		});
 	});
 
-	test.todo("build-effect requirements surface in the Layer", () => {
-		class SomeDep extends Context.Service<
-			SomeDep,
-			{ readonly x: number }
-		>()("SomeDep") {}
-
+	test.todo("wake-effect requirements surface in the Layer", () => {
 		const layer = TestActor.toLayer(
 			Effect.gen(function* () {
 				yield* SomeDep;

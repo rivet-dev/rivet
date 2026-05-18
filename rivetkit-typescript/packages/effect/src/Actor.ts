@@ -69,7 +69,7 @@ const splitOptions = <State extends ActorState.AnyWithProps>(
  * - `(name, key)` — stable user-facing pair (e.g. "Counter", ["counter-123"])
  * - `actorId` — opaque engine-assigned unique identifier
  *
- * Available inside `Actor.toLayer`'s build effect via
+ * Available inside `Actor.toLayer`'s wake effect via
  * `yield* Actor.CurrentAddress`.
  */
 export type ActorAddress = Pick<
@@ -79,7 +79,7 @@ export type ActorAddress = Pick<
 
 /**
  * Context tag for the current actor instance's address. Provided
- * once per wake when the build effect runs; capture it into a
+ * once per wake when the wake effect runs; capture it into a
  * closure if action handlers need it.
  */
 export class CurrentAddress extends Context.Service<
@@ -165,9 +165,10 @@ export interface Actor<
 		State extends ActorState.AnyWithProps = never,
 		RX = never,
 	>(
-		build:
+		wake:
 			| ActionHandlers
 			| Effect.Effect<ActionHandlers, never, RX>
+			| ((wakeOptions: any) => ActionHandlers)
 			| ((wakeOptions: any) => Effect.Effect<ActionHandlers, never, R>)
 			| Effect.Effect<
 					(
@@ -222,9 +223,10 @@ const Proto: Omit<Actor<any, any>, "name" | "actions"> = {
 		RX = never,
 	>(
 		this: Actor<string, Actions>,
-		build:
+		wake:
 			| ActionHandlers
 			| Effect.Effect<ActionHandlers, never, RX>
+			| ((wakeOptions: any) => ActionHandlers)
 			| ((wakeOptions: any) => Effect.Effect<ActionHandlers, never, R>)
 			| Effect.Effect<
 					(
@@ -235,11 +237,37 @@ const Proto: Omit<Actor<any, any>, "name" | "actions"> = {
 			  >,
 		options: Options<State> = {},
 	) {
+		const resolveWake: (
+			wakeContext: Rivetkit.WakeContextOf<Rivetkit.AnyActorDefinition>,
+		) => Effect.Effect<ActionHandlers, never, R | RX> = Effect.isEffect(
+			wake,
+		)
+			? (c) =>
+					(wake as Effect.Effect<any, never, RX>).pipe(
+						Effect.flatMap((resolved: any) =>
+							typeof resolved === "function"
+								? (resolved(c) as Effect.Effect<
+										ActionHandlers,
+										never,
+										R
+									>)
+								: Effect.succeed(resolved as ActionHandlers),
+						),
+					)
+			: typeof wake === "function"
+				? (c: any) => {
+						const result = (wake as Function)(c);
+						return (
+							Effect.isEffect(result)
+								? result
+								: Effect.succeed(result as ActionHandlers)
+						) as Effect.Effect<ActionHandlers, never, R>;
+					}
+				: () => Effect.succeed(wake as ActionHandlers);
+
 		return makeRivetkitActor({
 			actor: this,
-			buildActionHandlers: Effect.isEffect(build)
-				? build
-				: Effect.succeed(build),
+			resolveWake,
 			options,
 		}).pipe(
 			Effect.flatMap((rivetKitActor) =>
@@ -291,11 +319,13 @@ const makeRivetkitActor = Effect.fnUntraced(function* <
 	State extends ActorState.AnyWithProps = never,
 >({
 	actor,
-	buildActionHandlers,
+	resolveWake,
 	options,
 }: {
 	readonly actor: Actor<Name, Actions>;
-	readonly buildActionHandlers: Effect.Effect<ActionHandlers, never, RX>;
+	readonly resolveWake: (
+		wakeContext: Rivetkit.WakeContextOf<Rivetkit.AnyActorDefinition>,
+	) => Effect.Effect<ActionHandlers, never, RX>;
 	readonly options: Options<State>;
 }) {
 	// Snapshot the current Effect context so action callbacks
@@ -378,7 +408,7 @@ const makeRivetkitActor = Effect.fnUntraced(function* <
 						: Context.empty(),
 				);
 
-				const actionHandlers = yield* buildActionHandlers.pipe(
+				const actionHandlers = yield* resolveWake(c).pipe(
 					Effect.provide(context),
 				);
 
