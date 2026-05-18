@@ -160,11 +160,22 @@ export interface Actor<
 	): ActionHandlers;
 
 	toLayer<
+		R,
 		ActionHandlers extends ActionHandlersFrom<Actions>,
 		State extends ActorState.AnyWithProps = never,
 		RX = never,
 	>(
-		build: ActionHandlers | Effect.Effect<ActionHandlers, never, RX>,
+		build:
+			| ActionHandlers
+			| Effect.Effect<ActionHandlers, never, RX>
+			| ((wakeOptions: any) => Effect.Effect<ActionHandlers, never, R>)
+			| Effect.Effect<
+					(
+						wakeOptions: any,
+					) => Effect.Effect<ActionHandlers, never, R>,
+					never,
+					RX
+			  >,
 		options?: Options<State>,
 	): Layer.Layer<
 		never,
@@ -177,6 +188,7 @@ export interface Actor<
 				| RawRivetkitContext
 				| State
 		  >
+		| R
 		| ActionHandlerServices<ActionHandlers>
 		| Action.ServicesServer<Actions>
 		| Action.ServicesClient<Actions>
@@ -203,13 +215,24 @@ export type ActionHandlersFrom<Actions extends Action.Any> = {
 const Proto: Omit<Actor<any, any>, "name" | "actions"> = {
 	[TypeId]: TypeId,
 	toLayer<
+		R,
 		Actions extends Action.AnyWithProps,
 		ActionHandlers extends ActionHandlersFrom<Actions>,
 		State extends ActorState.AnyWithProps = never,
 		RX = never,
 	>(
 		this: Actor<string, Actions>,
-		build: ActionHandlers | Effect.Effect<ActionHandlers, never, RX>,
+		build:
+			| ActionHandlers
+			| Effect.Effect<ActionHandlers, never, RX>
+			| ((wakeOptions: any) => Effect.Effect<ActionHandlers, never, R>)
+			| Effect.Effect<
+					(
+						wakeOptions: any,
+					) => Effect.Effect<ActionHandlers, never, R>,
+					never,
+					RX
+			  >,
 		options: Options<State> = {},
 	) {
 		return makeRivetkitActor({

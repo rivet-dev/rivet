@@ -29,8 +29,30 @@ describe("Actor.make(...).toLayer", () => {
 
 	test("accepts an Effect of action handlers", () => {
 		expectTypeOf(TestActor.toLayer).toBeCallableWith(
-			Effect.succeed({
-				GetContext: () => Effect.void,
+			Effect.gen(function* () {
+				return {
+					GetContext: () => Effect.void,
+				};
+			}),
+		);
+	});
+
+	test("accepts a function returning an Effect of action handlers", () => {
+		expectTypeOf(TestActor.toLayer).toBeCallableWith((_wakeOptions) =>
+			Effect.gen(function* () {
+				return {
+					GetContext: () => Effect.void,
+				};
+			}),
+		);
+	});
+
+	test("accepts an Effect.fn returning action handlers", () => {
+		expectTypeOf(TestActor.toLayer).toBeCallableWith(
+			Effect.fn("build")(function* (_wakeOptions) {
+				return {
+					GetContext: () => Effect.void,
+				};
 			}),
 		);
 	});
