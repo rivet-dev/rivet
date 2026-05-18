@@ -157,6 +157,32 @@ export type Accessor<Actions extends Action.Any> = {
 	readonly getOrCreate: (key: AccessorKeyParam) => Handle<Actions>;
 };
 
+type UnknownToNever<T> = unknown extends T ? never : T;
+
+type ExcludeBuiltInWakeServices<
+	T,
+	State extends ActorState.AnyWithProps,
+> = UnknownToNever<
+	Exclude<
+		T,
+		Scope.Scope | CurrentAddress | Sleep | RawRivetkitContext | State
+	>
+>;
+
+type ToLayerRequirements<
+	Actions extends Action.Any,
+	ActionHandlers,
+	State extends ActorState.AnyWithProps,
+	R,
+	RX,
+> =
+	| ExcludeBuiltInWakeServices<R, State>
+	| ExcludeBuiltInWakeServices<RX, State>
+	| UnknownToNever<ActionHandlerServices<ActionHandlers>>
+	| UnknownToNever<Action.ServicesServer<Actions>>
+	| UnknownToNever<Action.ServicesClient<Actions>>
+	| Registry.Registry;
+
 /**
  * A Rivet Actor contract. It carries the action schemas and
  * display options, but no server implementation.
@@ -174,9 +200,9 @@ export interface Actor<
 	): ActionHandlers;
 
 	toLayer<
-		R,
 		ActionHandlers extends ActionHandlersFrom<Actions>,
 		State extends ActorState.AnyWithProps = never,
+		R = never,
 		RX = never,
 	>(
 		wake: Wake<ActionHandlers, R, RX>,
@@ -184,19 +210,7 @@ export interface Actor<
 	): Layer.Layer<
 		never,
 		never,
-		| Exclude<
-				RX,
-				| Scope.Scope
-				| CurrentAddress
-				| Sleep
-				| RawRivetkitContext
-				| State
-		  >
-		| R
-		| ActionHandlerServices<ActionHandlers>
-		| Action.ServicesServer<Actions>
-		| Action.ServicesClient<Actions>
-		| Registry.Registry
+		ToLayerRequirements<Actions, ActionHandlers, State, R, RX>
 	>;
 
 	/**
@@ -219,10 +233,10 @@ export type ActionHandlersFrom<Actions extends Action.Any> = {
 const Proto: Omit<Actor<any, any>, "name" | "actions"> = {
 	[TypeId]: TypeId,
 	toLayer<
-		R,
 		Actions extends Action.AnyWithProps,
 		ActionHandlers extends ActionHandlersFrom<Actions>,
 		State extends ActorState.AnyWithProps = never,
+		R = never,
 		RX = never,
 	>(
 		this: Actor<string, Actions>,
@@ -231,7 +245,7 @@ const Proto: Omit<Actor<any, any>, "name" | "actions"> = {
 	) {
 		return makeRivetkitActor({
 			actor: this,
-			wakeHandler: toWakeHandler(wake),
+			wakeHandler: toWakeHandler<ActionHandlers, R, RX>(wake),
 			options,
 		}).pipe(
 			Effect.flatMap((rivetKitActor) =>
@@ -274,6 +288,62 @@ export const make = <
 	self.actions = options?.actions;
 	return self;
 };
+
+export function toWakeHandler<ActionHandlers extends object, R, RX>(
+	wake: Effect.Effect<
+		(wakeOptions: WakeOptions) => Effect.Effect<ActionHandlers, never, R>,
+		never,
+		RX
+	>,
+): (wakeOptions: WakeOptions) => Effect.Effect<ActionHandlers, never, R | RX>;
+export function toWakeHandler<ActionHandlers extends object, RX>(
+	wake: Effect.Effect<
+		(wakeOptions: WakeOptions) => ActionHandlers,
+		never,
+		RX
+	>,
+): (wakeOptions: WakeOptions) => Effect.Effect<ActionHandlers, never, RX>;
+export function toWakeHandler<ActionHandlers extends object, R>(
+	wake: (wakeOptions: WakeOptions) => Effect.Effect<ActionHandlers, never, R>,
+): (wakeOptions: WakeOptions) => Effect.Effect<ActionHandlers, never, R>;
+export function toWakeHandler<ActionHandlers extends object>(
+	wake: (wakeOptions: WakeOptions) => ActionHandlers,
+): (wakeOptions: WakeOptions) => Effect.Effect<ActionHandlers, never, never>;
+export function toWakeHandler<ActionHandlers extends object, RX>(
+	wake: Effect.Effect<ActionHandlers, never, RX>,
+): (wakeOptions: WakeOptions) => Effect.Effect<ActionHandlers, never, RX>;
+export function toWakeHandler<ActionHandlers extends object>(
+	wake: ActionHandlers,
+): (wakeOptions: WakeOptions) => Effect.Effect<ActionHandlers, never, never>;
+export function toWakeHandler<ActionHandlers extends object, R, RX>(
+	wake: Wake<ActionHandlers, R, RX>,
+): (wakeOptions: WakeOptions) => Effect.Effect<ActionHandlers, never, R | RX>;
+export function toWakeHandler<ActionHandlers extends object, R, RX>(
+	wake: Wake<ActionHandlers, R, RX>,
+) {
+	return (wakeOptions: WakeOptions) => {
+		const wakeEffect = Effect.isEffect(wake)
+			? (wake as Effect.Effect<
+					ActionHandlers | WakeFunction<ActionHandlers, R>,
+					never,
+					RX
+				>)
+			: Effect.succeed(wake);
+
+		return wakeEffect.pipe(
+			Effect.flatMap((resolvedWake) => {
+				if (typeof resolvedWake === "function") {
+					const actionHandlers = resolvedWake(wakeOptions);
+					return Effect.isEffect(actionHandlers)
+						? actionHandlers
+						: Effect.succeed(actionHandlers);
+				}
+
+				return Effect.succeed(resolvedWake);
+			}),
+		);
+	};
+}
 
 const makeRivetkitActor = Effect.fnUntraced(function* <
 	Name extends string,
