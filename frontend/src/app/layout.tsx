@@ -1,6 +1,7 @@
 import {
 	faArrowUpRight,
 	faBook,
+	faChevronDown,
 	faCog,
 	faDiscord,
 	faFileLines,
@@ -66,6 +67,9 @@ import { BillingUsageGauge } from "./billing/billing-usage-gauge";
 import { Changelog } from "./changelog";
 import { ContextSwitcher } from "./context-switcher";
 import { HelpDropdown } from "./help-dropdown";
+import { FeedbackButton } from "./feedback-button";
+import { HelpButton } from "./help-button";
+import { Logo as BrandLogo } from "./logo";
 import { NamespaceSelect } from "./namespace-select";
 import { RunnerPoolErrorPopover } from "./runner-pool-error-popover";
 import { UserDropdown } from "./user-dropdown";
@@ -562,7 +566,7 @@ function HeaderLink({ icon, children, className, ...props }: HeaderLinkProps) {
 			variant="ghost"
 			{...props}
 			className={cn(
-				"font-medium px-1 text-muted-foreground data-active:text-foreground data-active:bg-accent",
+				"font-medium px-1 text-muted-foreground hover:bg-foreground/[0.04] data-active:text-foreground data-active:bg-foreground/[0.06]",
 				className,
 			)}
 			startIcon={
@@ -762,26 +766,84 @@ export const Content = ({
 	);
 };
 
+// Sidebarless onboarding/new-project pages share the same chrome as the
+// main dashboard TopBar (Logo + breadcrumb + Feedback / Help / Docs / Org
+// dropdown). The markup is inlined rather than imported from `./top-bar`
+// to avoid any module-evaluation order issue with this large layout file.
 export const SidebarlessHeader = () => {
+	const { data: org, isPending } = authClient.useActiveOrganization();
 	const { data: session } = authClient.useSession();
-	return (
-		<div className="rounded-lg flex items-center pe-1.5 justify-between bg-card/10 backdrop-blur-lg fixed inset-x-0 top-0 z-10">
-			<Logo />
+	const name =
+		org?.name ??
+		session?.user?.name ??
+		session?.user?.email?.split("@")[0] ??
+		"Account";
+	const logo = org?.logo ?? undefined;
+	const initial = name[0]?.toUpperCase() ?? "?";
 
-			<div className="flex gap-4">
+	return (
+		<div className="pl-2">
+			<header className="z-20 flex items-center gap-3 h-11 px-3 mt-2 mr-2 bg-card border border-border rounded-lg shrink-0">
+				<Link to="/" className="flex items-center gap-2 shrink-0">
+					<BrandLogo className="h-5 w-auto text-foreground" />
+				</Link>
 				<ContextSwitcher inline />
-				<UserDropdown>
+				<div className="ml-auto flex items-center gap-1">
+					<FeedbackButton />
+					{features.support ? <HelpButton /> : null}
 					<Button
 						variant="ghost"
-						className="text-sm text-muted-foreground font-normal px-1.5"
+						size="sm"
+						className="gap-2 text-muted-foreground hover:text-foreground"
+						asChild
+						startIcon={<Icon icon={faBook} className="size-4" />}
 					>
-						Logged in as{" "}
-						<span className="text-foreground">
-							{session?.user?.email}
-						</span>
+						<a
+							href="https://www.rivet.dev/docs"
+							target="_blank"
+							rel="noopener noreferrer"
+						>
+							Docs
+						</a>
 					</Button>
-				</UserDropdown>
-			</div>
+					{features.auth ? (
+						<>
+							<div className="mx-1 h-5 w-px bg-border" />
+							<UserDropdown>
+								<Button
+									variant="ghost"
+									size="sm"
+									className="gap-2 text-muted-foreground hover:text-foreground"
+									endIcon={
+										<Icon
+											icon={faChevronDown}
+											className="size-2.5 opacity-60"
+										/>
+									}
+								>
+									<span className="size-5 rounded-full overflow-hidden bg-foreground/10 flex items-center justify-center shrink-0">
+										{logo ? (
+											// biome-ignore lint/performance/noImgElement: small avatar, no Next runtime
+											<img
+												src={logo}
+												alt=""
+												className="size-full object-cover"
+											/>
+										) : (
+											<span className="text-[10px] font-semibold text-foreground/80">
+												{initial}
+											</span>
+										)}
+									</span>
+									<span className="text-sm">
+										{isPending && !org ? "…" : name}
+									</span>
+								</Button>
+							</UserDropdown>
+						</>
+					) : null}
+				</div>
+			</header>
 		</div>
 	);
 };

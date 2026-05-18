@@ -18,7 +18,6 @@ import {
 	TableRow,
 	WithTooltip,
 } from "@/components";
-import { Badge } from "@/components/ui/badge";
 import { authClient } from "@/lib/auth";
 
 function RemoveMemberButton({
@@ -198,12 +197,9 @@ export default function OrgMembersFrameContent(_: OrgMembersFrameContentProps) {
 																	session
 																		?.user
 																		.id && (
-																	<Badge
-																		variant="outline"
-																		className="text-xs py-0"
-																	>
+																	<span className="inline-flex items-center rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">
 																		You
-																	</Badge>
+																	</span>
 																)}
 															</div>
 															<p className="text-muted-foreground">
@@ -286,12 +282,15 @@ export default function OrgMembersFrameContent(_: OrgMembersFrameContentProps) {
 							</Table>
 						</div>
 
-						<div className="space-y-3">
-							<p className="text-sm font-medium mb-2 mt-4">
-								Invite a member
-							</p>
+						<div className="space-y-2 mt-4">
+							<p className="text-sm font-medium">Invite a member</p>
 							<InviteMemberForm.Form
 								defaultValues={{ email: "" }}
+								// Lock validation to submit-time so focusing or
+								// blurring the input never renders a FormMessage
+								// (which would otherwise push the layout).
+								mode="onSubmit"
+								revalidateMode="onSubmit"
 								onSubmit={async ({ email }, form) => {
 									try {
 										await inviteMember(email);
@@ -304,10 +303,8 @@ export default function OrgMembersFrameContent(_: OrgMembersFrameContentProps) {
 									}
 								}}
 							>
-								<div className="flex gap-2">
-									<div className="flex-1">
-										<InviteMemberForm.EmailField />
-									</div>
+								<div className="grid grid-cols-[1fr_auto] gap-2 items-start">
+									<InviteMemberForm.EmailField />
 									<InviteMemberForm.Submit>
 										Invite
 									</InviteMemberForm.Submit>

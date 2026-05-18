@@ -1,7 +1,6 @@
 import { createFileRoute, Outlet } from "@tanstack/react-router";
 import { match } from "ts-pattern";
 import { RouteError } from "@/app/route-error";
-import { useDialog } from "@/app/use-dialog";
 import { FullscreenLoading } from "@/components";
 import {
 	RECENT_PROJECTS_KEY,
@@ -34,42 +33,5 @@ export const Route = createFileRoute(
 });
 
 function RouteComponent() {
-	return (
-		<>
-			<Outlet />
-			<ProjectModals />
-		</>
-	);
-}
-
-function ProjectModals() {
-	const navigate = Route.useNavigate();
-	const search = Route.useSearch();
-
-	const BillingDialog = useDialog.Billing.Dialog;
-
-	return (
-		<>
-			<BillingDialog
-				dialogContentProps={{
-					className: "max-w-5xl",
-				}}
-				dialogProps={{
-					open: search.modal === "billing",
-					// FIXME
-					onOpenChange: (value: any) => {
-						if (!value) {
-							navigate({
-								to: ".",
-								search: (old) => ({
-									...old,
-									modal: undefined,
-								}),
-							});
-						}
-					},
-				}}
-			/>
-		</>
-	);
+	return <Outlet />;
 }

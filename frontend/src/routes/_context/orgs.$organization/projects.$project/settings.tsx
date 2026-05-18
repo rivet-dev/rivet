@@ -4,7 +4,6 @@ import { createFileRoute, notFound, useNavigate } from "@tanstack/react-router";
 import { HelpDropdown } from "@/app/help-dropdown";
 import { Content } from "@/app/layout";
 import { RouteLayout } from "@/app/route-layout";
-import { SidebarToggle } from "@/app/sidebar-toggle";
 import { Button, H1, H3, H4 } from "@/components";
 import { useCloudProjectDataProvider } from "@/components/actors";
 import { features } from "@/lib/features";
@@ -28,7 +27,6 @@ function RouteComponent() {
 				<div>
 					<div className="mb-4 pt-2 max-w-5xl mx-auto">
 						<div className="flex justify-between items-center px-6 @6xl:px-0 py-4">
-							<SidebarToggle className="absolute left-4" />
 							<H1>Project Settings</H1>
 							<HelpDropdown>
 								<Button
@@ -61,7 +59,7 @@ function DangerZone() {
 	);
 
 	return (
-		<div className="pb-4 pb-8 px-6 max-w-5xl mx-auto my-8 @6xl:border @6xl:rounded-lg">
+		<div className="pb-4 pb-8 px-6 max-w-5xl mx-auto my-8 border border-foreground/10 rounded-xl bg-card">
 			<div className="flex gap-2 items-center mb-2 mt-6">
 				<H3>Danger Zone</H3>
 			</div>

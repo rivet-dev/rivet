@@ -1,0 +1,392 @@
+import * as DialogPrimitive from "@radix-ui/react-dialog";
+import {
+	faBuilding,
+	faCircleUser,
+	faClose,
+	faCreditCard,
+	faGear,
+	faSparkles,
+	Icon,
+	type IconProp,
+} from "@rivet-gg/icons";
+import {
+	useMatch,
+	useMatchRoute,
+	useNavigate,
+	useSearch,
+} from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
+import { type ReactNode, useEffect, useState } from "react";
+import { cn, VisuallyHidden } from "@/components";
+import {
+	useCloudNamespaceDataProvider,
+	useCloudProjectDataProvider,
+} from "@/components/actors/data-provider";
+import { BillingPanel } from "./settings-pages/billing-panel";
+import { NamespaceSettingsContent } from "./settings-pages/namespace-settings";
+import { OrganizationPanel } from "./settings-pages/organization-panel";
+import { ProfilePage } from "./settings-pages/profile-page";
+import { ResourcePicker } from "./settings-pages/resource-picker";
+
+export type SettingsTab =
+	| "profile"
+	| "settings"
+	| "billing"
+	| "organization"
+	| "whats-new";
+
+const NAV_SECTIONS: Array<{
+	label: string;
+	items: { key: SettingsTab; label: string; icon: IconProp }[];
+}> = [
+	{
+		label: "Account",
+		items: [{ key: "profile", label: "Account", icon: faCircleUser }],
+	},
+	{
+		label: "Project",
+		items: [
+			{ key: "billing", label: "Billing", icon: faCreditCard },
+		],
+	},
+	{
+		label: "Namespace",
+		items: [{ key: "settings", label: "Settings", icon: faGear }],
+	},
+	{
+		label: "Organization",
+		items: [
+			{ key: "organization", label: "Organization", icon: faBuilding },
+		],
+	},
+	{
+		label: "Other",
+		items: [
+			{ key: "whats-new", label: "What's new", icon: faSparkles },
+		],
+	},
+];
+
+const TAB_META: Record<
+	SettingsTab,
+	{ title: string; description?: string }
+> = {
+	profile: {
+		title: "Account",
+		description: "Manage your account info.",
+	},
+	billing: {
+		title: "Billing",
+		description:
+			"Manage your project's billing information and view usage details.",
+	},
+	settings: {
+		title: "Settings",
+		description:
+			"Connect your RivetKit application to Rivet Cloud. Use your cloud of choice to run Rivet Actors.",
+	},
+	organization: {
+		title: "Organization",
+		description: "Manage your organization and its members.",
+	},
+	"whats-new": {
+		title: "What's new",
+		description: "Recent changes and announcements.",
+	},
+};
+
+interface SettingsDrawerProps {
+	open: boolean;
+	tab: SettingsTab;
+	onOpenChange: (open: boolean) => void;
+}
+
+// TopBar is `h-11` with `mt-2` (8 + 44 = 52px). Add another 8px gap to match the
+// content view's `my-2` so the drawer's top edge aligns with the card below.
+const TOP_BAR_OUTER_HEIGHT = "60px";
+
+
+export function SettingsDrawer({
+	open,
+	tab,
+	onOpenChange,
+}: SettingsDrawerProps) {
+	const navigate = useNavigate();
+	const matchRoute = useMatchRoute();
+	const onNamespace = !!matchRoute({
+		to: "/orgs/$organization/projects/$project/ns/$namespace",
+		fuzzy: true,
+	});
+	const [activeTab, setActiveTab] = useState<SettingsTab>(tab);
+
+	useEffect(() => {
+		if (open) setActiveTab(tab);
+	}, [open, tab]);
+
+	const switchTab = (next: SettingsTab) => {
+		setActiveTab(next);
+		navigate({
+			to: ".",
+			search: (old) => ({
+				...(old as Record<string, unknown>),
+				modal: next,
+			}),
+		});
+	};
+
+	const onProject = !!matchRoute({
+		to: "/orgs/$organization/projects/$project",
+		fuzzy: true,
+	});
+
+	const meta = TAB_META[activeTab];
+	const titleNode: ReactNode =
+		activeTab === "settings" && onNamespace ? (
+			<NamespaceSettingsTitle fallback={meta.title} />
+		) : activeTab === "billing" && onProject ? (
+			<ProjectBillingTitle fallback={meta.title} />
+		) : (
+			meta.title
+		);
+
+	return (
+		<DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
+			<DialogPrimitive.Portal>
+				<DialogPrimitive.Overlay className="fixed inset-0 z-40" />
+				<DialogPrimitive.Content
+					className={cn(
+						"fixed left-2 right-2 z-50 flex flex-col overflow-hidden",
+						"bg-card border border-border rounded-lg",
+						"focus:outline-none",
+						"data-[state=open]:animate-in data-[state=closed]:animate-out",
+						"data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
+					)}
+					style={{ top: TOP_BAR_OUTER_HEIGHT, bottom: "8px" }}
+				>
+					<VisuallyHidden>
+						<DialogPrimitive.Title>{meta.title}</DialogPrimitive.Title>
+					</VisuallyHidden>
+
+					<div className="flex h-full min-h-0">
+						<aside className="w-44 shrink-0 border-r border-border p-3 overflow-y-auto">
+							<nav className="flex flex-col gap-4">
+								{NAV_SECTIONS.map((section) => (
+									<div key={section.label}>
+										<div className="px-2 pb-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+											{section.label}
+										</div>
+										{section.items.map((item) => (
+											<NavItem
+												key={item.key}
+												icon={item.icon}
+												label={item.label}
+												active={activeTab === item.key}
+												onClick={() => switchTab(item.key)}
+											/>
+										))}
+									</div>
+								))}
+							</nav>
+						</aside>
+						<div className="flex-1 min-w-0 overflow-y-auto">
+							<TabFrame
+								title={titleNode}
+								description={meta.description}
+							>
+								<TabContent tab={activeTab} />
+							</TabFrame>
+						</div>
+					</div>
+
+					<DialogPrimitive.Close
+						className="absolute right-3 top-3 rounded-md p-1.5 text-muted-foreground hover:bg-foreground/[0.06] hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+						aria-label="Close settings"
+					>
+						<Icon icon={faClose} className="size-4" />
+					</DialogPrimitive.Close>
+				</DialogPrimitive.Content>
+			</DialogPrimitive.Portal>
+		</DialogPrimitive.Root>
+	);
+}
+
+function NavItem({
+	icon,
+	label,
+	active,
+	onClick,
+}: {
+	icon: IconProp;
+	label: string;
+	active: boolean;
+	onClick: () => void;
+}) {
+	return (
+		<button
+			type="button"
+			onClick={onClick}
+			className={cn(
+				"w-full flex items-center gap-2 rounded-md px-2.5 py-1.5 text-sm text-left transition-colors",
+				"focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+				active
+					? "bg-foreground/[0.06] text-foreground"
+					: "text-muted-foreground hover:bg-foreground/[0.04] hover:text-foreground",
+			)}
+		>
+			<Icon icon={icon} className="size-3.5 shrink-0" />
+			<span className="truncate">{label}</span>
+		</button>
+	);
+}
+
+function TabContent({ tab }: { tab: SettingsTab }) {
+	switch (tab) {
+		case "profile":
+			return <ProfilePage />;
+		case "billing":
+			return <BillingPanel />;
+		case "settings":
+			return <SettingsTabBody />;
+		case "organization":
+			return <OrganizationPanel />;
+		case "whats-new":
+			return (
+				<Placeholder text="No in-app changelog yet. See rivet.dev/changelog for now." />
+			);
+	}
+}
+
+function Placeholder({ text }: { text: string }) {
+	return (
+		<div className="flex h-64 items-center justify-center rounded-lg border border-dashed border-border">
+			<p className="text-sm text-muted-foreground">{text}</p>
+		</div>
+	);
+}
+
+function TabFrame({
+	title,
+	description,
+	children,
+}: {
+	title: ReactNode;
+	description?: string;
+	children: React.ReactNode;
+}) {
+	return (
+		<div className="mx-auto w-full max-w-4xl px-6 py-5">
+			<div className="mb-5">
+				<h2 className="text-base font-semibold text-foreground">
+					{title}
+				</h2>
+				{description ? (
+					<p className="mt-0.5 text-xs text-muted-foreground">
+						{description}
+					</p>
+				) : null}
+			</div>
+			{children}
+		</div>
+	);
+}
+
+function NamespaceSettingsTitle({ fallback }: { fallback: string }) {
+	// Guard with `shouldThrow: false` because the drawer can render this title
+	// while the active match tree is mid-transition. Without the guard, the
+	// inner `useLoaderData({ from: namespaceRoute })` throws an "active match"
+	// invariant.
+	const match = useMatch({
+		from: "/_context/orgs/$organization/projects/$project/ns/$namespace",
+		shouldThrow: false,
+	});
+	if (!match) return <>{fallback}</>;
+	return <NamespaceSettingsTitleInner fallback={fallback} />;
+}
+
+function NamespaceSettingsTitleInner({ fallback }: { fallback: string }) {
+	const dataProvider = useCloudNamespaceDataProvider();
+	const { data } = useQuery(dataProvider.currentNamespaceQueryOptions());
+	const displayName = data?.displayName;
+	return <>{displayName ? `${displayName} settings` : fallback}</>;
+}
+
+function ProjectBillingTitle({ fallback }: { fallback: string }) {
+	const match = useMatch({
+		from: "/_context/orgs/$organization/projects/$project",
+		shouldThrow: false,
+	});
+	if (!match) return <>{fallback}</>;
+	return <ProjectBillingTitleInner fallback={fallback} />;
+}
+
+function ProjectBillingTitleInner({ fallback }: { fallback: string }) {
+	const dataProvider = useCloudProjectDataProvider();
+	const { data } = useQuery(dataProvider.currentProjectQueryOptions());
+	const displayName = data?.displayName;
+	return <>{displayName ? `${displayName} Billing` : fallback}</>;
+}
+
+function SettingsTabBody() {
+	// `useMatch` with `shouldThrow: false` returns `undefined` when the
+	// namespace route is not in the active match tree. This is stricter than
+	// `useMatchRoute` (which can flicker during transitions) and lets us bail
+	// before any namespace-only hook gets called.
+	const namespaceMatch = useMatch({
+		from: "/_context/orgs/$organization/projects/$project/ns/$namespace",
+		shouldThrow: false,
+	});
+
+	if (!namespaceMatch) {
+		return (
+			<ResourcePicker
+				title="Pick a namespace"
+				description="Settings are scoped to a namespace. Choose one to manage providers, runners, and tokens."
+				modal="settings"
+				target="namespace"
+			/>
+		);
+	}
+	return <NamespaceSettingsContent />;
+}
+
+export function modalToTab(modal: string | undefined): SettingsTab | null {
+	switch (modal) {
+		case "profile":
+		case "settings":
+		case "billing":
+		case "organization":
+		case "whats-new":
+			return modal;
+		// Legacy: members lived in its own tab before being merged into
+		// Organization. Keep the deep link working.
+		case "members":
+			return "organization";
+		default:
+			return null;
+	}
+}
+
+export function SettingsDrawerHost() {
+	const navigate = useNavigate();
+	const search = useSearch({ strict: false }) as Record<string, unknown>;
+	const modal = typeof search.modal === "string" ? search.modal : undefined;
+	const tab = modalToTab(modal);
+
+	return (
+		<SettingsDrawer
+			open={tab !== null}
+			tab={tab ?? "profile"}
+			onOpenChange={(open) => {
+				if (!open) {
+					navigate({
+						to: ".",
+						search: (old) => ({
+							...(old as Record<string, unknown>),
+							modal: undefined,
+						}),
+					});
+				}
+			}}
+		/>
+	);
+}

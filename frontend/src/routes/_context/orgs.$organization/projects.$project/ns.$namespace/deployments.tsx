@@ -8,7 +8,6 @@ import { createFileRoute } from "@tanstack/react-router";
 import { HelpDropdown } from "@/app/help-dropdown";
 import { ImagesTable } from "@/app/images-table";
 import { Content } from "@/app/layout";
-import { SidebarToggle } from "@/app/sidebar-toggle";
 import { Button, H1, H2, Skeleton } from "@/components";
 import { useCloudNamespaceDataProvider } from "@/components/actors";
 
@@ -63,7 +62,6 @@ function RouteComponent() {
 			<div className=" ">
 				<div className="mb-4 pt-2 max-w-5xl mx-auto">
 					<div className="flex justify-between items-center px-6 @6xl:px-0 py-4 ">
-						<SidebarToggle className="absolute left-4" />
 						<H1>Deployments</H1>
 						<HelpDropdown>
 							<Button

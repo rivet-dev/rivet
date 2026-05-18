@@ -21,7 +21,7 @@ const H1 = ({ className, asChild, ...props }: TypographyElementProps<"h1">) => {
 		<Comp
 			className={cn(
 				className,
-				"scroll-m-20 text-xl font-semibold lg:text-4xl",
+				"scroll-m-20 text-2xl font-semibold tracking-tight lg:text-3xl",
 				getCommonHelperClass(props),
 			)}
 			{...omitCommonHelperProps(props)}
@@ -34,7 +34,7 @@ const H2 = ({ className, asChild, ...props }: TypographyElementProps<"h2">) => {
 	return (
 		<Comp
 			className={cn(
-				"scroll-m-20 text-3xl font-semibold tracking-tight first:mt-0",
+				"scroll-m-20 text-2xl font-semibold tracking-tight first:mt-0",
 				getCommonHelperClass(props),
 				className,
 			)}
@@ -49,7 +49,7 @@ const H3 = ({ className, asChild, ...props }: TypographyElementProps<"h3">) => {
 		<Comp
 			className={cn(
 				className,
-				"scroll-m-20 text-2xl font-semibold tracking-tight",
+				"scroll-m-20 text-xl font-semibold tracking-tight",
 				getCommonHelperClass(props),
 			)}
 			{...omitCommonHelperProps(props)}

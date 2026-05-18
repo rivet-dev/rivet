@@ -1,4 +1,17 @@
-import { faChevronDown, faPlus, Icon } from "@rivet-gg/icons";
+import {
+	faArrowRightFromBracket,
+	faChevronDown,
+	faCreditCard,
+	faGear,
+	faMoon,
+	faPlus,
+	faRightLeft,
+	faSparkles,
+	faSun,
+	faUserCircle,
+	faUsers,
+	Icon,
+} from "@rivet-gg/icons";
 import { useQuery } from "@tanstack/react-query";
 import { useMatchRoute, useNavigate, useParams, useRouter } from "@tanstack/react-router";
 import {
@@ -20,6 +33,8 @@ import {
 } from "@/components";
 import { useCloudDataProvider } from "@/components/actors";
 import { authClient } from "@/lib/auth";
+import { orgConicGradient, paletteForLetter } from "@/lib/org-palette";
+import { useTheme } from "@/lib/theme";
 import { queryClient } from "@/queries/global";
 
 export function UserDropdown({ children }: { children?: React.ReactNode }) {
@@ -31,11 +46,25 @@ export function UserDropdown({ children }: { children?: React.ReactNode }) {
 	const { data: session } = authClient.useSession();
 	const navigate = useNavigate();
 	const match = useMatchRoute();
+	const { theme, toggle: toggleTheme } = useTheme();
 
 	const isMatchingProjectRoute = match({
 		to: "/orgs/$organization/projects/$project",
 		fuzzy: true,
 	});
+
+	const goToBilling = () => {
+		if (isMatchingProjectRoute) {
+			return navigate({
+				to: ".",
+				search: (old) => ({ ...old, modal: "billing" }),
+			});
+		}
+		return navigate({
+			to: ".",
+			search: (old) => ({ ...old, modal: "billing" }),
+		});
+	};
 
 	return (
 		<DropdownMenu>
@@ -54,54 +83,98 @@ export function UserDropdown({ children }: { children?: React.ReactNode }) {
 						</Button>
 					))}
 			</DropdownMenuTrigger>
-			<DropdownMenuContent>
+			<DropdownMenuContent align="end" className="min-w-56">
+				<DropdownMenuItem
+					onSelect={() => {
+						return navigate({
+							to: ".",
+							search: (old) => ({ ...old, modal: "profile" }),
+						});
+					}}
+				>
+					<Icon icon={faUserCircle} className="mr-2 size-4" />
+					Profile
+				</DropdownMenuItem>
+				<DropdownMenuItem
+					onSelect={() => {
+						return navigate({
+							to: ".",
+							search: (old) => ({
+								...old,
+								modal: "settings",
+							}),
+						});
+					}}
+				>
+					<Icon icon={faGear} className="mr-2 size-4" />
+					Settings
+				</DropdownMenuItem>
 				{isMatchingProjectRoute ? (
-					<>
-						<DropdownMenuItem
-							onSelect={() => {
-								return navigate({
-									to: ".",
-									search: (old) => ({
-										...old,
-										modal: "billing",
-									}),
-								});
-							}}
-						>
-							Billing
-						</DropdownMenuItem>
-						<DropdownMenuSeparator />
-					</>
+					<DropdownMenuItem onSelect={goToBilling}>
+						<Icon icon={faCreditCard} className="mr-2 size-4" />
+						Billing
+					</DropdownMenuItem>
 				) : null}
 				{params.organization ? (
-					<>
-						<DropdownMenuSub>
-							<DropdownMenuSubTrigger>
-								Switch Organization
-							</DropdownMenuSubTrigger>
-							<DropdownMenuPortal>
-								<DropdownMenuSubContent>
-									<OrganizationSwitcher
-										value={params.organization}
-									/>
-								</DropdownMenuSubContent>
-							</DropdownMenuPortal>
-						</DropdownMenuSub>
-						<DropdownMenuItem
-							onSelect={() => {
-								return navigate({
-									to: ".",
-									search: (old) => ({
-										...old,
-										modal: "org-members",
-									}),
-								});
-							}}
-						>
-							Manage Members
-						</DropdownMenuItem>
-					</>
+					<DropdownMenuItem
+						onSelect={() => {
+							return navigate({
+								to: ".",
+								search: (old) => ({
+									...old,
+									modal: "members",
+								}),
+							});
+						}}
+					>
+						<Icon icon={faUsers} className="mr-2 size-4" />
+						Members
+					</DropdownMenuItem>
 				) : null}
+				<DropdownMenuSeparator />
+				{params.organization ? (
+					<DropdownMenuSub>
+						<DropdownMenuSubTrigger>
+							<Icon icon={faRightLeft} className="mr-2 size-4" />
+							Switch Organization
+						</DropdownMenuSubTrigger>
+						<DropdownMenuPortal>
+							<DropdownMenuSubContent
+								sideOffset={8}
+								className="min-w-56"
+							>
+								<OrganizationSwitcher
+									value={params.organization}
+								/>
+							</DropdownMenuSubContent>
+						</DropdownMenuPortal>
+					</DropdownMenuSub>
+				) : null}
+				<DropdownMenuItem
+					onSelect={() => {
+						window.open(
+							"https://www.rivet.dev/changelog",
+							"_blank",
+							"noopener,noreferrer",
+						);
+					}}
+				>
+					<Icon icon={faSparkles} className="mr-2 size-4" />
+					What's new
+				</DropdownMenuItem>
+				<DropdownMenuItem
+					onSelect={(e) => {
+						e.preventDefault();
+						toggleTheme();
+					}}
+				>
+					<Icon
+						icon={theme === "dark" ? faSun : faMoon}
+						className="mr-2 size-4"
+					/>
+					{theme === "dark" ? "Light mode" : "Dark mode"}
+				</DropdownMenuItem>
+				<DropdownMenuSeparator />
 				<DropdownMenuItem
 					onSelect={() => {
 						authClient.signOut();
@@ -110,7 +183,8 @@ export function UserDropdown({ children }: { children?: React.ReactNode }) {
 						return navigate({ to: "/login" });
 					}}
 				>
-					Logout
+					<Icon icon={faArrowRightFromBracket} className="mr-2 size-4" />
+					Sign out
 				</DropdownMenuItem>
 			</DropdownMenuContent>
 		</DropdownMenu>
@@ -132,7 +206,18 @@ function Preview({ org }: { org: string }) {
 			<div className="flex gap-2 items-center w-full min-w-0">
 				<Avatar className="size-5">
 					<AvatarImage src={data?.logo ?? undefined} />
-					<AvatarFallback>
+					<AvatarFallback
+						className="text-white text-[10px] font-semibold"
+						style={
+							data?.name
+								? {
+										backgroundImage: orgConicGradient(
+											paletteForLetter(data.name),
+										),
+									}
+								: undefined
+						}
+					>
 						{isLoading ? (
 							<Skeleton className="h-5 w-5" />
 						) : (
@@ -191,7 +276,14 @@ function OrganizationSwitcher({ value }: { value: string | undefined }) {
 				>
 					<Avatar className="size-4 mr-2">
 						<AvatarImage src={org.logo ?? undefined} />
-						<AvatarFallback>
+						<AvatarFallback
+							className="text-white text-[9px] font-semibold"
+							style={{
+								backgroundImage: orgConicGradient(
+									paletteForLetter(org.name),
+								),
+							}}
+						>
 							{org.name[0].toUpperCase()}
 						</AvatarFallback>
 					</Avatar>
@@ -200,13 +292,7 @@ function OrganizationSwitcher({ value }: { value: string | undefined }) {
 			))}
 			<DropdownMenuItem
 				onSelect={() => {
-					navigate({
-						to: ".",
-						search: (old) => ({
-							...old,
-							modal: "create-organization",
-						}),
-					});
+					navigate({ to: "/new-org" });
 				}}
 				indicator={<Icon icon={faPlus} className="size-4" />}
 			>

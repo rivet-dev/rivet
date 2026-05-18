@@ -33,10 +33,12 @@ export const ActorsListRow = memo(
 		return (
 			<Button
 				className={cn(
-					"h-[56px] flex items-center w-full group border-l-0 border-r-0 border-t-0 border-b rounded-none pl-2 pr-4",
+					"relative h-9 flex items-center w-full group border-l-0 border-r-0 border-t-0 border-b hover:border-foreground/10 rounded-none pl-2 pr-3 text-xs",
+					isCurrent &&
+						"bg-foreground/[0.08] bg-clip-padding hover:bg-foreground/[0.10] text-foreground before:absolute before:left-0 before:top-0 before:bottom-0 before:w-0.5 before:bg-primary",
 					className,
 				)}
-				variant={isCurrent ? "secondary" : "outline"}
+				variant="outline"
 				asChild
 			>
 				<Link
@@ -191,7 +193,7 @@ function SkeletonContent() {
 
 export function ActorsListRowSkeleton() {
 	return (
-		<div className="border-b flex items-center gap-2 pl-2 pr-4 h-[56px] relative">
+		<div className="border-b flex items-center gap-2 pl-2 pr-3 h-9 text-xs relative">
 			<SkeletonContent />
 		</div>
 	);

@@ -12,12 +12,12 @@ export function NoProvidersAlert({
 	variant?: "default" | "connect";
 }) {
 	return (
-		<div className="relative rounded-lg border border-primary p-4 pt-5 flex gap-6 w-full justify-between items-center">
+		<div className="relative rounded-lg border border-foreground/10 bg-foreground/[0.02] p-4 pt-5 flex gap-6 w-full justify-between items-center">
 			<div>
 				<H4>
 					<Icon
 						icon={faExclamationTriangle}
-						className="mr-2 text-primary"
+						className="mr-2 text-muted-foreground"
 					/>
 					No Providers Connected
 				</H4>
@@ -66,6 +66,7 @@ export function NoProvidersAlert({
 					size="sm"
 					asChild
 					variant="ghost"
+					className="w-full"
 				>
 					<a
 						href={docsLinks.runnersSetup}

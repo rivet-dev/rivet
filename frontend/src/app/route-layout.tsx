@@ -1,11 +1,9 @@
 import { Outlet } from "@tanstack/react-router";
-import { useLayoutEffect, useRef, useState } from "react";
+import { useRef } from "react";
 import type { ImperativePanelHandle } from "react-resizable-panels";
 import { H2, Skeleton } from "@/components";
 import { RootLayoutContextProvider } from "@/components/actors/root-layout-context";
-import * as Layout from "./layout";
-
-const AUTO_COLLAPSE_WIDTH = 1000; /* in px */
+import { TopBar } from "./top-bar";
 
 export function RouteLayout({
 	children = <Outlet />,
@@ -13,60 +11,32 @@ export function RouteLayout({
 	children?: React.ReactNode;
 }) {
 	const sidebarRef = useRef<ImperativePanelHandle>(null);
-	const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-	const autoCollapsedRef = useRef(false);
-
-	useLayoutEffect(() => {
-		const panelGroup = document.querySelector<HTMLDivElement>(
-			'[data-panel-group-id="root"]',
-		);
-		if (!panelGroup) return;
-
-		const observer = new ResizeObserver(() => {
-			const isTooNarrow = panelGroup.offsetWidth < AUTO_COLLAPSE_WIDTH;
-			if (isTooNarrow && !sidebarRef.current?.isCollapsed()) {
-				autoCollapsedRef.current = true;
-				sidebarRef.current?.collapse();
-			} else if (!isTooNarrow && autoCollapsedRef.current) {
-				autoCollapsedRef.current = false;
-				sidebarRef.current?.expand();
-			}
-		});
-		observer.observe(panelGroup);
-		return () => observer.disconnect();
-	}, []);
 
 	return (
-		<Layout.Root>
-			<Layout.VisibleInFull>
-				<Layout.Sidebar
-					ref={sidebarRef}
-					onCollapse={() => {
-						setIsSidebarCollapsed(true);
-					}}
-					onExpand={() => {
-						autoCollapsedRef.current = false;
-						setIsSidebarCollapsed(false);
-					}}
-				/>
-				<Layout.Main>
-					<RootLayoutContextProvider
-						sidebarRef={sidebarRef}
-						isSidebarCollapsed={isSidebarCollapsed}
-					>
-						{children}
-					</RootLayoutContextProvider>
-				</Layout.Main>
-			</Layout.VisibleInFull>
-			<Layout.Footer />
-		</Layout.Root>
+		<div className="flex h-screen flex-col bg-background pl-2">
+			<TopBar />
+			<main className="flex flex-1 min-h-0 flex-col bg-background min-w-0">
+				{/*
+				 * `isSidebarCollapsed: false` so the inner Content / ActorsListPreview
+				 * components still render their floating card border. There is no
+				 * sidebar anymore (top bar replaced it), but the styling condition
+				 * was inherited from the old layout.
+				 */}
+				<RootLayoutContextProvider
+					sidebarRef={sidebarRef}
+					isSidebarCollapsed={false}
+				>
+					{children}
+				</RootLayoutContextProvider>
+			</main>
+		</div>
 	);
 }
 
 export function PendingRouteLayout() {
 	return (
 		<RouteLayout>
-			<div className="bg-card h-full border my-2 mr-2 rounded-lg">
+			<div className="bg-card h-full border border-border mt-2 mb-2 ml-2 mr-2 rounded-lg">
 				<div className="mt-2 flex justify-between items-center px-6 py-4">
 					<H2 className="mb-2">
 						<Skeleton className="w-48 h-8" />

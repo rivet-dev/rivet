@@ -1,7 +1,6 @@
 import { useSuspenseInfiniteQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { Content } from "@/app/layout";
-import { SidebarToggle } from "@/app/sidebar-toggle";
 import { H1 } from "@/components";
 import { useCloudProjectDataProvider } from "@/components/actors";
 import { ChartSyncProvider } from "./chart-sync-context";
@@ -44,7 +43,6 @@ export function MetricsPage() {
 		<Content>
 			<div className="mb-4 pt-2 max-w-7xl mx-auto">
 				<div className="flex justify-between items-center px-6 @6xl:px-0 py-4">
-					<SidebarToggle className="absolute left-4" />
 					<H1>Metrics</H1>
 					<NamespaceFilterCombobox
 						namespaces={namespaces ?? []}

@@ -13,7 +13,6 @@ import { startTransition, useCallback, useRef, useState } from "react";
 import { z } from "zod";
 import { HelpDropdown } from "@/app/help-dropdown";
 import { Content } from "@/app/layout";
-import { SidebarToggle } from "@/app/sidebar-toggle";
 import { Button, H1, Skeleton } from "@/components";
 import {
 	useCloudNamespaceDataProvider,
@@ -98,7 +97,6 @@ function RouteComponent() {
 			<div className="flex flex-col h-full">
 				<div className="pt-2 px-6 mx-auto w-full">
 					<div className="flex justify-between items-center px-0 py-4">
-						<SidebarToggle className="absolute left-4" />
 						<H1>Logs</H1>
 
 						<HelpDropdown>

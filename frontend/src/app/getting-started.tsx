@@ -225,7 +225,7 @@ export function GettingStarted({
 				transition={{ duration: 0.3 }}
 				data-testid={TEST_IDS.Onboarding.GettingStartedWizard}
 			>
-				<div className="-full flex items-safe-center justify-center [&_[data-component='stepper']>form]:mx-auto [&_[data-component='stepper']]:overflow-x-hidden [&_[data-component='stepper']]:w-full [&:has([data-wide='true'])_[data-component='stepper']>form]:max-w-[64rem] has-[[data-wide='true']]:w-auto [&_[data-component='stepper']>form]:max-w-[32rem] px-4 h-full overflow-auto pt-8">
+				<div className="-full flex items-safe-center justify-center [&_[data-component='stepper']>form]:mx-auto [&_[data-component='stepper']]:overflow-x-hidden [&_[data-component='stepper']]:w-full [&:has([data-wide='true'])_[data-component='stepper']>form]:max-w-[56rem] has-[[data-wide='true']]:w-auto [&_[data-component='stepper']>form]:max-w-[32rem] px-4 h-full overflow-auto pt-8">
 					<CodeGroupSyncProvider>
 						<StepperForm
 							{...stepper}
@@ -549,9 +549,7 @@ function ProviderCard({
 				)}
 			/>
 			<div className="min-w-0">
-				<div className="flex items-center gap-2 flex-wrap">
-					<p className="text-sm font-medium">{option.displayName}</p>
-				</div>
+				<p className="text-sm font-medium">{option.displayName}</p>
 				<p className="text-xs text-muted-foreground">
 					{option.description}
 				</p>
@@ -1122,7 +1120,7 @@ function AgentPromptBanner({ code }: { code: string }) {
 			<Badge className="absolute -top-2.5 left-4 z-10 bg-background">
 				Recommended
 			</Badge>
-			<span className="text-sm font-medium text-white text-left">
+			<span className="text-sm font-medium text-foreground text-left">
 				Have your coding agent complete these steps automatically to
 				deploy to Rivet Cloud.
 			</span>

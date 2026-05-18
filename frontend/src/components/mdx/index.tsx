@@ -114,10 +114,10 @@ export const Note = ({ children }: { children: ReactNode }) => {
 	return (
 		<CalloutBase
 			icon={faInfoCircle}
-			iconColor="text-gray-400"
-			bgColor="bg-gray-950/20"
-			borderColor="border-gray-700/50"
-			textColor="text-gray-100"
+			iconColor="text-muted-foreground"
+			bgColor="bg-foreground/[0.02]"
+			borderColor="border-foreground/10"
+			textColor="text-foreground"
 		>
 			{children}
 		</CalloutBase>

@@ -29,15 +29,21 @@ export const EmailField = () => {
 			control={control}
 			name="email"
 			render={({ field }) => (
-				<FormItem>
+				// `space-y-0` so the (initially-empty) FormMessage slot
+				// doesn't reserve / claim margin and shift the input downward
+				// the moment the form transitions to a "dirty"/"touched"
+				// state on focus.
+				<FormItem className="space-y-0">
 					<FormControl>
 						<Input
 							type="email"
 							placeholder="colleague@company.com"
+							autoComplete="off"
 							{...field}
+							style={{ scrollMarginTop: "1rem" }}
 						/>
 					</FormControl>
-					<FormMessage />
+					<FormMessage className="mt-1.5" />
 				</FormItem>
 			)}
 		/>
