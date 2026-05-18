@@ -280,6 +280,7 @@ enum LiveExit {
 struct SleepGraceState {
 	deadline: Instant,
 	reason: ShutdownKind,
+	started_at: Instant,
 }
 
 struct PersistedStartup {
@@ -890,7 +891,8 @@ impl ActorTask {
 							let _action_keep_awake = action_keep_awake;
 							match tracked_reply_rx.await {
 								Ok(result) => {
-									let result = result.map_err(|error| ctx.attach_actor_to_error(error));
+									let result =
+										result.map_err(|error| ctx.attach_actor_to_error(error));
 									tracing::info!(
 										actor_id = %actor_id,
 										action_name = %action_name_for_log,
@@ -1459,9 +1461,11 @@ impl ActorTask {
 		self.sleep_deadline = None;
 		self.ctx.cancel_sleep_timer();
 		self.ctx.cancel_actor_abort_signal();
+		let started_at = Instant::now();
 		self.sleep_grace = Some(SleepGraceState {
-			deadline: Instant::now() + grace_period,
+			deadline: started_at + grace_period,
 			reason,
+			started_at,
 		});
 		self.ctx.reset_sleep_timer();
 	}
@@ -1498,6 +1502,23 @@ impl ActorTask {
 		};
 		if self.ctx.can_finalize_shutdown(grace.reason) {
 			let reason = grace.reason;
+			let grace_elapsed_ms = Instant::now()
+				.saturating_duration_since(grace.started_at)
+				.as_millis() as u64;
+			tracing::debug!(
+				actor_id = %self.ctx.actor_id(),
+				reason = shutdown_reason_label(reason),
+				grace_elapsed_ms,
+				core_dispatched_hook_count = self.ctx.core_dispatched_hook_count(),
+				shutdown_task_count = self.ctx.shutdown_task_count(),
+				sleep_keep_awake_count = self.ctx.sleep_keep_awake_count(),
+				sleep_internal_keep_awake_count = self.ctx.sleep_internal_keep_awake_count(),
+				active_http_request_count = self.ctx.active_http_request_count(),
+				websocket_callback_count = self.ctx.websocket_callback_count(),
+				pending_disconnect_count = self.ctx.pending_disconnect_count(),
+				connection_count = self.ctx.conns().len(),
+				"actor shutdown grace drained, all gates satisfied"
+			);
 			self.sleep_grace = None;
 			return Some(LiveExit::Shutdown { reason });
 		}

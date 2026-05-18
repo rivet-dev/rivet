@@ -421,7 +421,20 @@ async function cleanupNativeSleepRuntimeState(
 	runtime: CoreRuntime,
 	ctx: ActorContextHandle,
 ): Promise<void> {
-	await runtime.actorWaitForTrackedShutdownWork(ctx);
+	const waitStarted = Date.now();
+	const drained = await runtime.actorWaitForTrackedShutdownWork(ctx);
+	const waitMs = Date.now() - waitStarted;
+	if (drained) {
+		logger().debug({
+			msg: "sleep cleanup: tracked shutdown work drained",
+			waitMs,
+		});
+	} else {
+		logger().warn({
+			msg: "sleep cleanup: shutdown deadline reached before tracked work drained; closing DB anyway",
+			waitMs,
+		});
+	}
 	await closeNativeDatabaseClient(runtime, ctx);
 	await closeNativeSqlDatabase(runtime, ctx);
 	clearNativeRuntimeState(runtime, ctx);
@@ -2791,22 +2804,41 @@ export class ActorContextHandleAdapter {
 	}
 
 	keepAwake<T>(promise: Promise<T>): Promise<T> {
+		const startedAt = Date.now();
+		logger().debug({
+			msg: "keepAwake registered",
+			at: startedAt,
+		});
 		const trackedPromise = Promise.resolve(promise)
-			.catch((error) => {
-				logger().warn({
-					msg: "keepAwake promise rejected",
-					error: stringifyError(error),
-				});
-			})
+			.then(
+				() => {
+					logger().debug({
+						msg: "keepAwake promise resolved",
+						durationMs: Date.now() - startedAt,
+					});
+				},
+				(error) => {
+					logger().warn({
+						msg: "keepAwake promise rejected",
+						durationMs: Date.now() - startedAt,
+						error: stringifyError(error),
+					});
+				},
+			)
 			.then(() => null);
 		try {
 			callNativeSync(() =>
 				this.#runtime.actorKeepAwake(this.#ctx, trackedPromise),
 			);
 		} catch (error) {
-			if (!isClosedTaskRegistrationError(error)) {
-				throw error;
+			if (isClosedTaskRegistrationError(error)) {
+				logger().warn({
+					msg: "keepAwake registration dropped (teardown already started); promise will not delay grace",
+					error: stringifyError(error),
+				});
+				return promise;
 			}
+			throw error;
 		}
 		return promise;
 	}
