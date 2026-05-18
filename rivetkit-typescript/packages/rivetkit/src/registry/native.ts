@@ -1649,7 +1649,12 @@ class NativeQueueAdapter {
 			signal?: AbortSignal;
 		},
 	) {
-		if (!options?.signal) {
+		const { token, cleanup } = await createCancellationTokenHandle(
+			this.#runtime,
+			options?.signal,
+		);
+
+		try {
 			await callNative(() =>
 				this.#runtime.actorQueueWaitForNamesAvailable(
 					this.#ctx,
@@ -1657,57 +1662,11 @@ class NativeQueueAdapter {
 					{
 						timeoutMs: options?.timeout,
 					},
+					token,
 				),
 			);
-			return;
-		}
-
-		const deadline =
-			options.timeout === undefined
-				? undefined
-				: Date.now() + options.timeout;
-
-		for (;;) {
-			if (options.signal.aborted) {
-				throw actorAbortedError();
-			}
-
-			const remainingTimeout =
-				deadline === undefined
-					? undefined
-					: Math.max(0, deadline - Date.now());
-			const sliceTimeout =
-				remainingTimeout === undefined
-					? 100
-					: Math.min(remainingTimeout, 100);
-
-			try {
-				await callNative(() =>
-					this.#runtime.actorQueueWaitForNamesAvailable(
-						this.#ctx,
-						[...names],
-						{
-							timeoutMs: sliceTimeout,
-						},
-					),
-				);
-				return;
-			} catch (error) {
-				if (
-					(error as { group?: string; code?: string }).group ===
-						"queue" &&
-					(error as { group?: string; code?: string }).code ===
-						"timed_out"
-				) {
-					if (
-						remainingTimeout === undefined ||
-						remainingTimeout > 100
-					) {
-						continue;
-					}
-				}
-				throw error;
-			}
+		} finally {
+			cleanup?.();
 		}
 	}
 
