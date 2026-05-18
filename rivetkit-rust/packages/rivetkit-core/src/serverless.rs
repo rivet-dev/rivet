@@ -291,6 +291,10 @@ impl CoreServerlessRuntime {
 				}
 			}
 			("GET", "/metadata") => Ok(self.metadata_response()),
+			("GET", "/metrics") => {
+				let envoy_status = self.active_envoy_status().await;
+				Ok(metrics_response(&req.headers, envoy_status.as_ref()))
+			}
 			("GET", "/start") | ("POST", "/start") => self.start_response(req).await,
 			("OPTIONS", _) => Ok(bytes_response(
 				StatusCode::NO_CONTENT,
@@ -635,6 +639,33 @@ fn json_response(status: StatusCode, body: serde_json::Value) -> ServerlessRespo
 		HashMap::from([("content-type".to_owned(), "application/json".to_owned())]),
 		serde_json::to_vec(&body).unwrap_or_else(|_| b"{}".to_vec()),
 	)
+}
+
+fn metrics_response(
+	headers: &HashMap<String, String>,
+	envoy_status: Option<&CoreEnvoyStatus>,
+) -> ServerlessResponse {
+	let bearer_token = crate::metrics_endpoint::authorization_bearer_token_map(headers);
+	match crate::metrics_endpoint::authorize_metrics_request(bearer_token) {
+		Ok(()) => match crate::metrics_endpoint::render_prometheus_metrics(envoy_status) {
+			Ok(metrics) => bytes_response(
+				StatusCode::OK,
+				HashMap::from([("content-type".to_owned(), metrics.content_type)]),
+				metrics.body,
+			),
+			Err(error) => error_response(error),
+		},
+		Err(crate::metrics_endpoint::MetricsAccessError::NotEnabled) => text_response(
+			StatusCode::FORBIDDEN,
+			"text/plain; charset=utf-8",
+			"metrics not enabled\n",
+		),
+		Err(crate::metrics_endpoint::MetricsAccessError::Unauthorized) => text_response(
+			StatusCode::UNAUTHORIZED,
+			"text/plain; charset=utf-8",
+			"metrics request requires a valid bearer token\n",
+		),
+	}
 }
 
 fn bytes_response(
