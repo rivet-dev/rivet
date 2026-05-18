@@ -28,7 +28,7 @@
 		"build": "tsup src/mod.ts",
 		"dev": "tsup src/mod.ts --watch",
 		"check-types": "tsc --noEmit",
-		"test": "vitest run"
+		"test": "vitest --typecheck"
 	},
 	"dependencies": {
 		"rivetkit": "workspace:*"
