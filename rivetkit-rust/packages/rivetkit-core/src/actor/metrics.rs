@@ -22,6 +22,7 @@ const DIRECT_SHUTDOWN_LABELS: &[&str] = &[
 	"subsystem",
 	"operation",
 ];
+const CONNECTION_CLOSE_LABELS: &[&str] = &["actor_id_gen", "actor_key", "envoy_key", "reason"];
 
 #[cfg(feature = "sqlite-local")]
 const SQLITE_COMMIT_PHASE_LABELS: &[&str] = &["actor_id_gen", "actor_key", "envoy_key", "phase"];
@@ -68,6 +69,8 @@ struct ActorMetricCollectors {
 	queue_messages_received_total: IntCounterVec,
 	active_connections: IntGaugeVec,
 	connections_total: IntCounterVec,
+	connection_closed_total: IntCounterVec,
+	connection_lifetime_seconds: HistogramVec,
 	lifecycle_inbox_depth: IntGaugeVec,
 	dispatch_inbox_depth: IntGaugeVec,
 	lifecycle_event_inbox_depth: IntGaugeVec,
@@ -185,6 +188,22 @@ impl ActorMetricCollectors {
 			ACTOR_LABELS,
 		)
 		.expect("create actor_connections_total counter");
+		let connection_closed_total = IntCounterVec::new(
+			Opts::new(
+				"actor_connection_closed_total",
+				"total actor connections closed by close reason",
+			),
+			CONNECTION_CLOSE_LABELS,
+		)
+		.expect("create actor_connection_closed_total counter");
+		let connection_lifetime_seconds = HistogramVec::new(
+			HistogramOpts::new(
+				"actor_connection_lifetime_seconds",
+				"actor connection lifetime in seconds",
+			),
+			ACTOR_LABELS,
+		)
+		.expect("create actor_connection_lifetime_seconds histogram");
 		let lifecycle_inbox_depth = IntGaugeVec::new(
 			Opts::new(
 				"actor_lifecycle_inbox_depth",
@@ -455,6 +474,11 @@ impl ActorMetricCollectors {
 		register_metric(&rivet_metrics::REGISTRY, queue_messages_received_total.clone());
 		register_metric(&rivet_metrics::REGISTRY, active_connections.clone());
 		register_metric(&rivet_metrics::REGISTRY, connections_total.clone());
+		register_metric(&rivet_metrics::REGISTRY, connection_closed_total.clone());
+		register_metric(
+			&rivet_metrics::REGISTRY,
+			connection_lifetime_seconds.clone(),
+		);
 		register_metric(&rivet_metrics::REGISTRY, lifecycle_inbox_depth.clone());
 		register_metric(&rivet_metrics::REGISTRY, dispatch_inbox_depth.clone());
 		register_metric(&rivet_metrics::REGISTRY, lifecycle_event_inbox_depth.clone());
@@ -522,6 +546,8 @@ impl ActorMetricCollectors {
 			queue_messages_received_total,
 			active_connections,
 			connections_total,
+			connection_closed_total,
+			connection_lifetime_seconds,
 			lifecycle_inbox_depth,
 			dispatch_inbox_depth,
 			lifecycle_event_inbox_depth,
@@ -651,6 +677,18 @@ impl ActorMetrics {
 			.connections_total
 			.with_label_values(&self.actor_labels())
 			.inc();
+	}
+
+	pub(crate) fn record_connection_closed(&self, reason: &str, lifetime: Duration) {
+		let labels = self.actor_labels();
+		METRICS
+			.connection_closed_total
+			.with_label_values(&[labels[0], labels[1], labels[2], reason])
+			.inc();
+		METRICS
+			.connection_lifetime_seconds
+			.with_label_values(&labels)
+			.observe(lifetime.as_secs_f64());
 	}
 
 	pub(crate) fn set_lifecycle_inbox_depth(&self, depth: usize) {

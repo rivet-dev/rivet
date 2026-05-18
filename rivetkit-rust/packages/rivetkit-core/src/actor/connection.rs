@@ -3,7 +3,7 @@ use std::fmt;
 use std::ops::Bound::{Excluded, Unbounded};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
 use futures::future::BoxFuture;
@@ -39,6 +39,41 @@ type StateChangeCallback = Arc<dyn Fn(&ConnHandle) + Send + Sync>;
 pub(crate) struct OutgoingEvent {
 	pub name: String,
 	pub args: Vec<u8>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ConnectionCloseReason {
+	WsClose,
+	WsError,
+	Shutdown,
+	Orphaned,
+}
+
+impl ConnectionCloseReason {
+	fn as_label(self) -> &'static str {
+		match self {
+			Self::WsClose => "ws_close",
+			Self::WsError => "ws_error",
+			Self::Shutdown => "shutdown",
+			Self::Orphaned => "orphaned",
+		}
+	}
+
+	fn from_disconnect_reason(reason: Option<&str>) -> Self {
+		let Some(reason) = reason else {
+			return Self::WsClose;
+		};
+		let reason = reason.to_ascii_lowercase();
+		if reason.contains("shutdown") {
+			Self::Shutdown
+		} else if reason.contains("orphan") {
+			Self::Orphaned
+		} else if reason.contains("error") {
+			Self::WsError
+		} else {
+			Self::WsClose
+		}
+	}
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -151,6 +186,7 @@ pub struct ConnHandle(Arc<ConnHandleInner>);
 struct ConnHandleInner {
 	id: ConnId,
 	params: Vec<u8>,
+	created_at: Instant,
 	// Forced-sync: connection handles expose synchronous state and callback
 	// methods to foreign runtimes; callbacks are cloned before async work.
 	state: RwLock<Vec<u8>>,
@@ -174,6 +210,7 @@ impl ConnHandle {
 		Self(Arc::new(ConnHandleInner {
 			id: id.into(),
 			params,
+			created_at: Instant::now(),
 			state: RwLock::new(state),
 			is_hibernatable,
 			dirty: AtomicBool::new(false),
@@ -192,6 +229,10 @@ impl ConnHandle {
 
 	pub fn params(&self) -> Vec<u8> {
 		self.0.params.clone()
+	}
+
+	pub(crate) fn lifetime(&self) -> Duration {
+		self.0.created_at.elapsed()
 	}
 
 	pub fn state(&self) -> Vec<u8> {
@@ -517,7 +558,16 @@ impl ActorContext {
 		removed
 	}
 
+	#[cfg(test)]
 	fn remove_existing_for_disconnect(&self, conn_id: &str) -> Option<ConnHandle> {
+		self.remove_existing_for_disconnect_with_reason(conn_id, ConnectionCloseReason::WsClose)
+	}
+
+	fn remove_existing_for_disconnect_with_reason(
+		&self,
+		conn_id: &str,
+		reason: ConnectionCloseReason,
+	) -> Option<ConnHandle> {
 		let _disconnect_state = self.0.connection_disconnect_state.lock();
 		let (removed, active_count) = {
 			let mut connections = self.0.connections.write();
@@ -534,6 +584,9 @@ impl ActorContext {
 			(removed, connections.len())
 		};
 		self.0.metrics.set_active_connections(active_count);
+		self.0
+			.metrics
+			.record_connection_closed(reason.as_label(), removed.lifetime());
 		tracing::debug!(
 			actor_id = %self.actor_id(),
 			conn_id,
@@ -842,7 +895,10 @@ impl ActorContext {
 	}
 
 	async fn disconnect_managed(&self, conn_id: &str, reason: Option<String>) -> Result<()> {
-		let Some(conn) = self.remove_existing_for_disconnect(conn_id) else {
+		let close_reason = ConnectionCloseReason::from_disconnect_reason(reason.as_deref());
+		let Some(conn) =
+			self.remove_existing_for_disconnect_with_reason(conn_id, close_reason)
+		else {
 			tracing::debug!(
 				actor_id = %self.actor_id(),
 				conn_id,
@@ -954,7 +1010,10 @@ impl ActorContext {
 
 		let mut removed_any = false;
 		for conn_id in disconnected_ids {
-			let Some(conn) = self.remove_existing_for_disconnect(&conn_id) else {
+			let Some(conn) = self.remove_existing_for_disconnect_with_reason(
+				&conn_id,
+				ConnectionCloseReason::WsClose,
+			) else {
 				tracing::debug!(
 					actor_id = %self.actor_id(),
 					conn_id = %conn_id,

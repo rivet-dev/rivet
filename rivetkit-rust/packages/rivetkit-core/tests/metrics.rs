@@ -72,6 +72,40 @@ mod moved_tests {
 	}
 
 	#[test]
+	fn actor_connection_close_metrics_render() {
+		let metrics = ActorMetrics::new("actor-conn", Some(9), "counter/main", "envoy-1");
+
+		metrics.record_connection_closed("ws_close", Duration::from_millis(25));
+
+		let rendered = render_global_metrics();
+		let closed_line = rendered
+			.lines()
+			.find(|line| {
+				metric_line_for_actor(line, "rivet_actor_connection_closed_total", "actor-conn:9")
+					&& line.contains("reason=\"ws_close\"")
+			})
+			.expect("connection close counter should render");
+		assert!(
+			closed_line.ends_with('1'),
+			"connection close counter should increment: {closed_line}"
+		);
+		let lifetime_line = rendered
+			.lines()
+			.find(|line| {
+				metric_line_for_actor(
+					line,
+					"rivet_actor_connection_lifetime_seconds_count",
+					"actor-conn:9",
+				)
+			})
+			.expect("connection lifetime histogram should render");
+		assert!(
+			lifetime_line.ends_with('1'),
+			"connection lifetime histogram should observe: {lifetime_line}"
+		);
+	}
+
+	#[test]
 	fn actor_active_metric_is_retained_after_drop() {
 		let metrics = ActorMetrics::new("actor-retention", Some(7), "counter/main", "envoy-1");
 
