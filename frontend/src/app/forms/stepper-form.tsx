@@ -20,7 +20,6 @@ import {
 import type * as z from "zod";
 import { Button, cn } from "@/components";
 import type { defineStepper } from "@/components/ui/stepper";
-import { HelpDropdown } from "../help-dropdown";
 
 type Step = Stepperize.Step & {
 	assist?: boolean;
@@ -331,9 +330,6 @@ function Content<const Steps extends Step[]>({
 										<h2 className="text-xl font-semibold">
 											{step.title}
 										</h2>
-										{step.assist ? (
-											<NeedHelpButton />
-										) : null}
 									</div>
 									<div className="mt-6">
 										<StepPanel<Steps>
@@ -390,12 +386,6 @@ function Content<const Steps extends Step[]>({
 									of={step.id}
 								>
 									<Stepper.Title>{step.title}</Stepper.Title>
-									{step.assist &&
-									stepper.current.id === step.id ? (
-										<Stepper.Helper>
-											<NeedHelpButton />
-										</Stepper.Helper>
-									) : null}
 
 									{showAllSteps ? (
 										<StepPanel<Steps>
@@ -554,12 +544,3 @@ function StepPanel<const Steps extends Step[]>({
 	);
 }
 
-function NeedHelpButton() {
-	return (
-		<HelpDropdown>
-			<Button variant="link" className="text-foreground p-0">
-				Need help?
-			</Button>
-		</HelpDropdown>
-	);
-}

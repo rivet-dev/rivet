@@ -148,7 +148,7 @@ function RouteComponent() {
 
 	if (displayOnboarding || displayFrontendOnboarding) {
 		return (
-			<>
+			<div className="h-screen flex flex-col overflow-hidden">
 				<SidebarlessHeader />
 				<GettingStarted
 					key={`${project}-${namespace}`}
@@ -157,7 +157,7 @@ function RouteComponent() {
 				/>
 
 				<CloudNamespaceModals />
-			</>
+			</div>
 		);
 	}
 
