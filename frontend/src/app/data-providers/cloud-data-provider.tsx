@@ -297,6 +297,24 @@ export const createOrganizationContext = ({
 			...no404Retry(),
 		});
 
+	const namespaceAccessTokenQueryOptions = (opts: {
+		namespace: string;
+		organization: string;
+		project: string;
+	}) =>
+		queryOptions({
+			staleTime: 15 * 60 * 1000,
+			gcTime: 15 * 60 * 1000,
+			retry: false,
+			queryKey: [opts, "access-token"] as QueryKey,
+			queryFn: async () =>
+				await client.namespaces.createAccessToken(
+					opts.project,
+					opts.namespace,
+					{ org: opts.organization },
+				),
+		});
+
 	const namespaceQueryOptions = (opts: {
 		namespace: string;
 		organization: string;
@@ -511,6 +529,7 @@ export const createOrganizationContext = ({
 		organization,
 		organizationsQueryOptions,
 		orgProjectNamespacesQueryOptions,
+		namespaceAccessTokenQueryOptions,
 		currentOrgProjectNamespacesQueryOptions: (opts: {
 			project: string;
 		}) => {
@@ -534,6 +553,67 @@ export const createOrganizationContext = ({
 				organization,
 				project: opts.project,
 				namespace: opts.namespace,
+			});
+		},
+		currentOrgProjectNamespaceActorNamesQueryOptions(opts: {
+			project: string;
+			namespace: string;
+		}) {
+			return infiniteQueryOptions({
+				queryKey: [
+					{
+						organization,
+						project: opts.project,
+						namespace: opts.namespace,
+					},
+					"cross-namespace-actor-names",
+				] as QueryKey,
+				staleTime: 30 * 1000,
+				gcTime: 5 * 60 * 1000,
+				initialPageParam: undefined as string | undefined,
+				queryFn: async ({ pageParam }) => {
+					const ns = await queryClient.fetchQuery(
+						namespaceQueryOptions({
+							organization,
+							project: opts.project,
+							namespace: opts.namespace,
+						}),
+					);
+					const engineClient = createEngineClient(
+						cloudEnv().VITE_APP_API_URL,
+						{
+							token: async () =>
+								(
+									await queryClient.fetchQuery(
+										namespaceAccessTokenQueryOptions({
+											organization,
+											project: opts.project,
+											namespace: opts.namespace,
+										}),
+									)
+								).token,
+						},
+					);
+					return await engineClient.actorsListNames({
+						namespace: ns.access.engineNamespaceName,
+						cursor: pageParam ?? undefined,
+						limit: RECORDS_PER_PAGE,
+					});
+				},
+				getNextPageParam: (lastPage) => {
+					if (Object.keys(lastPage.names).length < RECORDS_PER_PAGE) {
+						return undefined;
+					}
+					return lastPage.pagination?.cursor;
+				},
+				select: (data) =>
+					data.pages.flatMap((page) =>
+						Object.entries(page.names).map(([id, name]) => ({
+							id,
+							name,
+						})),
+					),
+				retry: false,
 			});
 		},
 		createProjectMutationOptions,
@@ -747,22 +827,10 @@ export const createProjectContext = ({
 			};
 		},
 		accessTokenQueryOptions({ namespace }: { namespace: string }) {
-			return queryOptions({
-				staleTime: 15 * 60 * 1000, // 15 minutes
-				gcTime: 15 * 60 * 1000, // 15 minutes
-				retry: false,
-				queryKey: [
-					{ organization, project, namespace },
-					"access-token",
-				],
-				queryFn: async () => {
-					const response = await client.namespaces.createAccessToken(
-						project,
-						namespace,
-						{ org: organization },
-					);
-					return response;
-				},
+			return parent.namespaceAccessTokenQueryOptions({
+				organization,
+				project,
+				namespace,
 			});
 		},
 		// API Token methods
