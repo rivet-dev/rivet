@@ -1582,7 +1582,13 @@ function FrontendSetup() {
 						</Button>
 					) : (
 						<Button variant="outline" asChild>
-							<Link to="." search={{ modal: "create-actor" }}>
+							<Link
+								to="."
+								search={(s) => ({
+									...s,
+									modal: "create-actor",
+								})}
+							>
 								Create Actor
 							</Link>
 						</Button>
@@ -1593,7 +1599,13 @@ function FrontendSetup() {
 						size="xs"
 						className="text-muted-foreground mx-auto inline-block"
 					>
-						<Link to="." search={{ modal: "create-actor" }}>
+						<Link
+							to="."
+							search={(s) => ({
+								...s,
+								modal: "create-actor",
+							})}
+						>
 							or Manually Create Actor
 						</Link>
 					</Button>

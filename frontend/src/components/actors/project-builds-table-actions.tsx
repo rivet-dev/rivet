@@ -29,7 +29,11 @@ export function ProjectBuildsTableActions({
 					onSelect={() => {
 						navigate({
 							to: ".",
-							search: { modal: "edit-tags", buildId },
+							search: (s) => ({
+								...s,
+								modal: "edit-tags",
+								buildId,
+							}),
 						});
 					}}
 				>

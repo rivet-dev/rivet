@@ -142,7 +142,7 @@ export function SettingsDrawer({
 			to: ".",
 			search: (old) => ({
 				...(old as Record<string, unknown>),
-				modal: next,
+				settings: next,
 			}),
 		});
 	};
@@ -365,7 +365,7 @@ function SettingsTabBody() {
 			<ResourcePicker
 				title="Pick a namespace"
 				description="Settings are scoped to a namespace. Choose one to manage providers, runners, and tokens."
-				modal="settings"
+				settings="settings"
 				target="namespace"
 			/>
 		);
@@ -400,7 +400,7 @@ function AdvancedTabBody() {
 			<ResourcePicker
 				title="Pick a namespace"
 				description="Advanced settings are scoped to a namespace. Choose one to manage tokens and datacenter status."
-				modal="advanced"
+				settings="advanced"
 				target="namespace"
 			/>
 		);
@@ -411,15 +411,17 @@ function AdvancedTabBody() {
 	return <NamespaceAdvancedContent />;
 }
 
-export function modalToTab(modal: string | undefined): SettingsTab | null {
-	switch (modal) {
+export function settingsParamToTab(
+	param: string | undefined,
+): SettingsTab | null {
+	switch (param) {
 		case "profile":
 		case "settings":
 		case "advanced":
 		case "billing":
 		case "organization":
 		case "whats-new":
-			return modal;
+			return param;
 		// Legacy: members lived in its own tab before being merged into
 		// Organization. Keep the deep link working.
 		case "members":
@@ -432,8 +434,9 @@ export function modalToTab(modal: string | undefined): SettingsTab | null {
 export function SettingsDrawerHost() {
 	const navigate = useNavigate();
 	const search = useSearch({ strict: false }) as Record<string, unknown>;
-	const modal = typeof search.modal === "string" ? search.modal : undefined;
-	const tab = modalToTab(modal);
+	const param =
+		typeof search.settings === "string" ? search.settings : undefined;
+	const tab = settingsParamToTab(param);
 
 	return (
 		<SettingsDrawer
@@ -445,7 +448,7 @@ export function SettingsDrawerHost() {
 						to: ".",
 						search: (old) => ({
 							...(old as Record<string, unknown>),
-							modal: undefined,
+							settings: undefined,
 						}),
 					});
 				}

@@ -204,7 +204,7 @@ export function OrgLanding({ organization }: { organization: string }) {
 													organization,
 													project: project.name,
 												},
-												search: { modal: "billing" },
+												search: { settings: "billing" },
 											});
 										}}
 										title="Manage billing"

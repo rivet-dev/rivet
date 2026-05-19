@@ -71,7 +71,7 @@ export const Route = createFileRoute(
 		throw redirect({
 			to: "/orgs/$organization/projects/$project/ns/$namespace",
 			params,
-			search: { modal: "settings" },
+			search: { settings: "settings" },
 		});
 	},
 	component: RouteComponent,

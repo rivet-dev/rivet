@@ -861,7 +861,7 @@ function ProjectListItem({
 							void navigate({
 								to: "/orgs/$organization/projects/$project",
 								params: { organization, project: name },
-								search: { modal: "billing" },
+								search: { settings: "billing" },
 							});
 						}}
 						// `relative z-10` lifts the badge above SafeHover's
@@ -1029,7 +1029,7 @@ function NamespaceList({
 															project,
 															namespace: ns.name,
 														},
-														search: { modal: "settings" },
+														search: { settings: "settings" },
 													});
 												}}
 												// `relative z-10` is load-bearing: the SafeHover

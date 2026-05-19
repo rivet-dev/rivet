@@ -11,7 +11,10 @@ export function OneClickDeployRailwayButton() {
 			startIcon={<Icon icon={faRailway} />}
 			asChild
 		>
-			<Link to="." search={{ modal: "connect-q-railway" }}>
+			<Link
+				to="."
+				search={(s) => ({ ...s, modal: "connect-q-railway" })}
+			>
 				Railway
 			</Link>
 		</Button>
