@@ -1117,6 +1117,7 @@ async fn update_state_and_db(ctx: &ActivityCtx, input: &UpdateStateAndDbInput) -
 				let tx = tx.with_subspace(crate::keys::subspace());
 
 				tx.write(&crate::keys::actor::DestroyTsKey::new(actor_id), destroy_ts)?;
+				tx.delete(&crate::keys::actor::ActiveGenerationKey::new(actor_id));
 
 				// Update namespace indexes
 				tx.delete(&crate::keys::ns::ActiveActorKey::new(

@@ -872,7 +872,7 @@ async fn validate_remote_sqlite_generation(
 	let generation = u32::try_from(generation).context("invalid sqlite actor generation")?;
 	let namespace_id = conn.namespace_id;
 	let envoy_key = conn.envoy_key.clone();
-	let (active_generation, has_pending_start_command) = ctx
+	let (active_generation, has_pending_start_command, actor_active_generation) = ctx
 		.udb()?
 		.run(|tx| {
 			let envoy_key = envoy_key.clone();
@@ -917,12 +917,26 @@ async fn validate_remote_sqlite_generation(
 					}
 				}
 
-				Ok((active_generation, has_pending_start_command))
+				let actor_active_generation: Option<u32> = tx
+					.read_opt(
+						&pegboard::keys::actor::ActiveGenerationKey::new(actor_id),
+						Serializable,
+					)
+					.await?;
+
+				Ok((
+					active_generation,
+					has_pending_start_command,
+					actor_active_generation,
+				))
 			}
 		})
 		.await?;
 
-	if active_generation != Some(generation) && !has_pending_start_command {
+	if active_generation != Some(generation)
+		&& !has_pending_start_command
+		&& actor_active_generation != Some(generation)
+	{
 		bail!("actor does not exist");
 	}
 
