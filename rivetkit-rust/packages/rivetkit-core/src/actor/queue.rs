@@ -18,6 +18,7 @@ use tokio_util::sync::CancellationToken;
 
 use crate::actor::config::ActorConfig;
 use crate::actor::context::ActorContext;
+use crate::actor::kv::APPLY_BATCH_CHUNK_SIZE;
 use crate::actor::keys::{
 	QUEUE_MESSAGES_PREFIX, QUEUE_METADATA_KEY, decode_queue_message_key, make_queue_message_key,
 };
@@ -533,6 +534,53 @@ impl ActorContext {
 
 	pub fn max_size(&self) -> u32 {
 		self.config().max_queue_size
+	}
+
+	/// Removes all messages from the queue and resets the size counter.
+	pub async fn reset(&self) -> Result<()> {
+		self.ensure_initialized().await?;
+
+		// Serialize against receivers before touching metadata. try_receive_batch
+		// holds this lock across its list-then-dequeue, and list_messages
+		// reconciles metadata.size from a lockless KV scan. Without holding it
+		// here, a receiver mid-scan could deliver a message this reset deletes and
+		// overwrite size=0 with its stale pre-delete count. Lock order matches
+		// try_receive_batch (receive lock then metadata) so there is no deadlock.
+		let _receive_guard = self.0.queue_receive_lock.lock().await;
+
+		let mut metadata = self.0.queue_metadata.lock().await;
+
+		// List and delete all message keys. The engine rejects KV deletes above
+		// APPLY_BATCH_CHUNK_SIZE keys per call, and the queue can hold up to
+		// max_queue_size messages, so delete in chunks.
+		let entries = self.list_message_entries().await?;
+		for chunk in entries.chunks(APPLY_BATCH_CHUNK_SIZE) {
+			let key_refs: Vec<&[u8]> = chunk.iter().map(|(k, _)| k.as_slice()).collect();
+			self.0
+				.kv
+				.batch_delete(&key_refs)
+				.await
+				.context("delete all queue messages")?;
+		}
+
+		metadata.size = 0;
+		let encoded_metadata =
+			encode_queue_metadata(&metadata).context("encode reset queue metadata")?;
+		self.0
+			.kv
+			.put(&QUEUE_METADATA_KEY, &encoded_metadata)
+			.await
+			.context("persist reset queue metadata")?;
+
+		self.0.queue_completion_waiters.clear_async().await;
+
+		drop(metadata);
+
+		self.0.metrics.set_queue_depth(0);
+		self.notify_inspector_update(0);
+		self.0.queue_notify.notify_waiters();
+
+		Ok(())
 	}
 
 	pub(crate) fn configure_queue(&self, config: ActorConfig) {

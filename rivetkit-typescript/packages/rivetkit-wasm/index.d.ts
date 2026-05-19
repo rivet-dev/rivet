@@ -120,6 +120,7 @@ export class Queue {
 	waitForNamesAvailable(names: any, options: any): Promise<void>;
 	send(name: string, body: Uint8Array): Promise<QueueMessage>;
 	maxSize(): number;
+	reset(): Promise<void>;
 }
 
 export class QueueMessage {

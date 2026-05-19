@@ -3667,6 +3667,54 @@ export function buildNativeFactory(
 				});
 			}
 			if (
+				url.pathname === "/inspector/queue" &&
+				jsRequest.method === "DELETE"
+			) {
+				await runtime.actorQueueReset(ctx);
+				return jsonResponse({});
+			}
+			if (
+				url.pathname === "/inspector/queue" &&
+				jsRequest.method === "POST"
+			) {
+				let body: { name?: string; body?: unknown };
+				try {
+					body = (await jsRequest.json()) as {
+						name?: string;
+						body?: unknown;
+					};
+				} catch {
+					return errorResponse(
+						new RivetError(
+							"actor",
+							"invalid_request",
+							"Invalid inspector JSON body",
+							{ public: true },
+						),
+						400,
+					);
+				}
+				const name = body.name ?? "";
+				if (name === "") {
+					return errorResponse(
+						new RivetError(
+							"actor",
+							"invalid_request",
+							"Queue message name must not be empty",
+							{ public: true },
+						),
+						400,
+					);
+				}
+				const cbor = encodeCborCompat((body.body ?? null) as JsonCompatValue);
+				const message = await runtime.actorQueueSend(ctx, name, cbor);
+				return jsonResponse({
+					id: message.id().toString(),
+					name: message.name(),
+					createdAtMs: message.createdAt(),
+				});
+			}
+			if (
 				url.pathname === "/inspector/traces" &&
 				jsRequest.method === "GET"
 			) {

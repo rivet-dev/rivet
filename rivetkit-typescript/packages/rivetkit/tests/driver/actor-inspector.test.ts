@@ -457,6 +457,125 @@ describeDriverMatrix("Actor Inspector", (driverTestConfig) => {
 			expect(summary.queueSize).toBeGreaterThan(0);
 		});
 
+		test("POST then DELETE /inspector/queue injects and clears messages", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+			const handle = client.queueActor.getOrCreate([
+				"inspector-queue-mutate",
+			]);
+			// Seed a message so the actor exists and the inspector routes are live.
+			await handle.send("greeting", { hello: "seed" });
+
+			const gatewayUrl = await handle.getGatewayUrl();
+
+			// Inject a message through the inspector.
+			const injectResponse = await fetch(
+				buildInspectorUrl(gatewayUrl, "/inspector/queue"),
+				{
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+						Authorization: "Bearer token",
+					},
+					body: JSON.stringify({
+						name: "injected",
+						body: { hello: "world" },
+					}),
+				},
+			);
+			expect(injectResponse.status).toBe(200);
+			const injected = (await injectResponse.json()) as {
+				id: string;
+				name: string;
+				createdAtMs: number;
+			};
+			// id is serialized as a string to avoid bigint truncation.
+			expect(typeof injected.id).toBe("string");
+			expect(injected.name).toBe("injected");
+
+			// The injected message is visible in the queue.
+			const beforeClear = await fetch(
+				buildInspectorUrl(gatewayUrl, "/inspector/queue", {
+					limit: "50",
+				}),
+				{ headers: { Authorization: "Bearer token" } },
+			);
+			expect(beforeClear.status).toBe(200);
+			const beforeData = (await beforeClear.json()) as { size: number };
+			expect(beforeData.size).toBeGreaterThan(0);
+
+			// Clear the queue.
+			const clearResponse = await fetch(
+				buildInspectorUrl(gatewayUrl, "/inspector/queue"),
+				{
+					method: "DELETE",
+					headers: { Authorization: "Bearer token" },
+				},
+			);
+			expect(clearResponse.status).toBe(200);
+
+			// The queue is now empty.
+			const afterClear = await fetch(
+				buildInspectorUrl(gatewayUrl, "/inspector/queue", {
+					limit: "50",
+				}),
+				{ headers: { Authorization: "Bearer token" } },
+			);
+			expect(afterClear.status).toBe(200);
+			const afterData = (await afterClear.json()) as { size: number };
+			expect(afterData.size).toBe(0);
+		});
+
+		test("POST /inspector/queue rejects an empty name", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+			const handle = client.queueActor.getOrCreate([
+				"inspector-queue-empty-name",
+			]);
+			await handle.send("greeting", { hello: "seed" });
+
+			const gatewayUrl = await handle.getGatewayUrl();
+			const response = await fetch(
+				buildInspectorUrl(gatewayUrl, "/inspector/queue"),
+				{
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+						Authorization: "Bearer token",
+					},
+					body: JSON.stringify({
+						name: "",
+						body: { hello: "world" },
+					}),
+				},
+			);
+			expect(response.status).toBe(400);
+			const error = (await response.json()) as { code: string };
+			expect(error.code).toBe("invalid_request");
+		});
+
+		test("POST /inspector/queue rejects malformed JSON", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+			const handle = client.queueActor.getOrCreate([
+				"inspector-queue-bad-json",
+			]);
+			await handle.send("greeting", { hello: "seed" });
+
+			const gatewayUrl = await handle.getGatewayUrl();
+			const response = await fetch(
+				buildInspectorUrl(gatewayUrl, "/inspector/queue"),
+				{
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+						Authorization: "Bearer token",
+					},
+					body: "{ not valid json",
+				},
+			);
+			expect(response.status).toBe(400);
+			const error = (await response.json()) as { code: string };
+			expect(error.code).toBe("invalid_request");
+		});
+
 		test("GET /inspector/traces returns trace data", async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);
 			const handle = client.counter.getOrCreate(["inspector-traces"]);

@@ -542,6 +542,7 @@ export interface CoreRuntime {
 	actorQueueInspectMessages(
 		ctx: ActorContextHandle,
 	): Promise<RuntimeQueueInspectMessage[]>;
+	actorQueueReset(ctx: ActorContextHandle): Promise<void>;
 
 	actorScheduleAfter(
 		ctx: ActorContextHandle,

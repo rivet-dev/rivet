@@ -1861,6 +1861,15 @@ impl WasmQueue {
 		self.inner.queue().max_size()
 	}
 
+	#[wasm_bindgen]
+	pub async fn reset(&self) -> Result<(), JsValue> {
+		self.inner
+			.queue()
+			.reset()
+			.await
+			.map_err(anyhow_to_js_error)
+	}
+
 	#[wasm_bindgen(js_name = inspectMessages)]
 	pub async fn inspect_messages(&self) -> Result<Array, JsValue> {
 		let messages = self
