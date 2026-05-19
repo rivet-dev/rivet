@@ -215,6 +215,9 @@ function NamespaceSegmentPopover({
 	currentNamespace: string;
 }) {
 	const [open, setOpen] = useState(false);
+	const [hoveredNamespace, setHoveredNamespace] = useState<string | null>(
+		currentNamespace,
+	);
 	const { data: nsData } = useQuery(
 		useCloudDataProvider().currentOrgProjectNamespaceQueryOptions({
 			project: currentProject,
@@ -224,7 +227,15 @@ function NamespaceSegmentPopover({
 	const label = nsData?.displayName ?? currentNamespace;
 
 	return (
-		<Popover open={open} onOpenChange={setOpen}>
+		<Popover
+			open={open}
+			onOpenChange={(next) => {
+				setOpen(next);
+				if (next) {
+					setHoveredNamespace(currentNamespace);
+				}
+			}}
+		>
 			<PopoverTrigger asChild>
 				<Button
 					variant="ghost"
@@ -239,13 +250,24 @@ function NamespaceSegmentPopover({
 					<span className="truncate">{label}</span>
 				</Button>
 			</PopoverTrigger>
-			<PopoverContent className="p-0 w-56" align="start">
-				<NamespaceList
-					organization={organization}
-					project={currentProject}
-					currentNamespace={currentNamespace}
-					onClose={() => setOpen(false)}
-				/>
+			<PopoverContent className="p-0 w-fit flex" align="start">
+				<div className="w-56">
+					<NamespaceList
+						organization={organization}
+						project={currentProject}
+						currentNamespace={currentNamespace}
+						onHover={setHoveredNamespace}
+						onClose={() => setOpen(false)}
+					/>
+				</div>
+				{hoveredNamespace ? (
+					<ActorsList
+						organization={organization}
+						project={currentProject}
+						namespace={hoveredNamespace}
+						onClose={() => setOpen(false)}
+					/>
+				) : null}
 			</PopoverContent>
 		</Popover>
 	);
@@ -1056,39 +1078,6 @@ function NamespaceList({
 	);
 }
 
-// MOCK DATA — there is no cross-namespace actor listing endpoint in the
-// cloud-api today. The popover would need a server-side change to expose
-// `actorsListNames(org, project, namespace)`. For now we render a fixed
-// example list so the UX can be validated; the live actor list still
-// renders correctly inside the namespace itself via the engine tunnel.
-const MOCK_ACTORS_BY_NAMESPACE: Record<string, string[]> = {
-	default: [
-		"Chat Room",
-		"Game Lobby",
-		"Auth Session",
-		"Leaderboard",
-		"Match Maker",
-		"Inventory",
-		"Player Stats",
-		"World State",
-		"Chat Presence",
-		"Payments Worker",
-		"Email Queue",
-		"Analytics Sink",
-	],
-};
-
-function getMockActors(namespace: string): string[] {
-	return (
-		MOCK_ACTORS_BY_NAMESPACE[namespace] ??
-		MOCK_ACTORS_BY_NAMESPACE.default
-	);
-}
-
-function actorNameToBuildId(name: string): string {
-	return name.toLowerCase().replace(/\s+/g, "-");
-}
-
 function ActorsList({
 	organization,
 	project,
@@ -1101,7 +1090,28 @@ function ActorsList({
 	onClose?: () => void;
 }) {
 	const navigate = useNavigate();
-	const actors = getMockActors(namespace);
+	const {
+		data: actors,
+		isLoading,
+		hasNextPage,
+		isFetchingNextPage,
+		fetchNextPage,
+	} = useInfiniteQuery(
+		useCloudDataProvider().currentOrgProjectNamespaceActorNamesQueryOptions({
+			project,
+			namespace,
+		}),
+	);
+
+	const sorted = [...(actors ?? [])].sort((a, b) => {
+		const an = (a.name?.metadata as Record<string, unknown> | undefined)
+			?.name;
+		const bn = (b.name?.metadata as Record<string, unknown> | undefined)
+			?.name;
+		const aLabel = typeof an === "string" ? an : a.id;
+		const bLabel = typeof bn === "string" ? bn : b.id;
+		return aLabel.localeCompare(bLabel);
+	});
 
 	return (
 		<div className="border-l w-48">
@@ -1109,16 +1119,29 @@ function ActorsList({
 				<CommandInput placeholder="Find Actor..." />
 				<CommandList className="relative p-1 w-full">
 					<CommandGroup heading="Actors" className="w-full">
-						{actors.length === 0 ? (
+						{!isLoading && sorted.length === 0 ? (
 							<CommandEmpty>No actors yet.</CommandEmpty>
 						) : null}
-						{actors.map((name) => {
-							const buildId = actorNameToBuildId(name);
+						{isLoading ? (
+							<>
+								<ListItemSkeleton />
+								<ListItemSkeleton />
+								<ListItemSkeleton />
+							</>
+						) : null}
+						{sorted.map((actor) => {
+							const meta = actor.name?.metadata as
+								| Record<string, unknown>
+								| undefined;
+							const label =
+								typeof meta?.name === "string"
+									? meta.name
+									: actor.id;
 							return (
 								<CommandItem
-									key={buildId}
-									value={name}
-									keywords={[name, buildId]}
+									key={actor.id}
+									value={actor.id}
+									keywords={[label, actor.id]}
 									className="static w-full"
 									onSelect={() => {
 										onClose?.();
@@ -1136,15 +1159,24 @@ function ActorsList({
 												...(old as Record<string, unknown>),
 												actorId: undefined,
 												actorKey: undefined,
-												n: [buildId],
+												n: [actor.id],
 											}),
 										});
 									}}
 								>
-									<span className="truncate w-full">{name}</span>
+									<span className="truncate w-full">{label}</span>
 								</CommandItem>
 							);
 						})}
+						{isFetchingNextPage ? (
+							<>
+								<ListItemSkeleton />
+								<ListItemSkeleton />
+							</>
+						) : null}
+						{hasNextPage && !isFetchingNextPage ? (
+							<VisibilitySensor onChange={fetchNextPage} />
+						) : null}
 
 						<CommandItem
 							keywords={["create", "new", "actor"]}
