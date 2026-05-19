@@ -29,180 +29,195 @@ const ChatRoomState = ActorState.make("ChatRoomState", {
 });
 
 export const ChatRoomLive = ChatRoom.toLayer(
-	(wakeOptions) =>
-	Effect.gen(function* () {
-		const state = yield* ChatRoomState;
-		const ctx = wakeOptions.rawRivetkitContext;
-		const database = ctx.db as RawAccess;
-		const address = yield* Actor.CurrentAddress;
-		// The plain SDK example stores this in createVars. The Effect SDK
-		// does not expose vars yet, so the wake-scope closure owns it.
-		const sessionId = crypto.randomUUID();
+	({ rawRivetkitContext, state }) =>
+		Effect.gen(function* () {
+			const database = rawRivetkitContext.db;
+			const address = yield* Actor.CurrentAddress;
+			// The plain SDK example stores this in createVars. The Effect SDK
+			// does not expose vars yet, so the wake-scope closure owns it.
+			const sessionId = crypto.randomUUID();
 
-		yield* State.update(state, (current) => ({
-			...current,
-			wakeCount: current.wakeCount + 1,
-		})).pipe(Effect.orDie);
+			yield* State.update(state, (current) => ({
+				...current,
+				wakeCount: current.wakeCount + 1,
+			})).pipe(Effect.orDie);
 
-		yield* Effect.log("room awake", {
-			actorId: address.actorId,
-			key: address.key.join("/"),
-			sessionId,
-		});
+			yield* Effect.log("room awake", {
+				actorId: address.actorId,
+				key: address.key.join("/"),
+				sessionId,
+			});
 
-		yield* Effect.addFinalizer(() =>
-			Effect.gen(function* () {
-				const current = yield* State.get(state).pipe(Effect.orDie);
-				yield* Effect.log("room sleeping", {
-					actorId: address.actorId,
-					key: address.key.join("/"),
-					roomName: current.name,
-					sessionId,
-					wakeCount: current.wakeCount,
-				});
-			}),
-		);
-
-		const directory = () =>
-			// Server-side Effect actor clients are not available yet. Use the
-			// raw RivetKit actor client and keep the action shape explicit.
-			ctx.client<any>().directory.getOrCreate(["main"]);
-		const moderator = () =>
-			// The normal example uses a typed registry client here. This raw
-			// client keeps the runtime behavior while giving up type inference.
-			ctx.client<any>().moderator.getOrCreate(["main"]);
-
-		const roomName = State.get(state).pipe(
-			Effect.orDie,
-			Effect.map((s) => s.name),
-		);
-
-		return ChatRoom.of({
-			Initialize: ({ payload }) =>
-				// This replaces createState(input). Callers should initialize
-				// a room before actions that depend on a persisted room name.
-				State.update(state, (current) => {
-					if (current.initialized) return current;
-					return {
-						...current,
-						name: payload.name,
-						members: [],
-						initialized: true,
-					};
-				}),
-			Join: ({ payload }) =>
+			yield* Effect.addFinalizer(() =>
 				Effect.gen(function* () {
-					const member = { name: payload.name, joinedAt: Date.now() };
-					const next = yield* State.updateAndGet(
-						state,
-						(current) => ({
+					const current = yield* State.get(state).pipe(Effect.orDie);
+					yield* Effect.log("room sleeping", {
+						actorId: address.actorId,
+						key: address.key.join("/"),
+						roomName: current.name,
+						sessionId,
+						wakeCount: current.wakeCount,
+					});
+				}),
+			);
+
+			const directory = () =>
+				// Server-side Effect actor clients are not available yet. Use the
+				// raw RivetKit actor client and keep the action shape explicit.
+				rawRivetkitContext
+					.client<any>()
+					.directory.getOrCreate(["main"]);
+			const moderator = () =>
+				// The normal example uses a typed registry client here. This raw
+				// client keeps the runtime behavior while giving up type inference.
+				rawRivetkitContext
+					.client<any>()
+					.moderator.getOrCreate(["main"]);
+
+			const roomName = State.get(state).pipe(
+				Effect.orDie,
+				Effect.map((s) => s.name),
+			);
+
+			return ChatRoom.of({
+				Initialize: ({ payload }) =>
+					// This replaces createState(input). Callers should initialize
+					// a room before actions that depend on a persisted room name.
+					State.update(state, (current) => {
+						if (current.initialized) return current;
+						return {
 							...current,
-							members: [...current.members, member],
-						}),
-					);
+							name: payload.name,
+							members: [],
+							initialized: true,
+						};
+					}),
+				Join: ({ payload }) =>
+					Effect.gen(function* () {
+						const member = {
+							name: payload.name,
+							joinedAt: Date.now(),
+						};
+						const next = yield* State.updateAndGet(
+							state,
+							(current) => ({
+								...current,
+								members: [...current.members, member],
+							}),
+						);
 
-					ctx.broadcast("memberJoined", { member });
+						rawRivetkitContext.broadcast("memberJoined", {
+							member,
+						});
 
-					if (next.name !== "") {
-						// Directory registration is still actor-to-actor RPC, but
-						// it uses the Effect action name and object payload.
-						yield* Effect.tryPromise(() =>
-							directory().RegisterRoom({ name: next.name }),
+						if (next.name !== "") {
+							// Directory registration is still actor-to-actor RPC, but
+							// it uses the Effect action name and object payload.
+							yield* Effect.tryPromise(() =>
+								directory().RegisterRoom({ name: next.name }),
+							).pipe(Effect.orDie);
+						}
+
+						return member;
+					}),
+				Leave: ({ payload }) =>
+					Effect.gen(function* () {
+						yield* State.update(state, (current) => ({
+							...current,
+							members: current.members.filter(
+								(member) => member.name !== payload.name,
+							),
+						})).pipe(Effect.orDie);
+						rawRivetkitContext.broadcast("memberLeft", {
+							name: payload.name,
+						});
+					}),
+				SendMessage: ({ payload }) =>
+					Effect.gen(function* () {
+						// The normal example sends moderation work through a
+						// completable queue drained by run(). The Effect SDK does
+						// not expose queues or run loops yet, so moderation is a
+						// direct actor RPC and has no queue timeout path.
+						const verdict = yield* Effect.tryPromise(
+							() =>
+								moderator().Review({
+									text: payload.text,
+								}) as Promise<ModerationVerdict>,
 						).pipe(Effect.orDie);
-					}
 
-					return member;
-				}),
-			Leave: ({ payload }) =>
-				Effect.gen(function* () {
-					yield* State.update(state, (current) => ({
-						...current,
-						members: current.members.filter(
-							(member) => member.name !== payload.name,
-						),
-					})).pipe(Effect.orDie);
-					ctx.broadcast("memberLeft", { name: payload.name });
-				}),
-			SendMessage: ({ payload }) =>
-				Effect.gen(function* () {
-					// The normal example sends moderation work through a
-					// completable queue drained by run(). The Effect SDK does
-					// not expose queues or run loops yet, so moderation is a
-					// direct actor RPC and has no queue timeout path.
-					const verdict = yield* Effect.tryPromise(
-						() =>
-							moderator().Review({
-								text: payload.text,
-							}) as Promise<ModerationVerdict>,
-					).pipe(Effect.orDie);
+						if (!verdict.approved) {
+							return { ok: false, reason: verdict.reason };
+						}
 
-					if (!verdict.approved) {
-						return { ok: false, reason: verdict.reason };
-					}
+						const createdAt = Date.now();
+						yield* Effect.tryPromise(() =>
+							database.execute(
+								"INSERT INTO messages (sender, text, created_at) VALUES (?, ?, ?)",
+								payload.sender,
+								payload.text,
+								createdAt,
+							),
+						).pipe(Effect.orDie);
 
-					const createdAt = Date.now();
-					yield* Effect.tryPromise(() =>
-						database.execute(
-							"INSERT INTO messages (sender, text, created_at) VALUES (?, ?, ?)",
-							payload.sender,
-							payload.text,
+						rawRivetkitContext.broadcast("newMessage", {
+							sender: payload.sender,
+							text: payload.text,
 							createdAt,
+						});
+						return { ok: true, createdAt };
+					}),
+				GetHistory: () =>
+					Effect.tryPromise(() =>
+						database.execute<{
+							id: number;
+							sender: string;
+							text: string;
+							createdAt: number;
+						}>(
+							"SELECT id, sender, text, created_at as createdAt FROM messages ORDER BY id",
 						),
-					).pipe(Effect.orDie);
-
-					ctx.broadcast("newMessage", {
-						sender: payload.sender,
-						text: payload.text,
-						createdAt,
-					});
-					return { ok: true, createdAt };
-				}),
-			GetHistory: () =>
-				Effect.tryPromise(() =>
-					database.execute<{
-						id: number;
-						sender: string;
-						text: string;
-						createdAt: number;
-					}>(
-						"SELECT id, sender, text, created_at as createdAt FROM messages ORDER BY id",
+					).pipe(Effect.orDie),
+				GetMembers: () =>
+					State.get(state).pipe(
+						Effect.orDie,
+						Effect.map((s) => s.members),
 					),
-				).pipe(Effect.orDie),
-			GetMembers: () =>
-				State.get(state).pipe(
-					Effect.orDie,
-					Effect.map((s) => s.members),
-				),
-			ScheduleAnnouncement: ({ payload }) =>
-				Effect.sync(() => {
-					const firesAt = Date.now() + payload.delayMs;
-					// The raw scheduler dispatches the Effect action by name
-					// with the same object payload that a client would send.
-					ctx.schedule.after(payload.delayMs, "TriggerAnnouncement", {
-						text: payload.text,
-					});
-					return { firesAt };
-				}),
-			TriggerAnnouncement: ({ payload }) =>
-				Effect.sync(() => {
-					ctx.broadcast("announcement", { text: payload.text });
-				}),
-			Archive: () =>
-				Effect.gen(function* () {
-					const name = yield* roomName;
-					if (name !== "") {
-						// This only covers destruction through Archive. A future
-						// Effect onDestroy hook would cover every destroy path.
-						yield* Effect.tryPromise(() =>
-							directory().CloseRoom({ name }),
-						).pipe(Effect.orDie);
-					}
-					yield* Effect.sync(() => {
-						ctx.destroy();
-					});
-				}),
-		});
-	}),
+				ScheduleAnnouncement: ({ payload }) =>
+					Effect.sync(() => {
+						const firesAt = Date.now() + payload.delayMs;
+						// The raw scheduler dispatches the Effect action by name
+						// with the same object payload that a client would send.
+						rawRivetkitContext.schedule.after(
+							payload.delayMs,
+							"TriggerAnnouncement",
+							{
+								text: payload.text,
+							},
+						);
+						return { firesAt };
+					}),
+				TriggerAnnouncement: ({ payload }) =>
+					Effect.sync(() => {
+						rawRivetkitContext.broadcast("announcement", {
+							text: payload.text,
+						});
+					}),
+				Archive: () =>
+					Effect.gen(function* () {
+						const name = yield* roomName;
+						if (name !== "") {
+							// This only covers destruction through Archive. A future
+							// Effect onDestroy hook would cover every destroy path.
+							yield* Effect.tryPromise(() =>
+								directory().CloseRoom({ name }),
+							).pipe(Effect.orDie);
+						}
+						yield* Effect.sync(() => {
+							rawRivetkitContext.destroy();
+						});
+					}),
+			});
+		}),
 	{
 		state: ChatRoomState,
 		db: db({

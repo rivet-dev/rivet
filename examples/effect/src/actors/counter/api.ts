@@ -58,7 +58,7 @@ export const GetCount = Action.make("GetCount", {
 
 // The definition is the actor's public contract. It carries no
 // implementation and no persisted-state schema (state is server-only,
-// configured via `ActorState.make` + `toLayer({ state })` in `live.ts`).
+// configured via `ActorState.make` + `toLayer(wake, { state })` in `live.ts`).
 // Both server and client code import this; the implementation stays
 // server-only.
 export const Counter = Actor.make("Counter", {

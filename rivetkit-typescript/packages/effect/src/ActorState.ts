@@ -4,9 +4,9 @@ import type * as State from "./State";
 const TypeId = "~@rivetkit/effect/ActorState";
 
 /**
- * A typed, persistent state slot for one Rivet Actor. Yielded inside
- * the wake effect to obtain a `State` whose committed
- * changes are mirrored back to rivetkit's persisted state.
+ * A typed, persistent state slot for one Rivet Actor. When configured
+ * on `Actor.toLayer`, the wake options receive a `State` whose
+ * committed changes are mirrored back to rivetkit's persisted state.
  *
  * State configuration (`schema` + `initial`) is server-only — it
  * describes the persisted shape and lives in implementation modules
@@ -35,9 +35,8 @@ export interface Any {
 
 /**
  * Like `Any`, but with the prop fields (`schema`, `initialValue`) accessible.
- * Used by the runtime to seed `c.state` and provide the `State` under
- * the state's tag. The yielded `State` has no visible service requirement
- * because schema services are resolved against the actor runner context.
+ * Used by the runtime to seed `c.state` and type `wakeOptions.state`.
+ * Schema services are resolved against the actor runner context.
  */
 export interface AnyWithProps
 	extends Context.Service<any, State.State<any, Schema.SchemaError>> {
@@ -54,19 +53,24 @@ export const isActorState = (u: unknown): u is Any =>
  * Define a typed, persistent state slot for a Rivet Actor.
  *
  * `schema` is the persisted shape; `initialValue` produces the value used to
- * seed state on first wake. The returned value is itself a Context tag:
- * `yield* MyState` inside the wake effect resolves to a
- * `SubscriptionRef<S["Type"]>`.
+ * seed state on first wake. Pass the returned value as the `state` option to
+ * `Actor.toLayer`; the wake function receives the live state at
+ * `wakeOptions.state`.
  *
  * @example
  * ```ts
  * import { Schema } from "effect"
- * import { ActorState } from "@rivetkit/effect"
+ * import { Actor, ActorState, State } from "@rivetkit/effect"
  *
+ * const Counter = Actor.make("Counter")
  * const CounterState = ActorState.make("CounterState", {
  *   schema: Schema.Number,
  *   initialValue: () => 0,
  * })
+ *
+ * Counter.toLayer((wakeOptions) => ({
+ *   Get: () => State.get(wakeOptions.state),
+ * }), { state: CounterState })
  * ```
  */
 export const make = <Name extends string, S extends Schema.Top>(

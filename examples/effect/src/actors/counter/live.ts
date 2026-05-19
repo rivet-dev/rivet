@@ -24,7 +24,8 @@ const CounterState = ActorState.make("CounterState", {
 // calls within a wake. Finalizers run on sleep.
 export const CounterLive = Counter.toLayer(
 	// Wake scope (runs each wake, finalizers run on sleep)
-	Effect.gen(function* () {
+	(wakeOptions) =>
+		Effect.gen(function* () {
 		// Actor-provided services are yielded from the Effect context.
 		// They are scoped to this actor instance, not to individual
 		// action calls. This means all action handlers below close
@@ -39,10 +40,9 @@ export const CounterLive = Counter.toLayer(
 		// - Swappable via layers. Tests can provide an in-memory KV
 		//   or a mock DB without changing the actor code.
 
-		// Yielding `CounterState` resolves to a `State` view over the
-		// persisted store. `State.changes` exposes every state changes
-		// commit as a stream.
-		const state = yield* CounterState;
+		// `wakeOptions.state` is a `State` view over the persisted store.
+		// `State.changes` exposes every state change commit as a stream.
+		const state = wakeOptions.state;
 		//    ^ State.State<{ count: number }>
 		// const events = yield* Counter.Events
 		//    // ^ { countChanged: PubSub<number> }

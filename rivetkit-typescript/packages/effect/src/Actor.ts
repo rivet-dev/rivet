@@ -183,10 +183,38 @@ export type WakeOptions<
 	readonly rawRivetkitContext: Rivetkit.WakeContextOf<ActorDefinition>;
 };
 
-type WakeOptionsFor<
+type RawWakeContextFor<
 	State extends ActorState.AnyWithProps,
 	Database extends RivetkitDb.AnyDatabaseProvider,
-> = WakeOptions<RivetkitActorDefinitionFor<State, Database>>;
+> = {
+	[Key in keyof Rivetkit.WakeContextOf<
+		RivetkitActorDefinitionFor<State, Database>
+	>]: Key extends "state"
+		? [State] extends [never]
+			? never
+			: ActorStateEncoded<State>
+		: Rivetkit.WakeContextOf<
+				RivetkitActorDefinitionFor<State, Database>
+			>[Key];
+};
+
+type WakeOptionsFor<
+	ActorStateDefinition extends ActorState.AnyWithProps,
+	Database extends RivetkitDb.AnyDatabaseProvider,
+> = {
+	readonly rawRivetkitContext: RawWakeContextFor<
+		ActorStateDefinition,
+		Database
+	>;
+} &
+	([ActorStateDefinition] extends [never]
+		? {}
+		: {
+				readonly state: State.State<
+					ActorStateDecoded<ActorStateDefinition>,
+					Schema.SchemaError
+				>;
+			});
 
 type WakeFunction<ActionHandlers, R, W extends WakeOptions> =
 	| ((wakeOptions: W) => ActionHandlers)
@@ -227,8 +255,8 @@ type UnknownToNever<T> = unknown extends T ? never : T;
 
 type ExcludeBuiltInWakeServices<
 	T,
-	State extends ActorState.AnyWithProps,
-> = UnknownToNever<Exclude<T, Scope.Scope | CurrentAddress | Sleep | State>>;
+	_State extends ActorState.AnyWithProps,
+> = UnknownToNever<Exclude<T, Scope.Scope | CurrentAddress | Sleep>>;
 
 type ToLayerRequirements<
 	Actions extends Action.Any,
@@ -262,13 +290,25 @@ export interface Actor<
 
 	toLayer<
 		ActionHandlers extends ActionHandlersFrom<Actions>,
-		State extends ActorState.AnyWithProps = never,
+		R = never,
+		RX = never,
+	>(
+		wake: Wake<ActionHandlers, R, RX, WakeOptionsFor<never, undefined>>,
+	): Layer.Layer<
+		never,
+		never,
+		ToLayerRequirements<Actions, ActionHandlers, never, R, RX>
+	>;
+
+	toLayer<
+		ActionHandlers extends ActionHandlersFrom<Actions>,
+		State extends ActorState.AnyWithProps,
 		Database extends RivetkitDb.AnyDatabaseProvider = undefined,
 		R = never,
 		RX = never,
 	>(
 		wake: Wake<ActionHandlers, R, RX, WakeOptionsFor<State, Database>>,
-		options?: Options<State, Database>,
+		options: Options<State, Database>,
 	): Layer.Layer<
 		never,
 		never,
@@ -529,17 +569,12 @@ const makeRivetkitActor = Effect.fnUntraced(function* <
 						Sleep,
 						Effect.sync(() => c.sleep()),
 					),
-					effectOptions.state
-						? Context.make(
-								effectOptions.state,
-								UndefinedOr.getOrThrow(state),
-							)
-						: Context.empty(),
 				);
 
-				const wakeOptions: WakeOptionsFor<State, Database> = {
+				const wakeOptions = {
 					rawRivetkitContext: c,
-				};
+					...(state ? { state } : {}),
+				} as WakeOptionsFor<State, Database>;
 				const actionHandlers = yield* wakeHandler(wakeOptions).pipe(
 					Effect.provide(context),
 				);

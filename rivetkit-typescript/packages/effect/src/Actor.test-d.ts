@@ -98,9 +98,25 @@ describe("Actor.make(...).toLayer", () => {
 	});
 
 	test("accepts a function returning a plain action handlers object", () => {
-		expectTypeOf(TestActor.toLayer).toBeCallableWith((_wakeOptions) => ({
-			GetContext: () => Effect.void,
-		}));
+		expectTypeOf(TestActor.toLayer).toBeCallableWith(
+			(_wakeOptions: any) => ({
+				GetContext: () => Effect.void,
+			}),
+		);
+	});
+
+	test("wake options omit state without a configured state type", () => {
+		TestActor.toLayer((wakeOptions) => {
+			// @ts-expect-error: stateless actors do not expose wakeOptions.state
+			wakeOptions.state;
+			expectTypeOf(
+				wakeOptions.rawRivetkitContext.state,
+			).toEqualTypeOf<never>();
+
+			return {
+				GetContext: () => Effect.void,
+			};
+		});
 	});
 
 	test("wake options carry the configured state type", () => {
@@ -202,7 +218,7 @@ describe("Actor.make(...).toLayer", () => {
 	});
 
 	test("accepts a function returning an Effect of action handlers", () => {
-		expectTypeOf(TestActor.toLayer).toBeCallableWith((_wakeOptions) =>
+		expectTypeOf(TestActor.toLayer).toBeCallableWith((_wakeOptions: any) =>
 			Effect.gen(function* () {
 				return {
 					GetContext: () => Effect.void,

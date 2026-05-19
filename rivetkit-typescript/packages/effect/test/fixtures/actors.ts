@@ -249,11 +249,9 @@ const TransformedActorState = ActorState.make("TransformedActorState", {
 });
 
 export const TransformedStateActorLive = TransformedStateActor.toLayer(
-	(wakeOptions) =>
+	({ rawRivetkitContext, state }) =>
 		Effect.gen(function* () {
-			const state = wakeOptions.state;
 			const sleep = yield* Actor.Sleep;
-			const rawRivetkitContext = wakeOptions.rawRivetkitContext;
 			const rawWakeState = rawRivetkitContext.state;
 
 			return TransformedStateActor.of({
@@ -317,9 +315,8 @@ const CounterState = ActorState.make("CounterState", {
 });
 
 export const CounterLive = Counter.toLayer(
-	(wakeOptions) =>
+	({ rawRivetkitContext, state }) =>
 		Effect.gen(function* () {
-			const state = wakeOptions.state;
 			const count = yield* Ref.make(0);
 			const flags = yield* Flags;
 			flags.set("on wake", true);
@@ -332,8 +329,7 @@ export const CounterLive = Counter.toLayer(
 			// `Counter.toLayer` below is the `rivetkit/db` raw-access factory,
 			// so re-narrow to `RawAccess` for typed `execute` calls inside
 			// handler closures.
-			const ctx = wakeOptions.rawRivetkitContext;
-			const db = ctx.db as RawAccess;
+			const db = rawRivetkitContext.db;
 			// `Flags` is a process-wide Map shared across all tests in the
 			// suite, so the finalizer flag must be namespaced by actor key
 			// to keep cross-test wake/sleep cycles from leaking into each
@@ -447,7 +443,7 @@ export const CounterLive = Counter.toLayer(
 				GetPersistedState: () => State.get(state),
 				// Per-actor SQLite is provisioned via the `db:` option on
 				// `Counter.toLayer` below. The build effect destructures `db`
-				// from `wakeOptions.rawRivetkitContext`, so handlers reach SQLite
+				// from `rawRivetkitContext`, so handlers reach SQLite
 				// through the captured client without going through `c.db`.
 				LogEvent: ({ payload }) =>
 					Effect.tryPromise(async () => {
@@ -532,9 +528,8 @@ export const Strict = Actor.make("Strict", {
 });
 
 export const StrictLive = Strict.toLayer(
-	(wakeOptions) =>
+	({ state }) =>
 		Effect.gen(function* () {
-			const state = wakeOptions.state;
 			return Strict.of({
 				StrictSet: ({ payload }) =>
 					State.set(state, payload.value).pipe(
@@ -544,7 +539,9 @@ export const StrictLive = Strict.toLayer(
 						}),
 					),
 				StrictSetUnhandled: ({ payload }) =>
-					State.set(state, payload.value).pipe(Effect.as(payload.value)),
+					State.set(state, payload.value).pipe(
+						Effect.as(payload.value),
+					),
 				StrictGet: () => State.get(state),
 			});
 		}),
@@ -587,7 +584,7 @@ export const Unregistered = Actor.make("Unregistered", { actions: [Echo] });
 
 // Schema whose encode is permissive (identity) but whose decode rejects
 // negatives. Used to seed invalid persisted actor state so
-// `wakeOptions.state` construction rejects on first wake.
+// `state` construction rejects on first wake.
 const PermissiveEncodeStrictDecode = Schema.Number.pipe(
 	Schema.decodeTo(
 		Schema.Number,
@@ -617,9 +614,8 @@ export const WakeDecodeFail = Actor.make("WakeDecodeFail", {
 });
 
 export const WakeDecodeFailLive = WakeDecodeFail.toLayer(
-	(wakeOptions) =>
+	() =>
 		Effect.gen(function* () {
-			const _state = wakeOptions.state;
 			return WakeDecodeFail.of({
 				Ping: () => Effect.succeed("never reached"),
 			});
@@ -630,7 +626,7 @@ export const WakeDecodeFailLive = WakeDecodeFail.toLayer(
 // --- BuildSetRejected ---
 
 // Strict schema rejecting negatives on encode. The build effect deliberately
-// calls `State.set` against `wakeOptions.state` with a value the schema
+// calls `State.set` against `state` with a value the schema
 // rejects, catches the resulting `SchemaError` via `Effect.match`, and
 // exposes the outcome via `BuildOutcome`.
 const StrictForBuildState = ActorState.make("StrictForBuildState", {
@@ -647,9 +643,8 @@ export const BuildSetRejected = Actor.make("BuildSetRejected", {
 });
 
 export const BuildSetRejectedLive = BuildSetRejected.toLayer(
-	(wakeOptions) =>
+	({ state }) =>
 		Effect.gen(function* () {
-			const state = wakeOptions.state;
 			const wrote = yield* State.set(state, -1).pipe(
 				Effect.match({
 					onFailure: () => false,
