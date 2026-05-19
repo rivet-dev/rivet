@@ -346,7 +346,23 @@ function SettingsTabBody() {
 			/>
 		);
 	}
+	// During navigation from the resource picker the match enters the tree
+	// before its loader resolves. Namespace-only hooks crash on undefined
+	// loader data, so wait for it to land.
+	if (!namespaceMatch.loaderData) {
+		return <NamespaceSettingsSkeleton />;
+	}
 	return <NamespaceSettingsContent />;
+}
+
+function NamespaceSettingsSkeleton() {
+	return (
+		<div className="space-y-4">
+			<div className="h-24 rounded-xl border border-foreground/10 bg-card/50" />
+			<div className="h-40 rounded-xl border border-foreground/10 bg-card/50" />
+			<div className="h-40 rounded-xl border border-foreground/10 bg-card/50" />
+		</div>
+	);
 }
 
 export function modalToTab(modal: string | undefined): SettingsTab | null {

@@ -136,6 +136,14 @@ export function BillingPanel() {
 		);
 	}
 
+	// During navigation from the resource picker, the project match enters
+	// the tree before its loader resolves. `useCloudProjectDataProvider`
+	// reads `useLoaderData(...).dataProvider`, which crashes when loader
+	// data is undefined. Hold the skeleton until loader data lands.
+	if (!projectMatch.loaderData) {
+		return <BillingSkeleton />;
+	}
+
 	// Wrap in a local Suspense so any suspended descendant query (e.g.
 	// `BillingPlans` via `useSuspenseQuery`) is caught here and renders
 	// a local skeleton instead of bubbling to the project route's
