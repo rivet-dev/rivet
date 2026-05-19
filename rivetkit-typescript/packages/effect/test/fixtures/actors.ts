@@ -251,7 +251,7 @@ const TransformedActorState = ActorState.make("TransformedActorState", {
 export const TransformedStateActorLive = TransformedStateActor.toLayer(
 	(wakeOptions) =>
 		Effect.gen(function* () {
-			const state = yield* TransformedActorState;
+			const state = wakeOptions.state;
 			const sleep = yield* Actor.Sleep;
 			const rawRivetkitContext = wakeOptions.rawRivetkitContext;
 			const rawWakeState = rawRivetkitContext.state;
@@ -319,7 +319,7 @@ const CounterState = ActorState.make("CounterState", {
 export const CounterLive = Counter.toLayer(
 	(wakeOptions) =>
 		Effect.gen(function* () {
-			const state = yield* CounterState;
+			const state = wakeOptions.state;
 			const count = yield* Ref.make(0);
 			const flags = yield* Flags;
 			flags.set("on wake", true);
@@ -532,21 +532,22 @@ export const Strict = Actor.make("Strict", {
 });
 
 export const StrictLive = Strict.toLayer(
-	Effect.gen(function* () {
-		const state = yield* StrictState;
-		return Strict.of({
-			StrictSet: ({ payload }) =>
-				State.set(state, payload.value).pipe(
-					Effect.match({
-						onFailure: () => "rejected" as const,
-						onSuccess: () => "ok" as const,
-					}),
-				),
-			StrictSetUnhandled: ({ payload }) =>
-				State.set(state, payload.value).pipe(Effect.as(payload.value)),
-			StrictGet: () => State.get(state),
-		});
-	}),
+	(wakeOptions) =>
+		Effect.gen(function* () {
+			const state = wakeOptions.state;
+			return Strict.of({
+				StrictSet: ({ payload }) =>
+					State.set(state, payload.value).pipe(
+						Effect.match({
+							onFailure: () => "rejected" as const,
+							onSuccess: () => "ok" as const,
+						}),
+					),
+				StrictSetUnhandled: ({ payload }) =>
+					State.set(state, payload.value).pipe(Effect.as(payload.value)),
+				StrictGet: () => State.get(state),
+			});
+		}),
 	{ state: StrictState },
 );
 
@@ -585,8 +586,8 @@ export const Unregistered = Actor.make("Unregistered", { actions: [Echo] });
 // --- WakeDecodeFail ---
 
 // Schema whose encode is permissive (identity) but whose decode rejects
-// negatives. Used to plant an "invalid" value into `c.state` that the
-// next wake's `State.make` initial-read decode will reject.
+// negatives. Used to seed invalid persisted actor state so
+// `wakeOptions.state` construction rejects on first wake.
 const PermissiveEncodeStrictDecode = Schema.Number.pipe(
 	Schema.decodeTo(
 		Schema.Number,
@@ -607,8 +608,7 @@ const PermissiveEncodeStrictDecode = Schema.Number.pipe(
 const WakeDecodeFailState = ActorState.make("WakeDecodeFailState", {
 	schema: PermissiveEncodeStrictDecode,
 	// `-1` encodes successfully (encode is identity) so registry setup
-	// passes; but the wake-time decode rejects it, so State.make's
-	// initial read inside the build effect dies.
+	// passes, but the wake-time decode rejects before handlers are built.
 	initialValue: () => -1,
 });
 
@@ -617,23 +617,22 @@ export const WakeDecodeFail = Actor.make("WakeDecodeFail", {
 });
 
 export const WakeDecodeFailLive = WakeDecodeFail.toLayer(
-	Effect.gen(function* () {
-		const _state = yield* WakeDecodeFailState;
-		return WakeDecodeFail.of({
-			Ping: () => Effect.succeed("never reached"),
-		});
-	}),
+	(wakeOptions) =>
+		Effect.gen(function* () {
+			const _state = wakeOptions.state;
+			return WakeDecodeFail.of({
+				Ping: () => Effect.succeed("never reached"),
+			});
+		}),
 	{ state: WakeDecodeFailState },
 );
 
 // --- BuildSetRejected ---
 
-// Strict schema rejecting negatives on encode. The build effect below
-// deliberately calls `State.set` with a value the schema rejects,
-// catches the resulting `SchemaError` via `Effect.match`, and exposes
-// the outcome via `BuildOutcome`. Demonstrates that the new typed-`E`
-// channel on `State` is observable inside the wake-scope build effect,
-// not just inside action handlers.
+// Strict schema rejecting negatives on encode. The build effect deliberately
+// calls `State.set` against `wakeOptions.state` with a value the schema
+// rejects, catches the resulting `SchemaError` via `Effect.match`, and
+// exposes the outcome via `BuildOutcome`.
 const StrictForBuildState = ActorState.make("StrictForBuildState", {
 	schema: Schema.Number.pipe(Schema.check(Schema.isGreaterThanOrEqualTo(0))),
 	initialValue: () => 0,
@@ -648,17 +647,19 @@ export const BuildSetRejected = Actor.make("BuildSetRejected", {
 });
 
 export const BuildSetRejectedLive = BuildSetRejected.toLayer(
-	Effect.gen(function* () {
-		const state = yield* StrictForBuildState;
-		const wrote = yield* State.set(state, -1).pipe(
-			Effect.match({
-				onFailure: () => false,
-				onSuccess: () => true,
-			}),
-		);
-		return BuildSetRejected.of({
-			BuildOutcome: () => Effect.succeed(wrote ? "wrote" : "rejected"),
-		});
-	}),
+	(wakeOptions) =>
+		Effect.gen(function* () {
+			const state = wakeOptions.state;
+			const wrote = yield* State.set(state, -1).pipe(
+				Effect.match({
+					onFailure: () => false,
+					onSuccess: () => true,
+				}),
+			);
+			return BuildSetRejected.of({
+				BuildOutcome: () =>
+					Effect.succeed(wrote ? "wrote" : "rejected"),
+			});
+		}),
 	{ state: StrictForBuildState },
 );

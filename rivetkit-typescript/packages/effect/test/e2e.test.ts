@@ -420,7 +420,7 @@ layer(TestLayer)("end-to-end", (it) => {
 	);
 
 	it.effect(
-		"decodes transformed state written through raw wake context state",
+		"wake options state decodes transformed state written through raw wake context state",
 		() =>
 			Effect.gen(function* () {
 				const actor = (yield* TransformedStateActor.client).getOrCreate(
@@ -476,7 +476,7 @@ layer(TestLayer)("end-to-end", (it) => {
 				"t-service-wake",
 			]);
 			// `WakeGreeting` returns the string captured when `Greeter`
-			// was yielded inside the wake-scope build effect.
+			// was resolved inside the wake-scope build effect.
 			const greeting = yield* counter.WakeGreeting();
 			assert.strictEqual(greeting, "Hello, on wake!");
 		}),
@@ -592,7 +592,7 @@ layer(TestLayer)("end-to-end", (it) => {
 	);
 
 	it.effect(
-		"State.make initial-read decode failure inside build effect surfaces as RivetError",
+		"wake options state decode failure inside build effect surfaces as RivetError",
 		() =>
 			Effect.gen(function* () {
 				const failing = (yield* WakeDecodeFail.client).getOrCreate([

@@ -2,6 +2,7 @@ import { assert, describe, it } from "@effect/vitest";
 import { Context, Effect, Layer } from "effect";
 import type * as Rivetkit from "rivetkit";
 import * as Actor from "./Actor";
+import * as State from "./State";
 
 class Prefix extends Context.Service<Prefix, { readonly value: string }>()(
 	"Actor.test/Prefix",
@@ -35,12 +36,13 @@ describe("Actor.toWakeHandler", () => {
 		}).pipe(Effect.provide(PrefixLive)),
 	);
 
-	it.effect("calls a wake function with the wake context", () =>
+	it.effect("calls a wake function with wake options", () =>
 		Effect.gen(function* () {
+			const rawRivetkitContext = {
+				key: ["room", "1"],
+			} as Rivetkit.WakeContextOf<Rivetkit.AnyActorDefinition>;
 			const wakeOptions: Actor.WakeOptions = {
-				rawRivetkitContext: {
-					key: ["room", "1"],
-				} as Rivetkit.WakeContextOf<Rivetkit.AnyActorDefinition>,
+				rawRivetkitContext,
 			};
 			const wake = (wakeOptions: Actor.WakeOptions) => ({
 				GetKey: () =>
@@ -51,7 +53,47 @@ describe("Actor.toWakeHandler", () => {
 			const wakeHandler = Actor.toWakeHandler(wake);
 			const actionHandlers = yield* wakeHandler(wakeOptions);
 
+			assert.strictEqual(wakeOptions.rawRivetkitContext, rawRivetkitContext);
 			assert.strictEqual(yield* actionHandlers.GetKey(), "room/1");
+		}),
+	);
+
+	it.effect("passes actor state through wake options", () =>
+		Effect.gen(function* () {
+			const cell = { value: { count: 1 } };
+			const state = yield* State.make(
+				() => Effect.sync(() => cell.value),
+				(value: { readonly count: number }) =>
+					Effect.sync(() => {
+						cell.value = value;
+					}),
+			);
+			type StatefulWakeOptions = Actor.WakeOptions & {
+				readonly state: State.State<
+					{ readonly count: number },
+					never,
+					never
+				>;
+			};
+			const wakeOptions: StatefulWakeOptions = {
+				rawRivetkitContext:
+					{} as Rivetkit.WakeContextOf<Rivetkit.AnyActorDefinition>,
+				state,
+			};
+			const wake = (wakeOptions: StatefulWakeOptions) => ({
+				GetCount: () => State.get(wakeOptions.state),
+				SetCount: (count: number) =>
+					State.set(wakeOptions.state, { count }),
+			});
+			const wakeHandler = Actor.toWakeHandler(wake);
+			const actionHandlers = yield* wakeHandler(wakeOptions);
+
+			assert.deepStrictEqual(yield* actionHandlers.GetCount(), {
+				count: 1,
+			});
+
+			yield* actionHandlers.SetCount(7);
+			assert.deepStrictEqual(cell.value, { count: 7 });
 		}),
 	);
 

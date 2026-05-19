@@ -12,6 +12,7 @@ import * as Action from "./Action";
 import * as Actor from "./Actor";
 import * as ActorState from "./ActorState";
 import type * as Client from "./Client";
+import type * as State from "./State";
 
 class SomeDep extends Context.Service<SomeDep, { readonly x: number }>()(
 	"SomeDep",
@@ -105,6 +106,49 @@ describe("Actor.make(...).toLayer", () => {
 	test("wake options carry the configured state type", () => {
 		TestActor.toLayer(
 			(wakeOptions) => {
+				expectTypeOf(wakeOptions.state).toEqualTypeOf<
+					State.State<{ readonly count: number }, Schema.SchemaError>
+				>();
+
+				return {
+					GetContext: () => Effect.void,
+				};
+			},
+			{ state: TestState },
+		);
+	});
+
+	test("wake options carry the transformed state type", () => {
+		TestActor.toLayer(
+			(wakeOptions) => {
+				expectTypeOf(wakeOptions.state).toEqualTypeOf<
+					State.State<
+						{
+							readonly when: Date;
+							readonly url: URL;
+							readonly id: bigint;
+							readonly bytes: Uint8Array;
+							readonly tags: ReadonlyArray<string>;
+							readonly history: ReadonlyArray<{
+								readonly at: Date;
+								readonly payload: Uint8Array;
+							}>;
+						},
+						Schema.SchemaError
+					>
+				>();
+
+				return {
+					GetContext: () => Effect.void,
+				};
+			},
+			{ state: TransformedState },
+		);
+	});
+
+	test("wake options carry the raw RivetKit context with the encoded configured state type", () => {
+		TestActor.toLayer(
+			(wakeOptions) => {
 				expectTypeOf(
 					wakeOptions.rawRivetkitContext.state,
 				).toEqualTypeOf<{ readonly count: number }>();
@@ -117,7 +161,7 @@ describe("Actor.make(...).toLayer", () => {
 		);
 	});
 
-	test("wake options carry the encoded state type for transformed schemas", () => {
+	test("wake options carry the raw RivetKit context with the encoded transformed state type", () => {
 		TestActor.toLayer(
 			(wakeOptions) => {
 				expectTypeOf(
