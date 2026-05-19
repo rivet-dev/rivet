@@ -524,9 +524,10 @@ const EngineSubnav = () => {
 			<div className="w-full pt-1.5">
 				<div className="flex gap-0.5 mb-2 flex-col">
 					<HeaderLink
-						to="/ns/$namespace/settings"
+						to="/ns/$namespace"
 						className="font-normal"
 						params={nsMatch}
+						search={{ modal: "settings" }}
 						icon={faCog}
 					>
 						Settings
@@ -622,8 +623,9 @@ function CloudSidebarContentInner() {
 						}) ? (
 							<>
 								<HeaderLink
-									to="/orgs/$organization/projects/$project/ns/$namespace/settings"
+									to="/orgs/$organization/projects/$project/ns/$namespace"
 									className="font-normal"
+									search={{ modal: "settings" }}
 									icon={faCog}
 								>
 									Settings

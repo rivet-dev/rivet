@@ -45,11 +45,7 @@ import {
 import { VisibilitySensor } from "../visibility-sensor";
 import { useActorsFilters, useFiltersValue } from "./actor-filters-context";
 import { useActorsLayout } from "./actors-layout-context";
-import {
-	ActorsListHeader,
-	ActorsListRow,
-	ActorsListRowSkeleton,
-} from "./actors-list-row";
+import { ActorsListRow, ActorsListRowSkeleton } from "./actors-list-row";
 import { useActorsView } from "./actors-view-context-provider";
 import { CreateActorButton } from "./create-actor-button";
 import { useDataProvider } from "./data-provider";
@@ -66,7 +62,6 @@ export function ActorsList() {
 			<TopBar />
 			<Page1Poller />
 			<Suspense fallback={<ListSkeleton />}>
-				<ActorsTableHeaderGate />
 				<List viewportRef={viewportRef} />
 				<Pagination />
 			</Suspense>
@@ -306,16 +301,6 @@ function LoadingIndicator() {
 		return <ShimmerLine className="bottom-0" />;
 	}
 	return null;
-}
-
-function ActorsTableHeaderGate() {
-	const { n } = useSearch({ from: "/_context" });
-	const filters = useFiltersValue({ onlyStatic: true });
-	const { data: actors = [] } = useInfiniteQuery(
-		useDataProvider().actorsListQueryOptions({ n, filters }),
-	);
-	if (actors.length === 0) return null;
-	return <ActorsListHeader />;
 }
 
 function List({
@@ -616,34 +601,19 @@ function QuickstartEmptyState({ hasNameFilter }: { hasNameFilter: boolean }) {
 				)}
 
 				<div className="px-8 py-4 border-t border-foreground/10 flex flex-wrap items-center justify-between gap-6">
-					<div className="flex flex-wrap items-center gap-x-8 gap-y-3">
-						<a
-							href={links.gettingStarted.node}
-							target="_blank"
-							rel="noopener noreferrer"
-							className="inline-flex items-center gap-2 text-sm font-medium text-foreground hover:text-foreground/80"
-						>
-							<Icon icon={faBookOpen} className="size-3.5" />
-							Backend quickstart
-							<Icon
-								icon={faArrowUpRightFromSquare}
-								className="size-3 text-muted-foreground"
-							/>
-						</a>
-						<a
-							href={links.gettingStarted.react}
-							target="_blank"
-							rel="noopener noreferrer"
-							className="inline-flex items-center gap-2 text-sm font-medium text-foreground hover:text-foreground/80"
-						>
-							<Icon icon={faBookOpen} className="size-3.5" />
-							React quickstart
-							<Icon
-								icon={faArrowUpRightFromSquare}
-								className="size-3 text-muted-foreground"
-							/>
-						</a>
-					</div>
+					<a
+						href="https://www.rivet.dev/docs/actors/quickstart/"
+						target="_blank"
+						rel="noopener noreferrer"
+						className="group inline-flex items-center gap-2 text-sm font-medium text-foreground hover:text-foreground/80"
+					>
+						<Icon icon={faBookOpen} className="size-3.5" />
+						Quickstart
+						<Icon
+							icon={faArrowUpRightFromSquare}
+							className="size-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity"
+						/>
+					</a>
 					<CreateActorButton
 						variant="default"
 						label={hasNameFilter ? "Create Instance" : undefined}

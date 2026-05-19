@@ -6,9 +6,9 @@ export const Route = createFileRoute(
 	component: () => null,
 	beforeLoad: ({ params }) => {
 		throw redirect({
-			to: "/orgs/$organization/projects/$project/ns/$namespace/settings",
+			to: "/orgs/$organization/projects/$project/ns/$namespace",
 			params,
-			search: true,
+			search: { modal: "settings" },
 		});
 	},
 });

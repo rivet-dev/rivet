@@ -69,9 +69,9 @@ export const Route = createFileRoute(
 )({
 	beforeLoad: async ({ context, params }) => {
 		throw redirect({
-			to: "/orgs/$organization/projects/$project/ns/$namespace/settings",
+			to: "/orgs/$organization/projects/$project/ns/$namespace",
 			params,
-			search: true,
+			search: { modal: "settings" },
 		});
 	},
 	component: RouteComponent,

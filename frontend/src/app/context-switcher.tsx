@@ -2,6 +2,7 @@ import type { Rivet } from "@rivet-gg/cloud";
 import {
 	faChevronDown,
 	faCheck,
+	faGear,
 	faPlus,
 	faPlusCircle,
 	faSlashForward,
@@ -700,6 +701,7 @@ function ProjectList({
 										isCurrent={project === p.name}
 										onHover={() => onHover?.(p.name)}
 										organization={organization}
+										onClose={onClose}
 										onSelect={() => {
 											onClose?.();
 											authClient.organization.setActive({
@@ -711,7 +713,7 @@ function ProjectList({
 													organization: organization,
 													project: p.name,
 												},
-												search: {},
+												search: (old) => ({ ...old }),
 											});
 										}}
 									/>
@@ -767,6 +769,7 @@ function PrefetchedProjectListItem({
 	isCurrent?: boolean;
 	onHover?: () => void;
 	onSelect?: () => void;
+	onClose?: () => void;
 }) {
 	usePrefetchInfiniteQuery({
 		...useCloudDataProvider().currentOrgProjectNamespacesQueryOptions({
@@ -792,12 +795,15 @@ function ProjectListItem({
 	isCurrent,
 	onHover,
 	onSelect,
+	onClose,
 }: Rivet.Project & {
 	onHover?: () => void;
 	onSelect?: () => void;
+	onClose?: () => void;
 	organization: string;
 	isCurrent?: boolean;
 }) {
+	const navigate = useNavigate();
 	return (
 		<SafeHover key={id} offset={40}>
 			<CommandItem
@@ -817,10 +823,34 @@ function ProjectListItem({
 				/>
 				<span className="truncate flex-1">{displayName}</span>
 				{features.billing && (
-					<LazyBillingPlanBadge
-						project={name}
-						organization={organization}
-					/>
+					<button
+						type="button"
+						aria-label={`Billing for ${displayName}`}
+						title="Manage billing"
+						onPointerDown={(e) => e.stopPropagation()}
+						onClick={(e) => {
+							e.stopPropagation();
+							e.preventDefault();
+							onClose?.();
+							authClient.organization.setActive({
+								organizationSlug: organization,
+							});
+							void navigate({
+								to: "/orgs/$organization/projects/$project",
+								params: { organization, project: name },
+								search: { modal: "billing" },
+							});
+						}}
+						// `relative z-10` lifts the badge above SafeHover's
+						// click-eating `::before` corridor, the same trick the
+						// gear icon uses below.
+						className="relative z-10 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+					>
+						<LazyBillingPlanBadge
+							project={name}
+							organization={organization}
+						/>
+					</button>
 				)}
 			</CommandItem>
 		</SafeHover>
@@ -910,7 +940,7 @@ function NamespaceList({
 										<CommandItem
 											value={ns.name}
 											keywords={[ns.displayName, ns.name]}
-											className="static w-full"
+											className="group static w-full"
 											onMouseEnter={() => onHover?.(ns.name)}
 											onFocus={() => onHover?.(ns.name)}
 											onSelect={() => {
@@ -925,6 +955,7 @@ function NamespaceList({
 														project: project,
 														namespace: ns.name,
 													},
+													search: (old) => ({ ...old }),
 												});
 											}}
 										>
@@ -937,9 +968,51 @@ function NamespaceList({
 														: "opacity-0",
 												)}
 											/>
-											<span className="truncate w-full">
+											<span className="truncate flex-1">
 												{ns.displayName}
 											</span>
+											<button
+												type="button"
+												aria-label={`Settings for ${ns.displayName}`}
+												title="Namespace settings"
+												onPointerDown={(e) => {
+													// Stop cmdk's onSelect from firing on the
+													// parent CommandItem so the gear is its
+													// own navigation, not a row click.
+													e.stopPropagation();
+												}}
+												onClick={(e) => {
+													e.stopPropagation();
+													e.preventDefault();
+													onClose?.();
+													authClient.organization.setActive({
+														organizationSlug: organization,
+													});
+													void navigate({
+														to: "/orgs/$organization/projects/$project/ns/$namespace",
+														params: {
+															organization,
+															project,
+															namespace: ns.name,
+														},
+														search: { modal: "settings" },
+													});
+												}}
+												// `relative z-10` is load-bearing: the SafeHover
+												// parent paints a click-eating `::before` corridor
+												// at `z-index: 1` that overlaps this column.
+												// Without lifting the button above it, the
+												// gear is unclickable on hover.
+												className={cn(
+													"relative z-10 ml-2 -my-1 size-6 rounded inline-flex items-center justify-center shrink-0",
+													"text-muted-foreground hover:text-foreground hover:bg-foreground/[0.08]",
+													"opacity-0 transition-opacity",
+													"group-hover:opacity-100 group-data-[selected=true]:opacity-100 focus-visible:opacity-100",
+													"focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+												)}
+											>
+												<Icon icon={faGear} className="size-3" />
+											</button>
 										</CommandItem>
 									</SafeHover>
 								);
