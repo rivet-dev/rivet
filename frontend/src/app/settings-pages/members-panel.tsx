@@ -32,6 +32,12 @@ export function MembersPanel() {
 	const { data: org, isPending } = authClient.useActiveOrganization();
 	const { data: session } = authClient.useSession();
 
+	const viewerRole =
+		org?.members.find((m) => m.userId === session?.user?.id)?.role ??
+		"member";
+	const canManageMembers = viewerRole === "owner" || viewerRole === "admin";
+	const canManageInvitations = canManageMembers;
+
 	const { mutateAsync: inviteMember } = useMutation({
 		mutationFn: async (email: string) => {
 			if (!org) return;
@@ -57,19 +63,23 @@ export function MembersPanel() {
 
 	return (
 		<div className="space-y-4">
-			<div className="flex justify-end">
-				<Button
-					variant="outline"
-					size="sm"
-					startIcon={<Icon icon={faUserPlus} className="size-3.5" />}
-					onClick={() => setShowInvite((v) => !v)}
-				>
-					Invite member
-				</Button>
-			</div>
+			{canManageInvitations ? (
+				<div className="flex justify-end">
+					<Button
+						variant="outline"
+						size="sm"
+						startIcon={
+							<Icon icon={faUserPlus} className="size-3.5" />
+						}
+						onClick={() => setShowInvite((v) => !v)}
+					>
+						Invite member
+					</Button>
+				</div>
+			) : null}
 
 			<AnimatePresence initial={false}>
-				{showInvite ? (
+				{showInvite && canManageInvitations ? (
 					<motion.div
 						key="invite-form"
 						initial={{ height: 0, opacity: 0, marginTop: 0 }}
@@ -113,10 +123,9 @@ export function MembersPanel() {
 			</AnimatePresence>
 
 			<div className="rounded-lg border border-foreground/10 bg-card overflow-hidden">
-				<div className="grid grid-cols-[2fr_2fr_1fr_28px] items-center gap-4 px-4 py-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground border-b border-foreground/10 bg-foreground/[0.02]">
+				<div className="grid grid-cols-[2fr_2fr_28px] items-center gap-4 px-4 py-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground border-b border-foreground/10 bg-foreground/[0.02]">
 					<div>Name</div>
 					<div>Email</div>
-					<div>Role</div>
 					<div />
 				</div>
 
@@ -147,6 +156,8 @@ export function MembersPanel() {
 							email={user?.email ?? ""}
 							role={member.role ?? "member"}
 							isYou={isYou}
+							canManage={canManageMembers}
+							viewerRole={viewerRole}
 							last={isLast}
 						/>
 					);
@@ -160,6 +171,7 @@ export function MembersPanel() {
 							email={inv.email}
 							invitationId={inv.id}
 							organizationId={org.id}
+							canManage={canManageInvitations}
 							last={idx === arr.length - 1}
 						/>
 					))}
@@ -177,6 +189,8 @@ function MemberRow({
 	email,
 	role,
 	isYou,
+	canManage,
+	viewerRole,
 	last,
 }: {
 	memberId: string;
@@ -187,6 +201,8 @@ function MemberRow({
 	email: string;
 	role: string;
 	isYou: boolean;
+	canManage: boolean;
+	viewerRole: string;
 	last?: boolean;
 }) {
 	const initials = name
@@ -195,10 +211,11 @@ function MemberRow({
 		.slice(0, 2)
 		.join("")
 		.toUpperCase();
+	const isOwner = role === "owner";
 	return (
 		<div
 			className={cn(
-				"group grid grid-cols-[2fr_2fr_1fr_28px] items-center gap-4 px-4 py-3 text-sm transition-colors hover:bg-foreground/[0.025]",
+				"group grid grid-cols-[2fr_2fr_28px] items-center gap-4 px-4 py-3 text-sm transition-colors hover:bg-foreground/[0.025]",
 				!last && "border-b border-foreground/10",
 			)}
 		>
@@ -216,20 +233,25 @@ function MemberRow({
 							You
 						</span>
 					) : null}
+					{isOwner ? (
+						<span className="inline-flex items-center rounded-full border border-foreground/15 bg-foreground/[0.06] px-2 py-0.5 text-[11px] font-medium text-foreground">
+							Owner
+						</span>
+					) : null}
 				</div>
 			</div>
 			<div className="text-muted-foreground truncate">{email}</div>
-			<div>
-				<RolePill role={role} />
-			</div>
 			<div className="opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
-				<MemberRowMenu
-					memberId={memberId}
-					userId={userId}
-					organizationId={organizationId}
-					role={role}
-					isSelf={isYou}
-				/>
+				{canManage ? (
+					<MemberRowMenu
+						memberId={memberId}
+						userId={userId}
+						organizationId={organizationId}
+						role={role}
+						isSelf={isYou}
+						viewerRole={viewerRole}
+					/>
+				) : null}
 			</div>
 		</div>
 	);
@@ -241,12 +263,14 @@ function MemberRowMenu({
 	organizationId,
 	role,
 	isSelf,
+	viewerRole,
 }: {
 	memberId: string;
 	userId: string;
 	organizationId: string;
 	role: string;
 	isSelf: boolean;
+	viewerRole: string;
 }) {
 	const invalidate = () =>
 		queryClient.invalidateQueries({ queryKey: ["organizations"] });
@@ -284,6 +308,7 @@ function MemberRowMenu({
 
 	const isOwner = role === "owner";
 	const isAdmin = role === "admin";
+	const viewerIsOwner = viewerRole === "owner";
 	const disabled = isUpdatingRole || isRemoving;
 
 	if (isSelf) {
@@ -317,7 +342,7 @@ function MemberRowMenu({
 				</Button>
 			</DropdownMenuTrigger>
 			<DropdownMenuContent align="end" className="min-w-[10rem]">
-				{!isOwner ? (
+				{viewerIsOwner && !isOwner ? (
 					<DropdownMenuItem onSelect={() => setRole("owner")}>
 						Promote to owner
 					</DropdownMenuItem>
@@ -327,43 +352,24 @@ function MemberRowMenu({
 						Promote to admin
 					</DropdownMenuItem>
 				) : null}
-				{isOwner || isAdmin ? (
+				{isAdmin ? (
 					<DropdownMenuItem onSelect={() => setRole("member")}>
 						Demote to member
 					</DropdownMenuItem>
 				) : null}
-				<DropdownMenuSeparator />
-				<DropdownMenuItem
-					onSelect={() => remove()}
-					className="text-destructive focus:text-destructive"
-				>
-					Remove from organization
-				</DropdownMenuItem>
+				{!isOwner ? (
+					<>
+						<DropdownMenuSeparator />
+						<DropdownMenuItem
+							onSelect={() => remove()}
+							className="text-destructive focus:text-destructive"
+						>
+							Remove from organization
+						</DropdownMenuItem>
+					</>
+				) : null}
 			</DropdownMenuContent>
 		</DropdownMenu>
-	);
-}
-
-function RolePill({ role }: { role: string }) {
-	const styles = (() => {
-		switch (role) {
-			case "owner":
-				return "border-primary/20 bg-primary/10 text-primary";
-			case "admin":
-				return "border-foreground/15 bg-foreground/[0.06] text-foreground";
-			default:
-				return "border-foreground/10 bg-foreground/[0.03] text-muted-foreground";
-		}
-	})();
-	return (
-		<span
-			className={cn(
-				"inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium capitalize",
-				styles,
-			)}
-		>
-			{role}
-		</span>
 	);
 }
 
@@ -371,11 +377,13 @@ function InvitationRow({
 	email,
 	invitationId,
 	organizationId,
+	canManage,
 	last,
 }: {
 	email: string;
 	invitationId: string;
 	organizationId: string;
+	canManage: boolean;
 	last?: boolean;
 }) {
 	const { mutate: resend, isPending: isResendPending } = useMutation({
@@ -405,7 +413,7 @@ function InvitationRow({
 	return (
 		<div
 			className={cn(
-				"group grid grid-cols-[2fr_2fr_1fr_28px] items-center gap-4 px-4 py-3 text-sm transition-colors hover:bg-foreground/[0.025]",
+				"group grid grid-cols-[2fr_2fr_28px] items-center gap-4 px-4 py-3 text-sm transition-colors hover:bg-foreground/[0.025]",
 				!last && "border-b border-foreground/10",
 			)}
 		>
@@ -415,46 +423,55 @@ function InvitationRow({
 						{initials}
 					</AvatarFallback>
 				</Avatar>
-				<span className="text-muted-foreground italic">Invited</span>
+				<div className="flex items-center gap-1.5 min-w-0">
+					<span className="text-muted-foreground italic">
+						Invited
+					</span>
+					<span className="inline-flex items-center rounded-full border border-foreground/10 bg-foreground/[0.03] px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+						Pending
+					</span>
+				</div>
 			</div>
 			<div className="text-muted-foreground truncate">{email}</div>
-			<div>
-				<span className="inline-flex items-center rounded-full border border-foreground/10 bg-foreground/[0.03] px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-					Pending
-				</span>
-			</div>
 			<div className="flex items-center gap-1 justify-end opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
-				<WithTooltip
-					content="Resend"
-					delayDuration={0}
-					trigger={
-						<Button
-							variant="ghost"
-							size="icon-sm"
-							isLoading={isResendPending}
-							onClick={() => resend()}
-						>
-							<Icon icon={faPaperPlaneTop} className="size-3" />
-						</Button>
-					}
-				/>
-				<WithTooltip
-					content="Revoke"
-					delayDuration={0}
-					trigger={
-						<Button
-							variant="ghost"
-							size="icon-sm"
-							isLoading={isRevokePending}
-							onClick={() => revoke()}
-						>
-							<Icon
-								icon={faTrash}
-								className="size-3 text-destructive"
-							/>
-						</Button>
-					}
-				/>
+				{canManage ? (
+					<>
+						<WithTooltip
+							content="Resend"
+							delayDuration={0}
+							trigger={
+								<Button
+									variant="ghost"
+									size="icon-sm"
+									isLoading={isResendPending}
+									onClick={() => resend()}
+								>
+									<Icon
+										icon={faPaperPlaneTop}
+										className="size-3"
+									/>
+								</Button>
+							}
+						/>
+						<WithTooltip
+							content="Revoke"
+							delayDuration={0}
+							trigger={
+								<Button
+									variant="ghost"
+									size="icon-sm"
+									isLoading={isRevokePending}
+									onClick={() => revoke()}
+								>
+									<Icon
+										icon={faTrash}
+										className="size-3 text-destructive"
+									/>
+								</Button>
+							}
+						/>
+					</>
+				) : null}
 			</div>
 		</div>
 	);
@@ -462,13 +479,12 @@ function InvitationRow({
 
 function MemberRowSkeleton() {
 	return (
-		<div className="grid grid-cols-[2fr_2fr_1fr_28px] items-center gap-4 px-4 py-3 border-b border-foreground/10">
+		<div className="grid grid-cols-[2fr_2fr_28px] items-center gap-4 px-4 py-3 border-b border-foreground/10">
 			<div className="flex items-center gap-2.5">
 				<Skeleton className="size-7 rounded-full" />
 				<Skeleton className="h-4 w-32" />
 			</div>
 			<Skeleton className="h-4 w-40" />
-			<Skeleton className="h-4 w-16" />
 			<div />
 		</div>
 	);
