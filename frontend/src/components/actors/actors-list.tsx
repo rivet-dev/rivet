@@ -45,7 +45,11 @@ import {
 import { VisibilitySensor } from "../visibility-sensor";
 import { useActorsFilters, useFiltersValue } from "./actor-filters-context";
 import { useActorsLayout } from "./actors-layout-context";
-import { ActorsListRow, ActorsListRowSkeleton } from "./actors-list-row";
+import {
+	ActorsListHeader,
+	ActorsListRow,
+	ActorsListRowSkeleton,
+} from "./actors-list-row";
 import { useActorsView } from "./actors-view-context-provider";
 import { CreateActorButton } from "./create-actor-button";
 import { useDataProvider } from "./data-provider";
@@ -62,6 +66,7 @@ export function ActorsList() {
 			<TopBar />
 			<Page1Poller />
 			<Suspense fallback={<ListSkeleton />}>
+				<ActorsTableHeaderGate />
 				<List viewportRef={viewportRef} />
 				<Pagination />
 			</Suspense>
@@ -301,6 +306,16 @@ function LoadingIndicator() {
 		return <ShimmerLine className="bottom-0" />;
 	}
 	return null;
+}
+
+function ActorsTableHeaderGate() {
+	const { n } = useSearch({ from: "/_context" });
+	const filters = useFiltersValue({ onlyStatic: true });
+	const { data: actors = [] } = useInfiniteQuery(
+		useDataProvider().actorsListQueryOptions({ n, filters }),
+	);
+	if (actors.length === 0) return null;
+	return <ActorsListHeader />;
 }
 
 function List({
