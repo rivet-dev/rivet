@@ -14,6 +14,7 @@ import {
 } from "@rivet-gg/icons";
 import { useQuery } from "@tanstack/react-query";
 import { useMatchRoute, useNavigate, useParams, useRouter } from "@tanstack/react-router";
+import { useState } from "react";
 import {
 	Avatar,
 	AvatarFallback,
@@ -47,6 +48,7 @@ export function UserDropdown({ children }: { children?: React.ReactNode }) {
 	const navigate = useNavigate();
 	const match = useMatchRoute();
 	const { theme, toggle: toggleTheme } = useTheme();
+	const [open, setOpen] = useState(false);
 
 	const isMatchingProjectRoute = match({
 		to: "/orgs/$organization/projects/$project",
@@ -67,7 +69,7 @@ export function UserDropdown({ children }: { children?: React.ReactNode }) {
 	};
 
 	return (
-		<DropdownMenu>
+		<DropdownMenu open={open} onOpenChange={setOpen}>
 			<DropdownMenuTrigger asChild={!params.organization || !!children}>
 				{children ||
 					(params.organization ? (
@@ -145,6 +147,9 @@ export function UserDropdown({ children }: { children?: React.ReactNode }) {
 							>
 								<OrganizationSwitcher
 									value={params.organization}
+									onSwitch={() => {
+										setOpen(false);
+									}}
 								/>
 							</DropdownMenuSubContent>
 						</DropdownMenuPortal>
@@ -237,11 +242,18 @@ function Preview({ org }: { org: string }) {
 	);
 }
 
-function OrganizationSwitcher({ value }: { value: string | undefined }) {
+function OrganizationSwitcher({
+	value,
+	onSwitch,
+}: {
+	value: string | undefined;
+	onSwitch?: () => void;
+}) {
 	const { data: organizations, isPending: isLoading } =
 		authClient.useListOrganizations();
 
 	const navigate = useNavigate();
+	const router = useRouter();
 
 	return (
 		<>
@@ -262,19 +274,26 @@ function OrganizationSwitcher({ value }: { value: string | undefined }) {
 				<DropdownMenuCheckboxItem
 					key={org.id}
 					checked={org.slug === value}
-					onSelect={() => {
+					onSelect={async () => {
 						// Don't call `setActive` here — the org route's
 						// `beforeLoad` handles it once based on the URL params.
 						// Calling it eagerly races with the route transition
 						// and fires Better Auth updates against components that
 						// are mounting/unmounting, causing the
 						// "state update on unmounted component" warning.
-						navigate({
+						onSwitch?.();
+						await navigate({
 							to: `/orgs/$organization`,
 							params: {
 								organization: org.slug,
 							},
 						});
+						// Force a fresh load of the new org's matches.
+						// Without this, a route stuck in an error state
+						// (e.g. landing here from a deleted org) keeps
+						// rendering its errorComponent because the new
+						// match reuses the prior failed loader state.
+						await router.invalidate();
 					}}
 				>
 					<Avatar className="size-6 mr-2">
