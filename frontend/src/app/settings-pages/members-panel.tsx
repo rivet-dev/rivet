@@ -1,5 +1,6 @@
 import { faPaperPlaneTop, faTrash, faUserPlus, Icon } from "@rivet-gg/icons";
 import { useMutation } from "@tanstack/react-query";
+import { AnimatePresence, motion } from "framer-motion";
 import { useState } from "react";
 import * as InviteMemberForm from "@/app/forms/invite-member-form";
 import {
@@ -55,34 +56,49 @@ export function MembersPanel() {
 				</Button>
 			</div>
 
-			{showInvite ? (
-				<div className="rounded-lg border border-foreground/10 bg-card p-3">
-					<InviteMemberForm.Form
-						defaultValues={{ email: "" }}
-						mode="onSubmit"
-						revalidateMode="onSubmit"
-						onSubmit={async ({ email }, form) => {
-							try {
-								await inviteMember(email);
-								form.reset();
-								setShowInvite(false);
-							} catch {
-								form.setError("root", {
-									message: "Failed to send invitation.",
-								});
-							}
+			<AnimatePresence initial={false}>
+				{showInvite ? (
+					<motion.div
+						key="invite-form"
+						initial={{ height: 0, opacity: 0, marginTop: 0 }}
+						animate={{ height: "auto", opacity: 1, marginTop: 16 }}
+						exit={{ height: 0, opacity: 0, marginTop: 0 }}
+						transition={{
+							height: { duration: 0.22, ease: "easeInOut" },
+							marginTop: { duration: 0.22, ease: "easeInOut" },
+							opacity: { duration: 0.15, ease: "easeInOut" },
 						}}
+						className="overflow-hidden"
 					>
-						<div className="grid grid-cols-[1fr_auto] gap-2 items-start">
-							<InviteMemberForm.EmailField />
-							<InviteMemberForm.Submit>
-								Invite
-							</InviteMemberForm.Submit>
+						<div className="rounded-lg border border-foreground/10 bg-card p-3">
+							<InviteMemberForm.Form
+								defaultValues={{ email: "" }}
+								mode="onSubmit"
+								revalidateMode="onSubmit"
+								onSubmit={async ({ email }, form) => {
+									try {
+										await inviteMember(email);
+										form.reset();
+										setShowInvite(false);
+									} catch {
+										form.setError("root", {
+											message: "Failed to send invitation.",
+										});
+									}
+								}}
+							>
+								<div className="grid grid-cols-[1fr_auto] gap-2 items-start">
+									<InviteMemberForm.EmailField />
+									<InviteMemberForm.Submit>
+										Invite
+									</InviteMemberForm.Submit>
+								</div>
+								<InviteMemberForm.RootError />
+							</InviteMemberForm.Form>
 						</div>
-						<InviteMemberForm.RootError />
-					</InviteMemberForm.Form>
-				</div>
-			) : null}
+					</motion.div>
+				) : null}
+			</AnimatePresence>
 
 			<div className="rounded-lg border border-foreground/10 bg-card overflow-hidden">
 				<div className="grid grid-cols-[2fr_2fr_1fr_auto] items-center gap-4 px-4 py-2.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground border-b border-foreground/10">

@@ -56,6 +56,7 @@ export const ACTORS_FILTERS_DEFINITIONS = {
 		category: "display",
 		ephemeral: true,
 		defaultValue: ["1"],
+		feature: true,
 	},
 } satisfies FilterDefinitions;
 

@@ -41,7 +41,7 @@ export function ActorGeneral({ actorId }: ActorGeneralProps) {
 				</p>
 			<Flex
 				direction="col"
-				className="text-xs [&_dt]:py-2 [&_dd]:py-2 [&_dt]:border-b [&_dd]:border-b [&_dt]:border-foreground/[0.06] [&_dd]:border-foreground/[0.06] [&_dt:last-of-type]:border-0 [&_dd:last-of-type]:border-0 [&_dt]:text-muted-foreground [&_dt]:font-normal [&_dd]:text-foreground"
+				className="text-xs [&_dl]:items-stretch [&_dt]:py-2 [&_dd]:py-2 [&_dt]:border-b [&_dd]:border-b [&_dt]:border-foreground/[0.06] [&_dd]:border-foreground/[0.06] [&_dt:last-of-type]:border-0 [&_dd:last-of-type]:border-0 [&_dt]:text-muted-foreground [&_dt]:font-normal [&_dd]:text-foreground"
 			>
 				<Dl>
 					<Dt>Region</Dt>

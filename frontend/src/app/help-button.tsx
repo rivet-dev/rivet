@@ -1,4 +1,5 @@
 import { faArrowUpRightFromSquare, faLifeRing, Icon } from "@rivet-gg/icons";
+import { useNavigate, useSearch } from "@tanstack/react-router";
 import { useState } from "react";
 import {
 	Button,
@@ -28,7 +29,18 @@ const IMPACT_LABELS: Record<Impact, string> = {
 };
 
 export function HelpButton({ source = "web" }: { source?: string }) {
-	const [open, setOpen] = useState(false);
+	const navigate = useNavigate();
+	const search = useSearch({ strict: false }) as Record<string, unknown>;
+	const open = search.modal === "help";
+	const setOpen = (next: boolean) => {
+		void navigate({
+			to: ".",
+			search: (prev) => ({
+				...(prev as Record<string, unknown>),
+				modal: next ? "help" : undefined,
+			}),
+		});
+	};
 	const [subject, setSubject] = useState("");
 	const [message, setMessage] = useState("");
 	const [impact, setImpact] = useState<Impact>("general");

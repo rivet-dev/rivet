@@ -14,7 +14,7 @@ import {
 	useQuery,
 	useSuspenseQuery,
 } from "@tanstack/react-query";
-import { useRouteContext, useSearch } from "@tanstack/react-router";
+import { useNavigate, useRouteContext, useSearch } from "@tanstack/react-router";
 import {
 	createContext,
 	type ReactNode,
@@ -24,7 +24,6 @@ import {
 } from "react";
 import { match, P } from "ts-pattern";
 import { z } from "zod";
-import { HelpDropdown } from "@/app/help-dropdown";
 import { isRivetApiError } from "@/lib/errors";
 import { features } from "@/lib/features";
 import { DiscreteCopyButton } from "../copy-area";
@@ -145,16 +144,7 @@ function UnavailableInfo({
 
 				<div className="flex gap-4 items-center mt-4">
 					<WakeUpActorButton actorId={actorId} />
-
-					<HelpDropdown>
-						<Button
-							size="sm"
-							variant="outline"
-							startIcon={<Icon icon={faQuestionCircle} />}
-						>
-							Need help?
-						</Button>
-					</HelpDropdown>
+					<NeedHelpButton />
 				</div>
 			</Info>
 		))
@@ -217,17 +207,31 @@ function CrashLoopActor({ actorId }: { actorId: ActorId }) {
 
 			<div className="flex gap-4 items-center mt-4">
 				{!rescheduleInFuture && <WakeUpActorButton actorId={actorId} />}
-				<HelpDropdown>
-					<Button
-						size="sm"
-						variant="outline"
-						startIcon={<Icon icon={faQuestionCircle} />}
-					>
-						Need help?
-					</Button>
-				</HelpDropdown>
+				<NeedHelpButton />
 			</div>
 		</Info>
+	);
+}
+
+function NeedHelpButton() {
+	const navigate = useNavigate();
+	return (
+		<Button
+			size="sm"
+			variant="outline"
+			startIcon={<Icon icon={faQuestionCircle} />}
+			onClick={() => {
+				void navigate({
+					to: ".",
+					search: (prev) => ({
+						...(prev as Record<string, unknown>),
+						modal: "help",
+					}),
+				});
+			}}
+		>
+			Need help?
+		</Button>
 	);
 }
 

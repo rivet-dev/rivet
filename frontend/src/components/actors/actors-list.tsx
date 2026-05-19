@@ -16,18 +16,25 @@ import {
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import {
+	type RefObject,
 	Suspense,
 	useCallback,
 	useEffect,
 	useRef,
 	useState,
-	type RefObject,
 } from "react";
 import { useLocalStorage } from "usehooks-ts";
 import { RECORDS_PER_PAGE } from "@/app/data-providers/default-data-provider";
 import {
 	Button,
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
 	FiltersDisplay,
+	Input,
 	ls,
 	type OnFiltersChange,
 	ScrollArea,
@@ -114,6 +121,8 @@ function TopBar() {
 				<ActorNameLabel />
 				{showInstanceTools ? (
 					<div className="ml-auto flex items-center gap-1 shrink-0">
+						<Display />
+						<InstanceSearchTrigger />
 						<CreateActorButton iconOnly label="Create Instance" />
 					</div>
 				) : null}
@@ -133,26 +142,60 @@ function TopBar() {
 					/>
 				) : null}
 			</div>
-			{showInstanceTools ? (
-				<div className="flex items-center pl-1.5 pr-2.5 gap-2 h-10 border-t">
-					<InstanceSearchInput />
-					<Display />
-				</div>
-			) : null}
 			<LoadingIndicator />
 		</div>
 	);
 }
 
-function InstanceSearchInput() {
+function InstanceSearchTrigger() {
+	const [open, setOpen] = useState(false);
+
+	useEffect(() => {
+		const handler = (e: KeyboardEvent) => {
+			const isMod = e.metaKey || e.ctrlKey;
+			if (!isMod || e.key.toLowerCase() !== "k") return;
+			const target = e.target as HTMLElement | null;
+			if (target?.isContentEditable) return;
+			e.preventDefault();
+			setOpen(true);
+		};
+		window.addEventListener("keydown", handler);
+		return () => window.removeEventListener("keydown", handler);
+	}, []);
+
+	return (
+		<>
+			<WithTooltip
+				trigger={
+					<Button
+						variant="outline"
+						size="icon-sm"
+						onClick={() => setOpen(true)}
+						aria-label="Search Actor instance ID"
+					>
+						<Icon icon={faMagnifyingGlass} />
+					</Button>
+				}
+				content="Search Actor instance ID (⌘K)"
+			/>
+			<InstanceSearchDialog open={open} onOpenChange={setOpen} />
+		</>
+	);
+}
+
+function InstanceSearchDialog({
+	open,
+	onOpenChange,
+}: {
+	open: boolean;
+	onOpenChange: (open: boolean) => void;
+}) {
 	const navigate = useNavigate();
 	const queryClient = useQueryClient();
 	const dataProvider = useDataProvider();
 
 	const [value, setValue] = useState("");
 	const [isPending, setIsPending] = useState(false);
-
-	const placeholder = "Search Actor instance ID…";
 
 	const handleSubmit = async () => {
 		const trimmed = value.trim();
@@ -174,28 +217,51 @@ function InstanceSearchInput() {
 		} finally {
 			setValue("");
 			setIsPending(false);
+			onOpenChange(false);
 		}
 	};
 
 	return (
-		<div className="relative flex-1 min-w-0">
-			<Icon
-				icon={faMagnifyingGlass}
-				className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground size-3.5 pointer-events-none"
-			/>
-			<input
-				type="text"
-				value={value}
-				placeholder={placeholder}
-				disabled={isPending}
-				onChange={(e) => setValue(e.target.value)}
-				onKeyDown={(e) => {
-					if (e.key === "Enter") void handleSubmit();
-					if (e.key === "Escape") setValue("");
-				}}
-				className="w-full h-7 rounded-md bg-foreground/[0.04] text-xs pl-8 pr-2 placeholder:text-muted-foreground focus:outline-none focus:bg-foreground/[0.06] transition-colors"
-			/>
-		</div>
+		<Dialog
+			open={open}
+			onOpenChange={(next) => {
+				if (!next) setValue("");
+				onOpenChange(next);
+			}}
+		>
+			<DialogContent>
+				<DialogHeader>
+					<DialogTitle>Search Actor instance</DialogTitle>
+					<DialogDescription>
+						Enter an Actor instance ID or key
+					</DialogDescription>
+				</DialogHeader>
+				<Input
+					type="text"
+					value={value}
+					placeholder="Actor instance ID…"
+					disabled={isPending}
+					autoFocus
+					onChange={(e) => setValue(e.target.value)}
+					onKeyDown={(e) => {
+						if (e.key === "Enter") {
+							e.preventDefault();
+							void handleSubmit();
+						}
+					}}
+				/>
+				<DialogFooter>
+					<Button
+						type="button"
+						isLoading={isPending}
+						disabled={!value.trim()}
+						onClick={() => void handleSubmit()}
+					>
+						Search
+					</Button>
+				</DialogFooter>
+			</DialogContent>
+		</Dialog>
 	);
 }
 

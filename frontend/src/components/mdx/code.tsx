@@ -60,11 +60,7 @@ export function CodeGroup({ children, className }: CodeGroupProps) {
 							{Children.map(children, (child) => {
 								const idx = getChildIdx(child);
 								return (
-									<TabsTrigger
-										key={idx}
-										value={idx}
-										className="data-[state=active]:!text-white"
-									>
+									<TabsTrigger key={idx} value={idx}>
 										{child.props.title ||
 											languageNames[
 												child.props.language

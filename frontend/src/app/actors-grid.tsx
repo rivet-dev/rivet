@@ -9,6 +9,7 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { lazy, Suspense, type ReactNode } from "react";
 import { Button, cn, H1, ScrollArea, SmallText } from "@/components";
 import { useDataProvider } from "@/components/actors";
+import { NoProvidersAlert } from "@/components/actors/no-providers-alert";
 
 const emojiRegex =
 	/[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]|[\u{1F600}-\u{1F64F}]|[\u{1F680}-\u{1F6FF}]|[\u{1F1E0}-\u{1F1FF}]/u;
@@ -112,6 +113,17 @@ export function ActorsGrid({
 	const { data, isLoading } = useInfiniteQuery(
 		dataProvider.buildsQueryOptions(),
 	);
+	const { data: runnerNamesCount = 0 } = useInfiniteQuery({
+		...dataProvider.runnerNamesQueryOptions(),
+		select: (data) => data.pages.flatMap((page) => page.names).length,
+	});
+	const { data: runnerConfigsCount = 0 } = useInfiniteQuery({
+		...dataProvider.runnerConfigsQueryOptions(),
+		select: (data) =>
+			data.pages.flatMap((page) => Object.keys(page.runnerConfigs))
+				.length,
+	});
+	const hasRunners = runnerNamesCount + runnerConfigsCount > 0;
 
 	const builds = data ?? [];
 	const sorted = builds.toSorted((a, b) => a.id.localeCompare(b.id));
@@ -151,28 +163,32 @@ export function ActorsGrid({
 				</div>
 
 				{!isLoading && builds.length === 0 ? (
-					<div className="flex flex-col items-center gap-3 rounded-md border border-dashed bg-card/50 px-6 py-10 text-center">
-						<H1 className="text-base">No actors yet</H1>
-						<SmallText className="text-muted-foreground max-w-md">
-							Deploy code that registers an actor to see it here.
-						</SmallText>
-						<Button
-							variant="default"
-							size="sm"
-							startIcon={<Icon icon={faPlus} />}
-							onClick={() => {
-								navigate({
-									to: ".",
-									search: (old) => ({
-										...old,
-										modal: "create-actor",
-									}),
-								});
-							}}
-						>
-							Create Actor
-						</Button>
-					</div>
+					!hasRunners ? (
+						<NoProvidersAlert variant="connect" />
+					) : (
+						<div className="flex flex-col items-center gap-3 rounded-md border border-dashed bg-card/50 px-6 py-10 text-center">
+							<H1 className="text-base">No actors yet</H1>
+							<SmallText className="text-muted-foreground max-w-md">
+								Deploy code that registers an actor to see it here.
+							</SmallText>
+							<Button
+								variant="default"
+								size="sm"
+								startIcon={<Icon icon={faPlus} />}
+								onClick={() => {
+									navigate({
+										to: ".",
+										search: (old) => ({
+											...old,
+											modal: "create-actor",
+										}),
+									});
+								}}
+							>
+								Create Actor
+							</Button>
+						</div>
+					)
 				) : (
 					<div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
 					{sorted.map((build) => {
