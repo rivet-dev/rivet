@@ -11,6 +11,7 @@ import { NotFoundCard } from "@/app/not-found-card";
 import { RouteError } from "@/app/route-error";
 import { RouteLayout } from "@/app/route-layout";
 import { useDialog } from "@/app/use-dialog";
+import { CreateActorSheet } from "@/components/actors/dialogs/create-actor-sheet";
 import { FullscreenLoading, ls } from "@/components";
 import { deriveProviderFromMetadata } from "@/lib/data";
 import { posthog } from "@/lib/posthog";
@@ -206,24 +207,20 @@ function CloudNamespaceModals() {
 	const DeleteProjectDialog = useDialog.DeleteProject.Dialog;
 	const UpsertDeploymentDialog = useDialog.UpsertDeployment.Dialog;
 
-	const CreateActorDialog = useDialog.CreateActor.Dialog;
-
 	return (
 		<>
-			<CreateActorDialog
-				dialogProps={{
-					open: search?.modal === "create-actor",
-					onOpenChange: (value) => {
-						if (!value) {
-							return navigate({
-								to: ".",
-								search: (old) => ({
-									...old,
-									modal: undefined,
-								}),
-							});
-						}
-					},
+			<CreateActorSheet
+				open={search?.modal === "create-actor"}
+				onOpenChange={(value) => {
+					if (!value) {
+						return navigate({
+							to: ".",
+							search: (old) => ({
+								...old,
+								modal: undefined,
+							}),
+						});
+					}
 				}}
 			/>
 			<UpsertDeploymentDialog
