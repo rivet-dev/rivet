@@ -517,6 +517,7 @@ function ActorSegmentPopover({ currentBuildId }: { currentBuildId: string }) {
 														>),
 														actorId: undefined,
 														actorKey: undefined,
+														settings: undefined,
 														n: [build.id],
 													}),
 												});
@@ -1159,6 +1160,7 @@ function ActorsList({
 												...(old as Record<string, unknown>),
 												actorId: undefined,
 												actorKey: undefined,
+												settings: undefined,
 												n: [actor.id],
 											}),
 										});
