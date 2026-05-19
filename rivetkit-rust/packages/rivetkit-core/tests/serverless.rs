@@ -66,9 +66,9 @@ mod moved_tests {
 		let health = runtime
 			.handle_request(test_request("GET", "/api/rivet/health"))
 			.await;
-		assert_eq!(health.status, 200);
+		assert_eq!(health.status, 503);
 		let health_body = read_body(health).await;
-		assert_eq!(health_body["status"], "ok");
+		assert_eq!(health_body["status"], "engine_ping_stale");
 		assert_eq!(health_body["runtime"], "rivetkit");
 		assert_eq!(health_body["version"], "test-version");
 
