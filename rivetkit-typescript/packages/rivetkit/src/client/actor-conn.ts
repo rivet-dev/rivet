@@ -93,8 +93,6 @@ interface EventSubscriptions<Args extends Array<unknown>> {
 	once: boolean;
 }
 
-const DEFAULT_MAX_INCOMING_MESSAGE_SIZE = 65_536;
-
 /**
  * A function that unsubscribes from an event.
  *
@@ -1280,34 +1278,8 @@ export class ActorConnRaw {
 							}
 						},
 					);
-					const serializedLength = messageLength(messageSerialized);
-					if (
-						serializedLength > DEFAULT_MAX_INCOMING_MESSAGE_SIZE &&
-						message.body.tag === "ActionRequest"
-					) {
-						const actionId = Number(message.body.val.id);
-						const inFlight = this.#takeActionInFlight(actionId);
-						const error = new errors.ActorError(
-							"message",
-							"incoming_too_long",
-							"Incoming message too long",
-							{
-								maxSize: DEFAULT_MAX_INCOMING_MESSAGE_SIZE,
-								actualSize: serializedLength,
-							},
-						);
-						logger().warn({
-							msg: "rejecting oversized connection action request",
-							actionId,
-							actionName: inFlight.name,
-							actualSize: serializedLength,
-							maxSize: DEFAULT_MAX_INCOMING_MESSAGE_SIZE,
-						});
-						inFlight.reject(error);
-						this.#dispatchActorError(error);
-						return;
-					}
 					this.#websocket.send(messageSerialized);
+					const serializedLength = messageLength(messageSerialized);
 					logger().trace({
 						msg: "sent websocket message",
 						len: serializedLength,
