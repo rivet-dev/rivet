@@ -117,6 +117,19 @@ describe("Actor.make(...).toLayer", () => {
 				GetContext: () => Effect.void,
 			};
 		});
+
+		TestActor.toLayer((wakeOptions) => {
+			// @ts-expect-error: actors without a state option do not expose wakeOptions.state
+			wakeOptions.state;
+
+			expectTypeOf(
+				wakeOptions.rawRivetkitContext.state,
+			).toEqualTypeOf<never>();
+
+			return {
+				GetContext: () => Effect.void,
+			};
+		}, {});
 	});
 
 	test("wake options carry the configured state type", () => {

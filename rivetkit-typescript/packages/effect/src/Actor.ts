@@ -57,6 +57,21 @@ export type Options<
 	readonly db?: Database;
 };
 
+type StatelessOptions<
+	Database extends RivetkitDb.AnyDatabaseProvider = undefined,
+> = Readonly<RivetkitActorOptions> & {
+	readonly state?: never;
+	readonly db?: Database;
+};
+
+type StatefulOptions<
+	State extends ActorState.AnyWithProps,
+	Database extends RivetkitDb.AnyDatabaseProvider = undefined,
+> = Readonly<RivetkitActorOptions> & {
+	readonly state: State;
+	readonly db?: Database;
+};
+
 const splitOptions = <
 	State extends ActorState.AnyWithProps,
 	Database extends RivetkitDb.AnyDatabaseProvider,
@@ -290,6 +305,20 @@ export interface Actor<
 
 	toLayer<
 		ActionHandlers extends ActionHandlersFrom<Actions>,
+		Database extends RivetkitDb.AnyDatabaseProvider = undefined,
+		R = never,
+		RX = never,
+	>(
+		wake: Wake<ActionHandlers, R, RX, WakeOptionsFor<never, Database>>,
+		options: StatelessOptions<Database>,
+	): Layer.Layer<
+		never,
+		never,
+		ToLayerRequirements<Actions, ActionHandlers, never, R, RX>
+	>;
+
+	toLayer<
+		ActionHandlers extends ActionHandlersFrom<Actions>,
 		R = never,
 		RX = never,
 	>(
@@ -308,7 +337,7 @@ export interface Actor<
 		RX = never,
 	>(
 		wake: Wake<ActionHandlers, R, RX, WakeOptionsFor<State, Database>>,
-		options: Options<State, Database>,
+		options: StatefulOptions<State, Database>,
 	): Layer.Layer<
 		never,
 		never,
