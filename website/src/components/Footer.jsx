@@ -139,7 +139,7 @@ function SmallPrint() {
 				<div className="col-span-1 min-[440px]:col-span-2 md:col-span-4 lg:col-span-1 space-y-6">
 					<img className="h-8 w-8" src={imgLogo.src} alt="Rivet" />
 					<p className="text-sm text-zinc-500">
-						Infrastructure for software that thinks
+						Infrastructure for the agentic era
 					</p>
 					<div className="flex gap-4">
 						{footer.social.map((item) => (
