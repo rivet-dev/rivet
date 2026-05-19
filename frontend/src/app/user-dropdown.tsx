@@ -92,7 +92,7 @@ export function UserDropdown({ children }: { children?: React.ReactNode }) {
 						});
 					}}
 				>
-					<Icon icon={faUserCircle} className="mr-2 size-4" />
+					<Icon icon={faUserCircle} className="mr-2 size-3.5 text-muted-foreground" />
 					Profile
 				</DropdownMenuItem>
 				<DropdownMenuItem
@@ -106,12 +106,12 @@ export function UserDropdown({ children }: { children?: React.ReactNode }) {
 						});
 					}}
 				>
-					<Icon icon={faGear} className="mr-2 size-4" />
+					<Icon icon={faGear} className="mr-2 size-3.5 text-muted-foreground" />
 					Settings
 				</DropdownMenuItem>
 				{isMatchingProjectRoute ? (
 					<DropdownMenuItem onSelect={goToBilling}>
-						<Icon icon={faCreditCard} className="mr-2 size-4" />
+						<Icon icon={faCreditCard} className="mr-2 size-3.5 text-muted-foreground" />
 						Billing
 					</DropdownMenuItem>
 				) : null}
@@ -127,7 +127,7 @@ export function UserDropdown({ children }: { children?: React.ReactNode }) {
 							});
 						}}
 					>
-						<Icon icon={faUsers} className="mr-2 size-4" />
+						<Icon icon={faUsers} className="mr-2 size-3.5 text-muted-foreground" />
 						Members
 					</DropdownMenuItem>
 				) : null}
@@ -135,7 +135,7 @@ export function UserDropdown({ children }: { children?: React.ReactNode }) {
 				{params.organization ? (
 					<DropdownMenuSub>
 						<DropdownMenuSubTrigger>
-							<Icon icon={faRightLeft} className="mr-2 size-4" />
+							<Icon icon={faRightLeft} className="mr-2 size-3.5 text-muted-foreground" />
 							Switch Organization
 						</DropdownMenuSubTrigger>
 						<DropdownMenuPortal>
@@ -159,7 +159,7 @@ export function UserDropdown({ children }: { children?: React.ReactNode }) {
 						);
 					}}
 				>
-					<Icon icon={faSparkles} className="mr-2 size-4" />
+					<Icon icon={faSparkles} className="mr-2 size-3.5 text-muted-foreground" />
 					What's new
 				</DropdownMenuItem>
 				<DropdownMenuItem
@@ -170,7 +170,7 @@ export function UserDropdown({ children }: { children?: React.ReactNode }) {
 				>
 					<Icon
 						icon={theme === "dark" ? faSun : faMoon}
-						className="mr-2 size-4"
+						className="mr-2 size-3.5 text-muted-foreground"
 					/>
 					{theme === "dark" ? "Light mode" : "Dark mode"}
 				</DropdownMenuItem>
@@ -183,7 +183,7 @@ export function UserDropdown({ children }: { children?: React.ReactNode }) {
 						return navigate({ to: "/login" });
 					}}
 				>
-					<Icon icon={faArrowRightFromBracket} className="mr-2 size-4" />
+					<Icon icon={faArrowRightFromBracket} className="mr-2 size-3.5 text-muted-foreground" />
 					Sign out
 				</DropdownMenuItem>
 			</DropdownMenuContent>
@@ -263,9 +263,12 @@ function OrganizationSwitcher({ value }: { value: string | undefined }) {
 					key={org.id}
 					checked={org.slug === value}
 					onSelect={() => {
-						authClient.organization.setActive({
-							organizationId: org.id,
-						});
+						// Don't call `setActive` here — the org route's
+						// `beforeLoad` handles it once based on the URL params.
+						// Calling it eagerly races with the route transition
+						// and fires Better Auth updates against components that
+						// are mounting/unmounting, causing the
+						// "state update on unmounted component" warning.
 						navigate({
 							to: `/orgs/$organization`,
 							params: {
@@ -274,10 +277,10 @@ function OrganizationSwitcher({ value }: { value: string | undefined }) {
 						});
 					}}
 				>
-					<Avatar className="size-4 mr-2">
+					<Avatar className="size-6 mr-2">
 						<AvatarImage src={org.logo ?? undefined} />
 						<AvatarFallback
-							className="text-white text-[9px] font-semibold"
+							className="text-white text-[11px] font-semibold"
 							style={{
 								backgroundImage: orgConicGradient(
 									paletteForLetter(org.name),
@@ -294,7 +297,7 @@ function OrganizationSwitcher({ value }: { value: string | undefined }) {
 				onSelect={() => {
 					navigate({ to: "/new-org" });
 				}}
-				indicator={<Icon icon={faPlus} className="size-4" />}
+				indicator={<Icon icon={faPlus} className="size-4 text-muted-foreground" />}
 			>
 				Create a new organization
 			</DropdownMenuItem>

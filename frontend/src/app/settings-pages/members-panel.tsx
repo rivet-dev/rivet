@@ -207,13 +207,9 @@ function MemberRow({
 			</div>
 			<div className="text-muted-foreground truncate">{email}</div>
 			<div>
-				{isOwner ? (
-					<span className="inline-flex items-center rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">
-						Owner
-					</span>
-				) : (
-					<span className="text-muted-foreground">{role}</span>
-				)}
+				<span className="text-muted-foreground capitalize">
+					{isOwner ? "Owner" : role}
+				</span>
 			</div>
 			<div className="w-7 flex justify-end">
 				{removable ? (

@@ -54,6 +54,7 @@ import { useRootLayoutOptional } from "@/components/actors/root-layout-context";
 import type { HeaderLinkProps } from "@/components/header/header-link";
 import { authClient } from "@/lib/auth";
 import { features } from "@/lib/features";
+import { orgConicGradient, paletteForLetter } from "@/lib/org-palette";
 import { ensureTrailingSlash } from "@/lib/utils";
 import { TEST_IDS } from "@/utils/test-ids";
 import { ActorBuildsList } from "./actor-builds-list";
@@ -764,7 +765,7 @@ export const SidebarlessHeader = () => {
 										/>
 									}
 								>
-									<span className="size-5 rounded-full overflow-hidden bg-foreground/10 flex items-center justify-center shrink-0">
+									<span className="size-5 rounded-full overflow-hidden flex items-center justify-center shrink-0">
 										{logo ? (
 											// biome-ignore lint/performance/noImgElement: small avatar, no Next runtime
 											<img
@@ -773,7 +774,15 @@ export const SidebarlessHeader = () => {
 												className="size-full object-cover"
 											/>
 										) : (
-											<span className="text-[10px] font-semibold text-foreground/80">
+											<span
+												className="size-full flex items-center justify-center text-[10px] font-semibold text-white"
+												style={{
+													backgroundImage:
+														orgConicGradient(
+															paletteForLetter(name),
+														),
+												}}
+											>
 												{initial}
 											</span>
 										)}

@@ -1,17 +1,23 @@
 import {
-	faBuilding,
+	faCamera,
 	faRightFromBracket,
 	faTrash,
+	faTriangleExclamation,
 	Icon,
 } from "@rivet-gg/icons";
+import { useMutation } from "@tanstack/react-query";
+import { useId, useState } from "react";
 import {
 	Avatar,
 	AvatarFallback,
 	AvatarImage,
 	Button,
 	SmallText,
+	toast,
 } from "@/components";
 import { authClient } from "@/lib/auth";
+import { orgConicGradient, paletteForLetter } from "@/lib/org-palette";
+import { resizeImageToDataUrl } from "@/lib/resize-image";
 import { MembersPanel } from "./members-panel";
 
 export function OrganizationPanel() {
@@ -50,13 +56,13 @@ export function OrganizationPanel() {
 	return (
 		<div className="space-y-6">
 			<section className="rounded-lg border border-foreground/10 bg-card overflow-hidden">
-				<div className="flex items-start gap-4 p-5">
-					<Avatar className="size-14 shrink-0 rounded-md">
-						<AvatarImage src={org.logo ?? undefined} />
-						<AvatarFallback className="rounded-md text-lg font-semibold">
-							{initial}
-						</AvatarFallback>
-					</Avatar>
+				<div className="flex items-center gap-4 p-5">
+					<OrgLogoUpload
+						orgId={org.id}
+						logo={org.logo ?? null}
+						name={org.name ?? ""}
+						initial={initial}
+					/>
 					<div className="min-w-0 flex-1">
 						<div className="flex items-center gap-2">
 							<h3 className="text-base font-semibold text-foreground truncate">
@@ -92,8 +98,8 @@ export function OrganizationPanel() {
 			<section className="rounded-lg border border-foreground/10 bg-card overflow-hidden">
 				<header className="flex items-center gap-2 px-5 py-4">
 					<Icon
-						icon={faBuilding}
-						className="size-3.5 text-muted-foreground"
+						icon={faTriangleExclamation}
+						className="size-3.5 text-destructive"
 					/>
 					<h3 className="text-sm font-semibold text-foreground">
 						Danger zone
@@ -131,6 +137,84 @@ export function OrganizationPanel() {
 					/>
 				</div>
 			</section>
+		</div>
+	);
+}
+
+function OrgLogoUpload({
+	orgId,
+	logo,
+	name,
+	initial,
+}: {
+	orgId: string;
+	logo: string | null;
+	name: string;
+	initial: string;
+}) {
+	const inputId = useId();
+	const [isUploading, setIsUploading] = useState(false);
+
+	const { mutateAsync } = useMutation({
+		mutationFn: async (nextLogo: string) => {
+			const result = await authClient.organization.update({
+				data: { logo: nextLogo },
+				organizationId: orgId,
+			});
+			if (result.error) throw result.error;
+			return result;
+		},
+	});
+
+	const onPick = async (file: File) => {
+		setIsUploading(true);
+		try {
+			const dataUrl = await resizeImageToDataUrl(file);
+			await mutateAsync(dataUrl);
+			toast.success("Logo updated");
+		} catch {
+			toast.error("Couldn't update the logo. Try a different image.");
+		} finally {
+			setIsUploading(false);
+		}
+	};
+
+	return (
+		<div className="relative shrink-0">
+			<label
+				htmlFor={inputId}
+				className="block cursor-pointer rounded-full focus-within:outline-none focus-within:ring-2 focus-within:ring-ring"
+				aria-label={logo ? "Replace logo" : "Choose logo"}
+			>
+				<Avatar className="size-14">
+					<AvatarImage src={logo ?? undefined} />
+					<AvatarFallback
+						className="text-white text-xl font-semibold"
+						style={{
+							backgroundImage: orgConicGradient(
+								paletteForLetter(name),
+							),
+						}}
+					>
+						{initial}
+					</AvatarFallback>
+				</Avatar>
+				<span className="absolute -bottom-0.5 -right-0.5 flex h-6 w-6 items-center justify-center rounded-full border border-background bg-foreground text-background shadow-sm">
+					<Icon icon={faCamera} className="size-3" />
+				</span>
+			</label>
+			<input
+				id={inputId}
+				type="file"
+				accept="image/*"
+				className="sr-only"
+				disabled={isUploading}
+				onChange={(e) => {
+					const file = e.target.files?.[0];
+					if (file) void onPick(file);
+					e.target.value = "";
+				}}
+			/>
 		</div>
 	);
 }

@@ -1,4 +1,3 @@
-import { faArrowRight, Icon } from "@rivet-gg/icons";
 import { type UseFormReturn, useFormContext } from "react-hook-form";
 import z from "zod";
 import {
@@ -77,9 +76,5 @@ export const Organization = ({ className }: { className?: string }) => {
 };
 
 export const DefaultSubmit = () => {
-	return (
-		<Submit type="submit" startIcon={<Icon icon={faArrowRight} />}>
-			Create Project
-		</Submit>
-	);
+	return <Submit type="submit">Create Project</Submit>;
 };
