@@ -323,20 +323,6 @@ pub struct SendOutboundInput {
 pub async fn send_outbound(ctx: &ActivityCtx, input: &SendOutboundInput) -> Result<()> {
 	let state = ctx.state::<State>()?;
 
-	// Write the active generation before publishing the start message so
-	// SQLite generation fencing can validate requests immediately.
-	let actor_id = state.actor_id;
-	ctx.udb()?
-		.run(|tx| async move {
-			let tx = tx.with_subspace(keys::subspace());
-			tx.write(
-				&keys::actor::ActiveGenerationKey::new(actor_id),
-				input.generation,
-			)?;
-			Ok(())
-		})
-		.await?;
-
 	match &input.allocation {
 		Allocation::Serverless => {
 			let subject = crate::pubsub_subjects::ServerlessOutboundSubject.to_string();
