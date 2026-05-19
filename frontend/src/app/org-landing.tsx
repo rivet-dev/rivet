@@ -1,11 +1,4 @@
-import {
-	faEllipsis,
-	faFolder,
-	faPlus,
-	faUserPlus,
-	faUsers,
-	Icon,
-} from "@rivet-gg/icons";
+import { faEllipsis, faPlus, faUserPlus, Icon } from "@rivet-gg/icons";
 import { useInfiniteQuery, useMutation } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "framer-motion";
@@ -78,19 +71,10 @@ export function OrgLanding({ organization }: { organization: string }) {
 					</header>
 
 					<section>
-						<header className="flex items-start justify-between gap-4 mb-3">
-							<div>
-								<h2 className="text-base font-semibold text-foreground flex items-center gap-2">
-									<Icon
-										icon={faFolder}
-										className="size-3.5 text-muted-foreground"
-									/>
-									Projects
-								</h2>
-								<SmallText className="text-muted-foreground mt-0.5">
-									Each row is a project in this organization.
-								</SmallText>
-							</div>
+						<header className="flex items-center justify-between gap-4 mb-3">
+							<h2 className="text-base font-semibold text-foreground">
+								Projects
+							</h2>
 							{sorted.length > 0 ? (
 								<Button
 									variant="outline"
@@ -151,8 +135,9 @@ export function OrgLanding({ organization }: { organization: string }) {
 										project: project.name,
 									}}
 									className={cn(
-										"group relative flex flex-col items-start gap-2 rounded-lg border border-foreground/10 bg-foreground/[0.02] p-4 text-left transition-colors",
-										"hover:border-foreground/20 hover:bg-foreground/[0.05]",
+										"group relative flex flex-col items-start gap-2 rounded-lg border border-foreground/10 bg-foreground/[0.02] p-4 text-left transition-all duration-150",
+										"hover:border-foreground/25 hover:bg-foreground/[0.06] hover:shadow-sm hover:-translate-y-0.5",
+										"active:translate-y-0 active:shadow-none",
 										"focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
 										"min-h-[130px] cursor-pointer",
 									)}
@@ -247,19 +232,10 @@ function MembersSection({
 
 	return (
 		<section>
-			<header className="flex items-start justify-between gap-4 mb-3">
-				<div>
-					<h2 className="text-base font-semibold text-foreground flex items-center gap-2">
-						<Icon
-							icon={faUsers}
-							className="size-3.5 text-muted-foreground"
-						/>
-						Members
-					</h2>
-					<SmallText className="text-muted-foreground mt-0.5">
-						People with access to this organization.
-					</SmallText>
-				</div>
+			<header className="flex items-center justify-between gap-4 mb-3">
+				<h2 className="text-base font-semibold text-foreground">
+					Members
+				</h2>
 				<Button
 					variant="outline"
 					size="sm"
@@ -323,52 +299,62 @@ function MembersSection({
 						</SmallText>
 					</div>
 				) : (
-					visible.map((member) => {
-						const user = member.user;
-						const initial =
-							(user?.name ?? user?.email ?? "?")[0]?.toUpperCase() ??
-							"?";
-						const isSelf = member.userId === currentUserId;
-						return (
-							<div
-								key={member.id}
-								className="grid grid-cols-[1fr_120px_auto] gap-4 items-center px-3 py-2.5 text-xs border-b border-foreground/10 last:border-b-0"
-							>
-								<div className="flex items-center gap-2 min-w-0">
-									<Avatar className="size-6 shrink-0">
-										<AvatarImage src={user?.image ?? undefined} />
-										<AvatarFallback>{initial}</AvatarFallback>
-									</Avatar>
-									<div className="min-w-0">
-										<div className="flex items-center gap-1.5">
-											<span className="font-medium text-foreground truncate">
-												{user?.name ?? user?.email ?? "Unknown"}
-											</span>
-											{isSelf ? (
-												<span className="inline-flex items-center rounded-full border border-primary/20 bg-primary/10 px-1.5 py-0 text-[10px] font-medium text-primary">
-													You
+					<>
+						<div className="grid grid-cols-[1fr_120px_28px] gap-4 items-center px-3 py-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground border-b border-foreground/10 bg-foreground/[0.02]">
+							<div>Member</div>
+							<div>Role</div>
+							<div />
+						</div>
+						{visible.map((member) => {
+							const user = member.user;
+							const initial =
+								(user?.name ?? user?.email ?? "?")[0]?.toUpperCase() ??
+								"?";
+							const isSelf = member.userId === currentUserId;
+							const role = member.role ?? "member";
+							return (
+								<div
+									key={member.id}
+									className="group grid grid-cols-[1fr_120px_28px] gap-4 items-center px-3 py-2.5 text-xs border-b border-foreground/10 last:border-b-0 transition-colors hover:bg-foreground/[0.025]"
+								>
+									<div className="flex items-center gap-2 min-w-0">
+										<Avatar className="size-6 shrink-0">
+											<AvatarImage src={user?.image ?? undefined} />
+											<AvatarFallback>{initial}</AvatarFallback>
+										</Avatar>
+										<div className="min-w-0">
+											<div className="flex items-center gap-1.5">
+												<span className="font-medium text-foreground truncate">
+													{user?.name ?? user?.email ?? "Unknown"}
 												</span>
+												{isSelf ? (
+													<span className="inline-flex items-center rounded-full border border-primary/20 bg-primary/10 px-1.5 py-0 text-[10px] font-medium text-primary">
+														You
+													</span>
+												) : null}
+											</div>
+											{user?.email && user.email !== user.name ? (
+												<div className="text-muted-foreground truncate text-[11px]">
+													{user.email}
+												</div>
 											) : null}
 										</div>
-										{user?.email && user.email !== user.name ? (
-											<div className="text-muted-foreground truncate text-[11px]">
-												{user.email}
-											</div>
-										) : null}
+									</div>
+									<div>
+										<RolePill role={role} />
+									</div>
+									<div className="opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+										<MemberRowMenu
+											memberId={member.id}
+											userId={member.userId}
+											role={role}
+											isSelf={isSelf}
+										/>
 									</div>
 								</div>
-								<div className="text-muted-foreground capitalize">
-									{member.role ?? "member"}
-								</div>
-								<MemberRowMenu
-									memberId={member.id}
-									userId={member.userId}
-									role={member.role ?? "member"}
-									isSelf={isSelf}
-								/>
-							</div>
-						);
-					})
+							);
+						})}
+					</>
 				)}
 				{remaining > 0 ? (
 					<button
@@ -381,6 +367,29 @@ function MembersSection({
 				) : null}
 			</div>
 		</section>
+	);
+}
+
+function RolePill({ role }: { role: string }) {
+	const styles = (() => {
+		switch (role) {
+			case "owner":
+				return "border-primary/20 bg-primary/10 text-primary";
+			case "admin":
+				return "border-foreground/15 bg-foreground/[0.06] text-foreground";
+			default:
+				return "border-foreground/10 bg-foreground/[0.03] text-muted-foreground";
+		}
+	})();
+	return (
+		<span
+			className={cn(
+				"inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium capitalize",
+				styles,
+			)}
+		>
+			{role}
+		</span>
 	);
 }
 
@@ -438,6 +447,24 @@ function MemberRowMenu({
 	const isAdmin = role === "admin";
 	const disabled = isUpdatingRole || isRemoving;
 
+	if (isSelf) {
+		return (
+			<Button
+				variant="ghost"
+				size="icon-sm"
+				type="button"
+				aria-label="Member actions"
+				aria-disabled
+				title="You can't change your own role"
+				onClick={(e) => e.preventDefault()}
+				onPointerDown={(e) => e.preventDefault()}
+				className="cursor-not-allowed opacity-50 hover:bg-transparent"
+			>
+				<Icon icon={faEllipsis} />
+			</Button>
+		);
+	}
+
 	return (
 		<DropdownMenu>
 			<DropdownMenuTrigger asChild>
@@ -445,9 +472,7 @@ function MemberRowMenu({
 					variant="ghost"
 					size="icon-sm"
 					aria-label="Member actions"
-					disabled={disabled || isSelf}
-					title={isSelf ? "You can't change your own role" : undefined}
-					className="disabled:pointer-events-auto disabled:cursor-not-allowed disabled:hover:bg-transparent"
+					disabled={disabled}
 				>
 					<Icon icon={faEllipsis} />
 				</Button>

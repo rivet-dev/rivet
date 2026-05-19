@@ -5,6 +5,7 @@ import {
 	faClose,
 	faCreditCard,
 	faGear,
+	faSliders,
 	faSparkles,
 	Icon,
 	type IconProp,
@@ -23,7 +24,10 @@ import {
 	useCloudProjectDataProvider,
 } from "@/components/actors/data-provider";
 import { BillingPanel } from "./settings-pages/billing-panel";
-import { NamespaceSettingsContent } from "./settings-pages/namespace-settings";
+import {
+	NamespaceAdvancedContent,
+	NamespaceSettingsContent,
+} from "./settings-pages/namespace-settings";
 import { OrganizationPanel } from "./settings-pages/organization-panel";
 import { ProfilePage } from "./settings-pages/profile-page";
 import { ResourcePicker } from "./settings-pages/resource-picker";
@@ -31,6 +35,7 @@ import { ResourcePicker } from "./settings-pages/resource-picker";
 export type SettingsTab =
 	| "profile"
 	| "settings"
+	| "advanced"
 	| "billing"
 	| "organization"
 	| "whats-new";
@@ -51,7 +56,10 @@ const NAV_SECTIONS: Array<{
 	},
 	{
 		label: "Namespace",
-		items: [{ key: "settings", label: "Settings", icon: faGear }],
+		items: [
+			{ key: "settings", label: "Settings", icon: faGear },
+			{ key: "advanced", label: "Advanced", icon: faSliders },
+		],
 	},
 	{
 		label: "Organization",
@@ -84,6 +92,11 @@ const TAB_META: Record<
 		title: "Settings",
 		description:
 			"Connect your RivetKit application to Rivet Cloud. Use your cloud of choice to run Rivet Actors.",
+	},
+	advanced: {
+		title: "Advanced",
+		description:
+			"Tokens, datacenter status, and other low-level controls for this namespace.",
 	},
 	organization: {
 		title: "Organization",
@@ -247,6 +260,8 @@ function TabContent({ tab }: { tab: SettingsTab }) {
 			return <BillingPanel />;
 		case "settings":
 			return <SettingsTabBody />;
+		case "advanced":
+			return <AdvancedTabBody />;
 		case "organization":
 			return <OrganizationPanel />;
 		case "whats-new":
@@ -365,10 +380,33 @@ function NamespaceSettingsSkeleton() {
 	);
 }
 
+function AdvancedTabBody() {
+	const namespaceMatch = useMatch({
+		from: "/_context/orgs/$organization/projects/$project/ns/$namespace",
+		shouldThrow: false,
+	});
+
+	if (!namespaceMatch) {
+		return (
+			<ResourcePicker
+				title="Pick a namespace"
+				description="Advanced settings are scoped to a namespace. Choose one to manage tokens and datacenter status."
+				modal="advanced"
+				target="namespace"
+			/>
+		);
+	}
+	if (!namespaceMatch.loaderData) {
+		return <NamespaceSettingsSkeleton />;
+	}
+	return <NamespaceAdvancedContent />;
+}
+
 export function modalToTab(modal: string | undefined): SettingsTab | null {
 	switch (modal) {
 		case "profile":
 		case "settings":
+		case "advanced":
 		case "billing":
 		case "organization":
 		case "whats-new":

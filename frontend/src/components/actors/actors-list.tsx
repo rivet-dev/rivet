@@ -45,7 +45,11 @@ import {
 import { VisibilitySensor } from "../visibility-sensor";
 import { useActorsFilters, useFiltersValue } from "./actor-filters-context";
 import { useActorsLayout } from "./actors-layout-context";
-import { ActorsListRow, ActorsListRowSkeleton } from "./actors-list-row";
+import {
+	ActorsListHeader,
+	ActorsListRow,
+	ActorsListRowSkeleton,
+} from "./actors-list-row";
 import { useActorsView } from "./actors-view-context-provider";
 import { CreateActorButton } from "./create-actor-button";
 import { useDataProvider } from "./data-provider";
@@ -62,6 +66,7 @@ export function ActorsList() {
 			<TopBar />
 			<Page1Poller />
 			<Suspense fallback={<ListSkeleton />}>
+				<ActorsTableHeaderGate />
 				<List viewportRef={viewportRef} />
 				<Pagination />
 			</Suspense>
@@ -171,12 +176,12 @@ function InstanceSearchTrigger() {
 						variant="outline"
 						size="icon-sm"
 						onClick={() => setOpen(true)}
-						aria-label="Search Actor instance ID"
+						aria-label="Open Actor by ID"
 					>
 						<Icon icon={faMagnifyingGlass} />
 					</Button>
 				}
-				content="Search Actor instance ID (⌘K)"
+				content="Open Actor by ID (⌘K)"
 			/>
 			<InstanceSearchDialog open={open} onOpenChange={setOpen} />
 		</>
@@ -207,12 +212,20 @@ function InstanceSearchDialog({
 			);
 			void navigate({
 				to: ".",
-				search: (prev) => ({ ...prev, actorId: trimmed }),
+				search: (prev) => ({
+					...prev,
+					actorId: trimmed,
+					actorKey: undefined,
+				}),
 			});
 		} catch {
 			void navigate({
 				to: ".",
-				search: (prev) => ({ ...prev, actorKey: trimmed }),
+				search: (prev) => ({
+					...prev,
+					actorKey: trimmed,
+					actorId: undefined,
+				}),
 			});
 		} finally {
 			setValue("");
@@ -231,33 +244,47 @@ function InstanceSearchDialog({
 		>
 			<DialogContent>
 				<DialogHeader>
-					<DialogTitle>Search Actor instance</DialogTitle>
+					<DialogTitle>Open Actor by ID</DialogTitle>
 					<DialogDescription>
-						Enter an Actor instance ID or key
+						Paste a full Actor instance ID or key to jump straight
+						to it. Not a search — must match exactly.
 					</DialogDescription>
 				</DialogHeader>
-				<Input
-					type="text"
-					value={value}
-					placeholder="Actor instance ID…"
-					disabled={isPending}
-					autoFocus
-					onChange={(e) => setValue(e.target.value)}
-					onKeyDown={(e) => {
-						if (e.key === "Enter") {
-							e.preventDefault();
-							void handleSubmit();
-						}
-					}}
-				/>
+				<div className="space-y-1.5">
+					<label
+						htmlFor="actor-lookup-input"
+						className="text-xs font-medium text-muted-foreground"
+					>
+						Actor instance ID or key
+					</label>
+					<Input
+						id="actor-lookup-input"
+						type="text"
+						value={value}
+						placeholder="0193af8e-..."
+						disabled={isPending}
+						autoFocus
+						autoComplete="off"
+						spellCheck={false}
+						className="font-mono-console text-xs"
+						onChange={(e) => setValue(e.target.value)}
+						onKeyDown={(e) => {
+							if (e.key === "Enter") {
+								e.preventDefault();
+								void handleSubmit();
+							}
+						}}
+					/>
+				</div>
 				<DialogFooter>
 					<Button
 						type="button"
 						isLoading={isPending}
 						disabled={!value.trim()}
 						onClick={() => void handleSubmit()}
+						startIcon={<Icon icon={faArrowUpRightFromSquare} />}
 					>
-						Search
+						Open Actor
 					</Button>
 				</DialogFooter>
 			</DialogContent>
@@ -279,6 +306,16 @@ function LoadingIndicator() {
 		return <ShimmerLine className="bottom-0" />;
 	}
 	return null;
+}
+
+function ActorsTableHeaderGate() {
+	const { n } = useSearch({ from: "/_context" });
+	const filters = useFiltersValue({ onlyStatic: true });
+	const { data: actors = [] } = useInfiniteQuery(
+		useDataProvider().actorsListQueryOptions({ n, filters }),
+	);
+	if (actors.length === 0) return null;
+	return <ActorsListHeader />;
 }
 
 function List({

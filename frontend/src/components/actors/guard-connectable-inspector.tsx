@@ -133,20 +133,24 @@ function UnavailableInfo({
 }) {
 	return match(status)
 		.with("crashed", () => (
-			<Info>
-				<Icon
-					icon={faExclamationTriangle}
-					className="text-4xl text-destructive"
-				/>
-				<p>Actor is unavailable.</p>
-
-				<QueriedActorError actorId={actorId} />
-
-				<div className="flex gap-4 items-center mt-4">
+			<div className="flex-1 flex flex-col items-center justify-center h-full text-center px-6">
+				<div className="flex items-center justify-center size-10 rounded-full bg-destructive/10 mb-4">
+					<Icon
+						icon={faExclamationTriangle}
+						className="text-destructive text-lg"
+					/>
+				</div>
+				<h3 className="text-base font-semibold text-foreground mb-1">
+					Actor is unavailable
+				</h3>
+				<div className="text-sm text-muted-foreground max-w-sm mb-5">
+					<QueriedActorError actorId={actorId} />
+				</div>
+				<div className="flex gap-2 items-center">
 					<WakeUpActorButton actorId={actorId} />
 					<NeedHelpButton />
 				</div>
-			</Info>
+			</div>
 		))
 		.with("crash-loop", () => <CrashLoopActor actorId={actorId} />)
 		.with("pending", () => <NoRunners />)
@@ -218,7 +222,7 @@ function NeedHelpButton() {
 	return (
 		<Button
 			size="sm"
-			variant="outline"
+			variant="ghost"
 			startIcon={<Icon icon={faQuestionCircle} />}
 			onClick={() => {
 				void navigate({
@@ -679,7 +683,7 @@ function WakeUpActorButton({ actorId }: { actorId: ActorId }) {
 
 	return (
 		<Button
-			variant="outline"
+			variant="default"
 			size="sm"
 			onClick={() =>
 				mutate({

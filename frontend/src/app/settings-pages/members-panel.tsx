@@ -1,4 +1,10 @@
-import { faPaperPlaneTop, faTrash, faUserPlus, Icon } from "@rivet-gg/icons";
+import {
+	faEllipsis,
+	faPaperPlaneTop,
+	faTrash,
+	faUserPlus,
+	Icon,
+} from "@rivet-gg/icons";
 import { useMutation } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
 import { useState } from "react";
@@ -9,10 +15,16 @@ import {
 	AvatarImage,
 	Button,
 	cn,
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuSeparator,
+	DropdownMenuTrigger,
 	Skeleton,
 	toast,
 	WithTooltip,
 } from "@/components";
+import { queryClient } from "@/queries/global";
 import { authClient } from "@/lib/auth";
 
 export function MembersPanel() {
@@ -101,11 +113,11 @@ export function MembersPanel() {
 			</AnimatePresence>
 
 			<div className="rounded-lg border border-foreground/10 bg-card overflow-hidden">
-				<div className="grid grid-cols-[2fr_2fr_1fr_auto] items-center gap-4 px-4 py-2.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground border-b border-foreground/10">
+				<div className="grid grid-cols-[2fr_2fr_1fr_28px] items-center gap-4 px-4 py-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground border-b border-foreground/10 bg-foreground/[0.02]">
 					<div>Name</div>
 					<div>Email</div>
 					<div>Role</div>
-					<div className="w-7" />
+					<div />
 				</div>
 
 				{isPending ? (
@@ -127,29 +139,15 @@ export function MembersPanel() {
 					return (
 						<MemberRow
 							key={member.id}
+							memberId={member.id}
+							userId={member.userId}
+							organizationId={org.id}
 							avatarUrl={user?.image ?? undefined}
 							name={user?.name ?? user?.email ?? "?"}
 							email={user?.email ?? ""}
-							role={
-								member.role.charAt(0).toUpperCase() +
-								member.role.slice(1)
-							}
-							isOwner={member.role === "owner"}
+							role={member.role ?? "member"}
 							isYou={isYou}
 							last={isLast}
-							removable={!isYou && org !== null}
-							onRemove={async () => {
-								if (!org) return;
-								try {
-									await authClient.organization.removeMember({
-										memberIdOrEmail: member.userId,
-										organizationId: org.id,
-									});
-									toast.success("Member removed.");
-								} catch {
-									toast.error("Failed to remove member.");
-								}
-							}}
 						/>
 					);
 				})}
@@ -171,27 +169,26 @@ export function MembersPanel() {
 }
 
 function MemberRow({
+	memberId,
+	userId,
+	organizationId,
 	avatarUrl,
 	name,
 	email,
 	role,
-	isOwner,
 	isYou,
 	last,
-	removable,
-	onRemove,
 }: {
+	memberId: string;
+	userId: string;
+	organizationId: string;
 	avatarUrl?: string;
 	name: string;
 	email: string;
 	role: string;
-	isOwner: boolean;
 	isYou: boolean;
 	last?: boolean;
-	removable: boolean;
-	onRemove: () => Promise<void>;
 }) {
-	const [isRemoving, setIsRemoving] = useState(false);
 	const initials = name
 		.split(" ")
 		.map((part) => part[0])
@@ -201,7 +198,7 @@ function MemberRow({
 	return (
 		<div
 			className={cn(
-				"grid grid-cols-[2fr_2fr_1fr_auto] items-center gap-4 px-4 py-3 text-sm",
+				"group grid grid-cols-[2fr_2fr_1fr_28px] items-center gap-4 px-4 py-3 text-sm transition-colors hover:bg-foreground/[0.025]",
 				!last && "border-b border-foreground/10",
 			)}
 		>
@@ -223,39 +220,150 @@ function MemberRow({
 			</div>
 			<div className="text-muted-foreground truncate">{email}</div>
 			<div>
-				<span className="text-muted-foreground capitalize">
-					{isOwner ? "Owner" : role}
-				</span>
+				<RolePill role={role} />
 			</div>
-			<div className="w-7 flex justify-end">
-				{removable ? (
-					<WithTooltip
-						content="Remove member"
-						delayDuration={0}
-						trigger={
-							<Button
-								variant="ghost"
-								size="icon-sm"
-								isLoading={isRemoving}
-								onClick={async () => {
-									setIsRemoving(true);
-									try {
-										await onRemove();
-									} finally {
-										setIsRemoving(false);
-									}
-								}}
-							>
-								<Icon
-									icon={faTrash}
-									className="size-3.5 text-destructive"
-								/>
-							</Button>
-						}
-					/>
-				) : null}
+			<div className="opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+				<MemberRowMenu
+					memberId={memberId}
+					userId={userId}
+					organizationId={organizationId}
+					role={role}
+					isSelf={isYou}
+				/>
 			</div>
 		</div>
+	);
+}
+
+function MemberRowMenu({
+	memberId,
+	userId,
+	organizationId,
+	role,
+	isSelf,
+}: {
+	memberId: string;
+	userId: string;
+	organizationId: string;
+	role: string;
+	isSelf: boolean;
+}) {
+	const invalidate = () =>
+		queryClient.invalidateQueries({ queryKey: ["organizations"] });
+
+	const { mutate: setRole, isPending: isUpdatingRole } = useMutation({
+		mutationFn: async (nextRole: "owner" | "admin" | "member") => {
+			const result = await authClient.organization.updateMemberRole({
+				memberId,
+				role: nextRole,
+				organizationId,
+			});
+			if (result.error) throw result.error;
+		},
+		onSuccess: (_data, nextRole) => {
+			toast.success(`Member set to ${nextRole}.`);
+			void invalidate();
+		},
+		onError: () => toast.error("Couldn't update member role."),
+	});
+
+	const { mutate: remove, isPending: isRemoving } = useMutation({
+		mutationFn: async () => {
+			const result = await authClient.organization.removeMember({
+				memberIdOrEmail: userId,
+				organizationId,
+			});
+			if (result.error) throw result.error;
+		},
+		onSuccess: () => {
+			toast.success("Member removed.");
+			void invalidate();
+		},
+		onError: () => toast.error("Couldn't remove member."),
+	});
+
+	const isOwner = role === "owner";
+	const isAdmin = role === "admin";
+	const disabled = isUpdatingRole || isRemoving;
+
+	if (isSelf) {
+		return (
+			<Button
+				variant="ghost"
+				size="icon-sm"
+				type="button"
+				aria-label="Member actions"
+				aria-disabled
+				title="You can't change your own role"
+				onClick={(e) => e.preventDefault()}
+				onPointerDown={(e) => e.preventDefault()}
+				className="cursor-not-allowed opacity-50 hover:bg-transparent"
+			>
+				<Icon icon={faEllipsis} />
+			</Button>
+		);
+	}
+
+	return (
+		<DropdownMenu>
+			<DropdownMenuTrigger asChild>
+				<Button
+					variant="ghost"
+					size="icon-sm"
+					aria-label="Member actions"
+					disabled={disabled}
+				>
+					<Icon icon={faEllipsis} />
+				</Button>
+			</DropdownMenuTrigger>
+			<DropdownMenuContent align="end" className="min-w-[10rem]">
+				{!isOwner ? (
+					<DropdownMenuItem onSelect={() => setRole("owner")}>
+						Promote to owner
+					</DropdownMenuItem>
+				) : null}
+				{!isAdmin && !isOwner ? (
+					<DropdownMenuItem onSelect={() => setRole("admin")}>
+						Promote to admin
+					</DropdownMenuItem>
+				) : null}
+				{isOwner || isAdmin ? (
+					<DropdownMenuItem onSelect={() => setRole("member")}>
+						Demote to member
+					</DropdownMenuItem>
+				) : null}
+				<DropdownMenuSeparator />
+				<DropdownMenuItem
+					onSelect={() => remove()}
+					className="text-destructive focus:text-destructive"
+				>
+					Remove from organization
+				</DropdownMenuItem>
+			</DropdownMenuContent>
+		</DropdownMenu>
+	);
+}
+
+function RolePill({ role }: { role: string }) {
+	const styles = (() => {
+		switch (role) {
+			case "owner":
+				return "border-primary/20 bg-primary/10 text-primary";
+			case "admin":
+				return "border-foreground/15 bg-foreground/[0.06] text-foreground";
+			default:
+				return "border-foreground/10 bg-foreground/[0.03] text-muted-foreground";
+		}
+	})();
+	return (
+		<span
+			className={cn(
+				"inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium capitalize",
+				styles,
+			)}
+		>
+			{role}
+		</span>
 	);
 }
 
@@ -297,7 +405,7 @@ function InvitationRow({
 	return (
 		<div
 			className={cn(
-				"grid grid-cols-[2fr_2fr_1fr_auto] items-center gap-4 px-4 py-3 text-sm",
+				"group grid grid-cols-[2fr_2fr_1fr_28px] items-center gap-4 px-4 py-3 text-sm transition-colors hover:bg-foreground/[0.025]",
 				!last && "border-b border-foreground/10",
 			)}
 		>
@@ -311,11 +419,11 @@ function InvitationRow({
 			</div>
 			<div className="text-muted-foreground truncate">{email}</div>
 			<div>
-				<span className="text-muted-foreground text-xs">
-					Pending invite
+				<span className="inline-flex items-center rounded-full border border-foreground/10 bg-foreground/[0.03] px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+					Pending
 				</span>
 			</div>
-			<div className="flex items-center gap-1 justify-end">
+			<div className="flex items-center gap-1 justify-end opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
 				<WithTooltip
 					content="Resend"
 					delayDuration={0}
@@ -354,7 +462,7 @@ function InvitationRow({
 
 function MemberRowSkeleton() {
 	return (
-		<div className="grid grid-cols-[2fr_2fr_1fr_auto] items-center gap-4 px-4 py-3 border-b border-foreground/10">
+		<div className="grid grid-cols-[2fr_2fr_1fr_28px] items-center gap-4 px-4 py-3 border-b border-foreground/10">
 			<div className="flex items-center gap-2.5">
 				<Skeleton className="size-7 rounded-full" />
 				<Skeleton className="h-4 w-32" />

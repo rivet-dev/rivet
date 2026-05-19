@@ -1465,7 +1465,7 @@ export function FiltersDisplay({
 							{filterEntries.length > 0 ? (
 								<>
 									<div className="px-2 pt-1 pb-1.5 text-xs font-medium text-muted-foreground">
-										Filter by
+										Display
 									</div>
 									{filterEntries.map(renderItem)}
 								</>
