@@ -88,9 +88,6 @@ export function OrganizationPanel() {
 					<h3 className="text-sm font-semibold text-foreground">
 						Members
 					</h3>
-					<SmallText className="text-muted-foreground">
-						People with access to this organization.
-					</SmallText>
 				</header>
 				<MembersPanel />
 			</section>

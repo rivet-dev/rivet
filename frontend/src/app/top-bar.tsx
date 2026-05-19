@@ -1,4 +1,4 @@
-import { faBook, faChevronDown, Icon } from "@rivet-gg/icons";
+import { faChevronDown, Icon } from "@rivet-gg/icons";
 import { Link } from "@tanstack/react-router";
 import { Button, cn } from "@/components";
 import { authClient } from "@/lib/auth";
@@ -48,9 +48,8 @@ function DocsButton() {
 		<Button
 			variant="ghost"
 			size="sm"
-			className="gap-2 text-muted-foreground hover:text-foreground"
+			className="text-muted-foreground hover:text-foreground"
 			asChild
-			startIcon={<Icon icon={faBook} className="size-3.5" />}
 		>
 			<a
 				href="https://www.rivet.dev/docs"

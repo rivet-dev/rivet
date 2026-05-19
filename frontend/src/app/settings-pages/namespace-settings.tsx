@@ -9,16 +9,7 @@ import { type ReactNode, Suspense } from "react";
 import { ProviderDropdown } from "@/app/provider-dropdown";
 import { RunnerConfigsTable } from "@/app/runner-config-table";
 import { RunnersTable } from "@/app/runners-table";
-import {
-	Accordion,
-	AccordionContent,
-	AccordionItem,
-	AccordionTrigger,
-	Button,
-	Code,
-	Ping,
-	Skeleton,
-} from "@/components";
+import { Button, Code, Ping, Skeleton } from "@/components";
 import {
 	ActorRegion,
 	useCloudNamespaceDataProvider,
@@ -39,8 +30,29 @@ export function NamespaceSettingsContent() {
 			<NoRunnersAlert />
 			<Providers />
 			<Runners />
-			<Advanced />
 		</div>
+	);
+}
+
+export function NamespaceAdvancedContent() {
+	return (
+		<Suspense
+			fallback={
+				<div className="space-y-3">
+					<Skeleton className="w-full h-16 rounded-md" />
+					<Skeleton className="w-full h-16 rounded-md" />
+					<Skeleton className="w-full h-16 rounded-md" />
+				</div>
+			}
+		>
+			<div className="space-y-4">
+				<SecretToken />
+				<PublishableToken />
+				{features.auth ? <CloudApiTokens /> : null}
+				<DatacenterStatus />
+				{features.dangerZone ? <DangerZone /> : null}
+			</div>
+		</Suspense>
 	);
 }
 
@@ -183,40 +195,6 @@ function Runners() {
 				/>
 			</div>
 		</SectionCard>
-	);
-}
-
-function Advanced() {
-	return (
-		<Accordion type="single" collapsible>
-			<AccordionItem
-				value="advanced"
-				className="rounded-xl border border-foreground/10 bg-card overflow-hidden"
-			>
-				<AccordionTrigger className="px-5 py-4 text-sm font-semibold hover:no-underline">
-					Advanced
-				</AccordionTrigger>
-				<AccordionContent className="px-5 pb-5 pt-0">
-					<Suspense
-						fallback={
-							<div className="space-y-3">
-								<Skeleton className="w-full h-16 rounded-md" />
-								<Skeleton className="w-full h-16 rounded-md" />
-								<Skeleton className="w-full h-16 rounded-md" />
-							</div>
-						}
-					>
-						<div className="space-y-4">
-							<SecretToken />
-							<PublishableToken />
-							{features.auth ? <CloudApiTokens /> : null}
-							<DatacenterStatus />
-							{features.dangerZone ? <DangerZone /> : null}
-						</div>
-					</Suspense>
-				</AccordionContent>
-			</AccordionItem>
-		</Accordion>
 	);
 }
 

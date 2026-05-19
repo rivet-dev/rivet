@@ -4,9 +4,8 @@ import { Link } from "@tanstack/react-router";
 import { memo } from "react";
 import {
 	Button,
-	CopyTrigger,
 	cn,
-	DiscreteCopyButton,
+	CopyTrigger,
 	RelativeTime,
 	Skeleton,
 	SmallText,
@@ -22,6 +21,26 @@ import { QueriedActorStatusLabel } from "./actor-status-label";
 import { useDataProvider } from "./data-provider";
 import type { ActorId } from "./queries";
 
+export function actorsTableGridTemplate(
+	showIds: boolean,
+	showDatacenter: boolean,
+) {
+	const parts: string[] = ["44px"];
+	if (showIds) parts.push("96px");
+	if (showDatacenter) parts.push("64px");
+	parts.push("minmax(0,1fr)");
+	parts.push("72px");
+	return parts.join(" ");
+}
+
+export function useActorsTableColumns() {
+	const filters = useFiltersValue();
+	const showIds = filters.showIds?.value.includes("1") ?? false;
+	const showDatacenter =
+		filters.showDatacenter?.value.includes("1") ?? false;
+	return { showIds, showDatacenter };
+}
+
 interface ActorsListRowProps {
 	className?: string;
 	actorId: ActorId;
@@ -31,10 +50,13 @@ interface ActorsListRowProps {
 
 export const ActorsListRow = memo(
 	({ className, actorId, actorKey, isCurrent }: ActorsListRowProps) => {
+		const { showIds, showDatacenter } = useActorsTableColumns();
+		const template = actorsTableGridTemplate(showIds, showDatacenter);
+
 		return (
 			<Button
 				className={cn(
-					"relative h-9 flex items-center w-full group border-l-0 border-r-0 border-t-0 border-b hover:border-foreground/10 rounded-none pl-2 pr-3 text-xs",
+					"relative h-9 w-full grid items-center group border-l-0 border-r-0 border-t-0 border-b hover:border-foreground/10 rounded-none px-3 text-xs gap-3",
 					isCurrent &&
 						"bg-foreground/[0.08] bg-clip-padding hover:bg-foreground/[0.10] text-foreground before:absolute before:left-0 before:top-0 before:bottom-0 before:w-0.5 before:bg-primary",
 					className,
@@ -48,12 +70,12 @@ export const ActorsListRow = memo(
 						...search,
 						...(actorKey ? { actorKey } : { actorId }),
 					})}
-					className="flex items-center gap-2 w-full min-w-0"
+					style={{ gridTemplateColumns: template }}
 				>
 					<WithTooltip
 						delayDuration={0}
 						trigger={
-							<div className="w-6 flex-none flex justify-center">
+							<div className="flex justify-start items-center">
 								<QueriedActorStatusIndicator
 									actorId={actorId}
 								/>
@@ -68,11 +90,11 @@ export const ActorsListRow = memo(
 							</div>
 						}
 					/>
-					<div className="flex-1 min-w-0 flex items-center gap-1">
-						<Id actorId={actorId} />
+					{showIds ? <Id actorId={actorId} /> : null}
+					{showDatacenter ? (
 						<Datacenter actorId={actorId} />
-						<Tags actorId={actorId} />
-					</div>
+					) : null}
+					<Tags actorId={actorId} />
 					<Timestamp actorId={actorId} />
 				</Link>
 			</Button>
@@ -81,42 +103,31 @@ export const ActorsListRow = memo(
 );
 
 function Id({ actorId }: { actorId: ActorId }) {
-	const showIds = useFiltersValue().showIds?.value.includes("1");
-
-	if (!showIds) {
-		return null;
-	}
-
+	const shortId = actorId.includes("-")
+		? actorId.split("-")[0]
+		: actorId.substring(0, 8);
 	return (
-		<SmallText
-			className="text-muted-foreground tabular-nums font-mono-console inline-flex my-0 py-0 border-0 h-auto"
-			asChild
-		>
-			<DiscreteCopyButton value={actorId} size="xs">
-				{actorId.includes("-")
-					? actorId.split("-")[0]
-					: actorId.substring(0, 8)}
-			</DiscreteCopyButton>
-		</SmallText>
+		<CopyTrigger value={actorId}>
+			<span className="group/id inline-flex items-center gap-1 min-w-0 max-w-full cursor-pointer text-muted-foreground hover:text-foreground tabular-nums font-mono-console transition-colors">
+				<span className="truncate min-w-0">{shortId}</span>
+				<Icon
+					icon={faCopy}
+					className="opacity-0 group-hover/id:opacity-100 transition-opacity shrink-0 size-2.5"
+				/>
+			</span>
+		</CopyTrigger>
 	);
 }
 
 function Datacenter({ actorId }: { actorId: ActorId }) {
-	const showDatacenter =
-		useFiltersValue().showDatacenter?.value.includes("1");
 	const { data: datacenter, isLoading } = useQuery({
 		...useDataProvider().actorDatacenterQueryOptions(actorId),
-		enabled: showDatacenter,
 	});
 
-	if (!showDatacenter) {
-		return null;
-	}
-
 	return (
-		<SmallText className="text-foreground">
+		<SmallText className="text-foreground min-w-0 truncate">
 			{isLoading ? (
-				<Skeleton className=" h-5 w-10" />
+				<Skeleton className="h-5 w-10" />
 			) : datacenter ? (
 				<ActorRegion regionId={datacenter} />
 			) : (
@@ -131,19 +142,32 @@ function Tags({ actorId }: { actorId: ActorId }) {
 		useDataProvider().actorKeysQueryOptions(actorId),
 	);
 
+	if (isLoading) {
+		return (
+			<SmallText className="text-foreground truncate min-w-0 max-w-full inline-flex items-center">
+				<Skeleton className="h-5 w-10" />
+			</SmallText>
+		);
+	}
+
+	if (!data) {
+		return (
+			<SmallText className="text-foreground truncate min-w-0 max-w-full inline-flex items-center">
+				-
+			</SmallText>
+		);
+	}
+
 	return (
-		<SmallText className="text-foreground truncate min-w-0 max-w-full inline-flex items-center gap-0.5 group">
-			{isLoading ? <Skeleton className="h-5 w-10" /> : data || "-"}
-			<CopyTrigger value={actorId}>
-				<Button
-					variant="ghost"
-					size="icon-xs"
-					className="group-hover:opacity-100 opacity-0 transition-opacity text-sm"
-				>
-					<Icon icon={faCopy} />
-				</Button>
-			</CopyTrigger>
-		</SmallText>
+		<CopyTrigger value={data}>
+			<span className="group/key inline-flex items-center gap-1 min-w-0 max-w-full cursor-pointer text-foreground transition-colors">
+				<span className="truncate min-w-0">{data}</span>
+				<Icon
+					icon={faCopy}
+					className="opacity-0 group-hover/key:opacity-100 transition-opacity shrink-0 size-3"
+				/>
+			</span>
+		</CopyTrigger>
 	);
 }
 
@@ -157,7 +181,7 @@ function Timestamp({ actorId }: { actorId: ActorId }) {
 	const timestamp = ts ? new Date(ts) : null;
 
 	return (
-		<SmallText className="hidden @xs/main:flex text-right text-muted-foreground justify-end">
+		<SmallText className="text-right text-muted-foreground justify-end inline-flex tabular-nums">
 			{isLoading ? (
 				<Skeleton className="h-5 w-10" />
 			) : timestamp ? (
@@ -172,29 +196,49 @@ function Timestamp({ actorId }: { actorId: ActorId }) {
 	);
 }
 
-function SkeletonContent() {
-	const showIds = useFiltersValue().showIds?.value.includes("1");
+export function ActorsListHeader() {
+	const { showIds, showDatacenter } = useActorsTableColumns();
+	const template = actorsTableGridTemplate(showIds, showDatacenter);
 
 	return (
-		<>
-			<div className="w-6 flex-none flex items-center justify-center">
+		<div className="sticky top-[45px] z-[1] bg-card border-b border-foreground/15">
+			<div
+				className="bg-foreground/[0.04] grid items-center gap-3 px-3 h-8 text-[10px] font-medium uppercase tracking-wide text-muted-foreground"
+				style={{ gridTemplateColumns: template }}
+			>
+				<div>Status</div>
+				{showIds ? <div>ID</div> : null}
+				{showDatacenter ? <div>Region</div> : null}
+				<div>Key</div>
+				<div className="text-right">Created</div>
+			</div>
+		</div>
+	);
+}
+
+function SkeletonContent() {
+	const { showIds, showDatacenter } = useActorsTableColumns();
+	const template = actorsTableGridTemplate(showIds, showDatacenter);
+
+	return (
+		<div
+			className="grid items-center w-full gap-3"
+			style={{ gridTemplateColumns: template }}
+		>
+			<div className="flex justify-center">
 				<ActorStatusIndicator status="unknown" />
 			</div>
-			<div className="flex-1 min-w-0 flex items-center gap-1">
-				{showIds ? <Skeleton className="h-5 w-10" /> : <div />}
-				<Skeleton className="h-5 w-10" />
-				<Skeleton className="h-5 w-10" />
-			</div>
-			<div className="hidden @xs/main:flex justify-end">
-				<Skeleton className="h-5 w-10" />
-			</div>
-		</>
+			{showIds ? <Skeleton className="h-5 w-16" /> : null}
+			{showDatacenter ? <Skeleton className="h-5 w-10" /> : null}
+			<Skeleton className="h-5 w-32" />
+			<Skeleton className="h-5 w-10 justify-self-end" />
+		</div>
 	);
 }
 
 export function ActorsListRowSkeleton() {
 	return (
-		<div className="border-b flex items-center gap-2 pl-2 pr-3 h-9 text-xs relative">
+		<div className="border-b flex items-center px-3 h-9 text-xs relative">
 			<SkeletonContent />
 		</div>
 	);

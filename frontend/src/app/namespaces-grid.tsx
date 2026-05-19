@@ -94,7 +94,7 @@ export function NamespacesGrid({
 						</div>
 					) : (
 						<div className="rounded-md border border-foreground/10 bg-card overflow-hidden">
-							<div className="grid grid-cols-[1fr_1fr_160px] gap-4 px-3 py-2 text-[10px] uppercase tracking-wider text-muted-foreground border-b border-foreground/10">
+							<div className="grid grid-cols-[1fr_1fr_160px] gap-4 px-3 py-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground border-b border-foreground/10 bg-foreground/[0.02]">
 								<div>Name</div>
 								<div>Identifier</div>
 								<div>Created</div>
