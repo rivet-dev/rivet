@@ -1,4 +1,4 @@
-import { Action, Actor, ActorState, State } from "@rivetkit/effect";
+import { Action, Actor, State } from "@rivetkit/effect";
 import {
 	Context,
 	Effect,
@@ -9,7 +9,7 @@ import {
 	SchemaIssue,
 	SchemaTransformation,
 } from "effect";
-import { db, type RawAccess } from "rivetkit/db";
+import { db } from "rivetkit/db";
 
 // --- Counter ---
 
@@ -194,7 +194,7 @@ const EncodedTransformedState = Schema.Struct({
 	),
 });
 
-const TransformedStateShape = Schema.Struct({
+const TransformedStateSchema = Schema.Struct({
 	when: Schema.DateFromString,
 	url: Schema.URLFromString,
 	id: Schema.BigIntFromString,
@@ -213,13 +213,13 @@ export const GetRawWakeState = Action.make("GetRawWakeState", {
 });
 
 export const GetDecodedState = Action.make("GetDecodedState", {
-	success: TransformedStateShape,
+	success: TransformedStateSchema,
 });
 
 export const SetTransformedStateAndSleep = Action.make(
 	"SetTransformedStateAndSleep",
 	{
-		payload: TransformedStateShape,
+		payload: TransformedStateSchema,
 	},
 );
 
@@ -234,18 +234,6 @@ export const TransformedStateActor = Actor.make("TransformedStateActor", {
 		SetTransformedStateAndSleep,
 		SetRawWakeStateAndSleep,
 	],
-});
-
-const TransformedActorState = ActorState.make("TransformedActorState", {
-	schema: TransformedStateShape,
-	initialValue: () => ({
-		when: new Date("2024-01-01T00:00:00.000Z"),
-		url: new URL("https://rivet.dev/docs"),
-		id: 1n,
-		bytes: new Uint8Array([1, 2, 3]),
-		tags: ["initial"],
-		history: [],
-	}),
 });
 
 export const TransformedStateActorLive = TransformedStateActor.toLayer(
@@ -269,7 +257,19 @@ export const TransformedStateActorLive = TransformedStateActor.toLayer(
 					}).pipe(Effect.orDie),
 			});
 		}),
-	{ state: TransformedActorState },
+	{
+		state: {
+			schema: TransformedStateSchema,
+			initialValue: () => ({
+				when: new Date("2024-01-01T00:00:00.000Z"),
+				url: new URL("https://rivet.dev/docs"),
+				id: 1n,
+				bytes: new Uint8Array([1, 2, 3]),
+				tags: ["initial"],
+				history: [],
+			}),
+		},
+	},
 );
 
 export const Counter = Actor.make("Counter", {
@@ -292,26 +292,6 @@ export const Counter = Actor.make("Counter", {
 		ListEvents,
 		CountEvents,
 	],
-});
-
-const CounterState = ActorState.make("CounterState", {
-	schema: Schema.Struct({
-		count: Schema.Number,
-		when: Schema.DateFromString,
-		tags: TagsCsv,
-		// `scaled` is encoded/decoded through `ScaledNumber`, which
-		// yields `Multiplier` inside the transform. The Registry's state
-		// encode (write) and decode (wake) sites must resolve the
-		// service against the snapshotted Runner context, the same way
-		// action codec sites do.
-		scaled: ScaledNumber,
-	}),
-	initialValue: () => ({
-		count: 0,
-		when: new Date(),
-		tags: ["default"],
-		scaled: 0,
-	}),
 });
 
 export const CounterLive = Counter.toLayer(
@@ -474,7 +454,25 @@ export const CounterLive = Counter.toLayer(
 			});
 		}),
 	{
-		state: CounterState,
+		state: {
+			schema: Schema.Struct({
+				count: Schema.Number,
+				when: Schema.DateFromString,
+				tags: TagsCsv,
+				// `scaled` is encoded/decoded through `ScaledNumber`, which
+				// yields `Multiplier` inside the transform. The Registry's state
+				// encode (write) and decode (wake) sites must resolve the
+				// service against the snapshotted Runner context, the same way
+				// action codec sites do.
+				scaled: ScaledNumber,
+			}),
+			initialValue: () => ({
+				count: 0,
+				when: new Date(),
+				tags: ["default"],
+				scaled: 0,
+			}),
+		},
 		// Migration runs once before the wake-scope build effect, so the
 		// destructured `db` is already pointed at a migrated database
 		// when handlers capture it.
@@ -493,15 +491,6 @@ export const CounterLive = Counter.toLayer(
 );
 
 // --- Strict ---
-
-// State schema that rejects negative values. Used to exercise the
-// typed-error channel on `State` writes: encoding a negative through
-// `State.set` fails with `SchemaError`, which now flows through the
-// handler effect instead of dying as a defect.
-const StrictState = ActorState.make("StrictState", {
-	schema: Schema.Number.pipe(Schema.check(Schema.isGreaterThanOrEqualTo(0))),
-	initialValue: () => 0,
-});
 
 // Catches the `SchemaError` from `State.set` and reports the outcome.
 // Proves a handler can react to a schema failure that originates inside
@@ -545,7 +534,18 @@ export const StrictLive = Strict.toLayer(
 				StrictGet: () => State.get(state),
 			});
 		}),
-	{ state: StrictState },
+	{
+		state: {
+			// State schema that rejects negative values. Used to exercise the
+			// typed-error channel on `State` writes: encoding a negative through
+			// `State.set` fails with `SchemaError`, which now flows through the
+			// handler effect instead of dying as a defect.
+			schema: Schema.Number.pipe(
+				Schema.check(Schema.isGreaterThanOrEqualTo(0)),
+			),
+			initialValue: () => 0,
+		},
+	},
 );
 
 // --- Pinger ---
@@ -582,33 +582,6 @@ export const Unregistered = Actor.make("Unregistered", { actions: [Echo] });
 
 // --- WakeDecodeFail ---
 
-// Schema whose encode is permissive (identity) but whose decode rejects
-// negatives. Used to seed invalid persisted actor state so
-// `state` construction rejects on first wake.
-const PermissiveEncodeStrictDecode = Schema.Number.pipe(
-	Schema.decodeTo(
-		Schema.Number,
-		SchemaTransformation.transformOrFail({
-			decode: (n: number) =>
-				n >= 0
-					? Effect.succeed(n)
-					: Effect.fail(
-							new SchemaIssue.InvalidValue(Option.some(n), {
-								message: "decode rejects negative",
-							}),
-						),
-			encode: (n: number) => Effect.succeed(n),
-		}),
-	),
-);
-
-const WakeDecodeFailState = ActorState.make("WakeDecodeFailState", {
-	schema: PermissiveEncodeStrictDecode,
-	// `-1` encodes successfully (encode is identity) so registry setup
-	// passes, but the wake-time decode rejects before handlers are built.
-	initialValue: () => -1,
-});
-
 export const WakeDecodeFail = Actor.make("WakeDecodeFail", {
 	actions: [Ping],
 });
@@ -620,19 +593,39 @@ export const WakeDecodeFailLive = WakeDecodeFail.toLayer(
 				Ping: () => Effect.succeed("never reached"),
 			});
 		}),
-	{ state: WakeDecodeFailState },
+	{
+		state: {
+			// Schema whose encode is permissive (identity) but whose decode rejects
+			// negatives. Used to seed invalid persisted actor state so
+			// `state` construction rejects on first wake.
+			schema: Schema.Number.pipe(
+				Schema.decodeTo(
+					Schema.Number,
+					SchemaTransformation.transformOrFail({
+						decode: (n: number) =>
+							n >= 0
+								? Effect.succeed(n)
+								: Effect.fail(
+										new SchemaIssue.InvalidValue(
+											Option.some(n),
+											{
+												message:
+													"decode rejects negative",
+											},
+										),
+									),
+						encode: (n: number) => Effect.succeed(n),
+					}),
+				),
+			),
+			// `-1` encodes successfully (encode is identity) so registry setup
+			// passes, but the wake-time decode rejects before handlers are built.
+			initialValue: () => -1,
+		},
+	},
 );
 
 // --- BuildSetRejected ---
-
-// Strict schema rejecting negatives on encode. The build effect deliberately
-// calls `State.set` against `state` with a value the schema
-// rejects, catches the resulting `SchemaError` via `Effect.match`, and
-// exposes the outcome via `BuildOutcome`.
-const StrictForBuildState = ActorState.make("StrictForBuildState", {
-	schema: Schema.Number.pipe(Schema.check(Schema.isGreaterThanOrEqualTo(0))),
-	initialValue: () => 0,
-});
 
 export const BuildOutcome = Action.make("BuildOutcome", {
 	success: Schema.Literals(["wrote", "rejected"]),
@@ -656,5 +649,16 @@ export const BuildSetRejectedLive = BuildSetRejected.toLayer(
 					Effect.succeed(wrote ? "wrote" : "rejected"),
 			});
 		}),
-	{ state: StrictForBuildState },
+	{
+		state: {
+			// Strict schema rejecting negatives on encode. The build effect deliberately
+			// calls `State.set` against `state` with a value the schema
+			// rejects, catches the resulting `SchemaError` via `Effect.match`, and
+			// exposes the outcome via `BuildOutcome`.
+			schema: Schema.Number.pipe(
+				Schema.check(Schema.isGreaterThanOrEqualTo(0)),
+			),
+			initialValue: () => 0,
+		},
+	},
 );

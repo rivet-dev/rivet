@@ -10,7 +10,6 @@ import { db } from "rivetkit/db";
 import { describe, expectTypeOf, test } from "vitest";
 import * as Action from "./Action";
 import * as Actor from "./Actor";
-import * as ActorState from "./ActorState";
 import type * as Client from "./Client";
 import type * as State from "./State";
 
@@ -24,12 +23,12 @@ const TestActor = Actor.make("TestActor", {
 
 type TestActions = (typeof TestActor.actions)[number];
 
-const TestState = ActorState.make("TestState", {
+const TestState = {
 	schema: Schema.Struct({
 		count: Schema.Number,
 	}),
 	initialValue: () => ({ count: 0 }),
-});
+};
 
 const TagsCsv = Schema.String.pipe(
 	Schema.decodeTo(
@@ -41,7 +40,7 @@ const TagsCsv = Schema.String.pipe(
 	),
 );
 
-const TransformedState = ActorState.make("TransformedState", {
+const TransformedState = {
 	schema: Schema.Struct({
 		when: Schema.DateFromString,
 		url: Schema.URLFromString,
@@ -68,7 +67,7 @@ const TransformedState = ActorState.make("TransformedState", {
 			},
 		],
 	}),
-});
+};
 
 describe("Actor.make", () => {
 	test("preserves the name literal", () => {
