@@ -1,7 +1,11 @@
 import { Context, Effect, type Layer } from "effect";
+import { Schema } from "effect";
+import type { RawAccess } from "rivetkit/db";
+import { db } from "rivetkit/db";
 import { describe, expectTypeOf, test } from "vitest";
 import * as Action from "./Action";
 import * as Actor from "./Actor";
+import * as ActorState from "./ActorState";
 import type * as Client from "./Client";
 
 class SomeDep extends Context.Service<SomeDep, { readonly x: number }>()(
@@ -13,6 +17,13 @@ const TestActor = Actor.make("TestActor", {
 });
 
 type TestActions = (typeof TestActor.actions)[number];
+
+const TestState = ActorState.make("TestState", {
+	schema: Schema.Struct({
+		count: Schema.Number,
+	}),
+	initialValue: () => ({ count: 0 }),
+});
 
 describe("Actor.make", () => {
 	test("preserves the name literal", () => {
@@ -45,6 +56,36 @@ describe("Actor.make(...).toLayer", () => {
 		expectTypeOf(TestActor.toLayer).toBeCallableWith((_wakeOptions) => ({
 			GetContext: () => Effect.void,
 		}));
+	});
+
+	test("wake options carry the configured state type", () => {
+		TestActor.toLayer(
+			(wakeOptions) => {
+				expectTypeOf(
+					wakeOptions.rawRivetkitContext.state,
+				).toEqualTypeOf<{ readonly count: number }>();
+
+				return {
+					GetContext: () => Effect.void,
+				};
+			},
+			{ state: TestState },
+		);
+	});
+
+	test("wake options carry the configured database client type", () => {
+		TestActor.toLayer(
+			(wakeOptions) => {
+				expectTypeOf(
+					wakeOptions.rawRivetkitContext.db,
+				).toEqualTypeOf<RawAccess>();
+
+				return {
+					GetContext: () => Effect.void,
+				};
+			},
+			{ db: db() },
+		);
 	});
 
 	test("accepts a function returning an Effect of action handlers", () => {
