@@ -1,4 +1,10 @@
-import { faEllipsis, faPlus, faUserPlus, Icon } from "@rivet-gg/icons";
+import {
+	faEllipsis,
+	faGear,
+	faPlus,
+	faUserPlus,
+	Icon,
+} from "@rivet-gg/icons";
 import { useInfiniteQuery, useMutation } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "framer-motion";
@@ -20,6 +26,7 @@ import {
 	ScrollArea,
 	SmallText,
 	toast,
+	WithTooltip,
 } from "@/components";
 import { queryClient } from "@/queries/global";
 import { useCloudDataProvider } from "@/components/actors";
@@ -51,23 +58,49 @@ export function OrgLanding({ organization }: { organization: string }) {
 		<div className="flex flex-1 min-h-0 my-2 mr-2 overflow-hidden rounded-xl border border-foreground/10 bg-card">
 			<ScrollArea className="h-full w-full">
 				<div className="px-6 py-6 max-w-6xl mx-auto space-y-8">
-					<header className="flex items-center gap-3">
-						<Avatar className="size-10 shrink-0">
-							<AvatarImage src={org?.logo ?? undefined} />
-							<AvatarFallback
-								className="text-white text-base font-semibold"
-								style={{
-									backgroundImage: orgConicGradient(
-										paletteForLetter(org?.name ?? ""),
-									),
-								}}
-							>
-								{(org?.name?.[0] ?? "?").toUpperCase()}
-							</AvatarFallback>
-						</Avatar>
-						<H1 className="text-2xl">
-							{org?.name ?? "Organization"}
-						</H1>
+					<header className="flex items-center justify-between gap-4 pb-6 border-b border-foreground/10">
+						<div className="flex items-center gap-3 min-w-0">
+							<Avatar className="size-10 shrink-0">
+								<AvatarImage src={org?.logo ?? undefined} />
+								<AvatarFallback
+									className="text-white text-base font-semibold"
+									style={{
+										backgroundImage: orgConicGradient(
+											paletteForLetter(org?.name ?? ""),
+										),
+									}}
+								>
+									{(org?.name?.[0] ?? "?").toUpperCase()}
+								</AvatarFallback>
+							</Avatar>
+							<H1 className="text-2xl truncate">
+								{org?.name ?? "Organization"}
+							</H1>
+						</div>
+						<WithTooltip
+							content="Organization settings"
+							trigger={
+								<Button
+									variant="outline"
+									size="icon-sm"
+									aria-label="Organization settings"
+									onClick={() => {
+										navigate({
+											to: ".",
+											search: (old) => ({
+												...(old as Record<
+													string,
+													unknown
+												>),
+												modal: "organization",
+											}),
+										});
+									}}
+								>
+									<Icon icon={faGear} />
+								</Button>
+							}
+						/>
 					</header>
 
 					<section>
