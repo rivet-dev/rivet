@@ -1,4 +1,4 @@
-import { faLifeRing, Icon } from "@rivet-gg/icons";
+import { faArrowUpRightFromSquare, faLifeRing, Icon } from "@rivet-gg/icons";
 import { useState } from "react";
 import {
 	Button,
@@ -81,13 +81,16 @@ export function HelpButton({ source = "web" }: { source?: string }) {
 						Contact support
 					</h3>
 					<a
-						href="https://status.rivet.dev"
+						href="https://rivet.betteruptime.com/"
 						target="_blank"
 						rel="noopener noreferrer"
-						className="flex items-center gap-1.5 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+						className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
 					>
-						<span className="inline-flex size-1.5 rounded-full bg-emerald-500" />
-						All systems operational
+						Status page
+						<Icon
+							icon={faArrowUpRightFromSquare}
+							className="size-2.5"
+						/>
 					</a>
 				</div>
 				<div className="p-3 space-y-3">
