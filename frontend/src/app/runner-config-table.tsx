@@ -66,7 +66,7 @@ export function RunnerConfigsTable({
 					<TableHead className="w-8"></TableHead>
 					<TableHead className="pl-8">Name</TableHead>
 					<TableHead>Provider</TableHead>
-					<TableHead>Endpoint</TableHead>
+					<TableHead className="w-[220px] max-w-[220px]">Endpoint</TableHead>
 					<TableHead>Datacenter</TableHead>
 					<TableHead></TableHead>
 				</TableRow>
@@ -171,7 +171,7 @@ function Row({
 			<TableCell>
 				<Providers datacenters={datacenters} />
 			</TableCell>
-			<TableCell>
+			<TableCell className="w-[220px] max-w-[220px] truncate">
 				<Endpoints datacenters={datacenters} />
 			</TableCell>
 			<TableCell>
@@ -317,6 +317,11 @@ function Providers({
 	);
 }
 
+function truncateEndpoint(endpoint: string) {
+	if (endpoint.length <= 20) return endpoint;
+	return `${endpoint.slice(0, 10)}...${endpoint.slice(-7)}`;
+}
+
 function Endpoints({
 	datacenters,
 }: {
@@ -335,11 +340,14 @@ function Endpoints({
 	if (endpoints.length === 1) {
 		const endpoint = endpoints[0];
 		return (
-			<DiscreteCopyButton value={endpoint}>
-				{endpoint && endpoint.length > 32
-					? `${endpoint.slice(0, 16)}...${endpoint.slice(-16)}`
-					: endpoint || "-"}
-			</DiscreteCopyButton>
+			<WithTooltip
+				content={endpoint || "-"}
+				trigger={
+					<DiscreteCopyButton value={endpoint}>
+						{endpoint ? truncateEndpoint(endpoint) : "-"}
+					</DiscreteCopyButton>
+				}
+			/>
 		);
 	}
 
@@ -357,9 +365,7 @@ function Endpoints({
 									className="px-2 -mx-2"
 								>
 									<span>
-										{endpoint && endpoint.length > 32
-											? `${endpoint.slice(0, 16)}...${endpoint.slice(-16)}`
-											: endpoint || "-"}
+										{endpoint ? truncateEndpoint(endpoint) : "-"}
 									</span>
 								</DiscreteCopyButton>
 							</li>
