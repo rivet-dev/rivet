@@ -136,39 +136,14 @@ export function ActorsGrid({
 	const builds = data ?? [];
 	const sorted = builds.toSorted((a, b) => a.id.localeCompare(b.id));
 
-	const heading = namespaceLabel ? `${namespaceLabel} Actors` : "Actors";
-	const subheading = `Each card is an actor type registered in the ${namespaceLabel ?? "this"} namespace.`;
+	const namespaceName = namespaceLabel ?? "Namespace";
 
 	return (
 		<div className="flex flex-1 min-h-0 my-2 mr-2 overflow-hidden rounded-xl border border-foreground/10 bg-card">
 			<ScrollArea className="h-full w-full">
-				<div className="px-6 py-6 max-w-6xl mx-auto">
-				<div className="flex items-start justify-between gap-4 mb-6">
-					<div>
-						<H1 className="text-2xl">{heading}</H1>
-						<SmallText className="text-muted-foreground mt-1">
-							{subheading}
-						</SmallText>
-					</div>
-					<div className="flex items-center gap-2 shrink-0">
-						{builds.length > 0 ? (
-							<Button
-								variant="outline"
-								size="sm"
-								startIcon={<Icon icon={faPlus} />}
-								onClick={() => {
-									navigate({
-										to: ".",
-										search: (old) => ({
-											...old,
-											modal: "create-actor",
-										}),
-									});
-								}}
-							>
-								Create Actor
-							</Button>
-						) : null}
+				<div className="px-6 py-6 max-w-6xl mx-auto space-y-8">
+					<header className="flex items-center justify-between gap-4 pb-6 border-b border-foreground/10">
+						<H1 className="text-2xl truncate">{namespaceName}</H1>
 						<WithTooltip
 							content="Namespace settings"
 							trigger={
@@ -190,94 +165,124 @@ export function ActorsGrid({
 								</Button>
 							}
 						/>
-					</div>
-				</div>
+					</header>
 
-				{!isLoading && builds.length === 0 ? (
-					!hasRunners ? (
-						<NoProvidersAlert variant="connect" />
-					) : (
-						<div className="flex flex-col items-center gap-3 rounded-md border border-dashed bg-card/50 px-6 py-10 text-center">
-							<H1 className="text-base">No actors yet</H1>
-							<SmallText className="text-muted-foreground max-w-md">
-								Deploy code that registers an actor to see it here.
-							</SmallText>
-							<Button
-								variant="default"
-								size="sm"
-								startIcon={<Icon icon={faPlus} />}
-								onClick={() => {
-									navigate({
-										to: ".",
-										search: (old) => ({
-											...old,
-											modal: "create-actor",
-										}),
-									});
-								}}
-							>
-								Create Actor
-							</Button>
-						</div>
-					)
-				) : (
-					<div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-					{sorted.map((build) => {
-						const meta = build.name.metadata as
-							| Record<string, unknown>
-							| undefined;
-						const iconValue =
-							typeof meta?.icon === "string" ? meta.icon : null;
-						const displayName =
-							typeof meta?.name === "string"
-								? meta.name
-								: build.id;
+					<section>
+						<header className="flex items-center justify-between gap-4 mb-3">
+							<h2 className="text-base font-semibold text-foreground">
+								Actors
+							</h2>
+							{builds.length > 0 ? (
+								<Button
+									variant="outline"
+									size="sm"
+									startIcon={<Icon icon={faPlus} />}
+									onClick={() => {
+										navigate({
+											to: ".",
+											search: (old) => ({
+												...old,
+												modal: "create-actor",
+											}),
+										});
+									}}
+								>
+									Create Actor
+								</Button>
+							) : null}
+						</header>
 
-						return (
-							<Link
-								key={build.id}
-								to="."
-								search={(old) => ({
-									...old,
-									actorId: undefined,
-									actorKey: undefined,
-									n: [build.id],
-								})}
-								className={cn(
-									"group relative flex flex-col items-start gap-2 rounded-lg border border-foreground/10 bg-foreground/[0.02] p-4 text-left transition-colors",
-									"hover:border-foreground/20 hover:bg-foreground/[0.05]",
-									"focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-									"min-h-[110px] cursor-pointer",
-								)}
-							>
-									<div className="flex h-9 w-9 items-center justify-center rounded-md bg-foreground/[0.06] text-foreground/80">
-										<Suspense
-											fallback={
-												<Icon
-													icon={faActorsBorderless}
-													className="opacity-60 animate-pulse"
-												/>
-											}
-										>
-											<ActorIcon
-												iconValue={iconValue}
-												className="text-lg"
-											/>
-										</Suspense>
-									</div>
-									<div className="font-medium text-sm leading-tight">
-										{displayName}
-									</div>
-								{displayName !== build.id ? (
-									<SmallText className="text-muted-foreground text-xs leading-tight">
-										{build.id}
+						{!isLoading && builds.length === 0 ? (
+							!hasRunners ? (
+								<NoProvidersAlert variant="connect" />
+							) : (
+								<div className="flex flex-col items-center gap-3 rounded-md border border-dashed bg-card/50 px-6 py-10 text-center">
+									<h3 className="text-base font-semibold text-foreground">
+										No actors yet
+									</h3>
+									<SmallText className="text-muted-foreground max-w-md">
+										Deploy code that registers an actor to see
+										it here.
 									</SmallText>
-								) : null}
-							</Link>
-						);
-					})}
-					</div>
-				)}
+									<Button
+										variant="default"
+										size="sm"
+										startIcon={<Icon icon={faPlus} />}
+										onClick={() => {
+											navigate({
+												to: ".",
+												search: (old) => ({
+													...old,
+													modal: "create-actor",
+												}),
+											});
+										}}
+									>
+										Create Actor
+									</Button>
+								</div>
+							)
+						) : (
+							<div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+								{sorted.map((build) => {
+									const meta = build.name.metadata as
+										| Record<string, unknown>
+										| undefined;
+									const iconValue =
+										typeof meta?.icon === "string"
+											? meta.icon
+											: null;
+									const displayName =
+										typeof meta?.name === "string"
+											? meta.name
+											: build.id;
+
+									return (
+										<Link
+											key={build.id}
+											to="."
+											search={(old) => ({
+												...old,
+												actorId: undefined,
+												actorKey: undefined,
+												n: [build.id],
+											})}
+											className={cn(
+												"group relative flex flex-col items-start gap-2 rounded-lg border border-foreground/10 bg-foreground/[0.02] p-4 text-left transition-colors",
+												"hover:border-foreground/20 hover:bg-foreground/[0.05]",
+												"focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+												"min-h-[110px] cursor-pointer",
+											)}
+										>
+											<div className="flex h-9 w-9 items-center justify-center rounded-md bg-foreground/[0.06] text-foreground/80">
+												<Suspense
+													fallback={
+														<Icon
+															icon={faActorsBorderless}
+															className="opacity-60 animate-pulse"
+														/>
+													}
+												>
+													<ActorIcon
+														iconValue={iconValue}
+														className="text-lg"
+													/>
+												</Suspense>
+											</div>
+											<div className="font-medium text-sm leading-tight">
+												{displayName}
+											</div>
+											{displayName !== build.id ? (
+												<SmallText className="text-muted-foreground text-xs leading-tight">
+													{build.id}
+												</SmallText>
+											) : null}
+										</Link>
+									);
+								})}
+							</div>
+						)}
+					</section>
 				</div>
 			</ScrollArea>
 		</div>
