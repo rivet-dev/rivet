@@ -1,5 +1,7 @@
 import {
 	faActors,
+	faArrowUpRightFromSquare,
+	faBookOpen,
 	faMagnifyingGlass,
 	faQuestionSquare,
 	faSidebarFlip,
@@ -368,33 +370,9 @@ function EmptyState({ count }: { count: number }) {
 							<NoProvidersAlert />
 						</div>
 					) : (
-						<div className="mt-12 mx-auto max-w-sm flex flex-col items-center gap-4 text-center">
-							<div className="flex h-12 w-12 items-center justify-center rounded-full bg-foreground/[0.04] border border-foreground/10">
-								<Icon
-									icon={faActors}
-									className="text-lg text-muted-foreground/80"
-								/>
-							</div>
-							<div className="flex flex-col gap-1">
-								<p className="text-sm font-medium text-foreground">
-									{names && names.length > 0
-										? "No instances yet"
-										: "No actors yet"}
-								</p>
-								<SmallText className="text-muted-foreground my-0 leading-relaxed">
-									{names && names.length > 0
-										? "Instances of this actor will appear here as your code calls them."
-										: copy.noActorsFound}
-								</SmallText>
-							</div>
-							<CreateActorButton
-								label={
-									names && names.length > 0
-										? "Create Instance"
-										: undefined
-								}
-							/>
-						</div>
+						<QuickstartEmptyState
+							hasNameFilter={Boolean(names && names.length > 0)}
+						/>
 					)
 				) : (
 					<>
@@ -484,5 +462,113 @@ function Display() {
 				onChange={onFiltersChange}
 			/>
 		</>
+	);
+}
+
+const QUICKSTART_DEFINE_SNIPPET = `import { actor, setup } from "rivetkit";
+
+const counter = actor({
+  state: { count: 0 },
+  actions: {
+    increment: (c, by: number) => {
+      c.state.count += by;
+      return c.state.count;
+    },
+  },
+});
+
+export const registry = setup({ use: { counter } });`;
+
+function QuickstartEmptyState({ hasNameFilter }: { hasNameFilter: boolean }) {
+	const { links } = useActorsView();
+	const title = hasNameFilter
+		? "Call this actor to see instances"
+		: "Get started with Actors";
+	const description = hasNameFilter
+		? "Instances appear here the first time your code calls this actor with a unique key, or create one manually."
+		: "Define an actor in your registry. Instances appear here as your code calls them.";
+
+	return (
+		<div className="mx-auto my-10 w-full max-w-3xl px-4">
+			<div className="rounded-2xl border border-foreground/10 bg-card shadow-sm overflow-hidden">
+				<div className="px-8 pt-8 pb-6 border-b border-foreground/10">
+					<h2 className="text-xl font-semibold tracking-tight">
+						{title}
+					</h2>
+					<p className="mt-1.5 text-sm text-muted-foreground leading-relaxed">
+						{description}
+					</p>
+				</div>
+
+				{hasNameFilter ? null : (
+					<div className="px-8 py-6">
+						<QuickstartSection
+							step={1}
+							title="Define an actor in your registry"
+							code={QUICKSTART_DEFINE_SNIPPET}
+						/>
+					</div>
+				)}
+
+				<div className="px-8 py-4 border-t border-foreground/10 flex flex-wrap items-center justify-between gap-6">
+					<div className="flex flex-wrap items-center gap-x-8 gap-y-3">
+						<a
+							href={links.gettingStarted.node}
+							target="_blank"
+							rel="noopener noreferrer"
+							className="inline-flex items-center gap-2 text-sm font-medium text-foreground hover:text-foreground/80"
+						>
+							<Icon icon={faBookOpen} className="size-3.5" />
+							Backend quickstart
+							<Icon
+								icon={faArrowUpRightFromSquare}
+								className="size-3 text-muted-foreground"
+							/>
+						</a>
+						<a
+							href={links.gettingStarted.react}
+							target="_blank"
+							rel="noopener noreferrer"
+							className="inline-flex items-center gap-2 text-sm font-medium text-foreground hover:text-foreground/80"
+						>
+							<Icon icon={faBookOpen} className="size-3.5" />
+							React quickstart
+							<Icon
+								icon={faArrowUpRightFromSquare}
+								className="size-3 text-muted-foreground"
+							/>
+						</a>
+					</div>
+					<CreateActorButton
+						variant="default"
+						label={hasNameFilter ? "Create Instance" : undefined}
+					/>
+				</div>
+			</div>
+		</div>
+	);
+}
+
+function QuickstartSection({
+	step,
+	title,
+	code,
+}: {
+	step: number;
+	title: string;
+	code: string;
+}) {
+	return (
+		<div className="flex gap-4">
+			<div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-foreground/10 text-xs font-semibold text-foreground">
+				{step}
+			</div>
+			<div className="flex-1 min-w-0">
+				<p className="text-sm font-medium text-foreground mb-2">{title}</p>
+				<pre className="rounded-lg border border-foreground/10 bg-background/60 px-4 py-3 text-xs leading-relaxed overflow-x-auto font-mono text-foreground/90">
+					<code>{code}</code>
+				</pre>
+			</div>
+		</div>
 	);
 }
