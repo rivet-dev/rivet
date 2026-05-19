@@ -42,6 +42,7 @@ import {
 	SmallText,
 	WithTooltip,
 } from "@/components";
+import { CodePreview } from "../code-preview/code-preview";
 import { VisibilitySensor } from "../visibility-sensor";
 import { useActorsFilters, useFiltersValue } from "./actor-filters-context";
 import { useActorsLayout } from "./actors-layout-context";
@@ -655,9 +656,11 @@ function QuickstartSection({
 			</div>
 			<div className="flex-1 min-w-0">
 				<p className="text-sm font-medium text-foreground mb-2">{title}</p>
-				<pre className="rounded-lg border border-foreground/10 bg-background/60 px-4 py-3 text-xs leading-relaxed overflow-x-auto font-mono text-foreground/90">
-					<code>{code}</code>
-				</pre>
+				<CodePreview
+					code={code}
+					language="typescript"
+					className="rounded-lg border border-foreground/10 bg-background/60 px-4 py-3 text-xs leading-relaxed overflow-x-auto font-mono [&_pre]:!bg-transparent"
+				/>
 			</div>
 		</div>
 	);
