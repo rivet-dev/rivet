@@ -1854,6 +1854,7 @@ async fn fetch_initial_pages(
 fn is_initial_main_page_missing(message: &str) -> bool {
 	message.contains("sqlite database was not found in this bucket branch")
 		|| message.contains("sqlite meta missing for get_pages")
+		|| message == "actor does not exist"
 }
 
 fn next_temp_aux_path() -> String {

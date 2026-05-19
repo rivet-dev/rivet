@@ -698,7 +698,8 @@ async fn handle_sqlite_get_pages(
 	conn: &Conn,
 	request: protocol::SqliteGetPagesRequest,
 ) -> Result<protocol::SqliteGetPagesResponse> {
-	validate_sqlite_actor(ctx, conn, &request.actor_id).await?;
+	validate_sqlite_actor_for_request(ctx, conn, &request.actor_id, request.expected_generation)
+		.await?;
 
 	let actor_db = actor_db(ctx, conn, request.actor_id.clone()).await?;
 	let result = actor_db
@@ -733,7 +734,8 @@ async fn handle_sqlite_commit(
 	request: protocol::SqliteCommitRequest,
 ) -> Result<protocol::SqliteCommitResponse> {
 	let decode_request_start = Instant::now();
-	validate_sqlite_actor(ctx, conn, &request.actor_id).await?;
+	validate_sqlite_actor_for_request(ctx, conn, &request.actor_id, request.expected_generation)
+		.await?;
 	let decode_request_duration = decode_request_start.elapsed();
 	crate::metrics::SQLITE_COMMIT_ENVOY_DISPATCH_DURATION
 		.observe(decode_request_duration.as_secs_f64());
@@ -860,6 +862,19 @@ async fn validate_sqlite_actor(ctx: &StandaloneCtx, conn: &Conn, actor_id: &str)
 	}
 
 	Ok(())
+}
+
+async fn validate_sqlite_actor_for_request(
+	ctx: &StandaloneCtx,
+	conn: &Conn,
+	actor_id: &str,
+	expected_generation: Option<u64>,
+) -> Result<()> {
+	if let Some(generation) = expected_generation {
+		validate_remote_sqlite_generation(ctx, conn, actor_id, generation).await
+	} else {
+		validate_sqlite_actor(ctx, conn, actor_id).await
+	}
 }
 
 async fn validate_remote_sqlite_generation(
@@ -1125,11 +1140,10 @@ fn depot_error(err: &anyhow::Error) -> Option<&SqliteStorageError> {
 
 fn is_startup_database_miss(
 	err: &anyhow::Error,
-	expected_generation: Option<u64>,
+	_expected_generation: Option<u64>,
 	expected_head_txid: Option<u64>,
 ) -> bool {
-	expected_generation.is_none()
-		&& expected_head_txid.is_none()
+	expected_head_txid.is_none()
 		&& matches!(depot_error(err), Some(SqliteStorageError::DatabaseNotFound))
 }
 
