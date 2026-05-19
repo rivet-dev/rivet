@@ -1,4 +1,4 @@
-import { faPlus, Icon } from "@rivet-gg/icons";
+import { faGear, faPlus, Icon } from "@rivet-gg/icons";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import {
@@ -8,6 +8,7 @@ import {
 	RelativeTime,
 	ScrollArea,
 	SmallText,
+	WithTooltip,
 } from "@/components";
 import { useCloudProjectDataProvider } from "@/components/actors";
 
@@ -48,24 +49,47 @@ export function NamespacesGrid({
 								Local, Staging, Production.
 							</SmallText>
 						</div>
-						{sorted.length > 0 ? (
-							<Button
-								variant="outline"
-								size="sm"
-								startIcon={<Icon icon={faPlus} />}
-								onClick={() => {
-									navigate({
-										to: ".",
-										search: (old) => ({
-											...(old as Record<string, unknown>),
-											modal: "create-ns",
-										}),
-									});
-								}}
-							>
-								Create Namespace
-							</Button>
-						) : null}
+						<div className="flex items-center gap-2 shrink-0">
+							{sorted.length > 0 ? (
+								<Button
+									variant="outline"
+									size="sm"
+									startIcon={<Icon icon={faPlus} />}
+									onClick={() => {
+										navigate({
+											to: ".",
+											search: (old) => ({
+												...(old as Record<string, unknown>),
+												modal: "create-ns",
+											}),
+										});
+									}}
+								>
+									Create Namespace
+								</Button>
+							) : null}
+							<WithTooltip
+								content="Project settings"
+								trigger={
+									<Button
+										variant="outline"
+										size="icon-sm"
+										aria-label="Project settings"
+										onClick={() => {
+											navigate({
+												to: ".",
+												search: (old) => ({
+													...(old as Record<string, unknown>),
+													modal: "billing",
+												}),
+											});
+										}}
+									>
+										<Icon icon={faGear} />
+									</Button>
+								}
+							/>
+						</div>
 					</div>
 
 					{!isLoading && sorted.length === 0 ? (
