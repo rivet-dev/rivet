@@ -5,8 +5,6 @@ use tokio::sync::mpsc;
 
 use crate::util::{self, SYNC_RUNTIME};
 
-const EVENT_BUFFER_SIZE: usize = 100;
-
 struct ActorEvent {
     name: String,
     args: Vec<serde_json::Value>,
@@ -15,13 +13,13 @@ struct ActorEvent {
 #[pyclass]
 pub struct ActorHandle {
     handle: rivetkit_rs::connection::ActorHandle,
-    event_rx: Option<mpsc::Receiver<ActorEvent>>,
-    event_tx: mpsc::Sender<ActorEvent>,
+    event_rx: Option<mpsc::UnboundedReceiver<ActorEvent>>,
+    event_tx: mpsc::UnboundedSender<ActorEvent>,
 }
 
 impl ActorHandle {
     pub fn new(handle: rivetkit_rs::connection::ActorHandle) -> Self {
-        let (event_tx, event_rx) = mpsc::channel(EVENT_BUFFER_SIZE);
+        let (event_tx, event_rx) = mpsc::unbounded_channel();
 
         Self {
             handle,
@@ -90,7 +88,7 @@ impl ActorHandle {
                         args: args.clone(),
                     };
                     // Send this upstream(?)
-                    tx.send(event).await.map_err(|e| {
+                    tx.send(event).map_err(|e| {
                         py_runtime_err!(
                             "Failed to send via inner tx: {}",
                             e
