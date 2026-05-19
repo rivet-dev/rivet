@@ -1,19 +1,6 @@
 import { Effect, Schema } from "effect";
-import { ActorState, State } from "@rivetkit/effect";
+import { State } from "@rivetkit/effect";
 import { Directory } from "./api.ts";
-
-const DirectoryState = ActorState.make("DirectoryState", {
-	schema: Schema.Struct({
-		rooms: Schema.Array(
-			Schema.Struct({
-				name: Schema.String,
-				openedAt: Schema.Number,
-				closedAt: Schema.optionalKey(Schema.Number),
-			}),
-		),
-	}),
-	initialValue: () => ({ rooms: [] }),
-});
 
 export const DirectoryLive = Directory.toLayer(
 	({ state }) =>
@@ -54,5 +41,20 @@ export const DirectoryLive = Directory.toLayer(
 					),
 			});
 		}),
-	{ state: DirectoryState, name: "Directory", icon: "folder" },
+	{
+		state: {
+			schema: Schema.Struct({
+				rooms: Schema.Array(
+					Schema.Struct({
+						name: Schema.String,
+						openedAt: Schema.Number,
+						closedAt: Schema.optionalKey(Schema.Number),
+					}),
+				),
+			}),
+			initialValue: () => ({ rooms: [] }),
+		},
+		name: "Directory",
+		icon: "folder",
+	},
 );

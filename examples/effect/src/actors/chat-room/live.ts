@@ -1,32 +1,12 @@
 import { Effect, Schema } from "effect";
-import { Actor, ActorState, State } from "@rivetkit/effect";
-import { db, type RawAccess } from "rivetkit/db";
+import { Actor, State } from "@rivetkit/effect";
+import { db } from "rivetkit/db";
 import { ChatRoom } from "./api.ts";
 
 interface ModerationVerdict {
 	readonly approved: boolean;
 	readonly reason?: string;
 }
-
-const ChatRoomState = ActorState.make("ChatRoomState", {
-	schema: Schema.Struct({
-		name: Schema.String,
-		members: Schema.Array(
-			Schema.Struct({
-				name: Schema.String,
-				joinedAt: Schema.Number,
-			}),
-		),
-		wakeCount: Schema.Number,
-		initialized: Schema.Boolean,
-	}),
-	initialValue: () => ({
-		name: "",
-		members: [],
-		wakeCount: 0,
-		initialized: false,
-	}),
-});
 
 export const ChatRoomLive = ChatRoom.toLayer(
 	({ rawRivetkitContext, state }) =>
@@ -219,7 +199,25 @@ export const ChatRoomLive = ChatRoom.toLayer(
 			});
 		}),
 	{
-		state: ChatRoomState,
+		state: {
+			schema: Schema.Struct({
+				name: Schema.String,
+				members: Schema.Array(
+					Schema.Struct({
+						name: Schema.String,
+						joinedAt: Schema.Number,
+					}),
+				),
+				wakeCount: Schema.Number,
+				initialized: Schema.Boolean,
+			}),
+			initialValue: () => ({
+				name: "",
+				members: [],
+				wakeCount: 0,
+				initialized: false,
+			}),
+		},
 		db: db({
 			onMigrate: async (client) => {
 				await client.execute(`

@@ -1,14 +1,6 @@
 import { Effect, Schema } from "effect";
-import { ActorState, State } from "@rivetkit/effect";
+import { State } from "@rivetkit/effect";
 import { Moderator } from "./api.ts";
-
-const ModeratorState = ActorState.make("ModeratorState", {
-	schema: Schema.Struct({
-		bannedWords: Schema.Array(Schema.String),
-		reviewed: Schema.Number,
-	}),
-	initialValue: () => ({ bannedWords: ["spam", "scam"], reviewed: 0 }),
-});
 
 export const ModeratorLive = Moderator.toLayer(
 	({ state }) =>
@@ -45,5 +37,18 @@ export const ModeratorLive = Moderator.toLayer(
 					),
 			});
 		}),
-	{ state: ModeratorState, name: "Moderator", icon: "shield" },
+	{
+		state: {
+			schema: Schema.Struct({
+				bannedWords: Schema.Array(Schema.String),
+				reviewed: Schema.Number,
+			}),
+			initialValue: () => ({
+				bannedWords: ["spam", "scam"],
+				reviewed: 0,
+			}),
+		},
+		name: "Moderator",
+		icon: "shield",
+	},
 );
