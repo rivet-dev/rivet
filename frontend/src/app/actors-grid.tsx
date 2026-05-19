@@ -1,5 +1,6 @@
 import {
 	faActorsBorderless,
+	faGear,
 	faPlus,
 	Icon,
 	type IconProp,
@@ -7,7 +8,14 @@ import {
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { lazy, Suspense, type ReactNode } from "react";
-import { Button, cn, H1, ScrollArea, SmallText } from "@/components";
+import {
+	Button,
+	cn,
+	H1,
+	ScrollArea,
+	SmallText,
+	WithTooltip,
+} from "@/components";
 import { useDataProvider } from "@/components/actors";
 import { NoProvidersAlert } from "@/components/actors/no-providers-alert";
 
@@ -142,24 +150,47 @@ export function ActorsGrid({
 							{subheading}
 						</SmallText>
 					</div>
-					{builds.length > 0 ? (
-						<Button
-							variant="outline"
-							size="sm"
-							startIcon={<Icon icon={faPlus} />}
-							onClick={() => {
-								navigate({
-									to: ".",
-									search: (old) => ({
-										...old,
-										modal: "create-actor",
-									}),
-								});
-							}}
-						>
-							Create Actor
-						</Button>
-					) : null}
+					<div className="flex items-center gap-2 shrink-0">
+						{builds.length > 0 ? (
+							<Button
+								variant="outline"
+								size="sm"
+								startIcon={<Icon icon={faPlus} />}
+								onClick={() => {
+									navigate({
+										to: ".",
+										search: (old) => ({
+											...old,
+											modal: "create-actor",
+										}),
+									});
+								}}
+							>
+								Create Actor
+							</Button>
+						) : null}
+						<WithTooltip
+							content="Namespace settings"
+							trigger={
+								<Button
+									variant="outline"
+									size="icon-sm"
+									aria-label="Namespace settings"
+									onClick={() => {
+										navigate({
+											to: ".",
+											search: (old) => ({
+												...old,
+												modal: "settings",
+											}),
+										});
+									}}
+								>
+									<Icon icon={faGear} />
+								</Button>
+							}
+						/>
+					</div>
 				</div>
 
 				{!isLoading && builds.length === 0 ? (
