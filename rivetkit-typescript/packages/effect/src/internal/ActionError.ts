@@ -14,8 +14,6 @@ export const ActionErrorMetadata = Schema.Struct({
 
 export type ActionErrorMetadata = typeof ActionErrorMetadata.Type;
 
-export const isActionErrorMetadata = Schema.is(ActionErrorMetadata);
-
 const makeActionErrorMetadata = (error: unknown): ActionErrorMetadata => ({
 	_tag: ActionErrorMetadataTag,
 	version: ActionErrorSchemaVersion,
