@@ -48,11 +48,21 @@ export function ResourcePicker({
 		);
 	}
 
+	// Two-step case: caller wants a namespace, but we don't have a project
+	// in the URL yet. Show the project picker first with step-appropriate
+	// copy (the caller's title/description describes the namespace step).
+	const projectStepTitle =
+		target === "namespace" ? "Pick a project" : title;
+	const projectStepDescription =
+		target === "namespace"
+			? "Settings are scoped to a namespace. Choose a project first to find one."
+			: description;
+
 	return (
 		<ProjectPicker
 			organization={organization}
-			title={title}
-			description={description}
+			title={projectStepTitle}
+			description={projectStepDescription}
 			modal={modal}
 			target={target}
 		/>

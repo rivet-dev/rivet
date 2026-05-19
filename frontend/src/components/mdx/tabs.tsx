@@ -24,11 +24,7 @@ export const Tabs = ({ children }: { children: React.ReactElement<any> }) => {
 			<ScrollArea>
 				<RivetTabsList>
 					{titles.map((title) => (
-						<RivetTabsTrigger
-							key={title}
-							value={title}
-							className="data-[state=active]:!text-white"
-						>
+						<RivetTabsTrigger key={title} value={title}>
 							{title}
 						</RivetTabsTrigger>
 					))}

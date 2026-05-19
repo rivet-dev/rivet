@@ -6,9 +6,9 @@ export function FullscreenLoading({
 	children?: React.ReactNode;
 }) {
 	return (
-		<div className="min-h-screen flex items-center justify-center flex-col">
+		<div className="min-h-screen flex items-center justify-center flex-col bg-background text-foreground">
 			<AssetImage
-				className="animate-pulse h-10"
+				className="animate-pulse h-10 invert dark:invert-0"
 				src="/logo/icon-white.svg"
 			/>
 			{children}

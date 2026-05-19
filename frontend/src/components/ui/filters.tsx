@@ -682,6 +682,8 @@ export type FilterDefinition =
 			ephemeral?: boolean;
 			excludes?: string[];
 			defaultValue?: string[];
+			// Behavioral toggle rendered below a divider in the Display popover.
+			feature?: boolean;
 	  }
 	| FilterSelectDefinition;
 
@@ -1413,8 +1415,19 @@ export function FiltersDisplay({
 				</Button>
 			</PopoverTrigger>
 			<PopoverContent className="w-60 p-2">
-				<div className="flex flex-col">
-					{Object.entries(definitions).map(([key, def]) => {
+				{(() => {
+					const entries = Object.entries(definitions);
+					const filterEntries = entries.filter(
+						([, def]) => !("feature" in def && def.feature),
+					);
+					const featureEntries = entries.filter(
+						([, def]) => "feature" in def && def.feature,
+					);
+
+					const renderItem = ([key, def]: [
+						string,
+						FilterDefinition,
+					]) => {
 						const checked =
 							filters[key]?.value?.[0] === "true" ||
 							filters[key]?.value?.[0] === "1";
@@ -1445,8 +1458,33 @@ export function FiltersDisplay({
 								<span>{def.label}</span>
 							</Label>
 						);
-					})}
-				</div>
+					};
+
+					return (
+						<div className="flex flex-col">
+							{filterEntries.length > 0 ? (
+								<>
+									<div className="px-2 pt-1 pb-1.5 text-xs font-medium text-muted-foreground">
+										Filter by
+									</div>
+									{filterEntries.map(renderItem)}
+								</>
+							) : null}
+							{filterEntries.length > 0 &&
+							featureEntries.length > 0 ? (
+								<div className="my-1 h-px bg-border" />
+							) : null}
+							{featureEntries.length > 0 ? (
+								<>
+									<div className="px-2 pt-1 pb-1.5 text-xs font-medium text-muted-foreground">
+										Behavior
+									</div>
+									{featureEntries.map(renderItem)}
+								</>
+							) : null}
+						</div>
+					);
+				})()}
 			</PopoverContent>
 		</Popover>
 	);
