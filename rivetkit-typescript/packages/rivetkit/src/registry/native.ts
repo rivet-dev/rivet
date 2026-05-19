@@ -3523,6 +3523,27 @@ export function buildNativeFactory(
 				});
 			}
 			if (
+				url.pathname === "/inspector/queue" &&
+				jsRequest.method === "DELETE"
+			) {
+				await runtime.actorQueueReset(ctx);
+				return jsonResponse({});
+			}
+			if (
+				url.pathname === "/inspector/queue" &&
+				jsRequest.method === "POST"
+			) {
+				const body = await jsRequest.json() as { name?: string; body?: unknown };
+				const name = body.name ?? "";
+				const cbor = encodeCborCompat((body.body ?? null) as JsonCompatValue);
+				const message = await runtime.actorQueueSend(ctx, name, cbor);
+				return jsonResponse({
+					id: Number(message.id()),
+					name: message.name(),
+					createdAtMs: message.createdAt(),
+				});
+			}
+			if (
 				url.pathname === "/inspector/traces" &&
 				jsRequest.method === "GET"
 			) {
