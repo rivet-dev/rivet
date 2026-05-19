@@ -1,9 +1,7 @@
-import { faCamera, faGoogle, Icon } from "@rivet-gg/icons";
-import { useMutation } from "@tanstack/react-query";
-import { type ReactNode, useId, useState } from "react";
-import { Avatar, AvatarFallback, AvatarImage, cn, toast } from "@/components";
+import { faGoogle, Icon } from "@rivet-gg/icons";
+import type { ReactNode } from "react";
+import { Avatar, AvatarFallback, AvatarImage, cn } from "@/components";
 import { authClient } from "@/lib/auth";
-import { resizeImageToDataUrl } from "@/lib/resize-image";
 
 /**
  * Account / Profile tab.
@@ -71,69 +69,6 @@ function Field({
 	);
 }
 
-function ProfileImageUpload({
-	image,
-	initials,
-}: {
-	image: string | null;
-	initials: string;
-}) {
-	const inputId = useId();
-	const [isUploading, setIsUploading] = useState(false);
-
-	const { mutateAsync } = useMutation({
-		mutationFn: async (nextImage: string) => {
-			const result = await authClient.updateUser({ image: nextImage });
-			if (result.error) throw result.error;
-		},
-	});
-
-	const onPick = async (file: File) => {
-		setIsUploading(true);
-		try {
-			const dataUrl = await resizeImageToDataUrl(file);
-			await mutateAsync(dataUrl);
-			toast.success("Profile image updated");
-		} catch {
-			toast.error("Couldn't update the image. Try a different file.");
-		} finally {
-			setIsUploading(false);
-		}
-	};
-
-	return (
-		<div className="relative shrink-0">
-			<label
-				htmlFor={inputId}
-				className="block cursor-pointer rounded-full focus-within:outline-none focus-within:ring-2 focus-within:ring-ring"
-				aria-label={image ? "Replace profile image" : "Choose profile image"}
-			>
-				<Avatar className="size-8">
-					<AvatarImage src={image ?? undefined} />
-					<AvatarFallback className="text-xs">
-						{initials}
-					</AvatarFallback>
-				</Avatar>
-				<span className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full border border-background bg-foreground text-background shadow-sm">
-					<Icon icon={faCamera} className="size-2" />
-				</span>
-			</label>
-			<input
-				id={inputId}
-				type="file"
-				accept="image/*"
-				className="sr-only"
-				disabled={isUploading}
-				onChange={(e) => {
-					const file = e.target.files?.[0];
-					if (file) void onPick(file);
-					e.target.value = "";
-				}}
-			/>
-		</div>
-	);
-}
-
 function ProfileSection() {
 	const { data: session } = authClient.useSession();
 	const user = session?.user;
@@ -153,10 +88,12 @@ function ProfileSection() {
 		>
 			<Field label="Profile">
 				<div className="flex items-center gap-3 min-w-0">
-					<ProfileImageUpload
-						image={user?.image ?? null}
-						initials={initials || "?"}
-					/>
+					<Avatar className="size-8 shrink-0">
+						<AvatarImage src={user?.image ?? undefined} />
+						<AvatarFallback className="text-xs">
+							{initials || "?"}
+						</AvatarFallback>
+					</Avatar>
 					<span className="text-sm text-foreground truncate">
 						{name}
 					</span>

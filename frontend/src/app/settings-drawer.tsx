@@ -31,6 +31,7 @@ import {
 import { OrganizationPanel } from "./settings-pages/organization-panel";
 import { ProfilePage } from "./settings-pages/profile-page";
 import { ResourcePicker } from "./settings-pages/resource-picker";
+import { WhatsNewPanel } from "./settings-pages/whats-new-panel";
 
 export type SettingsTab =
 	| "profile"
@@ -271,18 +272,8 @@ function TabContent({ tab }: { tab: SettingsTab }) {
 		case "organization":
 			return <OrganizationPanel />;
 		case "whats-new":
-			return (
-				<Placeholder text="No in-app changelog yet. See rivet.dev/changelog for now." />
-			);
+			return <WhatsNewPanel />;
 	}
-}
-
-function Placeholder({ text }: { text: string }) {
-	return (
-		<div className="flex h-64 items-center justify-center rounded-lg border border-dashed border-border">
-			<p className="text-sm text-muted-foreground">{text}</p>
-		</div>
-	);
 }
 
 function TabFrame({
