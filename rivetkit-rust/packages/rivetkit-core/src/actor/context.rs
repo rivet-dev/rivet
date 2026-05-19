@@ -224,18 +224,13 @@ impl ActorContext {
 		name: String,
 		key: ActorKey,
 		region: String,
-		generation: Option<u32>,
-		envoy_key: String,
+		_generation: Option<u32>,
+		_envoy_key: String,
 		config: ActorConfig,
 		kv: Kv,
 		sql: SqliteDb,
 	) -> Self {
-		let metrics = ActorMetrics::new(
-			actor_id.clone(),
-			generation,
-			format_actor_key(&key),
-			envoy_key,
-		);
+		let metrics = ActorMetrics::new(name.clone());
 		#[cfg(feature = "sqlite-local")]
 		let mut sql = sql;
 		#[cfg(feature = "sqlite-local")]
