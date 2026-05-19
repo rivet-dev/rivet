@@ -6,7 +6,7 @@ import {
 	HEADER_ACTOR_ID,
 	HEADER_ACTOR_KEY,
 } from "@/common/actor-router-consts";
-import type { Encoding } from "@/common/encoding";
+import type { JsonCompatValue, Encoding } from "@/common/encoding";
 import {
 	getRequestEncoding,
 	getRequestExposeInternalError,
@@ -111,7 +111,7 @@ export function handleRouteError(error: unknown, c: HonoContext) {
 			code: value.code,
 			message: value.message,
 			metadata: value.metadata
-				? bufferToArrayBuffer(encodeCborCompat(value.metadata))
+				? bufferToArrayBuffer(encodeCborCompat(value.metadata as JsonCompatValue))
 				: null,
 			actor: value.actor
 				? {

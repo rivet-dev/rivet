@@ -13,6 +13,171 @@ const JSON_COMPAT_BIGINT = "$BigInt";
 const JSON_COMPAT_ARRAY_BUFFER = "$ArrayBuffer";
 const JSON_COMPAT_UINT8_ARRAY = "$Uint8Array";
 const JSON_COMPAT_UNDEFINED = "$Undefined";
+const JSON_COMPAT_SET = "$Set";
+
+/**
+ * Types that cbor-x encodes natively without any compat transforms.
+ */
+export type CborSerializable =
+	| string
+	| number
+	| boolean
+	| null
+	| undefined
+	| bigint
+	| Date
+	| RegExp
+	| Error
+	| ArrayBuffer
+	| Uint8Array
+	| Uint8ClampedArray
+	| Uint16Array
+	| Uint32Array
+	| BigUint64Array
+	| Int8Array
+	| Int16Array
+	| Int32Array
+	| BigInt64Array
+	| Float32Array
+	| Float64Array
+	| CborSerializable[]
+	| Map<CborSerializable, CborSerializable>
+	| { [key: string]: CborSerializable };
+
+/**
+ * User-facing serializable type. Extends CborSerializable with Set (encoded
+ * as a `$Set` tagged array by the JSON compat layer).
+ */
+export type JsonCompatValue =
+	| CborSerializable
+	| Set<JsonCompatValue>
+	| JsonCompatValue[]
+	| Map<JsonCompatValue, JsonCompatValue>
+	| { [key: string]: JsonCompatValue };
+
+function isTypedArray(value: unknown): boolean {
+	return (
+		value instanceof Uint8ClampedArray ||
+		value instanceof Uint16Array ||
+		value instanceof Uint32Array ||
+		value instanceof BigUint64Array ||
+		value instanceof Int8Array ||
+		value instanceof Int16Array ||
+		value instanceof Int32Array ||
+		value instanceof BigInt64Array ||
+		value instanceof Float32Array ||
+		value instanceof Float64Array
+	);
+}
+
+/**
+ * Recursively validates that a value is CBOR serializable. Throws TypeError
+ * with a descriptive message for non-serializable values.
+ */
+export function assertJsonCompatValue(
+	value: unknown,
+	path = "",
+): asserts value is JsonCompatValue {
+	if (
+		value === null ||
+		value === undefined ||
+		typeof value === "string" ||
+		typeof value === "number" ||
+		typeof value === "boolean" ||
+		typeof value === "bigint"
+	) {
+		return;
+	}
+
+	if (typeof value === "function") {
+		throw new TypeError(
+			`Value at ${path || "root"} is a function and is not CBOR serializable`,
+		);
+	}
+
+	if (typeof value === "symbol") {
+		throw new TypeError(
+			`Value at ${path || "root"} is a symbol and is not CBOR serializable`,
+		);
+	}
+
+	if (
+		value instanceof Date ||
+		value instanceof RegExp ||
+		value instanceof Error ||
+		value instanceof ArrayBuffer ||
+		value instanceof Uint8Array ||
+		isTypedArray(value)
+	) {
+		return;
+	}
+
+	if (value instanceof WeakMap) {
+		throw new TypeError(
+			`Value at ${path || "root"} is a WeakMap and is not CBOR serializable`,
+		);
+	}
+
+	if (value instanceof WeakSet) {
+		throw new TypeError(
+			`Value at ${path || "root"} is a WeakSet and is not CBOR serializable`,
+		);
+	}
+
+	if (value instanceof WeakRef) {
+		throw new TypeError(
+			`Value at ${path || "root"} is a WeakRef and is not CBOR serializable`,
+		);
+	}
+
+	if (value instanceof Promise) {
+		throw new TypeError(
+			`Value at ${path || "root"} is a Promise and is not CBOR serializable`,
+		);
+	}
+
+	if (value instanceof Map) {
+		for (const [k, v] of value.entries()) {
+			assertJsonCompatValue(k, `${path || "root"}.key(${String(k)})`);
+			assertJsonCompatValue(v, `${path || "root"}.value(${String(k)})`);
+		}
+		return;
+	}
+
+	if (value instanceof Set) {
+		let index = 0;
+		for (const item of value.values()) {
+			assertJsonCompatValue(item, `${path || "root"}.set[${index}]`);
+			index++;
+		}
+		return;
+	}
+
+	if (Array.isArray(value)) {
+		for (let i = 0; i < value.length; i++) {
+			assertJsonCompatValue(value[i], `${path || "root"}[${i}]`);
+		}
+		return;
+	}
+
+	if (isPlainObject(value)) {
+		for (const key in value) {
+			assertJsonCompatValue(
+				value[key as keyof typeof value],
+				path ? `${path}.${key}` : key,
+			);
+		}
+		return;
+	}
+
+	const typeName =
+		typeof value === "object" && value !== null
+			? value.constructor?.name ?? typeof value
+			: typeof value;
+	throw new TypeError(
+		`Value at ${path || "root"} of type "${typeName}" is not CBOR serializable`,
+	);
+}
 
 export const EncodingSchema = z.enum(["json", "cbor", "bare"]);
 
@@ -112,38 +277,95 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 	return proto === Object.prototype || proto === null;
 }
 
-export function encodeJsonCompatValue(input: any): any {
+export function encodeJsonCompatValue(input: JsonCompatValue): unknown {
+	// Primitives
+	if (input === null) {
+		return input;
+	}
 	if (input === undefined) {
 		return [JSON_COMPAT_UNDEFINED, 0];
+	}
+	if (
+		typeof input === "string" ||
+		typeof input === "number" ||
+		typeof input === "boolean"
+	) {
+		return input;
 	}
 	if (typeof input === "bigint") {
 		return [JSON_COMPAT_BIGINT, input.toString()];
 	}
+
+	// Binary types with custom encoding
 	if (input instanceof ArrayBuffer) {
 		return [JSON_COMPAT_ARRAY_BUFFER, base64EncodeArrayBuffer(input)];
 	}
 	if (input instanceof Uint8Array) {
 		return [JSON_COMPAT_UINT8_ARRAY, base64EncodeUint8Array(input)];
 	}
+
+	// TypedArrays pass through for cbor-x native handling
+	if (isTypedArray(input)) {
+		return input;
+	}
+
+	// Date, RegExp, and Error pass through for cbor-x native handling
+	if (input instanceof Date || input instanceof RegExp || input instanceof Error) {
+		return input;
+	}
+
+	// Set uses custom tag encoding
+	if (input instanceof Set) {
+		const encoded = [...input.values()].map((v) =>
+			encodeJsonCompatValue(v as JsonCompatValue),
+		);
+		return [JSON_COMPAT_SET, encoded];
+	}
+
+	// Map recurses into keys and values
+	if (input instanceof Map) {
+		const encoded = new Map<unknown, unknown>();
+		for (const [k, v] of input.entries()) {
+			encoded.set(
+				encodeJsonCompatValue(k as JsonCompatValue),
+				encodeJsonCompatValue(v as JsonCompatValue),
+			);
+		}
+		return encoded;
+	}
+
+	// Arrays
 	if (Array.isArray(input)) {
-		const encoded = input.map((value) => encodeJsonCompatValue(value));
+		const encoded = input.map((value) =>
+			encodeJsonCompatValue(value as JsonCompatValue),
+		);
 		if (
 			encoded.length === 2 &&
 			typeof encoded[0] === "string" &&
-			encoded[0].startsWith("$")
+			(encoded[0] as string).startsWith("$")
 		) {
 			return ["$" + encoded[0], encoded[1]];
 		}
 		return encoded;
 	}
+
+	// Plain objects
 	if (isPlainObject(input)) {
 		const encoded: Record<string, unknown> = {};
 		for (const [key, value] of Object.entries(input)) {
-			encoded[key] = encodeJsonCompatValue(value);
+			encoded[key] = encodeJsonCompatValue(value as JsonCompatValue);
 		}
 		return encoded;
 	}
-	return input;
+
+	// Not serializable
+	const typeName =
+		typeof input === "object" && input !== null
+			? (input as object).constructor?.name ?? typeof input
+			: typeof input;
+	throw new TypeError(
+		`Value of type "${typeName}" is not CBOR serializable`,
+	);
 }
 
 export interface JsonCompatReviveOptions {
@@ -164,6 +386,16 @@ export function reviveJsonCompatValue(
 		}
 		return input;
 	}
+	if (input instanceof Map) {
+		const revived = new Map();
+		for (const [k, v] of input.entries()) {
+			revived.set(
+				reviveJsonCompatValue(k, options),
+				reviveJsonCompatValue(v, options),
+			);
+		}
+		return revived;
+	}
 	if (Array.isArray(input)) {
 		if (
 			input.length === 2 &&
@@ -181,6 +413,12 @@ export function reviveJsonCompatValue(
 			}
 			if (input[0] === JSON_COMPAT_UNDEFINED) {
 				return undefined;
+			}
+			if (input[0] === JSON_COMPAT_SET) {
+				const items = (input[1] as unknown[]).map((v) =>
+					reviveJsonCompatValue(v, options),
+				);
+				return new Set(items);
 			}
 			if (input[0].startsWith("$$")) {
 				return [
