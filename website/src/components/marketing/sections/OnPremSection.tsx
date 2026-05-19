@@ -72,7 +72,7 @@ export const OnPremSection = () => (
         whileInView={{ opacity: 1, y: 0 }}
         viewport={{ once: true }}
         transition={{ duration: 0.5, delay: 0.2 }}
-        className='mt-12 flex flex-col items-start gap-3 sm:flex-row'
+        className='mt-12 flex flex-col items-center justify-center gap-3 sm:flex-row'
       >
         <a
           href='/talk-to-an-engineer'

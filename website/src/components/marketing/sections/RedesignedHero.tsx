@@ -246,7 +246,7 @@ interface RedesignedHeroProps {
 
 export const RedesignedHero = ({ latestChangelogTitle, thinkingImages }: RedesignedHeroProps) => {
   return (
-    <section className='relative flex min-h-[100svh] flex-col justify-center px-6 pt-20 md:pt-0'>
+    <section className='relative flex min-h-[100svh] flex-col justify-center px-6 pt-32 pb-16 md:pt-40 md:pb-24'>
       <div className='mx-auto w-full max-w-7xl'>
         <div className='flex flex-col gap-12 lg:flex-row lg:items-center lg:justify-between lg:gap-32 xl:gap-48 2xl:gap-64'>
           <div className='max-w-xl'>
