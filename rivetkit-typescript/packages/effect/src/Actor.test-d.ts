@@ -1,5 +1,10 @@
-import { Context, Effect, type Layer } from "effect";
-import { Schema } from "effect";
+import {
+	Context,
+	Effect,
+	type Layer,
+	Schema,
+	SchemaTransformation,
+} from "effect";
 import type { RawAccess } from "rivetkit/db";
 import { db } from "rivetkit/db";
 import { describe, expectTypeOf, test } from "vitest";
@@ -23,6 +28,45 @@ const TestState = ActorState.make("TestState", {
 		count: Schema.Number,
 	}),
 	initialValue: () => ({ count: 0 }),
+});
+
+const TagsCsv = Schema.String.pipe(
+	Schema.decodeTo(
+		Schema.Array(Schema.String),
+		SchemaTransformation.transform({
+			decode: (s: string): ReadonlyArray<string> => s.split(","),
+			encode: (arr: ReadonlyArray<string>) => arr.join(","),
+		}),
+	),
+);
+
+const TransformedState = ActorState.make("TransformedState", {
+	schema: Schema.Struct({
+		when: Schema.DateFromString,
+		url: Schema.URLFromString,
+		id: Schema.BigIntFromString,
+		bytes: Schema.Uint8ArrayFromBase64,
+		tags: TagsCsv,
+		history: Schema.Array(
+			Schema.Struct({
+				at: Schema.DateFromString,
+				payload: Schema.Uint8ArrayFromBase64,
+			}),
+		),
+	}),
+	initialValue: () => ({
+		when: new Date("2024-01-15T10:30:00.000Z"),
+		url: new URL("https://rivet.dev/docs"),
+		id: 1n,
+		bytes: new Uint8Array([1, 2, 3]),
+		tags: ["alpha", "beta"],
+		history: [
+			{
+				at: new Date("2024-01-15T10:30:00.000Z"),
+				payload: new Uint8Array([4, 5, 6]),
+			},
+		],
+	}),
 });
 
 describe("Actor.make", () => {
@@ -70,6 +114,31 @@ describe("Actor.make(...).toLayer", () => {
 				};
 			},
 			{ state: TestState },
+		);
+	});
+
+	test("wake options carry the encoded state type for transformed schemas", () => {
+		TestActor.toLayer(
+			(wakeOptions) => {
+				expectTypeOf(
+					wakeOptions.rawRivetkitContext.state,
+				).toEqualTypeOf<{
+					readonly when: string;
+					readonly url: string;
+					readonly id: string;
+					readonly bytes: string;
+					readonly tags: string;
+					readonly history: ReadonlyArray<{
+						readonly at: string;
+						readonly payload: string;
+					}>;
+				}>();
+
+				return {
+					GetContext: () => Effect.void,
+				};
+			},
+			{ state: TransformedState },
 		);
 	});
 

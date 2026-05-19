@@ -1,7 +1,7 @@
 import { assert, layer } from "@effect/vitest";
+import { Registry, RivetError } from "@rivetkit/effect";
 import { Effect, Layer, Schedule } from "effect";
 import { TestClock } from "effect/testing";
-import { Registry, RivetError } from "@rivetkit/effect";
 import { inject } from "vitest";
 import {
 	BuildSetRejected,
@@ -19,6 +19,8 @@ import {
 	ScaledOverflowError,
 	Strict,
 	StrictLive,
+	TransformedStateActor,
+	TransformedStateActorLive,
 	Unregistered,
 	WakeDecodeFail,
 	WakeDecodeFailLive,
@@ -73,6 +75,7 @@ const TestLayer = ReadyForEnvoy.pipe(
 					StrictLive,
 					WakeDecodeFailLive,
 					BuildSetRejectedLive,
+					TransformedStateActorLive,
 				),
 			),
 			Layer.provideMerge(Flags.layer),
@@ -365,6 +368,106 @@ layer(TestLayer)("end-to-end", (it) => {
 			});
 			assert.strictEqual(count, 3);
 		}),
+	);
+
+	it.effect(
+		"exposes transformed actor state as encoded raw wake context state",
+		() =>
+			Effect.gen(function* () {
+				const actor = (yield* TransformedStateActor.client).getOrCreate(
+					["t-raw-transformed-state"],
+				);
+				const when = new Date("2024-04-05T06:07:08.000Z");
+				const at = new Date("2024-04-06T07:08:09.000Z");
+				const bytes = new Uint8Array([9, 8, 7]);
+				const payload = new Uint8Array([6, 5, 4]);
+				const url = new URL(
+					"https://rivet.dev/docs/actors?section=state",
+				);
+				const id = 9_007_199_254_740_993n;
+
+				yield* actor.SetTransformedStateAndSleep({
+					when,
+					url,
+					id,
+					bytes,
+					tags: ["alpha", "beta", "gamma"],
+					history: [{ at, payload }],
+				});
+
+				const raw = yield* actor.GetRawWakeState().pipe(
+					Effect.repeat({
+						until: (state) => state.id === id.toString(),
+						schedule: Schedule.spaced("100 millis"),
+					}),
+					TestClock.withLive,
+				);
+
+				assert.deepEqual(raw, {
+					when: when.toISOString(),
+					url: url.toString(),
+					id: id.toString(),
+					bytes: Buffer.from(bytes).toString("base64"),
+					tags: "alpha,beta,gamma",
+					history: [
+						{
+							at: at.toISOString(),
+							payload: Buffer.from(payload).toString("base64"),
+						},
+					],
+				});
+			}),
+	);
+
+	it.effect(
+		"decodes transformed state written through raw wake context state",
+		() =>
+			Effect.gen(function* () {
+				const actor = (yield* TransformedStateActor.client).getOrCreate(
+					["t-raw-set-transformed-state"],
+				);
+				const when = "2024-05-06T07:08:09.000Z";
+				const at = "2024-05-07T08:09:10.000Z";
+				const url = "https://rivet.dev/docs/actors/state?source=raw";
+				const id = "9007199254740995";
+				const bytes = Buffer.from(new Uint8Array([1, 3, 5])).toString(
+					"base64",
+				);
+				const payload = Buffer.from(new Uint8Array([2, 4, 6])).toString(
+					"base64",
+				);
+
+				yield* actor.SetRawWakeStateAndSleep({
+					when,
+					url,
+					id,
+					bytes,
+					tags: "raw,encoded,state",
+					history: [{ at, payload }],
+				});
+
+				const decoded = yield* actor.GetDecodedState().pipe(
+					Effect.repeat({
+						until: (state) => state.id === BigInt(id),
+						schedule: Schedule.spaced("100 millis"),
+					}),
+					TestClock.withLive,
+				);
+
+				assert.strictEqual(decoded.when.toISOString(), when);
+				assert.strictEqual(decoded.url.toString(), url);
+				assert.strictEqual(decoded.id, BigInt(id));
+				assert.deepEqual(
+					Array.from(decoded.bytes),
+					Array.from(Buffer.from(bytes, "base64")),
+				);
+				assert.deepEqual(decoded.tags, ["raw", "encoded", "state"]);
+				assert.strictEqual(decoded.history[0]?.at.toISOString(), at);
+				assert.deepEqual(
+					Array.from(decoded.history[0]?.payload ?? []),
+					Array.from(Buffer.from(payload, "base64")),
+				);
+			}),
 	);
 
 	it.effect("resolves a non-built-in service", () =>

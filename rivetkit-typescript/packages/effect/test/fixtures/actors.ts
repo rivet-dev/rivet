@@ -1,3 +1,4 @@
+import { Action, Actor, ActorState, State } from "@rivetkit/effect";
 import {
 	Context,
 	Effect,
@@ -8,7 +9,6 @@ import {
 	SchemaIssue,
 	SchemaTransformation,
 } from "effect";
-import { Action, Actor, ActorState, State } from "@rivetkit/effect";
 import { db, type RawAccess } from "rivetkit/db";
 
 // --- Counter ---
@@ -179,6 +179,100 @@ export const ListEvents = Action.make("ListEvents", {
 export const CountEvents = Action.make("CountEvents", {
 	success: Schema.Number,
 });
+
+const EncodedTransformedState = Schema.Struct({
+	when: Schema.String,
+	url: Schema.String,
+	id: Schema.String,
+	bytes: Schema.String,
+	tags: Schema.String,
+	history: Schema.Array(
+		Schema.Struct({
+			at: Schema.String,
+			payload: Schema.String,
+		}),
+	),
+});
+
+const TransformedStateShape = Schema.Struct({
+	when: Schema.DateFromString,
+	url: Schema.URLFromString,
+	id: Schema.BigIntFromString,
+	bytes: Schema.Uint8ArrayFromBase64,
+	tags: TagsCsv,
+	history: Schema.Array(
+		Schema.Struct({
+			at: Schema.DateFromString,
+			payload: Schema.Uint8ArrayFromBase64,
+		}),
+	),
+});
+
+export const GetRawWakeState = Action.make("GetRawWakeState", {
+	success: EncodedTransformedState,
+});
+
+export const GetDecodedState = Action.make("GetDecodedState", {
+	success: TransformedStateShape,
+});
+
+export const SetTransformedStateAndSleep = Action.make(
+	"SetTransformedStateAndSleep",
+	{
+		payload: TransformedStateShape,
+	},
+);
+
+export const SetRawWakeStateAndSleep = Action.make("SetRawWakeStateAndSleep", {
+	payload: EncodedTransformedState,
+});
+
+export const TransformedStateActor = Actor.make("TransformedStateActor", {
+	actions: [
+		GetRawWakeState,
+		GetDecodedState,
+		SetTransformedStateAndSleep,
+		SetRawWakeStateAndSleep,
+	],
+});
+
+const TransformedActorState = ActorState.make("TransformedActorState", {
+	schema: TransformedStateShape,
+	initialValue: () => ({
+		when: new Date("2024-01-01T00:00:00.000Z"),
+		url: new URL("https://rivet.dev/docs"),
+		id: 1n,
+		bytes: new Uint8Array([1, 2, 3]),
+		tags: ["initial"],
+		history: [],
+	}),
+});
+
+export const TransformedStateActorLive = TransformedStateActor.toLayer(
+	(wakeOptions) =>
+		Effect.gen(function* () {
+			const state = yield* TransformedActorState;
+			const sleep = yield* Actor.Sleep;
+			const rawRivetkitContext = wakeOptions.rawRivetkitContext;
+			const rawWakeState = rawRivetkitContext.state;
+
+			return TransformedStateActor.of({
+				GetRawWakeState: () => Effect.succeed(rawWakeState),
+				GetDecodedState: () => State.get(state),
+				SetTransformedStateAndSleep: ({ payload }) =>
+					State.set(state, payload).pipe(Effect.andThen(sleep)),
+				SetRawWakeStateAndSleep: ({ payload }) =>
+					Effect.tryPromise(async () => {
+						rawRivetkitContext.state = payload;
+						await rawRivetkitContext.saveState({
+							immediate: true,
+						});
+						rawRivetkitContext.sleep();
+					}).pipe(Effect.orDie),
+			});
+		}),
+	{ state: TransformedActorState },
+);
 
 export const Counter = Actor.make("Counter", {
 	actions: [
