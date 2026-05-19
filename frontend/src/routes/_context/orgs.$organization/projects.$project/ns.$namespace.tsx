@@ -10,6 +10,7 @@ import { SidebarlessHeader } from "@/app/layout";
 import { NotFoundCard } from "@/app/not-found-card";
 import { RouteLayout } from "@/app/route-layout";
 import { useDialog } from "@/app/use-dialog";
+import { CreateActorSheet } from "@/components/actors/dialogs/create-actor-sheet";
 import { FullscreenLoading, ls } from "@/components";
 import { deriveProviderFromMetadata } from "@/lib/data";
 import { isRivetApiError } from "@/lib/errors";
@@ -188,24 +189,20 @@ function CloudNamespaceModals() {
 	const DeleteProjectDialog = useDialog.DeleteProject.Dialog;
 	const UpsertDeploymentDialog = useDialog.UpsertDeployment.Dialog;
 
-	const CreateActorDialog = useDialog.CreateActor.Dialog;
-
 	return (
 		<>
-			<CreateActorDialog
-				dialogProps={{
-					open: search?.modal === "create-actor",
-					onOpenChange: (value) => {
-						if (!value) {
-							return navigate({
-								to: ".",
-								search: (old) => ({
-									...old,
-									modal: undefined,
-								}),
-							});
-						}
-					},
+			<CreateActorSheet
+				open={search?.modal === "create-actor"}
+				onOpenChange={(value) => {
+					if (!value) {
+						return navigate({
+							to: ".",
+							search: (old) => ({
+								...old,
+								modal: undefined,
+							}),
+						});
+					}
 				}}
 			/>
 			<UpsertDeploymentDialog

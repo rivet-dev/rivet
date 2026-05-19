@@ -3,6 +3,7 @@ import { match } from "ts-pattern";
 import { NotFoundCard } from "@/app/not-found-card";
 import { RouteLayout } from "@/app/route-layout";
 import { useDialog } from "@/app/use-dialog";
+import { CreateActorSheet } from "@/components/actors/dialogs/create-actor-sheet";
 import {
 	RECENT_NAMESPACES_KEY,
 	recordRecentVisit,
@@ -41,8 +42,6 @@ function Modals() {
 	const navigate = useNavigate();
 	const search = Route.useSearch();
 
-	const CreateActorDialog = useDialog.CreateActor.Dialog;
-
 	const ConnectVercelDialog = useDialog.ConnectVercel.Dialog;
 	const ConnectQuickVercelDialog = useDialog.ConnectQuickVercel.Dialog;
 	const ConnectRailwayDialog = useDialog.ConnectRailway.Dialog;
@@ -56,20 +55,18 @@ function Modals() {
 
 	return (
 		<>
-			<CreateActorDialog
-				dialogProps={{
-					open: search.modal === "create-actor",
-					onOpenChange: (value) => {
-						if (!value) {
-							return navigate({
-								to: ".",
-								search: (old) => ({
-									...old,
-									modal: undefined,
-								}),
-							});
-						}
-					},
+			<CreateActorSheet
+				open={search.modal === "create-actor"}
+				onOpenChange={(value) => {
+					if (!value) {
+						return navigate({
+							to: ".",
+							search: (old) => ({
+								...old,
+								modal: undefined,
+							}),
+						});
+					}
 				}}
 			/>
 			<ConnectVercelDialog
