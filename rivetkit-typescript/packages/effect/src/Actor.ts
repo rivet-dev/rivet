@@ -49,14 +49,19 @@ export type RivetkitActorOptions = Pick<
  * `RivetkitActorOptions` (forwarded verbatim to `Rivetkit.actor`)
  * with the effect-SDK-only options.
  */
-export type Options<State extends ActorState.AnyWithProps> =
-	Readonly<RivetkitActorOptions> & {
-		readonly state?: State;
-		readonly db?: RivetkitDb.AnyDatabaseProvider;
-	};
+export type Options<
+	State extends ActorState.AnyWithProps,
+	Database extends RivetkitDb.AnyDatabaseProvider = undefined,
+> = Readonly<RivetkitActorOptions> & {
+	readonly state?: State;
+	readonly db?: Database;
+};
 
-const splitOptions = <State extends ActorState.AnyWithProps>(
-	options: Options<State>,
+const splitOptions = <
+	State extends ActorState.AnyWithProps,
+	Database extends RivetkitDb.AnyDatabaseProvider,
+>(
+	options: Options<State, Database>,
 ) => ({
 	rivetkitOptions: Struct.pick(options, rivetkitActorOptionsKeys),
 	effectOptions: Struct.omit(options, rivetkitActorOptionsKeys),
@@ -113,19 +118,85 @@ type ActionHandlerServices<ActionHandlers> = {
 		: never;
 }[keyof ActionHandlers];
 
-export type WakeOptions = {
-	readonly rawRivetkitContext: Rivetkit.WakeContextOf<Rivetkit.AnyActorDefinition>;
+type ActorStateEncoded<State extends ActorState.AnyWithProps> =
+	| State["schema"]["Encoded"]
+	| ([State] extends [never] ? undefined : never);
+
+type ActorStateDecoded<State extends ActorState.AnyWithProps> =
+	State["schema"]["Type"];
+
+type ActorStateCodec<State extends ActorState.AnyWithProps> = {
+	readonly decode: (
+		input: ActorStateEncoded<State>,
+	) => Effect.Effect<
+		ActorStateDecoded<State>,
+		Schema.SchemaError,
+		State["schema"]["DecodingServices"]
+	>;
+	readonly decodeUnknown: (
+		input: unknown,
+	) => Effect.Effect<
+		ActorStateDecoded<State>,
+		Schema.SchemaError,
+		State["schema"]["DecodingServices"]
+	>;
+	readonly encode: (
+		input: ActorStateDecoded<State>,
+	) => Effect.Effect<
+		ActorStateEncoded<State>,
+		Schema.SchemaError,
+		State["schema"]["EncodingServices"]
+	>;
 };
 
-type WakeFunction<ActionHandlers, R> =
-	| ((wakeOptions: WakeOptions) => ActionHandlers)
-	| ((wakeOptions: WakeOptions) => Effect.Effect<ActionHandlers, never, R>);
+const makeActorStateCodec = <State extends ActorState.AnyWithProps>(
+	state: State,
+): ActorStateCodec<State> => {
+	const schema = state.schema as State["schema"];
 
-type Wake<ActionHandlers, R, RX> =
+	return {
+		decode: Schema.decodeEffect(schema),
+		decodeUnknown: Schema.decodeUnknownEffect(schema),
+		encode: Schema.encodeEffect(schema),
+	};
+};
+
+type RivetkitActorDefinitionFor<
+	State extends ActorState.AnyWithProps,
+	Database extends RivetkitDb.AnyDatabaseProvider,
+> = Rivetkit.ActorDefinition<
+	ActorStateEncoded<State>,
+	undefined,
+	undefined,
+	undefined,
+	undefined,
+	Database,
+	Record<never, never>,
+	Record<never, never>,
+	any
+>;
+
+export type WakeOptions<
+	ActorDefinition extends
+		Rivetkit.AnyActorDefinition = Rivetkit.AnyActorDefinition,
+> = {
+	readonly rawRivetkitContext: Rivetkit.WakeContextOf<ActorDefinition>;
+};
+
+type WakeOptionsFor<
+	State extends ActorState.AnyWithProps,
+	Database extends RivetkitDb.AnyDatabaseProvider,
+> = WakeOptions<RivetkitActorDefinitionFor<State, Database>>;
+
+type WakeFunction<ActionHandlers, R, W extends WakeOptions> =
+	| ((wakeOptions: W) => ActionHandlers)
+	| ((wakeOptions: W) => Effect.Effect<ActionHandlers, never, R>);
+
+type Wake<ActionHandlers, R, RX, W extends WakeOptions> =
 	| ActionHandlers
 	| Effect.Effect<ActionHandlers, never, RX>
-	| WakeFunction<ActionHandlers, R>
-	| Effect.Effect<WakeFunction<ActionHandlers, R>, never, RX>;
+	| WakeFunction<ActionHandlers, R, W>
+	| Effect.Effect<WakeFunction<ActionHandlers, R, W>, never, RX>;
 
 export type AccessorKeyParam = string | Rivetkit.ActorKey;
 
@@ -157,12 +228,7 @@ type UnknownToNever<T> = unknown extends T ? never : T;
 type ExcludeBuiltInWakeServices<
 	T,
 	State extends ActorState.AnyWithProps,
-> = UnknownToNever<
-	Exclude<
-		T,
-		Scope.Scope | CurrentAddress | Sleep | State
-	>
->;
+> = UnknownToNever<Exclude<T, Scope.Scope | CurrentAddress | Sleep | State>>;
 
 type ToLayerRequirements<
 	Actions extends Action.Any,
@@ -197,11 +263,12 @@ export interface Actor<
 	toLayer<
 		ActionHandlers extends ActionHandlersFrom<Actions>,
 		State extends ActorState.AnyWithProps = never,
+		Database extends RivetkitDb.AnyDatabaseProvider = undefined,
 		R = never,
 		RX = never,
 	>(
-		wake: Wake<ActionHandlers, R, RX>,
-		options?: Options<State>,
+		wake: Wake<ActionHandlers, R, RX, WakeOptionsFor<State, Database>>,
+		options?: Options<State, Database>,
 	): Layer.Layer<
 		never,
 		never,
@@ -231,16 +298,22 @@ const Proto: Omit<Actor<any, any>, "name" | "actions"> = {
 		Actions extends Action.AnyWithProps,
 		ActionHandlers extends ActionHandlersFrom<Actions>,
 		State extends ActorState.AnyWithProps = never,
+		Database extends RivetkitDb.AnyDatabaseProvider = undefined,
 		R = never,
 		RX = never,
 	>(
 		this: Actor<string, Actions>,
-		wake: Wake<ActionHandlers, R, RX>,
-		options: Options<State> = {},
+		wake: Wake<ActionHandlers, R, RX, WakeOptionsFor<State, Database>>,
+		options: Options<State, Database> = {},
 	) {
 		return makeRivetkitActor({
 			actor: this,
-			wakeHandler: toWakeHandler<ActionHandlers, R, RX>(wake),
+			wakeHandler: toWakeHandler<
+				ActionHandlers,
+				R,
+				RX,
+				WakeOptionsFor<State, Database>
+			>(wake),
 			options,
 		}).pipe(
 			Effect.flatMap((rivetKitActor) =>
@@ -284,42 +357,69 @@ export const make = <
 	return self;
 };
 
-export function toWakeHandler<ActionHandlers extends object, R, RX>(
+export function toWakeHandler<
+	ActionHandlers extends object,
+	R,
+	RX,
+	W extends WakeOptions = WakeOptions,
+>(
 	wake: Effect.Effect<
-		(wakeOptions: WakeOptions) => Effect.Effect<ActionHandlers, never, R>,
+		(wakeOptions: W) => Effect.Effect<ActionHandlers, never, R>,
 		never,
 		RX
 	>,
-): (wakeOptions: WakeOptions) => Effect.Effect<ActionHandlers, never, R | RX>;
-export function toWakeHandler<ActionHandlers extends object, RX>(
-	wake: Effect.Effect<
-		(wakeOptions: WakeOptions) => ActionHandlers,
-		never,
-		RX
-	>,
-): (wakeOptions: WakeOptions) => Effect.Effect<ActionHandlers, never, RX>;
-export function toWakeHandler<ActionHandlers extends object, R>(
-	wake: (wakeOptions: WakeOptions) => Effect.Effect<ActionHandlers, never, R>,
-): (wakeOptions: WakeOptions) => Effect.Effect<ActionHandlers, never, R>;
-export function toWakeHandler<ActionHandlers extends object>(
-	wake: (wakeOptions: WakeOptions) => ActionHandlers,
-): (wakeOptions: WakeOptions) => Effect.Effect<ActionHandlers, never, never>;
-export function toWakeHandler<ActionHandlers extends object, RX>(
+): (wakeOptions: W) => Effect.Effect<ActionHandlers, never, R | RX>;
+export function toWakeHandler<
+	ActionHandlers extends object,
+	RX,
+	W extends WakeOptions = WakeOptions,
+>(
+	wake: Effect.Effect<(wakeOptions: W) => ActionHandlers, never, RX>,
+): (wakeOptions: W) => Effect.Effect<ActionHandlers, never, RX>;
+export function toWakeHandler<
+	ActionHandlers extends object,
+	R,
+	W extends WakeOptions = WakeOptions,
+>(
+	wake: (wakeOptions: W) => Effect.Effect<ActionHandlers, never, R>,
+): (wakeOptions: W) => Effect.Effect<ActionHandlers, never, R>;
+export function toWakeHandler<
+	ActionHandlers extends object,
+	W extends WakeOptions = WakeOptions,
+>(
+	wake: (wakeOptions: W) => ActionHandlers,
+): (wakeOptions: W) => Effect.Effect<ActionHandlers, never, never>;
+export function toWakeHandler<
+	ActionHandlers extends object,
+	RX,
+	W extends WakeOptions = WakeOptions,
+>(
 	wake: Effect.Effect<ActionHandlers, never, RX>,
-): (wakeOptions: WakeOptions) => Effect.Effect<ActionHandlers, never, RX>;
-export function toWakeHandler<ActionHandlers extends object>(
+): (wakeOptions: W) => Effect.Effect<ActionHandlers, never, RX>;
+export function toWakeHandler<
+	ActionHandlers extends object,
+	W extends WakeOptions = WakeOptions,
+>(
 	wake: ActionHandlers,
-): (wakeOptions: WakeOptions) => Effect.Effect<ActionHandlers, never, never>;
-export function toWakeHandler<ActionHandlers extends object, R, RX>(
-	wake: Wake<ActionHandlers, R, RX>,
-): (wakeOptions: WakeOptions) => Effect.Effect<ActionHandlers, never, R | RX>;
-export function toWakeHandler<ActionHandlers extends object, R, RX>(
-	wake: Wake<ActionHandlers, R, RX>,
-) {
-	return (wakeOptions: WakeOptions) => {
+): (wakeOptions: W) => Effect.Effect<ActionHandlers, never, never>;
+export function toWakeHandler<
+	ActionHandlers extends object,
+	R,
+	RX,
+	W extends WakeOptions = WakeOptions,
+>(
+	wake: Wake<ActionHandlers, R, RX, W>,
+): (wakeOptions: W) => Effect.Effect<ActionHandlers, never, R | RX>;
+export function toWakeHandler<
+	ActionHandlers extends object,
+	R,
+	RX,
+	W extends WakeOptions = WakeOptions,
+>(wake: Wake<ActionHandlers, R, RX, W>) {
+	return (wakeOptions: W) => {
 		const wakeEffect = Effect.isEffect(wake)
 			? (wake as Effect.Effect<
-					ActionHandlers | WakeFunction<ActionHandlers, R>,
+					ActionHandlers | WakeFunction<ActionHandlers, R, W>,
 					never,
 					RX
 				>)
@@ -346,16 +446,17 @@ const makeRivetkitActor = Effect.fnUntraced(function* <
 	ActionHandlers extends ActionHandlersFrom<Actions>,
 	RX,
 	State extends ActorState.AnyWithProps = never,
+	Database extends RivetkitDb.AnyDatabaseProvider = undefined,
 >({
 	actor,
 	wakeHandler,
 	options,
 }: {
 	readonly actor: Actor<Name, Actions>;
-	readonly wakeHandler: (wakeOptions: {
-		rawRivetkitContext: Rivetkit.WakeContextOf<Rivetkit.AnyActorDefinition>;
-	}) => Effect.Effect<ActionHandlers, never, RX>;
-	readonly options: Options<State>;
+	readonly wakeHandler: (
+		wakeOptions: WakeOptionsFor<State, Database>,
+	) => Effect.Effect<ActionHandlers, never, RX>;
+	readonly options: Options<State, Database>;
 }) {
 	// Snapshot the current Effect context so action callbacks
 	// (which run in rivetkit's plain Promise world) can run
@@ -364,10 +465,10 @@ const makeRivetkitActor = Effect.fnUntraced(function* <
 	const services = yield* Effect.context<any>();
 
 	const { effectOptions, rivetkitOptions } = splitOptions(options);
-	const stateCodec = UndefinedOr.map(effectOptions.state, (state) => ({
-		decode: Schema.decodeUnknownEffect(state.schema),
-		encode: Schema.encodeUnknownEffect(state.schema),
-	}));
+	const stateCodec = UndefinedOr.map(
+		effectOptions.state,
+		makeActorStateCodec,
+	);
 
 	const instances = MutableHashMap.empty<
 		string,
@@ -375,15 +476,15 @@ const makeRivetkitActor = Effect.fnUntraced(function* <
 			readonly actionHandlers: ActionHandlers;
 			readonly scope: Scope.Closeable;
 			readonly state?: State.State<
-				State["schema"]["Type"],
+				ActorStateDecoded<State>,
 				Schema.SchemaError
 			>;
 		}
 	>();
 
-	const onWake = async (
-		c: Rivetkit.WakeContextOf<Rivetkit.AnyActorDefinition>,
-	) => {
+	type RivetkitDefinition = RivetkitActorDefinitionFor<State, Database>;
+
+	const onWake = async (c: Rivetkit.WakeContextOf<RivetkitDefinition>) => {
 		await Effect.runPromiseWith(services)(
 			Effect.gen(function* () {
 				const scope = yield* Scope.make();
@@ -436,7 +537,9 @@ const makeRivetkitActor = Effect.fnUntraced(function* <
 						: Context.empty(),
 				);
 
-				const wakeOptions = { rawRivetkitContext: c };
+				const wakeOptions: WakeOptionsFor<State, Database> = {
+					rawRivetkitContext: c,
+				};
 				const actionHandlers = yield* wakeHandler(wakeOptions).pipe(
 					Effect.provide(context),
 				);
@@ -466,7 +569,7 @@ const makeRivetkitActor = Effect.fnUntraced(function* <
 		return [
 			action._tag,
 			async (
-				c: Rivetkit.ActionContextOf<Rivetkit.AnyActorDefinition>,
+				c: Rivetkit.ActionContextOf<RivetkitDefinition>,
 				payload: Action.Payload<typeof action>,
 				meta?: Client.ActionMeta, // TODO: Find better type
 			) => {
@@ -554,7 +657,7 @@ const makeRivetkitActor = Effect.fnUntraced(function* <
 	});
 
 	const onStateChange = (
-		c: Rivetkit.WakeContextOf<Rivetkit.AnyActorDefinition>,
+		c: Rivetkit.WakeContextOf<RivetkitDefinition>,
 		newState: unknown,
 	) => {
 		void Effect.runForkWith(services)(
@@ -574,7 +677,7 @@ const makeRivetkitActor = Effect.fnUntraced(function* <
 					state.semaphore,
 					Effect.gen(function* () {
 						const decoded = yield* stateCodec
-							.decode(newState)
+							.decodeUnknown(newState)
 							.pipe(Effect.orDie);
 						State.publishUnsafe(state, decoded);
 					}),
@@ -583,9 +686,7 @@ const makeRivetkitActor = Effect.fnUntraced(function* <
 		);
 	};
 
-	const onSleep = async (
-		c: Rivetkit.SleepContextOf<Rivetkit.AnyActorDefinition>,
-	) => {
+	const onSleep = async (c: Rivetkit.SleepContextOf<RivetkitDefinition>) => {
 		await Effect.runPromiseWith(services)(
 			Effect.gen(function* () {
 				const instance = yield* MutableHashMap.get(
@@ -600,7 +701,17 @@ const makeRivetkitActor = Effect.fnUntraced(function* <
 		);
 	};
 
-	return Rivetkit.actor({
+	return Rivetkit.actor<
+		ActorStateEncoded<State>,
+		undefined,
+		undefined,
+		undefined,
+		undefined,
+		Database,
+		Record<never, never>,
+		Record<never, never>,
+		any
+	>({
 		options: rivetkitOptions,
 		...(effectOptions.db ? { db: effectOptions.db } : {}),
 		onWake,
