@@ -3,7 +3,7 @@ import * as RivetkitClient from "rivetkit/client";
 import * as RivetkitErrors from "rivetkit/errors";
 import type * as Action from "./Action";
 import type * as Actor from "./Actor";
-import * as ActionError from "./internal/ActionError";
+import * as ActionErrorEnvelope from "./internal/ActionErrorEnvelope";
 import { rpcSystem, type TraceMeta } from "./internal/tracing";
 import * as RivetError from "./RivetError";
 
@@ -138,8 +138,8 @@ export const make = Effect.fnUntraced(function* (options: Options = {}) {
 export const layer = (options: Options = {}): Layer.Layer<Client> =>
 	Layer.effect(Client, make(options));
 
-const decodeActionErrorMetadata = Schema.decodeUnknownEffect(
-	ActionError.ActionErrorMetadata,
+const decodeActionErrorEnvelope = Schema.decodeUnknownEffect(
+	ActionErrorEnvelope.ActionErrorEnvelope,
 );
 
 /** @internal */
@@ -165,24 +165,29 @@ export const makeRivetkitActionFailureClassifier = <
 		never,
 		ActionErrorSchema["DecodingServices"]
 	> {
+		// In the case where the `cause` is not a `RivetError`. In principle, this shouldn't happen.
 		if (!RivetkitErrors.isRivetErrorLike(cause)) {
 			return RivetError.fromUnknown(cause);
 		}
 
 		const rivetkitRivetError = RivetkitErrors.toRivetError(cause);
 
-		const errorMetadataResult = yield* Effect.result(
-			decodeActionErrorMetadata(rivetkitRivetError.metadata),
+		const actionErrorEnvelope = yield* Effect.result(
+			decodeActionErrorEnvelope(rivetkitRivetError.metadata),
 		);
 
-		if (Result.isFailure(errorMetadataResult)) {
+		// If the error's `metadata` is not a valid action error envelope, then
+		// it means it's not a user-declared action error.
+		if (Result.isFailure(actionErrorEnvelope)) {
 			return RivetError.fromRivetkitRivetError(rivetkitRivetError);
 		}
 
 		const actionErrorResult = yield* Effect.result(
-			decodeActionError(errorMetadataResult.success.error),
+			decodeActionError(actionErrorEnvelope.success.error),
 		);
 
+		// The envelope was valid, but the inner payload doesn't match the
+		// declared schema — surface as `ActionErrorDecodeFailed`
 		if (Result.isFailure(actionErrorResult)) {
 			return new RivetError.RivetError({
 				reason: new RivetError.ActionErrorDecodeFailed({
@@ -192,6 +197,7 @@ export const makeRivetkitActionFailureClassifier = <
 			});
 		}
 
+		// Successfully decoded user-declared action error
 		return actionErrorResult.success;
 	});
 };

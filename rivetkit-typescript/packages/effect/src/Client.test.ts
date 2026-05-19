@@ -2,7 +2,7 @@ import { assert, describe, it } from "@effect/vitest";
 import { Effect, Schema } from "effect";
 import * as RivetkitErrors from "rivetkit/errors";
 import * as Client from "./Client";
-import * as ActionError from "./internal/ActionError";
+import * as ActionErrorEnvelope from "./internal/ActionErrorEnvelope";
 import * as RivetError from "./RivetError";
 
 describe("makeRivetkitActionFailureClassifier", () => {
@@ -54,8 +54,8 @@ describe("makeRivetkitActionFailureClassifier", () => {
 					{
 						public: true,
 						metadata: {
-							_tag: ActionError.ActionErrorMetadataTag,
-							version: ActionError.ActionErrorSchemaVersion,
+							_tag: ActionErrorEnvelope.tag,
+							version: ActionErrorEnvelope.schemaVersion,
 							error: {
 								_tag: "CounterOverflow",
 								message: "counter overflow",
@@ -84,8 +84,8 @@ describe("makeRivetkitActionFailureClassifier", () => {
 					"counter overflow",
 					{
 						metadata: {
-							_tag: ActionError.ActionErrorMetadataTag,
-							version: ActionError.ActionErrorSchemaVersion,
+							_tag: ActionErrorEnvelope.tag,
+							version: ActionErrorEnvelope.schemaVersion,
 							error: {
 								_tag: "CounterOverflow",
 								message: "counter overflow",

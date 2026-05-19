@@ -18,9 +18,10 @@ import {
 } from "effect";
 import * as Rivetkit from "rivetkit";
 import type * as RivetkitDb from "rivetkit/db";
+import { hasStringProperty } from "./internal/utils";
 import type * as Action from "./Action";
 import * as Client from "./Client";
-import * as ActionError from "./internal/ActionError";
+import * as ActionErrorEnvelope from "./internal/ActionErrorEnvelope";
 import type * as StateOptions from "./internal/StateOptions";
 import { readTraceMeta, rpcSystem } from "./internal/tracing";
 import * as Registry from "./Registry";
@@ -680,7 +681,22 @@ const makeRivetkitActor = Effect.fnUntraced(function* <
 							).pipe(Effect.orDie);
 
 							return yield* Effect.fail(
-								ActionError.make(action._tag, encodedError),
+								new Rivetkit.UserError(
+									hasStringProperty("message")(encodedError)
+										? encodedError.message
+										: `${action._tag} failed`,
+									{
+										code: hasStringProperty("_tag")(
+											encodedError,
+										)
+											? action._tag
+											: undefined,
+										metadata:
+											ActionErrorEnvelope.make(
+												encodedError,
+											),
+									},
+								),
 							);
 						}
 
