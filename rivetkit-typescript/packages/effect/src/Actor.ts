@@ -19,9 +19,9 @@ import {
 import * as Rivetkit from "rivetkit";
 import type * as RivetkitDb from "rivetkit/db";
 import type * as Action from "./Action";
-import type * as ActorState from "./ActorState";
 import * as Client from "./Client";
 import * as ActionError from "./internal/ActionError";
+import type * as StateOptions from "./internal/StateOptions";
 import { readTraceMeta, rpcSystem } from "./internal/tracing";
 import * as Registry from "./Registry";
 import type * as RivetError from "./RivetError";
@@ -50,7 +50,7 @@ export type RivetkitActorOptions = Pick<
  * with the effect-SDK-only options.
  */
 export type Options<
-	State extends ActorState.AnyWithProps,
+	State extends StateOptions.Any,
 	Database extends RivetkitDb.AnyDatabaseProvider = undefined,
 > = Readonly<RivetkitActorOptions> & {
 	readonly state?: State;
@@ -65,7 +65,7 @@ type StatelessOptions<
 };
 
 type StatefulOptions<
-	State extends ActorState.AnyWithProps,
+	State extends StateOptions.Any,
 	Database extends RivetkitDb.AnyDatabaseProvider = undefined,
 > = Readonly<RivetkitActorOptions> & {
 	readonly state: State;
@@ -73,7 +73,7 @@ type StatefulOptions<
 };
 
 const splitOptions = <
-	State extends ActorState.AnyWithProps,
+	State extends StateOptions.Any,
 	Database extends RivetkitDb.AnyDatabaseProvider,
 >(
 	options: Options<State, Database>,
@@ -133,40 +133,33 @@ type ActionHandlerServices<ActionHandlers> = {
 		: never;
 }[keyof ActionHandlers];
 
-type ActorStateEncoded<State extends ActorState.AnyWithProps> =
-	| State["schema"]["Encoded"]
-	| ([State] extends [never] ? undefined : never);
-
-type ActorStateDecoded<State extends ActorState.AnyWithProps> =
-	State["schema"]["Type"];
-
-type ActorStateCodec<State extends ActorState.AnyWithProps> = {
+type StateOptionsCodec<State extends StateOptions.Any> = {
 	readonly decode: (
-		input: ActorStateEncoded<State>,
+		input: StateOptions.Encoded<State>,
 	) => Effect.Effect<
-		ActorStateDecoded<State>,
+		StateOptions.Decoded<State>,
 		Schema.SchemaError,
 		State["schema"]["DecodingServices"]
 	>;
 	readonly decodeUnknown: (
 		input: unknown,
 	) => Effect.Effect<
-		ActorStateDecoded<State>,
+		StateOptions.Decoded<State>,
 		Schema.SchemaError,
 		State["schema"]["DecodingServices"]
 	>;
 	readonly encode: (
-		input: ActorStateDecoded<State>,
+		input: StateOptions.Decoded<State>,
 	) => Effect.Effect<
-		ActorStateEncoded<State>,
+		StateOptions.Encoded<State>,
 		Schema.SchemaError,
 		State["schema"]["EncodingServices"]
 	>;
 };
 
-const makeActorStateCodec = <State extends ActorState.AnyWithProps>(
+const makeStateOptionsCodec = <State extends StateOptions.Any>(
 	state: State,
-): ActorStateCodec<State> => {
+): StateOptionsCodec<State> => {
 	const schema = state.schema as State["schema"];
 
 	return {
@@ -177,10 +170,10 @@ const makeActorStateCodec = <State extends ActorState.AnyWithProps>(
 };
 
 type RivetkitActorDefinitionFor<
-	State extends ActorState.AnyWithProps,
+	State extends StateOptions.Any,
 	Database extends RivetkitDb.AnyDatabaseProvider,
 > = Rivetkit.ActorDefinition<
-	ActorStateEncoded<State>,
+	StateOptions.Encoded<State>,
 	undefined,
 	undefined,
 	undefined,
@@ -199,7 +192,7 @@ export type WakeOptions<
 };
 
 type RawWakeContextFor<
-	State extends ActorState.AnyWithProps,
+	State extends StateOptions.Any,
 	Database extends RivetkitDb.AnyDatabaseProvider,
 > = {
 	[Key in keyof Rivetkit.WakeContextOf<
@@ -207,29 +200,25 @@ type RawWakeContextFor<
 	>]: Key extends "state"
 		? [State] extends [never]
 			? never
-			: ActorStateEncoded<State>
+			: StateOptions.Encoded<State>
 		: Rivetkit.WakeContextOf<
 				RivetkitActorDefinitionFor<State, Database>
 			>[Key];
 };
 
 type WakeOptionsFor<
-	ActorStateDefinition extends ActorState.AnyWithProps,
+	StateDefinition extends StateOptions.Any,
 	Database extends RivetkitDb.AnyDatabaseProvider,
 > = {
-	readonly rawRivetkitContext: RawWakeContextFor<
-		ActorStateDefinition,
-		Database
-	>;
-} &
-	([ActorStateDefinition] extends [never]
-		? {}
-		: {
-				readonly state: State.State<
-					ActorStateDecoded<ActorStateDefinition>,
-					Schema.SchemaError
-				>;
-			});
+	readonly rawRivetkitContext: RawWakeContextFor<StateDefinition, Database>;
+} & ([StateDefinition] extends [never]
+	? {}
+	: {
+			readonly state: State.State<
+				StateOptions.Decoded<StateDefinition>,
+				Schema.SchemaError
+			>;
+		});
 
 type WakeFunction<ActionHandlers, R, W extends WakeOptions> =
 	| ((wakeOptions: W) => ActionHandlers)
@@ -270,13 +259,13 @@ type UnknownToNever<T> = unknown extends T ? never : T;
 
 type ExcludeBuiltInWakeServices<
 	T,
-	_State extends ActorState.AnyWithProps,
+	_State extends StateOptions.Any,
 > = UnknownToNever<Exclude<T, Scope.Scope | CurrentAddress | Sleep>>;
 
 type ToLayerRequirements<
 	Actions extends Action.Any,
 	ActionHandlers,
-	State extends ActorState.AnyWithProps,
+	State extends StateOptions.Any,
 	R,
 	RX,
 > =
@@ -331,7 +320,7 @@ export interface Actor<
 
 	toLayer<
 		ActionHandlers extends ActionHandlersFrom<Actions>,
-		State extends ActorState.AnyWithProps,
+		State extends StateOptions.Any,
 		Database extends RivetkitDb.AnyDatabaseProvider = undefined,
 		R = never,
 		RX = never,
@@ -366,7 +355,7 @@ const Proto: Omit<Actor<any, any>, "name" | "actions"> = {
 	toLayer<
 		Actions extends Action.AnyWithProps,
 		ActionHandlers extends ActionHandlersFrom<Actions>,
-		State extends ActorState.AnyWithProps = never,
+		State extends StateOptions.Any = never,
 		Database extends RivetkitDb.AnyDatabaseProvider = undefined,
 		R = never,
 		RX = never,
@@ -514,7 +503,7 @@ const makeRivetkitActor = Effect.fnUntraced(function* <
 	Actions extends Action.AnyWithProps,
 	ActionHandlers extends ActionHandlersFrom<Actions>,
 	RX,
-	State extends ActorState.AnyWithProps = never,
+	State extends StateOptions.Any = never,
 	Database extends RivetkitDb.AnyDatabaseProvider = undefined,
 >({
 	actor,
@@ -536,7 +525,7 @@ const makeRivetkitActor = Effect.fnUntraced(function* <
 	const { effectOptions, rivetkitOptions } = splitOptions(options);
 	const stateCodec = UndefinedOr.map(
 		effectOptions.state,
-		makeActorStateCodec,
+		makeStateOptionsCodec,
 	);
 
 	const instances = MutableHashMap.empty<
@@ -545,7 +534,7 @@ const makeRivetkitActor = Effect.fnUntraced(function* <
 			readonly actionHandlers: ActionHandlers;
 			readonly scope: Scope.Closeable;
 			readonly state?: State.State<
-				ActorStateDecoded<State>,
+				StateOptions.Decoded<State>,
 				Schema.SchemaError
 			>;
 		}
@@ -582,7 +571,7 @@ const makeRivetkitActor = Effect.fnUntraced(function* <
 									Effect.asVoid,
 								),
 						).pipe(Effect.orDie)) as State.State<
-							ActorState.AnyWithProps["schema"]["Type"],
+							StateOptions.Decoded<StateOptions.Any>,
 							Schema.SchemaError
 						>)
 					: undefined;
@@ -766,7 +755,7 @@ const makeRivetkitActor = Effect.fnUntraced(function* <
 	};
 
 	return Rivetkit.actor<
-		ActorStateEncoded<State>,
+		StateOptions.Encoded<State>,
 		undefined,
 		undefined,
 		undefined,
