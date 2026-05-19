@@ -1,7 +1,7 @@
-import { faCamera, faXmark, Icon } from "@rivet-gg/icons";
+import { faXmark, Icon } from "@rivet-gg/icons";
 import { useMutation } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { useId, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useFormContext } from "react-hook-form";
 import z from "zod";
 import {
@@ -23,7 +23,6 @@ import {
 } from "@/components";
 import { authClient } from "@/lib/auth";
 import { paletteForLetter } from "@/lib/org-palette";
-import { resizeImageToDataUrl } from "@/lib/resize-image";
 import { queryClient } from "@/queries/global";
 
 const formSchema = z.object({
@@ -36,16 +35,13 @@ const { Form, Submit } = createSchemaForm(formSchema);
 export function NewOrgPage() {
 	const navigate = useNavigate();
 	const [nameDraft, setNameDraft] = useState("");
-	const [logo, setLogo] = useState<string | null>(null);
-	const [logoError, setLogoError] = useState<string | null>(null);
 	const palette = useMemo(() => paletteForLetter(nameDraft), [nameDraft]);
 
 	const { mutateAsync, isPending } = useMutation({
-		mutationFn: async (values: { name: string; logo: string | null }) => {
+		mutationFn: async (values: { name: string }) => {
 			const result = await authClient.organization.create({
 				name: values.name,
 				slug: crypto.randomUUID(),
-				logo: values.logo ?? undefined,
 			});
 			if (result.error) throw result.error;
 			return result;
@@ -94,7 +90,7 @@ export function NewOrgPage() {
 						revalidateMode="onSubmit"
 						onSubmit={async (values, form) => {
 							try {
-								await mutateAsync({ ...values, logo });
+								await mutateAsync(values);
 							} catch {
 								form.setError("root", {
 									message:
@@ -111,35 +107,13 @@ export function NewOrgPage() {
 							</CardDescription>
 						</CardHeader>
 						<CardContent className="flex flex-col gap-6">
-							<div className="flex flex-col items-center gap-2">
-								<AvatarUpload
+							<div className="flex justify-center">
+								<GradientAvatar
 									palette={palette}
 									letter={
 										nameDraft.trim()[0]?.toUpperCase() ?? ""
 									}
-									logo={logo}
-									onPick={async (file) => {
-										setLogoError(null);
-										try {
-											const dataUrl =
-												await resizeImageToDataUrl(file);
-											setLogo(dataUrl);
-										} catch {
-											setLogoError(
-												"Couldn't read that image. Try a different file.",
-											);
-										}
-									}}
-									onClear={() => {
-										setLogo(null);
-										setLogoError(null);
-									}}
 								/>
-								{logoError ? (
-									<p className="text-xs text-destructive">
-										{logoError}
-									</p>
-								) : null}
 							</div>
 							<NameField onValueChange={setNameDraft} />
 							<RootError />
@@ -152,74 +126,6 @@ export function NewOrgPage() {
 					</Form>
 				</Card>
 			</div>
-		</div>
-	);
-}
-
-function AvatarUpload({
-	palette,
-	letter,
-	logo,
-	onPick,
-	onClear,
-}: {
-	palette: ReturnType<typeof paletteForLetter>;
-	letter: string;
-	logo: string | null;
-	onPick: (file: File) => void;
-	onClear: () => void;
-}) {
-	const inputId = useId();
-
-	return (
-		<div className="flex flex-col items-center gap-2">
-			<div className="relative">
-				<label
-					htmlFor={inputId}
-					className="block cursor-pointer rounded-full focus-within:outline-none focus-within:ring-2 focus-within:ring-ring"
-					aria-label={logo ? "Replace avatar" : "Choose avatar"}
-				>
-					{logo ? (
-						<div className="relative h-16 w-16 overflow-hidden rounded-full">
-							<img
-								src={logo}
-								alt=""
-								className="h-full w-full object-cover"
-							/>
-						</div>
-					) : (
-						<GradientAvatar palette={palette} letter={letter} />
-					)}
-					<span className="absolute -bottom-0.5 -right-0.5 flex h-6 w-6 items-center justify-center rounded-full border border-background bg-foreground text-background shadow-sm">
-						<Icon icon={faCamera} className="size-3" />
-					</span>
-				</label>
-				<input
-					id={inputId}
-					type="file"
-					accept="image/*"
-					className="sr-only"
-					onChange={(e) => {
-						const file = e.target.files?.[0];
-						if (file) onPick(file);
-						// Reset so picking the same file again still fires.
-						e.target.value = "";
-					}}
-				/>
-			</div>
-			{logo ? (
-				<button
-					type="button"
-					onClick={onClear}
-					className="text-xs text-muted-foreground underline-offset-2 hover:underline"
-				>
-					Remove
-				</button>
-			) : (
-				<span className="text-xs text-muted-foreground">
-					Choose avatar
-				</span>
-			)}
 		</div>
 	);
 }
