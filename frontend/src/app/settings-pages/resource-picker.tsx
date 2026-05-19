@@ -7,8 +7,8 @@ import { useCloudDataProvider } from "@/components/actors/data-provider";
 interface ResourcePickerProps {
 	title: string;
 	description: string;
-	/** Modal search-param to preserve so the drawer stays open after nav. */
-	modal: string;
+	/** Settings tab to preserve via search-param so the drawer stays open after nav. */
+	settings: string;
 	/** "project" → land on the project. "namespace" → require project + pick a namespace. */
 	target: "project" | "namespace";
 }
@@ -16,7 +16,7 @@ interface ResourcePickerProps {
 export function ResourcePicker({
 	title,
 	description,
-	modal,
+	settings,
 	target,
 }: ResourcePickerProps) {
 	const params = useParams({ strict: false }) as {
@@ -43,7 +43,7 @@ export function ResourcePicker({
 				project={project}
 				title={title}
 				description={description}
-				modal={modal}
+				settings={settings}
 			/>
 		);
 	}
@@ -63,7 +63,7 @@ export function ResourcePicker({
 			organization={organization}
 			title={projectStepTitle}
 			description={projectStepDescription}
-			modal={modal}
+			settings={settings}
 			target={target}
 		/>
 	);
@@ -73,13 +73,13 @@ function ProjectPicker({
 	organization,
 	title,
 	description,
-	modal,
+	settings,
 	target,
 }: {
 	organization: string;
 	title: string;
 	description: string;
-	modal: string;
+	settings: string;
 	target: "project" | "namespace";
 }) {
 	const navigate = useNavigate();
@@ -113,7 +113,7 @@ function ProjectPicker({
 										organization,
 										project: p.name,
 									},
-									search: { modal },
+									search: { settings },
 								});
 							} else {
 								// For namespace target, land on the project — the
@@ -125,7 +125,7 @@ function ProjectPicker({
 										organization,
 										project: p.name,
 									},
-									search: { modal },
+									search: { settings },
 								});
 							}
 						}}
@@ -163,13 +163,13 @@ function NamespacePicker({
 	project,
 	title,
 	description,
-	modal,
+	settings,
 }: {
 	organization: string;
 	project: string;
 	title: string;
 	description: string;
-	modal: string;
+	settings: string;
 }) {
 	const navigate = useNavigate();
 	const dataProvider = useCloudDataProvider();
@@ -202,7 +202,7 @@ function NamespacePicker({
 									project,
 									namespace: ns.name,
 								},
-								search: { modal },
+								search: { settings },
 							});
 						}}
 						className={cn(

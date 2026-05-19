@@ -34,7 +34,7 @@ export function ProviderDropdown({ children }: { children: React.ReactNode }) {
 				onSelect={() =>
 					navigate({
 						to: ".",
-						search: { modal: "connect-vercel" },
+						search: (s) => ({ ...s, modal: "connect-vercel" }),
 					})
 				}
 			>
@@ -45,7 +45,7 @@ export function ProviderDropdown({ children }: { children: React.ReactNode }) {
 				onSelect={() =>
 					navigate({
 						to: ".",
-						search: { modal: "connect-railway" },
+						search: (s) => ({ ...s, modal: "connect-railway" }),
 					})
 				}
 			>
@@ -56,7 +56,7 @@ export function ProviderDropdown({ children }: { children: React.ReactNode }) {
 				onSelect={() =>
 					navigate({
 						to: ".",
-						search: { modal: "connect-aws" },
+						search: (s) => ({ ...s, modal: "connect-aws" }),
 					})
 				}
 			>
@@ -67,7 +67,7 @@ export function ProviderDropdown({ children }: { children: React.ReactNode }) {
 				onSelect={() =>
 					navigate({
 						to: ".",
-						search: { modal: "connect-gcp" },
+						search: (s) => ({ ...s, modal: "connect-gcp" }),
 					})
 				}
 			>
@@ -78,7 +78,7 @@ export function ProviderDropdown({ children }: { children: React.ReactNode }) {
 				onSelect={() =>
 					navigate({
 						to: ".",
-						search: { modal: "connect-hetzner" },
+						search: (s) => ({ ...s, modal: "connect-hetzner" }),
 					})
 				}
 			>
@@ -89,7 +89,7 @@ export function ProviderDropdown({ children }: { children: React.ReactNode }) {
 				onSelect={() =>
 					navigate({
 						to: ".",
-						search: { modal: "connect-custom" },
+						search: (s) => ({ ...s, modal: "connect-custom" }),
 					})
 				}
 			>
@@ -135,7 +135,7 @@ function RivetCloudDropdownMenuItem() {
 			onSelect={() =>
 				navigate({
 					to: ".",
-					search: { modal: "connect-rivet" },
+					search: (s) => ({ ...s, modal: "connect-rivet" }),
 				})
 			}
 		>

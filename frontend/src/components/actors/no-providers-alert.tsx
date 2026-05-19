@@ -34,7 +34,7 @@ export function NoProvidersAlert({
 								<Link
 									to="/orgs/$organization/projects/$project/ns/$namespace"
 									from="/orgs/$organization/projects/$project/ns/$namespace"
-									search={{ modal: "settings" }}
+									search={(s) => ({ ...s, settings: "settings" })}
 								>
 									Go to Settings
 								</Link>
@@ -45,7 +45,7 @@ export function NoProvidersAlert({
 								<Link
 									to="/ns/$namespace"
 									from="/ns/$namespace"
-									search={{ modal: "settings" }}
+									search={(s) => ({ ...s, settings: "settings" })}
 								>
 									Go to Settings
 								</Link>

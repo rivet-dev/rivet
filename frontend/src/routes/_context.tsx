@@ -29,6 +29,7 @@ const searchSchema = z
 			])
 			.or(z.string())
 			.optional(),
+		settings: z.string().optional(),
 		utm_source: z.string().optional(),
 		actorId: z.string().optional(),
 		tab: z.string().optional(),

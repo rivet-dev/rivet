@@ -527,7 +527,7 @@ const EngineSubnav = () => {
 						to="/ns/$namespace"
 						className="font-normal"
 						params={nsMatch}
-						search={{ modal: "settings" }}
+						search={(s) => ({ ...s, settings: "settings" })}
 						icon={faCog}
 					>
 						Settings
@@ -625,7 +625,7 @@ function CloudSidebarContentInner() {
 								<HeaderLink
 									to="/orgs/$organization/projects/$project/ns/$namespace"
 									className="font-normal"
-									search={{ modal: "settings" }}
+									search={(s) => ({ ...s, settings: "settings" })}
 									icon={faCog}
 								>
 									Settings

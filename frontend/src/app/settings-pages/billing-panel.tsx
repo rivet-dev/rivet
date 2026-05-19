@@ -130,7 +130,7 @@ export function BillingPanel() {
 			<ResourcePicker
 				title="Pick a project"
 				description="Billing is scoped to a project. Choose one to see usage and plan details."
-				modal="billing"
+				settings="billing"
 				target="project"
 			/>
 		);

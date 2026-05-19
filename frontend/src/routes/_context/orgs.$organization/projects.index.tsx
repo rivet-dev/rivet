@@ -80,7 +80,7 @@ function ProjectList() {
 			<Link
 				from="/orgs/$organization/projects/"
 				to="."
-				search={{ modal: "create-project" }}
+				search={(s) => ({ ...s, modal: "create-project" })}
 			>
 				<div className="p-2 w-full flex items-center justify-center text-sm hover:bg-accent rounded-md transition-colors cursor-pointer">
 					<Icon icon={faPlus} className="mr-1" /> Create Project

@@ -57,12 +57,12 @@ export function UserDropdown({ children }: { children?: React.ReactNode }) {
 		if (isMatchingProjectRoute) {
 			return navigate({
 				to: ".",
-				search: (old) => ({ ...old, modal: "billing" }),
+				search: (old) => ({ ...old, settings: "billing" }),
 			});
 		}
 		return navigate({
 			to: ".",
-			search: (old) => ({ ...old, modal: "billing" }),
+			search: (old) => ({ ...old, settings: "billing" }),
 		});
 	};
 
@@ -88,7 +88,7 @@ export function UserDropdown({ children }: { children?: React.ReactNode }) {
 					onSelect={() => {
 						return navigate({
 							to: ".",
-							search: (old) => ({ ...old, modal: "profile" }),
+							search: (old) => ({ ...old, settings: "profile" }),
 						});
 					}}
 				>
@@ -101,7 +101,7 @@ export function UserDropdown({ children }: { children?: React.ReactNode }) {
 							to: ".",
 							search: (old) => ({
 								...old,
-								modal: "settings",
+								settings: "settings",
 							}),
 						});
 					}}
@@ -122,7 +122,7 @@ export function UserDropdown({ children }: { children?: React.ReactNode }) {
 								to: ".",
 								search: (old) => ({
 									...old,
-									modal: "members",
+									settings: "members",
 								}),
 							});
 						}}
