@@ -66,7 +66,7 @@ export function HelpButton({ source = "web" }: { source?: string }) {
 						"gap-2 text-muted-foreground hover:text-foreground",
 						open && "bg-foreground/[0.06] text-foreground",
 					)}
-					startIcon={<Icon icon={faLifeRing} className="size-4" />}
+					startIcon={<Icon icon={faLifeRing} className="size-3.5" />}
 				>
 					Help
 				</Button>

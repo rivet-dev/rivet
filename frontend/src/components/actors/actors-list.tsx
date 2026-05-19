@@ -148,16 +148,11 @@ function InstanceSearchInput() {
 	const navigate = useNavigate();
 	const queryClient = useQueryClient();
 	const dataProvider = useDataProvider();
-	const { n } = useSearch({ from: "/_context" });
-	const filters = useFiltersValue({ onlyStatic: true });
-	const { data: actors = [] } = useInfiniteQuery(
-		dataProvider.actorsListQueryOptions({ n, filters }),
-	);
 
 	const [value, setValue] = useState("");
 	const [isPending, setIsPending] = useState(false);
 
-	const placeholder = `Search ${actors.length} instance${actors.length === 1 ? "" : "s"}…`;
+	const placeholder = "Search Actor instance ID…";
 
 	const handleSubmit = async () => {
 		const trimmed = value.trim();

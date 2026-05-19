@@ -1,3 +1,4 @@
+import { faMessage, Icon } from "@rivet-gg/icons";
 import { useEffect, useState } from "react";
 import {
 	Button,
@@ -67,6 +68,7 @@ export function FeedbackButton({ source = "web" }: { source?: string }) {
 						"gap-2 text-muted-foreground hover:text-foreground",
 						open && "bg-foreground/[0.06] text-foreground",
 					)}
+					startIcon={<Icon icon={faMessage} className="size-3.5" />}
 				>
 					Feedback
 				</Button>

@@ -1,4 +1,4 @@
-import { faArrowRight, faCamera, faXmark, Icon } from "@rivet-gg/icons";
+import { faCamera, faXmark, Icon } from "@rivet-gg/icons";
 import { useMutation } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useId, useMemo, useState } from "react";
@@ -23,6 +23,7 @@ import {
 } from "@/components";
 import { authClient } from "@/lib/auth";
 import { paletteForLetter } from "@/lib/org-palette";
+import { resizeImageToDataUrl } from "@/lib/resize-image";
 import { queryClient } from "@/queries/global";
 
 const formSchema = z.object({
@@ -31,22 +32,6 @@ const formSchema = z.object({
 type FormValues = z.infer<typeof formSchema>;
 
 const { Form, Submit } = createSchemaForm(formSchema);
-
-async function resizeImageToDataUrl(file: File, maxSize = 256): Promise<string> {
-	const bitmap = await createImageBitmap(file);
-	const scale = Math.min(1, maxSize / Math.max(bitmap.width, bitmap.height));
-	const width = Math.round(bitmap.width * scale);
-	const height = Math.round(bitmap.height * scale);
-
-	const canvas = document.createElement("canvas");
-	canvas.width = width;
-	canvas.height = height;
-	const ctx = canvas.getContext("2d");
-	if (!ctx) throw new Error("Canvas 2D context unavailable");
-	ctx.drawImage(bitmap, 0, 0, width, height);
-	bitmap.close();
-	return canvas.toDataURL("image/jpeg", 0.85);
-}
 
 export function NewOrgPage() {
 	const navigate = useNavigate();
@@ -160,11 +145,7 @@ export function NewOrgPage() {
 							<RootError />
 						</CardContent>
 						<CardFooter className="justify-end">
-							<Submit
-								type="submit"
-								isLoading={isPending}
-								startIcon={<Icon icon={faArrowRight} />}
-							>
+							<Submit type="submit" isLoading={isPending}>
 								Continue
 							</Submit>
 						</CardFooter>

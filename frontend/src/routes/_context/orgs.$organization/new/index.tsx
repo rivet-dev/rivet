@@ -26,39 +26,35 @@ function RouteComponent() {
 	const params = Route.useParams();
 
 	return (
-		<>
+		<div className="h-screen flex flex-col overflow-hidden">
 			<SidebarlessHeader />
-			<div className="h-screen flex flex-col justify-safe-center">
-				<div className="flex-1 flex flex-col justify-safe-center overflow-auto">
-					<div className="flex mx-auto flex-1 w-full px-6 items-center justify-center">
-						<div className="max-w-2xl w-full">
-							<Card
-								className="max-w-2xl w-full"
-								data-testid={
-									TEST_IDS.Onboarding.CreateProjectCard
-								}
-							>
-								<CreateProjectFrameContent
-									organization={params.organization}
-									onSuccess={(data, vars) => {
-										return navigate({
-											to: "/orgs/$organization/projects/$project",
-											params: {
-												organization: vars.organization,
-												project: data.project.name,
-											},
-											search: {
-												flow: search.flow,
-											},
-										});
-									}}
-								/>
-							</Card>
-						</div>
+			<div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+				<div className="flex-1 min-h-0 flex mx-auto w-full px-6 items-center justify-center overflow-auto">
+					<div className="max-w-2xl w-full py-6">
+						<Card
+							className="max-w-2xl w-full"
+							data-testid={TEST_IDS.Onboarding.CreateProjectCard}
+						>
+							<CreateProjectFrameContent
+								organization={params.organization}
+								onSuccess={(data, vars) => {
+									return navigate({
+										to: "/orgs/$organization/projects/$project",
+										params: {
+											organization: vars.organization,
+											project: data.project.name,
+										},
+										search: {
+											flow: search.flow,
+										},
+									});
+								}}
+							/>
+						</Card>
 					</div>
-					<OnboardingFooter />
 				</div>
+				<OnboardingFooter />
 			</div>
-		</>
+		</div>
 	);
 }

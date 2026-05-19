@@ -3,6 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { Button, cn } from "@/components";
 import { authClient } from "@/lib/auth";
 import { features } from "@/lib/features";
+import { orgConicGradient, paletteForLetter } from "@/lib/org-palette";
 import { ContextSwitcher } from "./context-switcher";
 import { FeedbackButton } from "./feedback-button";
 import { HelpButton } from "./help-button";
@@ -49,7 +50,7 @@ function DocsButton() {
 			size="sm"
 			className="gap-2 text-muted-foreground hover:text-foreground"
 			asChild
-			startIcon={<Icon icon={faBook} className="size-4" />}
+			startIcon={<Icon icon={faBook} className="size-3.5" />}
 		>
 			<a
 				href="https://www.rivet.dev/docs"
@@ -97,7 +98,7 @@ function OrgIdentity() {
 
 	return (
 		<>
-			<span className="size-5 rounded-full overflow-hidden bg-foreground/10 flex items-center justify-center shrink-0">
+			<span className="size-5 rounded-full overflow-hidden flex items-center justify-center shrink-0">
 				{logo ? (
 					// biome-ignore lint/performance/noImgElement: small avatar, no Next runtime
 					<img
@@ -106,7 +107,14 @@ function OrgIdentity() {
 						className="size-full object-cover"
 					/>
 				) : (
-					<span className="text-[10px] font-semibold text-foreground/80">
+					<span
+						className="size-full flex items-center justify-center text-[10px] font-semibold text-white"
+						style={{
+							backgroundImage: orgConicGradient(
+								paletteForLetter(name),
+							),
+						}}
+					>
 						{initial}
 					</span>
 				)}
