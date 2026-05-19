@@ -32,8 +32,9 @@ export function NoProvidersAlert({
 						{features.platform ? (
 							<Button size="sm" asChild className="w-full">
 								<Link
-									to="/orgs/$organization/projects/$project/ns/$namespace/settings"
+									to="/orgs/$organization/projects/$project/ns/$namespace"
 									from="/orgs/$organization/projects/$project/ns/$namespace"
+									search={{ modal: "settings" }}
 								>
 									Go to Settings
 								</Link>
@@ -43,7 +44,8 @@ export function NoProvidersAlert({
 							<Button asChild size="sm" className="w-full">
 								<Link
 									to="/ns/$namespace"
-									from="/ns/$namespace/settings"
+									from="/ns/$namespace"
+									search={{ modal: "settings" }}
 								>
 									Go to Settings
 								</Link>

@@ -163,9 +163,12 @@ export function SettingsDrawer({
 		);
 
 	return (
-		<DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
+		<DialogPrimitive.Root
+			open={open}
+			onOpenChange={onOpenChange}
+			modal={false}
+		>
 			<DialogPrimitive.Portal>
-				<DialogPrimitive.Overlay className="fixed inset-0 z-40" />
 				<DialogPrimitive.Content
 					className={cn(
 						"fixed left-2 right-2 z-50 flex flex-col overflow-hidden",
@@ -175,6 +178,9 @@ export function SettingsDrawer({
 						"data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
 					)}
 					style={{ top: TOP_BAR_OUTER_HEIGHT, bottom: "8px" }}
+					onInteractOutside={(e) => e.preventDefault()}
+					onPointerDownOutside={(e) => e.preventDefault()}
+					onFocusOutside={(e) => e.preventDefault()}
 				>
 					<VisuallyHidden>
 						<DialogPrimitive.Title>{meta.title}</DialogPrimitive.Title>
@@ -307,19 +313,21 @@ function TabFrame({
 
 function NamespaceSettingsTitle({ fallback }: { fallback: string }) {
 	// Guard with `shouldThrow: false` because the drawer can render this title
-	// while the active match tree is mid-transition. Without the guard, the
-	// inner `useLoaderData({ from: namespaceRoute })` throws an "active match"
-	// invariant.
+	// while the active match tree is mid-transition. The `loaderData` check
+	// also handles the in-between state where the match has entered the tree
+	// but its loader hasn't resolved — without it, the inner hook reads
+	// undefined loader data and crashes when it touches `dataProvider`.
 	const match = useMatch({
 		from: "/_context/orgs/$organization/projects/$project/ns/$namespace",
 		shouldThrow: false,
 	});
-	if (!match) return <>{fallback}</>;
+	if (!match || !match.loaderData) return <>{fallback}</>;
 	return <NamespaceSettingsTitleInner fallback={fallback} />;
 }
 
 function NamespaceSettingsTitleInner({ fallback }: { fallback: string }) {
 	const dataProvider = useCloudNamespaceDataProvider();
+	if (!dataProvider) return <>{fallback}</>;
 	const { data } = useQuery(dataProvider.currentNamespaceQueryOptions());
 	const displayName = data?.displayName;
 	return <>{displayName ? `${displayName} settings` : fallback}</>;
@@ -330,12 +338,13 @@ function ProjectBillingTitle({ fallback }: { fallback: string }) {
 		from: "/_context/orgs/$organization/projects/$project",
 		shouldThrow: false,
 	});
-	if (!match) return <>{fallback}</>;
+	if (!match || !match.loaderData) return <>{fallback}</>;
 	return <ProjectBillingTitleInner fallback={fallback} />;
 }
 
 function ProjectBillingTitleInner({ fallback }: { fallback: string }) {
 	const dataProvider = useCloudProjectDataProvider();
+	if (!dataProvider) return <>{fallback}</>;
 	const { data } = useQuery(dataProvider.currentProjectQueryOptions());
 	const displayName = data?.displayName;
 	return <>{displayName ? `${displayName} Billing` : fallback}</>;

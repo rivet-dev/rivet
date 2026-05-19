@@ -233,6 +233,13 @@ function DangerZone() {
 	const dataProvider = useCloudNamespaceDataProvider();
 	const navigate = useNavigate();
 
+	// The namespace data provider can briefly resolve to `undefined` when the
+	// user switches namespace/project from the nav while this drawer is open.
+	// Bail until the new route's loader has populated `dataProvider`.
+	if (!dataProvider) {
+		return null;
+	}
+
 	const { data: project } = useQuery(
 		dataProvider.currentProjectQueryOptions(),
 	);
