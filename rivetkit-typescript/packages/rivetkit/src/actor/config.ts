@@ -26,6 +26,7 @@ export const DEFAULT_SLEEP_GRACE_PERIOD = 15_000;
 export const ACTOR_CONTEXT_INTERNAL_SYMBOL = Symbol(
 	"rivetkit.actor_context_internal",
 );
+export const RAW_STATE_SYMBOL = Symbol("rivetkit.raw_state");
 export const CONN_DRIVER_SYMBOL = Symbol("rivetkit.conn_driver");
 export const CONN_STATE_MANAGER_SYMBOL = Symbol("rivetkit.conn_state_manager");
 
@@ -310,6 +311,8 @@ export interface ActorContext<
 	TQueues extends QueueSchemaConfig = Record<never, never>,
 > {
 	[ACTOR_CONTEXT_INTERNAL_SYMBOL]?: unknown;
+	/** Returns the raw unwrapped state without the write-through proxy. */
+	[RAW_STATE_SYMBOL](): TState;
 	state: TState;
 	vars: TVars;
 	readonly kv: ActorKv;

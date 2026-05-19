@@ -2,6 +2,7 @@ import { VirtualWebSocket } from "@rivetkit/virtual-websocket";
 import {
 	ACTOR_CONTEXT_INTERNAL_SYMBOL,
 	CONN_STATE_MANAGER_SYMBOL,
+	RAW_STATE_SYMBOL,
 	getRunFunction,
 	getRunInspectorConfig,
 	type WorkflowInspectorConfig,
@@ -1160,6 +1161,10 @@ class NativeConnAdapter {
 			this.#schemas.connParamsSchema,
 			decodeValue(this.#runtime.connParams(this.#conn)),
 		);
+	}
+
+	[RAW_STATE_SYMBOL](): unknown {
+		return this.#readState();
 	}
 
 	get state(): unknown {
@@ -2453,6 +2458,13 @@ export class ActorContextHandleAdapter {
 		}
 
 		throw databaseClientNotReadyError();
+	}
+
+	[RAW_STATE_SYMBOL](): unknown {
+		if (!this.#stateEnabled) {
+			throw stateNotEnabledError();
+		}
+		return this.#readState();
 	}
 
 	get state(): unknown {

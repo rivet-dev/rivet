@@ -597,8 +597,8 @@ for (const mode of modes) {
 						}
 
 						// Crash at iteration 3 during first run. State was
-						// persisted at iteration 2 (deferred) and awaited at
-						// the start of iteration 3, so state should be saved.
+						// persisted at the end of iteration 2 after
+						// Loop.continue, so state should be saved.
 						if (state.count === 3 && firstRun) {
 							throw new Error("Crash after state save");
 						}
@@ -628,8 +628,8 @@ for (const mode of modes) {
 			expect(result.state).toBe("completed");
 			expect(result.output).toBe(5);
 
-			// Should resume from saved state at iteration 2, not from 0
-			expect(iterationsExecuted[0]).toBe(2);
+			// Should resume from saved state at iteration 3, not from 0
+			expect(iterationsExecuted[0]).toBe(3);
 		});
 
 		it("should handle loop that breaks before first prune interval", async () => {
