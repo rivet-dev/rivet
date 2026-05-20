@@ -73,6 +73,20 @@ describe("Registry.toWebHandler", () => {
 });
 
 describe("Registry.toHttpEffect", () => {
+	test("accepts serverless routing options", () => {
+		expectTypeOf(Registry.toHttpEffect).toBeCallableWith(RegistryLive, {
+			serverless: {
+				basePath: "/",
+				maxStartPayloadBytes: 1024,
+			},
+		});
+	});
+
+	test("rejects actor registration layers that do not provide Registry", () => {
+		// @ts-expect-error: actor registration layers require Registry but do not provide it.
+		Registry.toHttpEffect(TestActorLive);
+	});
+
 	test("returns a scoped Effect HTTP handler", () => {
 		expectTypeOf(
 			Registry.toHttpEffect(RegistryLive),
