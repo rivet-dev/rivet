@@ -21,7 +21,9 @@ use url::Url;
 use crate::actor::factory::ActorFactory;
 #[cfg(feature = "native-runtime")]
 use crate::engine_process::EngineProcessManager;
-use crate::registry::{RegistryCallbacks, RegistryDispatcher, ServeConfig};
+use crate::registry::{
+	CoreEnvoyHandle, CoreEnvoyStatus, RegistryCallbacks, RegistryDispatcher, ServeConfig,
+};
 use crate::runtime::RuntimeSpawner;
 use crate::time::{sleep, timeout};
 
