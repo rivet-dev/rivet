@@ -4,6 +4,7 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import {
 	Button,
 	cn,
+	DiscreteCopyButton,
 	H1,
 	RelativeTime,
 	ScrollArea,
@@ -52,7 +53,7 @@ export function NamespacesGrid({
 											to: ".",
 											search: (old) => ({
 												...(old as Record<string, unknown>),
-												modal: "billing",
+												settings: "billing",
 											}),
 										});
 									}}
@@ -138,9 +139,14 @@ export function NamespacesGrid({
 										<div className="font-medium text-foreground truncate">
 											{ns.displayName}
 										</div>
-										<div className="font-mono-console text-muted-foreground truncate">
-											{ns.name}
-										</div>
+										<DiscreteCopyButton
+											size="xs"
+											value={ns.name}
+											className="-mx-2 h-auto w-fit font-mono-console text-muted-foreground"
+											onClick={(e) => e.preventDefault()}
+										>
+											<span className="truncate">{ns.name}</span>
+										</DiscreteCopyButton>
 										<div className="text-muted-foreground">
 											{ns.createdAt ? (
 												<RelativeTime

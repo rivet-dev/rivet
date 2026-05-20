@@ -356,19 +356,9 @@ function CurrentBillCard({
 			<div className="text-2xl font-semibold text-foreground mb-4">
 				{formatCurrency(total)}
 			</div>
-			<div className="flex items-center justify-between text-xs mb-1.5">
-				<span className="text-muted-foreground">Billing period</span>
+			<div className="flex items-center justify-between text-xs">
+				<span className="text-muted-foreground">{fmtDate(periodStart)} – {fmtDate(periodEnd)}</span>
 				<span className="text-foreground">{daysLeft} days left</span>
-			</div>
-			<div className="relative h-1.5 rounded-full bg-foreground/10">
-				<div
-					className="absolute h-1.5 rounded-full bg-primary"
-					style={{ width: `${pct}%` }}
-				/>
-			</div>
-			<div className="flex items-center justify-between text-[11px] text-muted-foreground mt-1.5">
-				<span>{fmtDate(periodStart)}</span>
-				<span>{fmtDate(periodEnd)}</span>
 			</div>
 		</div>
 	);

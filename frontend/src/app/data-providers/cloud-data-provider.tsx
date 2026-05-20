@@ -201,23 +201,23 @@ export const createGlobalContext = () => {
 			});
 		},
 
-		imagesQueryOptions(opts: { organization: string; project: string }) {
-			return infiniteQueryOptions({
-				queryKey: [opts, "images"],
-				queryFn: async ({ pageParam }) => {
-					return await client.docker.listImages(opts.project, {
-						limit: 10,
-						cursor: pageParam ?? undefined,
-						org: opts.organization,
-					});
-				},
-				getNextPageParam: (lastPage) => {
-					return lastPage.pagination.cursor;
-				},
-				initialPageParam: undefined as string | undefined,
-				select: (data) => data.pages.flatMap((page) => page.images),
-			});
-		},
+		// imagesQueryOptions(opts: { organization: string; project: string }) {
+		// 	return infiniteQueryOptions({
+		// 		queryKey: [opts, "images"],
+		// 		queryFn: async ({ pageParam }) => {
+		// 			return await client.docker.listImages(opts.project, {
+		// 				limit: 10,
+		// 				cursor: pageParam ?? undefined,
+		// 				org: opts.organization,
+		// 			});
+		// 		},
+		// 		getNextPageParam: (lastPage) => {
+		// 			return lastPage.pagination.cursor;
+		// 		},
+		// 		initialPageParam: undefined as string | undefined,
+		// 		select: (data) => data.pages.flatMap((page) => page.images),
+		// 	});
+		// },
 	};
 };
 
@@ -735,12 +735,12 @@ export const createOrganizationContext = ({
 				repository: opts.repository,
 			});
 		},
-		currentOrganizationImagesQueryOptions(opts: { project: string }) {
-			return parent.imagesQueryOptions({
-				organization,
-				project: opts.project,
-			});
-		},
+		// currentOrganizationImagesQueryOptions(opts: { project: string }) {
+		// 	return parent.imagesQueryOptions({
+		// 		organization,
+		// 		project: opts.project,
+		// 	});
+		// },
 	};
 };
 
@@ -1003,12 +1003,12 @@ export const createProjectContext = ({
 				repository: opts.repository,
 			});
 		},
-		currentProjectImagesQueryOptions() {
-			return parent.imagesQueryOptions({
-				organization,
-				project,
-			});
-		},
+		// currentProjectImagesQueryOptions() {
+		// 	return parent.imagesQueryOptions({
+		// 		organization,
+		// 		project,
+		// 	});
+		// },
 		upsertCurrentProjectManagedPoolMutationOptions() {
 			return mutationOptions({
 				mutationKey: [organization, project, "managed-pool", "upsert"],

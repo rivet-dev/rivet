@@ -1,10 +1,10 @@
-import { faQuestionCircle, Icon } from "@rivet-gg/icons";
+import { faQuestionCircle, faTrash, faTriangleExclamation, Icon } from "@rivet-gg/icons";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, notFound, useNavigate } from "@tanstack/react-router";
 import { HelpDropdown } from "@/app/help-dropdown";
 import { Content } from "@/app/layout";
 import { RouteLayout } from "@/app/route-layout";
-import { Button, H1, H3, H4 } from "@/components";
+import { Button, H1, SmallText } from "@/components";
 import { useCloudProjectDataProvider } from "@/components/actors";
 import { features } from "@/lib/features";
 
@@ -59,38 +59,47 @@ function DangerZone() {
 	);
 
 	return (
-		<div className="pb-4 pb-8 px-6 max-w-5xl mx-auto my-8 border border-foreground/10 rounded-xl bg-card">
-			<div className="flex gap-2 items-center mb-2 mt-6">
-				<H3>Danger Zone</H3>
-			</div>
-			<p className="mb-6 text-muted-foreground">
-				Perform actions that could affect the stability of your project.
-			</p>
-
-			<div className="border border-destructive rounded-md p-4 bg-destructive/10 mb-4">
-				<H4 className="mb-2 text-destructive-foreground">
-					Archive project '{project?.displayName}'
-				</H4>
-				<p className=" mb-4">
-					Archiving this project will permanently remove all
-					associated namespaces, Rivet Actors, Runners, and
-					configurations. This action cannot be undone.
-				</p>
-				<Button
-					variant="destructive"
-					onClick={() =>
-						navigate({
-							to: ".",
-							search: {
-								modal: "delete-project",
-								displayName: project?.displayName,
-							},
-						})
-					}
-				>
-					Archive Project
-				</Button>
-			</div>
+		<div className="px-6 max-w-5xl mx-auto my-8">
+			<section className="rounded-lg border border-foreground/10 bg-card overflow-hidden">
+				<header className="flex items-center gap-2 px-5 py-4">
+					<Icon
+						icon={faTriangleExclamation}
+						className="size-3.5 text-destructive"
+					/>
+					<h3 className="text-sm font-semibold text-foreground">
+						Danger zone
+					</h3>
+				</header>
+				<div className="border-t border-foreground/10">
+					<div className="flex items-start justify-between gap-4 px-5 py-4">
+						<div className="min-w-0">
+							<div className="text-sm font-medium text-foreground">
+								Archive project
+							</div>
+							<SmallText className="text-muted-foreground">
+								Permanently removes all associated namespaces, Rivet Actors, Runners, and configurations. Cannot be undone.
+							</SmallText>
+						</div>
+						<Button
+							variant="destructive-outline"
+							size="sm"
+							startIcon={<Icon icon={faTrash} />}
+							onClick={() =>
+								navigate({
+									to: ".",
+									search: (old) => ({
+										...(old as Record<string, unknown>),
+										modal: "delete-project",
+										displayName: project?.displayName,
+									}),
+								})
+							}
+						>
+							Archive
+						</Button>
+					</div>
+				</div>
+			</section>
 		</div>
 	);
 }
