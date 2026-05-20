@@ -12,6 +12,7 @@
 		"test:watch": "npx turbo watch test",
 		"check-types": "npx turbo check-types",
 		"counter-latency": "pnpm --dir examples/kitchen-sink counter-latency",
+		"slow-reconnect": "pnpm --dir examples/kitchen-sink slow-reconnect",
 		"lint": "pnpm biome check .",
 		"fmt": "pnpm biome check --write --diagnostic-level=error ."
 	},
