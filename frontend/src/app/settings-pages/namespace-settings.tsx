@@ -1,4 +1,4 @@
-import { faPlus, Icon } from "@rivet-gg/icons";
+import { faPlus, faTrash, faTriangleExclamation, Icon } from "@rivet-gg/icons";
 import {
 	useInfiniteQuery,
 	usePrefetchInfiniteQuery,
@@ -9,7 +9,7 @@ import { type ReactNode, Suspense } from "react";
 import { ProviderDropdown } from "@/app/provider-dropdown";
 import { RunnerConfigsTable } from "@/app/runner-config-table";
 import { RunnersTable } from "@/app/runners-table";
-import { Button, Code, Ping, Skeleton } from "@/components";
+import { Button, Code, Ping, Skeleton, SmallText } from "@/components";
 import {
 	ActorRegion,
 	useCloudNamespaceDataProvider,
@@ -248,59 +248,72 @@ function DangerZone() {
 	);
 
 	return (
-		<SectionCard
-			title="Danger zone"
-			description="Actions that affect the stability of your Rivet Actors and Runners."
-		>
-			<div className="border border-destructive rounded-md p-4 bg-destructive/10 mb-3">
-				<h4 className="text-sm font-semibold mb-1 text-destructive-foreground">
-					Archive namespace '{namespace?.displayName}'
-				</h4>
-				<p className="text-xs text-muted-foreground mb-3">
-					Permanently removes all associated Rivet Actors, Runners,
-					and configurations. Cannot be undone.
-				</p>
-				<Button
-					variant="destructive"
-					size="sm"
-					onClick={() =>
-						navigate({
-							to: ".",
-							search: {
-								modal: "delete-namespace",
-								displayName: namespace?.displayName,
-							},
-						})
-					}
-				>
-					Archive namespace
-				</Button>
+		<section className="rounded-lg border border-foreground/10 bg-card overflow-hidden">
+			<header className="flex items-center gap-2 px-5 py-4">
+				<Icon
+					icon={faTriangleExclamation}
+					className="size-3.5 text-destructive"
+				/>
+				<h3 className="text-sm font-semibold text-foreground">
+					Danger zone
+				</h3>
+			</header>
+			<div className="border-t border-foreground/10">
+				<div className="flex items-start justify-between gap-4 px-5 py-4 border-b border-foreground/10">
+					<div className="min-w-0">
+						<div className="text-sm font-medium text-foreground">
+							Archive namespace
+						</div>
+						<SmallText className="text-muted-foreground">
+							Permanently removes all associated Rivet Actors, Runners, and configurations. Cannot be undone.
+						</SmallText>
+					</div>
+					<Button
+						variant="destructive-outline"
+						size="sm"
+						startIcon={<Icon icon={faTrash} />}
+						onClick={() =>
+							navigate({
+								to: ".",
+								search: (old) => ({
+									...(old as Record<string, unknown>),
+									modal: "delete-namespace",
+									displayName: namespace?.displayName,
+								}),
+							})
+						}
+					>
+						Archive
+					</Button>
+				</div>
+				<div className="flex items-start justify-between gap-4 px-5 py-4">
+					<div className="min-w-0">
+						<div className="text-sm font-medium text-foreground">
+							Archive project
+						</div>
+						<SmallText className="text-muted-foreground">
+							Permanently removes all associated Rivet Actors, Runners, and configurations. Cannot be undone.
+						</SmallText>
+					</div>
+					<Button
+						variant="destructive-outline"
+						size="sm"
+						startIcon={<Icon icon={faTrash} />}
+						onClick={() =>
+							navigate({
+								to: ".",
+								search: (old) => ({
+									...(old as Record<string, unknown>),
+									modal: "delete-project",
+									displayName: project?.displayName,
+								}),
+							})
+						}
+					>
+						Archive
+					</Button>
+				</div>
 			</div>
-
-			<div className="border border-destructive rounded-md p-4 bg-destructive/10">
-				<h4 className="text-sm font-semibold mb-1 text-destructive-foreground">
-					Archive project '{project?.displayName}'
-				</h4>
-				<p className="text-xs text-muted-foreground mb-3">
-					Permanently removes all associated Rivet Actors, Runners,
-					and configurations. Cannot be undone.
-				</p>
-				<Button
-					variant="destructive"
-					size="sm"
-					onClick={() =>
-						navigate({
-							to: ".",
-							search: {
-								modal: "delete-project",
-								displayName: project?.displayName,
-							},
-						})
-					}
-				>
-					Archive project
-				</Button>
-			</div>
-		</SectionCard>
+		</section>
 	);
 }

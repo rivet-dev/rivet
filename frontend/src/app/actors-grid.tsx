@@ -5,8 +5,13 @@ import {
 	Icon,
 	type IconProp,
 } from "@rivet-gg/icons";
-import { useInfiniteQuery } from "@tanstack/react-query";
-import { Link, useNavigate } from "@tanstack/react-router";
+import {
+	queryOptions,
+	useInfiniteQuery,
+	useQueries,
+	useSuspenseInfiniteQuery,
+} from "@tanstack/react-query";
+import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import { lazy, Suspense, type ReactNode } from "react";
 import {
 	Button,
@@ -16,7 +21,8 @@ import {
 	SmallText,
 	WithTooltip,
 } from "@/components";
-import { useDataProvider } from "@/components/actors";
+import { useDataProvider, useCloudNamespaceDataProvider } from "@/components/actors";
+import { ImagesTable } from "@/app/images-table";
 import { NoProvidersAlert } from "@/components/actors/no-providers-alert";
 
 const emojiRegex =
@@ -283,8 +289,107 @@ export function ActorsGrid({
 							</div>
 						)}
 					</section>
-				</div>
-			</ScrollArea>
-		</div>
-	);
+
+						<DeploymentsSection />
+					</div>
+				</ScrollArea>
+			</div>
+		);
+}
+
+function DeploymentsSection() {
+	const { namespace } = useParams({ strict: false }) as { namespace: string };
+	const dataProvider = useCloudNamespaceDataProvider();
+	const navigate = useNavigate();
+
+	// const {
+	// 	data: images,
+	// 	isError,
+	// 	isLoading: isLoadingImages,
+	// 	fetchNextPage,
+	// 	hasNextPage,
+	// } = useSuspenseInfiniteQuery({
+	// 	...dataProvider.currentProjectImagesQueryOptions(),
+	// 	refetchInterval: 5_000,
+	// });
+
+	// const { data: namespaces } = useSuspenseInfiniteQuery({
+	// 	...dataProvider.currentProjectNamespacesQueryOptions(),
+	// 	refetchInterval: 5_000,
+	// });
+
+	// const managedPoolQueries = useQueries({
+	// 	queries:
+	// 		namespaces.map((ns) =>
+	// 			queryOptions({
+	// 				...dataProvider.currentProjectManagedPoolQueryOptions({
+	// 					namespace: ns.name,
+	// 					pool: "default",
+	// 				}),
+	// 				select: (data) => ({
+	// 					...data,
+	// 					namespace: ns.name,
+	// 					...data?.config?.image,
+	// 				}),
+	// 				refetchInterval: 5_000,
+	// 			}),
+	// 		) ?? [],
+	// });
+
+	// const deployments = managedPoolQueries
+	// 	.map((query) => query.data)
+	// 	.filter(
+	// 		(data): data is Exclude<typeof data, undefined> =>
+	// 			data !== undefined,
+	// 	);
+
+	// // Only show deployments section if there are images (namespace uses compute).
+	// if (!isLoadingImages && images.length === 0) {
+	// 	return null;
+	// }
+
+	// const sorted = images.toSorted((a, b) => {
+	// 	const aTimestamp = new Date(a.createdAt).getTime();
+	// 	const bTimestamp = new Date(b.createdAt).getTime();
+	// 	return bTimestamp - aTimestamp;
+	// });
+
+	// return (
+	// 	<section>
+	// 		<header className="flex items-center justify-between gap-4 mb-3">
+	// 			<h2 className="text-base font-semibold text-foreground">
+	// 				Deployments
+	// 			</h2>
+	// 			<Button
+	// 				variant="outline"
+	// 				size="sm"
+	// 				startIcon={<Icon icon={faPlus} />}
+	// 				onClick={() => {
+	// 					navigate({
+	// 						to: ".",
+	// 						search: (old) => ({
+	// 							...old,
+	// 							modal: "upsert-deployment",
+	// 							namespace,
+	// 						}),
+	// 					});
+	// 				}}
+	// 			>
+	// 				Deploy
+	// 			</Button>
+	// 		</header>
+	// 		<div className="border rounded-md">
+	// 			<ImagesTable
+	// 				images={sorted}
+	// 				deployments={deployments}
+	// 				isLoading={isLoadingImages}
+	// 				namespace={namespace}
+	// 				isError={isError}
+	// 				fetchNextPage={fetchNextPage}
+	// 				hasNextPage={hasNextPage}
+	// 			/>
+	// 		</div>
+	// 	</section>
+	// );
+	return null;
 }
