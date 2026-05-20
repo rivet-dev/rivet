@@ -34,9 +34,9 @@ import {
 	AccordionTrigger,
 	Combobox,
 	type DialogContentProps,
-	Frame,
-	ToggleGroup,
-	ToggleGroupItem,
+	Label,
+	Separator,
+	Switch,
 } from "@/components";
 import { ActorRegion, useEngineCompatDataProvider } from "@/components/actors";
 import { queryClient } from "@/queries/global";
@@ -104,75 +104,32 @@ export default function EditRunnerConfigFrameContent({
 		return sigs.length === 0 || sigs.every((s) => s === sigs[0]);
 	}, [data.datacenters]);
 
-	const [settingsMode, setSettingsMode] = useState(
-		isSharedSettings ? "shared" : "datacenter",
-	);
+	const [shareAcrossDatacenters, setShareAcrossDatacenters] =
+		useState(isSharedSettings);
 
 	return (
-		<Frame.Content className="gap-4 flex flex-col">
-			<Frame.Header>
-				<Frame.Title className="justify-between flex items-center">
-					Edit '{name}' Provider
-				</Frame.Title>
-			</Frame.Header>
-
-			<div>
-				<SharedSettingsToggleGroup
-					value={settingsMode}
-					onChange={setSettingsMode}
+		<div className="flex-1 min-h-0 flex flex-col">
+			<div className="shrink-0 flex items-center justify-between gap-3 px-5 py-2.5 border-b border-border">
+				<Label
+					htmlFor="share-across-datacenters"
+					className="cursor-pointer text-sm font-normal text-muted-foreground"
+				>
+					Same settings for all datacenters
+				</Label>
+				<Switch
+					id="share-across-datacenters"
+					checked={shareAcrossDatacenters}
+					onCheckedChange={setShareAcrossDatacenters}
 				/>
 			</div>
-
 			<EndpointHealthCheckProvider>
-				<div className="gap-4 flex flex-col">
-					{settingsMode === "shared" ? (
-						<>
-							<div className="text-sm text-muted-foreground mb-2">
-								These settings will apply to all datacenters.
-							</div>
-							<SharedSettingsForm name={name} onClose={onClose} />
-						</>
-					) : null}
-
-					{settingsMode === "datacenter" ? (
-						<DatacenterSettingsForm name={name} onClose={onClose} />
-					) : null}
-				</div>
+				{shareAcrossDatacenters ? (
+					<SharedSettingsForm name={name} onClose={onClose} />
+				) : (
+					<DatacenterSettingsForm name={name} onClose={onClose} />
+				)}
 			</EndpointHealthCheckProvider>
-		</Frame.Content>
-	);
-}
-
-function SharedSettingsToggleGroup({
-	value,
-	onChange,
-}: {
-	value: string;
-	onChange: (mode: string) => void;
-}) {
-	return (
-		<ToggleGroup
-			defaultValue="shared"
-			type="single"
-			className="border rounded-md gap-0"
-			value={value}
-			onValueChange={(mode) => {
-				if (!mode) {
-					return;
-				}
-				onChange(mode);
-			}}
-		>
-			<ToggleGroupItem value="shared" className="rounded-none w-full">
-				Global Settings
-			</ToggleGroupItem>
-			<ToggleGroupItem
-				value="datacenter"
-				className="border-l rounded-none w-full"
-			>
-				Per Datacenter Settings
-			</ToggleGroupItem>
-		</ToggleGroup>
+		</div>
 	);
 }
 
@@ -417,42 +374,48 @@ function SharedSettingsForm({
 						}),
 			}}
 		>
-			<EditRunnerConfigForm.Mode />
-			<ResetOnModeChange />
-			<WhenMode value="serverless">
-				<EditRunnerConfigForm.Url headersName="headers" />
-				{isNewConfig ? (
-					<>
-						<div className="grid grid-cols-2 gap-2">
-							<EditRunnerConfigForm.RequestLifespan />
-							<EditRunnerConfigForm.MaxConcurrentActors />
+			<div className="flex-1 min-h-0 overflow-y-auto px-5 py-5 space-y-6">
+				<EditRunnerConfigForm.Mode />
+				<ResetOnModeChange />
+				<WhenMode value="serverless">
+					<div className="space-y-6">
+						<div className="space-y-5">
+							<EditRunnerConfigForm.Url headersName="headers" />
+							{isNewConfig ? (
+								<>
+									<div className="grid grid-cols-2 gap-3">
+										<EditRunnerConfigForm.RequestLifespan />
+										<EditRunnerConfigForm.MaxConcurrentActors />
+									</div>
+									<EditRunnerConfigForm.DrainGracePeriod />
+									<EditRunnerConfigForm.AutoUpgrade />
+								</>
+							) : (
+								<>
+									<div className="grid grid-cols-2 gap-3">
+										<EditRunnerConfigForm.MinRunners />
+										<EditRunnerConfigForm.MaxRunners />
+									</div>
+									<div className="grid grid-cols-2 gap-3">
+										<EditRunnerConfigForm.RequestLifespan />
+										<EditRunnerConfigForm.SlotsPerRunner />
+									</div>
+									<EditRunnerConfigForm.RunnersMargin />
+								</>
+							)}
 						</div>
-						<EditRunnerConfigForm.DrainGracePeriod />
-						<EditRunnerConfigForm.AutoUpgrade />
-					</>
-				) : (
-					<>
-						<div className="grid grid-cols-2 gap-2">
-							<EditRunnerConfigForm.MinRunners />
-							<EditRunnerConfigForm.MaxRunners />
-						</div>
-						<div className="grid grid-cols-2 gap-2">
-							<EditRunnerConfigForm.RequestLifespan />
-							<EditRunnerConfigForm.SlotsPerRunner />
-						</div>
-						<EditRunnerConfigForm.RunnersMargin />
-					</>
-				)}
-				<EditRunnerConfigForm.Headers />
-			</WhenMode>
-			<WhenMode value="serverfull">
-				<ServerfullModeNotice />
-			</WhenMode>
-			<EditRunnerConfigForm.Regions />
-			<div className="flex justify-end mt-4">
-				<SharedSettingsSubmit
-					dataDatacenters={data.datacenters}
-				/>
+						<Separator />
+						<EditRunnerConfigForm.Headers />
+					</div>
+				</WhenMode>
+				<WhenMode value="serverfull">
+					<ServerfullModeNotice />
+				</WhenMode>
+				<Separator />
+				<EditRunnerConfigForm.Regions />
+			</div>
+			<div className="shrink-0 border-t border-border bg-card px-5 py-3 flex justify-end gap-2">
+				<SharedSettingsSubmit dataDatacenters={data.datacenters} />
 			</div>
 		</EditRunnerConfigForm.Form>
 	);
@@ -589,23 +552,22 @@ function DatacenterSettingsForm({
 				onClose?.();
 			}}
 		>
-			<Accordion type="multiple" className="w-full">
-				{datacenters.map((dc) => (
-					<DatacenterAccordion
-						key={dc.name}
-						regionId={dc.name}
-						name={name}
-						data={data!}
-					/>
-				))}
-			</Accordion>
+			<div className="flex-1 min-h-0 overflow-y-auto px-5 py-5 space-y-4">
+				<Accordion type="multiple" className="w-full">
+					{datacenters.map((dc) => (
+						<DatacenterAccordion
+							key={dc.name}
+							regionId={dc.name}
+							name={name}
+							data={data!}
+						/>
+					))}
+				</Accordion>
 
-			<EditSingleRunnerConfigForm.Datacenters />
-
-			<div className="flex justify-end mt-4">
-				<DatacenterSettingsSubmit
-					dataDatacenters={data.datacenters}
-				/>
+				<EditSingleRunnerConfigForm.Datacenters />
+			</div>
+			<div className="shrink-0 border-t border-border bg-card px-5 py-3 flex justify-end gap-2">
+				<DatacenterSettingsSubmit dataDatacenters={data.datacenters} />
 			</div>
 		</EditSingleRunnerConfigForm.Form>
 	);
@@ -624,8 +586,8 @@ function DatacenterAccordion({
 
 	return (
 		<AccordionItem value={regionId} className="-mx-2">
-			<AccordionTrigger className="mx-2">
-				<div className="flex items-center gap-4">
+			<AccordionTrigger className="mx-2 py-3 text-sm font-medium">
+				<div className="flex items-center gap-3">
 					<EditSingleRunnerConfigForm.Enable
 						name={`datacenters.${regionId}.enable`}
 					/>

@@ -19,11 +19,11 @@ import { Route as AcceptInvitationRouteImport } from './routes/accept-invitation
 import { Route as ContextRouteImport } from './routes/_context'
 import { Route as ContextIndexRouteImport } from './routes/_context/index'
 import { Route as ContextNewIndexRouteImport } from './routes/_context/new/index'
+import { Route as ContextNewOrgIndexRouteImport } from './routes/_context/new-org/index'
 import { Route as ContextOrgsOrganizationRouteImport } from './routes/_context/orgs.$organization'
 import { Route as ContextNsNamespaceRouteImport } from './routes/_context/ns.$namespace'
 import { Route as ContextOrgsOrganizationIndexRouteImport } from './routes/_context/orgs.$organization/index'
 import { Route as ContextNsNamespaceIndexRouteImport } from './routes/_context/ns.$namespace/index'
-import { Route as ContextNsNamespaceSettingsRouteImport } from './routes/_context/ns.$namespace/settings'
 import { Route as ContextOrgsOrganizationProjectsIndexRouteImport } from './routes/_context/orgs.$organization/projects.index'
 import { Route as ContextOrgsOrganizationNewIndexRouteImport } from './routes/_context/orgs.$organization/new/index'
 import { Route as ContextOrgsOrganizationProjectsProjectRouteImport } from './routes/_context/orgs.$organization/projects.$project'
@@ -34,7 +34,6 @@ import { Route as ContextOrgsOrganizationProjectsProjectBillingRouteImport } fro
 import { Route as ContextOrgsOrganizationProjectsProjectNsNamespaceRouteImport } from './routes/_context/orgs.$organization/projects.$project/ns.$namespace'
 import { Route as ContextOrgsOrganizationProjectsProjectNsNamespaceIndexRouteImport } from './routes/_context/orgs.$organization/projects.$project/ns.$namespace/index'
 import { Route as ContextOrgsOrganizationProjectsProjectNsNamespaceTokensRouteImport } from './routes/_context/orgs.$organization/projects.$project/ns.$namespace/tokens'
-import { Route as ContextOrgsOrganizationProjectsProjectNsNamespaceSettingsRouteImport } from './routes/_context/orgs.$organization/projects.$project/ns.$namespace/settings'
 import { Route as ContextOrgsOrganizationProjectsProjectNsNamespaceMetricsRouteImport } from './routes/_context/orgs.$organization/projects.$project/ns.$namespace/metrics'
 import { Route as ContextOrgsOrganizationProjectsProjectNsNamespaceLogsRouteImport } from './routes/_context/orgs.$organization/projects.$project/ns.$namespace/logs'
 import { Route as ContextOrgsOrganizationProjectsProjectNsNamespaceDeploymentsRouteImport } from './routes/_context/orgs.$organization/projects.$project/ns.$namespace/deployments'
@@ -90,6 +89,11 @@ const ContextNewIndexRoute = ContextNewIndexRouteImport.update({
   path: '/new/',
   getParentRoute: () => ContextRoute,
 } as any)
+const ContextNewOrgIndexRoute = ContextNewOrgIndexRouteImport.update({
+  id: '/new-org/',
+  path: '/new-org/',
+  getParentRoute: () => ContextRoute,
+} as any)
 const ContextOrgsOrganizationRoute = ContextOrgsOrganizationRouteImport.update({
   id: '/orgs/$organization',
   path: '/orgs/$organization',
@@ -111,12 +115,6 @@ const ContextNsNamespaceIndexRoute = ContextNsNamespaceIndexRouteImport.update({
   path: '/',
   getParentRoute: () => ContextNsNamespaceRoute,
 } as any)
-const ContextNsNamespaceSettingsRoute =
-  ContextNsNamespaceSettingsRouteImport.update({
-    id: '/settings',
-    path: '/settings',
-    getParentRoute: () => ContextNsNamespaceRoute,
-  } as any)
 const ContextOrgsOrganizationProjectsIndexRoute =
   ContextOrgsOrganizationProjectsIndexRouteImport.update({
     id: '/projects/',
@@ -179,13 +177,6 @@ const ContextOrgsOrganizationProjectsProjectNsNamespaceTokensRoute =
     getParentRoute: () =>
       ContextOrgsOrganizationProjectsProjectNsNamespaceRoute,
   } as any)
-const ContextOrgsOrganizationProjectsProjectNsNamespaceSettingsRoute =
-  ContextOrgsOrganizationProjectsProjectNsNamespaceSettingsRouteImport.update({
-    id: '/settings',
-    path: '/settings',
-    getParentRoute: () =>
-      ContextOrgsOrganizationProjectsProjectNsNamespaceRoute,
-  } as any)
 const ContextOrgsOrganizationProjectsProjectNsNamespaceMetricsRoute =
   ContextOrgsOrganizationProjectsProjectNsNamespaceMetricsRouteImport.update({
     id: '/metrics',
@@ -235,8 +226,8 @@ export interface FileRoutesByFullPath {
   '/verify-email-pending': typeof VerifyEmailPendingRoute
   '/ns/$namespace': typeof ContextNsNamespaceRouteWithChildren
   '/orgs/$organization': typeof ContextOrgsOrganizationRouteWithChildren
+  '/new-org/': typeof ContextNewOrgIndexRoute
   '/new/': typeof ContextNewIndexRoute
-  '/ns/$namespace/settings': typeof ContextNsNamespaceSettingsRoute
   '/ns/$namespace/': typeof ContextNsNamespaceIndexRoute
   '/orgs/$organization/': typeof ContextOrgsOrganizationIndexRoute
   '/orgs/$organization/projects/$project': typeof ContextOrgsOrganizationProjectsProjectRouteWithChildren
@@ -252,7 +243,6 @@ export interface FileRoutesByFullPath {
   '/orgs/$organization/projects/$project/ns/$namespace/deployments': typeof ContextOrgsOrganizationProjectsProjectNsNamespaceDeploymentsRoute
   '/orgs/$organization/projects/$project/ns/$namespace/logs': typeof ContextOrgsOrganizationProjectsProjectNsNamespaceLogsRoute
   '/orgs/$organization/projects/$project/ns/$namespace/metrics': typeof ContextOrgsOrganizationProjectsProjectNsNamespaceMetricsRoute
-  '/orgs/$organization/projects/$project/ns/$namespace/settings': typeof ContextOrgsOrganizationProjectsProjectNsNamespaceSettingsRoute
   '/orgs/$organization/projects/$project/ns/$namespace/tokens': typeof ContextOrgsOrganizationProjectsProjectNsNamespaceTokensRoute
   '/orgs/$organization/projects/$project/ns/$namespace/': typeof ContextOrgsOrganizationProjectsProjectNsNamespaceIndexRoute
 }
@@ -265,8 +255,8 @@ export interface FileRoutesByTo {
   '/reset-password': typeof ResetPasswordRoute
   '/verify-email-pending': typeof VerifyEmailPendingRoute
   '/': typeof ContextIndexRoute
+  '/new-org': typeof ContextNewOrgIndexRoute
   '/new': typeof ContextNewIndexRoute
-  '/ns/$namespace/settings': typeof ContextNsNamespaceSettingsRoute
   '/ns/$namespace': typeof ContextNsNamespaceIndexRoute
   '/orgs/$organization': typeof ContextOrgsOrganizationIndexRoute
   '/orgs/$organization/new': typeof ContextOrgsOrganizationNewIndexRoute
@@ -280,7 +270,6 @@ export interface FileRoutesByTo {
   '/orgs/$organization/projects/$project/ns/$namespace/deployments': typeof ContextOrgsOrganizationProjectsProjectNsNamespaceDeploymentsRoute
   '/orgs/$organization/projects/$project/ns/$namespace/logs': typeof ContextOrgsOrganizationProjectsProjectNsNamespaceLogsRoute
   '/orgs/$organization/projects/$project/ns/$namespace/metrics': typeof ContextOrgsOrganizationProjectsProjectNsNamespaceMetricsRoute
-  '/orgs/$organization/projects/$project/ns/$namespace/settings': typeof ContextOrgsOrganizationProjectsProjectNsNamespaceSettingsRoute
   '/orgs/$organization/projects/$project/ns/$namespace/tokens': typeof ContextOrgsOrganizationProjectsProjectNsNamespaceTokensRoute
   '/orgs/$organization/projects/$project/ns/$namespace': typeof ContextOrgsOrganizationProjectsProjectNsNamespaceIndexRoute
 }
@@ -297,8 +286,8 @@ export interface FileRoutesById {
   '/_context/': typeof ContextIndexRoute
   '/_context/ns/$namespace': typeof ContextNsNamespaceRouteWithChildren
   '/_context/orgs/$organization': typeof ContextOrgsOrganizationRouteWithChildren
+  '/_context/new-org/': typeof ContextNewOrgIndexRoute
   '/_context/new/': typeof ContextNewIndexRoute
-  '/_context/ns/$namespace/settings': typeof ContextNsNamespaceSettingsRoute
   '/_context/ns/$namespace/': typeof ContextNsNamespaceIndexRoute
   '/_context/orgs/$organization/': typeof ContextOrgsOrganizationIndexRoute
   '/_context/orgs/$organization/projects/$project': typeof ContextOrgsOrganizationProjectsProjectRouteWithChildren
@@ -314,7 +303,6 @@ export interface FileRoutesById {
   '/_context/orgs/$organization/projects/$project/ns/$namespace/deployments': typeof ContextOrgsOrganizationProjectsProjectNsNamespaceDeploymentsRoute
   '/_context/orgs/$organization/projects/$project/ns/$namespace/logs': typeof ContextOrgsOrganizationProjectsProjectNsNamespaceLogsRoute
   '/_context/orgs/$organization/projects/$project/ns/$namespace/metrics': typeof ContextOrgsOrganizationProjectsProjectNsNamespaceMetricsRoute
-  '/_context/orgs/$organization/projects/$project/ns/$namespace/settings': typeof ContextOrgsOrganizationProjectsProjectNsNamespaceSettingsRoute
   '/_context/orgs/$organization/projects/$project/ns/$namespace/tokens': typeof ContextOrgsOrganizationProjectsProjectNsNamespaceTokensRoute
   '/_context/orgs/$organization/projects/$project/ns/$namespace/': typeof ContextOrgsOrganizationProjectsProjectNsNamespaceIndexRoute
 }
@@ -331,8 +319,8 @@ export interface FileRouteTypes {
     | '/verify-email-pending'
     | '/ns/$namespace'
     | '/orgs/$organization'
+    | '/new-org/'
     | '/new/'
-    | '/ns/$namespace/settings'
     | '/ns/$namespace/'
     | '/orgs/$organization/'
     | '/orgs/$organization/projects/$project'
@@ -348,7 +336,6 @@ export interface FileRouteTypes {
     | '/orgs/$organization/projects/$project/ns/$namespace/deployments'
     | '/orgs/$organization/projects/$project/ns/$namespace/logs'
     | '/orgs/$organization/projects/$project/ns/$namespace/metrics'
-    | '/orgs/$organization/projects/$project/ns/$namespace/settings'
     | '/orgs/$organization/projects/$project/ns/$namespace/tokens'
     | '/orgs/$organization/projects/$project/ns/$namespace/'
   fileRoutesByTo: FileRoutesByTo
@@ -361,8 +348,8 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/verify-email-pending'
     | '/'
+    | '/new-org'
     | '/new'
-    | '/ns/$namespace/settings'
     | '/ns/$namespace'
     | '/orgs/$organization'
     | '/orgs/$organization/new'
@@ -376,7 +363,6 @@ export interface FileRouteTypes {
     | '/orgs/$organization/projects/$project/ns/$namespace/deployments'
     | '/orgs/$organization/projects/$project/ns/$namespace/logs'
     | '/orgs/$organization/projects/$project/ns/$namespace/metrics'
-    | '/orgs/$organization/projects/$project/ns/$namespace/settings'
     | '/orgs/$organization/projects/$project/ns/$namespace/tokens'
     | '/orgs/$organization/projects/$project/ns/$namespace'
   id:
@@ -392,8 +378,8 @@ export interface FileRouteTypes {
     | '/_context/'
     | '/_context/ns/$namespace'
     | '/_context/orgs/$organization'
+    | '/_context/new-org/'
     | '/_context/new/'
-    | '/_context/ns/$namespace/settings'
     | '/_context/ns/$namespace/'
     | '/_context/orgs/$organization/'
     | '/_context/orgs/$organization/projects/$project'
@@ -409,7 +395,6 @@ export interface FileRouteTypes {
     | '/_context/orgs/$organization/projects/$project/ns/$namespace/deployments'
     | '/_context/orgs/$organization/projects/$project/ns/$namespace/logs'
     | '/_context/orgs/$organization/projects/$project/ns/$namespace/metrics'
-    | '/_context/orgs/$organization/projects/$project/ns/$namespace/settings'
     | '/_context/orgs/$organization/projects/$project/ns/$namespace/tokens'
     | '/_context/orgs/$organization/projects/$project/ns/$namespace/'
   fileRoutesById: FileRoutesById
@@ -497,6 +482,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ContextNewIndexRouteImport
       parentRoute: typeof ContextRoute
     }
+    '/_context/new-org/': {
+      id: '/_context/new-org/'
+      path: '/new-org'
+      fullPath: '/new-org/'
+      preLoaderRoute: typeof ContextNewOrgIndexRouteImport
+      parentRoute: typeof ContextRoute
+    }
     '/_context/orgs/$organization': {
       id: '/_context/orgs/$organization'
       path: '/orgs/$organization'
@@ -523,13 +515,6 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/ns/$namespace/'
       preLoaderRoute: typeof ContextNsNamespaceIndexRouteImport
-      parentRoute: typeof ContextNsNamespaceRoute
-    }
-    '/_context/ns/$namespace/settings': {
-      id: '/_context/ns/$namespace/settings'
-      path: '/settings'
-      fullPath: '/ns/$namespace/settings'
-      preLoaderRoute: typeof ContextNsNamespaceSettingsRouteImport
       parentRoute: typeof ContextNsNamespaceRoute
     }
     '/_context/orgs/$organization/projects/': {
@@ -602,13 +587,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ContextOrgsOrganizationProjectsProjectNsNamespaceTokensRouteImport
       parentRoute: typeof ContextOrgsOrganizationProjectsProjectNsNamespaceRoute
     }
-    '/_context/orgs/$organization/projects/$project/ns/$namespace/settings': {
-      id: '/_context/orgs/$organization/projects/$project/ns/$namespace/settings'
-      path: '/settings'
-      fullPath: '/orgs/$organization/projects/$project/ns/$namespace/settings'
-      preLoaderRoute: typeof ContextOrgsOrganizationProjectsProjectNsNamespaceSettingsRouteImport
-      parentRoute: typeof ContextOrgsOrganizationProjectsProjectNsNamespaceRoute
-    }
     '/_context/orgs/$organization/projects/$project/ns/$namespace/metrics': {
       id: '/_context/orgs/$organization/projects/$project/ns/$namespace/metrics'
       path: '/metrics'
@@ -648,12 +626,10 @@ declare module '@tanstack/react-router' {
 }
 
 interface ContextNsNamespaceRouteChildren {
-  ContextNsNamespaceSettingsRoute: typeof ContextNsNamespaceSettingsRoute
   ContextNsNamespaceIndexRoute: typeof ContextNsNamespaceIndexRoute
 }
 
 const ContextNsNamespaceRouteChildren: ContextNsNamespaceRouteChildren = {
-  ContextNsNamespaceSettingsRoute: ContextNsNamespaceSettingsRoute,
   ContextNsNamespaceIndexRoute: ContextNsNamespaceIndexRoute,
 }
 
@@ -666,7 +642,6 @@ interface ContextOrgsOrganizationProjectsProjectNsNamespaceRouteChildren {
   ContextOrgsOrganizationProjectsProjectNsNamespaceDeploymentsRoute: typeof ContextOrgsOrganizationProjectsProjectNsNamespaceDeploymentsRoute
   ContextOrgsOrganizationProjectsProjectNsNamespaceLogsRoute: typeof ContextOrgsOrganizationProjectsProjectNsNamespaceLogsRoute
   ContextOrgsOrganizationProjectsProjectNsNamespaceMetricsRoute: typeof ContextOrgsOrganizationProjectsProjectNsNamespaceMetricsRoute
-  ContextOrgsOrganizationProjectsProjectNsNamespaceSettingsRoute: typeof ContextOrgsOrganizationProjectsProjectNsNamespaceSettingsRoute
   ContextOrgsOrganizationProjectsProjectNsNamespaceTokensRoute: typeof ContextOrgsOrganizationProjectsProjectNsNamespaceTokensRoute
   ContextOrgsOrganizationProjectsProjectNsNamespaceIndexRoute: typeof ContextOrgsOrganizationProjectsProjectNsNamespaceIndexRoute
 }
@@ -683,8 +658,6 @@ const ContextOrgsOrganizationProjectsProjectNsNamespaceRouteChildren: ContextOrg
       ContextOrgsOrganizationProjectsProjectNsNamespaceLogsRoute,
     ContextOrgsOrganizationProjectsProjectNsNamespaceMetricsRoute:
       ContextOrgsOrganizationProjectsProjectNsNamespaceMetricsRoute,
-    ContextOrgsOrganizationProjectsProjectNsNamespaceSettingsRoute:
-      ContextOrgsOrganizationProjectsProjectNsNamespaceSettingsRoute,
     ContextOrgsOrganizationProjectsProjectNsNamespaceTokensRoute:
       ContextOrgsOrganizationProjectsProjectNsNamespaceTokensRoute,
     ContextOrgsOrganizationProjectsProjectNsNamespaceIndexRoute:
@@ -749,6 +722,7 @@ interface ContextRouteChildren {
   ContextIndexRoute: typeof ContextIndexRoute
   ContextNsNamespaceRoute: typeof ContextNsNamespaceRouteWithChildren
   ContextOrgsOrganizationRoute: typeof ContextOrgsOrganizationRouteWithChildren
+  ContextNewOrgIndexRoute: typeof ContextNewOrgIndexRoute
   ContextNewIndexRoute: typeof ContextNewIndexRoute
 }
 
@@ -756,6 +730,7 @@ const ContextRouteChildren: ContextRouteChildren = {
   ContextIndexRoute: ContextIndexRoute,
   ContextNsNamespaceRoute: ContextNsNamespaceRouteWithChildren,
   ContextOrgsOrganizationRoute: ContextOrgsOrganizationRouteWithChildren,
+  ContextNewOrgIndexRoute: ContextNewOrgIndexRoute,
   ContextNewIndexRoute: ContextNewIndexRoute,
 }
 

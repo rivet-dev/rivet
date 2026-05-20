@@ -120,7 +120,7 @@ export function ActorBuildsList() {
 							key={build.id}
 							className={cn(
 								"text-muted-foreground justify-start font-medium px-1",
-								"data-active:text-foreground data-active:bg-accent",
+								"data-active:text-foreground data-active:bg-foreground/[0.06]",
 							)}
 							startIcon={
 								<Suspense

@@ -70,6 +70,7 @@ export default defineConfig(({ mode }) => {
 		],
 		server: {
 			port: 43708,
+			allowedHosts: ["local.staging.rivet.dev"],
 			proxy: {
 				"/api": {
 					target: "http://localhost:6420",

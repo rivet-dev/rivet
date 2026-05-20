@@ -31,12 +31,12 @@ export const ACTORS_FILTERS_DEFINITIONS = {
 	},
 	showDestroyed: {
 		type: "boolean",
-		label: "Show destroyed",
+		label: "Destroyed actors",
 		category: "display",
 	},
 	showIds: {
 		type: "boolean",
-		label: "Show IDs",
+		label: "Actor IDs",
 		category: "display",
 		ephemeral: true,
 	},
@@ -44,7 +44,7 @@ export const ACTORS_FILTERS_DEFINITIONS = {
 		? {
 				showDatacenter: {
 					type: "boolean",
-					label: "Show Actors Datacenter",
+					label: "Datacenter",
 					category: "display",
 					ephemeral: true,
 				},
@@ -52,10 +52,11 @@ export const ACTORS_FILTERS_DEFINITIONS = {
 		: {}),
 	wakeOnSelect: {
 		type: "boolean",
-		label: "Auto-wake Actors on select",
+		label: "Auto-wake actors on select",
 		category: "display",
 		ephemeral: true,
 		defaultValue: ["1"],
+		feature: true,
 	},
 } satisfies FilterDefinitions;
 

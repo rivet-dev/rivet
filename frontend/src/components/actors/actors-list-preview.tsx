@@ -34,15 +34,15 @@ export const ActorsListPreview = memo(
 					autoSaveId="rivet-engine"
 				>
 					<ResizablePanel
-						defaultSize={35}
-						minSize={35}
+						defaultSize={28}
+						minSize={15}
 						className="flex"
 					>
 						<div
 							className={cn(
 								"flex-1 min-h-0 flex overflow-hidden transition-colors",
 								!isSidebarCollapsed &&
-									"border-y border-x my-2 mr-2 rounded-lg bg-card",
+									"border-y border-x mt-2 mb-2 mr-2 rounded-lg bg-card",
 							)}
 						>
 							<ActorsListPanel />
@@ -79,7 +79,7 @@ export const ActorsListPreview = memo(
 									className={cn(
 										"flex-1 overflow-hidden flex flex-col flex-grow transition-colors relative",
 										!isSidebarCollapsed &&
-											"border-t border-b border-r border-l my-2 bg-card rounded-lg mr-2",
+											"border mt-2 mb-2 bg-card rounded-lg mr-2",
 									)}
 								>
 									<Suspense>{children}</Suspense>

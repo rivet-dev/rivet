@@ -22,7 +22,7 @@ const DialogOverlay = React.forwardRef<
 	<DialogPrimitive.Overlay
 		ref={ref}
 		className={cn(
-			"fixed grid place-items-center inset-0 z-50 bg-black/80 overflow-y-auto",
+			"fixed grid place-items-center inset-0 z-50 overflow-y-auto bg-black/60",
 			styles.overlay,
 			className,
 		)}
@@ -42,7 +42,7 @@ const DialogContent = React.forwardRef<
 			<DialogPrimitive.Content
 				ref={ref}
 				className={cn(
-					"z-50 max-h-[80vh] overflow-auto grid w-full max-w-lg gap-4 border bg-background p-6 shadow-lg duration-200 sm:rounded-lg",
+					"z-50 max-h-[80vh] overflow-auto grid w-full max-w-lg gap-4 border border-foreground/10 bg-card p-6 shadow-2xl duration-200 sm:rounded-xl",
 					styles.content,
 					className,
 				)}
@@ -50,11 +50,8 @@ const DialogContent = React.forwardRef<
 			>
 				{children}
 				{hideClose ? null : (
-					<DialogPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground">
-						<Icon
-							icon={faXmark}
-							className="size-4 z-10 drop-shadow-dialog-close"
-						/>
+					<DialogPrimitive.Close className="absolute right-4 top-4 rounded-md p-1.5 text-muted-foreground hover:bg-foreground/[0.06] hover:text-foreground transition-colors focus:outline-none disabled:pointer-events-none">
+						<Icon icon={faXmark} className="size-4 z-10" />
 						<span className="sr-only">Close</span>
 					</DialogPrimitive.Close>
 				)}

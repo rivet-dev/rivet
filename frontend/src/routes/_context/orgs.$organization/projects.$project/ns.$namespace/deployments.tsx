@@ -8,7 +8,6 @@ import { createFileRoute } from "@tanstack/react-router";
 import { HelpDropdown } from "@/app/help-dropdown";
 import { ImagesTable } from "@/app/images-table";
 import { Content } from "@/app/layout";
-import { SidebarToggle } from "@/app/sidebar-toggle";
 import { Button, H1, H2, Skeleton } from "@/components";
 import { useCloudNamespaceDataProvider } from "@/components/actors";
 
@@ -63,7 +62,6 @@ function RouteComponent() {
 			<div className=" ">
 				<div className="mb-4 pt-2 max-w-5xl mx-auto">
 					<div className="flex justify-between items-center px-6 @6xl:px-0 py-4 ">
-						<SidebarToggle className="absolute left-4" />
 						<H1>Deployments</H1>
 						<HelpDropdown>
 							<Button
@@ -93,68 +91,69 @@ function RouteComponent() {
 function Deployments() {
 	const { namespace } = Route.useParams();
 	const dataProvider = useCloudNamespaceDataProvider();
-	const {
-		data: images,
-		isError,
-		isLoading: isLoadingImages,
-		fetchNextPage,
-		hasNextPage,
-	} = useSuspenseInfiniteQuery({
-		...dataProvider.currentProjectImagesQueryOptions(),
-		refetchInterval: 5_000,
-	});
+	// const {
+	// 	data: images,
+	// 	isError,
+	// 	isLoading: isLoadingImages,
+	// 	fetchNextPage,
+	// 	hasNextPage,
+	// } = useSuspenseInfiniteQuery({
+	// 	...dataProvider.currentProjectImagesQueryOptions(),
+	// 	refetchInterval: 5_000,
+	// });
 
-	const { data: namespaces } = useSuspenseInfiniteQuery({
-		...dataProvider.currentProjectNamespacesQueryOptions(),
-		refetchInterval: 5_000,
-	});
+	// const { data: namespaces } = useSuspenseInfiniteQuery({
+	// 	...dataProvider.currentProjectNamespacesQueryOptions(),
+	// 	refetchInterval: 5_000,
+	// });
 
-	const managedPoolQueries = useQueries({
-		queries:
-			namespaces.map((ns) =>
-				queryOptions({
-					...dataProvider.currentProjectManagedPoolQueryOptions({
-						namespace: ns.name,
-						pool: "default",
-					}),
-					select: (data) => ({
-						...data,
-						namespace: ns.name,
-						...data?.config.image,
-					}),
-					refetchInterval: 5_000,
-				}),
-			) ?? [],
-	});
+	// const managedPoolQueries = useQueries({
+	// 	queries:
+	// 		namespaces.map((ns) =>
+	// 			queryOptions({
+	// 				...dataProvider.currentProjectManagedPoolQueryOptions({
+	// 					namespace: ns.name,
+	// 					pool: "default",
+	// 				}),
+	// 				select: (data) => ({
+	// 					...data,
+	// 					namespace: ns.name,
+	// 					...data?.config.image,
+	// 				}),
+	// 				refetchInterval: 5_000,
+	// 			}),
+	// 		) ?? [],
+	// });
 
-	const deployments = managedPoolQueries
-		.map((query) => query.data)
-		.filter(
-			(data): data is Exclude<typeof data, undefined> =>
-				data !== undefined,
-		);
+	// const deployments = managedPoolQueries
+	// 	.map((query) => query.data)
+	// 	.filter(
+	// 		(data): data is Exclude<typeof data, undefined> =>
+	// 			data !== undefined,
+	// 	);
 
-	const sorted = images.toSorted((a, b) => {
-		const aTimestamp = new Date(a.createdAt).getTime();
-		const bTimestamp = new Date(b.createdAt).getTime();
-		return bTimestamp - aTimestamp;
-	});
+	// const sorted = images.toSorted((a, b) => {
+	// 	const aTimestamp = new Date(a.createdAt).getTime();
+	// 	const bTimestamp = new Date(b.createdAt).getTime();
+	// 	return bTimestamp - aTimestamp;
+	// });
 
-	return (
-		<div className="max-w-5xl mx-auto px-6">
-			<div className="border rounded-md">
-				<ImagesTable
-					images={sorted}
-					deployments={deployments}
-					isLoading={isLoadingImages}
-					namespace={namespace}
-					isError={isError}
-					fetchNextPage={fetchNextPage}
-					hasNextPage={hasNextPage}
-				/>
-			</div>
-		</div>
-	);
+	// return (
+	// 	<div className="max-w-5xl mx-auto px-6">
+	// 		<div className="border rounded-md">
+	// 			<ImagesTable
+	// 				images={sorted}
+	// 				deployments={deployments}
+	// 				isLoading={isLoadingImages}
+	// 				namespace={namespace}
+	// 				isError={isError}
+	// 				fetchNextPage={fetchNextPage}
+	// 				hasNextPage={hasNextPage}
+	// 			/>
+	// 		</div>
+	// 	</div>
+	// );
+	return null;
 }
 
 function DataLoadingPlaceholder() {

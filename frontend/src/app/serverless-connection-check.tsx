@@ -209,6 +209,30 @@ function isRivetHealthCheckFailureResponse(
 	return error && "error" in error;
 }
 
+function formatMetadataError(
+	error: Rivet.RunnerConfigsServerlessMetadataError,
+): string {
+	if ("invalidRequest" in error) return "Invalid request";
+	if ("requestFailed" in error) return "Request failed";
+	if ("requestTimedOut" in error) return "Request timed out";
+	if ("nonSuccessStatus" in error) {
+		const { statusCode, body } = error.nonSuccessStatus;
+		return `Non-success status ${statusCode}${body ? `: ${body}` : ""}`;
+	}
+	if ("invalidResponseJson" in error) {
+		return `Invalid response JSON: ${error.invalidResponseJson.parseError}`;
+	}
+	if ("invalidResponseSchema" in error) {
+		const { runtime, version } = error.invalidResponseSchema;
+		return `Invalid response schema (runtime ${runtime}, version ${version})`;
+	}
+	if ("invalidEnvoyProtocolVersion" in error) {
+		const { version, maxSupported } = error.invalidEnvoyProtocolVersion;
+		return `Unsupported envoy protocol version ${version} (max supported: ${maxSupported})`;
+	}
+	return "Unknown error";
+}
+
 function HealthCheckFailure({
 	error,
 }: {
@@ -221,11 +245,5 @@ function HealthCheckFailure({
 		return null;
 	}
 
-	const { message, details } = error.error;
-	return (
-		<p>
-			Health check failed: {message}
-			{details ? ` (${details})` : null}
-		</p>
-	);
+	return <p>Health check failed: {formatMetadataError(error.error)}</p>;
 }

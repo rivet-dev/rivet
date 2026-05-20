@@ -38,7 +38,7 @@ export default function ConfirmDeleteNamespaceContent({
 			onClose?.();
 			return navigate({
 				to: "/orgs/$organization/projects/$project",
-				from: "/orgs/$organization/projects/$project/ns/$namespace/settings",
+				from: "/orgs/$organization/projects/$project/ns/$namespace",
 			});
 		},
 	});

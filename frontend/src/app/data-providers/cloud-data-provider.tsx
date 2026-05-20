@@ -201,23 +201,23 @@ export const createGlobalContext = () => {
 			});
 		},
 
-		imagesQueryOptions(opts: { organization: string; project: string }) {
-			return infiniteQueryOptions({
-				queryKey: [opts, "images"],
-				queryFn: async ({ pageParam }) => {
-					return await client.docker.listImages(opts.project, {
-						limit: 10,
-						cursor: pageParam ?? undefined,
-						org: opts.organization,
-					});
-				},
-				getNextPageParam: (lastPage) => {
-					return lastPage.pagination.cursor;
-				},
-				initialPageParam: undefined as string | undefined,
-				select: (data) => data.pages.flatMap((page) => page.images),
-			});
-		},
+		// imagesQueryOptions(opts: { organization: string; project: string }) {
+		// 	return infiniteQueryOptions({
+		// 		queryKey: [opts, "images"],
+		// 		queryFn: async ({ pageParam }) => {
+		// 			return await client.docker.listImages(opts.project, {
+		// 				limit: 10,
+		// 				cursor: pageParam ?? undefined,
+		// 				org: opts.organization,
+		// 			});
+		// 		},
+		// 		getNextPageParam: (lastPage) => {
+		// 			return lastPage.pagination.cursor;
+		// 		},
+		// 		initialPageParam: undefined as string | undefined,
+		// 		select: (data) => data.pages.flatMap((page) => page.images),
+		// 	});
+		// },
 	};
 };
 
@@ -295,6 +295,24 @@ export const createOrganizationContext = ({
 			},
 			enabled: !!opts.project,
 			...no404Retry(),
+		});
+
+	const namespaceAccessTokenQueryOptions = (opts: {
+		namespace: string;
+		organization: string;
+		project: string;
+	}) =>
+		queryOptions({
+			staleTime: 15 * 60 * 1000,
+			gcTime: 15 * 60 * 1000,
+			retry: false,
+			queryKey: [opts, "access-token"] as QueryKey,
+			queryFn: async () =>
+				await client.namespaces.createAccessToken(
+					opts.project,
+					opts.namespace,
+					{ org: opts.organization },
+				),
 		});
 
 	const namespaceQueryOptions = (opts: {
@@ -511,6 +529,7 @@ export const createOrganizationContext = ({
 		organization,
 		organizationsQueryOptions,
 		orgProjectNamespacesQueryOptions,
+		namespaceAccessTokenQueryOptions,
 		currentOrgProjectNamespacesQueryOptions: (opts: {
 			project: string;
 		}) => {
@@ -534,6 +553,67 @@ export const createOrganizationContext = ({
 				organization,
 				project: opts.project,
 				namespace: opts.namespace,
+			});
+		},
+		currentOrgProjectNamespaceActorNamesQueryOptions(opts: {
+			project: string;
+			namespace: string;
+		}) {
+			return infiniteQueryOptions({
+				queryKey: [
+					{
+						organization,
+						project: opts.project,
+						namespace: opts.namespace,
+					},
+					"cross-namespace-actor-names",
+				] as QueryKey,
+				staleTime: 30 * 1000,
+				gcTime: 5 * 60 * 1000,
+				initialPageParam: undefined as string | undefined,
+				queryFn: async ({ pageParam }) => {
+					const ns = await queryClient.fetchQuery(
+						namespaceQueryOptions({
+							organization,
+							project: opts.project,
+							namespace: opts.namespace,
+						}),
+					);
+					const engineClient = createEngineClient(
+						cloudEnv().VITE_APP_API_URL,
+						{
+							token: async () =>
+								(
+									await queryClient.fetchQuery(
+										namespaceAccessTokenQueryOptions({
+											organization,
+											project: opts.project,
+											namespace: opts.namespace,
+										}),
+									)
+								).token,
+						},
+					);
+					return await engineClient.actorsListNames({
+						namespace: ns.access.engineNamespaceName,
+						cursor: pageParam ?? undefined,
+						limit: RECORDS_PER_PAGE,
+					});
+				},
+				getNextPageParam: (lastPage) => {
+					if (Object.keys(lastPage.names).length < RECORDS_PER_PAGE) {
+						return undefined;
+					}
+					return lastPage.pagination?.cursor;
+				},
+				select: (data) =>
+					data.pages.flatMap((page) =>
+						Object.entries(page.names).map(([id, name]) => ({
+							id,
+							name,
+						})),
+					),
+				retry: false,
 			});
 		},
 		createProjectMutationOptions,
@@ -655,12 +735,12 @@ export const createOrganizationContext = ({
 				repository: opts.repository,
 			});
 		},
-		currentOrganizationImagesQueryOptions(opts: { project: string }) {
-			return parent.imagesQueryOptions({
-				organization,
-				project: opts.project,
-			});
-		},
+		// currentOrganizationImagesQueryOptions(opts: { project: string }) {
+		// 	return parent.imagesQueryOptions({
+		// 		organization,
+		// 		project: opts.project,
+		// 	});
+		// },
 	};
 };
 
@@ -747,22 +827,10 @@ export const createProjectContext = ({
 			};
 		},
 		accessTokenQueryOptions({ namespace }: { namespace: string }) {
-			return queryOptions({
-				staleTime: 15 * 60 * 1000, // 15 minutes
-				gcTime: 15 * 60 * 1000, // 15 minutes
-				retry: false,
-				queryKey: [
-					{ organization, project, namespace },
-					"access-token",
-				],
-				queryFn: async () => {
-					const response = await client.namespaces.createAccessToken(
-						project,
-						namespace,
-						{ org: organization },
-					);
-					return response;
-				},
+			return parent.namespaceAccessTokenQueryOptions({
+				organization,
+				project,
+				namespace,
 			});
 		},
 		// API Token methods
@@ -935,12 +1003,12 @@ export const createProjectContext = ({
 				repository: opts.repository,
 			});
 		},
-		currentProjectImagesQueryOptions() {
-			return parent.imagesQueryOptions({
-				organization,
-				project,
-			});
-		},
+		// currentProjectImagesQueryOptions() {
+		// 	return parent.imagesQueryOptions({
+		// 		organization,
+		// 		project,
+		// 	});
+		// },
 		upsertCurrentProjectManagedPoolMutationOptions() {
 			return mutationOptions({
 				mutationKey: [organization, project, "managed-pool", "upsert"],

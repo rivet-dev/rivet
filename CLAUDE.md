@@ -79,6 +79,22 @@ docker-compose up -d
 
 **Never push to `main` unless explicitly specified by the user.**
 
+## Frontend Visual Changes
+
+- For any frontend visual change, use the `agent-browser` skill to view the result in a browser instead of working blind. If it is not installed, prompt the user to install it.
+- The frontend dashboard dev server always runs at `http://localhost:43708/`. Check that it is already serving there before starting a new one.
+
+## Frontend Forms
+
+- Manage all user-submitted form state with `react-hook-form`. Do not hand-roll form state with `useState`-driven controlled inputs. Wrapping a controlled UI-library input (e.g. a shadcn `Select`) in RHF's `<Controller>` is still react-hook-form owning the state and is fine.
+
+## Frontend Feature Flags
+
+- The dashboard serves multiple deployment flavors (cloud / OSS / enterprise) from one build via flags in `frontend/src/lib/features.ts`; consume them through `import { features } from "@/lib/features"`, never by reading `VITE_FEATURE_FLAGS` directly.
+- Ship a new pack of features behind a feature flag whenever it is significant (a whole panel/page/subsystem) or not universally available across flavors, so each flavor can freely enable or disable it. Do not gate small universal changes, and do not make flags for everything.
+- If unsure whether a feature needs a flag, confirm the need with the user before adding or omitting one.
+- See [Feature flags](.claude/reference/feature-flags.md) for the flag list, flavor mapping, and consistency rules.
+
 ## Frontend Routing (TanStack Router)
 
 ### Route context vs loader data
@@ -327,6 +343,7 @@ Load these only when the task touches the topic.
 ### Agent procedural (`.claude/reference/`)
 
 - **[Testing](.claude/reference/testing.md)** — running RivetKit tests, Vitest filter gotchas, driver-test parity workflow, Rust test layout.
+- **[Feature flags](.claude/reference/feature-flags.md)** — frontend `features.*` system, deployment-flavor mapping, when to add a flag, consistency rules.
 - **[Build troubleshooting](.claude/reference/build-troubleshooting.md)** — DTS failures, NAPI rebuild, `JsActorConfig` field churn, tsup stale exports.
 - **[Docs sync](.claude/reference/docs-sync.md)** — full table of "when you change X, update docs Y". Consult before finishing a change.
 - **[Content frontmatter](.claude/reference/content-frontmatter.md)** — required frontmatter schemas for docs + blog/changelog.

@@ -74,3 +74,7 @@ export const Organization = ({ className }: { className?: string }) => {
 		/>
 	);
 };
+
+export const DefaultSubmit = () => {
+	return <Submit type="submit">Create Project</Submit>;
+};

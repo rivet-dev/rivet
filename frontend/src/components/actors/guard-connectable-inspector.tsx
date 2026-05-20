@@ -14,7 +14,7 @@ import {
 	useQuery,
 	useSuspenseQuery,
 } from "@tanstack/react-query";
-import { useRouteContext, useSearch } from "@tanstack/react-router";
+import { useNavigate, useRouteContext, useSearch } from "@tanstack/react-router";
 import {
 	createContext,
 	type ReactNode,
@@ -24,7 +24,6 @@ import {
 } from "react";
 import { match, P } from "ts-pattern";
 import { z } from "zod";
-import { HelpDropdown } from "@/app/help-dropdown";
 import { isRivetApiError } from "@/lib/errors";
 import { features } from "@/lib/features";
 import { DiscreteCopyButton } from "../copy-area";
@@ -134,29 +133,24 @@ function UnavailableInfo({
 }) {
 	return match(status)
 		.with("crashed", () => (
-			<Info>
-				<Icon
-					icon={faExclamationTriangle}
-					className="text-4xl text-destructive"
-				/>
-				<p>Actor is unavailable.</p>
-
-				<QueriedActorError actorId={actorId} />
-
-				<div className="flex gap-4 items-center mt-4">
-					<WakeUpActorButton actorId={actorId} />
-
-					<HelpDropdown>
-						<Button
-							size="sm"
-							variant="outline"
-							startIcon={<Icon icon={faQuestionCircle} />}
-						>
-							Need help?
-						</Button>
-					</HelpDropdown>
+			<div className="flex-1 flex flex-col items-center justify-center h-full text-center px-6">
+				<div className="flex items-center justify-center size-10 rounded-full bg-destructive/10 mb-4">
+					<Icon
+						icon={faExclamationTriangle}
+						className="text-destructive text-lg"
+					/>
 				</div>
-			</Info>
+				<h3 className="text-base font-semibold text-foreground mb-1">
+					Actor is unavailable
+				</h3>
+				<div className="text-sm text-muted-foreground max-w-sm mb-5">
+					<QueriedActorError actorId={actorId} />
+				</div>
+				<div className="flex gap-2 items-center">
+					<WakeUpActorButton actorId={actorId} />
+					<NeedHelpButton />
+				</div>
+			</div>
 		))
 		.with("crash-loop", () => <CrashLoopActor actorId={actorId} />)
 		.with("pending", () => <NoRunners />)
@@ -217,17 +211,31 @@ function CrashLoopActor({ actorId }: { actorId: ActorId }) {
 
 			<div className="flex gap-4 items-center mt-4">
 				{!rescheduleInFuture && <WakeUpActorButton actorId={actorId} />}
-				<HelpDropdown>
-					<Button
-						size="sm"
-						variant="outline"
-						startIcon={<Icon icon={faQuestionCircle} />}
-					>
-						Need help?
-					</Button>
-				</HelpDropdown>
+				<NeedHelpButton />
 			</div>
 		</Info>
+	);
+}
+
+function NeedHelpButton() {
+	const navigate = useNavigate();
+	return (
+		<Button
+			size="sm"
+			variant="ghost"
+			startIcon={<Icon icon={faQuestionCircle} />}
+			onClick={() => {
+				void navigate({
+					to: ".",
+					search: (prev) => ({
+						...(prev as Record<string, unknown>),
+						modal: "help",
+					}),
+				});
+			}}
+		>
+			Need help?
+		</Button>
 	);
 }
 
@@ -675,7 +683,7 @@ function WakeUpActorButton({ actorId }: { actorId: ActorId }) {
 
 	return (
 		<Button
-			variant="outline"
+			variant="default"
 			size="sm"
 			onClick={() =>
 				mutate({
