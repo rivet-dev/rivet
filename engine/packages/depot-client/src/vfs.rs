@@ -867,8 +867,23 @@ impl VfsState {
 			.or_else(|| {
 				self.protected_page_cache
 					.read_sync(&pgno, |_, bytes| bytes.clone())
-			})
-			.or_else(|| self.page_cache.get(&pgno))
+				})
+				.or_else(|| self.page_cache.get(&pgno))
+	}
+
+	fn has_readable_page(&self, config: &VfsConfig, pgno: u32) -> bool {
+		if self.write_buffer.dirty.contains_key(&pgno) {
+			return true;
+		}
+		if !can_read_cached_page(config, pgno) {
+			return false;
+		}
+		self.committed_page_cache.contains_key(&pgno)
+			|| self
+				.protected_page_cache
+				.read_sync(&pgno, |_, _| true)
+				.unwrap_or(false)
+			|| self.page_cache.contains_key(&pgno)
 	}
 
 	fn cache_committed_page(&mut self, config: &VfsConfig, pgno: u32, bytes: Vec<u8>) {

@@ -6,7 +6,8 @@ pub(super) use vfs_support::{
 	storage_dirty_page,
 };
 
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::mem::ManuallyDrop;
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Barrier, mpsc};
 use std::thread;
 use std::time::Duration;
@@ -17,7 +18,7 @@ use parking_lot::Mutex as SyncMutex;
 use rivet_envoy_protocol as protocol;
 use tempfile::TempDir;
 use tokio::runtime::Builder;
-use tokio::sync::OnceCell;
+use tokio::sync::{Notify, OnceCell};
 
 use crate::optimization_flags::{
 	DEFAULT_STARTUP_PRELOAD_MAX_BYTES, DEFAULT_VFS_PAGE_CACHE_CAPACITY_PAGES,
@@ -119,6 +120,79 @@ impl SqliteTransport for RecordingInitialPagesTransport {
 	}
 }
 
+struct CappedAtomicCommitTransport {
+	inner: DirectDepotTransport,
+	max_dirty_bytes: usize,
+	rejected: AtomicBool,
+	max_seen_dirty_bytes: AtomicUsize,
+	max_seen_dirty_pages: AtomicUsize,
+}
+
+impl CappedAtomicCommitTransport {
+	fn new(engine: Arc<DirectStorage>, max_dirty_bytes: usize) -> Self {
+		Self {
+			inner: DirectDepotTransport::new(engine),
+			max_dirty_bytes,
+			rejected: AtomicBool::new(false),
+			max_seen_dirty_bytes: AtomicUsize::new(0),
+			max_seen_dirty_pages: AtomicUsize::new(0),
+		}
+	}
+
+	fn rejected(&self) -> bool {
+		self.rejected.load(Ordering::SeqCst)
+	}
+
+	fn max_seen_dirty_bytes(&self) -> usize {
+		self.max_seen_dirty_bytes.load(Ordering::SeqCst)
+	}
+
+	fn max_seen_dirty_pages(&self) -> usize {
+		self.max_seen_dirty_pages.load(Ordering::SeqCst)
+	}
+}
+
+#[async_trait]
+impl SqliteTransport for CappedAtomicCommitTransport {
+	async fn get_pages(
+		&self,
+		request: protocol::SqliteGetPagesRequest,
+	) -> anyhow::Result<protocol::SqliteGetPagesResponse> {
+		self.inner.get_pages(request).await
+	}
+
+	async fn commit(
+		&self,
+		request: protocol::SqliteCommitRequest,
+	) -> anyhow::Result<protocol::SqliteCommitResponse> {
+		let dirty_bytes = request
+			.dirty_pages
+			.iter()
+			.map(|page| page.bytes.len())
+			.sum::<usize>();
+		self.max_seen_dirty_bytes
+			.fetch_max(dirty_bytes, Ordering::SeqCst);
+		self.max_seen_dirty_pages
+			.fetch_max(request.dirty_pages.len(), Ordering::SeqCst);
+
+		if dirty_bytes > self.max_dirty_bytes {
+			self.rejected.store(true, Ordering::SeqCst);
+			return Ok(protocol::SqliteCommitResponse::SqliteErrorResponse(
+				protocol::SqliteErrorResponse {
+					group: "sqlite".to_string(),
+					code: "transaction_too_large".to_string(),
+					message: format!(
+						"simulated atomic commit cap exceeded: dirty_bytes={dirty_bytes} max_dirty_bytes={}",
+						self.max_dirty_bytes
+					),
+				},
+			));
+		}
+
+		self.inner.commit(request).await
+	}
+}
+
 struct MissingDbTransport;
 
 #[async_trait]
@@ -141,6 +215,68 @@ impl SqliteTransport for MissingDbTransport {
 		_request: protocol::SqliteCommitRequest,
 	) -> anyhow::Result<protocol::SqliteCommitResponse> {
 		anyhow::bail!("missing-db transport test does not commit")
+	}
+}
+
+struct DelayCapturedGetPagesTransport {
+	inner: Arc<DirectDepotTransport>,
+	delay_pgno: u32,
+	enabled: AtomicBool,
+	delayed: AtomicBool,
+	captured: Arc<Notify>,
+	release: Arc<Notify>,
+}
+
+impl DelayCapturedGetPagesTransport {
+	fn new(inner: Arc<DirectDepotTransport>, delay_pgno: u32) -> Self {
+		Self {
+			inner,
+			delay_pgno,
+			enabled: AtomicBool::new(false),
+			delayed: AtomicBool::new(false),
+			captured: Arc::new(Notify::new()),
+			release: Arc::new(Notify::new()),
+		}
+	}
+
+	fn enable(&self) {
+		self.enabled.store(true, Ordering::SeqCst);
+	}
+
+	async fn wait_captured(&self) {
+		self.captured.notified().await;
+	}
+
+	fn release(&self) {
+		self.release.notify_one();
+	}
+}
+
+#[async_trait]
+impl SqliteTransport for DelayCapturedGetPagesTransport {
+	async fn get_pages(
+		&self,
+		request: protocol::SqliteGetPagesRequest,
+	) -> anyhow::Result<protocol::SqliteGetPagesResponse> {
+		let should_delay = self.enabled.load(Ordering::SeqCst)
+			&& (self.delay_pgno == 0 || request.pgnos.contains(&self.delay_pgno))
+			&& !self.delayed.swap(true, Ordering::SeqCst);
+		if !should_delay {
+			return self.inner.get_pages(request).await;
+		}
+
+		// Capture real Depot bytes first, then release them after another writer advances the head.
+		let response = self.inner.get_pages(request).await?;
+		self.captured.notify_one();
+		self.release.notified().await;
+		Ok(response)
+	}
+
+	async fn commit(
+		&self,
+		request: protocol::SqliteCommitRequest,
+	) -> anyhow::Result<protocol::SqliteCommitResponse> {
+		self.inner.commit(request).await
 	}
 }
 
@@ -336,6 +472,16 @@ impl DirectEngineHarness {
 		config: VfsConfig,
 	) -> NativeDatabase {
 		let transport = Arc::new(DirectDepotTransport::new(engine));
+		self.open_db_with_transport(runtime, transport, actor_id, config)
+	}
+
+	fn open_db_with_transport(
+		&self,
+		runtime: &tokio::runtime::Runtime,
+		transport: SqliteTransportHandle,
+		actor_id: &str,
+		config: VfsConfig,
+	) -> NativeDatabase {
 		let initial_main_page = runtime
 			.block_on(fetch_initial_main_page_for_registration(
 				transport.clone(),
@@ -1024,6 +1170,163 @@ fn direct_engine_handles_large_rows_and_multi_page_growth() {
 		sqlite_query_i64(db.as_ptr(), "SELECT max(length(payload)) FROM blobs;")
 			.expect("max payload length should succeed")
 			>= 9000
+	);
+}
+
+#[test]
+fn batch_atomic_commit_does_not_depend_on_aux_journal_open() {
+	let runtime = direct_runtime();
+	let harness = DirectEngineHarness::new();
+	let db = harness.open_db(&runtime);
+	let ctx = direct_vfs_ctx(&db);
+
+	ctx.fail_next_aux_open("InjectedAuxOpenError: journal open should not be needed");
+	sqlite_exec(
+		db.as_ptr(),
+		"CREATE TABLE batch_atomic_no_journal (id INTEGER PRIMARY KEY, value TEXT NOT NULL);",
+	)
+	.expect("batch atomic create should not need rollback journal open");
+	sqlite_exec(
+		db.as_ptr(),
+		"INSERT INTO batch_atomic_no_journal (id, value) VALUES (1, 'ok');",
+	)
+	.expect("batch atomic insert should not need rollback journal open");
+
+	assert_eq!(
+		sqlite_query_text(db.as_ptr(), "PRAGMA integrity_check;")
+			.expect("integrity_check should succeed"),
+		"ok"
+	);
+}
+
+#[test]
+fn batch_atomic_oversized_commit_fails_closed_and_reopens_clean() {
+	let runtime = direct_runtime();
+	let harness = DirectEngineHarness::new();
+	let engine = runtime.block_on(harness.open_engine());
+	let actor_id = harness.actor_id.clone();
+	let transport = Arc::new(CappedAtomicCommitTransport::new(
+		Arc::clone(&engine),
+		256 * 1024,
+	));
+	let db = harness.open_db_with_transport(
+		&runtime,
+		transport.clone(),
+		&actor_id,
+		VfsConfig::default(),
+	);
+
+	sqlite_exec(
+		db.as_ptr(),
+		"CREATE TABLE atomic_cap (id INTEGER PRIMARY KEY, payload BLOB NOT NULL);",
+	)
+	.expect("create table should succeed");
+	sqlite_exec(
+		db.as_ptr(),
+		"INSERT INTO atomic_cap (id, payload) VALUES (1, zeroblob(1024));",
+	)
+	.expect("seed insert should succeed");
+	assert_eq!(
+		sqlite_query_text(db.as_ptr(), "PRAGMA integrity_check;")
+			.expect("pre-cap integrity_check should succeed"),
+		"ok"
+	);
+
+	sqlite_exec(db.as_ptr(), "BEGIN IMMEDIATE;").expect("large transaction should begin");
+	for id in 2..=130 {
+		sqlite_exec(
+			db.as_ptr(),
+			&format!("INSERT INTO atomic_cap (id, payload) VALUES ({id}, randomblob(4096));"),
+		)
+		.expect("large transaction insert should succeed");
+	}
+	let commit_err =
+		sqlite_exec(db.as_ptr(), "COMMIT;").expect_err("oversized commit should fail");
+	assert!(
+		commit_err.contains("disk I/O error") || commit_err.contains("transaction_too_large"),
+		"unexpected commit error: {commit_err}",
+	);
+	assert!(
+		transport.rejected(),
+		"test did not exceed the simulated atomic commit cap; max_seen_dirty_bytes={} max_seen_dirty_pages={}",
+		transport.max_seen_dirty_bytes(),
+		transport.max_seen_dirty_pages(),
+	);
+	drop(db);
+
+	let reopened = harness.open_db_on_engine(&runtime, engine, &actor_id, VfsConfig::default());
+	assert_eq!(
+		sqlite_query_i64(reopened.as_ptr(), "SELECT COUNT(*) FROM atomic_cap;")
+			.expect("count after capped commit should succeed"),
+		1
+	);
+	assert_eq!(
+		sqlite_query_text(reopened.as_ptr(), "PRAGMA quick_check;")
+			.expect("quick_check after capped commit should succeed"),
+		"ok"
+	);
+	assert_eq!(
+		sqlite_query_text(reopened.as_ptr(), "PRAGMA integrity_check;")
+			.expect("integrity_check after capped commit should succeed"),
+		"ok"
+	);
+}
+
+#[test]
+fn volatile_rollback_journal_without_batch_atomic_can_make_failed_commit_durable() {
+	let runtime = direct_runtime();
+	let harness = DirectEngineHarness::new();
+	let engine = runtime.block_on(harness.open_engine());
+	let transport = Arc::new(DirectDepotTransport::new(Arc::clone(&engine)));
+	let hooks = transport.direct_hooks();
+	let actor_id = harness.actor_id.clone();
+	let mut config = VfsConfig::default();
+	config.assert_batch_atomic = false;
+	config.advertise_batch_atomic = false;
+	let db = harness.open_db_with_transport(&runtime, transport, &actor_id, config);
+
+	sqlite_exec(
+		db.as_ptr(),
+		"CREATE TABLE rollback_journal_loss (id INTEGER PRIMARY KEY, value TEXT NOT NULL);",
+	)
+	.expect("create table should succeed");
+	sqlite_exec(
+		db.as_ptr(),
+		"INSERT INTO rollback_journal_loss (id, value) VALUES (1, 'before');",
+	)
+	.expect("seed insert should succeed");
+
+	hooks.fail_next_commit_after_apply("InjectedTransportError: main db sync response lost");
+	sqlite_exec(db.as_ptr(), "BEGIN IMMEDIATE;").expect("transaction should begin");
+	sqlite_exec(
+		db.as_ptr(),
+		"INSERT INTO rollback_journal_loss (id, value) VALUES (2, 'failed-commit');",
+	)
+	.expect("transaction insert should succeed");
+	let commit_err =
+		sqlite_exec(db.as_ptr(), "COMMIT;").expect_err("commit response loss should fail");
+	assert!(
+		commit_err.contains("disk I/O error"),
+		"unexpected commit error: {commit_err}"
+	);
+
+	let leaked = ManuallyDrop::new(db);
+	let _fatal_after_failed_commit = direct_vfs_ctx(&leaked).clone_fatal_error();
+
+	let reopened = harness.open_db_on_engine(&runtime, engine, &actor_id, VfsConfig::default());
+	assert_eq!(
+		sqlite_query_text(reopened.as_ptr(), "PRAGMA integrity_check;")
+			.expect("integrity_check should succeed after simulated crash"),
+		"ok"
+	);
+	assert_eq!(
+		sqlite_query_i64(
+			reopened.as_ptr(),
+			"SELECT COUNT(*) FROM rollback_journal_loss;"
+		)
+		.expect("count after simulated crash should succeed"),
+		2,
+		"without batch atomic, a lost main-db sync response can make a failed commit durable because the rollback journal was process-local",
 	);
 }
 
@@ -3640,6 +3943,147 @@ fn resolve_pages_surfaces_read_path_error_response() {
 }
 
 #[test]
+fn dead_vfs_rejects_cache_only_reads_before_serving_page_cache() {
+	let runtime = direct_runtime();
+	let harness = DirectEngineHarness::new();
+	let engine = runtime.block_on(harness.open_engine());
+	let transport = Arc::new(DirectDepotTransport::new(engine));
+	let hooks = transport.direct_hooks();
+	let config = VfsConfig::default();
+	let ctx = VfsContext::new(
+		harness.actor_id.clone(),
+		runtime.handle().clone(),
+		transport,
+		config.clone(),
+		unsafe { std::mem::zeroed() },
+		Vec::new(),
+		None,
+	)
+	.expect("vfs context should build");
+	{
+		let mut state = ctx.state.write();
+		state.db_size_pages = 2;
+		state.cache_page(&config, PageCacheInsertKind::Target, 2, vec![0x42; 4096]);
+	}
+
+	ctx.mark_fatal("generation fence lost".to_string());
+	let err = ctx
+		.resolve_pages(&[2], false)
+		.expect_err("dead VFS should not serve cached pages");
+	assert!(matches!(
+		err,
+		GetPagesError::Other(ref message) if message.contains("lost its fence")
+	));
+	assert!(
+		hooks.get_pages_requests().is_empty(),
+		"dead cache-only read should fail before calling Depot"
+	);
+}
+
+#[test]
+fn head_fence_mismatch_on_xread_poisoned_vfs_fails_later_operations_closed() {
+	let runtime = direct_runtime();
+	let harness = DirectEngineHarness::new();
+	let engine = runtime.block_on(harness.open_engine());
+	runtime
+		.block_on(async {
+			engine
+				.actor_db(harness.actor_id.clone())
+				.await
+				.commit(
+					vec![depot::types::DirtyPage {
+						pgno: 2,
+						bytes: vec![0x55; 4096],
+					}],
+					2,
+					sqlite_now_ms().expect("now ms should build"),
+				)
+				.await
+		})
+		.expect("seed commit should advance Depot head");
+
+	let transport = Arc::new(DirectDepotTransport::new(engine));
+	let hooks = transport.direct_hooks();
+	let config = VfsConfig::default();
+	let ctx = VfsContext::new(
+		harness.actor_id.clone(),
+		runtime.handle().clone(),
+		transport,
+		config.clone(),
+		unsafe { std::mem::zeroed() },
+		Vec::new(),
+		None,
+	)
+	.expect("vfs context should build");
+	{
+		let mut state = ctx.state.write();
+		state.db_size_pages = 2;
+		state.head_txid = Some(0);
+		state.cache_page(&config, PageCacheInsertKind::Target, 1, empty_db_page());
+	}
+
+	let mut file = VfsFile {
+		base: unsafe { std::mem::zeroed() },
+		ctx: &ctx,
+		aux: ptr::null_mut(),
+	};
+	let mut buf = vec![0; 4096];
+	let rc = unsafe {
+		io_read(
+			(&mut file as *mut VfsFile).cast::<sqlite3_file>(),
+			buf.as_mut_ptr().cast(),
+			buf.len() as c_int,
+			4096,
+		)
+	};
+	assert_eq!(rc, SQLITE_IOERR_READ);
+	assert!(ctx.is_dead());
+	assert!(
+		ctx.clone_fatal_error()
+			.is_some_and(|message| message.contains("head fence mismatch")),
+		"head fence mismatch should be retained as the fatal reason"
+	);
+	assert_eq!(hooks.get_pages_requests().len(), 1);
+
+	let rc = unsafe {
+		io_read(
+			(&mut file as *mut VfsFile).cast::<sqlite3_file>(),
+			buf.as_mut_ptr().cast(),
+			buf.len() as c_int,
+			0,
+		)
+	};
+	assert_eq!(rc, SQLITE_IOERR_READ);
+	assert_eq!(
+		hooks.get_pages_requests().len(),
+		1,
+		"dead cache-only read should not call Depot again"
+	);
+
+	let source = vec![0x7a; 4096];
+	let rc = unsafe {
+		io_write(
+			(&mut file as *mut VfsFile).cast::<sqlite3_file>(),
+			source.as_ptr().cast(),
+			source.len() as c_int,
+			0,
+		)
+	};
+	assert_eq!(rc, SQLITE_IOERR_WRITE);
+
+	{
+		let mut state = ctx.state.write();
+		state.write_buffer.dirty.insert(1, empty_db_page());
+	}
+	let rc = unsafe { io_sync((&mut file as *mut VfsFile).cast::<sqlite3_file>(), 0) };
+	assert_eq!(rc, SQLITE_IOERR_FSYNC);
+	assert!(
+		hooks.commit_requests().is_empty(),
+		"dead VFS should fail writes and sync before committing"
+	);
+}
+
+#[test]
 fn resolve_pages_sends_known_head_txid_as_read_fence() {
 	let runtime = direct_runtime();
 	let harness = DirectEngineHarness::new();
@@ -3759,6 +4203,336 @@ fn head_fence_ioerr_maps_to_fatal_worker_error_and_future_operations_fail_closed
 	runtime
 		.block_on(writer.close())
 		.expect("writer worker should close cleanly");
+}
+
+#[test]
+fn stale_vfs_page_cache_writer_fails_head_fence_and_reopen_is_clean() {
+	let runtime = direct_runtime();
+	let harness = DirectEngineHarness::new();
+	let engine = runtime.block_on(harness.open_engine());
+	let config = VfsConfig {
+		page_cache_mode: SqliteVfsPageCacheMode::All,
+		..VfsConfig::default()
+	};
+	let db_a =
+		harness.open_db_on_engine(&runtime, engine.clone(), &harness.actor_id, config.clone());
+
+	sqlite_exec(
+		db_a.as_ptr(),
+		"CREATE TABLE cached_rows (id INTEGER PRIMARY KEY, payload TEXT NOT NULL);",
+	)
+	.expect("create should succeed");
+	for id in 1..=64 {
+		sqlite_exec(
+			db_a.as_ptr(),
+			&format!(
+				"INSERT INTO cached_rows (id, payload) VALUES ({id}, printf('%04d:%s', {id}, zeroblob(512)));"
+			),
+		)
+		.expect("insert should succeed");
+	}
+
+	let cached_before = sqlite_query_text(
+		db_a.as_ptr(),
+		"SELECT payload FROM cached_rows WHERE id = 32;",
+	)
+	.expect("stale handle should read target row");
+	assert!(cached_before.starts_with("0032:"));
+
+	let db_b =
+		harness.open_db_on_engine(&runtime, engine.clone(), &harness.actor_id, config.clone());
+	sqlite_exec(
+		db_b.as_ptr(),
+		"UPDATE cached_rows SET payload = 'writer-b-new-value' WHERE id = 32;",
+	)
+	.expect("fresh writer should commit");
+	assert_eq!(
+		sqlite_query_text(db_b.as_ptr(), "SELECT payload FROM cached_rows WHERE id = 32;")
+			.expect("fresh writer should read its update"),
+		"writer-b-new-value"
+	);
+
+	let stale_update = sqlite_exec(
+		db_a.as_ptr(),
+		"UPDATE cached_rows SET payload = 'stale-writer-value' WHERE id = 32;",
+	);
+	assert!(
+		stale_update
+			.as_ref()
+			.expect_err("stale writer must fail the head fence")
+			.contains("disk I/O error"),
+		"unexpected stale writer error: {stale_update:?}"
+	);
+	assert!(
+		direct_vfs_ctx(&db_a)
+			.clone_fatal_error()
+			.is_some_and(|message| message.contains("head fence mismatch")),
+		"stale VFS should retain the head fence mismatch"
+	);
+
+	drop(db_a);
+	drop(db_b);
+
+	let db_c = harness.open_db_on_engine(&runtime, engine, &harness.actor_id, config);
+	assert_eq!(
+		sqlite_query_text(db_c.as_ptr(), "PRAGMA integrity_check;")
+			.expect("integrity check should run after stale writer failed"),
+		"ok"
+	);
+	assert_eq!(
+		sqlite_query_text(db_c.as_ptr(), "SELECT payload FROM cached_rows WHERE id = 32;")
+			.expect("fresh reopen should see writer B value"),
+		"writer-b-new-value"
+	);
+}
+
+#[test]
+fn delayed_read_ahead_response_fails_head_fence_and_reopen_is_clean() {
+	let runtime = direct_runtime();
+	let harness = DirectEngineHarness::new();
+	let engine = runtime.block_on(harness.open_engine());
+	let config = VfsConfig {
+		page_cache_mode: SqliteVfsPageCacheMode::All,
+		..VfsConfig::default()
+	};
+	let db_setup =
+		harness.open_db_on_engine(&runtime, engine.clone(), &harness.actor_id, config.clone());
+
+	sqlite_exec(
+		db_setup.as_ptr(),
+		"CREATE TABLE delayed_rows (id INTEGER PRIMARY KEY, payload TEXT NOT NULL);",
+	)
+	.expect("create should succeed");
+	for id in 1..=96 {
+		sqlite_exec(
+			db_setup.as_ptr(),
+			&format!(
+				"INSERT INTO delayed_rows (id, payload) VALUES ({id}, printf('%04d:%s', {id}, hex(zeroblob(2048))));"
+			),
+		)
+		.expect("insert should succeed");
+	}
+	let page_count = sqlite_query_i64(db_setup.as_ptr(), "PRAGMA page_count;")
+		.expect("page count should be readable");
+	assert!(
+		page_count >= 12,
+		"test setup should create enough pages for read-ahead, got {page_count}"
+	);
+	drop(db_setup);
+
+	let delaying_transport = Arc::new(DelayCapturedGetPagesTransport::new(
+		Arc::new(DirectDepotTransport::new(engine.clone())),
+		0,
+	));
+	let db_a = harness.open_db_with_transport(
+		&runtime,
+		delaying_transport.clone(),
+		&harness.actor_id,
+		config.clone(),
+	);
+
+	let ctx = direct_vfs_ctx(&db_a);
+	ctx.resolve_pages(&[2], false)
+		.expect("training read page 2 should succeed");
+	ctx.resolve_pages(&[3], false)
+		.expect("training read page 3 should succeed");
+	ctx.resolve_pages(&[4], false)
+		.expect("training read page 4 should succeed");
+
+	delaying_transport.enable();
+	let vfs_a = db_a._vfs.clone();
+	let delayed_read = thread::spawn(move || {
+		vfs_a
+			.ctx()
+			.resolve_pages(&[5], true)
+			.expect("delayed read-ahead fetch should eventually succeed")
+	});
+
+	runtime
+		.block_on(async {
+			tokio::time::timeout(Duration::from_secs(5), delaying_transport.wait_captured())
+				.await
+		})
+		.expect("delayed get_pages response should be captured before writer B commits");
+
+	let db_b =
+		harness.open_db_on_engine(&runtime, engine.clone(), &harness.actor_id, config.clone());
+	sqlite_exec(
+		db_b.as_ptr(),
+		"UPDATE delayed_rows SET payload = 'writer-b-new-value' WHERE id = 48;",
+	)
+	.expect("fresh writer should commit while delayed response is held");
+
+	delaying_transport.release();
+	let delayed_pages = delayed_read
+		.join()
+		.expect("delayed read thread should not panic");
+	assert!(
+		delayed_pages.contains_key(&5),
+		"delayed read should resolve the target page"
+	);
+
+	let stale_update = sqlite_exec(
+		db_a.as_ptr(),
+		"UPDATE delayed_rows SET payload = 'stale-writer-value' WHERE id = 48;",
+	);
+	assert!(
+		stale_update
+			.as_ref()
+			.expect_err("stale writer must fail after delayed old response")
+			.contains("disk I/O error"),
+		"unexpected stale writer error: {stale_update:?}"
+	);
+	assert!(
+		direct_vfs_ctx(&db_a)
+			.clone_fatal_error()
+			.is_some_and(|message| message.contains("head fence mismatch")),
+		"stale VFS should retain the head fence mismatch"
+	);
+
+	drop(db_a);
+	drop(db_b);
+
+	let db_c = harness.open_db_on_engine(&runtime, engine, &harness.actor_id, config);
+	assert_eq!(
+		sqlite_query_text(db_c.as_ptr(), "PRAGMA integrity_check;")
+			.expect("integrity check should run after delayed stale writer failed"),
+		"ok"
+	);
+	assert_eq!(
+		sqlite_query_text(db_c.as_ptr(), "SELECT payload FROM delayed_rows WHERE id = 48;")
+			.expect("fresh reopen should see writer B value"),
+		"writer-b-new-value"
+	);
+}
+
+#[test]
+fn delayed_startup_preload_response_fails_closed_and_reopen_is_clean() {
+	let runtime = direct_runtime();
+	let harness = DirectEngineHarness::new();
+	let engine = runtime.block_on(harness.open_engine());
+	let config = VfsConfig {
+		page_cache_mode: SqliteVfsPageCacheMode::All,
+		startup_preload_first_pages: true,
+		startup_preload_first_page_count: 8,
+		startup_preload_max_bytes: DEFAULT_PAGE_SIZE * 8,
+		..VfsConfig::default()
+	};
+	let db_setup =
+		harness.open_db_on_engine(&runtime, engine.clone(), &harness.actor_id, config.clone());
+
+	sqlite_exec(
+		db_setup.as_ptr(),
+		"CREATE TABLE preload_rows (id INTEGER PRIMARY KEY, payload TEXT NOT NULL);",
+	)
+	.expect("create should succeed");
+	for id in 1..=96 {
+		sqlite_exec(
+			db_setup.as_ptr(),
+			&format!(
+				"INSERT INTO preload_rows (id, payload) VALUES ({id}, printf('%04d:%s', {id}, hex(zeroblob(2048))));"
+			),
+		)
+		.expect("insert should succeed");
+	}
+	let page_count = sqlite_query_i64(db_setup.as_ptr(), "PRAGMA page_count;")
+		.expect("page count should be readable");
+	assert!(
+		page_count >= 12,
+		"test setup should create enough pages for startup preload, got {page_count}"
+	);
+	drop(db_setup);
+
+	let delaying_transport = Arc::new(DelayCapturedGetPagesTransport::new(
+		Arc::new(DirectDepotTransport::new(engine.clone())),
+		0,
+	));
+	delaying_transport.enable();
+	let actor_id = harness.actor_id.clone();
+	let config_a = config.clone();
+	let runtime_handle = runtime.handle().clone();
+	let open_transport = delaying_transport.clone();
+	let opening = thread::spawn(move || {
+		let initial_pages = runtime_handle
+			.block_on(fetch_initial_pages_for_registration(
+				open_transport.clone(),
+				&actor_id,
+				&config_a,
+			))
+			.expect("startup preload should eventually succeed");
+		let vfs = SqliteVfs::register_with_transport_and_initial_pages(
+			&next_test_name("sqlite-startup-preload-vfs"),
+			open_transport,
+			actor_id.clone(),
+			runtime_handle,
+			config_a,
+			initial_pages,
+			None,
+		)
+		.expect("vfs should register after startup preload");
+		open_database(vfs, &actor_id)
+	});
+
+	runtime
+		.block_on(async {
+			tokio::time::timeout(Duration::from_secs(5), delaying_transport.wait_captured())
+				.await
+		})
+		.expect("startup preload response should be captured before writer B commits");
+
+	let db_b =
+		harness.open_db_on_engine(&runtime, engine.clone(), &harness.actor_id, config.clone());
+	sqlite_exec(
+		db_b.as_ptr(),
+		"UPDATE preload_rows SET payload = 'writer-b-new-value' WHERE id = 48;",
+	)
+	.expect("fresh writer should commit while startup preload response is held");
+
+	delaying_transport.release();
+	let opened_a = opening
+		.join()
+		.expect("startup preload open thread should not panic");
+	if let Ok(db_a) = opened_a {
+		let stale_update = sqlite_exec(
+			db_a.as_ptr(),
+			"UPDATE preload_rows SET payload = 'stale-writer-value' WHERE id = 48;",
+		);
+		assert!(
+			stale_update
+				.as_ref()
+				.expect_err("stale writer must fail after delayed startup preload")
+				.contains("disk I/O error"),
+			"unexpected stale writer error: {stale_update:?}"
+		);
+		assert!(
+			direct_vfs_ctx(&db_a)
+				.clone_fatal_error()
+				.is_some_and(|message| message.contains("head fence mismatch")),
+			"stale VFS should retain the head fence mismatch"
+		);
+		drop(db_a);
+	} else {
+		let Err(err) = opened_a else {
+			unreachable!("startup preload result was already checked");
+		};
+		assert!(
+			err.contains("disk I/O error"),
+			"unexpected startup preload open error: {err}"
+		);
+	}
+	drop(db_b);
+
+	let db_c = harness.open_db_on_engine(&runtime, engine, &harness.actor_id, config);
+	assert_eq!(
+		sqlite_query_text(db_c.as_ptr(), "PRAGMA integrity_check;")
+			.expect("integrity check should run after stale startup preload failed"),
+		"ok"
+	);
+	assert_eq!(
+		sqlite_query_text(db_c.as_ptr(), "SELECT payload FROM preload_rows WHERE id = 48;")
+			.expect("fresh reopen should see writer B value"),
+		"writer-b-new-value"
+	);
 }
 
 #[test]
