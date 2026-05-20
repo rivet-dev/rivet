@@ -4176,6 +4176,135 @@ fn delayed_read_ahead_response_fails_head_fence_and_reopen_is_clean() {
 }
 
 #[test]
+fn delayed_startup_preload_response_fails_closed_and_reopen_is_clean() {
+	let runtime = direct_runtime();
+	let harness = DirectEngineHarness::new();
+	let engine = runtime.block_on(harness.open_engine());
+	let config = VfsConfig {
+		page_cache_mode: SqliteVfsPageCacheMode::All,
+		startup_preload_first_pages: true,
+		startup_preload_first_page_count: 8,
+		startup_preload_max_bytes: DEFAULT_PAGE_SIZE * 8,
+		..VfsConfig::default()
+	};
+	let db_setup =
+		harness.open_db_on_engine(&runtime, engine.clone(), &harness.actor_id, config.clone());
+
+	sqlite_exec(
+		db_setup.as_ptr(),
+		"CREATE TABLE preload_rows (id INTEGER PRIMARY KEY, payload TEXT NOT NULL);",
+	)
+	.expect("create should succeed");
+	for id in 1..=96 {
+		sqlite_exec(
+			db_setup.as_ptr(),
+			&format!(
+				"INSERT INTO preload_rows (id, payload) VALUES ({id}, printf('%04d:%s', {id}, hex(zeroblob(2048))));"
+			),
+		)
+		.expect("insert should succeed");
+	}
+	let page_count = sqlite_query_i64(db_setup.as_ptr(), "PRAGMA page_count;")
+		.expect("page count should be readable");
+	assert!(
+		page_count >= 12,
+		"test setup should create enough pages for startup preload, got {page_count}"
+	);
+	drop(db_setup);
+
+	let delaying_transport = Arc::new(DelayCapturedGetPagesTransport::new(
+		Arc::new(DirectDepotTransport::new(engine.clone())),
+		0,
+	));
+	delaying_transport.enable();
+	let actor_id = harness.actor_id.clone();
+	let config_a = config.clone();
+	let runtime_handle = runtime.handle().clone();
+	let open_transport = delaying_transport.clone();
+	let opening = thread::spawn(move || {
+		let initial_pages = runtime_handle
+			.block_on(fetch_initial_pages_for_registration(
+				open_transport.clone(),
+				&actor_id,
+				&config_a,
+			))
+			.expect("startup preload should eventually succeed");
+		let vfs = SqliteVfs::register_with_transport_and_initial_pages(
+			&next_test_name("sqlite-startup-preload-vfs"),
+			open_transport,
+			actor_id.clone(),
+			runtime_handle,
+			config_a,
+			initial_pages,
+			None,
+		)
+		.expect("vfs should register after startup preload");
+		open_database(vfs, &actor_id)
+	});
+
+	runtime
+		.block_on(async {
+			tokio::time::timeout(Duration::from_secs(5), delaying_transport.wait_captured())
+				.await
+		})
+		.expect("startup preload response should be captured before writer B commits");
+
+	let db_b =
+		harness.open_db_on_engine(&runtime, engine.clone(), &harness.actor_id, config.clone());
+	sqlite_exec(
+		db_b.as_ptr(),
+		"UPDATE preload_rows SET payload = 'writer-b-new-value' WHERE id = 48;",
+	)
+	.expect("fresh writer should commit while startup preload response is held");
+
+	delaying_transport.release();
+	let opened_a = opening
+		.join()
+		.expect("startup preload open thread should not panic");
+	if let Ok(db_a) = opened_a {
+		let stale_update = sqlite_exec(
+			db_a.as_ptr(),
+			"UPDATE preload_rows SET payload = 'stale-writer-value' WHERE id = 48;",
+		);
+		assert!(
+			stale_update
+				.as_ref()
+				.expect_err("stale writer must fail after delayed startup preload")
+				.contains("disk I/O error"),
+			"unexpected stale writer error: {stale_update:?}"
+		);
+		assert!(
+			direct_vfs_ctx(&db_a)
+				.clone_fatal_error()
+				.is_some_and(|message| message.contains("head fence mismatch")),
+			"stale VFS should retain the head fence mismatch"
+		);
+		drop(db_a);
+	} else {
+		let Err(err) = opened_a else {
+			unreachable!("startup preload result was already checked");
+		};
+		assert!(
+			err.contains("disk I/O error"),
+			"unexpected startup preload open error: {err}"
+		);
+	}
+	drop(db_b);
+
+	let db_c = harness.open_db_on_engine(&runtime, engine, &harness.actor_id, config);
+	assert_eq!(
+		sqlite_query_text(db_c.as_ptr(), "PRAGMA integrity_check;")
+			.expect("integrity check should run after stale startup preload failed"),
+		"ok"
+	);
+	assert_eq!(
+		sqlite_query_text(db_c.as_ptr(), "SELECT payload FROM preload_rows WHERE id = 48;")
+			.expect("fresh reopen should see writer B value"),
+		"writer-b-new-value"
+	);
+}
+
+#[test]
 fn commit_buffered_pages_uses_fast_path() {
 	let runtime = direct_runtime();
 	let harness = DirectEngineHarness::new();
