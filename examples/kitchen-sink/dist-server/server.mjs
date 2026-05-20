@@ -10336,9 +10336,6 @@ function createSerializedDb(execute) {
     return tx;
   };
   const queryWithMutex = async (query, ...values) => {
-    if (activeTransaction) {
-      return activeTransaction(query, ...values);
-    }
     await mutex.acquire();
     try {
       return await execute(query, ...values);

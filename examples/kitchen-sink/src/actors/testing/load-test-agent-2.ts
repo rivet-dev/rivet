@@ -154,9 +154,6 @@ function createSerializedDb(
 		query: string,
 		...values: SQLPrimitive[]
 	): Promise<T[]> => {
-		if (activeTransaction) {
-			return activeTransaction<T>(query, ...values);
-		}
 		await mutex.acquire();
 		try {
 			return await execute<T>(query, ...values);

@@ -150,6 +150,7 @@ pub struct VfsConfig {
 	pub cache_hit_predictor_training: bool,
 	pub recent_page_hints: bool,
 	pub adaptive_read_ahead: bool,
+	pub retain_read_cache: bool,
 	#[cfg(test)]
 	pub assert_batch_atomic: bool,
 	#[cfg(test)]
@@ -205,6 +206,7 @@ impl VfsConfig {
 			cache_hit_predictor_training: flags.cache_hit_predictor_training,
 			recent_page_hints: flags.recent_page_hints,
 			adaptive_read_ahead: flags.adaptive_read_ahead,
+			retain_read_cache: flags.vfs_retain_read_cache,
 			#[cfg(test)]
 			assert_batch_atomic: true,
 			#[cfg(test)]
@@ -2386,7 +2388,9 @@ unsafe extern "C" fn io_read(
 			buf[dest_offset..dest_offset + copy_len]
 				.copy_from_slice(&bytes[page_offset..page_offset + copy_len]);
 		}
-		ctx.state.read().evict_target_read_pages(&requested_pages);
+		if !ctx.config.retain_read_cache {
+			ctx.state.read().evict_target_read_pages(&requested_pages);
+		}
 
 		if i_offset as usize + i_amt as usize > file_size {
 			return SQLITE_IOERR_SHORT_READ;
