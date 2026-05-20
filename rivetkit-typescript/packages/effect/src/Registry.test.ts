@@ -64,6 +64,37 @@ describe("Registry.toWebHandler", () => {
 		}
 	});
 
+	it("uses a custom serverless start payload size limit", async () => {
+		const { handler, dispose } = Registry.toWebHandler(RegistryLive, {
+			serverless: {
+				maxStartPayloadBytes: 1,
+			},
+		});
+
+		try {
+			const response = await handler(
+				new Request("http://runner.test/api/rivet/start", {
+					method: "POST",
+					body: new Uint8Array([1, 2]),
+				}),
+			);
+
+			assert.strictEqual(response.status, 413);
+			const body = (await response.json()) as {
+				readonly group: string;
+				readonly code: string;
+				readonly message: string;
+			};
+			assert.deepStrictEqual(
+				{ group: body.group, code: body.code },
+				{ group: "message", code: "incoming_too_long" },
+			);
+			assert.match(body.message, /limit is 1 bytes/);
+		} finally {
+			await dispose();
+		}
+	});
+
 	it("builds the registry layer once across requests", async () => {
 		let builds = 0;
 		const CountingRegistryLive = Layer.mergeAll(
@@ -161,6 +192,39 @@ describe("Registry.toHttpEffect", () => {
 					readonly actorNames: Record<string, unknown>;
 				};
 				assert.ok(body.actorNames.TestActor);
+			}),
+		),
+	);
+
+	it.effect("uses a custom serverless start payload size limit", () =>
+		Effect.scoped(
+			Effect.gen(function* () {
+				const httpEffect = yield* Registry.toHttpEffect(RegistryLive, {
+					serverless: {
+						maxStartPayloadBytes: 1,
+					},
+				});
+				const handler = HttpEffect.toWebHandler(httpEffect);
+				const response = yield* Effect.promise(() =>
+					handler(
+						new Request("http://runner.test/api/rivet/start", {
+							method: "POST",
+							body: new Uint8Array([1, 2]),
+						}),
+					),
+				);
+
+				assert.strictEqual(response.status, 413);
+				const body = (yield* Effect.promise(() => response.json())) as {
+					readonly group: string;
+					readonly code: string;
+					readonly message: string;
+				};
+				assert.deepStrictEqual(
+					{ group: body.group, code: body.code },
+					{ group: "message", code: "incoming_too_long" },
+				);
+				assert.match(body.message, /limit is 1 bytes/);
 			}),
 		),
 	);
