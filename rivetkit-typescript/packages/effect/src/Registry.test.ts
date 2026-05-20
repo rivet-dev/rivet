@@ -1,9 +1,9 @@
 import { assert, describe, it } from "@effect/vitest";
 import { Effect, Layer } from "effect";
 import { HttpEffect } from "effect/unstable/http";
-import * as Registry from "./Registry";
 import * as Action from "./Action";
 import * as Actor from "./Actor";
+import * as Registry from "./Registry";
 
 const TestActor = Actor.make("TestActor", {
 	actions: [Action.make("Test")],
@@ -69,8 +69,7 @@ describe("Registry.toHttpEffect", () => {
 	it.effect("serves registered actors as an Effect HTTP handler", () =>
 		Effect.scoped(
 			Effect.gen(function* () {
-				const httpEffect =
-					yield* Registry.toHttpEffect(RegistryLive);
+				const httpEffect = yield* Registry.toHttpEffect(RegistryLive);
 				const handler = HttpEffect.toWebHandler(httpEffect);
 				const response = yield* Effect.promise(() =>
 					handler(
@@ -79,9 +78,7 @@ describe("Registry.toHttpEffect", () => {
 				);
 
 				assert.strictEqual(response.status, 200);
-				const body = (yield* Effect.promise(() =>
-					response.json(),
-				)) as {
+				const body = (yield* Effect.promise(() => response.json())) as {
 					readonly actorNames: Record<string, unknown>;
 				};
 				assert.ok(body.actorNames.TestActor);
