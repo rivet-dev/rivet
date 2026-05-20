@@ -5,7 +5,7 @@ var __export = (target, all) => {
 };
 
 // src/index.ts
-import { setup } from "rivetkit";
+import { setup as setup2 } from "rivetkit";
 
 // src/mode.ts
 function resolveMode() {
@@ -740,8 +740,8 @@ import { actor as actor15 } from "rivetkit";
 import { db } from "rivetkit/db";
 var sqliteRawActor = actor15({
   db: db({
-    onMigrate: async (db15) => {
-      await db15.execute(`
+    onMigrate: async (db16) => {
+      await db16.execute(`
 				CREATE TABLE IF NOT EXISTS todos (
 					id INTEGER PRIMARY KEY AUTOINCREMENT,
 					title TEXT NOT NULL,
@@ -860,14 +860,14 @@ var parallelismTest = actor17({
     stateCount: 0
   },
   db: db3({
-    onMigrate: async (db15) => {
-      await db15.execute(`
+    onMigrate: async (db16) => {
+      await db16.execute(`
 				CREATE TABLE IF NOT EXISTS counter (
 					id INTEGER PRIMARY KEY CHECK (id = 1),
 					count INTEGER NOT NULL DEFAULT 0
 				)
 			`);
-      await db15.execute(`
+      await db16.execute(`
 				INSERT OR IGNORE INTO counter (id, count) VALUES (1, 0)
 			`);
     }
@@ -1423,16 +1423,16 @@ var rawFetchCounter = actor24({
 function createCounterRouter() {
   const app2 = new Hono2();
   app2.get("/count", (c) => {
-    const { actor: actor60 } = c.env;
+    const { actor: actor61 } = c.env;
     return c.json({
-      count: actor60.state.count
+      count: actor61.state.count
     });
   });
   app2.post("/increment", (c) => {
-    const { actor: actor60 } = c.env;
-    actor60.state.count++;
+    const { actor: actor61 } = c.env;
+    actor61.state.count++;
     return c.json({
-      count: actor60.state.count
+      count: actor61.state.count
     });
   });
   return app2;
@@ -3799,14 +3799,14 @@ import { actor as actor47 } from "rivetkit";
 import { db as db4 } from "rivetkit/db";
 var testCounterSqlite = actor47({
   db: db4({
-    onMigrate: async (db15) => {
-      await db15.execute(`
+    onMigrate: async (db16) => {
+      await db16.execute(`
 				CREATE TABLE IF NOT EXISTS counter (
 					id INTEGER PRIMARY KEY CHECK (id = 1),
 					value INTEGER NOT NULL DEFAULT 0
 				)
 			`);
-      await db15.execute(
+      await db16.execute(
         "INSERT OR IGNORE INTO counter (id, value) VALUES (1, 0)"
       );
     }
@@ -3840,17 +3840,17 @@ import { actor as actor48 } from "rivetkit";
 import { db as db5 } from "rivetkit/db";
 var testSqliteLoad = actor48({
   db: db5({
-    onMigrate: async (db15) => {
-      await db15.execute(`
+    onMigrate: async (db16) => {
+      await db16.execute(`
 				CREATE TABLE IF NOT EXISTS schema_version (
 					id INTEGER PRIMARY KEY CHECK (id = 1),
 					version INTEGER NOT NULL DEFAULT 50
 				)
 			`);
-      await db15.execute(
+      await db16.execute(
         "INSERT OR IGNORE INTO schema_version (id, version) VALUES (1, 50)"
       );
-      await db15.execute(`
+      await db16.execute(`
 				CREATE TABLE IF NOT EXISTS users (
 					id INTEGER PRIMARY KEY AUTOINCREMENT,
 					name TEXT NOT NULL,
@@ -3858,7 +3858,7 @@ var testSqliteLoad = actor48({
 					created_at INTEGER NOT NULL
 				)
 			`);
-      await db15.execute(`
+      await db16.execute(`
 				CREATE TABLE IF NOT EXISTS products (
 					id INTEGER PRIMARY KEY AUTOINCREMENT,
 					name TEXT NOT NULL,
@@ -3866,7 +3866,7 @@ var testSqliteLoad = actor48({
 					created_at INTEGER NOT NULL
 				)
 			`);
-      await db15.execute(`
+      await db16.execute(`
 				CREATE TABLE IF NOT EXISTS orders (
 					id INTEGER PRIMARY KEY AUTOINCREMENT,
 					user_id INTEGER NOT NULL,
@@ -3876,7 +3876,7 @@ var testSqliteLoad = actor48({
 					FOREIGN KEY (user_id) REFERENCES users(id)
 				)
 			`);
-      await db15.execute(`
+      await db16.execute(`
 				CREATE TABLE IF NOT EXISTS order_items (
 					id INTEGER PRIMARY KEY AUTOINCREMENT,
 					order_id INTEGER NOT NULL,
@@ -3887,14 +3887,14 @@ var testSqliteLoad = actor48({
 					FOREIGN KEY (product_id) REFERENCES products(id)
 				)
 			`);
-      await db15.execute(`
+      await db16.execute(`
 				CREATE TABLE IF NOT EXISTS categories (
 					id INTEGER PRIMARY KEY AUTOINCREMENT,
 					name TEXT NOT NULL UNIQUE,
 					description TEXT
 				)
 			`);
-      await db15.execute(`
+      await db16.execute(`
 				CREATE TABLE IF NOT EXISTS product_categories (
 					product_id INTEGER NOT NULL,
 					category_id INTEGER NOT NULL,
@@ -3903,7 +3903,7 @@ var testSqliteLoad = actor48({
 					FOREIGN KEY (category_id) REFERENCES categories(id)
 				)
 			`);
-      await db15.execute(`
+      await db16.execute(`
 				CREATE TABLE IF NOT EXISTS reviews (
 					id INTEGER PRIMARY KEY AUTOINCREMENT,
 					user_id INTEGER NOT NULL,
@@ -3915,7 +3915,7 @@ var testSqliteLoad = actor48({
 					FOREIGN KEY (product_id) REFERENCES products(id)
 				)
 			`);
-      await db15.execute(`
+      await db16.execute(`
 				CREATE TABLE IF NOT EXISTS addresses (
 					id INTEGER PRIMARY KEY AUTOINCREMENT,
 					user_id INTEGER NOT NULL,
@@ -3927,7 +3927,7 @@ var testSqliteLoad = actor48({
 					FOREIGN KEY (user_id) REFERENCES users(id)
 				)
 			`);
-      await db15.execute(`
+      await db16.execute(`
 				CREATE TABLE IF NOT EXISTS payments (
 					id INTEGER PRIMARY KEY AUTOINCREMENT,
 					order_id INTEGER NOT NULL,
@@ -3938,7 +3938,7 @@ var testSqliteLoad = actor48({
 					FOREIGN KEY (order_id) REFERENCES orders(id)
 				)
 			`);
-      await db15.execute(`
+      await db16.execute(`
 				CREATE TABLE IF NOT EXISTS inventory (
 					product_id INTEGER PRIMARY KEY,
 					quantity INTEGER NOT NULL DEFAULT 0,
@@ -3947,7 +3947,7 @@ var testSqliteLoad = actor48({
 					FOREIGN KEY (product_id) REFERENCES products(id)
 				)
 			`);
-      await db15.execute(`
+      await db16.execute(`
 				CREATE TABLE IF NOT EXISTS coupons (
 					id INTEGER PRIMARY KEY AUTOINCREMENT,
 					code TEXT NOT NULL UNIQUE,
@@ -3957,7 +3957,7 @@ var testSqliteLoad = actor48({
 					expires_at INTEGER
 				)
 			`);
-      await db15.execute(`
+      await db16.execute(`
 				CREATE TABLE IF NOT EXISTS shipping (
 					id INTEGER PRIMARY KEY AUTOINCREMENT,
 					order_id INTEGER NOT NULL,
@@ -3970,13 +3970,13 @@ var testSqliteLoad = actor48({
 					FOREIGN KEY (address_id) REFERENCES addresses(id)
 				)
 			`);
-      await db15.execute(`
+      await db16.execute(`
 				CREATE TABLE IF NOT EXISTS tags (
 					id INTEGER PRIMARY KEY AUTOINCREMENT,
 					name TEXT NOT NULL UNIQUE
 				)
 			`);
-      await db15.execute(`
+      await db16.execute(`
 				CREATE TABLE IF NOT EXISTS product_tags (
 					product_id INTEGER NOT NULL,
 					tag_id INTEGER NOT NULL,
@@ -3985,7 +3985,7 @@ var testSqliteLoad = actor48({
 					FOREIGN KEY (tag_id) REFERENCES tags(id)
 				)
 			`);
-      await db15.execute(`
+      await db16.execute(`
 				CREATE TABLE IF NOT EXISTS wishlists (
 					id INTEGER PRIMARY KEY AUTOINCREMENT,
 					user_id INTEGER NOT NULL,
@@ -3994,7 +3994,7 @@ var testSqliteLoad = actor48({
 					FOREIGN KEY (user_id) REFERENCES users(id)
 				)
 			`);
-      await db15.execute(`
+      await db16.execute(`
 				CREATE TABLE IF NOT EXISTS wishlist_items (
 					wishlist_id INTEGER NOT NULL,
 					product_id INTEGER NOT NULL,
@@ -4004,7 +4004,7 @@ var testSqliteLoad = actor48({
 					FOREIGN KEY (product_id) REFERENCES products(id)
 				)
 			`);
-      await db15.execute(`
+      await db16.execute(`
 				CREATE TABLE IF NOT EXISTS notifications (
 					id INTEGER PRIMARY KEY AUTOINCREMENT,
 					user_id INTEGER NOT NULL,
@@ -4015,7 +4015,7 @@ var testSqliteLoad = actor48({
 					FOREIGN KEY (user_id) REFERENCES users(id)
 				)
 			`);
-      await db15.execute(`
+      await db16.execute(`
 				CREATE TABLE IF NOT EXISTS audit_log (
 					id INTEGER PRIMARY KEY AUTOINCREMENT,
 					entity_type TEXT NOT NULL,
@@ -4025,7 +4025,7 @@ var testSqliteLoad = actor48({
 					performed_at INTEGER NOT NULL
 				)
 			`);
-      await db15.execute(`
+      await db16.execute(`
 				CREATE TABLE IF NOT EXISTS sessions (
 					id TEXT PRIMARY KEY,
 					user_id INTEGER NOT NULL,
@@ -4035,37 +4035,37 @@ var testSqliteLoad = actor48({
 					FOREIGN KEY (user_id) REFERENCES users(id)
 				)
 			`);
-      await db15.execute(
+      await db16.execute(
         "CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)"
       );
-      await db15.execute(
+      await db16.execute(
         "CREATE INDEX IF NOT EXISTS idx_orders_user ON orders(user_id)"
       );
-      await db15.execute(
+      await db16.execute(
         "CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status)"
       );
-      await db15.execute(
+      await db16.execute(
         "CREATE INDEX IF NOT EXISTS idx_reviews_product ON reviews(product_id)"
       );
-      await db15.execute(
+      await db16.execute(
         "CREATE INDEX IF NOT EXISTS idx_reviews_user ON reviews(user_id)"
       );
-      await db15.execute(
+      await db16.execute(
         "CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id)"
       );
-      await db15.execute(
+      await db16.execute(
         "CREATE INDEX IF NOT EXISTS idx_audit_entity ON audit_log(entity_type, entity_id)"
       );
-      await db15.execute(
+      await db16.execute(
         "CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id)"
       );
-      await db15.execute(
+      await db16.execute(
         "CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token)"
       );
-      await db15.execute(
+      await db16.execute(
         "CREATE INDEX IF NOT EXISTS idx_inventory_quantity ON inventory(quantity)"
       );
-      await db15.execute(`
+      await db16.execute(`
 				CREATE TABLE IF NOT EXISTS returns (
 					id INTEGER PRIMARY KEY AUTOINCREMENT,
 					order_id INTEGER NOT NULL,
@@ -4076,7 +4076,7 @@ var testSqliteLoad = actor48({
 					FOREIGN KEY (order_id) REFERENCES orders(id)
 				)
 			`);
-      await db15.execute(`
+      await db16.execute(`
 				CREATE TABLE IF NOT EXISTS return_items (
 					return_id INTEGER NOT NULL,
 					order_item_id INTEGER NOT NULL,
@@ -4086,7 +4086,7 @@ var testSqliteLoad = actor48({
 					FOREIGN KEY (order_item_id) REFERENCES order_items(id)
 				)
 			`);
-      await db15.execute(`
+      await db16.execute(`
 				CREATE TABLE IF NOT EXISTS suppliers (
 					id INTEGER PRIMARY KEY AUTOINCREMENT,
 					name TEXT NOT NULL,
@@ -4094,7 +4094,7 @@ var testSqliteLoad = actor48({
 					country TEXT
 				)
 			`);
-      await db15.execute(`
+      await db16.execute(`
 				CREATE TABLE IF NOT EXISTS product_suppliers (
 					product_id INTEGER NOT NULL,
 					supplier_id INTEGER NOT NULL,
@@ -4105,7 +4105,7 @@ var testSqliteLoad = actor48({
 					FOREIGN KEY (supplier_id) REFERENCES suppliers(id)
 				)
 			`);
-      await db15.execute(`
+      await db16.execute(`
 				CREATE TABLE IF NOT EXISTS price_history (
 					id INTEGER PRIMARY KEY AUTOINCREMENT,
 					product_id INTEGER NOT NULL,
@@ -4115,7 +4115,7 @@ var testSqliteLoad = actor48({
 					FOREIGN KEY (product_id) REFERENCES products(id)
 				)
 			`);
-      await db15.execute(`
+      await db16.execute(`
 				CREATE TABLE IF NOT EXISTS user_preferences (
 					user_id INTEGER PRIMARY KEY,
 					theme TEXT NOT NULL DEFAULT 'dark',
@@ -4124,7 +4124,7 @@ var testSqliteLoad = actor48({
 					FOREIGN KEY (user_id) REFERENCES users(id)
 				)
 			`);
-      await db15.execute(`
+      await db16.execute(`
 				CREATE TABLE IF NOT EXISTS cart (
 					user_id INTEGER NOT NULL,
 					product_id INTEGER NOT NULL,
@@ -4135,7 +4135,7 @@ var testSqliteLoad = actor48({
 					FOREIGN KEY (product_id) REFERENCES products(id)
 				)
 			`);
-      await db15.execute(`
+      await db16.execute(`
 				CREATE TABLE IF NOT EXISTS saved_searches (
 					id INTEGER PRIMARY KEY AUTOINCREMENT,
 					user_id INTEGER NOT NULL,
@@ -4145,7 +4145,7 @@ var testSqliteLoad = actor48({
 					FOREIGN KEY (user_id) REFERENCES users(id)
 				)
 			`);
-      await db15.execute(`
+      await db16.execute(`
 				CREATE TABLE IF NOT EXISTS product_images (
 					id INTEGER PRIMARY KEY AUTOINCREMENT,
 					product_id INTEGER NOT NULL,
@@ -4155,7 +4155,7 @@ var testSqliteLoad = actor48({
 					FOREIGN KEY (product_id) REFERENCES products(id)
 				)
 			`);
-      await db15.execute(`
+      await db16.execute(`
 				CREATE TABLE IF NOT EXISTS discounts (
 					id INTEGER PRIMARY KEY AUTOINCREMENT,
 					product_id INTEGER NOT NULL,
@@ -4165,43 +4165,43 @@ var testSqliteLoad = actor48({
 					FOREIGN KEY (product_id) REFERENCES products(id)
 				)
 			`);
-      await db15.execute(
+      await db16.execute(
         "CREATE INDEX IF NOT EXISTS idx_order_items_order ON order_items(order_id)"
       );
-      await db15.execute(
+      await db16.execute(
         "CREATE INDEX IF NOT EXISTS idx_order_items_product ON order_items(product_id)"
       );
-      await db15.execute(
+      await db16.execute(
         "CREATE INDEX IF NOT EXISTS idx_payments_order ON payments(order_id)"
       );
-      await db15.execute(
+      await db16.execute(
         "CREATE INDEX IF NOT EXISTS idx_shipping_order ON shipping(order_id)"
       );
-      await db15.execute(
+      await db16.execute(
         "CREATE INDEX IF NOT EXISTS idx_returns_order ON returns(order_id)"
       );
-      await db15.execute(
+      await db16.execute(
         "CREATE INDEX IF NOT EXISTS idx_price_history_product ON price_history(product_id)"
       );
-      await db15.execute(
+      await db16.execute(
         "CREATE INDEX IF NOT EXISTS idx_product_images_product ON product_images(product_id)"
       );
-      await db15.execute(
+      await db16.execute(
         "CREATE INDEX IF NOT EXISTS idx_discounts_product ON discounts(product_id)"
       );
-      await db15.execute(
+      await db16.execute(
         "CREATE INDEX IF NOT EXISTS idx_cart_user ON cart(user_id)"
       );
-      await db15.execute(
+      await db16.execute(
         "CREATE INDEX IF NOT EXISTS idx_saved_searches_user ON saved_searches(user_id)"
       );
-      await db15.execute(`
+      await db16.execute(`
 				CREATE TABLE IF NOT EXISTS counter (
 					id INTEGER PRIMARY KEY CHECK (id = 1),
 					value INTEGER NOT NULL DEFAULT 0
 				)
 			`);
-      await db15.execute(
+      await db16.execute(
         "INSERT OR IGNORE INTO counter (id, value) VALUES (1, 0)"
       );
     }
@@ -9300,28 +9300,28 @@ function finiteInt(value, fallback) {
 function copyNativeMetrics(metrics) {
   if (!metrics) return null;
   const raw = metrics;
-  const numberField2 = (camel, snake) => Number(raw[camel] ?? raw[snake] ?? 0);
+  const numberField3 = (camel, snake) => Number(raw[camel] ?? raw[snake] ?? 0);
   return {
-    requestBuildNs: numberField2("requestBuildNs", "request_build_ns"),
-    serializeNs: numberField2("serializeNs", "serialize_ns"),
-    transportNs: numberField2("transportNs", "transport_ns"),
-    stateUpdateNs: numberField2("stateUpdateNs", "state_update_ns"),
-    totalNs: numberField2("totalNs", "total_ns"),
-    commitCount: numberField2("commitCount", "commit_count"),
-    pageCacheEntries: numberField2("pageCacheEntries", "page_cache_entries"),
-    pageCacheWeightedSize: numberField2(
+    requestBuildNs: numberField3("requestBuildNs", "request_build_ns"),
+    serializeNs: numberField3("serializeNs", "serialize_ns"),
+    transportNs: numberField3("transportNs", "transport_ns"),
+    stateUpdateNs: numberField3("stateUpdateNs", "state_update_ns"),
+    totalNs: numberField3("totalNs", "total_ns"),
+    commitCount: numberField3("commitCount", "commit_count"),
+    pageCacheEntries: numberField3("pageCacheEntries", "page_cache_entries"),
+    pageCacheWeightedSize: numberField3(
       "pageCacheWeightedSize",
       "page_cache_weighted_size"
     ),
-    pageCacheCapacityPages: numberField2(
+    pageCacheCapacityPages: numberField3(
       "pageCacheCapacityPages",
       "page_cache_capacity_pages"
     ),
-    writeBufferDirtyPages: numberField2(
+    writeBufferDirtyPages: numberField3(
       "writeBufferDirtyPages",
       "write_buffer_dirty_pages"
     ),
-    dbSizePages: numberField2("dbSizePages", "db_size_pages")
+    dbSizePages: numberField3("dbSizePages", "db_size_pages")
   };
 }
 async function queryOne2(database, sql, ...args) {
@@ -10164,8 +10164,8 @@ var loadTestAgent = actor56({
     sleepGracePeriod: 3e4
   },
   db: db12({
-    onMigrate: async (db15) => {
-      await db15.execute(`
+    onMigrate: async (db16) => {
+      await db16.execute(`
 				CREATE TABLE IF NOT EXISTS messages (
 					id INTEGER PRIMARY KEY AUTOINCREMENT,
 					connection_id TEXT NOT NULL,
@@ -10175,7 +10175,7 @@ var loadTestAgent = actor56({
 					created_at INTEGER NOT NULL
 				)
 			`);
-      await db15.execute(`
+      await db16.execute(`
 				CREATE INDEX IF NOT EXISTS messages_request_idx
 				ON messages (request_id, token_index)
 			`);
@@ -10560,12 +10560,12 @@ function numberField(record, field) {
   }
   return value;
 }
-function createAgentConcurrent2Db(db15) {
+function createAgentConcurrent2Db(db16) {
   return createSerializedDb(async (query, ...values) => {
     const converted = values.map(
       (value) => typeof value === "boolean" ? value ? 1 : 0 : value
     );
-    return await db15.execute(query, ...converted);
+    return await db16.execute(query, ...converted);
   });
 }
 function ensureAgentConcurrent2Runtime(c) {
@@ -10600,8 +10600,8 @@ function createAgentConcurrent2QueryStats() {
     byTable: {}
   };
 }
-function createAgentConcurrent2StatsSet(cycle, wake, actor60) {
-  return { cycle, wake, actor: actor60 };
+function createAgentConcurrent2StatsSet(cycle, wake, actor61) {
+  return { cycle, wake, actor: actor61 };
 }
 function snapshotAgentConcurrent2Stats(c, cycle) {
   return {
@@ -11856,10 +11856,823 @@ var sigtermSleepProbe = actor58({
   }
 });
 
+// src/actors/testing/slow-reconnect-actor.ts
+import { actor as actor59, setup } from "rivetkit";
+import { db as db15 } from "rivetkit/db";
+var AsyncMutex2 = class {
+  locked = false;
+  waiters = [];
+  async acquire() {
+    if (!this.locked) {
+      this.locked = true;
+      return;
+    }
+    await new Promise((resolve) => this.waiters.push(resolve));
+    this.locked = true;
+  }
+  release() {
+    const next = this.waiters.shift();
+    if (next) {
+      next();
+      return;
+    }
+    this.locked = false;
+  }
+};
+function createDb(execute) {
+  const mutex = new AsyncMutex2();
+  let activeTransaction = null;
+  const createTransactionDb = () => {
+    const tx = Object.assign(
+      (query, ...values) => execute(query, ...values),
+      {
+        withTransaction: async (fn) => fn(tx)
+      }
+    );
+    return tx;
+  };
+  const queryWithMutex = async (query, ...values) => {
+    if (activeTransaction) {
+      return activeTransaction(query, ...values);
+    }
+    await mutex.acquire();
+    try {
+      return await execute(query, ...values);
+    } finally {
+      mutex.release();
+    }
+  };
+  const sql = Object.assign(queryWithMutex, {
+    withTransaction: async (fn) => {
+      if (activeTransaction) {
+        return fn(activeTransaction);
+      }
+      await mutex.acquire();
+      const tx = createTransactionDb();
+      try {
+        await execute("BEGIN");
+        activeTransaction = tx;
+        try {
+          const result = await fn(tx);
+          activeTransaction = null;
+          await execute("COMMIT");
+          return result;
+        } catch (error) {
+          activeTransaction = null;
+          await execute("ROLLBACK");
+          throw error;
+        }
+      } finally {
+        activeTransaction = null;
+        mutex.release();
+      }
+    }
+  });
+  return sql;
+}
+var MESSAGE_COUNT2 = 84;
+var MESSAGE_TOOL_REF_COUNT2 = 122;
+var TOOL_CALL_COUNT2 = 61;
+var EXECUTOR_TOOL_COUNT2 = 42;
+var THREAD_EVENT_COUNT2 = 233;
+var MESSAGE_CONTENT_BYTES2 = 10620;
+var THREAD_EVENT_PAYLOAD_BYTES2 = 4036;
+var TOOL_CALL_RESULT_BYTES2 = 10975;
+var EXECUTOR_TOOL_SCHEMA_BYTES2 = 2235;
+var slowReconnectActor = actor59({
+  state: { runCount: 0 },
+  db: db15({
+    onMigrate: async (database) => {
+      await createSlowReconnectSchema(database);
+      await seedSlowReconnectData(database);
+    }
+  }),
+  vars: { sql: null },
+  onWebSocket: (c, ws) => {
+    const sock = ws;
+    if (sock.readyState === WebSocket.OPEN) {
+      sock.send("pong");
+    }
+    ws.addEventListener("message", (event21) => {
+      const promise = handleSlowReconnectWebSocketMessage(c, sock, event21.data);
+      void c.keepAwake(promise);
+    });
+  },
+  actions: {
+    reproReconnect: async (c, clientId) => {
+      c.vars.sql ??= createSlowReconnectDb(c.db);
+      c.state.runCount++;
+      return await runReconnectRepro(c.vars.sql, clientId ?? `action-${c.state.runCount}`, 0);
+    },
+    getRunCount: (c) => c.state.runCount,
+    sleep: (c) => {
+      c.sleep();
+      return true;
+    }
+  }
+});
+async function handleSlowReconnectWebSocketMessage(c, sock, data) {
+  if (data === "ping") {
+    if (sock.readyState === WebSocket.OPEN) {
+      sock.send("pong");
+    }
+    return;
+  }
+  let trigger = "unknown";
+  try {
+    const request = parseSlowReconnectRequest(data);
+    trigger = request.type;
+    c.vars.sql ??= createSlowReconnectDb(c.db);
+    c.state.runCount++;
+    if (request.type === "client_resume") {
+      const startedAt = performance.now();
+      const result2 = await runCatchupSnapshot2(c.vars.sql, request.version);
+      sendJSON(sock, {
+        type: "slow_reconnect_result",
+        trigger: request.type,
+        totalMs: Math.round(performance.now() - startedAt),
+        results: [result2]
+      });
+      return;
+    }
+    const clientId = request.type === "executor_connect" ? request.clientId : request.clientId ?? `slow-reconnect-${c.state.runCount}`;
+    const staggerHandleMs = request.type === "repro_reconnect" ? request.staggerHandleMs ?? 0 : 0;
+    const result = await runReconnectRepro(c.vars.sql, clientId, staggerHandleMs);
+    if (request.type === "executor_connect") {
+      sendJSON(sock, {
+        type: "executor_connected",
+        executorId: clientId,
+        registeredToolCount: EXECUTOR_TOOL_COUNT2,
+        guidanceInventory: [],
+        resumeBootstrap: true
+      });
+    }
+    sendJSON(sock, {
+      type: "slow_reconnect_result",
+      trigger: request.type,
+      ...result
+    });
+  } catch (error) {
+    sendJSON(sock, {
+      type: "slow_reconnect_error",
+      trigger,
+      error: error instanceof Error ? error.message : String(error)
+    });
+  }
+}
+function parseSlowReconnectRequest(data) {
+  if (typeof data !== "string") {
+    throw new Error("slowReconnectActor request must be a string");
+  }
+  const parsed = JSON.parse(data);
+  if (!parsed || typeof parsed !== "object") {
+    throw new Error("slowReconnectActor request must be an object");
+  }
+  const request = parsed;
+  if (request.type === "client_resume") {
+    return { type: "client_resume", version: numberField2(request, "version") };
+  }
+  if (request.type === "executor_connect") {
+    const executorType = request.executorType;
+    return {
+      type: "executor_connect",
+      clientId: stringField2(request, "clientId"),
+      ...executorType === "local-client" || executorType === "sandbox" || executorType === "virtual" ? { executorType } : {}
+    };
+  }
+  if (request.type === "repro_reconnect") {
+    return {
+      type: "repro_reconnect",
+      ...typeof request.clientId === "string" ? { clientId: request.clientId } : {},
+      ...typeof request.staggerHandleMs === "number" ? { staggerHandleMs: request.staggerHandleMs } : {}
+    };
+  }
+  throw new Error(`Unknown slowReconnectActor request type: ${String(request.type)}`);
+}
+function stringField2(record, field) {
+  const value = record[field];
+  if (typeof value !== "string" || value.length === 0) {
+    throw new Error(`slowReconnectActor request ${field} must be a non-empty string`);
+  }
+  return value;
+}
+function numberField2(record, field) {
+  const value = record[field];
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    throw new Error(`slowReconnectActor request ${field} must be a finite number`);
+  }
+  return value;
+}
+function sendJSON(sock, message) {
+  if (sock.readyState === WebSocket.OPEN) {
+    sock.send(JSON.stringify(message));
+  }
+}
+function createSlowReconnectDb(db16) {
+  return createDb(async (query, ...values) => {
+    const converted = values.map(
+      (value) => typeof value === "boolean" ? value ? 1 : 0 : value
+    );
+    return await db16.execute(query, ...converted);
+  });
+}
+async function runReconnectRepro(sql, clientId, staggerHandleMs) {
+  const startedAt = performance.now();
+  const buildToolPlanContext = runBuildToolPlanContext2(sql);
+  const catchupSnapshot = runCatchupSnapshot2(sql, 0);
+  const recoverToolCalls = runRecoverToolCalls2(sql);
+  const handleExecutorConnect = delay3(staggerHandleMs).then(
+    () => runHandleExecutorConnect(sql, clientId)
+  );
+  const results = await Promise.all([
+    handleExecutorConnect,
+    buildToolPlanContext,
+    catchupSnapshot,
+    recoverToolCalls
+  ]);
+  return {
+    totalMs: Math.round(performance.now() - startedAt),
+    results
+  };
+}
+async function runHandleExecutorConnect(sql, clientId) {
+  const startedAt = performance.now();
+  const steps = [];
+  const nextSeq = await sql.withTransaction(async (tx) => {
+    const latestExecutor = await timedQuery2(
+      tx,
+      steps,
+      "load-latest-executor-id",
+      `SELECT executor_id FROM executor_tools ORDER BY updated_at DESC LIMIT 1`
+    );
+    const latestExecutorId = String(latestExecutor[0]?.executor_id ?? "seed-executor");
+    await timedQuery2(
+      tx,
+      steps,
+      "select-cached-executor-tools",
+      `SELECT tool_name, schema FROM executor_tools WHERE executor_id = ? ORDER BY tool_name ASC`,
+      latestExecutorId
+    );
+    const executorType = await timedQuery2(
+      tx,
+      steps,
+      "select-executor-type",
+      `SELECT value FROM thread_meta_kv WHERE key = 'executor_type'`
+    );
+    if (!executorType[0]?.value) {
+      await timedQuery2(
+        tx,
+        steps,
+        "set-executor-type",
+        `INSERT OR REPLACE INTO thread_meta_kv (key, value, updated_at) VALUES ('executor_type', ?, ?)`,
+        "local-client",
+        (/* @__PURE__ */ new Date()).toISOString()
+      );
+    }
+    const sandboxIntent = await timedQuery2(
+      tx,
+      steps,
+      "select-sandbox-intent",
+      `SELECT value FROM thread_meta_kv WHERE key = 'sandbox_intent'`
+    );
+    if (hasPendingLaunch2(sandboxIntent[0]?.value)) {
+      await timedQuery2(
+        tx,
+        steps,
+        "clear-pending-launch",
+        `UPDATE thread_meta_kv SET value = ?, updated_at = ? WHERE key = 'sandbox_intent'`,
+        JSON.stringify({ spec: null, pendingLaunch: null }),
+        (/* @__PURE__ */ new Date()).toISOString()
+      );
+    }
+    const seqRows = await timedQuery2(
+      tx,
+      steps,
+      "select-next-thread-event-seq",
+      `SELECT COALESCE(MAX(seq), 0) + 1 AS seq FROM thread_events`
+    );
+    const seq = Number(seqRows[0]?.seq ?? 1);
+    await timedQuery2(
+      tx,
+      steps,
+      "insert-executor-connected-event",
+      `INSERT INTO thread_events (seq, event_type, payload, created_at) VALUES (?, ?, ?, ?)`,
+      seq,
+      "executor_connected",
+      JSON.stringify({ type: "executor_connected", executorId: clientId }),
+      (/* @__PURE__ */ new Date()).toISOString()
+    );
+    return seq;
+  });
+  steps.push({
+    name: "transaction-total",
+    durationMs: Math.round(performance.now() - startedAt),
+    rowCount: nextSeq
+  });
+  return {
+    name: "handle-executor-connect",
+    totalMs: Math.round(performance.now() - startedAt),
+    steps
+  };
+}
+async function runBuildToolPlanContext2(sql) {
+  const startedAt = performance.now();
+  const steps = [];
+  const latestExecutor = await timedQuery2(
+    sql,
+    steps,
+    "load-latest-executor-id",
+    `SELECT executor_id FROM executor_tools ORDER BY updated_at DESC LIMIT 1`
+  );
+  const latestExecutorId = String(latestExecutor[0]?.executor_id ?? "seed-executor");
+  await timedQuery2(
+    sql,
+    steps,
+    "select-executor-tools",
+    `SELECT tool_name, schema FROM executor_tools WHERE executor_id = ? ORDER BY tool_name ASC`,
+    latestExecutorId
+  );
+  await timedQuery2(
+    sql,
+    steps,
+    "count-uncancelled-top-level",
+    `SELECT COUNT(*) as count FROM messages WHERE cancelled = 0 AND parent_tool_use_id IS NULL`
+  );
+  const unresolvedRows = await timedQuery2(
+    sql,
+    steps,
+    "find-unresolved-assistant-message",
+    `SELECT m.*
+			FROM message_tool_refs AS tool_use
+			JOIN messages AS m
+				ON m.message_id = tool_use.assistant_message_id
+			WHERE tool_use.block_type = 'tool_use'
+				AND tool_use.cancelled = 0
+				AND m.cancelled = 0
+				AND m.role = 'assistant'
+				AND m.parent_tool_use_id IS NULL
+				AND NOT EXISTS (
+					SELECT 1
+					FROM message_tool_refs AS tool_result
+					JOIN messages AS tool_result_message
+						ON tool_result_message.message_id = tool_result.source_message_id
+					WHERE tool_result.assistant_message_id = tool_use.assistant_message_id
+						AND tool_result.block_type = 'tool_result'
+						AND tool_result.cancelled = 0
+						AND tool_result.tool_use_id = tool_use.tool_use_id
+						AND tool_result_message.parent_tool_use_id IS NULL
+				)
+			GROUP BY m.message_id
+			ORDER BY m.created_at DESC
+			LIMIT 1`
+  );
+  const unresolvedMessageId = unresolvedRows[0]?.message_id;
+  if (typeof unresolvedMessageId === "string") {
+    await timedQuery2(
+      sql,
+      steps,
+      "get-persisted-tool-result-ids",
+      `SELECT tool_result.tool_use_id
+				FROM message_tool_refs AS tool_result
+				JOIN messages AS tool_result_message
+					ON tool_result_message.message_id = tool_result.source_message_id
+				WHERE tool_result.assistant_message_id = ?
+					AND tool_result.block_type = 'tool_result'
+					AND tool_result.cancelled = 0
+					AND tool_result_message.parent_tool_use_id IS NULL`,
+      unresolvedMessageId
+    );
+    await timedQuery2(
+      sql,
+      steps,
+      "get-tool-calls-by-message-id",
+      `SELECT * FROM tool_calls WHERE message_id = ?`,
+      unresolvedMessageId
+    );
+  }
+  await timedQuery2(
+    sql,
+    steps,
+    "is-last-message-cancelled-assistant",
+    `SELECT role, cancelled FROM messages
+			WHERE parent_tool_use_id IS NULL
+			ORDER BY created_at DESC
+			LIMIT 1`
+  );
+  await timedQuery2(
+    sql,
+    steps,
+    "get-last-uncancelled",
+    `SELECT m.* FROM messages m
+			WHERE m.cancelled = 0 AND m.parent_tool_use_id IS NULL
+			ORDER BY m.created_at DESC
+			LIMIT 1`
+  );
+  return {
+    name: "build-tool-plan-context",
+    totalMs: Math.round(performance.now() - startedAt),
+    steps
+  };
+}
+async function runCatchupSnapshot2(sql, version) {
+  const startedAt = performance.now();
+  const steps = [];
+  await Promise.all([
+    timedQuery2(
+      sql,
+      steps,
+      "thread-events-list-since-version",
+      `SELECT seq, event_type, payload, created_at FROM thread_events WHERE seq > ? ORDER BY seq ASC`,
+      version
+    ),
+    timedQuery2(
+      sql,
+      steps,
+      "environment-snapshot",
+      `SELECT snapshot FROM environment_snapshot WHERE id = 1`
+    ),
+    timedQuery2(
+      sql,
+      steps,
+      "thread-settings-snapshot",
+      `SELECT settings FROM thread_settings_snapshot WHERE id = 1`
+    ),
+    timedQuery2(sql, steps, "retry-state", `SELECT * FROM retry_state WHERE id = 1`),
+    timedQuery2(
+      sql,
+      steps,
+      "queued-messages",
+      `SELECT * FROM queued_messages ORDER BY created_at ASC`
+    ),
+    timedQuery2(
+      sql,
+      steps,
+      "executor-artifacts",
+      `SELECT artifact_key, data_type, length(content_base64) AS bytes, tool_call_id, updated_at FROM executor_artifacts ORDER BY updated_at ASC`
+    ),
+    timedQuery2(sql, steps, "tool-approvals", `SELECT * FROM tool_approvals ORDER BY timestamp ASC`),
+    timedQuery2(
+      sql,
+      steps,
+      "compaction-summaries",
+      `SELECT cut_message_id, created_at FROM compaction_summaries ORDER BY created_at ASC`
+    ),
+    timedQuery2(
+      sql,
+      steps,
+      "executor-status",
+      `SELECT value FROM thread_meta_kv WHERE key = 'executor_status'`
+    )
+  ]);
+  steps.sort((a, b) => b.durationMs - a.durationMs);
+  return { name: "catchup-snapshot", totalMs: Math.round(performance.now() - startedAt), steps };
+}
+async function runRecoverToolCalls2(sql) {
+  const startedAt = performance.now();
+  const steps = [];
+  await timedQuery2(
+    sql,
+    steps,
+    "hydrate-tool-progress",
+    `SELECT id, progress
+			FROM tool_calls
+			WHERE progress IS NOT NULL
+				AND state IN ('queued', 'pending_reconnect', 'pending_ack', 'running')`
+  );
+  await timedQuery2(
+    sql,
+    steps,
+    "get-pending-tool-calls",
+    `SELECT * FROM tool_calls
+			WHERE state IN ('queued', 'pending_reconnect', 'pending_ack', 'running')
+			ORDER BY issued_at ASC`
+  );
+  await timedQuery2(
+    sql,
+    steps,
+    "get-next-tool-expiry",
+    `SELECT MIN(expires_at) AS expires_at
+			FROM tool_calls
+			WHERE state IN ('queued', 'pending_reconnect', 'pending_ack', 'running')`
+  );
+  return { name: "recover-tool-calls", totalMs: Math.round(performance.now() - startedAt), steps };
+}
+async function timedQuery2(sql, steps, name, query, ...values) {
+  const startedAt = performance.now();
+  const rows = await sql(query, ...values);
+  steps.push({
+    name,
+    durationMs: Math.round(performance.now() - startedAt),
+    rowCount: rows.length
+  });
+  return rows;
+}
+function hasPendingLaunch2(value) {
+  if (typeof value !== "string" || value.length === 0) {
+    return false;
+  }
+  try {
+    const parsed = JSON.parse(value);
+    return parsed.pendingLaunch !== null && parsed.pendingLaunch !== void 0;
+  } catch {
+    return false;
+  }
+}
+function delay3(ms) {
+  return new Promise((resolve) => setTimeout(resolve, Math.max(0, ms)));
+}
+async function createSlowReconnectSchema(database) {
+  await database.execute(`CREATE TABLE IF NOT EXISTS executor_tools (
+		executor_id TEXT NOT NULL,
+		tool_name TEXT NOT NULL,
+		schema TEXT NOT NULL,
+		updated_at TEXT NOT NULL,
+		PRIMARY KEY (executor_id, tool_name)
+	)`);
+  await database.execute(
+    `CREATE INDEX IF NOT EXISTS idx_executor_tools_executor ON executor_tools(executor_id)`
+  );
+  await database.execute(`CREATE TABLE IF NOT EXISTS thread_meta_kv (
+		key TEXT PRIMARY KEY,
+		value TEXT,
+		updated_at TEXT NOT NULL
+	)`);
+  await database.execute(`CREATE TABLE IF NOT EXISTS thread_events (
+		seq INTEGER PRIMARY KEY,
+		event_type TEXT NOT NULL,
+		payload TEXT NOT NULL,
+		created_at TEXT NOT NULL DEFAULT (datetime('now'))
+	)`);
+  await database.execute(`CREATE INDEX IF NOT EXISTS idx_thread_events_seq ON thread_events(seq)`);
+  await database.execute(`CREATE TABLE IF NOT EXISTS message_added_events (
+		message_id TEXT PRIMARY KEY,
+		seq INTEGER NOT NULL UNIQUE
+	)`);
+  await database.execute(`CREATE TABLE IF NOT EXISTS messages (
+		message_id TEXT PRIMARY KEY,
+		role TEXT NOT NULL CHECK(role IN ('user', 'assistant', 'info')),
+		content TEXT NOT NULL,
+		meta TEXT,
+		user_state TEXT,
+		created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+		cancelled INTEGER NOT NULL DEFAULT 0,
+		read_at TEXT,
+		parent_tool_use_id TEXT,
+		tool_result_for_message_id TEXT
+	)`);
+  await database.execute(
+    `CREATE INDEX IF NOT EXISTS idx_messages_parent_role_cancelled_created_at ON messages(parent_tool_use_id, role, cancelled, created_at DESC)`
+  );
+  await database.execute(
+    `CREATE INDEX IF NOT EXISTS idx_messages_parent_cancelled_created_at ON messages(parent_tool_use_id, cancelled, created_at DESC)`
+  );
+  await database.execute(
+    `CREATE INDEX IF NOT EXISTS idx_messages_parent_created_at ON messages(parent_tool_use_id, created_at DESC)`
+  );
+  await database.execute(
+    `CREATE INDEX IF NOT EXISTS idx_messages_role_created_at ON messages(role, created_at)`
+  );
+  await database.execute(`CREATE TABLE IF NOT EXISTS message_tool_refs (
+		source_message_id TEXT NOT NULL,
+		assistant_message_id TEXT NOT NULL,
+		tool_use_id TEXT NOT NULL,
+		block_type TEXT NOT NULL CHECK(block_type IN ('tool_use', 'tool_result')),
+		cancelled INTEGER NOT NULL DEFAULT 0,
+		PRIMARY KEY (source_message_id, block_type, tool_use_id)
+	)`);
+  await database.execute(
+    `CREATE INDEX IF NOT EXISTS idx_message_tool_refs_assistant_lookup ON message_tool_refs(assistant_message_id, block_type, cancelled, tool_use_id)`
+  );
+  await database.execute(
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_message_tool_refs_live_tool_result ON message_tool_refs(assistant_message_id, tool_use_id) WHERE block_type = 'tool_result' AND cancelled = 0`
+  );
+  await database.execute(
+    `CREATE INDEX IF NOT EXISTS idx_message_tool_refs_source_message ON message_tool_refs(source_message_id)`
+  );
+  await database.execute(
+    `CREATE INDEX IF NOT EXISTS idx_message_tool_refs_tool_use_lookup ON message_tool_refs(tool_use_id, assistant_message_id) WHERE block_type = 'tool_use' AND cancelled = 0`
+  );
+  await database.execute(`CREATE TABLE IF NOT EXISTS tool_calls (
+		id TEXT PRIMARY KEY,
+		provider_tool_use_id TEXT NOT NULL,
+		tool_name TEXT NOT NULL,
+		args TEXT NOT NULL,
+		executor_id TEXT,
+		message_id TEXT NOT NULL,
+		issued_at TEXT NOT NULL,
+		expires_at TEXT,
+		state TEXT NOT NULL CHECK(state IN ('queued', 'pending_reconnect', 'pending_ack', 'running', 'completed', 'expired', 'revoked')),
+		result TEXT,
+		progress TEXT,
+		completed_at TEXT
+	)`);
+  await database.execute(
+    `CREATE INDEX IF NOT EXISTS idx_tool_calls_message_id ON tool_calls(message_id)`
+  );
+  await database.execute(`CREATE INDEX IF NOT EXISTS idx_tool_calls_state ON tool_calls(state)`);
+  await database.execute(
+    `CREATE INDEX IF NOT EXISTS idx_tool_calls_expires_at ON tool_calls(expires_at) WHERE state IN ('queued', 'pending_reconnect', 'pending_ack', 'running')`
+  );
+  await database.execute(
+    `CREATE TABLE IF NOT EXISTS environment_snapshot (id INTEGER PRIMARY KEY CHECK (id = 1), snapshot TEXT NOT NULL, updated_at TEXT NOT NULL)`
+  );
+  await database.execute(
+    `CREATE TABLE IF NOT EXISTS thread_settings_snapshot (id INTEGER PRIMARY KEY CHECK (id = 1), settings TEXT NOT NULL, updated_at TEXT NOT NULL)`
+  );
+  await database.execute(
+    `CREATE TABLE IF NOT EXISTS retry_state (id INTEGER PRIMARY KEY CHECK (id = 1), attempt INTEGER NOT NULL DEFAULT 0, scheduled_at INTEGER NOT NULL, reason TEXT NOT NULL)`
+  );
+  await database.execute(
+    `CREATE TABLE IF NOT EXISTS queued_messages (message_id TEXT PRIMARY KEY, content TEXT NOT NULL, user_state TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')), steer INTEGER NOT NULL DEFAULT 0, user_meta TEXT)`
+  );
+  await database.execute(
+    `CREATE TABLE IF NOT EXISTS executor_artifacts (artifact_key TEXT PRIMARY KEY, data_type TEXT NOT NULL, content_base64 TEXT NOT NULL, tool_call_id TEXT, updated_at TEXT NOT NULL)`
+  );
+  await database.execute(
+    `CREATE TABLE IF NOT EXISTS tool_approvals (id TEXT PRIMARY KEY, tool_call_id TEXT NOT NULL UNIQUE, tool_name TEXT NOT NULL, args TEXT NOT NULL, reason TEXT, to_allow TEXT, context TEXT NOT NULL CHECK(context IN ('thread', 'subagent')), subagent_tool_name TEXT, parent_tool_call_id TEXT, timestamp INTEGER NOT NULL, matched_rule TEXT, rule_source TEXT CHECK(rule_source IN ('user', 'built-in')))`
+  );
+  await database.execute(
+    `CREATE INDEX IF NOT EXISTS idx_tool_approvals_timestamp ON tool_approvals(timestamp)`
+  );
+  await database.execute(
+    `CREATE TABLE IF NOT EXISTS compaction_summaries (summary_id TEXT PRIMARY KEY, summary_text TEXT NOT NULL, cut_message_id TEXT NOT NULL, created_at TEXT NOT NULL)`
+  );
+}
+async function seedSlowReconnectData(database) {
+  const existing = await database.execute(`SELECT COUNT(*) AS count FROM messages`);
+  if (Number(existing[0]?.count ?? 0) > 0) {
+    return;
+  }
+  const now = (/* @__PURE__ */ new Date("2026-05-16T03:58:18.661Z")).getTime();
+  const text2 = (size) => "x".repeat(size);
+  const isoAt = (index) => new Date(now + index * 1e3).toISOString();
+  await batchInsert3(database, `INSERT INTO thread_meta_kv (key, value, updated_at)`, [
+    ["executor_type", "local-client", isoAt(0)],
+    ["sandbox_intent", JSON.stringify({ spec: null, pendingLaunch: null }), isoAt(0)],
+    ["executor_status", JSON.stringify({ available: true, message: "ready" }), isoAt(0)]
+  ]);
+  const messageRows = [];
+  for (let index = 1; index <= MESSAGE_COUNT2; index++) {
+    const role = index % 2 === 0 ? "assistant" : "user";
+    messageRows.push([
+      messageId2(index),
+      role,
+      text2(MESSAGE_CONTENT_BYTES2),
+      null,
+      null,
+      isoAt(index),
+      0,
+      null,
+      null,
+      null
+    ]);
+  }
+  await batchInsert3(
+    database,
+    `INSERT INTO messages (message_id, role, content, meta, user_state, created_at, cancelled, read_at, parent_tool_use_id, tool_result_for_message_id)`,
+    messageRows,
+    20
+  );
+  const messageToolRefRows = [];
+  for (let index = 0; index < MESSAGE_TOOL_REF_COUNT2 / 2; index++) {
+    const assistantIndex = 2 + index % 42 * 2;
+    const sourceIndex = Math.max(1, assistantIndex - 1);
+    const resultIndex = Math.min(MESSAGE_COUNT2, assistantIndex + 1);
+    const toolUseId = toolUseID2(index + 1);
+    messageToolRefRows.push([
+      messageId2(sourceIndex),
+      messageId2(assistantIndex),
+      toolUseId,
+      "tool_use",
+      0
+    ]);
+    messageToolRefRows.push([
+      messageId2(resultIndex),
+      messageId2(assistantIndex),
+      toolUseId,
+      "tool_result",
+      0
+    ]);
+  }
+  await batchInsert3(
+    database,
+    `INSERT INTO message_tool_refs (source_message_id, assistant_message_id, tool_use_id, block_type, cancelled)`,
+    messageToolRefRows,
+    50
+  );
+  const toolCallRows = [];
+  for (let index = 1; index <= TOOL_CALL_COUNT2; index++) {
+    const assistantIndex = 2 + (index - 1) % 42 * 2;
+    toolCallRows.push([
+      toolUseID2(index),
+      `provider-${index}`,
+      `tool_${index % 21}`,
+      JSON.stringify({ path: `/tmp/file-${index}` }),
+      "seed-executor",
+      messageId2(assistantIndex),
+      isoAt(index),
+      null,
+      "completed",
+      JSON.stringify({
+        ok: true,
+        run: { status: "done", result: text2(TOOL_CALL_RESULT_BYTES2) }
+      }),
+      null,
+      isoAt(index + 100)
+    ]);
+  }
+  await batchInsert3(
+    database,
+    `INSERT INTO tool_calls (id, provider_tool_use_id, tool_name, args, executor_id, message_id, issued_at, expires_at, state, result, progress, completed_at)`,
+    toolCallRows,
+    20
+  );
+  const executorToolRows = [];
+  for (let index = 1; index <= EXECUTOR_TOOL_COUNT2; index++) {
+    const schema = JSON.stringify({
+      name: `tool_${index}`,
+      description: text2(EXECUTOR_TOOL_SCHEMA_BYTES2),
+      input_schema: { type: "object", properties: {} }
+    });
+    executorToolRows.push(["seed-executor", `tool_${index}`, schema, isoAt(index)]);
+  }
+  await batchInsert3(
+    database,
+    `INSERT INTO executor_tools (executor_id, tool_name, schema, updated_at)`,
+    executorToolRows,
+    42
+  );
+  const threadEventRows = [];
+  for (let index = 1; index <= THREAD_EVENT_COUNT2; index++) {
+    threadEventRows.push([
+      index,
+      index % 3 === 0 ? "message_added" : "agent_state_changed",
+      JSON.stringify({ type: "seed_event", body: text2(THREAD_EVENT_PAYLOAD_BYTES2) }),
+      isoAt(index)
+    ]);
+  }
+  await batchInsert3(
+    database,
+    `INSERT INTO thread_events (seq, event_type, payload, created_at)`,
+    threadEventRows,
+    25
+  );
+  const messageAddedRows = [];
+  for (let index = 1; index <= MESSAGE_COUNT2; index++) {
+    messageAddedRows.push([messageId2(index), index]);
+  }
+  await batchInsert3(
+    database,
+    `INSERT INTO message_added_events (message_id, seq)`,
+    messageAddedRows,
+    50
+  );
+  await database.execute(
+    `INSERT INTO environment_snapshot (id, snapshot, updated_at) VALUES (1, ?, ?)`,
+    JSON.stringify({ cwd: "/workspace", body: text2(3620) }),
+    isoAt(0)
+  );
+  await database.execute(
+    `INSERT INTO thread_settings_snapshot (id, settings, updated_at) VALUES (1, ?, ?)`,
+    JSON.stringify({ maxTokens: 2e4, body: text2(55) }),
+    isoAt(0)
+  );
+}
+async function batchInsert3(database, insertPrefix, rows, batchSize = 100) {
+  if (rows.length === 0) {
+    return;
+  }
+  const columnCount = rows[0]?.length ?? 0;
+  if (columnCount === 0) {
+    return;
+  }
+  const rowPlaceholder = `(${"?,".repeat(columnCount).slice(0, -1)})`;
+  for (let index = 0; index < rows.length; index += batchSize) {
+    const chunk = rows.slice(index, index + batchSize);
+    const values = chunk.map(() => rowPlaceholder).join(",");
+    const bindings = chunk.flat();
+    await database.execute(`${insertPrefix} VALUES ${values}`, ...bindings);
+  }
+}
+function messageId2(index) {
+  return `M-${String(index).padStart(22, "0")}`;
+}
+function toolUseID2(index) {
+  return `toolu_${String(index).padStart(22, "0")}`;
+}
+var registry = setup({
+  use: { slowReconnectActor },
+  maxIncomingMessageSize: 5 * 1024 * 1024,
+  maxOutgoingMessageSize: 5 * 1024 * 1024
+});
+if (import.meta.main) {
+  registry.start();
+}
+
 // src/actors/ai/ai-agent.ts
 import { openai } from "@ai-sdk/openai";
 import { generateText, tool } from "ai";
-import { actor as actor59, event as event20 } from "rivetkit";
+import { actor as actor60, event as event20 } from "rivetkit";
 import { z } from "zod";
 
 // src/actors/ai/my-tools.ts
@@ -11873,7 +12686,7 @@ async function getWeather(location) {
 }
 
 // src/actors/ai/ai-agent.ts
-var aiAgent = actor59({
+var aiAgent = actor60({
   // Persistent state that survives restarts: https://rivet.dev/docs/actors/state
   state: {
     messages: []
@@ -11955,7 +12768,7 @@ function serverlessPoolConfig() {
     }
   };
 }
-var registry = setup({
+var registry2 = setup2({
   configurePool: serverlessPoolConfig(),
   serverless: {
     publicToken: process.env.RIVET_PUBLIC_TOKEN ?? process.env.RIVET_TOKEN ?? "dev",
@@ -12068,6 +12881,7 @@ var registry = setup({
     loadTestAgent,
     loadTestAgent2,
     sigtermSleepProbe,
+    slowReconnectActor,
     // AI
     aiAgent
   }
@@ -12166,9 +12980,9 @@ app.get("/debug/memory", async (c) => {
   const forceGc = c.req.query("gc") === "1";
   return c.json(await memoryBreakdown(forceGc));
 });
-app.get("/health", () => registry.routes.health());
-app.get("/metadata", () => registry.routes.metadata());
-app.get("/metrics", (c) => registry.routes.prometheusMetrics(c.req.raw));
+app.get("/health", () => registry2.routes.health());
+app.get("/metadata", () => registry2.routes.metadata());
+app.get("/metrics", (c) => registry2.routes.prometheusMetrics(c.req.raw));
 app.post("/debug/heap-snapshot", (c) => {
   if (process.env.SQLITE_MEMORY_SOAK_DIAGNOSTICS !== "1") {
     return c.json({ error: "disabled" }, 404);
@@ -12185,10 +12999,10 @@ app.use("*", async (c, next) => {
   await next();
 });
 if (mode === "serverful") {
-  registry.start();
+  registry2.start();
 } else {
-  app.all("/api/rivet/*", (c) => registry.handler(c.req.raw));
-  app.all("/api/rivet", (c) => registry.handler(c.req.raw));
+  app.all("/api/rivet/*", (c) => registry2.handler(c.req.raw));
+  app.all("/api/rivet", (c) => registry2.handler(c.req.raw));
 }
 var server = serve({ fetch: app.fetch, port }, () => {
   if (mode === "serverful") {
