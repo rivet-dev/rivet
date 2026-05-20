@@ -64,6 +64,45 @@ describe("Registry.toWebHandler", () => {
 		}
 	});
 
+	it("uses the custom base path to identify start requests", async () => {
+		const { handler, dispose } = Registry.toWebHandler(RegistryLive, {
+			serverless: {
+				basePath: "/custom",
+				maxStartPayloadBytes: 1,
+			},
+		});
+
+		try {
+			const defaultPrefix = await handler(
+				new Request("http://runner.test/api/rivet/start", {
+					method: "POST",
+					body: new Uint8Array([1, 2]),
+				}),
+			);
+			assert.notStrictEqual(defaultPrefix.status, 413);
+
+			const customPrefix = await handler(
+				new Request("http://runner.test/custom/start", {
+					method: "POST",
+					body: new Uint8Array([1, 2]),
+				}),
+			);
+			assert.strictEqual(customPrefix.status, 413);
+			const body = (await customPrefix.json()) as {
+				readonly group: string;
+				readonly code: string;
+				readonly message: string;
+			};
+			assert.deepStrictEqual(
+				{ group: body.group, code: body.code },
+				{ group: "message", code: "incoming_too_long" },
+			);
+			await assert.match(body.message, /limit is 1 bytes/);
+		} finally {
+			await dispose();
+		}
+	});
+
 	it("uses a custom serverless start payload size limit", async () => {
 		const { handler, dispose } = Registry.toWebHandler(RegistryLive, {
 			serverless: {
@@ -89,7 +128,7 @@ describe("Registry.toWebHandler", () => {
 				{ group: body.group, code: body.code },
 				{ group: "message", code: "incoming_too_long" },
 			);
-			assert.match(body.message, /limit is 1 bytes/);
+			await assert.match(body.message, /limit is 1 bytes/);
 		} finally {
 			await dispose();
 		}
@@ -136,8 +175,9 @@ describe("Registry.toWebHandler", () => {
 				),
 			),
 		);
-		const { handler, dispose } =
-			Registry.toWebHandler(FinalizedRegistryLive);
+		const { handler, dispose } = Registry.toWebHandler(
+			FinalizedRegistryLive,
+		);
 
 		try {
 			const response = await handler(
@@ -165,11 +205,15 @@ describe("Registry.toHttpEffect", () => {
 					),
 				);
 
-				assert.strictEqual(response.status, 200);
-				const body = (yield* Effect.promise(() => response.json())) as {
-					readonly actorNames: Record<string, unknown>;
-				};
-				assert.ok(body.actorNames.TestActor);
+				yield* Effect.promise(() =>
+					(async (response: Response) => {
+						assert.strictEqual(response.status, 200);
+						const body = (await response.json()) as {
+							readonly actorNames: Record<string, unknown>;
+						};
+						await assert.ok(body.actorNames.TestActor);
+					})(response),
+				);
 			}),
 		),
 	);
@@ -187,11 +231,62 @@ describe("Registry.toHttpEffect", () => {
 					handler(new Request("http://runner.test/metadata")),
 				);
 
-				assert.strictEqual(response.status, 200);
-				const body = (yield* Effect.promise(() => response.json())) as {
-					readonly actorNames: Record<string, unknown>;
-				};
-				assert.ok(body.actorNames.TestActor);
+				yield* Effect.promise(() =>
+					(async (response: Response) => {
+						assert.strictEqual(response.status, 200);
+						const body = (await response.json()) as {
+							readonly actorNames: Record<string, unknown>;
+						};
+						await assert.ok(body.actorNames.TestActor);
+					})(response),
+				);
+			}),
+		),
+	);
+
+	it.effect("uses the custom base path to identify start requests", () =>
+		Effect.scoped(
+			Effect.gen(function* () {
+				const httpEffect = yield* Registry.toHttpEffect(RegistryLive, {
+					serverless: {
+						basePath: "/custom",
+						maxStartPayloadBytes: 1,
+					},
+				});
+				const handler = HttpEffect.toWebHandler(httpEffect);
+				const defaultPrefix = yield* Effect.promise(() =>
+					handler(
+						new Request("http://runner.test/api/rivet/start", {
+							method: "POST",
+							body: new Uint8Array([1, 2]),
+						}),
+					),
+				);
+				assert.notStrictEqual(defaultPrefix.status, 413);
+
+				const customPrefix = yield* Effect.promise(() =>
+					handler(
+						new Request("http://runner.test/custom/start", {
+							method: "POST",
+							body: new Uint8Array([1, 2]),
+						}),
+					),
+				);
+				yield* Effect.promise(() =>
+					(async (response: Response) => {
+						assert.strictEqual(response.status, 413);
+						const body = (await response.json()) as {
+							readonly group: string;
+							readonly code: string;
+							readonly message: string;
+						};
+						assert.deepStrictEqual(
+							{ group: body.group, code: body.code },
+							{ group: "message", code: "incoming_too_long" },
+						);
+						assert.match(body.message, /limit is 1 bytes/);
+					})(customPrefix),
+				);
 			}),
 		),
 	);
@@ -214,17 +309,21 @@ describe("Registry.toHttpEffect", () => {
 					),
 				);
 
-				assert.strictEqual(response.status, 413);
-				const body = (yield* Effect.promise(() => response.json())) as {
-					readonly group: string;
-					readonly code: string;
-					readonly message: string;
-				};
-				assert.deepStrictEqual(
-					{ group: body.group, code: body.code },
-					{ group: "message", code: "incoming_too_long" },
+				yield* Effect.promise(() =>
+					(async (response: Response) => {
+						assert.strictEqual(response.status, 413);
+						const body = (await response.json()) as {
+							readonly group: string;
+							readonly code: string;
+							readonly message: string;
+						};
+						assert.deepStrictEqual(
+							{ group: body.group, code: body.code },
+							{ group: "message", code: "incoming_too_long" },
+						);
+						assert.match(body.message, /limit is 1 bytes/);
+					})(response),
 				);
-				assert.match(body.message, /limit is 1 bytes/);
 			}),
 		),
 	);
