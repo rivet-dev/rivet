@@ -6,7 +6,7 @@ pub(super) use vfs_support::{
 	storage_dirty_page,
 };
 
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Barrier, mpsc};
 use std::thread;
 use std::time::Duration;
@@ -17,7 +17,7 @@ use parking_lot::Mutex as SyncMutex;
 use rivet_envoy_protocol as protocol;
 use tempfile::TempDir;
 use tokio::runtime::Builder;
-use tokio::sync::OnceCell;
+use tokio::sync::{Notify, OnceCell};
 
 use crate::optimization_flags::{
 	DEFAULT_STARTUP_PRELOAD_MAX_BYTES, DEFAULT_VFS_PAGE_CACHE_CAPACITY_PAGES,
@@ -141,6 +141,68 @@ impl SqliteTransport for MissingDbTransport {
 		_request: protocol::SqliteCommitRequest,
 	) -> anyhow::Result<protocol::SqliteCommitResponse> {
 		anyhow::bail!("missing-db transport test does not commit")
+	}
+}
+
+struct DelayCapturedGetPagesTransport {
+	inner: Arc<DirectDepotTransport>,
+	delay_pgno: u32,
+	enabled: AtomicBool,
+	delayed: AtomicBool,
+	captured: Arc<Notify>,
+	release: Arc<Notify>,
+}
+
+impl DelayCapturedGetPagesTransport {
+	fn new(inner: Arc<DirectDepotTransport>, delay_pgno: u32) -> Self {
+		Self {
+			inner,
+			delay_pgno,
+			enabled: AtomicBool::new(false),
+			delayed: AtomicBool::new(false),
+			captured: Arc::new(Notify::new()),
+			release: Arc::new(Notify::new()),
+		}
+	}
+
+	fn enable(&self) {
+		self.enabled.store(true, Ordering::SeqCst);
+	}
+
+	async fn wait_captured(&self) {
+		self.captured.notified().await;
+	}
+
+	fn release(&self) {
+		self.release.notify_one();
+	}
+}
+
+#[async_trait]
+impl SqliteTransport for DelayCapturedGetPagesTransport {
+	async fn get_pages(
+		&self,
+		request: protocol::SqliteGetPagesRequest,
+	) -> anyhow::Result<protocol::SqliteGetPagesResponse> {
+		let should_delay = self.enabled.load(Ordering::SeqCst)
+			&& (self.delay_pgno == 0 || request.pgnos.contains(&self.delay_pgno))
+			&& !self.delayed.swap(true, Ordering::SeqCst);
+		if !should_delay {
+			return self.inner.get_pages(request).await;
+		}
+
+		// Capture real Depot bytes first, then release them after another writer advances the head.
+		let response = self.inner.get_pages(request).await?;
+		self.captured.notify_one();
+		self.release.notified().await;
+		Ok(response)
+	}
+
+	async fn commit(
+		&self,
+		request: protocol::SqliteCommitRequest,
+	) -> anyhow::Result<protocol::SqliteCommitResponse> {
+		self.inner.commit(request).await
 	}
 }
 
@@ -336,6 +398,16 @@ impl DirectEngineHarness {
 		config: VfsConfig,
 	) -> NativeDatabase {
 		let transport = Arc::new(DirectDepotTransport::new(engine));
+		self.open_db_with_transport(runtime, transport, actor_id, config)
+	}
+
+	fn open_db_with_transport(
+		&self,
+		runtime: &tokio::runtime::Runtime,
+		transport: SqliteTransportHandle,
+		actor_id: &str,
+		config: VfsConfig,
+	) -> NativeDatabase {
 		let initial_main_page = runtime
 			.block_on(fetch_initial_main_page_for_registration(
 				transport.clone(),
@@ -3978,6 +4050,126 @@ fn stale_vfs_page_cache_writer_fails_head_fence_and_reopen_is_clean() {
 	);
 	assert_eq!(
 		sqlite_query_text(db_c.as_ptr(), "SELECT payload FROM cached_rows WHERE id = 32;")
+			.expect("fresh reopen should see writer B value"),
+		"writer-b-new-value"
+	);
+}
+
+#[test]
+fn delayed_read_ahead_response_fails_head_fence_and_reopen_is_clean() {
+	let runtime = direct_runtime();
+	let harness = DirectEngineHarness::new();
+	let engine = runtime.block_on(harness.open_engine());
+	let config = VfsConfig {
+		page_cache_mode: SqliteVfsPageCacheMode::All,
+		..VfsConfig::default()
+	};
+	let db_setup =
+		harness.open_db_on_engine(&runtime, engine.clone(), &harness.actor_id, config.clone());
+
+	sqlite_exec(
+		db_setup.as_ptr(),
+		"CREATE TABLE delayed_rows (id INTEGER PRIMARY KEY, payload TEXT NOT NULL);",
+	)
+	.expect("create should succeed");
+	for id in 1..=96 {
+		sqlite_exec(
+			db_setup.as_ptr(),
+			&format!(
+				"INSERT INTO delayed_rows (id, payload) VALUES ({id}, printf('%04d:%s', {id}, hex(zeroblob(2048))));"
+			),
+		)
+		.expect("insert should succeed");
+	}
+	let page_count = sqlite_query_i64(db_setup.as_ptr(), "PRAGMA page_count;")
+		.expect("page count should be readable");
+	assert!(
+		page_count >= 12,
+		"test setup should create enough pages for read-ahead, got {page_count}"
+	);
+	drop(db_setup);
+
+	let delaying_transport = Arc::new(DelayCapturedGetPagesTransport::new(
+		Arc::new(DirectDepotTransport::new(engine.clone())),
+		0,
+	));
+	let db_a = harness.open_db_with_transport(
+		&runtime,
+		delaying_transport.clone(),
+		&harness.actor_id,
+		config.clone(),
+	);
+
+	let ctx = direct_vfs_ctx(&db_a);
+	ctx.resolve_pages(&[2], false)
+		.expect("training read page 2 should succeed");
+	ctx.resolve_pages(&[3], false)
+		.expect("training read page 3 should succeed");
+	ctx.resolve_pages(&[4], false)
+		.expect("training read page 4 should succeed");
+
+	delaying_transport.enable();
+	let vfs_a = db_a._vfs.clone();
+	let delayed_read = thread::spawn(move || {
+		vfs_a
+			.ctx()
+			.resolve_pages(&[5], true)
+			.expect("delayed read-ahead fetch should eventually succeed")
+	});
+
+	runtime
+		.block_on(async {
+			tokio::time::timeout(Duration::from_secs(5), delaying_transport.wait_captured())
+				.await
+		})
+		.expect("delayed get_pages response should be captured before writer B commits");
+
+	let db_b =
+		harness.open_db_on_engine(&runtime, engine.clone(), &harness.actor_id, config.clone());
+	sqlite_exec(
+		db_b.as_ptr(),
+		"UPDATE delayed_rows SET payload = 'writer-b-new-value' WHERE id = 48;",
+	)
+	.expect("fresh writer should commit while delayed response is held");
+
+	delaying_transport.release();
+	let delayed_pages = delayed_read
+		.join()
+		.expect("delayed read thread should not panic");
+	assert!(
+		delayed_pages.contains_key(&5),
+		"delayed read should resolve the target page"
+	);
+
+	let stale_update = sqlite_exec(
+		db_a.as_ptr(),
+		"UPDATE delayed_rows SET payload = 'stale-writer-value' WHERE id = 48;",
+	);
+	assert!(
+		stale_update
+			.as_ref()
+			.expect_err("stale writer must fail after delayed old response")
+			.contains("disk I/O error"),
+		"unexpected stale writer error: {stale_update:?}"
+	);
+	assert!(
+		direct_vfs_ctx(&db_a)
+			.clone_fatal_error()
+			.is_some_and(|message| message.contains("head fence mismatch")),
+		"stale VFS should retain the head fence mismatch"
+	);
+
+	drop(db_a);
+	drop(db_b);
+
+	let db_c = harness.open_db_on_engine(&runtime, engine, &harness.actor_id, config);
+	assert_eq!(
+		sqlite_query_text(db_c.as_ptr(), "PRAGMA integrity_check;")
+			.expect("integrity check should run after delayed stale writer failed"),
+		"ok"
+	);
+	assert_eq!(
+		sqlite_query_text(db_c.as_ptr(), "SELECT payload FROM delayed_rows WHERE id = 48;")
 			.expect("fresh reopen should see writer B value"),
 		"writer-b-new-value"
 	);
