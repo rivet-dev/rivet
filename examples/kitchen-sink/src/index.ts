@@ -124,6 +124,7 @@ import { sqliteMemoryPressure } from "./actors/testing/sqlite-memory-pressure.ts
 import { mockAgenticLoop } from "./actors/testing/mock-agentic-loop.ts";
 import { sleepCloseFuzz } from "./actors/testing/sleep-close-fuzz.ts";
 import { loadTestAgent } from "./actors/testing/load-test-agent.ts";
+import { loadTestAgent2 } from "./actors/testing/load-test-agent-2.ts";
 import { sigtermSleepProbe } from "./actors/testing/sigterm-sleep-probe.ts";
 // AI
 import { aiAgent } from "./actors/ai/ai-agent.ts";
@@ -282,6 +283,7 @@ export const registry = setup({
 		mockAgenticLoop,
 		sleepCloseFuzz,
 		loadTestAgent,
+		loadTestAgent2,
 		sigtermSleepProbe,
 		// AI
 		aiAgent,
