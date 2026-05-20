@@ -22,6 +22,12 @@ pub struct IntegrationCtx {
 	endpoint: String,
 	child: Child,
 	client: reqwest::Client,
+	binary_path: PathBuf,
+	db_path: PathBuf,
+	database: EngineDatabase,
+	guard_port: u16,
+	api_peer_port: u16,
+	metrics_port: u16,
 	stdout_path: PathBuf,
 	stderr_path: PathBuf,
 }
@@ -168,6 +174,10 @@ impl IntegrationCtx {
 	}
 
 	pub async fn create_actor(&self, name: &str) -> Result<ApiActor> {
+		self.create_actor_with_key(name, None).await
+	}
+
+	pub async fn create_actor_with_key(&self, name: &str, key: Option<&str>) -> Result<ApiActor> {
 		let response = self
 			.client
 			.post(format!("{}/actors", self.endpoint))
@@ -176,7 +186,7 @@ impl IntegrationCtx {
 			.json(&serde_json::json!({
 				"name": name,
 				"runner_name_selector": DEFAULT_POOL,
-				"key": null,
+				"key": key,
 				"input": null,
 				"datacenter": null,
 				"crash_policy": "destroy",
@@ -196,6 +206,51 @@ impl IntegrationCtx {
 		let response: CreateActorResponse =
 			serde_json::from_str(&body).context("decode create actor response")?;
 		Ok(response.actor)
+	}
+
+	pub async fn create_or_get_actor_with_key(&self, name: &str, key: &str) -> Result<ApiActor> {
+		let response = self
+			.client
+			.post(format!("{}/actors", self.endpoint))
+			.query(&[("namespace", DEFAULT_NAMESPACE)])
+			.bearer_auth(TOKEN)
+			.json(&serde_json::json!({
+				"name": name,
+				"runner_name_selector": DEFAULT_POOL,
+				"key": key,
+				"input": null,
+				"datacenter": null,
+				"crash_policy": "destroy",
+			}))
+			.send()
+			.await
+			.context("create or get actor")?;
+		let status = response.status();
+		let body = response
+			.text()
+			.await
+			.context("read create or get actor response")?;
+		if status.is_success() {
+			let response: CreateActorResponse =
+				serde_json::from_str(&body).context("decode create actor response")?;
+			return Ok(response.actor);
+		}
+
+		let value: serde_json::Value =
+			serde_json::from_str(&body).context("decode create actor error response")?;
+		if value.get("code").and_then(serde_json::Value::as_str) == Some("duplicate_key") {
+			if let Some(actor_id) = value
+				.get("metadata")
+				.and_then(|metadata| metadata.get("existing_actor_id"))
+				.and_then(serde_json::Value::as_str)
+			{
+				return Ok(ApiActor {
+					actor_id: actor_id.to_owned(),
+				});
+			}
+		}
+
+		bail!("create or get actor failed with {status}: {body}");
 	}
 
 	async fn envoy_ready(&self) -> Result<bool> {
@@ -322,12 +377,34 @@ impl IntegrationCtx {
 		&self.endpoint
 	}
 
+	pub fn client(&self) -> reqwest::Client {
+		self.client.clone()
+	}
+
 	pub fn engine_stdout_tail(&self) -> String {
 		tail_file(&self.stdout_path)
 	}
 
 	pub fn engine_stderr_tail(&self) -> String {
 		tail_file(&self.stderr_path)
+	}
+
+	pub async fn restart_engine(&mut self) -> Result<()> {
+		shutdown_child(&mut self.child).await;
+		self.child = spawn_engine_child(
+			&self.binary_path,
+			&self.db_path,
+			&self.database,
+			self.guard_port,
+			self.api_peer_port,
+			self.metrics_port,
+			&self.stdout_path,
+			&self.stderr_path,
+		)
+		.await?;
+		wait_for_engine_health(&self.client, &self.endpoint, &mut self.child, &self.stderr_path)
+			.await?;
+		Ok(())
 	}
 
 	pub async fn shutdown(mut self) -> Result<()> {
@@ -369,25 +446,20 @@ impl IntegrationCtxBuilder {
 		let metrics_port = pick_port("metrics")?;
 		let endpoint = format!("http://127.0.0.1:{guard_port}");
 		let binary_path = engine_binary_path()?;
+		let database = EngineDatabase::from_env();
 		let stdout_path = temp_dir.path().join("engine.stdout.log");
 		let stderr_path = temp_dir.path().join("engine.stderr.log");
-		let stdout = File::create(&stdout_path).context("create engine stdout log")?;
-		let stderr = File::create(&stderr_path).context("create engine stderr log")?;
-
-		let mut child = Command::new(&binary_path)
-			.arg("start")
-			.env("RIVET__GUARD__HOST", "127.0.0.1")
-			.env("RIVET__GUARD__PORT", guard_port.to_string())
-			.env("RIVET__API_PEER__HOST", "127.0.0.1")
-			.env("RIVET__API_PEER__PORT", api_peer_port.to_string())
-			.env("RIVET__METRICS__HOST", "127.0.0.1")
-			.env("RIVET__METRICS__PORT", metrics_port.to_string())
-			.env("RIVET__FILE_SYSTEM__PATH", &db_path)
-			.stdin(Stdio::null())
-			.stdout(Stdio::from(stdout))
-			.stderr(Stdio::from(stderr))
-			.spawn()
-			.with_context(|| format!("spawn engine binary `{}`", binary_path.display()))?;
+		let mut child = spawn_engine_child(
+			&binary_path,
+			&db_path,
+			&database,
+			guard_port,
+			api_peer_port,
+			metrics_port,
+			&stdout_path,
+			&stderr_path,
+		)
+		.await?;
 
 		let client = reqwest::Client::new();
 		wait_for_engine_health(&client, &endpoint, &mut child, &stderr_path).await?;
@@ -397,6 +469,12 @@ impl IntegrationCtxBuilder {
 			endpoint,
 			child,
 			client,
+			binary_path,
+			db_path,
+			database,
+			guard_port,
+			api_peer_port,
+			metrics_port,
 			stdout_path,
 			stderr_path,
 		})
@@ -446,6 +524,90 @@ fn engine_binary_path() -> Result<PathBuf> {
 
 fn pick_port(label: &str) -> Result<u16> {
 	portpicker::pick_unused_port().with_context(|| format!("pick {label} port"))
+}
+
+#[derive(Clone, Debug)]
+enum EngineDatabase {
+	FileSystem,
+	FoundationDb {
+		cluster_description: String,
+		cluster_id: String,
+		addresses: String,
+	},
+}
+
+impl EngineDatabase {
+	fn from_env() -> Self {
+		match std::env::var("SQLITE_CORRUPTION_FUZZ_ENGINE_DATABASE").ok().as_deref() {
+			Some("foundationdb") => Self::FoundationDb {
+				cluster_description: std::env::var(
+					"SQLITE_CORRUPTION_FUZZ_FOUNDATIONDB_CLUSTER_DESCRIPTION",
+				)
+				.unwrap_or_else(|_| "docker".to_owned()),
+				cluster_id: std::env::var("SQLITE_CORRUPTION_FUZZ_FOUNDATIONDB_CLUSTER_ID")
+					.unwrap_or_else(|_| "docker".to_owned()),
+				addresses: std::env::var("SQLITE_CORRUPTION_FUZZ_FOUNDATIONDB_ADDRESSES")
+					.unwrap_or_else(|_| "127.0.0.1:4500".to_owned()),
+			},
+			_ => Self::FileSystem,
+		}
+	}
+}
+
+async fn spawn_engine_child(
+	binary_path: &Path,
+	db_path: &Path,
+	database: &EngineDatabase,
+	guard_port: u16,
+	api_peer_port: u16,
+	metrics_port: u16,
+	stdout_path: &Path,
+	stderr_path: &Path,
+) -> Result<Child> {
+	let stdout = File::options()
+		.create(true)
+		.append(true)
+		.open(stdout_path)
+		.context("open engine stdout log")?;
+	let stderr = File::options()
+		.create(true)
+		.append(true)
+		.open(stderr_path)
+		.context("open engine stderr log")?;
+
+	let mut command = Command::new(binary_path);
+	command
+		.arg("start")
+		.env("RIVET__GUARD__HOST", "127.0.0.1")
+		.env("RIVET__GUARD__PORT", guard_port.to_string())
+		.env("RIVET__API_PEER__HOST", "127.0.0.1")
+		.env("RIVET__API_PEER__PORT", api_peer_port.to_string())
+		.env("RIVET__METRICS__HOST", "127.0.0.1")
+		.env("RIVET__METRICS__PORT", metrics_port.to_string())
+		.env("RIVET__TELEMETRY__ENABLED", "false")
+		.stdin(Stdio::null())
+		.stdout(Stdio::from(stdout))
+		.stderr(Stdio::from(stderr));
+
+	match database {
+		EngineDatabase::FileSystem => {
+			command.env("RIVET__FILE_SYSTEM__PATH", db_path);
+		}
+		EngineDatabase::FoundationDb {
+			cluster_description,
+			cluster_id,
+			addresses,
+		} => {
+			command
+				.env("RIVET__FOUNDATIONDB__CLUSTER_DESCRIPTION", cluster_description)
+				.env("RIVET__FOUNDATIONDB__CLUSTER_ID", cluster_id)
+				.env("RIVET__FOUNDATIONDB__ADDRESSES", addresses);
+		}
+	}
+
+	command
+		.spawn()
+		.with_context(|| format!("spawn engine binary `{}`", binary_path.display()))
 }
 
 async fn wait_for_engine_health(
