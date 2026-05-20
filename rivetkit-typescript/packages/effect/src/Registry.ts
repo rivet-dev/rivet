@@ -175,21 +175,6 @@ export type ToWebHandlerOptions = ServerlessOptions & {
 	readonly memoMap?: Layer.MemoMap | undefined;
 };
 
-const toWebHandlerHandlerOptions = (
-	options?: ToWebHandlerOptions,
-): ServerlessOptions | undefined => {
-	if (options === undefined) {
-		return undefined;
-	}
-
-	const {
-		middleware: _middleware,
-		memoMap: _memoMap,
-		...handlerOptions
-	} = options;
-	return handlerOptions;
-};
-
 /**
  * Builds a Fetch-compatible request handler from a registry layer.
  *
@@ -200,16 +185,25 @@ const toWebHandlerHandlerOptions = (
 export const toWebHandler = <E>(
 	registryLayer: Layer.Layer<Registry, E>,
 	options?: ToWebHandlerOptions,
-) =>
-	HttpEffect.toWebHandlerLayerWith(registryLayer, {
+) => {
+	const { middleware, memoMap } = options ?? {};
+	let serverlessOptions: ServerlessOptions | undefined;
+	if (options !== undefined) {
+		const {
+			middleware: _middleware,
+			memoMap: _memoMap,
+			...handlerOptions
+		} = options;
+		serverlessOptions = handlerOptions;
+	}
+
+	return HttpEffect.toWebHandlerLayerWith(registryLayer, {
 		toHandler: (context) =>
 			Effect.sync(() => {
 				const registry = Context.get(context, Registry);
-				return makeHttpEffect(
-					registry,
-					toWebHandlerHandlerOptions(options),
-				);
+				return makeHttpEffect(registry, serverlessOptions);
 			}),
-		middleware: options?.middleware,
-		memoMap: options?.memoMap,
+		middleware,
+		memoMap,
 	});
+};
