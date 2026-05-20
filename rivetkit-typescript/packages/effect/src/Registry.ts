@@ -132,9 +132,19 @@ const makeHttpEffect = (
 };
 
 export type ToHttpEffectOptions = {
+	/**
+	 * Serverless request routing configuration for the generated HTTP handler.
+	 */
 	readonly serverless?: ServerlessOptions | undefined;
 };
 
+/**
+ * Builds a scoped Effect HTTP handler from a registry layer.
+ *
+ * The registry layer is built once in the surrounding scope. Registered Rivet
+ * Actors are materialized into a single underlying RivetKit registry, and each
+ * request is delegated to that registry's serverless handler.
+ */
 export const toHttpEffect = <E>(
 	registryLayer: Layer.Layer<Registry, E>,
 	options?: ToHttpEffectOptions,
@@ -153,11 +163,27 @@ export const toHttpEffect = <E>(
 	});
 
 export type ToWebHandlerOptions = {
+	/**
+	 * Serverless request routing configuration for the generated Web handler.
+	 */
 	readonly serverless?: ServerlessOptions | undefined;
+	/**
+	 * Effect HTTP middleware applied around the generated handler.
+	 */
 	readonly middleware?: HttpMiddleware.HttpMiddleware | undefined;
+	/**
+	 * Memo map used while building the registry layer.
+	 */
 	readonly memoMap?: Layer.MemoMap | undefined;
 };
 
+/**
+ * Builds a Fetch-compatible request handler from a registry layer.
+ *
+ * This is the serverless entrypoint for the Effect SDK. The registry layer must
+ * provide `Registry`, usually by composing actor layers with `Registry.layer`
+ * via `Layer.provideMerge`.
+ */
 export const toWebHandler = <E>(
 	registryLayer: Layer.Layer<Registry, E>,
 	options?: ToWebHandlerOptions,
