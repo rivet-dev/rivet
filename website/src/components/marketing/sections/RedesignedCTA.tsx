@@ -16,7 +16,7 @@ export const RedesignedCTA = () => (
         transition={{ duration: 0.5, delay: 0.1 }}
         className='mb-8 text-base leading-relaxed text-zinc-500'
       >
-        The next generation of software needs a new kind of backend. This is it.
+        Build with agents, build for agents, and run it where your data lives.
       </motion.p>
       <motion.div
         initial={{ opacity: 0, y: 20 }}

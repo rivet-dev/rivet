@@ -493,24 +493,33 @@ const Pricing = () => {
             name: "Open Source",
             price: "Free",
             period: "Forever",
-            desc: "Rivet is open source and free to use on your own infrastructure.",
+            desc: "Rivet is open source. Run it on your own infrastructure with no usage limits.",
             features: [
-                "No usage limits",
-                "Full source code access",
+                "Single Rust binary or Docker image",
+                "Air-gapped & on-prem deployments",
+                "BYO database (Postgres or filesystem)",
+                "Apache 2.0 license, full source access",
                 "Community support"
             ],
             cta: "Get Started",
             highlight: false
         },
         {
-            name: "Enterprise Support",
+            name: "Enterprise Edition",
             price: "Custom",
             period: "",
-            desc: "Get professional support and additional features for your self-hosted deployment.",
+            desc: "Production self-host bundle for teams running Rivet inside their own VPC, customer environments, or regulated networks.",
             features: [
-                "Priority support",
-                "SLA guarantees",
-                "Custom integrations"
+                "Actor orchestration runtime",
+                "FoundationDB persistence layer",
+                "ACL system",
+                "Advanced ClickHouse analytics",
+                "OpenTelemetry integration",
+                "Alert manager rules, Prometheus rules, Grafana configs",
+                "Kubernetes manifests",
+                "Air-gapped & sovereign-cloud deployments",
+                "Priority support & SLA",
+                "Hardening guidance for FedRAMP, HIPAA, regulated industries"
             ],
             cta: "Contact Sales",
             highlight: false
@@ -534,14 +543,24 @@ const Pricing = () => {
                 <div className="flex flex-col gap-12">
                     <div className="flex flex-col items-center text-center">
                         <h2 className="mb-2 text-2xl font-normal tracking-tight text-white md:text-4xl">
-                            {isCloud ? "Simple, Predictable Pricing" : "Rivet Self-Host"}
+                            {isCloud ? "Simple, predictable pricing" : "Run it where your data lives"}
                         </h2>
-                        <p className="mb-6 max-w-lg text-base leading-relaxed text-zinc-500">
+                        <p className="mb-6 max-w-xl text-base leading-relaxed text-zinc-500">
                             {isCloud
                                 ? "Pay for coordination and state. Compute costs are billed directly by your chosen cloud provider."
-                                : "Deploy Rivet on your own infrastructure."
+                                : "Deploy Rivet inside your VPC, your customer's environment, or fully air-gapped. Use the compliance posture you already have."
                             }
                         </p>
+
+                        {/* On-prem callout — visible whichever tier is selected */}
+                        <button
+                            onClick={() => setIsCloud(false)}
+                            className="mb-6 inline-flex items-center gap-2 rounded-full border border-[#FF4500]/20 bg-[#FF4500]/5 px-3 py-1.5 text-xs text-zinc-300 transition-colors hover:border-[#FF4500]/40 hover:text-white"
+                        >
+                            <Server className="h-3 w-3 text-[#FF4500]" />
+                            Need on-prem, air-gapped, or in your customer's VPC?
+                            <span className="text-[#FF4500]">Self-host →</span>
+                        </button>
 
                         {/* Toggle */}
                         <div className="inline-flex rounded-md border border-white/10 p-1">
@@ -593,7 +612,7 @@ const Pricing = () => {
                                     </div>
                                 </div>
 
-                                <a href={plan.name === "Enterprise" || plan.name === "Enterprise Support" ? "/sales" : "https://dashboard.rivet.dev"}
+                                <a href={plan.cta === "Contact Sales" || plan.name === "Enterprise" ? "/sales" : "https://dashboard.rivet.dev"}
                                     className={`w-full rounded-md py-3 text-center text-sm font-medium transition-colors ${
                                         plan.highlight
                                         ? 'bg-white text-black hover:bg-zinc-200'

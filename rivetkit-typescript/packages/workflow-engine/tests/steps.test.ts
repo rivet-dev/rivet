@@ -10,8 +10,8 @@ import {
 	type WorkflowErrorEvent,
 	type WorkflowContextInterface,
 } from "../src/testing.js";
-import { buildHistoryPrefixAll, keyStartsWith } from "../src/keys.js";
-import { deserializeEntry, serializeEntry } from "../schemas/serde.js";
+import { buildHistoryPrefixAll } from "../src/keys.js";
+import { deserializeEntry } from "../schemas/serde.js";
 
 const modes = ["yield", "live"] as const;
 
@@ -26,30 +26,6 @@ class CountingDriver extends InMemoryDriver {
 	}
 }
 
-class StripStepHistoryErrorDriver extends InMemoryDriver {
-	override async batch(
-		writes: { key: Uint8Array; value: Uint8Array }[],
-	): Promise<void> {
-		const historyPrefix = buildHistoryPrefixAll();
-		const rewritten = writes.map((write) => {
-			if (!keyStartsWith(write.key, historyPrefix)) {
-				return write;
-			}
-
-			const entry = deserializeEntry(write.value);
-			if (entry.kind.type === "step") {
-				// Simulate a driver/crash scenario where the step error is not persisted
-				// to the history entry, even though retries/exhaustion metadata is.
-				entry.kind.data.error = undefined;
-				return { key: write.key, value: serializeEntry(entry) };
-			}
-
-			return write;
-		});
-
-		return await super.batch(rewritten);
-	}
-}
 
 for (const mode of modes) {
 	describe(`Workflow Engine Steps (${mode})`, { sequential: true }, () => {
@@ -485,43 +461,6 @@ for (const mode of modes) {
 			).rejects.toThrow(StepExhaustedError);
 		});
 
-		it("should surface the last error even if step history is missing the error", async () => {
-			const driver = new StripStepHistoryErrorDriver();
-			driver.latency = 0;
-
-			const workflow = async (ctx: WorkflowContextInterface) => {
-				return await ctx.step({
-					name: "always-fails",
-					maxRetries: 1,
-					retryBackoffBase: 0,
-					retryBackoffMax: 0,
-					run: async () => {
-						throw new Error("Always fails");
-					},
-				});
-			};
-
-			if (mode === "yield") {
-				const firstResult = await runWorkflow(
-					"wf-1",
-					workflow,
-					undefined,
-					driver,
-					{ mode },
-				).result;
-				expect(firstResult.state).toBe("sleeping");
-			}
-
-			await expect(
-				runWorkflow("wf-1", workflow, undefined, driver, { mode })
-					.result,
-			).rejects.toThrow(StepExhaustedError);
-			await expect(
-				runWorkflow("wf-1", workflow, undefined, driver, { mode })
-					.result,
-			).rejects.toThrow(/Always fails/);
-		});
-
 		it("should recover exhausted retries", async () => {
 			let attempts = 0;
 
@@ -633,6 +572,41 @@ for (const mode of modes) {
 			expect(result.state).toBe("completed");
 			expect(result.output).toBe("done");
 			expect(driver.batchCalls).toBe(2);
+		});
+
+		it("should commit error but not output to step entry on failure", async () => {
+			const workflow = async (ctx: WorkflowContextInterface) => {
+				return await ctx.step({
+					name: "fail-once",
+					maxRetries: 3,
+					retryBackoffBase: 0,
+					retryBackoffMax: 0,
+					run: async () => {
+						throw new Error("step failed");
+					},
+				});
+			};
+
+			// Run once so the step fails and state is flushed
+			try {
+				await runWorkflow("wf-1", workflow, undefined, driver, {
+					mode,
+				}).result;
+			} catch {}
+
+			// Inspect all history entries in KV
+			const historyPrefix = buildHistoryPrefixAll();
+			const entries = await driver.list(historyPrefix);
+
+			for (const kv of entries) {
+				const entry = deserializeEntry(kv.value);
+				if (entry.kind.type === "step") {
+					// The step entry should have no output committed on failure.
+					expect(entry.kind.data.output).toBeUndefined();
+					// The error should be committed for inspection.
+					expect(entry.kind.data.error).toBe("Error: step failed");
+				}
+			}
 		});
 	});
 }

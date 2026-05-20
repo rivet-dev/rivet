@@ -246,7 +246,7 @@ interface RedesignedHeroProps {
 
 export const RedesignedHero = ({ latestChangelogTitle, thinkingImages }: RedesignedHeroProps) => {
   return (
-    <section className='relative flex min-h-[100svh] flex-col justify-center px-6 pt-20 md:pt-0'>
+    <section className='relative flex min-h-[100svh] flex-col justify-center px-6 pt-32 pb-16 md:pt-40 md:pb-24'>
       <div className='mx-auto w-full max-w-7xl'>
         <div className='flex flex-col gap-12 lg:flex-row lg:items-center lg:justify-between lg:gap-32 xl:gap-48 2xl:gap-64'>
           <div className='max-w-xl'>
@@ -273,7 +273,7 @@ export const RedesignedHero = ({ latestChangelogTitle, thinkingImages }: Redesig
               className='mb-4 text-4xl font-normal leading-[1.1] tracking-tight text-white md:text-6xl'
             >
               Infrastructure for <br />
-              software that thinks.
+              the agentic era.
             </motion.h1>
 
             <motion.p
@@ -282,7 +282,7 @@ export const RedesignedHero = ({ latestChangelogTitle, thinkingImages }: Redesig
               transition={{ duration: 0.5, delay: 0.05 }}
               className='mb-6 text-lg text-zinc-400 md:text-xl'
             >
-              Composable stateful compute for AI agents,<br/>collaborative apps, and durable execution.
+              Actors are the primitive for AI agents, real-time apps,<br/>and durable workflows. They burst when traffic spikes,<br/>sleep when idle, run for hours, and hold state across regions.
             </motion.p>
 
             <motion.div

@@ -4327,6 +4327,9 @@ importers:
       '@rivetkit/engine-envoy-protocol':
         specifier: workspace:*
         version: link:../../../engine/sdks/typescript/envoy-protocol
+      '@rivetkit/on-change':
+        specifier: 6.0.1
+        version: 6.0.1
       '@rivetkit/rivetkit-napi':
         specifier: workspace:*
         version: link:../rivetkit-napi
@@ -7636,20 +7639,24 @@ packages:
   '@mariozechner/pi-agent-core@0.60.0':
     resolution: {integrity: sha512-1zQcfFp8r0iwZCxCBQ9/ccFJoagns68cndLPTJJXl1ZqkYirzSld1zBOPxLAgeAKWIz3OX8dB2WQwTJFhmEojQ==}
     engines: {node: '>=20.0.0'}
+    deprecated: please use @earendil-works/pi-agent-core instead going forward
 
   '@mariozechner/pi-ai@0.60.0':
     resolution: {integrity: sha512-OiMuXQturnEDPmA+ho7eLe4G8plO2z21yjNMs9niQREauoblWOz7Glv58I66KPzczLED4aZTlQLTRdU6t1rz8A==}
     engines: {node: '>=20.0.0'}
+    deprecated: please use @earendil-works/pi-ai instead going forward
     hasBin: true
 
   '@mariozechner/pi-coding-agent@0.60.0':
     resolution: {integrity: sha512-IOv7cTU4nbznFNUE5ofi13k2dmSG39coBoGWIBQTVw3iVyl0HxuHbg0NiTx3ktrPIDNtkii+y7tWXzWqwoo4lw==}
     engines: {node: '>=20.6.0'}
+    deprecated: please use @earendil-works/pi-coding-agent instead going forward
     hasBin: true
 
   '@mariozechner/pi-tui@0.60.0':
     resolution: {integrity: sha512-ZAK5gxYhGmfJqMjfWcRBjB8glITltDbTrYJXvcDtfengbKTZN0p39p5uO5pvUB8/PiAWKTRS06yaNMhf/LG26g==}
     engines: {node: '>=20.0.0'}
+    deprecated: please use @earendil-works/pi-tui instead going forward
 
   '@marsidev/react-turnstile@1.5.0':
     resolution: {integrity: sha512-Ph6mcj8u9WBDsBO7s9jKPsyRDz1sBPBJwrk+Ngx09vFInvKsQ6U6kW5amEcGq4dHOreB6DgFrOJk7/fy318YlQ==}
@@ -8999,6 +9006,10 @@ packages:
   '@rivetkit/bare-ts@0.6.2':
     resolution: {integrity: sha512-3qndQUQXLdwafMEqfhz24hUtDPcsf1Bu3q52Kb8MqeH8JUh3h6R4HYW3ZJXiQsLcyYyFM68PuIwlLRlg1xDEpg==}
     engines: {node: ^14.18.0 || >=16.0.0}
+
+  '@rivetkit/on-change@6.0.1':
+    resolution: {integrity: sha512-QBN/KRBXLJdCgN4gBTL3XAc/zKm58atSnieXWMOyFSPmo6F1/yIVV/LTRdvAktfCttrGx7W6c32i/lwqCHWnsQ==}
+    engines: {node: '>=20'}
 
   '@rivetkit/sql-loader@2.2.1':
     resolution: {integrity: sha512-qqykzDGak06VY58o8qh8TH7CL77vIp2FHUJB2ZT78LJ+muRrXiwj/QHeVn9ykWePqCYCD9XP0L6Qd2fmERdXqQ==}
@@ -23705,6 +23716,8 @@ snapshots:
       - encoding
 
   '@rivetkit/bare-ts@0.6.2': {}
+
+  '@rivetkit/on-change@6.0.1': {}
 
   '@rivetkit/sql-loader@2.2.1': {}
 

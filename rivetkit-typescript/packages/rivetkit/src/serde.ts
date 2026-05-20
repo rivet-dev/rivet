@@ -3,7 +3,7 @@ import invariant from "invariant";
 import type { VersionedDataHandler } from "vbare";
 import type { z } from "zod/v4";
 import { assertUnreachable } from "@/common/utils";
-import type { Encoding } from "@/common/encoding";
+import type { JsonCompatValue, Encoding } from "@/common/encoding";
 import {
 	encodeJsonCompatValue,
 	jsonParseCompat,
@@ -46,7 +46,7 @@ export function contentTypeForEncoding(encoding: Encoding): string {
 	}
 }
 
-export function encodeCborCompat(value: unknown): Uint8Array {
+export function encodeCborCompat(value: JsonCompatValue): Uint8Array {
 	return cbor.encode(encodeJsonCompatValue(value));
 }
 

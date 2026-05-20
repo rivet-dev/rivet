@@ -180,7 +180,7 @@ export const ProductSplitSection = () => (
 				<ProductCard
 					icon={<img src={agentosLogoUrl.src} alt='agentOS' className='h-6 w-6' />}
 					title='agentOS'
-					tagline='A lightweight open-source operating system for agents. Built on WASM & V8.'
+					tagline='A lightweight open-source operating system for any type of agent. Built on WASM & V8.'
 					docsHref='/docs/agent-os'
 					detailsHref='/agent-os'
 					features={agentOSFeatures}
