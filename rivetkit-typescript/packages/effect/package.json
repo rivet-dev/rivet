@@ -28,7 +28,8 @@
 		"build": "tsup src/mod.ts",
 		"dev": "tsup src/mod.ts --watch",
 		"check-types": "tsc --noEmit",
-		"test": "vitest --typecheck"
+		"test": "vitest --typecheck",
+		"coverage": "vitest run --coverage"
 	},
 	"dependencies": {
 		"rivetkit": "workspace:*"
@@ -40,6 +41,7 @@
 		"@effect/language-service": "^0.85.1",
 		"@effect/vitest": "^4.0.0-beta.66",
 		"@types/node": "^22.18.1",
+		"@vitest/coverage-v8": "^4.1.7",
 		"effect": "^4.0.0-beta.66",
 		"tsup": "^8.4.0",
 		"typescript": "^5.9.2",

@@ -27,5 +27,9 @@ export default defineConfig({
 		fileParallelism: false,
 		sequence: { concurrent: false },
 		globalSetup: ["./test/global-setup.ts"],
+		coverage: {
+			include: ["src/**/*.ts"],
+			exclude: ["*.test-d.ts"],
+		},
 	},
 });
