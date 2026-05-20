@@ -9,6 +9,9 @@ pub const DEFAULT_CONCURRENCY: u32 = 1_000;
 pub const DEFAULT_CONCURRENT_INTERVAL_MS: u64 = 300;
 pub const DEFAULT_MESSAGE_INTERVAL_MS: u64 = 1_000;
 pub const DEFAULT_AGENT_MESSAGE_INTERVAL_MS: u64 = 30_000;
+pub const DEFAULT_AGENT_CONCURRENT_2_SLEEP_MS: u64 = 5_000;
+pub const DEFAULT_AGENT_CONCURRENT_2_TIMEOUT_MS: u64 = 120_000;
+pub const DEFAULT_AGENT_CONCURRENT_2_QUERY_MULTIPLIER: u32 = 1;
 pub const DEFAULT_TOKENS_PER_SECOND: f64 = 20.0;
 pub const DEFAULT_DURATION_MS: u64 = 5_000;
 pub const MESSAGE_GAP_WARN_MS: f64 = 3_000.0;
@@ -21,7 +24,8 @@ pub const ACTOR_STOPPED_CLOSE_REASON: &str = "hack_force_close";
 	about = "Mini load-test client for Rivet kitchen-sink actors",
 	long_about = "Subcommands:\n  \
 		concurrent       ramp raw WebSocket tunnel-stress actors (steady or rolling)\n  \
-		agent-concurrent ramp SQLite-backed agent actors (steady or rolling)\n\nEnv:\n  \
+		agent-concurrent ramp SQLite-backed agent actors (steady or rolling)\n  \
+		agent-concurrent-2 cycle SQLite-backed agent actors through work and sleep\n\nEnv:\n  \
 		RIVET_ENDPOINT  required, proto://<ns>:<token>@host\n  \
 		RIVET_POOL      runner pool name (default k8s)\n  \
 		RUN_FOR_MS      stop after this many ms"
@@ -38,6 +42,9 @@ enum Cmd {
 	/// Ramp SQLite-backed agent actors. Set `-c 1 --mode rolling` for an rtt-style workload.
 	#[command(name = "agent-concurrent")]
 	AgentConcurrent(ConcurrentCli),
+	/// Cycle SQLite-backed agent actors through one workload pass and forced sleep.
+	#[command(name = "agent-concurrent-2")]
+	AgentConcurrent2(ConcurrentCli),
 }
 
 #[derive(clap::Args, Clone)]
@@ -68,6 +75,18 @@ struct ConcurrentCli {
 	/// Wait for actor ready before connecting (default: skip).
 	#[arg(short = 'w', long)]
 	wait_ready: bool,
+	/// Delay after forcing actor sleep before reconnecting (agent-concurrent-2 only).
+	#[arg(long, default_value_t = DEFAULT_AGENT_CONCURRENT_2_SLEEP_MS)]
+	sleep_ms: u64,
+	/// Per-workload timeout in ms (agent-concurrent-2 only).
+	#[arg(long, default_value_t = DEFAULT_AGENT_CONCURRENT_2_TIMEOUT_MS)]
+	timeout_ms: u64,
+	/// Delay before the server-side write transaction starts (agent-concurrent-2 only).
+	#[arg(long, default_value_t = 0)]
+	stagger_handle_ms: u64,
+	/// Number of times to repeat the SQL workload per cycle (agent-concurrent-2 only).
+	#[arg(long, default_value_t = DEFAULT_AGENT_CONCURRENT_2_QUERY_MULTIPLIER)]
+	query_multiplier: u32,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, ValueEnum)]
@@ -89,12 +108,17 @@ pub struct ConcurrentArgs {
 	pub skip_ready_wait: bool,
 	pub tokens_per_second: f64,
 	pub duration_ms: u64,
+	pub sleep_ms: u64,
+	pub timeout_ms: u64,
+	pub stagger_handle_ms: u64,
+	pub query_multiplier: u32,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum ConcurrentMode {
 	Concurrent,
 	AgentConcurrent,
+	AgentConcurrent2,
 }
 
 #[derive(Clone)]
@@ -141,12 +165,16 @@ pub fn parse_cli() -> Args {
 		Cmd::AgentConcurrent(c) => {
 			Args::Concurrent(build_concurrent(ConcurrentMode::AgentConcurrent, c))
 		}
+		Cmd::AgentConcurrent2(c) => {
+			Args::Concurrent(build_concurrent(ConcurrentMode::AgentConcurrent2, c))
+		}
 	}
 }
 
 fn build_concurrent(mode: ConcurrentMode, cli: ConcurrentCli) -> ConcurrentArgs {
 	let default_message_interval = match mode {
 		ConcurrentMode::AgentConcurrent => DEFAULT_AGENT_MESSAGE_INTERVAL_MS,
+		ConcurrentMode::AgentConcurrent2 => DEFAULT_MESSAGE_INTERVAL_MS,
 		ConcurrentMode::Concurrent => DEFAULT_MESSAGE_INTERVAL_MS,
 	};
 	ConcurrentArgs {
@@ -159,5 +187,9 @@ fn build_concurrent(mode: ConcurrentMode, cli: ConcurrentCli) -> ConcurrentArgs 
 		skip_ready_wait: !cli.wait_ready,
 		tokens_per_second: cli.tokens_per_second,
 		duration_ms: cli.duration_ms,
+		sleep_ms: cli.sleep_ms,
+		timeout_ms: cli.timeout_ms,
+		stagger_handle_ms: cli.stagger_handle_ms,
+		query_multiplier: cli.query_multiplier.max(1),
 	}
 }
