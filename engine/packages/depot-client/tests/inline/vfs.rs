@@ -3640,6 +3640,44 @@ fn resolve_pages_surfaces_read_path_error_response() {
 }
 
 #[test]
+fn dead_vfs_rejects_cache_only_reads_before_serving_page_cache() {
+	let runtime = direct_runtime();
+	let harness = DirectEngineHarness::new();
+	let engine = runtime.block_on(harness.open_engine());
+	let transport = Arc::new(DirectDepotTransport::new(engine));
+	let hooks = transport.direct_hooks();
+	let config = VfsConfig::default();
+	let ctx = VfsContext::new(
+		harness.actor_id.clone(),
+		runtime.handle().clone(),
+		transport,
+		config.clone(),
+		unsafe { std::mem::zeroed() },
+		Vec::new(),
+		None,
+	)
+	.expect("vfs context should build");
+	{
+		let mut state = ctx.state.write();
+		state.db_size_pages = 2;
+		state.cache_page(&config, PageCacheInsertKind::Target, 2, vec![0x42; 4096]);
+	}
+
+	ctx.mark_fatal("generation fence lost".to_string());
+	let err = ctx
+		.resolve_pages(&[2], false)
+		.expect_err("dead VFS should not serve cached pages");
+	assert!(matches!(
+		err,
+		GetPagesError::Other(ref message) if message.contains("lost its fence")
+	));
+	assert!(
+		hooks.get_pages_requests().is_empty(),
+		"dead cache-only read should fail before calling Depot"
+	);
+}
+
+#[test]
 fn resolve_pages_sends_known_head_txid_as_read_fence() {
 	let runtime = direct_runtime();
 	let harness = DirectEngineHarness::new();
