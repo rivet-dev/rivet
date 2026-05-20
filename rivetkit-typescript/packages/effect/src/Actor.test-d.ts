@@ -21,8 +21,6 @@ const TestActor = Actor.make("TestActor", {
 	actions: [Action.make("GetContext")],
 });
 
-type TestActions = (typeof TestActor.actions)[number];
-
 const TestState = {
 	schema: Schema.Struct({
 		count: Schema.Number,
@@ -308,7 +306,11 @@ describe("Actor.make(...).toLayer", () => {
 describe("Actor.make(...).client", () => {
 	test("yields a typed Accessor", () => {
 		expectTypeOf(TestActor.client).toEqualTypeOf<
-			Effect.Effect<Actor.Accessor<TestActions>, never, Client.Client>
+			Effect.Effect<
+				Actor.Accessor<(typeof TestActor.actions)[number]>,
+				never,
+				Client.Client
+			>
 		>();
 	});
 });
