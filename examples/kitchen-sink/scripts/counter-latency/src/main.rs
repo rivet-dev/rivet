@@ -2,6 +2,7 @@
 // Subcommands:
 //   concurrent       ramp raw WS tunnel-stress actors (steady or rolling).
 //   agent-concurrent ramp SQLite-backed agent actors (steady or rolling).
+//   agent-concurrent-2 cycle SQLite-backed agent actors through work and sleep.
 //
 // Env:
 //   RUN_FOR_MS  optional run cap for both modes.
@@ -110,6 +111,7 @@ fn print_header(args: &Args, env: &EnvConfig, endpoint: &Endpoint) {
 		Args::Concurrent(a) => match a.mode {
 			args::ConcurrentMode::Concurrent => "concurrent",
 			args::ConcurrentMode::AgentConcurrent => "agent-concurrent",
+			args::ConcurrentMode::AgentConcurrent2 => "agent-concurrent-2",
 		},
 	};
 	let header = format!(
@@ -127,13 +129,16 @@ fn print_header(args: &Args, env: &EnvConfig, endpoint: &Endpoint) {
 				args::WorkerMode::Steady => "steady",
 				args::WorkerMode::Rolling => "rolling",
 			};
-			let agent_part = if matches!(a.mode, args::ConcurrentMode::AgentConcurrent) {
-				format!(
+			let agent_part = match a.mode {
+				args::ConcurrentMode::AgentConcurrent => format!(
 					" tokens-per-second={} duration-ms={}",
 					a.tokens_per_second, a.duration_ms,
-				)
-			} else {
-				String::new()
+				),
+				args::ConcurrentMode::AgentConcurrent2 => format!(
+					" sleep-ms={} timeout-ms={} stagger-handle-ms={} query-multiplier={}",
+					a.sleep_ms, a.timeout_ms, a.stagger_handle_ms, a.query_multiplier,
+				),
+				args::ConcurrentMode::Concurrent => String::new(),
 			};
 			let run_for_part = if env.run_for_ms > 0 {
 				format!(" run-for-ms={}", env.run_for_ms)

@@ -10,7 +10,7 @@ use std::time::Instant;
 use futures_util::{SinkExt, StreamExt};
 use tokio::sync::Mutex;
 use tokio::sync::mpsc;
-use tokio::time::sleep;
+use tokio::time::{sleep, timeout};
 use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::tungstenite::protocol::CloseFrame;
 use tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode;
@@ -285,9 +285,22 @@ pub async fn run_concurrent_mode(
 	state: Arc<State>,
 ) {
 	let args = Arc::new(args);
+	if matches!(args.mode, ConcurrentMode::AgentConcurrent2) {
+		let ctx = Arc::new(WorkloadCtx {
+			endpoint: endpoint.clone(),
+			args: args.clone(),
+			env: env.clone(),
+			state: state.clone(),
+		});
+		run_agent_concurrent_2_mode(args.clone(), env.clone(), ctx.clone(), state.clone()).await;
+		print_concurrent_summary(&ctx, "complete");
+		return;
+	}
+
 	let workload: Arc<dyn Workload> = match args.mode {
 		ConcurrentMode::AgentConcurrent => Arc::new(AgentWorkload),
 		ConcurrentMode::Concurrent => Arc::new(TunnelStressWorkload),
+		ConcurrentMode::AgentConcurrent2 => unreachable!(),
 	};
 	let ctx = Arc::new(WorkloadCtx {
 		endpoint: endpoint.clone(),
@@ -324,6 +337,414 @@ pub async fn run_concurrent_mode(
 	}
 
 	print_concurrent_summary(&ctx, "complete");
+}
+
+async fn run_agent_concurrent_2_mode(
+	args: Arc<ConcurrentArgs>,
+	env: Arc<EnvConfig>,
+	ctx: Arc<WorkloadCtx>,
+	state: Arc<State>,
+) {
+	if env.run_for_ms > 0 {
+		let state_clone = state.clone();
+		let dur = std::time::Duration::from_millis(env.run_for_ms);
+		tokio::spawn(async move {
+			sleep(dur).await;
+			state_clone.set_stopping();
+		});
+	}
+
+	let mut handles: Vec<tokio::task::JoinHandle<()>> = Vec::new();
+	for i in 0..args.concurrency {
+		let id = i + 1;
+		state.set_workers_started(id as i64);
+		state.set_worker_health(id, WorkerHealth::Connecting);
+		let ctx_clone = ctx.clone();
+		let handle = tokio::spawn(async move {
+			run_agent_concurrent_2_worker(id, ctx_clone).await;
+		});
+		handles.push(handle);
+		if i < args.concurrency - 1 {
+			sleep(std::time::Duration::from_millis(args.interval)).await;
+		}
+	}
+	for handle in handles {
+		let _ = handle.await;
+	}
+}
+
+async fn run_agent_concurrent_2_worker(worker: u32, ctx: Arc<WorkloadCtx>) {
+	let key = make_key(worker, "cl-a2");
+	let mut sequence: u64 = 0;
+	let actor_id: Option<String> = None;
+
+	while !ctx.state.stopping() {
+		sequence += 1;
+		ctx.state.set_worker_health(worker, WorkerHealth::Connecting);
+		let t0 = Instant::now();
+		let url =
+			ctx.endpoint
+				.build_raw_ws_url("loadTestAgent2", &key, ctx.args.skip_ready_wait);
+
+		let ws = match open_raw_ws_with_stall_log(&url, &ctx, &key, actor_id.as_deref()).await {
+			Ok(ws) => ws,
+			Err(err) => {
+				let elapsed = t0.elapsed().as_secs_f64() * 1000.0;
+				log_connect_error(
+					&ctx,
+					worker,
+					&key,
+					actor_id.as_deref(),
+					elapsed,
+					&err.to_string(),
+				);
+				return;
+			}
+		};
+		let t_connect = Instant::now();
+		let connect_ms = t_connect.duration_since(t0).as_secs_f64() * 1000.0;
+		record_connect(&ctx, worker, sequence > 1);
+
+		let (mut sink, mut stream) = ws.split();
+		let phase1 = run_ping_phase(
+			&mut sink,
+			&mut stream,
+			t0,
+			t_connect,
+			connect_ms,
+			&ctx,
+			&key,
+			actor_id.as_deref(),
+		)
+		.await;
+
+		match &phase1 {
+			PingOutcome::Completed {
+				first_ms,
+				second_ms,
+				total_ms,
+			} => {
+				log_rtt_line(
+					&ctx,
+					worker,
+					&key,
+					actor_id.as_deref(),
+					connect_ms,
+					*first_ms,
+					*second_ms,
+					*total_ms,
+					sequence > 1,
+				);
+			}
+			PingOutcome::Failed { first_ms, close } => {
+				log_partial_rtt(
+					&ctx,
+					worker,
+					&key,
+					actor_id.as_deref(),
+					connect_ms,
+					*first_ms,
+					sequence > 1,
+				);
+				if let Some((code, reason)) = close {
+					let detail = format!("code={} reason={}", code, reason);
+					log_disconnect(&ctx, worker, &key, actor_id.as_deref(), &detail, true);
+				}
+				ctx.state.set_stopping();
+				break;
+			}
+		}
+
+		let request_id = format!("agent2-{}-{}-{}", worker, to_base36(sequence), to_base36(chrono::Utc::now().timestamp_millis() as u64));
+		let payload = serde_json::json!({
+			"type": "agent2_connect",
+			"clientId": request_id,
+			"staggerHandleMs": ctx.args.stagger_handle_ms,
+		})
+		.to_string();
+
+		if let Err(err) = sink.send(Message::Text(payload.into())).await {
+			let _ = err;
+			log_websocket_error(&ctx, worker, &key, actor_id.as_deref());
+			ctx.state.set_stopping();
+			break;
+		}
+
+		let result = timeout(
+			std::time::Duration::from_millis(ctx.args.timeout_ms),
+			wait_agent_concurrent_2_result(&mut stream, &ctx, worker, &key, actor_id.as_deref()),
+		)
+		.await;
+
+		match result {
+			Ok(AgentConcurrent2Cycle::Result { total_ms, summary }) => {
+				log_agent_concurrent_2_result(
+					&ctx,
+					worker,
+					&key,
+					actor_id.as_deref(),
+					total_ms,
+					&summary,
+				);
+			}
+			Ok(AgentConcurrent2Cycle::ServerError { error }) => {
+				log_agent_concurrent_2_error(&ctx, worker, &key, actor_id.as_deref(), &error);
+				ctx.state.set_stopping();
+				break;
+			}
+			Ok(AgentConcurrent2Cycle::Closed { detail }) => {
+				log_disconnect(&ctx, worker, &key, actor_id.as_deref(), &detail, true);
+				ctx.state.set_stopping();
+				break;
+			}
+			Err(_) => {
+				let detail = format!("timeout waiting for agent-concurrent-2 result after {}ms", ctx.args.timeout_ms);
+				log_disconnect(&ctx, worker, &key, actor_id.as_deref(), &detail, true);
+				ctx.state.set_stopping();
+				break;
+			}
+		}
+
+		let _ = sink
+			.send(Message::Text(
+				serde_json::json!({ "type": "force_sleep" }).to_string().into(),
+			))
+			.await;
+		let _ = timeout(
+			std::time::Duration::from_millis(5_000),
+			wait_agent_concurrent_2_sleeping(&mut stream),
+		)
+		.await;
+		let _ = sink
+			.send(Message::Close(Some(CloseFrame {
+				code: CloseCode::Normal,
+				reason: "counter-latency complete".into(),
+			})))
+			.await;
+
+		sleep(std::time::Duration::from_millis(ctx.args.sleep_ms)).await;
+	}
+}
+
+enum AgentConcurrent2Cycle {
+	Result { total_ms: f64, summary: String },
+	ServerError { error: String },
+	Closed { detail: String },
+}
+
+async fn wait_agent_concurrent_2_result<R>(
+	stream: &mut R,
+	ctx: &Arc<WorkloadCtx>,
+	worker: u32,
+	key: &str,
+	actor_id: Option<&str>,
+) -> AgentConcurrent2Cycle
+where
+	R: futures_util::stream::Stream<
+			Item = Result<Message, tokio_tungstenite::tungstenite::Error>,
+		> + Unpin,
+{
+	while let Some(incoming) = stream.next().await {
+		match incoming {
+			Ok(Message::Text(text)) => {
+				let data = text.as_str();
+				if ctx.args.show_messages {
+					let prefix = ctx.log_prefix();
+					crate::out!(
+						"{} {}{} message={}",
+						prefix,
+						pad(key, 32),
+						format_actor(actor_id),
+						data,
+					);
+				}
+				let Ok(message) = serde_json::from_str::<serde_json::Value>(data) else {
+					continue;
+				};
+				let ty = message.get("type").and_then(|v| v.as_str()).unwrap_or("");
+				if ty == "agent2_result" {
+					let total_ms = message
+						.get("totalMs")
+						.and_then(|v| v.as_f64())
+						.unwrap_or_default();
+					let summary = summarize_agent_concurrent_2_result(&message, ctx);
+					return AgentConcurrent2Cycle::Result { total_ms, summary };
+				}
+				if ty == "agent2_error" {
+					let mut error = message
+						.get("error")
+						.and_then(|v| v.as_str())
+						.unwrap_or("unknown server error")
+						.to_string();
+					if let Some(stats) = summarize_agent_concurrent_2_query_stats(&message, ctx) {
+						error.push(' ');
+						error.push_str(&stats);
+					}
+					return AgentConcurrent2Cycle::ServerError { error };
+				}
+			}
+			Ok(Message::Binary(_) | Message::Ping(_) | Message::Pong(_) | Message::Frame(_)) => {}
+			Ok(Message::Close(frame)) => {
+				let detail = match frame {
+					Some(f) => format!("code={} reason={}", u16::from(f.code), f.reason),
+					None => "code=0 reason=".to_string(),
+				};
+				return AgentConcurrent2Cycle::Closed { detail };
+			}
+			Err(_) => {
+				log_websocket_error(ctx, worker, key, actor_id);
+				return AgentConcurrent2Cycle::Closed {
+					detail: "websocket error".to_string(),
+				};
+			}
+		}
+	}
+	AgentConcurrent2Cycle::Closed {
+		detail: "stream ended".to_string(),
+	}
+}
+
+async fn wait_agent_concurrent_2_sleeping<R>(stream: &mut R)
+where
+	R: futures_util::stream::Stream<
+			Item = Result<Message, tokio_tungstenite::tungstenite::Error>,
+		> + Unpin,
+{
+	while let Some(incoming) = stream.next().await {
+		let Ok(Message::Text(text)) = incoming else {
+			continue;
+		};
+		let Ok(message) = serde_json::from_str::<serde_json::Value>(text.as_str()) else {
+			continue;
+		};
+		if message.get("type").and_then(|v| v.as_str()) == Some("sleeping") {
+			return;
+		}
+	}
+}
+
+fn summarize_agent_concurrent_2_result(
+	message: &serde_json::Value,
+	ctx: &Arc<WorkloadCtx>,
+) -> String {
+	let Some(results) = message.get("results").and_then(|v| v.as_array()) else {
+		return "results=none".to_string();
+	};
+	let mut parts = results
+		.iter()
+		.map(|result| {
+			let name = result.get("name").and_then(|v| v.as_str()).unwrap_or("?");
+			let total = result
+				.get("totalMs")
+				.and_then(|v| v.as_f64())
+				.unwrap_or_default()
+				.round() as i64;
+			format!("{}={}ms", name, total)
+		})
+		.collect::<Vec<_>>();
+	if let Some(stats) = summarize_agent_concurrent_2_query_stats(message, ctx) {
+		parts.push(stats);
+	}
+	parts.join(" ")
+}
+
+fn summarize_agent_concurrent_2_query_stats(
+	message: &serde_json::Value,
+	ctx: &Arc<WorkloadCtx>,
+) -> Option<String> {
+	let stats = message.get("stats")?;
+	let cycle = stats.get("cycle")?;
+	let wake = stats.get("wake")?;
+	let actor = stats.get("actor")?;
+
+	let cycle_total = stat_i64(cycle, "total");
+	ctx.state
+		.stats
+		.agent2_queries
+		.fetch_add(cycle_total, Ordering::Relaxed);
+	ctx.state
+		.stats
+		.agent2_reads
+		.fetch_add(stat_i64(cycle, "reads"), Ordering::Relaxed);
+	ctx.state
+		.stats
+		.agent2_mutations
+		.fetch_add(stat_i64(cycle, "mutations"), Ordering::Relaxed);
+	ctx.state
+		.stats
+		.agent2_tx
+		.fetch_add(stat_i64(cycle, "tx"), Ordering::Relaxed);
+	ctx.state
+		.stats
+		.agent2_other
+		.fetch_add(stat_i64(cycle, "other"), Ordering::Relaxed);
+	ctx.state
+		.stats
+		.agent2_rows
+		.fetch_add(stat_i64(cycle, "rows"), Ordering::Relaxed);
+	ctx.state
+		.stats
+		.agent2_query_errors
+		.fetch_add(stat_i64(cycle, "errors"), Ordering::Relaxed);
+	ctx.state
+		.stats
+		.agent2_slow_queries
+		.fetch_add(stat_i64(cycle, "slow"), Ordering::Relaxed);
+
+	let wake_index = stat_i64(stats, "wakeIndex");
+	let actor_iteration = stat_i64(stats, "actorIteration");
+	let wake_iteration = stat_i64(stats, "wakeIteration");
+	let max_step = cycle
+		.get("maxStep")
+		.and_then(|v| v.as_str())
+		.unwrap_or("");
+	let max_ms = stat_i64(cycle, "maxMs");
+	let top_tables = top_counter_entries(cycle.get("byTable"), 3);
+	Some(format!(
+		"wake={} iter={}/{} cycleQ={} r/m/tx/o={}/{}/{}/{} wakeQ={} actorQ={} rows={} qerr={} qslow={} maxQ={}:{}ms tables={}",
+		wake_index,
+		wake_iteration,
+		actor_iteration,
+		cycle_total,
+		stat_i64(cycle, "reads"),
+		stat_i64(cycle, "mutations"),
+		stat_i64(cycle, "tx"),
+		stat_i64(cycle, "other"),
+		stat_i64(wake, "total"),
+		stat_i64(actor, "total"),
+		stat_i64(cycle, "rows"),
+		stat_i64(cycle, "errors"),
+		stat_i64(cycle, "slow"),
+		max_step,
+		max_ms,
+		top_tables,
+	))
+}
+
+fn stat_i64(value: &serde_json::Value, key: &str) -> i64 {
+	value.get(key).and_then(|v| v.as_i64()).unwrap_or_default()
+}
+
+fn top_counter_entries(value: Option<&serde_json::Value>, limit: usize) -> String {
+	let Some(map) = value.and_then(|v| v.as_object()) else {
+		return "-".to_string();
+	};
+	let mut entries = map
+		.iter()
+		.filter_map(|(key, value)| value.as_i64().map(|count| (key.as_str(), count)))
+		.collect::<Vec<_>>();
+	entries.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(b.0)));
+	let summary = entries
+		.into_iter()
+		.take(limit)
+		.map(|(key, count)| format!("{}:{}", key, count))
+		.collect::<Vec<_>>()
+		.join(",");
+	if summary.is_empty() {
+		"-".to_string()
+	} else {
+		summary
+	}
 }
 
 /// Steady scheduler. Spawn N workers up front (with --interval gaps for ramp). Each worker holds
@@ -1195,10 +1616,51 @@ fn log_websocket_error(
 	);
 }
 
+fn log_agent_concurrent_2_result(
+	ctx: &Arc<WorkloadCtx>,
+	_worker: u32,
+	key: &str,
+	actor_id: Option<&str>,
+	total_ms: f64,
+	summary: &str,
+) {
+	let prefix = ctx.log_prefix();
+	crate::out!(
+		"{} {}{} agent-concurrent-2 total={} {}",
+		prefix,
+		pad(key, 32),
+		format_actor(actor_id),
+		color_ms(total_ms),
+		summary,
+	);
+}
+
+fn log_agent_concurrent_2_error(
+	ctx: &Arc<WorkloadCtx>,
+	worker: u32,
+	key: &str,
+	actor_id: Option<&str>,
+	error: &str,
+) {
+	ctx.state.stats.slow_sql.fetch_add(1, Ordering::Relaxed);
+	ctx.state.stats.unclean_failures_or_disconnects.fetch_add(1, Ordering::Relaxed);
+	ctx.state.set_worker_health(worker, WorkerHealth::Failed);
+	let prefix = ctx.log_prefix();
+	crate::out!(
+		"{} {}{} {}AGENT-CONCURRENT-2-ERROR {}{}",
+		prefix,
+		pad(key, 32),
+		format_actor(actor_id),
+		RED,
+		error,
+		RESET,
+	);
+}
+
 pub fn print_concurrent_summary(ctx: &Arc<WorkloadCtx>, reason: &str) {
 	let counts = ctx.state.count_worker_health();
 	crate::out!(
-		"{}counter-latency summary{} reason={} workers={} [{}{}{}/{}{}{}/{}{}{}/{}{}{}/{}{}{}] disconnects={} connect-errors={} websocket-errors={} message-gaps={} slow-sql={} stalls={} connects={} reconnects={} first-messages={}",
+		"{}counter-latency summary{} reason={} workers={} [{}{}{}/{}{}{}/{}{}{}/{}{}{}/{}{}{}] disconnects={} connect-errors={} websocket-errors={} message-gaps={} slow-sql={} stalls={} connects={} reconnects={} first-messages={} agent2-q={} agent2-r/m/tx/o={}/{}/{}/{} agent2-rows={} agent2-qerr={} agent2-qslow={}",
 		BOLD,
 		RESET,
 		reason,
@@ -1217,5 +1679,13 @@ pub fn print_concurrent_summary(ctx: &Arc<WorkloadCtx>, reason: &str) {
 		ctx.state.stats.connects.load(Ordering::Relaxed),
 		ctx.state.stats.reconnects.load(Ordering::Relaxed),
 		ctx.state.stats.first_messages.load(Ordering::Relaxed),
+		ctx.state.stats.agent2_queries.load(Ordering::Relaxed),
+		ctx.state.stats.agent2_reads.load(Ordering::Relaxed),
+		ctx.state.stats.agent2_mutations.load(Ordering::Relaxed),
+		ctx.state.stats.agent2_tx.load(Ordering::Relaxed),
+		ctx.state.stats.agent2_other.load(Ordering::Relaxed),
+		ctx.state.stats.agent2_rows.load(Ordering::Relaxed),
+		ctx.state.stats.agent2_query_errors.load(Ordering::Relaxed),
+		ctx.state.stats.agent2_slow_queries.load(Ordering::Relaxed),
 	);
 }

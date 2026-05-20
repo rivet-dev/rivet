@@ -32,6 +32,14 @@ pub struct ConcurrentStats {
 	pub slow_sql: AtomicI64,
 	pub stalls: AtomicI64,
 	pub unclean_failures_or_disconnects: AtomicI64,
+	pub agent2_queries: AtomicI64,
+	pub agent2_reads: AtomicI64,
+	pub agent2_mutations: AtomicI64,
+	pub agent2_tx: AtomicI64,
+	pub agent2_other: AtomicI64,
+	pub agent2_rows: AtomicI64,
+	pub agent2_query_errors: AtomicI64,
+	pub agent2_slow_queries: AtomicI64,
 }
 
 impl ConcurrentStats {
@@ -47,6 +55,14 @@ impl ConcurrentStats {
 			slow_sql: AtomicI64::new(0),
 			stalls: AtomicI64::new(0),
 			unclean_failures_or_disconnects: AtomicI64::new(0),
+			agent2_queries: AtomicI64::new(0),
+			agent2_reads: AtomicI64::new(0),
+			agent2_mutations: AtomicI64::new(0),
+			agent2_tx: AtomicI64::new(0),
+			agent2_other: AtomicI64::new(0),
+			agent2_rows: AtomicI64::new(0),
+			agent2_query_errors: AtomicI64::new(0),
+			agent2_slow_queries: AtomicI64::new(0),
 		}
 	}
 }
