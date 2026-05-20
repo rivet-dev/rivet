@@ -18,6 +18,8 @@
 		"smoke:on-sleep-sigterm": "tsc --noEmit --pretty false --allowImportingTsExtensions --moduleResolution bundler --module esnext --target esnext --types node --lib esnext,dom --skipLibCheck --allowJs --checkJs false scripts/on-sleep-sigterm-smoke.ts src/actors/testing/sigterm-sleep-probe.ts src/actors/state/sqlite-drizzle/drizzle/migrations.js && node --experimental-strip-types --experimental-transform-types --import @rivetkit/sql-loader scripts/on-sleep-sigterm-smoke.ts",
 		"fuzz:sleep-close": "tsx scripts/sleep-close-fuzz.ts",
 		"mock-agentic-loop": "tsx scripts/mock-agentic-loop.ts",
+		"slow-reconnect": "tsx src/actors/testing/bench-slow-reconnect.ts",
+		"counter-latency": "cargo run --quiet --release --manifest-path scripts/counter-latency/Cargo.toml --",
 		"benchmark": "tsx scripts/benchmark.ts",
 		"db:generate": "find src/actors -name drizzle.config.ts -exec drizzle-kit generate --config {} \\;"
 	},

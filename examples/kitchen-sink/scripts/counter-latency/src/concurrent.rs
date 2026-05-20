@@ -1705,4 +1705,7 @@ pub fn print_concurrent_summary(ctx: &Arc<WorkloadCtx>, reason: &str) {
 		ctx.state.stats.agent2_query_errors.load(Ordering::Relaxed),
 		ctx.state.stats.agent2_slow_queries.load(Ordering::Relaxed),
 	);
+	if let Some(path) = crate::tee::log_file_path() {
+		crate::out!("counter-latency log: {}", path);
+	}
 }
