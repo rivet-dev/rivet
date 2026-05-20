@@ -40,6 +40,18 @@ describe("Registry.layer", () => {
 	});
 });
 
+describe("Registry.serve", () => {
+	test("accepts an actor registration layer", () => {
+		expectTypeOf(Registry.serve).toBeCallableWith(TestActorLive);
+	});
+
+	test("returns a server layer that requires Registry", () => {
+		expectTypeOf(Registry.serve(TestActorLive)).toEqualTypeOf<
+			Layer.Layer<never, never, Registry.Registry>
+		>();
+	});
+});
+
 describe("Registry.toWebHandler", () => {
 	test("accepts a registry layer", () => {
 		expectTypeOf(Registry.toWebHandler).toBeCallableWith(RegistryLive);

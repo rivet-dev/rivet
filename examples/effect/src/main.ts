@@ -18,8 +18,7 @@ const ActorsLayer = Layer.mergeAll(
 // point at a remote engine). For dev builds without a packaged engine,
 // set RIVET_ENGINE_BINARY to the path of a `cargo build` binary, e.g.:
 //   RIVET_ENGINE_BINARY=$(pwd)/target/debug/rivet-engine pnpm start
-const MainLayer = Registry.serve.pipe(
-	Layer.provide(ActorsLayer),
+const MainLayer = Registry.serve(ActorsLayer).pipe(
 	Layer.provide(Registry.layer()),
 )
 

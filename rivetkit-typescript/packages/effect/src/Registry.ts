@@ -56,17 +56,23 @@ const setupRivetkitRegistry = (
 	});
 
 /**
- * Run the registered actors against the configured engine. Reads
- * the collected entries, materializes the underlying rivetkit
- * registry, and starts it.
+ * Runs an actor registration layer against the configured engine.
+ *
+ * The actor layer is built in the server layer scope. Registered Rivet Actors
+ * are collected from `Registry`, materialized into a single underlying RivetKit
+ * registry, and started.
  */
-export const serve: Layer.Layer<never, never, Registry> = Layer.effectDiscard(
-	Effect.gen(function* () {
-		const registry = yield* Registry;
-		const rivetkitRegistry = setupRivetkitRegistry(registry);
-		yield* Effect.sync(() => rivetkitRegistry.start());
-	}),
-);
+export const serve = <E, R>(
+	actorsLayer: Layer.Layer<never, E, R>,
+): Layer.Layer<never, E, R | Registry> =>
+	Layer.effectDiscard(
+		Effect.gen(function* () {
+			yield* Layer.build(actorsLayer);
+			const registry = yield* Registry;
+			const rivetkitRegistry = setupRivetkitRegistry(registry);
+			yield* Effect.sync(() => rivetkitRegistry.start());
+		}),
+	);
 
 /**
  * In-process test runtime. Boots the rivetkit registry against the
