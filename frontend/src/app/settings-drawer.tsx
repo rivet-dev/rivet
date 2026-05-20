@@ -208,7 +208,7 @@ export function SettingsDrawer({
 								))}
 							</nav>
 						</aside>
-						<div className="flex-1 min-w-0 overflow-y-auto">
+						<div className="flex-1 min-w-0 overflow-y-auto [scrollbar-gutter:stable]">
 							<TabFrame
 								title={titleNode}
 								description={meta.description}
@@ -373,9 +373,9 @@ function SettingsTabBody() {
 function NamespaceSettingsSkeleton() {
 	return (
 		<div className="space-y-4">
-			<div className="h-24 rounded-xl border border-foreground/10 bg-card/50" />
-			<div className="h-40 rounded-xl border border-foreground/10 bg-card/50" />
-			<div className="h-40 rounded-xl border border-foreground/10 bg-card/50" />
+			<div className="h-24 rounded-lg border border-foreground/10 bg-card/50" />
+			<div className="h-40 rounded-lg border border-foreground/10 bg-card/50" />
+			<div className="h-40 rounded-lg border border-foreground/10 bg-card/50" />
 		</div>
 	);
 }

@@ -2,6 +2,7 @@ import { faGoogle, Icon } from "@rivet-gg/icons";
 import type { ReactNode } from "react";
 import { Avatar, AvatarFallback, AvatarImage, cn } from "@/components";
 import { authClient } from "@/lib/auth";
+import { SettingsCard } from "./settings-card";
 
 /**
  * Account / Profile tab.
@@ -19,32 +20,6 @@ export function ProfilePage() {
 	);
 }
 
-function Card({
-	title,
-	description,
-	children,
-}: {
-	title: string;
-	description?: string;
-	children: ReactNode;
-}) {
-	return (
-		<div className="rounded-lg border border-foreground/10 bg-card overflow-hidden">
-			<div className="px-6 pt-5 pb-4">
-				<h3 className="text-sm font-semibold text-foreground">
-					{title}
-				</h3>
-				{description ? (
-					<p className="mt-0.5 text-xs text-muted-foreground">
-						{description}
-					</p>
-				) : null}
-			</div>
-			<div className="border-t border-foreground/10">{children}</div>
-		</div>
-	);
-}
-
 function Field({
 	label,
 	children,
@@ -57,7 +32,7 @@ function Field({
 	return (
 		<div
 			className={cn(
-				"grid grid-cols-[160px_1fr] items-center gap-4 px-6 py-3.5 text-sm",
+				"grid grid-cols-[160px_1fr] items-center gap-4 px-5 py-3.5 text-sm",
 				!last && "border-b border-foreground/10",
 			)}
 		>
@@ -82,7 +57,8 @@ function ProfileSection() {
 		.toUpperCase();
 
 	return (
-		<Card
+		<SettingsCard
+			divided
 			title="Profile details"
 			description="Your personal information and connected identities."
 		>
@@ -117,6 +93,6 @@ function ProfileSection() {
 					</span>
 				</div>
 			</Field>
-		</Card>
+		</SettingsCard>
 	);
 }
