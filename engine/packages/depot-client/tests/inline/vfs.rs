@@ -4879,64 +4879,82 @@ fn warm_pidx_stale_read_then_rmw_commit_produces_malformed_db() {
 	// internal pages, indexes, and intermediate result sets. The literal runtime
 	// "database disk image is malformed" string typically surfaces during page
 	// reads through these paths rather than via PRAGMA integrity_check.
+	//
+	// Ordering matters: passive scans must run BEFORE any REINDEX. REINDEX rebuilds
+	// the index from a fresh table scan and writes a new root page, which would mask
+	// the malformation for any probe running afterwards. Probes that walk the stale
+	// index (page 165) are sequenced first.
+	let select_indexed_by_grouped = sqlite_query_i64(
+		db_c.as_ptr(),
+		"SELECT COUNT(*) FROM (SELECT payload, COUNT(*) FROM t1 INDEXED BY idx_t1_payload_stale WHERE payload BETWEEN 'payload-00000' AND 'payload-99999' GROUP BY payload);",
+	);
+	let select_indexed_by_count_star = sqlite_query_i64(
+		db_c.as_ptr(),
+		"SELECT COUNT(*) FROM t1 INDEXED BY idx_t1_payload_stale WHERE payload BETWEEN 'payload-00000' AND 'payload-99999';",
+	);
+	let select_distinct_via_index = sqlite_query_i64(
+		db_c.as_ptr(),
+		"SELECT COUNT(*) FROM (SELECT DISTINCT payload FROM t1 INDEXED BY idx_t1_payload_stale WHERE payload >= 'payload-');",
+	);
+	let update_through_index = sqlite_exec(
+		db_c.as_ptr(),
+		"UPDATE t1 SET payload = payload || '-tag' WHERE payload BETWEEN 'payload-00000' AND 'payload-99999';",
+	);
+	let delete_through_index = sqlite_exec(
+		db_c.as_ptr(),
+		"DELETE FROM t1 WHERE payload IN (SELECT payload FROM t1 INDEXED BY idx_t1_payload_stale WHERE payload BETWEEN 'payload-00500' AND 'payload-00600');",
+	);
+	let analyze_stale = sqlite_exec(db_c.as_ptr(), "ANALYZE idx_t1_payload_stale;");
 	let reindex_stale = sqlite_exec(db_c.as_ptr(), "REINDEX idx_t1_payload_stale;");
-	let reindex_payload = sqlite_exec(db_c.as_ptr(), "REINDEX idx_t1_payload;");
-	let order_by_payload = sqlite_query_i64(
-		db_c.as_ptr(),
-		"SELECT id FROM t1 ORDER BY payload LIMIT 5000;",
-	);
-	let count_distinct_payload =
-		sqlite_query_i64(db_c.as_ptr(), "SELECT COUNT(DISTINCT payload) FROM t1;");
-	let payload_like = sqlite_query_text(
-		db_c.as_ptr(),
-		"SELECT payload FROM t1 WHERE payload LIKE 'payload-%' ORDER BY payload LIMIT 1;",
-	);
-	let payload_subquery = sqlite_query_text(
-		db_c.as_ptr(),
-		"SELECT payload FROM t1 WHERE id IN (SELECT id FROM t1 WHERE payload > 'payload-01000') LIMIT 1;",
-	);
 
-	let runtime_probes: [(&str, Result<String, String>); 6] = [
+	let runtime_probes: [(&str, Result<String, String>); 7] = [
 		(
-			"REINDEX idx_t1_payload_stale",
+			"select_indexed_by_grouped",
+			select_indexed_by_grouped
+				.as_ref()
+				.map(|v| v.to_string())
+				.map_err(|e| e.clone()),
+		),
+		(
+			"select_indexed_by_count_star",
+			select_indexed_by_count_star
+				.as_ref()
+				.map(|v| v.to_string())
+				.map_err(|e| e.clone()),
+		),
+		(
+			"select_distinct_via_index",
+			select_distinct_via_index
+				.as_ref()
+				.map(|v| v.to_string())
+				.map_err(|e| e.clone()),
+		),
+		(
+			"update_through_index",
+			update_through_index
+				.as_ref()
+				.map(|_| String::new())
+				.map_err(|e| e.clone()),
+		),
+		(
+			"delete_through_index",
+			delete_through_index
+				.as_ref()
+				.map(|_| String::new())
+				.map_err(|e| e.clone()),
+		),
+		(
+			"analyze",
+			analyze_stale
+				.as_ref()
+				.map(|_| String::new())
+				.map_err(|e| e.clone()),
+		),
+		(
+			"reindex_stale",
 			reindex_stale
 				.as_ref()
 				.map(|_| String::new())
-				.map_err(|e| e.clone()),
-		),
-		(
-			"REINDEX idx_t1_payload",
-			reindex_payload
-				.as_ref()
-				.map(|_| String::new())
-				.map_err(|e| e.clone()),
-		),
-		(
-			"SELECT id FROM t1 ORDER BY payload LIMIT 5000",
-			order_by_payload
-				.as_ref()
-				.map(|v| v.to_string())
-				.map_err(|e| e.clone()),
-		),
-		(
-			"SELECT COUNT(DISTINCT payload) FROM t1",
-			count_distinct_payload
-				.as_ref()
-				.map(|v| v.to_string())
-				.map_err(|e| e.clone()),
-		),
-		(
-			"SELECT payload FROM t1 WHERE payload LIKE 'payload-%' ORDER BY payload LIMIT 1",
-			payload_like
-				.as_ref()
-				.map(|v| v.clone())
-				.map_err(|e| e.clone()),
-		),
-		(
-			"SELECT payload FROM t1 WHERE id IN (SELECT id FROM t1 WHERE payload > 'payload-01000') LIMIT 1",
-			payload_subquery
-				.as_ref()
-				.map(|v| v.clone())
 				.map_err(|e| e.clone()),
 		),
 	];
@@ -4952,17 +4970,56 @@ fn warm_pidx_stale_read_then_rmw_commit_produces_malformed_db() {
 		}
 	}
 
+	// Escalation: if none of the structured probes surfaced the literal substring,
+	// try a writable_schema toggle plus direct keyed lookups at probable leaf
+	// boundary payloads to force reads of cells 0 / 15 on page 165.
+	let mut escalation_probes: Vec<(String, Result<String, String>)> = Vec::new();
+	if runtime_corrupt_observed.is_none() {
+		let pragma_writable_schema_on =
+			sqlite_exec(db_c.as_ptr(), "PRAGMA writable_schema = ON;");
+		escalation_probes.push((
+			"pragma_writable_schema_on".to_string(),
+			pragma_writable_schema_on
+				.as_ref()
+				.map(|_| String::new())
+				.map_err(|e| e.clone()),
+		));
+		for boundary_id in [125u32, 126, 127, 250, 251, 252, 375, 376, 377] {
+			let q = format!(
+				"SELECT id FROM t1 INDEXED BY idx_t1_payload_stale WHERE payload = printf('payload-%05d-%s', {boundary_id}, hex(zeroblob(64)));"
+			);
+			let result = sqlite_query_i64(db_c.as_ptr(), &q);
+			escalation_probes.push((
+				format!("direct_page165_boundary_{boundary_id}"),
+				result
+					.as_ref()
+					.map(|v| v.to_string())
+					.map_err(|e| e.clone()),
+			));
+		}
+		for (label, result) in &escalation_probes {
+			if let Err(message) = result {
+				if message.contains("database disk image is malformed")
+					&& runtime_corrupt_observed.is_none()
+				{
+					runtime_corrupt_observed = Some(format!("{label}: {message}"));
+				}
+			}
+		}
+	}
+
 	tracing::warn!(
 		?integrity,
 		?quick_check,
 		?schema_after_reopen,
 		?row_count,
+		?select_indexed_by_grouped,
+		?select_indexed_by_count_star,
+		?select_distinct_via_index,
+		?update_through_index,
+		?delete_through_index,
+		?analyze_stale,
 		?reindex_stale,
-		?reindex_payload,
-		?order_by_payload,
-		?count_distinct_payload,
-		?payload_like,
-		?payload_subquery,
 		?runtime_corrupt_observed,
 		stale_commit_observed,
 		"warm pidx repro: final reopen state"
@@ -4970,12 +5027,21 @@ fn warm_pidx_stale_read_then_rmw_commit_produces_malformed_db() {
 	eprintln!(
 		"warm-pidx-repro: integrity={integrity:?} quick_check={quick_check:?} \
 		 schema_after_reopen={schema_after_reopen:?} row_count={row_count:?} \
-		 reindex_stale={reindex_stale:?} reindex_payload={reindex_payload:?} \
-		 order_by_payload={order_by_payload:?} count_distinct_payload={count_distinct_payload:?} \
-		 payload_like={payload_like:?} payload_subquery={payload_subquery:?} \
+		 select_indexed_by_grouped={select_indexed_by_grouped:?} \
+		 select_indexed_by_count_star={select_indexed_by_count_star:?} \
+		 select_distinct_via_index={select_distinct_via_index:?} \
+		 update_through_index={update_through_index:?} \
+		 delete_through_index={delete_through_index:?} \
+		 analyze_stale={analyze_stale:?} reindex_stale={reindex_stale:?} \
 		 runtime_corrupt_observed={runtime_corrupt_observed:?} \
 		 stale_commit_observed={stale_commit_observed}"
 	);
+	for (label, result) in &runtime_probes {
+		eprintln!("warm-pidx-repro: probe[{label}] = {result:?}");
+	}
+	for (label, result) in &escalation_probes {
+		eprintln!("warm-pidx-repro: escalation[{label}] = {result:?}");
+	}
 
 	// Primary assertion: detect any malformed-DB signature.
 	//
@@ -5059,6 +5125,508 @@ fn warm_pidx_stale_read_then_rmw_commit_produces_malformed_db() {
 	// in integrity_check or schema queries after the fresh reopen above.
 	tracing::info!(
 		"warm pidx repro: no malformed DB observed on this run; see eprintln for details"
+	);
+}
+
+#[test]
+fn warm_pidx_stale_read_then_rmw_commit_natural_repro() {
+	// Sibling of `warm_pidx_stale_read_then_rmw_commit_produces_malformed_db` that
+	// removes the artificial Step 1c warm-up call (`db_shared.get_pages_with_options`).
+	// Production code never calls `get_pages_with_options` directly; the warm PIDX cache
+	// is supposed to be populated naturally by commits flowing through `db_shared`
+	// (see `apply.rs` `pidx.insert(pgno, result.txid)` for each dirty pgno on commit).
+	// This test checks whether the warm-cache hazard reproduces under those natural
+	// conditions, i.e. with cache entries only from commit-side population.
+	use depot::conveyer::Db;
+	use depot::types::{CommitOptions, DirtyPage};
+	use rivet_pools::__rivet_util::Id;
+	use rivet_pools::NodeId;
+
+	struct PinnedDbTransport {
+		db: Arc<Db>,
+		actor_id: String,
+	}
+
+	#[async_trait]
+	impl SqliteTransport for PinnedDbTransport {
+		async fn get_pages(
+			&self,
+			request: protocol::SqliteGetPagesRequest,
+		) -> anyhow::Result<protocol::SqliteGetPagesResponse> {
+			assert_eq!(request.actor_id, self.actor_id, "pinned transport actor id");
+			match self
+				.db
+				.get_pages_with_options(
+					request.pgnos.clone(),
+					depot::types::GetPagesOptions {
+						expected_head_txid: request.expected_head_txid,
+						..Default::default()
+					},
+				)
+				.await
+			{
+				Ok(result) => Ok(protocol::SqliteGetPagesResponse::SqliteGetPagesOk(
+					protocol::SqliteGetPagesOk {
+						pages: result
+							.pages
+							.into_iter()
+							.map(|page| protocol::SqliteFetchedPage {
+								pgno: page.pgno,
+								bytes: page.bytes,
+							})
+							.collect(),
+						head_txid: Some(result.head_txid),
+					},
+				)),
+				Err(err) => Ok(protocol::SqliteGetPagesResponse::SqliteErrorResponse(
+					sqlite_error_response(&err),
+				)),
+			}
+		}
+
+		async fn commit(
+			&self,
+			request: protocol::SqliteCommitRequest,
+		) -> anyhow::Result<protocol::SqliteCommitResponse> {
+			assert_eq!(request.actor_id, self.actor_id, "pinned transport actor id");
+			let dirty_pages = request
+				.dirty_pages
+				.into_iter()
+				.map(|page| DirtyPage {
+					pgno: page.pgno,
+					bytes: page.bytes,
+				})
+				.collect::<Vec<_>>();
+			match self
+				.db
+				.commit_with_options(
+					dirty_pages,
+					request.db_size_pages,
+					request.now_ms,
+					CommitOptions {
+						expected_head_txid: request.expected_head_txid,
+					},
+				)
+				.await
+			{
+				Ok(result) => Ok(protocol::SqliteCommitResponse::SqliteCommitOk(
+					protocol::SqliteCommitOk {
+						head_txid: Some(result.head_txid),
+					},
+				)),
+				Err(err) => Ok(protocol::SqliteCommitResponse::SqliteErrorResponse(
+					sqlite_error_response(&err),
+				)),
+			}
+		}
+	}
+
+	let runtime = direct_runtime();
+	let harness = DirectEngineHarness::new();
+	let engine = runtime.block_on(harness.open_engine());
+	let udb = engine.depot_database();
+
+	let db_shared = Arc::new(Db::new(
+		udb.clone(),
+		Id::nil(),
+		harness.actor_id.clone(),
+		NodeId::new(),
+	));
+	let db_writer = Arc::new(Db::new(
+		udb.clone(),
+		Id::nil(),
+		harness.actor_id.clone(),
+		NodeId::new(),
+	));
+
+	let config = VfsConfig {
+		page_cache_mode: SqliteVfsPageCacheMode::All,
+		..VfsConfig::default()
+	};
+
+	// Step 1: handle A builds a real schema with enough rows to span btree internal pages.
+	// A's commits flow through `db_shared`, populating its warm PIDX cache naturally via
+	// the commit-side `pidx.insert(pgno, result.txid)` path.
+	let transport_a: Arc<dyn SqliteTransport + Send + Sync> = Arc::new(PinnedDbTransport {
+		db: db_shared.clone(),
+		actor_id: harness.actor_id.clone(),
+	});
+	let db_a = harness.open_db_with_transport(
+		&runtime,
+		transport_a.clone(),
+		&harness.actor_id,
+		config.clone(),
+	);
+	sqlite_exec(
+		db_a.as_ptr(),
+		"CREATE TABLE t1 (id INTEGER PRIMARY KEY, payload TEXT NOT NULL);",
+	)
+	.expect("create table should succeed");
+	sqlite_exec(db_a.as_ptr(), "CREATE INDEX idx_t1_payload ON t1(payload);")
+		.expect("create initial index should succeed");
+	sqlite_exec(db_a.as_ptr(), "BEGIN;").expect("begin should succeed");
+	for id in 1..=2000 {
+		sqlite_exec(
+			db_a.as_ptr(),
+			&format!(
+				"INSERT INTO t1 (id, payload) VALUES ({id}, printf('payload-%05d-%s', {id}, hex(zeroblob(64))));"
+			),
+		)
+		.expect("insert should succeed");
+	}
+	sqlite_exec(db_a.as_ptr(), "COMMIT;").expect("commit should succeed");
+
+	let page_count_after_a = sqlite_query_i64(db_a.as_ptr(), "PRAGMA page_count;")
+		.expect("page_count should be readable");
+	assert!(
+		page_count_after_a >= 32,
+		"setup should produce enough pages to span btree internals, got {page_count_after_a}"
+	);
+	let _row_count = sqlite_query_i64(db_a.as_ptr(), "SELECT COUNT(*) FROM t1;")
+		.expect("count should succeed");
+	let _sample = sqlite_query_i64(db_a.as_ptr(), "SELECT id FROM t1 WHERE id = 1;")
+		.expect("indexed lookup should succeed");
+
+	let schema_after_a = sqlite_query_text(
+		db_a.as_ptr(),
+		"SELECT group_concat(name, ',') FROM sqlite_master ORDER BY name;",
+	)
+	.expect("schema query should succeed");
+	assert!(
+		schema_after_a.contains("idx_t1_payload"),
+		"baseline schema should include the seed index: {schema_after_a}"
+	);
+	drop(db_a);
+
+	// NOTE: Step 1c removed. No explicit `db_shared.get_pages_with_options(...)` call.
+	// We rely entirely on commit-side `pidx.insert(...)` from handle A's commits to
+	// populate `db_shared.cache_snapshot.pidx`.
+
+	// Step 2: an independent `Db` instance commits schema mutations on the same actor.
+	let transport_writer: Arc<dyn SqliteTransport + Send + Sync> = Arc::new(PinnedDbTransport {
+		db: db_writer.clone(),
+		actor_id: harness.actor_id.clone(),
+	});
+	let db_writer_handle = harness.open_db_with_transport(
+		&runtime,
+		transport_writer.clone(),
+		&harness.actor_id,
+		config.clone(),
+	);
+	sqlite_exec(
+		db_writer_handle.as_ptr(),
+		"CREATE INDEX idx_t1_payload2 ON t1(payload, id);",
+	)
+	.expect("writer CREATE INDEX should commit");
+	sqlite_exec(db_writer_handle.as_ptr(), "BEGIN;").expect("begin should succeed");
+	for id in 1..=200 {
+		sqlite_exec(
+			db_writer_handle.as_ptr(),
+			&format!("UPDATE t1 SET payload = 'writer-rewrite-{id}' WHERE id = {id};"),
+		)
+		.expect("writer update should succeed");
+	}
+	sqlite_exec(db_writer_handle.as_ptr(), "COMMIT;")
+		.expect("writer commit should succeed");
+	let writer_head = runtime
+		.block_on(
+			db_writer.get_pages_with_options(vec![1], depot::types::GetPagesOptions::default()),
+		)
+		.expect("writer head fetch should succeed")
+		.head_txid;
+	drop(db_writer_handle);
+
+	// Diagnostic: inspect the shared `Db` warm PIDX cache. Without the explicit warm-up
+	// call, this shows whether commits alone populate the cache for the test's workload.
+	let shared_cache_pidx = runtime
+		.block_on(db_shared.branch_cache_snapshot_for_test())
+		.map(|(_, _, _, pidx)| pidx)
+		.unwrap_or_default();
+	let writer_cache_pidx = runtime
+		.block_on(db_writer.branch_cache_snapshot_for_test())
+		.map(|(_, _, _, pidx)| pidx)
+		.unwrap_or_default();
+	let shared_pg1 = shared_cache_pidx
+		.iter()
+		.find(|(pgno, _)| *pgno == 1)
+		.copied();
+	let writer_pg1 = writer_cache_pidx
+		.iter()
+		.find(|(pgno, _)| *pgno == 1)
+		.copied();
+	let shared_pgnos: Vec<u32> = shared_cache_pidx.iter().map(|(p, _)| *p).collect();
+	eprintln!(
+		"warm-pidx-natural-repro: db_shared cache rows = {} (pgno 1 owner = {:?}), db_writer cache rows = {} (pgno 1 owner = {:?}), db_shared pgnos = {:?}",
+		shared_cache_pidx.len(),
+		shared_pg1,
+		writer_cache_pidx.len(),
+		writer_pg1,
+		shared_pgnos,
+	);
+
+	// Step 3: open a fresh handle B through `db_shared`.
+	let db_b = harness.open_db_with_transport(
+		&runtime,
+		transport_a.clone(),
+		&harness.actor_id,
+		config.clone(),
+	);
+	let schema_seen_by_b = sqlite_query_text(
+		db_b.as_ptr(),
+		"SELECT group_concat(name, ',') FROM sqlite_master ORDER BY name;",
+	)
+	.expect("schema query through B should succeed");
+	tracing::info!(
+		schema_after_a = %schema_after_a,
+		schema_seen_by_b = %schema_seen_by_b,
+		writer_head = ?writer_head,
+		"warm pidx natural repro: schema visibility through stale Db"
+	);
+
+	// Step 4: RMW on pgno 1 from the (possibly stale) view.
+	let stale_create = sqlite_exec(
+		db_b.as_ptr(),
+		"CREATE INDEX idx_t1_payload_stale ON t1(payload, id, id);",
+	);
+	let mut stale_commit_observed = stale_create.is_ok();
+	if let Err(message) = &stale_create {
+		tracing::info!(?message, "stale RMW create index failed");
+	}
+	let stale_delete = sqlite_exec(db_b.as_ptr(), "DELETE FROM t1 WHERE id <= 50;");
+	if stale_delete.is_ok() {
+		stale_commit_observed = true;
+	}
+
+	drop(db_b);
+	drop(db_shared);
+	drop(db_writer);
+	runtime.block_on(engine.evict_actor_db(&harness.actor_id));
+
+	// Step 5: fresh reopen with no warm cache. Run integrity check + schema scan + the
+	// post-reopen probes that surface `database disk image is malformed` at runtime.
+	let db_c = harness.open_db_on_engine(&runtime, engine, &harness.actor_id, config);
+	let integrity = sqlite_query_text(db_c.as_ptr(), "PRAGMA integrity_check;");
+	let quick_check = sqlite_query_text(db_c.as_ptr(), "PRAGMA quick_check;");
+	let schema_after_reopen = sqlite_query_text(
+		db_c.as_ptr(),
+		"SELECT group_concat(name, ',') FROM sqlite_master ORDER BY name;",
+	);
+	let row_count = sqlite_query_i64(db_c.as_ptr(), "SELECT COUNT(*) FROM t1;");
+
+	// Ordering matters: passive scans before REINDEX (which would mask malformation).
+	let select_indexed_by_grouped = sqlite_query_i64(
+		db_c.as_ptr(),
+		"SELECT COUNT(*) FROM (SELECT payload, COUNT(*) FROM t1 INDEXED BY idx_t1_payload_stale WHERE payload BETWEEN 'payload-00000' AND 'payload-99999' GROUP BY payload);",
+	);
+	let select_indexed_by_count_star = sqlite_query_i64(
+		db_c.as_ptr(),
+		"SELECT COUNT(*) FROM t1 INDEXED BY idx_t1_payload_stale WHERE payload BETWEEN 'payload-00000' AND 'payload-99999';",
+	);
+	let select_distinct_via_index = sqlite_query_i64(
+		db_c.as_ptr(),
+		"SELECT COUNT(*) FROM (SELECT DISTINCT payload FROM t1 INDEXED BY idx_t1_payload_stale WHERE payload >= 'payload-');",
+	);
+	let update_through_index = sqlite_exec(
+		db_c.as_ptr(),
+		"UPDATE t1 SET payload = payload || '-tag' WHERE payload BETWEEN 'payload-00000' AND 'payload-99999';",
+	);
+	let delete_through_index = sqlite_exec(
+		db_c.as_ptr(),
+		"DELETE FROM t1 WHERE payload IN (SELECT payload FROM t1 INDEXED BY idx_t1_payload_stale WHERE payload BETWEEN 'payload-00500' AND 'payload-00600');",
+	);
+	let analyze_stale = sqlite_exec(db_c.as_ptr(), "ANALYZE idx_t1_payload_stale;");
+	let reindex_stale = sqlite_exec(db_c.as_ptr(), "REINDEX idx_t1_payload_stale;");
+
+	let runtime_probes: [(&str, Result<String, String>); 7] = [
+		(
+			"select_indexed_by_grouped",
+			select_indexed_by_grouped
+				.as_ref()
+				.map(|v| v.to_string())
+				.map_err(|e| e.clone()),
+		),
+		(
+			"select_indexed_by_count_star",
+			select_indexed_by_count_star
+				.as_ref()
+				.map(|v| v.to_string())
+				.map_err(|e| e.clone()),
+		),
+		(
+			"select_distinct_via_index",
+			select_distinct_via_index
+				.as_ref()
+				.map(|v| v.to_string())
+				.map_err(|e| e.clone()),
+		),
+		(
+			"update_through_index",
+			update_through_index
+				.as_ref()
+				.map(|_| String::new())
+				.map_err(|e| e.clone()),
+		),
+		(
+			"delete_through_index",
+			delete_through_index
+				.as_ref()
+				.map(|_| String::new())
+				.map_err(|e| e.clone()),
+		),
+		(
+			"analyze",
+			analyze_stale
+				.as_ref()
+				.map(|_| String::new())
+				.map_err(|e| e.clone()),
+		),
+		(
+			"reindex_stale",
+			reindex_stale
+				.as_ref()
+				.map(|_| String::new())
+				.map_err(|e| e.clone()),
+		),
+	];
+
+	let mut runtime_corrupt_observed: Option<String> = None;
+	for (label, result) in &runtime_probes {
+		if let Err(message) = result {
+			if message.contains("database disk image is malformed")
+				&& runtime_corrupt_observed.is_none()
+			{
+				runtime_corrupt_observed = Some(format!("{label}: {message}"));
+			}
+		}
+	}
+
+	let mut escalation_probes: Vec<(String, Result<String, String>)> = Vec::new();
+	if runtime_corrupt_observed.is_none() {
+		let pragma_writable_schema_on =
+			sqlite_exec(db_c.as_ptr(), "PRAGMA writable_schema = ON;");
+		escalation_probes.push((
+			"pragma_writable_schema_on".to_string(),
+			pragma_writable_schema_on
+				.as_ref()
+				.map(|_| String::new())
+				.map_err(|e| e.clone()),
+		));
+		for boundary_id in [125u32, 126, 127, 250, 251, 252, 375, 376, 377] {
+			let q = format!(
+				"SELECT id FROM t1 INDEXED BY idx_t1_payload_stale WHERE payload = printf('payload-%05d-%s', {boundary_id}, hex(zeroblob(64)));"
+			);
+			let result = sqlite_query_i64(db_c.as_ptr(), &q);
+			escalation_probes.push((
+				format!("direct_page165_boundary_{boundary_id}"),
+				result
+					.as_ref()
+					.map(|v| v.to_string())
+					.map_err(|e| e.clone()),
+			));
+		}
+		for (label, result) in &escalation_probes {
+			if let Err(message) = result {
+				if message.contains("database disk image is malformed")
+					&& runtime_corrupt_observed.is_none()
+				{
+					runtime_corrupt_observed = Some(format!("{label}: {message}"));
+				}
+			}
+		}
+	}
+
+	tracing::warn!(
+		?integrity,
+		?quick_check,
+		?schema_after_reopen,
+		?row_count,
+		?select_indexed_by_grouped,
+		?select_indexed_by_count_star,
+		?select_distinct_via_index,
+		?update_through_index,
+		?delete_through_index,
+		?analyze_stale,
+		?reindex_stale,
+		?runtime_corrupt_observed,
+		stale_commit_observed,
+		"warm pidx natural repro: final reopen state"
+	);
+	eprintln!(
+		"warm-pidx-natural-repro: integrity={integrity:?} quick_check={quick_check:?} \
+		 schema_after_reopen={schema_after_reopen:?} row_count={row_count:?} \
+		 select_indexed_by_grouped={select_indexed_by_grouped:?} \
+		 select_indexed_by_count_star={select_indexed_by_count_star:?} \
+		 select_distinct_via_index={select_distinct_via_index:?} \
+		 update_through_index={update_through_index:?} \
+		 delete_through_index={delete_through_index:?} \
+		 analyze_stale={analyze_stale:?} reindex_stale={reindex_stale:?} \
+		 runtime_corrupt_observed={runtime_corrupt_observed:?} \
+		 stale_commit_observed={stale_commit_observed}"
+	);
+	for (label, result) in &runtime_probes {
+		eprintln!("warm-pidx-natural-repro: probe[{label}] = {result:?}");
+	}
+	for (label, result) in &escalation_probes {
+		eprintln!("warm-pidx-natural-repro: escalation[{label}] = {result:?}");
+	}
+
+	let malformed_keywords = [
+		"malformed",
+		"corrupt",
+		"wrong page type",
+		"reference to page",
+		"out of order",
+		"page is never used",
+		"missing from index",
+		"row count",
+		"unordered",
+	];
+	let is_malformed_text = |text: &str| -> bool {
+		text != "ok"
+			&& (malformed_keywords.iter().any(|k| text.contains(k))
+				|| text.contains("***")
+				|| text.lines().count() > 1)
+	};
+	let mut malformed = false;
+	for probe in [&integrity, &quick_check] {
+		match probe {
+			Ok(text) => {
+				if is_malformed_text(text) {
+					malformed = true;
+				}
+			}
+			Err(message) => {
+				if malformed_keywords.iter().any(|k| message.contains(k)) {
+					malformed = true;
+				}
+			}
+		}
+	}
+	if let Err(message) = &row_count {
+		if malformed_keywords.iter().any(|k| message.contains(k)) {
+			malformed = true;
+		}
+	}
+	if let Err(message) = &schema_after_reopen {
+		if malformed_keywords.iter().any(|k| message.contains(k)) {
+			malformed = true;
+		}
+	}
+	if runtime_corrupt_observed.is_some() {
+		malformed = true;
+	}
+
+	if malformed {
+		panic!(
+			"REPRO (natural): warm-pidx-cache hazard produced a malformed DB after reopen \
+			 WITHOUT explicit cache warm-up. integrity={integrity:?} quick_check={quick_check:?} \
+			 schema_after_reopen={schema_after_reopen:?} row_count={row_count:?} \
+			 runtime_corrupt_observed={runtime_corrupt_observed:?}."
+		);
+	}
+
+	tracing::info!(
+		"warm pidx natural repro: no malformed DB observed on this run; see eprintln for details"
 	);
 }
 
