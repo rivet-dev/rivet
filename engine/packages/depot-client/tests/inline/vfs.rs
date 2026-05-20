@@ -3678,6 +3678,109 @@ fn dead_vfs_rejects_cache_only_reads_before_serving_page_cache() {
 }
 
 #[test]
+fn head_fence_mismatch_on_xread_poisoned_vfs_fails_later_operations_closed() {
+	let runtime = direct_runtime();
+	let harness = DirectEngineHarness::new();
+	let engine = runtime.block_on(harness.open_engine());
+	runtime
+		.block_on(async {
+			engine
+				.actor_db(harness.actor_id.clone())
+				.await
+				.commit(
+					vec![depot::types::DirtyPage {
+						pgno: 2,
+						bytes: vec![0x55; 4096],
+					}],
+					2,
+					sqlite_now_ms().expect("now ms should build"),
+				)
+				.await
+		})
+		.expect("seed commit should advance Depot head");
+
+	let transport = Arc::new(DirectDepotTransport::new(engine));
+	let hooks = transport.direct_hooks();
+	let config = VfsConfig::default();
+	let ctx = VfsContext::new(
+		harness.actor_id.clone(),
+		runtime.handle().clone(),
+		transport,
+		config.clone(),
+		unsafe { std::mem::zeroed() },
+		Vec::new(),
+		None,
+	)
+	.expect("vfs context should build");
+	{
+		let mut state = ctx.state.write();
+		state.db_size_pages = 2;
+		state.head_txid = Some(0);
+		state.cache_page(&config, PageCacheInsertKind::Target, 1, empty_db_page());
+	}
+
+	let mut file = VfsFile {
+		base: unsafe { std::mem::zeroed() },
+		ctx: &ctx,
+		aux: ptr::null_mut(),
+	};
+	let mut buf = vec![0; 4096];
+	let rc = unsafe {
+		io_read(
+			(&mut file as *mut VfsFile).cast::<sqlite3_file>(),
+			buf.as_mut_ptr().cast(),
+			buf.len() as c_int,
+			4096,
+		)
+	};
+	assert_eq!(rc, SQLITE_IOERR_READ);
+	assert!(ctx.is_dead());
+	assert!(
+		ctx.clone_fatal_error()
+			.is_some_and(|message| message.contains("head fence mismatch")),
+		"head fence mismatch should be retained as the fatal reason"
+	);
+	assert_eq!(hooks.get_pages_requests().len(), 1);
+
+	let rc = unsafe {
+		io_read(
+			(&mut file as *mut VfsFile).cast::<sqlite3_file>(),
+			buf.as_mut_ptr().cast(),
+			buf.len() as c_int,
+			0,
+		)
+	};
+	assert_eq!(rc, SQLITE_IOERR_READ);
+	assert_eq!(
+		hooks.get_pages_requests().len(),
+		1,
+		"dead cache-only read should not call Depot again"
+	);
+
+	let source = vec![0x7a; 4096];
+	let rc = unsafe {
+		io_write(
+			(&mut file as *mut VfsFile).cast::<sqlite3_file>(),
+			source.as_ptr().cast(),
+			source.len() as c_int,
+			0,
+		)
+	};
+	assert_eq!(rc, SQLITE_IOERR_WRITE);
+
+	{
+		let mut state = ctx.state.write();
+		state.write_buffer.dirty.insert(1, empty_db_page());
+	}
+	let rc = unsafe { io_sync((&mut file as *mut VfsFile).cast::<sqlite3_file>(), 0) };
+	assert_eq!(rc, SQLITE_IOERR_FSYNC);
+	assert!(
+		hooks.commit_requests().is_empty(),
+		"dead VFS should fail writes and sync before committing"
+	);
+}
+
+#[test]
 fn resolve_pages_sends_known_head_txid_as_read_fence() {
 	let runtime = direct_runtime();
 	let harness = DirectEngineHarness::new();
