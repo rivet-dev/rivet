@@ -1,5 +1,5 @@
 import {
-	faEllipsis,
+	faEllipsisVertical,
 	faGear,
 	faPlus,
 	faUserPlus,
@@ -514,7 +514,7 @@ function MemberRowMenu({
 				onPointerDown={(e) => e.preventDefault()}
 				className="cursor-not-allowed opacity-50 hover:bg-transparent"
 			>
-				<Icon icon={faEllipsis} />
+				<Icon icon={faEllipsisVertical} />
 			</Button>
 		);
 	}
@@ -528,7 +528,7 @@ function MemberRowMenu({
 					aria-label="Member actions"
 					disabled={disabled}
 				>
-					<Icon icon={faEllipsis} />
+					<Icon icon={faEllipsisVertical} />
 				</Button>
 			</DropdownMenuTrigger>
 			<DropdownMenuContent align="end" className="min-w-[10rem]">
