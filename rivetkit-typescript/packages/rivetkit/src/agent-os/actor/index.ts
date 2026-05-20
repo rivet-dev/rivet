@@ -93,27 +93,64 @@ function buildVmOptions(userOptions?: AgentOsOptions): AgentOsOptions {
 	};
 }
 
-// --- Prevent-sleep coordination ---
+// --- Keep-awake coordination ---
+//
+// rivetkit 2.3.0-rc.5+ replaces the boolean `c.setPreventSleep(enabled)`
+// API with the promise-based `c.keepAwake(promise)`. The runtime holds an
+// internal keep-awake counter that's incremented when `keepAwake(promise)`
+// is called and decremented when the promise settles; the actor becomes
+// eligible for idle sleep only when the counter hits zero.
+//
+// agent-os tracks four kinds of activity that must keep the actor awake:
+// active Pi sessions, running processes, in-flight hooks, and open shells.
+// Each of those is bookkept as a `Set` on `c.vars`. To bridge the
+// set-based bookkeeping into the promise-based keepAwake API, we maintain
+// a single barrier promise per actor instance:
+//
+//   - When activity count goes 0 -> >0, we create a new
+//     `Promise.withResolvers<void>()`, stash the resolver on
+//     `c.vars.keepAwakeResolver`, and hand the promise to `c.keepAwake`.
+//     The runtime's keep-awake counter goes from 0 to 1.
+//   - When activity count goes >0 -> 0, we resolve the stashed promise.
+//     The runtime's keep-awake counter goes from 1 to 0; idle sleep
+//     becomes eligible again.
+//
+// The barrier is one logical keep-awake regardless of how many activities
+// pile on, which matches the actor's reality (one VM either alive or
+// not). It also survives sub-counter churn — e.g. a session ending and
+// another starting in the same tick doesn't bounce the runtime counter.
+//
+// The function name `syncPreventSleep` is preserved because layerr docs
+// reference it; only the implementation changed.
 
 function syncPreventSleep<TConnParams>(
 	c: AgentOsActionContext<TConnParams>,
 ): void {
-	const shouldPrevent =
+	const isActive =
 		c.vars.activeSessionIds.size > 0 ||
 		c.vars.activeProcesses.size > 0 ||
 		c.vars.activeHooks.size > 0 ||
 		c.vars.activeShells.size > 0;
 
-	c.setPreventSleep(shouldPrevent);
-
-	c.log.info({
-		msg: "agent-os prevent sleep sync",
-		preventSleep: shouldPrevent,
-		activeSessions: c.vars.activeSessionIds.size,
-		activeProcesses: c.vars.activeProcesses.size,
-		activeHooks: c.vars.activeHooks.size,
-		activeShells: c.vars.activeShells.size,
-	});
+	if (isActive && !c.vars.keepAwakeResolver) {
+		// Transition 0 -> active: open the keep-awake barrier.
+		const { promise, resolve } = Promise.withResolvers<void>();
+		c.vars.keepAwakeResolver = resolve;
+		c.keepAwake(promise);
+		c.log.info({
+			msg: "agent-os keepAwake barrier opened",
+			activeSessions: c.vars.activeSessionIds.size,
+			activeProcesses: c.vars.activeProcesses.size,
+			activeHooks: c.vars.activeHooks.size,
+			activeShells: c.vars.activeShells.size,
+		});
+	} else if (!isActive && c.vars.keepAwakeResolver) {
+		// Transition active -> 0: close the barrier so the runtime
+		// counter decrements and idle sleep becomes eligible again.
+		c.vars.keepAwakeResolver();
+		c.vars.keepAwakeResolver = null;
+		c.log.info({ msg: "agent-os keepAwake barrier closed" });
+	}
 }
 
 // --- Hook tracking ---
@@ -208,6 +245,7 @@ export function agentOs<TConnParams = undefined>(
 			activeHooks: new Set<Promise<void>>(),
 			activeShells: new Set<string>(),
 			sessions: new Set(),
+			keepAwakeResolver: null,
 		}),
 		db: db({
 			onMigrate: migrateAgentOsTables,
@@ -245,6 +283,15 @@ export function agentOs<TConnParams = undefined>(
 				activeShells: c.vars.activeShells.size,
 			});
 
+			// Defensively close any open keep-awake barrier. If activity
+			// is still > 0 here it means a session/process didn't clean
+			// up via the normal path; resolving keeps the runtime counter
+			// from leaking across sleep/wake cycles.
+			if (c.vars.keepAwakeResolver) {
+				c.vars.keepAwakeResolver();
+				c.vars.keepAwakeResolver = null;
+			}
+
 			if (c.vars.agentOs) {
 				await c.vars.agentOs.dispose();
 				c.vars.agentOs = null;
@@ -259,6 +306,11 @@ export function agentOs<TConnParams = undefined>(
 				activeProcesses: c.vars.activeProcesses.size,
 				activeShells: c.vars.activeShells.size,
 			});
+
+			if (c.vars.keepAwakeResolver) {
+				c.vars.keepAwakeResolver();
+				c.vars.keepAwakeResolver = null;
+			}
 
 			if (c.vars.agentOs) {
 				await c.vars.agentOs.dispose();
