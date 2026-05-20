@@ -23,6 +23,17 @@ export interface AgentOsActorVars {
 	activeHooks: Set<Promise<void>>;
 	activeShells: Set<string>;
 	sessions: Set<string>;
+	/**
+	 * Resolver for the in-flight `c.keepAwake(promise)` barrier. Non-null
+	 * whenever there is at least one active session/process/hook/shell —
+	 * resolving this releases the keep-awake counter on the runtime so
+	 * the actor becomes eligible for idle sleep again.
+	 *
+	 * This replaces the deprecated `c.setPreventSleep(boolean)` API
+	 * (which is now a no-op in rivetkit 2.3.0-rc.5+). See
+	 * `syncPreventSleep` in actor/index.ts for the open/close logic.
+	 */
+	keepAwakeResolver: (() => void) | null;
 }
 
 // --- Event payloads ---

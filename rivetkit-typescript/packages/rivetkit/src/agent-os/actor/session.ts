@@ -134,6 +134,26 @@ export function subscribeToSession<TConnParams>(
 	parsedConfig: AgentOsActorConfig<TConnParams>,
 ): void {
 	agentOs.onSessionEvent(sessionId, (event) => {
+		// Always fan the event out, regardless of `c.abortSignal.aborted`.
+		// `c` here is captured from the `createSession` action's context.
+		// In rivetkit 2.3.0, action-context abortSignals can fire
+		// *call-scoped* (after the action returns / when the initiating
+		// WS connection drops) while the ACTOR is still very much alive
+		// and the agent-os Pi session is still streaming thoughts. An
+		// early return here silently dropped every subsequent
+		// `agent_thought_chunk` and (worse) the user's `onSessionEvent`
+		// hook — meaning the DAG kept growing (tool calls succeeded via
+		// direct actor RPCs) but the live thinking transcript never
+		// reached the UI.
+		//
+		// Both downstream paths handle shutdown-time races themselves:
+		// `c.broadcast` is best-effort (subscribers that already dropped
+		// just don't receive it; no error surfaces), and
+		// `persistSessionEvent`'s `.catch` below detects
+		// `isShutdownDbError` and demotes it to debug. So we don't need
+		// a blanket guard here — and adding one violates the
+		// fail-by-default-runtime rule (silent no-op on required
+		// behavior).
 		c.broadcast(
 			"sessionEvent",
 			JSON.parse(JSON.stringify({ sessionId, event })),
