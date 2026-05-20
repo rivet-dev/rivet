@@ -113,6 +113,8 @@ function NoRunnersAlert() {
 }
 
 function Providers() {
+	const navigate = useNavigate();
+	const dataProvider = useEngineCompatDataProvider();
 	const {
 		isLoading,
 		isError,
@@ -120,8 +122,15 @@ function Providers() {
 		hasNextPage,
 		fetchNextPage,
 	} = useInfiniteQuery({
-		...useEngineCompatDataProvider().runnerConfigsQueryOptions(),
+		...dataProvider.runnerConfigsQueryOptions(),
 		refetchInterval: 5000,
+	});
+
+	const { data: totalDatacenterCount } = useInfiniteQuery({
+		...dataProvider.datacentersQueryOptions(),
+		maxPages: Infinity,
+		select: (data) =>
+			data.pages.reduce((acc, page) => acc + page.datacenters?.length, 0),
 	});
 
 	return (
@@ -147,6 +156,34 @@ function Providers() {
 					configs={configs || []}
 					fetchNextPage={fetchNextPage}
 					hasNextPage={hasNextPage}
+					totalDatacenterCount={totalDatacenterCount}
+					renderRegion={(regionId, { abbreviated }) => (
+						<ActorRegion
+							className="w-full items-center flex-1 whitespace-nowrap"
+							regionId={regionId}
+							showLabel={abbreviated ? "abbreviated" : true}
+						/>
+					)}
+					onEditConfig={(name) =>
+						navigate({
+							to: ".",
+							search: (old) => ({
+								...(old as Record<string, unknown>),
+								modal: "edit-provider-config",
+								config: name,
+							}),
+						})
+					}
+					onDeleteConfig={(name) =>
+						navigate({
+							to: ".",
+							search: (old) => ({
+								...(old as Record<string, unknown>),
+								modal: "delete-provider-config",
+								config: name,
+							}),
+						})
+					}
 				/>
 			</div>
 		</SectionCard>

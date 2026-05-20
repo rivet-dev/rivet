@@ -216,9 +216,6 @@ function NamespaceSegmentPopover({
 	currentNamespace: string;
 }) {
 	const [open, setOpen] = useState(false);
-	const [hoveredNamespace, setHoveredNamespace] = useState<string | null>(
-		currentNamespace,
-	);
 	const { data: nsData } = useQuery(
 		useCloudDataProvider().currentOrgProjectNamespaceQueryOptions({
 			project: currentProject,
@@ -228,15 +225,7 @@ function NamespaceSegmentPopover({
 	const label = nsData?.displayName ?? currentNamespace;
 
 	return (
-		<Popover
-			open={open}
-			onOpenChange={(next) => {
-				setOpen(next);
-				if (next) {
-					setHoveredNamespace(currentNamespace);
-				}
-			}}
-		>
+		<Popover open={open} onOpenChange={setOpen}>
 			<PopoverTrigger asChild>
 				<Button
 					variant="ghost"
@@ -251,24 +240,13 @@ function NamespaceSegmentPopover({
 					<span className="truncate">{label}</span>
 				</Button>
 			</PopoverTrigger>
-			<PopoverContent className="p-0 w-fit flex" align="start">
-				<div className="w-56">
-					<NamespaceList
-						organization={organization}
-						project={currentProject}
-						currentNamespace={currentNamespace}
-						onHover={setHoveredNamespace}
-						onClose={() => setOpen(false)}
-					/>
-				</div>
-				{hoveredNamespace ? (
-					<ActorsList
-						organization={organization}
-						project={currentProject}
-						namespace={hoveredNamespace}
-						onClose={() => setOpen(false)}
-					/>
-				) : null}
+			<PopoverContent className="p-0 w-56" align="start">
+				<NamespaceList
+					organization={organization}
+					project={currentProject}
+					currentNamespace={currentNamespace}
+					onClose={() => setOpen(false)}
+				/>
 			</PopoverContent>
 		</Popover>
 	);

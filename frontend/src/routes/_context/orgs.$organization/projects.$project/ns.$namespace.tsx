@@ -5,6 +5,11 @@ import {
 	useNavigate,
 	useSearch,
 } from "@tanstack/react-router";
+import {
+	ConnectProviderSheet,
+	isConnectProviderModal,
+} from "@/app/dialogs/connect-provider-sheet";
+import { EditRunnerConfigSheet } from "@/app/dialogs/edit-runner-config-sheet";
 import { GettingStarted } from "@/app/getting-started";
 import { SidebarlessHeader } from "@/app/layout";
 import { NotFoundCard } from "@/app/not-found-card";
@@ -192,16 +197,6 @@ function CloudNamespaceModals() {
 	const navigate = useNavigate();
 	const search = useSearch({ strict: false });
 	const CreateNamespaceDialog = useDialog.CreateNamespace.Dialog;
-	const ConnectRivetDialog = useDialog.ConnectRivet.Dialog;
-	const ConnectVercelDialog = useDialog.ConnectVercel.Dialog;
-	const ConnectQuickVercelDialog = useDialog.ConnectQuickVercel.Dialog;
-	const ConnectRailwayDialog = useDialog.ConnectRailway.Dialog;
-	const ConnectQuickRailwayDialog = useDialog.ConnectQuickRailway.Dialog;
-	const ConnectManualDialog = useDialog.ConnectManual.Dialog;
-	const ConnectAwsDialog = useDialog.ConnectAws.Dialog;
-	const ConnectGcpDialog = useDialog.ConnectGcp.Dialog;
-	const ConnectHetznerDialog = useDialog.ConnectHetzner.Dialog;
-	const EditProviderConfigDialog = useDialog.EditProviderConfig.Dialog;
 	const DeleteConfigDialog = useDialog.DeleteConfig.Dialog;
 	const DeleteNamespaceDialog = useDialog.DeleteNamespace.Dialog;
 	const DeleteProjectDialog = useDialog.DeleteProject.Dialog;
@@ -262,196 +257,35 @@ function CloudNamespaceModals() {
 					},
 				}}
 			/>
-			<ConnectRivetDialog
-				dialogContentProps={{
-					className: "max-w-xl",
-				}}
-				dialogProps={{
-					open: search?.modal === "connect-rivet",
-					onOpenChange: (value) => {
-						if (!value) {
-							return navigate({
-								to: ".",
-								search: (old) => ({
-									...old,
-									modal: undefined,
-								}),
-							});
-						}
-					},
+			<ConnectProviderSheet
+				modal={search?.modal}
+				open={isConnectProviderModal(search?.modal)}
+				onOpenChange={(value) => {
+					if (!value) {
+						return navigate({
+							to: ".",
+							search: (old) => ({
+								...old,
+								modal: undefined,
+							}),
+						});
+					}
 				}}
 			/>
-			<ConnectVercelDialog
-				dialogContentProps={{
-					className: "max-w-xl",
-				}}
-				dialogProps={{
-					open: search?.modal === "connect-vercel",
-					onOpenChange: (value) => {
-						if (!value) {
-							return navigate({
-								to: ".",
-								search: (old) => ({
-									...old,
-									modal: undefined,
-								}),
-							});
-						}
-					},
-				}}
-			/>
-			<ConnectQuickVercelDialog
-				dialogContentProps={{
-					className: "max-w-xl",
-				}}
-				dialogProps={{
-					open: search?.modal === "connect-q-vercel",
-					onOpenChange: (value) => {
-						if (!value) {
-							return navigate({
-								to: ".",
-								search: (old) => ({
-									...old,
-									modal: undefined,
-								}),
-							});
-						}
-					},
-				}}
-			/>
-			<ConnectQuickRailwayDialog
-				dialogContentProps={{
-					className: "max-w-xl",
-				}}
-				dialogProps={{
-					open: search?.modal === "connect-q-railway",
-					onOpenChange: (value) => {
-						if (!value) {
-							return navigate({
-								to: ".",
-								search: (old) => ({
-									...old,
-									modal: undefined,
-								}),
-							});
-						}
-					},
-				}}
-			/>
-			<ConnectRailwayDialog
-				dialogContentProps={{
-					className: "max-w-xl",
-				}}
-				dialogProps={{
-					open: search?.modal === "connect-railway",
-					onOpenChange: (value) => {
-						if (!value) {
-							return navigate({
-								to: ".",
-								search: (old) => ({
-									...old,
-									modal: undefined,
-								}),
-							});
-						}
-					},
-				}}
-			/>
-			<ConnectManualDialog
-				dialogContentProps={{
-					className: "max-w-xl",
-				}}
-				dialogProps={{
-					open: search?.modal === "connect-custom",
-					onOpenChange: (value) => {
-						if (!value) {
-							return navigate({
-								to: ".",
-								search: (old) => ({
-									...old,
-									modal: undefined,
-								}),
-							});
-						}
-					},
-				}}
-			/>
-			<ConnectAwsDialog
-				dialogContentProps={{
-					className: "max-w-xl",
-				}}
-				dialogProps={{
-					open: search?.modal === "connect-aws",
-					onOpenChange: (value) => {
-						if (!value) {
-							return navigate({
-								to: ".",
-								search: (old) => ({
-									...old,
-									modal: undefined,
-								}),
-							});
-						}
-					},
-				}}
-			/>
-			<ConnectGcpDialog
-				dialogContentProps={{
-					className: "max-w-xl",
-				}}
-				dialogProps={{
-					open: search?.modal === "connect-gcp",
-					onOpenChange: (value) => {
-						if (!value) {
-							return navigate({
-								to: ".",
-								search: (old) => ({
-									...old,
-									modal: undefined,
-								}),
-							});
-						}
-					},
-				}}
-			/>
-			<ConnectHetznerDialog
-				dialogContentProps={{
-					className: "max-w-xl",
-				}}
-				dialogProps={{
-					open: search?.modal === "connect-hetzner",
-					onOpenChange: (value) => {
-						if (!value) {
-							return navigate({
-								to: ".",
-								search: (old) => ({
-									...old,
-									modal: undefined,
-								}),
-							});
-						}
-					},
-				}}
-			/>
-			<EditProviderConfigDialog
-				dialogContentProps={{
-					className: "max-w-xl",
-				}}
+			<EditRunnerConfigSheet
 				name={search?.config}
 				dc={search?.dc}
-				dialogProps={{
-					open: search?.modal === "edit-provider-config",
-					onOpenChange: (value) => {
-						if (!value) {
-							return navigate({
-								to: ".",
-								search: (old) => ({
-									...old,
-									modal: undefined,
-								}),
-							});
-						}
-					},
+				open={search?.modal === "edit-provider-config"}
+				onOpenChange={(value) => {
+					if (!value) {
+						return navigate({
+							to: ".",
+							search: (old) => ({
+								...old,
+								modal: undefined,
+							}),
+						});
+					}
 				}}
 			/>
 			<DeleteConfigDialog

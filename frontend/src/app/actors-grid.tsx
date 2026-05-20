@@ -162,7 +162,7 @@ export function ActorsGrid({
 											to: ".",
 											search: (old) => ({
 												...old,
-												modal: "settings",
+												settings: "settings",
 											}),
 										});
 									}}

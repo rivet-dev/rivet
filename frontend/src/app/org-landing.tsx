@@ -92,7 +92,7 @@ export function OrgLanding({ organization }: { organization: string }) {
 													string,
 													unknown
 												>),
-												modal: "organization",
+												settings: "organization",
 											}),
 										});
 									}}
