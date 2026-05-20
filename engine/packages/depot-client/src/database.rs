@@ -62,9 +62,10 @@ pub async fn open_database_from_transport(
 		inner: transport,
 		generation,
 	});
-	let initial_pages = fetch_initial_pages_for_registration(transport.clone(), &actor_id, &config)
-		.await
-		.map_err(|e| anyhow!("failed to preload sqlite pages: {e}"))?;
+	let initial_pages =
+		fetch_initial_pages_for_registration(transport.clone(), &actor_id, generation, &config)
+			.await
+			.map_err(|e| anyhow!("failed to preload sqlite pages: {e}"))?;
 	let vfs = Arc::new(
 		SqliteVfs::register_with_transport_and_initial_pages(
 			&vfs_name,

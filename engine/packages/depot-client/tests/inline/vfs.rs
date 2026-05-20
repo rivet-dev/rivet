@@ -6,7 +6,8 @@ pub(super) use vfs_support::{
 	storage_dirty_page,
 };
 
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::mem::ManuallyDrop;
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Barrier, mpsc};
 use std::thread;
 use std::time::Duration;
@@ -116,6 +117,79 @@ impl SqliteTransport for RecordingInitialPagesTransport {
 		_request: protocol::SqliteCommitRequest,
 	) -> anyhow::Result<protocol::SqliteCommitResponse> {
 		anyhow::bail!("initial-page preload test does not commit")
+	}
+}
+
+struct CappedAtomicCommitTransport {
+	inner: DirectDepotTransport,
+	max_dirty_bytes: usize,
+	rejected: AtomicBool,
+	max_seen_dirty_bytes: AtomicUsize,
+	max_seen_dirty_pages: AtomicUsize,
+}
+
+impl CappedAtomicCommitTransport {
+	fn new(engine: Arc<DirectStorage>, max_dirty_bytes: usize) -> Self {
+		Self {
+			inner: DirectDepotTransport::new(engine),
+			max_dirty_bytes,
+			rejected: AtomicBool::new(false),
+			max_seen_dirty_bytes: AtomicUsize::new(0),
+			max_seen_dirty_pages: AtomicUsize::new(0),
+		}
+	}
+
+	fn rejected(&self) -> bool {
+		self.rejected.load(Ordering::SeqCst)
+	}
+
+	fn max_seen_dirty_bytes(&self) -> usize {
+		self.max_seen_dirty_bytes.load(Ordering::SeqCst)
+	}
+
+	fn max_seen_dirty_pages(&self) -> usize {
+		self.max_seen_dirty_pages.load(Ordering::SeqCst)
+	}
+}
+
+#[async_trait]
+impl SqliteTransport for CappedAtomicCommitTransport {
+	async fn get_pages(
+		&self,
+		request: protocol::SqliteGetPagesRequest,
+	) -> anyhow::Result<protocol::SqliteGetPagesResponse> {
+		self.inner.get_pages(request).await
+	}
+
+	async fn commit(
+		&self,
+		request: protocol::SqliteCommitRequest,
+	) -> anyhow::Result<protocol::SqliteCommitResponse> {
+		let dirty_bytes = request
+			.dirty_pages
+			.iter()
+			.map(|page| page.bytes.len())
+			.sum::<usize>();
+		self.max_seen_dirty_bytes
+			.fetch_max(dirty_bytes, Ordering::SeqCst);
+		self.max_seen_dirty_pages
+			.fetch_max(request.dirty_pages.len(), Ordering::SeqCst);
+
+		if dirty_bytes > self.max_dirty_bytes {
+			self.rejected.store(true, Ordering::SeqCst);
+			return Ok(protocol::SqliteCommitResponse::SqliteErrorResponse(
+				protocol::SqliteErrorResponse {
+					group: "sqlite".to_string(),
+					code: "transaction_too_large".to_string(),
+					message: format!(
+						"simulated atomic commit cap exceeded: dirty_bytes={dirty_bytes} max_dirty_bytes={}",
+						self.max_dirty_bytes
+					),
+				},
+			));
+		}
+
+		self.inner.commit(request).await
 	}
 }
 
@@ -1096,6 +1170,163 @@ fn direct_engine_handles_large_rows_and_multi_page_growth() {
 		sqlite_query_i64(db.as_ptr(), "SELECT max(length(payload)) FROM blobs;")
 			.expect("max payload length should succeed")
 			>= 9000
+	);
+}
+
+#[test]
+fn batch_atomic_commit_does_not_depend_on_aux_journal_open() {
+	let runtime = direct_runtime();
+	let harness = DirectEngineHarness::new();
+	let db = harness.open_db(&runtime);
+	let ctx = direct_vfs_ctx(&db);
+
+	ctx.fail_next_aux_open("InjectedAuxOpenError: journal open should not be needed");
+	sqlite_exec(
+		db.as_ptr(),
+		"CREATE TABLE batch_atomic_no_journal (id INTEGER PRIMARY KEY, value TEXT NOT NULL);",
+	)
+	.expect("batch atomic create should not need rollback journal open");
+	sqlite_exec(
+		db.as_ptr(),
+		"INSERT INTO batch_atomic_no_journal (id, value) VALUES (1, 'ok');",
+	)
+	.expect("batch atomic insert should not need rollback journal open");
+
+	assert_eq!(
+		sqlite_query_text(db.as_ptr(), "PRAGMA integrity_check;")
+			.expect("integrity_check should succeed"),
+		"ok"
+	);
+}
+
+#[test]
+fn batch_atomic_oversized_commit_fails_closed_and_reopens_clean() {
+	let runtime = direct_runtime();
+	let harness = DirectEngineHarness::new();
+	let engine = runtime.block_on(harness.open_engine());
+	let actor_id = harness.actor_id.clone();
+	let transport = Arc::new(CappedAtomicCommitTransport::new(
+		Arc::clone(&engine),
+		256 * 1024,
+	));
+	let db = harness.open_db_with_transport(
+		&runtime,
+		transport.clone(),
+		&actor_id,
+		VfsConfig::default(),
+	);
+
+	sqlite_exec(
+		db.as_ptr(),
+		"CREATE TABLE atomic_cap (id INTEGER PRIMARY KEY, payload BLOB NOT NULL);",
+	)
+	.expect("create table should succeed");
+	sqlite_exec(
+		db.as_ptr(),
+		"INSERT INTO atomic_cap (id, payload) VALUES (1, zeroblob(1024));",
+	)
+	.expect("seed insert should succeed");
+	assert_eq!(
+		sqlite_query_text(db.as_ptr(), "PRAGMA integrity_check;")
+			.expect("pre-cap integrity_check should succeed"),
+		"ok"
+	);
+
+	sqlite_exec(db.as_ptr(), "BEGIN IMMEDIATE;").expect("large transaction should begin");
+	for id in 2..=130 {
+		sqlite_exec(
+			db.as_ptr(),
+			&format!("INSERT INTO atomic_cap (id, payload) VALUES ({id}, randomblob(4096));"),
+		)
+		.expect("large transaction insert should succeed");
+	}
+	let commit_err =
+		sqlite_exec(db.as_ptr(), "COMMIT;").expect_err("oversized commit should fail");
+	assert!(
+		commit_err.contains("disk I/O error") || commit_err.contains("transaction_too_large"),
+		"unexpected commit error: {commit_err}",
+	);
+	assert!(
+		transport.rejected(),
+		"test did not exceed the simulated atomic commit cap; max_seen_dirty_bytes={} max_seen_dirty_pages={}",
+		transport.max_seen_dirty_bytes(),
+		transport.max_seen_dirty_pages(),
+	);
+	drop(db);
+
+	let reopened = harness.open_db_on_engine(&runtime, engine, &actor_id, VfsConfig::default());
+	assert_eq!(
+		sqlite_query_i64(reopened.as_ptr(), "SELECT COUNT(*) FROM atomic_cap;")
+			.expect("count after capped commit should succeed"),
+		1
+	);
+	assert_eq!(
+		sqlite_query_text(reopened.as_ptr(), "PRAGMA quick_check;")
+			.expect("quick_check after capped commit should succeed"),
+		"ok"
+	);
+	assert_eq!(
+		sqlite_query_text(reopened.as_ptr(), "PRAGMA integrity_check;")
+			.expect("integrity_check after capped commit should succeed"),
+		"ok"
+	);
+}
+
+#[test]
+fn volatile_rollback_journal_without_batch_atomic_can_make_failed_commit_durable() {
+	let runtime = direct_runtime();
+	let harness = DirectEngineHarness::new();
+	let engine = runtime.block_on(harness.open_engine());
+	let transport = Arc::new(DirectDepotTransport::new(Arc::clone(&engine)));
+	let hooks = transport.direct_hooks();
+	let actor_id = harness.actor_id.clone();
+	let mut config = VfsConfig::default();
+	config.assert_batch_atomic = false;
+	config.advertise_batch_atomic = false;
+	let db = harness.open_db_with_transport(&runtime, transport, &actor_id, config);
+
+	sqlite_exec(
+		db.as_ptr(),
+		"CREATE TABLE rollback_journal_loss (id INTEGER PRIMARY KEY, value TEXT NOT NULL);",
+	)
+	.expect("create table should succeed");
+	sqlite_exec(
+		db.as_ptr(),
+		"INSERT INTO rollback_journal_loss (id, value) VALUES (1, 'before');",
+	)
+	.expect("seed insert should succeed");
+
+	hooks.fail_next_commit_after_apply("InjectedTransportError: main db sync response lost");
+	sqlite_exec(db.as_ptr(), "BEGIN IMMEDIATE;").expect("transaction should begin");
+	sqlite_exec(
+		db.as_ptr(),
+		"INSERT INTO rollback_journal_loss (id, value) VALUES (2, 'failed-commit');",
+	)
+	.expect("transaction insert should succeed");
+	let commit_err =
+		sqlite_exec(db.as_ptr(), "COMMIT;").expect_err("commit response loss should fail");
+	assert!(
+		commit_err.contains("disk I/O error"),
+		"unexpected commit error: {commit_err}"
+	);
+
+	let leaked = ManuallyDrop::new(db);
+	let _fatal_after_failed_commit = direct_vfs_ctx(&leaked).clone_fatal_error();
+
+	let reopened = harness.open_db_on_engine(&runtime, engine, &actor_id, VfsConfig::default());
+	assert_eq!(
+		sqlite_query_text(reopened.as_ptr(), "PRAGMA integrity_check;")
+			.expect("integrity_check should succeed after simulated crash"),
+		"ok"
+	);
+	assert_eq!(
+		sqlite_query_i64(
+			reopened.as_ptr(),
+			"SELECT COUNT(*) FROM rollback_journal_loss;"
+		)
+		.expect("count after simulated crash should succeed"),
+		2,
+		"without batch atomic, a lost main-db sync response can make a failed commit durable because the rollback journal was process-local",
 	);
 }
 

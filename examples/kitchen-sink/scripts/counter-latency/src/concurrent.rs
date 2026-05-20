@@ -378,7 +378,7 @@ async fn run_agent_concurrent_2_worker(worker: u32, ctx: Arc<WorkloadCtx>) {
 	let mut sequence: u64 = 0;
 	let actor_id: Option<String> = None;
 
-	while !ctx.state.stopping() {
+	'worker_loop: while !ctx.state.stopping() {
 		sequence += 1;
 		ctx.state.set_worker_health(worker, WorkerHealth::Connecting);
 		let t0 = Instant::now();
@@ -455,53 +455,70 @@ async fn run_agent_concurrent_2_worker(worker: u32, ctx: Arc<WorkloadCtx>) {
 			}
 		}
 
-		let request_id = format!("agent2-{}-{}-{}", worker, to_base36(sequence), to_base36(chrono::Utc::now().timestamp_millis() as u64));
-		let payload = serde_json::json!({
-			"type": "agent2_connect",
-			"clientId": request_id,
-			"staggerHandleMs": ctx.args.stagger_handle_ms,
-		})
-		.to_string();
+		for repeat_index in 0..ctx.args.query_multiplier {
+			let request_id = format!(
+				"agent2-{}-{}-{}-{}",
+				worker,
+				to_base36(sequence),
+				repeat_index + 1,
+				to_base36(chrono::Utc::now().timestamp_millis() as u64),
+			);
+			let payload = serde_json::json!({
+				"type": "agent2_connect",
+				"clientId": request_id,
+				"staggerHandleMs": ctx.args.stagger_handle_ms,
+			})
+			.to_string();
 
-		if let Err(err) = sink.send(Message::Text(payload.into())).await {
-			let _ = err;
-			log_websocket_error(&ctx, worker, &key, actor_id.as_deref());
-			ctx.state.set_stopping();
-			break;
-		}
+			if let Err(err) = sink.send(Message::Text(payload.into())).await {
+				let _ = err;
+				log_websocket_error(&ctx, worker, &key, actor_id.as_deref());
+				ctx.state.set_stopping();
+				break 'worker_loop;
+			}
 
-		let result = timeout(
-			std::time::Duration::from_millis(ctx.args.timeout_ms),
-			wait_agent_concurrent_2_result(&mut stream, &ctx, worker, &key, actor_id.as_deref()),
-		)
-		.await;
-
-		match result {
-			Ok(AgentConcurrent2Cycle::Result { total_ms, summary }) => {
-				log_agent_concurrent_2_result(
+			let result = timeout(
+				std::time::Duration::from_millis(ctx.args.timeout_ms),
+				wait_agent_concurrent_2_result(
+					&mut stream,
 					&ctx,
 					worker,
 					&key,
 					actor_id.as_deref(),
-					total_ms,
-					&summary,
-				);
-			}
-			Ok(AgentConcurrent2Cycle::ServerError { error }) => {
-				log_agent_concurrent_2_error(&ctx, worker, &key, actor_id.as_deref(), &error);
-				ctx.state.set_stopping();
-				break;
-			}
-			Ok(AgentConcurrent2Cycle::Closed { detail }) => {
-				log_disconnect(&ctx, worker, &key, actor_id.as_deref(), &detail, true);
-				ctx.state.set_stopping();
-				break;
-			}
-			Err(_) => {
-				let detail = format!("timeout waiting for agent-concurrent-2 result after {}ms", ctx.args.timeout_ms);
-				log_disconnect(&ctx, worker, &key, actor_id.as_deref(), &detail, true);
-				ctx.state.set_stopping();
-				break;
+				),
+			)
+			.await;
+
+			match result {
+				Ok(AgentConcurrent2Cycle::Result { total_ms, summary }) => {
+					log_agent_concurrent_2_result(
+						&ctx,
+						worker,
+						&key,
+						actor_id.as_deref(),
+						total_ms,
+						&summary,
+					);
+				}
+				Ok(AgentConcurrent2Cycle::ServerError { error }) => {
+					log_agent_concurrent_2_error(&ctx, worker, &key, actor_id.as_deref(), &error);
+					ctx.state.set_stopping();
+					break 'worker_loop;
+				}
+				Ok(AgentConcurrent2Cycle::Closed { detail }) => {
+					log_disconnect(&ctx, worker, &key, actor_id.as_deref(), &detail, true);
+					ctx.state.set_stopping();
+					break 'worker_loop;
+				}
+				Err(_) => {
+					let detail = format!(
+						"timeout waiting for agent-concurrent-2 result after {}ms",
+						ctx.args.timeout_ms,
+					);
+					log_disconnect(&ctx, worker, &key, actor_id.as_deref(), &detail, true);
+					ctx.state.set_stopping();
+					break 'worker_loop;
+				}
 			}
 		}
 
