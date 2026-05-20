@@ -82,7 +82,7 @@ export function ChangelogEntry({
 				<div className="flex gap-2 items-center">
 					<a
 						className="flex gap-1.5 items-center flex-row-reverse text-right"
-						href={authors[0].socials.twitter}
+						href={authors[0].socials?.twitter}
 					>
 						<Avatar className="size-8">
 							<AvatarFallback>
