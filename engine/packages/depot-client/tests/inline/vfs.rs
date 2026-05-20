@@ -3903,6 +3903,87 @@ fn head_fence_ioerr_maps_to_fatal_worker_error_and_future_operations_fail_closed
 }
 
 #[test]
+fn stale_vfs_page_cache_writer_fails_head_fence_and_reopen_is_clean() {
+	let runtime = direct_runtime();
+	let harness = DirectEngineHarness::new();
+	let engine = runtime.block_on(harness.open_engine());
+	let config = VfsConfig {
+		page_cache_mode: SqliteVfsPageCacheMode::All,
+		..VfsConfig::default()
+	};
+	let db_a =
+		harness.open_db_on_engine(&runtime, engine.clone(), &harness.actor_id, config.clone());
+
+	sqlite_exec(
+		db_a.as_ptr(),
+		"CREATE TABLE cached_rows (id INTEGER PRIMARY KEY, payload TEXT NOT NULL);",
+	)
+	.expect("create should succeed");
+	for id in 1..=64 {
+		sqlite_exec(
+			db_a.as_ptr(),
+			&format!(
+				"INSERT INTO cached_rows (id, payload) VALUES ({id}, printf('%04d:%s', {id}, zeroblob(512)));"
+			),
+		)
+		.expect("insert should succeed");
+	}
+
+	let cached_before = sqlite_query_text(
+		db_a.as_ptr(),
+		"SELECT payload FROM cached_rows WHERE id = 32;",
+	)
+	.expect("stale handle should read target row");
+	assert!(cached_before.starts_with("0032:"));
+
+	let db_b =
+		harness.open_db_on_engine(&runtime, engine.clone(), &harness.actor_id, config.clone());
+	sqlite_exec(
+		db_b.as_ptr(),
+		"UPDATE cached_rows SET payload = 'writer-b-new-value' WHERE id = 32;",
+	)
+	.expect("fresh writer should commit");
+	assert_eq!(
+		sqlite_query_text(db_b.as_ptr(), "SELECT payload FROM cached_rows WHERE id = 32;")
+			.expect("fresh writer should read its update"),
+		"writer-b-new-value"
+	);
+
+	let stale_update = sqlite_exec(
+		db_a.as_ptr(),
+		"UPDATE cached_rows SET payload = 'stale-writer-value' WHERE id = 32;",
+	);
+	assert!(
+		stale_update
+			.as_ref()
+			.expect_err("stale writer must fail the head fence")
+			.contains("disk I/O error"),
+		"unexpected stale writer error: {stale_update:?}"
+	);
+	assert!(
+		direct_vfs_ctx(&db_a)
+			.clone_fatal_error()
+			.is_some_and(|message| message.contains("head fence mismatch")),
+		"stale VFS should retain the head fence mismatch"
+	);
+
+	drop(db_a);
+	drop(db_b);
+
+	let db_c = harness.open_db_on_engine(&runtime, engine, &harness.actor_id, config);
+	assert_eq!(
+		sqlite_query_text(db_c.as_ptr(), "PRAGMA integrity_check;")
+			.expect("integrity check should run after stale writer failed"),
+		"ok"
+	);
+	assert_eq!(
+		sqlite_query_text(db_c.as_ptr(), "SELECT payload FROM cached_rows WHERE id = 32;")
+			.expect("fresh reopen should see writer B value"),
+		"writer-b-new-value"
+	);
+}
+
+#[test]
 fn commit_buffered_pages_uses_fast_path() {
 	let runtime = direct_runtime();
 	let harness = DirectEngineHarness::new();
