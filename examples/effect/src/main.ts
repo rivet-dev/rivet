@@ -24,3 +24,8 @@ const MainLayer = Registry.serve(ActorsLayer).pipe(
 
 // Keeps the layer alive. Tears down on SIGINT/SIGTERM.
 Layer.launch(MainLayer).pipe(NodeRuntime.runMain)
+
+// Or create a web handler, which can be used in serverless environments.
+export const { handler, dispose } = Registry.toWebHandler(
+	ActorsLayer.pipe(Layer.provideMerge(Registry.layer())),
+)
