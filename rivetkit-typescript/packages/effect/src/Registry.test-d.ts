@@ -1,5 +1,5 @@
-import { Context, Effect, Layer, Scope } from "effect";
-import {
+import { type Context, Effect, Layer, type Scope } from "effect";
+import type {
 	HttpServerError,
 	HttpServerRequest,
 	HttpServerResponse,
@@ -47,6 +47,7 @@ describe("Registry.toWebHandler", () => {
 
 	test("rejects actor registration layers that do not provide Registry", () => {
 		// @ts-expect-error: actor registration layers require Registry but do not provide it.
+		// @effect-diagnostics effect/missingLayerContext:off effect/floatingEffect:off
 		Registry.toWebHandler(TestActorLive);
 	});
 
@@ -80,6 +81,7 @@ describe("Registry.toHttpEffect", () => {
 
 	test("rejects actor registration layers that do not provide Registry", () => {
 		// @ts-expect-error: actor registration layers require Registry but do not provide it.
+		// @effect-diagnostics effect/missingLayerContext:off effect/floatingEffect:off
 		Registry.toHttpEffect(TestActorLive);
 	});
 
