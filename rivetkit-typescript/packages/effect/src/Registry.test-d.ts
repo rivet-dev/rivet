@@ -27,6 +27,7 @@ describe("Registry.layer", () => {
 			endpoint: "http://127.0.0.1:6420",
 			token: "dev-token",
 			namespace: "default",
+			noWelcome: true,
 		});
 	});
 
@@ -70,6 +71,13 @@ describe("Registry.toWebHandler", () => {
 		});
 	});
 
+	test("rejects registry options", () => {
+		Registry.toWebHandler(RegistryLive, {
+			// @ts-expect-error: noWelcome belongs to Registry.layer options.
+			noWelcome: true,
+		});
+	});
+
 	test("returns a Fetch-compatible handler", () => {
 		const handler = Registry.toWebHandler(RegistryLive);
 
@@ -88,6 +96,13 @@ describe("Registry.toHttpEffect", () => {
 		expectTypeOf(Registry.toHttpEffect).toBeCallableWith(RegistryLive, {
 			basePath: "/",
 			maxStartPayloadBytes: 1024,
+		});
+	});
+
+	test("rejects registry options", () => {
+		Registry.toHttpEffect(RegistryLive, {
+			// @ts-expect-error: noWelcome belongs to Registry.layer options.
+			noWelcome: true,
 		});
 	});
 

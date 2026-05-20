@@ -1,6 +1,7 @@
 import { assert, describe, it } from "@effect/vitest";
 import { Effect, Layer } from "effect";
 import { HttpEffect } from "effect/unstable/http";
+import { vi } from "vitest";
 import * as Action from "./Action";
 import * as Actor from "./Actor";
 import * as Registry from "./Registry";
@@ -19,6 +20,7 @@ const RegistryLive = ActorsLayer.pipe(
 	Layer.provideMerge(
 		Registry.layer({
 			endpoint: "http://127.0.0.1:6420",
+			noWelcome: true,
 		}),
 	),
 );
@@ -125,6 +127,23 @@ describe("Registry.toWebHandler", () => {
 			await assert.match(body.message, /limit is 1 bytes/);
 		} finally {
 			await dispose();
+		}
+	});
+
+	it("does not print the welcome banner when disabled", async () => {
+		const log = vi.spyOn(console, "log").mockImplementation(() => {});
+		const { handler, dispose } = Registry.toWebHandler(RegistryLive);
+
+		try {
+			const response = await handler(
+				new Request("http://runner.test/api/rivet/metadata"),
+			);
+
+			assert.strictEqual(response.status, 200);
+			assert.strictEqual(log.mock.calls.length, 0);
+		} finally {
+			await dispose();
+			log.mockRestore();
 		}
 	});
 

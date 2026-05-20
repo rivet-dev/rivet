@@ -1,10 +1,10 @@
-import { Context, Effect, Layer, Scope } from "effect";
+import { Context, Effect, Layer, type Scope } from "effect";
 import {
 	HttpEffect,
-	HttpMiddleware,
-	HttpServerError,
-	HttpServerRequest,
-	HttpServerResponse,
+	type HttpMiddleware,
+	type HttpServerError,
+	type HttpServerRequest,
+	type HttpServerResponse,
 } from "effect/unstable/http";
 import * as Rivetkit from "rivetkit";
 import * as Client from "./Client";
@@ -16,7 +16,7 @@ type ServerlessOptions = NonNullable<
 
 export type Options = Pick<
 	Rivetkit.RegistryConfigInput<Rivetkit.RegistryActors>,
-	"endpoint" | "token" | "namespace"
+	"endpoint" | "token" | "namespace" | "noWelcome"
 >;
 
 export interface Registry {
@@ -175,16 +175,19 @@ export type ToWebHandlerOptions = ServerlessOptions & {
 	readonly memoMap?: Layer.MemoMap | undefined;
 };
 
-const toWebHandlerServerlessOptions = (
+const toWebHandlerHandlerOptions = (
 	options?: ToWebHandlerOptions,
 ): ServerlessOptions | undefined => {
 	if (options === undefined) {
 		return undefined;
 	}
 
-	const { middleware: _middleware, memoMap: _memoMap, ...serverless } =
-		options;
-	return serverless;
+	const {
+		middleware: _middleware,
+		memoMap: _memoMap,
+		...handlerOptions
+	} = options;
+	return handlerOptions;
 };
 
 /**
@@ -204,7 +207,7 @@ export const toWebHandler = <E>(
 				const registry = Context.get(context, Registry);
 				return makeHttpEffect(
 					registry,
-					toWebHandlerServerlessOptions(options),
+					toWebHandlerHandlerOptions(options),
 				);
 			}),
 		middleware: options?.middleware,
