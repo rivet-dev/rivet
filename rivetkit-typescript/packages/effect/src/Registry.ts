@@ -10,8 +10,9 @@ import * as Rivetkit from "rivetkit";
 import * as Client from "./Client";
 
 const TypeId = "~@rivetkit/effect/Registry";
-type ServerlessOptions =
-	Rivetkit.RegistryConfigInput<Rivetkit.RegistryActors>["serverless"];
+type ServerlessOptions = NonNullable<
+	Rivetkit.RegistryConfigInput<Rivetkit.RegistryActors>["serverless"]
+>;
 
 export type Options = Pick<
 	Rivetkit.RegistryConfigInput<Rivetkit.RegistryActors>,
@@ -124,19 +125,14 @@ const makeHttpEffect = (
 	HttpServerRequest.HttpServerRequest
 > => {
 	const rivetkitRegistry = setupRivetkitRegistry(registry, {
-		serverless: options?.serverless,
+		serverless: options,
 	});
 	return HttpEffect.fromWebHandler((request) =>
 		rivetkitRegistry.handler(request),
 	);
 };
 
-export type ToHttpEffectOptions = {
-	/**
-	 * Serverless request routing configuration for the generated HTTP handler.
-	 */
-	readonly serverless?: ServerlessOptions | undefined;
-};
+export type ToHttpEffectOptions = ServerlessOptions;
 
 /**
  * Builds a scoped Effect HTTP handler from a registry layer.
@@ -162,11 +158,7 @@ export const toHttpEffect = <E>(
 		return makeHttpEffect(Context.get(context, Registry), options);
 	});
 
-export type ToWebHandlerOptions = {
-	/**
-	 * Serverless request routing configuration for the generated Web handler.
-	 */
-	readonly serverless?: ServerlessOptions | undefined;
+export type ToWebHandlerOptions = ServerlessOptions & {
 	/**
 	 * Effect HTTP middleware applied around the generated handler.
 	 */
@@ -175,6 +167,18 @@ export type ToWebHandlerOptions = {
 	 * Memo map used while building the registry layer.
 	 */
 	readonly memoMap?: Layer.MemoMap | undefined;
+};
+
+const toWebHandlerServerlessOptions = (
+	options?: ToWebHandlerOptions,
+): ServerlessOptions | undefined => {
+	if (options === undefined) {
+		return undefined;
+	}
+
+	const { middleware: _middleware, memoMap: _memoMap, ...serverless } =
+		options;
+	return serverless;
 };
 
 /**
@@ -192,9 +196,10 @@ export const toWebHandler = <E>(
 		toHandler: (context) =>
 			Effect.sync(() => {
 				const registry = Context.get(context, Registry);
-				return makeHttpEffect(registry, {
-					serverless: options?.serverless,
-				});
+				return makeHttpEffect(
+					registry,
+					toWebHandlerServerlessOptions(options),
+				);
 			}),
 		middleware: options?.middleware,
 		memoMap: options?.memoMap,

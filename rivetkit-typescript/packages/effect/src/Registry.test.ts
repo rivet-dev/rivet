@@ -44,9 +44,7 @@ describe("Registry.toWebHandler", () => {
 
 	it("uses a custom serverless base path", async () => {
 		const { handler, dispose } = Registry.toWebHandler(RegistryLive, {
-			serverless: {
-				basePath: "/",
-			},
+			basePath: "/",
 		});
 
 		try {
@@ -66,10 +64,8 @@ describe("Registry.toWebHandler", () => {
 
 	it("uses the custom base path to identify start requests", async () => {
 		const { handler, dispose } = Registry.toWebHandler(RegistryLive, {
-			serverless: {
-				basePath: "/custom",
-				maxStartPayloadBytes: 1,
-			},
+			basePath: "/custom",
+			maxStartPayloadBytes: 1,
 		});
 
 		try {
@@ -105,9 +101,7 @@ describe("Registry.toWebHandler", () => {
 
 	it("uses a custom serverless start payload size limit", async () => {
 		const { handler, dispose } = Registry.toWebHandler(RegistryLive, {
-			serverless: {
-				maxStartPayloadBytes: 1,
-			},
+			maxStartPayloadBytes: 1,
 		});
 
 		try {
@@ -222,9 +216,7 @@ describe("Registry.toHttpEffect", () => {
 		Effect.scoped(
 			Effect.gen(function* () {
 				const httpEffect = yield* Registry.toHttpEffect(RegistryLive, {
-					serverless: {
-						basePath: "/",
-					},
+					basePath: "/",
 				});
 				const handler = HttpEffect.toWebHandler(httpEffect);
 				const response = yield* Effect.promise(() =>
@@ -248,10 +240,8 @@ describe("Registry.toHttpEffect", () => {
 		Effect.scoped(
 			Effect.gen(function* () {
 				const httpEffect = yield* Registry.toHttpEffect(RegistryLive, {
-					serverless: {
-						basePath: "/custom",
-						maxStartPayloadBytes: 1,
-					},
+					basePath: "/custom",
+					maxStartPayloadBytes: 1,
 				});
 				const handler = HttpEffect.toWebHandler(httpEffect);
 				const defaultPrefix = yield* Effect.promise(() =>
@@ -295,9 +285,7 @@ describe("Registry.toHttpEffect", () => {
 		Effect.scoped(
 			Effect.gen(function* () {
 				const httpEffect = yield* Registry.toHttpEffect(RegistryLive, {
-					serverless: {
-						maxStartPayloadBytes: 1,
-					},
+					maxStartPayloadBytes: 1,
 				});
 				const handler = HttpEffect.toWebHandler(httpEffect);
 				const response = yield* Effect.promise(() =>

@@ -52,10 +52,8 @@ describe("Registry.toWebHandler", () => {
 
 	test("accepts serverless routing options", () => {
 		expectTypeOf(Registry.toWebHandler).toBeCallableWith(RegistryLive, {
-			serverless: {
-				basePath: "/",
-				maxStartPayloadBytes: 1024,
-			},
+			basePath: "/",
+			maxStartPayloadBytes: 1024,
 		});
 	});
 
@@ -75,10 +73,8 @@ describe("Registry.toWebHandler", () => {
 describe("Registry.toHttpEffect", () => {
 	test("accepts serverless routing options", () => {
 		expectTypeOf(Registry.toHttpEffect).toBeCallableWith(RegistryLive, {
-			serverless: {
-				basePath: "/",
-				maxStartPayloadBytes: 1024,
-			},
+			basePath: "/",
+			maxStartPayloadBytes: 1024,
 		});
 	});
 
@@ -88,9 +84,7 @@ describe("Registry.toHttpEffect", () => {
 	});
 
 	test("returns a scoped Effect HTTP handler", () => {
-		expectTypeOf(
-			Registry.toHttpEffect(RegistryLive),
-		).toEqualTypeOf<
+		expectTypeOf(Registry.toHttpEffect(RegistryLive)).toEqualTypeOf<
 			Effect.Effect<
 				Effect.Effect<
 					HttpServerResponse.HttpServerResponse,
