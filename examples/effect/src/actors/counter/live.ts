@@ -1,5 +1,5 @@
-import { Effect, Schema } from "effect";
 import { Actor, State } from "@rivetkit/effect";
+import { Effect, Schema } from "effect";
 import { Counter, CounterOverflowError } from "./api.ts";
 
 // --- Actor Implementation ---

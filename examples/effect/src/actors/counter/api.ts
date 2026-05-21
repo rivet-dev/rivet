@@ -1,5 +1,5 @@
+import { Action, Actor } from "@rivetkit/effect";
 import { Schema } from "effect";
-import { Actor, Action } from "@rivetkit/effect";
 
 // --- Errors ---
 

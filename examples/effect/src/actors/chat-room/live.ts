@@ -1,18 +1,19 @@
-import { DateTime, Duration, Effect, Random, Schema } from "effect";
 import { Actor, State } from "@rivetkit/effect";
+import { DateTime, Duration, Effect, Random, Schema } from "effect";
 import { db } from "rivetkit/db";
+import { Directory, Moderator } from "../mod.ts";
 import { ChatRoom } from "./api.ts";
-
-interface ModerationVerdict {
-	readonly approved: boolean;
-	readonly reason?: string;
-}
 
 export const ChatRoomLive = ChatRoom.toLayer(
 	({ rawRivetkitContext, state }) =>
 		Effect.gen(function* () {
 			const database = rawRivetkitContext.db;
 			const address = yield* Actor.CurrentAddress;
+			const moderatorClient = yield* Moderator.client;
+			const directoryClient = yield* Directory.client;
+
+			const directory = directoryClient.getOrCreate(["main"]);
+			const moderator = moderatorClient.getOrCreate(["main"]);
 			// The plain SDK example stores this in createVars. The Effect SDK
 			// does not expose vars yet, so the wake-scope closure owns it.
 			const sessionId = yield* Random.nextUUIDv4;
@@ -40,19 +41,6 @@ export const ChatRoomLive = ChatRoom.toLayer(
 					});
 				}),
 			);
-
-			const directory = () =>
-				// Server-side Effect actor clients are not available yet. Use the
-				// raw RivetKit actor client and keep the action shape explicit.
-				rawRivetkitContext
-					.client<any>()
-					.directory.getOrCreate(["main"]);
-			const moderator = () =>
-				// The normal example uses a typed registry client here. This raw
-				// client keeps the runtime behavior while giving up type inference.
-				rawRivetkitContext
-					.client<any>()
-					.moderator.getOrCreate(["main"]);
 
 			const roomName = State.get(state).pipe(
 				Effect.orDie,
@@ -97,9 +85,7 @@ export const ChatRoomLive = ChatRoom.toLayer(
 						if (next.name !== "") {
 							// Directory registration is still actor-to-actor RPC, but
 							// it uses the Effect action name and object payload.
-							yield* Effect.tryPromise(() =>
-								directory().RegisterRoom({ name: next.name }),
-							).pipe(Effect.orDie);
+							yield* directory.RegisterRoom({ name: next.name });
 						}
 
 						return member;
@@ -122,12 +108,9 @@ export const ChatRoomLive = ChatRoom.toLayer(
 						// completable queue drained by run(). The Effect SDK does
 						// not expose queues or run loops yet, so moderation is a
 						// direct actor RPC and has no queue timeout path.
-						const verdict = yield* Effect.tryPromise(
-							() =>
-								moderator().Review({
-									text: payload.text,
-								}) as Promise<ModerationVerdict>,
-						).pipe(Effect.orDie);
+						const verdict = yield* moderator.Review({
+							text: payload.text,
+						});
 
 						if (!verdict.approved) {
 							return { ok: false, reason: verdict.reason };
@@ -203,9 +186,7 @@ export const ChatRoomLive = ChatRoom.toLayer(
 						if (name !== "") {
 							// This only covers destruction through Archive. A future
 							// Effect onDestroy hook would cover every destroy path.
-							yield* Effect.tryPromise(() =>
-								directory().CloseRoom({ name }),
-							).pipe(Effect.orDie);
+							yield* directory.CloseRoom({ name });
 						}
 						yield* Effect.sync(() => {
 							rawRivetkitContext.destroy();
