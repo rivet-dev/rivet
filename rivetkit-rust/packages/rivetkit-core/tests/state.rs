@@ -178,7 +178,10 @@ mod moved_tests {
 
 	#[tokio::test]
 	async fn request_save_coalesces_and_escalates_to_immediate() {
-		let state = ActorContext::new_for_state_tests(new_in_memory(), ActorConfig::default());
+		let state = ActorContext::new_for_state_tests(
+			new_in_memory(),
+			ActorConfig::default(),
+		);
 		let (events_tx, mut events_rx) = mpsc::unbounded_channel();
 		state.configure_lifecycle_events(Some(events_tx));
 

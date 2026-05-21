@@ -181,7 +181,8 @@ impl Serialize for RivetError {
 	{
 		use serde::ser::SerializeStruct;
 
-		let field_count = 3 + usize::from(self.meta.is_some()) + usize::from(self.actor.is_some());
+		let field_count =
+			3 + usize::from(self.meta.is_some()) + usize::from(self.actor.is_some());
 		let mut state = serializer.serialize_struct("RivetError", field_count)?;
 
 		state.serialize_field("group", self.group())?;
