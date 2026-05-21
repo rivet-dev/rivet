@@ -633,6 +633,7 @@ export const createNamespaceContext = ({
 				throwOnError: noThrow,
 				meta: {
 					mightRequireAuth,
+					persist: true,
 				},
 			});
 		},
@@ -762,6 +763,7 @@ export const createNamespaceContext = ({
 				retry: shouldRetryAllExpect403,
 				meta: {
 					mightRequireAuth,
+					persist: true,
 				},
 			});
 		},
@@ -855,6 +857,9 @@ export const createNamespaceContext = ({
 		},
 		currentNamespaceEnvoyListQueryOptions() {
 			return dataProvider.envoysListQueryOptions({ namespace });
+		},
+		currentNamespaceQueryOptions() {
+			return parent.namespaceQueryOptions(namespace);
 		},
 	};
 };

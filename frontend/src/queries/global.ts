@@ -1,5 +1,6 @@
 import {
 	CancelledError,
+	defaultShouldDehydrateQuery,
 	type InfiniteData,
 	MutationCache,
 	QueryCache,
@@ -7,6 +8,12 @@ import {
 	type QueryKey,
 	queryOptions,
 } from "@tanstack/react-query";
+import { createAsyncStoragePersister } from "@tanstack/query-async-storage-persister";
+import {
+	type PersistQueryClientOptions,
+	persistQueryClientRestore,
+	persistQueryClientSubscribe,
+} from "@tanstack/react-query-persist-client";
 import type { Rivet } from "@rivetkit/engine-api-full";
 import { posthog } from "@/lib/posthog";
 import { toast } from "@/components";
@@ -127,3 +134,33 @@ export const queryClient = new QueryClient({
 	queryCache,
 	mutationCache,
 });
+
+// Persist a curated allowlist of queries to localStorage so cache-first route
+// loaders (such as the namespace onboarding gate) can resolve from cache across
+// full page reloads instead of blocking on the network. Only queries tagged
+// with `meta.persist` are stored, keeping large and sensitive payloads (actor
+// data, tokens, inspector state) out of localStorage. The build id busts the
+// persisted cache on every deploy so a schema change can never rehydrate stale
+// data.
+const queryCachePersister = createAsyncStoragePersister({
+	storage: typeof window !== "undefined" ? window.localStorage : undefined,
+	key: "rivet-query-cache",
+});
+
+const persistOptions: Omit<PersistQueryClientOptions, "queryClient"> = {
+	persister: queryCachePersister,
+	maxAge: 24 * 60 * 60 * 1000,
+	buster: __APP_BUILD_ID__,
+	dehydrateOptions: {
+		shouldDehydrateQuery: (query) =>
+			defaultShouldDehydrateQuery(query) && query.meta?.persist === true,
+	},
+};
+
+// Rehydrates the persisted cache, then keeps it in sync. Must be awaited before
+// the router mounts so loaders see restored data on first paint.
+export async function restoreQueryCache() {
+	if (typeof window === "undefined") return;
+	await persistQueryClientRestore({ queryClient, ...persistOptions });
+	persistQueryClientSubscribe({ queryClient, ...persistOptions });
+}
