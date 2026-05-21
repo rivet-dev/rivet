@@ -1,5 +1,5 @@
 import {
-	faEllipsis,
+	faEllipsisVertical,
 	faPaperPlaneTop,
 	faTrash,
 	faUserPlus,
@@ -233,25 +233,27 @@ function MemberRow({
 							You
 						</span>
 					) : null}
-					{isOwner ? (
-						<span className="inline-flex items-center rounded-full border border-foreground/15 bg-foreground/[0.06] px-2 py-0.5 text-[11px] font-medium text-foreground">
-							Owner
-						</span>
-					) : null}
 				</div>
 			</div>
 			<div className="text-muted-foreground truncate">{email}</div>
-			<div className="opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
-				{canManage ? (
-					<MemberRowMenu
-						memberId={memberId}
-						userId={userId}
-						organizationId={organizationId}
-						role={role}
-						isSelf={isYou}
-						viewerRole={viewerRole}
-					/>
+			<div className="flex items-center justify-end gap-2">
+				{isOwner ? (
+					<span className="shrink-0 inline-flex items-center rounded-full border border-foreground/15 bg-foreground/[0.06] px-2 py-0.5 text-[11px] font-medium text-foreground">
+						Owner
+					</span>
 				) : null}
+				<div className="opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+					{canManage ? (
+						<MemberRowMenu
+							memberId={memberId}
+							userId={userId}
+							organizationId={organizationId}
+							role={role}
+							isSelf={isYou}
+							viewerRole={viewerRole}
+						/>
+					) : null}
+				</div>
 			</div>
 		</div>
 	);
@@ -324,7 +326,7 @@ function MemberRowMenu({
 				onPointerDown={(e) => e.preventDefault()}
 				className="cursor-not-allowed opacity-50 hover:bg-transparent"
 			>
-				<Icon icon={faEllipsis} />
+				<Icon icon={faEllipsisVertical} />
 			</Button>
 		);
 	}
@@ -338,7 +340,7 @@ function MemberRowMenu({
 					aria-label="Member actions"
 					disabled={disabled}
 				>
-					<Icon icon={faEllipsis} />
+					<Icon icon={faEllipsisVertical} />
 				</Button>
 			</DropdownMenuTrigger>
 			<DropdownMenuContent align="end" className="min-w-[10rem]">
