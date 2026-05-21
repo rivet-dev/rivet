@@ -399,6 +399,8 @@ export interface StepConfig<T> {
 	retryBackoffMax?: number;
 	/** Timeout in ms for step execution (default: 30000). Set to 0 to disable. */
 	timeout?: number;
+	/** If true, step timeouts retry like any other error instead of failing immediately as critical. Default: false. */
+	retryOnTimeout?: boolean;
 }
 
 export type TryStepCatchKind =
