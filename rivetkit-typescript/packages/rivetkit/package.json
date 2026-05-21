@@ -168,7 +168,7 @@
 		"actor-config-schema-gen": "tsx scripts/actor-config-schema-gen.ts"
 	},
 	"dependencies": {
-		"@hono/node-server": "^1.18.2",
+		"@hono/node-server": "^1.19.13",
 		"@hono/node-ws": "^1.1.1",
 		"@hono/zod-openapi": "^1.1.5",
 		"@rivet-dev/agent-os-core": "^0.1.1",
@@ -184,7 +184,7 @@
 		"cbor-x": "^1.6.0",
 		"drizzle-orm": "^0.44.2",
 		"get-port": "^7.1.0",
-		"hono": "^4.7.0",
+		"hono": "^4.12.18",
 		"invariant": "^2.2.4",
 		"p-retry": "^6.2.1",
 		"pino": "^9.5.0",
