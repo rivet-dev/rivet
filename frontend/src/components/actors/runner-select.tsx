@@ -12,15 +12,20 @@ export function ConnectedRunnerSelect({
 	onValueChange,
 	value,
 }: ConnectedRunnerSelectProps) {
+	const dataProvider = useEngineCompatDataProvider();
+	const hasRunnerNames = "runnerNamesQueryOptions" in dataProvider;
 	const {
 		data = [],
 		hasNextPage,
 		fetchNextPage,
 		isLoading,
 		isFetchingNextPage,
-	} = useInfiniteQuery(
-		useEngineCompatDataProvider().runnerNamesQueryOptions(),
-	);
+	} = useInfiniteQuery({
+		...(hasRunnerNames
+			? dataProvider.runnerNamesQueryOptions()
+			: { queryKey: ["noop-runner-names"], queryFn: async () => [], initialPageParam: undefined, getNextPageParam: () => undefined }),
+		enabled: hasRunnerNames,
+	});
 
 	const builds = useMemo(() => {
 		const runners = data.map((runner) => {

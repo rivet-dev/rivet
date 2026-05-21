@@ -23,7 +23,6 @@ import {
 import {
 	ErrorDetails,
 	ErrorDetailsContent,
-	useCloudNamespaceDataProvider,
 	useCloudProjectDataProvider,
 } from "@/components/actors";
 
@@ -114,12 +113,14 @@ export function ImagesTable({
 
 				{!isLoading && hasNextPage ? (
 					<TableRow>
-						<TableCell colSpan={7}>
+						<TableCell colSpan={7} className="text-center py-2">
 							<Button
-								variant="outline"
+								variant="ghost"
+								size="sm"
 								isLoading={isLoading}
 								onClick={() => fetchNextPage?.()}
 								disabled={!hasNextPage}
+								className="text-muted-foreground"
 							>
 								Load more
 							</Button>
@@ -296,20 +297,16 @@ function ManagedPoolStatus({ namespace }: { namespace: string }) {
 function CreateTs({ createTs }: { createTs: string }) {
 	return (
 		<WithTooltip
-			content={new Date(createTs).toLocaleString()}
+			content={formatDistance(createTs, new Date(), { addSuffix: true })}
 			trigger={
-				<div>
-					{formatDistance(createTs, new Date(), {
-						addSuffix: true,
-					})}
-				</div>
+				<div>{new Date(createTs).toLocaleDateString()}</div>
 			}
 		/>
 	);
 }
 
 function DeploymentNamespace({ namespace }: { namespace: string }) {
-	const provider = useCloudNamespaceDataProvider();
+	const provider = useCloudProjectDataProvider();
 	const { data } = useQuery(
 		provider.currentProjectNamespaceQueryOptions({ namespace }),
 	);

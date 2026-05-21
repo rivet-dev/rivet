@@ -4,14 +4,12 @@ import {
 	faDownload,
 	faPause,
 	faPlay,
-	faQuestionCircle,
 	Icon,
 } from "@rivet-gg/icons";
 import { useInfiniteQuery, useSuspenseQuery } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { startTransition, useCallback, useRef, useState } from "react";
 import { z } from "zod";
-import { HelpDropdown } from "@/app/help-dropdown";
 import { Content } from "@/app/layout";
 import { Button, H1, Skeleton } from "@/components";
 import {
@@ -92,21 +90,27 @@ function RouteComponent() {
 		navigator.clipboard.writeText(getLogsText());
 	}, [getLogsText]);
 
+	if (!pool) {
+		return (
+			<Content>
+				<div className="h-full flex flex-col items-center justify-center gap-3">
+					<p className="text-muted-foreground">
+						Logs are only accessible on namespaces running on Rivet Compute.
+					</p>
+					<Link to="/orgs/$organization/projects/$project/ns/$namespace" params={Route.useParams()}>
+						<Button variant="outline" size="sm">Go back</Button>
+					</Link>
+				</div>
+			</Content>
+		);
+	}
+
 	return (
 		<Content>
 			<div className="flex flex-col h-full">
 				<div className="pt-2 px-6 mx-auto w-full">
 					<div className="flex justify-between items-center px-0 py-4">
 						<H1>Logs</H1>
-
-						<HelpDropdown>
-							<Button
-								variant="outline"
-								startIcon={<Icon icon={faQuestionCircle} />}
-							>
-								Need help?
-							</Button>
-						</HelpDropdown>
 					</div>
 
 					<p className="mb-6 text-muted-foreground">
