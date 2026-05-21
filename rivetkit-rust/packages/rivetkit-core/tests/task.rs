@@ -6,7 +6,7 @@ mod moved_tests {
 	use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 	use std::sync::{Mutex, OnceLock};
 	use std::task::Poll;
-	use std::time::{Duration, Instant};
+	use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 	use futures::{FutureExt, poll};
 	use rivet_envoy_client::config::{
@@ -51,6 +51,13 @@ mod moved_tests {
 	use crate::kv::tests::new_in_memory;
 	use crate::{ActorConfig, ActorContext, ActorFactory};
 	use rivet_envoy_client::utils::EnvoyShutdownError;
+
+	fn now_timestamp_ms() -> i64 {
+		let duration = SystemTime::now()
+			.duration_since(UNIX_EPOCH)
+			.unwrap_or_default();
+		i64::try_from(duration.as_millis()).unwrap_or(i64::MAX)
+	}
 
 	fn test_hook_lock() -> &'static AsyncMutex<()> {
 		static LOCK: OnceLock<AsyncMutex<()>> = OnceLock::new();
@@ -254,6 +261,7 @@ mod moved_tests {
 			)),
 			protocol_metadata: Arc::new(tokio::sync::Mutex::new(None)),
 			shutting_down: AtomicBool::new(false),
+			last_ping_ts: std::sync::atomic::AtomicI64::new(now_timestamp_ms()),
 			stopped_tx: tokio::sync::watch::channel(true).0,
 		});
 

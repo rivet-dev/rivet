@@ -30,18 +30,16 @@ fn preserves_public_error_message_for_client_boundary() {
 }
 
 #[test]
-fn preserves_user_error_metadata_for_client_boundary() {
+fn preserves_user_error_message_and_metadata_for_client_boundary() {
 	let metadata = serde_json::json!({
-		"error": {
-			"_tag": "CounterOverflowError",
-			"limit": 20,
-		},
+		"limit": 20,
+		"attempted": 25,
 	});
 	let error = ActionDispatchError::from_anyhow(anyhow::Error::new(RivetError {
 		kind: RivetErrorKind::Dynamic {
 			group: "user".to_owned(),
-			code: "Increment".to_owned(),
-			default_message: "count 25 would exceed limit 20".to_owned(),
+			code: "quota_exceeded".to_owned(),
+			default_message: "quota exceeded".to_owned(),
 		},
 		meta: serde_json::value::to_raw_value(&metadata).ok(),
 		message: None,
@@ -49,8 +47,8 @@ fn preserves_user_error_metadata_for_client_boundary() {
 	}));
 
 	assert_eq!(error.group, "user");
-	assert_eq!(error.code, "Increment");
-	assert_eq!(error.client_message(), "count 25 would exceed limit 20");
+	assert_eq!(error.code, "quota_exceeded");
+	assert_eq!(error.client_message(), "quota exceeded");
 	assert_eq!(error.client_metadata(), Some(&metadata));
 }
 
