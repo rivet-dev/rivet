@@ -450,8 +450,10 @@ async fn run_agent_concurrent_2_worker(worker: u32, ctx: Arc<WorkloadCtx>) {
 					let detail = format!("code={} reason={}", code, reason);
 					log_disconnect(&ctx, worker, &key, actor_id.as_deref(), &detail, true);
 				}
-				ctx.state.set_stopping();
-				break;
+				// Per-worker phase-1 failure: skip this iteration, continue outer loop.
+				// Do not call set_stopping — that would kill the whole test on a single error.
+				sleep(std::time::Duration::from_millis(ctx.args.sleep_ms)).await;
+				continue 'worker_loop;
 			}
 		}
 
@@ -473,8 +475,9 @@ async fn run_agent_concurrent_2_worker(worker: u32, ctx: Arc<WorkloadCtx>) {
 			if let Err(err) = sink.send(Message::Text(payload.into())).await {
 				let _ = err;
 				log_websocket_error(&ctx, worker, &key, actor_id.as_deref());
-				ctx.state.set_stopping();
-				break 'worker_loop;
+				// Per-worker send error: drop this connection, continue outer loop.
+				sleep(std::time::Duration::from_millis(ctx.args.sleep_ms)).await;
+				continue 'worker_loop;
 			}
 
 			let result = timeout(
@@ -502,13 +505,13 @@ async fn run_agent_concurrent_2_worker(worker: u32, ctx: Arc<WorkloadCtx>) {
 				}
 				Ok(AgentConcurrent2Cycle::ServerError { error }) => {
 					log_agent_concurrent_2_error(&ctx, worker, &key, actor_id.as_deref(), &error);
-					ctx.state.set_stopping();
-					break 'worker_loop;
+					sleep(std::time::Duration::from_millis(ctx.args.sleep_ms)).await;
+					continue 'worker_loop;
 				}
 				Ok(AgentConcurrent2Cycle::Closed { detail }) => {
 					log_disconnect(&ctx, worker, &key, actor_id.as_deref(), &detail, true);
-					ctx.state.set_stopping();
-					break 'worker_loop;
+					sleep(std::time::Duration::from_millis(ctx.args.sleep_ms)).await;
+					continue 'worker_loop;
 				}
 				Err(_) => {
 					let detail = format!(
@@ -516,8 +519,8 @@ async fn run_agent_concurrent_2_worker(worker: u32, ctx: Arc<WorkloadCtx>) {
 						ctx.args.timeout_ms,
 					);
 					log_disconnect(&ctx, worker, &key, actor_id.as_deref(), &detail, true);
-					ctx.state.set_stopping();
-					break 'worker_loop;
+					sleep(std::time::Duration::from_millis(ctx.args.sleep_ms)).await;
+					continue 'worker_loop;
 				}
 			}
 		}
