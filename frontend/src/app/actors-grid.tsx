@@ -18,6 +18,7 @@ import {
 	cn,
 	H1,
 	ScrollArea,
+	Skeleton,
 	SmallText,
 	WithTooltip,
 } from "@/components";
@@ -117,6 +118,16 @@ function GridCard({
 	);
 }
 
+function ActorGridCardSkeleton() {
+	return (
+		<div className="flex min-h-[110px] flex-col items-start gap-2 rounded-lg border border-foreground/10 bg-foreground/[0.02] p-4">
+			<Skeleton className="h-9 w-9 rounded-md" />
+			<Skeleton className="h-4 w-24" />
+			<Skeleton className="h-3 w-16" />
+		</div>
+	);
+}
+
 export function ActorsGrid({
 	namespaceLabel,
 }: {
@@ -198,7 +209,14 @@ export function ActorsGrid({
 							) : null}
 						</header>
 
-						{!isLoading && builds.length === 0 ? (
+						{isLoading ? (
+							<div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+								{Array.from({ length: 8 }).map((_, i) => (
+									// biome-ignore lint/suspicious/noArrayIndexKey: skeleton loaders are static
+									<ActorGridCardSkeleton key={i} />
+								))}
+							</div>
+						) : builds.length === 0 ? (
 							!hasRunners ? (
 								<NoProvidersAlert variant="connect" />
 							) : (
