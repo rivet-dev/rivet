@@ -1,4 +1,4 @@
-import { Effect } from "effect";
+import { Effect, Random } from "effect";
 import { Client } from "@rivetkit/effect";
 import { Counter /*, IncrementBy */ } from "./actors/counter/api.ts";
 import { ChatRoom } from "./actors/chat-room/api.ts";
@@ -6,8 +6,9 @@ import { Directory } from "./actors/directory/api.ts";
 import { Moderator } from "./actors/moderator/api.ts";
 
 const program = Effect.gen(function* () {
+	const runId = yield* Random.nextUUIDv4;
 	const counterClient = yield* Counter.client;
-	const counter = counterClient.getOrCreate(["counter-effect"]);
+	const counter = counterClient.getOrCreate([`counter-effect-${runId}`]);
 
 	const count = yield* counter.Increment({ amount: 5 });
 	yield* Effect.log(`Increment(5) -> ${count}`);
@@ -19,11 +20,12 @@ const program = Effect.gen(function* () {
 	const directoryClient = yield* Directory.client;
 	const moderatorClient = yield* Moderator.client;
 
-	const room = chatRoomClient.getOrCreate(["effect-room"]);
+	const roomName = `effect-room-${runId}`;
+	const room = chatRoomClient.getOrCreate([roomName]);
 	const directory = directoryClient.getOrCreate(["main"]);
 	const moderator = moderatorClient.getOrCreate(["main"]);
 
-	yield* room.Initialize({ name: "effect-room" });
+	yield* room.Initialize({ name: roomName });
 	yield* Effect.log(`ChatRoom.Initialize`);
 
 	const member = yield* room.Join({ name: "Alice" });
