@@ -539,26 +539,6 @@ function ActorSegmentPopover({ currentBuildId }: { currentBuildId: string }) {
 										</CommandItem>
 									);
 								})}
-								<CommandItem
-									keywords={["create", "new", "actor"]}
-									className="text-primary"
-									onSelect={() => {
-										setOpen(false);
-										return navigate({
-											to: ".",
-											search: (old) => ({
-												...(old as Record<string, unknown>),
-												modal: "create-actor",
-											}),
-										});
-									}}
-								>
-									<Icon
-										icon={faPlus}
-										className="mr-2 size-3 text-primary"
-									/>
-									New Actor
-								</CommandItem>
 							</CommandGroup>
 						</CommandList>
 					</Command>
