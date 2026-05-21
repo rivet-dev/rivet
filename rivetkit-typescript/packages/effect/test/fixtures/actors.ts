@@ -1,6 +1,7 @@
 import { Action, Actor, State } from "@rivetkit/effect";
 import {
 	Context,
+	DateTime,
 	Effect,
 	Layer,
 	Option,
@@ -182,6 +183,7 @@ export const CountEvents = Action.make("CountEvents", {
 
 const EncodedTransformedState = Schema.Struct({
 	when: Schema.String,
+	instant: Schema.String,
 	url: Schema.String,
 	id: Schema.String,
 	bytes: Schema.String,
@@ -195,15 +197,16 @@ const EncodedTransformedState = Schema.Struct({
 });
 
 const TransformedStateSchema = Schema.Struct({
-	when: Schema.DateFromString,
-	url: Schema.URLFromString,
-	id: Schema.BigIntFromString,
-	bytes: Schema.Uint8ArrayFromBase64,
+	when: Schema.Date,
+	instant: Schema.DateTimeUtc,
+	url: Schema.URL,
+	id: Schema.BigInt,
+	bytes: Schema.Uint8Array,
 	tags: TagsCsv,
 	history: Schema.Array(
 		Schema.Struct({
-			at: Schema.DateFromString,
-			payload: Schema.Uint8ArrayFromBase64,
+			at: Schema.Date,
+			payload: Schema.Uint8Array,
 		}),
 	),
 });
@@ -243,13 +246,17 @@ export const TransformedStateActorLive = TransformedStateActor.toLayer(
 			const rawWakeState = rawRivetkitContext.state;
 
 			return TransformedStateActor.of({
-				GetRawWakeState: () => Effect.succeed(rawWakeState),
+				GetRawWakeState: () =>
+					Effect.succeed(
+						rawWakeState as unknown as typeof EncodedTransformedState.Type,
+					),
 				GetDecodedState: () => State.get(state),
 				SetTransformedStateAndSleep: ({ payload }) =>
 					State.set(state, payload).pipe(Effect.andThen(sleep)),
 				SetRawWakeStateAndSleep: ({ payload }) =>
 					Effect.tryPromise(async () => {
-						rawRivetkitContext.state = payload;
+						rawRivetkitContext.state =
+							payload as unknown as typeof rawRivetkitContext.state;
 						await rawRivetkitContext.saveState({
 							immediate: true,
 						});
@@ -262,6 +269,7 @@ export const TransformedStateActorLive = TransformedStateActor.toLayer(
 			schema: TransformedStateSchema,
 			initialValue: () => ({
 				when: new Date("2024-01-01T00:00:00.000Z"),
+				instant: DateTime.makeUnsafe(1_704_067_200_000),
 				url: new URL("https://rivet.dev/docs"),
 				id: 1n,
 				bytes: new Uint8Array([1, 2, 3]),

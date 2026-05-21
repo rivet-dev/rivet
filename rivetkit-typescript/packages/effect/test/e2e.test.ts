@@ -1,6 +1,6 @@
 import { assert, layer } from "@effect/vitest";
 import { Registry, RivetError } from "@rivetkit/effect";
-import { Effect, Layer, Schedule } from "effect";
+import { DateTime, Effect, Layer, Schedule } from "effect";
 import { TestClock } from "effect/testing";
 import { createClient } from "rivetkit/client";
 import { inject } from "vitest";
@@ -397,6 +397,7 @@ layer(TestLayer)("end-to-end", (it) => {
 					["t-raw-transformed-state"],
 				);
 				const when = new Date("2024-04-05T06:07:08.000Z");
+				const instant = DateTime.makeUnsafe(1_712_298_428_000);
 				const at = new Date("2024-04-06T07:08:09.000Z");
 				const bytes = new Uint8Array([9, 8, 7]);
 				const payload = new Uint8Array([6, 5, 4]);
@@ -407,6 +408,7 @@ layer(TestLayer)("end-to-end", (it) => {
 
 				yield* actor.SetTransformedStateAndSleep({
 					when,
+					instant,
 					url,
 					id,
 					bytes,
@@ -424,6 +426,7 @@ layer(TestLayer)("end-to-end", (it) => {
 
 				assert.deepEqual(raw, {
 					when: when.toISOString(),
+					instant: DateTime.formatIso(instant),
 					url: url.toString(),
 					id: id.toString(),
 					bytes: Buffer.from(bytes).toString("base64"),
@@ -446,6 +449,7 @@ layer(TestLayer)("end-to-end", (it) => {
 					["t-raw-set-transformed-state"],
 				);
 				const when = "2024-05-06T07:08:09.000Z";
+				const instant = "2024-05-06T07:08:09.123Z";
 				const at = "2024-05-07T08:09:10.000Z";
 				const url = "https://rivet.dev/docs/actors/state?source=raw";
 				const id = "9007199254740995";
@@ -458,6 +462,7 @@ layer(TestLayer)("end-to-end", (it) => {
 
 				yield* actor.SetRawWakeStateAndSleep({
 					when,
+					instant,
 					url,
 					id,
 					bytes,
@@ -474,6 +479,10 @@ layer(TestLayer)("end-to-end", (it) => {
 				);
 
 				assert.strictEqual(decoded.when.toISOString(), when);
+				assert.strictEqual(
+					DateTime.toEpochMillis(decoded.instant),
+					Date.parse(instant),
+				);
 				assert.strictEqual(decoded.url.toString(), url);
 				assert.strictEqual(decoded.id, BigInt(id));
 				assert.deepEqual(

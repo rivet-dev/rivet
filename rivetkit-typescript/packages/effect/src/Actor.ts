@@ -513,9 +513,10 @@ const makeRivetkitActor = Effect.fnUntraced(function* <
 
 	const { effectOptions, rivetkitOptions } = splitOptions(options);
 	const stateCodec = UndefinedOr.map(effectOptions.state, (state) => ({
-		decode: Schema.decodeEffect(state.schema),
-		decodeUnknown: Schema.decodeUnknownEffect(state.schema),
-		encode: Schema.encodeEffect(state.schema),
+		decodeUnknown: Schema.decodeUnknownEffect(
+			Schema.toCodecJson(state.schema),
+		),
+		encode: Schema.encodeEffect(Schema.toCodecJson(state.schema)),
 	}));
 
 	const instances = MutableHashMap.empty<
@@ -550,7 +551,7 @@ const makeRivetkitActor = Effect.fnUntraced(function* <
 						// context satisfies them at runtime, so we erase
 						// R at the boundary.
 						((yield* State.make(
-							() => stateCodec.decode(c.state),
+							() => stateCodec.decodeUnknown(c.state),
 							(next) =>
 								stateCodec.encode(next).pipe(
 									Effect.tap((encoded) =>
