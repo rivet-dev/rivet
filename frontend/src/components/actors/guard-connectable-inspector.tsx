@@ -21,6 +21,7 @@ import {
 	useContext,
 	useEffect,
 	useMemo,
+	useRef,
 } from "react";
 import { match, P } from "ts-pattern";
 import { z } from "zod";
@@ -31,6 +32,7 @@ import { useConfig } from "../lib/config";
 import { ShimmerLine } from "../shimmer-line";
 import { Button } from "../ui/button";
 import { useFiltersValue } from "./actor-filters-context";
+import { resumeAutoWake, useAutoWakeSuppression } from "./auto-wake-suppression";
 import {
 	actorWakeUpMutationOptions,
 	actorWakeUpQueryOptions,
@@ -109,16 +111,54 @@ export function GuardConnectableInspector({
 		refetchInterval: 1000,
 	});
 
+	const suppression = useAutoWakeSuppression(actorId);
+
+	// Resume auto-wake when the actor transitions into running. This clears
+	// suppression set by an explicit sleep or reschedule once the actor is back
+	// up (a reschedule reallocated it, or it was woken externally). A rising edge
+	// is used instead of "is running" so a status refetch returning running while
+	// already running, such as the invalidation triggered by the sleep mutation,
+	// does not prematurely clear suppression set milliseconds earlier. The
+	// initial undefined-to-running transition also clears any leftover suppression
+	// when reopening an already-running actor.
+	const prevStatusRef = useRef<ActorStatus | undefined>(undefined);
+	useEffect(() => {
+		const prevStatus = prevStatusRef.current;
+		prevStatusRef.current = status;
+		if (status === "running" && prevStatus !== "running") {
+			resumeAutoWake(actorId);
+		}
+	}, [status, actorId]);
+
 	return match(status)
-		.with(P.union("running"), () => (
-			<ActorContextProvider actorId={actorId}>
-				{children}
-			</ActorContextProvider>
-		))
+		.with(P.union("running"), () => {
+			// When the user has put the actor to sleep, do not mount the inspector
+			// connection. Its /metadata polling and websocket count as actor
+			// activity and would keep the actor awake. Reschedule does not drop it:
+			// the actor reallocates back to running on its own, and the inspector
+			// would otherwise risk getting stuck if the sleep blip is too brief to
+			// observe as a status transition.
+			if (suppression === "sleep") {
+				return (
+					<InspectorGuardContext.Provider value={<TransitioningActor />}>
+						{children}
+					</InspectorGuardContext.Provider>
+				);
+			}
+
+			return (
+				<ActorContextProvider actorId={actorId}>
+					{children}
+				</ActorContextProvider>
+			);
+		})
 		.otherwise((status) => (
 			<InspectorGuardContext.Provider
 				value={<UnavailableInfo actorId={actorId} status={status} />}
 			>
+				{status === "sleeping" && (
+					<AutoWakeUpController actorId={actorId} />
+				)}
 				{children}
 			</InspectorGuardContext.Provider>
 		));
@@ -179,9 +219,10 @@ function UnavailableInfo({
 
 function SleepingActor({ actorId }: { actorId: ActorId }) {
 	const { wakeOnSelect } = useFiltersValue({ onlyEphemeral: true });
+	const suppression = useAutoWakeSuppression(actorId);
 
-	if (wakeOnSelect?.value[0] === "1") {
-		return <AutoWakeUpActor actorId={actorId} />;
+	if (wakeOnSelect?.value[0] === "1" && !suppression) {
+		return <AutoWakeUpActor />;
 	}
 
 	return (
@@ -699,17 +740,7 @@ function WakeUpActorButton({ actorId }: { actorId: ActorId }) {
 	);
 }
 
-function AutoWakeUpActor({ actorId }: { actorId: ActorId }) {
-	const { credentials } = useActorEngineContext({
-		actorId,
-	});
-
-	useQuery({
-		...actorWakeUpQueryOptions({ actorId, credentials }),
-		retryDelay: 10_000,
-		refetchInterval: 1_000,
-	});
-
+function AutoWakeUpActor() {
 	return (
 		<Info>
 			<div className="flex items-center">
@@ -720,12 +751,52 @@ function AutoWakeUpActor({ actorId }: { actorId: ActorId }) {
 	);
 }
 
+// Keeps a sleeping actor waking regardless of which tab is active. The actual
+// wake query lives here instead of in the sleeping overlay because the metadata
+// tab renders its own content instead of the guard overlay, so the
+// overlay-driven wake path never mounts there.
+function AutoWakeUpController({ actorId }: { actorId: ActorId }) {
+	const { wakeOnSelect } = useFiltersValue({ onlyEphemeral: true });
+	const suppression = useAutoWakeSuppression(actorId);
+
+	if (suppression || wakeOnSelect?.value[0] !== "1") {
+		return null;
+	}
+
+	return <AutoWakeUpRunner actorId={actorId} />;
+}
+
+function AutoWakeUpRunner({ actorId }: { actorId: ActorId }) {
+	const { credentials } = useActorEngineContext({
+		actorId,
+	});
+
+	useQuery({
+		...actorWakeUpQueryOptions({ actorId, credentials }),
+		retryDelay: 10_000,
+		refetchInterval: 1_000,
+	});
+
+	return null;
+}
+
 function ConnectingInspector() {
 	return (
 		<Info>
 			<div className="flex items-center">
 				<Icon icon={faSpinnerThird} className="animate-spin mr-2" />
 				Connecting to Inspector...
+			</div>
+		</Info>
+	);
+}
+
+function TransitioningActor() {
+	return (
+		<Info>
+			<div className="flex items-center">
+				<Icon icon={faSpinnerThird} className="animate-spin mr-2" />
+				Updating Actor...
 			</div>
 		</Info>
 	);
