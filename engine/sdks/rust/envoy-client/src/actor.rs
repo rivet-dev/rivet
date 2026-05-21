@@ -376,12 +376,12 @@ async fn actor_inner(
 
 fn send_event(ctx: &mut ActorContext, inner: protocol::Event) {
 	let checkpoint = increment_checkpoint(ctx);
-	let _ = ctx
-		.shared
-		.envoy_tx
-		.send(crate::envoy::ToEnvoyMessage::SendEvents {
+	let _ = crate::envoy::send_to_envoy_tx(
+		&ctx.shared,
+		crate::envoy::ToEnvoyMessage::SendEvents {
 			events: vec![protocol::EventWrapper { checkpoint, inner }],
-		});
+		},
+	);
 }
 
 async fn begin_stop(
@@ -1268,10 +1268,10 @@ async fn send_actor_message(
 				"buffering tunnel message, socket not connected to engine"
 			);
 		}
-		let _ = ctx
-			.shared
-			.envoy_tx
-			.send(crate::envoy::ToEnvoyMessage::BufferTunnelMsg { msg: buffer_msg });
+		let _ = crate::envoy::send_to_envoy_tx(
+			&ctx.shared,
+			crate::envoy::ToEnvoyMessage::BufferTunnelMsg { msg: buffer_msg },
+		);
 	}
 }
 

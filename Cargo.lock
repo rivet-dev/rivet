@@ -5652,6 +5652,7 @@ dependencies = [
  "parking_lot",
  "rand 0.8.5",
  "rivet-envoy-protocol",
+ "rivet-metrics",
  "rivet-util-serde",
  "rustls 0.23.29",
  "scc",

@@ -10,6 +10,7 @@ use vbare::OwnedVersionedData;
 
 use crate::context::SharedContext;
 use crate::context::WsTxMessage;
+use crate::metrics::METRICS;
 #[cfg(any(
 	feature = "native-transport",
 	all(feature = "wasm-transport", target_arch = "wasm32")
@@ -95,10 +96,27 @@ async fn forward_to_envoy(shared: &SharedContext, message: protocol::ToEnvoy) {
 			.await;
 		}
 		other => {
-			let _ = shared
-				.envoy_tx
-				.send(ToEnvoyMessage::ConnMessage { message: other });
+			let _ = crate::envoy::send_to_envoy_tx(
+				shared,
+				ToEnvoyMessage::ConnMessage { message: other },
+			);
 		}
+	}
+}
+
+fn observe_ping_unhealthy_on_close(shared: &SharedContext) {
+	let last_ping_ts = shared.last_ping_ts.load(Ordering::Acquire);
+	if last_ping_ts == 0 {
+		return;
+	}
+
+	let unhealthy_ms = crate::time::now_millis()
+		.saturating_sub(last_ping_ts)
+		.saturating_sub(crate::handle::EnvoyHandle::PING_HEALTHY_THRESHOLD_MS);
+	if unhealthy_ms > 0 {
+		METRICS
+			.ping_unhealthy_seconds_total
+			.inc_by(unhealthy_ms as f64 / 1_000.0);
 	}
 }
 
@@ -108,8 +126,22 @@ pub async fn ws_send(shared: &SharedContext, message: protocol::ToRivet) -> bool
 		tracing::debug!(data = stringify_to_rivet(&message), "sending message");
 	}
 
+	let message_kind = to_rivet_kind(&message);
+	let wait_start = crate::time::Instant::now();
 	let guard = shared.ws_tx.lock().await;
+	let wait_elapsed = wait_start.elapsed();
+	METRICS
+		.ws_tx_lock_wait_duration_seconds
+		.with_label_values(&[message_kind])
+		.observe(wait_elapsed.as_secs_f64());
+
+	let hold_start = crate::time::Instant::now();
 	let Some(tx) = guard.as_ref() else {
+		// Still observe hold duration on the early-return path.
+		METRICS
+			.ws_tx_lock_hold_duration_seconds
+			.with_label_values(&[message_kind])
+			.observe(hold_start.elapsed().as_secs_f64());
 		tracing::error!("websocket not available for sending");
 		return true;
 	};
@@ -118,7 +150,29 @@ pub async fn ws_send(shared: &SharedContext, message: protocol::ToRivet) -> bool
 		.serialize(protocol::PROTOCOL_VERSION)
 		.expect("failed to encode message");
 	let _ = tx.send(WsTxMessage::Send(encoded));
+	drop(guard);
+	METRICS
+		.ws_tx_lock_hold_duration_seconds
+		.with_label_values(&[message_kind])
+		.observe(hold_start.elapsed().as_secs_f64());
 	false
+}
+
+/// Bounded label set for `ws_tx` send paths.
+fn to_rivet_kind(message: &protocol::ToRivet) -> &'static str {
+	match message {
+		protocol::ToRivet::ToRivetMetadata(_) => "metadata",
+		protocol::ToRivet::ToRivetEvents(_) => "events",
+		protocol::ToRivet::ToRivetAckCommands(_) => "ack_commands",
+		protocol::ToRivet::ToRivetStopping => "stopping",
+		protocol::ToRivet::ToRivetPong(_) => "pong",
+		protocol::ToRivet::ToRivetKvRequest(_) => "kv_request",
+		protocol::ToRivet::ToRivetSqliteGetPagesRequest(_) => "sqlite_get_pages",
+		protocol::ToRivet::ToRivetSqliteCommitRequest(_) => "sqlite_commit",
+		protocol::ToRivet::ToRivetSqliteExecRequest(_) => "sqlite_exec",
+		protocol::ToRivet::ToRivetSqliteExecuteRequest(_) => "sqlite_execute",
+		protocol::ToRivet::ToRivetTunnelMessage(_) => "tunnel_message",
+	}
 }
 
 #[cfg(any(

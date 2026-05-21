@@ -9,6 +9,7 @@ pub mod events;
 pub mod handle;
 pub mod kv;
 pub mod latency_channel;
+pub mod metrics;
 pub mod sqlite;
 pub mod stringify;
 pub(crate) mod time {

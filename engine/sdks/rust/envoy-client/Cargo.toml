@@ -18,6 +18,7 @@ hex.workspace = true
 js-sys = { version = "0.3", optional = true }
 rand.workspace = true
 rivet-envoy-protocol.workspace = true
+rivet-metrics.workspace = true
 rivet-util-serde.workspace = true
 rustls = { workspace = true, optional = true }
 scc.workspace = true
