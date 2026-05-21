@@ -4,6 +4,7 @@ use serde_json::Value as JsonValue;
 
 pub fn public_error_status_code(group: &str, code: &str) -> Option<u16> {
 	match (group, code) {
+		("user", _) => Some(400),
 		("auth", "forbidden") => Some(403),
 		("actor", "action_not_found") => Some(404),
 		("actor", "action_timed_out") => Some(408),
