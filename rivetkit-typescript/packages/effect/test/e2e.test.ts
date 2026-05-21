@@ -2,6 +2,7 @@ import { assert, layer } from "@effect/vitest";
 import { Registry, RivetError } from "@rivetkit/effect";
 import { Effect, Layer, Schedule } from "effect";
 import { TestClock } from "effect/testing";
+import { createClient } from "rivetkit/client";
 import { inject } from "vitest";
 import {
 	BuildSetRejected,
@@ -103,6 +104,24 @@ layer(TestLayer)("end-to-end", (it) => {
 			const total = yield* counter.GetCount();
 			assert.strictEqual(total, 7);
 		}),
+	);
+
+	it.effect(
+		"accepts raw client no-arg calls for actions without payloads",
+		() =>
+			Effect.gen(function* () {
+				const client = yield* Effect.acquireRelease(
+					Effect.sync(() =>
+						createClient({ endpoint, token, namespace }),
+					),
+					(client) => Effect.promise(() => client.dispose()),
+				);
+				const counter = client.Counter.getOrCreate("t-raw-no-arg");
+				assert.strictEqual(
+					yield* Effect.promise(() => counter.GetCount()),
+					0,
+				);
+			}),
 	);
 
 	it.effect("isolates in-wake state across keys", () =>
@@ -314,7 +333,7 @@ layer(TestLayer)("end-to-end", (it) => {
 			}),
 	);
 
-	it.effect.skip(
+	it.effect(
 		"surfaces an expected handler error back into the original error",
 		() =>
 			Effect.gen(function* () {

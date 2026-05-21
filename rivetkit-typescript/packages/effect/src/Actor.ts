@@ -651,8 +651,15 @@ const makeRivetkitActor = Effect.fnUntraced(function* <
 						] as (
 							envelope: ActionRequest<typeof action>,
 						) => Action.ResultFrom<typeof action, any>;
+						// Raw RivetKit clients call no-argument actions with an
+						// absent first argument. The Effect JSON Void codec expects
+						// null, so adapt only actions that declared no payload.
+						const payloadForDecode =
+							!action.hasPayload && payload === undefined
+								? null
+								: payload;
 						const decodedPayload = yield* decodePayload(
-							payload,
+							payloadForDecode,
 						).pipe(Effect.orDie);
 						// The payload was decoded with this action's schema,
 						// so this is the runtime boundary that restores the

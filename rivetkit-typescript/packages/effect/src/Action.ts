@@ -17,6 +17,12 @@ export interface Action<
 	readonly [TypeId]: typeof TypeId;
 	readonly _tag: Tag;
 	readonly key: string;
+	/**
+	 * Raw RivetKit clients omit the argument for no-payload actions, so
+	 * the actor wrapper uses this to adapt only those calls to the Effect
+	 * JSON Void codec's null representation.
+	 */
+	readonly hasPayload: boolean;
 	readonly payloadSchema: Payload;
 	readonly successSchema: Success;
 	readonly errorSchema: Error;
@@ -40,6 +46,7 @@ export interface AnyWithProps {
 	readonly [TypeId]: typeof TypeId;
 	readonly _tag: string;
 	readonly key: string;
+	readonly hasPayload: boolean;
 	readonly payloadSchema: Schema.Top;
 	readonly successSchema: Schema.Top;
 	readonly errorSchema: Schema.Top;
@@ -158,6 +165,7 @@ const makeProto = <
 	Error extends Schema.Top,
 >(options: {
 	readonly _tag: Tag;
+	readonly hasPayload: boolean;
 	readonly payloadSchema: Payload;
 	readonly successSchema: Success;
 	readonly errorSchema: Error;
@@ -207,6 +215,7 @@ export const make = <
 > => {
 	const successSchema = options?.success ?? Schema.Void;
 	const errorSchema = options?.error ?? Schema.Never;
+	const hasPayload = options?.payload !== undefined;
 	const payloadSchema: Schema.Top = Schema.isSchema(options?.payload)
 		? (options?.payload as any)
 		: options?.payload
@@ -214,6 +223,7 @@ export const make = <
 			: Schema.Void;
 	return makeProto({
 		_tag: tag,
+		hasPayload,
 		payloadSchema,
 		successSchema,
 		errorSchema,
