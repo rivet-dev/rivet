@@ -209,7 +209,7 @@ export function OrgLanding({ organization }: { organization: string }) {
 										}}
 										title="Manage billing"
 										aria-label="Manage billing"
-										className="absolute top-3 right-3 z-10 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+										className="absolute top-3 right-3 z-10 rounded-full transition-all duration-150 group-hover:-translate-y-0.5 group-active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
 									>
 										<LazyBillingPlanBadge
 											project={project.name}
