@@ -31,7 +31,11 @@ const filteredPosts = posts
 const changelogPosts = filteredPosts.map((post) => {
 	const slug = post.id.replace(/\/page$/, '');
 	const imagePath = Object.keys(images).find((p) => p.includes(slug));
-	const image = imagePath ? images[imagePath].default : null;
+	const image = post.data.image
+		? { ...post.data.image, remote: true }
+		: imagePath
+			? { ...images[imagePath].default, remote: false }
+			: null;
 	const author = AUTHORS[post.data.author] as AuthorInfo;
 	const category = { ...CATEGORIES[post.data.category], id: post.data.category };
 	const data = post.data as unknown as { title: string; description: string };
@@ -83,15 +87,27 @@ const changelogPosts = filteredPosts.map((post) => {
 						<div>
 							{article.image && (
 								<div class="relative w-full">
-									<Image
-										src={article.image}
-										alt={article.title}
-										width={600}
-										height={300}
-										class="aspect-[2/1] w-full rounded-md border border-white/10 object-cover"
-										loading="lazy"
-										decoding="async"
-									/>
+									{article.image.remote ? (
+										<img
+											src={article.image.src}
+											alt={article.title}
+											width={600}
+											height={300}
+											class="aspect-[2/1] w-full rounded-md border border-white/10 object-cover"
+											loading="lazy"
+											decoding="async"
+										/>
+									) : (
+										<Image
+											src={article.image}
+											alt={article.title}
+											width={600}
+											height={300}
+											class="aspect-[2/1] w-full rounded-md border border-white/10 object-cover"
+											loading="lazy"
+											decoding="async"
+										/>
+									)}
 								</div>
 							)}
 							<div class="mt-3 flex items-center gap-x-3 text-xs">
