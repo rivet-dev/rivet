@@ -3,20 +3,20 @@ import { Action, Actor } from "@rivetkit/effect";
 
 export const Member = Schema.Struct({
 	name: Schema.String,
-	joinedAt: Schema.Number,
+	joinedAt: Schema.DateTimeUtc,
 });
 
 export const Message = Schema.Struct({
 	id: Schema.Number,
 	sender: Schema.String,
 	text: Schema.String,
-	createdAt: Schema.Number,
+	createdAt: Schema.DateTimeUtc,
 });
 
 export const SendMessageResult = Schema.Struct({
 	ok: Schema.Boolean,
 	reason: Schema.optionalKey(Schema.String),
-	createdAt: Schema.optionalKey(Schema.Number),
+	createdAt: Schema.optionalKey(Schema.DateTimeUtc),
 });
 
 // The plain RivetKit example uses createState input to name the room at
@@ -54,10 +54,10 @@ export const GetMembers = Action.make("GetMembers", {
 export const ScheduleAnnouncement = Action.make("ScheduleAnnouncement", {
 	payload: {
 		text: Schema.String,
-		delayMs: Schema.Number,
+		delay: Schema.DurationFromMillis,
 	},
 	success: Schema.Struct({
-		firesAt: Schema.Number,
+		firesAt: Schema.DateTimeUtc,
 	}),
 });
 

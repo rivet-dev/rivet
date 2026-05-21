@@ -1,4 +1,4 @@
-import { Effect, Random, Schema } from "effect";
+import { DateTime, Duration, Effect, Random, Schema } from "effect";
 import { Actor, State } from "@rivetkit/effect";
 import { db } from "rivetkit/db";
 import { ChatRoom } from "./api.ts";
@@ -74,9 +74,10 @@ export const ChatRoomLive = ChatRoom.toLayer(
 					}),
 				Join: ({ payload }) =>
 					Effect.gen(function* () {
+						const joinedAt = yield* DateTime.now;
 						const member = {
 							name: payload.name,
-							joinedAt: Date.now(),
+							joinedAt,
 						};
 						const next = yield* State.updateAndGet(
 							state,
@@ -87,7 +88,10 @@ export const ChatRoomLive = ChatRoom.toLayer(
 						);
 
 						rawRivetkitContext.broadcast("memberJoined", {
-							member,
+							member: {
+								...member,
+								joinedAt: DateTime.formatIso(member.joinedAt),
+							},
 						});
 
 						if (next.name !== "") {
@@ -129,20 +133,20 @@ export const ChatRoomLive = ChatRoom.toLayer(
 							return { ok: false, reason: verdict.reason };
 						}
 
-						const createdAt = Date.now();
+						const createdAt = yield* DateTime.now;
 						yield* Effect.tryPromise(() =>
 							database.execute(
 								"INSERT INTO messages (sender, text, created_at) VALUES (?, ?, ?)",
 								payload.sender,
 								payload.text,
-								createdAt,
+								DateTime.toEpochMillis(createdAt),
 							),
 						).pipe(Effect.orDie);
 
 						rawRivetkitContext.broadcast("newMessage", {
 							sender: payload.sender,
 							text: payload.text,
-							createdAt,
+							createdAt: DateTime.formatIso(createdAt),
 						});
 						return { ok: true, createdAt };
 					}),
@@ -156,7 +160,15 @@ export const ChatRoomLive = ChatRoom.toLayer(
 						}>(
 							"SELECT id, sender, text, created_at as createdAt FROM messages ORDER BY id",
 						),
-					).pipe(Effect.orDie),
+					).pipe(
+						Effect.map((rows) =>
+							rows.map((row) => ({
+								...row,
+								createdAt: DateTime.makeUnsafe(row.createdAt),
+							})),
+						),
+						Effect.orDie,
+					),
 				GetMembers: () =>
 					State.get(state).pipe(
 						Effect.orDie,
@@ -164,11 +176,14 @@ export const ChatRoomLive = ChatRoom.toLayer(
 					),
 				ScheduleAnnouncement: ({ payload }) =>
 					Effect.sync(() => {
-						const firesAt = Date.now() + payload.delayMs;
+						const firesAt = DateTime.addDuration(
+							DateTime.nowUnsafe(),
+							payload.delay,
+						);
 						// The raw scheduler dispatches the Effect action by name
 						// with the same object payload that a client would send.
 						rawRivetkitContext.schedule.after(
-							payload.delayMs,
+							Duration.toMillis(payload.delay),
 							"TriggerAnnouncement",
 							{
 								text: payload.text,
@@ -205,7 +220,7 @@ export const ChatRoomLive = ChatRoom.toLayer(
 				members: Schema.Array(
 					Schema.Struct({
 						name: Schema.String,
-						joinedAt: Schema.Number,
+						joinedAt: Schema.DateTimeUtc,
 					}),
 				),
 				wakeCount: Schema.Number,

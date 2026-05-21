@@ -3,8 +3,8 @@ import { Action, Actor } from "@rivetkit/effect";
 
 export const RoomEntry = Schema.Struct({
 	name: Schema.String,
-	openedAt: Schema.Number,
-	closedAt: Schema.optionalKey(Schema.Number),
+	openedAt: Schema.DateTimeUtc,
+	closedAt: Schema.optionalKey(Schema.DateTimeUtc),
 });
 
 export const RegisterRoom = Action.make("RegisterRoom", {
@@ -22,4 +22,3 @@ export const ListRooms = Action.make("ListRooms", {
 export const Directory = Actor.make("directory", {
 	actions: [RegisterRoom, CloseRoom, ListRooms],
 });
-
