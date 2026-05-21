@@ -155,4 +155,5 @@ define_keys! {
 	(127, ACCEPTED2, "accepted2"),
 	(128, ACTIVE2, "active2"),
 	(129, LAST_ACTIVE_PING_TS, "last_active_ping_ts"),
+	(130, GENERATION, "generation"),
 }

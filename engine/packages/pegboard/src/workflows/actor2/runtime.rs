@@ -144,7 +144,10 @@ impl RetryBackoffState {
 }
 
 #[derive(Debug, Serialize, Deserialize, Hash)]
-pub struct AllocateInput {}
+pub struct AllocateInput {
+	#[serde(default)]
+	generation: u32,
+}
 
 #[derive(Debug, Serialize, Deserialize, Hash)]
 #[serde(rename_all = "snake_case")]
@@ -291,6 +294,7 @@ pub async fn allocate(ctx: &ActivityCtx, input: &AllocateInput) -> Result<Alloca
 			if allocation.is_some() {
 				// Set not sleeping
 				tx.delete(&keys::actor::SleepTsKey::new(actor_id));
+				tx.write(&keys::actor::GenerationKey::new(actor_id), input.generation)?;
 			}
 
 			Ok((acquired_slot, allocation, error))
@@ -397,7 +401,12 @@ pub async fn reschedule_actor(
 	state: &mut LifecycleState,
 	metrics_workflow_id: Id,
 ) -> Result<()> {
-	let allocate_res = ctx.activity(AllocateInput {}).await?;
+	let next_gen = state.generation + 1;
+	let allocate_res = ctx
+		.activity(AllocateInput {
+			generation: next_gen,
+		})
+		.await?;
 
 	if let Some(allocation) = allocate_res.allocation {
 		state.generation += 1;
@@ -577,7 +586,12 @@ pub async fn handle_stopped(
 
 	let stopped_res = match decision {
 		Decision::Reallocate => {
-			let allocate_res = ctx.activity(AllocateInput {}).await?;
+			let next_gen = state.generation + 1;
+			let allocate_res = ctx
+				.activity(AllocateInput {
+					generation: next_gen,
+				})
+				.await?;
 
 			if let Some(allocation) = allocate_res.allocation {
 				state.generation += 1;

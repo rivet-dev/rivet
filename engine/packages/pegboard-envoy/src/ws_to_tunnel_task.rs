@@ -887,57 +887,68 @@ async fn validate_remote_sqlite_generation(
 	let generation = u32::try_from(generation).context("invalid sqlite actor generation")?;
 	let namespace_id = conn.namespace_id;
 	let envoy_key = conn.envoy_key.clone();
-	let (active_generation, has_pending_start_command) = ctx
+	let (current_generation, has_pending_start_command) = ctx
 		.udb()?
 		.run(|tx| {
 			let envoy_key = envoy_key.clone();
 			async move {
 				let tx = tx.with_subspace(pegboard::keys::subspace());
-				let active_generation = tx
+				let current_generation = tx
 					.read_opt(
-						&pegboard::keys::envoy::ActorKey::new(
-							namespace_id,
-							envoy_key.clone(),
-							actor_id,
-						),
+						&pegboard::keys::actor::GenerationKey::new(actor_id),
 						Serializable,
 					)
 					.await?;
 
-				let command_subspace = pegboard::keys::subspace().subspace(
-					&pegboard::keys::envoy::ActorCommandKey::subspace_with_actor(
-						namespace_id,
-						envoy_key,
-						actor_id,
-						generation,
-					),
-				);
-				let mut command_entries = tx.get_ranges_keyvalues(
-					RangeOption {
-						mode: StreamingMode::WantAll,
-						..(&command_subspace).into()
-					},
-					Serializable,
-				);
-				let mut has_pending_start_command = false;
-				while let Some(entry) = command_entries.try_next().await? {
-					let (_, command) =
-						tx.read_entry::<pegboard::keys::envoy::ActorCommandKey>(&entry)?;
-					match command {
-						protocol::ActorCommandKeyData::CommandStartActor(_) => {
-							has_pending_start_command = true;
-							break;
-						}
-						protocol::ActorCommandKeyData::CommandStopActor(_) => {}
-					}
-				}
+				if let Some(current_generation) = current_generation {
+					Ok((Some(current_generation), false))
+				} else {
+					let active_generation = tx
+						.read_opt(
+							&pegboard::keys::envoy::ActorKey::new(
+								namespace_id,
+								envoy_key.clone(),
+								actor_id,
+							),
+							Serializable,
+						)
+						.await?;
 
-				Ok((active_generation, has_pending_start_command))
+					let command_subspace = pegboard::keys::subspace().subspace(
+						&pegboard::keys::envoy::ActorCommandKey::subspace_with_actor(
+							namespace_id,
+							envoy_key,
+							actor_id,
+							generation,
+						),
+					);
+					let mut command_entries = tx.get_ranges_keyvalues(
+						RangeOption {
+							mode: StreamingMode::WantAll,
+							..(&command_subspace).into()
+						},
+						Serializable,
+					);
+					let mut has_pending_start_command = false;
+					while let Some(entry) = command_entries.try_next().await? {
+						let (_, command) =
+							tx.read_entry::<pegboard::keys::envoy::ActorCommandKey>(&entry)?;
+						match command {
+							protocol::ActorCommandKeyData::CommandStartActor(_) => {
+								has_pending_start_command = true;
+								break;
+							}
+							protocol::ActorCommandKeyData::CommandStopActor(_) => {}
+						}
+					}
+
+					Ok((active_generation, has_pending_start_command))
+				}
 			}
 		})
 		.await?;
 
-	if active_generation != Some(generation) && !has_pending_start_command {
+	if current_generation != Some(generation) && !has_pending_start_command {
 		bail!("actor does not exist");
 	}
 

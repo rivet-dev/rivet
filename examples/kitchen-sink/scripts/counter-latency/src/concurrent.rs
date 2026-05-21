@@ -16,7 +16,7 @@ use tokio_tungstenite::tungstenite::protocol::CloseFrame;
 use tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode;
 
 use crate::args::{
-	ACTOR_STOPPED_CLOSE_CODE, ACTOR_STOPPED_CLOSE_REASON, ConcurrentArgs, ConcurrentMode,
+	ConcurrentArgs, ConcurrentMode, is_actor_stopped_close,
 	EnvConfig, MESSAGE_GAP_WARN_MS, WorkerMode,
 };
 use crate::endpoint::Endpoint;
@@ -963,10 +963,7 @@ async fn run_concurrent_worker(
 			if !ctx.state.stopping()
 				&& close
 					.as_ref()
-					.map(|(code, reason)| {
-						*code == ACTOR_STOPPED_CLOSE_CODE
-							&& reason == ACTOR_STOPPED_CLOSE_REASON
-					})
+					.map(|(code, reason)| is_actor_stopped_close(*code, reason))
 					.unwrap_or(false)
 			{
 				let (code, reason) = close.clone().unwrap();
@@ -1035,6 +1032,7 @@ async fn run_concurrent_worker(
 				incoming = stream.next() => {
 					steady_silence_since = Instant::now();
 					steady_stall_logged = false;
+					ctx.state.clear_worker_slow(worker);
 					match incoming {
 						Some(Ok(Message::Text(text))) => {
 							let now = Instant::now();
@@ -1099,8 +1097,7 @@ async fn run_concurrent_worker(
 		let (code, reason) = close_info.unwrap_or((0, String::new()));
 		if !ctx.state.stopping()
 			&& !saw_websocket_error
-			&& code == ACTOR_STOPPED_CLOSE_CODE
-			&& reason == ACTOR_STOPPED_CLOSE_REASON
+			&& is_actor_stopped_close(code, &reason)
 		{
 			log_reconnect(&ctx, worker, &key, actor_id.as_deref(), code, &reason);
 			reconnect = true;
@@ -1113,6 +1110,10 @@ async fn run_concurrent_worker(
 			ctx.state.set_worker_health(worker, WorkerHealth::Failed);
 		}
 		if !reconnect {
+			// Make sure the worker is removed from the live "connected" bucket on exit;
+			// reconnect path goes back through `record_connect` (which sets Pinging) so we
+			// only need to mark Failed here.
+			ctx.state.set_worker_health(worker, WorkerHealth::Failed);
 			break;
 		}
 	}

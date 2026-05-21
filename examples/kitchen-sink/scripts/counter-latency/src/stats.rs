@@ -112,6 +112,15 @@ impl State {
 		}
 	}
 
+	/// Clear a previous slow flag once inbound traffic resumes. Only flips
+	/// `ConnectedSlow` back to `Connected`; other states (including `Failed`) are left alone.
+	pub fn clear_worker_slow(&self, worker: u32) {
+		let mut map = self.worker_health.lock().unwrap();
+		if let Some(WorkerHealth::ConnectedSlow) = map.get(&worker) {
+			map.insert(worker, WorkerHealth::Connected);
+		}
+	}
+
 	pub fn count_worker_health(&self) -> HealthCounts {
 		let map = self.worker_health.lock().unwrap();
 		let mut counts = HealthCounts {
