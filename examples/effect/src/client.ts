@@ -1,4 +1,4 @@
-import { Effect, Random } from "effect";
+import { Effect, Logger, Random } from "effect";
 import { Client } from "@rivetkit/effect";
 import { Counter /*, IncrementBy */ } from "./actors/counter/api.ts";
 import { ChatRoom } from "./actors/chat-room/api.ts";
@@ -81,8 +81,10 @@ const program = Effect.gen(function* () {
 );
 
 const ClientLayer = Client.layer({ endpoint: "http://127.0.0.1:6420" });
+const LoggerLayer = Logger.layer([Logger.consolePretty()]);
 
-program.pipe(Effect.provide(ClientLayer), Effect.runPromise).catch((err) => {
-	console.error("client failed:", err);
+Effect.runPromise(
+	program.pipe(Effect.provide(ClientLayer), Effect.provide(LoggerLayer)),
+).catch(() => {
 	process.exit(1);
 });
