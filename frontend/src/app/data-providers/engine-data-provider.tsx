@@ -825,28 +825,45 @@ export const createNamespaceContext = ({
 				queryKey: [{ namespace }, "actors", "count"] as QueryKey,
 				enabled: true,
 				queryFn: async () => {
-					// TODO: fetch all actor names only to get the count is inefficient
+					// TODO: Replace this whole probe with a single request once the
+					// engine supports namespace-wide actor existence. The /actors
+					// list endpoint currently requires a name (or actor_ids), so we
+					// cannot ask "does this namespace have any actor?" in one call.
+					// Add either a no-name namespace-wide list/scan or a dedicated
+					// "has actors / count" endpoint, then this becomes one request.
+					//
+					// Every consumer only checks whether the result is > 0, so this
+					// resolves to 0 or 1 rather than a true total. Until the engine
+					// change lands, existence is probed per name in parallel batches,
+					// stopping at the first actor found. A namespace with actors
+					// usually resolves in the first batch; only an empty (onboarding)
+					// namespace pays a full scan, where the name list is small.
 					const namesList = await client.actorsListNames({
 						namespace,
 						limit: 100,
 					});
 
 					const names = Object.keys(namesList.names);
+					const BATCH_SIZE = 32;
 
-					const data = await Promise.all(
-						names.map((name) =>
-							client.actorsList({
-								namespace,
-								name,
-								limit: 1,
-								includeDestroyed: true,
-							}),
-						),
-					);
-					return data.reduce(
-						(acc, curr) => acc + curr.actors.length,
-						0,
-					);
+					for (let i = 0; i < names.length; i += BATCH_SIZE) {
+						const batch = names.slice(i, i + BATCH_SIZE);
+						const results = await Promise.all(
+							batch.map((name) =>
+								client.actorsList({
+									namespace,
+									name,
+									limit: 1,
+									includeDestroyed: true,
+								}),
+							),
+						);
+						if (results.some((r) => r.actors.length > 0)) {
+							return 1;
+						}
+					}
+
+					return 0;
 				},
 				retry: shouldRetryAllExpect403,
 				throwOnError: noThrow,

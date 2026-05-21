@@ -1,10 +1,4 @@
-import {
-	faActorsBorderless,
-	faGear,
-	faPlus,
-	Icon,
-	type IconProp,
-} from "@rivet-gg/icons";
+import { faGear, faPlus, Icon } from "@rivet-gg/icons";
 import {
 	queryOptions,
 	useInfiniteQuery,
@@ -12,7 +6,7 @@ import {
 	useSuspenseInfiniteQuery,
 } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
-import { lazy, Suspense, type ReactNode } from "react";
+import { type ReactNode } from "react";
 import {
 	Button,
 	cn,
@@ -22,72 +16,11 @@ import {
 	SmallText,
 	WithTooltip,
 } from "@/components";
+import { ActorIcon } from "@/components/lazy-icon";
 import { useDataProvider, useCloudNamespaceDataProvider } from "@/components/actors";
+import { VisibilitySensor } from "@/components/visibility-sensor";
 import { ImagesTable } from "@/app/images-table";
 import { NoProvidersAlert } from "@/components/actors/no-providers-alert";
-
-const emojiRegex =
-	/[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]|[\u{1F600}-\u{1F64F}]|[\u{1F680}-\u{1F6FF}]|[\u{1F1E0}-\u{1F1FF}]/u;
-
-function isEmoji(str: string): boolean {
-	return emojiRegex.test(str);
-}
-
-function capitalize(str: string): string {
-	return str.charAt(0).toUpperCase() + str.slice(1);
-}
-
-function toPascalCase(str: string): string {
-	return str
-		.split("-")
-		.map((part) => capitalize(part))
-		.join("");
-}
-
-const iconModules = import.meta.glob<Record<string, IconProp>>(
-	"../../packages/icons/dist/icons/*.js",
-);
-
-function getLazyIcon(iconName: string) {
-	const loader = iconModules[`../../packages/icons/dist/icons/${iconName}.js`];
-	return lazy(() =>
-		(loader ? loader() : Promise.reject())
-			.then((mod) => ({
-				default: ({ className }: { className?: string }) => (
-					<Icon
-						icon={mod[iconName] ?? faActorsBorderless}
-						className={className}
-					/>
-				),
-			}))
-			.catch(() => ({
-				default: ({ className }: { className?: string }) => (
-					<Icon icon={faActorsBorderless} className={className} />
-				),
-			})),
-	);
-}
-
-function ActorIcon({
-	iconValue,
-	className,
-}: {
-	iconValue: string | null;
-	className?: string;
-}) {
-	if (iconValue && isEmoji(iconValue)) {
-		return <span className={cn("text-2xl", className)}>{iconValue}</span>;
-	}
-
-	const iconName = iconValue ? `fa${toPascalCase(iconValue)}` : null;
-
-	if (!iconName) {
-		return <Icon icon={faActorsBorderless} className={className} />;
-	}
-
-	const LazyIcon = getLazyIcon(iconName);
-	return <LazyIcon className={className} />;
-}
 
 function GridCard({
 	children,
@@ -135,9 +68,8 @@ export function ActorsGrid({
 }) {
 	const dataProvider = useDataProvider();
 	const navigate = useNavigate();
-	const { data, isLoading } = useInfiniteQuery(
-		dataProvider.buildsQueryOptions(),
-	);
+	const { data, isLoading, hasNextPage, fetchNextPage, isFetchingNextPage } =
+		useInfiniteQuery(dataProvider.buildsQueryOptions());
 	const { data: runnerNamesCount = 0 } = useInfiniteQuery({
 		...dataProvider.runnerNamesQueryOptions(),
 		select: (data) => data.pages.flatMap((page) => page.names).length,
@@ -247,7 +179,8 @@ export function ActorsGrid({
 								</div>
 							)
 						) : (
-							<div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+							<>
+								<div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
 								{sorted.map((build) => {
 									const meta = build.name.metadata as
 										| Record<string, unknown>
@@ -279,19 +212,10 @@ export function ActorsGrid({
 											)}
 										>
 											<div className="flex h-9 w-9 items-center justify-center rounded-md bg-foreground/[0.06] text-foreground/80">
-												<Suspense
-													fallback={
-														<Icon
-															icon={faActorsBorderless}
-															className="opacity-60 animate-pulse"
-														/>
-													}
-												>
-													<ActorIcon
-														iconValue={iconValue}
-														className="text-lg"
-													/>
-												</Suspense>
+												<ActorIcon
+													iconValue={iconValue}
+													className="text-lg"
+												/>
 											</div>
 											<div className="font-medium text-sm leading-tight">
 												{displayName}
@@ -304,7 +228,17 @@ export function ActorsGrid({
 										</Link>
 									);
 								})}
-							</div>
+								{isFetchingNextPage
+									? Array.from({ length: 4 }).map((_, i) => (
+											// biome-ignore lint/suspicious/noArrayIndexKey: skeleton loaders are static
+											<ActorGridCardSkeleton key={`next-${i}`} />
+										))
+									: null}
+								</div>
+								{hasNextPage && !isFetchingNextPage ? (
+									<VisibilitySensor onChange={fetchNextPage} />
+								) : null}
+							</>
 						)}
 					</section>
 
