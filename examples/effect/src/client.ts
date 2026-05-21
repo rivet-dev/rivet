@@ -23,10 +23,13 @@ const program = Effect.gen(function* () {
 	const directoryClient = yield* Directory.client;
 	const moderatorClient = yield* Moderator.client;
 
+		// This is a workaround. Scope helper actors to this run so stale
+		// singleton actors left in the local engine DB cannot trap nested RPCs.
 	const roomName = `effect-room-${runId}`;
+	const runKey = ["run", roomName];
 	const room = chatRoomClient.getOrCreate([roomName]);
-	const directory = directoryClient.getOrCreate(["main"]);
-	const moderator = moderatorClient.getOrCreate(["main"]);
+	const directory = directoryClient.getOrCreate(runKey);
+	const moderator = moderatorClient.getOrCreate(runKey);
 
 	yield* room.Initialize({ name: roomName });
 	yield* Effect.log(`ChatRoom.Initialize`);

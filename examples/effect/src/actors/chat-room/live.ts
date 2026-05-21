@@ -12,8 +12,11 @@ export const ChatRoomLive = ChatRoom.toLayer(
 			const moderatorClient = yield* Moderator.client;
 			const directoryClient = yield* Directory.client;
 
-			const directory = directoryClient.getOrCreate(["main"]);
-			const moderator = moderatorClient.getOrCreate(["main"]);
+			// This is a workaround. Scope helper actors to this run so stale
+			// singleton actors left in the local engine DB cannot trap nested RPCs.
+			const runKey = ["run", ...address.key];
+			const directory = directoryClient.getOrCreate(runKey);
+			const moderator = moderatorClient.getOrCreate(runKey);
 			// The plain SDK example stores this in createVars. The Effect SDK
 			// does not expose vars yet, so the wake-scope closure owns it.
 			const sessionId = yield* Random.nextUUIDv4;
