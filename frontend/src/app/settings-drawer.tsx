@@ -23,6 +23,7 @@ import {
 	useCloudNamespaceDataProvider,
 	useCloudProjectDataProvider,
 } from "@/components/actors/data-provider";
+import { BillingUsageGauge } from "./billing/billing-usage-gauge";
 import { BillingPanel } from "./settings-pages/billing-panel";
 import {
 	NamespaceAdvancedContent,
@@ -202,6 +203,12 @@ export function SettingsDrawer({
 												label={item.label}
 												active={activeTab === item.key}
 												onClick={() => switchTab(item.key)}
+												trailing={
+													item.key === "billing" &&
+													activeTab !== "billing" ? (
+														<NavBillingGauge />
+													) : null
+												}
 											/>
 										))}
 									</div>
@@ -235,11 +242,13 @@ function NavItem({
 	label,
 	active,
 	onClick,
+	trailing,
 }: {
 	icon: IconProp;
 	label: string;
 	active: boolean;
 	onClick: () => void;
+	trailing?: ReactNode;
 }) {
 	return (
 		<button
@@ -255,7 +264,26 @@ function NavItem({
 		>
 			<Icon icon={icon} className="size-3 shrink-0" />
 			<span className="truncate">{label}</span>
+			{trailing}
 		</button>
+	);
+}
+
+// Renders the usage gauge next to the Billing nav item. Guarded with
+// `shouldThrow: false` plus a `loaderData` check because the drawer can render
+// while the project match tree is mid-transition; without it the inner billing
+// hooks read undefined loader data and crash. Returns null off a project route
+// so the project-scoped hooks never run.
+function NavBillingGauge() {
+	const match = useMatch({
+		from: "/_context/orgs/$organization/projects/$project",
+		shouldThrow: false,
+	});
+	if (!match || !match.loaderData) return null;
+	return (
+		<span className="ml-auto flex items-center shrink-0">
+			<BillingUsageGauge />
+		</span>
 	);
 }
 

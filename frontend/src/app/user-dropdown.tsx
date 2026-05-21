@@ -33,6 +33,8 @@ import {
 	Skeleton,
 } from "@/components";
 import { useCloudDataProvider } from "@/components/actors";
+import { BillingPlanBadge } from "./billing/billing-plan-badge";
+import { BillingUsageGauge } from "./billing/billing-usage-gauge";
 import { authClient } from "@/lib/auth";
 import { orgConicGradient, paletteForLetter } from "@/lib/org-palette";
 import { useTheme } from "@/lib/theme";
@@ -128,6 +130,10 @@ export function UserDropdown({ children }: { children?: React.ReactNode }) {
 					<DropdownMenuItem onSelect={goToBilling}>
 						<Icon icon={faCreditCard} className="mr-2 size-3.5 text-muted-foreground" />
 						Billing
+						<span className="ml-auto flex items-center gap-1">
+							<BillingUsageGauge />
+							<BillingPlanBadge />
+						</span>
 					</DropdownMenuItem>
 				) : null}
 				{params.organization ? (
