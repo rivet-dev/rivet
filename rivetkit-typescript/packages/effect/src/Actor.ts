@@ -18,12 +18,12 @@ import {
 } from "effect";
 import * as Rivetkit from "rivetkit";
 import type * as RivetkitDb from "rivetkit/db";
-import { hasStringProperty } from "./internal/utils";
 import type * as Action from "./Action";
 import * as Client from "./Client";
 import * as ActionErrorEnvelope from "./internal/ActionErrorEnvelope";
 import type * as StateOptions from "./internal/StateOptions";
 import { readTraceMeta, rpcSystem } from "./internal/tracing";
+import { hasStringProperty } from "./internal/utils";
 import * as Registry from "./Registry";
 import type * as RivetError from "./RivetError";
 import * as State from "./State";
@@ -156,18 +156,6 @@ type StateOptionsCodec<State extends StateOptions.Any> = {
 		Schema.SchemaError,
 		State["schema"]["EncodingServices"]
 	>;
-};
-
-const makeStateOptionsCodec = <State extends StateOptions.Any>(
-	state: State,
-): StateOptionsCodec<State> => {
-	const schema = state.schema as State["schema"];
-
-	return {
-		decode: Schema.decodeEffect(schema),
-		decodeUnknown: Schema.decodeUnknownEffect(schema),
-		encode: Schema.encodeEffect(schema),
-	};
 };
 
 type RivetkitActorDefinitionFor<
@@ -524,10 +512,11 @@ const makeRivetkitActor = Effect.fnUntraced(function* <
 	const services = yield* Effect.context<any>();
 
 	const { effectOptions, rivetkitOptions } = splitOptions(options);
-	const stateCodec = UndefinedOr.map(
-		effectOptions.state,
-		makeStateOptionsCodec,
-	);
+	const stateCodec = UndefinedOr.map(effectOptions.state, (state) => ({
+		decode: Schema.decodeEffect(state.schema),
+		decodeUnknown: Schema.decodeUnknownEffect(state.schema),
+		encode: Schema.encodeEffect(state.schema),
+	}));
 
 	const instances = MutableHashMap.empty<
 		string,
