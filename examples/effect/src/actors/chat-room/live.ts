@@ -1,4 +1,4 @@
-import { Effect, Schema } from "effect";
+import { Effect, Random, Schema } from "effect";
 import { Actor, State } from "@rivetkit/effect";
 import { db } from "rivetkit/db";
 import { ChatRoom } from "./api.ts";
@@ -15,7 +15,7 @@ export const ChatRoomLive = ChatRoom.toLayer(
 			const address = yield* Actor.CurrentAddress;
 			// The plain SDK example stores this in createVars. The Effect SDK
 			// does not expose vars yet, so the wake-scope closure owns it.
-			const sessionId = crypto.randomUUID();
+			const sessionId = yield* Random.nextUUIDv4;
 
 			yield* State.update(state, (current) => ({
 				...current,
