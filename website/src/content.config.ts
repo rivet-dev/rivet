@@ -46,6 +46,12 @@ const posts = defineCollection({
 		published: z.coerce.date(),
 		category: z.enum(['changelog', 'monthly-update', 'launch-week', 'technical', 'guide', 'frogs']),
 		keywords: z.array(z.string()).optional(),
+		image: z.object({
+			src: z.string().url(),
+			width: z.number(),
+			height: z.number(),
+			format: z.string().optional(),
+		}).optional(),
 		unpublished: z.boolean().optional(),
 	}),
 });

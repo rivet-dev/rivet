@@ -852,7 +852,8 @@ const exploreFeatures = [
 
 const CAROUSEL_INTERVAL = 5000;
 
-const GIF_SRC = `/onboarding-demo.gif?t=${Date.now()}`;
+const GIF_SRC =
+	"https://assets.rivet.dev/dashboard/onboarding/onboarding-demo.gif";
 
 function ExploreRivet() {
 	const [activeIndex, setActiveIndex] = useState(0);

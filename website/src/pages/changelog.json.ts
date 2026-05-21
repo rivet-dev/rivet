@@ -25,7 +25,7 @@ export const GET: APIRoute = async () => {
 
 				// Find the image for this post
 				const imagePath = Object.keys(images).find(p => p.includes(slug));
-				const image = imagePath ? images[imagePath].default : null;
+				const image = entry.data.image || (imagePath ? images[imagePath].default : null);
 
 				return {
 					title,

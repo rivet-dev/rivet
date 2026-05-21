@@ -33,7 +33,11 @@ export async function getStaticPaths() {
 		.map((entry) => {
 			const slug = entry.id.replace(/\/page$/, '');
 			const imagePath = Object.keys(images).find((p) => p.includes(slug));
-			const image = imagePath ? images[imagePath].default : null;
+			const image = entry.data.image
+				? { ...entry.data.image, remote: true }
+				: imagePath
+					? { ...images[imagePath].default, remote: false }
+					: null;
 			return {
 				params: { slug },
 				props: { entry, image },
@@ -165,7 +169,19 @@ const breadcrumbSchema = {
 				className="w-full lg:flex-1 min-w-0 lg:order-2 max-w-none"
 			>
 				{image && (
-					<Image src={image} alt={title} class="rounded-xl border border-white/10" loading="eager" decoding="async" />
+					image.remote ? (
+						<img
+							src={image.src}
+							alt={title}
+							width={image.width}
+							height={image.height}
+							class="rounded-xl border border-white/10"
+							loading="eager"
+							decoding="async"
+						/>
+					) : (
+						<Image src={image} alt={title} class="rounded-xl border border-white/10" loading="eager" decoding="async" />
+					)
 				)}
 				<Content components={mdxComponents} />
 				<ArticleSocials title={title} client:load />
