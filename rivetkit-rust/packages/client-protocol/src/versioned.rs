@@ -268,10 +268,14 @@ macro_rules! impl_to_server_pair {
 macro_rules! impl_common_pair {
 	($left:ident, $right:ident) => {
 		impl_same_fields_pair!($left, $right, ActionRequest { id, name, args });
-		impl_same_fields_pair!($left, $right, SubscriptionRequest {
-			event_name,
-			subscribe,
-		});
+		impl_same_fields_pair!(
+			$left,
+			$right,
+			SubscriptionRequest {
+				event_name,
+				subscribe,
+			}
+		);
 		impl_to_server_pair!($left, $right);
 		impl_same_fields_pair!($left, $right, HttpActionRequest { args });
 		impl_same_fields_pair!($left, $right, HttpActionResponse { output });
@@ -281,17 +285,25 @@ macro_rules! impl_common_pair {
 
 macro_rules! impl_to_client_v2_v3_pair {
 	() => {
-		impl_same_fields_pair!(v2, v3, Init {
-			actor_id,
-			connection_id,
-		});
-		impl_same_fields_pair!(v2, v3, Error {
-			group,
-			code,
-			message,
-			metadata,
-			action_id,
-		});
+		impl_same_fields_pair!(
+			v2,
+			v3,
+			Init {
+				actor_id,
+				connection_id,
+			}
+		);
+		impl_same_fields_pair!(
+			v2,
+			v3,
+			Error {
+				group,
+				code,
+				message,
+				metadata,
+				action_id,
+			}
+		);
 		impl_same_fields_pair!(v2, v3, ActionResponse { id, output });
 		impl_same_fields_pair!(v2, v3, Event { name, args });
 
@@ -343,24 +355,36 @@ impl_common_pair!(v1, v2);
 impl_common_pair!(v2, v3);
 impl_common_pair!(v3, v4);
 impl_to_client_v2_v3_pair!();
-impl_same_fields_pair!(v1, v2, HttpResponseError {
-	group,
-	code,
-	message,
-	metadata,
-});
-impl_same_fields_pair!(v2, v3, HttpResponseError {
-	group,
-	code,
-	message,
-	metadata,
-});
-impl_same_fields_pair!(v3, v4, HttpQueueSendRequest {
-	body,
-	name,
-	wait,
-	timeout,
-});
+impl_same_fields_pair!(
+	v1,
+	v2,
+	HttpResponseError {
+		group,
+		code,
+		message,
+		metadata,
+	}
+);
+impl_same_fields_pair!(
+	v2,
+	v3,
+	HttpResponseError {
+		group,
+		code,
+		message,
+		metadata,
+	}
+);
+impl_same_fields_pair!(
+	v3,
+	v4,
+	HttpQueueSendRequest {
+		body,
+		name,
+		wait,
+		timeout,
+	}
+);
 impl_same_fields_pair!(v3, v4, HttpQueueSendResponse { status, response });
 
 macro_rules! impl_versioned_manual {
@@ -609,7 +633,9 @@ impl OwnedVersionedData for HttpResponseError {
 			(Self::V2(data), 2) => serde_bare::to_vec(&data).map_err(Into::into),
 			(Self::V3(data), 3) => serde_bare::to_vec(&data).map_err(Into::into),
 			(Self::V4(data), 4) => serde_bare::to_vec(&data).map_err(Into::into),
-			(_, version) => bail!("unexpected client protocol version for HttpResponseError: {version}"),
+			(_, version) => {
+				bail!("unexpected client protocol version for HttpResponseError: {version}")
+			}
 		}
 	}
 

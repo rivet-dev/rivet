@@ -8,8 +8,8 @@ mod moved_tests {
 
 	use rivet_metrics::prometheus::{IntGauge, Opts, Registry};
 
-	use super::*;
 	use super::metrics_helpers::{metric_line_for_actor, render_global_metrics};
+	use super::*;
 
 	#[test]
 	fn duplicate_metric_registration_uses_noop_fallback() {
@@ -102,6 +102,9 @@ mod moved_tests {
 					&& line.contains("envoy_key=\"envoy-1\"")
 			})
 			.unwrap_or_else(|| panic!("{name} should render"));
-		assert!(line.ends_with(value), "{name} should have value {value}: {line}");
+		assert!(
+			line.ends_with(value),
+			"{name} should have value {value}: {line}"
+		);
 	}
 }
