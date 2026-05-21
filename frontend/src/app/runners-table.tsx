@@ -391,7 +391,10 @@ function EmptyState() {
 								>
 									<Link
 										to="."
-										search={{ modal: "create-actor" }}
+										search={(s) => ({
+											...s,
+											modal: "create-actor",
+										})}
 									>
 										Create Actor
 									</Link>

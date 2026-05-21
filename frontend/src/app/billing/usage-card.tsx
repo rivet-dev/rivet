@@ -25,7 +25,7 @@ function stripTrailingZeros(value: number, decimals: number): string {
 	return value.toFixed(decimals).replace(/\.?0+$/, "");
 }
 
-function formatMetricValue(value: bigint, type: MetricType): string {
+export function formatMetricValue(value: bigint, type: MetricType): string {
 	const num = Number(value);
 
 	switch (type) {

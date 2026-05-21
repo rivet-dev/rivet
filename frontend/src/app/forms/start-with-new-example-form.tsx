@@ -40,12 +40,7 @@ export const Organization = ({ className }: { className?: string }) => {
 						<CloudOrganizationSelect
 							showCreateOrganization
 							onCreateClick={() => {
-								navigate({
-									to: ".",
-									search: {
-										modal: "create-organization",
-									},
-								});
+								navigate({ to: "/new-org" });
 							}}
 							onValueChange={field.onChange}
 							value={field.value}

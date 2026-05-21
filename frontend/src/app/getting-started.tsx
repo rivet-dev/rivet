@@ -217,21 +217,21 @@ export function GettingStarted({
 	};
 
 	return (
-		<Content className="flex flex-col items-center justify-safe-center">
+		<Content className="flex-1 min-h-0 !h-auto !overflow-hidden flex flex-col items-center justify-safe-center">
 			<motion.div
-				className="relative min-w-0 overflow-hidden w-full"
+				className="relative min-w-0 overflow-hidden w-full flex-1 min-h-0 flex flex-col"
 				initial={{ opacity: 0, y: 20 }}
 				animate={{ opacity: 1, y: 0 }}
 				transition={{ duration: 0.3 }}
 				data-testid={TEST_IDS.Onboarding.GettingStartedWizard}
 			>
-				<div className="-full flex items-safe-center justify-center [&_[data-component='stepper']>form]:mx-auto [&_[data-component='stepper']]:overflow-x-hidden [&_[data-component='stepper']]:w-full [&:has([data-wide='true'])_[data-component='stepper']>form]:max-w-[64rem] has-[[data-wide='true']]:w-auto [&_[data-component='stepper']>form]:max-w-[32rem] px-4 h-full overflow-auto pt-8">
+				<div className="flex-1 min-h-0 flex items-safe-center justify-center [&_[data-component='stepper']>form]:mx-auto [&_[data-component='stepper']]:overflow-x-hidden [&_[data-component='stepper']]:w-full [&:has([data-wide='true'])_[data-component='stepper']>form]:max-w-[56rem] has-[[data-wide='true']]:w-auto [&_[data-component='stepper']>form]:max-w-[32rem] px-4 overflow-auto pt-4">
 					<CodeGroupSyncProvider>
 						<StepperForm
 							{...stepper}
 							singlePage
 							formId="onboarding"
-							className="mb-8 mt-12"
+							className="mb-4 mt-6"
 							initialStep={
 								displayFrontendOnboarding
 									? "frontend"
@@ -549,9 +549,7 @@ function ProviderCard({
 				)}
 			/>
 			<div className="min-w-0">
-				<div className="flex items-center gap-2 flex-wrap">
-					<p className="text-sm font-medium">{option.displayName}</p>
-				</div>
+				<p className="text-sm font-medium">{option.displayName}</p>
 				<p className="text-xs text-muted-foreground">
 					{option.description}
 				</p>
@@ -1122,7 +1120,7 @@ function AgentPromptBanner({ code }: { code: string }) {
 			<Badge className="absolute -top-2.5 left-4 z-10 bg-background">
 				Recommended
 			</Badge>
-			<span className="text-sm font-medium text-white text-left">
+			<span className="text-sm font-medium text-foreground text-left">
 				Have your coding agent complete these steps automatically to
 				deploy to Rivet Cloud.
 			</span>
@@ -1584,7 +1582,13 @@ function FrontendSetup() {
 						</Button>
 					) : (
 						<Button variant="outline" asChild>
-							<Link to="." search={{ modal: "create-actor" }}>
+							<Link
+								to="."
+								search={(s) => ({
+									...s,
+									modal: "create-actor",
+								})}
+							>
 								Create Actor
 							</Link>
 						</Button>
@@ -1595,7 +1599,13 @@ function FrontendSetup() {
 						size="xs"
 						className="text-muted-foreground mx-auto inline-block"
 					>
-						<Link to="." search={{ modal: "create-actor" }}>
+						<Link
+							to="."
+							search={(s) => ({
+								...s,
+								modal: "create-actor",
+							})}
+						>
 							or Manually Create Actor
 						</Link>
 					</Button>

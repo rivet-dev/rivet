@@ -1,10 +1,8 @@
-import {
-	CatchBoundary,
-	createFileRoute,
-	notFound,
-	redirect,
-} from "@tanstack/react-router";
+import { useSuspenseQuery } from "@tanstack/react-query";
+import { createFileRoute, notFound, redirect } from "@tanstack/react-router";
 import { Actors } from "@/app/actors";
+import { ActorsGrid } from "@/app/actors-grid";
+import { useCloudNamespaceDataProvider } from "@/components/actors";
 
 export const Route = createFileRoute(
 	"/_context/orgs/$organization/projects/$project/ns/$namespace/",
@@ -42,18 +40,16 @@ export const Route = createFileRoute(
 
 		const n: string[] = deps.n || [];
 
+		// Without a selected actor name, render the grid landing instead of
+		// auto-redirecting into the first build's instances.
 		if (!n[0]) {
-			const builds = await context.queryClient.fetchInfiniteQuery(
-				dataProvider.buildsQueryOptions(),
-			);
-			const firstBuildId = Object.keys(builds.pages[0]?.names ?? {})[0];
-
-			if (!firstBuildId) {
-				await runnerPrefetch;
-				return;
-			}
-
-			n[0] = firstBuildId;
+			await Promise.all([
+				runnerPrefetch,
+				context.queryClient.prefetchInfiniteQuery(
+					dataProvider.buildsQueryOptions(),
+				),
+			]);
+			return;
 		}
 
 		const [actors] = await Promise.all([
@@ -80,13 +76,52 @@ export const Route = createFileRoute(
 });
 
 export function RouteComponent() {
-	const { actorId } = Route.useSearch();
+	const search = Route.useSearch() as Record<string, unknown>;
+	const actorId = search.actorId as string | undefined;
+	const actorKey = search.actorKey as string | undefined;
+	const n = search.n as string[] | undefined;
+	const hasSelection = !!(actorId || actorKey || n?.length);
 
+	return (
+		<NamespaceContent
+			hasSelection={hasSelection}
+			actorId={actorKey ?? actorId}
+		/>
+	);
+}
+
+function NamespaceContent({
+	hasSelection,
+	actorId,
+}: {
+	hasSelection: boolean;
+	actorId: string | undefined;
+}) {
+	const { namespace: namespaceParam } = Route.useParams();
+	const dataProvider = useCloudNamespaceDataProvider();
+	const { data: namespace } = useSuspenseQuery(
+		dataProvider.currentProjectNamespaceQueryOptions({
+			namespace: namespaceParam,
+		}),
+	);
+
+	if (!hasSelection) {
+		return <ActorsGrid namespaceLabel={namespace.displayName} />;
+	}
 	return <Actors actorId={actorId} />;
 }
 
 function PendingComponent() {
-	const { actorId } = Route.useSearch();
+	const search = Route.useSearch() as Record<string, unknown>;
+	const actorId = search.actorId as string | undefined;
+	const actorKey = search.actorKey as string | undefined;
+	const n = search.n as string[] | undefined;
+	const hasSelection = !!(actorId || actorKey || n?.length);
 
-	return <Actors actorId={actorId} />;
+	return (
+		<NamespaceContent
+			hasSelection={hasSelection}
+			actorId={actorKey ?? actorId}
+		/>
+	);
 }

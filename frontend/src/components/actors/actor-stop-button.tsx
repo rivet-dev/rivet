@@ -49,7 +49,7 @@ export function ActorStopButton({ actorId }: ActorStopButtonProps) {
 	return (
 		<Button
 			isLoading={isPending}
-			variant="destructive"
+			variant="destructive-outline"
 			size="sm"
 			onClick={(e) => {
 				e?.stopPropagation();

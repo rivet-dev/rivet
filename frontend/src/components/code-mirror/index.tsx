@@ -1,24 +1,40 @@
 import { json, jsonParseLinter } from "@codemirror/lang-json";
 import { linter } from "@codemirror/lint";
 import { Annotation } from "@codemirror/state";
-import { githubDark, githubDarkInit } from "@uiw/codemirror-theme-github";
+import {
+	githubDark,
+	githubDarkInit,
+	githubLight,
+	githubLightInit,
+} from "@uiw/codemirror-theme-github";
 import ReactCodeMirror, {
 	type ReactCodeMirrorProps,
 	type ReactCodeMirrorRef,
 } from "@uiw/react-codemirror";
 import { forwardRef } from "react";
+import { useTheme } from "@/lib/theme";
 
-const theme = githubDarkInit({
-	settings: {
-		background: "transparent",
-		lineHighlight: "transparent",
-		fontSize: "12px",
-	},
-});
+const transparentSettings = {
+	background: "transparent",
+	lineHighlight: "transparent",
+	fontSize: "12px",
+};
+
+const transparentDarkTheme = githubDarkInit({ settings: transparentSettings });
+const transparentLightTheme = githubLightInit({ settings: transparentSettings });
 
 export const CodeMirror = forwardRef<ReactCodeMirrorRef, ReactCodeMirrorProps>(
 	(props, ref) => {
-		return <ReactCodeMirror ref={ref} theme={theme} {...props} />;
+		const { theme } = useTheme();
+		return (
+			<ReactCodeMirror
+				ref={ref}
+				theme={
+					theme === "dark" ? transparentDarkTheme : transparentLightTheme
+				}
+				{...props}
+			/>
+		);
 	},
 );
 
@@ -26,6 +42,7 @@ interface JsonCodeProps extends ReactCodeMirrorProps {}
 
 export const JsonCode = forwardRef<ReactCodeMirrorRef, JsonCodeProps>(
 	({ value, extensions = [], ...props }, ref) => {
+		const { theme } = useTheme();
 		return (
 			<ReactCodeMirror
 				ref={ref}
@@ -42,7 +59,7 @@ export const JsonCode = forwardRef<ReactCodeMirrorRef, JsonCodeProps>(
 					}),
 					...extensions,
 				]}
-				theme={githubDark}
+				theme={theme === "dark" ? githubDark : githubLight}
 				value={value}
 			/>
 		);

@@ -11,6 +11,7 @@ import posthog from "posthog-js";
 import { useEffect } from "react";
 import z from "zod";
 import { getConfig, ls } from "@/components";
+import { SettingsDrawerHost } from "@/app/settings-drawer";
 import { useDialog } from "@/app/use-dialog";
 import { ModalRenderer } from "@/components/modal-renderer";
 import { authClient } from "@/lib/auth";
@@ -28,6 +29,7 @@ const searchSchema = z
 			])
 			.or(z.string())
 			.optional(),
+		settings: z.string().optional(),
 		utm_source: z.string().optional(),
 		actorId: z.string().optional(),
 		tab: z.string().optional(),
@@ -109,6 +111,7 @@ function RouteComponent() {
 			<Modals />
 			{!features.platform && <EngineModals />}
 			{features.platform && <CloudModals />}
+			{features.platform && <SettingsDrawerHost />}
 		</>
 	);
 }

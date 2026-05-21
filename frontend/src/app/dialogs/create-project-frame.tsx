@@ -16,6 +16,11 @@ const useDefaultOrg = () => {
 	return undefined;
 };
 
+export type CreateProjectSuccessVars = {
+	displayName: string;
+	organization: string;
+};
+
 export default function CreateProjectFrameContent({
 	organization,
 	onSuccess,
@@ -23,10 +28,9 @@ export default function CreateProjectFrameContent({
 }: {
 	name?: string;
 	organization?: string;
-	// FIXME
 	onSuccess?: (
 		data: Rivet.ProjectsCreateResponse,
-		vars: { displayName: string; organization: string },
+		vars: CreateProjectSuccessVars,
 	) => void;
 }) {
 	const queryClient = useQueryClient();
@@ -37,29 +41,36 @@ export default function CreateProjectFrameContent({
 
 	const { mutateAsync } = useMutation({
 		...provider.createProjectMutationOptions(),
-		onSuccess: async (data, vars) => {
-			await queryClient.refetchQueries(
-				provider.currentOrgProjectsQueryOptions(),
-			);
-
-			return onSuccess
-				? onSuccess(data, vars)
-				: navigate({
-						to: "/orgs/$organization/projects/$project",
-						params: {
-							organization: vars.organization,
-							project: data.project.name,
-						},
-					});
-		},
 	});
 
 	return (
 		<CreateProjectForm.Form
 			onSubmit={async (values) => {
-				await mutateAsync({
+				const result = await mutateAsync({
 					displayName: values.name,
 					organization: values.organization,
+				});
+
+				await queryClient.refetchQueries(
+					provider.currentOrgProjectsQueryOptions(),
+				);
+
+				const successVars: CreateProjectSuccessVars = {
+					displayName: values.name,
+					organization: values.organization,
+				};
+
+				if (onSuccess) {
+					onSuccess(result, successVars);
+					return;
+				}
+
+				navigate({
+					to: "/orgs/$organization/projects/$project",
+					params: {
+						organization: values.organization,
+						project: result.project.name,
+					},
 				});
 			}}
 			defaultValues={{
@@ -68,7 +79,7 @@ export default function CreateProjectFrameContent({
 			}}
 		>
 			<Frame.Header>
-				<Frame.Title>Create Project</Frame.Title>
+				<Frame.Title>Create new project</Frame.Title>
 			</Frame.Header>
 			<Frame.Content>
 				<Flex gap="4" direction="col">
@@ -76,10 +87,8 @@ export default function CreateProjectFrameContent({
 					<CreateProjectForm.Name />
 				</Flex>
 			</Frame.Content>
-			<Frame.Footer>
-				<CreateProjectForm.Submit type="submit">
-					Create
-				</CreateProjectForm.Submit>
+			<Frame.Footer className="flex-row justify-end">
+				<CreateProjectForm.DefaultSubmit />
 			</Frame.Footer>
 		</CreateProjectForm.Form>
 	);

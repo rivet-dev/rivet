@@ -13,6 +13,7 @@ import {
 	SelectValue,
 	Skeleton,
 } from "@/components";
+import { orgConicGradient, paletteForLetter } from "@/lib/org-palette";
 import { useCloudDataProvider } from "./actors";
 
 interface CloudOrganizationSelectProps extends ComponentProps<typeof Select> {
@@ -69,19 +70,28 @@ export function CloudOrganizationSelect({
 						</SelectItem>
 					</>
 				) : null}
-				{data.map((org) => (
-					<SelectItem key={org.id} value={org.slug}>
-						<span className="inline-flex items-center gap-2">
-							<Avatar className="size-5">
-								<AvatarImage src={org.logo ?? undefined} />
-								<AvatarFallback>
-									{org.name?.[0]?.toUpperCase()}
-								</AvatarFallback>
-							</Avatar>
-							<span className="truncate">{org.name}</span>
-						</span>
-					</SelectItem>
-				))}
+				{data.map((org) => {
+					const palette = paletteForLetter(org.name ?? "");
+					return (
+						<SelectItem key={org.id} value={org.slug}>
+							<span className="inline-flex items-center gap-2">
+								<Avatar className="size-5">
+									<AvatarImage src={org.logo ?? undefined} />
+									<AvatarFallback
+										className="text-white text-[10px] font-semibold"
+										style={{
+											backgroundImage:
+												orgConicGradient(palette),
+										}}
+									>
+										{org.name?.[0]?.toUpperCase()}
+									</AvatarFallback>
+								</Avatar>
+								<span className="truncate">{org.name}</span>
+							</span>
+						</SelectItem>
+					);
+				})}
 			</SelectContent>
 		</Select>
 	);
