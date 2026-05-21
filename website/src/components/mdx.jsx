@@ -71,6 +71,11 @@ export const Lead = ({ children }) => {
   return <p className='mb-10 text-lg font-semibold leading-7'>{children}</p>;
 };
 
+// Content wrapped in <LLMOnly>...</LLMOnly> is hidden from the rendered page but
+// preserved in /llms-full.txt for LLM consumers. See llms-full.txt.ts for the
+// build-time unwrap step.
+export const LLMOnly = () => null;
+
 // Re-export from @rivet-gg/components/mdx but override Tabs with SSR-safe version
 export {
   Tip,

@@ -1,6 +1,8 @@
+import { Hono } from "hono";
 import { ENGINE_ENDPOINT } from "@/common/engine";
 import { configureServerlessPool } from "@/serverless/configure";
-import { VERSION } from "@/utils";
+import { detectRuntime, VERSION } from "@/utils";
+import { crossPlatformServe, loadRuntimeServeStatic } from "@/utils/serve";
 import {
 	type RegistryActors,
 	type RegistryConfig,
@@ -277,6 +279,36 @@ export class Registry<A extends RegistryActors> {
 		return {
 			fetch: (request) => this.handler(request),
 		};
+	}
+
+	/**
+	 * Starts an HTTP server that dispatches every request through the
+	 * serverless handler. Uses `crossPlatformServe` to pick the right
+	 * runtime (Node, Bun, Deno).
+	 *
+	 * @param opts.port      Port to listen on. Defaults to 3000.
+	 * @param opts.publicDir If set, serves static files from this directory
+	 *                       before falling through to the registry handler.
+	 *
+	 * @example
+	 * ```ts
+	 * await registry.listen();
+	 * await registry.listen({ port: 8080, publicDir: "./public" });
+	 * ```
+	 */
+	public async listen(
+		opts: { port?: number; publicDir?: string } = {},
+	): Promise<void> {
+		const port = opts.port ?? 3000;
+		const config = this.parseConfig();
+		const runtime = detectRuntime();
+		const app = new Hono();
+		if (opts.publicDir) {
+			const serveStatic = await loadRuntimeServeStatic(runtime);
+			app.use("*", serveStatic({ root: opts.publicDir }));
+		}
+		app.all("*", (c) => this.handler(c.req.raw));
+		await crossPlatformServe(config, port, app, runtime);
 	}
 
 	public async diagnostics(): Promise<RegistryDiagnostics> {
