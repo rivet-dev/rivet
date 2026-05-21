@@ -104,9 +104,8 @@ export function ServerlessConnectionCheck({
 					layoutId="serverless-health-check"
 					className={cn(
 						"text-center text-muted-foreground text-sm overflow-hidden flex items-center justify-center transition-colors border rounded-md p-4",
-						isSuccess && "text-primary-foreground border-primary",
-						isError &&
-							"text-destructive-foreground border-destructive ",
+						isSuccess && "text-primary border-primary",
+						isError && "text-destructive border-destructive",
 					)}
 					initial={{ minHeight: 0, height: 0, opacity: 0.5 }}
 					animate={{ minHeight: "8rem", height: "auto", opacity: 1 }}
