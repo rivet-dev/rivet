@@ -346,6 +346,12 @@ layer(TestLayer)("end-to-end", (it) => {
 				assert.isTrue(exit._tag === "Success");
 				if (exit._tag === "Success") {
 					assert.instanceOf(exit.value, CounterOverflowError);
+					assert.instanceOf(exit.value, Error);
+					assert.strictEqual(
+						exit.value.constructor,
+						CounterOverflowError,
+					);
+					assert.strictEqual(exit.value._tag, "CounterOverflowError");
 					assert.strictEqual(exit.value.limit, 20);
 					assert.match(exit.value.message, /exceed limit 20/);
 				}
