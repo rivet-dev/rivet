@@ -636,7 +636,7 @@ layer(TestLayer)("end-to-end", (it) => {
 		}),
 	);
 
-	it.effect.skip(
+	it.effect(
 		"runs encoding/decoding services for an action's payload, success, and error",
 		() =>
 			Effect.gen(function* () {
