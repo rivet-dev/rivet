@@ -51,9 +51,10 @@ export function ActorGeneral({ actorId }: ActorGeneralProps) {
 							instance.
 						</p>
 					</div>
-					<div className="flex items-center gap-1 shrink-0">
+					<div className="flex items-center gap-2 shrink-0">
 						<ActorSleepButton actorId={actorId} />
 						<ActorRescheduleButton actorId={actorId} />
+						<ActorStopButton actorId={actorId} />
 					</div>
 				</header>
 				<Flex
@@ -152,7 +153,6 @@ export function ActorGeneral({ actorId }: ActorGeneralProps) {
 					</Dl>
 				</Flex>
 			</section>
-			<DangerZone actorId={actorId} />
 		</div>
 	);
 }
@@ -173,31 +173,6 @@ function TimestampValue({ ts }: { ts: Date }) {
 				content={ts.toLocaleString()}
 			/>
 		</DiscreteCopyButton>
-	);
-}
-
-function DangerZone({ actorId }: { actorId: ActorId }) {
-	const provider = useDataProvider();
-	const { data: destroyedAt } = useQuery(
-		provider.actorDestroyedAtQueryOptions(actorId),
-	);
-	if (!provider.features.canDeleteActors || destroyedAt) {
-		return null;
-	}
-	return (
-		<section className="rounded-lg border border-destructive/30 bg-destructive/[0.03] overflow-hidden">
-			<header className="px-4 py-3 border-b border-destructive/20">
-				<h3 className="text-sm font-semibold text-destructive">
-					Danger zone
-				</h3>
-			</header>
-			<div className="flex items-center justify-between gap-4 px-4 py-3">
-				<p className="text-sm text-foreground min-w-0">
-					Permanently destroy this instance. Its state will be lost.
-				</p>
-				<ActorStopButton actorId={actorId} />
-			</div>
-		</section>
 	);
 }
 
