@@ -7,6 +7,7 @@ import {
 import { authClient } from "@/lib/auth";
 import { orgConicGradient, paletteForLetter } from "@/lib/org-palette";
 import { MembersPanel } from "./members-panel";
+import { SettingsCard } from "./settings-card";
 
 export function OrganizationPanel() {
 	const { data: org, isPending } = authClient.useActiveOrganization();
@@ -43,7 +44,7 @@ export function OrganizationPanel() {
 
 	return (
 		<div className="space-y-6">
-			<section className="rounded-lg border border-foreground/10 bg-card overflow-hidden">
+			<SettingsCard divided>
 				<div className="flex items-center gap-4 p-5">
 					<Avatar className="size-14 shrink-0">
 						<AvatarImage src={org.logo ?? undefined} />
@@ -76,7 +77,7 @@ export function OrganizationPanel() {
 						value={pendingInvites.toString()}
 					/>
 				</div>
-			</section>
+			</SettingsCard>
 
 			<section>
 				<header className="mb-3">
