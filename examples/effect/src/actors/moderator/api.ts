@@ -1,14 +1,16 @@
-import { Schema } from "effect";
 import { Action, Actor } from "@rivetkit/effect";
+import { Schema } from "effect";
 
-export const ModerationVerdict = Schema.Struct({
-	approved: Schema.Boolean,
-	reason: Schema.optionalKey(Schema.String),
-});
+export class BannerWordsError extends Schema.TaggedErrorClass<BannerWordsError>()(
+	"BannerWordsError",
+	{
+		message: Schema.String,
+	},
+) {}
 
 export const Review = Action.make("Review", {
 	payload: { text: Schema.String },
-	success: ModerationVerdict,
+	error: BannerWordsError,
 });
 
 export const Stats = Action.make("Stats", {
@@ -20,4 +22,3 @@ export const Stats = Action.make("Stats", {
 export const Moderator = Actor.make("moderator", {
 	actions: [Review, Stats],
 });
-

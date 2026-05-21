@@ -104,17 +104,9 @@ export const ChatRoomLive = ChatRoom.toLayer(
 					}),
 				SendMessage: ({ payload }) =>
 					Effect.gen(function* () {
-						// The normal example sends moderation work through a
-						// completable queue drained by run(). The Effect SDK does
-						// not expose queues or run loops yet, so moderation is a
-						// direct actor RPC and has no queue timeout path.
-						const verdict = yield* moderator.Review({
+						yield* moderator.Review({
 							text: payload.text,
 						});
-
-						if (!verdict.approved) {
-							return { ok: false, reason: verdict.reason };
-						}
 
 						const createdAt = yield* DateTime.now;
 						yield* Effect.tryPromise(() =>
@@ -131,7 +123,6 @@ export const ChatRoomLive = ChatRoom.toLayer(
 							text: payload.text,
 							createdAt: DateTime.formatIso(createdAt),
 						});
-						return { ok: true, createdAt };
 					}),
 				GetHistory: () =>
 					Effect.tryPromise(() =>

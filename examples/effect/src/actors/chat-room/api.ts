@@ -1,5 +1,6 @@
 import { Action, Actor } from "@rivetkit/effect";
 import { Schema } from "effect";
+import { BannerWordsError } from "../mod";
 
 export const Member = Schema.Struct({
 	name: Schema.String,
@@ -11,12 +12,6 @@ export const Message = Schema.Struct({
 	sender: Schema.String,
 	text: Schema.String,
 	createdAt: Schema.DateTimeUtc,
-});
-
-export const SendMessageResult = Schema.Struct({
-	ok: Schema.Boolean,
-	reason: Schema.optionalKey(Schema.String),
-	createdAt: Schema.optionalKey(Schema.DateTimeUtc),
 });
 
 // The plain RivetKit example uses createState input to name the room at
@@ -40,7 +35,7 @@ export const SendMessage = Action.make("SendMessage", {
 		sender: Schema.String,
 		text: Schema.String,
 	},
-	success: SendMessageResult,
+	error: BannerWordsError,
 });
 
 export const GetHistory = Action.make("GetHistory", {

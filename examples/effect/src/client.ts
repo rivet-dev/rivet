@@ -1,9 +1,12 @@
-import { Effect, Logger, Random } from "effect";
 import { Client } from "@rivetkit/effect";
-import { Counter /*, IncrementBy */ } from "./actors/counter/api.ts";
-import { ChatRoom } from "./actors/chat-room/api.ts";
-import { Directory } from "./actors/directory/api.ts";
-import { Moderator } from "./actors/moderator/api.ts";
+import { Effect, Logger, Random } from "effect";
+import {
+	type BannerWordsError,
+	ChatRoom,
+	Counter,
+	Directory,
+	Moderator,
+} from "./actors/mod.ts";
 
 const program = Effect.gen(function* () {
 	const runId = yield* Random.nextUUIDv4;
@@ -31,19 +34,22 @@ const program = Effect.gen(function* () {
 	const member = yield* room.Join({ name: "Alice" });
 	yield* Effect.log(`ChatRoom.Join -> ${member.name}`);
 
-	const sent = yield* room.SendMessage({
+	yield* room.SendMessage({
 		sender: "Alice",
 		text: "hello from Effect",
 	});
-	yield* Effect.log(`ChatRoom.SendMessage -> ok=${sent.ok}`);
+	yield* Effect.log(`ChatRoom.SendMessage`);
 
-	const rejected = yield* room.SendMessage({
-		sender: "Alice",
-		text: "this contains spam",
-	});
-	yield* Effect.log(
-		`ChatRoom.SendMessage rejected -> ok=${rejected.ok} reason=${rejected.reason}`,
-	);
+	yield* room
+		.SendMessage({
+			sender: "Alice",
+			text: "this contains spam",
+		})
+		.pipe(
+			Effect.catchTag("BannerWordsError", (e: BannerWordsError) =>
+				Effect.logError(`ChatRoom.SendMessage rejected: ${e.message}`),
+			),
+		);
 
 	const history = yield* room.GetHistory();
 	yield* Effect.log(`ChatRoom.GetHistory -> ${history.length} messages`);
@@ -80,7 +86,9 @@ const program = Effect.gen(function* () {
 	),
 );
 
-const ClientLayer = Client.layer({ endpoint: "http://127.0.0.1:6420" });
+const ClientLayer = Client.layer({
+	endpoint: process.env.RIVET_ENDPOINT ?? "http://127.0.0.1:6420",
+});
 const LoggerLayer = Logger.layer([Logger.consolePretty()]);
 
 Effect.runPromise(

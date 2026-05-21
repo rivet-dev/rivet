@@ -1,15 +1,12 @@
-import { DateTime, Effect, Schema } from "effect";
 import { State } from "@rivetkit/effect";
-import { Directory, RoomEntry } from "./api.ts";
+import { DateTime, Effect, Schema } from "effect";
+import { Directory } from "./api.ts";
 
 export const DirectoryLive = Directory.toLayer(
 	({ state }) =>
 		Effect.gen(function* () {
 			return Directory.of({
 				RegisterRoom: ({ payload }) =>
-					// State writes go through Effect Schema validation. This
-					// example treats schema failures as defects instead of adding
-					// typed error channels to the action contract.
 					Effect.gen(function* () {
 						const openedAt = yield* DateTime.now;
 

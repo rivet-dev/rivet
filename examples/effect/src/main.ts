@@ -6,12 +6,14 @@ import { ChatRoomLive } from "./actors/chat-room/live.ts";
 import { DirectoryLive } from "./actors/directory/live.ts";
 import { ModeratorLive } from "./actors/moderator/live.ts";
 
+const endpoint = process.env.RIVET_ENDPOINT ?? "http://127.0.0.1:6420";
+
 const ActorsLayer = Layer.mergeAll(
 	CounterLive,
 	DirectoryLive,
 	ModeratorLive,
 	ChatRoomLive,
-).pipe(Layer.provide(Client.layer({ endpoint: "http://127.0.0.1:6420" })));
+).pipe(Layer.provide(Client.layer({ endpoint })));
 
 // Engine config defaults to spawning a local rivet-engine process and
 // listening on http://127.0.0.1:6420 (override via RIVET_ENDPOINT to

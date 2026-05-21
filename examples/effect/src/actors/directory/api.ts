@@ -1,5 +1,5 @@
-import { Schema } from "effect";
 import { Action, Actor } from "@rivetkit/effect";
+import { Schema } from "effect";
 
 export const RoomEntry = Schema.Struct({
 	name: Schema.String,

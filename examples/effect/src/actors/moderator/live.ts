@@ -1,6 +1,8 @@
 import { State } from "@rivetkit/effect";
 import { Effect, Schema } from "effect";
-import { Moderator } from "./api.ts";
+import { BannerWordsError, Moderator } from "./api.ts";
+
+const bannedWords = ["spam", "scam"];
 
 export const ModeratorLive = Moderator.toLayer(
 	({ state }) =>
@@ -8,27 +10,20 @@ export const ModeratorLive = Moderator.toLayer(
 			return Moderator.of({
 				Review: ({ payload }) =>
 					Effect.gen(function* () {
-						// State writes go through Effect Schema validation. This
-						// example treats schema failures as defects instead of adding
-						// typed error channels to the action contract.
-						const next = yield* State.updateAndGet(
-							state,
-							(current) => ({
-								...current,
-								reviewed: current.reviewed + 1,
-							}),
-						).pipe(Effect.orDie);
+						yield* State.update(state, (current) => ({
+							...current,
+							reviewed: current.reviewed + 1,
+						})).pipe(Effect.orDie);
+
 						const lower = payload.text.toLowerCase();
-						const hit = next.bannedWords.find((word) =>
+						const hit = bannedWords.find((word) =>
 							lower.includes(word),
 						);
-
-						return hit
-							? {
-									approved: false,
-									reason: `contains banned word "${hit}"`,
-								}
-							: { approved: true };
+						if (hit !== undefined) {
+							return yield* new BannerWordsError({
+								message: `contains banned word "${hit}"`,
+							});
+						}
 					}),
 				Stats: () =>
 					State.get(state).pipe(
@@ -40,11 +35,9 @@ export const ModeratorLive = Moderator.toLayer(
 	{
 		state: {
 			schema: Schema.Struct({
-				bannedWords: Schema.Array(Schema.String),
 				reviewed: Schema.Number,
 			}),
 			initialValue: () => ({
-				bannedWords: ["spam", "scam"],
 				reviewed: 0,
 			}),
 		},
