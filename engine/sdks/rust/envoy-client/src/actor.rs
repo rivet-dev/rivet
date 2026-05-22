@@ -302,11 +302,14 @@ async fn actor_inner(
 							);
 							continue;
 						}
+
+						ctx.error = Some("actor lost due to timeout".to_string());
+
 						match begin_stop(
 							&mut ctx,
 							&handle,
 							&mut http_request_tasks,
-							protocol::StopActorReason::Lost,
+							protocol::StopActorReason::SleepIntent,
 						)
 						.await
 						{
