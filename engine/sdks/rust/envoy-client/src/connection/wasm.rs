@@ -321,10 +321,7 @@ mod imp {
 	use crate::envoy::ToEnvoyMessage;
 
 	pub fn start_connection(shared: Arc<SharedContext>) {
-		let _ = crate::envoy::send_to_envoy_tx(
-			&shared,
-			ToEnvoyMessage::ConnClose { evict: false },
-		);
+		let _ = crate::envoy::send_to_envoy_tx(&shared, ToEnvoyMessage::ConnClose { evict: false });
 		tracing::error!("wasm envoy transport requires the wasm32 target");
 	}
 }

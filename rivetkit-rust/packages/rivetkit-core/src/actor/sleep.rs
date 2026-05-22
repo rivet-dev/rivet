@@ -13,22 +13,20 @@ use tokio::task::JoinHandle;
 use tracing::Instrument;
 
 use crate::actor::config::ActorConfig;
+use crate::actor::context::ActorContext;
 #[cfg(not(feature = "wasm-runtime"))]
 use crate::actor::context::ActorWorkRegion;
-use crate::actor::context::ActorContext;
 use crate::actor::task_types::ShutdownKind;
-#[cfg(feature = "wasm-runtime")]
-use crate::actor::work_registry::LocalShutdownTask;
 #[cfg(not(feature = "wasm-runtime"))]
 use crate::actor::work_registry::ActorWorkPolicy;
-use crate::actor::work_registry::{
-	ActorWorkKind, CountGuard, RegionGuard, WorkRegistry,
-};
+#[cfg(feature = "wasm-runtime")]
+use crate::actor::work_registry::LocalShutdownTask;
+use crate::actor::work_registry::{ActorWorkKind, CountGuard, RegionGuard, WorkRegistry};
 #[cfg(feature = "wasm-runtime")]
 use crate::runtime::RuntimeSpawner;
-use crate::time::{Instant, sleep};
 #[cfg(test)]
 use crate::time::sleep_until;
+use crate::time::{Instant, sleep};
 #[cfg(test)]
 use crate::types::ActorKey;
 #[cfg(feature = "wasm-runtime")]
@@ -504,7 +502,10 @@ impl ActorContext {
 		F: Future<Output = ()> + Send + 'static,
 	{
 		if Handle::try_current().is_err() {
-			tracing::warn!(kind = kind.label(), "actor work spawned without tokio runtime");
+			tracing::warn!(
+				kind = kind.label(),
+				"actor work spawned without tokio runtime"
+			);
 			return false;
 		}
 
@@ -512,7 +513,10 @@ impl ActorContext {
 		if policy.aborts_at_shutdown_deadline {
 			let mut shutdown_tasks = self.0.sleep.work.shutdown_tasks.lock();
 			if self.0.sleep.work.teardown_started.load(Ordering::Acquire) {
-				tracing::warn!(kind = kind.label(), "actor work spawned after teardown; aborting immediately");
+				tracing::warn!(
+					kind = kind.label(),
+					"actor work spawned after teardown; aborting immediately"
+				);
 				return false;
 			}
 			let region = self.begin_work_region(kind);
@@ -521,7 +525,10 @@ impl ActorContext {
 			let mut unabortable_shutdown_tasks =
 				self.0.sleep.work.unabortable_shutdown_tasks.lock();
 			if self.0.sleep.work.teardown_started.load(Ordering::Acquire) {
-				tracing::warn!(kind = kind.label(), "actor work spawned after teardown; aborting immediately");
+				tracing::warn!(
+					kind = kind.label(),
+					"actor work spawned after teardown; aborting immediately"
+				);
 				return false;
 			}
 			let region = self.begin_work_region(kind);
@@ -574,7 +581,10 @@ impl ActorContext {
 	{
 		let mut local_shutdown_tasks = self.0.sleep.work.local_shutdown_tasks.lock();
 		if self.0.sleep.work.teardown_started.load(Ordering::Acquire) {
-			tracing::warn!(kind = kind.label(), "actor work spawned after teardown; aborting immediately");
+			tracing::warn!(
+				kind = kind.label(),
+				"actor work spawned after teardown; aborting immediately"
+			);
 			return false;
 		}
 
@@ -868,9 +878,7 @@ impl ActorContext {
 				.set_http_requests_active(ctx.active_http_request_count());
 			ctx.reset_sleep_timer();
 		}));
-		self.0
-			.metrics
-			.set_http_requests_active(counter.load());
+		self.0.metrics.set_http_requests_active(counter.load());
 		Some(counter)
 	}
 }

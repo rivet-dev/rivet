@@ -10,12 +10,12 @@ use vbare::OwnedVersionedData;
 
 use crate::context::SharedContext;
 use crate::context::WsTxMessage;
-use crate::metrics::METRICS;
 #[cfg(any(
 	feature = "native-transport",
 	all(feature = "wasm-transport", target_arch = "wasm32")
 ))]
 use crate::envoy::ToEnvoyMessage;
+use crate::metrics::METRICS;
 #[cfg(any(
 	feature = "native-transport",
 	all(feature = "wasm-transport", target_arch = "wasm32")

@@ -11,8 +11,8 @@ mod moved_tests {
 
 	use crate::actor::task_types::UserTaskKind;
 
-	use super::*;
 	use super::metrics_helpers::{metric_line_for_actor, render_global_metrics};
+	use super::*;
 
 	#[test]
 	fn duplicate_metric_registration_uses_noop_fallback() {
@@ -105,7 +105,12 @@ mod moved_tests {
 		second.begin_user_task(UserTaskKind::Action);
 
 		let rendered = render_global_metrics();
-		assert_metric_value(&rendered, "rivetkit_actor_connections_active", actor_name, "5");
+		assert_metric_value(
+			&rendered,
+			"rivetkit_actor_connections_active",
+			actor_name,
+			"5",
+		);
 		assert_metric_value(&rendered, "rivetkit_actor_queue_depth", actor_name, "9");
 		assert_metric_value_with_label(
 			&rendered,
@@ -127,7 +132,12 @@ mod moved_tests {
 		drop(first);
 
 		let rendered = render_global_metrics();
-		assert_metric_value(&rendered, "rivetkit_actor_connections_active", actor_name, "3");
+		assert_metric_value(
+			&rendered,
+			"rivetkit_actor_connections_active",
+			actor_name,
+			"3",
+		);
 		assert_metric_value(&rendered, "rivetkit_actor_queue_depth", actor_name, "5");
 		assert_metric_value_with_label(
 			&rendered,
@@ -140,7 +150,12 @@ mod moved_tests {
 		drop(second);
 
 		let rendered = render_global_metrics();
-		assert_metric_value(&rendered, "rivetkit_actor_connections_active", actor_name, "0");
+		assert_metric_value(
+			&rendered,
+			"rivetkit_actor_connections_active",
+			actor_name,
+			"0",
+		);
 		assert_metric_value(&rendered, "rivetkit_actor_queue_depth", actor_name, "0");
 		assert_metric_value_with_label(
 			&rendered,
@@ -170,6 +185,9 @@ mod moved_tests {
 					&& (label.is_empty() || line.contains(label))
 			})
 			.unwrap_or_else(|| panic!("{name} should render"));
-		assert!(line.ends_with(value), "{name} should have value {value}: {line}");
+		assert!(
+			line.ends_with(value),
+			"{name} should have value {value}: {line}"
+		);
 	}
 }

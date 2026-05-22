@@ -24,6 +24,7 @@ use crate::kv::{
 	KV_CLEANUP_INTERVAL_MS, KvRequestEntry, cleanup_old_kv_requests, handle_kv_request,
 	handle_kv_response, process_unsent_kv_requests,
 };
+use crate::metrics::METRICS;
 use crate::sqlite::{
 	RemoteSqliteRequest, RemoteSqliteRequestEntry, RemoteSqliteResponse, SqliteRequest,
 	SqliteRequestEntry, SqliteResponse, cleanup_old_remote_sqlite_requests,
@@ -36,7 +37,6 @@ use crate::sqlite::{
 use crate::tunnel::{
 	handle_tunnel_message, resend_buffered_tunnel_messages, send_hibernatable_ws_message_ack,
 };
-use crate::metrics::METRICS;
 use crate::utils::{BufferMap, EnvoyShutdownError, SleepFuture, boxed_sleep, spawn_detached};
 
 /// Process-wide envoy slot. Holds the handle inside a mutex so a stopped

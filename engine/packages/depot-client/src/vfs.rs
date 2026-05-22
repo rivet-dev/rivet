@@ -874,8 +874,8 @@ impl VfsState {
 			.or_else(|| {
 				self.protected_page_cache
 					.read_sync(&pgno, |_, bytes| bytes.clone())
-				})
-				.or_else(|| self.page_cache.get(&pgno))
+			})
+			.or_else(|| self.page_cache.get(&pgno))
 	}
 
 	fn has_readable_page(&self, config: &VfsConfig, pgno: u32) -> bool {

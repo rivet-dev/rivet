@@ -478,11 +478,7 @@ impl SharedState {
 							inner_size,
 							"forwarding message to request handler"
 						);
-						if in_flight
-							.msg_tx
-							.send(msg.message_kind.clone())
-							.is_err()
-						{
+						if in_flight.msg_tx.send(msg.message_kind.clone()).is_err() {
 							tracing::warn!(
 								gateway_id=%protocol::util::id_to_string(&message_id.gateway_id),
 								request_id=%protocol::util::id_to_string(&message_id.request_id),
