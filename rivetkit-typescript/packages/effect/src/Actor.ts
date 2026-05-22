@@ -134,30 +134,6 @@ type ActionHandlerServices<ActionHandlers> = {
 		: never;
 }[keyof ActionHandlers];
 
-type StateOptionsCodec<State extends StateOptions.Any> = {
-	readonly decode: (
-		input: StateOptions.Encoded<State>,
-	) => Effect.Effect<
-		StateOptions.Decoded<State>,
-		Schema.SchemaError,
-		State["schema"]["DecodingServices"]
-	>;
-	readonly decodeUnknown: (
-		input: unknown,
-	) => Effect.Effect<
-		StateOptions.Decoded<State>,
-		Schema.SchemaError,
-		State["schema"]["DecodingServices"]
-	>;
-	readonly encode: (
-		input: StateOptions.Decoded<State>,
-	) => Effect.Effect<
-		StateOptions.Encoded<State>,
-		Schema.SchemaError,
-		State["schema"]["EncodingServices"]
-	>;
-};
-
 type RivetkitActorDefinitionFor<
 	State extends StateOptions.Any,
 	Database extends RivetkitDb.AnyDatabaseProvider,
