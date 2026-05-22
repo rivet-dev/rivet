@@ -662,7 +662,7 @@ const makeRivetkitActor = Effect.fnUntraced(function* <
 										code: hasStringProperty("_tag")(
 											encodedError,
 										)
-											? action._tag
+											? encodedError._tag
 											: undefined,
 										metadata:
 											ActionErrorEnvelope.make(
