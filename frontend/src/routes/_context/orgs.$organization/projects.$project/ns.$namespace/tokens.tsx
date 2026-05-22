@@ -25,6 +25,7 @@ import { EnvVariables, useRivetDsn } from "@/app/env-variables";
 import { features } from "@/lib/features";
 import { HelpDropdown } from "@/app/help-dropdown";
 import { PublishableTokenCodeGroup } from "@/app/publishable-token-code-group";
+import { SettingsCard } from "@/app/settings-pages/settings-card";
 import { useDialog } from "@/app/use-dialog";
 import {
 	Accordion,
@@ -39,7 +40,6 @@ import {
 	DiscreteInput,
 	getConfig,
 	H1,
-	H3,
 	Label,
 	Skeleton,
 	Table,
@@ -128,46 +128,39 @@ export function PublishableToken() {
 	const dsn = useRivetDsn({ kind: "publishable" });
 
 	return (
-		<div className="pb-4 pb-8 px-6 max-w-5xl mx-auto my-8 border border-foreground/10 rounded-xl bg-card ">
-			<div className="flex gap-2 items-center mb-2 mt-6">
-				<H3>Manual Client Configuration</H3>
-			</div>
-			<p className="mb-6 text-muted-foreground">
-				Manually configuring the client is only required for{" "}
-				<a
-					href="https://www.rivet.dev/docs/general/runtime-modes/#runners"
-					target="_blank"
-					rel="noopener noreferrer"
-					className="underline"
-				>
-					Runner Runtime Mode
-				</a>{" "}
-				or clients that need to be configured to connect directly to
-				Rivet.
-			</p>
+		<SettingsCard
+			title="Manual Client Configuration"
+			description={
+				<>
+					Manually configuring the client is only required for{" "}
+					<a
+						href="https://www.rivet.dev/docs/general/runtime-modes/#runners"
+						target="_blank"
+						rel="noopener noreferrer"
+						className="underline"
+					>
+						Runner Runtime Mode
+					</a>{" "}
+					or clients that need to be configured to connect directly to
+					Rivet.
+				</>
+			}
+		>
 			<div className="space-y-8">
 				<DiscreteInput value={dsn || ""} show />
 
 				<PublishableTokenCodeGroup />
 			</div>
-		</div>
+		</SettingsCard>
 	);
 }
 
 export function SecretToken() {
 	return (
-		<div className="pb-4 pb-8 px-6 max-w-5xl mx-auto my-8 border border-foreground/10 rounded-xl bg-card">
-			<div className="flex gap-2 items-center mb-2 mt-6">
-
-				<H3>Backend Configuration</H3>
-			</div>
-			<p className="mb-6 text-muted-foreground">
-				Used by Rivet to run your actors. Choose between Serverless
-				mode, where Rivet sends HTTP requests to your backend, or
-				Runners mode, where Rivet runs your actors as long-running
-				background processes.
-			</p>
-
+		<SettingsCard
+			title="Backend Configuration"
+			description="Used by Rivet to run your actors. Choose between Serverless mode, where Rivet sends HTTP requests to your backend, or Runners mode, where Rivet runs your actors as long-running background processes."
+		>
 			<Tabs defaultValue="serverless">
 				<TabsList>
 					<TabsTrigger value="serverless">Serverless</TabsTrigger>
@@ -180,7 +173,7 @@ export function SecretToken() {
 					<RunnersModeInfo />
 				</TabsContent>
 			</Tabs>
-		</div>
+		</SettingsCard>
 	);
 }
 
@@ -379,12 +372,15 @@ export function CloudApiTokens() {
 	const cloudApiUrl = cloudEnv().VITE_APP_CLOUD_API_URL;
 
 	return (
-		<div className="pb-4 pb-8 px-6 max-w-5xl mx-auto my-8 border border-foreground/10 rounded-xl bg-card">
-			<div className="flex gap-2 items-center justify-between mb-2 mt-6">
-				<div className="flex gap-2 items-center">
-					<H3>Cloud API Tokens</H3>
+		<SettingsCard
+			title={
+				<span className="inline-flex items-center gap-2">
+					Cloud API Tokens
 					<Badge variant="secondary">Beta</Badge>
-				</div>
+				</span>
+			}
+			description="Cloud API tokens provide programmatic access to the Rivet Cloud API. Keep them secure and never share them publicly."
+			action={
 				<Button
 					className="min-w-32"
 					variant="outline"
@@ -393,11 +389,8 @@ export function CloudApiTokens() {
 				>
 					Create API Token
 				</Button>
-			</div>
-			<p className="mb-6 text-muted-foreground">
-				Cloud API tokens provide programmatic access to the Rivet Cloud
-				API. Keep them secure and never share them publicly.
-			</p>
+			}
+		>
 			<div className="border rounded-md">
 				{isLoading ? (
 					<div className="space-y-2 p-4">
@@ -587,7 +580,7 @@ console.log(data.token);`}
 				</CodeGroup>
 			</div>
 			{createApiTokenDialog}
-		</div>
+		</SettingsCard>
 	);
 }
 

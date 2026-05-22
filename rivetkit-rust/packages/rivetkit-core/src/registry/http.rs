@@ -1,7 +1,7 @@
 use super::dispatch::*;
 use super::inspector::*;
 use super::*;
-use crate::error::{client_error_message, client_error_metadata, ProtocolError};
+use crate::error::{ProtocolError, client_error_message, client_error_metadata};
 use ::http;
 
 const HEADER_RIVET_ACTOR: &str = "x-rivet-actor";
@@ -378,7 +378,6 @@ impl RegistryDispatcher {
 			}
 		}
 	}
-
 }
 
 enum RegistryHttpRoute {

@@ -12,7 +12,11 @@ import { RouteLayout } from "@/app/route-layout";
 import { useDialog } from "@/app/use-dialog";
 import { CreateActorSheet } from "@/components/actors/dialogs/create-actor-sheet";
 import { ls } from "@/components";
-import { deriveProviderFromMetadata } from "@/lib/data";
+import {
+	deriveOnboardingState,
+	type RunnerConfigsInfiniteData,
+	type RunnerNamesInfiniteData,
+} from "@/lib/data";
 import { posthog } from "@/lib/posthog";
 import {
 	RECENT_NAMESPACES_KEY,
@@ -76,44 +80,61 @@ export const Route = createFileRoute("/_context/ns/$namespace")({
 				dataProvider: context.dataProvider,
 				displayOnboarding: false,
 				displayFrontendOnboarding: false,
+				provider: undefined,
 			};
 		}
 
-		const [runnerNames, runnerConfigs] = await Promise.all([
-			context.queryClient.fetchInfiniteQuery(
-				context.dataProvider.runnerNamesQueryOptions(),
-			),
-			context.queryClient.fetchInfiniteQuery(
-				context.dataProvider.runnerConfigsQueryOptions(),
-			),
-		]);
+		// Onboarding only applies to the default namespace. Every other namespace
+		// renders immediately without paying for the runner-config fetch.
+		const namespace = await context.queryClient.fetchQuery(
+			context.dataProvider.currentNamespaceQueryOptions(),
+		);
+		if (namespace?.displayName !== "Default") {
+			return {
+				dataProvider: context.dataProvider,
+				displayOnboarding: false,
+				displayFrontendOnboarding: false,
+				provider: undefined,
+			};
+		}
 
-		const runnerProvider = runnerConfigs.pages
-			.flatMap((page) =>
-				Object.values(page.runnerConfigs).flatMap((config) =>
-					Object.values(config.datacenters).map((dc) =>
-						deriveProviderFromMetadata(dc.metadata),
-					),
-				),
-			)
-			.find((provider) => provider !== undefined);
+		const runnerNamesOpts = context.dataProvider.runnerNamesQueryOptions();
+		const runnerConfigsOpts =
+			context.dataProvider.runnerConfigsQueryOptions();
 
-		const actors = await context.queryClient.fetchQuery(
+		let runnerNames =
+			context.queryClient.getQueryData<RunnerNamesInfiniteData>(
+				runnerNamesOpts.queryKey,
+			);
+		let runnerConfigs =
+			context.queryClient.getQueryData<RunnerConfigsInfiniteData>(
+				runnerConfigsOpts.queryKey,
+			);
+
+		const cachedHasConfigs =
+			Object.keys(runnerConfigs?.pages[0]?.runnerConfigs ?? {}).length > 0;
+		const cachedHasNames = (runnerNames?.pages[0]?.names.length ?? 0) > 0;
+
+		// Cache-first: only skip the slow blocking runner-config fetch when the
+		// cache already proves the backend is configured. An absent or empty
+		// cache still pays the fetch so we never wrongly show onboarding. This
+		// keeps the slowness to the first cold load of the default namespace.
+		if (!cachedHasConfigs && !cachedHasNames) {
+			const [names, configs] = await Promise.all([
+				context.queryClient.fetchInfiniteQuery(runnerNamesOpts),
+				context.queryClient.fetchInfiniteQuery(runnerConfigsOpts),
+			]);
+			runnerNames = names as RunnerNamesInfiniteData;
+			runnerConfigs = configs as RunnerConfigsInfiniteData;
+		}
+
+		const actorCount = await context.queryClient.fetchQuery(
 			context.dataProvider.actorsCountQueryOptions(),
 		);
 
-		const hasRunnerNames = runnerNames.pages[0].names.length > 0;
-		const hasRunnerConfigs =
-			Object.entries(runnerConfigs.pages[0].runnerConfigs).length > 0;
-		const hasActors = actors > 0;
-
-		const hasBackendConfigured = hasRunnerNames || hasRunnerConfigs;
-
 		return {
 			dataProvider: context.dataProvider,
-			displayOnboarding: !hasBackendConfigured && !hasActors,
-			displayFrontendOnboarding: hasBackendConfigured && !hasActors,
-			provider: runnerProvider,
+			...deriveOnboardingState({ runnerNames, runnerConfigs, actorCount }),
 		};
 	},
 	component: RouteComponent,

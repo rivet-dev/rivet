@@ -1,5 +1,5 @@
 import {
-	faEllipsis,
+	faEllipsisVertical,
 	faPaperPlaneTop,
 	faTrash,
 	faUserPlus,
@@ -26,6 +26,7 @@ import {
 } from "@/components";
 import { queryClient } from "@/queries/global";
 import { authClient } from "@/lib/auth";
+import { SettingsCard } from "./settings-card";
 
 export function MembersPanel() {
 	const [showInvite, setShowInvite] = useState(false);
@@ -122,8 +123,8 @@ export function MembersPanel() {
 				) : null}
 			</AnimatePresence>
 
-			<div className="rounded-lg border border-foreground/10 bg-card overflow-hidden">
-				<div className="grid grid-cols-[2fr_2fr_28px] items-center gap-4 px-4 py-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground border-b border-foreground/10 bg-foreground/[0.02]">
+			<SettingsCard divided>
+				<div className="grid grid-cols-[2fr_2fr_28px] items-center gap-4 px-5 py-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground border-b border-foreground/10 bg-foreground/[0.02]">
 					<div>Name</div>
 					<div>Email</div>
 					<div />
@@ -175,7 +176,7 @@ export function MembersPanel() {
 							last={idx === arr.length - 1}
 						/>
 					))}
-			</div>
+			</SettingsCard>
 		</div>
 	);
 }
@@ -215,7 +216,7 @@ function MemberRow({
 	return (
 		<div
 			className={cn(
-				"group grid grid-cols-[2fr_2fr_28px] items-center gap-4 px-4 py-3 text-sm transition-colors hover:bg-foreground/[0.025]",
+				"group grid grid-cols-[2fr_2fr_28px] items-center gap-4 px-5 py-3 text-sm transition-colors hover:bg-foreground/[0.025]",
 				!last && "border-b border-foreground/10",
 			)}
 		>
@@ -233,25 +234,27 @@ function MemberRow({
 							You
 						</span>
 					) : null}
-					{isOwner ? (
-						<span className="inline-flex items-center rounded-full border border-foreground/15 bg-foreground/[0.06] px-2 py-0.5 text-[11px] font-medium text-foreground">
-							Owner
-						</span>
-					) : null}
 				</div>
 			</div>
 			<div className="text-muted-foreground truncate">{email}</div>
-			<div className="opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
-				{canManage ? (
-					<MemberRowMenu
-						memberId={memberId}
-						userId={userId}
-						organizationId={organizationId}
-						role={role}
-						isSelf={isYou}
-						viewerRole={viewerRole}
-					/>
+			<div className="flex items-center justify-end gap-2">
+				{isOwner ? (
+					<span className="shrink-0 inline-flex items-center rounded-full border border-foreground/15 bg-foreground/[0.06] px-2 py-0.5 text-[11px] font-medium text-foreground">
+						Owner
+					</span>
 				) : null}
+				<div className="opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+					{canManage ? (
+						<MemberRowMenu
+							memberId={memberId}
+							userId={userId}
+							organizationId={organizationId}
+							role={role}
+							isSelf={isYou}
+							viewerRole={viewerRole}
+						/>
+					) : null}
+				</div>
 			</div>
 		</div>
 	);
@@ -324,7 +327,7 @@ function MemberRowMenu({
 				onPointerDown={(e) => e.preventDefault()}
 				className="cursor-not-allowed opacity-50 hover:bg-transparent"
 			>
-				<Icon icon={faEllipsis} />
+				<Icon icon={faEllipsisVertical} />
 			</Button>
 		);
 	}
@@ -338,7 +341,7 @@ function MemberRowMenu({
 					aria-label="Member actions"
 					disabled={disabled}
 				>
-					<Icon icon={faEllipsis} />
+					<Icon icon={faEllipsisVertical} />
 				</Button>
 			</DropdownMenuTrigger>
 			<DropdownMenuContent align="end" className="min-w-[10rem]">
@@ -413,7 +416,7 @@ function InvitationRow({
 	return (
 		<div
 			className={cn(
-				"group grid grid-cols-[2fr_2fr_28px] items-center gap-4 px-4 py-3 text-sm transition-colors hover:bg-foreground/[0.025]",
+				"group grid grid-cols-[2fr_2fr_28px] items-center gap-4 px-5 py-3 text-sm transition-colors hover:bg-foreground/[0.025]",
 				!last && "border-b border-foreground/10",
 			)}
 		>
@@ -479,7 +482,7 @@ function InvitationRow({
 
 function MemberRowSkeleton() {
 	return (
-		<div className="grid grid-cols-[2fr_2fr_28px] items-center gap-4 px-4 py-3 border-b border-foreground/10">
+		<div className="grid grid-cols-[2fr_2fr_28px] items-center gap-4 px-5 py-3 border-b border-foreground/10">
 			<div className="flex items-center gap-2.5">
 				<Skeleton className="size-7 rounded-full" />
 				<Skeleton className="h-4 w-32" />

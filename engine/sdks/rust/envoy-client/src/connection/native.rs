@@ -133,9 +133,7 @@ async fn single_connection(
 			while let Some(msg) = ws_rx.recv().await {
 				match msg {
 					WsTxMessage::Send(data) => {
-						let result = write
-							.send(tungstenite::Message::Binary(data.into()))
-							.await;
+						let result = write.send(tungstenite::Message::Binary(data.into())).await;
 						if let Err(e) = result {
 							tracing::error!(?e, "failed to send ws message");
 							break;

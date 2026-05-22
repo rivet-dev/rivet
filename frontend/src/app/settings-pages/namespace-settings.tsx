@@ -5,7 +5,7 @@ import {
 	useQuery,
 } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { type ReactNode, Suspense } from "react";
+import { Suspense } from "react";
 import { ProviderDropdown } from "@/app/provider-dropdown";
 import { RunnerConfigsTable } from "@/app/runner-config-table";
 import { RunnersTable } from "@/app/runners-table";
@@ -23,6 +23,7 @@ import {
 	PublishableToken,
 	SecretToken,
 } from "@/routes/_context/orgs.$organization/projects.$project/ns.$namespace/tokens";
+import { SettingsCard } from "./settings-card";
 
 export function NamespaceSettingsContent() {
 	return (
@@ -53,38 +54,6 @@ export function NamespaceAdvancedContent() {
 				{features.dangerZone ? <DangerZone /> : null}
 			</div>
 		</Suspense>
-	);
-}
-
-/** Compact section card matching the drawer's tighter typography. */
-function SectionCard({
-	title,
-	description,
-	action,
-	children,
-}: {
-	title: string;
-	description?: string;
-	action?: ReactNode;
-	children: ReactNode;
-}) {
-	return (
-		<div className="p-5 rounded-xl border border-foreground/10 bg-card">
-			<div className="flex gap-3 items-start justify-between mb-3">
-				<div className="min-w-0">
-					<h3 className="text-sm font-semibold text-foreground">
-						{title}
-					</h3>
-					{description ? (
-						<p className="text-xs text-muted-foreground mt-0.5">
-							{description}
-						</p>
-					) : null}
-				</div>
-				{action ? <div className="shrink-0">{action}</div> : null}
-			</div>
-			{children}
-		</div>
 	);
 }
 
@@ -134,7 +103,7 @@ function Providers() {
 	});
 
 	return (
-		<SectionCard
+		<SettingsCard
 			title="Providers"
 			description="Clouds connected to Rivet for running Rivet Actors."
 			action={
@@ -186,7 +155,7 @@ function Providers() {
 					}
 				/>
 			</div>
-		</SectionCard>
+		</SettingsCard>
 	);
 }
 
@@ -215,7 +184,7 @@ function Runners() {
 	const allRunners = [...(envoys || []), ...(runners || [])];
 
 	return (
-		<SectionCard
+		<SettingsCard
 			title="Runners"
 			description="Processes connected to Rivet Cloud and ready to start running Rivet Actors."
 		>
@@ -231,7 +200,7 @@ function Runners() {
 					hasNextPage={hasNextPage || hasNextEnvoysPage}
 				/>
 			</div>
-		</SectionCard>
+		</SettingsCard>
 	);
 }
 
@@ -244,7 +213,7 @@ function DatacenterStatus() {
 	const { data } = useInfiniteQuery(dataProvider.datacentersQueryOptions());
 
 	return (
-		<SectionCard
+		<SettingsCard
 			title="Datacenters status"
 			description="Where the Rivet Engine is currently running and ready to run your Rivet Actors."
 		>
@@ -262,7 +231,7 @@ function DatacenterStatus() {
 					</li>
 				))}
 			</ul>
-		</SectionCard>
+		</SettingsCard>
 	);
 }
 
@@ -285,18 +254,19 @@ function DangerZone() {
 	);
 
 	return (
-		<section className="rounded-lg border border-foreground/10 bg-card overflow-hidden">
-			<header className="flex items-center gap-2 px-5 py-4">
-				<Icon
-					icon={faTriangleExclamation}
-					className="size-3.5 text-destructive"
-				/>
-				<h3 className="text-sm font-semibold text-foreground">
+		<SettingsCard
+			divided
+			title={
+				<span className="inline-flex items-center gap-2">
+					<Icon
+						icon={faTriangleExclamation}
+						className="size-3.5 text-destructive"
+					/>
 					Danger zone
-				</h3>
-			</header>
-			<div className="border-t border-foreground/10">
-				<div className="flex items-start justify-between gap-4 px-5 py-4 border-b border-foreground/10">
+				</span>
+			}
+		>
+			<div className="flex items-start justify-between gap-4 px-5 py-4 border-b border-foreground/10">
 					<div className="min-w-0">
 						<div className="text-sm font-medium text-foreground">
 							Archive namespace
@@ -350,7 +320,6 @@ function DangerZone() {
 						Archive
 					</Button>
 				</div>
-			</div>
-		</section>
+		</SettingsCard>
 	);
 }

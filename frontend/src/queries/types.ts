@@ -13,11 +13,13 @@ export const ChangelogItem = z.object({
 			name: z.string(),
 			role: z.string(),
 			avatar: z.object({ url: z.string() }),
-			socials: z.object({
-				twitter: z.string().optional(),
-				github: z.string().optional(),
-				bluesky: z.string().optional(),
-			}),
+			socials: z
+				.object({
+					twitter: z.string().optional(),
+					github: z.string().optional(),
+					bluesky: z.string().optional(),
+				})
+				.optional(),
 		}),
 	),
 });
