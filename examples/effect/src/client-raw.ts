@@ -8,8 +8,7 @@ const client = createClient(
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function main() {
-	const runId = crypto.randomUUID();
-	const roomName = `raw-room-${runId}`;
+	const roomName = `chatroom_${crypto.randomUUID()}`;
 	const room = client.chatRoom.getOrCreate([roomName]);
 
 	try {

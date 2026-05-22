@@ -13,12 +13,6 @@ export const Review = Action.make("Review", {
 	error: BannedWordsError,
 });
 
-export const Stats = Action.make("Stats", {
-	success: Schema.Struct({
-		reviewed: Schema.Number,
-	}),
-});
-
 export const Moderator = Actor.make("moderator", {
-	actions: [Review, Stats],
+	actions: [Review],
 });

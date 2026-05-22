@@ -25,11 +25,6 @@ export const ModeratorLive = Moderator.toLayer(
 							});
 						}
 					}),
-				Stats: () =>
-					State.get(state).pipe(
-						Effect.orDie,
-						Effect.map(({ reviewed }) => ({ reviewed })),
-					),
 			});
 		}),
 	{

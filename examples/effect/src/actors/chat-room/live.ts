@@ -184,11 +184,8 @@ export const ChatRoomLive = ChatRoom.toLayer(
 					Effect.gen(function* () {
 						yield* ensureMember(payload.sender);
 
-						// This is a workaround. Scope helper actors to this run so stale
-						// singleton actors left in the local engine DB cannot trap nested RPCs.
-						const runKey = ["run", ...address.key];
 						// Actor-to-actor RPC uses the same API as client-to-actor RPC.
-						const moderator = moderatorClient.getOrCreate(runKey);
+						const moderator = moderatorClient.getOrCreate("main");
 
 						// If Review fails with BannedWordsError, that typed error
 						// flows through SendMessage's declared error channel.
