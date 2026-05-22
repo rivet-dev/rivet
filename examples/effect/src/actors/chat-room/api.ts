@@ -1,6 +1,6 @@
 import { Action, Actor } from "@rivetkit/effect";
 import { Schema } from "effect";
-import { BannedWordsError } from "../mod";
+import { BannedWordsError } from "../moderator/api.ts";
 
 // --- Errors ---
 
@@ -25,25 +25,16 @@ export class MemberNotInRoomError extends Schema.TaggedErrorClass<MemberNotInRoo
 //    and rich decoded forms in action handlers. Schemas can also require
 //    custom services during encode/decode.
 
-export const Member = Schema.Struct({
-	name: Schema.String,
-	joinedAt: Schema.DateTimeUtc,
-});
-
-export const Message = Schema.Struct({
-	id: Schema.Number,
-	sender: Schema.String,
-	text: Schema.String,
-	createdAt: Schema.DateTimeUtc,
-});
-
+// This action replaces passing an `input` when creating an actor.
 export const Initialize = Action.make("Initialize", {
 	payload: { name: Schema.String },
 });
 
 export const Join = Action.make("Join", {
 	payload: { name: Schema.String },
-	success: Member,
+	success: Schema.Struct({
+		memberCount: Schema.Number,
+	}),
 });
 
 export const Leave = Action.make("Leave", {
@@ -60,27 +51,17 @@ export const SendMessage = Action.make("SendMessage", {
 });
 
 export const GetHistory = Action.make("GetHistory", {
-	success: Schema.Array(Message),
+	success: Schema.Array(
+		Schema.Struct({
+			id: Schema.Number,
+			sender: Schema.String,
+			text: Schema.String,
+			createdAt: Schema.DateTimeUtc,
+		}),
+	),
 });
 
-export const GetMembers = Action.make("GetMembers", {
-	success: Schema.Array(Member),
-});
-
-export const ScheduleAnnouncement = Action.make("ScheduleAnnouncement", {
-	payload: {
-		text: Schema.String,
-		delay: Schema.DurationFromMillis,
-	},
-	success: Schema.Struct({
-		firesAt: Schema.DateTimeUtc,
-	}),
-});
-
-export const TriggerAnnouncement = Action.make("TriggerAnnouncement", {
-	payload: { text: Schema.String },
-});
-
+// This action replaces passing an `input` when creating an actor.
 export const Archive = Action.make("Archive");
 
 // --- Messages (not yet implemented) ---
@@ -91,9 +72,9 @@ export const Archive = Action.make("Archive");
 // })
 //
 // // Completable (sender can await a typed response)
-// export const IncrementBy = Message.make("IncrementBy", {
-// 	payload: { amount: Schema.Number },
-// 	success: Schema.Number,
+// export const SendSystemMessage = Message.make("SendSystemMessage", {
+// 	payload: { text: Schema.String },
+// 	success: Schema.String,
 // })
 
 // --- Actor Definition ---
@@ -111,11 +92,8 @@ export const ChatRoom = Actor.make("chatRoom", {
 		Leave,
 		SendMessage,
 		GetHistory,
-		GetMembers,
-		ScheduleAnnouncement,
-		TriggerAnnouncement,
 		Archive,
 	],
-	// messages: [Reset, IncrementBy],	// durable, queued, background
-	// events: { countChanged: Schema.Number },
+	// messages: [Reset, SendSystemMessage],	// durable, queued, background
+	// events: { messageAdded: Schema.String },
 });

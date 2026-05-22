@@ -1,78 +1,132 @@
 import { Actor, State } from "@rivetkit/effect";
-import { DateTime, Duration, Effect, Random, Schema } from "effect";
+import { Context, DateTime, Effect, Layer, Schema, Stream } from "effect";
 import { db } from "rivetkit/db";
-import { Directory, Moderator } from "../mod.ts";
+import { Moderator } from "../moderator/api.ts";
 import { ChatRoom, MemberNotInRoomError } from "./api.ts";
 
+// --- Services ---
+
+// Actors can use custom Effect services like any other Effect program.
+// Provide the service layer to the actor layer, then yield it in the wake scope.
+export class RoomPolicy extends Context.Service<
+	RoomPolicy,
+	{
+		readonly requireMember: (
+			members: ReadonlyArray<{ readonly name: string }>,
+			name: string,
+		) => Effect.Effect<void, MemberNotInRoomError>;
+	}
+>()("RoomPolicy") {}
+
+export const RoomPolicyLive = Layer.succeed(
+	RoomPolicy,
+	RoomPolicy.of({
+		requireMember: (members, name) =>
+			members.some((member) => member.name === name)
+				? Effect.void
+				: Effect.fail(
+						new MemberNotInRoomError({
+							name,
+							message: `${name} is not a member of this room`,
+						}),
+					),
+	}),
+);
+
+// --- Actor Implementation ---
+
+// `.toLayer` produces a Layer that registers this actor
+// with the `Registry` service that is in context. The first parameter
+// is a `wake` function that runs once when the actor awakes
+// and returns the action handlers.
 export const ChatRoomLive = ChatRoom.toLayer(
+	// Wake scope (runs on each wake)
 	({ rawRivetkitContext, state }) =>
 		Effect.gen(function* () {
-			const database = rawRivetkitContext.db;
+			// Actor-provided services, custom services, and actor clients are all
+			// yielded from the Effect context for this wake. They are scoped to
+			// this actor instance, not to individual action calls.
 			const address = yield* Actor.CurrentAddress;
+			const roomPolicy = yield* RoomPolicy;
 			const moderatorClient = yield* Moderator.client;
-			const directoryClient = yield* Directory.client;
 
-			// This is a workaround. Scope helper actors to this run so stale
-			// singleton actors left in the local engine DB cannot trap nested RPCs.
-			const runKey = ["run", ...address.key];
-			const directory = directoryClient.getOrCreate(runKey);
-			const moderator = moderatorClient.getOrCreate(runKey);
-			// The plain SDK example stores this in createVars. The Effect SDK
-			// does not expose vars yet, so the wake-scope closure owns it.
-			const sessionId = yield* Random.nextUUIDv4;
-
-			yield* State.update(state, (current) => ({
-				...current,
-				wakeCount: current.wakeCount + 1,
-			})).pipe(Effect.orDie);
-
-			yield* Effect.log("room awake", {
-				actorId: address.actorId,
-				key: address.key.join("/"),
-				sessionId,
-			});
-
-			yield* Effect.addFinalizer(() =>
-				Effect.gen(function* () {
-					const current = yield* State.get(state).pipe(Effect.orDie);
-					yield* Effect.log("room sleeping", {
-						actorId: address.actorId,
-						key: address.key.join("/"),
-						roomName: current.name,
-						sessionId,
-						wakeCount: current.wakeCount,
-					});
-				}),
-			);
-
-			const roomName = State.get(state).pipe(
+			// Access the actor's persisted `state` with a `SubscriptionRef`-like API
+			const name = State.get(state).pipe(
 				Effect.orDie,
 				Effect.map((s) => s.name),
 			);
 
+			yield* Effect.log("room awake", {
+				actorId: address.actorId,
+				key: address.key.join("/"),
+				name,
+			});
+
+			// Finalizers run on sleep
+			yield* Effect.addFinalizer(() =>
+				Effect.gen(function* () {
+					yield* Effect.log("room sleeping", {
+						actorId: address.actorId,
+						key: address.key.join("/"),
+						name,
+					});
+				}),
+			);
+
+			// `State.changes` streams every committed state change for this actor wake.
+			yield* State.changes(state).pipe(
+				Stream.runForEach((current) =>
+					Effect.log("room state changed", {
+						actorId: address.actorId,
+						name: current.name,
+						memberCount: current.members.length,
+					}),
+				),
+				Effect.forkScoped,
+			);
+
+			// Combine persisted actor state with a custom service-owned domain guard.
 			const ensureMember = (name: string) =>
 				State.get(state).pipe(
 					Effect.orDie,
 					Effect.flatMap((current) =>
-						current.members.some((member) => member.name === name)
-							? Effect.void
-							: new MemberNotInRoomError({
-									name,
-									message: `${name} is not a member of this room`,
-								}),
+						roomPolicy.requireMember(current.members, name),
 					),
 				);
 
+			// --- Message processing (not yet implemented) ---
+			// Pull-based: the actor controls when to take the next message.
+			// Forked into a scoped fiber, so it runs in the background and
+			// is canceled on sleep. Re-enable once ChatRoom messages land.
+			//
+			// yield* Effect.gen(function* () {
+			// 	const msg = yield* Queue.take(messages)
+			// 	yield* Match.value(msg).pipe(
+			// 		Match.tag("Reset", () =>
+			// 			Effect.gen(function* () {
+			// 				yield* State.set(state, 0)
+			// 				yield* PubSub.publish(events.countChanged, 0)
+			// 			})
+			// 		),
+			// 		Match.tag("SendSystemMessage", ({ payload, complete }) =>
+			// 			Effect.gen(function* () {
+			// 				yield* complete(payload.text)
+			// 			})
+			// 		),
+			// 		Match.exhaustive,
+			// 	)
+			// }).pipe(Effect.forever, Effect.forkScoped)
+
+			// --- Action handlers (request-response) ---
 			return ChatRoom.of({
 				Initialize: ({ payload }) =>
-					// This replaces createState(input). Callers should initialize
+					// This replaces `createState(input)`. Callers should initialize
 					// a room before actions that depend on a persisted room name.
 					State.update(state, (current) => {
 						if (current.initialized) return current;
 						return {
 							...current,
 							name: payload.name,
-							members: [],
 							initialized: true,
 						};
 					}),
@@ -98,23 +152,30 @@ export const ChatRoomLive = ChatRoom.toLayer(
 							},
 						});
 
-						if (next.name !== "") {
-							// Directory registration is still actor-to-actor RPC, but
-							// it uses the Effect action name and object payload.
-							yield* directory.RegisterRoom({ name: next.name });
-						}
+						// The raw scheduler dispatches the Effect action by name
+						// with the same object payload that a client would send.
+						rawRivetkitContext.schedule.after(
+							1_000,
+							"SendMessage",
+							{
+								sender: "Admin",
+								text: `Welcome to the room, ${payload.name}!`,
+							},
+						);
 
-						return member;
+						return { memberCount: next.members.length };
 					}),
 				Leave: ({ payload }) =>
 					Effect.gen(function* () {
 						yield* ensureMember(payload.name);
+
 						yield* State.update(state, (current) => ({
 							...current,
 							members: current.members.filter(
 								(member) => member.name !== payload.name,
 							),
 						})).pipe(Effect.orDie);
+
 						rawRivetkitContext.broadcast("memberLeft", {
 							name: payload.name,
 						});
@@ -122,13 +183,20 @@ export const ChatRoomLive = ChatRoom.toLayer(
 				SendMessage: ({ payload }) =>
 					Effect.gen(function* () {
 						yield* ensureMember(payload.sender);
-						yield* moderator.Review({
-							text: payload.text,
-						});
+
+						// This is a workaround. Scope helper actors to this run so stale
+						// singleton actors left in the local engine DB cannot trap nested RPCs.
+						const runKey = ["run", ...address.key];
+						// Actor-to-actor RPC uses the same API as client-to-actor RPC.
+						const moderator = moderatorClient.getOrCreate(runKey);
+
+						// If Review fails with BannedWordsError, that typed error
+						// flows through SendMessage's declared error channel.
+						yield* moderator.Review({ text: payload.text });
 
 						const createdAt = yield* DateTime.now;
 						yield* Effect.tryPromise(() =>
-							database.execute(
+							rawRivetkitContext.db.execute(
 								"INSERT INTO messages (sender, text, created_at) VALUES (?, ?, ?)",
 								payload.sender,
 								payload.text,
@@ -144,7 +212,7 @@ export const ChatRoomLive = ChatRoom.toLayer(
 					}),
 				GetHistory: () =>
 					Effect.tryPromise(() =>
-						database.execute<{
+						rawRivetkitContext.db.execute<{
 							id: number;
 							sender: string;
 							text: string;
@@ -161,45 +229,9 @@ export const ChatRoomLive = ChatRoom.toLayer(
 						),
 						Effect.orDie,
 					),
-				GetMembers: () =>
-					State.get(state).pipe(
-						Effect.orDie,
-						Effect.map((s) => s.members),
-					),
-				ScheduleAnnouncement: ({ payload }) =>
-					Effect.sync(() => {
-						const firesAt = DateTime.addDuration(
-							DateTime.nowUnsafe(),
-							payload.delay,
-						);
-						// The raw scheduler dispatches the Effect action by name
-						// with the same object payload that a client would send.
-						rawRivetkitContext.schedule.after(
-							Duration.toMillis(payload.delay),
-							"TriggerAnnouncement",
-							{
-								text: payload.text,
-							},
-						);
-						return { firesAt };
-					}),
-				TriggerAnnouncement: ({ payload }) =>
-					Effect.sync(() => {
-						rawRivetkitContext.broadcast("announcement", {
-							text: payload.text,
-						});
-					}),
 				Archive: () =>
-					Effect.gen(function* () {
-						const name = yield* roomName;
-						if (name !== "") {
-							// This only covers destruction through Archive. A future
-							// Effect onDestroy hook would cover every destroy path.
-							yield* directory.CloseRoom({ name });
-						}
-						yield* Effect.sync(() => {
-							rawRivetkitContext.destroy();
-						});
+					Effect.sync(() => {
+						rawRivetkitContext.destroy();
 					}),
 			});
 		}),
@@ -213,13 +245,11 @@ export const ChatRoomLive = ChatRoom.toLayer(
 						joinedAt: Schema.DateTimeUtc,
 					}),
 				),
-				wakeCount: Schema.Number,
 				initialized: Schema.Boolean,
 			}),
 			initialValue: () => ({
 				name: "",
-				members: [],
-				wakeCount: 0,
+				members: [{ name: "Admin", joinedAt: DateTime.nowUnsafe() }],
 				initialized: false,
 			}),
 		},
@@ -235,7 +265,7 @@ export const ChatRoomLive = ChatRoom.toLayer(
 				`);
 			},
 		}),
-		name: "Chat Room",
-		icon: "comments",
+		name: "Chat Room", // Human-friendly display name
+		icon: "comments", // FontAwesome icon name
 	},
 );
