@@ -1246,8 +1246,7 @@ fn batch_atomic_oversized_commit_fails_closed_and_reopens_clean() {
 		)
 		.expect("large transaction insert should succeed");
 	}
-	let commit_err =
-		sqlite_exec(db.as_ptr(), "COMMIT;").expect_err("oversized commit should fail");
+	let commit_err = sqlite_exec(db.as_ptr(), "COMMIT;").expect_err("oversized commit should fail");
 	assert!(
 		commit_err.contains("disk I/O error") || commit_err.contains("transaction_too_large"),
 		"unexpected commit error: {commit_err}",
@@ -4258,8 +4257,11 @@ fn stale_vfs_page_cache_writer_fails_head_fence_and_reopen_is_clean() {
 	)
 	.expect("fresh writer should commit");
 	assert_eq!(
-		sqlite_query_text(db_b.as_ptr(), "SELECT payload FROM cached_rows WHERE id = 32;")
-			.expect("fresh writer should read its update"),
+		sqlite_query_text(
+			db_b.as_ptr(),
+			"SELECT payload FROM cached_rows WHERE id = 32;"
+		)
+		.expect("fresh writer should read its update"),
 		"writer-b-new-value"
 	);
 
@@ -4291,8 +4293,11 @@ fn stale_vfs_page_cache_writer_fails_head_fence_and_reopen_is_clean() {
 		"ok"
 	);
 	assert_eq!(
-		sqlite_query_text(db_c.as_ptr(), "SELECT payload FROM cached_rows WHERE id = 32;")
-			.expect("fresh reopen should see writer B value"),
+		sqlite_query_text(
+			db_c.as_ptr(),
+			"SELECT payload FROM cached_rows WHERE id = 32;"
+		)
+		.expect("fresh reopen should see writer B value"),
 		"writer-b-new-value"
 	);
 }
@@ -4361,8 +4366,7 @@ fn delayed_read_ahead_response_fails_head_fence_and_reopen_is_clean() {
 
 	runtime
 		.block_on(async {
-			tokio::time::timeout(Duration::from_secs(5), delaying_transport.wait_captured())
-				.await
+			tokio::time::timeout(Duration::from_secs(5), delaying_transport.wait_captured()).await
 		})
 		.expect("delayed get_pages response should be captured before writer B commits");
 
@@ -4411,8 +4415,11 @@ fn delayed_read_ahead_response_fails_head_fence_and_reopen_is_clean() {
 		"ok"
 	);
 	assert_eq!(
-		sqlite_query_text(db_c.as_ptr(), "SELECT payload FROM delayed_rows WHERE id = 48;")
-			.expect("fresh reopen should see writer B value"),
+		sqlite_query_text(
+			db_c.as_ptr(),
+			"SELECT payload FROM delayed_rows WHERE id = 48;"
+		)
+		.expect("fresh reopen should see writer B value"),
 		"writer-b-new-value"
 	);
 }
@@ -4487,8 +4494,7 @@ fn delayed_startup_preload_response_fails_closed_and_reopen_is_clean() {
 
 	runtime
 		.block_on(async {
-			tokio::time::timeout(Duration::from_secs(5), delaying_transport.wait_captured())
-				.await
+			tokio::time::timeout(Duration::from_secs(5), delaying_transport.wait_captured()).await
 		})
 		.expect("startup preload response should be captured before writer B commits");
 
@@ -4541,8 +4547,11 @@ fn delayed_startup_preload_response_fails_closed_and_reopen_is_clean() {
 		"ok"
 	);
 	assert_eq!(
-		sqlite_query_text(db_c.as_ptr(), "SELECT payload FROM preload_rows WHERE id = 48;")
-			.expect("fresh reopen should see writer B value"),
+		sqlite_query_text(
+			db_c.as_ptr(),
+			"SELECT payload FROM preload_rows WHERE id = 48;"
+		)
+		.expect("fresh reopen should see writer B value"),
 		"writer-b-new-value"
 	);
 }
@@ -4718,8 +4727,8 @@ fn warm_pidx_stale_read_then_rmw_commit_produces_malformed_db() {
 	);
 	// Step 1b: reads that exercise sqlite_master + index root + table btree internals so
 	// the shared `Db` PIDX cache is warm for the pages production probes would touch.
-	let _row_count = sqlite_query_i64(db_a.as_ptr(), "SELECT COUNT(*) FROM t1;")
-		.expect("count should succeed");
+	let _row_count =
+		sqlite_query_i64(db_a.as_ptr(), "SELECT COUNT(*) FROM t1;").expect("count should succeed");
 	let _sample = sqlite_query_i64(db_a.as_ptr(), "SELECT id FROM t1 WHERE id = 1;")
 		.expect("indexed lookup should succeed");
 
@@ -4740,14 +4749,13 @@ fn warm_pidx_stale_read_then_rmw_commit_produces_malformed_db() {
 	// per-page transport calls during A's operations, leaving the warm PIDX cache empty.
 	// We need entries in `db_shared.cache_snapshot.pidx` for the warm-cache hazard.
 	let warm_pgnos: Vec<u32> = (1..=10).collect();
-	let warm_result = runtime
-		.block_on(
-			db_shared.get_pages_with_options(
+	let warm_result =
+		runtime
+			.block_on(db_shared.get_pages_with_options(
 				warm_pgnos.clone(),
 				depot::types::GetPagesOptions::default(),
-			),
-		)
-		.expect("warm read through db_shared should succeed");
+			))
+			.expect("warm read through db_shared should succeed");
 	tracing::info!(
 		?warm_pgnos,
 		warm_head_txid = warm_result.head_txid,
@@ -4781,8 +4789,7 @@ fn warm_pidx_stale_read_then_rmw_commit_produces_malformed_db() {
 		)
 		.expect("writer update should succeed");
 	}
-	sqlite_exec(db_writer_handle.as_ptr(), "COMMIT;")
-		.expect("writer commit should succeed");
+	sqlite_exec(db_writer_handle.as_ptr(), "COMMIT;").expect("writer commit should succeed");
 	let writer_head = runtime
 		.block_on(
 			db_writer.get_pages_with_options(vec![1], depot::types::GetPagesOptions::default()),
@@ -4975,8 +4982,7 @@ fn warm_pidx_stale_read_then_rmw_commit_produces_malformed_db() {
 	// boundary payloads to force reads of cells 0 / 15 on page 165.
 	let mut escalation_probes: Vec<(String, Result<String, String>)> = Vec::new();
 	if runtime_corrupt_observed.is_none() {
-		let pragma_writable_schema_on =
-			sqlite_exec(db_c.as_ptr(), "PRAGMA writable_schema = ON;");
+		let pragma_writable_schema_on = sqlite_exec(db_c.as_ptr(), "PRAGMA writable_schema = ON;");
 		escalation_probes.push((
 			"pragma_writable_schema_on".to_string(),
 			pragma_writable_schema_on
@@ -5282,8 +5288,8 @@ fn warm_pidx_stale_read_then_rmw_commit_natural_repro() {
 		page_count_after_a >= 32,
 		"setup should produce enough pages to span btree internals, got {page_count_after_a}"
 	);
-	let _row_count = sqlite_query_i64(db_a.as_ptr(), "SELECT COUNT(*) FROM t1;")
-		.expect("count should succeed");
+	let _row_count =
+		sqlite_query_i64(db_a.as_ptr(), "SELECT COUNT(*) FROM t1;").expect("count should succeed");
 	let _sample = sqlite_query_i64(db_a.as_ptr(), "SELECT id FROM t1 WHERE id = 1;")
 		.expect("indexed lookup should succeed");
 
@@ -5326,8 +5332,7 @@ fn warm_pidx_stale_read_then_rmw_commit_natural_repro() {
 		)
 		.expect("writer update should succeed");
 	}
-	sqlite_exec(db_writer_handle.as_ptr(), "COMMIT;")
-		.expect("writer commit should succeed");
+	sqlite_exec(db_writer_handle.as_ptr(), "COMMIT;").expect("writer commit should succeed");
 	let writer_head = runtime
 		.block_on(
 			db_writer.get_pages_with_options(vec![1], depot::types::GetPagesOptions::default()),
@@ -5502,8 +5507,7 @@ fn warm_pidx_stale_read_then_rmw_commit_natural_repro() {
 
 	let mut escalation_probes: Vec<(String, Result<String, String>)> = Vec::new();
 	if runtime_corrupt_observed.is_none() {
-		let pragma_writable_schema_on =
-			sqlite_exec(db_c.as_ptr(), "PRAGMA writable_schema = ON;");
+		let pragma_writable_schema_on = sqlite_exec(db_c.as_ptr(), "PRAGMA writable_schema = ON;");
 		escalation_probes.push((
 			"pragma_writable_schema_on".to_string(),
 			pragma_writable_schema_on
@@ -5765,11 +5769,10 @@ fn warm_pidx_stale_read_then_rmw_commit_via_natural_reopen() {
 		..VfsConfig::default()
 	};
 
-	let transport_shared: Arc<dyn SqliteTransport + Send + Sync> =
-		Arc::new(PinnedDbTransport {
-			db: db_shared.clone(),
-			actor_id: harness.actor_id.clone(),
-		});
+	let transport_shared: Arc<dyn SqliteTransport + Send + Sync> = Arc::new(PinnedDbTransport {
+		db: db_shared.clone(),
+		actor_id: harness.actor_id.clone(),
+	});
 
 	// Step 1: handle A1 builds a real schema with enough rows to span btree internals.
 	let db_a = harness.open_db_with_transport(
@@ -5831,11 +5834,8 @@ fn warm_pidx_stale_read_then_rmw_commit_via_natural_reopen() {
 		"SELECT id FROM t1 WHERE payload LIKE 'payload-00500%' LIMIT 1;",
 	)
 	.expect("indexed lookup through A_warm should succeed");
-	let _ = sqlite_query_i64(
-		db_a_warm.as_ptr(),
-		"SELECT id FROM t1 WHERE id = 1;",
-	)
-	.expect("pk lookup through A_warm should succeed");
+	let _ = sqlite_query_i64(db_a_warm.as_ptr(), "SELECT id FROM t1 WHERE id = 1;")
+		.expect("pk lookup through A_warm should succeed");
 	let _ = sqlite_query_text(
 		db_a_warm.as_ptr(),
 		"SELECT group_concat(name, ',') FROM sqlite_master ORDER BY name;",
@@ -5886,8 +5886,7 @@ fn warm_pidx_stale_read_then_rmw_commit_via_natural_reopen() {
 		)
 		.expect("writer update should succeed");
 	}
-	sqlite_exec(db_writer_handle.as_ptr(), "COMMIT;")
-		.expect("writer commit should succeed");
+	sqlite_exec(db_writer_handle.as_ptr(), "COMMIT;").expect("writer commit should succeed");
 	let writer_head = runtime
 		.block_on(
 			db_writer.get_pages_with_options(vec![1], depot::types::GetPagesOptions::default()),

@@ -39,7 +39,11 @@ pub fn authorize_metrics_request(
 		return Err(MetricsAccessError::Unauthorized);
 	};
 
-	if bearer_token.as_bytes().ct_eq(configured_token.as_bytes()).into() {
+	if bearer_token
+		.as_bytes()
+		.ct_eq(configured_token.as_bytes())
+		.into()
+	{
 		Ok(())
 	} else {
 		Err(MetricsAccessError::Unauthorized)

@@ -24,6 +24,7 @@ use crate::kv::{
 	KV_CLEANUP_INTERVAL_MS, KvRequestEntry, cleanup_old_kv_requests, handle_kv_request,
 	handle_kv_response, process_unsent_kv_requests,
 };
+use crate::metrics::METRICS;
 use crate::sqlite::{
 	RemoteSqliteRequest, RemoteSqliteRequestEntry, RemoteSqliteResponse, SqliteRequest,
 	SqliteRequestEntry, SqliteResponse, cleanup_old_remote_sqlite_requests,

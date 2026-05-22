@@ -402,8 +402,13 @@ impl IntegrationCtx {
 			&self.stderr_path,
 		)
 		.await?;
-		wait_for_engine_health(&self.client, &self.endpoint, &mut self.child, &self.stderr_path)
-			.await?;
+		wait_for_engine_health(
+			&self.client,
+			&self.endpoint,
+			&mut self.child,
+			&self.stderr_path,
+		)
+		.await?;
 		Ok(())
 	}
 
@@ -538,7 +543,10 @@ enum EngineDatabase {
 
 impl EngineDatabase {
 	fn from_env() -> Self {
-		match std::env::var("SQLITE_CORRUPTION_FUZZ_ENGINE_DATABASE").ok().as_deref() {
+		match std::env::var("SQLITE_CORRUPTION_FUZZ_ENGINE_DATABASE")
+			.ok()
+			.as_deref()
+		{
 			Some("foundationdb") => Self::FoundationDb {
 				cluster_description: std::env::var(
 					"SQLITE_CORRUPTION_FUZZ_FOUNDATIONDB_CLUSTER_DESCRIPTION",
@@ -599,7 +607,10 @@ async fn spawn_engine_child(
 			addresses,
 		} => {
 			command
-				.env("RIVET__FOUNDATIONDB__CLUSTER_DESCRIPTION", cluster_description)
+				.env(
+					"RIVET__FOUNDATIONDB__CLUSTER_DESCRIPTION",
+					cluster_description,
+				)
 				.env("RIVET__FOUNDATIONDB__CLUSTER_ID", cluster_id)
 				.env("RIVET__FOUNDATIONDB__ADDRESSES", addresses);
 		}

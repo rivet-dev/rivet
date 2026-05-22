@@ -69,18 +69,12 @@ impl ToServer {
 			v1::ToServerBody::PatchStateRequest(req) => {
 				v2::ToServerBody::PatchStateRequest(req.into())
 			}
-			v1::ToServerBody::StateRequest(req) => {
-				v2::ToServerBody::StateRequest(req.into())
-			}
+			v1::ToServerBody::StateRequest(req) => v2::ToServerBody::StateRequest(req.into()),
 			v1::ToServerBody::ConnectionsRequest(req) => {
 				v2::ToServerBody::ConnectionsRequest(req.into())
 			}
-			v1::ToServerBody::ActionRequest(req) => {
-				v2::ToServerBody::ActionRequest(req.into())
-			}
-			v1::ToServerBody::RpcsListRequest(req) => {
-				v2::ToServerBody::RpcsListRequest(req.into())
-			}
+			v1::ToServerBody::ActionRequest(req) => v2::ToServerBody::ActionRequest(req.into()),
+			v1::ToServerBody::RpcsListRequest(req) => v2::ToServerBody::RpcsListRequest(req.into()),
 			v1::ToServerBody::EventsRequest(_) | v1::ToServerBody::ClearEventsRequest(_) => {
 				bail!("cannot convert inspector v1 events requests to v2")
 			}
@@ -105,24 +99,16 @@ impl ToServer {
 			v3::ToServerBody::PatchStateRequest(req) => {
 				v4::ToServerBody::PatchStateRequest(req.into())
 			}
-			v3::ToServerBody::StateRequest(req) => {
-				v4::ToServerBody::StateRequest(req.into())
-			}
+			v3::ToServerBody::StateRequest(req) => v4::ToServerBody::StateRequest(req.into()),
 			v3::ToServerBody::ConnectionsRequest(req) => {
 				v4::ToServerBody::ConnectionsRequest(req.into())
 			}
-			v3::ToServerBody::ActionRequest(req) => {
-				v4::ToServerBody::ActionRequest(req.into())
-			}
-			v3::ToServerBody::RpcsListRequest(req) => {
-				v4::ToServerBody::RpcsListRequest(req.into())
-			}
+			v3::ToServerBody::ActionRequest(req) => v4::ToServerBody::ActionRequest(req.into()),
+			v3::ToServerBody::RpcsListRequest(req) => v4::ToServerBody::RpcsListRequest(req.into()),
 			v3::ToServerBody::TraceQueryRequest(req) => {
 				v4::ToServerBody::TraceQueryRequest(req.into())
 			}
-			v3::ToServerBody::QueueRequest(req) => {
-				v4::ToServerBody::QueueRequest(req.into())
-			}
+			v3::ToServerBody::QueueRequest(req) => v4::ToServerBody::QueueRequest(req.into()),
 			v3::ToServerBody::WorkflowHistoryRequest(req) => {
 				v4::ToServerBody::WorkflowHistoryRequest(req.into())
 			}
@@ -146,24 +132,16 @@ impl ToServer {
 			v4::ToServerBody::PatchStateRequest(req) => {
 				v3::ToServerBody::PatchStateRequest(req.into())
 			}
-			v4::ToServerBody::StateRequest(req) => {
-				v3::ToServerBody::StateRequest(req.into())
-			}
+			v4::ToServerBody::StateRequest(req) => v3::ToServerBody::StateRequest(req.into()),
 			v4::ToServerBody::ConnectionsRequest(req) => {
 				v3::ToServerBody::ConnectionsRequest(req.into())
 			}
-			v4::ToServerBody::ActionRequest(req) => {
-				v3::ToServerBody::ActionRequest(req.into())
-			}
-			v4::ToServerBody::RpcsListRequest(req) => {
-				v3::ToServerBody::RpcsListRequest(req.into())
-			}
+			v4::ToServerBody::ActionRequest(req) => v3::ToServerBody::ActionRequest(req.into()),
+			v4::ToServerBody::RpcsListRequest(req) => v3::ToServerBody::RpcsListRequest(req.into()),
 			v4::ToServerBody::TraceQueryRequest(req) => {
 				v3::ToServerBody::TraceQueryRequest(req.into())
 			}
-			v4::ToServerBody::QueueRequest(req) => {
-				v3::ToServerBody::QueueRequest(req.into())
-			}
+			v4::ToServerBody::QueueRequest(req) => v3::ToServerBody::QueueRequest(req.into()),
 			v4::ToServerBody::WorkflowHistoryRequest(req) => {
 				v3::ToServerBody::WorkflowHistoryRequest(req.into())
 			}
@@ -190,24 +168,16 @@ impl ToServer {
 			v3::ToServerBody::PatchStateRequest(req) => {
 				v2::ToServerBody::PatchStateRequest(req.into())
 			}
-			v3::ToServerBody::StateRequest(req) => {
-				v2::ToServerBody::StateRequest(req.into())
-			}
+			v3::ToServerBody::StateRequest(req) => v2::ToServerBody::StateRequest(req.into()),
 			v3::ToServerBody::ConnectionsRequest(req) => {
 				v2::ToServerBody::ConnectionsRequest(req.into())
 			}
-			v3::ToServerBody::ActionRequest(req) => {
-				v2::ToServerBody::ActionRequest(req.into())
-			}
-			v3::ToServerBody::RpcsListRequest(req) => {
-				v2::ToServerBody::RpcsListRequest(req.into())
-			}
+			v3::ToServerBody::ActionRequest(req) => v2::ToServerBody::ActionRequest(req.into()),
+			v3::ToServerBody::RpcsListRequest(req) => v2::ToServerBody::RpcsListRequest(req.into()),
 			v3::ToServerBody::TraceQueryRequest(req) => {
 				v2::ToServerBody::TraceQueryRequest(req.into())
 			}
-			v3::ToServerBody::QueueRequest(req) => {
-				v2::ToServerBody::QueueRequest(req.into())
-			}
+			v3::ToServerBody::QueueRequest(req) => v2::ToServerBody::QueueRequest(req.into()),
 			v3::ToServerBody::WorkflowHistoryRequest(req) => {
 				v2::ToServerBody::WorkflowHistoryRequest(req.into())
 			}
@@ -229,18 +199,12 @@ impl ToServer {
 			v2::ToServerBody::PatchStateRequest(req) => {
 				v1::ToServerBody::PatchStateRequest(req.into())
 			}
-			v2::ToServerBody::StateRequest(req) => {
-				v1::ToServerBody::StateRequest(req.into())
-			}
+			v2::ToServerBody::StateRequest(req) => v1::ToServerBody::StateRequest(req.into()),
 			v2::ToServerBody::ConnectionsRequest(req) => {
 				v1::ToServerBody::ConnectionsRequest(req.into())
 			}
-			v2::ToServerBody::ActionRequest(req) => {
-				v1::ToServerBody::ActionRequest(req.into())
-			}
-			v2::ToServerBody::RpcsListRequest(req) => {
-				v1::ToServerBody::RpcsListRequest(req.into())
-			}
+			v2::ToServerBody::ActionRequest(req) => v1::ToServerBody::ActionRequest(req.into()),
+			v2::ToServerBody::RpcsListRequest(req) => v1::ToServerBody::RpcsListRequest(req.into()),
 			v2::ToServerBody::TraceQueryRequest(_)
 			| v2::ToServerBody::QueueRequest(_)
 			| v2::ToServerBody::WorkflowHistoryRequest(_) => {
@@ -309,24 +273,18 @@ impl ToClient {
 		};
 
 		let body = match data.body {
-			v1::ToClientBody::StateResponse(resp) => {
-				v2::ToClientBody::StateResponse(resp.into())
-			}
+			v1::ToClientBody::StateResponse(resp) => v2::ToClientBody::StateResponse(resp.into()),
 			v1::ToClientBody::ConnectionsResponse(resp) => {
 				v2::ToClientBody::ConnectionsResponse(resp.into())
 			}
-			v1::ToClientBody::ActionResponse(resp) => {
-				v2::ToClientBody::ActionResponse(resp.into())
-			}
+			v1::ToClientBody::ActionResponse(resp) => v2::ToClientBody::ActionResponse(resp.into()),
 			v1::ToClientBody::RpcsListResponse(resp) => {
 				v2::ToClientBody::RpcsListResponse(resp.into())
 			}
 			v1::ToClientBody::ConnectionsUpdated(update) => {
 				v2::ToClientBody::ConnectionsUpdated(update.into())
 			}
-			v1::ToClientBody::StateUpdated(update) => {
-				v2::ToClientBody::StateUpdated(update.into())
-			}
+			v1::ToClientBody::StateUpdated(update) => v2::ToClientBody::StateUpdated(update.into()),
 			v1::ToClientBody::Error(error) => v2::ToClientBody::Error(error.into()),
 			v1::ToClientBody::Init(init) => v2::ToClientBody::Init(v2::Init {
 				connections: convert_vec(init.connections),
@@ -359,24 +317,16 @@ impl ToClient {
 		};
 
 		let body = match data.body {
-			v3::ToClientBody::StateResponse(resp) => {
-				v4::ToClientBody::StateResponse(resp.into())
-			}
+			v3::ToClientBody::StateResponse(resp) => v4::ToClientBody::StateResponse(resp.into()),
 			v3::ToClientBody::ConnectionsResponse(resp) => {
 				v4::ToClientBody::ConnectionsResponse(resp.into())
 			}
-			v3::ToClientBody::ActionResponse(resp) => {
-				v4::ToClientBody::ActionResponse(resp.into())
-			}
+			v3::ToClientBody::ActionResponse(resp) => v4::ToClientBody::ActionResponse(resp.into()),
 			v3::ToClientBody::ConnectionsUpdated(update) => {
 				v4::ToClientBody::ConnectionsUpdated(update.into())
 			}
-			v3::ToClientBody::QueueUpdated(update) => {
-				v4::ToClientBody::QueueUpdated(update.into())
-			}
-			v3::ToClientBody::StateUpdated(update) => {
-				v4::ToClientBody::StateUpdated(update.into())
-			}
+			v3::ToClientBody::QueueUpdated(update) => v4::ToClientBody::QueueUpdated(update.into()),
+			v3::ToClientBody::StateUpdated(update) => v4::ToClientBody::StateUpdated(update.into()),
 			v3::ToClientBody::WorkflowHistoryUpdated(update) => {
 				v4::ToClientBody::WorkflowHistoryUpdated(update.into())
 			}
@@ -386,9 +336,7 @@ impl ToClient {
 			v3::ToClientBody::TraceQueryResponse(resp) => {
 				v4::ToClientBody::TraceQueryResponse(resp.into())
 			}
-			v3::ToClientBody::QueueResponse(resp) => {
-				v4::ToClientBody::QueueResponse(resp.into())
-			}
+			v3::ToClientBody::QueueResponse(resp) => v4::ToClientBody::QueueResponse(resp.into()),
 			v3::ToClientBody::WorkflowHistoryResponse(resp) => {
 				v4::ToClientBody::WorkflowHistoryResponse(resp.into())
 			}
@@ -411,24 +359,16 @@ impl ToClient {
 		};
 
 		let body = match data.body {
-			v4::ToClientBody::StateResponse(resp) => {
-				v3::ToClientBody::StateResponse(resp.into())
-			}
+			v4::ToClientBody::StateResponse(resp) => v3::ToClientBody::StateResponse(resp.into()),
 			v4::ToClientBody::ConnectionsResponse(resp) => {
 				v3::ToClientBody::ConnectionsResponse(resp.into())
 			}
-			v4::ToClientBody::ActionResponse(resp) => {
-				v3::ToClientBody::ActionResponse(resp.into())
-			}
+			v4::ToClientBody::ActionResponse(resp) => v3::ToClientBody::ActionResponse(resp.into()),
 			v4::ToClientBody::ConnectionsUpdated(update) => {
 				v3::ToClientBody::ConnectionsUpdated(update.into())
 			}
-			v4::ToClientBody::QueueUpdated(update) => {
-				v3::ToClientBody::QueueUpdated(update.into())
-			}
-			v4::ToClientBody::StateUpdated(update) => {
-				v3::ToClientBody::StateUpdated(update.into())
-			}
+			v4::ToClientBody::QueueUpdated(update) => v3::ToClientBody::QueueUpdated(update.into()),
+			v4::ToClientBody::StateUpdated(update) => v3::ToClientBody::StateUpdated(update.into()),
 			v4::ToClientBody::WorkflowHistoryUpdated(update) => {
 				v3::ToClientBody::WorkflowHistoryUpdated(update.into())
 			}
@@ -438,9 +378,7 @@ impl ToClient {
 			v4::ToClientBody::TraceQueryResponse(resp) => {
 				v3::ToClientBody::TraceQueryResponse(resp.into())
 			}
-			v4::ToClientBody::QueueResponse(resp) => {
-				v3::ToClientBody::QueueResponse(resp.into())
-			}
+			v4::ToClientBody::QueueResponse(resp) => v3::ToClientBody::QueueResponse(resp.into()),
 			v4::ToClientBody::WorkflowHistoryResponse(resp) => {
 				v3::ToClientBody::WorkflowHistoryResponse(resp.into())
 			}
@@ -466,24 +404,16 @@ impl ToClient {
 		};
 
 		let body = match data.body {
-			v3::ToClientBody::StateResponse(resp) => {
-				v2::ToClientBody::StateResponse(resp.into())
-			}
+			v3::ToClientBody::StateResponse(resp) => v2::ToClientBody::StateResponse(resp.into()),
 			v3::ToClientBody::ConnectionsResponse(resp) => {
 				v2::ToClientBody::ConnectionsResponse(resp.into())
 			}
-			v3::ToClientBody::ActionResponse(resp) => {
-				v2::ToClientBody::ActionResponse(resp.into())
-			}
+			v3::ToClientBody::ActionResponse(resp) => v2::ToClientBody::ActionResponse(resp.into()),
 			v3::ToClientBody::ConnectionsUpdated(update) => {
 				v2::ToClientBody::ConnectionsUpdated(update.into())
 			}
-			v3::ToClientBody::QueueUpdated(update) => {
-				v2::ToClientBody::QueueUpdated(update.into())
-			}
-			v3::ToClientBody::StateUpdated(update) => {
-				v2::ToClientBody::StateUpdated(update.into())
-			}
+			v3::ToClientBody::QueueUpdated(update) => v2::ToClientBody::QueueUpdated(update.into()),
+			v3::ToClientBody::StateUpdated(update) => v2::ToClientBody::StateUpdated(update.into()),
 			v3::ToClientBody::WorkflowHistoryUpdated(update) => {
 				v2::ToClientBody::WorkflowHistoryUpdated(update.into())
 			}
@@ -493,9 +423,7 @@ impl ToClient {
 			v3::ToClientBody::TraceQueryResponse(resp) => {
 				v2::ToClientBody::TraceQueryResponse(resp.into())
 			}
-			v3::ToClientBody::QueueResponse(resp) => {
-				v2::ToClientBody::QueueResponse(resp.into())
-			}
+			v3::ToClientBody::QueueResponse(resp) => v2::ToClientBody::QueueResponse(resp.into()),
 			v3::ToClientBody::WorkflowHistoryResponse(resp) => {
 				v2::ToClientBody::WorkflowHistoryResponse(resp.into())
 			}
@@ -516,21 +444,15 @@ impl ToClient {
 		};
 
 		let body = match data.body {
-			v2::ToClientBody::StateResponse(resp) => {
-				v1::ToClientBody::StateResponse(resp.into())
-			}
+			v2::ToClientBody::StateResponse(resp) => v1::ToClientBody::StateResponse(resp.into()),
 			v2::ToClientBody::ConnectionsResponse(resp) => {
 				v1::ToClientBody::ConnectionsResponse(resp.into())
 			}
-			v2::ToClientBody::ActionResponse(resp) => {
-				v1::ToClientBody::ActionResponse(resp.into())
-			}
+			v2::ToClientBody::ActionResponse(resp) => v1::ToClientBody::ActionResponse(resp.into()),
 			v2::ToClientBody::ConnectionsUpdated(update) => {
 				v1::ToClientBody::ConnectionsUpdated(update.into())
 			}
-			v2::ToClientBody::StateUpdated(update) => {
-				v1::ToClientBody::StateUpdated(update.into())
-			}
+			v2::ToClientBody::StateUpdated(update) => v1::ToClientBody::StateUpdated(update.into()),
 			v2::ToClientBody::RpcsListResponse(resp) => {
 				v1::ToClientBody::RpcsListResponse(resp.into())
 			}
@@ -720,11 +642,15 @@ macro_rules! impl_common_actor_pair {
 		impl_same_fields_pair!($left, $right, Connection { id, details });
 		impl_connections_response_pair!($left, $right);
 		impl_connection_list_pair!($left, $right, ConnectionsUpdated);
-		impl_same_fields_pair!($left, $right, StateResponse {
-			rid,
-			state,
-			is_state_enabled,
-		});
+		impl_same_fields_pair!(
+			$left,
+			$right,
+			StateResponse {
+				rid,
+				state,
+				is_state_enabled,
+			}
+		);
 		impl_same_fields_pair!($left, $right, ActionResponse { rid, output });
 		impl_same_fields_pair!($left, $right, StateUpdated { state });
 		impl_same_fields_pair!($left, $right, RpcsListResponse { rid, rpcs });
@@ -734,28 +660,40 @@ macro_rules! impl_common_actor_pair {
 
 macro_rules! impl_queue_workflow_pair {
 	($left:ident, $right:ident) => {
-		impl_same_fields_pair!($left, $right, TraceQueryRequest {
-			id,
-			start_ms,
-			end_ms,
-			limit,
-		});
+		impl_same_fields_pair!(
+			$left,
+			$right,
+			TraceQueryRequest {
+				id,
+				start_ms,
+				end_ms,
+				limit,
+			}
+		);
 		impl_same_fields_pair!($left, $right, TraceQueryResponse { rid, payload });
 		impl_same_fields_pair!($left, $right, QueueRequest { id, limit });
-		impl_same_fields_pair!($left, $right, QueueMessageSummary {
-			id,
-			name,
-			created_at_ms,
-		});
+		impl_same_fields_pair!(
+			$left,
+			$right,
+			QueueMessageSummary {
+				id,
+				name,
+				created_at_ms,
+			}
+		);
 		impl_queue_status_pair!($left, $right);
 		impl_queue_response_pair!($left, $right);
 		impl_same_fields_pair!($left, $right, QueueUpdated { queue_size });
 		impl_same_fields_pair!($left, $right, WorkflowHistoryRequest { id });
-		impl_same_fields_pair!($left, $right, WorkflowHistoryResponse {
-			rid,
-			history,
-			is_workflow_enabled,
-		});
+		impl_same_fields_pair!(
+			$left,
+			$right,
+			WorkflowHistoryResponse {
+				rid,
+				history,
+				is_workflow_enabled,
+			}
+		);
 		impl_same_fields_pair!($left, $right, WorkflowHistoryUpdated { history });
 		impl_init_pair!($left, $right);
 	};
@@ -765,12 +703,16 @@ macro_rules! impl_database_pair {
 	($left:ident, $right:ident) => {
 		impl_same_fields_pair!($left, $right, DatabaseSchemaRequest { id });
 		impl_same_fields_pair!($left, $right, DatabaseSchemaResponse { rid, schema });
-		impl_same_fields_pair!($left, $right, DatabaseTableRowsRequest {
-			id,
-			table,
-			limit,
-			offset,
-		});
+		impl_same_fields_pair!(
+			$left,
+			$right,
+			DatabaseTableRowsRequest {
+				id,
+				table,
+				limit,
+				offset,
+			}
+		);
 		impl_same_fields_pair!($left, $right, DatabaseTableRowsResponse { rid, result });
 	};
 }
@@ -813,9 +755,7 @@ impl From<v2::ToClientBody> for v3::ToClientBody {
 			v2::ToClientBody::StateResponse(resp) => Self::StateResponse(resp.into()),
 			v2::ToClientBody::ConnectionsResponse(resp) => Self::ConnectionsResponse(resp.into()),
 			v2::ToClientBody::ActionResponse(resp) => Self::ActionResponse(resp.into()),
-			v2::ToClientBody::ConnectionsUpdated(update) => {
-				Self::ConnectionsUpdated(update.into())
-			}
+			v2::ToClientBody::ConnectionsUpdated(update) => Self::ConnectionsUpdated(update.into()),
 			v2::ToClientBody::QueueUpdated(update) => Self::QueueUpdated(update.into()),
 			v2::ToClientBody::StateUpdated(update) => Self::StateUpdated(update.into()),
 			v2::ToClientBody::WorkflowHistoryUpdated(update) => {

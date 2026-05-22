@@ -150,7 +150,10 @@ impl EnvoyClientMetrics {
 		)
 		.expect("create envoy_client_envoy_tx_depth gauge");
 
-		register(&rivet_metrics::REGISTRY, sqlite_request_expired_total.clone());
+		register(
+			&rivet_metrics::REGISTRY,
+			sqlite_request_expired_total.clone(),
+		);
 		register(&rivet_metrics::REGISTRY, sqlite_requests_inflight.clone());
 		register(
 			&rivet_metrics::REGISTRY,
@@ -182,7 +185,10 @@ impl EnvoyClientMetrics {
 			sqlite_request_wait_duration_seconds.clone(),
 		);
 		register(&rivet_metrics::REGISTRY, ws_reconnect_total.clone());
-		register(&rivet_metrics::REGISTRY, ws_session_duration_seconds.clone());
+		register(
+			&rivet_metrics::REGISTRY,
+			ws_session_duration_seconds.clone(),
+		);
 		register(&rivet_metrics::REGISTRY, envoy_tx_depth.clone());
 
 		Self {

@@ -44,18 +44,14 @@ async fn sqlite_lifecycle_fuzz_real_engine() -> Result<()> {
 		"SQLITE_CORRUPTION_FUZZ_RESTART_EVERY_ROUNDS",
 		DEFAULT_RESTART_EVERY_ROUNDS,
 	);
-	let action_timeout = Duration::from_secs(
-		env_usize(
-			"SQLITE_CORRUPTION_FUZZ_ACTION_TIMEOUT_SECS",
-			DEFAULT_ACTION_TIMEOUT_SECS,
-		) as u64,
-	);
-	let final_check_timeout = Duration::from_secs(
-		env_usize(
-			"SQLITE_CORRUPTION_FUZZ_FINAL_CHECK_TIMEOUT_SECS",
-			DEFAULT_FINAL_CHECK_TIMEOUT_SECS,
-		) as u64,
-	);
+	let action_timeout = Duration::from_secs(env_usize(
+		"SQLITE_CORRUPTION_FUZZ_ACTION_TIMEOUT_SECS",
+		DEFAULT_ACTION_TIMEOUT_SECS,
+	) as u64);
+	let final_check_timeout = Duration::from_secs(env_usize(
+		"SQLITE_CORRUPTION_FUZZ_FINAL_CHECK_TIMEOUT_SECS",
+		DEFAULT_FINAL_CHECK_TIMEOUT_SECS,
+	) as u64);
 	let final_check_attempts = env_usize(
 		"SQLITE_CORRUPTION_FUZZ_FINAL_CHECK_ATTEMPTS",
 		DEFAULT_FINAL_CHECK_ATTEMPTS,
@@ -65,12 +61,10 @@ async fn sqlite_lifecycle_fuzz_real_engine() -> Result<()> {
 		"SQLITE_CORRUPTION_FUZZ_MID_ROUND_RESTART_EVERY_ROUNDS",
 		DEFAULT_MID_ROUND_RESTART_EVERY_ROUNDS,
 	);
-	let mid_round_restart_delay = Duration::from_millis(
-		env_usize(
-			"SQLITE_CORRUPTION_FUZZ_MID_ROUND_RESTART_DELAY_MS",
-			DEFAULT_MID_ROUND_RESTART_DELAY_MS,
-		) as u64,
-	);
+	let mid_round_restart_delay = Duration::from_millis(env_usize(
+		"SQLITE_CORRUPTION_FUZZ_MID_ROUND_RESTART_DELAY_MS",
+		DEFAULT_MID_ROUND_RESTART_DELAY_MS,
+	) as u64);
 	let engine_restart_every_rounds = env_usize(
 		"SQLITE_CORRUPTION_FUZZ_ENGINE_RESTART_EVERY_ROUNDS",
 		DEFAULT_ENGINE_RESTART_EVERY_ROUNDS,
@@ -79,12 +73,10 @@ async fn sqlite_lifecycle_fuzz_real_engine() -> Result<()> {
 		"SQLITE_CORRUPTION_FUZZ_MID_ROUND_ENGINE_RESTART_EVERY_ROUNDS",
 		DEFAULT_MID_ROUND_ENGINE_RESTART_EVERY_ROUNDS,
 	);
-	let mid_round_engine_restart_delay = Duration::from_millis(
-		env_usize(
-			"SQLITE_CORRUPTION_FUZZ_MID_ROUND_ENGINE_RESTART_DELAY_MS",
-			DEFAULT_MID_ROUND_ENGINE_RESTART_DELAY_MS,
-		) as u64,
-	);
+	let mid_round_engine_restart_delay = Duration::from_millis(env_usize(
+		"SQLITE_CORRUPTION_FUZZ_MID_ROUND_ENGINE_RESTART_DELAY_MS",
+		DEFAULT_MID_ROUND_ENGINE_RESTART_DELAY_MS,
+	) as u64);
 	let suspect_probe_rounds = env_usize(
 		"SQLITE_CORRUPTION_FUZZ_SUSPECT_PROBE_ROUNDS",
 		DEFAULT_SUSPECT_PROBE_ROUNDS,
@@ -201,8 +193,9 @@ async fn sqlite_lifecycle_fuzz_real_engine() -> Result<()> {
 						suspect_unavailable_counts.remove(actor_id);
 					}
 					ActionAttempt::Unavailable { .. } => {
-						let unavailable_count =
-							suspect_unavailable_counts.entry(actor_id.clone()).or_insert(0);
+						let unavailable_count = suspect_unavailable_counts
+							.entry(actor_id.clone())
+							.or_insert(0);
 						*unavailable_count += 1;
 						if *unavailable_count >= suspect_probe_rounds {
 							replacement_actor_ids.insert(actor_id.clone());
@@ -240,8 +233,7 @@ async fn sqlite_lifecycle_fuzz_real_engine() -> Result<()> {
 			&& (round + 1) % restart_every_rounds == 0
 			&& round + 1 < steps_per_actor
 			&& !restarted_mid_round
-			&& !(engine_restart_every_rounds != 0
-				&& (round + 1) % engine_restart_every_rounds == 0)
+			&& !(engine_restart_every_rounds != 0 && (round + 1) % engine_restart_every_rounds == 0)
 		{
 			registry_task.shutdown().await?;
 			tokio::time::sleep(Duration::from_millis(150)).await;
@@ -441,8 +433,14 @@ async fn run_actor_action_direct(
 		}
 	};
 	let output = action_output(&body)?;
-	assert_eq!(output.get("integrity").and_then(JsonValue::as_str), Some("ok"));
-	assert_eq!(output.get("quick_check").and_then(JsonValue::as_str), Some("ok"));
+	assert_eq!(
+		output.get("integrity").and_then(JsonValue::as_str),
+		Some("ok")
+	);
+	assert_eq!(
+		output.get("quick_check").and_then(JsonValue::as_str),
+		Some("ok")
+	);
 	Ok(ActionAttempt::Ok)
 }
 
@@ -496,7 +494,10 @@ async fn send_json_action_direct(
 		.await
 		.context("send actor action")?;
 	let status = response.status();
-	let body = response.text().await.context("read actor action response")?;
+	let body = response
+		.text()
+		.await
+		.context("read actor action response")?;
 	if !status.is_success() {
 		bail!("actor action failed with {status}: {body}");
 	}
@@ -550,15 +551,18 @@ fn sqlite_fuzz_factory() -> ActorFactory {
 							step += 1;
 							let result = run_sqlite_step(&ctx, step).await;
 							if result.is_ok()
-								&& save_every_steps != 0
-								&& step % save_every_steps == 0
+								&& save_every_steps != 0 && step % save_every_steps == 0
 							{
 								ctx.request_save(RequestSaveOpts::default());
 							}
 							reply.send(result.map(|summary| encode_json(&summary)));
 						}
 						"check" => {
-							reply.send(run_sqlite_check(&ctx).await.map(|summary| encode_json(&summary)));
+							reply.send(
+								run_sqlite_check(&ctx)
+									.await
+									.map(|summary| encode_json(&summary)),
+							);
 						}
 						name => {
 							reply.send(Err(anyhow::anyhow!("unknown action `{name}`")));
@@ -870,7 +874,10 @@ async fn run_read_checks(
 	plan: &StepPlan,
 ) -> Result<()> {
 	ctx.db_query(
-		&format!("SELECT COUNT(*) AS count FROM fuzz_rows WHERE bucket = {}", plan.bucket),
+		&format!(
+			"SELECT COUNT(*) AS count FROM fuzz_rows WHERE bucket = {}",
+			plan.bucket
+		),
 		None,
 	)
 	.await?;
