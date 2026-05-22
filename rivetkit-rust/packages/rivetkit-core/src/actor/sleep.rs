@@ -868,9 +868,7 @@ impl ActorContext {
 				.set_http_requests_active(ctx.active_http_request_count());
 			ctx.reset_sleep_timer();
 		}));
-		self.0
-			.metrics
-			.set_http_requests_active(counter.load());
+		self.0.metrics.set_http_requests_active(counter.load());
 		Some(counter)
 	}
 }
