@@ -1,6 +1,6 @@
 import { State } from "@rivetkit/effect";
 import { Effect, Schema } from "effect";
-import { BannerWordsError, Moderator } from "./api.ts";
+import { BannedWordsError, Moderator } from "./api.ts";
 
 const bannedWords = ["spam", "scam"];
 
@@ -20,7 +20,7 @@ export const ModeratorLive = Moderator.toLayer(
 							lower.includes(word),
 						);
 						if (hit !== undefined) {
-							return yield* new BannerWordsError({
+							return yield* new BannedWordsError({
 								message: `contains banned word "${hit}"`,
 							});
 						}

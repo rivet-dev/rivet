@@ -1,8 +1,8 @@
 import { Action, Actor } from "@rivetkit/effect";
 import { Schema } from "effect";
 
-export class BannerWordsError extends Schema.TaggedErrorClass<BannerWordsError>()(
-	"BannerWordsError",
+export class BannedWordsError extends Schema.TaggedErrorClass<BannedWordsError>()(
+	"BannedWordsError",
 	{
 		message: Schema.String,
 	},
@@ -10,7 +10,7 @@ export class BannerWordsError extends Schema.TaggedErrorClass<BannerWordsError>(
 
 export const Review = Action.make("Review", {
 	payload: { text: Schema.String },
-	error: BannerWordsError,
+	error: BannedWordsError,
 });
 
 export const Stats = Action.make("Stats", {
