@@ -88,6 +88,9 @@ struct ActorContext {
 	ws_entries: BufferMap<WsEntry>,
 	hibernating_requests: Vec<protocol::HibernatingRequest>,
 	active_http_request_count: Arc<AsyncCounter>,
+	/// Captured at the top of `actor_inner` so `actor_lifetime_seconds` can be
+	/// observed at stop time.
+	started_at: crate::time::Instant,
 }
 
 struct ActiveHttpRequestGuard {
@@ -179,6 +182,7 @@ async fn actor_inner(
 		ws_entries: BufferMap::new(),
 		hibernating_requests,
 		active_http_request_count,
+		started_at: crate::time::Instant::now(),
 	};
 	let mut http_request_tasks = JoinSet::new();
 	let mut pending_stop: Option<PendingStop> = None;
@@ -387,6 +391,17 @@ fn send_event(ctx: &mut ActorContext, inner: protocol::Event) {
 	);
 }
 
+/// Bounded label values for `actor_stop_total` / `actor_lifetime_seconds`.
+fn stop_actor_reason_label(reason: &protocol::StopActorReason) -> &'static str {
+	match reason {
+		protocol::StopActorReason::SleepIntent => "sleep_intent",
+		protocol::StopActorReason::StopIntent => "stop_intent",
+		protocol::StopActorReason::Destroy => "destroy",
+		protocol::StopActorReason::GoingAway => "going_away",
+		protocol::StopActorReason::Lost => "lost",
+	}
+}
+
 async fn begin_stop(
 	ctx: &mut ActorContext,
 	handle: &EnvoyHandle,
@@ -410,6 +425,16 @@ async fn begin_stop(
 	} else {
 		(protocol::StopCode::Ok, None)
 	};
+
+	let reason_label = stop_actor_reason_label(&reason);
+	crate::metrics::METRICS
+		.actor_stop_total
+		.with_label_values(&[reason_label])
+		.inc();
+	crate::metrics::METRICS
+		.actor_lifetime_seconds
+		.with_label_values(&[reason_label])
+		.observe(ctx.started_at.elapsed().as_secs_f64());
 	let (stop_tx, mut stop_rx) = oneshot::channel();
 
 	let stop_result = ctx

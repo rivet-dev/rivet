@@ -450,9 +450,9 @@ async fn run_agent_concurrent_2_worker(worker: u32, ctx: Arc<WorkloadCtx>) {
 					let detail = format!("code={} reason={}", code, reason);
 					log_disconnect(&ctx, worker, &key, actor_id.as_deref(), &detail, true);
 				}
-				// Per-worker phase-1 failure: skip this iteration, continue outer loop.
-				// Do not call set_stopping — that would kill the whole test on a single error.
-				sleep(std::time::Duration::from_millis(ctx.args.sleep_ms)).await;
+				// Per-worker phase-1 failure: continue outer loop IMMEDIATELY to reproduce
+				// thundering-herd reconnect on storm. Do not call set_stopping (would kill
+				// the whole test) and do not sleep (would stagger reconnects).
 				continue 'worker_loop;
 			}
 		}
@@ -475,8 +475,7 @@ async fn run_agent_concurrent_2_worker(worker: u32, ctx: Arc<WorkloadCtx>) {
 			if let Err(err) = sink.send(Message::Text(payload.into())).await {
 				let _ = err;
 				log_websocket_error(&ctx, worker, &key, actor_id.as_deref());
-				// Per-worker send error: drop this connection, continue outer loop.
-				sleep(std::time::Duration::from_millis(ctx.args.sleep_ms)).await;
+				// Per-worker send error: drop this connection, continue immediately.
 				continue 'worker_loop;
 			}
 
@@ -505,12 +504,10 @@ async fn run_agent_concurrent_2_worker(worker: u32, ctx: Arc<WorkloadCtx>) {
 				}
 				Ok(AgentConcurrent2Cycle::ServerError { error }) => {
 					log_agent_concurrent_2_error(&ctx, worker, &key, actor_id.as_deref(), &error);
-					sleep(std::time::Duration::from_millis(ctx.args.sleep_ms)).await;
 					continue 'worker_loop;
 				}
 				Ok(AgentConcurrent2Cycle::Closed { detail }) => {
 					log_disconnect(&ctx, worker, &key, actor_id.as_deref(), &detail, true);
-					sleep(std::time::Duration::from_millis(ctx.args.sleep_ms)).await;
 					continue 'worker_loop;
 				}
 				Err(_) => {
@@ -519,7 +516,6 @@ async fn run_agent_concurrent_2_worker(worker: u32, ctx: Arc<WorkloadCtx>) {
 						ctx.args.timeout_ms,
 					);
 					log_disconnect(&ctx, worker, &key, actor_id.as_deref(), &detail, true);
-					sleep(std::time::Duration::from_millis(ctx.args.sleep_ms)).await;
 					continue 'worker_loop;
 				}
 			}

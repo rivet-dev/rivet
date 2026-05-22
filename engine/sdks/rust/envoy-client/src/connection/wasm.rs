@@ -51,21 +51,30 @@ mod imp {
 							tracing::debug!("connection evicted");
 							let _ = crate::envoy::send_to_envoy_tx(
 								&shared,
-								ToEnvoyMessage::ConnClose { evict: true },
+								ToEnvoyMessage::ConnClose {
+									evict: true,
+									was_error: false,
+								},
 							);
 							return;
 						}
 					}
 					let _ = crate::envoy::send_to_envoy_tx(
 						&shared,
-						ToEnvoyMessage::ConnClose { evict: false },
+						ToEnvoyMessage::ConnClose {
+							evict: false,
+							was_error: false,
+						},
 					);
 				}
 				Err(error) => {
 					tracing::error!(?error, "connection failed");
 					let _ = crate::envoy::send_to_envoy_tx(
 						&shared,
-						ToEnvoyMessage::ConnClose { evict: false },
+						ToEnvoyMessage::ConnClose {
+							evict: false,
+							was_error: true,
+						},
 					);
 				}
 			}
@@ -284,6 +293,8 @@ mod imp {
 			}
 		}
 
+		super::super::observe_ping_unhealthy_on_close(shared);
+
 		{
 			let mut guard = shared.ws_tx.lock().await;
 			*guard = None;
@@ -371,7 +382,13 @@ mod imp {
 	use crate::envoy::ToEnvoyMessage;
 
 	pub fn start_connection(shared: Arc<SharedContext>) {
-		let _ = crate::envoy::send_to_envoy_tx(&shared, ToEnvoyMessage::ConnClose { evict: false });
+		let _ = crate::envoy::send_to_envoy_tx(
+			&shared,
+			ToEnvoyMessage::ConnClose {
+				evict: false,
+				was_error: true,
+			},
+		);
 		tracing::error!("wasm envoy transport requires the wasm32 target");
 	}
 }

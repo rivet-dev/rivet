@@ -39,21 +39,30 @@ async fn connection_loop(shared: Arc<SharedContext>) {
 						tracing::debug!("connection evicted");
 						let _ = crate::envoy::send_to_envoy_tx(
 							&shared,
-							ToEnvoyMessage::ConnClose { evict: true },
+							ToEnvoyMessage::ConnClose {
+								evict: true,
+								was_error: false,
+							},
 						);
 						return;
 					}
 				}
 				let _ = crate::envoy::send_to_envoy_tx(
 					&shared,
-					ToEnvoyMessage::ConnClose { evict: false },
+					ToEnvoyMessage::ConnClose {
+						evict: false,
+						was_error: false,
+					},
 				);
 			}
 			Err(error) => {
 				tracing::error!(?error, "connection failed");
 				let _ = crate::envoy::send_to_envoy_tx(
 					&shared,
-					ToEnvoyMessage::ConnClose { evict: false },
+					ToEnvoyMessage::ConnClose {
+						evict: false,
+						was_error: true,
+					},
 				);
 			}
 		}
@@ -295,6 +304,7 @@ async fn single_connection(
 		.ws_reconnect_total
 		.with_label_values(&[disconnect_reason])
 		.inc();
+	super::observe_ping_unhealthy_on_close(shared);
 	tracing::info!(
 		envoy_key = %shared.envoy_key,
 		reason = disconnect_reason,

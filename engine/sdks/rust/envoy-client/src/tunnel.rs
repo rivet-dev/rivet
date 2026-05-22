@@ -352,6 +352,9 @@ pub async fn resend_buffered_tunnel_messages(ctx: &mut EnvoyContext) {
 	);
 
 	let messages = std::mem::take(&mut ctx.buffered_messages);
+	crate::metrics::METRICS
+		.outbound_queue_depth
+		.sub(messages.len() as i64);
 	for msg in messages {
 		ws_send(&ctx.shared, protocol::ToRivet::ToRivetTunnelMessage(msg)).await;
 	}

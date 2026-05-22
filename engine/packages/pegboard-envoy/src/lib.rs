@@ -34,8 +34,11 @@ pub struct PegboardEnvoyWs {
 	ctx: StandaloneCtx,
 }
 
+static METRICS_PREPOPULATE: std::sync::Once = std::sync::Once::new();
+
 impl PegboardEnvoyWs {
 	pub fn new(ctx: StandaloneCtx) -> Self {
+		METRICS_PREPOPULATE.call_once(metrics::prepopulate);
 		let service = Self { ctx: ctx.clone() };
 
 		service
@@ -269,7 +272,62 @@ impl CustomServeTrait for PegboardEnvoyWs {
 			])
 			.dec();
 
+		// Classify the close for `ws_close_initiator_total` and `connection_close_total`.
+		let ns_label = conn.namespace_id.to_string();
+		let pool_label = conn.pool_name.as_str();
+		let (initiator, cause, close_code, reason_group) = classify_ws_close(&lifecycle_res);
+		metrics::WS_CLOSE_INITIATOR_TOTAL
+			.with_label_values(&[ns_label.as_str(), pool_label, initiator, cause.as_str()])
+			.inc();
+		metrics::CONNECTION_CLOSE_TOTAL
+			.with_label_values(&[ns_label.as_str(), pool_label, close_code, reason_group.as_str()])
+			.inc();
+
 		// This will determine the close frame sent back to the envoy websocket
 		lifecycle_res.map(|_| None)
+	}
+}
+
+/// Determine `(initiator, cause, close_code, reason_group)` metric labels from the lifecycle
+/// result returned by the envoy websocket tasks.
+fn classify_ws_close(
+	res: &Result<LifecycleResult>,
+) -> (&'static str, String, &'static str, String) {
+	match res {
+		Ok(LifecycleResult::Closed) => (
+			"client_close",
+			"ok".to_string(),
+			"1000",
+			"ok".to_string(),
+		),
+		Ok(LifecycleResult::Aborted) => (
+			"engine_shutdown",
+			"ok".to_string(),
+			"1001",
+			"ok".to_string(),
+		),
+		Ok(LifecycleResult::Evicted) => (
+			"engine_eviction",
+			"ws.eviction".to_string(),
+			"1008",
+			"ws".to_string(),
+		),
+		Err(err) => {
+			let structured = rivet_error::RivetError::extract(err);
+			let group = structured.group().to_string();
+			let code = structured.code().to_string();
+			let cause = format!("{group}.{code}");
+			let (initiator, close_code) = if group == "ws" {
+				match code.as_str() {
+					"timed_out" => ("engine_ping_timeout", "1011"),
+					"going_away" => ("engine_shutdown", "1001"),
+					"eviction" => ("engine_eviction", "1008"),
+					_ => ("network", "1006"),
+				}
+			} else {
+				("network", "1011")
+			};
+			(initiator, cause, close_code, group)
+		}
 	}
 }

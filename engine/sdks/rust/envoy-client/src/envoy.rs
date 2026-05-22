@@ -91,6 +91,7 @@ pub enum ToEnvoyMessage {
 	},
 	ConnClose {
 		evict: bool,
+		was_error: bool,
 	},
 	SendEvents {
 		events: Vec<protocol::EventWrapper>,
@@ -353,6 +354,9 @@ async fn envoy_loop(
 	let mut kv_cleanup_tick = boxed_sleep(std::time::Duration::from_millis(KV_CLEANUP_INTERVAL_MS));
 
 	let mut lost_timeout: Option<SleepFuture> = None;
+	// Captured at the moment we arm the lost-threshold timer so we can observe
+	// `reconnect_within_grace_seconds` if a reconnect/init beats the timer.
+	let mut lost_timer_armed_at: Option<crate::time::Instant> = None;
 
 	loop {
 		let iter_start = crate::time::Instant::now();
@@ -369,11 +373,50 @@ async fn envoy_loop(
 
 				match msg {
 					ToEnvoyMessage::ConnMessage { message } => {
+						let was_armed = lost_timeout.is_some();
+						let prev_armed_at = lost_timer_armed_at;
 						lost_timeout = handle_conn_message(&mut ctx, &start_tx, lost_timeout, message).await;
+						// Detect lost-timer cancellation by a successful init/reconnect.
+						if was_armed && lost_timeout.is_none() {
+							METRICS
+								.lost_timer_outcome_total
+								.with_label_values(&["cancelled_by_reconnect"])
+								.inc();
+							if let Some(at) = prev_armed_at {
+								METRICS
+									.reconnect_within_grace_seconds
+									.observe(at.elapsed().as_secs_f64());
+							}
+							lost_timer_armed_at = None;
+						}
 					}
-					ToEnvoyMessage::ConnClose { evict } => {
+					ToEnvoyMessage::ConnClose { evict, was_error } => {
 						fail_sent_remote_sqlite_requests_with_indeterminate_result(&mut ctx);
+						let was_armed = lost_timeout.is_some();
 						lost_timeout = handle_conn_close(&ctx, lost_timeout);
+						// Only count metrics on the first arm (handle_conn_close
+						// is a no-op when a timer is already armed).
+						if !was_armed && lost_timeout.is_some() {
+							let reason = if was_error {
+								"conn_close_error"
+							} else {
+								"conn_close_clean"
+							};
+							METRICS
+								.lost_timer_armed_total
+								.with_label_values(&[reason])
+								.inc();
+							let source = if has_protocol_metadata(&ctx).await {
+								"metadata"
+							} else {
+								"fallback"
+							};
+							METRICS
+								.lost_threshold_source_total
+								.with_label_values(&[source])
+								.inc();
+							lost_timer_armed_at = Some(crate::time::Instant::now());
+						}
 						if evict {
 							observe_envoy_loop_iteration(branch, iter_start);
 							break;
@@ -393,6 +436,7 @@ async fn envoy_loop(
 					}
 					ToEnvoyMessage::BufferTunnelMsg { msg } => {
 						ctx.buffered_messages.push(msg);
+						METRICS.outbound_queue_depth.inc();
 					}
 					ToEnvoyMessage::ActorIntent { actor_id, generation, intent, error } => {
 						if let Some(entry) = ctx.get_actor(&actor_id, generation) {
@@ -464,6 +508,10 @@ async fn envoy_loop(
 				}
 			} => {
 				branch = "lost_timeout";
+				METRICS
+					.lost_timer_outcome_total
+					.with_label_values(&["fired"])
+					.inc();
 				// Lost timeout fired
 				for (_id, request) in ctx.kv_requests.drain() {
 					METRICS.kv_requests_inflight.dec();
@@ -474,13 +522,19 @@ async fn envoy_loop(
 
 				if !ctx.actors.is_empty() {
 					tracing::warn!("stopping all actors due to envoy lost threshold");
+					let mut evicted = 0u64;
 					for (_actor_id, gens) in &ctx.actors {
 						for (_g, entry) in gens {
 							if !entry.handle.is_closed() {
 								let _ = entry.handle.send(ToActor::Lost);
+								evicted += 1;
 							}
 						}
 					}
+					METRICS
+						.actor_evicted_total
+						.with_label_values(&["lost_threshold"])
+						.inc_by(evicted);
 					ctx.actors.clear();
 					ctx.shared
 						.actors
@@ -490,6 +544,7 @@ async fn envoy_loop(
 				}
 
 				lost_timeout = None;
+				lost_timer_armed_at = None;
 			}
 		}
 		observe_envoy_loop_iteration(branch, iter_start);
@@ -606,6 +661,13 @@ async fn handle_conn_message(
 	}
 
 	lost_timeout
+}
+
+/// True if the engine has delivered a `ToEnvoyInit` containing a protocol
+/// metadata block (so the lost-threshold value would come from metadata rather
+/// than the 10s local fallback).
+async fn has_protocol_metadata(ctx: &EnvoyContext) -> bool {
+	ctx.shared.protocol_metadata.lock().await.is_some()
 }
 
 fn handle_conn_close(ctx: &EnvoyContext, lost_timeout: Option<SleepFuture>) -> Option<SleepFuture> {

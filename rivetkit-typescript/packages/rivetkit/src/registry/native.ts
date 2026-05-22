@@ -4686,6 +4686,14 @@ export async function buildConfiguredRegistry(config: RegistryConfig): Promise<{
 	serveConfig: RuntimeServeConfig;
 }> {
 	const runtime = await loadConfiguredRuntime(config);
+	if (runtime.kind === "napi") {
+		// Start Node.js runtime health metrics collection (event loop lag,
+		// GC, heap, CPU, libuv handles). Only available on the native NAPI
+		// runtime; wasm/edge hosts do not expose perf_hooks/v8 the same
+		// way and have no Rust-side prometheus collectors loaded.
+		const { startProcessMetrics } = await import("./process-metrics");
+		startProcessMetrics();
+	}
 	return buildRegistryWithRuntime(
 		normalizeRuntimeConfig(config, runtime),
 		runtime,

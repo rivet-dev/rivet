@@ -310,7 +310,7 @@ if (!nativeBinding) {
   throw new Error(`Failed to load native binding`)
 }
 
-const { ActorContext, NapiActorFactory, CancellationToken, ConnHandle, JsNativeDatabase, Kv, Queue, QueueMessage, CoreRegistry, Schedule, WebSocket } = nativeBinding
+const { ActorContext, NapiActorFactory, CancellationToken, ConnHandle, JsNativeDatabase, Kv, Queue, QueueMessage, CoreRegistry, Schedule, WebSocket, jsSetEventloopLagQuantile, jsSetEventloopUtilization, jsSetEventloopHeartbeatTsMs, jsAddProcessCpuSeconds, jsSetProcessResidentMemoryBytes, jsSetHeapBytes, jsObserveGcDuration, jsSetActiveHandles, jsSetActiveRequests } = nativeBinding
 
 module.exports.ActorContext = ActorContext
 module.exports.NapiActorFactory = NapiActorFactory
@@ -323,3 +323,12 @@ module.exports.QueueMessage = QueueMessage
 module.exports.CoreRegistry = CoreRegistry
 module.exports.Schedule = Schedule
 module.exports.WebSocket = WebSocket
+module.exports.jsSetEventloopLagQuantile = jsSetEventloopLagQuantile
+module.exports.jsSetEventloopUtilization = jsSetEventloopUtilization
+module.exports.jsSetEventloopHeartbeatTsMs = jsSetEventloopHeartbeatTsMs
+module.exports.jsAddProcessCpuSeconds = jsAddProcessCpuSeconds
+module.exports.jsSetProcessResidentMemoryBytes = jsSetProcessResidentMemoryBytes
+module.exports.jsSetHeapBytes = jsSetHeapBytes
+module.exports.jsObserveGcDuration = jsObserveGcDuration
+module.exports.jsSetActiveHandles = jsSetActiveHandles
+module.exports.jsSetActiveRequests = jsSetActiveRequests

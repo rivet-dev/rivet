@@ -14,6 +14,7 @@ pub mod inspector;
 pub mod metrics_endpoint;
 pub mod registry;
 pub mod runtime;
+pub mod runtime_metrics;
 pub mod serverless;
 pub(crate) mod time {
 	use std::fmt;
