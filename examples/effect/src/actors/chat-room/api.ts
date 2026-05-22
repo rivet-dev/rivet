@@ -1,6 +1,6 @@
 import { Action, Actor } from "@rivetkit/effect";
 import { Schema } from "effect";
-import { BannerWordsError } from "../mod";
+import { BannedWordsError } from "../mod";
 
 // --- Errors ---
 
@@ -48,7 +48,7 @@ export const SendMessage = Action.make("SendMessage", {
 		sender: Schema.String,
 		text: Schema.String,
 	},
-	error: Schema.Union([MemberNotInRoomError, BannerWordsError]),
+	error: Schema.Union([MemberNotInRoomError, BannedWordsError]),
 });
 
 export const GetHistory = Action.make("GetHistory", {

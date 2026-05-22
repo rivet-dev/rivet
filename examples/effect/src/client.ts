@@ -1,7 +1,7 @@
 import { Client } from "@rivetkit/effect";
 import { Effect, Logger, Random } from "effect";
 import {
-	type BannerWordsError,
+	type BannedWordsError,
 	ChatRoom,
 	Counter,
 	Directory,
@@ -61,7 +61,7 @@ const program = Effect.gen(function* () {
 			text: "this contains spam",
 		})
 		.pipe(
-			Effect.catchTag("BannerWordsError", (e: BannerWordsError) =>
+			Effect.catchTag("BannedWordsError", (e: BannedWordsError) =>
 				Effect.logError(`ChatRoom.SendMessage rejected: ${e.message}`),
 			),
 		);
