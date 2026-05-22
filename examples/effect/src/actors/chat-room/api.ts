@@ -14,6 +14,17 @@ export class MemberNotInRoomError extends Schema.TaggedErrorClass<MemberNotInRoo
 
 // --- Actions ---
 
+// Actions use explicit schemas which enable:
+//
+// - Runtime validation. Schemas validate encoded data end to end
+//    which protects from malformed, stale, or malicious data.
+//
+// - Encoding/decoding control. Effect Schema distinguishes encoded
+//    (wire) and decoded (runtime) types. Values like `URL`, `bigint`,
+//    or custom domain types can have safe encoded forms on the wire
+//    and rich decoded forms in action handlers. Schemas can also require
+//    custom services during encode/decode.
+
 export const Member = Schema.Struct({
 	name: Schema.String,
 	joinedAt: Schema.DateTimeUtc,
@@ -26,9 +37,6 @@ export const Message = Schema.Struct({
 	createdAt: Schema.DateTimeUtc,
 });
 
-// The plain RivetKit example uses createState input to name the room at
-// creation time. The Effect SDK does not expose create input yet, so this
-// action initializes the persisted room state explicitly after getOrCreate.
 export const Initialize = Action.make("Initialize", {
 	payload: { name: Schema.String },
 });
@@ -69,18 +77,34 @@ export const ScheduleAnnouncement = Action.make("ScheduleAnnouncement", {
 	}),
 });
 
-// Scheduled actions receive the same single schema payload that normal
-// Effect actions use. This replaces the plain SDK example's positional
-// triggerAnnouncement(text) action.
 export const TriggerAnnouncement = Action.make("TriggerAnnouncement", {
 	payload: { text: Schema.String },
 });
 
-// The plain RivetKit example closes the room from onDestroy. The Effect SDK
-// does not expose onDestroy yet, so archive performs cleanup before destroy.
 export const Archive = Action.make("Archive");
 
+// --- Messages (not yet implemented) ---
+//
+// // Non-completable (fire-and-forget)
+// export const Reset = Message.make("Reset", {
+// 	payload: { reason: Schema.String },
+// })
+//
+// // Completable (sender can await a typed response)
+// export const IncrementBy = Message.make("IncrementBy", {
+// 	payload: { amount: Schema.Number },
+// 	success: Schema.Number,
+// })
+
+// --- Actor Definition ---
+
+// The definition is the actor's public contract. It carries no
+// implementation or server-only configuration, so it does not leak
+// server-specific implementation details when importing from the client.
 export const ChatRoom = Actor.make("chatRoom", {
+	// Actions are standalone values (vs. embedded in the actor definition)
+	// as it allows for shared action protocols (e.g., a `Ping` health check
+	// or `GetMetrics` action defined once and composed into multiple actors).
 	actions: [
 		Initialize,
 		Join,
@@ -92,4 +116,6 @@ export const ChatRoom = Actor.make("chatRoom", {
 		TriggerAnnouncement,
 		Archive,
 	],
+	// messages: [Reset, IncrementBy],	// durable, queued, background
+	// events: { countChanged: Schema.Number },
 });
