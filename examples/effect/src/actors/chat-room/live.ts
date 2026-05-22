@@ -2,7 +2,7 @@ import { Actor, State } from "@rivetkit/effect";
 import { DateTime, Duration, Effect, Random, Schema } from "effect";
 import { db } from "rivetkit/db";
 import { Directory, Moderator } from "../mod.ts";
-import { ChatRoom } from "./api.ts";
+import { ChatRoom, MemberNotInRoomError } from "./api.ts";
 
 export const ChatRoomLive = ChatRoom.toLayer(
 	({ rawRivetkitContext, state }) =>
@@ -50,6 +50,19 @@ export const ChatRoomLive = ChatRoom.toLayer(
 				Effect.map((s) => s.name),
 			);
 
+			const ensureMember = (name: string) =>
+				State.get(state).pipe(
+					Effect.orDie,
+					Effect.flatMap((current) =>
+						current.members.some((member) => member.name === name)
+							? Effect.void
+							: new MemberNotInRoomError({
+									name,
+									message: `${name} is not a member of this room`,
+								}),
+					),
+				);
+
 			return ChatRoom.of({
 				Initialize: ({ payload }) =>
 					// This replaces createState(input). Callers should initialize
@@ -95,6 +108,7 @@ export const ChatRoomLive = ChatRoom.toLayer(
 					}),
 				Leave: ({ payload }) =>
 					Effect.gen(function* () {
+						yield* ensureMember(payload.name);
 						yield* State.update(state, (current) => ({
 							...current,
 							members: current.members.filter(
@@ -107,6 +121,7 @@ export const ChatRoomLive = ChatRoom.toLayer(
 					}),
 				SendMessage: ({ payload }) =>
 					Effect.gen(function* () {
+						yield* ensureMember(payload.sender);
 						yield* moderator.Review({
 							text: payload.text,
 						});

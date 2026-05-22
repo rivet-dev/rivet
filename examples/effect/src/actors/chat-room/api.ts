@@ -2,6 +2,18 @@ import { Action, Actor } from "@rivetkit/effect";
 import { Schema } from "effect";
 import { BannerWordsError } from "../mod";
 
+// --- Errors ---
+
+export class MemberNotInRoomError extends Schema.TaggedErrorClass<MemberNotInRoomError>()(
+	"MemberNotInRoomError",
+	{
+		name: Schema.String,
+		message: Schema.String,
+	},
+) {}
+
+// --- Actions ---
+
 export const Member = Schema.Struct({
 	name: Schema.String,
 	joinedAt: Schema.DateTimeUtc,
@@ -28,6 +40,7 @@ export const Join = Action.make("Join", {
 
 export const Leave = Action.make("Leave", {
 	payload: { name: Schema.String },
+	error: MemberNotInRoomError,
 });
 
 export const SendMessage = Action.make("SendMessage", {
@@ -35,7 +48,7 @@ export const SendMessage = Action.make("SendMessage", {
 		sender: Schema.String,
 		text: Schema.String,
 	},
-	error: BannerWordsError,
+	error: Schema.Union([MemberNotInRoomError, BannerWordsError]),
 });
 
 export const GetHistory = Action.make("GetHistory", {

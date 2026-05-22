@@ -5,6 +5,7 @@ import {
 	ChatRoom,
 	Counter,
 	Directory,
+	type MemberNotInRoomError,
 	Moderator,
 } from "./actors/mod.ts";
 
@@ -23,8 +24,8 @@ const program = Effect.gen(function* () {
 	const directoryClient = yield* Directory.client;
 	const moderatorClient = yield* Moderator.client;
 
-		// This is a workaround. Scope helper actors to this run so stale
-		// singleton actors left in the local engine DB cannot trap nested RPCs.
+	// This is a workaround. Scope helper actors to this run so stale
+	// singleton actors left in the local engine DB cannot trap nested RPCs.
 	const roomName = `effect-room-${runId}`;
 	const runKey = ["run", roomName];
 	const room = chatRoomClient.getOrCreate([roomName]);
@@ -42,6 +43,17 @@ const program = Effect.gen(function* () {
 		text: "hello from Effect",
 	});
 	yield* Effect.log(`ChatRoom.SendMessage`);
+
+	yield* room
+		.SendMessage({
+			sender: "Mallory",
+			text: "I should not be able to post",
+		})
+		.pipe(
+			Effect.catchTag("MemberNotInRoomError", (e: MemberNotInRoomError) =>
+				Effect.logError(`ChatRoom.SendMessage rejected: ${e.message}`),
+			),
+		);
 
 	yield* room
 		.SendMessage({
