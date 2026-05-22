@@ -521,7 +521,29 @@ async fn envoy_loop(
 				fail_remote_sqlite_requests_with_shutdown(&mut ctx);
 
 				if !ctx.actors.is_empty() {
-					tracing::warn!("stopping all actors due to envoy lost threshold");
+					let threshold_source = if ctx.shared.protocol_metadata.try_lock()
+						.ok()
+						.and_then(|g| g.as_ref().map(|_| ()))
+						.is_some()
+					{
+						"metadata"
+					} else {
+						"fallback"
+					};
+					let time_since_close_ms = lost_timer_armed_at
+						.map(|t| t.elapsed().as_millis() as u64)
+						.unwrap_or(0);
+					let actor_count: u64 = ctx
+						.actors
+						.values()
+						.map(|gens| gens.len() as u64)
+						.sum();
+					tracing::warn!(
+						actor_count,
+						time_since_close_ms,
+						threshold_source,
+						"stopping all actors due to envoy lost threshold"
+					);
 					let mut evicted = 0u64;
 					for (_actor_id, gens) in &ctx.actors {
 						for (_g, entry) in gens {
@@ -683,7 +705,19 @@ fn handle_conn_close(ctx: &EnvoyContext, lost_timeout: Option<SleepFuture>) -> O
 			.unwrap_or(10_000)
 	};
 
-	tracing::debug!(ms = lost_threshold, "starting envoy lost timeout");
+	let source = if ctx
+		.shared
+		.protocol_metadata
+		.try_lock()
+		.ok()
+		.and_then(|guard| guard.as_ref().map(|m| m.envoy_lost_threshold))
+		.is_some()
+	{
+		"metadata"
+	} else {
+		"fallback"
+	};
+	tracing::info!(ms = lost_threshold, source, "starting envoy lost timeout");
 
 	Some(boxed_sleep(std::time::Duration::from_millis(
 		lost_threshold,

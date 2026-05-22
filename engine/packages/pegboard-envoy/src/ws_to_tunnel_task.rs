@@ -177,6 +177,17 @@ async fn handle_message(
 				metrics::PONG_MISSED_TOTAL
 					.with_label_values(&[ns_label.as_str(), pool_label])
 					.inc();
+				tracing::warn!(
+					rtt_ms = rtt,
+					slow_threshold_ms,
+					"slow pong"
+				);
+			}
+
+			// Independent high-rtt warning at a hard 500ms threshold so operators
+			// see latency spikes even when slow_threshold_ms is configured higher.
+			if rtt > 500 && u64::from(rtt) <= slow_threshold_ms {
+				tracing::warn!(rtt_ms = rtt, "high rtt pong");
 			}
 
 			conn.last_rtt.store(rtt, Ordering::SeqCst);

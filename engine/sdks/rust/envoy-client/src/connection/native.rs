@@ -289,7 +289,17 @@ async fn single_connection(
 			}
 			Err(e) => {
 				disconnect_reason = "error";
-				tracing::error!(?e, "websocket error");
+				let last_ping_ts = shared.last_ping_ts.load(std::sync::atomic::Ordering::Acquire);
+				let time_since_last_ping_ms = if last_ping_ts == 0 {
+					None
+				} else {
+					Some(crate::time::now_millis() - last_ping_ts)
+				};
+				tracing::error!(
+					?e,
+					?time_since_last_ping_ms,
+					"websocket error"
+				);
 				break;
 			}
 			_ => {}

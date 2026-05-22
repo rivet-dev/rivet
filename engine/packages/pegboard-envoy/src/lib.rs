@@ -215,7 +215,14 @@ impl CustomServeTrait for PegboardEnvoyWs {
 				// flight kv requests from being completed immediately. This guarantees the invariant that an
 				// actor's KV is only being accessed from one place at a time.
 				if res.is_err() {
-					tracing::warn!(?res, "ping task failed, aborting ws_to_tunnel");
+					let now = util::timestamp::now();
+					let last_ping_ts = conn.last_ping_ts.load(std::sync::atomic::Ordering::SeqCst);
+					tracing::warn!(
+						?res,
+						envoy_key = %conn.envoy_key,
+						time_since_last_pong_ms = now - last_ping_ts,
+						"ping task failed, aborting ws_to_tunnel"
+					);
 					hard_abort_ws_to_tunnel.abort();
 				}
 

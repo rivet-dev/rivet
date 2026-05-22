@@ -427,6 +427,12 @@ async fn begin_stop(
 	};
 
 	let reason_label = stop_actor_reason_label(&reason);
+	tracing::info!(
+		?reason,
+		?stop_code,
+		error = ?ctx.error,
+		"actor stopping"
+	);
 	crate::metrics::METRICS
 		.actor_stop_total
 		.with_label_values(&[reason_label])
