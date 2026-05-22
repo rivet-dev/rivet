@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use std::fmt;
-use std::sync::{Arc, LazyLock};
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, LazyLock};
 use std::time::Duration;
 
 use parking_lot::Mutex;
@@ -178,7 +178,10 @@ impl ActorMetricCollectors {
 		)
 		.expect("create actor_queue_depth gauge");
 		let queue_messages_sent_total = IntCounterVec::new(
-			Opts::new("rivetkit_actor_queue_messages_sent_total", "total queue messages sent"),
+			Opts::new(
+				"rivetkit_actor_queue_messages_sent_total",
+				"total queue messages sent",
+			),
 			ACTOR_LABELS,
 		)
 		.expect("create actor_queue_messages_sent_total counter");
@@ -212,7 +215,10 @@ impl ActorMetricCollectors {
 		)
 		.expect("create actor_inbox_depth gauge");
 		let user_tasks_active = IntGaugeVec::new(
-			Opts::new("rivetkit_actor_user_tasks_active", "current active actor user tasks"),
+			Opts::new(
+				"rivetkit_actor_user_tasks_active",
+				"current active actor user tasks",
+			),
 			USER_TASK_LABELS,
 		)
 		.expect("create actor_user_tasks_active gauge");
@@ -265,7 +271,10 @@ impl ActorMetricCollectors {
 		)
 		.expect("create actor_shutdown_timeout_total counter");
 		let state_mutation_total = CounterVec::new(
-			Opts::new("rivetkit_actor_state_mutation_total", "total actor state mutations"),
+			Opts::new(
+				"rivetkit_actor_state_mutation_total",
+				"total actor state mutations",
+			),
 			STATE_MUTATION_LABELS,
 		)
 		.expect("create actor_state_mutation_total counter");
@@ -495,7 +504,10 @@ impl ActorMetricCollectors {
 		);
 		register_metric(&rivet_metrics::REGISTRY, queue_depth.clone());
 		register_metric(&rivet_metrics::REGISTRY, queue_messages_sent_total.clone());
-		register_metric(&rivet_metrics::REGISTRY, queue_messages_received_total.clone());
+		register_metric(
+			&rivet_metrics::REGISTRY,
+			queue_messages_received_total.clone(),
+		);
 		register_metric(&rivet_metrics::REGISTRY, active_connections.clone());
 		register_metric(&rivet_metrics::REGISTRY, connections_total.clone());
 		register_metric(&rivet_metrics::REGISTRY, inbox_depth.clone());
@@ -513,7 +525,10 @@ impl ActorMetricCollectors {
 		);
 		#[cfg(feature = "sqlite-local")]
 		{
-			register_metric(&rivet_metrics::REGISTRY, sqlite_vfs_resolve_pages_total.clone());
+			register_metric(
+				&rivet_metrics::REGISTRY,
+				sqlite_vfs_resolve_pages_total.clone(),
+			);
 			register_metric(
 				&rivet_metrics::REGISTRY,
 				sqlite_vfs_resolve_pages_requested_total.clone(),
@@ -527,10 +542,22 @@ impl ActorMetricCollectors {
 				sqlite_vfs_resolve_pages_cache_misses_total.clone(),
 			);
 			register_metric(&rivet_metrics::REGISTRY, sqlite_vfs_get_pages_total.clone());
-			register_metric(&rivet_metrics::REGISTRY, sqlite_vfs_pages_fetched_total.clone());
-			register_metric(&rivet_metrics::REGISTRY, sqlite_vfs_prefetch_pages_total.clone());
-			register_metric(&rivet_metrics::REGISTRY, sqlite_vfs_bytes_fetched_total.clone());
-			register_metric(&rivet_metrics::REGISTRY, sqlite_vfs_prefetch_bytes_total.clone());
+			register_metric(
+				&rivet_metrics::REGISTRY,
+				sqlite_vfs_pages_fetched_total.clone(),
+			);
+			register_metric(
+				&rivet_metrics::REGISTRY,
+				sqlite_vfs_prefetch_pages_total.clone(),
+			);
+			register_metric(
+				&rivet_metrics::REGISTRY,
+				sqlite_vfs_bytes_fetched_total.clone(),
+			);
+			register_metric(
+				&rivet_metrics::REGISTRY,
+				sqlite_vfs_prefetch_bytes_total.clone(),
+			);
 			register_metric(
 				&rivet_metrics::REGISTRY,
 				sqlite_vfs_get_pages_duration_seconds.clone(),
@@ -546,16 +573,31 @@ impl ActorMetricCollectors {
 			);
 			register_metric(&rivet_metrics::REGISTRY, sqlite_worker_queue_depth.clone());
 			register_metric(&rivet_metrics::REGISTRY, sqlite_workers_active.clone());
-			register_metric(&rivet_metrics::REGISTRY, sqlite_worker_queue_overload_total.clone());
+			register_metric(
+				&rivet_metrics::REGISTRY,
+				sqlite_worker_queue_overload_total.clone(),
+			);
 			register_metric(
 				&rivet_metrics::REGISTRY,
 				sqlite_worker_command_duration_seconds.clone(),
 			);
-			register_metric(&rivet_metrics::REGISTRY, sqlite_worker_command_error_total.clone());
-			register_metric(&rivet_metrics::REGISTRY, sqlite_worker_close_duration_seconds.clone());
-			register_metric(&rivet_metrics::REGISTRY, sqlite_worker_close_timeout_total.clone());
+			register_metric(
+				&rivet_metrics::REGISTRY,
+				sqlite_worker_command_error_total.clone(),
+			);
+			register_metric(
+				&rivet_metrics::REGISTRY,
+				sqlite_worker_close_duration_seconds.clone(),
+			);
+			register_metric(
+				&rivet_metrics::REGISTRY,
+				sqlite_worker_close_timeout_total.clone(),
+			);
 			register_metric(&rivet_metrics::REGISTRY, sqlite_worker_crash_total.clone());
-			register_metric(&rivet_metrics::REGISTRY, sqlite_worker_unclean_close_total.clone());
+			register_metric(
+				&rivet_metrics::REGISTRY,
+				sqlite_worker_unclean_close_total.clone(),
+			);
 		}
 
 		Self {
@@ -912,12 +954,7 @@ impl ActorMetricInner {
 			&[labels[0], "lifecycle_event"],
 		);
 		for (kind, current) in state.user_tasks_active.iter_mut() {
-			set_aggregated_gauge(
-				current,
-				0,
-				&METRICS.user_tasks_active,
-				&[labels[0], *kind],
-			);
+			set_aggregated_gauge(current, 0, &METRICS.user_tasks_active, &[labels[0], *kind]);
 		}
 		set_aggregated_gauge(
 			&mut state.http_requests_active,
@@ -1139,7 +1176,6 @@ impl depot_client::vfs::SqliteVfsMetrics for ActorMetrics {
 	}
 }
 
-
 #[cfg(feature = "sqlite-local")]
 fn ns_to_seconds(duration_ns: u64) -> f64 {
 	Duration::from_nanos(duration_ns).as_secs_f64()
@@ -1152,12 +1188,7 @@ fn sqlite_worker_duration_buckets() -> Vec<f64> {
 	]
 }
 
-fn set_aggregated_gauge(
-	current: &mut i64,
-	next: i64,
-	gauge: &IntGaugeVec,
-	labels: &[&str],
-) {
+fn set_aggregated_gauge(current: &mut i64, next: i64, gauge: &IntGaugeVec, labels: &[&str]) {
 	let delta = next.saturating_sub(*current);
 	if delta != 0 {
 		gauge.with_label_values(labels).add(delta);

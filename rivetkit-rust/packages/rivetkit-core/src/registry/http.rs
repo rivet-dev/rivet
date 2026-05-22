@@ -1,7 +1,7 @@
 use super::dispatch::*;
 use super::inspector::*;
 use super::*;
-use crate::error::{client_error_message, client_error_metadata, ProtocolError};
+use crate::error::{ProtocolError, client_error_message, client_error_metadata};
 use ::http;
 
 const HEADER_RIVET_ACTOR: &str = "x-rivet-actor";
@@ -21,7 +21,10 @@ impl RegistryDispatcher {
 			request.uri().path(),
 			self.handle_inspector_http_in_runtime,
 		)?;
-		if matches!(route, RegistryHttpRoute::Framework(FrameworkHttpRoute::Metrics)) {
+		if matches!(
+			route,
+			RegistryHttpRoute::Framework(FrameworkHttpRoute::Metrics)
+		) {
 			return handle_metrics_fetch(&request);
 		}
 		let instance = match self.active_actor(actor_id).await {
@@ -382,7 +385,6 @@ impl RegistryDispatcher {
 			}
 		}
 	}
-
 }
 
 enum RegistryHttpRoute {

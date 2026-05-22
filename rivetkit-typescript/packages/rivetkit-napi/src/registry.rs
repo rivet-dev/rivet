@@ -288,12 +288,16 @@ impl CoreRegistry {
 					Some(envoy) => {
 						return Ok(health_response(
 							if envoy.ping_healthy { 200 } else { 503 },
-							if envoy.ping_healthy { "ok" } else { "engine_ping_stale" },
+							if envoy.ping_healthy {
+								"ok"
+							} else {
+								"engine_ping_stale"
+							},
 							&version,
 						));
 					}
 					None => return Ok(health_response(503, "starting", &version)),
-				}
+				},
 				RegistryState::Serverless(runtime) => runtime.clone(),
 				RegistryState::ShuttingDown => {
 					return Ok(health_response(503, "shutting_down", &version));
@@ -307,7 +311,11 @@ impl CoreRegistry {
 		let response = match serverless_runtime.active_envoy_status().await {
 			Some(envoy) => health_response(
 				if envoy.ping_healthy { 200 } else { 503 },
-				if envoy.ping_healthy { "ok" } else { "engine_ping_stale" },
+				if envoy.ping_healthy {
+					"ok"
+				} else {
+					"engine_ping_stale"
+				},
 				&version,
 			),
 			None => health_response(503, "engine_ping_stale", &version),
@@ -331,8 +339,8 @@ impl CoreRegistry {
 
 	#[napi]
 	pub fn metrics(&self) -> napi::Result<JsRegistryRouteResponse> {
-		let metrics =
-			rivetkit_core::metrics_endpoint::render_prometheus_metrics().map_err(napi_anyhow_error)?;
+		let metrics = rivetkit_core::metrics_endpoint::render_prometheus_metrics()
+			.map_err(napi_anyhow_error)?;
 		Ok(JsRegistryRouteResponse {
 			status: 200,
 			headers: HashMap::from([("content-type".to_owned(), metrics.content_type)]),
@@ -471,9 +479,7 @@ impl CoreRegistry {
 			registry.serverless_metadata_payload(&serve_config),
 		)?);
 
-		let build_result = registry
-			.into_serverless_runtime(serve_config)
-			.await;
+		let build_result = registry.into_serverless_runtime(serve_config).await;
 
 		// Re-acquire the lock and re-check state. Shutdown may have run during
 		// the build. If so, tear down the freshly-built runtime rather than
@@ -580,10 +586,7 @@ fn health_response(status_code: u16, status: &str, version: &str) -> JsRegistryR
 
 	JsRegistryRouteResponse {
 		status: status_code,
-		headers: HashMap::from([(
-			"content-type".to_owned(),
-			"application/json".to_owned(),
-		)]),
+		headers: HashMap::from([("content-type".to_owned(), "application/json".to_owned())]),
 		body: Buffer::from(serde_json::to_vec(&body).unwrap_or_else(|_| b"{}".to_vec())),
 	}
 }
