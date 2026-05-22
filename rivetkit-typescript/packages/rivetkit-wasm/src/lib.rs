@@ -7,15 +7,18 @@ use std::time::Duration;
 
 use anyhow::{Result, anyhow};
 use js_sys::{Array, Function, Object, Promise, Reflect, Uint8Array};
-use rivet_error::{ActorSpecifier, RivetError as RivetTransportError, RivetErrorKind};
+use rivet_error::{
+	ActorSpecifier, RivetError as RivetTransportError, RivetErrorKind,
+};
 use rivetkit_core::error::public_error_status_code;
 use rivetkit_core::inspector::InspectorAuth;
 use rivetkit_core::{
 	ActorConfig, ActorConfigInput, ActorEvent, ActorFactory as CoreActorFactory, ActorStart,
-	ActorWorkKind, BindParam, ColumnValue, CoreRegistry as NativeCoreRegistry,
-	CoreServerlessRuntime, EnqueueAndWaitOpts, KeepAwakeRegion, ListOpts, QueueMessage,
-	QueueNextBatchOpts, QueueSendResult, QueueSendStatus, QueueTryNextBatchOpts, QueueWaitOpts,
-	Request, RequestSaveOpts, Response, RuntimeSpawner, SerializeStateReason, ServeConfig,
+	ActorWorkKind,
+	BindParam, ColumnValue, CoreRegistry as NativeCoreRegistry, CoreServerlessRuntime,
+	EnqueueAndWaitOpts, KeepAwakeRegion, ListOpts, QueueMessage, QueueNextBatchOpts,
+	QueueSendResult, QueueSendStatus, QueueTryNextBatchOpts, QueueWaitOpts, Request,
+	RequestSaveOpts, Response, RuntimeSpawner, SerializeStateReason, ServeConfig,
 	ServerlessRequest, StateDelta, WebSocket, WebSocketCallbackRegion, WsMessage,
 };
 use tokio::sync::oneshot;
@@ -2862,7 +2865,9 @@ mod tests {
 	}
 
 	fn transport_message(error: &anyhow::Error) -> String {
-		transport_error(error).message().to_owned()
+		transport_error(error)
+			.message()
+			.to_owned()
 	}
 
 	#[test]

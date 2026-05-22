@@ -1,7 +1,7 @@
 use super::dispatch::*;
 use super::http::*;
 use super::*;
-use crate::error::{ProtocolError, client_error_message};
+use crate::error::{client_error_message, ProtocolError};
 use ::http;
 
 #[derive(rivet_error::RivetError, serde::Serialize)]
@@ -346,7 +346,9 @@ impl RegistryDispatcher {
 	) -> Result<(bool, Option<Vec<u8>>)> {
 		let result = instance
 			.ctx
-			.internal_keep_awake(dispatch_workflow_history_through_task(&instance.dispatch))
+			.internal_keep_awake(dispatch_workflow_history_through_task(
+				&instance.dispatch,
+			))
 			.await
 			.context("load inspector workflow history");
 

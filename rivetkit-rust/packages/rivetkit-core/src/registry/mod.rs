@@ -625,8 +625,11 @@ impl RegistryDispatcher {
 
 		let (start_tx, start_rx) = oneshot::channel();
 		let result: Result<Arc<ActorTaskHandle>> = async {
-			try_send_lifecycle_command(&lifecycle_tx, LifecycleCommand::Start { reply: start_tx })
-				.context("send actor task start command")?;
+			try_send_lifecycle_command(
+				&lifecycle_tx,
+				LifecycleCommand::Start { reply: start_tx },
+			)
+			.context("send actor task start command")?;
 			start_rx
 				.await
 				.context("receive actor task start reply")?
