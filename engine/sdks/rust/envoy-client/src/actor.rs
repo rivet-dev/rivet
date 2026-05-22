@@ -378,7 +378,7 @@ async fn actor_inner(
 	}
 
 	abort_and_join_http_request_tasks(&mut ctx, &mut http_request_tasks).await;
-	tracing::debug!("envoy actor stopped");
+	tracing::info!("actor stopped");
 }
 
 fn send_event(ctx: &mut ActorContext, inner: protocol::Event) {

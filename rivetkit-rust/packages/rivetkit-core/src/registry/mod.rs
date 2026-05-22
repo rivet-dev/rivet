@@ -965,7 +965,7 @@ impl RegistryDispatcher {
 			instance.ctx.mark_destroy_requested();
 		}
 
-		tracing::debug!(
+		tracing::info!(
 			actor_id,
 			handle_actor_id = %instance.actor_id,
 			actor_name = %instance.actor_name,
