@@ -8,11 +8,11 @@ const client = createClient(
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function main() {
-	const roomName = `chatroom_${crypto.randomUUID()}`;
-	const room = client.chatRoom.getOrCreate([roomName]);
+	const room = client.chatRoom.getOrCreate(`chatroom_${crypto.randomUUID()}`);
 
 	try {
-		await room.Initialize({ name: roomName });
+		const roomName = "Effect Lovers";
+		await room.Initialize({ name: "Effect Lovers" });
 		console.log(`created room ${roomName}`);
 
 		const { memberCount } = await room.Join({ name: "Alice" });

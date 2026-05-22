@@ -13,6 +13,6 @@ export const Review = Action.make("Review", {
 	error: BannedWordsError,
 });
 
-export const Moderator = Actor.make("moderator", {
+export const Moderator = Actor.make("Moderator", {
 	actions: [Review],
 });

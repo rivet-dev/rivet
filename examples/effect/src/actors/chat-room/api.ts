@@ -82,18 +82,11 @@ export const Archive = Action.make("Archive");
 // The definition is the actor's public contract. It carries no
 // implementation or server-only configuration, so it does not leak
 // server-specific implementation details when importing from the client.
-export const ChatRoom = Actor.make("chatRoom", {
+export const ChatRoom = Actor.make("ChatRoom", {
 	// Actions are standalone values (vs. embedded in the actor definition)
 	// as it allows for shared action protocols (e.g., a `Ping` health check
 	// or `GetMetrics` action defined once and composed into multiple actors).
-	actions: [
-		Initialize,
-		Join,
-		Leave,
-		SendMessage,
-		GetHistory,
-		Archive,
-	],
+	actions: [Initialize, Join, Leave, SendMessage, GetHistory, Archive],
 	// messages: [Reset, SendSystemMessage],	// durable, queued, background
 	// events: { messageAdded: Schema.String },
 });

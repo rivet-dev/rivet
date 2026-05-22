@@ -9,8 +9,9 @@ import {
 const program = Effect.gen(function* () {
 	// `Actor.client` yields a typed accessor backed by the Effect SDK client layer.
 	const chatRoomClient = yield* ChatRoom.client;
-	const roomName = `chatroom_${yield* Random.nextUUIDv4}`;
-	const room = chatRoomClient.getOrCreate(roomName);
+	const room = chatRoomClient.getOrCreate(
+		`chatroom_${yield* Random.nextUUIDv4}`,
+	);
 
 	yield* Effect.addFinalizer(() =>
 		Effect.gen(function* () {
@@ -19,6 +20,7 @@ const program = Effect.gen(function* () {
 		}),
 	);
 
+	const roomName = "Effect Lovers";
 	yield* room.Initialize({ name: roomName });
 	yield* Effect.log(`created room ${roomName}`);
 

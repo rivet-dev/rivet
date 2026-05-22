@@ -50,21 +50,19 @@ export const ChatRoomLive = ChatRoom.toLayer(
 			const roomPolicy = yield* RoomPolicy;
 			const moderatorClient = yield* Moderator.client;
 
-			// Access the actor's persisted `state` with a `SubscriptionRef`-like API
-			const name = State.get(state).pipe(
-				Effect.orDie,
-				Effect.map((s) => s.name),
-			);
-
 			yield* Effect.log("room awake", {
 				actorId: address.actorId,
 				key: address.key.join("/"),
-				name,
 			});
 
 			// Finalizers run on sleep
 			yield* Effect.addFinalizer(() =>
 				Effect.gen(function* () {
+					// Access the actor's persisted `state` with a `SubscriptionRef`-like API
+					const name = yield* State.get(state).pipe(
+						Effect.orDie,
+						Effect.map((s) => s.name),
+					);
 					yield* Effect.log("room sleeping", {
 						actorId: address.actorId,
 						key: address.key.join("/"),
@@ -185,7 +183,10 @@ export const ChatRoomLive = ChatRoom.toLayer(
 						yield* ensureMember(payload.sender);
 
 						// Actor-to-actor RPC uses the same API as client-to-actor RPC.
-						const moderator = moderatorClient.getOrCreate("main");
+						const moderator = moderatorClient.getOrCreate([
+							...address.key,
+							"main",
+						]);
 
 						// If Review fails with BannedWordsError, that typed error
 						// flows through SendMessage's declared error channel.
