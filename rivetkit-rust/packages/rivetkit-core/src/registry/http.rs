@@ -21,6 +21,9 @@ impl RegistryDispatcher {
 			request.uri().path(),
 			self.handle_inspector_http_in_runtime,
 		)?;
+		if matches!(route, RegistryHttpRoute::Framework(FrameworkHttpRoute::Metrics)) {
+			return handle_metrics_fetch(&request);
+		}
 		let instance = match self.active_actor(actor_id).await {
 			Ok(instance) => instance,
 			Err(error) => {
@@ -114,6 +117,7 @@ impl RegistryDispatcher {
 			}
 			FrameworkHttpRoute::Metadata => handle_metadata_fetch(&request, Some(&actor)),
 			FrameworkHttpRoute::Health => handle_health_fetch(&request, Some(&actor)),
+			FrameworkHttpRoute::Metrics => handle_metrics_fetch(&request),
 			FrameworkHttpRoute::Root => handle_root_fetch(&request, Some(&actor)),
 			FrameworkHttpRoute::NotFound => handle_not_found_fetch(&request, Some(&actor)),
 		}
@@ -416,6 +420,7 @@ impl RegistryHttpRoute {
 		match normalized_path {
 			"/metadata" => Ok(Self::Framework(FrameworkHttpRoute::Metadata)),
 			"/health" => Ok(Self::Framework(FrameworkHttpRoute::Health)),
+			"/metrics" => Ok(Self::Framework(FrameworkHttpRoute::Metrics)),
 			"/" => Ok(Self::Framework(FrameworkHttpRoute::Root)),
 			_ => Ok(Self::Framework(FrameworkHttpRoute::NotFound)),
 		}
@@ -427,6 +432,7 @@ pub(super) enum FrameworkHttpRoute {
 	Queue(String),
 	Metadata,
 	Health,
+	Metrics,
 	Root,
 	NotFound,
 }
@@ -466,6 +472,15 @@ fn handle_health_fetch(request: &Request, actor: Option<&ActorSpecifier>) -> Res
 	text_response(StatusCode::OK, "ok")
 }
 
+fn handle_metrics_fetch(request: &Request) -> Result<HttpResponse> {
+	if request.method() != http::Method::GET {
+		return method_not_allowed_response(request, None);
+	}
+
+	let metrics = crate::metrics_endpoint::render_prometheus_metrics()?;
+	bytes_response(StatusCode::OK, &metrics.content_type, metrics.body)
+}
+
 fn handle_root_fetch(request: &Request, actor: Option<&ActorSpecifier>) -> Result<HttpResponse> {
 	if request.method() != http::Method::GET {
 		return method_not_allowed_response(request, actor);
@@ -494,15 +509,23 @@ fn handle_not_found_fetch(
 }
 
 fn text_response(status: StatusCode, body: &str) -> Result<HttpResponse> {
+	bytes_response(
+		status,
+		"text/plain; charset=utf-8",
+		body.as_bytes().to_vec(),
+	)
+}
+
+fn bytes_response(status: StatusCode, content_type: &str, body: Vec<u8>) -> Result<HttpResponse> {
 	let mut headers = HashMap::new();
 	headers.insert(
 		http::header::CONTENT_TYPE.to_string(),
-		"text/plain; charset=utf-8".to_owned(),
+		content_type.to_owned(),
 	);
 	Ok(HttpResponse {
 		status: status.as_u16(),
 		headers,
-		body: Some(body.as_bytes().to_vec()),
+		body: Some(body),
 		body_stream: None,
 	})
 }

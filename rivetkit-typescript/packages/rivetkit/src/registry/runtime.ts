@@ -257,9 +257,10 @@ export interface RuntimeServerlessResponseHead {
 	headers: Record<string, string>;
 }
 
-export interface RuntimeRegistryDiagnostics {
-	mode: string;
-	envoyActiveActorCount?: number | null;
+export interface RuntimeRegistryRouteResponse {
+	status: number;
+	headers: Record<string, string>;
+	body: RuntimeBytes;
 }
 
 export type RuntimeServerlessStreamEvent =
@@ -309,6 +310,9 @@ export interface CoreRuntime {
 		config: RuntimeServeConfig,
 	): Promise<void>;
 	shutdownRegistry(registry: RegistryHandle): Promise<void>;
+	registryActorStopThresholdMs?(
+		registry: RegistryHandle,
+	): Promise<number | undefined>;
 	handleServerlessRequest(
 		registry: RegistryHandle,
 		req: RuntimeServerlessRequest,
@@ -316,9 +320,15 @@ export interface CoreRuntime {
 		cancelToken: CancellationTokenHandle,
 		config: RuntimeServeConfig,
 	): Promise<RuntimeServerlessResponseHead>;
-	registryDiagnostics?(
+	registryHealth?(
 		registry: RegistryHandle,
-	): Promise<RuntimeRegistryDiagnostics>;
+	): Promise<RuntimeRegistryRouteResponse>;
+	registryMetadata?(
+		registry: RegistryHandle,
+	): Promise<RuntimeRegistryRouteResponse>;
+	registryMetrics?(
+		registry: RegistryHandle,
+	): Promise<RuntimeRegistryRouteResponse>;
 	createActorFactory(
 		callbacks: object,
 		config?: RuntimeActorConfig | undefined | null,

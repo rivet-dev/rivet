@@ -24,7 +24,7 @@ import type {
 	RuntimeQueueTryNextBatchOptions,
 	RuntimeQueueWaitOptions,
 	RuntimeRequestSaveOpts,
-	RuntimeRegistryDiagnostics,
+	RuntimeRegistryRouteResponse,
 	RuntimeServeConfig,
 	RuntimeServerlessRequest,
 	RuntimeServerlessResponseHead,
@@ -202,13 +202,45 @@ export class NapiCoreRuntime implements CoreRuntime {
 		await asNativeRegistry(registry).shutdown();
 	}
 
-	async registryDiagnostics(
+	async registryActorStopThresholdMs(
 		registry: RegistryHandle,
-	): Promise<RuntimeRegistryDiagnostics> {
-		const diagnostics = await asNativeRegistry(registry).diagnostics();
+	): Promise<number | undefined> {
+		return (
+			(await asNativeRegistry(registry).actorStopThresholdMs()) ??
+			undefined
+		);
+	}
+
+	async registryHealth(
+		registry: RegistryHandle,
+	): Promise<RuntimeRegistryRouteResponse> {
+		const response = await asNativeRegistry(registry).health();
 		return {
-			mode: diagnostics.mode,
-			envoyActiveActorCount: diagnostics.envoyActiveActorCount,
+			status: response.status,
+			headers: response.headers,
+			body: response.body,
+		};
+	}
+
+	async registryMetadata(
+		registry: RegistryHandle,
+	): Promise<RuntimeRegistryRouteResponse> {
+		const response = asNativeRegistry(registry).metadata();
+		return {
+			status: response.status,
+			headers: response.headers,
+			body: response.body,
+		};
+	}
+
+	async registryMetrics(
+		registry: RegistryHandle,
+	): Promise<RuntimeRegistryRouteResponse> {
+		const response = asNativeRegistry(registry).metrics();
+		return {
+			status: response.status,
+			headers: response.headers,
+			body: response.body,
 		};
 	}
 

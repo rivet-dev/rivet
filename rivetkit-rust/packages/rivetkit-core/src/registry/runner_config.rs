@@ -1,9 +1,10 @@
+use std::collections::HashMap;
 use std::net::IpAddr;
 
 use anyhow::{Context, Result};
 use reqwest::{Client, Url};
 use serde::Deserialize;
-use serde_json::{Map as JsonMap, json};
+use serde_json::{Value as JsonValue, json};
 
 use super::ServeConfig;
 
@@ -17,6 +18,24 @@ struct Datacenter {
 	name: String,
 }
 
+#[derive(Debug, Deserialize)]
+struct RunnerConfigsResponse {
+	#[serde(default)]
+	runner_configs: HashMap<String, RunnerConfigDatacenters>,
+}
+
+#[derive(Debug, Deserialize)]
+struct RunnerConfigDatacenters {
+	#[serde(default)]
+	datacenters: HashMap<String, RunnerConfigEntry>,
+}
+
+#[derive(Debug, Deserialize)]
+struct RunnerConfigEntry {
+	#[serde(default)]
+	normal: Option<JsonValue>,
+}
+
 pub(super) async fn ensure_local_normal_runner_config(config: &ServeConfig) -> Result<()> {
 	if !is_local_engine_endpoint(&config.endpoint) {
 		return Ok(());
@@ -25,26 +44,56 @@ pub(super) async fn ensure_local_normal_runner_config(config: &ServeConfig) -> R
 	let client = Client::builder()
 		.build()
 		.context("build reqwest client for runner config")?;
-	let datacenters = get_datacenters(&client, config).await?;
-	let mut runner_datacenters = JsonMap::new();
 
-	for datacenter in datacenters.datacenters {
-		runner_datacenters.insert(
-			datacenter.name,
-			json!({
-				"normal": {},
-				"drain_on_version_upgrade": true,
-			}),
+	let (datacenters, runner_configs) = tokio::try_join!(
+		get_datacenters(&client, config),
+		get_runner_configs(&client, config),
+	)?;
+
+	let existing = runner_configs.runner_configs.get(config.pool_name.as_str());
+
+	let missing: Vec<String> = datacenters
+		.datacenters
+		.into_iter()
+		.filter(|dc| {
+			let has_normal = existing
+				.and_then(|pool| pool.datacenters.get(&dc.name))
+				.map(|entry| entry.normal.is_some())
+				.unwrap_or(false);
+			!has_normal
+		})
+		.map(|dc| dc.name)
+		.collect();
+
+	if missing.is_empty() {
+		tracing::debug!(
+			namespace = %config.namespace,
+			pool_name = %config.pool_name,
+			"local normal runner config already up to date"
 		);
+		return Ok(());
 	}
 
+	let missing_count = missing.len();
 	let url = engine_api_url(
 		&config.endpoint,
 		&["runner-configs", config.pool_name.as_str()],
 		&config.namespace,
 	)?;
+	let entry = json!({
+		"normal": {
+			"drain_on_version_upgrade": true,
+			"actor_eviction_delay": 0,
+			"actor_eviction_period": 0,
+			"actor_eviction_rate": 1.0,
+		},
+	});
+	let datacenters_body: serde_json::Map<String, JsonValue> = missing
+		.iter()
+		.map(|name| (name.clone(), entry.clone()))
+		.collect();
 	let body = json!({
-		"datacenters": runner_datacenters,
+		"datacenters": datacenters_body,
 	});
 
 	let response = apply_auth(client.put(url), config)
@@ -69,6 +118,7 @@ pub(super) async fn ensure_local_normal_runner_config(config: &ServeConfig) -> R
 	tracing::debug!(
 		namespace = %config.namespace,
 		pool_name = %config.pool_name,
+		missing_count,
 		"ensured local normal runner config"
 	);
 
@@ -98,6 +148,37 @@ async fn get_datacenters(client: &Client, config: &ServeConfig) -> Result<Datace
 		.json::<DatacentersResponse>()
 		.await
 		.context("decode datacenters response")
+}
+
+async fn get_runner_configs(
+	client: &Client,
+	config: &ServeConfig,
+) -> Result<RunnerConfigsResponse> {
+	let mut url = engine_api_url(&config.endpoint, &["runner-configs"], &config.namespace)?;
+	url.query_pairs_mut()
+		.append_pair("runner_name", config.pool_name.as_str());
+	let response = apply_auth(client.get(url), config)
+		.send()
+		.await
+		.context("get local runner configs")?;
+	let status = response.status();
+	if !status.is_success() {
+		let response_body = response
+			.text()
+			.await
+			.context("read failed runner configs response body")?;
+		anyhow::bail!(
+			"failed to get local runner configs for `{}`: {} {}",
+			config.pool_name,
+			status,
+			response_body
+		);
+	}
+
+	response
+		.json::<RunnerConfigsResponse>()
+		.await
+		.context("decode runner configs response")
 }
 
 fn apply_auth(request: reqwest::RequestBuilder, config: &ServeConfig) -> reqwest::RequestBuilder {

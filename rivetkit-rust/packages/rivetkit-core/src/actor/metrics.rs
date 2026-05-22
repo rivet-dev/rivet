@@ -1,78 +1,83 @@
+use std::collections::BTreeMap;
 use std::fmt;
 use std::sync::{Arc, LazyLock};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
+use parking_lot::Mutex;
 use rivet_metrics::prometheus::{
-	CounterVec, GaugeVec, HistogramOpts, HistogramVec, IntCounterVec, IntGaugeVec, Opts, Registry,
+	CounterVec, HistogramOpts, HistogramVec, IntCounterVec, IntGaugeVec, Opts, Registry,
 };
-use scc::HashMap as SccHashMap;
 
 use crate::actor::task_types::{ShutdownKind, StateMutationReason, UserTaskKind};
-use crate::time::Instant;
 
-const ACTOR_LABELS: &[&str] = &["actor_id_gen", "actor_key", "envoy_key"];
-const USER_TASK_LABELS: &[&str] = &["actor_id_gen", "actor_key", "envoy_key", "kind"];
-const SHUTDOWN_LABELS: &[&str] = &["actor_id_gen", "actor_key", "envoy_key", "reason"];
-const STATE_MUTATION_LABELS: &[&str] = &["actor_id_gen", "actor_key", "envoy_key", "reason"];
-const ACTOR_METRIC_RETENTION: Duration = Duration::from_secs(10 * 60);
-const DIRECT_SHUTDOWN_LABELS: &[&str] = &[
-	"actor_id_gen",
-	"actor_key",
-	"envoy_key",
-	"subsystem",
-	"operation",
-];
+const ACTOR_LABELS: &[&str] = &["actor_name"];
+const INBOX_LABELS: &[&str] = &["actor_name", "inbox"];
+const USER_TASK_LABELS: &[&str] = &["actor_name", "kind"];
+const WORK_LABELS: &[&str] = &["actor_name", "kind"];
+const SHUTDOWN_LABELS: &[&str] = &["actor_name", "reason"];
+const STATE_MUTATION_LABELS: &[&str] = &["actor_name", "reason"];
+const DIRECT_SHUTDOWN_LABELS: &[&str] = &["actor_name", "subsystem", "operation"];
 
 #[cfg(feature = "sqlite-local")]
-const SQLITE_COMMIT_PHASE_LABELS: &[&str] = &["actor_id_gen", "actor_key", "envoy_key", "phase"];
+const SQLITE_COMMIT_PHASE_LABELS: &[&str] = &["actor_name", "phase"];
 #[cfg(feature = "sqlite-local")]
-const SQLITE_WORKER_COMMAND_LABELS: &[&str] =
-	&["actor_id_gen", "actor_key", "envoy_key", "operation"];
+const SQLITE_WORKER_COMMAND_LABELS: &[&str] = &["actor_name", "operation"];
 #[cfg(feature = "sqlite-local")]
-const SQLITE_WORKER_ERROR_LABELS: &[&str] =
-	&["actor_id_gen", "actor_key", "envoy_key", "operation", "code"];
+const SQLITE_WORKER_ERROR_LABELS: &[&str] = &["actor_name", "operation", "code"];
 
+#[derive(Clone)]
 pub(crate) struct ActorMetrics {
-	labels: Arc<ActorMetricLabels>,
+	inner: Arc<ActorMetricInner>,
 }
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Debug)]
+struct ActorMetricInner {
+	labels: ActorMetricLabels,
+	state: Mutex<ActorMetricState>,
+	active: AtomicBool,
+}
+
+#[derive(Debug)]
 struct ActorMetricLabels {
-	actor_id_gen: String,
-	actor_key: String,
-	envoy_key: String,
+	actor_name: String,
 }
 
-#[derive(Default)]
-struct RetainedActorMetrics {
-	active_refs: usize,
-	expires_at: Option<Instant>,
-	user_task_kinds: Vec<&'static str>,
-	shutdown_reasons: Vec<&'static str>,
-	state_mutation_reasons: Vec<&'static str>,
-	direct_shutdown_labels: Vec<(String, String)>,
+#[derive(Debug, Default)]
+struct ActorMetricState {
+	queue_depth: i64,
+	active_connections: i64,
+	lifecycle_inbox_depth: i64,
+	dispatch_inbox_depth: i64,
+	lifecycle_event_inbox_depth: i64,
+	user_tasks_active: BTreeMap<&'static str, i64>,
+	http_requests_active: i64,
+	keep_awake_active: i64,
+	internal_keep_awake_active: i64,
+	shutdown_tasks_active: i64,
 	#[cfg(feature = "sqlite-local")]
-	sqlite_commit_phases: Vec<&'static str>,
+	sqlite_worker_queue_depth: i64,
 	#[cfg(feature = "sqlite-local")]
-	sqlite_worker_operations: Vec<&'static str>,
-	#[cfg(feature = "sqlite-local")]
-	sqlite_worker_error_labels: Vec<(&'static str, &'static str)>,
+	sqlite_workers_active: i64,
 }
 
 struct ActorMetricCollectors {
-	actor_active: IntGaugeVec,
-	create_state_ms: GaugeVec,
-	create_vars_ms: GaugeVec,
+	actor_active_count: IntGaugeVec,
+	actor_started_total: IntCounterVec,
+	actor_stopped_total: IntCounterVec,
+	create_state_duration_seconds: HistogramVec,
+	create_vars_duration_seconds: HistogramVec,
 	queue_depth: IntGaugeVec,
 	queue_messages_sent_total: IntCounterVec,
 	queue_messages_received_total: IntCounterVec,
 	active_connections: IntGaugeVec,
 	connections_total: IntCounterVec,
-	lifecycle_inbox_depth: IntGaugeVec,
-	dispatch_inbox_depth: IntGaugeVec,
-	lifecycle_event_inbox_depth: IntGaugeVec,
+	inbox_depth: IntGaugeVec,
 	user_tasks_active: IntGaugeVec,
 	user_task_duration_seconds: HistogramVec,
+	http_requests_active: IntGaugeVec,
+	keep_awake_active: IntGaugeVec,
+	shutdown_tasks_active: IntGaugeVec,
 	shutdown_wait_seconds: HistogramVec,
 	shutdown_timeout_total: CounterVec,
 	state_mutation_total: CounterVec,
@@ -106,6 +111,8 @@ struct ActorMetricCollectors {
 	#[cfg(feature = "sqlite-local")]
 	sqlite_worker_queue_depth: IntGaugeVec,
 	#[cfg(feature = "sqlite-local")]
+	sqlite_workers_active: IntGaugeVec,
+	#[cfg(feature = "sqlite-local")]
 	sqlite_worker_queue_overload_total: IntCounterVec,
 	#[cfg(feature = "sqlite-local")]
 	sqlite_worker_command_duration_seconds: HistogramVec,
@@ -122,48 +129,62 @@ struct ActorMetricCollectors {
 }
 
 static METRICS: LazyLock<ActorMetricCollectors> = LazyLock::new(ActorMetricCollectors::new);
-static RETAINED_ACTORS: LazyLock<SccHashMap<ActorMetricLabels, RetainedActorMetrics>> =
-	LazyLock::new(SccHashMap::new);
 
 impl ActorMetricCollectors {
 	fn new() -> Self {
-		let actor_active = IntGaugeVec::new(
+		let actor_active_count = IntGaugeVec::new(
 			Opts::new(
-				"actor_active",
-				"whether an actor is currently active, retained briefly after shutdown",
+				"rivetkit_actor_active_count",
+				"current active actors in this process",
 			),
 			ACTOR_LABELS,
 		)
-		.expect("create actor_active gauge");
-		let create_state_ms = GaugeVec::new(
+		.expect("create actor_active_count gauge");
+		let actor_started_total = IntCounterVec::new(
 			Opts::new(
-				"actor_create_state_ms",
-				"time spent creating typed actor state during startup",
+				"rivetkit_actor_started_total",
+				"total actors started in this process",
 			),
 			ACTOR_LABELS,
 		)
-		.expect("create actor_create_state_ms gauge");
-		let create_vars_ms = GaugeVec::new(
+		.expect("create actor_started_total counter");
+		let actor_stopped_total = IntCounterVec::new(
 			Opts::new(
-				"actor_create_vars_ms",
-				"time spent creating typed actor vars during startup",
+				"rivetkit_actor_stopped_total",
+				"total actors stopped in this process",
 			),
 			ACTOR_LABELS,
 		)
-		.expect("create actor_create_vars_ms gauge");
+		.expect("create actor_stopped_total counter");
+		let create_state_duration_seconds = HistogramVec::new(
+			HistogramOpts::new(
+				"rivetkit_actor_create_state_duration_seconds",
+				"typed actor state creation time during startup in seconds",
+			),
+			ACTOR_LABELS,
+		)
+		.expect("create actor_create_state_duration_seconds histogram");
+		let create_vars_duration_seconds = HistogramVec::new(
+			HistogramOpts::new(
+				"rivetkit_actor_create_vars_duration_seconds",
+				"typed actor vars creation time during startup in seconds",
+			),
+			ACTOR_LABELS,
+		)
+		.expect("create actor_create_vars_duration_seconds histogram");
 		let queue_depth = IntGaugeVec::new(
-			Opts::new("actor_queue_depth", "current actor queue depth"),
+			Opts::new("rivetkit_actor_queue_depth", "current actor queue depth"),
 			ACTOR_LABELS,
 		)
 		.expect("create actor_queue_depth gauge");
 		let queue_messages_sent_total = IntCounterVec::new(
-			Opts::new("actor_queue_messages_sent_total", "total queue messages sent"),
+			Opts::new("rivetkit_actor_queue_messages_sent_total", "total queue messages sent"),
 			ACTOR_LABELS,
 		)
 		.expect("create actor_queue_messages_sent_total counter");
 		let queue_messages_received_total = IntCounterVec::new(
 			Opts::new(
-				"actor_queue_messages_received_total",
+				"rivetkit_actor_queue_messages_received_total",
 				"total queue messages received",
 			),
 			ACTOR_LABELS,
@@ -171,60 +192,65 @@ impl ActorMetricCollectors {
 		.expect("create actor_queue_messages_received_total counter");
 		let active_connections = IntGaugeVec::new(
 			Opts::new(
-				"actor_active_connections",
+				"rivetkit_actor_connections_active",
 				"current active actor connections",
 			),
 			ACTOR_LABELS,
 		)
-		.expect("create actor_active_connections gauge");
+		.expect("create actor_connections_active gauge");
 		let connections_total = IntCounterVec::new(
 			Opts::new(
-				"actor_connections_total",
+				"rivetkit_actor_connections_total",
 				"total successfully established actor connections",
 			),
 			ACTOR_LABELS,
 		)
 		.expect("create actor_connections_total counter");
-		let lifecycle_inbox_depth = IntGaugeVec::new(
-			Opts::new(
-				"actor_lifecycle_inbox_depth",
-				"current actor lifecycle command inbox depth",
-			),
-			ACTOR_LABELS,
+		let inbox_depth = IntGaugeVec::new(
+			Opts::new("rivetkit_actor_inbox_depth", "current actor inbox depth"),
+			INBOX_LABELS,
 		)
-		.expect("create actor_lifecycle_inbox_depth gauge");
-		let dispatch_inbox_depth = IntGaugeVec::new(
-			Opts::new(
-				"actor_dispatch_inbox_depth",
-				"current actor dispatch command inbox depth",
-			),
-			ACTOR_LABELS,
-		)
-		.expect("create actor_dispatch_inbox_depth gauge");
-		let lifecycle_event_inbox_depth = IntGaugeVec::new(
-			Opts::new(
-				"actor_lifecycle_event_inbox_depth",
-				"current actor lifecycle event inbox depth",
-			),
-			ACTOR_LABELS,
-		)
-		.expect("create actor_lifecycle_event_inbox_depth gauge");
+		.expect("create actor_inbox_depth gauge");
 		let user_tasks_active = IntGaugeVec::new(
-			Opts::new("actor_user_tasks_active", "current active actor user tasks"),
+			Opts::new("rivetkit_actor_user_tasks_active", "current active actor user tasks"),
 			USER_TASK_LABELS,
 		)
 		.expect("create actor_user_tasks_active gauge");
 		let user_task_duration_seconds = HistogramVec::new(
 			HistogramOpts::new(
-				"actor_user_task_duration_seconds",
+				"rivetkit_actor_user_task_duration_seconds",
 				"actor user task execution time in seconds",
 			),
 			USER_TASK_LABELS,
 		)
 		.expect("create actor_user_task_duration_seconds histogram");
+		let http_requests_active = IntGaugeVec::new(
+			Opts::new(
+				"rivetkit_actor_http_requests_active",
+				"current actor-scoped HTTP requests",
+			),
+			ACTOR_LABELS,
+		)
+		.expect("create actor_http_requests_active gauge");
+		let keep_awake_active = IntGaugeVec::new(
+			Opts::new(
+				"rivetkit_actor_keep_awake_active",
+				"current actor keep-awake work",
+			),
+			WORK_LABELS,
+		)
+		.expect("create actor_keep_awake_active gauge");
+		let shutdown_tasks_active = IntGaugeVec::new(
+			Opts::new(
+				"rivetkit_actor_shutdown_tasks_active",
+				"current actor work draining during shutdown",
+			),
+			ACTOR_LABELS,
+		)
+		.expect("create actor_shutdown_tasks_active gauge");
 		let shutdown_wait_seconds = HistogramVec::new(
 			HistogramOpts::new(
-				"actor_shutdown_wait_seconds",
+				"rivetkit_actor_shutdown_wait_seconds",
 				"actor shutdown wait time in seconds",
 			),
 			SHUTDOWN_LABELS,
@@ -232,20 +258,20 @@ impl ActorMetricCollectors {
 		.expect("create actor_shutdown_wait_seconds histogram");
 		let shutdown_timeout_total = CounterVec::new(
 			Opts::new(
-				"actor_shutdown_timeout_total",
+				"rivetkit_actor_shutdown_timeout_total",
 				"total actor shutdown timeout events",
 			),
 			SHUTDOWN_LABELS,
 		)
 		.expect("create actor_shutdown_timeout_total counter");
 		let state_mutation_total = CounterVec::new(
-			Opts::new("actor_state_mutation_total", "total actor state mutations"),
+			Opts::new("rivetkit_actor_state_mutation_total", "total actor state mutations"),
 			STATE_MUTATION_LABELS,
 		)
 		.expect("create actor_state_mutation_total counter");
 		let direct_subsystem_shutdown_warning_total = CounterVec::new(
 			Opts::new(
-				"actor_direct_subsystem_shutdown_warning_total",
+				"rivetkit_actor_direct_subsystem_shutdown_warning_total",
 				"total actor shutdown warnings emitted by direct subsystem drains",
 			),
 			DIRECT_SHUTDOWN_LABELS,
@@ -255,7 +281,7 @@ impl ActorMetricCollectors {
 		#[cfg(feature = "sqlite-local")]
 		let sqlite_vfs_resolve_pages_total = IntCounterVec::new(
 			Opts::new(
-				"actor_sqlite_vfs_resolve_pages_total",
+				"rivetkit_actor_sqlite_vfs_resolve_pages_total",
 				"total VFS page resolution attempts",
 			),
 			ACTOR_LABELS,
@@ -264,7 +290,7 @@ impl ActorMetricCollectors {
 		#[cfg(feature = "sqlite-local")]
 		let sqlite_vfs_resolve_pages_requested_total = IntCounterVec::new(
 			Opts::new(
-				"actor_sqlite_vfs_resolve_pages_requested_total",
+				"rivetkit_actor_sqlite_vfs_resolve_pages_requested_total",
 				"total pages requested by VFS page resolution attempts",
 			),
 			ACTOR_LABELS,
@@ -273,7 +299,7 @@ impl ActorMetricCollectors {
 		#[cfg(feature = "sqlite-local")]
 		let sqlite_vfs_resolve_pages_cache_hits_total = IntCounterVec::new(
 			Opts::new(
-				"actor_sqlite_vfs_resolve_pages_cache_hits_total",
+				"rivetkit_actor_sqlite_vfs_resolve_pages_cache_hits_total",
 				"total pages resolved from the VFS page cache or write buffer",
 			),
 			ACTOR_LABELS,
@@ -282,7 +308,7 @@ impl ActorMetricCollectors {
 		#[cfg(feature = "sqlite-local")]
 		let sqlite_vfs_resolve_pages_cache_misses_total = IntCounterVec::new(
 			Opts::new(
-				"actor_sqlite_vfs_resolve_pages_cache_misses_total",
+				"rivetkit_actor_sqlite_vfs_resolve_pages_cache_misses_total",
 				"total pages missing from the VFS page cache and write buffer",
 			),
 			ACTOR_LABELS,
@@ -291,7 +317,7 @@ impl ActorMetricCollectors {
 		#[cfg(feature = "sqlite-local")]
 		let sqlite_vfs_get_pages_total = IntCounterVec::new(
 			Opts::new(
-				"actor_sqlite_vfs_get_pages_total",
+				"rivetkit_actor_sqlite_vfs_get_pages_total",
 				"total VFS to engine get_pages requests",
 			),
 			ACTOR_LABELS,
@@ -300,7 +326,7 @@ impl ActorMetricCollectors {
 		#[cfg(feature = "sqlite-local")]
 		let sqlite_vfs_pages_fetched_total = IntCounterVec::new(
 			Opts::new(
-				"actor_sqlite_vfs_pages_fetched_total",
+				"rivetkit_actor_sqlite_vfs_pages_fetched_total",
 				"total pages requested from the engine by VFS get_pages calls",
 			),
 			ACTOR_LABELS,
@@ -309,7 +335,7 @@ impl ActorMetricCollectors {
 		#[cfg(feature = "sqlite-local")]
 		let sqlite_vfs_prefetch_pages_total = IntCounterVec::new(
 			Opts::new(
-				"actor_sqlite_vfs_prefetch_pages_total",
+				"rivetkit_actor_sqlite_vfs_prefetch_pages_total",
 				"total pages requested speculatively by VFS prefetch",
 			),
 			ACTOR_LABELS,
@@ -318,7 +344,7 @@ impl ActorMetricCollectors {
 		#[cfg(feature = "sqlite-local")]
 		let sqlite_vfs_bytes_fetched_total = IntCounterVec::new(
 			Opts::new(
-				"actor_sqlite_vfs_bytes_fetched_total",
+				"rivetkit_actor_sqlite_vfs_bytes_fetched_total",
 				"total bytes requested from the engine by VFS get_pages calls",
 			),
 			ACTOR_LABELS,
@@ -327,7 +353,7 @@ impl ActorMetricCollectors {
 		#[cfg(feature = "sqlite-local")]
 		let sqlite_vfs_prefetch_bytes_total = IntCounterVec::new(
 			Opts::new(
-				"actor_sqlite_vfs_prefetch_bytes_total",
+				"rivetkit_actor_sqlite_vfs_prefetch_bytes_total",
 				"total bytes requested speculatively by VFS prefetch",
 			),
 			ACTOR_LABELS,
@@ -336,7 +362,7 @@ impl ActorMetricCollectors {
 		#[cfg(feature = "sqlite-local")]
 		let sqlite_vfs_get_pages_duration_seconds = HistogramVec::new(
 			HistogramOpts::new(
-				"actor_sqlite_vfs_get_pages_duration_seconds",
+				"rivetkit_actor_sqlite_vfs_get_pages_duration_seconds",
 				"VFS get_pages request duration in seconds",
 			)
 			.buckets(vec![
@@ -348,7 +374,7 @@ impl ActorMetricCollectors {
 		#[cfg(feature = "sqlite-local")]
 		let sqlite_vfs_commit_total = IntCounterVec::new(
 			Opts::new(
-				"actor_sqlite_vfs_commit_total",
+				"rivetkit_actor_sqlite_vfs_commit_total",
 				"total successful VFS commits",
 			),
 			ACTOR_LABELS,
@@ -357,7 +383,7 @@ impl ActorMetricCollectors {
 		#[cfg(feature = "sqlite-local")]
 		let sqlite_vfs_commit_phase_duration_seconds_total = CounterVec::new(
 			Opts::new(
-				"actor_sqlite_vfs_commit_phase_duration_seconds_total",
+				"rivetkit_actor_sqlite_vfs_commit_phase_duration_seconds_total",
 				"cumulative VFS commit phase duration in seconds",
 			),
 			SQLITE_COMMIT_PHASE_LABELS,
@@ -366,7 +392,7 @@ impl ActorMetricCollectors {
 		#[cfg(feature = "sqlite-local")]
 		let sqlite_vfs_commit_duration_seconds_total = CounterVec::new(
 			Opts::new(
-				"actor_sqlite_vfs_commit_duration_seconds_total",
+				"rivetkit_actor_sqlite_vfs_commit_duration_seconds_total",
 				"cumulative VFS commit duration in seconds",
 			),
 			SQLITE_COMMIT_PHASE_LABELS,
@@ -375,16 +401,25 @@ impl ActorMetricCollectors {
 		#[cfg(feature = "sqlite-local")]
 		let sqlite_worker_queue_depth = IntGaugeVec::new(
 			Opts::new(
-				"actor_sqlite_worker_queue_depth",
+				"rivetkit_actor_sqlite_worker_queue_depth",
 				"current native SQLite worker SQL command queue depth",
 			),
 			ACTOR_LABELS,
 		)
 		.expect("create actor_sqlite_worker_queue_depth gauge");
 		#[cfg(feature = "sqlite-local")]
+		let sqlite_workers_active = IntGaugeVec::new(
+			Opts::new(
+				"rivetkit_actor_sqlite_workers_active",
+				"current active native SQLite workers",
+			),
+			ACTOR_LABELS,
+		)
+		.expect("create actor_sqlite_workers_active gauge");
+		#[cfg(feature = "sqlite-local")]
 		let sqlite_worker_queue_overload_total = IntCounterVec::new(
 			Opts::new(
-				"actor_sqlite_worker_queue_overload_total",
+				"rivetkit_actor_sqlite_worker_queue_overload_total",
 				"total native SQLite worker SQL command queue overloads",
 			),
 			ACTOR_LABELS,
@@ -393,7 +428,7 @@ impl ActorMetricCollectors {
 		#[cfg(feature = "sqlite-local")]
 		let sqlite_worker_command_duration_seconds = HistogramVec::new(
 			HistogramOpts::new(
-				"actor_sqlite_worker_command_duration_seconds",
+				"rivetkit_actor_sqlite_worker_command_duration_seconds",
 				"native SQLite worker SQL command duration in seconds",
 			)
 			.buckets(sqlite_worker_duration_buckets()),
@@ -403,7 +438,7 @@ impl ActorMetricCollectors {
 		#[cfg(feature = "sqlite-local")]
 		let sqlite_worker_command_error_total = CounterVec::new(
 			Opts::new(
-				"actor_sqlite_worker_command_error_total",
+				"rivetkit_actor_sqlite_worker_command_error_total",
 				"total native SQLite worker SQL command errors",
 			),
 			SQLITE_WORKER_ERROR_LABELS,
@@ -412,7 +447,7 @@ impl ActorMetricCollectors {
 		#[cfg(feature = "sqlite-local")]
 		let sqlite_worker_close_duration_seconds = HistogramVec::new(
 			HistogramOpts::new(
-				"actor_sqlite_worker_close_duration_seconds",
+				"rivetkit_actor_sqlite_worker_close_duration_seconds",
 				"native SQLite worker close duration in seconds",
 			)
 			.buckets(sqlite_worker_duration_buckets()),
@@ -422,7 +457,7 @@ impl ActorMetricCollectors {
 		#[cfg(feature = "sqlite-local")]
 		let sqlite_worker_close_timeout_total = IntCounterVec::new(
 			Opts::new(
-				"actor_sqlite_worker_close_timeout_total",
+				"rivetkit_actor_sqlite_worker_close_timeout_total",
 				"total native SQLite worker close timeouts",
 			),
 			ACTOR_LABELS,
@@ -431,7 +466,7 @@ impl ActorMetricCollectors {
 		#[cfg(feature = "sqlite-local")]
 		let sqlite_worker_crash_total = IntCounterVec::new(
 			Opts::new(
-				"actor_sqlite_worker_crash_total",
+				"rivetkit_actor_sqlite_worker_crash_total",
 				"total native SQLite worker crashes",
 			),
 			ACTOR_LABELS,
@@ -440,26 +475,35 @@ impl ActorMetricCollectors {
 		#[cfg(feature = "sqlite-local")]
 		let sqlite_worker_unclean_close_total = IntCounterVec::new(
 			Opts::new(
-				"actor_sqlite_worker_unclean_close_total",
+				"rivetkit_actor_sqlite_worker_unclean_close_total",
 				"total native SQLite worker channel drops without clean close",
 			),
 			ACTOR_LABELS,
 		)
 		.expect("create actor_sqlite_worker_unclean_close_total counter");
 
-		register_metric(&rivet_metrics::REGISTRY, actor_active.clone());
-		register_metric(&rivet_metrics::REGISTRY, create_state_ms.clone());
-		register_metric(&rivet_metrics::REGISTRY, create_vars_ms.clone());
+		register_metric(&rivet_metrics::REGISTRY, actor_active_count.clone());
+		register_metric(&rivet_metrics::REGISTRY, actor_started_total.clone());
+		register_metric(&rivet_metrics::REGISTRY, actor_stopped_total.clone());
+		register_metric(
+			&rivet_metrics::REGISTRY,
+			create_state_duration_seconds.clone(),
+		);
+		register_metric(
+			&rivet_metrics::REGISTRY,
+			create_vars_duration_seconds.clone(),
+		);
 		register_metric(&rivet_metrics::REGISTRY, queue_depth.clone());
 		register_metric(&rivet_metrics::REGISTRY, queue_messages_sent_total.clone());
 		register_metric(&rivet_metrics::REGISTRY, queue_messages_received_total.clone());
 		register_metric(&rivet_metrics::REGISTRY, active_connections.clone());
 		register_metric(&rivet_metrics::REGISTRY, connections_total.clone());
-		register_metric(&rivet_metrics::REGISTRY, lifecycle_inbox_depth.clone());
-		register_metric(&rivet_metrics::REGISTRY, dispatch_inbox_depth.clone());
-		register_metric(&rivet_metrics::REGISTRY, lifecycle_event_inbox_depth.clone());
+		register_metric(&rivet_metrics::REGISTRY, inbox_depth.clone());
 		register_metric(&rivet_metrics::REGISTRY, user_tasks_active.clone());
 		register_metric(&rivet_metrics::REGISTRY, user_task_duration_seconds.clone());
+		register_metric(&rivet_metrics::REGISTRY, http_requests_active.clone());
+		register_metric(&rivet_metrics::REGISTRY, keep_awake_active.clone());
+		register_metric(&rivet_metrics::REGISTRY, shutdown_tasks_active.clone());
 		register_metric(&rivet_metrics::REGISTRY, shutdown_wait_seconds.clone());
 		register_metric(&rivet_metrics::REGISTRY, shutdown_timeout_total.clone());
 		register_metric(&rivet_metrics::REGISTRY, state_mutation_total.clone());
@@ -501,6 +545,7 @@ impl ActorMetricCollectors {
 				sqlite_vfs_commit_duration_seconds_total.clone(),
 			);
 			register_metric(&rivet_metrics::REGISTRY, sqlite_worker_queue_depth.clone());
+			register_metric(&rivet_metrics::REGISTRY, sqlite_workers_active.clone());
 			register_metric(&rivet_metrics::REGISTRY, sqlite_worker_queue_overload_total.clone());
 			register_metric(
 				&rivet_metrics::REGISTRY,
@@ -514,19 +559,22 @@ impl ActorMetricCollectors {
 		}
 
 		Self {
-			actor_active,
-			create_state_ms,
-			create_vars_ms,
+			actor_active_count,
+			actor_started_total,
+			actor_stopped_total,
+			create_state_duration_seconds,
+			create_vars_duration_seconds,
 			queue_depth,
 			queue_messages_sent_total,
 			queue_messages_received_total,
 			active_connections,
 			connections_total,
-			lifecycle_inbox_depth,
-			dispatch_inbox_depth,
-			lifecycle_event_inbox_depth,
+			inbox_depth,
 			user_tasks_active,
 			user_task_duration_seconds,
+			http_requests_active,
+			keep_awake_active,
+			shutdown_tasks_active,
 			shutdown_wait_seconds,
 			shutdown_timeout_total,
 			state_mutation_total,
@@ -560,6 +608,8 @@ impl ActorMetricCollectors {
 			#[cfg(feature = "sqlite-local")]
 			sqlite_worker_queue_depth,
 			#[cfg(feature = "sqlite-local")]
+			sqlite_workers_active,
+			#[cfg(feature = "sqlite-local")]
 			sqlite_worker_queue_overload_total,
 			#[cfg(feature = "sqlite-local")]
 			sqlite_worker_command_duration_seconds,
@@ -578,51 +628,59 @@ impl ActorMetricCollectors {
 }
 
 impl ActorMetrics {
-	pub(crate) fn new(
-		actor_id: impl Into<String>,
-		generation: Option<u32>,
-		actor_key: impl Into<String>,
-		envoy_key: impl Into<String>,
-	) -> Self {
-		let actor_id = actor_id.into();
-		let labels = Arc::new(ActorMetricLabels {
-			actor_id_gen: generation
-				.map(|generation| format!("{actor_id}:{generation}"))
-				.unwrap_or_else(|| format!("{actor_id}:")),
-			actor_key: actor_key.into(),
-			envoy_key: envoy_key.into(),
-		});
-		retain_actor_metrics(&labels);
-		Self { labels }
+	pub(crate) fn new(actor_name: impl Into<String>) -> Self {
+		let labels = ActorMetricLabels {
+			actor_name: actor_name.into(),
+		};
+		let metrics = &*METRICS;
+		metrics
+			.actor_active_count
+			.with_label_values(&labels.as_label_values())
+			.inc();
+		metrics
+			.actor_started_total
+			.with_label_values(&labels.as_label_values())
+			.inc();
+		Self {
+			inner: Arc::new(ActorMetricInner {
+				labels,
+				state: Mutex::new(ActorMetricState::default()),
+				active: AtomicBool::new(true),
+			}),
+		}
 	}
 
-	fn actor_labels(&self) -> [&str; 3] {
-		[
-			self.labels.actor_id_gen.as_str(),
-			self.labels.actor_key.as_str(),
-			self.labels.envoy_key.as_str(),
-		]
+	fn labels(&self) -> &ActorMetricLabels {
+		&self.inner.labels
+	}
+
+	fn actor_labels(&self) -> [&str; 1] {
+		self.labels().as_label_values()
 	}
 
 	pub(crate) fn observe_create_state(&self, duration: Duration) {
 		METRICS
-			.create_state_ms
+			.create_state_duration_seconds
 			.with_label_values(&self.actor_labels())
-			.set(duration_ms(duration));
+			.observe(duration.as_secs_f64());
 	}
 
 	pub(crate) fn observe_create_vars(&self, duration: Duration) {
 		METRICS
-			.create_vars_ms
+			.create_vars_duration_seconds
 			.with_label_values(&self.actor_labels())
-			.set(duration_ms(duration));
+			.observe(duration.as_secs_f64());
 	}
 
 	pub(crate) fn set_queue_depth(&self, depth: u32) {
-		METRICS
-			.queue_depth
-			.with_label_values(&self.actor_labels())
-			.set(i64::from(depth));
+		let labels = self.actor_labels();
+		let mut state = self.inner.state.lock();
+		set_aggregated_gauge(
+			&mut state.queue_depth,
+			i64::from(depth),
+			&METRICS.queue_depth,
+			&labels,
+		);
 	}
 
 	pub(crate) fn add_queue_messages_sent(&self, count: u64) {
@@ -640,10 +698,14 @@ impl ActorMetrics {
 	}
 
 	pub(crate) fn set_active_connections(&self, count: usize) {
-		METRICS
-			.active_connections
-			.with_label_values(&self.actor_labels())
-			.set(count.try_into().unwrap_or(i64::MAX));
+		let labels = self.actor_labels();
+		let mut state = self.inner.state.lock();
+		set_aggregated_gauge(
+			&mut state.active_connections,
+			usize_to_i64(count),
+			&METRICS.active_connections,
+			&labels,
+		);
 	}
 
 	pub(crate) fn inc_connections_total(&self) {
@@ -654,101 +716,260 @@ impl ActorMetrics {
 	}
 
 	pub(crate) fn set_lifecycle_inbox_depth(&self, depth: usize) {
-		METRICS
-			.lifecycle_inbox_depth
-			.with_label_values(&self.actor_labels())
-			.set(depth.try_into().unwrap_or(i64::MAX));
+		self.set_inbox_depth("lifecycle", depth);
 	}
 
 	pub(crate) fn set_dispatch_inbox_depth(&self, depth: usize) {
-		METRICS
-			.dispatch_inbox_depth
-			.with_label_values(&self.actor_labels())
-			.set(depth.try_into().unwrap_or(i64::MAX));
+		self.set_inbox_depth("dispatch", depth);
 	}
 
 	pub(crate) fn set_lifecycle_event_inbox_depth(&self, depth: usize) {
-		METRICS
-			.lifecycle_event_inbox_depth
-			.with_label_values(&self.actor_labels())
-			.set(depth.try_into().unwrap_or(i64::MAX));
+		self.set_inbox_depth("lifecycle_event", depth);
+	}
+
+	fn set_inbox_depth(&self, inbox: &'static str, depth: usize) {
+		let labels = self.actor_labels();
+		let mut state = self.inner.state.lock();
+		let current = match inbox {
+			"lifecycle" => &mut state.lifecycle_inbox_depth,
+			"dispatch" => &mut state.dispatch_inbox_depth,
+			"lifecycle_event" => &mut state.lifecycle_event_inbox_depth,
+			_ => unreachable!("unknown inbox metric label"),
+		};
+		set_aggregated_gauge(
+			current,
+			usize_to_i64(depth),
+			&METRICS.inbox_depth,
+			&[labels[0], inbox],
+		);
 	}
 
 	pub(crate) fn begin_user_task(&self, kind: UserTaskKind) {
-		record_retained_actor_metrics(&self.labels, |retained| {
-			push_unique(&mut retained.user_task_kinds, kind.as_metric_label());
-		});
 		let labels = self.actor_labels();
-		METRICS
-			.user_tasks_active
-			.with_label_values(&[labels[0], labels[1], labels[2], kind.as_metric_label()])
-			.inc();
+		let kind = kind.as_metric_label();
+		let mut state = self.inner.state.lock();
+		let current = state.user_tasks_active.entry(kind).or_default();
+		let next = (*current).saturating_add(1);
+		set_aggregated_gauge(
+			current,
+			next,
+			&METRICS.user_tasks_active,
+			&[labels[0], kind],
+		);
 	}
 
 	pub(crate) fn end_user_task(&self, kind: UserTaskKind, duration: Duration) {
-		record_retained_actor_metrics(&self.labels, |retained| {
-			push_unique(&mut retained.user_task_kinds, kind.as_metric_label());
-		});
 		let labels = self.actor_labels();
-		let labels = [labels[0], labels[1], labels[2], kind.as_metric_label()];
-		METRICS
-			.user_tasks_active
-			.with_label_values(&labels)
-			.dec();
+		let kind = kind.as_metric_label();
+		{
+			let mut state = self.inner.state.lock();
+			let current = state.user_tasks_active.entry(kind).or_default();
+			let next = (*current).saturating_sub(1);
+			set_aggregated_gauge(
+				current,
+				next,
+				&METRICS.user_tasks_active,
+				&[labels[0], kind],
+			);
+		}
 		METRICS
 			.user_task_duration_seconds
-			.with_label_values(&labels)
+			.with_label_values(&[labels[0], kind])
 			.observe(duration.as_secs_f64());
 	}
 
+	pub(crate) fn set_http_requests_active(&self, count: usize) {
+		let labels = self.actor_labels();
+		let mut state = self.inner.state.lock();
+		set_aggregated_gauge(
+			&mut state.http_requests_active,
+			usize_to_i64(count),
+			&METRICS.http_requests_active,
+			&labels,
+		);
+	}
+
+	pub(crate) fn set_keep_awake_active(&self, count: usize) {
+		let labels = self.actor_labels();
+		let mut state = self.inner.state.lock();
+		set_aggregated_gauge(
+			&mut state.keep_awake_active,
+			usize_to_i64(count),
+			&METRICS.keep_awake_active,
+			&[labels[0], "keep_awake"],
+		);
+	}
+
+	pub(crate) fn set_internal_keep_awake_active(&self, count: usize) {
+		let labels = self.actor_labels();
+		let mut state = self.inner.state.lock();
+		set_aggregated_gauge(
+			&mut state.internal_keep_awake_active,
+			usize_to_i64(count),
+			&METRICS.keep_awake_active,
+			&[labels[0], "internal_keep_awake"],
+		);
+	}
+
+	pub(crate) fn set_shutdown_tasks_active(&self, count: usize) {
+		let labels = self.actor_labels();
+		let mut state = self.inner.state.lock();
+		set_aggregated_gauge(
+			&mut state.shutdown_tasks_active,
+			usize_to_i64(count),
+			&METRICS.shutdown_tasks_active,
+			&labels,
+		);
+	}
+
 	pub(crate) fn observe_shutdown_wait(&self, reason: ShutdownKind, duration: Duration) {
-		record_retained_actor_metrics(&self.labels, |retained| {
-			push_unique(&mut retained.shutdown_reasons, reason.as_metric_label());
-		});
 		let labels = self.actor_labels();
 		METRICS
 			.shutdown_wait_seconds
-			.with_label_values(&[labels[0], labels[1], labels[2], reason.as_metric_label()])
+			.with_label_values(&[labels[0], reason.as_metric_label()])
 			.observe(duration.as_secs_f64());
 	}
 
 	pub(crate) fn inc_shutdown_timeout(&self, reason: ShutdownKind) {
-		record_retained_actor_metrics(&self.labels, |retained| {
-			push_unique(&mut retained.shutdown_reasons, reason.as_metric_label());
-		});
 		let labels = self.actor_labels();
 		METRICS
 			.shutdown_timeout_total
-			.with_label_values(&[labels[0], labels[1], labels[2], reason.as_metric_label()])
+			.with_label_values(&[labels[0], reason.as_metric_label()])
 			.inc();
 	}
 
 	pub(crate) fn inc_state_mutation(&self, reason: StateMutationReason) {
-		record_retained_actor_metrics(&self.labels, |retained| {
-			push_unique(
-				&mut retained.state_mutation_reasons,
-				reason.as_metric_label(),
-			);
-		});
 		let labels = self.actor_labels();
 		METRICS
 			.state_mutation_total
-			.with_label_values(&[labels[0], labels[1], labels[2], reason.as_metric_label()])
+			.with_label_values(&[labels[0], reason.as_metric_label()])
 			.inc();
 	}
 
 	pub(crate) fn inc_direct_subsystem_shutdown_warning(&self, subsystem: &str, operation: &str) {
-		record_retained_actor_metrics(&self.labels, |retained| {
-			push_unique(
-				&mut retained.direct_shutdown_labels,
-				(subsystem.to_owned(), operation.to_owned()),
-			);
-		});
 		let labels = self.actor_labels();
 		METRICS
 			.direct_subsystem_shutdown_warning_total
-			.with_label_values(&[labels[0], labels[1], labels[2], subsystem, operation])
+			.with_label_values(&[labels[0], subsystem, operation])
 			.inc();
+	}
+
+	pub(crate) fn record_actor_stopped(&self) {
+		self.inner.record_actor_stopped();
+	}
+}
+
+impl Drop for ActorMetricInner {
+	fn drop(&mut self) {
+		self.record_actor_stopped();
+	}
+}
+
+impl ActorMetricInner {
+	fn record_actor_stopped(&self) {
+		if !self.active.swap(false, Ordering::AcqRel) {
+			return;
+		}
+
+		self.clear_aggregated_gauges();
+		let metrics = &*METRICS;
+		metrics
+			.actor_active_count
+			.with_label_values(&self.labels.as_label_values())
+			.dec();
+		metrics
+			.actor_stopped_total
+			.with_label_values(&self.labels.as_label_values())
+			.inc();
+	}
+
+	fn clear_aggregated_gauges(&self) {
+		let labels = self.labels.as_label_values();
+		let mut state = self.state.lock();
+		set_aggregated_gauge(&mut state.queue_depth, 0, &METRICS.queue_depth, &labels);
+		set_aggregated_gauge(
+			&mut state.active_connections,
+			0,
+			&METRICS.active_connections,
+			&labels,
+		);
+		set_aggregated_gauge(
+			&mut state.lifecycle_inbox_depth,
+			0,
+			&METRICS.inbox_depth,
+			&[labels[0], "lifecycle"],
+		);
+		set_aggregated_gauge(
+			&mut state.dispatch_inbox_depth,
+			0,
+			&METRICS.inbox_depth,
+			&[labels[0], "dispatch"],
+		);
+		set_aggregated_gauge(
+			&mut state.lifecycle_event_inbox_depth,
+			0,
+			&METRICS.inbox_depth,
+			&[labels[0], "lifecycle_event"],
+		);
+		for (kind, current) in state.user_tasks_active.iter_mut() {
+			set_aggregated_gauge(
+				current,
+				0,
+				&METRICS.user_tasks_active,
+				&[labels[0], *kind],
+			);
+		}
+		set_aggregated_gauge(
+			&mut state.http_requests_active,
+			0,
+			&METRICS.http_requests_active,
+			&labels,
+		);
+		set_aggregated_gauge(
+			&mut state.keep_awake_active,
+			0,
+			&METRICS.keep_awake_active,
+			&[labels[0], "keep_awake"],
+		);
+		set_aggregated_gauge(
+			&mut state.internal_keep_awake_active,
+			0,
+			&METRICS.keep_awake_active,
+			&[labels[0], "internal_keep_awake"],
+		);
+		set_aggregated_gauge(
+			&mut state.shutdown_tasks_active,
+			0,
+			&METRICS.shutdown_tasks_active,
+			&labels,
+		);
+		#[cfg(feature = "sqlite-local")]
+		{
+			set_aggregated_gauge(
+				&mut state.sqlite_worker_queue_depth,
+				0,
+				&METRICS.sqlite_worker_queue_depth,
+				&labels,
+			);
+			set_aggregated_gauge(
+				&mut state.sqlite_workers_active,
+				0,
+				&METRICS.sqlite_workers_active,
+				&labels,
+			);
+		}
+	}
+}
+
+impl Default for ActorMetrics {
+	fn default() -> Self {
+		Self::new("")
+	}
+}
+
+impl fmt::Debug for ActorMetrics {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		f.debug_struct("ActorMetrics").finish()
 	}
 }
 
@@ -826,11 +1047,6 @@ impl depot_client::vfs::SqliteVfsMetrics for ActorMetrics {
 		state_update_ns: u64,
 		total_ns: u64,
 	) {
-		record_retained_actor_metrics(&self.labels, |retained| {
-			for phase in ["request_build", "serialize", "transport", "state_update", "total"] {
-				push_unique(&mut retained.sqlite_commit_phases, phase);
-			}
-		});
 		let labels = self.actor_labels();
 		for (phase, duration_ns) in [
 			("request_build", request_build_ns),
@@ -840,20 +1056,35 @@ impl depot_client::vfs::SqliteVfsMetrics for ActorMetrics {
 		] {
 			METRICS
 				.sqlite_vfs_commit_phase_duration_seconds_total
-				.with_label_values(&[labels[0], labels[1], labels[2], phase])
+				.with_label_values(&[labels[0], phase])
 				.inc_by(ns_to_seconds(duration_ns));
 		}
 		METRICS
 			.sqlite_vfs_commit_duration_seconds_total
-			.with_label_values(&[labels[0], labels[1], labels[2], "total"])
+			.with_label_values(&[labels[0], "total"])
 			.inc_by(ns_to_seconds(total_ns));
 	}
 
 	fn set_worker_queue_depth(&self, depth: u64) {
-		METRICS
-			.sqlite_worker_queue_depth
-			.with_label_values(&self.actor_labels())
-			.set(depth as i64);
+		let labels = self.actor_labels();
+		let mut state = self.inner.state.lock();
+		set_aggregated_gauge(
+			&mut state.sqlite_worker_queue_depth,
+			u64_to_i64(depth),
+			&METRICS.sqlite_worker_queue_depth,
+			&labels,
+		);
+	}
+
+	fn set_worker_active(&self, active: bool) {
+		let labels = self.actor_labels();
+		let mut state = self.inner.state.lock();
+		set_aggregated_gauge(
+			&mut state.sqlite_workers_active,
+			if active { 1 } else { 0 },
+			&METRICS.sqlite_workers_active,
+			&labels,
+		);
 	}
 
 	fn record_worker_queue_overload(&self) {
@@ -864,25 +1095,18 @@ impl depot_client::vfs::SqliteVfsMetrics for ActorMetrics {
 	}
 
 	fn observe_worker_command_duration(&self, operation: &'static str, duration_ns: u64) {
-		record_retained_actor_metrics(&self.labels, |retained| {
-			push_unique(&mut retained.sqlite_worker_operations, operation);
-		});
 		let labels = self.actor_labels();
 		METRICS
 			.sqlite_worker_command_duration_seconds
-			.with_label_values(&[labels[0], labels[1], labels[2], operation])
+			.with_label_values(&[labels[0], operation])
 			.observe(ns_to_seconds(duration_ns));
 	}
 
 	fn record_worker_command_error(&self, operation: &'static str, code: &'static str) {
-		record_retained_actor_metrics(&self.labels, |retained| {
-			push_unique(&mut retained.sqlite_worker_operations, operation);
-			push_unique(&mut retained.sqlite_worker_error_labels, (operation, code));
-		});
 		let labels = self.actor_labels();
 		METRICS
 			.sqlite_worker_command_error_total
-			.with_label_values(&[labels[0], labels[1], labels[2], operation, code])
+			.with_label_values(&[labels[0], operation, code])
 			.inc();
 	}
 
@@ -915,36 +1139,6 @@ impl depot_client::vfs::SqliteVfsMetrics for ActorMetrics {
 	}
 }
 
-impl Clone for ActorMetrics {
-	fn clone(&self) -> Self {
-		retain_actor_metrics(&self.labels);
-		Self {
-			labels: self.labels.clone(),
-		}
-	}
-}
-
-impl Drop for ActorMetrics {
-	fn drop(&mut self) {
-		release_actor_metrics(&self.labels);
-	}
-}
-
-impl Default for ActorMetrics {
-	fn default() -> Self {
-		Self::new("", None, "", "")
-	}
-}
-
-impl fmt::Debug for ActorMetrics {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		f.debug_struct("ActorMetrics").finish()
-	}
-}
-
-fn duration_ms(duration: Duration) -> f64 {
-	duration.as_secs_f64() * 1000.0
-}
 
 #[cfg(feature = "sqlite-local")]
 fn ns_to_seconds(duration_ns: u64) -> f64 {
@@ -958,210 +1152,31 @@ fn sqlite_worker_duration_buckets() -> Vec<f64> {
 	]
 }
 
-fn retain_actor_metrics(labels: &Arc<ActorMetricLabels>) {
-	cleanup_expired_actor_metrics(Instant::now());
-	let mut retained = RETAINED_ACTORS
-		.entry_sync(labels.as_ref().clone())
-		.or_default();
-	retained.active_refs = retained.active_refs.saturating_add(1);
-	retained.expires_at = None;
-	METRICS
-		.actor_active
-		.with_label_values(&labels.as_label_values())
-		.set(1);
-}
-
-fn release_actor_metrics(labels: &Arc<ActorMetricLabels>) {
-	let now = Instant::now();
-	let mut inactive = false;
-	if let Some(mut retained) = RETAINED_ACTORS.get_sync(labels.as_ref()) {
-		retained.active_refs = retained.active_refs.saturating_sub(1);
-		if retained.active_refs == 0 {
-			retained.expires_at = Some(now + ACTOR_METRIC_RETENTION);
-			inactive = true;
-		}
-	}
-	if inactive {
-		METRICS
-			.actor_active
-			.with_label_values(&labels.as_label_values())
-			.set(0);
-	}
-	cleanup_expired_actor_metrics(now);
-}
-
-fn record_retained_actor_metrics(
-	labels: &Arc<ActorMetricLabels>,
-	record: impl FnOnce(&mut RetainedActorMetrics),
+fn set_aggregated_gauge(
+	current: &mut i64,
+	next: i64,
+	gauge: &IntGaugeVec,
+	labels: &[&str],
 ) {
-	let mut retained = RETAINED_ACTORS
-		.entry_sync(labels.as_ref().clone())
-		.or_default();
-	record(&mut retained);
-}
-
-fn cleanup_expired_actor_metrics(now: Instant) {
-	RETAINED_ACTORS.retain_sync(|labels, retained| {
-		let expired = retained
-			.expires_at
-			.is_some_and(|expires_at| now >= expires_at);
-		if expired {
-			remove_retained_actor_metrics(labels, retained);
-		}
-		!expired
-	});
-}
-
-fn remove_retained_actor_metrics(labels: &ActorMetricLabels, retained: &RetainedActorMetrics) {
-	let actor_labels = labels.as_label_values();
-	let metrics = &*METRICS;
-	macro_rules! remove_actor_labels {
-		($($metric:ident),+ $(,)?) => {
-			$(
-				ignore_missing_labels(metrics.$metric.remove_label_values(&actor_labels));
-			)+
-		};
-	}
-
-	remove_actor_labels!(
-		actor_active,
-		create_state_ms,
-		create_vars_ms,
-		queue_depth,
-		queue_messages_sent_total,
-		queue_messages_received_total,
-		active_connections,
-		connections_total,
-		lifecycle_inbox_depth,
-		dispatch_inbox_depth,
-		lifecycle_event_inbox_depth,
-	);
-
-	for kind in &retained.user_task_kinds {
-		let labels = [actor_labels[0], actor_labels[1], actor_labels[2], *kind];
-		ignore_missing_labels(metrics.user_tasks_active.remove_label_values(&labels));
-		ignore_missing_labels(
-			metrics
-				.user_task_duration_seconds
-				.remove_label_values(&labels),
-		);
-	}
-	for reason in &retained.shutdown_reasons {
-		let labels = [actor_labels[0], actor_labels[1], actor_labels[2], *reason];
-		ignore_missing_labels(metrics.shutdown_wait_seconds.remove_label_values(&labels));
-		ignore_missing_labels(metrics.shutdown_timeout_total.remove_label_values(&labels));
-	}
-	for reason in &retained.state_mutation_reasons {
-		let labels = [actor_labels[0], actor_labels[1], actor_labels[2], *reason];
-		ignore_missing_labels(metrics.state_mutation_total.remove_label_values(&labels));
-	}
-	for (subsystem, operation) in &retained.direct_shutdown_labels {
-		let labels = [
-			actor_labels[0],
-			actor_labels[1],
-			actor_labels[2],
-			subsystem.as_str(),
-			operation.as_str(),
-		];
-		ignore_missing_labels(
-			metrics
-				.direct_subsystem_shutdown_warning_total
-				.remove_label_values(&labels),
-		);
-	}
-
-	#[cfg(feature = "sqlite-local")]
-	{
-		remove_actor_labels!(
-			sqlite_vfs_resolve_pages_total,
-			sqlite_vfs_resolve_pages_requested_total,
-			sqlite_vfs_resolve_pages_cache_hits_total,
-			sqlite_vfs_resolve_pages_cache_misses_total,
-			sqlite_vfs_get_pages_total,
-			sqlite_vfs_pages_fetched_total,
-			sqlite_vfs_prefetch_pages_total,
-			sqlite_vfs_bytes_fetched_total,
-			sqlite_vfs_prefetch_bytes_total,
-			sqlite_vfs_get_pages_duration_seconds,
-			sqlite_vfs_commit_total,
-			sqlite_worker_queue_depth,
-			sqlite_worker_queue_overload_total,
-			sqlite_worker_close_duration_seconds,
-			sqlite_worker_close_timeout_total,
-			sqlite_worker_crash_total,
-			sqlite_worker_unclean_close_total,
-		);
-
-		for phase in &retained.sqlite_commit_phases {
-			let labels = [actor_labels[0], actor_labels[1], actor_labels[2], *phase];
-			ignore_missing_labels(
-				metrics
-					.sqlite_vfs_commit_phase_duration_seconds_total
-					.remove_label_values(&labels),
-			);
-			ignore_missing_labels(
-				metrics
-					.sqlite_vfs_commit_duration_seconds_total
-					.remove_label_values(&labels),
-			);
-		}
-		for operation in &retained.sqlite_worker_operations {
-			let labels = [actor_labels[0], actor_labels[1], actor_labels[2], *operation];
-			ignore_missing_labels(
-				metrics
-					.sqlite_worker_command_duration_seconds
-					.remove_label_values(&labels),
-			);
-		}
-		for (operation, code) in &retained.sqlite_worker_error_labels {
-			let labels = [
-				actor_labels[0],
-				actor_labels[1],
-				actor_labels[2],
-				*operation,
-				*code,
-			];
-			ignore_missing_labels(
-				metrics
-					.sqlite_worker_command_error_total
-					.remove_label_values(&labels),
-			);
-		}
+	let delta = next.saturating_sub(*current);
+	if delta != 0 {
+		gauge.with_label_values(labels).add(delta);
+		*current = next;
 	}
 }
 
-fn push_unique<T: PartialEq>(values: &mut Vec<T>, value: T) {
-	if !values.contains(&value) {
-		values.push(value);
-	}
+fn usize_to_i64(value: usize) -> i64 {
+	i64::try_from(value).unwrap_or(i64::MAX)
 }
 
-fn ignore_missing_labels(result: rivet_metrics::prometheus::Result<()>) {
-	match result {
-		Ok(()) => {}
-		Err(error) if is_missing_labels_error(&error) => {}
-		Err(error) => {
-			tracing::debug!(?error, "failed to remove retained actor metric labels");
-		}
-	}
-}
-
-fn is_missing_labels_error(error: &rivet_metrics::prometheus::Error) -> bool {
-	matches!(
-		error,
-		rivet_metrics::prometheus::Error::Msg(message)
-			if message.starts_with("missing label values ")
-				|| message.starts_with("missing labels ")
-	)
+#[cfg(feature = "sqlite-local")]
+fn u64_to_i64(value: u64) -> i64 {
+	i64::try_from(value).unwrap_or(i64::MAX)
 }
 
 impl ActorMetricLabels {
-	fn as_label_values(&self) -> [&str; 3] {
-		[
-			self.actor_id_gen.as_str(),
-			self.actor_key.as_str(),
-			self.envoy_key.as_str(),
-		]
+	fn as_label_values(&self) -> [&str; 1] {
+		[self.actor_name.as_str()]
 	}
 }
 

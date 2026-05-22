@@ -174,6 +174,18 @@ mod moved_tests {
 		)
 	}
 
+	#[test]
+	fn request_save_hook_does_not_retain_actor_context() {
+		let ctx = ActorContext::new("actor-hook-drop", "task-hook-drop", Vec::new(), "local");
+		let weak = ctx.downgrade();
+		let task = new_task(ctx.clone());
+
+		drop(task);
+		drop(ctx);
+
+		assert!(weak.upgrade().is_none());
+	}
+
 	struct IdleEnvoyCallbacks;
 
 	impl EnvoyCallbacks for IdleEnvoyCallbacks {
@@ -254,6 +266,7 @@ mod moved_tests {
 			)),
 			protocol_metadata: Arc::new(tokio::sync::Mutex::new(None)),
 			shutting_down: AtomicBool::new(false),
+			last_ping_ts: std::sync::atomic::AtomicI64::new(i64::MAX),
 			stopped_tx: tokio::sync::watch::channel(true).0,
 		});
 

@@ -5,8 +5,11 @@ mod metrics_helpers;
 
 mod moved_tests {
 	use std::panic::{AssertUnwindSafe, catch_unwind};
+	use std::time::Duration;
 
 	use rivet_metrics::prometheus::{IntGauge, Opts, Registry};
+
+	use crate::actor::task_types::UserTaskKind;
 
 	use super::*;
 	use super::metrics_helpers::{metric_line_for_actor, render_global_metrics};
@@ -42,44 +45,38 @@ mod moved_tests {
 	}
 
 	#[test]
-	fn missing_label_filter_keeps_unexpected_prometheus_errors() {
-		use rivet_metrics::prometheus::Error;
+	fn actor_startup_duration_metrics_render() {
+		let actor_name = "counter-startup";
+		let metrics = ActorMetrics::new(actor_name);
 
-		assert!(is_missing_labels_error(&Error::Msg(
-			"missing label values [\"actor\"]".to_owned(),
-		)));
-		assert!(!is_missing_labels_error(&Error::InconsistentCardinality {
-			expect: 3,
-			got: 2,
-		}));
-		assert!(!is_missing_labels_error(&Error::Msg(
-			"unexpected metric error".to_owned(),
-		)));
-	}
-
-	#[test]
-	fn actor_inbox_depth_metrics_render() {
-		let metrics = ActorMetrics::new("actor-inbox-depth", Some(42), "counter/main", "envoy-1");
-
-		metrics.set_lifecycle_inbox_depth(1);
-		metrics.set_dispatch_inbox_depth(2);
-		metrics.set_lifecycle_event_inbox_depth(3);
+		metrics.observe_create_state(Duration::from_millis(10));
+		metrics.observe_create_vars(Duration::from_millis(20));
 
 		let rendered = render_global_metrics();
-		assert_metric_value(&rendered, "rivet_actor_lifecycle_inbox_depth", "1");
-		assert_metric_value(&rendered, "rivet_actor_dispatch_inbox_depth", "2");
-		assert_metric_value(&rendered, "rivet_actor_lifecycle_event_inbox_depth", "3");
+		assert_metric_value(
+			&rendered,
+			"rivetkit_actor_create_state_duration_seconds_count",
+			actor_name,
+			"1",
+		);
+		assert_metric_value(
+			&rendered,
+			"rivetkit_actor_create_vars_duration_seconds_count",
+			actor_name,
+			"1",
+		);
 	}
 
 	#[test]
-	fn actor_active_metric_is_retained_after_drop() {
-		let metrics = ActorMetrics::new("actor-retention", Some(7), "counter/main", "envoy-1");
+	fn actor_active_count_tracks_metric_lifetime() {
+		let actor_name = "counter-active";
+		let metrics = ActorMetrics::new(actor_name);
 
 		let rendered = render_global_metrics();
 		let line = rendered
 			.lines()
-			.find(|line| metric_line_for_actor(line, "rivet_actor_active", "actor-retention:7"))
-			.expect("active actor metric should render");
+			.find(|line| metric_line_for_actor(line, "rivetkit_actor_active_count", actor_name))
+			.expect("active actor count metric should render");
 		assert!(line.ends_with('1'), "actor should be active: {line}");
 
 		drop(metrics);
@@ -87,19 +84,90 @@ mod moved_tests {
 		let rendered = render_global_metrics();
 		let line = rendered
 			.lines()
-			.find(|line| metric_line_for_actor(line, "rivet_actor_active", "actor-retention:7"))
-			.expect("inactive actor metric should remain during retention window");
+			.find(|line| metric_line_for_actor(line, "rivetkit_actor_active_count", actor_name))
+			.expect("inactive actor count metric should remain");
 		assert!(line.ends_with('0'), "actor should be inactive: {line}");
 	}
 
-	fn assert_metric_value(metrics: &str, name: &str, value: &str) {
+	#[test]
+	fn actor_current_gauges_aggregate_by_actor_name() {
+		let actor_name = "counter-gauge-aggregate";
+		let first = ActorMetrics::new(actor_name);
+		let second = ActorMetrics::new(actor_name);
+
+		first.set_active_connections(2);
+		second.set_active_connections(3);
+		first.set_queue_depth(4);
+		second.set_queue_depth(5);
+		first.set_dispatch_inbox_depth(6);
+		second.set_dispatch_inbox_depth(7);
+		first.begin_user_task(UserTaskKind::Action);
+		second.begin_user_task(UserTaskKind::Action);
+
+		let rendered = render_global_metrics();
+		assert_metric_value(&rendered, "rivetkit_actor_connections_active", actor_name, "5");
+		assert_metric_value(&rendered, "rivetkit_actor_queue_depth", actor_name, "9");
+		assert_metric_value_with_label(
+			&rendered,
+			"rivetkit_actor_inbox_depth",
+			actor_name,
+			"inbox=\"dispatch\"",
+			"13",
+		);
+		assert_metric_value_with_label(
+			&rendered,
+			"rivetkit_actor_user_tasks_active",
+			actor_name,
+			"kind=\"action\"",
+			"2",
+		);
+
+		first.set_active_connections(1);
+		first.end_user_task(UserTaskKind::Action, Duration::from_millis(1));
+		drop(first);
+
+		let rendered = render_global_metrics();
+		assert_metric_value(&rendered, "rivetkit_actor_connections_active", actor_name, "3");
+		assert_metric_value(&rendered, "rivetkit_actor_queue_depth", actor_name, "5");
+		assert_metric_value_with_label(
+			&rendered,
+			"rivetkit_actor_user_tasks_active",
+			actor_name,
+			"kind=\"action\"",
+			"1",
+		);
+
+		drop(second);
+
+		let rendered = render_global_metrics();
+		assert_metric_value(&rendered, "rivetkit_actor_connections_active", actor_name, "0");
+		assert_metric_value(&rendered, "rivetkit_actor_queue_depth", actor_name, "0");
+		assert_metric_value_with_label(
+			&rendered,
+			"rivetkit_actor_user_tasks_active",
+			actor_name,
+			"kind=\"action\"",
+			"0",
+		);
+	}
+
+	fn assert_metric_value(metrics: &str, name: &str, actor_name: &str, value: &str) {
+		assert_metric_value_with_label(metrics, name, actor_name, "", value);
+	}
+
+	fn assert_metric_value_with_label(
+		metrics: &str,
+		name: &str,
+		actor_name: &str,
+		label: &str,
+		value: &str,
+	) {
 		let line = metrics
 			.lines()
 			.find(|line| {
 				line.starts_with(name)
-					&& line.contains("actor_id_gen=\"actor-inbox-depth:42\"")
-					&& line.contains("actor_key=\"counter/main\"")
-					&& line.contains("envoy_key=\"envoy-1\"")
+					&& line.contains(&format!("actor_name=\"{actor_name}\""))
+					&& (label.is_empty() || line.contains(label))
 			})
 			.unwrap_or_else(|| panic!("{name} should render"));
 		assert!(line.ends_with(value), "{name} should have value {value}: {line}");

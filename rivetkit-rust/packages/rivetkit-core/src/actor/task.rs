@@ -387,11 +387,13 @@ impl ActorTask {
 			Arc::clone(&inspector_attach_count),
 			inspector_overlay_tx.clone(),
 		);
-		let inspector_ctx = ctx.clone();
+		let inspector_ctx = ctx.downgrade();
 		let inspector_attach_count_for_hook = Arc::clone(&inspector_attach_count);
 		ctx.on_request_save(Box::new(move |_opts| {
 			if inspector_attach_count_for_hook.load(Ordering::SeqCst) > 0 {
-				inspector_ctx.notify_inspector_serialize_requested();
+				if let Some(ctx) = ActorContext::from_weak(&inspector_ctx) {
+					ctx.notify_inspector_serialize_requested();
+				}
 			}
 		}));
 		Self {
@@ -444,6 +446,7 @@ impl ActorTask {
 		let exit = self.run_live().await;
 		let LiveExit::Shutdown { reason } = exit else {
 			self.record_inbox_depths();
+			self.ctx.metrics().record_actor_stopped();
 			return Ok(());
 		};
 
@@ -457,6 +460,7 @@ impl ActorTask {
 		self.deliver_shutdown_reply(reason, &result);
 		self.transition_to(LifecycleState::Terminated);
 		self.record_inbox_depths();
+		self.ctx.metrics().record_actor_stopped();
 		result
 	}
 

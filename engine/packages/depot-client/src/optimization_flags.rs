@@ -23,11 +23,12 @@ pub const VFS_PAGE_CACHE_CAPACITY_PAGES_ENV: &str =
 	"RIVETKIT_SQLITE_OPT_VFS_PAGE_CACHE_CAPACITY_PAGES";
 pub const VFS_PROTECTED_CACHE_PAGES_ENV: &str = "RIVETKIT_SQLITE_OPT_VFS_PROTECTED_CACHE_PAGES";
 pub const VFS_STAGING_CACHE_TTL_MS_ENV: &str = "RIVETKIT_SQLITE_OPT_VFS_STAGING_CACHE_TTL_MS";
+pub const VFS_RETAIN_READ_CACHE_ENV: &str = "RIVETKIT_SQLITE_OPT_VFS_RETAIN_READ_CACHE";
 
 pub const DEFAULT_STARTUP_PRELOAD_MAX_BYTES: usize = 1024 * 1024;
-pub const MAX_STARTUP_PRELOAD_MAX_BYTES: usize = 8 * 1024 * 1024;
+pub const MAX_STARTUP_PRELOAD_MAX_BYTES: usize = 64 * 1024 * 1024;
 pub const DEFAULT_STARTUP_PRELOAD_FIRST_PAGE_COUNT: u32 = 1;
-pub const MAX_STARTUP_PRELOAD_FIRST_PAGE_COUNT: u32 = 256;
+pub const MAX_STARTUP_PRELOAD_FIRST_PAGE_COUNT: u32 = 16_384;
 pub const DEFAULT_VFS_PAGE_CACHE_CAPACITY_PAGES: u64 = 50_000;
 pub const MAX_VFS_PAGE_CACHE_CAPACITY_PAGES: u64 = 500_000;
 pub const DEFAULT_VFS_PROTECTED_CACHE_PAGES: usize = 512;
@@ -106,6 +107,7 @@ pub struct SqliteOptimizationFlags {
 	pub vfs_page_cache_capacity_pages: u64,
 	pub vfs_protected_cache_pages: usize,
 	pub vfs_staging_cache_ttl_ms: u64,
+	pub vfs_retain_read_cache: bool,
 }
 
 impl Default for SqliteOptimizationFlags {
@@ -133,6 +135,7 @@ impl Default for SqliteOptimizationFlags {
 			vfs_page_cache_capacity_pages: DEFAULT_VFS_PAGE_CACHE_CAPACITY_PAGES,
 			vfs_protected_cache_pages: DEFAULT_VFS_PROTECTED_CACHE_PAGES,
 			vfs_staging_cache_ttl_ms: DEFAULT_VFS_STAGING_CACHE_TTL_MS,
+			vfs_retain_read_cache: false,
 		}
 	}
 }
@@ -206,6 +209,9 @@ impl SqliteOptimizationFlags {
 				DEFAULT_VFS_STAGING_CACHE_TTL_MS,
 				MAX_VFS_STAGING_CACHE_TTL_MS,
 			),
+			vfs_retain_read_cache: disabled_by_default(
+				read_env(VFS_RETAIN_READ_CACHE_ENV).as_deref(),
+			),
 		}
 	}
 }
@@ -226,6 +232,20 @@ fn enabled_by_default(value: Option<&str>) -> bool {
 			false
 		}
 		_ => true,
+	}
+}
+
+fn disabled_by_default(value: Option<&str>) -> bool {
+	match value.map(|value| value.trim().to_ascii_lowercase()) {
+		Some(value)
+			if matches!(
+				value.as_str(),
+				"1" | "true" | "on" | "yes" | "enabled" | "enable"
+			) =>
+		{
+			true
+		}
+		_ => false,
 	}
 }
 fn usize_bounded_by_default(value: Option<&str>, default: usize, max: usize) -> usize {
@@ -318,6 +338,7 @@ mod tests {
 			VFS_PAGE_CACHE_CAPACITY_PAGES_ENV => Some("0".to_string()),
 			VFS_PROTECTED_CACHE_PAGES_ENV => Some("0".to_string()),
 			VFS_STAGING_CACHE_TTL_MS_ENV => Some("0".to_string()),
+			VFS_RETAIN_READ_CACHE_ENV => Some("true".to_string()),
 			_ => None,
 		});
 
@@ -339,6 +360,7 @@ mod tests {
 		assert_eq!(flags.vfs_page_cache_capacity_pages, 0);
 		assert_eq!(flags.vfs_protected_cache_pages, 0);
 		assert_eq!(flags.vfs_staging_cache_ttl_ms, 0);
+		assert!(flags.vfs_retain_read_cache);
 	}
 
 	#[test]

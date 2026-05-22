@@ -13,6 +13,22 @@ import type { RuntimeServerlessResponseHead } from "./runtime";
 
 type ShutdownSignal = "SIGINT" | "SIGTERM";
 
+function signalExitCode(signal: ShutdownSignal): number {
+	switch (signal) {
+		case "SIGINT":
+			return 130;
+		case "SIGTERM":
+			return 143;
+	}
+}
+
+function finishShutdownSignal(signal: ShutdownSignal): void {
+	if (process.pid === 1) {
+		process.exit(signalExitCode(signal));
+	}
+	process.kill(process.pid, signal);
+}
+
 export type FetchHandler = (
 	request: Request,
 	...args: any
@@ -22,13 +38,15 @@ export interface ServerlessHandler {
 	fetch: FetchHandler;
 }
 
-export interface RegistryDiagnostics {
-	mode: string;
-	envoyActiveActorCount?: number | null;
+export interface RegistryRoutes {
+	health(): Promise<Response>;
+	metadata(): Promise<Response>;
+	prometheusMetrics(request?: Request): Promise<Response>;
 }
 
 export class Registry<A extends RegistryActors> {
 	#config: RegistryConfigInput<A>;
+	public readonly routes: RegistryRoutes;
 
 	get config(): RegistryConfigInput<A> {
 		return this.#config;
@@ -49,6 +67,12 @@ export class Registry<A extends RegistryActors> {
 
 	constructor(config: RegistryConfigInput<A>) {
 		this.#config = config;
+		this.routes = {
+			health: () => this.#healthRoute(),
+			metadata: () => this.#metadataRoute(),
+			prometheusMetrics: (request?: Request) =>
+				this.#prometheusMetricsRoute(request),
+		};
 	}
 
 	#ensureServerlessPoolConfigured(config: RegistryConfig): Promise<void> | undefined {
@@ -279,7 +303,92 @@ export class Registry<A extends RegistryActors> {
 		};
 	}
 
-	public async diagnostics(): Promise<RegistryDiagnostics> {
+	/**
+	 * Returns a health response suitable for mounting in a user-owned router.
+	 */
+	async #healthRoute(): Promise<Response> {
+		const configured = await this.#activeConfiguredRegistry();
+		if (!configured) {
+			return jsonRouteResponse(503, {
+				status: "not_started",
+				runtime: "rivetkit",
+				version: VERSION,
+			});
+		}
+
+		const { runtime, registry } = configured;
+		if (!runtime.registryHealth) {
+			return jsonRouteResponse(501, {
+				status: "unsupported",
+				runtime: "rivetkit",
+				version: VERSION,
+			});
+		}
+
+		const response = await runtime.registryHealth(registry);
+		return new Response(new Uint8Array(response.body), {
+			status: response.status,
+			headers: response.headers,
+		});
+	}
+
+	/**
+	 * Returns serverless metadata suitable for mounting in a user-owned router.
+	 */
+	async #metadataRoute(): Promise<Response> {
+		const configured = await this.#activeConfiguredRegistry();
+		if (!configured) {
+			return new Response("registry not started\n", {
+				status: 503,
+				headers: { "content-type": "text/plain; charset=utf-8" },
+			});
+		}
+
+		const { runtime, registry } = configured;
+		if (!runtime.registryMetadata) {
+			return new Response("metadata is not supported by this runtime\n", {
+				status: 501,
+				headers: { "content-type": "text/plain; charset=utf-8" },
+			});
+		}
+
+		const response = await runtime.registryMetadata(registry);
+		return new Response(new Uint8Array(response.body), {
+			status: response.status,
+			headers: response.headers,
+		});
+	}
+
+	/**
+	 * Returns a Prometheus metrics response suitable for mounting in a user-owned router.
+	 */
+	async #prometheusMetricsRoute(_request?: Request): Promise<Response> {
+		const configured = await this.#activeConfiguredRegistry();
+		if (!configured) {
+			return new Response("registry not started\n", {
+				status: 503,
+				headers: { "content-type": "text/plain; charset=utf-8" },
+			});
+		}
+
+		const { runtime, registry } = configured;
+		if (!runtime.registryMetrics) {
+			return new Response("metrics are not supported by this runtime\n", {
+				status: 501,
+				headers: { "content-type": "text/plain; charset=utf-8" },
+			});
+		}
+
+		const response = await runtime.registryMetrics(registry);
+		return new Response(new Uint8Array(response.body), {
+			status: response.status,
+			headers: response.headers,
+		});
+	}
+
+	async #activeConfiguredRegistry(): Promise<
+		Awaited<ReturnType<typeof buildConfiguredRegistry>> | undefined
+	> {
 		const candidates = [
 			this.#runtimeServerlessPromise,
 			this.#runtimeServeConfiguredPromise,
@@ -287,13 +396,8 @@ export class Registry<A extends RegistryActors> {
 			candidate !== undefined
 		);
 
-		for (const candidate of candidates) {
-			const { runtime, registry } = await candidate;
-			const diagnostics = await runtime.registryDiagnostics?.(registry);
-			if (diagnostics) return diagnostics;
-		}
-
-		return { mode: "not_started", envoyActiveActorCount: null };
+		if (candidates.length === 0) return undefined;
+		return await candidates[0]!;
 	}
 
 	/**
@@ -364,10 +468,11 @@ export class Registry<A extends RegistryActors> {
 	): void {
 		if (this.#shutdownInFlight !== null) {
 			// Second delivery of the same (or another) shutdown signal.
-			// Remove our handler only (preserving any user-installed listeners)
-			// and re-raise so Node proceeds with its default exit path.
+			// Remove our handler only, preserving any user-installed listeners.
+			// PID 1 must exit directly because re-raised default signals can be
+			// swallowed by the container signal path.
 			this.#removeSignalHandlers();
-			process.kill(process.pid, signal);
+			finishShutdownSignal(signal);
 			return;
 		}
 		this.#shutdownInFlight = this.#runShutdown(
@@ -384,11 +489,13 @@ export class Registry<A extends RegistryActors> {
 		config: RegistryConfig,
 		configuredRegistryPromise: ReturnType<typeof buildConfiguredRegistry>,
 	): Promise<void> {
-		const gracePeriodMs = config.shutdown?.gracePeriodMs ?? 30_000;
+		const gracePeriodMs =
+			config.shutdown?.gracePeriodMs ??
+			(await this.#actorStopThresholdMs(configuredRegistryPromise)) ??
+			30 * 60 * 1000;
 		// Race the entire drain sequence (both modes + serve promise) against
-		// a single grace ceiling. Without this, each mode's Rust-side drain
-		// (20s) could stack sequentially and blow past gracePeriodMs before
-		// we re-raise the signal.
+		// a single grace ceiling. By default, this uses the engine-provided
+		// actor stop threshold, matching Pegboard's hard cutoff for actors.
 		const drain = async () => {
 			// Shut down every live `CoreRegistry` we know about. Mode A
 			// (`start()`) and Mode B (`handler()`) each build a separate
@@ -442,7 +549,30 @@ export class Registry<A extends RegistryActors> {
 			),
 		]);
 		this.#removeSignalHandlers();
-		process.kill(process.pid, signal);
+		finishShutdownSignal(signal);
+	}
+
+	async #actorStopThresholdMs(
+		configuredRegistryPromise: ReturnType<typeof buildConfiguredRegistry>,
+	): Promise<number | undefined> {
+		try {
+			const { runtime, registry } = await configuredRegistryPromise;
+			const thresholdMs =
+				await runtime.registryActorStopThresholdMs?.(registry);
+			if (
+				thresholdMs !== undefined &&
+				Number.isFinite(thresholdMs) &&
+				thresholdMs > 0
+			) {
+				return thresholdMs;
+			}
+		} catch (err) {
+			logger().warn(
+				{ err },
+				"failed to read actor stop threshold for shutdown grace",
+			);
+		}
+		return undefined;
 	}
 
 	#removeSignalHandlers(): void {
@@ -522,6 +652,13 @@ function isServerlessMetadataRequest(request: Request, basePath: string): boolea
 	const normalizedBase =
 		basePath === "/" ? "" : `/${basePath.replace(/^\/+|\/+$/g, "")}`;
 	return parsed.pathname === `${normalizedBase}/metadata`;
+}
+
+function jsonRouteResponse(status: number, body: unknown): Response {
+	return new Response(JSON.stringify(body), {
+		status,
+		headers: { "content-type": "application/json" },
+	});
 }
 
 export function setup<A extends RegistryActors>(

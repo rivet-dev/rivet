@@ -1,9 +1,11 @@
 import { setup } from "rivetkit";
+import { resolveMode } from "./mode.ts";
 // Counter
 import { counter } from "./actors/counter/counter.ts";
 import { counterConn } from "./actors/counter/counter-conn.ts";
 import { counterWithParams } from "./actors/counter/conn-params.ts";
 import { counterWithLifecycle } from "./actors/counter/lifecycle.ts";
+import { pingPongCounter } from "./actors/counter/ping-pong-counter.ts";
 // Actions
 import { inputActor } from "./actors/actions/action-inputs.ts";
 import {
@@ -58,6 +60,7 @@ import {
 import { rawFetchCounter } from "./actors/http/raw-fetch-counter.ts";
 import { rawWebSocketChatRoom } from "./actors/http/raw-websocket-chat-room.ts";
 import { rawWebSocketServerlessSmoke } from "./actors/http/raw-websocket-serverless-smoke.ts";
+import { tunnelStress } from "./actors/http/tunnel-stress.ts";
 // Lifecycle
 import {
 	runWithTicks,
@@ -123,6 +126,10 @@ import { rawSqliteFuzzer } from "./actors/testing/raw-sqlite-fuzzer.ts";
 import { sqliteMemoryPressure } from "./actors/testing/sqlite-memory-pressure.ts";
 import { mockAgenticLoop } from "./actors/testing/mock-agentic-loop.ts";
 import { sleepCloseFuzz } from "./actors/testing/sleep-close-fuzz.ts";
+import { loadTestAgent } from "./actors/testing/load-test-agent.ts";
+import { loadTestAgent2 } from "./actors/testing/load-test-agent-2.ts";
+import { sigtermSleepProbe } from "./actors/testing/sigterm-sleep-probe.ts";
+import { slowReconnectActor } from "./actors/testing/slow-reconnect-actor.ts";
 // AI
 import { aiAgent } from "./actors/ai/ai-agent.ts";
 
@@ -139,14 +146,16 @@ function numberFromEnv(name: string, fallback: number): number {
 }
 
 function serverlessPoolConfig() {
+	// Only the local serverless mode self-registers its pool with the engine.
+	// In the deployed `serverless` mode the pool is configured externally on
+	// the engine cluster, and the `serverful` mode uses a long-lived runner
+	// connection rather than a serverless pool.
+	if (resolveMode() !== "serverless-local") return undefined;
+
 	const url =
 		process.env.RIVET_SERVERLESS_URL ??
 		process.env.KITCHEN_SINK_SERVERLESS_URL ??
-		(process.env.RIVET_RUN_ENGINE === "1"
-			? "http://127.0.0.1:3000/api/rivet"
-			: undefined);
-
-	if (!url) return undefined;
+		"http://127.0.0.1:3000/api/rivet";
 
 	return {
 		name: process.env.RIVET_POOL,
@@ -186,6 +195,7 @@ export const registry = setup({
 		counterConn,
 		counterWithParams,
 		counterWithLifecycle,
+		pingPongCounter,
 		// Core API
 		inputActor,
 		syncActionActor,
@@ -226,6 +236,7 @@ export const registry = setup({
 		rawFetchCounter,
 		rawWebSocketChatRoom,
 		rawWebSocketServerlessSmoke,
+		tunnelStress,
 		// Lifecycle and scheduling
 		runWithTicks,
 		runWithQueueConsumer,
@@ -279,6 +290,10 @@ export const registry = setup({
 		sqliteMemoryPressure,
 		mockAgenticLoop,
 		sleepCloseFuzz,
+		loadTestAgent,
+		loadTestAgent2,
+		sigtermSleepProbe,
+		slowReconnectActor,
 		// AI
 		aiAgent,
 	},

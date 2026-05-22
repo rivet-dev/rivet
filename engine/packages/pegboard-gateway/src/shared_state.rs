@@ -17,7 +17,7 @@ use vbare::OwnedVersionedData;
 use crate::{WebsocketPendingLimitReached, metrics};
 
 pub struct InFlightRequestHandle {
-	pub msg_rx: mpsc::Receiver<protocol::mk2::ToServerTunnelMessageKind>,
+	pub msg_rx: mpsc::UnboundedReceiver<protocol::mk2::ToServerTunnelMessageKind>,
 	/// Used to check if the request handler has been dropped.
 	///
 	/// This is separate from `msg_rx` there may still be messages that need to be sent to the
@@ -81,7 +81,7 @@ struct InFlightRequest {
 	protocol_version: u16,
 	state: InFlightRequestState,
 	/// Sender for incoming messages to this request.
-	msg_tx: mpsc::Sender<protocol::mk2::ToServerTunnelMessageKind>,
+	msg_tx: mpsc::UnboundedSender<protocol::mk2::ToServerTunnelMessageKind>,
 	/// Used to check if the request handler has been dropped.
 	drop_tx: watch::Sender<Option<MsgGcReason>>,
 	/// True once first message for this request has been sent (so runner learned reply_to).
@@ -184,7 +184,7 @@ impl SharedState {
 		request_id: protocol::mk2::RequestId,
 		state: InFlightRequestState,
 	) -> InFlightRequestHandle {
-		let (msg_tx, msg_rx) = mpsc::channel(128);
+		let (msg_tx, msg_rx) = mpsc::unbounded_channel();
 		let (drop_tx, drop_rx) = watch::channel(None);
 
 		let new = match self.in_flight_requests.entry_async(request_id).await {
@@ -481,7 +481,6 @@ impl SharedState {
 						if in_flight
 							.msg_tx
 							.send(msg.message_kind.clone())
-							.await
 							.is_err()
 						{
 							tracing::warn!(
