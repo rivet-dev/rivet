@@ -33,6 +33,8 @@ import {
 	Skeleton,
 } from "@/components";
 import { useCloudDataProvider } from "@/components/actors";
+import { BillingPlanBadge } from "./billing/billing-plan-badge";
+import { BillingUsageGauge } from "./billing/billing-usage-gauge";
 import { authClient } from "@/lib/auth";
 import { orgConicGradient, paletteForLetter } from "@/lib/org-palette";
 import { useTheme } from "@/lib/theme";
@@ -85,7 +87,20 @@ export function UserDropdown({ children }: { children?: React.ReactNode }) {
 						</Button>
 					))}
 			</DropdownMenuTrigger>
-			<DropdownMenuContent align="end" className="min-w-56">
+			{/*
+			 * `closeAnimation={false}`: selecting an org navigates to a new
+			 * route whose `beforeLoad` is async. The router runs that navigation
+			 * inside a React transition, and while it is pending the old tree is
+			 * held on screen. Radix keeps the menu mounted for its close
+			 * animation, so the held transition freezes the closing menu and it
+			 * lingers until `beforeLoad` resolves. Closing without an exit
+			 * animation lets the menu unmount immediately instead.
+			 */}
+			<DropdownMenuContent
+				align="end"
+				className="min-w-56"
+				closeAnimation={false}
+			>
 				<DropdownMenuItem
 					onSelect={() => {
 						return navigate({
@@ -115,6 +130,10 @@ export function UserDropdown({ children }: { children?: React.ReactNode }) {
 					<DropdownMenuItem onSelect={goToBilling}>
 						<Icon icon={faCreditCard} className="mr-2 size-3.5 text-muted-foreground" />
 						Billing
+						<span className="ml-auto flex items-center gap-1">
+							<BillingUsageGauge />
+							<BillingPlanBadge />
+						</span>
 					</DropdownMenuItem>
 				) : null}
 				{params.organization ? (
@@ -144,6 +163,7 @@ export function UserDropdown({ children }: { children?: React.ReactNode }) {
 							<DropdownMenuSubContent
 								sideOffset={8}
 								className="min-w-56"
+								closeAnimation={false}
 							>
 								<OrganizationSwitcher
 									value={params.organization}

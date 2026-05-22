@@ -90,7 +90,7 @@ function ProjectPicker({
 
 	return (
 		<div className="rounded-lg border border-foreground/10 bg-card overflow-hidden">
-			<header className="px-4 py-3 border-b border-foreground/10">
+			<header className="px-5 py-3 border-b border-foreground/10">
 				<h3 className="text-sm font-semibold text-foreground">{title}</h3>
 				<SmallText className="text-muted-foreground">
 					{description}
@@ -130,7 +130,7 @@ function ProjectPicker({
 							}
 						}}
 						className={cn(
-							"w-full grid grid-cols-[auto_1fr_auto] items-center gap-3 px-4 py-3 text-left text-xs",
+							"w-full grid grid-cols-[auto_1fr_auto] items-center gap-3 px-5 py-3 text-left text-xs",
 							"border-b border-foreground/10 last:border-b-0",
 							"hover:bg-foreground/[0.04] focus-visible:outline-none focus-visible:bg-foreground/[0.06]",
 						)}
@@ -179,7 +179,7 @@ function NamespacePicker({
 
 	return (
 		<div className="rounded-lg border border-foreground/10 bg-card overflow-hidden">
-			<header className="px-4 py-3 border-b border-foreground/10">
+			<header className="px-5 py-3 border-b border-foreground/10">
 				<h3 className="text-sm font-semibold text-foreground">{title}</h3>
 				<SmallText className="text-muted-foreground">
 					{description}
@@ -206,7 +206,7 @@ function NamespacePicker({
 							});
 						}}
 						className={cn(
-							"w-full grid grid-cols-[auto_1fr_auto] items-center gap-3 px-4 py-3 text-left text-xs",
+							"w-full grid grid-cols-[auto_1fr_auto] items-center gap-3 px-5 py-3 text-left text-xs",
 							"border-b border-foreground/10 last:border-b-0",
 							"hover:bg-foreground/[0.04] focus-visible:outline-none focus-visible:bg-foreground/[0.06]",
 						)}
@@ -241,7 +241,7 @@ function RowSkeletons() {
 				<div
 					// biome-ignore lint/suspicious/noArrayIndexKey: skeleton rows are static
 					key={i}
-					className="grid grid-cols-[auto_1fr] items-center gap-3 px-4 py-3 border-b border-foreground/10 last:border-b-0"
+					className="grid grid-cols-[auto_1fr] items-center gap-3 px-5 py-3 border-b border-foreground/10 last:border-b-0"
 				>
 					<div className="size-3.5 rounded-full bg-foreground/[0.06]" />
 					<div className="h-3.5 w-32 rounded bg-foreground/[0.06]" />
@@ -253,7 +253,7 @@ function RowSkeletons() {
 
 function EmptyRow({ text }: { text: string }) {
 	return (
-		<div className="px-4 py-6 text-center">
+		<div className="px-5 py-6 text-center">
 			<SmallText className="text-muted-foreground">{text}</SmallText>
 		</div>
 	);

@@ -36,6 +36,7 @@ import {
 import { useCloudProjectDataProvider } from "@/components/actors";
 import { BILLING } from "@/content/billing";
 import { ResourcePicker } from "./resource-picker";
+import { SettingsCard } from "./settings-card";
 
 type BilledMetric = keyof typeof BILLING.prices;
 
@@ -243,7 +244,7 @@ function BillingDrawerBody() {
 					</p>
 				</div>
 
-				<div className="rounded-lg border border-foreground/10 bg-card overflow-hidden">
+				<SettingsCard divided>
 					{USAGE_METRICS.map((metric, idx) => {
 						const current = metrics[metric.key] || 0n;
 						const includedInPlan = planIncluded[metric.key];
@@ -263,7 +264,7 @@ function BillingDrawerBody() {
 							/>
 						);
 					})}
-				</div>
+				</SettingsCard>
 			</div>
 		</div>
 	);
@@ -280,7 +281,7 @@ function CurrentPlanCard({
 	const price = PLAN_PRICE[plan] ?? "$0/mo";
 	const blurb = PLAN_BLURB[plan] ?? PLAN_BLURB.free;
 	return (
-		<div className="rounded-lg border border-foreground/10 bg-card p-5">
+		<SettingsCard>
 			<div className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground mb-2">
 				Current plan
 			</div>
@@ -312,7 +313,7 @@ function CurrentPlanCard({
 					</span>
 				</ManageBillingButton>
 			</div>
-		</div>
+		</SettingsCard>
 	);
 }
 
@@ -337,7 +338,7 @@ function CurrentBillCard({
 		d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 
 	return (
-		<div className="rounded-lg border border-foreground/10 bg-card p-5">
+		<SettingsCard>
 			<div className="flex items-center gap-1.5 mb-2">
 				<span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
 					Current bill
@@ -360,7 +361,7 @@ function CurrentBillCard({
 				<span className="text-muted-foreground">{fmtDate(periodStart)} – {fmtDate(periodEnd)}</span>
 				<span className="text-foreground">{daysLeft} days left</span>
 			</div>
-		</div>
+		</SettingsCard>
 	);
 }
 

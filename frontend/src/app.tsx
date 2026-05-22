@@ -40,6 +40,7 @@ declare module "@tanstack/react-query" {
 			actorsListQueryKey?: readonly unknown[];
 			actorsListPage1Poll?: boolean;
 			actorsListTargetQueryKey?: readonly unknown[];
+			persist?: boolean;
 		};
 	}
 }

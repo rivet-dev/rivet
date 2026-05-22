@@ -154,9 +154,19 @@ function ContextSwitcherInner({
 					<Breadcrumbs inline={inline} />
 				</Button>
 			</PopoverTrigger>
+			{/*
+			 * `closeAnimation={false}`: switching project/namespace/actor
+			 * navigates to a route with an async `beforeLoad`. The router runs
+			 * that navigation inside a React transition, and while it is pending
+			 * the old tree is held on screen. Radix keeps the popover mounted
+			 * for its close animation, so the held transition freezes the
+			 * closing popover and it lingers until the navigation resolves.
+			 * Closing without an exit animation lets it unmount immediately.
+			 */}
 			<PopoverContent
 				className="p-0 w-fit max-w-[calc(12rem*3)]"
 				align="start"
+				closeAnimation={false}
 			>
 				<Content onClose={() => setIsOpen(false)} />
 			</PopoverContent>
@@ -195,7 +205,11 @@ function ProjectSegmentPopover({
 					<span className="truncate">{label}</span>
 				</Button>
 			</PopoverTrigger>
-			<PopoverContent className="p-0 w-56" align="start">
+			<PopoverContent
+				className="p-0 w-56"
+				align="start"
+				closeAnimation={false}
+			>
 				<ProjectList
 					organization={organization}
 					currentProject={currentProject}
@@ -240,7 +254,11 @@ function NamespaceSegmentPopover({
 					<span className="truncate">{label}</span>
 				</Button>
 			</PopoverTrigger>
-			<PopoverContent className="p-0 w-56" align="start">
+			<PopoverContent
+				className="p-0 w-56"
+				align="start"
+				closeAnimation={false}
+			>
 				<NamespaceList
 					organization={organization}
 					project={currentProject}
@@ -458,7 +476,11 @@ function ActorSegmentPopover({ currentBuildId }: { currentBuildId: string }) {
 					<span className="truncate">{currentLabel}</span>
 				</Button>
 			</PopoverTrigger>
-			<PopoverContent className="p-0 w-56" align="start">
+			<PopoverContent
+				className="p-0 w-56"
+				align="start"
+				closeAnimation={false}
+			>
 				<div className="w-full">
 					<Command loop>
 						<CommandInput placeholder="Find actor..." />
@@ -517,26 +539,6 @@ function ActorSegmentPopover({ currentBuildId }: { currentBuildId: string }) {
 										</CommandItem>
 									);
 								})}
-								<CommandItem
-									keywords={["create", "new", "actor"]}
-									className="text-primary"
-									onSelect={() => {
-										setOpen(false);
-										return navigate({
-											to: ".",
-											search: (old) => ({
-												...(old as Record<string, unknown>),
-												modal: "create-actor",
-											}),
-										});
-									}}
-								>
-									<Icon
-										icon={faPlus}
-										className="mr-2 size-3 text-primary"
-									/>
-									New Actor
-								</CommandItem>
 							</CommandGroup>
 						</CommandList>
 					</Command>

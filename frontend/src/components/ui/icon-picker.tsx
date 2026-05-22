@@ -5,8 +5,6 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import {
 	type ComponentPropsWithoutRef,
 	forwardRef,
-	type LazyExoticComponent,
-	lazy,
 	type ReactNode,
 	Suspense,
 	useEffect,
@@ -14,53 +12,11 @@ import {
 	useRef,
 	useState,
 } from "react";
+import { LazyIcon } from "../lazy-icon";
 import { cn } from "../lib/utils";
 import { Button } from "./button";
 import { Input } from "./input";
 import { Popover, PopoverContent, PopoverTrigger } from "./popover";
-
-const iconModules = import.meta.glob<Record<string, IconProp>>(
-	"../../../packages/icons/dist/icons/*.js",
-);
-
-function capitalize(s: string): string {
-	return s.charAt(0).toUpperCase() + s.slice(1);
-}
-
-function toExportName(iconName: string): string {
-	return `fa${iconName.split("-").map(capitalize).join("")}`;
-}
-
-const lazyIconCache = new Map<
-	string,
-	LazyExoticComponent<(props: { className?: string }) => ReactNode>
->();
-
-function getLazyIcon(iconName: string) {
-	const exportName = toExportName(iconName);
-	const cached = lazyIconCache.get(exportName);
-	if (cached) return cached;
-
-	const loader = iconModules[`../../../packages/icons/dist/icons/${exportName}.js`];
-	const component = lazy(() =>
-		(loader ? loader() : Promise.reject())
-			.then((mod) => ({
-				default: ({ className }: { className?: string }) => (
-					<Icon
-						icon={mod[exportName] ?? faQuestion}
-						className={className}
-					/>
-				),
-			}))
-			.catch(() => ({
-				default: ({ className }: { className?: string }) => (
-					<Icon icon={faQuestion} className={className} />
-				),
-			})),
-	);
-	lazyIconCache.set(exportName, component);
-	return component;
-}
 
 export function IconRenderer({
 	name,
@@ -72,10 +28,9 @@ export function IconRenderer({
 	fallback?: ReactNode;
 }) {
 	if (!name) return <>{fallback ?? null}</>;
-	const LazyIcon = getLazyIcon(name);
 	return (
 		<Suspense fallback={fallback ?? <span className={className} />}>
-			<LazyIcon className={className} />
+			<LazyIcon name={name} className={className} fallback={faQuestion} />
 		</Suspense>
 	);
 }

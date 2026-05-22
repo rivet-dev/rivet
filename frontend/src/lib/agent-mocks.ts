@@ -1,8 +1,11 @@
 // Dev-only HTTP mocking surface for agent-driven testing.
 //
 // Activated when the dev build sees `?mock=1` on the URL. Once active, exposes:
-//   window.__rivetMock(pattern, { status, body, method? })
+//   window.__rivetMock(pattern, { status, body, method?, delayMs? })
 //   window.__rivetClearMocks()
+//
+// `delayMs` holds the response open before replying, which keeps the triggering
+// query in its pending state long enough to inspect loading skeletons.
 //
 // `pattern` is an MSW path matcher (e.g. "*/actors/:id/kv/keys/*"). Mocks are
 // persisted to sessionStorage so they survive page reloads, which is the
@@ -16,6 +19,9 @@ type MockSpec = {
 	status: number;
 	body?: unknown;
 	method?: MockMethod;
+	// Delay the response by this many milliseconds before replying. Use this to
+	// hold a query in its pending state long enough to inspect loading skeletons.
+	delayMs?: number;
 };
 
 type StoredMock = MockSpec & { pattern: string };
@@ -50,13 +56,14 @@ export async function maybeStartAgentMocks() {
 	if (params.get("mock") !== "1") return;
 
 	const { setupWorker } = await import("msw/browser");
-	const { http, HttpResponse } = await import("msw");
+	const { http, HttpResponse, delay } = await import("msw");
 
 	const buildHandler = (m: StoredMock): HttpHandler => {
 		const method = m.method ?? "get";
-		return http[method](m.pattern, () =>
-			HttpResponse.json(m.body ?? null, { status: m.status }),
-		);
+		return http[method](m.pattern, async () => {
+			if (m.delayMs) await delay(m.delayMs);
+			return HttpResponse.json(m.body ?? null, { status: m.status });
+		});
 	};
 
 	const initial = readStoredMocks();
