@@ -425,22 +425,6 @@ async fn begin_stop(
 	} else {
 		(protocol::StopCode::Ok, None)
 	};
-
-	let reason_label = stop_actor_reason_label(&reason);
-	tracing::info!(
-		?reason,
-		?stop_code,
-		error = ?ctx.error,
-		"actor stopping"
-	);
-	crate::metrics::METRICS
-		.actor_stop_total
-		.with_label_values(&[reason_label])
-		.inc();
-	crate::metrics::METRICS
-		.actor_lifetime_seconds
-		.with_label_values(&[reason_label])
-		.observe(ctx.started_at.elapsed().as_secs_f64());
 	let (stop_tx, mut stop_rx) = oneshot::channel();
 
 	let stop_result = ctx
