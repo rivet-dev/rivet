@@ -35,11 +35,11 @@
 		"@hono/node-server": "^1.19.1",
 		"@hono/node-ws": "^1.2.0",
 		"@rivetkit/react": "^2.3.0-rc.5",
-		"hono": "^4.7.0",
+		"hono": "^4.12.18",
 		"react": "^18.3.1",
 		"react-dom": "^18.3.1",
 		"rivetkit": "^2.3.0-rc.5",
-		"ws": "^8.18.0"
+		"ws": "^8.20.1"
 	},
 	"license": "MIT"
 }
