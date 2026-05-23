@@ -1,4 +1,4 @@
-import { faGear, faPlus, Icon } from "@rivet-gg/icons";
+import { faGear, faLogs, faPlus, Icon } from "@rivet-gg/icons";
 import {
 	queryOptions,
 	useInfiniteQuery,
@@ -18,6 +18,7 @@ import {
 	WithTooltip,
 } from "@/components";
 import { cloudEnv } from "@/lib/env";
+import { features } from "@/lib/features";
 import { ActorIcon } from "@/components/lazy-icon";
 import { useDataProvider, useCloudNamespaceDataProvider } from "@/components/actors";
 import { VisibilitySensor } from "@/components/visibility-sensor";
@@ -81,8 +82,9 @@ export function ActorsGrid({
 			pool: "default",
 			safe: true,
 		}),
+		enabled: features.compute,
 	});
-	const hasCompute = managedPool != null;
+	const hasCompute = features.compute && managedPool != null;
 	const { data: runnerNamesCount = 0 } = useInfiniteQuery({
 		...dataProvider.runnerNamesQueryOptions(),
 		select: (data) => data.pages.flatMap((page) => page.names).length,
@@ -289,12 +291,13 @@ function DeploymentsSection() {
 			pool: "default",
 			safe: true,
 		}),
+		enabled: features.compute,
 		refetchInterval: (query) =>
 			query.state.data === null ? false : 5_000,
 		refetchOnWindowFocus: (query) => query.state.data !== null,
 	});
 
-	const hasPool = managedPool != null;
+	const hasPool = features.compute && managedPool != null;
 
 	const {
 		data: images,

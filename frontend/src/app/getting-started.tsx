@@ -288,7 +288,7 @@ export function GettingStarted({
 								// after form reset, so read it from the live form.
 								const provider = (values.provider ?? form.getValues("provider")) as string | undefined;
 								if (stepper.current.id === "provider") {
-									if (provider === "rivet") {
+									if (features.compute && provider === "rivet") {
 										await mutateAsyncManagedPool({
 											displayName: "default",
 											pool: "default",
@@ -319,6 +319,7 @@ export function GettingStarted({
 								}
 								if (
 									stepper.current.id === "backend" &&
+									features.compute &&
 									provider === "rivet"
 								) {
 									return;
@@ -490,6 +491,7 @@ function ProviderSetup() {
 	const { setValue, control, getValues } = useFormContext();
 
 	useEffect(() => {
+		if (!features.compute) return;
 		if (!getValues("provider")) {
 			setValue("provider", "rivet", {
 				shouldDirty: true,
@@ -512,21 +514,32 @@ function ProviderSetup() {
 					return (
 						<div className="flex flex-col gap-2">
 							<div className="grid grid-cols-2 gap-2">
-								{deployOptions.map((option) => (
-									<ProviderCard
-										key={option.name}
-										option={option}
-										isSelected={field.value === option.name}
-										onSelect={() =>
-											setValue("provider", option.name, {
-												shouldDirty: true,
-												shouldTouch: true,
-												shouldValidate: true,
-											})
-										}
-										className={option.name === "rivet" ? "col-span-2 py-5" : undefined}
-									/>
-								))}
+								{deployOptions
+									.filter(
+										(option) =>
+											features.compute ||
+											option.name !== "rivet",
+									)
+									.map((option) => (
+										<ProviderCard
+											key={option.name}
+											option={option}
+											isSelected={field.value === option.name}
+											onSelect={() =>
+												setValue("provider", option.name, {
+													shouldDirty: true,
+													shouldTouch: true,
+													shouldValidate: true,
+												})
+											}
+											className={
+												features.compute &&
+												option.name === "rivet"
+													? "col-span-2 py-5"
+													: undefined
+											}
+										/>
+									))}
 							</div>
 						</div>
 					);

@@ -7,7 +7,7 @@ import {
 	Icon,
 } from "@rivet-gg/icons";
 import { useInfiniteQuery, useSuspenseQuery } from "@tanstack/react-query";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { startTransition, useCallback, useRef, useState } from "react";
 import { z } from "zod";
 import { Content } from "@/app/layout";
@@ -24,6 +24,7 @@ import {
 	DropdownMenuItem,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { features } from "@/lib/features";
 
 export const Route = createFileRoute(
 	"/_context/orgs/$organization/projects/$project/ns/$namespace/logs",
@@ -32,6 +33,14 @@ export const Route = createFileRoute(
 		search: z.string().optional(),
 	}),
 	component: RouteComponent,
+	beforeLoad: ({ params }) => {
+		if (!features.compute) {
+			throw redirect({
+				to: "/orgs/$organization/projects/$project/ns/$namespace",
+				params,
+			});
+		}
+	},
 	loader: async ({ context }) => {
 		const dataProvider = context.dataProvider;
 		await context.queryClient.prefetchQuery(
