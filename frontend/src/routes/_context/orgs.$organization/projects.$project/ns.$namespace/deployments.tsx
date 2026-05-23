@@ -4,16 +4,25 @@ import {
 	useSuspenseInfiniteQuery,
 	useSuspenseQuery,
 } from "@tanstack/react-query";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { ImagesTable } from "@/app/images-table";
 import { Content } from "@/app/layout";
 import { Button, H1, H2, Skeleton } from "@/components";
 import { useCloudNamespaceDataProvider } from "@/components/actors";
+import { features } from "@/lib/features";
 
 export const Route = createFileRoute(
 	"/_context/orgs/$organization/projects/$project/ns/$namespace/deployments",
 )({
 	component: RouteComponent,
+	beforeLoad: ({ params }) => {
+		if (!features.compute) {
+			throw redirect({
+				to: "/orgs/$organization/projects/$project/ns/$namespace",
+				params,
+			});
+		}
+	},
 	loader: async ({ context }) => {
 		const dataProvider = context.dataProvider;
 		await context.queryClient.prefetchQuery(

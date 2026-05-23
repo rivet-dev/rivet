@@ -26,6 +26,10 @@ export const features = {
 	acl,
 	billing: isEnabled("billing"),
 	captcha: isEnabled("captcha") && auth,
+	// `compute` gates the Rivet Compute (managed pool) UI: namespace
+	// deployments, logs, and the Rivet provider option. Cloud-platform-only
+	// because every surface consumes cloud-namespace data providers.
+	compute: isEnabled("compute") && platform,
 	support: isEnabled("support"),
 	branding: isEnabled("branding"),
 	datacenter: isEnabled("datacenter"),

@@ -714,8 +714,13 @@ function CloudSidebarContentInner() {
 }
 
 function DeploymentsLink() {
+	if (!features.compute) {
+		return null;
+	}
+	// biome-ignore lint/correctness/useHookAtTopLevel: guarded by build constant
 	const provider = useCloudNamespaceDataProvider();
 
+	// biome-ignore lint/correctness/useHookAtTopLevel: guarded by build constant
 	const { data } = useSuspenseQuery(
 		provider.currentNamespaceHasManagedPoolQueryOptions(),
 	);
