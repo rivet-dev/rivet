@@ -212,10 +212,15 @@ export const PrefillActorName = () => {
 export const PrefillRunnerName = () => {
 	const prefilled = useRef(false);
 	const { watch } = useFormContext<FormValues>();
+	const dataProvider = useEngineCompatDataProvider();
+	const hasRunnerNames = "runnerNamesQueryOptions" in dataProvider;
 
-	const { data = [], isSuccess } = useInfiniteQuery(
-		useEngineCompatDataProvider().runnerNamesQueryOptions(),
-	);
+	const { data = [], isSuccess } = useInfiniteQuery({
+		...(hasRunnerNames
+			? dataProvider.runnerNamesQueryOptions()
+			: { queryKey: ["noop-runner-names"], queryFn: async () => [], initialPageParam: undefined, getNextPageParam: () => undefined }),
+		enabled: hasRunnerNames,
+	});
 
 	const watchedValue = watch("runnerNameSelector");
 

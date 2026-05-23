@@ -178,28 +178,31 @@ export function DeploymentLogs({
 		}
 	}, [totalCount, displayedLogs.length, follow, isLoading]);
 
-	// After prepending older history, scroll to restore the previously-first row.
+	// After prepending older history, restore scroll position by adjusting for
+	// the pixel height of the newly prepended rows so the viewport stays in place.
 	const wasLoadingMoreRef = useRef(false);
+	const scrollOffsetBeforeLoadRef = useRef(0);
+	const prevTotalSizeRef = useRef(0);
 	useEffect(() => {
 		if (
 			wasLoadingMoreRef.current &&
 			!isLoadingMore &&
 			displayedLogs.length > prevLogCountRef.current
 		) {
-			const addedCount = displayedLogs.length - prevLogCountRef.current;
 			const rafId = requestAnimationFrame(() => {
-				// +1 to skip sentinel row at index 0.
-				virtualizerRef.current?.scrollToIndex(
-					addedCount + sentinelOffset,
-					{
-						align: "start",
-					},
+				const virtualizer = virtualizerRef.current;
+				if (!virtualizer) return;
+				const newTotalSize = virtualizer.getTotalSize();
+				const addedHeight = newTotalSize - prevTotalSizeRef.current;
+				virtualizer.scrollToOffset(
+					scrollOffsetBeforeLoadRef.current + addedHeight,
+					{ align: "start" },
 				);
 			});
 			return () => cancelAnimationFrame(rafId);
 		}
 		wasLoadingMoreRef.current = isLoadingMore;
-	}, [isLoadingMore, displayedLogs.length, sentinelOffset]);
+	}, [isLoadingMore, displayedLogs.length]);
 
 	useEffect(() => {
 		if (logsRef) {
@@ -223,6 +226,8 @@ export function DeploymentLogs({
 					!isLoadingMore
 				) {
 					prevLogCountRef.current = displayedLogs.length;
+					scrollOffsetBeforeLoadRef.current = instance.scrollOffset ?? 0;
+					prevTotalSizeRef.current = instance.getTotalSize();
 					loadMoreHistory();
 				}
 			}
