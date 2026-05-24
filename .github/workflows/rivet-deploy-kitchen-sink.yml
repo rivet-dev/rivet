@@ -1,0 +1,97 @@
+name: Rivet Deploy (kitchen-sink)
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+    paths:
+      - "examples/kitchen-sink/**"
+      - "rivetkit-typescript/packages/**"
+      - "engine/sdks/typescript/**"
+      - "shared/typescript/**"
+      - "docker/build/linux-x64-gnu.Dockerfile"
+      - ".github/workflows/rivet-deploy-kitchen-sink.yml"
+  push:
+    branches: [main]
+    paths:
+      - "examples/kitchen-sink/**"
+      - "rivetkit-typescript/packages/**"
+      - "engine/sdks/typescript/**"
+      - "shared/typescript/**"
+      - "docker/build/linux-x64-gnu.Dockerfile"
+      - ".github/workflows/rivet-deploy-kitchen-sink.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: rivet-deploy-kitchen-sink-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rivet-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Build rivetkit-napi .node (linux-x64-gnu)
+        env:
+          DEPOT_TOKEN: ${{ secrets.DEPOT_TOKEN }}
+        run: |
+          set -euo pipefail
+          # The DEPOT_TOKEN enables sccache; the Dockerfile gracefully falls
+          # back to a no-cache build if it isn't set.
+          DEPOT_TOKEN_FILE=$(mktemp)
+          printf "%s" "${DEPOT_TOKEN:-}" > "${DEPOT_TOKEN_FILE}"
+          docker buildx build \
+            --file docker/build/linux-x64-gnu.Dockerfile \
+            --build-arg BUILD_TARGET=rivetkit-napi \
+            --build-arg BUILD_MODE=release \
+            --secret id=DEPOT_TOKEN,src="${DEPOT_TOKEN_FILE}" \
+            --load \
+            --tag rivetkit-napi-builder:local \
+            .
+          rm -f "${DEPOT_TOKEN_FILE}"
+          container_id=$(docker create rivetkit-napi-builder:local)
+          docker cp "${container_id}:/artifacts/rivetkit-napi.linux-x64-gnu.node" \
+            ./examples/kitchen-sink/rivetkit-napi.linux-x64-gnu.node
+          docker rm "${container_id}" >/dev/null
+          ls -lh ./examples/kitchen-sink/rivetkit-napi.linux-x64-gnu.node
+      - name: Collect workspace manifest stubs
+        run: |
+          set -euo pipefail
+          # pnpm deploy resolves the full workspace topology even when filtered,
+          # so it needs every workspace package.json that isn't already in the
+          # Dockerfile's COPY set. Collect them under a single dir that the
+          # Dockerfile copies AFTER pnpm install/build (so install isn't
+          # tempted to walk them).
+          rm -rf .docker-ks-manifests
+          mkdir -p .docker-ks-manifests
+          find . -type f -name 'package.json' \
+            -not -path './node_modules/*' \
+            -not -path '*/node_modules/*' \
+            -not -path './target/*' \
+            -not -path './.git/*' \
+            -not -path './.docker-ks-manifests/*' \
+            -not -path './napi-artifacts/*' \
+            -not -path './package.json' \
+            -not -path './examples/kitchen-sink/*' \
+            -not -path './rivetkit-typescript/packages/*' \
+            -not -path './engine/sdks/typescript/*' \
+            -not -path './shared/typescript/*' \
+            -print0 |
+          while IFS= read -r -d '' src; do
+            rel="${src#./}"
+            dest=".docker-ks-manifests/${rel}"
+            mkdir -p "$(dirname "${dest}")"
+            cp "${src}" "${dest}"
+          done
+          echo "manifest stubs:"
+          find .docker-ks-manifests -name package.json | sort
+      - uses: rivet-dev/deploy-action@v1.1.0
+        with:
+          rivet-token: ${{ secrets.KITCHEN_SINK_RIVET_CLOUD_TOKEN }}
+          dockerfile-path: examples/kitchen-sink/Dockerfile
+          docker-build-path: .
+          managed-pool-config: '{"environment":{"PORT":"8080"}}'

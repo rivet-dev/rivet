@@ -84,3 +84,7 @@ examples/*/public/
 
 # Ralph/Codex generated command stream logs
 scripts/ralph/codex-streams/
+
+# Kitchen-sink Rivet Cloud deploy build artifacts
+.docker-ks-manifests/
+examples/kitchen-sink/rivetkit-napi.*.node
