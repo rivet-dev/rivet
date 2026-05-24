@@ -7,25 +7,6 @@ var __export = (target, all) => {
 // src/index.ts
 import { setup as setup2 } from "rivetkit";
 
-// src/mode.ts
-function resolveMode() {
-  const explicit = process.env.RIVET_KITCHEN_SINK_MODE;
-  if (explicit === "serverless" || explicit === "serverful" || explicit === "serverless-local") {
-    return explicit;
-  }
-  if (explicit !== void 0 && explicit !== "") {
-    throw new Error(
-      `RIVET_KITCHEN_SINK_MODE must be one of "serverless", "serverful", or "serverless-local" (got "${explicit}")`
-    );
-  }
-  if (process.env.RIVET_RUN_ENGINE === "1") return "serverless-local";
-  if (process.env.RIVET_SERVERLESS_URL !== void 0) return "serverless-local";
-  if (process.env.KITCHEN_SINK_SERVERLESS_URL !== void 0) {
-    return "serverless-local";
-  }
-  return "serverless";
-}
-
 // src/actors/counter/counter.ts
 import { actor, event } from "rivetkit";
 var counter = actor({
@@ -169,48 +150,9 @@ var counterWithLifecycle = actor4({
   }
 });
 
-// src/actors/counter/ping-pong-counter.ts
-import { actor as actor5 } from "rivetkit";
-var pingPongCounter = actor5({
-  state: {
-    pingCount: 0
-  },
-  onWebSocket(ctx, websocket) {
-    websocket.addEventListener("message", (event21) => {
-      const data = event21.data;
-      if (typeof data !== "string") return;
-      let parsed;
-      try {
-        parsed = JSON.parse(data);
-      } catch {
-        return;
-      }
-      if (parsed?.type === "ping") {
-        ctx.state.pingCount = ctx.state.pingCount + 1;
-        websocket.send(
-          JSON.stringify({
-            type: "pong",
-            pingCount: ctx.state.pingCount,
-            timestamp: Date.now()
-          })
-        );
-      }
-    });
-  },
-  actions: {
-    getPingCount(c) {
-      return c.state.pingCount;
-    },
-    resetPingCount(c) {
-      c.state.pingCount = 0;
-      return c.state.pingCount;
-    }
-  }
-});
-
 // src/actors/actions/action-inputs.ts
-import { actor as actor6 } from "rivetkit";
-var inputActor = actor6({
+import { actor as actor5 } from "rivetkit";
+var inputActor = actor5({
   createState: (c, input) => {
     return {
       initialInput: input,
@@ -231,8 +173,8 @@ var inputActor = actor6({
 });
 
 // src/actors/actions/action-types.ts
-import { actor as actor7, UserError } from "rivetkit";
-var syncActionActor = actor7({
+import { actor as actor6, UserError } from "rivetkit";
+var syncActionActor = actor6({
   state: { value: 0 },
   actions: {
     // Simple synchronous action that returns a value directly
@@ -253,7 +195,7 @@ var syncActionActor = actor7({
     }
   }
 });
-var asyncActionActor = actor7({
+var asyncActionActor = actor6({
   state: { value: 0, data: null },
   actions: {
     // Async action with a delay
@@ -279,7 +221,7 @@ var asyncActionActor = actor7({
     }
   }
 });
-var promiseActor = actor7({
+var promiseActor = actor6({
   state: { results: [] },
   actions: {
     // Action that returns a resolved promise
@@ -305,8 +247,8 @@ var promiseActor = actor7({
 });
 
 // src/actors/actions/action-timeout.ts
-import { actor as actor8 } from "rivetkit";
-var shortTimeoutActor = actor8({
+import { actor as actor7 } from "rivetkit";
+var shortTimeoutActor = actor7({
   state: { value: 0 },
   options: {
     actionTimeout: 50
@@ -322,7 +264,7 @@ var shortTimeoutActor = actor8({
     }
   }
 });
-var longTimeoutActor = actor8({
+var longTimeoutActor = actor7({
   state: { value: 0 },
   options: {
     actionTimeout: 200
@@ -335,7 +277,7 @@ var longTimeoutActor = actor8({
     }
   }
 });
-var defaultTimeoutActor = actor8({
+var defaultTimeoutActor = actor7({
   state: { value: 0 },
   actions: {
     normalAction: async (c) => {
@@ -344,7 +286,7 @@ var defaultTimeoutActor = actor8({
     }
   }
 });
-var syncTimeoutActor = actor8({
+var syncTimeoutActor = actor7({
   state: { value: 0 },
   options: {
     actionTimeout: 50
@@ -358,8 +300,8 @@ var syncTimeoutActor = actor8({
 });
 
 // src/actors/actions/error-handling.ts
-import { actor as actor9, UserError as UserError2 } from "rivetkit";
-var errorHandlingActor = actor9({
+import { actor as actor8, UserError as UserError2 } from "rivetkit";
+var errorHandlingActor = actor8({
   state: {
     errorLog: []
   },
@@ -422,7 +364,7 @@ var errorHandlingActor = actor9({
     // 500ms timeout for actions
   }
 });
-var customTimeoutActor = actor9({
+var customTimeoutActor = actor8({
   state: {},
   actions: {
     quickAction: async () => {
@@ -441,8 +383,8 @@ var customTimeoutActor = actor9({
 });
 
 // src/actors/state/actor-onstatechange.ts
-import { actor as actor10 } from "rivetkit";
-var onStateChangeActor = actor10({
+import { actor as actor9 } from "rivetkit";
+var onStateChangeActor = actor9({
   state: {
     value: 0
   },
@@ -487,8 +429,8 @@ var onStateChangeActor = actor10({
 });
 
 // src/actors/state/metadata.ts
-import { actor as actor11 } from "rivetkit";
-var metadataActor = actor11({
+import { actor as actor10 } from "rivetkit";
+var metadataActor = actor10({
   state: {
     lastMetadata: null,
     actorName: "",
@@ -549,8 +491,8 @@ var metadataActor = actor11({
 });
 
 // src/actors/state/vars.ts
-import { actor as actor12 } from "rivetkit";
-var staticVarActor = actor12({
+import { actor as actor11 } from "rivetkit";
+var staticVarActor = actor11({
   state: { value: 0 },
   connState: { hello: "world" },
   vars: { counter: 42, name: "test-actor" },
@@ -563,7 +505,7 @@ var staticVarActor = actor12({
     }
   }
 });
-var nestedVarActor = actor12({
+var nestedVarActor = actor11({
   state: { value: 0 },
   connState: { hello: "world" },
   vars: {
@@ -586,7 +528,7 @@ var nestedVarActor = actor12({
     }
   }
 });
-var dynamicVarActor = actor12({
+var dynamicVarActor = actor11({
   state: { value: 0 },
   connState: { hello: "world" },
   createVars: () => {
@@ -601,7 +543,7 @@ var dynamicVarActor = actor12({
     }
   }
 });
-var uniqueVarActor = actor12({
+var uniqueVarActor = actor11({
   state: { value: 0 },
   connState: { hello: "world" },
   createVars: () => {
@@ -615,7 +557,7 @@ var uniqueVarActor = actor12({
     }
   }
 });
-var driverCtxActor = actor12({
+var driverCtxActor = actor11({
   state: { value: 0 },
   connState: { hello: "world" },
   createVars: (c, driverCtx) => {
@@ -631,8 +573,8 @@ var driverCtxActor = actor12({
 });
 
 // src/actors/state/kv.ts
-import { actor as actor13 } from "rivetkit";
-var kvActor = actor13({
+import { actor as actor12 } from "rivetkit";
+var kvActor = actor12({
   actions: {
     putText: async (c, key, value) => {
       await c.kv.put(key, value);
@@ -661,8 +603,8 @@ var kvActor = actor13({
 });
 
 // src/actors/state/large-payloads.ts
-import { actor as actor14 } from "rivetkit";
-var largePayloadActor = actor14({
+import { actor as actor13 } from "rivetkit";
+var largePayloadActor = actor13({
   state: {},
   actions: {
     /**
@@ -693,7 +635,7 @@ var largePayloadActor = actor14({
     }
   }
 });
-var largePayloadConnActor = actor14({
+var largePayloadConnActor = actor13({
   state: {},
   connState: {
     lastRequestSize: 0
@@ -736,9 +678,9 @@ var largePayloadConnActor = actor14({
 });
 
 // src/actors/state/sqlite-raw.ts
-import { actor as actor15 } from "rivetkit";
+import { actor as actor14 } from "rivetkit";
 import { db } from "rivetkit/db";
-var sqliteRawActor = actor15({
+var sqliteRawActor = actor14({
   db: db({
     onMigrate: async (db16) => {
       await db16.execute(`
@@ -780,7 +722,7 @@ var sqliteRawActor = actor15({
 });
 
 // src/actors/state/sqlite-drizzle/mod.ts
-import { actor as actor16 } from "rivetkit";
+import { actor as actor15 } from "rivetkit";
 import { db as db2 } from "rivetkit/db/drizzle";
 import { eq } from "drizzle-orm";
 
@@ -825,7 +767,7 @@ var migrations_default = {
 
 // src/actors/state/sqlite-drizzle/mod.ts
 var { todos: todos2 } = schema_exports;
-var sqliteDrizzleActor = actor16({
+var sqliteDrizzleActor = actor15({
   db: db2({ schema: schema_exports, migrations: migrations_default }),
   actions: {
     addTodo: async (c, title) => {
@@ -853,9 +795,9 @@ var sqliteDrizzleActor = actor16({
 });
 
 // src/actors/state/parallelism-test.ts
-import { actor as actor17, event as event4 } from "rivetkit";
+import { actor as actor16, event as event4 } from "rivetkit";
 import { db as db3 } from "rivetkit/db";
-var parallelismTest = actor17({
+var parallelismTest = actor16({
   state: {
     stateCount: 0
   },
@@ -907,8 +849,8 @@ var parallelismTest = actor17({
 });
 
 // src/actors/connections/conn-state.ts
-import { actor as actor18, event as event5 } from "rivetkit";
-var connStateActor = actor18({
+import { actor as actor17, event as event5 } from "rivetkit";
+var connStateActor = actor17({
   state: {
     sharedCounter: 0,
     disconnectionCount: 0
@@ -994,8 +936,8 @@ var connStateActor = actor18({
 });
 
 // src/actors/connections/reject-connection.ts
-import { actor as actor19, UserError as UserError3 } from "rivetkit";
-var rejectConnectionActor = actor19({
+import { actor as actor18, UserError as UserError3 } from "rivetkit";
+var rejectConnectionActor = actor18({
   onBeforeConnect: async (_c, params) => {
     if (params?.reject) {
       await new Promise((resolve) => setTimeout(resolve, 500));
@@ -1010,8 +952,8 @@ var rejectConnectionActor = actor19({
 });
 
 // src/actors/connections/request-access.ts
-import { actor as actor20 } from "rivetkit";
-var requestAccessActor = actor20({
+import { actor as actor19 } from "rivetkit";
+var requestAccessActor = actor19({
   state: {
     // Track request info from different hooks
     onBeforeConnectRequest: {
@@ -1137,8 +1079,8 @@ var requestAccessActor = actor20({
 
 // src/actors/http/raw-http.ts
 import { Hono } from "hono";
-import { actor as actor21 } from "rivetkit";
-var rawHttpActor = actor21({
+import { actor as actor20 } from "rivetkit";
+var rawHttpActor = actor20({
   state: {
     requestCount: 0
   },
@@ -1182,16 +1124,16 @@ var rawHttpActor = actor21({
   },
   actions: {}
 });
-var rawHttpNoHandlerActor = actor21({
+var rawHttpNoHandlerActor = actor20({
   actions: {}
 });
-var rawHttpVoidReturnActor = actor21({
+var rawHttpVoidReturnActor = actor20({
   onRequest(ctx, request) {
     return void 0;
   },
   actions: {}
 });
-var rawHttpHonoActor = actor21({
+var rawHttpHonoActor = actor20({
   createVars() {
     const router = new Hono();
     router.get(
@@ -1234,8 +1176,8 @@ var rawHttpHonoActor = actor21({
 });
 
 // src/actors/http/raw-http-request-properties.ts
-import { actor as actor22 } from "rivetkit";
-var rawHttpRequestPropertiesActor = actor22({
+import { actor as actor21 } from "rivetkit";
+var rawHttpRequestPropertiesActor = actor21({
   actions: {},
   onRequest(ctx, request) {
     const url = new URL(request.url);
@@ -1303,8 +1245,8 @@ var rawHttpRequestPropertiesActor = actor22({
 });
 
 // src/actors/http/raw-websocket.ts
-import { actor as actor23 } from "rivetkit";
-var rawWebSocketActor = actor23({
+import { actor as actor22 } from "rivetkit";
+var rawWebSocketActor = actor22({
   state: {
     connectionCount: 0,
     messageCount: 0
@@ -1386,7 +1328,7 @@ var rawWebSocketActor = actor23({
     }
   }
 });
-var rawWebSocketBinaryActor = actor23({
+var rawWebSocketBinaryActor = actor22({
   onWebSocket(ctx, websocket) {
     websocket.addEventListener("message", (event21) => {
       const data = event21.data;
@@ -1405,8 +1347,8 @@ var rawWebSocketBinaryActor = actor23({
 
 // src/actors/http/raw-fetch-counter.ts
 import { Hono as Hono2 } from "hono";
-import { actor as actor24 } from "rivetkit";
-var rawFetchCounter = actor24({
+import { actor as actor23 } from "rivetkit";
+var rawFetchCounter = actor23({
   state: {
     count: 0
   },
@@ -1423,24 +1365,24 @@ var rawFetchCounter = actor24({
 function createCounterRouter() {
   const app2 = new Hono2();
   app2.get("/count", (c) => {
-    const { actor: actor61 } = c.env;
+    const { actor: actor60 } = c.env;
     return c.json({
-      count: actor61.state.count
+      count: actor60.state.count
     });
   });
   app2.post("/increment", (c) => {
-    const { actor: actor61 } = c.env;
-    actor61.state.count++;
+    const { actor: actor60 } = c.env;
+    actor60.state.count++;
     return c.json({
-      count: actor61.state.count
+      count: actor60.state.count
     });
   });
   return app2;
 }
 
 // src/actors/http/raw-websocket-chat-room.ts
-import { actor as actor25 } from "rivetkit";
-var rawWebSocketChatRoom = actor25({
+import { actor as actor24 } from "rivetkit";
+var rawWebSocketChatRoom = actor24({
   state: {
     messages: []
   },
@@ -1493,11 +1435,11 @@ var rawWebSocketChatRoom = actor25({
 });
 
 // src/actors/http/raw-websocket-serverless-smoke.ts
-import { actor as actor26 } from "rivetkit";
+import { actor as actor25 } from "rivetkit";
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
-var rawWebSocketServerlessSmoke = actor26({
+var rawWebSocketServerlessSmoke = actor25({
   options: {
     canHibernateWebSocket: false,
     sleepGracePeriod: 5e3
@@ -1584,8 +1526,8 @@ var rawWebSocketServerlessSmoke = actor26({
 });
 
 // src/actors/http/tunnel-stress.ts
-import { actor as actor27 } from "rivetkit";
-var tunnelStress = actor27({
+import { actor as actor26 } from "rivetkit";
+var tunnelStress = actor26({
   options: {
     canHibernateWebSocket: false,
     sleepGracePeriod: 5e3
@@ -1664,9 +1606,9 @@ var tunnelStress = actor27({
 });
 
 // src/actors/lifecycle/run.ts
-import { actor as actor28, queue } from "rivetkit";
+import { actor as actor27, queue } from "rivetkit";
 var RUN_SLEEP_TIMEOUT = 500;
-var runWithTicks = actor28({
+var runWithTicks = actor27({
   state: {
     tickCount: 0,
     lastTickAt: 0,
@@ -1707,7 +1649,7 @@ var runWithTicks = actor28({
     sleepTimeout: RUN_SLEEP_TIMEOUT
   }
 });
-var runWithQueueConsumer = actor28({
+var runWithQueueConsumer = actor27({
   state: {
     messagesReceived: [],
     runStarted: false
@@ -1743,7 +1685,7 @@ var runWithQueueConsumer = actor28({
     sleepTimeout: RUN_SLEEP_TIMEOUT
   }
 });
-var runWithEarlyExit = actor28({
+var runWithEarlyExit = actor27({
   state: {
     runStarted: false,
     destroyCalled: false
@@ -1767,7 +1709,7 @@ var runWithEarlyExit = actor28({
     sleepTimeout: RUN_SLEEP_TIMEOUT
   }
 });
-var runWithError = actor28({
+var runWithError = actor27({
   state: {
     runStarted: false,
     destroyCalled: false
@@ -1791,7 +1733,7 @@ var runWithError = actor28({
     sleepTimeout: RUN_SLEEP_TIMEOUT
   }
 });
-var runWithoutHandler = actor28({
+var runWithoutHandler = actor27({
   state: {
     wakeCount: 0
   },
@@ -1809,10 +1751,10 @@ var runWithoutHandler = actor28({
 });
 
 // src/actors/lifecycle/sleep.ts
-import { actor as actor29, event as event7 } from "rivetkit";
+import { actor as actor28, event as event7 } from "rivetkit";
 import { promiseWithResolvers } from "rivetkit/utils";
 var SLEEP_TIMEOUT = 1e3;
-var sleep2 = actor29({
+var sleep2 = actor28({
   state: { startCount: 0, sleepCount: 0 },
   onWake: (c) => {
     c.state.startCount += 1;
@@ -1841,7 +1783,7 @@ var sleep2 = actor29({
     sleepTimeout: SLEEP_TIMEOUT
   }
 });
-var sleepWithLongRpc = actor29({
+var sleepWithLongRpc = actor28({
   state: { startCount: 0, sleepCount: 0 },
   createVars: () => ({}),
   events: {
@@ -1874,7 +1816,7 @@ var sleepWithLongRpc = actor29({
     sleepTimeout: SLEEP_TIMEOUT
   }
 });
-var sleepWithRawHttp = actor29({
+var sleepWithRawHttp = actor28({
   state: { startCount: 0, sleepCount: 0, requestCount: 0 },
   onWake: (c) => {
     c.state.startCount += 1;
@@ -1911,7 +1853,7 @@ var sleepWithRawHttp = actor29({
     sleepTimeout: SLEEP_TIMEOUT
   }
 });
-var sleepWithRawWebSocket = actor29({
+var sleepWithRawWebSocket = actor28({
   state: { startCount: 0, sleepCount: 0, connectionCount: 0 },
   onWake: (c) => {
     c.state.startCount += 1;
@@ -1974,7 +1916,7 @@ var sleepWithRawWebSocket = actor29({
     sleepTimeout: SLEEP_TIMEOUT
   }
 });
-var sleepWithNoSleepOption = actor29({
+var sleepWithNoSleepOption = actor28({
   state: { startCount: 0, sleepCount: 0 },
   onWake: (c) => {
     c.state.startCount += 1;
@@ -1997,8 +1939,8 @@ var sleepWithNoSleepOption = actor29({
 });
 
 // src/actors/lifecycle/scheduled.ts
-import { actor as actor30, event as event8 } from "rivetkit";
-var scheduled = actor30({
+import { actor as actor29, event as event8 } from "rivetkit";
+var scheduled = actor29({
   state: {
     lastRun: 0,
     scheduledCount: 0,
@@ -2069,8 +2011,8 @@ var scheduled = actor30({
 });
 
 // src/actors/lifecycle/destroy.ts
-import { actor as actor31 } from "rivetkit";
-var destroyObserver = actor31({
+import { actor as actor30 } from "rivetkit";
+var destroyObserver = actor30({
   state: { destroyedActors: [] },
   actions: {
     notifyDestroyed: (c, actorKey) => {
@@ -2084,7 +2026,7 @@ var destroyObserver = actor31({
     }
   }
 });
-var destroyActor = actor31({
+var destroyActor = actor30({
   state: { value: 0, key: "" },
   onWake: (c) => {
     c.state.key = c.key.join("/");
@@ -2110,9 +2052,9 @@ var destroyActor = actor31({
 });
 
 // src/actors/lifecycle/hibernation.ts
-import { actor as actor32 } from "rivetkit";
+import { actor as actor31 } from "rivetkit";
 var HIBERNATION_SLEEP_TIMEOUT = 500;
-var hibernationActor = actor32({
+var hibernationActor = actor31({
   state: {
     sleepCount: 0,
     wakeCount: 0
@@ -2179,8 +2121,8 @@ var hibernationActor = actor32({
 });
 
 // src/actors/queue/worker.ts
-import { actor as actor33, event as event9, queue as queue2 } from "rivetkit";
-var worker = actor33({
+import { actor as actor32, event as event9, queue as queue2 } from "rivetkit";
+var worker = actor32({
   state: {
     status: "idle",
     processed: 0,
@@ -2221,9 +2163,9 @@ var worker = actor33({
 });
 
 // src/actors/queue/worker-timeout.ts
-import { actor as actor34, event as event10, queue as queue3 } from "rivetkit";
+import { actor as actor33, event as event10, queue as queue3 } from "rivetkit";
 var DEFAULT_TIMEOUT_MS = 2e3;
-var workerTimeout = actor34({
+var workerTimeout = actor33({
   state: {
     status: "idle",
     processed: 0,
@@ -2283,12 +2225,12 @@ var workerTimeout = actor34({
 });
 
 // src/actors/workflow/workflow-fixtures.ts
-import { actor as actor35, event as event11, queue as queue4 } from "rivetkit";
+import { actor as actor34, event as event11, queue as queue4 } from "rivetkit";
 import { Loop, workflow } from "rivetkit/workflow";
 var WORKFLOW_GUARD_KV_KEY = "__rivet_actor_workflow_guard_triggered";
 var WORKFLOW_QUEUE_NAME = "workflow-default";
 var WORKFLOW_TIMEOUT_QUEUE_NAME = "workflow-timeout";
-var workflowCounterActor = actor35({
+var workflowCounterActor = actor34({
   state: {
     runCount: 0,
     guardTriggered: false,
@@ -2320,7 +2262,7 @@ var workflowCounterActor = actor35({
     sleepTimeout: 50
   }
 });
-var workflowQueueActor = actor35({
+var workflowQueueActor = actor34({
   state: {
     received: []
   },
@@ -2347,7 +2289,7 @@ var workflowQueueActor = actor35({
     getMessages: (c) => c.state.received
   }
 });
-var workflowSleepActor = actor35({
+var workflowSleepActor = actor34({
   state: {
     ticks: 0
   },
@@ -2367,7 +2309,7 @@ var workflowSleepActor = actor35({
     sleepTimeout: 50
   }
 });
-var workflowQueueTimeoutActor = actor35({
+var workflowQueueTimeoutActor = actor34({
   state: {
     processed: 0,
     ticks: 0,
@@ -2449,7 +2391,7 @@ function processWorkflowTimeoutJob(ctx, job) {
 }
 
 // src/actors/workflow/timer.ts
-import { actor as actor36, event as event12 } from "rivetkit";
+import { actor as actor35, event as event12 } from "rivetkit";
 import { Loop as Loop2, workflow as workflow2 } from "rivetkit/workflow";
 
 // src/actors/workflow/_helpers.ts
@@ -2458,7 +2400,7 @@ function actorCtx(ctx) {
 }
 
 // src/actors/workflow/timer.ts
-var timer = actor36({
+var timer = actor35({
   createState: (c, input) => ({
     id: c.key[0],
     name: input?.name ?? "Timer",
@@ -2499,7 +2441,7 @@ var timer = actor36({
 });
 
 // src/actors/workflow/order.ts
-import { actor as actor37, event as event13 } from "rivetkit";
+import { actor as actor36, event as event13 } from "rivetkit";
 import { Loop as Loop3, workflow as workflow3 } from "rivetkit/workflow";
 async function simulateWork(name, failChance = 0.1) {
   await new Promise(
@@ -2509,7 +2451,7 @@ async function simulateWork(name, failChance = 0.1) {
     throw new Error(`${name} failed (simulated)`);
   }
 }
-var order = actor37({
+var order = actor36({
   createState: (c) => ({
     id: c.key[0],
     status: "pending",
@@ -2557,7 +2499,7 @@ var order = actor37({
 });
 
 // src/actors/workflow/batch.ts
-import { actor as actor38, event as event14 } from "rivetkit";
+import { actor as actor37, event as event14 } from "rivetkit";
 import { Loop as Loop4, workflow as workflow4 } from "rivetkit/workflow";
 function fetchBatch(cursor, batchSize, totalItems) {
   const start = cursor * batchSize;
@@ -2571,7 +2513,7 @@ function fetchBatch(cursor, batchSize, totalItems) {
     hasMore: end < totalItems
   };
 }
-var batch = actor38({
+var batch = actor37({
   createState: (c, input) => ({
     id: c.key[0],
     totalItems: input?.totalItems ?? 50,
@@ -2643,11 +2585,11 @@ var batch = actor38({
 });
 
 // src/actors/workflow/approval.ts
-import { actor as actor39, event as event15, queue as queue5 } from "rivetkit";
+import { actor as actor38, event as event15, queue as queue5 } from "rivetkit";
 import { Loop as Loop5, workflow as workflow5 } from "rivetkit/workflow";
 var QUEUE_DECISION = "decision";
 var APPROVAL_TIMEOUT_MS = 3e4;
-var approval = actor39({
+var approval = actor38({
   createState: (c, input) => ({
     id: c.key[0],
     title: input?.title ?? "Untitled Request",
@@ -2727,7 +2669,7 @@ var approval = actor39({
 });
 
 // src/actors/workflow/dashboard.ts
-import { actor as actor40, event as event16, queue as queue6 } from "rivetkit";
+import { actor as actor39, event as event16, queue as queue6 } from "rivetkit";
 import { Loop as Loop6, workflow as workflow6 } from "rivetkit/workflow";
 var QUEUE_REFRESH = "refresh";
 async function fetchUserStats() {
@@ -2756,7 +2698,7 @@ async function fetchMetricsStats() {
     bounceRate: Math.round(30 + Math.random() * 40)
   };
 }
-var dashboard = actor40({
+var dashboard = actor39({
   state: {
     data: null,
     loading: false,
@@ -2868,9 +2810,9 @@ var dashboard = actor40({
 });
 
 // src/actors/workflow/race.ts
-import { actor as actor41, event as event17 } from "rivetkit";
+import { actor as actor40, event as event17 } from "rivetkit";
 import { Loop as Loop7, workflow as workflow7 } from "rivetkit/workflow";
-var race = actor41({
+var race = actor40({
   createState: (c, input) => ({
     id: c.key[0],
     workDurationMs: input?.workDurationMs ?? 2e3,
@@ -2950,9 +2892,9 @@ var race = actor41({
 });
 
 // src/actors/workflow/payment.ts
-import { actor as actor42, event as event18 } from "rivetkit";
+import { actor as actor41, event as event18 } from "rivetkit";
 import { Loop as Loop8, workflow as workflow8 } from "rivetkit/workflow";
-var payment = actor42({
+var payment = actor41({
   createState: (c, input) => ({
     id: c.key[0],
     amount: input?.amount ?? 100,
@@ -3068,12 +3010,12 @@ var payment = actor42({
 });
 
 // src/actors/workflow/history-examples.ts
-import { actor as actor43, queue as queue7 } from "rivetkit";
+import { actor as actor42, queue as queue7 } from "rivetkit";
 import { Loop as Loop9, workflow as workflow9 } from "rivetkit/workflow";
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
-var workflowHistorySimple = actor43({
+var workflowHistorySimple = actor42({
   createState: (c) => ({
     id: c.key[0],
     status: "pending"
@@ -3113,7 +3055,7 @@ var workflowHistorySimple = actor43({
   })
 });
 var LOOP_ITEMS = ["A", "B", "C"];
-var workflowHistoryLoop = actor43({
+var workflowHistoryLoop = actor42({
   createState: (c) => ({
     id: c.key[0],
     status: "running",
@@ -3157,7 +3099,7 @@ var workflowHistoryLoop = actor43({
     });
   })
 });
-var workflowHistoryJoin = actor43({
+var workflowHistoryJoin = actor42({
   createState: (c) => ({
     id: c.key[0],
     status: "pending"
@@ -3212,7 +3154,7 @@ var workflowHistoryJoin = actor43({
     });
   })
 });
-var workflowHistoryRace = actor43({
+var workflowHistoryRace = actor42({
   createState: (c) => ({
     id: c.key[0],
     status: "running"
@@ -3275,7 +3217,7 @@ var FULL_WORKFLOW_ITEMS = [
   { id: "item-3", basePrice: 130, tax: 10 },
   { id: "item-4", basePrice: 145, tax: 12 }
 ];
-var workflowHistoryFull = actor43({
+var workflowHistoryFull = actor42({
   createState: (c) => ({
     id: c.key[0],
     status: "pending",
@@ -3472,7 +3414,7 @@ var workflowHistoryFull = actor43({
     });
   })
 });
-var workflowHistoryInProgress = actor43({
+var workflowHistoryInProgress = actor42({
   createState: (c, input) => ({
     id: c.key[0],
     status: "running",
@@ -3505,7 +3447,7 @@ var workflowHistoryInProgress = actor43({
   })
 });
 var RETRY_MAX_RETRIES = 20;
-var workflowHistoryRetrying = actor43({
+var workflowHistoryRetrying = actor42({
   createState: (c) => ({
     id: c.key[0],
     status: "running",
@@ -3545,7 +3487,7 @@ var workflowHistoryRetrying = actor43({
   })
 });
 var FAILED_MAX_RETRIES = 3;
-var workflowHistoryFailed = actor43({
+var workflowHistoryFailed = actor42({
   createState: (c) => ({
     id: c.key[0],
     status: "running",
@@ -3582,8 +3524,8 @@ var workflowHistoryFailed = actor43({
 });
 
 // src/actors/inter-actor/cross-actor-actions.ts
-import { actor as actor44 } from "rivetkit";
-var inventory = actor44({
+import { actor as actor43 } from "rivetkit";
+var inventory = actor43({
   // Each item has its own inventory actor instance
   createState: (_c, input) => ({
     itemName: input?.itemName ?? "Widget",
@@ -3627,7 +3569,7 @@ var inventory = actor44({
     }
   }
 });
-var checkout = actor44({
+var checkout = actor43({
   createState: (_c, input) => ({
     customerName: input?.customerName ?? "Guest",
     items: [],
@@ -3694,7 +3636,7 @@ var checkout = actor44({
 });
 
 // src/actors/testing/inline-client.ts
-import { actor as actor45 } from "rivetkit";
+import { actor as actor44 } from "rivetkit";
 function isDynamicSandboxRuntime() {
   return false;
 }
@@ -3715,7 +3657,7 @@ async function waitForConnectionOpen(connection) {
     });
   });
 }
-var inlineClientActor = actor45({
+var inlineClientActor = actor44({
   state: { messages: [] },
   actions: {
     // Action that uses client to call another actor (stateless)
@@ -3776,8 +3718,8 @@ var inlineClientActor = actor45({
 });
 
 // src/actors/testing/test-counter.ts
-import { actor as actor46 } from "rivetkit";
-var testCounter = actor46({
+import { actor as actor45 } from "rivetkit";
+var testCounter = actor45({
   state: { count: 0 },
   actions: {
     increment: (c, amount = 1) => {
@@ -3795,9 +3737,9 @@ var testCounter = actor46({
 });
 
 // src/actors/testing/test-counter-sqlite.ts
-import { actor as actor47 } from "rivetkit";
+import { actor as actor46 } from "rivetkit";
 import { db as db4 } from "rivetkit/db";
-var testCounterSqlite = actor47({
+var testCounterSqlite = actor46({
   db: db4({
     onMigrate: async (db16) => {
       await db16.execute(`
@@ -3836,9 +3778,9 @@ var testCounterSqlite = actor47({
 });
 
 // src/actors/testing/test-sqlite-load.ts
-import { actor as actor48 } from "rivetkit";
+import { actor as actor47 } from "rivetkit";
 import { db as db5 } from "rivetkit/db";
-var testSqliteLoad = actor48({
+var testSqliteLoad = actor47({
   db: db5({
     onMigrate: async (db16) => {
       await db16.execute(`
@@ -4380,7 +4322,7 @@ var testSqliteLoad = actor48({
 });
 
 // src/actors/testing/test-sqlite-bench.ts
-import { actor as actor49 } from "rivetkit";
+import { actor as actor48 } from "rivetkit";
 import { db as db6 } from "rivetkit/db";
 var CHAT_LOG_CHUNK_BYTES = 4 * 1024;
 var CHAT_LOG_INSERT_BATCH_SIZE = 50;
@@ -4427,7 +4369,7 @@ async function seedChatLog(database, targetBytes) {
   }
   return { threadId, rows, totalBytes: targetBytes };
 }
-var testSqliteBench = actor49({
+var testSqliteBench = actor48({
   options: {
     actionTimeout: 3e5
   },
@@ -5210,7 +5152,7 @@ var testSqliteBench = actor49({
 
 // src/actors/testing/sqlite-cold-start-bench.ts
 import { randomBytes } from "crypto";
-import { actor as actor50 } from "rivetkit";
+import { actor as actor49 } from "rivetkit";
 import { db as db7 } from "rivetkit/db";
 var DEFAULT_TARGET_BYTES = 50 * 1024 * 1024;
 var DEFAULT_ROW_BYTES = 16 * 1024;
@@ -5327,7 +5269,7 @@ async function readPayloads(database, direction = "forward") {
     readBatchRows: READ_BATCH_ROWS
   };
 }
-var sqliteColdStartBench = actor50({
+var sqliteColdStartBench = actor49({
   options: {
     actionTimeout: 6e5
   },
@@ -5490,7 +5432,7 @@ var sqliteColdStartBench = actor50({
 });
 
 // src/actors/testing/sqlite-realworld-bench.ts
-import { actor as actor51 } from "rivetkit";
+import { actor as actor50 } from "rivetkit";
 import { db as db8 } from "rivetkit/db";
 var DEFAULT_ROW_BYTES2 = 2 * 1024;
 var ORDER_BATCH_ROWS = 50;
@@ -6015,7 +5957,7 @@ async function readRowidRange(database, direction) {
   }
   return { rows: scannedRows, bytes };
 }
-var sqliteRealworldBench = actor51({
+var sqliteRealworldBench = actor50({
   options: {
     actionTimeout: 12e5,
     sleepGracePeriod: 3e4
@@ -6800,7 +6742,7 @@ var sqliteRealworldBench = actor51({
 });
 
 // src/actors/testing/raw-sqlite-fuzzer.ts
-import { actor as actor52 } from "rivetkit";
+import { actor as actor51 } from "rivetkit";
 import { db as db9 } from "rivetkit/db";
 var ACCOUNT_COUNT = 8;
 var ACCOUNT_INITIAL_BALANCE = 1e5;
@@ -8367,8 +8309,8 @@ async function applyDeterministicNastyScript(database, opts) {
   );
   return ops;
 }
-function shouldRunDeepScenario(mode2, scenario) {
-  return mode2 === scenario || mode2 === "kitchen-sink" || mode2 === "nasty";
+function shouldRunDeepScenario(mode, scenario) {
+  return mode === scenario || mode === "kitchen-sink" || mode === "nasty";
 }
 async function applyDeepScenarios(database, opts) {
   const runScenario = async (name, fn) => {
@@ -8448,21 +8390,21 @@ async function applyDeepScenarios(database, opts) {
     opts.ops.shadow = (opts.ops.shadow ?? 0) + await runScenario("shadow", () => updateShadowChecksums(database, opts.phase));
   }
 }
-function chooseKind(mode2, rng) {
+function chooseKind(mode, rng) {
   const roll = rng();
-  if (mode2 === "transactions") {
+  if (mode === "transactions") {
     if (roll < 0.55) return "transfer";
     if (roll < 0.75) return "upsert";
     if (roll < 0.9) return "update";
     return "delete";
   }
-  if (mode2 === "hot") {
+  if (mode === "hot") {
     if (roll < 0.6) return "hot";
     if (roll < 0.75) return "upsert";
     if (roll < 0.9) return "update";
     return "delete";
   }
-  if (mode2 === "payloads") {
+  if (mode === "payloads") {
     if (roll < 0.4) return "upsert";
     if (roll < 0.7) return "insert";
     if (roll < 0.9) return "update";
@@ -8862,7 +8804,7 @@ async function debugItemMismatches(database, limit = 5) {
   }
   return { itemMismatches, recentEventsByKey };
 }
-var rawSqliteFuzzer = actor52({
+var rawSqliteFuzzer = actor51({
   options: {
     actionTimeout: 3e5
   },
@@ -9162,7 +9104,7 @@ var rawSqliteFuzzer = actor52({
       return await validate(c.db);
     },
     runPhase: async (c, input) => {
-      const mode2 = input.mode ?? "balanced";
+      const mode = input.mode ?? "balanced";
       const iterations = Math.max(1, Math.floor(input.iterations));
       const keySpace = Math.max(1, Math.floor(input.keySpace ?? DEFAULT_KEY_SPACE));
       const maxPayloadBytes = Math.max(
@@ -9173,13 +9115,13 @@ var rawSqliteFuzzer = actor52({
         1,
         Math.floor(input.growthTargetBytes ?? DEFAULT_GROWTH_TARGET_BYTES)
       );
-      const rng = makeRng(`${input.seed}:${input.phase}:${mode2}`);
+      const rng = makeRng(`${input.seed}:${input.phase}:${mode}`);
       const ops = {};
       let stage = "ensureAccounts";
       try {
         await ensureAccounts(c.db);
         for (let i = 0; i < iterations; i += 1) {
-          const kind = chooseKind(mode2, rng);
+          const kind = chooseKind(mode, rng);
           ops[kind] = (ops[kind] ?? 0) + 1;
           stage = `base:${kind}:iteration:${i}`;
           if (kind === "transfer") {
@@ -9204,7 +9146,7 @@ var rawSqliteFuzzer = actor52({
             }
           } else if (kind === "hot") {
             const itemKey = `hot-${intBetween(rng, 0, 3)}`;
-            const updates = intBetween(rng, 2, mode2 === "hot" ? 12 : 5);
+            const updates = intBetween(rng, 2, mode === "hot" ? 12 : 5);
             try {
               await applyHotUpdates(c.db, {
                 seed: input.seed,
@@ -9221,8 +9163,8 @@ var rawSqliteFuzzer = actor52({
               );
             }
           } else {
-            const itemKey = mode2 === "hot" && rng() < 0.6 ? `hot-${intBetween(rng, 0, 3)}` : `item-${intBetween(rng, 0, keySpace - 1)}`;
-            const payloadBytes = mode2 === "payloads" ? intBetween(rng, Math.min(256, maxPayloadBytes), maxPayloadBytes) : intBetween(rng, 1, maxPayloadBytes);
+            const itemKey = mode === "hot" && rng() < 0.6 ? `hot-${intBetween(rng, 0, 3)}` : `item-${intBetween(rng, 0, keySpace - 1)}`;
+            const payloadBytes = mode === "payloads" ? intBetween(rng, Math.min(256, maxPayloadBytes), maxPayloadBytes) : intBetween(rng, 1, maxPayloadBytes);
             try {
               await applyItemOperation(c.db, {
                 seed: input.seed,
@@ -9244,7 +9186,7 @@ var rawSqliteFuzzer = actor52({
         await applyDeepScenarios(c.db, {
           seed: input.seed,
           phase: input.phase,
-          mode: mode2,
+          mode,
           iterations,
           rng,
           maxPayloadBytes,
@@ -9255,7 +9197,7 @@ var rawSqliteFuzzer = actor52({
         return {
           seed: input.seed,
           phase: input.phase,
-          mode: mode2,
+          mode,
           iterations,
           ops,
           validation: await validate(c.db)
@@ -9263,7 +9205,7 @@ var rawSqliteFuzzer = actor52({
       } catch (error) {
         const detail = error instanceof Error ? error.message : typeof error === "string" ? error : String(error);
         throw new Error(
-          `runPhase failed during ${stage} for mode ${mode2} phase ${input.phase} seed ${input.seed}: ${detail}`,
+          `runPhase failed during ${stage} for mode ${mode} phase ${input.phase} seed ${input.seed}: ${detail}`,
           { cause: error }
         );
       }
@@ -9284,7 +9226,7 @@ var rawSqliteFuzzer = actor52({
 });
 
 // src/actors/testing/sqlite-memory-pressure.ts
-import { actor as actor53 } from "rivetkit";
+import { actor as actor52 } from "rivetkit";
 import { db as db10 } from "rivetkit/db";
 var DEFAULT_INSERT_ROWS = 128;
 var DEFAULT_ROW_BYTES3 = 16 * 1024;
@@ -9344,7 +9286,7 @@ async function storageStats(database) {
     vfs: copiedMetrics
   };
 }
-var sqliteMemoryPressure = actor53({
+var sqliteMemoryPressure = actor52({
   options: {
     actionTimeout: 3e5
   },
@@ -9598,7 +9540,7 @@ var sqliteMemoryPressure = actor53({
 
 // src/actors/testing/mock-agentic-loop.ts
 import {
-  actor as actor54
+  actor as actor53
 } from "rivetkit";
 import { db as db11 } from "rivetkit/db";
 var DEFAULT_SLEEP_GRACE_PERIOD_MS = 12e4;
@@ -9768,7 +9710,7 @@ function verifyAllRows(rows, expectedRequests) {
     ok
   };
 }
-var mockAgenticLoop = actor54({
+var mockAgenticLoop = actor53({
   options: {
     canHibernateWebSocket: false,
     sleepGracePeriod: DEFAULT_SLEEP_GRACE_PERIOD_MS
@@ -10073,8 +10015,8 @@ var mockAgenticLoop = actor54({
 });
 
 // src/actors/testing/sleep-close-fuzz.ts
-import { actor as actor55 } from "rivetkit";
-var sleepCloseFuzz = actor55({
+import { actor as actor54 } from "rivetkit";
+var sleepCloseFuzz = actor54({
   options: {
     canHibernateWebSocket: false
   },
@@ -10128,7 +10070,7 @@ var sleepCloseFuzz = actor55({
 });
 
 // src/actors/testing/load-test-agent.ts
-import { actor as actor56 } from "rivetkit";
+import { actor as actor55 } from "rivetkit";
 import { db as db12 } from "rivetkit/db";
 var DEFAULT_TOKENS_PER_SECOND = 20;
 var DEFAULT_DURATION_MS = 5e3;
@@ -10158,7 +10100,7 @@ function sleep4(ms, signal) {
     );
   });
 }
-var loadTestAgent = actor56({
+var loadTestAgent = actor55({
   options: {
     canHibernateWebSocket: false,
     sleepGracePeriod: 3e4
@@ -10301,7 +10243,7 @@ var loadTestAgent = actor56({
 });
 
 // src/actors/testing/load-test-agent-2.ts
-import { actor as actor57 } from "rivetkit";
+import { actor as actor56 } from "rivetkit";
 import { db as db13 } from "rivetkit/db";
 var AsyncMutex = class {
   locked = false;
@@ -10390,7 +10332,7 @@ function send3(websocket, message) {
     websocket.send(JSON.stringify(message));
   }
 }
-var loadTestAgent2 = actor57({
+var loadTestAgent2 = actor56({
   options: {
     canHibernateWebSocket: false,
     sleepGracePeriod: 1e3
@@ -10600,8 +10542,8 @@ function createAgentConcurrent2QueryStats() {
     byTable: {}
   };
 }
-function createAgentConcurrent2StatsSet(cycle, wake, actor61) {
-  return { cycle, wake, actor: actor61 };
+function createAgentConcurrent2StatsSet(cycle, wake, actor60) {
+  return { cycle, wake, actor: actor60 };
 }
 function snapshotAgentConcurrent2Stats(c, cycle) {
   return {
@@ -11556,7 +11498,7 @@ function safeId(value) {
 }
 
 // src/actors/testing/sigterm-sleep-probe.ts
-import { actor as actor58 } from "rivetkit";
+import { actor as actor57 } from "rivetkit";
 import { db as db14 } from "rivetkit/db";
 var DEFAULT_ON_SLEEP_DURATION_MS = 5e3;
 var DEFAULT_ON_SLEEP_TICK_MS = 1e3;
@@ -11571,7 +11513,7 @@ function formatError(error) {
   if (error instanceof Error) return error.stack ?? error.message;
   return String(error);
 }
-var sigtermSleepProbe = actor58({
+var sigtermSleepProbe = actor57({
   state: {
     label: "unprepared",
     wakeCount: 0,
@@ -11857,7 +11799,7 @@ var sigtermSleepProbe = actor58({
 });
 
 // src/actors/testing/slow-reconnect-actor.ts
-import { actor as actor59, setup } from "rivetkit";
+import { actor as actor58, setup } from "rivetkit";
 import { db as db15 } from "rivetkit/db";
 var AsyncMutex2 = class {
   locked = false;
@@ -11939,7 +11881,7 @@ var MESSAGE_CONTENT_BYTES2 = 10620;
 var THREAD_EVENT_PAYLOAD_BYTES2 = 4036;
 var TOOL_CALL_RESULT_BYTES2 = 10975;
 var EXECUTOR_TOOL_SCHEMA_BYTES2 = 2235;
-var slowReconnectActor = actor59({
+var slowReconnectActor = actor58({
   state: { runCount: 0 },
   db: db15({
     onMigrate: async (database) => {
@@ -12686,7 +12628,7 @@ if (import.meta.main) {
 // src/actors/ai/ai-agent.ts
 import { openai } from "@ai-sdk/openai";
 import { generateText, tool } from "ai";
-import { actor as actor60, event as event20 } from "rivetkit";
+import { actor as actor59, event as event20 } from "rivetkit";
 import { z } from "zod";
 
 // src/actors/ai/my-tools.ts
@@ -12700,7 +12642,7 @@ async function getWeather(location) {
 }
 
 // src/actors/ai/ai-agent.ts
-var aiAgent = actor60({
+var aiAgent = actor59({
   // Persistent state that survives restarts: https://rivet.dev/docs/actors/state
   state: {
     messages: []
@@ -12759,8 +12701,11 @@ function numberFromEnv2(name, fallback) {
   return parsed;
 }
 function serverlessPoolConfig() {
-  if (resolveMode() !== "serverless-local") return void 0;
-  const url = process.env.RIVET_SERVERLESS_URL ?? process.env.KITCHEN_SINK_SERVERLESS_URL ?? "http://127.0.0.1:3000/api/rivet";
+  if (process.env._RIVET_COMPUTE === "1" || process.env.SANDBOX_MODE === "serverless") {
+    return void 0;
+  }
+  const url = process.env.RIVET_SERVERLESS_URL ?? process.env.KITCHEN_SINK_SERVERLESS_URL ?? (process.env.RIVET_RUN_ENGINE === "1" ? "http://127.0.0.1:3000/api/rivet" : void 0);
+  if (!url) return void 0;
   return {
     name: process.env.RIVET_POOL,
     url,
@@ -12797,7 +12742,6 @@ var registry2 = setup2({
     counterConn,
     counterWithParams,
     counterWithLifecycle,
-    pingPongCounter,
     // Core API
     inputActor,
     syncActionActor,
@@ -12907,7 +12851,7 @@ import { Hono as Hono3 } from "hono";
 import * as v8 from "v8";
 var app = new Hono3();
 var port = Number.parseInt(process.env.PORT ?? "3000", 10);
-var mode = resolveMode();
+var serverlessMode = process.env.RIVET_RUN_ENGINE === "1" || process.env.RIVET_SERVERLESS_URL !== void 0 || process.env.KITCHEN_SINK_SERVERLESS_URL !== void 0;
 process.on("exit", (code) => {
   console.log(JSON.stringify({ kind: "process_exit", code, pid: process.pid }));
 });
@@ -12953,6 +12897,10 @@ async function memoryBreakdown(forceGc) {
   const heap = v8.getHeapStatistics();
   const spaces = v8.getHeapSpaceStatistics();
   const nativeNonV8Estimate = Math.max(0, memory.rss - heap.total_heap_size);
+  const diagnostics = "diagnostics" in registry2 && typeof registry2.diagnostics === "function" ? registry2.diagnostics.bind(registry2) : void 0;
+  const registryDiagnostics = diagnostics ? await diagnostics().catch((error) => ({
+    error: error instanceof Error ? error.message : String(error)
+  })) : { error: "registry diagnostics unavailable" };
   return {
     pid: process.pid,
     timestamp: (/* @__PURE__ */ new Date()).toISOString(),
@@ -12987,6 +12935,7 @@ async function memoryBreakdown(forceGc) {
       v8ExternalBytes: memory.external,
       nativeNonV8ResidentEstimateBytes: nativeNonV8Estimate
     },
+    registry: registryDiagnostics,
     resourceUsage: process.resourceUsage()
   };
 }
@@ -12994,9 +12943,6 @@ app.get("/debug/memory", async (c) => {
   const forceGc = c.req.query("gc") === "1";
   return c.json(await memoryBreakdown(forceGc));
 });
-app.get("/health", () => registry2.routes.health());
-app.get("/metadata", () => registry2.routes.metadata());
-app.get("/metrics", (c) => registry2.routes.prometheusMetrics(c.req.raw));
 app.post("/debug/heap-snapshot", (c) => {
   if (process.env.SQLITE_MEMORY_SOAK_DIAGNOSTICS !== "1") {
     return c.json({ error: "disabled" }, 404);
@@ -13012,20 +12958,20 @@ app.use("*", async (c, next) => {
   const startedAt = Date.now();
   await next();
 });
-if (mode === "serverful") {
-  registry2.start();
-} else {
+if (serverlessMode) {
   app.all("/api/rivet/*", (c) => registry2.handler(c.req.raw));
   app.all("/api/rivet", (c) => registry2.handler(c.req.raw));
+} else {
+  registry2.start();
 }
 var server = serve({ fetch: app.fetch, port }, () => {
-  if (mode === "serverful") {
+  if (serverlessMode) {
     console.log(
-      `kitchen sink (serverful) listening on http://127.0.0.1:${port}`
+      `serverless RivetKit listening on http://127.0.0.1:${port}/api/rivet`
     );
   } else {
     console.log(
-      `kitchen sink (${mode}) listening on http://127.0.0.1:${port}/api/rivet`
+      `kitchen sink diagnostics listening on http://127.0.0.1:${port}`
     );
   }
 });

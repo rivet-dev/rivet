@@ -58,6 +58,7 @@ import {
 import { rawFetchCounter } from "./actors/http/raw-fetch-counter.ts";
 import { rawWebSocketChatRoom } from "./actors/http/raw-websocket-chat-room.ts";
 import { rawWebSocketServerlessSmoke } from "./actors/http/raw-websocket-serverless-smoke.ts";
+import { tunnelStress } from "./actors/http/tunnel-stress.ts";
 // Lifecycle
 import {
 	runWithTicks,
@@ -143,6 +144,19 @@ function numberFromEnv(name: string, fallback: number): number {
 }
 
 function serverlessPoolConfig() {
+	// Running under a platform-managed serverless host (Rivet Cloud managed
+	// pool, or Cloud Run via Rivet's deploy pipeline). The platform configures
+	// the serverless runner pool on its side and issues per-namespace `sk_`
+	// tokens that do not have permission to list datacenters, which is what
+	// `configurePool` would try to do. Skip our in-process pool configuration
+	// in that case.
+	if (
+		process.env._RIVET_COMPUTE === "1" ||
+		process.env.SANDBOX_MODE === "serverless"
+	) {
+		return undefined;
+	}
+
 	const url =
 		process.env.RIVET_SERVERLESS_URL ??
 		process.env.KITCHEN_SINK_SERVERLESS_URL ??
@@ -230,6 +244,7 @@ export const registry = setup({
 		rawFetchCounter,
 		rawWebSocketChatRoom,
 		rawWebSocketServerlessSmoke,
+		tunnelStress,
 		// Lifecycle and scheduling
 		runWithTicks,
 		runWithQueueConsumer,
