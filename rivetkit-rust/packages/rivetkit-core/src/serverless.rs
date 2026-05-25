@@ -484,13 +484,21 @@ impl CoreServerlessRuntime {
 		}
 		let mut guard = self.envoy.lock().await;
 		if let Some(handle) = guard.as_ref() {
-			// The start request token authenticates the serverless callback. It is not part
-			// of envoy identity, and may differ from the token used for the engine connection.
+			// Cached reuse is disabled by default until the protocol authenticates each
+			// `/start` request. If someone opts in, still warn when reuse crosses
+			// regional dial targets that endpoint validation intentionally treats as equal.
 			if !endpoints_match(handle.endpoint(), &headers.endpoint)
 				|| handle.namespace() != headers.namespace
 				|| handle.pool_name() != headers.pool_name
 			{
 				anyhow::bail!("serverless start headers do not match active envoy");
+			}
+			if !dial_endpoints_match(handle.endpoint(), &headers.endpoint) {
+				tracing::warn!(
+					active_endpoint = %handle.endpoint(),
+					requested_endpoint = %headers.endpoint,
+					"serverless start is reusing a cached envoy with a different regional endpoint",
+				);
 			}
 			return Ok(handle.clone());
 		}
@@ -769,9 +777,33 @@ pub fn normalize_endpoint_url(url: &str) -> Option<String> {
 	Some(format!("{}://{}{}", parsed.scheme(), host, pathname))
 }
 
+fn normalize_dial_endpoint_url(url: &str) -> Option<String> {
+	let parsed = Url::parse(url).ok()?;
+	let pathname = if parsed.path() == "/" {
+		"/".to_owned()
+	} else {
+		parsed.path().trim_end_matches('/').to_owned()
+	};
+	let mut hostname = parsed.host_str()?.to_owned();
+	if is_loopback_address(&hostname) {
+		hostname = "localhost".to_owned();
+	}
+	let host = match parsed.port() {
+		Some(port) => format!("{hostname}:{port}"),
+		None => hostname,
+	};
+	Some(format!("{}://{}{}", parsed.scheme(), host, pathname))
+}
+
 pub fn endpoints_match(a: &str, b: &str) -> bool {
 	let a_normalized = normalize_endpoint_url(a).unwrap_or_else(|| a.to_owned());
 	let b_normalized = normalize_endpoint_url(b).unwrap_or_else(|| b.to_owned());
+	a_normalized == b_normalized
+}
+
+fn dial_endpoints_match(a: &str, b: &str) -> bool {
+	let a_normalized = normalize_dial_endpoint_url(a).unwrap_or_else(|| a.to_owned());
+	let b_normalized = normalize_dial_endpoint_url(b).unwrap_or_else(|| b.to_owned());
 	a_normalized == b_normalized
 }
 

@@ -8,8 +8,8 @@ mod moved_tests {
 	use tokio_util::sync::CancellationToken;
 
 	use super::{
-		CoreServerlessRuntime, ServerlessRequest, endpoints_match, normalize_endpoint_url,
-		parse_start_headers,
+		CoreServerlessRuntime, ServerlessRequest, dial_endpoints_match, endpoints_match,
+		normalize_endpoint_url, parse_start_headers,
 	};
 	use crate::registry::ServeConfig;
 
@@ -38,6 +38,18 @@ mod moved_tests {
 		assert!(!endpoints_match(
 			"https://api-us-west-1.example.com",
 			"https://api.example.com"
+		));
+	}
+
+	#[test]
+	fn dial_endpoint_identity_preserves_rivet_regional_hosts() {
+		assert!(endpoints_match(
+			"https://api-us-east-1.rivet.dev",
+			"https://api-us-west-1.rivet.dev/"
+		));
+		assert!(!dial_endpoints_match(
+			"https://api-us-east-1.rivet.dev",
+			"https://api-us-west-1.rivet.dev/"
 		));
 	}
 
